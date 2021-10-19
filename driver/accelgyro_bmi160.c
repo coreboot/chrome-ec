@@ -322,10 +322,11 @@ end_perform_calib:
  * Defined even if host interface is not defined, to enable double tap even
  * when the host does not deal with gesture.
  */
-int manage_activity(const struct motion_sensor_t *s,
-		    enum motionsensor_activity activity,
-		    int enable,
-		    const struct ec_motion_sense_activity *param)
+#ifdef CONFIG_GESTURE_HOST_DETECTION
+static int manage_activity(const struct motion_sensor_t *s,
+			   enum motionsensor_activity activity,
+			   int enable,
+			   const struct ec_motion_sense_activity *param)
 {
 	int ret;
 	struct bmi_drv_data_t *data = BMI_GET_DATA(s);
@@ -383,17 +384,6 @@ int manage_activity(const struct motion_sensor_t *s,
 		}
 	}
 	return ret;
-}
-
-#ifdef CONFIG_GESTURE_HOST_DETECTION
-int list_activities(const struct motion_sensor_t *s,
-		    uint32_t *enabled,
-		    uint32_t *disabled)
-{
-	struct bmi_drv_data_t *data = BMI_GET_DATA(s);
-	*enabled = data->enabled_activities;
-	*disabled = data->disabled_activities;
-	return EC_RES_SUCCESS;
 }
 #endif
 
@@ -761,7 +751,7 @@ const struct accelgyro_drv bmi160_drv = {
 #endif
 #ifdef CONFIG_GESTURE_HOST_DETECTION
 	.manage_activity = manage_activity,
-	.list_activities = list_activities,
+	.list_activities = bmi_list_activities,
 #endif
 #ifdef CONFIG_BODY_DETECTION
 	.get_rms_noise = bmi_get_rms_noise,

@@ -9,9 +9,12 @@
 #define __CROS_EC_BASEBOARD_H
 
 /*
- * By default, enable all console messages excepted HC
+ * By default, enable all console messages excepted HC, ACPI and event:
+ * The sensor stack is generating a lot of activity.
  */
-#define CC_DEFAULT     (CC_ALL & ~(BIT(CC_HOSTCMD)))
+#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
+#undef CONFIG_HOSTCMD_DEBUG_MODE
+#define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 
 /* NPCX9 config */
 #define NPCX9_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
@@ -85,6 +88,13 @@
 #define CONFIG_BATTERY_HW_PRESENT_CUSTOM
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
 #define CONFIG_CMD_BATT_MFG_ACCESS
+/*
+ * Enable support for battery hostcmd, supporting longer strings.
+ * support for EC_CMD_BATTERY_GET_STATIC version 1.
+ */
+#define CONFIG_BATTERY_V2
+#define CONFIG_BATTERY_COUNT 1
+#define CONFIG_HOSTCMD_BATTERY_V2
 
 /* Chipset config */
 #define CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540
@@ -133,6 +143,16 @@
 #define CONFIG_CHIPSET_CAN_THROTTLE
 
 #define CONFIG_PWM
+
+/* Prochot assertion/deassertion ratios*/
+#define PROCHOT_ADAPTER_WATT_RATIO 97
+#define PROCHOT_ASSERTION_BATTERY_RATIO 95
+#define PROCHOT_DEASSERTION_BATTERY_RATIO 85
+#define PROCHOT_ASSERTION_PD_RATIO 105
+#define PROCHOT_DEASSERTION_PD_BATTERY_RATIO 95
+#define PROCHOT_ASSERTION_ADAPTER_RATIO 105
+#define PROCHOT_DEASSERTION_ADAPTER_RATIO 90
+#define PROCHOT_DEASSERTION_ADAPTER_BATT_RATIO 90
 
 /* Enable I2C Support */
 #define CONFIG_I2C

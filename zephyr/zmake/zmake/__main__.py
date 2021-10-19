@@ -133,14 +133,22 @@ def main(argv=None):
         "--log-level",
         choices=list(log_level_map.keys()),
         dest="log_level",
-        help="Set the logging level (default=WARNING)",
+        help="Set the logging level (default=INFO)",
     )
     parser.add_argument(
         "-L",
         "--no-log-label",
-        action="store_true",
-        default=False,
+        action="store_false",
         help="Turn off logging labels",
+        dest="log_label",
+        default=None,
+    )
+    parser.add_argument(
+        "--log-label",
+        action="store_true",
+        help="Turn on logging labels",
+        dest="log_label",
+        default=None,
     )
     parser.add_argument(
         "--modules-dir",
@@ -152,6 +160,11 @@ def main(argv=None):
     )
     parser.add_argument(
         "--zephyr-base", type=pathlib.Path, help="Path to Zephyr OS repository"
+    )
+    parser.add_argument(
+        "--zephyr-root",
+        type=pathlib.Path,
+        help="Path to Zephyr OS repos, must contain subdirs like v1.2",
     )
 
     sub = parser.add_subparsers(dest="subcommand", help="Subcommand")
@@ -228,16 +241,25 @@ def main(argv=None):
 
     opts = parser.parse_args(argv)
 
-    if opts.no_log_label:
-        log_format = "%(message)s"
-    else:
-        log_format = "%(levelname)s: %(message)s"
+    # Default logging
+    log_level = logging.INFO
+    log_label = False
 
-    log_level = logging.WARNING
     if opts.log_level:
         log_level = log_level_map[opts.log_level]
+        log_label = True
     elif opts.debug:
         log_level = logging.DEBUG
+        log_label = True
+
+    if opts.log_label is not None:
+        log_label = opts.log_label
+    if log_label:
+        log_format = "%(levelname)s: %(message)s"
+    else:
+        log_format = "%(message)s"
+        multiproc.log_job_names = False
+
     logging.basicConfig(format=log_format, level=log_level)
 
     if not opts.debug:

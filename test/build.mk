@@ -105,6 +105,7 @@ test-list-host += usb_pe_drp_noextended
 test-list-host += utils
 test-list-host += utils_str
 test-list-host += vboot
+test-list-host += version
 test-list-host += x25519
 test-list-host += stillness_detector
 endif
@@ -122,6 +123,10 @@ cov-dont-test += fpsensor
 cov-dont-test += fpsensor_crypto
 # fpsensor_state: genhtml looks for build/host/fpsensor_state/cryptoc/util.c
 cov-dont-test += fpsensor_state
+# version: Only works in a chroot.
+cov-dont-test += version
+# interrupt: The test often times out if enabled for coverage.
+cov-dont-test += interrupt
 cov-test-list-host = $(filter-out $(cov-dont-test), $(test-list-host))
 
 accel_cal-y=accel_cal.o
@@ -242,6 +247,7 @@ usb_tcpmv2_compliance-y=usb_tcpmv2_compliance.o usb_tcpmv2_compliance_common.o \
 utils-y=utils.o
 utils_str-y=utils_str.o
 vboot-y=vboot.o
+version-y += version.o
 float-y=fp.o
 fp-y=fp.o
 x25519-y=x25519.o

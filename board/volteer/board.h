@@ -137,7 +137,6 @@
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
 #define GPIO_PCH_DSW_PWROK		GPIO_EC_PCH_DSW_PWROK
 #define GPIO_POWER_BUTTON_L		GPIO_H1_EC_PWR_BTN_ODL
-#define GPIO_RSMRST_L_PGOOD		GPIO_PG_EC_RSMRST_ODL
 #define GPIO_CPU_PROCHOT		GPIO_EC_PROCHOT_ODL
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L
@@ -164,14 +163,16 @@
 
 #define CONFIG_DEBUG_ASSERT_BRIEF
 
-/* Disable volume button command in EC console */
-#undef  CONFIG_CMD_BUTTON
+/* Disable console commands to help save space */
+#undef CONFIG_CMD_ADC
+#undef CONFIG_CMD_BATTFAKE
+#undef CONFIG_CMD_CBI
+#undef CONFIG_CMD_APTHROTTLE
+#undef CONFIG_CMD_BUTTON
+#undef CONFIG_CONSOLE_CMDHELP
 
 /* Disable volume button in ectool */
 #undef CONFIG_HOSTCMD_BUTTON
-
-/* Disable console command help to save space */
-#undef CONFIG_CONSOLE_CMDHELP
 
 #ifndef __ASSEMBLER__
 

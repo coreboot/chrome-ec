@@ -147,11 +147,23 @@ class Zmake:
     """
 
     def __init__(
-        self, checkout=None, jobserver=None, jobs=0, modules_dir=None, zephyr_base=None
+        self,
+        checkout=None,
+        jobserver=None,
+        jobs=0,
+        modules_dir=None,
+        zephyr_base=None,
+        zephyr_root=None,
     ):
         zmake.multiproc.reset()
         self._checkout = checkout
         self._zephyr_base = zephyr_base
+        if zephyr_root:
+            self._zephyr_root = zephyr_root
+        else:
+            self._zephyr_root = (
+                self.checkout / "src" / "third_party" / "zephyr" / "main"
+            )
 
         if modules_dir:
             self.module_paths = zmake.modules.locate_from_directory(modules_dir)
@@ -190,7 +202,7 @@ class Zmake:
         if self._zephyr_base:
             return self._zephyr_base
 
-        return util.locate_zephyr_base(self.checkout, version)
+        return util.locate_zephyr_base(self._zephyr_root, version)
 
     def configure(
         self,
@@ -314,7 +326,11 @@ class Zmake:
                 log_level_override_func=cmake_log_level_override,
                 job_id=job_id,
             )
-            processes.append(proc)
+            if self._sequential:
+                if proc.wait():
+                    raise OSError(get_process_failure_msg(proc))
+            else:
+                processes.append(proc)
         for proc in processes:
             if proc.wait():
                 raise OSError(get_process_failure_msg(proc))
@@ -323,7 +339,15 @@ class Zmake:
         util.update_symlink(project_dir, build_dir / "project")
 
         if test_after_configure:
-            return self.test(build_dir=build_dir)
+            rv = self.test(build_dir=build_dir)
+            if rv or not coverage:
+                return rv
+            return self._coverage_run_test(
+                project=project,
+                build_dir=build_dir,
+                lcov_file=build_dir / "output" / "zephyr.info",
+                is_configured=True,
+            )
         elif build_after_configure:
             return self.build(build_dir=build_dir)
 
@@ -341,7 +365,6 @@ class Zmake:
                 True if all if OK
                 False if an error was found (so that zmake should exit)
             """
-            # Let all output be produced before exiting
             bad = None
             for proc in procs:
                 if proc.wait() and not bad:
@@ -354,6 +377,9 @@ class Zmake:
                 # since it exposes the fragmented nature of the build.
                 raise OSError(get_process_failure_msg(bad))
 
+            # Let all output be produced before exiting
+            for writer in writers:
+                writer.wait()
             if fail_on_warnings and any(
                 w.has_written(logging.WARNING) or w.has_written(logging.ERROR)
                 for w in writers
@@ -439,7 +465,7 @@ class Zmake:
             packer_work_dir, self.jobserver, version_string=version_string, **dirs
         ):
             shutil.copy2(output_file, output_dir / output_name)
-            self.logger.info("Output file '%r' created.", output_file)
+            self.logger.debug("Output file '%s' created.", output_file)
             output_files_out.append(output_file)
 
         return 0
@@ -529,6 +555,8 @@ class Zmake:
                 build_dir,
                 "-t",
                 lcov_file.stem,
+                "--rc",
+                "lcov_branch_coverage=1",
                 "--exclude",
                 "*/build-*/zephyr/*/generated/*",
                 "--exclude",
@@ -644,17 +672,24 @@ class Zmake:
 
         return self._run_lcov(build_dir, lcov_file, initial=True, gcov=gcov)
 
-    def _coverage_run_test(self, project, build_dir, lcov_file):
+    def _coverage_run_test(
+        self,
+        project,
+        build_dir,
+        lcov_file,
+        is_configured=False,
+    ):
         self.logger.info("Running test %s in %s", project.project_dir, build_dir)
-        rv = self.configure(
-            project_dir=project.project_dir,
-            build_dir=build_dir,
-            build_after_configure=True,
-            test_after_configure=True,
-            coverage=True,
-        )
-        if rv:
-            return rv
+        if not is_configured:
+            rv = self.configure(
+                project_dir=project.project_dir,
+                build_dir=build_dir,
+                build_after_configure=True,
+                test_after_configure=True,
+                coverage=True,
+            )
+            if rv:
+                return rv
         gcov = "gcov.sh-not-found"
         for build_name, build_config in project.iter_builds():
             gcov = build_dir / "build-{}".format(build_name) / "gcov.sh"
@@ -698,7 +733,13 @@ class Zmake:
         with self.jobserver.get_job():
             # Merge info files into a single lcov.info
             self.logger.info("Merging coverage data into %s.", build_dir / "lcov.info")
-            cmd = ["/usr/bin/lcov", "-o", build_dir / "lcov.info"]
+            cmd = [
+                "/usr/bin/lcov",
+                "-o",
+                build_dir / "lcov.info",
+                "--rc",
+                "lcov_branch_coverage=1",
+            ]
             for info in all_lcov_files:
                 cmd += ["-a", info]
             proc = self.jobserver.popen(
@@ -717,6 +758,9 @@ class Zmake:
             if proc.wait():
                 raise OSError(get_process_failure_msg(proc))
 
+            # Find the common root dir
+            prefixdir = os.path.commonprefix(list(self.module_paths.values()))
+
             # Merge into a nice html report
             self.logger.info("Creating coverage report %s.", build_dir / "coverage_rpt")
             proc = self.jobserver.popen(
@@ -728,8 +772,9 @@ class Zmake:
                     "-t",
                     "Zephyr EC Unittest",
                     "-p",
-                    self.checkout / "src",
+                    prefixdir,
                     "-s",
+                    "--branch-coverage",
                 ]
                 + all_lcov_files,
                 stdout=subprocess.PIPE,

@@ -39,6 +39,13 @@ static uint32_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 /* Device initialized at least once */
 #define USB_MUX_FLAG_INIT		BIT(1)
 
+/* Coordinate mux accesses by-port among the tasks */
+static mutex_t mux_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
+
+/* Coordinate which task requires an ACK event */
+static task_id_t ack_task[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	[0 ... CONFIG_USB_PD_PORT_MAX_COUNT - 1] = TASK_ID_INVALID };
+
 enum mux_config_type {
 	USB_MUX_INIT,
 	USB_MUX_LOW_POWER,
@@ -47,6 +54,19 @@ enum mux_config_type {
 	USB_MUX_CHIPSET_RESET,
 	USB_MUX_HPD_UPDATE,
 };
+
+#ifdef CONFIG_ZEPHYR
+static int init_mux_mutex(const struct device *dev)
+{
+	int port;
+
+	ARG_UNUSED(dev);
+	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++)
+		k_mutex_init(&mux_lock[port]);
+	return 0;
+}
+SYS_INIT(init_mux_mutex, POST_KERNEL, 50);
+#endif /* CONFIG_ZEPHYR */
 
 /* Configure the MUX */
 static int configure_mux(int port,
@@ -76,6 +96,9 @@ static int configure_mux(int port,
 		mux_state_t lcl_state;
 		const struct usb_mux_driver *drv = mux_ptr->driver;
 		bool ack_required = false;
+
+		/* Action time!  Lock this mux */
+		mutex_lock(&mux_lock[port]);
 
 		switch (config) {
 		case USB_MUX_INIT:
@@ -116,6 +139,9 @@ static int configure_mux(int port,
 					break;
 			}
 
+			if (ack_required)
+				ack_task[port] = task_get_current();
+
 			/* Apply board specific setting */
 			if (mux_ptr->board_set)
 				rv = mux_ptr->board_set(mux_ptr, lcl_state);
@@ -143,6 +169,9 @@ static int configure_mux(int port,
 
 		}
 
+		/* Unlock before any host command waits */
+		mutex_unlock(&mux_lock[port]);
+
 		if (ack_required) {
 			/* This should only be called from the PD task */
 			assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
@@ -155,6 +184,8 @@ static int configure_mux(int port,
 			 * purposes.
 			 */
 			task_wait_event_mask(PD_EVENT_AP_MUX_DONE, 100*MSEC);
+			ack_task[port] = TASK_ID_INVALID;
+
 			usleep(12.5 * MSEC);
 		}
 	}
@@ -326,11 +357,8 @@ void usb_mux_flip(int port)
 	configure_mux(port, USB_MUX_SET_MODE, &mux_state);
 }
 
-void usb_mux_hpd_update(int port, int hpd_lvl, int hpd_irq)
+void usb_mux_hpd_update(int port, mux_state_t hpd_state)
 {
-	mux_state_t mux_state = (hpd_lvl ? USB_PD_MUX_HPD_LVL : 0) |
-				(hpd_irq ? USB_PD_MUX_HPD_IRQ : 0);
-
 	if (port >= board_get_usb_pd_port_count()) {
 		return;
 	}
@@ -342,13 +370,7 @@ void usb_mux_hpd_update(int port, int hpd_lvl, int hpd_irq)
 	if (exit_low_power_mode(port) != EC_SUCCESS)
 		return;
 
-	configure_mux(port, USB_MUX_HPD_UPDATE, &mux_state);
-
-	if (!configure_mux(port, USB_MUX_GET_MODE, &mux_state)) {
-		mux_state |= (hpd_lvl ? USB_PD_MUX_HPD_LVL : 0) |
-			(hpd_irq ? USB_PD_MUX_HPD_IRQ : 0);
-		configure_mux(port, USB_MUX_SET_MODE, &mux_state);
-	}
+	configure_mux(port, USB_MUX_HPD_UPDATE, &hpd_state);
 }
 
 int usb_mux_retimer_fw_update_port_info(void)
@@ -475,7 +497,7 @@ static enum ec_status hc_usb_pd_mux_info(struct host_cmd_handler_args *args)
 	/* Clear HPD IRQ event since we're about to inform host of it. */
 	if (IS_ENABLED(CONFIG_USB_MUX_VIRTUAL) &&
 	    (r->flags & USB_PD_MUX_HPD_IRQ)) {
-		usb_mux_hpd_update(port, r->flags & USB_PD_MUX_HPD_LVL, 0);
+		usb_mux_hpd_update(port, r->flags & USB_PD_MUX_HPD_LVL);
 	}
 
 	args->response_size = sizeof(*r);
@@ -492,7 +514,8 @@ static enum ec_status hc_usb_pd_mux_ack(struct host_cmd_handler_args *args)
 	if (!IS_ENABLED(CONFIG_USB_MUX_AP_ACK_REQUEST))
 		return EC_RES_INVALID_COMMAND;
 
-	task_set_event(PD_PORT_TO_TASK_ID(p->port), PD_EVENT_AP_MUX_DONE);
+	if (ack_task[p->port] != TASK_ID_INVALID)
+		task_set_event(ack_task[p->port], PD_EVENT_AP_MUX_DONE);
 
 	return EC_RES_SUCCESS;
 }

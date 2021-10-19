@@ -185,6 +185,14 @@ uintptr_t get_program_memory_addr(enum ec_image copy);
  */
 int system_jumped_to_this_image(void);
 
+#ifdef CONFIG_ZTEST
+struct system_jumped_late_mock {
+	int ret_val;
+	int call_count;
+};
+extern struct system_jumped_late_mock system_jumped_late_mock;
+#endif
+
 /**
  * Return non-zero if late (legacy) sysjump occurred.
  *
@@ -286,6 +294,15 @@ const struct image_data *system_get_image_data(enum ec_image copy);
 const char *system_get_version(enum ec_image copy);
 
 /**
+ * Get the CrOS fwid string for an image
+ *
+ * @param copy		Image copy to get version from, or SYSTEM_IMAGE_UNKNOWN
+ *			to get the version for the currently running image.
+ * @return The fwid string for the image copy, or an empty string if error.
+ */
+const char *system_get_cros_fwid(enum ec_image copy);
+
+/**
  * Get the SKU ID for a device
  *
  * @return A value that identifies the SKU variant of a model. Its meaning and
@@ -338,6 +355,11 @@ const char *system_get_build_info(void);
  * Stay in RO next reboot, instead of potentially selecting RW during EFS.
  */
 #define SYSTEM_RESET_STAY_IN_RO         BIT(6)
+/*
+ * Hibernate reset. Reset EC when wake up from hibernate mode
+ * (the most power saving mode).
+ */
+#define SYSTEM_RESET_HIBERNATE          BIT(7)
 
 /**
  * Reset the system.

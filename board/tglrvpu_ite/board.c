@@ -5,10 +5,10 @@
 
 /* Intel TGL-U-RVP-ITE board-specific configuration */
 
-#include "bb_retimer.h"
 #include "button.h"
 #include "charger.h"
 #include "driver/charger/isl9241.h"
+#include "driver/retimer/bb_retimer_public.h"
 #include "extpower.h"
 #include "i2c.h"
 #include "intc.h"
@@ -130,6 +130,7 @@ const struct usb_mux usb_muxes[] = {
 		.usb_port = TYPE_C_PORT_0,
 		.next_mux = &usbc0_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT0_BB_RETIMER,
 		.i2c_addr_flags = I2C_PORT0_BB_RETIMER_ADDR,
 	},
@@ -137,6 +138,7 @@ const struct usb_mux usb_muxes[] = {
 		.usb_port = TYPE_C_PORT_1,
 		.next_mux = &usbc1_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT1_BB_RETIMER,
 		.i2c_addr_flags = I2C_PORT1_BB_RETIMER_ADDR,
 	},

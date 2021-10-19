@@ -89,6 +89,36 @@ const uint8_t usb_string_desc[] = {
 	0x09, 0x04 /* LangID = 0x0409: U.S. English */
 };
 
+#ifdef CONFIG_USB_MS_EXTENDED_COMPAT_ID_DESCRIPTOR
+/*
+ * String descriptor for Windows Compatible ID OS Descriptor. This string
+ * descriptor is used by Windows OS to know to request a Windows Compatible ID
+ * OS Descriptor so that Windows will load the proper WINUSB driver.
+ */
+const void *const usb_ms_os_string_descriptor = {USB_MS_STRING_DESC("MSFT100")};
+
+/*
+ * Extended Compat ID OS Feature descriptor. This descriptor is used by Windows
+ * OS to know which type of driver is required so the USB-EP device gets
+ * registered properly. This type of descriptor may contain more than one
+ * function interface, but this instantiation only uses one function interface
+ * to communicate the WINUSB compatible ID.
+ */
+const struct usb_ms_ext_compat_id_desc winusb_desc = {
+	.dwLength = sizeof(struct usb_ms_ext_compat_id_desc),
+	.bcdVersion = 0x100, /* Windows Compat ID Desc v1.0 */
+	.wIndex = USB_MS_EXT_COMPATIBLE_ID_INDEX,
+	.bCount = USB_MS_COMPAT_ID_FUNCTION,
+	.function = {
+		[0] = {
+			.bFirstInterfaceNumber = 0,
+			.reserved_1 = 1,
+			.compatible_id = {USB_MS_COMPAT_ID}, /* WINUSB */
+		},
+	},
+};
+#endif
+
 /* Endpoint table in USB controller RAM */
 struct stm32_endpoint btable_ep[USB_EP_COUNT] __aligned(8) __usb_btable;
 /* Control endpoint (EP0) buffers */
@@ -200,17 +230,30 @@ static void ep0_rx(void)
 	}
 	/* vendor specific request */
 	if ((req & USB_TYPE_MASK) == USB_TYPE_VENDOR) {
-#ifdef CONFIG_WEBUSB_URL
+#if defined(CONFIG_WEBUSB_URL) || \
+	defined(CONFIG_USB_MS_EXTENDED_COMPAT_ID_DESCRIPTOR)
 		uint8_t b_req = req >> 8; /* bRequest in the transfer */
-		uint16_t idx = ep0_buf_rx[2]; /* wIndex in the transfer */
+		uint16_t w_index = ep0_buf_rx[2]; /* wIndex in the transfer */
 
-		if (b_req == 0x01 && idx == WEBUSB_REQ_GET_URL) {
+#ifdef CONFIG_WEBUSB_URL
+		if (b_req == 0x01 && w_index == WEBUSB_REQ_GET_URL) {
 			int len = *(uint8_t *)webusb_url;
 
 			ep0_send_descriptor(webusb_url, len, 0);
 			return;
 		}
-#endif
+#endif /* CONFIG_WEBUSB_URL */
+
+#ifdef CONFIG_USB_MS_EXTENDED_COMPAT_ID_DESCRIPTOR
+		if (b_req == USB_MS_STRING_DESC_VENDOR_CODE &&
+			w_index == USB_MS_EXT_COMPATIBLE_ID_INDEX) {
+			ep0_send_descriptor((uint8_t *)&winusb_desc,
+					    winusb_desc.dwLength, 0);
+			return;
+		}
+#endif /* CONFIG_USB_MS_EXTENDED_COMPAT_ID_DESCRIPTOR */
+
+#endif /* CONFIG_WEBUSB_URL || CONFIG_USB_MS_EXTENDED_COMPAT_ID_DESCRIPTOR */
 		goto unknown_req;
 	}
 
@@ -237,6 +280,19 @@ static void ep0_rx(void)
 			break;
 #endif
 		case USB_DT_STRING: /* Setup : Get string descriptor */
+
+#ifdef CONFIG_USB_MS_EXTENDED_COMPAT_ID_DESCRIPTOR
+			/*
+			 * String descriptor request at index == 0xEE is used by
+			 * Windows OS to know how to retrieve an Extended Compat
+			 * ID OS Feature descriptor.
+			 */
+			if (idx == USB_GET_MS_DESCRIPTOR) {
+				desc = (uint8_t *)usb_ms_os_string_descriptor;
+				len = desc[0];
+				break;
+			}
+#endif
 			if (idx >= USB_STR_COUNT)
 				/* The string does not exist : STALL */
 				goto unknown_req;
@@ -677,14 +733,7 @@ DECLARE_IRQ(STM32_IRQ_USB_LP, usb_interrupt, 1);
 
 void usb_init(void)
 {
-	/* Enable USB device clock. */
-#if defined(STM32_RCC_APB1ENR2_USBFSEN)
-	STM32_RCC_APB1ENR2 |= STM32_RCC_APB1ENR2_USBFSEN;
-#else
-	STM32_RCC_APB1ENR |= STM32_RCC_PB1_USB;
-#endif
-
-	/* we need a proper 48MHz clock */
+	/* Enable USB device clock, possibly increasing system clock to 48MHz */
 	clock_enable_module(MODULE_USB, 1);
 
 	/* configure the pinmux */
@@ -747,26 +796,15 @@ void usb_release(void)
 	/* unset pinmux */
 	gpio_config_module(MODULE_USB, 0);
 
-	/* disable 48MHz clock */
+	/* disable USB device clock, possibly slowing down system clock */
 	clock_enable_module(MODULE_USB, 0);
-
-	/* disable USB device clock */
-#if defined(STM32_RCC_APB1ENR2_USBFSEN)
-	STM32_RCC_APB1ENR2 &= ~STM32_RCC_APB1ENR2_USBFSEN;
-#else
-	STM32_RCC_APB1ENR &= ~STM32_RCC_PB1_USB;
-#endif
 }
 /* ensure the host disconnects and reconnects over a sysjump */
 DECLARE_HOOK(HOOK_SYSJUMP, usb_release, HOOK_PRIO_DEFAULT);
 
 int usb_is_enabled(void)
 {
-#if defined(STM32_RCC_APB1ENR2_USBFSEN)
-	return (STM32_RCC_APB1ENR2 & STM32_RCC_APB1ENR2_USBFSEN) ? 1 : 0;
-#else
-	return (STM32_RCC_APB1ENR & STM32_RCC_PB1_USB) ? 1 : 0;
-#endif
+	return clock_is_module_enabled(MODULE_USB);
 }
 
 void *memcpy_to_usbram(void *dest, const void *src, size_t n)

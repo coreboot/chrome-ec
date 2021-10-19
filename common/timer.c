@@ -23,6 +23,14 @@ extern __error("k_usleep() should only be called from Zephyr code")
 int32_t k_usleep(int32_t);
 #endif /* CONFIG_ZEPHYR */
 
+#ifdef CONFIG_COMMON_RUNTIME
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
+#else
+#define CPRINTS(format, args...)
+#define CPRINTF(format, args...)
+#endif
+
 #define TIMER_SYSJUMP_TAG 0x4d54  /* "TM" */
 
 /* High 32-bits of the 64-bit timestamp counter. */
@@ -167,6 +175,10 @@ void usleep(unsigned us)
 	uint32_t evt = 0;
 	uint32_t t0;
 
+	/* If a wait is 0, return immediately. */
+	if (!us)
+		return;
+
 	if (IS_ENABLED(CONFIG_ZEPHYR)) {
 		while (us)
 			us = k_usleep(us);
@@ -181,7 +193,13 @@ void usleep(unsigned us)
 		return;
 	}
 
-	ASSERT(us);
+	/* If in interrupt context or interrupts are disabled, use udelay() */
+	if (!is_interrupt_enabled() || in_interrupt_context()) {
+		CPRINTS("Sleeping not allowed");
+		udelay(us);
+		return;
+	}
+
 	do {
 		evt |= task_wait_event(us);
 	} while (!(evt & TASK_EVENT_TIMER) &&
@@ -387,7 +405,7 @@ DECLARE_SAFE_CONSOLE_COMMAND(gettime, command_get_time,
 #endif
 
 #ifdef CONFIG_CMD_TIMERINFO
-int command_timer_info(int argc, char **argv)
+static int command_timer_info(int argc, char **argv)
 {
 	timer_print_info();
 

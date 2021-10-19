@@ -52,7 +52,7 @@ static struct icm_drv_data_t g_icm426xx_data;
  */
 static const mat33_fp_t lid_standard_ref = {
 	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, FLOAT_TO_FP(1), 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 static const mat33_fp_t base_standard_ref = {
@@ -72,7 +72,7 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_lid_accel_mutex,
 		.drv_data = &g_kx022_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = KX022_ADDR0_FLAGS,
+		.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
 		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.rot_standard_ref = &lid_standard_ref, /* identity matrix */
 		.default_range = 2, /* g */
@@ -136,16 +136,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = ICM426XX_GYRO_MIN_FREQ,
 		.max_frequency = ICM426XX_GYRO_MAX_FREQ,
-		.config = {
-			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 13000 | ROUND_UP_FLAG,
-				.ec_rate = 100 * MSEC,
-			},
-			[SENSOR_CONFIG_EC_S3] = {
-				.odr = 10000 | ROUND_UP_FLAG,
-				.ec_rate = 100 * MSEC,
-			},
-		},
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);

@@ -19,6 +19,16 @@ extern void test_suite_bmi260(void);
 extern void test_suite_bmi160(void);
 extern void test_suite_tcs3400(void);
 extern void test_suite_espi(void);
+extern void test_suite_bb_retimer(void);
+extern void test_suite_ln9310(void);
+extern void test_suite_lis2dw12(void);
+extern void test_suite_stm_mems_common(void);
+extern void test_suite_isl923x(void);
+extern void test_suite_usb_mux(void);
+extern void test_suite_ppc_syv682c(void);
+extern void test_suite_ppc_sn5s330(void);
+extern void test_suite_cros_cbi(void);
+extern void test_suite_tcpci(void);
 
 void test_main(void)
 {
@@ -39,4 +49,14 @@ void test_main(void)
 	test_suite_bmi160();
 	test_suite_tcs3400();
 	test_suite_espi();
+	test_suite_bb_retimer();
+	test_suite_ln9310();
+	test_suite_lis2dw12();
+	test_suite_stm_mems_common();
+	test_suite_isl923x();
+	test_suite_usb_mux();
+	test_suite_ppc_sn5s330();
+	test_suite_ppc_syv682c();
+	test_suite_cros_cbi();
+	test_suite_tcpci();
 }

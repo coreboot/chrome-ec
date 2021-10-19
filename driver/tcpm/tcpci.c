@@ -21,6 +21,7 @@
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
+#include "usb_pd_flags.h"
 #include "usb_pd_tcpc.h"
 #include "usb_pd_tcpm.h"
 #include "util.h"
@@ -321,14 +322,20 @@ static int init_alert_mask(int port)
 	 * Create mask of alert events that will cause the TCPC to
 	 * signal the TCPM via the Alert# gpio line.
 	 */
-	mask = TCPC_REG_ALERT_TX_SUCCESS | TCPC_REG_ALERT_TX_FAILED |
-		TCPC_REG_ALERT_TX_DISCARDED | TCPC_REG_ALERT_RX_STATUS |
-		TCPC_REG_ALERT_RX_HARD_RST | TCPC_REG_ALERT_CC_STATUS |
-		TCPC_REG_ALERT_FAULT
-#ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-		| TCPC_REG_ALERT_POWER_STATUS
-#endif
-		;
+	if (get_usb_pd_vbus_detect() == USB_PD_VBUS_DETECT_TCPC) {
+		mask = TCPC_REG_ALERT_TX_SUCCESS | TCPC_REG_ALERT_TX_FAILED |
+			TCPC_REG_ALERT_TX_DISCARDED | TCPC_REG_ALERT_RX_STATUS |
+			TCPC_REG_ALERT_RX_HARD_RST | TCPC_REG_ALERT_CC_STATUS |
+			TCPC_REG_ALERT_FAULT
+			| TCPC_REG_ALERT_POWER_STATUS
+			;
+	} else {
+		mask = TCPC_REG_ALERT_TX_SUCCESS | TCPC_REG_ALERT_TX_FAILED |
+			TCPC_REG_ALERT_TX_DISCARDED | TCPC_REG_ALERT_RX_STATUS |
+			TCPC_REG_ALERT_RX_HARD_RST | TCPC_REG_ALERT_CC_STATUS |
+			TCPC_REG_ALERT_FAULT
+			;
+	}
 
 	/* TCPCI Rev2 includes SAFE0V alerts */
 	if (TCPC_FLAGS_VSAFE0V(tcpc_config[port].flags))
@@ -361,11 +368,11 @@ static int init_power_status_mask(int port)
 	uint8_t mask;
 	int rv;
 
-#ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-	mask = TCPC_REG_POWER_STATUS_VBUS_PRES;
-#else
-	mask = 0;
-#endif
+	if (get_usb_pd_vbus_detect() == USB_PD_VBUS_DETECT_TCPC)
+		mask = TCPC_REG_POWER_STATUS_VBUS_PRES;
+	else
+		mask = 0;
+
 	rv = tcpc_write(port, TCPC_REG_POWER_STATUS_MASK , mask);
 
 	return rv;
@@ -653,15 +660,6 @@ int tcpci_tcpm_set_vconn(int port, int enable)
 
 	reg &= ~TCPC_REG_POWER_CTRL_VCONN(1);
 	reg |= TCPC_REG_POWER_CTRL_VCONN(enable);
-
-	/*
-	 * Add delay of writing TCPC_REG_POWER_CTRL makes
-	 * CC status being judged correctly when disable VCONN.
-	 * This may be a PS8XXX firmware issue, Parade is still trying.
-	 * https://partnerissuetracker.corp.google.com/issues/185202064
-	 */
-	if (!enable)
-		msleep(PS8XXX_VCONN_TURN_OFF_DELAY_US);
 
 	return tcpc_write(port, TCPC_REG_POWER_CTRL, reg);
 }
@@ -1142,7 +1140,7 @@ static void tcpci_check_vbus_changed(int port, int alert, uint32_t *pd_event)
 			tcpc_vbus[port] = BIT(VBUS_SAFE0V);
 		}
 
-		if (IS_ENABLED(CONFIG_USB_PD_VBUS_DETECT_TCPC) &&
+		if ((get_usb_pd_vbus_detect() == USB_PD_VBUS_DETECT_TCPC) &&
 		    IS_ENABLED(CONFIG_USB_CHARGER)) {
 			/* Update charge manager with new VBUS state */
 			usb_charger_vbus_change(port,
@@ -1166,6 +1164,7 @@ void tcpci_tcpc_alert(int port)
 	int alert_ext = 0;
 	int failed_attempts;
 	uint32_t pd_event = 0;
+	int retval = 0;
 
 	/* Read the Alert register from the TCPC */
 	if (tcpm_alert_status(port, &alert)) {
@@ -1201,10 +1200,23 @@ void tcpci_tcpc_alert(int port)
 	/* Pull all RX messages from TCPC into EC memory */
 	failed_attempts = 0;
 	while (alert & TCPC_REG_ALERT_RX_STATUS) {
-		if (tcpm_enqueue_message(port))
+		retval = tcpm_enqueue_message(port);
+		if (retval)
 			++failed_attempts;
 		if (tcpm_alert_status(port, &alert))
 			++failed_attempts;
+
+
+		/*
+		 * EC RX FIFO is full. Deassert ALERT# line to exit interrupt
+		 * handler by discarding pending message from TCPC RX FIFO.
+		 */
+		if (retval == EC_ERROR_OVERFLOW) {
+			CPRINTS("C%d: PD RX OVF!", port);
+			tcpc_write16(port, TCPC_REG_ALERT,
+				TCPC_REG_ALERT_RX_STATUS |
+				TCPC_REG_ALERT_RX_BUF_OVF);
+		}
 
 		/* Ensure we don't loop endlessly */
 		if (failed_attempts >= MAX_ALLOW_FAILED_RX_READS) {

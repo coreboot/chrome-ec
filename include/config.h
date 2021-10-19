@@ -119,6 +119,7 @@
 #undef CONFIG_ACCEL_LIS2DW_AS_BASE
 
 #undef CONFIG_ACCELGYRO_BMI160
+#undef CONFIG_ACCELGYRO_BMI220
 #undef CONFIG_ACCELGYRO_BMI260
 #undef CONFIG_ACCELGYRO_BMI3XX
 #undef CONFIG_ACCELGYRO_ICM426XX
@@ -607,6 +608,21 @@
  * battery_get_disconnect_state() to be defined.
  */
 #undef CONFIG_BATTERY_REVIVE_DISCONNECT
+
+/*
+ * Low voltage protection for a battery (a.k.a. deep charge inspection):
+ * If battery voltage is lower than voltage_min, deep charge for more
+ * than precharge time The battery voltage is still lower than voltage_min,
+ * the system will stop charging
+ */
+#undef CONFIG_BATTERY_LOW_VOLTAGE_PROTECTION
+
+/*
+ * If battery voltage is lower than voltage_min, precharge voltage & current
+ * are supplied and charging will be disabled after
+ * CONFIG_BATTERY_LOW_VOLTAGE_TIMEOUT seconds.
+ */
+#define CONFIG_BATTERY_LOW_VOLTAGE_TIMEOUT  (30*60*SECOND)
 
 /*
  * Specify the battery percentage at which the host is told it is full.
@@ -1418,6 +1434,7 @@
 #undef  CONFIG_CMD_I2CWEDGE
 #undef  CONFIG_CMD_I2C_PROTECT
 #define CONFIG_CMD_I2C_SCAN
+#undef  CONFIG_CMD_I2C_SPEED
 #undef  CONFIG_CMD_I2C_STRESS_TEST
 #undef  CONFIG_CMD_I2C_STRESS_TEST_ACCEL
 #undef  CONFIG_CMD_I2C_STRESS_TEST_ALS
@@ -1500,6 +1517,9 @@
  * wish to use chip-implemented panic backup/restore functions.
  */
 #undef CONFIG_CHIP_PANIC_BACKUP
+
+/* Don't save General Purpose Registers during panic */
+#undef CONFIG_PANIC_STRIP_GPR
 
 /*
  * Provide the default GPIO abstraction layer.
@@ -2314,6 +2334,9 @@
 /* Command to get the EC uptime (and optionally AP reset stats) */
 #define CONFIG_HOSTCMD_GET_UPTIME_INFO
 
+/* Include host command to control I2C busses (get, set speed, etc.) */
+#undef CONFIG_HOSTCMD_I2C_CONTROL
+
 /*
  * List of host commands whose debug output will be suppressed
  * By default remove periodic commands and commands called often (SENSE).
@@ -2570,7 +2593,15 @@
 /* Support CCGXXF I/O expander built inside PD chip */
 #undef CONFIG_IO_EXPANDER_CCGXXF
 
-/* Support IT8801 I/O expander. */
+/*
+ * Support IT8801 I/O expander.
+ *
+ * I2C address IT8801_KEYBOARD_PWM_I2C_ADDR_FLAGS and I2C port
+ * IT8801_KEYBOARD_PWM_I2C_PORT must be defined as well.
+ * Note: these values are only used when accessing the keyboard and PWM
+ * function of the IT8801 chip.  I/O expander functions are accessed using
+ * the ioex_config[] array.
+ */
 #undef CONFIG_IO_EXPANDER_IT8801
 
 /* Support Nuvoton NCT38xx I/O expander. */
@@ -4225,6 +4256,13 @@
 #undef CONFIG_USB_PD_DEBUG_LEVEL
 
 /*
+ * Define if this board is using runtime flags instead of build time configs
+ * to control USB PD properties.
+ */
+#define CONFIG_USB_PD_FLAGS
+#undef CONFIG_USB_PD_RUNTIME_FLAGS
+
+/*
  * Define if this board can enable VBUS discharge (eg. through a GPIO-controlled
  * discharge circuit, or through port controller registers) to discharge VBUS
  * rapidly on disconnect. Will be defined automatically when one of the below
@@ -4757,15 +4795,11 @@
 
 /*
  * Intel Reference Validation Platform's (RVP) Modular Embedded Control
- * Card (MECC) version 0.9
+ * Card (MECC) versions
  */
 #undef CONFIG_INTEL_RVP_MECC_VERSION_0_9
-
-/*
- * Intel Reference Validation Platform's (RVP) Modular Embedded Control
- * Card (MECC) version 1.0
- */
 #undef CONFIG_INTEL_RVP_MECC_VERSION_1_0
+#undef CONFIG_INTEL_RVP_MECC_VERSION_1_1
 
 /*****************************************************************************/
 
@@ -4930,6 +4964,14 @@
 
 /* Support correct handling of USB suspend (host-initiated). */
 #undef CONFIG_USB_SUSPEND
+
+/*
+ * Enable this config for a USB-EP device that needs to interop properly with a
+ * MS Windows OS host machine. This config will enable a special string
+ * descriptor so Windows OS will know to retreieve an Extended Compat ID OS
+ * Feature descriptor.
+ */
+#undef CONFIG_USB_MS_EXTENDED_COMPAT_ID_DESCRIPTOR
 
 /* Default pull-up value on the USB-C ports when they are used as source. */
 #define CONFIG_USB_PD_PULLUP TYPEC_RP_1A5
@@ -5171,13 +5213,6 @@
  */
 #undef CONFIG_WP_ALWAYS
 
-/*
- * If needed to allocate some free space in the base of the RO or RW section
- * of the image, define these to be equal the required size of the free space.
- */
-#define CONFIG_RO_HEAD_ROOM 0
-#define CONFIG_RW_HEAD_ROOM 0
-
 /* Firmware upgrade options. */
 /* A different config for the same update. TODO(vbendeb): dedupe these */
 #undef CONFIG_USB_UPDATE
@@ -5202,6 +5237,11 @@
  * command output.
  */
 #undef CONFIG_EXTENDED_VERSION_INFO
+
+/*
+ * Include CROS_FWID in version output.
+ */
+#define CONFIG_CROS_FWID_VERSION
 
 /*
  * Define this to support Cros Board Info from EEPROM. I2C_PORT_EEPROM

@@ -177,6 +177,9 @@
 
 #define PP5000_PGOOD_POWER_SIGNAL_MASK POWER_SIGNAL_MASK(PP5000_A_PGOOD)
 
+/* Include math_util for bitmask_uint64 used in pd_timers */
+#define CONFIG_MATH_UTIL
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
@@ -281,6 +284,6 @@ unsigned int ec_config_get_thermal_solution(void);
  * There is no RSMRST input, so alias it to the output. This short-circuits
  * common_intel_x86_handle_rsmrst.
  */
-#define GPIO_RSMRST_L_PGOOD	GPIO_PCH_RSMRST_L
+#define GPIO_PG_EC_RSMRST_ODL	GPIO_PCH_RSMRST_L
 
 #endif /* __CROS_EC_BOARD_H */

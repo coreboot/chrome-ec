@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_DRIVER_RETIMER_BB_RETIMER_PUBLIC_H
 #define __CROS_EC_DRIVER_RETIMER_BB_RETIMER_PUBLIC_H
 
+#include "usb_mux.h"
+
 struct usb_mux;
 
 /* Supported USB retimer drivers */
@@ -42,15 +44,13 @@ __override_proto int bb_retimer_power_enable(const struct usb_mux *me,
 					     bool enable);
 
 /**
- * reset the BB retimer
+ * Set HPD on the BB retimer
  *
- * Define override function at board level if the platform specific changes
- * are needed to reset the BB retimer.
+ * Set the HPD related fields in the BB retimer
  *
- * @param me     Pointer to USB mux
- *
- * @return EC_SUCCESS, or non-zero on error.
+ * @param me		Pointer to USB mux
+ * @param mux_state	USB mux state containing HPD level and IRQ
  */
-__override_proto int bb_retimer_reset(const struct usb_mux *me);
+void bb_retimer_hpd_update(const struct usb_mux *me, mux_state_t mux_state);
 
 #endif /* __CROS_EC_DRIVER_RETIMER_BB_RETIMER_PUBLIC_H */

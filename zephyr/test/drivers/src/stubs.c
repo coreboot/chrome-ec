@@ -8,14 +8,16 @@
 #include "bc12/pi3usb9201_public.h"
 #include "charge_ramp.h"
 #include "charger.h"
+#include "charger/isl923x_public.h"
 #include "charger/isl9241_public.h"
 #include "config.h"
 #include "i2c/i2c.h"
+#include "power.h"
 #include "ppc/sn5s330_public.h"
 #include "ppc/syv682x_public.h"
 #include "retimer/bb_retimer_public.h"
 #include "stubs.h"
-#include "tcpm/tusb422_public.h"
+#include "tcpm/tcpci.h"
 #include "tcpm/tusb422_public.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
@@ -43,12 +45,26 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
 
 /* Charger Chip Configuration */
 const struct charger_config_t chg_chips[] = {
+#ifdef CONFIG_PLATFORM_EC_CHARGER_ISL9241
 	{
 		.i2c_port = I2C_PORT_CHARGER,
 		.i2c_addr_flags = ISL9241_ADDR_FLAGS,
 		.drv = &isl9241_drv,
 	},
+#endif
+#ifdef CONFIG_PLATFORM_EC_CHARGER_ISL9238
+	{
+		.i2c_port = I2C_PORT_CHARGER,
+		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
+		.drv = &isl923x_drv,
+	},
+#endif
 };
+
+uint8_t board_get_charger_chip_count(void)
+{
+	return ARRAY_SIZE(chg_chips);
+}
 
 const struct board_batt_params board_battery_info[] = {
 	/* LGC\011 L17L3PB0 Battery Information */
@@ -106,9 +122,9 @@ struct tcpc_config_t tcpc_config[] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_USB_C0,
-			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
+			.addr_flags = DT_REG_ADDR(DT_NODELABEL(tcpci_emul)),
 		},
-		.drv = &tusb422_tcpm_drv,
+		.drv = &tcpci_tcpm_drv,
 	},
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -127,6 +143,12 @@ int board_is_sourcing_vbus(int port)
 	return 0;
 }
 
+struct usb_mux usbc1_virtual_usb_mux = {
+	.usb_port = USBC_PORT_C1,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
+};
+
 struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
 		.usb_port = USBC_PORT_C0,
@@ -135,11 +157,26 @@ struct usb_mux usb_muxes[] = {
 	},
 	[USBC_PORT_C1] = {
 		.usb_port = USBC_PORT_C1,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
+		.next_mux = &usbc1_virtual_usb_mux,
+		.i2c_port = I2C_PORT_USB_C1,
+		.i2c_addr_flags = DT_REG_ADDR(DT_NODELABEL(
+					usb_c1_bb_retimer_emul)),
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
+
+struct bb_usb_control bb_controls[] = {
+	[USBC_PORT_C0] = {
+		/* USB-C port 0 doesn't have a retimer */
+	},
+	[USBC_PORT_C1] = {
+		.usb_ls_en_gpio = GPIO_USB_C1_LS_EN,
+		.retimer_rst_gpio = GPIO_USB_C1_RT_RST_ODL,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(bb_controls) == USBC_PORT_COUNT);
 
 void pd_power_supply_reset(int port)
 {
@@ -180,3 +217,32 @@ uint16_t tcpc_get_alert_status(void)
 {
 	return 0;
 }
+
+enum power_state power_chipset_init(void)
+{
+	return POWER_G3;
+}
+
+enum power_state mock_state = POWER_G3;
+
+void set_mock_power_state(enum power_state state)
+{
+	mock_state = state;
+	task_wake(TASK_ID_CHIPSET);
+}
+
+enum power_state power_handle_state(enum power_state state)
+{
+	return mock_state;
+}
+
+void chipset_reset(enum chipset_reset_reason reason)
+{
+}
+
+void chipset_force_shutdown(enum chipset_shutdown_reason reason)
+{
+}
+
+/* Power signals list. Must match order of enum power_signal. */
+const struct power_signal_info power_signal_list[] = {};

@@ -107,6 +107,7 @@ static int charge_current = CHARGE_CURRENT_UNINITIALIZED;
 static int charge_current_uncapped = CHARGE_CURRENT_UNINITIALIZED;
 static int charge_voltage;
 static int charge_supplier = CHARGE_SUPPLIER_NONE;
+static int charge_pd_current_uncapped = CHARGE_CURRENT_UNINITIALIZED;
 static int override_port = OVERRIDE_OFF;
 
 static int delayed_override_port = OVERRIDE_OFF;
@@ -265,6 +266,11 @@ static int charge_manager_is_seeded(void)
 	}
 	is_seeded = 1;
 	return 1;
+}
+
+int charge_manager_get_pd_current_uncapped(void)
+{
+	return charge_pd_current_uncapped;
 }
 
 #ifndef TEST_BUILD
@@ -828,6 +834,15 @@ static void charge_manager_refresh(void)
 			available_charge[new_supplier][new_port].voltage;
 	}
 
+	/*
+	 * Record the PD current limit to prevent from over-sinking
+	 * the charger.
+	 */
+	if (new_supplier == CHARGE_SUPPLIER_PD)
+		charge_pd_current_uncapped = new_charge_current_uncapped;
+	else
+		charge_pd_current_uncapped = CHARGE_CURRENT_UNINITIALIZED;
+
 	/* Change the charge limit + charge port/supplier if modified. */
 	if (new_port != charge_port || new_charge_current != charge_current ||
 	    new_supplier != charge_supplier) {
@@ -919,6 +934,7 @@ static void charge_manager_refresh(void)
 			uint32_t max_voltage;
 			uint32_t max_current;
 			uint32_t unused;
+			bool new_req = false;
 			/*
 			 * Check if new voltage/current is different
 			 * than requested. If yes, send new power request
@@ -927,19 +943,28 @@ static void charge_manager_refresh(void)
 			    charge_voltage ||
 			    pd_get_requested_current(updated_new_port) !=
 			    charge_current_uncapped)
-				pd_set_new_power_request(updated_new_port);
+				new_req = true;
 
-			/*
-			 * Check if we can get more power from this port.
-			 * If yes, send new power request
-			 */
-			pd_find_pdo_index(pd_get_src_cap_cnt(updated_new_port),
-					  pd_get_src_caps(updated_new_port),
-					  pd_get_max_voltage(), &pdo);
-			pd_extract_pdo_power(pdo, &max_current, &max_voltage,
-					     &unused);
-			if (charge_voltage != max_voltage ||
-			    charge_current_uncapped != max_current)
+			if (IS_ENABLED(CONFIG_USB_PD_DPS) && dps_is_enabled()) {
+				/* Fall-through. DPS control sink voltage */
+			} else {
+				/*
+				 * Check if we can get more power from this
+				 * port. If yes, send new power request
+				 */
+				pd_find_pdo_index(
+					pd_get_src_cap_cnt(updated_new_port),
+					pd_get_src_caps(updated_new_port),
+					pd_get_max_voltage(), &pdo);
+				pd_extract_pdo_power(pdo, &max_current,
+						     &max_voltage, &unused);
+
+				if (charge_voltage != max_voltage ||
+				    charge_current_uncapped != max_current)
+					new_req = true;
+			}
+
+			if (new_req)
 				pd_set_new_power_request(updated_new_port);
 		} else {
 			/*

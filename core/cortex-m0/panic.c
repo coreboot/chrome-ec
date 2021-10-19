@@ -24,8 +24,7 @@ static int bus_fault_ignored;
 static struct panic_data * const pdata_ptr = PANIC_DATA_PTR;
 
 /* Preceded by stack, rounded down to nearest 64-bit-aligned boundary */
-static const uint32_t pstack_addr = (CONFIG_RAM_BASE + CONFIG_RAM_SIZE
-				     - sizeof(struct panic_data)) & ~7;
+static const uint32_t pstack_addr = ((uint32_t)pdata_ptr) & ~7;
 
 /**
  * Print the name and value of a register
@@ -164,8 +163,17 @@ void exception_panic(void)
 			[pstack] "r" (pstack_addr) :
 			/* Constraints protecting these from being clobbered.
 			 * Gcc should be using r0 & r12 for pregs and pstack. */
-			"r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9",
-			"r10", "r11", "cc", "memory"
+			"r1", "r2", "r3", "r4", "r5", "r6",
+		/* clang warns that we're clobbering a reserved register:
+		 * inline asm clobber list contains reserved registers: R7
+		 * [-Werror,-Winline-asm]. The intent of the clobber list is
+		 * to force pregs and pstack to be in R0 and R12, which
+		 * still holds.
+		 */
+#ifndef __clang__
+			"r7",
+#endif
+			"r8", "r9", "r10", "r11", "cc", "memory"
 		);
 }
 

@@ -18,6 +18,12 @@
 /* Barrel Jack */
 #define DEDICATED_CHARGE_PORT 3
 
+/* HDMI CEC */
+#define CONFIG_CEC
+#define CEC_GPIO_OUT GPIO_HDMI_CEC_OUT
+#define CEC_GPIO_IN  GPIO_HDMI_CEC_IN
+#define CEC_GPIO_PULL_UP GPIO_HDMI_CEC_PULL_UP
+
 /* USB Type A Features */
 #define USB_PORT_COUNT			4
 #define CONFIG_USB_PORT_POWER_DUMB
@@ -49,8 +55,8 @@
  * to 100W after we verify it.
  */
 #define PD_OPERATING_POWER_MW	CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
-#define PD_MAX_POWER_MW		60000
-#define PD_MAX_CURRENT_MA	3000
+#define PD_MAX_POWER_MW		100000
+#define PD_MAX_CURRENT_MA	5000
 #define PD_MAX_VOLTAGE_MV	20000
 
 /*
@@ -79,7 +85,6 @@
 #define GPIO_PG_EC_DSW_PWROK		GPIO_SEQ_EC_DSW_PWROK
 #define GPIO_PG_EC_RSMRST_ODL		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_POWER_BUTTON_L		GPIO_GSC_EC_PWR_BTN_ODL
-#define GPIO_RSMRST_L_PGOOD		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
 #define GPIO_WP_L			GPIO_EC_WP_ODL
 #define GPIO_RECOVERY_L			GPIO_EC_RECOVERY_BTN_OD
@@ -139,11 +144,22 @@
  */
 /* #define CONFIG_FANS			FAN_CH_COUNT */
 
+/* Include math_util for bitmask_uint64 used in pd_timers */
+#define CONFIG_MATH_UTIL
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"	/* needed by registers.h */
 #include "registers.h"
 #include "usbc_config.h"
+
+enum charge_port {
+	CHARGE_PORT_TYPEC0,
+	CHARGE_PORT_TYPEC1,
+	CHARGE_PORT_TYPEC2,
+	CHARGE_PORT_BARRELJACK,
+	CHARGE_PORT_ENUM_COUNT
+};
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_CPU,
@@ -169,7 +185,9 @@ enum ioex_port {
 };
 
 enum pwm_channel {
-	PWM_CH_FAN,			/* PWM5 */
+	PWM_CH_LED_GREEN,		/* PWM0 */
+	PWM_CH_FAN,                     /* PWM5 */
+	PWM_CH_LED_RED,                 /* PWM2 */
 	PWM_CH_COUNT
 };
 
@@ -182,6 +200,18 @@ enum mft_channel {
 	MFT_CH_0 = 0,
 	MFT_CH_COUNT
 };
+
+/*
+ * firmware config fields
+ */
+/*
+ * Barrel-jack power (4 bits).
+ */
+#define EC_CFG_BJ_POWER_L		0
+#define EC_CFG_BJ_POWER_H		3
+#define EC_CFG_BJ_POWER_MASK GENMASK(EC_CFG_BJ_POWER_H, EC_CFG_BJ_POWER_L)
+
+extern void adp_connect_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

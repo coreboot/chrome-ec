@@ -4,7 +4,6 @@
 
 menuconfig PLATFORM_EC_BATTERY
 	bool "Battery support"
-	select HAS_TASK_CHARGER
 	help
 	  Enables battery support on the board. Requires selection of a battery
 	  and a charger IC.
@@ -90,13 +89,6 @@ config PLATFORM_EC_BATTERY_DEVICE_CHEMISTRY
 	  is returning the right information. If it is not, there might be
 	  something wrong with the I2C implementation.
 
-config PLATFORM_EC_BATTERY_REVIVE_DISCONNECT
-	bool "Check for a battery in disconnect state"
-	help
-	  Check for battery in disconnect state (similar to cut-off state). If
-	  so, take it out of that state by force-applying a charge current.
-	  This option requires battery_get_disconnect_state() to be defined.
-
 config PLATFORM_EC_I2C_VIRTUAL_BATTERY
 	bool "I2C virtual battery"
 	help
@@ -106,11 +98,41 @@ config PLATFORM_EC_I2C_VIRTUAL_BATTERY
 	  return desired data to host instead of issuing I2C transaction every
 	  time.
 
-choice "Charger select"
-	prompt "Select the charger to use"
+config PLATFORM_EC_I2C_VIRTUAL_BATTERY_ADDR
+	hex "I2C virtual battery address"
+	default 0x0B if PLATFORM_EC_BATTERY_SMART
+	range 0x00 0x7f
+	depends on PLATFORM_EC_I2C_VIRTUAL_BATTERY
 	help
-	  Select the battery charger IC used on the board. Only one charger may
-	  be selected.
+	  This config sets i2c address that will be intercepted by virtual
+	  battery feature. All communication to this port will be cached
+	  to decrease i2c communication traffic.
+	  This should be equal to the address of real battery.
+
+menuconfig PLATFORM_EC_CHARGER
+	bool "Charging support"
+	default y
+	select HAS_TASK_CHARGER
+	help
+	  Enable the EC charging task.  This enables compilation of the
+          charge_state_v2 code.
+
+if PLATFORM_EC_CHARGER
+
+config PLATFORM_EC_CHARGE_MANAGER
+	bool "Charge manager"
+	default y
+	help
+	  The EC charge manager manages charging the battery from all supported
+	  power sources.  This includes dedicated charge ports (such as a
+	  barrel jack connector), BC1.2 (Battery Charging 1.2) sources, and
+	  USB-C sources. When multiple charge sources are connected to a
+	  Chromebook simultaneously, the charge manager is responsible for
+	  picking the best source.
+
+	  Note that the charge manager assumes that at least one USB-C power
+	  source is available on the hardware, so cannot be built without
+	  PLATFORM_EC_USBC.
 
 config PLATFORM_EC_CHARGER_ISL9237
 	bool "Use the ISL9237 charger"
@@ -187,8 +209,6 @@ config PLATFORM_EC_CHARGER_BQ25720
 	  wide range of input power sources are supported such as high
 	  voltage USB-C power delivery.
 
-endchoice  # "Charger select"
-
 config PLATFORM_EC_CHARGER_DISCHARGE_ON_AC
 	bool "Board supports discharge mode"
 	help
@@ -255,7 +275,7 @@ config PLATFORM_EC_CHARGER_BQ25720_VSYS_TH2_DV
 config PLATFORM_EC_CHARGER_MAINTAIN_VBAT
 	bool "Maintain VBAT voltage regardless of AC state"
 	help
-	  Leave the  charger VBAT configured to battery-requested voltage under
+	  Leave the charger VBAT configured to battery-requested voltage under
 	  all conditions, even when AC is not present. This may be necessary to
 	  work around quirks of certain charger chips, such as the BD9995X.
 
@@ -371,7 +391,7 @@ config PLATFORM_EC_CHARGE_RAMP_HW
 	depends on !PLATFORM_EC_CHARGER_CHGRAMP_BROKEN
 	help
 	   Disables software control of ramping up charging. This is used when
-	   the hardware has a a mechanism for ramping input current and
+	   the hardware has a mechanism for ramping input current and
 	   backing-off as needed.
 
 config PLATFORM_EC_CHARGE_RAMP_SW
@@ -417,6 +437,20 @@ config PLATFORM_EC_CONSOLE_CMD_CHGRAMP
 	      OC 1: s0 oc_det0 icl0
 	      OC 2: s0 oc_det0 icl0
 
+endif # PLATFORM_EC_CHARGER
+
+config PLATFORM_EC_BATTERY_CRITICAL_SHUTDOWN_CUT_OFF
+	bool "Enable battery cut off on critical power level"
+	help
+	  If this option is enabled, the battery will enter cut-off
+	  mode in case of critical power level.
+
+config PLATFORM_EC_BATTERY_CHECK_CHARGE_TEMP_LIMITS
+	bool "Monitor battery temperature while charging"
+	help
+	  Enable monitoring of battery temperature while charging and
+	  stop charging if is outside of the safe range.
+
 config PLATFORM_EC_BATTERY_CUT_OFF
 	bool "Host/Console command: battery cut-off"
 	help
@@ -441,6 +475,37 @@ config PLATFORM_EC_BATTERY_REVIVE_DISCONNECT
 	  If this battery is found to be in disconnect state, take it out of
 	  this state by force-applying a charge current. Once defined,
 	  a battery_get_disconnect_state() function has to be provided.
+
+config PLATFORM_EC_BATTERY_MEASURE_IMBALANCE
+	bool "Measure the battery cells imbalance"
+	help
+	  Smart battery driver should measure the voltage cell imbalance in the
+	  battery pack.
+	  This requires a battery driver capable of the measurement.
+	  If enabled, the AP enabling may be prevented if battery is too
+	  imbalanced.
+
+config PLATFORM_EC_BATTERY_MAX_IMBALANCE_MV
+	int "Max battery imbalance in millivolts"
+	depends on PLATFORM_EC_BATTERY_MEASURE_IMBALANCE
+	default 200
+	help
+	  Imbalanced battery packs in this situation appear to have balanced
+	  charge very quickly after beginning the charging cycle, since dV/dQ
+	  rapidly decreases as the cell is charged out of deep discharge.
+	  Increasing the value of
+	  CONFIG_PLATFORM_EC_CHARGER_MIN_BAT_PCT_IMBALANCED_POWER_ON will make a
+	  system tolerant of larger values of
+	  CONFIG_PLATFORM_EC_BATTERY_MAX_IMBALANCE_MV.
+
+config PLATFORM_EC_CHARGER_MIN_BAT_PCT_IMBALANCED_POWER_ON
+	int "Minimum battery percentage for power on with an imbalanced pack"
+	depends on PLATFORM_EC_BATTERY_MEASURE_IMBALANCE
+	default 5
+	range 0 100
+	help
+	  If battery pack is in imbalanced state and current state of charge is
+	  below this value, the AP won't be powered on.
 
 config PLATFORM_EC_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV
 	int "Voltage limit in mV when battery is full and AP is off"

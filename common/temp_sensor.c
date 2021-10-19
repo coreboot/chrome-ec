@@ -27,7 +27,11 @@ int temp_sensor_read(enum temp_sensor_id id, int *temp_ptr)
 		return EC_ERROR_INVAL;
 	sensor = temp_sensors + id;
 
+#ifdef CONFIG_ZEPHYR
+	return sensor->read(sensor, temp_ptr);
+#else
 	return sensor->read(sensor->idx, temp_ptr);
+#endif
 }
 
 static void update_mapped_memory(void)
@@ -98,11 +102,7 @@ static void temp_sensor_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, temp_sensor_init, HOOK_PRIO_DEFAULT);
 
-/*****************************************************************************/
-/* Console commands */
-
-#ifdef CONFIG_CMD_TEMP_SENSOR
-int console_command_temps(int argc, char **argv)
+int print_temps(void)
 {
 	int t, i;
 	int rv, rv1 = EC_SUCCESS;
@@ -140,7 +140,16 @@ int console_command_temps(int argc, char **argv)
 
 	return rv1;
 }
-DECLARE_CONSOLE_COMMAND(temps, console_command_temps,
+
+/*****************************************************************************/
+/* Console commands */
+
+#ifdef CONFIG_CMD_TEMP_SENSOR
+static int command_temps(int argc, char **argv)
+{
+	return print_temps();
+}
+DECLARE_CONSOLE_COMMAND(temps, command_temps,
 			NULL,
 			"Print temp sensors");
 #endif
@@ -148,7 +157,8 @@ DECLARE_CONSOLE_COMMAND(temps, console_command_temps,
 /*****************************************************************************/
 /* Host commands */
 
-enum ec_status temp_sensor_command_get_info(struct host_cmd_handler_args *args)
+static enum ec_status
+temp_sensor_command_get_info(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_temp_sensor_get_info *p = args->params;
 	struct ec_response_temp_sensor_get_info *r = args->response;

@@ -23,20 +23,11 @@ config PLATFORM_EC_LED_PWM
 	  Enable PWM (Pulse Width Modulation) controlled LEDs that conform to
 	  the Chromium OS LED behavior specification.
 
-	  Your board files must implement the led_get_brightness_range() and
-	  led_set_brightness() which are used by the LED PWM module to set the
-	  board LEDs in response to power and charging events.
+	  Your board files must implement led_set_brightness() function, which
+	  is used by the LED PWM module to set the board LEDs in response to
+	  power and charging events.
 
 if PLATFORM_EC_LED_PWM
-
-config PLATFORM_EC_LED_PWM_COUNT
-	int "Number of PWM LEDs"
-	default 1
-	help
-	  This sets the number of PWM LEDs that are controlled by the common
-	  PWM LED policy. The maximum number of PWM LEDs is currently 2.
-
-	  TODO(b/177452529): Set this parameter from the device tree.
 
 config PLATFORM_EC_CONSOLE_CMD_LEDTEST
 	bool "Console command: ledtest"
@@ -54,4 +45,23 @@ config PLATFORM_EC_CONSOLE_CMD_LEDTEST
 	    ledtest 0 disable
 
 endif # PLATFORM_EC_LED_PWM
+
+config PLATFORM_EC_LED_ONOFF_STATES
+	bool "EC LED On-Off States"
+	help
+	  Enable EC Standard LED On-Off state code that conforms to the
+	  Chromium OS LED On-Off state behavior.
+
+if PLATFORM_EC_LED_ONOFF_STATES
+
+config PLATFORM_EC_LED_ONOFF_STATES_BAT_LOW
+	int "EC LED On-Off State Battery Low Percentage"
+	default 10
+	help
+	  Enable EC Standard LED On-Off bettery low percentage
+	  for standard Chromium OS LED On-Off battery low
+	  state behavior.
+
+endif # PLATFORM_EC_LED_ONOFF_STATES
+
 endif # PLATFORM_EC_LED_COMMON

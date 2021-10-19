@@ -79,6 +79,11 @@ void interrupt_disable(void);
  */
 void interrupt_enable(void);
 
+/**
+ * Check if interrupts are enabled
+ */
+int is_interrupt_enabled(void);
+
 /*
  * Define irq_lock and irq_unlock that match the function signatures to Zephyr's
  * functions. In reality, these simply call the current implementation of
@@ -434,5 +439,17 @@ struct irq_def {
 #include "ec.irqlist"
 #endif /* CONFIG_COMMON_RUNTIME */
 #endif /* !CONFIG_ZEPHYR */
+
+#if defined(CONFIG_ZEPHYR) && defined(TEST_BUILD)
+#include <kernel.h>
+
+/**
+ * @brief Get the Zephyr thread ID for the given task
+ *
+ * @param cros_tid A valid cros TASK_ID_* entry
+ * @return The Zephyr thread ID
+ */
+k_tid_t task_get_zephyr_tid(size_t cros_tid);
+#endif /* CONFIG_ZEPHYR && TEST_BUILD */
 
 #endif  /* __CROS_EC_TASK_H */

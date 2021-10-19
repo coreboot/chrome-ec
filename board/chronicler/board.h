@@ -18,10 +18,6 @@
 #undef CONFIG_CHIP_INIT_ROM_REGION
 
 /* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
-
-/* Remove PRL state names to free flash space */
-#define CONFIG_USB_PD_DEBUG_LEVEL 2
 
 #define CONFIG_VBOOT_EFS2
 
@@ -106,7 +102,6 @@
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
 #define GPIO_PCH_DSW_PWROK		GPIO_EC_PCH_DSW_PWROK
 #define GPIO_POWER_BUTTON_L		GPIO_H1_EC_PWR_BTN_ODL
-#define GPIO_RSMRST_L_PGOOD		GPIO_PG_EC_RSMRST_ODL
 #define GPIO_CPU_PROCHOT		GPIO_EC_PROCHOT_ODL
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L

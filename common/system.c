@@ -12,6 +12,7 @@
 #include "console.h"
 #include "cpu.h"
 #include "cros_board_info.h"
+#include "ec_version.h"
 #include "dma.h"
 #include "extpower.h"
 #include "flash.h"
@@ -246,6 +247,8 @@ void system_encode_save_flags(int flags, uint32_t *save_flags)
 	/* Save reset flag */
 	if (flags & (SYSTEM_RESET_HARD | SYSTEM_RESET_WAIT_EXT))
 		*save_flags |= EC_RESET_FLAG_HARD;
+	else if (flags & SYSTEM_RESET_HIBERNATE)
+		*save_flags |= EC_RESET_FLAG_HIBERNATE;
 	else
 		*save_flags |= EC_RESET_FLAG_SOFT;
 }
@@ -678,11 +681,6 @@ static int system_run_image_copy_with_flags(enum ec_image copy,
 		init_addr = system_get_fw_reset_vector(base);
 	} else {
 		uintptr_t init = base + 4;
-
-		/* Skip any head room in the RO image */
-		if (copy == EC_IMAGE_RO)
-			init += CONFIG_RO_HEAD_ROOM;
-
 		init_addr = *(uintptr_t *)(init);
 
 		/* Make sure the reset vector is inside the destination image */
@@ -805,6 +803,23 @@ const char *system_get_version(enum ec_image copy)
 	const struct image_data *data = system_get_image_data(copy);
 
 	return data ? data->version : "";
+}
+
+
+const char *system_get_cros_fwid(enum ec_image copy)
+{
+	const struct image_data *data;
+
+	if (IS_ENABLED(CONFIG_CROS_FWID_VERSION)) {
+		data = system_get_image_data(copy);
+		if (data &&
+		    (data->cookie3 & CROS_EC_IMAGE_DATA_COOKIE3_MASK) ==
+			    CROS_EC_IMAGE_DATA_COOKIE3)
+			return data->cros_fwid;
+		else
+			return CROS_FWID_MISSING_STR;
+	}
+	return "";
 }
 
 #ifdef CONFIG_ROLLBACK
@@ -1244,47 +1259,32 @@ DECLARE_CONSOLE_COMMAND(hibernate, command_hibernate,
  *
  * cr50_v1.1.4979-0061603+ private-cr51:v0.0.66-bd9a0fe tpm2:v0.0.259-2b...
  *
- * Each subcomponent in this case includes the ":v" substring. For these
- * combined version strings this function prints each version or subcomponent
- * version on a different line.
  */
 static void print_build_string(void)
 {
 	const char *full_build_string;
 	const char *p;
-	char symbol;
-	int seen_colonv;
+	size_t next_token_len;
+	size_t line_len = 0;
+	const size_t max_line_len = 50;
 
-	ccprintf("Build:   ");
+	ccprintf("Build:\t");
 	full_build_string = system_get_build_info();
-
-	/* 50 characters or less, will fit into the terminal line. */
-	if (strlen(full_build_string) < 50) {
-		ccprintf("%s\n", full_build_string);
-		return;
-	}
-
-	/*
-	 * Build version string needs splitting, let's split it at the first
-	 * space (this is where the main version ends), and then on each space
-	 * after the ":v" substring, this is where subcomponent versions are
-	 * separated.
-	 */
 	p = full_build_string;
-	seen_colonv = 1;
 
-	symbol = *p++;
-	while (symbol) {
-		if ((symbol == ' ') && seen_colonv) {
-			seen_colonv = 0;
-			/* Indent each line under 'Build:    ' */
-			ccprintf("\n         ");
-		} else {
-			if ((symbol == ':') && (*p == 'v'))
-				seen_colonv = 1;
-			ccprintf("%c", symbol);
+	while (*p) {
+		/* Print first token */
+		if (*p == ' ') {
+			next_token_len = strcspn(p + 1, " \0");
+			if (next_token_len + line_len > max_line_len) {
+				line_len = 0;
+				p++;
+				ccprintf("\n\t\t");
+				continue;
+			}
 		}
-		symbol = *p++;
+		ccprintf("%c", *p++);
+		line_len++;
 	}
 	ccprintf("\n");
 }
@@ -1292,46 +1292,66 @@ static void print_build_string(void)
 static int command_version(int argc, char **argv)
 {
 	int board_version;
+	const char *fw_version;
+	const char *cros_fwid;
+	bool __maybe_unused is_active;
 
-	ccprintf("Chip:    %s %s %s\n", system_get_chip_vendor(),
+	ccprintf("Chip:\t%s %s %s\n", system_get_chip_vendor(),
 		 system_get_chip_name(), system_get_chip_revision());
 
 	board_version = system_get_board_version();
 	if (board_version < 0)
-		ccprintf("Board:   Error %d\n", -board_version);
+		ccprintf("Board:\tError %d\n", -board_version);
 	else
-		ccprintf("Board:   %d\n", board_version);
+		ccprintf("Board:\t%d\n", board_version);
 
-#ifdef CHIP_HAS_RO_B
-	{
-		enum ec_image active;
+	fw_version = system_get_version(EC_IMAGE_RO);
+	cros_fwid = system_get_cros_fwid(EC_IMAGE_RO);
+	if (IS_ENABLED(CHIP_HAS_RO_B)) {
+		is_active = system_get_ro_image_copy() == EC_IMAGE_RO;
 
-		active = system_get_ro_image_copy();
-		ccprintf("RO_A:  %c %s\n",
-			 (active == EC_IMAGE_RO ? '*' : ' '),
-			 system_get_version(EC_IMAGE_RO));
-		ccprintf("RO_B:  %c %s\n",
-			 (active == EC_IMAGE_RO_B ? '*' : ' '),
-			 system_get_version(EC_IMAGE_RO_B));
+		ccprintf("RO_A:\t%s%s\n", is_active ? "* " : "", fw_version);
+		if (IS_NONEMPTY_STRING(cros_fwid))
+			ccprintf("\t\t%s%s\n", is_active ? "* " : "",
+				 cros_fwid);
+
+		is_active = system_get_ro_image_copy() == EC_IMAGE_RO_B;
+		fw_version = system_get_version(EC_IMAGE_RO_B);
+		cros_fwid = system_get_cros_fwid(EC_IMAGE_RO_B);
+
+		ccprintf("RO_B:\t%s%s\n", is_active ? "* " : "", fw_version);
+		if (IS_NONEMPTY_STRING(cros_fwid))
+			ccprintf("\t\t%s%s\n", is_active ? "* " : "",
+				 cros_fwid);
+	} else {
+		ccprintf("RO:\t%s\n", fw_version);
+		if (IS_NONEMPTY_STRING(cros_fwid))
+			ccprintf("\t\t%s\n", cros_fwid);
 	}
-#else
-	ccprintf("RO:      %s\n", system_get_version(EC_IMAGE_RO));
-#endif
-#ifdef CONFIG_RW_B
-	{
-		enum ec_image active;
 
-		active = system_get_image_copy();
-		ccprintf("RW_A:  %c %s\n",
-			 (active == EC_IMAGE_RW ? '*' : ' '),
-			 system_get_version(EC_IMAGE_RW));
-		ccprintf("RW_B:  %c %s\n",
-			 (active == EC_IMAGE_RW_B ? '*' : ' '),
-			 system_get_version(EC_IMAGE_RW_B));
+	fw_version = system_get_version(EC_IMAGE_RW);
+	cros_fwid = system_get_cros_fwid(EC_IMAGE_RW);
+	if (IS_ENABLED(CONFIG_RW_B)) {
+		is_active = system_get_active_copy() == EC_IMAGE_RW;
+
+		ccprintf("RW_A:\t%s%s\n", is_active ? "* " : "", fw_version);
+		if (IS_NONEMPTY_STRING(cros_fwid))
+			ccprintf("\t\t%s%s\n", is_active ? "* " : "",
+				 cros_fwid);
+
+		fw_version = system_get_version(EC_IMAGE_RW_B);
+		cros_fwid = system_get_cros_fwid(EC_IMAGE_RW_B);
+		is_active = system_get_active_copy() == EC_IMAGE_RW_B;
+
+		ccprintf("RW_B:\t%s%s\n", is_active ? "* " : "", fw_version);
+		if (IS_NONEMPTY_STRING(cros_fwid))
+			ccprintf("\t\t%s%s\n", is_active ? "* " : "",
+				 cros_fwid);
+	} else {
+		ccprintf("RW:\t%s\n", fw_version);
+		if (IS_NONEMPTY_STRING(cros_fwid))
+			ccprintf("\t\t%s\n", cros_fwid);
 	}
-#else
-	ccprintf("RW:      %s\n", system_get_version(EC_IMAGE_RW));
-#endif
 
 	system_print_extended_version_info();
 	print_build_string();
@@ -1543,13 +1563,12 @@ DECLARE_CONSOLE_COMMAND(rflags, command_rflags,
 static enum ec_status
 host_command_get_version(struct host_cmd_handler_args *args)
 {
-	struct ec_response_get_version *r = args->response;
+	struct ec_response_get_version_v1 *r = args->response;
 	enum ec_image active_slot = system_get_active_copy();
 
 	strzcpy(r->version_string_ro, system_get_version(EC_IMAGE_RO),
 		sizeof(r->version_string_ro));
-	strzcpy(r->version_string_rw,
-		system_get_version(active_slot),
+	strzcpy(r->version_string_rw, system_get_version(active_slot),
 		sizeof(r->version_string_rw));
 
 	switch (system_get_image_copy()) {
@@ -1565,13 +1584,36 @@ host_command_get_version(struct host_cmd_handler_args *args)
 		break;
 	}
 
-	args->response_size = sizeof(*r);
+	/*
+	 * Assuming args->response is zero'd in host_command_process, so no need
+	 * to zero uninitialized fields here.
+	 */
+	if (args->version > 0 && IS_ENABLED(CONFIG_CROS_FWID_VERSION)) {
+		strzcpy(r->cros_fwid_ro, system_get_cros_fwid(EC_IMAGE_RO),
+			sizeof(r->cros_fwid_ro));
+		strzcpy(r->cros_fwid_rw, system_get_cros_fwid(EC_IMAGE_RW),
+			sizeof(r->cros_fwid_rw));
+	}
+
+	/*
+	 * By convention, ec_response_get_version_v1 is a strict superset of
+	 * ec_response_get_version(v0). The v1 response changes the semantics
+	 * of one field (reserved to cros_fwid_ro) and adds one additional field
+	 * (cros_fwid_rw). So simply adjusting the response size here is safe.
+	 */
+	if (args->version == 0)
+		args->response_size = sizeof(struct ec_response_get_version);
+	else if (args->version == 1)
+		args->response_size = sizeof(struct ec_response_get_version_v1);
+	else
+		/* Shouldn't happen because of EC_VER_MASK */
+		return EC_RES_INVALID_VERSION;
 
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_GET_VERSION,
 		     host_command_get_version,
-		     EC_VER_MASK(0));
+		     EC_VER_MASK(0) | EC_VER_MASK(1));
 
 #ifdef CONFIG_HOSTCMD_SKUID
 static enum ec_status
@@ -1649,7 +1691,7 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_CHIP_INFO,
 		     host_command_get_chip_info,
 		     EC_VER_MASK(0));
 
-enum ec_status
+static enum ec_status
 host_command_get_board_version(struct host_cmd_handler_args *args)
 {
 	struct ec_response_board_version *r = args->response;
@@ -1670,7 +1712,7 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_BOARD_VERSION,
 		     host_command_get_board_version,
 		     EC_VER_MASK(0));
 
-enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
+static enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
 {
 	struct ec_params_reboot_ec p;
 

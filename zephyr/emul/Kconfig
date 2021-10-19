@@ -2,13 +2,22 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+config EMUL_COMMON_I2C
+	bool "Common handler for I2C emulator messages"
+	help
+	  Enable common code that is used by many emulators of devices on I2C
+	  bus. It allows to share code for handling I2C messages, locking and
+	  custom user handlers between these emulators.
+
 config EMUL_SMART_BATTERY
 	bool "Smart Battery emulator"
+	select EMUL_COMMON_I2C
 	help
 	  Enable the Smart Battery emulator. This driver use emulated I2C bus.
 
 config EMUL_BMA255
 	bool "BMA255 emulator"
+	select EMUL_COMMON_I2C
 	help
 	  Enable the BMA255 emulator. This driver use emulated I2C bus.
 	  It is used to test bma2x2 driver. Emulators API is available in
@@ -27,8 +36,10 @@ config EMUL_PPC_SYV682X
 	help
 	  Enable the SYV682x emulator. SYV682 is a USB Type-C PPC. This driver
 	  uses the emulated I2C bus.
+
 config EMUL_BMI
 	bool "BMI emulator"
+	select EMUL_COMMON_I2C
 	help
 	  Enable the BMI emulator. This driver use emulated I2C bus.
 	  It is used to test bmi 160 and 260 drivers. Emulators API is
@@ -36,6 +47,7 @@ config EMUL_BMI
 
 config EMUL_TCS3400
 	bool "TCS3400 emulator"
+	select EMUL_COMMON_I2C
 	help
 	  Enable the TCS3400 light sensor. This driver use emulated I2C bus.
 	  It is used to test als_tcs3400 driver. It supports reading sensor
@@ -45,3 +57,20 @@ config EMUL_TCS3400
 	  TCS3400 registers support read and write with optional checking
 	  of proper access to reserved bits. Emulators API is available in
 	  zephyr/include/emul/emul_tcs3400.h
+
+config EMUL_BB_RETIMER
+	bool "BB retimer emulator"
+	select EMUL_COMMON_I2C
+	help
+	  Enable the BB (Burnside Bridge) retimer emulator. This driver use
+	  emulated I2C bus. It is used to test bb_retimer driver. It supports
+	  reads and writes to all emulator registers. Emulators API is
+	  available in zephyr/include/emul/emul_bb_retimer.h
+
+rsource "Kconfig.ln9310"
+rsource "Kconfig.lis2dw12"
+rsource "Kconfig.i2c_mock"
+rsource "Kconfig.isl923x"
+rsource "Kconfig.clock_control"
+rsource "Kconfig.tcpci"
+rsource "Kconfig.sn5s330"

@@ -4,7 +4,6 @@
  */
 
 /* Volteer board-specific configuration */
-#include "bb_retimer.h"
 #include "button.h"
 #include "common.h"
 #include "accelgyro.h"
@@ -12,7 +11,7 @@
 #include "charge_state_v2.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/ppc/syv682x.h"
-#include "driver/retimer/bb_retimer.h"
+#include "driver/retimer/bb_retimer_public.h"
 #include "driver/sync.h"
 #include "driver/tcpm/rt1715.h"
 #include "driver/tcpm/tcpci.h"
@@ -370,6 +369,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C0,
 		.next_mux = &usbc0_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_1_MIX,
 		.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
 	},
@@ -377,6 +377,7 @@ struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C1,
 		.next_mux = &usbc1_tcss_usb_mux,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_1_MIX,
 		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
 	},

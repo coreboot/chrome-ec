@@ -48,7 +48,15 @@
 #define I2C_BITBANG_PORT_COUNT 0
 #endif
 
+#ifdef CONFIG_ZEPHYR
+/* I2C_PORT_COUNT is bigger than the real count of used I2C devices, so
+ * use a special define for that to save RAM.
+ */
+static mutex_t port_mutex[I2C_DEVICE_COUNT + I2C_BITBANG_PORT_COUNT];
+#else
 static mutex_t port_mutex[I2C_CONTROLLER_COUNT + I2C_BITBANG_PORT_COUNT];
+#endif /* CONFIG_ZEPHYR */
+
 /* A bitmap of the controllers which are currently servicing a request. */
 static volatile uint32_t i2c_port_active_list;
 BUILD_ASSERT(ARRAY_SIZE(port_mutex) < 32);
@@ -100,13 +108,23 @@ const struct i2c_port_t *get_i2c_port(const int port)
 {
 	int i;
 
-	/* Find the matching port in i2c_ports[] table. */
-	for (i = 0; i < i2c_ports_used; i++) {
-		if (i2c_ports[i].port == port)
-			return &i2c_ports[i];
+	/*
+	 * If the EC's I2C driver implementation is task event based and the
+	 * I2C is accessed before the task is initialized, it causes the system
+	 * panic hence these I2C will fall back to bitbang mode if enabled at
+	 * board level and will again switch back to event based I2C upon task
+	 * initialization.
+	 */
+	if (task_start_called()) {
+		/* Find the matching port in i2c_ports[] table. */
+		for (i = 0; i < i2c_ports_used; i++) {
+			if (i2c_ports[i].port == port)
+				return &i2c_ports[i];
+		}
 	}
 
 	if (IS_ENABLED(CONFIG_I2C_BITBANG)) {
+		/* Find the matching port in i2c_bitbang_ports[] table. */
 		for (i = 0; i < i2c_bitbang_ports_used; i++) {
 			if (i2c_bitbang_ports[i].port == port)
 				return &i2c_bitbang_ports[i];
@@ -137,6 +155,7 @@ __maybe_unused static int chip_i2c_xfer_with_notify(
 		 * remove the flag so it won't confuse chip driver.
 		 */
 		no_pec_af &= ~I2C_FLAG_PEC;
+
 	if (i2c_port->drv)
 		ret = i2c_port->drv->xfer(i2c_port, no_pec_af,
 					  out, out_size, in, in_size, flags);
@@ -258,8 +277,22 @@ int i2c_xfer_unlocked(const int port,
 			ccprintf("Ignoring flags from i2c addr_flags: %04x",
 					no_pec_af);
 
-		return i2c_transfer(i2c_get_device_for_port(port), msg,
+		ret =  i2c_transfer(i2c_get_device_for_port(port), msg,
 				    num_msgs, I2C_STRIP_FLAGS(no_pec_af));
+
+		if (IS_ENABLED(CONFIG_I2C_DEBUG)) {
+			i2c_trace_notify(port, addr_flags, out, out_size,
+					 in, in_size);
+		}
+
+		switch (ret) {
+		case 0:
+			return EC_SUCCESS;
+		case -EIO:
+			return EC_ERROR_INVAL;
+		default:
+			return EC_ERROR_UNKNOWN;
+		}
 #elif defined(CONFIG_I2C_XFER_LARGE_TRANSFER)
 		ret = i2c_xfer_no_retry(port, no_pec_af,
 					    out, out_size, in,
@@ -297,9 +330,6 @@ void i2c_lock(int port, int lock)
 	/* Lock the controller, not the port */
 	port = i2c_port_to_controller(port);
 #endif
-	if (port < 0 || port >= ARRAY_SIZE(port_mutex))
-		return;
-
 	if (IS_ENABLED(CONFIG_ZEPHYR)) {
 		/*
 		 * For Zephyr: to convert an i2c port enum value to a port
@@ -309,6 +339,9 @@ void i2c_lock(int port, int lock)
 		if (i2c_get_physical_port(port) >= 0)
 			port = i2c_get_physical_port(port);
 	}
+
+	if (port < 0 || port >= ARRAY_SIZE(port_mutex))
+		return;
 
 	if (lock) {
 		uint32_t irq_lock_key;
@@ -1096,12 +1129,45 @@ unwedge_done:
 }
 #endif /* !CONFIG_ZEPHYR */
 
+int i2c_freq_to_khz(enum i2c_freq freq)
+{
+	switch (freq) {
+	case I2C_FREQ_100KHZ:
+		return 100;
+	case I2C_FREQ_400KHZ:
+		return 400;
+	case I2C_FREQ_1000KHZ:
+		return 1000;
+	default:
+		return 0;
+	}
+}
+
+enum i2c_freq i2c_khz_to_freq(int speed_khz)
+{
+	switch (speed_khz) {
+	case 100:
+		return I2C_FREQ_100KHZ;
+	case 400:
+		return I2C_FREQ_400KHZ;
+	case 1000:
+		return I2C_FREQ_1000KHZ;
+	default:
+		return I2C_FREQ_COUNT;
+	}
+}
+
 int i2c_set_freq(int port, enum i2c_freq freq)
 {
 	int ret;
+	const struct i2c_port_t *cfg;
 
-	if (!(get_i2c_port(port)->flags & I2C_PORT_FLAG_DYNAMIC_SPEED))
+	cfg = get_i2c_port(port);
+	if (cfg == NULL)
 		return EC_ERROR_INVAL;
+
+	if (!(cfg->flags & I2C_PORT_FLAG_DYNAMIC_SPEED))
+		return EC_ERROR_UNIMPLEMENTED;
 
 	i2c_lock(port, 1);
 	ret = chip_i2c_set_freq(port, freq);
@@ -1184,7 +1250,7 @@ static int check_i2c_params(const struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 
-#ifdef I2C_PORT_VIRTUAL_BATTERY
+#ifdef CONFIG_I2C_VIRTUAL_BATTERY
 static inline int is_i2c_port_virtual_battery(int port)
 {
 #ifdef CONFIG_ZEPHYR
@@ -1197,7 +1263,7 @@ static inline int is_i2c_port_virtual_battery(int port)
 	return (port == I2C_PORT_VIRTUAL_BATTERY);
 #endif
 }
-#endif /* I2C_PORT_VIRTUAL_BATTERY */
+#endif /* CONFIG_I2C_VIRTUAL_BATTERY */
 
 static enum ec_status i2c_command_passthru(struct host_cmd_handler_args *args)
 {
@@ -1272,7 +1338,7 @@ static enum ec_status i2c_command_passthru(struct host_cmd_handler_args *args)
 		if (resp->num_msgs == params->num_msgs - 1)
 			xferflags |= I2C_XFER_STOP;
 
-#if defined(VIRTUAL_BATTERY_ADDR_FLAGS) && defined(I2C_PORT_VIRTUAL_BATTERY)
+#ifdef CONFIG_I2C_VIRTUAL_BATTERY
 		if (is_i2c_port_virtual_battery(params->port) &&
 		    addr_flags == VIRTUAL_BATTERY_ADDR_FLAGS) {
 			if (virtual_battery_handler(resp, in_len, &rv,
@@ -1424,6 +1490,76 @@ i2c_command_passthru_protect(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_I2C_PASSTHRU_PROTECT, i2c_command_passthru_protect,
 		     EC_VER_MASK(0));
+
+#ifdef CONFIG_HOSTCMD_I2C_CONTROL
+
+static enum ec_status
+i2c_command_control(struct host_cmd_handler_args *args)
+{
+#ifdef CONFIG_ZEPHYR
+	/* For Zephyr, convert the received remote port number to a port number
+	 * used in EC.
+	 */
+	((struct ec_params_i2c_control *)(args->params))->port =
+		i2c_get_port_from_remote_port(
+			((struct ec_params_i2c_control *)(args->params))
+			->port);
+#endif
+	const struct ec_params_i2c_control *params = args->params;
+	struct ec_response_i2c_control *resp = args->response;
+	enum i2c_freq old_i2c_freq;
+	enum i2c_freq new_i2c_freq;
+	const struct i2c_port_t *cfg;
+	uint16_t old_i2c_speed_khz;
+	uint16_t new_i2c_speed_khz;
+	enum ec_error_list rv;
+	int khz;
+
+	cfg = get_i2c_port(params->port);
+	if (!cfg)
+		return EC_RES_INVALID_PARAM;
+
+	switch (params->cmd) {
+	case EC_I2C_CONTROL_GET_SPEED:
+		old_i2c_freq = i2c_get_freq(cfg->port);
+		khz = i2c_freq_to_khz(old_i2c_freq);
+		old_i2c_speed_khz = (khz != 0) ? khz :
+			EC_I2C_CONTROL_SPEED_UNKNOWN;
+		break;
+
+	case EC_I2C_CONTROL_SET_SPEED:
+		new_i2c_speed_khz = params->cmd_params.speed_khz;
+		new_i2c_freq = i2c_khz_to_freq(new_i2c_speed_khz);
+		if (new_i2c_freq == I2C_FREQ_COUNT)
+			return EC_RES_INVALID_PARAM;
+
+		old_i2c_freq = i2c_get_freq(cfg->port);
+		old_i2c_speed_khz = i2c_freq_to_khz(old_i2c_freq);
+
+		rv = i2c_set_freq(cfg->port, new_i2c_freq);
+		if (rv != EC_SUCCESS)
+			return EC_RES_ERROR;
+
+		CPRINTS("I2C%d speed changed from %d kHz to %d kHz",
+			params->port,
+			old_i2c_speed_khz,
+			new_i2c_speed_khz);
+		break;
+
+	default:
+		return EC_RES_INVALID_COMMAND;
+	}
+
+	resp->cmd_response.speed_khz = old_i2c_speed_khz;
+	args->response_size = sizeof(*resp);
+
+	return EC_RES_SUCCESS;
+}
+
+DECLARE_HOST_COMMAND(EC_CMD_I2C_CONTROL, i2c_command_control,
+		     EC_VER_MASK(0));
+
+#endif /* CONFIG_HOSTCMD_I2C_CONTROL */
 
 /*****************************************************************************/
 /* Console commands */
@@ -1704,6 +1840,80 @@ DECLARE_CONSOLE_COMMAND(i2cxfer, command_i2cxfer,
 			,
 			"Read write I2C");
 #endif
+
+#ifdef CONFIG_CMD_I2C_SPEED
+
+static const char * const i2c_freq_str[] = {
+	[I2C_FREQ_1000KHZ] = "1000 kHz",
+	[I2C_FREQ_400KHZ] = "400 kHz",
+	[I2C_FREQ_100KHZ] = "100 kHz",
+	[I2C_FREQ_COUNT] = "unknown",
+};
+
+BUILD_ASSERT(ARRAY_SIZE(i2c_freq_str) == I2C_FREQ_COUNT + 1);
+
+static int command_i2c_speed(int argc, char **argv)
+{
+	int port;
+	char *e;
+	enum i2c_freq freq;
+	enum i2c_freq new_freq = I2C_FREQ_COUNT;
+
+	if (argc < 2 || argc > 3)
+		return EC_ERROR_PARAM_COUNT;
+
+	port = strtoi(argv[1], &e, 0);
+	if (*e)
+		return EC_ERROR_PARAM1;
+
+	if (port < 0 || port >= I2C_PORT_COUNT)
+		return EC_ERROR_INVAL;
+
+	freq = i2c_get_freq(port);
+	if (freq < 0 || freq > I2C_FREQ_COUNT)
+		return EC_ERROR_UNKNOWN;
+
+	if (argc == 3) {
+		int khz;
+		int rv;
+
+		khz = strtoi(argv[2], &e, 0);
+		if (*e)
+			return EC_ERROR_PARAM2;
+
+		switch (khz) {
+		case 100:
+			new_freq = I2C_FREQ_100KHZ;
+			break;
+		case 400:
+			new_freq = I2C_FREQ_400KHZ;
+			break;
+		case 1000:
+			new_freq = I2C_FREQ_1000KHZ;
+			break;
+		default:
+			return EC_ERROR_PARAM2;
+		}
+		rv = i2c_set_freq(port, new_freq);
+		if (rv != EC_SUCCESS)
+			return rv;
+	}
+
+	if (new_freq != I2C_FREQ_COUNT)
+		ccprintf("Port %d speed changed from %s to %s\n", port,
+			 i2c_freq_str[freq],
+			 i2c_freq_str[new_freq]);
+	else
+		ccprintf("Port %d speed is %s\n", port, i2c_freq_str[freq]);
+
+	return EC_SUCCESS;
+}
+
+DECLARE_CONSOLE_COMMAND(i2cspeed, command_i2c_speed,
+			"port [speed in kHz]",
+			"Get or set I2C port speed");
+
+#endif /* CONFIG_CMD_I2C_SPEED */
 
 #ifdef CONFIG_CMD_I2C_STRESS_TEST
 static void i2c_test_status(struct i2c_test_results *i2c_test, int test_dev)

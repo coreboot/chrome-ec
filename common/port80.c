@@ -22,10 +22,10 @@ typedef uint32_t port80_code_t;
 #else
 typedef uint16_t port80_code_t;
 #endif
-static port80_code_t __bss_slow history[CONFIG_PORT80_HISTORY_LEN];
-static int __bss_slow writes;    /* Number of port 80 writes so far */
+static port80_code_t history[CONFIG_PORT80_HISTORY_LEN];
+static int writes;    /* Number of port 80 writes so far */
 static uint16_t last_boot; /* Last code from previous boot */
-static int __bss_slow scroll;
+static int scroll;
 
 #ifdef CONFIG_BRINGUP
 #undef CONFIG_PORT80_PRINT_IN_INT
@@ -168,7 +168,7 @@ enum ec_status port80_last_boot(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 
-enum ec_status port80_command_read(struct host_cmd_handler_args *args)
+static enum ec_status port80_command_read(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_port80_read *p = args->params;
 	uint32_t offset = p->read_buffer.offset;

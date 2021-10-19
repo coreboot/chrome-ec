@@ -23,6 +23,16 @@
 /* Internal SPI flash on NPCX7 */
 #define CONFIG_FLASH_SIZE_BYTES (512 * 1024)  /* 512KB internal spi flash */
 
+/* Save some flash space */
+#define CONFIG_LTO
+#define CONFIG_USB_PD_DEBUG_LEVEL 2
+#undef CONFIG_CMD_FLASHINFO
+#undef CONFIG_CMD_MMAPINFO
+#undef CONFIG_CMD_ACCELSPOOF
+#undef CONFIG_CMD_ACCEL_FIFO
+#undef CONFIG_CMD_ACCEL_INFO
+#undef CONFIG_CMD_TASK_RESET
+
 /* Battery */
 #define CONFIG_BATTERY_DEVICE_CHEMISTRY  "LION"
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
@@ -45,6 +55,9 @@
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
 #define OPT3001_I2C_ADDR_FLAGS OPT3001_I2C_ADDR1_FLAGS
+#define CONFIG_ACCELGYRO_BMI260
+#define CONFIG_ACCELGYRO_BMI260_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
 
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
@@ -108,6 +121,8 @@ void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);
 /* Base detection */
 void base_detect_interrupt(enum gpio_signal signal);
+/* motion sensor interrupt */
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !defined(__ASSEMBLER__) */
 

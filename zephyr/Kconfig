@@ -115,6 +115,22 @@ config PLATFORM_EC_BOARD_RESET_AFTER_POWER_ON
 	  the EC starts up, performs some amount of processing and then gets a
 	  reset that it is not expecting.
 
+config PLATFORM_EC_WAIT_RESET_CYCLES_PER_ITERATION
+	int "CPU execution cycle per iteration for waiting the H1 reset"
+	default 4
+	depends on PLATFORM_EC_BOARD_RESET_AFTER_POWER_ON
+	help
+	  This options specifies the number of CPU execution cycles per delay
+	  loop iteration, while waiting for the H1 to reset.
+
+config PLATFORM_EC_PREINIT_HW_CYCLES_PER_SEC
+	int "CPU power up clock cycle per second"
+	default 100000000
+	depends on PLATFORM_EC_BOARD_RESET_AFTER_POWER_ON
+	help
+	  This option specifies the frequency (in Hz) of the CPU core when
+	  coming out of a power on reset.
+
 config PLATFORM_EC_BRINGUP
 	bool "Enable early bringup debugging features"
 	help
@@ -264,6 +280,13 @@ config PLATFORM_EC_CONSOLE_CMD_SHMEM
 	  located at the top of RAM, above all RAM symbols: total size, bytes
 	  used and the maximum number of bytes that have been used since
 	  the EC started running.
+
+config PLATFORM_EC_CROS_FWID_VERSION
+	bool "Include CrOS FWID version"
+	default y
+	help
+	  Include Chrome OS FWID in version output. The CrOS FWID will be common
+	  across OS, AP firmware and EC firmware when built together.
 
 config PLATFORM_EC_DEBUG_ASSERT
 	bool "Enable assertion failures"
@@ -430,6 +453,46 @@ config PLATFORM_EC_I2C
 	  in include/i2c.h and implemented in common/i2c_master.c. Doing so
 	  should make shimming other platform/ec modules which rely on i2c
 	  communication "just work" without requiring any further code changes.
+
+config PLATFORM_EC_I2C_DEBUG
+	bool "I2C Tracing"
+	default n if ARCH_POSIX
+	depends on PLATFORM_EC_I2C
+	help
+	  This option enables I2C bus communication tracing. Use the console
+	  command "i2ctrace" to enable and disable tracing on specific I2C
+	  peripherals.
+
+	  Please see the I2C debugging documentation for more details:
+
+	  https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/docs/i2c-debugging.md
+
+config PLATFORM_EC_I2C_DEBUG_PASSTHRU
+	bool "I2C Passthru Debug"
+	default n if ARCH_POSIX
+	depends on PLATFORM_EC_I2C
+	help
+	  This option enables extra debug for I2C passthru operations initiated
+	  by the AP.
+
+config PLATFORM_EC_CONSOLE_CMD_I2C_PORTMAP
+	bool "Console command: i2c_portmap"
+	default y
+	depends on PLATFORM_EC_I2C
+	help
+	  Enable the 'i2c_portmap' console command. This comamnd is used to
+	  display the mapping of the I2C ports defined by the named-i2c-ports
+	  node to the physical port and remote port indexes.
+
+config PLATFORM_EC_CONSOLE_CMD_I2C_SPEED
+	bool "Console command: i2cspeed"
+	default n
+	depends on PLATFORM_EC_I2C
+	help
+	  Enable the 'i2cspeed' console command. This comamnd is used to
+	  display an I2C port's bus speed. Additionally, for ports with
+	  the DYNAMIC_SPEED port flag set, the speed can be set. In all
+	  cases, the bus speed is in units of kHz.
 
 config PLATFORM_EC_SMBUS_PEC
 	bool "Packet error checking support for SMBus"

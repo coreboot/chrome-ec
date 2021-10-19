@@ -191,8 +191,8 @@ BUILD_ASSERT(ARRAY_SIZE(prob_text) == NUM_PROBLEM_TYPES);
  */
 static void problem(enum problem_type p, int v)
 {
-	static int __bss_slow last_prob_val[NUM_PROBLEM_TYPES];
-	static timestamp_t __bss_slow last_prob_time[NUM_PROBLEM_TYPES];
+	static int last_prob_val[NUM_PROBLEM_TYPES];
+	static timestamp_t last_prob_time[NUM_PROBLEM_TYPES];
 	timestamp_t t_now, t_diff;
 
 	if (last_prob_val[p] != v) {
@@ -848,7 +848,7 @@ static void update_dynamic_battery_info(void)
 	uint8_t tmp;
 	int send_batt_status_event = 0;
 	int send_batt_info_event = 0;
-	static int __bss_slow batt_present;
+	static int batt_present;
 
 	tmp = 0;
 	if (curr.ac)
@@ -1027,7 +1027,7 @@ static int update_static_battery_info(void)
 
 static void update_dynamic_battery_info(void)
 {
-	static int __bss_slow batt_present;
+	static int batt_present;
 	uint8_t tmp;
 	int send_batt_status_event = 0;
 	int send_batt_info_event = 0;
@@ -1282,7 +1282,7 @@ static void show_charging_progress(void)
 /* Calculate if battery is full based on whether it is accepting charge */
 test_mockable int calc_is_full(void)
 {
-	static int __bss_slow ret;
+	static int ret;
 
 	/* If bad state of charge reading, return last value */
 	if (curr.batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE ||
@@ -1306,7 +1306,7 @@ test_mockable int calc_is_full(void)
 static int charge_request(int voltage, int current)
 {
 	int r1 = EC_SUCCESS, r2 = EC_SUCCESS, r3 = EC_SUCCESS, r4 = EC_SUCCESS;
-	static int __bss_slow prev_volt, prev_curr;
+	static int prev_volt, prev_curr;
 
 	if (!voltage || !current) {
 #ifdef CONFIG_CHARGER_NARROW_VDC
@@ -1692,7 +1692,6 @@ const struct batt_params *charger_current_battery_params(void)
 static int battery_outside_charging_temperature(void)
 {
 	const struct battery_info *batt_info = battery_get_info();
-	/* battery temp in 0.1 deg C */
 	int batt_temp_c = DECI_KELVIN_TO_CELSIUS(curr.batt.temperature);
 	int max_c, min_c;
 
@@ -1857,6 +1856,39 @@ static void wakeup_battery(int *need_static)
 		curr.requested_current = batt_info->precharge_current;
 	}
 }
+
+__test_only enum charge_state_v2 charge_get_state_v2(void)
+{
+	return curr.state;
+}
+
+static void deep_charge_battery(int *need_static)
+{
+	if (curr.state == ST_IDLE) {
+		/* Deep charge time out , do nothing */
+		curr.requested_voltage = 0;
+		curr.requested_current = 0;
+	} else if (curr.state == ST_PRECHARGE
+			&& (get_time().val > precharge_start_time.val +
+			CONFIG_BATTERY_LOW_VOLTAGE_TIMEOUT)) {
+		/* We've tried long enough, give up */
+		CPRINTS("Precharge for low voltage timed out");
+		set_charge_state(ST_IDLE);
+		curr.requested_voltage = 0;
+		curr.requested_current = 0;
+	} else {
+		/* See if we can wake it up */
+		if (curr.state != ST_PRECHARGE) {
+			CPRINTS("Start precharge for low voltage");
+			precharge_start_time = get_time();
+			*need_static = 1;
+		}
+		set_charge_state(ST_PRECHARGE);
+		curr.requested_voltage = batt_info->voltage_max;
+		curr.requested_current = batt_info->precharge_current;
+	}
+}
+
 
 static void revive_battery(int *need_static)
 {
@@ -2106,6 +2138,13 @@ void charger_task(void *u)
 		/* If the battery is not responsive, try to wake it up. */
 		if (!(curr.batt.flags & BATT_FLAG_RESPONSIVE)) {
 			wakeup_battery(&need_static);
+			goto wait_for_it;
+		}
+
+		if (IS_ENABLED(CONFIG_BATTERY_LOW_VOLTAGE_PROTECTION)
+			&& !(curr.batt.flags & BATT_FLAG_BAD_VOLTAGE)
+			&& (curr.batt.voltage <= batt_info->voltage_min)) {
+			deep_charge_battery(&need_static);
 			goto wait_for_it;
 		}
 
@@ -2655,6 +2694,19 @@ int charge_set_input_current_limit(int ma, int mv)
 	/* Limit input current limit to max limit for this board */
 	ma = MIN(ma, CONFIG_CHARGER_MAX_INPUT_CURRENT);
 #endif
+
+	if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
+		int pd_current_uncapped =
+			charge_manager_get_pd_current_uncapped();
+
+		/*
+		 * clamp the input current to not exceeded the PD's limitation.
+		 */
+		if (pd_current_uncapped != CHARGE_CURRENT_UNINITIALIZED &&
+		    ma > pd_current_uncapped)
+			ma = pd_current_uncapped;
+	}
+
 	curr.desired_input_current = ma;
 #ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
 	/* Wake up charger task to allocate current between lid and base. */

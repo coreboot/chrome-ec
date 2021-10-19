@@ -73,6 +73,7 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 #ifdef CONFIG_USB_PD_DP_HPD_GPIO
 	int cur_lvl = svdm_get_hpd_gpio(port);
 #endif /* CONFIG_USB_PD_DP_HPD_GPIO */
+	mux_state_t mux_state;
 
 	dp_status[port] = payload[1];
 
@@ -142,7 +143,9 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 	svdm_hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
 #endif /* CONFIG_USB_PD_DP_HPD_GPIO */
 
-	usb_mux_hpd_update(port, lvl, irq);
+	mux_state = (lvl ? USB_PD_MUX_HPD_LVL : USB_PD_MUX_HPD_LVL_DEASSERTED) |
+		    (irq ? USB_PD_MUX_HPD_IRQ : USB_PD_MUX_HPD_IRQ_DEASSERTED);
+	usb_mux_hpd_update(port, mux_state);
 
 #ifdef USB_PD_PORT_TCPC_MST
 	if (port == USB_PD_PORT_TCPC_MST)
@@ -158,7 +161,8 @@ __override void svdm_exit_dp_mode(int port)
 #ifdef CONFIG_USB_PD_DP_HPD_GPIO
 	svdm_set_hpd_gpio(port, 0);
 #endif /* CONFIG_USB_PD_DP_HPD_GPIO */
-	usb_mux_hpd_update(port, 0, 0);
+	usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
+				 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 
 	aux_display_disconnected(port);
 
@@ -213,7 +217,7 @@ void pd_power_supply_reset(int port)
 		pd_set_vbus_discharge(port, 1);
 
 	if (port == 1)
-		rt1718s_gpio_ctrl(RT1718S_GPIO_DISABLED);
+		rt1718s_gpio_set_level(port, GPIO_EN_USB_C1_5V_OUT, 0);
 
 	/* Notify host of power info change. */
 	pd_send_host_event(PD_EVENT_POWER_CHANGE);
@@ -241,11 +245,8 @@ int pd_set_power_supply_ready(int port)
 	if (rv)
 		return rv;
 
-	if (port == 1) {
-		rv = rt1718s_gpio_ctrl(RT1718S_GPIO_ENABLE_SOURCE);
-		if (rv)
-			return rv;
-	}
+	if (port == 1)
+		rt1718s_gpio_set_level(port, GPIO_EN_USB_C1_5V_OUT, 1);
 
 	/* Notify host of power info change. */
 	pd_send_host_event(PD_EVENT_POWER_CHANGE);

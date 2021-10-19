@@ -81,7 +81,6 @@
 #define GPIO_PG_EC_DSW_PWROK		GPIO_SEQ_EC_DSW_PWROK
 #define GPIO_PG_EC_RSMRST_ODL		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_POWER_BUTTON_L		GPIO_GSC_EC_PWR_BTN_ODL
-#define GPIO_RSMRST_L_PGOOD		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
 #define GPIO_VOLUME_DOWN_L		GPIO_EC_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L		GPIO_EC_VOLUP_BTN_ODL
@@ -132,6 +131,8 @@
 
 /* Fan features */
 #define CONFIG_FANS		FAN_CH_COUNT
+#define CONFIG_CUSTOM_FAN_CONTROL
+#define RPM_DEVIATION	1
 
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
@@ -141,6 +142,7 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
 
 /* Keyboard features */
+#define CONFIG_KEYBOARD_FACTORY_TEST
 #define CONFIG_KEYBOARD_VIVALDI
 #define CONFIG_KEYBOARD_REFRESH_ROW3
 
@@ -151,7 +153,7 @@
 #include "usbc_config.h"
 
 enum adc_channel {
-	ADC_TEMP_SENSOR_1_DDR,
+	ADC_TEMP_SENSOR_1_FAN,
 	ADC_TEMP_SENSOR_2_SOC,
 	ADC_TEMP_SENSOR_3_CHARGER,
 	ADC_TEMP_SENSOR_4_REGULATOR,
@@ -159,7 +161,7 @@ enum adc_channel {
 };
 
 enum temp_sensor_id {
-	TEMP_SENSOR_1_DDR,
+	TEMP_SENSOR_1_FAN,
 	TEMP_SENSOR_2_SOC,
 	TEMP_SENSOR_3_CHARGER,
 	TEMP_SENSOR_4_REGULATOR,
@@ -193,6 +195,11 @@ enum mft_channel {
 	MFT_CH_0 = 0,
 	MFT_CH_COUNT
 };
+
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
+#endif
 
 #endif /* !__ASSEMBLER__ */
 

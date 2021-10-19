@@ -132,6 +132,17 @@ static uint32_t fp_process_enroll(void)
 	     | (percent << EC_MKBP_FP_ENROLL_PROGRESS_OFFSET);
 }
 
+static bool fp_match_success(int match_result)
+{
+	if (match_result == EC_MKBP_FP_ERR_MATCH_YES ||
+	    match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATED ||
+	    match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATE_FAILED) {
+		return true;
+	}
+
+	return false;
+}
+
 static uint32_t fp_process_match(void)
 {
 	timestamp_t t0 = get_time();
@@ -146,20 +157,39 @@ static uint32_t fp_process_match(void)
 		res = fp_finger_match(fp_template[0], templ_valid, fp_buffer,
 				      &fgr, &updated);
 		CPRINTS("Match =>%d (finger %d)", res, fgr);
-		if (res < 0 || fgr < 0 || fgr >= FP_MAX_FINGER_COUNT) {
+
+		if (fp_match_success(res)) {
+			/*
+			 * Match succeded! Let's check if template number
+			 * is valid. If it is not valid, overwrite result
+			 * with EC_MKBP_FP_ERR_MATCH_NO_INTERNAL.
+			 */
+			if (fgr >= 0 && fgr < FP_MAX_FINGER_COUNT) {
+				fp_enable_positive_match_secret(fgr,
+					&positive_match_secret_state);
+			} else {
+				res = EC_MKBP_FP_ERR_MATCH_NO_INTERNAL;
+			}
+		} else if (res < 0) {
+			/*
+			 * Negative result means that there is a problem with
+			 * code responsible for matching. Overwrite it with
+			 * MATCH_NO_INTERNAL to let upper layers know what
+			 * happened.
+			 */
 			res = EC_MKBP_FP_ERR_MATCH_NO_INTERNAL;
-			timestamps_invalid |= FPSTATS_MATCHING_INV;
-		} else {
-			fp_enable_positive_match_secret(fgr,
-				&positive_match_secret_state);
 		}
+
 		if (res == EC_MKBP_FP_ERR_MATCH_YES_UPDATED)
 			templ_dirty |= updated;
 	} else {
 		CPRINTS("No enrolled templates");
 		res = EC_MKBP_FP_ERR_MATCH_NO_TEMPLATES;
-		timestamps_invalid |= FPSTATS_MATCHING_INV;
 	}
+
+	if (!fp_match_success(res))
+		timestamps_invalid |= FPSTATS_MATCHING_INV;
+
 	matching_time_us = time_since32(t0);
 	return EC_MKBP_FP_MATCH | EC_MKBP_FP_ERRCODE(res)
 	| ((fgr << EC_MKBP_FP_MATCH_IDX_OFFSET) & EC_MKBP_FP_MATCH_IDX_MASK);
@@ -732,7 +762,7 @@ static enum ec_error_list fp_console_action(uint32_t mode)
 	return EC_ERROR_TIMEOUT;
 }
 
-int command_fpcapture(int argc, char **argv)
+static int command_fpcapture(int argc, char **argv)
 {
 	int capture_type = FP_CAPTURE_SIMPLE_IMAGE;
 	uint32_t mode;
@@ -765,7 +795,7 @@ DECLARE_CONSOLE_COMMAND_FLAGS(fpcapture, command_fpcapture, NULL,
 			      "Capture fingerprint in PGM format",
 			      CMD_FLAG_RESTRICTED);
 
-int command_fpenroll(int argc, char **argv)
+static int command_fpenroll(int argc, char **argv)
 {
 	enum ec_error_list rc;
 	int percent = 0;
@@ -807,7 +837,7 @@ DECLARE_CONSOLE_COMMAND_FLAGS(fpenroll, command_fpenroll, NULL,
 			      CMD_FLAG_RESTRICTED);
 
 
-int command_fpmatch(int argc, char **argv)
+static int command_fpmatch(int argc, char **argv)
 {
 	enum ec_error_list rc = fp_console_action(FP_MODE_MATCH);
 	uint32_t event = atomic_clear(&fp_events);
@@ -825,7 +855,7 @@ int command_fpmatch(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(fpmatch, command_fpmatch, NULL,
 			"Run match algorithm against finger");
 
-int command_fpclear(int argc, char **argv)
+static int command_fpclear(int argc, char **argv)
 {
 	/*
 	 * We intentionally run this on the fp_task so that we use the
@@ -843,7 +873,7 @@ int command_fpclear(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(fpclear, command_fpclear, NULL,
 			"Clear fingerprint sensor context");
 
-int command_fpmaintenance(int argc, char **argv)
+static int command_fpmaintenance(int argc, char **argv)
 {
 #ifdef HAVE_FP_PRIVATE_DRIVER
 	return fp_maintenance();

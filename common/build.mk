@@ -13,6 +13,7 @@ common-y=util.o util_stdlib.o
 common-y+=version.o printf.o queue.o queue_policies.o irq_locking.o
 
 common-$(CONFIG_ACCELGYRO_BMI160)+=math_util.o
+common-$(CONFIG_ACCELGYRO_BMI220)+=math_util.o
 common-$(CONFIG_ACCELGYRO_BMI260)+=math_util.o
 common-$(CONFIG_ACCELGYRO_BMI3XX)+=math_util.o
 common-$(CONFIG_ACCELGYRO_ICM426XX)+=math_util.o
@@ -52,6 +53,7 @@ common-$(CONFIG_BODY_DETECTION)+=body_detection.o
 common-$(CONFIG_CAPSENSE)+=capsense.o
 common-$(CONFIG_CEC)+=cec.o
 common-$(CONFIG_CBI_EEPROM)+=cbi.o cbi_eeprom.o
+common-$(CONFIG_USB_PD_FLAGS)+=usb_pd_flags.o
 common-$(CONFIG_CBI_GPIO)+=cbi.o cbi_gpio.o
 ifeq ($(HAS_MOCK_CHARGE_MANAGER),)
 common-$(CONFIG_CHARGE_MANAGER)+=charge_manager.o

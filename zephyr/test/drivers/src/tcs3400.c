@@ -9,6 +9,7 @@
 #include "common.h"
 #include "i2c.h"
 #include "emul/emul_tcs3400.h"
+#include "emul/emul_common_i2c.h"
 
 #include "motion_sense.h"
 #include "motion_sense_fifo.h"
@@ -37,16 +38,16 @@ static void test_tcs_init(void)
 	zassert_equal(EC_SUCCESS, ms_rgb->drv->init(ms_rgb), NULL);
 
 	/* Fail init on communication errors */
-	tcs_emul_set_read_fail_reg(emul, TCS_EMUL_FAIL_ALL_REG);
-	zassert_equal(-EIO, ms->drv->init(ms), NULL);
-	tcs_emul_set_read_fail_reg(emul, TCS_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_FAIL_ALL_REG);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->init(ms), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Fail on bad ID */
 	tcs_emul_set_reg(emul, TCS_I2C_ID, 0);
 	zassert_equal(EC_ERROR_ACCESS_DENIED, ms->drv->init(ms), NULL);
 	/* Restore ID */
-	tcs_emul_set_reg(emul, TCS_I2C_ID, DT_ENUM_TOKEN(DT_NODELABEL(tcs_emul),
-							 device_id));
+	tcs_emul_set_reg(emul, TCS_I2C_ID,
+			 DT_STRING_TOKEN(DT_NODELABEL(tcs_emul), device_id));
 
 	/* Test successful init. ATIME and AGAIN should be changed on init */
 	zassert_equal(EC_SUCCESS, ms->drv->init(ms), NULL);
@@ -68,13 +69,13 @@ static void test_tcs_read(void)
 	ms = &motion_sensors[TCS_CLR_SENSOR_ID];
 
 	/* Test error on writing registers */
-	tcs_emul_set_write_fail_reg(emul, TCS_I2C_ATIME);
-	zassert_equal(-EIO, ms->drv->read(ms, v), NULL);
-	tcs_emul_set_write_fail_reg(emul, TCS_I2C_CONTROL);
-	zassert_equal(-EIO, ms->drv->read(ms, v), NULL);
-	tcs_emul_set_write_fail_reg(emul, TCS_I2C_ENABLE);
-	zassert_equal(-EIO, ms->drv->read(ms, v), NULL);
-	tcs_emul_set_write_fail_reg(emul, TCS_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_write_fail_reg(emul, TCS_I2C_ATIME);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->read(ms, v), NULL);
+	i2c_common_emul_set_write_fail_reg(emul, TCS_I2C_CONTROL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->read(ms, v), NULL);
+	i2c_common_emul_set_write_fail_reg(emul, TCS_I2C_ENABLE);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->read(ms, v), NULL);
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Test starting read with calibration */
 	tcs_emul_set_reg(emul, TCS_I2C_ATIME, 0);
@@ -152,15 +153,15 @@ static void test_tcs_irq_handler_fail(void)
 
 	event = TCS_INT_EVENT;
 	/* Test error on reading status */
-	tcs_emul_set_read_fail_reg(emul, TCS_I2C_STATUS);
-	zassert_equal(-EIO, ms->drv->irq_handler(ms, &event), NULL);
-	tcs_emul_set_read_fail_reg(emul, TCS_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_read_fail_reg(emul, TCS_I2C_STATUS);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->irq_handler(ms, &event), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 	check_fifo_empty(ms, ms_rgb);
 
 	/* Test fail on changing device power state */
-	tcs_emul_set_write_fail_reg(emul, TCS_I2C_ENABLE);
-	zassert_equal(-EIO, ms->drv->irq_handler(ms, &event), NULL);
-	tcs_emul_set_write_fail_reg(emul, TCS_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_write_fail_reg(emul, TCS_I2C_ENABLE);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->irq_handler(ms, &event), NULL);
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 	check_fifo_empty(ms, ms_rgb);
 
 	/* Test that no data is committed when status is 0 */
@@ -536,12 +537,12 @@ static void test_tcs_data_rate(void)
 	ms_rgb = &motion_sensors[TCS_RGB_SENSOR_ID];
 
 	/* Test fail on reading device power state */
-	tcs_emul_set_read_fail_reg(emul, TCS_I2C_ENABLE);
-	zassert_equal(-EIO, ms->drv->set_data_rate(ms, 0, 0), NULL);
-	zassert_equal(-EIO, ms->drv->set_data_rate(ms, 0, 1), NULL);
-	zassert_equal(-EIO, ms->drv->set_data_rate(ms, 100, 0), NULL);
-	zassert_equal(-EIO, ms->drv->set_data_rate(ms, 100, 1), NULL);
-	tcs_emul_set_read_fail_reg(emul, TCS_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_read_fail_reg(emul, TCS_I2C_ENABLE);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 0, 0), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 0, 1), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 100, 0), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 100, 1), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Test setting 0 rate disables device */
 	zassert_equal(EC_SUCCESS, ms->drv->set_data_rate(ms, 0, 0), NULL);

@@ -12,6 +12,7 @@
 #define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(syv682x);
+#include <stdint.h>
 #include <string.h>
 
 #include "emul/emul_syv682x.h"
@@ -28,6 +29,12 @@ struct syv682x_emul_data {
 	const struct syv682x_emul_cfg *cfg;
 	/** Current state of all emulated SYV682x registers */
 	uint8_t reg[EMUL_REG_COUNT];
+	/**
+	 * Current state of conditions affecting interrupt bits, as distinct
+	 * from the current values of those bits stored in reg.
+	 */
+	uint8_t status_cond;
+	uint8_t control_4_cond;
 };
 
 /** Static configuration for the emulator */
@@ -51,6 +58,48 @@ int syv682x_emul_set_reg(struct i2c_emul *emul, int reg, uint8_t val)
 	data->reg[reg] = val;
 
 	return 0;
+}
+
+void syv682x_emul_set_status(struct i2c_emul *emul, uint8_t val)
+{
+	struct syv682x_emul_data *data;
+
+	data = CONTAINER_OF(emul, struct syv682x_emul_data, emul);
+	data->status_cond = val;
+	data->reg[SYV682X_STATUS_REG] |= val;
+
+	if (val & (SYV682X_STATUS_TSD | SYV682X_STATUS_OVP |
+				SYV682X_STATUS_OC_HV)) {
+		data->reg[SYV682X_CONTROL_1_REG] |= SYV682X_CONTROL_1_PWR_ENB;
+	}
+
+	/*
+	 * TODO(b/190519131): Make this emulator trigger GPIO-based interrupts
+	 * by itself based on the status. In real life, the device should turn
+	 * the power path off when either of these conditions occurs, and they
+	 * should quickly dissipate. If they somehow stay set, the device should
+	 * interrupt continuously.
+	 */
+}
+
+void syv682x_emul_set_control_4(struct i2c_emul *emul, uint8_t val)
+{
+	struct syv682x_emul_data *data;
+	uint8_t val_interrupt = val & SYV682X_CONTROL_4_INT_MASK;
+
+	data = CONTAINER_OF(emul, struct syv682x_emul_data, emul);
+	data->control_4_cond = val_interrupt;
+	/* Only update the interrupting bits. */
+	data->reg[SYV682X_CONTROL_4_REG] &= ~SYV682X_CONTROL_4_INT_MASK;
+	data->reg[SYV682X_CONTROL_4_REG] |= val_interrupt;
+
+	/*
+	 * Note: The description of CONTROL_4 suggests that setting VCONN_OC
+	 * will turn off the VCONN channel. The "VCONN Channel Over Current
+	 * Response" plot shows that VCONN the device will merely throttle VCONN
+	 * current. The latter behavior is observed in practice, and this
+	 * emulator does not currently model it.
+	 */
 }
 
 int syv682x_emul_get_reg(struct i2c_emul *emul, int reg, uint8_t *val)
@@ -94,14 +143,39 @@ static int syv682x_emul_transfer(struct i2c_emul *emul, struct i2c_msg *msgs,
 	i2c_dump_msgs("emul", msgs, num_msgs, addr);
 
 	if (num_msgs == 1) {
+		int reg = msgs[0].buf[0];
+		uint8_t val = msgs[0].buf[1];
+
 		if (!((msgs[0].flags & I2C_MSG_RW_MASK) == I2C_MSG_WRITE
 					&& msgs[0].len == 2)) {
 			LOG_ERR("Unexpected write msgs");
 			return -EIO;
 		}
-		return syv682x_emul_set_reg(emul, msgs[0].buf[0],
-				msgs[0].buf[1]);
+
+		switch (reg) {
+		case SYV682X_CONTROL_1_REG:
+			/*
+			 * If OVP or TSD is active, the power path stays
+			 * disabled.
+			 */
+			if (data->status_cond & (SYV682X_STATUS_TSD |
+						SYV682X_STATUS_OVP))
+				val |= SYV682X_CONTROL_1_PWR_ENB;
+			break;
+		case SYV682X_CONTROL_4_REG:
+			/* Interrupt bits are read-only. */
+			val &= ~SYV682X_CONTROL_4_INT_MASK;
+			break;
+		default:
+			break;
+		}
+
+		return syv682x_emul_set_reg(emul, msgs[0].buf[0], val);
 	} else if (num_msgs == 2) {
+		int ret;
+		int reg;
+		uint8_t *buf;
+
 		if (!((msgs[0].flags & I2C_MSG_RW_MASK) == I2C_MSG_WRITE
 					&& msgs[0].len == 1
 					&& (msgs[1].flags & I2C_MSG_RW_MASK) ==
@@ -110,8 +184,29 @@ static int syv682x_emul_transfer(struct i2c_emul *emul, struct i2c_msg *msgs,
 			LOG_ERR("Unexpected read msgs");
 			return -EIO;
 		}
-		return syv682x_emul_get_reg(emul, msgs[0].buf[0],
-				&msgs[1].buf[0]);
+
+		reg = msgs[0].buf[0];
+		buf = &msgs[1].buf[0];
+		ret = syv682x_emul_get_reg(emul, reg, buf);
+
+		switch (reg) {
+		/*
+		 * STATUS and the interrupt bits of CONTROL_4 are clear-on-read
+		 * (if the underlying condition has cleared).
+		 */
+		case SYV682X_STATUS_REG:
+			syv682x_emul_set_reg(emul, reg, data->status_cond);
+			break;
+		case SYV682X_CONTROL_4_REG:
+			syv682x_emul_set_reg(emul, reg,
+					(*buf & ~SYV682X_CONTROL_4_INT_MASK) |
+					data->control_4_cond);
+			break;
+		default:
+			break;
+		}
+
+		return ret;
 	} else {
 		LOG_ERR("Unexpected num_msgs");
 		return -EIO;
@@ -153,16 +248,15 @@ static int syv682x_emul_init(const struct emul *emul,
 	return ret;
 }
 
-#define SYV682X_EMUL(n)						\
-	static struct syv682x_emul_data syv682x_emul_data_##n = {	\
-	};								\
-									\
-	static const struct syv682x_emul_cfg syv682x_emul_cfg_##n = {	\
-		.i2c_label = DT_INST_BUS_LABEL(n),			\
-		.data = &syv682x_emul_data_##n,				\
-		.addr = DT_INST_REG_ADDR(n),				\
-	};								\
-	EMUL_DEFINE(syv682x_emul_init, DT_DRV_INST(n), &syv682x_emul_cfg_##n)
+#define SYV682X_EMUL(n)                                                       \
+	static struct syv682x_emul_data syv682x_emul_data_##n = {};           \
+	static const struct syv682x_emul_cfg syv682x_emul_cfg_##n = {         \
+		.i2c_label = DT_INST_BUS_LABEL(n),                            \
+		.data = &syv682x_emul_data_##n,                               \
+		.addr = DT_INST_REG_ADDR(n),                                  \
+	};                                                                    \
+	EMUL_DEFINE(syv682x_emul_init, DT_DRV_INST(n), &syv682x_emul_cfg_##n, \
+		    &syv682x_emul_data_##n)
 
 DT_INST_FOREACH_STATUS_OKAY(SYV682X_EMUL)
 

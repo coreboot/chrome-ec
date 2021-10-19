@@ -1373,6 +1373,10 @@ static void pe_clear_port_data(int port)
 	pd_set_src_caps(port, 0, NULL);
 	pe_set_snk_caps(port, 0, NULL);
 
+	/* Clear any stored modes and discovery data */
+	pd_dfp_discovery_init(port);
+	pd_dfp_mode_init(port);
+
 	dpm_remove_sink(port);
 	dpm_remove_source(port);
 
@@ -1479,8 +1483,7 @@ static bool common_src_snk_dpm_requests(int port)
 		/* Currently only support sending soft reset to SOP */
 		pe_send_soft_reset(port, TCPCI_MSG_SOP);
 		return true;
-	} else if (PE_CHK_DPM_REQUEST(port,
-					DPM_REQUEST_PORT_DISCOVERY)) {
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_PORT_DISCOVERY)) {
 		pe_set_dpm_curr_request(port, DPM_REQUEST_PORT_DISCOVERY);
 		if (!PE_CHK_FLAG(port, PE_FLAGS_MODAL_OPERATION)) {
 			/*
@@ -1489,6 +1492,11 @@ static bool common_src_snk_dpm_requests(int port)
 			 * requests.
 			 */
 			pd_dfp_discovery_init(port);
+			/*
+			 * TODO(b/189353401): Do not reinitialize modes when no
+			 * longer required.
+			 */
+			pd_dfp_mode_init(port);
 			pe[port].dr_swap_attempt_counter = 0;
 			pe[port].discover_identity_counter = 0;
 			pd_timer_enable(port, PE_TIMER_DISCOVER_IDENTITY,
@@ -2157,8 +2165,9 @@ static void pe_src_startup_entry(int port)
 		 */
 		pd_timer_enable(port, PE_TIMER_DISCOVER_IDENTITY, 0);
 
-		/* Clear port discovery flags */
+		/* Clear port discovery/mode flags */
 		pd_dfp_discovery_init(port);
+		pd_dfp_mode_init(port);
 		pe[port].ama_vdo = PD_VDO_INVALID;
 		pe[port].vpd_vdo = PD_VDO_INVALID;
 		pe[port].discover_identity_counter = 0;
@@ -3010,8 +3019,9 @@ static void pe_snk_startup_entry(int port)
 		 */
 		pd_timer_enable(port, PE_TIMER_DISCOVER_IDENTITY, 0);
 
-		/* Clear port discovery flags */
+		/* Clear port discovery/mode flags */
 		pd_dfp_discovery_init(port);
+		pd_dfp_mode_init(port);
 		pe[port].discover_identity_counter = 0;
 
 		/* Reset dr swap attempt counter */
@@ -5756,7 +5766,7 @@ static void pe_init_vdm_modes_request_entry(int port)
 
 static void pe_init_vdm_modes_request_run(int port)
 {
-	struct svid_mode_data *mode_data;
+	const struct svid_mode_data *mode_data;
 	uint16_t requested_svid;
 
 	mode_data = pd_get_next_mode(port, pe[port].tx_type);
@@ -6993,6 +7003,16 @@ uint32_t task_access[CONFIG_USB_PD_PORT_MAX_COUNT][DISCOVERY_TYPE_COUNT];
 
 void pd_dfp_discovery_init(int port)
 {
+	atomic_or(&task_access[port][TCPCI_MSG_SOP], BIT(task_get_current()));
+	atomic_or(&task_access[port][TCPCI_MSG_SOP_PRIME],
+		  BIT(task_get_current()));
+
+	memset(pe[port].discovery, 0, sizeof(pe[port].discovery));
+
+}
+
+void pd_dfp_mode_init(int port)
+{
 	/*
 	 * Clear the VDM Setup Done and Modal Operation flags so we will
 	 * have a fresh discovery
@@ -7000,11 +7020,6 @@ void pd_dfp_discovery_init(int port)
 	PE_CLR_FLAG(port, PE_FLAGS_VDM_SETUP_DONE |
 			  PE_FLAGS_MODAL_OPERATION);
 
-	atomic_or(&task_access[port][TCPCI_MSG_SOP], BIT(task_get_current()));
-	atomic_or(&task_access[port][TCPCI_MSG_SOP_PRIME],
-		  BIT(task_get_current()));
-
-	memset(pe[port].discovery, 0, sizeof(pe[port].discovery));
 	memset(pe[port].partner_amodes, 0, sizeof(pe[port].partner_amodes));
 
 	/* Reset the DPM and DP modules to enable alternate mode entry. */
@@ -7039,14 +7054,20 @@ __maybe_unused bool pd_discovery_access_validate(int port,
 	return !(task_access[port][type] & ~BIT(task_get_current()));
 }
 
-__maybe_unused struct pd_discovery *pd_get_am_discovery(int port,
+__maybe_unused struct pd_discovery *pd_get_am_discovery_and_notify_access(
+				int port, enum tcpci_msg_type type)
+{
+	atomic_or(&task_access[port][type], BIT(task_get_current()));
+	return (struct pd_discovery *)pd_get_am_discovery(port, type);
+}
+
+__maybe_unused const struct pd_discovery *pd_get_am_discovery(int port,
 			enum tcpci_msg_type type)
 {
 	if (!IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
 		assert(0);
 	ASSERT(type < DISCOVERY_TYPE_COUNT);
 
-	atomic_or(&task_access[port][type], BIT(task_get_current()));
 	return &pe[port].discovery[type];
 }
 

@@ -113,6 +113,7 @@
 
 /* Sensors */
 #ifdef HAS_TASK_MOTIONSENSE
+
 #define CONFIG_TABLET_MODE
 #define CONFIG_GMR_TABLET_MODE
 #define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE
@@ -131,7 +132,7 @@
 
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK (1 << LID_ACCEL)
-#endif
+#endif  /* HAS_TASK_MOTIONSENSE */
 
 /* Backlight config */
 #define CONFIG_BACKLIGHT_LID
@@ -189,6 +190,7 @@
 #define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USB_PD_DUAL_ROLE
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
+#define CONFIG_USB_PD_FRS_TCPC
 #define CONFIG_USB_PD_LOGGING
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_MUX
@@ -314,31 +316,11 @@ enum usba_port {
 	USBA_PORT_COUNT
 };
 
-/* ADC Channels */
-enum adc_channel {
-	ADC_TEMP_SENSOR_SOC = 0,
-	ADC_TEMP_SENSOR_CHARGER,
-	ADC_TEMP_SENSOR_MEMORY,
-	ADC_CORE_IMON1,
-	ADC_SOC_IMON2,
-	ADC_CH_COUNT
-};
-
 /* TMP112 sensors */
 enum tmp112_sensor {
 	TMP112_SOC,
 	TMP112_AMB,
 	TMP112_COUNT,
-};
-
-/* Temp Sensors */
-enum temp_sensor_id {
-	TEMP_SENSOR_SOC = 0,
-	TEMP_SENSOR_CHARGER,
-	TEMP_SENSOR_MEMORY,
-	TEMP_SENSOR_CPU,
-	TEMP_SENSOR_AMBIENT,
-	TEMP_SENSOR_COUNT
 };
 
 enum sensor_id {

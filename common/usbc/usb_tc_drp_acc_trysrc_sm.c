@@ -724,6 +724,11 @@ static void tc_detached(int port)
 	tc_set_modes_exit(port);
 	if (IS_ENABLED(CONFIG_USB_PRL_SM))
 		prl_set_default_pd_revision(port);
+
+	/* Clear any mux connection on detach */
+	if (IS_ENABLED(CONFIG_USBC_SS_MUX))
+		usb_mux_set(port, USB_PD_MUX_NONE,
+			    USB_SWITCH_DISCONNECT, tc[port].polarity);
 }
 
 static inline void pd_set_dual_role_and_event(int port,
@@ -1887,6 +1892,16 @@ __maybe_unused static void handle_new_power_state(int port)
 	}
 
 	/*
+	 * If the sink port was sourcing Vconn, and can no longer, request a
+	 * hard reset on this port to restore Vconn to the source.
+	 */
+	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
+		if (tc_is_vconn_src(port) && tc_is_attached_snk(port) &&
+						!pd_check_vconn_swap(port))
+			pd_dpm_request(port, DPM_REQUEST_HARD_RESET_SEND);
+	}
+
+	/*
 	 * TC_FLAGS_UPDATE_USB_MUX is set on chipset startup and shutdown.
 	 * Set the USB mux according to the new power state.  If the chipset
 	 * is transitioning to OFF, this disconnects USB and DP mux.
@@ -2231,10 +2246,6 @@ static void tc_unattached_snk_entry(const int port)
 	 */
 	pd_execute_data_swap(port, PD_ROLE_DISCONNECTED);
 	pd_timer_enable(port, TC_TIMER_NEXT_ROLE_SWAP, PD_T_DRP_SNK);
-
-	if (IS_ENABLED(CONFIG_USBC_SS_MUX))
-		usb_mux_set(port, USB_PD_MUX_NONE,
-			USB_SWITCH_DISCONNECT, tc[port].polarity);
 
 	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
 		CLR_FLAGS_ON_DISCONNECT(port);
@@ -3995,6 +4006,27 @@ static void pd_chipset_shutdown(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, pd_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
+static void pd_set_power_change(void)
+{
+	int i;
+
+	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+		task_set_event(PD_PORT_TO_TASK_ID(i),
+			       PD_EVENT_POWER_STATE_CHANGE);
+	}
+}
+DECLARE_DEFERRED(pd_set_power_change);
+
+static void pd_chipset_hard_off(void)
+{
+	/*
+	 * Wait 1 second to check our Vconn sourcing status, as the power rails
+	 * which were supporting it may take some time to change after entering
+	 * G3.
+	 */
+	hook_call_deferred(&pd_set_power_change_data, 1 * SECOND);
+}
+DECLARE_HOOK(HOOK_CHIPSET_HARD_OFF, pd_chipset_hard_off, HOOK_PRIO_DEFAULT);
 
 /*
  * Type-C State Hierarchy (Sub-States are listed inside the boxes)

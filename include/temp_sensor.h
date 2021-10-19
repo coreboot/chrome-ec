@@ -33,8 +33,18 @@ struct temp_sensor_t {
 	const char *name;
 	/* Temperature sensor type. */
 	enum temp_sensor_type type;
+	/*
+	 * TODO(b:201081891) Refactor temp_sensor_t references
+	 * to all use OO style sensor argument to get adc idx.
+	 */
+#ifdef CONFIG_ZEPHYR
+	/* Read sensor value in K into temp_ptr; return non-zero if error. */
+	int (*read)(const struct temp_sensor_t *sensor, int *temp_ptr);
+	struct thermistor_info *thermistor;
+#else
 	/* Read sensor value in K into temp_ptr; return non-zero if error. */
 	int (*read)(int idx, int *temp_ptr);
+#endif
 	/* Index among the same kind of sensors. */
 	int idx;
 };
@@ -58,13 +68,10 @@ extern const struct temp_sensor_t temp_sensors[];
 int temp_sensor_read(enum temp_sensor_id id, int *temp_ptr);
 
 /**
- * Console command to print temperature sensor values
- *
- * @param argc		argument count (Set argc = 1)
- * @param argv		argument vector (Set argv = NULL)
+ * Print all temperature sensor values.
  *
  * @return EC_SUCCESS, or non-zero if error.
  */
-int console_command_temps(int argc, char **argv);
+int print_temps(void);
 
 #endif  /* __CROS_EC_TEMP_SENSOR_H */

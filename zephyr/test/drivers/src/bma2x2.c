@@ -9,6 +9,7 @@
 #include "common.h"
 #include "i2c.h"
 #include "emul/emul_bma255.h"
+#include "emul/emul_common_i2c.h"
 
 #include "accelgyro.h"
 #include "motion_sense.h"
@@ -120,10 +121,12 @@ struct reset_func_data {
  * accessing register data.ok_before_fail times. Error is returned during next
  * data.fail_attempts times.
  */
-static int emul_read_reset(struct i2c_emul *emul, int reg, void *data)
+static int emul_read_reset(struct i2c_emul *emul, int reg, uint8_t *buf,
+			   int bytes, void *data)
 {
 	struct reset_func_data *d = data;
 
+	reg = bma_emul_access_reg(emul, reg, bytes, true /* = read */);
 	if (reg != BMA2x2_RST_ADDR) {
 		return 1;
 	}
@@ -161,15 +164,18 @@ static void test_bma_get_offset(void)
 	emul = bma_emul_get(BMA_ORD);
 
 	/* Test fail on each axis */
-	bma_emul_set_read_fail_reg(emul, BMA2x2_OFFSET_X_AXIS_ADDR);
-	zassert_equal(-EIO, ms.drv->get_offset(&ms, ret_offset, &temp), NULL);
-	bma_emul_set_read_fail_reg(emul, BMA2x2_OFFSET_Y_AXIS_ADDR);
-	zassert_equal(-EIO, ms.drv->get_offset(&ms, ret_offset, &temp), NULL);
-	bma_emul_set_read_fail_reg(emul, BMA2x2_OFFSET_Z_AXIS_ADDR);
-	zassert_equal(-EIO, ms.drv->get_offset(&ms, ret_offset, &temp), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_OFFSET_X_AXIS_ADDR);
+	zassert_equal(EC_ERROR_INVAL,
+		      ms.drv->get_offset(&ms, ret_offset, &temp), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_OFFSET_Y_AXIS_ADDR);
+	zassert_equal(EC_ERROR_INVAL,
+		      ms.drv->get_offset(&ms, ret_offset, &temp), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_OFFSET_Z_AXIS_ADDR);
+	zassert_equal(EC_ERROR_INVAL,
+		      ms.drv->get_offset(&ms, ret_offset, &temp), NULL);
 
 	/* Do not fail on read */
-	bma_emul_set_read_fail_reg(emul, BMA_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Set emulator offset */
 	exp_offset[0] = BMA_EMUL_1G / 10;
@@ -209,15 +215,18 @@ static void test_bma_set_offset(void)
 	emul = bma_emul_get(BMA_ORD);
 
 	/* Test fail on each axis */
-	bma_emul_set_write_fail_reg(emul, BMA2x2_OFFSET_X_AXIS_ADDR);
-	zassert_equal(-EIO, ms.drv->set_offset(&ms, exp_offset, temp), NULL);
-	bma_emul_set_write_fail_reg(emul, BMA2x2_OFFSET_Y_AXIS_ADDR);
-	zassert_equal(-EIO, ms.drv->set_offset(&ms, exp_offset, temp), NULL);
-	bma_emul_set_write_fail_reg(emul, BMA2x2_OFFSET_Z_AXIS_ADDR);
-	zassert_equal(-EIO, ms.drv->set_offset(&ms, exp_offset, temp), NULL);
+	i2c_common_emul_set_write_fail_reg(emul, BMA2x2_OFFSET_X_AXIS_ADDR);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_offset(&ms, exp_offset, temp),
+		      NULL);
+	i2c_common_emul_set_write_fail_reg(emul, BMA2x2_OFFSET_Y_AXIS_ADDR);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_offset(&ms, exp_offset, temp),
+		      NULL);
+	i2c_common_emul_set_write_fail_reg(emul, BMA2x2_OFFSET_Z_AXIS_ADDR);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_offset(&ms, exp_offset, temp),
+		      NULL);
 
 	/* Do not fail on write */
-	bma_emul_set_write_fail_reg(emul, BMA_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Set input offset */
 	exp_offset[0] = BMA_EMUL_1G / 10;
@@ -305,36 +314,36 @@ static void test_bma_set_range(void)
 	ms.current_range = start_range;
 	bma_emul_set_reg(emul, BMA2x2_RANGE_SELECT_ADDR, BMA2x2_RANGE_2G);
 	/* Setup emulator fail on read */
-	bma_emul_set_read_fail_reg(emul, BMA2x2_RANGE_SELECT_ADDR);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_RANGE_SELECT_ADDR);
 
 	/* Test fail on read */
-	zassert_equal(-EIO, ms.drv->set_range(&ms, 12, 0), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 0), NULL);
 	zassert_equal(start_range, ms.current_range, NULL);
 	zassert_equal(BMA2x2_RANGE_2G,
 		      bma_emul_get_reg(emul, BMA2x2_RANGE_SELECT_ADDR), NULL);
-	zassert_equal(-EIO, ms.drv->set_range(&ms, 12, 1), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 1), NULL);
 	zassert_equal(start_range, ms.current_range, NULL);
 	zassert_equal(BMA2x2_RANGE_2G,
 		      bma_emul_get_reg(emul, BMA2x2_RANGE_SELECT_ADDR), NULL);
 
 	/* Do not fail on read */
-	bma_emul_set_read_fail_reg(emul, BMA_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Setup emulator fail on write */
-	bma_emul_set_write_fail_reg(emul, BMA2x2_RANGE_SELECT_ADDR);
+	i2c_common_emul_set_write_fail_reg(emul, BMA2x2_RANGE_SELECT_ADDR);
 
 	/* Test fail on write */
-	zassert_equal(-EIO, ms.drv->set_range(&ms, 12, 0), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 0), NULL);
 	zassert_equal(start_range, ms.current_range, NULL);
 	zassert_equal(BMA2x2_RANGE_2G,
 		      bma_emul_get_reg(emul, BMA2x2_RANGE_SELECT_ADDR), NULL);
-	zassert_equal(-EIO, ms.drv->set_range(&ms, 12, 1), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 1), NULL);
 	zassert_equal(start_range, ms.current_range, NULL);
 	zassert_equal(BMA2x2_RANGE_2G,
 		      bma_emul_get_reg(emul, BMA2x2_RANGE_SELECT_ADDR), NULL);
 
 	/* Do not fail on write */
-	bma_emul_set_write_fail_reg(emul, BMA_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Test setting range with rounding down */
 	check_set_range(emul, 1, 0, 2);
@@ -374,42 +383,42 @@ static void test_bma_init(void)
 	emul = bma_emul_get(BMA_ORD);
 
 	/* Setup emulator fail read function */
-	bma_emul_set_read_fail_reg(emul, BMA2x2_CHIP_ID_ADDR);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_CHIP_ID_ADDR);
 
 	/* Test fail on chip id read */
 	zassert_equal(EC_ERROR_UNKNOWN, ms.drv->init(&ms), NULL);
 
 	/* Disable failing on chip id read, but set wrong value */
-	bma_emul_set_read_fail_reg(emul, BMA_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 	bma_emul_set_reg(emul, BMA2x2_CHIP_ID_ADDR, 23);
 
 	/* Test wrong chip id */
 	zassert_equal(EC_ERROR_ACCESS_DENIED, ms.drv->init(&ms), NULL);
 
 	/* Set correct chip id, but fail on reset reg read */
-	bma_emul_set_read_fail_reg(emul, BMA2x2_RST_ADDR);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_RST_ADDR);
 	bma_emul_set_reg(emul, BMA2x2_CHIP_ID_ADDR, BMA255_CHIP_ID_MAJOR);
 
 	/* Test fail on reset register read */
-	zassert_equal(-EIO, ms.drv->init(&ms), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->init(&ms), NULL);
 
 	/* Do not fail on read */
-	bma_emul_set_read_fail_reg(emul, BMA_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Setup emulator fail on write */
-	bma_emul_set_write_fail_reg(emul, BMA2x2_RST_ADDR);
+	i2c_common_emul_set_write_fail_reg(emul, BMA2x2_RST_ADDR);
 
 	/* Test fail on reset register write */
-	zassert_equal(-EIO, ms.drv->init(&ms), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->init(&ms), NULL);
 
 	/* Do not fail on write */
-	bma_emul_set_write_fail_reg(emul, BMA_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Setup emulator fail reset read function */
 	reset_func_data.ok_before_fail = 1;
 	reset_func_data.fail_attempts = 100;
 	reset_func_data.reset_value = 0;
-	bma_emul_set_read_func(emul, emul_read_reset, &reset_func_data);
+	i2c_common_emul_set_read_func(emul, emul_read_reset, &reset_func_data);
 
 	/* Test fail on too many reset read errors */
 	zassert_equal(EC_ERROR_TIMEOUT, ms.drv->init(&ms), NULL);
@@ -434,7 +443,7 @@ static void test_bma_init(void)
 	zassert_equal(EC_RES_SUCCESS, ms.drv->init(&ms), NULL);
 
 	/* Remove custom emulator read function */
-	bma_emul_set_read_func(emul, NULL, NULL);
+	i2c_common_emul_set_read_func(emul, NULL, NULL);
 }
 
 /*
@@ -568,36 +577,40 @@ static void test_bma_rate(void)
 	reg_rate = bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR);
 
 	/* Setup emulator fail on read */
-	bma_emul_set_read_fail_reg(emul, BMA2x2_BW_SELECT_ADDR);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_BW_SELECT_ADDR);
 
 	/* Test fail on read */
-	zassert_equal(-EIO, ms.drv->set_data_rate(&ms, 15625, 0), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_data_rate(&ms, 15625, 0),
+		      NULL);
 	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms), NULL);
-	zassert_equal(reg_rate,
-		      bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR), NULL);
-	zassert_equal(-EIO, ms.drv->set_data_rate(&ms, 15625, 1), NULL);
+	zassert_equal(reg_rate, bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR),
+		      NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_data_rate(&ms, 15625, 1),
+		      NULL);
 	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms), NULL);
 	zassert_equal(reg_rate,
 		      bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR), NULL);
 
 	/* Do not fail on read */
-	bma_emul_set_read_fail_reg(emul, BMA_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Setup emulator fail on write */
-	bma_emul_set_write_fail_reg(emul, BMA2x2_BW_SELECT_ADDR);
+	i2c_common_emul_set_write_fail_reg(emul, BMA2x2_BW_SELECT_ADDR);
 
 	/* Test fail on write */
-	zassert_equal(-EIO, ms.drv->set_data_rate(&ms, 15625, 0), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_data_rate(&ms, 15625, 0),
+		      NULL);
 	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms), NULL);
-	zassert_equal(reg_rate,
-		      bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR), NULL);
-	zassert_equal(-EIO, ms.drv->set_data_rate(&ms, 15625, 1), NULL);
+	zassert_equal(reg_rate, bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR),
+		      NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_data_rate(&ms, 15625, 1),
+		      NULL);
 	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms), NULL);
-	zassert_equal(reg_rate,
-		      bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR), NULL);
+	zassert_equal(reg_rate, bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR),
+		      NULL);
 
 	/* Do not fail on write */
-	bma_emul_set_write_fail_reg(emul, BMA_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 }
 
 /** Test read with and without I2C errors. */
@@ -616,21 +629,21 @@ static void test_bma_read(void)
 	bma_emul_set_off(emul, BMA_EMUL_AXIS_Z, 0);
 
 	/* Test fail on each axis */
-	bma_emul_set_read_fail_reg(emul, BMA2x2_X_AXIS_LSB_ADDR);
-	zassert_equal(-EIO, ms.drv->read(&ms, ret_acc_v), NULL);
-	bma_emul_set_read_fail_reg(emul, BMA2x2_X_AXIS_MSB_ADDR);
-	zassert_equal(-EIO, ms.drv->read(&ms, ret_acc_v), NULL);
-	bma_emul_set_read_fail_reg(emul, BMA2x2_Y_AXIS_LSB_ADDR);
-	zassert_equal(-EIO, ms.drv->read(&ms, ret_acc_v), NULL);
-	bma_emul_set_read_fail_reg(emul, BMA2x2_Y_AXIS_MSB_ADDR);
-	zassert_equal(-EIO, ms.drv->read(&ms, ret_acc_v), NULL);
-	bma_emul_set_read_fail_reg(emul, BMA2x2_Z_AXIS_LSB_ADDR);
-	zassert_equal(-EIO, ms.drv->read(&ms, ret_acc_v), NULL);
-	bma_emul_set_read_fail_reg(emul, BMA2x2_Z_AXIS_MSB_ADDR);
-	zassert_equal(-EIO, ms.drv->read(&ms, ret_acc_v), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_X_AXIS_LSB_ADDR);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_X_AXIS_MSB_ADDR);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_Y_AXIS_LSB_ADDR);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_Y_AXIS_MSB_ADDR);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_Z_AXIS_LSB_ADDR);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, BMA2x2_Z_AXIS_MSB_ADDR);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
 
 	/* Do not fail on read */
-	bma_emul_set_read_fail_reg(emul, BMA_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Set input accelerometer values */
 	exp_acc[0] = BMA_EMUL_1G / 10;
@@ -692,12 +705,14 @@ struct calib_func_data {
  * error when offset control register is accessed when cal ready bit is not set
  * and data.read_fail is not zero.
  */
-static int emul_read_calib_func(struct i2c_emul *emul, int reg, void *data)
+static int emul_read_calib_func(struct i2c_emul *emul, int reg, uint8_t *val,
+				int bytes, void *data)
 {
 	struct calib_func_data *d = data;
 	uint8_t reg_val;
 	int cur_time;
 
+	reg = bma_emul_access_reg(emul, reg, bytes, true /* = read */);
 	if (reg != BMA2x2_OFFSET_CTRL_ADDR) {
 		return 1;
 	}
@@ -723,10 +738,11 @@ static int emul_read_calib_func(struct i2c_emul *emul, int reg, void *data)
  * triggerd.
  */
 static int emul_write_calib_func(struct i2c_emul *emul, int reg, uint8_t val,
-				 void *data)
+				 int bytes, void *data)
 {
 	struct calib_func_data *d = data;
 
+	reg = bma_emul_access_reg(emul, reg, bytes, false /* = read */);
 	if (reg != BMA2x2_OFFSET_CTRL_ADDR) {
 		return 1;
 	}
@@ -783,8 +799,8 @@ static void test_bma_perform_calib(void)
 	exp_off[2] = BMA_EMUL_1G - exp_off[2];
 
 	/* Setup emulator calibration functions */
-	bma_emul_set_read_func(emul, emul_read_calib_func, &func_data);
-	bma_emul_set_write_func(emul, emul_write_calib_func, &func_data);
+	i2c_common_emul_set_read_func(emul, emul_read_calib_func, &func_data);
+	i2c_common_emul_set_write_func(emul, emul_write_calib_func, &func_data);
 
 	/* Setup emulator to fail on first access to offset control register */
 	func_data.calib_start = k_uptime_get_32();
@@ -797,7 +813,7 @@ static void test_bma_perform_calib(void)
 	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
 
 	/* Test fail on first access to offset control register */
-	zassert_equal(-EIO, ms.drv->perform_calib(&ms, 1), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->perform_calib(&ms, 1), NULL);
 	zassert_equal(range, ms.current_range, NULL);
 	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
 
@@ -821,7 +837,7 @@ static void test_bma_perform_calib(void)
 	func_data.time = 160;
 
 	/* Test fail on read during offset compensation */
-	zassert_equal(-EIO, ms.drv->perform_calib(&ms, 1), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->perform_calib(&ms, 1), NULL);
 	zassert_equal(range, ms.current_range, NULL);
 	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
 
@@ -833,7 +849,6 @@ static void test_bma_perform_calib(void)
 	func_data.read_fail = 0;
 	func_data.time = 1000;
 
-	/* Test fail on too long offset compensation */
 	zassert_equal(EC_RES_TIMEOUT, ms.drv->perform_calib(&ms, 1), NULL);
 	zassert_equal(range, ms.current_range, NULL);
 	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
@@ -883,8 +898,8 @@ static void test_bma_perform_calib(void)
 	compare_int3v(exp_off, ret_off);
 
 	/* Remove custom emulator functions */
-	bma_emul_set_read_func(emul, NULL, NULL);
-	bma_emul_set_write_func(emul, NULL, NULL);
+	i2c_common_emul_set_read_func(emul, NULL, NULL);
+	i2c_common_emul_set_write_func(emul, NULL, NULL);
 }
 
 /** Test get resolution. */

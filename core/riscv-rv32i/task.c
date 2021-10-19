@@ -199,6 +199,16 @@ void __ram_code interrupt_enable(void)
 	asm volatile ("csrs  mie, t0");
 }
 
+inline int is_interrupt_enabled(void)
+{
+	int mie = 0;
+
+	asm volatile ("csrr %0, mie" : "=r"(mie));
+
+	/* Check if MEIE bit is set in MIE register */
+	return !!(mie & 0x800);
+}
+
 inline int in_interrupt_context(void)
 {
 	return in_interrupt;
@@ -610,7 +620,7 @@ void task_print_list(void)
 	}
 }
 
-int command_task_info(int argc, char **argv)
+static int command_task_info(int argc, char **argv)
 {
 #ifdef CONFIG_TASK_PROFILING
 	unsigned int total = 0;

@@ -1149,7 +1149,7 @@ enum ec_image {
 };
 
 /**
- * struct ec_response_get_version - Response to the get version command.
+ * struct ec_response_get_version - Response to the v0 get version command.
  * @version_string_ro: Null-terminated RO firmware version string.
  * @version_string_rw: Null-terminated RW firmware version string.
  * @reserved: Unused bytes; was previously RW-B firmware version string.
@@ -1158,8 +1158,29 @@ enum ec_image {
 struct ec_response_get_version {
 	char version_string_ro[32];
 	char version_string_rw[32];
-	char reserved[32];
+	char reserved[32];  /* Changed to cros_fwid_ro in version 1 */
 	uint32_t current_image;
+} __ec_align4;
+
+/**
+ * struct ec_response_get_version_v1 - Response to the v1 get version command.
+ *
+ * ec_response_get_version_v1 is a strict superset of ec_response_get_version.
+ * The v1 response changes the semantics of one field (reserved to cros_fwid_ro)
+ * and adds one additional field (cros_fwid_rw).
+ *
+ * @version_string_ro: Null-terminated RO firmware version string.
+ * @version_string_rw: Null-terminated RW firmware version string.
+ * @cros_fwid_ro: Null-terminated RO CrOS FWID string.
+ * @current_image: One of ec_image.
+ * @cros_fwid_rw: Null-terminated RW CrOS FWID string.
+ */
+struct ec_response_get_version_v1 {
+	char version_string_ro[32];
+	char version_string_rw[32];
+	char cros_fwid_ro[32];  /* Added in version 1 (Used to be reserved) */
+	uint32_t current_image;
+	char cros_fwid_rw[32];  /* Added in version 1 */
 } __ec_align4;
 
 /* Read test */
@@ -2688,6 +2709,7 @@ enum motionsensor_chip {
 	MOTIONSENSE_CHIP_ICM42607 = 26,
 	MOTIONSENSE_CHIP_BMA422 = 27,
 	MOTIONSENSE_CHIP_BMI323 = 28,
+	MOTIONSENSE_CHIP_BMI220 = 29,
 	MOTIONSENSE_CHIP_MAX,
 };
 
@@ -6987,6 +7009,31 @@ enum ec_set_base_state_cmd {
 	EC_SET_BASE_STATE_ATTACH,
 	EC_SET_BASE_STATE_RESET,
 };
+
+#define EC_CMD_I2C_CONTROL 0x0139
+
+/* Subcommands for I2C control */
+
+enum ec_i2c_control_command {
+	EC_I2C_CONTROL_GET_SPEED,
+	EC_I2C_CONTROL_SET_SPEED,
+};
+
+#define EC_I2C_CONTROL_SPEED_UNKNOWN 0
+
+struct ec_params_i2c_control {
+	uint8_t port;		/* I2C port number */
+	uint8_t cmd;		/* enum ec_i2c_control_command */
+	union {
+		uint16_t speed_khz;
+	} cmd_params;
+} __ec_align_size1;
+
+struct ec_response_i2c_control {
+	union {
+		uint16_t speed_khz;
+	} cmd_response;
+} __ec_align_size1;
 
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */

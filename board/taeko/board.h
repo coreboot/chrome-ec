@@ -18,7 +18,6 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-#define CONFIG_BRIGNUP
 #define CONFIG_SYSTEM_UNLOCKED
 
 /*
@@ -33,11 +32,7 @@
 #define CONFIG_LED_ONOFF_STATES
 
 /* Sensors */
-
-/* TODO(b/194765820)
- * Check if project support dynamic motion sensor count
- */
-/* #define	CONFIG_DYNAMIC_MOTION_SENSOR_COUNT */
+#define	CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
 #define CONFIG_ACCELGYRO_LSM6DSO	/* Base accel */
 #define CONFIG_ACCEL_LSM6DSO_INT_EVENT \
@@ -56,8 +51,10 @@
 
 /* Lid accel */
 #define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE	BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID	LID_ACCEL
+#define CONFIG_ACCEL_BMA4XX
 #define CONFIG_ACCEL_LIS2DWL
 #define CONFIG_ACCEL_LIS2DW_AS_BASE
 #define CONFIG_ACCEL_LIS2DW12_INT_EVENT \
@@ -127,7 +124,6 @@
 #define GPIO_PG_EC_DSW_PWROK		GPIO_SEQ_EC_DSW_PWROK
 #define GPIO_PG_EC_RSMRST_ODL		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_POWER_BUTTON_L		GPIO_GSC_EC_PWR_BTN_ODL
-#define GPIO_RSMRST_L_PGOOD		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
 #define GPIO_VOLUME_DOWN_L		GPIO_EC_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L		GPIO_EC_VOLUP_BTN_ODL
@@ -160,11 +156,8 @@
 #define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_SEQ_EC_DSW_PWROK
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
-/*
- * TODO:(b/194774929)
- * no fan control loop until sensors are tuned
- */
-/* #define CONFIG_FANS			FAN_CH_COUNT */
+/* Fan */
+#define CONFIG_FANS			FAN_CH_COUNT
 
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
@@ -183,20 +176,15 @@ enum adc_channel {
 	ADC_TEMP_SENSOR_1_DDR_SOC,
 	ADC_TEMP_SENSOR_2_FAN,
 	ADC_TEMP_SENSOR_3_CHARGER,
-	ADC_TEMP_SENSOR_4_WWAN,
+	ADC_TEMP_SENSOR_4_CPUCHOKE,
 	ADC_CH_COUNT
 };
 
 enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
 	TEMP_SENSOR_2_FAN,
-#if 0
-/*
- * TOOD(b/194774929): need to update for real fan
- */
 	TEMP_SENSOR_3_CHARGER,
-	TEMP_SENSOR_4_WWAN,
-#endif
+	TEMP_SENSOR_4_CPUCHOKE,
 	TEMP_SENSOR_COUNT
 };
 
@@ -234,6 +222,8 @@ enum mft_channel {
 	MFT_CH_0 = 0,
 	MFT_CH_COUNT
 };
+
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

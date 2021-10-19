@@ -199,6 +199,7 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
+static int board_id = -1;
 
 void board_init(void)
 {
@@ -424,14 +425,14 @@ static struct mutex g_base_mutex;
 /* Matrices to rotate accelerometers into the standard reference. */
 static const mat33_fp_t lid_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
+	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
 static const mat33_fp_t base_standard_ref = {
-	{ 0, FLOAT_TO_FP(1), 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
 	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
+	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
 static struct stprivate_data g_lis2ds_data;
@@ -612,6 +613,13 @@ static int ps8743_tune_mux_c1(const struct usb_mux *me)
 			PS8743_USB_EQ_TX_3_6_DB,
 			PS8743_USB_EQ_RX_16_0_DB);
 
+	ps8743_write(me,
+			PS8743_REG_USB_SWING,
+			PS8743_LFPS_SWG_TD);
+	ps8743_write(me,
+			PS8743_REG_DP_SETTING,
+			PS8743_DP_SWG_ADJ_P15P);
+
 	return EC_SUCCESS;
 }
 
@@ -720,9 +728,27 @@ static void panel_power_change_deferred(void)
 {
 	int signal = gpio_get_level(GPIO_EN_PP1800_PANEL_S0);
 
-	gpio_set_level(GPIO_EN_LCD_ENP, signal);
-	msleep(1);
-	gpio_set_level(GPIO_EN_LCD_ENN, signal);
+	if (board_id == -1) {
+		uint32_t val;
+
+		if (cbi_get_board_version(&val) == EC_SUCCESS)
+			board_id = val;
+	}
+
+	if (board_id < 4) {
+		gpio_set_level(GPIO_EN_LCD_ENP, signal);
+		msleep(1);
+		gpio_set_level(GPIO_EN_LCD_ENN, signal);
+	} else if (signal != 0) {
+		i2c_write8(I2C_PORT_LCD, I2C_ADDR_ISL98607_FLAGS,
+				ISL98607_REG_VBST_OUT, ISL98607_VBST_OUT_5P65);
+		i2c_write8(I2C_PORT_LCD, I2C_ADDR_ISL98607_FLAGS,
+				ISL98607_REG_VN_OUT, ISL98607_VN_OUT_5P5);
+		i2c_write8(I2C_PORT_LCD, I2C_ADDR_ISL98607_FLAGS,
+				ISL98607_REG_VP_OUT, ISL98607_VP_OUT_5P5);
+	}
+
+	gpio_set_level(GPIO_TSP_TA, signal & extpower_is_present());
 }
 DECLARE_DEFERRED(panel_power_change_deferred);
 
@@ -737,6 +763,42 @@ void panel_power_change_interrupt(enum gpio_signal signal)
  */
 static void handle_tsp_ta(void)
 {
-	gpio_set_level(GPIO_TSP_TA, extpower_is_present());
+	int signal = gpio_get_level(GPIO_EN_PP1800_PANEL_S0);
+
+	gpio_set_level(GPIO_TSP_TA, signal & extpower_is_present());
 }
 DECLARE_HOOK(HOOK_AC_CHANGE, handle_tsp_ta, HOOK_PRIO_DEFAULT);
+
+/******************************************************************************/
+/* USB-A charging control */
+const int usb_port_enable[USB_PORT_COUNT] = {
+	GPIO_EN_USB_A0_VBUS,
+};
+
+/*
+ * Change LED Driver Current
+ * LED driver current must be written when EN_BL_OD goes from Low to High.
+ */
+static int backup_enable_backlight = -1;
+void backlit_gpio_tick(void)
+{
+	int signal = gpio_get_level(GPIO_ENABLE_BACKLIGHT);
+
+	if (backup_enable_backlight == signal)
+		return;
+
+	backup_enable_backlight = signal;
+	if (board_id == -1) {
+		uint32_t val;
+
+		if (cbi_get_board_version(&val) == EC_SUCCESS)
+			board_id = val;
+	}
+
+	if (board_id >= 4 && signal == 1)
+		i2c_write16(I2C_PORT_LCD, I2C_ADDR_MP3372_FLAGS,
+				MP3372_REG_ISET_CHEN,
+				MP3372_ISET_21P8_CHEN_ALL);
+
+}
+DECLARE_HOOK(HOOK_TICK, backlit_gpio_tick, HOOK_PRIO_DEFAULT);

@@ -8,10 +8,15 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+/* Free up flash space */
+#define CONFIG_LTO
+
 /* Select Baseboard features */
 #define VARIANT_OCTOPUS_EC_NPCX796FB
 #define VARIANT_OCTOPUS_CHARGER_ISL9238
 #include "baseboard.h"
+
+#define GPIO_PG_EC_RSMRST_ODL GPIO_RSMRST_L_PGOOD
 
 /* I2C bus configuraiton */
 #define I2C_PORT_ACCEL	I2C_PORT_SENSOR
@@ -55,10 +60,6 @@
 #define CONFIG_STEINHART_HART_3V3_13K7_47K_4050B
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
 
-/* Keyboard backliht */
-#define CONFIG_PWM
-#define CONFIG_PWM_KBLIGHT
-
 #ifndef __ASSEMBLER__
 
 /* support factory keyboard test */
@@ -80,11 +81,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_AMBIENT,
 	TEMP_SENSOR_CHARGER,
 	TEMP_SENSOR_COUNT
-};
-
-enum pwm_channel {
-	PWM_CH_KBLIGHT,
-	PWM_CH_COUNT
 };
 
 /* Motion sensors */

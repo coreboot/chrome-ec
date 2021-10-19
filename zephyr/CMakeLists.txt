@@ -42,6 +42,8 @@ if(DEFINED CONFIG_PLATFORM_EC)
   # Force compiler warnings to generate errors
   zephyr_compile_options(-Werror)
 
+  include(fpu.cmake)
+
   # When LTO is enabled, enable only for the "app" library, which compiles
   # and links all Chromium OS sources.
   # TODO: Enable LTO for all sources when Zephyr supports it.
@@ -71,6 +73,7 @@ if (DEFINED CONFIG_PLATFORM_EC)
     "${PLATFORM_EC}/zephyr/shim/include"
     "${PLATFORM_EC}/fuzz"
     "${PLATFORM_EC}/test"
+    "${PLATFORM_EC}"
     "${PLATFORM_EC}/include"
     "${PLATFORM_EC}/include/driver"
     "${PLATFORM_EC}/third_party")
@@ -112,6 +115,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC "${PLATFORM_EC}/common/base32.c"
 
 # Now include files that depend on or relate to other CONFIG options, sorted by
 # CONFIG
+zephyr_library_sources_ifdef(CONFIG_HAS_TASK_POWERBTN
+                                                "${PLATFORM_EC}/common/power_button_x86.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_BMA255
                                                 "${PLATFORM_EC}/driver/accel_bma2x2.c"
                                                 "${PLATFORM_EC}/common/math_util.c")
@@ -205,6 +210,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_REGULATOR
                                                 "${PLATFORM_EC}/common/regulator.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C
                                                 "${PLATFORM_EC}/common/i2c_controller.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C_DEBUG
+                                                "${PLATFORM_EC}/common/i2c_trace.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C_VIRTUAL_BATTERY
                                                 "${PLATFORM_EC}/common/virtual_battery.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
@@ -229,6 +236,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
                                                 "${PLATFORM_EC}/common/led_common.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_PWM
                                                 "${PLATFORM_EC}/common/led_pwm.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_ONOFF_STATES
+                                                "${PLATFORM_EC}/common/led_onoff_states.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LID_ANGLE
                                                 "${PLATFORM_EC}/common/motion_lid.c"
                                                 "${PLATFORM_EC}/common/math_util.c")
@@ -248,12 +257,13 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWER_BUTTON
                                                 "${PLATFORM_EC}/common/power_button.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ
                                                 "${PLATFORM_EC}/power/common.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_AMD
+                                                "${PLATFORM_EC}/power/amd_x86.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_COMETLAKE
                                                 "${PLATFORM_EC}/power/cometlake.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_ICELAKE
                                                 "${PLATFORM_EC}/power/icelake.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
-                                                "${PLATFORM_EC}/common/power_button_x86.c"
                                                 "${PLATFORM_EC}/power/intel_x86.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
@@ -300,7 +310,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
                                                 "${PLATFORM_EC}/common/usbc/usbc_task.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_pd_timer.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_sm.c"
-                                                "${PLATFORM_EC}/common/usbc_intr_task.c")
+                                                "${PLATFORM_EC}/common/usbc_intr_task.c"
+                                                "${PLATFORM_EC}/common/usb_pd_flags.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_CHARGEN
                                                 "${PLATFORM_EC}/common/chargen.c")
@@ -394,3 +405,5 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT_EFS2
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VSTORE
                                                 "${PLATFORM_EC}/common/vstore.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RTC
+						"${PLATFORM_EC}/common/rtc.c")

@@ -3,8 +3,9 @@
  * found in the LICENSE file.
  */
 
-/* Guybrush board-specific configuration */
+/* Nipperkin board-specific configuration */
 
+#include "adc.h"
 #include "base_fw_config.h"
 #include "board_fw_config.h"
 #include "button.h"
@@ -13,6 +14,8 @@
 #include "cros_board_info.h"
 #include "driver/retimer/ps8811.h"
 #include "driver/retimer/ps8818.h"
+#include "driver/temp_sensor/sb_tsi.h"
+#include "driver/temp_sensor/tmp112.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -22,8 +25,10 @@
 #include "power_button.h"
 #include "switch.h"
 #include "tablet_mode.h"
+#include "temp_sensor.h"
 #include "temp_sensor/thermistor.h"
 #include "temp_sensor/tmp112.h"
+#include "thermal.h"
 #include "usb_mux.h"
 
 #include "gpio_list.h" /* Must come after other header files. */
@@ -162,4 +167,278 @@ int board_get_ambient_temp_mk(int *temp_mk)
 		return EC_ERROR_NOT_POWERED;
 
 	return tmp112_get_val_mk(TMP112_AMB, temp_mk);
+}
+
+/* ADC Channels */
+const struct adc_t adc_channels[] = {
+	[ADC_TEMP_SENSOR_MEMORY] = {
+		.name = "MEMORY",
+		.input_ch = NPCX_ADC_CH0,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_TEMP_SENSOR_CHARGER] = {
+		.name = "CHARGER",
+		.input_ch = NPCX_ADC_CH1,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_TEMP_SENSOR_5V_REGULATOR] = {
+		.name = "5V_REGULATOR",
+		.input_ch = NPCX_ADC_CH2,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_CORE_IMON1] = {
+		.name = "CORE_I",
+		.input_ch = NPCX_ADC_CH3,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_SOC_IMON2] = {
+		.name = "SOC_I",
+		.input_ch = NPCX_ADC_CH4,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
+
+/* Temp Sensors */
+static int board_get_temp(int, int *);
+
+const struct tmp112_sensor_t tmp112_sensors[] = {
+	{ I2C_PORT_SENSOR, TMP112_I2C_ADDR_FLAGS0 },
+	{ I2C_PORT_SENSOR, TMP112_I2C_ADDR_FLAGS1 },
+};
+BUILD_ASSERT(ARRAY_SIZE(tmp112_sensors) == TMP112_COUNT);
+
+const struct temp_sensor_t temp_sensors[] = {
+	[TEMP_SENSOR_SOC] = {
+		.name = "SOC",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = board_get_soc_temp_k,
+		.idx = TMP112_SOC,
+	},
+	[TEMP_SENSOR_CHARGER] = {
+		.name = "Charger",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = get_temp_3v3_30k9_47k_4050b,
+		.idx = ADC_TEMP_SENSOR_CHARGER,
+	},
+	[TEMP_SENSOR_MEMORY] = {
+		.name = "Memory",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = board_get_temp,
+		.idx = ADC_TEMP_SENSOR_MEMORY,
+	},
+	[TEMP_SENSOR_5V_REGULATOR] = {
+		.name = "5V_REGULATOR",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = board_get_temp,
+		.idx = ADC_TEMP_SENSOR_5V_REGULATOR,
+	},
+	[TEMP_SENSOR_CPU] = {
+		.name = "CPU",
+		.type = TEMP_SENSOR_TYPE_CPU,
+		.read = sb_tsi_get_val,
+		.idx = 0,
+	},
+	[TEMP_SENSOR_AMBIENT] = {
+		.name = "Ambient",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = tmp112_get_val_k,
+		.idx = TMP112_AMB,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
+
+struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
+	[TEMP_SENSOR_SOC] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
+		},
+		/* TODO: Setting fan off to 0 so it's allways on */
+		.temp_fan_off = C_TO_K(0),
+		.temp_fan_max = C_TO_K(70),
+	},
+	[TEMP_SENSOR_CHARGER] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
+		},
+		.temp_fan_off = 0,
+		.temp_fan_max = 0,
+	},
+	[TEMP_SENSOR_MEMORY] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
+		},
+		.temp_fan_off = 0,
+		.temp_fan_max = 0,
+	},
+	[TEMP_SENSOR_CPU] = {
+		.temp_host = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
+		},
+		.temp_host_release = {
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
+		},
+		/*
+		 * CPU temp sensor fan thresholds are high because they are a
+		 * backup for the SOC temp sensor fan thresholds.
+		 */
+		.temp_fan_off = C_TO_K(60),
+		.temp_fan_max = C_TO_K(90),
+	},
+	/*
+	 * Note: Leave ambient entries at 0, both as it does not represent a
+	 * hotspot and as not all boards have this sensor
+	 */
+};
+BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
+static int board_get_temp(int idx, int *temp_k)
+{
+	if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
+		return EC_ERROR_NOT_POWERED;
+	return get_temp_3v3_30k9_47k_4050b(idx, temp_k);
+}
+
+/* Called on AP resume to S0 */
+static void board_chipset_resume(void)
+{
+	ioex_set_level(IOEX_HDMI_DATA_EN, 1);
+	ioex_set_level(IOEX_EN_PWR_HDMI, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+/* Called on AP suspend */
+static void board_chipset_suspend(void)
+{
+	ioex_set_level(IOEX_EN_PWR_HDMI, 0);
+	ioex_set_level(IOEX_HDMI_DATA_EN, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
+
+/*
+ * With privacy screen, with keyboard backlight
+ */
+static const struct ec_response_keybd_config keybd_w_privacy_w_kblight = {
+	.num_top_row_keys = 13,
+	.action_keys = {
+		TK_BACK,			/* T1 */
+		TK_REFRESH,			/* T2 */
+		TK_FULLSCREEN,			/* T3 */
+		TK_OVERVIEW,			/* T4 */
+		TK_SNAPSHOT,			/* T5 */
+		TK_BRIGHTNESS_DOWN,		/* T6 */
+		TK_BRIGHTNESS_UP,		/* T7 */
+		TK_PRIVACY_SCRN_TOGGLE,		/* T8 */
+		TK_KBD_BKLIGHT_TOGGLE,		/* T9 */
+		TK_MICMUTE,			/* T10 */
+		TK_VOL_MUTE,			/* T11 */
+		TK_VOL_DOWN,			/* T12 */
+		TK_VOL_UP,			/* T13 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+/*
+ * Without privacy screen, with keyboard backlight
+ */
+static const struct ec_response_keybd_config keybd_wo_privacy_w_kblight = {
+	.num_top_row_keys = 13,
+	.action_keys = {
+		TK_BACK,			/* T1 */
+		TK_REFRESH,			/* T2 */
+		TK_FULLSCREEN,			/* T3 */
+		TK_OVERVIEW,			/* T4 */
+		TK_SNAPSHOT,			/* T5 */
+		TK_BRIGHTNESS_DOWN,		/* T6 */
+		TK_BRIGHTNESS_UP,		/* T7 */
+		TK_KBD_BKLIGHT_TOGGLE,		/* T8 */
+		TK_PLAY_PAUSE,			/* T9 */
+		TK_MICMUTE,			/* T10 */
+		TK_VOL_MUTE,			/* T11 */
+		TK_VOL_DOWN,			/* T12 */
+		TK_VOL_UP,			/* T13 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+/*
+ * With privacy screen, without keyboard backlight
+ */
+static const struct ec_response_keybd_config keybd_w_privacy_wo_kblight = {
+	.num_top_row_keys = 13,
+	.action_keys = {
+		TK_BACK,			/* T1 */
+		TK_REFRESH,			/* T2 */
+		TK_FULLSCREEN,			/* T3 */
+		TK_OVERVIEW,			/* T4 */
+		TK_SNAPSHOT,			/* T5 */
+		TK_BRIGHTNESS_DOWN,		/* T6 */
+		TK_BRIGHTNESS_UP,		/* T7 */
+		TK_PRIVACY_SCRN_TOGGLE,		/* T8 */
+		TK_PLAY_PAUSE,			/* T9 */
+		TK_MICMUTE,			/* T10 */
+		TK_VOL_MUTE,			/* T11 */
+		TK_VOL_DOWN,			/* T12 */
+		TK_VOL_UP,			/* T13 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+/*
+ * Without privacy screen, without keyboard backlight
+ */
+static const struct ec_response_keybd_config keybd_wo_privacy_wo_kblight = {
+	.num_top_row_keys = 13,
+	.action_keys = {
+		TK_BACK,			/* T1 */
+		TK_REFRESH,			/* T2 */
+		TK_FULLSCREEN,			/* T3 */
+		TK_OVERVIEW,			/* T4 */
+		TK_SNAPSHOT,			/* T5 */
+		TK_BRIGHTNESS_DOWN,		/* T6 */
+		TK_BRIGHTNESS_UP,		/* T7 */
+		TK_PREV_TRACK,			/* T8 */
+		TK_PLAY_PAUSE,			/* T9 */
+		TK_MICMUTE,			/* T10 */
+		TK_VOL_MUTE,			/* T11 */
+		TK_VOL_DOWN,			/* T12 */
+		TK_VOL_UP,			/* T13 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+__override const struct ec_response_keybd_config *
+board_vivaldi_keybd_config(void)
+{
+	if (board_has_privacy_panel() && board_has_kblight())
+		return &keybd_w_privacy_w_kblight;
+	else if (!board_has_privacy_panel() && board_has_kblight())
+		return &keybd_wo_privacy_w_kblight;
+	else if (board_has_privacy_panel() && !board_has_kblight())
+		return &keybd_w_privacy_wo_kblight;
+	else
+		return &keybd_wo_privacy_wo_kblight;
 }

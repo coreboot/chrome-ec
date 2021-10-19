@@ -211,28 +211,28 @@ static int motion_sense_set_ec_rate_from_ap(
 
 	if (new_rate_us == 0)
 		return 0;
-	if (motion_sensor_in_forced_mode(sensor))
-		/*
-		 * AP EC sampling rate does not matter: we will collect at the
-		 * requested sensor frequency.
-		 */
-		goto end_set_ec_rate_from_ap;
+
 	if (odr_mhz == 0)
+		/*
+		 * No event (interrupt or forced mode) are generated,
+		 * any ec rate works.
+		 */
 		goto end_set_ec_rate_from_ap;
 
 	/*
 	 * If the EC collection rate is close to the sensor data rate,
-	 * given variation from the EC scheduler, it is possible that a sensor
-	 * will not present any measurement for a given time slice, and then 2
-	 * measurement for the next. That will create a large interval between
-	 * 2 measurements.
-	 * To prevent that, increase the EC period by 5% to be sure to get at
-	 * least one measurement at every collection time.
+	 * given variation from the EC scheduler, we want to be sure the EC is
+	 * ready to send an event to the AP when either the interrupt arrives,
+	 * or the EC is actively probing the sensor.
+	 * Decrease the EC period by 5% to be sure to get at least one
+	 * measurement at every collection time.
 	 * We will apply that correction only if the ec rate is within 10% of
 	 * the data rate.
+	 * It is possible for sensors at the same ODR to not be in phase.
+	 * One will have a delay guarantee to be less than its ODR.
 	 */
 	if (SECOND * 1100 / odr_mhz > new_rate_us)
-		new_rate_us = new_rate_us / 100 * 105;
+		new_rate_us = new_rate_us * 95 / 100;
 
 end_set_ec_rate_from_ap:
 	return MAX(new_rate_us, motion_min_interval);
@@ -1120,6 +1120,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 			return EC_RES_INVALID_PARAM;
 
 		if (IS_ENABLED(CONFIG_GESTURE_HOST_DETECTION) &&
+		    MOTION_SENSE_ACTIVITY_SENSOR_ID >= 0 &&
 		    (in->sensor_odr.sensor_num ==
 		     MOTION_SENSE_ACTIVITY_SENSOR_ID))
 			out->info.type = MOTIONSENSE_TYPE_ACTIVITY;
@@ -1451,6 +1452,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 	case MOTIONSENSE_CMD_SPOOF: {
 		/* spoof activity if it is activity sensor */
 		if (IS_ENABLED(CONFIG_GESTURE_HOST_DETECTION) &&
+		    MOTION_SENSE_ACTIVITY_SENSOR_ID >= 0 &&
 		    in->spoof.sensor_id == MOTION_SENSE_ACTIVITY_SENSOR_ID) {
 			switch (in->spoof.activity_num) {
 #ifdef CONFIG_BODY_DETECTION

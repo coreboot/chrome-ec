@@ -125,6 +125,7 @@ const struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
 		.usb_port = USBC_PORT_C0,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_C0_C2_MUX,
 		.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
 		.next_mux = &usbc0_tcss_usb_mux,
@@ -139,6 +140,7 @@ const struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C2] = {
 		.usb_port = USBC_PORT_C2,
 		.driver = &bb_usb_retimer,
+		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_C0_C2_MUX,
 		.i2c_addr_flags = USBC_PORT_C2_BB_RETIMER_I2C_ADDR,
 		.next_mux = &usbc2_tcss_usb_mux,
@@ -177,25 +179,25 @@ struct ioexpander_config_t ioex_config[] = {
 		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 	[IOEX_C2_NCT38XX] = {
 		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR2_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 	[IOEX_ID_1_C0_NCT38XX] = {
 		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 	[IOEX_ID_1_C2_NCT38XX] = {
 		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR2_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(ioex_config) == CONFIG_IO_EXPANDER_PORT_COUNT);
@@ -268,20 +270,6 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 	return EC_SUCCESS;
 }
 
-__override int bb_retimer_reset(const struct usb_mux *me)
-{
-	/*
-	 * TODO(b/193402306, b/195375738): Remove this once transition to
-	 * QS Silicon is complete
-	 */
-	bb_retimer_power_enable(me, false);
-	msleep(5);
-	bb_retimer_power_enable(me, true);
-	msleep(25);
-
-	return EC_SUCCESS;
-}
-
 void board_reset_pd_mcu(void)
 {
 	enum gpio_signal tcpc_rst;
@@ -320,7 +308,6 @@ void board_reset_pd_mcu(void)
 
 static void enable_ioex(int ioex)
 {
-	ioex_config[ioex].flags &= ~IOEX_FLAGS_DISABLED;
 	ioex_init(ioex);
 }
 

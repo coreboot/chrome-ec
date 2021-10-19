@@ -46,6 +46,7 @@
 #undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
 #define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
 #define CONFIG_BATTERY_CHECK_CHARGE_TEMP_LIMITS
+#define CONFIG_CHARGER_PROFILE_OVERRIDE
 
 /*
  * GPIO for C1 interrupts, for baseboard use
@@ -90,6 +91,10 @@
 #define CONFIG_USB_PD_DISCHARGE_TCPC
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 
+/* USB Type A Features */
+#define USB_PORT_COUNT 1
+#define CONFIG_USB_PORT_POWER_DUMB
+
 /* Variant references the TCPCs to determine Vbus sourcing */
 #define CONFIG_USB_PD_5V_EN_CUSTOM
 
@@ -109,13 +114,33 @@
 #define I2C_PORT_USB_C0     NPCX_I2C_PORT1_0
 #define I2C_PORT_SUB_USB_C1 NPCX_I2C_PORT2_0
 #define I2C_PORT_USB_MUX    I2C_PORT_USB_C0
+#define I2C_PORT_LCD	    NPCX_I2C_PORT3_0
 /* TODO(b:147440290): Need to handle multiple charger ICs */
 #define I2C_PORT_CHARGER    I2C_PORT_USB_C0
 
 #define I2C_PORT_ACCEL      I2C_PORT_SENSOR
 
 #define I2C_ADDR_EEPROM_FLAGS 0x50 /* 7b address */
+#define I2C_ADDR_ISL98607_FLAGS 0x29
+#define I2C_ADDR_MP3372_FLAGS 0x28
 
+/* ISL98607 registers and value */
+/* VBST Voltage Adjustment */
+#define ISL98607_REG_VBST_OUT	0x06
+#define ISL98607_VBST_OUT_5P65	0x0a
+
+/* VN Voltage Adjustment */
+#define ISL98607_REG_VN_OUT	0x08
+#define ISL98607_VN_OUT_5P5	0x0a
+
+/* VP Voltage Adjustment */
+#define ISL98607_REG_VP_OUT	0x09
+#define ISL98607_VP_OUT_5P5	0x0a
+
+/* MP3372 registers and value */
+/* ISET & CHEN */
+#define MP3372_REG_ISET_CHEN		0x00
+#define MP3372_ISET_21P8_CHEN_ALL	0x70ff
 /*
  * I2C pin names for baseboard
  *
@@ -148,7 +173,6 @@
 
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
-#define CONFIG_GMR_TABLET_MODE
 
 /* LIS2DS Lid accel */
 #define CONFIG_ACCEL_LIS2DS
