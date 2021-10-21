@@ -4791,7 +4791,10 @@ struct __ec_align1 ec_params_set_cbi {
  * - The semantic meaning of an entry should not change.
  * - Do not exceed 2^15 - 1 for reset reasons or 2^16 - 1 for shutdown reasons.
  */
-enum chipset_reset_reason {
+enum chipset_shutdown_reason {
+	/*
+	 * Beginning of reset reasons.
+	 */
 	CHIPSET_RESET_BEGIN = 0,
 	CHIPSET_RESET_UNKNOWN = CHIPSET_RESET_BEGIN,
 	/* Custom reason defined by a board.c or baseboard.c file */
@@ -4815,13 +4818,11 @@ enum chipset_reset_reason {
 	/* EC detected an AP watchdog event. */
 	CHIPSET_RESET_AP_WATCHDOG,
 
-	CHIPSET_RESET_COUNT,
-};
+	CHIPSET_RESET_COUNT, /* End of reset reasons. */
 
-/*
- * AP hard shutdowns are logged on the same path as resets.
- */
-enum chipset_shutdown_reason {
+	/*
+	 * Beginning of shutdown reasons.
+	 */
 	CHIPSET_SHUTDOWN_BEGIN = (1 << 15),
 	CHIPSET_SHUTDOWN_POWERFAIL = CHIPSET_SHUTDOWN_BEGIN,
 	/* Forcing a shutdown as part of EC initialization */
@@ -4843,7 +4844,7 @@ enum chipset_shutdown_reason {
 	/* Force a chipset shutdown from the power button through EC */
 	CHIPSET_SHUTDOWN_BUTTON,
 
-	CHIPSET_SHUTDOWN_COUNT,
+	CHIPSET_SHUTDOWN_COUNT, /* End of shutdown reasons. */
 };
 
 

@@ -510,7 +510,7 @@ void power_chipset_handle_host_sleep_event(enum host_sleep_event state)
 
 #endif
 
-void chipset_reset(enum chipset_reset_reason reason)
+void chipset_reset(enum chipset_shutdown_reason reason)
 {
 	/*
 	 * Irrespective of cold_reset value, always toggle SYS_RESET_L to
