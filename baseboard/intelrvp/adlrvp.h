@@ -41,6 +41,7 @@
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #endif
 #define CONFIG_USB_MUX_VIRTUAL
+#define CONFIG_USB_MUX_TUSB1044
 #define PD_MAX_POWER_MW              100000
 
 #define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
@@ -180,6 +181,16 @@ enum battery_type {
 	BATTERY_GETAC_SMP_HHP_408,
 	BATTERY_TYPE_COUNT,
 };
+
+/* I2C access in polling mode before task is initialized */
+#define CONFIG_I2C_BITBANG
+
+enum adlrvp_bitbang_i2c_channel {
+	I2C_BITBANG_CHAN_BRD_ID,
+	I2C_BITBANG_CHAN_IOEX_0,
+	I2C_BITBANG_CHAN_COUNT
+};
+#define I2C_BITBANG_PORT_COUNT	I2C_BITBANG_CHAN_COUNT
 
 void espi_reset_pin_asserted_interrupt(enum gpio_signal signal);
 void extpower_interrupt(enum gpio_signal signal);

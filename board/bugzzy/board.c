@@ -758,6 +758,43 @@ void panel_power_change_interrupt(enum gpio_signal signal)
 	hook_call_deferred(&panel_power_change_deferred_data, 1 * MSEC);
 }
 
+/*
+ * Detect LCD reset & control LCD DCDC power
+ */
+static void lcd_reset_detect_init(void)
+{
+	if (board_id == -1) {
+		uint32_t val;
+
+		if (cbi_get_board_version(&val) == EC_SUCCESS)
+			board_id = val;
+	}
+
+	if (board_id < 4)
+		return;
+	gpio_enable_interrupt(GPIO_DDI0_DDC_SCL);
+}
+DECLARE_HOOK(HOOK_INIT, lcd_reset_detect_init, HOOK_PRIO_DEFAULT);
+/*
+ * Handle VSP / VSN for mipi display when lcd turns off
+ */
+static void lcd_reset_change_deferred(void)
+{
+	int signal = gpio_get_level(GPIO_DDI0_DDC_SCL);
+
+	if (signal != 0)
+		return;
+
+	i2c_write8(I2C_PORT_LCD, I2C_ADDR_ISL98607_FLAGS,
+			ISL98607_REG_ENABLE, ISL97607_VP_VN_VBST_DIS);
+
+}
+DECLARE_DEFERRED(lcd_reset_change_deferred);
+void lcd_reset_change_interrupt(enum gpio_signal signal)
+{
+	hook_call_deferred(&lcd_reset_change_deferred_data, 100 * MSEC);
+}
+
 /**
  * Handle TSP_TA according to AC status
  */
@@ -774,3 +811,31 @@ DECLARE_HOOK(HOOK_AC_CHANGE, handle_tsp_ta, HOOK_PRIO_DEFAULT);
 const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A0_VBUS,
 };
+
+/*
+ * Change LED Driver Current
+ * LED driver current must be written when EN_BL_OD goes from Low to High.
+ */
+static int backup_enable_backlight = -1;
+void backlit_gpio_tick(void)
+{
+	int signal = gpio_get_level(GPIO_ENABLE_BACKLIGHT);
+
+	if (backup_enable_backlight == signal)
+		return;
+
+	backup_enable_backlight = signal;
+	if (board_id == -1) {
+		uint32_t val;
+
+		if (cbi_get_board_version(&val) == EC_SUCCESS)
+			board_id = val;
+	}
+
+	if (board_id >= 4 && signal == 1)
+		i2c_write16(I2C_PORT_LCD, I2C_ADDR_MP3372_FLAGS,
+				MP3372_REG_ISET_CHEN,
+				MP3372_ISET_21P8_CHEN_ALL);
+
+}
+DECLARE_HOOK(HOOK_TICK, backlit_gpio_tick, HOOK_PRIO_DEFAULT);

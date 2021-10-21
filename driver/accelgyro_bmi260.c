@@ -37,26 +37,6 @@
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_ACCEL, format, ## args)
 
-#if defined(CONFIG_ZEPHYR) && defined(CONFIG_ACCEL_INTERRUPTS)
-/*
- * Get the mostion sensor ID of the BMI260 sensor that
- * generates the interrupt.
- * The interrupt is converted to the event and transferred to motion
- * sense task that actually handles the interrupt.
- *
- * Here, we use alias to get the motion sensor ID
- *
- * e.g) base_accel is the label of a child node in /motionsense-sensors
- * aliases {
- *     bmi260-int = &base_accel;
- * };
- */
-#if DT_NODE_EXISTS(DT_ALIAS(bmi260_int))
-#define CONFIG_ACCELGYRO_BMI260_INT_EVENT	\
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(SENSOR_ID(DT_ALIAS(bmi260_int)))
-#endif
-#endif
-
 STATIC_IF(CONFIG_ACCEL_FIFO) volatile uint32_t last_interrupt_timestamp;
 
 /*
@@ -254,6 +234,12 @@ static int perform_calib(struct motion_sensor_t *s, int enable)
 
 	if (!enable)
 		return EC_SUCCESS;
+
+	/* We only support accelerometers and gyroscopes */
+	if (s->type != MOTIONSENSE_TYPE_ACCEL &&
+	    s->type != MOTIONSENSE_TYPE_GYRO)
+		return EC_RES_INVALID_PARAM;
+
 	rate = bmi_get_data_rate(s);
 	ret = set_data_rate(s, 100000, 0);
 	if (ret)
@@ -269,10 +255,12 @@ static int perform_calib(struct motion_sensor_t *s, int enable)
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
 		break;
+	/* LCOV_EXCL_START */
 	default:
-		/* Not supported on Magnetometer */
-		ret = EC_RES_INVALID_PARAM;
-		goto end_perform_calib;
+		/* Unreachable due to sensor type check above. */
+		ASSERT(false);
+		break;
+	/* LCOV_EXCL_STOP */
 	}
 
 	/* Get the calibrated offset */
@@ -307,12 +295,15 @@ void bmi260_interrupt(enum gpio_signal signal)
 	task_set_event(TASK_ID_MOTIONSENSE, CONFIG_ACCELGYRO_BMI260_INT_EVENT);
 }
 
+/**
+ * config_interrupt - sets up the interrupt request output pin on the BMI260
+ *
+ * Note: this function only supports motion_sensor_t structs of type
+ * MOTIONSENSE_TYPE_ACCEL and expects the caller to verify this.
+ */
 static int config_interrupt(const struct motion_sensor_t *s)
 {
 	int ret;
-
-	if (s->type != MOTIONSENSE_TYPE_ACCEL)
-		return EC_SUCCESS;
 
 	mutex_lock(s->mutex);
 	bmi_write8(s->port, s->i2c_spi_addr_flags,

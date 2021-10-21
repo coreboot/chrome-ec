@@ -34,8 +34,17 @@
 /* Sensors */
 #define	CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
+
+/* Change Request (b/199529373)
+ * GYRO sensor change from ST LSM6DSOETR3TR to ST LSM6DS3TR-C
+ *	LSM6DSOETR3TR base accel/gyro if board id = 0
+ *	LSM6DS3TR-C Base accel/gyro if board id > 0
+ */
 #define CONFIG_ACCELGYRO_LSM6DSO	/* Base accel */
 #define CONFIG_ACCEL_LSM6DSO_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_LSM6DSM
+#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 /* Enable sensor fifo, must also define the _SIZE and _THRES */
@@ -78,7 +87,7 @@
 #define CONFIG_IO_EXPANDER_PORT_COUNT		1
 
 #define CONFIG_USB_PD_TCPM_PS8815
-
+#define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 #define CONFIG_USBC_PPC_SYV682X
 #define CONFIG_USBC_PPC_NX20P3483
 
@@ -91,7 +100,7 @@
  * Passive USB-C cables only support up to 60W.
  */
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
+#define PD_MAX_POWER_MW		45000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 
