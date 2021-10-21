@@ -1127,7 +1127,7 @@ static int ov_getc(void)
 	if (!override_file)
 		return EOF;
 
-	if (pushback_cnt)
+	if (pushback_cnt > 0)
 		return pushback_stack[--pushback_cnt];
 	return getc(override_file);
 }
@@ -3613,7 +3613,7 @@ static void init_vif_component_product_power_fields(
 			enum dtype type)
 {
 	if (type == DRP || type == SRC) {
-		char str[10];
+		char str[14];
 
 		sprintf(str, "%d mW", src_max_power);
 		set_vif_field_itss(&vif_fields[Product_Total_Source_Power_mW],

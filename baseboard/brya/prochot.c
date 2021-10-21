@@ -18,7 +18,6 @@
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
 
 #define ADT_RATING_W  (PD_MAX_POWER_MW / 1000)
-#define BATT_MAX_CONTINUE_DISCHARGE_WATT    66
 #define PROCHOT_EVENT_200MS_TICK    TASK_EVENT_CUSTOM_BIT(0)
 
 struct batt_para {
@@ -28,56 +27,55 @@ struct batt_para {
 	int state_of_charge;
 };
 
-static struct batt_para batt_params;
+struct batt_para batt_params;
 
 static int cal_sys_watt(void)
 {
+	int adapter_voltage_v;
+	int IDPM;
 	int Vacpacn;
 	int V_iadpt;
-	int IDPM;
 	int W_adpt;
 
-	/* Read ADC_IADPT from BQ25720 */
-	V_iadpt = adc_read_channel(ADC_IADPT);
+	Vacpacn = adc_read_channel(ADC_IADPT);
 
-	/* Calculate V(ACP-ACN)
-	 * We select IADPT_FAIN as 40 for more precise
-	 */
-	Vacpacn = V_iadpt * 1000 / 40;
+	/* the ratio selectable through IADPT_GAIN bit. */
+	V_iadpt = Vacpacn * 1000 / 40;
 
-	/* Calculate the input current */
-	IDPM = Vacpacn / CONFIG_CHARGER_SENSE_RESISTOR_AC;
+	IDPM = V_iadpt / CONFIG_CHARGER_SENSE_RESISTOR_AC;
 
-	/* Current multiplied by 20v to calculate actual adapter wattage */
-	W_adpt = IDPM * 20 / 97 * 100;
+	adapter_voltage_v = charge_manager_get_charger_voltage() / 1000;
+
+	W_adpt = IDPM * adapter_voltage_v / PROCHOT_ADAPTER_WATT_RATIO * 100;
 
 	return W_adpt;
 }
 
 static int get_batt_parameter(void)
 {
-	int battery_voltage_mv;
-	int battery_current_ma;
+	int battery_voltage;
+	int battery_current;
 	int battery_design_voltage_mv;
 	int battery_design_capacity_mAh;
 	int rv = 0;
 
 	batt_params.flags = 0;
 
-	if (sb_read(SB_VOLTAGE, &battery_voltage_mv))
+	/* read battery voltage */
+	if (sb_read(SB_VOLTAGE, &battery_voltage))
 		batt_params.flags |= BATT_FLAG_BAD_VOLTAGE;
 
 	/* Battery_current sometimes return a very huge number
 	 * and cause prochot keep toggling so add (int16_t) to guard it.
 	 */
-	if (sb_read(SB_CURRENT, &battery_current_ma))
+	if (sb_read(SB_CURRENT, &battery_current))
 		batt_params.flags |= BATT_FLAG_BAD_CURRENT;
 	else
-		battery_current_ma = (int16_t)battery_current_ma;
+		battery_current = (int16_t)battery_current;
 
 	/* calculate battery wattage and convert to mW */
 	batt_params.battery_continuous_discharge_mw =
-		(battery_voltage_mv * battery_current_ma) / 1000;
+		(battery_voltage * battery_current) / 1000;
 
 	rv |= sb_read(SB_DESIGN_VOLTAGE, &battery_design_voltage_mv);
 	rv |= sb_read(SB_DESIGN_CAPACITY, &battery_design_capacity_mAh);
@@ -96,6 +94,7 @@ static int get_chg_watt(void)
 	int adapter_voltage_mv;
 	int adapter_wattage;
 
+	/* Get adapter wattage */
 	adapter_current_ma = charge_manager_get_charger_current();
 	adapter_voltage_mv = charge_manager_get_charger_voltage();
 	adapter_wattage = adapter_current_ma * adapter_voltage_mv / 1000 / 1000;
@@ -103,27 +102,41 @@ static int get_chg_watt(void)
 	return adapter_wattage;
 }
 
+static int set_register_charge_option(void)
+{
+	int reg;
+	int rv;
+
+	rv = i2c_read16(I2C_PORT_CHARGER, BQ25710_SMBUS_ADDR1_FLAGS,
+		    BQ25710_REG_CHARGE_OPTION_0, &reg);
+	if (rv == EC_SUCCESS) {
+		reg |= BQ25710_CHARGE_OPTION_0_IADP_GAIN;
+		/* if AC only, disable IDPM,
+		 * because it will cause charger keep asserting PROCHOT
+		 */
+		if (!battery_hw_present())
+			reg &= ~BQ25710_CHARGE_OPTION_0_EN_IDPM;
+		else
+			reg |= BQ25710_CHARGE_OPTION_0_EN_IDPM;
+	} else {
+		CPRINTS("Failed to read bq25720");
+		return rv;
+	}
+
+	return i2c_write16(I2C_PORT_CHARGER, BQ25710_SMBUS_ADDR1_FLAGS,
+				BQ25710_REG_CHARGE_OPTION_0, reg);
+}
+
 static void assert_prochot(void)
 {
 	int adapter_wattage;
 	int adpt_mw;
-	int reg;
 	int total_W;
 
-	/* no AC, don't assert PROCHOT */
-	if (!extpower_is_present()) {
-		gpio_set_level(GPIO_EC_PROCHOT_ODL, 1);
-		return;
-	}
-
 	/* Set 0x12 bit4=1 */
-	if (charger_get_option(&reg))
-		CPRINTS("Failed to read bq25720");
-	else {
-		/* only execute if get_option succeeded. */
-		reg |= BQ25710_CHARGE_OPTION_0_IADP_GAIN;
-		if (charger_set_option(reg))
-			return;
+	if (set_register_charge_option()) {
+		CPRINTS("Failed to set bq25720");
+		return;
 	}
 
 	/* Calculate actual system W */
@@ -149,14 +162,63 @@ static void assert_prochot(void)
 	/* Get adapter wattage */
 	adapter_wattage = get_chg_watt();
 
-	if (adapter_wattage < ADT_RATING_W) {
+	/*
+	 * no AC, don't assert PROCHOT.
+	 * If AC exists, PROCHOT will only be asserted when the battery
+	 * is physical present and the battery wattage is over 95% of
+	 * the max continue discharge current of battery spec.
+	 * When the battery wattage is lower than 85% of the max
+	 * continue discharge current of battery spec, PROCHOT will be
+	 * deasserted.
+	 */
+	if (!extpower_is_present()) {
+		if (!battery_hw_present()) {
+			gpio_set_level(GPIO_EC_PROCHOT_ODL, 1);
+		} else {
+			batt_params.battery_continuous_discharge_mw =
+			ABS(batt_params.battery_continuous_discharge_mw);
+			if ((batt_params.battery_continuous_discharge_mw /
+			 1000) > BATT_MAX_CONTINUE_DISCHARGE_WATT *
+			 PROCHOT_ASSERTION_BATTERY_RATIO / 100)
+				gpio_set_level(GPIO_EC_PROCHOT_ODL, 0);
+			else if ((batt_params.battery_continuous_discharge_mw
+			 / 1000) < BATT_MAX_CONTINUE_DISCHARGE_WATT *
+			 PROCHOT_DEASSERTION_BATTERY_RATIO / 100)
+				gpio_set_level(GPIO_EC_PROCHOT_ODL, 1);
+		}
+		return;
+	}
+
+	if (adapter_wattage >= ADT_RATING_W) {
+		/* if adapter >= 60W */
+		/* if no battery or battery < 10% */
+		if (!battery_hw_present() ||
+		batt_params.state_of_charge <= 10) {
+			if (total_W > ADT_RATING_W *
+			PROCHOT_ASSERTION_PD_RATIO / 100)
+				gpio_set_level(GPIO_EC_PROCHOT_ODL, 0);
+			else if (total_W <= ADT_RATING_W)
+				gpio_set_level(GPIO_EC_PROCHOT_ODL, 1);
+		} else {
+			/* AC + battery */
+			if (total_W > (ADT_RATING_W +
+			BATT_MAX_CONTINUE_DISCHARGE_WATT))
+				gpio_set_level(GPIO_EC_PROCHOT_ODL, 0);
+			else if (total_W < (ADT_RATING_W +
+			BATT_MAX_CONTINUE_DISCHARGE_WATT) *
+			PROCHOT_DEASSERTION_PD_BATTERY_RATIO / 100)
+				gpio_set_level(GPIO_EC_PROCHOT_ODL, 1);
+		}
+	} else {
 		/* if adapter < 60W */
 		/* if no battery or battery < 10% */
 		if (!battery_hw_present() ||
-			batt_params.state_of_charge <= 10) {
-			if (total_W > (adapter_wattage * 105/100))
+		batt_params.state_of_charge <= 10) {
+			if (total_W > (adapter_wattage *
+			PROCHOT_ASSERTION_ADAPTER_RATIO / 100))
 				gpio_set_level(GPIO_EC_PROCHOT_ODL, 0);
-			else if (total_W < (adapter_wattage * 90/100))
+			else if (total_W <= (adapter_wattage *
+			PROCHOT_DEASSERTION_ADAPTER_RATIO / 100))
 				gpio_set_level(GPIO_EC_PROCHOT_ODL, 1);
 		} else {
 			/* AC + battery */
@@ -165,25 +227,7 @@ static void assert_prochot(void)
 				gpio_set_level(GPIO_EC_PROCHOT_ODL, 0);
 			else if (total_W < (adapter_wattage +
 				(BATT_MAX_CONTINUE_DISCHARGE_WATT *
-					90/100)))
-				gpio_set_level(GPIO_EC_PROCHOT_ODL, 1);
-		}
-	} else {
-		/* if adapter = 60W */
-		/* if no battery or battery < 10% */
-		if (!battery_hw_present() ||
-			batt_params.state_of_charge <= 10) {
-			if (total_W > (ADT_RATING_W * 105/100))
-				gpio_set_level(GPIO_EC_PROCHOT_ODL, 0);
-			else if (total_W <= ADT_RATING_W)
-				gpio_set_level(GPIO_EC_PROCHOT_ODL, 1);
-		} else {
-			/* AC + battery */
-			if (total_W > (ADT_RATING_W +
-				BATT_MAX_CONTINUE_DISCHARGE_WATT))
-				gpio_set_level(GPIO_EC_PROCHOT_ODL, 0);
-			else if (total_W < (ADT_RATING_W +
-				BATT_MAX_CONTINUE_DISCHARGE_WATT) * 95/100)
+				PROCHOT_DEASSERTION_ADAPTER_BATT_RATIO / 100)))
 				gpio_set_level(GPIO_EC_PROCHOT_ODL, 1);
 		}
 	}

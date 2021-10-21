@@ -178,7 +178,6 @@
 #define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_PD_DECODE_SOP
 #define CONFIG_USB_DRP_ACC_TRYSRC
-/* TODO: Enable TCPMv2 Fast Role Swap (FRS) */
 #define CONFIG_HOSTCMD_PD_CONTROL
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_USB_CHARGER
@@ -357,7 +356,7 @@ void bc12_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
 void sbu_fault_interrupt(enum ioex_signal signal);
 
-void baseboard_en_pwr_pcore_s0(enum gpio_signal signal);
+void baseboard_en_pwr_pcore_signal(enum gpio_signal signal);
 void baseboard_en_pwr_s0(enum gpio_signal signal);
 
 int board_get_soc_temp_k(int idx, int *temp_k);

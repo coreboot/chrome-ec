@@ -49,10 +49,11 @@
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
+#include "usb_tc_sm.h"
 
 static void bc12_interrupt(enum gpio_signal signal);
 static void ppc_interrupt(enum gpio_signal signal);
-static void usb_a0_interrupt(enum gpio_signal signal);
+static void xhci_init_done_interrupt(enum gpio_signal signal);
 
 #include "gpio_list.h"
 
@@ -229,6 +230,7 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 static void board_chipset_resume(void)
 {
 	gpio_set_level(GPIO_EC_BL_EN_OD, 1);
+	gpio_set_level(GPIO_DP_DEMUX_EN, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 
@@ -236,6 +238,7 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 static void board_chipset_suspend(void)
 {
 	gpio_set_level(GPIO_EC_BL_EN_OD, 0);
+	gpio_set_level(GPIO_DP_DEMUX_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
@@ -245,13 +248,24 @@ const int usb_port_enable[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_port_enable) == USB_PORT_COUNT);
 
-__maybe_unused void usb_a0_interrupt(enum gpio_signal signal)
+__maybe_unused void xhci_init_done_interrupt(enum gpio_signal signal)
 {
 	enum usb_charge_mode mode = gpio_get_level(signal) ?
 		USB_CHARGE_MODE_ENABLED : USB_CHARGE_MODE_DISABLED;
 
 	for (int i = 0; i < USB_PORT_COUNT; i++)
 		usb_charge_set_mode(i, mode, USB_ALLOW_SUSPEND_CHARGE);
+
+	/*
+	 * Trigger hard reset to cycle Vbus on Type-C ports, recommended by
+	 * USB 3.2 spec 10.3.1.1.
+	 */
+	if (gpio_get_level(signal)) {
+		for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+			if (tc_is_attached_src(i))
+				pd_dpm_request(i, DPM_REQUEST_HARD_RESET_SEND);
+		}
+	}
 }
 
 /* USB Mux */

@@ -68,8 +68,10 @@ void syv682x_emul_set_status(struct i2c_emul *emul, uint8_t val)
 	data->status_cond = val;
 	data->reg[SYV682X_STATUS_REG] |= val;
 
-	if (val & (SYV682X_STATUS_TSD | SYV682X_STATUS_OVP))
+	if (val & (SYV682X_STATUS_TSD | SYV682X_STATUS_OVP |
+				SYV682X_STATUS_OC_HV)) {
 		data->reg[SYV682X_CONTROL_1_REG] |= SYV682X_CONTROL_1_PWR_ENB;
+	}
 
 	/*
 	 * TODO(b/190519131): Make this emulator trigger GPIO-based interrupts
@@ -77,6 +79,26 @@ void syv682x_emul_set_status(struct i2c_emul *emul, uint8_t val)
 	 * the power path off when either of these conditions occurs, and they
 	 * should quickly dissipate. If they somehow stay set, the device should
 	 * interrupt continuously.
+	 */
+}
+
+void syv682x_emul_set_control_4(struct i2c_emul *emul, uint8_t val)
+{
+	struct syv682x_emul_data *data;
+	uint8_t val_interrupt = val & SYV682X_CONTROL_4_INT_MASK;
+
+	data = CONTAINER_OF(emul, struct syv682x_emul_data, emul);
+	data->control_4_cond = val_interrupt;
+	/* Only update the interrupting bits. */
+	data->reg[SYV682X_CONTROL_4_REG] &= ~SYV682X_CONTROL_4_INT_MASK;
+	data->reg[SYV682X_CONTROL_4_REG] |= val_interrupt;
+
+	/*
+	 * Note: The description of CONTROL_4 suggests that setting VCONN_OC
+	 * will turn off the VCONN channel. The "VCONN Channel Over Current
+	 * Response" plot shows that VCONN the device will merely throttle VCONN
+	 * current. The latter behavior is observed in practice, and this
+	 * emulator does not currently model it.
 	 */
 }
 
@@ -140,6 +162,10 @@ static int syv682x_emul_transfer(struct i2c_emul *emul, struct i2c_msg *msgs,
 						SYV682X_STATUS_OVP))
 				val |= SYV682X_CONTROL_1_PWR_ENB;
 			break;
+		case SYV682X_CONTROL_4_REG:
+			/* Interrupt bits are read-only. */
+			val &= ~SYV682X_CONTROL_4_INT_MASK;
+			break;
 		default:
 			break;
 		}
@@ -165,14 +191,16 @@ static int syv682x_emul_transfer(struct i2c_emul *emul, struct i2c_msg *msgs,
 
 		switch (reg) {
 		/*
-		 * These registers are clear-on-read (if the underlying
-		 * condition has cleared).
+		 * STATUS and the interrupt bits of CONTROL_4 are clear-on-read
+		 * (if the underlying condition has cleared).
 		 */
 		case SYV682X_STATUS_REG:
 			syv682x_emul_set_reg(emul, reg, data->status_cond);
 			break;
 		case SYV682X_CONTROL_4_REG:
-			syv682x_emul_set_reg(emul, reg, data->control_4_cond);
+			syv682x_emul_set_reg(emul, reg,
+					(*buf & ~SYV682X_CONTROL_4_INT_MASK) |
+					data->control_4_cond);
 			break;
 		default:
 			break;

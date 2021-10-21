@@ -127,7 +127,7 @@ struct usb_mux usb_muxes[] = {
 		.driver = &bb_usb_retimer,
 		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_C2_MUX,
-		.i2c_addr_flags = USBC_PORT_BB_RETIMER_I2C_ADDR,
+		.i2c_addr_flags = USBC_PORT_C2_BB_RETIMER_I2C_ADDR,
 		.next_mux = &usbc2_tcss_usb_mux,
 	},
 	[USBC_PORT_C1] = {
@@ -145,7 +145,7 @@ struct usb_mux usb_muxes_c1 = {
 		.driver = &bb_usb_retimer,
 		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_C1_MUX,
-		.i2c_addr_flags = USBC_PORT_BB_RETIMER_I2C_ADDR,
+		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
 		.next_mux = &usbc1_tcss_usb_mux,
 };
 
@@ -176,13 +176,13 @@ struct ioexpander_config_t ioex_config[] = {
 		.i2c_host_port = I2C_PORT_USB_C1_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 	[IOEX_C2_NCT38XX] = {
 		.i2c_host_port = I2C_PORT_USB_C2_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(ioex_config) == CONFIG_IO_EXPANDER_PORT_COUNT);
@@ -266,7 +266,6 @@ void board_reset_pd_mcu(void)
 
 static void enable_ioex(int ioex)
 {
-	ioex_config[ioex].flags &= ~IOEX_FLAGS_DISABLED;
 	ioex_init(ioex);
 }
 

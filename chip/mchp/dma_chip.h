@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved
+/* Copyright 2017 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -65,4 +65,3 @@ int dma_crc32_start(const uint8_t *mstart, const uint32_t nbytes, int ien);
 #endif /* #ifndef _DMA_CHIP_H */
 /**   @}
  */
-

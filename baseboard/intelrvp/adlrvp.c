@@ -16,6 +16,7 @@
 #include "sn5s330.h"
 #include "system.h"
 #include "task.h"
+#include "tusb1064.h"
 #include "usb_mux.h"
 #include "usbc_ppc.h"
 #include "util.h"
@@ -312,8 +313,6 @@ static void board_connect_c0_sbu_deferred(void)
 	}
 }
 DECLARE_DEFERRED(board_connect_c0_sbu_deferred);
-/* Make sure SBU are routed to CCD or AUX based on CCD status at init */
-DECLARE_HOOK(HOOK_INIT, board_connect_c0_sbu_deferred, HOOK_PRIO_INIT_I2C + 2);
 
 void board_connect_c0_sbu(enum gpio_signal s)
 {
@@ -331,10 +330,16 @@ static void configure_retimer_usbmux(void)
 	switch (ADL_RVP_BOARD_ID(board_get_version())) {
 	case ADLN_LP5_ERB_SKU_BOARD_ID:
 	case ADLN_LP5_RVP_SKU_BOARD_ID:
-		/* No retimer on Port0 & Port1 */
-		usb_muxes[TYPE_C_PORT_0].driver = NULL;
+		/* enable TUSB1044RNQR redriver on Port0  */
+		usb_muxes[TYPE_C_PORT_0].i2c_addr_flags =
+					TUSB1064_I2C_ADDR14_FLAGS;
+		usb_muxes[TYPE_C_PORT_0].driver =
+					&tusb1064_usb_mux_driver;
+		usb_muxes[TYPE_C_PORT_0].hpd_update = tusb1044_hpd_update;
+
 #if defined(HAS_TASK_PD_C1)
 		usb_muxes[TYPE_C_PORT_1].driver = NULL;
+		usb_muxes[TYPE_C_PORT_1].hpd_update = NULL;
 #endif
 		break;
 
@@ -365,7 +370,6 @@ static void configure_retimer_usbmux(void)
 		break;
 	}
 }
-DECLARE_HOOK(HOOK_INIT, configure_retimer_usbmux, HOOK_PRIO_INIT_I2C + 1);
 
 /******************************************************************************/
 /* PWROK signal configuration */
@@ -447,4 +451,16 @@ __override bool board_is_tbt_usb4_port(int port)
 	}
 
 	return tbt_usb4;
+}
+
+__override void board_pre_task_i2c_peripheral_init(void)
+{
+	/* Initialized IOEX-0 to access IOEX-GPIOs needed pre-task */
+	ioex_init(IOEX_C0_PCA9675);
+
+	/* Make sure SBU are routed to CCD or AUX based on CCD status at init */
+	board_connect_c0_sbu_deferred();
+
+	/* Configure board specific retimer & mux */
+	configure_retimer_usbmux();
 }
