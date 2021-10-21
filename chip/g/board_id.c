@@ -186,8 +186,7 @@ static int write_board_id(struct board_id *id)
 	flash_info_write_enable();
 
 	/* Write Board ID */
-	rv = flash_info_physical_write(INFO_BOARD_ID_OFFSET +
-			 offsetof(struct info1_board_space, bid),
+	rv = flash_info_physical_write(INFO_BOARD_ID_OFFSET,
 				       sizeof(*id), (const char *)id);
 	if (rv != EC_SUCCESS)
 		CPRINTS("%s: write failed", __func__);
