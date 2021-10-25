@@ -83,15 +83,6 @@ void tablet_set_mode(int mode, uint32_t trigger)
 	if (tablet_mode_forced)
 		return;
 
-	if (mode)
-		tablet_mode |= trigger;
-	else
-		tablet_mode &= ~trigger;
-
-	/* Boolean comparison */
-	if (!tablet_mode == !old_mode)
-		return;
-
 	if (disabled) {
 		CPRINTS("Tablet mode set while disabled (ignoring)!");
 		return;
@@ -111,6 +102,15 @@ void tablet_set_mode(int mode, uint32_t trigger)
 				(gmr_sensor_at_360 ? "flipped" : "closed"));
 		return;
 	}
+
+	if (mode)
+		tablet_mode |= trigger;
+	else
+		tablet_mode &= ~trigger;
+
+	/* Boolean comparison */
+	if (!tablet_mode == !old_mode)
+		return;
 
 	notify_tablet_mode_change();
 }
