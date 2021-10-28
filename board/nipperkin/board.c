@@ -12,6 +12,7 @@
 #include "chipset.h"
 #include "common.h"
 #include "cros_board_info.h"
+#include "driver/retimer/pi3hdx1204.h"
 #include "driver/retimer/ps8811.h"
 #include "driver/retimer/ps8818.h"
 #include "driver/temp_sensor/sb_tsi.h"
@@ -29,7 +30,10 @@
 #include "temp_sensor/thermistor.h"
 #include "temp_sensor/tmp112.h"
 #include "thermal.h"
+#include "timer.h"
 #include "usb_mux.h"
+
+static void hdmi_hpd_interrupt(enum gpio_signal signal);
 
 #include "gpio_list.h" /* Must come after other header files. */
 
@@ -134,6 +138,8 @@ __override int board_c1_ps8818_mux_set(const struct usb_mux *me,
 
 static void board_init(void)
 {
+	if (get_board_version() > 1)
+		gpio_enable_interrupt(GPIO_HPD_EC_IN);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -267,9 +273,6 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 		},
-		/* TODO: Setting fan off to 0 so it's allways on */
-		.temp_fan_off = C_TO_K(0),
-		.temp_fan_max = C_TO_K(70),
 	},
 	[TEMP_SENSOR_CHARGER] = {
 		.temp_host = {
@@ -279,8 +282,6 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 		},
-		.temp_fan_off = 0,
-		.temp_fan_max = 0,
 	},
 	[TEMP_SENSOR_MEMORY] = {
 		.temp_host = {
@@ -290,8 +291,6 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 		},
-		.temp_fan_off = 0,
-		.temp_fan_max = 0,
 	},
 	[TEMP_SENSOR_CPU] = {
 		.temp_host = {
@@ -301,12 +300,6 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 		},
-		/*
-		 * CPU temp sensor fan thresholds are high because they are a
-		 * backup for the SOC temp sensor fan thresholds.
-		 */
-		.temp_fan_off = C_TO_K(60),
-		.temp_fan_max = C_TO_K(90),
 	},
 	/*
 	 * Note: Leave ambient entries at 0, both as it does not represent a
@@ -322,19 +315,35 @@ static int board_get_temp(int idx, int *temp_k)
 	return get_temp_3v3_30k9_47k_4050b(idx, temp_k);
 }
 
+static int check_hdmi_hpd_status(void)
+{
+	if (get_board_version() > 1)
+		return gpio_get_level(GPIO_HPD_EC_IN);
+	else
+		return true;
+}
+
 /* Called on AP resume to S0 */
 static void board_chipset_resume(void)
 {
+	ioex_set_level(IOEX_USB_A1_PD_R_L, 1);
 	ioex_set_level(IOEX_HDMI_DATA_EN, 1);
 	ioex_set_level(IOEX_EN_PWR_HDMI, 1);
+	msleep(PI3HDX1204_POWER_ON_DELAY_MS);
+	pi3hdx1204_enable(I2C_PORT_TCPC1,
+		PI3HDX1204_I2C_ADDR_FLAGS,
+		check_hdmi_hpd_status());
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 
 /* Called on AP suspend */
 static void board_chipset_suspend(void)
 {
+	pi3hdx1204_enable(I2C_PORT_TCPC1,
+		PI3HDX1204_I2C_ADDR_FLAGS, 0);
 	ioex_set_level(IOEX_EN_PWR_HDMI, 0);
 	ioex_set_level(IOEX_HDMI_DATA_EN, 0);
+	ioex_set_level(IOEX_USB_A1_PD_R_L, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
@@ -441,4 +450,29 @@ board_vivaldi_keybd_config(void)
 		return &keybd_w_privacy_wo_kblight;
 	else
 		return &keybd_wo_privacy_wo_kblight;
+}
+
+const struct pi3hdx1204_tuning pi3hdx1204_tuning = {
+	.eq_ch0_ch1_offset = PI3HDX1204_EQ_DB710,
+	.eq_ch2_ch3_offset = PI3HDX1204_EQ_DB710,
+	.vod_offset = PI3HDX1204_VOD_115_ALL_CHANNELS,
+	.de_offset = PI3HDX1204_DE_DB_MINUS5,
+};
+
+static void hdmi_hpd_handler(void)
+{
+	int hpd = check_hdmi_hpd_status();
+
+	ccprints("HDMI HPD %d", hpd);
+	pi3hdx1204_enable(I2C_PORT_TCPC1,
+			  PI3HDX1204_I2C_ADDR_FLAGS,
+			  chipset_in_or_transitioning_to_state(CHIPSET_STATE_ON)
+			  && hpd);
+}
+DECLARE_DEFERRED(hdmi_hpd_handler);
+
+static void hdmi_hpd_interrupt(enum gpio_signal signal)
+{
+	/* Debounce for 2 msec */
+	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
 }

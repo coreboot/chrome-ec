@@ -147,6 +147,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BACKLIGHT_LID
                                                 "${PLATFORM_EC}/common/backlight_lid.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
                                                 "${PLATFORM_EC}/common/battery.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_V1
+                                                "${PLATFORM_EC}/common/battery_v1.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_V2
+                                                "${PLATFORM_EC}/common/battery_v2.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_FUEL_GAUGE
                                                 "${PLATFORM_EC}/common/battery_fuel_gauge.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_SMART
@@ -323,8 +327,12 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_FW_UPDATE
                                                 "${PLATFORM_EC}/common/usbc/usb_retimer_fw_update.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
                                                 "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8818
+                                                "${PLATFORM_EC}/driver/retimer/ps8818.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_SS_MUX
                                                 "${PLATFORM_EC}/driver/usb_mux/usb_mux.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_AMD_FP6
+                                                "${PLATFORM_EC}/driver/usb_mux/amd_fp6.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_IT5205
                                                 "${PLATFORM_EC}/driver/usb_mux/it5205.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_PS8743
@@ -369,6 +377,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_DRP_ACC_TRYSRC
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PRL_SM
                                                 "${PLATFORM_EC}/common/usbc/usb_prl_sm.c")
 
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_NCT38XX
+                                                "${PLATFORM_EC}/driver/tcpm/nct38xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8751
                                                 "${PLATFORM_EC}/driver/tcpm/ps8xxx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8805
@@ -390,6 +400,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_DRIVER_IT8XXX2
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC
                                                 "${PLATFORM_EC}/common/usbc_ppc.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_AOZ1380
+                                                "${PLATFORM_EC}/driver/ppc/aoz1380.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_NX20P3483
+                                                "${PLATFORM_EC}/driver/ppc/nx20p348x.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_SN5S330
                                                 "${PLATFORM_EC}/driver/ppc/sn5s330.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_SYV682X
