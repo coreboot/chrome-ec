@@ -187,7 +187,12 @@
  * This is pretty arbitrary, a rough estimate of what's required for smooth
  * Cr50 operation.
  */
+#ifndef CRYPTO_TEST_SETUP
 #define CONFIG_SHAREDMEM_MINIMUM_SIZE 5500
+#else
+/* Crypto tests require more statically allocated memory. */
+#define CONFIG_SHAREDMEM_MINIMUM_SIZE 5000
+#endif
 
 /* Implement custom udelay, due to usec hwtimer imprecision. */
 #define CONFIG_HW_SPECIFIC_UDELAY
