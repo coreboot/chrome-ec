@@ -252,6 +252,11 @@ static void cbi_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
 
+void board_hibernate_late(void)
+{
+	NPCX_KBSINPU = 0x0A;
+}
+
 #ifndef TEST_BUILD
 /* This callback disables keyboard when convertibles are fully open */
 void lid_angle_peripheral_enable(int enable)
