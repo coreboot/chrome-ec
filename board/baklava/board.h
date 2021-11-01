@@ -11,7 +11,8 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-#define USE_QSI_VID_PID
+/* Define to use reference design VID/PID */
+#undef USE_QSI_VID_PID
 
 /* Optional features */
 /*
