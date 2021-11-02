@@ -1054,6 +1054,15 @@
 #undef CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC
 
 /*
+ * This config option is used to enable the PSYS sensing circuit on the
+ * BQ25710 and BQ25720 chargers. This is used for system power
+ * monitoring on board designs that support this capability. This
+ * circuit is disabled by default (reset) and needs to be explicitly
+ * enabled for meaningful results.
+ */
+#undef CONFIG_CHARGER_BQ25710_PSYS_SENSING
+
+/*
  * Board specific maximum input current limit, in mA.
  */
 #undef CONFIG_CHARGER_MAX_INPUT_CURRENT
@@ -1405,6 +1414,7 @@
 #undef  CONFIG_CMD_BATT_MFG_ACCESS
 #undef  CONFIG_CMD_BUTTON
 #define CONFIG_CMD_CBI
+#undef  CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE
 
 /*
  * HAS_TASK_CHIPSET implies the GSC presence.
@@ -1531,6 +1541,9 @@
 
 /* Don't save General Purpose Registers during panic */
 #undef CONFIG_PANIC_STRIP_GPR
+
+/* Provide another output method of panic information by console channel */
+#undef CONFIG_PANIC_CONSOLE_OUTPUT
 
 /*
  * Provide the default GPIO abstraction layer.
