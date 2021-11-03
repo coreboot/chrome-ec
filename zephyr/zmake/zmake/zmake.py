@@ -252,18 +252,15 @@ class Zmake:
         coverage=False,
     ):
         """Set up a build directory to later be built by "zmake build"."""
-        supported_versions = [
-            util.parse_zephyr_version(v)
-            for v in project.config.supported_zephyr_versions
-        ]
-        zephyr_base = self.locate_zephyr_base(max(supported_versions)).resolve()
+        supported_version = util.parse_zephyr_version(project.config.zephyr_version)
+        zephyr_base = self.locate_zephyr_base(supported_version).resolve()
 
         # Ignore the patchset from the Zephyr version.
         zephyr_version = util.read_zephyr_version(zephyr_base)[:2]
 
         if (
             not ignore_unsupported_zephyr_version
-            and zephyr_version not in supported_versions
+            and zephyr_version != supported_version
         ):
             raise ValueError(
                 "The Zephyr OS version (v{}.{}) is not supported by the "
@@ -275,7 +272,10 @@ class Zmake:
         # Resolve build_dir if needed.
         if not build_dir:
             build_dir = (
-                self.module_paths["ec"] / "build" / "zephyr" / project.config.name
+                self.module_paths["ec"]
+                / "build"
+                / "zephyr"
+                / project.config.project_name
             )
         # Make sure the build directory is clean.
         if os.path.exists(build_dir):
@@ -324,9 +324,11 @@ class Zmake:
         if not generated_include_dir.exists():
             generated_include_dir.mkdir()
         processes = []
-        self.logger.info("Building %s in %s.", project.config.name, build_dir)
+        self.logger.info("Building %s in %s.", project.config.project_name, build_dir)
         for build_name, build_config in project.iter_builds():
-            self.logger.info("Configuring %s:%s.", project.config.name, build_name)
+            self.logger.info(
+                "Configuring %s:%s.", project.config.project_name, build_name
+            )
             config = (
                 base_config
                 | toolchain_config
@@ -347,7 +349,7 @@ class Zmake:
                 encoding="utf-8",
                 errors="replace",
             )
-            job_id = "{}:{}".format(project.config.name, build_name)
+            job_id = "{}:{}".format(project.config.project_name, build_name)
             zmake.multiproc.log_output(
                 self.logger,
                 logging.DEBUG,
@@ -373,7 +375,7 @@ class Zmake:
 
         # To reconstruct a Project object later, we need to know the
         # name and project directory.
-        (build_dir / "project_name.txt").write_text(project.config.name)
+        (build_dir / "project_name.txt").write_text(project.config.project_name)
         util.update_symlink(project.config.project_dir, build_dir / "project")
 
         if test_after_configure:
@@ -559,7 +561,7 @@ class Zmake:
         ).values():
             is_test = project.config.is_test
             temp_build_dir = tempfile.mkdtemp(
-                suffix="-{}".format(project.config.name),
+                suffix="-{}".format(project.config.project_name),
                 prefix="zbuild-",
             )
             tmp_dirs.append(temp_build_dir)
@@ -643,7 +645,7 @@ class Zmake:
             return 0
 
     def _coverage_compile_only(self, project, build_dir, lcov_file):
-        self.logger.info("Building %s in %s", project.config.name, build_dir)
+        self.logger.info("Building %s in %s", project.config.project_name, build_dir)
         rv = self._configure(
             project=project,
             build_dir=build_dir,
@@ -722,7 +724,9 @@ class Zmake:
         lcov_file,
         is_configured=False,
     ):
-        self.logger.info("Running test %s in %s", project.config.name, build_dir)
+        self.logger.info(
+            "Running test %s in %s", project.config.project_name, build_dir
+        )
         if not is_configured:
             rv = self._configure(
                 project=project,

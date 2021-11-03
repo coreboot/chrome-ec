@@ -100,13 +100,13 @@ def bundle_firmware(opts):
     zephyr_dir = pathlib.Path(__file__).parent
     platform_ec = zephyr_dir.resolve().parent
     for project in zmake.project.find_projects(zephyr_dir).values():
-        build_dir = platform_ec / "build" / "zephyr" / project.config.name
+        build_dir = platform_ec / "build" / "zephyr" / project.config.project_name
         artifacts_dir = build_dir / 'output'
         # TODO(kmshelton): Remove once the build command does not rely
         # on a pre-defined list of targets.
         if not artifacts_dir.is_dir():
             continue
-        tarball_name = '{}.firmware.tbz2'.format(project.config.name)
+        tarball_name = '{}.firmware.tbz2'.format(project.config.project_name)
         tarball_path = bundle_dir.joinpath(tarball_name)
         cmd = ['tar', 'cvfj', tarball_path, '.']
         subprocess.run(cmd, cwd=artifacts_dir, check=True)
@@ -132,6 +132,10 @@ def test(opts):
     # Run zmake tests to ensure we have a fully working zmake before
     # proceeding.
     subprocess.run([zephyr_dir / 'zmake' / 'run_tests.sh'], check=True)
+
+    # Run formatting checks on all BUILD.py files.
+    config_files = zephyr_dir.rglob("**/BUILD.py")
+    subprocess.run(["black", "--diff", "--check", *config_files], check=True)
 
     subprocess.run(['zmake', '-D', 'testall'], check=True)
 

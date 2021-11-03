@@ -36,10 +36,10 @@ class FakeProject:
         self.packer.pack_firmware = mock.Mock(return_value=[])
 
         self.config = zmake.project.ProjectConfig(
-            name="fakeproject",
+            project_name="fakeproject",
             zephyr_board="fakeboard",
             supported_toolchains=["llvm"],
-            supported_zephyr_versions=["v2.5"],
+            zephyr_version="v2.5",
             output_packer=zmake.output_packers.ElfPacker,
             project_dir=pathlib.Path("FakeProjectDir"),
         )

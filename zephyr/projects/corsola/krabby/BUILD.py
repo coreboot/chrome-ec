@@ -3,7 +3,14 @@
 # found in the LICENSE file.
 
 register_binman_project(
-    "krabby",
+    project_name="krabby",
     zephyr_board="it8xxx2",
-    dts_overlays=["battery.dts", "gpio.dts", "motionsense.dts", "pwm.dts"],
+    dts_overlays=[
+        "adc.dts",
+        "battery.dts",
+        "gpio.dts",
+        "i2c.dts",
+        "motionsense.dts",
+        "pwm.dts",
+    ],
 )
