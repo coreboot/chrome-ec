@@ -631,14 +631,19 @@
 #undef CONFIG_BATTERY_LEVEL_NEAR_FULL
 
 /*
+ * Use memory mapped region to store battery information. It supports only
+ * single battery systems. V2 should be used unless there is a reason not to.
+ */
+#undef CONFIG_BATTERY_V1
+
+/*
  * Use an alternative method to store battery information: Instead of writing
  * directly to host memory mapped region, this keeps the battery information in
  * ec_response_battery_static/dynamic_info structures, that can then be fetched
  * using host commands, or via EC_ACPI_MEM_BATTERY_INDEX command, which tells
  * the EC to update the shared memory.
  *
- * This is required on dual-battery systems, and on on hostless bases with a
- * battery.
+ * This is required on dual-battery systems and hostless bases with a battery.
  */
 #undef CONFIG_BATTERY_V2
 
@@ -1042,6 +1047,21 @@
  */
 #undef CONFIG_CHARGER_BQ25720_VSYS_TH2_DV
 
+/* Value of the bq25710 charge sense resistor, in mOhms */
+#undef CONFIG_CHARGER_BQ25710_SENSE_RESISTOR
+
+/* Value of the bq25710 input current sense resistor, in mOhms */
+#undef CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC
+
+/*
+ * This config option is used to enable the PSYS sensing circuit on the
+ * BQ25710 and BQ25720 chargers. This is used for system power
+ * monitoring on board designs that support this capability. This
+ * circuit is disabled by default (reset) and needs to be explicitly
+ * enabled for meaningful results.
+ */
+#undef CONFIG_CHARGER_BQ25710_PSYS_SENSING
+
 /*
  * Board specific maximum input current limit, in mA.
  */
@@ -1394,6 +1414,7 @@
 #undef  CONFIG_CMD_BATT_MFG_ACCESS
 #undef  CONFIG_CMD_BUTTON
 #define CONFIG_CMD_CBI
+#undef  CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE
 
 /*
  * HAS_TASK_CHIPSET implies the GSC presence.
@@ -1520,6 +1541,9 @@
 
 /* Don't save General Purpose Registers during panic */
 #undef CONFIG_PANIC_STRIP_GPR
+
+/* Provide another output method of panic information by console channel */
+#undef CONFIG_PANIC_CONSOLE_OUTPUT
 
 /*
  * Provide the default GPIO abstraction layer.
@@ -5841,6 +5865,12 @@
 #define CONFIG_BATTERY_COUNT 1
 #endif
 #endif /* CONFIG_EC_EC_COMM_BATTERY */
+
+/*****************************************************************************/
+/* If battery_v2 isn't used, it's v1. */
+#if defined(CONFIG_BATTERY) && !defined(CONFIG_BATTERY_V2)
+#define CONFIG_BATTERY_V1
+#endif
 
 /*****************************************************************************/
 /* Define derived USB PD Discharge common path */

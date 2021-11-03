@@ -144,16 +144,6 @@
 
 #define CONFIG_PWM
 
-/* Prochot assertion/deassertion ratios*/
-#define PROCHOT_ADAPTER_WATT_RATIO 97
-#define PROCHOT_ASSERTION_BATTERY_RATIO 95
-#define PROCHOT_DEASSERTION_BATTERY_RATIO 85
-#define PROCHOT_ASSERTION_PD_RATIO 105
-#define PROCHOT_DEASSERTION_PD_BATTERY_RATIO 95
-#define PROCHOT_ASSERTION_ADAPTER_RATIO 105
-#define PROCHOT_DEASSERTION_ADAPTER_RATIO 90
-#define PROCHOT_DEASSERTION_ADAPTER_BATT_RATIO 90
-
 /* Enable I2C Support */
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER
@@ -228,6 +218,19 @@
 #define CONFIG_USB_PID 0x504F
 /* Device version of product. */
 #define CONFIG_USB_BCD_DEV 0x0000
+
+/*
+ * These stack sizes were determined using "make analyzestack" for brya
+ * and include about 15% headroom. Sizes are rounded to multiples of 64
+ * bytes. Task stack sizes not listed here use more generic values (see
+ * ec.tasklist).
+ */
+#define BASEBOARD_CHARGER_TASK_STACK_SIZE	1088
+#define BASEBOARD_CHG_RAMP_TASK_STACK_SIZE	1088
+#define BASEBOARD_CHIPSET_TASK_STACK_SIZE	1152
+#define BASEBOARD_PD_INT_TASK_STACK_SIZE	 800
+#define BASEBOARD_PD_TASK_STACK_SIZE		1216
+#define BASEBOARD_POWERBTN_TASK_STACK_SIZE	1088
 
 #ifndef __ASSEMBLER__
 

@@ -34,6 +34,9 @@
 #include "switch.h"
 #include "tablet_mode.h"
 #include "task.h"
+#include "temp_sensor.h"
+#include "temp_sensor/thermistor.h"
+#include "thermal.h"
 #include "usbc_ppc.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
@@ -152,8 +155,25 @@ const struct adc_t adc_channels[] = {
 		ADC_READ_MAX + 1,
 		0
 	},
+	[ADC_SYSTHERM2] = {
+		"SYSTHERM2",
+		NPCX_ADC_CH6,
+		ADC_MAX_VOLT,
+		ADC_READ_MAX + 1,
+		0,
+	},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
+
+const struct temp_sensor_t temp_sensors[] = {
+	[TEMP_SENSOR_SYS2] = {
+		.name = "SYSTEMP2",
+		.type = TEMP_SENSOR_TYPE_BOARD,
+		.read = get_temp_3v3_30k9_47k_4050b,
+		.idx = ADC_SYSTHERM2,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 const struct pwm_t pwm_channels[] = {
 	/* TODO(waihong): Assign a proper frequency. */
@@ -590,26 +610,4 @@ uint16_t tcpc_get_alert_status(void)
 			status |= PD_STATUS_TCPC_ALERT_0;
 
 	return status;
-}
-
-int battery_get_vendor_param(uint32_t param, uint32_t *value)
-{
-	int rv;
-	uint8_t data[16] = {};
-
-	/* only allow reading 0x70~0x7F, 16 byte data */
-	if (param < 0x70 || param >= 0x80)
-		return EC_ERROR_ACCESS_DENIED;
-
-	rv = sb_read_string(0x70, data, sizeof(data));
-	if (rv)
-		return rv;
-
-	*value = data[param - 0x70];
-	return EC_SUCCESS;
-}
-
-int battery_set_vendor_param(uint32_t param, uint32_t value)
-{
-	return EC_ERROR_UNIMPLEMENTED;
 }

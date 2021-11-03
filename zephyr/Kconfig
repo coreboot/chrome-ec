@@ -219,6 +219,12 @@ config PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
 	  Require to initialize it first such that it can receive a host resume
 	  event, that notifies the normal resume hook.
 
+config PLATFORM_EC_CHIP_INIT_ROM_REGION
+	bool "Enables the use of a dedicated init ROM region"
+	help
+	  Enable this flag if the board has a `.init_rom` region. This will
+	  activate routines in `init_rom.h` to access objects in this region.
+
 config PLATFORM_EC_CONSOLE_CMD_HCDEBUG
 	bool "Console command: hcdebug"
 	default y
@@ -630,9 +636,9 @@ config PLATFORM_EC_PWM_DISPLIGHT
 	depends on PLATFORM_EC_PWM
 	help
 	  Enables display backlight controlled by a PWM signal connected
-	  directly to the EC chipset. The board files must define the C
-	  reference PWM_CH_DISPLIGHT to the PWM channel used for the
-	  display backlight control.
+	  directly to the EC chipset. The board devicetree file must define the
+	  PWM channel used for the display backlight control and assign the
+	  "displight" node label to it.
 
 config PLATFORM_EC_RTC
 	bool "Real-time clock (RTC)"

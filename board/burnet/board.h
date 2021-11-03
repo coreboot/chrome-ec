@@ -24,6 +24,8 @@
 
 #define CONFIG_BATTERY_HW_PRESENT_CUSTOM
 #define CONFIG_BATTERY_VENDOR_PARAM
+#define CONFIG_BATTERY_V2
+#define CONFIG_BATTERY_COUNT 1
 
 #define CONFIG_CHARGER_PSYS
 
@@ -44,6 +46,9 @@
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 
 #define CONFIG_USB_MUX_IT5205
+
+/* Disable verbose output in EC pd */
+#define CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE
 
 /* Motion Sensors */
 #ifndef VARIANT_KUKUI_NO_SENSORS

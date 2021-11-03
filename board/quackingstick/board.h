@@ -46,6 +46,7 @@
 #define CONFIG_USB_PD_TCPM_MULTI_PS8XXX
 #define CONFIG_USB_PD_TCPM_PS8755
 #define CONFIG_USB_PD_TCPM_PS8805
+#define CONFIG_USB_PD_TCPM_PS8805_FORCE_DID
 #define CONFIG_USBC_PPC_SN5S330
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
 
@@ -73,6 +74,11 @@
 #define GPIO_WP_L GPIO_EC_FLASH_WP_ODL
 #define GPIO_PMIC_RESIN_L GPIO_PM845_RESIN_L
 
+/* temp */
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_THERMISTOR
+#define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
@@ -83,7 +89,13 @@ enum adc_channel {
 	ADC_AMON_BMON,
 	ADC_PSYS,
 	ADC_BASE_DET,
+	ADC_SYSTHERM2,
 	ADC_CH_COUNT
+};
+
+enum temp_sensor_id {
+	TEMP_SENSOR_SYS2,
+	TEMP_SENSOR_COUNT
 };
 
 /* Motion sensors */
@@ -100,10 +112,8 @@ enum pwm_channel {
 
 /* List of possible batteries */
 enum battery_type {
-	BATTERY_GH02047XL_1C,
-	BATTERY_GH02047XL,
-	BATTERY_DS02032XL,
-	BATTERY_DS02032XL_1C,
+	BATTERY_AP21CBI,
+	BATTERY_AP21CBI_VER0,
 	BATTERY_TYPE_COUNT,
 };
 

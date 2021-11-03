@@ -17,7 +17,7 @@
 	named-i2c-ports {
 		compatible = "named-i2c-ports";
 
-		power {
+		i2c_power: power {
 			i2c-port = <&i2c0_0>;
 			enum-name = "I2C_PORT_POWER";
 			label = "POWER";
@@ -38,12 +38,12 @@
 			enum-name = "I2C_PORT_CHARGER";
 			label = "CHARGER";
 		};
-		tcpc0 {
+		i2c_tcpc0: tcpc0 {
 			i2c-port = <&i2c1_0>;
 			enum-name = "I2C_PORT_TCPC0";
 			label = "TCPC0";
 		};
-		tcpc1 {
+		i2c_tcpc1: tcpc1 {
 			i2c-port = <&i2c2_0>;
 			enum-name = "I2C_PORT_TCPC1";
 			label = "TCPC1";
@@ -53,7 +53,7 @@
 			enum-name = "I2C_PORT_RTC";
 			label = "RTC";
 		};
-		eeprom {
+		i2c_eeprom: eeprom {
 			i2c-port = <&i2c5_0>;
 			enum-name = "I2C_PORT_EEPROM";
 			label = "EEPROM";

@@ -5,6 +5,8 @@
  * TI bq25710 battery charger driver.
  */
 
+#include <stdbool.h>
+
 #include "battery.h"
 #include "battery_smart.h"
 #include "bq25710.h"
@@ -19,6 +21,11 @@
 #include "system.h"
 #include "timer.h"
 #include "util.h"
+
+#if !defined(CONFIG_CHARGER_BQ25710) &&	\
+	!defined(CONFIG_CHARGER_BQ25720)
+#error Only the BQ25720 and BQ25710 are supported by bq25710 driver.
+#endif
 
 #ifndef CONFIG_CHARGER_NARROW_VDC
 #error "BQ25710 is a NVDC charger, please enable CONFIG_CHARGER_NARROW_VDC."
@@ -35,18 +42,12 @@
 /* Sense resistor configurations and macros */
 #define DEFAULT_SENSE_RESISTOR 10
 
-#ifdef CONFIG_CHARGER_SENSE_RESISTOR_AC_BQ25710
-	#undef CONFIG_CHARGER_SENSE_RESISTOR_AC
-	#define CONFIG_CHARGER_SENSE_RESISTOR_AC \
-		CONFIG_CHARGER_SENSE_RESISTOR_AC_BQ25710
-#endif
-
-
 #define INPUT_RESISTOR_RATIO \
-	((CONFIG_CHARGER_SENSE_RESISTOR_AC) / DEFAULT_SENSE_RESISTOR)
+	((CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC) / DEFAULT_SENSE_RESISTOR)
 
 #define CHARGING_RESISTOR_RATIO \
-	((CONFIG_CHARGER_SENSE_RESISTOR) / DEFAULT_SENSE_RESISTOR)
+	((CONFIG_CHARGER_BQ25710_SENSE_RESISTOR) / DEFAULT_SENSE_RESISTOR)
+
 #define REG_TO_CHARGING_CURRENT(REG) ((REG) / CHARGING_RESISTOR_RATIO)
 #define CHARGING_CURRENT_TO_REG(CUR) ((CUR) * CHARGING_RESISTOR_RATIO)
 #ifdef CONFIG_CHARGER_BQ25720
@@ -170,6 +171,39 @@ static int bq25710_set_low_power_mode(int chgnum, int enable)
 	return EC_SUCCESS;
 }
 
+static int bq25710_set_psys_sensing(int chgnum, bool enable)
+{
+	int rv;
+	int reg;
+	int mask, on, off;
+
+	rv = raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_1, &reg);
+	if (rv)
+		return rv;
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25720)) {
+		mask = BQ25720_CHARGE_OPTION_1_PSYS_MASK;
+		on = BQ25720_CHARGE_OPTION_1_PSYS_ON;
+		off = BQ25720_CHARGE_OPTION_1_PSYS_OFF;
+	} else if (IS_ENABLED(CONFIG_CHARGER_BQ25710)) {
+		mask = BQ25710_CHARGE_OPTION_1_PSYS_MASK;
+		on = BQ25710_CHARGE_OPTION_1_PSYS_ON;
+		off = BQ25710_CHARGE_OPTION_1_PSYS_OFF;
+	}
+
+	reg &= ~mask;
+	if (enable)
+		reg |= on;
+	else
+		reg |= off;
+
+	rv = raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_1, reg);
+	if (rv)
+		return rv;
+
+	return EC_SUCCESS;
+}
+
 static int bq25710_adc_start(int chgnum, int adc_en_mask)
 {
 	int reg;
@@ -250,6 +284,9 @@ static void bq25710_init(int chgnum)
 		/* Reenable low power mode */
 		bq25710_set_low_power_mode(chgnum, 1);
 	}
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_PSYS_SENSING))
+		bq25710_set_psys_sensing(chgnum, true);
 
 	if (!raw_read16(chgnum, BQ25710_REG_PROCHOT_OPTION_1, &reg)) {
 		/* Disable VDPM prochot profile at initialization */

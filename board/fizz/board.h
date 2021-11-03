@@ -60,6 +60,10 @@
 
 /* EC console commands */
 #define CONFIG_CMD_BUTTON
+#undef CONFIG_CMD_ADC
+
+/* Reduce flash space usage */
+#undef  CONFIG_CONSOLE_CMDHELP
 
 /* SOC */
 #define CONFIG_CHIPSET_SKYLAKE

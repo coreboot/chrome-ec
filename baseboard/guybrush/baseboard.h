@@ -222,12 +222,6 @@
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 
-#define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_CURRENT_MA	5000
-#define PD_MAX_VOLTAGE_MV	20000
-/* Max Power = 100 W */
-#define PD_MAX_POWER_MW		((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
-
 /* USB-A config */
 #define USB_PORT_COUNT USBA_PORT_COUNT
 #define CONFIG_USB_PORT_POWER_SMART
@@ -238,8 +232,8 @@
 #define GPIO_USB1_ILIM_SEL IOEX_USB_A0_LIMIT_SDP
 #define GPIO_USB2_ILIM_SEL IOEX_USB_A1_LIMIT_SDP_DB
 
-/* Round up 3250 max current to multiple of 128mA for ISL9241 AC prochot. */
-#define GUYBRUSH_AC_PROCHOT_CURRENT_MA 3328
+/* Round up 5000 max current to multiple of 128mA for ISL9241 AC prochot. */
+#define GUYBRUSH_AC_PROCHOT_CURRENT_MA 5120
 
 /*
  * USB ID - This is allocated specifically for Guybrush

@@ -1,0 +1,63 @@
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+/dts-v1/;
+
+#include <cros/ite/it8xxx2.dtsi>
+#include <dt-bindings/gpio_defines.h>
+#include <it8xxx2.dtsi>
+#include <dt-bindings/wake_mask_event_defines.h>
+
+/ {
+	model = "Google IT8XXX2 Baseboard";
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,console = &uart1;
+		zephyr,shell-uart = &uart1;
+		zephyr,flash = &flash0;
+		zephyr,flash-controller = &flashctrl;
+	};
+
+	ec-mkbp-host-event-wakeup-mask {
+		compatible = "ec-wake-mask-event";
+		wakeup-mask = <(
+			HOST_EVENT_MASK(HOST_EVENT_AC_CONNECTED) |
+			HOST_EVENT_MASK(HOST_EVENT_AC_DISCONNECTED) |
+			HOST_EVENT_MASK(HOST_EVENT_LID_OPEN) |
+			HOST_EVENT_MASK(HOST_EVENT_POWER_BUTTON) |
+			HOST_EVENT_MASK(HOST_EVENT_HANG_DETECT) |
+			HOST_EVENT_MASK(HOST_EVENT_MODE_CHANGE))>;
+	};
+
+	ec-mkbp-event-wakeup-mask {
+		compatible = "ec-wake-mask-event";
+		wakeup-mask = <(MKBP_EVENT_KEY_MATRIX |
+				MKBP_EVENT_HOST_EVENT)>;
+	};
+
+	soc {
+		/delete-node/ kscan@f01d00;
+
+		cros_kb_raw: cros-kb-raw@f01d00 {
+			compatible = "ite,it8xxx2-cros-kb-raw";
+			reg = <0x00f01d00 0x29>;
+			label = "CROS_KB_RAW_0";
+			interrupt-parent = <&intc>;
+			interrupts = <13 IRQ_TYPE_LEVEL_HIGH>;
+			status = "disabled";
+		};
+	};
+};
+
+&uart1 {
+	status = "okay";
+	current-speed = <115200>;
+	clock-frequency = <1804800>;
+};
+
+&cros_kb_raw {
+	status = "okay";
+};

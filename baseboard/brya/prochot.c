@@ -42,7 +42,7 @@ static int cal_sys_watt(void)
 	/* the ratio selectable through IADPT_GAIN bit. */
 	V_iadpt = Vacpacn * 1000 / 40;
 
-	IDPM = V_iadpt / CONFIG_CHARGER_SENSE_RESISTOR_AC;
+	IDPM = V_iadpt / CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC;
 
 	adapter_voltage_v = charge_manager_get_charger_voltage() / 1000;
 
@@ -142,11 +142,10 @@ static void assert_prochot(void)
 	/* Calculate actual system W */
 	adpt_mw = cal_sys_watt();
 
-	/* Read battery info
-	 * if any flag is set, skip this cycle and hope
+	/* If any battery flag is set and no AC, skip this cycle and hope
 	 * the next cycle succeeds
 	 */
-	if (get_batt_parameter())
+	if (get_batt_parameter() && !extpower_is_present())
 		return;
 
 	/* When battery is discharging, the battery current will be negative */
@@ -197,7 +196,8 @@ static void assert_prochot(void)
 			if (total_W > ADT_RATING_W *
 			PROCHOT_ASSERTION_PD_RATIO / 100)
 				gpio_set_level(GPIO_EC_PROCHOT_ODL, 0);
-			else if (total_W <= ADT_RATING_W)
+			else if (total_W <= ADT_RATING_W *
+			PROCHOT_DEASSERTION_PD_RATIO / 100)
 				gpio_set_level(GPIO_EC_PROCHOT_ODL, 1);
 		} else {
 			/* AC + battery */
