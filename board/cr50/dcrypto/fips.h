@@ -38,7 +38,14 @@ enum fips_status {
 	FIPS_FATAL_SELF_INTEGRITY = 1 << 10,
 	FIPS_FATAL_BN_MATH = 1 << 11,
 	FIPS_FATAL_OTHER = 1 << 15,
+
+/* For CRYPTO_TEST ignore self-integrity errors. */
+#ifdef CRYPTO_TEST_SETUP
+	FIPS_ERROR_MASK = 0xffff & ~FIPS_FATAL_SELF_INTEGRITY,
+#else
 	FIPS_ERROR_MASK = 0xffff,
+#endif
+
 	FIPS_RFU_MASK = 0x7fff0000
 };
 
