@@ -46,22 +46,15 @@ uint8_t fips_break_cmd;
 
 /**
  * Return true if no blocking crypto errors detected.
- * Until self-integrity works properly (b/138578318), ignore it.
- * TODO(b/138578318): remove ignoring of FIPS_FATAL_SELF_INTEGRITY.
  */
 static inline bool fips_is_no_crypto_error(void)
 {
-	return (_fips_status &
-		(FIPS_ERROR_MASK & (~FIPS_FATAL_SELF_INTEGRITY))) == 0;
+	return (_fips_status & FIPS_ERROR_MASK) == 0;
 }
 
 /* Return true if crypto can be used (no failures detected). */
 bool fips_crypto_allowed(void)
 {
-	/**
-	 * We never allow crypto if there were errors, no matter
-	 * if we are in FIPS approved or not-approved mode.
-	 */
 	return ((_fips_status & FIPS_POWER_UP_TEST_DONE) &&
 		fips_is_no_crypto_error() && DCRYPTO_ladder_is_enabled());
 }
@@ -125,10 +118,10 @@ void fips_set_status(enum fips_status status)
 	/* Accumulate status (errors). */
 	_fips_status |= status;
 
-	status = _fips_status;
-	/* if we have error, require power up tests on resume. */
-	if (status & FIPS_ERROR_MASK)
+	if (_fips_status & FIPS_ERROR_MASK) {
+		_fips_status &= ~FIPS_MODE_ACTIVE;
 		fips_set_power_up(false);
+	}
 }
 
 /**
@@ -678,7 +671,8 @@ void fips_power_up_tests(void)
 	uint64_t starttime;
 
 	starttime = fips_vtable->get_time().val;
-
+	/* Drop flags for in case of rerunning tests. */
+	_fips_status &= ~(FIPS_MODE_ACTIVE | FIPS_POWER_UP_TEST_DONE);
 	/* SHA2-256 is used for self-integrity test, so check it first. */
 	if (!fips_sha256_kat())
 		_fips_status |= FIPS_FATAL_SHA256;
@@ -765,6 +759,11 @@ void fips_power_up_tests(void)
 		_fips_status |= FIPS_FATAL_OTHER;
 
 	fips_last_kat_test_duration = fips_vtable->get_time().val - starttime;
+
+	fips_set_status(_fips_status);
+	/* Check if we can set FIPS-approved mode. */
+	if (fips_crypto_allowed())
+		fips_set_status(FIPS_MODE_ACTIVE);
 }
 
 void fips_power_on(void)
@@ -782,11 +781,6 @@ void fips_power_on(void)
 		fips_power_up_tests();
 	else	/* tests were already completed before sleep */
 		_fips_status |= FIPS_POWER_UP_TEST_DONE;
-
-	/* Check if we can set FIPS-approved mode. */
-	if (fips_crypto_allowed())
-		fips_set_status(FIPS_MODE_ACTIVE);
-
 }
 
 const struct fips_vtable *fips_vtable;
