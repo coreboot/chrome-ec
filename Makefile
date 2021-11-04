@@ -264,7 +264,6 @@ include core/$(CORE)/build.mk
 include common/build.mk
 include driver/build.mk
 include fuzz/build.mk
-include power/build.mk
 -include private/build.mk
 ifneq ($(PDIR),)
 include $(PDIR)/build.mk
@@ -296,7 +295,6 @@ all-obj-$(1)+=$(call objs_from_dir_p,$(PBDIR),board-private,$(1))
 endif
 all-obj-$(1)+=$(call objs_from_dir_p,common,common,$(1))
 all-obj-$(1)+=$(call objs_from_dir_p,driver,driver,$(1))
-all-obj-$(1)+=$(call objs_from_dir_p,power,power,$(1))
 ifdef CTS_MODULE
 all-obj-$(1)+=$(call objs_from_dir_p,cts,cts,$(1))
 endif
@@ -311,7 +309,7 @@ endef
 $(eval $(call get_sources,y))
 $(eval $(call get_sources,ro))
 
-dirs=core/$(CORE) chip/$(CHIP) $(BASEDIR) $(BDIR) common fuzz power test \
+dirs=core/$(CORE) chip/$(CHIP) $(BASEDIR) $(BDIR) common fuzz test \
 	cts/common cts/$(CTS_MODULE) $(out)/gen
 dirs+= private $(PDIR) $(PBDIR)
 dirs+=$(shell find common -type d)
