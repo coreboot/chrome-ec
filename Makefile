@@ -93,14 +93,6 @@ not_cfg = $(subst ro rw,y,$(filter-out $(1:y=ro rw),ro rw))
 # Include those now, since they must be defined for _flag_cfg below.
 include $(BDIR)/build.mk
 
-ifneq ($(ENV_VARS),)
-# Let's make sure $(out)/env_config.h changes if value any of the above
-# variables has changed since the prvious make invocation. This in turn will
-# make sure that relevant object files are re-built.
-current_set = $(foreach env_flag, $(ENV_VARS), $(env_flag)=$($(env_flag)))
-$(shell util/env_changed.sh "$(out)/env_config.h" "$(current_set)")
-endif
-
 # Baseboard directory
 ifneq (,$(BASEBOARD))
 BASEDIR:=baseboard/$(BASEBOARD)
@@ -130,7 +122,7 @@ UC_PROJECT:=$(call uppercase,$(PROJECT))
 # Transform the configuration into make variables.  This must be done after
 # the board/baseboard/project/chip/core variables are defined, since some of
 # the configs are dependent on particular configurations.
-includes=include core/$(CORE)/include include/driver $(dirs) $(out) fuzz test third_party
+includes=include core/$(CORE)/include include/driver $(dirs) $(out) third_party
 ifdef CTS_MODULE
 includes+=cts/$(CTS_MODULE) cts
 endif
@@ -261,8 +253,6 @@ include chip/$(CHIP)/build.mk
 include core/$(CORE)/build.mk
 include common/build.mk
 include driver/build.mk
-include fuzz/build.mk
-include power/build.mk
 -include private/build.mk
 -include private-kandou/build.mk
 ifneq ($(PDIR),)
@@ -271,9 +261,6 @@ endif
 ifneq ($(PBDIR),)
 include $(PBDIR)/build.mk
 endif
-include test/build.mk
-include util/build.mk
-include util/lock/build.mk
 
 includes+=$(includes-y)
 
@@ -312,37 +299,11 @@ endef
 $(eval $(call get_sources,y))
 $(eval $(call get_sources,ro))
 
-# The following variables are meant to be initialized in the baseboard or
-# board's build.mk. They will later be appended to in util/build.mk with
-# utils that should be generated for all boards.
-#
-# build-util-bin-y - Utils for the system doing the "build".
-#                    For example, the 64-bit x86 GNU/Linux running make.
-#                    These are often program that are needed by the build
-#                    system to generate code for use in firmware.
-# host-util-bin-y  - Utils for the target platform on top of the EC.
-#                    For example, the 32-bit x86 Chromebook.
-# build-util-art-y - Build ?artifacts? for the system doing the "build"
-#
-# The util targets added to these variable will pickup extra build objects
-# from their optional <util_name>-objs make variable.
-#
-# See commit bc4c1b4 for more context.
-build-utils := $(call objs_from_dir,$(out)/util,build-util-bin)
-host-utils := $(call objs_from_dir,$(out)/util,host-util-bin)
-build-art := $(call objs_from_dir,$(out),build-util-art)
-# Use the util_name with an added .c AND the special <util_name>-objs variable.
-build-srcs := $(foreach u,$(build-util-bin-y),$(sort $($(u)-objs:%.o=util/%.c) \
-                $(wildcard util/$(u).c)))
-host-srcs := $(foreach u,$(host-util-bin-y),$(sort $($(u)-objs:%.o=util/%.c) \
-               $(wildcard util/$(u).c)))
-
-dirs=core/$(CORE) chip/$(CHIP) $(BASEDIR) $(BDIR) common fuzz power test \
+dirs=core/$(CORE) chip/$(CHIP) $(BASEDIR) $(BDIR) common \
 	cts/common cts/$(CTS_MODULE) $(out)/gen
 dirs+= private private-kandou $(PDIR) $(PBDIR)
 dirs+=$(shell find common -type d)
 dirs+=$(shell find driver -type d)
-common_dirs=util
 
 ifeq ($(custom-ro_objs-y),)
 ro-common-objs := $(sort $(foreach obj, $(all-obj-y), $(out)/RO/$(obj)))
@@ -373,7 +334,7 @@ deps := $(ro-deps) $(rw-deps) $(deps-y)
 $(config): $(out)/$(PROJECT).bin
 	@printf '%s=y\n' $(_tsk_cfg) $(_flag_cfg) > $@
 
-def_all_deps:=$(config) $(PROJECT_EXTRA) notice rw size utils
+def_all_deps:=$(config) $(PROJECT_EXTRA) notice rw size
 ifeq ($(CONFIG_FW_INCLUDE_RO),y)
 def_all_deps+=ro
 endif

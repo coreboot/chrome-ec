@@ -306,9 +306,3 @@ $(out)/rma_key_from_blob.h: board/$(BOARD)/$(BLOB_FILE) util/bin2h.sh
 	$(Q)util/bin2h.sh RMA_KEY_BLOB $< $@
 
 endif
-
-include $(_common_dir)fpsensor/build.mk
-include $(_common_dir)usbc/build.mk
-
-include $(_common_dir)mock/build.mk
-common-y+=$(foreach m,$(mock-y),mock/$(m))

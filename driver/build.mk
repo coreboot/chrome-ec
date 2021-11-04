@@ -80,9 +80,6 @@ driver-$(CONFIG_CHARGER_SM5803)+=charger/sm5803.o
 # DP Redrivers
 driver-$(CONFIG_DP_REDRIVER_TDP142)+=retimer/tdp142.o
 
-# Fingerprint Sensors
-include $(_driver_cur_dir)fingerprint/build.mk
-
 # I/O expander
 driver-$(CONFIG_IO_EXPANDER_CCGXXF)+=ioexpander/ccgxxf.o
 driver-$(CONFIG_IO_EXPANDER_IT8801)+=ioexpander/it8801.o

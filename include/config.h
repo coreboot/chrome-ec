@@ -6126,8 +6126,6 @@
  * override some of the config flags in non-standard ways to mock only parts of
  * the system.
  */
-#include "fuzz_config.h"
-#include "test_config.h"
 
 /*
  * Validity checks to make sure some of the configs above make sense.

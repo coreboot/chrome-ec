@@ -195,14 +195,10 @@ build_boards: | $(FAILED_BOARDS_DIR)
 	$(MAKE) try_build_boards
 
 .PHONY: buildall_only
-buildall_only: build_boards build_cros_ec_commands
-	$(MAKE) build_cts
-	$(MAKE) buildfuzztests
+buildall_only: build_boards
 
 .PHONY: buildall
 buildall: buildall_only
-	$(MAKE) runtests
-	@touch .tests-passed
 	@echo "$@ completed successfully!"
 	$(call cmd_stats,RO)
 	$(call cmd_stats,RW)
@@ -213,25 +209,10 @@ buildall: buildall_only
 		printf "%-10s: %6d\n" $$board $$size; \
 	 done
 
-.PHONY: try_build_tests
-try_build_tests: $(foreach b, $(BOARDS), tests-$(b))
-
-.PHONY: buildalltests
-buildalltests: | $(FAILED_BOARDS_DIR)
-	$(MAKE) try_build_tests
-	@echo "$@ completed successfully!"
-
 .PHONY: print-boards
 print-boards:
 	$(call cmd_pretty_print_list,\
 		$(sort $(boards)))
-
-ifeq ($(ALLOW_CONFIG),)
-cmd_check_allowed = ./util/check_allowed.sh ${config} util/config_allowed.txt .
-else
-cmd_check_allowed = true
-endif
-quiet_cmd_check_allowed = CHECK_ALLOWED ${config}
 
 # Print any important notices at the end of the build.
 .PHONY: notice
@@ -269,157 +250,6 @@ hex-$(CONFIG_RW_B) += $(out)/RW/$(PROJECT).RW_B.hex
 hex: $(hex-y)
 .PHONY: hex
 
-.PHONY: utils-art
-utils-art: $(build-art)
-
-.PHONY: utils-host
-utils-host: $(host-utils)
-
-.PHONY: utils-build
-utils-build: $(build-utils)
-
-.PHONY: utils
-utils: utils-host utils-build utils-art
-
-# On board test binaries
-test-targets=$(foreach t,$(test-list-y),test-$(t))
-.PHONY: $(test-targets)
-
-ifeq "$(CONFIG_COMMON_RUNTIME)" "y"
-$(test-targets): test-%:
-	@set -e ; \
-	$(call echo,"  BUILD   $(out)/$*") \
-	$(MAKE) BOARD=$(BOARD) PROJECT=$* \
-	        V=$(V) out=$(out)/$* TEST_BUILD=y; \
-	cp $(out)/$*/$*.bin $(out)/test-$*.bin
-endif
-
-.PHONY: tests
-tests: $(test-targets)
-
-.PHONY: print-tests
-print-tests:
-	$(call cmd_pretty_print_list, \
-		$(sort $(test-targets)))
-
-# Emulator test executables
-host-test-targets=$(foreach t,$(test-list-host),host-$(t))
-run-test-targets=$(foreach t,$(test-list-host),run-$(t))
-.PHONY: $(host-test-targets) $(run-test-targets)
-
-$(host-test-targets): host-%: | $(FAILED_BOARDS_DIR)
-	@touch $(FAILED_BOARDS_DIR)/test-$*
-	+$(call quiet,host_test,BUILD  )
-
-$(run-test-targets): run-%: host-%
-	$(call quiet,run_host_test,TEST   )
-	@rm -f $(FAILED_BOARDS_DIR)/test-$*
-
-host-coverage-targets=$(foreach t,$(test-list-host),host-coverage-$(t))
-run-coverage-targets=$(foreach t,$(test-list-host),run-coverage-$(t))
-.PHONY: $(host-coverage-targets) $(run-coverage-targets)
-
-$(host-coverage-targets): host-coverage-%: | $(FAILED_BOARDS_DIR)
-	@touch $(FAILED_BOARDS_DIR)/test-$*
-	+$(call quiet,coverage_test,BUILD  )
-
-$(run-coverage-targets): run-coverage-%: host-coverage-%
-	$(call quiet,run_coverage_test,TEST   )
-	@rm -f $(FAILED_BOARDS_DIR)/test-$*
-
-.PHONY: print-host-tests
-print-host-tests:
-	$(call cmd_pretty_print_list, \
-		$(sort $(host-test-targets) $(run-test-targets)))
-
-# Fuzzing tests
-
-fuzz-test-targets=$(foreach t,$(fuzz-test-list-host),host-$(t))
-run-fuzz-test-targets=$(foreach t,$(fuzz-test-list-host),run-$(t))
-
-.PHONY: $(fuzz-test-targets) $(run-fuzz-test-targets)
-
-$(fuzz-test-targets): TEST_FLAG=TEST_FUZZ=y TEST_ASAN=$(TEST_ASAN) \
-	TEST_MSAN=$(TEST_MSAN) TEST_UBSAN=$(TEST_UBSAN) \
-	CROSS_COMPILE=$(shell echo $(HOSTCC) | grep -v ccache | \
-		sed -e 's/[^-]*$$//')
-$(fuzz-test-targets): host-%: | $(FAILED_BOARDS_DIR)
-	@touch $(FAILED_BOARDS_DIR)/test-$*
-	+$(call quiet,host_test,BUILD  )
-$(run-fuzz-test-targets): run-%: host-%
-	$(call quiet,run_fuzz,TEST   )
-	@rm -f $(FAILED_BOARDS_DIR)/test-$*
-
-$(FAILED_BOARDS_DIR):
-	@mkdir $(FAILED_BOARDS_DIR)
-
-.PHONY: print-host-fuzzers
-print-host-fuzzers:
-	$(call cmd_pretty_print_list, \
-		$(sort $(fuzz-test-targets) $(run-fuzz-test-targets)))
-
-.PHONY: buildfuzztests
-buildfuzztests: $(fuzz-test-targets)
-
-.PHONY: hosttests runhosttests runfuzztests runtests
-hosttests: $(host-test-targets)
-runhosttests: TEST_FLAG=TEST_HOSTTEST=y
-runhosttests: $(run-test-targets)
-runfuzztests: $(run-fuzz-test-targets)
-runtests: runhosttests runfuzztests run-genvif_test
-
-# Automatically enumerate all suites.
-cts_excludes := common
-cts_suites := $(filter-out $(cts_excludes), \
-	$(shell find cts -maxdepth 1 -mindepth 1 -type d -printf "%f "))
-
-# Add boards below as CTS is expanded.
-cts_boards := stm32l476g-eval nucleo-f072rb
-
-.PHONY: build_cts
-
-# Create CTS rule automatically for given suite and board
-# $1: suite name
-# $2: board name
-define make-cts =
-build_cts: cts-$(1)-$(2)
-cts-$(1)-$(2): | $(FAILED_BOARDS_DIR)
-	@touch $(FAILED_BOARDS_DIR)/cts-$(2)-$(1)
-	$$(MAKE) CTS_MODULE=$(1) BOARD=$(2)
-	@rm -f $(FAILED_BOARDS_DIR)/cts-$(2)-$(1)
-# Do not remove this blank line
-
-endef
-
-# Create rules for all cts-suite-board combinations. Additionally, we serialize
-# targets per board: cts-x-board -> cts-y-board -> ...
-# If we don't serialize targets, parallel make fails because all suites
-# try to produce ec.bin in the same directory (e.g. build/stm32l476g-eval).
-$(foreach b, $(cts_boards), \
-	$(foreach s, $(cts_suites), \
-		$(eval $(call make-cts,$(s),$(b))) \
-	) \
-)
-
-cov-boards=lazor volteer
-cov-test-targets=$(foreach t,$(cov-test-list-host),build/coverage/$(t).info)
-cov-test-targets+=$(foreach t,$(cov-boards),build/coverage/initial-$(t).info)
-bldversion=$(shell (./util/getversion.sh ; echo VERSION) | $(CPP) -P -)
-
-# lcov fails when multiple instances run at the same time.
-# We need to run them sequentially by using flock
-cmd_lcov=flock /tmp/ec-lcov-lock -c "lcov --gcov-tool \
-	$(HOSTGCOV) -q -o $@ -c -d build/coverage/$* -t $* \
-	--exclude '*/ec/test/*' --exclude '*/ec/include/tests/*'"
-cmd_lcov-initial=flock /tmp/ec-lcov-lock -c "lcov --gcov-tool \
-	$(GCOV) -q -o $@ -c -d build/coverage/initial-$* \
-	-i -t $* --exclude '*/ec/test/*' --exclude '*/ec/include/tests/*'"
-cmd_merge_cov=lcov -o build/coverage/lcov.info $(foreach info,$^,-a ${info})
-cmd_report_cov=genhtml -q -o build/coverage/coverage_rpt -t \
-	       "EC Unittest "$(bldversion) -s $^
-cmd_strip_lcov=sed -i build/coverage/lcov.info \
-	-e 's/\/mnt\/host\/source\/src\/platform\/ec\///'
-
 # Unless V is set to 0 we always want the 'size:' target to report its output,
 # there is no point in generating a short form command trace when calculating
 # size.
@@ -453,20 +283,6 @@ cmd_stats= \
   while read size board; do \
 	printf "%-10s: %6d\n" $$board $$size; \
   done
-
-.DELETE_ON_ERROR: build/coverage/initial-%.info build/coverage/%.info
-build/coverage/initial-%.info:
-	$(MAKE) TEST_COVERAGE=y BOARD=$* compile-only
-	$(call quiet,lcov-initial,COV    )
-build/coverage/%.info: run-coverage-%
-	$(call quiet,lcov,COV    )
-
-.PHONY: coverage
-coverage: TEST_FLAG=TEST_COVERAGE=y
-coverage: $(cov-test-targets)
-	$(call quiet,merge_cov,MERGE  )
-	$(call quiet,report_cov,REPORT )
-	$(call quiet,strip_lcov,STRIP  )
 
 $(out)/libec.a: $(ro-objs)
 	$(call quiet,libec,BUILD )
@@ -633,12 +449,6 @@ $(sharedlib-objs): | $(out)/ec_version.h
 $(out)/ec_version.h:
 	$(call quiet,version,VERSION)
 
-$(build-utils): $(out)/%:$(build-srcs)
-	$(call quiet,c_to_build,BUILDCC)
-
-$(host-utils): $(out)/%:$(host-srcs)
-	$(call quiet,c_to_host,HOSTCC )
-
 $(out)/cscope.files: $(out)/$(PROJECT).bin
 	$(call quiet,deps_to_list,SH     )
 
@@ -648,61 +458,9 @@ $(out)/TAGS: $(out)/cscope.files
 $(out)/tags: $(out)/cscope.files
 	$(call quiet,ctags,CTAGS  )
 
-.PHONY: npx-monitor-dir
-npx-monitor-dir:
-	$(Q)mkdir -p ${out}/chip/npcx/spiflashfw
-
-# See "Commonly used compiler options" for more documentation
-
-# TODO: optional make rules for PROJECT_EXTRA
-$(npcx-monitor-fw-bin):$(npcx-monitor-fw).c npx-monitor-dir
-	$(if $(V),,@echo '  EXTBIN ' $(subst $(out)/,,$@) ; )
-	$(Q)$(CC) $(CFLAGS) -MMD -MF $(out)/$(npcx-lfw).d -c $< \
-		-MT $(out)/$(npcx-monitor-fw).o -o $(out)/$(npcx-monitor-fw).o
-	$(Q)$(CC) $(out)/$(npcx-monitor-fw).o $(LDFLAGS) \
-		-o $(out)/$(npcx-monitor-fw).elf -Wl,-T,$(npcx-monitor-fw).ld \
-		-Wl,-Map,$(out)/$(npcx-monitor-fw).map
-	$(Q)$(OBJCOPY) -O binary $(out)/$(npcx-monitor-fw).elf $@
-
-$(out)/$(npcx-monitor-hdr)_ro.o:$(npcx-monitor-hdr).c npx-monitor-dir
-	$(Q)$(CC) $(CFLAGS) -DSECTION_IS_RO=$(EMPTY) -MMD -c $< -MT $@ -o $@
-
-$(npcx-monitor-hdr-ro-bin):$(out)/$(npcx-monitor-hdr)_ro.o
-	$(if $(V),,@echo '  EXTBIN ' $(subst $(out)/,,$@) ; )
-	$(Q)$(OBJCOPY) -O binary $< $@
-
-$(out)/$(npcx-monitor-hdr)_rw.o:$(npcx-monitor-hdr).c npx-monitor-dir
-	$(Q)$(CC) $(CFLAGS) -MMD -c $< -MT $@ -o $@
-
-$(npcx-monitor-hdr-rw-bin):$(out)/$(npcx-monitor-hdr)_rw.o
-	$(if $(V),,@echo '  EXTBIN ' $(subst $(out)/,,$@) ; )
-	$(Q)$(OBJCOPY) -O binary $< $@
-
 .PHONY: xrefs
 xrefs: $(call targ_if_prog,etags,$(out)/TAGS) \
 	$(call targ_if_prog,ctags,$(out)/tags)
-
-openocd-cfg-flash = $(or $(wildcard $(BDIR)/openocd-flash.cfg),\
-	$(error Board $(BOARD) doesn't support OpenOCD flashing))
-
-.PHONY: flash
-flash: $(out)/ec.bin
-	openocd -c "set BOARD $(BOARD)"\
-		-c "set BUILD_DIR $(out)"\
-		-f $(openocd-cfg-flash)
-
-.PHONY: flash_ec
-flash_ec: $(out)/ec.bin
-	./util/flash_ec --board $(BOARD) --image $(out)/ec.bin --port $(PORT)
-
-.PHONY: flash_dfu
-flash_dfu: $(out)/ec.bin
-	sudo ./$(BDIR)/dfu $(out)/ec.bin
-
-# Deprecated, use print-make-vars instead
-.PHONY: print-baseboard
-print-baseboard:
-	@echo "${BASEBOARD}"
 
 # Print variables identifying and providing Makefile-specific
 # configuration for each board. The format is one variable per line,
