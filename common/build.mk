@@ -100,7 +100,6 @@ common-$(CONFIG_PWM_KBLIGHT)+=pwm_kblight.o
 common-$(CONFIG_KEYBOARD_BACKLIGHT)+=keyboard_backlight.o
 common-$(CONFIG_RMA_AUTH)+=rma_auth.o
 common-$(CONFIG_RSA)+=rsa.o
-common-$(CONFIG_ROLLBACK)+=rollback.o
 common-$(CONFIG_RWSIG)+=rwsig.o vboot/common.o
 common-$(CONFIG_RWSIG_TYPE_RWSIG)+=vboot/vb21_lib.o
 common-$(CONFIG_MATH_UTIL)+=math_util.o
