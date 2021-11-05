@@ -345,6 +345,13 @@ void board_hibernate(void)
 		       GPIO_INPUT | GPIO_PULL_DOWN);
 
 	/*
+	 * Board rev 1+ has the hardware fix. Don't need the following
+	 * workaround.
+	 */
+	if (system_get_board_version() >= 1)
+		return;
+
+	/*
 	 * Enable the PPC power sink path before EC enters hibernate;
 	 * otherwise, ACOK won't go High and can't wake EC up. Check the
 	 * bug b/170324206 for details.
