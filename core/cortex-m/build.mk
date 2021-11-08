@@ -41,4 +41,3 @@ core-$(CONFIG_ARMV7M_CACHE)+=cache.o
 core-$(CONFIG_COMMON_PANIC_OUTPUT)+=panic.o
 core-$(CONFIG_COMMON_RUNTIME)+=switch.o task.o
 core-$(CONFIG_WATCHDOG)+=watchdog.o
-core-$(CONFIG_MPU)+=mpu.o
