@@ -242,11 +242,6 @@ __stdlib_compat int isalpha(int c)
 	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
-__stdlib_compat int isupper(int c)
-{
-	return c >= 'A' && c <= 'Z';
-}
-
 __stdlib_compat int isprint(int c)
 {
 	return c >= ' ' && c <= '~';
