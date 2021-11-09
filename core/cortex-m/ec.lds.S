@@ -53,13 +53,6 @@ MEMORY
         ORIGIN = CONFIG_PROGRAM_MEMORY_BASE + FW_MEM_OFF(SECTION), \
         LENGTH = FW_SIZE(SECTION)
 #endif /* CONFIG_EXTERNAL_STORAGE */
-
-#ifdef CONFIG_CHIP_MEMORY_REGIONS
-#define REGION(name, attr, start, size) \
-    name(attr) : ORIGIN = (start), LENGTH = (size)
-#include "memory_regions.inc"
-#undef REGION
-#endif /* CONFIG_MEMORY_REGIONS */
 }
 
 SECTIONS
@@ -439,17 +432,6 @@ SECTIONS
 #else
     __image_size = __hey_flash_used;
 #endif
-
-#ifdef CONFIG_CHIP_MEMORY_REGIONS
-#define REGION(name, attr, start, size) \
-    .name(NOLOAD) : { \
-        __##name##_start = .; \
-        *(SORT(.name.*)) \
-    } > name
-#include "memory_regions.inc"
-#undef REGION
-#endif /* CONFIG_CHIP_MEMORY_REGIONS */
-
 #if !(defined(SECTION_IS_RO) && defined(CONFIG_FLASH))
     /DISCARD/ : { *(.google) }
 #endif
