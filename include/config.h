@@ -2889,9 +2889,6 @@
  */
 #undef CONFIG_PWM_KBLIGHT
 
-/* Support Real-Time Clock (RTC) */
-#undef CONFIG_RTC
-
 /* Size of each RAM bank in chip, default is CONFIG_RAM_SIZE */
 #undef CONFIG_RAM_BANK_SIZE
 
