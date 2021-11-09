@@ -575,21 +575,10 @@
  */
 #undef CONFIG_BOARD_PRE_INIT
 
-/*
- * EC has the notion of board version either through resistors or EEPROM.
- * The common CONFIG_BOARD_VERSION is defined automatically when one of the
- * specific options is used.
- */
+/* EC has GPIOs attached to board version stuffing resistors */
 #undef CONFIG_BOARD_VERSION
-/* The board version comes from Cros Board Info within EEPROM. */
-#undef CONFIG_BOARD_VERSION_CBI
-/* The board version function is defined in board code. */
-#undef CONFIG_BOARD_VERSION_CUSTOM
-/*
- * The board version is encoded with 3 GPIO signals where GPIO_BOARD_VERSION1
- * is the LSB.
- */
-#undef CONFIG_BOARD_VERSION_GPIO
+/* The decoding of the GPIOs defining board version is defined in board code */
+#undef CONFIG_BOARD_SPECIFIC_VERSION
 
 /*
  * The board is unable to distinguish EC reset from power-on so it should treat
@@ -4323,19 +4312,6 @@
 #undef CONFIG_CONSOLE_HISTORY
 #define CONFIG_CRC8
 #endif /* defined(CONFIG_EXPERIMENTAL_CONSOLE) */
-
-
-/******************************************************************************/
-/*
- * Automatically define common CONFIG_BOARD_VERSION if any specific option is
- * used.
- */
-
-#if defined(CONFIG_BOARD_VERSION_CBI) || \
-	defined(CONFIG_BOARD_VERSION_CUSTOM) || \
-	defined(CONFIG_BOARD_VERSION_GPIO)
-#define CONFIG_BOARD_VERSION
-#endif
 
 /******************************************************************************/
 /*
