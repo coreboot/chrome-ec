@@ -46,10 +46,6 @@ int flash_bank_count(int offset, int size);
  */
 int flash_bank_size(int bank);
 
-int flash_bank_start_offset(int bank);
-
-int flash_bank_erase_size(int bank);
-
 /* Number of physical flash banks */
 #define PHYSICAL_BANKS  CONFIG_FLASH_MULTIPLE_REGION
 
@@ -92,15 +88,9 @@ int flash_bank_erase_size(int bank);
 /*
  * ROLLBACK region offset and size in units of flash banks.
  */
-#ifdef CONFIG_FLASH_MULTIPLE_REGION
-#define ROLLBACK_BANK_OFFSET	flash_bank_index(CONFIG_ROLLBACK_OFF)
-#define ROLLBACK_BANK_COUNT	\
-	flash_bank_count(CONFIG_ROLLBACK_OFF, CONFIG_ROLLBACK_SIZE)
-#else
 #define ROLLBACK_BANK_OFFSET	(CONFIG_ROLLBACK_OFF / CONFIG_FLASH_BANK_SIZE)
 #define ROLLBACK_BANK_COUNT	(CONFIG_ROLLBACK_SIZE / CONFIG_FLASH_BANK_SIZE)
-#endif	/* CONFIG_FLASH_MULTIPLE_REGION */
-#endif	/* CONFIG_ROLLBACK */
+#endif
 
 /* This enum is useful to identify different regions during verification. */
 enum flash_region {
