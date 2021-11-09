@@ -2054,11 +2054,6 @@
 /* Set entry in PD MCU's device rw_hash table */
 #define CONFIG_HOSTCMD_RWHASHPD
 
-#if !defined(TEST_BUILD) && !defined(TEST_FUZZ)
-/* Enable EC_CMD_LOCATE_CHIP */
-#define CONFIG_HOSTCMD_LOCATE_CHIP
-#endif
-
 /* Command to get the EC uptime (and optionally AP reset stats) */
 #define CONFIG_HOSTCMD_GET_UPTIME_INFO
 
