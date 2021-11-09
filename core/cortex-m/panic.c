@@ -13,7 +13,6 @@
 #include "system.h"
 #include "task.h"
 #include "timer.h"
-#include "uart.h"
 #include "util.h"
 #include "watchdog.h"
 
@@ -337,9 +336,6 @@ void __keep report_panic(void)
 	pdata->cm.hfsr = CPU_NVIC_HFSR;
 	pdata->cm.dfsr = CPU_NVIC_DFSR;
 
-#ifdef CONFIG_UART_PAD_SWITCH
-	uart_reset_default_pad_panic();
-#endif
 	panic_data_print(pdata);
 #ifdef CONFIG_DEBUG_EXCEPTIONS
 	panic_show_process_stack(pdata);
