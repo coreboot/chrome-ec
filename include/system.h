@@ -15,7 +15,7 @@
 #include "timer.h"
 
 /* Per chip implementation to save/read raw EC_RESET_FLAG_ flags. */
-void chip_save_reset_flags(uint32_t flags);
+void chip_save_reset_flags(int flags);
 uint32_t chip_read_reset_flags(void);
 
 /* System images */
