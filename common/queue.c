@@ -67,23 +67,17 @@ int queue_is_full(struct queue const *q)
  *          |****************|
  */
 
-struct queue_chunk queue_get_write_chunk(struct queue const *q, size_t offset)
+struct queue_chunk queue_get_write_chunk(struct queue const *q)
 {
 	size_t head = q->state->head & q->buffer_units_mask;
-	size_t tail = (q->state->tail + offset) & q->buffer_units_mask;
-	size_t last = (tail < head) ? head :   /* Wrapped        */
-			q->buffer_units;       /* Normal | Empty */
-
-	/* Make sure that the offset doesn't exceed free space. */
-	if (queue_space(q) <= offset)
-		return ((struct queue_chunk) {
-			.count = 0,
-			.buffer = NULL,
-		});
+	size_t tail = q->state->tail & q->buffer_units_mask;
+	size_t last = (queue_is_full(q) ? tail : /* Full           */
+		       ((tail < head) ? head :   /* Wrapped        */
+			q->buffer_units));       /* Normal | Empty */
 
 	return ((struct queue_chunk) {
-		.count = last - tail,
-		.buffer = q->buffer + (tail * q->unit_bytes),
+		.length = (last - tail) * q->unit_bytes,
+		.buffer = q->buffer + tail * q->unit_bytes,
 	});
 }
 
@@ -96,8 +90,8 @@ struct queue_chunk queue_get_read_chunk(struct queue const *q)
 			q->buffer_units));        /* Wrapped | Full */
 
 	return ((struct queue_chunk) {
-		.count = (last - head),
-		.buffer = q->buffer + (head * q->unit_bytes),
+		.length = (last - head) * q->unit_bytes,
+		.buffer = q->buffer + head * q->unit_bytes,
 	});
 }
 
