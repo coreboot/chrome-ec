@@ -227,14 +227,11 @@ enum hook_type {
 	HOOK_SECOND,
 
 	/*
-	 * USB PD cc disconnect event.
+	 * Detect USB PD cc disconnect.
+	 *
+	 * Hook routines will be called from the PD task.
 	 */
 	HOOK_USB_PD_DISCONNECT,
-
-	/*
-	 * USB PD cc connection event.
-	 */
-	HOOK_USB_PD_CONNECT,
 };
 
 struct hook_data {
