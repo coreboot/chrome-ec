@@ -14,9 +14,8 @@
 #include "console.h"
 #include "timer.h"
 
-/* Per chip implementation to save/read raw EC_RESET_FLAG_ flags. */
+/* Per chip implementation to save raw EC_RESET_FLAG_ flags. */
 void chip_save_reset_flags(int flags);
-uint32_t chip_read_reset_flags(void);
 
 /* System images */
 enum system_image_copy_t {
