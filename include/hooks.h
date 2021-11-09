@@ -49,8 +49,6 @@ enum hook_priority {
 	/* Init charge manager before usage in board init */
 	HOOK_PRIO_CHARGE_MANAGER_INIT = HOOK_PRIO_FIRST + 12,
 
-	HOOK_PRIO_INIT_ADC = HOOK_PRIO_DEFAULT,
-
 	/*
 	 * Priorities for CR50 modules.
 	 * HOOK_PRIO_INIT_CR50_BOARD is for board_init() in board/cr50/board.c
