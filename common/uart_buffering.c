@@ -11,7 +11,6 @@
 #include "console.h"
 #include "hooks.h"
 #include "host_command.h"
-#include "link_defs.h"
 #include "printf.h"
 #include "system.h"
 #include "task.h"
@@ -41,10 +40,10 @@ BUILD_ASSERT((CONFIG_UART_RX_BUF_SIZE & (CONFIG_UART_RX_BUF_SIZE - 1)) == 0);
 				 (CONFIG_UART_RX_DMA_RECHECKS + 1))
 
 /* Transmit and receive buffers */
-static volatile char tx_buf[CONFIG_UART_TX_BUF_SIZE] __uncached;
+static volatile char tx_buf[CONFIG_UART_TX_BUF_SIZE];
 static volatile int tx_buf_head;
 static volatile int tx_buf_tail;
-static volatile char rx_buf[CONFIG_UART_RX_BUF_SIZE] __uncached;
+static volatile char rx_buf[CONFIG_UART_RX_BUF_SIZE];
 static volatile int rx_buf_head;
 static volatile int rx_buf_tail;
 static int tx_snapshot_head;
