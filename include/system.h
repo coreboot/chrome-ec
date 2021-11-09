@@ -254,10 +254,6 @@ const char *system_get_build_info(void);
  * Wait for reset pin to be driven, rather that resetting ourselves.
  */
 #define SYSTEM_RESET_WAIT_EXT           BIT(4)
-/*
- * Indicate that this reset was triggered by an AP watchdog
- */
-#define SYSTEM_RESET_AP_WATCHDOG        BIT(5)
 
 /**
  * Reset the system.
