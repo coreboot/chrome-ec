@@ -195,8 +195,7 @@ void gpio_set_wakepin(enum gpio_signal signal, uint32_t flags)
 	configure_wakepin(dio_mask, dio_wake_flags);
 }
 
-void gpio_set_alternate_function(uint32_t port, uint32_t mask,
-				enum gpio_alternate_func func)
+void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func)
 {
 	/* This HW feature is not present in the Cr50 ARM core */
 }
