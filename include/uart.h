@@ -354,11 +354,6 @@ int uart_console_read_buffer(uint8_t type,
 			     uint16_t dest_size,
 			     uint16_t *write_count);
 
-/**
- * Initialize tx buffer head and tail
- */
-void uart_init_buffer(void);
-
 /* Return the size of the free room in the UART TX circular buffer. */
 size_t uart_buffer_room(void);
 
