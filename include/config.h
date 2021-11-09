@@ -4188,8 +4188,8 @@
  * If needed to allocate some free space in the base of the RO or RW section
  * of the image, define these to be equal the required size of the free space.
  */
-#define CONFIG_RO_HEAD_ROOM 0
-#define CONFIG_RW_HEAD_ROOM 0
+#undef CONFIG_RO_HEAD_ROOM
+#undef CONFIG_RW_HEAD_ROOM
 
 /* Firmware upgrade options. */
 /* Firmware updates using other than HC channel(s). */
