@@ -56,8 +56,8 @@ static void mont_mul_add(const struct rsa_public_key *key,
 	uint32_t i;
 
 	for (i = 1; i < RSANUMWORDS; ++i) {
-		A = mulaa32(a, b[i], c[i], A >> 32);
-		B = mulaa32(d0, key->n[i], A, B >> 32);
+		A = (A >> 32) + mula32(a, b[i], c[i]);
+		B = (B >> 32) + mula32(d0, key->n[i], A);
 		c[i - 1] = (uint32_t)B;
 	}
 
@@ -82,7 +82,7 @@ static void mont_mul_add_0(const struct rsa_public_key *key,
 	uint32_t i;
 
 	for (i = 1; i < RSANUMWORDS; ++i) {
-		B = mulaa32(d0, key->n[i], c[i], B >> 32);
+		B = (B >> 32) + mula32(d0, key->n[i], c[i]);
 		c[i - 1] = (uint32_t)B;
 	}
 
