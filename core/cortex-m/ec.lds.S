@@ -30,7 +30,7 @@ ENTRY(reset)
 MEMORY
 {
 #if !defined(CONFIG_FLASH_PHYSICAL)
-    IROM (rx) : ORIGIN = CONFIG_ROM_BASE, LENGTH = CONFIG_ROM_SIZE
+    IRAM (rwx)  : ORIGIN = CONFIG_RAM_BASE, LENGTH = CONFIG_RAM_SIZE
 #else
 #if defined(SECTION_IS_RO) && defined(NPCX_RO_HEADER)
     /*
@@ -49,8 +49,8 @@ MEMORY
     SHARED_LIB (rx) : ORIGIN = FW_OFF(SHAREDLIB), \
               LENGTH = FW_SIZE(SHAREDLIB)
 #endif
+    IRAM (rw)  : ORIGIN = CONFIG_RAM_BASE, LENGTH = CONFIG_RAM_SIZE
 #endif /* !CONFIG_FLASH_PHYSICAL */
-    IRAM (rw) : ORIGIN = CONFIG_RAM_BASE, LENGTH = CONFIG_RAM_SIZE
 
 #ifdef CONFIG_EXTERNAL_STORAGE
     CDRAM (rx) : \
@@ -150,7 +150,7 @@ SECTIONS
     } > CDRAM AT > FLASH
 #else
 #if !defined(CONFIG_FLASH_PHYSICAL)
-    } > IROM
+    } > IRAM
 #else
     } > FLASH
 #endif /* !CONFIG_FLASH_PHYSICAL */
@@ -297,7 +297,7 @@ SECTIONS
 
         . = ALIGN(4);
 #if !defined(CONFIG_FLASH_PHYSICAL)
-    } > IROM
+    } > IRAM
 #define DATA_LMA_MEM_REGION IROM
 #elif defined(CONFIG_EXTERNAL_STORAGE)
     } > CDRAM AT > FLASH
@@ -309,7 +309,23 @@ SECTIONS
 
     __data_lma_start = .;
 
+#if !defined(CONFIG_FLASH_PHYSICAL)
+    /*
+     * Make a space for .data section's LMA. Otherwise, ld won't preserve
+     * a space for .data if .rodata and .bss sections are both in IRAM.
+     */
+#if defined(__clang__)
+     /*
+      * The lazy evaluation timing of symbols and builtin functions of ld and
+      * lld are different.
+      */
+    .bss __data_lma_start + SIZEOF(.data) : {
+#else
+    .bss __data_lma_start + __data_end - __data_start : {
+#endif  /* __clang__ */
+#else
     .bss : {
+#endif /* !CONFIG_FLASH_PHYSICAL */
         /*
          * Align to 512 bytes. This is convenient when some memory block
          * needs big alignment. This is the beginning of the RAM,
