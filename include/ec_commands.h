@@ -5581,7 +5581,6 @@ struct ec_params_set_cbi {
 #define EC_RESET_FLAG_RDD         BIT(15)  /* USB Type-C debug cable */
 #define EC_RESET_FLAG_RBOX        BIT(16)  /* Fixed Reset Functionality */
 #define EC_RESET_FLAG_SECURITY    BIT(17)  /* Security threat */
-#define EC_RESET_FLAG_AP_WATCHDOG BIT(18)  /* AP experienced a watchdog reset */
 
 struct ec_response_uptime_info {
 	/*
