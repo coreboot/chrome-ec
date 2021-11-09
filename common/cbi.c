@@ -282,6 +282,18 @@ int cbi_get_model_id(uint32_t *id)
 	uint8_t size = sizeof(*id);
 	return cbi_get_board_info(CBI_TAG_MODEL_ID, (uint8_t *)id, &size);
 }
+/*
+ * For backward compatibility. New code should use cbi_get_board_version.
+ */
+int board_get_version(void)
+{
+	uint32_t ver;
+	uint8_t size = sizeof(ver);
+
+	if (cbi_get_board_info(CBI_TAG_BOARD_VERSION, (uint8_t *)&ver, &size))
+		return -1;
+	return ver;
+}
 
 static enum ec_status hc_cbi_get(struct host_cmd_handler_args *args)
 {

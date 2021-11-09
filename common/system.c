@@ -8,7 +8,6 @@
 #include "common.h"
 #include "console.h"
 #include "cpu.h"
-#include "cros_board_info.h"
 #include "dma.h"
 #include "flash.h"
 #include "gpio.h"
@@ -728,32 +727,24 @@ int system_get_image_used(enum system_image_copy_t copy)
 	return data ? MAX((int)data->size, 0) : 0;
 }
 
-/*
- * Returns positive board version if successfully retrieved. Otherwise the
- * value is a negative version of an EC return code. Without this optimization
- * multiple boards run out of flash size.
- */
 int system_get_board_version(void)
 {
-#if defined(CONFIG_BOARD_VERSION_CUSTOM)
-	return board_get_version();
-#elif defined(CONFIG_BOARD_VERSION_GPIO)
-	return
-		(!!gpio_get_level(GPIO_BOARD_VERSION1) << 0) |
-		(!!gpio_get_level(GPIO_BOARD_VERSION2) << 1) |
-		(!!gpio_get_level(GPIO_BOARD_VERSION3) << 2);
-#elif defined(CONFIG_BOARD_VERSION_CBI)
-	int error;
-	int32_t version;
+	int v = 0;
 
-	error = cbi_get_board_version(&version);
-	if (error)
-		return -error;
-	else
-		return version;
+#ifdef CONFIG_BOARD_VERSION
+#ifdef CONFIG_BOARD_SPECIFIC_VERSION
+	v = board_get_version();
 #else
-	return 0;
+	if (gpio_get_level(GPIO_BOARD_VERSION1))
+		v |= 0x01;
+	if (gpio_get_level(GPIO_BOARD_VERSION2))
+		v |= 0x02;
+	if (gpio_get_level(GPIO_BOARD_VERSION3))
+		v |= 0x04;
 #endif
+#endif
+
+	return v;
 }
 
 __attribute__((weak))	   /* Weird chips may need their own implementations */
@@ -1060,17 +1051,9 @@ static void print_build_string(void)
 
 static int command_version(int argc, char **argv)
 {
-	int board_version;
-
 	ccprintf("Chip:    %s %s %s\n", system_get_chip_vendor(),
 		 system_get_chip_name(), system_get_chip_revision());
-
-	board_version = system_get_board_version();
-	if (board_version < 0)
-		ccprintf("Board:   Error %d\n", -board_version);
-	else
-		ccprintf("Board:   %d\n", board_version);
-
+	ccprintf("Board:   %d\n", system_get_board_version());
 #ifdef CHIP_HAS_RO_B
 	{
 		enum system_image_copy_t active;
@@ -1387,15 +1370,9 @@ enum ec_status
 host_command_get_board_version(struct host_cmd_handler_args *args)
 {
 	struct ec_response_board_version *r = args->response;
-	int board_version;
 
-	board_version = system_get_board_version();
-	if (board_version < 0) {
-		CPRINTS("Failed (%d) getting board version", -board_version);
-		return EC_RES_ERROR;
-	}
+	r->board_version = (uint16_t) system_get_board_version();
 
-	r->board_version = board_version;
 	args->response_size = sizeof(*r);
 
 	return EC_RES_SUCCESS;
