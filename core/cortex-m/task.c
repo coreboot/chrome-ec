@@ -51,12 +51,8 @@ static const char * const task_names[] = {
 
 #ifdef CONFIG_TASK_PROFILING
 static uint64_t task_start_time; /* Time task scheduling started */
-/*
- * We only keep 32-bit values for exception start/end time, to avoid
- * accounting errors when we service interrupt when the timer wraps around.
- */
-static uint32_t exc_start_time;  /* Time of task->exception transition */
-static uint32_t exc_end_time;    /* Time of exception->task transition */
+static uint64_t exc_start_time;  /* Time of task->exception transition */
+static uint64_t exc_end_time;    /* Time of exception->task transition */
 static uint64_t exc_total_time;  /* Total time in exceptions */
 static uint32_t svc_calls;       /* Number of service calls */
 static uint32_t task_switches;   /* Number of times active task changed */
@@ -272,7 +268,7 @@ void svc_handler(int desched, task_id_t resched)
 	task_ *current, *next;
 #ifdef CONFIG_TASK_PROFILING
 	int exc = get_interrupt_context();
-	uint32_t t;
+	uint64_t t;
 #endif
 
 	/*
@@ -288,7 +284,7 @@ void svc_handler(int desched, task_id_t resched)
 	 * start time explicitly.
 	 */
 	if (exc == 0xb) {
-		exc_start_time = get_time().le.lo;
+		exc_start_time = get_time().val;
 		svc_calls++;
 	}
 #endif
@@ -320,7 +316,7 @@ void svc_handler(int desched, task_id_t resched)
 
 #ifdef CONFIG_TASK_PROFILING
 	/* Track time in interrupts */
-	t = get_time().le.lo;
+	t = get_time().val;
 	exc_total_time += (t - exc_start_time);
 
 	/*
@@ -364,7 +360,7 @@ void __keep task_start_irq_handler(void *excep_return)
 	 * Get time before checking depth, in case this handler is
 	 * pre-empted.
 	 */
-	uint32_t t = get_time().le.lo;
+	uint64_t t = get_time().val;
 	int irq = get_interrupt_context() - 16;
 
 	/*
@@ -1018,10 +1014,7 @@ void task_clear_fp_used(void)
 int task_start(void)
 {
 #ifdef CONFIG_TASK_PROFILING
-	timestamp_t t = get_time();
-
-	task_start_time = t.val;
-	exc_end_time = t.le.lo;
+	task_start_time = exc_end_time = get_time().val;
 #endif
 	start_called = 1;
 
