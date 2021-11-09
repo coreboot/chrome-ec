@@ -277,12 +277,6 @@
 #undef CONFIG_AP_WARM_RESET_INTERRUPT
 
 /*
- * Enable support for CPU caches behaving according to the ARMv7-M ISA.
- * (so far, only the Cortex-M7 has such caches)
- */
-#undef CONFIG_ARMV7M_CACHE
-
-/*
  * Defined if core/ code provides assembly optimized implementation of
  * multiply-accumulate operations (32-bit operands, 64-bit result), for the
  * cores that lack native instructions.

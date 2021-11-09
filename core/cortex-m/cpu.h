@@ -42,8 +42,6 @@ enum {
 	CPU_NVIC_MMFS_BFARVALID		= BIT(15),
 	CPU_NVIC_MMFS_MFARVALID		= BIT(7),
 
-	CPU_NVIC_CCR_ICACHE		= BIT(17),
-	CPU_NVIC_CCR_DCACHE		= BIT(16),
 	CPU_NVIC_CCR_DIV_0_TRAP		= BIT(4),
 	CPU_NVIC_CCR_UNALIGN_TRAP	= BIT(3),
 
@@ -56,16 +54,8 @@ enum {
 	CPU_NVIC_SHCSR_USGFAULTENA	= BIT(18),
 };
 
-/* System Control Block: cache registers */
-#define CPU_SCB_CCSIDR         CPUREG(0xe000ed80)
-#define CPU_SCB_CCSELR         CPUREG(0xe000ed84)
-#define CPU_SCB_ICIALLU        CPUREG(0xe000ef50)
-#define CPU_SCB_DCISW          CPUREG(0xe000ef60)
-
 /* Set up the cpu to detect faults */
 void cpu_init(void);
-/* Enable the CPU instruction cache if it is not already enabled */
-void cpu_enable_icache(void);
 
 /* Invalidate a single address of the D-cache */
 void cpu_invalidate_dcache_address(uintptr_t address);
