@@ -91,20 +91,6 @@
 #define UNIMPLEMENTED(name)
 #endif
 
-/**
- * @def UNUSED
- * @brief The UNUSED macro is used to define a pin as unused.
- *
- * This allows the chip specific code to provision these pins for
- * the lowest power state.
- * We don't want to automatically provision all unreferenced pins/ports
- * as unused, since this may alter the behavior of existing firmwares in
- * ways that may not be obvious to the developer.
- */
-#ifndef UNUSED
-#define UNUSED(pin)
-#endif
-
 /*
  * RO/RW pin macro.
  *
@@ -123,8 +109,6 @@
 #define ALTERNATE_RW(pinmask, function, module, flags)
 #define UNIMPLEMENTED_RO(name) UNIMPLEMENTED(name)
 #define UNIMPLEMENTED_RW(name)
-#define UNUSED_RO(name) UNUSED(name)
-#define UNUSED_RW(name)
 #elif defined(SECTION_IS_RW)
 #define GPIO_RO(name, pin, flags)
 #define GPIO_RW(name, pin, flags) GPIO(name, pin, flags)
@@ -135,8 +119,6 @@
 		ALTERNATE(pinmask, function, module, flags)
 #define UNIMPLEMENTED_RO(name)
 #define UNIMPLEMENTED_RW(name) UNIMPLEMENTED(name)
-#define UNUSED_RO(name)
-#define UNUSED_RW(name) UNUSED(name)
 #else
 #define GPIO_RO(name, pin, flags) GPIO(name, pin, flags)
 #define GPIO_RW(name, pin, flags) GPIO(name, pin, flags)
@@ -148,8 +130,6 @@
 		ALTERNATE(pinmask, function, module, flags)
 #define UNIMPLEMENTED_RO(name) UNIMPLEMENTED(name)
 #define UNIMPLEMENTED_RW(name) UNIMPLEMENTED(name)
-#define UNUSED_RO(name) UNUSED(name)
-#define UNUSED_RW(name) UNUSED(name)
 #endif
 
 #ifndef IOEX
@@ -164,8 +144,6 @@
 
 /*
  * Once the gpio.inc file has been included these macros are no longer needed.
- * This allows the includer to redefine these macros and include this file
- * again, within the same file.
  */
 #undef GPIO
 #undef GPIO_RO
@@ -179,9 +157,6 @@
 #undef UNIMPLEMENTED
 #undef UNIMPLEMENTED_RO
 #undef UNIMPLEMENTED_RW
-#undef UNUSED
-#undef UNUSED_RO
-#undef UNUSED_RW
 
 #undef IOEX
 #undef IOEX_INT
