@@ -37,9 +37,6 @@
 #define GPIO_HIB_WAKE_LOW     BIT(20) /* Hibernate wake on low level */
 #define GPIO_HIB_WAKE_RISING  BIT(21) /* Hibernate wake on rising edge */
 #define GPIO_HIB_WAKE_FALLING BIT(22) /* Hibernate wake on falling edge */
-#ifdef CONFIG_GPIO_POWER_DOWN
-#define GPIO_POWER_DOWN    BIT(23) /* Pin and pad is powered off */
-#endif
 
 /* Common flag combinations */
 #define GPIO_OUT_LOW        (GPIO_OUTPUT | GPIO_LOW)
@@ -279,16 +276,6 @@ void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags);
  *			GPIOs for normal GPIO operation.
  */
 void gpio_set_alternate_function(uint32_t port, uint32_t mask, int func);
-
-#ifdef CONFIG_GPIO_POWER_DOWN
-/**
- * Power down all GPIO pins in a module.
- *
- * @param id		Module ID to initialize
- * @return EC_SUCCESS, or non-zero if module_id is not found.
- */
-int gpio_power_down_module(enum module_id id);
-#endif
 
 /**
  * Configure a GPIO as wake source on a given condition and enable it, or
