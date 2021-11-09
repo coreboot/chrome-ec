@@ -403,7 +403,7 @@ void system_disable_jump(void)
 			return;
 		}
 
-#if defined(CONFIG_EXTERNAL_STORAGE) || !defined(CONFIG_FLASH_PHYSICAL)
+#ifdef CONFIG_EXTERNAL_STORAGE
 		/*
 		 * Protect code RAM from being overwritten
 		 */
