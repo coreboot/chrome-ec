@@ -284,8 +284,3 @@ get_ap_reset_stats(struct ap_reset_log_entry *reset_log_entries,
 #endif /* !CONFIG_CMD_AP_RESET_LOG */
 
 #endif  /* __CROS_EC_CHIPSET_H */
-
-/**
- * Initialize reset logs and next reset log.
- */
-void init_reset_log(void);
