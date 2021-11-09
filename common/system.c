@@ -1549,27 +1549,33 @@ int system_can_boot_ap(void)
 
 #ifdef CONFIG_SERIALNO_LEN
 /* By default, read serial number from flash, can be overridden. */
-__overridable const char *board_read_serial(void)
+#if defined(CONFIG_FLASH_PSTATE) && defined(CONFIG_FLASH_PSTATE_BANK)
+__attribute__((weak))
+const char *board_read_serial(void)
 {
-	if (IS_ENABLED(CONFIG_FLASH_PSTATE) &&
-	    IS_ENABLED(CONFIG_FLASH_PSTATE_BANK))
-		return flash_read_pstate_serial();
-	else if (IS_ENABLED(CONFIG_OTP))
-		return otp_read_serial();
-	else
-		return "";
+	return flash_read_pstate_serial();
 }
+#elif defined(CONFIG_OTP)
+__attribute__((weak))
+const char *board_read_serial(void)
+{
+	return otp_read_serial();
+}
+#endif
 
-__overridable int board_write_serial(const char *serialno)
+#if defined(CONFIG_FLASH_PSTATE) && defined(CONFIG_FLASH_PSTATE_BANK)
+__attribute__((weak))
+int board_write_serial(const char *serialno)
 {
-	if (IS_ENABLED(CONFIG_FLASH_PSTATE) &&
-	    IS_ENABLED(CONFIG_FLASH_PSTATE_BANK))
-		return flash_write_pstate_serial(serialno);
-	else if (IS_ENABLED(CONFIG_OTP))
-		return otp_write_serial(serialno);
-	else
-		return EC_ERROR_UNIMPLEMENTED;
+	return flash_write_pstate_serial(serialno);
 }
+#elif defined(CONFIG_OTP)
+__attribute__((weak))
+int board_write_serial(const char *serialno)
+{
+	return otp_write_serial(serialno);
+}
+#endif
 #endif  /* CONFIG_SERIALNO_LEN */
 
 
