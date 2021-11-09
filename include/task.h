@@ -229,18 +229,6 @@ void task_clear_fp_used(void);
 void task_enable_all_tasks(void);
 
 /**
- * Enable a task.
- */
-void task_enable_task(task_id_t tskid);
-
-/**
- * Disable a task.
- *
- * If the task disable itself, this will cause an immediate reschedule.
- */
-void task_disable_task(task_id_t tskid);
-
-/**
  * Enable an interrupt.
  */
 void task_enable_irq(int irq);
