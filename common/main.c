@@ -7,7 +7,6 @@
 
 #include "board_config.h"
 #include "button.h"
-#include "chipset.h"
 #include "clock.h"
 #include "common.h"
 #include "console.h"
@@ -169,11 +168,6 @@ test_mockable __keep int main(void)
 #endif /* defined(CONFIG_DEDICATED_RECOVERY_BUTTON | CONFIG_VOLUME_BUTTONS) */
 
 #if defined(CONFIG_VBOOT_EFS)
-	/*
-	 * Execute PMIC reset in case we're here after watchdog reset to unwedge
-	 * AP. This has to be done here because vboot_main may jump to RW.
-	 */
-	chipset_handle_reboot();
 	/*
 	 * For RO, it behaves as follows:
 	 *   In recovery, it enables PD communication and returns.
