@@ -90,8 +90,13 @@ enum panic_arch {
 	PANIC_ARCH_X86 = 3,          /* Intel x86 */
 };
 
-/* Use PANIC_DATA_PTR to refer to the persistent storage location */
-#define PANIC_DATA_PTR ((struct panic_data *)CONFIG_PANIC_DATA_BASE)
+/*
+ * Panic data goes at the end of RAM.  This is safe because we don't context
+ * switch away from the panic handler before rebooting, and stacks and data
+ * start at the beginning of RAM.
+ */
+#define PANIC_DATA_PTR ((struct panic_data *)\
+	(CONFIG_RAM_BASE + CONFIG_RAM_SIZE - sizeof(struct panic_data)))
 
 /* Flags for panic_data.flags */
 /* panic_data.frame is valid */
