@@ -63,9 +63,8 @@ cmd_obj_to_bin ?= $(OBJCOPY) --gap-fill=0xff -O binary $^ $(out)/$*.bin.tmp
 cmd_flat_to_obj = $(CC) -Wl,-T $(out)/firmware_image.lds -nostdlib $(CFLAGS) \
                   -Wl,--build-id=none -o $@ $<
 # Allow the .roshared section to overlap other sections (itself)
-cmd_ec_elf_to_flat ?= $(OBJCOPY) --set-section-flags .roshared=share -R .dram \
+cmd_ec_elf_to_flat ?= $(OBJCOPY) --set-section-flags .roshared=share \
 				-O binary $< $@
-cmd_ec_elf_to_flat_dram ?= $(OBJCOPY) -j .dram -O binary $< $@
 cmd_elf_to_signed ?= $(SIGNER) --key=util/signer/$(3) \
 	--b --input=$< --format=bin --output=$@.signed $(SIGNER_EXTRAS) \
 	&& sudo chown $(shell whoami) $@.signed && mv $@.signed $@
@@ -412,8 +411,6 @@ flat-$(CONFIG_FW_INCLUDE_RO) += $(out)/RO/$(PROJECT).RO.flat
 
 deps += $(out)/firmware_image.lds.d $(flat-y:%.flat=%.lds.d)
 
-flat-$(CONFIG_DRAM_BASE) += $(out)/RW/$(PROJECT).RW.flat.dram
-
 flat-$(CONFIG_RWSIG_TYPE_RWSIG) += $(out)/key.vbpubk2
 flat-$(CONFIG_RWSIG_TYPE_RWSIG) += $(out)/RW/$(PROJECT).RW.flat.sig
 
@@ -441,9 +438,6 @@ $(out)/RW/%.hex: $(out)/RW/%.elf$(rw_elf_ext) $(out)/RW/%.smap
 ifeq ($(SIGNED_IMAGES),)
 $(out)/%.flat: $(out)/%.elf $(out)/%.smap $(build-utils)
 	$(call quiet,ec_elf_to_flat,OBJCOPY)
-
-$(out)/%.flat.dram: $(out)/%.elf $(out)/%.smap $(build-utils)
-	$(call quiet,ec_elf_to_flat_dram,OBJCOPY)
 
 $(out)/RO/%.hex: $(out)/RO/%.elf $(out)/RO/%.smap
 	$(call quiet,elf_to_hex,OBJCOPY)
