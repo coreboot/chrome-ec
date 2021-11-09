@@ -16,9 +16,6 @@
 /* Tasks may use the bits in TASK_EVENT_CUSTOM_BIT for their own events */
 #define TASK_EVENT_CUSTOM_BIT(x) BUILD_CHECK_INLINE(BIT(x), BIT(x) & 0x0ffff)
 
-/* Used to signal that sysjump preparation has completed */
-#define TASK_EVENT_SYSJUMP_READY BIT(16)
-
 /* Used to signal that IPC layer is available for sending new data */
 #define TASK_EVENT_IPC_READY	BIT(17)
 
