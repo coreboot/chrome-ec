@@ -667,7 +667,8 @@ uint32_t flash_get_rw_offset(enum system_image_copy_t copy)
 	return CONFIG_EC_PROTECTED_STORAGE_OFF + CONFIG_RO_STORAGE_OFF;
 }
 
-const struct image_data *system_get_image_data(enum system_image_copy_t copy)
+static const struct image_data *system_get_image_data(
+					enum system_image_copy_t copy)
 {
 	static struct image_data data;
 

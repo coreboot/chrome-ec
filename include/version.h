@@ -9,7 +9,6 @@
 #define __CROS_EC_VERSION_H
 
 #include "common.h"
-#include "system.h"
 
 #define CROS_EC_IMAGE_DATA_COOKIE1 0xce778899
 #define CROS_EC_IMAGE_DATA_COOKIE2 0xceaabbdd
@@ -28,9 +27,7 @@ extern const char __image_data_offset[];
 extern const void *__image_size;
 
 /**
- * Get the number of commits of an image
- *
- * @return Number of commits in integer or 0 on error
+ * Get the number of commits field from version string.
  */
-int ver_get_num_commits(enum system_image_copy_t copy);
+uint32_t ver_get_numcommits(void);
 #endif  /* __CROS_EC_VERSION_H */
