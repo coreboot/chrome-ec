@@ -110,10 +110,5 @@ extern const void *__data_end;
 #else
 #define __SECTION(name)
 #endif /* CONFIG_MEMORY_REGIONS */
-#ifdef CONFIG_CHIP_UNCACHED_REGION
-#define __uncached __SECTION(CONFIG_CHIP_UNCACHED_REGION)
-#else
-#define __uncached
-#endif
 
 #endif /* __CROS_EC_LINK_DEFS_H */
