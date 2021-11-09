@@ -68,7 +68,6 @@ int atoi(const char *nptr);
 int isdigit(int c);
 int isspace(int c);
 int isalpha(int c);
-int isupper(int c);
 int isprint(int c);
 int memcmp(const void *s1, const void *s2, size_t len);
 void *memcpy(void *dest, const void *src, size_t len);
