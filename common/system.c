@@ -814,7 +814,7 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 	case EC_REBOOT_JUMP_RO:
 		return system_run_image_copy(SYSTEM_IMAGE_RO);
 	case EC_REBOOT_JUMP_RW:
-		return system_run_image_copy(system_get_active_copy());
+		return system_run_image_copy(SYSTEM_IMAGE_RW);
 	case EC_REBOOT_COLD:
 		cflush();
 		system_reset(SYSTEM_RESET_HARD);
