@@ -1082,16 +1082,12 @@ DECLARE_HOST_COMMAND(EC_CMD_I2C_LOOKUP, i2c_command_lookup, EC_VER_MASK(0));
 /* If the params union expands in the future, need to bump EC_VER_MASK */
 BUILD_ASSERT(sizeof(struct ec_params_i2c_lookup) == 4);
 
-static void i2c_passthru_protect_port(uint32_t port)
+void i2c_passthru_protect_port(uint32_t port)
 {
 	if (port < I2C_PORT_COUNT)
 		port_protected[port] = 1;
 	else
 		PTHRUPRINTS("Invalid I2C port %d to be protected\n", port);
-}
-
-static void i2c_passthru_protect_tcpc_ports(void)
-{
 }
 
 static enum ec_status
@@ -1123,10 +1119,6 @@ i2c_command_passthru_protect(struct host_cmd_handler_args *args)
 		args->response_size = sizeof(*resp);
 	} else if (params->subcmd == EC_CMD_I2C_PASSTHRU_PROTECT_ENABLE) {
 		i2c_passthru_protect_port(params->port);
-	} else if (params->subcmd == EC_CMD_I2C_PASSTHRU_PROTECT_ENABLE_TCPCS) {
-		if (IS_ENABLED(CONFIG_USB_POWER_DELIVERY) &&
-				!IS_ENABLED(CONFIG_USB_PD_TCPM_STUB))
-			i2c_passthru_protect_tcpc_ports();
 	} else {
 		return EC_RES_INVALID_COMMAND;
 	}

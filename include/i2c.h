@@ -531,4 +531,9 @@ void i2c_trace_notify(int port, uint16_t periph_addr_flags,
  */
 void i2cp_sda_isr(enum gpio_signal signal);
 
+/**
+ * Function to protect I2C port/tunnel. This is invoked either when through
+ * host command or when sys_jump is disabld.
+ */
+void i2c_passthru_protect_port(uint32_t port);
 #endif  /* __CROS_EC_I2C_H */
