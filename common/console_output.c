@@ -10,7 +10,6 @@
 #include "usb_console.h"
 #include "util.h"
 
-#ifdef CONFIG_CONSOLE_CHANNEL
 /* Default to all channels active */
 #ifndef CC_DEFAULT
 #define CC_DEFAULT CC_ALL
@@ -46,7 +45,6 @@ static const char * const channel_names[] = {
 BUILD_ASSERT(ARRAY_SIZE(channel_names) == CC_CHANNEL_COUNT);
 /* ensure that we are not silently masking additional channels */
 BUILD_ASSERT(CC_CHANNEL_COUNT <= 8*sizeof(uint32_t));
-#endif /* CONFIG_CONSOLE_CHANNEL */
 
 #ifndef CONFIG_EXTRACT_PRINTF_STRINGS
 
@@ -57,11 +55,9 @@ int cputs(enum console_channel channel, const char *outstr)
 {
 	int rv1, rv2;
 
-#ifdef CONFIG_CONSOLE_CHANNEL
 	/* Filter out inactive channels */
 	if (!(CC_MASK(channel) & channel_mask))
 		return EC_SUCCESS;
-#endif
 
 	rv1 = usb_puts(outstr);
 	rv2 = uart_puts(outstr);
@@ -74,11 +70,9 @@ int cprintf(enum console_channel channel, const char *format, ...)
 	int rv1, rv2;
 	va_list args;
 
-#ifdef CONFIG_CONSOLE_CHANNEL
 	/* Filter out inactive channels */
 	if (!(CC_MASK(channel) & channel_mask))
 		return EC_SUCCESS;
-#endif
 
 	usb_va_start(args, format);
 	rv1 = usb_vprintf(format, args);
@@ -96,11 +90,9 @@ int cprints(enum console_channel channel, const char *format, ...)
 	int r, rv;
 	va_list args;
 
-#ifdef CONFIG_CONSOLE_CHANNEL
 	/* Filter out inactive channels */
 	if (!(CC_MASK(channel) & channel_mask))
 		return EC_SUCCESS;
-#endif
 
 	rv = cprintf(channel, "[%pT ", PRINTF_TIMESTAMP_NOW);
 
@@ -129,7 +121,6 @@ void cflush(void)
 /*****************************************************************************/
 /* Console commands */
 
-#ifdef CONFIG_CONSOLE_CHANNEL
 /* Set active channels */
 static int command_ch(int argc, char **argv)
 {
@@ -172,4 +163,3 @@ static int command_ch(int argc, char **argv)
 DECLARE_SAFE_CONSOLE_COMMAND(chan, command_ch,
 			     "[ save | restore | <mask> ]",
 			     "Save, restore, get or set console channel mask");
-#endif /* CONFIG_CONSOLE_CHANNEL */
