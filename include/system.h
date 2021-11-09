@@ -48,14 +48,6 @@ void system_pre_init(void);
 void system_common_pre_init(void);
 
 /**
- * Set up flags that should be saved to battery backed RAM.
- *
- * @param reset_flags - flags passed into system_reset
- * @param *save_flags - flags to be saved in battery backed RAM
- */
-void system_encode_save_flags(int reset_flags, uint32_t *save_flags);
-
-/**
  * Get the reset flags.
  *
  * @return Reset flags (EC_RESET_FLAG_*), or 0 if the cause is unknown.
@@ -249,10 +241,6 @@ const char *system_get_build_info(void);
  * Indicate that this was a manually triggered reset.
  */
 #define SYSTEM_RESET_MANUALLY_TRIGGERED BIT(3)
-/*
- * Wait for reset pin to be driven, rather that resetting ourselves.
- */
-#define SYSTEM_RESET_WAIT_EXT           BIT(4)
 
 /**
  * Reset the system.
