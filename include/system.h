@@ -412,7 +412,6 @@ enum {
 	SLEEP_MASK_PHYSICAL_PRESENCE  = BIT(11), /* Physical presence
 						    * detection ongoing */
 	SLEEP_MASK_PLL        = BIT(12), /* High-speed PLL in-use */
-	SLEEP_MASK_ADC        = BIT(13), /* ADC conversion ongoing */
 	SLEEP_MASK_FORCE_NO_DSLEEP    = BIT(15), /* Force disable. */
 
 
