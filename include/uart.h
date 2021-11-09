@@ -303,38 +303,6 @@ int uart_alt_pad_write_read(uint8_t *tx, int tx_len, uint8_t *rx, int rx_len,
  */
 void uart_default_pad_rx_interrupt(enum gpio_signal signal);
 
-/**
- * Prepare for following `uart_console_read_buffer()` call.  It will create a
- * snapshot of current uart buffer.
- *
- * @return result status (EC_RES_*)
- */
-enum ec_status uart_console_read_buffer_init(void);
-
-/**
- * Read from uart buffer.
- *
- * `uart_console_read_buffer_init()` must be called first.
- *
- * If `type` is CONSOLE_READ_NEXT, this will return data starting from the
- * beginning of the last snapshot created by `uart_console_read_buffer_init()`.
- *
- * If `type` is CONSOLE_READ_RECENT, this will start from the end of the
- * previous snapshot (so if current snapshot and previous snapshot has overlaps,
- * only new content will be returned).
- *
- * @param type		an ec_console_read_subcmd value.
- * @param dest		output buffer, it will be a null-terminated string.
- * @param dest_size	size of output buffer.
- * @param write_count	number of bytes written (including '\0').
- *
- * @return result status (EC_RES_*)
- */
-int uart_console_read_buffer(uint8_t type,
-			     char *dest,
-			     uint16_t dest_size,
-			     uint16_t *write_count);
-
 /* Return the size of the free room in the UART TX circular buffer. */
 size_t uart_buffer_room(void);
 
