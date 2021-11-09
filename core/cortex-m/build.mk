@@ -37,7 +37,6 @@ endif
 core-y=cpu.o init.o ldivmod.o llsr.o uldivmod.o vecttable.o
 core-$(CONFIG_AES)+=aes.o
 core-$(CONFIG_AES_GCM)+=ghash.o
-core-$(CONFIG_ARMV7M_CACHE)+=cache.o
 core-$(CONFIG_COMMON_PANIC_OUTPUT)+=panic.o
 core-$(CONFIG_COMMON_RUNTIME)+=switch.o task.o
 core-$(CONFIG_WATCHDOG)+=watchdog.o
