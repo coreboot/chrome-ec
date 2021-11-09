@@ -18,6 +18,7 @@ struct queue_policy const queue_policy_null = {
 
 void queue_init(struct queue const *q)
 {
+	ASSERT(POWER_OF_TWO(q->buffer_units));
 	ASSERT(q->policy);
 	ASSERT(q->policy->add);
 	ASSERT(q->policy->remove);
