@@ -53,8 +53,7 @@ test_mockable __keep int main(void)
 		 * reset logs because we need to verify if the values remain
 		 * the same after every EC reset.
 		 */
-		if (IS_ENABLED(CONFIG_CMD_AP_RESET_LOG))
-			init_reset_log();
+		init_reset_log();
 	}
 
 	/*
