@@ -309,18 +309,6 @@ __stdlib_compat int atoi(const char *nptr)
 	return neg ? -result : result;
 }
 
-static int find_base(int base, int *c, const char **nptr) {
-	if ((base == 0 || base == 16) && *c == '0'
-	    && (**nptr == 'x' || **nptr == 'X')) {
-		*c = (*nptr)[1];
-		(*nptr) += 2;
-		base = 16;
-	} else if (base == 0) {
-		base = *c == '0' ? 8 : 10;
-	}
-	return base;
-}
-
 
 /* Like strtol(), but for integers */
 __stdlib_compat int strtoi(const char *nptr, char **endptr, int base)
@@ -329,17 +317,23 @@ __stdlib_compat int strtoi(const char *nptr, char **endptr, int base)
 	int neg = 0;
 	int c = '\0';
 
+	if (endptr)
+		*endptr = (char *)nptr;
+
 	while ((c = *nptr++) && isspace(c))
 		;
 
-	if (c == '+') {
-		c = *nptr++;
-	} else if (c == '-') {
-		neg = 1;
-		c = *nptr++;
+	if (c == '0' && *nptr == 'x') {
+		base = 16;
+		c = nptr[1];
+		nptr += 2;
+	} else if (base == 0) {
+		base = 10;
+		if (c == '-') {
+			neg = 1;
+			c = *nptr++;
+		}
 	}
-
-	base = find_base(base, &c, &nptr);
 
 	while (c) {
 		if (c >= '0' && c < '0' + MIN(base, 10))
@@ -351,11 +345,11 @@ __stdlib_compat int strtoi(const char *nptr, char **endptr, int base)
 		else
 			break;
 
+		if (endptr)
+			*endptr = (char *)nptr;
 		c = *nptr++;
 	}
 
-	if (endptr)
-		*endptr = (char *)nptr - 1;
 	return neg ? -result : result;
 }
 
@@ -364,18 +358,21 @@ __stdlib_compat uint64_t strtoul(const char *nptr, char **endptr, int base)
 	uint64_t result = 0;
 	int c = '\0';
 
+	if (endptr)
+		*endptr = (char *)nptr;
+
 	while ((c = *nptr++) && isspace(c))
 		;
 
-	if (c == '+') {
-		c = *nptr++;
-	} else if (c == '-') {
-		if (endptr)
-			*endptr = (char *)nptr - 1;
-		return result;
+	if (c == '0' && *nptr == 'x') {
+		base = 16;
+		c = nptr[1];
+		nptr += 2;
+	} else if (base == 0) {
+		base = 10;
+		if (c == '-')
+			return result;
 	}
-	
-	base = find_base(base, &c, &nptr);
 
 	while (c) {
 		if (c >= '0' && c < '0' + MIN(base, 10))
@@ -387,11 +384,11 @@ __stdlib_compat uint64_t strtoul(const char *nptr, char **endptr, int base)
 		else
 			break;
 
+		if (endptr)
+			*endptr = (char *)nptr;
 		c = *nptr++;
 	}
 
-	if (endptr)
-		*endptr = (char *)nptr - 1;
 	return result;
 }
 
