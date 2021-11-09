@@ -190,7 +190,7 @@ host_event_t __attribute__((weak)) lpc_override_always_report_mask(void)
 	return LPC_HOST_EVENT_ALWAYS_REPORT_DEFAULT_MASK;
 }
 
-void lpc_init_mask(void)
+static void lpc_init_mask(void)
 {
 	/*
 	 * First check if masks were stashed before sysjump. If no masks were
@@ -201,6 +201,11 @@ void lpc_init_mask(void)
 		lpc_host_event_mask[LPC_HOST_EVENT_ALWAYS_REPORT] =
 			lpc_override_always_report_mask();
 }
+/*
+ * This hook is required to run before chip gets to initialize LPC because
+ * update host events will need the masks to be correctly restored.
+ */
+DECLARE_HOOK(HOOK_INIT, lpc_init_mask, HOOK_PRIO_INIT_LPC - 1);
 
 void lpc_s3_resume_clear_masks(void)
 {
