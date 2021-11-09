@@ -4,7 +4,6 @@
  */
 
 /* System module for Chrome EC : common functions */
-#include "chipset.h"
 #include "clock.h"
 #include "common.h"
 #include "console.h"
@@ -99,11 +98,6 @@ static int jumped_to_image;
 static int disable_jump;  /* Disable ALL jumps if system is locked */
 static int force_locked;  /* Force system locked even if WP isn't enabled */
 static enum ec_reboot_cmd reboot_at_shutdown;
-
-#ifdef CONFIG_HIBERNATE
-static uint32_t hibernate_seconds;
-static uint32_t hibernate_microseconds;
-#endif
 
 /* On-going actions preventing going into deep-sleep mode */
 uint32_t sleep_mask;
@@ -894,7 +888,7 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 		/* Intentional fall-through */
 	case EC_REBOOT_HIBERNATE:
 		CPRINTS("system hibernating");
-		system_hibernate(hibernate_seconds, hibernate_microseconds);
+		system_hibernate(0, 0);
 		/* That shouldn't return... */
 		return EC_ERROR_UNKNOWN;
 #endif
@@ -984,20 +978,7 @@ static int command_hibernate(int argc, char **argv)
 	else
 		ccprintf("Hibernating until wake pin asserted.\n");
 
-	/*
-	 * If chipset is already off, then call system_hibernate directly. Else,
-	 * let chipset_task bring down the power rails and transition to proper
-	 * state before system_hibernate is called.
-	 */
-	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		system_hibernate(seconds, microseconds);
-	else {
-		reboot_at_shutdown = EC_REBOOT_HIBERNATE;
-		hibernate_seconds = seconds;
-		hibernate_microseconds = microseconds;
-
-		chipset_force_shutdown(CHIPSET_SHUTDOWN_CONSOLE_CMD);
-	}
+	system_hibernate(seconds, microseconds);
 
 	return EC_SUCCESS;
 }
