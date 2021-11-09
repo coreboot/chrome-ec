@@ -413,7 +413,6 @@ enum {
 						    * detection ongoing */
 	SLEEP_MASK_PLL        = BIT(12), /* High-speed PLL in-use */
 	SLEEP_MASK_ADC        = BIT(13), /* ADC conversion ongoing */
-	SLEEP_MASK_EMMC       = BIT(14), /* eMMC emulation ongoing */
 	SLEEP_MASK_FORCE_NO_DSLEEP    = BIT(15), /* Force disable. */
 
 
