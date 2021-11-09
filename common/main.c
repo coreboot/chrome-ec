@@ -151,7 +151,7 @@ test_mockable __keep int main(void)
 	 * done, lpc always report mask needs to be initialized
 	 * correctly.
 	 */
-#ifdef CONFIG_HOSTCMD_X86
+#ifdef CONFIG_LPC
 	lpc_init_mask();
 #endif
 	if (IS_ENABLED(CONFIG_I2C_CONTROLLER)) {

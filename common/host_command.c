@@ -36,7 +36,7 @@ static struct host_cmd_handler_args *pending_args;
 /* Verify Boot Mode */
 static int g_vboot_mode;
 
-#ifndef CONFIG_HOSTCMD_X86
+#ifndef CONFIG_LPC
 /*
  * Simulated memory map.  Must be word-aligned, because some of the elements
  * in the memory map are words.
@@ -91,7 +91,7 @@ static uint32_t hc_suppressed_cnt[ARRAY_SIZE(hc_suppressed_cmd)];
 
 uint8_t *host_get_memmap(int offset)
 {
-#ifdef CONFIG_HOSTCMD_X86
+#ifdef CONFIG_LPC
 	return lpc_get_memmap_range() + offset;
 #else
 	return host_memmap + offset;
@@ -521,7 +521,7 @@ DECLARE_HOST_COMMAND(EC_CMD_READ_TEST,
 		     host_command_read_test,
 		     EC_VER_MASK(0));
 
-#ifndef CONFIG_HOSTCMD_X86
+#ifndef CONFIG_LPC
 /*
  * Host command to read memory map is not needed on LPC, because LPC can
  * directly map the data to the host's memory space.
