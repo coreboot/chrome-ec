@@ -156,8 +156,8 @@ test_mockable __keep int main(void)
 	button_init();
 #endif /* defined(CONFIG_DEDICATED_RECOVERY_BUTTON | CONFIG_VOLUME_BUTTONS) */
 
-#if !defined(CONFIG_VBOOT_EFS) && \
-	defined(CONFIG_RWSIG) && !defined(HAS_TASK_RWSIG)
+#ifndef CONFIG_VBOOT_EC
+#if defined(CONFIG_RWSIG) && !defined(HAS_TASK_RWSIG)
 	/*
 	 * Check the RW firmware signature and jump to it if it is good.
 	 *
@@ -178,7 +178,8 @@ test_mockable __keep int main(void)
 				rwsig_jump_now();
 		}
 	}
-#endif  /* !CONFIG_VBOOT_EFS && CONFIG_RWSIG && !HAS_TASK_RWSIG */
+#endif
+#endif /* !CONFIG_VBOOT_EC */
 
 	/*
 	 * Print the init time.  Not completely accurate because it can't take
