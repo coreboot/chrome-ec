@@ -115,12 +115,6 @@ SECTIONS
         __ap_ro_root_key_hash_end = . ;
         . = ALIGN(4);
         STRINGIFY(OUTDIR/core/CORE/init.o) (.text)
-#if defined(CHIP_FAMILY_NPCX7) && !defined(CONFIG_HIBERNATE_PSL)
-        /* Keep hibernate utility in last code ram block */
-        . = ALIGN(4);
-        KEEP(*(.after_init))
-        __after_init_end = .;
-#endif
         *(.text*)
 #ifdef CONFIG_EXTERNAL_STORAGE
         . = ALIGN(4);

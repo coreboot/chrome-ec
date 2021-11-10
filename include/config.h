@@ -2038,13 +2038,6 @@
  */
 #define CONFIG_SUPPORT_CHIP_HIBERNATION
 
-/*
- * Use PSL (Power Switch Logic) for hibernating. It turns off VCC power rail
- * for ultra-low power consumption and uses PSL inputs rely on VSBY power rail
- * to wake up ec and the whole system.
- */
-#undef CONFIG_HIBERNATE_PSL
-
 /* Use a hardware specific udelay(). */
 #undef CONFIG_HW_SPECIFIC_UDELAY
 
