@@ -149,14 +149,14 @@ int usb_pdu_valid(struct upgrade_command *cmd_body,  size_t cmd_size)
 					       cmd.block_base);
 
 	/* Check if the block was received properly. */
-	DCRYPTO_SHA1_hash(&cmd_body->block_base,
-			  body_size + sizeof(cmd_body->block_base),
-			  sha1_digest);
-	if (memcmp(sha1_digest, &cmd_body->block_digest,
+	if (DCRYPTO_SHA1_hash(&cmd_body->block_base,
+			      body_size + sizeof(cmd_body->block_base),
+			      sha1_digest) &&
+	    memcmp(sha1_digest, &cmd_body->block_digest,
 		   sizeof(cmd_body->block_digest))) {
-		CPRINTF("%s:%d sha1 %x not equal received %x\n",
-			__func__, __LINE__,
-			*(uint32_t *)sha1_digest, cmd_body->block_digest);
+		CPRINTF("%s:%d sha1 %x not equal received %x\n", __func__,
+			__LINE__, *(uint32_t *)sha1_digest,
+			cmd_body->block_digest);
 		return 0;
 	}
 
