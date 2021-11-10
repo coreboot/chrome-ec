@@ -969,9 +969,13 @@ static int command_sysjump(int argc, char **argv)
 	/* Handle named images */
 	if (!strcasecmp(argv[1], "RO"))
 		return system_run_image_copy(SYSTEM_IMAGE_RO);
-	else if (!strcasecmp(argv[1], "RW") || !strcasecmp(argv[1], "A"))
+	else if (!strcasecmp(argv[1], "RW") || !strcasecmp(argv[1], "A")) {
+		/*
+		 * TODO(crosbug.com/p/11149): remove "A" once all scripts are
+		 * updated to use "RW".
+		 */
 		return system_run_image_copy(SYSTEM_IMAGE_RW);
-	else if (!strcasecmp(argv[1], "B")) {
+	} else if (!strcasecmp(argv[1], "B")) {
 #ifdef CONFIG_RW_B
 		return system_run_image_copy(SYSTEM_IMAGE_RW_B);
 #else
