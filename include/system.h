@@ -28,13 +28,6 @@ enum system_image_copy_t {
 };
 
 /**
- * Checks if running image is RW or not
- *
- * @return True if system is running in a RW image or false otherwise.
- */
-int system_is_in_rw(void);
-
-/**
  * Pre-initializes the module.  This occurs before clocks or tasks are
  * set up.
  */
