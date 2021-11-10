@@ -1381,14 +1381,6 @@ struct ec_response_get_features {
 } __ec_align4;
 
 /*****************************************************************************/
-/* Get the board's SKU ID from EC */
-#define EC_CMD_GET_SKU_ID 0x000E
-
-struct ec_response_sku_id {
-	uint32_t sku_id;
-} __ec_align4;
-
-/*****************************************************************************/
 /* Flash commands */
 
 /* Get flash info */
