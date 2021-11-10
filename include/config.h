@@ -1458,9 +1458,6 @@
 /* Usually, EC capable of sensor speeds up to 200000 mHz */
 #define CONFIG_EC_MAX_SENSOR_FREQ_DEFAULT_MILLIHZ 200000
 
-/* Maximal EC sampling rate */
-#undef CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ
-
 /*
  * Allow board to override the feature bitmap provided through host command
  * and ACPI.
@@ -4595,11 +4592,6 @@
 
 #if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS) * 2)
 #error "CONFIG_AUX_TIMER_PERIOD_MS must be at least 2x HOOK_TICK_INTERVAL_MS"
-#endif
-
-#ifndef CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ
-#define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ \
-	CONFIG_EC_MAX_SENSOR_FREQ_DEFAULT_MILLIHZ
 #endif
 
 /* Enable BMI160 secondary port if needed. */
