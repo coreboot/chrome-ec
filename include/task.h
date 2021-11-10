@@ -20,7 +20,6 @@
 #define TASK_EVENT_PECI_DONE	BIT(19)
 
 /* I2C tx/rx interrupt handler completion event. */
-#ifdef CHIP_STM32
 #define TASK_EVENT_I2C_COMPLETION(port) \
 				(1 << ((port) + 20))
 #define TASK_EVENT_I2C_IDLE	(TASK_EVENT_I2C_COMPLETION(0))
@@ -29,9 +28,6 @@
 #if (I2C_PORT_COUNT > TASK_EVENT_MAX_I2C)
 #error "Too many i2c ports for i2c events"
 #endif
-#endif
-#else
-#define TASK_EVENT_I2C_IDLE	BIT(20)
 #endif
 
 /* DMA transmit complete event */
