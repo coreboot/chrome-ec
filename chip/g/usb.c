@@ -1531,7 +1531,7 @@ static int usb_set_serial(const char *serialno)
 		return EC_ERROR_INVAL;
 
 	/* Convert into unicode usb string desc. */
-	for (i = 0; i < CONFIG_SERIALNO_LEN; i++) {
+	for (i = 0; i < USB_STRING_LEN; i++) {
 		sd->_data[i] = serialno[i];
 		if (serialno[i] == 0)
 			break;
