@@ -3431,10 +3431,7 @@ enum ec_mkbp_event {
 	/* New Fingerprint sensor event, the event data is fp_events bitmap. */
 	EC_MKBP_EVENT_FINGERPRINT = 5,
 
-	/*
-	 * Sysrq event: send emulated sysrq. The event data is sysrq,
-	 * corresponding to the key to be pressed.
-	 */
+	/* Sysrq event */
 	EC_MKBP_EVENT_SYSRQ = 6,
 
 	/*
