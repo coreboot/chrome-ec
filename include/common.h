@@ -333,9 +333,6 @@ enum ec_error_list {
 #define __stdlib_compat
 #endif /* TEST_FUZZ */
 
-/* find the most significant bit. Not defined in n == 0. */
-#define __fls(n) (31 - __builtin_clz(n))
-
 /*
  * __cfg_select(CONFIG_NAME, EMPTY, OTHERWISE) is a macro used for
  * defining other macros which conditionally select code based on a
