@@ -110,7 +110,6 @@ static int get_data_size(enum ec_mkbp_event e)
 	case EC_MKBP_EVENT_HOST_EVENT:
 	case EC_MKBP_EVENT_BUTTON:
 	case EC_MKBP_EVENT_SWITCH:
-	case EC_MKBP_EVENT_SYSRQ:
 		return sizeof(uint32_t);
 	default:
 		/* For unknown types, say it's 0. */
@@ -311,15 +310,6 @@ void keyboard_update_button(enum keyboard_button_type button, int is_pressed)
 		      (const uint8_t *)&mkbp_button_state);
 }
 
-#ifdef CONFIG_EMULATED_SYSRQ
-void send_sysrq(uint8_t key)
-{
-	uint32_t value = key;
-
-	mkbp_fifo_add(EC_MKBP_EVENT_SYSRQ, (const uint8_t *)&value);
-}
-#endif
-
 #ifdef CONFIG_POWER_BUTTON
 /**
  * Handle power button changing state.
@@ -386,14 +376,6 @@ static int switch_get_next_event(uint8_t *out)
 	return get_next_event(out, EC_MKBP_EVENT_SWITCH);
 }
 DECLARE_EVENT_SOURCE(EC_MKBP_EVENT_SWITCH, switch_get_next_event);
-
-#ifdef CONFIG_EMULATED_SYSRQ
-static int sysrq_get_next_event(uint8_t *out)
-{
-	return get_next_event(out, EC_MKBP_EVENT_SYSRQ);
-}
-DECLARE_EVENT_SOURCE(EC_MKBP_EVENT_SYSRQ, sysrq_get_next_event);
-#endif
 
 void keyboard_send_battery_key(void)
 {
