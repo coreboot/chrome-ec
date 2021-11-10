@@ -274,6 +274,10 @@ int system_get_chip_unique_id(uint8_t **id);
  * not implemented.
  */
 enum system_bbram_idx {
+	/*
+	 * TODO(crbug.com/693210): Consider boards without vbnvcontext
+	 * host command.
+	 */
 	SYSTEM_BBRAM_IDX_VBNVBLOCK0 = 0,
 	/*
 	 * ...
