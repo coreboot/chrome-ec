@@ -1988,9 +1988,6 @@
 /* EC controls the board's SKU ID and can report that to the AP */
 #undef CONFIG_HOSTCMD_SKUID
 
-/* Set SKU ID from AP */
-#undef CONFIG_HOSTCMD_AP_SET_SKUID
-
 /* Command to issue AP reset */
 #undef CONFIG_HOSTCMD_AP_RESET
 

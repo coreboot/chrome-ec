@@ -1384,10 +1384,7 @@ struct ec_response_get_features {
 /* Get the board's SKU ID from EC */
 #define EC_CMD_GET_SKU_ID 0x000E
 
-/* Set SKU ID from AP */
-#define EC_CMD_SET_SKU_ID 0x000F
-
-struct ec_sku_id_info {
+struct ec_response_sku_id {
 	uint32_t sku_id;
 } __ec_align4;
 
