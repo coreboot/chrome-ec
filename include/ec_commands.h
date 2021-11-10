@@ -3431,9 +3431,6 @@ enum ec_mkbp_event {
 	/* New Fingerprint sensor event, the event data is fp_events bitmap. */
 	EC_MKBP_EVENT_FINGERPRINT = 5,
 
-	/* Sysrq event */
-	EC_MKBP_EVENT_SYSRQ = 6,
-
 	/*
 	 * New 64-bit host event.
 	 * The event data is 8 bytes of host event flags.
@@ -3497,8 +3494,6 @@ union __ec_align_offset1 ec_response_get_next_data_v1 {
 	uint32_t switches;
 
 	uint32_t fp_events;
-
-	uint32_t sysrq;
 
 	/* CEC events from enum mkbp_cec_event */
 	uint32_t cec_events;

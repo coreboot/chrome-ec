@@ -1467,9 +1467,6 @@
 /* Support EC chip internal data EEPROM */
 #undef CONFIG_EEPROM
 
-/* Support for sending emulated sysrq commands to AP */
-#undef CONFIG_EMULATED_SYSRQ
-
 /* Include code for handling external power */
 #define CONFIG_EXTPOWER
 
