@@ -21,6 +21,7 @@
 #include "usb_pd.h"
 #include "usb_pd_dpm.h"
 #include "usb_pd_tcpm.h"
+#include "usb_pd_pdo.h"
 #include "usb_tbt_alt_mode.h"
 
 #ifdef CONFIG_COMMON_RUNTIME
@@ -467,7 +468,7 @@ static void balance_source_ports(void)
 	uint32_t removed_ports, new_ports;
 	static bool deferred_waiting;
 
-	if (task_get_current() == TASK_ID_HOOKS)
+	if (in_deferred_context())
 		deferred_waiting = false;
 
 	/*

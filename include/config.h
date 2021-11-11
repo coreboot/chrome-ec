@@ -1063,6 +1063,14 @@
 #undef CONFIG_CHARGER_BQ25710_PSYS_SENSING
 
 /*
+ * This config option is used to change the charger's internal
+ * comparator reference voltage to 1.2 V. The power-on default is 2.3
+ * V. This must be enabled if the board was designed for 1.2 V instead
+ * of 2.3 V.
+ */
+#undef CONFIG_CHARGER_BQ25710_CMP_REF_1P2
+
+/*
  * Board specific maximum input current limit, in mA.
  */
 #undef CONFIG_CHARGER_MAX_INPUT_CURRENT
@@ -1272,6 +1280,7 @@
 						 * discrete EC control
 						 */
 #undef CONFIG_CHIPSET_ECDRIVEN		/* Mock power module */
+#undef CONFIG_CHIPSET_FALCONLITE	/* Falcon-lite*/
 #undef CONFIG_CHIPSET_GEMINILAKE	/* Intel Geminilake (x86) */
 #undef CONFIG_CHIPSET_ICELAKE		/* Intel Icelake (x86) */
 #undef CONFIG_CHIPSET_JASPERLAKE	/* Intel Jasperlake (x86) */

@@ -13,59 +13,43 @@
 #include "task.h"
 #include "timer.h"
 
-int hook_call_deferred(const struct deferred_data *data, int us)
-{
-	struct k_work_delayable *work = data->work;
-	int rv = 0;
-
-	if (us == -1) {
-		k_work_cancel_delayable(work);
-	} else if (us >= 0) {
-		rv = k_work_reschedule(work, K_USEC(us));
-		if (rv == -EINVAL) {
-			/* Already processing or completed. */
-			return 0;
-		} else if (rv < 0) {
-			cprints(CC_HOOK,
-				"Warning: deferred call not submitted, "
-				"deferred_data=0x%pP, err=%d",
-				data, rv);
-		}
-	} else {
-		return EC_ERROR_PARAM2;
-	}
-
-	return rv;
-}
+static void hook_second_work(struct k_work *work);
+static void hook_tick_work(struct k_work *work);
 
 static struct zephyr_shim_hook_list *hook_registry[HOOK_TYPE_COUNT];
 
-static int zephyr_shim_setup_hooks(const struct device *unused)
+static K_WORK_DELAYABLE_DEFINE(hook_seconds_work_data, hook_second_work);
+static K_WORK_DELAYABLE_DEFINE(hook_ticks_work_data, hook_tick_work);
+
+static void work_queue_error(const void *data, int rv)
 {
-	STRUCT_SECTION_FOREACH(zephyr_shim_hook_list, entry) {
-		struct zephyr_shim_hook_list **loc = &hook_registry[entry->type];
-
-		/* Find the correct place to put the entry in the registry. */
-		while (*loc && (*loc)->priority < entry->priority)
-			loc = &((*loc)->next);
-
-		entry->next = *loc;
-
-		/* Insert the entry. */
-		*loc = entry;
-	}
-
-	return 0;
+	cprints(CC_HOOK,
+		"Warning: deferred call not submitted, "
+		"deferred_data=0x%pP, err=%d",
+		data, rv);
 }
 
-SYS_INIT(zephyr_shim_setup_hooks, APPLICATION, 1);
-
-void hook_notify(enum hook_type type)
+static void hook_second_work(struct k_work *work)
 {
-	struct zephyr_shim_hook_list *p;
+	int rv;
 
-	for (p = hook_registry[type]; p; p = p->next)
-		p->routine();
+	hook_notify(HOOK_SECOND);
+
+	rv = k_work_reschedule(&hook_seconds_work_data, K_SECONDS(1));
+	if (rv < 0)
+		work_queue_error(&hook_seconds_work_data, rv);
+}
+
+static void hook_tick_work(struct k_work *work)
+{
+	int rv;
+
+	hook_notify(HOOK_TICK);
+
+	rv = k_work_reschedule(&hook_ticks_work_data,
+			       K_USEC(HOOK_TICK_INTERVAL));
+	if (rv < 0)
+		work_queue_error(&hook_ticks_work_data, rv);
 }
 
 static void check_hook_task_priority(k_tid_t thread)
@@ -81,42 +65,67 @@ static void check_hook_task_priority(k_tid_t thread)
 			k_thread_priority_get(thread), (TASK_ID_COUNT - 1));
 }
 
-void hook_task(void *u)
+static int zephyr_shim_setup_hooks(const struct device *unused)
 {
-	/* Periodic hooks will be called first time through the loop */
-	static uint64_t last_second = -SECOND;
-	static uint64_t last_tick = -HOOK_TICK_INTERVAL;
+	int rv;
 
-	/*
-	 * Verify deferred routines are run at the lowest priority.
-	 */
-	check_hook_task_priority(&k_sys_work_q.thread);
-	check_hook_task_priority(k_current_get());
+	STRUCT_SECTION_FOREACH(zephyr_shim_hook_list, entry) {
+		struct zephyr_shim_hook_list **loc =
+			&hook_registry[entry->type];
 
-	while (1) {
-		uint64_t t = get_time().val;
-		int next = 0;
+		/* Find the correct place to put the entry in the registry. */
+		while (*loc && (*loc)->priority < entry->priority)
+			loc = &((*loc)->next);
 
-		if (t - last_tick >= HOOK_TICK_INTERVAL) {
-			hook_notify(HOOK_TICK);
-			last_tick = t;
-		}
+		entry->next = *loc;
 
-		if (t - last_second >= SECOND) {
-			hook_notify(HOOK_SECOND);
-			last_second = t;
-		}
-
-		/* Calculate when next tick needs to occur */
-		t = get_time().val;
-		if (last_tick + HOOK_TICK_INTERVAL > t)
-			next = last_tick + HOOK_TICK_INTERVAL - t;
-
-		/*
-		 * Sleep until next tick, unless we've already exceeded
-		 * HOOK_TICK_INTERVAL.
-		 */
-		if (next > 0)
-			task_wait_event(next);
+		/* Insert the entry. */
+		*loc = entry;
 	}
+
+	/* Startup the HOOK_TICK and HOOK_SECOND recurring work */
+	rv = k_work_reschedule(&hook_seconds_work_data, K_SECONDS(1));
+	if (rv < 0)
+		work_queue_error(&hook_seconds_work_data, rv);
+
+	rv = k_work_reschedule(&hook_ticks_work_data,
+			       K_USEC(HOOK_TICK_INTERVAL));
+	if (rv < 0)
+		work_queue_error(&hook_ticks_work_data, rv);
+
+	check_hook_task_priority(&k_sys_work_q.thread);
+
+	return 0;
+}
+
+SYS_INIT(zephyr_shim_setup_hooks, APPLICATION, 1);
+
+void hook_notify(enum hook_type type)
+{
+	struct zephyr_shim_hook_list *p;
+
+	for (p = hook_registry[type]; p; p = p->next)
+		p->routine();
+}
+
+int hook_call_deferred(const struct deferred_data *data, int us)
+{
+	struct k_work_delayable *work = data->work;
+	int rv = 0;
+
+	if (us == -1) {
+		k_work_cancel_delayable(work);
+	} else if (us >= 0) {
+		rv = k_work_reschedule(work, K_USEC(us));
+		if (rv == -EINVAL) {
+			/* Already processing or completed. */
+			return 0;
+		} else if (rv < 0) {
+			work_queue_error(data, rv);
+		}
+	} else {
+		return EC_ERROR_PARAM2;
+	}
+
+	return rv;
 }

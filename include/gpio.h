@@ -29,7 +29,7 @@
 #elif GPIO_INPUT != BIT(8)
 #error GPIO_INPUT values are not the same!
 #elif GPIO_OUTPUT != BIT(9)
-#error GPIO_PULL_DOWN values are not the same!
+#error GPIO_OUTPUT values are not the same!
 #endif
 
 /* Otherwise define overlapping GPIO_ flags ourselves */
@@ -251,6 +251,26 @@ int gpio_get_flags(enum gpio_signal signal);
  * @param mask		Bitmask of pins on that port to check: one only.
  */
 int gpio_get_flags_by_mask(uint32_t port, uint32_t mask);
+#endif
+
+#ifdef CONFIG_ZEPHYR
+
+/**
+ * Convert flags from Zephyr to CrOS EC format
+ *
+ * @param zephyr	flags in Zephyr format
+ * @returns		flags in CrOS EC format
+ */
+int convert_from_zephyr_flags(const gpio_flags_t zephyr);
+
+/**
+ * Convert flags from CrOS EC to Zephyr format
+ *
+ * @param ec_flags	flags in CrOS EC format
+ * @returns		flags in Zephyr format
+ */
+gpio_flags_t convert_to_zephyr_flags(int ec_flags);
+
 #endif
 
 /**

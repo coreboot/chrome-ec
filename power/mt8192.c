@@ -67,9 +67,6 @@
 /* Maximum time it should for PMIC to turn on after toggling PMIC_EN_ODL. */
 #define PMIC_EN_TIMEOUT (300 * MSEC)
 
-/* Time delay in G3 to deassert EN_PP1800_S5_L */
-#define EN_PP1800_S5_L_DEASSERT_TIME (20 * MSEC)
-
 /*
  * Time delay for AP on/off the AP_EC_WDT when received SYS_RST_ODL.
  * Generally it can be done within 3 ms.
@@ -79,6 +76,8 @@
 /* 30 ms for hard reset, we hold it longer to prevent TPM false alarm. */
 #define SYS_RST_PULSE_LENGTH (50 * MSEC)
 
+#ifndef CONFIG_ZEPHYR
+
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
 	{GPIO_PMIC_EC_PWRGD, POWER_SIGNAL_ACTIVE_HIGH, "PMIC_PWR_GOOD"},
@@ -86,6 +85,8 @@ const struct power_signal_info power_signal_list[] = {
 	{GPIO_AP_EC_WATCHDOG_L, POWER_SIGNAL_ACTIVE_LOW, "AP_WDT_ASSERTED"},
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
+
+#endif /* !CONFIG_ZEPHYR */
 
 static int forcing_shutdown;
 
