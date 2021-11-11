@@ -2844,9 +2844,6 @@
  */
 #undef CONFIG_RMA_AUTH_USE_P256
 
-/* Enable hardware Random Number generator support */
-#undef CONFIG_RNG
-
 /* Support verifying 2048-bit RSA signature */
 #undef CONFIG_RSA
 
