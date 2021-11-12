@@ -276,13 +276,6 @@
 /* Support AP Warm reset Interrupt. */
 #undef CONFIG_AP_WARM_RESET_INTERRUPT
 
-/*
- * Defined if core/ code provides assembly optimized implementation of
- * multiply-accumulate operations (32-bit operands, 64-bit result), for the
- * cores that lack native instructions.
- */
-#undef CONFIG_ASSEMBLY_MULA32
-
 /* Support audio codec. */
 #undef CONFIG_AUDIO_CODEC
 /* Audio codec caps. */
