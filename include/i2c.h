@@ -10,7 +10,6 @@
 
 #include "common.h"
 #include "host_command.h"
-#include "stddef.h"
 
 /*
  * I2C Peripheral Address encoding
@@ -509,20 +508,6 @@ void i2c_start_xfer_notify(const int port,
  */
 void i2c_end_xfer_notify(const int port,
 			 const uint16_t periph_addr_flags);
-
-/**
- * Defined in common/i2c_trace.c, used by i2c controller to notify tracing
- * funcionality of transactions.
- *
- * @param port: I2C port number
- * @param periph_addr: peripheral device address
- * @param direction: 0 for write,
- *                   1 for read
- * @param data: pointer to data read or written
- * @param size: size of data read or written
- */
-void i2c_trace_notify(int port, uint16_t periph_addr_flags,
-		      int direction, const uint8_t *data, size_t size);
 
 /*
  * Interrupt handler of GPIO_MONITOR_I2CP_SDA.
