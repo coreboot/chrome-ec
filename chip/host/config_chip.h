@@ -51,7 +51,7 @@ extern char __host_flash[CONFIG_FLASH_SIZE];
 #undef CONFIG_COMMON_TIMER
 
 #define GPIO_PIN(port, index) GPIO_##port, BIT(index)
-#define GPIO_PIN_MASK(p, m) .port = GPIO_##p, .mask = (m)
+#define GPIO_PIN_MASK(port, mask) GPIO_##port, (mask)
 
 #define I2C_PORT_COUNT 1
 
