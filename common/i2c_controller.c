@@ -79,11 +79,9 @@ static int chip_i2c_xfer_with_notify(const int port,
 	int ret;
 	uint16_t addr_flags = periph_addr_flags;
 
-	if (IS_ENABLED(CONFIG_I2C_DEBUG))
-		i2c_trace_notify(port, periph_addr_flags, 0, out, out_size);
-
-	if (IS_ENABLED(CONFIG_I2C_XFER_BOARD_CALLBACK))
-		i2c_start_xfer_notify(port, periph_addr_flags);
+#ifdef CONFIG_I2C_XFER_BOARD_CALLBACK
+	i2c_start_xfer_notify(port, periph_addr_flags);
+#endif
 
 	if (IS_ENABLED(CONFIG_SMBUS_PEC))
 		/*
@@ -94,11 +92,9 @@ static int chip_i2c_xfer_with_notify(const int port,
 	ret = chip_i2c_xfer(port, addr_flags, out, out_size, in, in_size,
 			    flags);
 
-	if (IS_ENABLED(CONFIG_I2C_XFER_BOARD_CALLBACK))
-		i2c_end_xfer_notify(port, periph_addr_flags);
-
-	if (IS_ENABLED(CONFIG_I2C_DEBUG))
-		i2c_trace_notify(port, periph_addr_flags, 1, in, in_size);
+#ifdef CONFIG_I2C_XFER_BOARD_CALLBACK
+	i2c_end_xfer_notify(port, periph_addr_flags);
+#endif
 
 	return ret;
 }
