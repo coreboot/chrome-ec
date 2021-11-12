@@ -2175,8 +2175,6 @@ enum ec_led_id {
 	EC_LED_ID_LEFT_LED,
 	/* LED to indicate right side */
 	EC_LED_ID_RIGHT_LED,
-	/* LED to indicate recovery mode with HW_REINIT */
-	EC_LED_ID_RECOVERY_HW_REINIT_LED,
 	/* LED to indicate sysrq debug mode. */
 	EC_LED_ID_SYSRQ_DEBUG_LED,
 
