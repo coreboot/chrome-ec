@@ -61,16 +61,12 @@ void usb_save_suspended_state(void);
 void usb_restore_suspended_state(void);
 
 /*
- * Tell the host to wake up. Does nothing if CONFIG_USB_REMOTE_WAKEUP is not
- * defined.
+ * Tell the host to wake up. Requires CONFIG_USB_REMOTE_WAKEUP to be defined,
+ * and a chip that implements the function.
  *
  * Returns immediately, suspend status can be checked using usb_is_suspended.
  */
-#ifdef CONFIG_USB_REMOTE_WAKEUP
 void usb_wake(void);
-#else
-static inline void usb_wake(void) {}
-#endif
 
 /* Board-specific USB wake, for side-band wake, called by usb_wake above. */
 void board_usb_wake(void);
