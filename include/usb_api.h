@@ -68,9 +68,6 @@ void usb_restore_suspended_state(void);
  */
 void usb_wake(void);
 
-/* Board-specific USB wake, for side-band wake, called by usb_wake above. */
-void board_usb_wake(void);
-
 #ifdef CONFIG_USB_SELECT_PHY
 /* Select which PHY to use. */
 void usb_select_phy(uint32_t phy);
