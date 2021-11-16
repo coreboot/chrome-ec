@@ -67,9 +67,6 @@
 /* Maximum time it should for PMIC to turn on after toggling PMIC_EN_ODL. */
 #define PMIC_EN_TIMEOUT (300 * MSEC)
 
-/* Time delay in G3 to deassert EN_PP1800_S5_L */
-#define EN_PP1800_S5_L_DEASSERT_TIME (20 * MSEC)
-
 /*
  * Time delay for AP on/off the AP_EC_WDT when received SYS_RST_ODL.
  * Generally it can be done within 3 ms.
@@ -173,7 +170,7 @@ void chipset_exit_hard_off_button(void)
 }
 DECLARE_DEFERRED(chipset_exit_hard_off_button);
 
-void chipset_reset(enum chipset_reset_reason reason)
+void chipset_reset(enum chipset_shutdown_reason reason)
 {
 	CPRINTS("%s: %d", __func__, reason);
 	report_ap_reset(reason);

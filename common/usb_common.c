@@ -16,6 +16,7 @@
 #include "console.h"
 #include "ec_commands.h"
 #include "hooks.h"
+#include "mkbp_event.h"
 #include "stdbool.h"
 #include "host_command.h"
 #include "system.h"
@@ -126,6 +127,12 @@ int remote_flashing(int argc, char **argv)
 	return EC_SUCCESS;
 }
 #endif /* defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH) */
+
+#ifdef CONFIG_COMMON_RUNTIME
+struct ec_params_usb_pd_rw_hash_entry rw_hash_table[RW_HASH_ENTRIES];
+#endif /* CONFIG_COMMON_RUNTIME */
+
+static __maybe_unused uint32_t pd_host_event_status __aligned(4);
 
 bool pd_firmware_upgrade_check_power_readiness(int port)
 {
@@ -698,30 +705,6 @@ __overridable void typec_set_source_current_limit(int p, enum tcpc_rp_value rp)
 		ppc_set_vbus_source_current_limit(p, rp);
 }
 
-/* ---------------- Power Data Objects (PDOs) ----------------- */
-#ifndef CONFIG_USB_PD_CUSTOM_PDO
-#define PDO_FIXED_FLAGS (PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP |\
-			 PDO_FIXED_COMM_CAP)
-
-const uint32_t pd_src_pdo[] = {
-	PDO_FIXED(5000, 1500, PDO_FIXED_FLAGS),
-};
-const int pd_src_pdo_cnt = ARRAY_SIZE(pd_src_pdo);
-const uint32_t pd_src_pdo_max[] = {
-	PDO_FIXED(5000, 3000, PDO_FIXED_FLAGS),
-};
-const int pd_src_pdo_max_cnt = ARRAY_SIZE(pd_src_pdo_max);
-
-const uint32_t pd_snk_pdo[] = {
-	PDO_FIXED(5000,
-		  GENERIC_MIN((PD_OPERATING_POWER_MW / 5), PD_MAX_CURRENT_MA),
-		  PDO_FIXED_FLAGS),
-	PDO_BATT(4750, PD_MAX_VOLTAGE_MV, PD_OPERATING_POWER_MW),
-	PDO_VAR(4750, PD_MAX_VOLTAGE_MV, PD_MAX_CURRENT_MA),
-};
-const int pd_snk_pdo_cnt = ARRAY_SIZE(pd_snk_pdo);
-#endif /* CONFIG_USB_PD_CUSTOM_PDO */
-
 /* ----------------- Vendor Defined Messages ------------------ */
 #if defined(CONFIG_USB_PE_SM) && !defined(CONFIG_USB_VPD) && \
 	!defined(CONFIG_USB_CTVPD)
@@ -1075,4 +1058,26 @@ int pd_build_alert_msg(uint32_t *msg, uint32_t *len, enum pd_power_role pr)
 	*len = 4;
 
 	return EC_SUCCESS;
+}
+
+#if defined(HAS_TASK_HOSTCMD) && !defined(TEST_BUILD)
+void pd_send_host_event(int mask)
+{
+	/* mask must be set */
+	if (!mask)
+		return;
+
+	atomic_or(&pd_host_event_status, mask);
+	/* interrupt the AP */
+	host_set_single_event(EC_HOST_EVENT_PD_MCU);
+}
+#endif /* defined(HAS_TASK_HOSTCMD) && !defined(TEST_BUILD) */
+
+__overridable void pd_notify_dp_alt_mode_entry(int port)
+{
+	if (IS_ENABLED(CONFIG_MKBP_EVENT)) {
+		(void)port;
+		CPRINTS("Notifying AP of DP Alt Mode Entry...");
+		mkbp_send_event(EC_MKBP_EVENT_DP_ALT_MODE_ENTERED);
+	}
 }

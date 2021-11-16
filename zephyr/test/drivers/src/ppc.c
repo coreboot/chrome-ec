@@ -3,6 +3,9 @@
  * found in the LICENSE file.
  */
 
+#include <device.h>
+#include <devicetree/gpio.h>
+#include <drivers/gpio/gpio_emul.h>
 #include <zephyr.h>
 #include <ztest.h>
 #include <ztest_assert.h>
@@ -15,6 +18,8 @@
 #include "usbc_ppc.h"
 
 #define SYV682X_ORD DT_DEP_ORD(DT_NODELABEL(syv682x_emul))
+#define GPIO_USB_C1_FRS_EN_PATH DT_PATH(named_gpios, usb_c1_frs_en)
+#define GPIO_USB_C1_FRS_EN_PORT DT_GPIO_PIN(GPIO_USB_C1_FRS_EN_PATH, gpios)
 
 static const int syv682x_port = 1;
 
@@ -167,7 +172,7 @@ static void test_ppc_syv682x_interrupt(void)
 	zassert_false(reg &
 			(SYV682X_CONTROL_4_VCONN1 | SYV682X_CONTROL_4_VCONN2),
 			"VCONN enabled after long VCONN OC");
-	syv682x_emul_set_control_4(emul, 0x0);
+	syv682x_emul_set_control_4(emul, 0);
 
 	/*
 	 * A VCONN over-voltage (VBAT_OVP) event will cause the device to
@@ -194,6 +199,67 @@ static void test_ppc_syv682x_interrupt(void)
 	 * to a CC over-voltage event. There is currently no easy way to test
 	 * that a Hard Reset occurred.
 	 */
+	syv682x_emul_set_control_4(emul, 0);
+}
+
+static void test_ppc_syv682x_frs(void)
+{
+	struct i2c_emul *emul = syv682x_emul_get(SYV682X_ORD);
+	const struct device *gpio_dev =
+		DEVICE_DT_GET(DT_GPIO_CTLR(GPIO_USB_C1_FRS_EN_PATH, gpios));
+	uint8_t reg;
+
+	/*
+	 * Enabling FRS should enable only the appropriate CC line based on
+	 * polarity. Disabling FRS should enable both CC lines.
+	 */
+	ppc_vbus_sink_enable(syv682x_port, true);
+	zassert_false(ppc_is_sourcing_vbus(syv682x_port),
+			"PPC is sourcing VBUS after sink enabled");
+	ppc_set_polarity(syv682x_port, 0 /* CC1 */);
+	ppc_set_frs_enable(syv682x_port, true);
+	zassert_equal(gpio_emul_output_get(gpio_dev, GPIO_USB_C1_FRS_EN_PORT),
+			1, "FRS enabled, but FRS GPIO not asserted");
+	zassert_ok(syv682x_emul_get_reg(emul, SYV682X_CONTROL_4_REG, &reg),
+			"Reading CONTROL_4 failed");
+	zassert_equal(reg &
+			(SYV682X_CONTROL_4_CC1_BPS | SYV682X_CONTROL_4_CC2_BPS),
+			SYV682X_CONTROL_4_CC1_BPS,
+			"FRS enabled with CC1 polarity, but CONTROL_4 is 0x%x",
+			reg);
+	ppc_set_frs_enable(syv682x_port, false);
+	zassert_equal(gpio_emul_output_get(gpio_dev, GPIO_USB_C1_FRS_EN_PORT),
+			0, "FRS disabled, but FRS GPIO not deasserted");
+	zassert_ok(syv682x_emul_get_reg(emul, SYV682X_CONTROL_4_REG, &reg),
+			"Reading CONTROL_4 failed");
+	zassert_equal(reg &
+			(SYV682X_CONTROL_4_CC1_BPS | SYV682X_CONTROL_4_CC2_BPS),
+			SYV682X_CONTROL_4_CC1_BPS | SYV682X_CONTROL_4_CC2_BPS,
+			"FRS enabled with CC1 polarity, but CONTROL_4 is 0x%x",
+			reg);
+
+	ppc_set_polarity(syv682x_port, 1 /* CC2 */);
+	ppc_set_frs_enable(syv682x_port, true);
+	zassert_ok(syv682x_emul_get_reg(emul, SYV682X_CONTROL_4_REG, &reg),
+			"Reading CONTROL_4 failed");
+	zassert_equal(reg &
+			(SYV682X_CONTROL_4_CC1_BPS | SYV682X_CONTROL_4_CC2_BPS),
+			SYV682X_CONTROL_4_CC2_BPS,
+			"FRS enabled with CC2 polarity, but CONTROL_4 is 0x%x",
+			reg);
+
+	/*
+	 * An FRS event when the PPC is Sink should cause the PPC to switch from
+	 * Sink to Source.
+	 */
+	syv682x_emul_set_status(emul, SYV682X_STATUS_FRS);
+	syv682x_interrupt(syv682x_port);
+	/* TODO(b/201420132): Simulate passage of time instead of sleeping. */
+	msleep(1);
+	zassert_true(ppc_is_sourcing_vbus(syv682x_port),
+			"PPC is not sourcing VBUS after FRS signal handled");
+	syv682x_emul_set_status(emul, 0);
+
 }
 
 static void test_ppc_syv682x(void)
@@ -202,6 +268,7 @@ static void test_ppc_syv682x(void)
 
 	test_ppc_syv682x_vbus_enable();
 	test_ppc_syv682x_interrupt();
+	test_ppc_syv682x_frs();
 }
 
 void test_suite_ppc(void)

@@ -250,6 +250,45 @@ menuconfig PLATFORM_EC_USB_POWER_DELIVERY
 
 if PLATFORM_EC_USB_POWER_DELIVERY
 
+menuconfig PLATFORM_EC_USB_PD_INT_SHARED
+	bool "USB-C ports share PD interrupts"
+	select HAS_TASK_PD_INT_SHARED
+	help
+	  This enables processing of shared interrupts where multiple ports
+	  share a single IRQ on the EC. Only one shared IRQ is supported,
+	  but any combination of ports can be serviced by that one IRQ.
+
+if PLATFORM_EC_USB_PD_INT_SHARED
+
+config PLATFORM_EC_USB_PD_PORT_0_SHARED
+	bool "Port 0 IRQ is shared"
+	help
+	  Enable handling of port 0 PD interrupts signalled by an IRQ that is
+	  shared by every other port enabled in this section.
+
+config PLATFORM_EC_USB_PD_PORT_1_SHARED
+	bool "Port 1 IRQ is shared"
+	depends on PLATFORM_EC_USB_PD_PORT_MAX_COUNT > 1
+	help
+	  Enable handling of port 1 PD interrupts signalled by an IRQ that is
+	  shared by every other port enabled in this section.
+
+config PLATFORM_EC_USB_PD_PORT_2_SHARED
+	bool "Port 2 IRQ is shared"
+	depends on PLATFORM_EC_USB_PD_PORT_MAX_COUNT > 2
+	help
+	  Enable handling of port 2 PD interrupts signalled by an IRQ that is
+	  shared by every other port enabled in this section.
+
+config PLATFORM_EC_USB_PD_PORT_3_SHARED
+	bool "Port 3 IRQ is shared"
+	depends on PLATFORM_EC_USB_PD_PORT_MAX_COUNT > 3
+	help
+	  Enable handling of port 3 PD interrupts signalled by an IRQ that is
+	  shared by every other port enabled in this section.
+
+endif # PLATFORM_EC_USB_PD_INT_SHARED
+
 config PLATFORM_EC_USB_PD_HOST_CMD
 	bool "Host commands related to USB Power Delivery"
 	default y
@@ -1093,6 +1132,7 @@ config PLATFORM_EC_USB_PD_TCPM_NCT38XX
 config PLATFORM_EC_USB_PD_TCPM_PS8751
 	bool "Parade PS8751 USB-C Gen 2 Type-C Port Controller"
 	select PLATFORM_EC_USB_PD_TCPM_MUX
+	imply PLATFORM_EC_HOSTCMD_I2C_CONTROL
 	help
 	  The Parade Technologies PS8751 is a USB Type-C Port Controller (TCPC)
 	  for USB Type-C Host and DisplayPort applications. It supports
@@ -1101,6 +1141,7 @@ config PLATFORM_EC_USB_PD_TCPM_PS8751
 config PLATFORM_EC_USB_PD_TCPM_PS8805
 	bool "Parade PS8805 USB-C Gen 2 Type-C Port Controller"
 	select PLATFORM_EC_USB_PD_TCPM_MUX
+	imply PLATFORM_EC_HOSTCMD_I2C_CONTROL
 	help
 	  The Parade Technologies PS8805 is an active retiming/redriving
 	  (respectively for USB 3.1 Gen 2 / DisplayPort 1.4a HBR3) integrated
@@ -1121,6 +1162,7 @@ endif # PLATFORM_EC_USB_PD_TCPM_PS8805
 config PLATFORM_EC_USB_PD_TCPM_PS8815
 	bool "Parade PS8815 USB-C Gen 2 Type-C Port Controller"
 	select PLATFORM_EC_USB_PD_TCPM_MUX
+	imply PLATFORM_EC_HOSTCMD_I2C_CONTROL
 	help
 	  The Parade Technologies PS8815 is an active retiming/redriving
 	  (respectively for USB 3.1 Gen 2 / DisplayPort 1.4a HBR3) integrated

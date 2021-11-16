@@ -59,6 +59,31 @@
 			enum-name = "GPIO_USB_C1_RT_RST_ODL";
 			label = "USB_C1_RT_RST_ODL";
 		};
+		gpio_usb_c1_frs_en: usb_c1_frs_en {
+			gpios = <&gpio0 8 (GPIO_OUT_LOW)>;
+			enum-name = "GPIO_USB_C1_FRS_EN";
+			label = "USB_C1_FRS_EN";
+		};
+		usb_c0_tcpc_int_odl: usb_c0_tcpc_int_odl {
+			gpios = <&gpio0 9 GPIO_INPUT>;
+			enum-name = "GPIO_USB_C0_TCPC_INT_ODL";
+			label = "USB_C0_TCPC_INT_ODL";
+		};
+		usb_c1_tcpc_int_odl: usb_c1_tcpc_int_odl {
+			gpios = <&gpio0 10 GPIO_INPUT>;
+			enum-name = "GPIO_USB_C1_TCPC_INT_ODL";
+			label = "USB_C1_TCPC_INT_ODL";
+		};
+		usb_c0_tcpc_rst_l {
+			gpios = <&gpio0 11 (GPIO_OUT_HIGH | GPIO_INPUT)>;
+			enum-name = "GPIO_USB_C0_TCPC_RST_L";
+			label = "USB_C0_TCPC_RST_L";
+		};
+		usb_c1_tcpc_rst_l {
+			gpios = <&gpio0 12 (GPIO_OUT_HIGH | GPIO_INPUT)>;
+			enum-name = "GPIO_USB_C1_TCPC_RST_L";
+			label = "USB_C1_TCPC_RST_L";
+		};
 	};
 	named-i2c-ports {
 		compatible = "named-i2c-ports";
@@ -449,6 +474,7 @@
 			status = "okay";
 			reg = <0xb>;
 			label = "TCPCI_PS8XXX_EMUL";
+			alert_gpio = <&usb_c1_tcpc_int_odl>;
 		};
 
 		ps8xxx_emul: ps8xxx_emul {
@@ -473,6 +499,7 @@
 			compatible = "zephyr,syv682x-emul";
 			reg = <0x41>;
 			label = "SYV682X_EMUL";
+			frs_en_gpio = <&gpio_usb_c1_frs_en>;
 		};
 
 		usb_c1_bb_retimer_emul: bbretimer@42 {
@@ -512,7 +539,7 @@
 };
 
 &gpio0 {
-	ngpios = <8>;
+	ngpios = <13>;
 };
 
 &i2c0 {
@@ -601,6 +628,7 @@
 		status = "okay";
 		reg = <0x82>;
 		label = "TCPCI_EMUL";
+		alert_gpio = <&usb_c0_tcpc_int_odl>;
 	};
 };
 

@@ -9,7 +9,7 @@
 
 #include "battery.h"
 #include "battery_smart.h"
-#include "bq25710.h"
+#include "bq257x0_regs.h"
 #include "charge_ramp.h"
 #include "charge_state_v2.h"
 #include "charger.h"
@@ -31,6 +31,45 @@
 #error "BQ25710 is a NVDC charger, please enable CONFIG_CHARGER_NARROW_VDC."
 #endif
 
+#ifndef CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
+#define CONFIG_CHARGER_BQ25720_VSYS_TH2_DV	GET_BQ_FIELD(BQ25720, \
+							     VMIN_AP,	\
+							     VSYS_TH2, \
+							     UINT16_MAX)
+#endif
+
+#ifndef CONFIG_BQ25720_VSYS_UVP_CUSTOM
+#define CONFIG_BQ25720_VSYS_UVP 0
+#endif
+
+/*
+ * Helper macros
+ */
+
+#define SET_CO1_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
+							     CHARGE_OPTION_1, \
+							     _field, _c, (_x))
+
+#define SET_CO2_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
+							     CHARGE_OPTION_2, \
+							     _field, _c, (_x))
+
+#define SET_CO3(_field, _v, _x)		SET_BQ_FIELD(BQ257X0,	\
+						     CHARGE_OPTION_3,	\
+						     _field, _v, (_x))
+
+#define SET_CO4(_field, _v, _x)		SET_BQ_FIELD(BQ25720,	\
+						     CHARGE_OPTION_4,	\
+						     _field, _v, (_x))
+
+#define SET_PO1(_field, _v, _x)		SET_BQ_FIELD(BQ257X0,	\
+						     PROCHOT_OPTION_1,	\
+						     _field, _v, (_x))
+
+#define SET_PO1_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
+							     PROCHOT_OPTION_1, \
+							     _field, _c, (_x))
+
 /*
  * Delay required from taking the bq25710 out of low power mode and having the
  * correct value in register 0x3E for VSYS_MIN voltage. The length of the delay
@@ -50,9 +89,7 @@
 
 #define REG_TO_CHARGING_CURRENT(REG) ((REG) / CHARGING_RESISTOR_RATIO)
 #define CHARGING_CURRENT_TO_REG(CUR) ((CUR) * CHARGING_RESISTOR_RATIO)
-#ifdef CONFIG_CHARGER_BQ25720
 #define VMIN_AP_VSYS_TH2_TO_REG(DV) ((DV) - 32)
-#endif
 
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
@@ -86,14 +123,14 @@ static enum ec_error_list bq25710_set_option(int chgnum, int option);
 
 static inline int iin_dpm_reg_to_current(int reg)
 {
-	return (reg + 1) * BQ25710_IIN_DPM_CURRENT_STEP_MA /
+	return (reg + 1) * BQ257X0_IIN_DPM_CURRENT_STEP_MA /
 		INPUT_RESISTOR_RATIO;
 }
 
 static inline int iin_host_current_to_reg(int current)
 {
 	return (current * INPUT_RESISTOR_RATIO /
-		BQ25710_IIN_HOST_CURRENT_STEP_MA) - 1;
+		BQ257X0_IIN_HOST_CURRENT_STEP_MA) - 1;
 }
 
 static inline enum ec_error_list raw_read16(int chgnum, int offset, int *value)
@@ -127,7 +164,7 @@ static int bq25710_get_low_power_mode(int chgnum, int *mode)
 	if (rv)
 		return rv;
 
-	*mode = !!(reg & BQ25710_CHARGE_OPTION_0_LOW_POWER_MODE);
+	*mode = !!(reg & BQ_FIELD_MASK(BQ257X0, CHARGE_OPTION_0, EN_LWPWR));
 
 	return EC_SUCCESS;
 }
@@ -157,9 +194,11 @@ static int bq25710_set_low_power_mode(int chgnum, int enable)
 #endif
 
 	if (enable)
-		reg |= BQ25710_CHARGE_OPTION_0_LOW_POWER_MODE;
+		reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_0, EN_LWPWR, true,
+				   reg);
 	else
-		reg &= ~BQ25710_CHARGE_OPTION_0_LOW_POWER_MODE;
+		reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_0, EN_LWPWR, false,
+				   reg);
 
 	rv = raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_0, reg);
 #ifdef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
@@ -171,37 +210,21 @@ static int bq25710_set_low_power_mode(int chgnum, int enable)
 	return EC_SUCCESS;
 }
 
-static int bq25710_set_psys_sensing(int chgnum, bool enable)
+static int co1_set_psys_sensing(int reg, bool enable)
 {
-	int rv;
-	int reg;
-	int mask, on, off;
-
-	rv = raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_1, &reg);
-	if (rv)
-		return rv;
-
 	if (IS_ENABLED(CONFIG_CHARGER_BQ25720)) {
-		mask = BQ25720_CHARGE_OPTION_1_PSYS_MASK;
-		on = BQ25720_CHARGE_OPTION_1_PSYS_ON;
-		off = BQ25720_CHARGE_OPTION_1_PSYS_OFF;
+		if (enable)
+			reg = SET_BQ_FIELD_BY_NAME(BQ25720, CHARGE_OPTION_1,
+						   PSYS_CONFIG, PBUS_PBAT, reg);
+		else
+			reg = SET_BQ_FIELD_BY_NAME(BQ25720, CHARGE_OPTION_1,
+						   PSYS_CONFIG, OFF, reg);
 	} else if (IS_ENABLED(CONFIG_CHARGER_BQ25710)) {
-		mask = BQ25710_CHARGE_OPTION_1_PSYS_MASK;
-		on = BQ25710_CHARGE_OPTION_1_PSYS_ON;
-		off = BQ25710_CHARGE_OPTION_1_PSYS_OFF;
+		reg = SET_BQ_FIELD(BQ25710, CHARGE_OPTION_1, EN_PSYS, enable,
+				   reg);
 	}
 
-	reg &= ~mask;
-	if (enable)
-		reg |= on;
-	else
-		reg |= off;
-
-	rv = raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_1, reg);
-	if (rv)
-		return rv;
-
-	return EC_SUCCESS;
+	return reg;
 }
 
 static int bq25710_adc_start(int chgnum, int adc_en_mask)
@@ -222,8 +245,8 @@ static int bq25710_adc_start(int chgnum, int adc_en_mask)
 	 * Turn on the ADC for one reading. Note that adc_en_mask
 	 * maps to bit[7:0] in ADCOption register.
 	 */
-	reg = (adc_en_mask & BQ25710_ADC_OPTION_EN_ADC_ALL) |
-	      BQ25710_ADC_OPTION_ADC_START;
+	reg = (adc_en_mask & BQ257X0_ADC_OPTION_EN_ADC_ALL) |
+		BQ_FIELD_MASK(BQ257X0, ADC_OPTION, ADC_START);
 	if (raw_write16(chgnum, BQ25710_REG_ADC_OPTION, reg))
 		return EC_ERROR_UNKNOWN;
 
@@ -237,19 +260,199 @@ static int bq25710_adc_start(int chgnum, int adc_en_mask)
 		/* sleep 2 ms so we time out after 2x the expected time */
 		msleep(2);
 		raw_read16(chgnum, BQ25710_REG_ADC_OPTION, &reg);
-	} while (--tries_left && (reg & BQ25710_ADC_OPTION_ADC_START));
+	} while (--tries_left && (reg & BQ_FIELD_MASK(BQ257X0, ADC_OPTION,
+						      ADC_START)));
 
 	/* ADC reading attempt complete, go back to low power mode */
 	if (bq25710_set_low_power_mode(chgnum, mode))
 		return EC_ERROR_UNKNOWN;
 
 	/* Could not complete read */
-	if (reg & BQ25710_ADC_OPTION_ADC_START)
+	if (reg & BQ_FIELD_MASK(BQ257X0, ADC_OPTION, ADC_START))
 		return EC_ERROR_TIMEOUT;
 
 	return EC_SUCCESS;
 }
 #endif
+
+static int bq257x0_init_charge_option_1(int chgnum)
+{
+	int rv;
+	int reg;
+
+	if (!IS_ENABLED(CONFIG_CHARGER_BQ25710_PSYS_SENSING) &&
+	    !IS_ENABLED(CONFIG_CHARGER_BQ25710_CMP_REF_1P2))
+		return EC_SUCCESS;
+
+	rv = raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_1, &reg);
+	if (rv)
+		return rv;
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_PSYS_SENSING))
+		reg = co1_set_psys_sensing(reg, true);
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_CMP_REF_1P2))
+		reg = SET_CO1_BY_NAME(CMP_REF, 1P2, reg);
+
+	return raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_1, reg);
+}
+
+static int bq257x0_init_prochot_option_1(int chgnum)
+{
+	int rv;
+	int reg;
+
+	rv = raw_read16(chgnum, BQ25710_REG_PROCHOT_OPTION_1, &reg);
+	if (rv)
+		return rv;
+
+	/* Disable VDPM prochot profile at initialization */
+	reg = SET_PO1_BY_NAME(PP_VDPM, DISABLE, reg);
+
+	/*
+	 * Enable PROCHOT to be asserted with VSYS min detection. Note
+	 * that when no battery is present, then VSYS will be set to the
+	 * value in register 0x3E (MinSysVoltage) which means that when
+	 * no battery is present prochot will continuosly be asserted.
+	 */
+	reg = SET_PO1_BY_NAME(PP_VSYS, ENABLE, reg);
+
+#ifdef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
+	/*
+	 * Set the IDCHG limit who's value is defined in the config
+	 * option in mA.
+	 *
+	 * IDCHG limit is in 512 mA steps. Note there is a 128 mA offset
+	 * so the actual IDCHG limit will be the value stored in
+	 * IDCHG_VTH + 128 mA.
+	 */
+	reg = SET_PO1(IDCHG_VTH,
+		      CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA >> 9,
+		      reg);
+
+	/*  Enable IDCHG trigger for prochot. */
+	reg = SET_PO1_BY_NAME(PP_IDCHG, ENABLE, reg);
+#endif
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_PP_INOM))
+		reg = SET_PO1_BY_NAME(PP_INOM, ENABLE, reg);
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_PP_BATPRES))
+		reg = SET_PO1_BY_NAME(PP_BATPRES, ENABLE, reg);
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_PP_ACOK))
+		reg = SET_PO1_BY_NAME(PP_ACOK, ENABLE, reg);
+
+	return raw_write16(chgnum, BQ25710_REG_PROCHOT_OPTION_1, reg);
+}
+
+static int bq257x0_init_charge_option_2(int chgnum)
+{
+	int reg;
+	int rv;
+
+	rv = raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_2, &reg);
+	if (rv)
+		return rv;
+
+	/*
+	 * Reduce peak power mode overload and relax cycle time from
+	 * default 20 msec to the minimum of 5 msec on the bq25710. The
+	 * minimum is 20 msec on the bq25720.
+	 */
+	reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_2, PKPWR_TMAX, 0, reg);
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_EN_ACOC)) {
+		/* Enable AC input over-current protection. */
+		reg = SET_CO2_BY_NAME(EN_ACOC, ENABLE, reg);
+	}
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_ACOC_VTH_1P33)) {
+		/* Set ACOC threshold to 133% of ILIM2 */
+		reg = SET_CO2_BY_NAME(ACOC_VTH, 1P33, reg);
+	}
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_BATOC_VTH_MINIMUM)) {
+		/* Set battery over-current threshold to minimum. */
+		if (IS_ENABLED(CONFIG_CHARGER_BQ25720))
+			reg = SET_BQ_FIELD_BY_NAME(BQ25720, CHARGE_OPTION_2,
+						   BATOC_VTH, 1P33, reg);
+		else
+			reg = SET_BQ_FIELD_BY_NAME(BQ25710, CHARGE_OPTION_2,
+						   BATOC_VTH, 1P50, reg);
+	}
+
+	return raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_2, reg);
+}
+
+static int bq257x0_init_charge_option_3(int chgnum)
+{
+	int reg;
+	int rv;
+
+	if (!IS_ENABLED(CONFIG_CHARGER_BQ25720))
+		return EC_SUCCESS;
+
+	rv = raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_3, &reg);
+	if (rv)
+		return rv;
+
+	/*
+	 * The bq25720 defaults to 15 A while the bq25710
+	 * defaults to 10A. Set the bq25720 to 10A as well.
+	 */
+	reg = SET_CO3(IL_AVG, BQ25720_CHARGE_OPTION_3_IL_AVG__10A, reg);
+
+	return raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_3, reg);
+}
+
+static int bq257x0_init_charge_option_4(int chgnum)
+{
+	int reg;
+	int rv;
+
+	if (!IS_ENABLED(CONFIG_CHARGER_BQ25720))
+		return EC_SUCCESS;
+
+	if (!IS_ENABLED(CONFIG_BQ25720_VSYS_UVP_CUSTOM))
+		return EC_SUCCESS;
+
+	rv = raw_read16(chgnum, BQ25720_REG_CHARGE_OPTION_4, &reg);
+	if (rv)
+		return rv;
+
+	if (IS_ENABLED(CONFIG_BQ25720_VSYS_UVP_CUSTOM))
+		reg = SET_CO4(VSYS_UVP, CONFIG_BQ25720_VSYS_UVP, reg);
+
+	return raw_write16(chgnum, BQ25720_REG_CHARGE_OPTION_4, reg);
+}
+
+static int bq25720_init_vmin_active_protection(int chgnum)
+{
+	int reg;
+	int rv;
+	int th2_dv;
+
+	if (!IS_ENABLED(CONFIG_CHARGER_BQ25720))
+		return EC_SUCCESS;
+
+	if (!IS_ENABLED(CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM))
+		return EC_SUCCESS;
+
+	rv = raw_read16(chgnum, BQ25720_REG_VMIN_ACTIVE_PROTECTION, &reg);
+	if (rv)
+		return rv;
+
+	/*
+	 * The default VSYS_TH2 is 5.9v for a 2S config. Boards may need
+	 * to increase this for stability. PROCHOT is asserted when the
+	 * threshold is reached.
+	 */
+	th2_dv = VMIN_AP_VSYS_TH2_TO_REG(CONFIG_CHARGER_BQ25720_VSYS_TH2_DV);
+	reg = SET_BQ_FIELD(BQ25720, VMIN_AP, VSYS_TH2, th2_dv, reg);
+
+	return raw_write16(chgnum, BQ25720_REG_VMIN_ACTIVE_PROTECTION, reg);
+}
 
 static void bq25710_init(int chgnum)
 {
@@ -274,7 +477,8 @@ static void bq25710_init(int chgnum)
 		rv |= raw_read16(chgnum, BQ25710_REG_MIN_SYSTEM_VOLTAGE, &vsys);
 		rv |= raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_3, &reg);
 		if (!rv) {
-			reg |= BQ25710_CHARGE_OPTION_3_RESET_REG;
+			reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_3, RESET_REG,
+					   1, reg);
 			/* Set all registers to default values */
 			raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_3, reg);
 			/* Restore VSYS_MIN voltage to POR reset value */
@@ -285,67 +489,24 @@ static void bq25710_init(int chgnum)
 		bq25710_set_low_power_mode(chgnum, 1);
 	}
 
-	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_PSYS_SENSING))
-		bq25710_set_psys_sensing(chgnum, true);
+	bq257x0_init_charge_option_1(chgnum);
 
-	if (!raw_read16(chgnum, BQ25710_REG_PROCHOT_OPTION_1, &reg)) {
-		/* Disable VDPM prochot profile at initialization */
-		reg &= ~BQ25710_PROCHOT_PROFILE_VDPM;
-		/*
-		 * Enable PROCHOT to be asserted with VSYS min detection. Note
-		 * that when no battery is present, then VSYS will be set to the
-		 * value in register 0x3E (MinSysVoltage) which means that when
-		 * no battery is present prochot will continuosly be asserted.
-		 */
-		reg |= BQ25710_PROCHOT_PROFILE_VSYS;
-#ifdef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
-		/*
-		 * Set the IDCHG limit who's value is defined in the config
-		 * option in mA. Also, enable IDCHG trigger for prochot.
-		 */
-		reg &= ~BQ25710_PROCHOT_IDCHG_VTH_MASK;
-		/*
-		 * IDCHG limit is in 512 mA steps. Note there is a 128 mA offset
-		 * so the actual IDCHG limit will be the value stored in bits
-		 * 15:10 + 128 mA.
-		 */
-		reg |= ((CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA << 1) &
-			BQ25710_PROCHOT_IDCHG_VTH_MASK);
-		reg |= BQ25710_PROCHOT_PROFILE_IDCHG;
-#endif
-		raw_write16(chgnum, BQ25710_REG_PROCHOT_OPTION_1, reg);
-#ifdef CONFIG_CHARGER_BQ25720_VSYS_TH2_DV
-		/*
-		 * The default VSYS_TH2 is 5.9v for a 2S config. Boards
-		 * may need to increase this for stability. PROCHOT is
-		 * asserted when the threshold is reached.
-		 */
-		if (!raw_read16(chgnum, BQ25720_REG_VMIN_ACTIVE_PROTECTION,
-				&reg)) {
-			reg &= ~BQ25720_VMIN_AP_VSYS_TH2_MASK;
-			reg |= VMIN_AP_VSYS_TH2_TO_REG(
-				CONFIG_CHARGER_BQ25720_VSYS_TH2_DV) <<
-				BQ25720_VMIN_AP_VSYS_TH2_SHIFT;
-			raw_write16(chgnum, BQ25720_REG_VMIN_ACTIVE_PROTECTION,
-				    reg);
-		}
-#endif
-	}
+	bq257x0_init_prochot_option_1(chgnum);
 
 	/* Reduce ILIM from default of 150% to 105% */
 	if (!raw_read16(chgnum, BQ25710_REG_PROCHOT_OPTION_0, &reg)) {
-		reg &= ~BQ25710_PROCHOT0_ILIM_VTH_MASK;
+		reg = SET_BQ_FIELD(BQ257X0, PROCHOT_OPTION_0, ILIM2_VTH, 0,
+				   reg);
 		raw_write16(chgnum, BQ25710_REG_PROCHOT_OPTION_0, reg);
 	}
 
-	/*
-	 * Reduce peak power mode overload and relax cycle time from default 20
-	 * msec to the minimum of 5 msec.
-	 */
-	if (!raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_2, &reg)) {
-		reg &= ~BQ25710_CHARGE_OPTION_2_TMAX_MASK;
-		raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_2, reg);
-	}
+	bq257x0_init_charge_option_2(chgnum);
+
+	bq257x0_init_charge_option_3(chgnum);
+
+	bq257x0_init_charge_option_4(chgnum);
+
+	bq25720_init_vmin_active_protection(chgnum);
 }
 
 /* Charger interfaces */
@@ -380,7 +541,7 @@ static enum ec_error_list bq25710_get_status(int chgnum, int *status)
 	/* Default status */
 	*status = CHARGER_LEVEL_2;
 
-	if (option & BQ25710_CHARGE_OPTION_0_CHRG_INHIBIT)
+	if (option & BQ_FIELD_MASK(BQ257X0, CHARGE_OPTION_0, CHRG_INHIBIT))
 		*status |= CHARGER_CHARGE_INHIBITED;
 
 	return EC_SUCCESS;
@@ -396,9 +557,11 @@ static enum ec_error_list bq25710_set_mode(int chgnum, int mode)
 		return rv;
 
 	if (mode & CHARGER_CHARGE_INHIBITED)
-		option |= BQ25710_CHARGE_OPTION_0_CHRG_INHIBIT;
+		option = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_0, CHRG_INHIBIT, 1,
+				      option);
 	else
-		option &= ~BQ25710_CHARGE_OPTION_0_CHRG_INHIBIT;
+		option = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_0, CHRG_INHIBIT, 0,
+				      option);
 
 	return bq25710_set_option(chgnum, option);
 }
@@ -455,9 +618,11 @@ static enum ec_error_list bq25710_discharge_on_ac(int chgnum, int enable)
 		return rv;
 
 	if (enable)
-		option |= BQ25710_CHARGE_OPTION_0_EN_LEARN;
+		option = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_0, EN_LEARN, 1,
+				      option);
 	else
-		option &= ~BQ25710_CHARGE_OPTION_0_EN_LEARN;
+		option = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_0, EN_LEARN, 0,
+				      option);
 
 	return bq25710_set_option(chgnum, option);
 }
@@ -468,7 +633,7 @@ static enum ec_error_list bq25710_set_input_current_limit(int chgnum,
 	int num_steps = iin_host_current_to_reg(input_current);
 
 	return raw_write16(chgnum, BQ25710_REG_IIN_HOST,
-			   num_steps << BQ25710_IIN_HOST_CURRENT_SHIFT);
+			   num_steps << BQ257X0_IIN_HOST_CURRENT_SHIFT);
 }
 
 static enum ec_error_list bq25710_get_input_current_limit(int chgnum,
@@ -486,7 +651,7 @@ static enum ec_error_list bq25710_get_input_current_limit(int chgnum,
 	if (!rv)
 		*input_current =
 			iin_dpm_reg_to_current(reg >>
-					       BQ25710_IIN_DPM_CURRENT_SHIFT);
+					       BQ257X0_IIN_DPM_CURRENT_SHIFT);
 
 	return rv;
 }
@@ -534,7 +699,8 @@ static enum ec_error_list bq25710_get_vbus_voltage(int chgnum, int port,
 {
 	int reg, rv;
 
-	rv = bq25710_adc_start(chgnum, BQ25710_ADC_OPTION_EN_ADC_VBUS);
+	rv = bq25710_adc_start(chgnum, BQ_FIELD_MASK(BQ257X0, ADC_OPTION,
+						     EN_ADC_VBUS));
 	if (rv)
 		goto error;
 
@@ -543,7 +709,7 @@ static enum ec_error_list bq25710_get_vbus_voltage(int chgnum, int port,
 	if (rv)
 		goto error;
 
-	reg >>= BQ25710_ADC_VBUS_STEP_BIT_OFFSET;
+	reg >>= BQ257X0_ADC_VBUS_PSYS_VBUS_SHIFT;
 	*voltage = reg_adc_vbus_to_mv(reg);
 
 error:
@@ -634,22 +800,26 @@ static enum ec_error_list bq25710_set_hw_ramp(int chgnum, int enable)
 			return rv;
 
 		/*  Enable ICO algorithm */
-		option3_reg |= BQ25710_CHARGE_OPTION_3_EN_ICO_MODE;
+		option3_reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_3,
+					   EN_ICO_MODE, 1, option3_reg);
 
 		/* 0b: Input current limit is set by BQ25710_REG_IIN_HOST */
-		option2_reg &= ~BQ25710_CHARGE_OPTION_2_EN_EXTILIM;
+		option2_reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_2,
+					   EN_EXTILIM, 0, option2_reg);
 
 		/* Charge ramp may take up to 2s to settle down */
 		hook_call_deferred(&bq25710_chg_ramp_handle_data, (4 * SECOND));
 	} else {
 		/*  Disable ICO algorithm */
-		option3_reg &= ~BQ25710_CHARGE_OPTION_3_EN_ICO_MODE;
+		option3_reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_3,
+					   EN_ICO_MODE, 0, option3_reg);
 
 		/*
 		 * 1b: Input current limit is set by the lower value of
 		 * ILIM_HIZ pin and BQ25710_REG_IIN_HOST
 		 */
-		option2_reg |= BQ25710_CHARGE_OPTION_2_EN_EXTILIM;
+		option2_reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_2,
+					    EN_EXTILIM, 1, option2_reg);
 	}
 
 	rv = raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_2, option2_reg);
@@ -665,7 +835,7 @@ static int bq25710_ramp_is_stable(int chgnum)
 	if (raw_read16(chgnum, BQ25710_REG_CHARGER_STATUS, &reg))
 		return 0;
 
-	return reg & BQ25710_CHARGE_STATUS_ICO_DONE;
+	return reg & BQ_FIELD_MASK(BQ257X0, CHARGER_STATUS, ICO_DONE);
 }
 
 static int bq25710_ramp_get_current_limit(int chgnum)
@@ -679,7 +849,7 @@ static int bq25710_ramp_get_current_limit(int chgnum)
 		return 0;
 	}
 
-	return iin_dpm_reg_to_current(reg >> BQ25710_IIN_DPM_CURRENT_SHIFT);
+	return iin_dpm_reg_to_current(reg >> BQ257X0_IIN_DPM_CURRENT_SHIFT);
 }
 #endif /* CONFIG_CHARGE_RAMP_HW */
 

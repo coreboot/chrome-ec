@@ -45,7 +45,7 @@
 			label = "PG_PWR_S5";
 			enum-name = "GPIO_S5_PGOOD";
 		};
-		pg_pcore_s0_r_od {
+		gpio_s0_pgood: pg_pcore_s0_r_od {
 			gpios = <&gpiob 6 GPIO_INPUT>;
 			label = "PG_PCORE_S0_R_OD";
 			enum-name = "GPIO_S0_PGOOD";
@@ -290,6 +290,7 @@
 		en_kb_bl {
 			gpios = <&gpio9 7 GPIO_OUT_HIGH>;
 			label = "EN_KB_BL";
+			enum-name = "GPIO_EN_KEYBOARD_BACKLIGHT";
 		};
 		ec_kso_02_inv {
 			gpios = <&gpio1 7 GPIO_OUT_LOW>;

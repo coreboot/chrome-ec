@@ -68,7 +68,7 @@ common-$(CONFIG_CHARGER)+=charger.o charge_state_v2.o
 common-$(CONFIG_CHARGER_PROFILE_OVERRIDE_COMMON)+=charger_profile_override.o
 common-$(CONFIG_CMD_I2CWEDGE)+=i2c_wedge.o
 common-$(CONFIG_COMMON_GPIO)+=gpio.o gpio_commands.o
-common-$(CONFIG_IO_EXPANDER)+=ioexpander.o
+common-$(CONFIG_IO_EXPANDER)+=ioexpander.o ioexpander_commands.o
 common-$(CONFIG_COMMON_PANIC_OUTPUT)+=panic_output.o
 common-$(CONFIG_COMMON_RUNTIME)+=hooks.o main.o system.o peripheral.o
 common-$(CONFIG_COMMON_TIMER)+=timer.o
@@ -168,9 +168,10 @@ common-$(CONFIG_USB_PORT_POWER_DUMB)+=usb_port_power_dumb.o
 common-$(CONFIG_USB_PORT_POWER_SMART)+=usb_port_power_smart.o
 common-$(CONFIG_HAS_TASK_PD_INT)+=usbc_intr_task.o
 ifneq ($(CONFIG_USB_POWER_DELIVERY),)
-common-$(CONFIG_USB_POWER_DELIVERY)+=usb_common.o
+common-$(CONFIG_USB_POWER_DELIVERY)+=usb_common.o usb_pd_pdo.o
 ifneq ($(CONFIG_USB_PD_TCPMV1),)
-common-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_protocol.o usb_pd_policy.o
+common-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_protocol.o usb_pd_policy.o \
+	usb_pd_pdo.o
 endif
 common-$(CONFIG_USB_PD_DUAL_ROLE)+=usb_pd_dual_role.o
 common-$(CONFIG_USB_PD_HOST_CMD)+=usb_pd_host_cmd.o

@@ -203,6 +203,7 @@ enum adc_channel {
 enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
 	TEMP_SENSOR_2_FAN,
+	TEMP_SENSOR_3_CHARGER,
 	TEMP_SENSOR_COUNT
 };
 
@@ -214,8 +215,7 @@ enum sensor_id {
 };
 
 enum battery_type {
-	BATTERY_POWER_TECH,
-	BATTERY_LGC011,
+	BATTERY_AP19B8M,
 	BATTERY_TYPE_COUNT
 };
 

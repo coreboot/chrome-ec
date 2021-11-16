@@ -4,6 +4,7 @@
  */
 
 #include <sys/util.h>
+#include <drivers/i2c.h>
 
 #include "console.h"
 #include "i2c.h"
@@ -26,10 +27,15 @@
 #define INIT_REMOTE_PORTS(id) \
 	[I2C_PORT(id)] = DT_PROP_OR(id, remote_port, -1),
 
-#define I2C_PORT_INIT(id)             \
-	{                             \
-		.name = DT_LABEL(id), \
-		.port = I2C_PORT(id), \
+#define I2C_PORT_FLAGS(id)                                                     \
+	COND_CODE_1(DT_PROP(id, dynamic_speed), (I2C_PORT_FLAG_DYNAMIC_SPEED), \
+		    (0))
+
+#define I2C_PORT_INIT(id)                    \
+	{                                    \
+		.name = DT_LABEL(id),        \
+		.port = I2C_PORT(id),        \
+		.flags = I2C_PORT_FLAGS(id), \
 	},
 /*
  * Long term we will not need these, for now they're needed to get things to
@@ -140,3 +146,59 @@ static int command_i2c_portmap(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(i2c_portmap, command_i2c_portmap, NULL,
 			"Show I2C port mapping");
 #endif /* CONFIG_PLATFORM_EC_CONSOLE_CMD_I2C_PORTMAP */
+
+int chip_i2c_set_freq(int port, enum i2c_freq freq)
+{
+	uint32_t dev_config;
+	uint32_t speed;
+	int ret = EC_SUCCESS;
+
+	switch (freq) {
+	case I2C_FREQ_100KHZ:
+		speed = I2C_SPEED_STANDARD;
+		break;
+	case I2C_FREQ_400KHZ:
+		speed = I2C_SPEED_FAST;
+		break;
+	case I2C_FREQ_1000KHZ:
+		speed = I2C_SPEED_FAST_PLUS;
+		break;
+	default:
+		return EC_ERROR_INVAL;
+	}
+
+	ret = i2c_get_config(i2c_get_device_for_port(port), &dev_config);
+	if (!ret) {
+		dev_config &= ~I2C_SPEED_MASK;
+		dev_config |= I2C_SPEED_SET(speed);
+		ret = i2c_configure(i2c_get_device_for_port(port), dev_config);
+	}
+
+	return ret;
+}
+
+enum i2c_freq chip_i2c_get_freq(int port)
+{
+	uint32_t dev_config;
+	int ret = EC_SUCCESS;
+	const struct device *dev = i2c_get_device_for_port(port);
+
+	if (dev == NULL)
+		return I2C_FREQ_COUNT;
+
+	ret = i2c_get_config(dev, &dev_config);
+
+	if (ret)
+		return I2C_FREQ_COUNT;
+
+	switch (I2C_SPEED_GET(dev_config)) {
+	case I2C_SPEED_STANDARD:
+		return I2C_FREQ_100KHZ;
+	case I2C_SPEED_FAST:
+		return I2C_FREQ_400KHZ;
+	case I2C_SPEED_FAST_PLUS:
+		return I2C_FREQ_1000KHZ;
+	default:
+		return I2C_FREQ_COUNT;
+	}
+}
