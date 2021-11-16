@@ -1037,6 +1037,9 @@
  */
 #undef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
 
+/* Enable if CONFIG_CHARGER_BQ25720_VSYS_TH2_DV should be applied */
+#undef CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
+
 /*
  * This config option is used to set the charger's VSYS voltage
  * threshold. When the voltage drops to this level, PROCHOT is asserted
@@ -1046,6 +1049,17 @@
  * 8.0v.
  */
 #undef CONFIG_CHARGER_BQ25720_VSYS_TH2_DV
+
+/* Enable if CONFIG_CHARGER_BQ25720_VSYS_UVP should be applied */
+#undef CONFIG_CHARGER_BQ25720_VSYS_UVP_CUSTOM
+
+/*
+ * This config option is used to set the VSYS under voltage (VSYS_UVP)
+ * lockout threshold. This is a 3 bit field with default value 0. The
+ * actual voltage encoded is (0.8 * <value> + 2.4), allowing a threshold
+ * in the range of 2.4 V to 8.0 V to be specified.
+ */
+#undef CONFIG_CHARGER_BQ25720_VSYS_UVP
 
 /* Value of the bq25710 charge sense resistor, in mOhms */
 #undef CONFIG_CHARGER_BQ25710_SENSE_RESISTOR
@@ -1069,6 +1083,50 @@
  * of 2.3 V.
  */
 #undef CONFIG_CHARGER_BQ25710_CMP_REF_1P2
+
+/*
+ * This config option is used to enable the charger's AC over-current
+ * protection. The converter turns off when the OC threshold is
+ * reached. The threshold is selected using the ACOC_VTH bit.
+ */
+#undef CONFIG_CHARGER_BQ25710_EN_ACOC
+
+/*
+ * This config option selects which ACOC protection threshold is used
+ * with EN_ACOC. Enabling this option selects 133% of ILIM2. Otherwise,
+ * the default is 200% of ILIM2.
+ */
+#undef CONFIG_CHARGER_BQ25710_ACOC_VTH_1P33
+
+/*
+ * This config option selects the minimum BATOC protection threshold to
+ * be used with EN_BATOC. The minimum threshold is 150% of PROCHOT IDCHG
+ * on the bq25710 and 133% of PROCHOT IDCHG_TH2 on the bq25720. The
+ * default threshold is 200% on both chips.
+ */
+#undef CONFIG_CHARGER_BQ25710_BATOC_VTH_MINIMUM
+
+/*
+ * This config option sets the PP_INOM bit in Prochot Option 1
+ * register. This causes PROCHOT to be pulsed when the nominal adapter
+ * current threshold is reached. INOM is 110% of IDPM/IIN_DPM (input
+ * current setting).
+ */
+#undef CONFIG_CHARGER_BQ25710_PP_INOM
+
+/*
+ * This config option sets the PP_BATPRES bit in Prochot Option 1
+ * register. This causes PROCHOT to be pulsed when the battery is
+ * removed.
+ */
+#undef CONFIG_CHARGER_BQ25710_PP_BATPRES
+
+/*
+ * This config option sets the PP_ACOK in Prochot Option 1
+ * register. This causes PROCHOT to be pulsed when the AC adapter is
+ * removed.
+ */
+#undef CONFIG_CHARGER_BQ25710_PP_ACOK
 
 /*
  * Board specific maximum input current limit, in mA.

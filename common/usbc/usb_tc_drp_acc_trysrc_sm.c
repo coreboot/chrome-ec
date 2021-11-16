@@ -1574,9 +1574,9 @@ void tc_state_init(int port)
 	}
 
 	/*
-	 * If this is non-EFS2 device, battery is not present and EC RO doesn't
-	 * keep power-on reset flag after reset caused by H1, then don't apply
-	 * CC open because it will cause brown out.
+	 * If this is non-EFS2 device, battery is not present or at some minimum
+	 * voltage and EC RO doesn't keep power-on reset flag after reset caused
+	 * by H1, then don't apply CC open because it will cause brown out.
 	 *
 	 * Please note that we are checking if CONFIG_BOARD_RESET_AFTER_POWER_ON
 	 * is defined now, but actually we need to know if it was enabled in
@@ -1585,7 +1585,7 @@ void tc_state_init(int port)
 	 */
 	if (!IS_ENABLED(CONFIG_BOARD_RESET_AFTER_POWER_ON) &&
 	    !IS_ENABLED(CONFIG_VBOOT_EFS2) && IS_ENABLED(CONFIG_BATTERY) &&
-	    (battery_is_present() == BP_NO)) {
+	    !pd_is_battery_capable()) {
 		first_state = TC_UNATTACHED_SNK;
 	}
 
@@ -1745,8 +1745,14 @@ void tc_event_check(int port, int evt)
 		}
 	}
 
-	if (evt & PD_EVENT_UPDATE_DUAL_ROLE)
+	if (evt & PD_EVENT_UPDATE_DUAL_ROLE) {
+		/* If TCPC is idle, start the wake process */
+		if (IS_ENABLED(CONFIG_USB_PD_TCPC_LOW_POWER) &&
+		    get_state_tc(port) == TC_LOW_POWER_MODE)
+			tcpm_wake_low_power_mode(port);
+
 		pd_update_dual_role_config(port);
+	}
 }
 
 /*

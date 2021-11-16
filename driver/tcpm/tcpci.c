@@ -580,6 +580,19 @@ int tcpci_enter_low_power_mode(int port)
 {
 	return tcpc_write(port, TCPC_REG_COMMAND, TCPC_REG_COMMAND_I2CIDLE);
 }
+
+void tcpci_wake_low_power_mode(int port)
+{
+	/*
+	 * TCPCI 4.8.1 I2C Interface - wake the TCPC with a throw-away command
+	 *
+	 * TODO(b/205140007): Align LPM exit to TCPCI spec for TCPCs which can
+	 * correctly support it
+	 */
+	i2c_write8(tcpc_config[port].i2c_info.port,
+		   tcpc_config[port].i2c_info.addr_flags,
+		   TCPC_REG_COMMAND, TCPC_REG_COMMAND_WAKE_I2C);
+}
 #endif
 
 int tcpci_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
@@ -1004,6 +1017,18 @@ int tcpci_tcpm_transmit(int port, enum tcpci_msg_type type,
 			if (rv)
 				return rv;
 		}
+	}
+
+	/*
+	 * The PRL_RX state machine should force a discard of PRL_TX any time a
+	 * new message comes in.  However, since most of the PRL_RX runs on
+	 * the TCPC, we may receive a RX interrupt between the EC PRL_RX and
+	 * PRL_TX state machines running.  In this case, mark the message
+	 * discarded and don't tell the TCPC to transmit.
+	 */
+	if (tcpm_has_pending_message(port)) {
+		pd_transmit_complete(port, TCPC_TX_COMPLETE_DISCARDED);
+		return EC_ERROR_BUSY;
 	}
 
 	/*

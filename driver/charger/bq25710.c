@@ -31,12 +31,43 @@
 #error "BQ25710 is a NVDC charger, please enable CONFIG_CHARGER_NARROW_VDC."
 #endif
 
+#ifndef CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
+#define CONFIG_CHARGER_BQ25720_VSYS_TH2_DV	GET_BQ_FIELD(BQ25720, \
+							     VMIN_AP,	\
+							     VSYS_TH2, \
+							     UINT16_MAX)
+#endif
+
+#ifndef CONFIG_BQ25720_VSYS_UVP_CUSTOM
+#define CONFIG_BQ25720_VSYS_UVP 0
+#endif
+
 /*
  * Helper macros
  */
 
 #define SET_CO1_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
 							     CHARGE_OPTION_1, \
+							     _field, _c, (_x))
+
+#define SET_CO2_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
+							     CHARGE_OPTION_2, \
+							     _field, _c, (_x))
+
+#define SET_CO3(_field, _v, _x)		SET_BQ_FIELD(BQ257X0,	\
+						     CHARGE_OPTION_3,	\
+						     _field, _v, (_x))
+
+#define SET_CO4(_field, _v, _x)		SET_BQ_FIELD(BQ25720,	\
+						     CHARGE_OPTION_4,	\
+						     _field, _v, (_x))
+
+#define SET_PO1(_field, _v, _x)		SET_BQ_FIELD(BQ257X0,	\
+						     PROCHOT_OPTION_1,	\
+						     _field, _v, (_x))
+
+#define SET_PO1_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
+							     PROCHOT_OPTION_1, \
 							     _field, _c, (_x))
 
 /*
@@ -58,9 +89,7 @@
 
 #define REG_TO_CHARGING_CURRENT(REG) ((REG) / CHARGING_RESISTOR_RATIO)
 #define CHARGING_CURRENT_TO_REG(CUR) ((CUR) * CHARGING_RESISTOR_RATIO)
-#ifdef CONFIG_CHARGER_BQ25720
 #define VMIN_AP_VSYS_TH2_TO_REG(DV) ((DV) - 32)
-#endif
 
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
@@ -268,6 +297,163 @@ static int bq257x0_init_charge_option_1(int chgnum)
 	return raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_1, reg);
 }
 
+static int bq257x0_init_prochot_option_1(int chgnum)
+{
+	int rv;
+	int reg;
+
+	rv = raw_read16(chgnum, BQ25710_REG_PROCHOT_OPTION_1, &reg);
+	if (rv)
+		return rv;
+
+	/* Disable VDPM prochot profile at initialization */
+	reg = SET_PO1_BY_NAME(PP_VDPM, DISABLE, reg);
+
+	/*
+	 * Enable PROCHOT to be asserted with VSYS min detection. Note
+	 * that when no battery is present, then VSYS will be set to the
+	 * value in register 0x3E (MinSysVoltage) which means that when
+	 * no battery is present prochot will continuosly be asserted.
+	 */
+	reg = SET_PO1_BY_NAME(PP_VSYS, ENABLE, reg);
+
+#ifdef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
+	/*
+	 * Set the IDCHG limit who's value is defined in the config
+	 * option in mA.
+	 *
+	 * IDCHG limit is in 512 mA steps. Note there is a 128 mA offset
+	 * so the actual IDCHG limit will be the value stored in
+	 * IDCHG_VTH + 128 mA.
+	 */
+	reg = SET_PO1(IDCHG_VTH,
+		      CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA >> 9,
+		      reg);
+
+	/*  Enable IDCHG trigger for prochot. */
+	reg = SET_PO1_BY_NAME(PP_IDCHG, ENABLE, reg);
+#endif
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_PP_INOM))
+		reg = SET_PO1_BY_NAME(PP_INOM, ENABLE, reg);
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_PP_BATPRES))
+		reg = SET_PO1_BY_NAME(PP_BATPRES, ENABLE, reg);
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_PP_ACOK))
+		reg = SET_PO1_BY_NAME(PP_ACOK, ENABLE, reg);
+
+	return raw_write16(chgnum, BQ25710_REG_PROCHOT_OPTION_1, reg);
+}
+
+static int bq257x0_init_charge_option_2(int chgnum)
+{
+	int reg;
+	int rv;
+
+	rv = raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_2, &reg);
+	if (rv)
+		return rv;
+
+	/*
+	 * Reduce peak power mode overload and relax cycle time from
+	 * default 20 msec to the minimum of 5 msec on the bq25710. The
+	 * minimum is 20 msec on the bq25720.
+	 */
+	reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_2, PKPWR_TMAX, 0, reg);
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_EN_ACOC)) {
+		/* Enable AC input over-current protection. */
+		reg = SET_CO2_BY_NAME(EN_ACOC, ENABLE, reg);
+	}
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_ACOC_VTH_1P33)) {
+		/* Set ACOC threshold to 133% of ILIM2 */
+		reg = SET_CO2_BY_NAME(ACOC_VTH, 1P33, reg);
+	}
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_BATOC_VTH_MINIMUM)) {
+		/* Set battery over-current threshold to minimum. */
+		if (IS_ENABLED(CONFIG_CHARGER_BQ25720))
+			reg = SET_BQ_FIELD_BY_NAME(BQ25720, CHARGE_OPTION_2,
+						   BATOC_VTH, 1P33, reg);
+		else
+			reg = SET_BQ_FIELD_BY_NAME(BQ25710, CHARGE_OPTION_2,
+						   BATOC_VTH, 1P50, reg);
+	}
+
+	return raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_2, reg);
+}
+
+static int bq257x0_init_charge_option_3(int chgnum)
+{
+	int reg;
+	int rv;
+
+	if (!IS_ENABLED(CONFIG_CHARGER_BQ25720))
+		return EC_SUCCESS;
+
+	rv = raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_3, &reg);
+	if (rv)
+		return rv;
+
+	/*
+	 * The bq25720 defaults to 15 A while the bq25710
+	 * defaults to 10A. Set the bq25720 to 10A as well.
+	 */
+	reg = SET_CO3(IL_AVG, BQ25720_CHARGE_OPTION_3_IL_AVG__10A, reg);
+
+	return raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_3, reg);
+}
+
+static int bq257x0_init_charge_option_4(int chgnum)
+{
+	int reg;
+	int rv;
+
+	if (!IS_ENABLED(CONFIG_CHARGER_BQ25720))
+		return EC_SUCCESS;
+
+	if (!IS_ENABLED(CONFIG_BQ25720_VSYS_UVP_CUSTOM))
+		return EC_SUCCESS;
+
+	rv = raw_read16(chgnum, BQ25720_REG_CHARGE_OPTION_4, &reg);
+	if (rv)
+		return rv;
+
+	if (IS_ENABLED(CONFIG_BQ25720_VSYS_UVP_CUSTOM))
+		reg = SET_CO4(VSYS_UVP, CONFIG_BQ25720_VSYS_UVP, reg);
+
+	return raw_write16(chgnum, BQ25720_REG_CHARGE_OPTION_4, reg);
+}
+
+static int bq25720_init_vmin_active_protection(int chgnum)
+{
+	int reg;
+	int rv;
+	int th2_dv;
+
+	if (!IS_ENABLED(CONFIG_CHARGER_BQ25720))
+		return EC_SUCCESS;
+
+	if (!IS_ENABLED(CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM))
+		return EC_SUCCESS;
+
+	rv = raw_read16(chgnum, BQ25720_REG_VMIN_ACTIVE_PROTECTION, &reg);
+	if (rv)
+		return rv;
+
+	/*
+	 * The default VSYS_TH2 is 5.9v for a 2S config. Boards may need
+	 * to increase this for stability. PROCHOT is asserted when the
+	 * threshold is reached.
+	 */
+	th2_dv = VMIN_AP_VSYS_TH2_TO_REG(CONFIG_CHARGER_BQ25720_VSYS_TH2_DV);
+	reg = SET_BQ_FIELD(BQ25720, VMIN_AP, VSYS_TH2, th2_dv, reg);
+
+	return raw_write16(chgnum, BQ25720_REG_VMIN_ACTIVE_PROTECTION, reg);
+}
+
 static void bq25710_init(int chgnum)
 {
 	int reg;
@@ -305,54 +491,7 @@ static void bq25710_init(int chgnum)
 
 	bq257x0_init_charge_option_1(chgnum);
 
-	if (!raw_read16(chgnum, BQ25710_REG_PROCHOT_OPTION_1, &reg)) {
-		/* Disable VDPM prochot profile at initialization */
-		reg = SET_BQ_FIELD(BQ257X0, PROCHOT_OPTION_1, PP_VDPM, false,
-				   reg);
-		/*
-		 * Enable PROCHOT to be asserted with VSYS min detection. Note
-		 * that when no battery is present, then VSYS will be set to the
-		 * value in register 0x3E (MinSysVoltage) which means that when
-		 * no battery is present prochot will continuosly be asserted.
-		 */
-		reg = SET_BQ_FIELD(BQ257X0, PROCHOT_OPTION_1, PP_VSYS, true,
-				   reg);
-#ifdef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
-		/*
-		 * Set the IDCHG limit who's value is defined in the config
-		 * option in mA. Also, enable IDCHG trigger for prochot.
-		 */
-		/*
-		 * IDCHG limit is in 512 mA steps. Note there is a 128 mA offset
-		 * so the actual IDCHG limit will be the value stored in bits
-		 * 15:10 + 128 mA.
-		 */
-
-		reg = SET_BQ_FIELD(BQ257X0, PROCHOT_OPTION_1, IDCHG_VTH,
-				   CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA >> 9,
-				   reg);
-		reg = SET_BQ_FIELD(BQ257X0, PROCHOT_OPTION_1, PP_IDCHG, true,
-				   reg);
-#endif
-		raw_write16(chgnum, BQ25710_REG_PROCHOT_OPTION_1, reg);
-#ifdef CONFIG_CHARGER_BQ25720_VSYS_TH2_DV
-		/*
-		 * The default VSYS_TH2 is 5.9v for a 2S config. Boards
-		 * may need to increase this for stability. PROCHOT is
-		 * asserted when the threshold is reached.
-		 */
-		if (!raw_read16(chgnum, BQ25720_REG_VMIN_ACTIVE_PROTECTION,
-				&reg)) {
-			int th2_dv = VMIN_AP_VSYS_TH2_TO_REG(
-				CONFIG_CHARGER_BQ25720_VSYS_TH2_DV);
-
-			reg = SET_BQ_FIELD(BQ25720, VMIN_AP, VSYS_TH2,
-					   th2_dv, reg);
-			raw_write16(chgnum, BQ25720_REG_VMIN_ACTIVE_PROTECTION,
-				    reg);
-		}
-#endif
-	}
+	bq257x0_init_prochot_option_1(chgnum);
 
 	/* Reduce ILIM from default of 150% to 105% */
 	if (!raw_read16(chgnum, BQ25710_REG_PROCHOT_OPTION_0, &reg)) {
@@ -361,15 +500,13 @@ static void bq25710_init(int chgnum)
 		raw_write16(chgnum, BQ25710_REG_PROCHOT_OPTION_0, reg);
 	}
 
-	/*
-	 * Reduce peak power mode overload and relax cycle time from default 20
-	 * msec to the minimum of 5 msec.
-	 */
-	if (!raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_2, &reg)) {
-		reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_2, PKPWR_TMAX,
-				   0, reg);
-		raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_2, reg);
-	}
+	bq257x0_init_charge_option_2(chgnum);
+
+	bq257x0_init_charge_option_3(chgnum);
+
+	bq257x0_init_charge_option_4(chgnum);
+
+	bq25720_init_vmin_active_protection(chgnum);
 }
 
 /* Charger interfaces */

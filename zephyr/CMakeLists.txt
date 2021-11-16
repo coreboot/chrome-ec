@@ -40,7 +40,10 @@ if(DEFINED CONFIG_PLATFORM_EC)
   zephyr_compile_definitions("CONFIG_ZEPHYR")
 
   # Force compiler warnings to generate errors
-  zephyr_compile_options(-Werror)
+  option(ALLOW_WARNINGS "Do not treat warnings as errors")
+  if (NOT ALLOW_WARNINGS)
+    zephyr_compile_options(-Werror)
+  endif()
 
   include(fpu.cmake)
 
@@ -218,6 +221,20 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C_DEBUG
                                                 "${PLATFORM_EC}/common/i2c_trace.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C_VIRTUAL_BATTERY
                                                 "${PLATFORM_EC}/common/virtual_battery.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_IOEX
+                                                "${PLATFORM_EC}/common/ioexpander_commands.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_CCGXXF
+                                                "${PLATFORM_EC}/driver/ioexpander/ccgxxf.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_IT8801
+                                                "${PLATFORM_EC}/driver/ioexpander/it8801.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_NCT38XX
+                                                "${PLATFORM_EC}/driver/ioexpander/ioexpander_nct38xx.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_PCA9675
+                                                "${PLATFORM_EC}/driver/ioexpander/pca9675.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_PCAL6408
+                                                "${PLATFORM_EC}/driver/ioexpander/pcal6408.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_TCA64XXA
+                                                "${PLATFORM_EC}/driver/ioexpander/tca64xxa.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
                                                 "${PLATFORM_EC}/common/keyboard_scan.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_8042
@@ -261,6 +278,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWER_BUTTON
                                                 "${PLATFORM_EC}/common/power_button.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ
                                                 "${PLATFORM_EC}/power/common.c")
+zephyr_library_sources_ifdef(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540
+                                                "${PLATFORM_EC}/power/alderlake_slg4bd44540.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_AMD
                                                 "${PLATFORM_EC}/power/amd_x86.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_COMETLAKE
@@ -272,7 +291,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8192
-						"${PLATFORM_EC}/power/mt8192.c")
+                                                "${PLATFORM_EC}/power/mt8192.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7180
                                                 "${PLATFORM_EC}/power/qcom.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7280
