@@ -563,7 +563,7 @@ enum manufacturing_status tpm_endorse(void)
 
 	/* Unpack rsa cert struct. */
 	rsa_cert = (const struct ro_cert *) p;
-	/* Sanity check cert region contents. */
+	/* Validity check cert region contents. */
 	if ((2 * sizeof(struct ro_cert)) +
 		rsa_cert->cert_response.cert_len > RO_CERTS_REGION_SIZE)
 		return mnf_bad_rsa_size;
@@ -571,7 +571,7 @@ enum manufacturing_status tpm_endorse(void)
 	/* Unpack ecc cert struct. */
 	ecc_cert = (const struct ro_cert *) (p + sizeof(struct ro_cert) +
 					rsa_cert->cert_response.cert_len);
-	/* Sanity check cert region contents. */
+	/* Validity check cert region contents. */
 	if ((2 * sizeof(struct ro_cert)) +
 		rsa_cert->cert_response.cert_len +
 		ecc_cert->cert_response.cert_len > RO_CERTS_REGION_SIZE)

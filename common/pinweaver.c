@@ -18,7 +18,7 @@
 #include <tpm_registers.h>
 #include <util.h>
 
-/* Compile time sanity checks. */
+/* Compile time validity checks. */
 /* Make sure the hash size is consistent with dcrypto. */
 BUILD_ASSERT(PW_HASH_SIZE >= SHA256_DIGEST_SIZE);
 

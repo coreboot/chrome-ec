@@ -307,7 +307,7 @@ static void aes_command_handler(void *cmd_body,
 	 * We know that the receive buffer is at least this big, i.e. all the
 	 * preceding fields are guaranteed to fit.
 	 *
-	 * Now is a good time to verify overall sanity of the received
+	 * Now is a good time to verify overall validity of the received
 	 * payload: does the actual size match the added up sizes of the
 	 * pieces.
 	 */

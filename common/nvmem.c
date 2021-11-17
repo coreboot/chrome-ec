@@ -270,7 +270,7 @@ static int nvmem_get_partition_off(int user, uint32_t offset, uint32_t len,
 {
 	uint32_t start_offset;
 
-	/* Sanity check for user */
+	/* Validity check for user */
 	if (user >= NVMEM_NUM_USERS)
 		return EC_ERROR_OVERFLOW;
 

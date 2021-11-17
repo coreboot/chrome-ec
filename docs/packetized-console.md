@@ -136,7 +136,7 @@ struct console_packet {
 	 * params: 1-8 of objects matching the format of the string indexed by
 	 * 'str_index' above.
 	 *
-	 * CONSOLE_PACKET_END, as a sanity-check that we haven't dropped
+	 * CONSOLE_PACKET_END, as a validity check that we haven't dropped
 	 * anything.  A checksum or CRC would be kinda expensive for debug
 	 * data.  Note that it is not present if data_len == 0.
 	 */

@@ -343,7 +343,7 @@ static const struct virtual_nv_index_cfg index_config[] = {
 			GetRSUDevID)
 };
 
-/* Check sanity of above config. */
+/* Check validity check of above config. */
 BUILD_ASSERT(VIRTUAL_NV_INDEX_END <= (VIRTUAL_NV_INDEX_MAX + 1));
 BUILD_ASSERT((VIRTUAL_NV_INDEX_END - VIRTUAL_NV_INDEX_START) ==
 	     ARRAY_SIZE(index_config));

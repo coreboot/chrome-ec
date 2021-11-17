@@ -53,7 +53,7 @@
  * why they would need more than 32 ranges.
  */
 #define APRO_MAX_NUM_RANGES 32
-/* Values used for sanity check of the flash_range structure fields. */
+/* Values used for validity check of the flash_range structure fields. */
 #define MAX_SUPPORTED_FLASH_SIZE (32 * 1024 * 1024)
 #define MAX_SUPPORTED_RANGE_SIZE (4 * 1024 * 1024)
 
@@ -102,7 +102,7 @@ struct gvd_descriptor {
 /*
  * Header added for storing of the AP RO check information in the H1 flash
  * page. The checksum is a 4 byte truncated sha256 of the saved payload, just
- * a sanity check.
+ * a validity check.
  */
 struct ap_ro_check_header {
 	uint8_t version;
