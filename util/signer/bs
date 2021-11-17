@@ -93,7 +93,7 @@ tweak_manifest () {
   local rlz
 
   bid_params=( $(echo $CR50_BOARD_ID | sed 's/:/ /g') )
-  # A very basic sanity check: it needs to consist of three colon separated
+  # A very basic validity check: it needs to consist of three colon separated
   # fields.
   if [[ ${#bid_params[@]} != 3 ]]; then
     echo "Wrong board ID string \"$CR50_BOARD_ID\"}" >&2

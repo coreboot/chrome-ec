@@ -337,7 +337,7 @@ static int cmd_hmac_drbg(int argc, char **argv)
 DECLARE_SAFE_CONSOLE_COMMAND(hmac_drbg, cmd_hmac_drbg, NULL, NULL);
 
 /*
- * Sanity check to exercise random initialization.
+ * Validity check to exercise random initialization.
  */
 static int cmd_hmac_drbg_rand(int argc, char **argv)
 {

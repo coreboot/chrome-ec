@@ -47,13 +47,13 @@ void tryLaunch(uint32_t adr, size_t max_size)
 
 	memset(&hashes, 0, sizeof(hashes));
 
-	/* Sanity check image header. */
+	/* Validity check image header. */
 	if (hdr->magic != -1)
 		return;
 	if (hdr->image_size > max_size)
 		return;
 
-	/* Sanity checks that image belongs at adr. */
+	/* Validity checks that image belongs at adr. */
 	if (hdr->ro_base < adr)
 		return;
 	if (hdr->ro_max > adr + max_size)
