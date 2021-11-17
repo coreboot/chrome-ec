@@ -1134,7 +1134,6 @@
 #define CONFIG_CMD_SYSJUMP
 #define CONFIG_CMD_SYSLOCK
 #define CONFIG_CMD_SYSRST
-#undef  CONFIG_CMD_TASK_RESET
 #undef  CONFIG_CMD_TASKREADY
 #define CONFIG_CMD_TEMP_SENSOR
 #define CONFIG_CMD_TIMERINFO
@@ -3094,27 +3093,6 @@
  * (i.e. cts/cts.tasklist).
  */
 #undef CONFIG_CTS_TASK_LIST
-
-/*
- * List of tasks that support reset. Tasks listed here must also be included in
- * CONFIG_TASK_LIST.
- *
- * For each task, use macro ENABLE_RESET(n) to enable resets. The parameter n
- * must match the value passed to TASK_{ALWAYS,NOTEST} in CONFIG_TASK_LIST.
- *
- * Tasks that enable resets *must* call task_reset_cleanup() once at the
- * beginning of their main function, and perform task-specific cleanup if
- * necessary.
- *
- * By default, tasks can be reset at any time. To change this behavior, call
- * task_disable_resets() immediately after task_reset_cleanup(), and then enable
- * resets where appropriate.
- *
- * Tasks that predominantly have resets disabled are expected to periodically
- * enable resets, and should always ensure to do so before waiting for long
- * periods (eg when waiting for an event to process).
- */
-#undef CONFIG_TASK_RESET_LIST
 
 /*
  * Enable task profiling.
