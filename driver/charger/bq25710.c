@@ -38,8 +38,20 @@
 							     UINT16_MAX)
 #endif
 
-#ifndef CONFIG_BQ25720_VSYS_UVP_CUSTOM
-#define CONFIG_BQ25720_VSYS_UVP 0
+#ifndef CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_CUSTOM
+#define CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_MV 0
+#endif
+
+#ifndef CONFIG_CHARGER_BQ25720_VSYS_UVP_CUSTOM
+#define CONFIG_CHARGER_BQ25720_VSYS_UVP 0
+#endif
+
+#ifndef CONFIG_CHARGER_BQ25720_IDCHG_DEG2_CUSTOM
+#define CONFIG_CHARGER_BQ25720_IDCHG_DEG2 1
+#endif
+
+#ifndef CONFIG_CHARGER_BQ25720_IDCHG_TH2_CUSTOM
+#define CONFIG_CHARGER_BQ25720_IDCHG_TH2 1
 #endif
 
 /*
@@ -57,6 +69,10 @@
 #define SET_CO3(_field, _v, _x)		SET_BQ_FIELD(BQ257X0,	\
 						     CHARGE_OPTION_3,	\
 						     _field, _v, (_x))
+
+#define SET_CO3_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
+							     CHARGE_OPTION_3, \
+							     _field, _c, (_x))
 
 #define SET_CO4(_field, _v, _x)		SET_BQ_FIELD(BQ25720,	\
 						     CHARGE_OPTION_4,	\
@@ -142,8 +158,17 @@ static inline enum ec_error_list raw_read16(int chgnum, int offset, int *value)
 
 static inline int min_system_voltage_to_reg(int voltage_mv)
 {
-	return (voltage_mv / BQ25710_MIN_SYSTEM_VOLTAGE_STEP_MV) <<
-			BQ25710_MIN_SYSTEM_VOLTAGE_SHIFT;
+	int steps;
+	int reg;
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25720)) {
+		steps = voltage_mv / BQ25720_VSYS_MIN_VOLTAGE_STEP_MV;
+		reg = SET_BQ_FIELD(BQ25720, VSYS_MIN, VOLTAGE, steps, 0);
+	} else {
+		steps = voltage_mv / BQ25710_MIN_SYSTEM_VOLTAGE_STEP_MV;
+		reg = SET_BQ_FIELD(BQ25710, MIN_SYSTEM, VOLTAGE, steps, 0);
+	}
+	return reg;
 }
 
 static inline enum ec_error_list raw_write16(int chgnum, int offset, int value)
@@ -397,11 +422,7 @@ static int bq257x0_init_charge_option_3(int chgnum)
 	if (rv)
 		return rv;
 
-	/*
-	 * The bq25720 defaults to 15 A while the bq25710
-	 * defaults to 10A. Set the bq25720 to 10A as well.
-	 */
-	reg = SET_CO3(IL_AVG, BQ25720_CHARGE_OPTION_3_IL_AVG__10A, reg);
+	reg = SET_CO3_BY_NAME(IL_AVG, 10A, reg);
 
 	return raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_3, reg);
 }
@@ -414,15 +435,24 @@ static int bq257x0_init_charge_option_4(int chgnum)
 	if (!IS_ENABLED(CONFIG_CHARGER_BQ25720))
 		return EC_SUCCESS;
 
-	if (!IS_ENABLED(CONFIG_BQ25720_VSYS_UVP_CUSTOM))
+	if (!IS_ENABLED(CONFIG_CHARGER_BQ25720_VSYS_UVP_CUSTOM) &&
+	    !IS_ENABLED(CONFIG_CHARGER_BQ25720_IDCHG_DEG2_CUSTOM) &&
+	    !IS_ENABLED(CONFIG_CHARGER_BQ25720_IDCHG_TH2_CUSTOM))
 		return EC_SUCCESS;
 
 	rv = raw_read16(chgnum, BQ25720_REG_CHARGE_OPTION_4, &reg);
 	if (rv)
 		return rv;
 
-	if (IS_ENABLED(CONFIG_BQ25720_VSYS_UVP_CUSTOM))
-		reg = SET_CO4(VSYS_UVP, CONFIG_BQ25720_VSYS_UVP, reg);
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25720_VSYS_UVP_CUSTOM))
+		reg = SET_CO4(VSYS_UVP, CONFIG_CHARGER_BQ25720_VSYS_UVP, reg);
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25720_IDCHG_DEG2_CUSTOM))
+		reg = SET_CO4(IDCHG_DEG2, CONFIG_CHARGER_BQ25720_IDCHG_DEG2,
+			      reg);
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25720_IDCHG_TH2_CUSTOM))
+		reg = SET_CO4(IDCHG_TH2, CONFIG_CHARGER_BQ25720_IDCHG_TH2, reg);
 
 	return raw_write16(chgnum, BQ25720_REG_CHARGE_OPTION_4, reg);
 }
@@ -461,20 +491,31 @@ static void bq25710_init(int chgnum)
 	int rv;
 
 	/*
-	 * Reset registers to their default settings. There is no reset pin for
-	 * this chip so without a full power cycle, some registers may not be at
-	 * their default values. Note, need to save the POR value of
-	 * MIN_SYSTEM_VOLTAGE register prior to setting the reset so that the
-	 * correct value is preserved. In order to have the correct value read,
-	 * the bq25710 must not be in low power mode, otherwise the VDDA rail
-	 * may not be powered if AC is not connected. Note, this reset is only
-	 * required when running out of RO and not following sysjump to RW.
+	 * Reset registers to their default settings. There is no reset
+	 * pin for this chip so without a full power cycle, some
+	 * registers may not be at their default values. Note, need to
+	 * save the POR value of MIN_SYSTEM_VOLTAGE/VSYS_MIN register
+	 * prior to setting the reset so that the correct value is
+	 * preserved. In order to have the correct value read, the
+	 * bq25710 must not be in low power mode, otherwise the VDDA
+	 * rail may not be powered if AC is not connected. Note, this
+	 * reset is only required when running out of RO and not
+	 * following sysjump to RW.
 	 */
 	if (!system_jumped_late()) {
 		rv = bq25710_set_low_power_mode(chgnum, 0);
 		/* Allow enough time for VDDA to be powered */
 		msleep(BQ25710_VDDA_STARTUP_DELAY_MSEC);
-		rv |= raw_read16(chgnum, BQ25710_REG_MIN_SYSTEM_VOLTAGE, &vsys);
+
+		if (IS_ENABLED(
+			    CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_CUSTOM)) {
+			vsys = min_system_voltage_to_reg(
+				CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_MV);
+		} else {
+			rv |= raw_read16(chgnum,
+					 BQ25710_REG_MIN_SYSTEM_VOLTAGE, &vsys);
+		}
+
 		rv |= raw_read16(chgnum, BQ25710_REG_CHARGE_OPTION_3, &reg);
 		if (!rv) {
 			reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_3, RESET_REG,

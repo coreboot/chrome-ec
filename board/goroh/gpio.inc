@@ -22,6 +22,8 @@ GPIO_INT(AP_EC_WARM_RST_REQ, PIN(D, 3), GPIO_INT_RISING | GPIO_SEL_1P8V,
 GPIO_INT(AP_EC_SHUTDOWN_REQ_L, PIN(F, 2),
          GPIO_INT_BOTH | GPIO_PULL_DOWN | GPIO_SEL_1P8V,
          chipset_reset_request_interrupt)
+GPIO_INT(AP_EC_WATCHDOG_L,   PIN(C, 7), GPIO_INT_BOTH | GPIO_SEL_1P8V,
+         power_signal_interrupt)
 GPIO_INT(PG_S5_PWR_OD,           PIN(A, 6), GPIO_INT_BOTH,
 	 power_signal_interrupt)
 GPIO_INT(PG_VDD1_VDD2_OD,        PIN(M, 6), GPIO_INT_BOTH | GPIO_SEL_1P8V,
@@ -36,8 +38,6 @@ GPIO_INT(PG_VDD_DDR_OD,          PIN(J, 5), GPIO_INT_BOTH,
 /* Sensor Interrupts */
 GPIO_INT(BASE_IMU_INT_L,     PIN(M, 2), GPIO_INT_FALLING | GPIO_SEL_1P8V,
          bmi160_interrupt)
-GPIO_INT(LID_ACCEL_INT_L,    PIN(G, 0), GPIO_INT_FALLING | GPIO_SEL_1P8V,
-         lis2dw12_interrupt)
 
 /* USB-C interrupts */
 GPIO_INT(USB_C0_FAULT_ODL,   PIN(D, 1), GPIO_INT_BOTH, ppc_interrupt)
@@ -59,7 +59,7 @@ GPIO_INT(SPI0_CS,            PIN(M, 5), GPIO_INT_FALLING,
 
 /* Power Sequencing Signals */
 GPIO(EN_PP1800_S5,           PIN(H, 0), GPIO_OUT_LOW)
-GPIO(EN_PP5000_S5,           PIN(C, 6), GPIO_OUT_LOW)
+GPIO(EN_PP5000_S5,           PIN(C, 6), GPIO_OUT_HIGH) /* default high for PPC init on start up. */
 GPIO(EN_VDD_SOC,             PIN(E, 1), GPIO_OUT_LOW)
 GPIO(EN_VDD_MEDIA_ML,        PIN(F, 1), GPIO_OUT_LOW)
 GPIO(SYS_RST_ODL,            PIN(B, 6), GPIO_ODR_LOW)
@@ -91,7 +91,6 @@ GPIO(USB_C0_SBU2_DC,         PIN(H, 5), GPIO_OUT_LOW)
 /* Misc Signals */
 GPIO(EC_BATT_PRES_ODL,       PIN(C, 0), GPIO_INPUT)
 GPIO(ENTERING_RW,            PIN(C, 5), GPIO_OUT_LOW) /* EC_ENTERING_RW */
-GPIO(FAN_SPEED_TACH_1,       PIN(D, 6), GPIO_INPUT)
 GPIO(EN_EC_ID_ODL,           PIN(C, 3), GPIO_OUT_LOW)
 GPIO(EN_PP5000_FAN_X,        PIN(E, 3), GPIO_OUT_LOW)
 GPIO(EN_PPVAR_KB_BL_X,       PIN(H, 3), GPIO_OUT_LOW)
@@ -126,15 +125,16 @@ ALTERNATE(PIN_MASK(B, 0x03), 1, MODULE_UART, 0) /* EC to Servo */
 
 /* PWM */
 ALTERNATE(PIN_MASK(A, 0x0F), 1, MODULE_PWM, 0) /* PWM 0~3 */
+ALTERNATE(PIN_MASK(D, 0x40), 3, MODULE_PWM, GPIO_PULL_UP) /* TACH0A for FAN1 */
 
 /* ADC */
-ALTERNATE(PIN_MASK(I, 0x6E), 0, MODULE_ADC, 0) /* ADC 1,2,3,5,6 */
+ALTERNATE(PIN_MASK(I, 0x2E), 0, MODULE_ADC, 0) /* ADC 1,2,3,5 */
 
 /* SPI */
 ALTERNATE(PIN_MASK(M, 0x33), 0, MODULE_SPI, 0) /* SPI */
 
-/* Unimplemented Pins  */
-UNIMPLEMENTED(AP_EC_WATCHDOG_L)
+/* unused, configure as input pin */
+GPIO(LID_ACCEL_INT_L,    PIN(G, 0), GPIO_INPUT | GPIO_SEL_1P8V)
 
 /* *_ODL pin has external pullup so don't pull it down. */
 

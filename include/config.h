@@ -1061,6 +1061,28 @@
  */
 #undef CONFIG_CHARGER_BQ25720_VSYS_UVP
 
+/* Enable if CONFIG_CHARGER_BQ25720_IDCHG_DEG2 should be applied */
+#undef CONFIG_CHARGER_BQ25720_IDCHG_DEG2_CUSTOM
+
+/*
+ * This config option is used to set the 2nd battery discharge current
+ * limit (IDCHG_TH2) deglitch time (IDCHG_DEG2). This is a 2 bit field
+ * with default value 1 (1.6 ms). The encoded value ranges from 100 us
+ * to 12 ms.
+ */
+#undef CONFIG_CHARGER_BQ25720_IDCHG_DEG2
+
+/* Enable if CONFIG_CHARGER_BQ25720_IDCHG_TH2 should be applied */
+#undef CONFIG_CHARGER_BQ25720_IDCHG_TH2_CUSTOM
+
+/*
+ * This config option is used to set the charger's 2nd battery discharge
+ * current limit (IDCHG_TH2) as a percentage of IDCHG_TH1. This is a 3
+ * bit field with default value 1 (150%). The encoded value ranges from
+ * 125% to 400%.
+ */
+#undef CONFIG_CHARGER_BQ25720_IDCHG_TH2
+
 /* Value of the bq25710 charge sense resistor, in mOhms */
 #undef CONFIG_CHARGER_BQ25710_SENSE_RESISTOR
 
@@ -1127,6 +1149,19 @@
  * removed.
  */
 #undef CONFIG_CHARGER_BQ25710_PP_ACOK
+
+/* Enable if CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_MV should be applied */
+#undef CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_CUSTOM
+
+/*
+ * This config option sets the minimum system voltage in
+ * milli-volts. The bq25710 uses 6 bits of resolution and can be
+ * configured from 1.024 V to 16.128 V in 256 mV increments. The bq25720
+ * uses 8 bits of resolution and can be set from 1.0 V to 19.2 V in 100
+ * mV increments. The default value depends on configured number of
+ * battery cells connected in series using the CELL_BATPRESZ strap.
+ */
+#undef CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_MV
 
 /*
  * Board specific maximum input current limit, in mA.
