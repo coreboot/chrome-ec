@@ -13,7 +13,7 @@
 #define GPIO(name, pin, flags) {#name, GPIO_##pin, flags},
 #endif
 
-#define UNIMPLEMENTED(name) {#name, DUMMY_GPIO_BANK, 0, GPIO_DEFAULT},
+#define UNIMPLEMENTED(name) {#name, PLACEHOLDER_GPIO_BANK, 0, GPIO_DEFAULT},
 #define GPIO_INT(name, pin, flags, signal) GPIO(name, pin, flags)
 
 /* GPIO signal list. */

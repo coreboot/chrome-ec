@@ -3,4 +3,4 @@
  * found in the LICENSE file.
  */
 
-/* Dummy empty file, just to make test compilation work. */
+/* Placeholder empty file, just to make test compilation work. */

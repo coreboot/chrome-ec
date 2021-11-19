@@ -103,7 +103,7 @@ _data_end:
 _data_lma_start:
 .long __data_lma_start
 
-/* Dummy functions to avoid linker complaints */
+/* Placeholder functions to avoid linker complaints */
 .global __aeabi_unwind_cpp_pr0
 .global __aeabi_unwind_cpp_pr1
 .global __aeabi_unwind_cpp_pr2
@@ -118,4 +118,3 @@ stack_start:
 .space CONFIG_STACK_SIZE, 0
 stack_end:
 .global stack_end
-

@@ -17,9 +17,9 @@
 #include "timer.h"
 #include "util.h"
 
-/* Dummy implementations for testing */
-static uint8_t dummy_board_id[4] = {'Z', 'Z', 'C', 'R'};
-static uint8_t dummy_device_id[8] = {'T', 'H', 'X', 1, 1, 3, 8, 0xfe};
+/* Placeholder implementations for testing */
+static uint8_t placeholder_board_id[4] = {'Z', 'Z', 'C', 'R'};
+static uint8_t placeholder_device_id[8] = {'T', 'H', 'X', 1, 1, 3, 8, 0xfe};
 static int server_protocol_version = RMA_CHALLENGE_VERSION;
 static uint8_t server_private_key[32] = RMA_TEST_SERVER_PRIVATE_KEY;
 static int server_key_id = RMA_TEST_SERVER_KEY_ID;
@@ -35,7 +35,7 @@ void rand_bytes(void *buffer, size_t len)
 
 int read_board_id(struct board_id *id)
 {
-	memcpy(&id->type, dummy_board_id, sizeof(id->type));
+	memcpy(&id->type, placeholder_board_id, sizeof(id->type));
 	id->type_inv = ~id->type;
 	id->flags = 0xFF00;
 	return EC_SUCCESS;
@@ -43,8 +43,8 @@ int read_board_id(struct board_id *id)
 
 int system_get_chip_unique_id(uint8_t **id)
 {
-	*id = dummy_device_id;
-	return sizeof(dummy_device_id);
+	*id = placeholder_device_id;
+	return sizeof(placeholder_device_id);
 }
 
 /**
@@ -101,11 +101,11 @@ int rma_server_side(char *out_auth_code, const char *challenge)
 	 * Since this is just a test, here we'll just make sure the BoardID
 	 * and DeviceID match what we expected.
 	 */
-	if (memcmp(c.board_id, dummy_board_id, sizeof(c.board_id))) {
+	if (memcmp(c.board_id, placeholder_board_id, sizeof(c.board_id))) {
 		printf("BoardID mismatch\n");
 		return -1;
 	}
-	if (memcmp(c.device_id, dummy_device_id, sizeof(c.device_id))) {
+	if (memcmp(c.device_id, placeholder_device_id, sizeof(c.device_id))) {
 		printf("DeviceID mismatch\n");
 		return -1;
 	}
@@ -193,13 +193,13 @@ static int test_rma_auth(void)
 	TEST_ASSERT(rma_server_side(authcode, challenge) == -1);
 	server_key_id--;
 
-	dummy_board_id[0]++;
+	placeholder_board_id[0]++;
 	TEST_ASSERT(rma_server_side(authcode, challenge) == -1);
-	dummy_board_id[0]--;
+	placeholder_board_id[0]--;
 
-	dummy_device_id[0]++;
+	placeholder_device_id[0]++;
 	TEST_ASSERT(rma_server_side(authcode, challenge) == -1);
-	dummy_device_id[0]--;
+	placeholder_device_id[0]--;
 
 	return EC_SUCCESS;
 }

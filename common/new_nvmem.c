@@ -707,7 +707,7 @@ static enum ec_error_list set_first_page_header(void)
  */
 static int container_is_valid(struct nn_container *ch)
 {
-	struct nn_container dummy_c;
+	struct nn_container placeholder_c;
 	uint32_t hash;
 	uint32_t preserved_hash;
 	uint8_t preserved_type;
@@ -723,9 +723,9 @@ static int container_is_valid(struct nn_container *ch)
 	ch->container_hash = preserved_hash;
 	ch->container_type = preserved_type;
 
-	dummy_c.container_hash = hash;
+	placeholder_c.container_hash = hash;
 
-	return dummy_c.container_hash == ch->container_hash;
+	return placeholder_c.container_hash == ch->container_hash;
 }
 
 static uint32_t aligned_container_size(const struct nn_container *ch)
@@ -1881,7 +1881,7 @@ static void restore_object(void *pad, size_t size)
  * flash - it would never be reinstated even after TPM reinitializes.
  *
  * The reserved_bitmap array is a bitmap of all detected reserved objects,
- * those not in the array are initialized to a dummy initial value.
+ * those not in the array are initialized to a placeholder initial value.
  */
 static enum ec_error_list verify_reserved(uint8_t *reserved_bitmap,
 					  struct nn_container *ch)
@@ -3053,7 +3053,7 @@ int nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 
 	/*
 	 * Now fill up the current flash page with erased objects to make sure
-	 * that it would be erased during next compaction. Use dummy key,
+	 * that it would be erased during next compaction. Use placeholder key,
 	 * value pairs as the erase objects.
 	 */
 	saved_list_index = controller_at.list_index;

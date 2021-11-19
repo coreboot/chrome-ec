@@ -109,7 +109,7 @@ struct console_packet {
 
 	/* Set if the sender had to discard packets due to buffer overflow. */
 	uint8_t overflow : 1;
-	uint8_t dummy : 3;
+	uint8_t placeholder : 3;
 
 	/* Channel; values from enum console_channel */
 	uint8_t channel;
