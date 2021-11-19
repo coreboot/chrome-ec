@@ -45,7 +45,7 @@
  *  - no need to initialize (key, value) storage separately, initvars() API is
  *    not there.
  *
- *  - when the user is retrieving a (key, value) object, he/she is given a
+ *  - when the user is retrieving a (key, value) object, they are given a
  *    dynamically allocated buffer, which needs to be explicitly released by
  *    calling the new API: freevar().
  *
