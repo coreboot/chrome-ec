@@ -198,12 +198,12 @@ ifneq ($(CR50_DEV),)
 # H1, whatever its info mask state is. The awk script below clears out the
 # info {} section of the manifest.
 #
-DUMMY := $(shell /usr/bin/awk 'BEGIN {skip = 0}; \
+MODIFY_MANIFEST := $(shell /usr/bin/awk 'BEGIN {skip = 0}; \
 	/^},/ {skip = 0}; \
 	{if (!skip) {print };} \
 	/"info": {/ {skip = 1};' $(MANIFEST) > $(SIGNER_MANIFEST))
 else
-DUMMY := $(shell /bin/cp $(MANIFEST) $(SIGNER_MANIFEST))
+MODIFY_MANIFEST := $(shell /bin/cp $(MANIFEST) $(SIGNER_MANIFEST))
 endif
 REPLACEMENT := $(shell printf \
 	'\\n    \\"DEV_ID0\\": %s,\\n    \\"DEV_ID1\\": %s,' $(H1_DEVIDS))
