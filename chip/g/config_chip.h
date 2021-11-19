@@ -58,7 +58,7 @@
 /* Magic for gpio.inc */
 #define GPIO_PIN(port, index) (port), (1 << (index))
 #define GPIO_PIN_MASK(port, mask) (port), (mask)
-#define DUMMY_GPIO_BANK 0
+#define PLACEHOLDER_GPIO_BANK 0
 
 #define PCLK_FREQ  (24 * 1000 * 1000)
 

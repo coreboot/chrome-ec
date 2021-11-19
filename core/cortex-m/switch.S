@@ -80,7 +80,8 @@ __switchto:
 .global __task_start
 .thumb_func
 __task_start:
-  ldr r2,=scratchpad     @ area used as dummy thread stack for the first switch
+  ldr r2,=scratchpad     @ area used as placeholder thread stack for the first
+			 @ switch
   mov r3, #2             @ use : priv. mode / thread stack / no floating point
                          @ setting FP to unused here means first context switch
                          @ will not store FP regs
@@ -98,4 +99,3 @@ __task_start:
   /* we should never return here */
   mov r0, #1             @ set to EC_ERROR_UNKNOWN
   bx lr
-

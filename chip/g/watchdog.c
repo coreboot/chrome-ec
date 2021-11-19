@@ -69,9 +69,11 @@ void watchdog_reload(void)
 	 * the first timeout we need to reset the interrupt bit. */
 	if (status) {
 		GR_WATCHDOG_ICR = status;
-		/* That doesn't seem to unpend the watchdog interrupt (even if
-		 * we do dummy writes to force the write to be committed), so
-		 * explicitly unpend the interrupt before re-enabling it. */
+		/*
+		 * That doesn't seem to unpend the watchdog interrupt (even if
+		 * we do placeholder writes to force the write to be committed),
+		 * so explicitly unpend the interrupt before re-enabling it.
+		 */
 		task_clear_pending_irq(GC_IRQNUM_WATCHDOG0_WDOGINT);
 		task_enable_irq(GC_IRQNUM_WATCHDOG0_WDOGINT);
 	}

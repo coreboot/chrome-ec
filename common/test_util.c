@@ -30,13 +30,13 @@ int __test_error_count;
 /* Weak reference function as an entry point for unit test */
 test_mockable void run_test(void) { }
 
-/* Default dummy test init */
+/* Default placeholder test init */
 test_mockable void test_init(void) { }
 
-/* Default dummy before test */
+/* Default placeholder before test */
 test_mockable void before_test(void) { }
 
-/* Default dummy after test */
+/* Default placeholder after test */
 test_mockable void after_test(void) { }
 
 #ifdef TEST_COVERAGE
