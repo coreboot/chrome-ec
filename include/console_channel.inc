@@ -20,16 +20,12 @@ CONSOLE_CHANNEL(CC_EXTENSION,    "extension")
 CONSOLE_CHANNEL(CC_CCD,          "ccd")
 #endif
 CONSOLE_CHANNEL(CC_CHARGER,      "charger")
-#ifdef HAS_TASK_CHIPSET
 CONSOLE_CHANNEL(CC_CHIPSET,      "chipset")
-#endif
 CONSOLE_CHANNEL(CC_CLOCK,        "clock")
 #ifdef CONFIG_DMA
 CONSOLE_CHANNEL(CC_DMA,          "dma")
 #endif
-#if defined(CONFIG_DEVICE_EVENT) || defined(CONFIG_HOSTCMD_EVENTS)
 CONSOLE_CHANNEL(CC_EVENTS,       "events")
-#endif
 #ifdef HAS_TASK_FPSENSOR
 CONSOLE_CHANNEL(CC_FP,           "fingerprint")
 #endif
@@ -47,12 +43,8 @@ CONSOLE_CHANNEL(CC_I2C,          "i2c")
 CONSOLE_CHANNEL(CC_IPI,          "ipi")
 #endif
 CONSOLE_CHANNEL(CC_KEYBOARD,     "keyboard")
-#ifdef HAS_TASK_KEYSCAN
 CONSOLE_CHANNEL(CC_KEYSCAN,      "keyscan")
-#endif
-#ifdef CONFIG_LID_ANGLE_UPDATE
 CONSOLE_CHANNEL(CC_LIDANGLE,     "lidangle")
-#endif
 #ifdef HAS_TASK_LIGHTBAR
 CONSOLE_CHANNEL(CC_LIGHTBAR,     "lightbar")
 #endif
@@ -94,9 +86,7 @@ CONSOLE_CHANNEL(CC_DPTF,         "dptf")
 CONSOLE_CHANNEL(CC_ALS,		 "als")
 #endif
 CONSOLE_CHANNEL(CC_THERMAL,      "thermal")
-#ifdef CHIP_G
 CONSOLE_CHANNEL(CC_TPM,          "tpm")
-#endif
 CONSOLE_CHANNEL(CC_USB,          "usb")
 CONSOLE_CHANNEL(CC_USBCHARGE,    "usbcharge")
 #if defined(CONFIG_USB_POWER_DELIVERY) || defined(CONFIG_USB_PD_TCPC)
