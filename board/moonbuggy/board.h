@@ -38,7 +38,7 @@
 #define CONFIG_MKBP_USE_HOST_EVENT
 #undef CONFIG_KEYBOARD_RUNTIME_KEYS
 #undef CONFIG_HIBERNATE
-#define CONFIG_HOSTCMD_ESPI
+#define CONFIG_HOST_INTERFACE_ESPI
 #define CONFIG_LED_COMMON
 #undef  CONFIG_LID_SWITCH
 #define CONFIG_LTO
@@ -147,7 +147,7 @@ enum adc_channel {
 enum pwm_channel {
 	PWM_CH_FAN,
 	PWM_CH_LED_RED,
-	PWM_CH_LED_WHITE,
+	PWM_CH_LED_BLUE,
 	/* Number of PWM channels */
 	PWM_CH_COUNT
 };

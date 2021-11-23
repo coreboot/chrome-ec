@@ -49,13 +49,13 @@ DECLARE_HOOK(HOOK_INIT, gpio_init, HOOK_PRIO_DEFAULT);
  */
 
 #define GPIO_IRQ_FUNC(_irq_func, wui_int)		\
-void _irq_func(void)					\
+static void _irq_func(void)				\
 {							\
 	gpio_interrupt(wui_int);			\
 }
 
 /* If we need to handle the other type interrupts except GPIO, add code here */
-void __gpio_wk0efgh_interrupt(void)
+static void __gpio_wk0efgh_interrupt(void)
 {
 	if (IS_ENABLED(CONFIG_HOSTCMD_X86)) {
 		/* Pending bit 7 or 6 or 5? */
@@ -67,7 +67,7 @@ void __gpio_wk0efgh_interrupt(void)
 			SET_BIT(NPCX_WKPCL(MIWU_TABLE_0, MIWU_GROUP_5), 6);
 			return;
 		}
-		if (IS_ENABLED(CONFIG_HOSTCMD_ESPI)) {
+		if (IS_ENABLED(CONFIG_HOST_INTERFACE_ESPI)) {
 			if (IS_BIT_SET(NPCX_WKEN(MIWU_TABLE_0, MIWU_GROUP_5), 5)
 				&&
 			IS_BIT_SET(NPCX_WKPND(MIWU_TABLE_0, MIWU_GROUP_5), 5)) {
@@ -97,7 +97,7 @@ static void set_rtc_host_event(void)
 DECLARE_DEFERRED(set_rtc_host_event);
 #endif
 
-void __gpio_rtc_interrupt(void)
+static void __gpio_rtc_interrupt(void)
 {
 	/* Check pending bit 7 */
 #ifdef CONFIG_HOSTCMD_RTC
@@ -130,7 +130,7 @@ void __gpio_rtc_interrupt(void)
 	gpio_interrupt(WUI_INT(MIWU_TABLE_0, MIWU_GROUP_4));
 }
 
-void __gpio_wk1h_interrupt(void)
+static void __gpio_wk1h_interrupt(void)
 {
 #if defined(CHIP_FAMILY_NPCX7) && defined(CONFIG_LOW_POWER_IDLE) && \
 	(CONFIG_CONSOLE_UART == 0)
@@ -179,7 +179,7 @@ DECLARE_IRQ(NPCX_IRQ_KSI_WKINTC_1,  __gpio_wk1c_interrupt, 3);
 #endif
 DECLARE_IRQ(NPCX_IRQ_WKINTD_1,      __gpio_wk1d_interrupt, 3);
 DECLARE_IRQ(NPCX_IRQ_WKINTE_1,      __gpio_wk1e_interrupt, 3);
-#ifdef CONFIG_HOSTCMD_SHI
+#ifdef CONFIG_HOST_INTERFACE_SHI
 /*
  * HACK: Make CS GPIO P2 to improve SHI reliability.
  * TODO: Increase CS-assertion-to-transaction-start delay on host to

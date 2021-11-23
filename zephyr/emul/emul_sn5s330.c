@@ -30,6 +30,63 @@ struct sn5s330_emul_data {
 	struct i2c_common_emul_data common;
 	/** Emulated FUNC_SET1 register */
 	uint8_t func_set1_reg;
+	/** Emulated FUNC_SET2 register */
+	uint8_t func_set2_reg;
+	/** Emulated FUNC_SET3 register */
+	uint8_t func_set3_reg;
+	/** Emulated FUNC_SET4 register */
+	uint8_t func_set4_reg;
+	/** Emulated FUNC_SET5 register */
+	uint8_t func_set5_reg;
+	/** Emulated FUNC_SET6 register */
+	uint8_t func_set6_reg;
+	/** Emulated FUNC_SET7 register */
+	uint8_t func_set7_reg;
+	/** Emulated FUNC_SET8 register */
+	uint8_t func_set8_reg;
+	/** Emulated FUNC_SET9 register */
+	uint8_t func_set9_reg;
+	/** Emulated FUNC_SET10 register */
+	uint8_t func_set10_reg;
+	/** Emulated FUNC_SET11 register */
+	uint8_t func_set11_reg;
+	/** Emulated FUNC_SET12 register */
+	uint8_t func_set12_reg;
+	/** Emulated INT_STATUS_REG1 register */
+	uint8_t int_status_reg1;
+	/** Emulated INT_STATUS_REG2 register */
+	uint8_t int_status_reg2;
+	/** Emulated INT_STATUS_REG3 register */
+	uint8_t int_status_reg3;
+	/** Emulated INT_STATUS_REG4 register */
+	/*
+	 * TODO(b:205754232): Register name discrepancy
+	 */
+	uint8_t int_status_reg4;
+	/** Emulated INT_MASK_RISE_REG1 register */
+	uint8_t int_mask_rise_reg1;
+	/** Emulated INT_MASK_RISE_REG2 register */
+	uint8_t int_mask_rise_reg2;
+	/** Emulated INT_MASK_RISE_REG3 register */
+	uint8_t int_mask_rise_reg3;
+	/** Emulated INT_MASK_FALL_REG1 register */
+	uint8_t int_mask_fall_reg1;
+	/** Emulated INT_MASK_FALL_REG2 register */
+	uint8_t int_mask_fall_reg2;
+	/** Emulated INT_MASK_FALL_REG3 register */
+	uint8_t int_mask_fall_reg3;
+	/** Emulated INT_TRIP_RISE_REG1 register */
+	uint8_t int_trip_rise_reg1;
+	/** Emulated INT_TRIP_RISE_REG2 register */
+	uint8_t int_trip_rise_reg2;
+	/** Emulated INT_TRIP_RISE_REG3 register */
+	uint8_t int_trip_rise_reg3;
+	/** Emulated INT_TRIP_FALL_REG1 register */
+	uint8_t int_trip_fall_reg1;
+	/** Emulated INT_TRIP_FALL_REG2 register */
+	uint8_t int_trip_fall_reg2;
+	/** Emulated INT_TRIP_FALL_REG3 register */
+	uint8_t int_trip_fall_reg3;
 };
 
 struct sn5s330_emul_cfg {
@@ -46,7 +103,7 @@ struct i2c_emul *sn5s330_emul_to_i2c_emul(const struct emul *emul)
 
 int sn5s330_emul_peek_reg(const struct emul *emul, uint32_t reg, uint32_t *val)
 {
-	struct sn5s330_emul_data *data = SN5S330_DATA_FROM_I2C_EMUL(emul);
+	struct sn5s330_emul_data *data = emul->data;
 
 	switch (reg) {
 	case SN5S330_FUNC_SET1:
@@ -63,13 +120,96 @@ static int sn5s330_emul_read_byte(struct i2c_emul *emul, int reg, uint8_t *val,
 {
 	struct sn5s330_emul_data *data = SN5S330_DATA_FROM_I2C_EMUL(emul);
 
+	__ASSERT(bytes == 0, "bytes 0x%x != 0x0 on reg 0x%x", bytes, reg);
+
 	switch (reg) {
 	case SN5S330_FUNC_SET1:
-		__ASSERT_NO_MSG(bytes == 0);
 		*val = data->func_set1_reg;
 		break;
+	case SN5S330_FUNC_SET2:
+		*val = data->func_set2_reg;
+		break;
+	case SN5S330_FUNC_SET3:
+		*val = data->func_set3_reg;
+		break;
+	case SN5S330_FUNC_SET4:
+		*val = data->func_set4_reg;
+		break;
+	case SN5S330_FUNC_SET5:
+		*val = data->func_set5_reg;
+		break;
+	case SN5S330_FUNC_SET6:
+		*val = data->func_set6_reg;
+		break;
+	case SN5S330_FUNC_SET7:
+		*val = data->func_set7_reg;
+		break;
+	case SN5S330_FUNC_SET8:
+		*val = data->func_set8_reg;
+		break;
+	case SN5S330_FUNC_SET9:
+		*val = data->func_set9_reg;
+		break;
+	case SN5S330_FUNC_SET10:
+		*val = data->func_set10_reg;
+		break;
+	case SN5S330_FUNC_SET11:
+		*val = data->func_set11_reg;
+		break;
+	case SN5S330_FUNC_SET12:
+		*val = data->func_set12_reg;
+		break;
+	case SN5S330_INT_STATUS_REG1:
+		*val = data->int_status_reg1;
+		break;
+	case SN5S330_INT_STATUS_REG2:
+		*val = data->int_status_reg2;
+		break;
+	case SN5S330_INT_STATUS_REG3:
+		*val = data->int_status_reg3;
+		break;
+	case SN5S330_INT_STATUS_REG4:
+		*val = data->int_status_reg4;
+		break;
+	case SN5S330_INT_MASK_RISE_REG1:
+		*val = data->int_mask_rise_reg1;
+		break;
+	case SN5S330_INT_MASK_RISE_REG2:
+		*val = data->int_mask_rise_reg2;
+		break;
+	case SN5S330_INT_MASK_RISE_REG3:
+		*val = data->int_mask_rise_reg3;
+		break;
+	case SN5S330_INT_MASK_FALL_REG1:
+		*val = data->int_mask_fall_reg1;
+		break;
+	case SN5S330_INT_MASK_FALL_REG2:
+		*val = data->int_mask_fall_reg2;
+		break;
+	case SN5S330_INT_MASK_FALL_REG3:
+		*val = data->int_mask_fall_reg3;
+		break;
+	case SN5S330_INT_TRIP_RISE_REG1:
+		*val = data->int_trip_rise_reg1;
+		break;
+	case SN5S330_INT_TRIP_RISE_REG2:
+		*val = data->int_trip_rise_reg2;
+		break;
+	case SN5S330_INT_TRIP_RISE_REG3:
+		*val = data->int_trip_rise_reg3;
+		break;
+	case SN5S330_INT_TRIP_FALL_REG1:
+		*val = data->int_trip_fall_reg1;
+		break;
+	case SN5S330_INT_TRIP_FALL_REG2:
+		*val = data->int_trip_fall_reg2;
+		break;
+	case SN5S330_INT_TRIP_FALL_REG3:
+		*val = data->int_trip_fall_reg3;
+		break;
 	default:
-		return -EINVAL;
+		__ASSERT(false, "Unimplemented Register Access Error on 0x%x",
+			 reg);
 	}
 
 	return 0;
@@ -80,16 +220,110 @@ static int sn5s330_emul_write_byte(struct i2c_emul *emul, int reg, uint8_t val,
 {
 	struct sn5s330_emul_data *data = SN5S330_DATA_FROM_I2C_EMUL(emul);
 
+	__ASSERT(bytes == 1, "bytes 0x%x != 0x1 on reg 0x%x", bytes, reg);
+
 	switch (reg) {
 	case SN5S330_FUNC_SET1:
-		__ASSERT_NO_MSG(bytes == 1);
 		data->func_set1_reg = val;
 		break;
+	case SN5S330_FUNC_SET2:
+		data->func_set2_reg = val;
+		break;
+	case SN5S330_FUNC_SET3:
+		data->func_set3_reg = val;
+		break;
+	case SN5S330_FUNC_SET4:
+		data->func_set4_reg = val;
+		break;
+	case SN5S330_FUNC_SET5:
+		data->func_set5_reg = val;
+		break;
+	case SN5S330_FUNC_SET6:
+		data->func_set6_reg = val;
+		break;
+	case SN5S330_FUNC_SET7:
+		data->func_set7_reg = val;
+		break;
+	case SN5S330_FUNC_SET8:
+		data->func_set8_reg = val;
+		break;
+	case SN5S330_FUNC_SET9:
+		data->func_set9_reg = val;
+		break;
+	case SN5S330_FUNC_SET10:
+		data->func_set10_reg = val;
+		break;
+	case SN5S330_FUNC_SET11:
+		data->func_set11_reg = val;
+		break;
+	case SN5S330_FUNC_SET12:
+		data->func_set12_reg = val;
+		break;
+	case SN5S330_INT_STATUS_REG1:
+		/* fallthrough */
+	case SN5S330_INT_STATUS_REG2:
+		/* fallthrough */
+	case SN5S330_INT_STATUS_REG3:
+		__ASSERT(false,
+			 "Write to an unverified-as-safe read-only register on "
+			 "0x%x",
+			 reg);
+		/* fallthrough for checkpath */
+	case SN5S330_INT_STATUS_REG4:
+		data->int_status_reg4 = val;
+		break;
+	case SN5S330_INT_MASK_RISE_REG1:
+		data->int_mask_rise_reg1 = val;
+		break;
+	case SN5S330_INT_MASK_RISE_REG2:
+		data->int_mask_rise_reg2 = val;
+		break;
+	case SN5S330_INT_MASK_RISE_REG3:
+		data->int_mask_rise_reg3 = val;
+		break;
+	case SN5S330_INT_MASK_FALL_REG1:
+		data->int_mask_fall_reg1 = val;
+		break;
+	case SN5S330_INT_MASK_FALL_REG2:
+		data->int_mask_fall_reg2 = val;
+		break;
+	case SN5S330_INT_MASK_FALL_REG3:
+		data->int_mask_fall_reg3 = val;
+		break;
+	case SN5S330_INT_TRIP_RISE_REG1:
+		data->int_trip_rise_reg1 = val;
+		break;
+	case SN5S330_INT_TRIP_RISE_REG2:
+		data->int_trip_rise_reg2 = val;
+		break;
+	case SN5S330_INT_TRIP_RISE_REG3:
+		data->int_trip_rise_reg3 = val;
+		break;
+	case SN5S330_INT_TRIP_FALL_REG1:
+		data->int_trip_fall_reg1 = val;
+		break;
+	case SN5S330_INT_TRIP_FALL_REG2:
+		data->int_trip_fall_reg2 = val;
+		break;
+	case SN5S330_INT_TRIP_FALL_REG3:
+		data->int_trip_fall_reg3 = val;
+		break;
 	default:
-		return -EINVAL;
+		__ASSERT(false, "Unimplemented Register Access Error on 0x%x",
+			 reg);
 	}
 
 	return 0;
+}
+
+void sn5s330_emul_reset(const struct emul *emul)
+{
+	struct sn5s330_emul_data *data = emul->data;
+	struct i2c_common_emul_data common = data->common;
+
+	/* Only Reset the sn5s330 Register Data */
+	memset(data, 0, sizeof(struct sn5s330_emul_data));
+	data->common = common;
 }
 
 static int emul_sn5s330_init(const struct emul *emul,

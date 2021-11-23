@@ -4,40 +4,30 @@
  */
 
 #include "ec_commands.h"
-#include "gpio.h"
 #include "led_common.h"
-#include "led_onoff_states.h"
-#include "chipset.h"
-#include "driver/bc12/mt6360.h"
+#include "led_pwm.h"
+#include "pwm.h"
 
-const int led_charge_lvl_1 = 5;
-const int led_charge_lvl_2 = 95;
-
-struct led_descriptor led_bat_state_table[LED_NUM_STATES][LED_NUM_PHASES] = {
-	[STATE_CHARGING_LVL_1]	     = {{EC_LED_COLOR_AMBER, LED_INDEFINITE} },
-	[STATE_CHARGING_LVL_2]	     = {{EC_LED_COLOR_AMBER, LED_INDEFINITE} },
-	[STATE_CHARGING_FULL_CHARGE] = {{EC_LED_COLOR_WHITE,  LED_INDEFINITE} },
-	[STATE_DISCHARGE_S0]	     = {{LED_OFF,  LED_INDEFINITE} },
-	[STATE_DISCHARGE_S0_BAT_LOW] = {{EC_LED_COLOR_AMBER,  1 * LED_ONE_SEC},
-					{LED_OFF,	    3 * LED_ONE_SEC} },
-	[STATE_DISCHARGE_S3]	     = {{LED_OFF,  LED_INDEFINITE} },
-	[STATE_DISCHARGE_S5]         = {{LED_OFF,  LED_INDEFINITE} },
-	[STATE_BATTERY_ERROR]        = {{EC_LED_COLOR_AMBER,  1 * LED_ONE_SEC},
-					{LED_OFF,	    1 * LED_ONE_SEC} },
-	[STATE_FACTORY_TEST]         = {{EC_LED_COLOR_WHITE,   2 * LED_ONE_SEC},
-					{EC_LED_COLOR_AMBER, 2 * LED_ONE_SEC} },
+struct pwm_led_color_map led_color_map[EC_LED_COLOR_COUNT] = {
+				/* Green, Red */
+	[EC_LED_COLOR_RED]    = {   0, 100 },
+	[EC_LED_COLOR_GREEN]  = { 100,   0 },
+	[EC_LED_COLOR_BLUE]   = {   0,   0 },
+	[EC_LED_COLOR_YELLOW] = {   0,   0 },
+	[EC_LED_COLOR_WHITE]  = {   0,   0 },
+	[EC_LED_COLOR_AMBER]  = {   0,   0 },
 };
 
-const struct led_descriptor
-		led_pwr_state_table[PWR_LED_NUM_STATES][LED_NUM_PHASES] = {
-	[PWR_LED_STATE_ON]           = {{EC_LED_COLOR_WHITE, LED_INDEFINITE} },
-	[PWR_LED_STATE_SUSPEND_AC]   = {{EC_LED_COLOR_WHITE, 1 * LED_ONE_SEC},
-					{LED_OFF,	     3 * LED_ONE_SEC} },
-	[PWR_LED_STATE_SUSPEND_NO_AC] = {{EC_LED_COLOR_WHITE, 1 * LED_ONE_SEC},
-					{LED_OFF,	     3 * LED_ONE_SEC} },
-	[PWR_LED_STATE_OFF]           = {{LED_OFF, LED_INDEFINITE} },
+struct pwm_led pwm_leds[CONFIG_LED_PWM_COUNT] = {
+	[PWM_LED0] = {
+		/* left port LEDs */
+		.ch0 = PWM_CH_LED_GREEN,
+		.ch1 = PWM_CH_LED_RED,
+		.ch2 = PWM_LED_NO_CHANNEL,
+		.enable = &pwm_enable,
+		.set_duty = &pwm_set_duty,
+	},
 };
-
 
 const enum ec_led_id supported_led_ids[] = {
 	EC_LED_ID_BATTERY_LED,
@@ -46,74 +36,31 @@ const enum ec_led_id supported_led_ids[] = {
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
-void led_set_color_battery(enum ec_led_colors color)
-{
-	mt6360_led_set_brightness(MT6360_LED_RGB2, 50);
-	mt6360_led_set_brightness(MT6360_LED_RGB3, 50);
-
-	switch (color) {
-	case EC_LED_COLOR_AMBER:
-		mt6360_led_enable(MT6360_LED_RGB2, 0);
-		mt6360_led_enable(MT6360_LED_RGB3, 1);
-		break;
-	case EC_LED_COLOR_WHITE:
-		mt6360_led_enable(MT6360_LED_RGB2, 1);
-		mt6360_led_enable(MT6360_LED_RGB3, 0);
-		break;
-	default: /* LED_OFF and other unsupported colors */
-		mt6360_led_enable(MT6360_LED_RGB2, 0);
-		mt6360_led_enable(MT6360_LED_RGB3, 0);
-		break;
-	}
-}
-
-void led_set_color_power(enum ec_led_colors color)
-{
-	mt6360_led_set_brightness(MT6360_LED_RGB1, 1);
-	mt6360_led_enable(MT6360_LED_RGB1, color == EC_LED_COLOR_WHITE);
-}
-
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
 {
-	if (led_id == EC_LED_ID_BATTERY_LED) {
-		brightness_range[EC_LED_COLOR_AMBER] =
-				MT6360_LED_BRIGHTNESS_MAX;
-		brightness_range[EC_LED_COLOR_WHITE] =
-				MT6360_LED_BRIGHTNESS_MAX;
-	} else if (led_id == EC_LED_ID_POWER_LED) {
-		brightness_range[EC_LED_COLOR_WHITE] =
-				MT6360_LED_BRIGHTNESS_MAX;
-	}
+	if (led_id == EC_LED_ID_BATTERY_LED)
+		brightness_range[EC_LED_COLOR_RED] = 100;
+	else if (led_id == EC_LED_ID_POWER_LED)
+		brightness_range[EC_LED_COLOR_GREEN] = 100;
 }
 
 int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 {
-	if (led_id == EC_LED_ID_BATTERY_LED) {
-		if (brightness[EC_LED_COLOR_AMBER] != 0)
-			led_set_color_battery(EC_LED_COLOR_AMBER);
-		else if (brightness[EC_LED_COLOR_WHITE] != 0)
-			led_set_color_battery(EC_LED_COLOR_WHITE);
-		else
-			led_set_color_battery(LED_OFF);
-	} else if (led_id == EC_LED_ID_POWER_LED) {
-		if (brightness[EC_LED_COLOR_WHITE] != 0)
-			led_set_color_power(EC_LED_COLOR_WHITE);
-		else
-			led_set_color_power(LED_OFF);
-	}
+	enum pwm_led_id pwm_id;
+
+	/* Convert ec_led_id to pwm_led_id. */
+	if (led_id == EC_LED_ID_POWER_LED || led_id == EC_LED_ID_BATTERY_LED)
+		pwm_id = PWM_LED0;
+	else
+		return EC_ERROR_UNKNOWN;
+
+	if (brightness[EC_LED_COLOR_RED])
+		set_pwm_led_color(pwm_id, EC_LED_COLOR_RED);
+	else if (brightness[EC_LED_COLOR_GREEN])
+		set_pwm_led_color(pwm_id, EC_LED_COLOR_GREEN);
+	else
+		/* Otherwise, the "color" is "off". */
+		set_pwm_led_color(pwm_id, -1);
 
 	return EC_SUCCESS;
-}
-
-__override enum led_states board_led_get_state(enum led_states desired_state)
-{
-	if (desired_state == STATE_BATTERY_ERROR) {
-		if (chipset_in_state(CHIPSET_STATE_ON))
-			return desired_state;
-		else if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND))
-			return STATE_DISCHARGE_S3;
-		else
-			return STATE_DISCHARGE_S5;
-	}
-	return desired_state;
 }

@@ -631,14 +631,19 @@
 #undef CONFIG_BATTERY_LEVEL_NEAR_FULL
 
 /*
+ * Use memory mapped region to store battery information. It supports only
+ * single battery systems. V2 should be used unless there is a reason not to.
+ */
+#undef CONFIG_BATTERY_V1
+
+/*
  * Use an alternative method to store battery information: Instead of writing
  * directly to host memory mapped region, this keeps the battery information in
  * ec_response_battery_static/dynamic_info structures, that can then be fetched
  * using host commands, or via EC_ACPI_MEM_BATTERY_INDEX command, which tells
  * the EC to update the shared memory.
  *
- * This is required on dual-battery systems, and on on hostless bases with a
- * battery.
+ * This is required on dual-battery systems and hostless bases with a battery.
  */
 #undef CONFIG_BATTERY_V2
 
@@ -1032,6 +1037,9 @@
  */
 #undef CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA
 
+/* Enable if CONFIG_CHARGER_BQ25720_VSYS_TH2_DV should be applied */
+#undef CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
+
 /*
  * This config option is used to set the charger's VSYS voltage
  * threshold. When the voltage drops to this level, PROCHOT is asserted
@@ -1041,6 +1049,137 @@
  * 8.0v.
  */
 #undef CONFIG_CHARGER_BQ25720_VSYS_TH2_DV
+
+/* Enable if CONFIG_CHARGER_BQ25720_VSYS_UVP should be applied */
+#undef CONFIG_CHARGER_BQ25720_VSYS_UVP_CUSTOM
+
+/*
+ * This config option is used to set the VSYS under voltage (VSYS_UVP)
+ * lockout threshold. This is a 3 bit field with default value 0. The
+ * actual voltage encoded is (0.8 * <value> + 2.4), allowing a threshold
+ * in the range of 2.4 V to 8.0 V to be specified.
+ */
+#undef CONFIG_CHARGER_BQ25720_VSYS_UVP
+
+/* Enable if CONFIG_CHARGER_BQ25720_IDCHG_DEG2 should be applied */
+#undef CONFIG_CHARGER_BQ25720_IDCHG_DEG2_CUSTOM
+
+/*
+ * This config option is used to set the 2nd battery discharge current
+ * limit (IDCHG_TH2) deglitch time (IDCHG_DEG2). This is a 2 bit field
+ * with default value 1 (1.6 ms). The encoded value ranges from 100 us
+ * to 12 ms.
+ */
+#undef CONFIG_CHARGER_BQ25720_IDCHG_DEG2
+
+/* Enable if CONFIG_CHARGER_BQ25720_IDCHG_TH2 should be applied */
+#undef CONFIG_CHARGER_BQ25720_IDCHG_TH2_CUSTOM
+
+/*
+ * This config option is used to set the charger's 2nd battery discharge
+ * current limit (IDCHG_TH2) as a percentage of IDCHG_TH1. This is a 3
+ * bit field with default value 1 (150%). The encoded value ranges from
+ * 125% to 400%.
+ */
+#undef CONFIG_CHARGER_BQ25720_IDCHG_TH2
+
+/* Value of the bq25710 charge sense resistor, in mOhms */
+#undef CONFIG_CHARGER_BQ25710_SENSE_RESISTOR
+
+/* Value of the bq25710 input current sense resistor, in mOhms */
+#undef CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC
+
+/*
+ * This config option is used to enable the PSYS sensing circuit on the
+ * BQ25710 and BQ25720 chargers. This is used for system power
+ * monitoring on board designs that support this capability. This
+ * circuit is disabled by default (reset) and needs to be explicitly
+ * enabled for meaningful results.
+ */
+#undef CONFIG_CHARGER_BQ25710_PSYS_SENSING
+
+/*
+ * This config option is used to change the charger's internal
+ * comparator reference voltage to 1.2 V. The power-on default is 2.3
+ * V. This must be enabled if the board was designed for 1.2 V instead
+ * of 2.3 V.
+ */
+#undef CONFIG_CHARGER_BQ25710_CMP_REF_1P2
+
+/* Enable if CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG should be applied */
+#undef CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG_CUSTOM
+
+/*
+ * Input overload time when in peak power mode (PKPWR_TOVLD_DEG). This
+ * limits how long the charger can draw ILIM2 from the adapter. This is
+ * a 2 bit field. On the bq25710 1 ms to 20 ms can be encoded. On the
+ * bq25720 1 ms to 10 ms can be encoded.
+ */
+#undef CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG
+
+/*
+ * This config option is used to enable the charger's AC over-current
+ * protection. The converter turns off when the OC threshold is
+ * reached. The threshold is selected using the ACOC_VTH bit.
+ */
+#undef CONFIG_CHARGER_BQ25710_EN_ACOC
+
+/*
+ * This config option selects which ACOC protection threshold is used
+ * with EN_ACOC. Enabling this option selects 133% of ILIM2. Otherwise,
+ * the default is 200% of ILIM2.
+ */
+#undef CONFIG_CHARGER_BQ25710_ACOC_VTH_1P33
+
+/*
+ * This config option selects the minimum BATOC protection threshold to
+ * be used with EN_BATOC. The minimum threshold is 150% of PROCHOT IDCHG
+ * on the bq25710 and 133% of PROCHOT IDCHG_TH2 on the bq25720. The
+ * default threshold is 200% on both chips.
+ */
+#undef CONFIG_CHARGER_BQ25710_BATOC_VTH_MINIMUM
+
+/*
+ * This config option sets the PP_INOM bit in Prochot Option 1
+ * register. This causes PROCHOT to be pulsed when the nominal adapter
+ * current threshold is reached. INOM is 110% of IDPM/IIN_DPM (input
+ * current setting).
+ */
+#undef CONFIG_CHARGER_BQ25710_PP_INOM
+
+/*
+ * This config option sets the PP_BATPRES bit in Prochot Option 1
+ * register. This causes PROCHOT to be pulsed when the battery is
+ * removed.
+ */
+#undef CONFIG_CHARGER_BQ25710_PP_BATPRES
+
+/*
+ * This config option sets the PP_ACOK in Prochot Option 1
+ * register. This causes PROCHOT to be pulsed when the AC adapter is
+ * removed.
+ */
+#undef CONFIG_CHARGER_BQ25710_PP_ACOK
+
+/*
+ * This config option sets the PP_IDCHG2 bit in the Charge Option 4
+ * register. This causes PROCHOT to be pulsed when IDCHG_TH2 is reached.
+ */
+
+#undef CONFIG_CHARGER_BQ25720_PP_IDCHG2
+
+/* Enable if CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_MV should be applied */
+#undef CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_CUSTOM
+
+/*
+ * This config option sets the minimum system voltage in
+ * milli-volts. The bq25710 uses 6 bits of resolution and can be
+ * configured from 1.024 V to 16.128 V in 256 mV increments. The bq25720
+ * uses 8 bits of resolution and can be set from 1.0 V to 19.2 V in 100
+ * mV increments. The default value depends on configured number of
+ * battery cells connected in series using the CELL_BATPRESZ strap.
+ */
+#undef CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_MV
 
 /*
  * Board specific maximum input current limit, in mA.
@@ -1252,6 +1391,7 @@
 						 * discrete EC control
 						 */
 #undef CONFIG_CHIPSET_ECDRIVEN		/* Mock power module */
+#undef CONFIG_CHIPSET_FALCONLITE	/* Falcon-lite*/
 #undef CONFIG_CHIPSET_GEMINILAKE	/* Intel Geminilake (x86) */
 #undef CONFIG_CHIPSET_ICELAKE		/* Intel Icelake (x86) */
 #undef CONFIG_CHIPSET_JASPERLAKE	/* Intel Jasperlake (x86) */
@@ -1394,6 +1534,7 @@
 #undef  CONFIG_CMD_BATT_MFG_ACCESS
 #undef  CONFIG_CMD_BUTTON
 #define CONFIG_CMD_CBI
+#undef  CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE
 
 /*
  * HAS_TASK_CHIPSET implies the GSC presence.
@@ -1520,6 +1661,9 @@
 
 /* Don't save General Purpose Registers during panic */
 #undef CONFIG_PANIC_STRIP_GPR
+
+/* Provide another output method of panic information by console channel */
+#undef CONFIG_PANIC_CONSOLE_OUTPUT
 
 /*
  * Provide the default GPIO abstraction layer.
@@ -2269,7 +2413,7 @@
  * Accept EC host commands over the SPI host interface.  The AP is SPI
  * controller and the EC is the SPI peripheral for this configuration.
  */
-#undef CONFIG_HOSTCMD_SHI
+#undef CONFIG_HOST_INTERFACE_SHI
 
 /*
  * Host command rate limiting assures EC will have time to process lower
@@ -3015,19 +3159,19 @@
 #undef CONFIG_HID_HECI
 
 /* Support host command interface over HECI */
-#undef CONFIG_HOSTCMD_HECI
+#undef CONFIG_HOST_INTERFACE_HECI
 
 /*
  * EC supports x86 host communication with AP. This can either be through LPC
  * or eSPI. The CONFIG_HOSTCMD_X86 will get automatically defined if either
- * CONFIG_HOSTCMD_LPC or CONFIG_HOSTCMD_ESPI are defined. LPC and eSPI are
- * mutually exclusive.
+ * CONFIG_HOST_INTERFACE_LPC or CONFIG_HOST_INTERFACE_ESPI are defined.
+ * LPC and eSPI are mutually exclusive.
  */
 #undef CONFIG_HOSTCMD_X86
 /* Support host command interface over LPC bus. */
-#undef CONFIG_HOSTCMD_LPC
+#undef CONFIG_HOST_INTERFACE_LPC
 /* Support host command interface over eSPI bus. */
-#undef CONFIG_HOSTCMD_ESPI
+#undef CONFIG_HOST_INTERFACE_ESPI
 
 /*
  * SLP signals (SLP_S3 and SLP_S4) use virtual wires intead of physical pins
@@ -3880,8 +4024,10 @@
 #undef CONFIG_TEMP_SENSOR_G781		/* G781 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_G782		/* G782 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_OTI502	/* OTI502 sensor, on I2C bus */
+#undef CONFIG_TEMP_SENSOR_PCT2075	/* PCT2075 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_SB_TSI	/* SB_TSI sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP006	/* TI TMP006 sensor, on I2C bus */
+#undef CONFIG_TEMP_SENSOR_TMP112	/* TI TMP112 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP411	/* TI TMP411 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP432	/* TI TMP432 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP468	/* TI TMP468 sensor, on I2C bus */
@@ -5053,6 +5199,9 @@
 /* Support the Parade PS8743 Type-C Redriving Switch */
 #undef CONFIG_USB_MUX_PS8743
 
+/* Config to enable TUSB1044 Type-c USB redriver */
+#undef CONFIG_USB_MUX_TUSB1044
+
 /* Support the Texas Instrument TUSB1064 Type-C Redriving Switch (UFP) */
 #undef CONFIG_USB_MUX_TUSB1064
 
@@ -5387,7 +5536,7 @@
  * without using eSPI for host commands.
  */
 #if (!defined(CONFIG_ZEPHYR) && defined(CONFIG_HOST_ESPI_VW_POWER_SIGNAL) && \
-     !defined(CONFIG_HOSTCMD_ESPI))
+	!defined(CONFIG_HOST_INTERFACE_ESPI))
 #error Must enable eSPI to enable virtual wires.
 #endif
 
@@ -5512,17 +5661,17 @@
  * Automatically define CONFIG_HOSTCMD_X86 if either child option is defined.
  * Ensure LPC and eSPI are mutually exclusive
  */
-#if defined(CONFIG_HOSTCMD_LPC) || defined(CONFIG_HOSTCMD_ESPI)
+#if defined(CONFIG_HOST_INTERFACE_LPC) || defined(CONFIG_HOST_INTERFACE_ESPI)
 #define CONFIG_HOSTCMD_X86
 #endif
 
-#if defined(CONFIG_HOSTCMD_LPC) && defined(CONFIG_HOSTCMD_ESPI)
+#if defined(CONFIG_HOST_INTERFACE_LPC) && defined(CONFIG_HOST_INTERFACE_ESPI)
 #error Must select only one type of host communication bus.
 #endif
 
 #if defined(CONFIG_HOSTCMD_X86) && \
-	!defined(CONFIG_HOSTCMD_LPC) && \
-	!defined(CONFIG_HOSTCMD_ESPI)
+	!defined(CONFIG_HOST_INTERFACE_LPC) && \
+	!defined(CONFIG_HOST_INTERFACE_ESPI)
 #error Must select one type of host communication bus.
 #endif
 
@@ -5838,6 +5987,12 @@
 #define CONFIG_BATTERY_COUNT 1
 #endif
 #endif /* CONFIG_EC_EC_COMM_BATTERY */
+
+/*****************************************************************************/
+/* If battery_v2 isn't used, it's v1. */
+#if defined(CONFIG_BATTERY) && !defined(CONFIG_BATTERY_V2)
+#define CONFIG_BATTERY_V1
+#endif
 
 /*****************************************************************************/
 /* Define derived USB PD Discharge common path */

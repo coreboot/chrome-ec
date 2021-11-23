@@ -80,7 +80,6 @@
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 #define CONFIG_THROTTLE_AP
 #define CONFIG_TEMP_SENSOR_SB_TSI
-#define CONFIG_TEMP_SENSOR_TMP112
 #define CONFIG_THERMISTOR
 #define CONFIG_CPU_PROCHOT_ACTIVE_LOW
 #define GPIO_CPU_PROCHOT	GPIO_PROCHOT_ODL
@@ -92,7 +91,7 @@
 
 /* Host communication */
 #define CONFIG_CMD_CHARGEN
-#define CONFIG_HOSTCMD_ESPI
+#define CONFIG_HOST_INTERFACE_ESPI
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
 #define GPIO_EC_INT_L		GPIO_EC_SOC_INT_L
@@ -178,7 +177,6 @@
 #define CONFIG_USB_PD_TCPMV2
 #define CONFIG_USB_PD_DECODE_SOP
 #define CONFIG_USB_DRP_ACC_TRYSRC
-/* TODO: Enable TCPMv2 Fast Role Swap (FRS) */
 #define CONFIG_HOSTCMD_PD_CONTROL
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_USB_CHARGER
@@ -223,12 +221,6 @@
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 
-#define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_CURRENT_MA	5000
-#define PD_MAX_VOLTAGE_MV	20000
-/* Max Power = 100 W */
-#define PD_MAX_POWER_MW		((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
-
 /* USB-A config */
 #define USB_PORT_COUNT USBA_PORT_COUNT
 #define CONFIG_USB_PORT_POWER_SMART
@@ -239,8 +231,8 @@
 #define GPIO_USB1_ILIM_SEL IOEX_USB_A0_LIMIT_SDP
 #define GPIO_USB2_ILIM_SEL IOEX_USB_A1_LIMIT_SDP_DB
 
-/* Round up 3250 max current to multiple of 128mA for ISL9241 AC prochot. */
-#define GUYBRUSH_AC_PROCHOT_CURRENT_MA 3328
+/* Round up 5000 max current to multiple of 128mA for ISL9241 AC prochot. */
+#define GUYBRUSH_AC_PROCHOT_CURRENT_MA 5120
 
 /*
  * USB ID - This is allocated specifically for Guybrush
@@ -357,7 +349,7 @@ void bc12_interrupt(enum gpio_signal signal);
 void ppc_interrupt(enum gpio_signal signal);
 void sbu_fault_interrupt(enum ioex_signal signal);
 
-void baseboard_en_pwr_pcore_s0(enum gpio_signal signal);
+void baseboard_en_pwr_pcore_signal(enum gpio_signal signal);
 void baseboard_en_pwr_s0(enum gpio_signal signal);
 
 int board_get_soc_temp_k(int idx, int *temp_k);

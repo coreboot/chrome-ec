@@ -21,14 +21,22 @@
  */
 #define CONFIG_IT83XX_RESET_PD_CONTRACT_IN_BRAM
 
-/* BC12 */
-/* TODO(b/159583342): remove after rev0 deprecated */
-#define CONFIG_MT6360_BC12_GPIO
-
 /* LED */
+#define CONFIG_LED_PWM_COUNT 1
+#define CONFIG_LED_PWM
 #define CONFIG_LED_POWER_LED
-#define CONFIG_LED_ONOFF_STATES
-#define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
+#undef CONFIG_LED_PWM_NEAR_FULL_COLOR
+#undef CONFIG_LED_PWM_CHARGE_COLOR
+#undef CONFIG_LED_PWM_CHARGE_ERROR_COLOR
+#undef CONFIG_LED_PWM_LOW_BATT_COLOR
+#undef CONFIG_LED_PWM_SOC_ON_COLOR
+#undef CONFIG_LED_PWM_SOC_SUSPEND_COLOR
+#define CONFIG_LED_PWM_NEAR_FULL_COLOR EC_LED_COLOR_GREEN
+#define CONFIG_LED_PWM_CHARGE_COLOR EC_LED_COLOR_GREEN
+#define CONFIG_LED_PWM_CHARGE_ERROR_COLOR EC_LED_COLOR_RED
+#define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_RED
+#define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_COUNT /* OFF */
+#define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_COUNT /* OFF */
 
 /* PD / USB-C / PPC */
 #define CONFIG_USB_PD_DEBUG_LEVEL 3
@@ -50,18 +58,21 @@
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
-#define CONFIG_ACCEL_LIS2DWL
-#define CONFIG_ACCEL_LIS2DW_AS_BASE
-#define CONFIG_ACCEL_LIS2DW12_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
-
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 #define CONFIG_LID_ANGLE_UPDATE
 
-/* TODO(b/171931139): remove this after rev1 board deprecated */
-#define CONFIG_ACCEL_FORCE_MODE_MASK (board_accel_force_mode_mask())
+#define CONFIG_ACCEL_BMA255 /* Lid accel BMA253 */
+
+/* Sensors without hardware FIFO are in forced mode */
+#define CONFIG_ACCEL_FORCE_MODE_MASK \
+	(BIT(LID_ACCEL) | BIT(BASE_GYRO) | BIT(BASE_ACCEL))
+
+/* Thermistors */
+#define CONFIG_TEMP_SENSOR
+#define CONFIG_THERMISTOR
+#define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
 
 /* SPI / Host Command */
 #undef CONFIG_HOSTCMD_DEBUG_MODE
@@ -76,7 +87,7 @@
 #include "registers.h"
 
 enum battery_type {
-	BATTERY_C235,
+	BATTERY_LGC_AP18C8K,
 	BATTERY_TYPE_COUNT,
 };
 
@@ -89,25 +100,40 @@ enum sensor_id {
 };
 
 enum adc_channel {
-	ADC_VBUS,                /* ADC 0 */
-	ADC_BOARD_ID_0,          /* ADC 1 */
-	ADC_BOARD_ID_1,          /* ADC 2 */
-	ADC_CHARGER_AMON_R,      /* ADC 3 */
-	ADC_VBUS_C1,             /* ADC 5 */
-	ADC_CHARGER_PMON,        /* ADC 6 */
+	ADC_BOARD_ID,            /* ADC 1 */
+	ADC_TEMP_SENSOR_CPU,     /* ADC 2 */
+	ADC_TEMP_SENSOR_GPU,     /* ADC 3 */
+	ADC_TEMP_SENSOR_CHARGER, /* ADC 5 */
 
 	/* Number of ADC channels */
 	ADC_CH_COUNT,
 };
 
+enum usbc_port {
+	USBC_PORT_C0 = 0,
+	USBC_PORT_C1,
+	USBC_PORT_COUNT
+};
+
 enum pwm_channel {
-	PWM_CH_LED1,
-	PWM_CH_LED2,
-	PWM_CH_LED3,
+	PWM_CH_LED_GREEN,
+	PWM_CH_LED_RED,
+	PWM_CH_FAN,
+	PWM_CH_KBLIGHT,
 	PWM_CH_COUNT,
 };
 
-int board_accel_force_mode_mask(void);
+enum fan_channel {
+	FAN_CH_0,
+	FAN_CH_COUNT
+};
+
+enum temp_sensor_id {
+	TEMP_SENSOR_CPU,
+	TEMP_SENSOR_GPU,
+	TEMP_SENSOR_CHARGER,
+	TEMP_SENSOR_COUNT,
+};
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

@@ -700,9 +700,11 @@ __maybe_unused static void tc_enable_try_src(int en)
 }
 
 /*
- * Exit all modes due to a detach event
+ * Exit all modes due to a detach event or hard reset
+ *
  * Note: this skips the ExitMode VDM steps in the PE because it is assumed the
- * partner is not present to receive them, and the PE will no longer be running.
+ * partner is not present to receive them, and the PE will no longer be running,
+ * or we've forced an abrupt mode exit through a hard reset.
  */
 static void tc_set_modes_exit(int port)
 {
@@ -1304,6 +1306,13 @@ static bool tc_perform_src_hard_reset(int port)
 		/* Set role to DFP */
 		tc_set_data_role(port, PD_ROLE_DFP);
 
+		/*
+		 * USB PD Rev 3.0 Ver 2.0 6.8.3.2: "A Hard Reset Shall cause
+		 * all Active Modes to be exited by both Port Partners and any
+		 * Cable Plugs"
+		 */
+		tc_set_modes_exit(port);
+
 		tc[port].ps_reset_state = PS_STATE1;
 		pd_timer_enable(port, TC_TIMER_TIMEOUT, PD_T_SRC_RECOVER);
 		return false;
@@ -1347,6 +1356,13 @@ static bool tc_perform_snk_hard_reset(int port)
 	case PS_STATE0:
 		/* Hard reset sets us back to default data role */
 		tc_set_data_role(port, PD_ROLE_UFP);
+
+		/*
+		 * USB PD Rev 3.0 Ver 2.0 6.8.3.2: "A Hard Reset Shall cause
+		 * all Active Modes to be exited by both Port Partners and any
+		 * Cable Plugs"
+		 */
+		tc_set_modes_exit(port);
 
 		/*
 		 * When VCONN is supported, the Hard Reset Shall cause
@@ -1574,9 +1590,9 @@ void tc_state_init(int port)
 	}
 
 	/*
-	 * If this is non-EFS2 device, battery is not present and EC RO doesn't
-	 * keep power-on reset flag after reset caused by H1, then don't apply
-	 * CC open because it will cause brown out.
+	 * If this is non-EFS2 device, battery is not present or at some minimum
+	 * voltage and EC RO doesn't keep power-on reset flag after reset caused
+	 * by H1, then don't apply CC open because it will cause brown out.
 	 *
 	 * Please note that we are checking if CONFIG_BOARD_RESET_AFTER_POWER_ON
 	 * is defined now, but actually we need to know if it was enabled in
@@ -1585,7 +1601,7 @@ void tc_state_init(int port)
 	 */
 	if (!IS_ENABLED(CONFIG_BOARD_RESET_AFTER_POWER_ON) &&
 	    !IS_ENABLED(CONFIG_VBOOT_EFS2) && IS_ENABLED(CONFIG_BATTERY) &&
-	    (battery_is_present() == BP_NO)) {
+	    !pd_is_battery_capable()) {
 		first_state = TC_UNATTACHED_SNK;
 	}
 
@@ -1745,8 +1761,14 @@ void tc_event_check(int port, int evt)
 		}
 	}
 
-	if (evt & PD_EVENT_UPDATE_DUAL_ROLE)
+	if (evt & PD_EVENT_UPDATE_DUAL_ROLE) {
+		/* If TCPC is idle, start the wake process */
+		if (IS_ENABLED(CONFIG_USB_PD_TCPC_LOW_POWER) &&
+		    get_state_tc(port) == TC_LOW_POWER_MODE)
+			tcpm_wake_low_power_mode(port);
+
 		pd_update_dual_role_config(port);
+	}
 }
 
 /*
@@ -1893,11 +1915,14 @@ __maybe_unused static void handle_new_power_state(int port)
 
 	/*
 	 * If the sink port was sourcing Vconn, and can no longer, request a
-	 * hard reset on this port to restore Vconn to the source.
+	 * hard reset on this port to restore Vconn to the source.  If we do not
+	 * have sufficient battery to withstand Vbus loss, then continue with
+	 * the inconsistent Vconn state in order to keep the board powered.
 	 */
 	if (IS_ENABLED(CONFIG_USB_PE_SM)) {
 		if (tc_is_vconn_src(port) && tc_is_attached_snk(port) &&
-						!pd_check_vconn_swap(port))
+						!pd_check_vconn_swap(port) &&
+						pd_is_battery_capable())
 			pd_dpm_request(port, DPM_REQUEST_HARD_RESET_SEND);
 	}
 

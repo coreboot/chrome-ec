@@ -125,6 +125,11 @@
 #define I2C_ADDR_MP3372_FLAGS 0x28
 
 /* ISL98607 registers and value */
+/* Enable VP / VN / VBST */
+#define ISL98607_REG_ENABLE	0x05
+#define ISL98607_VP_VN_VBST_EN	0x07
+#define ISL97607_VP_VN_VBST_DIS	0x00
+
 /* VBST Voltage Adjustment */
 #define ISL98607_REG_VBST_OUT	0x06
 #define ISL98607_VBST_OUT_5P65	0x0a
@@ -141,6 +146,7 @@
 /* ISET & CHEN */
 #define MP3372_REG_ISET_CHEN		0x00
 #define MP3372_ISET_21P8_CHEN_ALL	0x70ff
+#define MP3372_ISET_19P4_CHEN_ALL	0x63ff
 /*
  * I2C pin names for baseboard
  *
@@ -164,6 +170,10 @@
 
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+#define CONFIG_ACCELGYRO_LSM6DSM        /* Base accel */
+#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 #define CONFIG_LID_ANGLE
@@ -222,5 +232,7 @@ enum battery_type {
 };
 
 void panel_power_change_interrupt(enum gpio_signal signal);
+void lcd_reset_change_interrupt(enum gpio_signal signal);
+void motion_interrupt(enum gpio_signal signal);
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

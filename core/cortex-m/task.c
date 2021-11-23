@@ -79,7 +79,7 @@ void __idle(void)
 		 * CSAE bit is set. Please notice this symptom only
 		 * occurs at npcx5.
 		 */
-#if defined(CHIP_FAMILY_NPCX5) && defined(CONFIG_HOSTCMD_ESPI)
+#if defined(CHIP_FAMILY_NPCX5) && defined(CONFIG_HOST_INTERFACE_ESPI)
 		/* Enable Host access wakeup */
 		SET_BIT(NPCX_WKEN(MIWU_TABLE_0, MIWU_GROUP_5), 6);
 #endif
@@ -227,7 +227,7 @@ void interrupt_enable(void)
 	asm("cpsie i");
 }
 
-inline int is_interrupt_enabled(void)
+inline bool is_interrupt_enabled(void)
 {
 	int primask;
 
@@ -237,7 +237,7 @@ inline int is_interrupt_enabled(void)
 	return !(primask & 0x1);
 }
 
-inline int in_interrupt_context(void)
+inline bool in_interrupt_context(void)
 {
 	int ret;
 	asm("mrs %0, ipsr \n"             /* read exception number */
@@ -389,7 +389,9 @@ void __keep task_start_irq_handler(void *excep_return)
 	 * and we are not called from another exception (this must match the
 	 * logic for when we chain to svc_handler() below).
 	 */
-	if (!need_resched_or_profiling || (((uint32_t)excep_return & 0xf) == 1))
+	if (!need_resched_or_profiling
+	    || (((uint32_t)excep_return & EXC_RETURN_MODE_MASK)
+		== EXC_RETURN_MODE_HANDLER))
 		return;
 
 	exc_start_time = t;
@@ -402,7 +404,9 @@ void __keep task_resched_if_needed(void *excep_return)
 	 * Continue iff a rescheduling event happened or profiling is active,
 	 * and we are not called from another exception.
 	 */
-	if (!need_resched_or_profiling || (((uint32_t)excep_return & 0xf) == 1))
+	if (!need_resched_or_profiling
+	    || (((uint32_t)excep_return & EXC_RETURN_MODE_MASK)
+		== EXC_RETURN_MODE_HANDLER))
 		return;
 
 	svc_handler(0, 0);

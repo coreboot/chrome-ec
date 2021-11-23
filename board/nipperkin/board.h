@@ -20,6 +20,11 @@
 #define CONFIG_CMD_BUTTON
 
 /* USB Type C and USB PD defines */
+#define PD_OPERATING_POWER_MW   15000
+#define PD_MAX_CURRENT_MA       5000
+#define PD_MAX_VOLTAGE_MV       20000
+/* Max Power = 100 W */
+#define PD_MAX_POWER_MW         ((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
 
 /* USB Type A Features */
 
@@ -34,6 +39,9 @@
 /* LED features */
 #define CONFIG_LED_COMMON
 #define CONFIG_LED_ONOFF_STATES
+
+/* Thermal Config */
+#define CONFIG_TEMP_SENSOR_PCT2075
 
 #ifndef __ASSEMBLER__
 
@@ -66,6 +74,13 @@ enum temp_sensor_id {
 	TEMP_SENSOR_CPU,
 	TEMP_SENSOR_AMBIENT,
 	TEMP_SENSOR_COUNT
+};
+
+/* PCT2075 sensors */
+enum pct2075_sensor {
+	PCT2075_SOC,
+	PCT2075_AMB,
+	PCT2075_COUNT,
 };
 
 #endif /* !__ASSEMBLER__ */

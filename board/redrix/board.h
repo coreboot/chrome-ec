@@ -19,6 +19,9 @@
  */
 #define CONFIG_HIBERNATE_PSL_VCC1_RST_WAKEUP
 
+/* Chipset */
+#define CONFIG_CHIPSET_RESUME_INIT_HOOK
+
 /* Sensors */
 #define CONFIG_ACCEL_BMA255		/* Lid accel */
 #define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
@@ -179,10 +182,19 @@
 
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
+/*
+ * b/202915015: The IDCHG current limit is set in 512 mA steps.
+ * The value set here is somewhat specific to the battery pack being
+ * currently used. The limit here was set based on the battery's
+ * discharge current limit and what was tested to prevent the AP
+ * rebooting with low charge level batteries.
+ */
+#define CONFIG_CHARGER_BQ25710_IDCHG_LIMIT_MA	8192
+#define CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
 #define CONFIG_CHARGER_BQ25720_VSYS_TH2_DV	70
 #define CONFIG_CHARGE_RAMP_HW
-#define CONFIG_CHARGER_SENSE_RESISTOR		10
-#define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+#define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR		10
+#define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC	10
 
 /* Keyboard features */
 #define CONFIG_KEYBOARD_FACTORY_TEST

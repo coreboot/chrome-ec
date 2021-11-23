@@ -230,6 +230,7 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 static void board_chipset_resume(void)
 {
 	gpio_set_level(GPIO_EC_BL_EN_OD, 1);
+	gpio_set_level(GPIO_DP_DEMUX_EN, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 
@@ -237,6 +238,7 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 static void board_chipset_suspend(void)
 {
 	gpio_set_level(GPIO_EC_BL_EN_OD, 0);
+	gpio_set_level(GPIO_DP_DEMUX_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
@@ -293,7 +295,7 @@ static int board_ps8802_mux_set(const struct usb_mux *me,
 					PS8802_REG_PAGE2,
 					PS8802_REG2_USB_SSEQ_LEVEL,
 					PS8802_USBEQ_LEVEL_UP_MASK,
-					PS8802_USBEQ_LEVEL_UP_19DB));
+					PS8802_USBEQ_LEVEL_UP_12DB));
 	}
 
 	/* DP specific config */
@@ -303,7 +305,7 @@ static int board_ps8802_mux_set(const struct usb_mux *me,
 					PS8802_REG_PAGE2,
 					PS8802_REG2_DPEQ_LEVEL,
 					PS8802_DPEQ_LEVEL_UP_MASK,
-					PS8802_DPEQ_LEVEL_UP_19DB));
+					PS8802_DPEQ_LEVEL_UP_12DB));
 	}
 
 	return EC_SUCCESS;
@@ -414,7 +416,8 @@ __override int board_rt1718s_init(int port)
 	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_FRS_CTRL3,
 			RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO2 |
 			RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO1,
-			RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO2));
+			RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO2 |
+			RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO1));
 	/* Set FRS signal detect time to 46.875us */
 	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_FRS_CTRL1,
 			RT1718S_FRS_CTRL1_FRSWAPRX_MASK,

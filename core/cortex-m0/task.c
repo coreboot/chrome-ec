@@ -161,7 +161,7 @@ void interrupt_enable(void)
 	asm("cpsie i");
 }
 
-inline int is_interrupt_enabled(void)
+inline bool is_interrupt_enabled(void)
 {
 	int primask;
 
@@ -171,12 +171,12 @@ inline int is_interrupt_enabled(void)
 	return !(primask & 0x1);
 }
 
-inline int in_interrupt_context(void)
+inline bool in_interrupt_context(void)
 {
 	int ret;
-	asm("mrs %0, ipsr\n"              /* read exception number */
-	    "lsl %0, #23\n" : "=r"(ret)); /* exception bits are the 9 LSB */
-	return ret;
+	asm("mrs %0, ipsr\n" /* read exception number */
+	    : "=r"(ret));
+	return ret & GENMASK(8, 0); /* exception bits are the 9 LSB */
 }
 
 #ifdef CONFIG_TASK_PROFILING
@@ -304,7 +304,9 @@ void task_start_irq_handler(void *excep_return)
 	 * Continue iff the tasks are ready and we are not called from another
 	 * exception (as the time accouting is done in the outer irq).
 	 */
-	if (!start_called || ((uint32_t)excep_return & 0xf) == 1)
+	if (!start_called
+	    || (((uint32_t)excep_return & EXC_RETURN_MODE_MASK)
+		== EXC_RETURN_MODE_HANDLER))
 		return;
 
 	exc_start_time = t;
@@ -322,7 +324,9 @@ void task_end_irq_handler(void *excep_return)
 	 * Continue iff the tasks are ready and we are not called from another
 	 * exception (as the time accouting is done in the outer irq).
 	 */
-	if (!start_called || ((uint32_t)excep_return & 0xf) == 1)
+	if (!start_called
+	    || (((uint32_t)excep_return & EXC_RETURN_MODE_MASK)
+		== EXC_RETURN_MODE_HANDLER))
 		return;
 
 	/* Track time in interrupts */

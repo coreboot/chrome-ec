@@ -15,9 +15,6 @@ config IDLE_STACK_SIZE
 config ISR_STACK_SIZE
 	default 800
 
-config SHELL_STACK_SIZE
-	default 1048
-
 config SYSTEM_WORKQUEUE_STACK_SIZE
 	default 1024
 
@@ -29,9 +26,6 @@ config TASK_CHARGER_STACK_SIZE
 
 config TASK_CHIPSET_STACK_SIZE
 	default 820
-
-config TASK_HOOKS_STACK_SIZE
-	default 672
 
 config TASK_HOSTCMD_STACK_SIZE
 	default 1024

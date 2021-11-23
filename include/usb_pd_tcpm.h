@@ -430,6 +430,16 @@ struct tcpm_drv {
 	 * @return EC_SUCCESS or error
 	 */
 	int (*enter_low_power_mode)(int port);
+
+	/**
+	 * Starts I2C wake sequence for TCPC
+	 *
+	 * NOTE: Do no use tcpc_(read|write) style helper methods in this
+	 * function. You must use i2c_(read|write) directly.
+	 *
+	 * @param port Type-C port number
+	 */
+	void (*wake_low_power_mode)(int port);
 #endif
 
 #ifdef CONFIG_USB_PD_FRS_TCPC
@@ -487,6 +497,7 @@ struct tcpm_drv {
  * Bit 4 --> Set to 1 if TCPC is using TCPCI Revision 2.0 but does not support
  *           the vSafe0V bit in the EXTENDED_STATUS_REGISTER
  * Bit 5 --> Set to 1 to prevent TCPC setting debug accessory control
+ * Bit 6 --> TCPC controls VCONN (even when CONFIG_USB_PD_TCPC_VCONN is off)
  */
 #define TCPC_FLAGS_ALERT_ACTIVE_HIGH	BIT(0)
 #define TCPC_FLAGS_ALERT_OD		BIT(1)
@@ -494,6 +505,7 @@ struct tcpm_drv {
 #define TCPC_FLAGS_TCPCI_REV2_0		BIT(3)
 #define TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V	BIT(4)
 #define TCPC_FLAGS_NO_DEBUG_ACC_CONTROL	BIT(5)
+#define TCPC_FLAGS_CONTROL_VCONN	BIT(6)
 
 struct tcpc_config_t {
 	enum ec_bus_type bus_type;	/* enum ec_bus_type */
@@ -503,6 +515,7 @@ struct tcpc_config_t {
 	const struct tcpm_drv *drv;
 	/* See TCPC_FLAGS_* above */
 	uint32_t flags;
+	enum gpio_signal alert_signal;
 };
 
 #ifndef CONFIG_USB_PD_TCPC_RUNTIME_CONFIG

@@ -8,7 +8,7 @@
 #include "charge_manager.h"
 #include "charger.h"
 #include "console.h"
-#include "driver/charger/bq25710.h"
+#include "driver/charger/bq257x0_regs.h"
 #include "hooks.h"
 #include "i2c.h"
 #include "math_util.h"
@@ -31,7 +31,7 @@ struct batt_para batt_params;
 
 static int cal_sys_watt(void)
 {
-	int adapter_voltage_mv;
+	int adapter_voltage_v;
 	int IDPM;
 	int Vacpacn;
 	int V_iadpt;
@@ -42,11 +42,11 @@ static int cal_sys_watt(void)
 	/* the ratio selectable through IADPT_GAIN bit. */
 	V_iadpt = Vacpacn * 1000 / 40;
 
-	IDPM = V_iadpt / CONFIG_CHARGER_SENSE_RESISTOR_AC;
+	IDPM = V_iadpt / CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC;
 
-	adapter_voltage_mv = charge_manager_get_charger_voltage();
+	adapter_voltage_v = charge_manager_get_charger_voltage() / 1000;
 
-	W_adpt = IDPM * adapter_voltage_mv / PROCHOT_ADAPTER_WATT_RATIO * 100;
+	W_adpt = IDPM * adapter_voltage_v / PROCHOT_ADAPTER_WATT_RATIO * 100;
 
 	return W_adpt;
 }
@@ -110,14 +110,16 @@ static int set_register_charge_option(void)
 	rv = i2c_read16(I2C_PORT_CHARGER, BQ25710_SMBUS_ADDR1_FLAGS,
 		    BQ25710_REG_CHARGE_OPTION_0, &reg);
 	if (rv == EC_SUCCESS) {
-		reg |= BQ25710_CHARGE_OPTION_0_IADP_GAIN;
+		reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_0, IADP_GAIN, 1, reg);
 		/* if AC only, disable IDPM,
 		 * because it will cause charger keep asserting PROCHOT
 		 */
 		if (!battery_hw_present())
-			reg &= ~BQ25710_CHARGE_OPTION_0_EN_IDPM;
+			reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_0, EN_IDPM, 0,
+					   reg);
 		else
-			reg |= BQ25710_CHARGE_OPTION_0_EN_IDPM;
+			reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_0, EN_IDPM, 1,
+					   reg);
 	} else {
 		CPRINTS("Failed to read bq25720");
 		return rv;
@@ -142,11 +144,10 @@ static void assert_prochot(void)
 	/* Calculate actual system W */
 	adpt_mw = cal_sys_watt();
 
-	/* Read battery info
-	 * if any flag is set, skip this cycle and hope
+	/* If any battery flag is set and no AC, skip this cycle and hope
 	 * the next cycle succeeds
 	 */
-	if (get_batt_parameter())
+	if (get_batt_parameter() && !extpower_is_present())
 		return;
 
 	/* When battery is discharging, the battery current will be negative */
@@ -197,7 +198,8 @@ static void assert_prochot(void)
 			if (total_W > ADT_RATING_W *
 			PROCHOT_ASSERTION_PD_RATIO / 100)
 				gpio_set_level(GPIO_EC_PROCHOT_ODL, 0);
-			else if (total_W <= ADT_RATING_W)
+			else if (total_W <= ADT_RATING_W *
+			PROCHOT_DEASSERTION_PD_RATIO / 100)
 				gpio_set_level(GPIO_EC_PROCHOT_ODL, 1);
 		} else {
 			/* AC + battery */

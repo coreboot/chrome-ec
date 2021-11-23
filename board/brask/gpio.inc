@@ -27,6 +27,7 @@ GPIO_INT(USB_C2_BC12_INT_ODL,        PIN(8, 3), GPIO_INT_FALLING, bc12_interrupt
 GPIO_INT(USB_C2_PPC_INT_ODL,         PIN(7, 0), GPIO_INT_FALLING, ppc_interrupt)
 GPIO_INT(USB_C2_RT_INT_ODL,          PIN(4, 1), GPIO_INT_FALLING, retimer_interrupt)
 GPIO_INT(BJ_ADP_PRESENT_ODL,         PIN(8, 2), GPIO_INT_BOTH | GPIO_PULL_UP, adp_connect_interrupt)
+GPIO_INT(EC_RECOVERY_BTN_OD,         PIN(2, 3), GPIO_INT_BOTH, button_interrupt)
 
 /* CCD */
 GPIO(CCD_MODE_ODL,                   PIN(E, 5), GPIO_INPUT)
@@ -65,7 +66,6 @@ GPIO(CPU_C10_GATE_L,                 PIN(6, 7), GPIO_INPUT)
 
 /* Button */
 GPIO(EC_PCH_PWR_BTN_ODL,             PIN(C, 1), GPIO_ODR_HIGH)
-GPIO(EC_RECOVERY_BTN_OD,             PIN(2, 3), GPIO_INPUT)
 GPIO(GSC_EC_RECOVERY_BTN_OD,         PIN(2, 2), GPIO_INPUT)
 
 /* NFC */
@@ -128,7 +128,7 @@ GPIO(LED_RED_L,                      PIN(C, 4), GPIO_OUT_LOW)
 GPIO(USB_C0_C2_TCPC_RST_ODL,         PIN(A, 7), GPIO_ODR_LOW)
 GPIO(USB_C1_FRS_EN,                  PIN(9, 4), GPIO_OUT_LOW)
 GPIO(USB_C1_RT_INT_ODL,              PIN(A, 0), GPIO_INPUT)
-GPIO(USB_C1_RT_RST_R_ODL,            PIN(0, 2), GPIO_ODR_LOW)
+GPIO(USB_C1_RT_RST_R_L,              PIN(0, 2), GPIO_OUT_LOW)
 
 /* GPIO02_P2 to PU */
 /* GPIO03_P2 to PU */

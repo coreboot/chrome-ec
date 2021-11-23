@@ -3,17 +3,12 @@
  * found in the LICENSE file.
  */
 
-/* Brya board configuration */
+/* Kano board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
 #include "compile_time_macros.h"
-
-/*
- * Early brya boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
 
 /* Baseboard features */
 #include "baseboard.h"
@@ -27,21 +22,15 @@
 #define CONFIG_MP2964
 
 /* LED */
-#define CONFIG_LED_PWM
-#define CONFIG_LED_PWM_COUNT 1
-#undef CONFIG_LED_PWM_NEAR_FULL_COLOR
-#undef CONFIG_LED_PWM_SOC_ON_COLOR
-#undef CONFIG_LED_PWM_SOC_SUSPEND_COLOR
-#undef CONFIG_LED_PWM_LOW_BATT_COLOR
-#define CONFIG_LED_PWM_NEAR_FULL_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
+#define CONFIG_LED_ONOFF_STATES
 
 /* Sensors */
 #define CONFIG_ACCELGYRO_ICM426XX	/* Base accel */
 #define CONFIG_ACCELGYRO_ICM_COMM_I2C
 #define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+#define CONFIG_ACCELGYRO_BMI260
+#define CONFIG_ACCELGYRO_BMI260_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 /* Enable sensor fifo, must also define the _SIZE and _THRES */
@@ -60,12 +49,18 @@
 #define CONFIG_LID_ANGLE_SENSOR_BASE	BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID	LID_ACCEL
 #define CONFIG_ACCEL_KX022
+#define CONFIG_ACCEL_BMA4XX
 
 #define CONFIG_ACCEL_INTERRUPTS
 
 /* Sensor console commands */
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
+
+/* Keyboard */
+#define CONFIG_KEYBOARD_VIVALDI
+#define CONFIG_KEYBOARD_REFRESH_ROW3
+
 
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
@@ -133,7 +128,7 @@
 
 /* I2C Bus Configuration */
 
-#define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
+#define I2C_PORT_ACCEL		NPCX_I2C_PORT0_0
 
 #define I2C_PORT_USB_C0_C2_TCPC	NPCX_I2C_PORT1_0
 #define I2C_PORT_USB_C1_TCPC	NPCX_I2C_PORT4_1
@@ -207,6 +202,7 @@ enum adc_channel {
 enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
 	TEMP_SENSOR_2_FAN,
+	TEMP_SENSOR_3_CHARGER,
 	TEMP_SENSOR_COUNT
 };
 
@@ -218,15 +214,12 @@ enum sensor_id {
 };
 
 enum battery_type {
-	BATTERY_POWER_TECH,
-	BATTERY_LGC011,
+	BATTERY_AP19B8M,
 	BATTERY_TYPE_COUNT
 };
 
 enum pwm_channel {
-	PWM_CH_LED2 = 0,		/* PWM0 (white charger) */
-	PWM_CH_LED1,			/* PWM2 (orange charger) */
-	PWM_CH_KBLIGHT,			/* PWM3 */
+	PWM_CH_KBLIGHT = 0,		/* PWM3 */
 	PWM_CH_FAN,			/* PWM5 */
 	PWM_CH_COUNT
 };

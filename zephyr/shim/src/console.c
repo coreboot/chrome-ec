@@ -109,6 +109,14 @@ int uart_shell_stop(void)
 	return event.signal->result;
 }
 
+#ifdef SHELL_DEFAULT_BACKEND_CONFIG_FLAGS
+static const struct shell_backend_config_flags shell_cfg_flags =
+	SHELL_DEFAULT_BACKEND_CONFIG_FLAGS;
+#else
+/* TODO(b/205884929): Drop after we drop support for v2.7 */
+static const bool shell_cfg_flags;
+#endif
+
 static void shell_init_from_work(struct k_work *work)
 {
 	bool log_backend = CONFIG_SHELL_BACKEND_SERIAL_LOG_LEVEL > 0;
@@ -122,8 +130,8 @@ static void shell_init_from_work(struct k_work *work)
 	}
 
 	/* Initialize the shell and re-enable both RX and TX */
-	shell_init(shell_backend_uart_get_ptr(), uart_shell_dev, false,
-		   log_backend, level);
+	shell_init(shell_backend_uart_get_ptr(), uart_shell_dev,
+		   shell_cfg_flags, log_backend, level);
 	uart_irq_rx_enable(uart_shell_dev);
 	uart_irq_tx_enable(uart_shell_dev);
 
@@ -217,7 +225,7 @@ int uart_tx_char_raw(void *context, int c)
 
 void uart_write_char(char c)
 {
-	printk("%c", c);
+	uart_poll_out(uart_shell_dev, c);
 
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE))
 		console_buf_notify_chars(&c, 1);
@@ -272,15 +280,7 @@ static void zephyr_print(const char *buff, size_t size)
 	if (k_is_in_isr() || shell_zephyr->ctx->state != SHELL_STATE_ACTIVE) {
 		printk("%s", buff);
 	} else {
-		/*
-		 * On some platforms, shell_* functions are not as fast
-		 * as printk and they need the added speed to avoid
-		 * timeouts.
-		 */
-		if (IS_ENABLED(CONFIG_PLATFORM_EC_CONSOLE_USES_PRINTK))
-			printk("%s", buff);
-		else
-			shell_fprintf(shell_zephyr, SHELL_NORMAL, "%s", buff);
+		shell_fprintf(shell_zephyr, SHELL_NORMAL, "%s", buff);
 		if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE))
 			console_buf_notify_chars(buff, size);
 	}

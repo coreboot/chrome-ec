@@ -26,7 +26,7 @@ class GenericToolchain:
         # know if it's installed.  Simply return False to indicate not
         # installed.  An unknown toolchain would only be used if -t
         # was manually passed to zmake, and is not valid to put in a
-        # zmake.yaml file.
+        # BUILD.py file.
         return False
 
     def get_build_config(self):
@@ -107,7 +107,7 @@ class ZephyrToolchain(GenericToolchain):
         if not self.zephyr_sdk_install_dir:
             raise RuntimeError(
                 "No installed Zephyr SDK was found"
-                " (see docs/zephyr_build.md for documentation)"
+                " (see docs/zephyr/zephyr_build.md for documentation)"
             )
         tc_vars = {
             "ZEPHYR_SDK_INSTALL_DIR": str(self.zephyr_sdk_install_dir),

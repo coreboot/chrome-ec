@@ -12,6 +12,7 @@ LOG_MODULE_REGISTER(tcpci_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 #include <emul.h>
 #include <drivers/i2c.h>
 #include <drivers/i2c_emul.h>
+#include <drivers/gpio/gpio_emul.h>
 
 #include "tcpm/tcpci.h"
 
@@ -58,6 +59,10 @@ struct tcpci_emul_data {
 	struct tcpci_emul_dev_ops *dev_ops;
 	/** Callbacks for TCPCI partner */
 	struct tcpci_emul_partner_ops *partner;
+
+	/** Reference to Alert# GPIO emulator. */
+	const struct device *alert_gpio_port;
+	gpio_pin_t alert_gpio_pin;
 };
 
 /**
@@ -195,19 +200,33 @@ static bool tcpci_emul_check_int(const struct emul *emul)
  *
  * @param emul Pointer to TCPCI emulator
  *
- * @return State of alert line
+ * @return 0 for success, or non-0 for errors.
  */
-static void tcpci_emul_alert_changed(const struct emul *emul)
+static int tcpci_emul_alert_changed(const struct emul *emul)
 {
 	struct tcpci_emul_data *data = emul->data;
+	int rc;
+	bool alert_is_active = tcpci_emul_check_int(emul);
+
+	/** Trigger GPIO. */
+	if (data->alert_gpio_port != NULL) {
+		/* Triggers on edge falling, so set to 0 when there is an alert.
+		 */
+		rc = gpio_emul_input_set(data->alert_gpio_port,
+					 data->alert_gpio_pin,
+					 alert_is_active ? 0 : 1);
+		if (rc != 0)
+			return rc;
+	}
 
 	/* Nothing to do */
 	if (data->alert_callback == NULL) {
-		return;
+		return 0;
 	}
 
-	data->alert_callback(emul, tcpci_emul_check_int(emul),
+	data->alert_callback(emul, alert_is_active,
 			     data->alert_callback_data);
+	return 0;
 }
 
 /** Check description in emul_tcpci.h */
@@ -216,6 +235,7 @@ int tcpci_emul_add_rx_msg(const struct emul *emul,
 {
 	struct tcpci_emul_data *data = emul->data;
 	uint16_t dev_cap_2;
+	int rc;
 
 	if (data->rx_msg == NULL) {
 		tcpci_emul_get_reg(emul, TCPC_REG_DEV_CAP_2, &dev_cap_2);
@@ -250,7 +270,9 @@ int tcpci_emul_add_rx_msg(const struct emul *emul,
 
 		data->reg[TCPC_REG_ALERT] |= TCPC_REG_ALERT_RX_STATUS;
 
-		tcpci_emul_alert_changed(emul);
+		rc = tcpci_emul_alert_changed(emul);
+		if (rc != 0)
+			return rc;
 	}
 
 	rx_msg->next = NULL;
@@ -282,6 +304,162 @@ void tcpci_emul_set_rev(const struct emul *emul, enum tcpci_emul_rev rev)
 				    TCPC_REG_PD_INT_REV_VER_1_1);
 		return;
 	}
+}
+
+/** Check description in emul_tcpci.h */
+void tcpci_emul_set_dev_ops(const struct emul *emul,
+			    struct tcpci_emul_dev_ops *dev_ops)
+{
+	struct tcpci_emul_data *data = emul->data;
+
+	data->dev_ops = dev_ops;
+}
+
+/** Check description in emul_tcpci.h */
+void tcpci_emul_set_alert_callback(const struct emul *emul,
+				   tcpci_emul_alert_state_func alert_callback,
+				   void *alert_callback_data)
+{
+	struct tcpci_emul_data *data = emul->data;
+
+	data->alert_callback = alert_callback;
+	data->alert_callback_data = alert_callback_data;
+}
+
+/** Check description in emul_tcpci.h */
+void tcpci_emul_set_partner_ops(const struct emul *emul,
+				struct tcpci_emul_partner_ops *partner)
+{
+	struct tcpci_emul_data *data = emul->data;
+
+	data->partner = partner;
+}
+
+/**
+ * @brief Get detected voltage for given CC resistor
+ *
+ * @param res CC pull resistor value
+ * @param volt Voltage applied by port partner
+ *
+ * @return Voltage visible at CC resistor side
+ */
+static enum tcpc_cc_voltage_status tcpci_emul_detected_volt_for_res(
+		enum tcpc_cc_pull res,
+		enum tcpc_cc_voltage_status volt)
+{
+	switch (res) {
+	case TYPEC_CC_RD:
+		switch (volt) {
+		/* As Rd we cannot detect another Rd or Ra */
+		case TYPEC_CC_VOLT_RA:
+		case TYPEC_CC_VOLT_RD:
+			return TYPEC_CC_VOLT_OPEN;
+		default:
+			return volt;
+		}
+	case TYPEC_CC_RP:
+		switch (volt) {
+		/* As Rp we cannot detect another Rp */
+		case TYPEC_CC_VOLT_RP_DEF:
+		case TYPEC_CC_VOLT_RP_1_5:
+		case TYPEC_CC_VOLT_RP_3_0:
+			return TYPEC_CC_VOLT_OPEN;
+		default:
+			return volt;
+		}
+	default:
+		/* As Ra or open we cannot detect anything */
+		return TYPEC_CC_VOLT_OPEN;
+	}
+}
+
+/** Check description in emul_tcpci.h */
+int tcpci_emul_connect_partner(const struct emul *emul,
+			       enum pd_power_role partner_power_role,
+			       enum tcpc_cc_voltage_status partner_cc1,
+			       enum tcpc_cc_voltage_status partner_cc2,
+			       enum tcpc_cc_polarity polarity)
+{
+	enum tcpc_cc_voltage_status cc1_v, cc2_v;
+	uint16_t cc_status, alert, role_ctrl;
+	enum tcpc_cc_pull cc1_r, cc2_r;
+
+	if (polarity == POLARITY_CC1) {
+		cc1_v = partner_cc1;
+		cc2_v = partner_cc2;
+	} else {
+		cc1_v = partner_cc2;
+		cc2_v = partner_cc1;
+	}
+
+	tcpci_emul_get_reg(emul, TCPC_REG_CC_STATUS, &cc_status);
+	if (TCPC_REG_CC_STATUS_LOOK4CONNECTION(cc_status)) {
+		/* Change resistors values in case of DRP toggling */
+		if (partner_power_role == PD_ROLE_SOURCE) {
+			/* TCPCI is sink */
+			cc1_r = TYPEC_CC_RD;
+			cc2_r = TYPEC_CC_RD;
+		} else {
+			/* TCPCI is src */
+			cc1_r = TYPEC_CC_RP;
+			cc2_r = TYPEC_CC_RP;
+		}
+	} else {
+		/* Use role control resistors values otherwise */
+		tcpci_emul_get_reg(emul, TCPC_REG_ROLE_CTRL, &role_ctrl);
+		cc1_r = TCPC_REG_ROLE_CTRL_CC1(role_ctrl);
+		cc2_r = TCPC_REG_ROLE_CTRL_CC2(role_ctrl);
+	}
+
+	cc1_v = tcpci_emul_detected_volt_for_res(cc1_r, cc1_v);
+	cc2_v = tcpci_emul_detected_volt_for_res(cc2_r, cc2_v);
+
+	/* If CC status is TYPEC_CC_VOLT_RP_*, then BIT(2) is ignored */
+	cc_status = TCPC_REG_CC_STATUS_SET(
+				partner_power_role == PD_ROLE_SOURCE ? 1 : 0,
+				cc2_v, cc1_v);
+	tcpci_emul_set_reg(emul, TCPC_REG_CC_STATUS, cc_status);
+	tcpci_emul_get_reg(emul, TCPC_REG_ALERT, &alert);
+	tcpci_emul_set_reg(emul, TCPC_REG_ALERT,
+			   alert | TCPC_REG_ALERT_CC_STATUS);
+
+	if (partner_power_role == PD_ROLE_SOURCE) {
+		/* Set TCPCI emulator VBUS to present (connected, above 4V) */
+		tcpci_emul_set_reg(emul, TCPC_REG_POWER_STATUS,
+				   TCPC_REG_POWER_STATUS_VBUS_PRES |
+				   TCPC_REG_POWER_STATUS_VBUS_DET);
+	}
+
+	tcpci_emul_alert_changed(emul);
+
+	return 0;
+}
+
+/** Check description in emul_tcpci.h */
+void tcpci_emul_partner_msg_status(const struct emul *emul,
+				   enum tcpci_emul_tx_status status)
+{
+	uint16_t alert;
+	uint16_t tx_status_alert;
+
+	switch (status) {
+	case TCPCI_EMUL_TX_SUCCESS:
+		tx_status_alert = TCPC_REG_ALERT_TX_SUCCESS;
+		break;
+	case TCPCI_EMUL_TX_DISCARDED:
+		tx_status_alert = TCPC_REG_ALERT_TX_DISCARDED;
+		break;
+	case TCPCI_EMUL_TX_FAILED:
+		tx_status_alert = TCPC_REG_ALERT_TX_FAILED;
+		break;
+	default:
+		__ASSERT(0, "Invalid partner TX status 0x%x", status);
+		return;
+	}
+
+	tcpci_emul_get_reg(emul, TCPC_REG_ALERT, &alert);
+	tcpci_emul_set_reg(emul, TCPC_REG_ALERT, alert | tx_status_alert);
+	tcpci_emul_alert_changed(emul);
 }
 
 /** Mask reserved bits in each register of TCPCI */
@@ -392,8 +570,9 @@ static void tcpci_emul_reset_role_ctrl(const struct emul *emul)
  *        are not changed.
  *
  * @param emul Pointer to TCPCI emulator
+ * @return 0 if successful
  */
-static void tcpci_emul_reset(const struct emul *emul)
+static int tcpci_emul_reset(const struct emul *emul)
 {
 	struct tcpci_emul_data *data = emul->data;
 
@@ -438,15 +617,16 @@ static void tcpci_emul_reset(const struct emul *emul)
 		data->dev_ops->reset(emul, data->dev_ops);
 	}
 
-	tcpci_emul_alert_changed(emul);
+	return tcpci_emul_alert_changed(emul);
 }
 
 /**
  * @brief Set alert and fault registers to indicate i2c interface fault
  *
  * @param emul Pointer to TCPCI emulator
+ * @return 0 if successful
  */
-static void tcpci_emul_set_i2c_interface_err(const struct emul *emul)
+static int tcpci_emul_set_i2c_interface_err(const struct emul *emul)
 {
 	struct tcpci_emul_data *data = emul->data;
 
@@ -454,7 +634,7 @@ static void tcpci_emul_set_i2c_interface_err(const struct emul *emul)
 					TCPC_REG_FAULT_STATUS_I2C_INTERFACE_ERR;
 	data->reg[TCPC_REG_ALERT + 1] |= TCPC_REG_ALERT_FAULT >> 8;
 
-	tcpci_emul_alert_changed(emul);
+	return tcpci_emul_alert_changed(emul);
 }
 
 /**
@@ -580,6 +760,8 @@ static int tcpci_emul_read_byte(struct i2c_emul *i2c_emul, int reg,
 
 	emul = i2c_emul->parent;
 	data = TCPCI_DATA_FROM_I2C_EMUL(i2c_emul);
+
+	LOG_DBG("TCPCI 0x%x: read reg 0x%x", i2c_emul->addr, reg);
 
 	if (data->dev_ops && data->dev_ops->read_byte) {
 		switch (data->dev_ops->read_byte(emul, data->dev_ops, reg, val,
@@ -789,6 +971,8 @@ static int tcpci_emul_write_byte(struct i2c_emul *i2c_emul, int reg,
 static int tcpci_emul_handle_command(const struct emul *emul)
 {
 	struct tcpci_emul_data *data = emul->data;
+	uint16_t role_ctrl;
+	uint16_t pwr_ctrl;
 
 	switch (data->write_data & 0xff) {
 	case TCPC_REG_COMMAND_RESET_TRANSMIT_BUF:
@@ -799,12 +983,31 @@ static int tcpci_emul_handle_command(const struct emul *emul)
 			data->rx_msg->idx = 0;
 		}
 		break;
+	case TCPC_REG_COMMAND_LOOK4CONNECTION:
+		tcpci_emul_get_reg(emul, TCPC_REG_ROLE_CTRL, &role_ctrl);
+		tcpci_emul_get_reg(emul, TCPC_REG_POWER_CTRL, &pwr_ctrl);
+
+		/*
+		 * Start DRP toggling only if auto discharge is disabled,
+		 * DRP is enabled and CC1/2 are both Rp or Rd
+		 */
+		if (!(pwr_ctrl & TCPC_REG_POWER_CTRL_AUTO_DISCHARGE_DISCONNECT)
+		    && TCPC_REG_ROLE_CTRL_DRP(role_ctrl) &&
+		    (TCPC_REG_ROLE_CTRL_CC1(role_ctrl) ==
+		     TCPC_REG_ROLE_CTRL_CC2(role_ctrl)) &&
+		    (TCPC_REG_ROLE_CTRL_CC1(role_ctrl) == TYPEC_CC_RP ||
+		     TCPC_REG_ROLE_CTRL_CC1(role_ctrl) == TYPEC_CC_RD)) {
+			/* Set Look4Connection and clear CC1/2 state */
+			tcpci_emul_set_reg(
+				emul, TCPC_REG_CC_STATUS,
+				TCPC_REG_CC_STATUS_LOOK4CONNECTION_MASK);
+		}
+		break;
 	case TCPC_REG_COMMAND_ENABLE_VBUS_DETECT:
 	case TCPC_REG_COMMAND_SNK_CTRL_LOW:
 	case TCPC_REG_COMMAND_SNK_CTRL_HIGH:
 	case TCPC_REG_COMMAND_SRC_CTRL_LOW:
 	case TCPC_REG_COMMAND_SRC_CTRL_HIGH:
-	case TCPC_REG_COMMAND_LOOK4CONNECTION:
 	case TCPC_REG_COMMAND_I2CIDLE:
 		break;
 	default:
@@ -845,6 +1048,42 @@ static int tcpci_emul_handle_transmit(const struct emul *emul)
 }
 
 /**
+ * @brief Load next rx message and inform partner which message was consumed
+ *        by TCPC
+ *
+ * @param emul Pointer to TCPCI emulator
+ *
+ * @return 0 when there is no new message to load
+ * @return 1 when new rx message is loaded
+ */
+static int tcpci_emul_get_next_rx_msg(const struct emul *emul)
+{
+	struct tcpci_emul_data *data = emul->data;
+	struct tcpci_emul_msg *consumed_msg;
+
+	if (data->rx_msg == NULL) {
+		return 0;
+	}
+
+	consumed_msg = data->rx_msg;
+	data->rx_msg = consumed_msg->next;
+
+	/* Inform partner */
+	if (data->partner && data->partner->rx_consumed) {
+		data->partner->rx_consumed(emul, data->partner, consumed_msg);
+	}
+
+	/* Prepare new loaded message */
+	if (data->rx_msg) {
+		data->rx_msg->idx = 0;
+
+		return 1;
+	}
+
+	return 0;
+}
+
+/**
  * @brief Handle I2C write message. It is checked if accessed register isn't RO
  *        and reserved bits are set to 0.
  *
@@ -865,6 +1104,7 @@ static int tcpci_emul_handle_write(struct i2c_emul *i2c_emul, int reg,
 	bool inform_partner = false;
 	bool alert_changed = false;
 	int reg_bytes;
+	int rc;
 
 	/* This write message was setting register before read */
 	if (msg_len == 1) {
@@ -876,6 +1116,9 @@ static int tcpci_emul_handle_write(struct i2c_emul *i2c_emul, int reg,
 
 	emul = i2c_emul->parent;
 	data = TCPCI_DATA_FROM_I2C_EMUL(i2c_emul);
+
+	LOG_DBG("TCPCI 0x%x: write reg 0x%x val 0x%x", i2c_emul->addr, reg,
+		data->write_data);
 
 	if (data->dev_ops && data->dev_ops->handle_write) {
 		switch (data->dev_ops->handle_write(emul, data->dev_ops, reg,
@@ -897,13 +1140,9 @@ static int tcpci_emul_handle_write(struct i2c_emul *i2c_emul, int reg,
 		data->write_data &= ~TCPC_REG_ALERT_RX_BUF_OVF;
 		if (data->write_data & TCPC_REG_ALERT_RX_STATUS) {
 			data->write_data |= TCPC_REG_ALERT_RX_BUF_OVF;
-			/* Load next message if possible */
-			if (data->rx_msg && data->rx_msg->next) {
+			/* Do not clear RX status if there is new message */
+			if (tcpci_emul_get_next_rx_msg(emul)) {
 				data->write_data &= ~TCPC_REG_ALERT_RX_STATUS;
-				data->rx_msg = data->rx_msg->next;
-				data->rx_msg->idx = 0;
-			} else {
-				data->rx_msg = NULL;
 			}
 		}
 	/* fallthrough */
@@ -1017,7 +1256,9 @@ static int tcpci_emul_handle_write(struct i2c_emul *i2c_emul, int reg,
 	tcpci_emul_set_reg(emul, reg, data->write_data);
 
 	if (alert_changed) {
-		tcpci_emul_alert_changed(emul);
+		rc = tcpci_emul_alert_changed(emul);
+		if (rc != 0)
+			return rc;
 	}
 
 	if (inform_partner && data->partner && data->partner->control_change) {
@@ -1079,10 +1320,10 @@ static int tcpci_emul_init(const struct emul *emul, const struct device *parent)
 	i2c_common_emul_init(&data->common);
 
 	ret = i2c_emul_register(parent, emul->dev_label, &data->common.emul);
+	if (ret != 0)
+		return ret;
 
-	tcpci_emul_reset(emul);
-
-	return ret;
+	return tcpci_emul_reset(emul);
 }
 
 #define TCPCI_EMUL(n)							\
@@ -1101,6 +1342,16 @@ static int tcpci_emul_init(const struct emul *emul, const struct device *parent)
 			.read_byte = tcpci_emul_read_byte,		\
 			.access_reg = tcpci_emul_access_reg,		\
 		},							\
+		.alert_gpio_port = COND_CODE_1(				\
+			DT_INST_NODE_HAS_PROP(n, alert_gpio),		\
+			(DEVICE_DT_GET(DT_GPIO_CTLR(			\
+				DT_INST_PROP(n, alert_gpio), gpios))),	\
+			(NULL)),					\
+		.alert_gpio_pin = COND_CODE_1(				\
+			DT_INST_NODE_HAS_PROP(n, alert_gpio),		\
+			(DT_GPIO_PIN(DT_INST_PROP(n, alert_gpio),	\
+				gpios)),				\
+			(0)),						\
 	};								\
 									\
 	static const struct i2c_common_emul_cfg tcpci_emul_cfg_##n = {	\

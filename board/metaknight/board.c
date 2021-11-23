@@ -196,31 +196,42 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-const static struct ec_thermal_config thermal_memory = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_MEMORY \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(85), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_memory =
+	THERMAL_MEMORY;
 
-const static struct ec_thermal_config thermal_cpu = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_CPU \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
 
@@ -737,6 +748,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		},
 		.flags = TCPC_FLAGS_TCPCI_REV2_0,
 		.drv = &raa489000_tcpm_drv,
+		.alert_signal = GPIO_USB_C0_INT_ODL,
 	},
 };
 
@@ -753,33 +765,22 @@ uint16_t tcpc_get_alert_status(void)
 {
 	uint16_t status = 0;
 	int regval;
+	int p;
 
 	/*
-	 * The interrupt line is shared between the TCPC and BC1.2 detector IC.
-	 * Therefore, go out and actually read the alert registers to report the
-	 * alert status.
+	 * The interrupt line is shared between the TCPC and BC1.2
+	 * detector IC. Therefore, go out and actually read the alert
+	 * registers to report the alert status.
 	 */
-	if (!gpio_get_level(GPIO_USB_C0_INT_ODL)) {
-		if (!tcpc_read16(0, TCPC_REG_ALERT, &regval)) {
-			/* The TCPCI Rev 1.0 spec says to ignore bits 14:12. */
-			if (!(tcpc_config[0].flags & TCPC_FLAGS_TCPCI_REV2_0))
-				regval &= ~((1 << 14) | (1 << 13) | (1 << 12));
-
-			if (regval)
-				status |= PD_STATUS_TCPC_ALERT_0;
-		}
-	}
-
-	if (board_get_usb_pd_port_count() > 1 &&
-				!gpio_get_level(GPIO_SUB_C1_INT_EN_RAILS_ODL)) {
-		if (!tcpc_read16(1, TCPC_REG_ALERT, &regval)) {
-			/* TCPCI spec Rev 1.0 says to ignore bits 14:12. */
-			if (!(tcpc_config[1].flags & TCPC_FLAGS_TCPCI_REV2_0))
-				regval &= ~((1 << 14) | (1 << 13) | (1 << 12));
-
-			if (regval)
-				status |= PD_STATUS_TCPC_ALERT_1;
-		}
+	for (p = 0; p < board_get_usb_pd_port_count(); p++) {
+		if (gpio_get_level(tcpc_config[p].alert_signal) ||
+		    tcpc_read16(p, TCPC_REG_ALERT, &regval))
+			continue;
+		/* The TCPCI Rev 1.0 spec says to ignore bits 14:12. */
+		if (!(tcpc_config[p].flags & TCPC_FLAGS_TCPCI_REV2_0))
+			regval &= ~(BIT(14) | BIT(13) | BIT(12));
+		if (regval)
+			status |= (PD_STATUS_TCPC_ALERT_0 << p);
 	}
 
 	return status;

@@ -6,6 +6,7 @@
 /* Intel ADLRVP board-specific common configuration */
 
 #include "charger.h"
+#include "bq25710.h"
 #include "common.h"
 #include "driver/retimer/bb_retimer_public.h"
 #include "hooks.h"
@@ -16,6 +17,7 @@
 #include "sn5s330.h"
 #include "system.h"
 #include "task.h"
+#include "tusb1064.h"
 #include "usb_mux.h"
 #include "usbc_ppc.h"
 #include "util.h"
@@ -235,7 +237,7 @@ struct ioexpander_config_t ioex_config[] = {
 BUILD_ASSERT(ARRAY_SIZE(ioex_config) == CONFIG_IO_EXPANDER_PORT_COUNT);
 
 /* Charger Chips */
-const struct charger_config_t chg_chips[] = {
+struct charger_config_t chg_chips[] = {
 	{
 		.i2c_port = I2C_PORT_CHARGER,
 		.i2c_addr_flags = ISL9241_ADDR_FLAGS,
@@ -312,8 +314,6 @@ static void board_connect_c0_sbu_deferred(void)
 	}
 }
 DECLARE_DEFERRED(board_connect_c0_sbu_deferred);
-/* Make sure SBU are routed to CCD or AUX based on CCD status at init */
-DECLARE_HOOK(HOOK_INIT, board_connect_c0_sbu_deferred, HOOK_PRIO_INIT_I2C + 2);
 
 void board_connect_c0_sbu(enum gpio_signal s)
 {
@@ -326,15 +326,37 @@ static void enable_h1_irq(void)
 }
 DECLARE_HOOK(HOOK_INIT, enable_h1_irq, HOOK_PRIO_LAST);
 
+static void configure_charger(void)
+{
+	switch (ADL_RVP_BOARD_ID(board_get_version())) {
+	case ADLN_LP5_ERB_SKU_BOARD_ID:
+	case ADLN_LP5_RVP_SKU_BOARD_ID:
+		/* charger chip BQ25720 support */
+		chg_chips[0].i2c_addr_flags = BQ25710_SMBUS_ADDR1_FLAGS;
+		chg_chips[0].drv = &bq25710_drv;
+		break;
+
+	/* Add additional board SKUs */
+	default:
+		break;
+	}
+}
+
 static void configure_retimer_usbmux(void)
 {
 	switch (ADL_RVP_BOARD_ID(board_get_version())) {
 	case ADLN_LP5_ERB_SKU_BOARD_ID:
 	case ADLN_LP5_RVP_SKU_BOARD_ID:
-		/* No retimer on Port0 & Port1 */
-		usb_muxes[TYPE_C_PORT_0].driver = NULL;
+		/* enable TUSB1044RNQR redriver on Port0  */
+		usb_muxes[TYPE_C_PORT_0].i2c_addr_flags =
+					TUSB1064_I2C_ADDR14_FLAGS;
+		usb_muxes[TYPE_C_PORT_0].driver =
+					&tusb1064_usb_mux_driver;
+		usb_muxes[TYPE_C_PORT_0].hpd_update = tusb1044_hpd_update;
+
 #if defined(HAS_TASK_PD_C1)
 		usb_muxes[TYPE_C_PORT_1].driver = NULL;
+		usb_muxes[TYPE_C_PORT_1].hpd_update = NULL;
 #endif
 		break;
 
@@ -365,7 +387,6 @@ static void configure_retimer_usbmux(void)
 		break;
 	}
 }
-DECLARE_HOOK(HOOK_INIT, configure_retimer_usbmux, HOOK_PRIO_INIT_I2C + 1);
 
 /******************************************************************************/
 /* PWROK signal configuration */
@@ -447,4 +468,19 @@ __override bool board_is_tbt_usb4_port(int port)
 	}
 
 	return tbt_usb4;
+}
+
+__override void board_pre_task_i2c_peripheral_init(void)
+{
+	/* Initialized IOEX-0 to access IOEX-GPIOs needed pre-task */
+	ioex_init(IOEX_C0_PCA9675);
+
+	/* Make sure SBU are routed to CCD or AUX based on CCD status at init */
+	board_connect_c0_sbu_deferred();
+
+	/* Reconfigure board specific charger drivers */
+	configure_charger();
+
+	/* Configure board specific retimer & mux */
+	configure_retimer_usbmux();
 }

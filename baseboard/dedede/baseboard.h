@@ -13,6 +13,8 @@
  * The sensor stack is generating a lot of activity.
  */
 #define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
+#undef CONFIG_HOSTCMD_DEBUG_MODE
+#define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 
 /*
  * Variant EC defines. Pick one:
@@ -119,7 +121,7 @@
 /* EC Modules */
 #define CONFIG_ADC
 #define CONFIG_CRC8
-#define CONFIG_HOSTCMD_ESPI
+#define CONFIG_HOST_INTERFACE_ESPI
 #define CONFIG_HOSTCMD_EVENTS
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER

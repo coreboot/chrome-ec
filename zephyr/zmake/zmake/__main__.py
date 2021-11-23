@@ -161,27 +161,23 @@ def main(argv=None):
     parser.add_argument(
         "--zephyr-base", type=pathlib.Path, help="Path to Zephyr OS repository"
     )
-    parser.add_argument(
-        "--zephyr-root",
-        type=pathlib.Path,
-        help="Path to Zephyr OS repos, must contain subdirs like v1.2",
-    )
 
     sub = parser.add_subparsers(dest="subcommand", help="Subcommand")
     sub.required = True
 
     configure = sub.add_parser("configure")
-    configure.add_argument(
-        "--ignore-unsupported-zephyr-version",
-        action="store_true",
-        help="Don't warn about using an unsupported Zephyr version",
-    )
     configure.add_argument("-t", "--toolchain", help="Name of toolchain to use")
     configure.add_argument(
         "--bringup",
         action="store_true",
         dest="bringup",
         help="Enable bringup debugging features",
+    )
+    configure.add_argument(
+        "--allow-warnings",
+        action="store_true",
+        default=False,
+        help="Do not treat warnings as errors",
     )
     configure.add_argument(
         "-B", "--build-dir", type=pathlib.Path, help="Build directory"
@@ -200,7 +196,8 @@ def main(argv=None):
         help="Test the .elf file after configuration",
     )
     configure.add_argument(
-        "project_dir", type=pathlib.Path, help="Path to the project to build"
+        "project_name_or_dir",
+        help="Path to the project to build",
     )
     configure.add_argument(
         "-c",

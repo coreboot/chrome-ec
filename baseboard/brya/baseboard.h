@@ -45,7 +45,7 @@
 #define CONFIG_BOARD_RESET_AFTER_POWER_ON
 
 /* Host communication */
-#define CONFIG_HOSTCMD_ESPI
+#define CONFIG_HOST_INTERFACE_ESPI
 #define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
 
 /*
@@ -144,16 +144,6 @@
 
 #define CONFIG_PWM
 
-/* Prochot assertion/deassertion ratios*/
-#define PROCHOT_ADAPTER_WATT_RATIO 97
-#define PROCHOT_ASSERTION_BATTERY_RATIO 95
-#define PROCHOT_DEASSERTION_BATTERY_RATIO 85
-#define PROCHOT_ASSERTION_PD_RATIO 105
-#define PROCHOT_DEASSERTION_PD_BATTERY_RATIO 95
-#define PROCHOT_ASSERTION_ADAPTER_RATIO 105
-#define PROCHOT_DEASSERTION_ADAPTER_RATIO 90
-#define PROCHOT_DEASSERTION_ADAPTER_BATT_RATIO 90
-
 /* Enable I2C Support */
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER
@@ -229,28 +219,29 @@
 /* Device version of product. */
 #define CONFIG_USB_BCD_DEV 0x0000
 
+/*
+ * These stack sizes were determined using "make analyzestack" for brya
+ * and include about 15% headroom. Sizes are rounded to multiples of 64
+ * bytes. Task stack sizes not listed here use more generic values (see
+ * ec.tasklist).
+ */
+#define BASEBOARD_CHARGER_TASK_STACK_SIZE	1088
+#define BASEBOARD_CHG_RAMP_TASK_STACK_SIZE	1088
+#define BASEBOARD_CHIPSET_TASK_STACK_SIZE	1152
+#define BASEBOARD_PD_INT_TASK_STACK_SIZE	 800
+#define BASEBOARD_PD_TASK_STACK_SIZE		1216
+#define BASEBOARD_POWERBTN_TASK_STACK_SIZE	1088
+
 #ifndef __ASSEMBLER__
 
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "cbi.h"
 #include "common.h"
 #include "baseboard_usbc_config.h"
 #include "extpower.h"
 
-/**
- * Configure run-time data structures and operation based on CBI data. This
- * typically includes customization for changes in the BOARD_VERSION and
- * FW_CONFIG fields in CBI. This routine is called from the baseboard after
- * the CBI data has been initialized.
- */
-__override_proto void board_cbi_init(void);
-
-/**
- * Initialize the FW_CONFIG from CBI data. If the CBI data is not valid, set the
- * FW_CONFIG to the board specific defaults.
- */
-__override_proto void board_init_fw_config(void);
 
 /*
  * Check battery disconnect state.
@@ -258,11 +249,6 @@ __override_proto void board_init_fw_config(void);
  * @return true - initialized. false - not.
  */
 __override_proto bool board_battery_is_initialized(void);
-
-/*
- * Return the board revision number.
- */
-uint8_t get_board_id(void);
 
 #endif /* !__ASSEMBLER__ */
 

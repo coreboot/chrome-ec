@@ -15,9 +15,8 @@
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
-#include "driver/accelgyro_bmi_common.h"
 #include "driver/accel_lis2dw12.h"
-#include "driver/als_tcs3400.h"
+#include "driver/accelgyro_icm426xx.h"
 #include "driver/bc12/mt6360.h"
 #include "driver/charger/isl923x.h"
 #include "driver/ppc/syv682x.h"
@@ -80,21 +79,4 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 int board_allow_i2c_passthru(int port)
 {
 	return (port == I2C_PORT_VIRTUAL_BATTERY);
-}
-
-const struct cc_para_t *board_get_cc_tuning_parameter(enum usbpd_port port)
-{
-	const static struct cc_para_t
-		cc_parameter[CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT] = {
-		{
-			.rising_time = IT83XX_TX_PRE_DRIVING_TIME_1_UNIT,
-			.falling_time = IT83XX_TX_PRE_DRIVING_TIME_2_UNIT,
-		},
-		{
-			.rising_time = IT83XX_TX_PRE_DRIVING_TIME_1_UNIT,
-			.falling_time = IT83XX_TX_PRE_DRIVING_TIME_2_UNIT,
-		},
-	};
-
-	return &cc_parameter[port];
 }

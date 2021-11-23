@@ -44,6 +44,7 @@ rsource "Kconfig.espi"
 rsource "Kconfig.flash"
 rsource "Kconfig.header"
 rsource "Kconfig.init_priority"
+rsource "Kconfig.ioex"
 rsource "Kconfig.keyboard"
 rsource "Kconfig.led"
 rsource "Kconfig.panic"
@@ -218,6 +219,12 @@ config PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
 	  initialize/disable the SPI driver, which goes to sleep on suspend.
 	  Require to initialize it first such that it can receive a host resume
 	  event, that notifies the normal resume hook.
+
+config PLATFORM_EC_CHIP_INIT_ROM_REGION
+	bool "Enables the use of a dedicated init ROM region"
+	help
+	  Enable this flag if the board has a `.init_rom` region. This will
+	  activate routines in `init_rom.h` to access objects in this region.
 
 config PLATFORM_EC_CONSOLE_CMD_HCDEBUG
 	bool "Console command: hcdebug"
@@ -494,6 +501,17 @@ config PLATFORM_EC_CONSOLE_CMD_I2C_SPEED
 	  the DYNAMIC_SPEED port flag set, the speed can be set. In all
 	  cases, the bus speed is in units of kHz.
 
+config PLATFORM_EC_HOSTCMD_I2C_CONTROL
+	bool "Host command: i2c_control"
+	default n
+	depends on PLATFORM_EC_I2C
+	help
+	  Enable the I2C_CONTROL host command. This comamnd is used to
+	  display an I2C port's bus speed. Additionally, for ports with
+	  the DYNAMIC_SPEED port flag set, the speed can be set. In all
+	  cases, the bus speed is in units of kHz. More functionality of
+	  the command may be added in the future.
+
 config PLATFORM_EC_SMBUS_PEC
 	bool "Packet error checking support for SMBus"
 	help
@@ -630,9 +648,9 @@ config PLATFORM_EC_PWM_DISPLIGHT
 	depends on PLATFORM_EC_PWM
 	help
 	  Enables display backlight controlled by a PWM signal connected
-	  directly to the EC chipset. The board files must define the C
-	  reference PWM_CH_DISPLIGHT to the PWM channel used for the
-	  display backlight control.
+	  directly to the EC chipset. The board devicetree file must define the
+	  PWM channel used for the display backlight control and assign the
+	  "displight" node label to it.
 
 config PLATFORM_EC_RTC
 	bool "Real-time clock (RTC)"

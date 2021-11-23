@@ -383,12 +383,27 @@
 /* Root mean square noise of 100 Hz accelerometer, units: ug */
 #define BMI160_ACCEL_RMS_NOISE_100HZ    1300
 
-#ifdef CONFIG_BMI_SEC_I2C
 /* Functions to access the secondary device through the accel/gyro. */
 int bmi160_sec_raw_read8(const int port, const uint16_t addr_flags,
 			 const uint8_t reg, int *data_ptr);
 int bmi160_sec_raw_write8(const int port, const uint16_t addr_flags,
 			  const uint8_t reg, int data);
+
+#if defined(CONFIG_ZEPHYR) && defined(CONFIG_ACCEL_INTERRUPTS)
+/* Get the motion sensor ID of the BMI160 sensor that generates the interrupt.
+ * The interrupt is converted to the event and transferred to motion sense task
+ * that actually handles the interrupt.
+ *
+ * Here we use an alias (bmi160_int) to get the motion sensor ID. This alias
+ * MUST be defined for this driver to work.
+ * aliases {
+ *   bmi160-int = &base_accel;
+ * };
+ */
+#if DT_NODE_EXISTS(DT_ALIAS(bmi160_int))
+#define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(SENSOR_ID(DT_ALIAS(bmi160_int)))
+#endif
 #endif
 
 #endif /* __CROS_EC_ACCELGYRO_BMI160_H */

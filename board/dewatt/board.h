@@ -15,6 +15,7 @@
 
 /* Keyboard features */
 #define CONFIG_KEYBOARD_FACTORY_TEST
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Sensors */
 #define CONFIG_ACCELGYRO_BMI160
@@ -37,6 +38,12 @@
 #define CONFIG_USB_MUX_ANX7451
 #define CONFIG_USBC_RETIMER_ANX7451
 
+#define PD_OPERATING_POWER_MW   15000
+#define PD_MAX_CURRENT_MA       3250
+#define PD_MAX_VOLTAGE_MV       20000
+/* Max Power = 65 W */
+#define PD_MAX_POWER_MW         ((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
+
 /* USB Type A Features */
 
 /* BC 1.2 */
@@ -49,6 +56,9 @@
 #define CONFIG_LED_COMMON
 #define CONFIG_LED_ONOFF_STATES
 
+/* Thermal Config */
+#define CONFIG_TEMP_SENSOR_TMP112
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
@@ -59,9 +69,7 @@ void motion_interrupt(enum gpio_signal signal);
 
 /* Battery Types */
 enum battery_type {
-	BATTERY_AEC,
-	BATTERY_AP18F4M,
-	BATTERY_POWER_TECH,
+	BATTERY_AP19B8M,
 	BATTERY_TYPE_COUNT,
 };
 

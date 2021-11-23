@@ -18,6 +18,7 @@ from testfixtures import LogCapture
 import zmake.build_config
 import zmake.jobserver
 import zmake.multiproc as multiproc
+import zmake.output_packers
 import zmake.project
 import zmake.toolchains
 import zmake.zmake as zm
@@ -33,10 +34,14 @@ class FakeProject:
     def __init__(self):
         self.packer = mock.Mock()
         self.packer.pack_firmware = mock.Mock(return_value=[])
-        self.project_dir = pathlib.Path("FakeProjectDir")
 
-        self.config = mock.Mock()
-        self.config.supported_zephyr_versions = [(2, 5)]
+        self.config = zmake.project.ProjectConfig(
+            project_name="fakeproject",
+            zephyr_board="fakeboard",
+            supported_toolchains=["llvm"],
+            output_packer=zmake.output_packers.ElfPacker,
+            project_dir=pathlib.Path("FakeProjectDir"),
+        )
 
     @staticmethod
     def iter_builds():
@@ -123,12 +128,10 @@ def do_test_with_log_level(log_level, use_configure=False, fnames=None):
             re.compile(r".*build-rw"): get_test_filepath("rw"),
         }
     zephyr_base = mock.Mock()
-    zephyr_root = mock.Mock()
 
     zmk = zm.Zmake(
         jobserver=FakeJobserver(fnames),
         zephyr_base=zephyr_base,
-        zephyr_root=zephyr_root,
     )
 
     with LogCapture(level=log_level) as cap:
@@ -142,13 +145,16 @@ VERSION_TWEAK = 0
 EXTRAVERSION =
 """
                 )
+            (pathlib.Path(tmpname) / "project_name.txt").write_text("fakeproject")
             zephyr_base.resolve = mock.Mock(return_value=pathlib.Path(tmpname))
             with patch("zmake.version.get_version_string", return_value="123"):
-                with patch.object(zmake.project, "Project", return_value=FakeProject()):
+                with patch.object(
+                    zmake.project,
+                    "find_projects",
+                    return_value={"fakeproject": FakeProject()},
+                ):
                     if use_configure:
-                        zmk.configure(
-                            pathlib.Path(tmpname), build_dir=pathlib.Path("build")
-                        )
+                        zmk.configure("fakeproject", build_dir=pathlib.Path("build"))
                     else:
                         with patch("zmake.version.write_version_header", autospec=True):
                             zmk.build(pathlib.Path(tmpname))

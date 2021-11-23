@@ -21,4 +21,18 @@ module = TCPCI_EMUL
 module-str = tcpci_emul
 source "subsys/logging/Kconfig.template.log_config"
 
+config EMUL_PS8XXX
+	bool "Parade PS8XXX emulator"
+	help
+	  Enable emulator for PS8XXX family of TCPC. This emulator is extenstion
+	  for TCPCI emulator. PS8XXX specific API is available in
+	  zephyr/include/emul/emul_tcpci.h
+
+config EMUL_CHARGER
+	bool "USB-C charger emulator"
+	help
+	  Enable USB-C charger emulator which may be attached to TCPCI emulator.
+	  API of charger emulator is available in
+	  zephyr/include/emul/emul_charger.h
+
 endif # EMUL_TCPCI

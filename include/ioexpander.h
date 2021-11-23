@@ -59,6 +59,12 @@ struct ioexpander_drv {
 /* IO Expander has been initialized */
 #define IOEX_FLAGS_INITIALIZED	BIT(1)
 
+/*
+ * BITS 24 to 31 are used by io-expander drivers that need to control multiple
+ * devices
+ */
+#define IOEX_FLAGS_CUSTOM_BIT(x) BUILD_CHECK_INLINE(BIT(x), BIT(x) & 0xff000000)
+
 struct ioexpander_config_t {
 	/* Physical I2C port connects to the IO expander chip. */
 	int i2c_host_port;
@@ -90,6 +96,16 @@ int ioex_enable_interrupt(enum ioex_signal signal);
  * @return			EC_SUCCESS if successful, non-zero if error.
  */
 int ioex_disable_interrupt(enum ioex_signal signal);
+
+/*
+ * Get io expander flags (IOEX_FLAGS_*) for chip that specified IOEX signal
+ * belongs to. They contain information if port was disabled or initialized.
+ *
+ * @param signal IOEX signal that belongs to chip which flags will be returned
+ * @param val	 Pointer to memory where flags will be stored
+ * @return	 EC_SUCCESS if successful, non-zero if error.
+ */
+int ioex_get_ioex_flags(enum ioex_signal signal, int *val);
 
 /*
  * Get flags for the IOEX signal

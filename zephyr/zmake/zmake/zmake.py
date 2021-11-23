@@ -153,16 +153,17 @@ class Zmake:
         jobs=0,
         modules_dir=None,
         zephyr_base=None,
-        zephyr_root=None,
     ):
         zmake.multiproc.reset()
         self._checkout = checkout
-        self._zephyr_base = zephyr_base
-        if zephyr_root:
-            self._zephyr_root = zephyr_root
+        if zephyr_base:
+            self.zephyr_base = zephyr_base
         else:
-            self._zephyr_root = (
-                self.checkout / "src" / "third_party" / "zephyr" / "main"
+            # TODO(b/205884929): Drop v2.7 from path.  This is
+            # intentionally hard-coded here as an intermediate step to
+            # cutting over to the main branch.
+            self.zephyr_base = (
+                self.checkout / "src" / "third_party" / "zephyr" / "main" / "v2.7"
             )
 
         if modules_dir:
@@ -188,59 +189,62 @@ class Zmake:
             self._checkout = util.locate_cros_checkout()
         return self._checkout.resolve()
 
-    def locate_zephyr_base(self, version):
-        """Locate the Zephyr OS repository.
-
-        Args:
-            version: If a Zephyr OS base was not supplied to Zmake,
-                which version to search for as a tuple of integers.
-                This argument is ignored if a Zephyr base was supplied
-                to Zmake.
-        Returns:
-            A pathlib.Path to the found Zephyr OS repository.
-        """
-        if self._zephyr_base:
-            return self._zephyr_base
-
-        return util.locate_zephyr_base(self._zephyr_root, version)
-
     def configure(
         self,
-        project_dir,
+        project_name_or_dir,
         build_dir=None,
         toolchain=None,
-        ignore_unsupported_zephyr_version=False,
         build_after_configure=False,
         test_after_configure=False,
         bringup=False,
         coverage=False,
+        allow_warnings=False,
+    ):
+        """Locate a project by name or directory and then call _configure."""
+        root_dir = pathlib.Path(project_name_or_dir)
+        if not root_dir.is_dir():
+            root_dir = self.module_paths["ec"] / "zephyr"
+        found_projects = zmake.project.find_projects(root_dir)
+        if len(found_projects) == 1:
+            # Likely passed directory path, wants to build only
+            # project from there.
+            project = next(iter(found_projects.values()))
+        else:
+            try:
+                project = found_projects[project_name_or_dir]
+            except KeyError as e:
+                raise KeyError("No project named {}".format(project_name_or_dir)) from e
+        return self._configure(
+            project=project,
+            build_dir=build_dir,
+            toolchain=toolchain,
+            build_after_configure=build_after_configure,
+            test_after_configure=test_after_configure,
+            bringup=bringup,
+            coverage=coverage,
+            allow_warnings=allow_warnings,
+        )
+
+    def _configure(
+        self,
+        project,
+        build_dir=None,
+        toolchain=None,
+        build_after_configure=False,
+        test_after_configure=False,
+        bringup=False,
+        coverage=False,
+        allow_warnings=False,
     ):
         """Set up a build directory to later be built by "zmake build"."""
-        project = zmake.project.Project(project_dir)
-        supported_versions = project.config.supported_zephyr_versions
-
-        zephyr_base = self.locate_zephyr_base(max(supported_versions)).resolve()
-
-        # Ignore the patchset from the Zephyr version.
-        zephyr_version = util.read_zephyr_version(zephyr_base)[:2]
-
-        if (
-            not ignore_unsupported_zephyr_version
-            and zephyr_version not in supported_versions
-        ):
-            raise ValueError(
-                "The Zephyr OS version (v{}.{}) is not supported by the "
-                "project.  You may wish to either configure zmake.yaml to "
-                "support this version, or pass "
-                "--ignore-unsupported-zephyr-version.".format(*zephyr_version)
-            )
-
         # Resolve build_dir if needed.
-        build_dir = util.resolve_build_dir(
-            platform_ec_dir=self.module_paths["ec"],
-            project_dir=project_dir,
-            build_dir=build_dir,
-        )
+        if not build_dir:
+            build_dir = (
+                self.module_paths["ec"]
+                / "build"
+                / "zephyr"
+                / project.config.project_name
+            )
         # Make sure the build directory is clean.
         if os.path.exists(build_dir):
             self.logger.info("Clearing old build directory %s", build_dir)
@@ -248,8 +252,9 @@ class Zmake:
 
         generated_include_dir = (build_dir / "include").resolve()
         base_config = zmake.build_config.BuildConfig(
-            environ_defs={"ZEPHYR_BASE": str(zephyr_base), "PATH": "/usr/bin"},
+            environ_defs={"ZEPHYR_BASE": str(self.zephyr_base), "PATH": "/usr/bin"},
             cmake_defs={
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "DTS_ROOT": str(self.module_paths["ec"] / "zephyr"),
                 "SYSCALL_INCLUDE_DIRS": str(
                     self.module_paths["ec"] / "zephyr" / "include" / "drivers"
@@ -267,7 +272,7 @@ class Zmake:
 
         # Symlink the Zephyr base into the build directory so it can
         # be used in the build phase.
-        util.update_symlink(zephyr_base, build_dir / "zephyr_base")
+        util.update_symlink(self.zephyr_base, build_dir / "zephyr_base")
 
         dts_overlay_config = project.find_dts_overlays(module_paths)
 
@@ -282,15 +287,21 @@ class Zmake:
             base_config |= zmake.build_config.BuildConfig(
                 kconfig_defs={"CONFIG_COVERAGE": "y"}
             )
+        if allow_warnings:
+            base_config |= zmake.build_config.BuildConfig(
+                cmake_defs={"ALLOW_WARNINGS": "ON"}
+            )
 
         if not build_dir.exists():
             build_dir = build_dir.mkdir()
         if not generated_include_dir.exists():
             generated_include_dir.mkdir()
         processes = []
-        self.logger.info("Building %s in %s.", project_dir, build_dir)
+        self.logger.info("Building %s in %s.", project.config.project_name, build_dir)
         for build_name, build_config in project.iter_builds():
-            self.logger.info("Configuring %s:%s.", project_dir, build_name)
+            self.logger.info(
+                "Configuring %s:%s.", project.config.project_name, build_name
+            )
             config = (
                 base_config
                 | toolchain_config
@@ -302,7 +313,7 @@ class Zmake:
             kconfig_file = build_dir / "kconfig-{}.conf".format(build_name)
             proc = config.popen_cmake(
                 self.jobserver,
-                project_dir,
+                project.config.project_dir,
                 output_dir,
                 kconfig_file,
                 stdin=subprocess.DEVNULL,
@@ -311,7 +322,7 @@ class Zmake:
                 encoding="utf-8",
                 errors="replace",
             )
-            job_id = "{}:{}".format(project_dir, build_name)
+            job_id = "{}:{}".format(project.config.project_name, build_name)
             zmake.multiproc.log_output(
                 self.logger,
                 logging.DEBUG,
@@ -335,8 +346,10 @@ class Zmake:
             if proc.wait():
                 raise OSError(get_process_failure_msg(proc))
 
-        # Create symlink to project
-        util.update_symlink(project_dir, build_dir / "project")
+        # To reconstruct a Project object later, we need to know the
+        # name and project directory.
+        (build_dir / "project_name.txt").write_text(project.config.project_name)
+        util.update_symlink(project.config.project_dir, build_dir / "project")
 
         if test_after_configure:
             rv = self.test(build_dir=build_dir)
@@ -393,7 +406,8 @@ class Zmake:
         dirs = {}
 
         build_dir = build_dir.resolve()
-        project = zmake.project.Project(build_dir / "project")
+        found_projects = zmake.project.find_projects(build_dir / "project")
+        project = found_projects[(build_dir / "project_name.txt").read_text()]
 
         # Compute the version string.
         version_string = zmake.version.get_version_string(
@@ -477,7 +491,8 @@ class Zmake:
         self.build(build_dir, output_files_out=output_files)
 
         # If the project built but isn't a test, just bail.
-        project = zmake.project.Project(build_dir / "project")
+        found_projects = zmake.project.find_projects(build_dir / "project")
+        project = found_projects[(build_dir / "project_name.txt").read_text()]
         if not project.config.is_test:
             return 0
 
@@ -514,17 +529,19 @@ class Zmake:
     def testall(self):
         """Test all the valid test targets"""
         tmp_dirs = []
-        for project in zmake.project.find_projects(self.module_paths["ec"] / "zephyr"):
+        for project in zmake.project.find_projects(
+            self.module_paths["ec"] / "zephyr"
+        ).values():
             is_test = project.config.is_test
             temp_build_dir = tempfile.mkdtemp(
-                suffix="-{}".format(os.path.basename(project.project_dir.as_posix())),
+                suffix="-{}".format(project.config.project_name),
                 prefix="zbuild-",
             )
             tmp_dirs.append(temp_build_dir)
             # Configure and run the test.
             self.executor.append(
-                func=lambda: self.configure(
-                    project_dir=project.project_dir,
+                func=lambda: self._configure(
+                    project=project,
                     build_dir=pathlib.Path(temp_build_dir),
                     build_after_configure=True,
                     test_after_configure=is_test,
@@ -601,9 +618,9 @@ class Zmake:
             return 0
 
     def _coverage_compile_only(self, project, build_dir, lcov_file):
-        self.logger.info("Building %s in %s", project.project_dir, build_dir)
-        rv = self.configure(
-            project_dir=project.project_dir,
+        self.logger.info("Building %s in %s", project.config.project_name, build_dir)
+        rv = self._configure(
+            project=project,
             build_dir=build_dir,
             build_after_configure=False,
             test_after_configure=False,
@@ -628,7 +645,8 @@ class Zmake:
         )
 
         # Use ninja to compile the all.libraries target.
-        build_project = zmake.project.Project(build_dir / "project")
+        found_projects = zmake.project.find_projects(build_dir / "project")
+        build_project = found_projects[(build_dir / "project_name.txt").read_text()]
 
         procs = []
         dirs = {}
@@ -679,10 +697,12 @@ class Zmake:
         lcov_file,
         is_configured=False,
     ):
-        self.logger.info("Running test %s in %s", project.project_dir, build_dir)
+        self.logger.info(
+            "Running test %s in %s", project.config.project_name, build_dir
+        )
         if not is_configured:
-            rv = self.configure(
-                project_dir=project.project_dir,
+            rv = self._configure(
+                project=project,
                 build_dir=build_dir,
                 build_after_configure=True,
                 test_after_configure=True,
@@ -699,12 +719,11 @@ class Zmake:
         """Builds all targets with coverage enabled, and then runs the tests."""
         all_lcov_files = []
         root_dir = self.module_paths["ec"] / "zephyr"
-        for project in zmake.project.find_projects(root_dir):
+        for project in zmake.project.find_projects(root_dir).values():
             is_test = project.config.is_test
-            rel_path = project.project_dir.relative_to(root_dir)
-            project_build_dir = pathlib.Path(build_dir).joinpath(rel_path)
-            lcov_file = pathlib.Path(build_dir).joinpath(
-                str(rel_path).replace("/", "_") + ".info"
+            project_build_dir = pathlib.Path(build_dir) / project.config.project_name
+            lcov_file = pathlib.Path(build_dir) / "{}.info".format(
+                project.config.project_name
             )
             all_lcov_files.append(lcov_file)
             if is_test:

@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include <fff.h>
 #include <zephyr.h>
 #include <ztest.h>
 
@@ -14,6 +15,7 @@
 #include "motion_sense_fifo.h"
 #include "driver/accelgyro_bmi260.h"
 #include "driver/accelgyro_bmi_common.h"
+#include "test_mocks.h"
 
 #define BMI_ORD			DT_DEP_ORD(DT_NODELABEL(accel_bmi260))
 #define BMI_ACC_SENSOR_ID	SENSOR_ID(DT_NODELABEL(ms_bmi260_accel))
@@ -1567,6 +1569,15 @@ static int emul_init_ok(struct i2c_emul *emul, int reg, uint8_t *val, int byte,
 	return 1;
 }
 
+/**
+ * A custom fake to use with the `init_rom_map` mock that returns the
+ * value of `addr`
+ */
+static const void *init_rom_map_addr_passthru(const void *addr, int size)
+{
+	return addr;
+}
+
 /** Test init function of BMI260 accelerometer and gyroscope sensors */
 static void test_bmi_init(void)
 {
@@ -1576,6 +1587,10 @@ static void test_bmi_init(void)
 	emul = bmi_emul_get(BMI_ORD);
 	ms_acc = &motion_sensors[BMI_ACC_SENSOR_ID];
 	ms_gyr = &motion_sensors[BMI_GYR_SENSOR_ID];
+
+	/* The mock should return whatever is passed in to its addr param */
+	RESET_FAKE(init_rom_map);
+	init_rom_map_fake.custom_fake = init_rom_map_addr_passthru;
 
 	/*
 	 * Test successful init. It is needed custom function to set value of
@@ -1891,6 +1906,271 @@ static void test_unsupported_configs(void)
 		EC_RES_INVALID_PARAM, ret);
 }
 
+void test_interrupt_handler(void)
+{
+	/* The accelerometer interrupt handler simply sets an event flag for the
+	 * motion sensing task. Make sure that flag starts cleared, fire the
+	 * interrupt, and ensure the flag is set.
+	 */
+
+	uint32_t *mask;
+
+	mask = task_get_event_bitmap(TASK_ID_MOTIONSENSE);
+	zassert_true(mask != NULL,
+		     "Got a null pointer when getting event bitmap.");
+	zassert_true((*mask & CONFIG_ACCELGYRO_BMI260_INT_EVENT) == 0,
+		     "Event flag is set before firing interrupt");
+
+	bmi260_interrupt(0);
+
+	mask = task_get_event_bitmap(TASK_ID_MOTIONSENSE);
+	zassert_true(mask != NULL,
+		     "Got a null pointer when getting event bitmap.");
+	zassert_true(*mask & CONFIG_ACCELGYRO_BMI260_INT_EVENT,
+		     "Event flag is not set after firing interrupt");
+}
+
+void test_bmi_init_chip_id(void)
+{
+	struct i2c_emul *emul = bmi_emul_get(BMI_ORD);
+	struct motion_sensor_t *ms_acc = &motion_sensors[BMI_ACC_SENSOR_ID];
+
+	/* Part 1:
+	 * Error occurs while reading the chip ID
+	 */
+	i2c_common_emul_set_read_fail_reg(emul, BMI260_CHIP_ID);
+	int ret = ms_acc->drv->init(ms_acc);
+
+	zassert_equal(ret, EC_ERROR_UNKNOWN,
+		      "Expected %d (EC_ERROR_UNKNOWN) but got %d",
+		      EC_ERROR_UNKNOWN, ret);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/* Part 2:
+	 * Test cases where the returned chip ID does not match what is
+	 * expected. This involves overriding values in the motion_sensor
+	 * struct, so make a copy first.
+	 */
+	struct motion_sensor_t ms_fake;
+
+	memcpy(&ms_fake, ms_acc, sizeof(ms_fake));
+
+	/* Part 2a: expecting MOTIONSENSE_CHIP_BMI220 but get BMI260's chip ID!
+	 */
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI260_CHIP_ID_MAJOR);
+	ms_fake.chip = MOTIONSENSE_CHIP_BMI220;
+
+	ret = ms_fake.drv->init(&ms_fake);
+	zassert_equal(ret, EC_ERROR_ACCESS_DENIED,
+		      "Expected %d (EC_ERROR_ACCESS_DENIED) but got %d",
+		      EC_ERROR_ACCESS_DENIED, ret);
+
+	/* Part 2b: expecting MOTIONSENSE_CHIP_BMI260 but get BMI220's chip ID!
+	 */
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI220_CHIP_ID_MAJOR);
+	ms_fake.chip = MOTIONSENSE_CHIP_BMI260;
+
+	ret = ms_fake.drv->init(&ms_fake);
+	zassert_equal(ret, EC_ERROR_ACCESS_DENIED,
+		      "Expected %d (EC_ERROR_ACCESS_DENIED) but got %d",
+		      EC_ERROR_ACCESS_DENIED, ret);
+
+	/* Part 2c: use an invalid expected chip */
+	ms_fake.chip = MOTIONSENSE_CHIP_MAX;
+
+	ret = ms_fake.drv->init(&ms_fake);
+	zassert_equal(ret, EC_ERROR_ACCESS_DENIED,
+		      "Expected %d (EC_ERROR_ACCESS_DENIED) but got %d",
+		      EC_ERROR_ACCESS_DENIED, ret);
+}
+
+/* Make an I2C emulator mock wrapped in FFF */
+FAKE_VALUE_FUNC(int, bmi_config_load_no_mapped_flash_mock_read_fn,
+		struct i2c_emul *, int, uint8_t *, int, void *);
+static int bmi_config_load_no_mapped_flash_mock_read_fn_helper(
+	struct i2c_emul *emul, int reg, uint8_t *val, int bytes, void *data)
+{
+	if (reg == BMI260_INTERNAL_STATUS && val) {
+		/* We want to force-return a status of 'initialized' when this
+		 * is read.
+		 */
+		*val = BMI260_INIT_OK;
+		return 0;
+	}
+	/* For other registers, go through the normal emulator route */
+	return 1;
+}
+
+void test_bmi_config_load_no_mapped_flash(void)
+{
+	/* Tests the situation where we load BMI config data when flash memory
+	 * is not mapped (basically what occurs when `init_rom_map()` in
+	 * `bmi_config_load()` returns NULL)
+	 */
+
+	struct i2c_emul *emul = bmi_emul_get(BMI_ORD);
+	struct motion_sensor_t *ms_acc = &motion_sensors[BMI_ACC_SENSOR_ID];
+	int ret, num_status_reg_reads;
+
+	/* Force bmi_config_load() to have to manually copy from memory */
+	RESET_FAKE(init_rom_map);
+	init_rom_map_fake.return_val = NULL;
+
+	/* Force init_rom_copy() to succeed */
+	RESET_FAKE(init_rom_copy);
+	init_rom_copy_fake.return_val = 0;
+
+	/* Set proper chip ID and raise the INIT_OK flag to signal that config
+	 * succeeded.
+	 */
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI260_CHIP_ID_MAJOR);
+	i2c_common_emul_set_read_func(
+		emul, bmi_config_load_no_mapped_flash_mock_read_fn, NULL);
+	RESET_FAKE(bmi_config_load_no_mapped_flash_mock_read_fn);
+	bmi_config_load_no_mapped_flash_mock_read_fn_fake.custom_fake =
+		bmi_config_load_no_mapped_flash_mock_read_fn_helper;
+
+	/* Part 1: successful path */
+	ret = ms_acc->drv->init(ms_acc);
+
+	zassert_equal(ret, EC_RES_SUCCESS, "Got %d but expected %d", ret,
+		      EC_RES_SUCCESS);
+
+	/* Check the number of times we accessed BMI260_INTERNAL_STATUS */
+	num_status_reg_reads = MOCK_COUNT_CALLS_WITH_ARG_VALUE(
+		bmi_config_load_no_mapped_flash_mock_read_fn_fake, 1,
+		BMI260_INTERNAL_STATUS);
+	zassert_equal(1, num_status_reg_reads,
+		      "Accessed status reg %d times but expected %d.",
+		      num_status_reg_reads, 1);
+
+	/* Part 2: write to `BMI260_INIT_ADDR_0` fails */
+	i2c_common_emul_set_write_fail_reg(emul, BMI260_INIT_ADDR_0);
+
+	ret = ms_acc->drv->init(ms_acc);
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Got %d but expected %d",
+		      ret, EC_ERROR_INVALID_CONFIG);
+
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/* Part 3: init_rom_copy() fails w/ a non-zero return code of 255. */
+	init_rom_copy_fake.return_val = 255;
+
+	ret = ms_acc->drv->init(ms_acc);
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Got %d but expected %d",
+		      ret, EC_ERROR_INVALID_CONFIG);
+
+	init_rom_copy_fake.return_val = 0;
+
+	/* Part 4: write to `BMI260_INIT_DATA` fails */
+	i2c_common_emul_set_write_fail_reg(emul, BMI260_INIT_DATA);
+
+	ret = ms_acc->drv->init(ms_acc);
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Got %d but expected %d",
+		      ret, EC_ERROR_INVALID_CONFIG);
+
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/* Cleanup */
+	i2c_common_emul_set_read_func(emul, NULL, NULL);
+}
+
+void test_bmi_config_unsupported_chip(void)
+{
+	/* Test what occurs when we try to configure a chip that is
+	 * turned off in Kconfig (BMI220). This test assumes that
+	 * CONFIG_ACCELGYRO_BMI220 is NOT defined.
+	 */
+
+#if defined(CONFIG_ACCELGYRO_BMI220)
+#error "Test test_bmi_config_unsupported_chip will not work properly with " \
+	"CONFIG_ACCELGYRO_BMI220 defined."
+#endif
+
+	struct i2c_emul *emul = bmi_emul_get(BMI_ORD);
+	struct motion_sensor_t ms_fake;
+
+	/* Set up struct and emaulator to be a BMI220 chip, which
+	 * `bmi_config_load()` does not support in the current configuration
+	 */
+
+	memcpy(&ms_fake, &motion_sensors[BMI_ACC_SENSOR_ID], sizeof(ms_fake));
+	ms_fake.chip = MOTIONSENSE_CHIP_BMI220;
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI220_CHIP_ID_MAJOR);
+
+	int ret = ms_fake.drv->init(&ms_fake);
+
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Expected %d but got %d",
+		      EC_ERROR_INVALID_CONFIG, ret);
+}
+
+void test_init_config_read_failure(void)
+{
+	/* Test proper response to a failed read from the register
+	 * BMI260_INTERNAL_STATUS.
+	 */
+
+	struct i2c_emul *emul = bmi_emul_get(BMI_ORD);
+	struct motion_sensor_t *ms_acc = &motion_sensors[BMI_ACC_SENSOR_ID];
+	int ret;
+
+	/* Set up i2c emulator and mocks */
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI260_CHIP_ID_MAJOR);
+	i2c_common_emul_set_read_fail_reg(emul, BMI260_INTERNAL_STATUS);
+	RESET_FAKE(init_rom_map);
+	init_rom_map_fake.custom_fake = init_rom_map_addr_passthru;
+
+	ret = ms_acc->drv->init(ms_acc);
+
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Expected %d but got %d",
+		      EC_ERROR_INVALID_CONFIG, ret);
+}
+
+/* Mock read function and counter used to test the timeout when
+ * waiting for the chip to initialize
+ */
+static int timeout_test_status_reg_access_count;
+static int status_timeout_mock_read_fn(struct i2c_emul *emul, int reg,
+				       uint8_t *val, int bytes, void *data)
+{
+	if (reg == BMI260_INTERNAL_STATUS && val) {
+		/* We want to force-return a non-OK status each time */
+		timeout_test_status_reg_access_count++;
+		*val = BMI260_INIT_ERR;
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+void test_init_config_status_timeout(void)
+{
+	/* We allow up to 15 tries to get a successful BMI260_INIT_OK
+	 * value from the BMI260_INTERNAL_STATUS register. Make sure
+	 * we properly handle the case where the chip is not initialized
+	 * before the timeout.
+	 */
+
+	struct i2c_emul *emul = bmi_emul_get(BMI_ORD);
+	struct motion_sensor_t *ms_acc = &motion_sensors[BMI_ACC_SENSOR_ID];
+	int ret;
+
+	/* Set up i2c emulator and mocks */
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI260_CHIP_ID_MAJOR);
+	timeout_test_status_reg_access_count = 0;
+	i2c_common_emul_set_read_func(emul, status_timeout_mock_read_fn, NULL);
+	RESET_FAKE(init_rom_map);
+	init_rom_map_fake.custom_fake = init_rom_map_addr_passthru;
+
+	ret = ms_acc->drv->init(ms_acc);
+
+	zassert_equal(timeout_test_status_reg_access_count, 15,
+		      "Expected %d attempts but counted %d", 15,
+		      timeout_test_status_reg_access_count);
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Expected %d but got %d",
+		      EC_ERROR_INVALID_CONFIG, ret);
+}
+
 void test_suite_bmi260(void)
 {
 	ztest_test_suite(bmi260,
@@ -1912,6 +2192,15 @@ void test_suite_bmi260(void)
 			 ztest_user_unit_test(test_bmi_init),
 			 ztest_user_unit_test(test_bmi_acc_fifo),
 			 ztest_user_unit_test(test_bmi_gyr_fifo),
-			 ztest_user_unit_test(test_unsupported_configs));
+			 ztest_user_unit_test(test_unsupported_configs),
+			 ztest_user_unit_test(test_interrupt_handler),
+			 ztest_user_unit_test(test_bmi_init_chip_id),
+			 ztest_user_unit_test(
+				 test_bmi_config_load_no_mapped_flash),
+			 ztest_user_unit_test(
+				 test_bmi_config_unsupported_chip),
+			 ztest_user_unit_test(
+				 test_init_config_read_failure),
+			 ztest_user_unit_test(test_init_config_status_timeout));
 	ztest_run_test_suite(bmi260);
 }

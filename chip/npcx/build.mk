@@ -11,6 +11,9 @@ CORE:=cortex-m
 # Allow the full Cortex-M4 instruction set
 CFLAGS_CPU+=-march=armv7e-m -mcpu=cortex-m4
 
+# Disable overlapping section warning that linker emits due to NPCX_RO_HEADER.
+LDFLAGS_EXTRA+=-Wl,--no-check-sections
+
 # Assign default CHIP_FAMILY as npcx5 for old boards used npcx5 series
 ifeq ($(CHIP_FAMILY),)
 CHIP_FAMILY:=npcx5
@@ -30,9 +33,9 @@ chip-$(CONFIG_FANS)+=fan.o
 chip-$(CONFIG_FLASH_PHYSICAL)+=flash.o
 chip-$(CONFIG_I2C)+=i2c.o i2c-$(CHIP_FAMILY).o
 chip-$(CONFIG_HOSTCMD_X86)+=lpc.o
-chip-$(CONFIG_HOSTCMD_ESPI)+=espi.o
+chip-$(CONFIG_HOST_INTERFACE_ESPI)+=espi.o
 chip-$(CONFIG_PECI)+=peci.o
-chip-$(CONFIG_HOSTCMD_SHI)+=shi.o
+chip-$(CONFIG_HOST_INTERFACE_SHI)+=shi.o
 chip-$(CONFIG_CEC)+=cec.o
 # pwm functions are implemented with the fan functions
 chip-$(CONFIG_PWM)+=pwm.o

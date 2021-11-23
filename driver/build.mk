@@ -121,6 +121,7 @@ driver-$(CONFIG_TEMP_SENSOR_G753)+=temp_sensor/g753.o
 driver-$(CONFIG_TEMP_SENSOR_G781)+=temp_sensor/g78x.o
 driver-$(CONFIG_TEMP_SENSOR_G782)+=temp_sensor/g78x.o
 driver-$(CONFIG_TEMP_SENSOR_OTI502)+=temp_sensor/oti502.o
+driver-$(CONFIG_TEMP_SENSOR_PCT2075)+=temp_sensor/pct2075.o
 driver-$(CONFIG_TEMP_SENSOR_SB_TSI)+=temp_sensor/sb_tsi.o
 driver-$(CONFIG_TEMP_SENSOR_TMP006)+=temp_sensor/tmp006.o
 driver-$(CONFIG_TEMP_SENSOR_TMP112)+=temp_sensor/tmp112.o
@@ -190,8 +191,9 @@ driver-$(CONFIG_USB_MUX_PI3USB31532)+=usb_mux/pi3usb3x532.o
 driver-$(CONFIG_USB_MUX_PS8740)+=usb_mux/ps8740.o
 driver-$(CONFIG_USB_MUX_PS8742)+=usb_mux/ps8740.o
 driver-$(CONFIG_USB_MUX_PS8743)+=usb_mux/ps8743.o
-driver-$(CONFIG_USB_MUX_TUSB1064)+=usb_mux/tusb1064.o
 driver-$(CONFIG_USB_MUX_PS8822)+=usb_mux/ps8822.o
+driver-$(CONFIG_USB_MUX_TUSB1044)+=usb_mux/tusb1064.o
+driver-$(CONFIG_USB_MUX_TUSB1064)+=usb_mux/tusb1064.o
 driver-$(CONFIG_USB_MUX_VIRTUAL)+=usb_mux/virtual.o
 
 # USB Hub with I2C interface

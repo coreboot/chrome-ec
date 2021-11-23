@@ -137,13 +137,6 @@ const struct motion_sensor_t *motion_als_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 
-static void board_sensors_init(void)
-{
-	/* Enable interrupt for the TCS3400 color light sensor */
-	gpio_enable_interrupt(GPIO_EC_RGB_INT_L);
-}
-DECLARE_HOOK(HOOK_INIT, board_sensors_init, HOOK_PRIO_INIT_I2C + 1);
-
 static void power_monitor(void);
 DECLARE_DEFERRED(power_monitor);
 
@@ -346,37 +339,47 @@ BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
 /******************************************************************************/
 /* Thermal control; drive fan based on temperature sensors. */
-const static struct ec_thermal_config thermal_a = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(90),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(78),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(89),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_A \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(85), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(90), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(78), \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+		.temp_fan_off = C_TO_K(25), \
+		.temp_fan_max = C_TO_K(89), \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_a = THERMAL_A;
 
-const static struct ec_thermal_config thermal_b = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(78),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_B \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(78), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(85), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_b = THERMAL_B;
 
 struct ec_thermal_config thermal_params[] = {
-	[TEMP_SENSOR_CORE] = thermal_a,
-	[TEMP_SENSOR_WIFI] = thermal_a,
+	[TEMP_SENSOR_CORE] = THERMAL_A,
+	[TEMP_SENSOR_WIFI] = THERMAL_A,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
@@ -412,6 +415,33 @@ static void cbi_init(void)
 		board_version, sku_id, fw_config);
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
+
+static void board_sensors_init(void)
+{
+	/* Enable interrupt for the TCS3400 color light sensor */
+	switch (board_version) {
+	case BOARD_VERSION_PROTO:
+	case BOARD_VERSION_PRE_EVT:
+	case BOARD_VERSION_EVT:
+		/*
+		 * b/203224828: These versions incorrectly use a 1.8V interrupt
+		 * line, which sends a constant interrupt signal and eventually
+		 * triggers a watchdog reset, so we keep it disabled.
+		 */
+		gpio_disable_interrupt(GPIO_EC_RGB_INT_L);
+		CPRINTS("ALS interrupt disabled (detected known-bad hardware)");
+		break;
+
+	case BOARD_VERSION_DVT:
+	case BOARD_VERSION_PVT:
+	default:
+		gpio_enable_interrupt(GPIO_EC_RGB_INT_L);
+		CPRINTS("ALS interrupt enabled");
+		break;
+	}
+}
+/* Ensure board_sensors_init runs after cbi_init. */
+DECLARE_HOOK(HOOK_INIT, board_sensors_init, HOOK_PRIO_INIT_I2C + 2);
 
 static void board_init(void)
 {

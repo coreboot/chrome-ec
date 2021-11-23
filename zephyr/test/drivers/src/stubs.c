@@ -11,14 +11,15 @@
 #include "charger/isl923x_public.h"
 #include "charger/isl9241_public.h"
 #include "config.h"
+#include "hooks.h"
 #include "i2c/i2c.h"
 #include "power.h"
 #include "ppc/sn5s330_public.h"
 #include "ppc/syv682x_public.h"
 #include "retimer/bb_retimer_public.h"
 #include "stubs.h"
+#include "tcpm/ps8xxx_public.h"
 #include "tcpm/tcpci.h"
-#include "tcpm/tusb422_public.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
@@ -130,18 +131,41 @@ struct tcpc_config_t tcpc_config[] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_USB_C1,
-			.addr_flags = TUSB422_I2C_ADDR_FLAGS,
+			.addr_flags = DT_REG_ADDR(DT_NODELABEL(
+							tcpci_ps8xxx_emul)),
 		},
-		.drv = &tusb422_tcpm_drv,
+		.drv = &ps8xxx_tcpm_drv,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
+static uint16_t ps8xxx_product_id = PS8805_PRODUCT_ID;
+
+uint16_t board_get_ps8xxx_product_id(int port)
+{
+	if (port != USBC_PORT_C1) {
+		return 0;
+	}
+
+	return ps8xxx_product_id;
+}
+
+void board_set_ps8xxx_product_id(uint16_t product_id)
+{
+	ps8xxx_product_id = product_id;
+}
+
 int board_is_sourcing_vbus(int port)
 {
 	return 0;
 }
+
+struct usb_mux usbc0_virtual_usb_mux = {
+	.usb_port = USBC_PORT_C0,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
+};
 
 struct usb_mux usbc1_virtual_usb_mux = {
 	.usb_port = USBC_PORT_C1,
@@ -152,8 +176,10 @@ struct usb_mux usbc1_virtual_usb_mux = {
 struct usb_mux usb_muxes[] = {
 	[USBC_PORT_C0] = {
 		.usb_port = USBC_PORT_C0,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+		.driver = &tcpci_tcpm_usb_mux_driver,
+		.next_mux = &usbc0_virtual_usb_mux,
+		.i2c_port = I2C_PORT_USB_C0,
+		.i2c_addr_flags = DT_REG_ADDR(DT_NODELABEL(tcpci_emul)),
 	},
 	[USBC_PORT_C1] = {
 		.usb_port = USBC_PORT_C1,
@@ -202,7 +228,7 @@ struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C1] = {
 		.i2c_port = I2C_PORT_USB_C1,
 		.i2c_addr_flags = SYV682X_ADDR1_FLAGS,
-		/* TODO(b/190519131): Add FRS GPIO, test FRS */
+		.frs_en = GPIO_USB_C1_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 };
@@ -215,7 +241,23 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 
 uint16_t tcpc_get_alert_status(void)
 {
-	return 0;
+	uint16_t status = 0;
+
+	/*
+	 * Check which port has the ALERT line set and ignore if that TCPC has
+	 * its reset line active.
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_TCPC_INT_ODL)) {
+		if (gpio_get_level(GPIO_USB_C0_TCPC_RST_L) != 0)
+			status |= PD_STATUS_TCPC_ALERT_0;
+	}
+
+	if (!gpio_get_level(GPIO_USB_C1_TCPC_INT_ODL)) {
+		if (gpio_get_level(GPIO_USB_C1_TCPC_RST_L) != 0)
+			status |= PD_STATUS_TCPC_ALERT_1;
+	}
+
+	return status;
 }
 
 enum power_state power_chipset_init(void)
@@ -236,7 +278,7 @@ enum power_state power_handle_state(enum power_state state)
 	return mock_state;
 }
 
-void chipset_reset(enum chipset_reset_reason reason)
+void chipset_reset(enum chipset_shutdown_reason reason)
 {
 }
 
@@ -246,3 +288,59 @@ void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 
 /* Power signals list. Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {};
+
+void tcpc_alert_event(enum gpio_signal signal)
+{
+	int port;
+
+	switch (signal) {
+	case GPIO_USB_C0_TCPC_INT_ODL:
+		port = 0;
+		break;
+	case GPIO_USB_C1_TCPC_INT_ODL:
+		port = 1;
+		break;
+	default:
+		return;
+	}
+
+	schedule_deferred_pd_interrupt(port);
+}
+
+void ppc_alert(enum gpio_signal signal)
+{
+	switch (signal) {
+	case GPIO_USB_C1_PPC_INT_ODL:
+		syv682x_interrupt(USBC_PORT_C1);
+		break;
+	default:
+		return;
+	}
+}
+
+/* TODO: This code should really be generic, and run based on something in
+ * the dts.
+ */
+static void usbc_interrupt_init(void)
+{
+	/* Enable TCPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C0_TCPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
+
+	cprints(CC_USB, "Resetting TCPCs...");
+	cflush();
+
+	/* Reset generic TCPCI on port 0. */
+	gpio_set_level(GPIO_USB_C0_TCPC_RST_L, 0);
+	msleep(1);
+	gpio_set_level(GPIO_USB_C0_TCPC_RST_L, 1);
+
+	/* Reset PS8XXX on port 1. */
+	gpio_set_level(GPIO_USB_C1_TCPC_RST_L, 0);
+	msleep(PS8XXX_RESET_DELAY_MS);
+	gpio_set_level(GPIO_USB_C1_TCPC_RST_L, 1);
+
+	/* Enable PPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
+}
+DECLARE_HOOK(HOOK_INIT, usbc_interrupt_init, HOOK_PRIO_INIT_I2C + 1);

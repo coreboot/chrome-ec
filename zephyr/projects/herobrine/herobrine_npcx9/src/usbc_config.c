@@ -5,7 +5,6 @@
 
 /* Herobrine board-specific USB-C configuration */
 
-#include "bc12/pi3usb9201_public.h"
 #include "charger.h"
 #include "charger/isl923x_public.h"
 #include "charge_manager.h"
@@ -25,6 +24,7 @@
 #include "usb_mux.h"
 #include "usbc_ocp.h"
 #include "usbc_ppc.h"
+#include "usbc/ppc.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
@@ -47,16 +47,6 @@ void tcpc_alert_event(enum gpio_signal signal)
 	}
 
 	schedule_deferred_pd_interrupt(port);
-}
-
-void usb0_evt(enum gpio_signal signal)
-{
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
-}
-
-void usb1_evt(enum gpio_signal signal)
-{
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
 }
 
 static void usba_oc_deferred(void)
@@ -93,14 +83,11 @@ void ppc_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_C0_SWCTL_INT_ODL:
-		if (board_has_syv_ppc())
-			syv682x_interrupt(0);
-		else
-			sn5s330_interrupt(0);
+		ppc_chips[0].drv->interrupt(0);
 		break;
 
 	case GPIO_USB_C1_SWCTL_INT_ODL:
-		sn5s330_interrupt(1);
+		ppc_chips[1].drv->interrupt(1);
 		break;
 
 	default:
@@ -154,27 +141,6 @@ enum ec_status charger_profile_override_set_param(uint32_t param,
 	return EC_RES_INVALID_PARAM;
 }
 
-/* Power Path Controller */
-struct ppc_config_t ppc_chips[] = {
-	{
-		.i2c_port = I2C_PORT_TCPC0,
-		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
-		.drv = &sn5s330_drv
-	},
-	{
-		.i2c_port = I2C_PORT_TCPC1,
-		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
-		.drv = &sn5s330_drv
-	},
-};
-unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
-
-static const struct ppc_config_t ppc_syv682x_port0 = {
-		.i2c_port = I2C_PORT_TCPC0,
-		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
-		.drv = &syv682x_drv,
-};
-
 /* TCPC mux configuration */
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
@@ -219,33 +185,15 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A_5V,
 };
 
-/* BC1.2 */
-const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
-	{
-		.i2c_port = I2C_PORT_POWER,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-	},
-	{
-		.i2c_port = I2C_PORT_EEPROM,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-	},
-};
-
 /* Initialize board USC-C things */
 static void board_init_usbc(void)
 {
-	/* Enable BC1.2 interrupts */
-	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
-	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_L);
-
 	/* Enable USB-A overcurrent interrupt */
 	gpio_enable_interrupt(GPIO_USB_A0_OC_ODL);
 
 	/* Configure the PPC driver */
 	if (board_has_syv_ppc())
-		memcpy(&ppc_chips[0],
-		       &ppc_syv682x_port0,
-		       sizeof(struct ppc_config_t));
+		PPC_ENABLE_ALTERNATE(ppc_port0_syv);
 }
 DECLARE_HOOK(HOOK_INIT, board_init_usbc, HOOK_PRIO_DEFAULT);
 

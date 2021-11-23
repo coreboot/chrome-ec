@@ -227,13 +227,14 @@ static inline int tcpm_sop_prime_enable(int port, bool enable)
 
 static inline int tcpm_set_vconn(int port, int enable)
 {
-#ifdef CONFIG_USB_PD_TCPC_VCONN
-	int rv;
+	if (IS_ENABLED(CONFIG_USB_PD_TCPC_VCONN) ||
+	    tcpc_config[port].flags & TCPC_FLAGS_CONTROL_VCONN) {
+		int rv;
 
-	rv = tcpc_config[port].drv->set_vconn(port, enable);
-	if (rv)
-		return rv;
-#endif
+		rv = tcpc_config[port].drv->set_vconn(port, enable);
+		if (rv)
+			return rv;
+	}
 
 	return tcpm_sop_prime_enable(port, enable);
 }
@@ -355,8 +356,15 @@ static inline int tcpm_enter_low_power_mode(int port)
 {
 	return tcpc_config[port].drv->enter_low_power_mode(port);
 }
+
+static inline void tcpm_wake_low_power_mode(int port)
+{
+	if (tcpc_config[port].drv->wake_low_power_mode)
+		tcpc_config[port].drv->wake_low_power_mode(port);
+}
 #else
 int tcpm_enter_low_power_mode(int port);
+void tcpm_wake_low_power_mode(int port);
 #endif
 
 #ifdef CONFIG_CMD_I2C_STRESS_TEST_TCPC
