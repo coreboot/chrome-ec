@@ -1327,7 +1327,7 @@ static enum ap_ro_check_result validate_and_cache_ap_ro_v2_from_flash(void)
 
 		if (read_ap_spi(fmh.fmap_signature, offset,
 				sizeof(fmh.fmap_signature), __LINE__))
-			return -1;
+			return ROV_FAILED;
 
 		if (memcmp(fmh.fmap_signature, FMAP_SIGNATURE,
 			   sizeof(fmh.fmap_signature)))
@@ -1338,7 +1338,7 @@ static enum ap_ro_check_result validate_and_cache_ap_ro_v2_from_flash(void)
 				sizeof(fmh.fmap_signature),
 				sizeof(fmh) - sizeof(fmh.fmap_signature),
 				__LINE__))
-			return -1;
+			return ROV_FAILED;
 
 		/* Verify fmap validity. */
 		if ((fmh.fmap_ver_major != FMAP_MAJOR_VERSION) ||
@@ -1360,7 +1360,6 @@ static enum ap_ro_check_result validate_and_cache_ap_ro_v2_from_flash(void)
 
 	if (ro_gscvd_found)
 		return ROV_FAILED;
-
 
 	return ROV_NOT_FOUND;
 }
@@ -1390,26 +1389,25 @@ static uint8_t do_ap_ro_check(void)
 		rv = ROV_NOT_FOUND;
 	}
 
-
-	/*
-	 * If a V2 entry is found, or V1 check failed, which could be because
-	 * there is a new RO with a V2 structure.
-	 */
-	if ((support_status == ARCVE_NOT_PROGRAMMED) ||
-	    (p_chk->header.type == AP_RO_HASH_TYPE_GSCVD) ||
-	    (v1_record_found && (rv != ROV_SUCCEEDED))) {
+	/* If V1 check has not succeeded, try checking for V2. */
+	if (rv  != ROV_SUCCEEDED) {
 		const struct gvd_descriptor *descriptor;
+		enum ap_ro_check_result rv2;
 
 		descriptor = find_v2_entry();
 
 		if (descriptor)
-			rv = validate_cached_ap_ro_v2(descriptor);
+			rv2 = validate_cached_ap_ro_v2(descriptor);
 
-		if ((rv != ROV_SUCCEEDED) || !descriptor)
+		if ((rv2 != ROV_SUCCEEDED) || !descriptor)
 			/* There could have been a legitimate RO change. */
-			rv = validate_and_cache_ap_ro_v2_from_flash();
+			rv2 = validate_and_cache_ap_ro_v2_from_flash();
+		/*
+		 * Unless V2 entry is not found, override the V1 result.
+		 */
+		if (rv2 != ROV_NOT_FOUND)
+			rv = rv2;
 	}
-
 	disable_ap_spi_hash_shortcut();
 
 	if (rv != ROV_SUCCEEDED) {
