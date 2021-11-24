@@ -18,16 +18,9 @@ enum ap_ro_status {
 };
 /*
  * validate_ap_ro: based on information saved in an H1 RO flash page verify
- * contents of the AP flash.
- *
- * Returns:
- *
- *  EC_SUCCESS if valid integrity check information was found and the AP flash
- *             check succeeded.
- *  EC_ERROR_INVAL in valid integrity check information was not found.
- *  EC_ERROR_CRC if information was found, but the AP flash check failed.
+ * contents of the AP flash. Hold the EC in reset if verification fails.
  */
-int validate_ap_ro(void);
+void validate_ap_ro(void);
 
 /*
  * ap_ro_add_flash_event: add a flash log event to keep track of AP RO
