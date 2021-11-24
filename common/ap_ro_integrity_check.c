@@ -18,6 +18,7 @@
 #include "shared_mem.h"
 #include "stddef.h"
 #include "stdint.h"
+#include "system.h"
 #include "timer.h"
 #include "tpm_registers.h"
 #include "usb_spi.h"
@@ -496,7 +497,7 @@ static int verify_keyblock(const struct kb_container *kbc,
 /* Clear validate_ap_ro_boot state. */
 void ap_ro_device_reset(void)
 {
-	if (apro_result == AP_RO_NOT_RUN)
+	if (apro_result == AP_RO_NOT_RUN || ec_rst_override())
 		return;
 	CPRINTS("%s: clear apro result", __func__);
 	apro_result = AP_RO_NOT_RUN;
@@ -1364,6 +1365,40 @@ static enum ap_ro_check_result validate_and_cache_ap_ro_v2_from_flash(void)
 	return ROV_NOT_FOUND;
 }
 
+/*
+ * A hook used to keep the EC in reset, no matter what keys the user presses,
+ * the only way out is the Cr50 reboot, most likely through power cycle by
+ * battery cutoff.
+ *
+ * Cr50 console over SuzyQ would still be available in case the user has the
+ * cable and wants to see what happens with the system. The easiest way to see
+ * the system is in this state to run the 'flog' command and examine the flash
+ * log.
+ */
+static void keep_ec_in_reset(void);
+
+DECLARE_DEFERRED(keep_ec_in_reset);
+
+static void keep_ec_in_reset(void)
+{
+	disable_sleep(SLEEP_MASK_AP_RO_VERIFICATION);
+	assert_ec_rst();
+	hook_call_deferred(&keep_ec_in_reset_data, 100 * MSEC);
+}
+
+static void release_ec_reset_override(void)
+{
+	hook_call_deferred(&keep_ec_in_reset_data, -1);
+	deassert_ec_rst();
+	enable_sleep(SLEEP_MASK_AP_RO_VERIFICATION);
+}
+
+int ec_rst_override(void)
+{
+	return apro_result == AP_RO_FAIL;
+}
+
+
 static uint8_t do_ap_ro_check(void)
 {
 	enum ap_ro_check_result rv;
@@ -1423,14 +1458,17 @@ static uint8_t do_ap_ro_check(void)
 		 * Both explicit failure to verify OR any error if cached
 		 * descriptor was found should block the booting.
 		 */
-		if ((rv == ROV_FAILED) || check_is_required())
+		if ((rv == ROV_FAILED) || check_is_required()) {
+			keep_ec_in_reset();
 			return EC_ERROR_CRC;
+		}
 		return EC_ERROR_UNIMPLEMENTED;
 	}
 
 	apro_result = AP_RO_PASS;
 	ap_ro_add_flash_event(APROF_CHECK_SUCCEEDED);
 	CPRINTS("AP RO verification SUCCEEDED!");
+	release_ec_reset_override();
 
 	return EC_SUCCESS;
 }
@@ -1459,7 +1497,7 @@ static enum vendor_cmd_rc ap_ro_check_callback(struct vendor_cmd_params *p)
 }
 DECLARE_VENDOR_COMMAND_P(VENDOR_CC_AP_RO_VALIDATE, ap_ro_check_callback);
 
-int validate_ap_ro(void)
+void validate_ap_ro(void)
 {
 	struct {
 		struct tpm_cmd_header tpmh;
@@ -1474,9 +1512,6 @@ int validate_ap_ro(void)
 	pack.tpmh.subcommand_code = htobe16(VENDOR_CC_AP_RO_VALIDATE);
 
 	tpm_alt_extension(&pack.tpmh, sizeof(pack));
-
-	/* The last byte is the response code. */
-	return pack.rv;
 }
 
 void ap_ro_add_flash_event(enum ap_ro_verification_ev event)
