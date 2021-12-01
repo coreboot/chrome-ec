@@ -22,7 +22,7 @@ typedef union {
 		 * for __switchto() to work.
 		 */
 		uint32_t sp;       /* Saved stack pointer for context switch */
-		uint32_t events;   /* Bitmaps of received events */
+		atomic_t events;   /* Bitmaps of received events */
 		uint64_t runtime;  /* Time spent in task */
 		uint32_t *stack;   /* Start of stack */
 	};
@@ -197,7 +197,7 @@ task_id_t task_get_current(void)
 	return current_task - tasks;
 }
 
-uint32_t *task_get_event_bitmap(task_id_t tskid)
+atomic_t *task_get_event_bitmap(task_id_t tskid)
 {
 	task_ *tsk = __task_id_to_ptr(tskid);
 	return &tsk->events;
@@ -304,7 +304,9 @@ void task_start_irq_handler(void *excep_return)
 	 * Continue iff the tasks are ready and we are not called from another
 	 * exception (as the time accouting is done in the outer irq).
 	 */
-	if (!start_called || ((uint32_t)excep_return & 0xf) == 1)
+	if (!start_called
+	    || (((uint32_t)excep_return & EXC_RETURN_MODE_MASK)
+		== EXC_RETURN_MODE_HANDLER))
 		return;
 
 	exc_start_time = t;
@@ -322,7 +324,9 @@ void task_end_irq_handler(void *excep_return)
 	 * Continue iff the tasks are ready and we are not called from another
 	 * exception (as the time accouting is done in the outer irq).
 	 */
-	if (!start_called || ((uint32_t)excep_return & 0xf) == 1)
+	if (!start_called
+	    || (((uint32_t)excep_return & EXC_RETURN_MODE_MASK)
+		== EXC_RETURN_MODE_HANDLER))
 		return;
 
 	/* Track time in interrupts */

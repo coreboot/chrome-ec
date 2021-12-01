@@ -67,13 +67,32 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /******************************************************************************/
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"typec", 0, 400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"other", 2, 400, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
+	{
+		.name = "typec",
+		.port = 0,
+		.kbps = 400,
+		.scl  = GPIO_I2C1_SCL,
+		.sda  = GPIO_I2C1_SDA
+	},
+	{
+		.name = "other",
+		.port = 2,
+		.kbps = 400,
+		.scl  = GPIO_I2C3_SCL,
+		.sda  = GPIO_I2C3_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 const struct i2c_port_t i2c_bitbang_ports[] = {
-	{"battery", 3, 100, GPIO_I2C4_SCL, GPIO_I2C4_SDA, .drv = &bitbang_drv},
+	{
+		.name = "battery",
+		.port = 3,
+		.kbps = 100,
+		.scl = GPIO_I2C4_SCL,
+		.sda = GPIO_I2C4_SDA,
+		.drv = &bitbang_drv
+	},
 };
 const unsigned int i2c_bitbang_ports_used = ARRAY_SIZE(i2c_bitbang_ports);
 
@@ -267,7 +286,7 @@ static void board_spi_enable(void)
 #ifdef CHIP_FAMILY_STM32L4
 	/* Set I/O speed before AF configured */
 	/* EMMC SPI SLAVE: PB13/14/15 */
-	/* SENSORS SPI MASTER: PB10, PB12, PC2, PC3 */
+	/* SENSORS SPI controller: PB10, PB12, PC2, PC3 */
 	STM32_GPIO_OSPEEDR(GPIO_B) |= 0xFF300000;
 	STM32_GPIO_OSPEEDR(GPIO_C) |= 0x000000F0;
 

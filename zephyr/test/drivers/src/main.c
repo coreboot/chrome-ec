@@ -30,6 +30,8 @@ extern void test_suite_ppc_sn5s330(void);
 extern void test_suite_cros_cbi(void);
 extern void test_suite_tcpci(void);
 extern void test_suite_ps8xxx(void);
+extern void test_suite_integration_usb(void);
+extern void test_suite_power_common(void);
 
 void test_main(void)
 {
@@ -61,4 +63,6 @@ void test_main(void)
 	test_suite_cros_cbi();
 	test_suite_tcpci();
 	test_suite_ps8xxx();
+	test_suite_integration_usb();
+	test_suite_power_common();
 }

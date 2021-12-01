@@ -55,10 +55,10 @@ def load_config_file(path):
     exec(code, config_globals)
 
     # Next, load the BUILD.py
-    logging.info("Loading config file %s", path)
+    logging.debug("Loading config file %s", path)
     code = compile(path.read_bytes(), str(path), "exec")
     exec(code, config_globals)
-    logging.info("Config file %s defines %s projects", path, len(projects))
+    logging.debug("Config file %s defines %s projects", path, len(projects))
     return projects
 
 
@@ -71,7 +71,7 @@ def find_projects(root_dir):
     Returns:
         A dictionary mapping project names to Project objects.
     """
-    logging.info("Finding zmake targets under '%s'.", root_dir)
+    logging.debug("Finding zmake targets under '%s'.", root_dir)
     found_projects = {}
     for path in pathlib.Path(root_dir).rglob("BUILD.py"):
         for project in load_config_file(path):
@@ -91,7 +91,6 @@ class ProjectConfig:
     zephyr_board: str
     supported_toolchains: "list[str]"
     output_packer: type
-    zephyr_version: str = dataclasses.field(default="v2.7")
     modules: "list[str]" = dataclasses.field(
         default_factory=lambda: modules.known_modules,
     )

@@ -54,6 +54,10 @@
 #define CONFIG_CHARGER_BQ25720_IDCHG_TH2 1
 #endif
 
+#ifndef CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG_CUSTOM
+#define CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG 0
+#endif
+
 /*
  * Helper macros
  */
@@ -61,6 +65,10 @@
 #define SET_CO1_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
 							     CHARGE_OPTION_1, \
 							     _field, _c, (_x))
+
+#define SET_CO2(_field, _v, _x)		SET_BQ_FIELD(BQ257X0,	\
+						     CHARGE_OPTION_2,	\
+						     _field, _v, (_x))
 
 #define SET_CO2_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
 							     CHARGE_OPTION_2, \
@@ -77,6 +85,10 @@
 #define SET_CO4(_field, _v, _x)		SET_BQ_FIELD(BQ25720,	\
 						     CHARGE_OPTION_4,	\
 						     _field, _v, (_x))
+
+#define SET_CO4_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ25720,	\
+							     CHARGE_OPTION_4, \
+							     _field, _c, (_x))
 
 #define SET_PO1(_field, _v, _x)		SET_BQ_FIELD(BQ257X0,	\
 						     PROCHOT_OPTION_1,	\
@@ -387,6 +399,12 @@ static int bq257x0_init_charge_option_2(int chgnum)
 	 */
 	reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_2, PKPWR_TMAX, 0, reg);
 
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG_CUSTOM)) {
+		/* Set input overload time in peak power mode. */
+		reg = SET_CO2(PKPWR_TOVLD_DEG,
+			      CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG, reg);
+	}
+
 	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_EN_ACOC)) {
 		/* Enable AC input over-current protection. */
 		reg = SET_CO2_BY_NAME(EN_ACOC, ENABLE, reg);
@@ -399,12 +417,7 @@ static int bq257x0_init_charge_option_2(int chgnum)
 
 	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_BATOC_VTH_MINIMUM)) {
 		/* Set battery over-current threshold to minimum. */
-		if (IS_ENABLED(CONFIG_CHARGER_BQ25720))
-			reg = SET_BQ_FIELD_BY_NAME(BQ25720, CHARGE_OPTION_2,
-						   BATOC_VTH, 1P33, reg);
-		else
-			reg = SET_BQ_FIELD_BY_NAME(BQ25710, CHARGE_OPTION_2,
-						   BATOC_VTH, 1P50, reg);
+		reg = SET_CO2_BY_NAME(BATOC_VTH, 1P33, reg);
 	}
 
 	return raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_2, reg);
@@ -453,6 +466,9 @@ static int bq257x0_init_charge_option_4(int chgnum)
 
 	if (IS_ENABLED(CONFIG_CHARGER_BQ25720_IDCHG_TH2_CUSTOM))
 		reg = SET_CO4(IDCHG_TH2, CONFIG_CHARGER_BQ25720_IDCHG_TH2, reg);
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25720_PP_IDCHG2))
+		reg = SET_CO4_BY_NAME(PP_IDCHG2, ENABLE, reg);
 
 	return raw_write16(chgnum, BQ25720_REG_CHARGE_OPTION_4, reg);
 }

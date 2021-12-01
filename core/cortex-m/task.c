@@ -22,7 +22,7 @@ typedef union {
 		 * for __switchto() to work.
 		 */
 		uint32_t sp;       /* Saved stack pointer for context switch */
-		uint32_t events;   /* Bitmaps of received events */
+		atomic_t events;   /* Bitmaps of received events */
 		uint64_t runtime;  /* Time spent in task */
 		uint32_t *stack;   /* Start of stack */
 	};
@@ -79,7 +79,7 @@ void __idle(void)
 		 * CSAE bit is set. Please notice this symptom only
 		 * occurs at npcx5.
 		 */
-#if defined(CHIP_FAMILY_NPCX5) && defined(CONFIG_HOSTCMD_ESPI)
+#if defined(CHIP_FAMILY_NPCX5) && defined(CONFIG_HOST_INTERFACE_ESPI)
 		/* Enable Host access wakeup */
 		SET_BIT(NPCX_WKEN(MIWU_TABLE_0, MIWU_GROUP_5), 6);
 #endif
@@ -263,7 +263,7 @@ task_id_t task_get_current(void)
 	return current_task - tasks;
 }
 
-uint32_t *task_get_event_bitmap(task_id_t tskid)
+atomic_t *task_get_event_bitmap(task_id_t tskid)
 {
 	task_ *tsk = __task_id_to_ptr(tskid);
 	return &tsk->events;
@@ -389,7 +389,9 @@ void __keep task_start_irq_handler(void *excep_return)
 	 * and we are not called from another exception (this must match the
 	 * logic for when we chain to svc_handler() below).
 	 */
-	if (!need_resched_or_profiling || (((uint32_t)excep_return & 0xf) == 1))
+	if (!need_resched_or_profiling
+	    || (((uint32_t)excep_return & EXC_RETURN_MODE_MASK)
+		== EXC_RETURN_MODE_HANDLER))
 		return;
 
 	exc_start_time = t;
@@ -402,7 +404,9 @@ void __keep task_resched_if_needed(void *excep_return)
 	 * Continue iff a rescheduling event happened or profiling is active,
 	 * and we are not called from another exception.
 	 */
-	if (!need_resched_or_profiling || (((uint32_t)excep_return & 0xf) == 1))
+	if (!need_resched_or_profiling
+	    || (((uint32_t)excep_return & EXC_RETURN_MODE_MASK)
+		== EXC_RETURN_MODE_HANDLER))
 		return;
 
 	svc_handler(0, 0);

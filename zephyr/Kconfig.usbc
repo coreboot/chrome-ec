@@ -392,8 +392,14 @@ config PLATFORM_EC_USB_PD_VBUS_MEASURE_TCPC
 config PLATFORM_EC_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
 	bool "VBUS on each port is measured using an ADC channel"
 	help
-	  Enable this is there is a separate ADC channel for each USB-C VBUS
+	  Enable this if there is a separate ADC channel for each USB-C VBUS
 	  voltage.
+
+config PLATFORM_EC_USB_PD_VBUS_MEASURE_BY_BOARD
+	bool "VBUS on each port is measured per board specific"
+	help
+	  Enable this if there are different VBUS measurement approaches on
+	  the board, and also `board_get_vbus_voltage()` has to be implemented.
 
 endchoice  # Measuring VBUS voltage
 
@@ -584,6 +590,14 @@ config PLATFORM_EC_USB_PD_DP_HPD_GPIO_CUSTOM
 	    void svdm_set_hpd_gpio(int port, int enable);
 
 	    int svdm_get_hpd_gpio(int port);
+
+config PLATFORM_EC_USB_PD_DATA_RESET_MSG
+	bool "Enable the PD Data Reset Message."
+	depends on PLATFORM_EC_USB_PD_REV30
+	help
+	  Enable this to support the Data Reset PD message flows. This is
+	  mandatory for products supporting USB4 but optional for other PD 3.0
+	  products.
 
 choice "VBUS detection method"
 	prompt "Select the method to detect VBUS"
@@ -932,6 +946,7 @@ choice "Type-C Port Manager (TCPM)"
 
 config PLATFORM_EC_USB_PD_TCPM_TCPCI
 	bool "Use TCPCI"
+	select PLATFORM_EC_USBC_OCP
 	help
 	  Enable a TCPC compatible with the Type-C Port Controller Interface
 	  (TCPCI) Specification. This driver supports both Rev1 v1.2 and Rev2
@@ -946,7 +961,6 @@ config PLATFORM_EC_USB_PD_TCPM_TCPCI
 #  CONFIG_USB_PD_TCPM_ANX3429
 #  CONFIG_USB_PD_TCPM_ANX740X
 #  CONFIG_USB_PD_TCPM_ANX741X
-#  CONFIG_USB_PD_TCPM_ANX7447
 #  CONFIG_USB_PD_TCPM_ANX7688
 #  CONFIG_USB_PD_TCPM_MT6370
 #  CONFIG_USB_PD_TCPM_RAA489000
@@ -1121,6 +1135,40 @@ config PLATFORM_EC_USB_PD_TCPM_MULTI_PS8XXX
 	     PS8755_PRODUCT_ID
 	     PS8805_PRODUCT_ID
 	     PS8815_PRODUCT_ID
+
+config PLATFORM_EC_USB_PD_TCPM_ANX7447
+	bool "Analogix ANX7447 USB-C Gen 2 Type-C Port Controller"
+	select PLATFORM_EC_USB_PD_TCPM_MUX
+	help
+	  The Analogix ANX7447 is a USB Type-C Port Controller (TCPC)
+	  for USB Type-C v1.2 Host, USB3.1 Gen2 and DisplayPort applications.
+	  It has an on-chip microcontroller (OCM) to manage the signal
+	  switching. It supports Power Delivery Rev. 3.0 and the DisplayPort
+	  Alt Mode version 1.4a HBR3.
+
+	  Supported chips are:
+	     ANX3447
+	     ANX7447
+
+if PLATFORM_EC_USB_PD_TCPM_ANX7447
+config PLATFORM_EC_USB_PD_TCPM_ANX7447_AUX_PU_PD
+	bool "Enable ANX77447 AUX_N internal PU, and AUX_P internal PD."
+	depends on PLATFORM_EC_USB_PD_TCPM_ANX7447
+	help
+	  Use this config option to enable and internal pullup resistor on the
+	  AUX_N and internal pulldown resistor on the AUX_P line. Only use this
+	  config option if there are no external pu/pd resistors on these
+	  signals. This configuration should be used to avoid noise issues on
+	  the DDI1_AUX_N & DDI1_AUX_P signals (b/122873171)
+
+config PLATFORM_EC_USB_PD_TCPM_ANX7447_OCM_ERASE_COMMAND
+	bool "Enable console command to erase ANX7447 OCM flash"
+	depends on PLATFORM_EC_USB_PD_TCPM_ANX7447
+	help
+	  Adds an EC console command to erase the ANX7447 OCM flash.
+	  Note: this is intended to be a temporary option and won't be needed
+	  when ANX7447 are put on boards with OCM already erased
+endif # PLATFORM_EC_USB_PD_TCPM_ANX7447
 
 config PLATFORM_EC_USB_PD_TCPM_NCT38XX
 	bool "Nuvoton 3807/8 Single/Dual Port Controller with Power Delivery"

@@ -164,7 +164,7 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	},
 	[USBC_PORT_C1] = {
 		.i2c_port = I2C_PORT_USB_C1_BC12,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
+		.i2c_addr_flags = PI3USB9201_I2C_ADDR_1_FLAGS,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
@@ -210,7 +210,7 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 	int rst_signal;
 
 	if (me->usb_port == USBC_PORT_C1)
-		rst_signal = GPIO_USB_C1_RT_RST_R_ODL;
+		rst_signal = IOEX_USB_C1_RT_RST_ODL;
 	else if (me->usb_port == USBC_PORT_C2)
 		rst_signal = IOEX_USB_C2_RT_RST_ODL;
 	else

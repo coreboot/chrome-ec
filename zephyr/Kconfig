@@ -176,7 +176,7 @@ choice PLATFORM_EC_CBI_STORAGE_TYPE
 
 	  See here for detailed information on CBI:
 
-	  https://chromium.googlesource.com/chromiumos/docs/+/master/design_docs/cros_board_info.md
+	  https://chromium.googlesource.com/chromiumos/docs/+/HEAD/design_docs/cros_board_info.md
 
 config PLATFORM_EC_CBI_EEPROM
 	bool "CBI EEPROM support"
@@ -893,5 +893,11 @@ config PLATFORM_EC_AMD_STT
 	  specification. It makes use of the thermal capacitance of the system
 	  to temporarily boost above the sustainable power limit, while the
 	  chassis skin temperatures are below limits.
+
+config PLATFORM_EC_MATH_UTIL
+	bool "Math utility"
+	help
+	  Math utilities including bitmask manipulation, division rounding,
+	  trigonometric function, etc.
 
 endif # PLATFORM_EC

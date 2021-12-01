@@ -1106,6 +1106,17 @@
  */
 #undef CONFIG_CHARGER_BQ25710_CMP_REF_1P2
 
+/* Enable if CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG should be applied */
+#undef CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG_CUSTOM
+
+/*
+ * Input overload time when in peak power mode (PKPWR_TOVLD_DEG). This
+ * limits how long the charger can draw ILIM2 from the adapter. This is
+ * a 2 bit field. On the bq25710 1 ms to 20 ms can be encoded. On the
+ * bq25720 1 ms to 10 ms can be encoded.
+ */
+#undef CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG
+
 /*
  * This config option is used to enable the charger's AC over-current
  * protection. The converter turns off when the OC threshold is
@@ -1149,6 +1160,13 @@
  * removed.
  */
 #undef CONFIG_CHARGER_BQ25710_PP_ACOK
+
+/*
+ * This config option sets the PP_IDCHG2 bit in the Charge Option 4
+ * register. This causes PROCHOT to be pulsed when IDCHG_TH2 is reached.
+ */
+
+#undef CONFIG_CHARGER_BQ25720_PP_IDCHG2
 
 /* Enable if CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_MV should be applied */
 #undef CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_CUSTOM
@@ -2395,7 +2413,7 @@
  * Accept EC host commands over the SPI host interface.  The AP is SPI
  * controller and the EC is the SPI peripheral for this configuration.
  */
-#undef CONFIG_HOSTCMD_SHI
+#undef CONFIG_HOST_INTERFACE_SHI
 
 /*
  * Host command rate limiting assures EC will have time to process lower
@@ -3141,26 +3159,27 @@
 #undef CONFIG_HID_HECI
 
 /* Support host command interface over HECI */
-#undef CONFIG_HOSTCMD_HECI
+#undef CONFIG_HOST_INTERFACE_HECI
 
 /*
  * EC supports x86 host communication with AP. This can either be through LPC
  * or eSPI. The CONFIG_HOSTCMD_X86 will get automatically defined if either
- * CONFIG_HOSTCMD_LPC or CONFIG_HOSTCMD_ESPI are defined. LPC and eSPI are
- * mutually exclusive.
+ * CONFIG_HOST_INTERFACE_LPC or CONFIG_HOST_INTERFACE_ESPI are defined.
+ * LPC and eSPI are mutually exclusive.
  */
 #undef CONFIG_HOSTCMD_X86
 /* Support host command interface over LPC bus. */
-#undef CONFIG_HOSTCMD_LPC
+#undef CONFIG_HOST_INTERFACE_LPC
 /* Support host command interface over eSPI bus. */
-#undef CONFIG_HOSTCMD_ESPI
+#undef CONFIG_HOST_INTERFACE_ESPI
 
 /*
- * SLP signals (SLP_S3 and SLP_S4) use virtual wires intead of physical pins
- * with eSPI interface.
+ * SLP signals (SLP_S3, SLP_S4, and SLP_S5) use virtual wires instead of
+ * physical pins with eSPI interface.
  */
 #undef CONFIG_HOSTCMD_ESPI_VW_SLP_S3
 #undef CONFIG_HOSTCMD_ESPI_VW_SLP_S4
+#undef CONFIG_HOSTCMD_ESPI_VW_SLP_S5
 
 /* MCHP next two items are EC eSPI slave configuration */
 /* Maximum clock frequence eSPI EC slave advertises
@@ -3511,6 +3530,9 @@
 
 /* Support S0ix */
 #undef CONFIG_POWER_S0IX
+
+/* Advertise S4 residency */
+#undef CONFIG_POWER_S4_RESIDENCY
 
 /* Support detecting failure to enter a sleep state (S0ix/S3) */
 #undef CONFIG_POWER_SLEEP_FAILURE_DETECTION
@@ -4006,8 +4028,10 @@
 #undef CONFIG_TEMP_SENSOR_G781		/* G781 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_G782		/* G782 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_OTI502	/* OTI502 sensor, on I2C bus */
+#undef CONFIG_TEMP_SENSOR_PCT2075	/* PCT2075 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_SB_TSI	/* SB_TSI sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP006	/* TI TMP006 sensor, on I2C bus */
+#undef CONFIG_TEMP_SENSOR_TMP112	/* TI TMP112 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP411	/* TI TMP411 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP432	/* TI TMP432 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP468	/* TI TMP468 sensor, on I2C bus */
@@ -4387,6 +4411,12 @@
  */
 #define CONFIG_USB_PD_FLAGS
 #undef CONFIG_USB_PD_RUNTIME_FLAGS
+
+/*
+ * Define to enable the PD Data Reset Message. This is mandatory for
+ * USB4 and optional for USB 3.2
+ */
+#undef CONFIG_USB_PD_DATA_RESET_MSG
 
 /*
  * Define if this board can enable VBUS discharge (eg. through a GPIO-controlled
@@ -5507,8 +5537,21 @@
  * are configured as virtual wires.
  */
 #if defined(CONFIG_HOSTCMD_ESPI_VW_SLP_S3) || \
-	defined(CONFIG_HOSTCMD_ESPI_VW_SLP_S4)
+	defined(CONFIG_HOSTCMD_ESPI_VW_SLP_S4) || \
+	defined(CONFIG_HOSTCMD_ESPI_VW_SLP_S5)
 #define CONFIG_HOST_ESPI_VW_POWER_SIGNAL
+#endif
+
+/*
+ * S4 residency works by observing SLP_S5 via virtual wire (as SLP_S5 has not
+ * traditionally been routed to the EC). If the board family wants S4 residency,
+ * they need to use ECs that support eSPI. Note that S4 residency is not
+ * strictly a requirement to support suspend-to-disk, except on Intel platforms
+ * with Key Locker support (TGL+).
+ */
+#if defined(CONFIG_POWER_S4_RESIDENCY) && \
+	!defined(CONFIG_HOSTCMD_ESPI_VW_SLP_S5)
+#error "S4_RESIDENCY needs eSPI support or SLP_S5 routed"
 #endif
 
 /*
@@ -5516,7 +5559,7 @@
  * without using eSPI for host commands.
  */
 #if (!defined(CONFIG_ZEPHYR) && defined(CONFIG_HOST_ESPI_VW_POWER_SIGNAL) && \
-     !defined(CONFIG_HOSTCMD_ESPI))
+	!defined(CONFIG_HOST_INTERFACE_ESPI))
 #error Must enable eSPI to enable virtual wires.
 #endif
 
@@ -5641,17 +5684,17 @@
  * Automatically define CONFIG_HOSTCMD_X86 if either child option is defined.
  * Ensure LPC and eSPI are mutually exclusive
  */
-#if defined(CONFIG_HOSTCMD_LPC) || defined(CONFIG_HOSTCMD_ESPI)
+#if defined(CONFIG_HOST_INTERFACE_LPC) || defined(CONFIG_HOST_INTERFACE_ESPI)
 #define CONFIG_HOSTCMD_X86
 #endif
 
-#if defined(CONFIG_HOSTCMD_LPC) && defined(CONFIG_HOSTCMD_ESPI)
+#if defined(CONFIG_HOST_INTERFACE_LPC) && defined(CONFIG_HOST_INTERFACE_ESPI)
 #error Must select only one type of host communication bus.
 #endif
 
 #if defined(CONFIG_HOSTCMD_X86) && \
-	!defined(CONFIG_HOSTCMD_LPC) && \
-	!defined(CONFIG_HOSTCMD_ESPI)
+	!defined(CONFIG_HOST_INTERFACE_LPC) && \
+	!defined(CONFIG_HOST_INTERFACE_ESPI)
 #error Must select one type of host communication bus.
 #endif
 

@@ -109,10 +109,34 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"bat_chg",  IT83XX_I2C_CH_A, 100, GPIO_I2C_A_SCL, GPIO_I2C_A_SDA},
-	{"sensor",   IT83XX_I2C_CH_B, 400, GPIO_I2C_B_SCL, GPIO_I2C_B_SDA},
-	{"usb0",     IT83XX_I2C_CH_C, 400, GPIO_I2C_C_SCL, GPIO_I2C_C_SDA},
-	{"usb1",     IT83XX_I2C_CH_E, 400, GPIO_I2C_E_SCL, GPIO_I2C_E_SDA},
+	{
+		.name = "bat_chg",
+		.port = IT83XX_I2C_CH_A,
+		.kbps = 100,
+		.scl  = GPIO_I2C_A_SCL,
+		.sda  = GPIO_I2C_A_SDA
+	},
+	{
+		.name = "sensor",
+		.port = IT83XX_I2C_CH_B,
+		.kbps = 400,
+		.scl  = GPIO_I2C_B_SCL,
+		.sda  = GPIO_I2C_B_SDA
+	},
+	{
+		.name = "usb0",
+		.port = IT83XX_I2C_CH_C,
+		.kbps = 400,
+		.scl  = GPIO_I2C_C_SCL,
+		.sda  = GPIO_I2C_C_SDA
+	},
+	{
+		.name = "usb1",
+		.port = IT83XX_I2C_CH_E,
+		.kbps = 400,
+		.scl  = GPIO_I2C_E_SCL,
+		.sda  = GPIO_I2C_E_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -243,3 +267,17 @@ void lid_angle_peripheral_enable(int enable)
 	}
 }
 #endif
+
+/* Called on AP S5 -> S3 transition */
+static void board_chipset_startup(void)
+{
+	gpio_set_level(GPIO_EN_USB_C1_MUX_PWR, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S3 -> S5 transition */
+static void board_chipset_shutdown(void)
+{
+	gpio_set_level(GPIO_EN_USB_C1_MUX_PWR, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
