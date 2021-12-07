@@ -98,7 +98,7 @@ main() {
   if [[ -n ${BOARD} ]]; then
     case "${BOARD}" in
       (cr50)
-        dir_list+=( ../../third_party/tpm2 ../../third_party/cryptoc )
+        dir_list+=( ../../third_party/tpm2 )
         ;;
       (*_fp)
         dir_list+=( ./private )
