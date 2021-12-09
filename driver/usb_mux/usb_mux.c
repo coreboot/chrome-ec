@@ -32,7 +32,7 @@ static int enable_debug_prints;
  * Flags will reset to 0 after sysjump; This works for current flags as LPM will
  * get reset in the init method which is called during PD task startup.
  */
-static uint32_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
+static atomic_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* Device is in low power mode. */
 #define USB_MUX_FLAG_IN_LPM		BIT(0)
@@ -317,9 +317,6 @@ static int configure_mux(int port,
 					break;
 			}
 
-			if (ack_required)
-				ack_task[port] = task_get_current();
-
 			/* Apply board specific setting */
 			if (mux_ptr->board_set)
 				rv = mux_ptr->board_set(mux_ptr, lcl_state);
@@ -343,7 +340,8 @@ static int configure_mux(int port,
 
 		case USB_MUX_HPD_UPDATE:
 			if (mux_ptr->hpd_update)
-				mux_ptr->hpd_update(mux_ptr, *mux_state);
+				mux_ptr->hpd_update(mux_ptr, *mux_state,
+						    &ack_required);
 
 		}
 
@@ -351,6 +349,8 @@ static int configure_mux(int port,
 		mutex_unlock(&mux_lock[port]);
 
 		if (ack_required) {
+			ack_task[port] = task_get_current();
+
 			/*
 			 * This should only be called from the PD task or usb
 			 * mux task

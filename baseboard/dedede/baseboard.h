@@ -176,6 +176,7 @@
 
 /* Sensors */
 #define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK 0
 #define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
 
 /* SoC */
@@ -241,6 +242,7 @@
 
 #ifndef __ASSEMBLER__
 
+#include "atomic_t.h"
 #include "common.h"
 #include "gpio_signal.h"
 
@@ -265,7 +267,7 @@ void board_reset_pd_mcu(void);
  * Bit to indicate if the PP3000_A rail's power is good. Will be updated by ADC
  * interrupt.
  */
-extern uint32_t pp3300_a_pgood;
+extern atomic_t pp3300_a_pgood;
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BASEBOARD_H */

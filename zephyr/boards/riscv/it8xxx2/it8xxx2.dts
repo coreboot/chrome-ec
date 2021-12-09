@@ -6,9 +6,7 @@
 /dts-v1/;
 
 #include <cros/ite/it8xxx2.dtsi>
-#include <dt-bindings/gpio_defines.h>
 #include <it8xxx2.dtsi>
-#include <dt-bindings/wake_mask_event_defines.h>
 
 / {
 	model = "Google IT8XXX2 Baseboard";
@@ -21,23 +19,7 @@
 		zephyr,flash-controller = &flashctrl;
 	};
 
-	ec-mkbp-host-event-wakeup-mask {
-		compatible = "ec-wake-mask-event";
-		wakeup-mask = <(
-			HOST_EVENT_MASK(HOST_EVENT_AC_CONNECTED) |
-			HOST_EVENT_MASK(HOST_EVENT_AC_DISCONNECTED) |
-			HOST_EVENT_MASK(HOST_EVENT_LID_OPEN) |
-			HOST_EVENT_MASK(HOST_EVENT_POWER_BUTTON) |
-			HOST_EVENT_MASK(HOST_EVENT_HANG_DETECT) |
-			HOST_EVENT_MASK(HOST_EVENT_MODE_CHANGE))>;
-	};
-
-	ec-mkbp-event-wakeup-mask {
-		compatible = "ec-wake-mask-event";
-		wakeup-mask = <(MKBP_EVENT_KEY_MATRIX |
-				MKBP_EVENT_HOST_EVENT)>;
-	};
-
+	/* Override keyboard scanning */
 	soc {
 		/delete-node/ kscan@f01d00;
 
@@ -47,7 +29,6 @@
 			label = "CROS_KB_RAW_0";
 			interrupt-parent = <&intc>;
 			interrupts = <13 IRQ_TYPE_LEVEL_HIGH>;
-			status = "disabled";
 		};
 	};
 };
@@ -63,5 +44,5 @@
 };
 
 &cros_kb_raw {
-	status = "okay";
+	status = "okay";	/* Override in project dts if not required */
 };
