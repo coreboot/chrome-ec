@@ -190,10 +190,11 @@ enum vendor_cmd_rc u2f_sign_cmd(enum vendor_cmd_cc code, void *buf,
 		origin = req->v1.appId;
 		/**
 		 * TODO(b/184393647): Enforce user verification if no user
-		 * presence check is requested.
+		 * presence check is requested. Set
+		 *    authTimeSecret = req->v1.authTimeSecret;
+		 * unconditionally or if (flags & U2F_AUTH_FLAG_TUP) == 0
 		 */
-		if ((flags & U2F_AUTH_FLAG_TUP) == 0)
-			authTimeSecret = (uint8_t *)req->v1.authTimeSecret;
+		authTimeSecret = NULL;
 	} else if (input_size == sizeof(struct u2f_sign_versioned_req_v2)) {
 		kh = (union u2f_key_handle_variant *)&req->v2.keyHandle;
 		kh_version = U2F_KH_VERSION_2;
