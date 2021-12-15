@@ -1543,11 +1543,11 @@ static uint32_t get_properties(void)
 	uint8_t config;
 	uint32_t properties;
 
-#ifdef H1_RED_BOARD
-	CPRINTS("Unconditionally enabling SPI and platform reset");
-	return (BOARD_PERIPH_CONFIG_SPI | BOARD_USE_PLT_RESET);
-#endif
 	if (get_strap_config(&config) != EC_SUCCESS) {
+#ifdef H1_RED_BOARD
+		CPRINTS("Unconditionally enabling SPI and platform reset");
+		return (BOARD_PERIPH_CONFIG_SPI | BOARD_USE_PLT_RESET);
+#else
 		/*
 		 * No pullups were detected on any of the strap pins so there
 		 * is no point in checking for a matching config table entry.
@@ -1556,6 +1556,7 @@ static uint32_t get_properties(void)
 		CPRINTS("Invalid strap pins! Default properties = 0x%x",
 			BOARD_PROPERTIES_DEFAULT);
 		return BOARD_PROPERTIES_DEFAULT;
+#endif
 	}
 
 	/* Search board config table to find a matching entry */
