@@ -159,23 +159,44 @@ class TPM:
         """Return status of debugging"""
         return self._debug_enabled
 
+found_valid_test = False
+valid_tests = []
+
+def run_test(requested_test, test_name):
+    """Returns True if the test arg is none or it matches the test_name."""
+    global found_valid_test
+
+    run_test = (not requested_test) or (requested_test == test_name)
+    valid_tests.append(test_name)
+    if run_test:
+        found_valid_test = True
+    return run_test
+
+def check_for_run(requested_test):
+    """Raises an ValueError if no tests were run."""
+    if not found_valid_test:
+        raise ValueError('%r is not a valid test. Use one of %r' %
+                         (requested_test, valid_tests))
+
 def usage():
     """Print usage information"""
-    print('Syntax: tpmtest.py [-d] | [-t source [-o file] [-s bits] ]| -h ]\n'
+    print('Syntax: tpmtest.py [-d] | [-t source [-o file] [-s bits] ]| -h | '
+          '                           -T test_name ]\n'
           '     -d - prints additional debug information during tests\n'
           '     -t source - only dump raw output from TRNG. source values:\n'
           '        0 - raw TRNG'
           '        [-o file] - set output file, default /tmp/trng_output\n'
           '        [-s bits] - TRNG sample size in bit, default = 1\n'
           '     -l path to output lab result vectors.\n'
-          '     -r path for the drbg input vector.\n'
-          '        [-e file] - expected results file\n'
+          '     -r path for the lab input vector.\n'
+          '     -e path for the lab expected results file\n'
+          '     -T test to run\n'
           '     -h - this help\n')
 
 def main():
     """Run TPM tests"""
     try:
-        opts, _ = getopt.getopt(sys.argv[1:], 'dt:hs:o:r:e:l:', 'help')
+        opts, _ = getopt.getopt(sys.argv[1:], 'dt:T:hs:o:r:e:l:', 'help')
     except getopt.GetoptError as err:
         print(str(err))
         usage()
@@ -186,8 +207,9 @@ def main():
     trng_sample_bits = 1
     trng_mode = 0
     lab_output = '/tmp/lab_output'
-    drbg_request = ''
-    drbg_expected = ''
+    request = ''
+    expected = ''
+    requested_test = ''
 
     for option, arg in opts:
         if option == '-d':
@@ -200,9 +222,11 @@ def main():
         elif option == '-l':
             lab_output = arg
         elif option == '-r':
-            drbg_request = arg
+            request = arg
+        elif option == '-T':
+            requested_test = arg
         elif option == '-e':
-            drbg_expected = arg
+            expected = arg
         elif option == '-s':
             trng_sample_bits = int(arg)
         elif option in ('-h', '--help'):
@@ -214,22 +238,28 @@ def main():
             trng_test.trng_test(tpm_object, trng_output,
                                 trng_mode, trng_sample_bits)
             sys.exit(0)
-        if drbg_request:
-            drbg_test.drbg_test(tpm_object, drbg_request, drbg_expected,
-                                lab_output)
-            sys.exit(0)
-        u2f_test.u2f_test(tpm_object)
-        crypto_test.crypto_tests(tpm_object, os.path.join(ROOT_DIR,
-                                                         'crypto_test.xml'))
-        drbg_test.drbg_test(tpm_object, drbg_request, drbg_expected,
-                           lab_output)
-        ecc_test.ecc_test(tpm_object)
+        if run_test(requested_test, 'u2f'):
+            u2f_test.u2f_test(tpm_object)
+        if run_test(requested_test, 'crypto'):
+            crypto_test.crypto_tests(tpm_object, os.path.join(ROOT_DIR,
+                                                             'crypto_test.xml'))
+        if run_test(requested_test, 'drbg'):
+            drbg_test.drbg_test(tpm_object, request, expected,
+                               lab_output)
+        if run_test(requested_test, 'ecc'):
+            ecc_test.ecc_test(tpm_object)
 #       cr50 don't implement ecies
 #       ecies_test.ecies_test(tpm_object)
-        hash_test.hash_test(tpm_object)
-        hkdf_test.hkdf_test(tpm_object)
-        rsa_test.rsa_test(tpm_object)
-        upgrade_test.upgrade(tpm_object)
+        if run_test(requested_test, 'hash'):
+            hash_test.hash_test(tpm_object)
+        if run_test(requested_test, 'hkdf'):
+            hkdf_test.hkdf_test(tpm_object)
+
+        if run_test(requested_test, 'rsa'):
+            rsa_test.rsa_test(tpm_object)
+        if run_test(requested_test, 'upgrade'):
+            upgrade_test.upgrade(tpm_object)
+        check_for_run(requested_test)
     except subcmd.TpmTestError as tpm_exc:
         _, _, exc_traceback = sys.exc_info()
         exc_file, exc_line = traceback.extract_tb(exc_traceback)[-1][:2]
