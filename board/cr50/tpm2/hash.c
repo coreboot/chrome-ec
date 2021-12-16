@@ -369,9 +369,11 @@ static void hash_command_handler(void *cmd_body,
 		return;
 	}
 
+	CPRINTF("%s:", __func__);
 	switch (hash_cmd) {
 	case CMD_HASH_START: /* Start a new hash context. */
 		process_start(alg, handle, cmd_body, response_size);
+		CPRINTF("%d start", __LINE__);
 		if (*response_size)
 			break; /* Something went wrong. */
 		process_continue(handle, cmd, text_len,
@@ -379,6 +381,7 @@ static void hash_command_handler(void *cmd_body,
 		break;
 
 	case CMD_HASH_CONTINUE:
+		CPRINTF("%d contd", __LINE__);
 		process_continue(handle, cmd, text_len,
 				 cmd_body, response_size);
 		break;
@@ -386,12 +389,11 @@ static void hash_command_handler(void *cmd_body,
 	case CMD_HASH_FINISH:
 		process_continue(handle, cmd, text_len,
 				 cmd_body, response_size);
+		CPRINTF("%d finish", __LINE__);
 		if (*response_size)
 			break;  /* Something went wrong. */
 
 		process_finish(handle, cmd_body, response_size);
-		CPRINTF("%s:%d response size %d\n", __func__, __LINE__,
-			*response_size);
 		break;
 
 	case CMD_HASH: /* Process a buffer in a single shot. */
@@ -401,8 +403,7 @@ static void hash_command_handler(void *cmd_body,
 		 */
 		*response_size = _cpri__HashBlock(alg, text_len,
 						  cmd, response_room, cmd_body);
-		CPRINTF("%s:%d response size %d\n", __func__,
-			__LINE__, *response_size);
+		CPRINTF("%d hash", __LINE__);
 		break;
 	case CMD_SW_HMAC: /* SW HMAC SHA-256 (key, value) in a single shot. */
 		/*
@@ -411,8 +412,7 @@ static void hash_command_handler(void *cmd_body,
 		 */
 		*response_size = do_software_hmac(alg, text_len, cmd,
 						  response_room, cmd_body);
-		CPRINTF("%s:%d hmac response size %d\n", __func__, __LINE__,
-			*response_size);
+		CPRINTF("%d sw hmac", __LINE__);
 		break;
 	case CMD_HW_HMAC: /* HW HMAC SHA-256 (key, value) in a single shot */
 		/*
@@ -421,13 +421,13 @@ static void hash_command_handler(void *cmd_body,
 		 */
 		*response_size = do_dcrypto_hmac(alg, text_len, cmd,
 						 response_room, cmd_body);
-		CPRINTF("%s:%d hmac response size %d\n", __func__, __LINE__,
-			*response_size);
+		CPRINTF("%d hw hmac", __LINE__);
 		break;
 
 	default:
 		break;
 	}
+	CPRINTF(" resp (%d)\n", *response_size);
 }
 
 DECLARE_EXTENSION_COMMAND(EXTENSION_HASH, hash_command_handler);
