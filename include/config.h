@@ -3084,6 +3084,7 @@
 #undef CONFIG_LED_DRIVER_LM3509  /* LM3509, on I2C interface */
 #undef CONFIG_LED_DRIVER_LM3630A /* LM3630A, on I2C interface */
 #undef CONFIG_LED_DRIVER_LP5562  /* LP5562, on I2C interface */
+#undef CONFIG_LED_DRIVER_MP3385   /* MPS MP3385, on I2C */
 #undef CONFIG_LED_DRIVER_OZ554   /* O2Micro OZ554, on I2C */
 
 /* Offset in flash where little firmware will live. */
@@ -5960,6 +5961,10 @@
 /*
  * Define CONFIG_USB_PD_TCPC_ON_CHIP if we use ITE series TCPM driver
  * on the board.
+ *
+ * NOTE: If we don't use all the ITE pd ports on a board, then we need to
+ *       start from port0 to use the ITE pd port. If we start from port1,
+ *       then port1 HOOK function never works.
  */
 #ifdef CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #define CONFIG_USB_PD_TCPC_ON_CHIP

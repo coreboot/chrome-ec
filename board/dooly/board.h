@@ -224,6 +224,7 @@
  * LED backlight controller
  */
 #define CONFIG_LED_DRIVER_OZ554
+#define CONFIG_LED_DRIVER_MP3385
 
 #define PP5000_PGOOD_POWER_SIGNAL_MASK POWER_SIGNAL_MASK(PP5000_A_PGOOD)
 
@@ -280,6 +281,12 @@ enum sensor_id {
 	SENSOR_COUNT,
 };
 
+enum ssfc_led_id {
+	SSFC_LED_OZ554 = 0,
+	SSFC_LED_MP3385,
+	SSFC_LED_COUNT,
+};
+
 
 /* Board specific handlers */
 void board_reset_pd_mcu(void);
@@ -309,8 +316,22 @@ void show_critical_error(void);
 #define EC_CFG_THERMAL_H		7
 #define EC_CFG_THERMAL_MASK GENMASK(EC_CFG_THERMAL_H, EC_CFG_THERMAL_L)
 
+/*
+ * Second Source Factory Cache (SSFC) CBI field
+ */
+/*
+ * Led driver IC (2 bits).
+ */
+#define EC_SSFC_LED_L		0
+#define EC_SSFC_LED_H		1
+#define EC_SSFC_LED_MASK GENMASK(EC_SSFC_LED_H, EC_SSFC_LED_L)
+
+
 unsigned int ec_config_get_bj_power(void);
 unsigned int ec_config_get_thermal_solution(void);
+unsigned int ec_ssfc_get_led_ic(void);
+
+void board_backlight_enable_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

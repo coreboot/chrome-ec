@@ -200,7 +200,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_DPTF
                                                 "${PLATFORM_EC}/common/dptf.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ
                                                 "${PLATFORM_EC}/common/chipset.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ESPI
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI
                                                 "${PLATFORM_EC}/common/espi.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC "${PLATFORM_EC}/common/extpower_common.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_EXTPOWER_GPIO
@@ -321,6 +321,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TEMP_SENSOR
                                                 "${PLATFORM_EC}/common/temp_sensor.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_THERMISTOR
                                                 "${PLATFORM_EC}/driver/temp_sensor/thermistor.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TEMP_SENSOR_TMP112
+                                                "${PLATFORM_EC}/driver/temp_sensor/tmp112.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_THROTTLE_AP
                                                 "${PLATFORM_EC}/common/throttle_ap.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TIMER

@@ -13,8 +13,7 @@ child-binding:
       required: true
       type: string
       description:
-        Human-readable string describing the device (used as
-        device_get_binding() argument)
+        String used to describe an ADC channel in the 'adc' console command.
     channel:
       required: true
       type: int
@@ -93,10 +92,12 @@ child-binding:
       - ADC_BOARD_ID_1
       - ADC_CORE_IMON1
       - ADC_PMON
+      - ADC_PP3300_S5
       - ADC_PSYS
       - ADC_SOC_IMON2
       - ADC_TEMP_SENSOR_1
       - ADC_TEMP_SENSOR_2
+      - ADC_TEMP_SENSOR_3
       - ADC_TEMP_SENSOR_CHARGER
       - ADC_TEMP_SENSOR_DDR_SOC
       - ADC_TEMP_SENSOR_FAN

@@ -411,8 +411,11 @@ void tcpc_alert_event(enum gpio_signal signal)
 void ppc_alert(enum gpio_signal signal)
 {
 	switch (signal) {
+	case GPIO_USB_C0_PPC_INT_ODL:
+		ppc_chips[USBC_PORT_C0].drv->interrupt(USBC_PORT_C0);
+		break;
 	case GPIO_USB_C1_PPC_INT_ODL:
-		syv682x_interrupt(USBC_PORT_C1);
+		ppc_chips[USBC_PORT_C1].drv->interrupt(USBC_PORT_C1);
 		break;
 	default:
 		return;
@@ -422,7 +425,7 @@ void ppc_alert(enum gpio_signal signal)
 /* TODO: This code should really be generic, and run based on something in
  * the dts.
  */
-static void usbc_interrupt_init(void)
+static void stubs_interrupt_init(void)
 {
 	/* Enable TCPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_TCPC_INT_ODL);
@@ -442,6 +445,10 @@ static void usbc_interrupt_init(void)
 	gpio_set_level(GPIO_USB_C1_TCPC_RST_L, 1);
 
 	/* Enable PPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
+
+	/* Enable SwitchCap interrupt */
+	gpio_enable_interrupt(GPIO_SWITCHCAP_PG_INT_L);
 }
-DECLARE_HOOK(HOOK_INIT, usbc_interrupt_init, HOOK_PRIO_INIT_I2C + 1);
+DECLARE_HOOK(HOOK_INIT, stubs_interrupt_init, HOOK_PRIO_INIT_I2C + 1);

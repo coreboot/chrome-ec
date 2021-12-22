@@ -5,14 +5,14 @@
 
 #include <zephyr.h>
 #include <ztest.h>
-
-#include "emul/emul_tcpci.h"
-#include "emul/emul_smart_battery.h"
-#include "emul/emul_charger.h"
 #include <drivers/gpio/gpio_emul.h>
+
 #include "battery_smart.h"
-#include "tcpm/tcpci.h"
 #include "ec_tasks.h"
+#include "emul/emul_smart_battery.h"
+#include "emul/tcpc/emul_tcpci.h"
+#include "emul/tcpc/emul_tcpci_partner_src.h"
+#include "tcpm/tcpci.h"
 
 #define TCPCI_EMUL_LABEL DT_NODELABEL(tcpci_emul)
 #define BATTERY_ORD DT_DEP_ORD(DT_NODELABEL(battery))
@@ -59,7 +59,7 @@ static void test_attach_compliant_charger(void)
 		emul_get_binding(DT_LABEL(TCPCI_EMUL_LABEL));
 	struct i2c_emul *i2c_emul;
 	uint16_t battery_status;
-	struct charger_emul_data my_charger;
+	struct tcpci_src_emul_data my_charger;
 	const struct device *gpio_dev =
 		DEVICE_DT_GET(DT_GPIO_CTLR(GPIO_AC_OK_PATH, gpios));
 
@@ -75,8 +75,8 @@ static void test_attach_compliant_charger(void)
 
 	/* Attach emulated charger. */
 	zassert_ok(gpio_emul_input_set(gpio_dev, GPIO_AC_OK_PIN, 1), NULL);
-	charger_emul_init(&my_charger);
-	zassert_ok(charger_emul_connect_to_tcpci(&my_charger, tcpci_emul),
+	tcpci_src_emul_init(&my_charger);
+	zassert_ok(tcpci_src_emul_connect_to_tcpci(&my_charger, tcpci_emul),
 		   NULL);
 
 	/* Wait for current ramp. */
