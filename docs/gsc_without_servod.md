@@ -41,7 +41,7 @@ Linux distributions):
 ```
 $ git clone https://chrome-internal.googlesource.com/chromeos/platform/cr50-utils
 $ cd cr50-utils/software/tools/SPI
-$ sudo apt-get install libc6 libelf1 libgcc-s1 libssl1.1 libstdc++6 libudev1 libusb-1.0-0 zlib1g
+$ sudo apt-get install libc6 libelf-dev- libgcc-s1 libssl-dev libstdc++6 libudev1 libusb-1.0-0-dev zlib1g
 $ make rescue
 ```
 This will create the `rescue` utility in the local directory, place it
@@ -55,7 +55,7 @@ invoking `rescue` with proper command line parameters.
 
 To find the TTY devices created by Servo Micro run:
 ```
-$ ./util/maptty.sh | grep Servo_Micro
+$ ../util/maptty.sh | grep Servo_Micro
 /dev/ttyUSB0  /dev/serial/by-id/usb-Google_Inc._Servo_Micro_CMO653-00166-040489J04128-if00-port0
 /dev/ttyUSB1  /dev/serial/by-id/usb-Google_Inc._Servo_Micro_CMO653-00166-040489J04128-if03-port0
 /dev/ttyUSB2  /dev/serial/by-id/usb-Google_Inc._Servo_Micro_CMO653-00166-040489J04128-if05-port0
@@ -102,7 +102,7 @@ This is all there is to it.
 Using C2D2 is even simpler. The same `maptty.sh` script will show the TTY
 devices connected when C2D2 is attached:
 ```
-$ ./util/maptty.sh | grep C2D2
+$ ../util/maptty.sh | grep C2D2
 /dev/ttyUSB4  /dev/serial/by-id/usb-Google_Inc._C2D2_C2103110780-if00-port0
 /dev/ttyUSB5  /dev/serial/by-id/usb-Google_Inc._C2D2_C2103110780-if03-port0
 /dev/ttyUSB6  /dev/serial/by-id/usb-Google_Inc._C2D2_C2103110780-if05-port0
@@ -155,7 +155,7 @@ Then to rescue the GSC chip, do the following:
 
 Here is an example of a Ti50 rescue session:
 ```
-$ ./util/brescue.sh <path to>/ti50.bin.prepvt /dev/ttyUSB4
+$ ../util/brescue.sh <path to>/ti50.bin.prepvt /dev/ttyUSB4
 carved out binary /tmp/brescue.sh.y1uXW/rw.bin mapped to 0x88000
 converted to /tmp/brescue.sh.y1uXW/rw.hex, waiting for target reset
 flash_start_:  00008000 flash_end_:  00018000
