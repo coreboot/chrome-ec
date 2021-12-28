@@ -78,6 +78,36 @@ def u2f_attest(tpm, origin, user, challenge, kh, public_key, fail=False):
         return b''
     return sig
 
+def tpm_start(tpm):
+    tpm_startup = [0x80, 0x01,         # TPM_ST_NO_SESSIONS
+            0x00, 0x00, 0x00, 0x0c, # commandSize = 12
+            0x00, 0x00, 0x01, 0x44, # TPM_CC_Startup
+            0x00, 0x00,             # TPM_SU_CLEAR
+      ]
+    tpm_startup_cmd = bytes(tpm_startup)
+    response = tpm.command(tpm_startup_cmd)
+    return response
+
+def g2f_get_cert(tpm):
+    g2f_read = [0x80, 0x02,          # TPM_ST_SESSIONS
+      0x00, 0x00, 0x00, 0x23,        # size
+      0x00, 0x00, 0x01, 0x4e,        # TPM_CC_NV_READ
+      0x01, 0x3f, 0xff, 0x02,        # authHandle : TPMI_RH_NV_AUTH
+      0x01, 0x3f, 0xff, 0x02,        # nvIndex    : TPMI_RH_NV_INDEX
+      0x00, 0x00, 0x00, 0x09,        # authorizationSize : UINT32
+      0x40, 0x00, 0x00, 0x09,        # sessionHandle : empty password
+      0x00, 0x00, 0x00, 0x00, 0x00,  # nonce, sessionAttributes, hmac
+      0x01, 0x3b,                    # nvSize   : UINT16
+      0x00, 0x00                     # nvOffset : UINT16
+      ]
+    g2f_read_cmd = bytes(g2f_read)
+    response = tpm.command(g2f_read_cmd)
+    if len(response) <= 10:
+         raise subcmd.TpmTestError('Unexpected G2F response: '
+                                       + utils.hex_dump(response))
+    print('G2F cert len', len(response))
+    return response
+
 def u2f_test(tpm):
     """Run U2F tests"""
     origin = b'1'
@@ -85,6 +115,10 @@ def u2f_test(tpm):
     auth = b'3'
     msg = b'12345'
 
+
+    tpm_start(tpm)
+    print('G2F read cert');
+    g2f_get_cert(tpm)
     print('U2F_GENERATE v0');
     public_key0, khv0 = u2f_generate(tpm, origin, user, 0, auth)
     if tpm.debug_enabled():

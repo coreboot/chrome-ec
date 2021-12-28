@@ -589,7 +589,7 @@ size_t g2f_attestation_cert_serial(const struct u2f_state *state,
 {
 	p256_int d, pk_x, pk_y;
 
-	if (g2f_individual_key_pair(state, &d, &pk_x, &pk_y))
+	if (!g2f_individual_key_pair(state, &d, &pk_x, &pk_y))
 		return 0;
 
 	/* Note that max length is not currently respected here. */
