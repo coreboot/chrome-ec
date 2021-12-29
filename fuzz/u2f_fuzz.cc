@@ -30,9 +30,10 @@ int system_get_chip_unique_id(uint8_t **id)
 /******************************************************************************/
 /* Mock implementations of Dcrypto functionality.
  */
-int DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
-				   const p256_int *pk_y, const p256_int *serial,
-				   const char *name, uint8_t *cert, const int n)
+size_t DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
+				      const p256_int *pk_y,
+				      const p256_int *serial, const char *name,
+				      uint8_t *cert, const size_t n)
 {
 	memset(cert, 1, n);
 	return n;
