@@ -99,6 +99,7 @@ enum ap_ro_verification_ev {
 	APROF_SPACE_INVALID = 5,
 	APROF_CHECK_FAILED = 6,
 	APROF_CHECK_SUCCEEDED = 7,
+	APROF_CHECK_UNSUPPORTED = 8,
 };
 
 struct ap_ro_entry_payload {
