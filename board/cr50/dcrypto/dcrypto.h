@@ -949,30 +949,34 @@ enum dcrypto_result DCRYPTO_x509_verify(const uint8_t *cert, size_t len,
 
 /* Generate U2F Certificate and sign it
  * Use ECDSA with NIST P-256 curve, and SHA2-256 digest
- * @param d: key handle, used for NIST SP 800-90A HMAC DRBG
+ * @param d: private key to use
  * @param pk_x, pk_y: public key
  * @param serial: serial number for certificate
  * @param name: certificate issuer and subject
  * @param cert: output buffer for certificate
  * @param n: max size of cert
+ *
+ * @returns size of certificate or 0 if failure
  */
-int DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
-				   const p256_int *pk_y, const p256_int *serial,
-				   const char *name, uint8_t *cert,
-				   const int n);
+size_t DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
+				      const p256_int *pk_y,
+				      const p256_int *serial, const char *name,
+				      uint8_t *cert, const size_t n);
 
 /* Generate U2F Certificate with DCRYPTO_x509_gen_u2f_cert_name
  * Providing certificate issuer as BOARD or U2F
- * @param d: key handle, used for NIST SP 800-90A HMAC DRBG
+ * @param d: private key to use
  * @param pk_x, pk_y: public key
  * @param serial: serial number for certificate
  * @param name: certificate issuer and subject
  * @param cert: output buffer for certificate
  * @param n: max size of cert
+ *
+ * @returns size of certificate or 0 if failure
  */
-int DCRYPTO_x509_gen_u2f_cert(const p256_int *d, const p256_int *pk_x,
-			      const p256_int *pk_y, const p256_int *serial,
-			      uint8_t *cert, const int n);
+size_t DCRYPTO_x509_gen_u2f_cert(const p256_int *d, const p256_int *pk_x,
+				 const p256_int *pk_y, const p256_int *serial,
+				 uint8_t *cert, const size_t n);
 
 /*
  * Memory related functions.

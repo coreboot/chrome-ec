@@ -102,9 +102,10 @@ def g2f_get_cert(tpm):
       ]
     g2f_read_cmd = bytes(g2f_read)
     response = tpm.command(g2f_read_cmd)
-    if len(response) <= 10:
+    if len(response) <= 16 or response.count(0) > 100:
          raise subcmd.TpmTestError('Unexpected G2F response: '
                                        + utils.hex_dump(response))
+
     print('G2F cert len', len(response))
     return response
 
