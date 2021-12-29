@@ -1233,14 +1233,45 @@ static int bn_probable_prime(const struct LITE_BIGNUM *p)
 			return 0;
 
 		for (i = A.dmax - 1; i >= 0; i--) {
-			while (BN_DIGIT(&A, i) > BN_DIGIT(p, i)) {
-				uint64_t rnd = fips_trng_rand32();
+			uint32_t digit_a = BN_DIGIT(&A, i);
+			uint32_t digit_p = BN_DIGIT(p, i);
 
-				if (!rand_valid(rnd))
-					return 0;
-				BN_DIGIT(&A, i) = (uint32_t)rnd;
+			if (digit_a < digit_p)
+				break;
+
+			if (digit_a == digit_p)
+				continue;
+
+			/**
+			 * digit_a > digit_p, which means
+			 * 0 =< p < 0xffffffff. Update digit_a such that
+			 * it is less or equal than digit_p in unbiased way.
+			 */
+			if (digit_p <= 1)
+				digit_a &= digit_p;
+			else {
+				/**
+				 * 1 < p < 0xffffffff, so
+				 * 2 < p+1 <= 0xffffffff
+				 */
+				uint32_t digit_p_1 = digit_p + 1;
+				/**
+				 * Compute threshold when not a whole
+				 * number of p+1 fits in 32-bit.
+				 */
+				uint32_t max_p =
+					(0xffffffff / digit_p_1) * digit_p_1;
+				while (digit_a >= max_p) {
+					uint64_t rnd = fips_trng_rand32();
+
+					if (!rand_valid(rnd))
+						return 0;
+					digit_a = rnd;
+				}
+				digit_a = digit_a % digit_p_1;
 			}
-			if (BN_DIGIT(&A, i) < BN_DIGIT(p, i))
+			BN_DIGIT(&A, i) = digit_a;
+			if (digit_a < digit_p)
 				break;
 		}
 
