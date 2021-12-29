@@ -521,7 +521,7 @@ int DCRYPTO_x509_gen_u2f_cert_name(const p256_int *d, const p256_int *pk_x,
 	hmac_drbg_init_rfc6979(&drbg, d, &h);
 	result = dcrypto_p256_ecdsa_sign(&drbg, d, &h, &r, &s) - DCRYPTO_OK;
 	drbg_exit(&drbg);
-	if (!result)
+	if (result)
 		return 0;
 
 	/* Append X509 signature */
