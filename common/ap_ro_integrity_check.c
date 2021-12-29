@@ -1447,21 +1447,24 @@ static uint8_t do_ap_ro_check(void)
 
 	if (rv != ROV_SUCCEEDED) {
 		/* Failure reason has already been reported. */
-		apro_result = AP_RO_FAIL;
 		ap_ro_add_flash_event(APROF_CHECK_FAILED);
 
-		/*
-		 * Map failures into EC_ERROR_CRC, this will make sure that in
-		 * case this was invoked by the operator keypress, the device
-		 * will not continue booting.
-		 *
-		 * Both explicit failure to verify OR any error if cached
-		 * descriptor was found should block the booting.
-		 */
 		if ((rv == ROV_FAILED) || check_is_required()) {
+			apro_result = AP_RO_FAIL;
 			keep_ec_in_reset();
+			/*
+			 * Map failures into EC_ERROR_CRC, this will make sure
+			 * that in case this was invoked by the operator
+			 * keypress, the device will not continue booting.
+			 *
+			 * Both explicit failure to verify OR any error if
+			 * cached descriptor was found should block the
+			 * booting.
+			 */
 			return EC_ERROR_CRC;
 		}
+
+		apro_result = AP_RO_UNSUPPORTED_TRIGGERED;
 		return EC_ERROR_UNIMPLEMENTED;
 	}
 
