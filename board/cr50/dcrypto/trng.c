@@ -43,7 +43,7 @@ static volatile struct trng_reg *reg_trng = (void *)(GC_TRNG_BASE_ADDR);
 /**
  * Number of attempts to reset TRNG after stall is detected.
  */
-#define TRNG_RESET_COUNT 8
+#define TRNG_RESET_COUNT 16
 
 void fips_init_trng(void)
 {
@@ -127,13 +127,19 @@ uint64_t read_rand(void)
 		    empty_count > TRNG_EMPTY_COUNT) {
 			/* TRNG timed out, restart */
 			reg_trng->stop_work = 1;
-#ifdef CONFIG_FLASH_LOG
-			fips_vtable->flash_log_add_event(FE_LOG_TRNG_STALL, 0,
-							 NULL);
-#endif
-			reg_trng->go_event = 1;
 			empty_count = 0;
 			reset_count++;
+			reg_trng->go_event = 1;
+#ifdef CONFIG_FLASH_LOG
+			/**
+			 * Log stall only first time. Placing it after TRNG
+			 * go_event increase a chance to get random in case
+			 * of slow TRNG.
+			 */
+			if (reset_count == 1)
+				fips_vtable->flash_log_add_event(
+					FE_LOG_TRNG_STALL, 0, NULL);
+#endif
 		}
 		empty_count++;
 	}
