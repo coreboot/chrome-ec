@@ -33,6 +33,7 @@ config PLATFORM_EC_USB_PORT_POWER_DUMB_CUSTOM_HOOK
 menuconfig PLATFORM_EC_USBC
 	bool "USB Type-C"
 	default y if PLATFORM_EC_BATTERY
+	depends on PLATFORM_EC_MATH_UTIL
 	help
 	  Enable this to support various USB Type-C features chosen by the
 	  options below. USB-C is widely used on modern Chromebooks and the EC's
@@ -540,6 +541,14 @@ config PLATFORM_EC_USB_PD_ALT_MODE
 	  differential pairs. If all are used for the alternate mode, then USB
 	  transmission is not available at all while in this mode.
 
+config PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY
+	bool "USB Power delivery requires AP to enter alternate modes"
+	depends on PLATFORM_EC_USB_PD_ALT_MODE
+	help
+	  Do not enter USB PD alternate modes or USB4 automatically, Wait for
+	  the AP to direct the EC to enter a mode. This requires AP software
+	  support.
+
 config PLATFORM_EC_USB_PD_ALT_MODE_DFP
 	bool "Downward Facing Port support"
 	default y
@@ -858,6 +867,14 @@ config PLATFORM_EC_USBC_PPC_RT1718S
 	  be also configured to control system block such as USB3.0 to DP Mux
 	  for alternated mode usage. VCONN Switch with OVP/OCP/RVP/RCP/UVP
 	  protection is also integrated.
+
+config PLATFORM_EC_USBC_PPC_KTU1125
+	bool "Kinetic KTU1125 Power Path Controller"
+	select PLATFORM_EC_USBC_OCP
+	help
+	  KTU1125 integrates power switches to provide a compact protection
+	  solution to USB Type-C applications by eliminating the dependence
+	  on external components.
 
 config PLATFORM_EC_USBC_PPC_NX20P3483
 	bool "NX20P3483 High Voltage Sink/Source Combo Switch"
@@ -1250,6 +1267,13 @@ config PLATFORM_EC_USB_PD_TCPM_PS8815_FORCE_DID
 	  value for A1 silicon. Enable this option to check the vendor specific
 	  chip version register and force the correct device ID.
 endif # PLATFORM_EC_USB_PD_TCPM_PS8815
+
+config PLATFORM_EC_USB_PD_TCPM_RAA489000
+  bool "Renesas RAA489000 Type-C port controller and battery charger"
+  select PLATFORM_EC_USB_PD_PPC
+  help
+    Build drivers for the RAA489000, a combined battery charger and USB-C
+    TCPCI.
 
 config PLATFORM_EC_USB_PD_TCPM_RT1715
 	bool "Richtek RT1715 Type-C Port Controller"

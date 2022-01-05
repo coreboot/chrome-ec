@@ -10,7 +10,8 @@
 #include "charger.h"
 #include "compile_time_macros.h"
 #include "console.h"
-#include "driver/charger/bq25710.h"
+#include "driver/charger/isl9241.h"
+#include "hooks.h"
 #include "usbc_ppc.h"
 #include "usb_pd.h"
 #include "util.h"
@@ -23,8 +24,8 @@
 const struct charger_config_t chg_chips[] = {
 	{
 		.i2c_port = I2C_PORT_CHARGER,
-		.i2c_addr_flags = BQ25710_SMBUS_ADDR1_FLAGS,
-		.drv = &bq25710_drv,
+		.i2c_addr_flags = ISL9241_ADDR_FLAGS,
+		.drv = &isl9241_drv,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(chg_chips) == CHARGER_NUM);
@@ -88,3 +89,9 @@ __overridable void board_set_charge_limit(int port, int supplier, int charge_ma,
 					   CONFIG_CHARGER_INPUT_CURRENT),
 				       charge_mv);
 }
+
+static void set_ac_prochot(void)
+{
+	isl9241_set_ac_prochot(CHARGER_SOLO, PD_MAX_CURRENT_MA);
+}
+DECLARE_HOOK(HOOK_INIT, set_ac_prochot, HOOK_PRIO_DEFAULT);

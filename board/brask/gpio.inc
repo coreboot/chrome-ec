@@ -73,6 +73,7 @@ GPIO(GSC_EC_RECOVERY_BTN_OD,         PIN(2, 2), GPIO_INPUT)
 GPIO(NFC_COIL_ACT_L,                 PIN(D, 4), GPIO_INPUT)
 GPIO(NFC_LOW_POWER_MODE,             PIN(9, 5), GPIO_OUT_HIGH)
 GPIO(NFC_CARD_DET_L,                 PIN(A, 3), GPIO_INPUT)
+GPIO(EN_NFC_BUZZER,                  PIN(0, 5), GPIO_OUT_LOW)
 
 /* Wireless Charger */
 /* TODO(b/191418683): Implement Qi Driver */
@@ -82,7 +83,7 @@ GPIO(EC_I2C_QI_INT_ODL,              PIN(9, 6), GPIO_INPUT)
 
 /* HDMI CEC */
 /* TODO(b/197474873): Enable HDMI CEC */
-GPIO(HDMI_CEC_IN,                    PIN(7, 3), GPIO_INPUT)
+GPIO(HDMI_CEC_IN,                    PIN(4, 0), GPIO_INPUT)
 GPIO(HDMI_CEC_OUT,                   PIN(D, 3), GPIO_OUT_HIGH | GPIO_OPEN_DRAIN)
 GPIO(HDMI_CEC_PULL_UP,               PIN(C, 2), GPIO_OUT_HIGH)
 
@@ -106,7 +107,7 @@ GPIO(EC_I2C_USB_C1_TCPC_SDA,         PIN(F, 2), GPIO_INPUT)
 
 /* USBA */
 GPIO(EN_PP5000_USBA,                 PIN(D, 7), GPIO_OUT_LOW)
-GPIO(USB_A0_OC_ODL,                  PIN(3, 1), GPIO_INPUT)
+GPIO(USB_A0_OC_ODL,                  PIN(3, 1), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(USB_A1_OC_ODL,                  PIN(3, 0), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(USB_A2_OC_ODL,                  PIN(2, 7), GPIO_INPUT | GPIO_PULL_UP)
 GPIO(USB_A3_OC_ODL,                  PIN(2, 6), GPIO_INPUT | GPIO_PULL_UP)
@@ -118,6 +119,7 @@ GPIO(USB_A_LOW_PWR0_OD,              PIN(1, 5), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(USB_A_LOW_PWR1_OD,              PIN(1, 4), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(USB_A_LOW_PWR2_OD,              PIN(1, 1), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(USB_A_LOW_PWR3_OD,              PIN(1, 0), GPIO_INPUT | GPIO_PULL_DOWN)
+GPIO(USB_A_OC_SOC_L,                 PIN(8, 0), GPIO_OUT_HIGH)
 
 /* LED */
 /* TODO(b/197471359): LED implementation */
@@ -156,7 +158,7 @@ ALTERNATE(PIN_MASK(E, 0x18), 0, MODULE_I2C, 0)               /* GPIOE4/I2C6_SCL1
 ALTERNATE(PIN_MASK(F, 0x0c), 0, MODULE_I2C, 0)               /* GPIOF3/I2C4_SCL1, GPIOF2/I2C4_SDA1 */
 
 /* PWM alternate functions */
-ALTERNATE(PIN_MASK(4, 0x01), 0, MODULE_PWM, 0)               /* GPIO40/TA1 */
+ALTERNATE(PIN_MASK(7, 0x08), 0, MODULE_PWM, 0)               /* GPIO73/TA2 */
 ALTERNATE(PIN_MASK(B, 0x80), 0, MODULE_PWM, 0)               /* GPIOB7/PWM5 */
 ALTERNATE(PIN_MASK(C, 0x18), 0, MODULE_PWM, 0)               /* GPIOC4/PWM2, GPIOC3/PWM0 */
 
@@ -177,6 +179,4 @@ UNUSED(PIN(8, 6))       /* GPIO86/TXD/CR_SOUT2 */
 UNUSED(PIN(1, 3))       /* KSO06/GPO13/GP_SEL# */
 UNUSED(PIN(1, 2))       /* KSO07/GPO12/JEN# */
 UNUSED(PIN(0, 6))       /* KSO11/GPIO06/P80_CLK */
-UNUSED(PIN(0, 5))       /* KSO12/GPIO05 */
 UNUSED(PIN(0, 4))       /* KSO13/GPIO04 */
-UNUSED(PIN(8, 0))       /* GPIO80/PWM3 */

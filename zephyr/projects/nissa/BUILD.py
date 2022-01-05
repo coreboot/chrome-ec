@@ -27,10 +27,19 @@ register_nissa_project(
     project_name="nivviks",
     chip="npcx9",
     extra_dts_overlays=[
-        here / "adc_nivviks.dts",
-        here / "gpio_nivviks.dts",
-        here / "i2c_nivviks.dts",
-        here / "pwm_nivviks.dts",
+        here / "nivviks_generated.dts",
+        here / "nivviks_overlay.dts",
+        here / "nivviks_motionsense.dts",
     ],
     extra_kconfig_files=[here / "prj_nivviks.conf"],
+)
+
+register_nissa_project(
+    project_name="nereid",
+    chip="it8xxx2",
+    extra_dts_overlays=[
+        here / "nereid_generated.dts",
+        here / "nereid_overlay.dts",
+    ],
+    extra_kconfig_files=[here / "prj_nereid.conf"],
 )
