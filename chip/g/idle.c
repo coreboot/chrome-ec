@@ -53,6 +53,10 @@ static int command_idle(int argc, char **argv)
 			idle_action = IDLE_WFI;
 		} else if (!strncasecmp("s", argv[1], 1)) {
 			idle_action = IDLE_SLEEP;
+#ifdef H1_RED_BOARD
+		} else if (!strncasecmp("d", argv[1], 1)) {
+			idle_action = IDLE_DEEP_SLEEP;
+#endif
 		} else {
 			return EC_ERROR_INVAL;
 		}
@@ -64,7 +68,11 @@ static int command_idle(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_SAFE_CONSOLE_COMMAND(idle, command_idle,
+#ifdef H1_RED_BOARD
+			     "[w|s|c|d]",
+#else
 			     "[w|s|c]",
+#endif
 			     "Set idle action: wfi, sleep or "
 			     "Clear the deep sleep count");
 
