@@ -59,9 +59,13 @@ bool fips_crypto_allowed(void)
 		fips_is_no_crypto_error() && DCRYPTO_ladder_is_enabled());
 }
 
+/**
+ * This function can be called very early in the boot before FIPS power-up.
+ * It doesn't use FIPS crypto, so we just check for no FIPS errors.
+ */
 int crypto_enabled(void)
 {
-	return fips_crypto_allowed();
+	return fips_is_no_crypto_error() && DCRYPTO_ladder_is_enabled();
 }
 
 void fips_throw_err(enum fips_status err)
@@ -769,9 +773,6 @@ void fips_power_up_tests(void)
 void fips_power_on(void)
 {
 	fips_last_kat_test_duration = -1ULL;
-	/* make sure on power-on / resume it's cleared */
-	_fips_status = FIPS_UNINITIALIZED;
-
 	/**
 	 * If this was a power-on or power-up tests weren't executed
 	 * for some reason, run them now. Board FIPS KAT status will
@@ -779,8 +780,8 @@ void fips_power_on(void)
 	 */
 	if (!fips_is_power_up_done())
 		fips_power_up_tests();
-	else	/* tests were already completed before sleep */
-		_fips_status |= FIPS_POWER_UP_TEST_DONE;
+	else /* tests were already completed before sleep */
+		_fips_status |= FIPS_POWER_UP_TEST_DONE | FIPS_MODE_ACTIVE;
 }
 
 const struct fips_vtable *fips_vtable;
@@ -808,6 +809,10 @@ static bool is_flash_address(const void *ptr)
 	return false;
 }
 
+/**
+ * This function is called the first in FIPS initialization very early
+ * in the boot to set-up required dependencies.
+ */
 void fips_set_callbacks(const struct fips_vtable *vtable)
 {
 	if (is_flash_address(vtable) &&
@@ -832,4 +837,7 @@ void fips_set_callbacks(const struct fips_vtable *vtable)
 		fips_vtable = vtable;
 	else
 		fips_vtable = NULL;
+
+	/* make sure on power-on / resume it's cleared */
+	_fips_status = FIPS_UNINITIALIZED;
 }
