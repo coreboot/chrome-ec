@@ -41,7 +41,7 @@ Linux distributions):
 ```
 $ git clone https://chrome-internal.googlesource.com/chromeos/platform/cr50-utils
 $ cd cr50-utils/software/tools/SPI
-$ sudo apt-get install libc6 libelf-dev- libgcc-s1 libssl-dev libstdc++6 libudev1 libusb-1.0-0-dev zlib1g
+$ sudo apt-get install libc6 libelf-dev libgcc-s1 libssl-dev libstdc++6 libudev1 libusb-1.0-0-dev zlib1g
 $ make rescue
 ```
 This will create the `rescue` utility in the local directory, place it
