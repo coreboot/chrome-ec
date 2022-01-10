@@ -54,6 +54,16 @@
 #define CONFIG_CHARGER_BQ25720_IDCHG_TH2 1
 #endif
 
+#ifndef CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG_CUSTOM
+#define CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG 0
+#endif
+
+#ifndef CONFIG_CHARGER_BQ257X0_ILIM2_VTH_CUSTOM
+/* Reduce ILIM from default of 150% to 110% */
+#define CONFIG_CHARGER_BQ257X0_ILIM2_VTH \
+	BQ257X0_PROCHOT_OPTION_0_ILIM2_VTH__1P10
+#endif
+
 /*
  * Helper macros
  */
@@ -61,6 +71,10 @@
 #define SET_CO1_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
 							     CHARGE_OPTION_1, \
 							     _field, _c, (_x))
+
+#define SET_CO2(_field, _v, _x)		SET_BQ_FIELD(BQ257X0,	\
+						     CHARGE_OPTION_2,	\
+						     _field, _v, (_x))
 
 #define SET_CO2_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
 							     CHARGE_OPTION_2, \
@@ -77,6 +91,18 @@
 #define SET_CO4(_field, _v, _x)		SET_BQ_FIELD(BQ25720,	\
 						     CHARGE_OPTION_4,	\
 						     _field, _v, (_x))
+
+#define SET_CO4_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ25720,	\
+							     CHARGE_OPTION_4, \
+							     _field, _c, (_x))
+
+#define SET_PO0(_field, _v, _x)		SET_BQ_FIELD(BQ257X0,	\
+						     PROCHOT_OPTION_0,	\
+						     _field, _v, (_x))
+
+#define SET_PO0_BY_NAME(_field, _c, _x)	SET_BQ_FIELD_BY_NAME(BQ257X0,	\
+							     PROCHOT_OPTION_0, \
+							     _field, _c, (_x))
 
 #define SET_PO1(_field, _v, _x)		SET_BQ_FIELD(BQ257X0,	\
 						     PROCHOT_OPTION_1,	\
@@ -322,6 +348,20 @@ static int bq257x0_init_charge_option_1(int chgnum)
 	return raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_1, reg);
 }
 
+static int bq257x0_init_prochot_option_0(int chgnum)
+{
+	int rv;
+	int reg;
+
+	rv = raw_read16(chgnum, BQ25710_REG_PROCHOT_OPTION_0, &reg);
+	if (rv)
+		return rv;
+
+	reg = SET_PO0(ILIM2_VTH, CONFIG_CHARGER_BQ257X0_ILIM2_VTH, reg);
+
+	return raw_write16(chgnum, BQ25710_REG_PROCHOT_OPTION_0, reg);
+}
+
 static int bq257x0_init_prochot_option_1(int chgnum)
 {
 	int rv;
@@ -387,6 +427,12 @@ static int bq257x0_init_charge_option_2(int chgnum)
 	 */
 	reg = SET_BQ_FIELD(BQ257X0, CHARGE_OPTION_2, PKPWR_TMAX, 0, reg);
 
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG_CUSTOM)) {
+		/* Set input overload time in peak power mode. */
+		reg = SET_CO2(PKPWR_TOVLD_DEG,
+			      CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG, reg);
+	}
+
 	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_EN_ACOC)) {
 		/* Enable AC input over-current protection. */
 		reg = SET_CO2_BY_NAME(EN_ACOC, ENABLE, reg);
@@ -399,12 +445,7 @@ static int bq257x0_init_charge_option_2(int chgnum)
 
 	if (IS_ENABLED(CONFIG_CHARGER_BQ25710_BATOC_VTH_MINIMUM)) {
 		/* Set battery over-current threshold to minimum. */
-		if (IS_ENABLED(CONFIG_CHARGER_BQ25720))
-			reg = SET_BQ_FIELD_BY_NAME(BQ25720, CHARGE_OPTION_2,
-						   BATOC_VTH, 1P33, reg);
-		else
-			reg = SET_BQ_FIELD_BY_NAME(BQ25710, CHARGE_OPTION_2,
-						   BATOC_VTH, 1P50, reg);
+		reg = SET_CO2_BY_NAME(BATOC_VTH, 1P33, reg);
 	}
 
 	return raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_2, reg);
@@ -453,6 +494,9 @@ static int bq257x0_init_charge_option_4(int chgnum)
 
 	if (IS_ENABLED(CONFIG_CHARGER_BQ25720_IDCHG_TH2_CUSTOM))
 		reg = SET_CO4(IDCHG_TH2, CONFIG_CHARGER_BQ25720_IDCHG_TH2, reg);
+
+	if (IS_ENABLED(CONFIG_CHARGER_BQ25720_PP_IDCHG2))
+		reg = SET_CO4_BY_NAME(PP_IDCHG2, ENABLE, reg);
 
 	return raw_write16(chgnum, BQ25720_REG_CHARGE_OPTION_4, reg);
 }
@@ -532,14 +576,9 @@ static void bq25710_init(int chgnum)
 
 	bq257x0_init_charge_option_1(chgnum);
 
-	bq257x0_init_prochot_option_1(chgnum);
+	bq257x0_init_prochot_option_0(chgnum);
 
-	/* Reduce ILIM from default of 150% to 105% */
-	if (!raw_read16(chgnum, BQ25710_REG_PROCHOT_OPTION_0, &reg)) {
-		reg = SET_BQ_FIELD(BQ257X0, PROCHOT_OPTION_0, ILIM2_VTH, 0,
-				   reg);
-		raw_write16(chgnum, BQ25710_REG_PROCHOT_OPTION_0, reg);
-	}
+	bq257x0_init_prochot_option_1(chgnum);
 
 	bq257x0_init_charge_option_2(chgnum);
 

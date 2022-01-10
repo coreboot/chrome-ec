@@ -383,11 +383,15 @@ bool check_ps8755_chip(int port)
 }
 
 void ps8xxx_tcpc_update_hpd_status(const struct usb_mux *me,
-				   mux_state_t mux_state)
+				   mux_state_t mux_state,
+				   bool *ack_required)
 {
 	int port = me->usb_port;
 	int hpd_lvl = (mux_state & USB_PD_MUX_HPD_LVL) ? 1 : 0;
 	int hpd_irq = (mux_state & USB_PD_MUX_HPD_IRQ) ? 1 : 0;
+
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
 
 	if (IS_ENABLED(CONFIG_USB_PD_TCPM_PS8751_CUSTOM_MUX_DRIVER) &&
 	    product_id[me->usb_port] == PS8751_PRODUCT_ID &&
@@ -710,11 +714,12 @@ static int ps8xxx_get_chip_info(int port, int live,
 static int ps8xxx_enter_low_power_mode(int port)
 {
 	/*
-	 * PS8751 has the auto sleep function that enters low power mode on
-	 * its own in ~2 seconds. Other chips don't have it. Stub it out for
-	 * PS8751.
+	 * PS8751/PS8815 has the auto sleep function that enters
+	 * low power mode on its own in ~2 seconds. Other chips
+	 * don't have it. Stub it out for PS8751/PS8815.
 	 */
-	if (product_id[port] == PS8751_PRODUCT_ID)
+	if (product_id[port] == PS8751_PRODUCT_ID ||
+		product_id[port] == PS8815_PRODUCT_ID)
 		return EC_SUCCESS;
 
 	return tcpci_enter_low_power_mode(port);

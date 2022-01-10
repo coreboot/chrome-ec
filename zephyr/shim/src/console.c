@@ -109,6 +109,9 @@ int uart_shell_stop(void)
 	return event.signal->result;
 }
 
+static const struct shell_backend_config_flags shell_cfg_flags =
+	SHELL_DEFAULT_BACKEND_CONFIG_FLAGS;
+
 static void shell_init_from_work(struct k_work *work)
 {
 	bool log_backend = CONFIG_SHELL_BACKEND_SERIAL_LOG_LEVEL > 0;
@@ -122,8 +125,8 @@ static void shell_init_from_work(struct k_work *work)
 	}
 
 	/* Initialize the shell and re-enable both RX and TX */
-	shell_init(shell_backend_uart_get_ptr(), uart_shell_dev, false,
-		   log_backend, level);
+	shell_init(shell_backend_uart_get_ptr(), uart_shell_dev,
+		   shell_cfg_flags, log_backend, level);
 	uart_irq_rx_enable(uart_shell_dev);
 	uart_irq_tx_enable(uart_shell_dev);
 
@@ -275,6 +278,8 @@ static void zephyr_print(const char *buff, size_t size)
 		shell_fprintf(shell_zephyr, SHELL_NORMAL, "%s", buff);
 		if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE))
 			console_buf_notify_chars(buff, size);
+		if (IS_ENABLED(CONFIG_PLATFORM_EC_CONSOLE_DEBUG))
+			printk("%s", buff);
 	}
 }
 

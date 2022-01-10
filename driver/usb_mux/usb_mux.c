@@ -32,7 +32,7 @@ static int enable_debug_prints;
  * Flags will reset to 0 after sysjump; This works for current flags as LPM will
  * get reset in the init method which is called during PD task startup.
  */
-static uint32_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
+static atomic_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* Device is in low power mode. */
 #define USB_MUX_FLAG_IN_LPM		BIT(0)
@@ -317,9 +317,6 @@ static int configure_mux(int port,
 					break;
 			}
 
-			if (ack_required)
-				ack_task[port] = task_get_current();
-
 			/* Apply board specific setting */
 			if (mux_ptr->board_set)
 				rv = mux_ptr->board_set(mux_ptr, lcl_state);
@@ -343,7 +340,8 @@ static int configure_mux(int port,
 
 		case USB_MUX_HPD_UPDATE:
 			if (mux_ptr->hpd_update)
-				mux_ptr->hpd_update(mux_ptr, *mux_state);
+				mux_ptr->hpd_update(mux_ptr, *mux_state,
+						    &ack_required);
 
 		}
 
@@ -351,6 +349,8 @@ static int configure_mux(int port,
 		mutex_unlock(&mux_lock[port]);
 
 		if (ack_required) {
+			ack_task[port] = task_get_current();
+
 			/*
 			 * This should only be called from the PD task or usb
 			 * mux task
@@ -358,8 +358,15 @@ static int configure_mux(int port,
 			if (IS_ENABLED(HAS_TASK_USB_MUX)) {
 				assert(task_get_current() == TASK_ID_USB_MUX);
 			} else {
+#if defined(CONFIG_ZEPHYR) && defined(TEST_BUILD)
+				assert(port ==
+				       TASK_ID_TO_PD_PORT(task_get_current()) ||
+				       task_get_current() ==
+				       TASK_ID_TEST_RUNNER);
+#else
 				assert(port ==
 				       TASK_ID_TO_PD_PORT(task_get_current()));
+#endif /* defined(CONFIG_ZEPHYR) && defined(TEST_BUILD) */
 			}
 
 			/*
@@ -530,23 +537,29 @@ bool usb_mux_set_completed(int port)
 	return !sets_pending;
 }
 
-mux_state_t usb_mux_get(int port)
+static enum ec_error_list try_usb_mux_get(int port, mux_state_t *mux_state)
 {
-	mux_state_t mux_state;
-	int rv;
-
-	if (port >= board_get_usb_pd_port_count()) {
-		return USB_PD_MUX_NONE;
-	}
+	if (port >= board_get_usb_pd_port_count())
+		return EC_ERROR_INVAL;
 
 	/* Perform initialization if not initialized yet */
 	if (!(flags[port] & USB_MUX_FLAG_INIT))
 		usb_mux_init(port);
 
-	if (flags[port] & USB_MUX_FLAG_IN_LPM)
-		return USB_PD_MUX_NONE;
+	if (flags[port] & USB_MUX_FLAG_IN_LPM) {
+		*mux_state = USB_PD_MUX_NONE;
+		return EC_SUCCESS;
+	}
 
-	rv = configure_mux(port, USB_MUX_GET_MODE, &mux_state);
+	return configure_mux(port, USB_MUX_GET_MODE, mux_state);
+}
+
+mux_state_t usb_mux_get(int port)
+{
+	mux_state_t mux_state;
+	enum ec_status rv;
+
+	rv = try_usb_mux_get(port, &mux_state);
 
 	return rv ? USB_PD_MUX_NONE : mux_state;
 }
@@ -718,9 +731,8 @@ static enum ec_status hc_usb_pd_mux_info(struct host_cmd_handler_args *args)
 	if (port >= board_get_usb_pd_port_count())
 		return EC_RES_INVALID_PARAM;
 
-	if (configure_mux(port, USB_MUX_GET_MODE, &mux_state))
+	if (try_usb_mux_get(port, &mux_state))
 		return EC_RES_ERROR;
-
 	r->flags = mux_state;
 
 	/* Clear HPD IRQ event since we're about to inform host of it. */

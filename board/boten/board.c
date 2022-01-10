@@ -397,8 +397,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_ACCEL),
-		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
@@ -426,8 +424,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_GYRO),
-		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
@@ -472,6 +468,8 @@ void board_init(void)
 		gpio_set_flags(GPIO_LID_360_L, GPIO_INPUT | GPIO_PULL_DOWN);
 		gpio_set_flags(GPIO_VOLUP_BTN_ODL, GPIO_INPUT | GPIO_PULL_DOWN);
 		gpio_set_flags(GPIO_VOLDN_BTN_ODL, GPIO_INPUT | GPIO_PULL_DOWN);
+		button_disable_gpio(BUTTON_VOLUME_UP);
+		button_disable_gpio(BUTTON_VOLUME_DOWN);
 	}
 
 	/* Set LEDs luminance */

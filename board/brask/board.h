@@ -38,11 +38,12 @@
 #define CONFIG_USB_PD_PPC
 #define CONFIG_USB_PD_TCPM_RT1715
 #define CONFIG_USBC_RETIMER_INTEL_BB
-/* TODO: Do not add CONFIG_KB800X_CUSTOM_XBAR until find out how
- * to config ss_lane.
- */
+
 #define CONFIG_USBC_RETIMER_KB800X
+#define CONFIG_KB800X_CUSTOM_XBAR
 #define CONFIG_USBC_PPC_SYV682X
+#undef CONFIG_SYV682X_HV_ILIM
+#define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
 
 /* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
@@ -74,6 +75,7 @@
 #define GPIO_PCH_RTCRST			GPIO_EC_PCH_RTCRST
 #define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
+#define GPIO_TEMP_SENSOR_POWER		GPIO_SEQ_EC_DSW_PWROK
 
 /*
  * GPIO_EC_PCH_INT_ODL is used for MKBP events as well as a PCH wakeup
@@ -128,7 +130,7 @@
 /* Thermal features */
 #define CONFIG_THERMISTOR
 #define CONFIG_TEMP_SENSOR
-#define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_SEQ_EC_DSW_PWROK
+#define CONFIG_TEMP_SENSOR_POWER
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
 /* ADC */
@@ -138,7 +140,7 @@
  * TODO(b/197478860): Enable the fan control. We need
  * to check the sensor value and adjust the fan speed.
  */
-/* #define CONFIG_FANS			FAN_CH_COUNT */
+ #define CONFIG_FANS			FAN_CH_COUNT
 
 /* Include math_util for bitmask_uint64 used in pd_timers */
 #define CONFIG_MATH_UTIL

@@ -1,0 +1,99 @@
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+/ {
+	named-i2c-ports {
+		compatible = "named-i2c-ports";
+
+		battery {
+			i2c-port = <&i2c1>;
+			remote-port = <1>;
+			enum-name = "I2C_PORT_BATTERY";
+		};
+		virtual-battery {
+			i2c-port = <&i2c1>;
+			enum-name = "I2C_PORT_VIRTUAL_BATTERY";
+		};
+		eeprom {
+			i2c-port = <&i2c0>;
+			enum-name = "I2C_PORT_EEPROM";
+		};
+		charger {
+			i2c-port = <&i2c0>;
+			enum-name = "I2C_PORT_CHARGER";
+		};
+		i2c_sensor: sensor {
+			i2c-port = <&i2c3>;
+			enum-name = "I2C_PORT_SENSOR";
+		};
+		ppc0 {
+			i2c-port = <&i2c2>;
+			enum-name = "I2C_PORT_PPC0";
+		};
+		ppc1 {
+			i2c-port = <&i2c4>;
+			enum-name = "I2C_PORT_PPC1";
+		};
+		usb-c0 {
+			i2c-port = <&i2c2>;
+			enum-name = "I2C_PORT_USB_C0";
+		};
+		usb-c1 {
+			i2c-port = <&i2c4>;
+			enum-name = "I2C_PORT_USB_C1";
+		};
+		usb-mux0 {
+			i2c-port = <&i2c2>;
+			enum-name = "I2C_PORT_USB_MUX0";
+		};
+		usb-mux1 {
+			i2c-port = <&i2c4>;
+			enum-name = "I2C_PORT_USB_MUX1";
+		};
+	};
+
+};
+
+&i2c0 {
+	/* EC_I2C_PWR_CBI */
+	label = "I2C_PWR_CBI";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+&i2c1 {
+	/* EC_I2C_BATTERY */
+	label = "I2C_BATTERY";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+};
+
+&i2c2 {
+	/* EC_I2C_USB_C0 */
+	label = "I2C_USB_C0";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+&i2c3 {
+	/* EC_I2C_SENSOR */
+	label = "I2C_SENSOR";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+	/*
+	 * b/210800948: i2c3 is not working at this moment.
+	 *
+	 * The driver support for i2c3 on GPF2/F3 is under review in
+	 * following PR.
+	 * https://github.com/zephyrproject-rtos/zephyr/pull/41389
+	 */
+};
+
+&i2c4 {
+	/* EC_I2C_USB_C1 */
+	label = "I2C_USB_C1";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};

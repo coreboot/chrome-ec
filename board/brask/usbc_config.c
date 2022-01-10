@@ -111,7 +111,13 @@ struct kb800x_control_t kb800x_control[] = {
 	[USBC_PORT_C0] = {
 	},
 	[USBC_PORT_C1] = {
-		.retimer_rst_gpio = GPIO_USB_C1_RT_RST_R_ODL,
+		.retimer_rst_gpio = GPIO_USB_C1_RT_RST_R_L,
+		.ss_lanes = {
+			[KB800X_A0] = KB800X_TX0, [KB800X_A1] = KB800X_RX0,
+			[KB800X_B0] = KB800X_RX1, [KB800X_B1] = KB800X_TX1,
+			[KB800X_C0] = KB800X_RX0, [KB800X_C1] = KB800X_TX0,
+			[KB800X_D0] = KB800X_TX1, [KB800X_D1] = KB800X_RX1,
+			}
 	},
 	[USBC_PORT_C2] = {
 	},
@@ -249,7 +255,7 @@ void board_reset_pd_mcu(void)
 	 */
 
 	gpio_set_level(tcpc_rst, 0);
-	gpio_set_level(GPIO_USB_C1_RT_RST_R_ODL, 0);
+	gpio_set_level(GPIO_USB_C1_RT_RST_R_L, 0);
 
 	/*
 	 * delay for power-on to reset-off and min. assertion time
@@ -258,7 +264,7 @@ void board_reset_pd_mcu(void)
 	msleep(20);
 
 	gpio_set_level(tcpc_rst, 1);
-	gpio_set_level(GPIO_USB_C1_RT_RST_R_ODL, 1);
+	gpio_set_level(GPIO_USB_C1_RT_RST_R_L, 1);
 
 	/* wait for chips to come up */
 

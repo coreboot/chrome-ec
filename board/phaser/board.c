@@ -167,8 +167,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_ACCEL),
-		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.rot_standard_ref = &standard_rot_ref,
@@ -199,8 +197,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_GYRO),
-		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
@@ -246,6 +242,11 @@ static void cbi_init(void)
 	support_syv_ppc = board_is_support_syv_ppc();
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
+
+void board_hibernate_late(void)
+{
+	NPCX_KBSINPU = 0x0A;
+}
 
 /* This callback disables keyboard when convertibles are fully open */
 __override void lid_angle_peripheral_enable(int enable)

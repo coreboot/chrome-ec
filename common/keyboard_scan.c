@@ -140,9 +140,9 @@ void keyboard_scan_enable(int enable, enum kb_scan_disable_masks mask)
 {
 	/* Access atomically */
 	if (enable) {
-		atomic_clear_bits((uint32_t *)&disable_scanning_mask, mask);
+		atomic_clear_bits((atomic_t *)&disable_scanning_mask, mask);
 	} else {
-		atomic_or((uint32_t *)&disable_scanning_mask, mask);
+		atomic_or((atomic_t *)&disable_scanning_mask, mask);
 		clear_typematic_key();
 	}
 
@@ -954,9 +954,9 @@ int keyboard_factory_test_scan(void)
 
 		gpio_set_flags_by_mask(port, 1 << id, GPIO_OUT_LOW);
 
-		for (j = 0; j < i; j++) {
+		for (j = 0; j < keyboard_factory_scan_pins_used; j++) {
 
-			if (keyboard_factory_scan_pins[j][0] < 0)
+			if (keyboard_factory_scan_pins[j][0] < 0 || i == j)
 				continue;
 
 			if (keyboard_raw_is_input_low(

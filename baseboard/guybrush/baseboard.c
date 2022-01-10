@@ -373,25 +373,6 @@ const struct mft_t mft_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
-const struct fan_conf fan_conf_0 = {
-	.flags = FAN_USE_RPM_MODE,
-	.ch = MFT_CH_0,	/* Use MFT id to control fan */
-	.pgood_gpio = GPIO_S0_PGOOD,
-	.enable_gpio = -1,
-};
-const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 1000,
-	.rpm_start = 1000,
-	.rpm_max = 6500,
-};
-const struct fan_t fans[] = {
-	[FAN_CH_0] = {
-		.conf = &fan_conf_0,
-		.rpm = &fan_rpm_0,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
-
 /*
  * USB C0 port SBU mux use standalone FSUSB42UMX
  * chip and it needs a board specific driver.
@@ -611,14 +592,22 @@ void tcpc_alert_event(enum gpio_signal signal)
 static void reset_nct38xx_port(int port)
 {
 	enum gpio_signal reset_gpio_l;
+	int a_vbus, a_limit_sdp, a1_retimer_en;
 
-	if (port == USBC_PORT_C0)
+	/* Save type-A GPIO values to restore after reset */
+	if (port == USBC_PORT_C0) {
 		reset_gpio_l = GPIO_USB_C0_TCPC_RST_L;
-	else if (port == USBC_PORT_C1)
+		ioex_get_level(IOEX_EN_PP5000_USB_A0_VBUS, &a_vbus);
+		ioex_get_level(IOEX_USB_A0_LIMIT_SDP, &a_limit_sdp);
+	} else if (port == USBC_PORT_C1) {
 		reset_gpio_l = GPIO_USB_C1_TCPC_RST_L;
-	else
+		ioex_get_level(IOEX_EN_PP5000_USB_A1_VBUS_DB, &a_vbus);
+		ioex_get_level(IOEX_USB_A1_LIMIT_SDP_DB, &a_limit_sdp);
+		ioex_get_level(IOEX_USB_A1_RETIMER_EN, &a1_retimer_en);
+	} else {
 		/* Invalid port: do nothing */
 		return;
+	}
 
 	gpio_set_level(reset_gpio_l, 0);
 	msleep(NCT38XX_RESET_HOLD_DELAY_MS);
@@ -626,6 +615,17 @@ static void reset_nct38xx_port(int port)
 	nct38xx_reset_notify(port);
 	if (NCT3807_RESET_POST_DELAY_MS != 0)
 		msleep(NCT3807_RESET_POST_DELAY_MS);
+
+	/* Re-init ioex after resetting the TCPC */
+	ioex_init(port);
+	if (port == USBC_PORT_C0) {
+		ioex_set_level(IOEX_EN_PP5000_USB_A0_VBUS, a_vbus);
+		ioex_set_level(IOEX_USB_A0_LIMIT_SDP, a_limit_sdp);
+	} else {
+		ioex_set_level(IOEX_EN_PP5000_USB_A1_VBUS_DB, a_vbus);
+		ioex_set_level(IOEX_USB_A1_LIMIT_SDP_DB, a_limit_sdp);
+		ioex_set_level(IOEX_USB_A1_RETIMER_EN, a1_retimer_en);
+	}
 }
 
 

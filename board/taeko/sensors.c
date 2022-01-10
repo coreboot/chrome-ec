@@ -67,21 +67,24 @@ static struct accelgyro_saved_data_t g_bma422_data;
 static struct lsm6dso_data lsm6dso_data;
 static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
-/* TODO(b/201504044): calibrate the orientation matrix on later board stage */
-#if 0
+/* The matrix for new DB */
+static const mat33_fp_t lid_ref_for_new_DB = {
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+/* Matrix to rotate lid and base sensor into standard reference frame */
 static const mat33_fp_t lid_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(-1)}
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
 static const mat33_fp_t base_standard_ref = {
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, FLOAT_TO_FP(-1), 0},
+	{ FLOAT_TO_FP(-1), 0, 0},
+	{ 0, FLOAT_TO_FP(1), 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
-#endif
-
 
 struct motion_sensor_t bma422_lid_accel = {
 	.name = "Lid Accel - BMA",
@@ -94,7 +97,7 @@ struct motion_sensor_t bma422_lid_accel = {
 	.drv_data = &g_bma422_data,
 	.port = I2C_PORT_SENSOR,
 	.i2c_spi_addr_flags = BMA4_I2C_ADDR_PRIMARY, /* 0x18 */
-	.rot_standard_ref = NULL, /* identity matrix */
+	.rot_standard_ref = &lid_standard_ref, /* identity matrix */
 	.default_range = 2, /* g, enough for laptop. */
 	.min_frequency = BMA4_ACCEL_MIN_FREQ,
 	.max_frequency = BMA4_ACCEL_MAX_FREQ,
@@ -122,11 +125,9 @@ struct motion_sensor_t lsm6dsm_base_accel = {
 	.mutex = &g_base_accel_mutex,
 	.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 			MOTIONSENSE_TYPE_ACCEL),
-	.int_signal = GPIO_EC_IMU_INT_R_L,
-	.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 	.port = I2C_PORT_SENSOR,
 	.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-	.rot_standard_ref = NULL,
+	.rot_standard_ref = &base_standard_ref,
 	.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	.min_frequency = LSM6DSM_ODR_MIN_VAL,
 	.max_frequency = LSM6DSM_ODR_MAX_VAL,
@@ -153,12 +154,10 @@ struct motion_sensor_t lsm6dsm_base_gyro = {
 	.drv = &lsm6dsm_drv,
 	.mutex = &g_base_accel_mutex,
 	.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data, MOTIONSENSE_TYPE_GYRO),
-	.int_signal = GPIO_EC_IMU_INT_R_L,
-	.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 	.port = I2C_PORT_SENSOR,
 	.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 	.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-	.rot_standard_ref = NULL,
+	.rot_standard_ref = &base_standard_ref,
 	.min_frequency = LSM6DSM_ODR_MIN_VAL,
 	.max_frequency = LSM6DSM_ODR_MAX_VAL,
 };
@@ -173,11 +172,9 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv = &lis2dw12_drv,
 		.mutex = &g_lid_accel_mutex,
 		.drv_data = &g_lis2dw12_data,
-		.int_signal = GPIO_EC_ACCEL_INT_R_L,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LIS2DW12_ADDR1, /* 0x19 */
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
-		.rot_standard_ref = NULL, /* identity matrix */
+		.rot_standard_ref = &lid_standard_ref, /* identity matrix */
 		.default_range = 2, /* g */
 		.min_frequency = LIS2DW12_ODR_MIN_VAL,
 		.max_frequency = LIS2DW12_ODR_MAX_VAL,
@@ -202,11 +199,9 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv = &lsm6dso_drv,
 		.mutex = &g_base_accel_mutex,
 		.drv_data = &lsm6dso_data,
-		.int_signal = GPIO_EC_IMU_INT_R_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSO_ADDR0_FLAGS,
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &base_standard_ref,
 		.default_range = 4,  /* g */
 		.min_frequency = LSM6DSO_ODR_MIN_VAL,
 		.max_frequency = LSM6DSO_ODR_MAX_VAL,
@@ -231,12 +226,10 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv = &lsm6dso_drv,
 		.mutex = &g_base_accel_mutex,
 		.drv_data = &lsm6dso_data,
-		.int_signal = GPIO_EC_IMU_INT_R_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSO_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-		.rot_standard_ref = NULL,
+		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = LSM6DSO_ODR_MIN_VAL,
 		.max_frequency = LSM6DSO_ODR_MAX_VAL,
 	},
@@ -287,6 +280,11 @@ static void board_detect_motionsensor(void)
 		 * we don't use INT1. Keep this pin as input w/o enable
 		 * interrupt.
 		 */
+		if (get_board_id() >= 2) {
+			/* Need to change matrix when board ID >= 2 */
+			bma422_lid_accel.rot_standard_ref =
+					&lid_ref_for_new_DB;
+		}
 		return;
 	}
 
@@ -320,6 +318,12 @@ static void baseboard_sensors_init(void)
 		if (get_board_id() > 0) {
 			motion_sensors[BASE_ACCEL] = lsm6dsm_base_accel;
 			motion_sensors[BASE_GYRO] = lsm6dsm_base_gyro;
+		}
+
+		if (get_board_id() >= 2) {
+			/* Need to change matrix when board ID >= 2 */
+			motion_sensors[LID_ACCEL].rot_standard_ref =
+							&lid_ref_for_new_DB;
 		}
 
 		/* Enable gpio interrupt for base accelgyro sensor */

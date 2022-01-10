@@ -21,7 +21,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_FUEL_GAUGE
                                                             battery.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_EEPROM  cbi.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_GPIO    cbi.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ESPI        espi.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI
+                                                            espi.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN         fan.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH_CROS  flash.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOOKS       hooks.c)
@@ -53,3 +54,5 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_WATCHDOG    watchdog.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
 	                                                     bc12_pi3usb9201.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC    ppc.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_NCT38XX
+                                                            tcpc_nct38xx.c)

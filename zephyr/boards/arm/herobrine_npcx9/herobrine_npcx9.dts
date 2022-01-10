@@ -50,14 +50,12 @@
 	named-pwms {
 		compatible = "named-pwms";
 
-		kblight: kblight {
+		kblight: kb_bl_pwm {
 			pwms = <&pwm3 0 0>;
-			label = "KBLIGHT";
 			frequency = <10000>;
 		};
-		displight: displight {
+		displight: ecl_bl_pwm_r {
 			pwms = <&pwm5 0 0>;
-			label = "DISPLIGHT";
 			frequency = <4800>;
 		};
 	};
@@ -66,14 +64,14 @@
 		compatible = "named-adc-channels";
 
 		vbus {
-			label = "ADC_VBUS";
+			label = "VBUS";
 			enum-name = "ADC_VBUS";
 			channel = <1>;
 			/* Measure VBUS through a 1/10 voltage divider */
 			mul = <10>;
 		};
 		amon_bmon {
-			label = "ADC_AMON_BMON";
+			label = "AMON_BMON";
 			enum-name = "ADC_AMON_BMON";
 			channel = <2>;
 			/*
@@ -85,7 +83,7 @@
 			div = <18>;
 		};
 		psys {
-			label = "ADC_PSYS";
+			label = "PSYS";
 			enum-name = "ADC_PSYS";
 			channel = <3>;
 			/*

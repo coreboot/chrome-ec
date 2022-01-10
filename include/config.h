@@ -479,6 +479,11 @@
 #undef CONFIG_BATTERY
 
 /*
+ * Config to indicate the battery type that cannot be auto detected.
+ */
+#undef CONFIG_BATTERY_TYPE_NO_AUTO_DETECT
+
+/*
  * Compile battery-specific code.
  *
  * Note that some boards have their own unique battery constants / functions.
@@ -1106,6 +1111,17 @@
  */
 #undef CONFIG_CHARGER_BQ25710_CMP_REF_1P2
 
+/* Enable if CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG should be applied */
+#undef CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG_CUSTOM
+
+/*
+ * Input overload time when in peak power mode (PKPWR_TOVLD_DEG). This
+ * limits how long the charger can draw ILIM2 from the adapter. This is
+ * a 2 bit field. On the bq25710 1 ms to 20 ms can be encoded. On the
+ * bq25720 1 ms to 10 ms can be encoded.
+ */
+#undef CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG
+
 /*
  * This config option is used to enable the charger's AC over-current
  * protection. The converter turns off when the OC threshold is
@@ -1149,6 +1165,13 @@
  * removed.
  */
 #undef CONFIG_CHARGER_BQ25710_PP_ACOK
+
+/*
+ * This config option sets the PP_IDCHG2 bit in the Charge Option 4
+ * register. This causes PROCHOT to be pulsed when IDCHG_TH2 is reached.
+ */
+
+#undef CONFIG_CHARGER_BQ25720_PP_IDCHG2
 
 /* Enable if CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_MV should be applied */
 #undef CONFIG_CHARGER_BQ25710_VSYS_MIN_VOLTAGE_CUSTOM
@@ -2395,7 +2418,7 @@
  * Accept EC host commands over the SPI host interface.  The AP is SPI
  * controller and the EC is the SPI peripheral for this configuration.
  */
-#undef CONFIG_HOSTCMD_SHI
+#undef CONFIG_HOST_INTERFACE_SHI
 
 /*
  * Host command rate limiting assures EC will have time to process lower
@@ -2776,6 +2799,12 @@
 #undef CONFIG_IT83XX_HARD_RESET_BY_GPG1
 
 /*
+ * Use i2c command queue mode for a single i2c transaction.
+ * (Applied to port D, E, and F)
+ */
+#undef CONFIG_IT83XX_I2C_CMD_QUEUE
+
+/*
  * Enable it if EC's VBAT won't go low when system's power isn't
  * presented (no battery and no AC)
  * If EC's VSTBY and VBAT(power source of BRAM) aren't connected to the same
@@ -3060,6 +3089,7 @@
 #undef CONFIG_LED_DRIVER_LM3509  /* LM3509, on I2C interface */
 #undef CONFIG_LED_DRIVER_LM3630A /* LM3630A, on I2C interface */
 #undef CONFIG_LED_DRIVER_LP5562  /* LP5562, on I2C interface */
+#undef CONFIG_LED_DRIVER_MP3385   /* MPS MP3385, on I2C */
 #undef CONFIG_LED_DRIVER_OZ554   /* O2Micro OZ554, on I2C */
 
 /* Offset in flash where little firmware will live. */
@@ -3141,26 +3171,27 @@
 #undef CONFIG_HID_HECI
 
 /* Support host command interface over HECI */
-#undef CONFIG_HOSTCMD_HECI
+#undef CONFIG_HOST_INTERFACE_HECI
 
 /*
  * EC supports x86 host communication with AP. This can either be through LPC
  * or eSPI. The CONFIG_HOSTCMD_X86 will get automatically defined if either
- * CONFIG_HOSTCMD_LPC or CONFIG_HOSTCMD_ESPI are defined. LPC and eSPI are
- * mutually exclusive.
+ * CONFIG_HOST_INTERFACE_LPC or CONFIG_HOST_INTERFACE_ESPI are defined.
+ * LPC and eSPI are mutually exclusive.
  */
 #undef CONFIG_HOSTCMD_X86
 /* Support host command interface over LPC bus. */
-#undef CONFIG_HOSTCMD_LPC
+#undef CONFIG_HOST_INTERFACE_LPC
 /* Support host command interface over eSPI bus. */
-#undef CONFIG_HOSTCMD_ESPI
+#undef CONFIG_HOST_INTERFACE_ESPI
 
 /*
- * SLP signals (SLP_S3 and SLP_S4) use virtual wires intead of physical pins
- * with eSPI interface.
+ * SLP signals (SLP_S3, SLP_S4, and SLP_S5) use virtual wires instead of
+ * physical pins with eSPI interface.
  */
 #undef CONFIG_HOSTCMD_ESPI_VW_SLP_S3
 #undef CONFIG_HOSTCMD_ESPI_VW_SLP_S4
+#undef CONFIG_HOSTCMD_ESPI_VW_SLP_S5
 
 /* MCHP next two items are EC eSPI slave configuration */
 /* Maximum clock frequence eSPI EC slave advertises
@@ -3511,6 +3542,9 @@
 
 /* Support S0ix */
 #undef CONFIG_POWER_S0IX
+
+/* Advertise S4 residency */
+#undef CONFIG_POWER_S4_RESIDENCY
 
 /* Support detecting failure to enter a sleep state (S0ix/S3) */
 #undef CONFIG_POWER_SLEEP_FAILURE_DETECTION
@@ -4006,8 +4040,10 @@
 #undef CONFIG_TEMP_SENSOR_G781		/* G781 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_G782		/* G782 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_OTI502	/* OTI502 sensor, on I2C bus */
+#undef CONFIG_TEMP_SENSOR_PCT2075	/* PCT2075 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_SB_TSI	/* SB_TSI sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP006	/* TI TMP006 sensor, on I2C bus */
+#undef CONFIG_TEMP_SENSOR_TMP112	/* TI TMP112 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP411	/* TI TMP411 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP432	/* TI TMP432 sensor, on I2C bus */
 #undef CONFIG_TEMP_SENSOR_TMP468	/* TI TMP468 sensor, on I2C bus */
@@ -4033,10 +4069,11 @@
 
 /*
  * If defined, active-high GPIO which indicates temperature sensor chips are
- * powered.  If not defined, temperature sensors are assumed to be always
+ * powered. The GPIO pin must be defined as GPIO_TEMP_SENSOR_POWER.
+ * If not defined, temperature sensors are assumed to be always
  * powered.
  */
-#undef CONFIG_TEMP_SENSOR_POWER_GPIO
+#undef CONFIG_TEMP_SENSOR_POWER
 
 /* AMD STT (Skin Temperature Tracking) */
 #undef CONFIG_AMD_STT
@@ -4387,6 +4424,12 @@
  */
 #define CONFIG_USB_PD_FLAGS
 #undef CONFIG_USB_PD_RUNTIME_FLAGS
+
+/*
+ * Define to enable the PD Data Reset Message. This is mandatory for
+ * USB4 and optional for USB 3.2
+ */
+#undef CONFIG_USB_PD_DATA_RESET_MSG
 
 /*
  * Define if this board can enable VBUS discharge (eg. through a GPIO-controlled
@@ -4857,6 +4900,7 @@
 
 /* USB Type-C Power Path Controllers (PPC) */
 #undef CONFIG_USBC_PPC_AOZ1380
+#undef CONFIG_USBC_PPC_KTU1125
 #undef CONFIG_USBC_PPC_NX20P3481
 #undef CONFIG_USBC_PPC_NX20P3483
 #undef CONFIG_USBC_PPC_RT1718S
@@ -5507,8 +5551,21 @@
  * are configured as virtual wires.
  */
 #if defined(CONFIG_HOSTCMD_ESPI_VW_SLP_S3) || \
-	defined(CONFIG_HOSTCMD_ESPI_VW_SLP_S4)
+	defined(CONFIG_HOSTCMD_ESPI_VW_SLP_S4) || \
+	defined(CONFIG_HOSTCMD_ESPI_VW_SLP_S5)
 #define CONFIG_HOST_ESPI_VW_POWER_SIGNAL
+#endif
+
+/*
+ * S4 residency works by observing SLP_S5 via virtual wire (as SLP_S5 has not
+ * traditionally been routed to the EC). If the board family wants S4 residency,
+ * they need to use ECs that support eSPI. Note that S4 residency is not
+ * strictly a requirement to support suspend-to-disk, except on Intel platforms
+ * with Key Locker support (TGL+).
+ */
+#if defined(CONFIG_POWER_S4_RESIDENCY) && \
+	!defined(CONFIG_HOSTCMD_ESPI_VW_SLP_S5)
+#error "S4_RESIDENCY needs eSPI support or SLP_S5 routed"
 #endif
 
 /*
@@ -5516,7 +5573,7 @@
  * without using eSPI for host commands.
  */
 #if (!defined(CONFIG_ZEPHYR) && defined(CONFIG_HOST_ESPI_VW_POWER_SIGNAL) && \
-     !defined(CONFIG_HOSTCMD_ESPI))
+	!defined(CONFIG_HOST_INTERFACE_ESPI))
 #error Must enable eSPI to enable virtual wires.
 #endif
 
@@ -5641,17 +5698,17 @@
  * Automatically define CONFIG_HOSTCMD_X86 if either child option is defined.
  * Ensure LPC and eSPI are mutually exclusive
  */
-#if defined(CONFIG_HOSTCMD_LPC) || defined(CONFIG_HOSTCMD_ESPI)
+#if defined(CONFIG_HOST_INTERFACE_LPC) || defined(CONFIG_HOST_INTERFACE_ESPI)
 #define CONFIG_HOSTCMD_X86
 #endif
 
-#if defined(CONFIG_HOSTCMD_LPC) && defined(CONFIG_HOSTCMD_ESPI)
+#if defined(CONFIG_HOST_INTERFACE_LPC) && defined(CONFIG_HOST_INTERFACE_ESPI)
 #error Must select only one type of host communication bus.
 #endif
 
 #if defined(CONFIG_HOSTCMD_X86) && \
-	!defined(CONFIG_HOSTCMD_LPC) && \
-	!defined(CONFIG_HOSTCMD_ESPI)
+	!defined(CONFIG_HOST_INTERFACE_LPC) && \
+	!defined(CONFIG_HOST_INTERFACE_ESPI)
 #error Must select one type of host communication bus.
 #endif
 
@@ -5870,6 +5927,7 @@
 /*****************************************************************************/
 /* Define CONFIG_USBC_OCP if a component can detect overcurrent */
 #if defined(CONFIG_USBC_PPC_AOZ1380) || \
+	defined(CONFIG_USBC_PPC_KTU1125) || \
 	defined(CONFIG_USBC_PPC_NX20P3481) || \
 	defined(CONFIG_USBC_PPC_NX20P3483) || \
 	defined(CONFIG_USBC_PPC_SN5S330) || \
@@ -5911,6 +5969,10 @@
 /*
  * Define CONFIG_USB_PD_TCPC_ON_CHIP if we use ITE series TCPM driver
  * on the board.
+ *
+ * NOTE: If we don't use all the ITE pd ports on a board, then we need to
+ *       start from port0 to use the ITE pd port. If we start from port1,
+ *       then port1 HOOK function never works.
  */
 #ifdef CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #define CONFIG_USB_PD_TCPC_ON_CHIP

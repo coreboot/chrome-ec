@@ -18,11 +18,8 @@
 #define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Sensors */
-#define CONFIG_ACCELGYRO_BMI160
-#define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-#define CONFIG_ACCELGYRO_BMI3XX
-#define CONFIG_ACCELGYRO_BMI3XX_INT_EVENT \
+#define CONFIG_ACCELGYRO_BMI260
+#define CONFIG_ACCELGYRO_BMI260_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCEL_BMA4XX
@@ -51,10 +48,14 @@
 /* Volume Button feature */
 
 /* Fan features */
+#define CONFIG_FAN_RPM_CUSTOM
 
 /* LED features */
 #define CONFIG_LED_COMMON
 #define CONFIG_LED_ONOFF_STATES
+
+/* Thermal Config */
+#define CONFIG_TEMP_SENSOR_PCT2075
 
 #ifndef __ASSEMBLER__
 
@@ -72,8 +73,7 @@ enum battery_type {
 
 enum base_accelgyro_type {
 	BASE_GYRO_NONE = 0,
-	BASE_GYRO_BMI160 = 1,
-	BASE_GYRO_BMI323 = 2,
+	BASE_GYRO_BMI260 = 1,
 };
 
 /* ADC Channels */
@@ -94,6 +94,13 @@ enum temp_sensor_id {
 	TEMP_SENSOR_CPU,
 	TEMP_SENSOR_AMBIENT,
 	TEMP_SENSOR_COUNT
+};
+
+/* PCT2075 sensors */
+enum pct2075_sensor {
+	PCT2075_SOC,
+	PCT2075_AMB,
+	PCT2075_COUNT,
 };
 
 #endif /* !__ASSEMBLER__ */

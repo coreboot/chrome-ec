@@ -23,9 +23,8 @@ struct i2c_emul *sn5s330_emul_to_i2c_emul(const struct emul *emul);
  * @param emul The emulator to query
  * @param reg The register to read
  * @param val Pointer to write the register value to
- * @return 0 on success
  */
-int sn5s330_emul_peek_reg(const struct emul *emul, uint32_t reg, uint32_t *val);
+void sn5s330_emul_peek_reg(const struct emul *emul, uint32_t reg, uint8_t *val);
 
 /**
  * @brief Reset the sn5s330 emulator
@@ -33,5 +32,19 @@ int sn5s330_emul_peek_reg(const struct emul *emul, uint32_t reg, uint32_t *val);
  * @param emul The emulator to reset
  */
 void sn5s330_emul_reset(const struct emul *emul);
+
+/**
+ * @brief Emulate vbus overcurrent clamping condition.
+ *
+ * @param emul The sn5s330 chip emulator.
+ */
+void sn5s330_emul_make_vbus_overcurrent(const struct emul *emul);
+
+/**
+ * @brief Emulate vbus voltage is below min 0.6V.
+ *
+ * @param emul The sn5s330 chip emulator.
+ */
+void sn5s330_emul_lower_vbus_below_minv(const struct emul *emul);
 
 #endif /* ZEPHYR_INCLUDE_EMUL_EMUL_SN5S330_H_ */

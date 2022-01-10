@@ -13,8 +13,6 @@
 #include "gpio.h"
 #include "gpio_signal.h"
 #include "hooks.h"
-#include "driver/accel_lis2dw12.h"
-#include "driver/accelgyro_lsm6dso.h"
 #include "driver/als_tcs3400.h"
 #include "fw_config.h"
 #include "hooks.h"
@@ -23,7 +21,6 @@
 #include "power.h"
 #include "registers.h"
 #include "switch.h"
-#include "tablet_mode.h"
 #include "throttle_ap.h"
 #include "usbc_config.h"
 
@@ -33,20 +30,18 @@
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
 
-/* Called on AP S3 -> S0 transition */
-static void board_chipset_resume(void)
+static void board_chipset_startup(void)
 {
 	/* Allow keyboard backlight to be enabled */
 
-	gpio_set_level(GPIO_EC_KB_BL_EN_L, 0);
+	gpio_set_level(GPIO_EC_KB_BL_EN, 1);
 }
-DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
 
-/* Called on AP S0 -> S3 transition */
-static void board_chipset_suspend(void)
+static void board_chipset_shutdown(void)
 {
 	/* Turn off the keyboard backlight if it's on. */
 
-	gpio_set_level(GPIO_EC_KB_BL_EN_L, 1);
+	gpio_set_level(GPIO_EC_KB_BL_EN, 0);
 }
-DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);

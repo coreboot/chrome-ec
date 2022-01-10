@@ -1,3 +1,7 @@
+# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
 menuconfig AP
 	bool "Enable AP SoC support code"
 	default y
@@ -39,6 +43,12 @@ config AP_ARM_MTK_MT8192
 	select AP_AARCH64
 	help
 	  The application processor is a MediaTek MT8192 processor.
+
+config AP_ARM_MTK_MT8186
+	bool "MediaTek MT8186"
+	select AP_AARCH64
+	help
+	  The application processor is a MediaTek MT8186 processor.
 
 config AP_ARM_QUALCOMM_SC7180
 	bool "Qualcomm Snapdragon SC7180"

@@ -56,7 +56,8 @@ struct tcpc_config_t tcpc_config[] = {
 		},
 		.drv = &ps8xxx_tcpm_drv,
 		.flags = TCPC_FLAGS_TCPCI_REV2_0 |
-			 TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V,
+			 TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V |
+			 TCPC_FLAGS_CONTROL_VCONN,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
@@ -210,7 +211,7 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 	int rst_signal;
 
 	if (me->usb_port == USBC_PORT_C1)
-		rst_signal = GPIO_USB_C1_RT_RST_R_ODL;
+		rst_signal = IOEX_USB_C1_RT_RST_ODL;
 	else if (me->usb_port == USBC_PORT_C2)
 		rst_signal = IOEX_USB_C2_RT_RST_ODL;
 	else

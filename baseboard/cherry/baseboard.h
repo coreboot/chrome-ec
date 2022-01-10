@@ -14,6 +14,7 @@
  * connect to 1.8v on other versions.
  */
 #define CONFIG_IT83XX_VCC_1P8V
+#define CONFIG_IT83XX_I2C_CMD_QUEUE
 
 /*
  * On power-on, H1 releases the EC from reset but then quickly asserts and
@@ -109,7 +110,6 @@
 #define CONFIG_LED_COMMON
 
 /* PD / USB-C / PPC */
-#define CONFIG_USB_PD_DEBUG_LEVEL 3
 #define CONFIG_CMD_PPC_DUMP
 #define CONFIG_HOSTCMD_PD_CONTROL
 #define CONFIG_IT83XX_TUNE_CC_PHY
@@ -207,6 +207,11 @@
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_HANG_DETECT) |     \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE) | \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
+
+/* And the MKBP events */
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK \
+		(BIT(EC_MKBP_EVENT_KEY_MATRIX) | \
+		 BIT(EC_MKBP_EVENT_HOST_EVENT))
 
 #ifndef __ASSEMBLER__
 

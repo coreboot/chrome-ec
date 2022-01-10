@@ -3,17 +3,12 @@
  * found in the LICENSE file.
  */
 
-/* Brya board configuration */
+/* Kano board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
 #include "compile_time_macros.h"
-
-/*
- * Early brya boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
 
 /* Baseboard features */
 #include "baseboard.h"
@@ -112,6 +107,7 @@
 #define GPIO_PCH_RTCRST			GPIO_EC_PCH_RTCRST
 #define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
+#define GPIO_TEMP_SENSOR_POWER		GPIO_SEQ_EC_DSW_PWROK
 #define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_L
 
 /*
@@ -177,13 +173,10 @@
 /* Thermal features */
 #define CONFIG_THERMISTOR
 #define CONFIG_TEMP_SENSOR
-#define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_SEQ_EC_DSW_PWROK
+#define CONFIG_TEMP_SENSOR_POWER
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
-/*
- * TODO(b/181271666): no fan control loop until sensors are tuned
- */
-/* #define CONFIG_FANS			FAN_CH_COUNT */
+#define CONFIG_FANS FAN_CH_COUNT
 
 /* Charger defines */
 #define CONFIG_CHARGER_ISL9241

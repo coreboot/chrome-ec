@@ -41,7 +41,7 @@
 
 #undef CONFIG_PECI
 
-#define CONFIG_HOSTCMD_SHI
+#define CONFIG_HOST_INTERFACE_SHI
 #define CONFIG_HOST_COMMAND_STATUS
 #define CONFIG_HOSTCMD_SECTION_SORTED
 #define CONFIG_KEYBOARD_COL2_INVERTED
@@ -55,6 +55,8 @@
 #define CONFIG_SWITCH
 #define CONFIG_LID_SWITCH
 #define CONFIG_EXTPOWER_GPIO
+
+#define CONFIG_HIBERNATE_WAKE_PINS_DYNAMIC
 
 /*
  * On power-on, H1 releases the EC from reset but then quickly asserts and

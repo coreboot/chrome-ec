@@ -737,8 +737,8 @@ static int it83xx_tcpm_enter_low_power_mode(int port)
 {
 	/*
 	 * ITE embedded TCPC SLEEP_MASK_USB_PD flag is only controlled by
-	 * it83xx driver in set_pd_sleep_mask(), and do low power mode in
-	 * idle_task().
+	 * it83xx driver in tc_update_pd_sleep_mask(), and do low power
+	 * mode in idle_task().
 	 * In deep sleep mode, ITE TCPC clock is turned off, and the
 	 * timer every 5ms to exit the mode and wakeup PD task to run
 	 * (ex. change the CC lines termination).
@@ -786,17 +786,17 @@ void switch_plug_out_type(enum usbpd_port port)
 	it83xx_tcpm_switch_plug_out_type(port);
 }
 
-void set_pd_sleep_mask(int port)
+__override void tc_update_pd_sleep_mask(int port)
 {
 	int i;
 	bool prevent_deep_sleep = false;
 
 	/*
-	 * Set SLEEP_MASK_USB_PD for deep sleep mode:
-	 * 1.Enable deep sleep mode, when all ITE ports are in Unattach.SRC/SNK
-	 *   state (HOOK_DISCONNECT called) and other ports aren't pd_capable().
-	 * 2.Disable deep sleep mode, when one of ITE port is in Attach.SRC/SNK
-	 *   state (HOOK_CONNECT called) or one of other ports is pd_capable().
+	 * Check ITE embedded pd ports to set SLEEP_MASK_USB_PD:
+	 * In tc_attached_[src, snk]_entry states, calling HOOK_CONNECT
+	 * to enable BMC PHY, and if one of ITE pd ports BMC PHY is enable,
+	 * then EC deep doze mode will be disabled.
+	 * Otherwise, EC deep doze mode will be enabled.
 	 */
 	for (i = 0; i < CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT; ++i) {
 		if (IT83XX_USBPD_GCR(i) & USBPD_REG_MASK_BMC_PHY) {
@@ -806,9 +806,11 @@ void set_pd_sleep_mask(int port)
 	}
 
 	/*
-	 * Check if any other ports have a PD port partner connected.  Deep
-	 * sleep is forbidden if any PD port partner is connected.  Above, we
-	 * only checked for the ITE ports.
+	 * Check Other stand alone pd ports to set SLEEP_MASK_USB_PD:
+	 * In [pe_src_send_capabilities_run, pe_snk_select_capability_entry]
+	 * states receive [GoodCRC, SRC_CAP] from port partner, then EC deep
+	 * doze mode will be disabled.
+	 * Otherwise, EC deep doze mode will be enabled.
 	 */
 	if (!prevent_deep_sleep) {
 		for (; i < board_get_usb_pd_port_count(); i++)
@@ -825,6 +827,16 @@ void set_pd_sleep_mask(int port)
 static void it83xx_tcpm_hook_connect(void)
 {
 	int port = TASK_ID_TO_PD_PORT(task_get_current());
+
+	/*
+	 * If it isn't ITE active port, then return.
+	 *
+	 * NOTE: If we don't use all the ITE pd ports on a board, then we
+	 *       need to start from port0 to use the ITE pd port. If we
+	 *       start from port1, then port1 HOOK function never works.
+	 */
+	if (port > (CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT - 1))
+		return;
 
 #ifdef CONFIG_USB_PD_TCPMV2
 	/*
@@ -848,7 +860,14 @@ static void it83xx_tcpm_hook_connect(void)
 #endif
 	/* Enable PD PHY Tx and Rx module since type-c has connected. */
 	USBPD_ENABLE_BMC_PHY(port);
-	set_pd_sleep_mask(port);
+	/*
+	 * After we're in attached.[SRC, SNK] states and before we receive
+	 * [GoodCRC of SRC_CAP, SRC_CAP] this period time, if EC goes to
+	 * deep doze mode, the pd clock will be gated, then pd can't
+	 * transmit and receive any messages, so we disable deep doze mode
+	 * to make sure that pd won't miss any messages.
+	 */
+	tc_update_pd_sleep_mask(port);
 }
 
 DECLARE_HOOK(HOOK_USB_PD_CONNECT, it83xx_tcpm_hook_connect, HOOK_PRIO_DEFAULT);
@@ -856,6 +875,16 @@ DECLARE_HOOK(HOOK_USB_PD_CONNECT, it83xx_tcpm_hook_connect, HOOK_PRIO_DEFAULT);
 static void it83xx_tcpm_hook_disconnect(void)
 {
 	int port = TASK_ID_TO_PD_PORT(task_get_current());
+
+	/*
+	 * If it isn't ITE active port, then return.
+	 *
+	 * NOTE: If we don't use all the ITE pd ports on a board, then we
+	 *       need to start from port0 to use the ITE pd port. If we
+	 *       start from port1, then port1 HOOK function never works.
+	 */
+	if (port > (CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT - 1))
+		return;
 
 	if (IS_ENABLED(IT83XX_INTC_PLUG_IN_OUT_SUPPORT))
 		/*
@@ -876,7 +905,11 @@ static void it83xx_tcpm_hook_disconnect(void)
 	if (IS_ENABLED(CONFIG_USB_PD_DECODE_SOP))
 		sop_prime_en[port] = 0;
 	USBPD_DISABLE_BMC_PHY(port);
-	set_pd_sleep_mask(port);
+	/*
+	 * Since PD BMC PHY is off, then EC can go to deep doze mode and
+	 * turn off pd clock.
+	 */
+	tc_update_pd_sleep_mask(port);
 }
 
 DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, it83xx_tcpm_hook_disconnect,

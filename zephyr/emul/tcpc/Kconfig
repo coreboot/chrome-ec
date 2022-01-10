@@ -1,0 +1,56 @@
+# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+DT_COMPAT_TCPCI_EMUL := cros,tcpci-emul
+
+menuconfig EMUL_TCPCI
+	bool "TCPCI emulator"
+	default $(dt_compat_enabled,$(DT_COMPAT_TCPCI_EMUL))
+	depends on I2C_EMUL
+	help
+	  Enable the TCPCI emulator. This driver uses the emulated I2C bus.
+	  It is used to test tcpci code. It supports reads and writes to all
+	  emulator registers. Generic TCPCI emulator can be used as the base
+	  for specific TCPC device emulator that follow TCPCI specification.
+	  TCPCI emulator API is available in
+	  zephyr/include/emul/tcpc/emul_tcpci.h
+
+if EMUL_TCPCI
+
+module = TCPCI_EMUL
+module-str = tcpci_emul
+source "subsys/logging/Kconfig.template.log_config"
+
+config EMUL_TCPCI_PARTNER_COMMON
+	bool
+	help
+	  This option is selected automatically by specific TCPCI partner
+	  emulators. Enable common code that can be used by TCPCI partner device
+	  emulators. It covers sending delayed messages. API of common functions
+	  is available in zephyr/include/emul/tcpc/emul_common_tcpci_partner.h
+
+config EMUL_PS8XXX
+	bool "Parade PS8XXX emulator"
+	help
+	  Enable emulator for PS8XXX family of TCPC. This emulator is extenstion
+	  for TCPCI emulator. PS8XXX specific API is available in
+	  zephyr/include/emul/tcpc/emul_ps8xxx.h
+
+config EMUL_TCPCI_PARTNER_SRC
+	bool "USB-C source device emulator"
+	select EMUL_TCPCI_PARTNER_COMMON
+	help
+	  Enable USB-C source device emulator which may be attached to TCPCI
+	  emulator. API of source device emulator is available in
+	  zephyr/include/emul/tcpc/emul_tcpci_partner_src.h
+
+config EMUL_TCPCI_PARTNER_SNK
+	bool "USB-C sink device emulator"
+	select EMUL_TCPCI_PARTNER_COMMON
+	help
+	  Enable USB-C sink device emulator which may be attached to TCPCI
+	  emulator. API of source device emulator is available in
+	  zephyr/include/emul/tcpc/emul_tcpci_partner_snk.h
+
+endif # EMUL_TCPCI

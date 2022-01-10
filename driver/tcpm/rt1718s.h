@@ -10,7 +10,8 @@
 #include "usb_pd_tcpm.h"
 
 /* RT1718S Private RegMap */
-#define RT1718S_I2C_ADDR_FLAGS				0x43
+#define RT1718S_I2C_ADDR1_FLAGS				0x43
+#define RT1718S_I2C_ADDR2_FLAGS				0x40
 
 #define RT1718S_VID					0x29CF
 #define RT1718S_PID					0x1718
@@ -213,6 +214,7 @@ enum rt1718s_gpio {
 	RT1718S_GPIO1 = 0,
 	RT1718S_GPIO2,
 	RT1718S_GPIO3,
+	RT1718S_GPIO_COUNT,
 };
 
 /**
@@ -242,4 +244,29 @@ void rt1718s_gpio_set_level(int port, enum rt1718s_gpio signal, int value);
  */
 int rt1718s_gpio_get_level(int port, enum rt1718s_gpio signal);
 
+/**
+ * Set fast role swap.
+ *
+ * @param port		USB-C port
+ * @param enable	enable/disable FRS
+ * @return EC_SUCCESS if success, EC_ERROR_UNKNOWN otherwise.
+ */
+int rt1718s_set_frs_enable(int port, int enable);
+
+/**
+ * Initialize RT1718S FRS function
+ *
+ * @param port		USB-C port
+ * @return EC_SUCCESS if success, EC_ERROR_UNKNOWN otherwise.
+ */
+int rt1718s_frs_init(int port);
+
+
+/**
+ * Software reset RT1718S
+ *
+ * @param port		USB-C port
+ * @return EC_SUCCESS if success, EC_ERROR_UNKNOWN otherwise.
+ */
+int rt1718s_sw_reset(int port);
 #endif /* __CROS_EC_USB_PD_TCPM_MT6370_H */

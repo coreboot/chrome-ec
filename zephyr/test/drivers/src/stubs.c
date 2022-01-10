@@ -11,6 +11,7 @@
 #include "charger/isl923x_public.h"
 #include "charger/isl9241_public.h"
 #include "config.h"
+#include "fff.h"
 #include "hooks.h"
 #include "i2c/i2c.h"
 #include "power.h"
@@ -23,6 +24,13 @@
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
+#include "charge_state_v2.h"
+
+#include <logging/log.h>
+LOG_MODULE_REGISTER(stubs);
+
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
 /* All of these definitions are just to get the test to link. None of these
  * functions are useful or behave as they should. Please remove them once the
@@ -105,6 +113,56 @@ const enum battery_type DEFAULT_BATTERY_TYPE = BATTERY_LGC011;
 
 int board_set_active_charge_port(int port)
 {
+	int is_real_port = (port >= 0 &&
+			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
+	int i;
+
+	if (!is_real_port && port != CHARGE_PORT_NONE)
+		return EC_ERROR_INVAL;
+
+	if (port == CHARGE_PORT_NONE) {
+		CPRINTS("Disabling all charging port");
+
+		/* Disable all ports. */
+		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+			/*
+			 * Do not return early if one fails otherwise we can
+			 * get into a boot loop assertion failure.
+			 */
+			if (board_vbus_sink_enable(i, 0))
+				CPRINTS("Disabling p%d sink path failed.", i);
+		}
+
+		return EC_SUCCESS;
+	}
+
+	/* Check if the port is sourcing VBUS. */
+	if (board_is_sourcing_vbus(port)) {
+		CPRINTS("Skip enable p%d", port);
+		return EC_ERROR_INVAL;
+	}
+
+
+	CPRINTS("New charge port: p%d", port);
+
+	/*
+	 * Turn off the other ports' sink path FETs, before enabling the
+	 * requested charge port.
+	 */
+	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+		if (i == port)
+			continue;
+
+		if (board_vbus_sink_enable(i, 0))
+			CPRINTS("p%d: sink path disable failed.", i);
+	}
+
+	/* Enable requested charge port. */
+	if (board_vbus_sink_enable(port, 1)) {
+		CPRINTS("p%d: sink path enable failed.", port);
+		return EC_ERROR_UNKNOWN;
+	}
+
 	return EC_SUCCESS;
 }
 
@@ -116,6 +174,8 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 			    int charge_mv)
 {
+	charge_set_input_current_limit(
+	MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }
 
 struct tcpc_config_t tcpc_config[] = {
@@ -156,9 +216,16 @@ void board_set_ps8xxx_product_id(uint16_t product_id)
 	ps8xxx_product_id = product_id;
 }
 
+int board_vbus_sink_enable(int port, int enable)
+{
+	/* Both ports are controlled by PPC SN5S330 */
+	return ppc_vbus_sink_enable(port, enable);
+}
+
 int board_is_sourcing_vbus(int port)
 {
-	return 0;
+	/* Both ports are controlled by PPC SN5S330 */
+	return ppc_is_sourcing_vbus(port);
 }
 
 struct usb_mux usbc0_virtual_usb_mux = {
@@ -235,9 +302,7 @@ struct ppc_config_t ppc_chips[] = {
 BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == USBC_PORT_COUNT);
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
-void system_hibernate(uint32_t seconds, uint32_t microseconds)
-{
-}
+DEFINE_FAKE_VOID_FUNC(system_hibernate, uint32_t, uint32_t);
 
 uint16_t tcpc_get_alert_status(void)
 {
@@ -265,17 +330,53 @@ enum power_state power_chipset_init(void)
 	return POWER_G3;
 }
 
-enum power_state mock_state = POWER_G3;
+static enum power_state forced_state;
+static bool force_state;
 
-void set_mock_power_state(enum power_state state)
+void force_power_state(bool force, enum power_state state)
 {
-	mock_state = state;
-	task_wake(TASK_ID_CHIPSET);
+	forced_state = state;
+	force_state = force;
+
+	if (force) {
+		task_wake(TASK_ID_CHIPSET);
+		/*
+		 * TODO(b/201420132) - setting power state requires to wake up
+		 * TASK_ID_CHIPSET Sleep is required to run chipset task before
+		 * continuing with test
+		 */
+		k_msleep(1);
+	}
 }
 
 enum power_state power_handle_state(enum power_state state)
 {
-	return mock_state;
+	switch (state) {
+	case POWER_G3S5:
+	case POWER_S5S3:
+	case POWER_S3S0:
+	case POWER_S0S3:
+	case POWER_S3S5:
+	case POWER_S5G3:
+#ifdef CONFIG_POWER_S0IX
+	case POWER_S0ixS0:
+	case POWER_S0S0ix:
+#endif
+		/*
+		 * Wait for event in transition states to prevent dead loop in
+		 * chipset task
+		 */
+		task_wait_event(-1);
+		break;
+	default:
+		break;
+	}
+
+	if (force_state) {
+		state = forced_state;
+	}
+
+	return state;
 }
 
 void chipset_reset(enum chipset_shutdown_reason reason)
@@ -307,10 +408,24 @@ void tcpc_alert_event(enum gpio_signal signal)
 	schedule_deferred_pd_interrupt(port);
 }
 
+void ppc_alert(enum gpio_signal signal)
+{
+	switch (signal) {
+	case GPIO_USB_C0_PPC_INT_ODL:
+		ppc_chips[USBC_PORT_C0].drv->interrupt(USBC_PORT_C0);
+		break;
+	case GPIO_USB_C1_PPC_INT_ODL:
+		ppc_chips[USBC_PORT_C1].drv->interrupt(USBC_PORT_C1);
+		break;
+	default:
+		return;
+	}
+}
+
 /* TODO: This code should really be generic, and run based on something in
  * the dts.
  */
-static void usbc_interrupt_init(void)
+static void stubs_interrupt_init(void)
 {
 	/* Enable TCPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_TCPC_INT_ODL);
@@ -328,5 +443,12 @@ static void usbc_interrupt_init(void)
 	gpio_set_level(GPIO_USB_C1_TCPC_RST_L, 0);
 	msleep(PS8XXX_RESET_DELAY_MS);
 	gpio_set_level(GPIO_USB_C1_TCPC_RST_L, 1);
+
+	/* Enable PPC interrupts. */
+	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
+
+	/* Enable SwitchCap interrupt */
+	gpio_enable_interrupt(GPIO_SWITCHCAP_PG_INT_L);
 }
-DECLARE_HOOK(HOOK_INIT, usbc_interrupt_init, HOOK_PRIO_INIT_I2C + 1);
+DECLARE_HOOK(HOOK_INIT, stubs_interrupt_init, HOOK_PRIO_INIT_I2C + 1);

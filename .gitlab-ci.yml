@@ -24,7 +24,7 @@ cache:
     - .cache/pip
     - venv/
     - modules/
-    - zephyr/main
+    - zephyr/
 
 
 # The directory structure is:
@@ -34,11 +34,9 @@ cache:
 before_script:
   - export MODULES_DIR="$CI_PROJECT_DIR/modules"
   - mkdir -p "${MODULES_DIR}"
-  - export ZEPHYR_ROOT="$CI_PROJECT_DIR/zephyr/main"
-  - mkdir -p "${ZEPHYR_ROOT}"
-  - test -d "${ZEPHYR_ROOT}/v2.6" || git clone --depth 1 -b chromeos-v2.6 https://chromium.googlesource.com/chromiumos/third_party/zephyr "${ZEPHYR_ROOT}/v2.6"
-  - test -d "${ZEPHYR_ROOT}/v2.7" || git clone --depth 1 -b chromeos-v2.7 https://chromium.googlesource.com/chromiumos/third_party/zephyr "${ZEPHYR_ROOT}/v2.7"
-  - test -d "${ZEPHYR_ROOT}/v2.8" || git clone --depth 1 -b chromeos-v2.8 https://chromium.googlesource.com/chromiumos/third_party/zephyr "${ZEPHYR_ROOT}/v2.8"
+  - export ZEPHYR_BASE="${CI_PROJECT_DIR}/zephyr/main"
+  - mkdir -p "${ZEPHYR_BASE}"
+  - test -d "${ZEPHYR_BASE}/.git" || git clone --depth 1 -b main https://chromium.googlesource.com/chromiumos/third_party/zephyr "${ZEPHYR_BASE}"
   - test -d "${MODULES_DIR}/cmsis" || git clone --depth 1 -b chromeos-main https://chromium.googlesource.com/chromiumos/third_party/zephyr/cmsis "${MODULES_DIR}/cmsis"
   - test -d "${MODULES_DIR}/hal_stm32" || git clone --depth 1 -b chromeos-main https://chromium.googlesource.com/chromiumos/third_party/zephyr/hal_stm32 "${MODULES_DIR}/hal_stm32"
   - test -d "${MODULES_DIR}/nanopb" || git clone --depth 1 -b main https://chromium.googlesource.com/chromiumos/third_party/zephyr/nanopb "${MODULES_DIR}/nanopb"
@@ -46,9 +44,8 @@ before_script:
   - ln -s "$(pwd)" "${MODULES_DIR}/ec"
   - python3 -V  # Print out python version for debugging
   - python3 -m pip install zephyr/zmake --user
-  - python3 -m pip install pyyaml
+  - python3 -m pip install pyyaml packaging
   - export BUILD_DIR=build
-  - export ZEPHYR_DIR=/zephyr
   - export PATH="$PATH:$HOME/.local/bin"
   - export PYTHONIOENCODING=utf-8
   - export EC_DIR=/builds/zephyr-ec/ec
@@ -62,10 +59,10 @@ seed_cache:
       - .cache/pip
       - venv/
       - modules/
-      - zephyr/main
+      - zephyr/
     policy: push
   script:
-    - ls "${MODULES_DIR}" "${ZEPHYR_ROOT}"
+    - ls "${MODULES_DIR}" "${ZEPHYR_BASE}"
 
 # Users of this template must set:
 # $PROJECT to the project to build. E.g., "lazor"
@@ -73,7 +70,7 @@ seed_cache:
   stage: build
   needs: ["seed_cache"]
   script:
-    - zmake --zephyr-root "${ZEPHYR_ROOT}"
+    - zmake --zephyr-base "${ZEPHYR_BASE}"
       --modules-dir "${MODULES_DIR}" -l DEBUG configure -b
       -B "${BUILD_DIR}/${PROJECT}" -t ${TOOLCHAIN:-zephyr}
       "${PROJECT}"
@@ -92,17 +89,48 @@ seed_cache:
 
 # Users of this template must set:
 # $PROJECT to the project to build. E.g., "lazor"
+# Builds the project with coverage enabled, removes the non-ec files.
+# Then merges with the tests, excludes all files not used by this project,
+# and generates a report.
 .coverage_template: &coverage_template
   stage: test
-  needs: ["merged_coverage", "zephyr_coverage"]
+  needs: ["merged_coverage", "zephyr_coverage", "twister_coverage"]
   script:
-    - grep "SF:" "build/zcoverage/${PROJECT}.info" | sort -u | sed -e 's|^SF:||' | xargs lcov -o build/no_zephyr_${PROJECT}.info -e build/merged_no_zephyr.info
-    - /usr/bin/genhtml -q -o build/no_zephyr_${PROJECT}_rpt -t "${PROJECT} coverage w/o zephyr" -p ${EC_DIR} -s build/no_zephyr_${PROJECT}.info
+    - zmake --zephyr-base "${ZEPHYR_BASE}"
+      --modules-dir "${MODULES_DIR}" -l DEBUG configure -b --coverage
+      -B "${BUILD_DIR}/${PROJECT}" -t ${TOOLCHAIN:-zephyr}
+      "${PROJECT}"
+    - lcov -o "${BUILD_DIR}/${PROJECT}/merged_twister.info" -a "${BUILD_DIR}/${PROJECT}/lcov.info" -a "${BUILD_DIR}/zephyr_codecov/fixed.info"
+    - lcov -o "${BUILD_DIR}/${PROJECT}/merged_twister_no_ec.info" -e "${BUILD_DIR}/${PROJECT}/merged_twister.info" "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
+    - grep "SF:" "${BUILD_DIR}/${PROJECT}/lcov.info" | sort -u |
+      sed -e 's|^SF:||' | xargs lcov
+      -o "${BUILD_DIR}/${PROJECT}/filtered_twister.info"
+      -e "${BUILD_DIR}/${PROJECT}/merged_twister_no_ec.info"
+    - /usr/bin/genhtml -q -o "${BUILD_DIR}/${PROJECT}/filtered_twister_rpt"
+      -t "${PROJECT} coverage of twister tests"
+      -s "${BUILD_DIR}/${PROJECT}/filtered_twister.info"
+    - lcov -o "${BUILD_DIR}/${PROJECT}/merged.info"
+      -a "${BUILD_DIR}/${PROJECT}/lcov.info" -a build/merged.info
+    - lcov -o "${BUILD_DIR}/${PROJECT}/no_zephyr.info"
+      -r "${BUILD_DIR}/${PROJECT}/lcov.info" "${ZEPHYR_BASE}/**"
+      "${MODULES_DIR}/*" "${EC_DIR}/zephyr/drivers/*" '/usr/include/x86_64-linux-gnu/*'
+    - lcov -o "${BUILD_DIR}/${PROJECT}/merged_no_zephyr.info"
+      -r "${BUILD_DIR}/${PROJECT}/merged.info" "${ZEPHYR_BASE}/**"
+      "${MODULES_DIR}/*" "${EC_DIR}/zephyr/drivers/*" '/usr/include/x86_64-linux-gnu/*'
+    - grep "SF:" "${BUILD_DIR}/${PROJECT}/no_zephyr.info" | sort -u |
+      sed -e 's|^SF:||' | xargs lcov
+      -o "${BUILD_DIR}/${PROJECT}/filtered_no_zephyr.info"
+      -e "${BUILD_DIR}/${PROJECT}/merged_no_zephyr.info"
+    - /usr/bin/genhtml -q -o "${BUILD_DIR}/${PROJECT}/filtered_no_zephyr_rpt"
+      -t "${PROJECT} coverage w/o zephyr"
+      -p ${EC_DIR}
+      -s "${BUILD_DIR}/${PROJECT}/filtered_no_zephyr.info"
   artifacts:
     paths:
-      - build/*.info
-      - build/*_rpt
+      - build/${PROJECT}/*.info
+      - build/${PROJECT}/*_rpt
     expire_in: 1 week
+    when: always
   coverage: '/lines\.*: \d+\.\d+%/'
 
 delbin:
@@ -114,6 +142,11 @@ hayato:
   variables:
     PROJECT: "hayato"
   <<: *build_template
+
+hayato_coverage:
+  variables:
+    PROJECT: "hayato"
+  <<: *coverage_template
 
 herobrine_npcx9:
   variables:
@@ -130,6 +163,26 @@ it8xxx2_evb:
     PROJECT: "it8xxx2_evb"
   <<: *build_template
 
+kingler:
+  variables:
+    PROJECT: "kingler"
+  <<: *build_template
+
+kingler_coverage:
+  variables:
+    PROJECT: "kingler"
+  <<: *coverage_template
+
+krabby:
+  variables:
+    PROJECT: "krabby"
+  <<: *build_template
+
+krabby_coverage:
+  variables:
+    PROJECT: "krabby"
+  <<: *coverage_template
+
 lazor:
   variables:
     PROJECT: "lazor"
@@ -140,6 +193,16 @@ native_posix:
     PROJECT: "posix-ec"
     TOOLCHAIN: "host"
   <<: *build_template
+
+skyrim:
+  variables:
+    PROJECT: "skyrim"
+  <<: *build_template
+
+skyrim_coverage:
+  variables:
+    PROJECT: "skyrim"
+  <<: *coverage_template
 
 volteer:
   variables:
@@ -165,7 +228,7 @@ zephyr_coverage:
   stage: test
   needs: ["seed_cache"]
   script:
-    - zmake --zephyr-root "${ZEPHYR_ROOT}"
+    - zmake --zephyr-base "${ZEPHYR_BASE}"
       --modules-dir "${MODULES_DIR}" -l DEBUG coverage
       "${BUILD_DIR}/zcoverage"
   artifacts:
@@ -180,7 +243,12 @@ merged_coverage:
   needs: ["ec_coverage", "zephyr_coverage"]
   script:
     - lcov -o build/merged.info -a build/coverage/lcov.info -a build/zcoverage/lcov.info
-    - lcov -o build/merged_no_zephyr.info -r build/merged.info "${ZEPHYR_ROOT}/*" "${MODULES_DIR}/*" "zephyr/drivers/*" '/usr/include/x86_64-linux-gnu/*'
+    - lcov -o build/merged_no_zephyr.info -r build/merged.info
+      "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
+      "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
+      "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
+      "${EC_DIR}/zephyr/projects/**"
+      '/usr/include/x86_64-linux-gnu/**'
   artifacts:
     paths:
       - build/*.info
@@ -192,6 +260,31 @@ testall:
   stage: test
   needs: ["seed_cache"]
   script:
-    - zmake --zephyr-root "${ZEPHYR_ROOT}"
+    - zmake --zephyr-base "${ZEPHYR_BASE}"
       --modules-dir "${MODULES_DIR}" -l DEBUG testall
 
+twister_coverage:
+  stage: test
+  needs: ["seed_cache"]
+  script:
+    - mkdir -p build/zephyr_codecov
+    - for commitid in $(cd "${ZEPHYR_BASE}" ; git fetch --depth=100 ; git log | awk '/GitOrigin-RevId:/ {print $2}') ; do
+        echo "COMMITID = ${commitid?}" ;
+        if wget -O /tmp/coverage.html "https://codecov.io/gh/zephyrproject-rtos/zephyr/commit/${commitid?}/build" ; then
+          downloadurl=$(sed -e '/download\/build/!d' -e 's|^.*href="|https://codecov.io|' -e 's|".*$||' /tmp/coverage.html | head -1) ;
+          echo "DOWNLOADURL = ${downloadurl?}" ;
+          wget -O build/zephyr_codecov/merged.info.raw "${downloadurl?}" ;
+          sed <build/zephyr_codecov/merged.info.raw >build/zephyr_codecov/merged.info
+            -e '1,/<<<<<< network/d' -e '/<<<<<< EOF/,$d' ;
+          sed <build/zephyr_codecov/merged.info >build/zephyr_codecov/fixed.info
+            -e "s|/__w/zephyr/zephyr|${ZEPHYR_BASE}|"
+            -e "s|/__w/zephyr/modules/hal/cmsis|${MODULES_DIR}/cmsis|"
+            -e "s|/__w/zephyr/modules|${MODULES_DIR}|" ;
+          break ;
+        fi ;
+      done
+    - lcov --summary build/zephyr_codecov/fixed.info
+  artifacts:
+    paths:
+      - build/zephyr_codecov/fixed.info
+    expire_in: 1 week

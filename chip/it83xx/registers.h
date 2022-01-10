@@ -1456,7 +1456,7 @@ enum bram_indices {
 	BRAM_IDX_EC_LOG_STATUS = 0xc,
 
 	/* offset 0x0d ~ 0x1f are reserved for future use. */
-#if defined(CONFIG_HOSTCMD_LPC) || defined(CONFIG_HOSTCMD_ESPI)
+#if defined(CONFIG_HOST_INTERFACE_LPC) || defined(CONFIG_HOST_INTERFACE_ESPI)
 	/*
 	 * offset 0x20 ~ 0x7b are reserved for future use.
 	 * (apply to x86 platform)
@@ -1508,7 +1508,7 @@ enum bram_ec_logs_status {
  * And they will be used to save panic data if the GPG1 reset mechanism
  * is enabled.
  */
-#if defined(CONFIG_HOSTCMD_LPC) || defined(CONFIG_HOSTCMD_ESPI)
+#if defined(CONFIG_HOST_INTERFACE_LPC) || defined(CONFIG_HOST_INTERFACE_ESPI)
 /* offset 0x80 ~ 0xbf */
 #define IT83XX_BRAM_BANK1(i)    REG8(IT83XX_BRAM_BASE + 0x80 + i)
 #else
@@ -1552,7 +1552,20 @@ enum bram_ec_logs_status {
 #define IT83XX_I2C_IDR(ch)           REG8(IT83XX_I2C_BASE+0x06+(ch << 7))
 #define IT83XX_I2C_TOS(ch)           REG8(IT83XX_I2C_BASE+0x07+(ch << 7))
 #define IT83XX_I2C_CLK_STR           (1 << 7)
+#define IT83XX_I2C_STR2(ch)          REG8(IT83XX_I2C_BASE+0x12+(ch << 7))
+#define IT83XX_I2C_NST(ch)           REG8(IT83XX_I2C_BASE+0x13+(ch << 7))
+#define IT83XX_I2C_NST_CNS           BIT(7)
+#define IT83XX_I2C_NST_ID_NACK       BIT(3)
+#define IT83XX_I2C_TO_ARB_ST(ch)     REG8(IT83XX_I2C_BASE+0x18+(ch << 7))
+#define IT83XX_I2C_ERR_ST(ch)        REG8(IT83XX_I2C_BASE+0x19+(ch << 7))
+#define IT83XX_I2C_ERR_ST_DEV1_EIRQ  BIT(0)
+#define IT83XX_I2C_FST(ch)           REG8(IT83XX_I2C_BASE+0x1b+(ch << 7))
+#define IT83XX_I2C_FST_DEV1_IRQ      BIT(4)
+#define IT83XX_I2C_EM(ch)            REG8(IT83XX_I2C_BASE+0x1c+(ch << 7))
+#define IT83XX_I2C_EM_DEV1_IRQ       BIT(4)
+#define IT83XX_I2C_MODE_SEL(ch)      REG8(IT83XX_I2C_BASE+0x1d+(ch << 7))
 #define IT83XX_I2C_IDR2(ch)          REG8(IT83XX_I2C_BASE+0x1F+(ch << 7))
+#define IT83XX_I2C_CTR2(ch)          REG8(IT83XX_I2C_BASE+0x20+(ch << 7))
 #define IT83XX_I2C_RAMHA(ch)         REG8(IT83XX_I2C_BASE+0x23+(ch << 7))
 #define IT83XX_I2C_RAMLA(ch)         REG8(IT83XX_I2C_BASE+0x24+(ch << 7))
 #define IT83XX_I2C_RAMHA2(ch)        REG8(IT83XX_I2C_BASE+0x2B+(ch << 7))

@@ -76,7 +76,7 @@
 /* Enable control of SPI over USB */
 #define CONFIG_USB_SPI
 #define CONFIG_SPI_CONTROLLER
-#define CONFIG_SPI_FLASH_PORT    0  /* First SPI master port */
+#define CONFIG_SPI_FLASH_PORT    0  /* First SPI controller port */
 
 /* This is not actually an EC so disable some features. */
 #undef CONFIG_WATCHDOG_HELP
@@ -120,6 +120,7 @@ enum usb_strings {
 	USB_STR_PRODUCT,
 	USB_STR_SERIALNO,
 	USB_STR_VERSION,
+	USB_STR_SPI_NAME,
 	USB_STR_I2C_NAME,
 	USB_STR_USART4_STREAM_NAME,
 	USB_STR_CONSOLE_NAME,

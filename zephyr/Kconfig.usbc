@@ -33,6 +33,7 @@ config PLATFORM_EC_USB_PORT_POWER_DUMB_CUSTOM_HOOK
 menuconfig PLATFORM_EC_USBC
 	bool "USB Type-C"
 	default y if PLATFORM_EC_BATTERY
+	depends on PLATFORM_EC_MATH_UTIL
 	help
 	  Enable this to support various USB Type-C features chosen by the
 	  options below. USB-C is widely used on modern Chromebooks and the EC's
@@ -392,8 +393,14 @@ config PLATFORM_EC_USB_PD_VBUS_MEASURE_TCPC
 config PLATFORM_EC_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
 	bool "VBUS on each port is measured using an ADC channel"
 	help
-	  Enable this is there is a separate ADC channel for each USB-C VBUS
+	  Enable this if there is a separate ADC channel for each USB-C VBUS
 	  voltage.
+
+config PLATFORM_EC_USB_PD_VBUS_MEASURE_BY_BOARD
+	bool "VBUS on each port is measured per board specific"
+	help
+	  Enable this if there are different VBUS measurement approaches on
+	  the board, and also `board_get_vbus_voltage()` has to be implemented.
 
 endchoice  # Measuring VBUS voltage
 
@@ -450,7 +457,6 @@ config PLATFORM_EC_USB_PD_FRS_PPC
 
 config PLATFORM_EC_USB_PD_FRS_TCPC
 	bool "TCPC"
-	depends on PLATFORM_EC_USBC_TCPC
 	help
 	  Enable this if the Fast Role Swap trigger is implemented in the
 	  Type-C Port Controller (TCPC).
@@ -535,6 +541,14 @@ config PLATFORM_EC_USB_PD_ALT_MODE
 	  differential pairs. If all are used for the alternate mode, then USB
 	  transmission is not available at all while in this mode.
 
+config PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY
+	bool "USB Power delivery requires AP to enter alternate modes"
+	depends on PLATFORM_EC_USB_PD_ALT_MODE
+	help
+	  Do not enter USB PD alternate modes or USB4 automatically, Wait for
+	  the AP to direct the EC to enter a mode. This requires AP software
+	  support.
+
 config PLATFORM_EC_USB_PD_ALT_MODE_DFP
 	bool "Downward Facing Port support"
 	default y
@@ -584,6 +598,14 @@ config PLATFORM_EC_USB_PD_DP_HPD_GPIO_CUSTOM
 	    void svdm_set_hpd_gpio(int port, int enable);
 
 	    int svdm_get_hpd_gpio(int port);
+
+config PLATFORM_EC_USB_PD_DATA_RESET_MSG
+	bool "Enable the PD Data Reset Message."
+	depends on PLATFORM_EC_USB_PD_REV30
+	help
+	  Enable this to support the Data Reset PD message flows. This is
+	  mandatory for products supporting USB4 but optional for other PD 3.0
+	  products.
 
 choice "VBUS detection method"
 	prompt "Select the method to detect VBUS"
@@ -830,6 +852,30 @@ config PLATFORM_EC_USBC_PPC_AOZ1380
 	  provide all the functionality and protection needed for sourcing
 	  and sinking current through a USB Type-C port with PD capability.
 
+config PLATFORM_EC_USBC_PPC_RT1718S
+	bool "Richtek RT1718S TCPC/PPC"
+	select PLATFORM_EC_USB_PD_TCPM_RT1718S
+	select PLATFORM_EC_USBC_OCP
+	select PLATFORM_EC_USBC_PPC_POLARITY
+	select PLATFORM_EC_USBC_PPC_SBU
+	select PLATFORM_EC_USBC_PPC_VCONN if PLATFORM_EC_USBC_VCONN
+	help
+	  RT1718S integrates several high voltage protection switch of
+	  SBU1/SBU2/DP/DM from high voltage VBUS touching the adjacent pins. The
+	  AMR of SBU OVP switch is 24V. High Voltage USB 2.0 Switches also
+	  support HV DCP & fast charging protocols. The GPIOs in RT1718S can
+	  be also configured to control system block such as USB3.0 to DP Mux
+	  for alternated mode usage. VCONN Switch with OVP/OCP/RVP/RCP/UVP
+	  protection is also integrated.
+
+config PLATFORM_EC_USBC_PPC_KTU1125
+	bool "Kinetic KTU1125 Power Path Controller"
+	select PLATFORM_EC_USBC_OCP
+	help
+	  KTU1125 integrates power switches to provide a compact protection
+	  solution to USB Type-C applications by eliminating the dependence
+	  on external components.
+
 config PLATFORM_EC_USBC_PPC_NX20P3483
 	bool "NX20P3483 High Voltage Sink/Source Combo Switch"
 	select PLATFORM_EC_USBC_OCP
@@ -869,6 +915,14 @@ config PLATFORM_EC_USBC_PPC_SYV682C
 	  The C version of this chip won't block I2C accessing to the CONTROL4
 	  rer (to on/off Vconn) when smart discahrge is enabled. This allows us
 	  to re-enable the smart discharge on boards using SYV682C.
+
+config PLATFORM_EC_USBC_PPC_SYV682X_HV_ILIM
+	int "SYV682X high-voltage current limit"
+	depends on PLATFORM_EC_USBC_PPC_SYV682X
+	default 2
+	help
+	  SYV682x PPC high voltage power path current limit. Valid values are
+	  0 (1.25A), 1 (1.75A), 2 (3.3A), or 3 (5.5A). See syv682x.h.
 
 config PLATFORM_EC_USBC_PPC_SYV682X_NO_CC
 	bool "SYV682X does not pass through CC"
@@ -932,6 +986,7 @@ choice "Type-C Port Manager (TCPM)"
 
 config PLATFORM_EC_USB_PD_TCPM_TCPCI
 	bool "Use TCPCI"
+	select PLATFORM_EC_USBC_OCP
 	help
 	  Enable a TCPC compatible with the Type-C Port Controller Interface
 	  (TCPCI) Specification. This driver supports both Rev1 v1.2 and Rev2
@@ -946,7 +1001,6 @@ config PLATFORM_EC_USB_PD_TCPM_TCPCI
 #  CONFIG_USB_PD_TCPM_ANX3429
 #  CONFIG_USB_PD_TCPM_ANX740X
 #  CONFIG_USB_PD_TCPM_ANX741X
-#  CONFIG_USB_PD_TCPM_ANX7447
 #  CONFIG_USB_PD_TCPM_ANX7688
 #  CONFIG_USB_PD_TCPM_MT6370
 #  CONFIG_USB_PD_TCPM_RAA489000
@@ -1122,6 +1176,40 @@ config PLATFORM_EC_USB_PD_TCPM_MULTI_PS8XXX
 	     PS8805_PRODUCT_ID
 	     PS8815_PRODUCT_ID
 
+config PLATFORM_EC_USB_PD_TCPM_ANX7447
+	bool "Analogix ANX7447 USB-C Gen 2 Type-C Port Controller"
+	select PLATFORM_EC_USB_PD_TCPM_MUX
+	help
+	  The Analogix ANX7447 is a USB Type-C Port Controller (TCPC)
+	  for USB Type-C v1.2 Host, USB3.1 Gen2 and DisplayPort applications.
+	  It has an on-chip microcontroller (OCM) to manage the signal
+	  switching. It supports Power Delivery Rev. 3.0 and the DisplayPort
+	  Alt Mode version 1.4a HBR3.
+
+	  Supported chips are:
+	     ANX3447
+	     ANX7447
+
+if PLATFORM_EC_USB_PD_TCPM_ANX7447
+config PLATFORM_EC_USB_PD_TCPM_ANX7447_AUX_PU_PD
+	bool "Enable ANX77447 AUX_N internal PU, and AUX_P internal PD."
+	depends on PLATFORM_EC_USB_PD_TCPM_ANX7447
+	help
+	  Use this config option to enable and internal pullup resistor on the
+	  AUX_N and internal pulldown resistor on the AUX_P line. Only use this
+	  config option if there are no external pu/pd resistors on these
+	  signals. This configuration should be used to avoid noise issues on
+	  the DDI1_AUX_N & DDI1_AUX_P signals (b/122873171)
+
+config PLATFORM_EC_USB_PD_TCPM_ANX7447_OCM_ERASE_COMMAND
+	bool "Enable console command to erase ANX7447 OCM flash"
+	depends on PLATFORM_EC_USB_PD_TCPM_ANX7447
+	help
+	  Adds an EC console command to erase the ANX7447 OCM flash.
+	  Note: this is intended to be a temporary option and won't be needed
+	  when ANX7447 are put on boards with OCM already erased
+endif # PLATFORM_EC_USB_PD_TCPM_ANX7447
+
 config PLATFORM_EC_USB_PD_TCPM_NCT38XX
 	bool "Nuvoton 3807/8 Single/Dual Port Controller with Power Delivery"
 	help
@@ -1180,8 +1268,15 @@ config PLATFORM_EC_USB_PD_TCPM_PS8815_FORCE_DID
 	  chip version register and force the correct device ID.
 endif # PLATFORM_EC_USB_PD_TCPM_PS8815
 
+config PLATFORM_EC_USB_PD_TCPM_RAA489000
+  bool "Renesas RAA489000 Type-C port controller and battery charger"
+  select PLATFORM_EC_USB_PD_PPC
+  help
+    Build drivers for the RAA489000, a combined battery charger and USB-C
+    TCPCI.
+
 config PLATFORM_EC_USB_PD_TCPM_RT1715
-	bool "Ricktek RT1715 Type-C Port Controller"
+	bool "Richtek RT1715 Type-C Port Controller"
 	help
 	  The RT1715 is a USB Type-C controller, integrating a complete Type-C
 	  Transceiver including the Rp and Rd resistors. It does the USB Type-C
@@ -1189,6 +1284,16 @@ config PLATFORM_EC_USB_PD_TCPM_RT1715
 	  physical layer of the USB BMC power delivery protocol to allow up to
 	  100W of power and role swap. The BMC PD block enables full support
 	  for alternative interfaces of the Type-C specification.
+
+config PLATFORM_EC_USB_PD_TCPM_RT1718S
+	bool "Richtek RT1718S Type-C Port Controller"
+	select PLATFORM_EC_USBC_PPC_RT17182S
+	help
+	  The RT1718S is an integrated USB Type-C TCPC controller which
+	  includes IEC-61000-4-2 ESD protection cell for CC/SBU/DP/DM.
+	  High voltage USB 2.0 switches also support HV DCP & fast charging
+	  protocols. RT1718S supports TCPC Version 1.2, and Battery Charging
+	  version 1.2 (BC1.2).
 
 config PLATFORM_EC_USB_PD_TCPM_TUSB422
 	bool "TI TUSB422 Port Control with USB PD"
@@ -1240,6 +1345,14 @@ config PLATFORM_EC_USB_PD_TCPM_DRIVER_IT8XXX2
 	  (provider and consumer) and Fast Role Swap detection.
 
 endif  # PLATFORM_EC_USBC_PPC
+
+config PLATFORM_EC_USB_PD_PULLUP
+	int "Default source Rp value"
+	default 1
+	help
+	  Default pull-up value on the USB-C ports when they are used as source.
+	  Valid values are 0 (USB default current), 1 (1.5A), and 2 (3.0A). See
+	  enum tcpc_rp_value.
 
 config PLATFORM_EC_USB_PD_ONLY_FIXED_PDOS
 	bool "Only support FIXED type PDOs"

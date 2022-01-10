@@ -209,6 +209,17 @@ config PLATFORM_EC_CHARGER_BQ25720
 	  wide range of input power sources are supported such as high
 	  voltage USB-C power delivery.
 
+config PLATFORM_EC_CHARGER_RAA489000
+	bool "Use the RAA489000 charger"
+	depends on PLATFORM_EC_I2C
+	depends on PLATFORM_EC_CHARGER_SENSE_RESISTOR > 0
+	depends on PLATFORM_EC_CHARGER_SENSE_RESISTOR_AC > 0
+	select PLATFORM_EC_CHARGER_NARROW_VDC
+	select PLATFORM_EC_CHARGER_TRICKLE
+	help
+	  Enables the driver for the Renesas RAA489000 battery charger
+	  with integrated USB-C TCPC.
+
 config PLATFORM_EC_CHARGER_DISCHARGE_ON_AC
 	bool "Board supports discharge mode"
 	help
@@ -270,6 +281,25 @@ config PLATFORM_EC_CHARGER_BQ25710_CMP_REF_1P2
 	  voltage to 1.2 V. The power-on default is 2.3 V. This must be
 	  enabled if the board was designed for 1.2 V instead of 2.3 V.
 
+config PLATFORM_EC_CHARGER_BQ25710_PKPWR_TOVLD_DEG_CUSTOM
+	bool "PKPWR_TOVLD_DEG override"
+	default n
+	depends on PLATFORM_EC_CHARGER_BQ25710 || PLATFORM_EC_CHARGER_BQ25720
+	help
+	  Enable customizing the charger's PKPWR_TOVLD_DEG period.
+
+config PLATFORM_EC_CHARGER_BQ25710_PKPWR_TOVLD_DEG
+	int "PKPWR_TOVLD_DEG period"
+	range 0 3
+	default 0
+	depends on PLATFORM_EC_CHARGER_BQ25710 || PLATFORM_EC_CHARGER_BQ25720
+	help
+	  Sets the input overload time when in peak power mode
+	  (PKPWR_TOVLD_DEG). This limits how long the charger can draw
+	  ILIM2 from the adapter. This is a 2 bit field. On the bq25710
+	  1 ms to 20 ms can be encoded. On the bq25720 1 ms to 10 ms can
+	  be encoded.
+
 config PLATFORM_EC_CHARGER_BQ25710_EN_ACOC
 	bool "Enable AC over-current protection"
 	default n
@@ -324,6 +354,15 @@ config PLATFORM_EC_CHARGER_BQ25710_PP_ACOK
 	  Sets the PP_ACOK in Prochot Option 1 register. This causes
 	  PROCHOT to be pulsed when the AC adapter is removed.
 
+config PLATFORM_EC_CHARGER_BQ25720_PP_IDCHG2
+	bool "Enable PROCHOT on battery current exceeding IDCHG_TH2"
+	default n
+	depends on PLATFORM_EC_CHARGER_BQ25720
+	help
+	  Sets the PP_IDCHG2 bit in Charge Option 4 register. This
+	  causes PROCHOT to be pulsed when the battery discharge current
+	  exceeds IDCHG_TH2.
+
 config PLATFORM_EC_CHARGER_BQ25710_SENSE_RESISTOR
 	int "Value of the charge sense-resistor, in mOhms"
 	default 10
@@ -341,6 +380,25 @@ config PLATFORM_EC_CHARGER_BQ25710_SENSE_RESISTOR_AC
 	  The input sense-resistor is used to detect the input current from the
 	  external AC power supply. Its value must be known for the calculation
 	  to be correct. The value is typically around 10 mOhms.
+
+config PLATFORM_EC_CHARGER_BQ257X0_ILIM2_VTH_CUSTOM
+	bool "ILIM2_VTH override"
+	depends on PLATFORM_EC_CHARGER_BQ25710 || PLATFORM_EC_CHARGER_BQ25720
+	help
+	  Enable customizing the charhger's ILIM2_VTH threshold
+
+config PLATFORM_EC_CHARGER_BQ257X0_ILIM2_VTH
+	int "ILIM2 threshold"
+	range 1 30
+	default 9
+	depends on PLATFORM_EC_CHARGER_BQ257X0_ILIM2_VTH_CUSTOM
+	help
+	  Set percentage of IDPM as threshold. ICRIT threshold is set to be 110%
+	  of ILIM2. Input overcurrent protection (ACOC) threshold is also 1.33x
+	  or 2x of ILIM2 (1.33x or 2x based on ACOC limit field).
+	  1  - 25: 110% - 230%, step is 5%.
+	  26 - 30: 250% - 450%, step is 50%.
+	  31: Out of range (ignored).
 
 config PLATFORM_EC_CHARGER_BQ25720_VSYS_TH2_CUSTOM
 	bool "VSYS_TH2 override"
@@ -457,6 +515,14 @@ config PLATFORM_EC_CHARGER_NARROW_VDC
 
 	  This should be enabled by charger drivers which need it. It cannot
 	  be set otherwise, even in prj.conf
+
+config PLATFORM_EC_CHARGER_TRICKLE
+	bool
+	help
+	  Select this if the charger allows trickle charging, which allows
+	  the battery to charge with a minimum voltage.
+
+	  This should be enabled by charger drivers which need it.
 
 config PLATFORM_EC_CHARGER_OTG_SUPPORTED
 	bool
@@ -602,6 +668,12 @@ config PLATFORM_EC_CONSOLE_CMD_CHGRAMP
 	      OC 1: s0 oc_det0 icl0
 	      OC 2: s0 oc_det0 icl0
 
+config PLATFORM_EC_CONSOLE_CMD_CHARGER_DUMP
+	bool "Console command: charger dump"
+	help
+	  Enable the "charger dump" subcommand. If the charger driver provides
+	  a dump_registers() function, this command shows its register dump.
+
 endif # PLATFORM_EC_CHARGER
 
 config PLATFORM_EC_BATTERY_CRITICAL_SHUTDOWN_CUT_OFF
@@ -689,7 +761,7 @@ choice PLATFORM_EC_BATTERY_API
 	  Select the battery API version. V2 is required on dual-battery-systems
 	  and hostless bases with a battery. V1 should not be used except for
 	  testing on legacy boards.
-      
+
 config PLATFORM_EC_BATTERY_V1
 	bool "Enable battery API v1"
 	depends on !PLATFORM_EC_BATTERY_V2
@@ -703,6 +775,14 @@ config PLATFORM_EC_BATTERY_V2
 	  This enables battery API version 2. This version can support multiple
 	  batteries and full size string values in the battery information
 	  including manufacturer, model, chemistry.
+
+config PLATFORM_EC_BATTERY_TYPE_NO_AUTO_DETECT
+	bool "Disable battery auto detection"
+	help
+	  Enable this option when the battery type cannot be distinguished
+	  based on only the manufacturer and device name. Your board code
+	  must call battery_set_fixed_battery_type() to set the fixed battery
+	  type, during board initialization.
 
 endchoice
 

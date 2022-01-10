@@ -8,6 +8,11 @@
 #include <freq.h>
 
 / {
+	chosen {
+		cros-ec,adc = &adc0;
+		cros-ec,espi = &espi0;
+	};
+
 	aliases {
 		bmi260-int = &ms_bmi260_accel;
 		bmi160-int = &ms_bmi160_accel;
@@ -20,12 +25,10 @@
 		ec_batt_pres_odl {
 			gpios = <&gpio0 1 GPIO_INPUT>;
 			enum-name = "GPIO_BATT_PRES_ODL";
-			label = "EC_BATT_PRES_ODL";
 		};
 		acok_od {
 			gpios = <&gpio0 2 GPIO_INPUT>;
 			enum-name = "GPIO_AC_PRESENT";
-			label = "ACOK_OD";
 		};
 		/* In test WP is output because CBI use it, but it is also
 		 * input, because test_all_tags set it to enable write
@@ -35,54 +38,56 @@
 			#gpio-cells = <0>;
 			gpios = <&gpio0 3 (GPIO_INPUT | GPIO_OUTPUT)>;
 			enum-name = "GPIO_WP_L";
-			label = "WP_L";
 		};
 		pg_ec_dsw_pwrok {
 			gpios = <&gpio0 4 GPIO_INPUT>;
 			enum-name = "GPIO_PG_EC_DSW_PWROK";
-			label = "PG_EC_DSW_PWROK";
 		};
 		ec_pch_wake_odl {
 			gpios = <&gpio0 5 GPIO_OUT_HIGH>;
 			enum-name = "GPIO_EC_PCH_WAKE_ODL";
-			label = "EC_PCH_WAKE_ODL";
 		};
 		/* Setup USB C1 pin as output to check their state in test */
 		usb_c1_ls_en {
-			gpios = <&gpio0 6 (GPIO_INPUT | GPIO_PULL_UP |
+			gpios = <&gpio0 6 (GPIO_INPUT_PULL_UP |
 					   GPIO_OUTPUT)>;
 			enum-name = "GPIO_USB_C1_LS_EN";
-			label = "USB_C1_LS_EN";
 		};
 		usb_c1_rt_rst_odl {
 			gpios = <&gpio0 7 (GPIO_OUTPUT | GPIO_INPUT)>;
 			enum-name = "GPIO_USB_C1_RT_RST_ODL";
-			label = "USB_C1_RT_RST_ODL";
 		};
 		gpio_usb_c1_frs_en: usb_c1_frs_en {
 			gpios = <&gpio0 8 (GPIO_OUT_LOW)>;
 			enum-name = "GPIO_USB_C1_FRS_EN";
-			label = "USB_C1_FRS_EN";
 		};
 		usb_c0_tcpc_int_odl: usb_c0_tcpc_int_odl {
 			gpios = <&gpio0 9 GPIO_INPUT>;
 			enum-name = "GPIO_USB_C0_TCPC_INT_ODL";
-			label = "USB_C0_TCPC_INT_ODL";
 		};
 		usb_c1_tcpc_int_odl: usb_c1_tcpc_int_odl {
 			gpios = <&gpio0 10 GPIO_INPUT>;
 			enum-name = "GPIO_USB_C1_TCPC_INT_ODL";
-			label = "USB_C1_TCPC_INT_ODL";
 		};
 		usb_c0_tcpc_rst_l {
 			gpios = <&gpio0 11 (GPIO_OUT_HIGH | GPIO_INPUT)>;
 			enum-name = "GPIO_USB_C0_TCPC_RST_L";
-			label = "USB_C0_TCPC_RST_L";
 		};
 		usb_c1_tcpc_rst_l {
 			gpios = <&gpio0 12 (GPIO_OUT_HIGH | GPIO_INPUT)>;
 			enum-name = "GPIO_USB_C1_TCPC_RST_L";
-			label = "USB_C1_TCPC_RST_L";
+		};
+		gpio_usb_c1_ppc_int: usb_c1_ppc_int {
+			gpios = <&gpio0 13 GPIO_INPUT>;
+			enum-name = "GPIO_USB_C1_PPC_INT_ODL";
+		};
+		gpio_usb_c0_ppc_int: usb_c0_ppc_int {
+			gpios = <&gpio0 14 GPIO_INPUT>;
+			enum-name = "GPIO_USB_C0_PPC_INT_ODL";
+		};
+		gpio_switchcap_pg_int_l: switchcap_pg_int_l {
+			gpios = <&gpio0 15 GPIO_INPUT>;
+			enum-name = "GPIO_SWITCHCAP_PG_INT_L";
 		};
 	};
 	named-i2c-ports {
@@ -91,42 +96,34 @@
 		usb-c0 {
 			i2c-port = <&i2c0>;
 			enum-name = "I2C_PORT_USB_C0";
-			label = "USB_C0";
 		};
 		usb-c1 {
 			i2c-port = <&i2c1>;
 			enum-name = "I2C_PORT_USB_C1";
-			label = "USB_C1";
 		};
 		battery {
 			i2c-port = <&i2c0>;
 			enum-name = "I2C_PORT_BATTERY";
-			label = "BATTERY";
 		};
 		power {
 			i2c-port = <&i2c0>;
 			enum-name = "I2C_PORT_POWER";
-			label = "POWER";
 		};
 		charger {
 			i2c-port = <&i2c0>;
 			enum-name = "I2C_PORT_CHARGER";
-			label = "CHARGER";
 		};
 		eeprom {
 			i2c-port = <&i2c0>;
 			enum-name = "I2C_PORT_EEPROM";
-			label = "EEPROM";
 		};
 		i2c_accel: accel {
 			i2c-port = <&i2c0>;
 			enum-name = "I2C_PORT_ACCEL";
-			label = "ACCEL";
 		};
 		i2c_sensor: sensor {
 			i2c-port = <&i2c1>;
 			enum-name = "I2C_PORT_SENSOR";
-			label = "SENSOR";
 		};
 	};
 
@@ -153,6 +150,35 @@
 				compatible = "named-cbi-ssfc-value";
 				status = "okay";
 				value = <2>;
+			};
+		};
+	};
+
+	cbi-fw-config {
+		compatible = "named-cbi-fw-config";
+		field-1 {
+			enum-name = "FW_CONFIG_FIELD_1";
+			start = <0>;
+			size = <2>;
+			val-0 {
+				compatible = "named-cbi-fw-config-value";
+				enum-name = "FW_FIELD_1_A";
+				value = <0>;
+			};
+			val-1 {
+				compatible = "named-cbi-fw-config-value";
+				enum-name = "FW_FIELD_1_B";
+				value = <1>;
+			};
+		};
+		field-2 {
+			enum-name = "FW_CONFIG_FIELD_2";
+			start = <5>;
+			size = <1>;
+			val-1 {
+				compatible = "named-cbi-fw-config-value";
+				enum-name = "FW_FIELD_2_X";
+				value = <1>;
 			};
 		};
 	};
@@ -195,7 +221,7 @@
 		charger {
 			thermistor = <&thermistor_3V3_13K7_47K_4050B>;
 			status = "okay";
-			compatible = "cros-ec,temp-sensor";
+			compatible = "cros-ec,temp-sensor-thermistor";
 			label = "TEMP_SENSOR_CHARGER";
 			enum-name = "TEMP_SENSOR_CHARGER";
 			temp_fan_off = <40>;
@@ -208,7 +234,7 @@
 		pp3300-regulator {
 			thermistor = <&thermistor_3V3_30K9_47K_4050B>;
 			status = "okay";
-			compatible = "cros-ec,temp-sensor";
+			compatible = "cros-ec,temp-sensor-thermistor";
 			label = "TEMP_SENSOR_PP3300_REGULATOR";
 			enum-name = "TEMP_SENSOR_PP3300_REGULATOR";
 			temp_fan_off = <40>;
@@ -221,7 +247,7 @@
 		ddr-soc {
 			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
 			status = "okay";
-			compatible = "cros-ec,temp-sensor";
+			compatible = "cros-ec,temp-sensor-thermistor";
 			label = "TEMP_SENSOR_DDR_SOC";
 			enum-name = "TEMP_SENSOR_DDR_SOC";
 			temp_fan_off = <35>;
@@ -234,7 +260,7 @@
 		fan {
 			thermistor = <&thermistor_3V0_22K6_47K_4050B>;
 			status = "okay";
-			compatible = "cros-ec,temp-sensor";
+			compatible = "cros-ec,temp-sensor-thermistor";
 			label = "TEMP_SENSOR_FAN";
 			enum-name = "TEMP_SENSOR_FAN";
 			temp_fan_off = <35>;
@@ -500,6 +526,7 @@
 			reg = <0x41>;
 			label = "SYV682X_EMUL";
 			frs_en_gpio = <&gpio_usb_c1_frs_en>;
+			alert_gpio = <&gpio_usb_c1_ppc_int>;
 		};
 
 		usb_c1_bb_retimer_emul: bbretimer@42 {
@@ -539,7 +566,7 @@
 };
 
 &gpio0 {
-	ngpios = <13>;
+	ngpios = <16>;
 };
 
 &i2c0 {
@@ -582,6 +609,7 @@
 		compatible = "cros,sn5s330-emul";
 		reg = <0x40>;
 		label = "SN5S330_EMUL";
+		int_gpio = <&gpio_usb_c0_ppc_int>;
 	};
 
 	accel_bmi260: bmi260@68 {
@@ -600,6 +628,7 @@
 		status = "okay";
 		reg = <0x80>;
 		label = "LN9310";
+		pg_int_gpio = <&gpio_switchcap_pg_int_l>;
 	};
 
 	lis2dw12_emul: lis2dw12@19 {
@@ -621,6 +650,7 @@
 		status = "okay";
 		reg = <0x9>;
 		label = "ISL923X_EMUL";
+		battery = <&battery>;
 	};
 
 	tcpci_emul: tcpci_emul@82 {

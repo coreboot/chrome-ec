@@ -72,11 +72,11 @@ STATIC_IF(CONFIG_HIBERNATE) uint32_t hibernate_seconds;
 STATIC_IF(CONFIG_HIBERNATE) uint32_t hibernate_microseconds;
 
 /* On-going actions preventing going into deep-sleep mode */
-uint32_t sleep_mask;
+atomic_t sleep_mask;
 
 #ifdef CONFIG_LOW_POWER_IDLE_LIMITED
 /* Set it to prevent going into idle mode */
-uint32_t idle_disabled;
+atomic_t idle_disabled;
 #endif
 
 /* SKU ID sourced from AP */
@@ -1491,7 +1491,7 @@ static int command_sleepmask(int argc, char **argv)
 		}
 	}
 #endif
-	ccprintf("sleep mask: %08x\n", sleep_mask);
+	ccprintf("sleep mask: %08x\n", (int)sleep_mask);
 
 	return EC_SUCCESS;
 }

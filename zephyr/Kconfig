@@ -43,6 +43,7 @@ rsource "Kconfig.defaults"
 rsource "Kconfig.espi"
 rsource "Kconfig.flash"
 rsource "Kconfig.header"
+rsource "Kconfig.host_interface"
 rsource "Kconfig.init_priority"
 rsource "Kconfig.ioex"
 rsource "Kconfig.keyboard"
@@ -71,7 +72,7 @@ rsource "Kconfig.watchdog"
 
 config PLATFORM_EC_ACPI
 	bool "Advanced Confiugration and Power Interface (ACPI)"
-	default y if AP_X86 && PLATFORM_EC_ESPI
+	default y if AP_X86 && PLATFORM_EC_HOST_INTERFACE_ESPI
 	help
 	  Enable the Advanced Configuration and Power Interface (ACPI) in the
 	  EC. ACPI is a standard interface to the Application Processor (AP)
@@ -176,7 +177,7 @@ choice PLATFORM_EC_CBI_STORAGE_TYPE
 
 	  See here for detailed information on CBI:
 
-	  https://chromium.googlesource.com/chromiumos/docs/+/master/design_docs/cros_board_info.md
+	  https://chromium.googlesource.com/chromiumos/docs/+/HEAD/design_docs/cros_board_info.md
 
 config PLATFORM_EC_CBI_EEPROM
 	bool "CBI EEPROM support"
@@ -331,23 +332,6 @@ config PLATFORM_EC_EMULATED_SYSRQ
 	  This option enables support for sending emulated SysRq events to AP
 	  (on designs with a keyboard, SysRq is passed as normal key presses).
 
-menuconfig PLATFORM_EC_ESPI
-	bool "eSPI"
-	depends on ESPI && AP
-	default y
-	help
-	  Enable the Enhanced Serial Peripheral Interface (eSPI) shim layer.
-	  eSPI supports a shared physical connection between several on-board
-	  devices, similar to SPI. It adds a few optional signals and a protocol
-	  layer to provide independent 'channels' for each device to communicate
-	  over.
-
-	  eSPI is the replacement for LPC (Low-Pin-Count bus).
-
-	  See here for information about eSPI:
-
-	  https://www.intel.com/content/dam/support/us/en/documents/software/chipset-software/327432-004_espi_base_specification_rev1.0_cb.pdf
-
 config PLATFORM_EC_EXTPOWER_GPIO
 	bool "GPIO-based external power detection"
 	depends on PLATFORM_EC_HOOKS && PLATFORM_EC_HOSTCMD
@@ -399,6 +383,9 @@ menuconfig PLATFORM_EC_HOSTCMD
 	  communication with the AP. The AP sends a command to the EC and it
 	  responds when able. An interrupt can be used to indicate to the AP
 	  that the EC has something for it.
+
+	  The host interface type is selected based on the AP type, but can be
+	  changed though the CONFIG_PLATFORM_EC_HOST_INTERFACE_TYPE choice.
 
 config PLATFORM_EC_HOSTCMD_GET_UPTIME_INFO
 	bool "Host command: EC_CMD_GET_UPTIME_INFO"
@@ -548,6 +535,13 @@ config PLATFORM_EC_LOW_POWER_IDLE
 	  Enable low power idle modes in the EC chipset. This is automatically
 	  enabled when the Zephyr power management options are enabled with the
 	  PM option.
+
+config PLATFORM_EC_POWER_COMMON
+	bool
+	default y
+	depends on PLATFORM_EC_POWERSEQ
+	help
+	  Compile common code for AP power state machine.
 
 config PLATFORM_EC_MKBP_EVENT
     bool "MKBP event"
@@ -753,6 +747,7 @@ config PLATFORM_EC_SYSTEM_UNLOCKED
 
 config PLATFORM_EC_THROTTLE_AP
 	bool "CPU throttling"
+	depends on PLATFORM_EC_TEMP_SENSOR
 	help
 	  Enable throttling the CPU based on the temperature sensors. When they
 	  detect that the CPU is getting too hot, the CPU is throttled to
@@ -865,7 +860,7 @@ config PLATFORM_EC_I2C_PASSTHRU_RESTRICTED
 
 config PLATFORM_EC_HOST_COMMAND_STATUS
 	bool "Return in-progress status for slow host commands"
-	default n
+	default y if PLATFORM_EC_HOST_INTERFACE_SHI
 	help
 	  When the AP is attached to the EC via a serialized bus such as I2C or
 	  SPI, it needs a way to minimize the length of time an EC command will
@@ -893,5 +888,12 @@ config PLATFORM_EC_AMD_STT
 	  specification. It makes use of the thermal capacitance of the system
 	  to temporarily boost above the sustainable power limit, while the
 	  chassis skin temperatures are below limits.
+
+config PLATFORM_EC_MATH_UTIL
+	bool "Math utility"
+	default y
+	help
+	  Math utilities including bitmask manipulation, division rounding,
+	  trigonometric function, etc.
 
 endif # PLATFORM_EC

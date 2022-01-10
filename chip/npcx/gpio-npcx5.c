@@ -67,7 +67,7 @@ static void __gpio_wk0efgh_interrupt(void)
 			SET_BIT(NPCX_WKPCL(MIWU_TABLE_0, MIWU_GROUP_5), 6);
 			return;
 		}
-		if (IS_ENABLED(CONFIG_HOSTCMD_ESPI)) {
+		if (IS_ENABLED(CONFIG_HOST_INTERFACE_ESPI)) {
 			if (IS_BIT_SET(NPCX_WKEN(MIWU_TABLE_0, MIWU_GROUP_5), 5)
 				&&
 			IS_BIT_SET(NPCX_WKPND(MIWU_TABLE_0, MIWU_GROUP_5), 5)) {
@@ -179,7 +179,7 @@ DECLARE_IRQ(NPCX_IRQ_KSI_WKINTC_1,  __gpio_wk1c_interrupt, 3);
 #endif
 DECLARE_IRQ(NPCX_IRQ_WKINTD_1,      __gpio_wk1d_interrupt, 3);
 DECLARE_IRQ(NPCX_IRQ_WKINTE_1,      __gpio_wk1e_interrupt, 3);
-#ifdef CONFIG_HOSTCMD_SHI
+#ifdef CONFIG_HOST_INTERFACE_SHI
 /*
  * HACK: Make CS GPIO P2 to improve SHI reliability.
  * TODO: Increase CS-assertion-to-transaction-start delay on host to

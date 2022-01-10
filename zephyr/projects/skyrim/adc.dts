@@ -1,0 +1,85 @@
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+#include <cros/thermistor/thermistor.dtsi>
+
+/ {
+	named-adc-channels {
+		compatible = "named-adc-channels";
+
+		adc_temp_charger: temp-charger {
+			label = "CHARGER";
+			enum-name = "ADC_TEMP_SENSOR_CHARGER";
+			channel = <1>;
+		};
+		adc_temp_memory: temp-memory {
+			label = "MEMORY";
+			enum-name = "ADC_TEMP_SENSOR_MEMORY";
+			channel = <2>;
+		};
+		adc_core_imon1: core-imon1 {
+			label = "CORE_I";
+			enum-name = "ADC_CORE_IMON1";
+			channel = <3>;
+		};
+		adc_core_imon2: core-imon2 {
+			label = "SOC_I";
+			enum-name = "ADC_SOC_IMON2";
+			channel = <4>;
+		};
+	};
+
+	named-temp-sensors {
+		soc-tmp112 {
+			compatible = "cros-ec,temp-sensor-tmp112";
+			label = "SOC";
+			enum-name = "TEMP_SENSOR_SOC";
+			tmp112-name = "TMP112_SOC";
+			port = <&i2c_sensor>;
+			i2c-addr-flags = "TMP112_I2C_ADDR_FLAGS0";
+			temp_host_high = <100>;
+			temp_host_halt = <105>;
+			temp_host_release_high = <80>;
+			temp_fan_off = <0>;
+			temp_fan_max = <70>;
+		};
+		charger-thermistor {
+			compatible = "cros-ec,temp-sensor-thermistor";
+			thermistor = <&thermistor_3V3_30K9_47K_4050B>;
+			label = "Charger";
+			enum-name = "TEMP_SENSOR_CHARGER";
+			temp_host_high = <100>;
+			temp_host_halt = <105>;
+			temp_host_release_high = <80>;
+			adc = <&adc_temp_charger>;
+		};
+		memory-thermistor {
+			compatible = "cros-ec,temp-sensor-thermistor";
+			thermistor = <&thermistor_3V3_30K9_47K_4050B>;
+			label = "Memory";
+			enum-name = "TEMP_SENSOR_MEMORY";
+			temp_host_high = <100>;
+			temp_host_halt = <105>;
+			temp_host_release_high = <80>;
+			adc = <&adc_temp_memory>;
+		};
+		amb-tmp112 {
+			compatible = "cros-ec,temp-sensor-tmp112";
+			label = "Ambient";
+			enum-name = "TEMP_SENSOR_AMB";
+			tmp112-name = "TMP112_AMB";
+			port = <&i2c_sensor>;
+			i2c-addr-flags = "TMP112_I2C_ADDR_FLAGS1";
+		};
+	};
+};
+
+&adc0 {
+	status = "okay";
+};
+
+&thermistor_3V3_30K9_47K_4050B {
+	status = "okay";
+};

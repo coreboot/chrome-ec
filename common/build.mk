@@ -30,6 +30,7 @@ common-$(CONFIG_ACCEL_LIS2DS)+=math_util.o
 common-$(CONFIG_ACCEL_KXCJ9)+=math_util.o
 common-$(CONFIG_ACCEL_KX022)+=math_util.o
 common-$(CONFIG_TEMP_SENSOR_TMP112)+=math_util.o
+common-$(CONFIG_TEMP_SENSOR_PCT2075)+=math_util.o
 ifneq ($(CORE),cortex-m)
 common-$(CONFIG_AES)+=aes.o
 endif
@@ -83,7 +84,7 @@ common-$(CONFIG_DEVICE_STATE)+=device_state.o
 common-$(CONFIG_DPTF)+=dptf.o
 common-$(CONFIG_EC_EC_COMM_CLIENT)+=ec_ec_comm_client.o
 common-$(CONFIG_EC_EC_COMM_SERVER)+=ec_ec_comm_server.o
-common-$(CONFIG_HOSTCMD_ESPI)+=espi.o
+common-$(CONFIG_HOST_INTERFACE_ESPI)+=espi.o
 common-$(CONFIG_EXTPOWER_GPIO)+=extpower_gpio.o
 common-$(CONFIG_EXTPOWER)+=extpower_common.o
 common-$(CONFIG_FANS)+=fan.o pwm.o

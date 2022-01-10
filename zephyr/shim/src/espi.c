@@ -153,8 +153,7 @@ static void espi_reset_handler(const struct device *dev,
 }
 #endif /* CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK */
 
-#define ESPI_NODE DT_NODELABEL(espi0)
-static const struct device *espi_dev;
+#define espi_dev DEVICE_DT_GET(DT_CHOSEN(cros_ec_espi))
 
 
 int espi_vw_set_wire(enum espi_vw_signal signal, uint8_t level)
@@ -540,11 +539,8 @@ int zephyr_shim_setup_espi(void)
 		.max_freq = 50,
 	};
 
-	espi_dev = DEVICE_DT_GET(ESPI_NODE);
-	if (!device_is_ready(espi_dev)) {
-		LOG_ERR("Error: device %s is not ready", espi_dev->name);
-		return -1;
-	}
+	if (!device_is_ready(espi_dev))
+		k_oops();
 
 	/* Configure eSPI */
 	if (espi_config(espi_dev, &cfg)) {
@@ -560,4 +556,46 @@ int zephyr_shim_setup_espi(void)
 	}
 
 	return 0;
+}
+
+bool is_acpi_command(uint32_t data)
+{
+	struct espi_evt_data_acpi *acpi = (struct espi_evt_data_acpi *)&data;
+
+	return acpi->type;
+}
+
+uint32_t get_acpi_value(uint32_t data)
+{
+	struct espi_evt_data_acpi *acpi = (struct espi_evt_data_acpi *)&data;
+
+	return acpi->data;
+}
+
+bool is_8042_ibf(uint32_t data)
+{
+	struct espi_evt_data_kbc *kbc = (struct espi_evt_data_kbc *)&data;
+
+	return kbc->evt & HOST_KBC_EVT_IBF;
+}
+
+bool is_8042_obe(uint32_t data)
+{
+	struct espi_evt_data_kbc *kbc = (struct espi_evt_data_kbc *)&data;
+
+	return kbc->evt & HOST_KBC_EVT_OBE;
+}
+
+uint32_t get_8042_type(uint32_t data)
+{
+	struct espi_evt_data_kbc *kbc = (struct espi_evt_data_kbc *)&data;
+
+	return kbc->type;
+}
+
+uint32_t get_8042_data(uint32_t data)
+{
+	struct espi_evt_data_kbc *kbc = (struct espi_evt_data_kbc *)&data;
+
+	return kbc->data;
 }

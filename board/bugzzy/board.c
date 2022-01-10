@@ -438,6 +438,12 @@ static const mat33_fp_t base_standard_ref = {
 	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
+static const mat33_fp_t base_standard_ref_lsm = {
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
 struct motion_sensor_t ldm6dsm_base_accel = {
 	.name = "Base Accel",
 	.active_mask = SENSOR_ACTIVE_S0_S3,
@@ -448,11 +454,9 @@ struct motion_sensor_t ldm6dsm_base_accel = {
 	.mutex = &g_base_mutex,
 	.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 			MOTIONSENSE_TYPE_ACCEL),
-	.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-	.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-	.rot_standard_ref = &base_standard_ref,
+	.rot_standard_ref = &base_standard_ref_lsm,
 	.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
 	.min_frequency = LSM6DSM_ODR_MIN_VAL,
 	.max_frequency = LSM6DSM_ODR_MAX_VAL,
@@ -479,12 +483,10 @@ struct motion_sensor_t ldm6dsm_base_gyro = {
 	.mutex = &g_base_mutex,
 	.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 			MOTIONSENSE_TYPE_GYRO),
-	.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-	.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 	.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-	.rot_standard_ref = &base_standard_ref,
+	.rot_standard_ref = &base_standard_ref_lsm,
 	.min_frequency = LSM6DSM_ODR_MIN_VAL,
 	.max_frequency = LSM6DSM_ODR_MAX_VAL,
 
@@ -871,6 +873,11 @@ static void lcd_reset_change_deferred(void)
 	if (signal != 0)
 		return;
 
+	signal = gpio_get_level(GPIO_EN_PP1800_PANEL_S0);
+
+	if (signal == 0)
+		return;
+
 	i2c_write8(I2C_PORT_LCD, I2C_ADDR_ISL98607_FLAGS,
 			ISL98607_REG_ENABLE, ISL97607_VP_VN_VBST_DIS);
 
@@ -878,7 +885,7 @@ static void lcd_reset_change_deferred(void)
 DECLARE_DEFERRED(lcd_reset_change_deferred);
 void lcd_reset_change_interrupt(enum gpio_signal signal)
 {
-	hook_call_deferred(&lcd_reset_change_deferred_data, 10 * MSEC);
+	hook_call_deferred(&lcd_reset_change_deferred_data, 45 * MSEC);
 }
 
 /**
@@ -921,7 +928,7 @@ void backlit_gpio_tick(void)
 	if (board_id >= 4 && signal == 1)
 		i2c_write16(I2C_PORT_LCD, I2C_ADDR_MP3372_FLAGS,
 				MP3372_REG_ISET_CHEN,
-				MP3372_ISET_19P4_CHEN_ALL);
+				MP3372_ISET_15P3_CHEN_ALL);
 
 }
 DECLARE_HOOK(HOOK_TICK, backlit_gpio_tick, HOOK_PRIO_DEFAULT);

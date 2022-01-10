@@ -18,6 +18,7 @@
 #include "driver/als_tcs3400.h"
 #include "driver/ina3221.h"
 #include "driver/led/oz554.h"
+#include "driver/led/mp3385.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/tcpm/anx7447.h"
 #include "driver/tcpm/ps8xxx.h"
@@ -532,13 +533,55 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 /******************************************************************************/
 /* I2C port map configuration */
 const struct i2c_port_t i2c_ports[] = {
-	{"ina",     I2C_PORT_INA,     400, GPIO_I2C0_SCL, GPIO_I2C0_SDA},
-	{"ppc0",    I2C_PORT_PPC0,    400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"ppc1",    I2C_PORT_PPC1,    400, GPIO_I2C2_SCL, GPIO_I2C1_SDA},
-	{"tcpc0",   I2C_PORT_TCPC0,   400, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
-	{"tcpc1",   I2C_PORT_TCPC1,   400, GPIO_I2C4_SCL, GPIO_I2C3_SDA},
-	{"power",   I2C_PORT_POWER,   400, GPIO_I2C5_SCL, GPIO_I2C5_SDA},
-	{"eeprom",  I2C_PORT_EEPROM,  400, GPIO_I2C7_SCL, GPIO_I2C7_SDA},
+	{
+		.name = "ina",
+		.port = I2C_PORT_INA,
+		.kbps = 400,
+		.scl  = GPIO_I2C0_SCL,
+		.sda  = GPIO_I2C0_SDA
+	},
+	{
+		.name = "ppc0",
+		.port = I2C_PORT_PPC0,
+		.kbps = 400,
+		.scl  = GPIO_I2C1_SCL,
+		.sda  = GPIO_I2C1_SDA
+	},
+	{
+		.name = "ppc1",
+		.port = I2C_PORT_PPC1,
+		.kbps = 400,
+		.scl  = GPIO_I2C2_SCL,
+		.sda  = GPIO_I2C2_SDA
+	},
+	{
+		.name = "tcpc0",
+		.port = I2C_PORT_TCPC0,
+		.kbps = 400,
+		.scl  = GPIO_I2C3_SCL,
+		.sda  = GPIO_I2C3_SDA
+	},
+	{
+		.name = "tcpc1",
+		.port = I2C_PORT_TCPC1,
+		.kbps = 400,
+		.scl  = GPIO_I2C4_SCL,
+		.sda  = GPIO_I2C4_SDA
+	},
+	{
+		.name = "power",
+		.port = I2C_PORT_POWER,
+		.kbps = 400,
+		.scl  = GPIO_I2C5_SCL,
+		.sda  = GPIO_I2C5_SDA
+	},
+	{
+		.name = "eeprom",
+		.port = I2C_PORT_EEPROM,
+		.kbps = 400,
+		.scl  = GPIO_I2C7_SCL,
+		.sda  = GPIO_I2C7_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -663,6 +706,7 @@ const unsigned int ina3221_count = ARRAY_SIZE(ina3221);
 static uint16_t board_version;
 static uint32_t sku_id;
 static uint32_t fw_config;
+static uint32_t ssfc;
 
 static void cbi_init(void)
 {
@@ -680,8 +724,11 @@ static void cbi_init(void)
 		sku_id = val;
 	if (cbi_get_fw_config(&val) == EC_SUCCESS)
 		fw_config = val;
-	CPRINTS("Board Version: %d, SKU ID: 0x%08x, F/W config: 0x%08x",
-		board_version, sku_id, fw_config);
+	if (cbi_get_ssfc(&val) == EC_SUCCESS)
+		ssfc = val;
+	CPRINTS("Board Version: %d, SKU ID: 0x%08x, "
+			"F/W config: 0x%08x, SSFC: 0x%08x ",
+		board_version, sku_id, fw_config, ssfc);
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
 
@@ -715,6 +762,13 @@ static void board_init(void)
 	/* Always claim AC is online, because we don't have a battery. */
 	memmap_batt_flags = host_get_memmap(EC_MEMMAP_BATT_FLAG);
 	*memmap_batt_flags |= EC_BATT_FLAG_AC_PRESENT;
+
+	/* Initial backlight ic setting by ssfc */
+	if (ec_ssfc_get_led_ic() == SSFC_LED_MP3385)
+		mp3385_board_init();
+	else
+		oz554_board_init();
+	gpio_enable_interrupt(GPIO_PANEL_BACKLIGHT_EN);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -920,6 +974,11 @@ unsigned int ec_config_get_bj_power(void)
 unsigned int ec_config_get_thermal_solution(void)
 {
 	return (fw_config & EC_CFG_THERMAL_MASK) >> EC_CFG_THERMAL_L;
+}
+
+unsigned int ec_ssfc_get_led_ic(void)
+{
+	return (ssfc & EC_SSFC_LED_MASK) >> EC_SSFC_LED_L;
 }
 
 /*
@@ -1176,7 +1235,7 @@ static void power_monitor(void)
 	hook_call_deferred(&power_monitor_data, delay);
 }
 
-__override void oz554_board_init(void)
+void oz554_board_init(void)
 {
 	int pin_status = 0;
 
@@ -1200,4 +1259,46 @@ __override void oz554_board_init(void)
 		CPRINTS("PANEL UNKNOWN");
 		break;
 	}
+}
+
+void mp3385_board_init(void)
+{
+	int pin_status = 0;
+
+	pin_status |= gpio_get_level(GPIO_PANEL_ID0) << 0;
+	pin_status |= gpio_get_level(GPIO_PANEL_ID1) << 1;
+
+	switch (pin_status) {
+	case 0x00:
+		CPRINTS("PANEL_HAN01.10A");
+		mp3385_set_config(0, 0xF1);
+		mp3385_set_config(2, 0x4C);
+		mp3385_set_config(5, 0xB7);
+		break;
+	case 0x02:
+		CPRINTS("PANEL_WF9_SSA2");
+		mp3385_set_config(0, 0xF1);
+		mp3385_set_config(2, 0x55);
+		mp3385_set_config(5, 0x87);
+		break;
+	default:
+		CPRINTS("PANEL UNKNOWN");
+		break;
+	}
+}
+
+void board_backlight_enable_interrupt(enum gpio_signal signal)
+{
+	switch (ec_ssfc_get_led_ic()) {
+	case SSFC_LED_OZ554:
+		oz554_interrupt(signal);
+		break;
+	case SSFC_LED_MP3385:
+		mp3385_interrupt(signal);
+		break;
+	default:
+		oz554_interrupt(signal);
+		break;
+	}
+
 }

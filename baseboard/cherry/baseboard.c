@@ -148,7 +148,7 @@ struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 	{
 		.i2c_port = I2C_PORT_PPC1,
-		.i2c_addr_flags = RT1718S_I2C_ADDR_FLAGS,
+		.i2c_addr_flags = RT1718S_I2C_ADDR1_FLAGS,
 		.drv = &rt1718s_ppc_drv,
 	},
 };
@@ -282,7 +282,7 @@ const struct usb_mux usbc1_virtual_mux = {
 	.hpd_update = &virtual_hpd_update,
 };
 
-static int board_ps8802_mux_set(const struct usb_mux *me,
+static int board_ps8762_mux_set(const struct usb_mux *me,
 				mux_state_t mux_state)
 {
 	/* Make sure the PS8802 is awake */
@@ -311,6 +311,15 @@ static int board_ps8802_mux_set(const struct usb_mux *me,
 	return EC_SUCCESS;
 }
 
+static int board_ps8762_mux_init(const struct usb_mux *me)
+{
+	return ps8802_i2c_field_update8(
+			me, PS8802_REG_PAGE1,
+			PS8802_REG_DCIRX,
+			PS8802_AUTO_DCI_MODE_DISABLE | PS8802_FORCE_DCI_MODE,
+			PS8802_AUTO_DCI_MODE_DISABLE);
+}
+
 static int board_anx3443_mux_set(const struct usb_mux *me,
 				 mux_state_t mux_state)
 {
@@ -326,7 +335,8 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.i2c_addr_flags = PS8802_I2C_ADDR_FLAGS,
 		.driver = &ps8802_usb_mux_driver,
 		.next_mux = &usbc0_virtual_mux,
-		.board_set = &board_ps8802_mux_set,
+		.board_init = &board_ps8762_mux_init,
+		.board_set = &board_ps8762_mux_set,
 	},
 	{
 		.usb_port = 1,
@@ -357,10 +367,34 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"bat_chg",  IT83XX_I2C_CH_A, 100, GPIO_I2C_A_SCL, GPIO_I2C_A_SDA},
-	{"sensor",   IT83XX_I2C_CH_B, 400, GPIO_I2C_B_SCL, GPIO_I2C_B_SDA},
-	{"usb0",     IT83XX_I2C_CH_C, 400, GPIO_I2C_C_SCL, GPIO_I2C_C_SDA},
-	{"usb1",     IT83XX_I2C_CH_E, 1000, GPIO_I2C_E_SCL, GPIO_I2C_E_SDA},
+	{
+		.name = "bat_chg",
+		.port = IT83XX_I2C_CH_A,
+		.kbps = 100,
+		.scl  = GPIO_I2C_A_SCL,
+		.sda  = GPIO_I2C_A_SDA
+	},
+	{
+		.name = "sensor",
+		.port = IT83XX_I2C_CH_B,
+		.kbps = 400,
+		.scl  = GPIO_I2C_B_SCL,
+		.sda  = GPIO_I2C_B_SDA
+	},
+	{
+		.name = "usb0",
+		.port = IT83XX_I2C_CH_C,
+		.kbps = 400,
+		.scl  = GPIO_I2C_C_SCL,
+		.sda  = GPIO_I2C_C_SDA
+	},
+	{
+		.name = "usb1",
+		.port = IT83XX_I2C_CH_E,
+		.kbps = 1000,
+		.scl  = GPIO_I2C_E_SCL,
+		.sda  = GPIO_I2C_E_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -382,7 +416,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_USB1,
-			.addr_flags = RT1718S_I2C_ADDR_FLAGS,
+			.addr_flags = RT1718S_I2C_ADDR1_FLAGS,
 		},
 		.drv = &rt1718s_tcpm_drv,
 	},

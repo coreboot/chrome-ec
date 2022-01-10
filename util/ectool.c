@@ -896,6 +896,7 @@ static const char * const ec_feature_names[] = {
 		"Host-controlled Type-C mode entry",
 	[EC_FEATURE_TYPEC_MUX_REQUIRE_AP_ACK] =
 		"AP ack for Type-C mux configuration",
+	[EC_FEATURE_S4_RESIDENCY] = "S4 residency",
 };
 
 int cmd_inventory(int argc, char *argv[])
@@ -3022,12 +3023,13 @@ int read_mapped_temperature(int id)
 	return rv;
 }
 
-static int get_thermal_fan_percent(int temp)
+static int get_thermal_fan_percent(int temp, int sensor_id)
 {
 	struct ec_params_thermal_get_threshold_v1 p;
 	struct ec_thermal_config r;
 	int rv = 0;
 
+	p.sensor_num = sensor_id;
 	rv = ec_command(EC_CMD_THERMAL_GET_THRESHOLD, 1, &p, sizeof(p),
 			&r, sizeof(r));
 
@@ -3054,7 +3056,7 @@ static int cmd_temperature_print(int id, int mtemp)
 	if (rc < 0)
 		return rc;
 	printf("%-20s  %d K (= %d C) %11d%%\n", r.sensor_name, temp,
-	       K_TO_C(temp), get_thermal_fan_percent(temp));
+	       K_TO_C(temp), get_thermal_fan_percent(temp, id));
 
 	return 0;
 }
@@ -3074,9 +3076,7 @@ int cmd_temperature(int argc, char *argv[])
 
 	if (strcmp(argv[1], "all") == 0) {
 		fprintf(stdout, header);
-		for (id = 0;
-		     id < EC_TEMP_SENSOR_ENTRIES + EC_TEMP_SENSOR_B_ENTRIES;
-		     id++) {
+		for (id = 0; id < EC_MAX_TEMP_SENSOR_ENTRIES; id++) {
 			mtemp = read_mapped_temperature(id);
 			switch (mtemp) {
 			case EC_TEMP_SENSOR_NOT_PRESENT:
@@ -3105,7 +3105,7 @@ int cmd_temperature(int argc, char *argv[])
 	}
 
 	if (id < 0 ||
-	    id >= EC_TEMP_SENSOR_ENTRIES + EC_TEMP_SENSOR_B_ENTRIES) {
+	    id >= EC_MAX_TEMP_SENSOR_ENTRIES) {
 		printf("Sensor ID invalid.\n");
 		return -1;
 	}
@@ -3147,9 +3147,7 @@ int cmd_temp_sensor_info(int argc, char *argv[])
 	}
 
 	if (strcmp(argv[1], "all") == 0) {
-		for (p.id = 0;
-		     p.id < EC_TEMP_SENSOR_ENTRIES + EC_TEMP_SENSOR_B_ENTRIES;
-		     p.id++) {
+		for (p.id = 0; p.id < EC_MAX_TEMP_SENSOR_ENTRIES; p.id++) {
 			if (read_mapped_temperature(p.id) ==
 			    EC_TEMP_SENSOR_NOT_PRESENT)
 				continue;
@@ -3271,7 +3269,7 @@ int cmd_thermal_get_threshold_v1(int argc, char *argv[])
 	int i;
 
 	printf("sensor  warn  high  halt   fan_off fan_max   name\n");
-	for (i = 0; i < 99; i++) {	/* number of sensors is unknown */
+	for (i = 0; i < EC_MAX_TEMP_SENSOR_ENTRIES; i++) {
 
 		/* ask for one */
 		p.sensor_num = i;
@@ -5097,7 +5095,7 @@ static int ms_help(const char *cmd)
 		cmd);
 	printf("  %s active                       - print active flag\n", cmd);
 	printf("  %s info NUM                     - print sensor info\n", cmd);
-	printf("  %s ec_rate [RATE_MS]            - set/get sample rate\n",
+	printf("  %s ec_rate NUM [RATE_MS]        - set/get sample rate\n",
 		cmd);
 	printf("  %s odr NUM [ODR [ROUNDUP]]      - set/get sensor ODR\n",
 		cmd);
@@ -5166,7 +5164,6 @@ static int cmd_motionsense(int argc, char **argv)
 		{ "Motion sensing inactive", "0"},
 		{ "Motion sensing active", "1"},
 	};
-
 	/* No motionsense command has more than 7 args. */
 	if (argc > 7)
 		return ms_help(argv[0]);
@@ -5388,14 +5385,18 @@ static int cmd_motionsense(int argc, char **argv)
 		return 0;
 	}
 
-	if (argc < 4 && !strcasecmp(argv[1], "ec_rate")) {
+	if (argc > 2 && !strcasecmp(argv[1], "ec_rate")) {
 		param.cmd = MOTIONSENSE_CMD_EC_RATE;
 		param.ec_rate.data = EC_MOTION_SENSE_NO_VALUE;
-
-		if (argc == 3) {
-			param.ec_rate.data = strtol(argv[2], &e, 0);
+		param.sensor_odr.sensor_num = strtol(argv[2], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad %s arg.\n", argv[2]);
+			return -1;
+		}
+		if (argc == 4) {
+			param.ec_rate.data = strtol(argv[3], &e, 0);
 			if (e && *e) {
-				fprintf(stderr, "Bad %s arg.\n", argv[2]);
+				fprintf(stderr, "Bad %s arg.\n", argv[3]);
 				return -1;
 			}
 		}
