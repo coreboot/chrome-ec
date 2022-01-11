@@ -104,7 +104,7 @@
 #undef CONFIG_FAN_INIT_SPEED
 #define CONFIG_FAN_INIT_SPEED 0
 #define CONFIG_TEMP_SENSOR
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_ROA_RAILS
+#define CONFIG_TEMP_SENSOR_POWER
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 #define CONFIG_THROTTLE_AP
@@ -169,10 +169,13 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
-
 /* Board specific handlers */
 void led_alert(int enable);
 void show_critical_error(void);
+
+/* Board ADS control handlers */
+void ads_5v_interrupt(enum gpio_signal signal);
+void ads_12v_interrupt(enum gpio_signal signal);
 
 /*
  * firmware config fields
@@ -218,6 +221,7 @@ unsigned int ec_config_get_thermal_solution(void);
 #define GPIO_PCH_SLP_S0_L	GPIO_SLP_S0_L
 #define GPIO_PCH_SLP_S3_L	GPIO_SLP_S3_L
 #define GPIO_PCH_SLP_S4_L	GPIO_SLP_S4_L
+#define GPIO_TEMP_SENSOR_POWER	GPIO_EN_ROA_RAILS
 #define GPIO_AC_PRESENT		GPIO_BJ_ADP_PRESENT_L
 
 /*

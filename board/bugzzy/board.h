@@ -11,12 +11,7 @@
 #define VARIANT_DEDEDE_EC_NPCX796FC
 #include "baseboard.h"
 
-/*
- * Keep the system unlocked in early development.
- * TODO(b/151264302): Make sure to remove this before production!
- */
-#define CONFIG_SYSTEM_UNLOCKED
-
+#undef CONFIG_I2C_DEBUG
 /*
  * The RAM and flash size combination on the the NPCX797FC does not leave
  * any unused flash space that can be used to store the .init_rom section.
@@ -149,6 +144,7 @@
 #define MP3372_ISET_19P4_CHEN_ALL	0x63ff
 #define MP3372_ISET_18P0_CHEN_ALL	0x5cff
 #define MP3372_ISET_15P8_CHEN_ALL	0x50ff
+#define MP3372_ISET_15P3_CHEN_ALL	0x4eff
 /*
  * I2C pin names for baseboard
  *

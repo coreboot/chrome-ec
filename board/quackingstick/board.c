@@ -393,13 +393,15 @@ void motion_interrupt(enum gpio_signal signal)
 static void board_init(void)
 {
 	/*
-	 * The rev-1 hardware doesn't have the external pull-up fix for the bug
-	 * b/177611071. It requires rework to stuff the resistor. For people who
-	 * has difficulty to do the rework, this is a workaround, which makes
-	 * the GPIO push-pull, instead of open-drain.
+	 * The rev-1 hardware use PP1800_SENSORS as the power of the hall IC,
+	 * it cause the LID_OPEN_EC wake EC immediately when EC enter hibernate.
 	 */
-	if (system_get_board_version() == 1)
-		gpio_set_flags(GPIO_HIBERNATE_L, GPIO_OUTPUT);
+	if (system_get_board_version() <= 1) {
+		hibernate_wake_pins[0] = GPIO_AC_PRESENT;
+		hibernate_wake_pins[1] = GPIO_POWER_BUTTON_L;
+		hibernate_wake_pins[2] = GPIO_EC_RST_ODL;
+		hibernate_wake_pins_used = 3;
+	}
 
 	/* Enable BC1.2 interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_L);
@@ -411,6 +413,10 @@ static void board_init(void)
 	 * the CCD_MODE_ODL interrupt to make sure the SBU FETs are connected.
 	 */
 	gpio_enable_interrupt(GPIO_CCD_MODE_ODL);
+
+	/* Enable pen input detect interrupt */
+	if (system_get_board_version() >= 2)
+		gpio_enable_interrupt(GPIO_EC_PEN_PDCT_L);
 
 	/* Set the backlight duty cycle to 0. AP will override it later. */
 	pwm_set_duty(PWM_CH_DISPLIGHT, 0);
@@ -465,7 +471,7 @@ void board_hibernate(void)
 	 * Board rev 1+ has the hardware fix. Don't need the following
 	 * workaround.
 	 */
-	if (system_get_board_version() >= 1)
+	if (system_get_board_version() > 1)
 		return;
 
 	/*
@@ -625,6 +631,33 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 					   CONFIG_CHARGER_INPUT_CURRENT),
 				       charge_mv);
 }
+
+/**
+ * Handle debounced pen input changing state.
+ */
+static void pen_input_deferred(void)
+{
+	bool pen_charge_enable = !gpio_get_level(GPIO_EC_PEN_PDCT_L) &&
+			!chipset_in_state(CHIPSET_STATE_ANY_OFF);
+
+	gpio_set_level(GPIO_PEN_PWR_EN, pen_charge_enable);
+
+	CPRINTS("Pen charge %sable", pen_charge_enable ? "en" : "dis");
+}
+DECLARE_DEFERRED(pen_input_deferred);
+
+void pen_input_interrupt(enum gpio_signal signal)
+{
+	/* pen input debounce time */
+	hook_call_deferred(&pen_input_deferred_data, (100 * MSEC));
+}
+
+static void pen_charge_check(void)
+{
+	hook_call_deferred(&pen_input_deferred_data, (100 * MSEC));
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, pen_charge_check, HOOK_PRIO_LAST);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, pen_charge_check, HOOK_PRIO_LAST);
 
 uint16_t tcpc_get_alert_status(void)
 {
