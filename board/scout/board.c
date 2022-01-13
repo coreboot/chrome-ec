@@ -466,6 +466,12 @@ static void board_init(void)
 	 */
 	if (board_version < 2)
 		button_disable_gpio(GPIO_EC_RECOVERY_BTN_ODL);
+
+	/*
+	 * Early Scout devices does not setup EC_MIC_OE in RO, so it needs
+	 * to be done explicitly instead.
+	 */
+	gpio_set_level(GPIO_EC_MIC_OE, 1);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
