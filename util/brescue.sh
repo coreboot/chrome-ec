@@ -13,13 +13,18 @@
 # and starts the rescue utility to send the RW to the chip. The user is
 # supposed to reset the chip to trigger the rescue session.
 #
-# In invoked with nonempty NOCLEAN environment variable the script preserves
+# If invoked with RESCUE environment variable set to a path, the script will try
+# to use the rescue binary at that path.
+#
+# If invoked with nonempty NOCLEAN environment variable, the script preserves
 # the hex RW image it creates.
+#
+# If invoked with nonempty EARLY environment variable, the script passes the
+# --early option to rescue.
 
 TMPD="$(mktemp -d "/tmp/$(basename "$0").XXXXX")"
 
-RESCUE=
-for r in rescue cr50-rescue; do
+for r in ${RESCUE} rescue cr50-rescue; do
   if type "${r}" > /dev/null 2>&1; then
     RESCUE="${r}"
     break
@@ -32,6 +37,12 @@ if [[ -z ${RESCUE} ]]; then
 fi
 if [[ -z "${NOCLEAN}" ]]; then
   trap 'rm -rf "${TMPD}"' EXIT
+fi
+
+# --early could help to improve success rate depending on setup.
+early=''
+if [[ -n "${EARLY}" ]]; then
+  early='--early'
 fi
 
 dest_hex="${TMPD}/rw.hex"
@@ -118,4 +129,6 @@ if ! objcopy -I binary -O ihex --change-addresses "${addr}" \
 fi
 echo "converted to ${dest_hex}, waiting for target reset"
 
-"${RESCUE}"  "${chip_extension}" -d "${device}" -v -i "${dest_hex}"
+echo "${RESCUE}"  "${chip_extension}" -d "${device}" "${early}" -v -i \
+  "${dest_hex}"
+"${RESCUE}"  "${chip_extension}" -d "${device}" "${early}" -v -i "${dest_hex}"
