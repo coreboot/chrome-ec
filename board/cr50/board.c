@@ -1571,7 +1571,7 @@ static int get_strap_config(uint8_t *config)
 		if ((i2c_prop && spi_prop) || (!spi_prop && !i2c_prop))
 			return EC_ERROR_INVAL;
 		use_spi = spi_prop;
-		CPRINTS("Ambiguous strap config. Use %s based on old "
+		CPRINTS("WARN Ambiguous strap cfg. Use %s based on old "
 			"brdprop.", use_spi ? "spi" : "i2c");
 	}
 
@@ -1599,8 +1599,8 @@ static uint32_t get_properties(void)
 		 * is no point in checking for a matching config table entry.
 		 * For this case use default properties.
 		 */
-		CPRINTS("Invalid strap pins! Default properties = 0x%x",
-			BOARD_PROPERTIES_DEFAULT);
+		CPRINTS("ERROR INVALID STRAP PINS!!! cfg 0x%0x prop 0x%x",
+			config, BOARD_PROPERTIES_DEFAULT);
 		return BOARD_PROPERTIES_DEFAULT;
 	}
 
@@ -1632,7 +1632,7 @@ static uint32_t get_properties(void)
 		properties = BOARD_PROPERTIES_DEFAULT;
 	}
 	flog_brdprop_event(BRDPROP_NO_ENTRY, config);
-	CPRINTS("strap_cfg 0x%x has no table entry, prop = 0x%x",
+	CPRINTS("ERROR NO TABLE ENTRY!!! cfg: 0x%x prop: 0x%x",
 		config, properties);
 	return properties;
 }
