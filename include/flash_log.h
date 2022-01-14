@@ -25,6 +25,7 @@ enum flash_event_type {
 	FE_LOG_FIPS_FAILURE = 10, /* Error during continuous and/or known-answer
 				   * tests for FIPS 140-2/3
 				   */
+	FE_LOG_BRDPROP = 11, /* Detected invalid board properties */
 	/*
 	 * Fixed padding value makes it easier to parse log space
 	 * snapshots.
@@ -104,6 +105,27 @@ enum ap_ro_verification_ev {
 
 struct ap_ro_entry_payload {
 	enum ap_ro_verification_ev event : 8;
+} __packed;
+
+/*****************************************************************************/
+/* Brdprop Events */
+/* Each event can only be logged once per boot. */
+enum brdprop_ev {
+	BRDPROP_INVALID = 0,
+	BRDPROP_AMBIGUOUS = 1,
+	BRDPROP_NO_ENTRY = 2,
+
+	/*
+	 * If BRDPROP_COUNT goes above 8, increase the size of events in
+	 * brdprop_payload.
+	 */
+	BRDPROP_COUNT = 3,
+};
+
+struct brdprop_payload {
+	uint8_t events;
+	uint32_t reset_flags;
+	uint8_t configs[BRDPROP_COUNT];
 } __packed;
 
 /* Returned in the "type" field, when there is no entry available */
