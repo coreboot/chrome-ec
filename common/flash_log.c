@@ -486,7 +486,7 @@ test_export_static void flash_log_init(void)
 	}
 	flash_log_write_disable();
 }
-DECLARE_HOOK(HOOK_INIT, flash_log_init, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_INIT, flash_log_init, HOOK_PRIO_INIT_CR50_BOARD - 1);
 
 uint32_t flash_log_get_tstamp(void)
 {
