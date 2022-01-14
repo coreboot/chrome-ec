@@ -35,6 +35,7 @@ uint32_t extension_route_command(struct vendor_cmd_params *p)
 		case VENDOR_CC_SN_INC_RMA:
 		case VENDOR_CC_ENDORSEMENT_SEED:
 		case VENDOR_CC_RESET_EC:
+		case VENDOR_CC_POP_LOG_ENTRY:
 #endif /* defined(CR50_DEV) */
 		case EXTENSION_POST_RESET: /* Always need to reset. */
 		case VENDOR_CC_CCD:
