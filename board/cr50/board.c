@@ -552,6 +552,8 @@ void pmu_wakeup_interrupt(void)
 	if (wakeup_src & GC_PMU_EXITPD_SRC_PIN_PD_EXIT_MASK) {
 		reset_wake_logic();
 
+		pmu_check_tpm_rst();
+
 		/*
 		 * Delay sleep long enough for a SPI periph transaction to start
 		 * or for the system to be reset.

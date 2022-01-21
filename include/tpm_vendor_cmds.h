@@ -157,6 +157,14 @@ enum vendor_cmd_cc {
 
 	VENDOR_CC_AP_RO_VALIDATE = 58,
 
+	/*
+	 * Vendor command to disable deep sleep during the next TPM_RST_L
+	 * assertion. Cr50 used to use 22 to do this. It can't reuse that
+	 * because some old boards still send it, and deep sleep shouldn't
+	 * be disabled on those boards.
+	 */
+	VENDOR_CC_DS_DIS_TEMP = 59,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 

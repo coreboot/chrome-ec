@@ -6,6 +6,7 @@
  */
 #include "ap_ro_integrity_check.h"
 #include "ec_commands.h"
+#include "extension.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "registers.h"
@@ -15,9 +16,11 @@
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 
 static enum device_state state = DEVICE_STATE_INIT;
+static bool disable_ds_temp;
 
 void print_ap_state(void)
 {
+	ccprintf("DS Dis:  %s\n", disable_ds_temp ? "on" : "off");
 	ccprintf("AP:      %s\n", device_state_name(state));
 }
 
@@ -25,6 +28,46 @@ int ap_is_on(void)
 {
 	return state == DEVICE_STATE_ON;
 }
+
+void pmu_check_tpm_rst(void)
+{
+	/*
+	 * disable_ds_temp modifies the GPIO_TPM_RST_L wake settings to
+	 * WAKE_HIGH. With that setting it's possible to miss a rising edge.
+	 * If TPM_RST_L is high, but the ap state isn't on, cr50 missed the
+	 * edge. Trigger the interrupt manually.
+	 */
+	if (disable_ds_temp && !ap_is_on() &&
+	    gpio_get_level(GPIO_TPM_RST_L)) {
+		tpm_rst_deasserted(GPIO_TPM_RST_L);
+		CPRINTS("Missed edge");
+	}
+}
+
+/*
+ * Disable deep sleep during the next TPM_RST_L pulse
+ *
+ * Normally cr50 enters deep sleep while TPM_RST_L is asserted. This vendor
+ * command can be used to disable deep sleep the next time TPM_RST_L is
+ * asserted.
+ *
+ * This can be run on any board with any CCD state.
+ */
+static enum vendor_cmd_rc vc_ds_disable_temp(enum vendor_cmd_cc code,
+					     void *buf,
+					     size_t input_size,
+					     size_t *response_size)
+{
+	*response_size = 0;
+	if (input_size)
+		return VENDOR_RC_BOGUS_ARGS;
+
+	disable_ds_temp = true;
+	CPRINTS("dis DS");
+
+	return VENDOR_RC_SUCCESS;
+}
+DECLARE_VENDOR_COMMAND(VENDOR_CC_DS_DIS_TEMP, vc_ds_disable_temp);
 
 /**
  * Set the AP state.
@@ -75,8 +118,17 @@ static void deferred_set_ap_off(void)
 	 * Note: Presence of platform reset is a poor indicator of deep sleep
 	 * support.  It happens to be correlated with ARM vs x86 at present.
 	 */
-	if (board_deep_sleep_allowed())
+	if (disable_ds_temp) {
+		CPRINTS("Block DS");
+		disable_deep_sleep();
+		/*
+		 * TPM_RST_L will stay asserted until the system resumes.
+		 * Wake from sleep when it goes high.
+		 */
+		gpio_set_wakepin(GPIO_TPM_RST_L, GPIO_HIB_WAKE_HIGH);
+	} else if (board_deep_sleep_allowed()) {
 		enable_deep_sleep();
+	}
 }
 DECLARE_DEFERRED(deferred_set_ap_off);
 
@@ -100,6 +152,22 @@ void set_ap_on(void)
 
 	if (board_deep_sleep_allowed())
 		disable_deep_sleep();
+
+
+	/*
+	 * Restore TPM_RST_L wake low now that TPM_RST_L has been
+	 * deasserted. Only change the TPM_RST_L wake setting if cr50 blocked
+	 * deep sleep.
+	 */
+	if (disable_ds_temp) {
+		CPRINTS("set TPM wake");
+		gpio_set_wakepin(GPIO_TPM_RST_L, GPIO_HIB_WAKE_LOW);
+	}
+	/*
+	 * disable_ds_temp only survives one TPM_RST_L pulse. Clear it when
+	 * the AP turns back on.
+	 */
+	disable_ds_temp = false;
 }
 
 static uint8_t waiting_for_ap_reset;
