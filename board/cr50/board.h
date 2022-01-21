@@ -395,6 +395,7 @@ void print_ap_uart_state(void);
 void print_ec_state(void);
 void print_servo_state(void);
 
+void pmu_check_tpm_rst(void);
 int ap_is_on(void);
 int ap_uart_is_on(void);
 int ec_is_on(void);
