@@ -101,7 +101,7 @@ int power_signal_is_asserted(const struct power_signal_info *s);
 /**
  * Get the level of provided input signal.
  */
-__overridable int power_signal_get_level(enum gpio_signal signal);
+__override_proto int power_signal_get_level(enum gpio_signal signal);
 
 /**
  * Enable interrupt for provided input signal.
@@ -378,5 +378,13 @@ __override_proto void board_power_5v_enable(int enable);
  * @param enable: 1 to turn on the rail, 0 to request the rail to be turned off.
  */
 void power_5v_enable(task_id_t tid, int enable);
+
+#ifdef CONFIG_ZTEST
+/**
+ * @brief Perform one state transition with power_common_state() as
+ * chipset_task() would.
+ */
+void test_power_common_state(void);
+#endif
 
 #endif  /* __CROS_EC_POWER_H */

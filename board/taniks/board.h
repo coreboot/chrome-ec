@@ -4,6 +4,7 @@
  */
 
 /* Taniks board configuration */
+#define CONFIG_BUTTONS_RUNTIME_CONFIG
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
@@ -14,6 +15,8 @@
  * Taniks boards are set up for vivaldi
  */
 #define CONFIG_KEYBOARD_VIVALDI
+#undef CONFIG_VOLUME_BUTTONS
+#define NPCX_SELECT_KSI_TO_GPIO
 
 /* Baseboard features */
 #include "baseboard.h"
@@ -89,6 +92,12 @@
 #define CONFIG_USBC_PPC_SYV682X
 #define CONFIG_USBC_PPC_NX20P3483
 
+/* I2C speed console command */
+#define CONFIG_CMD_I2C_SPEED
+
+/* I2C control host command */
+#define CONFIG_HOSTCMD_I2C_CONTROL
+
 /* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
@@ -123,7 +132,6 @@
 #define GPIO_PCH_RTCRST			GPIO_EC_PCH_RTCRST
 #define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
-#define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_L
 
 /*
  * GPIO_EC_PCH_INT_ODL is used for MKBP events as well as a PCH wakeup
@@ -233,9 +241,9 @@ enum ioex_port {
 };
 
 enum battery_type {
-	BATTERY_SMP,
+	BATTERY_SMP_51W,
+	BATTERY_SMP_71W,
 	BATTERY_LGC,
-	BATTERY_SUNWODA,
 	BATTERY_TYPE_COUNT,
 };
 

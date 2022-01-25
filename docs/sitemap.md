@@ -31,6 +31,7 @@
 *   [Fingerprint Factory Requirements](./fingerprint/fingerprint-factory-requirements.md)
 *   [Fingerprint Quick Factory Guide](./fingerprint/fingerprint-factory-quick-guide.md)
 *   [Dragonclaw Schematics and Layout](./schematics/dragonclaw)
+*   [Fingerprint MCU RAM and Flash](./fingerprint/fingerprint-ram-and-flash.md)
 
 ## Testing
 
@@ -73,6 +74,7 @@
 *   [Reducing EC Image Size](./reducing_ec_image_size.md)
 *   [Code Reviews](./code_reviews.md)
 *   [IDE Support](./ide-support.md)
+*   [Building with Goma (Googlers only)](./goma.md)
 
 [1]:https://chromium.googlesource.com/chromiumos/platform/ec/+/cr50_stab/docs/case_closed_debugging.md
 [2]:https://chromium.googlesource.com/chromiumos/platform/ec/+/cr50_stab/docs/case_closed_debugging_cr50.md

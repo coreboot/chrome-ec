@@ -471,13 +471,22 @@ void __idle(void)
 	uint16_t lptim0;
 
 	while (1) {
-		asm volatile("cpsid i");
+		interrupt_disable();
 
 		t0 = get_time();
 		next_delay = __hw_clock_event_get() - t0.le.lo;
 
 		if (DEEP_SLEEP_ALLOWED &&
 		    next_delay > LPTIM_PERIOD_US + STOP_MODE_LATENCY) {
+			/*
+			 * Sleep time MUST be smaller than watchdog period.
+			 * Otherwise watchdog will wake us from deep sleep
+			 * which is not what we want. Please note that this
+			 * assert won't fire if we are already part way through
+			 * the watchdog period.
+			 */
+			ASSERT(next_delay < CONFIG_WATCHDOG_PERIOD_MS * MSEC);
+
 			/* deep-sleep in STOP mode */
 			idle_dsleep_cnt++;
 
@@ -529,7 +538,7 @@ void __idle(void)
 			/* normal idle : only CPU clock stopped */
 			asm("wfi");
 		}
-		asm volatile("cpsie i");
+		interrupt_enable();
 	}
 }
 

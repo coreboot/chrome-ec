@@ -93,20 +93,12 @@ log_level_map = {
 }
 
 
-def main(argv=None):
-    """The main function.
-
-    Args:
-        argv: Optionally, the command-line to parse, not including argv[0].
+def get_argparser():
+    """Get the argument parser.
 
     Returns:
-        Zero upon success, or non-zero upon failure.
+        A two tuple, the argument parser, and the subcommand action.
     """
-    if argv is None:
-        argv = sys.argv[1:]
-
-    maybe_reexec(argv)
-
     parser = argparse.ArgumentParser(
         prog="zmake",
         description="Chromium OS's meta-build tool for Zephyr",
@@ -130,6 +122,12 @@ def main(argv=None):
         default=1,
         type=int,
         help="Degree of multiprogramming to use",
+    )
+    parser.add_argument(
+        "--goma",
+        action="store_true",
+        dest="goma",
+        help="Enable hyperspeed compilation with Goma! (Googlers only)",
     )
     parser.add_argument(
         "-l",
@@ -165,7 +163,11 @@ def main(argv=None):
         "--zephyr-base", type=pathlib.Path, help="Path to Zephyr OS repository"
     )
 
-    sub = parser.add_subparsers(dest="subcommand", help="Subcommand")
+    sub = parser.add_subparsers(
+        dest="subcommand",
+        metavar="subcommand",
+        help="Subcommand to run",
+    )
     sub.required = True
 
     configure = sub.add_parser(
@@ -178,6 +180,12 @@ def main(argv=None):
         action="store_true",
         dest="bringup",
         help="Enable bringup debugging features",
+    )
+    configure.add_argument(
+        "--clobber",
+        action="store_true",
+        dest="clobber",
+        help="Delete existing build directories, even if configuration is unchanged",
     )
     configure.add_argument(
         "--allow-warnings",
@@ -253,14 +261,27 @@ def main(argv=None):
         help="Execute tests from a build directory",
     )
     test.add_argument(
+        "-c",
+        "--coverage",
+        action="store_true",
+        dest="coverage",
+        help="Run lcov after running test to generate coverage info file.",
+    )
+    test.add_argument(
         "build_dir",
         type=pathlib.Path,
         help="The build directory used during configuration",
     )
 
-    sub.add_parser(
+    testall = sub.add_parser(
         "testall",
         help="Execute all known builds and tests",
+    )
+    testall.add_argument(
+        "--clobber",
+        action="store_true",
+        dest="clobber",
+        help="Delete existing build directories, even if configuration is unchanged",
     )
 
     coverage = sub.add_parser(
@@ -268,11 +289,54 @@ def main(argv=None):
         help="Run coverage on a build directory",
     )
     coverage.add_argument(
+        "--clobber",
+        action="store_true",
+        dest="clobber",
+        help="Delete existing build directories, even if configuration is unchanged",
+    )
+    coverage.add_argument(
         "build_dir",
         type=pathlib.Path,
         help="The build directory used during configuration",
     )
 
+    generate_readme = sub.add_parser(
+        "generate-readme",
+        help="Update the auto-generated markdown documentation",
+    )
+    generate_readme.add_argument(
+        "-o",
+        "--output-file",
+        default=pathlib.Path(__file__).parent.parent / "README.md",
+        help="File to write to.  It will only be written if changed.",
+    )
+    generate_readme.add_argument(
+        "--diff",
+        action="store_true",
+        help=(
+            "If specified, diff the README with the expected contents instead of "
+            "writing out."
+        ),
+    )
+
+    return parser, sub
+
+
+def main(argv=None):
+    """The main function.
+
+    Args:
+        argv: Optionally, the command-line to parse, not including argv[0].
+
+    Returns:
+        Zero upon success, or non-zero upon failure.
+    """
+    if argv is None:
+        argv = sys.argv[1:]
+
+    maybe_reexec(argv)
+
+    parser, _ = get_argparser()
     opts = parser.parse_args(argv)
 
     # Default logging
@@ -303,7 +367,8 @@ def main(argv=None):
         zmake = call_with_namespace(zm.Zmake, opts)
         subcommand_method = getattr(zmake, opts.subcommand.replace("-", "_"))
         result = call_with_namespace(subcommand_method, opts)
-        return result
+        wait_rv = zmake.executor.wait()
+        return result or wait_rv
     finally:
         multiproc.wait_for_log_end()
 

@@ -9,11 +9,7 @@
 
 #include "baseboard.h"
 
-/* Chipset config */
-#define CONFIG_BRINGUP
-
 /* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED
 #define CONFIG_LTO
 #define CONFIG_PRESERVE_LOGS
 
@@ -30,7 +26,7 @@
 #define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
 
 /* PD / USB-C / PPC */
-#define CONFIG_USB_PD_DEBUG_LEVEL 0
+#undef CONFIG_USB_PD_DEBUG_LEVEL /* default to 1, configurable in ec console */
 
 /* Optional console commands */
 #define CONFIG_CMD_FLASH
@@ -40,14 +36,12 @@
 #define CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV	9000
 
 /* Keyboard */
-#define GPIO_EN_KEYBOARD_BACKLIGHT	GPIO_EN_KB_BL
 #define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Sensor */
 #define CONFIG_GMR_TABLET_MODE
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
-#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
 
 /* ICM426XX Base accel/gyro */
 #define CONFIG_ACCELGYRO_ICM42607

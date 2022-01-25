@@ -55,11 +55,15 @@ EC Feature                                                                  | Ne
 [Configure AP Power Sequencing (TODO)](./zephyr_template.md)                | yes
 [Configure USB-C (TODO)](./zephyr_template.md)                              | yes
 [Configure Charger (TODO)](./zephyr_template.md)                            | yes
-[Configure I2C Buses (TODO)](./zephyr_template.md)                          | yes
+[Configure I2C Buses](./zephyr_i2c.md)                                      | yes
+[Configure GPIO](./zephyr_gpio.md)                                          | yes
 [Configure Batteries (TODO)](./zephyr_template.md)                          | no
 [Configure CrOS Board Information (CBI) (TODO)](./zephyr_template.md)       | no
+[Configure CrOS CBI FW CONFIG](./zephyr_fw_config.md)                       | no
 [Configure Keyboard (TODO)](./zephyr_template.md)                           | no
 [Configure LEDs (TODO)](./zephyr_template.md)                               | no
 [Configure Motion Sensors (TODO)](./zephyr_template.md)                     | no
 [Configure BC1.2 Charger Detector (TODO)](./zephyr_template.md)             | no
 [Configure Battery (TODO)](./zephyr_template.md)                            | no
+[Configure ADC](./zephyr_adc.md)                                            | no
+[Configure Temperature Sensors](./zephyr_temperature_sensor.md)             | no

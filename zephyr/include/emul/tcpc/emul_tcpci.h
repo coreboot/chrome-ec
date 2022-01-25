@@ -12,7 +12,7 @@
 #ifndef __EMUL_TCPCI_H
 #define __EMUL_TCPCI_H
 
-#include <emul.h>
+#include <drivers/emul.h>
 #include <drivers/i2c.h>
 #include <drivers/i2c_emul.h>
 #include <usb_pd_tcpm.h>
@@ -276,7 +276,7 @@ void tcpci_emul_set_alert_callback(const struct emul *emul,
  * @param partner Pointer to callbacks
  */
 void tcpci_emul_set_partner_ops(const struct emul *emul,
-				struct tcpci_emul_partner_ops *partner);
+				const struct tcpci_emul_partner_ops *partner);
 
 /**
  * @brief Emulate connection of specific device to emulated TCPCI

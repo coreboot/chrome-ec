@@ -72,11 +72,10 @@ void tcpci_partner_set_header(struct tcpci_partner_data *data,
  *
  * @param work Pointer to work structure
  */
-static void tcpci_partner_delayed_send(struct k_work *work)
+static void tcpci_partner_delayed_send(void *fifo_data)
 {
-	struct k_work_delayable *kwd = k_work_delayable_from_work(work);
 	struct tcpci_partner_data *data =
-		CONTAINER_OF(kwd, struct tcpci_partner_data, delayed_send);
+		CONTAINER_OF(fifo_data, struct tcpci_partner_data, fifo_data);
 	struct tcpci_partner_msg *msg;
 	uint64_t now;
 	int ret;
@@ -105,12 +104,52 @@ static void tcpci_partner_delayed_send(struct k_work *work)
 						   K_FOREVER);
 			} while (ret);
 		} else {
-			k_work_reschedule(kwd, K_MSEC(msg->time - now));
+			k_timer_start(&data->delayed_send,
+				      K_MSEC(msg->time - now), K_NO_WAIT);
 			break;
 		}
 	}
 
 	k_mutex_unlock(&data->to_send_mutex);
+}
+
+/** FIFO to schedule TCPCI partners that needs to send message */
+K_FIFO_DEFINE(delayed_send_fifo);
+
+/**
+ * @brief Thread which sends delayed messages for TCPCI partners
+ *
+ * @param a unused
+ * @param b unused
+ * @param c unused
+ */
+static void tcpci_partner_delayed_send_thread(void *a, void *b, void *c)
+{
+	void *fifo_data;
+
+	while (1) {
+		fifo_data = k_fifo_get(&delayed_send_fifo, K_FOREVER);
+		tcpci_partner_delayed_send(fifo_data);
+	}
+}
+
+/** Thread for sending delayed messages */
+K_THREAD_DEFINE(tcpci_partner_delayed_send_tid, 512 /* stack size */,
+		tcpci_partner_delayed_send_thread, NULL, NULL, NULL,
+		0 /* priority */, 0, 0);
+
+/**
+ * @brief Timeout handler which adds TCPCI partner that has pending delayed
+ *        message to send
+ *
+ * @param timer Pointer to timer which triggered timeout
+ */
+static void tcpci_partner_delayed_send_timer(struct k_timer *timer)
+{
+	struct tcpci_partner_data *data =
+		CONTAINER_OF(timer, struct tcpci_partner_data, delayed_send);
+
+	k_fifo_put(&delayed_send_fifo, &data->fifo_data);
 }
 
 /** Check description in emul_common_tcpci_partner.h */
@@ -147,7 +186,7 @@ int tcpci_partner_send_msg(struct tcpci_partner_data *data,
 	/* Current message should be sent first */
 	if (prev_msg == NULL || prev_msg->time > msg->time) {
 		sys_slist_prepend(&data->to_send, &msg->node);
-		k_work_reschedule(&data->delayed_send, K_MSEC(delay));
+		k_timer_start(&data->delayed_send, K_MSEC(delay), K_NO_WAIT);
 		k_mutex_unlock(&data->to_send_mutex);
 		return 0;
 	}
@@ -219,7 +258,7 @@ int tcpci_partner_clear_msg_queue(struct tcpci_partner_data *data)
 	struct tcpci_partner_msg *msg;
 	int ret;
 
-	k_work_cancel_delayable(&data->delayed_send);
+	k_timer_stop(&data->delayed_send);
 
 	ret = k_mutex_lock(&data->to_send_mutex, K_FOREVER);
 	if (ret) {
@@ -227,9 +266,8 @@ int tcpci_partner_clear_msg_queue(struct tcpci_partner_data *data)
 	}
 
 	while (!sys_slist_is_empty(&data->to_send)) {
-		msg = SYS_SLIST_CONTAINER(
-				sys_slist_get_not_empty(&data->to_send),
-				msg, node);
+		msg = CONTAINER_OF(sys_slist_get_not_empty(&data->to_send),
+				   struct tcpci_partner_msg, node);
 		tcpci_partner_free_msg(msg);
 	}
 
@@ -238,10 +276,165 @@ int tcpci_partner_clear_msg_queue(struct tcpci_partner_data *data)
 	return 0;
 }
 
+/**
+ * @brief Reset common data to state after hard reset (reset counters, flags,
+ *        clear message queue)
+ *
+ * @param data Pointer to TCPCI partner emulator
+ */
+static void tcpci_partner_common_reset(struct tcpci_partner_data *data)
+{
+	tcpci_partner_clear_msg_queue(data);
+	data->msg_id = 0;
+	data->recv_msg_id = -1;
+	data->wait_for_response = false;
+	data->in_soft_reset = false;
+}
+
+/** Check description in emul_common_tcpci_partner.h */
+void tcpci_partner_common_send_hard_reset(struct tcpci_partner_data *data)
+{
+	struct tcpci_partner_msg *msg;
+
+	tcpci_partner_common_reset(data);
+
+	msg = tcpci_partner_alloc_msg(0);
+	msg->msg.type = TCPCI_MSG_TX_HARD_RESET;
+
+	tcpci_partner_send_msg(data, msg, 0);
+}
+
+/** Check description in emul_common_tcpci_partner.h */
+void tcpci_partner_common_send_soft_reset(struct tcpci_partner_data *data)
+{
+	/* Reset counters */
+	data->msg_id = 0;
+	data->recv_msg_id = -1;
+	/* Send message */
+	tcpci_partner_send_control_msg(data, PD_CTRL_SOFT_RESET, 0);
+	/* Wait for accept of soft reset */
+	data->wait_for_response = true;
+	data->in_soft_reset = true;
+}
+
+/** Check description in emul_common_tcpci_partner.h */
+enum tcpci_partner_handler_res tcpci_partner_common_msg_handler(
+	struct tcpci_partner_data *data,
+	const struct tcpci_emul_msg *tx_msg,
+	enum tcpci_msg_type type,
+	enum tcpci_emul_tx_status tx_status)
+{
+	uint16_t header;
+	int msg_type;
+
+	tcpci_emul_partner_msg_status(data->tcpci_emul, tx_status);
+	/* If receiving message was unsuccessful, abandon processing message */
+	if (tx_status != TCPCI_EMUL_TX_SUCCESS) {
+		return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
+	}
+
+	LOG_HEXDUMP_INF(tx_msg->buf, tx_msg->cnt,
+			"USB-C partner emulator received message");
+
+	/* Handle hard reset */
+	if (type == TCPCI_MSG_TX_HARD_RESET) {
+		tcpci_partner_common_reset(data);
+
+		return TCPCI_PARTNER_COMMON_MSG_HARD_RESET;
+	}
+
+	/* Handle only SOP messages */
+	if (type != TCPCI_MSG_SOP) {
+		return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
+	}
+
+	header = sys_get_le16(tx_msg->buf);
+	msg_type = PD_HEADER_TYPE(header);
+
+	if (PD_HEADER_ID(header) == data->recv_msg_id &&
+	    msg_type != PD_CTRL_SOFT_RESET) {
+		/* Repeated message mark as handled */
+		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+	}
+
+	data->recv_msg_id = PD_HEADER_ID(header);
+
+	if (PD_HEADER_CNT(header)) {
+		switch (PD_HEADER_TYPE(header)) {
+		case PD_DATA_VENDOR_DEF:
+			/* VDM (vendor defined message) - ignore */
+			return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+		default:
+			/* No other common handlers for data messages */
+			return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
+		}
+	}
+
+	if (data->common_handler_masked & BIT(msg_type)) {
+		/* This message type is masked from common handler */
+		return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
+	}
+
+	/* Handle control message */
+	switch (PD_HEADER_TYPE(header)) {
+	case PD_CTRL_SOFT_RESET:
+		data->msg_id = 0;
+		tcpci_partner_send_control_msg(data, PD_CTRL_ACCEPT, 0);
+		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+
+	case PD_CTRL_REJECT:
+		if (data->in_soft_reset) {
+			tcpci_partner_common_send_hard_reset(data);
+
+			return TCPCI_PARTNER_COMMON_MSG_HARD_RESET;
+		}
+		/* Fall through */
+	case PD_CTRL_ACCEPT:
+		if (data->wait_for_response) {
+			if (data->in_soft_reset) {
+				/*
+				 * Accept is response to soft reset send by
+				 * common code. It is handled here
+				 */
+				data->wait_for_response = false;
+				data->in_soft_reset = false;
+
+				return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+			}
+			/*
+			 * Accept/reject is expected message and emulator code
+			 * should handle it
+			 */
+			return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
+		}
+
+		/* Unexpected message - trigger soft reset */
+		tcpci_partner_common_send_soft_reset(data);
+
+		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+	}
+
+	return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
+}
+
+/** Check description in emul_common_tcpci_partner.h */
+void tcpci_partner_common_handler_mask_msg(struct tcpci_partner_data *data,
+					   enum pd_ctrl_msg_type type,
+					   bool enable)
+{
+	if (enable) {
+		data->common_handler_masked |= BIT(type);
+	} else {
+		data->common_handler_masked &= ~BIT(type);
+	}
+}
+
 /** Check description in emul_common_tcpci_partner.h */
 void tcpci_partner_init(struct tcpci_partner_data *data)
 {
-	k_work_init_delayable(&data->delayed_send, tcpci_partner_delayed_send);
+	k_timer_init(&data->delayed_send, tcpci_partner_delayed_send_timer,
+		     NULL);
 	sys_slist_init(&data->to_send);
 	k_mutex_init(&data->to_send_mutex);
+	tcpci_partner_common_reset(data);
 }

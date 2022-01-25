@@ -6,6 +6,7 @@ zephyr_library_sources(console.c)
 zephyr_library_sources(crc.c)
 zephyr_library_sources(gpio.c)
 zephyr_library_sources(gpio_id.c)
+zephyr_library_sources(gpio_int.c)
 zephyr_library_sources(power.c)
 
 if (DEFINED CONFIG_ARCH_POSIX)
@@ -17,7 +18,7 @@ endif()
 zephyr_library_sources_ifdef(no_libgcc                  libgcc_${ARCH}.S)
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ADC         adc.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_FUEL_GAUGE
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
                                                             battery.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_EEPROM  cbi.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_GPIO    cbi.c)

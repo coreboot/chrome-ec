@@ -2,7 +2,7 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-/* Cherry board configuration */
+/* Dojo board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
@@ -30,7 +30,7 @@
 #define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
 
 /* PD / USB-C / PPC */
-#define CONFIG_USB_PD_DEBUG_LEVEL 0
+#undef CONFIG_USB_PD_DEBUG_LEVEL /* default to 1, configurable in ec console */
 
 /* Optional console commands */
 #define CONFIG_CMD_FLASH
@@ -47,7 +47,6 @@
 #define CONFIG_GMR_TABLET_MODE
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
-#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
 
 /* ICM426XX Base accel/gyro */
 #define CONFIG_ACCELGYRO_ICM42607
@@ -85,10 +84,11 @@
 #include "registers.h"
 
 enum battery_type {
-	BATTERY_PANASONIC_AC16L5J,
-	BATTERY_PANASONIC_AC16L5J_KT00205009,
-	BATTERY_AP16L8J,
-	BATTERY_LGC_AP18C8K,
+	BATTERY_DYNAPACK_COS,
+	BATTERY_DYNAPACK_ATL,
+	BATTERY_SIMPLO_COS,
+	BATTERY_SIMPLO_HIGHPOWER,
+	BATTERY_COS,
 	BATTERY_TYPE_COUNT,
 };
 

@@ -8,6 +8,39 @@
 #include <dt-bindings/pinctrl/it8xxx2-pinctrl.h>
 #include <soc.h>
 
+#define SCL 0
+#define SDA 1
+#define IT8XXX2_DT_I2C_ALT_ITEMS(node_id) {                              \
+	.clk_pinctrls = DEVICE_DT_GET(DT_PHANDLE(                        \
+		DT_PINCTRL_BY_IDX(node_id, 0, SCL), pinctrls)),          \
+	.dat_pinctrls = DEVICE_DT_GET(DT_PHANDLE(                        \
+		DT_PINCTRL_BY_IDX(node_id, 0, SDA), pinctrls)),          \
+	.clk_pin = DT_PHA(                                               \
+		DT_PINCTRL_BY_IDX(node_id, 0, SCL), pinctrls, pin),      \
+	.dat_pin = DT_PHA(                                               \
+		DT_PINCTRL_BY_IDX(node_id, 0, SDA), pinctrls, pin),      \
+	.clk_alt = DT_PHA(                                               \
+		DT_PINCTRL_BY_IDX(node_id, 0, SCL), pinctrls, alt_func), \
+	.dat_alt = DT_PHA(                                               \
+		DT_PINCTRL_BY_IDX(node_id, 0, SDA), pinctrls, alt_func), \
+},
+
+struct i2c_alts_cfg {
+	/* Pinmux control group */
+	const struct device *clk_pinctrls;
+	const struct device *dat_pinctrls;
+	/* GPIO pin */
+	uint8_t clk_pin;
+	uint8_t dat_pin;
+	/* Alternate function */
+	uint8_t clk_alt;
+	uint8_t dat_alt;
+};
+
+static struct i2c_alts_cfg i2c_alts[] = {
+	DT_FOREACH_STATUS_OKAY(ite_it8xxx2_i2c, IT8XXX2_DT_I2C_ALT_ITEMS)
+};
+
 static int it8xxx2_pinmux_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
@@ -34,78 +67,16 @@ static int it8xxx2_pinmux_init_latr(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(i2c0), okay) && \
-	DT_NODE_HAS_STATUS(DT_NODELABEL(pinmuxb), okay)
-	{
-		const struct device *portb =
-				DEVICE_DT_GET(DT_NODELABEL(pinmuxb));
-
-		/* I2C0 CLK */
-		pinmux_pin_set(portb, 3, IT8XXX2_PINMUX_FUNC_1);
-		/* I2C0 DAT */
-		pinmux_pin_set(portb, 4, IT8XXX2_PINMUX_FUNC_1);
+	for (int inst = 0; inst < ARRAY_SIZE(i2c_alts); inst++) {
+		/* I2C CLK */
+		pinmux_pin_set(i2c_alts[inst].clk_pinctrls,
+			       i2c_alts[inst].clk_pin,
+			       i2c_alts[inst].clk_alt);
+		/* I2C DAT */
+		pinmux_pin_set(i2c_alts[inst].dat_pinctrls,
+			       i2c_alts[inst].dat_pin,
+			       i2c_alts[inst].dat_alt);
 	}
-#endif
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(i2c1), okay) && \
-	DT_NODE_HAS_STATUS(DT_NODELABEL(pinmuxc), okay)
-	{
-		const struct device *portc =
-				DEVICE_DT_GET(DT_NODELABEL(pinmuxc));
-
-		/* I2C1 CLK */
-		pinmux_pin_set(portc, 1, IT8XXX2_PINMUX_FUNC_1);
-		/* I2C1 DAT */
-		pinmux_pin_set(portc, 2, IT8XXX2_PINMUX_FUNC_1);
-	}
-#endif
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(i2c2), okay) && \
-	DT_NODE_HAS_STATUS(DT_NODELABEL(pinmuxf), okay)
-	{
-		const struct device *portf =
-				DEVICE_DT_GET(DT_NODELABEL(pinmuxf));
-
-		/* I2C2 CLK */
-		pinmux_pin_set(portf, 6, IT8XXX2_PINMUX_FUNC_1);
-		/* I2C2 DAT */
-		pinmux_pin_set(portf, 7, IT8XXX2_PINMUX_FUNC_1);
-	}
-#endif
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(i2c3), okay) && \
-	DT_NODE_HAS_STATUS(DT_NODELABEL(pinmuxh), okay)
-	{
-		const struct device *porth =
-				DEVICE_DT_GET(DT_NODELABEL(pinmuxh));
-
-		/* I2C3 CLK */
-		pinmux_pin_set(porth, 1, IT8XXX2_PINMUX_FUNC_3);
-		/* I2C3 DAT */
-		pinmux_pin_set(porth, 2, IT8XXX2_PINMUX_FUNC_3);
-	}
-#endif
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(i2c4), okay) && \
-	DT_NODE_HAS_STATUS(DT_NODELABEL(pinmuxe), okay)
-	{
-		const struct device *porte =
-				DEVICE_DT_GET(DT_NODELABEL(pinmuxe));
-
-		/* I2C4 CLK */
-		pinmux_pin_set(porte, 0, IT8XXX2_PINMUX_FUNC_3);
-		/* I2C4 DAT */
-		pinmux_pin_set(porte, 7, IT8XXX2_PINMUX_FUNC_3);
-	}
-#endif
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(i2c5), okay) && \
-	DT_NODE_HAS_STATUS(DT_NODELABEL(pinmuxa), okay)
-	{
-		const struct device *porta =
-				DEVICE_DT_GET(DT_NODELABEL(pinmuxa));
-
-		/* I2C5 CLK */
-		pinmux_pin_set(porta, 4, IT8XXX2_PINMUX_FUNC_3);
-		/* I2C5 DAT */
-		pinmux_pin_set(porta, 5, IT8XXX2_PINMUX_FUNC_3);
-	}
-#endif
 
 	return 0;
 }

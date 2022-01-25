@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Brya board configuration */
+/* Volmar board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
@@ -11,7 +11,7 @@
 #include "compile_time_macros.h"
 
 /*
- * Early brya boards are not set up for vivaldi
+ * Early Volmar boards are not set up for vivaldi
  */
 #undef CONFIG_KEYBOARD_VIVALDI
 
@@ -43,13 +43,6 @@
 #define CONFIG_ACCEL_LSM6DSO_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
-/* TCS3400 ALS */
-#define CONFIG_ALS
-#define ALS_COUNT 1
-#define CONFIG_ALS_TCS3400
-#define CONFIG_ALS_TCS3400_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
-
 /* Enable sensor fifo, must also define the _SIZE and _THRES */
 #define CONFIG_ACCEL_FIFO
 /* FIFO size is in power of 2. */
@@ -58,8 +51,7 @@
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
 
 /* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK \
-	(BIT(LID_ACCEL) | BIT(CLEAR_ALS))
+#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 
 /* Lid accel */
 #define CONFIG_LID_ANGLE
@@ -84,11 +76,9 @@
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
-#define CONFIG_IO_EXPANDER
-#define CONFIG_IO_EXPANDER_NCT38XX
-#define CONFIG_IO_EXPANDER_PORT_COUNT		4
-
-#define CONFIG_USB_PD_TCPM_PS8815
+#undef CONFIG_USB_PD_TCPM_NCT38XX
+#define CONFIG_USB_PD_TCPM_RT1715 /* C0 */
+#define CONFIG_USB_PD_TCPM_PS8815 /* C1 */
 #define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 #define CONFIG_USBC_RETIMER_INTEL_BB
 
@@ -99,7 +89,6 @@
 #define CONFIG_HOSTCMD_I2C_CONTROL
 
 #define CONFIG_USBC_PPC_SYV682X
-#define CONFIG_USBC_PPC_NX20P3483
 
 /* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
@@ -132,7 +121,6 @@
 #define GPIO_PCH_RTCRST			GPIO_EC_PCH_RTCRST
 #define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
-#define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_L
 
 /*
  * GPIO_EC_PCH_INT_ODL is used for MKBP events as well as a PCH wakeup
@@ -226,7 +214,6 @@ enum adc_channel {
 	ADC_TEMP_SENSOR_1_DDR_SOC,
 	ADC_TEMP_SENSOR_2_AMBIENT,
 	ADC_TEMP_SENSOR_3_CHARGER,
-	ADC_TEMP_SENSOR_4_WWAN,
 	ADC_CH_COUNT
 };
 
@@ -234,7 +221,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
 	TEMP_SENSOR_2_AMBIENT,
 	TEMP_SENSOR_3_CHARGER,
-	TEMP_SENSOR_4_WWAN,
 	TEMP_SENSOR_COUNT
 };
 
@@ -242,22 +228,13 @@ enum sensor_id {
 	LID_ACCEL = 0,
 	BASE_ACCEL,
 	BASE_GYRO,
-	CLEAR_ALS,
-	RGB_ALS,
 	SENSOR_COUNT
-};
-
-enum ioex_port {
-	IOEX_C0_NCT38XX = 0,
-	IOEX_C2_NCT38XX,
-	IOEX_ID_1_C0_NCT38XX,
-	IOEX_ID_1_C2_NCT38XX,
-	IOEX_PORT_COUNT
 };
 
 enum battery_type {
 	BATTERY_POWER_TECH,
 	BATTERY_LGC011,
+	BATTERY_AP19B8M,
 	BATTERY_TYPE_COUNT
 };
 

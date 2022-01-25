@@ -14,7 +14,6 @@ extern void test_suite_thermistor(void);
 extern void test_suite_temp_sensor(void);
 extern void test_suite_bma2x2(void);
 extern void test_suite_bc12(void);
-extern void test_suite_ppc(void);
 extern void test_suite_bmi260(void);
 extern void test_suite_bmi160(void);
 extern void test_suite_tcs3400(void);
@@ -32,10 +31,13 @@ extern void test_suite_tcpci(void);
 extern void test_suite_ps8xxx(void);
 extern void test_suite_integration_usb(void);
 extern void test_suite_power_common(void);
+extern void test_suite_power_common_no_tasks(void);
+extern void test_suite_watchdog(void);
 
 void test_main(void)
 {
 	/* Test suites to run before ec_app_main.*/
+	test_suite_power_common_no_tasks();
 
 	ec_app_main();
 
@@ -47,7 +49,6 @@ void test_main(void)
 	test_suite_temp_sensor();
 	test_suite_bma2x2();
 	test_suite_bc12();
-	test_suite_ppc();
 	test_suite_bmi260();
 	test_suite_bmi160();
 	test_suite_tcs3400();
@@ -65,4 +66,5 @@ void test_main(void)
 	test_suite_ps8xxx();
 	test_suite_integration_usb();
 	test_suite_power_common();
+	test_suite_watchdog();
 }

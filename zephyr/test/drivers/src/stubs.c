@@ -54,13 +54,6 @@ BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
 
 /* Charger Chip Configuration */
 const struct charger_config_t chg_chips[] = {
-#ifdef CONFIG_PLATFORM_EC_CHARGER_ISL9241
-	{
-		.i2c_port = I2C_PORT_CHARGER,
-		.i2c_addr_flags = ISL9241_ADDR_FLAGS,
-		.drv = &isl9241_drv,
-	},
-#endif
 #ifdef CONFIG_PLATFORM_EC_CHARGER_ISL9238
 	{
 		.i2c_port = I2C_PORT_CHARGER,
@@ -325,71 +318,6 @@ uint16_t tcpc_get_alert_status(void)
 	return status;
 }
 
-enum power_state power_chipset_init(void)
-{
-	return POWER_G3;
-}
-
-static enum power_state forced_state;
-static bool force_state;
-
-void force_power_state(bool force, enum power_state state)
-{
-	forced_state = state;
-	force_state = force;
-
-	if (force) {
-		task_wake(TASK_ID_CHIPSET);
-		/*
-		 * TODO(b/201420132) - setting power state requires to wake up
-		 * TASK_ID_CHIPSET Sleep is required to run chipset task before
-		 * continuing with test
-		 */
-		k_msleep(1);
-	}
-}
-
-enum power_state power_handle_state(enum power_state state)
-{
-	switch (state) {
-	case POWER_G3S5:
-	case POWER_S5S3:
-	case POWER_S3S0:
-	case POWER_S0S3:
-	case POWER_S3S5:
-	case POWER_S5G3:
-#ifdef CONFIG_POWER_S0IX
-	case POWER_S0ixS0:
-	case POWER_S0S0ix:
-#endif
-		/*
-		 * Wait for event in transition states to prevent dead loop in
-		 * chipset task
-		 */
-		task_wait_event(-1);
-		break;
-	default:
-		break;
-	}
-
-	if (force_state) {
-		state = forced_state;
-	}
-
-	return state;
-}
-
-void chipset_reset(enum chipset_shutdown_reason reason)
-{
-}
-
-void chipset_force_shutdown(enum chipset_shutdown_reason reason)
-{
-}
-
-/* Power signals list. Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {};
-
 void tcpc_alert_event(enum gpio_signal signal)
 {
 	int port;
@@ -452,3 +380,23 @@ static void stubs_interrupt_init(void)
 	gpio_enable_interrupt(GPIO_SWITCHCAP_PG_INT_L);
 }
 DECLARE_HOOK(HOOK_INIT, stubs_interrupt_init, HOOK_PRIO_INIT_I2C + 1);
+
+void board_set_switchcap_power(int enable)
+{
+	gpio_set_level(GPIO_SWITCHCAP_ON, enable);
+}
+
+int board_is_switchcap_enabled(void)
+{
+	return gpio_get_level(GPIO_SWITCHCAP_ON);
+}
+
+int board_is_switchcap_power_good(void)
+{
+	return gpio_get_level(GPIO_SWITCHCAP_PG);
+}
+
+void sys_arch_reboot(int type)
+{
+	ARG_UNUSED(type);
+}

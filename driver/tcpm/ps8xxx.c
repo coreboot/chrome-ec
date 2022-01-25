@@ -340,6 +340,7 @@ static int dp_set_irq(const struct usb_mux *me, int enable)
 	return mux_write(me, MUX_IN_HPD_ASSERTION_REG, reg);
 }
 
+/* LCOV_EXCL_START */
 __overridable
 uint16_t board_get_ps8xxx_product_id(int port)
 {
@@ -366,6 +367,7 @@ uint16_t board_get_ps8xxx_product_id(int port)
 	CPRINTS("%s: Any new product id is not defined here?", __func__);
 	return 0;
 }
+/* LCOV_EXCL_STOP */
 
 bool check_ps8755_chip(int port)
 {
@@ -762,6 +764,7 @@ __maybe_unused static int ps8815_transmit_buffer_workaround_check(int port)
 		ps8xxx_role_control_delay_ms[port] = 1;
 		break;
 	default:
+		ps8xxx_role_control_delay_ms[port] = 0;
 		break;
 	}
 

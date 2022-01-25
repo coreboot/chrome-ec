@@ -12,9 +12,10 @@
 #ifndef __EMUL_SMART_BATTERY_H
 #define __EMUL_SMART_BATTERY_H
 
-#include <emul.h>
+#include <drivers/emul.h>
 #include <drivers/i2c.h>
 #include <drivers/i2c_emul.h>
+#include <stdint.h>
 
 /**
  * @brief Smart Battery emulator backend API

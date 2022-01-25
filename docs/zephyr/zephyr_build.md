@@ -8,26 +8,14 @@ This section describes how to build and use zmake.
 
 ## Syncing the source
 
-N.B. The Zephyr build relies on multiple repos and tools which get installed as
-packages into the chroot.  This means that partial syncs are not supported
-(i.e. just doing `repo sync .` in platform/ec). You must run
-`~/trunk/src/scripts/update_chroot` frequently, ideally each time you do a full
-repo sync. This will update zmake and the repos in src/third_party/zephyr
-
+*** note
+The Zephyr build relies on multiple repos.  This means that partial
+syncs are not supported (i.e., just doing `repo sync .` in
+`platform/ec`), as you may end up with a Zephyr kernel or module which
+is not compatible with your EC checkout.
+***
 
 ## Working inside the chroot
-
-### Install zmake
-
-The `zephyr-build-tools` ebuild builds and installed zmake. This should happen
-automatically, with the caveat above.
-
-To do this manually and run tests:
-
-```bash
-FEATURE=test sudo -E emerge zephyr-build-tools
-```
-
 
 ### Building
 
@@ -126,17 +114,7 @@ a rough guide.
 First configure the build with the project you want:
 
 ```bash
-# Use -t zephyr when running outside chroot
-
-zmake configure -B /tmp/z/vol zephyr/projects/volteer/volteer/ -t zephyr
-```
-
-If you are building for posix-ec, change the default toolchain to host to make
-it use the system toolchain instead of llvm. Make sure to start with a clean
-build directory if zmake returns any build error:
-
-```bash
-zmake configure -B /tmp/posix zephyr/projects/posix-ec -t host
+zmake configure -B /tmp/z/vol volteer
 ```
 
 Then build with just the target directory:
@@ -160,6 +138,8 @@ You might also find these files useful (using read-only as an example):
 *   `build-ro/zephyr/zephyr.dts` - devicetree that is used
 *   `build-ro/zephyr/zephyr.dts` - map of image
 
+Googlers may be interested in setting up [building with Goma](../goma.md)
+as well.
 
 ### Looking at the Kconfig
 

@@ -7,15 +7,15 @@
 #include "chipset.h"
 #include "hooks.h"
 #include "usb_mux.h"
-#include "usbc_ppc.h"
+#include "system.h"
+#include "driver/charger/isl923x_public.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/raa489000.h"
+
+#include "gpios.h"
 #include "sub_board.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
-
-struct ppc_config_t ppc_chips[] = {};
-unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
 struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
@@ -53,17 +53,58 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
+/*
+ * Board specific hibernate functions.
+ */
+__override void board_hibernate(void)
+{
+	/* Shut down the chargers */
+	if (board_get_usb_pd_port_count() == 2)
+		raa489000_hibernate(CHARGER_SECONDARY, true);
+	raa489000_hibernate(CHARGER_PRIMARY, true);
+	CPRINTS("Charger(s) hibernated");
+	cflush();
+}
+
+__override void board_hibernate_late(void)
+{
+	gpio_set_level(GPIO_EN_SLP_Z, 1);
+	/*
+	 * The system should hibernate, but there may be
+	 * a small delay, so return.
+	 */
+}
+
+static uint8_t cached_usb_pd_port_count;
+
 __override uint8_t board_get_usb_pd_port_count(void)
+{
+	if (cached_usb_pd_port_count == 0)
+		CPRINTS("USB PD Port count not initialized!");
+	return cached_usb_pd_port_count;
+}
+
+/*
+ * Initialise the USB PD port count, which
+ * depends on which sub-board is attached.
+ */
+static void init_usb_pd_port_count(void)
 {
 	switch (nissa_get_sb_type()) {
 	default:
-		return 1;
+		cached_usb_pd_port_count = 1;
+		break;
 
 	case NISSA_SB_C_A:
 	case NISSA_SB_C_LTE:
-		return 2;
+		cached_usb_pd_port_count = 2;
+		break;
 	}
 }
+/*
+ * Make sure setup is done after EEPROM is readable.
+ */
+DECLARE_HOOK(HOOK_INIT, init_usb_pd_port_count, HOOK_PRIO_INIT_I2C + 1);
 
 void board_set_charge_limit(int port, int supplier, int charge_ma,
 			    int max_ma, int charge_mv)
@@ -160,7 +201,7 @@ uint16_t tcpc_get_alert_status(void)
 	 * Therefore, go out and actually read the alert registers to report the
 	 * alert status.
 	 */
-	if (!gpio_get_level(GPIO_USB_C0_PD_INT_ODL)) {
+	if (!gpio_pin_get_dt(&gpio_usb_c0_int_odl)) {
 		if (!tcpc_read16(0, TCPC_REG_ALERT, &regval)) {
 			/* The TCPCI Rev 1.0 spec says to ignore bits 14:12. */
 			if (!(tcpc_config[0].flags & TCPC_FLAGS_TCPCI_REV2_0))
@@ -171,8 +212,8 @@ uint16_t tcpc_get_alert_status(void)
 		}
 	}
 
-	/* TODO(b:212490923) ignore C1 interrupts if port is not present. */
-	if (!gpio_get_level(GPIO_USB_C1_PD_INT_ODL)) {
+	if (board_get_usb_pd_port_count() == 2 &&
+	    !gpio_pin_get_dt(&gpio_usb_c1_int_odl)) {
 		if (!tcpc_read16(1, TCPC_REG_ALERT, &regval)) {
 			/* TCPCI spec Rev 1.0 says to ignore bits 14:12. */
 			if (!(tcpc_config[1].flags & TCPC_FLAGS_TCPCI_REV2_0))
@@ -255,24 +296,26 @@ DECLARE_DEFERRED(poll_c1_int);
 static void usbc_interrupt_trigger(int port)
 {
 	schedule_deferred_pd_interrupt(port);
-	task_set_event(PD_PORT_TO_TASK_ID(port), USB_CHG_EVENT_BC12);
+	task_set_event(USB_CHG_PORT_TO_TASK_ID(port), USB_CHG_EVENT_BC12);
 }
 
 #define USBC_INT_POLL_DATA(port) poll_c ## port ## _int_data
-#define USBC_INT_POLL(port)						  \
-	static void poll_c ## port ## _int (void)			  \
-	{								  \
-		if (!gpio_get_level(GPIO_USB_C ## port ## _PD_INT_ODL)) { \
-			usbc_interrupt_trigger(port);			  \
-			hook_call_deferred(&USBC_INT_POLL_DATA(port),	  \
-					   USBC_INT_POLL_DELAY_US);	  \
-		}							  \
+#define USBC_INT_POLL(port)						    \
+	static void poll_c ## port ## _int (void)			    \
+	{								    \
+		if (!gpio_pin_get_dt(&gpio_usb_c ## port ## _int_odl)) { \
+			usbc_interrupt_trigger(port);			    \
+			hook_call_deferred(&USBC_INT_POLL_DATA(port),	    \
+					   USBC_INT_POLL_DELAY_US);	    \
+		}							    \
 	}
 
 USBC_INT_POLL(0)
 USBC_INT_POLL(1)
 
-void usb_c0_interrupt(enum gpio_signal gpio)
+void usb_c0_interrupt(const struct device *port,
+		      struct gpio_callback *cb,
+		      gpio_port_pins_t pins)
 {
 	/*
 	 * We've just been called from a falling edge, so there's definitely
@@ -285,17 +328,43 @@ void usb_c0_interrupt(enum gpio_signal gpio)
 	hook_call_deferred(&USBC_INT_POLL_DATA(0), USBC_INT_POLL_DELAY_US);
 }
 
-void usb_c1_interrupt(enum gpio_signal gpio)
+void usb_c1_interrupt(const struct device *port,
+		      struct gpio_callback *cb,
+		      gpio_port_pins_t pins)
 {
 	hook_call_deferred(&USBC_INT_POLL_DATA(1), -1);
 	usbc_interrupt_trigger(1);
 	hook_call_deferred(&USBC_INT_POLL_DATA(1), USBC_INT_POLL_DELAY_US);
 }
 
+/*
+ * Set up one USB port's interrupt handling.
+ */
+static void usbc_init_interrupt(int port,
+				const struct gpio_dt_spec *gpio,
+				struct gpio_callback *cb_data,
+				gpio_callback_handler_t cb)
+{
+	int ret;
+
+	gpio_init_callback(cb_data, cb, BIT(gpio->pin));
+	gpio_add_callback(gpio->port, cb_data);
+	ret = gpio_pin_interrupt_configure_dt(gpio, GPIO_INT_EDGE_FALLING);
+	if (ret != 0)
+		CPRINTS("USB init interrupt failed on port %d", port);
+}
+
 static void usbc_init(void)
 {
-	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
+	static struct gpio_callback c0_callback;
+	static struct gpio_callback c1_callback;
+
+	usbc_init_interrupt(0, &gpio_usb_c0_int_odl,
+			    &c0_callback,
+			    usb_c0_interrupt);
 	if (board_get_usb_pd_port_count() == 2)
-		gpio_enable_interrupt(GPIO_USB_C1_PD_INT_ODL);
+		usbc_init_interrupt(1, &gpio_usb_c1_int_odl,
+				    &c1_callback,
+				    usb_c1_interrupt);
 }
 DECLARE_HOOK(HOOK_INIT, usbc_init, HOOK_PRIO_DEFAULT);

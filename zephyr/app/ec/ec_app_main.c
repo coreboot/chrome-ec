@@ -38,7 +38,8 @@ void ec_app_main(void)
 
 	system_print_banner();
 
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG)) {
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG) &&
+		!IS_ENABLED(CONFIG_WDT_DISABLE_AT_BOOT)) {
 		watchdog_init();
 	}
 
@@ -59,12 +60,6 @@ void ec_app_main(void)
 	if (IS_ENABLED(CONFIG_DEDICATED_RECOVERY_BUTTON) ||
 	    IS_ENABLED(CONFIG_VOLUME_BUTTONS)) {
 		button_init();
-	}
-
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI)) {
-		if (zephyr_shim_setup_espi() < 0) {
-			printk("Failed to init eSPI!\n");
-		}
 	}
 
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_VBOOT_EFS2)) {

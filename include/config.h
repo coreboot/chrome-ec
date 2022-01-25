@@ -2898,6 +2898,7 @@
  *  - A response to EC_CMD_GET_KEYBD_CONFIG command from coreboot
  *  - Boards can specify their custom layout for top keys.
  */
+/* Keyboard features */
 #define CONFIG_KEYBOARD_VIVALDI
 
 /* Compile code for MKBP keyboard protocol */
@@ -3914,13 +3915,13 @@
 
 /*
  * Config to identify what devices use GMR sensor to detect tablet mode. If a
- * board selects this config, it also needs to provide GMR_TABLET_MODE_GPIO_L
+ * board selects this config, it also needs to provide GPIO_TABLET_MODE_L
  * and direct its interrupt to gmr_tablet_switch_isr.
  */
 #undef CONFIG_GMR_TABLET_MODE
 
 /*
- * Board provides board_sensor_at_360 method instead of GMR_TABLET_MODE_GPIO_L
+ * Board provides board_sensor_at_360 method instead of GPIO_TABLET_MODE_L
  * as the means for determining the state of the flipped-360-degree mode.
  */
 #undef CONFIG_GMR_TABLET_MODE_CUSTOM
@@ -4967,7 +4968,6 @@
  * Intel Reference Validation Platform's (RVP) Modular Embedded Control
  * Card (MECC) versions
  */
-#undef CONFIG_INTEL_RVP_MECC_VERSION_0_9
 #undef CONFIG_INTEL_RVP_MECC_VERSION_1_0
 #undef CONFIG_INTEL_RVP_MECC_VERSION_1_1
 

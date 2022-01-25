@@ -128,6 +128,17 @@ cov-dont-test += fpsensor_state
 cov-dont-test += version
 # interrupt: The test often times out if enabled for coverage.
 cov-dont-test += interrupt
+# Tests that use test_run_multistep are flaky.
+cov-dont-test += flash flash_write_protect kb_scan
+# As are some others for unknown reasons
+cov-dont-test += base32 online_calibration_spoof printf body_detection kb_8042
+cov-dont-test += accel_cal aes compile_time_macros fp mag_cal rsa
+cov-dont-test += stillness_detector usb_pe_drp_noextended charge_manager
+cov-dont-test += timer_dos cec float queue x25519 usb_pd_timer motion_sense_fifo
+cov-dont-test += kb_scan_strict entropy kb_mkbp cbi_wp gyro_cal newton_fit
+cov-dont-test += shmalloc usb_common usb_ppc utils_str battery_get_params_smart
+cov-dont-test += rtc charge_ramp kasa motion_angle_tablet usb_prl
+
 cov-test-list-host = $(filter-out $(cov-dont-test), $(test-list-host))
 
 accel_cal-y=accel_cal.o
@@ -141,8 +152,8 @@ button-y=button.o
 cbi-y=cbi.o
 cbi_wp-y=cbi_wp.o
 cec-y=cec.o
-charge_manager-y=charge_manager.o
-charge_manager_drp_charging-y=charge_manager.o
+charge_manager-y=charge_manager.o fake_usbc.o
+charge_manager_drp_charging-y=charge_manager.o fake_usbc.o
 charge_ramp-y+=charge_ramp.o
 compile_time_macros-y=compile_time_macros.o
 console_edit-y=console_edit.o

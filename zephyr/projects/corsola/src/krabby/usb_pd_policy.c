@@ -55,12 +55,6 @@ void pd_power_supply_reset(int port)
 	pd_send_host_event(PD_EVENT_POWER_CHANGE);
 }
 
-int pd_check_vconn_swap(int port)
-{
-	/* Allow Vconn swap if AP is on. */
-	return chipset_in_state(CHIPSET_STATE_SUSPEND | CHIPSET_STATE_ON);
-}
-
 int pd_set_power_supply_ready(int port)
 {
 	int rv;

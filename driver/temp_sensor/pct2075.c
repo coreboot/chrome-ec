@@ -7,11 +7,15 @@
 
 #include "common.h"
 #include "console.h"
-#include "pct2075.h"
 #include "i2c.h"
 #include "hooks.h"
 #include "math_util.h"
+#include "temp_sensor/pct2075.h"
 #include "util.h"
+
+#ifdef CONFIG_ZEPHYR
+#include "temp_sensor/temp_sensor.h"
+#endif
 
 #define PCT2075_RESOLUTION 11
 #define PCT2075_SHIFT1 (16 - PCT2075_RESOLUTION)

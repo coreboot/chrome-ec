@@ -35,6 +35,9 @@
 /* Sensors */
 #define	CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
+/* Button */
+#define CONFIG_BUTTONS_RUNTIME_CONFIG
+
 
 /* Change Request (b/199529373)
  * GYRO sensor change from ST LSM6DSOETR3TR to ST LSM6DS3TR-C
@@ -133,7 +136,6 @@
 #define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
 #define GPIO_TEMP_SENSOR_POWER	GPIO_SEQ_EC_DSW_PWROK
-#define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_L
 
 /*
  * GPIO_EC_PCH_INT_ODL is used for MKBP events as well as a PCH wakeup

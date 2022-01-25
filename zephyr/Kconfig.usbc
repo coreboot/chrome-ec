@@ -607,8 +607,15 @@ config PLATFORM_EC_USB_PD_DATA_RESET_MSG
 	  mandatory for products supporting USB4 but optional for other PD 3.0
 	  products.
 
-choice "VBUS detection method"
+choice PLATFORM_EC_USB_PD_VBUS_DETECTION_TYPE
 	prompt "Select the method to detect VBUS"
+	default PLATFORM_EC_USB_PD_VBUS_DETECT_NONE
+
+config PLATFORM_EC_USB_PD_VBUS_DETECT_NONE
+	bool "No way to detect VBUS"
+	help
+	  Choose this option if it is not possible to detect VBUS. This causes
+	  the `check_vbus_level` function pointer in the driver struct to be NULL.
 
 config PLATFORM_EC_USB_PD_VBUS_DETECT_TCPC
 	bool "TCPC detects VBUS"
@@ -627,12 +634,7 @@ config PLATFORM_EC_USB_PD_VBUS_DETECT_PPC
 	  Choose this option if the Power-Path Controller (PPC) can detect the
 	  presence of VBUS
 
-config PLATFORM_EC_USB_PD_VBUS_DETECT_NONE
-	bool "No way to detect VBUS"
-	help
-	  Choose this option if it is not possible to detect VBUS.
-
-endchoice  # VBUS detection method
+endchoice  # PLATFORM_EC_USB_PD_VBUS_DETECTION_TYPE
 
 config PLATFORM_EC_USB_TYPEC_SM
 	bool "Type-C (TC) physical-layer state machine"
@@ -951,6 +953,8 @@ config PLATFORM_EC_USBC_PPC_DEDICATED_INT
 	  ppc_get_alert_status() to find out he interrupt status for a port.
 	  This function should be provided by the board code.
 
+endif  # PLATFORM_EC_USBC_PPC
+
 config PLATFORM_EC_USB_PD_TCPC_LOW_POWER
 	bool "Allow Type-C Port Controller to enter low-power mode"
 	default y
@@ -1003,7 +1007,6 @@ config PLATFORM_EC_USB_PD_TCPM_TCPCI
 #  CONFIG_USB_PD_TCPM_ANX741X
 #  CONFIG_USB_PD_TCPM_ANX7688
 #  CONFIG_USB_PD_TCPM_MT6370
-#  CONFIG_USB_PD_TCPM_RAA489000
 #  CONFIG_USB_PD_TCPM_FUSB307
 #  CONFIG_USB_PD_TCPM_STM32GX
 #  CONFIG_USB_PD_TCPM_CCGXXF
@@ -1343,8 +1346,6 @@ config PLATFORM_EC_USB_PD_TCPM_DRIVER_IT8XXX2
 	  Enable a driver for the ITE IT8XXX2 on-chip UBB Type-C Port Manager.
 	  This supports up to two USB Type-C ports with Dual Role function
 	  (provider and consumer) and Fast Role Swap detection.
-
-endif  # PLATFORM_EC_USBC_PPC
 
 config PLATFORM_EC_USB_PD_PULLUP
 	int "Default source Rp value"

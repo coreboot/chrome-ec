@@ -161,14 +161,6 @@ static int cros_flash_it8xxx2_init(const struct device *dev)
 	return EC_ERROR_UNKNOWN;
 }
 
-static int cros_flash_it8xxx2_read(const struct device *dev, int offset,
-				   int size, char *dst_data)
-{
-	ARG_UNUSED(dev);
-
-	return flash_read(flash_controller, offset, dst_data, size);
-}
-
 static int cros_flash_it8xxx2_write(const struct device *dev, int offset,
 				    int size, const char *src_data)
 {
@@ -297,7 +289,6 @@ static int cros_flash_it8xxx2_protect_now(const struct device *dev, int all)
 /* cros ec flash driver registration */
 static const struct cros_flash_driver_api cros_flash_it8xxx2_driver_api = {
 	.init = cros_flash_it8xxx2_init,
-	.physical_read = cros_flash_it8xxx2_read,
 	.physical_write = cros_flash_it8xxx2_write,
 	.physical_erase = cros_flash_it8xxx2_erase,
 	.physical_get_protect = cros_flash_it8xxx2_get_protect,
@@ -322,5 +313,5 @@ static int flash_it8xxx2_init(const struct device *dev)
 static struct cros_flash_it8xxx2_data cros_flash_data;
 
 DEVICE_DT_INST_DEFINE(0, flash_it8xxx2_init, NULL, &cros_flash_data, NULL,
-		      PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		      &cros_flash_it8xxx2_driver_api);
