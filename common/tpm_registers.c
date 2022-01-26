@@ -21,6 +21,7 @@
 #include "system_chip.h"
 #include "task.h"
 #include "tpm_manufacture.h"
+#include "tpm_nvmem_ops.h"
 #include "tpm_registers.h"
 #include "util.h"
 #include "watchdog.h"
@@ -850,8 +851,21 @@ void tpm_reinstate_nvmem_commits(void)
 	task_set_event(TASK_ID_TPM, TPM_EVENT_COMMIT, 0);
 }
 
-static void tpm_reset_now(int wipe_first)
+/*
+ * Reset TPM stack state.
+ * Called at boot, when AP resets (TPM_RESET_EVENT) and when a TPM data wipe
+ * is requested.
+ *
+ * Parameters:
+ *     wipe_first - wipe TPM nvmem as a part of reset.
+ *     can_preserve_orderly - preserve orderly nvmem spaces over a possibly
+ *         unorderly shutdown (unless wipe_first is requested). This is a GSC
+ *         specific modification to TPM behavior.
+ */
+static void tpm_reset_now(int wipe_first, int can_preserve_orderly)
 {
+	char orderly_state_copy[TPM_ORDERLY_STATE_SIZE];
+
 	if_stop();
 
 	/* This is more related to TPM task activity than TPM transactions */
@@ -874,6 +888,9 @@ static void tpm_reset_now(int wipe_first)
 	 */
 	nvmem_enable_commits();
 
+	if (can_preserve_orderly && !wipe_first)
+		tpm_orderly_state_capture(orderly_state_copy);
+
 	/*
 	 * Clear the TPM library's zero-init data.  Note that the linker script
 	 * includes this file's .bss in the same section, so it will be cleared
@@ -888,6 +905,9 @@ static void tpm_reset_now(int wipe_first)
 
 	/* Re-initialize our registers */
 	tpm_init();
+
+	if (can_preserve_orderly && !wipe_first)
+		tpm_orderly_state_restore(orderly_state_copy);
 
 	if (waiting_for_reset != TASK_ID_INVALID) {
 		/* Wake the waiting task, if any */
@@ -908,7 +928,7 @@ static void tpm_reset_now(int wipe_first)
 
 int tpm_sync_reset(int wipe_first)
 {
-	tpm_reset_now(wipe_first);
+	tpm_reset_now(wipe_first, 1);
 
 	return wipe_result;
 }
@@ -957,7 +977,7 @@ void tpm_task(void *u)
 				__func__, __LINE__, evt);
 	}
 
-	tpm_reset_now(0);
+	tpm_reset_now(0, 0);
 	while (1) {
 		uint8_t *response = NULL;
 		unsigned response_size;
@@ -971,7 +991,7 @@ void tpm_task(void *u)
 			evt = task_wait_event(-1);
 
 		if (evt & TPM_EVENT_RESET) {
-			tpm_reset_now(wipe_requested);
+			tpm_reset_now(wipe_requested, 1);
 			if (evt & TPM_EVENT_ALT_EXTENSION) {
 				/*
 				 * Need to tell the waiting task that

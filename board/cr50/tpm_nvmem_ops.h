@@ -7,6 +7,8 @@
 #ifndef __EC_BOARD_CR50_TPM_NVMEM_OPS_H
 #define __EC_BOARD_CR50_TPM_NVMEM_OPS_H
 
+#define TPM_ORDERLY_STATE_SIZE 512
+
 enum tpm_read_rv {
 	TPM_READ_SUCCESS,
 	TPM_READ_NOT_FOUND,
@@ -45,5 +47,9 @@ enum tpm_write_rv write_tpm_nvmem_hidden(uint16_t object_index,
 
 /* return size of hidden nvmem object, 0 if not found */
 size_t read_tpm_nvmem_size(uint16_t obj_index);
+
+void tpm_orderly_state_capture(char copy[TPM_ORDERLY_STATE_SIZE]);
+
+void tpm_orderly_state_restore(const char copy[TPM_ORDERLY_STATE_SIZE]);
 
 #endif  /* ! __EC_BOARD_CR50_TPM_NVMEM_OPS_H */
