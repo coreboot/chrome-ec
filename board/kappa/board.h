@@ -98,6 +98,7 @@ enum charge_port {
 enum battery_type {
 	BATTERY_DANAPACK_HIGHPOWER,
 	BATTERY_DANAPACK_COS,
+	BATTERY_LGC,
 	BATTERY_TYPE_COUNT,
 };
 
