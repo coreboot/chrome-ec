@@ -108,3 +108,15 @@ size_t read_tpm_nvmem_size(uint16_t obj_index)
 
 	return size;
 }
+
+BUILD_ASSERT(TPM_ORDERLY_STATE_SIZE >= RAM_INDEX_SPACE);
+
+void tpm_orderly_state_capture(char copy[TPM_ORDERLY_STATE_SIZE])
+{
+	NvStateCapture(copy);
+}
+
+void tpm_orderly_state_restore(const char copy[TPM_ORDERLY_STATE_SIZE])
+{
+	NvStateRestore(copy);
+}
