@@ -21,6 +21,7 @@
 #include "tcpm/tcpci.h"
 #include "test/usb_pe.h"
 #include "utils.h"
+#include "test_state.h"
 
 #define TCPCI_EMUL_LABEL DT_NODELABEL(tcpci_emul)
 #define BATTERY_ORD DT_DEP_ORD(DT_NODELABEL(battery))
@@ -28,7 +29,7 @@
 #define GPIO_AC_OK_PATH DT_PATH(named_gpios, acok_od)
 #define GPIO_AC_OK_PIN DT_GPIO_PIN(GPIO_AC_OK_PATH, gpios)
 
-static void init_tcpm(void)
+static void integration_usb_before(void *state)
 {
 	const struct emul *tcpci_emul =
 		emul_get_binding(DT_LABEL(TCPCI_EMUL_LABEL));
@@ -37,6 +38,7 @@ static void init_tcpm(void)
 	const struct device *gpio_dev =
 		DEVICE_DT_GET(DT_GPIO_CTLR(GPIO_AC_OK_PATH, gpios));
 
+	ARG_UNUSED(state);
 	set_test_runner_tid();
 	zassert_ok(tcpci_tcpm_init(0), 0);
 	tcpci_emul_set_rev(tcpci_emul, TCPCI_EMUL_REV1_0_VER1_0);
@@ -52,17 +54,64 @@ static void init_tcpm(void)
 	zassert_ok(gpio_emul_input_set(gpio_dev, GPIO_AC_OK_PIN, 0), NULL);
 }
 
-static void remove_emulated_devices(void)
+static void integration_usb_after(void *state)
 {
 	const struct emul *tcpci_emul =
 		emul_get_binding(DT_LABEL(TCPCI_EMUL_LABEL));
+	ARG_UNUSED(state);
+
 	/* TODO: This function should trigger gpios to signal there is nothing
 	 * attached to the port.
 	 */
 	zassert_ok(tcpci_emul_disconnect_partner(tcpci_emul), NULL);
+	/* Give time to actually disconnect */
+	k_sleep(K_SECONDS(1));
 }
 
-static void test_attach_compliant_charger(void)
+/* Check the results of EC_CMD_USB_PD_POWER_INFO against expected charger
+ * properties.
+ */
+static void check_usb_pd_power_info(int port, enum usb_power_roles role,
+		enum usb_chg_type charger_type, int charge_voltage_mv,
+		int charge_current_ma)
+{
+	struct ec_params_usb_pd_power_info power_info_params = {.port = port};
+	struct ec_response_usb_pd_power_info power_info_response;
+	struct host_cmd_handler_args power_info_args =  BUILD_HOST_COMMAND(
+			EC_CMD_USB_PD_POWER_INFO, 0, power_info_response,
+			power_info_params);
+	struct usb_chg_measures *meas = &power_info_response.meas;
+
+	zassert_ok(host_command_process(&power_info_args),
+			"Failed to get PD power info");
+	zassert_equal(power_info_response.role, role,
+			"Power role %d, but PD reports role %d",
+			role, power_info_response.role);
+	zassert_equal(power_info_response.type, charger_type,
+			"Charger type %d, but PD reports type %d",
+			charger_type, power_info_response.type);
+	/* The measurements in this response are denoted in mV, mA, and mW. */
+	zassert_equal(meas->voltage_max, charge_voltage_mv,
+			"Charging at VBUS %dmV, but PD reports %dmV",
+			charge_voltage_mv, meas->voltage_max);
+	zassert_within(meas->voltage_now, charge_voltage_mv,
+			charge_voltage_mv / 10,
+			"Actually charging at VBUS %dmV, but PD reports %dmV",
+			charge_voltage_mv, meas->voltage_now);
+	zassert_equal(meas->current_max, charge_current_ma,
+			"Charging at VBUS max %dmA, but PD reports %dmA",
+			charge_current_ma, meas->current_max);
+	zassert_true(meas->current_lim >= charge_current_ma,
+			"Charging at VBUS max %dmA, but PD current limit %dmA",
+			charge_current_ma, meas->current_lim);
+	zassert_equal(power_info_response.max_power,
+			charge_voltage_mv * charge_current_ma,
+			"Charging up to %duW, PD max power %duW",
+			charge_voltage_mv * charge_current_ma,
+			power_info_response.max_power);
+}
+
+ZTEST(integration_usb, test_attach_compliant_charger)
 {
 	const struct emul *tcpci_emul =
 		emul_get_binding(DT_LABEL(TCPCI_EMUL_LABEL));
@@ -102,7 +151,9 @@ static void test_attach_compliant_charger(void)
 	/* TODO: Also check voltage, current, etc. */
 }
 
-static void test_attach_pd_charger(void)
+#define BATTERY_ORD	DT_DEP_ORD(DT_NODELABEL(battery))
+
+ZTEST(integration_usb, test_attach_pd_charger)
 {
 	const struct emul *tcpci_emul =
 		emul_get_binding(DT_LABEL(TCPCI_EMUL_LABEL));
@@ -122,11 +173,6 @@ static void test_attach_pd_charger(void)
 	struct host_cmd_handler_args typec_args =  BUILD_HOST_COMMAND(
 			EC_CMD_TYPEC_STATUS, 0, typec_response, typec_params);
 
-	/*
-	 * TODO(b/209907297): Implement the steps of the test beyond USB default
-	 * charging.
-	 */
-
 	/* Attach emulated charger. Send Source Capabilities that offer 20V. Set
 	 * the charger input voltage to ~18V (the highest voltage it supports).
 	 */
@@ -138,7 +184,12 @@ static void test_attach_pd_charger(void)
 						   &my_charger.common_data,
 						   &my_charger.ops, tcpci_emul),
 		   NULL);
-	isl923x_emul_set_adc_vbus(charger_emul, 0x3f);
+	/* This corresponds to 20.352V according to the scheme used by
+	 * isl923x_get_vbus_voltage, which is slightly different than that
+	 * described in the ISL9238 datasheet.
+	 * TODO(b/216497851): Specify this in natural units.
+	 */
+	isl923x_emul_set_adc_vbus(charger_emul, 0x3500);
 
 	/* Wait for PD negotiation and current ramp.
 	 * TODO(b/213906889): Check message timing and contents.
@@ -159,10 +210,7 @@ static void test_attach_pd_charger(void)
 	 * the PD charging and current, but they should be positive if the
 	 * battery is charging.
 	 */
-	/*
-	 * TODO(b/213908743): Also check the corresponding PD state and
-	 * encapsulate this for use in other tests.
-	 */
+	/* TODO(b/213908743): Encapsulate this for use in other tests. */
 	charge_params.chgnum = 0;
 	charge_params.cmd = CHARGE_STATE_CMD_GET_STATE;
 	zassert_ok(host_command_process(&args), "Failed to get charge state");
@@ -190,31 +238,20 @@ static void test_attach_pd_charger(void)
 			"Charger attached, but TCPM power role is %d",
 			typec_response.power_role);
 
-	/*
-	 * 3. Wait for SenderResponseTimeout. Expect TCPM to send Request.
-	 * We could verify that the Request references the expected PDO, but
-	 * the voltage/current/PDO checks at the end of the test should all be
-	 * wrong if the requested PDO was wrong here.
-	 */
-
-	/*
-	 * 4. Send Accept and PS_RDY from partner with appropriate delay between
-	 * them. Emulate supplying VBUS at the requested voltage/current before
-	 * PS_RDY.
-	 */
-
-	/*
-	 * 5. Check the charging voltage and current. Cross-check the PD state,
-	 * the battery/charger state, and the active PDO as reported by the PD
-	 * state.
-	 */
+	check_usb_pd_power_info(0, USB_PD_PORT_POWER_SINK, USB_CHG_TYPE_PD,
+			20000, 3000);
 }
 
-static void test_attach_sink(void)
+ZTEST(integration_usb, test_attach_sink)
 {
 	const struct emul *tcpci_emul =
 		emul_get_binding(DT_LABEL(TCPCI_EMUL_LABEL));
 	struct tcpci_snk_emul my_sink;
+
+	/*
+	 * TODO: investigate why call in integration_usb_before() is not enough
+	 */
+	set_test_runner_tid();
 
 	/* Set chipset to ON, this will set TCPM to DRP */
 	test_set_chipset_to_s0();
@@ -241,11 +278,16 @@ static void test_attach_sink(void)
 	zassert_equal(PE_SRC_READY, get_state_pe(USBC_PORT_C0), NULL);
 }
 
-static void test_attach_drp(void)
+ZTEST(integration_usb, test_attach_drp)
 {
 	const struct emul *tcpci_emul =
 		emul_get_binding(DT_LABEL(TCPCI_EMUL_LABEL));
 	struct tcpci_drp_emul my_drp;
+
+	/*
+	 * TODO: investigate why call in integration_usb_before() is not enough
+	 */
+	set_test_runner_tid();
 
 	/* Set chipset to ON, this will set TCPM to DRP */
 	test_set_chipset_to_s0();
@@ -272,20 +314,5 @@ static void test_attach_drp(void)
 	zassert_equal(PE_SNK_READY, get_state_pe(USBC_PORT_C0), NULL);
 }
 
-void test_suite_integration_usb(void)
-{
-	ztest_test_suite(integration_usb,
-			 ztest_user_unit_test_setup_teardown(
-				 test_attach_compliant_charger, init_tcpm,
-				 remove_emulated_devices),
-			 ztest_user_unit_test_setup_teardown(
-				 test_attach_pd_charger, init_tcpm,
-				 remove_emulated_devices),
-			 ztest_user_unit_test_setup_teardown(
-				 test_attach_sink, init_tcpm,
-				 remove_emulated_devices),
-			 ztest_user_unit_test_setup_teardown(
-				 test_attach_drp, init_tcpm,
-				 remove_emulated_devices));
-	ztest_run_test_suite(integration_usb);
-}
+ZTEST_SUITE(integration_usb, drivers_predicate_post_main, NULL,
+	    integration_usb_before, integration_usb_after, NULL);

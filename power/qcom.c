@@ -168,7 +168,8 @@ enum power_request_t {
 	POWER_REQ_NONE,
 	POWER_REQ_OFF,
 	POWER_REQ_ON,
-	POWER_REQ_RESET,
+	POWER_REQ_COLD_RESET,
+	POWER_REQ_WARM_RESET,
 
 	POWER_REQ_COUNT,
 };
@@ -250,17 +251,17 @@ void chipset_ap_rst_interrupt(enum gpio_signal signal)
 	power_signal_interrupt(signal);
 }
 
-/* Issue a request to initiate a reset sequence */
-static void request_cold_reset(void)
-{
-	power_request = POWER_REQ_RESET;
-	task_wake(TASK_ID_CHIPSET);
-}
-
 #ifdef CONFIG_CHIPSET_SC7180
 
 /* 1 if AP_RST_L and PS_HOLD is overdriven by EC */
 static char ap_rst_overdriven;
+
+/* Issue a request to initiate a reset sequence */
+static void request_cold_reset(void)
+{
+	power_request = POWER_REQ_COLD_RESET;
+	task_wake(TASK_ID_CHIPSET);
+}
 
 void chipset_warm_reset_interrupt(enum gpio_signal signal)
 {
@@ -612,7 +613,7 @@ enum power_state power_chipset_init(void)
 /**
  * Power off the AP
  */
-static void power_off(void)
+static void power_off_seq(void)
 {
 	/* Check PMIC POWER_GOOD */
 	if (is_pmic_pwron()) {
@@ -664,7 +665,7 @@ static int power_is_enough(void)
  *
  * @return EC_SUCCESS or error
  */
-static int power_on(void)
+static int power_on_seq(void)
 {
 	int ret;
 
@@ -698,7 +699,7 @@ static uint8_t check_for_power_on_event(void)
 	if (power_request == POWER_REQ_ON) {
 		power_request = POWER_REQ_NONE;
 		return POWER_ON_BY_POWER_REQ_ON;
-	} else if (power_request == POWER_REQ_RESET) {
+	} else if (power_request == POWER_REQ_COLD_RESET) {
 		power_request = POWER_REQ_NONE;
 		return POWER_ON_BY_POWER_REQ_RESET;
 	}
@@ -740,7 +741,7 @@ static uint8_t check_for_power_off_event(void)
 	if (power_request == POWER_REQ_OFF) {
 		power_request = POWER_REQ_NONE;
 		return POWER_OFF_BY_POWER_REQ_OFF;
-	} else if (power_request == POWER_REQ_RESET) {
+	} else if (power_request == POWER_REQ_COLD_RESET) {
 		/*
 		 * The power_request flag will be cleared later
 		 * in check_for_power_on_event() in S5.
@@ -812,12 +813,14 @@ void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 	task_wake(TASK_ID_CHIPSET);
 }
 
-void chipset_reset(enum chipset_shutdown_reason reason)
+/**
+ * Warm reset the AP
+ *
+ * @return EC_SUCCESS or error
+ */
+static int warm_reset_seq(void)
 {
 	int rv;
-
-	CPRINTS("%s(%d)", __func__, reason);
-	report_ap_reset(reason);
 
 	/*
 	 * Warm reset sequence:
@@ -838,11 +841,40 @@ void chipset_reset(enum chipset_shutdown_reason reason)
 
 	rv = power_wait_signals_timeout(IN_AP_RST_ASSERTED,
 					PMIC_POWER_AP_RESPONSE_TIMEOUT);
+
 	/* Exception case: PMIC not work as expected, request a cold reset */
-	if (rv != EC_SUCCESS) {
-		CPRINTS("AP refuses to warm reset. Cold resetting.");
-		request_cold_reset();
+	if (rv != EC_SUCCESS)
+		return rv;
+
+	return EC_SUCCESS;
+}
+
+/**
+ * Check for some event triggering the warm reset.
+ *
+ * The only event is a request by the console command `apreset`.
+ */
+static void check_for_warm_reset_event(void)
+{
+	int rv;
+
+	if (power_request == POWER_REQ_WARM_RESET) {
+		power_request = POWER_REQ_NONE;
+		rv = warm_reset_seq();
+		if (rv != EC_SUCCESS) {
+			CPRINTS("AP refuses to warm reset. Cold resetting.");
+			power_request = POWER_REQ_COLD_RESET;
+		}
 	}
+}
+
+void chipset_reset(enum chipset_shutdown_reason reason)
+{
+	CPRINTS("%s(%d)", __func__, reason);
+	report_ap_reset(reason);
+
+	power_request = POWER_REQ_WARM_RESET;
+	task_wake(TASK_ID_CHIPSET);
 }
 
 /*
@@ -991,8 +1023,8 @@ enum power_state power_handle_state(enum power_state state)
 		/* Initialize components to ready state before AP is up. */
 		hook_notify(HOOK_CHIPSET_PRE_INIT);
 
-		if (power_on() != EC_SUCCESS) {
-			power_off();
+		if (power_on_seq() != EC_SUCCESS) {
+			power_off_seq();
 			boot_from_off = 0;
 			return POWER_S5;
 		}
@@ -1053,6 +1085,8 @@ enum power_state power_handle_state(enum power_state state)
 		return POWER_S0;
 
 	case POWER_S0:
+		check_for_warm_reset_event();
+
 		shutdown_from_on = check_for_power_off_event();
 		if (shutdown_from_on) {
 			return POWER_S0S3;
@@ -1101,7 +1135,7 @@ enum power_state power_handle_state(enum power_state state)
 		/* Call hooks before we drop power rails */
 		hook_notify(HOOK_CHIPSET_SHUTDOWN);
 
-		power_off();
+		power_off_seq();
 		CPRINTS("power shutdown complete");
 
 		/* Call hooks after we drop power rails */

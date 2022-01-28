@@ -2720,6 +2720,7 @@ enum motionsensor_chip {
 	MOTIONSENSE_CHIP_BMA422 = 27,
 	MOTIONSENSE_CHIP_BMI323 = 28,
 	MOTIONSENSE_CHIP_BMI220 = 29,
+	MOTIONSENSE_CHIP_CM32183 = 30,
 	MOTIONSENSE_CHIP_MAX,
 };
 
@@ -6947,8 +6948,9 @@ enum pchg_state {
 
 /* Port number is encoded in bit[28:31]. */
 #define EC_MKBP_PCHG_PORT_SHIFT		28
-/* Utility macro for converting MKBP event to port number. */
+/* Utility macros for converting MKBP event <-> port number. */
 #define EC_MKBP_PCHG_EVENT_TO_PORT(e)	(((e) >> EC_MKBP_PCHG_PORT_SHIFT) & 0xf)
+#define EC_MKBP_PCHG_PORT_TO_EVENT(p)	(BIT((p) + EC_MKBP_PCHG_PORT_SHIFT))
 /* Utility macro for extracting event bits. */
 #define EC_MKBP_PCHG_EVENT_MASK(e)	((e) \
 					& GENMASK(EC_MKBP_PCHG_PORT_SHIFT-1, 0))
@@ -6957,6 +6959,7 @@ enum pchg_state {
 #define EC_MKBP_PCHG_WRITE_COMPLETE	BIT(1)
 #define EC_MKBP_PCHG_UPDATE_CLOSED	BIT(2)
 #define EC_MKBP_PCHG_UPDATE_ERROR	BIT(3)
+#define EC_MKBP_PCHG_DEVICE_EVENT	BIT(4)
 
 enum ec_pchg_update_cmd {
 	/* Reset chip to normal mode. */

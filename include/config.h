@@ -349,6 +349,7 @@
 #undef CONFIG_ALS_BH1730_LUXTH_PARAMS
 #undef CONFIG_ALS_ISL29035
 #undef CONFIG_ALS_OPT3001
+#undef CONFIG_ALS_CM32183
 /* Define the exact model ID present on the board: SI1141 = 41, SI1142 = 42, */
 #undef CONFIG_ALS_SI114X
 /* Check if the device revision is supported */
@@ -1319,12 +1320,6 @@
 
 /* Wireless chargers */
 #undef CONFIG_WIRELESS_CHARGER_P9221_R7
-
-/*
- * Workaround npcx9 A1 chip's bug for download_from_flash API in th booter.
- * This can be removed when A2 chip is available.
- */
-#undef CONFIG_WORKAROUND_FLASH_DOWNLOAD_API
 
 /*****************************************************************************/
 
@@ -3606,6 +3601,12 @@
  * This implies CONFIG_KEYBOARD_BACKLIGHT.
  */
 #undef CONFIG_PWM_KBLIGHT
+
+/*
+ * Support a GPIO enable pin (set as GPIO_EN_KEYBOARD_BACKLIGHT) for the
+ * keyboard backlight.
+ */
+#undef CONFIG_KBLIGHT_ENABLE_PIN
 
 /* Support Real-Time Clock (RTC) */
 #undef CONFIG_RTC

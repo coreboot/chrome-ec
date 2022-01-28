@@ -9,6 +9,7 @@
 #include <shell/shell.h>
 
 #include "common.h"
+#include "console.h"
 #include "timer.h"
 #include "task.h"
 
@@ -226,13 +227,6 @@ static void task_entry(void *task_context_static,
 	struct task_ctx_static *const ctx_static =
 			(struct task_ctx_static *)task_context_static;
 
-#ifdef CONFIG_THREAD_NAME
-	struct task_ctx_dyn *const ctx_dyn =
-			(struct task_ctx_dyn *)task_context_dyn;
-	/* Name thread for debugging */
-	k_thread_name_set(ctx_dyn->zephyr_tid, ctx_static->name);
-#endif
-
 	/* Call into task entry point */
 	ctx_static->entry((void *)ctx_static->parameter);
 }
@@ -281,10 +275,24 @@ void set_test_runner_tid(void)
 {
 	shimmed_tasks_dyn[TASK_ID_TEST_RUNNER].zephyr_tid = k_current_get();
 }
-#endif
+
+#ifdef CONFIG_SET_TEST_RUNNER_TID_RULE
+static void set_test_runner_tid_rule_before(const struct ztest_unit_test *test,
+					    void *data)
+{
+	ARG_UNUSED(test);
+	ARG_UNUSED(data);
+	set_test_runner_tid();
+}
+
+ZTEST_RULE(set_test_runner_tid, set_test_runner_tid_rule_before, NULL);
+#endif /* CONFIG_SET_TEST_RUNNER_TID_RULE */
+#endif /* TEST_BUILD */
 
 void start_ec_tasks(void)
 {
+	int priority;
+
 	/* Initialize all EC tasks, which does not include the sysworkq entry */
 	for (size_t i = 0; i < TASK_ID_COUNT; ++i) {
 		struct task_ctx_dyn *const ctx_dyn = &shimmed_tasks_dyn[i];
@@ -293,6 +301,8 @@ void start_ec_tasks(void)
 
 		k_timer_init(&ctx_dyn->timer, timer_expire, NULL);
 
+		priority = K_PRIO_PREEMPT(TASK_ID_COUNT - i - 1);
+
 #ifdef TEST_BUILD
 		/* Do not create thread for test runner; it will be set later */
 		if (i == TASK_ID_TEST_RUNNER) {
@@ -300,6 +310,21 @@ void start_ec_tasks(void)
 			continue;
 		}
 #endif
+
+#ifdef HAS_CONSOLE_STUB_TASK
+		/*
+		 * The console is run on the built-in Zephyr shell thread.
+		 * The TASK_ID_CONSOLE_STUB is a placeholder to determine
+		 * the correct priority of the shell thread based on the
+		 * enabled cros-ec tasks.
+		 */
+		if (i == TASK_ID_CONSOLE_STUB) {
+			ctx_dyn->zephyr_tid = NULL;
+			uart_shell_set_priority(priority);
+			continue;
+		}
+#endif
+
 		/*
 		 * TODO(b/172361873): Add K_FP_REGS for FPU tasks. See
 		 * comment in config.h for CONFIG_TASK_LIST for existing flags
@@ -313,9 +338,14 @@ void start_ec_tasks(void)
 			(void *)ctx_static,
 			ctx_dyn,
 			NULL,
-			K_PRIO_PREEMPT(TASK_ID_COUNT - i - 1),
+			priority,
 			0,
 			K_NO_WAIT);
+
+#ifdef CONFIG_THREAD_NAME
+		/* Name thread for debugging */
+		k_thread_name_set(ctx_dyn->zephyr_tid, ctx_static->name);
+#endif
 	}
 
 	/* Create an entry for sysworkq we can send events to */
