@@ -38,6 +38,8 @@ static void fips_print_mode(void)
 {
 	enum fips_status status = fips_status();
 
+	CPRINTS("FIPS module digest %ph...",
+		HEX_BUF(&fips_integrity, 8));
 	if (status == FIPS_UNINITIALIZED)
 		CPRINTS("FIPS mode not initialized");
 	else if (status & FIPS_ERROR_MASK)
@@ -150,8 +152,10 @@ static int cmd_fips_status(int argc, char **argv)
 			fips_break_cmd = FIPS_BREAK_HMAC_SHA256;
 		else if (!strncmp(argv[1], "drbg", 4))
 			fips_break_cmd = FIPS_BREAK_HMAC_DRBG;
-		else if (!strncmp(argv[1], "ecdsa", 5))
-			fips_break_cmd = FIPS_BREAK_ECDSA;
+		else if (!strncmp(argv[1], "ecver", 5))
+			fips_break_cmd = FIPS_BREAK_ECDSA_VER;
+		else if (!strncmp(argv[1], "ecsign", 6))
+			fips_break_cmd = FIPS_BREAK_ECDSA_SIGN;
 		else if (!strncmp(argv[1], "pwct", 4))
 			fips_break_cmd = FIPS_BREAK_ECDSA_PWCT;
 		else if (!strncmp(argv[1], "none", 4))
@@ -217,8 +221,11 @@ static enum vendor_cmd_rc fips_cmd(enum vendor_cmd_cc code, void *buf,
 	case FIPS_CMD_BREAK_HMAC_DRBG:
 		fips_break_cmd = FIPS_BREAK_HMAC_DRBG;
 		break;
-	case FIPS_CMD_BREAK_ECDSA:
-		fips_break_cmd = FIPS_BREAK_ECDSA;
+	case FIPS_CMD_BREAK_ECDSA_VER:
+		fips_break_cmd = FIPS_BREAK_ECDSA_VER;
+		break;
+	case FIPS_CMD_BREAK_ECDSA_SIGN:
+		fips_break_cmd = FIPS_BREAK_ECDSA_SIGN;
 		break;
 #ifdef CONFIG_FIPS_AES_CBC_256
 	case FIPS_CMD_BREAK_AES256:

@@ -446,14 +446,17 @@ static bool fips_ecdsa_sign_verify_kat(void)
 
 	p256_from_bin(msg_digest, &msg);
 
+	if (fips_break_cmd == FIPS_BREAK_ECDSA_SIGN)
+		msg.a[0] ^= 0x80; /* inject 1-bit error. */
+
 	/* KAT for ECDSA signing with fixed k. */
 	passed = dcrypto_p256_ecdsa_sign_raw(&k, &d, &msg, &r, &s) - DCRYPTO_OK;
 
 	passed |= DCRYPTO_equals(r.a, R.a, sizeof(R)) - DCRYPTO_OK;
 	passed |= DCRYPTO_equals(s.a, S.a, sizeof(S)) - DCRYPTO_OK;
 
-	if (fips_break_cmd == FIPS_BREAK_ECDSA)
-		msg.a[0] ^= 1;
+	if (fips_break_cmd == FIPS_BREAK_ECDSA_VER)
+		msg.a[0] ^= 1; /* inject another 1-bit error. */
 
 	/* KAT for verification */
 	passed |=
