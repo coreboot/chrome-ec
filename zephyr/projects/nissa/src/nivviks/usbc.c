@@ -39,19 +39,6 @@ struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{
-		.usb_port = 0,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-	},
-	{ /* sub-board */
-		.usb_port = 1,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-	},
-};
-
 /*
  * Board specific hibernate functions.
  */
@@ -72,51 +59,6 @@ __override void board_hibernate_late(void)
 	 * The system should hibernate, but there may be
 	 * a small delay, so return.
 	 */
-}
-
-static uint8_t cached_usb_pd_port_count;
-
-__override uint8_t board_get_usb_pd_port_count(void)
-{
-	if (cached_usb_pd_port_count == 0)
-		CPRINTS("USB PD Port count not initialized!");
-	return cached_usb_pd_port_count;
-}
-
-/*
- * Initialise the USB PD port count, which
- * depends on which sub-board is attached.
- */
-static void init_usb_pd_port_count(void)
-{
-	switch (nissa_get_sb_type()) {
-	default:
-		cached_usb_pd_port_count = 1;
-		break;
-
-	case NISSA_SB_C_A:
-	case NISSA_SB_C_LTE:
-		cached_usb_pd_port_count = 2;
-		break;
-	}
-}
-/*
- * Make sure setup is done after EEPROM is readable.
- */
-DECLARE_HOOK(HOOK_INIT, init_usb_pd_port_count, HOOK_PRIO_INIT_I2C + 1);
-
-void board_set_charge_limit(int port, int supplier, int charge_ma,
-			    int max_ma, int charge_mv)
-{
-	int icl = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
-
-	/*
-	 * Assume charger overdraws by about 4%, keeping the actual draw
-	 * within spec. This adjustment can be changed with characterization
-	 * of actual hardware.
-	 */
-	icl = icl * 96 / 100;
-	charge_set_input_current_limit(icl, charge_mv);
 }
 
 int board_is_sourcing_vbus(int port)
@@ -212,7 +154,7 @@ uint16_t tcpc_get_alert_status(void)
 	}
 
 	if (board_get_usb_pd_port_count() == 2 &&
-	    !gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c1_int_odl))) {
+	    !gpio_pin_get_dt(GPIO_DT_FROM_ALIAS(gpio_usb_c1_int_odl))) {
 		if (!tcpc_read16(1, TCPC_REG_ALERT, &regval)) {
 			/* TCPCI spec Rev 1.0 says to ignore bits 14:12. */
 			if (!(tcpc_config[1].flags & TCPC_FLAGS_TCPCI_REV2_0))
@@ -224,12 +166,6 @@ uint16_t tcpc_get_alert_status(void)
 	}
 
 	return status;
-}
-
-int pd_check_vconn_swap(int port)
-{
-	/* Allow VCONN swaps if the AP is on. */
-	return chipset_in_state(CHIPSET_STATE_ANY_SUSPEND | CHIPSET_STATE_ON);
 }
 
 void pd_power_supply_reset(int port)
@@ -298,20 +234,29 @@ static void usbc_interrupt_trigger(int port)
 	task_set_event(USB_CHG_PORT_TO_TASK_ID(port), USB_CHG_EVENT_BC12);
 }
 
-#define USBC_INT_POLL(port)						    \
-	static void poll_c ## port ## _int (void)			    \
-	{								    \
-		if (!gpio_pin_get_dt(					    \
-			GPIO_DT_FROM_NODELABEL				    \
-				(gpio_usb_c ## port ## _int_odl))) {	    \
-			usbc_interrupt_trigger(port);			    \
-			hook_call_deferred(&poll_c ## port ## _int_data,    \
-					   USBC_INT_POLL_DELAY_US);	    \
-		}							    \
+static inline void poll_usb_gpio(int port,
+				 const struct gpio_dt_spec *gpio,
+				 const struct deferred_data *ud)
+{
+	if (!gpio_pin_get_dt(gpio)) {
+		usbc_interrupt_trigger(port);
+		hook_call_deferred(ud, USBC_INT_POLL_DELAY_US);
 	}
+}
 
-USBC_INT_POLL(0)
-USBC_INT_POLL(1)
+static void poll_c0_int (void)
+{
+	poll_usb_gpio(0,
+		      GPIO_DT_FROM_NODELABEL(gpio_usb_c0_int_odl),
+		      &poll_c0_int_data);
+}
+
+static void poll_c1_int (void)
+{
+	poll_usb_gpio(1,
+		      GPIO_DT_FROM_ALIAS(gpio_usb_c1_int_odl),
+		      &poll_c1_int_data);
+}
 
 void usb_interrupt(enum gpio_signal signal)
 {

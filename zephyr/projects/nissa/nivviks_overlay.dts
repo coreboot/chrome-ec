@@ -14,9 +14,9 @@
 
 	hibernate-wake-pins {
 		compatible = "cros-ec,hibernate-wake-pins";
-		wakeup-pins = <
-			&gpio_gsc_ec_pwr_btn_odl
-			&gpio_lid_open
+		wakeup-irqs = <
+			&int_power_button
+			&int_lid_open
 		>;
 	};
 
@@ -24,87 +24,92 @@
 		compatible = "cros-ec,gpio-interrupts";
 
 		int_power_button: power_button {
-			irq-gpio = <&gpio_gsc_ec_pwr_btn_odl>;
+			irq-pin = <&gpio_gsc_ec_pwr_btn_odl>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "power_button_interrupt";
 		};
 		int_wp_l: wp_l {
-			irq-gpio = <&gpio_ec_wp_odl>;
+			irq-pin = <&gpio_ec_wp_odl>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "switch_interrupt";
 		};
 		int_lid_open: lid_open {
-			irq-gpio = <&gpio_lid_open>;
+			irq-pin = <&gpio_lid_open>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "lid_interrupt";
 		};
 		int_imu: ec_imu {
-			irq-gpio = <&gpio_imu_int_l>;
+			irq-pin = <&gpio_imu_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "lsm6dso_interrupt";
 		};
 		int_vol_down: vol_down {
-			irq-gpio = <&gpio_voldn_btn_odl>;
+			irq-pin = <&gpio_voldn_btn_odl>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "button_interrupt";
 		};
 		int_vol_up: vol_up {
-			irq-gpio = <&gpio_volup_btn_odl>;
+			irq-pin = <&gpio_volup_btn_odl>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "button_interrupt";
 		};
 		int_usb_c0: usb_c0 {
-			irq-gpio = <&gpio_usb_c0_int_odl>;
+			irq-pin = <&gpio_usb_c0_int_odl>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "usb_interrupt";
 		};
 		int_usb_c1: usb_c1 {
-			irq-gpio = <&gpio_usb_c1_int_odl>;
+			irq-pin = <&gpio_sb_1>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "usb_interrupt";
 		};
 		int_prochot: ap_prochot {
-			irq-gpio = <&gpio_ec_prochot_odl>;
+			irq-pin = <&gpio_ec_prochot_odl>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "throttle_ap_prochot_input_interrupt";
 		};
 	};
 
 	named-gpios {
-		/*
-		 * The following 2 nodes refer to the same pin, but have
-		 * different configuration depending on the sub-board.
-		 *
-		 * Input GPIO when used with type-C port 1
-		 */
-		gpio_usb_c1_int_odl: usb_c1_int_odl {
-			#gpio-cells = <0>;
-			gpios = <&gpio0 2 GPIO_INPUT_PULL_UP>;
-			no-auto-init;
-		};
-		/*
-		 * Output GPIO when used with HDMI port
-		 */
-		gpio_en_sub_rails_odl: en_sub_rails_odl {
-			#gpio-cells = <0>;
-			gpios = <&gpio0 2 GPIO_OUTPUT>;
+		gpio_sb_1: sb_1 {
+			gpios = <&gpio0 2 GPIO_PULL_UP>;
 			no-auto-init;
 		};
 
-		/*
-		 * Alternative use for I2C_PORT_USB_C1_TCPC
-		 * when HDMI sub-board connected.
-		 */
-		gpio_hdmi_en_sub_odl: hdmi_en_sub_odl {
-			#gpio-cells = <0>;
+		gpio_sb_2: sb_2 {
+			gpios = <&gpiod 4 GPIO_OUTPUT>;
+			no-auto-init;
+		};
+
+		gpio_sb_3: sb_3 {
 			gpios = <&gpiof 4 GPIO_OPEN_DRAIN>;
 			no-auto-init;
 		};
-		gpio_hpd_sub_odl: hdmi_hpd_sub_odl {
-			#gpio-cells = <0>;
+		gpio_sb_4: sb_4 {
 			gpios = <&gpiof 5 GPIO_INPUT>;
 			no-auto-init;
 		};
+	};
+
+	/*
+	 * Aliases used for sub-board GPIOs.
+	 */
+	aliases {
+		/*
+		 * Input GPIO when used with type-C port 1
+		 * Output when used with HDMI sub-board
+		 */
+		gpio-usb-c1-int-odl = &gpio_sb_1;
+		gpio-en-rails-odl = &gpio_sb_1;
+		/*
+		 * Sub-board with type A USB, enable.
+		 */
+		gpio-en-usb-a1-vbus = &gpio_sb_2;
+		/*
+		 * HPD pins for HDMI sub-board.
+		 */
+		gpio-hdmi-en-odl = &gpio_sb_3;
+		gpio-hpd-odl = &gpio_sb_4;
 	};
 
 	named-temp-sensors {
@@ -204,7 +209,8 @@
 		pagesize = <16>;
 		address-width = <8>;
 		timeout = <5>;
-		wp-gpios = <&gpio_ec_wp_odl>;
+		/* gpio_ec_wp_odl */
+		wp-gpios = <&gpioa 1 GPIO_INPUT>;
 	};
 };
 

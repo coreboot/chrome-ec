@@ -27,6 +27,7 @@
 
 #include "usb_mux.h"
 #include "test_state.h"
+#include "utils.h"
 
 /** Copy of original usb_muxes[USB_PORT_C1] */
 struct usb_mux usb_mux_c1;
@@ -404,7 +405,7 @@ ZTEST(usb_uninit_mux, test_usb_mux_init)
 	set_test_runner_tid();
 
 	/* Set AP to normal state to init BB retimer */
-	power_set_state(POWER_S0);
+	test_set_chipset_to_s0();
 
 	/* Test successful initialisation */
 	usb_mux_init(USBC_PORT_C1);
@@ -812,6 +813,7 @@ ZTEST(usb_init_mux, test_usb_mux_hc_mux_info)
 /** Test typec console command */
 ZTEST(usb_init_mux, test_usb_mux_typec_command)
 {
+	mux_state_t polarity;
 	mux_state_t exp_mode;
 	/* TODO: investigate why call in usb_init_mux_before() is not enough */
 	set_test_runner_tid();
@@ -860,9 +862,13 @@ ZTEST(usb_init_mux, test_usb_mux_typec_command)
 	/* Mux will enter low power mode */
 	CHECK_PROXY_FAKE_CALL_CNT(proxy_enter_low_power_mode, NUM_OF_PROXY);
 
+	/* Polarity is set based on PD */
+	polarity = polarity_rm_dts(pd_get_polarity(USBC_PORT_C1)) ?
+			USB_PD_MUX_POLARITY_INVERTED : 0;
+
 	/* Test setting USB mode */
 	reset_proxy_fakes();
-	exp_mode = USB_PD_MUX_USB_ENABLED;
+	exp_mode = USB_PD_MUX_USB_ENABLED | polarity;
 	zassert_equal(EC_SUCCESS,
 		      shell_execute_cmd(shell_backend_uart_get_ptr(),
 					"typec 1 usb"), NULL);
@@ -872,7 +878,7 @@ ZTEST(usb_init_mux, test_usb_mux_typec_command)
 
 	/* Test setting DP mode */
 	reset_proxy_fakes();
-	exp_mode = USB_PD_MUX_DP_ENABLED;
+	exp_mode = USB_PD_MUX_DP_ENABLED | polarity;
 	zassert_equal(EC_SUCCESS,
 		      shell_execute_cmd(shell_backend_uart_get_ptr(),
 					"typec 1 dp"), NULL);
@@ -880,7 +886,7 @@ ZTEST(usb_init_mux, test_usb_mux_typec_command)
 
 	/* Test setting dock mode */
 	reset_proxy_fakes();
-	exp_mode = USB_PD_MUX_USB_ENABLED | USB_PD_MUX_DP_ENABLED;
+	exp_mode = USB_PD_MUX_USB_ENABLED | USB_PD_MUX_DP_ENABLED | polarity;
 	zassert_equal(EC_SUCCESS,
 		      shell_execute_cmd(shell_backend_uart_get_ptr(),
 					"typec 1 dock"), NULL);

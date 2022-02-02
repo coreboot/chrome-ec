@@ -35,7 +35,6 @@
 		 * protection.
 		 */
 		gpio_wp_l: wp_l {
-			#gpio-cells = <0>;
 			gpios = <&gpio0 3 (GPIO_INPUT | GPIO_OUTPUT)>;
 			enum-name = "GPIO_WP_L";
 		};
@@ -86,7 +85,7 @@
 			enum-name = "GPIO_USB_C0_PPC_INT_ODL";
 		};
 		gpio_switchcap_pg_int_l: switchcap_pg_int_l {
-			gpios = <&gpio0 15 GPIO_INPUT>;
+			gpios = <&gpio0 15 (GPIO_OUTPUT | GPIO_INPUT)>;
 		};
 		gpio_ap_rst_l: ap_rst_l {
 			gpios = <&gpio0 16 GPIO_INPUT>;
@@ -97,7 +96,8 @@
 			enum-name = "GPIO_PS_HOLD";
 		};
 		gpio_mb_power_good: mb_power_good {
-			gpios = <&gpio0 18 (GPIO_INPUT | GPIO_PULL_DOWN)>;
+			gpios = <&gpio0 18 (GPIO_OUTPUT | GPIO_INPUT |
+				GPIO_PULL_DOWN)>;
 			enum-name = "GPIO_POWER_GOOD";
 		};
 		gpio_ap_suspend: ap_suspend {
@@ -121,7 +121,7 @@
 			enum-name = "GPIO_LID_OPEN";
 		};
 		gpio_switchcap_on: switchcap_on {
-			gpios = <&gpio0 24 GPIO_OUT_LOW>;
+			gpios = <&gpio0 24 (GPIO_INPUT | GPIO_OUT_LOW)>;
 			enum-name = "GPIO_SWITCHCAP_ON";
 		};
 		gpio_ec_pwr_btn_odl: ec_pwr_btn_odl {
@@ -129,8 +129,13 @@
 			enum-name = "GPIO_POWER_BUTTON_L";
 		};
 		gpio_src_vph_pwr_pg: src_vph_pwr_pg {
-			gpios = <&gpio0 26 (GPIO_INPUT | GPIO_PULL_DOWN)>;
+			gpios = <&gpio0 26 (GPIO_INPUT | GPIO_OUTPUT |
+				GPIO_PULL_DOWN)>;
 			enum-name = "GPIO_SWITCHCAP_PG";
+		};
+		gpio_test: test {
+			gpios = <&gpio0 27 (GPIO_INPUT | GPIO_OUTPUT)>;
+			enum-name = "GPIO_TEST";
 		};
 	};
 
@@ -138,34 +143,44 @@
 		compatible = "cros-ec,gpio-interrupts";
 
 		int_ac_present: ac_present {
-			irq-gpio = <&gpio_acok_od>;
+			irq-pin = <&gpio_acok_od>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "extpower_interrupt";
 		};
 		int_usb_c0: usb_c0 {
-			irq-gpio = <&usb_c0_tcpc_int_odl>;
+			irq-pin = <&usb_c0_tcpc_int_odl>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "tcpc_alert_event";
 		};
 		int_usb_c1: usb_c1 {
-			irq-gpio = <&usb_c1_tcpc_int_odl>;
+			irq-pin = <&usb_c1_tcpc_int_odl>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "tcpc_alert_event";
 		};
 		int_usb_c0_ppc: usb_c0_ppc {
-			irq-gpio = <&gpio_usb_c0_ppc_int>;
+			irq-pin = <&gpio_usb_c0_ppc_int>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "ppc_alert";
 		};
 		int_usb_c1_ppc: usb_c1_ppc {
-			irq-gpio = <&gpio_usb_c1_ppc_int>;
+			irq-pin = <&gpio_usb_c1_ppc_int>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "ppc_alert";
 		};
 		int_switchcap_pg: switchcap_pg {
-			irq-gpio = <&gpio_switchcap_pg_int_l>;
+			irq-pin = <&gpio_switchcap_pg_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "ln9310_interrupt";
+		};
+		int_gpio_test: test {
+			irq-pin = <&gpio_test>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "gpio_test_interrupt";
+		};
+		int_mb_power_good: mb_power_good {
+			irq-pin = <&gpio_mb_power_good>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "power_signal_interrupt";
 		};
 	};
 
@@ -653,7 +668,7 @@
 };
 
 &gpio0 {
-	ngpios = <27>;
+	ngpios = <28>;
 };
 
 &i2c0 {
@@ -665,7 +680,8 @@
 		pagesize = <8>;
 		address-width = <8>;
 		timeout = <5>;
-		wp-gpios = <&gpio_wp_l>;
+		/* gpio_wp_l */
+		wp-gpios = <&gpio0 3 (GPIO_INPUT | GPIO_OUTPUT)>;
 	};
 
 	battery: sb@b {
@@ -718,7 +734,7 @@
 		status = "okay";
 		reg = <0x80>;
 		label = "LN9310";
-		pg_int_gpio = <&gpio_switchcap_pg_int_l>;
+		pg-int-pin = <&gpio_switchcap_pg_int_l>;
 	};
 
 	lis2dw12_emul: lis2dw12@19 {

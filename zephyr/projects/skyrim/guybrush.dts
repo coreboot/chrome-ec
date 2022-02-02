@@ -11,27 +11,20 @@
 			enum-name = "GPIO_WP_L";
 		};
 		gpio_ec_pwr_btn_odl: ec_pwr_btn_odl {
-			#gpio-cells = <0>;
 			gpios = <&gpio0 1 GPIO_INPUT>;
-			enum-name = "GPIO_EC_PWR_BTN_ODL";
 		};
 		gpio_slp_s3_s0i3_l: slp_s3_s0i3_l {
-			#gpio-cells = <0>;
 			gpios = <&gpio7 4 GPIO_INPUT>;
 			enum-name = "GPIO_PCH_SLP_S0_L";
 		};
 		gpio_ec_pcore_int_odl: ec_pcore_int_odl {
-			#gpio-cells = <0>;
 			gpios = <&gpiof 0 GPIO_INPUT_PULL_UP>;
-			enum-name = "GPIO_EC_PCORE_INT_ODL";
 		};
 		gpio_pg_groupc_s0_od: pg_groupc_s0_od {
-			#gpio-cells = <0>;
 			gpios = <&gpioa 3 GPIO_INPUT>;
 			enum-name = "GPIO_PG_GROUPC_S0_OD";
 		};
 		gpio_pg_lpddr4x_s3_od: pg_lpddr4x_s3_od {
-			#gpio-cells = <0>;
 			gpios = <&gpio9 5 GPIO_INPUT>;
 			enum-name = "GPIO_PG_LPDDR4X_S3_OD";
 		};
@@ -49,7 +42,7 @@
 		ec_mem_event {
 			gpios = <&gpioa 5 GPIO_OUT_LOW>;
 		};
-		ec_soc_pwr_btn_l {
+		gpio_ec_soc_pwr_btn_l: ec_soc_pwr_btn_l {
 			gpios = <&gpio6 3 GPIO_OUT_HIGH>;
 			enum-name = "GPIO_PCH_PWRBTN_L";
 		};
@@ -59,7 +52,7 @@
 		soc_thermtrip_odl {
 			gpios = <&gpioe 5 GPIO_INPUT>;
 		};
-		usb_c0_c1_fault_odl {
+		gpio_usb_c0_c1_fault_odl: usb_c0_c1_fault_odl {
 			gpios = <&gpio7 3 GPIO_ODR_HIGH>;
 			enum-name = "GPIO_USB_C0_C1_FAULT_ODL";
 		};
@@ -67,12 +60,10 @@
 			gpios = <&gpioa 2 GPIO_INPUT_PULL_DOWN>;
 		};
 		gpio_voldn_btn_odl: voldn_btn_odl {
-			#gpio-cells = <0>;
 			gpios = <&gpioa 7 GPIO_INPUT_PULL_UP>;
 			enum-name = "GPIO_VOLUME_DOWN_L";
 		};
 		gpio_volup_btn_odl: volup_btn_odl {
-			#gpio-cells = <0>;
 			gpios = <&gpio9 3 GPIO_INPUT_PULL_UP>;
 			enum-name = "GPIO_VOLUME_UP_L";
 		};
@@ -155,27 +146,27 @@
 		compatible = "cros-ec,gpio-interrupts";
 
 		int_pg_lpddr4x_s3: pg_lpddr4x_s3 {
-			irq-gpio = <&gpio_pg_lpddr4x_s3_od>;
+			irq-pin = <&gpio_pg_lpddr4x_s3_od>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "baseboard_en_pwr_pcore_s0";
 		};
 		int_slp_s3_s0i3: slp_s3_s0i3 {
-			irq-gpio = <&gpio_slp_s3_s0i3_l>;
+			irq-pin = <&gpio_slp_s3_s0i3_l>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "power_signal_interrupt";
 		};
 		int_ec_pwr_btn: ec_pwr_btn {
-			irq-gpio = <&gpio_ec_pwr_btn_odl>;
+			irq-pin = <&gpio_ec_pwr_btn_odl>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "power_signal_interrupt";
 		};
 		int_ec_pcore: ec_pcore {
-			irq-gpio = <&gpio_ec_pcore_int_odl>;
+			irq-pin = <&gpio_ec_pcore_int_odl>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "power_signal_interrupt";
 		};
 		int_pg_groupc_s0: pg_groupc_s0 {
-			irq-gpio = <&gpio_pg_groupc_s0_od>;
+			irq-pin = <&gpio_pg_groupc_s0_od>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "baseboard_en_pwr_pcore_s0";
 		};

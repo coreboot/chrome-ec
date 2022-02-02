@@ -385,6 +385,11 @@ DECLARE_HOOK(HOOK_INIT, stubs_interrupt_init, HOOK_PRIO_INIT_I2C + 1);
 void board_set_switchcap_power(int enable)
 {
 	gpio_set_level(GPIO_SWITCHCAP_ON, enable);
+	/* TODO(b/217554681): So, the ln9310 emul should probably be setting
+	 * this instead of setting it here.
+	 */
+	gpio_set_level(GPIO_SWITCHCAP_PG, enable);
+	gpio_set_level(GPIO_POWER_GOOD, enable);
 }
 
 int board_is_switchcap_enabled(void)
@@ -400,4 +405,13 @@ int board_is_switchcap_power_good(void)
 void sys_arch_reboot(int type)
 {
 	ARG_UNUSED(type);
+}
+
+/* GPIO TEST interrupt handler */
+bool gpio_test_interrupt_triggered;
+void gpio_test_interrupt(enum gpio_signal signal)
+{
+	ARG_UNUSED(signal);
+	printk("%s called\n", __func__);
+	gpio_test_interrupt_triggered = true;
 }
