@@ -18,9 +18,11 @@
 #include "tcpm/tcpm.h"
 #include "usb_dp_alt_mode.h"
 #include "usb_mode.h"
+#include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_dpm.h"
 #include "usb_pd_tcpm.h"
+#include "usb_pd_pdo.h"
 #include "usb_tbt_alt_mode.h"
 
 #ifdef CONFIG_COMMON_RUNTIME
@@ -35,7 +37,7 @@
 #define DPM_ATTENION_MAX_VDO 2
 
 static struct {
-	uint32_t flags;
+	atomic_t flags;
 	uint32_t vdm_attention[DPM_ATTENION_MAX_VDO];
 	int vdm_cnt;
 	mutex_t vdm_attention_mutex;
@@ -46,12 +48,16 @@ static struct {
 #define DPM_CHK_FLAG(port, flag) (dpm[(port)].flags & (flag))
 
 /* Flags for internal DPM state */
-#define DPM_FLAG_MODE_ENTRY_DONE BIT(0)
-#define DPM_FLAG_EXIT_REQUEST    BIT(1)
-#define DPM_FLAG_ENTER_DP        BIT(2)
-#define DPM_FLAG_ENTER_TBT       BIT(3)
-#define DPM_FLAG_ENTER_USB4      BIT(4)
-#define DPM_FLAG_SEND_ATTENTION  BIT(5)
+#define DPM_FLAG_MODE_ENTRY_DONE      BIT(0)
+#define DPM_FLAG_EXIT_REQUEST         BIT(1)
+#define DPM_FLAG_ENTER_DP             BIT(2)
+#define DPM_FLAG_ENTER_TBT            BIT(3)
+#define DPM_FLAG_ENTER_USB4           BIT(4)
+#define DPM_FLAG_ENTER_ANY            (DPM_FLAG_ENTER_DP | DPM_FLAG_ENTER_TBT \
+					| DPM_FLAG_ENTER_USB4)
+#define DPM_FLAG_SEND_ATTENTION       BIT(5)
+#define DPM_FLAG_DATA_RESET_REQUESTED BIT(6)
+#define DPM_FLAG_DATA_RESET_DONE      BIT(7)
 
 #ifdef CONFIG_ZEPHYR
 static int init_vdm_attention_mutex(const struct device *dev)
@@ -132,6 +138,7 @@ enum ec_status pd_request_enter_mode(int port, enum typec_mode mode)
 
 	DPM_CLR_FLAG(port, DPM_FLAG_MODE_ENTRY_DONE);
 	DPM_CLR_FLAG(port, DPM_FLAG_EXIT_REQUEST);
+	DPM_CLR_FLAG(port, DPM_FLAG_DATA_RESET_DONE);
 
 	return EC_RES_SUCCESS;
 }
@@ -139,6 +146,12 @@ enum ec_status pd_request_enter_mode(int port, enum typec_mode mode)
 void dpm_init(int port)
 {
 	dpm[port].flags = 0;
+}
+
+void dpm_mode_exit_complete(int port)
+{
+	DPM_CLR_FLAG(port, DPM_FLAG_MODE_ENTRY_DONE | DPM_FLAG_EXIT_REQUEST |
+			DPM_FLAG_SEND_ATTENTION);
 }
 
 static void dpm_set_mode_entry_done(int port)
@@ -151,6 +164,13 @@ static void dpm_set_mode_entry_done(int port)
 void dpm_set_mode_exit_request(int port)
 {
 	DPM_SET_FLAG(port, DPM_FLAG_EXIT_REQUEST);
+}
+
+void dpm_data_reset_complete(int port)
+{
+	DPM_CLR_FLAG(port, DPM_FLAG_DATA_RESET_REQUESTED);
+	DPM_SET_FLAG(port, DPM_FLAG_DATA_RESET_DONE);
+	DPM_CLR_FLAG(port, DPM_FLAG_MODE_ENTRY_DONE);
 }
 
 static void dpm_clear_mode_exit_request(int port)
@@ -234,6 +254,7 @@ static void dpm_attempt_mode_entry(int port)
 	enum tcpci_msg_type tx_type = TCPCI_MSG_SOP;
 	bool enter_mode_requested =
 		IS_ENABLED(CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY) ?  false : true;
+	enum dpm_msg_setup_status status = MSG_SETUP_UNSUPPORTED;
 
 	if (pd_get_data_role(port) != PD_ROLE_DFP) {
 		if (DPM_CHK_FLAG(port, DPM_FLAG_ENTER_DP |
@@ -276,6 +297,30 @@ static void dpm_attempt_mode_entry(int port)
 		return;
 	}
 
+	/*
+	 * If muxes are still settling, then wait on our next VDM.  We must
+	 * ensure we correctly sequence actions such as USB safe state with TBT
+	 * entry or DP configuration.
+	 */
+	if (IS_ENABLED(CONFIG_USBC_SS_MUX) && !usb_mux_set_completed(port))
+		return;
+
+	if (IS_ENABLED(CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY) &&
+			IS_ENABLED(CONFIG_USB_PD_DATA_RESET_MSG) &&
+			DPM_CHK_FLAG(port, DPM_FLAG_ENTER_ANY) &&
+			!DPM_CHK_FLAG(port, DPM_FLAG_DATA_RESET_REQUESTED) &&
+			!DPM_CHK_FLAG(port, DPM_FLAG_DATA_RESET_DONE)) {
+		pd_dpm_request(port, DPM_REQUEST_DATA_RESET);
+		DPM_SET_FLAG(port, DPM_FLAG_DATA_RESET_REQUESTED);
+		return;
+	}
+
+	if (IS_ENABLED(CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY) &&
+			IS_ENABLED(CONFIG_USB_PD_DATA_RESET_MSG) &&
+			!DPM_CHK_FLAG(port, DPM_FLAG_DATA_RESET_DONE)) {
+		return;
+	}
+
 	/* Check if port, port partner and cable support USB4. */
 	if (IS_ENABLED(CONFIG_USB_PD_USB4) &&
 	    board_is_tbt_usb4_port(port) &&
@@ -287,8 +332,9 @@ static void dpm_attempt_mode_entry(int port)
 		 * cable and USB4 mode with the port partner.
 		 */
 		if (tbt_cable_entry_required_for_usb4(port)) {
-			vdo_count = tbt_setup_next_vdm(port,
-				ARRAY_SIZE(vdm), vdm, &tx_type);
+			vdo_count = ARRAY_SIZE(vdm);
+			status = tbt_setup_next_vdm(port, &vdo_count, vdm,
+						    &tx_type);
 		} else {
 			pd_dpm_request(port, DPM_REQUEST_ENTER_USB);
 			return;
@@ -302,24 +348,32 @@ static void dpm_attempt_mode_entry(int port)
 				USB_VID_INTEL) &&
 			dpm_mode_entry_requested(port, TYPEC_MODE_TBT)) {
 		enter_mode_requested = true;
-		vdo_count = tbt_setup_next_vdm(port,
-			ARRAY_SIZE(vdm), vdm, &tx_type);
+		vdo_count = ARRAY_SIZE(vdm);
+		status = tbt_setup_next_vdm(port, &vdo_count, vdm,
+					    &tx_type);
 	}
 
 	/* If not, check if they support DisplayPort alt mode. */
-	if (vdo_count == 0 && !DPM_CHK_FLAG(port, DPM_FLAG_MODE_ENTRY_DONE) &&
+	if (status == MSG_SETUP_UNSUPPORTED &&
+	    !DPM_CHK_FLAG(port, DPM_FLAG_MODE_ENTRY_DONE) &&
 	    pd_is_mode_discovered_for_svid(port, TCPCI_MSG_SOP,
-				USB_SID_DISPLAYPORT) &&
+					   USB_SID_DISPLAYPORT) &&
 	    dpm_mode_entry_requested(port, TYPEC_MODE_DP)) {
 		enter_mode_requested = true;
-		vdo_count = dp_setup_next_vdm(port, ARRAY_SIZE(vdm), vdm);
+		vdo_count = ARRAY_SIZE(vdm);
+		status = dp_setup_next_vdm(port, &vdo_count, vdm);
 	}
+
+	/* Not ready to send a VDM, check again next cycle */
+	if (status == MSG_SETUP_MUX_WAIT)
+		return;
 
 	/*
 	 * If the PE didn't discover any supported (requested) alternate mode,
 	 * just mark setup done and get out of here.
 	 */
-	if (vdo_count == 0 && !DPM_CHK_FLAG(port, DPM_FLAG_MODE_ENTRY_DONE)) {
+	if (status != MSG_SETUP_SUCCESS &&
+				!DPM_CHK_FLAG(port, DPM_FLAG_MODE_ENTRY_DONE)) {
 		if (enter_mode_requested) {
 			/*
 			 * TODO(b/168030639): Notify the AP that mode entry
@@ -335,7 +389,7 @@ static void dpm_attempt_mode_entry(int port)
 		return;
 	}
 
-	if (vdo_count < 0) {
+	if (status != MSG_SETUP_SUCCESS) {
 		dpm_set_mode_entry_done(port);
 		CPRINTS("C%d: Couldn't construct alt mode VDM", port);
 		return;
@@ -355,8 +409,9 @@ static void dpm_attempt_mode_entry(int port)
 
 static void dpm_attempt_mode_exit(int port)
 {
-	uint32_t vdm = 0;
-	int vdo_count = 0;
+	uint32_t vdm[VDO_MAX_SIZE];
+	int vdo_count = ARRAY_SIZE(vdm);
+	enum dpm_msg_setup_status status = MSG_SETUP_ERROR;
 	enum tcpci_msg_type tx_type = TCPCI_MSG_SOP;
 
 	if (IS_ENABLED(CONFIG_USB_PD_USB4) &&
@@ -364,6 +419,15 @@ static void dpm_attempt_mode_exit(int port)
 		CPRINTS("C%d: USB4 teardown", port);
 		usb4_exit_mode_request(port);
 	}
+
+	/*
+	 * If muxes are still settling, then wait on our next VDM.  We must
+	 * ensure we correctly sequence actions such as USB safe state with TBT
+	 * or DP mode exit.
+	 */
+	if (IS_ENABLED(CONFIG_USBC_SS_MUX) && !usb_mux_set_completed(port))
+		return;
+
 	if (IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE) &&
 	    tbt_is_active(port)) {
 		/*
@@ -373,18 +437,21 @@ static void dpm_attempt_mode_exit(int port)
 		 */
 		CPRINTS("C%d: TBT teardown", port);
 		tbt_exit_mode_request(port);
-		vdo_count = tbt_setup_next_vdm(port, VDO_MAX_SIZE, &vdm,
-					&tx_type);
+		status = tbt_setup_next_vdm(port, &vdo_count, vdm, &tx_type);
 	} else if (dp_is_active(port)) {
 		CPRINTS("C%d: DP teardown", port);
-		vdo_count = dp_setup_next_vdm(port, VDO_MAX_SIZE, &vdm);
+		status = dp_setup_next_vdm(port, &vdo_count, vdm);
 	} else {
 		/* Clear exit mode request */
 		dpm_clear_mode_exit_request(port);
 		return;
 	}
 
-	if (!pd_setup_vdm_request(port, tx_type, &vdm, vdo_count)) {
+	/* This covers error, wait mux, and unsupported cases */
+	if (status != MSG_SETUP_SUCCESS)
+		return;
+
+	if (!pd_setup_vdm_request(port, tx_type, vdm, vdo_count)) {
 		dpm_clear_mode_exit_request(port);
 		return;
 	}
@@ -436,11 +503,11 @@ static uint32_t		max_current_claimed;
 K_MUTEX_DEFINE(max_current_claimed_lock);
 
 /* Ports with PD sink needing > 1.5 A */
-static uint32_t sink_max_pdo_requested;
+static atomic_t sink_max_pdo_requested;
 /* Ports with FRS source needing > 1.5 A */
-static uint32_t source_frs_max_requested;
+static atomic_t source_frs_max_requested;
 /* Ports with non-PD sinks, so current requirements are unknown */
-static uint32_t non_pd_sink_max_requested;
+static atomic_t non_pd_sink_max_requested;
 
 #define LOWEST_PORT(p) __builtin_ctz(p)  /* Undefined behavior if p == 0 */
 
@@ -467,7 +534,7 @@ static void balance_source_ports(void)
 	uint32_t removed_ports, new_ports;
 	static bool deferred_waiting;
 
-	if (task_get_current() == TASK_ID_HOOKS)
+	if (in_deferred_context())
 		deferred_waiting = false;
 
 	/*
@@ -641,8 +708,8 @@ void dpm_remove_sink(int port)
 	if (CONFIG_USB_PD_3A_PORTS == 0)
 		return;
 
-	if (!(BIT(port) & sink_max_pdo_requested) &&
-	    !(BIT(port) & non_pd_sink_max_requested))
+	if (!(BIT(port) & (uint32_t)sink_max_pdo_requested) &&
+	    !(BIT(port) & (uint32_t)non_pd_sink_max_requested))
 		return;
 
 	atomic_clear_bits(&sink_max_pdo_requested, BIT(port));
@@ -663,7 +730,7 @@ void dpm_remove_source(int port)
 	if (!IS_ENABLED(CONFIG_USB_PD_FRS))
 		return;
 
-	if (!(BIT(port) & source_frs_max_requested))
+	if (!(BIT(port) & (uint32_t)source_frs_max_requested))
 		return;
 
 	atomic_clear_bits(&source_frs_max_requested, BIT(port));

@@ -26,6 +26,19 @@
 #ifdef CONFIG_ZEPHYR
 int uart_shell_stop(void);
 void uart_shell_start(void);
+
+/*
+ * Set the priority of the Zephyr shell.  The desired priority is lower than
+ * the PD threads, but higher than the HOSTCMD thread.  See shimmed_task_id.h
+ */
+void uart_shell_set_priority(int prio);
+
+#ifdef TEST_BUILD
+/* Gets the pointer to the zephyr shell, since it might not always be
+ * the uart backend.
+ */
+const struct shell *get_ec_shell(void);
+#endif
 #else
 static inline int uart_shell_stop(void)
 {
@@ -221,11 +234,11 @@ void console_has_input(void);
  */
 #if !defined(HAS_TASK_CONSOLE) && !defined(CONFIG_ZEPHYR)
 #define DECLARE_CONSOLE_COMMAND(NAME, ROUTINE, ARGDESC, HELP)		\
-	int (ROUTINE)(int argc, char **argv) __attribute__((unused))
+	static int (ROUTINE)(int argc, char **argv) __attribute__((unused))
 #define DECLARE_SAFE_CONSOLE_COMMAND(NAME, ROUTINE, ARGDESC, HELP)	\
-	int (ROUTINE)(int argc, char **argv) __attribute__((unused))
+	static int (ROUTINE)(int argc, char **argv) __attribute__((unused))
 #define DECLARE_CONSOLE_COMMAND_FLAGS(NAME, ROUTINE, ARGDESC, HELP, FLAGS) \
-	int (ROUTINE)(int argc, char **argv) __attribute__((unused))
+	static int (ROUTINE)(int argc, char **argv) __attribute__((unused))
 #elif defined(HAS_TASK_CONSOLE)
 
 /* We always provde help args, but we may discard them to save space. */
@@ -247,6 +260,7 @@ void console_has_input(void);
 
 /* This macro takes all possible args and discards the ones we don't use */
 #define _DCL_CON_CMD_ALL(NAME, ROUTINE, ARGDESC, HELP, FLAGS)		\
+	static int (ROUTINE)(int argc, char **argv);			\
 	static const char __con_cmd_label_##NAME[] = #NAME;		\
 	_Static_assert(sizeof(__con_cmd_label_##NAME) < 16,		\
 		       "command name '" #NAME "' is too long");		\

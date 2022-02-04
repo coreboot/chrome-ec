@@ -60,8 +60,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_lid_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_a_data,
 				MOTIONSENSE_TYPE_ACCEL),
-		.int_signal = GPIO_ACCEL_GYRO_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR1_FLAGS,
 		.rot_standard_ref = &lid_rot_ref,
@@ -90,8 +88,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_lid_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_a_data,
 				MOTIONSENSE_TYPE_GYRO),
-		.int_signal = GPIO_ACCEL_GYRO_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR1_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
@@ -160,7 +156,7 @@ int board_sensor_at_360(void)
 	 * also active.
 	 */
 	return lid_is_open() &&
-	       !gpio_get_level(GMR_TABLET_MODE_GPIO_L);
+	       !gpio_get_level(GPIO_TABLET_MODE_L);
 }
 
 /* Initialize board. */

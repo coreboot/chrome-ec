@@ -50,7 +50,7 @@
 #define BMI3_REG_GYR_CONF			0x21
 #define BMI3_REG_INT_MAP1			0x3A
 #define BMI3_REG_FIFO_WATERMARK			0x35
-
+#define BMI3_REG_UGAIN_OFF_SEL		0x3F
 #define BMI3_REG_FIFO_CONF			0x36
 #define BMI3_FIFO_STOP_ON_FULL			0x01
 #define BMI3_FIFO_TIME_EN			0x01
@@ -106,9 +106,10 @@
 #define BMI3_ACC_FOC_16G_REF			2048
 #define BMI3_FOC_SAMPLE_LIMIT			32
 
-/* 20ms delay for 50Hz ODR */
 #define FOC_TRY_COUNT				5
+/* 20ms delay for 50Hz ODR */
 #define FOC_DELAY				20
+#define OFFSET_UPDATE_DELAY			120
 #define BMI3_INT_STATUS_FWM			0x4000
 #define BMI3_INT_STATUS_FFULL			0x8000
 #define BMI3_INT_STATUS_ORIENTATION		0x0008
@@ -257,5 +258,25 @@ enum sensor_index_t {
 extern const struct accelgyro_drv bmi3xx_drv;
 
 void bmi3xx_interrupt(enum gpio_signal signal);
+
+#if defined(CONFIG_ZEPHYR) && defined(CONFIG_ACCEL_INTERRUPTS)
+/*
+ * Get the motion sensor ID of the BMI3xx sensor that
+ * generates the interrupt.
+ * The interrupt is converted to the event and transferred to motion
+ * sense task that actually handles the interrupt.
+ *
+ * Here, we use alias to get the motion sensor ID
+ *
+ * e.g) base_accel is the label of a child node in /motionsense-sensors
+ * aliases {
+ *     bmi3xx-int = &base_accel;
+ * };
+ */
+#if DT_NODE_EXISTS(DT_ALIAS(bmi3xx_int))
+#define CONFIG_ACCELGYRO_BMI3XX_INT_EVENT	\
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(SENSOR_ID(DT_ALIAS(bmi3xx_int)))
+#endif
+#endif
 
 #endif /* __CROS_EC_ACCELGYRO_BMI3XX_H */

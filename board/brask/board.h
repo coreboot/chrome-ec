@@ -38,12 +38,12 @@
 #define CONFIG_USB_PD_PPC
 #define CONFIG_USB_PD_TCPM_RT1715
 #define CONFIG_USBC_RETIMER_INTEL_BB
-/* TODO(b/197505149): need to fix the build error and clarify
- * how to set the usb_ls_en_gpio and retimer_rst_gpio
- * in the same array.
- */
-/* #define CONFIG_USBC_RETIMER_KB800X */
+
+#define CONFIG_USBC_RETIMER_KB800X
+#define CONFIG_KB800X_CUSTOM_XBAR
 #define CONFIG_USBC_PPC_SYV682X
+#undef CONFIG_SYV682X_HV_ILIM
+#define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
 
 /* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
@@ -75,6 +75,7 @@
 #define GPIO_PCH_RTCRST			GPIO_EC_PCH_RTCRST
 #define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
+#define GPIO_TEMP_SENSOR_POWER		GPIO_SEQ_EC_DSW_PWROK
 
 /*
  * GPIO_EC_PCH_INT_ODL is used for MKBP events as well as a PCH wakeup
@@ -85,7 +86,6 @@
 #define GPIO_PG_EC_DSW_PWROK		GPIO_SEQ_EC_DSW_PWROK
 #define GPIO_PG_EC_RSMRST_ODL		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_POWER_BUTTON_L		GPIO_GSC_EC_PWR_BTN_ODL
-#define GPIO_RSMRST_L_PGOOD		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
 #define GPIO_WP_L			GPIO_EC_WP_ODL
 #define GPIO_RECOVERY_L			GPIO_EC_RECOVERY_BTN_OD
@@ -115,11 +115,8 @@
 
 #define I2C_ADDR_MP2964_FLAGS	0x20
 
-/*
- * see b/174768555#comment22
- */
-#define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x56
-#define USBC_PORT_C2_BB_RETIMER_I2C_ADDR	0x57
+#define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x58
+#define USBC_PORT_C2_BB_RETIMER_I2C_ADDR	0x59
 
 /* Enabling Thunderbolt-compatible mode */
 #define CONFIG_USB_PD_TBT_COMPAT_MODE
@@ -133,7 +130,7 @@
 /* Thermal features */
 #define CONFIG_THERMISTOR
 #define CONFIG_TEMP_SENSOR
-#define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_SEQ_EC_DSW_PWROK
+#define CONFIG_TEMP_SENSOR_POWER
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
 /* ADC */
@@ -143,13 +140,24 @@
  * TODO(b/197478860): Enable the fan control. We need
  * to check the sensor value and adjust the fan speed.
  */
-/* #define CONFIG_FANS			FAN_CH_COUNT */
+ #define CONFIG_FANS			FAN_CH_COUNT
+
+/* Include math_util for bitmask_uint64 used in pd_timers */
+#define CONFIG_MATH_UTIL
 
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"	/* needed by registers.h */
 #include "registers.h"
 #include "usbc_config.h"
+
+enum charge_port {
+	CHARGE_PORT_TYPEC0,
+	CHARGE_PORT_TYPEC1,
+	CHARGE_PORT_TYPEC2,
+	CHARGE_PORT_BARRELJACK,
+	CHARGE_PORT_ENUM_COUNT
+};
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_CPU,
@@ -190,6 +198,18 @@ enum mft_channel {
 	MFT_CH_0 = 0,
 	MFT_CH_COUNT
 };
+
+/*
+ * firmware config fields
+ */
+/*
+ * Barrel-jack power (4 bits).
+ */
+#define EC_CFG_BJ_POWER_L		0
+#define EC_CFG_BJ_POWER_H		3
+#define EC_CFG_BJ_POWER_MASK GENMASK(EC_CFG_BJ_POWER_H, EC_CFG_BJ_POWER_L)
+
+extern void adp_connect_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

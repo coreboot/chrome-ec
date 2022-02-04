@@ -10,7 +10,7 @@
 LOG_MODULE_REGISTER(smart_battery);
 
 #include <device.h>
-#include <emul.h>
+#include <drivers/emul.h>
 #include <drivers/i2c.h>
 #include <drivers/i2c_emul.h>
 
@@ -586,20 +586,21 @@ static int sbat_emul_handle_read_msg(struct i2c_emul *emul, int reg)
 
 	/* Handle commands which return block */
 	ret = sbat_emul_get_block_data(emul, reg, &blk, &len);
-	if (ret != 0) {
-		if (ret == 1) {
-			data->bat.error_code = STATUS_CODE_UNSUPPORTED;
-			LOG_ERR("Unknown read command (0x%x)", reg);
-		}
-
+	if (ret < 0) {
 		return -EIO;
 	}
+	if (ret == 0) {
+		data->num_to_read = len + 1;
+		data->msg_buf[0] = len;
+		memcpy(&data->msg_buf[1], blk, len);
+		data->bat.error_code = STATUS_CODE_OK;
+		sbat_emul_append_pec(data, reg);
 
-	data->num_to_read = len + 1;
-	data->msg_buf[0] = len;
-	memcpy(&data->msg_buf[1], blk, len);
-	data->bat.error_code = STATUS_CODE_OK;
-	sbat_emul_append_pec(data, reg);
+		return 0;
+	}
+
+	/* Command is unknown. Wait for custom handler before failing. */
+	data->num_to_read = 0;
 
 	return 0;
 }
@@ -740,6 +741,13 @@ static int sbat_emul_read_byte(struct i2c_emul *emul, int reg, uint8_t *val,
 
 	data = SBAT_DATA_FROM_I2C_EMUL(emul);
 
+	if (data->num_to_read == 0) {
+		data->bat.error_code = STATUS_CODE_UNSUPPORTED;
+		LOG_ERR("Unknown read command (0x%x)", reg);
+
+		return -EIO;
+	}
+
 	if (bytes < data->num_to_read) {
 		*val = data->msg_buf[bytes];
 	}
@@ -766,10 +774,6 @@ static int sbat_emul_access_reg(struct i2c_emul *emul, int reg, int bytes,
 
 /* Device instantiation */
 
-static struct i2c_emul_api sbat_emul_api = {
-	.transfer = i2c_common_emul_transfer,
-};
-
 /**
  * @brief Set up a new Smart Battery emulator
  *
@@ -788,7 +792,7 @@ static int sbat_emul_init(const struct emul *emul,
 	struct i2c_common_emul_data *data = cfg->data;
 	int ret;
 
-	data->emul.api = &sbat_emul_api;
+	data->emul.api = &i2c_common_emul_api;
 	data->emul.addr = cfg->addr;
 	data->i2c = parent;
 	data->cfg = cfg;

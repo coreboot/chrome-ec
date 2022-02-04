@@ -13,6 +13,7 @@
 		zephyr,console = &uart1;
 		zephyr,shell-uart = &uart1;
 		zephyr,flash = &flash0;
+		zephyr,flash-controller = &int_flash;
 		cros,rtc = &mtc;
 	};
 
@@ -22,27 +23,22 @@
 		i2c_evb_0_0 {
 			i2c-port = <&i2c0_0>;
 			enum-name = "I2C_PORT_EVB_0";
-			label = "I2C0_0";
 		};
 		i2c_evb_1_0 {
 			i2c-port = <&i2c1_0>;
 			enum-name = "I2C_PORT_EVB_1";
-			label = "I2C1_0";
 		};
 		i2c_evb_2_0 {
 			i2c-port = <&i2c2_0>;
 			enum-name = "I2C_PORT_EVB_2";
-			label = "I2C2_0";
 		};
 		i2c_evb_3_0 {
 			i2c-port = <&i2c3_0>;
 			enum-name = "I2C_PORT_EVB_3";
-			label = "I2C3_0";
 		};
 		i2c_evb_7_0 {
 			i2c-port = <&i2c7_0>;
 			enum-name = "I2C_PORT_EVB_7";
-			label = "I2C7_0";
 		};
 	};
 
@@ -52,27 +48,27 @@
 		adc_ch_0 {
 			label = "ADC0";
 			enum-name = "ADC_EVB_CH_0";
-			channel = <0>;
+			io-channels = <&adc0 0>;
 		};
 		adc_ch_1 {
 			label = "ADC1";
 			enum-name = "ADC_EVB_CH_1";
-			channel = <1>;
+			io-channels = <&adc0 1>;
 		};
 		adc_ch_2 {
 			label = "ADC2";
 			enum-name = "ADC_EVB_CH_2";
-			channel = <2>;
+			io-channels = <&adc0 2>;
 		};
 		adc_ch_3 {
 			label = "ADC3";
 			enum-name = "ADC_EVB_CH_3";
-			channel = <3>;
+			io-channels = <&adc0 3>;
 		};
 		adc_ch_4 {
 			label = "ADC4";
 			enum-name = "ADC_EVB_CH_4";
-			channel = <4>;
+			io-channels = <&adc0 4>;
 		};
 	};
 
@@ -87,9 +83,17 @@
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 };
 
+&i2c_ctrl0 {
+	status = "okay";
+};
+
 &i2c1_0 {
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
+};
+
+&i2c_ctrl1 {
+	status = "okay";
 };
 
 &i2c2_0 {
@@ -97,14 +101,26 @@
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 };
 
+&i2c_ctrl2 {
+	status = "okay";
+};
+
 &i2c3_0 {
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 };
 
+&i2c_ctrl3 {
+	status = "okay";
+};
+
 &i2c7_0 {
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
+};
+
+&i2c_ctrl7 {
+	status = "okay";
 };
 
 &adc0 {

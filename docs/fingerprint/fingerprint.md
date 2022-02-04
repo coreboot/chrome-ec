@@ -28,10 +28,13 @@ The main source code for fingerprint sensor functionality lives in the
 The following "boards" (specified by the `BOARD` environment variable when
 building the EC code) are for fingerprint:
 
-MCU                    | Sensor     | Firmware (EC "board")                          | Dev Board                                    | Nucleo Board
----------------------- | ---------- | ---------------------------------------------- | -------------------------------------------- | ------------
+MCU                      | Sensor     | Firmware (EC "board")                          | Dev Board                                    | Nucleo Board
+------------------------ | ---------- | ---------------------------------------------- | -------------------------------------------- | ------------
 [STM32H743] \(Cortex-M7) | [FPC 1145] | `dartmonkey`<br>(aka `nocturne_fp`, `nami_fp`) | [Icetower v0.2] <br>(Previously Dragontalon) | [Nucleo H743ZI2]
 [STM32F412] \(Cortex-M4) | [FPC 1025] | `bloonchipper`<br>(aka `hatch_fp`)             | [Dragonclaw v0.2]                            | [Nucleo F412ZG]
+
+RAM and Flash details for each board are in the [Fingerprint MCU RAM and Flash]
+document.
 
 ### Sensor Template Sizes
 
@@ -243,9 +246,8 @@ openssl genrsa -3 -out board/$BOARD/dev_key.pem 3072
 
 ### Resources
 
-*   https://sites.google.com/a/google.com/chromeos/resources/engineering/releng/signer-documentation
-*   https://sites.google.com/a/google.com/chromeos/paygen---payload
-*   https://b.corp.google.com/issues/77882970
+*   http://go/cros-signer-docs
+*   https://issuetracker.google.com/issues/77882970
 
 ## Signing
 
@@ -526,48 +528,48 @@ determines the [SKU information][Chrome OS Config SKU] (and thus the
 [fingerprint config][Chrome OS Config fingerprint]) from [CBI Info]. The SKU for
 a given device can be found by viewing `chrome://system/#platform_identity_sku`.
 
-[`common/fpsensor`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/common/fpsensor/
-[`driver/fingerprint`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/driver/fingerprint
-[`nocturne_fp`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/board/nocturne_fp/
-[`nami_fp`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/board/nami_fp/
-[`hatch_fp`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/board/hatch_fp/
-[`bloonchipper`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/board/bloonchipper/
-[`dartmonkey`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/master/board/dartmonkey/
+[`common/fpsensor`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/common/fpsensor/
+[`driver/fingerprint`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/driver/fingerprint
+[`nocturne_fp`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/board/nocturne_fp/
+[`nami_fp`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/board/nami_fp/
+[`hatch_fp`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/board/hatch_fp/
+[`bloonchipper`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/board/bloonchipper/
+[`dartmonkey`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/board/dartmonkey/
 [hardware write protection]: ../write_protection.md
-[`flash_fp_mcu`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/util/flash_fp_mcu
+[`flash_fp_mcu`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/util/flash_fp_mcu
 [`stm32mon`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/e1f3f89e7ea7945adddd0c2e6838f5e59856cff2/util/stm32mon.c#14
-[`futility`]: https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/master/futility/
-[`sign_official_build.sh`]: https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/master/scripts/image_signing/sign_official_build.sh
+[`futility`]: https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/HEAD/futility/
+[`sign_official_build.sh`]: https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/HEAD/scripts/image_signing/sign_official_build.sh
 [vboot_key_id]: https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/e7db36856ce418552637d1981c173d22dfe5bf39/firmware/2lib/include/2id.h#5
 [vb2_public_key]: https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/e7db36856ce418552637d1981c173d22dfe5bf39/firmware/2lib/include/2rsa.h#14
 [chatty-firmware-q]: https://groups.google.com/a/google.com/d/msg/chromeos-chatty-firmware/ZSg423wsFPg/26UbdGwjFQAJ
 [`fp_updater.sh`]: http://go/cros-fp-updater-nocturne-source
-[`bio_fw_updater`]: https://chromium.googlesource.com/chromiumos/platform2/+/refs/heads/master/biod/tools
+[`bio_fw_updater`]: https://chromium.googlesource.com/chromiumos/platform2/+/HEAD/biod/tools
 [`flashrom`]: https://chromium.googlesource.com/chromiumos/third_party/flashrom/
 [STM32F412]: https://www.st.com/resource/en/reference_manual/dm00180369.pdf
 [STM32H743]: https://www.st.com/resource/en/reference_manual/dm00314099.pdf
-[`board/nocturne_fp/dev_key.pem`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/master/board/nocturne_fp/dev_key.pem
-[`timberslide`]: https://chromium.googlesource.com/chromiumos/platform2/+/master/timberslide
+[`board/nocturne_fp/dev_key.pem`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/board/nocturne_fp/dev_key.pem
+[`timberslide`]: https://chromium.googlesource.com/chromiumos/platform2/+/HEAD/timberslide
 [cros_ec_debugfs]: https://chromium.googlesource.com/chromiumos/third_party/kernel/+/9db44685934a2e4bc9180ea2de87a6c429672395/drivers/platform/chrome/cros_ec_debugfs.c
 [Fingerprint Factory Requirements]: ./fingerprint-factory-requirements.md
-[Chromium OS test image]: https://chromium.googlesource.com/chromiumos/platform/factory/+/master/README.md#building-test-image
-[Chrome OS Config]: https://chromium.googlesource.com/chromiumos/platform2/+/master/chromeos-config/README.md
-[Chrome OS Config fingerprint]: https://chromium.googlesource.com/chromiumos/platform2/+/refs/heads/master/chromeos-config/README.md#fingerprint
-[section on testing properties]: https://chromium.googlesource.com/chromiumos/platform2/+/refs/heads/master/chromeos-config/README.md#adding-and-testing-new-properties
-[Chrome OS board]: https://chromium.googlesource.com/chromiumos/docs/+/master/developer_guide.md#Select-a-board
+[Chromium OS test image]: https://chromium.googlesource.com/chromiumos/platform/factory/+/HEAD/README.md#building-test-image
+[Chrome OS Config]: https://chromium.googlesource.com/chromiumos/platform2/+/HEAD/chromeos-config/README.md
+[Chrome OS Config fingerprint]: https://chromium.googlesource.com/chromiumos/platform2/+/HEAD/chromeos-config/README.md#fingerprint
+[section on testing properties]: https://chromium.googlesource.com/chromiumos/platform2/+/HEAD/chromeos-config/README.md#adding-and-testing-new-properties
+[Chrome OS board]: https://chromium.googlesource.com/chromiumos/docs/+/HEAD/developer_guide.md#Select-a-board
 [biod chromium-os]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/4ea72b588af3394cb9fd1c330dcf726472183dfd/virtual/target-chromium-os/target-chromium-os-1.ebuild#154
 [hatch make.defaults]: https://chromium.googlesource.com/chromiumos/overlays/board-overlays/+/2f075f0e7ce09d3eb460f3c529da463a6201276c/overlay-hatch/profiles/base/make.defaults#22
-[Hatch baseboard `make.defaults`]: https://chrome-internal.googlesource.com/chromeos/overlays/baseboard-hatch-private/+/refs/heads/master/profiles/base/make.defaults#17
-[hatch model.yaml]: https://chrome-internal.googlesource.com/chromeos/overlays/overlay-hatch-private/+/master/chromeos-base/chromeos-config-bsp-hatch-private/files/model.yaml
-[`ec_extras` attribute]: https://chromium.googlesource.com/chromiumos/platform2/+/refs/heads/master/chromeos-config/README.md#build_targets
+[Hatch baseboard `make.defaults`]: https://chrome-internal.googlesource.com/chromeos/overlays/baseboard-hatch-private/+/HEAD/profiles/base/make.defaults#17
+[hatch model.yaml]: https://chrome-internal.googlesource.com/chromeos/overlays/overlay-hatch-private/+/HEAD/chromeos-base/chromeos-config-bsp-hatch-private/files/model.yaml
+[`ec_extras` attribute]: https://chromium.googlesource.com/chromiumos/platform2/+/HEAD/chromeos-config/README.md#build_targets
 [FPMCU_FIRMWARE make.defaults]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/4ea72b588af3394cb9fd1c330dcf726472183dfd/profiles/base/make.defaults#157
 [`USE` flag]: https://devmanual.gentoo.org/general-concepts/use-flags/index.html
 [`USE` flags]: https://devmanual.gentoo.org/general-concepts/use-flags/index.html
 [biod release firmware]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/4ea72b588af3394cb9fd1c330dcf726472183dfd/chromeos-base/biod/biod-9999.ebuild#49
-[`chromeos-firmware-fpmcu` ebuild]: https://chrome-internal.googlesource.com/chromeos/overlays/chromeos-overlay/+/refs/heads/master/chromeos-base/chromeos-firmware-fpmcu/chromeos-firmware-fpmcu-9999.ebuild
-[firmware ebuild]: https://chrome-internal.googlesource.com/chromeos/overlays/chromeos-overlay/+/refs/heads/master/chromeos-base/chromeos-firmware-fpmcu/chromeos-firmware-fpmcu-9999.ebuild#40
-[`chromeos-fpmcu-release*` ebuilds]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/master/sys-firmware
-[internal manifest]: https://chromium.googlesource.com/chromiumos/docs/+/master/developer_guide.md#get-the-source-code
+[`chromeos-firmware-fpmcu` ebuild]: https://chrome-internal.googlesource.com/chromeos/overlays/chromeos-overlay/+/HEAD/chromeos-base/chromeos-firmware-fpmcu/chromeos-firmware-fpmcu-9999.ebuild
+[firmware ebuild]: https://chrome-internal.googlesource.com/chromeos/overlays/chromeos-overlay/+/HEAD/chromeos-base/chromeos-firmware-fpmcu/chromeos-firmware-fpmcu-9999.ebuild#40
+[`chromeos-fpmcu-release*` ebuilds]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/HEAD/sys-firmware
+[internal manifest]: https://chromium.googlesource.com/chromiumos/docs/+/HEAD/developer_guide.md#get-the-source-code
 [Unit Tests]: ../unit_tests.md
 [run the unit tests]: ../unit_tests.md#running
 [Measuring Power]: ./fingerprint-dev-for-partners.md#measure-power
@@ -583,8 +585,9 @@ a given device can be found by viewing `chrome://system/#platform_identity_sku`.
 [CBI Info]: https://chromium.googlesource.com/chromiumos/docs/+/HEAD/design_docs/cros_board_info.md
 [Chrome OS Config SKU]: https://chromium.googlesource.com/chromiumos/platform2/+/HEAD/chromeos-config/README.md#identity
 [Chrome OS Project Configuration]: https://chromium.googlesource.com/chromiumos/config/+/HEAD/README.md
-[Starlark]: https://docs.bazel.build/versions/master/skylark/language.html
+[Starlark]: https://docs.bazel.build/versions/main/skylark/language.html
 [`create_fingerprint`]: https://chromium.googlesource.com/chromiumos/config/+/e1fa0d7f56eb3dd6e9378e4326de086ada46b7d3/util/hw_topology.star#444
 [Morphius `config.star`]: https://chrome-internal.googlesource.com/chromeos/project/zork/morphius/+/593b657a776ed6b320c826916adc9cd845faf709/config.star#85
 [regenerate the config]: https://chromium.googlesource.com/chromiumos/config/+/HEAD/README.md#making-configuration-changes-for-your-project
 [`CLFactory`]: https://chromium.googlesource.com/chromiumos/config/+/HEAD/README.md#making-bulk-changes-across-repos
+[Fingerprint MCU RAM and Flash]: ./fingerprint-ram-and-flash.md

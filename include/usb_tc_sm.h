@@ -181,6 +181,15 @@ void tc_request_power_swap(int port);
 void tc_pr_swap_complete(int port, bool success);
 
 /**
+ * The Type-C state machine updates the SLEEP_MASK_USB_PD mask for the
+ * case that TCPC wants to set/clear SLEEP_MASK_USB_PD mask only by
+ * itself, ex. TCPC embedded in EC.
+ *
+ * @param port USB_C port number
+ */
+__override_proto void tc_update_pd_sleep_mask(int port);
+
+/**
  * Instructs the Attached.SNK to stop drawing power. This function is called
  * from the Policy Engine and only has effect if the current Type-C state
  * Attached.SNK.
@@ -394,4 +403,3 @@ void tc_reset_support_timer(int port);
 void tc_ctvpd_detected(int port);
 #endif /* CONFIG_USB_CTVPD */
 #endif /* __CROS_EC_USB_TC_H */
-

@@ -422,7 +422,7 @@ void __idle(void)
 			 * CSAE bit is set. Please notice this symptom only
 			 * occurs at npcx5.
 			 */
-#if defined(CHIP_FAMILY_NPCX5) && defined(CONFIG_HOSTCMD_ESPI)
+#if defined(CHIP_FAMILY_NPCX5) && defined(CONFIG_HOST_INTERFACE_ESPI)
 			/* Enable Host access wakeup */
 			SET_BIT(NPCX_WKEN(MIWU_TABLE_0, MIWU_GROUP_5), 6);
 #endif
@@ -499,7 +499,7 @@ static int command_dsleep(int argc, char **argv)
 		}
 	}
 
-	ccprintf("Sleep mask: %08x\n", sleep_mask);
+	ccprintf("Sleep mask: %08x\n", (int)sleep_mask);
 	ccprintf("Console in use timeout:   %d sec\n",
 			console_in_use_timeout_sec);
 	ccprintf("PMCSR register:      0x%02x\n", NPCX_PMCSR);

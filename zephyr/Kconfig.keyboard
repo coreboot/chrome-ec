@@ -48,6 +48,14 @@ config PLATFORM_EC_KEYBOARD_PROTOCOL_MKBP
 
 endchoice # PLATFORM_EC_KEYBOARD
 
+config PLATFORM_EC_KEYBOARD_DEBUG
+	bool "Enable keyboard debug prints"
+	depends on PLATFORM_EC_SYSTEM_UNLOCKED
+	help
+	  Enable keyboard debug prints to show up in early bringup, for example
+	  if the board is currently headless and keyboard functionality is being
+	  checked.
+
 config PLATFORM_EC_KEYBOARD_KEYPAD
 	bool "Support a numeric keypad"
 	help
@@ -168,10 +176,16 @@ config PLATFORM_EC_PWM_KBLIGHT
 	depends on PLATFORM_EC_PWM
 	help
 	  Enables a PWM-controlled keyboard backlight controlled by a PWM signal
-	  connected directly to the EC chipset. The board files must define
-	  the C reference PWM_CH_KBLIGHT to the PWM channel used for the
-	  keyboard backlight control.
+	  connected directly to the EC chipset. The board devicetree file must
+	  define the PWM channel used for the keyboard backlight control and
+	  assign the "kblight" node label to it.
 
 endchoice  # Keyboard backlight
+
+config PLATFORM_EC_KBLIGHT_ENABLE_PIN
+	bool "Keyboard backlight enable pin"
+	help
+	  Enables control of the keyboard backlight through a GPIO enable and
+	  disable pin.  This pin must be defined as GPIO_EN_KEYBOARD_BACKLIGHT.
 
 endif # PLATFORM_EC_KEYBOARD

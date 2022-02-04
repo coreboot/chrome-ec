@@ -42,7 +42,7 @@ GPIO_INT(USB_C0_TCPPC_INT_ODL, PIN(E, 0), GPIO_INT_FALLING, ppc_interrupt)
 GPIO_INT(USB_C0_TCPC_INT_ODL,  PIN(6, 2), GPIO_INT_FALLING, tcpc_alert_event)
 GPIO_INT(USB_C1_TCPPC_INT_ODL, PIN(A, 2), GPIO_INT_FALLING, ppc_interrupt)
 GPIO_INT(USB_C1_TCPC_INT_ODL,  PIN(E, 4), GPIO_INT_FALLING, tcpc_alert_event)
-GPIO_INT(PANEL_BACKLIGHT_EN,	PIN(B, 1), GPIO_INT_RISING, backlight_enable_interrupt)
+GPIO_INT(PANEL_BACKLIGHT_EN,	PIN(B, 1), GPIO_INT_RISING, board_backlight_enable_interrupt)
 
 /* Sensor Interrupts */
 GPIO_INT(ALS_GSENSOR_INT_ODL, PIN(9, 6), GPIO_INT_FALLING, tcs3400_interrupt)
@@ -69,7 +69,7 @@ GPIO_INT(EC_VOLUP_BTN_ODL,     PIN(8, 0), GPIO_INT_BOTH | GPIO_PULL_UP, button_i
 GPIO(EC_PCH_PWROK,             PIN(0, 5), GPIO_OUT_LOW)
 GPIO(EC_PCH_SYS_PWROK,         PIN(3, 7), GPIO_OUT_LOW)
 GPIO(EC_PCH_PWR_BTN_ODL,       PIN(C, 1), GPIO_ODR_HIGH)
-GPIO(EC_PCH_RTCRST,            PIN(7, 6), GPIO_ODR_HIGH)
+GPIO(EC_PCH_RTCRST,            PIN(7, 6), GPIO_OUT_LOW)
 GPIO(EC_PCH_WAKE_ODL,          PIN(7, 4), GPIO_ODR_HIGH)
 GPIO(EC_PROCHOT_IN_OD,         PIN(3, 4), GPIO_INPUT)
 GPIO(EC_PROCHOT_ODL,           PIN(6, 3), GPIO_ODR_HIGH)
@@ -151,8 +151,13 @@ ALTERNATE(PIN_MASK(6, 0x30), 0, MODULE_UART, 0)                 /* UART from EC 
 GPIO(PANEL_ID0,			PIN(0, 2), GPIO_INPUT)
 GPIO(PANEL_ID1,			PIN(C, 6), GPIO_INPUT)
 
-/* EDID write protect control */
-GPIO(EC_EDID_WP_DISABLE_L,	PIN(D, 3), GPIO_OUT_HIGH)			/* LOW to disable EDID WP */
+/*
+ * EDID write protect control
+ * EDID ROM powered by EN_ROA_RAILS, init low to prevent power leakage
+ * high to enable EDID ROM WP
+ * low to disable EDID ROM WP
+ */
+GPIO(EC_EDID_WP_DISABLE_L,	PIN(D, 3), GPIO_OUT_LOW)
 
 /* Unused pins */
 UNUSED(PIN(9, 5))						/* H10 TP54 */

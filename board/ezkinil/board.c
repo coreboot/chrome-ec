@@ -309,27 +309,27 @@ const struct usb_mux usbc0_sbu_mux = {
  * Base Gyro Sensor dynamic configuration
  */
 
-static int base_gyro_config;
+static enum ec_ssfc_base_gyro_sensor base_gyro_config = SSFC_BASE_GYRO_NONE;
 
 static void setup_base_gyro_config(void)
 {
 	base_gyro_config = ec_config_has_base_gyro_sensor();
 
-	if (base_gyro_config == BASE_GYRO_ICM426XX) {
+	if (base_gyro_config == SSFC_BASE_GYRO_ICM426XX) {
 		motion_sensors[BASE_ACCEL] = icm426xx_base_accel;
 		motion_sensors[BASE_GYRO] = icm426xx_base_gyro;
 		ccprints("BASE GYRO is ICM426XX");
-	} else if (base_gyro_config == BASE_GYRO_BMI160)
+	} else if (base_gyro_config == SSFC_BASE_GYRO_BMI160)
 		ccprints("BASE GYRO is BMI160");
 }
 
 void motion_interrupt(enum gpio_signal signal)
 {
 	switch (base_gyro_config) {
-	case BASE_GYRO_ICM426XX:
+	case SSFC_BASE_GYRO_ICM426XX:
 		icm426xx_interrupt(signal);
 		break;
-	case BASE_GYRO_BMI160:
+	case SSFC_BASE_GYRO_BMI160:
 	default:
 		bmi160_interrupt(signal);
 		break;
@@ -715,29 +715,40 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-const static struct ec_thermal_config thermal_thermistor = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(95),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
-	},
-	.temp_fan_off = 0,
-	.temp_fan_max = 0,
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_THERMISTOR \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(85), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(95), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
+		}, \
+		.temp_fan_off = 0, \
+		.temp_fan_max = 0, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_thermistor =
+	THERMAL_THERMISTOR;
 
-const static struct ec_thermal_config thermal_soc = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-	},
-	.temp_fan_off = C_TO_K(32),
-	.temp_fan_max = C_TO_K(75),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_SOC \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+		}, \
+		.temp_fan_off = C_TO_K(32), \
+		.temp_fan_max = C_TO_K(75), \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_soc = THERMAL_SOC;
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
 

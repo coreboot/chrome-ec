@@ -56,7 +56,14 @@ static struct usart_hw_ops const usart_variant_hw_ops = {
 
 void usart_clear_tc(struct usart_config const *config)
 {
-	STM32_USART_ICR(config->hw->base) |= STM32_USART_ICR_TCCF;
+	/*
+	 * ST reference code does blind write to this register, as is usual
+	 * with the "write 1 to clear" convention, despite the datasheet
+	 * listing the bits as "keep at reset value", (which we assume is due
+	 * to copying from the description of reserved bits in read/write
+	 * registers.)
+	 */
+	STM32_USART_ICR(config->hw->base) = STM32_USART_ICR_TCCF;
 }
 
 /*
@@ -73,7 +80,7 @@ struct usart_hw_config const usart1_hw = {
 	.ops            = &usart_variant_hw_ops,
 };
 
-void usart1_interrupt(void)
+static void usart1_interrupt(void)
 {
 	usart_interrupt(configs[0]);
 }
@@ -91,7 +98,7 @@ struct usart_hw_config const usart2_hw = {
 	.ops            = &usart_variant_hw_ops,
 };
 
-void usart2_interrupt(void)
+static void usart2_interrupt(void)
 {
 	usart_interrupt(configs[1]);
 }
@@ -111,7 +118,7 @@ struct usart_hw_config const usart3_hw = {
 #endif
 
 #if defined(CONFIG_STREAM_USART3)
-void usart3_interrupt(void)
+static void usart3_interrupt(void)
 {
 	usart_interrupt(configs[2]);
 }

@@ -1,0 +1,11 @@
+# Copyright 2022 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+config BUG209907615
+	bool "Enable tests for b:209907615"
+	help
+	This flag may change as we protoype integration tests.
+	TODO(b/209907615): Remove when test finished.
+
+source "Kconfig.zephyr"

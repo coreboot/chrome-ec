@@ -43,7 +43,9 @@ rsource "Kconfig.defaults"
 rsource "Kconfig.espi"
 rsource "Kconfig.flash"
 rsource "Kconfig.header"
+rsource "Kconfig.host_interface"
 rsource "Kconfig.init_priority"
+rsource "Kconfig.ioex"
 rsource "Kconfig.keyboard"
 rsource "Kconfig.led"
 rsource "Kconfig.panic"
@@ -70,7 +72,7 @@ rsource "Kconfig.watchdog"
 
 config PLATFORM_EC_ACPI
 	bool "Advanced Confiugration and Power Interface (ACPI)"
-	default y if AP_X86 && PLATFORM_EC_ESPI
+	default y if AP_X86 && PLATFORM_EC_HOST_INTERFACE_ESPI
 	help
 	  Enable the Advanced Configuration and Power Interface (ACPI) in the
 	  EC. ACPI is a standard interface to the Application Processor (AP)
@@ -106,6 +108,13 @@ config PLATFORM_EC_BACKLIGHT_LID
 	  This option enables the EC_CMD_SWITCH_ENABLE_BKLIGHT host command,
 	  which allows the AP to override the backlight setting until the next
 	  change in the lid state.
+
+config PLATFORM_EC_BACKLIGHT_LID_ACTIVE_LOW
+	bool "Control for the display backlight is active low"
+	depends on PLATFORM_EC_BACKLIGHT_LID
+	help
+	  Support controlling the backlight with an active low GPIO signal.
+          This config option expects a GPIO_ENABLE_BACKLIGHT_L defined.
 
 config PLATFORM_EC_BOARD_RESET_AFTER_POWER_ON
 	bool "Work around H1 reset issue"
@@ -175,7 +184,7 @@ choice PLATFORM_EC_CBI_STORAGE_TYPE
 
 	  See here for detailed information on CBI:
 
-	  https://chromium.googlesource.com/chromiumos/docs/+/master/design_docs/cros_board_info.md
+	  https://chromium.googlesource.com/chromiumos/docs/+/HEAD/design_docs/cros_board_info.md
 
 config PLATFORM_EC_CBI_EEPROM
 	bool "CBI EEPROM support"
@@ -219,6 +228,12 @@ config PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
 	  Require to initialize it first such that it can receive a host resume
 	  event, that notifies the normal resume hook.
 
+config PLATFORM_EC_CHIP_INIT_ROM_REGION
+	bool "Enables the use of a dedicated init ROM region"
+	help
+	  Enable this flag if the board has a `.init_rom` region. This will
+	  activate routines in `init_rom.h` to access objects in this region.
+
 config PLATFORM_EC_CONSOLE_CMD_HCDEBUG
 	bool "Console command: hcdebug"
 	default y
@@ -231,6 +246,13 @@ config PLATFORM_EC_CONSOLE_CMD_HCDEBUG
 	    hcdebug [off | normal | every | params]
 
 	  See PLATFORM_EC_HOSTCMD_DEBUG_MODE for more detail.
+
+config PLATFORM_EC_CONSOLE_CMD_IRQ
+	bool "Console command: irq"
+	depends on TRACING_ISR && TRACING_USER
+	help
+	  Enable the "irq" console command. This command lists the number of
+	  IRQ calls.
 
 config PLATFORM_EC_CONSOLE_CMD_MEM
 	bool "Console command: md, rw"
@@ -324,25 +346,19 @@ config PLATFORM_EC_EMULATED_SYSRQ
 	  This option enables support for sending emulated SysRq events to AP
 	  (on designs with a keyboard, SysRq is passed as normal key presses).
 
-menuconfig PLATFORM_EC_ESPI
-	bool "eSPI"
-	depends on ESPI && AP
-	default y
+config PLATFORM_EC_EXTPOWER
+	bool "Support external power detection"
+	depends on PLATFORM_EC_HOOKS && PLATFORM_EC_HOSTCMD
 	help
-	  Enable the Enhanced Serial Peripheral Interface (eSPI) shim layer.
-	  eSPI supports a shared physical connection between several on-board
-	  devices, similar to SPI. It adds a few optional signals and a protocol
-	  layer to provide independent 'channels' for each device to communicate
-	  over.
-
-	  eSPI is the replacement for LPC (Low-Pin-Count bus).
-
-	  See here for information about eSPI:
-
-	  https://www.intel.com/content/dam/support/us/en/documents/software/chipset-software/327432-004_espi_base_specification_rev1.0_cb.pdf
+	  Enable code for handling the detection of external power.
+	  If PLATFORM_EC_EXTPOWER_GPIO is not set, then the board
+	  must supply the function board_check_extpower in order
+	  to check for external power, and update the state via
+	  extpower_handle_update().
 
 config PLATFORM_EC_EXTPOWER_GPIO
 	bool "GPIO-based external power detection"
+	select PLATFORM_EC_EXTPOWER
 	depends on PLATFORM_EC_HOOKS && PLATFORM_EC_HOSTCMD
 	help
 	  Enable shimming the extpower_gpio module, which provides
@@ -392,6 +408,9 @@ menuconfig PLATFORM_EC_HOSTCMD
 	  communication with the AP. The AP sends a command to the EC and it
 	  responds when able. An interrupt can be used to indicate to the AP
 	  that the EC has something for it.
+
+	  The host interface type is selected based on the AP type, but can be
+	  changed though the CONFIG_PLATFORM_EC_HOST_INTERFACE_TYPE choice.
 
 config PLATFORM_EC_HOSTCMD_GET_UPTIME_INFO
 	bool "Host command: EC_CMD_GET_UPTIME_INFO"
@@ -484,6 +503,27 @@ config PLATFORM_EC_CONSOLE_CMD_I2C_PORTMAP
 	  display the mapping of the I2C ports defined by the named-i2c-ports
 	  node to the physical port and remote port indexes.
 
+config PLATFORM_EC_CONSOLE_CMD_I2C_SPEED
+	bool "Console command: i2cspeed"
+	default n
+	depends on PLATFORM_EC_I2C
+	help
+	  Enable the 'i2cspeed' console command. This comamnd is used to
+	  display an I2C port's bus speed. Additionally, for ports with
+	  the DYNAMIC_SPEED port flag set, the speed can be set. In all
+	  cases, the bus speed is in units of kHz.
+
+config PLATFORM_EC_HOSTCMD_I2C_CONTROL
+	bool "Host command: i2c_control"
+	default n
+	depends on PLATFORM_EC_I2C
+	help
+	  Enable the I2C_CONTROL host command. This comamnd is used to
+	  display an I2C port's bus speed. Additionally, for ports with
+	  the DYNAMIC_SPEED port flag set, the speed can be set. In all
+	  cases, the bus speed is in units of kHz. More functionality of
+	  the command may be added in the future.
+
 config PLATFORM_EC_SMBUS_PEC
 	bool "Packet error checking support for SMBus"
 	help
@@ -520,6 +560,13 @@ config PLATFORM_EC_LOW_POWER_IDLE
 	  Enable low power idle modes in the EC chipset. This is automatically
 	  enabled when the Zephyr power management options are enabled with the
 	  PM option.
+
+config PLATFORM_EC_POWER_COMMON
+	bool
+	default y
+	depends on PLATFORM_EC_POWERSEQ
+	help
+	  Compile common code for AP power state machine.
 
 config PLATFORM_EC_MKBP_EVENT
     bool "MKBP event"
@@ -620,9 +667,9 @@ config PLATFORM_EC_PWM_DISPLIGHT
 	depends on PLATFORM_EC_PWM
 	help
 	  Enables display backlight controlled by a PWM signal connected
-	  directly to the EC chipset. The board files must define the C
-	  reference PWM_CH_DISPLIGHT to the PWM channel used for the
-	  display backlight control.
+	  directly to the EC chipset. The board devicetree file must define the
+	  PWM channel used for the display backlight control and assign the
+	  "displight" node label to it.
 
 config PLATFORM_EC_RTC
 	bool "Real-time clock (RTC)"
@@ -725,6 +772,7 @@ config PLATFORM_EC_SYSTEM_UNLOCKED
 
 config PLATFORM_EC_THROTTLE_AP
 	bool "CPU throttling"
+	depends on PLATFORM_EC_TEMP_SENSOR
 	help
 	  Enable throttling the CPU based on the temperature sensors. When they
 	  detect that the CPU is getting too hot, the CPU is throttled to
@@ -837,7 +885,7 @@ config PLATFORM_EC_I2C_PASSTHRU_RESTRICTED
 
 config PLATFORM_EC_HOST_COMMAND_STATUS
 	bool "Return in-progress status for slow host commands"
-	default n
+	default y if PLATFORM_EC_HOST_INTERFACE_SHI
 	help
 	  When the AP is attached to the EC via a serialized bus such as I2C or
 	  SPI, it needs a way to minimize the length of time an EC command will
@@ -865,5 +913,12 @@ config PLATFORM_EC_AMD_STT
 	  specification. It makes use of the thermal capacitance of the system
 	  to temporarily boost above the sustainable power limit, while the
 	  chassis skin temperatures are below limits.
+
+config PLATFORM_EC_MATH_UTIL
+	bool "Math utility"
+	default y
+	help
+	  Math utilities including bitmask manipulation, division rounding,
+	  trigonometric function, etc.
 
 endif # PLATFORM_EC

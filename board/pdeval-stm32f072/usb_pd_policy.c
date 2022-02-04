@@ -15,25 +15,14 @@
 #include "util.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
+#include "usb_pd_pdo.h"
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
-#define PDO_FIXED_FLAGS (PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP)
-
 /* Used to fake VBUS presence since no GPIO is available to read VBUS */
 static int vbus_present;
 
-const uint32_t pd_src_pdo[] = {
-		PDO_FIXED(5000, 3000, PDO_FIXED_FLAGS),
-};
-const int pd_src_pdo_cnt = ARRAY_SIZE(pd_src_pdo);
-
-const uint32_t pd_snk_pdo[] = {
-		PDO_FIXED(5000, 900, PDO_FIXED_FLAGS),
-		PDO_BATT(5000, 21000, 30000),
-};
-const int pd_snk_pdo_cnt = ARRAY_SIZE(pd_snk_pdo);
 
 #if defined(CONFIG_USB_PD_TCPM_MUX) && defined(CONFIG_USB_PD_TCPM_ANX7447)
 const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
@@ -254,6 +243,7 @@ __override int svdm_dp_config(int port, uint32_t *payload)
 
 __override void svdm_dp_post_config(int port)
 {
+	bool unused;
 	const struct usb_mux *mux = &usb_muxes[port];
 
 	dp_flags[port] |= DP_FLAGS_DP_ON;
@@ -263,7 +253,8 @@ __override void svdm_dp_post_config(int port)
 	/* Note: Usage is deprecated, use usb_mux_hpd_update instead */
 	if (IS_ENABLED(CONFIG_USB_PD_TCPM_ANX7447))
 		anx7447_tcpc_update_hpd_status(mux, USB_PD_MUX_HPD_LVL |
-					       USB_PD_MUX_HPD_IRQ_DEASSERTED);
+					       USB_PD_MUX_HPD_IRQ_DEASSERTED,
+					       &unused);
 }
 
 __override int svdm_dp_attention(int port, uint32_t *payload)
@@ -272,6 +263,8 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 	int lvl = PD_VDO_DPSTS_HPD_LVL(payload[1]);
 	int irq = PD_VDO_DPSTS_HPD_IRQ(payload[1]);
 	const struct usb_mux *mux = &usb_muxes[port];
+	bool unused;
+
 	mux_state_t mux_state = (lvl ? USB_PD_MUX_HPD_LVL :
 				 USB_PD_MUX_HPD_LVL_DEASSERTED) |
 				(irq ? USB_PD_MUX_HPD_IRQ :
@@ -279,7 +272,7 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 
 	/* Note: Usage is deprecated, use usb_mux_hpd_update instead */
 	CPRINTS("Attention: 0x%x", payload[1]);
-	anx7447_tcpc_update_hpd_status(mux, mux_state);
+	anx7447_tcpc_update_hpd_status(mux, mux_state, &unused);
 #endif
 	dp_status[port] = payload[1];
 

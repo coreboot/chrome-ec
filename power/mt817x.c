@@ -644,7 +644,7 @@ static void power_on(void)
 	CPRINTS("AP running ...");
 }
 
-void chipset_reset(enum chipset_reset_reason reason)
+void chipset_reset(enum chipset_shutdown_reason reason)
 {
 	CPRINTS("%s: %d", __func__, reason);
 	report_ap_reset(reason);
@@ -748,6 +748,12 @@ enum power_state power_handle_state(enum power_state state)
 
 	case POWER_S5G3:
 		return POWER_G3;
+
+	default:
+		/* Elm does not have space for such an extravagant print. */
+		/* CPRINTS("Unexpected power state %d", state); */
+		ASSERT(0);
+		break;
 	}
 
 	return state;

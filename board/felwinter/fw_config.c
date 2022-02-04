@@ -43,3 +43,13 @@ enum ec_cfg_usb_db_type ec_cfg_usb_db_type(void)
 {
 	return fw_config.usb_db;
 }
+
+enum ec_cfg_usb_mb_type ec_cfg_usb_mb_type(void)
+{
+	return fw_config.usb_mb;
+}
+
+enum ec_cfg_stylus_type ec_cfg_stylus(void)
+{
+	return fw_config.stylus;
+}

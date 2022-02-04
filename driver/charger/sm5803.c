@@ -48,10 +48,10 @@ static const struct charger_info sm5803_charger_info = {
 	.input_current_step = INPUT_I_STEP,
 };
 
-static uint32_t irq_pending; /* Bitmask of chips with interrupts pending */
+static atomic_t irq_pending; /* Bitmask of chips with interrupts pending */
 
-static struct mutex flow1_access_lock[CHARGER_NUM];
-static struct mutex flow2_access_lock[CHARGER_NUM];
+static mutex_t flow1_access_lock[CHARGER_NUM];
+static mutex_t flow2_access_lock[CHARGER_NUM];
 
 static int charger_vbus[CHARGER_NUM];
 
@@ -395,6 +395,19 @@ static void init_status_retrieve(void)
 		memcpy(&chip_inited, tag_contents, size);
 }
 DECLARE_HOOK(HOOK_INIT, init_status_retrieve, HOOK_PRIO_FIRST);
+
+#ifdef CONFIG_ZEPHYR
+static void init_mutexes(void)
+{
+	int i;
+
+	for (i = 0; i < CHARGER_NUM; i++) {
+		k_mutex_init(&flow1_access_lock[i]);
+		k_mutex_init(&flow2_access_lock[i]);
+	}
+}
+DECLARE_HOOK(HOOK_INIT, init_mutexes, HOOK_PRIO_FIRST);
+#endif
 
 static void sm5803_init(int chgnum)
 {
@@ -1850,14 +1863,10 @@ static int sm5803_ramp_get_current_limit(int chgnum)
 #endif /* CONFIG_CHARGE_RAMP_HW */
 
 #ifdef CONFIG_CMD_CHARGER_DUMP
-static int command_sm5803_dump(int argc, char **argv)
+static void command_sm5803_dump(int chgnum)
 {
 	int reg;
 	int regval;
-	int chgnum = 0;
-
-	if (argc > 1)
-		chgnum = atoi(argv[1]);
 
 	/* Dump base regs */
 	ccprintf("BASE regs\n");
@@ -1891,11 +1900,7 @@ static int command_sm5803_dump(int argc, char **argv)
 			watchdog_reload();
 		}
 	}
-
-	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(charger_dump, command_sm5803_dump,
-			"charger_dump [chgnum]", "Dumps SM5803 registers");
 #endif /* CONFIG_CMD_CHARGER_DUMP */
 
 const struct charger_drv sm5803_drv = {
@@ -1929,5 +1934,8 @@ const struct charger_drv sm5803_drv = {
 	.ramp_is_stable = &sm5803_ramp_is_stable,
 	.ramp_is_detected = &sm5803_ramp_is_detected,
 	.ramp_get_current_limit = &sm5803_ramp_get_current_limit,
+#endif
+#ifdef CONFIG_CMD_CHARGER_DUMP
+	.dump_registers = &command_sm5803_dump,
 #endif
 };

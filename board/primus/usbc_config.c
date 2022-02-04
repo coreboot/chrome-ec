@@ -132,7 +132,7 @@ void config_usb_db_type(void)
 
 __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 {
-	enum ioex_signal rst_signal;
+	enum gpio_signal rst_signal;
 
 	if (me->usb_port == USBC_PORT_C0) {
 		rst_signal = GPIO_USB_C0_RT_RST_ODL;
@@ -168,20 +168,6 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 		msleep(1);
 		gpio_set_level(GPIO_TBT_PWR_EN, 0);
 	}
-	return EC_SUCCESS;
-}
-
-__override int bb_retimer_reset(const struct usb_mux *me)
-{
-	/*
-	 * TODO(b/200194309): Remove this once transition to
-         * QS Silicon is complete
-	 */
-	bb_retimer_power_enable(me, false);
-	msleep(5);
-	bb_retimer_power_enable(me, true);
-	msleep(25);
-
 	return EC_SUCCESS;
 }
 
@@ -287,4 +273,12 @@ void retimer_interrupt(enum gpio_signal signal)
 __override bool board_is_dts_port(int port)
 {
 	return port == USBC_PORT_C0;
+}
+
+__override enum tbt_compat_cable_speed board_get_max_tbt_speed(int port)
+{
+	if (ec_cfg_mlb_usb())
+		return TBT_SS_U32_GEN1_GEN2;
+
+	return TBT_SS_TBT_GEN3;
 }

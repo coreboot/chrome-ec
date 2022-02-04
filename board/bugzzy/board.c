@@ -17,6 +17,7 @@
 #include "cros_board_info.h"
 #include "driver/accel_lis2ds.h"
 #include "driver/accelgyro_bmi_common.h"
+#include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
 #include "driver/tcpm/raa489000.h"
@@ -199,6 +200,7 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
+static int board_id = -1;
 
 void board_init(void)
 {
@@ -421,6 +423,8 @@ __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
 static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
+static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
+
 /* Matrices to rotate accelerometers into the standard reference. */
 static const mat33_fp_t lid_standard_ref = {
 	{ 0, FLOAT_TO_FP(1), 0},
@@ -432,6 +436,60 @@ static const mat33_fp_t base_standard_ref = {
 	{ 0, FLOAT_TO_FP(-1), 0},
 	{ FLOAT_TO_FP(-1), 0, 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+static const mat33_fp_t base_standard_ref_lsm = {
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+struct motion_sensor_t ldm6dsm_base_accel = {
+	.name = "Base Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_LSM6DSM,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &lsm6dsm_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
+			MOTIONSENSE_TYPE_ACCEL),
+	.port = I2C_PORT_ACCEL,
+	.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
+	.rot_standard_ref = &base_standard_ref_lsm,
+	.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
+	.min_frequency = LSM6DSM_ODR_MIN_VAL,
+	.max_frequency = LSM6DSM_ODR_MAX_VAL,
+	.config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 13000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+		/* Sensor on for angle detection */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+	},
+};
+struct motion_sensor_t ldm6dsm_base_gyro = {
+	.name = "Base Gyro",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_LSM6DSM,
+	.type = MOTIONSENSE_TYPE_GYRO,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &lsm6dsm_drv,
+	.mutex = &g_base_mutex,
+	.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
+			MOTIONSENSE_TYPE_GYRO),
+	.port = I2C_PORT_ACCEL,
+	.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
+	.default_range = 1000 | ROUND_UP_FLAG, /* dps */
+	.rot_standard_ref = &base_standard_ref_lsm,
+	.min_frequency = LSM6DSM_ODR_MIN_VAL,
+	.max_frequency = LSM6DSM_ODR_MAX_VAL,
+
 };
 
 static struct stprivate_data g_lis2ds_data;
@@ -509,6 +567,39 @@ struct motion_sensor_t motion_sensors[] = {
 };
 
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+enum base_accelgyro_type {
+	BASE_GYRO_NONE = 0,
+	BASE_GYRO_BMI160 = 1,
+	BASE_GYRO_LSM6DSM = 2,
+};
+
+static enum base_accelgyro_type base_accelgyro_config;
+static void board_set_motionsensor(void)
+{
+	if (board_id == -1) {
+		uint32_t val;
+
+		if (cbi_get_board_version(&val) == EC_SUCCESS)
+			board_id = val;
+	}
+
+	base_accelgyro_config = BASE_GYRO_BMI160;
+	if (board_id > 6) {
+		motion_sensors[BASE_ACCEL] = ldm6dsm_base_accel;
+		motion_sensors[BASE_GYRO] = ldm6dsm_base_gyro;
+		base_accelgyro_config = BASE_GYRO_LSM6DSM;
+	}
+}
+DECLARE_HOOK(HOOK_INIT, board_set_motionsensor, HOOK_PRIO_INIT_I2C + 2);
+
+void motion_interrupt(enum gpio_signal signal)
+{
+	if (base_accelgyro_config == BASE_GYRO_BMI160)
+		bmi160_interrupt(signal);
+	else
+		lsm6dsm_interrupt(signal);
+}
 
 __override void ocpc_get_pid_constants(int *kp, int *kp_div,
 				       int *ki, int *ki_div,
@@ -727,9 +818,25 @@ static void panel_power_change_deferred(void)
 {
 	int signal = gpio_get_level(GPIO_EN_PP1800_PANEL_S0);
 
-	gpio_set_level(GPIO_EN_LCD_ENP, signal);
-	msleep(1);
-	gpio_set_level(GPIO_EN_LCD_ENN, signal);
+	if (board_id == -1) {
+		uint32_t val;
+
+		if (cbi_get_board_version(&val) == EC_SUCCESS)
+			board_id = val;
+	}
+	if (board_id < 4) {
+		gpio_set_level(GPIO_EN_LCD_ENP, signal);
+		msleep(1);
+		gpio_set_level(GPIO_EN_LCD_ENN, signal);
+	} else if (signal != 0) {
+		i2c_write8(I2C_PORT_LCD, I2C_ADDR_ISL98607_FLAGS,
+				ISL98607_REG_VBST_OUT, ISL98607_VBST_OUT_5P65);
+		i2c_write8(I2C_PORT_LCD, I2C_ADDR_ISL98607_FLAGS,
+				ISL98607_REG_VN_OUT, ISL98607_VN_OUT_5P5);
+		i2c_write8(I2C_PORT_LCD, I2C_ADDR_ISL98607_FLAGS,
+				ISL98607_REG_VP_OUT, ISL98607_VP_OUT_5P5);
+	}
+	gpio_set_level(GPIO_TSP_TA, signal & extpower_is_present());
 }
 DECLARE_DEFERRED(panel_power_change_deferred);
 
@@ -739,12 +846,56 @@ void panel_power_change_interrupt(enum gpio_signal signal)
 	hook_call_deferred(&panel_power_change_deferred_data, 1 * MSEC);
 }
 
+/*
+ * Detect LCD reset & control LCD DCDC power
+ */
+static void lcd_reset_detect_init(void)
+{
+	if (board_id == -1) {
+		uint32_t val;
+
+		if (cbi_get_board_version(&val) == EC_SUCCESS)
+			board_id = val;
+	}
+
+	if (board_id < 4)
+		return;
+	gpio_enable_interrupt(GPIO_DDI0_DDC_SCL);
+}
+DECLARE_HOOK(HOOK_INIT, lcd_reset_detect_init, HOOK_PRIO_DEFAULT);
+/*
+ * Handle VSP / VSN for mipi display when lcd turns off
+ */
+static void lcd_reset_change_deferred(void)
+{
+	int signal = gpio_get_level(GPIO_DDI0_DDC_SCL);
+
+	if (signal != 0)
+		return;
+
+	signal = gpio_get_level(GPIO_EN_PP1800_PANEL_S0);
+
+	if (signal == 0)
+		return;
+
+	i2c_write8(I2C_PORT_LCD, I2C_ADDR_ISL98607_FLAGS,
+			ISL98607_REG_ENABLE, ISL97607_VP_VN_VBST_DIS);
+
+}
+DECLARE_DEFERRED(lcd_reset_change_deferred);
+void lcd_reset_change_interrupt(enum gpio_signal signal)
+{
+	hook_call_deferred(&lcd_reset_change_deferred_data, 45 * MSEC);
+}
+
 /**
  * Handle TSP_TA according to AC status
  */
 static void handle_tsp_ta(void)
 {
-	gpio_set_level(GPIO_TSP_TA, extpower_is_present());
+	int signal = gpio_get_level(GPIO_EN_PP1800_PANEL_S0);
+
+	gpio_set_level(GPIO_TSP_TA, signal & extpower_is_present());
 }
 DECLARE_HOOK(HOOK_AC_CHANGE, handle_tsp_ta, HOOK_PRIO_DEFAULT);
 
@@ -753,3 +904,31 @@ DECLARE_HOOK(HOOK_AC_CHANGE, handle_tsp_ta, HOOK_PRIO_DEFAULT);
 const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A0_VBUS,
 };
+
+/*
+ * Change LED Driver Current
+ * LED driver current must be written when EN_BL_OD goes from Low to High.
+ */
+static int backup_enable_backlight = -1;
+void backlit_gpio_tick(void)
+{
+	int signal = gpio_get_level(GPIO_ENABLE_BACKLIGHT);
+
+	if (backup_enable_backlight == signal)
+		return;
+
+	backup_enable_backlight = signal;
+	if (board_id == -1) {
+		uint32_t val;
+
+		if (cbi_get_board_version(&val) == EC_SUCCESS)
+			board_id = val;
+	}
+
+	if (board_id >= 4 && signal == 1)
+		i2c_write16(I2C_PORT_LCD, I2C_ADDR_MP3372_FLAGS,
+				MP3372_REG_ISET_CHEN,
+				MP3372_ISET_15P3_CHEN_ALL);
+
+}
+DECLARE_HOOK(HOOK_TICK, backlit_gpio_tick, HOOK_PRIO_DEFAULT);

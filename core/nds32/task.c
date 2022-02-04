@@ -25,7 +25,7 @@ typedef union {
 		 * for __switchto() to work.
 		 */
 		uint32_t sp;       /* Saved stack pointer for context switch */
-		uint32_t events;   /* Bitmaps of received events */
+		atomic_t events;   /* Bitmaps of received events */
 		uint64_t runtime;  /* Time spent in task */
 		uint32_t *stack;   /* Start of stack */
 	};
@@ -159,13 +159,13 @@ int need_resched;
  * can do their init within a task switching context.  The hooks task will then
  * make a call to enable all tasks.
  */
-static uint32_t tasks_ready = BIT(TASK_ID_HOOKS);
+static atomic_t tasks_ready = BIT(TASK_ID_HOOKS);
 /*
  * Initially allow only the HOOKS and IDLE task to run, regardless of ready
  * status, in order for HOOK_INIT to complete before other tasks.
  * task_enable_all_tasks() will open the flood gates.
  */
-static uint32_t tasks_enabled = BIT(TASK_ID_HOOKS) | BIT(TASK_ID_IDLE);
+static atomic_t tasks_enabled = BIT(TASK_ID_HOOKS) | BIT(TASK_ID_IDLE);
 
 int start_called;  /* Has task swapping started */
 
@@ -224,17 +224,17 @@ void __ram_code interrupt_enable(void)
 	asm volatile ("mtsr %0, $INT_MASK" : : "r"(val));
 }
 
-inline int is_interrupt_enabled(void)
+inline bool is_interrupt_enabled(void)
 {
 	uint32_t val = 0;
 
 	asm volatile ("mfsr %0, $INT_MASK" : "=r"(val));
 
 	/* Interrupts are enabled if any of HW2 ~ HW15 is enabled */
-	return !!(val & 0xFFFC);
+	return val & 0xFFFC;
 }
 
-inline int in_interrupt_context(void)
+inline bool in_interrupt_context(void)
 {
 	/* check INTL (Interrupt Stack Level) bits */
 	return get_psw() & PSW_INTL_MASK;
@@ -250,7 +250,7 @@ task_id_t task_get_current(void)
 	return start_called ? (current_task - tasks) : TASK_ID_INVALID;
 }
 
-uint32_t *task_get_event_bitmap(task_id_t tskid)
+atomic_t *task_get_event_bitmap(task_id_t tskid)
 {
 	task_ *tsk = __task_id_to_ptr(tskid);
 	return &tsk->events;
@@ -670,7 +670,7 @@ void task_print_list(void)
 	ccputs("Task Ready Name         Events      Time (s)  StkUsed\n");
 
 	for (i = 0; i < TASK_ID_COUNT; i++) {
-		char is_ready = (tasks_ready & (1<<i)) ? 'R' : ' ';
+		char is_ready = ((uint32_t)tasks_ready & BIT(i)) ? 'R' : ' ';
 		uint32_t *sp;
 
 		int stackused = tasks_init[i].stack_size;
@@ -681,13 +681,13 @@ void task_print_list(void)
 			stackused -= sizeof(uint32_t);
 
 		ccprintf("%4d %c %-16s %08x %11.6lld  %3d/%3d\n", i, is_ready,
-			 task_names[i], tasks[i].events, tasks[i].runtime,
+			 task_names[i], (int)tasks[i].events, tasks[i].runtime,
 			 stackused, tasks_init[i].stack_size);
 		cflush();
 	}
 }
 
-int command_task_info(int argc, char **argv)
+static int command_task_info(int argc, char **argv)
 {
 #ifdef CONFIG_TASK_PROFILING
 	int total = 0;
@@ -724,10 +724,10 @@ DECLARE_CONSOLE_COMMAND(taskinfo, command_task_info,
 static int command_task_ready(int argc, char **argv)
 {
 	if (argc < 2) {
-		ccprintf("tasks_ready: 0x%08x\n", tasks_ready);
+		ccprintf("tasks_ready: 0x%08x\n", (int)tasks_ready);
 	} else {
 		tasks_ready = strtoi(argv[1], NULL, 16);
-		ccprintf("Setting tasks_ready to 0x%08x\n", tasks_ready);
+		ccprintf("Setting tasks_ready to 0x%08x\n", (int)tasks_ready);
 		__schedule(0, 0, 0);
 	}
 

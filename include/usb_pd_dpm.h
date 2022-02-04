@@ -22,11 +22,25 @@
 void dpm_init(int port);
 
 /*
+ * Informs the DPM that a mode exit is complete.
+ *
+ * @param port USB-C port number
+ */
+void dpm_mode_exit_complete(int port);
+
+/*
  * Informs the DPM that Exit Mode request is received
  *
  * @param port USB-C port number
  */
 void dpm_set_mode_exit_request(int port);
+
+/* Informs the DPM that the PE has performed a Data Reset (or at least
+ * determined that the port partner doesn't support one).
+ *
+ * @param port USB-C port number
+ */
+void dpm_data_reset_complete(int port);
 
 /*
  * Informs the DPM that a VDM ACK was received.
@@ -107,5 +121,13 @@ int dpm_get_source_pdo(const uint32_t **src_pdo, const int port);
  * @return		Current offered, in mA
  */
 int dpm_get_source_current(const int port);
+
+/* Enum for modules to describe to the DPM their setup status */
+enum dpm_msg_setup_status {
+	MSG_SETUP_SUCCESS,
+	MSG_SETUP_ERROR,
+	MSG_SETUP_UNSUPPORTED,
+	MSG_SETUP_MUX_WAIT,
+};
 
 #endif  /* __CROS_EC_USB_DPM_H */

@@ -52,12 +52,7 @@ BOARDS_IT83XX=(
 	adlrvpm_ite
 	adlrvpp_ite
 	it83xx_evb
-	jslrvp_ite
 	reef_it8320
-	tglrvpu_ite
-	tglrvpu_ite_tcpmv1
-	tglrvpy_ite
-	tglrvpy_ite_tcpmv1
 )
 
 BOARDS_IT83XX_SPI_PROGRAMMING=(
@@ -272,11 +267,6 @@ function dut_control_get_or_die {
 
 : ${BOARD:=${FLAGS_board}}
 
-# Find the Zephyr project directory for the specified board. Zephyr projects
-# organized under ./zephyr/projects as <baseboard>/<board> directory.
-: ${ZEPHYR_DIR:=$(find zephyr/projects -mindepth 2 -maxdepth 2 \
-		-type d -name "${BOARD}")}
-
 in_array() {
 	local n=$#
 	local value=${!n}
@@ -430,8 +420,7 @@ if [[ "${SERVO_TYPE}" =~ ^servo_v4(p1)?_with_.*_and_.*$ ]]; then
 fi
 
 servo_is_ccd() {
-	[[ "${SERVO_TYPE}" =~ "ccd_cr50" ]] || \
-	[[ "${SERVO_TYPE}" =~ "ccd_ti50" ]]
+	[[ "${SERVO_TYPE}" =~ "ccd" ]]
 }
 
 servo_has_warm_reset() {
@@ -694,7 +683,7 @@ if [[ -n "${EC_DIR}" ]]; then
 	if [ "${FLAGS_ro}" = ${FLAGS_TRUE} ] ; then
 		LOCAL_BUILD="${EC_DIR}/build/${BOARD}/RO/${EC_FILE}"
 	elif [ "${FLAGS_zephyr}" = ${FLAGS_TRUE} ] ; then
-		LOCAL_BUILD="${EC_DIR}/build/${ZEPHYR_DIR}/output/${EC_FILE}"
+		LOCAL_BUILD="${EC_DIR}/build/zephyr/${BOARD}/output/${EC_FILE}"
 	else
 		LOCAL_BUILD="${EC_DIR}/build/${BOARD}/${EC_FILE}"
 	fi
@@ -1266,6 +1255,14 @@ function dut_i2c_dev() {
 		return
 	fi
 
+	local has_i2c_pseudo="$(dut_control_get_or_die \
+		"${ACTIVE_DEVICE}_i2c_pseudo_is_running")"
+	if [[ "${has_i2c_pseudo}" == False ]]; then
+		error "i2c-pseudo module is not running."
+		error "Please follow https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/util/iteflash.md#i2c-pseudo"
+		die "to install i2c-pseudo module."
+	fi
+
 	local adap_num=
 	adap_num="$(dut_control_get_or_die \
 	    "${ACTIVE_DEVICE}_i2c_pseudo_adapter_num")"
@@ -1394,24 +1391,6 @@ function flash_ite_spi_ccd_i2c() {
 	fi
 }
 
-function flash_lm4() {
-	OCD_CHIP_CFG="lm4_chip.cfg"
-	OCD_CMDS="init; flash_lm4 ${IMG} ${FLAGS_offset}; shutdown;"
-
-	flash_openocd
-
-}
-
-function flash_nrf51() {
-	OCD_CHIP_CFG="nrf51_chip.cfg"
-	OCD_CMDS="init; flash_nrf51 ${IMG} ${FLAGS_offset}; exit_debug_mode_nrf51; shutdown;"
-
-	flash_openocd
-
-	# waiting 100us for the reset pulse is not necessary, it takes ~2.5ms
-	dut_control swd_reset:on swd_reset:off
-}
-
 function flash_npcx_jtag() {
 	IMG_PATH="${EC_DIR}/build/${BOARD}"
 	OCD_CHIP_CFG="npcx_chip.cfg"
@@ -1441,7 +1420,7 @@ function flash_npcx_uut() {
 		"$(dirname "$IMG")/chip/npcx/spiflashfw" \
 		"$(dirname "$IMG")" \
 		"${EC_DIR}/build/${BOARD}/chip/npcx/spiflashfw" \
-		"${EC_DIR}/build/${ZEPHYR_DIR}/output" \
+		"${EC_DIR}/build/zephyr/${BOARD}/output" \
 		"$(dirname "$LOCAL_BUILD")" \
 		"$(dirname "$EMERGE_BUILD")" ;
 	do

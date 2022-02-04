@@ -215,7 +215,7 @@ void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 }
 
 #define SYS_RST_HOLD_US (1 * MSEC)
-void chipset_reset(enum chipset_reset_reason reason)
+void chipset_reset(enum chipset_shutdown_reason reason)
 {
 #ifdef CONFIG_CMD_RTC
 	/* Print out the RTC to help correlate resets in logs. */
@@ -529,6 +529,11 @@ enum power_state power_handle_state(enum power_state state)
 
 	case POWER_S5G3:
 		return POWER_G3;
+
+	default:
+		CPRINTS("Unexpected power state %d", state);
+		ASSERT(0);
+		break;
 	}
 
 	return state;
@@ -602,7 +607,7 @@ static void power_signal_changed(void)
 		 * Pass a fake power gpio_signal to power_signal_interrupt().
 		 * Note that here we make power_signal_interrupt() reentrant.
 		 */
-		power_signal_interrupt(POWER_SIGNAL_COUNT);
+		power_signal_interrupt(GPIO_COUNT);
 		in_signals = inew;
 	}
 }

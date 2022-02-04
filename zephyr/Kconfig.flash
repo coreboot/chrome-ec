@@ -6,6 +6,7 @@ if PLATFORM_EC_FLASH_CROS
 
 config PLATFORM_EC_SPI_FLASH_REGS
 	bool "Enable SPI flash registers"
+	default y if SOC_FAMILY_MEC
 	default y if SOC_FAMILY_NPCX
 	help
 	  Enables flash registers for SPI flash (both internal and external).
@@ -64,6 +65,7 @@ config PLATFORM_EC_CONSOLE_CMD_SYSJUMP
 choice PLATFORM_EC_STORAGE_TYPE
        prompt "Code storage type"
        default PLATFORM_EC_EXTERNAL_STORAGE if SOC_FAMILY_NPCX
+       default PLATFORM_EC_EXTERNAL_STORAGE if SOC_FAMILY_MEC
        default PLATFORM_EC_INTERNAL_STORAGE if SOC_FAMILY_RISCV_ITE
        help
          Sets the EC code storage type.
@@ -85,6 +87,15 @@ config PLATFORM_EC_INTERNAL_STORAGE
 
 endchoice
 
+# Workaround for not being able to have commas in macro arguments
+DT_CHOSEN_CROS_FLASH := cros-ec,flash
+
+config PLATFORM_EC_FLASH_SIZE_BYTES
+	hex "flash size"
+	default $(dt_chosen_reg_size_hex,$(DT_CHOSEN_CROS_FLASH))
+	help
+	  Total size of writable flash.
+
 config PLATFORM_EC_MAPPED_STORAGE
 	bool "Flash is mapped into the EC's address space"
 	default y if SOC_FAMILY_NPCX || SOC_FAMILY_RISCV_ITE
@@ -93,6 +104,14 @@ config PLATFORM_EC_MAPPED_STORAGE
 	  its address space. This makes it easier to read and write the flash.
 	  If this is not defined, the flash driver must implement
 	  flash_physical_read().
+
+config PLATFORM_EC_MAPPED_STORAGE_BASE
+	hex "Mapped storage size"
+	default $(dt_chosen_reg_addr_hex,$(DT_CHOSEN_CROS_FLASH))
+	depends on PLATFORM_EC_MAPPED_STORAGE
+	help
+	  Base address of memory-mapped flash storage, for platforms which
+	  define CONFIG_MAPPED_STORAGE.
 
 config PLATFORM_EC_FLASH_PSTATE
 	bool "Store persistent write protect for the flash inside"

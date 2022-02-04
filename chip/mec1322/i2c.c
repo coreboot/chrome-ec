@@ -237,7 +237,7 @@ static inline void push_in_buf(uint8_t **in, uint8_t val, int skip)
 }
 
 int chip_i2c_xfer(const int port,
-		  const uint16_t slave_addr_flags,
+		  const uint16_t addr_flags,
 		  const uint8_t *out, int out_size,
 		  uint8_t *in, int in_size, int flags)
 {
@@ -287,7 +287,7 @@ int chip_i2c_xfer(const int port,
 	if (out_size) {
 		if (send_start) {
 			MEC1322_I2C_DATA(controller) =
-				(uint8_t)(I2C_STRIP_FLAGS(slave_addr_flags)
+				(uint8_t)(I2C_STRIP_FLAGS(addr_flags)
 					  << 1);
 
 			/* Clock out the slave address, sending START bit */
@@ -332,7 +332,7 @@ int chip_i2c_xfer(const int port,
 							       CTRL_ENI;
 
 			MEC1322_I2C_DATA(controller) =
-				(uint8_t)(I2C_STRIP_FLAGS(slave_addr_flags)
+				(uint8_t)(I2C_STRIP_FLAGS(addr_flags)
 					  << 1)
 				| 0x01;
 
@@ -520,10 +520,10 @@ static void handle_interrupt(int controller)
 		task_set_event(id, TASK_EVENT_I2C_IDLE);
 }
 
-void i2c0_interrupt(void) { handle_interrupt(0); }
-void i2c1_interrupt(void) { handle_interrupt(1); }
-void i2c2_interrupt(void) { handle_interrupt(2); }
-void i2c3_interrupt(void) { handle_interrupt(3); }
+static void i2c0_interrupt(void) { handle_interrupt(0); }
+static void i2c1_interrupt(void) { handle_interrupt(1); }
+static void i2c2_interrupt(void) { handle_interrupt(2); }
+static void i2c3_interrupt(void) { handle_interrupt(3); }
 
 DECLARE_IRQ(MEC1322_IRQ_I2C_0, i2c0_interrupt, 2);
 DECLARE_IRQ(MEC1322_IRQ_I2C_1, i2c1_interrupt, 2);

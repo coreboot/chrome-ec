@@ -5,6 +5,8 @@
 
 #include <zephyr.h>
 #include <ztest.h>
+#include <shell/shell.h>
+#include <shell/shell_uart.h>
 
 #include "common.h"
 #include "i2c.h"
@@ -13,11 +15,12 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "test_state.h"
 
 #define BATTERY_ORD	DT_DEP_ORD(DT_NODELABEL(battery))
 
 /** Test all simple getters */
-static void test_battery_getters(void)
+ZTEST_USER(smart_battery, test_battery_getters)
 {
 	struct sbat_emul_bat_data *bat;
 	struct i2c_emul *emul;
@@ -35,15 +38,9 @@ static void test_battery_getters(void)
 	zassert_equal(EC_SUCCESS, battery_state_of_charge_abs(&word), NULL);
 	zassert_equal(expected, word, "%d != %d", expected, word);
 
-	zassert_equal(EC_SUCCESS, battery_remaining_capacity(&word), NULL);
-	zassert_equal(bat->cap, word, "%d != %d", bat->cap, word);
-	zassert_equal(EC_SUCCESS, battery_full_charge_capacity(&word), NULL);
-	zassert_equal(bat->full_cap, word, "%d != %d", bat->full_cap, word);
 	zassert_equal(EC_SUCCESS, battery_cycle_count(&word), NULL);
 	zassert_equal(bat->cycle_count, word, "%d != %d",
 		      bat->cycle_count, word);
-	zassert_equal(EC_SUCCESS, battery_design_capacity(&word), NULL);
-	zassert_equal(bat->design_cap, word, "%d != %d", bat->design_cap, word);
 	zassert_equal(EC_SUCCESS, battery_design_voltage(&word), NULL);
 	zassert_equal(bat->design_mv, word, "%d != %d", bat->design_mv, word);
 	zassert_equal(EC_SUCCESS, battery_serial_number(&word), NULL);
@@ -60,6 +57,8 @@ static void test_battery_getters(void)
 			  "%s != %s", block, bat->dev_chem);
 	word = battery_get_avg_current();
 	zassert_equal(bat->avg_cur, word, "%d != %d", bat->avg_cur, word);
+	word = battery_get_avg_voltage();
+	zassert_equal(bat->volt, word, "%d != %d", bat->volt, word);
 
 	bat->avg_cur = 200;
 	expected = (bat->full_cap - bat->cap) * 60 / bat->avg_cur;
@@ -77,8 +76,46 @@ static void test_battery_getters(void)
 	zassert_equal(expected, word, "%d != %d", expected, word);
 }
 
+/** Test getting capacity. These functions should force mAh mode */
+ZTEST_USER(smart_battery, test_battery_get_capacity)
+{
+	struct sbat_emul_bat_data *bat;
+	struct i2c_emul *emul;
+	int word;
+
+	emul = sbat_emul_get_ptr(BATTERY_ORD);
+	bat = sbat_emul_get_bat_data(emul);
+
+	/* Test fail when checking battery mode */
+	i2c_common_emul_set_read_fail_reg(emul, SB_BATTERY_MODE);
+	zassert_equal(EC_ERROR_INVAL, battery_remaining_capacity(&word), NULL);
+	zassert_equal(EC_ERROR_INVAL, battery_full_charge_capacity(&word),
+		      NULL);
+	zassert_equal(EC_ERROR_INVAL, battery_design_capacity(&word), NULL);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/* Test getting remaining capacity and if mAh mode is forced */
+	bat->mode |= MODE_CAPACITY;
+	zassert_equal(EC_SUCCESS, battery_remaining_capacity(&word), NULL);
+	zassert_equal(bat->cap, word, "%d != %d", bat->cap, word);
+	zassert_false(bat->mode & MODE_CAPACITY, "mAh mode not forced");
+
+	/* Test getting full charge capacity and if mAh mode is forced */
+	bat->mode |= MODE_CAPACITY;
+	zassert_equal(EC_SUCCESS, battery_full_charge_capacity(&word), NULL);
+	zassert_equal(bat->full_cap, word, "%d != %d", bat->full_cap, word);
+	zassert_false(bat->mode & MODE_CAPACITY, "mAh mode not forced");
+
+	/* Test getting design capacity and if mAh mode is forced */
+	bat->mode |= MODE_CAPACITY;
+	zassert_equal(EC_SUCCESS, battery_design_capacity(&word), NULL);
+	zassert_equal(bat->design_cap, word, "%d != %d", bat->design_cap, word);
+	zassert_false(bat->mode & MODE_CAPACITY, "mAh mode not forced");
+}
+
+
 /** Test battery status */
-static void test_battery_status(void)
+ZTEST_USER(smart_battery, test_battery_status)
 {
 	struct sbat_emul_bat_data *bat;
 	struct i2c_emul *emul;
@@ -104,7 +141,7 @@ static void test_battery_status(void)
 }
 
 /** Test wait for stable function */
-static void test_battery_wait_for_stable(void)
+ZTEST_USER(smart_battery, test_battery_wait_for_stable)
 {
 	struct i2c_emul *emul;
 
@@ -120,7 +157,7 @@ static void test_battery_wait_for_stable(void)
 }
 
 /** Test manufacture date */
-static void test_battery_manufacture_date(void)
+ZTEST_USER(smart_battery, test_battery_manufacture_date)
 {
 	struct sbat_emul_bat_data *bat;
 	struct i2c_emul *emul;
@@ -144,7 +181,7 @@ static void test_battery_manufacture_date(void)
 }
 
 /** Test time at rate */
-static void test_battery_time_at_rate(void)
+ZTEST_USER(smart_battery, test_battery_time_at_rate)
 {
 	struct sbat_emul_bat_data *bat;
 	struct i2c_emul *emul;
@@ -154,6 +191,34 @@ static void test_battery_time_at_rate(void)
 
 	emul = sbat_emul_get_ptr(BATTERY_ORD);
 	bat = sbat_emul_get_bat_data(emul);
+
+	/* Test fail on rate 0 */
+	rate = 0;
+	zassert_equal(EC_ERROR_INVAL, battery_time_at_rate(rate, &minutes),
+		      NULL);
+
+	/* 10mAh at rate 6000mA will be discharged in 6s */
+	bat->cap = 10;
+	rate = -6000;
+
+	/* Test fail on writing at rate register */
+	i2c_common_emul_set_write_fail_reg(emul, SB_AT_RATE);
+	zassert_equal(EC_ERROR_INVAL, battery_time_at_rate(rate, &minutes),
+		      NULL);
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/* Test fail on reading at rate ok register */
+	i2c_common_emul_set_read_fail_reg(emul, SB_AT_RATE_OK);
+	zassert_equal(EC_ERROR_INVAL, battery_time_at_rate(rate, &minutes),
+		      NULL);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/*
+	 * Expected discharging rate is less then 10s,
+	 * so AtRateOk() register should return 0
+	 */
+	zassert_equal(EC_ERROR_TIMEOUT, battery_time_at_rate(rate, &minutes),
+		      NULL);
 
 	/* 3000mAh at rate 300mA will be discharged in 10h */
 	bat->cap = 3000;
@@ -174,7 +239,7 @@ static void test_battery_time_at_rate(void)
 }
 
 /** Test battery get params */
-static void test_battery_get_params(void)
+ZTEST_USER(smart_battery, test_battery_get_params)
 {
 	struct sbat_emul_bat_data *bat;
 	struct batt_params batt;
@@ -183,10 +248,6 @@ static void test_battery_get_params(void)
 
 	emul = sbat_emul_get_ptr(BATTERY_ORD);
 	bat = sbat_emul_get_bat_data(emul);
-
-	/* Battery wants to charge */
-	bat->desired_charg_cur = 1000;
-	bat->desired_charg_volt = 5000;
 
 	/* Fail temperature read */
 	i2c_common_emul_set_read_fail_reg(emul, SB_TEMPERATURE);
@@ -268,14 +329,230 @@ static void test_battery_get_params(void)
 	zassert_equal(flags, batt.flags, "0x%x != 0x%x", flags, batt.flags);
 }
 
-void test_suite_smart_battery(void)
+struct mfgacc_data {
+	int reg;
+	uint8_t *buf;
+	int len;
+};
+
+static int mfgacc_read_func(struct i2c_emul *emul, int reg, uint8_t *val,
+			    int bytes, void *data)
 {
-	ztest_test_suite(smart_battery,
-			 ztest_user_unit_test(test_battery_getters),
-			 ztest_user_unit_test(test_battery_status),
-			 ztest_user_unit_test(test_battery_wait_for_stable),
-			 ztest_user_unit_test(test_battery_manufacture_date),
-			 ztest_user_unit_test(test_battery_time_at_rate),
-			 ztest_user_unit_test(test_battery_get_params));
-	ztest_run_test_suite(smart_battery);
+	struct mfgacc_data *conf = data;
+
+	if (bytes == 0 && conf->reg == reg) {
+		sbat_emul_set_response(emul, reg, conf->buf, conf->len, false);
+	}
+
+	return 1;
 }
+
+/** Test battery manufacturer access */
+ZTEST_USER(smart_battery, test_battery_mfacc)
+{
+	struct sbat_emul_bat_data *bat;
+	struct mfgacc_data mfacc_conf;
+	struct i2c_emul *emul;
+	uint8_t recv_buf[10];
+	uint8_t mf_data[10];
+	uint16_t cmd;
+	int len;
+
+	emul = sbat_emul_get_ptr(BATTERY_ORD);
+	bat = sbat_emul_get_bat_data(emul);
+
+	/* Select arbitrary command number for the test */
+	cmd = 0x1234;
+
+	/* Test fail on to short receive buffer */
+	len = 2;
+	zassert_equal(EC_ERROR_INVAL,
+		      sb_read_mfgacc(cmd, SB_ALT_MANUFACTURER_ACCESS, recv_buf,
+				     len), NULL);
+
+	/* Set correct length for rest of the test */
+	len = 10;
+
+	/* Test fail on writing SB_MANUFACTURER_ACCESS register */
+	i2c_common_emul_set_write_fail_reg(emul, SB_MANUFACTURER_ACCESS);
+	zassert_equal(EC_ERROR_INVAL,
+		      sb_read_mfgacc(cmd, SB_ALT_MANUFACTURER_ACCESS, recv_buf,
+				     len), NULL);
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/* Test fail on reading manufacturer data (custom handler is not set) */
+	zassert_equal(EC_ERROR_INVAL,
+		      sb_read_mfgacc(cmd, SB_ALT_MANUFACTURER_ACCESS, recv_buf,
+				     len), NULL);
+
+	/* Set arbitrary manufacturer data */
+	for (int i = 1; i < len; i++) {
+		mf_data[i] = i;
+	}
+	/* Set first byte of message as length */
+	mf_data[0] = len;
+
+	/* Setup custom handler */
+	mfacc_conf.reg = SB_ALT_MANUFACTURER_ACCESS;
+	mfacc_conf.len = len;
+	mfacc_conf.buf = mf_data;
+	i2c_common_emul_set_read_func(emul, mfgacc_read_func, &mfacc_conf);
+
+	/* Test error when mf_data doesn't start with command */
+	zassert_equal(EC_ERROR_UNKNOWN,
+		      sb_read_mfgacc(cmd, SB_ALT_MANUFACTURER_ACCESS, recv_buf,
+				     len), NULL);
+
+	/* Set beginning of the manufacturer data */
+	mf_data[1] = cmd & 0xff;
+	mf_data[2] = (cmd >> 8) & 0xff;
+
+	/* Test successful manufacturer data read */
+	zassert_equal(EC_SUCCESS,
+		      sb_read_mfgacc(cmd, SB_ALT_MANUFACTURER_ACCESS, recv_buf,
+				     len), NULL);
+	/* Compare received data ignoring length byte */
+	zassert_mem_equal(mf_data + 1, recv_buf, len - 1, NULL);
+
+	/* Disable custom read function */
+	i2c_common_emul_set_read_func(emul, NULL, NULL);
+}
+
+/** Test battery fake charge level set and read */
+ZTEST_USER(smart_battery, test_battery_fake_charge)
+{
+	struct sbat_emul_bat_data *bat;
+	struct batt_params batt;
+	struct i2c_emul *emul;
+	int remaining_cap;
+	int fake_charge;
+	int charge;
+	int flags;
+
+	emul = sbat_emul_get_ptr(BATTERY_ORD);
+	bat = sbat_emul_get_bat_data(emul);
+
+	/* Success on command with no argument */
+	zassert_equal(EC_SUCCESS,
+		      shell_execute_cmd(get_ec_shell(),
+					"battfake"), NULL);
+
+	/* Fail on command with argument which is not a number */
+	zassert_equal(EC_ERROR_PARAM1,
+		      shell_execute_cmd(get_ec_shell(),
+					"battfake test"), NULL);
+
+	/* Fail on command with charge level above 100% */
+	zassert_equal(EC_ERROR_PARAM1,
+		      shell_execute_cmd(get_ec_shell(),
+					"battfake 123"), NULL);
+
+	/* Fail on command with charge level below 0% */
+	zassert_equal(EC_ERROR_PARAM1,
+		      shell_execute_cmd(get_ec_shell(),
+					"battfake -23"), NULL);
+
+	/* Set fake charge level */
+	fake_charge = 65;
+	zassert_equal(EC_SUCCESS,
+		      shell_execute_cmd(get_ec_shell(),
+					"battfake 65"), NULL);
+
+	/* Test that fake charge level is applied */
+	flags = BATT_FLAG_WANT_CHARGE | BATT_FLAG_RESPONSIVE;
+	battery_get_params(&batt);
+	zassert_equal(flags, batt.flags, "0x%x != 0x%x", flags, batt.flags);
+	zassert_equal(fake_charge, batt.state_of_charge, "%d%% != %d%%",
+		      fake_charge, batt.state_of_charge);
+	remaining_cap = bat->full_cap * fake_charge / 100;
+	zassert_equal(remaining_cap, batt.remaining_capacity, "%d != %d",
+		      remaining_cap, batt.remaining_capacity);
+
+	/* Test fake remaining capacity when full capacity is not available */
+	i2c_common_emul_set_read_fail_reg(emul, SB_FULL_CHARGE_CAPACITY);
+	flags = BATT_FLAG_WANT_CHARGE | BATT_FLAG_RESPONSIVE |
+		BATT_FLAG_BAD_FULL_CAPACITY;
+	battery_get_params(&batt);
+	zassert_equal(flags, batt.flags, "0x%x != 0x%x", flags, batt.flags);
+	zassert_equal(fake_charge, batt.state_of_charge, "%d%% != %d%%",
+		      fake_charge, batt.state_of_charge);
+	remaining_cap = bat->design_cap * fake_charge / 100;
+	zassert_equal(remaining_cap, batt.remaining_capacity, "%d != %d",
+		      remaining_cap, batt.remaining_capacity);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/* Disable fake charge level */
+	zassert_equal(EC_SUCCESS,
+		      shell_execute_cmd(get_ec_shell(),
+					"battfake -1"), NULL);
+
+	/* Test that fake charge level is not applied */
+	flags = BATT_FLAG_WANT_CHARGE | BATT_FLAG_RESPONSIVE;
+	battery_get_params(&batt);
+	zassert_equal(flags, batt.flags, "0x%x != 0x%x", flags, batt.flags);
+	charge = 100 * bat->cap / bat->full_cap;
+	zassert_equal(charge, batt.state_of_charge, "%d%% != %d%%",
+		      charge, batt.state_of_charge);
+	zassert_equal(bat->cap, batt.remaining_capacity, "%d != %d",
+		      bat->cap, batt.remaining_capacity);
+}
+
+/** Test battery fake temperature set and read */
+ZTEST_USER(smart_battery, test_battery_fake_temperature)
+{
+	struct sbat_emul_bat_data *bat;
+	struct batt_params batt;
+	struct i2c_emul *emul;
+	int fake_temp;
+	int flags;
+
+	emul = sbat_emul_get_ptr(BATTERY_ORD);
+	bat = sbat_emul_get_bat_data(emul);
+
+	/* Success on command with no argument */
+	zassert_equal(EC_SUCCESS,
+		      shell_execute_cmd(get_ec_shell(),
+					"batttempfake"), NULL);
+
+	/* Fail on command with argument which is not a number */
+	zassert_equal(EC_ERROR_PARAM1,
+		      shell_execute_cmd(get_ec_shell(),
+					"batttempfake test"), NULL);
+
+	/* Fail on command with too high temperature (above 500.0 K) */
+	zassert_equal(EC_ERROR_PARAM1,
+		      shell_execute_cmd(get_ec_shell(),
+					"batttempfake 5001"), NULL);
+
+	/* Fail on command with too low temperature (below 0 K) */
+	zassert_equal(EC_ERROR_PARAM1,
+		      shell_execute_cmd(get_ec_shell(),
+					"batttempfake -23"), NULL);
+
+	/* Set fake temperature */
+	fake_temp = 2840;
+	zassert_equal(EC_SUCCESS,
+		      shell_execute_cmd(get_ec_shell(),
+					"batttempfake 2840"), NULL);
+
+	/* Test that fake temperature is applied */
+	flags = BATT_FLAG_WANT_CHARGE | BATT_FLAG_RESPONSIVE;
+	battery_get_params(&batt);
+	zassert_equal(flags, batt.flags, "0x%x != 0x%x", flags, batt.flags);
+	zassert_equal(fake_temp, batt.temperature, "%d != %d",
+		      fake_temp, batt.temperature);
+
+	/* Disable fake temperature */
+	zassert_equal(EC_SUCCESS,
+		      shell_execute_cmd(get_ec_shell(),
+					"batttempfake -1"), NULL);
+
+	/* Test that fake temperature is not applied */
+	flags = BATT_FLAG_WANT_CHARGE | BATT_FLAG_RESPONSIVE;
+	battery_get_params(&batt);
+	zassert_equal(flags, batt.flags, "0x%x != 0x%x", flags, batt.flags);
+	zassert_equal(bat->temp, batt.temperature, "%d != %d",
+		      bat->temp, batt.temperature);
+}
+
+ZTEST_SUITE(smart_battery, drivers_predicate_post_main, NULL, NULL, NULL, NULL);

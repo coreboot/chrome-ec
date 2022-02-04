@@ -651,7 +651,7 @@ static void shi_handle_cs_assert(void)
 }
 
 /* This routine handles all interrupts of this module */
-void shi_int_handler(void)
+static void shi_int_handler(void)
 {
 	uint8_t stat_reg;
 #ifdef NPCX_SHI_V2
@@ -1076,7 +1076,7 @@ static enum ec_status shi_get_protocol_info(struct host_cmd_handler_args *args)
 
 	args->response_size = sizeof(*r);
 
-	return EC_SUCCESS;
+	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO, shi_get_protocol_info,
 EC_VER_MASK(0));

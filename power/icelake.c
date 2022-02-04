@@ -46,9 +46,14 @@ const struct power_signal_info power_signal_list[] = {
 		.name = "SLP_S3_DEASSERTED",
 	},
 	[X86_SLP_S4_DEASSERTED] = {
-		.gpio = SLP_S4_SIGNAL_L,
+		.gpio = (enum gpio_signal)SLP_S4_SIGNAL_L,
 		.flags = POWER_SIGNAL_ACTIVE_HIGH,
 		.name = "SLP_S4_DEASSERTED",
+	},
+	[X86_SLP_S5_DEASSERTED] = {
+		.gpio = SLP_S5_SIGNAL_L,
+		.flags = POWER_SIGNAL_ACTIVE_HIGH,
+		.name = "SLP_S5_DEASSERTED",
 	},
 	[X86_SLP_SUS_DEASSERTED] = {
 		.gpio = GPIO_SLP_SUS_L,

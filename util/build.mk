@@ -30,6 +30,7 @@ comm-objs+=comm-lpc.o comm-i2c.o misc_util.o
 
 iteflash-objs = iteflash.o usb_if.o
 ectool-objs=ectool.o ectool_keyscan.o ec_flash.o ec_panicinfo.o $(comm-objs)
+ectool-objs+=ectool_i2c.o
 ectool-objs+=../common/crc.o
 ectool_servo-objs=$(ectool-objs) comm-servo-spi.o
 ec_sb_firmware_update-objs=ec_sb_firmware_update.o $(comm-objs) misc_util.o
@@ -46,10 +47,10 @@ build-util-bin-y+=genvif
 build-util-art-y+=$(BOARD)_vif.xml
 
 # usb_pd_policy.c can be in baseboard, or board, or both.
-genvif-pd-srcs=$(sort $(wildcard $(BASEDIR)/usb_pd_policy.c \
-			board/$(BOARD)/usb_pd_policy.c))
+genvif-pd-srcs=$(sort $(wildcard $(BASEDIR)/usb_pd_pdo.c \
+			board/$(BOARD)/usb_pd_pdo.c))
 genvif-pd-objs=$(genvif-pd-srcs:%.c=$(out)/util/%.o)
-genvif-pd-objs += $(out)/common/usb_common.o
+genvif-pd-objs += $(out)/common/usb_common.o $(out)/common/usb_pd_pdo.o
 deps-$(CONFIG_USB_POWER_DELIVERY) += $(genvif-pd-objs:%.o=%.o.d)
 
 $(out)/util/genvif: $(genvif-pd-objs) util/genvif.h board/$(BOARD)/board.h \
@@ -62,7 +63,13 @@ STANDALONE_FLAGS=-ffreestanding -fno-builtin -nostdinc \
 $(out)/util/%/usb_pd_policy.o: %/usb_pd_policy.c
 	-@ mkdir -p $(@D)
 	$(call quiet,c_to_vif,BUILDCC)
+$(out)/util/%/usb_pd_pdo.o: %/usb_pd_pdo.c
+	-@ mkdir -p $(@D)
+	$(call quiet,c_to_vif,BUILDCC)
 $(out)/common/usb_common.o: common/usb_common.c
+	-@ mkdir -p $(@D)
+	$(call quiet,c_to_vif,BUILDCC)
+$(out)/common/usb_pd_pdo.o: common/usb_pd_pdo.c
 	-@ mkdir -p $(@D)
 	$(call quiet,c_to_vif,BUILDCC)
 endif # CONFIG_USB_POWER_DELIVERY

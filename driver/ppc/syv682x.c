@@ -12,6 +12,7 @@
 #include "hooks.h"
 #include "i2c.h"
 #include "system.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_charge.h"
 #include "usb_pd_tcpm.h"
@@ -30,10 +31,10 @@
 #define SYV682X_FLAGS_FRS		BIT(7)
 #define SYV682X_FLAGS_VCONN_OCP		BIT(8)
 
-static uint32_t irq_pending; /* Bitmask of ports signaling an interrupt. */
-static uint32_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
+static atomic_t irq_pending; /* Bitmask of ports signaling an interrupt. */
+static atomic_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 /* Running count of sink ocp events */
-static uint32_t sink_ocp_count[CONFIG_USB_PD_PORT_MAX_COUNT];
+static atomic_t sink_ocp_count[CONFIG_USB_PD_PORT_MAX_COUNT];
 static timestamp_t vbus_oc_timer[CONFIG_USB_PD_PORT_MAX_COUNT];
 static timestamp_t vconn_oc_timer[CONFIG_USB_PD_PORT_MAX_COUNT];
 
@@ -204,7 +205,7 @@ static int syv682x_vbus_source_enable(int port, int enable)
 		 */
 		regval |= SYV682X_CONTROL_1_PWR_ENB;
 		if (IS_ENABLED(CONFIG_USB_PD_FRS_PPC))
-			gpio_set_level(ppc_chips[port].frs_en, 0);
+			gpio_or_ioex_set_level(ppc_chips[port].frs_en, 0);
 	}
 
 	rv = write_reg(port, SYV682X_CONTROL_1_REG, regval);
@@ -268,7 +269,7 @@ static void syv682x_handle_status_interrupt(int port, int regval)
 			atomic_or(&flags[port], SYV682X_FLAGS_SOURCE_ENABLED);
 			atomic_clear_bits(&flags[port],
 					  SYV682X_FLAGS_SINK_ENABLED);
-			if (!IS_ENABLED(CONFIG_USB_PD_FRS_TCPC))
+			if (!tcpm_tcpc_has_frs_control(port))
 				pd_got_frs_signal(port);
 		}
 	}
@@ -656,7 +657,7 @@ static int syv682x_set_frs_enable(int port, int enable)
 					SYV682X_CONTROL_4_CC1_BPS;
 		/* set GPIO after configuring */
 		write_reg(port, SYV682X_CONTROL_4_REG, regval);
-		gpio_set_level(ppc_chips[port].frs_en, 1);
+		gpio_or_ioex_set_level(ppc_chips[port].frs_en, 1);
 	} else {
 		/*
 		 * Reconnect CC lines to TCPC. Since the FRS GPIO needs to be
@@ -667,7 +668,7 @@ static int syv682x_set_frs_enable(int port, int enable)
 		regval |= SYV682X_CONTROL_4_CC1_BPS | SYV682X_CONTROL_4_CC2_BPS;
 		write_reg(port, SYV682X_CONTROL_4_REG, regval);
 		if (!(flags[port] & SYV682X_FLAGS_FRS))
-			gpio_set_level(ppc_chips[port].frs_en, 0);
+			gpio_or_ioex_set_level(ppc_chips[port].frs_en, 0);
 	}
 	return EC_SUCCESS;
 }
@@ -731,7 +732,7 @@ static int syv682x_init(int port)
 	 * Disable FRS prior to configuring the power paths
 	 */
 	if (IS_ENABLED(CONFIG_USB_PD_FRS_PPC))
-		gpio_set_level(ppc_chips[port].frs_en, 0);
+		gpio_or_ioex_set_level(ppc_chips[port].frs_en, 0);
 
 	if (!syv682x_is_sink(control_1)
 		|| (status & SYV682X_STATUS_VSAFE_0V)) {
@@ -834,4 +835,5 @@ const struct ppc_drv syv682x_drv = {
 #ifdef CONFIG_USBC_PPC_VCONN
 	.set_vconn = &syv682x_set_vconn,
 #endif
+	.interrupt = &syv682x_interrupt,
 };

@@ -70,6 +70,44 @@ enum {
 #define CPU_SCB_DCISW          CPUREG(0xe000ef60)
 #define CPU_SCB_DCCISW         CPUREG(0xe000ef74)
 
+/* Floating Point Context Address Register */
+#define CPU_FPU_FPCAR          CPUREG(0xe000ef38)
+
+/*
+ * As defined by Armv7-M Reference Manual B1.5.7 "Context state stacking on
+ * exception entry with the FP extension" the structure of the FPU state is:
+ * s0, s1, ..., s14, s15, fpscr.
+ */
+#define FPU_IDX_REG_FPSCR 16
+#define FPU_FPSCR_IOC BIT(0) /* Invalid operation */
+#define FPU_FPSCR_DZC BIT(1) /* Division by zero */
+#define FPU_FPSCR_OFC BIT(2) /* Overflow */
+#define FPU_FPSCR_UFC BIT(3) /* Underflow */
+#define FPU_FPSCR_IXC BIT(4) /* Inexact */
+#define FPU_FPSCR_IDC BIT(7) /* Input denormal */
+#define FPU_FPSCR_EXC_FLAGS (FPU_FPSCR_IOC | FPU_FPSCR_DZC | FPU_FPSCR_OFC | \
+			     FPU_FPSCR_UFC | FPU_FPSCR_IXC | FPU_FPSCR_IDC)
+
+/* Bitfield values for EXC_RETURN. */
+#define EXC_RETURN_ES_MASK	BIT(0)
+#define EXC_RETURN_ES_NON_SECURE 0
+#define EXC_RETURN_ES_SECURE	BIT(0)
+#define EXC_RETURN_SPSEL_MASK	BIT(2)
+#define EXC_RETURN_SPSEL_MSP	0
+#define EXC_RETURN_SPSEL_PSP	BIT(2)
+#define EXC_RETURN_MODE_MASK	BIT(3)
+#define EXC_RETURN_MODE_HANDLER	0
+#define EXC_RETURN_MODE_THREAD	BIT(3)
+#define EXC_RETURN_FTYPE_MASK	BIT(4)
+#define EXC_RETURN_FTYPE_ON	0
+#define EXC_RETURN_FTYPE_OFF	BIT(4)
+#define EXC_RETURN_DCRS_MASK	BIT(5)
+#define EXC_RETURN_DCRS_OFF	0
+#define EXC_RETURN_DCRS_ON	BIT(5)
+#define EXC_RETURN_S_MASK	BIT(6)
+#define EXC_RETURN_S_NON_SECURE	0
+#define EXC_RETURN_S_SECURE	BIT(6)
+
 /* Set up the cpu to detect faults */
 void cpu_init(void);
 /* Enable the CPU I-cache and D-cache if they are not already enabled */

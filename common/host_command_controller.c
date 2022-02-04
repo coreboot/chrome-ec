@@ -192,8 +192,8 @@ int pd_host_command(int command, int version,
 static int command_pd_mcu(int argc, char **argv)
 {
 	char *e;
-	static char __bss_slow outbuf[128];
-	static char __bss_slow inbuf[128];
+	static char outbuf[128];
+	static char inbuf[128];
 	int command, version;
 	int i, ret, tmp;
 
@@ -227,4 +227,3 @@ static int command_pd_mcu(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(pdcmd, command_pd_mcu,
 			"cmd ver [params]",
 			"Send PD host command");
-

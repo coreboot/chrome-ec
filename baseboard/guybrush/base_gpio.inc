@@ -21,8 +21,8 @@ GPIO_INT(PG_PWR_S5,		PIN(C, 0), GPIO_INT_BOTH,			baseboard_en_pwr_s0)	/* S5 Powe
 GPIO_INT(PG_PCORE_S0_R_OD,	PIN(B, 6), GPIO_INT_BOTH, 			power_signal_interrupt) /* S0 Power OK */
 GPIO_INT(ACOK_OD,		PIN(0, 0), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH,	extpower_interrupt)	/* AC Power Present */
 GPIO_INT(EC_PCORE_INT_ODL,	PIN(F, 0), GPIO_INT_BOTH | GPIO_PULL_UP,	power_signal_interrupt)	/* Power Core Interrupt */
-GPIO_INT(PG_GROUPC_S0_OD,	PIN(A, 3), GPIO_INT_BOTH, 			baseboard_en_pwr_pcore_s0)	/* Power Group C S0 */
-GPIO_INT(PG_LPDDR4X_S3_OD,	PIN(9, 5), GPIO_INT_BOTH, 			baseboard_en_pwr_pcore_s0)	/* Power Group LPDDR4 S3 */
+GPIO_INT(PG_GROUPC_S0_OD,	PIN(A, 3), GPIO_INT_BOTH, 			baseboard_en_pwr_pcore_signal)	/* Power Group C S0 */
+GPIO_INT(PG_LPDDR4X_S3_OD,	PIN(9, 5), GPIO_INT_BOTH, 			baseboard_en_pwr_pcore_signal)	/* Power Group LPDDR4 S3 */
 GPIO(EN_PWR_S5,			PIN(B, 7), GPIO_OUT_LOW)						/* Enable S5 Power */
 GPIO(EN_PWR_S0_R,		PIN(F, 1), GPIO_OUT_LOW)
 GPIO(EN_PWR_PCORE_S0_R,		PIN(E, 1), GPIO_OUT_LOW)
@@ -111,9 +111,6 @@ ALTERNATE(/*KSO_03-09*/		PIN_MASK(1, GENMASK(6, 0)), 0,			MODULE_KEYBOARD_SCAN, 
 ALTERNATE(/*KSO_10-13*/		PIN_MASK(0, GENMASK(7, 4)), 0, 			MODULE_KEYBOARD_SCAN, GPIO_ODR_HIGH)
 ALTERNATE(/*KSO_14*/		PIN_MASK(8, BIT(2)), 0, 			MODULE_KEYBOARD_SCAN, GPIO_ODR_HIGH)
 
-/* b/186135022: Pull eSPI RST# high to disable */
-GPIO(EC_ESPI_RST_L,		PIN(5, 4), GPIO_PULL_UP)
-
 #if 0
 /*
  * SOC eSPI Bus
@@ -126,6 +123,7 @@ GPIO(ESPI_SOC_D0_EC,		PIN(4, 6), GPIO_DEFAULT)
 GPIO(ESPI_SOC_D1_EC,		PIN(4, 7), GPIO_DEFAULT)
 GPIO(ESPI_SOC_D2_EC,		PIN(5, 1), GPIO_DEFAULT)
 GPIO(ESPI_SOC_D3_EC,		PIN(5, 2), GPIO_DEFAULT)
+GPIO(EC_ESPI_RST_L,		PIN(5, 4), GPIO_DEFAULT)
 GPIO(ESPI_EC_ALERT_SOC_L,	PIN(5, 7), GPIO_DEFAULT)
 #endif
 

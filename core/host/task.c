@@ -28,7 +28,7 @@
 struct emu_task_t {
 	pthread_t thread;
 	pthread_cond_t resume;
-	uint32_t event;
+	atomic_t event;
 	timestamp_t wake_time;
 	uint8_t started;
 };
@@ -47,7 +47,7 @@ static int task_started;
 static sem_t interrupt_sem;
 static pthread_mutex_t interrupt_lock;
 static pthread_t interrupt_thread;
-static int in_interrupt;
+static bool in_interrupt;
 static int interrupt_disabled;
 static void (*pending_isr)(void);
 static int generator_sleeping;
@@ -119,9 +119,9 @@ void task_pre_init(void)
 	/* Nothing */
 }
 
-int in_interrupt_context(void)
+bool in_interrupt_context(void)
 {
-	return !!in_interrupt;
+	return in_interrupt;
 }
 
 test_mockable void interrupt_disable(void)
@@ -138,17 +138,17 @@ test_mockable void interrupt_enable(void)
 	pthread_mutex_unlock(&interrupt_lock);
 }
 
-inline int is_interrupt_enabled(void)
+inline bool is_interrupt_enabled(void)
 {
 	return !interrupt_disabled;
 }
 
 static void _task_execute_isr(int sig)
 {
-	in_interrupt = 1;
+	in_interrupt = true;
 	pending_isr();
 	sem_post(&interrupt_sem);
-	in_interrupt = 0;
+	in_interrupt = false;
 }
 
 void task_register_interrupt(void)
@@ -209,7 +209,7 @@ uint32_t task_set_event(task_id_t tskid, uint32_t event)
 	return 0;
 }
 
-uint32_t *task_get_event_bitmap(task_id_t tskid)
+atomic_t *task_get_event_bitmap(task_id_t tskid)
 {
 	return &tasks[tskid].event;
 }
@@ -316,7 +316,7 @@ void task_print_list(void)
 	}
 }
 
-int command_task_info(int argc, char **argv)
+static int command_task_info(int argc, char **argv)
 {
 	task_print_list();
 

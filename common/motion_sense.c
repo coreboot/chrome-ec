@@ -73,7 +73,7 @@ STATIC_IF(CONFIG_MOTION_FILL_LPC_SENSE_DATA) void update_sense_data(
 		uint8_t *lpc_status, int *psample_id);
 
 /* Flags to control whether to send an ODR change event for a sensor */
-static uint32_t odr_event_required;
+static atomic_t odr_event_required;
 
 /* Whether or not the FIFO interrupt should be enabled (set from the AP). */
 __maybe_unused static int fifo_int_enabled;
@@ -232,7 +232,7 @@ static int motion_sense_set_ec_rate_from_ap(
 	 * One will have a delay guarantee to be less than its ODR.
 	 */
 	if (SECOND * 1100 / odr_mhz > new_rate_us)
-		new_rate_us = new_rate_us / 95 * 100;
+		new_rate_us = new_rate_us * 95 / 100;
 
 end_set_ec_rate_from_ap:
 	return MAX(new_rate_us, motion_min_interval);
@@ -332,10 +332,10 @@ static inline int motion_sense_init(struct motion_sensor_t *sensor)
 
 	BUILD_ASSERT(SENSOR_COUNT < 32);
 #if defined(HAS_TASK_CONSOLE)
-	ASSERT((task_get_current() == TASK_ID_HOOKS) ||
+	ASSERT((in_deferred_context()) ||
 	       (task_get_current() == TASK_ID_CONSOLE));
 #else
-	ASSERT(task_get_current() == TASK_ID_HOOKS);
+	ASSERT(in_deferred_context());
 #endif /* HAS_TASK_CONSOLE */
 
 	/* Initialize accelerometers. */
@@ -386,7 +386,7 @@ static void motion_sense_switch_sensor_rate(void)
 	struct motion_sensor_t *sensor;
 	unsigned int sensor_setup_mask = 0;
 
-	ASSERT(task_get_current() == TASK_ID_HOOKS);
+	ASSERT(in_deferred_context());
 
 	for (i = 0; i < motion_sensor_count; ++i) {
 		sensor = &motion_sensors[i];
@@ -1120,6 +1120,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 			return EC_RES_INVALID_PARAM;
 
 		if (IS_ENABLED(CONFIG_GESTURE_HOST_DETECTION) &&
+		    MOTION_SENSE_ACTIVITY_SENSOR_ID >= 0 &&
 		    (in->sensor_odr.sensor_num ==
 		     MOTION_SENSE_ACTIVITY_SENSOR_ID))
 			out->info.type = MOTIONSENSE_TYPE_ACTIVITY;
@@ -1451,6 +1452,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 	case MOTIONSENSE_CMD_SPOOF: {
 		/* spoof activity if it is activity sensor */
 		if (IS_ENABLED(CONFIG_GESTURE_HOST_DETECTION) &&
+		    MOTION_SENSE_ACTIVITY_SENSOR_ID >= 0 &&
 		    in->spoof.sensor_id == MOTION_SENSE_ACTIVITY_SENSOR_ID) {
 			switch (in->spoof.activity_num) {
 #ifdef CONFIG_BODY_DETECTION

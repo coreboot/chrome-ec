@@ -20,13 +20,12 @@ To calculate code coverage for this test only
 
 ```bash
 (chroot) zmake configure --coverage --test zephyr/test/drivers
-(chroot) lcov --gcov-tool ~/trunk/src/platform/ec/util/llvm-gcov.sh -q \
-        -o build/zephyr/test/drivers/lcov.info -c -d build/zephyr/test/drivers
-(chroot) genhtml -q -o build/zephyr/test/drivers/coverage_rpt \
-        build/zephyr/test/drivers/lcov.info
+(chroot) genhtml --branch-coverage -q \
+        -o build/zephyr/test-drivers/output/coverage_rpt \
+        build/zephyr/test-drivers/output/zephyr.info
 ```
 
-The report will be in build/zephyr/test/drivers/coverage_rpt/index.html
+The report will be in build/zephyr/test-drivers/output/coverage_rpt/index.html
 
 ## Debugging
 
@@ -44,7 +43,7 @@ Build the test
 Then run gdb
 
 ```
-(chroot) gdb build/zephyr/test/drivers/build-singleimage/zephyr/zephyr.exe
+(chroot) gdb build/zephyr/test-drivers/build-singleimage/zephyr/zephyr.exe
 # Set breakpoints, run, etc.
 ```
 

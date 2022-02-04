@@ -11,12 +11,7 @@
 #define VARIANT_DEDEDE_EC_NPCX796FC
 #include "baseboard.h"
 
-/*
- * Keep the system unlocked in early development.
- * TODO(b/151264302): Make sure to remove this before production!
- */
-#define CONFIG_SYSTEM_UNLOCKED
-
+#undef CONFIG_I2C_DEBUG
 /*
  * The RAM and flash size combination on the the NPCX797FC does not leave
  * any unused flash space that can be used to store the .init_rom section.
@@ -46,6 +41,7 @@
 #undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
 #define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (100 * MSEC)
 #define CONFIG_BATTERY_CHECK_CHARGE_TEMP_LIMITS
+#define CONFIG_CHARGER_PROFILE_OVERRIDE
 
 /*
  * GPIO for C1 interrupts, for baseboard use
@@ -113,13 +109,42 @@
 #define I2C_PORT_USB_C0     NPCX_I2C_PORT1_0
 #define I2C_PORT_SUB_USB_C1 NPCX_I2C_PORT2_0
 #define I2C_PORT_USB_MUX    I2C_PORT_USB_C0
+#define I2C_PORT_LCD	    NPCX_I2C_PORT3_0
 /* TODO(b:147440290): Need to handle multiple charger ICs */
 #define I2C_PORT_CHARGER    I2C_PORT_USB_C0
 
 #define I2C_PORT_ACCEL      I2C_PORT_SENSOR
 
 #define I2C_ADDR_EEPROM_FLAGS 0x50 /* 7b address */
+#define I2C_ADDR_ISL98607_FLAGS 0x29
+#define I2C_ADDR_MP3372_FLAGS 0x28
 
+/* ISL98607 registers and value */
+/* Enable VP / VN / VBST */
+#define ISL98607_REG_ENABLE	0x05
+#define ISL98607_VP_VN_VBST_EN	0x07
+#define ISL97607_VP_VN_VBST_DIS	0x00
+
+/* VBST Voltage Adjustment */
+#define ISL98607_REG_VBST_OUT	0x06
+#define ISL98607_VBST_OUT_5P65	0x0a
+
+/* VN Voltage Adjustment */
+#define ISL98607_REG_VN_OUT	0x08
+#define ISL98607_VN_OUT_5P5	0x0a
+
+/* VP Voltage Adjustment */
+#define ISL98607_REG_VP_OUT	0x09
+#define ISL98607_VP_OUT_5P5	0x0a
+
+/* MP3372 registers and value */
+/* ISET & CHEN */
+#define MP3372_REG_ISET_CHEN		0x00
+#define MP3372_ISET_21P8_CHEN_ALL	0x70ff
+#define MP3372_ISET_19P4_CHEN_ALL	0x63ff
+#define MP3372_ISET_18P0_CHEN_ALL	0x5cff
+#define MP3372_ISET_15P8_CHEN_ALL	0x50ff
+#define MP3372_ISET_15P3_CHEN_ALL	0x4eff
 /*
  * I2C pin names for baseboard
  *
@@ -143,6 +168,10 @@
 
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+#define CONFIG_ACCELGYRO_LSM6DSM        /* Base accel */
+#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 #define CONFIG_LID_ANGLE
@@ -201,5 +230,7 @@ enum battery_type {
 };
 
 void panel_power_change_interrupt(enum gpio_signal signal);
+void lcd_reset_change_interrupt(enum gpio_signal signal);
+void motion_interrupt(enum gpio_signal signal);
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

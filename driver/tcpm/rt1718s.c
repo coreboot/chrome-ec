@@ -88,7 +88,7 @@ int rt1718s_read16(int port, int reg, int *val)
 }
 
 
-static int rt1718s_sw_reset(int port)
+int rt1718s_sw_reset(int port)
 {
 	int rv;
 
@@ -252,6 +252,9 @@ static int rt1718s_init(int port)
 				TCPC_REG_ALERT_MASK_VENDOR_DEF,
 				MASK_SET));
 
+	if (IS_ENABLED(CONFIG_USB_PD_FRS_TCPC))
+		rt1718s_frs_init(port);
+
 	RETURN_ERROR(board_rt1718s_init(port));
 
 	return EC_SUCCESS;
@@ -326,7 +329,11 @@ static void rt1718s_bc12_usb_charger_task(const int port)
 		uint32_t evt = task_wait_event(-1);
 
 		if (evt & USB_CHG_EVENT_VBUS) {
-			if (pd_snk_is_vbus_provided(port))
+			bool is_non_pd_sink = !pd_capable(port) &&
+				pd_get_power_role(port) == PD_ROLE_SINK &&
+				pd_snk_is_vbus_provided(port);
+
+			if (is_non_pd_sink)
 				rt1718s_enable_bc12_sink(port, true);
 			else
 				rt1718s_update_charge_manager(
@@ -398,6 +405,23 @@ void rt1718s_vendor_defined_alert(int port)
 	tcpc_write16(port, TCPC_REG_ALERT, TCPC_REG_ALERT_VENDOR_DEF);
 }
 
+__overridable int board_rt1718s_set_snk_enable(int port, int enable)
+{
+	return EC_SUCCESS;
+}
+
+
+static int rt1718s_tcpm_set_snk_ctrl(int port, int enable)
+{
+	int rv;
+
+	rv = board_rt1718s_set_snk_enable(port, enable);
+	if (rv)
+		return rv;
+
+	return tcpci_tcpm_set_snk_ctrl(port, enable);
+}
+
 static void rt1718s_alert(int port)
 {
 	int alert;
@@ -428,7 +452,7 @@ static int rt1718s_enter_low_power_mode(int port)
 
 int rt1718s_get_adc(int port, enum rt1718s_adc_channel channel, int *adc_val)
 {
-	static struct mutex adc_lock;
+	static mutex_t adc_lock;
 	int rv;
 	const int max_wait_times = 30;
 
@@ -520,6 +544,35 @@ int rt1718s_gpio_get_level(int port, enum rt1718s_gpio signal)
 	return !!(val & RT1718S_GPIO_CTRL_I);
 }
 
+static int command_rt1718s_gpio(int argc, char **argv)
+{
+	int i, j;
+	uint32_t flags;
+
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
+
+		if (tcpc_config[i].drv != &rt1718s_tcpm_drv)
+			continue;
+
+		for (j = 0; j < RT1718S_GPIO_COUNT; j++) {
+			int rv;
+
+			rv = rt1718s_read8(i, RT1718S_GPIO_CTRL(j), &flags);
+			if (rv)
+				return EC_ERROR_UNKNOWN;
+
+			ccprintf("C%d GPIO%d OD=%d PU=%d PD=%d OE=%d HL=%d\n",
+				 i, j, !(flags & RT1718S_GPIO_CTRL_OD_N),
+				 !!(flags & RT1718S_GPIO_CTRL_PU),
+				 !!(flags & RT1718S_GPIO_CTRL_PD),
+				 !!(flags & RT1718S_GPIO_CTRL_OE),
+				 !!(flags & RT1718S_GPIO_CTRL_O));
+		}
+	}
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(rt1718s_gpio, command_rt1718s_gpio, "", "RT1718S GPIO");
+
 /* RT1718S is a TCPCI compatible port controller */
 const struct tcpm_drv rt1718s_tcpm_drv = {
 	.init			= &rt1718s_init,
@@ -548,11 +601,14 @@ const struct tcpm_drv rt1718s_tcpm_drv = {
 #endif
 	.get_chip_info		= &tcpci_get_chip_info,
 #ifdef CONFIG_USB_PD_PPC
-	.set_snk_ctrl		= &tcpci_tcpm_set_snk_ctrl,
+	.set_snk_ctrl		= &rt1718s_tcpm_set_snk_ctrl,
 	.set_src_ctrl		= &tcpci_tcpm_set_src_ctrl,
 #endif
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode	= &rt1718s_enter_low_power_mode,
+#endif
+#ifdef CONFIG_USB_PD_FRS_TCPC
+	.set_frs_enable		= &rt1718s_set_frs_enable,
 #endif
 };
 

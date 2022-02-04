@@ -54,8 +54,16 @@ struct ioexpander_drv {
 #endif
 };
 
-/* IO expander chip disabled. No I2C communication will be attempted. */
-#define IOEX_FLAGS_DISABLED	BIT(0)
+/* IO expander default init disabled. No I2C communication will be attempted. */
+#define IOEX_FLAGS_DEFAULT_INIT_DISABLED	BIT(0)
+/* IO Expander has been initialized */
+#define IOEX_FLAGS_INITIALIZED	BIT(1)
+
+/*
+ * BITS 24 to 31 are used by io-expander drivers that need to control multiple
+ * devices
+ */
+#define IOEX_FLAGS_CUSTOM_BIT(x) BUILD_CHECK_INLINE(BIT(x), BIT(x) & 0xff000000)
 
 struct ioexpander_config_t {
 	/* Physical I2C port connects to the IO expander chip. */
@@ -88,6 +96,16 @@ int ioex_enable_interrupt(enum ioex_signal signal);
  * @return			EC_SUCCESS if successful, non-zero if error.
  */
 int ioex_disable_interrupt(enum ioex_signal signal);
+
+/*
+ * Get io expander flags (IOEX_FLAGS_*) for chip that specified IOEX signal
+ * belongs to. They contain information if port was disabled or initialized.
+ *
+ * @param signal IOEX signal that belongs to chip which flags will be returned
+ * @param val	 Pointer to memory where flags will be stored
+ * @return	 EC_SUCCESS if successful, non-zero if error.
+ */
+int ioex_get_ioex_flags(enum ioex_signal signal, int *val);
 
 /*
  * Get flags for the IOEX signal
@@ -160,5 +178,25 @@ const char *ioex_get_name(enum ioex_signal signal);
  * @return		1 if signal is IOEX else return 0
  */
 int signal_is_ioex(int signal);
+
+/*
+ * Save gpio state of IO expander
+ *
+ * @param ioex		IO expander chip's port number
+ * @param state		Buffer to hold gpio state
+ * @param state_len	Length of state buffer, IOEX_COUNT is recommended
+ * @return		EC_SUCCESS if successful, non-zero if error.
+ */
+int ioex_save_gpio_state(int ioex, int *state, int state_len);
+
+/*
+ * Restore gpio state of IO expander
+ *
+ * @param ioex		IO expander chip's port number
+ * @param state		Buffer with gpio state saved by ioex_save_gpio_state
+ * @param state_len	Length of state buffer, IOEX_COUNT is recommended
+ * @return		EC_SUCCESS if successful, non-zero if error.
+ */
+int ioex_restore_gpio_state(int ioex, const int *state, int state_len);
 
 #endif /* __CROS_EC_IOEXPANDER_H */

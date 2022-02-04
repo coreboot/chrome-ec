@@ -10,11 +10,6 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early brya boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
@@ -49,6 +44,7 @@
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 /* Lid accel */
 #define CONFIG_LID_ANGLE
+#define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE	BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID	LID_ACCEL
 #define CONFIG_ACCEL_LIS2DWL
@@ -75,6 +71,9 @@
 
 #define CONFIG_USB_PD_TCPM_PS8815
 #define CONFIG_USBC_RETIMER_INTEL_BB
+
+/* I2C control host command */
+#define CONFIG_HOSTCMD_I2C_CONTROL
 
 #define CONFIG_USBC_PPC_SYV682X
 #define CONFIG_USBC_PPC_NX20P3483
@@ -110,7 +109,7 @@
 #define GPIO_PCH_RTCRST			GPIO_EC_PCH_RTCRST
 #define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
-#define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_L
+#define GPIO_TEMP_SENSOR_POWER	GPIO_SEQ_EC_DSW_PWROK
 
 /*
  * GPIO_EC_PCH_INT_ODL is used for MKBP events as well as a PCH wakeup
@@ -121,7 +120,6 @@
 #define GPIO_PG_EC_DSW_PWROK		GPIO_SEQ_EC_DSW_PWROK
 #define GPIO_PG_EC_RSMRST_ODL		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_POWER_BUTTON_L		GPIO_GSC_EC_PWR_BTN_ODL
-#define GPIO_RSMRST_L_PGOOD		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
 #define GPIO_VOLUME_DOWN_L		GPIO_EC_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L		GPIO_EC_VOLUP_BTN_ODL
@@ -158,7 +156,8 @@
 /*
  *
  */
-#define USBC_PORT_BB_RETIMER_I2C_ADDR	0x57
+#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x56
+#define USBC_PORT_C2_BB_RETIMER_I2C_ADDR	0x58
 
 /* Enabling Thunderbolt-compatible mode */
 #define CONFIG_USB_PD_TBT_COMPAT_MODE
@@ -172,20 +171,18 @@
 /* Thermal features */
 #define CONFIG_THERMISTOR
 #define CONFIG_TEMP_SENSOR
-#define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_SEQ_EC_DSW_PWROK
+#define CONFIG_TEMP_SENSOR_POWER
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
-/*
- * TODO(b/181271666): no fan control loop until sensors are tuned
- */
-/* #define CONFIG_FANS			FAN_CH_COUNT */
+#define CONFIG_FANS			FAN_CH_COUNT
 
 /* Charger defines */
-#define CONFIG_CHARGER_BQ25720
-#define CONFIG_CHARGER_BQ25720_VSYS_TH2_DV	70
+#define CONFIG_CHARGER_ISL9241
 #define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 #ifndef __ASSEMBLER__
 
@@ -239,6 +236,10 @@ enum mft_channel {
 	MFT_CH_0 = 0,
 	MFT_CH_COUNT
 };
+
+void pen_detect_interrupt(enum gpio_signal s);
+
+void pen_config(void);
 
 #endif /* !__ASSEMBLER__ */
 

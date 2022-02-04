@@ -20,6 +20,7 @@
 #include "temp_sensor.h"
 #include "test_util.h"
 #include "timer.h"
+#include "usb_pd_tcpm.h"
 #include "util.h"
 
 /*
@@ -30,6 +31,10 @@
 #define GPIO_0  0
 
 #include "gpio_list.h"
+
+test_mockable const struct tcpc_config_t tcpc_config[] = {
+	[0] = {},
+};
 
 test_mockable enum battery_present battery_is_present(void)
 {
@@ -62,15 +67,45 @@ test_mockable void fps_event(enum gpio_signal signal)
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
 #ifdef I2C_PORT_BATTERY
-	{"battery", I2C_PORT_BATTERY, 100,  0, 0},
+	{
+		.name = "battery",
+		.port = I2C_PORT_BATTERY,
+		.kbps = 100,
+		.scl  = 0,
+		.sda  = 0
+	},
 #elif defined I2C_PORT_LIGHTBAR
-	{"lightbar", I2C_PORT_LIGHTBAR, 100,  0, 0},
+	{
+		.name = "lightbar",
+		.port = I2C_PORT_LIGHTBAR,
+		.kbps = 100,
+		.scl  = 0,
+		.sda  = 0
+	},
 #elif defined I2C_PORT_HOST_TCPC
-	{"tcpc", I2C_PORT_HOST_TCPC, 100,  0, 0},
+	{
+		.name = "tcpc",
+		.port = I2C_PORT_HOST_TCPC,
+		.kbps = 100,
+		.scl  = 0,
+		.sda  = 0
+	},
 #elif defined I2C_PORT_EEPROM
-	{"eeprom", I2C_PORT_EEPROM, 100, 0, 0},
+	{
+		.name = "eeprom",
+		.port = I2C_PORT_EEPROM,
+		.kbps = 100,
+		.scl  = 0,
+		.sda  = 0
+	},
 #elif defined I2C_PORT_WLC
-	{"wlc", I2C_PORT_WLC, 100, 0, 0},
+	{
+		.name = "wlc",
+		.port = I2C_PORT_WLC,
+		.kbps = 100,
+		.scl  = 0,
+		.sda  = 0
+	},
 #endif
 };
 

@@ -470,7 +470,7 @@ static void gpio_interrupt(int girq, int port)
 }
 
 #define GPIO_IRQ_FUNC(irqfunc, girq, port)\
-	void irqfunc(void) \
+	static void irqfunc(void) \
 	{ \
 		gpio_interrupt(girq, port);\
 	}
@@ -494,4 +494,3 @@ DECLARE_IRQ(MCHP_IRQ_GIRQ10, __girq_10_interrupt, 1);
 DECLARE_IRQ(MCHP_IRQ_GIRQ11, __girq_11_interrupt, 1);
 DECLARE_IRQ(MCHP_IRQ_GIRQ12, __girq_12_interrupt, 1);
 DECLARE_IRQ(MCHP_IRQ_GIRQ26, __girq_26_interrupt, 1);
-

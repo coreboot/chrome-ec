@@ -184,6 +184,8 @@ const char help_str[] =
 	"      Protect EC's I2C bus\n"
 	"  i2cread\n"
 	"      Read I2C bus\n"
+	"  i2cspeed <port> [speed]\n"
+	"      Get or set EC's I2C bus speed\n"
 	"  i2cwrite\n"
 	"      Write I2C bus\n"
 	"  i2cxfer <port> <peripheral_addr> <read_count> [write bytes...]\n"
@@ -303,7 +305,7 @@ const char help_str[] =
 	"  switches\n"
 	"      Prints current EC switch positions\n"
 	"  temps <sensorid>\n"
-	"      Print temperature.\n"
+	"      Print temperature and fan speed\n"
 	"  tempsinfo <sensorid>\n"
 	"      Print temperature sensor info.\n"
 	"  thermalget <platform-specific args>\n"
@@ -335,8 +337,12 @@ const char help_str[] =
 			"[toggle|toggle-off|sink|source] [none|usb|dp|dock] "
 			"[dr_swap|pr_swap|vconn_swap]>\n"
 	"      Control USB PD/type-C [deprecated]\n"
-	"  usbpdmuxinfo\n"
-	"      Get USB-C SS mux info\n"
+	"  usbpdmuxinfo [tsv]\n"
+	"      Get USB-C SS mux info.\n"
+	"          tsv: Output as tab separated values. Columns are defined "
+			"as:\n"
+	"               Port, USB enabled, DP enabled, Polarity, HPD IRQ, "
+			"HPD LVL\n"
 	"  usbpdpower [port]\n"
 	"      Get USB PD power information\n"
 	"  version\n"
@@ -362,7 +368,7 @@ static const char * const led_names[] = {
 BUILD_ASSERT(ARRAY_SIZE(led_names) == EC_LED_ID_COUNT);
 
 /* ASCII mode for printing, default off */
-static int ascii_mode = 0;
+int ascii_mode;
 
 /* Check SBS numerical value range */
 int is_battery_range(int val)
@@ -890,6 +896,7 @@ static const char * const ec_feature_names[] = {
 		"Host-controlled Type-C mode entry",
 	[EC_FEATURE_TYPEC_MUX_REQUIRE_AP_ACK] =
 		"AP ack for Type-C mux configuration",
+	[EC_FEATURE_S4_RESIDENCY] = "S4 residency",
 };
 
 int cmd_inventory(int argc, char *argv[])
@@ -1574,6 +1581,8 @@ static void print_flash_protect_flags(const char *desc, uint32_t flags)
 		printf(" STUCK");
 	if (flags & EC_FLASH_PROTECT_ERROR_INCONSISTENT)
 		printf(" INCONSISTENT");
+	if (flags & EC_FLASH_PROTECT_ERROR_UNKNOWN)
+		printf(" UNKNOWN_ERROR");
 	printf("\n");
 }
 
@@ -3014,12 +3023,51 @@ int read_mapped_temperature(int id)
 	return rv;
 }
 
+static int get_thermal_fan_percent(int temp, int sensor_id)
+{
+	struct ec_params_thermal_get_threshold_v1 p;
+	struct ec_thermal_config r;
+	int rv = 0;
+
+	p.sensor_num = sensor_id;
+	rv = ec_command(EC_CMD_THERMAL_GET_THRESHOLD, 1, &p, sizeof(p),
+			&r, sizeof(r));
+
+	if (rv <= 0 || r.temp_fan_max == r.temp_fan_off)
+		return -1;
+	if (temp < r.temp_fan_off)
+		return 0;
+	if (temp > r.temp_fan_max)
+		return 100;
+	return 100 * (temp - r.temp_fan_off) /
+		     (r.temp_fan_max - r.temp_fan_off);
+}
+
+static int cmd_temperature_print(int id, int mtemp)
+{
+	struct ec_response_temp_sensor_get_info r;
+	struct ec_params_temp_sensor_get_info p;
+	int rc;
+	int temp = mtemp + EC_TEMP_SENSOR_OFFSET;
+
+	p.id = id;
+	rc = ec_command(EC_CMD_TEMP_SENSOR_GET_INFO, 0, &p, sizeof(p),
+			&r, sizeof(r));
+	if (rc < 0)
+		return rc;
+	printf("%-20s  %d K (= %d C) %11d%%\n", r.sensor_name, temp,
+	       K_TO_C(temp), get_thermal_fan_percent(temp, id));
+
+	return 0;
+}
 
 int cmd_temperature(int argc, char *argv[])
 {
-	int rv;
+	int mtemp;
 	int id;
 	char *e;
+	const char header[] = "--sensor name -------- temperature "
+			      "-------- fan speed --\n";
 
 	if (argc != 2) {
 		fprintf(stderr, "Usage: %s <sensorid> | all\n", argv[0]);
@@ -3027,11 +3075,10 @@ int cmd_temperature(int argc, char *argv[])
 	}
 
 	if (strcmp(argv[1], "all") == 0) {
-		for (id = 0;
-		     id < EC_TEMP_SENSOR_ENTRIES + EC_TEMP_SENSOR_B_ENTRIES;
-		     id++) {
-			rv = read_mapped_temperature(id);
-			switch (rv) {
+		fprintf(stdout, header);
+		for (id = 0; id < EC_MAX_TEMP_SENSOR_ENTRIES; id++) {
+			mtemp = read_mapped_temperature(id);
+			switch (mtemp) {
 			case EC_TEMP_SENSOR_NOT_PRESENT:
 				break;
 			case EC_TEMP_SENSOR_ERROR:
@@ -3045,8 +3092,7 @@ int cmd_temperature(int argc, char *argv[])
 					id);
 				break;
 			default:
-				printf("%d: %d K\n", id,
-				       rv + EC_TEMP_SENSOR_OFFSET);
+				cmd_temperature_print(id, mtemp);
 			}
 		}
 		return 0;
@@ -3059,15 +3105,15 @@ int cmd_temperature(int argc, char *argv[])
 	}
 
 	if (id < 0 ||
-	    id >= EC_TEMP_SENSOR_ENTRIES + EC_TEMP_SENSOR_B_ENTRIES) {
+	    id >= EC_MAX_TEMP_SENSOR_ENTRIES) {
 		printf("Sensor ID invalid.\n");
 		return -1;
 	}
 
 	printf("Reading temperature...");
-	rv = read_mapped_temperature(id);
+	mtemp = read_mapped_temperature(id);
 
-	switch (rv) {
+	switch (mtemp) {
 	case EC_TEMP_SENSOR_NOT_PRESENT:
 		printf("Sensor not present\n");
 		return -1;
@@ -3081,8 +3127,9 @@ int cmd_temperature(int argc, char *argv[])
 		fprintf(stderr, "Sensor not calibrated\n");
 		return -1;
 	default:
-		printf("%d K\n", rv + EC_TEMP_SENSOR_OFFSET);
-		return 0;
+		fprintf(stdout, "\n");
+		fprintf(stdout, header);
+		return cmd_temperature_print(id, mtemp);
 	}
 }
 
@@ -3100,9 +3147,7 @@ int cmd_temp_sensor_info(int argc, char *argv[])
 	}
 
 	if (strcmp(argv[1], "all") == 0) {
-		for (p.id = 0;
-		     p.id < EC_TEMP_SENSOR_ENTRIES + EC_TEMP_SENSOR_B_ENTRIES;
-		     p.id++) {
+		for (p.id = 0; p.id < EC_MAX_TEMP_SENSOR_ENTRIES; p.id++) {
 			if (read_mapped_temperature(p.id) ==
 			    EC_TEMP_SENSOR_NOT_PRESENT)
 				continue;
@@ -3224,7 +3269,11 @@ int cmd_thermal_get_threshold_v1(int argc, char *argv[])
 	int i;
 
 	printf("sensor  warn  high  halt   fan_off fan_max   name\n");
-	for (i = 0; i < 99; i++) {	/* number of sensors is unknown */
+	for (i = 0; i < EC_MAX_TEMP_SENSOR_ENTRIES; i++) {
+
+		if (read_mapped_temperature(i) ==
+			EC_TEMP_SENSOR_NOT_PRESENT)
+			continue;
 
 		/* ask for one */
 		p.sensor_num = i;
@@ -5050,7 +5099,7 @@ static int ms_help(const char *cmd)
 		cmd);
 	printf("  %s active                       - print active flag\n", cmd);
 	printf("  %s info NUM                     - print sensor info\n", cmd);
-	printf("  %s ec_rate [RATE_MS]            - set/get sample rate\n",
+	printf("  %s ec_rate NUM [RATE_MS]        - set/get sample rate\n",
 		cmd);
 	printf("  %s odr NUM [ODR [ROUNDUP]]      - set/get sensor ODR\n",
 		cmd);
@@ -5119,7 +5168,6 @@ static int cmd_motionsense(int argc, char **argv)
 		{ "Motion sensing inactive", "0"},
 		{ "Motion sensing active", "1"},
 	};
-
 	/* No motionsense command has more than 7 args. */
 	if (argc > 7)
 		return ms_help(argv[0]);
@@ -5265,6 +5313,9 @@ static int cmd_motionsense(int argc, char **argv)
 		case MOTIONSENSE_CHIP_OPT3001:
 			printf("opt3001\n");
 			break;
+		case MOTIONSENSE_CHIP_CM32183:
+			printf("cm32183\n");
+			break;
 		case MOTIONSENSE_CHIP_BH1730:
 			printf("bh1730\n");
 			break;
@@ -5319,6 +5370,9 @@ static int cmd_motionsense(int argc, char **argv)
 		case MOTIONSENSE_CHIP_BMA422:
 			printf("bma422\n");
 			break;
+		case MOTIONSENSE_CHIP_BMI220:
+			printf("bmi220\n");
+			break;
 		default:
 			printf("unknown\n");
 		}
@@ -5338,14 +5392,18 @@ static int cmd_motionsense(int argc, char **argv)
 		return 0;
 	}
 
-	if (argc < 4 && !strcasecmp(argv[1], "ec_rate")) {
+	if (argc > 2 && !strcasecmp(argv[1], "ec_rate")) {
 		param.cmd = MOTIONSENSE_CMD_EC_RATE;
 		param.ec_rate.data = EC_MOTION_SENSE_NO_VALUE;
-
-		if (argc == 3) {
-			param.ec_rate.data = strtol(argv[2], &e, 0);
+		param.sensor_odr.sensor_num = strtol(argv[2], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad %s arg.\n", argv[2]);
+			return -1;
+		}
+		if (argc == 4) {
+			param.ec_rate.data = strtol(argv[3], &e, 0);
 			if (e && *e) {
-				fprintf(stderr, "Bad %s arg.\n", argv[2]);
+				fprintf(stderr, "Bad %s arg.\n", argv[3]);
 				return -1;
 			}
 		}
@@ -6370,6 +6428,14 @@ int cmd_usb_pd_mux_info(int argc, char *argv[])
 	struct ec_params_usb_pd_mux_info p;
 	struct ec_response_usb_pd_mux_info r;
 	int num_ports, rv, i;
+	bool tsv = false;
+
+	if (argc == 2 && (strncmp(argv[1], "tsv", 4) == 0)) {
+		tsv = true;
+	} else if (argc >= 2) {
+		fprintf(stderr, "Usage: %s [tsv]\n", argv[0]);
+		return -1;
+	}
 
 	rv = ec_command(EC_CMD_USB_PD_PORTS, 0, NULL, 0,
 			ec_inbuf, ec_max_insize);
@@ -6385,17 +6451,41 @@ int cmd_usb_pd_mux_info(int argc, char *argv[])
 		if (rv < 0)
 			return rv;
 
-		printf("Port %d: ", i);
-		printf("USB=%d ", !!(r.flags & USB_PD_MUX_USB_ENABLED));
-		printf("DP=%d ", !!(r.flags & USB_PD_MUX_DP_ENABLED));
-		printf("POLARITY=%s ", r.flags & USB_PD_MUX_POLARITY_INVERTED ?
-					"INVERTED" : "NORMAL");
-		printf("HPD_IRQ=%d ", !!(r.flags & USB_PD_MUX_HPD_IRQ));
-		printf("HPD_LVL=%d ", !!(r.flags & USB_PD_MUX_HPD_LVL));
-		printf("SAFE=%d ", !!(r.flags & USB_PD_MUX_SAFE_MODE));
-		printf("TBT=%d ", !!(r.flags & USB_PD_MUX_TBT_COMPAT_ENABLED));
-		printf("USB4=%d ", !!(r.flags & USB_PD_MUX_USB4_ENABLED));
-		printf("\n");
+		if (tsv) {
+			/*
+			 * Machine-readable tab-separated values. This set of
+			 * values is append-only. Columns should not be removed
+			 * or repurposed. Update the documentation above if new
+			 * columns are added.
+			 */
+			printf("%d\t", i);
+			printf("%d\t", !!(r.flags & USB_PD_MUX_USB_ENABLED));
+			printf("%d\t", !!(r.flags & USB_PD_MUX_DP_ENABLED));
+			printf("%s\t",
+				r.flags & USB_PD_MUX_POLARITY_INVERTED ?
+							"INVERTED" : "NORMAL");
+			printf("%d\t", !!(r.flags & USB_PD_MUX_HPD_IRQ));
+			printf("%d\n", !!(r.flags & USB_PD_MUX_HPD_LVL));
+		} else {
+			/* Human-readable mux info. */
+			printf("Port %d: ", i);
+			printf("USB=%d ",
+				!!(r.flags & USB_PD_MUX_USB_ENABLED));
+			printf("DP=%d ", !!(r.flags & USB_PD_MUX_DP_ENABLED));
+			printf("POLARITY=%s",
+				r.flags & USB_PD_MUX_POLARITY_INVERTED ?
+							"INVERTED" : "NORMAL");
+			printf("HPD_IRQ=%d ",
+				!!(r.flags & USB_PD_MUX_HPD_IRQ));
+			printf("HPD_LVL=%d ",
+				!!(r.flags & USB_PD_MUX_HPD_LVL));
+			printf("SAFE=%d ", !!(r.flags & USB_PD_MUX_SAFE_MODE));
+			printf("TBT=%d ",
+				!!(r.flags & USB_PD_MUX_TBT_COMPAT_ENABLED));
+			printf("USB4=%d ",
+				!!(r.flags & USB_PD_MUX_USB4_ENABLED));
+			printf("\n");
+		}
 	}
 
 	return 0;
@@ -7048,315 +7138,6 @@ int cmd_wireless(int argc, char *argv[])
 	return 0;
 }
 
-
-int cmd_i2c_protect(int argc, char *argv[])
-{
-	struct ec_params_i2c_passthru_protect p;
-	char *e;
-	int rv;
-
-	if (argc != 2 && (argc != 3 || strcmp(argv[2], "status"))) {
-		fprintf(stderr, "Usage: %s <port> [status]\n",
-				argv[0]);
-		return -1;
-	}
-
-	p.port = strtol(argv[1], &e, 0);
-	if (e && *e) {
-		fprintf(stderr, "Bad port.\n");
-		return -1;
-	}
-
-	if (argc == 3) {
-		struct ec_response_i2c_passthru_protect r;
-
-		p.subcmd = EC_CMD_I2C_PASSTHRU_PROTECT_STATUS;
-
-		rv = ec_command(EC_CMD_I2C_PASSTHRU_PROTECT, 0, &p, sizeof(p),
-				&r, sizeof(r));
-
-		if (rv < 0)
-			return rv;
-
-		printf("I2C port %d: %s (%d)\n", p.port,
-			r.status ? "Protected" : "Unprotected", r.status);
-	} else {
-		p.subcmd = EC_CMD_I2C_PASSTHRU_PROTECT_ENABLE;
-
-		rv = ec_command(EC_CMD_I2C_PASSTHRU_PROTECT, 0, &p, sizeof(p),
-				NULL, 0);
-
-		if (rv < 0)
-			return rv;
-	}
-	return 0;
-}
-
-
-int do_i2c_xfer(unsigned int port, unsigned int addr,
-		uint8_t *write_buf, int write_len,
-		uint8_t **read_buf, int read_len) {
-	struct ec_params_i2c_passthru *p =
-		(struct ec_params_i2c_passthru *)ec_outbuf;
-	struct ec_response_i2c_passthru *r =
-		(struct ec_response_i2c_passthru *)ec_inbuf;
-	struct ec_params_i2c_passthru_msg *msg = p->msg;
-	uint8_t *pdata;
-	int size;
-	int rv;
-
-	p->port = port;
-	p->num_msgs = (read_len != 0) + (write_len != 0);
-
-	size = sizeof(*p) + p->num_msgs * sizeof(*msg);
-	if (size + write_len > ec_max_outsize) {
-		fprintf(stderr, "Params too large for buffer\n");
-		return -1;
-	}
-	if (sizeof(*r) + read_len > ec_max_insize) {
-		fprintf(stderr, "Read length too big for buffer\n");
-		return -1;
-	}
-
-	pdata = (uint8_t *)p + size;
-	if (write_len) {
-		msg->addr_flags = addr;
-		msg->len = write_len;
-
-		memcpy(pdata, write_buf, write_len);
-		msg++;
-	}
-
-	if (read_len) {
-		msg->addr_flags = addr | EC_I2C_FLAG_READ;
-		msg->len = read_len;
-	}
-
-	rv = ec_command(EC_CMD_I2C_PASSTHRU, 0, p, size + write_len,
-			r, sizeof(*r) + read_len);
-	if (rv < 0)
-		return rv;
-
-	/* Parse response */
-	if (r->i2c_status & (EC_I2C_STATUS_NAK | EC_I2C_STATUS_TIMEOUT)) {
-		fprintf(stderr, "Transfer failed with status=0x%x\n",
-			r->i2c_status);
-		return -1;
-	}
-
-	if (rv < sizeof(*r) + read_len) {
-		fprintf(stderr, "Truncated read response\n");
-		return -1;
-	}
-
-	if (read_len)
-		*read_buf = r->data;
-
-	return 0;
-}
-
-static void cmd_i2c_help(void)
-{
-	fprintf(stderr,
-	"  Usage: i2cread <8 | 16> <port> <addr8> <offset>\n"
-	"  Usage: i2cwrite <8 | 16> <port> <addr8> <offset> <data>\n"
-	"  Usage: i2cxfer <port> <addr7> <read_count> [bytes...]\n"
-	"    <port> i2c port number\n"
-	"    <addr8> 8-bit i2c address\n"
-	"    <addr7> 7-bit i2c address\n"
-	"    <offset> offset to read from or write to\n"
-	"    <data> data to write\n"
-	"    <read_count> number of bytes to read\n"
-	"    [bytes ...] data to write\n"
-	);
-
-}
-
-int cmd_i2c_read(int argc, char *argv[])
-{
-	unsigned int port, addr8, addr7;
-	int read_len, write_len;
-	uint8_t write_buf[1];
-	uint8_t *read_buf = NULL;
-	char *e;
-	int rv;
-
-	if (argc != 5) {
-		cmd_i2c_help();
-		return -1;
-	}
-
-	read_len = strtol(argv[1], &e, 0);
-	if ((e && *e) || (read_len != 8 && read_len != 16)) {
-		fprintf(stderr, "Bad read size.\n");
-		return -1;
-	}
-	read_len = read_len / 8;
-
-	port = strtol(argv[2], &e, 0);
-	if (e && *e) {
-		fprintf(stderr, "Bad port.\n");
-		return -1;
-	}
-
-	addr8 = strtol(argv[3], &e, 0);
-	if (e && *e) {
-		fprintf(stderr, "Bad address.\n");
-		return -1;
-	}
-	addr7 = addr8 >> 1;
-
-	write_buf[0] = strtol(argv[4], &e, 0);
-	if (e && *e) {
-		fprintf(stderr, "Bad offset.\n");
-		return -1;
-	}
-	write_len = 1;
-
-	rv = do_i2c_xfer(port, addr7, write_buf, write_len, &read_buf,
-			 read_len);
-
-	if (rv < 0)
-		return rv;
-
-	printf("Read from I2C port %d at 0x%x offset 0x%x = 0x%x\n",
-		port, addr8, write_buf[0], *(uint16_t *)read_buf);
-	return 0;
-}
-
-
-int cmd_i2c_write(int argc, char *argv[])
-{
-	unsigned int port, addr8, addr7;
-	int write_len;
-	uint8_t write_buf[3];
-	char *e;
-	int rv;
-
-	if (argc != 6) {
-		cmd_i2c_help();
-		return -1;
-	}
-
-	write_len = strtol(argv[1], &e, 0);
-	if ((e && *e) || (write_len != 8 && write_len != 16)) {
-		fprintf(stderr, "Bad write size.\n");
-		return -1;
-	}
-	/* Include offset (length 1) */
-	write_len = 1 + write_len / 8;
-
-	port = strtol(argv[2], &e, 0);
-	if (e && *e) {
-		fprintf(stderr, "Bad port.\n");
-		return -1;
-	}
-
-	addr8 = strtol(argv[3], &e, 0);
-	if (e && *e) {
-		fprintf(stderr, "Bad address.\n");
-		return -1;
-	}
-	addr7 = addr8 >> 1;
-
-	write_buf[0] = strtol(argv[4], &e, 0);
-	if (e && *e) {
-		fprintf(stderr, "Bad offset.\n");
-		return -1;
-	}
-
-	*((uint16_t *)&write_buf[1]) = strtol(argv[5], &e, 0);
-	if (e && *e) {
-		fprintf(stderr, "Bad data.\n");
-		return -1;
-	}
-
-	rv = do_i2c_xfer(port, addr7, write_buf, write_len, NULL, 0);
-
-	if (rv < 0)
-		return rv;
-
-	printf("Wrote 0x%x to I2C port %d at 0x%x offset 0x%x.\n",
-	       *((uint16_t *)&write_buf[1]), port, addr8, write_buf[0]);
-	return 0;
-}
-
-int cmd_i2c_xfer(int argc, char *argv[])
-{
-	unsigned int port, addr;
-	int read_len, write_len;
-	uint8_t *write_buf = NULL;
-	uint8_t *read_buf;
-	char *e;
-	int rv, i;
-
-	if (argc < 4) {
-		cmd_i2c_help();
-		return -1;
-	}
-
-	port = strtol(argv[1], &e, 0);
-	if (e && *e) {
-		fprintf(stderr, "Bad port.\n");
-		return -1;
-	}
-
-	addr = strtol(argv[2], &e, 0) & 0x7f;
-	if (e && *e) {
-		fprintf(stderr, "Bad peripheral address.\n");
-		return -1;
-	}
-
-	read_len = strtol(argv[3], &e, 0);
-	if (e && *e) {
-		fprintf(stderr, "Bad read length.\n");
-		return -1;
-	}
-
-	/* Skip over params to bytes to write */
-	argc -= 4;
-	argv += 4;
-	write_len = argc;
-
-	if (write_len) {
-		write_buf = (uint8_t *)(malloc(write_len));
-		if (write_buf == NULL)
-			return -1;
-		for (i = 0; i < write_len; i++) {
-			write_buf[i] = strtol(argv[i], &e, 0);
-			if (e && *e) {
-				fprintf(stderr, "Bad write byte %d\n", i);
-				free(write_buf);
-				return -1;
-			}
-		}
-	}
-
-	rv = do_i2c_xfer(port, addr, write_buf, write_len, &read_buf, read_len);
-
-	if (write_len)
-		free(write_buf);
-
-	if (rv)
-		return rv;
-
-	if (read_len) {
-		if (ascii_mode) {
-			for (i = 0; i < read_len; i++)
-				printf(isprint(read_buf[i]) ? "%c" : "\\x%02x",
-				       read_buf[i]);
-		} else {
-			printf("Read bytes:");
-			for (i = 0; i < read_len; i++)
-				printf(" %#02x", read_buf[i]);
-		}
-		printf("\n");
-	} else {
-		printf("Write successful.\n");
-	}
-
-	return 0;
-}
 
 static void cmd_locate_chip_help(const char *const cmd)
 {
@@ -10750,6 +10531,7 @@ const struct command commands[] = {
 	{"locatechip", cmd_locate_chip},
 	{"i2cprotect", cmd_i2c_protect},
 	{"i2cread", cmd_i2c_read},
+	{"i2cspeed", cmd_i2c_speed},
 	{"i2cwrite", cmd_i2c_write},
 	{"i2cxfer", cmd_i2c_xfer},
 	{"infopddev", cmd_pd_device_info},

@@ -1,7 +1,6 @@
-/*
- * Copyright 2020 Google LLC
- *
- * SPDX-License-Identifier: Apache-2.0
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
  */
 
 /**
@@ -36,9 +35,6 @@
  */
 typedef int (*cros_flash_api_init)(const struct device *dev);
 
-typedef int (*cros_flash_api_physical_read)(const struct device *dev,
-					    int offset, int size, char *data);
-
 typedef int (*cros_flash_api_physical_write)(const struct device *dev,
 					     int offset, int size,
 					     const char *data);
@@ -58,15 +54,24 @@ typedef int (*cros_flash_api_physical_protect_at_boot)(const struct device *dev,
 typedef int (*cros_flash_api_physical_protect_now)(const struct device *dev,
 						   int all);
 
+typedef int (*cros_flash_api_physical_get_jedec_id)(const struct device *dev,
+						   uint8_t *manufacturer,
+						   uint16_t *device);
+
+typedef int (*cros_flash_api_physical_get_status)(const struct device *dev,
+						   uint8_t *sr1,
+						   uint8_t *sr2);
+
 __subsystem struct cros_flash_driver_api {
 	cros_flash_api_init init;
-	cros_flash_api_physical_read physical_read;
 	cros_flash_api_physical_write physical_write;
 	cros_flash_api_physical_erase physical_erase;
 	cros_flash_api_physical_get_protect physical_get_protect;
 	cros_flash_api_physical_get_protect_flags physical_get_protect_flags;
 	cros_flash_api_physical_protect_at_boot physical_protect_at_boot;
 	cros_flash_api_physical_protect_now physical_protect_now;
+	cros_flash_api_physical_get_jedec_id physical_get_jedec_id;
+	cros_flash_api_physical_get_status physical_get_status;
 };
 
 /**
@@ -93,34 +98,6 @@ static inline int z_impl_cros_flash_init(const struct device *dev)
 	}
 
 	return api->init(dev);
-}
-
-/**
- * @brief Read from physical flash.
- *
- * @param dev Pointer to the device structure for the flash driver instance.
- * @param offset Flash offset to read.
- * @param size Number of bytes to read.
- * @param data Destination buffer for data.  Must be 32-bit aligned.
- *
- * @return 0 If successful.
- * @retval -ENOTSUP Not supported api function.
- */
-__syscall int cros_flash_physical_read(const struct device *dev, int offset,
-				       int size, char *data);
-
-static inline int z_impl_cros_flash_physical_read(const struct device *dev,
-						  int offset, int size,
-						  char *data)
-{
-	const struct cros_flash_driver_api *api =
-		(const struct cros_flash_driver_api *)dev->api;
-
-	if (!api->physical_read) {
-		return -ENOTSUP;
-	}
-
-	return api->physical_read(dev, offset, size, data);
 }
 
 /**
@@ -279,6 +256,60 @@ z_impl_cros_flash_physical_protect_now(const struct device *dev, int all)
 	}
 
 	return api->physical_protect_now(dev, all);
+}
+
+/**
+ * @brief Get JEDEC manufacturer and device identifiers.
+ *
+ * @param dev Pointer to the device structure for the flash driver instance.
+ * @param manufacturer Pointer to data where manufacturer id will be written.
+ * @param device Pointer to data where device id will be written.
+ *
+ * @return 0 If successful.
+ * @retval -ENOTSUP Not supported api function.
+ */
+__syscall int cros_flash_physical_get_jedec_id(const struct device *dev,
+						      uint8_t *manufacturer,
+						      uint16_t *device);
+
+static inline int
+z_impl_cros_flash_physical_get_jedec_id(const struct device *dev,
+					uint8_t *manufacturer,
+					uint16_t *device)
+{
+	const struct cros_flash_driver_api *api =
+		(const struct cros_flash_driver_api *)dev->api;
+
+	if (!api->physical_get_jedec_id)
+		return -ENOTSUP;
+
+	return api->physical_get_jedec_id(dev, manufacturer, device);
+}
+
+/**
+ * @brief Get status registers.
+ *
+ * @param dev Pointer to the device structure for the flash driver instance.
+ * @param sr1 Pointer to data where status1 register will be written.
+ * @param sr2 Pointer to data where status2 register will be written.
+ *
+ * @return 0 If successful.
+ * @retval -ENOTSUP Not supported api function.
+ */
+__syscall int cros_flash_physical_get_status(const struct device *dev,
+		uint8_t *sr1, uint8_t *sr2);
+
+static inline int
+z_impl_cros_flash_physical_get_status(const struct device *dev,
+				      uint8_t *sr1, uint8_t *sr2)
+{
+	const struct cros_flash_driver_api *api =
+		(const struct cros_flash_driver_api *)dev->api;
+
+	if (!api->physical_get_status)
+		return -ENOTSUP;
+
+	return api->physical_get_status(dev, sr1, sr2);
 }
 
 /**

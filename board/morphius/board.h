@@ -42,14 +42,14 @@
 #define CONFIG_TABLET_MODE
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_TEMP_SENSOR_TMP432
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_PWR_A
+#define CONFIG_TEMP_SENSOR_POWER
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
 #define CONFIG_GMR_TABLET_MODE
 #define CONFIG_GMR_TABLET_MODE_CUSTOM
-#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE
+#define GPIO_TABLET_MODE_L GPIO_TABLET_MODE
 #define RPM_DEVIATION 1
 
 /* GPIO mapping from board specific name to EC common name. */
@@ -71,6 +71,7 @@
 #define GPIO_S0_PGOOD			GPIO_S0_PWROK_OD
 #define GPIO_S5_PGOOD			GPIO_EC_PWROK_OD
 #define GPIO_SYS_RESET_L		GPIO_EC_SYS_RST_L
+#define GPIO_TEMP_SENSOR_POWER		GPIO_EN_PWR_A
 #define GPIO_VOLUME_DOWN_L		GPIO_VOLDN_BTN_ODL
 #define GPIO_VOLUME_UP_L		GPIO_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L
@@ -209,8 +210,15 @@ static inline bool ec_config_has_mst_hub_rtd2141b(void)
 }
 
 void motion_interrupt(enum gpio_signal signal);
-enum gpio_signal board_usbc_port_to_hpd_gpio(int port);
-#define PORT_TO_HPD(port) board_usbc_port_to_hpd_gpio(port)
+
+/**
+ * @warning Callers must use gpio_or_ioex_set_level to handle the return result
+ * since either type of signal can be returned.
+ *
+ * @return GPIO (gpio_signal) or IOEX (ioex_signal)
+ */
+int board_usbc_port_to_hpd_gpio_or_ioex(int port);
+#define PORT_TO_HPD(port) board_usbc_port_to_hpd_gpio_or_ioex(port)
 
 extern const struct usb_mux usbc0_pi3dpx1207_usb_retimer;
 extern const struct usb_mux usbc1_ps8802;

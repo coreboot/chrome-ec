@@ -38,7 +38,7 @@
 #define CONFIG_MKBP_USE_HOST_EVENT
 #undef CONFIG_KEYBOARD_RUNTIME_KEYS
 #undef CONFIG_HIBERNATE
-#define CONFIG_HOSTCMD_ESPI
+#define CONFIG_HOST_INTERFACE_ESPI
 #define CONFIG_LED_COMMON
 #undef  CONFIG_LID_SWITCH
 #define CONFIG_LTO
@@ -104,7 +104,7 @@
 #undef CONFIG_FAN_INIT_SPEED
 #define CONFIG_FAN_INIT_SPEED 0
 #define CONFIG_TEMP_SENSOR
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_ROA_RAILS
+#define CONFIG_TEMP_SENSOR_POWER
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 #define CONFIG_THROTTLE_AP
@@ -147,7 +147,7 @@ enum adc_channel {
 enum pwm_channel {
 	PWM_CH_FAN,
 	PWM_CH_LED_RED,
-	PWM_CH_LED_WHITE,
+	PWM_CH_LED_BLUE,
 	/* Number of PWM channels */
 	PWM_CH_COUNT
 };
@@ -169,10 +169,13 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
-
 /* Board specific handlers */
 void led_alert(int enable);
 void show_critical_error(void);
+
+/* Board ADS control handlers */
+void ads_5v_interrupt(enum gpio_signal signal);
+void ads_12v_interrupt(enum gpio_signal signal);
 
 /*
  * firmware config fields
@@ -218,12 +221,13 @@ unsigned int ec_config_get_thermal_solution(void);
 #define GPIO_PCH_SLP_S0_L	GPIO_SLP_S0_L
 #define GPIO_PCH_SLP_S3_L	GPIO_SLP_S3_L
 #define GPIO_PCH_SLP_S4_L	GPIO_SLP_S4_L
+#define GPIO_TEMP_SENSOR_POWER	GPIO_EN_ROA_RAILS
 #define GPIO_AC_PRESENT		GPIO_BJ_ADP_PRESENT_L
 
 /*
  * There is no RSMRST input, so alias it to the output. This short-circuits
  * common_intel_x86_handle_rsmrst.
  */
-#define GPIO_RSMRST_L_PGOOD	GPIO_PCH_RSMRST_L
+#define GPIO_PG_EC_RSMRST_ODL	GPIO_PCH_RSMRST_L
 
 #endif /* __CROS_EC_BOARD_H */

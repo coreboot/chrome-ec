@@ -60,7 +60,7 @@ static uint64_t task_start_time; /* Time task scheduling started */
 static uint32_t exc_start_time;  /* Time of task->exception transition */
 static uint32_t exc_end_time;    /* Time of exception->task transition */
 static uint64_t exc_total_time;  /* Total time in exceptions */
-static uint32_t svc_calls;	 /* Number of service calls */
+static atomic_t svc_calls;	 /* Number of service calls */
 static uint32_t task_switches;	/* Number of times active task changed */
 static uint32_t irq_dist[CONFIG_IRQ_COUNT];	/* Distribution of IRQ calls */
 #endif
@@ -143,13 +143,13 @@ task_ *current_task, *next_task;
  * can do their init within a task switching context.  The hooks task will then
  * make a call to enable all tasks.
  */
-static uint32_t tasks_ready = BIT(TASK_ID_HOOKS);
+static atomic_t tasks_ready = BIT(TASK_ID_HOOKS);
 /*
  * Initially allow only the HOOKS and IDLE task to run, regardless of ready
  * status, in order for HOOK_INIT to complete before other tasks.
  * task_enable_all_tasks() will open the flood gates.
  */
-static uint32_t tasks_enabled = BIT(TASK_ID_HOOKS) | BIT(TASK_ID_IDLE);
+static atomic_t tasks_enabled = BIT(TASK_ID_HOOKS) | BIT(TASK_ID_IDLE);
 
 static int start_called;  /* Has task swapping started */
 
@@ -173,7 +173,7 @@ void interrupt_enable(void)
 	__asm__ __volatile__ ("sti");
 }
 
-inline int is_interrupt_enabled(void)
+inline bool is_interrupt_enabled(void)
 {
 	uint32_t eflags = 0;
 
@@ -182,12 +182,12 @@ inline int is_interrupt_enabled(void)
 			      : "=r"(eflags));
 
 	/* Check Interrupt Enable flag */
-	return !!(eflags & 0x200);
+	return eflags & 0x200;
 }
 
-inline int in_interrupt_context(void)
+inline bool in_interrupt_context(void)
 {
-	return !!__in_isr;
+	return __in_isr;
 }
 
 task_id_t task_get_current(void)
@@ -207,7 +207,7 @@ const char *task_get_name(task_id_t tskid)
 	return "<< unknown >>";
 }
 
-uint32_t *task_get_event_bitmap(task_id_t tskid)
+atomic_t *task_get_event_bitmap(task_id_t tskid)
 {
 	task_ *tsk = __task_id_to_ptr(tskid);
 
@@ -521,7 +521,7 @@ void task_print_list(void)
 		       "StkUsed\n");
 
 	for (i = 0; i < TASK_ID_COUNT; i++) {
-		char is_ready = (tasks_ready & (1<<i)) ? 'R' : ' ';
+		char is_ready = ((uint32_t)tasks_ready & BIT(i)) ? 'R' : ' ';
 		uint32_t *sp;
 
 		int stackused = tasks_init[i].stack_size;
@@ -535,21 +535,21 @@ void task_print_list(void)
 			char use_fpu = tasks[i].use_fpu ? 'Y' : 'N';
 
 			ccprintf("%4d %c %-16s %08x %11.6lld  %3d/%3d %c\n",
-				 i, is_ready, task_get_name(i), tasks[i].events,
-				 tasks[i].runtime, stackused,
-				 tasks_init[i].stack_size, use_fpu);
+				 i, is_ready, task_get_name(i),
+				 (int)tasks[i].events, tasks[i].runtime,
+				 stackused, tasks_init[i].stack_size, use_fpu);
 		} else {
 			ccprintf("%4d %c %-16s %08x %11.6lld  %3d/%3d\n",
-				 i, is_ready, task_get_name(i), tasks[i].events,
-				 tasks[i].runtime, stackused,
-				 tasks_init[i].stack_size);
+				 i, is_ready, task_get_name(i),
+				 (int)tasks[i].events, tasks[i].runtime,
+				 stackused, tasks_init[i].stack_size);
 		}
 
 		cflush();
 	}
 }
 
-int command_task_info(int argc, char **argv)
+static int command_task_info(int argc, char **argv)
 {
 	task_print_list();
 
@@ -565,8 +565,9 @@ int command_task_info(int argc, char **argv)
 				total += irq_dist[i];
 			}
 		}
-		ccprintf("Service calls:          %11d\n", svc_calls);
-		ccprintf("Total exceptions:       %11d\n", total + svc_calls);
+		ccprintf("Service calls:          %11d\n", (int)svc_calls);
+		ccprintf("Total exceptions:       %11d\n",
+			 total + (int)svc_calls);
 		ccprintf("Task switches:          %11d\n", task_switches);
 		ccprintf("Task switching started: %11.6lld s\n",
 			 task_start_time);
@@ -586,10 +587,10 @@ __maybe_unused
 static int command_task_ready(int argc, char **argv)
 {
 	if (argc < 2) {
-		ccprintf("tasks_ready: 0x%08x\n", tasks_ready);
+		ccprintf("tasks_ready: 0x%08x\n", (int)tasks_ready);
 	} else {
 		tasks_ready = strtoi(argv[1], NULL, 16);
-		ccprintf("Setting tasks_ready to 0x%08x\n", tasks_ready);
+		ccprintf("Setting tasks_ready to 0x%08x\n", (int)tasks_ready);
 		__schedule(0, 0);
 	}
 

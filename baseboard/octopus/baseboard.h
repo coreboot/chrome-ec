@@ -69,6 +69,12 @@
 
 	/* EC variant determines USB-C variant */
 	#define VARIANT_OCTOPUS_USBC_ITE_EC_TCPCS
+
+	/*
+	 * Limit maximal ODR to 125Hz, the EC is using ~5ms per sample at
+	 * 48MHz core cpu clock.
+	 */
+	#define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ 125000
 #else
 	#error Must define a VARIANT_OCTOPUS_EC
 #endif /* VARIANT_OCTOPUS_EC */
@@ -129,7 +135,8 @@
 	#define CONFIG_CHARGER_ISL9238
 	#define CONFIG_CHARGER_BQ25710
 	#define CONFIG_CHARGER_SENSE_RESISTOR_AC_ISL9238 20
-	#define CONFIG_CHARGER_SENSE_RESISTOR_AC_BQ25710 10
+	#define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC 10
+	#define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR 10
 
 	#undef CONFIG_EXTPOWER_DEBOUNCE_MS
 	#define CONFIG_EXTPOWER_DEBOUNCE_MS 200
@@ -248,7 +255,7 @@
  /* Common SoC / PCH defines */
 #define CONFIG_CHIPSET_GEMINILAKE
 #define CONFIG_CHIPSET_RESET_HOOK
-#define CONFIG_HOSTCMD_ESPI
+#define CONFIG_HOST_INTERFACE_ESPI
 /* TODO(b/74123961): Enable Virtual Wires after bringup */
 #define CONFIG_POWER_COMMON
 #define CONFIG_POWER_S0IX
@@ -277,7 +284,6 @@
 /* Common Sensor Defines */
 #define CONFIG_TABLET_MODE
 #define CONFIG_GMR_TABLET_MODE
-#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
 /*
  * Slew rate on the PP1800_SENSOR load switch requires a short delay on startup.
  */

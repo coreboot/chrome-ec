@@ -51,18 +51,58 @@ __override struct keyboard_scan_config keyscan_config = {
 	.poll_timeout_us = 100 * MSEC,
 };
 
+/*
+ * Map keyboard connector pins to EC GPIO pins for factory test.
+ * Pins mapped to {-1, -1} are skipped.
+ * The connector has 24 pins total, and there is no pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+	{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
+	{0, 7}, {1, 4}, {1, 3}, {1, 6}, {1, 7},
+	{3, 1}, {2, 0}, {1, 5}, {2, 6}, {2, 7},
+	{2, 1}, {2, 4}, {2, 5}, {1, 2}, {2, 3},
+	{2, 2}, {3, 0}, {-1, -1}, {-1, -1}, {-1, -1},
+};
+const int keyboard_factory_scan_pins_used =
+		ARRAY_SIZE(keyboard_factory_scan_pins);
+
 /* I2C port map */
 const struct i2c_port_t i2c_ports[] = {
-	{"power",   I2C_PORT_POWER,  100, GPIO_EC_I2C_POWER_SCL,
-					  GPIO_EC_I2C_POWER_SDA},
-	{"tcpc0",   I2C_PORT_TCPC0, 1000, GPIO_EC_I2C_USB_C0_PD_SCL,
-					  GPIO_EC_I2C_USB_C0_PD_SDA},
-	{"tcpc1",   I2C_PORT_TCPC1, 1000, GPIO_EC_I2C_USB_C1_PD_SCL,
-					  GPIO_EC_I2C_USB_C1_PD_SDA},
-	{"eeprom",  I2C_PORT_EEPROM, 400, GPIO_EC_I2C_EEPROM_SCL,
-					  GPIO_EC_I2C_EEPROM_SDA},
-	{"sensor",  I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
-					  GPIO_EC_I2C_SENSOR_SDA},
+	{
+		.name = "power",
+		.port = I2C_PORT_POWER,
+		.kbps = 100,
+		.scl  = GPIO_EC_I2C_POWER_SCL,
+		.sda  = GPIO_EC_I2C_POWER_SDA
+	},
+	{
+		.name = "tcpc0",
+		.port = I2C_PORT_TCPC0,
+		.kbps = 1000,
+		.scl  = GPIO_EC_I2C_USB_C0_PD_SCL,
+		.sda  = GPIO_EC_I2C_USB_C0_PD_SDA
+	},
+	{
+		.name = "tcpc1",
+		.port = I2C_PORT_TCPC1,
+		.kbps = 1000,
+		.scl  = GPIO_EC_I2C_USB_C1_PD_SCL,
+		.sda  = GPIO_EC_I2C_USB_C1_PD_SDA
+	},
+	{
+		.name = "eeprom",
+		.port = I2C_PORT_EEPROM,
+		.kbps = 400,
+		.scl  = GPIO_EC_I2C_EEPROM_SCL,
+		.sda  = GPIO_EC_I2C_EEPROM_SDA
+	},
+	{
+		.name = "sensor",
+		.port = I2C_PORT_SENSOR,
+		.kbps = 400,
+		.scl  = GPIO_EC_I2C_SENSOR_SCL,
+		.sda  = GPIO_EC_I2C_SENSOR_SDA
+	},
 };
 
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);

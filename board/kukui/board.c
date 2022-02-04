@@ -56,6 +56,10 @@ static void gauge_interrupt(enum gpio_signal signal)
 	task_wake(TASK_ID_CHARGER);
 }
 
+#ifdef SECTION_IS_RW
+static void motion_interrupt(enum gpio_signal signal);
+#endif /* SECTION_IS_RW */
+
 #include "gpio_list.h"
 
 /******************************************************************************/
@@ -71,8 +75,20 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /******************************************************************************/
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"typec", 0, 400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"other", 1, 400, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+	{
+		.name = "typec",
+		.port = 0,
+		.kbps = 400,
+		.scl  = GPIO_I2C1_SCL,
+		.sda  = GPIO_I2C1_SDA
+	},
+	{
+		.name = "other",
+		.port = 1,
+		.kbps = 400,
+		.scl  = GPIO_I2C2_SCL,
+		.sda  = GPIO_I2C2_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -119,8 +135,12 @@ void board_set_dp_mux_control(int output_enable, int polarity)
 }
 
 static void board_hpd_update(const struct usb_mux *me,
-			     mux_state_t mux_state)
+			     mux_state_t mux_state,
+			     bool *ack_required)
 {
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
+
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify
 	 * host here.
@@ -559,7 +579,62 @@ const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 const struct motion_sensor_t *motion_als_sensors[] = {
 	&motion_sensors[CLEAR_ALS],
 };
+
+#ifdef BOARD_KRANE
+
+static bool is_bmi220_present;
+
+static void board_detect_bmi220(void)
+{
+	int id = -1;
+	struct motion_sensor_t *s;
+
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		return;
+
+	/* Detect accelgyro chip */
+	bmi_read8(I2C_PORT_ACCEL, BMI260_ADDR0_FLAGS, BMI260_CHIP_ID, &id);
+	if (id == BMI220_CHIP_ID_MAJOR) {
+		is_bmi220_present = true;
+		/* Lid Accel*/
+		s = &motion_sensors[LID_ACCEL];
+		s->chip = MOTIONSENSE_CHIP_BMI220;
+		s->drv = &bmi260_drv;
+		s->i2c_spi_addr_flags = BMI260_ADDR0_FLAGS;
+		/* Lid Gyro */
+		s = &motion_sensors[LID_GYRO];
+		s->chip = MOTIONSENSE_CHIP_BMI220;
+		s->drv = &bmi260_drv;
+		s->i2c_spi_addr_flags = BMI260_ADDR0_FLAGS;
+#ifdef CONFIG_MAG_BMI_BMM150
+		/* Lid Mag */
+		s = &motion_sensors[LID_MAG];
+		s->chip = MOTIONSENSE_CHIP_BMI220;
+		s->drv = &bmi260_drv;
+		s->i2c_spi_addr_flags = BMI260_ADDR0_FLAGS;
+#endif /* CONFIG_MAG_BMI_BMM150 */
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_detect_bmi220, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_INIT, board_detect_bmi220, HOOK_PRIO_DEFAULT + 1);
+#endif /* BOARD_KRANE */
+
 #endif /* VARIANT_KUKUI_NO_SENSORS */
+
+#ifdef SECTION_IS_RW
+static void motion_interrupt(enum gpio_signal signal)
+{
+#if defined(BOARD_KRANE)
+	if (is_bmi220_present)
+		bmi260_interrupt(signal);
+	else
+		bmi160_interrupt(signal);
+#elif !defined(VARIANT_KUKUI_NO_SENSORS)
+	bmi160_interrupt(signal);
+#endif /* BOARD_KRANE, !VARIANT_KUKUI_NO_SENSORS */
+
+}
+#endif /* SECTION_IS_RW */
 
 /*
  * Return if VBUS is sagging too low

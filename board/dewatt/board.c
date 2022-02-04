@@ -12,16 +12,16 @@
 #include "common.h"
 #include "cros_board_info.h"
 #include "driver/accelgyro_bmi_common.h"
-#include "driver/accelgyro_bmi160.h"
-#include "driver/accelgyro_bmi323.h"
+#include "driver/accelgyro_bmi260.h"
 #include "driver/accel_bma422.h"
 #include "driver/retimer/ps8811.h"
 #include "driver/retimer/ps8818.h"
 #include "driver/temp_sensor/sb_tsi.h"
-#include "driver/temp_sensor/tmp112.h"
+#include "driver/temp_sensor/pct2075.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "keyboard_8042.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "power.h"
@@ -30,7 +30,7 @@
 #include "tablet_mode.h"
 #include "temp_sensor.h"
 #include "temp_sensor/thermistor.h"
-#include "temp_sensor/tmp112.h"
+#include "temp_sensor/pct2075.h"
 #include "thermal.h"
 #include "usb_mux.h"
 
@@ -47,14 +47,14 @@ static struct accelgyro_saved_data_t g_bma422_data;
 /* Matrix to rotate accelrator into standard reference frame */
 const mat33_fp_t base_standard_ref = {
 	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(1),  0},
-	{ 0, 0,  FLOAT_TO_FP(-1)}
+	{ 0, FLOAT_TO_FP(1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
 const mat33_fp_t lid_standard_ref = {
-	{ 0, FLOAT_TO_FP(-1), 0},
 	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0,  FLOAT_TO_FP(-1)}
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0,  FLOAT_TO_FP(1)}
 };
 
 /*
@@ -78,14 +78,14 @@ struct motion_sensor_t motion_sensors[] = {
 	[BASE_ACCEL] = {
 		.name = "Base Accel",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_BMI323,
+		.chip = MOTIONSENSE_CHIP_BMI260,
 		.type = MOTIONSENSE_TYPE_ACCEL,
 		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &bmi3xx_drv,
+		.drv = &bmi260_drv,
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = BMI3_ADDR_I2C_PRIM,
+		.i2c_spi_addr_flags = BMI260_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI_ACCEL_MIN_FREQ,
 		.max_frequency = BMI_ACCEL_MAX_FREQ,
@@ -93,12 +93,12 @@ struct motion_sensor_t motion_sensors[] = {
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 12500 | ROUND_UP_FLAG,
+				.odr = 10000 | ROUND_UP_FLAG,
 				.ec_rate = 100 * MSEC,
 			},
 			/* Sensor on in S3 */
 			[SENSOR_CONFIG_EC_S3] = {
-				.odr = 12500 | ROUND_UP_FLAG,
+				.odr = 10000 | ROUND_UP_FLAG,
 				.ec_rate = 0,
 			},
 		},
@@ -134,14 +134,14 @@ struct motion_sensor_t motion_sensors[] = {
 	[BASE_GYRO] = {
 		.name = "Base Gyro",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_BMI323,
+		.chip = MOTIONSENSE_CHIP_BMI260,
 		.type = MOTIONSENSE_TYPE_GYRO,
 		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &bmi3xx_drv,
+		.drv = &bmi260_drv,
 		.mutex = &g_base_mutex,
 		.drv_data = &g_bmi_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = BMI3_ADDR_I2C_PRIM,
+		.i2c_spi_addr_flags = BMI260_ADDR0_FLAGS,
 		.default_range = 1000, /* dps */
 		.rot_standard_ref = &base_standard_ref,
 		.min_frequency = BMI_GYRO_MIN_FREQ,
@@ -149,52 +149,6 @@ struct motion_sensor_t motion_sensors[] = {
 	},
 };
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
-
-struct motion_sensor_t bmi160_base_accel = {
-	.name = "Base Accel",
-	.active_mask = SENSOR_ACTIVE_S0_S3,
-	.chip = MOTIONSENSE_CHIP_BMI160,
-	.type = MOTIONSENSE_TYPE_ACCEL,
-	.location = MOTIONSENSE_LOC_BASE,
-	.drv = &bmi160_drv,
-	.mutex = &g_base_mutex,
-	.drv_data = &g_bmi_data,
-	.port = I2C_PORT_SENSOR,
-	.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	.rot_standard_ref = &base_standard_ref,
-	.min_frequency = BMI_ACCEL_MIN_FREQ,
-	.max_frequency = BMI_ACCEL_MAX_FREQ,
-	.default_range = 4,  /* g, to meet CDD 7.3.1/C-1-4 reqs */
-	.config = {
-		/* EC use accel for angle detection */
-		[SENSOR_CONFIG_EC_S0] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 100 * MSEC,
-		},
-		/* Sensor on in S3 */
-		[SENSOR_CONFIG_EC_S3] = {
-			.odr = 10000 | ROUND_UP_FLAG,
-			.ec_rate = 0,
-		},
-	},
-};
-
-struct motion_sensor_t bmi160_base_gyro = {
-	.name = "Base Gyro",
-	.active_mask = SENSOR_ACTIVE_S0_S3,
-	.chip = MOTIONSENSE_CHIP_BMI160,
-	.type = MOTIONSENSE_TYPE_GYRO,
-	.location = MOTIONSENSE_LOC_BASE,
-	.drv = &bmi160_drv,
-	.mutex = &g_base_mutex,
-	.drv_data = &g_bmi_data,
-	.port = I2C_PORT_SENSOR,
-	.i2c_spi_addr_flags = BMI160_ADDR0_FLAGS,
-	.default_range = 1000, /* dps */
-	.rot_standard_ref = &base_standard_ref,
-	.min_frequency = BMI_GYRO_MIN_FREQ,
-	.max_frequency = BMI_GYRO_MAX_FREQ,
-};
 
 __override enum ec_error_list
 board_a1_ps8811_retimer_init(const struct usb_mux *me)
@@ -288,10 +242,10 @@ __override int board_c1_ps8818_mux_set(const struct usb_mux *me,
 			return rv;
 
 		/* Enable HPD on the DB */
-		gpio_set_level(GPIO_USB_C1_HPD, 1);
+		ioex_set_level(IOEX_USB_C1_IN_HPD, 1);
 	} else {
 		/* Disable HPD on the DB */
-		gpio_set_level(GPIO_USB_C1_HPD, 0);
+		ioex_set_level(IOEX_USB_C1_IN_HPD, 0);
 	}
 
 	return rv;
@@ -316,15 +270,8 @@ static int base_gyro_config;
 static void board_update_motion_sensor_config(void)
 {
 	if (board_is_convertible()) {
-		if (get_board_version() == 1) {
-			motion_sensors[BASE_ACCEL] = bmi160_base_accel;
-			motion_sensors[BASE_GYRO] = bmi160_base_gyro;
-			base_gyro_config = BASE_GYRO_BMI160;
-			ccprints("BASE GYRO is BMI160");
-		} else {
-			base_gyro_config = BASE_GYRO_BMI323;
-			ccprints("BASE GYRO is BMI323");
-		}
+		base_gyro_config = BASE_GYRO_BMI260;
+		ccprints("BASE GYRO is BMI260");
 
 		motion_sensor_count = ARRAY_SIZE(motion_sensors);
 		/* Enable Base Accel and Gyro interrupt */
@@ -340,12 +287,9 @@ static void board_update_motion_sensor_config(void)
 void motion_interrupt(enum gpio_signal signal)
 {
 	switch (base_gyro_config) {
-	case BASE_GYRO_BMI160:
-		bmi160_interrupt(signal);
-		break;
-	case BASE_GYRO_BMI323:
+	case BASE_GYRO_BMI260:
 	default:
-		bmi3xx_interrupt(signal);
+		bmi260_interrupt(signal);
 		break;
 	}
 }
@@ -359,7 +303,7 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 static void board_chipset_startup(void)
 {
 	if (get_board_version() > 1)
-		tmp112_init();
+		pct2075_init();
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup,
 	     HOOK_PRIO_DEFAULT);
@@ -369,7 +313,7 @@ int board_get_soc_temp_k(int idx, int *temp_k)
 	if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
 		return EC_ERROR_NOT_POWERED;
 
-	return tmp112_get_val_k(idx, temp_k);
+	return pct2075_get_val_k(idx, temp_k);
 }
 
 int board_get_soc_temp_mk(int *temp_mk)
@@ -377,7 +321,7 @@ int board_get_soc_temp_mk(int *temp_mk)
 	if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
 		return EC_ERROR_NOT_POWERED;
 
-	return tmp112_get_val_mk(TMP112_SOC, temp_mk);
+	return pct2075_get_val_mk(PCT2075_SOC, temp_mk);
 }
 
 int board_get_ambient_temp_mk(int *temp_mk)
@@ -385,7 +329,7 @@ int board_get_ambient_temp_mk(int *temp_mk)
 	if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
 		return EC_ERROR_NOT_POWERED;
 
-	return tmp112_get_val_mk(TMP112_AMB, temp_mk);
+	return pct2075_get_val_mk(PCT2075_AMB, temp_mk);
 }
 
 /* ADC Channels */
@@ -431,18 +375,18 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /* Temp Sensors */
 static int board_get_memory_temp(int, int *);
 
-const struct tmp112_sensor_t tmp112_sensors[] = {
-	{ I2C_PORT_SENSOR, TMP112_I2C_ADDR_FLAGS0 },
-	{ I2C_PORT_SENSOR, TMP112_I2C_ADDR_FLAGS1 },
+const struct pct2075_sensor_t pct2075_sensors[] = {
+	{ I2C_PORT_SENSOR, PCT2075_I2C_ADDR_FLAGS0 },
+	{ I2C_PORT_SENSOR, PCT2075_I2C_ADDR_FLAGS7 },
 };
-BUILD_ASSERT(ARRAY_SIZE(tmp112_sensors) == TMP112_COUNT);
+BUILD_ASSERT(ARRAY_SIZE(pct2075_sensors) == PCT2075_COUNT);
 
 const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_SOC] = {
 		.name = "SOC",
 		.type = TEMP_SENSOR_TYPE_BOARD,
 		.read = board_get_soc_temp_k,
-		.idx = TMP112_SOC,
+		.idx = PCT2075_SOC,
 	},
 	[TEMP_SENSOR_CHARGER] = {
 		.name = "Charger",
@@ -465,72 +409,39 @@ const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_AMBIENT] = {
 		.name = "Ambient",
 		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = tmp112_get_val_k,
-		.idx = TMP112_AMB,
+		.read = pct2075_get_val_k,
+		.idx = PCT2075_AMB,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
-
-struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
-	[TEMP_SENSOR_SOC] = {
-		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
-		},
-		.temp_host_release = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		},
-		/* TODO: Setting fan off to 0 so it's allways on */
-		.temp_fan_off = C_TO_K(0),
-		.temp_fan_max = C_TO_K(70),
-	},
-	[TEMP_SENSOR_CHARGER] = {
-		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
-		},
-		.temp_host_release = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		},
-		.temp_fan_off = 0,
-		.temp_fan_max = 0,
-	},
-	[TEMP_SENSOR_MEMORY] = {
-		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
-		},
-		.temp_host_release = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		},
-		.temp_fan_off = 0,
-		.temp_fan_max = 0,
-	},
-	[TEMP_SENSOR_CPU] = {
-		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(105),
-		},
-		.temp_host_release = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		},
-		/*
-		 * CPU temp sensor fan thresholds are high because they are a
-		 * backup for the SOC temp sensor fan thresholds.
-		 */
-		.temp_fan_off = C_TO_K(60),
-		.temp_fan_max = C_TO_K(90),
-	},
-	/*
-	 * Note: Leave ambient entries at 0, both as it does not represent a
-	 * hotspot and as not all boards have this sensor
-	 */
-};
-BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
 static int board_get_memory_temp(int idx, int *temp_k)
 {
 	if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
 		return EC_ERROR_NOT_POWERED;
 	return get_temp_3v3_30k9_47k_4050b(idx, temp_k);
+}
+
+/* keyboard config */
+static const struct ec_response_keybd_config main_kb = {
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+__override const struct ec_response_keybd_config
+*board_vivaldi_keybd_config(void)
+{
+	return &main_kb;
 }

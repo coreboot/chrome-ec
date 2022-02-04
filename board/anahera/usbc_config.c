@@ -134,13 +134,13 @@ struct ioexpander_config_t ioex_config[] = {
 		.i2c_host_port = I2C_PORT_USB_C0_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 	[IOEX_C1_NCT38XX] = {
 		.i2c_host_port = I2C_PORT_USB_C1_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR1_4_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(ioex_config) == CONFIG_IO_EXPANDER_PORT_COUNT);
@@ -208,14 +208,16 @@ static void board_tcpc_init(void)
 	int i;
 
 	/* Don't reset TCPCs after initial reset */
-	if (!system_jumped_late()) {
+	if (!system_jumped_late())
 		board_reset_pd_mcu();
 
-		for (i = 0; i < CONFIG_IO_EXPANDER_PORT_COUNT; ++i) {
-			ioex_config[i].flags &= ~IOEX_FLAGS_DISABLED;
-			ioex_init(i);
-		}
-	}
+	/*
+	 * These IO expander pins are implemented using the
+	 * C0/C1 TCPCs, so they must be set up after the TCPCs has
+	 * been taken out of reset.
+	 */
+	for (i = 0; i < CONFIG_IO_EXPANDER_PORT_COUNT; ++i)
+		ioex_init(i);
 
 	/* Enable PPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);

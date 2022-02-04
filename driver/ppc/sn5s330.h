@@ -43,6 +43,9 @@ enum sn5s330_pp_idx {
 #define SN5S330_INT_STATUS_REG1 0x2F
 #define SN5S330_INT_STATUS_REG2 0x30
 #define SN5S330_INT_STATUS_REG3 0x31
+/*
+ * TODO(b:205754232): Register name discrepancy
+ */
 #define SN5S330_INT_STATUS_REG4 0x32
 
 #define SN5S330_INT_TRIP_RISE_REG1 0x20
@@ -108,6 +111,7 @@ enum sn5s330_pp_idx {
 /* FUNC_SET_9 */
 #define SN5S330_FORCE_OVP_EN_SBU	BIT(1)
 #define SN5S330_PP2_CONFIG		BIT(2)
+#define SN5S330_PWR_OVR_VBUS		BIT(3)
 #define SN5S330_OVP_EN_CC		BIT(4)
 #define SN5S330_CONFIG_UVP		BIT(5)
 #define SN5S330_FORCE_ON_VBUS_OVP	BIT(6)
@@ -121,6 +125,9 @@ enum sn5s330_pp_idx {
 #define SN5S330_DB_BOOT			BIT(1)
 #define SN5S330_VSAFE0V_STAT		BIT(2)
 #define SN5S330_VSAFE0V_MASK		BIT(3)
+
+/* FUNC_SET_10 */
+#define SN5S330_PP1_RCP_OFFSET		BIT(4)
 
 /*
  * INT_MASK_RISE/FALL_EDGE_1

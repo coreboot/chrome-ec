@@ -95,6 +95,8 @@ enum pd_rx_errors {
  * Note: Some bits and decode macros are defined in ec_commands.h
  */
 #define PDO_FIXED_SUSPEND	BIT(28) /* USB Suspend supported */
+/* Higher capability in vSafe5V sink PDO */
+#define PDO_FIXED_SNK_HIGHER_CAP          BIT(28)
 #define PDO_FIXED_FRS_CURR_NOT_SUPPORTED  (0 << 23)
 #define PDO_FIXED_FRS_CURR_DFLT_USB_POWER (1 << 23)
 #define PDO_FIXED_FRS_CURR_1A5_AT_5V      (2 << 23)
@@ -243,6 +245,10 @@ enum pd_rx_errors {
 #define PD_T_DISCOVER_IDENTITY      (45*MSEC) /* between 40ms and 50ms */
 #define PD_T_SYSJUMP              (1000*MSEC) /* 1s */
 #define PD_T_PR_SWAP_WAIT          (100*MSEC) /* tPRSwapWait 100ms */
+#define PD_T_DATA_RESET            (225*MSEC) /* between 200ms and 250ms */
+#define PD_T_DATA_RESET_FAIL       (300*MSEC) /* 300ms */
+#define PD_T_VCONN_REAPPLIED        (15*MSEC) /* between 10ms and 20ms */
+#define PD_T_VCONN_DISCHARGE       (240*MSEC) /* between 160ms and 240ms */
 
 /*
  * Non-spec timer to prevent going Unattached if Vbus drops before a partner FRS
@@ -1008,6 +1014,7 @@ enum pd_dpm_request {
 	DPM_REQUEST_SOP_PRIME_SOFT_RESET_SEND   = BIT(20),
 	DPM_REQUEST_FRS_DET_ENABLE		= BIT(21),
 	DPM_REQUEST_FRS_DET_DISABLE		= BIT(22),
+	DPM_REQUEST_DATA_RESET                  = BIT(23),
 };
 
 /**
@@ -1134,9 +1141,9 @@ enum pd_ctrl_msg_type {
 	PD_CTRL_VCONN_SWAP = 11,
 	PD_CTRL_WAIT = 12,
 	PD_CTRL_SOFT_RESET = 13,
-	/* 14-15 Reserved */
-
 	/* Used for REV 3.0 */
+	PD_CTRL_DATA_RESET = 14,
+	PD_CTRL_DATA_RESET_COMPLETE = 15,
 	PD_CTRL_NOT_SUPPORTED = 16,
 	PD_CTRL_GET_SOURCE_CAP_EXT = 17,
 	PD_CTRL_GET_STATUS = 18,
@@ -2707,6 +2714,11 @@ void pd_rx_enable_monitoring(int port);
 /* stop listening to the CC wire during transmissions */
 void pd_rx_disable_monitoring(int port);
 
+/**
+ * interrupt handler
+ */
+void pd_rx_handler(void);
+
 /* get time since last RX edge interrupt */
 uint64_t get_time_since_last_edge(int port);
 
@@ -3263,6 +3275,14 @@ __override_proto int svdm_dp_attention(int port, uint32_t *payload);
  * @param port The PD port number
  */
 __override_proto void svdm_exit_dp_mode(int port);
+
+/**
+ * Get the DP mode that's desired on this port
+ *
+ * @param  port The PD port number
+ * @return USB_PD_MUX_DOCK or USB_PD_MUX_DP_ENABLED
+ */
+uint8_t svdm_dp_get_mux_mode(int port);
 
 /* Google Firmware Update Alternate Mode */
 /**

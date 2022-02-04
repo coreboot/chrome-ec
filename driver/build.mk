@@ -15,6 +15,7 @@ driver-$(CONFIG_ACCEL_KXCJ9)+=accel_kionix.o
 driver-$(CONFIG_ACCEL_KX022)+=accel_kionix.o
 driver-$(CONFIG_ACCELGYRO_LSM6DS0)+=accelgyro_lsm6ds0.o
 driver-$(CONFIG_ACCELGYRO_BMI160)+=accelgyro_bmi160.o accelgyro_bmi_common.o
+driver-$(CONFIG_ACCELGYRO_BMI220)+=accelgyro_bmi260.o accelgyro_bmi_common.o
 driver-$(CONFIG_ACCELGYRO_BMI260)+=accelgyro_bmi260.o accelgyro_bmi_common.o
 driver-$(CONFIG_ACCELGYRO_BMI3XX)+=accelgyro_bmi3xx.o accelgyro_bmi_common.o
 driver-$(CONFIG_ACCEL_BMA4XX)+=accel_bma4xx.o
@@ -46,6 +47,7 @@ driver-$(CONFIG_ALS_OPT3001)+=als_opt3001.o
 driver-$(CONFIG_ALS_SI114X)+=als_si114x.o
 driver-$(CONFIG_ALS_BH1730)+=als_bh1730.o
 driver-$(CONFIG_ALS_TCS3400)+=als_tcs3400.o
+driver-$(CONFIG_ALS_CM32183)+=als_cm32183.o
 
 # Barometers
 driver-$(CONFIG_BARO_BMP280)+=baro_bmp280.o
@@ -55,7 +57,9 @@ driver-$(CONFIG_BATTERY_BQ20Z453)+=battery/bq20z453.o
 driver-$(CONFIG_BATTERY_BQ27541)+=battery/bq27541.o
 driver-$(CONFIG_BATTERY_BQ27621)+=battery/bq27621_g1.o
 driver-$(CONFIG_BATTERY_MAX17055)+=battery/max17055.o
+ifeq ($(HAS_MOCK_BATTERY),)
 driver-$(CONFIG_BATTERY_SMART)+=battery/smart.o
+endif
 driver-$(CONFIG_BATTERY_BQ4050)+=battery/bq4050.o
 driver-$(CONFIG_BATTERY_MM8013)+=battery/mm8013.o
 
@@ -103,6 +107,7 @@ driver-$(CONFIG_LED_DRIVER_DS2413)+=led/ds2413.o
 driver-$(CONFIG_LED_DRIVER_LM3509)+=led/lm3509.o
 driver-$(CONFIG_LED_DRIVER_LM3630A)+=led/lm3630a.o
 driver-$(CONFIG_LED_DRIVER_LP5562)+=led/lp5562.o
+driver-$(CONFIG_LED_DRIVER_MP3385)+=led/mp3385.o
 driver-$(CONFIG_LED_DRIVER_OZ554)+=led/oz554.o
 
 # 7-segment display
@@ -120,6 +125,7 @@ driver-$(CONFIG_TEMP_SENSOR_G753)+=temp_sensor/g753.o
 driver-$(CONFIG_TEMP_SENSOR_G781)+=temp_sensor/g78x.o
 driver-$(CONFIG_TEMP_SENSOR_G782)+=temp_sensor/g78x.o
 driver-$(CONFIG_TEMP_SENSOR_OTI502)+=temp_sensor/oti502.o
+driver-$(CONFIG_TEMP_SENSOR_PCT2075)+=temp_sensor/pct2075.o
 driver-$(CONFIG_TEMP_SENSOR_SB_TSI)+=temp_sensor/sb_tsi.o
 driver-$(CONFIG_TEMP_SENSOR_TMP006)+=temp_sensor/tmp006.o
 driver-$(CONFIG_TEMP_SENSOR_TMP112)+=temp_sensor/tmp112.o
@@ -189,8 +195,9 @@ driver-$(CONFIG_USB_MUX_PI3USB31532)+=usb_mux/pi3usb3x532.o
 driver-$(CONFIG_USB_MUX_PS8740)+=usb_mux/ps8740.o
 driver-$(CONFIG_USB_MUX_PS8742)+=usb_mux/ps8740.o
 driver-$(CONFIG_USB_MUX_PS8743)+=usb_mux/ps8743.o
-driver-$(CONFIG_USB_MUX_TUSB1064)+=usb_mux/tusb1064.o
 driver-$(CONFIG_USB_MUX_PS8822)+=usb_mux/ps8822.o
+driver-$(CONFIG_USB_MUX_TUSB1044)+=usb_mux/tusb1064.o
+driver-$(CONFIG_USB_MUX_TUSB1064)+=usb_mux/tusb1064.o
 driver-$(CONFIG_USB_MUX_VIRTUAL)+=usb_mux/virtual.o
 
 # USB Hub with I2C interface
@@ -205,6 +212,7 @@ driver-y += ppc/nx20p348x.o
 endif
 driver-$(CONFIG_USBC_PPC_SYV682X)+=ppc/syv682x.o
 driver-$(CONFIG_USBC_PPC_NX20P3483)+=ppc/nx20p348x.o
+driver-$(CONFIG_USBC_PPC_KTU1125)+=ppc/ktu1125.o
 
 # Switchcap
 driver-$(CONFIG_LN9310)+=ln9310.o

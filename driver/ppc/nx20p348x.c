@@ -22,7 +22,7 @@
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
-static uint32_t irq_pending; /* Bitmask of ports signaling an interrupt. */
+static atomic_t irq_pending; /* Bitmask of ports signaling an interrupt. */
 
 #define NX20P348X_DB_EXIT_FAIL_THRESHOLD 10
 static int db_exit_fail_count[CONFIG_USB_PD_PORT_MAX_COUNT];
@@ -563,4 +563,5 @@ const struct ppc_drv nx20p348x_drv = {
 #ifdef CONFIG_USBC_PPC_VCONN
 	.set_vconn = &nx20p348x_set_vconn,
 #endif /* defined(CONFIG_USBC_PPC_VCONN) */
+	.interrupt = &nx20p348x_interrupt,
 };

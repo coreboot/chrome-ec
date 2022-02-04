@@ -30,6 +30,7 @@
 		zephyr,console = &uart1;
 		zephyr,shell-uart = &uart1;
 		zephyr,flash = &flash0;
+		zephyr,flash-controller = &int_flash;
 		cros,rtc = &mtc;
 	};
 
@@ -53,48 +54,39 @@
 		i2c_sensor: sensor {
 			i2c-port = <&i2c0_0>;
 			enum-name = "I2C_PORT_SENSOR";
-			label = "SENSOR";
 		};
 		i2c-accel {
 			i2c-port = <&i2c0_0>;
 			enum-name = "I2C_PORT_ACCEL";
-			label = "ACCEL";
 		};
-		usb-c0 {
+		i2c_usb_c0: usb-c0 {
 			i2c-port = <&i2c1_0>;
 			enum-name = "I2C_PORT_USB_C0";
-			label = "USB_C0";
 		};
-		usb-c1 {
+		i2c_usb_c1: usb-c1 {
 			i2c-port = <&i2c2_0>;
 			enum-name = "I2C_PORT_USB_C1";
-			label = "USB_C1";
 		};
 		usb1-mix {
 			i2c-port = <&i2c3_0>;
 			enum-name = "I2C_PORT_USB_1_MIX";
-			label = "USB_1_MIX";
 		};
 		power {
 			i2c-port = <&i2c5_0>;
 			enum-name = "I2C_PORT_POWER";
-			label = "POWER";
 		};
 		battery {
 			i2c-port = <&i2c5_0>;
 			enum-name = "I2C_PORT_BATTERY";
-			label = "BATTERY";
 		};
 		eeprom {
 			i2c-port = <&i2c7_0>;
 			remote-port = <7>;
 			enum-name = "I2C_PORT_EEPROM";
-			label = "EEPROM";
 		};
 		charger {
 			i2c-port = <&i2c7_0>;
 			enum-name = "I2C_PORT_CHARGER";
-			label = "CHARGER";
 		};
 	};
 
@@ -102,30 +94,30 @@
 		compatible = "named-adc-channels";
 
 		adc_charger: charger {
-			label = "ADC_TEMP_SENSOR_CHARGER";
+			label = "TEMP_CHARGER";
 			enum-name = "ADC_TEMP_SENSOR_CHARGER";
-			channel = <0>;
+			io-channels = <&adc0 0>;
 		};
 		adc_pp3300_regulator: pp3300_regulator {
-			label = "ADC_TEMP_SENSOR_PP3300_REGULATOR";
+			label = "TEMP_PP3300_REGULATOR";
 			enum-name = "ADC_TEMP_SENSOR_PP3300_REGULATOR";
-			channel = <1>;
+			io-channels = <&adc0 1>;
 		};
 		adc_ddr_soc: ddr_soc {
-			label = "ADC_TEMP_SENSOR_DDR_SOC";
+			label = "TEMP_DDR_SOC";
 			enum-name = "ADC_TEMP_SENSOR_DDR_SOC";
-			channel = <8>;
+			io-channels = <&adc0 8>;
 		};
 		adc_fan: fan {
-			label = "ADC_TEMP_SENSOR_FAN";
+			label = "TEMP_FAN";
 			enum-name = "ADC_TEMP_SENSOR_FAN";
-			channel = <3>;
+			io-channels = <&adc0 3>;
 		};
 	};
 
 	named-temp-sensors {
 		charger {
-			compatible = "cros-ec,temp-sensor";
+			compatible = "cros-ec,temp-sensor-thermistor";
 			thermistor = <&thermistor_3V3_30K9_47K_4050B>;
 			label = "TEMP_SENSOR_CHARGER";
 			enum-name = "TEMP_SENSOR_CHARGER";
@@ -137,7 +129,7 @@
 			adc = <&adc_charger>;
 		};
 		pp3300_regulator {
-			compatible = "cros-ec,temp-sensor";
+			compatible = "cros-ec,temp-sensor-thermistor";
 			thermistor = <&thermistor_3V3_30K9_47K_4050B>;
 			label = "TEMP_SENSOR_PP3300_REGULATOR";
 			enum-name = "TEMP_SENSOR_PP3300_REGULATOR";
@@ -149,7 +141,7 @@
 			adc = <&adc_pp3300_regulator>;
 		};
 		ddr_soc {
-			compatible = "cros-ec,temp-sensor";
+			compatible = "cros-ec,temp-sensor-thermistor";
 			thermistor = <&thermistor_3V3_30K9_47K_4050B>;
 			label = "TEMP_SENSOR_DDR_SOC";
 			enum-name = "TEMP_SENSOR_DDR_SOC";
@@ -161,7 +153,7 @@
 			adc = <&adc_ddr_soc>;
 		};
 		fan {
-			compatible = "cros-ec,temp-sensor";
+			compatible = "cros-ec,temp-sensor-thermistor";
 			thermistor = <&thermistor_3V3_30K9_47K_4050B>;
 			label = "TEMP_SENSOR_FAN";
 			enum-name = "TEMP_SENSOR_FAN";

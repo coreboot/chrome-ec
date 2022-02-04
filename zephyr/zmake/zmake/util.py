@@ -64,26 +64,6 @@ def locate_cros_checkout():
     raise FileNotFoundError("Unable to locate a ChromiumOS checkout")
 
 
-def locate_zephyr_base(checkout, version):
-    """Locate the path to the Zephyr RTOS in a ChromiumOS checkout.
-
-    Args:
-        checkout: The path to the ChromiumOS checkout.
-        version: The requested zephyr version, as a tuple of integers.
-
-    Returns:
-        The path to the Zephyr source.
-    """
-    return (
-        checkout
-        / "src"
-        / "third_party"
-        / "zephyr"
-        / "main"
-        / "v{}.{}".format(*version[:2])
-    )
-
-
 def read_kconfig_file(path):
     """Parse a Kconfig file.
 
@@ -137,23 +117,6 @@ def write_kconfig_file(path, config, only_if_changed=True):
     with open(path, "w") as f:
         for name, value in config.items():
             f.write("{}={}\n".format(name, value))
-
-
-def parse_zephyr_version(version_string):
-    """Parse a human-readable version string (e.g., "v2.4") as a tuple.
-
-    Args:
-        version_string: The human-readable version string.
-
-    Returns:
-        A 2-tuple or 3-tuple of integers representing the version.
-    """
-    match = re.fullmatch(r"v?(\d+)[._](\d+)(?:[._](\d+))?", version_string)
-    if not match:
-        raise ValueError(
-            "{} does not look like a Zephyr version.".format(version_string)
-        )
-    return tuple(int(x) for x in match.groups() if x is not None)
 
 
 def read_zephyr_version(zephyr_base):
@@ -220,36 +183,3 @@ def log_multi_line(logger, level, message):
     for line in message.splitlines():
         if line:
             logger.log(level, line)
-
-
-def resolve_build_dir(platform_ec_dir, project_dir, build_dir):
-    """Resolve the build directory using platform/ec/build/... as default.
-
-    Args:
-        platform_ec_dir: The path to the chromiumos source's platform/ec
-          directory.
-        project_dir: The directory of the project.
-        build_dir: The directory to build in (may be None).
-    Returns:
-        The resolved build directory (using build_dir if not None).
-    """
-    if build_dir:
-        return build_dir
-
-    if not pathlib.Path.exists(project_dir / "zmake.yaml"):
-        raise OSError("Invalid configuration")
-
-    # Resolve project_dir to absolute path.
-    project_dir = project_dir.resolve()
-
-    # Compute the path of project_dir relative to platform_ec_dir.
-    project_relative_path = pathlib.Path.relative_to(project_dir, platform_ec_dir)
-
-    # Make sure that the project_dir is a subdirectory of platform_ec_dir.
-    if platform_ec_dir / project_relative_path != project_dir:
-        raise OSError(
-            "Can't resolve project directory {} which is not a subdirectory"
-            " of the platform/ec directory {}".format(project_dir, platform_ec_dir)
-        )
-
-    return platform_ec_dir / "build" / project_relative_path

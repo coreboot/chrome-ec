@@ -13,12 +13,11 @@ child-binding:
       required: true
       type: string
       description:
-        Human-readable string describing the device (used as
-        device_get_binding() argument)
-    channel:
+        String used to describe an ADC channel in the 'adc' console command.
+    io-channels:
       required: true
-      type: int
-      description: ADC channel used
+      type: phandle-array
+      description: IO channels specifiers ADC channel used
     mul:
       required: false
       type: int
@@ -91,12 +90,26 @@ child-binding:
       - ADC_AMON_BMON
       - ADC_BOARD_ID_0
       - ADC_BOARD_ID_1
+      - ADC_CORE_IMON1
+      - ADC_ID_0
+      - ADC_ID_1
       - ADC_PMON
+      - ADC_PP3300_S5
       - ADC_PSYS
+      - ADC_SOC_IMON2
+      - ADC_TEMP_SENSOR_1
+      - ADC_TEMP_SENSOR_2
+      - ADC_TEMP_SENSOR_3
       - ADC_TEMP_SENSOR_CHARGER
       - ADC_TEMP_SENSOR_DDR_SOC
       - ADC_TEMP_SENSOR_FAN
+      - ADC_TEMP_SENSOR_MEMORY
       - ADC_TEMP_SENSOR_PP3300_REGULATOR
+      - ADC_TEMP_SENSOR_SOC
+      - ADC_TEMP_SENSOR_1_DDR_SOC
+      - ADC_TEMP_SENSOR_2_AMBIENT
+      - ADC_TEMP_SENSOR_3_CHARGER
+      - ADC_TEMP_SENSOR_4_WWAN
       - ADC_VBUS
       - ADC_VBUS_C0
       - ADC_VBUS_C1

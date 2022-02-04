@@ -8,6 +8,7 @@
 #ifndef __CROS_EC_MOTION_SENSE_H
 #define __CROS_EC_MOTION_SENSE_H
 
+#include "atomic.h"
 #include "chipset.h"
 #include "common.h"
 #include "ec_commands.h"
@@ -127,8 +128,6 @@ struct motion_data_t {
  * the components.
  */
 #define MOTIONSENSE_FLAG_IN_SPOOF_MODE		BIT(1)
-#define MOTIONSENSE_FLAG_INT_SIGNAL		BIT(2)
-#define MOTIONSENSE_FLAG_INT_ACTIVE_HIGH	BIT(3)
 
 struct online_calib_data {
 	/**
@@ -163,8 +162,6 @@ struct motion_sensor_t {
 	/* One mutex per physical chip. */
 	mutex_t *mutex;
 	void *drv_data;
-	/* Only valid if flags & MOTIONSENSE_FLAG_INT_SIGNAL is true. */
-	enum gpio_signal int_signal;
 	/* Data used for online calibraiton, must match the sensor type. */
 	struct online_calib_data
 		online_calib_data[__cfg_select(CONFIG_ONLINE_CALIB, 1, 0)];
@@ -215,7 +212,7 @@ struct motion_sensor_t {
 	intv3_t spoof_xyz;
 
 	/* How many flush events are pending */
-	uint32_t flush_pending;
+	atomic_t flush_pending;
 
 	/*
 	 * Allow EC to request an higher frequency for the sensors than the AP.

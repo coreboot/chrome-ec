@@ -755,29 +755,36 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-const static struct ec_thermal_config thermal_thermistor = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(95),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(100),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(58),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_THERMISTOR \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(95), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(100), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(90), \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_thermistor =
+	THERMAL_THERMISTOR;
 
-const static struct ec_thermal_config thermal_cpu = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(95),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(100),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(58),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_CPU \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(95), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(100), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(90), \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
 
@@ -839,7 +846,7 @@ void hdmi_hpd_interrupt(enum gpio_signal signal)
 	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
 }
 
-enum gpio_signal board_usbc_port_to_hpd_gpio(int port)
+int board_usbc_port_to_hpd_gpio_or_ioex(int port)
 {
 	/* USB-C0 always uses USB_C0_HPD */
 	if (port == 0)

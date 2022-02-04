@@ -10,6 +10,7 @@
 
 /* Free up flash space */
 #define CONFIG_DEBUG_ASSERT_BRIEF
+#define CONFIG_LTO
 #define CONFIG_USB_PD_DEBUG_LEVEL 0
 
 /* Optional modules */
@@ -61,7 +62,6 @@
 #undef CONFIG_HOSTCMD_DEBUG_MODE
 #define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 #undef CONFIG_LID_SWITCH
-#undef CONFIG_LTO
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_IGNORE_LID
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
@@ -132,6 +132,11 @@
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
 #define CONFIG_BATTERY_MAX17055
 
+/* Disable verbose output in EC pd */
+#ifdef SECTION_IS_RO
+#define CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE
+#endif
+
 /* Battery parameters for max17055 ModelGauge m5 algorithm. */
 #define BATTERY_MAX17055_RSENSE             5     /* m-ohm */
 #define BATTERY_DESIRED_CHARGING_CURRENT    4000  /* mA */
@@ -181,7 +186,7 @@
 #define VIRTUAL_BATTERY_ADDR_FLAGS 0x0B
 
 /* Enable Accel over SPI */
-#define CONFIG_SPI_ACCEL_PORT    0  /* The first SPI master port (SPI2) */
+#define CONFIG_SPI_ACCEL_PORT    0  /* The first SPI controller port (SPI2) */
 
 #define CONFIG_MKBP_INPUT_DEVICES
 #define CONFIG_MKBP_EVENT

@@ -15,6 +15,9 @@
 
 /* RVP Board ids */
 #define CONFIG_BOARD_VERSION_GPIO
+#define ADLM_LP4_RVP1_SKU_BOARD_ID	0x01
+#define ADLM_LP5_RVP2_SKU_BOARD_ID	0x02
+#define ADLM_LP5_RVP3_SKU_BOARD_ID	0x03
 #define ADLN_LP5_ERB_SKU_BOARD_ID	0x06
 #define ADLN_LP5_RVP_SKU_BOARD_ID	0x07
 #define ADLP_DDR5_RVP_SKU_BOARD_ID	0x12
@@ -41,6 +44,7 @@
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #endif
 #define CONFIG_USB_MUX_VIRTUAL
+#define CONFIG_USB_MUX_TUSB1044
 #define PD_MAX_POWER_MW              100000
 
 #define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
@@ -117,8 +121,16 @@
 #define BOARD_FAN_MIN_RPM	3000
 #define BOARD_FAN_MAX_RPM	10000
 
-/* Charger */
+/* Charger Configs */
+#define CONFIG_CHARGER_RUNTIME_CONFIG
+/* Charger chip on ADL-P, ADL-M */
 #define CONFIG_CHARGER_ISL9241
+/* Charger chip on ADL-N */
+#define CONFIG_CHARGER_BQ25720
+#define CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
+#define CONFIG_CHARGER_BQ25720_VSYS_TH2_DV	70
+#define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR	10
+#define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC	10
 
 /* Port 80 */
 #define PORT80_I2C_ADDR		MAX695X_I2C_ADDR1_FLAGS
@@ -145,6 +157,9 @@
 #define CONFIG_BATTERY_V2
 #define CONFIG_BATTERY_COUNT	1
 #define CONFIG_HOSTCMD_BATTERY_V2
+
+/* Config to indicate battery type doesn't auto detect */
+#define CONFIG_BATTERY_TYPE_NO_AUTO_DETECT
 
 #ifndef __ASSEMBLER__
 
@@ -177,9 +192,20 @@ enum ioex_port {
 #define CONFIG_IO_EXPANDER_PORT_COUNT IOEX_PORT_COUNT
 
 enum battery_type {
-	BATTERY_GETAC_SMP_HHP_408,
+	BATTERY_GETAC_SMP_HHP_408_3S,
+	BATTERY_GETAC_SMP_HHP_408_2S,
 	BATTERY_TYPE_COUNT,
 };
+
+/* I2C access in polling mode before task is initialized */
+#define CONFIG_I2C_BITBANG
+
+enum adlrvp_bitbang_i2c_channel {
+	I2C_BITBANG_CHAN_BRD_ID,
+	I2C_BITBANG_CHAN_IOEX_0,
+	I2C_BITBANG_CHAN_COUNT
+};
+#define I2C_BITBANG_PORT_COUNT	I2C_BITBANG_CHAN_COUNT
 
 void espi_reset_pin_asserted_interrupt(enum gpio_signal signal);
 void extpower_interrupt(enum gpio_signal signal);
@@ -187,6 +213,8 @@ void ppc_interrupt(enum gpio_signal signal);
 void tcpc_alert_event(enum gpio_signal signal);
 void board_connect_c0_sbu(enum gpio_signal s);
 int board_get_version(void);
+void battery_detect_interrupt(enum gpio_signal signal);
+void set_charger_system_voltage(void);
 
 #endif /* !__ASSEMBLER__ */
 

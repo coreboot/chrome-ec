@@ -7,6 +7,7 @@
 
 #include "adc_chip.h"
 #include "button.h"
+#include "cbi_fw_config.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
@@ -216,37 +217,6 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A0_VBUS,
 };
 
-void board_init(void)
-{
-	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C0_CCSBU_OVP_ODL);
-	/* Enable gpio interrupt for base accelgyro sensor */
-	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
-	gpio_enable_interrupt(GPIO_HDMI_HPD_SUB_ODL);
-	/* Enable gpio interrupt for pen detect */
-	gpio_enable_interrupt(GPIO_PEN_DET_ODL);
-
-	/* Make sure pen detection is triggered or not at sysjump */
-	if (!gpio_get_level(GPIO_PEN_DET_ODL))
-		gpio_set_level(GPIO_EN_PP5000_PEN, 1);
-
-	if (gpio_get_level(GPIO_PEN_DET_ODL))
-		gpio_set_level(GPIO_PEN_DET_PCH, 1);
-
-	/* Set LEDs luminance */
-	pwm_set_duty(PWM_CH_LED_RED, 70);
-	pwm_set_duty(PWM_CH_LED_GREEN, 70);
-	pwm_set_duty(PWM_CH_LED_WHITE, 70);
-
-	/*
-	 * If interrupt lines are already low, schedule them to be processed
-	 * after inits are completed.
-	 */
-	if (!gpio_get_level(GPIO_USB_C0_INT_ODL))
-		hook_call_deferred(&check_c0_line_data, 0);
-}
-DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
-
 void board_reset_pd_mcu(void)
 {
 	/*
@@ -427,8 +397,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_ACCEL),
-		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
@@ -456,8 +424,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_GYRO),
-		.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
@@ -467,7 +433,58 @@ struct motion_sensor_t motion_sensors[] = {
 	},
 };
 
-const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+void board_init(void)
+{
+	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C0_CCSBU_OVP_ODL);
+	gpio_enable_interrupt(GPIO_HDMI_HPD_SUB_ODL);
+	if (get_cbi_fw_config_tablet_mode() == TABLET_MODE_PRESENT) {
+		motion_sensor_count = ARRAY_SIZE(motion_sensors);
+		/* Enable gpio interrupt for base accelgyro sensor */
+		gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+
+		/* Enable gpio interrupt for pen detect */
+		gpio_enable_interrupt(GPIO_PEN_DET_ODL);
+
+		/* Make sure pen detection is triggered or not at sysjump */
+		if (!gpio_get_level(GPIO_PEN_DET_ODL))
+			gpio_set_level(GPIO_EN_PP5000_PEN, 1);
+
+		if (gpio_get_level(GPIO_PEN_DET_ODL))
+			gpio_set_level(GPIO_PEN_DET_PCH, 1);
+	} else {
+		motion_sensor_count = 0;
+		gmr_tablet_switch_disable();
+		/* Base accel is not stuffed, don't allow line to float */
+		gpio_set_flags(GPIO_BASE_SIXAXIS_INT_L,
+				GPIO_INPUT | GPIO_PULL_DOWN);
+
+		/* only clamshell sku todo */
+		gpio_set_flags(GPIO_PEN_DET_ODL, GPIO_INPUT | GPIO_PULL_DOWN);
+		gpio_set_flags(GPIO_PEN_DET_PCH, GPIO_INPUT | GPIO_PULL_DOWN);
+		gpio_set_flags(GPIO_EN_PP5000_PEN, GPIO_INPUT | GPIO_PULL_DOWN);
+		gpio_set_flags(GPIO_LID_360_L, GPIO_INPUT | GPIO_PULL_DOWN);
+		gpio_set_flags(GPIO_VOLUP_BTN_ODL, GPIO_INPUT | GPIO_PULL_DOWN);
+		gpio_set_flags(GPIO_VOLDN_BTN_ODL, GPIO_INPUT | GPIO_PULL_DOWN);
+		button_disable_gpio(BUTTON_VOLUME_UP);
+		button_disable_gpio(BUTTON_VOLUME_DOWN);
+	}
+
+	/* Set LEDs luminance */
+	pwm_set_duty(PWM_CH_LED_RED, 70);
+	pwm_set_duty(PWM_CH_LED_GREEN, 70);
+	pwm_set_duty(PWM_CH_LED_WHITE, 70);
+
+	/*
+	 * If interrupt lines are already low, schedule them to be processed
+	 * after inits are completed.
+	 */
+	if (!gpio_get_level(GPIO_USB_C0_INT_ODL))
+		hook_call_deferred(&check_c0_line_data, 0);
+}
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 /* Thermistors */
 const struct temp_sensor_t temp_sensors[] = {

@@ -72,7 +72,7 @@ static struct als_drv_data_t g_tcs3400_data = {
 	.als_cal.offset = 0,
 	.als_cal.channel_scale = {
 		.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kc from VPD */
-		.cover_scale = ALS_CHANNEL_SCALE(1.0),     /* CT */
+		.cover_scale = ALS_CHANNEL_SCALE(0.98),     /* CT */
 	},
 };
 
@@ -82,39 +82,39 @@ static struct als_drv_data_t g_tcs3400_data = {
  */
 static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 	.calibration.rgb_cal[X] = {
-		.offset = 0,
-		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(0),
-		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(0),
-		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0),
-		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0),
+		.offset = 66, /* 66.47729532 */
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(0.00222243),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(0.51877192),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(-0.28664117),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.0586877),
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kr */
-			.cover_scale = ALS_CHANNEL_SCALE(1.0)
+			.cover_scale = ALS_CHANNEL_SCALE(0.61)
 		}
 	},
 	.calibration.rgb_cal[Y] = {
-		.offset = 0,
-		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(0),
-		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(0),
-		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0),
-		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0),
+		.offset = 41, /* 40.95355984 */
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-0.15384715),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(0.40454969),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(-0.237452),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.13102168),
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kg */
 			.cover_scale = ALS_CHANNEL_SCALE(1.0)
 		},
 	},
 	.calibration.rgb_cal[Z] = {
-		.offset = 0,
-		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(0),
-		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(0),
-		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0),
-		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0),
+		.offset = 5, /* 5.08596128 */
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(-0.79005309),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(-0.35553576),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0.13997097),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.40223911),
 		.scale = {
 			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kb */
-			.cover_scale = ALS_CHANNEL_SCALE(1.0)
+			.cover_scale = ALS_CHANNEL_SCALE(1.6)
 		}
 	},
-	.calibration.irt = INT_TO_FP(1),
+	.calibration.irt = INT_TO_FP(0.41),
 	.saturation.again = TCS_DEFAULT_AGAIN,
 	.saturation.atime = TCS_DEFAULT_ATIME,
 };
@@ -157,8 +157,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_accel_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_ACCEL),
-		.int_signal = GPIO_EC_IMU_INT_R_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
@@ -187,8 +185,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_accel_mutex,
 		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 				MOTIONSENSE_TYPE_GYRO),
-		.int_signal = GPIO_EC_IMU_INT_R_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
@@ -284,17 +280,20 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 /*
  * TODO(b/195673113): Need to update for Alder Lake/redrix
  */
-static const struct ec_thermal_config thermal_ddr = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-	},
-	.temp_fan_off = C_TO_K(35),
-	.temp_fan_max = C_TO_K(50),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_DDR \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_ddr = THERMAL_DDR;
 
 /*
  * TODO(b/195673113): Need to update for Alder Lake/redrix
@@ -303,53 +302,64 @@ static const struct ec_thermal_config thermal_ddr = {
  * 130 C.  However, sensor is located next to SOC, so we need to use the lower
  * SOC temperature limit (85 C)
  */
-static const struct ec_thermal_config thermal_cpu = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-	},
-	.temp_fan_off = C_TO_K(35),
-	.temp_fan_max = C_TO_K(50),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_CPU \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 
 /*
  * TODO(b/195673113): Need to update for Alder Lake/redrix
  */
-static const struct ec_thermal_config thermal_charger = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-	},
-	.temp_fan_off = C_TO_K(40),
-	.temp_fan_max = C_TO_K(55),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_CHARGER \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(85), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_charger =
+	THERMAL_CHARGER;
 
 /*
  * TODO(b/195673113): Need to update for Alder Lake/redrix
  */
-static const struct ec_thermal_config thermal_regulator = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-	},
-	.temp_fan_off = C_TO_K(40),
-	.temp_fan_max = C_TO_K(55),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_REGULATOR \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(85), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_regulator =
+	THERMAL_REGULATOR;
 
 /* this should really be "const" */
 struct ec_thermal_config thermal_params[] = {
-	[TEMP_SENSOR_1_DDR] = thermal_ddr,
-	[TEMP_SENSOR_2_SOC] = thermal_cpu,
-	[TEMP_SENSOR_3_CHARGER] = thermal_charger,
-	[TEMP_SENSOR_4_REGULATOR] = thermal_regulator,
+	[TEMP_SENSOR_1_DDR] = THERMAL_DDR,
+	[TEMP_SENSOR_2_SOC] = THERMAL_CPU,
+	[TEMP_SENSOR_3_CHARGER] = THERMAL_CHARGER,
+	[TEMP_SENSOR_4_REGULATOR] = THERMAL_REGULATOR,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
