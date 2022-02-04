@@ -1,1 +1,3 @@
-*
+# Fingerprint release branch OWNERS file
+include chromiumos/platform2:main:/biod/OWNERS
+
