@@ -161,7 +161,7 @@ int uart_read_char(void)
 }
 
 /* Interrupt handler for console USART */
-void uart_interrupt(void)
+static void uart_interrupt(void)
 {
 #ifndef CONFIG_UART_TX_DMA
 	/*
@@ -176,7 +176,14 @@ void uart_interrupt(void)
 #if defined(CHIP_FAMILY_STM32F4)
 		STM32_USART_SR(UARTN_BASE) &= ~STM32_USART_SR_TC;
 #else
-		STM32_USART_ICR(UARTN_BASE) |= STM32_USART_SR_TC;
+		/*
+		 * ST reference code does blind write to this register, as is
+		 * usual with the "write 1 to clear" convention, despite the
+		 * datasheet listing the bits as "keep at reset value", (which
+		 * we assume is due to copying from the description of
+		 * reserved bits in read/write registers.)
+		 */
+		STM32_USART_ICR(UARTN_BASE) = STM32_USART_SR_TC;
 #endif
 		if (!(STM32_USART_SR(UARTN_BASE) & ~STM32_USART_SR_TC))
 			return;

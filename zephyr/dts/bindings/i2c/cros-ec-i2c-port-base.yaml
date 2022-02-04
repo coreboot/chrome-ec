@@ -28,6 +28,7 @@ properties:
     - I2C_PORT_EVB_2
     - I2C_PORT_EVB_3
     - I2C_PORT_EVB_7
+    - I2C_PORT_MP2964
     - I2C_PORT_OPT_4
     - I2C_PORT_POWER
     - I2C_PORT_PPC0
@@ -36,21 +37,25 @@ properties:
     - I2C_PORT_SENSOR
     - I2C_PORT_TCPC0
     - I2C_PORT_TCPC1
+    - I2C_PORT_THERMAL_AP
     - I2C_PORT_USB_1_MIX
     - I2C_PORT_USB_C0
+    - I2C_PORT_USB_C0_TCPC
+    - I2C_PORT_USB_C0_C2_BC12
     - I2C_PORT_USB_C0_C2_MUX
     - I2C_PORT_USB_C0_C2_PPC
     - I2C_PORT_USB_C0_C2_TCPC
     - I2C_PORT_USB_C1
+    - I2C_PORT_USB_C1_BC12
     - I2C_PORT_USB_C1_PPC
     - I2C_PORT_USB_C1_TCPC
+    - I2C_PORT_USB_MUX
     - I2C_PORT_USB_MUX0
     - I2C_PORT_USB_MUX1
-    - I2C_PORT_VIRTUAL
+    - I2C_PORT_VIRTUAL_BATTERY
     - I2C_PORT_WLC
-  label:
-    required: true
-    type: string
+  dynamic-speed:
+    type: boolean
+    required: false
     description:
-      Human readable string describing the device (used as device_get_binding()
-      argument).
+      Enables run-time speed configuration.

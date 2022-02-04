@@ -38,7 +38,8 @@ void ec_app_main(void)
 
 	system_print_banner();
 
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG)) {
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG) &&
+		!IS_ENABLED(CONFIG_WDT_DISABLE_AT_BOOT)) {
 		watchdog_init();
 	}
 
@@ -59,12 +60,6 @@ void ec_app_main(void)
 	if (IS_ENABLED(CONFIG_DEDICATED_RECOVERY_BUTTON) ||
 	    IS_ENABLED(CONFIG_VOLUME_BUTTONS)) {
 		button_init();
-	}
-
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_ESPI)) {
-		if (zephyr_shim_setup_espi() < 0) {
-			printk("Failed to init eSPI!\n");
-		}
 	}
 
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_VBOOT_EFS2)) {
@@ -88,21 +83,6 @@ void ec_app_main(void)
 	/* Call init hooks before main tasks start */
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOOKS)) {
 		hook_notify(HOOK_INIT);
-	}
-
-
-	/*
-	 * Increase priority of shell thread.
-	 * This is temporary code that'll be removed
-	 * after the feature outlined in bug b/191795553
-	 * is implemented.
-	 */
-	{
-		static const struct shell *shell;
-
-		shell = shell_backend_uart_get_ptr();
-		k_thread_priority_set(shell->ctx->tid,
-				K_HIGHEST_APPLICATION_THREAD_PRIO);
 	}
 
 	/*

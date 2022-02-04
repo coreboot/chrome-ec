@@ -38,7 +38,7 @@
 #define CONFIG_MKBP_USE_HOST_EVENT
 #undef CONFIG_KEYBOARD_RUNTIME_KEYS
 #undef CONFIG_HIBERNATE
-#define CONFIG_HOSTCMD_ESPI
+#define CONFIG_HOST_INTERFACE_ESPI
 #define CONFIG_LED_COMMON
 #undef  CONFIG_LID_SWITCH
 #define CONFIG_LTO
@@ -48,6 +48,26 @@
 #define CONFIG_VSTORE
 #define CONFIG_VSTORE_SLOT_COUNT 1
 #define CONFIG_SHA256
+
+/* Sensor */
+#define CONFIG_ACCEL_INTERRUPTS
+#define CONFIG_CMD_ACCEL_INFO
+/* Enable sensor fifo, must also define the _SIZE and _THRES */
+#define CONFIG_ACCEL_FIFO
+/* FIFO size is in power of 2. */
+#define CONFIG_ACCEL_FIFO_SIZE 256
+/* Depends on how fast the AP boots and typical ODRs */
+#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
+
+/* TCS3400 ALS */
+#define CONFIG_ALS
+#define ALS_COUNT 1
+#define CONFIG_ALS_TCS3400
+#define CONFIG_ALS_TCS3400_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
+
+/* Sensors without hardware FIFO are in forced mode */
+#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(CLEAR_ALS)
 
 /* EC Commands */
 #define CONFIG_CMD_BUTTON
@@ -103,7 +123,7 @@
 #undef CONFIG_FAN_INIT_SPEED
 #define CONFIG_FAN_INIT_SPEED 0
 #define CONFIG_TEMP_SENSOR
-#define CONFIG_TEMP_SENSOR_POWER_GPIO GPIO_EN_ROA_RAILS
+#define CONFIG_TEMP_SENSOR_POWER
 #define CONFIG_THERMISTOR
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 #define CONFIG_THROTTLE_AP
@@ -121,6 +141,7 @@
 #define I2C_PORT_INA		NPCX_I2C_PORT0_0
 #define I2C_PORT_PPC0		NPCX_I2C_PORT1_0
 #define I2C_PORT_SCALER		NPCX_I2C_PORT2_0
+#define I2C_PORT_SENSORS	NPCX_I2C_PORT3_0
 #define I2C_PORT_TCPC0		NPCX_I2C_PORT3_0
 #define I2C_PORT_POWER		NPCX_I2C_PORT5_0
 #define I2C_PORT_EEPROM		NPCX_I2C_PORT7_0
@@ -132,6 +153,14 @@
 
 #include "gpio_signal.h"
 #include "registers.h"
+
+enum board_version {
+	BOARD_VERSION_PROTO = 1,
+	BOARD_VERSION_PRE_EVT = 2,
+	BOARD_VERSION_EVT = 3,
+	BOARD_VERSION_DVT = 4,
+	BOARD_VERSION_PVT = 5,
+};
 
 enum adc_channel {
 	ADC_SNS_PP3300,     /* ADC2 */
@@ -170,6 +199,11 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
+enum sensor_id {
+	CLEAR_ALS,
+	RGB_ALS,
+	SENSOR_COUNT,
+};
 
 /* Board specific handlers */
 void board_reset_pd_mcu(void);
@@ -222,12 +256,13 @@ unsigned int ec_config_get_thermal_solution(void);
 #define GPIO_PCH_SLP_S0_L	GPIO_SLP_S0_L
 #define GPIO_PCH_SLP_S3_L	GPIO_SLP_S3_L
 #define GPIO_PCH_SLP_S4_L	GPIO_SLP_S4_L
+#define GPIO_TEMP_SENSOR_POWER	GPIO_EN_ROA_RAILS
 #define GPIO_AC_PRESENT		GPIO_BJ_ADP_PRESENT_L
 
 /*
  * There is no RSMRST input, so alias it to the output. This short-circuits
  * common_intel_x86_handle_rsmrst.
  */
-#define GPIO_RSMRST_L_PGOOD	GPIO_PCH_RSMRST_L
+#define GPIO_PG_EC_RSMRST_ODL	GPIO_PCH_RSMRST_L
 
 #endif /* __CROS_EC_BOARD_H */

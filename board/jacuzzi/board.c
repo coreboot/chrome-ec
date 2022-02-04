@@ -67,17 +67,42 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /******************************************************************************/
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"typec", 0, 400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
+	{
+		.name = "typec",
+		.port = 0,
+		.kbps = 400,
+		.scl  = GPIO_I2C1_SCL,
+		.sda  = GPIO_I2C1_SDA
+	},
 #ifdef BOARD_JACUZZI
-	{"other", 1, 100, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+	{
+		.name = "other",
+		.port = 1,
+		.kbps = 100,
+		.scl  = GPIO_I2C2_SCL,
+		.sda  = GPIO_I2C2_SDA
+	},
 #else /* Juniper */
-	{"other", 1, 400, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+	{
+		.name = "other",
+		.port = 1,
+		.kbps = 400,
+		.scl  = GPIO_I2C2_SCL,
+		.sda  = GPIO_I2C2_SDA
+	},
 #endif
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 const struct i2c_port_t i2c_bitbang_ports[] = {
-	{"battery", 2, 100, GPIO_I2C3_SCL, GPIO_I2C3_SDA, .drv = &bitbang_drv},
+	{
+		.name = "battery",
+		.port = 2,
+		.kbps = 100,
+		.scl  = GPIO_I2C3_SCL,
+		.sda  = GPIO_I2C3_SDA,
+		.drv = &bitbang_drv
+	},
 };
 const unsigned int i2c_bitbang_ports_used = ARRAY_SIZE(i2c_bitbang_ports);
 
@@ -143,8 +168,12 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 static void board_hpd_status(const struct usb_mux *me,
-			     mux_state_t mux_state)
+			     mux_state_t mux_state,
+			     bool *ack_required)
 {
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
+
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify
 	 * host here.
@@ -291,6 +320,9 @@ static void board_spi_disable(void)
 	/* Set pins to a state calming the sensor down. */
 	gpio_set_flags(GPIO_EC_SENSOR_SPI_CK, GPIO_OUT_LOW);
 	gpio_set_level(GPIO_EC_SENSOR_SPI_CK, 0);
+	/* Pull SPI_NSS pin to low to prevent a leakage. */
+	gpio_set_flags(GPIO_EC_SENSOR_SPI_NSS, GPIO_OUT_LOW);
+	gpio_set_level(GPIO_EC_SENSOR_SPI_NSS, 0);
 	gpio_config_module(MODULE_SPI_CONTROLLER, 0);
 
 	/* Disable spi peripheral and clocks. */
@@ -541,7 +573,7 @@ int board_sensor_at_360(void)
 	if (board_version == 8 || board_version == 9)
 		return 0;
 	else
-		return !gpio_get_level(GMR_TABLET_MODE_GPIO_L);
+		return !gpio_get_level(GPIO_TABLET_MODE_L);
 }
 #endif /* !VARIANT_KUKUI_NO_SENSORS */
 

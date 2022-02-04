@@ -102,28 +102,24 @@ static void temp_sensor_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, temp_sensor_init, HOOK_PRIO_DEFAULT);
 
-/*****************************************************************************/
-/* Console commands */
-
-#ifdef CONFIG_CMD_TEMP_SENSOR
-int console_command_temps(int argc, char **argv)
+int print_temps(void)
 {
 	int t, i;
 	int rv, rv1 = EC_SUCCESS;
 
 	for (i = 0; i < TEMP_SENSOR_COUNT; ++i) {
-		ccprintf("  %-20s: ", temp_sensors[i].name);
+		ccprintf("  %-20s  ", temp_sensors[i].name);
 		rv = temp_sensor_read(i, &t);
 		if (rv)
 			rv1 = rv;
 
 		switch (rv) {
 		case EC_SUCCESS:
-			ccprintf("%d K = %d C", t, K_TO_C(t));
+			ccprintf("%d K (= %d C)", t, K_TO_C(t));
 #ifdef CONFIG_THROTTLE_AP
 			if (thermal_params[i].temp_fan_off &&
 			    thermal_params[i].temp_fan_max)
-				ccprintf("  %d%%",
+				ccprintf("  %11d%%",
 					 thermal_fan_percent(
 						 thermal_params[i].temp_fan_off,
 						 thermal_params[i].temp_fan_max,
@@ -144,15 +140,25 @@ int console_command_temps(int argc, char **argv)
 
 	return rv1;
 }
-DECLARE_CONSOLE_COMMAND(temps, console_command_temps,
+
+/*****************************************************************************/
+/* Console commands */
+
+#ifdef CONFIG_CMD_TEMP_SENSOR
+static int command_temps(int argc, char **argv)
+{
+	return print_temps();
+}
+DECLARE_CONSOLE_COMMAND(temps, command_temps,
 			NULL,
-			"Print temp sensors");
+			"Print temp sensors and fan speed");
 #endif
 
 /*****************************************************************************/
 /* Host commands */
 
-enum ec_status temp_sensor_command_get_info(struct host_cmd_handler_args *args)
+static enum ec_status
+temp_sensor_command_get_info(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_temp_sensor_get_info *p = args->params;
 	struct ec_response_temp_sensor_get_info *r = args->response;

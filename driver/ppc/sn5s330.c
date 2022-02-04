@@ -26,7 +26,7 @@
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
-static uint32_t irq_pending; /* Bitmask of ports signaling an interrupt. */
+static atomic_t irq_pending; /* Bitmask of ports signaling an interrupt. */
 static int source_enabled[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 static int read_reg(uint8_t port, int reg, int *regval)
@@ -333,6 +333,17 @@ static int sn5s330_init(int port)
 		return status;
 	}
 
+	/*
+	 * Set RCP voltage threshold to 3mV instead of 6mV default for the
+	 * source path. This modification helps prevent false RCP triggers
+	 * against certain port partners when VBUS is set to 20V.
+	 */
+	status = clr_flags(port, SN5S330_FUNC_SET10, SN5S330_PP1_RCP_OFFSET);
+	if (status) {
+		ppc_prints("Failed to set FUNC_SET10!", port);
+		return status;
+	}
+
 	/* Turn off PP1 FET. */
 	status = sn5s330_pp_fet_enable(port, SN5S330_PP1, 0);
 	if (status) {
@@ -453,7 +464,14 @@ static int sn5s330_init(int port)
 		i2c_write8(i2c_port, i2c_addr_flags,
 			   SN5S330_INT_STATUS_REG4, regval);
 
-		/* Turn on PP2 FET. */
+		/*
+		 * Turn on PP2 FET.
+		 * Although PP2 FET is already enabled during dead batter boot
+		 * by the spec, we force that state here.
+		 *
+		 * TODO(207034759): Verify need or remove redundant PP2 set.
+		 */
+
 		status = sn5s330_pp_fet_enable(port, SN5S330_PP2, 1);
 		if (status) {
 			ppc_prints("Failed to turn on PP2 FET!", port);
@@ -522,8 +540,10 @@ static int sn5s330_set_vbus_source_current_limit(int port,
 		regval |= SN5S330_ILIM_1_62;
 		break;
 
+	/* USB minimum source current is 0.5A */
 	case TYPEC_RP_USB:
 	default:
+		/* SN5S330 Defaults to USB associated limits */
 		regval |= SN5S330_ILIM_0_63;
 		break;
 	};
@@ -749,4 +769,5 @@ const struct ppc_drv sn5s330_drv = {
 #ifdef CONFIG_USBC_PPC_VCONN
 	.set_vconn = &sn5s330_set_vconn,
 #endif
+	.interrupt = &sn5s330_interrupt,
 };

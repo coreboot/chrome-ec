@@ -12,7 +12,7 @@
 #ifndef __EMUL_COMMON_I2C_H
 #define __EMUL_COMMON_I2C_H
 
-#include <emul.h>
+#include <drivers/emul.h>
 #include <drivers/i2c.h>
 #include <drivers/i2c_emul.h>
 
@@ -275,6 +275,9 @@ struct i2c_common_emul_data {
 	/** Mutex used to control access to emulator data */
 	struct k_mutex data_mtx;
 };
+
+/** A common API that simply links to the i2c_common_emul_transfer function */
+extern struct i2c_emul_api i2c_common_emul_api;
 
 /**
  * @brief Lock access to emulator properties. After acquiring lock, user

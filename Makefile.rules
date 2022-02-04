@@ -87,7 +87,10 @@ cmd_bin_to_hex = $(OBJCOPY) -I binary -O ihex \
 	--change-addresses $(_program_memory_base) $^ $@
 cmd_smap = $(NM) $< | sort > $@
 cmd_elf = $(CC) $(objs) $(libsharedobjs_elf-y) $(LDFLAGS) \
-	-o $@ -Wl,-T,$< -Wl,-Map,$(patsubst %.elf,%.map,$@) -flto-partition=one
+	-o $@ -Wl,-T,$< -Wl,-Map,$(patsubst %.elf,%.map,$@)
+ifeq ($(cc-name),gcc)
+cmd_elf+= -flto-partition=one
+endif
 cmd_fuzz_exe = $(CXX) $^ $(HOST_TEST_LDFLAGS) $(LDFLAGS_EXTRA) -o $@
 cmd_run_fuzz = build/host/$*/$*.exe -seed=1 -runs=1 $(silent) \
 	$(silent_err) || (echo "Test $* failed!" && false)
@@ -243,10 +246,7 @@ ifeq ($(TEST_BUILD),)
 	@echo "directory!  Otherwise, you won't be able to enter any commands."
 endif # not a TEST_BUILD
 endif # CONFIG_EXPERIMENTAL_CONSOLE=y
-#	TODO(b/195718112): Disable config option check as it's
-#	suspected to be breaking the CQ. We should consider enabling
-#	as a pre-submit only when re-enabling.
-#	$(call quiet,check_allowed)
+	$(call quiet,check_allowed)
 
 proj-%: | $(FAILED_BOARDS_DIR)
 	@touch $(FAILED_BOARDS_DIR)/$*
@@ -403,19 +403,18 @@ $(foreach b, $(cts_boards), \
 
 cov-boards=lazor volteer
 cov-test-targets=$(foreach t,$(cov-test-list-host),build/coverage/$(t).info)
-cov-test-targets+=$(foreach t,$(cov-boards),build/coverage/initial-$(t).info)
+cov-initial-targets=$(foreach t,$(cov-boards),build/coverage/initial-$(t).info)
 bldversion=$(shell (./util/getversion.sh ; echo VERSION) | $(CPP) -P -)
 
-# lcov fails when multiple instances run at the same time.
-# We need to run them sequentially by using flock
-cmd_lcov=flock /tmp/ec-lcov-lock -c "lcov --gcov-tool \
-	$(CURDIR)/util/llvm-gcov.sh -q -o $@ -c -d build/coverage/$* -t $* \
-	--exclude '*/ec/test/*' --exclude '*/ec/include/tests/*'"
-cmd_lcov-initial=flock /tmp/ec-lcov-lock -c "lcov --gcov-tool \
-	$(CURDIR)/util/llvm-gcov.sh -q -o $@ -c -d build/coverage/initial-$* \
-	-i -t $* --exclude '*/ec/test/*' --exclude '*/ec/include/tests/*'"
-cmd_merge_cov=lcov -o build/coverage/lcov.info $(foreach info,$^,-a ${info})
-cmd_report_cov=genhtml -q -o build/coverage/coverage_rpt -t \
+cmd_lcov=lcov --rc lcov_branch_coverage=1 --gcov-tool \
+	$(HOSTGCOV) -q -o $@ -c -d build/coverage/$* -t $* \
+	--exclude '*/ec/test/*' --exclude '*/ec/include/tests/*'
+cmd_lcov-initial=lcov --rc lcov_branch_coverage=1 --gcov-tool \
+	$(GCOV) -q -o $@ -c -d build/coverage/initial-$* \
+	-i -t $* --exclude '*/ec/test/*' --exclude '*/ec/include/tests/*'
+cmd_merge_cov=lcov --rc lcov_branch_coverage=1 -o build/coverage/lcov.info \
+	$(foreach info,$^,-a ${info})
+cmd_report_cov=genhtml --branch-coverage -q -o build/coverage/coverage_rpt -t \
 	       "EC Unittest "$(bldversion) -s $^
 cmd_strip_lcov=sed -i build/coverage/lcov.info \
 	-e 's/\/mnt\/host\/source\/src\/platform\/ec\///'
@@ -428,9 +427,9 @@ ifeq ($(V),0)
 cmd_size=
 else
 cmd_size=$(Q)awk '\
-  /__flash_used =/ {flash_used = strtonum($$1)} \
-  /^FLASH / {flash_size = strtonum($$3)} \
-  /__ram_free =/ {ram_free = strtonum($$1)} \
+  /__flash_used/ {flash_used = strtonum("0x" $$1)} \
+  /__flash_size/ {flash_size = strtonum("0x" $$1)} \
+  /__ram_free/ {ram_free = strtonum("0x" $$1)} \
   END {room_free = flash_size - flash_used; \
        print ram_free > "$(out)/$(1)/space_free_ram.txt"; \
        printf "  *** "; \
@@ -440,7 +439,7 @@ cmd_size=$(Q)awk '\
        } \
        printf ("%s bytes in RAM still available on $(BOARD) $(1) ****\n", \
            ram_free) \
-  }' $(out)/$(1)/$(PROJECT).$(1).map
+  }' $(out)/$(1)/$(PROJECT).$(1).smap
 endif
 
 # List the smallest free flash spaces
@@ -461,12 +460,16 @@ build/coverage/initial-%.info:
 build/coverage/%.info: run-coverage-%
 	$(call quiet,lcov,COV    )
 
-.PHONY: coverage
+.PHONY: coverage test-coverage
 coverage: TEST_FLAG=TEST_COVERAGE=y
-coverage: $(cov-test-targets)
+coverage: $(cov-test-targets) $(cov-initial-targets)
 	$(call quiet,merge_cov,MERGE  )
 	$(call quiet,report_cov,REPORT )
 	$(call quiet,strip_lcov,STRIP  )
+test-coverage: TEST_FLAG=TEST_COVERAGE=y
+test-coverage: $(cov-test-targets)
+	$(call quiet,merge_cov,MERGE  )
+	$(call quiet,report_cov,REPORT )
 
 $(out)/libec.a: $(ro-objs)
 	$(call quiet,libec,BUILD )
@@ -665,14 +668,14 @@ $(npcx-monitor-fw-bin):$(npcx-monitor-fw).c npx-monitor-dir
 	$(Q)$(OBJCOPY) -O binary $(out)/$(npcx-monitor-fw).elf $@
 
 $(out)/$(npcx-monitor-hdr)_ro.o:$(npcx-monitor-hdr).c npx-monitor-dir
-	$(Q)$(CC) $(CFLAGS) -DSECTION_IS_RO=$(EMPTY) -MMD -c $< -MT $@ -o $@
+	$(Q)$(CC) $(CFLAGS) -DSECTION_IS_RO=$(EMPTY) -MMD -fno-lto -c $< -MT $@ -o $@
 
 $(npcx-monitor-hdr-ro-bin):$(out)/$(npcx-monitor-hdr)_ro.o
 	$(if $(V),,@echo '  EXTBIN ' $(subst $(out)/,,$@) ; )
 	$(Q)$(OBJCOPY) -O binary $< $@
 
 $(out)/$(npcx-monitor-hdr)_rw.o:$(npcx-monitor-hdr).c npx-monitor-dir
-	$(Q)$(CC) $(CFLAGS) -MMD -c $< -MT $@ -o $@
+	$(Q)$(CC) $(CFLAGS) -MMD -fno-lto -c $< -MT $@ -o $@
 
 $(npcx-monitor-hdr-rw-bin):$(out)/$(npcx-monitor-hdr)_rw.o
 	$(if $(V),,@echo '  EXTBIN ' $(subst $(out)/,,$@) ; )

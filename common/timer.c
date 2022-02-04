@@ -34,7 +34,7 @@ int32_t k_usleep(int32_t);
 #define TIMER_SYSJUMP_TAG 0x4d54  /* "TM" */
 
 /* High 32-bits of the 64-bit timestamp counter. */
-STATIC_IF_NOT(CONFIG_HWTIMER_64BIT) uint32_t clksrc_high;
+STATIC_IF_NOT(CONFIG_HWTIMER_64BIT) volatile uint32_t clksrc_high;
 
 /* Bitmap of currently running timers */
 static uint32_t timer_running;
@@ -49,7 +49,7 @@ static int timer_irq;
 static void expire_timer(task_id_t tskid)
 {
 	/* we are done with this timer */
-	atomic_clear_bits(&timer_running, 1 << tskid);
+	atomic_clear_bits((atomic_t *)&timer_running, 1 << tskid);
 	/* wake up the taks waiting for this timer */
 	task_set_event(tskid, TASK_EVENT_TIMER);
 }
@@ -142,7 +142,7 @@ int timer_arm(timestamp_t event, task_id_t tskid)
 		return EC_ERROR_BUSY;
 
 	timer_deadline[tskid] = event;
-	atomic_or(&timer_running, BIT(tskid));
+	atomic_or((atomic_t *)&timer_running, BIT(tskid));
 
 	/* Modify the next event if needed */
 	if ((event.le.hi < now.le.hi) ||
@@ -156,7 +156,7 @@ void timer_cancel(task_id_t tskid)
 {
 	ASSERT(tskid < TASK_ID_COUNT);
 
-	atomic_clear_bits(&timer_running, BIT(tskid));
+	atomic_clear_bits((atomic_t *)&timer_running, BIT(tskid));
 	/*
 	 * Don't need to cancel the hardware timer interrupt, instead do
 	 * timer-related housekeeping when the next timer interrupt fires.
@@ -211,15 +211,29 @@ void usleep(unsigned us)
 			  evt & ~TASK_EVENT_TIMER);
 }
 
+#ifdef CONFIG_ZTEST
+timestamp_t *get_time_mock;
+#endif /* CONFIG_ZTEST */
+
 timestamp_t get_time(void)
 {
 	timestamp_t ts;
+
+#ifdef CONFIG_ZTEST
+	if (get_time_mock != NULL)
+		return *get_time_mock;
+#endif /* CONFIG_ZTEST */
 
 	if (IS_ENABLED(CONFIG_HWTIMER_64BIT)) {
 		ts.val = __hw_clock_source_read64();
 	} else {
 		ts.le.hi = clksrc_high;
 		ts.le.lo = __hw_clock_source_read();
+		/*
+		 * TODO(b/213342294) If statement below doesn't catch overflows
+		 * when interrupts are disabled or currently processed interrupt
+		 * has higher priority.
+		 */
 		if (ts.le.hi != clksrc_high) {
 			ts.le.hi = clksrc_high;
 			ts.le.lo = __hw_clock_source_read();
@@ -240,8 +254,24 @@ void force_time(timestamp_t ts)
 	if (IS_ENABLED(CONFIG_HWTIMER_64BIT)) {
 		__hw_clock_source_set64(ts.val);
 	} else {
+		/* Save current interrupt state */
+		bool interrupt_enabled = is_interrupt_enabled();
+
+		/*
+		 * Updating timer shouldn't be interrupted (eg. when counter
+		 * overflows) because it could lead to some unintended
+		 * consequences. Please note that this function can be called
+		 * with disabled or enabled interrupts so we need to restore
+		 * the original state later.
+		 */
+		interrupt_disable();
+
 		clksrc_high = ts.le.hi;
 		__hw_clock_source_set(ts.le.lo);
+
+		/* Restore original interrupt state */
+		if (interrupt_enabled)
+			interrupt_enable();
 	}
 
 	/* some timers might be already expired : process them */
@@ -405,7 +435,7 @@ DECLARE_SAFE_CONSOLE_COMMAND(gettime, command_get_time,
 #endif
 
 #ifdef CONFIG_CMD_TIMERINFO
-int command_timer_info(int argc, char **argv)
+static int command_timer_info(int argc, char **argv)
 {
 	timer_print_info();
 

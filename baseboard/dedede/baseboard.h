@@ -13,6 +13,8 @@
  * The sensor stack is generating a lot of activity.
  */
 #define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
+#undef CONFIG_HOSTCMD_DEBUG_MODE
+#define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 
 /*
  * Variant EC defines. Pick one:
@@ -45,6 +47,12 @@
 
 	#undef CONFIG_UART_TX_BUF_SIZE		/* UART */
 	#define CONFIG_UART_TX_BUF_SIZE 4096
+
+	/*
+	 * Limit maximal ODR to 125Hz, the EC is using ~5ms per sample at
+	 * 48MHz core cpu clock.
+	 */
+	#define CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ 125000
 #else
 #error "Must define a VARIANT_[DEDEDE|KEEBY]_EC!"
 #endif
@@ -85,14 +93,14 @@
 #else
 #define GPIO_POWER_BUTTON_L	GPIO_H1_EC_PWR_BTN_ODL
 #endif
-#define GPIO_RSMRST_L_PGOOD	GPIO_RSMRST_PWRGD_L
+#define GPIO_PG_EC_RSMRST_ODL	GPIO_RSMRST_PWRGD_L
 #define GPIO_SYS_RESET_L	GPIO_SYS_RST_ODL
 #define GPIO_USB_C0_DP_HPD	GPIO_EC_AP_USB_C0_HPD
 #define GPIO_USB_C1_DP_HPD	GPIO_EC_AP_USB_C1_HDMI_HPD
 #define GPIO_VOLUME_UP_L	GPIO_VOLUP_BTN_ODL
 #define GPIO_VOLUME_DOWN_L	GPIO_VOLDN_BTN_ODL
 #define GPIO_WP			GPIO_EC_WP_OD
-#define GMR_TABLET_MODE_GPIO_L	GPIO_LID_360_L
+#define GPIO_TABLET_MODE_L	GPIO_LID_360_L
 
 /* Common EC defines */
 
@@ -119,7 +127,7 @@
 /* EC Modules */
 #define CONFIG_ADC
 #define CONFIG_CRC8
-#define CONFIG_HOSTCMD_ESPI
+#define CONFIG_HOST_INTERFACE_ESPI
 #define CONFIG_HOSTCMD_EVENTS
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER
@@ -174,6 +182,7 @@
 
 /* Sensors */
 #define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK 0
 #define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
 
 /* SoC */
@@ -196,7 +205,8 @@
 #define CONFIG_USBC_VCONN_SWAP
 
 /* Temp Sensor */
-#define CONFIG_TEMP_SENSOR_POWER_GPIO  GPIO_EN_PP3300_A
+#define CONFIG_TEMP_SENSOR_POWER
+#define GPIO_TEMP_SENSOR_POWER  GPIO_EN_PP3300_A
 #define CONFIG_TEMP_SENSOR_FIRST_READ_DELAY_MS 500
 
 /* USB PD */
@@ -239,6 +249,7 @@
 
 #ifndef __ASSEMBLER__
 
+#include "atomic_t.h"
 #include "common.h"
 #include "gpio_signal.h"
 
@@ -263,7 +274,7 @@ void board_reset_pd_mcu(void);
  * Bit to indicate if the PP3000_A rail's power is good. Will be updated by ADC
  * interrupt.
  */
-extern uint32_t pp3300_a_pgood;
+extern atomic_t pp3300_a_pgood;
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BASEBOARD_H */

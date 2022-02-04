@@ -6,8 +6,10 @@
  */
 
 #include "battery_fuel_gauge.h"
+#include "battery_smart.h"
 #include "charge_state.h"
 #include "common.h"
+#include "util.h"
 
 /*
  * Battery info for all waddledoo battery types. Note that the fields
@@ -44,8 +46,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -76,8 +78,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -139,8 +141,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -171,8 +173,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -204,8 +206,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -236,8 +238,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -268,8 +270,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -300,8 +302,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -332,8 +334,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -364,8 +366,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -427,8 +429,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -459,8 +461,8 @@ const struct board_batt_params board_battery_info[] = {
 			},
 			.fet = {
 				.reg_addr       = 0x0,
-				.reg_mask       = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -548,9 +550,9 @@ const struct board_batt_params board_battery_info[] = {
 				.reg_data = { 0x0010, 0x0010 },
 			},
 			.fet = {
-				.reg_addr = 0x0,
-				.reg_mask = 0x2000,
-				.disconnect_val = 0x2000,
+				.reg_addr       = 0x0,
+				.reg_mask       = 0x8000,
+				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
 			}
@@ -632,3 +634,25 @@ const struct board_batt_params board_battery_info[] = {
 BUILD_ASSERT(ARRAY_SIZE(board_battery_info) == BATTERY_TYPE_COUNT);
 
 const enum battery_type DEFAULT_BATTERY_TYPE = BATTERY_BYD_1VX1H;
+
+int charger_profile_override(struct charge_state_data *curr)
+{
+	if (chipset_in_state(CHIPSET_STATE_ON)) {
+		curr->requested_current = MIN(curr->requested_current,
+				CHARGING_CURRENT_1100MA);
+	}
+
+	return 0;
+}
+
+enum ec_status charger_profile_override_get_param(uint32_t param,
+						  uint32_t *value)
+{
+	return EC_RES_INVALID_PARAM;
+}
+
+enum ec_status charger_profile_override_set_param(uint32_t param,
+						  uint32_t value)
+{
+	return EC_RES_INVALID_PARAM;
+}

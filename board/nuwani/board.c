@@ -32,11 +32,41 @@ const int hibernate_wake_pins_used =  ARRAY_SIZE(hibernate_wake_pins);
 
 /* I2C port map. */
 const struct i2c_port_t i2c_ports[] = {
-	{"power",   I2C_PORT_POWER,   100, GPIO_I2C0_SCL, GPIO_I2C0_SDA},
-	{"tcpc0",   I2C_PORT_TCPC0,   400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"tcpc1",   I2C_PORT_TCPC1,   400, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
-	{"thermal", I2C_PORT_THERMAL_AP, 400, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
-	{"sensor",  I2C_PORT_SENSOR,  400, GPIO_I2C7_SCL, GPIO_I2C7_SDA},
+	{
+		.name = "power",
+		.port = I2C_PORT_POWER,
+		.kbps = 100,
+		.scl  = GPIO_I2C0_SCL,
+		.sda  = GPIO_I2C0_SDA
+	},
+	{
+		.name = "tcpc0",
+		.port = I2C_PORT_TCPC0,
+		.kbps = 400,
+		.scl  = GPIO_I2C1_SCL,
+		.sda  = GPIO_I2C1_SDA
+	},
+	{
+		.name = "tcpc1",
+		.port = I2C_PORT_TCPC1,
+		.kbps = 400,
+		.scl  = GPIO_I2C2_SCL,
+		.sda  = GPIO_I2C2_SDA
+	},
+	{
+		.name = "thermal",
+		.port = I2C_PORT_THERMAL_AP,
+		.kbps = 400,
+		.scl  = GPIO_I2C3_SCL,
+		.sda  = GPIO_I2C3_SDA
+	},
+	{
+		.name = "sensor",
+		.port = I2C_PORT_SENSOR,
+		.kbps = 400,
+		.scl  = GPIO_I2C7_SCL,
+		.sda  = GPIO_I2C7_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -100,8 +130,6 @@ struct motion_sensor_t base_accel_1 = {
 	.mutex = &g_base_mutex_1,
 	.drv_data = LSM6DSM_ST_DATA(g_lsm6dsm_data,
 			MOTIONSENSE_TYPE_ACCEL),
-	.int_signal = GPIO_6AXIS_INT_L,
-	.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 	.rot_standard_ref = &lsm6dsm_base_standard_ref,
@@ -132,8 +160,6 @@ struct motion_sensor_t base_gyro_1 = {
 	.mutex = &g_base_mutex_1,
 	.drv_data = LSM6DSM_ST_DATA(g_lsm6dsm_data,
 			MOTIONSENSE_TYPE_GYRO),
-	.int_signal = GPIO_6AXIS_INT_L,
-	.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 	.default_range = 1000 | ROUND_UP_FLAG, /* dps */

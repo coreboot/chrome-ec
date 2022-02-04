@@ -42,7 +42,7 @@
 static uint8_t oc_event_cnt_tbl[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* A flag for ports with sink device connected. */
-static uint32_t snk_connected_ports;
+static atomic_t snk_connected_ports;
 
 static void clear_oc_tbl(void)
 {
@@ -53,7 +53,7 @@ static void clear_oc_tbl(void)
 		 * Only clear the table if the port partner is no longer
 		 * attached after debouncing.
 		 */
-		if ((!(BIT(port) & snk_connected_ports)) &&
+		if ((!(BIT(port) & (uint32_t)snk_connected_ports)) &&
 		    oc_event_cnt_tbl[port]) {
 			oc_event_cnt_tbl[port] = 0;
 			CPRINTS("C%d: OC events cleared", port);

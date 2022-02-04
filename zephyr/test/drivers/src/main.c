@@ -6,45 +6,33 @@
 #include <zephyr.h>
 #include <ztest.h>
 #include "ec_app_main.h"
+#include "test_state.h"
 
-extern void test_suite_battery(void);
-extern void test_suite_cbi(void);
-extern void test_suite_smart_battery(void);
-extern void test_suite_thermistor(void);
-extern void test_suite_temp_sensor(void);
-extern void test_suite_bma2x2(void);
-extern void test_suite_bc12(void);
-extern void test_suite_ppc(void);
-extern void test_suite_bmi260(void);
-extern void test_suite_bmi160(void);
-extern void test_suite_tcs3400(void);
-extern void test_suite_espi(void);
-extern void test_suite_bb_retimer(void);
-extern void test_suite_ln9310(void);
-extern void test_suite_lis2dw12(void);
-extern void test_suite_stm_mems_common(void);
+bool drivers_predicate_pre_main(const void *state)
+{
+	return ((struct test_state *)state)->ec_app_main_run == false;
+}
+
+bool drivers_predicate_post_main(const void *state)
+{
+	return !drivers_predicate_pre_main(state);
+}
 
 void test_main(void)
 {
-	/* Test suites to run before ec_app_main.*/
+	struct test_state state = {
+		.ec_app_main_run = false,
+	};
+
+	/* Run all the suites that depend on main not being called yet */
+	ztest_run_test_suites(&state);
 
 	ec_app_main();
+	state.ec_app_main_run = true;
 
-	/* Test suites to run after ec_app_main.*/
-	test_suite_battery();
-	test_suite_cbi();
-	test_suite_smart_battery();
-	test_suite_thermistor();
-	test_suite_temp_sensor();
-	test_suite_bma2x2();
-	test_suite_bc12();
-	test_suite_ppc();
-	test_suite_bmi260();
-	test_suite_bmi160();
-	test_suite_tcs3400();
-	test_suite_espi();
-	test_suite_bb_retimer();
-	test_suite_ln9310();
-	test_suite_lis2dw12();
-	test_suite_stm_mems_common();
+	/* Run all the suites that depend on main being called */
+	ztest_run_test_suites(&state);
+
+	/* Check that every suite ran */
+	ztest_verify_all_test_suites_ran();
 }

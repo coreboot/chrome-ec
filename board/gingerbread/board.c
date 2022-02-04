@@ -152,6 +152,20 @@ struct ppc_config_t ppc_chips[] = {
 #endif
 
 #ifdef SECTION_IS_RW
+
+/* TUSB1064 set mux board tuning for DP Rx path */
+static int board_tusb1064_dp_rx_eq_set(const struct usb_mux *me,
+				       mux_state_t mux_state)
+{
+	int rv = EC_SUCCESS;
+
+	/* DP specific config */
+	if (mux_state & USB_PD_MUX_DP_ENABLED)
+		rv = tusb1064_set_dp_rx_eq(me, TUSB1064_DP_EQ_RX_8_9_DB);
+
+	return rv;
+}
+
 /*
  * TCPCs: 2 USBC/PD ports
  *     port 0 -> host port              -> STM32G4 UCPD
@@ -178,6 +192,7 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.i2c_port = I2C_PORT_I2C1,
 		.i2c_addr_flags = TUSB1064_I2C_ADDR0_FLAGS,
 		.driver = &tusb1064_usb_mux_driver,
+		.board_set = &board_tusb1064_dp_rx_eq_set,
 	},
 	[USB_PD_PORT_DP] = {
 		.usb_port = USB_PD_PORT_DP,
@@ -311,12 +326,46 @@ int dock_get_mf_preference(void)
 	return mf;
 }
 
+static void board_usb_tc_connect(void)
+{
+	int port = TASK_ID_TO_PD_PORT(task_get_current());
+
+	/*
+	 * The EC needs to keep the USB hubs in reset until the host port is
+	 * attached so that the USB-EP can be properly enumerated.
+	 */
+	if (port == USB_PD_PORT_HOST) {
+		gpio_set_level(GPIO_EC_HUB1_RESET_L, 1);
+		gpio_set_level(GPIO_EC_HUB2_RESET_L, 1);
+	}
+}
+DECLARE_HOOK(HOOK_USB_PD_CONNECT, board_usb_tc_connect, HOOK_PRIO_DEFAULT);
+
+static void board_usb_tc_disconnect(void)
+{
+	int port = TASK_ID_TO_PD_PORT(task_get_current());
+
+	/* Only the host port disconnect is relevant */
+	if (port == USB_PD_PORT_HOST) {
+		gpio_set_level(GPIO_EC_HUB1_RESET_L, 0);
+		gpio_set_level(GPIO_EC_HUB2_RESET_L, 0);
+	}
+}
+DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, board_usb_tc_disconnect, \
+	     HOOK_PRIO_DEFAULT);
+
 #endif /* SECTION_IS_RW */
 
 static void board_init(void)
 {
 #ifdef SECTION_IS_RW
-
+	/*
+	 * Set current limit for USB 3.1 Gen 2 ports to 1.5 A. Note, this is
+	 * also done in gpio.inc, but needs to be in RW for platforms which
+	 * shipped with RO that set these 2 lines to the 900 mA level.
+	 */
+	gpio_set_level(GPIO_USB3_P3_CDP_EN, 1);
+	gpio_set_level(GPIO_USB3_P4_CDP_EN, 1);
 #endif
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);

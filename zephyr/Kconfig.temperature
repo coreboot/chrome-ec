@@ -10,6 +10,13 @@ menuconfig PLATFORM_EC_TEMP_SENSOR
 
 if PLATFORM_EC_TEMP_SENSOR
 
+config PLATFORM_EC_TEMP_SENSOR_POWER
+	bool "Temperature sensors are not always powered on"
+	help
+	  If enabled, temperature sensors require enabling power rail before
+	  being read. Enabling it requires to define a pin enabling the power
+	  as GPIO_TEMP_SENSOR_POWER.
+
 config PLATFORM_EC_DPTF
 	bool "Dynamic Platform and Thermal Framework"
 	default y if PLATFORM_EC_ACPI
@@ -30,6 +37,24 @@ config PLATFORM_EC_THERMISTOR
 	help
 	  Enables support for thermistors (resistor whose resistance is
 	  strongly dependent on temperature) as temperature-sensor type.
+
+config PLATFORM_EC_TEMP_SENSOR_PCT2075
+	bool "PCT2075 support"
+	help
+	  Enables support for the CrosEC PCT2075 sensor, an i2c peripheral
+	  temperature sensor from NXP.
+
+config PLATFORM_EC_TEMP_SENSOR_SB_TSI
+	bool "SB TSI support"
+	help
+	  Enables support for the Side Band Temperature Sensor Interface,
+	  an i2c peripheral available on AMD platforms.
+
+config PLATFORM_EC_TEMP_SENSOR_TMP112
+	bool "TMP112 support"
+	help
+	  Enables support for the CrosEC TMP112 driver, an i2c peripheral
+	  temperature sensor from TI.
 
 endif # PLATFORM_EC_TEMP_SENSOR
 

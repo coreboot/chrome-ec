@@ -21,17 +21,14 @@ config PLATFORM_EC_CONSOLE_CHANNEL
 
 	  Boards may #undef this to reduce image size.
 
-# Adjusted to the longest print message from the timer_info command
+# Adjusted to the account for the build_info[] string (about 160 bytes) plus
+# the image type (about 16 bytes).
+# printed by the banner.
 config SHELL_PRINTF_BUFF_SIZE
-	default 130
+	default 180
 
 # Some boards may need to increase the size, depending on the amount of output
-#
-# TODO(b/196627937): zephyr: hang when running help with CONFIG_SHELL_HELP
-# enabled.  Increase the TX buffer size to workaround the hang when the help
-# is enabled.
 config SHELL_BACKEND_SERIAL_TX_RING_BUFFER_SIZE
-	default 4096 if SHELL_HELP
 	default 1024
 
 menuconfig PLATFORM_EC_HOSTCMD_CONSOLE
@@ -57,13 +54,11 @@ config PLATFORM_EC_HOSTCMD_CONSOLE_BUF_SIZE
 
 endif # PLATFORM_EC_HOSTCMD_CONSOLE
 
-config PLATFORM_EC_CONSOLE_USES_PRINTK
-	bool "Console uses printk"
+menuconfig PLATFORM_EC_CONSOLE_DEBUG
+	bool "Console Debug"
 	depends on CONSOLE
+	default n
 	help
-	  Implement zephyr_print using printk for all cases instead
-	  of using shell_fprintf for non-ISR uses in
-	  shim/common/console.c.
-	  Some devices have not been able to output to the console
-	  fast enough using shell_fprintf and end up timing out
-	  unrelated functionality.
+	  Write all zephyr_print() messages to printk() also. Not recommended
+	  outside of tests.
+

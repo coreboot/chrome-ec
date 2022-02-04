@@ -3,10 +3,15 @@
  * found in the LICENSE file.
  */
 
+#include <logging/log.h>
 #include "common.h"
 #include "accelgyro.h"
 #include "hooks.h"
+#include "gpio/gpio_int.h"
 #include "drivers/cros_cbi.h"
+#include "motionsense_sensors.h"
+
+LOG_MODULE_REGISTER(shim_cros_motionsense_sensors);
 
 #define SENSOR_MUTEX_NODE		DT_PATH(motionsense_mutex)
 #define SENSOR_MUTEX_NAME(id)		DT_CAT(MUTEX_, id)
@@ -121,6 +126,22 @@ DT_FOREACH_CHILD(SENSOR_ROT_REF_NODE, DECLARE_SENSOR_ROT_REF)
 		(.mutex = &SENSOR_MUTEX_NAME(DT_PHANDLE(id, mutex)),))
 
 /*
+ * Set the interrupt pin which is referred by the phandle.
+ */
+#define SENSOR_INT_SIGNAL(id)						\
+	IF_ENABLED(DT_NODE_HAS_PROP(id, int_signal),			\
+		(.int_signal = GPIO_SIGNAL(DT_PHANDLE(id, int_signal)),))
+
+/*
+ * Set flags based on values defined in the node.
+ */
+#define SENSOR_FLAGS(id)						\
+	.flags = 0							\
+	IF_ENABLED(DT_NODE_HAS_PROP(id, int_signal),			\
+		(|MOTIONSENSE_FLAG_INT_SIGNAL))			\
+	,
+
+/*
  * Get I2C port number which is referred by phandle.
  * See motionsense-sensor-base.yaml for DT example and details.
  */
@@ -196,7 +217,9 @@ DT_FOREACH_CHILD(SENSOR_ROT_REF_NODE, DECLARE_SENSOR_ROT_REF)
 	SENSOR_I2C_PORT(id)						\
 	SENSOR_ROT_STD_REF(id)						\
 	SENSOR_DRV_DATA(id)						\
-	SENSOR_CONFIG(id)
+	SENSOR_CONFIG(id)						\
+	SENSOR_INT_SIGNAL(id)						\
+	SENSOR_FLAGS(id)
 
 /* Create motion sensor node with node ID */
 #define DO_MK_SENSOR_ENTRY(						\
@@ -353,13 +376,13 @@ BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
  *
  *         // list of GPIO interrupts that have to
  *         // be enabled at initial stage
- *        sensor-irqs = <&gpio_ec_imu_int_l &gpio_ec_als_rgb_int_l>;
+ *        sensor-irqs = <&int_imu &int_als_rgb>;
  * };
  */
 #if DT_NODE_HAS_PROP(SENSOR_INFO_NODE, sensor_irqs)
 #define SENSOR_GPIO_ENABLE_INTERRUPT(i, id)		\
-	gpio_enable_interrupt(				\
-		GPIO_SIGNAL(DT_PHANDLE_BY_IDX(id, sensor_irqs, i)));
+	gpio_enable_dt_interrupt(				\
+		GPIO_INT_FROM_NODE(DT_PHANDLE_BY_IDX(id, sensor_irqs, i)));
 static void sensor_enable_irqs(void)
 {
 	UTIL_LISTIFY(DT_PROP_LEN(SENSOR_INFO_NODE, sensor_irqs),
@@ -369,35 +392,72 @@ DECLARE_HOOK(HOOK_INIT, sensor_enable_irqs, HOOK_PRIO_DEFAULT);
 #endif
 
 /* Handle the alternative motion sensors */
-#define REPLACE_ALT_MOTION_SENSOR(new_id, old_id) \
-	motion_sensors[SENSOR_ID(old_id)] =       \
-		motion_sensors_alt[SENSOR_ID(new_id)];
+#define CHECK_SSFC_AND_ENABLE_ALT_SENSOR(id, cbi_dev)                         \
+	do {                                                                  \
+		if (cros_cbi_ssfc_check_match(cbi_dev, CBI_SSFC_VALUE_ID(     \
+				DT_PHANDLE(id, alternate_ssfc_indicator)))) { \
+			LOG_INF("Replacing \"%s\" for \"%s\" based on SSFC",  \
+				motion_sensors[SENSOR_ID(DT_PHANDLE(id,       \
+					alternate_for))].name,                \
+				motion_sensors_alt[SENSOR_ID(id)].name);      \
+			ENABLE_ALT_MOTION_SENSOR(id);                         \
+		}                                                             \
+	} while (0)
 
-#define CHECK_AND_REPLACE_ALT_MOTION_SENSOR(id)                        \
-	do {                                                           \
-		if (cros_cbi_ssfc_check_match(                         \
-			    dev, CBI_SSFC_VALUE_ID(DT_PHANDLE(         \
-					 id, alternate_indicator)))) { \
-			REPLACE_ALT_MOTION_SENSOR(                     \
-				id, DT_PHANDLE(id, alternate_for))     \
-		}                                                      \
-	} while (0);
-
-#define ALT_MOTION_SENSOR_INIT_ID(id)                                    \
-	COND_CODE_1(UTIL_AND(DT_NODE_HAS_PROP(id, alternate_for),        \
-			     DT_NODE_HAS_PROP(id, alternate_indicator)), \
-		    (CHECK_AND_REPLACE_ALT_MOTION_SENSOR(id)), ())
-
-void motion_sensors_init_alt(void)
-{
-	const struct device *dev = device_get_binding("cros_cbi");
-
-	if (dev == NULL)
-		return;
+#define ALT_SENSOR_CHECK_SSFC_ID(id, cbi_dev)                                 \
+	COND_CODE_1(UTIL_AND(DT_NODE_HAS_PROP(id, alternate_for),             \
+			     DT_NODE_HAS_PROP(id, alternate_ssfc_indicator)), \
+		    (CHECK_SSFC_AND_ENABLE_ALT_SENSOR(id, cbi_dev);), ())
 
 #if DT_NODE_EXISTS(SENSOR_ALT_NODE)
-	DT_FOREACH_CHILD(SENSOR_ALT_NODE, ALT_MOTION_SENSOR_INIT_ID)
-#endif
+
+int motion_sense_probe(enum sensor_alt_id alt_idx)
+{
+	int res;
+
+	LOG_INF("Probing \"%s\" chip %d type %d loc %d",
+		motion_sensors_alt[alt_idx].name,
+		motion_sensors_alt[alt_idx].chip,
+		motion_sensors_alt[alt_idx].type,
+		motion_sensors_alt[alt_idx].location);
+
+	__ASSERT(motion_sensors_alt[alt_idx].drv->probe != NULL,
+		 "No probing function for alt sensor: %d", alt_idx);
+	res = motion_sensors_alt[alt_idx].drv->probe(
+		&motion_sensors_alt[alt_idx]);
+	LOG_INF("%sfound\n", (res != EC_SUCCESS ? "not " : ""));
+
+	return res;
 }
 
-DECLARE_HOOK(HOOK_INIT, motion_sensors_init_alt, HOOK_PRIO_INIT_I2C + 1);
+void motion_sensors_check_ssfc(void)
+{
+	const struct device *dev = device_get_binding(CROS_CBI_LABEL);
+
+	if (dev != NULL) {
+		DT_FOREACH_CHILD_VARGS(SENSOR_ALT_NODE,
+				       ALT_SENSOR_CHECK_SSFC_ID, dev)
+	}
+}
+#endif /* DT_NODE_EXISTS(SENSOR_ALT_NODE) */
+
+#define DEF_MOTION_ISR_NAME_ENUM(id) \
+	DT_STRING_UPPER_TOKEN(DT_PHANDLE(id, int_signal), enum_name)
+#define DEF_MOTION_ISR_NAME_ENUM_WITH_SUFFIX(name) DT_CAT(name, _ISR)
+#define DEF_MOTION_ISR_NAME(id) \
+	DEF_MOTION_ISR_NAME_ENUM_WITH_SUFFIX(DEF_MOTION_ISR_NAME_ENUM(id))
+
+#define DEF_MOTION_ISR(id) \
+void DEF_MOTION_ISR_NAME(id)(enum gpio_signal signal)		\
+{								\
+	__ASSERT(motion_sensors[SENSOR_ID(id)].drv->interrupt,	\
+		"No interrupt handler for signal: %x", signal);	\
+	motion_sensors[SENSOR_ID(id)].drv->interrupt(signal);	\
+}
+
+#define DEF_MOTION_CHECK_ISR(id) \
+	COND_CODE_1(DT_NODE_HAS_PROP(id, int_signal), (DEF_MOTION_ISR(id)), ())
+
+#if DT_NODE_EXISTS(SENSOR_NODE)
+DT_FOREACH_CHILD(SENSOR_NODE, DEF_MOTION_CHECK_ISR)
+#endif

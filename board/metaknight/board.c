@@ -196,31 +196,42 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-const static struct ec_thermal_config thermal_memory = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_MEMORY \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(85), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_memory =
+	THERMAL_MEMORY;
 
-const static struct ec_thermal_config thermal_cpu = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_CPU \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
 
@@ -556,8 +567,6 @@ struct motion_sensor_t lsm6dsm_base_accel = {
 	.mutex = &g_base_mutex,
 	.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 			MOTIONSENSE_TYPE_ACCEL),
-	.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-	.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 	.port = I2C_PORT_SENSOR,
 	.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 	.rot_standard_ref = &base_lsm6dsm_ref,
@@ -586,8 +595,6 @@ struct motion_sensor_t lsm6dsm_base_gyro = {
 	.mutex = &g_base_mutex,
 	.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
 			MOTIONSENSE_TYPE_GYRO),
-	.int_signal = GPIO_BASE_SIXAXIS_INT_L,
-	.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 	.port = I2C_PORT_SENSOR,
 	.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
 	.default_range = 1000 | ROUND_UP_FLAG, /* dps */
@@ -737,6 +744,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		},
 		.flags = TCPC_FLAGS_TCPCI_REV2_0,
 		.drv = &raa489000_tcpm_drv,
+		.alert_signal = GPIO_USB_C0_INT_ODL,
 	},
 };
 
@@ -753,33 +761,22 @@ uint16_t tcpc_get_alert_status(void)
 {
 	uint16_t status = 0;
 	int regval;
+	int p;
 
 	/*
-	 * The interrupt line is shared between the TCPC and BC1.2 detector IC.
-	 * Therefore, go out and actually read the alert registers to report the
-	 * alert status.
+	 * The interrupt line is shared between the TCPC and BC1.2
+	 * detector IC. Therefore, go out and actually read the alert
+	 * registers to report the alert status.
 	 */
-	if (!gpio_get_level(GPIO_USB_C0_INT_ODL)) {
-		if (!tcpc_read16(0, TCPC_REG_ALERT, &regval)) {
-			/* The TCPCI Rev 1.0 spec says to ignore bits 14:12. */
-			if (!(tcpc_config[0].flags & TCPC_FLAGS_TCPCI_REV2_0))
-				regval &= ~((1 << 14) | (1 << 13) | (1 << 12));
-
-			if (regval)
-				status |= PD_STATUS_TCPC_ALERT_0;
-		}
-	}
-
-	if (board_get_usb_pd_port_count() > 1 &&
-				!gpio_get_level(GPIO_SUB_C1_INT_EN_RAILS_ODL)) {
-		if (!tcpc_read16(1, TCPC_REG_ALERT, &regval)) {
-			/* TCPCI spec Rev 1.0 says to ignore bits 14:12. */
-			if (!(tcpc_config[1].flags & TCPC_FLAGS_TCPCI_REV2_0))
-				regval &= ~((1 << 14) | (1 << 13) | (1 << 12));
-
-			if (regval)
-				status |= PD_STATUS_TCPC_ALERT_1;
-		}
+	for (p = 0; p < board_get_usb_pd_port_count(); p++) {
+		if (gpio_get_level(tcpc_config[p].alert_signal) ||
+		    tcpc_read16(p, TCPC_REG_ALERT, &regval))
+			continue;
+		/* The TCPCI Rev 1.0 spec says to ignore bits 14:12. */
+		if (!(tcpc_config[p].flags & TCPC_FLAGS_TCPCI_REV2_0))
+			regval &= ~(BIT(14) | BIT(13) | BIT(12));
+		if (regval)
+			status |= (PD_STATUS_TCPC_ALERT_0 << p);
 	}
 
 	return status;
@@ -822,9 +819,9 @@ static void adc_vol_key_press_check(void)
 	}
 	if (new_adc_key_state != old_adc_key_state) {
 		adc_key_state_change = old_adc_key_state ^ new_adc_key_state;
-		if (adc_key_state_change && ADC_VOL_UP_MASK)
+		if (adc_key_state_change & ADC_VOL_UP_MASK)
 			button_interrupt(GPIO_VOLUME_UP_L);
-		if (adc_key_state_change && ADC_VOL_DOWN_MASK)
+		if (adc_key_state_change & ADC_VOL_DOWN_MASK)
 			button_interrupt(GPIO_VOLUME_DOWN_L);
 
 		old_adc_key_state = new_adc_key_state;
@@ -877,28 +874,43 @@ void motion_interrupt(enum gpio_signal signal)
 
 const struct i2c_port_t i2c_ports[] = {
 	{
-		"eeprom", I2C_PORT_EEPROM, 400, GPIO_EC_I2C_EEPROM_SCL,
-		GPIO_EC_I2C_EEPROM_SDA
+		.name = "eeprom",
+		.port = I2C_PORT_EEPROM,
+		.kbps = 400,
+		.scl  = GPIO_EC_I2C_EEPROM_SCL,
+		.sda  = GPIO_EC_I2C_EEPROM_SDA
 	},
 
 	{
-		"battery", I2C_PORT_BATTERY, 100, GPIO_EC_I2C_BATTERY_SCL,
-		GPIO_EC_I2C_BATTERY_SDA
+		.name = "battery",
+		.port = I2C_PORT_BATTERY,
+		.kbps = 100,
+		.scl  = GPIO_EC_I2C_BATTERY_SCL,
+		.sda  = GPIO_EC_I2C_BATTERY_SDA
 	},
 
 	{
-		"sensor", I2C_PORT_SENSOR, 400, GPIO_EC_I2C_SENSOR_SCL,
-		GPIO_EC_I2C_SENSOR_SDA
+		.name = "sensor",
+		.port = I2C_PORT_SENSOR,
+		.kbps = 400,
+		.scl  = GPIO_EC_I2C_SENSOR_SCL,
+		.sda  = GPIO_EC_I2C_SENSOR_SDA
 	},
 
 	{
-		"usbc0", I2C_PORT_USB_C0, 1000, GPIO_EC_I2C_USB_C0_SCL,
-		GPIO_EC_I2C_USB_C0_SDA
+		.name = "usbc0",
+		.port = I2C_PORT_USB_C0,
+		.kbps = 1000,
+		.scl  = GPIO_EC_I2C_USB_C0_SCL,
+		.sda  = GPIO_EC_I2C_USB_C0_SDA
 	},
 #if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	{
-		"sub_usbc1", I2C_PORT_SUB_USB_C1, 1000,
-		GPIO_EC_I2C_SUB_USB_C1_SCL, GPIO_EC_I2C_SUB_USB_C1_SDA
+		.name = "sub_usbc1",
+		.port = I2C_PORT_SUB_USB_C1,
+		.kbps = 1000,
+		.scl  = GPIO_EC_I2C_SUB_USB_C1_SCL,
+		.sda  = GPIO_EC_I2C_SUB_USB_C1_SDA
 	},
 #endif
 };

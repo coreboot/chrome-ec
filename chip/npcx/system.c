@@ -872,7 +872,7 @@ void system_pre_init(void)
 		BIT(NPCX_PWDWN_CTL6_ITIM6_PD) |
 #endif
 		BIT(NPCX_PWDWN_CTL6_ITIM4_PD); /* Skip ITIM5_PD */
-#if !defined(CONFIG_HOSTCMD_ESPI)
+#if !defined(CONFIG_HOST_INTERFACE_ESPI)
 	pwdwn6 |= 1 << NPCX_PWDWN_CTL6_ESPI_PD;
 #endif
 	NPCX_PWDWN_CTL(NPCX_PMC_PWDWN_6) = pwdwn6;
@@ -1348,14 +1348,8 @@ void system_jump_to_booter(void)
 	 */
 	clock_turbo();
 
-/*
- * npcx9 Rev.1 has the problem for download_from_flash API.
- * Workwaroud it by executing the system_download_from_flash function
- * in the suspend RAM like npcx5.
- * TODO: Removing npcx9 when Rev.2 is available.
- */
 	/* Bypass for GMDA issue of ROM api utilities */
-#if defined(CHIP_FAMILY_NPCX5) || defined(CONFIG_WORKAROUND_FLASH_DOWNLOAD_API)
+#if defined(CHIP_FAMILY_NPCX5)
 	system_download_from_flash(
 		flash_offset,      /* The offset of the data in spi flash */
 		CONFIG_PROGRAM_MEMORY_BASE, /* RAM Addr of downloaded data */

@@ -84,40 +84,21 @@ build/cerise/RW/space_free_flash grew by 548 bytes: (7076 to 7624)
 
 ### Checking a single zephyr-ec build
 
-By default all the information messages from the `zmake` tool are hidden during
-builds of zephyr-ec boards.
-
-Changing the logging level to INFO, displays the flash and SRAM usage of board.
+By default, `zmake` will display the flash and SRAM usage of the
+board.
 
 ```
-$ zmake -l INFO configure -b zephyr/projects/volteer/volteer
-INFO: Clearing old build directory /mnt/host/source/src/platform/ec/build/zephyr/projects/volteer/volteer
+$ zmake configure -b volteer
     ...
-INFO: [/mnt/host/source/src/platform/ec/build/zephyr/projects/volteer/volteer:ro]Memory region         Used Size  Region Size  %age Used
-INFO: [/mnt/host/source/src/platform/ec/build/zephyr/projects/volteer/volteer:ro]FLASH:      238852 B       512 KB     45.56%
-INFO: [/mnt/host/source/src/platform/ec/build/zephyr/projects/volteer/volteer:ro]SRAM:       57144 B        62 KB     90.01%
-INFO: [/mnt/host/source/src/platform/ec/build/zephyr/projects/volteer/volteer:ro]IDT_LIST:          0 GB         2 KB      0.00%
-INFO: [/mnt/host/source/src/platform/ec/build/zephyr/projects/volteer/volteer:rw]Memory region         Used Size  Region Size  %age Used
-INFO: [/mnt/host/source/src/platform/ec/build/zephyr/projects/volteer/volteer:rw]FLASH:      238852 B       512 KB     45.56%
-INFO: [/mnt/host/source/src/platform/ec/build/zephyr/projects/volteer/volteer:rw]SRAM:       57144 B        62 KB     90.01%
-INFO: [/mnt/host/source/src/platform/ec/build/zephyr/projects/volteer/volteer:rw]IDT_LIST:          0 GB         2 KB      0.00%
-```
-
-For easier to read output, you can run the ninja build tool directly and see the
-RO and RW footprint.
-
-```
-$ zmake configure zephyr/projects/volteer/volteer/
-$ ninja -C build/zephyr/projects/volteer/volteer/build-ro
-ninja: Entering directory 'build/zephyr/projects/volteer/volteer/build-ro'
-[1/324] Preparing syscall dependency handling
-
-[317/324] Linking C executable zephyr/zephyr_prebuilt.elf
-
-[324/324] Linking C executable zephyr/zephyr.elf
+Building /mnt/host/source/src/platform/ec/build/zephyr/volteer:ro: /usr/bin/ninja -C /mnt/host/source/src/platform/ec/build/zephyr/volteer/build-ro
 Memory region         Used Size  Region Size  %age Used
-           FLASH:      238852 B       512 KB     45.56%
-            SRAM:       57144 B        62 KB     90.01%
+           FLASH:      230852 B       512 KB     44.03%
+            SRAM:       51520 B        62 KB     81.15%
+        IDT_LIST:          0 GB         2 KB      0.00%
+Building /mnt/host/source/src/platform/ec/build/zephyr/volteer:rw: /usr/bin/ninja -C /mnt/host/source/src/platform/ec/build/zephyr/volteer/build-rw
+Memory region         Used Size  Region Size  %age Used
+           FLASH:      230852 B       512 KB     44.03%
+            SRAM:       51520 B        62 KB     81.15%
         IDT_LIST:          0 GB         2 KB      0.00%
 ```
 
@@ -138,7 +119,7 @@ images outside chroot before running the commands below.
 
 ```
 # Configure the Volteer zephyr project, storing the build files in /tmp/zephyr-volteer
-$ zmake configure -B /tmp/zephyr-volteer zephyr/projects/volteer/volteer -t zephyr
+$ zmake configure -B /tmp/zephyr-volteer volteer
 
 # Build the RO image
 $ ninja -C /tmp/zephyr-volteer/build-ro
@@ -233,6 +214,7 @@ prj.conf file to disable the console command.
 | x | CONFIG_CMD_PD | `pd` | Used by FAFT PD |
 | | CONFIG_CMD_PD_DEV_DUMP_INFO | | Not a console command |
 | | CONFIG_CMD_PD_FLASH | `pd flash` | Not supported by TCPMv2 |
+| | CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE | `pd <port> srccaps` | Defining this reduces the verbosity of this command, saving bytes |
 | | CONFIG_CMD_PECI | `peci` | firmware_ECThermal uses `ectool tempsinfo` |
 | | CONFIG_CMD_PLL | `pll` | only used by lm4 chip |
 | | CONFIG_CMD_POWERINDEBUG | `powerindebug` | |
@@ -451,7 +433,7 @@ Note that there are some [FAFT tests][5] that rely on the GPIO name. If you
 enable this option, you may also need to change firmware testing configuration
 [file][6].
 
-[1]:./zephyr_build.md#Working-outside-the-chroot
+[1]:./zephyr/zephyr_build.md#Working-outside-the-chroot
 [2]:https://github.com/zephyrproject-rtos/zephyr/blob/main/subsys/shell/Kconfig
 [3]:https://docs.zephyrproject.org/latest/guides/optimizations/tools.html
 [4]:https://github.com/zephyrproject-rtos/zephyr/issues/2112

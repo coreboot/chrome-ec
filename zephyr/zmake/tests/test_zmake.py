@@ -13,11 +13,13 @@ import unittest
 import unittest.mock as mock
 from unittest.mock import patch
 
+import pytest
 from testfixtures import LogCapture
 
 import zmake.build_config
 import zmake.jobserver
 import zmake.multiproc as multiproc
+import zmake.output_packers
 import zmake.project
 import zmake.toolchains
 import zmake.zmake as zm
@@ -33,10 +35,14 @@ class FakeProject:
     def __init__(self):
         self.packer = mock.Mock()
         self.packer.pack_firmware = mock.Mock(return_value=[])
-        self.project_dir = pathlib.Path("FakeProjectDir")
 
-        self.config = mock.Mock()
-        self.config.supported_zephyr_versions = [(2, 5)]
+        self.config = zmake.project.ProjectConfig(
+            project_name="fakeproject",
+            zephyr_board="fakeboard",
+            supported_toolchains=["llvm"],
+            output_packer=zmake.output_packers.ElfPacker,
+            project_dir=pathlib.Path("FakeProjectDir"),
+        )
 
     @staticmethod
     def iter_builds():
@@ -140,12 +146,17 @@ VERSION_TWEAK = 0
 EXTRAVERSION =
 """
                 )
+            (pathlib.Path(tmpname) / "project_name.txt").write_text("fakeproject")
             zephyr_base.resolve = mock.Mock(return_value=pathlib.Path(tmpname))
             with patch("zmake.version.get_version_string", return_value="123"):
-                with patch.object(zmake.project, "Project", return_value=FakeProject()):
+                with patch.object(
+                    zmake.project,
+                    "find_projects",
+                    return_value={"fakeproject": FakeProject()},
+                ):
                     if use_configure:
                         zmk.configure(
-                            pathlib.Path(tmpname), build_dir=pathlib.Path("build")
+                            "fakeproject", build_dir=pathlib.Path("build"), clobber=True
                         )
                     else:
                         with patch("zmake.version.write_version_header", autospec=True):
@@ -218,6 +229,72 @@ class TestFilters(unittest.TestCase):
 
         dt_errs = [rec for rec in recs if "adc" in rec]
         assert "devicetree error: 'adc' is marked as required" in list(dt_errs)[0]
+
+
+@pytest.mark.parametrize(
+    ["project_names", "format", "search_dir", "expected_output"],
+    [
+        (
+            ["link", "samus"],
+            "{config.project_name}\n",
+            None,
+            "link\nsamus\n",
+        ),
+        (
+            ["link", "samus"],
+            "{config.project_name}\n",
+            pathlib.Path("/foo/bar"),
+            "link\nsamus\n",
+        ),
+        (
+            [],
+            "{config.project_name}\n",
+            None,
+            "",
+        ),
+        (
+            ["link"],
+            "",
+            None,
+            "",
+        ),
+        (
+            ["link"],
+            "{config.zephyr_board}\n",
+            None,
+            "some_board\n",
+        ),
+        (
+            ["link"],
+            "{config.project_name} is_test={config.is_test}\n",
+            None,
+            "link is_test=False\n",
+        ),
+    ],
+)
+def test_list_projects(project_names, format, search_dir, expected_output, capsys):
+    """Test listing projects with default directory."""
+    fake_projects = {
+        name: zmake.project.Project(
+            zmake.project.ProjectConfig(
+                project_name=name,
+                zephyr_board="some_board",
+                supported_toolchains=["coreboot-sdk"],
+                output_packer=zmake.output_packers.RawBinPacker,
+            )
+        )
+        for name in project_names
+    }
+    zmk = zm.Zmake()
+    with mock.patch(
+        "zmake.project.find_projects",
+        autospec=True,
+        return_value=fake_projects,
+    ):
+        zmk.list_projects(format=format, search_dir=search_dir)
+
+    captured = capsys.readouterr()
+    assert captured.out == expected_output
 
 
 if __name__ == "__main__":

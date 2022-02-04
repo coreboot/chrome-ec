@@ -106,6 +106,47 @@ static void port_ocp_interrupt(enum gpio_signal signal)
 	hook_call_deferred(&update_5v_usage_data, 0);
 }
 
+/*
+ * Reverse current protection:
+ * When the board asserts +5Vs_V2_ADP_PRESENT_L active low, the EC needs
+ * to turn off the jack charger by setting EN_AC_JACK_CHARGER_EC_L high.
+ *
+ * When the board asserts BJ_ADP_PRESENT_L active low, the EC needs to
+ * enable the jack charger by setting EN_AC_JACK_CHARGER_EC_L low.
+ */
+static void ads_5v_deferred(void)
+{
+	int ads_5v_enable = !gpio_get_level(GPIO_ADS_5VS_V2_ADP_PRESENT_L);
+
+	if (ads_5v_enable)
+		gpio_set_level(GPIO_EC_AC_JACK_CHARGER_EC_L, 1);
+}
+DECLARE_DEFERRED(ads_5v_deferred);
+
+void ads_5v_interrupt(enum gpio_signal signal)
+{
+	/* ADS 5v control time*/
+	hook_call_deferred(&ads_5v_deferred_data, (5 * MSEC));
+}
+
+/**
+ * Handle debounced ADS 12v handler.
+ */
+static void ads_12v_deferred(void)
+{
+	int ads_12v_enable = !gpio_get_level(GPIO_BJ_ADP_PRESENT_L);
+
+	if (ads_12v_enable)
+		gpio_set_level(GPIO_EC_AC_JACK_CHARGER_EC_L, 0);
+}
+DECLARE_DEFERRED(ads_12v_deferred);
+
+void ads_12v_interrupt(enum gpio_signal signal)
+{
+	/* ADS 12v control time */
+	hook_call_deferred(&ads_12v_deferred_data, (5 * MSEC));
+}
+
 /******************************************************************************/
 
 #include "gpio_list.h" /* Must come after other header files. */
@@ -123,22 +164,60 @@ const struct pwm_t pwm_channels[] = {
 				.flags = PWM_CONFIG_OPEN_DRAIN,
 				.freq = 25000},
 	[PWM_CH_LED_RED]    = { .channel = 0,
-				.flags = PWM_CONFIG_DSLEEP,
+				.flags = PWM_CONFIG_ACTIVE_LOW |
+					 PWM_CONFIG_DSLEEP,
 				.freq = 2000 },
-	[PWM_CH_LED_WHITE]  = { .channel = 2,
-				.flags = PWM_CONFIG_DSLEEP,
+	[PWM_CH_LED_BLUE]  = { .channel = 2,
+				.flags = PWM_CONFIG_ACTIVE_LOW |
+					 PWM_CONFIG_DSLEEP,
 				.freq = 2000 },
 };
 
 /******************************************************************************/
 /* I2C port map configuration */
 const struct i2c_port_t i2c_ports[] = {
-	{"ina",     I2C_PORT_INA,     400, GPIO_I2C0_SCL, GPIO_I2C0_SDA},
-	{"ppc0",    I2C_PORT_PPC0,    400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"tcpc0",   I2C_PORT_TCPC0,   400, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
-	{"pse",     I2C_PORT_PSE,     400, GPIO_I2C4_SCL, GPIO_I2C4_SDA},
-	{"power",   I2C_PORT_POWER,   400, GPIO_I2C5_SCL, GPIO_I2C5_SDA},
-	{"eeprom",  I2C_PORT_EEPROM,  400, GPIO_I2C7_SCL, GPIO_I2C7_SDA},
+	{
+		.name = "ina",
+		.port = I2C_PORT_INA,
+		.kbps = 400,
+		.scl  = GPIO_I2C0_SCL,
+		.sda  = GPIO_I2C0_SDA
+	},
+	{
+		.name = "ppc0",
+		.port = I2C_PORT_PPC0,
+		.kbps = 400,
+		.scl  = GPIO_I2C1_SCL,
+		.sda  = GPIO_I2C1_SDA
+	},
+	{
+		.name = "tcpc0",
+		.port = I2C_PORT_TCPC0,
+		.kbps = 400,
+		.scl  = GPIO_I2C3_SCL,
+		.sda  = GPIO_I2C3_SDA
+	},
+	{
+		.name = "pse",
+		.port = I2C_PORT_PSE,
+		.kbps = 400,
+		.scl  = GPIO_I2C4_SCL,
+		.sda  = GPIO_I2C4_SDA
+	},
+	{
+		.name = "power",
+		.port = I2C_PORT_POWER,
+		.kbps = 400,
+		.scl  = GPIO_I2C5_SCL,
+		.sda  = GPIO_I2C5_SDA
+	},
+	{
+		.name = "eeprom",
+		.port = I2C_PORT_EEPROM,
+		.kbps = 400,
+		.scl  = GPIO_I2C7_SCL,
+		.sda  = GPIO_I2C7_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -227,23 +306,28 @@ BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
 /******************************************************************************/
 /* Thermal control; drive fan based on temperature sensors. */
-const static struct ec_thermal_config thermal_a = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(90),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(78),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(89),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_A \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(85), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(90), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(78), \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+		.temp_fan_off = C_TO_K(25), \
+		.temp_fan_max = C_TO_K(89), \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_a = THERMAL_A;
 
 struct ec_thermal_config thermal_params[] = {
-	[TEMP_SENSOR_CORE] = thermal_a,
+	[TEMP_SENSOR_CORE] = THERMAL_A,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
@@ -310,7 +394,7 @@ static void board_init(void)
 	 * button is not available.
 	 */
 	if (board_version < 2)
-		button_disable_gpio(GPIO_EC_RECOVERY_BTN_ODL);
+		button_disable_gpio(BUTTON_RECOVERY);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 

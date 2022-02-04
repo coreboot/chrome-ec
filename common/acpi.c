@@ -28,17 +28,17 @@
 #define CPRINTS(format, args...) cprints(CC_LPC, format, ## args)
 
 /* Last received ACPI command */
-static uint8_t __bss_slow acpi_cmd;
+static uint8_t acpi_cmd;
 /* First byte of data after ACPI command */
-static uint8_t __bss_slow acpi_addr;
+static uint8_t acpi_addr;
 /* Number of data writes after command */
-static int __bss_slow acpi_data_count;
+static int acpi_data_count;
 /* Test byte in ACPI memory space */
-static uint8_t __bss_slow acpi_mem_test;
+static uint8_t acpi_mem_test;
 
 #ifdef CONFIG_DPTF
-static int __bss_slow dptf_temp_sensor_id;	/* last sensor ID written */
-static int __bss_slow dptf_temp_threshold;	/* last threshold written */
+static int dptf_temp_sensor_id;	/* last sensor ID written */
+static int dptf_temp_threshold;	/* last threshold written */
 
 /*
  * Current DPTF profile number.
@@ -133,6 +133,10 @@ static int acpi_read(uint8_t addr)
 	uint8_t *memmap_addr = (uint8_t *)(lpc_get_memmap_range() + addr -
 					   EC_ACPI_MEM_MAPPED_BEGIN);
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wtautological-constant-out-of-range-compare"
+#endif /* __clang__ */
 	/* Check for out-of-range read. */
 	if (addr < EC_ACPI_MEM_MAPPED_BEGIN ||
 	    addr >= EC_ACPI_MEM_MAPPED_BEGIN + EC_ACPI_MEM_MAPPED_SIZE) {
@@ -140,6 +144,10 @@ static int acpi_read(uint8_t addr)
 			acpi_addr);
 		return 0xff;
 	}
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif /* __clang__ */
+
 
 	/* Read from cache if enabled (burst mode). */
 	if (acpi_read_cache.enabled) {

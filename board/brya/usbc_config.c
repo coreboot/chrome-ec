@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "cbi.h"
+#include "charger.h"
+#include "charge_ramp.h"
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
@@ -36,6 +39,16 @@
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 
+#ifdef CONFIG_ZEPHYR
+enum ioex_port {
+	IOEX_C0_NCT38XX = 0,
+	IOEX_C2_NCT38XX,
+	IOEX_ID_1_C0_NCT38XX,
+	IOEX_ID_1_C2_NCT38XX,
+	IOEX_PORT_COUNT
+};
+#endif /* CONFIG_ZEPHYR */
+
 /* USBC TCPC configuration */
 const struct tcpc_config_t tcpc_config[] = {
 	[USBC_PORT_C0] = {
@@ -56,7 +69,8 @@ const struct tcpc_config_t tcpc_config[] = {
 		},
 		.drv = &ps8xxx_tcpm_drv,
 		.flags = TCPC_FLAGS_TCPCI_REV2_0 |
-			 TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V,
+			 TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V |
+			 TCPC_FLAGS_CONTROL_VCONN,
 	},
 	[USBC_PORT_C2] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -70,6 +84,16 @@ const struct tcpc_config_t tcpc_config[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
+
+/******************************************************************************/
+/* USB-A charging control */
+
+const int usb_port_enable[USB_PORT_COUNT] = {
+	GPIO_EN_PP5000_USBA_R,
+};
+BUILD_ASSERT(ARRAY_SIZE(usb_port_enable) == USB_PORT_COUNT);
+
+/******************************************************************************/
 
 /* USBC PPC configuration */
 struct ppc_config_t ppc_chips[] = {
@@ -148,6 +172,7 @@ const struct usb_mux usb_muxes[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
 
+#ifndef CONFIG_ZEPHYR
 /* BC1.2 charger detect configuration */
 const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	[USBC_PORT_C0] = {
@@ -179,28 +204,63 @@ struct ioexpander_config_t ioex_config[] = {
 		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 	[IOEX_C2_NCT38XX] = {
 		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR2_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 	[IOEX_ID_1_C0_NCT38XX] = {
 		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 	[IOEX_ID_1_C2_NCT38XX] = {
 		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
 		.i2c_addr_flags = NCT38XX_I2C_ADDR2_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DISABLED,
+		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(ioex_config) == CONFIG_IO_EXPANDER_PORT_COUNT);
+#endif /* !CONFIG_ZEPHYR */
+
+#ifdef CONFIG_CHARGE_RAMP_SW
+
+/*
+ * TODO(b/181508008): tune this threshold
+ */
+
+#define BC12_MIN_VOLTAGE 4400
+
+/**
+ * Return true if VBUS is too low
+ */
+int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
+{
+	int voltage;
+
+	if (charger_get_vbus_voltage(port, &voltage))
+		voltage = 0;
+
+	if (voltage == 0) {
+		CPRINTS("%s: must be disconnected", __func__);
+		return 1;
+	}
+
+	if (voltage < BC12_MIN_VOLTAGE) {
+		CPRINTS("%s: port %d: vbus %d lower than %d", __func__,
+			port, voltage, BC12_MIN_VOLTAGE);
+		return 1;
+	}
+
+	return 0;
+}
+
+#endif /* CONFIG_CHARGE_RAMP_SW */
 
 void config_usb_db_type(void)
 {
@@ -218,14 +278,20 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 	enum ioex_signal rst_signal;
 
 	if (me->usb_port == USBC_PORT_C0) {
+/* TODO: explore how to handle board id in zephyr*/
+#ifndef CONFIG_ZEPHYR
 		if (get_board_id() == 1)
 			rst_signal = IOEX_ID_1_USB_C0_RT_RST_ODL;
 		else
+#endif /* !CONFIG_ZEPHYR */
 			rst_signal = IOEX_USB_C0_RT_RST_ODL;
 	} else if (me->usb_port == USBC_PORT_C2) {
+/* TODO: explore how to handle board id in zephyr*/
+#ifndef CONFIG_ZEPHYR
 		if (get_board_id() == 1)
 			rst_signal = IOEX_ID_1_USB_C2_RT_RST_ODL;
 		else
+#endif /* !CONFIG_ZEPHYR */
 			rst_signal = IOEX_USB_C2_RT_RST_ODL;
 	} else {
 		return EC_ERROR_INVAL;
@@ -275,8 +341,11 @@ void board_reset_pd_mcu(void)
 	enum gpio_signal tcpc_rst;
 
 	if (get_board_id() == 1)
+/* TODO: explore how to handle board id in zephyr*/
+#ifndef CONFIG_ZEPHYR
 		tcpc_rst = GPIO_ID_1_USB_C0_C2_TCPC_RST_ODL;
 	else
+#endif /* !CONFIG_ZEPHYR */
 		tcpc_rst = GPIO_USB_C0_C2_TCPC_RST_ODL;
 
 	/*
@@ -306,30 +375,23 @@ void board_reset_pd_mcu(void)
 	msleep(50);
 }
 
-static void enable_ioex(int ioex)
-{
-	ioex_config[ioex].flags &= ~IOEX_FLAGS_DISABLED;
-	ioex_init(ioex);
-}
-
 static void board_tcpc_init(void)
 {
 	/* Don't reset TCPCs after initial reset */
-	if (!system_jumped_late()) {
+	if (!system_jumped_late())
 		board_reset_pd_mcu();
 
-		/*
-		 * These IO expander pins are implemented using the
-		 * C0/C2 TCPC, so they must be set up after the TCPC has
-		 * been taken out of reset.
-		 */
-		if (get_board_id() == 1) {
-			enable_ioex(IOEX_ID_1_C0_NCT38XX);
-			enable_ioex(IOEX_ID_1_C2_NCT38XX);
-		} else {
-			enable_ioex(IOEX_C0_NCT38XX);
-			enable_ioex(IOEX_C2_NCT38XX);
-		}
+	/*
+	 * These IO expander pins are implemented using the
+	 * C0/C2 TCPC, so they must be set up after the TCPC has
+	 * been taken out of reset.
+	 */
+	if (get_board_id() == 1) {
+		ioex_init(IOEX_ID_1_C0_NCT38XX);
+		ioex_init(IOEX_ID_1_C2_NCT38XX);
+	} else {
+		ioex_init(IOEX_C0_NCT38XX);
+		ioex_init(IOEX_C2_NCT38XX);
 	}
 
 	/* Enable PPC interrupts. */
@@ -339,14 +401,18 @@ static void board_tcpc_init(void)
 	/* Enable TCPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_C2_TCPC_INT_ODL);
 
+#ifndef CONFIG_ZEPHYR
 	/* Enable BC1.2 interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C2_BC12_INT_ODL);
+#endif /* !CONFIG_ZEPHYR */
 
 	if (ec_cfg_usb_db_type() != DB_USB_ABSENT) {
 		gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
 		gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
+#ifndef CONFIG_ZEPHYR
 		gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
+#endif /* !CONFIG_ZEPHYR */
 	}
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_CHIPSET);

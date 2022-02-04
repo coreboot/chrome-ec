@@ -237,31 +237,41 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-const static struct ec_thermal_config thermal_a = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_A \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(85), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_a = THERMAL_A;
 
-const static struct ec_thermal_config thermal_b = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(73),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_B \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(73), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(85), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_b = THERMAL_B;
 
 struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT];
 
@@ -814,9 +824,9 @@ static void adc_vol_key_press_check(void)
 	}
 	if (new_adc_key_state != old_adc_key_state) {
 		adc_key_state_change = old_adc_key_state ^ new_adc_key_state;
-		if (adc_key_state_change && ADC_VOL_UP_MASK)
+		if (adc_key_state_change & ADC_VOL_UP_MASK)
 			button_interrupt(GPIO_VOLUME_UP_L);
-		if (adc_key_state_change && ADC_VOL_DOWN_MASK)
+		if (adc_key_state_change & ADC_VOL_DOWN_MASK)
 			button_interrupt(GPIO_VOLUME_DOWN_L);
 
 		old_adc_key_state = new_adc_key_state;

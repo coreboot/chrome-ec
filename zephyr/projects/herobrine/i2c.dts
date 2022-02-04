@@ -1,0 +1,152 @@
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+/ {
+	aliases {
+		i2c-0 = &i2c0_0;
+		i2c-1 = &i2c1_0;
+		i2c-2 = &i2c2_0;
+		i2c-3 = &i2c3_0;
+		i2c-4 = &i2c4_1;
+		i2c-5 = &i2c5_0;
+		i2c-7 = &i2c7_0;
+	};
+
+	named-i2c-ports {
+		compatible = "named-i2c-ports";
+
+		i2c_power: power {
+			i2c-port = <&i2c0_0>;
+			enum-name = "I2C_PORT_POWER";
+		};
+		battery {
+			i2c-port = <&i2c0_0>;
+			remote-port = <0>;
+			enum-name = "I2C_PORT_BATTERY";
+		};
+		virtual-battery {
+			i2c-port = <&i2c0_0>;
+			enum-name = "I2C_PORT_VIRTUAL_BATTERY";
+		};
+		charger {
+			i2c-port = <&i2c0_0>;
+			enum-name = "I2C_PORT_CHARGER";
+		};
+		i2c_tcpc0: tcpc0 {
+			i2c-port = <&i2c1_0>;
+			enum-name = "I2C_PORT_TCPC0";
+		};
+		i2c_tcpc1: tcpc1 {
+			i2c-port = <&i2c2_0>;
+			enum-name = "I2C_PORT_TCPC1";
+		};
+		rtc {
+			i2c-port = <&i2c4_1>;
+			enum-name = "I2C_PORT_RTC";
+		};
+		i2c_eeprom: eeprom {
+			i2c-port = <&i2c5_0>;
+			enum-name = "I2C_PORT_EEPROM";
+		};
+		i2c_sensor: sensor {
+			i2c-port = <&i2c7_0>;
+			enum-name = "I2C_PORT_SENSOR";
+		};
+		accel {
+			i2c-port = <&i2c7_0>;
+			enum-name = "I2C_PORT_ACCEL";
+		};
+	};
+
+
+};
+
+&i2c0_0 {
+	label = "I2C_POWER";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+
+	isl9238: isl9238@9 {
+		compatible = "intersil,isl9238";
+		reg = <0x09>;
+		label = "ISL9238_CHARGER";
+	};
+};
+
+&i2c_ctrl0 {
+	status = "okay";
+};
+
+&i2c1_0 {
+	label = "I2C_USB_C0_PD";
+	status = "okay";
+	/*
+	 * TODO(b/200280341): PS8805 SPI ROM access
+	 *
+	 * The PS8805 supports 1 MHz during normal operation, but only
+	 * 400 Khz during firmware updates. The I2C passthru commands don't
+	 * currently support changing the I2C frequency or notifying the EC
+	 * that a programming operation is going to start.  Lower the clock
+	 * rate to 400 kHz for all accesses.
+	 */
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+&i2c_ctrl1 {
+	status = "okay";
+};
+
+&i2c2_0 {
+	label = "I2C_USB_C1_PD";
+	status = "okay";
+	/* TODO(b/200280341): PS8805 SPI ROM access */
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+&i2c_ctrl2 {
+	status = "okay";
+};
+
+&i2c3_0 {
+	/* Not used as no WLC connected */
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+&i2c4_1 {
+	label = "I2C_RTC";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+
+	pcf85063a: pcf85063a@51 {
+		compatible = "nxp,rtc-pcf85063a";
+		reg = <0x51>;
+		label = "RTC_PCF85063A";
+		int-pin = <&gpio_rtc_ec_wake_odl>;
+	};
+};
+
+&i2c_ctrl4 {
+	status = "okay";
+};
+
+&i2c5_0 {
+	label = "I2C_EEPROM";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+&i2c_ctrl5 {
+	status = "okay";
+};
+
+&i2c7_0 {
+	label = "I2C_SENSOR";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+&i2c_ctrl7 {
+	status = "okay";
+};

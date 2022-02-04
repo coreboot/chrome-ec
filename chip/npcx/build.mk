@@ -11,6 +11,9 @@ CORE:=cortex-m
 # Allow the full Cortex-M4 instruction set
 CFLAGS_CPU+=-march=armv7e-m -mcpu=cortex-m4
 
+# Disable overlapping section warning that linker emits due to NPCX_RO_HEADER.
+LDFLAGS_EXTRA+=-Wl,--no-check-sections
+
 # Assign default CHIP_FAMILY as npcx5 for old boards used npcx5 series
 ifeq ($(CHIP_FAMILY),)
 CHIP_FAMILY:=npcx5
@@ -30,9 +33,9 @@ chip-$(CONFIG_FANS)+=fan.o
 chip-$(CONFIG_FLASH_PHYSICAL)+=flash.o
 chip-$(CONFIG_I2C)+=i2c.o i2c-$(CHIP_FAMILY).o
 chip-$(CONFIG_HOSTCMD_X86)+=lpc.o
-chip-$(CONFIG_HOSTCMD_ESPI)+=espi.o
+chip-$(CONFIG_HOST_INTERFACE_ESPI)+=espi.o
 chip-$(CONFIG_PECI)+=peci.o
-chip-$(CONFIG_HOSTCMD_SHI)+=shi.o
+chip-$(CONFIG_HOST_INTERFACE_SHI)+=shi.o
 chip-$(CONFIG_CEC)+=cec.o
 # pwm functions are implemented with the fan functions
 chip-$(CONFIG_PWM)+=pwm.o
@@ -69,13 +72,13 @@ show_esct_cmd=$(if $(V),,echo '  ECST   ' $(subst $(out)/,,$@) ; )
 # size when the CONFIG_CHIP_INIT_ROM_REGION is used. Note that the -fwlen
 # parameter for the ecst utility must be in hex.
 cmd_fwlen=$(shell awk '\
-  /__flash_used =/ {flash_used = strtonum($$1)} \
+  /__flash_used/ {flash_used = strtonum("0x" $$1)} \
   END {printf ("%x", flash_used)}' $(1))
 
 # ECST options for header
 bld_ecst=${out}/util/ecst -chip $(CHIP_VARIANT) \
 	-usearmrst -mode bt -ph -i $(1) -o $(2) -nohcrc -nofcrc -flashsize 8 \
-	-fwlen $(call cmd_fwlen, $(patsubst %.flat,%.map,$(2))) \
+	-fwlen $(call cmd_fwlen, $(patsubst %.flat,%.smap,$(2))) \
 	-spimaxclk 50 -spireadmode dual 1> /dev/null
 
 # Replace original one with the flat file including header

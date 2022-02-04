@@ -341,13 +341,13 @@ static int init_alert_mask(int port)
 	if (TCPC_FLAGS_VSAFE0V(tcpc_config[port].flags))
 		mask |= TCPC_REG_ALERT_EXT_STATUS;
 
-	if (IS_ENABLED(CONFIG_USB_PD_FRS_TCPC))
+	if (tcpm_tcpc_has_frs_control(port))
 		mask |= TCPC_REG_ALERT_ALERT_EXT;
 
 	/* Set the alert mask in TCPC */
 	rv = tcpc_write16(port, TCPC_REG_ALERT_MASK, mask);
 
-	if (IS_ENABLED(CONFIG_USB_PD_FRS_TCPC)) {
+	if (tcpm_tcpc_has_frs_control(port)) {
 		if (rv)
 			return rv;
 
@@ -580,6 +580,19 @@ int tcpci_enter_low_power_mode(int port)
 {
 	return tcpc_write(port, TCPC_REG_COMMAND, TCPC_REG_COMMAND_I2CIDLE);
 }
+
+void tcpci_wake_low_power_mode(int port)
+{
+	/*
+	 * TCPCI 4.8.1 I2C Interface - wake the TCPC with a throw-away command
+	 *
+	 * TODO(b/205140007): Align LPM exit to TCPCI spec for TCPCs which can
+	 * correctly support it
+	 */
+	i2c_write8(tcpc_config[port].i2c_info.port,
+		   tcpc_config[port].i2c_info.addr_flags,
+		   TCPC_REG_COMMAND, TCPC_REG_COMMAND_WAKE_I2C);
+}
 #endif
 
 int tcpci_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
@@ -661,15 +674,6 @@ int tcpci_tcpm_set_vconn(int port, int enable)
 	reg &= ~TCPC_REG_POWER_CTRL_VCONN(1);
 	reg |= TCPC_REG_POWER_CTRL_VCONN(enable);
 
-	/*
-	 * Add delay of writing TCPC_REG_POWER_CTRL makes
-	 * CC status being judged correctly when disable VCONN.
-	 * This may be a PS8XXX firmware issue, Parade is still trying.
-	 * https://partnerissuetracker.corp.google.com/issues/185202064
-	 */
-	if (!enable)
-		msleep(PS8XXX_VCONN_TURN_OFF_DELAY_US);
-
 	return tcpc_write(port, TCPC_REG_POWER_CTRL, reg);
 }
 
@@ -725,7 +729,7 @@ int tcpci_tcpm_set_rx_enable(int port, int enable)
 	return tcpc_write(port, TCPC_REG_RX_DETECT, detect_sop_en);
 }
 
-#ifdef CONFIG_USB_PD_FRS_TCPC
+#ifdef CONFIG_USB_PD_FRS
 int tcpci_tcpc_fast_role_swap_enable(int port, int enable)
 {
 	return tcpc_update8(port,
@@ -873,12 +877,12 @@ struct queue {
 	 * Head points to the index of the first empty slot to put a new RX
 	 * message. Must be masked before used in lookup.
 	 */
-	uint32_t head;
+	atomic_t head;
 	/*
 	 * Tail points to the index of the first message for the PD task to
 	 * consume. Must be masked before used in lookup.
 	 */
-	uint32_t tail;
+	atomic_t tail;
 	struct cached_tcpm_message buffer[CACHE_DEPTH];
 };
 static struct queue cached_messages[CONFIG_USB_PD_PORT_MAX_COUNT];
@@ -1013,6 +1017,18 @@ int tcpci_tcpm_transmit(int port, enum tcpci_msg_type type,
 			if (rv)
 				return rv;
 		}
+	}
+
+	/*
+	 * The PRL_RX state machine should force a discard of PRL_TX any time a
+	 * new message comes in.  However, since most of the PRL_RX runs on
+	 * the TCPC, we may receive a RX interrupt between the EC PRL_RX and
+	 * PRL_TX state machines running.  In this case, mark the message
+	 * discarded and don't tell the TCPC to transmit.
+	 */
+	if (tcpm_has_pending_message(port)) {
+		pd_transmit_complete(port, TCPC_TX_COMPLETE_DISCARDED);
+		return EC_ERROR_BUSY;
 	}
 
 	/*
@@ -1293,7 +1309,7 @@ void tcpci_tcpc_alert(int port)
 	    alert & TCPC_REG_ALERT_TX_FAILED)
 		CPRINTS("C%d Hard Reset sent", port);
 
-	if (IS_ENABLED(CONFIG_USB_PD_FRS_TCPC)
+	if (tcpm_tcpc_has_frs_control(port)
 	    && (alert_ext & TCPC_REG_ALERT_EXT_SNK_FRS))
 		pd_got_frs_signal(port);
 

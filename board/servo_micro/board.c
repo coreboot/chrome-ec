@@ -314,6 +314,7 @@ const void *const usb_strings[] = {
 	[USB_STR_PRODUCT]      = USB_STRING_DESC("Servo Micro"),
 	[USB_STR_SERIALNO]     = 0,
 	[USB_STR_VERSION]      = USB_STRING_DESC(CROS_EC_VERSION32),
+	[USB_STR_SPI_NAME]     = USB_STRING_DESC("SPI"),
 	[USB_STR_I2C_NAME]     = USB_STRING_DESC("I2C"),
 	[USB_STR_USART4_STREAM_NAME]  = USB_STRING_DESC("UART3"),
 	[USB_STR_CONSOLE_NAME] = USB_STRING_DESC("Servo Shell"),
@@ -372,8 +373,13 @@ USB_SPI_CONFIG(usb_spi, USB_IFACE_SPI, USB_EP_SPI, 0);
 
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"master", I2C_PORT_MASTER, 100,
-		GPIO_MASTER_I2C_SCL, GPIO_MASTER_I2C_SDA},
+	{
+		.name = "master",
+		.port = I2C_PORT_MASTER,
+		.kbps = 100,
+		.scl  = GPIO_MASTER_I2C_SCL,
+		.sda  = GPIO_MASTER_I2C_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 

@@ -4,6 +4,7 @@
  */
 /* tiny substitute of the runtime layer */
 
+#include "atomic.h"
 #include "chip/stm32/clock-f.h"
 #include "clock.h"
 #include "common.h"
@@ -16,7 +17,7 @@
 #include "util.h"
 
 volatile uint32_t last_event;
-uint32_t sleep_mask;
+atomic_t sleep_mask;
 
 /* High word of the 64-bit timestamp counter  */
 static volatile uint32_t clksrc_high;
@@ -74,7 +75,7 @@ uint32_t task_set_event(task_id_t tskid, uint32_t event)
 	return 0;
 }
 
-void tim2_interrupt(void)
+static void tim2_interrupt(void)
 {
 	uint32_t stat = STM32_TIM_SR(2);
 
@@ -148,7 +149,7 @@ uint32_t task_wait_event(int timeout_us)
 
 	t1.val = get_time().val + timeout_us;
 
-	asm volatile("cpsid i");
+	interrupt_disable();
 	/* the event already happened */
 	if (last_event || !timeout_us) {
 		evt = last_event;
@@ -195,7 +196,7 @@ uint32_t task_wait_event(int timeout_us)
 
 		asm volatile("cpsie i ; isb");
 		/* note: interrupt that woke us up will run here */
-		asm volatile("cpsid i");
+		interrupt_disable();
 
 		t0 = get_time();
 		/* check for timeout if timeout was set */
@@ -238,7 +239,7 @@ noreturn
 void __keep cpu_reset(void)
 {
 	/* Disable interrupts */
-	asm volatile("cpsid i");
+	interrupt_disable();
 	/* reboot the CPU */
 	CPU_NVIC_APINT = 0x05fa0004;
 	/* Spin and wait for reboot; should never return */
@@ -258,17 +259,17 @@ void system_reset(int flags)
 void exception_panic(void) __attribute__((naked));
 void exception_panic(void)
 {
-#ifdef CONFIG_DEBUG_PRINTF
 	asm volatile(
+#ifdef CONFIG_DEBUG_PRINTF
 		"mov r0, %0\n"
 		/* TODO: Should this be SP_process instead of SP_main? */
 		"mov r3, sp\n"
 		"ldr r1, [r3, #6*4]\n" /* retrieve exception PC */
 		"ldr r2, [r3, #5*4]\n" /* retrieve exception LR */
 		"bl debug_printf\n"
-	: : "r"("PANIC PC=%08x LR=%08x\n\n"));
 #endif
-	cpu_reset();
+		"bl cpu_reset\n"
+	: : "r"("PANIC PC=%08x LR=%08x\n\n"));
 }
 
 void panic_reboot(void)

@@ -11,6 +11,7 @@
 #include "common.h"
 #include "core/cortex-m/cpu.h"
 #include "cros_board_info.h"
+#include "driver/als_tcs3400.h"
 #include "driver/ina3221.h"
 #include "ec_commands.h"
 #include "extpower.h"
@@ -38,6 +39,103 @@
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
+
+/* Sensors */
+
+/* TCS3400 private data */
+static struct als_drv_data_t g_tcs3400_data = {
+	.als_cal.scale = 1,
+	.als_cal.uscale = 0,
+	.als_cal.offset = 0,
+	.als_cal.channel_scale = {
+		.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kc */
+		.cover_scale = ALS_CHANNEL_SCALE(1.0),     /* CT */
+	},
+};
+
+static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
+	/*
+	 * b/202465034: calculate the actual coefficients and scaling factors
+	 */
+	.calibration.rgb_cal[X] = {
+		.offset = 0,
+		.scale = {
+			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kr */
+			.cover_scale = ALS_CHANNEL_SCALE(1.0)
+		},
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(0),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(0),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0),
+	},
+	.calibration.rgb_cal[Y] = {
+		.offset = 0,
+		.scale = {
+			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kg */
+			.cover_scale = ALS_CHANNEL_SCALE(1.0)
+		},
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(0),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(0),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0.1),
+	},
+	.calibration.rgb_cal[Z] = {
+		.offset = 0,
+		.scale = {
+			.k_channel_scale = ALS_CHANNEL_SCALE(1.0), /* kb */
+			.cover_scale = ALS_CHANNEL_SCALE(1.0)
+		},
+		.coeff[TCS_RED_COEFF_IDX] = FLOAT_TO_FP(0),
+		.coeff[TCS_GREEN_COEFF_IDX] = FLOAT_TO_FP(0),
+		.coeff[TCS_BLUE_COEFF_IDX] = FLOAT_TO_FP(0),
+		.coeff[TCS_CLEAR_COEFF_IDX] = FLOAT_TO_FP(0),
+	},
+	.calibration.irt = INT_TO_FP(1),
+	.saturation.again = TCS_DEFAULT_AGAIN,
+	.saturation.atime = TCS_DEFAULT_ATIME,
+};
+
+struct motion_sensor_t motion_sensors[] = {
+	[CLEAR_ALS] = {
+		.name = "Clear Light",
+		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.chip = MOTIONSENSE_CHIP_TCS3400,
+		.type = MOTIONSENSE_TYPE_LIGHT,
+		.location = MOTIONSENSE_LOC_BASE,
+		.drv = &tcs3400_drv,
+		.drv_data = &g_tcs3400_data,
+		.port = I2C_PORT_SENSORS,
+		.i2c_spi_addr_flags = TCS3400_I2C_ADDR_FLAGS,
+		.rot_standard_ref = NULL,
+		.default_range = 0x10000, /* scale = 1x, uscale = 0 */
+		.min_frequency = TCS3400_LIGHT_MIN_FREQ,
+		.max_frequency = TCS3400_LIGHT_MAX_FREQ,
+		.config = {
+			/* Run ALS sensor in S0 */
+			[SENSOR_CONFIG_EC_S0] = {
+				.odr = 1000,
+			},
+		},
+	},
+	[RGB_ALS] = {
+		.name = "RGB Light",
+		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.chip = MOTIONSENSE_CHIP_TCS3400,
+		.type = MOTIONSENSE_TYPE_LIGHT_RGB,
+		.location = MOTIONSENSE_LOC_BASE,
+		.drv = &tcs3400_rgb_drv,
+		.drv_data = &g_tcs3400_rgb_data,
+		.rot_standard_ref = NULL,
+		.default_range = 0x10000, /* scale = 1x, uscale = 0 */
+	},
+};
+const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
+
+/* ALS instances when LPC mapping is needed. Each entry directs to a sensor. */
+const struct motion_sensor_t *motion_als_sensors[] = {
+	&motion_sensors[CLEAR_ALS],
+};
+BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 
 static void power_monitor(void);
 DECLARE_DEFERRED(power_monitor);
@@ -135,12 +233,48 @@ const struct pwm_t pwm_channels[] = {
 /******************************************************************************/
 /* I2C port map configuration */
 const struct i2c_port_t i2c_ports[] = {
-	{"ina",     I2C_PORT_INA,     400, GPIO_I2C0_SCL, GPIO_I2C0_SDA},
-	{"ppc0",    I2C_PORT_PPC0,    400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"scaler",  I2C_PORT_SCALER,  400, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
-	{"tcpc0",   I2C_PORT_TCPC0,   400, GPIO_I2C3_SCL, GPIO_I2C3_SDA},
-	{"power",   I2C_PORT_POWER,   400, GPIO_I2C5_SCL, GPIO_I2C5_SDA},
-	{"eeprom",  I2C_PORT_EEPROM,  400, GPIO_I2C7_SCL, GPIO_I2C7_SDA},
+	{
+		.name = "ina",
+		.port = I2C_PORT_INA,
+		.kbps = 400,
+		.scl  = GPIO_I2C0_SCL,
+		.sda  = GPIO_I2C0_SDA
+	},
+	{
+		.name = "ppc0",
+		.port = I2C_PORT_PPC0,
+		.kbps = 400,
+		.scl  = GPIO_I2C1_SCL,
+		.sda  = GPIO_I2C1_SDA
+	},
+	{
+		.name = "scaler",
+		.port = I2C_PORT_SCALER,
+		.kbps = 400,
+		.scl  = GPIO_I2C2_SCL,
+		.sda  = GPIO_I2C2_SDA
+	},
+	{
+		.name = "tcpc0",
+		.port = I2C_PORT_TCPC0,
+		.kbps = 400,
+		.scl  = GPIO_I2C3_SCL,
+		.sda  = GPIO_I2C3_SDA
+	},
+	{
+		.name = "power",
+		.port = I2C_PORT_POWER,
+		.kbps = 400,
+		.scl  = GPIO_I2C5_SCL,
+		.sda  = GPIO_I2C5_SDA
+	},
+	{
+		.name = "eeprom",
+		.port = I2C_PORT_EEPROM,
+		.kbps = 400,
+		.scl  = GPIO_I2C7_SCL,
+		.sda  = GPIO_I2C7_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -222,8 +356,8 @@ const struct fan_conf fan_conf_0 = {
 };
 
 const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 2500,
-	.rpm_start = 2500,
+	.rpm_min = 2400,
+	.rpm_start = 2400,
 	.rpm_max = 5300,
 };
 
@@ -241,37 +375,47 @@ BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
 /******************************************************************************/
 /* Thermal control; drive fan based on temperature sensors. */
-const static struct ec_thermal_config thermal_a = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(90),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(78),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-	.temp_fan_off = C_TO_K(25),
-	.temp_fan_max = C_TO_K(89),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_A \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(85), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(90), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(78), \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+		.temp_fan_off = C_TO_K(25), \
+		.temp_fan_max = C_TO_K(89), \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_a = THERMAL_A;
 
-const static struct ec_thermal_config thermal_b = {
-	.temp_host = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(78),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_WARN] = 0,
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
-		[EC_TEMP_THRESH_HALT] = 0,
-	},
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_B \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(78), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(85), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_WARN] = 0, \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_b = THERMAL_B;
 
 struct ec_thermal_config thermal_params[] = {
-	[TEMP_SENSOR_CORE] = thermal_a,
-	[TEMP_SENSOR_WIFI] = thermal_a,
+	[TEMP_SENSOR_CORE] = THERMAL_A,
+	[TEMP_SENSOR_WIFI] = THERMAL_A,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
@@ -308,6 +452,33 @@ static void cbi_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, cbi_init, HOOK_PRIO_INIT_I2C + 1);
 
+static void board_sensors_init(void)
+{
+	/* Enable interrupt for the TCS3400 color light sensor */
+	switch (board_version) {
+	case BOARD_VERSION_PROTO:
+	case BOARD_VERSION_PRE_EVT:
+	case BOARD_VERSION_EVT:
+		/*
+		 * b/203224828: These versions incorrectly use a 1.8V interrupt
+		 * line, which sends a constant interrupt signal and eventually
+		 * triggers a watchdog reset, so we keep it disabled.
+		 */
+		gpio_disable_interrupt(GPIO_EC_RGB_INT_L);
+		CPRINTS("ALS interrupt disabled (detected known-bad hardware)");
+		break;
+
+	case BOARD_VERSION_DVT:
+	case BOARD_VERSION_PVT:
+	default:
+		gpio_enable_interrupt(GPIO_EC_RGB_INT_L);
+		CPRINTS("ALS interrupt enabled");
+		break;
+	}
+}
+/* Ensure board_sensors_init runs after cbi_init. */
+DECLARE_HOOK(HOOK_INIT, board_sensors_init, HOOK_PRIO_INIT_I2C + 2);
+
 static void board_init(void)
 {
 	uint8_t *memmap_batt_flags;
@@ -338,7 +509,13 @@ static void board_init(void)
 	 * button is not available.
 	 */
 	if (board_version < 2)
-		button_disable_gpio(GPIO_EC_RECOVERY_BTN_ODL);
+		button_disable_gpio(BUTTON_RECOVERY);
+
+	/*
+	 * Early Scout devices does not setup EC_MIC_OE in RO, so it needs
+	 * to be done explicitly instead.
+	 */
+	gpio_set_level(GPIO_EC_MIC_OE, 1);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -384,6 +561,8 @@ void board_enable_s0_rails(int enable)
 	gpio_set_level(GPIO_EC_CAM_V3P3_EN, enable);
 
 	gpio_set_level(GPIO_PP3300_TPU_A_EN, enable);
+
+	gpio_set_level(GPIO_EN_LOAD_SWITCH, enable);
 }
 
 int ec_config_get_usb4_present(void)

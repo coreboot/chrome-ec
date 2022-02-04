@@ -17,8 +17,8 @@
 #define CPUTS(outstr) cputs(CC_SYSTEM, outstr)
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
 
-#define SB_RMI_MAILBOX_TIMEOUT_MS 10
-#define SB_RMI_MAILBOX_RETRY_DELAY_US 200
+#define SB_RMI_MAILBOX_TIMEOUT_MS 200
+#define SB_RMI_MAILBOX_RETRY_DELAY_MS 5
 
 /**
  * Write an SB-RMI register
@@ -83,8 +83,7 @@ int sb_rmi_mailbox_xfer(int cmd, uint32_t msg_in, uint32_t *msg_out_ptr)
 	* 8. For a read operation, the initiator (BMC) reads the firmware
 	*    response Command Data Out[31:0] from SBRMI::OutBndMsg_inst[4:1]
 	*    {SBRMI_x34(MSB):SBRMI_x31(LSB)}.
-	* 9. Firmware clears the interrupt on SBRMI::SoftwareInterrupt.
-	* 10. BMC must write 1'b1 to SBRMI::Status[SwAlertSts] to clear the
+	* 9. BMC must write 1'b1 to SBRMI::Status[SwAlertSts] to clear the
 	*     ALERT to initiator (BMC). It is recommended to clear the ALERT
 	*     upon completion of the current mailbox command.
 	*/
@@ -136,20 +135,17 @@ int sb_rmi_mailbox_xfer(int cmd, uint32_t msg_in, uint32_t *msg_out_ptr)
 			alerted = true;
 			break;
 		}
-		msleep(1);
+		msleep(SB_RMI_MAILBOX_RETRY_DELAY_MS);
 	} while (time_since32(start) < SB_RMI_MAILBOX_TIMEOUT_MS * MSEC);
 
 	if (!alerted) {
 		CPRINTS("SB-SMI: Mailbox transfer timeout");
-		/* Clear interrupt */
-		sb_rmi_assert_interrupt(0);
 		return EC_ERROR_TIMEOUT;
 	}
 
 	RETURN_ERROR(sb_rmi_read(SB_RMI_OUT_BND_MSG0_REG, &val));
 	if (val != cmd) {
 		CPRINTS("RMI: Unexpected command value in out bound message");
-		sb_rmi_assert_interrupt(0);
 		return EC_ERROR_UNKNOWN;
 	}
 
@@ -164,17 +160,14 @@ int sb_rmi_mailbox_xfer(int cmd, uint32_t msg_in, uint32_t *msg_out_ptr)
 	RETURN_ERROR(sb_rmi_read(SB_RMI_OUT_BND_MSG4_REG, &val));
 	*msg_out_ptr |= val << 24;
 
-	/* Step 9: clear SBRMIx40[Software Interrupt] */
-	RETURN_ERROR(sb_rmi_assert_interrupt(0));
-
 	/**
-	 * Step 10: BMC must write 1'b1 to SBRMI::Status[SwAlertSts] to clear
+	 * Step 9: BMC must write 1'b1 to SBRMI::Status[SwAlertSts] to clear
 	 *          the ALERT to initiator (BMC). It is recommended to clear the
 	 *          ALERT upon completion of the current mailbox command.
 	 */
 	RETURN_ERROR(sb_rmi_write(SB_RMI_STATUS_REG, 0x2));
 
-	/* Step 11: read the return code from OutBndMsg_inst7 (SBRMI_x37) */
+	/* Step 10: read the return code from OutBndMsg_inst7 (SBRMI_x37) */
 	RETURN_ERROR(sb_rmi_read(SB_RMI_OUT_BND_MSG7_REG, &val));
 
 	switch (val) {

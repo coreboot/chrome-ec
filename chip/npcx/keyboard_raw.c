@@ -138,6 +138,7 @@ test_mockable int keyboard_raw_read_rows(void)
 	return (~NPCX_KBSIN) & KB_ROW_MASK;
 }
 
+#ifndef NPCX_SELECT_KSI_TO_GPIO
 /**
  * Enable or disable keyboard interrupts.
  */
@@ -152,7 +153,7 @@ void keyboard_raw_enable_interrupt(int enable)
 /*
  * Interrupt handler for the entire GPIO bank of keyboard rows.
  */
-void keyboard_raw_interrupt(void)
+static void keyboard_raw_interrupt(void)
 {
 	/* Clear pending input sources used by scanner */
 	NPCX_WKPCL(MIWU_TABLE_WKKEY, MIWU_GROUP_WKKEY) = 0xFF;
@@ -161,9 +162,9 @@ void keyboard_raw_interrupt(void)
 	task_wake(TASK_ID_KEYSCAN);
 }
 DECLARE_IRQ(NPCX_IRQ_KSI_WKINTC_1, keyboard_raw_interrupt, 5);
+#endif
 
 int keyboard_raw_is_input_low(int port, int id)
 {
 	return (NPCX_PDIN(port) & BIT(id)) == 0;
 }
-

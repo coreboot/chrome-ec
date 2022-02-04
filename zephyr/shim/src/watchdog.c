@@ -14,19 +14,26 @@
 
 LOG_MODULE_REGISTER(watchdog_shim, LOG_LEVEL_ERR);
 
+#define wdt DEVICE_DT_GET(DT_CHOSEN(cros_ec_watchdog))
+
+#ifdef TEST_BUILD
+extern bool wdt_warning_triggered;
+#endif /* TEST_BUILD */
+
 static void wdt_warning_handler(const struct device *wdt_dev, int channel_id)
 {
 	/* TODO(b/176523207): watchdog warning message */
 	printk("Watchdog deadline is close!\n");
+	#ifdef TEST_BUILD
+	wdt_warning_triggered = true;
+	#endif
 }
 
 int watchdog_init(void)
 {
 	int err;
-	const struct device *wdt;
 	struct wdt_timeout_cfg wdt_config;
 
-	wdt = DEVICE_DT_GET(DT_NODELABEL(twd0));
 	if (!device_is_ready(wdt)) {
 		LOG_ERR("Error: device %s is not ready", wdt->name);
 		return -1;
@@ -44,6 +51,13 @@ int watchdog_init(void)
 	wdt_config.callback = wdt_warning_handler;
 
 	err = wdt_install_timeout(wdt, &wdt_config);
+
+	/* If watchdog is running, reinstall it. */
+	if (err == -EBUSY) {
+		wdt_disable(wdt);
+		err = wdt_install_timeout(wdt, &wdt_config);
+	}
+
 	if (err < 0) {
 		LOG_ERR("Watchdog install error");
 		return err;
@@ -60,9 +74,6 @@ int watchdog_init(void)
 
 void watchdog_reload(void)
 {
-	const struct device *wdt;
-
-	wdt = DEVICE_DT_GET(DT_NODELABEL(twd0));
 	if (!device_is_ready(wdt))
 		LOG_ERR("Error: device %s is not ready", wdt->name);
 

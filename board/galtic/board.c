@@ -816,37 +816,56 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-const static struct ec_thermal_config thermal_charger = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(98),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-	},
-};
-const static struct ec_thermal_config thermal_vcore = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(50),
-	},
-};
-const static struct ec_thermal_config thermal_ambient = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(65),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(50),
-	},
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_CHARGER \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(85), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(98), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_charger =
+	THERMAL_CHARGER;
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_VCORE \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(50), \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_vcore =
+	THERMAL_VCORE;
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_AMBIENT \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(50), \
+		}, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_ambient =
+	THERMAL_AMBIENT;
+
 struct ec_thermal_config thermal_params[] = {
-	[TEMP_SENSOR_1] = thermal_charger,
-	[TEMP_SENSOR_2] = thermal_vcore,
-	[TEMP_SENSOR_3] = thermal_ambient,
+	[TEMP_SENSOR_1] = THERMAL_CHARGER,
+	[TEMP_SENSOR_2] = THERMAL_VCORE,
+	[TEMP_SENSOR_3] = THERMAL_AMBIENT,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 
@@ -889,4 +908,34 @@ __override void board_pulse_entering_rw(void)
 	usleep(MSEC);
 	gpio_set_level(GPIO_EC_ENTERING_RW, 0);
 	gpio_set_level(GPIO_EC_ENTERING_RW2, 0);
+}
+
+enum battery_cell_type battery_cell;
+
+static void get_battery_cell(void)
+{
+	int val;
+
+	if (i2c_read16(I2C_PORT_USB_C0, ISL923X_ADDR_FLAGS,
+		       ISL9238_REG_INFO2, &val) == EC_SUCCESS) {
+		/* PROG resistor read out. Number of battery cells [4:0] */
+		val = val & 0x001f;
+	}
+
+	if (val == 0 || val >= 0x18)
+		battery_cell = BATTERY_CELL_TYPE_1S;
+	else if (val >= 0x01 && val <= 0x08)
+		battery_cell = BATTERY_CELL_TYPE_2S;
+	else if (val >= 0x09 && val <= 0x10)
+		battery_cell = BATTERY_CELL_TYPE_3S;
+	else
+		battery_cell = BATTERY_CELL_TYPE_4S;
+
+	CPRINTS("Get battery cells: %d", battery_cell);
+}
+DECLARE_HOOK(HOOK_INIT, get_battery_cell, HOOK_PRIO_INIT_I2C+1);
+
+enum battery_cell_type board_get_battery_cell_type(void)
+{
+	return battery_cell;
 }

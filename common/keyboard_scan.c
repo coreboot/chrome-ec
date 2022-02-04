@@ -95,34 +95,34 @@ static uint32_t boot_key_value = BOOT_KEY_NONE;
 uint8_t keyboard_cols = KEYBOARD_COLS_MAX;
 
 /* Debounced key matrix */
-static uint8_t __bss_slow debounced_state[KEYBOARD_COLS_MAX];
+static uint8_t debounced_state[KEYBOARD_COLS_MAX];
 /* Mask of keys being debounced */
-static uint8_t __bss_slow debouncing[KEYBOARD_COLS_MAX];
+static uint8_t debouncing[KEYBOARD_COLS_MAX];
 /* Keys simulated-pressed */
-static uint8_t __bss_slow simulated_key[KEYBOARD_COLS_MAX];
+static uint8_t simulated_key[KEYBOARD_COLS_MAX];
 #ifdef CONFIG_KEYBOARD_LANGUAGE_ID
-static uint8_t __bss_slow keyboard_id[KEYBOARD_IDS];
+static uint8_t keyboard_id[KEYBOARD_IDS];
 #endif
 
 /* Times of last scans */
-static uint32_t __bss_slow scan_time[SCAN_TIME_COUNT];
+static uint32_t scan_time[SCAN_TIME_COUNT];
 /* Current scan_time[] index */
-static int __bss_slow scan_time_index;
+static int scan_time_index;
 
 /* Index into scan_time[] when each key started debouncing */
-static uint8_t __bss_slow scan_edge_index[KEYBOARD_COLS_MAX][KEYBOARD_ROWS];
+static uint8_t scan_edge_index[KEYBOARD_COLS_MAX][KEYBOARD_ROWS];
 
 /* Minimum delay between keyboard scans based on current clock frequency */
-static uint32_t __bss_slow post_scan_clock_us;
+static uint32_t post_scan_clock_us;
 
 /*
  * Print all keyboard scan state changes?  Off by default because it generates
  * a lot of debug output, which makes the saved EC console data less useful.
  */
-static int __bss_slow print_state_changes;
+static int print_state_changes;
 
 /* Must init to 0 for scanning at boot */
-static volatile uint32_t __bss_slow disable_scanning_mask;
+static volatile uint32_t disable_scanning_mask;
 
 /* Constantly incrementing counter of the number of times we polled */
 static volatile int kbd_polls;
@@ -140,9 +140,9 @@ void keyboard_scan_enable(int enable, enum kb_scan_disable_masks mask)
 {
 	/* Access atomically */
 	if (enable) {
-		atomic_clear_bits((uint32_t *)&disable_scanning_mask, mask);
+		atomic_clear_bits((atomic_t *)&disable_scanning_mask, mask);
 	} else {
-		atomic_or((uint32_t *)&disable_scanning_mask, mask);
+		atomic_or((atomic_t *)&disable_scanning_mask, mask);
 		clear_typematic_key();
 	}
 
@@ -477,7 +477,7 @@ static int check_keys_changed(uint8_t *state)
 	int any_pressed = 0;
 	int c, i;
 	int any_change = 0;
-	static uint8_t __bss_slow new_state[KEYBOARD_COLS_MAX];
+	static uint8_t new_state[KEYBOARD_COLS_MAX];
 	uint32_t tnow = get_time().le.lo;
 
 	/* Save the current scan time */
@@ -954,9 +954,9 @@ int keyboard_factory_test_scan(void)
 
 		gpio_set_flags_by_mask(port, 1 << id, GPIO_OUT_LOW);
 
-		for (j = 0; j < i; j++) {
+		for (j = 0; j < keyboard_factory_scan_pins_used; j++) {
 
-			if (keyboard_factory_scan_pins[j][0] < 0)
+			if (keyboard_factory_scan_pins[j][0] < 0 || i == j)
 				continue;
 
 			if (keyboard_raw_is_input_low(

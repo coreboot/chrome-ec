@@ -792,9 +792,6 @@ static int stm32gx_ucpd_start_transmit(int port, enum ucpd_tx_msg msg_type)
 		/* Index into ordset enum for start of packet */
 		if (type <= TCPCI_MSG_CABLE_RESET)
 			STM32_UCPD_TX_ORDSETR(port) = ucpd_txorderset[type];
-		else
-			STM32_UCPD_TX_ORDSETR(port) =
-				ucpd_txorderset[TX_ORDERSET_SOP];
 
 		/* Reset msg byte index */
 		ucpd_tx_active_buffer-> msg_index = 0;
@@ -1251,7 +1248,7 @@ enum ec_error_list stm32gx_ucpd_set_bist_test_mode(const int port,
 	return EC_SUCCESS;
 }
 
-void stm32gx_ucpd1_irq(void)
+static void stm32gx_ucpd1_irq(void)
 {
 	/* STM32_IRQ_UCPD indicates this is from UCPD1, so port = 0 */
 	int port = 0;

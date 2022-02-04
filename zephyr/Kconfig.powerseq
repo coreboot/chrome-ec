@@ -109,6 +109,16 @@ config PLATFORM_EC_POWERSEQ_S0IX
 	  option, Intel's low-power idle sleep state, also known as
 	  "modern sleep".
 
+config PLATFORM_EC_POWERSEQ_S4
+	bool "Advertise S4 residency"
+	depends on PLATFORM_EC_ESPI_VW_SLP_S5
+	default y if AP_X86_INTEL_TGL
+	default y if AP_X86_INTEL_ADL
+	help
+	  Advertise S4 residency capabilities to the AP. This is required for
+	  AP hibernate (suspend-to-disk) on Intel platforms with Key Locker
+	  support (TGL+)
+
 config PLATFORM_EC_POWERSEQ_COMETLAKE
 	bool "Use common Comet Lake code for power sequencing"
 	depends on AP_X86_INTEL_CML
@@ -116,10 +126,18 @@ config PLATFORM_EC_POWERSEQ_COMETLAKE
 	help
 	  Use the Comet Lake code for power sequencing.
 
+config CHIPSET_ALDERLAKE_SLG4BD44540
+       bool "Use powersequencing with Silego"
+       depends on AP_X86_INTEL_ADL
+       default y
+       help
+          Use this for AlderLake power sequencing with the
+          Silego chips.
+
 menuconfig PLATFORM_EC_POWERSEQ_ICELAKE
 	bool "Use common Icelake code for power sequencing"
-	default y if AP_X86_INTEL_TGL
-	default y if AP_X86_INTEL_ADL
+	depends on AP_X86_INTEL_TGL
+	default y
 	help
 	  Use the Icelake common code for power sequencing.  Note that
 	  this applies to more platforms than just Icelake.  For
@@ -145,23 +163,19 @@ endif # PLATFORM_EC_POWERSEQ_ICELAKE
 
 endif # PLATFORM_EC_POWERSEQ_INTEL
 
-menuconfig PLATFORM_EC_POWERSEQ_IT8XXX2
-	bool "Enable shimming common ITE8xxx2 power sequencing code"
-	depends on AP_ARM_MTK_MT8192
-	default y
-	help
-	  Enable shimming platform/ec AP power sequencing code for
-	  IT8xxx2.
-
-if PLATFORM_EC_POWERSEQ_IT8XXX2
-
 config PLATFORM_EC_POWERSEQ_MT8192
 	bool "Use common MT8192 code for power sequencing"
 	default y
+	depends on AP_ARM_MTK_MT8192
 	help
-	  Use the Comet Lake code for power sequencing.
+	  Use the MT8192 code for power sequencing.
 
-endif # PLATFORM_EC_POWERSEQ_ITE8XXX2
+config PLATFORM_EC_POWERSEQ_MT8186
+	bool "Use common MT8186 code for power sequencing"
+	default y
+	depends on AP_ARM_MTK_MT8186
+	help
+	  Use the MT8186 code for power sequencing.
 
 config PLATFORM_EC_POWERSEQ_SC7180
 	bool "SC7180 power sequencing"

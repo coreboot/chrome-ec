@@ -31,9 +31,9 @@ struct button_state_t {
 	int debounced_pressed;
 };
 
-static struct button_state_t __bss_slow state[BUTTON_COUNT];
+static struct button_state_t state[BUTTON_COUNT];
 
-static uint64_t __bss_slow next_deferred_time;
+static uint64_t next_deferred_time;
 
 #if defined(CONFIG_CMD_BUTTON) || defined(CONFIG_HOSTCMD_BUTTON)
 #define CONFIG_SIMULATED_BUTTON
@@ -43,7 +43,7 @@ static uint64_t __bss_slow next_deferred_time;
 /* Bitmask to keep track of simulated state of each button.
  * Bit numbers are aligned to enum button.
  */
-static int sim_button_state;
+static atomic_t sim_button_state;
 
 /*
  * Flip state of associated button type in sim_button_state bitmask.
@@ -62,7 +62,7 @@ static int sim_button_state;
  */
 static int simulated_button_pressed(const struct button_config *button)
 {
-	return !!(sim_button_state & BIT(button->type));
+	return !!((uint32_t)sim_button_state & BIT(button->type));
 }
 #endif
 
@@ -389,7 +389,8 @@ static void simulate_button_release_deferred(void)
 	/* Release the button */
 	for (button_idx = 0; button_idx < BUTTON_COUNT; button_idx++) {
 		/* Check state for button pressed */
-		if (sim_button_state & BIT(buttons[button_idx].type)) {
+		if ((uint32_t)sim_button_state &
+		    BIT(buttons[button_idx].type)) {
 			/* Set state of the button as released */
 			atomic_clear_bits(&sim_button_state,
 					  BIT(buttons[button_idx].type));

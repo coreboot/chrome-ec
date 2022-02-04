@@ -19,6 +19,10 @@
 
 #define CPRINTS(format, args...) cprints(CC_KEYSCAN, format, ## args)
 
+#ifdef CONFIG_IO_EXPANDER_SUPPORT_GET_PORT
+#error "This driver doesn't support get_port function"
+#endif
+
 static int it8801_ioex_set_level(int ioex, int port, int mask, int value);
 static void it8801_ioex_event_handler(void);
 DECLARE_DEFERRED(it8801_ioex_event_handler);
@@ -655,6 +659,11 @@ static int it8801_kblight_enable(int enable)
 	return EC_SUCCESS;
 }
 
+static int it8801_kblight_get_enabled(void)
+{
+	return it8801_pwm_get_enabled(it8801_kblight_pwm_ch);
+}
+
 static int it8801_kblight_set_brightness(int percent)
 {
 	it8801_pwm_set_duty(it8801_kblight_pwm_ch, percent);
@@ -678,6 +687,7 @@ const struct kblight_drv kblight_it8801 = {
 	.set = it8801_kblight_set_brightness,
 	.get = it8801_kblight_get_brightness,
 	.enable = it8801_kblight_enable,
+	.get_enabled = it8801_kblight_get_enabled,
 };
 #endif
 #endif  /* CONFIG_IO_EXPANDER_IT8801_PWM */

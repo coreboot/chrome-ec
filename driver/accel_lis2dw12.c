@@ -64,7 +64,7 @@ static __maybe_unused int lis2dw12_enable_fifo(const struct motion_sensor_t *s,
  * @s: Motion sensor pointer
  */
 static __maybe_unused int lis2dw12_load_fifo(struct motion_sensor_t *s,
-			 int nsamples, uint32_t *last_fifo_read_ts)
+					     int nsamples)
 {
 	int ret, left, length, i;
 	struct ec_response_motion_sensor_data vect;
@@ -87,7 +87,6 @@ static __maybe_unused int lis2dw12_load_fifo(struct motion_sensor_t *s,
 
 		ret = st_raw_read_n(s->port, s->i2c_spi_addr_flags,
 				    LIS2DW12_OUT_X_L_ADDR, fifo, length);
-		*last_fifo_read_ts = __hw_clock_source_read();
 		if (ret != EC_SUCCESS)
 			return ret;
 
@@ -106,8 +105,6 @@ static __maybe_unused int lis2dw12_load_fifo(struct motion_sensor_t *s,
 		}
 		left -= length;
 	} while (left > 0);
-
-	motion_sense_fifo_commit_data();
 
 	return EC_SUCCESS;
 }
@@ -128,21 +125,6 @@ static __maybe_unused int lis2dw12_get_fifo_samples(struct motion_sensor_t *s,
 	*nsamples = tmp & LIS2DW12_FIFO_DIFF_MASK;
 
 	return EC_SUCCESS;
-}
-
-static __maybe_unused int fifo_data_avail(struct motion_sensor_t *s)
-{
-	int ret, nsamples;
-
-	if (s->flags & MOTIONSENSE_FLAG_INT_SIGNAL)
-		return gpio_get_level(s->int_signal) ==
-			!!(MOTIONSENSE_FLAG_INT_ACTIVE_HIGH & s->flags);
-
-	ret = lis2dw12_get_fifo_samples(s, &nsamples);
-	/* If we failed to read the FIFO size assume empty. */
-	if (ret != EC_SUCCESS)
-		return 0;
-	return nsamples;
 }
 
 /**
@@ -211,22 +193,16 @@ static __maybe_unused int lis2dw12_config_interrupt(
 }
 
 #ifdef LIS2DW12_ENABLE_FIFO
-static void lis2dw12_handle_interrupt_for_fifo(uint32_t ts)
-{
-	if (IS_ENABLED(CONFIG_ACCEL_FIFO) &&
-	    time_after(ts, last_interrupt_timestamp))
-		last_interrupt_timestamp = ts;
-
-	task_set_event(TASK_ID_MOTIONSENSE, CONFIG_ACCEL_LIS2DW12_INT_EVENT);
-}
-
 /**
  * lis2dw12_interrupt - interrupt from int pin of sensor
  * Schedule Motion Sense Task to manage Interrupts.
  */
 void lis2dw12_interrupt(enum gpio_signal signal)
 {
-	lis2dw12_handle_interrupt_for_fifo(__hw_clock_source_read());
+	if (IS_ENABLED(LIS2DW12_ENABLE_FIFO))
+		last_interrupt_timestamp = __hw_clock_source_read();
+
+	task_set_event(TASK_ID_MOTIONSENSE, CONFIG_ACCEL_LIS2DW12_INT_EVENT);
 }
 
 /**
@@ -235,8 +211,6 @@ void lis2dw12_interrupt(enum gpio_signal signal)
 static int lis2dw12_irq_handler(struct motion_sensor_t *s,
 					       uint32_t *event)
 {
-	int ret = EC_SUCCESS;
-
 	if ((s->type != MOTIONSENSE_TYPE_ACCEL) ||
 	    (!(*event & CONFIG_ACCEL_LIS2DW12_INT_EVENT))) {
 		return EC_ERROR_NOT_HANDLED;
@@ -254,39 +228,28 @@ static int lis2dw12_irq_handler(struct motion_sensor_t *s,
 	}
 
 	if (IS_ENABLED(CONFIG_ACCEL_FIFO)) {
+		bool commit_needed = false;
 		int nsamples;
-		uint32_t last_fifo_read_ts;
-		uint32_t triggering_interrupt_timestamp =
-			last_interrupt_timestamp;
 
-		ret = lis2dw12_get_fifo_samples(s, &nsamples);
-		if (ret != EC_SUCCESS)
-			return ret;
+		do {
+			RETURN_ERROR(lis2dw12_get_fifo_samples(s, &nsamples));
 
-		last_fifo_read_ts = __hw_clock_source_read();
-		if (nsamples == 0)
-			return EC_SUCCESS;
+			if (nsamples != 0) {
+				commit_needed = true;
+				RETURN_ERROR(lis2dw12_load_fifo(s, nsamples));
+			}
+		} while (nsamples != 0);
 
-		ret = lis2dw12_load_fifo(s, nsamples, &last_fifo_read_ts);
-
-		/*
-		 * Check if FIFO isn't empty and we never got an interrupt.
-		 * This can happen if new entries were added to the FIFO after
-		 * the count was read, but before the FIFO was cleared out.
-		 * In the long term it might be better to use the last
-		 * spread timestamp instead.
-		 */
-		if (fifo_data_avail(s) &&
-		    triggering_interrupt_timestamp == last_interrupt_timestamp)
-			lis2dw12_handle_interrupt_for_fifo(last_fifo_read_ts);
+		if (commit_needed)
+			motion_sense_fifo_commit_data();
 	}
 
-	return ret;
+	return EC_SUCCESS;
 }
 #endif
 
 /**
- * set_power_mode - set sensor power mode
+ * lis2dw12_set_power_mode - set sensor power mode
  * @s: Motion sensor pointer
  * @mode: LIS2DW12_LOW_POWER, LIS2DW12_HIGH_PERF
  * @lpmode: LIS2DW12_LOW_POWER_MODE_2,
@@ -296,9 +259,10 @@ static int lis2dw12_irq_handler(struct motion_sensor_t *s,
  * TODO: LIS2DW12_LOW_POWER_MODE_1 not implemented because output differ
  *       in resolution
  */
-static int set_power_mode(const struct motion_sensor_t *s,
-			  enum lis2sw12_mode mode,
-			  enum lis2sw12_lpmode lpmode)
+STATIC_IF_NOT(CONFIG_ZTEST)
+int lis2dw12_set_power_mode(const struct motion_sensor_t *s,
+			    enum lis2sw12_mode mode,
+			    enum lis2sw12_lpmode lpmode)
 {
 	int ret = EC_SUCCESS;
 
@@ -425,9 +389,6 @@ static int set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)
 	if (reg_val > LIS2DW12_ODR_1_6kHZ_VAL) {
 		reg_val = LIS2DW12_ODR_1_6kHZ_VAL;
 		normalized_rate = LIS2DW12_ODR_MAX_VAL;
-	} else if (reg_val < LIS2DW12_ODR_12HZ_VAL) {
-		reg_val = LIS2DW12_ODR_12HZ_VAL;
-		normalized_rate = LIS2DW12_ODR_MIN_VAL;
 	}
 
 	/* lis2dwl supports 14 bit resolution only at high performance mode,
@@ -436,9 +397,9 @@ static int set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)
 	 */
 	if (!IS_ENABLED(CONFIG_ACCEL_LIS2DWL)) {
 		if (reg_val > LIS2DW12_ODR_200HZ_VAL)
-			ret = set_power_mode(s, LIS2DW12_HIGH_PERF, 0);
+			ret = lis2dw12_set_power_mode(s, LIS2DW12_HIGH_PERF, 0);
 		else
-			ret = set_power_mode(s, LIS2DW12_LOW_POWER,
+			ret = lis2dw12_set_power_mode(s, LIS2DW12_LOW_POWER,
 					LIS2DW12_LOW_POWER_MODE_2);
 	}
 
@@ -555,8 +516,7 @@ static int init(struct motion_sensor_t *s)
 		goto err_unlock;
 
 	/* Interrupt trigger level of power-on-reset is HIGH */
-	if (IS_ENABLED(LIS2DW12_ENABLE_FIFO) &&
-	    !(MOTIONSENSE_FLAG_INT_ACTIVE_HIGH & s->flags)) {
+	if (IS_ENABLED(LIS2DW12_ENABLE_FIFO)) {
 		ret = st_write_data_with_mask(s, LIS2DW12_H_ACTIVE_ADDR,
 						LIS2DW12_H_ACTIVE_MASK,
 						LIS2DW12_EN_BIT);
@@ -569,10 +529,10 @@ static int init(struct motion_sensor_t *s)
 		 * lis2dwl supports 14 bit resolution only
 		 * at high performance mode
 		 */
-		ret = set_power_mode(s, LIS2DW12_HIGH_PERF, 0);
+		ret = lis2dw12_set_power_mode(s, LIS2DW12_HIGH_PERF, 0);
 	else
 		/* Set default Mode and Low Power Mode. */
-		ret = set_power_mode(s, LIS2DW12_LOW_POWER,
+		ret = lis2dw12_set_power_mode(s, LIS2DW12_LOW_POWER,
 				     LIS2DW12_LOW_POWER_MODE_2);
 	if (ret != EC_SUCCESS)
 		goto err_unlock;

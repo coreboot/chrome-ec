@@ -70,7 +70,6 @@ config PLATFORM_EC_ACCEL_INTERRUPTS
 
 config PLATFORM_EC_ALS
     bool "Ambient Light Sensor(ALS)"
-    default y if HAS_TASK_ALS
     help
       Enable this to indicate there's at least one or more ALS devices available.
       If PLATFORM_EC_MOTION_FILL_LPC_SENSE_DATA is set, then motion task updates
@@ -79,18 +78,6 @@ config PLATFORM_EC_ALS
       Number of ALS entries reserved in EC memmap are defined by EC_ALS_ENTRIES
       in ec_commands.h.
 
-if PLATFORM_EC_ALS
-
-config PLATFORM_EC_ALS_COUNT
-    int "Number of ALS devices"
-    default 1
-    help
-      This sets the number of ALS devices. This should be less than or equal to
-      EC_ALS_ENTRIES in ec_commands.h
-      TODO(b/173507858) move this to device tree
-
-endif # PLATFORM_EC_ALS
-
 config PLATFORM_EC_DYNAMIC_MOTION_SENSOR_COUNT
     bool "Dynamic Motion Sensor Count"
     help
@@ -98,6 +85,7 @@ config PLATFORM_EC_DYNAMIC_MOTION_SENSOR_COUNT
 
 config PLATFORM_EC_LID_ANGLE
     bool "Lid Angle"
+    select PLATFORM_EC_MATH_UTIL
     help
       Enable this to detect lid angle with two accelerometers. The andgle
       calculation requires the information about which sensor is on the lid
@@ -135,7 +123,7 @@ config PLATFORM_EC_GMR_TABLET_MODE
     bool "Giant Magnetoresistance(GMR) Tablet Mode"
     help
       Enable this to use GMR sensor to detect tablet mode.
-      It requires to set GMR_TABLET_MODE_GPIO_L to map the interrupt from
+      It requires to set GPIO_TABLET_MODE_L to map the interrupt from
       the sensor and direct its mapping to gmr_tablet_switch_isr
       in common/tablet_mode.c.
 

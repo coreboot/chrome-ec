@@ -30,7 +30,7 @@
  */
 enum chipset_state_mask {
 	CHIPSET_STATE_HARD_OFF = 0x01,   /* Hard off (G3) */
-	CHIPSET_STATE_SOFT_OFF = 0x02,   /* Soft off (S5) */
+	CHIPSET_STATE_SOFT_OFF = 0x02,   /* Soft off (S5, S4) */
 	CHIPSET_STATE_SUSPEND  = 0x04,   /* Suspend (S3) */
 	CHIPSET_STATE_ON       = 0x08,   /* On (S0) */
 	CHIPSET_STATE_STANDBY  = 0x10,   /* Standby (S0ix) */
@@ -96,7 +96,7 @@ void chipset_force_shutdown(enum chipset_shutdown_reason reason);
 /**
  * Reset the CPU and/or chipset.
  */
-void chipset_reset(enum chipset_reset_reason reason);
+void chipset_reset(enum chipset_shutdown_reason reason);
 
 /**
  * Interrupt handler to power GPIO inputs.
@@ -137,7 +137,7 @@ static inline void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 {
 }
 
-static inline void chipset_reset(enum chipset_reset_reason reason) { }
+static inline void chipset_reset(enum chipset_shutdown_reason reason) { }
 static inline void power_interrupt(enum gpio_signal signal) { }
 static inline void chipset_handle_espi_reset_assert(void) { }
 static inline void chipset_handle_reboot(void) { }

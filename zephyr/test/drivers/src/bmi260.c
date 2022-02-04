@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include <fff.h>
 #include <zephyr.h>
 #include <ztest.h>
 
@@ -14,6 +15,8 @@
 #include "motion_sense_fifo.h"
 #include "driver/accelgyro_bmi260.h"
 #include "driver/accelgyro_bmi_common.h"
+#include "test_mocks.h"
+#include "test_state.h"
 
 #define BMI_ORD			DT_DEP_ORD(DT_NODELABEL(accel_bmi260))
 #define BMI_ACC_SENSOR_ID	SENSOR_ID(DT_NODELABEL(ms_bmi260_accel))
@@ -131,8 +134,43 @@ static void compare_int3v_f(intv3_t exp_v, intv3_t v, int eps, int line)
 #define compare_int3v_eps(exp_v, v, e) compare_int3v_f(exp_v, v, e, __LINE__)
 #define compare_int3v(exp_v, v) compare_int3v_eps(exp_v, v, V_EPS)
 
+/**
+ * Custom emulator read function which always return INIT OK status in
+ * INTERNAL STATUS register. Used in init test.
+ */
+static int emul_init_ok(struct i2c_emul *emul, int reg, uint8_t *val, int byte,
+			void *data)
+{
+	bmi_emul_set_reg(emul, BMI260_INTERNAL_STATUS, BMI260_INIT_OK);
+
+	return 1;
+}
+
+/** Init BMI260 before test */
+static void bmi_init_emul(void)
+{
+	struct motion_sensor_t *ms_acc;
+	struct motion_sensor_t *ms_gyr;
+	struct i2c_emul *emul;
+
+	emul = bmi_emul_get(BMI_ORD);
+	ms_acc = &motion_sensors[BMI_ACC_SENSOR_ID];
+	ms_gyr = &motion_sensors[BMI_GYR_SENSOR_ID];
+
+	/*
+	 * Init BMI before test. It is needed custom function to set value of
+	 * BMI260_INTERNAL_STATUS register, because init function triggers reset
+	 * which clears value set in this register before test.
+	 */
+	i2c_common_emul_set_read_func(emul, emul_init_ok, NULL);
+	zassert_equal(EC_RES_SUCCESS, ms_acc->drv->init(ms_acc), NULL);
+	zassert_equal(EC_RES_SUCCESS, ms_gyr->drv->init(ms_gyr), NULL);
+	/* Remove custom emulator read function */
+	i2c_common_emul_set_read_func(emul, NULL, NULL);
+}
+
 /** Test get accelerometer offset with and without rotation */
-static void test_bmi_acc_get_offset(void)
+ZTEST_USER(bmi260, test_bmi_acc_get_offset)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -189,7 +227,7 @@ static void test_bmi_acc_get_offset(void)
 }
 
 /** Test get gyroscope offset with and without rotation */
-static void test_bmi_gyr_get_offset(void)
+ZTEST_USER(bmi260, test_bmi_gyr_get_offset)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -255,7 +293,7 @@ static void test_bmi_gyr_get_offset(void)
  * Test set accelerometer offset with and without rotation. Also test behaviour
  * on I2C error.
  */
-static void test_bmi_acc_set_offset(void)
+ZTEST_USER(bmi260, test_bmi_acc_set_offset)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -339,7 +377,7 @@ static void test_bmi_acc_set_offset(void)
  * Test set gyroscope offset with and without rotation. Also test behaviour
  * on I2C error.
  */
-static void test_bmi_gyr_set_offset(void)
+ZTEST_USER(bmi260, test_bmi_gyr_set_offset)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -457,7 +495,7 @@ static void check_set_acc_range_f(struct i2c_emul *emul,
 	check_set_acc_range_f(emul, ms, range, rnd, exp_range, __LINE__)
 
 /** Test set accelerometer range with and without I2C errors */
-static void test_bmi_acc_set_range(void)
+ZTEST_USER(bmi260, test_bmi_acc_set_range)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -565,7 +603,7 @@ static void check_set_gyr_range_f(struct i2c_emul *emul,
 	check_set_gyr_range_f(emul, ms, range, rnd, exp_range, __LINE__)
 
 /** Test set gyroscope range with and without I2C errors */
-static void test_bmi_gyr_set_range(void)
+ZTEST_USER(bmi260, test_bmi_gyr_set_range)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -632,7 +670,7 @@ static void test_bmi_gyr_set_range(void)
 }
 
 /** Test get resolution of acclerometer and gyroscope sensor */
-static void test_bmi_get_resolution(void)
+ZTEST_USER(bmi260, test_bmi_get_resolution)
 {
 	struct motion_sensor_t *ms;
 
@@ -710,7 +748,7 @@ static void check_set_acc_rate_f(struct i2c_emul *emul,
 	check_set_acc_rate_f(emul, ms, rate, rnd, exp_rate, __LINE__)
 
 /** Test set and get accelerometer rate with and without I2C errors */
-static void test_bmi_acc_rate(void)
+ZTEST_USER(bmi260, test_bmi_acc_rate)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -837,6 +875,20 @@ static void test_bmi_acc_rate(void)
 	reg_rate = bmi_emul_get_reg(emul, BMI260_ACC_CONF);
 	zassert_equal(BMI260_ACC_EN, pwr_ctrl, NULL);
 	zassert_true(reg_rate & BMI260_FILTER_PERF, NULL);
+
+	/* Test disabling sensor (by setting rate to 0) but failing. */
+	i2c_common_emul_set_write_fail_reg(emul, BMI260_PWR_CTRL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 0, 0),
+		      "Did not properly handle failed power down.");
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/* Test enabling sensor but failing. (after first disabling it) */
+	ms->drv->set_data_rate(ms, 0, 0);
+
+	i2c_common_emul_set_write_fail_reg(emul, BMI260_PWR_CTRL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 50000, 0),
+		      "Did not properly handle failed power up.");
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
 }
 
 /**
@@ -900,7 +952,7 @@ static void check_set_gyr_rate_f(struct i2c_emul *emul,
 	check_set_gyr_rate_f(emul, ms, rate, rnd, exp_rate, __LINE__)
 
 /** Test set and get gyroscope rate with and without I2C errors */
-static void test_bmi_gyr_rate(void)
+ZTEST_USER(bmi260, test_bmi_gyr_rate)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -1030,7 +1082,7 @@ static void test_bmi_gyr_rate(void)
  * Test setting and getting scale in accelerometer and gyroscope sensors.
  * Correct appling scale to results is checked in "read" test.
  */
-static void test_bmi_scale(void)
+ZTEST_USER(bmi260, test_bmi_scale)
 {
 	struct motion_sensor_t *ms;
 	int16_t ret_scale[3];
@@ -1061,7 +1113,7 @@ static void test_bmi_scale(void)
 }
 
 /** Test reading temperature using accelerometer and gyroscope sensors */
-static void test_bmi_read_temp(void)
+ZTEST_USER(bmi260, test_bmi_read_temp)
 {
 	struct motion_sensor_t *ms_acc, *ms_gyr;
 	struct i2c_emul *emul;
@@ -1140,7 +1192,7 @@ static void test_bmi_read_temp(void)
 }
 
 /** Test reading accelerometer sensor data */
-static void test_bmi_acc_read(void)
+ZTEST_USER(bmi260, test_bmi_acc_read)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -1248,7 +1300,7 @@ static void test_bmi_acc_read(void)
 }
 
 /** Test reading gyroscope sensor data */
-static void test_bmi_gyr_read(void)
+ZTEST_USER(bmi260, test_bmi_gyr_read)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -1356,7 +1408,7 @@ static void test_bmi_gyr_read(void)
 }
 
 /** Test acceleromtere calibration */
-static void test_bmi_acc_perform_calib(void)
+ZTEST_USER(bmi260, test_bmi_acc_perform_calib)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -1368,6 +1420,11 @@ static void test_bmi_acc_perform_calib(void)
 
 	emul = bmi_emul_get(BMI_ORD);
 	ms = &motion_sensors[BMI_ACC_SENSOR_ID];
+
+	bmi_init_emul();
+
+	/* Disable rotation */
+	ms->rot_standard_ref = NULL;
 
 	/* Range and rate cannot change after calibration */
 	range = 4;
@@ -1447,7 +1504,7 @@ static void test_bmi_acc_perform_calib(void)
 }
 
 /** Test gyroscope calibration */
-static void test_bmi_gyr_perform_calib(void)
+ZTEST_USER(bmi260, test_bmi_gyr_perform_calib)
 {
 	struct motion_sensor_t *ms;
 	struct i2c_emul *emul;
@@ -1542,19 +1599,16 @@ static void test_bmi_gyr_perform_calib(void)
 }
 
 /**
- * Custom emulatro read function which always return INIT OK status in
- * INTERNAL STATUS register. Used in init test.
+ * A custom fake to use with the `init_rom_map` mock that returns the
+ * value of `addr`
  */
-static int emul_init_ok(struct i2c_emul *emul, int reg, uint8_t *val, int byte,
-			void *data)
+static const void *init_rom_map_addr_passthru(const void *addr, int size)
 {
-	bmi_emul_set_reg(emul, BMI260_INTERNAL_STATUS, BMI260_INIT_OK);
-
-	return 1;
+	return addr;
 }
 
 /** Test init function of BMI260 accelerometer and gyroscope sensors */
-static void test_bmi_init(void)
+ZTEST_USER(bmi260, test_bmi_init)
 {
 	struct motion_sensor_t *ms_acc, *ms_gyr;
 	struct i2c_emul *emul;
@@ -1563,18 +1617,11 @@ static void test_bmi_init(void)
 	ms_acc = &motion_sensors[BMI_ACC_SENSOR_ID];
 	ms_gyr = &motion_sensors[BMI_GYR_SENSOR_ID];
 
-	/*
-	 * Test successful init. It is needed custom function to set value of
-	 * BMI260_INTERNAL_STATUS register, because init function triggers reset
-	 * which clears value set in this register before test.
-	 */
-	i2c_common_emul_set_read_func(emul, emul_init_ok, NULL);
-	zassert_equal(EC_RES_SUCCESS, ms_acc->drv->init(ms_acc), NULL);
+	/* The mock should return whatever is passed in to its addr param */
+	RESET_FAKE(init_rom_map);
+	init_rom_map_fake.custom_fake = init_rom_map_addr_passthru;
 
-	zassert_equal(EC_RES_SUCCESS, ms_gyr->drv->init(ms_gyr), NULL);
-
-	/* Remove custom emulator read function */
-	i2c_common_emul_set_read_func(emul, NULL, NULL);
+	bmi_init_emul();
 }
 
 /** Data for custom emulator read function used in FIFO test */
@@ -1635,7 +1682,7 @@ static void check_fifo_f(struct motion_sensor_t *ms_acc,
 
 	/* Read FIFO in driver */
 	zassert_equal(EC_SUCCESS, ms_acc->drv->irq_handler(ms_acc, &event),
-		      NULL);
+		      "Failed to read FIFO in irq handler, line %d", line);
 
 	/* Read all data committed to FIFO */
 	while (motion_sense_fifo_read(sizeof(vector), 1, &vector, &size)) {
@@ -1698,7 +1745,7 @@ static void check_fifo_f(struct motion_sensor_t *ms_acc,
 	check_fifo_f(ms_acc, ms_gyr, frame, acc_range, gyr_range, __LINE__)
 
 /** Test irq handler of accelerometer sensor */
-static void test_bmi_acc_fifo(void)
+ZTEST_USER(bmi260, test_bmi_acc_fifo)
 {
 	struct motion_sensor_t *ms, *ms_gyr;
 	struct fifo_func_data func_data;
@@ -1711,6 +1758,8 @@ static void test_bmi_acc_fifo(void)
 	emul = bmi_emul_get(BMI_ORD);
 	ms = &motion_sensors[BMI_ACC_SENSOR_ID];
 	ms_gyr = &motion_sensors[BMI_GYR_SENSOR_ID];
+
+	bmi_init_emul();
 
 	/* Need to be set to collect all data in FIFO */
 	ms->oversampling_ratio = 1;
@@ -1733,13 +1782,14 @@ static void test_bmi_acc_fifo(void)
 	bmi_emul_set_reg(emul, BMI260_INT_STATUS_0, 0);
 	bmi_emul_set_reg(emul, BMI260_INT_STATUS_1, 0);
 
+	/* Enable sensor FIFO */
+	zassert_equal(EC_SUCCESS, ms->drv->set_data_rate(ms, 50000, 0), NULL);
+
 	/* Trigger irq handler and check results */
 	check_fifo(ms, ms_gyr, NULL, acc_range, gyr_range);
 
 	/* Set custom function for FIFO test */
 	i2c_common_emul_set_read_func(emul, emul_fifo_func, &func_data);
-	/* Enable sensor FIFO */
-	zassert_equal(EC_SUCCESS, ms->drv->set_data_rate(ms, 50000, 0), NULL);
 	/* Set range */
 	zassert_equal(EC_SUCCESS, ms->drv->set_range(ms, acc_range, 0), NULL);
 	zassert_equal(EC_SUCCESS, ms_gyr->drv->set_range(ms_gyr, gyr_range, 0),
@@ -1826,7 +1876,7 @@ static void test_bmi_acc_fifo(void)
 }
 
 /** Test irq handler of gyroscope sensor */
-static void test_bmi_gyr_fifo(void)
+ZTEST_USER(bmi260, test_bmi_gyr_fifo)
 {
 	struct motion_sensor_t *ms;
 	uint32_t event;
@@ -1839,26 +1889,307 @@ static void test_bmi_gyr_fifo(void)
 		      NULL);
 }
 
-void test_suite_bmi260(void)
+ZTEST_USER(bmi260, test_unsupported_configs)
 {
-	ztest_test_suite(bmi260,
-			 ztest_user_unit_test(test_bmi_acc_get_offset),
-			 ztest_user_unit_test(test_bmi_gyr_get_offset),
-			 ztest_user_unit_test(test_bmi_acc_set_offset),
-			 ztest_user_unit_test(test_bmi_gyr_set_offset),
-			 ztest_user_unit_test(test_bmi_acc_set_range),
-			 ztest_user_unit_test(test_bmi_gyr_set_range),
-			 ztest_user_unit_test(test_bmi_get_resolution),
-			 ztest_user_unit_test(test_bmi_acc_rate),
-			 ztest_user_unit_test(test_bmi_gyr_rate),
-			 ztest_user_unit_test(test_bmi_scale),
-			 ztest_user_unit_test(test_bmi_read_temp),
-			 ztest_user_unit_test(test_bmi_acc_read),
-			 ztest_user_unit_test(test_bmi_gyr_read),
-			 ztest_user_unit_test(test_bmi_acc_perform_calib),
-			 ztest_user_unit_test(test_bmi_gyr_perform_calib),
-			 ztest_user_unit_test(test_bmi_init),
-			 ztest_user_unit_test(test_bmi_acc_fifo),
-			 ztest_user_unit_test(test_bmi_gyr_fifo));
-	ztest_run_test_suite(bmi260);
+	/*
+	 * This test checks that we properly handle passing in invalid sensor
+	 * types or attempting unsupported operations on certain sensor types.
+	 */
+
+	struct motion_sensor_t ms_fake;
+
+	/* Part 1:
+	 * Setting offset on anything that is not an accel or gyro is an error.
+	 * Make a copy of the accelerometer motion sensor struct and modify its
+	 * type to magnetometer for this test.
+	 */
+	memcpy(&ms_fake, &motion_sensors[BMI_ACC_SENSOR_ID], sizeof(ms_fake));
+	ms_fake.type = MOTIONSENSE_TYPE_MAG;
+
+	int16_t offset[3];
+	int ret =
+		ms_fake.drv->set_offset(&ms_fake, (const int16_t *)&offset, 0);
+	zassert_equal(
+		ret, EC_RES_INVALID_PARAM,
+		"Expected a return code of %d (EC_RES_INVALID_PARAM) but got %d",
+		EC_RES_INVALID_PARAM, ret);
+
+	/* Part 2:
+	 * Running a calibration on a magnetometer is also not supported.
+	 */
+	memcpy(&ms_fake, &motion_sensors[BMI_ACC_SENSOR_ID], sizeof(ms_fake));
+	ms_fake.type = MOTIONSENSE_TYPE_MAG;
+
+	ret = ms_fake.drv->perform_calib(&ms_fake, 1);
+	zassert_equal(
+		ret, EC_RES_INVALID_PARAM,
+		"Expected a return code of %d (EC_RES_INVALID_PARAM) but got %d",
+		EC_RES_INVALID_PARAM, ret);
 }
+
+ZTEST_USER(bmi260, test_interrupt_handler)
+{
+	/* The accelerometer interrupt handler simply sets an event flag for the
+	 * motion sensing task. Make sure that flag starts cleared, fire the
+	 * interrupt, and ensure the flag is set.
+	 */
+
+	atomic_t *mask;
+
+	mask = task_get_event_bitmap(TASK_ID_MOTIONSENSE);
+	zassert_true(mask != NULL,
+		     "Got a null pointer when getting event bitmap.");
+	zassert_true((*mask & CONFIG_ACCELGYRO_BMI260_INT_EVENT) == 0,
+		     "Event flag is set before firing interrupt");
+
+	bmi260_interrupt(0);
+
+	mask = task_get_event_bitmap(TASK_ID_MOTIONSENSE);
+	zassert_true(mask != NULL,
+		     "Got a null pointer when getting event bitmap.");
+	zassert_true(*mask & CONFIG_ACCELGYRO_BMI260_INT_EVENT,
+		     "Event flag is not set after firing interrupt");
+}
+
+ZTEST_USER(bmi260, test_bmi_init_chip_id)
+{
+	struct i2c_emul *emul = bmi_emul_get(BMI_ORD);
+	struct motion_sensor_t *ms_acc = &motion_sensors[BMI_ACC_SENSOR_ID];
+
+	/* Part 1:
+	 * Error occurs while reading the chip ID
+	 */
+	i2c_common_emul_set_read_fail_reg(emul, BMI260_CHIP_ID);
+	int ret = ms_acc->drv->init(ms_acc);
+
+	zassert_equal(ret, EC_ERROR_UNKNOWN,
+		      "Expected %d (EC_ERROR_UNKNOWN) but got %d",
+		      EC_ERROR_UNKNOWN, ret);
+	i2c_common_emul_set_read_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/* Part 2:
+	 * Test cases where the returned chip ID does not match what is
+	 * expected. This involves overriding values in the motion_sensor
+	 * struct, so make a copy first.
+	 */
+	struct motion_sensor_t ms_fake;
+
+	memcpy(&ms_fake, ms_acc, sizeof(ms_fake));
+
+	/* Part 2a: expecting MOTIONSENSE_CHIP_BMI220 but get BMI260's chip ID!
+	 */
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI260_CHIP_ID_MAJOR);
+	ms_fake.chip = MOTIONSENSE_CHIP_BMI220;
+
+	ret = ms_fake.drv->init(&ms_fake);
+	zassert_equal(ret, EC_ERROR_ACCESS_DENIED,
+		      "Expected %d (EC_ERROR_ACCESS_DENIED) but got %d",
+		      EC_ERROR_ACCESS_DENIED, ret);
+
+	/* Part 2b: expecting MOTIONSENSE_CHIP_BMI260 but get BMI220's chip ID!
+	 */
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI220_CHIP_ID_MAJOR);
+	ms_fake.chip = MOTIONSENSE_CHIP_BMI260;
+
+	ret = ms_fake.drv->init(&ms_fake);
+	zassert_equal(ret, EC_ERROR_ACCESS_DENIED,
+		      "Expected %d (EC_ERROR_ACCESS_DENIED) but got %d",
+		      EC_ERROR_ACCESS_DENIED, ret);
+
+	/* Part 2c: use an invalid expected chip */
+	ms_fake.chip = MOTIONSENSE_CHIP_MAX;
+
+	ret = ms_fake.drv->init(&ms_fake);
+	zassert_equal(ret, EC_ERROR_ACCESS_DENIED,
+		      "Expected %d (EC_ERROR_ACCESS_DENIED) but got %d",
+		      EC_ERROR_ACCESS_DENIED, ret);
+}
+
+/* Make an I2C emulator mock wrapped in FFF */
+FAKE_VALUE_FUNC(int, bmi_config_load_no_mapped_flash_mock_read_fn,
+		struct i2c_emul *, int, uint8_t *, int, void *);
+static int bmi_config_load_no_mapped_flash_mock_read_fn_helper(
+	struct i2c_emul *emul, int reg, uint8_t *val, int bytes, void *data)
+{
+	if (reg == BMI260_INTERNAL_STATUS && val) {
+		/* We want to force-return a status of 'initialized' when this
+		 * is read.
+		 */
+		*val = BMI260_INIT_OK;
+		return 0;
+	}
+	/* For other registers, go through the normal emulator route */
+	return 1;
+}
+
+ZTEST_USER(bmi260, test_bmi_config_load_no_mapped_flash)
+{
+	/* Tests the situation where we load BMI config data when flash memory
+	 * is not mapped (basically what occurs when `init_rom_map()` in
+	 * `bmi_config_load()` returns NULL)
+	 */
+
+	struct i2c_emul *emul = bmi_emul_get(BMI_ORD);
+	struct motion_sensor_t *ms_acc = &motion_sensors[BMI_ACC_SENSOR_ID];
+	int ret, num_status_reg_reads;
+
+	/* Force bmi_config_load() to have to manually copy from memory */
+	RESET_FAKE(init_rom_map);
+	init_rom_map_fake.return_val = NULL;
+
+	/* Force init_rom_copy() to succeed */
+	RESET_FAKE(init_rom_copy);
+	init_rom_copy_fake.return_val = 0;
+
+	/* Set proper chip ID and raise the INIT_OK flag to signal that config
+	 * succeeded.
+	 */
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI260_CHIP_ID_MAJOR);
+	i2c_common_emul_set_read_func(
+		emul, bmi_config_load_no_mapped_flash_mock_read_fn, NULL);
+	RESET_FAKE(bmi_config_load_no_mapped_flash_mock_read_fn);
+	bmi_config_load_no_mapped_flash_mock_read_fn_fake.custom_fake =
+		bmi_config_load_no_mapped_flash_mock_read_fn_helper;
+
+	/* Part 1: successful path */
+	ret = ms_acc->drv->init(ms_acc);
+
+	zassert_equal(ret, EC_RES_SUCCESS, "Got %d but expected %d", ret,
+		      EC_RES_SUCCESS);
+
+	/* Check the number of times we accessed BMI260_INTERNAL_STATUS */
+	num_status_reg_reads = MOCK_COUNT_CALLS_WITH_ARG_VALUE(
+		bmi_config_load_no_mapped_flash_mock_read_fn_fake, 1,
+		BMI260_INTERNAL_STATUS);
+	zassert_equal(1, num_status_reg_reads,
+		      "Accessed status reg %d times but expected %d.",
+		      num_status_reg_reads, 1);
+
+	/* Part 2: write to `BMI260_INIT_ADDR_0` fails */
+	i2c_common_emul_set_write_fail_reg(emul, BMI260_INIT_ADDR_0);
+
+	ret = ms_acc->drv->init(ms_acc);
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Got %d but expected %d",
+		      ret, EC_ERROR_INVALID_CONFIG);
+
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/* Part 3: init_rom_copy() fails w/ a non-zero return code of 255. */
+	init_rom_copy_fake.return_val = 255;
+
+	ret = ms_acc->drv->init(ms_acc);
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Got %d but expected %d",
+		      ret, EC_ERROR_INVALID_CONFIG);
+
+	init_rom_copy_fake.return_val = 0;
+
+	/* Part 4: write to `BMI260_INIT_DATA` fails */
+	i2c_common_emul_set_write_fail_reg(emul, BMI260_INIT_DATA);
+
+	ret = ms_acc->drv->init(ms_acc);
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Got %d but expected %d",
+		      ret, EC_ERROR_INVALID_CONFIG);
+
+	i2c_common_emul_set_write_fail_reg(emul, I2C_COMMON_EMUL_NO_FAIL_REG);
+
+	/* Cleanup */
+	i2c_common_emul_set_read_func(emul, NULL, NULL);
+}
+
+ZTEST_USER(bmi260, test_bmi_config_unsupported_chip)
+{
+	/* Test what occurs when we try to configure a chip that is
+	 * turned off in Kconfig (BMI220). This test assumes that
+	 * CONFIG_ACCELGYRO_BMI220 is NOT defined.
+	 */
+
+#if defined(CONFIG_ACCELGYRO_BMI220)
+#error "Test test_bmi_config_unsupported_chip will not work properly with " \
+	"CONFIG_ACCELGYRO_BMI220 defined."
+#endif
+
+	struct i2c_emul *emul = bmi_emul_get(BMI_ORD);
+	struct motion_sensor_t ms_fake;
+
+	/* Set up struct and emaulator to be a BMI220 chip, which
+	 * `bmi_config_load()` does not support in the current configuration
+	 */
+
+	memcpy(&ms_fake, &motion_sensors[BMI_ACC_SENSOR_ID], sizeof(ms_fake));
+	ms_fake.chip = MOTIONSENSE_CHIP_BMI220;
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI220_CHIP_ID_MAJOR);
+
+	int ret = ms_fake.drv->init(&ms_fake);
+
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Expected %d but got %d",
+		      EC_ERROR_INVALID_CONFIG, ret);
+}
+
+ZTEST_USER(bmi260, test_init_config_read_failure)
+{
+	/* Test proper response to a failed read from the register
+	 * BMI260_INTERNAL_STATUS.
+	 */
+
+	struct i2c_emul *emul = bmi_emul_get(BMI_ORD);
+	struct motion_sensor_t *ms_acc = &motion_sensors[BMI_ACC_SENSOR_ID];
+	int ret;
+
+	/* Set up i2c emulator and mocks */
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI260_CHIP_ID_MAJOR);
+	i2c_common_emul_set_read_fail_reg(emul, BMI260_INTERNAL_STATUS);
+	RESET_FAKE(init_rom_map);
+	init_rom_map_fake.custom_fake = init_rom_map_addr_passthru;
+
+	ret = ms_acc->drv->init(ms_acc);
+
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Expected %d but got %d",
+		      EC_ERROR_INVALID_CONFIG, ret);
+}
+
+/* Mock read function and counter used to test the timeout when
+ * waiting for the chip to initialize
+ */
+static int timeout_test_status_reg_access_count;
+static int status_timeout_mock_read_fn(struct i2c_emul *emul, int reg,
+				       uint8_t *val, int bytes, void *data)
+{
+	if (reg == BMI260_INTERNAL_STATUS && val) {
+		/* We want to force-return a non-OK status each time */
+		timeout_test_status_reg_access_count++;
+		*val = BMI260_INIT_ERR;
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+ZTEST_USER(bmi260, test_init_config_status_timeout)
+{
+	/* We allow up to 15 tries to get a successful BMI260_INIT_OK
+	 * value from the BMI260_INTERNAL_STATUS register. Make sure
+	 * we properly handle the case where the chip is not initialized
+	 * before the timeout.
+	 */
+
+	struct i2c_emul *emul = bmi_emul_get(BMI_ORD);
+	struct motion_sensor_t *ms_acc = &motion_sensors[BMI_ACC_SENSOR_ID];
+	int ret;
+
+	/* Set up i2c emulator and mocks */
+	bmi_emul_set_reg(emul, BMI260_CHIP_ID, BMI260_CHIP_ID_MAJOR);
+	timeout_test_status_reg_access_count = 0;
+	i2c_common_emul_set_read_func(emul, status_timeout_mock_read_fn, NULL);
+	RESET_FAKE(init_rom_map);
+	init_rom_map_fake.custom_fake = init_rom_map_addr_passthru;
+
+	ret = ms_acc->drv->init(ms_acc);
+
+	zassert_equal(timeout_test_status_reg_access_count, 15,
+		      "Expected %d attempts but counted %d", 15,
+		      timeout_test_status_reg_access_count);
+	zassert_equal(ret, EC_ERROR_INVALID_CONFIG, "Expected %d but got %d",
+		      EC_ERROR_INVALID_CONFIG, ret);
+}
+
+ZTEST_SUITE(bmi260, drivers_predicate_post_main, NULL, NULL, NULL, NULL);

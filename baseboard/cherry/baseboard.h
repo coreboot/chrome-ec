@@ -14,6 +14,7 @@
  * connect to 1.8v on other versions.
  */
 #define CONFIG_IT83XX_VCC_1P8V
+#define CONFIG_IT83XX_I2C_CMD_QUEUE
 
 /*
  * On power-on, H1 releases the EC from reset but then quickly asserts and
@@ -30,7 +31,7 @@
 
 /* Chipset */
 #define CONFIG_CMD_AP_RESET_LOG
-#define CONFIG_CMD_POWERINDEBUG
+#undef CONFIG_CMD_POWERINDEBUG
 #define CONFIG_HOST_COMMAND_STATUS
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LOW_POWER_S0
@@ -109,7 +110,6 @@
 #define CONFIG_LED_COMMON
 
 /* PD / USB-C / PPC */
-#define CONFIG_USB_PD_DEBUG_LEVEL 3
 #define CONFIG_CMD_PPC_DUMP
 #define CONFIG_HOSTCMD_PD_CONTROL
 #define CONFIG_IT83XX_TUNE_CC_PHY
@@ -125,12 +125,12 @@
 #define CONFIG_USB_DRP_ACC_TRYSRC
 #define CONFIG_USBC_RETIMER_PS8802 /* C0 */
 #define CONFIG_USB_MUX_ANX3443 /* C1 */
-#define CONFIG_USB_MUX_VIRTUAL
 #define CONFIG_USB_PD_ALT_MODE
 #define CONFIG_USB_PD_ALT_MODE_DFP
 #define CONFIG_USB_PD_DECODE_SOP
 #define CONFIG_USB_PD_DISCHARGE
 #define CONFIG_USB_PD_DISCHARGE_PPC
+#define CONFIG_USB_PD_DPS
 #define CONFIG_USB_PD_DP_HPD_GPIO
 #define CONFIG_USB_PD_DP_HPD_GPIO_CUSTOM
 #define CONFIG_USB_PD_DUAL_ROLE
@@ -161,7 +161,9 @@
 
 /* USB-A */
 #define CONFIG_USB_PORT_POWER_DUMB
+#ifndef BOARD_CHERRY
 #define CONFIG_USB_PORT_POWER_DUMB_CUSTOM_HOOK
+#endif
 #define USB_PORT_COUNT USBA_PORT_COUNT
 
 /* UART */
@@ -186,6 +188,13 @@
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
 #define CONFIG_MKBP_USE_GPIO
 
+/* Vboot Config */
+#define CONFIG_CRC8
+#define CONFIG_VBOOT_EFS2
+#define CONFIG_VBOOT_HASH
+#define CONFIG_VSTORE
+#define CONFIG_VSTORE_SLOT_COUNT 1
+
 /* Voltage regulator control */
 #define CONFIG_HOSTCMD_REGULATOR
 
@@ -197,6 +206,11 @@
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_HANG_DETECT) |     \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE) | \
 	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_POWER_BUTTON))
+
+/* And the MKBP events */
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK \
+		(BIT(EC_MKBP_EVENT_KEY_MATRIX) | \
+		 BIT(EC_MKBP_EVENT_HOST_EVENT))
 
 #ifndef __ASSEMBLER__
 
@@ -219,14 +233,6 @@ enum adc_channel {
 enum temp_sensor_id {
 	TEMP_SENSOR_CHARGER,
 	TEMP_SENSOR_COUNT,
-};
-
-enum pwm_channel {
-	PWM_CH_LED1,
-	PWM_CH_LED2,
-	PWM_CH_LED3,
-	PWM_CH_KBLIGHT,
-	PWM_CH_COUNT,
 };
 
 void board_reset_pd_mcu(void);

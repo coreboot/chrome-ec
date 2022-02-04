@@ -17,6 +17,10 @@
 
 #include "adlrvp.h"
 
+/* Heavy I2C communication as POR, increase WDT expired time */
+#undef CONFIG_WATCHDOG_PERIOD_MS
+#define CONFIG_WATCHDOG_PERIOD_MS 5000
+
 /*
  * External parallel crystal between XTAL1 and XTAL2 pins.
  *   #define CONFIG_CLOCK_SRC_EXTERNAL
@@ -72,7 +76,6 @@
 /* Power sequencing */
 #define GPIO_EC_SPI_OE_N		GPIO_EC_SPI_OE_MECC
 #define GPIO_PG_EC_ALL_SYS_PWRGD	GPIO_ALL_SYS_PWRGD
-#define GPIO_RSMRST_L_PGOOD		GPIO_RSMRST_PWRGD
 #define GPIO_PG_EC_RSMRST_ODL		GPIO_RSMRST_PWRGD
 #define GPIO_PCH_SLP_S0_L		GPIO_PCH_SLP_S0_N
 #define GPIO_PG_EC_DSW_PWROK		GPIO_VCCPDSW_3P3
@@ -85,7 +88,7 @@
 #define GPIO_PCH_DSW_PWROK		GPIO_EC_DSW_PWROK
 
 /* Sensors */
-#define GMR_TABLET_MODE_GPIO_L		GPIO_SLATE_MODE_INDICATION
+#define GPIO_TABLET_MODE_L		GPIO_SLATE_MODE_INDICATION
 #define GPIO_CPU_PROCHOT		GPIO_PROCHOT_EC_N
 
 /* Buttons */

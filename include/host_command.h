@@ -270,6 +270,7 @@ struct host_command *zephyr_find_host_command(int command);
  * commands starting at offset 0x0000
  */
 #define DECLARE_HOST_COMMAND(command, routine, version_mask)		\
+	static enum ec_status(routine)(struct host_cmd_handler_args *args); \
 	const struct host_command __keep __no_sanitize_address		\
 	EXPAND(0x0000, command)						\
 	__attribute__((section(".rodata.hcmds."EXPANDSTR(0x0000, command)))) \
@@ -280,6 +281,7 @@ struct host_command *zephyr_find_host_command(int command);
  * commands starting at offset EC_CMD_BOARD_SPECIFIC_BASE,
  */
 #define DECLARE_PRIVATE_HOST_COMMAND(command, routine, version_mask) \
+	static enum ec_status(routine)(struct host_cmd_handler_args *args); \
 	const struct host_command __keep __no_sanitize_address	     \
 	EXPAND(EC_CMD_BOARD_SPECIFIC_BASE, command) \
 	__attribute__((section(".rodata.hcmds."\
@@ -288,7 +290,7 @@ struct host_command *zephyr_find_host_command(int command);
 		   version_mask}
 #else /* !CONFIG_ZEPHYR && !HAS_TASK_HOSTCMD */
 #define DECLARE_HOST_COMMAND(command, routine, version_mask)    \
-	enum ec_status (routine)(struct host_cmd_handler_args *args)       \
+	static enum ec_status (routine)(struct host_cmd_handler_args *args) \
 		__attribute__((unused))
 
 #define DECLARE_PRIVATE_HOST_COMMAND(command, routine, version_mask)	\
@@ -356,13 +358,29 @@ stub_send_response_callback(struct host_cmd_handler_args *args)
 	ARG_UNUSED(args);
 }
 
-#define BUILD_HOST_COMMAND(CMD, VERSION, RESPONSE)                         \
-	{                                                                  \
-		.command = (CMD), .version = (VERSION),                    \
-		.send_response = stub_send_response_callback,              \
-		.response = &(RESPONSE), .response_max = sizeof(RESPONSE), \
-		.response_size = sizeof(RESPONSE)                          \
+#define BUILD_HOST_COMMAND(CMD, VERSION, RESPONSE, PARAMS)		\
+	{								\
+		.command = (CMD), .version = (VERSION),			\
+		.send_response = stub_send_response_callback,		\
+		.response_size = 0,					\
+		COND_CODE_0(IS_EMPTY(RESPONSE),				\
+		    (.response = &(RESPONSE),				\
+		     .response_max = sizeof(RESPONSE)),			\
+		    (.response = NULL, .response_max = 0)),		\
+		COND_CODE_0(IS_EMPTY(PARAMS),				\
+		    (.params = &(PARAMS),				\
+		     .params_size = sizeof(PARAMS)),			\
+		    (.params = NULL, .params_size = 0))			\
 	}
+
+#define BUILD_HOST_COMMAND_RESPONSE(CMD, VERSION, RESPONSE)		\
+	BUILD_HOST_COMMAND(CMD, VERSION, RESPONSE, EMPTY)
+
+#define BUILD_HOST_COMMAND_PARAMS(CMD, VERSION, PARAMS)			\
+	BUILD_HOST_COMMAND(CMD, VERSION, EMPTY, PARAMS)
+
+#define BUILD_HOST_COMMAND_SIMPLE(CMD, VERSION)				\
+	BUILD_HOST_COMMAND(CMD, VERSION, EMPTY, EMPTY)
 #endif /* CONFIG_ZTEST */
 
 #endif  /* __CROS_EC_HOST_COMMAND_H */

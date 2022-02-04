@@ -93,30 +93,18 @@ log_level_map = {
 }
 
 
-def main(argv=None):
-    """The main function.
-
-    Args:
-        argv: Optionally, the command-line to parse, not including argv[0].
+def get_argparser():
+    """Get the argument parser.
 
     Returns:
-        Zero upon success, or non-zero upon failure.
+        A two tuple, the argument parser, and the subcommand action.
     """
-    if argv is None:
-        argv = sys.argv[1:]
-
-    maybe_reexec(argv)
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--checkout", type=pathlib.Path, help="Path to ChromiumOS checkout"
+    parser = argparse.ArgumentParser(
+        prog="zmake",
+        description="Chromium OS's meta-build tool for Zephyr",
     )
     parser.add_argument(
-        "-D",
-        "--debug",
-        action="store_true",
-        default=False,
-        help=("Turn on debug features (e.g., stack trace, " "verbose logging)"),
+        "--checkout", type=pathlib.Path, help="Path to ChromiumOS checkout"
     )
     parser.add_argument(
         "-j",
@@ -129,12 +117,31 @@ def main(argv=None):
         help="Degree of multiprogramming to use",
     )
     parser.add_argument(
+        "--goma",
+        action="store_true",
+        dest="goma",
+        help="Enable hyperspeed compilation with Goma! (Googlers only)",
+    )
+
+    log_level_group = parser.add_mutually_exclusive_group()
+    log_level_group.add_argument(
         "-l",
         "--log-level",
-        choices=list(log_level_map.keys()),
-        dest="log_level",
+        choices=log_level_map.values(),
+        metavar=f"{{{','.join(log_level_map)}}}",
+        type=lambda x: log_level_map[x],
+        default=logging.INFO,
         help="Set the logging level (default=INFO)",
     )
+    log_level_group.add_argument(
+        "-D",
+        "--debug",
+        dest="log_level",
+        action="store_const",
+        const=logging.DEBUG,
+        help="Alias for --log-level=DEBUG",
+    )
+
     parser.add_argument(
         "-L",
         "--no-log-label",
@@ -162,14 +169,16 @@ def main(argv=None):
         "--zephyr-base", type=pathlib.Path, help="Path to Zephyr OS repository"
     )
 
-    sub = parser.add_subparsers(dest="subcommand", help="Subcommand")
+    sub = parser.add_subparsers(
+        dest="subcommand",
+        metavar="subcommand",
+        help="Subcommand to run",
+    )
     sub.required = True
 
-    configure = sub.add_parser("configure")
-    configure.add_argument(
-        "--ignore-unsupported-zephyr-version",
-        action="store_true",
-        help="Don't warn about using an unsupported Zephyr version",
+    configure = sub.add_parser(
+        "configure",
+        help="Set up a build directory to be built later by the build subcommand",
     )
     configure.add_argument("-t", "--toolchain", help="Name of toolchain to use")
     configure.add_argument(
@@ -177,6 +186,18 @@ def main(argv=None):
         action="store_true",
         dest="bringup",
         help="Enable bringup debugging features",
+    )
+    configure.add_argument(
+        "--clobber",
+        action="store_true",
+        dest="clobber",
+        help="Delete existing build directories, even if configuration is unchanged",
+    )
+    configure.add_argument(
+        "--allow-warnings",
+        action="store_true",
+        default=False,
+        help="Do not treat warnings as errors",
     )
     configure.add_argument(
         "-B", "--build-dir", type=pathlib.Path, help="Build directory"
@@ -195,7 +216,8 @@ def main(argv=None):
         help="Test the .elf file after configuration",
     )
     configure.add_argument(
-        "project_dir", type=pathlib.Path, help="Path to the project to build"
+        "project_name_or_dir",
+        help="Path to the project to build",
     )
     configure.add_argument(
         "-c",
@@ -205,7 +227,10 @@ def main(argv=None):
         help="Enable CONFIG_COVERAGE Kconfig.",
     )
 
-    build = sub.add_parser("build")
+    build = sub.add_parser(
+        "build",
+        help="Execute the build from a build directory",
+    )
     build.add_argument(
         "build_dir",
         type=pathlib.Path,
@@ -218,34 +243,110 @@ def main(argv=None):
         help="Exit with code 2 if warnings are detected",
     )
 
-    test = sub.add_parser("test")
+    list_projects = sub.add_parser(
+        "list-projects",
+        help="List projects known to zmake.",
+    )
+    list_projects.add_argument(
+        "--format",
+        default="{config.project_name}\n",
+        help=(
+            "Output format to print projects (str.format(config=project.config) is "
+            "called on this for each project)."
+        ),
+    )
+    list_projects.add_argument(
+        "search_dir",
+        type=pathlib.Path,
+        nargs="?",
+        help="Optional directory to search for BUILD.py files in.",
+    )
+
+    test = sub.add_parser(
+        "test",
+        help="Execute tests from a build directory",
+    )
+    test.add_argument(
+        "-c",
+        "--coverage",
+        action="store_true",
+        dest="coverage",
+        help="Run lcov after running test to generate coverage info file.",
+    )
     test.add_argument(
         "build_dir",
         type=pathlib.Path,
         help="The build directory used during configuration",
     )
 
-    sub.add_parser("testall")
+    testall = sub.add_parser(
+        "testall",
+        help="Execute all known builds and tests",
+    )
+    testall.add_argument(
+        "--clobber",
+        action="store_true",
+        dest="clobber",
+        help="Delete existing build directories, even if configuration is unchanged",
+    )
 
-    coverage = sub.add_parser("coverage")
+    coverage = sub.add_parser(
+        "coverage",
+        help="Run coverage on a build directory",
+    )
+    coverage.add_argument(
+        "--clobber",
+        action="store_true",
+        dest="clobber",
+        help="Delete existing build directories, even if configuration is unchanged",
+    )
     coverage.add_argument(
         "build_dir",
         type=pathlib.Path,
         help="The build directory used during configuration",
     )
 
+    generate_readme = sub.add_parser(
+        "generate-readme",
+        help="Update the auto-generated markdown documentation",
+    )
+    generate_readme.add_argument(
+        "-o",
+        "--output-file",
+        default=pathlib.Path(__file__).parent.parent / "README.md",
+        help="File to write to.  It will only be written if changed.",
+    )
+    generate_readme.add_argument(
+        "--diff",
+        action="store_true",
+        help=(
+            "If specified, diff the README with the expected contents instead of "
+            "writing out."
+        ),
+    )
+
+    return parser, sub
+
+
+def main(argv=None):
+    """The main function.
+
+    Args:
+        argv: Optionally, the command-line to parse, not including argv[0].
+
+    Returns:
+        Zero upon success, or non-zero upon failure.
+    """
+    if argv is None:
+        argv = sys.argv[1:]
+
+    maybe_reexec(argv)
+
+    parser, _ = get_argparser()
     opts = parser.parse_args(argv)
 
     # Default logging
-    log_level = logging.INFO
     log_label = False
-
-    if opts.log_level:
-        log_level = log_level_map[opts.log_level]
-        log_label = True
-    elif opts.debug:
-        log_level = logging.DEBUG
-        log_label = True
 
     if opts.log_label is not None:
         log_label = opts.log_label
@@ -255,16 +356,14 @@ def main(argv=None):
         log_format = "%(message)s"
         multiproc.log_job_names = False
 
-    logging.basicConfig(format=log_format, level=log_level)
-
-    if not opts.debug:
-        sys.tracebacklimit = 0
+    logging.basicConfig(format=log_format, level=opts.log_level)
 
     try:
         zmake = call_with_namespace(zm.Zmake, opts)
         subcommand_method = getattr(zmake, opts.subcommand.replace("-", "_"))
         result = call_with_namespace(subcommand_method, opts)
-        return result
+        wait_rv = zmake.executor.wait()
+        return result or wait_rv
     finally:
         multiproc.wait_for_log_end()
 

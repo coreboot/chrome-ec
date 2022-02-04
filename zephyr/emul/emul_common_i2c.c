@@ -8,7 +8,7 @@
 LOG_MODULE_REGISTER(emul_common_i2c);
 
 #include <device.h>
-#include <emul.h>
+#include <drivers/emul.h>
 #include <drivers/i2c.h>
 #include <drivers/i2c_emul.h>
 
@@ -430,3 +430,7 @@ void i2c_common_emul_init(struct i2c_common_emul_data *data)
 
 	k_mutex_init(&data->data_mtx);
 }
+
+struct i2c_emul_api i2c_common_emul_api = {
+	.transfer = i2c_common_emul_transfer,
+};

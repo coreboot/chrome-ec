@@ -340,6 +340,7 @@ static int dp_set_irq(const struct usb_mux *me, int enable)
 	return mux_write(me, MUX_IN_HPD_ASSERTION_REG, reg);
 }
 
+/* LCOV_EXCL_START */
 __overridable
 uint16_t board_get_ps8xxx_product_id(int port)
 {
@@ -366,6 +367,7 @@ uint16_t board_get_ps8xxx_product_id(int port)
 	CPRINTS("%s: Any new product id is not defined here?", __func__);
 	return 0;
 }
+/* LCOV_EXCL_STOP */
 
 bool check_ps8755_chip(int port)
 {
@@ -383,11 +385,15 @@ bool check_ps8755_chip(int port)
 }
 
 void ps8xxx_tcpc_update_hpd_status(const struct usb_mux *me,
-				   mux_state_t mux_state)
+				   mux_state_t mux_state,
+				   bool *ack_required)
 {
 	int port = me->usb_port;
 	int hpd_lvl = (mux_state & USB_PD_MUX_HPD_LVL) ? 1 : 0;
 	int hpd_irq = (mux_state & USB_PD_MUX_HPD_IRQ) ? 1 : 0;
+
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
 
 	if (IS_ENABLED(CONFIG_USB_PD_TCPM_PS8751_CUSTOM_MUX_DRIVER) &&
 	    product_id[me->usb_port] == PS8751_PRODUCT_ID &&
@@ -710,11 +716,12 @@ static int ps8xxx_get_chip_info(int port, int live,
 static int ps8xxx_enter_low_power_mode(int port)
 {
 	/*
-	 * PS8751 has the auto sleep function that enters low power mode on
-	 * its own in ~2 seconds. Other chips don't have it. Stub it out for
-	 * PS8751.
+	 * PS8751/PS8815 has the auto sleep function that enters
+	 * low power mode on its own in ~2 seconds. Other chips
+	 * don't have it. Stub it out for PS8751/PS8815.
 	 */
-	if (product_id[port] == PS8751_PRODUCT_ID)
+	if (product_id[port] == PS8751_PRODUCT_ID ||
+		product_id[port] == PS8815_PRODUCT_ID)
 		return EC_SUCCESS;
 
 	return tcpci_enter_low_power_mode(port);
@@ -757,6 +764,7 @@ __maybe_unused static int ps8815_transmit_buffer_workaround_check(int port)
 		ps8xxx_role_control_delay_ms[port] = 1;
 		break;
 	default:
+		ps8xxx_role_control_delay_ms[port] = 0;
 		break;
 	}
 
@@ -771,6 +779,9 @@ __maybe_unused static int ps8815_disable_rp_detect_workaround_check(int port)
 
 	ps8815_disable_rp_detect[port] = false;
 	ps8815_disconnected[port] = true;
+
+	if (product_id[port] != PS8815_PRODUCT_ID)
+		return EC_SUCCESS;
 
 	reg = get_reg_by_product(port, REG_FW_VER);
 	rv = tcpc_read(port, reg, &val);
@@ -895,6 +906,20 @@ static int ps8xxx_tcpm_get_cc(int port, enum tcpc_cc_voltage_status *cc1,
 	return tcpci_tcpm_get_cc(port, cc1, cc2);
 }
 
+static int ps8xxx_tcpm_set_vconn(int port, int enable)
+{
+	/*
+	 * Add delay of writing TCPC_REG_POWER_CTRL makes
+	 * CC status being judged correctly when disable VCONN.
+	 * This may be a PS8XXX firmware issue, Parade is still trying.
+	 * https://partnerissuetracker.corp.google.com/issues/185202064
+	 */
+	if (!enable)
+		msleep(PS8XXX_VCONN_TURN_OFF_DELAY_US);
+
+	return tcpci_tcpm_set_vconn(port, enable);
+}
+
 const struct tcpm_drv ps8xxx_tcpm_drv = {
 	.init			= ps8xxx_tcpm_init,
 	.release		= ps8xxx_tcpm_release,
@@ -908,7 +933,7 @@ const struct tcpm_drv ps8xxx_tcpm_drv = {
 #ifdef CONFIG_USB_PD_DECODE_SOP
 	.sop_prime_enable	= tcpci_tcpm_sop_prime_enable,
 #endif
-	.set_vconn		= tcpci_tcpm_set_vconn,
+	.set_vconn		= ps8xxx_tcpm_set_vconn,
 	.set_msg_header		= tcpci_tcpm_set_msg_header,
 	.set_rx_enable		= tcpci_tcpm_set_rx_enable,
 	.get_message_raw	= tcpci_tcpm_get_message_raw,

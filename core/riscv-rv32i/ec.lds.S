@@ -318,7 +318,6 @@ SECTIONS
 		. = ALIGN(4);
 		/* Rest of .bss takes care of its own alignment */
 		*(.bss)
-		*(.bss.slow)
 
 		/*
 		 * Reserve space for deferred function firing times.
@@ -348,9 +347,13 @@ SECTIONS
 		     (__shared_mem_buf + CONFIG_SHAREDMEM_MINIMUM_SIZE);
 
 	/*
-	 * __flash_used is used in flash free calculations by the makefile.
+	 * __flash_used and __flash_size is used in flash free calculations by
+	 * the makefile. Note the difference between __flash_size and
+	 * __config_flash_size. __flash_size is the flash size for the given
+	 * image (RW, RO, etc.), while __config_flash_size is the *total*
+	 * flash size.
 	 * __image_size is stored in the struct image_data header and used
-	 * in hash calcuations.
+	 * in hash calculations.
 	 */
 #if defined(CHIP_FAMILY_IT8XXX2)
 	__flash_used = LOADADDR(.data) + SIZEOF(.data) + \
@@ -358,7 +361,18 @@ SECTIONS
 #else
 	__flash_used = LOADADDR(.data) + SIZEOF(.data) - FW_OFF(SECTION);
 #endif
+#if defined(CONFIG_FLASH_PHYSICAL)
+	__flash_size = LENGTH(FLASH);
+#else
+	__flash_size = LENGTH(IROM);
+#endif
 	__image_size = __flash_used;
+
+#if defined(SECTION_IS_RW) && (CONFIG_FLASH_WRITE_SIZE > 0)
+	/* Alignment is needed by flash_command_write() for RW update. */
+	ASSERT(__image_size % CONFIG_FLASH_WRITE_SIZE == 0,
+	       "Error: RW image is not aligned to CONFIG_FLASH_WRITE_SIZE")
+#endif
 
 #ifdef CONFIG_FLASH_CROS
         /*

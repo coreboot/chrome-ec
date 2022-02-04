@@ -154,13 +154,13 @@ static bool board_is_convertible(void)
 {
 	int sku = system_get_sku_id();
 
-	return sku == 1;
+	return sku == 1 || sku == 2;
 }
 
 int board_sensor_at_360(void)
 {
 	if (board_is_convertible())
-		return !gpio_get_level(GMR_TABLET_MODE_GPIO_L);
+		return !gpio_get_level(GPIO_TABLET_MODE_L);
 
 	return 0;
 }
@@ -207,9 +207,27 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /******************************************************************************/
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"typec",   IT83XX_I2C_CH_C, 400, GPIO_I2C_C_SCL, GPIO_I2C_C_SDA},
-	{"sensor",  IT83XX_I2C_CH_B, 400, GPIO_I2C_B_SCL, GPIO_I2C_B_SDA},
-	{"battery", IT83XX_I2C_CH_A, 100, GPIO_I2C_A_SCL, GPIO_I2C_A_SDA},
+	{
+		.name = "typec",
+		.port = IT83XX_I2C_CH_C,
+		.kbps = 400,
+		.scl  = GPIO_I2C_C_SCL,
+		.sda  = GPIO_I2C_C_SDA
+	},
+	{
+		.name = "sensor",
+		.port = IT83XX_I2C_CH_B,
+		.kbps = 400,
+		.scl  = GPIO_I2C_B_SCL,
+		.sda  = GPIO_I2C_B_SDA
+	},
+	{
+		.name = "battery",
+		.port = IT83XX_I2C_CH_A,
+		.kbps = 100,
+		.scl  = GPIO_I2C_A_SCL,
+		.sda  = GPIO_I2C_A_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -242,8 +260,12 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 static void board_hpd_status(const struct usb_mux *me,
-			     mux_state_t mux_state)
+			     mux_state_t mux_state,
+			     bool *ack_required)
 {
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
+
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify
 	 * host here.

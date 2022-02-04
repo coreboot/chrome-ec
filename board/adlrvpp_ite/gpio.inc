@@ -42,14 +42,22 @@ GPIO_INT(BC_ACOK_EC,		PIN(K, 3), GPIO_INT_BOTH, extpower_interrupt) /* AC Presen
 
 GPIO_INT(UART_SERVO_TX_EC_RX,	PIN(B, 0), GPIO_INT_FALLING, uart_deepsleep_interrupt)
 
+/* Battery present */
+GPIO_INT(BAT_DET_EC,	PIN(K, 0), GPIO_INT_BOTH, battery_detect_interrupt)
+
 /* USB-C interrupts */
 /* Using embedded TCPC for Port-0 */
 UNIMPLEMENTED(USBC_TCPC_ALRT_P0)
 GPIO(NC_USBC_TCPC_ALRT_P0,	PIN(I, 7), GPIO_INPUT)
 GPIO_INT(USBC_TCPC_PPC_ALRT_P0, PIN(J, 5), GPIO_INT_FALLING, ppc_interrupt)
 
+/*
+ * b:200265672 External pull-up resistor of port 1 is removed to fix port 3
+ * TCPC interrupt issue. So add internal pull-up for port 1 instead.
+ * This change is only applied to ITE chip.
+ */
 #if defined(HAS_TASK_PD_C1)
-GPIO_INT(USBC_TCPC_ALRT_P1,	PIN(G, 0), GPIO_INT_FALLING, tcpc_alert_event)
+GPIO_INT(USBC_TCPC_ALRT_P1,	PIN(G, 0), GPIO_INT_FALLING | GPIO_PULL_UP, tcpc_alert_event)
 GPIO_INT(USBC_TCPC_PPC_ALRT_P1, PIN(C, 4), GPIO_INT_FALLING, ppc_interrupt)
 #else
 GPIO(USBC_TCPC_ALRT_P1,		PIN(G, 0), GPIO_INPUT)
@@ -72,11 +80,11 @@ GPIO(USBC_TCPC_ALRT_P3,		PIN(J, 3), GPIO_INPUT)
 GPIO(USBC_TCPC_PPC_ALRT_P3,	PIN(E, 6), GPIO_INPUT)
 #endif
 
-#ifndef CONFIG_HOSTCMD_ESPI
+#ifndef CONFIG_HOST_INTERFACE_ESPI
 GPIO_INT(ESPI_RST_R,		PIN(D, 2), GPIO_INPUT)
 #endif
 
-#ifdef CONFIG_HOSTCMD_ESPI
+#ifdef CONFIG_HOST_INTERFACE_ESPI
 /* enable 1.8v input of EC's espi_reset pin, and then this pin takes effect. */
 GPIO_INT(ESPI_RST_R,		PIN(D, 2), GPIO_INT_FALLING | GPIO_SEL_1P8V, espi_reset_pin_asserted_interrupt) /* eSPI_reset# */
 #endif
@@ -107,13 +115,10 @@ GPIO(SYS_PWROK_EC,	PIN(D, 1), GPIO_OUT_LOW)
 GPIO(DSW_PWROK_EC,	PIN(L, 6), GPIO_OUT_LOW)
 
 /* Host communication GPIOs */
-#ifndef CONFIG_HOSTCMD_ESPI
+#ifndef CONFIG_HOST_INTERFACE_ESPI
 GPIO(PLT_RST_L, 	PIN(H, 6), GPIO_INPUT | GPIO_PULL_UP) /* PCH_PLTRST_L */
 #endif
 GPIO(PCH_WAKE_N,	PIN(J, 0), GPIO_ODR_HIGH)
-
-/* Battery present */
-GPIO(BAT_DET_EC,	PIN(K, 0), GPIO_INPUT)
 
 /* LED */
 GPIO(LED_1_L_EC,	PIN(A, 6), GPIO_OUT_HIGH)	/* BAT_LED_GREEN_L LED_2_L */

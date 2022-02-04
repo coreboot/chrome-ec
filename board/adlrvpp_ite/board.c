@@ -8,7 +8,9 @@
 #include "fan.h"
 #include "fusb302.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "i2c.h"
+#include "i2c_bitbang.h"
 #include "it83xx_pd.h"
 #include "lid_switch.h"
 #include "pca9675.h"
@@ -76,6 +78,27 @@ const struct i2c_port_t i2c_ports[] = {
 BUILD_ASSERT(ARRAY_SIZE(i2c_ports) == I2C_CHAN_COUNT);
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
+const struct i2c_port_t i2c_bitbang_ports[] = {
+	[I2C_BITBANG_CHAN_BRD_ID] = {
+		.name = "bitbang_brd_id",
+		.port = IT83XX_I2C_CH_B,
+		.kbps = 100,
+		.scl = GPIO_SMB_BS_CLK,
+		.sda = GPIO_SMB_BS_DATA,
+		.drv = &bitbang_drv,
+	},
+	[I2C_BITBANG_CHAN_IOEX_0] = {
+		.name = "bitbang_ioex_0",
+		.port = IT83XX_I2C_CH_C,
+		.kbps = 100,
+		.scl = GPIO_USBC_TCPC_I2C_CLK_P0,
+		.sda = GPIO_USBC_TCPC_I2C_DATA_P0,
+		.drv = &bitbang_drv,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(i2c_bitbang_ports) == I2C_BITBANG_CHAN_COUNT);
+const unsigned int i2c_bitbang_ports_used = ARRAY_SIZE(i2c_bitbang_ports);
+
 /* USB-C TCPC Configuration */
 const struct tcpc_config_t tcpc_config[] = {
 	[TYPE_C_PORT_0] = {
@@ -115,3 +138,17 @@ const struct tcpc_config_t tcpc_config[] = {
 #endif
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == CONFIG_USB_PD_PORT_MAX_COUNT);
+
+static void enable_irq(void)
+{
+	gpio_enable_interrupt(CONFIG_BATTERY_PRESENT_GPIO);
+}
+DECLARE_HOOK(HOOK_INIT, enable_irq, HOOK_PRIO_LAST);
+
+DECLARE_DEFERRED(set_charger_system_voltage);
+
+void battery_detect_interrupt(enum gpio_signal signal)
+{
+	/* Trigger deferred notification of battery interrupt */
+	hook_call_deferred(&set_charger_system_voltage_data, 0);
+}

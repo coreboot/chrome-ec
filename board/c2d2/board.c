@@ -155,6 +155,7 @@ const void *const usb_strings[] = {
 	[USB_STR_USART4_STREAM_NAME]	= USB_STRING_DESC("CR50"),
 	[USB_STR_UPDATE_NAME]		= USB_STRING_DESC("Firmware update"),
 	[USB_STR_CONSOLE_NAME]		= USB_STRING_DESC("C2D2 Shell"),
+	[USB_STR_SPI_NAME]		= USB_STRING_DESC("SPI"),
 	[USB_STR_I2C_NAME]		= USB_STRING_DESC("I2C"),
 	[USB_STR_USART3_STREAM_NAME]	= USB_STRING_DESC("CPU"),
 	[USB_STR_USART1_STREAM_NAME]	= USB_STRING_DESC("EC"),
@@ -839,13 +840,35 @@ DECLARE_CONSOLE_COMMAND(pwr_button, command_pwr_button,
 
 static int command_h1_reset(int argc, char **argv)
 {
+	if ((argc == 2) && !strncasecmp("pulse", argv[1], strlen(argv[1]))) {
+		int rv;
+		int c = 2;
+		char *cmd_on[] = {"", "1", ""};
+		char *cmd_off[] = {"", "0", ""};
+
+		rv = command_vref_alternate(c, cmd_on,
+					    GPIO_SPIVREF_RSVD_H1VREF_H1_RST_ODL,
+					    GPIO_EN_SPIVREF_RSVD_H1VREF_H1_RST,
+					    VREF_MON_DIS_H1_RST_HELD,
+					    "H1 reset");
+		if (rv == EC_SUCCESS) {
+			msleep(100);
+			rv = command_vref_alternate
+				(c, cmd_off,
+				 GPIO_SPIVREF_RSVD_H1VREF_H1_RST_ODL,
+				 GPIO_EN_SPIVREF_RSVD_H1VREF_H1_RST,
+				 VREF_MON_DIS_H1_RST_HELD, "H1 reset");
+		}
+		return rv;
+	}
+
 	return command_vref_alternate(argc, argv,
 				      GPIO_SPIVREF_RSVD_H1VREF_H1_RST_ODL,
 				      GPIO_EN_SPIVREF_RSVD_H1VREF_H1_RST,
 				      VREF_MON_DIS_H1_RST_HELD, "H1 reset");
 }
 DECLARE_CONSOLE_COMMAND(h1_reset, command_h1_reset,
-			"[0|1]?",
+			"[0|1|pulse]?",
 			"Get/set the h1 reset state");
 
 

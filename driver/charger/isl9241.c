@@ -46,7 +46,7 @@
 static int learn_mode;
 
 /* Mutex for CONTROL1 register, that can be updated from multiple tasks. */
-K_MUTEX_DEFINE(control1_mutex);
+K_MUTEX_DEFINE(control1_mutex_isl9241);
 
 /* Charger parameters */
 static const struct charger_info isl9241_charger_info = {
@@ -312,7 +312,7 @@ static enum ec_error_list isl9241_discharge_on_ac(int chgnum, int enable)
 {
 	int rv;
 
-	mutex_lock(&control1_mutex);
+	mutex_lock(&control1_mutex_isl9241);
 
 	rv = isl9241_update(chgnum, ISL9241_REG_CONTROL1,
 			    ISL9241_CONTROL1_LEARN_MODE,
@@ -320,7 +320,7 @@ static enum ec_error_list isl9241_discharge_on_ac(int chgnum, int enable)
 	if (!rv)
 		learn_mode = enable;
 
-	mutex_unlock(&control1_mutex);
+	mutex_unlock(&control1_mutex_isl9241);
 	return rv;
 }
 
@@ -546,17 +546,8 @@ static void dump_reg_range(int chgnum, int low, int high)
 	}
 }
 
-static int command_isl9241_dump(int argc, char **argv)
+static void command_isl9241_dump(int chgnum)
 {
-	char *e;
-	int chgnum = 0;
-
-	if (argc >= 2) {
-		chgnum = strtoi(argv[1], &e, 10);
-		if (*e)
-			return EC_ERROR_PARAM1;
-	}
-
 	dump_reg_range(chgnum, 0x14, 0x15);
 	dump_reg_range(chgnum, 0x38, 0x40);
 	dump_reg_range(chgnum, 0x43, 0x43);
@@ -564,12 +555,7 @@ static int command_isl9241_dump(int argc, char **argv)
 	dump_reg_range(chgnum, 0x80, 0x87);
 	dump_reg_range(chgnum, 0x90, 0x91);
 	dump_reg_range(chgnum, 0xFE, 0xFF);
-
-	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(charger_dump, command_isl9241_dump,
-			"charger_dump <chgnum>",
-			"Dumps ISL9241 registers");
 #endif /* CONFIG_CMD_CHARGER_DUMP */
 
 const struct charger_drv isl9241_drv = {
@@ -595,5 +581,8 @@ const struct charger_drv isl9241_drv = {
 	.ramp_is_stable = &isl9241_ramp_is_stable,
 	.ramp_is_detected = &isl9241_ramp_is_detected,
 	.ramp_get_current_limit = &isl9241_ramp_get_current_limit,
+#endif
+#ifdef CONFIG_CMD_CHARGER_DUMP
+	.dump_registers = &command_isl9241_dump,
 #endif
 };

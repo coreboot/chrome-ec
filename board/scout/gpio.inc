@@ -36,7 +36,8 @@ GPIO_INT(SLP_S3_L,             PIN(A, 5), GPIO_INT_BOTH, slp_s3_interrupt)
 GPIO_INT(PG_PP950_VCCIO_OD,    PIN(1, 7), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(SLP_S0_L,             PIN(D, 5), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(IMVP8_VRRDY_OD,       PIN(1, 6), GPIO_INT_BOTH, power_signal_interrupt)
-
+/* ALS signals */
+GPIO_INT(EC_RGB_INT_L,         PIN(9, 7), GPIO_INT_FALLING, tcs3400_interrupt)
 /*
  * Directly connected recovery button (not available on some boards).
  */
@@ -59,7 +60,7 @@ GPIO_INT(USB_A3_OC_ODL,        PIN(0, 3), GPIO_INT_BOTH, port_ocp_interrupt)
 GPIO(EC_PCH_PWROK,             PIN(0, 5), GPIO_OUT_LOW)
 GPIO(EC_PCH_SYS_PWROK,         PIN(3, 7), GPIO_OUT_LOW)
 GPIO(EC_PCH_PWR_BTN_ODL,       PIN(C, 1), GPIO_ODR_HIGH)
-GPIO(EC_PCH_RTCRST,            PIN(7, 6), GPIO_ODR_HIGH)
+GPIO(EC_PCH_RTCRST,            PIN(7, 6), GPIO_OUT_LOW)
 GPIO(EC_PCH_WAKE_ODL,          PIN(7, 4), GPIO_ODR_HIGH)
 GPIO(EC_PROCHOT_IN_OD,         PIN(3, 4), GPIO_INPUT)
 GPIO(EC_PROCHOT_ODL,           PIN(6, 3), GPIO_ODR_HIGH)
@@ -70,9 +71,6 @@ GPIO(BOOT_IND_EC,              PIN(E, 2), GPIO_INPUT)
 
 /* TSUM scaler signals */
 GPIO(TSUM_WAKEUP_EC,           PIN(B, 1), GPIO_INPUT)
-
-/* ALS signals */
-GPIO(EC_RGB_INT_L,             PIN(9, 7), GPIO_INPUT)
 
 /* Power control outputs */
 GPIO(EN_PP5000_A,              PIN(A, 4), GPIO_OUT_LOW)
@@ -89,6 +87,7 @@ GPIO(EC_MX8M_ONOFF,            PIN(9, 3), GPIO_OUT_LOW)
 GPIO(EC_SCALER_EN,             PIN(E, 0), GPIO_OUT_LOW)
 GPIO(PP3300_TPU_A_EN,          PIN(B, 0), GPIO_OUT_LOW)
 GPIO(PWR_CTRL,                 PIN(6, 2), GPIO_OUT_LOW)
+GPIO(EN_LOAD_SWITCH,           PIN(4, 2), GPIO_OUT_LOW)
 
 /* Barreljack */
 GPIO(EN_PPVAR_BJ_ADP_L,        PIN(0, 4), GPIO_OUT_LOW)
@@ -108,6 +107,7 @@ GPIO(EC_ENTERING_RW,           PIN(E, 3), GPIO_OUT_LOW)
 GPIO(CCD_MODE_ODL,             PIN(E, 5), GPIO_ODR_HIGH)
 GPIO(PACKET_MODE_EN,           PIN(7, 5), GPIO_OUT_LOW)
 GPIO(EN_PP_MST_OD,             PIN(9, 6), GPIO_OUT_HIGH)
+GPIO(EC_MIC_OE,                PIN(6, 0), GPIO_OUT_HIGH)
 
 /* HDMI/CEC */
 GPIO(EN_PP5000_HDMI,           PIN(5, 0), GPIO_OUT_LOW)
@@ -116,18 +116,18 @@ GPIO(HDMI_CONN1_CEC_OUT,       PIN(9, 5), GPIO_ODR_HIGH)
 GPIO(HDMI_CONN1_CEC_IN,        PIN(D, 3), GPIO_INPUT)
 
 /* I2C pins - Alternate function below configures I2C module on these pins */
-GPIO(I2C0_SCL,                 PIN(B, 5), GPIO_INPUT)           /* EC_I2C_INA_SCL */
-GPIO(I2C0_SDA,                 PIN(B, 4), GPIO_INPUT)           /* EC_I2C_INA_SDA */
-GPIO(I2C1_SCL,                 PIN(9, 0), GPIO_INPUT)           /* EC_I2C_USB_C0_TCPPC_SCL */
-GPIO(I2C1_SDA,                 PIN(8, 7), GPIO_INPUT)           /* EC_I2C_USB_C0_TCPPC_SDA */
-GPIO(I2C2_SCL,                 PIN(9, 2), GPIO_INPUT)           /* EC_I2C_DDR_SCALER_SCL */
-GPIO(I2C2_SDA,                 PIN(9, 1), GPIO_INPUT)           /* EC_I2C_DDR_SCALER_SDA */
-GPIO(I2C3_SCL,                 PIN(D, 1), GPIO_INPUT)           /* EC_I2C_ALS_SCL */
-GPIO(I2C3_SDA,                 PIN(D, 0), GPIO_INPUT)           /* EC_I2C_ALS_SDA */
-GPIO(I2C5_SCL,                 PIN(3, 3), GPIO_INPUT)           /* EC_I2C_IMVP8_SCL */
-GPIO(I2C5_SDA,                 PIN(3, 6), GPIO_INPUT)           /* EC_I2C_IMVP8_SDA */
-GPIO(I2C7_SCL,                 PIN(B, 3), GPIO_INPUT)           /* EC_I2C_EEPROM_SCL */
-GPIO(I2C7_SDA,                 PIN(B, 2), GPIO_INPUT)           /* EC_I2C_EEPROM_SDA */
+GPIO(I2C0_SCL,                 PIN(B, 5), GPIO_INPUT)                 /* EC_I2C_INA_SCL */
+GPIO(I2C0_SDA,                 PIN(B, 4), GPIO_INPUT)                 /* EC_I2C_INA_SDA */
+GPIO(I2C1_SCL,                 PIN(9, 0), GPIO_INPUT)                 /* EC_I2C_USB_C0_TCPPC_SCL */
+GPIO(I2C1_SDA,                 PIN(8, 7), GPIO_INPUT)                 /* EC_I2C_USB_C0_TCPPC_SDA */
+GPIO(I2C2_SCL,                 PIN(9, 2), GPIO_INPUT)                 /* EC_I2C_DDR_SCALER_SCL */
+GPIO(I2C2_SDA,                 PIN(9, 1), GPIO_INPUT)                 /* EC_I2C_DDR_SCALER_SDA */
+GPIO(I2C3_SCL,                 PIN(D, 1), GPIO_INPUT | GPIO_SEL_1P8V) /* EC_I2C_ALS_SCL */
+GPIO(I2C3_SDA,                 PIN(D, 0), GPIO_INPUT | GPIO_SEL_1P8V) /* EC_I2C_ALS_SDA */
+GPIO(I2C5_SCL,                 PIN(3, 3), GPIO_INPUT)                 /* EC_I2C_IMVP8_SCL */
+GPIO(I2C5_SDA,                 PIN(3, 6), GPIO_INPUT)                 /* EC_I2C_IMVP8_SDA */
+GPIO(I2C7_SCL,                 PIN(B, 3), GPIO_INPUT)                 /* EC_I2C_EEPROM_SCL */
+GPIO(I2C7_SDA,                 PIN(B, 2), GPIO_INPUT)                 /* EC_I2C_EEPROM_SDA */
 
 /* Alternate functions GPIO definitions */
 ALTERNATE(PIN_MASK(B, 0x30), 0, MODULE_I2C, 0)                  /* I2C0 */
@@ -145,7 +145,7 @@ ALTERNATE(PIN_MASK(B, 0x80), 0, MODULE_PWM, 0)                  /* PWM5 - Fan 1 
 ALTERNATE(PIN_MASK(7, 0x08), 0, MODULE_PWM, 0)                  /* TA2 - Fan Tachometer */
 
 /* ADC */
-ALTERNATE(PIN_MASK(4, 0x3E), 0, MODULE_ADC, 0)                  /* ADC0, ADC1, ADC2, ADC4 */
+ALTERNATE(PIN_MASK(4, 0x3A), 0, MODULE_ADC, 0)                  /* ADC0, ADC1, ADC2, ADC4 */
 ALTERNATE(PIN_MASK(E, 0x02), 0, MODULE_ADC, 0)                  /* ADC7 */
 ALTERNATE(PIN_MASK(F, 0x01), 0, MODULE_ADC, 0)                  /* ADC9 */
 
@@ -156,7 +156,6 @@ ALTERNATE(PIN_MASK(6, 0x30), 0, MODULE_UART, 0)                 /* UART from EC 
 UNUSED(PIN(1, 3))						/* EC_GP_SEL1_ODL */
 UNUSED(PIN(C, 0))						/* FAN_PWM_2 */
 UNUSED(PIN(8, 0))						/* LED_BLUE_L */
-UNUSED(PIN(4, 2))						/* ADC3/TEMP_SENSOR_3 */
 UNUSED(PIN(C, 2))						/* A12 NC */
 UNUSED(PIN(1, 2))						/* C6  NC */
 UNUSED(PIN(6, 6))						/* H4  NC */

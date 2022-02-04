@@ -7,11 +7,7 @@
 	pwmleds {
 		compatible = "pwm-leds";
 		pwm_led0: pwm_led_0 {
-			pwms = <&led3_red
-				&led2_green
-				&led1_blue
-				&led3_sidesel
-				>;
+			pwms = <&led3_red &led2_green &led1_blue>;
 		};
 	};
 
@@ -19,6 +15,7 @@
 		compatible = "cros-ec,pwm-leds";
 
 		leds = <&pwm_led0>;
+		sidesel = <&led3_sidesel>;
 
 		color-map-red    = <100   0   0>;
 		color-map-green  = <  0 100   0>;
@@ -28,5 +25,13 @@
 		color-map-amber  = <100  20   0>;
 
 		brightness-range = <255 255 255 0 0 0>;
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		pwm_led_0@0 {
+			reg = <0>;
+			ec-led-name = "EC_LED_ID_POWER_LED";
+		};
 	};
 };

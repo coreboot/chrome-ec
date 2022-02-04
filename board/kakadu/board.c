@@ -71,8 +71,20 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /******************************************************************************/
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"typec", 0, 400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"other", 1, 400, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+	{
+		.name = "typec",
+		.port = 0,
+		.kbps = 400,
+		.scl  = GPIO_I2C1_SCL,
+		.sda  = GPIO_I2C1_SDA
+	},
+	{
+		.name = "other",
+		.port = 1,
+		.kbps = 400,
+		.scl  = GPIO_I2C2_SCL,
+		.sda  = GPIO_I2C2_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
@@ -108,8 +120,12 @@ struct mt6370_thermal_bound thermal_bound = {
 };
 
 static void board_hpd_update(const struct usb_mux *me,
-			     mux_state_t mux_state)
+			     mux_state_t mux_state,
+			     bool *ack_required)
 {
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
+
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify
 	 * host here.
@@ -520,3 +536,17 @@ void board_fill_source_power_info(int port,
 	r->max_power = r->meas.voltage_now * r->meas.current_max;
 }
 
+/* b/207456334: bugged reserved bits causes device not charging */
+static void mt6370_reg_fix(void)
+{
+	i2c_update8(chg_chips[CHARGER_SOLO].i2c_port,
+		    chg_chips[CHARGER_SOLO].i2c_addr_flags,
+		    RT946X_REG_CHGCTRL1,
+		    BIT(3) | BIT(5), MASK_CLR);
+	i2c_update8(chg_chips[CHARGER_SOLO].i2c_port,
+		    chg_chips[CHARGER_SOLO].i2c_addr_flags,
+		    RT946X_REG_CHGCTRL2,
+		    BIT(5) | BIT(RT946X_SHIFT_BATDET_DIS_DLY),
+		    MASK_CLR);
+}
+DECLARE_HOOK(HOOK_INIT, mt6370_reg_fix, HOOK_PRIO_DEFAULT);

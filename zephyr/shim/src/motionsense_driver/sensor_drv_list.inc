@@ -34,6 +34,18 @@
 #ifdef CONFIG_PLATFORM_EC_ACCELGYRO_BMI260
 #include "bmi260-drvinfo.inc"
 #endif
+#ifdef CONFIG_PLATFORM_EC_ACCELGYRO_BMI3XX
+#include "bmi3xx-drvinfo.inc"
+#endif
 #ifdef CONFIG_PLATFORM_EC_ALS_TCS3400
 #include "tcs3400-drvinfo.inc"
+#endif
+#ifdef CONFIG_PLATFORM_EC_ACCELGYRO_ICM426XX
+#include "icm426xx-drvinfo.inc"
+#endif
+#ifdef CONFIG_PLATFORM_EC_ACCELGYRO_ICM42607
+#include "icm42607-drvinfo.inc"
+#endif
+#ifdef CONFIG_PLATFORM_EC_ACCELGYRO_LSM6DSO
+#include "lsm6dso-drvinfo.inc"
 #endif

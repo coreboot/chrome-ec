@@ -25,6 +25,7 @@
 
 static int dev_id[CONFIG_USB_PD_PORT_MAX_COUNT] = { -1 };
 
+#ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 static int raa489000_enter_low_power_mode(int port)
 {
 	int rv;
@@ -39,6 +40,7 @@ static int raa489000_enter_low_power_mode(int port)
 
 	return tcpci_enter_low_power_mode(port);
 }
+#endif /* CONFIG_USB_PD_TCPC_LOW_POWER */
 
 /* Configure output current in the TCPC because it is controlling Vbus */
 int raa489000_set_output_current(int port, enum tcpc_rp_value rp)
@@ -317,6 +319,7 @@ const struct tcpm_drv raa489000_tcpm_drv = {
 	.get_chip_info          = &tcpci_get_chip_info,
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode   = &raa489000_enter_low_power_mode,
+	.wake_low_power_mode	= &tcpci_wake_low_power_mode,
 #endif
 	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 	.tcpc_enable_auto_discharge_disconnect =

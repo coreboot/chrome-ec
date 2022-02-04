@@ -81,7 +81,7 @@
 #define IT8801_KEYBOARD_PWM_I2C_ADDR_FLAGS    IT8801_I2C_ADDR1
 
 /* Enable Accel over SPI */
-#define CONFIG_SPI_ACCEL_PORT    0  /* The first SPI master port (SPI2) */
+#define CONFIG_SPI_ACCEL_PORT    0  /* The first SPI controller port (SPI2) */
 
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
 #define CONFIG_MKBP_EVENT
@@ -90,7 +90,7 @@
 #define CONFIG_LED_ONOFF_STATES
 
 #undef CONFIG_GMR_TABLET_MODE
-#undef GMR_TABLET_MODE_GPIO_L
+#undef GPIO_TABLET_MODE_L
 #undef CONFIG_TABLET_MODE
 #undef CONFIG_TABLET_MODE_SWITCH
 

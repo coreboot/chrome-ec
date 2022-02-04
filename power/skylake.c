@@ -31,12 +31,12 @@ const struct power_signal_info power_signal_list[] = {
 	},
 #endif
 	[X86_SLP_S3_DEASSERTED] = {
-		SLP_S3_SIGNAL_L,
+		(enum gpio_signal)SLP_S3_SIGNAL_L,
 		POWER_SIGNAL_ACTIVE_HIGH,
 		"SLP_S3_DEASSERTED",
 	},
 	[X86_SLP_S4_DEASSERTED] = {
-		SLP_S4_SIGNAL_L,
+		(enum gpio_signal)SLP_S4_SIGNAL_L,
 		POWER_SIGNAL_ACTIVE_HIGH,
 		"SLP_S4_DEASSERTED",
 	},
@@ -46,7 +46,7 @@ const struct power_signal_info power_signal_list[] = {
 		"SLP_SUS_DEASSERTED",
 	},
 	[X86_RSMRST_L_PWRGD] = {
-		GPIO_RSMRST_L_PGOOD,
+		GPIO_PG_EC_RSMRST_ODL,
 		POWER_SIGNAL_ACTIVE_HIGH,
 		"RSMRST_N_PWRGD",
 	},

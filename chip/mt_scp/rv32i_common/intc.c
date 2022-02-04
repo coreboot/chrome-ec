@@ -243,13 +243,13 @@ static struct {
 	/* 68 */
 	[SCP_IRQ_APU_MBOX]		= { INTC_GRP_0 },
 	[SCP_IRQ_DEVAPC_SECURE_VIO]	= { INTC_GRP_0 },
-	[SCP_IRQ_CAMSYS_29]		= { INTC_GRP_0 },
-	[SCP_IRQ_CAMSYS_28]		= { INTC_GRP_0 },
+	[SCP_IRQ_APDMA0]		= { INTC_GRP_0 },
+	[SCP_IRQ_APDMA1]		= { INTC_GRP_0 },
 	/* 72 */
-	[SCP_IRQ_CAMSYS_5]		= { INTC_GRP_0 },
-	[SCP_IRQ_CAMSYS_4]		= { INTC_GRP_0 },
-	[SCP_IRQ_CAMSYS_3]		= { INTC_GRP_0 },
-	[SCP_IRQ_CAMSYS_2]		= { INTC_GRP_0 },
+	[SCP_IRQ_APDMA2]		= { INTC_GRP_0 },
+	[SCP_IRQ_APDMA3]		= { INTC_GRP_0 },
+	[SCP_IRQ_APDMA4]		= { INTC_GRP_0 },
+	[SCP_IRQ_APDMA5]		= { INTC_GRP_0 },
 	/* 76 */
 	[SCP_IRQ_HDMIRX_PM_DVI_SQH]	= { INTC_GRP_0 },
 	[SCP_IRQ_HDMIRX_RESERVED]	= { INTC_GRP_0 },
@@ -272,9 +272,9 @@ static struct {
 	[SCP_IRQ_HDMI2]			= { INTC_GRP_0 },
 	/* 92 */
 	[SCP_IRQ_EARC]			= { INTC_GRP_0 },
-	[SCP_IRQ_HDMI2]			= { INTC_GRP_0 },
-	[SCP_IRQ_HDMI2]			= { INTC_GRP_0 },
-	[SCP_IRQ_HDMI2]			= { INTC_GRP_0 },
+	[SCP_IRQ_CEC]			= { INTC_GRP_0 },
+	[SCP_IRQ_HDMI_DEV_DET]		= { INTC_GRP_0 },
+	[SCP_IRQ_HDMIRX_OUT_ARM_PHY]	= { INTC_GRP_0 },
 	/* 96 */
 	[SCP_IRQ_I2C2]			= { INTC_GRP_0 },
 	[SCP_IRQ_I2C3]			= { INTC_GRP_0 },
@@ -313,16 +313,19 @@ BUILD_ASSERT(ARRAY_SIZE(irqs) == SCP_INTC_IRQ_COUNT);
  * Lower group has higher priority.
  * Higher INT number has higher priority.
  */
+#define EC_INT_MAGIC_DUMP_GROUP BIT(15)
 int chip_get_ec_int(void)
 {
 	extern volatile int ec_int;
 	unsigned int group, sta;
 	int word;
 
-	if (!SCP_CORE0_INTC_IRQ_OUT)
-		goto error;
-
 	group = read_csr(CSR_VIC_MICAUSE);
+
+	if (!SCP_CORE0_INTC_IRQ_OUT) {
+		ec_int = EC_INT_MAGIC_DUMP_GROUP | group;
+		goto error;
+	}
 
 	for (word = SCP_INTC_GRP_LEN - 1; word >= 0; --word) {
 		sta = SCP_CORE0_INTC_IRQ_GRP_STA(group, word);

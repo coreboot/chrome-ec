@@ -30,6 +30,11 @@ usage() {
 	exit 1
 }
 
+die() {
+	echo >&2 "$1"
+	exit 2
+}
+
 [ $# -ge 3 ] || usage
 
 config="$1"
@@ -52,7 +57,8 @@ sed -n 's/^\(CONFIG_[A-Za-z0-9_]*\).*/\1/p' "${config}" | sort | uniq \
 	>"${new_configs}"
 
 # Find any not mentioned in the allowed file
-comm -23 "${new_configs}" "${allow}" > "${suspects}"
+comm -23 --check-order "${new_configs}" "${allow}" > "${suspects}" || \
+	die "${allow} must be sorted"
 
 # Find all the Kconfig options so far defined
 find "${srctree}" -type f -name "Kconfig*" -exec cat {} \; | sed -n -e \
@@ -80,9 +86,14 @@ if [ -s "${new_adhoc}" ]; then
 	echo >&2 "Also see details in http://issuetracker.google.com/181253613"
 	echo >&2
 	echo >&2 "To temporarily disable this, use: ALLOW_CONFIG=1 make ..."
+	rm -rf "${tmp}"
+	exit 1
 else
-	# Check if we can remove some things from the allowed file
-	./util/build_allowed.sh
+	# If we are running in a git repo, check if we can remove some things
+	# from the allowed file
+	if git rev-parse --is-inside-work-tree 1>/dev/null 2>&1; then
+		./util/build_allowed.sh
+	fi
 fi
 
 rm -rf "${tmp}"

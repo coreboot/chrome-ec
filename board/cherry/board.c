@@ -159,6 +159,42 @@ static void board_update_motion_sensor_config(void)
 	}
 }
 
+/* PWM */
+
+/*
+ * PWM channels. Must be in the exactly same order as in enum pwm_channel.
+ * There total three 16 bits clock prescaler registers for all pwm channels,
+ * so use the same frequency and prescaler register setting is required if
+ * number of pwm channel greater than three.
+ */
+const struct pwm_t pwm_channels[] = {
+	[PWM_CH_LED1] = {
+		.channel = 0,
+		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
+		.freq_hz = 324, /* maximum supported frequency */
+		.pcfsr_sel = PWM_PRESCALER_C4,
+	},
+	[PWM_CH_LED2] = {
+		.channel = 1,
+		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
+		.freq_hz = 324, /* maximum supported frequency */
+		.pcfsr_sel = PWM_PRESCALER_C4,
+	},
+	[PWM_CH_LED3] = {
+		.channel = 2,
+		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
+		.freq_hz = 324, /* maximum supported frequency */
+		.pcfsr_sel = PWM_PRESCALER_C4,
+	},
+	[PWM_CH_KBLIGHT] = {
+		.channel = 3,
+		.flags = PWM_CONFIG_DSLEEP,
+		.freq_hz = 10000, /* SYV226 supports 10~100kHz */
+		.pcfsr_sel = PWM_PRESCALER_C6,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
+
 /* Initialize board. */
 static void board_init(void)
 {
@@ -170,5 +206,22 @@ static void board_init(void)
 	pwm_enable(PWM_CH_LED2, 0);
 
 	board_update_motion_sensor_config();
+
+	if (board_get_version() >= 2) {
+		gpio_set_flags(GPIO_I2C_H_SCL, GPIO_INPUT | GPIO_PULL_DOWN);
+		gpio_set_flags(GPIO_I2C_H_SDA, GPIO_INPUT | GPIO_PULL_DOWN);
+	}
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+static void board_do_chipset_resume(void)
+{
+	gpio_set_level(GPIO_EN_KB_BL, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_do_chipset_resume, HOOK_PRIO_DEFAULT);
+
+static void board_do_chipset_suspend(void)
+{
+	gpio_set_level(GPIO_EN_KB_BL, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_do_chipset_suspend, HOOK_PRIO_DEFAULT);

@@ -43,6 +43,8 @@
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
+#define CPRINTSCHIP(format, args...) cprints(CC_CHIPSET, format ## args)
+
 static void reset_nct38xx_port(int port);
 
 /* Wake Sources */
@@ -371,25 +373,6 @@ const struct mft_t mft_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
-const struct fan_conf fan_conf_0 = {
-	.flags = FAN_USE_RPM_MODE,
-	.ch = MFT_CH_0,	/* Use MFT id to control fan */
-	.pgood_gpio = GPIO_S0_PGOOD,
-	.enable_gpio = -1,
-};
-const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 1000,
-	.rpm_start = 1000,
-	.rpm_max = 6500,
-};
-const struct fan_t fans[] = {
-	[FAN_CH_0] = {
-		.conf = &fan_conf_0,
-		.rpm = &fan_rpm_0,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(fans) == FAN_CH_COUNT);
-
 /*
  * USB C0 port SBU mux use standalone FSUSB42UMX
  * chip and it needs a board specific driver.
@@ -431,7 +414,7 @@ int board_set_active_charge_port(int port)
 	int is_valid_port = (port >= 0 &&
 			     port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
-	int cur_port = charge_manager_get_active_charge_port();
+	int rv;
 
 	if (port == CHARGE_PORT_NONE) {
 		CPRINTSUSB("Disabling all charger ports");
@@ -444,7 +427,7 @@ int board_set_active_charge_port(int port)
 			 */
 			if (nct38xx_get_boot_type(i) ==
 						NCT38XX_BOOT_DEAD_BATTERY) {
-				reset_nct38xx_port(cur_port);
+				reset_nct38xx_port(i);
 				pd_set_error_recovery(i);
 			}
 
@@ -461,34 +444,54 @@ int board_set_active_charge_port(int port)
 		return EC_ERROR_INVAL;
 	}
 
+	/*
+	 * Check if we can reset any ports in dead battery mode
+	 *
+	 * The NCT3807 may continue to keep EN_SNK low on the dead battery port
+	 * and allow a dangerous level of voltage to pass through to the initial
+	 * charge port (see b/183660105).  We must reset the ports if we have
+	 * sufficient battery to do so, which will bring EN_SNK back under
+	 * normal control.
+	 */
+	rv = EC_SUCCESS;
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
+		if (nct38xx_get_boot_type(i) == NCT38XX_BOOT_DEAD_BATTERY) {
+			CPRINTSUSB("Found dead battery on %d", i);
+			/*
+			 * If we have battery, get this port reset ASAP.
+			 * This means temporarily rejecting charge manager
+			 * sets to it.
+			 */
+			if (pd_is_battery_capable()) {
+				reset_nct38xx_port(i);
+				pd_set_error_recovery(i);
+
+				if (port == i)
+					rv = EC_ERROR_INVAL;
+			} else if (port != i) {
+				/*
+				 * If other port is selected and in dead battery
+				 * mode, reset this port.  Otherwise, reject
+				 * change because we'll brown out.
+				 */
+				if (nct38xx_get_boot_type(port) ==
+						NCT38XX_BOOT_DEAD_BATTERY) {
+					reset_nct38xx_port(i);
+					pd_set_error_recovery(i);
+				} else {
+					rv = EC_ERROR_INVAL;
+				}
+			}
+		}
+	}
+
+	if (rv != EC_SUCCESS)
+		return rv;
 
 	/* Check if the port is sourcing VBUS. */
 	if (tcpm_get_src_ctrl(port)) {
 		CPRINTSUSB("Skip enable C%d", port);
 		return EC_ERROR_INVAL;
-	}
-
-	/*
-	 * Disallow changing ports if we booted in dead battery mode and don't
-	 * have sufficient power to withstand Vbus loss.  The NCT3807 may
-	 * continue to keep EN_SNK low on the original port and allow a
-	 * dangerous level of voltage to pass through to the initial charge
-	 * port (see b/183660105)
-	 *
-	 * If we do have sufficient power, then reset the dead battery port and
-	 * set up Type-C error recovery on its connection.
-	 */
-	if (cur_port != CHARGE_PORT_NONE &&
-			port != cur_port &&
-			nct38xx_get_boot_type(cur_port) ==
-						NCT38XX_BOOT_DEAD_BATTERY) {
-		if (pd_is_battery_capable()) {
-			reset_nct38xx_port(cur_port);
-			pd_set_error_recovery(cur_port);
-		} else {
-			CPRINTSUSB("Battery too low for charge port change");
-			return EC_ERROR_INVAL;
-		}
 	}
 
 	CPRINTSUSB("New charge port: C%d", port);
@@ -588,15 +591,23 @@ void tcpc_alert_event(enum gpio_signal signal)
 
 static void reset_nct38xx_port(int port)
 {
-	enum gpio_signal reset_gpio_l;
+	int rv;
+	int saved_state[IOEX_COUNT] = {0};
+	enum gpio_signal reset_gpio_l = (port == USBC_PORT_C0) ?
+						      GPIO_USB_C0_TCPC_RST_L :
+						      GPIO_USB_C1_TCPC_RST_L;
 
-	if (port == USBC_PORT_C0)
-		reset_gpio_l = GPIO_USB_C0_TCPC_RST_L;
-	else if (port == USBC_PORT_C1)
-		reset_gpio_l = GPIO_USB_C1_TCPC_RST_L;
-	else
-		/* Invalid port: do nothing */
+	if (port < 0 || port > USBC_PORT_COUNT) {
+		CPRINTSUSB("%s invalid port %d", __func__, port);
 		return;
+	}
+
+	/* Save ioexpander GPIO state */
+	rv = ioex_save_gpio_state(port, saved_state, ARRAY_SIZE(saved_state));
+	if (rv) {
+		CPRINTSUSB("%s failed to save ioex state rv=%d", __func__, rv);
+		return;
+	}
 
 	gpio_set_level(reset_gpio_l, 0);
 	msleep(NCT38XX_RESET_HOLD_DELAY_MS);
@@ -604,8 +615,18 @@ static void reset_nct38xx_port(int port)
 	nct38xx_reset_notify(port);
 	if (NCT3807_RESET_POST_DELAY_MS != 0)
 		msleep(NCT3807_RESET_POST_DELAY_MS);
-}
 
+	/* Re-init ioex after resetting the TCPC */
+	ioex_init(port);
+	/* Restore ioexpander GPIO state */
+	rv = ioex_restore_gpio_state(port, saved_state,
+				     ARRAY_SIZE(saved_state));
+	if (rv) {
+		CPRINTSUSB("%s failed to restore ioex state rv=%d", __func__,
+			   rv);
+		return;
+	}
+}
 
 void board_reset_pd_mcu(void)
 {
@@ -730,6 +751,7 @@ void board_pwrbtn_to_pch(int level)
 void board_hibernate(void)
 {
 	int port;
+	enum ec_error_list ret;
 
 	/*
 	 * If we are charging, then drop the Vbus level down to 5V to ensure
@@ -746,7 +768,8 @@ void board_hibernate(void)
 	}
 
 	/* Try to put our battery fuel gauge into sleep mode */
-	if (battery_sleep_fuel_gauge() != EC_SUCCESS)
+	ret = battery_sleep_fuel_gauge();
+	if ((ret != EC_SUCCESS) && (ret != EC_ERROR_UNIMPLEMENTED))
 		cprints(CC_SYSTEM, "Failed to send battery sleep command");
 }
 
@@ -872,14 +895,32 @@ void board_overcurrent_event(int port, int is_overcurrented)
 	}
 }
 
-void baseboard_en_pwr_pcore_s0(enum gpio_signal signal)
+static void baseboard_set_en_pwr_pcore(void)
 {
-
-	/* EC must AND signals PG_LPDDR4X_S3_OD and PG_GROUPC_S0_OD */
+	/*
+	 * EC must AND signals PG_LPDDR4X_S3_OD, PG_GROUPC_S0_OD, and
+	 * EN_PWR_S0_R.
+	 */
 	gpio_set_level(GPIO_EN_PWR_PCORE_S0_R,
 					gpio_get_level(GPIO_PG_LPDDR4X_S3_OD) &&
-					gpio_get_level(GPIO_PG_GROUPC_S0_OD));
+					gpio_get_level(GPIO_PG_GROUPC_S0_OD) &&
+					gpio_get_level(GPIO_EN_PWR_S0_R));
 }
+
+void baseboard_en_pwr_pcore_signal(enum gpio_signal signal)
+{
+	baseboard_set_en_pwr_pcore();
+}
+
+static void baseboard_check_groupc_low(void)
+{
+	/* Warn if we see unexpected sequencing here */
+	if (!gpio_get_level(GPIO_EN_PWR_S0_R) &&
+					gpio_get_level(GPIO_PG_GROUPC_S0_OD))
+		CPRINTSCHIP("WARN: PG_GROUPC_S0_OD high while EN_PWR_S0_R low");
+
+}
+DECLARE_DEFERRED(baseboard_check_groupc_low);
 
 void baseboard_en_pwr_s0(enum gpio_signal signal)
 {
@@ -888,6 +929,17 @@ void baseboard_en_pwr_s0(enum gpio_signal signal)
 	gpio_set_level(GPIO_EN_PWR_S0_R,
 					gpio_get_level(GPIO_SLP_S3_L) &&
 					gpio_get_level(GPIO_PG_PWR_S5));
+
+	/*
+	 * If we set EN_PWR_S0_R low, then check PG_GROUPC_S0_OD went low as
+	 * well some reasonable time later
+	 */
+	if (!gpio_get_level(GPIO_EN_PWR_S0_R))
+		hook_call_deferred(&baseboard_check_groupc_low_data,
+				   100 * MSEC);
+
+	/* Change EN_PWR_PCORE_S0_R if needed */
+	baseboard_set_en_pwr_pcore();
 
 	/* Now chain off to the normal power signal interrupt handler. */
 	power_signal_interrupt(signal);

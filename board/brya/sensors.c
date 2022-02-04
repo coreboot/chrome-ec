@@ -131,10 +131,8 @@ struct motion_sensor_t motion_sensors[] = {
 		.drv = &lis2dw12_drv,
 		.mutex = &g_lid_accel_mutex,
 		.drv_data = &g_lis2dw12_data,
-		.int_signal = GPIO_EC_ACCEL_INT_R_L,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LIS2DW12_ADDR0,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.rot_standard_ref = &lid_standard_ref, /* identity matrix */
 		.default_range = 2, /* g */
 		.min_frequency = LIS2DW12_ODR_MIN_VAL,
@@ -161,8 +159,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_accel_mutex,
 		.drv_data = LSM6DSO_ST_DATA(lsm6dso_data,
 				MOTIONSENSE_TYPE_ACCEL),
-		.int_signal = GPIO_EC_IMU_INT_R_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSO_ADDR0_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
@@ -191,8 +187,6 @@ struct motion_sensor_t motion_sensors[] = {
 		.mutex = &g_base_accel_mutex,
 		.drv_data = LSM6DSO_ST_DATA(lsm6dso_data,
 				MOTIONSENSE_TYPE_GYRO),
-		.int_signal = GPIO_EC_IMU_INT_R_L,
-		.flags = MOTIONSENSE_FLAG_INT_SIGNAL,
 		.port = I2C_PORT_SENSOR,
 		.i2c_spi_addr_flags = LSM6DSO_ADDR0_FLAGS,
 		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
@@ -294,17 +288,22 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  * 130 C.  However, sensor is located next to DDR, so we need to use the lower
  * DDR temperature limit (85 C)
  */
-static const struct ec_thermal_config thermal_cpu = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(90),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-	},
-	.temp_fan_off = C_TO_K(35),
-	.temp_fan_max = C_TO_K(60),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_CPU \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(85), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(90), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80), \
+		}, \
+		.temp_fan_off = C_TO_K(35), \
+		.temp_fan_max = C_TO_K(60), \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 
 /*
  * TODO(b/180681346): update for Alder Lake/brya
@@ -319,17 +318,23 @@ static const struct ec_thermal_config thermal_cpu = {
  * Inductors: limit of 125c
  * PCB: limit is 80c
  */
-static const struct ec_thermal_config thermal_ambient = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(90),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
-	},
-	.temp_fan_off = C_TO_K(35),
-	.temp_fan_max = C_TO_K(60),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_AMBIENT \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(85), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(90), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(80), \
+		}, \
+		.temp_fan_off = C_TO_K(35), \
+		.temp_fan_max = C_TO_K(60), \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_ambient =
+	THERMAL_AMBIENT;
 
 /*
  * Inductor limits - used for both charger and PP3300 regulator
@@ -342,38 +347,50 @@ static const struct ec_thermal_config thermal_ambient = {
  * Inductors: limit of 125c
  * PCB: limit is 80c
  */
-const static struct ec_thermal_config thermal_charger = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(105),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(120),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(90),
-	},
-	.temp_fan_off = C_TO_K(35),
-	.temp_fan_max = C_TO_K(65),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_CHARGER \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(105), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(120), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(90), \
+		}, \
+		.temp_fan_off = C_TO_K(35), \
+		.temp_fan_max = C_TO_K(65), \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_charger =
+	THERMAL_CHARGER;
 
 /*
  * TODO(b/180681346): update for brya WWAN module
  */
-static const struct ec_thermal_config thermal_wwan = {
-	.temp_host = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(130),
-		[EC_TEMP_THRESH_HALT] = C_TO_K(130),
-	},
-	.temp_host_release = {
-		[EC_TEMP_THRESH_HIGH] = C_TO_K(100),
-	},
-	.temp_fan_off = C_TO_K(35),
-	.temp_fan_max = C_TO_K(60),
-};
+/*
+ * TODO(b/202062363): Remove when clang is fixed.
+ */
+#define THERMAL_WWAN \
+	{ \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(130), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(130), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(100), \
+		}, \
+		.temp_fan_off = C_TO_K(35), \
+		.temp_fan_max = C_TO_K(60), \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_wwan =
+	THERMAL_WWAN;
 
 struct ec_thermal_config thermal_params[] = {
-	[TEMP_SENSOR_1_DDR_SOC] = thermal_cpu,
-	[TEMP_SENSOR_2_AMBIENT]	= thermal_ambient,
-	[TEMP_SENSOR_3_CHARGER] = thermal_charger,
-	[TEMP_SENSOR_4_WWAN] = thermal_wwan,
+	[TEMP_SENSOR_1_DDR_SOC] = THERMAL_CPU,
+	[TEMP_SENSOR_2_AMBIENT] = THERMAL_AMBIENT,
+	[TEMP_SENSOR_3_CHARGER] = THERMAL_CHARGER,
+	[TEMP_SENSOR_4_WWAN] = THERMAL_WWAN,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 

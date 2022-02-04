@@ -108,9 +108,21 @@ int anx7688_passthru_allowed(const struct i2c_port_t *port,
 
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"battery", I2C_PORT_BATTERY, 100,  GPIO_I2C0_SCL, GPIO_I2C0_SDA},
-	{"pd",      I2C_PORT_PD_MCU,  1000, GPIO_I2C1_SCL, GPIO_I2C1_SDA,
-		anx7688_passthru_allowed}
+	{
+		.name = "battery",
+		.port = I2C_PORT_BATTERY,
+		.kbps = 100,
+		.scl  = GPIO_I2C0_SCL,
+		.sda  = GPIO_I2C0_SDA
+	},
+	{
+		.name = "pd",
+		.port = I2C_PORT_PD_MCU,
+		.kbps = 1000,
+		.scl  = GPIO_I2C1_SCL,
+		.sda  = GPIO_I2C1_SDA,
+		.passthru_allowed = anx7688_passthru_allowed
+	}
 };
 
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
@@ -244,7 +256,7 @@ void board_reset_pd_mcu(void)
 	hook_call_deferred(&deferred_reset_pd_mcu_data, 10*MSEC);
 }
 
-int command_pd_reset(int argc, char **argv)
+static int command_pd_reset(int argc, char **argv)
 {
 	board_reset_pd_mcu();
 	return EC_SUCCESS;
@@ -529,4 +541,3 @@ uint16_t tcpc_get_alert_status(void)
 {
 	return gpio_get_level(GPIO_PD_MCU_INT) ? PD_STATUS_TCPC_ALERT_0 : 0;
 }
-

@@ -60,6 +60,7 @@ const void *const usb_strings[] = {
 	[USB_STR_SERIALNO]     = 0,
 	[USB_STR_VERSION]      =
 			USB_STRING_DESC(CROS_EC_SECTION ":" CROS_EC_VERSION32),
+	[USB_STR_SPI_NAME]     = USB_STRING_DESC("SPI"),
 	[USB_STR_I2C_NAME]     = USB_STRING_DESC("I2C"),
 	[USB_STR_UPDATE_NAME]  = USB_STRING_DESC("Firmware update"),
 #ifdef CONFIG_USB_ISOCHRONOUS
@@ -90,11 +91,21 @@ void usb_spi_board_disable(struct usb_spi_config const *config) {}
 #ifdef CONFIG_I2C
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"master", I2C_PORT_MASTER, 400,
-		GPIO_MASTER_I2C_SCL, GPIO_MASTER_I2C_SDA},
+	{
+		.name = "master",
+		.port = I2C_PORT_MASTER,
+		.kbps = 400,
+		.scl  = GPIO_MASTER_I2C_SCL,
+		.sda  = GPIO_MASTER_I2C_SDA
+	},
 #ifdef BOARD_WAND
-	{"charger", I2C_PORT_CHARGER, 100,
-		GPIO_CHARGER_I2C_SCL, GPIO_CHARGER_I2C_SDA},
+	{
+		.name = "charger",
+		.port = I2C_PORT_CHARGER,
+		.kbps = 100,
+		.scl  = GPIO_CHARGER_I2C_SCL,
+		.sda  = GPIO_CHARGER_I2C_SDA
+	},
 #endif
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
@@ -362,6 +373,23 @@ static const struct ec_response_keybd_config bland_kb = {
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
 
+static const struct ec_response_keybd_config duck_kb = {
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,
+		TK_FORWARD,
+		TK_REFRESH,
+		TK_FULLSCREEN,
+		TK_OVERVIEW,
+		TK_BRIGHTNESS_DOWN,
+		TK_BRIGHTNESS_UP,
+		TK_VOL_MUTE,
+		TK_VOL_DOWN,
+		TK_VOL_UP,
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
 __override
 const struct ec_response_keybd_config *board_vivaldi_keybd_config(void)
 {
@@ -369,6 +397,8 @@ const struct ec_response_keybd_config *board_vivaldi_keybd_config(void)
 		return &zed_kb;
 	if (IS_ENABLED(BOARD_BLAND) || IS_ENABLED(BOARD_EEL))
 		return &bland_kb;
+	if (IS_ENABLED(BOARD_DUCK))
+		return &duck_kb;
 
 	return NULL;
 }

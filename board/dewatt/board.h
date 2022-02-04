@@ -15,13 +15,11 @@
 
 /* Keyboard features */
 #define CONFIG_KEYBOARD_FACTORY_TEST
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /* Sensors */
-#define CONFIG_ACCELGYRO_BMI160
-#define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-#define CONFIG_ACCELGYRO_BMI3XX
-#define CONFIG_ACCELGYRO_BMI3XX_INT_EVENT \
+#define CONFIG_ACCELGYRO_BMI260
+#define CONFIG_ACCELGYRO_BMI260_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCEL_BMA4XX
@@ -37,6 +35,12 @@
 #define CONFIG_USB_MUX_ANX7451
 #define CONFIG_USBC_RETIMER_ANX7451
 
+#define PD_OPERATING_POWER_MW   15000
+#define PD_MAX_CURRENT_MA       3250
+#define PD_MAX_VOLTAGE_MV       20000
+/* Max Power = 65 W */
+#define PD_MAX_POWER_MW         ((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
+
 /* USB Type A Features */
 
 /* BC 1.2 */
@@ -44,10 +48,14 @@
 /* Volume Button feature */
 
 /* Fan features */
+#define CONFIG_FAN_RPM_CUSTOM
 
 /* LED features */
 #define CONFIG_LED_COMMON
 #define CONFIG_LED_ONOFF_STATES
+
+/* Thermal Config */
+#define CONFIG_TEMP_SENSOR_PCT2075
 
 #ifndef __ASSEMBLER__
 
@@ -59,16 +67,13 @@ void motion_interrupt(enum gpio_signal signal);
 
 /* Battery Types */
 enum battery_type {
-	BATTERY_AEC,
-	BATTERY_AP18F4M,
-	BATTERY_POWER_TECH,
+	BATTERY_AP19B8M,
 	BATTERY_TYPE_COUNT,
 };
 
 enum base_accelgyro_type {
 	BASE_GYRO_NONE = 0,
-	BASE_GYRO_BMI160 = 1,
-	BASE_GYRO_BMI323 = 2,
+	BASE_GYRO_BMI260 = 1,
 };
 
 /* ADC Channels */
@@ -89,6 +94,13 @@ enum temp_sensor_id {
 	TEMP_SENSOR_CPU,
 	TEMP_SENSOR_AMBIENT,
 	TEMP_SENSOR_COUNT
+};
+
+/* PCT2075 sensors */
+enum pct2075_sensor {
+	PCT2075_SOC,
+	PCT2075_AMB,
+	PCT2075_COUNT,
 };
 
 #endif /* !__ASSEMBLER__ */

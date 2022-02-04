@@ -145,12 +145,6 @@ SECTIONS
 	} > SHARED_LIB
 #endif
 	.text : {
-#ifdef SECTION_IS_RO
-		. = . +  CONFIG_RO_HEAD_ROOM;
-#endif
-#ifdef SECTION_IS_RW
-		. = . +  CONFIG_RW_HEAD_ROOM;
-#endif
 		*(.text.vecttable)
 		. = ALIGN(4);
 		__image_data_offset = .;
@@ -357,7 +351,14 @@ SECTIONS
 	__data_lma_start = ORIGIN(ROM_RESIDENT_VMA);
 	#define INIT_ROM_LMA	(ORIGIN(ROM_RESIDENT_VMA) + SIZEOF(.data))
 #else
+/*
+ * TODO(b/202863352): Unify clang and gcc behavior.
+ */
+#ifdef __clang__
+	__data_lma_start = LOADADDR(.data);
+#else
 	__data_lma_start = .;
+#endif
 	#define INIT_ROM_LMA	ORIGIN(ROM_RESIDENT_VMA)
 #endif
 
@@ -395,7 +396,7 @@ SECTIONS
 			*(.bss.Tpm2_common)
 		__bss_libtpm2_end = .;
 
-		*(.bss)
+		*(.bss*)
 
 		/*
 		 * Reserve space for deferred function firing times.
@@ -407,16 +408,7 @@ SECTIONS
 		__deferred_until = .;
 		. += (__deferred_funcs_end - __deferred_funcs) * (8 / 4);
 		__deferred_until_end = .;
-	} > IRAM
 
-	.bss.slow : {
-		/* Region of RAM reclaimed from the little firmware(LFW). */
-		*(.bss.slow)
-		/*
-		 * Not replacing the loader, so .bss.slow is part of .bss.
-		 * It needs to be followed by __bss_end so that .bss.slow
-		 * will be zeroed by init.
-		 */
 		. = ALIGN(4);
 		__bss_end = .;
 	} > IRAM
@@ -494,23 +486,31 @@ SECTIONS
 #endif
 
 	/*
-	 * __flash_used is used in flash free calculations by the makefile.
+	 * __flash_used and __flash_size is used in flash free calculations by
+	 * the makefile. Note the difference between __flash_size and
+	 * __config_flash_size. __flash_size is the flash size for the given
+	 * image (RW, RO, etc.), while __config_flash_size is the *total*
+	 * flash size.
 	 * __image_size is stored in the struct image_data header and used
-	 * in hash calcuations.
+	 * in hash calculations.
 	 */
 	__flash_used = FLASH_USED_END - ORIGIN(EC_IMAGE_LMA_MEM_REGION);
+	__flash_size = LENGTH(EC_IMAGE_LMA_MEM_REGION);
 #ifndef CONFIG_CHIP_INIT_ROM_REGION
-#if !(defined(SECTION_IS_RW) && (CONFIG_FLASH_WRITE_SIZE > 4))
-	__image_size = __flash_used;
-#else
-	.rw_image_size_alignment :
+#if defined(SECTION_IS_RW) && (CONFIG_FLASH_WRITE_SIZE > 4)
+	.rw_image_size_alignment FLASH_USED_END : AT(FLASH_USED_END)
 	{
-		. = ORIGIN(FLASH) + __flash_used;
-		BYTE(0xFF);
 		. = ALIGN (CONFIG_FLASH_WRITE_SIZE);
 	} > FLASH = 0xFF
 
 	__image_size = __flash_used + SIZEOF(.rw_image_size_alignment);
+#else
+	__image_size = __flash_used;
+#endif
+#if defined(SECTION_IS_RW) && (CONFIG_FLASH_WRITE_SIZE > 0)
+	/* Alignment is needed by flash_command_write() for RW update. */
+	ASSERT(__image_size % CONFIG_FLASH_WRITE_SIZE == 0,
+	       "Error: RW image is not aligned to CONFIG_FLASH_WRITE_SIZE")
 #endif
 #endif /* CONFIG_CHIP_INIT_ROM_REGION */
 

@@ -69,10 +69,11 @@
 
 /*
  * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
- * cables only support up to 60W.
+ * cables only support up to 60W, the limitation of 45W is for the delbin
+ * board.
  */
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
+#define PD_MAX_POWER_MW		45000
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 
@@ -122,14 +123,12 @@
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
 #define GPIO_PG_EC_DSW_PWROK		GPIO_DSW_PWROK
 #define GPIO_POWER_BUTTON_L		GPIO_H1_EC_PWR_BTN_ODL
-#define GPIO_RSMRST_L_PGOOD		GPIO_PG_EC_RSMRST_ODL
 #define GPIO_CPU_PROCHOT		GPIO_EC_PROCHOT_ODL
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
 #define GPIO_WP_L			GPIO_EC_WP_L
 #define GPIO_USB_C1_BC12_INT_ODL	GPIO_USB_C1_MIX_INT_ODL
 #define GPIO_VOLUME_UP_L		GPIO_EC_VOLUP_BTN_ODL
 #define GPIO_VOLUME_DOWN_L		GPIO_EC_VOLDN_BTN_ODL
-#define GMR_TABLET_MODE_GPIO_L		GPIO_TABLET_MODE_L
 
 /* I2C Bus Configuration */
 #define CONFIG_I2C

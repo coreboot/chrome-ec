@@ -5,7 +5,9 @@
 
 #include "battery.h"
 #include "button.h"
+#include "charge_manager.h"
 #include "charge_ramp.h"
+#include "charge_state_v2.h"
 #include "charger.h"
 #include "common.h"
 #include "compile_time_macros.h"
@@ -48,15 +50,26 @@ __override void board_cbi_init(void)
 	config_usb_db_type();
 }
 
+void board_init(void)
+{
+	if (!ec_cfg_has_tabletmode()) {
+		/* applies only to clamshell devices */
+		gpio_set_flags(GPIO_VOLUME_DOWN_L, GPIO_INPUT | GPIO_PULL_DOWN);
+		gpio_set_flags(GPIO_VOLUME_UP_L, GPIO_INPUT | GPIO_PULL_DOWN);
+		button_disable_gpio(BUTTON_VOLUME_UP);
+		button_disable_gpio(BUTTON_VOLUME_DOWN);
+	}
+}
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
 /* Called on AP S3 -> S0 transition */
 static void board_chipset_resume(void)
 {
 	/* Allow keyboard backlight to be enabled */
-
-	if (ec_cfg_has_keyboard_backlight() == 1)
-		gpio_set_level(GPIO_EC_KB_BL_EN_L, 1);
-	else
+	if (ec_cfg_has_keyboard_backlight() == 1) {
+		/* GPIO_EC_KB_BL_EN_L is low active pin */
 		gpio_set_level(GPIO_EC_KB_BL_EN_L, 0);
+	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 
@@ -64,11 +77,10 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 static void board_chipset_suspend(void)
 {
 	/* Turn off the keyboard backlight if it's on. */
-
-	if (ec_cfg_has_keyboard_backlight() == 1)
-		gpio_set_level(GPIO_EC_KB_BL_EN_L, 0);
-	else
+	if (ec_cfg_has_keyboard_backlight() == 1) {
+		/* GPIO_EC_KB_BL_EN_L is low active pin */
 		gpio_set_level(GPIO_EC_KB_BL_EN_L, 1);
+	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
@@ -110,4 +122,18 @@ enum battery_present battery_hw_present(void)
 {
 	/* The GPIO is low when the battery is physically present */
 	return gpio_get_level(GPIO_EC_BATT_PRES_ODL) ? BP_NO : BP_YES;
+}
+
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+			    int max_ma, int charge_mv)
+{
+	/*
+	 * Follow OEM request to limit the input current to
+	 * 95% negotiated limit.
+	 */
+	charge_ma = charge_ma * 95 / 100;
+
+	charge_set_input_current_limit(MAX(charge_ma,
+					CONFIG_CHARGER_INPUT_CURRENT),
+					charge_mv);
 }

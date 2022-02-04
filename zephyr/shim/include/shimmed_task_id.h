@@ -12,6 +12,22 @@
 typedef uint8_t task_id_t;
 
 /*
+ * Bitmask of port enable bits, expanding to a value like `BIT(0) | BIT(2) | 0`.
+ */
+#define PD_INT_SHARED_PORT_MASK ( \
+	FOR_EACH_NONEMPTY_TERM(BIT, (|),		\
+		IF_ENABLED(CONFIG_PLATFORM_EC_USB_PD_PORT_0_SHARED, (0)),	\
+		IF_ENABLED(CONFIG_PLATFORM_EC_USB_PD_PORT_1_SHARED, (1)),	\
+		IF_ENABLED(CONFIG_PLATFORM_EC_USB_PD_PORT_2_SHARED, (2)),	\
+		IF_ENABLED(CONFIG_PLATFORM_EC_USB_PD_PORT_3_SHARED, (3)),	\
+	) 0 \
+)
+
+#if defined CONFIG_SHELL && !defined TEST_BUILD
+#define HAS_CONSOLE_STUB_TASK 1
+#endif
+
+/*
  * Highest priority on bottom -- same as in platform/ec. List of CROS_EC_TASK
  * items. See CONFIG_TASK_LIST in platform/ec's config.h for more information.
  * For tests that want their own custom tasks, use CONFIG_HAS_TEST_TASKS and not
@@ -19,9 +35,6 @@ typedef uint8_t task_id_t;
  */
 #ifdef CONFIG_SHIMMED_TASKS
 #define CROS_EC_TASK_LIST                                                 \
-	COND_CODE_1(HAS_TASK_HOOKS,                                       \
-		     (CROS_EC_TASK(HOOKS, hook_task, 0,                   \
-				   CONFIG_TASK_HOOKS_STACK_SIZE)), ())    \
 	COND_CODE_1(HAS_TASK_CHG_RAMP,                                    \
 		     (CROS_EC_TASK(CHG_RAMP, chg_ramp_task, 0,            \
 				   CONFIG_TASK_CHG_RAMP_STACK_SIZE)), ()) \
@@ -46,6 +59,10 @@ typedef uint8_t task_id_t;
 	COND_CODE_1(HAS_TASK_HOSTCMD,                                     \
 		     (CROS_EC_TASK(HOSTCMD, host_command_task, 0,         \
 				   CONFIG_TASK_HOSTCMD_STACK_SIZE)), ())  \
+	/* Placeholder to set the shell task priority */                  \
+	COND_CODE_1(HAS_CONSOLE_STUB_TASK,                                \
+		     (CROS_EC_TASK(CONSOLE_STUB, console_task_nop, 0,     \
+				   0)), ())                               \
 	COND_CODE_1(HAS_TASK_KEYPROTO,                                    \
 		     (CROS_EC_TASK(KEYPROTO, keyboard_protocol_task, 0,   \
 				   CONFIG_TASK_KEYPROTO_STACK_SIZE)), ()) \
@@ -67,6 +84,10 @@ typedef uint8_t task_id_t;
 	COND_CODE_1(HAS_TASK_PD_C3,                                       \
 		     (CROS_EC_TASK(PD_C3, pd_task, 0,                     \
 				   CONFIG_TASK_PD_STACK_SIZE)), ())       \
+	IF_ENABLED(CONFIG_HAS_TASK_PD_INT_SHARED,			  \
+		   (CROS_EC_TASK(PD_INT_SHARED, pd_shared_alert_task,	  \
+				 PD_INT_SHARED_PORT_MASK,		  \
+				 CONFIG_TASK_PD_INT_STACK_SIZE)))	  \
 	COND_CODE_1(HAS_TASK_PD_INT_C0,                                   \
 		     (CROS_EC_TASK(PD_INT_C0, pd_interrupt_handler_task, 0, \
 				   CONFIG_TASK_PD_INT_STACK_SIZE)), ())   \

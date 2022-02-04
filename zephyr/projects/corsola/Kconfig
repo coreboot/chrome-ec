@@ -1,0 +1,32 @@
+# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+config BOARD_KRABBY
+	bool "Google Krabby Board"
+	help
+	  Build Google Krabby reference board. Krabby has MediaTek MT8186 SoC
+	  with ITE it81202-bx EC.
+
+config BOARD_KINGLER
+	bool "Google Kingler Board"
+	help
+	  Build Google Kingler reference board. Krabby has MediaTek MT8186 SoC
+	  with NPCX993FA0BX EC.
+
+config VARIANT_CORSOLA_DB_DETECTION
+	bool "Corsola Platform Runtime Daughter Board Detection"
+	help
+	  Daughter board detection for Type-C subboard or HDMI subboard. This
+          includes pin configuration and driver loading.
+	default y
+
+config VARIANT_CORSOLA_USBA
+	bool "Corsola Platform USB-A support"
+	help
+	  Support Corsola USB-A related functions. Enable this function if
+	  it has USB-A ports.
+        depends on PLATFORM_EC_USBC
+	default y
+
+source "Kconfig.zephyr"

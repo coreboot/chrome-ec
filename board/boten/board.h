@@ -93,6 +93,9 @@
 #define USB_PORT_COUNT 1
 #define CONFIG_USB_PORT_POWER_DUMB
 
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
+#define CONFIG_BUTTONS_RUNTIME_CONFIG
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"

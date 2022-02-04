@@ -69,13 +69,32 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 /******************************************************************************/
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{"typec", 0, 400, GPIO_I2C1_SCL, GPIO_I2C1_SDA},
-	{"other", 1, 100, GPIO_I2C2_SCL, GPIO_I2C2_SDA},
+	{
+		.name = "typec",
+		.port = 0,
+		.kbps = 400,
+		.scl  = GPIO_I2C1_SCL,
+		.sda  = GPIO_I2C1_SDA
+	},
+	{
+		.name = "other",
+		.port = 1,
+		.kbps = 100,
+		.scl  = GPIO_I2C2_SCL,
+		.sda  = GPIO_I2C2_SDA
+	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 const struct i2c_port_t i2c_bitbang_ports[] = {
-	{"battery", 2, 100, GPIO_I2C3_SCL, GPIO_I2C3_SDA, .drv = &bitbang_drv},
+	{
+		.name = "battery",
+		.port = 2,
+		.kbps = 100,
+		.scl  = GPIO_I2C3_SCL,
+		.sda  = GPIO_I2C3_SDA,
+		.drv = &bitbang_drv
+	},
 };
 const unsigned int i2c_bitbang_ports_used = ARRAY_SIZE(i2c_bitbang_ports);
 
@@ -141,8 +160,12 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 };
 
 static void board_hpd_status(const struct usb_mux *me,
-			     mux_state_t mux_state)
+			     mux_state_t mux_state,
+			     bool *ack_required)
 {
+	/* This driver does not use host command ACKs */
+	*ack_required = false;
+
 	/*
 	 * svdm_dp_attention() did most of the work, we only need to notify
 	 * host here.
@@ -567,25 +590,3 @@ static void board_chipset_shutdown(void)
 	gpio_set_level(GPIO_EN_USBA_5V, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);
-
-int battery_get_vendor_param(uint32_t param, uint32_t *value)
-{
-	int rv;
-	uint8_t data[16] = {};
-
-	/* only allow reading 0x70~0x7F, 16 byte data */
-	if (param < 0x70 || param >= 0x80)
-		return EC_ERROR_ACCESS_DENIED;
-
-	rv = sb_read_string(0x70, data, sizeof(data));
-	if (rv)
-		return rv;
-
-	*value = data[param - 0x70];
-	return EC_SUCCESS;
-}
-
-int battery_set_vendor_param(uint32_t param, uint32_t value)
-{
-	return EC_ERROR_UNIMPLEMENTED;
-}
