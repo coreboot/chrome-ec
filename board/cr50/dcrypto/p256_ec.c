@@ -117,18 +117,10 @@ enum dcrypto_result dcrypto_p256_key_pwct(struct drbg_ctx *drbg,
 #endif
 
 	result = dcrypto_p256_fips_sign_internal(drbg, d, &message, &r, &s);
-	if (result != DCRYPTO_OK) {
-		fips_set_status(FIPS_FATAL_ECDSA_PWCT);
+	if (result != DCRYPTO_OK)
 		return result;
-	}
 
-	result = dcrypto_p256_ecdsa_verify(x, y, &message, &r, &s);
-	if (result != DCRYPTO_OK) {
-		fips_set_status(FIPS_FATAL_ECDSA_PWCT);
-		return result;
-	}
-
-	return result;
+	return dcrypto_p256_ecdsa_verify(x, y, &message, &r, &s);
 }
 
 /**

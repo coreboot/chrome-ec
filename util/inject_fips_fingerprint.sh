@@ -70,9 +70,6 @@ main() {
   sha256sum "${fips_body}" | xxd -r -p -l 32 > "${fips_checksum_dump}"
 
   cp "${rw_elf_in}" "${rw_elf_out}"
-
-  # don't update digest if run with FIPS_BREAK=1
-  [ -v FIPS_BREAK ] && return 0
   ${objcopy} --update-section "${checksum_section}"="${fips_checksum_dump}" \
 		"${rw_elf_out}"
 }

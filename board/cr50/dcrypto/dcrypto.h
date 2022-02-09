@@ -1111,11 +1111,6 @@ bool fips_rand_bytes(void *buffer, size_t len)
  */
 void *always_memset(void *d, int c, size_t n);
 
-/**
- * FIPS module digest for reporting.
- */
-extern const struct sha256_digest fips_integrity;
-
 #ifdef __cplusplus
 }
 #endif
