@@ -7,7 +7,7 @@
 },
   "board_id": 1179010630,  // that's 0x46464646, a.k.a. 'FFFF' in ASCII
   "board_id_mask": 0,
-  "board_id_flags": 16,   // 0x10
+  "board_id_flags": 65536, // 0x10000
 // Rollback state.
 "info": {
                                    "3": -1,   "4": -1,   "5": -1,   "6": -1,
@@ -46,7 +46,7 @@
   // epoch/major/minor would be preferred
   "timestamp": 1,
   "epoch": 0,  // FWR diversification contributor, 32 bits.
-  "major": 6,  // FW2_HIK_CHAIN counter.
+  "major": 5,  // FW2_HIK_CHAIN counter.
   "minor": 220,  // Mostly harmless version field.
   "applysec": -1,  // Mask to and with fuse BROM_APPLYSEC.
   "config1": 13,  // Which BROM_CONFIG1 actions to take before launching.
