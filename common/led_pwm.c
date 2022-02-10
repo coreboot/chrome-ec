@@ -54,7 +54,7 @@ static int get_led_id_color(enum pwm_led_id id, int color)
 
 void set_pwm_led_color(enum pwm_led_id id, int color)
 {
-	struct pwm_led duty = { 0 };
+	struct pwm_led_color_map duty = { 0 };
 	const struct pwm_led *led = &pwm_leds[id];
 
 	if ((id >= CONFIG_LED_PWM_COUNT) || (id < 0) ||
@@ -67,11 +67,11 @@ void set_pwm_led_color(enum pwm_led_id id, int color)
 		duty.ch2 = led_color_map[color].ch2;
 	}
 
-	if (led->ch0 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+	if (led->ch0 != PWM_LED_NO_CHANNEL)
 		led->set_duty(led->ch0, duty.ch0);
-	if (led->ch1 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+	if (led->ch1 != PWM_LED_NO_CHANNEL)
 		led->set_duty(led->ch1, duty.ch1);
-	if (led->ch2 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+	if (led->ch2 != PWM_LED_NO_CHANNEL)
 		led->set_duty(led->ch2, duty.ch2);
 }
 
@@ -93,17 +93,19 @@ static void set_led_color(int color)
 
 static void set_pwm_led_enable(enum pwm_led_id id, int enable)
 {
+#ifndef CONFIG_ZEPHYR
 	const struct pwm_led *led = &pwm_leds[id];
 
 	if ((id >= CONFIG_LED_PWM_COUNT) || (id < 0))
 		return;
 
-	if (led->ch0 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+	if (led->ch0 != PWM_LED_NO_CHANNEL)
 		led->enable(led->ch0, enable);
-	if (led->ch1 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+	if (led->ch1 != PWM_LED_NO_CHANNEL)
 		led->enable(led->ch1, enable);
-	if (led->ch2 != (enum pwm_channel)PWM_LED_NO_CHANNEL)
+	if (led->ch2 != PWM_LED_NO_CHANNEL)
 		led->enable(led->ch2, enable);
+#endif
 }
 
 static void init_leds_off(void)

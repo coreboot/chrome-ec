@@ -128,6 +128,8 @@ zephyr_library_sources_ifdef(CONFIG_HAS_TASK_POWERBTN
                                                 "${PLATFORM_EC}/common/power_button_x86.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_BMA255
                                                 "${PLATFORM_EC}/driver/accel_bma2x2.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_BMA4XX
+                                                "${PLATFORM_EC}/driver/accel_bma4xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_KX022
                                                 "${PLATFORM_EC}/driver/accel_kionix.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_LIS2DW12
@@ -462,6 +464,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_KTU1125
                                                 "${PLATFORM_EC}/driver/ppc/ktu1125.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_NX20P3483
                                                 "${PLATFORM_EC}/driver/ppc/nx20p348x.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_RT1739
+                                                "${PLATFORM_EC}/driver/ppc/rt1739.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_SN5S330
                                                 "${PLATFORM_EC}/driver/ppc/sn5s330.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_SYV682X

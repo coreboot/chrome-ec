@@ -13,6 +13,7 @@
 #include "driver/accelgyro_icm_common.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "keyboard_scan.h"
 #include "motion_sense.h"
 #include "pwm.h"
 #include "pwm_chip.h"
@@ -20,6 +21,21 @@
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+
+/* Keyboard scan setting */
+__override struct keyboard_scan_config keyscan_config = {
+	/* Increase from 50 us, because KSO_02 passes through the H1. */
+	.output_settle_us = 80,
+	.debounce_down_us = 9 * MSEC,
+	.debounce_up_us = 30 * MSEC,
+	.scan_period_us = 3 * MSEC,
+	.min_post_scan_delay_us = 1000,
+	.poll_timeout_us = 100 * MSEC,
+	.actual_key_mask = {
+		0x1c, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
+	},
+};
 
 /* Sensor */
 static struct mutex g_base_mutex;
@@ -168,19 +184,19 @@ static void board_update_motion_sensor_config(void)
  * number of pwm channel greater than three.
  */
 const struct pwm_t pwm_channels[] = {
-	[PWM_CH_LED1] = {
+	[PWM_CH_LED_C1_WHITE] = {
 		.channel = 0,
 		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
 		.freq_hz = 324, /* maximum supported frequency */
 		.pcfsr_sel = PWM_PRESCALER_C4,
 	},
-	[PWM_CH_LED2] = {
+	[PWM_CH_LED_C1_AMBER] = {
 		.channel = 1,
 		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
 		.freq_hz = 324, /* maximum supported frequency */
 		.pcfsr_sel = PWM_PRESCALER_C4,
 	},
-	[PWM_CH_LED3] = {
+	[PWM_CH_LED_PWR] = {
 		.channel = 2,
 		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
 		.freq_hz = 324, /* maximum supported frequency */
@@ -192,6 +208,18 @@ const struct pwm_t pwm_channels[] = {
 		.freq_hz = 10000, /* SYV226 supports 10~100kHz */
 		.pcfsr_sel = PWM_PRESCALER_C6,
 	},
+	[PWM_CH_LED_C0_WHITE] = {
+		.channel = 6,
+		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
+		.freq_hz = 324, /* maximum supported frequency */
+		.pcfsr_sel = PWM_PRESCALER_C4,
+	},
+	[PWM_CH_LED_C0_AMBER] = {
+		.channel = 7,
+		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
+		.freq_hz = 324, /* maximum supported frequency */
+		.pcfsr_sel = PWM_PRESCALER_C4,
+	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
@@ -201,9 +229,6 @@ static void board_init(void)
 	/* Enable motion sensor interrupt */
 	gpio_enable_interrupt(GPIO_BASE_IMU_INT_L);
 	gpio_enable_interrupt(GPIO_LID_ACCEL_INT_L);
-
-	/* Disable PWM_CH_LED2(Green) for unuse */
-	pwm_enable(PWM_CH_LED2, 0);
 
 	board_update_motion_sensor_config();
 }

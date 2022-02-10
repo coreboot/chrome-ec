@@ -84,17 +84,31 @@ static int ps8743_tune_mux(const struct usb_mux *me)
 	return EC_SUCCESS;
 }
 
+const struct usb_mux usbc0_virtual_mux = {
+	.usb_port = USBC_PORT_C0,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
+};
+
+const struct usb_mux usbc1_virtual_mux = {
+	.usb_port = USBC_PORT_C1,
+	.driver = &virtual_usb_mux_driver,
+	.hpd_update = &virtual_hpd_update,
+};
+
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USBC_PORT_C0] = {
 		.usb_port = USBC_PORT_C0,
 		.driver = &anx7447_usb_mux_driver,
 		.hpd_update = &anx7447_tcpc_update_hpd_status,
+		.next_mux = &usbc0_virtual_mux,
 	},
 	[USBC_PORT_C1] = {
 		.usb_port = USBC_PORT_C1,
 		.i2c_port = I2C_PORT_USB_C1,
 		.i2c_addr_flags = PS8743_I2C_ADDR0_FLAG,
 		.driver = &ps8743_usb_mux_driver,
+		.next_mux = &usbc1_virtual_mux,
 		.board_init = &ps8743_tune_mux,
 	},
 };
@@ -124,19 +138,6 @@ void board_tcpc_init(void)
 		/* TODO(crosbug.com/p/61098): How long do we need to wait? */
 		board_reset_pd_mcu();
 	}
-
-	/* Enable PPC interrupts */
-	/*
-	 * The original code says GPIO_USB_C0_TCPC_INT_ODL but
-	 * the comments say PPC interrupt, so perhaps
-	 * this should be int_usb_c0_ppc.
-	 * Since int_usb_c0_tcpc is enabled further down, this
-	 * does look like a typo.
-	 */
-	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_tcpc));
-	if (corsola_get_db_type() == CORSOLA_DB_TYPEC)
-		gpio_enable_dt_interrupt(
-			GPIO_INT_FROM_NODELABEL(int_x_ec_gpio2));
 
 	/* Enable TCPC interrupts */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_tcpc));

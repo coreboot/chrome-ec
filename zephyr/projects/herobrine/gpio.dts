@@ -52,7 +52,7 @@
 			enum-name = "GPIO_VOLUME_UP_L";
 		};
 		gpio_ec_wp_odl: ec_wp_odl {
-			gpios = <&gpiod 3 GPIO_INPUT>;
+			gpios = <&gpiod 3 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 			enum-name = "GPIO_WP_L";
 		};
 		gpio_lid_open_ec: lid_open_ec {
@@ -245,19 +245,6 @@
 		lvol-io-pads = <
 			&lvol_iob3 /* EC_I2C_SENSOR_SCL */
 			&lvol_iob2 /* EC_I2C_SENSOR_SDA */
-		>;
-	};
-
-	hibernate-wake-pins {
-		compatible = "cros-ec,hibernate-wake-pins";
-		wakeup-irqs = <
-			/*
-			 * TODO(b/216893756): Resolve how
-			 * hibernation is done.
-			 */
-			&int_ac_present
-			&int_power_button
-			&int_lid_open
 		>;
 	};
 
