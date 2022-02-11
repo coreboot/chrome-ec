@@ -561,7 +561,7 @@ static int ccd_set_password(const char *password)
 	result = raw_set_password(password);
 	mutex_unlock(&ccd_config_mutex);
 
-	if (!result)
+	if (result != EC_SUCCESS)
 		return result;
 
 	return ccd_save_config();
