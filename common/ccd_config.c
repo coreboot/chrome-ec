@@ -952,11 +952,15 @@ static enum vendor_cmd_rc ccd_open(struct vendor_cmd_params *p)
 	} else if ((ccd_is_cap_enabled(CCD_CAP_OPEN_WITHOUT_DEV_MODE) ||
 		    (board_vboot_dev_mode_enabled())) &&
 		   (ccd_is_cap_enabled(CCD_CAP_OPEN_FROM_USB) ||
-		    !(p->flags & VENDOR_CMD_FROM_USB))) {
+		    !(p->flags & (VENDOR_CMD_FROM_USB |
+				  VENDOR_CMD_FROM_ALT_IF)))) {
 		/*
 		 * Open allowed with no password if dev mode enabled and
 		 * command came from the AP. CCD capabilities can be used to
 		 * bypass these checks.
+		 * VENDOR_CMD_FROM_USB is set for vendor commands sent over usb.
+		 * VENDOR_CMD_FROM_ALT_IF is set for commands sent from the
+		 * console. Reject both unless CCD_CAP_OPEN_FROM_USB is enabled.
 		 */
 	} else {
 #ifndef CONFIG_CCD_OPEN_PREPVT
@@ -1289,14 +1293,15 @@ static enum vendor_cmd_rc ccd_password(struct vendor_cmd_params *p)
 	char *response = p->buffer;
 
 	/*
-	 * Only allow setting a password from the AP, not USB.  This increases
-	 * the effort required for an attacker to set one externally, even if
-	 * they have access to a system someone left in the opened state.
+	 * Only allow setting a password from the AP, not USB, or the console.
+	 * This increases the effort required for an attacker to set one
+	 * externally, even if they have access to a system someone left in the
+	 * opened state.
 	 *
 	 * An attacker can still set testlab mode or open up the CCD config,
 	 * but those changes are reversible by the device owner.
 	 */
-	if (p->flags & VENDOR_CMD_FROM_USB) {
+	if (p->flags & (VENDOR_CMD_FROM_USB | VENDOR_CMD_FROM_ALT_IF)) {
 		p->out_size = 1;
 		*response = EC_ERROR_ACCESS_DENIED;
 		return VENDOR_RC_NOT_ALLOWED;
