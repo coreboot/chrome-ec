@@ -43,6 +43,9 @@ REQUIRED_CONTROLS = {
         r'raw_cr50_uart_pty:\S+',
         r'cr50_ec3po_interp_connect:\S+',
     ],
+    'pch_disable': [
+        r'pch_disable:\S+',
+    ],
     'cr50_reset_odl': [
         r'cr50_reset_odl:\S+',
     ],
@@ -62,6 +65,7 @@ SUPPORTED_RESETS = (
     'battery_cutoff',
     'console_reboot',
     'cr50_reset_odl',
+    'pch_disable',
     'manual_reset',
 )
 
@@ -372,32 +376,41 @@ class Cr50Reset(object):
 class Cr50ResetODLReset(Cr50Reset):
     """Class for using the servo cr50_reset_odl to reset cr50."""
 
-    REQUIRED_SETUP = (
+    SIGNAL = 'cr50_reset_odl'
+    REQUIRED_SETUP = [
         # Rescue is done through Cr50 uart. It requires a flex cable not ccd.
         'flex',
-        # cr50_reset_odl is used to hold cr50 in reset. This control only exists
-        # if it actually resets cr50.
-        'cr50_reset_odl',
         # Cr50 rescue is done through cr50 uart.
         'cr50_uart',
-    )
+    ]
+
+    def __init__(self, servo, name):
+        # Make sure the reset signal exists in the servo setup.
+        self.REQUIRED_SETUP.append(self.SIGNAL)
+        super(Cr50ResetODLReset, self).__init__(servo, name)
 
     def cleanup(self):
         """Use the Cr50 reset signal to hold Cr50 in reset."""
         try:
-            self.restore_control('cr50_reset_odl')
+            self.restore_control(self.SIGNAL)
         finally:
             super(Cr50ResetODLReset, self).cleanup()
 
+    def set_signal(self, signal):
+        logging.info("Setting %s", signal)
+        self._servo.dut_control(signal)
+
     def run_reset(self):
         """Use cr50_reset_odl to hold Cr50 in reset."""
-        logging.info('cr50_reset_odl:on')
-        self._servo.dut_control('cr50_reset_odl:on')
+        self.set_signal('%s:on' % self.SIGNAL)
 
     def recover_from_reset(self):
         """Release the reset signal."""
-        logging.info('cr50_reset_odl:off')
-        self._servo.dut_control('cr50_reset_odl:off')
+        self.set_signal('%s:off' % self.SIGNAL)
+
+class PCHDisableReset(Cr50ResetODLReset):
+    """Class for using the servo pch_disable to reset cr50."""
+    SIGNAL = 'pch_disable'
 
 
 class BatteryCutoffReset(Cr50Reset):
@@ -660,6 +673,8 @@ class Cr50RescueUpdater(FlashCr50):
             return ConsoleReboot(self._servo, reset_type)
         elif reset_type == 'cr50_reset_odl':
             return Cr50ResetODLReset(self._servo, reset_type)
+        elif reset_type == 'pch_disable':
+            return PCHDisableReset(self._servo, reset_type)
         return ManualReset(self._servo, reset_type)
 
     def update(self, image):
