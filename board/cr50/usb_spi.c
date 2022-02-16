@@ -901,7 +901,7 @@ static int hash_command_wrapper(int argc, char *argv[])
 
 	return rv;
 }
-DECLARE_CONSOLE_COMMAND(spihash, hash_command_wrapper,
+DECLARE_SAFE_CONSOLE_COMMAND(spihash, hash_command_wrapper,
 		     "ap | ec [gang] | disable | [dump] <offset> <size>",
 		     "Hash SPI flash via TPM vendor command");
 #endif /* CONFIG_SPI_HASH */
