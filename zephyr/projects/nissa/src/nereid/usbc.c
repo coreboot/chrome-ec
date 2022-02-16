@@ -3,6 +3,8 @@
  * found in the LICENSE file.
  */
 
+#include <logging/log.h>
+
 #include "charge_state_v2.h"
 #include "chipset.h"
 #include "hooks.h"
@@ -15,7 +17,7 @@
 
 #include "sub_board.h"
 
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
+LOG_MODULE_DECLARE(nissa, CONFIG_NISSA_LOG_LEVEL);
 
 struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
@@ -58,13 +60,78 @@ void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
 			!!enabled);
 }
 
-/*
- * TODO(b/201000844): Fill in missing functions.
- */
+__override bool pd_check_vbus_level(int port, enum vbus_level level)
+{
+	/*
+	 * While the charger can differentiate SAFE0V from REMOVED, doing so
+	 * requires doing a I2C read of the VBUS analog level. Because this
+	 * function can be polled by the USB state machines and doing the I2C
+	 * read is relatively costly, we only check the cached VBUS presence
+	 * (for which interrupts record transitions).
+	 */
+	switch (level) {
+	case VBUS_PRESENT:
+		return sm5803_is_vbus_present(port);
+	case VBUS_SAFE0V:	/* Less than vSafe0V */
+	case VBUS_REMOVED:	/* Less than vSinkDisconnect */
+		return !sm5803_is_vbus_present(port);
+	}
+	LOG_WRN("Unrecognized vbus_level value: %d", level);
+	return false;
+}
 
 int board_set_active_charge_port(int port)
 {
-	return EC_SUCCESS;
+	int is_real_port = (port >= 0 && port < board_get_usb_pd_port_count());
+	int i;
+	int old_port;
+	int rv;
+
+	if (!is_real_port && port != CHARGE_PORT_NONE)
+		return EC_ERROR_INVAL;
+
+	old_port = charge_manager_get_active_charge_port();
+	LOG_INF("Charge update: p%d -> p%d", old_port, port);
+
+	/* Check if port is sourcing VBUS. */
+	if (port != CHARGE_PORT_NONE && charger_is_sourcing_otg_power(port)) {
+		LOG_WRN("Skip enable p%d: already sourcing", port);
+		return EC_ERROR_INVAL;
+	}
+
+	/* Disable sinking on all ports except the desired one */
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
+		if (i == port)
+			continue;
+
+		if (sm5803_vbus_sink_enable(i, 0))
+			/*
+			 * Do not early-return because this can fail during
+			 * power-on which would put us into a loop.
+			 */
+			LOG_WRN("p%d: sink path disable failed.", i);
+	}
+
+	/* Don't enable anything (stop here) if no ports were requested */
+	if (port == CHARGE_PORT_NONE)
+		return EC_SUCCESS;
+
+	/*
+	 * Stop the charger IC from switching while changing ports.  Otherwise,
+	 * we can overcurrent the adapter we're switching to. (crbug.com/926056)
+	 */
+	if (old_port != CHARGE_PORT_NONE)
+		charger_discharge_on_ac(1);
+
+	/* Enable requested charge port. */
+	rv = sm5803_vbus_sink_enable(port, 1);
+	if (rv)
+		LOG_WRN("p%d: sink path enable failed: code %d", port, rv);
+
+	/* Allow the charger IC to begin/continue switching. */
+	charger_discharge_on_ac(0);
+
+	return rv;
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -93,8 +160,28 @@ uint16_t tcpc_get_alert_status(void)
 	return status;
 }
 
+/*
+ * TODO(b/201000844): Fill in missing functions.
+ */
+
 void pd_power_supply_reset(int port)
 {
+	int prev_en;
+
+	if (port < 0 || port >= board_get_usb_pd_port_count())
+		return;
+
+	prev_en = charger_is_sourcing_otg_power(port);
+
+	/* Disable Vbus */
+	charger_enable_otg_power(port, 0);
+
+	/* Discharge Vbus if previously enabled */
+	if (prev_en)
+		sm5803_set_vbus_disch(port, 1);
+
+	/* Notify host of power info change. */
+	pd_send_host_event(PD_EVENT_POWER_CHANGE);
 }
 
 int pd_set_power_supply_ready(int port)

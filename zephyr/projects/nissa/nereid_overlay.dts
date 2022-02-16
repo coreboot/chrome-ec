@@ -6,9 +6,14 @@
 #include <cros/thermistor/thermistor.dtsi>
 
 / {
+	aliases {
+		gpio-wp = &gpio_ec_wp_odl;
+		int-wp = &int_wp_l;
+	};
+
 	batteries {
-		default_battery: lgc {
-			compatible = "lgc,ap18c8k";
+		default_battery: smp_l20m3pg0 {
+			compatible = "smp,l20m3pg0";
 		};
 	};
 
@@ -204,8 +209,6 @@
 		pagesize = <16>;
 		address-width = <8>;
 		timeout = <5>;
-		/* gpio_ec_wp_odl */
-		wp-gpios = <&gpioa 6 GPIO_INPUT>;
 	};
 };
 

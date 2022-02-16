@@ -939,6 +939,7 @@
 #undef CONFIG_CHARGER_RAA489000
 #undef CONFIG_CHARGER_RT9466
 #undef CONFIG_CHARGER_RT9467
+#undef CONFIG_CHARGER_RT9490
 #undef CONFIG_CHARGER_SM5803
 #undef CONFIG_CHARGER_SY21612
 
@@ -4432,6 +4433,12 @@
 #undef CONFIG_USB_PD_DEBUG_LEVEL
 
 /*
+ * Set to a nonzero value to delay PD task startup by the given
+ * amount of time.
+ */
+#define CONFIG_USB_PD_STARTUP_DELAY_MS 0
+
+/*
  * Define if this board is using runtime flags instead of build time configs
  * to control USB PD properties.
  */
@@ -5411,6 +5418,30 @@
 /* PDU size for fw update over USB (or TPM). */
 #define CONFIG_UPDATE_PDU_SIZE 1024
 
+/* DFU firmware upgrade options */
+/*
+ * Enables DFU USB Runtime identifier.
+ */
+#undef CONFIG_DFU_RUNTIME
+
+/*
+ * Indicates this region is a DFU Boot Manager and is a minimal runtime.
+ */
+#undef CONFIG_DFU_BOOTMANAGER_MAIN
+/*
+ * Enables DFU Boot Manager reboot loop protection. When unexpected reboots
+ * occur, a counter is incremented which will enter DFU once it exceeds
+ * the value defined. This parameter should only be enabled on setups which
+ * can issue the command to exit DFU.
+ */
+#undef CONFIG_DFU_BOOTMANAGER_MAX_REBOOT_COUNT
+
+/*
+ * Enables access to shared utilities required for the application
+ * and DFU Boot Manager. This allows the application to enter DFU.
+ */
+#undef CONFIG_DFU_BOOTMANAGER_SHARED
+
 /*
  * If defined, charge_get_state returns a special status if battery is
  * discharging and battery is nearly full.
@@ -5957,6 +5988,7 @@
 #if defined(CONFIG_CHARGER_BD9995X) || \
 	defined(CONFIG_CHARGER_RT9466) || \
 	defined(CONFIG_CHARGER_RT9467) || \
+	defined(CONFIG_CHARGER_RT9490) || \
 	defined(CONFIG_CHARGER_MT6370) || \
 	defined(CONFIG_CHARGER_BQ25710) || \
 	defined(CONFIG_CHARGER_BQ25720) || \

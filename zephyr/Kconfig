@@ -5,6 +5,7 @@
 rsource "app/Kconfig"
 rsource "drivers/Kconfig"
 rsource "emul/Kconfig"
+rsource "subsys/Kconfig"
 
 if ZTEST
 
@@ -34,6 +35,7 @@ if PLATFORM_EC
 
 rsource "shim/chip/npcx/Kconfig.npcx"
 rsource "Kconfig.adc"
+rsource "Kconfig.ap_power"
 rsource "Kconfig.battery"
 rsource "Kconfig.board_version"
 rsource "Kconfig.console"
@@ -61,6 +63,7 @@ rsource "Kconfig.tasks"
 rsource "Kconfig.temperature"
 rsource "Kconfig.timer"
 rsource "Kconfig.throttle_ap"
+rsource "Kconfig.usba"
 rsource "Kconfig.usbc"
 rsource "Kconfig.watchdog"
 

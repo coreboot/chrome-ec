@@ -192,7 +192,7 @@ class Zmake:
 
     def configure(
         self,
-        project_name_or_dir,
+        project_name,
         build_dir=None,
         toolchain=None,
         build_after_configure=False,
@@ -203,19 +203,12 @@ class Zmake:
         allow_warnings=False,
     ):
         """Locate a project by name or directory and then call _configure."""
-        root_dir = pathlib.Path(project_name_or_dir)
-        if not root_dir.is_dir():
-            root_dir = self.module_paths["ec"] / "zephyr"
+        root_dir = self.module_paths["ec"] / "zephyr"
         found_projects = zmake.project.find_projects(root_dir)
-        if len(found_projects) == 1:
-            # Likely passed directory path, wants to build only
-            # project from there.
-            project = next(iter(found_projects.values()))
-        else:
-            try:
-                project = found_projects[project_name_or_dir]
-            except KeyError as e:
-                raise KeyError("No project named {}".format(project_name_or_dir)) from e
+        try:
+            project = found_projects[project_name]
+        except KeyError as e:
+            raise KeyError(f"No project named {project_name}") from e
         return self._configure(
             project=project,
             build_dir=build_dir,
@@ -531,7 +524,7 @@ class Zmake:
 
         return 0
 
-    def _run_test(self, elf_file, coverage, gcov, build_dir, lcov_file):
+    def _run_test(self, elf_file, coverage, gcov, build_dir, lcov_file, timeout=None):
         """Run a single test, with goma if enabled.
 
         Args:
@@ -568,10 +561,18 @@ class Zmake:
                 proc.stderr,
                 job_id=job_id,
             )
-            if proc.wait():
-                raise OSError(get_process_failure_msg(proc))
-            if coverage:
-                self._run_lcov(build_dir, lcov_file, initial=False, gcov=gcov)
+            try:
+                if proc.wait(timeout=timeout):
+                    raise OSError(get_process_failure_msg(proc))
+                if coverage:
+                    self._run_lcov(build_dir, lcov_file, initial=False, gcov=gcov)
+            except subprocess.TimeoutExpired as e:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                raise e
 
         if self.goma:
             _run()
@@ -604,6 +605,7 @@ class Zmake:
                     gcov=gcov,
                     build_dir=build_dir,
                     lcov_file=build_dir / "output" / "zephyr.info",
+                    timeout=project.config.test_timeout_secs,
                 )
             )
 
