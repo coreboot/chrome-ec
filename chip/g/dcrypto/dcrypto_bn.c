@@ -1275,6 +1275,8 @@ int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
 	uint32_t r_buf[RSA_MAX_WORDS];
 	uint32_t rinv_buf[RSA_MAX_WORDS];
 
+	uint32_t rx[2];
+
 	struct LITE_BIGNUM r;
 	struct LITE_BIGNUM rinv;
 
@@ -1302,7 +1304,10 @@ int dcrypto_modexp_blinded(struct LITE_BIGNUM *output,
 	result = setup_and_lock(N, input);
 
 	/* Pick !0 64-bit random for exponent blinding */
-	rand64(ctx->rnd);
+	rand64(rx);
+	ctx->rnd[0] = rx[0];
+	ctx->rnd[1] = rx[1];
+
 	ctx->pubexp = pubexp;
 
 	ctx->_pad1[0] = ctx->_pad1[1] = ctx->_pad1[2] = 0;
