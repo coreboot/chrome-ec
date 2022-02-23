@@ -25,7 +25,7 @@ size_t g2f_attestation_cert(uint8_t *buf)
 {
 	uint8_t *serial;
 
-	const struct u2f_state *state = u2f_get_state();
+	const struct u2f_state *state = u2f_get_state_no_commit();
 
 	if (!state)
 		return 0;
