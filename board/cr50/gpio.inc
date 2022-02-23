@@ -127,6 +127,12 @@ GPIO_INT(EC_PACKET_MODE_EN, PIN(1, 7), GPIO_INT_RISING, ec_comm_packet_mode_en)
 GPIO_INT(EC_PACKET_MODE_DIS, PIN(1, 8), GPIO_INT_FALLING,
 	 ec_comm_packet_mode_dis)
 
+/*
+ * Generic pulled up input used for physical presence indication on some
+ * devices.
+ */
+GPIO_INT(DIOM4,           PIN(0, 3), GPIO_INT_RISING, diom4_deasserted)
+
 /*****************************************************************************/
 /* NON STANDARD INTERRUPT GPIOs - handlers defined and configured in board.c */
 /*
@@ -171,12 +177,6 @@ GPIO(BATT_PRES_L,     PIN(0, 6), GPIO_INPUT)
 GPIO(SPI_MOSI,        PIN(0, 7), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(SPI_CLK,         PIN(0, 8), GPIO_INPUT | GPIO_PULL_DOWN)
 GPIO(SPI_CS_L,        PIN(0, 9), GPIO_INPUT)
-
-/*
- * Generic pulled up input used for physical presence indication on some
- * devices.
- */
-GPIO(DIOM4,           PIN(0, 3), GPIO_INPUT)
 
 /* Used during *chip* factory process. */
 GPIO(DIOB4,           PIN(0, 10), GPIO_INPUT | GPIO_PULL_DOWN)
@@ -242,7 +242,7 @@ UNIMPLEMENTED(ENTERING_RW)
 /* GPIOs - mark outputs as inputs too, to read back from the driven pad */
 PINMUX(GPIO(INT_AP_L),        A5, DIO_INPUT)
 
-PINMUX(GPIO(DIOM4), M4, DIO_INPUT | GPIO_PULL_UP)
+PINMUX(GPIO(DIOM4),           M4, DIO_INPUT)
 
 PINMUX(GPIO(EC_FLASH_SELECT), B2, DIO_INPUT)
 PINMUX(GPIO(MONITOR_I2CP_SDA), A1, GPIO_INPUT)
