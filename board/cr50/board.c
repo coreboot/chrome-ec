@@ -189,6 +189,25 @@ int board_get_ccd_rec_lid_pin(void)
 	return board_properties & BOARD_CCD_REC_LID_PIN_MASK;
 }
 
+int board_use_diom4(void)
+{
+	return !!(board_properties & BOARD_USE_DIOM4);
+}
+
+void board_write_prop(uint32_t flag, uint8_t enable)
+{
+	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG1, 1);
+	/* Update board_properties and long life scratch. */
+	if (enable) {
+		board_properties |= flag;
+		GREG32(PMU, LONG_LIFE_SCRATCH1) |= flag;
+	} else {
+		board_properties &= ~flag;
+		GREG32(PMU, LONG_LIFE_SCRATCH1) &= ~flag;
+	}
+	/* Disable access to LONG_LIFE_SCRATCH1 reg */
+	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG1, 0);
+}
 
 /* Get header address of the backup RW copy. */
 const struct SignedHeader *get_other_rw_addr(void)

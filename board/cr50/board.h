@@ -292,6 +292,7 @@ void ec_detect_asserted(enum gpio_signal signal);
 void servo_detect_asserted(enum gpio_signal signal);
 void tpm_rst_deasserted(enum gpio_signal signal);
 void tpm_rst_asserted(enum gpio_signal signal);
+void diom4_deasserted(enum gpio_signal signal);
 
 void post_reboot_request(void);
 
@@ -359,6 +360,11 @@ int board_has_ec_cr50_comm_support(void);
 int board_id_is_mismatched(void);
 /* Allow for deep sleep to be enabled on AP shutdown */
 int board_deep_sleep_allowed(void);
+/* The board uses DIOM4 for user_pres_l */
+int board_use_diom4(void);
+
+/* Set or clear a board property flag in long life scratch. */
+void board_write_prop(uint32_t flag, uint8_t enable);
 
 void power_button_record(void);
 

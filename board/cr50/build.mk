@@ -113,6 +113,7 @@ board-${CONFIG_RDD} += rdd.o
 board-${CONFIG_USB_SPI_V2} += usb_spi.o
 board-${CONFIG_USB_I2C} += usb_i2c.o
 board-y += recovery_button.o
+board-y += user_pres.o
 
 fips-y=
 fips-y += dcrypto/fips.o
