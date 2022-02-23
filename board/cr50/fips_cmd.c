@@ -81,7 +81,7 @@ static void print_u2f_keys_status(void)
 
 	hmac_len = read_tpm_nvmem_size(TPM_HIDDEN_U2F_KEK);
 	drbg_len = read_tpm_nvmem_size(TPM_HIDDEN_U2F_KH_SALT);
-	load_result = u2f_load_or_create_state(&state, false);
+	load_result = u2f_load_or_create_state(&state, false, false);
 
 	CPRINTS("U2F HMAC len: %u, U2F Entropy len: %u, U2F load:%u, "
 		"State DRBG len:%u", hmac_len,

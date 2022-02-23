@@ -19,7 +19,8 @@ static const uint8_t k_salt_deprecated = NVMEM_VAR_U2F_SALT;
 
 #define CPRINTF(format, args...) cprintf(CC_EXTENSION, format, ##args)
 
-bool u2f_load_or_create_state(struct u2f_state *state, bool force_create)
+bool u2f_load_or_create_state(struct u2f_state *state, bool force_create,
+			      bool commit)
 {
 	bool g2f_secret_was_created = false;
 
@@ -62,7 +63,7 @@ bool u2f_load_or_create_state(struct u2f_state *state, bool force_create)
 
 		if (write_tpm_nvmem_hidden(
 			    TPM_HIDDEN_U2F_KEK, sizeof(state->hmac_key),
-			    state->hmac_key, 1 /* commit */) == TPM_WRITE_FAIL)
+			    state->hmac_key, commit) == TPM_WRITE_FAIL)
 			return false;
 	}
 
@@ -92,10 +93,9 @@ bool u2f_load_or_create_state(struct u2f_state *state, bool force_create)
 		if (!g2f_secret_was_created)
 			state->drbg_entropy_size = 32;
 
-		if (write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KH_SALT,
-					   state->drbg_entropy_size,
-					   state->drbg_entropy,
-					   1 /* commit */) == TPM_WRITE_FAIL) {
+		if (write_tpm_nvmem_hidden(
+			    TPM_HIDDEN_U2F_KH_SALT, state->drbg_entropy_size,
+			    state->drbg_entropy, commit) == TPM_WRITE_FAIL) {
 			state->drbg_entropy_size = 0;
 			return false;
 		}
@@ -126,12 +126,23 @@ bool u2f_load_or_create_state(struct u2f_state *state, bool force_create)
 static bool u2f_state_loaded;
 static struct u2f_state u2f_state;
 
+static struct u2f_state *u2f_get_state_common(bool commit)
+{
+	if (!u2f_state_loaded) {
+		u2f_state_loaded =
+			u2f_load_or_create_state(&u2f_state, false, commit);
+	}
+	return u2f_state_loaded ? &u2f_state : NULL;
+}
+
 struct u2f_state *u2f_get_state(void)
 {
-	if (!u2f_state_loaded)
-		u2f_state_loaded = u2f_load_or_create_state(&u2f_state, false);
+	return u2f_get_state_common(true);
+}
 
-	return u2f_state_loaded ? &u2f_state : NULL;
+struct u2f_state *u2f_get_state_no_commit(void)
+{
+	return u2f_get_state_common(false);
 }
 
 enum ec_error_list u2f_gen_kek_seed(void)
@@ -193,7 +204,8 @@ enum ec_error_list u2f_update_keys(void)
 	if (!state || state->drbg_entropy_size != sizeof(state->drbg_entropy)) {
 		result = u2f_zeroize_keys();
 		/* Force creation of new keys. */
-		u2f_state_loaded = u2f_load_or_create_state(&u2f_state, true);
+		u2f_state_loaded =
+			u2f_load_or_create_state(&u2f_state, true, true);
 
 		/* try to load again */
 		state = u2f_get_state();

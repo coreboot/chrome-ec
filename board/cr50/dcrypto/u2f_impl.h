@@ -186,9 +186,21 @@ enum ec_error_list u2f_attest(const struct u2f_state *state,
 /**
  * Get the current u2f state from the board.
  *
+ * Create a state if one does not exist, commit the created state into NVMEM.
+ *
  * @return pointer to static state if successful, NULL otherwise
  */
 struct u2f_state *u2f_get_state(void);
+
+/**
+ * Get the current u2f state from the board.
+ *
+ * Create a state if one does not exist, do not force committing of the
+ * created state into NVMEM.
+ *
+ * @return pointer to static state if successful, NULL otherwise
+ */
+struct u2f_state *u2f_get_state_no_commit(void);
 
 /**
  * Try to load U2F keys or create if failed.
@@ -198,7 +210,8 @@ struct u2f_state *u2f_get_state(void);
  *
  * @return true if state is properly initialized and will persist in flash.
  */
-bool u2f_load_or_create_state(struct u2f_state *state, bool force_create);
+bool u2f_load_or_create_state(struct u2f_state *state, bool force_create,
+			      bool commit);
 
 /***
  * Generates and persists to nvram a new key that will be used to

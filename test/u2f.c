@@ -90,6 +90,11 @@ struct u2f_state *u2f_get_state(void)
 	return &state;
 }
 
+struct u2f_state *u2f_get_state_no_commit(void)
+{
+	return u2f_get_state();
+}
+
 enum touch_state pop_check_presence(int consume)
 {
 	enum touch_state ret = presence ? POP_TOUCH_YES : POP_TOUCH_NO;
