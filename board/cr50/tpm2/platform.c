@@ -7,12 +7,15 @@
 #include "TPM_Types.h"
 
 #include "ccd_config.h"
+#include "console.h"
 #include "pinweaver.h"
 #include "tpm_nvmem.h"
 #include "dcrypto.h"
 #include "u2f_impl.h"
 #include "util.h"
 #include "version.h"
+
+#define CPRINTF(format, args...) cprintf(CC_EXTENSION, format, ## args)
 
 uint16_t _cpri__GenerateRandom(size_t random_size,
 			uint8_t *buffer)
@@ -94,6 +97,10 @@ BOOL _plat__ShallSurviveOwnerClear(uint32_t  index)
 
 void _plat__OwnerClearCallback(void)
 {
+	enum ec_error_list rv;
+
 	/* Invalidate existing u2f registrations. */
-	u2f_gen_kek_seed(0 /* commit */);
+	rv = u2f_gen_kek_seed();
+	if (rv != EC_SUCCESS)
+		CPRINTF("%s: failed (%d)\n", __func__, rv);
 }

@@ -140,6 +140,8 @@ static int cmd_fips_status(int argc, char **argv)
 				u2f_zeroize_keys());
 		else if (!strncmp(argv[1], "old", 3))
 			return fips_set_old_u2f_keys();
+		else if (!strncmp(argv[1], "kek", 3))
+			return u2f_gen_kek_seed();
 		else if (!strncmp(argv[1], "u2f", 3))
 			print_u2f_keys_status();
 		else if (!strncmp(argv[1], "gen", 3))

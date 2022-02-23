@@ -134,19 +134,28 @@ struct u2f_state *u2f_get_state(void)
 	return u2f_state_loaded ? &u2f_state : NULL;
 }
 
-enum ec_error_list u2f_gen_kek_seed(int commit)
+enum ec_error_list u2f_gen_kek_seed(void)
 {
-	struct u2f_state *state = u2f_get_state();
-
-	if (!state)
-		return EC_ERROR_UNKNOWN;
-
-	if (!u2f_generate_hmac_key(state))
+	/**
+	 * If U2F state is loaded, update HMAC key in memory, otherwise this
+	 * is just temporary storage and will be updated (to the same value)
+	 * in u2f_load_or_create_state() when u2f_get_state() will be called
+	 * upon use of U2F.
+	 */
+	if (u2f_generate_hmac_key(&u2f_state) != EC_SUCCESS)
 		return EC_ERROR_HW_INTERNAL;
 
-	if (write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KEK, sizeof(state->hmac_key),
-				   state->hmac_key, commit) == TPM_WRITE_FAIL)
+	/* Store new U2F HMAC key in nvmem */
+	if (write_tpm_nvmem_hidden(TPM_HIDDEN_U2F_KEK,
+				   sizeof(u2f_state.hmac_key),
+				   u2f_state.hmac_key, 0) == TPM_WRITE_FAIL) {
+		/**
+		 * Failure to write means we now have inconsistent state
+		 * between u2f_state and nvmem, so mark it as not loaded.
+		 */
+		u2f_state_loaded = false;
 		return EC_ERROR_UNKNOWN;
+	}
 
 	return EC_SUCCESS;
 }
