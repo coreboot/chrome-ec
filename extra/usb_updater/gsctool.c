@@ -339,7 +339,9 @@ static const struct option_container cmd_line_options[] = {
 	{{"version", no_argument, NULL, 'v'},
 	 "Report this utility version"},
 	{{"wp", optional_argument, NULL, 'w'},
-	 "[enable] Get the current WP setting or enable WP"}
+	 "[enable] Get the current WP setting or enable WP"},
+	{{"user_pres", optional_argument, NULL, 'z'},
+	 "Enable or check user_pres_l status"},
 };
 
 /* Helper to print debug messages when verbose flag is specified. */
@@ -2668,6 +2670,58 @@ static void process_rma(struct transfer_descriptor *td, const char *authcode)
 }
 
 /*
+ * Enable or disable user pres tracking. Get time since DIOM4 was asserted.
+ */
+static int process_user_pres(struct transfer_descriptor *td, const char *arg)
+{
+	struct user_pres_response response;
+	size_t response_size = sizeof(response);
+	char *cmd_str;
+	int rv;
+	uint8_t *subcmd;
+	uint8_t subcmd_size = 1;
+
+	if (!arg) {
+		subcmd = NULL;
+		subcmd_size = 0;
+		cmd_str = "check";
+	} else if (!strcasecmp(arg, "disable")) {
+		*subcmd = USER_PRES_DISABLE;
+		cmd_str = "disable";
+	} else if (!strcasecmp(arg, "enable")) {
+		*subcmd = USER_PRES_ENABLE;
+		cmd_str = "enable";
+
+	} else {
+		fprintf(stderr, "Invalid user pres arg %s", arg);
+		return update_error;
+	}
+
+	rv = send_vendor_command(td, VENDOR_CC_USER_PRES, subcmd, subcmd_size,
+		&response, &response_size);
+	if (rv) {
+		fprintf(stderr, "Failed %s user pres\nvc error "
+			"%d\n", cmd_str, rv);
+		return update_error;
+	}
+	printf("user pres %s succeeded. %zu\n", cmd_str, response_size);
+	if (subcmd_size)
+		return 0;
+
+	if (response_size != sizeof(struct user_pres_response)) {
+		fprintf(stderr, "Unexpected response %zu\n", response_size);
+		return update_error;
+	}
+
+	printf("user pres %sabled\n",
+		response.state & USER_PRES_ENABLE ? "en" : "dis");
+	if (response.state & USER_PRES_PRESSED)
+		printf("last press: %lu\n", response.last_press);
+	return 0;
+}
+
+
+/*
  * Enable or disable factory mode. Factory mode will only be enabled if HW
  * write protect is removed.
  */
@@ -3048,6 +3102,7 @@ int main(int argc, char *argv[])
 	const char *openbox_desc_file = NULL;
 	int factory_mode = 0;
 	char *factory_mode_arg;
+	char *user_pres_arg;
 	char *tpm_mode_arg = NULL;
 	char *serial = NULL;
 	int sn_bits = 0;
@@ -3056,6 +3111,7 @@ int main(int argc, char *argv[])
 	uint8_t sn_inc_rma_arg;
 	int erase_ap_ro_hash = 0;
 	int is_dauntless = 0;
+	int user_pres = 0;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -3226,6 +3282,10 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Illegal wp option \"%s\"\n", optarg);
 			errorcnt++;
 			break;
+		case 'z':
+			user_pres = 1;
+			user_pres_arg = optarg;
+			break;
 		case 0:				/* auto-handled option */
 			break;
 		case '?':
@@ -3280,6 +3340,7 @@ int main(int argc, char *argv[])
 	    !openbox_desc_file &&
 	    !tstamp &&
 	    !tpm_mode &&
+	    !user_pres &&
 	    (wp == WP_NONE)) {
 		if (optind >= argc) {
 			fprintf(stderr,
@@ -3360,6 +3421,9 @@ int main(int argc, char *argv[])
 
 	if (rma)
 		process_rma(&td, rma_auth_code);
+
+	if (user_pres)
+		exit(process_user_pres(&td, user_pres_arg));
 
 	if (factory_mode)
 		process_factory_mode(&td, factory_mode_arg);
