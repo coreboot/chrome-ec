@@ -165,6 +165,8 @@ enum vendor_cmd_cc {
 	 */
 	VENDOR_CC_DS_DIS_TEMP = 59,
 
+	VENDOR_CC_USER_PRES = 60,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 
@@ -223,6 +225,18 @@ enum wp_options {
 	WP_CHECK,
 	WP_ENABLE
 };
+
+/* VENDOR_CC_USER_PRES options. */
+enum user_pres_options {
+	USER_PRES_ENABLE = BIT(0),
+	USER_PRES_DISABLE = BIT(1),
+	USER_PRES_PRESSED = BIT(2)
+};
+/* Structure for VENDOR_CC_USER_PRES response */
+struct user_pres_response {
+	uint8_t state;		/* The user presence state. ENABLE or DISABLE */
+	uint64_t last_press;	/* Time since last press */
+} __packed;
 
 /*
  * The TPMv2 Spec mandates that vendor-specific command codes have bit 29 set,

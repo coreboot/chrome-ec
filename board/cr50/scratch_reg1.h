@@ -100,6 +100,11 @@
 #define BOARD_CCD_REC_LID_PIN_DIOA12      (3 << BOARD_CCD_REC_LID_PIN_SHIFT)
 
 /*
+ * The board supports USER_PRES on DIOM4.
+ */
+#define BOARD_USE_DIOM4                   BIT(24)
+
+/*
  * Indicates successful completion of FIPS power up
  * tests earlier. Reduces wake up time after sleep.
  * Stored in PWRDN_SCRATCH22 and use multiple bits to harden against
@@ -123,6 +128,7 @@
 	BOARD_PERIPH_CONFIG_I2C | \
 	BOARD_PERIPH_CONFIG_SPI | \
 	BOARD_USE_PLT_RESET | \
+	BOARD_USE_DIOM4 | \
 	BOARD_WP_DISABLE_DELAY)
 
 #endif  /* ! __EC_BOARD_CR50_SCRATCH_REG1_H */
