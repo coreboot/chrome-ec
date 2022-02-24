@@ -664,6 +664,15 @@ static void configure_board_specific_gpios(void)
 
 		/* Enable the input */
 		GWRITE_FIELD(PINMUX, DIOM3_CTL, IE, 1);
+
+#ifdef H1_RED_BOARD
+		/*
+		 * When running on Red board pull this input up to avoid the
+		 * 'asserted AP reset' condition.
+		 */
+		GWRITE_FIELD(PINMUX, DIOM3_CTL, PU, 1);
+#endif
+
 	} else {
 		/* Use sys_rst_l as the tpm reset signal. */
 		/* Select for TPM_RST_L */
