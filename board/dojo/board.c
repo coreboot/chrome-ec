@@ -45,15 +45,15 @@ static struct kionix_accel_data g_kx022_data;
 
 /* Matrix to rotate accelrator into standard reference frame */
 static const mat33_fp_t base_standard_ref = {
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(-1)}
-};
-
-static const mat33_fp_t lid_standard_ref = {
 	{ FLOAT_TO_FP(-1), 0, 0},
 	{ 0, FLOAT_TO_FP(-1), 0},
 	{ 0, 0, FLOAT_TO_FP(1)}
+};
+
+static const mat33_fp_t lid_standard_ref = {
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ 0, 0, FLOAT_TO_FP(-1)}
 };
 
 struct motion_sensor_t motion_sensors[] = {
@@ -202,3 +202,15 @@ static void disable_nvme(void)
 	gpio_set_level(GPIO_EN_PP3300_SSD, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, disable_nvme, HOOK_PRIO_DEFAULT);
+
+static void board_do_chipset_resume(void)
+{
+	gpio_set_level(GPIO_EN_KB_BL, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_do_chipset_resume, HOOK_PRIO_DEFAULT);
+
+static void board_do_chipset_suspend(void)
+{
+	gpio_set_level(GPIO_EN_KB_BL, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_do_chipset_suspend, HOOK_PRIO_DEFAULT);

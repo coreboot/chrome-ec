@@ -25,6 +25,7 @@
 #include "gpio.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
+#include "ioexpander.h"
 #include "power.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
@@ -80,7 +81,10 @@ const struct tcpc_config_t tcpc_config[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == CONFIG_USB_PD_PORT_MAX_COUNT);
 
-/* TODO: usb_port_enable expander pins */
+const int usb_port_enable[USBA_PORT_COUNT] = {
+	IOEX_EN_PP5000_USB_A0_VBUS,
+	IOEX_EN_PP5000_USB_A1_VBUS_DB,
+};
 
 static void usbc_interrupt_init(void)
 {
@@ -114,19 +118,6 @@ struct ppc_config_t ppc_chips[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == CONFIG_USB_PD_PORT_MAX_COUNT);
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
-
-const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
-	[USBC_PORT_C0] = {
-		.i2c_port = I2C_PORT_TCPC0,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-	},
-
-	[USBC_PORT_C1] = {
-		.i2c_port = I2C_PORT_TCPC1,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == CONFIG_USB_PD_PORT_MAX_COUNT);
 
 /*
  * .init is not necessary here because it has nothing
@@ -163,6 +154,8 @@ struct usb_mux usbc1_ps8818 = {
 	.driver = &ps8818_usb_retimer_driver,
 	.board_set = &board_c1_ps8818_mux_set,
 };
+
+/* TODO: ANX7483 support */
 
 /*
  * ANX7491(A1) and ANX7451(C1) are on the same i2c bus. Both default
@@ -209,7 +202,9 @@ struct usb_mux usb_muxes[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == CONFIG_USB_PD_PORT_MAX_COUNT);
 
-/* TODO: ioex_config */
+/* TODO: SBU flip on DB with fusb */
+/* TODO: HPD signal on PS8818 DB */
+/* TODO: A1 retimer enable and reset on PS8811 DB */
 
 /*
  * USB C0 port SBU mux use standalone FSUSB42UMX
@@ -222,7 +217,11 @@ static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state,
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
 
-	/* TODO: set IOEX_USB_C0_SBU_FLIP */
+	if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
+		ioex_set_level(IOEX_USB_C0_SBU_FLIP, 1);
+	else
+		ioex_set_level(IOEX_USB_C0_SBU_FLIP, 0);
+
 	return EC_SUCCESS;
 }
 
@@ -352,7 +351,9 @@ int board_aoz1380_set_vbus_source_current_limit(int port,
 {
 	int rv = EC_SUCCESS;
 
-	/* TODO: Set IOEX_USB_C0_PPC_ILIM_3A_EN */
+	rv = ioex_set_level(IOEX_USB_C0_PPC_ILIM_3A_EN,
+			    (rp == TYPEC_RP_3A0) ? 1 : 0);
+
 	return rv;
 }
 
@@ -396,6 +397,7 @@ static void reset_nct38xx_port(int port)
 {
 	const struct gpio_dt_spec *reset_gpio_l;
 
+	/* TODO: Save and restore ioex signals */
 	if (port == USBC_PORT_C0)
 		reset_gpio_l = GPIO_DT_FROM_NODELABEL(gpio_usb_c0_tcpc_rst_l);
 	else if (port == USBC_PORT_C1)
@@ -630,21 +632,3 @@ void baseboard_a1_retimer_setup(void)
 	a1_retimer.board_init(&a1_retimer);
 }
 DECLARE_DEFERRED(baseboard_a1_retimer_setup);
-
-/* TODO: Remove when guybrush is no longer supported */
-#ifdef CONFIG_BOARD_GUYBRUSH
-void board_overcurrent_event(int port, int is_overcurrented)
-{
-	switch (port) {
-	case USBC_PORT_C0:
-	case USBC_PORT_C1:
-		gpio_pin_set_dt(
-			GPIO_DT_FROM_NODELABEL(gpio_usb_c0_c1_fault_odl),
-			!is_overcurrented);
-		break;
-
-	default:
-		break;
-	}
-}
-#endif
