@@ -321,6 +321,7 @@ void system_print_banner(void)
 	}
 }
 
+#ifdef CONFIG_RAM_SIZE
 struct jump_data *get_jump_data(void)
 {
 	uintptr_t addr;
@@ -343,6 +344,7 @@ struct jump_data *get_jump_data(void)
 
 	return (struct jump_data *)(addr - sizeof(struct jump_data));
 }
+#endif
 
 int system_jumped_to_this_image(void)
 {
@@ -594,7 +596,7 @@ static void jump_to_image(uintptr_t init_addr)
 	 *  check whether PD tasks have started (instead of VBOOT_EFS2, which
 	 *  is static).
 	 */
-	if (task_start_called() && IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
+	if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP) && task_start_called())
 		/* Note: must be before i2c module is locked down */
 		pd_prepare_sysjump();
 
@@ -735,6 +737,7 @@ int system_set_active_copy(enum ec_image copy)
 	return system_set_bbram(SYSTEM_BBRAM_IDX_TRY_SLOT, copy);
 }
 
+#ifdef CONFIG_EC_PROTECTED_STORAGE_OFF
 /*
  * This is defined in system.c instead of flash.c because it's called even
  * on the boards which don't include flash.o. (e.g. hadoken, stm32l476g-eval)
@@ -750,6 +753,7 @@ uint32_t flash_get_rw_offset(enum ec_image copy)
 
 	return CONFIG_EC_PROTECTED_STORAGE_OFF + CONFIG_RO_STORAGE_OFF;
 }
+#endif
 
 const struct image_data *system_get_image_data(enum ec_image copy)
 {

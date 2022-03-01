@@ -13,6 +13,8 @@ properties:
       enum:
          - "aec,5477109"
          - "as3gwrc3ka,c235-41"
+         - "getac,bq40z50-R3-S3"
+         - "getac,bq40z50-R3-S2"
          - "lgc,ac17a8m"
          - "lgc,ap16l8j"
          - "lgc,ap18c8k"
@@ -21,4 +23,6 @@ properties:
          - "panasonic,ap16l5j"
          - "panasonic,ap16l5j-009"
          - "powertech,batgqa05l22"
+         - "smp,l20m3pg0"
+         - "smp,l20m3pg1"
          - "smp,l20m3pg2"

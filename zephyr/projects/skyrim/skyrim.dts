@@ -4,17 +4,22 @@
  */
 
 / {
+	aliases {
+		gpio-wp = &gpio_wp;
+		gpio-cbi-wp = &gpio_cbi_wp;
+		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
+	};
+
 	named-gpios {
 		/* Skyrim-specific GPIO customizations */
 		usb_fault_odl {
 			gpios = <&gpio5 0 GPIO_ODR_HIGH>;
 		};
-		en_pwr_s3 {
+		gpio_en_pwr_s3: en_pwr_s3 {
 			gpios = <&gpio7 4 GPIO_OUT_LOW>;
 		};
 		gpio_pg_groupc_s0_od: pg_groupc_s0_od {
 			gpios = <&gpiof 0 GPIO_INPUT>;
-			enum-name = "GPIO_PG_GROUPC_S0_OD";
 		};
 		/* TODO: Add interrupt handler */
 		ec_i2c_usbc_pd_int {
@@ -67,16 +72,20 @@
 		ec_sc_rst {
 			gpios = <&gpiob 0 GPIO_OUT_LOW>;
 		};
-		ec_cbi_wp {
+		gpio_cbi_wp: ec_cbi_wp {
 			gpios = <&gpio8 1 GPIO_OUT_LOW>;
-			enum-name = "GPIO_EC_CBI_WP";
 		};
-		ec_wp_l {
-			gpios = <&gpiod 7 GPIO_INPUT>;
-			enum-name = "GPIO_WP_L";
+		gpio_wp: ec_wp_l {
+			gpios = <&gpiod 7 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 		};
 		gpio_pg_lpddr5_s0_od: pg_lpddr5_s0_od {
 			gpios = <&gpio6 0 GPIO_INPUT>;
+		};
+		ec_espi_rst_l {
+			gpios = <&gpio5 4 GPIO_PULL_DOWN>;
+		};
+		6axis_int_l {
+			gpios = <&gpioa 0 GPIO_INPUT>;
 		};
 	};
 

@@ -181,7 +181,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = NPCX_I2C_PORT0_0,
-			.addr_flags = PS8751_I2C_ADDR1_FLAGS,
+			.addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
 		},
 		.drv = &ps8xxx_tcpm_drv,
 	},
@@ -189,7 +189,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = NPCX_I2C_PORT0_1,
-			.addr_flags = PS8751_I2C_ADDR1_FLAGS,
+			.addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
 		},
 		.drv = &ps8xxx_tcpm_drv,
 	},
@@ -782,17 +782,17 @@ int board_has_working_reset_flags(void)
 #define BATTERY_FREE_MIN_DELTA_US		(5 * MSEC)
 static timestamp_t battery_last_i2c_time;
 
-static int is_battery_i2c(const int port, const uint16_t slave_addr_flags)
+static int is_battery_i2c(const int port, const uint16_t addr_flags)
 {
 	return (port == I2C_PORT_BATTERY)
-		&& (slave_addr_flags == BATTERY_ADDR_FLAGS);
+		&& (addr_flags == BATTERY_ADDR_FLAGS);
 }
 
-void i2c_start_xfer_notify(const int port, const uint16_t slave_addr_flags)
+void i2c_start_xfer_notify(const int port, const uint16_t addr_flags)
 {
 	unsigned int time_delta_us;
 
-	if (!is_battery_i2c(port, slave_addr_flags))
+	if (!is_battery_i2c(port, addr_flags))
 		return;
 
 	time_delta_us = time_since32(battery_last_i2c_time);
@@ -802,9 +802,9 @@ void i2c_start_xfer_notify(const int port, const uint16_t slave_addr_flags)
 	usleep(BATTERY_FREE_MIN_DELTA_US - time_delta_us);
 }
 
-void i2c_end_xfer_notify(const int port, const uint16_t slave_addr_flags)
+void i2c_end_xfer_notify(const int port, const uint16_t addr_flags)
 {
-	if (!is_battery_i2c(port, slave_addr_flags))
+	if (!is_battery_i2c(port, addr_flags))
 		return;
 
 	battery_last_i2c_time = get_time();

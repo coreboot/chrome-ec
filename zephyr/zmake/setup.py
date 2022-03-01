@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+"""Configuration to allow pip install."""
 import setuptools
 
 setuptools.setup(
@@ -33,6 +34,14 @@ setuptools.setup(
     entry_points={
         "console_scripts": [
             "zmake=zmake.__main__:main",
+        ],
+    },
+    extras_require={
+        "tests": [
+            "coverage",
+            "pytest",
+            "hypothesis",
+            "testfixtures",
         ],
     },
 )

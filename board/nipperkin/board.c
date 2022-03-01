@@ -7,8 +7,10 @@
 
 #include "adc.h"
 #include "base_fw_config.h"
+#include "battery.h"
 #include "board_fw_config.h"
 #include "button.h"
+#include "charger.h"
 #include "chipset.h"
 #include "common.h"
 #include "cros_board_info.h"
@@ -293,8 +295,8 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 	},
 	[TEMP_SENSOR_5V_REGULATOR] = {
 		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(54),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(57),
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(55),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(58),
 		},
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(47),
@@ -335,8 +337,8 @@ static int check_hdmi_hpd_status(void)
 static void board_chipset_resume(void)
 {
 	ioex_set_level(IOEX_USB_A1_PD_R_L, 1);
-	ioex_set_level(IOEX_HDMI_DATA_EN, 1);
 	ioex_set_level(IOEX_EN_PWR_HDMI, 1);
+	ioex_set_level(IOEX_HDMI_DATA_EN, 1);
 	msleep(PI3HDX1204_POWER_ON_DELAY_MS);
 	pi3hdx1204_enable(I2C_PORT_TCPC1,
 		PI3HDX1204_I2C_ADDR_FLAGS,
@@ -349,8 +351,8 @@ static void board_chipset_suspend(void)
 {
 	pi3hdx1204_enable(I2C_PORT_TCPC1,
 		PI3HDX1204_I2C_ADDR_FLAGS, 0);
-	ioex_set_level(IOEX_EN_PWR_HDMI, 0);
 	ioex_set_level(IOEX_HDMI_DATA_EN, 0);
+	ioex_set_level(IOEX_EN_PWR_HDMI, 0);
 	ioex_set_level(IOEX_USB_A1_PD_R_L, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
@@ -358,7 +360,8 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 /*
  * With privacy screen, with keyboard backlight
  */
-static const struct ec_response_keybd_config keybd_w_privacy_w_kblight = {
+static const struct ec_response_keybd_config
+	keybd_w_privacy_w_kblight = {
 	.num_top_row_keys = 13,
 	.action_keys = {
 		TK_BACK,			/* T1 */
@@ -381,7 +384,8 @@ static const struct ec_response_keybd_config keybd_w_privacy_w_kblight = {
 /*
  * Without privacy screen, with keyboard backlight
  */
-static const struct ec_response_keybd_config keybd_wo_privacy_w_kblight = {
+static const struct ec_response_keybd_config
+	keybd_wo_privacy_w_kblight = {
 	.num_top_row_keys = 13,
 	.action_keys = {
 		TK_BACK,			/* T1 */
@@ -404,7 +408,8 @@ static const struct ec_response_keybd_config keybd_wo_privacy_w_kblight = {
 /*
  * With privacy screen, without keyboard backlight
  */
-static const struct ec_response_keybd_config keybd_w_privacy_wo_kblight = {
+static const struct ec_response_keybd_config
+	keybd_w_privacy_wo_kblight = {
 	.num_top_row_keys = 13,
 	.action_keys = {
 		TK_BACK,			/* T1 */
@@ -427,7 +432,8 @@ static const struct ec_response_keybd_config keybd_w_privacy_wo_kblight = {
 /*
  * Without privacy screen, without keyboard backlight
  */
-static const struct ec_response_keybd_config keybd_wo_privacy_wo_kblight = {
+static const struct ec_response_keybd_config
+	keybd_wo_privacy_wo_kblight_V0 = {
 	.num_top_row_keys = 13,
 	.action_keys = {
 		TK_BACK,			/* T1 */
@@ -447,6 +453,27 @@ static const struct ec_response_keybd_config keybd_wo_privacy_wo_kblight = {
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
 
+static const struct ec_response_keybd_config
+	keybd_wo_privacy_wo_kblight_V1 = {
+	.num_top_row_keys = 13,
+	.action_keys = {
+		TK_BACK,			/* T1 */
+		TK_REFRESH,			/* T2 */
+		TK_FULLSCREEN,			/* T3 */
+		TK_OVERVIEW,			/* T4 */
+		TK_SNAPSHOT,			/* T5 */
+		TK_BRIGHTNESS_DOWN,		/* T6 */
+		TK_BRIGHTNESS_UP,		/* T7 */
+		TK_PLAY_PAUSE,			/* T8 */
+		TK_MICMUTE,			/* T9 */
+		TK_VOL_MUTE,			/* T10 */
+		TK_VOL_DOWN,			/* T11 */
+		TK_VOL_UP,			/* T12 */
+		TK_MENU,			/* T13 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
 __override const struct ec_response_keybd_config *
 board_vivaldi_keybd_config(void)
 {
@@ -456,8 +483,12 @@ board_vivaldi_keybd_config(void)
 		return &keybd_wo_privacy_w_kblight;
 	else if (board_has_privacy_panel() && !board_has_kblight())
 		return &keybd_w_privacy_wo_kblight;
-	else
-		return &keybd_wo_privacy_wo_kblight;
+	else {
+		if (get_board_version() <= 3)
+			return &keybd_wo_privacy_wo_kblight_V0;
+		else
+			return &keybd_wo_privacy_wo_kblight_V1;
+	}
 }
 
 const struct pi3hdx1204_tuning pi3hdx1204_tuning = {
@@ -484,3 +515,20 @@ static void hdmi_hpd_interrupt(enum gpio_signal signal)
 	/* Debounce for 2 msec */
 	hook_call_deferred(&hdmi_hpd_handler_data, (2 * MSEC));
 }
+
+void board_set_current_limit(void)
+{
+	const int no_battery_current_limit_override_ma = 6000;
+	/*
+	 * When there is no battery, override charger current limit to
+	 * prevent brownout during boot.
+	 */
+	if (battery_is_present() == BP_NO) {
+		ccprints("No Battery Found - Override Current Limit to %dmA",
+			 no_battery_current_limit_override_ma);
+		charger_set_input_current_limit(
+			CHARGER_SOLO, no_battery_current_limit_override_ma);
+	}
+}
+DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, board_set_current_limit,
+	     HOOK_PRIO_INIT_EXTPOWER);

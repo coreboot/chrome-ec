@@ -2,34 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-# TODO(sjg): Not USB-C: perhaps we should have a 'power' thing at the top level?
-config PLATFORM_EC_USB_A_PORT_COUNT
-	int "Number of USB-A ports"
-	default 0
-	help
-	  This sets the number of USB-A ports on the device. These ports do
-	  not support USB Power Delivery features but can be used to power
-	  external devices (according to the USB 3 spec, not the Battery Charger
-	  standard) and to charge devices slowly if power is enabled to them.
-
-config PLATFORM_EC_USB_PORT_POWER_DUMB
-	bool "Simple control of power to USB-A ports"
-	depends on PLATFORM_EC_USB_A_PORT_COUNT > 0
-	default y
-	help
-	  Enable this to provide simple control of the power to USB ports
-	  using GPIOs. To use this your board code must provide a
-	  usb_port_enable[] array with the GPIOs to use for each port. This
-	  implements the EC_CMD_USB_CHARGE_SET_MODE host command and provides
-	  a 'usbchargemode' console command.
-
-config PLATFORM_EC_USB_PORT_POWER_DUMB_CUSTOM_HOOK
-	bool "Simple control of power to USB-A ports"
-	depends on PLATFORM_EC_USB_PORT_POWER_DUMB
-	help
-	  Enable this if your board does not want to use the default S3 hooks
-	  from USB_PORT_POWER_DUMB.
-
 menuconfig PLATFORM_EC_USBC
 	bool "USB Type-C"
 	default y if PLATFORM_EC_BATTERY
@@ -41,6 +13,15 @@ menuconfig PLATFORM_EC_USBC
 	  over USB). The EC is also responsible for discovering the capabilities
 	  of attached USB-C partners and enabling alternate operational modes,
 	  including Display Port, Thunderbolt, and USB4.
+
+rsource "Kconfig.retimer"
+rsource "Kconfig.pd_int_shared"
+rsource "Kconfig.pd_meas_vbus"
+rsource "Kconfig.pd_frs"
+rsource "Kconfig.pd_discharge"
+rsource "Kconfig.pd_vbus_detection"
+rsource "Kconfig.pd_console_cmd"
+rsource "Kconfig.pd_usbc_device_type"
 
 if PLATFORM_EC_USBC
 
@@ -56,59 +37,6 @@ config PLATFORM_EC_CHARGER_INPUT_CURRENT
 	  voltage, and the maximum power of the running system. For type-C
 	  chargers, this should be set to 512 mA in order to not brown-out
 	  low-current USB charge ports in accordance with USB-PD r3.0 Sec. 7.3
-
-menuconfig PLATFORM_EC_BOOT_AP_POWER_REQUIREMENTS
-	bool "Power requirements to boot AP"
-	default y
-	help
-	  Power thresholds for AP boot.
-	  If one of the following conditions is met, EC boots AP:
-	   1. Battery charge >= CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON.
-	   2. AC power >= CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON.
-	   3. Battery charge >= CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC
-	    and
-	    AC power >= CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT.
-
-if PLATFORM_EC_BOOT_AP_POWER_REQUIREMENTS
-
-config PLATFORM_EC_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
-	int "Minimal battery level to boot AP without AC"
-	depends on PLATFORM_EC_BATTERY
-	default 3
-	help
-	  Sets the minimum battery capacity, as a percentage, needed to boot
-	  the AP when AC power is not supplied.
-
-config PLATFORM_EC_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC
-	int "Minimal battery level to boot AP with AC"
-	depends on PLATFORM_EC_BATTERY && PLATFORM_EC_CHARGE_MANAGER
-	default 1
-	help
-	  Sets the minimum battery capacity, as a percentage, needed to boot
-	  the AP when AC power is supplied. The AC power supplied must also
-	  be greater than CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT.
-
-config PLATFORM_EC_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT
-	int "Minimal AC power to boot AP with battery"
-	depends on PLATFORM_EC_BATTERY && PLATFORM_EC_CHARGE_MANAGER
-	default 15000
-	help
-	  Sets the minimum power, in milliwatts, supplied by an external
-	  charger required to boot the AP when the battery capacity is also
-	  above CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON_WITH_AC.
-
-config PLATFORM_EC_CHARGER_MIN_POWER_MW_FOR_POWER_ON
-	int "Minimal AC power to boot AP without battery"
-	depends on PLATFORM_EC_CHARGE_MANAGER
-	default 15000
-	help
-	  Sets the minimum power, in milliwatts, supplied by an external
-	  charger requires to boot the AP when no battery is present or
-	  under dead battery conditions. If the AP requires greater than
-	  15W to boot, check the
-	  CONFIG_PLATFORM_EC_CHARGER_LIMIT_POWER_THRESH_CHG_MW setting.
-
-endif # PLATFORM_EC_BOOT_AP_POWER_REQUIREMENTS
 
 config PLATFORM_EC_USBC_OCP
 	bool
@@ -158,82 +86,6 @@ config PLATFORM_EC_USB_MS_EXTENDED_COMPAT_ID_DESCRIPTOR
 	  ID Feature descriptor so that Windows will know to load its WINUSB
 	  driver.
 
-config PLATFORM_EC_USBC_RETIMER_INTEL_BB
-	bool "Support Intel Burnside Bridge retimer"
-	help
-	  Enable this to support the Intel Burnside Bridge Thunderbolt / USB /
-	  DisplayPort retimer.
-
-	  Intel Burnside Bridge is a Type-C multi-protocol retimer to be used
-	  in on-board applications. Burnside Bridge offers the ability to latch
-	  protocol signals into on-chip memory before retransmitting them
-	  onwards. It can be used to extend the physical length of the system
-	  without increasing high-frequency jitter.
-
-	  Burnside Bridge supports spec compliant retimer of following
-	  protocols:
-
-	    - Display Port: four unidirectional DP lanes
-	    - USB3.1 Gen1/2: one bi-directional USB lane
-	    - Thunderbolt: two bi-directional CIO lanes
-	    - Multifunction Display (MFD): two unidirectional lanes of DP and
-	      one bidirectional lane of USB3.1 Gen1/2
-
-config PLATFORM_EC_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
-	bool "Use runtime configuration of Intel Burnside Bridge"
-	depends on PLATFORM_EC_USBC_RETIMER_INTEL_BB
-	default y
-	help
-	  Enable this to allow run-time configuration of the Burnside Bridge
-	  driver structure. This makes the bb_controls[] array writable, i.e.
-	  not const. It should be declared as such in the board config.
-
-	  This is useful when the board has runtime information that changes
-	  the configuration, such as Chromium OS Board Info (CBI set in the
-	  factory. Without this, multiple EC images would need to be installed
-	  depending on the board.
-
-config PLATFORM_EC_USBC_RETIMER_ANX7451
-	bool "Support Analogix ANX7451 10G Active Mux and Retimer"
-	help
-	  ANX7451 is a 4x4 re-timing mux capable of switching DisplayPort (DP)
-	  and USB3.2 Gen 2 10Gbps signals to support a single USB Type-C port.
-	  ANX7451 has built-in re-timers to recover both the USB and DP signals
-	  with loss compensation of 23dB for USB and up to 27dB for DP.
-
-config PLATFORM_EC_USBC_RETIMER_PS8811
-	bool "Support Parade PS8811 Single Port USB 3.1 Gen 2 10G Retimer"
-	help
-	  The PS8811 is a one-port bidirectional USB 3.1 Gen 2 retimer that
-	  integrates the UniEye equalizer and a retimer to re-condition USB 3.1
-	  signals for long media link applications. It supports USB 3.1 Gen 2
-	  with operation speed up to 10Gbps as well as Gen 1 operation at 5Gbps.
-
-config PLATFORM_EC_USBC_RETIMER_PS8818
-	bool "Parade PS8818 USB Type-C Retimer for USB and DP Alternate Mode"
-	help
-	  PS8818 is a 10Gbps retimer for Type-C applications with the
-	  integrated USB3.1 and DisplayPort alternate mode port.
-
-config PLATFORM_EC_USBC_RETIMER_KB800X
-	bool "Enable KB800X retimer"
-	help
-	  The KB8001 is a Universal Serial Bus (USB) Type-C 40 Gb/s multiprotocol
-	  switch and bidirectional Bit-Level Retimer (BLR) which supports:
-	    - Display Port: four unidirectional DP lanes
-	    - USB3.1 Gen1/2: one bi-directional USB lane
-	    - USB4/Thunderbolt: two bi-directional CIO lanes
-	    - Multifunction Display (MFD): two unidirectional lanes of DP and
-	      one bidirectional lane of USB3.1 Gen1/2
-
-config PLATFORM_EC_KB800X_CUSTOM_XBAR
-	bool "Use custom remapping of HSIO XBAR"
-	depends on PLATFORM_EC_USBC_RETIMER_KB800X
-	default n
-	help
-	  Enable this to allow using a custom crossbar configuration for the HSIO
-	  lanes.
-
 menuconfig PLATFORM_EC_USB_POWER_DELIVERY
 	bool "USB Type-C Power Delivery (PD)"
 	default y
@@ -250,45 +102,6 @@ menuconfig PLATFORM_EC_USB_POWER_DELIVERY
 	  those devices.
 
 if PLATFORM_EC_USB_POWER_DELIVERY
-
-menuconfig PLATFORM_EC_USB_PD_INT_SHARED
-	bool "USB-C ports share PD interrupts"
-	select HAS_TASK_PD_INT_SHARED
-	help
-	  This enables processing of shared interrupts where multiple ports
-	  share a single IRQ on the EC. Only one shared IRQ is supported,
-	  but any combination of ports can be serviced by that one IRQ.
-
-if PLATFORM_EC_USB_PD_INT_SHARED
-
-config PLATFORM_EC_USB_PD_PORT_0_SHARED
-	bool "Port 0 IRQ is shared"
-	help
-	  Enable handling of port 0 PD interrupts signalled by an IRQ that is
-	  shared by every other port enabled in this section.
-
-config PLATFORM_EC_USB_PD_PORT_1_SHARED
-	bool "Port 1 IRQ is shared"
-	depends on PLATFORM_EC_USB_PD_PORT_MAX_COUNT > 1
-	help
-	  Enable handling of port 1 PD interrupts signalled by an IRQ that is
-	  shared by every other port enabled in this section.
-
-config PLATFORM_EC_USB_PD_PORT_2_SHARED
-	bool "Port 2 IRQ is shared"
-	depends on PLATFORM_EC_USB_PD_PORT_MAX_COUNT > 2
-	help
-	  Enable handling of port 2 PD interrupts signalled by an IRQ that is
-	  shared by every other port enabled in this section.
-
-config PLATFORM_EC_USB_PD_PORT_3_SHARED
-	bool "Port 3 IRQ is shared"
-	depends on PLATFORM_EC_USB_PD_PORT_MAX_COUNT > 3
-	help
-	  Enable handling of port 3 PD interrupts signalled by an IRQ that is
-	  shared by every other port enabled in this section.
-
-endif # PLATFORM_EC_USB_PD_INT_SHARED
 
 config PLATFORM_EC_USB_PD_HOST_CMD
 	bool "Host commands related to USB Power Delivery"
@@ -376,41 +189,6 @@ config PLATFORM_EC_USB_PD_5V_CHARGER_CTRL
 	  The function charger_is_sourcing_otg_power is called
 	  to determine if VBUS is enabled on the source port.
 
-choice "Measuring VBUS voltage"
-	prompt "Select how VBUS voltage is measured"
-
-config PLATFORM_EC_USB_PD_VBUS_MEASURE_NOT_PRESENT
-	bool "VBUS voltage cannot be read"
-	help
-	  Enable this if the board does not provide any mechanism for the EC to
-	  read the analog VBUS voltage.
-
-config PLATFORM_EC_USB_PD_VBUS_MEASURE_CHARGER
-	bool "On-board charger supports VBUS measurement"
-	help
-	  Enable this if the VBUS voltage can be read using a charger on the
-	  board.
-
-config PLATFORM_EC_USB_PD_VBUS_MEASURE_TCPC
-	bool "Type-C Port Controller supports VBUS measurement"
-	help
-	  Enable this if the VBUS voltage can be read using the on-board
-	  TCPC.
-
-config PLATFORM_EC_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
-	bool "VBUS on each port is measured using an ADC channel"
-	help
-	  Enable this if there is a separate ADC channel for each USB-C VBUS
-	  voltage.
-
-config PLATFORM_EC_USB_PD_VBUS_MEASURE_BY_BOARD
-	bool "VBUS on each port is measured per board specific"
-	help
-	  Enable this if there are different VBUS measurement approaches on
-	  the board, and also `board_get_vbus_voltage()` has to be implemented.
-
-endchoice  # Measuring VBUS voltage
-
 config PLATFORM_EC_USBC_VCONN
 	bool "Support USB Type-C VCONN"
 	default y
@@ -430,47 +208,6 @@ config PLATFORM_EC_USB_PD_DUAL_ROLE
 	  operation. This means that the port can accept power (e.g. to charge
 	  up its battery), or send out power to an attached device on the same
 	  port.
-
-config PLATFORM_EC_USB_PD_FRS
-	bool "Support Fast Role Swap protocol"
-	help
-	  Enables the protocol side of Fast Role Swap (FRS). This allows the
-	  device to switch from a SNK to a SRC (or vice versa) based on
-	  communication with the partner device.
-
-	  For this to work the trigger must be implemented in either the
-	  Type-C Port Controller (TCPC) or Power Path Controller (PPC).
-
-	  FRS differs from the traditional power-role swap in that FRS
-	  guarantees there is no interruption of power nor disruption of data
-	  communication to any downstream devices (such as devices connected
-	  to a USB-C hub or dock).
-
-if PLATFORM_EC_USB_PD_FRS
-
-choice "Trigger implementation"
-	prompt "Select where the trigger is implemented"
-	help
-	  The Fast Role Swap (protocol requires that a trigger be implemented to
-	  initiate the swap. Use this option to select which of the available
-	  options should be used.
-
-config PLATFORM_EC_USB_PD_FRS_PPC
-	bool "PPC"
-	depends on PLATFORM_EC_USBC_PPC
-	help
-	  Enable this if the Fast Role Swap trigger is implemented in the
-	  Power Path Controller (PPC).
-
-config PLATFORM_EC_USB_PD_FRS_TCPC
-	bool "TCPC"
-	help
-	  Enable this if the Fast Role Swap trigger is implemented in the
-	  Type-C Port Controller (TCPC).
-
-endchoice # Trigger implementation
-
-endif # PLATFORM_EC_USB_PD_FRS
 
 config PLATFORM_EC_USB_PD_DPS
 	bool "Board can support Dynamic PDO Selection"
@@ -492,39 +229,6 @@ config PLATFORM_EC_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	  board supports toggling of the power role autonomously. When this is
 	  disabled, the USB power delivery task is responsible for manually
 	  toggling the power role.
-
-config PLATFORM_EC_USB_PD_DISCHARGE
-	bool "Board can discharge VBUS"
-	default y
-	help
-	  Enable this if the board can enable VBUS discharge (eg. through a
-	  GPIO-controlled discharge circuit, or through port controller
-	  registers) to discharge VBUS rapidly on disconnect
-
-choice "Discharge method"
-	prompt "Select the discharge method"
-	depends on PLATFORM_EC_USB_PD_DISCHARGE
-
-config PLATFORM_EC_USB_PD_DISCHARGE_GPIO
-	bool "GPIO control"
-	help
-	  Enable this if the discharge circuit is controlled by a GPIO
-
-	  TODO: How to specify the GPIO?
-
-config PLATFORM_EC_USB_PD_DISCHARGE_TCPC
-	bool "Discharge circuit is provided by the TCPC"
-	help
-	  Enable this if the discharge circuit is provided by Power-Delivery
-	  resistors on the USB Type-C Port Controller (TCPC).
-
-config PLATFORM_EC_USB_PD_DISCHARGE_PPC
-	bool "Discharge circuit is provided by the PPC"
-	help
-	  Enable this if the discharge circuit is using Power Delivery
-	  resistors on the Power Path Controller.
-
-endchoice  # Discharge method
 
 config PLATFORM_EC_USB_PD_REV30
 	bool "USB PD Rev3.0 functionality"
@@ -614,35 +318,6 @@ config PLATFORM_EC_USB_PD_DATA_RESET_MSG
 	  mandatory for products supporting USB4 but optional for other PD 3.0
 	  products.
 
-choice PLATFORM_EC_USB_PD_VBUS_DETECTION_TYPE
-	prompt "Select the method to detect VBUS"
-	default PLATFORM_EC_USB_PD_VBUS_DETECT_NONE
-
-config PLATFORM_EC_USB_PD_VBUS_DETECT_NONE
-	bool "No way to detect VBUS"
-	help
-	  Choose this option if it is not possible to detect VBUS. This causes
-	  the `check_vbus_level` function pointer in the driver struct to be NULL.
-
-config PLATFORM_EC_USB_PD_VBUS_DETECT_TCPC
-	bool "TCPC detects VBUS"
-	help
-	  Choose this option if the TCPC can detect the presence of VBUS
-
-config PLATFORM_EC_USB_PD_VBUS_DETECT_CHARGER
-	bool "Charger detects VBUS"
-	help
-	  Choose this option if the battery charger can detect the presence
-	  of VBUS
-
-config PLATFORM_EC_USB_PD_VBUS_DETECT_PPC
-	bool "PPC detects VBUS"
-	help
-	  Choose this option if the Power-Path Controller (PPC) can detect the
-	  presence of VBUS
-
-endchoice  # PLATFORM_EC_USB_PD_VBUS_DETECTION_TYPE
-
 config PLATFORM_EC_USB_TYPEC_SM
 	bool "Type-C (TC) physical-layer state machine"
 	default y
@@ -697,86 +372,6 @@ config PLATFORM_EC_USB_PD_LOGGING
 	  The log events are stored in a circular buffer, each one being a
 	  struct event_log_entry.
 
-menuconfig PLATFORM_EC_USB_PD_CONSOLE_CMD
-	bool "Enable USB PD console commands"
-	default y if PLATFORM_EC_USB_PD_ALT_MODE_DFP
-	help
-	  Enables various USB-C PD related console commands.
-
-if PLATFORM_EC_USB_PD_CONSOLE_CMD
-
-config PLATFORM_EC_CONSOLE_CMD_USB_PD_PE
-	bool "Console command: pe"
-	default y
-	help
-	  This command dumps information about the USB PD alternate mode options
-	  discovered from the partner device. It can be useful for debugging.
-
-	  Example: pe 1 dump
-	     IDENT SOP:
-
-	             [ID Header] 2c000bda :: AMA, VID:0bda
-	             [Cert Stat] 00000000
-	             [2] 00000209    [3] 11000f09
-	     IDENT SOP':
-	             [ID Header] 1c000489 :: PCable, VID:0489
-	             [Cert Stat] 000001c6
-	             [2] f6810000    [3] 11082051
-	     SVID[0]: ff01 MODES: [1] 000c0045
-	     MODE[1]: svid:ff01 caps:000c0045
-
-config PLATFORM_EC_CONSOLE_CMD_USB_PD_CABLE
-	bool "Console command: pdcable"
-	default y
-	help
-	  This commands shows the USB cable charactistics as detected from the
-	  device. It can be useful for debugging problems with cables and the
-	  device's response to them.
-
-	  Example: pdcable 1
-	     Cable Type: Passive
-	     Cable Rev: 1.0
-	     Connector Type: 2
-	     Cable Current: 5A
-	     USB Superspeed Signaling support: 1
-	     Rounded support: No
-	     Optical cable: No
-	     Retimer support: No
-	     Link training: Bi-directional
-	     Thunderbolt cable type: Passive
-
-endif  # PLATFORM_EC_USB_PD_CONSOLE_CMD
-
-choice "USB-C device type"
-	prompt "Select the USB-C device type"
-	default PLATFORM_EC_USB_DRP_ACC_TRYSRC
-
-config PLATFORM_EC_USB_VPD
-	bool "VCONN-Powered Device"
-	help
-	  This enables support for supplying power to devices that accept power
-	  over the USB VCONN line.
-
-	  See here for details:
-
-	  https://www.usb.org/sites/default/files/D1T2-3a%20-%20CTVPDs%20and%20Making%20Your%20Own%20USB-C%20Thingamajig.pdf
-
-config PLATFORM_EC_USB_CTVPD
-	bool "Charge-Through VCONN-Powered Device"
-	help
-	  This enables support for supplying power to devices, with a circuit
-	  that deals with this without needing the involvement of the main
-	  device.
-
-config PLATFORM_EC_USB_DRP_ACC_TRYSRC
-	bool "Dual-Role Port, Audio Accessory, and Try.SRC Device"
-	help
-	  This is the most flexible option, allowing the port to operate in
-	  a dual-role capacity, so that power can be accepted or supplied on
-	  a port.
-
-endchoice  # USB-C device type
-
 config PLATFORM_EC_USB_PD_TRY_SRC
 	bool "Enable Try.SRC mode"
 	depends on PLATFORM_EC_USB_DRP_ACC_TRYSRC
@@ -804,6 +399,21 @@ config PLATFORM_EC_USB_PD_TBT_COMPAT_MODE
 	help
 	  Enable this to allow entering into Thunderbolt-compatible mode between
 	  two port partners. This does not require that USB4 mode be enabled.
+
+config PLATFORM_EC_USB_PD_STARTUP_DELAY_MS
+  int "PD thread startup delay time in milliseconds"
+  default 0
+  help
+    Have the USB-PD thread(s) delay this many milliseconds after startup
+    before beginning regular processing. This can be helpful if external
+    processes need to happen shortly after reset and PD initialization may
+    interfere with them.
+
+    For instance, if the EC enters programming mode when it receives a special
+    signal but requires USB-PD power in order to remain alive, PD
+    initialization can cause the system to reset and interrupt programming.
+    Adding a delay to startup can provide a wider window to enter programming
+    mode and help prevent such issues.
 
 endif  # PLATFORM_EC_USB_POWER_DELIVERY
 
@@ -891,6 +501,13 @@ config PLATFORM_EC_USBC_PPC_NX20P3483
 	help
 	  The NX20P3483 is a product with combined multiple power switches
 	  and a LDO for USB PD application.
+
+config PLATFORM_EC_USBC_PPC_RT1739
+	bool "Richtek RT1739 Type-C Power Path Controller"
+	help
+	  RT1739 is a highly integrated USB-C Bi-Directional Power Mux and
+	  Protection IC which includes IEC-61000-4-2 ESD protection cell for
+	  VBUS/CC/SBU/DP/DM.
 
 config PLATFORM_EC_USBC_PPC_SN5S330
 	bool "TI SN5S330 PD 3.0 power mux"

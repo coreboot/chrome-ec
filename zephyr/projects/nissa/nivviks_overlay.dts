@@ -6,6 +6,12 @@
 #include <cros/thermistor/thermistor.dtsi>
 
 / {
+	aliases {
+		gpio-wp = &gpio_ec_wp_odl;
+		int-wp = &int_wp_l;
+		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
+	};
+
 	batteries {
 		default_battery: lgc {
 			compatible = "lgc,ap18c8k";
@@ -139,18 +145,6 @@
 		};
 	};
 
-	/*
-	 * Alias kblist to correct node.
-	 * It would be nice to use alias here, but the code
-	 * uses DT_NODELABEL to directly reference the node label.
-	 */
-	named-pwms {
-		compatible = "named-pwms";
-
-		kblight: pwm_kb_bl {
-		};
-	};
-
 	usbc {
 		port0 {
 			bc12 {
@@ -180,20 +174,16 @@
 	status = "okay";
 };
 
-/* Power switch logic input pads */
-/* LID_OPEN_OD */
-&psl_in1 {
-	flag = <NPCX_PSL_RISING_EDGE>;
-};
-
-/* ACOK_EC_OD */
-&psl_in2 {
-	flag = <NPCX_PSL_RISING_EDGE>;
-};
-
-/* GSC_EC_PWR_BTN_ODL */
-&psl_in3 {
-	flag = <NPCX_PSL_FALLING_EDGE>;
+&adc_ec_vsense_pp3300_s5 {
+	/*
+	 * Voltage divider on input has 47k upper and 220k lower legs with
+	 * 2714 mV full-scale reading on the ADC. Apply the largest possible
+	 * multiplier (without overflowing int32) to get the best possible
+	 * approximation of the actual ratio, but derate by a factor of two to
+	 * ensure unexpectedly high values won't overflow.
+	 */
+	mul = <(791261 / 2)>;
+	div = <(651975 / 2)>;
 };
 
 /* Set bus speeds for I2C */
@@ -209,8 +199,6 @@
 		pagesize = <16>;
 		address-width = <8>;
 		timeout = <5>;
-		/* gpio_ec_wp_odl */
-		wp-gpios = <&gpioa 1 GPIO_INPUT>;
 	};
 };
 

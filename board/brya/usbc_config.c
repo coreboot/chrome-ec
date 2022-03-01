@@ -65,12 +65,13 @@ const struct tcpc_config_t tcpc_config[] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_USB_C1_TCPC,
-			.addr_flags = PS8751_I2C_ADDR1_FLAGS,
+			.addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
 		},
 		.drv = &ps8xxx_tcpm_drv,
 		.flags = TCPC_FLAGS_TCPCI_REV2_0 |
 			 TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V |
-			 TCPC_FLAGS_CONTROL_VCONN,
+			 TCPC_FLAGS_CONTROL_VCONN |
+			 TCPC_FLAGS_CONTROL_FRS,
 	},
 	[USBC_PORT_C2] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -100,6 +101,7 @@ struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		.i2c_port = I2C_PORT_USB_C0_C2_PPC,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.frs_en = IOEX_USB_C0_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C1] = {
@@ -110,11 +112,8 @@ struct ppc_config_t ppc_chips[] = {
 	},
 	[USBC_PORT_C2] = {
 		.i2c_port = I2C_PORT_USB_C0_C2_PPC,
-		/*
-		 * b/179987870
-		 * schematics I2C map says ADDR3
-		 */
 		.i2c_addr_flags = SYV682X_ADDR2_FLAGS,
+		.frs_en = IOEX_USB_C2_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 };

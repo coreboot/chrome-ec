@@ -8,6 +8,7 @@
 #include "keyboard_8042_sharedlib.h"
 #include "keyboard_scan.h"
 #include "ec_commands.h"
+#include "gpio.h"
 #include <host_command.h>
 #include <util.h>
 #include <hooks.h>
@@ -63,6 +64,7 @@ static const uint16_t action_scancodes[] = {
 	[TK_PRIVACY_SCRN_TOGGLE] = SCANCODE_PRIVACY_SCRN_TOGGLE,
 	[TK_MICMUTE] = SCANCODE_MICMUTE,
 	[TK_KBD_BKLIGHT_TOGGLE] = SCANCODE_KBD_BKLIGHT_TOGGLE,
+	[TK_MENU] = SCANCODE_MENU,
 };
 
 static const struct ec_response_keybd_config *vivaldi_keybd;

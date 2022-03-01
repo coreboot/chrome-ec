@@ -31,17 +31,10 @@ def build(opts):
     with open(opts.metrics, 'w') as f:
         f.write(json_format.MessageToJson(metrics))
 
-    targets = [
-        'projects/posix-ec',
-        'projects/volteer/volteer',
-    ]
-    for target in targets:
-        print('Building {}'.format(target))
-        cmd = ['zmake', '-D', 'configure', '-b', target]
-        rv = subprocess.run(cmd, cwd=pathlib.Path(__file__).parent).returncode
-        if rv != 0:
-            return rv
-    return 0
+    cmd = ['zmake', '-D', 'build', '-a']
+    if opts.code_coverage:
+        cmd.append('--coverage')
+    return subprocess.run(cmd, cwd=pathlib.Path(__file__).parent).returncode
 
 
 def bundle(opts):
@@ -78,7 +71,7 @@ def bundle_coverage(opts):
     bundle_dir = get_bundle_dir(opts)
     zephyr_dir = pathlib.Path(__file__).parent
     platform_ec = zephyr_dir.resolve().parent
-    build_dir = platform_ec / 'build/zephyr-coverage'
+    build_dir = platform_ec / "build" / "zephyr"
     tarball_name = 'coverage.tbz2'
     tarball_path = bundle_dir / tarball_name
     cmd = ['tar', 'cvfj', tarball_path, 'lcov.info']
@@ -99,12 +92,10 @@ def bundle_firmware(opts):
     zephyr_dir = pathlib.Path(__file__).parent
     platform_ec = zephyr_dir.resolve().parent
     for project in zmake.project.find_projects(zephyr_dir).values():
+        if project.config.is_test:
+            continue
         build_dir = platform_ec / "build" / "zephyr" / project.config.project_name
         artifacts_dir = build_dir / 'output'
-        # TODO(kmshelton): Remove once the build command does not rely
-        # on a pre-defined list of targets.
-        if not artifacts_dir.is_dir():
-            continue
         tarball_name = '{}.firmware.tbz2'.format(project.config.project_name)
         tarball_path = bundle_dir.joinpath(tarball_name)
         cmd = ['tar', 'cvfj', tarball_path, '.']
@@ -136,13 +127,43 @@ def test(opts):
     config_files = zephyr_dir.rglob("**/BUILD.py")
     subprocess.run(["black", "--diff", "--check", *config_files], check=True)
 
-    subprocess.run(['zmake', '-D', 'testall'], check=True)
+    cmd = ['zmake', '-D', 'test', '-a', '--no-rebuild']
+    if opts.code_coverage:
+        cmd.append('--coverage')
+    rv = subprocess.run(cmd, check=True).returncode
+    if rv:
+        return rv
+    if opts.code_coverage:
+        platform_ec = zephyr_dir.parent
+        build_dir = platform_ec / "build" / "zephyr"
+        # Merge lcov files here because bundle failures are "infra" failures.
+        cmd = [
+            "/usr/bin/lcov",
+            "-o",
+            build_dir / "fullpaths.info",
+            "--rc",
+            "lcov_branch_coverage=1",
+            "-a", build_dir / 'all_tests.info',
+            "-a", build_dir / 'all_builds.info',
+        ]
+        rv = subprocess.run(cmd, cwd=pathlib.Path(__file__).parent).returncode
+        if rv != 0:
+            return rv
+        # Make filenames relative to platform/ec
+        cmd = ["sed", "-e", "s|^SF:.*/platform/ec/|SF:|"]
+        with open(build_dir / "fullpaths.info") as infile, open(
+            build_dir / "lcov.info", "w"
+        ) as outfile:
+            rv = subprocess.run(
+                cmd,
+                cwd=pathlib.Path(__file__).parent,
+                stdin=infile,
+                stdout=outfile,
+            ).returncode
+            if rv != 0:
+                return rv
 
-    # Run the test with coverage also, as sometimes they behave differently.
-    platform_ec = zephyr_dir.parent
-    build_dir = platform_ec / 'build/zephyr-coverage'
-    return subprocess.run(
-        ['zmake', '-D', 'coverage', build_dir], cwd=platform_ec).returncode
+    return 0
 
 
 def main(args):
@@ -184,7 +205,7 @@ def parse_args(args):
         '--output-dir',
         required=False,
         help=
-        'Full pathanme for the directory in which to bundle build artifacts.',
+        'Full pathname for the directory in which to bundle build artifacts.',
     )
 
     parser.add_argument(

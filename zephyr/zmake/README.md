@@ -6,7 +6,7 @@
 
 ## Usage
 
-**Usage:** `zmake [-h] [--checkout CHECKOUT] [-D] [-j JOBS] [--goma] [-l {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [-L] [--log-label] [--modules-dir MODULES_DIR] [--zephyr-base ZEPHYR_BASE] subcommand ...`
+**Usage:** `zmake [-h] [--checkout CHECKOUT] [-j JOBS] [--goma] [-l {DEBUG,INFO,WARNING,ERROR,CRITICAL} | -D] [-L] [--log-label] [--modules-dir MODULES_DIR] [--zephyr-base ZEPHYR_BASE] subcommand ...`
 
 Chromium OS's meta-build tool for Zephyr
 
@@ -22,10 +22,10 @@ Chromium OS's meta-build tool for Zephyr
 |---|---|
 | `-h`, `--help` | show this help message and exit |
 | `--checkout CHECKOUT` | Path to ChromiumOS checkout |
-| `-D`, `--debug` | Turn on debug features (e.g., stack trace, verbose logging) |
 | `-j JOBS`, `--jobs JOBS` | Degree of multiprogramming to use |
 | `--goma` | Enable hyperspeed compilation with Goma! (Googlers only) |
-| `-l LOG_LEVEL`, `--log-level LOG_LEVEL` | Set the logging level (default=INFO) |
+| `-l {DEBUG,INFO,WARNING,ERROR,CRITICAL}`, `--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}` | Set the logging level (default=INFO) |
+| `-D`, `--debug` | Alias for --log-level=DEBUG |
 | `-L`, `--no-log-label` | Turn off logging labels |
 | `--log-label` | Turn on logging labels |
 | `--modules-dir MODULES_DIR` | The path to a directory containing all modules needed.  If unspecified, zmake will assume you have a Chrome OS checkout and try locating them in the checkout. |
@@ -35,13 +35,39 @@ Chromium OS's meta-build tool for Zephyr
 
 ### zmake configure
 
-**Usage:** `zmake configure [-h] [-t TOOLCHAIN] [--bringup] [--clobber] [--allow-warnings] [-B BUILD_DIR] [-b] [--test] project_name_or_dir [-c]`
+**Usage:** `zmake configure [-h] [-b] [--test] [-t TOOLCHAIN] [--bringup] [--clobber] [--allow-warnings] [-B BUILD_DIR] [-c] (-a | --host-tests-only | project_name [project_name ...])`
 
 #### Positional Arguments
 
 |   |   |
 |---|---|
-| `project_name_or_dir` | Path to the project to build |
+| `project_name` | Name(s) of the project(s) to build |
+
+#### Optional Arguments
+
+|   |   |
+|---|---|
+| `-h`, `--help` | show this help message and exit |
+| `-b`, `--build` | Run the build after configuration |
+| `--test` | Test the .elf file after building |
+| `-t TOOLCHAIN`, `--toolchain TOOLCHAIN` | Name of toolchain to use |
+| `--bringup` | Enable bringup debugging features |
+| `--clobber` | Delete existing build directories, even if configuration is unchanged |
+| `--allow-warnings` | Do not treat warnings as errors |
+| `-B BUILD_DIR`, `--build-dir BUILD_DIR` | Root build directory, project files will be in ${build_dir}/${project_name} |
+| `-c`, `--coverage` | Enable CONFIG_COVERAGE Kconfig. |
+| `-a`, `--all` | Select all projects |
+| `--host-tests-only` | Select all test projects |
+
+### zmake build
+
+**Usage:** `zmake build [-h] [-t TOOLCHAIN] [--bringup] [--clobber] [--allow-warnings] [-B BUILD_DIR] [-c] (-a | --host-tests-only | project_name [project_name ...])`
+
+#### Positional Arguments
+
+|   |   |
+|---|---|
+| `project_name` | Name(s) of the project(s) to build |
 
 #### Optional Arguments
 
@@ -52,27 +78,10 @@ Chromium OS's meta-build tool for Zephyr
 | `--bringup` | Enable bringup debugging features |
 | `--clobber` | Delete existing build directories, even if configuration is unchanged |
 | `--allow-warnings` | Do not treat warnings as errors |
-| `-B BUILD_DIR`, `--build-dir BUILD_DIR` | Build directory |
-| `-b`, `--build` | Run the build after configuration |
-| `--test` | Test the .elf file after configuration |
+| `-B BUILD_DIR`, `--build-dir BUILD_DIR` | Root build directory, project files will be in ${build_dir}/${project_name} |
 | `-c`, `--coverage` | Enable CONFIG_COVERAGE Kconfig. |
-
-### zmake build
-
-**Usage:** `zmake build [-h] build_dir [-w]`
-
-#### Positional Arguments
-
-|   |   |
-|---|---|
-| `build_dir` | The build directory used during configuration |
-
-#### Optional Arguments
-
-|   |   |
-|---|---|
-| `-h`, `--help` | show this help message and exit |
-| `-w`, `--fail-on-warnings` | Exit with code 2 if warnings are detected |
+| `-a`, `--all` | Select all projects |
+| `--host-tests-only` | Select all test projects |
 
 ### zmake list-projects
 
@@ -93,24 +102,32 @@ Chromium OS's meta-build tool for Zephyr
 
 ### zmake test
 
-**Usage:** `zmake test [-h] [-c] build_dir`
+**Usage:** `zmake test [-h] [--no-rebuild] [-t TOOLCHAIN] [--bringup] [--clobber] [--allow-warnings] [-B BUILD_DIR] [-c] (-a | --host-tests-only | project_name [project_name ...])`
 
 #### Positional Arguments
 
 |   |   |
 |---|---|
-| `build_dir` | The build directory used during configuration |
+| `project_name` | Name(s) of the project(s) to build |
 
 #### Optional Arguments
 
 |   |   |
 |---|---|
 | `-h`, `--help` | show this help message and exit |
-| `-c`, `--coverage` | Run lcov after running test to generate coverage info file. |
+| `--no-rebuild` | Do not configure or build before running tests. |
+| `-t TOOLCHAIN`, `--toolchain TOOLCHAIN` | Name of toolchain to use |
+| `--bringup` | Enable bringup debugging features |
+| `--clobber` | Delete existing build directories, even if configuration is unchanged |
+| `--allow-warnings` | Do not treat warnings as errors |
+| `-B BUILD_DIR`, `--build-dir BUILD_DIR` | Root build directory, project files will be in ${build_dir}/${project_name} |
+| `-c`, `--coverage` | Enable CONFIG_COVERAGE Kconfig. |
+| `-a`, `--all` | Select all projects |
+| `--host-tests-only` | Select all test projects |
 
 ### zmake testall
 
-**Usage:** `zmake testall [-h] [--clobber]`
+**Usage:** `zmake testall [-h] [--clobber] [-B BUILD_DIR]`
 
 #### Optional Arguments
 
@@ -118,23 +135,7 @@ Chromium OS's meta-build tool for Zephyr
 |---|---|
 | `-h`, `--help` | show this help message and exit |
 | `--clobber` | Delete existing build directories, even if configuration is unchanged |
-
-### zmake coverage
-
-**Usage:** `zmake coverage [-h] [--clobber] build_dir`
-
-#### Positional Arguments
-
-|   |   |
-|---|---|
-| `build_dir` | The build directory used during configuration |
-
-#### Optional Arguments
-
-|   |   |
-|---|---|
-| `-h`, `--help` | show this help message and exit |
-| `--clobber` | Delete existing build directories, even if configuration is unchanged |
+| `-B BUILD_DIR`, `--build-dir BUILD_DIR` | Build directory |
 
 ### zmake generate-readme
 

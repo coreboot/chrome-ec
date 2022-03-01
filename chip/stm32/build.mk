@@ -49,8 +49,9 @@ chip-y+=clock-$(CHIP_FAMILY).o
 ifeq ($(CHIP_FAMILY),$(filter $(CHIP_FAMILY),stm32f0 stm32f3 stm32f4))
 chip-y+=clock-f.o
 endif
+chip-$(CONFIG_FPU)+=fpu.o
 chip-$(CONFIG_SPI)+=spi.o
-chip-$(CONFIG_SPI_CONTROLLER)+=spi_master$(SPI_TYPE).o
+chip-$(CONFIG_SPI_CONTROLLER)+=spi_controller$(SPI_TYPE).o
 chip-$(CONFIG_COMMON_GPIO)+=gpio.o gpio-$(CHIP_FAMILY).o
 chip-$(CONFIG_COMMON_TIMER)+=hwtimer$(TIMER_TYPE).o
 chip-$(CONFIG_I2C)+=i2c-$(CHIP_FAMILY).o
@@ -80,6 +81,9 @@ chip-$(CHIP_FAMILY_STM32F3)+=flash-f.o
 chip-$(CHIP_FAMILY_STM32F4)+=flash-f.o
 endif
 chip-$(CONFIG_ADC)+=adc-$(CHIP_FAMILY).o
+chip-$(CONFIG_DFU_BOOTMANAGER_MAIN)+=dfu_bootmanager_main.o
+chip-$(CONFIG_DFU_BOOTMANAGER_SHARED)+=dfu_bootmanager_shared.o
+chip-$(CONFIG_DFU_RUNTIME)+=usb_dfu_runtime.o
 chip-$(CONFIG_STM32_CHARGER_DETECT)+=charger_detect.o
 chip-$(CONFIG_DEBUG_PRINTF)+=debug_printf.o
 chip-$(CONFIG_OTP)+=otp-$(CHIP_FAMILY).o

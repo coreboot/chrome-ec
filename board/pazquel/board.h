@@ -10,14 +10,6 @@
 
 #include "baseboard.h"
 
-/* TODO(waihong): Remove the following bringup features */
-#define CONFIG_BRINGUP
-#define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands. */
-#define CONFIG_USB_PD_DEBUG_LEVEL 3
-#define CONFIG_CMD_GPIO_EXTENDED
-#define CONFIG_CMD_POWERINDEBUG
-#define CONFIG_I2C_DEBUG
-
 /* Internal SPI flash on NPCX7 */
 #define CONFIG_FLASH_SIZE_BYTES (512 * 1024)  /* 512KB internal spi flash */
 
@@ -72,6 +64,11 @@
 #define GPIO_WP_L GPIO_EC_WP_ODL
 #define GPIO_SWITCHCAP_PG GPIO_SWITCHCAP_GPIO_1
 #define GPIO_ACOK_OD GPIO_CHG_ACOK_OD
+/* Da9313 */
+#define DA9313_I2C_ADDR_FLAGS 0x68
+#define DA9313_REG_PVC_CTRL 0x04
+#define DA9313_PVC_CTRL_PVC_MODE BIT(1)
+#define DA9313_PVC_CTRL_PVC_EN BIT(0)
 
 #ifndef __ASSEMBLER__
 
