@@ -963,14 +963,12 @@ static enum vendor_cmd_rc ccd_open(struct vendor_cmd_params *p)
 		 * console. Reject both unless CCD_CAP_OPEN_FROM_USB is enabled.
 		 */
 	} else {
-#ifndef CONFIG_CCD_OPEN_PREPVT
 		/*
 		 * - Battery is present
 		 * - Either not in developer mode or the command came from USB
 		 */
 		why_denied = "open from AP in devmode or remove batt";
 		goto denied;
-#endif
 	}
 
 	/* Fail and abort if already checking physical presence */
