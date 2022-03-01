@@ -11,6 +11,7 @@
 #include "hooks.h"
 #include "registers.h"
 #include "system.h"
+#include "timer.h"
 #include "tpm_registers.h"
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
@@ -44,6 +45,15 @@ void pmu_check_tpm_rst(void)
 	}
 }
 
+void clear_ds_disable(void)
+{
+	if (!disable_ds_temp)
+		return;
+	CPRINTS("DDS: clear");
+	disable_ds_temp = false;
+}
+DECLARE_DEFERRED(clear_ds_disable);
+
 /*
  * Disable deep sleep during the next TPM_RST_L pulse
  *
@@ -62,6 +72,11 @@ static enum vendor_cmd_rc vc_ds_disable_temp(enum vendor_cmd_cc code,
 	if (input_size)
 		return VENDOR_RC_BOGUS_ARGS;
 
+	/*
+	 * Clear this if the AP doesn't turn off in 10 seconds, since
+	 * that probably means suspend was aborted.
+	 */
+	hook_call_deferred(&clear_ds_disable_data, 10 * SECOND);
 	disable_ds_temp = true;
 	CPRINTS("dis DS");
 
@@ -119,6 +134,9 @@ static void deferred_set_ap_off(void)
 	 * support.  It happens to be correlated with ARM vs x86 at present.
 	 */
 	if (disable_ds_temp) {
+		/* Cancel the clear ds disable call since the AP turned off. */
+		hook_call_deferred(&clear_ds_disable_data, -1);
+
 		CPRINTS("Block DS");
 		disable_deep_sleep();
 		/*
@@ -163,11 +181,12 @@ void set_ap_on(void)
 		CPRINTS("set TPM wake");
 		gpio_set_wakepin(GPIO_TPM_RST_L, GPIO_HIB_WAKE_LOW);
 	}
+
 	/*
 	 * disable_ds_temp only survives one TPM_RST_L pulse. Clear it when
 	 * the AP turns back on.
 	 */
-	disable_ds_temp = false;
+	hook_call_deferred(&clear_ds_disable_data, 0);
 }
 
 static uint8_t waiting_for_ap_reset;
