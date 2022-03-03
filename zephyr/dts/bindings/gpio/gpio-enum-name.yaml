@@ -34,7 +34,6 @@ properties:
       - GPIO_EC_PMIC_EN_ODL
       - GPIO_EC_PMIC_WATCHDOG_L
       - GPIO_EC_PROCHOT_IN_L
-      - GPIO_EC_SPI_OE_MECC
       - GPIO_ENABLE_BACKLIGHT
       - GPIO_ENABLE_BACKLIGHT_L
       - GPIO_ENTERING_RW
@@ -49,7 +48,6 @@ properties:
       - GPIO_EN_S5_RAILS
       - GPIO_EN_USB_A_5V
       - GPIO_IMVP9_VRRDY_OD
-      - GPIO_KBD_KSO2
       - GPIO_LID_ACCEL_INT_L
       - GPIO_LID_OPEN
       - GPIO_PACKET_MODE_EN

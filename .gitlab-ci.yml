@@ -43,7 +43,7 @@ before_script:
   - test -d "${MODULES_DIR}/cryptoc" || git clone --depth 1 -b main https://chromium.googlesource.com/chromiumos/third_party/cryptoc "${MODULES_DIR}/cryptoc"
   - ln -s "$(pwd)" "${MODULES_DIR}/ec"
   - python3 -V  # Print out python version for debugging
-  - python3 -m pip install zephyr/zmake --user
+  - python3 -m pip install 'zephyr/zmake[tests]' --user
   - python3 -m pip install pyyaml packaging
   - export BUILD_DIR=build
   - export PATH="$PATH:$HOME/.local/bin"
@@ -70,9 +70,9 @@ seed_cache:
   stage: build
   needs: ["seed_cache"]
   script:
-    - zmake --zephyr-base "${ZEPHYR_BASE}"
-      --modules-dir "${MODULES_DIR}" -l DEBUG configure -b
-      -B "${BUILD_DIR}/${PROJECT}" -t ${TOOLCHAIN:-zephyr}
+    - zmake -j8 --zephyr-base "${ZEPHYR_BASE}"
+      --modules-dir "${MODULES_DIR}" -l DEBUG build
+      -B "${BUILD_DIR}" -t ${TOOLCHAIN:-zephyr}
       "${PROJECT}"
     - for b in "${BUILD_DIR}/${PROJECT}"/build-* ; do
       bdir=$(basename ${b}) ;
@@ -96,9 +96,9 @@ seed_cache:
   stage: test
   needs: ["merged_coverage", "zephyr_coverage", "twister_coverage"]
   script:
-    - zmake --zephyr-base "${ZEPHYR_BASE}"
-      --modules-dir "${MODULES_DIR}" -l DEBUG configure -b --coverage
-      -B "${BUILD_DIR}/${PROJECT}" -t ${TOOLCHAIN:-zephyr}
+    - zmake -j8 --zephyr-base "${ZEPHYR_BASE}"
+      --modules-dir "${MODULES_DIR}" -l DEBUG build --coverage
+      -B "${BUILD_DIR}" -t ${TOOLCHAIN:-zephyr}
       "${PROJECT}"
     - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/${PROJECT}/output/merged_twister.info" -a "${BUILD_DIR}/${PROJECT}/output/zephyr.info" -a "${BUILD_DIR}/zephyr_codecov/fixed.info"
     - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/${PROJECT}/output/merged_twister_no_ec.info" -e "${BUILD_DIR}/${PROJECT}/output/merged_twister.info" "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
@@ -225,13 +225,12 @@ zephyr_coverage:
   stage: test
   needs: ["seed_cache"]
   script:
-    - zmake --zephyr-base "${ZEPHYR_BASE}"
-      --modules-dir "${MODULES_DIR}" -l DEBUG coverage
-      "${BUILD_DIR}/zcoverage"
+    - zmake -j8 --zephyr-base "${ZEPHYR_BASE}"
+      --modules-dir "${MODULES_DIR}" -l DEBUG test
+      --coverage --host-tests-only
   artifacts:
     paths:
-      - build/zcoverage/coverage_rpt/*
-      - build/zcoverage/*.info
+      - build/zephyr/all_tests.info
     expire_in: 1 week
   coverage: '/lines\.*: \d+\.\d+%/'
 
@@ -239,7 +238,7 @@ merged_coverage:
   stage: test
   needs: ["ec_coverage", "zephyr_coverage"]
   script:
-    - lcov --rc lcov_branch_coverage=1 -o build/merged.info -a build/coverage/lcov.info -a build/zcoverage/lcov.info
+    - lcov --rc lcov_branch_coverage=1 -o build/merged.info -a build/coverage/lcov.info -a build/zephyr/all_tests.info
     - lcov --rc lcov_branch_coverage=1 -o build/merged_no_zephyr.info -r build/merged.info
       "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
       "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
@@ -257,8 +256,8 @@ testall:
   stage: test
   needs: ["seed_cache"]
   script:
-    - zmake --zephyr-base "${ZEPHYR_BASE}"
-      --modules-dir "${MODULES_DIR}" -l DEBUG testall
+    - zmake -j8 --zephyr-base "${ZEPHYR_BASE}"
+      --modules-dir "${MODULES_DIR}" -l DEBUG test --host-tests-only
 
 twister_coverage:
   stage: test
@@ -286,3 +285,17 @@ twister_coverage:
       - build/zephyr_codecov/fixed.info
     expire_in: 1 week
   coverage: '/lines\.*: \d+\.\d+%/'
+
+zmake_coverage:
+  stage: test
+  needs: ["seed_cache"]
+  script:
+    - cd zephyr/zmake
+    - coverage run --source=zmake -m pytest .
+    - coverage report
+    - coverage html
+  artifacts:
+    paths:
+      - zephyr/zmake/htmlcov/*
+    expire_in: 1 week
+  coverage: '/TOTAL\.* \d+%/'
