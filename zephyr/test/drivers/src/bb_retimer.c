@@ -96,7 +96,7 @@ ZTEST_USER(bb_retimer, test_bb_set_state)
 	/* Test USB3 gen2 mode */
 	disc = pd_get_am_discovery_and_notify_access(
 					USBC_PORT_C1, TCPCI_MSG_SOP_PRIME);
-	disc->identity.product_t1.p_rev20.ss = USB_R20_SS_U31_GEN1_GEN2;
+	disc->identity.product_t1.p_rev30.ss = USB_R30_SS_U32_U40_GEN2;
 	prl_set_rev(USBC_PORT_C1, TCPCI_MSG_SOP_PRIME, PD_REV30);
 	zassert_equal(EC_SUCCESS, bb_usb_retimer.set(&usb_muxes[USBC_PORT_C1],
 						     USB_PD_MUX_USB_ENABLED,
@@ -219,6 +219,7 @@ ZTEST_USER(bb_retimer, test_bb_set_dfp_state)
 					USBC_PORT_C1, TCPCI_MSG_SOP_PRIME);
 	disc->identity.idh.product_type = IDH_PTYPE_ACABLE;
 	disc->identity.product_t2.a2_rev30.active_elem = ACTIVE_RETIMER;
+	disc->identity.product_t1.p_rev30.ss = USB_R30_SS_U32_U40_GEN2;
 	prl_set_rev(USBC_PORT_C1, TCPCI_MSG_SOP_PRIME, PD_REV30);
 
 	/* Set cable VDO */
@@ -257,11 +258,7 @@ ZTEST_USER(bb_retimer, test_bb_set_dfp_state)
 	conn = bb_emul_get_reg(emul, BB_RETIMER_REG_CONNECTION_STATE);
 	exp_conn = BB_RETIMER_DATA_CONNECTION_PRESENT |
 		   BB_RETIMER_USB_3_CONNECTION |
-		   /*
-		    * TODO(b/216307791) Need to investigate it, why this is not
-		    *   set
-		    */
-		   /* BB_RETIMER_USB_3_SPEED | */
+		   BB_RETIMER_USB_3_SPEED |
 		   BB_RETIMER_RE_TIMER_DRIVER |
 		   BB_RETIMER_ACTIVE_PASSIVE;
 	zassert_equal(exp_conn, conn, "Expected state 0x%lx, got 0x%lx",
@@ -521,6 +518,32 @@ ZTEST_USER(bb_retimer, test_bb_init)
 	zassert_equal(0, gpio_emul_output_get(gpio_dev,
 					      GPIO_USB_C1_RT_RST_ODL_PORT),
 		      NULL);
+}
+
+/** Test BB retimer console command */
+ZTEST_USER(bb_retimer, test_bb_console_cmd)
+{
+	int rv;
+
+	/* Validate well formed shell commands */
+	rv = shell_execute_cmd(get_ec_shell(), "bb 1 r 2");
+	zassert_ok(rv, "rv=%d", rv);
+	rv = shell_execute_cmd(get_ec_shell(), "bb 1 w 2 0");
+	zassert_ok(rv, "rv=%d", rv);
+
+	/* Validate errors for malformed shell commands */
+	rv = shell_execute_cmd(get_ec_shell(), "bb x");
+	zassert_equal(EC_ERROR_PARAM_COUNT, rv, "rv=%d", rv);
+	rv = shell_execute_cmd(get_ec_shell(), "bb x r 2");
+	zassert_equal(EC_ERROR_PARAM1, rv, "rv=%d", rv);
+	rv = shell_execute_cmd(get_ec_shell(), "bb 0 r 2");
+	zassert_equal(EC_ERROR_PARAM1, rv, "rv=%d", rv);
+	rv = shell_execute_cmd(get_ec_shell(), "bb 1 x 2");
+	zassert_equal(EC_ERROR_PARAM2, rv, "rv=%d", rv);
+	rv = shell_execute_cmd(get_ec_shell(), "bb 1 r x");
+	zassert_equal(EC_ERROR_PARAM3, rv, "rv=%d", rv);
+	rv = shell_execute_cmd(get_ec_shell(), "bb 1 w 2 x");
+	zassert_equal(EC_ERROR_PARAM4, rv, "rv=%d", rv);
 }
 
 ZTEST_SUITE(bb_retimer, drivers_predicate_post_main, NULL, NULL, NULL, NULL);

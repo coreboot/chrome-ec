@@ -15,6 +15,7 @@
 #include "common.h"
 #include "console.h"
 #include "ec_commands.h"
+#include "gpio.h"
 #include "hooks.h"
 #include "mkbp_event.h"
 #include "stdbool.h"
@@ -913,7 +914,8 @@ int pd_set_frs_enable(int port, int enable)
 
 	if (IS_ENABLED(CONFIG_USB_PD_FRS_PPC))
 		rv = ppc_set_frs_enable(port, enable);
-	if (rv == EC_SUCCESS && IS_ENABLED(CONFIG_USB_PD_FRS_TCPC))
+	if ((rv == EC_SUCCESS || rv == EC_ERROR_UNIMPLEMENTED) &&
+	    tcpm_tcpc_has_frs_control(port))
 		rv = tcpm_set_frs_enable(port, enable);
 	if (rv == EC_SUCCESS)
 		rv = board_pd_set_frs_enable(port, enable);

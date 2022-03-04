@@ -20,19 +20,13 @@ GPIO_INT(SLP_S3_L,                       PIN(A, 5), GPIO_INT_BOTH, power_signal_
 GPIO_INT(SLP_SUS_L,                      PIN(F, 1), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(SYS_SLP_S0IX_L,                 PIN(D, 5), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(USB_C0_BC12_INT_ODL,            PIN(C, 6), GPIO_INT_FALLING, bc12_interrupt)
-GPIO_INT(USB_C0_C2_TCPC_INT_ODL,         PIN(E, 0), GPIO_INT_FALLING, tcpc_alert_event)
+GPIO_INT(USB_C0_TCPC_INT_ODL,            PIN(E, 0), GPIO_INT_FALLING, tcpc_alert_event)
 GPIO_INT(USB_C0_PPC_INT_ODL,             PIN(6, 2), GPIO_INT_FALLING, ppc_interrupt)
-GPIO_INT(USB_C0_RT_INT_ODL,              PIN(B, 1), GPIO_INT_FALLING, retimer_interrupt)
-GPIO_INT(USB_C1_BC12_INT_ODL,            PIN(5, 0), GPIO_INT_FALLING, bc12_interrupt)
-GPIO_INT(USB_C1_PPC_INT_ODL,             PIN(F, 5), GPIO_INT_FALLING, ppc_interrupt)
-GPIO_INT(USB_C1_TCPC_INT_ODL,            PIN(A, 2), GPIO_INT_FALLING, tcpc_alert_event)
-GPIO_INT(USB_C2_BC12_INT_ODL,            PIN(8, 3), GPIO_INT_FALLING, bc12_interrupt)
-GPIO_INT(USB_C2_PPC_INT_ODL,             PIN(7, 0), GPIO_INT_FALLING, ppc_interrupt)
-GPIO_INT(USB_C2_RT_INT_ODL,              PIN(4, 1), GPIO_INT_FALLING, retimer_interrupt)
+GPIO_INT(USB_C1_BC12_INT_ODL,            PIN(8, 3), GPIO_INT_FALLING, bc12_interrupt)
+GPIO_INT(USB_C1_TCPC_INT_ODL,            PIN(7, 0), GPIO_INT_FALLING, tcpc_alert_event)
 
 /* USED GPIOs: */
 GPIO(CCD_MODE_ODL,                   PIN(E, 5), GPIO_INPUT)
-GPIO(CHARGER_VAP_OTG_EN,             PIN(7, 3), GPIO_OUT_LOW)
 GPIO(CPU_C10_GATE_L,                 PIN(6, 7), GPIO_INPUT)
 GPIO(EC_BATT_PRES_ODL,               PIN(A, 3), GPIO_INPUT)
 GPIO(EC_ENTERING_RW,                 PIN(0, 3), GPIO_OUT_LOW)
@@ -44,17 +38,13 @@ GPIO(EC_I2C_MISC_SCL_R,              PIN(B, 3), GPIO_INPUT)
 GPIO(EC_I2C_MISC_SDA_R,              PIN(B, 2), GPIO_INPUT)
 GPIO(EC_I2C_SENSOR_SCL,              PIN(B, 5), GPIO_INPUT | GPIO_SEL_1P8V)
 GPIO(EC_I2C_SENSOR_SDA,              PIN(B, 4), GPIO_INPUT | GPIO_SEL_1P8V)
-GPIO(EC_I2C_USB_C0_C2_PPC_BC_SCL,    PIN(9, 2), GPIO_INPUT)
-GPIO(EC_I2C_USB_C0_C2_PPC_BC_SDA,    PIN(9, 1), GPIO_INPUT)
-GPIO(EC_I2C_USB_C0_C2_RT_SCL,        PIN(D, 1), GPIO_INPUT)
-GPIO(EC_I2C_USB_C0_C2_RT_SDA,        PIN(D, 0), GPIO_INPUT)
-GPIO(EC_I2C_USB_C0_C2_TCPC_SCL,      PIN(9, 0), GPIO_INPUT)
-GPIO(EC_I2C_USB_C0_C2_TCPC_SDA,      PIN(8, 7), GPIO_INPUT)
-GPIO(EC_I2C_USB_C1_MIX_SCL,          PIN(E, 4), GPIO_INPUT)
-GPIO(EC_I2C_USB_C1_MIX_SDA,          PIN(E, 3), GPIO_INPUT)
-GPIO(EC_I2C_USB_C1_TCPC_SCL,         PIN(F, 3), GPIO_INPUT)
-GPIO(EC_I2C_USB_C1_TCPC_SDA,         PIN(F, 2), GPIO_INPUT)
-GPIO(EC_KB_BL_EN_L,                  PIN(8, 6), GPIO_OUT_HIGH)
+GPIO(EC_I2C_USB_C1_SCL,              PIN(9, 2), GPIO_INPUT)
+GPIO(EC_I2C_USB_C1_SDA,              PIN(9, 1), GPIO_INPUT)
+GPIO(EC_I2C_USB_C0_SCL,              PIN(9, 0), GPIO_INPUT)
+GPIO(EC_I2C_USB_C0_SDA,              PIN(8, 7), GPIO_INPUT)
+GPIO(EC_I2C_USBA_RT_SCL,             PIN(E, 4), GPIO_INPUT)
+GPIO(EC_I2C_USBA_RT_SDA,             PIN(E, 3), GPIO_INPUT)
+GPIO(EC_KB_BL_EN,                    PIN(8, 6), GPIO_OUT_LOW)
 GPIO(EC_PCHHOT_ODL,                  PIN(7, 4), GPIO_INPUT)
 GPIO(EC_PCH_INT_ODL,                 PIN(B, 0), GPIO_ODR_HIGH)
 GPIO(EC_PCH_PWR_BTN_ODL,             PIN(C, 1), GPIO_ODR_HIGH)
@@ -65,16 +55,20 @@ GPIO(EC_PCH_WAKE_R_ODL,              PIN(C, 0), GPIO_ODR_HIGH)
 GPIO(EC_PROCHOT_ODL,                 PIN(6, 3), GPIO_ODR_HIGH)
 GPIO(EN_PP5000_FAN,                  PIN(6, 1), GPIO_OUT_HIGH)
 GPIO(EN_PP5000_USBA_R,               PIN(D, 7), GPIO_OUT_LOW)
-GPIO(EN_S5_RAILS,                    PIN(B, 6), GPIO_OUT_LOW)
+GPIO(EN_S5_RAILS,                    PIN(9, 6), GPIO_OUT_LOW)
 GPIO(IMVP9_VRRDY_OD,                 PIN(4, 3), GPIO_INPUT)
 GPIO(PCH_PWROK,                      PIN(7, 2), GPIO_OUT_LOW)
 GPIO(SYS_RST_ODL,                    PIN(C, 5), GPIO_ODR_HIGH)
-GPIO(USB_C0_C2_TCPC_RST_ODL,         PIN(A, 7), GPIO_ODR_LOW)
-GPIO(USB_C1_FRS_EN,                  PIN(9, 4), GPIO_OUT_LOW)
-GPIO(USB_C1_RST_ODL,                 PIN(9, 6), GPIO_ODR_LOW)
-GPIO(USB_C1_RT_INT_ODL,              PIN(A, 0), GPIO_INPUT)
-GPIO(USB_C1_RT_RST_R_ODL,            PIN(0, 2), GPIO_ODR_LOW)
+GPIO(EC_USB_PCH_C0_OC_ODL,           PIN(9, 4), GPIO_ODR_HIGH)
+GPIO(EC_USB_PCH_C1_OC_ODL,           PIN(9, 7), GPIO_ODR_HIGH)
+GPIO(USB_C0_FRS_EN,                  PIN(A, 0), GPIO_LOW)
+GPIO(EN_USB_C1_TCPC_RST_R,           PIN(0, 2), GPIO_ODR_LOW)
 GPIO(VCCST_PWRGD_OD,                 PIN(A, 4), GPIO_ODR_LOW)
+GPIO(EN_USB_A_LOW_POWER,             PIN(9, 3), GPIO_OUT_LOW)
+
+/* Barreljack */
+GPIO(EN_PPVAR_BJ_ADP,                PIN(A, 2), GPIO_OUT_LOW)
+GPIO(BJ_ADP_PRESENT_L,               PIN(5, 6), GPIO_INPUT)
 
 /*
  * The NPCX keyboard driver does not use named GPIOs to access
@@ -100,7 +94,8 @@ ALTERNATE(PIN_MASK(F, 0x0c), 0, MODULE_I2C, 0)               /* GPIOF3/I2C4_SCL1
 ALTERNATE(PIN_MASK(4, 0x01), 0, MODULE_PWM, 0)               /* GPIO40/TA1 */
 ALTERNATE(PIN_MASK(6, 0x01), 0, MODULE_PWM, 0)               /* GPIO60/PWM7 */
 ALTERNATE(PIN_MASK(8, 0x01), 0, MODULE_PWM, 0)               /* GPIO80/PWM3 */
-ALTERNATE(PIN_MASK(B, 0x80), 0, MODULE_PWM, 0)               /* GPIOB7/PWM5 */
+ALTERNATE(PIN_MASK(A, 0x80), 0, MODULE_PWM, 0)               /* GPIOA7/TB1 */
+ALTERNATE(PIN_MASK(B, 0xC0), 0, MODULE_PWM, 0)               /* GPIOB7/PWM5, GPIOB6/PWM4 */
 ALTERNATE(PIN_MASK(C, 0x1c), 0, MODULE_PWM, 0)               /* GPIOC4/PWM2, GPIOC3/PWM0, GPIOC2/PWM1/I2C6_SCL0 */
 
 /* ADC alternate functions */
@@ -129,7 +124,7 @@ UNUSED(PIN(6, 6))       /* GPIO66 */
 UNUSED(PIN(5, 7))       /* GPIO57/SER_IRQ/ESPI_ALERT_L */
 UNUSED(PIN(8, 1))       /* GPIO81 */
 UNUSED(PIN(D, 4))       /* GPIOD4 */
-UNUSED(PIN(5, 6))       /* GPIO56 */
-UNUSED(PIN(9, 3))       /* GPIO93 */
-UNUSED(PIN(9, 7))       /* GPIO97 */
 UNUSED(PIN(9, 5))       /* GPIO95 */
+UNUSED(PIN(7, 3))       /* GPIO73 */
+UNUSED(PIN(4, 1))       /* GPIO41 */
+UNUSED(PIN(5, 0))       /* GPIO50 */

@@ -8,19 +8,15 @@
 		compatible = "named-pwms";
 
 		pwm_fan: ec_fan_pwm {
-			pwms = <&pwm0 0 0>;
+			pwms = <&pwm0 0 PWM_POLARITY_NORMAL>;
 			frequency = <25000>;
 		};
-		kblight: pwm_kb_bl {
-			pwms = <&pwm1 0 0>;
-			frequency = <100>;
-		};
 		led_charge: ec_pwm_led_chrg_l {
-			pwms = <&pwm2 0 0>;
+			pwms = <&pwm2 0 PWM_POLARITY_NORMAL>;
 			frequency = <100>;
 		};
 		led_full: ec_pwm_led_full_l {
-			pwms = <&pwm3 0 0>;
+			pwms = <&pwm3 0 PWM_POLARITY_NORMAL>;
 			frequency = <100>;
 		};
 	};
@@ -30,12 +26,6 @@
 &pwm0 {
 	status = "okay";
 	drive-open-drain;
-};
-
-/* Keyboard backlight */
-&pwm1 {
-	status = "okay";
-	clock-bus = "NPCX_CLOCK_BUS_LFCLK";
 };
 
 /* Amber charging LED */

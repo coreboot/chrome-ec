@@ -503,8 +503,8 @@ static int set_pmic_pwron(int enable)
 	if (enable == is_pmic_pwron())
 		return EC_SUCCESS;
 
-	if (!gpio_get_level(GPIO_PMIC_KPD_PWR_ODL)) {
-		CPRINTS("PMIC_KPD_PWR_ODL not pulled up by PMIC; cancel pwron");
+	if (!gpio_get_level(GPIO_PMIC_RESIN_L)) {
+		CPRINTS("PMIC_RESIN_L not pulled up by PMIC; cancel pwron");
 		return EC_ERROR_UNKNOWN;
 	}
 
@@ -612,21 +612,34 @@ enum power_state power_chipset_init(void)
 
 /**
  * Power off the AP
+ *
+ * @param shutdown_event	reason of shutdown, which is a return value of
+ *				check_for_power_off_event()
  */
-static void power_off_seq(void)
+static void power_off_seq(uint8_t shutdown_event)
 {
 	/* Check PMIC POWER_GOOD */
 	if (is_pmic_pwron()) {
-		/* Do a graceful way to shutdown PMIC/AP first */
-		set_pmic_pwron(0);
-		usleep(PMIC_POWER_OFF_DELAY);
-
-		/*
-		 * Disable signal interrupts, as they are floating when
-		 * switchcap off.
-		 */
-		power_signal_disable_interrupt(GPIO_AP_RST_L);
+		if (shutdown_event == POWER_OFF_BY_POWER_GOOD_LOST) {
+			/*
+			 * The POWER_GOOD was lost previously, which sets the
+			 * shutdown_event flag. But now it is up again. This
+			 * is unexpected. Show the warning message. Then go
+			 * straight to turn off the switchcap.
+			 */
+			CPRINTS("Warning: POWER_GOOD up again after lost");
+		} else {
+			/* Do a graceful way to shutdown PMIC/AP first */
+			set_pmic_pwron(0);
+			usleep(PMIC_POWER_OFF_DELAY);
+		}
 	}
+
+	/*
+	 * Disable signal interrupts, as they are floating when
+	 * switchcap off.
+	 */
+	power_signal_disable_interrupt(GPIO_AP_RST_L);
 
 	/* Check the switchcap status */
 	if (is_system_powered()) {
@@ -696,33 +709,31 @@ static int power_on_seq(void)
  */
 static uint8_t check_for_power_on_event(void)
 {
+	uint8_t ret;
+
 	if (power_request == POWER_REQ_ON) {
-		power_request = POWER_REQ_NONE;
-		return POWER_ON_BY_POWER_REQ_ON;
+		ret = POWER_ON_BY_POWER_REQ_ON;
 	} else if (power_request == POWER_REQ_COLD_RESET) {
-		power_request = POWER_REQ_NONE;
-		return POWER_ON_BY_POWER_REQ_RESET;
+		ret = POWER_ON_BY_POWER_REQ_RESET;
+	} else if (auto_power_on) {
+		/* power on requested at EC startup for recovery */
+		ret = POWER_ON_BY_AUTO_POWER_ON;
+	} else if (lid_opened) {
+		/* check lid open */
+		ret = POWER_ON_BY_LID_OPEN;
+	} else if (power_button_is_pressed()) {
+		/* check for power button press */
+		ret = POWER_ON_BY_POWER_BUTTON_PRESSED;
+	} else {
+		ret = POWER_OFF_CANCEL;
 	}
-	/* Clear invalid request */
+
+	/* The flags are handled above. Clear them all. */
 	power_request = POWER_REQ_NONE;
+	auto_power_on = 0;
+	lid_opened = 0;
 
-	/* power on requested at EC startup for recovery */
-	if (auto_power_on) {
-		auto_power_on = 0;
-		return POWER_ON_BY_AUTO_POWER_ON;
-	}
-
-	/* Check lid open */
-	if (lid_opened) {
-		lid_opened = 0;
-		return POWER_ON_BY_LID_OPEN;
-	}
-
-	/* check for power button press */
-	if (power_button_is_pressed())
-		return POWER_ON_BY_POWER_BUTTON_PRESSED;
-
-	return POWER_OFF_CANCEL;
+	return ret;
 }
 
 /**
@@ -1024,7 +1035,7 @@ enum power_state power_handle_state(enum power_state state)
 		hook_notify(HOOK_CHIPSET_PRE_INIT);
 
 		if (power_on_seq() != EC_SUCCESS) {
-			power_off_seq();
+			power_off_seq(shutdown_from_on);
 			boot_from_off = 0;
 			return POWER_S5;
 		}
@@ -1135,7 +1146,7 @@ enum power_state power_handle_state(enum power_state state)
 		/* Call hooks before we drop power rails */
 		hook_notify(HOOK_CHIPSET_SHUTDOWN);
 
-		power_off_seq();
+		power_off_seq(shutdown_from_on);
 		CPRINTS("power shutdown complete");
 
 		/* Call hooks after we drop power rails */

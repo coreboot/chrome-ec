@@ -6,12 +6,12 @@
 #define DT_DRV_COMPAT ite_it8xxx2_gctrl
 
 #include <device.h>
-#include <drivers/cros_system.h>
+#include <drivers/gpio.h>
 #include <logging/log.h>
 #include <soc.h>
 #include <soc/ite_it8xxx2/reg_def_cros.h>
 
-#include "gpio.h"
+#include "drivers/cros_system.h"
 #include "gpio/gpio_int.h"
 #include "system.h"
 #include "util.h"
@@ -233,7 +233,7 @@ do {									       \
 	gpio_pin_configure_dt(GPIO_DT_FROM_NODE(WAKEUP_NGPIO(id, prop, idx)),  \
 			      GPIO_INPUT);				       \
 	gpio_enable_dt_interrupt(					       \
-		&GPIO_INT_FROM_NODE(WAKEUP_INT(id, prop, idx)));	       \
+		GPIO_INT_FROM_NODE(WAKEUP_INT(id, prop, idx)));	       \
 	} while (0);
 
 /*

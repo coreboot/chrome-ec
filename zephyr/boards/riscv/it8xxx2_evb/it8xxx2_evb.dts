@@ -20,6 +20,10 @@
 		zephyr,flash-controller = &flashctrl;
 	};
 
+	aliases {
+		gpio-wp = &gpio_wp;
+	};
+
 	named-gpios {
 		compatible = "named-gpios";
 
@@ -31,9 +35,9 @@
 			gpios = <&gpioe 2 GPIO_INPUT_PULL_UP>;
 			enum-name = "GPIO_LID_OPEN";
 		};
-		wp_l {
-			gpios = <&gpioi 4 GPIO_INPUT_PULL_UP>;
-			enum-name = "GPIO_WP_L";
+		gpio_wp: wp_l {
+			gpios = <&gpioi 4 (GPIO_INPUT_PULL_UP |
+					   GPIO_ACTIVE_LOW)>;
 		};
 		pch_pltrst_l {
 			gpios = <&gpioe 3 GPIO_INPUT_PULL_UP>;
@@ -43,9 +47,8 @@
 			gpios = <&gpiob 6 GPIO_OUT_HIGH>;
 			enum-name = "GPIO_SYS_RESET_L";
 		};
-		pch_wake_l {
+		gpio_ec_pch_wake_odl: pch_wake_l {
 			gpios = <&gpiob 7 GPIO_OUT_HIGH>;
-			enum-name = "GPIO_EC_PCH_WAKE_ODL";
 		};
 		i2c_a_scl {
 			gpios = <&gpiob 3 GPIO_INPUT>;

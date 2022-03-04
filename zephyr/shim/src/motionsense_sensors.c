@@ -6,9 +6,9 @@
 #include <logging/log.h>
 #include "common.h"
 #include "accelgyro.h"
+#include "cros_cbi.h"
 #include "hooks.h"
 #include "gpio/gpio_int.h"
-#include "drivers/cros_cbi.h"
 #include "motionsense_sensors.h"
 
 LOG_MODULE_REGISTER(shim_cros_motionsense_sensors);
@@ -382,7 +382,7 @@ BUILD_ASSERT(ARRAY_SIZE(motion_als_sensors) == ALS_COUNT);
 #if DT_NODE_HAS_PROP(SENSOR_INFO_NODE, sensor_irqs)
 #define SENSOR_GPIO_ENABLE_INTERRUPT(i, id)		\
 	gpio_enable_dt_interrupt(				\
-		&GPIO_INT_FROM_NODE(DT_PHANDLE_BY_IDX(id, sensor_irqs, i)));
+		GPIO_INT_FROM_NODE(DT_PHANDLE_BY_IDX(id, sensor_irqs, i)));
 static void sensor_enable_irqs(void)
 {
 	UTIL_LISTIFY(DT_PROP_LEN(SENSOR_INFO_NODE, sensor_irqs),

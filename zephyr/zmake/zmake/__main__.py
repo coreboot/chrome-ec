@@ -107,13 +107,6 @@ def get_argparser():
         "--checkout", type=pathlib.Path, help="Path to ChromiumOS checkout"
     )
     parser.add_argument(
-        "-D",
-        "--debug",
-        action="store_true",
-        default=False,
-        help=("Turn on debug features (e.g., stack trace, " "verbose logging)"),
-    )
-    parser.add_argument(
         "-j",
         "--jobs",
         # TODO(b/178196029): ninja doesn't know how to talk to a
@@ -129,13 +122,26 @@ def get_argparser():
         dest="goma",
         help="Enable hyperspeed compilation with Goma! (Googlers only)",
     )
-    parser.add_argument(
+
+    log_level_group = parser.add_mutually_exclusive_group()
+    log_level_group.add_argument(
         "-l",
         "--log-level",
-        choices=list(log_level_map.keys()),
-        dest="log_level",
+        choices=log_level_map.values(),
+        metavar=f"{{{','.join(log_level_map)}}}",
+        type=lambda x: log_level_map[x],
+        default=logging.INFO,
         help="Set the logging level (default=INFO)",
     )
+    log_level_group.add_argument(
+        "-D",
+        "--debug",
+        dest="log_level",
+        action="store_const",
+        const=logging.DEBUG,
+        help="Alias for --log-level=DEBUG",
+    )
+
     parser.add_argument(
         "-L",
         "--no-log-label",
@@ -174,28 +180,6 @@ def get_argparser():
         "configure",
         help="Set up a build directory to be built later by the build subcommand",
     )
-    configure.add_argument("-t", "--toolchain", help="Name of toolchain to use")
-    configure.add_argument(
-        "--bringup",
-        action="store_true",
-        dest="bringup",
-        help="Enable bringup debugging features",
-    )
-    configure.add_argument(
-        "--clobber",
-        action="store_true",
-        dest="clobber",
-        help="Delete existing build directories, even if configuration is unchanged",
-    )
-    configure.add_argument(
-        "--allow-warnings",
-        action="store_true",
-        default=False,
-        help="Do not treat warnings as errors",
-    )
-    configure.add_argument(
-        "-B", "--build-dir", type=pathlib.Path, help="Build directory"
-    )
     configure.add_argument(
         "-b",
         "--build",
@@ -207,35 +191,15 @@ def get_argparser():
         "--test",
         action="store_true",
         dest="test_after_configure",
-        help="Test the .elf file after configuration",
+        help="Test the .elf file after building",
     )
-    configure.add_argument(
-        "project_name_or_dir",
-        help="Path to the project to build",
-    )
-    configure.add_argument(
-        "-c",
-        "--coverage",
-        action="store_true",
-        dest="coverage",
-        help="Enable CONFIG_COVERAGE Kconfig.",
-    )
+    add_common_configure_args(configure)
 
     build = sub.add_parser(
         "build",
-        help="Execute the build from a build directory",
+        help="Configure and build projects",
     )
-    build.add_argument(
-        "build_dir",
-        type=pathlib.Path,
-        help="The build directory used during configuration",
-    )
-    build.add_argument(
-        "-w",
-        "--fail-on-warnings",
-        action="store_true",
-        help="Exit with code 2 if warnings are detected",
-    )
+    add_common_configure_args(build)
 
     list_projects = sub.add_parser(
         "list-projects",
@@ -258,24 +222,18 @@ def get_argparser():
 
     test = sub.add_parser(
         "test",
-        help="Execute tests from a build directory",
+        help="Configure, build and run tests on specified projects",
     )
     test.add_argument(
-        "-c",
-        "--coverage",
+        "--no-rebuild",
         action="store_true",
-        dest="coverage",
-        help="Run lcov after running test to generate coverage info file.",
+        help="Do not configure or build before running tests.",
     )
-    test.add_argument(
-        "build_dir",
-        type=pathlib.Path,
-        help="The build directory used during configuration",
-    )
+    add_common_configure_args(test)
 
     testall = sub.add_parser(
         "testall",
-        help="Execute all known builds and tests",
+        help="Alias for test --all",
     )
     testall.add_argument(
         "--clobber",
@@ -283,22 +241,7 @@ def get_argparser():
         dest="clobber",
         help="Delete existing build directories, even if configuration is unchanged",
     )
-
-    coverage = sub.add_parser(
-        "coverage",
-        help="Run coverage on a build directory",
-    )
-    coverage.add_argument(
-        "--clobber",
-        action="store_true",
-        dest="clobber",
-        help="Delete existing build directories, even if configuration is unchanged",
-    )
-    coverage.add_argument(
-        "build_dir",
-        type=pathlib.Path,
-        help="The build directory used during configuration",
-    )
+    testall.add_argument("-B", "--build-dir", type=pathlib.Path, help="Build directory")
 
     generate_readme = sub.add_parser(
         "generate-readme",
@@ -322,6 +265,64 @@ def get_argparser():
     return parser, sub
 
 
+def add_common_configure_args(sub_parser: argparse.ArgumentParser):
+    """Adds common arguments used by configure-like subcommands."""
+    sub_parser.add_argument("-t", "--toolchain", help="Name of toolchain to use")
+    sub_parser.add_argument(
+        "--bringup",
+        action="store_true",
+        dest="bringup",
+        help="Enable bringup debugging features",
+    )
+    sub_parser.add_argument(
+        "--clobber",
+        action="store_true",
+        dest="clobber",
+        help="Delete existing build directories, even if configuration is unchanged",
+    )
+    sub_parser.add_argument(
+        "--allow-warnings",
+        action="store_true",
+        default=False,
+        help="Do not treat warnings as errors",
+    )
+    sub_parser.add_argument(
+        "-B",
+        "--build-dir",
+        type=pathlib.Path,
+        help="Root build directory, project files will be in "
+        "${build_dir}/${project_name}",
+    )
+    sub_parser.add_argument(
+        "-c",
+        "--coverage",
+        action="store_true",
+        dest="coverage",
+        help="Enable CONFIG_COVERAGE Kconfig.",
+    )
+    group = sub_parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        dest="all_projects",
+        help="Select all projects",
+    )
+    group.add_argument(
+        "--host-tests-only",
+        action="store_true",
+        dest="host_tests_only",
+        help="Select all test projects",
+    )
+    group.add_argument(
+        "project_names",
+        nargs="*",
+        metavar="project_name",
+        help="Name(s) of the project(s) to build",
+        default=[],
+    )
+
+
 def main(argv=None):
     """The main function.
 
@@ -340,15 +341,7 @@ def main(argv=None):
     opts = parser.parse_args(argv)
 
     # Default logging
-    log_level = logging.INFO
     log_label = False
-
-    if opts.log_level:
-        log_level = log_level_map[opts.log_level]
-        log_label = True
-    elif opts.debug:
-        log_level = logging.DEBUG
-        log_label = True
 
     if opts.log_label is not None:
         log_label = opts.log_label
@@ -358,10 +351,7 @@ def main(argv=None):
         log_format = "%(message)s"
         multiproc.log_job_names = False
 
-    logging.basicConfig(format=log_format, level=log_level)
-
-    if not opts.debug:
-        sys.tracebacklimit = 0
+    logging.basicConfig(format=log_format, level=opts.log_level)
 
     try:
         zmake = call_with_namespace(zm.Zmake, opts)

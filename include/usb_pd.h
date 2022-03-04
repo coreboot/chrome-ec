@@ -104,6 +104,8 @@ enum pd_rx_errors {
 #define PDO_FIXED_PEAK_CURR () /* [21..20] Peak current */
 #define PDO_FIXED_VOLT(mv)  (((mv)/50) << 10) /* Voltage in 50mV units */
 #define PDO_FIXED_CURR(ma)  (((ma)/10) << 0)  /* Max current in 10mA units */
+#define PDO_FIXED_GET_VOLT(pdo) (((pdo >> 10) & 0x3FF) * 50)
+#define PDO_FIXED_GET_CURR(pdo) ((pdo & 0x3FF) * 10)
 
 #define PDO_FIXED(mv, ma, flags) (PDO_FIXED_VOLT(mv) |\
 				  PDO_FIXED_CURR(ma) | (flags))
@@ -2373,6 +2375,21 @@ int enter_tbt_compat_mode(int port, enum tcpci_msg_type sop,
  * @return cable speed
  */
 __override_proto enum tbt_compat_cable_speed board_get_max_tbt_speed(int port);
+
+/**
+ * Set what this board should be replying to TBT EnterMode requests with, when
+ * it is configured as the UFP (VDM Responder).
+ *
+ * @param port USB-C port number
+ * @param reply AP-selected reply to the TBT EnterMode request
+ * @return EC_RES_SUCCESS if board supports this configuration setting
+ *	   EC_RES_INVALID_PARAM if board supports this feature, but not this
+ *	   option
+ *	   EC_RES_UNAVAILABLE if board does not support this feature
+ */
+__override_proto enum ec_status
+			board_set_tbt_ufp_reply(int port,
+						enum typec_tbt_ufp_reply reply);
 
 /**
  * Return true if the board's port supports TBT or USB4

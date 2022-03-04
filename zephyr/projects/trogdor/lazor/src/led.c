@@ -1,16 +1,17 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
  * Power and battery LED control.
  */
 
+#include <drivers/gpio.h>
+
 #include "battery.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "chipset.h"
 #include "ec_commands.h"
-#include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "led_common.h"

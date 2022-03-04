@@ -6,10 +6,11 @@
 import dataclasses
 import logging
 import pathlib
+from typing import Dict, List
 
 import zmake.build_config as build_config
 import zmake.configlib as configlib
-import zmake.modules as modules
+import zmake.modules
 import zmake.toolchains as toolchains
 
 
@@ -26,65 +27,6 @@ def module_dts_overlay_name(modpath, board_name):
     return modpath / "zephyr" / "dts" / "board-overlays" / "{}.dts".format(board_name)
 
 
-def load_config_file(path):
-    """Load a BUILD.py config file and create associated projects.
-
-    Args:
-        path: A pathlib.Path to the BUILD.py file.
-
-    Returns:
-        A list of Project objects specified by the file.
-    """
-    projects = []
-
-    def register_project(**kwargs):
-        projects.append(Project(ProjectConfig(**kwargs)))
-
-    # The Python environment passed to the config file.
-    config_globals = {
-        "register_project": register_project,
-        "here": path.parent.resolve(),
-    }
-
-    # First, load the global helper functions.
-    code = compile(
-        pathlib.Path(configlib.__file__).read_bytes(),
-        configlib.__file__,
-        "exec",
-    )
-    exec(code, config_globals)
-
-    # Next, load the BUILD.py
-    logging.debug("Loading config file %s", path)
-    code = compile(path.read_bytes(), str(path), "exec")
-    exec(code, config_globals)
-    logging.debug("Config file %s defines %s projects", path, len(projects))
-    return projects
-
-
-def find_projects(root_dir):
-    """Finds all zmake projects in root_dir.
-
-    Args:
-        root_dir: the root dir as a pathlib.Path object
-
-    Returns:
-        A dictionary mapping project names to Project objects.
-    """
-    logging.debug("Finding zmake targets under '%s'.", root_dir)
-    found_projects = {}
-    for path in pathlib.Path(root_dir).rglob("BUILD.py"):
-        for project in load_config_file(path):
-            if project.config.project_name in found_projects:
-                raise KeyError(
-                    "Duplicate project defined: {} (in {})".format(
-                        project.config.project_name, path
-                    )
-                )
-            found_projects[project.config.project_name] = project
-    return found_projects
-
-
 @dataclasses.dataclass
 class ProjectConfig:
     project_name: str
@@ -92,18 +34,19 @@ class ProjectConfig:
     supported_toolchains: "list[str]"
     output_packer: type
     modules: "list[str]" = dataclasses.field(
-        default_factory=lambda: modules.known_modules,
+        default_factory=lambda: zmake.modules.known_modules,
     )
     is_test: bool = dataclasses.field(default=False)
     dts_overlays: "list[str]" = dataclasses.field(default_factory=list)
     kconfig_files: "list[pathlib.Path]" = dataclasses.field(default_factory=list)
     project_dir: pathlib.Path = dataclasses.field(default_factory=pathlib.Path)
+    test_timeout_secs: float = dataclasses.field(default=2 * 60)
 
 
 class Project:
     """An object encapsulating a project directory."""
 
-    def __init__(self, config):
+    def __init__(self, config: ProjectConfig):
         self.config = config
         self.packer = self.config.output_packer(self)
 
@@ -209,3 +152,62 @@ class Project:
                 "either want to setup your system with a supported toolchain, or "
                 "manually select an unsupported toolchain with the -t flag."
             )
+
+
+def load_config_file(path) -> List[Project]:
+    """Load a BUILD.py config file and create associated projects.
+
+    Args:
+        path: A pathlib.Path to the BUILD.py file.
+
+    Returns:
+        A list of Project objects specified by the file.
+    """
+    projects: List[Project] = []
+
+    def register_project(**kwargs):
+        projects.append(Project(ProjectConfig(**kwargs)))
+
+    # The Python environment passed to the config file.
+    config_globals = {
+        "register_project": register_project,
+        "here": path.parent.resolve(),
+    }
+
+    # First, load the global helper functions.
+    code = compile(
+        pathlib.Path(configlib.__file__).read_bytes(),
+        configlib.__file__,
+        "exec",
+    )
+    exec(code, config_globals)
+
+    # Next, load the BUILD.py
+    logging.debug("Loading config file %s", path)
+    code = compile(path.read_bytes(), str(path), "exec")
+    exec(code, config_globals)
+    logging.debug("Config file %s defines %s projects", path, len(projects))
+    return projects
+
+
+def find_projects(root_dir) -> Dict[str, Project]:
+    """Finds all zmake projects in root_dir.
+
+    Args:
+        root_dir: the root dir as a pathlib.Path object
+
+    Returns:
+        A dictionary mapping project names to Project objects.
+    """
+    logging.debug("Finding zmake targets under '%s'.", root_dir)
+    found_projects = {}
+    for path in pathlib.Path(root_dir).rglob("BUILD.py"):
+        for project in load_config_file(path):
+            if project.config.project_name in found_projects:
+                raise KeyError(
+                    "Duplicate project defined: {} (in {})".format(
+                        project.config.project_name, path
+                    )
+                )
+            found_projects[project.config.project_name] = project
+    return found_projects
