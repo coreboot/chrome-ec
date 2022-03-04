@@ -5,6 +5,8 @@
 
 /* Guybrush family-specific USB-C configuration */
 
+#include <drivers/gpio.h>
+
 #include "cros_board_info.h"
 #include "battery_fuel_gauge.h"
 #include "charge_manager.h"
@@ -22,7 +24,6 @@
 #include "driver/tcpm/nct38xx.h"
 #include "driver/usb_mux/anx7451.h"
 #include "driver/usb_mux/amd_fp6.h"
-#include "gpio.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
 #include "ioexpander.h"
@@ -80,11 +81,6 @@ const struct tcpc_config_t tcpc_config[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == CONFIG_USB_PD_PORT_MAX_COUNT);
-
-const int usb_port_enable[USBA_PORT_COUNT] = {
-	IOEX_EN_PP5000_USB_A0_VBUS,
-	IOEX_EN_PP5000_USB_A1_VBUS_DB,
-};
 
 static void usbc_interrupt_init(void)
 {

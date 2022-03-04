@@ -6,8 +6,8 @@
 #ifndef __X86_COMMON_PWRSEQ_H__
 #define __X86_COMMON_PWRSEQ_H__
 
-#include <drivers/espi.h>
-#include <drivers/gpio.h>
+#include <power_signals.h>
+#include <x86_power_signals.h>
 #include <logging/log.h>
 
 /**
@@ -76,5 +76,7 @@ enum pwrseq_chipset_shutdown_reason {
 struct pwrseq_context {
 	/* On power-on start boot up sequence */
 	enum power_states_ndsx power_state;
+	/* Indicate should exit G3 power state or not */
+	bool want_g3_exit;
 };
-#endif /* __X86_COMMON_H__ */
+#endif /* __X86_COMMON_PWRSEQ_H__ */

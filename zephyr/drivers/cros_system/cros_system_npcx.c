@@ -4,7 +4,6 @@
  */
 
 #include <arch/arm/aarch32/cortex_m/cmsis.h>
-#include <drivers/cros_system.h>
 #include <drivers/gpio.h>
 #include <drivers/watchdog.h>
 #include <logging/log.h>
@@ -12,7 +11,7 @@
 #include <soc/nuvoton_npcx/reg_def_cros.h>
 #include <sys/util.h>
 
-#include "gpio.h"
+#include "drivers/cros_system.h"
 #include "gpio/gpio_int.h"
 #include "rom_chip.h"
 #include "soc_gpio.h"
@@ -65,10 +64,15 @@ struct cros_system_npcx_data {
  * total RAM size = code ram + data ram + extra 2K for ROM functions
  * divided by the block size 32k.
  */
+#if DT_NODE_EXISTS(DT_NODELABEL(bootloader_ram))
+#define BT_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(bootloader_ram))
+#else
+#define BT_RAM_SIZE 0
+#endif
 #define DATA_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(sram0))
 #define CODE_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(flash0))
 #define NPCX_RAM_BLOCK_COUNT \
-	((DATA_RAM_SIZE + CODE_RAM_SIZE + KB(2)) / NPCX_RAM_BLOCK_SIZE)
+	((DATA_RAM_SIZE + CODE_RAM_SIZE + BT_RAM_SIZE) / NPCX_RAM_BLOCK_SIZE)
 
 /* Valid bit-depth of RAM block Power-Down control (RAM_PD) registers. Use its
  * mask to power down all unnecessary RAM blocks before hibernating.
@@ -501,6 +505,16 @@ static int cros_system_npcx_soc_reset(const struct device *dev)
 	/* should never return */
 	return 0;
 }
+
+#if defined(CONFIG_PLATFORM_EC_HIBERNATE_PSL)
+#if DT_HAS_COMPAT_STATUS_OKAY(cros_ec_hibernate_wake_pins)
+#error "cros-ec,hibernate-wake-pins cannot be used with HIBERNATE_PSL"
+#endif
+#else
+#if DT_HAS_COMPAT_STATUS_OKAY(nuvoton_npcx_pslctrl_def)
+#error "vsby-psl-in-list cannot be used with non-HIBERNATE_PSL"
+#endif
+#endif
 
 static int cros_system_npcx_hibernate(const struct device *dev,
 				      uint32_t seconds, uint32_t microseconds)

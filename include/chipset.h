@@ -16,7 +16,7 @@
 #include "common.h"
 #include "compile_time_macros.h"
 #include "ec_commands.h"
-#include "gpio.h"
+#include "gpio_signal.h"
 #include "stddef.h"
 
 /*
@@ -48,7 +48,7 @@ enum critical_shutdown {
 	CRITICAL_SHUTDOWN_CUTOFF,
 };
 
-#ifdef HAS_TASK_CHIPSET
+#if defined(HAS_TASK_CHIPSET) || defined(CONFIG_ZEPHYR)
 
 /**
  * Check if chipset is in a given state.

@@ -744,6 +744,7 @@ class Zmake:
             self.logger.info("Running tests in %s.", elf_file)
             proc = self.jobserver.popen(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 encoding="utf-8",
@@ -801,20 +802,6 @@ class Zmake:
             build_dir.stem,
             "--rc",
             "lcov_branch_coverage=1",
-            "--exclude",
-            "*/build-*/zephyr/*/generated/*",
-            "--exclude",
-            "*/ec/test/*",
-            "--exclude",
-            "*/ec/zephyr/shim/chip/npcx/npcx_monitor/*",
-            "--exclude",
-            "*/ec/zephyr/emul/*",
-            "--exclude",
-            "*/ec/zephyr/test/*",
-            "--exclude",
-            "*/testsuite/*",
-            "--exclude",
-            "*/subsys/emul/*",
         ]
         if initial:
             cmd += ["-i"]

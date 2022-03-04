@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+zephyr_library_sources(chipset_api.c)
 zephyr_library_sources(console.c)
 zephyr_library_sources(crc.c)
 zephyr_library_sources(gpio.c)
@@ -16,7 +17,6 @@ if (DEFINED CONFIG_ARCH_POSIX)
 else()
   zephyr_library_sources(system.c)
 endif()
-zephyr_library_sources("${PLATFORM_EC}/common/system.c")
 
 zephyr_library_sources_ifdef(no_libgcc                  libgcc_${ARCH}.S)
 
@@ -53,6 +53,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TIMER       hwtimer.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C         i2c.c)
 zephyr_library_sources_ifdef(CONFIG_SHIMMED_TASKS           tasks.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_WATCHDOG    watchdog.c)
+zephyr_library_sources_ifndef(CONFIG_PLATFORM_EC_BC12_SINGLE_DRIVER
+                                                            bc12.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
 	                                                     bc12_pi3usb9201.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC    ppc.c)

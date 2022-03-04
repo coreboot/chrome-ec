@@ -69,7 +69,7 @@
 			enum-name = "GPIO_ENTERING_RW";
 		};
 		gpio_ec_gsc_packet_mode: ec_gsc_packet_mode {
-			gpios = <&gpioh 1 GPIO_INPUT>;
+			gpios = <&gpioh 1 GPIO_OUTPUT>;
 			enum-name = "GPIO_PACKET_MODE_EN";
 		};
 		gpio_ec_pch_wake_odl: ec_pch_wake_odl {
@@ -214,13 +214,13 @@
 	named-i2c-ports {
 		compatible = "named-i2c-ports";
 
-		i2c_ec_i2c_batt: ec_i2c_batt {
-			i2c-port = <&i2c1>;
-			enum-name = "I2C_PORT_BATTERY";
-		};
 		i2c_ec_i2c_eeprom: ec_i2c_eeprom {
 			i2c-port = <&i2c0>;
 			enum-name = "I2C_PORT_EEPROM";
+		};
+		i2c_ec_i2c_batt: ec_i2c_batt {
+			i2c-port = <&i2c1>;
+			enum-name = "I2C_PORT_BATTERY";
 		};
 		i2c_ec_i2c_sensor: ec_i2c_sensor {
 			i2c-port = <&i2c2>;

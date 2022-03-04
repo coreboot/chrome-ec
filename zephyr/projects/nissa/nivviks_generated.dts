@@ -61,11 +61,11 @@
 			enum-name = "GPIO_ENTERING_RW";
 		};
 		gpio_ec_gsc_packet_mode: ec_gsc_packet_mode {
-			gpios = <&gpio7 5 GPIO_INPUT>;
+			gpios = <&gpio7 5 GPIO_OUTPUT>;
 			enum-name = "GPIO_PACKET_MODE_EN";
 		};
 		gpio_ec_kso_02_inv: ec_kso_02_inv {
-			gpios = <&gpio1 7 GPIO_OUTPUT>;
+			gpios = <&gpio1 7 (GPIO_OUT_LOW | GPIO_ACTIVE_LOW)>;
 		};
 		gpio_ec_pch_wake_odl: ec_pch_wake_odl {
 			gpios = <&gpiob 0 GPIO_ODR_LOW>;

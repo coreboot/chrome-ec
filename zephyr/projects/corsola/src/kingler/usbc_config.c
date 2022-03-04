@@ -25,6 +25,13 @@
 #include "baseboard_usbc_config.h"
 #include "variant_db_detection.h"
 
+/* TODO(b/220196310): Create GPIO driver for RT17181S TCPC */
+#ifdef __REQUIRE_ZEPHYR_GPIOS__
+#undef __REQUIRE_ZEPHYR_GPIOS__
+#endif
+#include "gpio.h"
+
+
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
 
@@ -36,8 +43,8 @@ struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 			.addr_flags = AN7447_TCPC0_I2C_ADDR_FLAGS,
 		},
 		.drv = &anx7447_tcpm_drv,
-		/* Alert is active-low, push-pull */
-		.flags = 0,
+		/* Alert is active-low, open-drain */
+		.flags = TCPC_FLAGS_ALERT_OD,
 	},
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -46,6 +53,8 @@ struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 			.addr_flags = RT1718S_I2C_ADDR2_FLAGS,
 		},
 		.drv = &rt1718s_tcpm_drv,
+		/* Alert is active-low, open-drain */
+		.flags = TCPC_FLAGS_ALERT_OD,
 	}
 };
 

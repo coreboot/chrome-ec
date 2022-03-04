@@ -14,12 +14,9 @@
  * Taeko boards are set up for vivaldi
  */
 #define CONFIG_KEYBOARD_VIVALDI
-
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 /* Baseboard features */
 #include "baseboard.h"
-
-#define CONFIG_SYSTEM_UNLOCKED
-#define CONFIG_BYPASS_CBI_EEPROM_WP_CHECK
 
 /*
  * This will happen automatically on NPCX9 ES2 and later. Do not remove
@@ -90,6 +87,8 @@
 #define CONFIG_IO_EXPANDER_NCT38XX
 #define CONFIG_IO_EXPANDER_PORT_COUNT		1
 
+#define CONFIG_USB_PD_FRS_PPC
+#define CONFIG_USB_PD_FRS
 #define CONFIG_USB_PD_TCPM_PS8815
 #define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 #define CONFIG_USBC_PPC_SYV682X
