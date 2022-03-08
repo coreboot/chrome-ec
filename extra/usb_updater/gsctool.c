@@ -995,10 +995,10 @@ static bool valid_header(const struct SignedHeader *const h, const size_t size)
 	return true;
 }
 
-/* Rounds and address up to the next 16KB boundary if not one already */
-static inline uint32_t round_up_16kb(const uint32_t addr)
+/* Rounds and address up to the next 2KB boundary if not one already */
+static inline uint32_t round_up_2kb(const uint32_t addr)
 {
-	const uint32_t mask = (16 * 1024) - 1;
+	const uint32_t mask = (2 * 1024) - 1;
 
 	return (addr + mask) & ~mask;
 }
@@ -1012,12 +1012,12 @@ static const struct SignedHeader *as_header(const void *image, uint32_t offset)
 static int32_t find_rw_header(const void *image, uint32_t offset,
 			      const uint32_t end)
 {
-	offset = round_up_16kb(offset);
+	offset = round_up_2kb(offset);
 
 	while (offset < end) {
 		if (valid_header(as_header(image, offset), end - offset))
 			return offset;
-		offset = round_up_16kb(offset + 1);
+		offset = round_up_2kb(offset + 1);
 	}
 
 	return -1;
