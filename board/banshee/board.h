@@ -28,6 +28,9 @@
 
 #define CONFIG_MP2964
 
+/* KEYBOARD */
+#define CONFIG_KEYBOARD_CUSTOMIZATION
+
 /* LED */
 #define CONFIG_LED_PWM
 #define CONFIG_LED_PWM_COUNT 4
@@ -177,8 +180,15 @@
 /* Enabling USB4 mode */
 #define CONFIG_USB_PD_USB4
 
+/*
+ * TODO: Disable BBR firmware update temporally,
+ * revert this patch once confirm BBR firmware update is ready
+ * on kernel.
+ */
 /* Retimer */
+#if 0
 #define CONFIG_USBC_RETIMER_FW_UPDATE
+#endif
 
 /* Thermal features */
 #define CONFIG_THERMISTOR
