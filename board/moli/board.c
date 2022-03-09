@@ -83,10 +83,6 @@ int board_set_active_charge_port(int port)
 
 	switch (port) {
 	case CHARGE_PORT_TYPEC0:
-	case CHARGE_PORT_TYPEC1:
-	case CHARGE_PORT_TYPEC2:
-		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_L, 1);
-		break;
 	case CHARGE_PORT_BARRELJACK:
 		/* Make sure BJ adapter is sourcing power */
 		if (gpio_get_level(GPIO_BJ_ADP_PRESENT_ODL))
@@ -123,13 +119,13 @@ static const struct {
 	int voltage;
 	int current;
 } bj_power[] = {
-	{ /* 0 - 135W (also default) */
-	.voltage = 19500,
-	.current = 6920
+	{ /* 0 - 90W (also default) */
+	.voltage = 19000,
+	.current = 4740
 	},
-	{ /* 1 - 230W */
-	.voltage = 19500,
-	.current = 11800
+	{ /* 1 - 135W */
+	.voltage = 19000,
+	.current = 6920
 	},
 };
 

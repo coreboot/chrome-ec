@@ -141,7 +141,7 @@ enum pd_rx_errors {
 #define RDO_FIXED_VAR_MAX_CURR(ma) ((((ma) / 10) & 0x3FF) << 0)
 
 #define RDO_BATT_OP_POWER(mw)      ((((mw) / 250) & 0x3FF) << 10)
-#define RDO_BATT_MAX_POWER(mw)     ((((mw) / 250) & 0x3FF) << 10)
+#define RDO_BATT_MAX_POWER(mw)     ((((mw) / 250) & 0x3FF) << 0)
 
 #define RDO_FIXED(n, op_ma, max_ma, flags) \
 				(RDO_OBJ_POS(n) | (flags) | \
@@ -1466,6 +1466,16 @@ unsigned pd_get_max_voltage(void);
  * @return 1 if voltage supported, 0 if not
  */
 __override_proto int pd_is_valid_input_voltage(int mv);
+
+/*
+ * Return the appropriate set of Source Capability PDOs to offer this
+ * port
+ *
+ * @param src_pdo	Will point to appropriate PDO(s) to offer
+ * @param port		USB-C port number
+ * @return		Number of PDOs
+ */
+int pd_get_source_pdo(const uint32_t **src_pdo_p, const int port);
 
 /**
  * Request a new operating voltage.

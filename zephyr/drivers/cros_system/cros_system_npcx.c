@@ -64,10 +64,15 @@ struct cros_system_npcx_data {
  * total RAM size = code ram + data ram + extra 2K for ROM functions
  * divided by the block size 32k.
  */
+#if DT_NODE_EXISTS(DT_NODELABEL(bootloader_ram))
+#define BT_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(bootloader_ram))
+#else
+#define BT_RAM_SIZE 0
+#endif
 #define DATA_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(sram0))
 #define CODE_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(flash0))
 #define NPCX_RAM_BLOCK_COUNT \
-	((DATA_RAM_SIZE + CODE_RAM_SIZE + KB(2)) / NPCX_RAM_BLOCK_SIZE)
+	((DATA_RAM_SIZE + CODE_RAM_SIZE + BT_RAM_SIZE) / NPCX_RAM_BLOCK_SIZE)
 
 /* Valid bit-depth of RAM block Power-Down control (RAM_PD) registers. Use its
  * mask to power down all unnecessary RAM blocks before hibernating.
@@ -553,7 +558,7 @@ static const struct cros_system_driver_api cros_system_driver_npcx_api = {
 	.chip_vendor = cros_system_npcx_get_chip_vendor,
 	.chip_name = cros_system_npcx_get_chip_name,
 	.chip_revision = cros_system_npcx_get_chip_revision,
-#ifdef CONFIG_SOC_POWER_MANAGEMENT_TRACE
+#ifdef CONFIG_NPCX_PM_TRACE
 	.deep_sleep_ticks = cros_system_npcx_deep_sleep_ticks,
 #endif
 };

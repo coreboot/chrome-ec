@@ -3114,6 +3114,8 @@
 #undef CONFIG_LED_DRIVER_LP5562  /* LP5562, on I2C interface */
 #undef CONFIG_LED_DRIVER_MP3385   /* MPS MP3385, on I2C */
 #undef CONFIG_LED_DRIVER_OZ554   /* O2Micro OZ554, on I2C */
+#undef CONFIG_LED_DRIVER_IS31FL3743B /* Lumissil IS31FL3743B on SPI */
+#undef CONFIG_LED_DRIVER_AW20198     /* Awinic AW20198 on I2C */
 
 /* Offset in flash where little firmware will live. */
 #undef CONFIG_LFW_OFFSET
@@ -3634,6 +3636,29 @@
  * keyboard backlight.
  */
 #undef CONFIG_KBLIGHT_ENABLE_PIN
+
+/*
+ * RGB Keyboard
+ */
+#undef CONFIG_RGB_KEYBOARD
+
+/*
+ * Enable debug messages from a RGB keyboard task.
+ */
+#undef CONFIG_RGB_KEYBOARD_DEBUG
+
+/*
+ * Enable demo for RGB keyboard to run on reset.
+ *
+ * FLOW: In each iteration, a new color is placed in (0,0) and the rest of LEDs
+ * copy colors from adjacent LEDs.
+ *
+ * DOT: A red dot is placed on (0,0) and traverses the grid from top to bottom
+ * left to right. After the entire matrix is traversed, it's repeated with a
+ * new color.
+ */
+#undef CONFIG_RGBKBD_DEMO_FLOW
+#undef CONFIG_RGBKBD_DEMO_DOT
 
 /* Support Real-Time Clock (RTC) */
 #undef CONFIG_RTC
@@ -6757,6 +6782,14 @@
 /* AMD STT requires AMD SB-RMI to be enabled */
 #if defined(CONFIG_AMD_STT) && !defined(CONFIG_AMD_SB_RMI)
 #define CONFIG_AMD_SB_RMI
+#endif
+
+/*
+ * Default timeout value for which EC has to wait for system to exit from S5
+ * before performing RTC reset and moving the system to G3.
+ */
+#if defined(CONFIG_BOARD_HAS_RTC_RESET) && !defined(CONFIG_S5_EXIT_WAIT)
+#define CONFIG_S5_EXIT_WAIT 4
 #endif
 
 #endif  /* __CROS_EC_CONFIG_H */

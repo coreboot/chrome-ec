@@ -25,12 +25,10 @@ struct common_pwrseq_config {
 /* The wait time is ~150 msec, allow for safety margin. */
 #define IN_PCH_SLP_SUS_WAIT_TIME_MS 250
 
-void power_update_signals(void);
 enum power_states_ndsx chipset_pwr_sm_run(
 				enum power_states_ndsx curr_state,
 				const struct common_pwrseq_config *com_cfg);
-void chipset_force_shutdown(enum pwrseq_chipset_shutdown_reason reason,
-				const struct common_pwrseq_config *com_cfg);
+void new_chipset_force_shutdown(void);
 void chipset_reset(enum pwrseq_chipset_shutdown_reason reason);
 void init_chipset_pwr_seq_state(void);
 void chipset_request_exit_hardoff(bool should_exit);

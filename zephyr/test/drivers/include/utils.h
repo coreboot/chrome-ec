@@ -6,9 +6,11 @@
 #ifndef ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_
 #define ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_
 
+#include <drivers/emul.h>
 #include <drivers/gpio/gpio_emul.h>
 
 #include "charger.h"
+#include "emul/tcpc/emul_tcpci_partner_src.h"
 #include "extpower.h"
 #include "host_command.h"
 
@@ -189,6 +191,26 @@ static inline struct ec_response_typec_status host_cmd_typec_status(int port)
 	return response;
 }
 
+/**
+ * Run the host command to get the charge state.
+ *
+ * @return The result of the query.
+ */
+static inline struct ec_response_charge_control
+host_cmd_get_charge_control(void)
+{
+	struct ec_params_charge_control params = {
+		.cmd = EC_CHARGE_CONTROL_CMD_GET
+	};
+	struct ec_response_charge_control response;
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND(EC_CMD_CHARGE_CONTROL, 2, response, params);
+
+	zassume_ok(host_command_process(&args),
+		   "Failed to get charge control values");
+	return response;
+}
+
 #define GPIO_ACOK_OD_NODE DT_NODELABEL(gpio_acok_od)
 #define GPIO_ACOK_OD_PIN  DT_GPIO_PIN(GPIO_ACOK_OD_NODE, gpios)
 
@@ -214,5 +236,30 @@ static inline void set_ac_enabled(bool enabled)
 	k_sleep(K_MSEC(CONFIG_EXTPOWER_DEBOUNCE_MS + 1));
 	zassume_equal(enabled, extpower_is_present(), NULL);
 }
+
+/**
+ * @brief Connect a power source to a given port.
+ *
+ * Note: this is function currently only supports an ISL923X charger chip.
+ *
+ * @param src Pointer to the emulated source
+ * @param pdo_index The index of the PDO object within the src to use
+ * @param tcpci_emul The TCPCI emulator that the source will connect to
+ * @param charger_emul The charger chip emulator
+ */
+void connect_source_to_port(struct tcpci_src_emul *src, int pdo_index,
+			    const struct emul *tcpci_emul,
+			    const struct emul *charger_emul);
+
+/**
+ * @brief Disconnect a power source from a given port.
+ *
+ * Note: this is function currently only supports an ISL923X charger chip.
+ *
+ * @param tcpci_emul The TCPCI emulator that will be disconnected
+ * @param charger_emul The charger chip emulator
+ */
+void disconnect_source_from_port(const struct emul *tcpci_emul,
+				 const struct emul *charger_emul);
 
 #endif /* ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_ */

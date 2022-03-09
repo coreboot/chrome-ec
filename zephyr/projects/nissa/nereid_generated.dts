@@ -85,7 +85,7 @@
 			gpios = <&gpiok 7 GPIO_OUTPUT>;
 		};
 		gpio_ec_soc_int_odl: ec_soc_int_odl {
-			gpios = <&gpiod 5 GPIO_ODR_LOW>;
+			gpios = <&gpiod 5 GPIO_ODR_HIGH>;
 			enum-name = "GPIO_EC_INT_L";
 		};
 		gpio_ec_soc_pch_pwrok_od: ec_soc_pch_pwrok_od {
@@ -214,13 +214,13 @@
 	named-i2c-ports {
 		compatible = "named-i2c-ports";
 
-		i2c_ec_i2c_batt: ec_i2c_batt {
-			i2c-port = <&i2c1>;
-			enum-name = "I2C_PORT_BATTERY";
-		};
 		i2c_ec_i2c_eeprom: ec_i2c_eeprom {
 			i2c-port = <&i2c0>;
 			enum-name = "I2C_PORT_EEPROM";
+		};
+		i2c_ec_i2c_batt: ec_i2c_batt {
+			i2c-port = <&i2c1>;
+			enum-name = "I2C_PORT_BATTERY";
 		};
 		i2c_ec_i2c_sensor: ec_i2c_sensor {
 			i2c-port = <&i2c2>;

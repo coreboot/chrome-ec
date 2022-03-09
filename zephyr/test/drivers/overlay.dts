@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include <cros/binman.dtsi>
 #include <cros/thermistor/thermistor.dtsi>
 #include <dt-bindings/gpio_defines.h>
 #include <freq.h>
@@ -12,6 +13,7 @@
 		cros-ec,espi = &espi0;
 		cros-ec,watchdog = &wdt_counter;
 		cros-ec,raw-kb = &cros_kb_raw;
+		cros-ec,flash-controller = &cros_flash;
 	};
 
 	aliases {
@@ -609,8 +611,9 @@
 			alert_gpio = <&usb_c1_tcpc_int_odl>;
 		};
 
-		ps8xxx_emul: ps8xxx_emul {
+		ps8xxx_emul: ps8xxx_emul@b1 {
 			compatible = "cros,ps8xxx-emul";
+			reg = <0xb1>;
 			tcpci-i2c = <&tcpci_ps8xxx_emul>;
 			p0-i2c-addr = <0x8>;
 			p1-i2c-addr = <0x9>;
@@ -671,6 +674,11 @@
 	cros_kb_raw: kb-raw-emul {
 		compatible = "cros-ec,kb-raw-emul";
 		label = "KB_RAW";
+	};
+
+	cros_flash: cros-flash {
+		compatible = "cros-ec,flash-emul";
+		label = "FLASH";
 	};
 };
 

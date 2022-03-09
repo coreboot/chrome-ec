@@ -273,6 +273,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_TCA64XXA
                                                 "${PLATFORM_EC}/driver/ioexpander/tca64xxa.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
                                                 "${PLATFORM_EC}/common/keyboard_scan.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RGB_KEYBOARD
+                                                "${PLATFORM_EC}/common/rgb_keyboard.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_8042
                                                 "${PLATFORM_EC}/common/keyboard_8042.c"
                                                 "${PLATFORM_EC}/common/keyboard_8042_sharedlib.c")
@@ -334,8 +336,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7280
                                                 "${PLATFORM_EC}/power/qcom.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PANIC
                                                 "${PLATFORM_EC}/common/panic_output.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM
-                                                "${PLATFORM_EC}/common/pwm.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SHA256_SW
                                                 "${PLATFORM_EC}/common/sha256.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCH

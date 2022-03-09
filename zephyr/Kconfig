@@ -37,6 +37,7 @@ rsource "shim/chip/npcx/Kconfig.npcx"
 rsource "Kconfig.adc"
 rsource "Kconfig.ap_power"
 rsource "Kconfig.battery"
+rsource "Kconfig.charger"
 rsource "Kconfig.board_version"
 rsource "Kconfig.console"
 rsource "Kconfig.console_cmd_mem"
@@ -658,7 +659,7 @@ config PLATFORM_EC_POWER_BUTTON
 	  This requires a GPIO named GPIO_POWER_BUTTON_L in gpio_map.h.
 
 config PLATFORM_EC_PWM
-	bool "PWM (Pulse Width Modulation) module"
+	bool
 	default y if PWM
 	help
 	  Enable the PWM (Pulse Width Modulation) module. This module is used to
@@ -670,9 +671,8 @@ config PLATFORM_EC_PWM_DISPLIGHT
 	depends on PLATFORM_EC_PWM
 	help
 	  Enables display backlight controlled by a PWM signal connected
-	  directly to the EC chipset. The board devicetree file must define the
-	  PWM channel used for the display backlight control and assign the
-	  "displight" node label to it.
+	  directly to the EC chipset. The board devicetree file must define a
+	  "cros-ec,displight" compatible device node.
 
 config PLATFORM_EC_RTC
 	bool "Real-time clock (RTC)"
