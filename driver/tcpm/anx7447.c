@@ -346,14 +346,10 @@ static int anx7447_init(int port)
 	if (rv)
 		return rv;
 
-	/*
-	 * Specifically disable voltage alarms, as VBUS_VOLTAGE_ALARM_HI may
-	 * trigger repeatedly despite being masked (b/153989733)
-	 */
-	rv = tcpc_update16(port, TCPC_REG_POWER_CTRL,
-			   TCPC_REG_POWER_CTRL_VBUS_VOL_MONITOR_DIS, MASK_SET);
-	if (rv)
-		return rv;
+	/* Set VBUS_VOLTAGE_ALARM_HI threshold */
+	RETURN_ERROR(tcpc_write16(port, TCPC_REG_VBUS_VOLTAGE_ALARM_HI_CFG, 0x3FF));
+	/* Set VCONN_VOLTAGE_ALARM_HI threshold to 6V */
+	RETURN_ERROR(tcpc_write16(port, VCONN_VOLTAGE_ALARM_HI_CFG, 0xF0));
 
 	/* ADC enable, use to monitor VBUS voltage */
 	rv = tcpc_read(port, ANX7447_REG_ADC_CTRL_1, &reg);
@@ -513,10 +509,10 @@ static int anx7447_mux_init(const struct usb_mux *me)
 
 	/*
 	 * find corresponding anx7447 SPI address according to
-	 * specified TCPC address
+	 * specified MUX address
 	 */
 	for (i = 0; i < ARRAY_SIZE(anx7447_i2c_addrs_flags); i++) {
-		if (I2C_STRIP_FLAGS(tcpc_config[port].i2c_info.addr_flags) ==
+		if (I2C_STRIP_FLAGS(usb_muxes[port].i2c_addr_flags) ==
 		    I2C_STRIP_FLAGS(
 			    anx7447_i2c_addrs_flags[i].tcpc_addr_flags)) {
 			anx[port].i2c_addr_flags =
@@ -526,8 +522,7 @@ static int anx7447_mux_init(const struct usb_mux *me)
 	}
 	if (!I2C_STRIP_FLAGS(anx[port].i2c_addr_flags)) {
 		ccprintf("TCPC I2C addr 0x%x is invalid for ANX7447\n",
-			 I2C_STRIP_FLAGS(tcpc_config[port]
-				      .i2c_info.addr_flags));
+			 I2C_STRIP_FLAGS(usb_muxes[port].i2c_addr_flags));
 		return EC_ERROR_UNKNOWN;
 	}
 

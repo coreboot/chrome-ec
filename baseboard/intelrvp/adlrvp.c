@@ -12,6 +12,7 @@
 #include "common.h"
 #include "driver/retimer/bb_retimer_public.h"
 #include "extpower.h"
+#include "gpio.h"
 #include "hooks.h"
 #include "ioexpander.h"
 #include "isl9241.h"
@@ -530,12 +531,12 @@ __override void board_pre_task_i2c_peripheral_init(void)
 	/* Make sure SBU are routed to CCD or AUX based on CCD status at init */
 	board_connect_c0_sbu_deferred();
 
+	/* Configure battery type */
+	configure_battery_type();
+
 	/* Reconfigure board specific charger drivers */
 	configure_charger();
 
 	/* Configure board specific retimer & mux */
 	configure_retimer_usbmux();
-
-	/* Configure battery type */
-	configure_battery_type();
 }

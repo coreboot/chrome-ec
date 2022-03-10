@@ -8,11 +8,13 @@
 #include "adc_chip.h"
 #include "button.h"
 #include "cbi_fw_config.h"
+#include "cbi_ssfc.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
 #include "cros_board_info.h"
 #include "driver/accel_bma2x2.h"
+#include "driver/accel_bma422.h"
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/sm5803.h"
@@ -263,7 +265,7 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
 			.port = I2C_PORT_SUB_USB_C1,
-			.addr_flags = PS8751_I2C_ADDR1_FLAGS,
+			.addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
 		},
 		.drv = &ps8xxx_tcpm_drv,
 	},
@@ -280,7 +282,7 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
 		.usb_port = 1,
 		.i2c_port = I2C_PORT_SUB_USB_C1,
-		.i2c_addr_flags = PS8751_I2C_ADDR1_FLAGS,
+		.i2c_addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
 		.driver = &tcpci_tcpm_usb_mux_driver,
 		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
 	},
@@ -292,6 +294,7 @@ static struct mutex g_base_mutex;
 
 /* Sensor Data */
 static struct accelgyro_saved_data_t g_bma253_data;
+static struct accelgyro_saved_data_t g_bma422_data;
 static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 /* Matrix to rotate accelrator into standard reference frame */
@@ -381,6 +384,41 @@ struct motion_sensor_t motion_sensors[] = {
 
 unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
+struct motion_sensor_t bma422_lid_accel = {
+	.name = "Lid Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_BMA422,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_LID,
+	.drv = &bma4_accel_drv,
+	.mutex = &g_lid_mutex,
+	.drv_data = &g_bma422_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = BMA4_I2C_ADDR_PRIMARY,
+	.rot_standard_ref = &lid_standard_ref,
+	.default_range = 2,
+	.min_frequency = BMA4_ACCEL_MIN_FREQ,
+	.max_frequency = BMA4_ACCEL_MAX_FREQ,
+	.config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 12500 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+		/* Sensor on in S3 */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 12500 | ROUND_UP_FLAG,
+			.ec_rate = 0,
+		},
+	},
+};
+
+static void board_update_motion_sensor_config(void)
+{
+	if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_BMA422)
+		motion_sensors[LID_ACCEL] = bma422_lid_accel;
+}
+
 void board_init(void)
 {
 	int on;
@@ -415,6 +453,8 @@ void board_init(void)
 		motion_sensor_count = ARRAY_SIZE(motion_sensors);
 		/* Enable Base Accel interrupt */
 		gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
+
+		board_update_motion_sensor_config();
 	} else {
 		motion_sensor_count = 0;
 		gmr_tablet_switch_disable();

@@ -5,12 +5,13 @@
  * Power and battery LED control.
  */
 
+#include <drivers/gpio.h>
+
 #include "battery.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "chipset.h"
 #include "ec_commands.h"
-#include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "led_common.h"
@@ -122,7 +123,7 @@ struct node_prop_t {
 	+ LED_PERIOD(color_num, state_id)
 
 #define ACC_PERIOD(color_num, state_id)					\
-	(0 UTIL_LISTIFY(color_num, LED_PLUS_PERIOD, state_id))
+	(0 LISTIFY(color_num, LED_PLUS_PERIOD, (), state_id))
 
 #define GET_PROP(id, prop)						\
 	COND_CODE_1(DT_NODE_HAS_PROP(id, prop),				\
@@ -264,7 +265,7 @@ static int find_color(int node_idx, int ticks)
 		ticks = ticks % GET_PERIOD(node_idx, MAX_COLOR - 1);
 
 		for (color_idx = 0; color_idx < MAX_COLOR; color_idx++) {
-			if (GET_PERIOD(node_idx, color_idx) < ticks)
+			if (GET_PERIOD(node_idx, color_idx) > ticks)
 				break;
 		}
 	}
@@ -296,7 +297,7 @@ static void led_tick(void)
 	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
 		board_led_set_color();
 }
-DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_SECOND, led_tick, HOOK_PRIO_DEFAULT);
 
 void led_control(enum ec_led_id led_id, enum ec_led_state state)
 {

@@ -18,7 +18,12 @@ def register_corsola_project(
     register_func(
         project_name=project_name,
         zephyr_board=chip,
-        dts_overlays=[here / "power_signal.dts", *extra_dts_overlays],
+        dts_overlays=[
+            here / "common.dts",
+            here / "power_signal.dts",
+            here / "usba.dts",
+            *extra_dts_overlays,
+        ],
         kconfig_files=[here / "prj.conf", *extra_kconfig_files],
     )
 
@@ -48,7 +53,9 @@ register_corsola_project(
         here / "interrupts_kingler.dts",
         here / "cbi_eeprom.dts",
         here / "gpio_kingler.dts",
+        here / "led_kingler.dts",
         here / "motionsense_kingler.dts",
+        here / "pwm_kingler.dts",
     ],
     extra_kconfig_files=[here / "prj_kingler.conf"],
 )

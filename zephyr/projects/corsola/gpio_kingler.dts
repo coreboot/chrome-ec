@@ -4,6 +4,11 @@
  */
 
 / {
+	aliases {
+		gpio-wp = &gpio_ec_wp_l;
+		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
+	};
+
 	named-gpios {
 		compatible = "named-gpios";
 
@@ -41,7 +46,7 @@
 			gpios = <&gpioc 6 GPIO_OUT_LOW>;
 		};
 		en_ec_id_odl {
-			gpios = <&gpio7 6 GPIO_ODR_LOW>;
+			gpios = <&gpio7 6 GPIO_ODR_HIGH>;
 		};
 		sys_rst_odl {
 			gpios = <&gpioc 5 (GPIO_ODR_LOW | GPIO_VOLTAGE_1P8)>;
@@ -81,8 +86,7 @@
 			gpios = <&gpioe 4 GPIO_INPUT>;
 		};
 		gpio_ec_wp_l: ec_wp_odl {
-			gpios = <&gpioe 3 (GPIO_OPEN_DRAIN)>;
-			enum-name = "GPIO_WP_L";
+			gpios = <&gpioe 3 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 		};
 		lid_accel_int_l {
 			gpios = <&gpiob 3 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
@@ -95,9 +99,8 @@
 			gpios = <&gpioc 1 (GPIO_ODR_HIGH | GPIO_VOLTAGE_1P8)>;
 			enum-name = "GPIO_EC_INT_L";
 		};
-		ec_kso_02_inv {
-			gpios = <&gpio1 7 GPIO_OUT_LOW>;
-			enum-name = "GPIO_KBD_KSO2";
+		gpio_ec_kso_02_inv: ec_kso_02_inv {
+			gpios = <&gpio1 7 (GPIO_OUT_LOW | GPIO_ACTIVE_LOW)>;
 		};
 		gpio_usb_c0_bc12_int_odl: usb_c0_bc12_int_odl {
 			gpios = <&gpio8 3 GPIO_INPUT>;
@@ -112,7 +115,6 @@
 		};
 		ec_rst_odl {
 			gpios = <&gpio7 7 GPIO_INPUT>;
-			enum-name = "GPIO_EC_RST_ODL";
 		};
 		gpio_lid_open: lid_open {
 			gpios = <&gpiod 2 GPIO_INPUT>;
@@ -172,6 +174,7 @@
 		};
 		en_pp5000_usb_a0_vbus: en_pp5000_usb_a0_vbus_x {
 			gpios = <&gpio6 0 GPIO_OUT_LOW>;
+			enum-name = "GPIO_EN_PP5000_USB_A0_VBUS";
 		};
 		gpio_hdmi_prsnt_odl: hdmi_prsnt_odl {
 			gpios = <&gpio3 7 GPIO_INPUT>;

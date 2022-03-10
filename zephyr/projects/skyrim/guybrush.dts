@@ -4,11 +4,15 @@
  */
 
 / {
+	aliases {
+		gpio-wp = &gpio_wp;
+		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
+	};
+
 	named-gpios {
 		/* Guybrush-specific GPIO customizations */
-		ec_wp_l {
-			gpios = <&gpio5 0 GPIO_INPUT>;
-			enum-name = "GPIO_WP_L";
+		gpio_wp: ec_wp_l {
+			gpios = <&gpio5 0 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 		};
 		gpio_ec_pwr_btn_odl: ec_pwr_btn_odl {
 			gpios = <&gpio0 1 GPIO_INPUT>;
@@ -22,11 +26,9 @@
 		};
 		gpio_pg_groupc_s0_od: pg_groupc_s0_od {
 			gpios = <&gpioa 3 GPIO_INPUT>;
-			enum-name = "GPIO_PG_GROUPC_S0_OD";
 		};
 		gpio_pg_lpddr4x_s3_od: pg_lpddr4x_s3_od {
 			gpios = <&gpio9 5 GPIO_INPUT>;
-			enum-name = "GPIO_PG_LPDDR4X_S3_OD";
 		};
 		ec_soc_pwr_good {
 			gpios = <&gpiod 3 GPIO_OUT_LOW>;
@@ -54,7 +56,6 @@
 		};
 		gpio_usb_c0_c1_fault_odl: usb_c0_c1_fault_odl {
 			gpios = <&gpio7 3 GPIO_ODR_HIGH>;
-			enum-name = "GPIO_USB_C0_C1_FAULT_ODL";
 		};
 		3axis_int_l {
 			gpios = <&gpioa 2 GPIO_INPUT_PULL_DOWN>;
@@ -87,6 +88,9 @@
 		};
 		ec_pwm7 {
 			gpios = <&gpio6 0 GPIO_INPUT_PULL_UP>;
+		};
+		6axis_int_l {
+			gpios = <&gpioa 0 GPIO_INPUT_PULL_UP>;
 		};
 	};
 

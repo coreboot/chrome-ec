@@ -23,19 +23,28 @@ func (c *genChip) Name() string {
 }
 
 func (c *genChip) EnabledNodes() []string {
-	return []string{"adc0", "i2c0", "pwm1"}
+	return []string{"adc0", "i2c0", "i2c1", "i2c2", "pwm1"}
 }
 
 func (c *genChip) Adc(pin string) string {
 	return pin
 }
 
-func (c *genChip) Gpio(pin string) string {
-	return fmt.Sprintf("gpio %s", pin)
+func (c *genChip) Gpio(pin string) (string, int) {
+
+	return fmt.Sprintf("gpio%c", pin[0]), int(pin[1] - '0')
 }
 
 func (c *genChip) I2c(pin string) string {
-	return "i2c0"
+	switch pin {
+	case "B2":
+		return "i2c2"
+	case "B3":
+		return "i2c1"
+	case "B4":
+		return "i2c0"
+	}
+	panic(fmt.Sprintf("Unknown I2C: %s", pin))
 }
 
 func (c *genChip) Pwm(pin string) string {
@@ -48,7 +57,9 @@ func TestGenerate(t *testing.T) {
 			&pm.Pin{pm.ADC, "A1", "EC_ADC_1", "ENUM_ADC_1"},
 		},
 		I2c: []*pm.Pin{
-			&pm.Pin{pm.I2C, "B2", "EC_I2C_CLK_0", "ENUM_I2C_0"},
+			&pm.Pin{pm.I2C, "B4", "EC_C_I2C_CLK", "ENUM_I2C_0"},
+			&pm.Pin{pm.I2C, "B3", "EC_B_I2C_CLK", "ENUM_I2C_1"},
+			&pm.Pin{pm.I2C, "B2", "EC_A_I2C_CLK", "ENUM_I2C_2"},
 		},
 		Gpio: []*pm.Pin{
 			&pm.Pin{pm.Input, "C3", "EC_IN_1", "ENUM_IN_1"},
@@ -62,7 +73,7 @@ func TestGenerate(t *testing.T) {
 		},
 	}
 	var out bytes.Buffer
-	pm.Generate(&out, pins, &genChip{})
+	pm.Generate(&out, pins, &genChip{}, true)
 	/*
 	 * Rather than doing a golden output text compare, it would be better
 	 * to parse the device tree directly and ensuing it is correct.
@@ -92,19 +103,19 @@ func TestGenerate(t *testing.T) {
 		compatible = "named-gpios";
 
 		gpio_ec_in_1: ec_in_1 {
-			gpios = <&gpio C3 GPIO_INPUT>;
+			gpios = <&gpioC 3 GPIO_INPUT>;
 			enum-name = "ENUM_IN_1";
 		};
 		gpio_ec_in_3: ec_in_3 {
-			gpios = <&gpio G7 GPIO_INPUT_PULL_UP>;
+			gpios = <&gpioG 7 GPIO_INPUT_PULL_UP>;
 			enum-name = "ENUM_IN_3";
 		};
 		gpio_ec_in_4: ec_in_4 {
-			gpios = <&gpio H8 GPIO_INPUT_PULL_DOWN>;
+			gpios = <&gpioH 8 GPIO_INPUT_PULL_DOWN>;
 			enum-name = "ENUM_IN_4";
 		};
 		gpio_ec_out_2: ec_out_2 {
-			gpios = <&gpio D4 GPIO_OUTPUT>;
+			gpios = <&gpioD 4 GPIO_OUTPUT>;
 			enum-name = "ENUM_OUT_2";
 		};
 	};
@@ -112,9 +123,17 @@ func TestGenerate(t *testing.T) {
 	named-i2c-ports {
 		compatible = "named-i2c-ports";
 
-		i2c_ec_i2c_clk_0: ec_i2c_clk_0 {
+		i2c_ec_c_i2c_clk: ec_c_i2c_clk {
 			i2c-port = <&i2c0>;
 			enum-name = "ENUM_I2C_0";
+		};
+		i2c_ec_b_i2c_clk: ec_b_i2c_clk {
+			i2c-port = <&i2c1>;
+			enum-name = "ENUM_I2C_1";
+		};
+		i2c_ec_a_i2c_clk: ec_a_i2c_clk {
+			i2c-port = <&i2c2>;
+			enum-name = "ENUM_I2C_2";
 		};
 	};
 
@@ -140,8 +159,58 @@ func TestGenerate(t *testing.T) {
 	status = "okay";
 };
 
+&i2c1 {
+	status = "okay";
+};
+
+&i2c2 {
+	status = "okay";
+};
+
 &pwm1 {
 	status = "okay";
+};
+
+&gpioC {
+	gpio-line-names =
+		"",
+		"",
+		"",
+		"ec_in_1";
+};
+
+&gpioD {
+	gpio-line-names =
+		"",
+		"",
+		"",
+		"",
+		"ec_out_2";
+};
+
+&gpioG {
+	gpio-line-names =
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"ec_in_3";
+};
+
+&gpioH {
+	gpio-line-names =
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"ec_in_4";
 };
 `
 	exp := fmt.Sprintf(expFmt, time.Now().Year())

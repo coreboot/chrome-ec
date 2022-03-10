@@ -4,9 +4,12 @@
  */
 
 #include <dt-bindings/gpio_defines.h>
-#include <dt-bindings/wake_mask_event_defines.h>
 
 / {
+	aliases {
+		gpio-wp = &ec_flash_wp_odl;
+	};
+
 	named-gpios {
 		compatible = "named-gpios";
 
@@ -54,14 +57,14 @@
 			enum-name = "GPIO_AC_PRESENT";
 		};
 		ec_flash_wp_odl: ec_flash_wp_odl {
-			gpios = <&gpioi 4 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
-			enum-name = "GPIO_WP_L";
+			gpios = <&gpioi 4 (GPIO_INPUT | GPIO_VOLTAGE_1P8 |
+					   GPIO_ACTIVE_LOW)>;
 		};
 		spi0_cs: spi0_cs {
 			gpios = <&gpiom 5 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
 		gpio_x_ec_gpio2: x_ec_gpio2 {
-			gpios = <&gpiob 2 (GPIO_INPUT | GPIO_ODR_HIGH)>;
+			gpios = <&gpiob 2 GPIO_INPUT>;
 		};
 		usb_c0_ppc_bc12_int_odl: usb_c0_ppc_bc12_int_odl {
 			gpios = <&gpiod 1 GPIO_INPUT>;
@@ -108,6 +111,7 @@
 		};
 		en_pp5000_usb_a0_vbus: en_pp5000_usb_a0_vbus {
 			gpios = <&gpiob 7 GPIO_OUT_LOW>;
+			enum-name = "GPIO_EN_PP5000_USB_A0_VBUS";
 		};
 		usb_c0_ppc_frsinfo: usb_c0_ppc_frsinfo {
 			gpios = <&gpiof 0 GPIO_INPUT>;
@@ -169,10 +173,14 @@
 			gpios = <&gpioh 4 GPIO_OUT_LOW>;
 		};
 		gpio_ec_x_gpio3: ec_x_gpio3 {
-			gpios = <&gpioj 1 GPIO_INPUT>;
+			gpios = <&gpioj 1 GPIO_OUT_LOW>;
 		};
 		gpio_hdmi_prsnt_odl: hdmi_prsnt_odl {
 			gpios = <&gpioj 3 GPIO_INPUT>;
+		};
+		gpio_packet_mode_en: packet_mode_en {
+			gpios = <&gpiod 4 GPIO_OUT_LOW>;
+			enum-name = "GPIO_PACKET_MODE_EN";
 		};
 	};
 
@@ -188,23 +196,6 @@
 		gpio-ps185-pwrdn-odl = &gpio_ec_x_gpio3;
 	};
 
-	ec-mkbp-host-event-wakeup-mask {
-		compatible = "ec-wake-mask-event";
-		wakeup-mask = <(
-			HOST_EVENT_AC_CONNECTED |
-			HOST_EVENT_AC_DISCONNECTED |
-			HOST_EVENT_LID_OPEN |
-			HOST_EVENT_POWER_BUTTON |
-			HOST_EVENT_HANG_DETECT |
-			HOST_EVENT_MODE_CHANGE)>;
-	};
-
-	ec-mkbp-event-wakeup-mask {
-		compatible = "ec-wake-mask-event";
-		wakeup-mask = <(MKBP_EVENT_KEY_MATRIX |
-				MKBP_EVENT_HOST_EVENT)>;
-	};
-
 	hibernate-wake-pins {
 		compatible = "cros-ec,hibernate-wake-pins";
 		wakeup-irqs = <&int_ac_present
@@ -216,8 +207,6 @@
 		compatible = "unused-gpios";
 
 		unused-gpios =
-			/* packet_mode_en */
-			<&gpiod 4 GPIO_OUT_LOW>,
 			/* pg_pp5000_z2_od */
 			<&gpiod 2 GPIO_INPUT>,
 			/* pg_mt6315_proc_b_odl */
@@ -238,7 +227,7 @@
 			<&gpioi 3 GPIO_INPUT_PULL_DOWN>,
 			<&gpioi 5 GPIO_INPUT_PULL_DOWN>,
 			<&gpioi 6 GPIO_INPUT_PULL_DOWN>,
-			<&gpiom 6 GPIO_INPUT_PULL_DOWN>,
+			<&gpiom 6 (GPIO_INPUT_PULL_DOWN | GPIO_VOLTAGE_1P8)>,
 			/* spi_clk_gpg6 */
 			<&gpiog 6 GPIO_INPUT_PULL_UP>,
 			/* spi_mosi_gpg4 */

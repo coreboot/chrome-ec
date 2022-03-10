@@ -4,20 +4,20 @@
  */
 
 #include <device.h>
-#include <drivers/cros_cbi.h>
 
 #include "battery.h"
 #include "charger.h"
 #include "charge_state_v2.h"
 #include "chipset.h"
+#include "cros_cbi.h"
 #include "hooks.h"
 #include "usb_mux.h"
 #include "system.h"
 
 #include "sub_board.h"
 
-#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
+#include <logging/log.h>
+LOG_MODULE_REGISTER(nissa, CONFIG_NISSA_LOG_LEVEL);
 
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
@@ -37,7 +37,7 @@ static uint8_t cached_usb_pd_port_count;
 __override uint8_t board_get_usb_pd_port_count(void)
 {
 	if (cached_usb_pd_port_count == 0)
-		CPRINTS("USB PD Port count not initialized!");
+		LOG_WRN("USB PD Port count not initialized!");
 	return cached_usb_pd_port_count;
 }
 
@@ -99,7 +99,6 @@ enum nissa_sub_board_type nissa_get_sb_type(void)
 	static enum nissa_sub_board_type sb = NISSA_SB_UNKNOWN;
 	int ret;
 	uint32_t val;
-	const struct device *dev;
 
 	/*
 	 * Return cached value.
@@ -108,35 +107,52 @@ enum nissa_sub_board_type nissa_get_sb_type(void)
 		return sb;
 
 	sb = NISSA_SB_NONE;	/* Defaults to none */
-	dev = device_get_binding(CROS_CBI_LABEL);
-	if (dev == NULL) {
-		CPRINTS("No %s device", CROS_CBI_LABEL);
-	} else {
-		ret = cros_cbi_get_fw_config(dev, FW_SUB_BOARD, &val);
-		if (ret != 0) {
-			CPRINTS("Error retrieving CBI FW_CONFIG field %d",
-				FW_SUB_BOARD);
-			return sb;
-		}
-		switch (val) {
-		default:
-			CPRINTS("No sub-board defined");
-			break;
-		case FW_SUB_BOARD_1:
-			sb = NISSA_SB_C_A;
-			CPRINTS("SB: USB type C, USB type A");
-			break;
+	ret = cros_cbi_get_fw_config(FW_SUB_BOARD, &val);
+	if (ret != 0) {
+		LOG_WRN("Error retrieving CBI FW_CONFIG field %d",
+			FW_SUB_BOARD);
+		return sb;
+	}
+	switch (val) {
+	default:
+		LOG_WRN("No sub-board defined");
+		break;
+	case FW_SUB_BOARD_1:
+		sb = NISSA_SB_C_A;
+		LOG_INF("SB: USB type C, USB type A");
+		break;
 
-		case FW_SUB_BOARD_2:
-			sb = NISSA_SB_C_LTE;
-			CPRINTS("SB: USB type C, WWAN LTE");
-			break;
+	case FW_SUB_BOARD_2:
+		sb = NISSA_SB_C_LTE;
+		LOG_INF("SB: USB type C, WWAN LTE");
+		break;
 
-		case FW_SUB_BOARD_3:
-			sb = NISSA_SB_HDMI_A;
-			CPRINTS("SB: HDMI, USB type A");
-			break;
-		}
+	case FW_SUB_BOARD_3:
+		sb = NISSA_SB_HDMI_A;
+		LOG_INF("SB: HDMI, USB type A");
+		break;
 	}
 	return sb;
 }
+
+/* Called on AP S4 -> S3 transition */
+static void board_chipset_startup(void)
+{
+	/*
+	 * Enable USB-A vbus
+	 * TODO(b/222238390):remove when BC1.2 is enabled.
+	 */
+	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_en_usb_a0_vbus), 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
+
+/* Called on AP S4 -> S5 transition */
+static void board_chipset_shutdown(void)
+{
+	/*
+	 * Disable USB-A vbus
+	 * TODO(b/222238390):remove when BC1.2 is enabled.
+	 */
+	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_en_usb_a0_vbus), 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, board_chipset_shutdown, HOOK_PRIO_DEFAULT);

@@ -63,6 +63,9 @@ a corresponding Kconfig option for Zephyr'''
     parser.add_argument(
         '-D', '--debug', action='store_true',
         help='Enabling debugging (provides a full traceback on error)')
+    parser.add_argument(
+        '-i', '--ignore', action='append',
+        help='Kconfig options to ignore (without CONFIG_ prefix)')
     parser.add_argument('-I', '--search-path', type=str, action='append',
                         help='Search paths to look for Kconfigs')
     parser.add_argument('-p', '--prefix', type=str, default='PLATFORM_EC_',
@@ -70,7 +73,13 @@ a corresponding Kconfig option for Zephyr'''
     parser.add_argument('-s', '--srctree', type=str, default='zephyr/',
                         help='Path to source tree to look for Kconfigs')
 
-    subparsers = parser.add_subparsers(dest='cmd', required=True)
+    # TODO(sjg@chromium.org): The chroot uses a very old Python. Once it moves
+    # to 3.7 or later we can use this instead:
+    #    subparsers = parser.add_subparsers(dest='cmd', required=True)
+    subparsers = parser.add_subparsers(dest='cmd')
+    subparsers.required = True
+
+    subparsers.add_parser('build', help='Build new list of ad-hoc CONFIGs')
     subparsers.add_parser('check', help='Check for new ad-hoc CONFIGs')
 
     return parser.parse_args(argv)
@@ -269,7 +278,14 @@ class KconfigCheck:
                     current state of the Kconfig options
         """
         configs = self.read_configs(configs_file, use_defines)
-        kconfigs = self.scan_kconfigs(srcdir, prefix, search_paths)
+        try:
+            kconfigs = self.scan_kconfigs(srcdir, prefix, search_paths)
+        except kconfiglib.KconfigError:
+            # If we don't actually have access to the full Kconfig then we may
+            # get an error. Fall back to using manual methods.
+            kconfigs = self.scan_kconfigs(srcdir, prefix, search_paths,
+                                          try_kconfiglib=False)
+
         allowed = self.read_allowed(allowed_file)
         new_adhoc = self.find_new_adhoc(configs, kconfigs, allowed)
         unneeded_adhoc = self.find_unneeded_adhoc(kconfigs, allowed)
@@ -277,7 +293,7 @@ class KconfigCheck:
         return new_adhoc, unneeded_adhoc, updated_adhoc
 
     def do_check(self, configs_file, srcdir, allowed_file, prefix, use_defines,
-                 search_paths):
+                 search_paths, ignore=None):
         """Find new ad-hoc configs in the configs_file
 
         Args:
@@ -289,6 +305,9 @@ class KconfigCheck:
             use_defines: True if each line of the file starts with #define
             search_paths: List of project paths to search for Kconfig files, in
                 addition to the current directory
+            ignore: List of Kconfig options to ignore if they match an ad-hoc
+                CONFIG. This means they will not cause an error if they match
+                an ad-hoc CONFIG.
 
         Returns:
             Exit code: 0 if OK, 1 if a problem was found
@@ -314,12 +333,15 @@ To temporarily disable this, use: ALLOW_CONFIG=1 make ...
 ''', file=sys.stderr)
             return 1
 
+        if not ignore:
+            ignore = []
+        unneeded_adhoc = [name for name in unneeded_adhoc if name not in ignore]
         if unneeded_adhoc:
             with open(NEW_ALLOWED_FNAME, 'w') as out:
                 for config in updated_adhoc:
                     print('CONFIG_%s' % config, file=out)
-            now_in_kconfig = '\n'.join(['CONFIG_%s' % name
-                                        for name in unneeded_adhoc])
+            now_in_kconfig = '\n'.join(
+                ['CONFIG_%s' % name for name in unneeded_adhoc])
             print(f'''The following options are now in Kconfig:
 
 {now_in_kconfig}
@@ -332,6 +354,31 @@ update in your CL:
             return 1
         return 0
 
+    def do_build(self, configs_file, srcdir, allowed_file, prefix, use_defines,
+                 search_paths):
+        """Find new ad-hoc configs in the configs_file
+
+        Args:
+            configs_file: Filename containing CONFIG options to check
+            srcdir: Source directory to scan for Kconfig files
+            allowed_file: File containing allowed CONFIG options
+            prefix: Prefix to strip from the start of each Kconfig
+                (e.g. 'PLATFORM_EC_')
+            use_defines: True if each line of the file starts with #define
+            search_paths: List of project paths to search for Kconfig files, in
+                addition to the current directory
+
+        Returns:
+            Exit code: 0 if OK, 1 if a problem was found
+        """
+        new_adhoc, _, updated_adhoc = self.check_adhoc_configs(
+            configs_file, srcdir, allowed_file, prefix, use_defines,
+            search_paths)
+        with open(NEW_ALLOWED_FNAME, 'w') as out:
+            combined = sorted(new_adhoc + updated_adhoc)
+            for config in combined:
+                print(f'CONFIG_{config}', file=out)
+        print(f'New list is in {NEW_ALLOWED_FNAME}')
 
 def main(argv):
     """Main function"""
@@ -342,6 +389,11 @@ def main(argv):
     if args.cmd == 'check':
         return checker.do_check(
             configs_file=args.configs, srcdir=args.srctree,
+            allowed_file=args.allowed, prefix=args.prefix,
+            use_defines=args.use_defines, search_paths=args.search_path,
+            ignore=args.ignore)
+    elif args.cmd == 'build':
+        return checker.do_build(configs_file=args.configs, srcdir=args.srctree,
             allowed_file=args.allowed, prefix=args.prefix,
             use_defines=args.use_defines, search_paths=args.search_path)
     return 2

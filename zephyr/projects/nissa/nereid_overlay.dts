@@ -6,9 +6,15 @@
 #include <cros/thermistor/thermistor.dtsi>
 
 / {
+	aliases {
+		gpio-cbi-wp = &gpio_ec_cbi_wp;
+		gpio-wp = &gpio_ec_wp_odl;
+		int-wp = &int_wp_l;
+	};
+
 	batteries {
-		default_battery: lgc {
-			compatible = "lgc,ap18c8k";
+		default_battery: smp {
+			compatible = "smp,l20m3pg0";
 		};
 	};
 
@@ -38,6 +44,16 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "lid_interrupt";
 		};
+		int_tablet_mode: tablet_mode {
+			irq-pin = <&gpio_tablet_mode_l>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "gmr_tablet_switch_isr";
+		};
+		int_imu: ec_imu {
+		  irq-pin = <&gpio_imu_int_l>;
+		  flags = <GPIO_INT_EDGE_FALLING>;
+		  handler = "bmi3xx_interrupt";
+		};
 		int_usb_c0: usb_c0 {
 			irq-pin = <&gpio_usb_c0_int_odl>;
 			flags = <GPIO_INT_EDGE_FALLING>;
@@ -56,6 +72,14 @@
 	};
 
 	named-gpios {
+		/*
+		 * EC doesn't take any specific action on CC/SBU disconnect due to
+		 * fault, but this definition is useful for hardware testing.
+		 */
+		gpio_usb_c0_prot_fault_odl: usb_c0_prot_fault_odl {
+			gpios = <&gpiok 6 GPIO_INPUT_PULL_UP>;
+		};
+
 		gpio_sb_1: sb_1 {
 			gpios = <&gpioe 6 GPIO_INPUT_PULL_UP>;
 			no-auto-init;
@@ -124,7 +148,7 @@
 		ambient {
 			compatible = "cros-ec,temp-sensor-thermistor";
 			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
-			label = "Ambiient";
+			label = "Ambient";
 			enum-name = "TEMP_SENSOR_AMB";
 			temp_fan_off = <35>;
 			temp_fan_max = <60>;
@@ -133,27 +157,6 @@
 			temp_host_release_high = <80>;
 			adc = <&adc_temp_sensor_3>;
 		};
-
-		/*
-		 * TODO(b/215449005): Re-enable when all ADC
-		 * channels supported.
-		 */
-		/delete-node/ ambient;
-	};
-	/* TODO(b/215449005): Re-enable when all ADC channels supported. */
-	named-adc-channels {
-		compatible = "named-adc-channels";
-		/delete-node/ temp_sensor_3;
-	};
-
-	/*
-	 * Alias kblist to correct node.
-	 */
-	named-pwms {
-		compatible = "named-pwms";
-
-		kblight: pwm_kb_bl {
-		};
 	};
 
 	usbc {
@@ -161,14 +164,12 @@
 			bc12 {
 				compatible = "pericom,pi3usb9201";
 				port = <&i2c_ec_i2c_usb_c0>;
-				irq = <&int_usb_c0>;
 			};
 		};
 		port1 {
 			bc12 {
 				compatible = "pericom,pi3usb9201";
 				port = <&i2c_ec_i2c_sub_usb_c1>;
-				irq = <&int_usb_c1>;
 			};
 		};
 	};
@@ -176,6 +177,18 @@
 
 &thermistor_3V3_51K1_47K_4050B {
 	status = "okay";
+};
+
+&adc_ec_vsense_pp3300_s5 {
+	/*
+	 * Voltage divider on input has 47k upper and 220k lower legs with 3 V
+	 * full-scale reading on the ADC. Apply the largest possible multiplier
+	 * (without overflowing int32) to get the best possible approximation
+	 * of the actual ratio, but derate by a factor of two to ensure
+	 * unexpectedly high values won't overflow.
+	 */
+	mul = <(715828 / 2)>;
+	div = <(589820 / 2)>;
 };
 
 /* Set bus speeds for I2C */
@@ -191,8 +204,6 @@
 		pagesize = <16>;
 		address-width = <8>;
 		timeout = <5>;
-		/* gpio_ec_wp_odl */
-		wp-gpios = <&gpioa 6 GPIO_INPUT>;
 	};
 };
 
