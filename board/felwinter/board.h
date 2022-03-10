@@ -87,8 +87,8 @@
  * Passive USB-C cables only support up to 60W.
  */
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
-#define PD_MAX_CURRENT_MA	3000
+#define PD_MAX_POWER_MW		65000
+#define PD_MAX_CURRENT_MA	3250
 #define PD_MAX_VOLTAGE_MV	20000
 
 /*
@@ -200,6 +200,7 @@ enum adc_channel {
 enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
 	TEMP_SENSOR_2_FAN,
+	TEMP_SENSOR_3_CHARGER,
 	TEMP_SENSOR_COUNT
 };
 

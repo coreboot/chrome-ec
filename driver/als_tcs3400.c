@@ -97,11 +97,20 @@ static inline int tcs3400_i2c_write8(const struct motion_sensor_t *s,
 	return i2c_write8(s->port, s->i2c_spi_addr_flags, reg, data);
 }
 
+#ifdef CONFIG_ALS_TCS3400_EMULATED_IRQ_EVENT
 static void tcs3400_read_deferred(void)
+#else
+void tcs3400_interrupt(enum gpio_signal signal)
+#endif
 {
+	if (IS_ENABLED(CONFIG_ACCEL_FIFO))
+		last_interrupt_timestamp = __hw_clock_source_read();
+
 	task_set_event(TASK_ID_MOTIONSENSE, CONFIG_ALS_TCS3400_INT_EVENT);
 }
+#ifdef CONFIG_ALS_TCS3400_EMULATED_IRQ_EVENT
 DECLARE_DEFERRED(tcs3400_read_deferred);
+#endif
 
 /* convert ATIME register to integration time, in microseconds */
 int tcs3400_get_integration_time(int atime)
@@ -134,16 +143,10 @@ static int tcs3400_read(const struct motion_sensor_t *s, intv3_t v)
 	if (ret)
 		return ret;
 
-	if (IS_ENABLED(CONFIG_ALS_TCS3400_EMULATED_IRQ_EVENT)) {
-		int atime;
-
-		ret = tcs3400_i2c_read8(s, TCS_I2C_ATIME, &atime);
-		if (ret)
-			return ret;
-
-		hook_call_deferred(&tcs3400_read_deferred_data,
-				tcs3400_get_integration_time(atime));
-	}
+#ifdef CONFIG_ALS_TCS3400_EMULATED_IRQ_EVENT
+	hook_call_deferred(&tcs3400_read_deferred_data,
+			   tcs3400_get_integration_time(atime));
+#endif
 
 	/*
 	 * If write succeeded, we've started the read process, but can't
@@ -489,6 +492,8 @@ static int tcs3400_post_events(struct motion_sensor_t *s,
 	      (raw_data[BLUE_CRGB_IDX] != TCS_SATURATION_LEVEL) &&
 	      (raw_data[GREEN_CRGB_IDX] != TCS_SATURATION_LEVEL)))) {
 
+		void *udata = vector.udata;
+
 		if (is_spoof(rgb_s)) {
 			memcpy(last_v, rgb_s->spoof_xyz, sizeof(rgb_s->spoof_xyz));
 		} else if (is_calibration) {
@@ -499,7 +504,7 @@ static int tcs3400_post_events(struct motion_sensor_t *s,
 			memcpy(last_v, xyz_data, sizeof(xyz_data));
 		}
 
-		ec_motion_sensor_clamp_u16s(vector.udata, last_v);
+		ec_motion_sensor_clamp_u16s(udata, last_v);
 
 		if (IS_ENABLED(CONFIG_ACCEL_FIFO)) {
 			vector.sensor_num = rgb_s - motion_sensors;
@@ -514,14 +519,6 @@ static int tcs3400_post_events(struct motion_sensor_t *s,
 							   raw_data, status);
 
 	return ret;
-}
-
-void tcs3400_interrupt(enum gpio_signal signal)
-{
-	if (IS_ENABLED(CONFIG_ACCEL_FIFO))
-		last_interrupt_timestamp = __hw_clock_source_read();
-
-	task_set_event(TASK_ID_MOTIONSENSE, CONFIG_ALS_TCS3400_INT_EVENT);
 }
 
 /*

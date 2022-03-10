@@ -11,11 +11,11 @@
 #include "pwm.h"
 #include "util.h"
 
-#ifdef CONFIG_ZEPHYR
-#include "pwm/pwm.h"
-#endif
-
 #ifdef CONFIG_PWM
+
+#define PWM_RAW_TO_PERCENT(v) \
+	DIV_ROUND_NEAREST((uint32_t)(v) * 100, UINT16_MAX)
+#define PWM_PERCENT_TO_RAW(v) ((uint32_t)(v) * UINT16_MAX / 100)
 
 /*
  * Get target channel based on type / index host command parameters.
@@ -49,13 +49,13 @@ __attribute__((weak)) void pwm_set_raw_duty(enum pwm_channel ch, uint16_t duty)
 	int percent;
 
 	/* Convert 16 bit duty to percent on [0, 100] */
-	percent = DIV_ROUND_NEAREST((uint32_t)duty * 100, 65535);
+	percent = PWM_RAW_TO_PERCENT(duty);
 	pwm_set_duty(ch, percent);
 }
 
 __attribute__((weak)) uint16_t pwm_get_raw_duty(enum pwm_channel ch)
 {
-	return (pwm_get_duty(ch) * 65535) / 100;
+	return PWM_PERCENT_TO_RAW(pwm_get_duty(ch));
 }
 
 static enum ec_status
@@ -166,7 +166,6 @@ DECLARE_CONSOLE_COMMAND(pwmduty, cc_pwm_duty,
 			"Get/set PWM duty cycles ");
 #endif /* CONFIG_PWM */
 
-#ifndef CONFIG_ZEPHYR
 /*
  * Initialize all PWM pins as functional.  This is not required under
  * Zephyr as pin configuration is automatically performed by chip driver
@@ -177,4 +176,3 @@ static void pwm_pin_init(void)
 }
 /* HOOK_PRIO_INIT_PWM may be used for chip PWM unit init, so use PRIO + 1 */
 DECLARE_HOOK(HOOK_INIT, pwm_pin_init, HOOK_PRIO_INIT_PWM + 1);
-#endif /* CONFIG_ZEPHYR */

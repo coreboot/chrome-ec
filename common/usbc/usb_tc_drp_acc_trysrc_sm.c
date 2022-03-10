@@ -7,6 +7,7 @@
 #include "charge_state.h"
 #include "common.h"
 #include "console.h"
+#include "gpio.h"
 #include "hooks.h"
 #include "system.h"
 #include "task.h"
@@ -545,7 +546,7 @@ int pd_get_rev(int port, enum tcpci_msg_type type)
 
 #endif /* !CONFIG_USB_PR_SM */
 
-#ifndef HAS_TASK_CHIPSET
+#if !defined(HAS_TASK_CHIPSET) && !defined(CONFIG_AP_PWRSEQ)
 __overridable enum pd_dual_role_states board_tc_get_initial_drp_mode(int port)
 {
 	/*
@@ -1549,12 +1550,8 @@ void tc_state_init(int port)
 
 	/* For test builds, replicate static initialization */
 	if (IS_ENABLED(TEST_BUILD)) {
-		int i;
-
-		for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; ++i) {
-			memset(&tc[i], 0, sizeof(tc[i]));
-			drp_state[i] = CONFIG_USB_PD_INITIAL_DRP_STATE;
-		}
+		memset(&tc[port], 0, sizeof(tc[port]));
+		drp_state[port] = CONFIG_USB_PD_INITIAL_DRP_STATE;
 	}
 
 	/* If port is not available, there is nothing to initialize */
@@ -1574,7 +1571,7 @@ void tc_state_init(int port)
 	 */
 	tc_policy_pd_enable(port, pd_comm_allowed_by_policy());
 
-#ifdef HAS_TASK_CHIPSET
+#if defined(HAS_TASK_CHIPSET) || defined(CONFIG_AP_PWRSEQ)
 	/* Set dual-role state based on chipset power state */
 	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
 		pd_set_dual_role_and_event(port, PD_DRP_FORCE_SINK, 0);

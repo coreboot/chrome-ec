@@ -80,6 +80,19 @@ static inline int is_raw_capture(uint32_t mode)
 	     || capture_type == FP_CAPTURE_QUALITY_TEST);
 }
 
+#if defined(HAVE_FP_PRIVATE_DRIVER) || defined(CONFIG_CMD_FPSENSOR_DEBUG)
+static bool fp_match_success(int match_result)
+{
+	if (match_result == EC_MKBP_FP_ERR_MATCH_YES ||
+	    match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATED ||
+	    match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATE_FAILED) {
+		return true;
+	}
+
+	return false;
+}
+#endif
+
 #ifdef HAVE_FP_PRIVATE_DRIVER
 static inline int is_test_capture(uint32_t mode)
 {
@@ -130,17 +143,6 @@ static uint32_t fp_process_enroll(void)
 	}
 	return EC_MKBP_FP_ENROLL | EC_MKBP_FP_ERRCODE(res)
 	     | (percent << EC_MKBP_FP_ENROLL_PROGRESS_OFFSET);
-}
-
-static bool fp_match_success(int match_result)
-{
-	if (match_result == EC_MKBP_FP_ERR_MATCH_YES ||
-	    match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATED ||
-	    match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATE_FAILED) {
-		return true;
-	}
-
-	return false;
 }
 
 static uint32_t fp_process_match(void)
@@ -843,11 +845,11 @@ static int command_fpmatch(int argc, char **argv)
 	uint32_t event = atomic_clear(&fp_events);
 
 	if (rc == EC_SUCCESS && event & EC_MKBP_FP_MATCH) {
-		uint32_t errcode = EC_MKBP_FP_ERRCODE(event);
+		uint32_t match_errcode = EC_MKBP_FP_ERRCODE(event);
 
 		CPRINTS("Match: %s (%d)",
-			errcode & EC_MKBP_FP_ERR_MATCH_YES ? "YES" : "NO",
-			errcode);
+			fp_match_success(match_errcode) ? "YES" : "NO",
+			match_errcode);
 	}
 
 	return rc;

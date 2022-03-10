@@ -8,3 +8,12 @@
 # runtime but not used in Zephyr EC.
 config TIMESLICING
 	default n
+
+config GPIO_EMUL
+	default y if ARCH_POSIX
+
+config GPIO
+	default y if ARCH_POSIX
+
+config SHELL_PROMPT_UART
+	default "ec:~$ "

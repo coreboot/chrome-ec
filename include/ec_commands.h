@@ -6426,6 +6426,7 @@ enum action_key {
 	TK_PREV_TRACK = 17,
 	TK_KBD_BKLIGHT_TOGGLE = 18,
 	TK_MICMUTE = 19,
+	TK_MENU = 20,
 };
 
 /*
@@ -6635,6 +6636,7 @@ enum typec_control_command {
 	TYPEC_CONTROL_COMMAND_EXIT_MODES,
 	TYPEC_CONTROL_COMMAND_CLEAR_EVENTS,
 	TYPEC_CONTROL_COMMAND_ENTER_MODE,
+	TYPEC_CONTROL_COMMAND_TBT_UFP_REPLY,
 };
 
 /* Modes (USB or alternate) that a type-C port may enter. */
@@ -6642,6 +6644,12 @@ enum typec_mode {
 	TYPEC_MODE_DP,
 	TYPEC_MODE_TBT,
 	TYPEC_MODE_USB4,
+};
+
+/* Replies the AP may specify to the TBT EnterMode command as a UFP */
+enum typec_tbt_ufp_reply {
+	TYPEC_TBT_UFP_REPLY_NAK,
+	TYPEC_TBT_UFP_REPLY_ACK,
 };
 
 struct ec_params_typec_control {
@@ -6655,8 +6663,12 @@ struct ec_params_typec_control {
 	 * the command version when adding new sub-commands.
 	 */
 	union {
+		/* Used for CLEAR_EVENTS */
 		uint32_t clear_events_mask;
-		uint8_t mode_to_enter;      /* enum typec_mode */
+		/* Used for ENTER_MODE - enum typec_mode */
+		uint8_t mode_to_enter;
+		/* Used for TBT_UFP_REPLY - enum typec_tbt_ufp_reply */
+		uint8_t tbt_ufp_reply;
 		uint8_t placeholder[128];
 	};
 } __ec_align1;
@@ -6904,7 +6916,20 @@ struct ec_response_pchg {
 	/* Fields added in version 1 */
 	uint32_t fw_version;
 	uint32_t dropped_event_count;
-} __ec_align2;
+} __ec_align4;
+
+struct ec_response_pchg_v2 {
+	uint32_t error;			/* enum pchg_error */
+	uint8_t state;			/* enum pchg_state state */
+	uint8_t battery_percentage;
+	uint8_t unused0;
+	uint8_t unused1;
+	/* Fields added in version 1 */
+	uint32_t fw_version;
+	uint32_t dropped_event_count;
+	/* Fields added in version 2 */
+	uint32_t dropped_host_event_count;
+} __ec_align4;
 
 enum pchg_state {
 	/* Charger is reset and not initialized. */
@@ -6950,7 +6975,7 @@ enum pchg_state {
 #define EC_MKBP_PCHG_PORT_SHIFT		28
 /* Utility macros for converting MKBP event <-> port number. */
 #define EC_MKBP_PCHG_EVENT_TO_PORT(e)	(((e) >> EC_MKBP_PCHG_PORT_SHIFT) & 0xf)
-#define EC_MKBP_PCHG_PORT_TO_EVENT(p)	(BIT((p) + EC_MKBP_PCHG_PORT_SHIFT))
+#define EC_MKBP_PCHG_PORT_TO_EVENT(p)	((p) << EC_MKBP_PCHG_PORT_SHIFT)
 /* Utility macro for extracting event bits. */
 #define EC_MKBP_PCHG_EVENT_MASK(e)	((e) \
 					& GENMASK(EC_MKBP_PCHG_PORT_SHIFT-1, 0))
@@ -7003,6 +7028,14 @@ struct ec_response_pchg_update {
 } __ec_align4;
 
 
+/*****************************************************************************
+ * Get displayable charge percent
+ *
+ * Return
+ * EC_RES_SUCCESS : Values successfully read
+ * EC_RES_UNAVAILABLE : Values are currently unavailable,
+ *			e.g. unresponsive battery.
+ */
 #define EC_CMD_DISPLAY_SOC 0x0137
 
 struct ec_response_display_soc {
@@ -7048,6 +7081,21 @@ struct ec_response_i2c_control {
 		uint16_t speed_khz;
 	} cmd_response;
 } __ec_align_size1;
+
+#define EC_CMD_RGB_KEYBOARD 0x013A
+
+enum rgbkbd_state {
+	/* RGB keyboard is reset and not initialized. */
+	RGBKBD_STATE_RESET = 0,
+	/* RGB keyboard is initialized but not enabled. */
+	RGBKBD_STATE_INITIALIZED,
+	/* RGB keyboard is enabled and ready to receive a command. */
+	RGBKBD_STATE_ENABLED,
+
+	/* Put no more entry below */
+	RGBKBD_STATE_COUNT,
+};
+
 
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */

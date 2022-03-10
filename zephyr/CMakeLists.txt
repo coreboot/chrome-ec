@@ -61,24 +61,42 @@ if(DEFINED CONFIG_PLATFORM_EC)
       set_property(TARGET app PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
     endif()
   endif()
-
-  set_compiler_property(APPEND PROPERTY warning_base
-                        # TODO(b/210501420): Make EC code compatible with
-                        # -W-address-of-packed-member
-                        -Wno-address-of-packed-member
-  )
 endif()
+
+# The EC application is split into two libraries:
+#   app: contains all the legacy code
+#   ec_shim: contains all the code under platform/ec/shim
+#
+# This allows us to add an extra compiler definition __REQUIRE_ZEPHYR_GPIOS__
+# that is applied only to the Zephyr sources. This is used to verify that
+# all Zephyr sources are using the upstream Zephyr GPIO API and not the legacy
+# EC API.
+zephyr_library_named(ec_shim)
+get_property(APP_LTO_PROPERTY TARGET app PROPERTY INTERPROCEDURAL_OPTIMIZATION)
+set_property(TARGET ec_shim PROPERTY INTERPROCEDURAL_OPTIMIZATION ${APP_LTO_PROPERTY})
+set_property(TARGET ec_shim APPEND PROPERTY COMPILE_DEFINITIONS __REQUIRE_ZEPHYR_GPIOS__)
 
 # Switch from the "zephyr" library to the "app" library for all Chromium OS
 # sources.
 set(ZEPHYR_CURRENT_LIBRARY app)
 
-add_subdirectory(linker)
+# Custom function that ensures the include path is always updated for both
+# libraries.
+function(cros_ec_library_include_directories)
+  target_include_directories(app PRIVATE ${ARGN})
+  target_include_directories(ec_shim PRIVATE ${ARGN})
+endfunction()
+function(cros_ec_library_include_directories_ifdef feature_toggle)
+  if(${${feature_toggle}})
+    target_include_directories(app PRIVATE ${ARGN})
+    target_include_directories(ec_shim PRIVATE ${ARGN})
+  endif()
+endfunction()
 
-zephyr_library_include_directories(include)
+cros_ec_library_include_directories(include)
 
 if (DEFINED CONFIG_PLATFORM_EC)
-  zephyr_library_include_directories(
+  cros_ec_library_include_directories(
     "${PLATFORM_EC}/zephyr/shim/include"
     "${PLATFORM_EC}/fuzz"
     "${PLATFORM_EC}/test"
@@ -88,11 +106,8 @@ if (DEFINED CONFIG_PLATFORM_EC)
     "${PLATFORM_EC}/third_party")
 endif()
 
-add_subdirectory("app")
-add_subdirectory("drivers")
-add_subdirectory("emul")
+add_subdirectory("subsys")
 
-add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 # Creates a phony target all.libraries in case you only want to build the
 # libraries and not the binaries. For example for creating the initial zero
 # coverage files.
@@ -118,6 +133,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC "${PLATFORM_EC}/common/base32.c"
                                                 "${PLATFORM_EC}/common/printf.c"
                                                 "${PLATFORM_EC}/common/queue.c"
                                                 "${PLATFORM_EC}/common/shared_mem.c"
+                                                "${PLATFORM_EC}/common/system.c"
                                                 "${PLATFORM_EC}/common/uart_printf.c"
                                                 "${PLATFORM_EC}/common/util.c"
                                                 "${PLATFORM_EC}/common/version.c")
@@ -128,6 +144,8 @@ zephyr_library_sources_ifdef(CONFIG_HAS_TASK_POWERBTN
                                                 "${PLATFORM_EC}/common/power_button_x86.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_BMA255
                                                 "${PLATFORM_EC}/driver/accel_bma2x2.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_BMA4XX
+                                                "${PLATFORM_EC}/driver/accel_bma4xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_KX022
                                                 "${PLATFORM_EC}/driver/accel_kionix.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_LIS2DW12
@@ -188,6 +206,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_BQ25710
                                                 "${PLATFORM_EC}/driver/charger/bq25710.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_BQ25720
                                                 "${PLATFORM_EC}/driver/charger/bq25710.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_RT9490
+                                                "${PLATFORM_EC}/driver/charger/rt9490.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_SM5803
                                                 "${PLATFORM_EC}/driver/charger/sm5803.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_MANAGER
@@ -203,8 +223,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_OCPC
                                                 "${PLATFORM_EC}/common/ocpc.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_EEPROM
-                                                "${PLATFORM_EC}/common/cbi.c"
-                                                "${PLATFORM_EC}/common/cbi_eeprom.c")
+                                                "${PLATFORM_EC}/common/cbi.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_GPIO
                                                 "${PLATFORM_EC}/common/cbi.c"
                                                 "${PLATFORM_EC}/common/cbi_gpio.c")
@@ -256,6 +275,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_TCA64XXA
                                                 "${PLATFORM_EC}/driver/ioexpander/tca64xxa.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
                                                 "${PLATFORM_EC}/common/keyboard_scan.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RGB_KEYBOARD
+                                                "${PLATFORM_EC}/common/rgb_keyboard.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_8042
                                                 "${PLATFORM_EC}/common/keyboard_8042.c"
                                                 "${PLATFORM_EC}/common/keyboard_8042_sharedlib.c")
@@ -270,8 +291,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MKBP_INPUT_DEVICES
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_VIVALDI
                                                 "${PLATFORM_EC}/common/keyboard_vivaldi.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM_KBLIGHT
-                                                "${PLATFORM_EC}/common/keyboard_backlight.c"
-                                                "${PLATFORM_EC}/common/pwm_kblight.c")
+                                                "${PLATFORM_EC}/common/keyboard_backlight.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
                                                 "${PLATFORM_EC}/common/led_common.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_PWM
@@ -318,8 +338,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7280
                                                 "${PLATFORM_EC}/power/qcom.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PANIC
                                                 "${PLATFORM_EC}/common/panic_output.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM
-                                                "${PLATFORM_EC}/common/pwm.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SHA256_SW
                                                 "${PLATFORM_EC}/common/sha256.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCH
@@ -462,6 +480,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_KTU1125
                                                 "${PLATFORM_EC}/driver/ppc/ktu1125.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_NX20P3483
                                                 "${PLATFORM_EC}/driver/ppc/nx20p348x.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_RT1739
+                                                "${PLATFORM_EC}/driver/ppc/rt1739.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_SN5S330
                                                 "${PLATFORM_EC}/driver/ppc/sn5s330.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_SYV682X
@@ -483,3 +503,12 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RTC
 						"${PLATFORM_EC}/common/rtc.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MATH_UTIL
 						"${PLATFORM_EC}/common/math_util.c")
+
+# Switch to ec_shim library for all Zephyr sources
+set(ZEPHYR_CURRENT_LIBRARY ec_shim)
+
+add_subdirectory(linker)
+add_subdirectory("app")
+add_subdirectory("drivers")
+add_subdirectory("emul")
+add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")

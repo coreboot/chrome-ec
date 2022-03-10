@@ -1,0 +1,15 @@
+/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+/ {
+	batteries {
+		default_battery: getac-smp-hhp-408-3s {
+			compatible = "getac,bq40z50-R3-S3";
+		};
+		getac-smp-hhp-408-2s {
+			compatible = "getac,bq40z50-R3-S2";
+		};
+	};
+};

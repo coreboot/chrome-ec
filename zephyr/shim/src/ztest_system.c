@@ -7,112 +7,89 @@
 #include "cros_version.h"
 #include "battery.h"
 #include "charge_manager.h"
+#include "sysjump.h"
 
-#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
 
-/* Ongoing actions preventing going into deep-sleep mode. */
-atomic_t sleep_mask;
+struct jump_data mock_jump_data = {};
 
-void system_common_pre_init(void)
-{
-}
-
-int system_add_jump_tag(uint16_t tag, int version, int size, const void *data)
-{
-	return EC_SUCCESS;
-}
-
-const uint8_t *system_get_jump_tag(uint16_t tag, int *version, int *size)
-{
-	return NULL;
-}
-
-#ifdef CONFIG_ZTEST
-struct system_jumped_late_mock system_jumped_late_mock = {
-	.ret_val = 0,
-	.call_count = 0,
-};
-#endif
-
-int system_jumped_late(void)
-{
-#ifdef CONFIG_ZTEST
-	system_jumped_late_mock.call_count++;
-
-	return system_jumped_late_mock.ret_val;
-#else
-	return 0;
-#endif
-}
-
-enum ec_image system_get_image_copy(void)
-{
-	return EC_IMAGE_RW;
-}
-
-int system_is_locked(void)
-{
-	return 0;
-}
-
-int system_is_in_rw(void)
-{
-	return 1;
-}
-
-uint32_t system_get_reset_flags(void)
-{
-	/* Don't power up the AP automatically, let the tests do it if they
-	 * need to.
-	 */
-	return EC_RESET_FLAG_AP_OFF;
-}
-
-void system_print_banner(void)
-{
-	printk("Image: %s\n", build_info);
-}
-
-void system_set_reset_flags(uint32_t flags)
-{
-}
-
+/* When CONFIG_RAM_SIZE is defined, this is provided by common/system.c */
+#ifndef CONFIG_RAM_SIZE
 struct jump_data *get_jump_data(void)
 {
-	return NULL;
+	return &mock_jump_data;
 }
+#endif
 
-__attribute__((weak))
-void system_reset(int flags)
+__attribute__((weak)) void system_reset(int flags)
 {
 	__builtin_unreachable();
 }
 
-int system_can_boot_ap(void)
+static uint8_t bbram[SYSTEM_BBRAM_IDX_TRY_SLOT + 1];
+
+test_mockable int system_get_bbram(enum system_bbram_idx idx, uint8_t *value)
 {
-	int soc = -1;
-	int pow = -1;
+	if (idx <= SYSTEM_BBRAM_IDX_TRY_SLOT) {
+		*value = bbram[idx];
+		return EC_SUCCESS;
+	}
+	return EC_ERROR_INVAL;
+}
 
-#if defined(CONFIG_BATTERY) && \
-	defined(CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
-	/* Require a minimum battery level to power on. If battery isn't
-	 * present, battery_state_of_charge_abs returns false.
-	 */
-	if (battery_state_of_charge_abs(&soc) == EC_SUCCESS &&
-			soc >= CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
-		return 1;
-#endif
+test_mockable int system_set_bbram(enum system_bbram_idx idx, uint8_t value)
+{
+	if (idx <= SYSTEM_BBRAM_IDX_TRY_SLOT) {
+		bbram[idx] = value;
+		return EC_SUCCESS;
+	}
+	return EC_ERROR_INVAL;
+}
 
-#if defined(CONFIG_CHARGE_MANAGER) && \
-	defined(CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON)
-	pow = charge_manager_get_power_limit_uw() / 1000;
-	if (pow >= CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON)
-		return 1;
-#else
-	/* For fixed AC system */
-	return 1;
-#endif
-
-	CPRINTS("Not enough power to boot (%d %%, %d mW)", soc, pow);
+/* When CONFIG_EC_PROTECTED_STORAGE_OFF is defined, this is provided by
+ * common/system.c
+ */
+#ifndef CONFIG_EC_PROTECTED_STORAGE_OFF
+uint32_t flash_get_rw_offset(enum ec_image copy)
+{
 	return 0;
+}
+#endif
+
+/* When CONFIG_PLATFORM_EC_FLASH_CROS is defined, this is provided by
+ * common/flash.c
+ */
+#ifndef CONFIG_PLATFORM_EC_FLASH_CROS
+int crec_flash_read(int offset, int size, char *data)
+{
+	return EC_ERROR_INVAL;
+}
+
+uint32_t crec_flash_get_protect(void)
+{
+	return 0;
+}
+#endif
+
+test_mockable const char *system_get_chip_vendor(void)
+{
+	return "Testing";
+}
+
+test_mockable const char *system_get_chip_name(void)
+{
+	return "emu";
+}
+
+test_mockable const char *system_get_chip_revision(void)
+{
+	return "";
+}
+
+void board_reset_pd_mcu(void)
+{
+}
+
+test_mockable void system_hibernate(uint32_t seconds, uint32_t microseconds)
+{
 }
