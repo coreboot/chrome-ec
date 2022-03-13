@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <x86_non_dsx_common_pwrseq_sm_handler.h>
 
-LOG_MODULE_DECLARE(ap_pwrseq, 4);
+LOG_MODULE_DECLARE(ap_pwrseq, CONFIG_AP_PWRSEQ_LOG_LEVEL);
 
 /* Console commands */
 static int powerinfo_handler(const struct shell *shell, size_t argc,
@@ -75,7 +75,7 @@ SHELL_CMD_REGISTER(apshutdown, NULL, NULL, apshutdown_handler);
 static int apreset_handler(const struct shell *shell, size_t argc,
 							char **argv)
 {
-	chipset_reset(PWRSEQ_CHIPSET_SHUTDOWN_CONSOLE_CMD);
+	ap_power_reset(AP_POWER_SHUTDOWN_CONSOLE_CMD);
 	return 0;
 }
 

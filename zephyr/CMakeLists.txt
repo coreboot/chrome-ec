@@ -106,6 +106,8 @@ if (DEFINED CONFIG_PLATFORM_EC)
     "${PLATFORM_EC}/third_party")
 endif()
 
+add_subdirectory("subsys")
+
 # Creates a phony target all.libraries in case you only want to build the
 # libraries and not the binaries. For example for creating the initial zero
 # coverage files.
@@ -469,6 +471,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_DRIVER_IT83XX
                                                 "${PLATFORM_EC}/driver/tcpm/it83xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_DRIVER_IT8XXX2
                                                 "${PLATFORM_EC}/driver/tcpm/it8xxx2.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_FUSB302
+                                                "${PLATFORM_EC}/driver/tcpm/fusb302.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC
                                                 "${PLATFORM_EC}/common/usbc_ppc.c")
@@ -509,5 +513,4 @@ add_subdirectory(linker)
 add_subdirectory("app")
 add_subdirectory("drivers")
 add_subdirectory("emul")
-add_subdirectory("subsys")
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")

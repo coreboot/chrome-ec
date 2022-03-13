@@ -75,6 +75,16 @@ enum tcpci_partner_handler_res tcpci_src_emul_handle_sop_msg(
 	}
 }
 
+/** Check description in emul_tcpci_partner_src.h */
+void tcpci_src_emul_hard_reset(void *data)
+{
+	struct tcpci_src_emul *src_emul = data;
+
+	/* Send capability after 15 ms to establish PD again */
+	tcpci_src_emul_send_capability_msg(&src_emul->data,
+					   &src_emul->common_data, 15);
+}
+
 /**
  * @brief Function called when TCPM wants to transmit message. Accept received
  *        message and generate response.
@@ -95,21 +105,30 @@ static void tcpci_src_emul_transmit_op(const struct emul *emul,
 		CONTAINER_OF(ops, struct tcpci_src_emul, ops);
 	enum tcpci_partner_handler_res processed;
 	uint16_t header;
+	int ret;
+
+	ret = k_mutex_lock(&src_emul->common_data.transmit_mutex, K_FOREVER);
+	if (ret) {
+		LOG_ERR("Failed to get SRC mutex");
+		/* Inform TCPM that message send failed */
+		tcpci_partner_common_msg_handler(&src_emul->common_data,
+						 tx_msg, type,
+						 TCPCI_EMUL_TX_FAILED);
+		return;
+	}
 
 	processed = tcpci_partner_common_msg_handler(&src_emul->common_data,
 						     tx_msg, type,
 						     TCPCI_EMUL_TX_SUCCESS);
 	/* Handle hard reset */
 	if (processed == TCPCI_PARTNER_COMMON_MSG_HARD_RESET) {
-		/* Send capability after 15 ms to establish PD again */
-		tcpci_src_emul_send_capability_msg(&src_emul->data,
-						   &src_emul->common_data, 15);
-
+		k_mutex_unlock(&src_emul->common_data.transmit_mutex);
 		return;
 	}
 
 	/* Handle only SOP messages */
 	if (type != TCPCI_MSG_SOP) {
+		k_mutex_unlock(&src_emul->common_data.transmit_mutex);
 		return;
 	}
 
@@ -121,6 +140,7 @@ static void tcpci_src_emul_transmit_op(const struct emul *emul,
 		 * Only soft reset requires additional handling after
 		 * common handler
 		 */
+		k_mutex_unlock(&src_emul->common_data.transmit_mutex);
 		return;
 	}
 
@@ -133,6 +153,7 @@ static void tcpci_src_emul_transmit_op(const struct emul *emul,
 		tcpci_partner_send_control_msg(&src_emul->common_data,
 					       PD_CTRL_REJECT, 0);
 	}
+	k_mutex_unlock(&src_emul->common_data.transmit_mutex);
 }
 
 /**
@@ -288,7 +309,7 @@ void tcpci_src_emul_init_data(struct tcpci_src_emul_data *data)
 /** Check description in emul_tcpci_parnter_src.h */
 void tcpci_src_emul_init(struct tcpci_src_emul *emul)
 {
-	tcpci_partner_init(&emul->common_data);
+	tcpci_partner_init(&emul->common_data, tcpci_src_emul_hard_reset, emul);
 
 	emul->common_data.data_role = PD_ROLE_UFP;
 	emul->common_data.power_role = PD_ROLE_SOURCE;

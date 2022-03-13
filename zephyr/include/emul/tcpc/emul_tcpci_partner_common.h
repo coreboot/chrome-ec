@@ -27,6 +27,18 @@
  * in generic way using optional delay.
  */
 
+/** Timeout for other side to respond to PD message */
+#define TCPCI_PARTNER_RESPONSE_TIMEOUT_MS	K_MSEC(30)
+/** Timeout for source to transition to requested state after accept */
+#define TCPCI_PARTNER_TRANSITION_TIMEOUT_MS	K_MSEC(550)
+
+/**
+ * @brief Function type that is used by TCPCI partner emulator on hard reset
+ *
+ * @param data Pointer to custom function data
+ */
+typedef void (*tcpci_partner_hard_reset_func)(void *data);
+
 /** Common data for TCPCI partner device emulators */
 struct tcpci_partner_data {
 	/** Timer used to send message with delay */
@@ -64,6 +76,25 @@ struct tcpci_partner_data {
 	 * doesn't arrive, hard reset is triggered.
 	 */
 	bool in_soft_reset;
+	/**
+	 * Mutex for TCPCI transmit handler. Should be used to synchronise
+	 * access to partner emulator with TCPCI emulator.
+	 */
+	struct k_mutex transmit_mutex;
+	/** Pointer to function called on hard reset */
+	tcpci_partner_hard_reset_func hard_reset_func;
+	/** Pointer to data passed to hard reset function */
+	void *hard_reset_data;
+	/** Delayed work which is executed when response timeout occurs */
+	struct k_work_delayable sender_response_timeout;
+	/** Number of TCPM timeouts. Test may chekck if timeout occurs */
+	int tcpm_timeouts;
+	/** List with logged PD messages */
+	sys_slist_t msg_log;
+	/** Flag which controls if messages should be logged */
+	bool collect_msg_log;
+	/** Mutex for msg_log */
+	struct k_mutex msg_log_mutex;
 };
 
 /** Structure of message used by TCPCI partner emulator */
@@ -80,6 +111,30 @@ struct tcpci_partner_msg {
 	int data_objects;
 };
 
+/** Identify sender of logged PD message */
+enum tcpci_partner_msg_sender {
+	TCPCI_PARTNER_SENDER_PARTNER,
+	TCPCI_PARTNER_SENDER_TCPM
+};
+
+/** Structure of logged PD message */
+struct tcpci_partner_log_msg {
+	/** Reserved for sys_slist_* usage */
+	sys_snode_t node;
+	/** Pointer to buffer for header and message */
+	uint8_t *buf;
+	/** Number of bytes in buf */
+	int cnt;
+	/** Type of message (SOP, SOP', etc) */
+	uint8_t sop;
+	/** Time when message was send or received by partner emulator */
+	uint64_t time;
+	/** Sender of the message */
+	enum tcpci_partner_msg_sender sender;
+	/** 0 if message was successfully received/send */
+	int status;
+};
+
 /** Result of common handler */
 enum tcpci_partner_handler_res {
 	TCPCI_PARTNER_COMMON_MSG_HANDLED,
@@ -92,8 +147,12 @@ enum tcpci_partner_handler_res {
  *        any other function.
  *
  * @param data Pointer to USB-C charger emulator
+ * @param hard_reset_func Pointer to function called on hard reset
+ * @param hard_reset_data Pointer to data passed to hard reset function
  */
-void tcpci_partner_init(struct tcpci_partner_data *data);
+void tcpci_partner_init(struct tcpci_partner_data *data,
+			tcpci_partner_hard_reset_func hard_reset_func,
+			void *hard_reset_data);
 
 /**
  * @brief Allocate message with space for header and given number of data
@@ -197,6 +256,24 @@ void tcpci_partner_common_send_hard_reset(struct tcpci_partner_data *data);
 void tcpci_partner_common_send_soft_reset(struct tcpci_partner_data *data);
 
 /**
+ * @brief Start sender response timer for TCPCI_PARTNER_RESPONSE_TIMEOUT_MS.
+ *        If @ref tcpci_partner_stop_sender_response_timer wasn't called before
+ *        timeout, @ref tcpci_partner_sender_response_timeout is called.
+ *        The wait_for_response flag is set on timer start.
+ *
+ * @param data Pointer to TCPCI partner emulator
+ */
+void tcpci_partner_start_sender_response_timer(struct tcpci_partner_data *data);
+
+/**
+ * @brief Stop sender response timer. The wait_for_response flag is unset.
+ *        Timeout handler will not execute.
+ *
+ * @param data Pointer to TCPCI partner emulator
+ */
+void tcpci_partner_stop_sender_response_timer(struct tcpci_partner_data *data);
+
+/**
  * @brief Common handler for TCPCI messages. It handles hard reset, soft reset,
  *        repeated messages. It handles vendor defined messages by skipping
  *        them. Accept and reject messages are handled when soft reset is send.
@@ -234,6 +311,32 @@ enum tcpci_partner_handler_res tcpci_partner_common_msg_handler(
 void tcpci_partner_common_handler_mask_msg(struct tcpci_partner_data *data,
 					   enum pd_ctrl_msg_type type,
 					   bool enable);
+
+/**
+ * @brief Select if PD messages should be logged or not.
+ *
+ * @param data Pointer to TCPCI partner emulator
+ * @param enable If true, PD messages are logged, false otherwise
+ *
+ * @return 0 on success
+ * @return non-zero on failure
+ */
+int tcpci_partner_common_enable_pd_logging(struct tcpci_partner_data *data,
+					   bool enable);
+
+/**
+ * @brief Print all logged PD messages
+ *
+ * @param data Pointer to TCPCI partner emulator
+ */
+void tcpci_partner_common_print_logged_msgs(struct tcpci_partner_data *data);
+
+/**
+ * @brief Clear all logged PD messages
+ *
+ * @param data Pointer to TCPCI partner emulator
+ */
+void tcpci_partner_common_clear_logged_msgs(struct tcpci_partner_data *data);
 
 /**
  * @}
