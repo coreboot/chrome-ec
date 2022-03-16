@@ -16,6 +16,7 @@
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "charge_state_v2.h"
+#include "ec_commands.h"
 #include "math_util.h"
 #include "task.h"
 #include "timer.h"
@@ -93,6 +94,12 @@ static void dps_enable(bool en)
 
 	if (is_enabled && !prev_en)
 		task_wake(TASK_ID_DPS);
+
+	if (!is_enabled) {
+		/* issue a new PD request for a default voltage */
+		if (dps_port != CHARGE_PORT_NONE)
+			pd_dpm_request(dps_port, DPM_REQUEST_NEW_POWER_LEVEL);
+	}
 }
 
 static void update_timeout(int us)
@@ -469,6 +476,7 @@ void dps_task(void *u)
 			flag |= DPS_FLAG_WAITING;
 			task_wait_event(timeout.val - now.val);
 			flag &= ~DPS_FLAG_WAITING;
+			continue;
 		}
 
 		if (!is_enabled) {
@@ -562,9 +570,6 @@ static int command_dps(int argc, char **argv)
 		return EC_SUCCESS;
 	} else if (!strcasecmp(argv[1], "dis")) {
 		dps_enable(false);
-		/* issue a new PD request for a default voltage */
-		if (dps_port != CHARGE_PORT_NONE)
-			pd_dpm_request(dps_port, DPM_REQUEST_NEW_POWER_LEVEL);
 		return EC_SUCCESS;
 	} else if (!strcasecmp(argv[1], "fakepwr")) {
 		if (argc == 2) {
@@ -644,3 +649,14 @@ DECLARE_CONSOLE_COMMAND(dps, command_dps,
 			"\t\t set(tstable|tcheck) <int>\n"
 			"\t\t fakepwr [dis|<mV> <mA>]",
 			"Print/set Dynamic PDO Selection state.");
+
+static enum ec_status hc_usb_pd_dps_control(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_usb_pd_dps_control *p = args->params;
+
+	dps_enable(p->enable);
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_USB_PD_DPS_CONTROL,
+		     hc_usb_pd_dps_control,
+		     EC_VER_MASK(0));

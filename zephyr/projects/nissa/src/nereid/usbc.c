@@ -15,7 +15,7 @@
 #include "driver/tcpm/ps8xxx_public.h"
 #include "driver/tcpm/tcpci.h"
 
-#include "sub_board.h"
+#include "nissa_common.h"
 
 LOG_MODULE_DECLARE(nissa, CONFIG_NISSA_LOG_LEVEL);
 
@@ -282,6 +282,7 @@ static void notify_c1_chips(void)
 {
 	schedule_deferred_pd_interrupt(1);
 	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+	sm5803_interrupt(1);
 }
 
 static void check_c1_line(void)

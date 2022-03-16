@@ -3,24 +3,17 @@
  * found in the LICENSE file.
  */
 
+#include <init.h>
 #include <x86_non_dsx_common_pwrseq_sm_handler.h>
 
 static K_KERNEL_STACK_DEFINE(pwrseq_thread_stack,
-			CONFIG_X86_NON_DSW_PWRSEQ_STACK_SIZE);
+			CONFIG_AP_PWRSEQ_STACK_SIZE);
 static struct k_thread pwrseq_thread_data;
 static struct pwrseq_context pwrseq_ctx;
 /* S5 inactive timer*/
 K_TIMER_DEFINE(s5_inactive_timer, NULL, NULL);
 
-LOG_MODULE_REGISTER(ap_pwrseq, LOG_LEVEL_INF);
-
-static const struct common_pwrseq_config com_cfg = {
-	.pch_dsw_pwrok_delay_ms = DT_INST_PROP(0, dsw_pwrok_delay),
-	.pch_pm_pwrbtn_delay_ms =  DT_INST_PROP(0, pm_pwrbtn_delay),
-	.pch_rsmrst_delay_ms = DT_INST_PROP(0, rsmrst_delay),
-	.wait_signal_timeout_ms = DT_INST_PROP(0, wait_signal_timeout),
-	.s5_timeout_s = DT_INST_PROP(0, s5_inactivity_timeout),
-};
+LOG_MODULE_REGISTER(ap_pwrseq, CONFIG_AP_PWRSEQ_LOG_LEVEL);
 
 #ifdef CONFIG_LOG
 /**
@@ -48,9 +41,6 @@ const char pwrsm_dbg[][25] = {
 void notify_espi_ready(bool ready)
 {
 	pwrseq_ctx.espi_ready = ready;
-	if (ready) {
-		power_update_signals();
-	}
 }
 #endif
 
@@ -111,7 +101,7 @@ void pwr_sm_set_state(enum power_states_ndsx new_state)
 	pwrseq_ctx.power_state = new_state;
 }
 
-void chipset_request_exit_hardoff(bool should_exit)
+void request_exit_hardoff(bool should_exit)
 {
 	pwrseq_ctx.want_g3_exit = should_exit;
 }
@@ -124,7 +114,7 @@ static bool chipset_is_exit_hardoff(void)
 void apshutdown(void)
 {
 	if (pwr_sm_get_state() != SYS_POWER_STATE_G3) {
-		new_chipset_force_shutdown();
+		ap_power_force_shutdown(AP_POWER_SHUTDOWN_G3);
 		pwr_sm_set_state(SYS_POWER_STATE_G3);
 	}
 }
@@ -156,7 +146,7 @@ int check_pch_out_of_suspend(void)
 }
 
 /* Handling RSMRST signal is mostly common across x86 chipsets */
-__attribute__((weak)) void rsmrst_pass_thru_handler(void)
+void rsmrst_pass_thru_handler(void)
 {
 	/* Handle RSMRST passthrough */
 	/* TODO: Add additional conditions for RSMRST handling */
@@ -165,7 +155,7 @@ __attribute__((weak)) void rsmrst_pass_thru_handler(void)
 
 	if (in_sig_val != out_sig_val) {
 		if (in_sig_val)
-			k_msleep(com_cfg.pch_rsmrst_delay_ms);
+			k_msleep(AP_PWRSEQ_DT_VALUE(rsmrst_delay));
 		LOG_DBG("Setting PWR_EC_PCH_RSMRST to %d", in_sig_val);
 		power_signal_set(PWR_EC_PCH_RSMRST, in_sig_val);
 	}
@@ -180,7 +170,7 @@ static int common_pwr_sm_run(int state)
 	switch (state) {
 	case SYS_POWER_STATE_G3:
 		if (chipset_is_exit_hardoff()) {
-			chipset_request_exit_hardoff(false);
+			request_exit_hardoff(false);
 			return SYS_POWER_STATE_G3S5;
 		}
 
@@ -188,7 +178,8 @@ static int common_pwr_sm_run(int state)
 
 	case SYS_POWER_STATE_G3S5:
 		if (power_wait_signals_timeout(
-			IN_PGOOD_ALL_CORE, com_cfg.wait_signal_timeout_ms))
+			IN_PGOOD_ALL_CORE,
+			AP_PWRSEQ_DT_VALUE(wait_signal_timeout)))
 			break;
 		/*
 		 * Now wait for SLP_SUS_L to go high based on tPCH32. If this
@@ -214,9 +205,9 @@ static int common_pwr_sm_run(int state)
 			}
 		}
 		/* S5 inactivity timeout, go to S5G3 */
-		if (com_cfg.s5_timeout_s == 0)
+		if (AP_PWRSEQ_DT_VALUE(s5_inactivity_timeout) == 0)
 			return SYS_POWER_STATE_S5G3;
-		else if (com_cfg.s5_timeout_s > 0) {
+		else if (AP_PWRSEQ_DT_VALUE(s5_inactivity_timeout) > 0) {
 			if (k_timer_status_get(&s5_inactive_timer) > 0)
 				/* Timer is expired */
 				return SYS_POWER_STATE_S5G3;
@@ -224,13 +215,15 @@ static int common_pwr_sm_run(int state)
 						&s5_inactive_timer) == 0)
 				/* Timer is not started or stopped */
 				k_timer_start(&s5_inactive_timer,
-					K_SECONDS(com_cfg.s5_timeout_s),
+					K_SECONDS(AP_PWRSEQ_DT_VALUE(
+						s5_inactivity_timeout)),
 					K_NO_WAIT);
 		}
 		break;
 
 	case SYS_POWER_STATE_S5G3:
-		new_chipset_force_shutdown();
+		ap_power_force_shutdown(AP_POWER_SHUTDOWN_G3);
+		ap_power_ev_send_callbacks(AP_POWER_SHUTDOWN_COMPLETE);
 		return SYS_POWER_STATE_G3;
 
 	case SYS_POWER_STATE_S5S4:
@@ -253,12 +246,13 @@ static int common_pwr_sm_run(int state)
 	case SYS_POWER_STATE_S4S3:
 		if (!power_signals_on(IN_PGOOD_ALL_CORE)) {
 			/* Required rail went away */
-			new_chipset_force_shutdown();
+			ap_power_force_shutdown(AP_POWER_SHUTDOWN_POWERFAIL);
 			return SYS_POWER_STATE_G3;
 		}
 
 		/* Call hooks now that rails are up */
-		/* TODO: hook_notify(HOOK_CHIPSET_STARTUP); */
+		ap_power_ev_send_callbacks(AP_POWER_STARTUP);
+
 		/* TODO: S0ix
 		 * Clearing the S0ix flag on the path to S0
 		 * to handle any reset conditions.
@@ -270,7 +264,7 @@ static int common_pwr_sm_run(int state)
 		/* AP is out of suspend to RAM */
 		if (!power_signals_on(IN_PGOOD_ALL_CORE)) {
 			/* Required rail went away, go straight to S5 */
-			new_chipset_force_shutdown();
+			ap_power_force_shutdown(AP_POWER_SHUTDOWN_POWERFAIL);
 			return SYS_POWER_STATE_G3;
 		} else if (signals_valid_and_off(IN_PCH_SLP_S3))
 			return SYS_POWER_STATE_S3S0;
@@ -281,18 +275,20 @@ static int common_pwr_sm_run(int state)
 
 	case SYS_POWER_STATE_S3S0:
 		if (!power_signals_on(IN_PGOOD_ALL_CORE)) {
-			new_chipset_force_shutdown();
+			ap_power_force_shutdown(AP_POWER_SHUTDOWN_POWERFAIL);
 			return SYS_POWER_STATE_G3;
 		}
 
 		/* All the power rails must be stable */
-		if (power_signal_get(PWR_ALL_SYS_PWRGD))
+		if (power_signal_get(PWR_ALL_SYS_PWRGD)) {
+			ap_power_ev_send_callbacks(AP_POWER_RESUME);
 			return SYS_POWER_STATE_S0;
+		}
 		break;
 
 	case SYS_POWER_STATE_S0:
 		if (!power_signals_on(IN_PGOOD_ALL_CORE)) {
-			new_chipset_force_shutdown();
+			ap_power_force_shutdown(AP_POWER_SHUTDOWN_POWERFAIL);
 			return SYS_POWER_STATE_G3;
 		} else if (signals_valid_and_on(IN_PCH_SLP_S3))
 			return SYS_POWER_STATE_S0S3;
@@ -301,13 +297,11 @@ static int common_pwr_sm_run(int state)
 		break;
 
 	case SYS_POWER_STATE_S4S5:
-		/* TODO */
 		/* Call hooks before we remove power rails */
-		/* hook_notify(HOOK_CHIPSET_SHUTDOWN); */
+		ap_power_ev_send_callbacks(AP_POWER_SHUTDOWN);
 		/* Disable wireless */
 		/* wireless_set_state(WIRELESS_OFF); */
 		/* Call hooks after we remove power rails */
-		/* hook_notify(HOOK_CHIPSET_SHUTDOWN_COMPLETE); */
 		/* Always enter into S5 state. The S5 state is required to
 		 * correctly handle global resets which have a bit of delay
 		 * while the SLP_Sx_L signals are asserted then deasserted.
@@ -318,8 +312,8 @@ static int common_pwr_sm_run(int state)
 		return SYS_POWER_STATE_S4;
 
 	case SYS_POWER_STATE_S0S3:
-		/* TODO: Call hooks before we remove power rails */
-		/* hook_notify(HOOK_CHIPSET_SUSPEND); */
+		/* Call hooks before we remove power rails */
+		ap_power_ev_send_callbacks(AP_POWER_SUSPEND);
 		return SYS_POWER_STATE_S3;
 
 	default:
@@ -347,6 +341,7 @@ static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 		 * comes back by the time we update our signals.
 		 */
 		this_in_signals = power_get_signals();
+
 		if (this_in_signals != last_in_signals ||
 				curr_state != last_state) {
 			LOG_INF("power state %d = %s, in 0x%04x",
@@ -357,7 +352,7 @@ static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 		}
 
 		/* Run chipset specific state machine */
-		new_state = chipset_pwr_sm_run(curr_state, &com_cfg);
+		new_state = chipset_pwr_sm_run(curr_state);
 
 		/*
 		 * Run common power state machine
@@ -382,21 +377,30 @@ static inline void create_pwrseq_thread(void)
 			K_KERNEL_STACK_SIZEOF(pwrseq_thread_stack),
 			(k_thread_entry_t)pwrseq_loop_thread,
 			NULL, NULL, NULL,
-			K_PRIO_COOP(8), 0, K_NO_WAIT);
+			K_PRIO_COOP(8), 0,
+			IS_ENABLED(CONFIG_AP_PWRSEQ_AUTOSTART) ? K_NO_WAIT
+							       : K_FOREVER);
 
 	k_thread_name_set(&pwrseq_thread_data, "pwrseq_task");
 }
 
-void init_pwr_seq_state(void)
+void ap_pwrseq_task_start(void)
+{
+	if (!IS_ENABLED(CONFIG_AP_PWRSEQ_AUTOSTART)) {
+		k_thread_start(&pwrseq_thread_data);
+	}
+}
+
+static void init_pwr_seq_state(void)
 {
 	init_chipset_pwr_seq_state();
-	chipset_request_exit_hardoff(false);
+	request_exit_hardoff(false);
 
 	pwr_sm_set_state(SYS_POWER_STATE_G3S5);
 }
 
 /* Initialize power sequence system state */
-static int pwrseq_init(void)
+static int pwrseq_init(const struct device *dev)
 {
 	LOG_INF("Pwrseq Init");
 

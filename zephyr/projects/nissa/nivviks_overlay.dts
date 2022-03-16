@@ -7,6 +7,7 @@
 
 / {
 	aliases {
+		gpio-cbi-wp = &gpio_ec_cbi_wp;
 		gpio-wp = &gpio_ec_wp_odl;
 		int-wp = &int_wp_l;
 		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
@@ -148,6 +149,21 @@
 			temp_host_release_high = <80>;
 			adc = <&adc_temp_sensor_2>;
 		};
+	};
+
+	usba {
+		compatible = "cros-ec,usba-port-enable-pins";
+		/*
+		 * sb_2 is only configured as GPIO when USB-A1 is present,
+		 * but it's still safe to control when disabled.
+		 *
+		 * ILIM_SEL pins are referred to by legacy enum name,
+		 * GPIO_USB*_ILIM_SEL. The one for port A1 is unused on
+		 * sub-boards that don't have USB-A so is safe to control
+		 * regardless of system configuration.
+		 */
+		enable-pins = <&gpio_en_usb_a0_vbus &gpio_sb_2>;
+		status = "okay";
 	};
 
 	usbc {

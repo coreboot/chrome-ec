@@ -289,9 +289,42 @@ static void tcpci_snk_emul_handle_source_cap(
 	}
 
 	/* Expect response for request */
-	common_data->wait_for_response = true;
+	tcpci_partner_start_sender_response_timer(common_data);
 	tcpci_partner_send_data_msg(common_data, PD_DATA_REQUEST, &rdo,
 				    1 /* = data_obj_num */, 0 /* = delay */);
+}
+
+/**
+ * @brief Start partner transition timer. If emulator doesn't receive PS_RDY
+ *        message before timeout, than
+ *        @ref tcpci_partner_sender_response_timeout is called and hard reset
+ *        is triggered. The wait_for_ps_rdy flag is set on timer start.
+ *
+ * @param data Pointer to USB-C sink device emulator data
+ * @param common_data Pointer to common TCPCI partner data
+ */
+static void tcpci_snk_emul_start_partner_transition_timer(
+	struct tcpci_snk_emul_data *data,
+	struct tcpci_partner_data *common_data)
+{
+	k_work_schedule(&common_data->sender_response_timeout,
+			TCPCI_PARTNER_TRANSITION_TIMEOUT_MS);
+	data->wait_for_ps_rdy = true;
+}
+
+/**
+ * @brief Stop partner transition timer. The wait_for_ps_rdy flag is unset.
+ *        Timeout handler will not execute.
+ *
+ * @param data Pointer to USB-C sink device emulator data
+ * @param common_data Pointer to common TCPCI partner data
+ */
+static void tcpci_snk_emul_stop_partner_transition_timer(
+	struct tcpci_snk_emul_data *data,
+	struct tcpci_partner_data *common_data)
+{
+	k_work_cancel_delayable(&common_data->sender_response_timeout);
+	data->wait_for_ps_rdy = false;
 }
 
 /** Check description in emul_tcpci_snk.h */
@@ -326,19 +359,21 @@ enum tcpci_partner_handler_res tcpci_snk_emul_handle_sop_msg(
 		case PD_CTRL_PS_RDY:
 			__ASSERT(data->wait_for_ps_rdy,
 				 "Unexpected PS RDY message");
-			data->wait_for_ps_rdy = false;
+			tcpci_snk_emul_stop_partner_transition_timer(
+							data, common_data);
 			data->pd_completed = true;
 			return TCPCI_PARTNER_COMMON_MSG_HANDLED;
 		case PD_CTRL_REJECT:
+			tcpci_partner_stop_sender_response_timer(common_data);
 			/* Request rejected. Ask for capabilities again. */
 			tcpci_partner_send_control_msg(common_data,
 						       PD_CTRL_GET_SOURCE_CAP,
 						       0);
-			common_data->wait_for_response = false;
 			return TCPCI_PARTNER_COMMON_MSG_HANDLED;
 		case PD_CTRL_ACCEPT:
-			common_data->wait_for_response = false;
-			data->wait_for_ps_rdy = true;
+			tcpci_partner_stop_sender_response_timer(common_data);
+			tcpci_snk_emul_start_partner_transition_timer(
+							data, common_data);
 			return TCPCI_PARTNER_COMMON_MSG_HANDLED;
 		default:
 			return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
@@ -346,6 +381,15 @@ enum tcpci_partner_handler_res tcpci_snk_emul_handle_sop_msg(
 	}
 
 	return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
+}
+
+/** Check description in emul_tcpci_partner_snk.h */
+void tcpci_snk_emul_hard_reset(void *data)
+{
+	struct tcpci_snk_emul *snk_emul = data;
+
+	snk_emul->data.wait_for_ps_rdy = false;
+	snk_emul->data.pd_completed = false;
 }
 
 /**
@@ -367,6 +411,17 @@ static void tcpci_snk_emul_transmit_op(const struct emul *emul,
 	struct tcpci_snk_emul *snk_emul =
 		CONTAINER_OF(ops, struct tcpci_snk_emul, ops);
 	enum tcpci_partner_handler_res processed;
+	int ret;
+
+	ret = k_mutex_lock(&snk_emul->common_data.transmit_mutex, K_FOREVER);
+	if (ret) {
+		LOG_ERR("Failed to get SNK mutex");
+		/* Inform TCPM that message send failed */
+		tcpci_partner_common_msg_handler(&snk_emul->common_data,
+						 tx_msg, type,
+						 TCPCI_EMUL_TX_FAILED);
+		return;
+	}
 
 	/* Call common handler */
 	processed = tcpci_partner_common_msg_handler(&snk_emul->common_data,
@@ -374,13 +429,9 @@ static void tcpci_snk_emul_transmit_op(const struct emul *emul,
 						     TCPCI_EMUL_TX_SUCCESS);
 	switch (processed) {
 	case TCPCI_PARTNER_COMMON_MSG_HARD_RESET:
-		/* Handle hard reset */
-		snk_emul->data.wait_for_ps_rdy = false;
-		snk_emul->data.pd_completed = false;
-
-		return;
 	case TCPCI_PARTNER_COMMON_MSG_HANDLED:
 		/* Message handled nothing to do */
+		k_mutex_unlock(&snk_emul->common_data.transmit_mutex);
 		return;
 	case TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED:
 	default:
@@ -390,6 +441,7 @@ static void tcpci_snk_emul_transmit_op(const struct emul *emul,
 
 	/* Handle only SOP messages */
 	if (type != TCPCI_MSG_SOP) {
+		k_mutex_unlock(&snk_emul->common_data.transmit_mutex);
 		return;
 	}
 
@@ -402,6 +454,7 @@ static void tcpci_snk_emul_transmit_op(const struct emul *emul,
 		tcpci_partner_send_control_msg(&snk_emul->common_data,
 					       PD_CTRL_REJECT, 0);
 	}
+	k_mutex_unlock(&snk_emul->common_data.transmit_mutex);
 }
 
 /**
@@ -463,7 +516,7 @@ void tcpci_snk_emul_init_data(struct tcpci_snk_emul_data *data)
 /** Check description in emul_tcpci_snk.h */
 void tcpci_snk_emul_init(struct tcpci_snk_emul *emul)
 {
-	tcpci_partner_init(&emul->common_data);
+	tcpci_partner_init(&emul->common_data, tcpci_snk_emul_hard_reset, emul);
 
 	emul->common_data.data_role = PD_ROLE_DFP;
 	emul->common_data.power_role = PD_ROLE_SINK;

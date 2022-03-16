@@ -4,7 +4,8 @@
  */
 
 / {
-	named-pwms {
-		compatible = "named-pwms";
+	switchcap {
+		compatible = "switchcap-gpio";
+		enable-pin = <&gpio_switchcap_on>;
 	};
 };

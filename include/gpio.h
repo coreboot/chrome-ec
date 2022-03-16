@@ -22,28 +22,73 @@
 #ifdef CONFIG_ZEPHYR
 #include <drivers/gpio.h>
 
+/*
+ * Some flag definitions are duplicated by our private devicetree binding
+ * in zephyr/include/dt-bindings/gpio_defines.h.
+ *
+ * Validate that these definitions haven't changed.
+ */
 /* Validate that Zephyr's definition are the same for overlapping defines */
-#if GPIO_OPEN_DRAIN != (BIT(1) | BIT(2))
-#error GPIO_OPEN_DRAIN values are not the same!
-#elif GPIO_PULL_UP != BIT(4)
-#error GPIO_PULL_UP values are not the same!
-#elif GPIO_PULL_DOWN != BIT(5)
-#error GPIO_PULL_DOWN values are not the same!
-#elif GPIO_INPUT != BIT(8)
+#if BIT(16) != GPIO_INPUT
 #error GPIO_INPUT values are not the same!
-#elif GPIO_OUTPUT != BIT(9)
+#elif BIT(17) != GPIO_OUTPUT
 #error GPIO_OUTPUT values are not the same!
+#elif BIT(18) != GPIO_OUTPUT_INIT_LOW
+#error GPIO_OUTPUT_INIT_LOW values are not the same!
+#elif BIT(19) != GPIO_OUTPUT_INIT_HIGH
+#error GPIO_OUTPUT_INIT_HIGH values are not the same!
+#elif BIT(20) != GPIO_OUTPUT_INIT_LOGICAL
+#error GPIO_OUTPUT_INIT_LOGICAL values are not the same!
+#elif BIT(21) != GPIO_INT_DISABLE
+#error GPIO_INT_DISABLE values are not the same!
+#elif BIT(22) != GPIO_INT_ENABLE
+#error GPIO_INT_ENABLE values are not the same!
+#elif BIT(23) != GPIO_INT_LEVELS_LOGICAL
+#error GPIO_INT_LEVELS_LOGICAL values are not the same!
+#elif BIT(24) != GPIO_INT_EDGE
+#error GPIO_INT_EDGE values are not the same!
+#elif BIT(25) != GPIO_INT_LOW_0
+#error GPIO_INT_LOW_0 values are not the same!
+#elif BIT(26) != GPIO_INT_HIGH_1
+#error GPIO_INT_HIGH_1 values are not the same!
 #endif
 
-/* Otherwise define overlapping GPIO_ flags ourselves */
-#else /* !CONFIG_ZEPHYR */
-#define GPIO_OPEN_DRAIN    (BIT(1) | BIT(2))  /* Output type is open-drain */
-#define GPIO_PULL_UP       BIT(4)  /* Enable on-chip pullup */
-#define GPIO_PULL_DOWN     BIT(5)  /* Enable on-chip pulldown */
-#define GPIO_INPUT         BIT(8)  /* Input */
-#define GPIO_OUTPUT        BIT(9)  /* Output */
-#endif /* CONFIG_ZEPHYR */
+/*
+ * Map the legacy EC GPIO flags to the Zephyr equivalent.
+ * Refer to the descriptions below.
+ */
+#define GPIO_FLAG_NONE     GPIO_DISCONNECTED
+/* GPIO_ANALOG	           not supported by Zephyr */
+/* GPIO_OPEN_DRAIN         already defined by Zephyr */
+/* GPIO_DEFAULT            not supported by Zephyr */
+/* GPIO_PULL_UP            already defined by Zephyr */
+/* GPIO_PULL_DOWN          already defined by Zephyr */
+#define GPIO_LOW           GPIO_OUTPUT_INIT_LOW
+#define GPIO_HIGH          GPIO_OUTPUT_INIT_HIGH
+/* GPIO_INPUT              already defined by Zephyr */
+/* GPIO_OUTPUT             already defined by Zephyr */
 
+/*
+ * One to one mapping of interrupt flags isn't possible. So map these
+ * flags to not conflict with any Zephyr flags.
+ */
+#define GPIO_INT_F_RISING  BIT(28)
+#define GPIO_INT_F_FALLING BIT(29)
+#define GPIO_INT_F_LOW     BIT(30)
+#define GPIO_INT_F_HIGH    BIT(31)
+/* GPIO_INT_DSLEEP         not supported by Zephyr */
+/* GPIO_INT_SHARED         not supported by Zephyr */
+
+#define GPIO_SEL_1P8V      GPIO_VOLTAGE_1P8
+/* GPIO_ALTERNATE          not supported by Zephyr */
+/* GPIO_LOCKED             not supported by Zephyr */
+/* GPIO_HIB_WAKE_HIGH      not supported by Zephyr */
+/* GPIO_HIB_WAKE_LOW       not supported by Zephyr */
+/* GPIO_HIB_WAKE_RISING    not supported by Zephyr */
+/* GPIO_HIB_WAKE_FALLING   not supported by Zephyr */
+/* GPIO_POWER_DOWN         not supported by Zephyr */
+
+#else /* !CONFIG_ZEPHYR */
 /*
  * All flags supported by gpio_info expect GPIO_ANALOG
  *
@@ -55,14 +100,14 @@
  */
 #define GPIO_FLAG_NONE     0       /* No flag needed, default setting */
 #define GPIO_ANALOG        BIT(0)  /* Set pin to analog-mode */
-/* GPIO_OPEN_DRAIN         BIT(1) | BIT(2)  Output type is open-drain */
-#define GPIO_DEFAULT       BIT(3) /* Don't set up on boot */
-/* GPIO_PULL_UP            BIT(4)    Enable on-chip pullup */
-/* GPIO_PULL_DOWN          BIT(5)    Enable on-chip pulldown */
+#define GPIO_OPEN_DRAIN    (BIT(1) | BIT(2))  /* Output type is open-drain  */
+#define GPIO_DEFAULT       BIT(3)  /* Don't set up on boot */
+#define GPIO_PULL_UP       BIT(4)  /* Enable on-chip pullup */
+#define GPIO_PULL_DOWN     BIT(5)  /* Enable on-chip pulldown */
 #define GPIO_LOW           BIT(6)  /* If GPIO_OUTPUT, set level low */
 #define GPIO_HIGH          BIT(7)  /* If GPIO_OUTPUT, set level high */
-/* GPIO_INPUT              BIT(8)     Input */
-/* GPIO_OUTPUT             BIT(9)     Output */
+#define GPIO_INPUT         BIT(8)  /* Input */
+#define GPIO_OUTPUT        BIT(9)  /* Output */
 #define GPIO_INT_F_RISING  BIT(10) /* Interrupt on rising edge */
 #define GPIO_INT_F_FALLING BIT(11) /* Interrupt on falling edge */
 #define GPIO_INT_F_LOW     BIT(12) /* Interrupt on low level */
@@ -79,6 +124,8 @@
 #ifdef CONFIG_GPIO_POWER_DOWN
 #define GPIO_POWER_DOWN    BIT(23) /* Pin and pad is powered off */
 #endif
+
+#endif /* CONFIG_ZEPHYR */
 
 /* Common flag combinations */
 #define GPIO_OUT_LOW        (GPIO_OUTPUT | GPIO_LOW)
@@ -238,9 +285,8 @@ void gpio_set_flags(enum gpio_signal signal, int flags);
 #define CONFIG_GPIO_GET_EXTENDED
 #endif
 
-#ifdef CONFIG_GPIO_GET_EXTENDED
 /**
- * Get the current flags for a signal.
+ * Get the current flags for a signal. Requires CONFIG_GPIO_GET_EXTENDED.
  *
  * @param signal	Signal to get flags for
  * @returns The flags that are currently defined for this signal
@@ -248,13 +294,12 @@ void gpio_set_flags(enum gpio_signal signal, int flags);
 int gpio_get_flags(enum gpio_signal signal);
 
 /**
- * Get flags for GPIO by port and mask.
+ * Get flags for GPIO by port and mask. Requires CONFIG_GPIO_GET_EXTENDED.
  *
  * @param port		GPIO port to set (GPIO_*)
  * @param mask		Bitmask of pins on that port to check: one only.
  */
 int gpio_get_flags_by_mask(uint32_t port, uint32_t mask);
-#endif
 
 #ifdef CONFIG_ZEPHYR
 
