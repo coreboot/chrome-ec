@@ -6,9 +6,11 @@
 #ifndef __X86_COMMON_PWRSEQ_H__
 #define __X86_COMMON_PWRSEQ_H__
 
+#include <logging/log.h>
+
+#include <ap_power_override_functions.h>
 #include <power_signals.h>
 #include <x86_power_signals.h>
-#include <logging/log.h>
 
 /**
  * @brief System power states for Non Deep Sleep Well
@@ -66,4 +68,5 @@ struct pwrseq_context {
 #endif
 
 };
+
 #endif /* __X86_COMMON_PWRSEQ_H__ */

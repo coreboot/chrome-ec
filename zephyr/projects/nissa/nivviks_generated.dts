@@ -68,7 +68,7 @@
 			enum-name = "GPIO_PACKET_MODE_EN";
 		};
 		gpio_ec_kso_02_inv: ec_kso_02_inv {
-			gpios = <&gpio1 7 (GPIO_OUT_LOW | GPIO_ACTIVE_LOW)>;
+			gpios = <&gpio1 7 (GPIO_OUTPUT_LOW | GPIO_ACTIVE_LOW)>;
 		};
 		gpio_ec_pch_wake_odl: ec_pch_wake_odl {
 			gpios = <&gpiob 0 GPIO_ODR_LOW>;
@@ -114,6 +114,7 @@
 		};
 		gpio_en_pp3300_s5: en_pp3300_s5 {
 			gpios = <&gpiob 6 GPIO_OUTPUT>;
+			enum-name = "GPIO_TEMP_SENSOR_POWER";
 		};
 		gpio_en_pp5000_pen_x: en_pp5000_pen_x {
 			gpios = <&gpioe 2 GPIO_OUTPUT>;
@@ -170,6 +171,7 @@
 		};
 		gpio_sub_usb_a1_ilimit_sdp: sub_usb_a1_ilimit_sdp {
 			gpios = <&gpiod 5 GPIO_OUTPUT>;
+			enum-name = "GPIO_USB2_ILIM_SEL";
 		};
 		gpio_sys_rst_odl: sys_rst_odl {
 			gpios = <&gpioc 5 GPIO_ODR_HIGH>;
@@ -180,6 +182,7 @@
 		};
 		gpio_usb_a0_ilimit_sdp: usb_a0_ilimit_sdp {
 			gpios = <&gpio8 5 GPIO_OUTPUT>;
+			enum-name = "GPIO_USB1_ILIM_SEL";
 		};
 		gpio_usb_c0_int_odl: usb_c0_int_odl {
 			gpios = <&gpio0 1 GPIO_INPUT_PULL_UP>;

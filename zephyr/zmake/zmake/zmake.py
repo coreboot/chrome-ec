@@ -11,7 +11,7 @@ import pathlib
 import re
 import shutil
 import subprocess
-from typing import List
+from typing import Dict, List
 
 import zmake.build_config
 import zmake.generate_readme
@@ -559,7 +559,6 @@ class Zmake:
             rv = self._build(
                 build_dir=build_dir,
                 project=project,
-                fail_on_warnings=not allow_warnings,
                 coverage=coverage,
                 output_files_out=output_files,
             )
@@ -589,7 +588,6 @@ class Zmake:
         build_dir,
         project: zmake.project.Project,
         output_files_out=None,
-        fail_on_warnings=False,
         coverage=False,
     ):
         """Build a pre-configured build directory."""
@@ -620,17 +618,11 @@ class Zmake:
             # Let all output be produced before exiting
             for writer in writers:
                 writer.wait()
-            if fail_on_warnings and any(
-                w.has_written(logging.WARNING) or w.has_written(logging.ERROR)
-                for w in writers
-            ):
-                self.logger.warning("zmake: Warnings detected in build: aborting")
-                return False
             return True
 
         procs = []
         log_writers = []
-        dirs = {}
+        dirs: Dict[str, pathlib.Path] = {}
 
         build_dir = build_dir.resolve()
 
@@ -675,12 +667,15 @@ class Zmake:
                     errors="replace",
                 )
                 job_id = "{}:{}".format(project.config.project_name, build_name)
+                dirs[build_name].mkdir(parents=True, exist_ok=True)
+                build_log = open(dirs[build_name] / "build.log", "w")
                 out = zmake.multiproc.log_output(
                     logger=self.logger,
                     log_level=logging.INFO,
                     file_descriptor=proc.stdout,
                     log_level_override_func=ninja_stdout_log_level_override,
                     job_id=job_id,
+                    tee_output=build_log,
                 )
                 err = zmake.multiproc.log_output(
                     self.logger,

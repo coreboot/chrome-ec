@@ -63,6 +63,9 @@ if(DEFINED CONFIG_PLATFORM_EC)
   endif()
 endif()
 
+# Set extra compiler flags.
+zephyr_cc_option(-mno-unaligned-access)
+
 # The EC application is split into two libraries:
 #   app: contains all the legacy code
 #   ec_shim: contains all the code under platform/ec/shim
@@ -326,6 +329,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_ICELAKE
                                                 "${PLATFORM_EC}/power/icelake.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
                                                 "${PLATFORM_EC}/power/intel_x86.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_METEORLAKE
+                                                "${PLATFORM_EC}/power/meteorlake.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8186
@@ -371,6 +376,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_CHARGER
                                                 "${PLATFORM_EC}/common/usb_charger.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PORT_POWER_DUMB
                                                 "${PLATFORM_EC}/common/usb_port_power_dumb.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PORT_POWER_SMART
+                                                "${PLATFORM_EC}/common/usb_port_power_smart.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
                                                 "${PLATFORM_EC}/common/usb_common.c"
@@ -389,6 +396,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_PD
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_FW_UPDATE
                                                 "${PLATFORM_EC}/common/usbc/usb_retimer_fw_update.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7483
+                                                "${PLATFORM_EC}/driver/retimer/anx7483.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
                                                 "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8818
@@ -408,6 +417,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_TUSB1044
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_VIRTUAL
                                                 "${PLATFORM_EC}/driver/usb_mux/virtual.c")
 
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DPS
+                                                "${PLATFORM_EC}/common/dps.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_LOGGING
                                                 "${PLATFORM_EC}/common/event_log.c"
                                                 "${PLATFORM_EC}/common/pd_log.c")

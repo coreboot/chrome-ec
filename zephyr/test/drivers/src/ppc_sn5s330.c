@@ -15,6 +15,7 @@
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_sn5s330.h"
 #include "usbc_ppc.h"
+#include "test_mocks.h"
 #include "test_state.h"
 
 /** This must match the index of the sn5s330 in ppc_chips[] */
@@ -331,12 +332,137 @@ ZTEST(ppc_sn5s330, test_sn5s330_set_vconn_fet)
 	zassert_not_equal(func_set4_reg & SN5S330_VCONN_EN, 0, NULL);
 }
 
+/* Make an I2C emulator mock read func wrapped in FFF */
+FAKE_VALUE_FUNC(int, dump_read_fn, struct i2c_emul *, int, uint8_t *, int,
+		void *);
+
+ZTEST(ppc_sn5s330, test_dump)
+{
+	int ret;
+	struct i2c_emul *i2c_emul = sn5s330_emul_to_i2c_emul(EMUL);
+
+	/* Set up our fake read function to pass through to the real emul */
+	RESET_FAKE(dump_read_fn);
+	dump_read_fn_fake.return_val = 1;
+	i2c_common_emul_set_read_func(i2c_emul, dump_read_fn, NULL);
+
+	ret = sn5s330_drv.reg_dump(SN5S330_PORT);
+
+	zassert_equal(EC_SUCCESS, ret, "Expected EC_SUCCESS, got %d", ret);
+
+	/* Check that all the expected I2C reads were performed. */
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 0, SN5S330_FUNC_SET1);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 1, SN5S330_FUNC_SET2);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 2, SN5S330_FUNC_SET3);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 3, SN5S330_FUNC_SET4);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 4, SN5S330_FUNC_SET5);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 5, SN5S330_FUNC_SET6);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 6, SN5S330_FUNC_SET7);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 7, SN5S330_FUNC_SET8);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 8, SN5S330_FUNC_SET9);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 9, SN5S330_FUNC_SET10);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 10, SN5S330_FUNC_SET11);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 11, SN5S330_FUNC_SET12);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 12, SN5S330_INT_STATUS_REG1);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 13, SN5S330_INT_STATUS_REG2);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 14, SN5S330_INT_STATUS_REG3);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 15, SN5S330_INT_STATUS_REG4);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 16, SN5S330_INT_TRIP_RISE_REG1);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 17, SN5S330_INT_TRIP_RISE_REG2);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 18, SN5S330_INT_TRIP_RISE_REG3);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 19, SN5S330_INT_TRIP_FALL_REG1);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 20, SN5S330_INT_TRIP_FALL_REG2);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 21, SN5S330_INT_TRIP_FALL_REG3);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 22, SN5S330_INT_MASK_RISE_REG1);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 23, SN5S330_INT_MASK_RISE_REG2);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 24, SN5S330_INT_MASK_RISE_REG3);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 25, SN5S330_INT_MASK_FALL_REG1);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 26, SN5S330_INT_MASK_FALL_REG2);
+	MOCK_ASSERT_I2C_READ(dump_read_fn, 27, SN5S330_INT_MASK_FALL_REG3);
+}
+
+enum i2c_operation {
+	I2C_WRITE,
+	I2C_READ,
+};
+
+#define INIT_I2C_FAIL_HELPER(EMUL, RW, REG)                                \
+	do {                                                               \
+		if ((RW) == I2C_READ) {                                    \
+			i2c_common_emul_set_read_fail_reg((EMUL), (REG));  \
+			i2c_common_emul_set_write_fail_reg(                \
+				(EMUL), I2C_COMMON_EMUL_NO_FAIL_REG);      \
+		} else if ((RW) == I2C_WRITE) {                            \
+			i2c_common_emul_set_read_fail_reg(                 \
+				(EMUL), I2C_COMMON_EMUL_NO_FAIL_REG);      \
+			i2c_common_emul_set_write_fail_reg((EMUL), (REG)); \
+		} else {                                                   \
+			zassert_true(false, "Invalid I2C operation");      \
+		}                                                          \
+		zassert_equal(                                             \
+			EC_ERROR_INVAL, sn5s330_drv.init(SN5S330_PORT),    \
+			"Did not get EC_ERROR_INVAL when reg %s (0x%02x)"  \
+			"could not be %s",                                 \
+			#REG, (REG),                                       \
+			((RW) == I2C_READ) ? "read" : "written");          \
+	} while (0)
+
+ZTEST(ppc_sn5s330, test_init_reg_fails)
+{
+	struct i2c_emul *i2c_emul = sn5s330_emul_to_i2c_emul(EMUL);
+
+	/* Fail on each of the I2C operations the init function does to ensure
+	 * we get the correct return value. This includes operations made by
+	 * clr_flags() and set_flags().
+	 */
+
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_FUNC_SET5);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_READ, SN5S330_FUNC_SET6);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_FUNC_SET6);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_FUNC_SET2);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_FUNC_SET9);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_FUNC_SET11);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_READ, SN5S330_FUNC_SET8);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_FUNC_SET8);
+
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_READ, SN5S330_FUNC_SET4);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_FUNC_SET4);
+
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_READ, SN5S330_FUNC_SET3);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_FUNC_SET3);
+
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_READ, SN5S330_FUNC_SET10);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_FUNC_SET10);
+
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_STATUS_REG4);
+
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_MASK_RISE_REG1);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_MASK_FALL_REG1);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_MASK_RISE_REG2);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_MASK_FALL_REG2);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_MASK_RISE_REG3);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_MASK_FALL_REG3);
+
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_READ, SN5S330_INT_STATUS_REG4);
+
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_TRIP_RISE_REG1);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_TRIP_RISE_REG2);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_TRIP_RISE_REG3);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_TRIP_FALL_REG1);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_TRIP_FALL_REG2);
+	INIT_I2C_FAIL_HELPER(i2c_emul, I2C_WRITE, SN5S330_INT_TRIP_FALL_REG3);
+}
+
 static inline void reset_sn5s330_state(void)
 {
 	struct i2c_emul *i2c_emul = sn5s330_emul_to_i2c_emul(EMUL);
 
 	i2c_common_emul_set_write_func(i2c_emul, NULL, NULL);
 	i2c_common_emul_set_read_func(i2c_emul, NULL, NULL);
+	i2c_common_emul_set_write_fail_reg(i2c_emul,
+		I2C_COMMON_EMUL_NO_FAIL_REG);
+	i2c_common_emul_set_read_fail_reg(i2c_emul,
+		I2C_COMMON_EMUL_NO_FAIL_REG);
 	sn5s330_emul_reset(EMUL);
 	RESET_FAKE(sn5s330_emul_interrupt_set_stub);
 }

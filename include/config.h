@@ -1169,6 +1169,13 @@
 #undef CONFIG_CHARGER_BQ25710_PP_ACOK
 
 /*
+ * This config option sets the PP_COMP in Prochot Option 1
+ * register. Need to use EN_PROCHOT_LPWR to enable independent comparator
+ * and its PROCHOT profile.
+ */
+#undef CONFIG_CHARGER_BQ25710_PP_COMP
+
+/*
  * This config option sets the PP_IDCHG2 bit in the Charge Option 4
  * register. This causes PROCHOT to be pulsed when IDCHG_TH2 is reached.
  */
@@ -1396,6 +1403,7 @@
 #undef CONFIG_CHIPSET_GEMINILAKE	/* Intel Geminilake (x86) */
 #undef CONFIG_CHIPSET_ICELAKE		/* Intel Icelake (x86) */
 #undef CONFIG_CHIPSET_JASPERLAKE	/* Intel Jasperlake (x86) */
+#undef CONFIG_CHIPSET_METEORLAKE	/* Intel Meteorlake (x86) */
 #undef CONFIG_CHIPSET_MT817X		/* MediaTek MT817x */
 #undef CONFIG_CHIPSET_MT8183		/* MediaTek MT8183 */
 #undef CONFIG_CHIPSET_MT8192		/* MediaTek MT8192 */
@@ -4780,6 +4788,7 @@
 /*
  * Type-C retimer drivers to be used.
  */
+#undef CONFIG_USBC_RETIMER_ANX7483
 #undef CONFIG_USBC_RETIMER_INTEL_BB
 #undef CONFIG_USBC_RETIMER_KB800X
 #undef CONFIG_USBC_RETIMER_NB7V904M
@@ -6180,6 +6189,7 @@
 #undef CONFIG_CHIPSET_GEMINILAKE
 #undef CONFIG_CHIPSET_ICELAKE
 #undef CONFIG_CHIPSET_JASPERLAKE
+#undef CONFIG_CHIPSET_METEORLAKE
 #undef CONFIG_CHIPSET_MT817X
 #undef CONFIG_CHIPSET_MT8183
 #undef CONFIG_CHIPSET_MT8192
@@ -6308,6 +6318,7 @@
 	defined(CONFIG_CHIPSET_COMETLAKE_DISCRETE) || \
 	defined(CONFIG_CHIPSET_GEMINILAKE) || \
 	defined(CONFIG_CHIPSET_ICELAKE) || \
+	defined(CONFIG_CHIPSET_METEORLAKE) || \
 	defined(CONFIG_CHIPSET_SKYLAKE)
 #define CONFIG_POWER_COMMON
 #endif
@@ -6315,6 +6326,7 @@
 #if defined(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540) || \
 	defined(CONFIG_CHIPSET_CANNONLAKE) || \
 	defined(CONFIG_CHIPSET_ICELAKE) || \
+	defined(CONFIG_CHIPSET_METEORLAKE) || \
 	defined(CONFIG_CHIPSET_SKYLAKE)
 #define CONFIG_CHIPSET_X86_RSMRST_DELAY
 #endif
