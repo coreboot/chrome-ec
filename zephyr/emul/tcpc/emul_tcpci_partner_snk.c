@@ -45,7 +45,9 @@ static int tcpci_snk_emul_num_of_pdos(struct tcpci_snk_emul_data *data)
  * @param common_data Pointer to common TCPCI partner data
  * @param delay Optional delay
  *
- * @return 0 on success
+ * @return TCPCI_EMUL_TX_SUCCESS on success
+ * @return TCPCI_EMUL_TX_FAILED when TCPCI is configured to not handle
+ *                              messages of this type
  * @return -ENOMEM when there is no free memory for message
  * @return -EINVAL on TCPCI emulator add RX message error
  */
@@ -308,7 +310,7 @@ static void tcpci_snk_emul_start_partner_transition_timer(
 	struct tcpci_partner_data *common_data)
 {
 	k_work_schedule(&common_data->sender_response_timeout,
-			TCPCI_PARTNER_TRANSITION_TIMEOUT_MS);
+			TCPCI_PARTNER_TRANSITION_TIMEOUT);
 	data->wait_for_ps_rdy = true;
 }
 
@@ -386,10 +388,10 @@ enum tcpci_partner_handler_res tcpci_snk_emul_handle_sop_msg(
 /** Check description in emul_tcpci_partner_snk.h */
 void tcpci_snk_emul_hard_reset(void *data)
 {
-	struct tcpci_snk_emul *snk_emul = data;
+	struct tcpci_snk_emul_data *snk_emul_data = data;
 
-	snk_emul->data.wait_for_ps_rdy = false;
-	snk_emul->data.pd_completed = false;
+	snk_emul_data->wait_for_ps_rdy = false;
+	snk_emul_data->pd_completed = false;
 }
 
 /**
@@ -477,6 +479,22 @@ static void tcpci_snk_emul_rx_consumed_op(
 	tcpci_partner_free_msg(msg);
 }
 
+/**
+ * @brief Function called when emulator is disconnected from TCPCI
+ *
+ * @param emul Pointer to TCPCI emulator
+ * @param ops Pointer to partner operations structure
+ */
+static void tcpci_snk_emul_disconnect_op(
+		const struct emul *emul,
+		const struct tcpci_emul_partner_ops *ops)
+{
+	struct tcpci_snk_emul *snk_emul =
+		CONTAINER_OF(ops, struct tcpci_snk_emul, ops);
+
+	tcpci_partner_common_disconnect(&snk_emul->common_data);
+}
+
 /** Check description in emul_tcpci_snk.h */
 int tcpci_snk_emul_connect_to_tcpci(struct tcpci_snk_emul_data *data,
 				    struct tcpci_partner_data *common_data,
@@ -516,7 +534,8 @@ void tcpci_snk_emul_init_data(struct tcpci_snk_emul_data *data)
 /** Check description in emul_tcpci_snk.h */
 void tcpci_snk_emul_init(struct tcpci_snk_emul *emul)
 {
-	tcpci_partner_init(&emul->common_data, tcpci_snk_emul_hard_reset, emul);
+	tcpci_partner_init(&emul->common_data, tcpci_snk_emul_hard_reset,
+			   &emul->data);
 
 	emul->common_data.data_role = PD_ROLE_DFP;
 	emul->common_data.power_role = PD_ROLE_SINK;
@@ -525,6 +544,7 @@ void tcpci_snk_emul_init(struct tcpci_snk_emul *emul)
 	emul->ops.transmit = tcpci_snk_emul_transmit_op;
 	emul->ops.rx_consumed = tcpci_snk_emul_rx_consumed_op;
 	emul->ops.control_change = NULL;
+	emul->ops.disconnect = tcpci_snk_emul_disconnect_op;
 
 	tcpci_snk_emul_init_data(&emul->data);
 }

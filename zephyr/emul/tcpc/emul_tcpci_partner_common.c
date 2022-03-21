@@ -146,12 +146,14 @@ static void tcpci_partner_delayed_send(void *fifo_data)
 			k_mutex_unlock(&data->to_send_mutex);
 
 			tcpci_partner_set_header(data, msg);
+			__ASSERT(data->tcpci_emul,
+				 "Disconnected partner send message");
 			ret = tcpci_emul_add_rx_msg(data->tcpci_emul, &msg->msg,
 						    true /* send alert */);
 			tcpci_partner_log_msg(data, &msg->msg,
 					      TCPCI_PARTNER_SENDER_PARTNER,
 					      ret);
-			if (ret) {
+			if (ret != TCPCI_EMUL_TX_SUCCESS) {
 				tcpci_partner_free_msg(msg);
 			}
 
@@ -218,11 +220,12 @@ int tcpci_partner_send_msg(struct tcpci_partner_data *data,
 	int ret;
 
 	if (delay == 0) {
+		__ASSERT(data->tcpci_emul, "Disconnected partner send message");
 		tcpci_partner_set_header(data, msg);
 		ret = tcpci_emul_add_rx_msg(data->tcpci_emul, &msg->msg, true);
 		tcpci_partner_log_msg(data, &msg->msg,
 				      TCPCI_PARTNER_SENDER_PARTNER, ret);
-		if (ret) {
+		if (ret != TCPCI_EMUL_TX_SUCCESS) {
 			tcpci_partner_free_msg(msg);
 		}
 
@@ -416,7 +419,7 @@ static void tcpci_partner_sender_response_timeout(struct k_work *work)
 void tcpci_partner_start_sender_response_timer(struct tcpci_partner_data *data)
 {
 	k_work_schedule(&data->sender_response_timeout,
-			TCPCI_PARTNER_RESPONSE_TIMEOUT_MS);
+			TCPCI_PARTNER_RESPONSE_TIMEOUT);
 	data->wait_for_response = true;
 }
 
@@ -440,7 +443,14 @@ enum tcpci_partner_handler_res tcpci_partner_common_msg_handler(
 	tcpci_partner_log_msg(data, tx_msg, TCPCI_PARTNER_SENDER_TCPM,
 			      tx_status);
 
-	tcpci_emul_partner_msg_status(data->tcpci_emul, tx_status);
+	/*
+	 * Do not change alert register in TCPCI emulator upon receiving
+	 * hard reset or cable reset
+	 */
+	if (type != TCPCI_MSG_TX_HARD_RESET && type != TCPCI_MSG_CABLE_RESET) {
+		tcpci_emul_partner_msg_status(data->tcpci_emul, tx_status);
+	}
+
 	/* If receiving message was unsuccessful, abandon processing message */
 	if (tx_status != TCPCI_EMUL_TX_SUCCESS) {
 		return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
@@ -544,6 +554,14 @@ void tcpci_partner_common_handler_mask_msg(struct tcpci_partner_data *data,
 	} else {
 		data->common_handler_masked &= ~BIT(type);
 	}
+}
+
+/** Check description in emul_common_tcpci_partner.h */
+void tcpci_partner_common_disconnect(struct tcpci_partner_data *data)
+{
+	tcpci_partner_clear_msg_queue(data);
+	tcpci_partner_stop_sender_response_timer(data);
+	data->tcpci_emul = NULL;
 }
 
 /** Check description in emul_common_tcpci_partner.h */
@@ -693,6 +711,6 @@ void tcpci_partner_init(struct tcpci_partner_data *data,
 	data->collect_msg_log = false;
 	tcpci_partner_common_reset(data);
 	data->hard_reset_func = hard_reset_func;
-	data->hard_reset_data = data;
+	data->hard_reset_data = hard_reset_data;
 	data->tcpm_timeouts = 0;
 }

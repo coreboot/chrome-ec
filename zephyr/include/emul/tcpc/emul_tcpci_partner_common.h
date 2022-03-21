@@ -28,9 +28,21 @@
  */
 
 /** Timeout for other side to respond to PD message */
-#define TCPCI_PARTNER_RESPONSE_TIMEOUT_MS	K_MSEC(30)
+#define TCPCI_PARTNER_RESPONSE_TIMEOUT_MS	30
+#define TCPCI_PARTNER_RESPONSE_TIMEOUT			\
+		K_MSEC(TCPCI_PARTNER_RESPONSE_TIMEOUT_MS)
 /** Timeout for source to transition to requested state after accept */
-#define TCPCI_PARTNER_TRANSITION_TIMEOUT_MS	K_MSEC(550)
+#define TCPCI_PARTNER_TRANSITION_TIMEOUT_MS	550
+#define TCPCI_PARTNER_TRANSITION_TIMEOUT		\
+		K_MSEC(TCPCI_PARTNER_TRANSITION_TIMEOUT_MS)
+/** Timeout for source to send capability again after failure */
+#define TCPCI_SOURCE_CAPABILITY_TIMEOUT_MS	150
+#define TCPCI_SOURCE_CAPABILITY_TIMEOUT			\
+		K_MSEC(TCPCI_SOURCE_CAPABILITY_TIMEOUT_MS)
+/** Timeout for source to send capability message after power swap */
+#define TCPCI_SWAP_SOURCE_START_TIMEOUT_MS	20
+#define TCPCI_SWAP_SOURCE_START_TIMEOUT			\
+		K_MSEC(TCPCI_SWAP_SOURCE_START_TIMEOUT_MS)
 
 /**
  * @brief Function type that is used by TCPCI partner emulator on hard reset
@@ -189,7 +201,9 @@ void tcpci_partner_set_header(struct tcpci_partner_data *data,
  * @param msg Pointer to message to send
  * @param delay Optional delay
  *
- * @return 0 on success
+ * @return TCPCI_EMUL_TX_SUCCESS on success
+ * @return TCPCI_EMUL_TX_FAILED when TCPCI is configured to not handle
+ *                              messages of this type
  * @return negative on failure
  */
 int tcpci_partner_send_msg(struct tcpci_partner_data *data,
@@ -202,7 +216,9 @@ int tcpci_partner_send_msg(struct tcpci_partner_data *data,
  * @param type Type of message
  * @param delay Optional delay
  *
- * @return 0 on success
+ * @return TCPCI_EMUL_TX_SUCCESS on success
+ * @return TCPCI_EMUL_TX_FAILED when TCPCI is configured to not handle
+ *                              messages of this type
  * @return -ENOMEM when there is no free memory for message
  * @return negative on failure
  */
@@ -220,7 +236,9 @@ int tcpci_partner_send_control_msg(struct tcpci_partner_data *data,
  * @param data_obj_num Number of data objects
  * @param delay Optional delay
  *
- * @return 0 on success
+ * @return TCPCI_EMUL_TX_SUCCESS on success
+ * @return TCPCI_EMUL_TX_FAILED when TCPCI is configured to not handle
+ *                              messages of this type
  * @return -ENOMEM when there is no free memory for message
  * @return negative on failure
  */
@@ -311,6 +329,15 @@ enum tcpci_partner_handler_res tcpci_partner_common_msg_handler(
 void tcpci_partner_common_handler_mask_msg(struct tcpci_partner_data *data,
 					   enum pd_ctrl_msg_type type,
 					   bool enable);
+
+/**
+ * @brief Common disconnect function which clears messages queue, sets
+ *        tcpci_emul field in struct tcpci_partner_data to NULL, and stops
+ *        timers.
+ *
+ * @param data Pointer to TCPCI partner emulator
+ */
+void tcpci_partner_common_disconnect(struct tcpci_partner_data *data);
 
 /**
  * @brief Select if PD messages should be logged or not.
