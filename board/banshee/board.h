@@ -32,6 +32,7 @@
 
 /* KEYBOARD */
 #define CONFIG_KEYBOARD_CUSTOMIZATION
+#define CONFIG_KEYBOARD_VIVALDI
 
 /* LED */
 #define CONFIG_LED_PWM_COUNT 2
@@ -64,7 +65,7 @@
 #define CONFIG_HOSTCMD_I2C_CONTROL
 
 #define CONFIG_USBC_PPC_SYV682X
-#define CONFIG_USBC_PPC_NX20P3483
+#define CONFIG_USB_PD_PPC
 
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
@@ -234,6 +235,8 @@ enum mft_channel {
 	MFT_CH_0 = 0,
 	MFT_CH_COUNT
 };
+
+void battery_present_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

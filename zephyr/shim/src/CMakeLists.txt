@@ -36,12 +36,13 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_CROS_DRV
                                                             ioex_drv.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD    keyboard_raw.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD    keyscan.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_DT      led.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MKBP_EVENT  mkbp_event.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
                                                             motionsense_sensors.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PANIC       panic.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM         pwm.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON  pwm_led.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_PWM     pwm_led.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RTC         rtc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCHCAP_GPIO
 															switchcap_gpio.c)

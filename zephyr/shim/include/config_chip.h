@@ -919,7 +919,6 @@ extern struct jump_data mock_jump_data;
 #define PD_MAX_CURRENT_MA	3000
 #define PD_MAX_VOLTAGE_MV	20000
 
-/* TODO: b/144165680 - measure and check these values on Volteer */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 #endif
@@ -1084,6 +1083,11 @@ extern struct jump_data mock_jump_data;
 #undef CONFIG_BC12_DETECT_MT6360
 #ifdef CONFIG_PLATFORM_EC_BC12_DETECT_MT6360
 #define CONFIG_BC12_DETECT_MT6360
+#endif
+
+#undef CONFIG_BC12_DETECT_DATA_ROLE_TRIGGER
+#ifdef CONFIG_PLATFORM_EC_BC12_DETECT_DATA_ROLE_TRIGGER
+#define CONFIG_BC12_DETECT_DATA_ROLE_TRIGGER
 #endif
 
 #undef CONFIG_MT6360_BC12_GPIO
