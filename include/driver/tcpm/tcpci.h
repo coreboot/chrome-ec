@@ -227,8 +227,21 @@
 #define TCPC_REG_MSG_HDR_INFO_PROLE(reg) ((reg) & 0x1)
 
 #define TCPC_REG_RX_DETECT         0x2f
-#define TCPC_REG_RX_DETECT_SOP_HRST_MASK 0x21
-#define TCPC_REG_RX_DETECT_SOP_SOPP_SOPPP_HRST_MASK 0x27
+#define TCPC_REG_RX_DETECT_MSG_DISABLE_DISCONNECT	BIT(7)
+#define TCPC_REG_RX_DETECT_CABLE_RST			BIT(6)
+#define TCPC_REG_RX_DETECT_HRST				BIT(5)
+#define TCPC_REG_RX_DETECT_SOPPP_DBG			BIT(4)
+#define TCPC_REG_RX_DETECT_SOPP_DBG			BIT(3)
+#define TCPC_REG_RX_DETECT_SOPPP			BIT(2)
+#define TCPC_REG_RX_DETECT_SOPP				BIT(1)
+#define TCPC_REG_RX_DETECT_SOP				BIT(0)
+#define TCPC_REG_RX_DETECT_SOP_HRST_MASK (TCPC_REG_RX_DETECT_SOP | \
+					  TCPC_REG_RX_DETECT_HRST)
+#define TCPC_REG_RX_DETECT_SOP_SOPP_SOPPP_HRST_MASK		\
+					(TCPC_REG_RX_DETECT_SOP | \
+					 TCPC_REG_RX_DETECT_SOPP | \
+					 TCPC_REG_RX_DETECT_SOPPP | \
+					 TCPC_REG_RX_DETECT_HRST)
 
 /* TCPCI Rev 1.0 receive registers */
 #define TCPC_REG_RX_BYTE_CNT       0x30
@@ -324,7 +337,7 @@ int tcpci_tcpm_mux_enter_low_power(const struct usb_mux *me);
 int tcpci_get_chip_info(int port, int live,
 			struct ec_response_pd_chip_info_v1 *chip_info);
 int tcpci_get_vbus_voltage(int port, int *vbus);
-#ifdef CONFIG_USBC_PPC
+#ifdef CONFIG_USB_PD_PPC
 bool tcpci_tcpm_get_snk_ctrl(int port);
 int tcpci_tcpm_set_snk_ctrl(int port, int enable);
 bool tcpci_tcpm_get_src_ctrl(int port);

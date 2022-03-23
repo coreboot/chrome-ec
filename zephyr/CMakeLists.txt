@@ -262,8 +262,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C_DEBUG
                                                 "${PLATFORM_EC}/common/i2c_trace.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C_VIRTUAL_BATTERY
                                                 "${PLATFORM_EC}/common/virtual_battery.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_IOEX
-                                                "${PLATFORM_EC}/common/ioexpander_commands.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_CCGXXF
                                                 "${PLATFORM_EC}/driver/ioexpander/ccgxxf.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_IT8801
@@ -296,6 +294,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_VIVALDI
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM_KBLIGHT
                                                 "${PLATFORM_EC}/common/keyboard_backlight.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
+                                                "${PLATFORM_EC}/common/led_common.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_DT
                                                 "${PLATFORM_EC}/common/led_common.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_PWM
                                                 "${PLATFORM_EC}/common/led_pwm.c")

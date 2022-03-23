@@ -13,9 +13,12 @@
 #define __EMUL_TCPCI_PARTNER_COMMON_H
 
 #include <drivers/emul.h>
-#include "emul/tcpc/emul_tcpci.h"
+#include <kernel.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #include "ec_commands.h"
+#include "emul/tcpc/emul_tcpci.h"
 #include "usb_pd.h"
 
 /**
@@ -28,9 +31,21 @@
  */
 
 /** Timeout for other side to respond to PD message */
-#define TCPCI_PARTNER_RESPONSE_TIMEOUT_MS	K_MSEC(30)
+#define TCPCI_PARTNER_RESPONSE_TIMEOUT_MS	30
+#define TCPCI_PARTNER_RESPONSE_TIMEOUT			\
+		K_MSEC(TCPCI_PARTNER_RESPONSE_TIMEOUT_MS)
 /** Timeout for source to transition to requested state after accept */
-#define TCPCI_PARTNER_TRANSITION_TIMEOUT_MS	K_MSEC(550)
+#define TCPCI_PARTNER_TRANSITION_TIMEOUT_MS	550
+#define TCPCI_PARTNER_TRANSITION_TIMEOUT		\
+		K_MSEC(TCPCI_PARTNER_TRANSITION_TIMEOUT_MS)
+/** Timeout for source to send capability again after failure */
+#define TCPCI_SOURCE_CAPABILITY_TIMEOUT_MS	150
+#define TCPCI_SOURCE_CAPABILITY_TIMEOUT			\
+		K_MSEC(TCPCI_SOURCE_CAPABILITY_TIMEOUT_MS)
+/** Timeout for source to send capability message after power swap */
+#define TCPCI_SWAP_SOURCE_START_TIMEOUT_MS	20
+#define TCPCI_SWAP_SOURCE_START_TIMEOUT			\
+		K_MSEC(TCPCI_SWAP_SOURCE_START_TIMEOUT_MS)
 
 /**
  * @brief Function type that is used by TCPCI partner emulator on hard reset
@@ -95,6 +110,17 @@ struct tcpci_partner_data {
 	bool collect_msg_log;
 	/** Mutex for msg_log */
 	struct k_mutex msg_log_mutex;
+	/* VDMs with which the partner responds to discovery REQs. The VDM
+	 * buffers include the VDM header, and the VDO counts include 1 for the
+	 * VDM header. This structure has space for the mode response for a
+	 * single supported SVID.
+	 */
+	uint32_t identity_vdm[VDO_MAX_SIZE];
+	int identity_vdos;
+	uint32_t svids_vdm[VDO_MAX_SIZE];
+	int svids_vdos;
+	uint32_t modes_vdm[VDO_MAX_SIZE];
+	int modes_vdos;
 };
 
 /** Structure of message used by TCPCI partner emulator */
@@ -189,7 +215,9 @@ void tcpci_partner_set_header(struct tcpci_partner_data *data,
  * @param msg Pointer to message to send
  * @param delay Optional delay
  *
- * @return 0 on success
+ * @return TCPCI_EMUL_TX_SUCCESS on success
+ * @return TCPCI_EMUL_TX_FAILED when TCPCI is configured to not handle
+ *                              messages of this type
  * @return negative on failure
  */
 int tcpci_partner_send_msg(struct tcpci_partner_data *data,
@@ -202,7 +230,9 @@ int tcpci_partner_send_msg(struct tcpci_partner_data *data,
  * @param type Type of message
  * @param delay Optional delay
  *
- * @return 0 on success
+ * @return TCPCI_EMUL_TX_SUCCESS on success
+ * @return TCPCI_EMUL_TX_FAILED when TCPCI is configured to not handle
+ *                              messages of this type
  * @return -ENOMEM when there is no free memory for message
  * @return negative on failure
  */
@@ -220,7 +250,9 @@ int tcpci_partner_send_control_msg(struct tcpci_partner_data *data,
  * @param data_obj_num Number of data objects
  * @param delay Optional delay
  *
- * @return 0 on success
+ * @return TCPCI_EMUL_TX_SUCCESS on success
+ * @return TCPCI_EMUL_TX_FAILED when TCPCI is configured to not handle
+ *                              messages of this type
  * @return -ENOMEM when there is no free memory for message
  * @return negative on failure
  */
@@ -313,6 +345,15 @@ void tcpci_partner_common_handler_mask_msg(struct tcpci_partner_data *data,
 					   bool enable);
 
 /**
+ * @brief Common disconnect function which clears messages queue, sets
+ *        tcpci_emul field in struct tcpci_partner_data to NULL, and stops
+ *        timers.
+ *
+ * @param data Pointer to TCPCI partner emulator
+ */
+void tcpci_partner_common_disconnect(struct tcpci_partner_data *data);
+
+/**
  * @brief Select if PD messages should be logged or not.
  *
  * @param data Pointer to TCPCI partner emulator
@@ -337,6 +378,30 @@ void tcpci_partner_common_print_logged_msgs(struct tcpci_partner_data *data);
  * @param data Pointer to TCPCI partner emulator
  */
 void tcpci_partner_common_clear_logged_msgs(struct tcpci_partner_data *data);
+
+/**
+ * @brief Set the discovery responses (Vendor Defined Messages) for the partner.
+ *
+ * If a response for a command type is not defined, the partner will ignore
+ * requests of that type. To emulate compliant behavior, the discover responses
+ * should be internally consistent, e.g., if there is a DisplayPort VID in
+ * Discover SVIDs ACK, there should be a Discover Modes ACK for DisplayPort.
+ *
+ * @param data          Pointer to TCPCI partner emulator
+ * @param identity_vdos Number of 32-bit Vendor Defined Objects in the Discover
+ *                      Identity response VDM
+ * @param identity_vdm  Pointer to the Discover Identity response VDM, including
+ *                      the VDM header
+ * @param svids_vdos    Number of VDOs in the Discover SVIDs response
+ * @param svids_vdm     Pointer to the Discover SVIDs response
+ * @param modes_vdos    Number of VDOs in the Discover Modes response
+ * @param modes_vdm     Pointer to the Discover Modes response; only currently
+ *                      supports a response for a single SVID
+ */
+void tcpci_partner_set_discovery_info(struct tcpci_partner_data *data,
+				      int identity_vdos, uint32_t *identity_vdm,
+				      int svids_vdos, uint32_t *svids_vdm,
+				      int modes_vdos, uint32_t *modes_vdm);
 
 /**
  * @}

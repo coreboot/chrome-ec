@@ -95,3 +95,37 @@ void disconnect_source_from_port(const struct emul *tcpci_emul,
 	isl923x_emul_set_adc_vbus(charger_emul, 0);
 	k_sleep(K_SECONDS(1));
 }
+
+void host_cmd_motion_sense_dump(int max_sensor_count,
+				struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_DUMP,
+		.dump = {
+			.max_sensor_count = max_sensor_count,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 4, *response, params);
+
+	zassume_ok(host_command_process(&args),
+		   "Failed to get motion_sense dump");
+}
+
+void host_cmd_typec_discovery(int port, enum typec_partner_type partner_type,
+			      void *response, size_t response_size)
+{
+	struct ec_params_typec_discovery params = {
+		.port = port, .partner_type = partner_type
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND_PARAMS(
+		EC_CMD_TYPEC_DISCOVERY, 0, params);
+	/* The expected response to EC_CMD_TYPEC_DISCOVERY extends beyond the
+	 * bounds of struct ec_response_typec_discovery.
+	 */
+	args.response = response;
+	args.response_max = response_size;
+
+	zassume_ok(host_command_process(&args),
+		   "Failed to get Type-C state for port %d", port);
+}

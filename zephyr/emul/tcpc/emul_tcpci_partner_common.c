@@ -146,12 +146,14 @@ static void tcpci_partner_delayed_send(void *fifo_data)
 			k_mutex_unlock(&data->to_send_mutex);
 
 			tcpci_partner_set_header(data, msg);
+			__ASSERT(data->tcpci_emul,
+				 "Disconnected partner send message");
 			ret = tcpci_emul_add_rx_msg(data->tcpci_emul, &msg->msg,
 						    true /* send alert */);
 			tcpci_partner_log_msg(data, &msg->msg,
 					      TCPCI_PARTNER_SENDER_PARTNER,
 					      ret);
-			if (ret) {
+			if (ret != TCPCI_EMUL_TX_SUCCESS) {
 				tcpci_partner_free_msg(msg);
 			}
 
@@ -218,11 +220,12 @@ int tcpci_partner_send_msg(struct tcpci_partner_data *data,
 	int ret;
 
 	if (delay == 0) {
+		__ASSERT(data->tcpci_emul, "Disconnected partner send message");
 		tcpci_partner_set_header(data, msg);
 		ret = tcpci_emul_add_rx_msg(data->tcpci_emul, &msg->msg, true);
 		tcpci_partner_log_msg(data, &msg->msg,
 				      TCPCI_PARTNER_SENDER_PARTNER, ret);
-		if (ret) {
+		if (ret != TCPCI_EMUL_TX_SUCCESS) {
 			tcpci_partner_free_msg(msg);
 		}
 
@@ -416,7 +419,7 @@ static void tcpci_partner_sender_response_timeout(struct k_work *work)
 void tcpci_partner_start_sender_response_timer(struct tcpci_partner_data *data)
 {
 	k_work_schedule(&data->sender_response_timeout,
-			TCPCI_PARTNER_RESPONSE_TIMEOUT_MS);
+			TCPCI_PARTNER_RESPONSE_TIMEOUT);
 	data->wait_for_response = true;
 }
 
@@ -425,6 +428,49 @@ void tcpci_partner_stop_sender_response_timer(struct tcpci_partner_data *data)
 {
 	k_work_cancel_delayable(&data->sender_response_timeout);
 	data->wait_for_response = false;
+}
+
+enum tcpci_partner_handler_res
+tcpci_partner_common_vdm_handler(struct tcpci_partner_data *data,
+				 const struct tcpci_emul_msg *message)
+{
+	uint32_t vdm_header = sys_get_le32(message->buf + TCPCI_MSG_HEADER_LEN);
+
+	/* TCPCI r2.0: Ignore unsupported VDMs. Don't handle command types other
+	 * than REQ or unstructured VDMs.
+	 * TODO(b/225397796): Validate VDM fields more thoroughly.
+	 */
+	if (PD_VDO_CMDT(vdm_header) != CMDT_INIT || !PD_VDO_SVDM(vdm_header)) {
+		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+	}
+
+	switch (PD_VDO_CMD(vdm_header)) {
+	case CMD_DISCOVER_IDENT:
+		if (data->identity_vdos > 0) {
+			tcpci_partner_send_data_msg(data, PD_DATA_VENDOR_DEF,
+						    data->identity_vdm,
+						    data->identity_vdos, 0);
+		}
+		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+	case CMD_DISCOVER_SVID:
+		if (data->svids_vdos > 0) {
+			tcpci_partner_send_data_msg(data, PD_DATA_VENDOR_DEF,
+						    data->svids_vdm,
+						    data->svids_vdos, 0);
+		}
+		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+	case CMD_DISCOVER_MODES:
+		if (data->modes_vdos > 0) {
+			tcpci_partner_send_data_msg(data, PD_DATA_VENDOR_DEF,
+						    data->modes_vdm,
+						    data->modes_vdos, 0);
+		}
+		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+	/* TODO(b/219562077): Support DP mode entry. */
+	default:
+		/* TCPCI r. 2.0: Ignore unsupported commands. */
+		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+	}
 }
 
 /** Check description in emul_common_tcpci_partner.h */
@@ -440,7 +486,14 @@ enum tcpci_partner_handler_res tcpci_partner_common_msg_handler(
 	tcpci_partner_log_msg(data, tx_msg, TCPCI_PARTNER_SENDER_TCPM,
 			      tx_status);
 
-	tcpci_emul_partner_msg_status(data->tcpci_emul, tx_status);
+	/*
+	 * Do not change alert register in TCPCI emulator upon receiving
+	 * hard reset or cable reset
+	 */
+	if (type != TCPCI_MSG_TX_HARD_RESET && type != TCPCI_MSG_CABLE_RESET) {
+		tcpci_emul_partner_msg_status(data->tcpci_emul, tx_status);
+	}
+
 	/* If receiving message was unsuccessful, abandon processing message */
 	if (tx_status != TCPCI_EMUL_TX_SUCCESS) {
 		return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
@@ -478,8 +531,7 @@ enum tcpci_partner_handler_res tcpci_partner_common_msg_handler(
 	if (PD_HEADER_CNT(header)) {
 		switch (PD_HEADER_TYPE(header)) {
 		case PD_DATA_VENDOR_DEF:
-			/* VDM (vendor defined message) - ignore */
-			return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+			return tcpci_partner_common_vdm_handler(data, tx_msg);
 		default:
 			/* No other common handlers for data messages */
 			return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
@@ -544,6 +596,32 @@ void tcpci_partner_common_handler_mask_msg(struct tcpci_partner_data *data,
 	} else {
 		data->common_handler_masked &= ~BIT(type);
 	}
+}
+
+void tcpci_partner_set_discovery_info(struct tcpci_partner_data *data,
+				      int identity_vdos, uint32_t *identity_vdm,
+				      int svids_vdos, uint32_t *svids_vdm,
+				      int modes_vdos, uint32_t *modes_vdm)
+{
+	memset(data->identity_vdm, 0, sizeof(data->identity_vdm));
+	memset(data->svids_vdm, 0, sizeof(data->svids_vdm));
+	memset(data->modes_vdm, 0, sizeof(data->modes_vdm));
+
+	data->identity_vdos = identity_vdos;
+	memcpy(data->identity_vdm, identity_vdm,
+	       identity_vdos * sizeof(*identity_vdm));
+	data->svids_vdos = svids_vdos;
+	memcpy(data->svids_vdm, svids_vdm, svids_vdos * sizeof(*svids_vdm));
+	data->modes_vdos = modes_vdos;
+	memcpy(data->modes_vdm, modes_vdm, modes_vdos * sizeof(*modes_vdm));
+}
+
+/** Check description in emul_common_tcpci_partner.h */
+void tcpci_partner_common_disconnect(struct tcpci_partner_data *data)
+{
+	tcpci_partner_clear_msg_queue(data);
+	tcpci_partner_stop_sender_response_timer(data);
+	data->tcpci_emul = NULL;
 }
 
 /** Check description in emul_common_tcpci_partner.h */
@@ -693,6 +771,9 @@ void tcpci_partner_init(struct tcpci_partner_data *data,
 	data->collect_msg_log = false;
 	tcpci_partner_common_reset(data);
 	data->hard_reset_func = hard_reset_func;
-	data->hard_reset_data = data;
+	data->hard_reset_data = hard_reset_data;
 	data->tcpm_timeouts = 0;
+	data->identity_vdos = 0;
+	data->svids_vdos = 0;
+	data->modes_vdos = 0;
 }

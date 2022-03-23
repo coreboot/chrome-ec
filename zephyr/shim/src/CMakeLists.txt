@@ -36,12 +36,13 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_CROS_DRV
                                                             ioex_drv.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD    keyboard_raw.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD    keyscan.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_DT      led.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MKBP_EVENT  mkbp_event.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
                                                             motionsense_sensors.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PANIC       panic.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM         pwm.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON  pwm_led.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_PWM     pwm_led.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RTC         rtc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCHCAP_GPIO
 															switchcap_gpio.c)
@@ -60,14 +61,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC    ppc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_NCT38XX
                                                             tcpc_nct38xx.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8751
-                                                            tcpc_ps8xxx.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8755
-                                                            tcpc_ps8xxx.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8705
-                                                            tcpc_ps8xxx.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8805
-                                                            tcpc_ps8xxx.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8815
-                                                            tcpc_ps8xxx.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_TCPCI
+                                                            tcpc.c)
+
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBA        usba.c)
+

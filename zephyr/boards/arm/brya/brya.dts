@@ -33,6 +33,11 @@
 		cros,rtc = &mtc;
 	};
 
+	ec-console {
+		compatible = "ec-console";
+		disabled = "events", "lpc", "hostcmd";
+	};
+
 	named-i2c-ports {
 		compatible = "named-i2c-ports";
 		i2c_sensor: sensor {
@@ -85,10 +90,6 @@
 			i2c-port = <&i2c7_0>;
 			enum-name = "I2C_PORT_MP2964";
 		};
-	};
-
-	named-pwms {
-		compatible = "named-pwms";
 	};
 
 	named-adc-channels {
