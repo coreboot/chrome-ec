@@ -9,14 +9,14 @@
 
 #include "battery.h"
 #include "battery_smart.h"
-#include "charger_utils.h"
+#include "test/drivers/charger_utils.h"
 #include "driver/charger/isl923x.h"
 #include "driver/charger/isl923x_public.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_isl923x.h"
 #include "system.h"
-#include "test_mocks.h"
-#include "test_state.h"
+#include "test/drivers/test_mocks.h"
+#include "test/drivers/test_state.h"
 
 BUILD_ASSERT(CONFIG_CHARGER_SENSE_RESISTOR == 10 ||
 	     CONFIG_CHARGER_SENSE_RESISTOR == 5);
@@ -191,6 +191,11 @@ ZTEST(isl923x, test_isl923x_set_input_current_limit)
 			      expected_current_milli_amps[i],
 			      current_milli_amps);
 	}
+}
+
+ZTEST(isl923x, test_isl923x_psys)
+{
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "psys"), NULL);
 }
 
 ZTEST(isl923x, test_manufacturer_id)
@@ -615,8 +620,15 @@ ZTEST(isl923x, test_init)
 	zassert_ok(isl923x_drv.get_input_current_limit(CHARGER_NUM,
 						       &input_current),
 		   NULL);
-	zassert_equal(0, input_current,
-		      "Expected input current 0mV but got %dmV", input_current);
+	if (IS_ENABLED(CONFIG_CHARGE_RAMP_HW)) {
+		zassert_equal(512, input_current,
+			      "Expected input current 512mV but got %dmV",
+			      input_current);
+	} else {
+		zassert_equal(0, input_current,
+			      "Expected input current 0mV but got %dmV",
+			      input_current);
+	}
 
 	/* Test failed CTRL 0 write */
 	isl923x_emul_reset_registers(isl923x_emul);
@@ -627,8 +639,15 @@ ZTEST(isl923x, test_init)
 	zassert_ok(isl923x_drv.get_input_current_limit(CHARGER_NUM,
 						       &input_current),
 		   NULL);
-	zassert_equal(0, input_current,
-		      "Expected input current 0mV but got %dmV", input_current);
+	if (IS_ENABLED(CONFIG_CHARGE_RAMP_HW)) {
+		zassert_equal(512, input_current,
+			      "Expected input current 512mV but got %dmV",
+			      input_current);
+	} else {
+		zassert_equal(0, input_current,
+			      "Expected input current 0mV but got %dmV",
+			      input_current);
+	}
 
 	/* Test failed CTRL 3 read */
 	isl923x_emul_reset_registers(isl923x_emul);

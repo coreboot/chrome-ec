@@ -19,7 +19,7 @@
 #include "ppc/sn5s330_public.h"
 #include "ppc/syv682x_public.h"
 #include "retimer/bb_retimer_public.h"
-#include "stubs.h"
+#include "test/drivers/stubs.h"
 #include "tcpm/ps8xxx_public.h"
 #include "tcpm/tcpci.h"
 #include "usb_mux.h"
@@ -68,42 +68,6 @@ uint8_t board_get_charger_chip_count(void)
 {
 	return ARRAY_SIZE(chg_chips);
 }
-
-const struct board_batt_params board_battery_info[] = {
-	/* LGC\011 L17L3PB0 Battery Information */
-	/*
-	 * Battery info provided by ODM on b/143477210, comment #11
-	 */
-	[BATTERY_LGC011] = {
-		.fuel_gauge = {
-			.manuf_name = "LGC",
-			.ship_mode = {
-				.reg_addr = 0x00,
-				.reg_data = { 0x10, 0x10 },
-			},
-			.fet = {
-				.reg_addr = 0x0,
-				.reg_mask = 0x6000,
-				.disconnect_val = 0x6000,
-			}
-		},
-		.batt_info = {
-			.voltage_max		= TARGET_WITH_MARGIN(13200, 5),
-			.voltage_normal		= 11550, /* mV */
-			.voltage_min		= 9000, /* mV */
-			.precharge_current	= 256,	/* mA */
-			.start_charging_min_c	= 0,
-			.start_charging_max_c	= 45,
-			.charging_min_c		= 0,
-			.charging_max_c		= 60,
-			.discharging_min_c	= 0,
-			.discharging_max_c	= 75,
-		},
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(board_battery_info) == BATTERY_TYPE_COUNT);
-
-const enum battery_type DEFAULT_BATTERY_TYPE = BATTERY_LGC011;
 
 int board_set_active_charge_port(int port)
 {
@@ -357,8 +321,9 @@ void ppc_alert(enum gpio_signal signal)
 /* TODO: This code should really be generic, and run based on something in
  * the dts.
  */
-static void stubs_interrupt_init(void)
+static int stubs_interrupt_init(const struct device *unused)
 {
+	ARG_UNUSED(unused);
 	/* Enable TCPC interrupts. */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0));
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1));
@@ -382,8 +347,10 @@ static void stubs_interrupt_init(void)
 
 	/* Enable SwitchCap interrupt */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_switchcap_pg));
+
+	return 0;
 }
-DECLARE_HOOK(HOOK_INIT, stubs_interrupt_init, HOOK_PRIO_INIT_I2C + 1);
+SYS_INIT(stubs_interrupt_init, APPLICATION, HOOK_PRIO_POST_I2C);
 
 void board_set_switchcap_power(int enable)
 {
