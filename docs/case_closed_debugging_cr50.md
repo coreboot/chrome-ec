@@ -429,10 +429,11 @@ power is otherwise lost.
 The `atboot` setting is the state of the write protect when Cr50 boots; it
 defaults to `follow_batt_pres`.
 
-To change the `atboot` setting, add the `atboot` arg to the `wp` command:
+To change the `atboot` setting, add the `atboot` arg to the end of the `wp`
+command:
 
 ```
-cr50 > wp atboot [enable|disable|follow_batt_pres]
+cr50 > wp [enable|disable|follow_batt_pres] atboot
 ```
 
 You can query the write protect state with `gsctool`:
