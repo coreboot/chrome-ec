@@ -64,8 +64,11 @@ rw_offset() {
   local base
 
   src="$1"
+  # The second grep term filters out the 'fake' cryptolib header, which does
+  # not contain a valid signature, the signature field is filled with SSSSS
+  # (0x53...).
   base=$(/usr/bin/od -Ax -t x1 -v "${src}" |
-    grep -E '^....00 fd ff ff ff' |
+    grep -E '^....00 fd ff ff ff' | grep -v '00 fd ff ff ff 53 53 53' |
     head -2 |
     tail -1 |
     sed 's/ .*//')
