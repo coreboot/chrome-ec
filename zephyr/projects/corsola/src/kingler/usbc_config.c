@@ -4,6 +4,7 @@
  */
 
 /* Kingler board-specific USB-C configuration */
+#include <toolchain.h>
 
 #include "charger.h"
 #include "console.h"
@@ -165,7 +166,15 @@ void board_tcpc_init(void)
 		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
 					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
-DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
+
+static int kingler_tcpc_init(const struct device *unused)
+{
+	ARG_UNUSED(unused);
+
+	board_tcpc_init();
+	return 0;
+}
+SYS_INIT(kingler_tcpc_init, APPLICATION, HOOK_PRIO_POST_I2C);
 
 __override int board_rt1718s_init(int port)
 {
@@ -225,13 +234,7 @@ void board_reset_pd_mcu(void)
 /* Used by Vbus discharge common code with CONFIG_USB_PD_DISCHARGE */
 int board_vbus_source_enabled(int port)
 {
-	return tcpm_get_src_ctrl(port);
-}
-
-/* Used by USB charger task with CONFIG_USB_PD_5V_EN_CUSTOM */
-int board_is_sourcing_vbus(int port)
-{
-	return board_vbus_source_enabled(port);
+	return ppc_is_sourcing_vbus(port);
 }
 
 __override int board_rt1718s_set_snk_enable(int port, int enable)

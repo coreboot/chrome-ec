@@ -56,7 +56,7 @@ static void shi_power_change(struct ap_power_ev_callback *cb,
 	default:
 		return;
 
-#ifdef CONFIG_CHIPSET_RESUME_INIT_HOOK
+#if CONFIG_PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
 	case AP_POWER_RESUME_INIT:
 		shi_enable();
 		break;
@@ -76,12 +76,13 @@ static void shi_power_change(struct ap_power_ev_callback *cb,
 	}
 }
 
-static void shi_init(void)
+static int shi_init(const struct device *unused)
 {
+	ARG_UNUSED(unused);
 	static struct ap_power_ev_callback cb;
 
 	ap_power_ev_init_callback(&cb, shi_power_change,
-#ifdef CONFIG_CHIPSET_RESUME_INIT_HOOK
+#if CONFIG_PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
 				  AP_POWER_RESUME_INIT |
 				  AP_POWER_SHUTDOWN_COMPLETE
 #else
@@ -95,9 +96,11 @@ static void shi_init(void)
 	    (system_jumped_late() && chipset_in_state(CHIPSET_STATE_ON))) {
 		shi_enable();
 	}
+
+	return 0;
 }
 /* Call hook after chipset sets initial power state */
-DECLARE_HOOK(HOOK_INIT, shi_init, HOOK_PRIO_INIT_CHIPSET + 1);
+SYS_INIT(shi_init, APPLICATION, HOOK_PRIO_POST_CHIPSET);
 
 /* Get protocol information */
 static enum ec_status shi_get_protocol_info(struct host_cmd_handler_args *args)

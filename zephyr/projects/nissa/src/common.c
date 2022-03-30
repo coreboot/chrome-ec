@@ -12,6 +12,7 @@
 #include "chipset.h"
 #include "cros_cbi.h"
 #include "hooks.h"
+#include "keyboard_scan.h"
 #include "usb_mux.h"
 #include "system.h"
 
@@ -61,8 +62,9 @@ static void board_power_change(struct ap_power_ev_callback *cb,
  * Initialise the USB PD port count, which
  * depends on which sub-board is attached.
  */
-static void board_setup_init(void)
+static int board_setup_init(const struct device *unused)
 {
+	ARG_UNUSED(unused);
 	static struct ap_power_ev_callback cb;
 
 	ap_power_ev_init_callback(&cb, board_power_change,
@@ -79,11 +81,13 @@ static void board_setup_init(void)
 		cached_usb_pd_port_count = 2;
 		break;
 	}
+
+	return 0;
 }
 /*
  * Make sure setup is done after EEPROM is readable.
  */
-DECLARE_HOOK(HOOK_INIT, board_setup_init, HOOK_PRIO_INIT_I2C);
+SYS_INIT(board_setup_init, APPLICATION, HOOK_PRIO_INIT_I2C);
 
 void board_set_charge_limit(int port, int supplier, int charge_ma,
 			    int max_ma, int charge_mv)
@@ -155,4 +159,27 @@ enum nissa_sub_board_type nissa_get_sb_type(void)
 		break;
 	}
 	return sb;
+}
+
+static const struct ec_response_keybd_config nissa_kb = {
+	.num_top_row_keys = 10,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_VOL_MUTE,		/* T8 */
+		TK_VOL_DOWN,		/* T9 */
+		TK_VOL_UP,		/* T10 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+__override const struct ec_response_keybd_config
+*board_vivaldi_keybd_config(void)
+{
+	return &nissa_kb;
 }

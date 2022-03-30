@@ -76,6 +76,10 @@ endif
 ifeq ($(cc-name),clang)
 # TODO(b/172020503): Re-enabling this warning requires a large CL.
 C_WARN+= -Wno-ignored-attributes
+# TODO(b/172020503): Re-enabling this warning requires the following large CLs:
+# https://crrev.com/c/3223973
+# https://crrev.com/c/3227261
+COMMON_WARN+= -Wno-unused-function
 endif
 
 UBSAN_FLAGS=-fsanitize=array-bounds,vla-bound \
@@ -170,7 +174,10 @@ ifneq (${SYSROOT},)
 endif
 LDFLAGS=-nostdlib -g -Wl,-X -Wl,--gc-sections -Wl,--build-id=none \
 	$(LDFLAGS_EXTRA) $(CFLAGS_CPU)
-MEMSIZE_FLAGS=-Wl,--print-memory-usage
+MEMSIZE_FLAGS=
+ifeq ($(cc-name),gcc)
+MEMSIZE_FLAGS+=-Wl,--print-memory-usage
+endif
 BUILD_LDFLAGS=$(LIBFTDIUSB_LDLIBS)
 HOST_LDFLAGS=$(LIBFTDIUSB_LDLIBS)
 HOST_TEST_LDFLAGS=-Wl,-T core/host/host_exe.lds -lrt -pthread -rdynamic -lm\

@@ -80,8 +80,9 @@ static void hook_tick_work(struct k_work *work)
 		work_queue_error(&hook_ticks_work_data, rv);
 }
 
-static void check_hook_task_priority(void)
+static int check_hook_task_priority(const struct device *unused)
 {
+	ARG_UNUSED(unused);
 	k_tid_t thread = &k_sys_work_q.thread;
 
 	/*
@@ -93,8 +94,10 @@ static void check_hook_task_priority(void)
 			"ERROR: %s has priority %d but must be >= %d\n",
 			k_thread_name_get(thread),
 			k_thread_priority_get(thread), (TASK_ID_COUNT - 1));
+
+	return 0;
 }
-DECLARE_HOOK(HOOK_INIT, check_hook_task_priority, HOOK_PRIO_FIRST);
+SYS_INIT(check_hook_task_priority, APPLICATION, HOOK_PRIO_FIRST);
 
 static int zephyr_shim_setup_hooks(const struct device *unused)
 {
@@ -207,7 +210,7 @@ static void ev_handler(struct ap_power_ev_callback *cb,
 		CASE_HOOK(STARTUP);
 		CASE_HOOK(RESUME);
 		CASE_HOOK(SUSPEND);
-#ifdef CONFIG_CHIPSET_RESUME_INIT_HOOK
+#if CONFIG_PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
 		CASE_HOOK(RESUME_INIT);
 		CASE_HOOK(SUSPEND_COMPLETE);
 #endif
@@ -232,7 +235,7 @@ static int zephyr_shim_ap_power_event(const struct device *unused)
 		&cb, ev_handler,
 		AP_POWER_PRE_INIT | AP_POWER_STARTUP | AP_POWER_RESUME |
 			AP_POWER_SUSPEND |
-#ifdef CONFIG_CHIPSET_RESUME_INIT_HOOK
+#if CONFIG_PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
 			AP_POWER_RESUME_INIT | AP_POWER_SUSPEND_COMPLETE |
 #endif
 			AP_POWER_SHUTDOWN | AP_POWER_SHUTDOWN_COMPLETE |
@@ -258,7 +261,7 @@ EV_HOOK(PRE_INIT);
 EV_HOOK(STARTUP);
 EV_HOOK(RESUME);
 EV_HOOK(SUSPEND);
-#ifdef CONFIG_CHIPSET_RESUME_INIT_HOOK
+#if CONFIG_PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
 EV_HOOK(RESUME_INIT);
 EV_HOOK(SUSPEND_COMPLETE);
 #endif

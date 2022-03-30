@@ -19,7 +19,7 @@
 #include "ppc/sn5s330_public.h"
 #include "ppc/syv682x_public.h"
 #include "retimer/bb_retimer_public.h"
-#include "stubs.h"
+#include "test/drivers/stubs.h"
 #include "tcpm/ps8xxx_public.h"
 #include "tcpm/tcpci.h"
 #include "usb_mux.h"
@@ -321,8 +321,9 @@ void ppc_alert(enum gpio_signal signal)
 /* TODO: This code should really be generic, and run based on something in
  * the dts.
  */
-static void stubs_interrupt_init(void)
+static int stubs_interrupt_init(const struct device *unused)
 {
+	ARG_UNUSED(unused);
 	/* Enable TCPC interrupts. */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0));
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1));
@@ -346,8 +347,10 @@ static void stubs_interrupt_init(void)
 
 	/* Enable SwitchCap interrupt */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_switchcap_pg));
+
+	return 0;
 }
-DECLARE_HOOK(HOOK_INIT, stubs_interrupt_init, HOOK_PRIO_INIT_I2C + 1);
+SYS_INIT(stubs_interrupt_init, APPLICATION, HOOK_PRIO_POST_I2C);
 
 void board_set_switchcap_power(int enable)
 {

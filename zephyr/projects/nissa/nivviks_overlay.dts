@@ -4,6 +4,8 @@
  */
 
 #include <cros/thermistor/thermistor.dtsi>
+#include <dt-bindings/colors.h>
+
 
 / {
 	aliases {
@@ -15,7 +17,7 @@
 
 	batteries {
 		default_battery: lgc {
-			compatible = "lgc,ap18c8k";
+			compatible = "lgc,ap18c8k", "battery-smart";
 		};
 	};
 
@@ -189,6 +191,18 @@
 			};
 		};
 	};
+
+	/*
+	 * LED PWM configuration
+	 */
+	leds: leds {
+		compatible = "cros-ec,multi-pwm-leds";
+		pwms = <&pwm2 2 PWM_POLARITY_INVERTED>,
+		       <&pwm0 0 PWM_POLARITY_INVERTED>,
+		       <&pwm1 1 PWM_POLARITY_INVERTED>;
+		frequency = <324>;
+		color-list = <RED GREEN BLUE>;
+	};
 };
 
 &thermistor_3V3_51K1_47K_4050B {
@@ -249,27 +263,18 @@
 	frequency = <10000>;
 };
 
-&pwm_pwm_led_1_odl {
-	frequency = <324>;
-};
-
-&pwm_pwm_led_2_odl {
-	frequency = <324>;
-};
-
-&pwm_pwm_led_3_odl {
-	frequency = <324>;
-};
-
 /* Enable LEDs to work while CPU suspended */
 &pwm0 {
+	status = "okay";
 	clock-bus = "NPCX_CLOCK_BUS_LFCLK";
 };
 
 &pwm1 {
+	status = "okay";
 	clock-bus = "NPCX_CLOCK_BUS_LFCLK";
 };
 
 &pwm2 {
+	status = "okay";
 	clock-bus = "NPCX_CLOCK_BUS_LFCLK";
 };
