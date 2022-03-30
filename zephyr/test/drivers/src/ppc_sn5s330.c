@@ -303,8 +303,38 @@ ZTEST(ppc_sn5s330, test_sn5s330_vbus_overcurrent)
 	zassert_equal(int_trip_rise_reg1 & SN5S330_ILIM_PP1_MASK, 0, NULL);
 }
 
+ZTEST(ppc_sn5s330, test_sn5s330_vbus_overcurrent_late_jump)
+{
+	const struct emul *emul = EMUL;
+	uint8_t int_trip_rise_reg1;
+
+	/* Simulate the system jumping late. The second call to init() will
+	 * skip certain interrupt setup work. Make sure the interrupt continues
+	 * to function.
+	 */
+
+	zassert_ok(sn5s330_drv.init(SN5S330_PORT), NULL);
+	system_jumped_late_fake.return_val = 1;
+	zassert_ok(sn5s330_drv.init(SN5S330_PORT), NULL);
+
+	sn5s330_emul_make_vbus_overcurrent(emul);
+	/*
+	 * TODO(b/201420132): Replace arbitrary sleeps.
+	 */
+	/* Make sure interrupt happens first. */
+	k_msleep(SN5S330_INTERRUPT_DELAYMS);
+	zassert_true(sn5s330_emul_interrupt_set_stub_fake.call_count > 0, NULL);
+
+	/*
+	 * Verify we cleared vbus overcurrent interrupt trip rise bit so the
+	 * driver can detect future overcurrent clamping interrupts.
+	 */
+	sn5s330_emul_peek_reg(emul, SN5S330_INT_TRIP_RISE_REG1,
+			      &int_trip_rise_reg1);
+	zassert_equal(int_trip_rise_reg1 & SN5S330_ILIM_PP1_MASK, 0, NULL);
+}
+
 ZTEST(ppc_sn5s330, test_sn5s330_disable_vbus_low_interrupt)
-#ifdef CONFIG_USBC_PPC_VCONN
 {
 	const struct emul *emul = EMUL;
 
@@ -314,14 +344,32 @@ ZTEST(ppc_sn5s330, test_sn5s330_disable_vbus_low_interrupt)
 	sn5s330_emul_lower_vbus_below_minv(emul);
 	zassert_equal(sn5s330_emul_interrupt_set_stub_fake.call_count, 0, NULL);
 }
-#else
+
+ZTEST(ppc_sn5s330, test_sn5s330_disable_vbus_low_interrupt_late_jump)
 {
-	ztest_test_skip();
+	const struct emul *emul = EMUL;
+
+	/* Simulate the system jumping late. The second call to init() will
+	 * skip certain interrupt setup work. Make sure the interrupt continues
+	 * to function.
+	 */
+
+	zassert_ok(sn5s330_drv.init(SN5S330_PORT), NULL);
+	system_jumped_late_fake.return_val = 1;
+	zassert_ok(sn5s330_drv.init(SN5S330_PORT), NULL);
+
+	/* Would normally cause a vbus low interrupt */
+	sn5s330_emul_lower_vbus_below_minv(emul);
+	zassert_equal(sn5s330_emul_interrupt_set_stub_fake.call_count, 0, NULL);
 }
-#endif /* CONFIG_USBC_PPC_VCONN */
 
 ZTEST(ppc_sn5s330, test_sn5s330_set_vconn_fet)
 {
+	if (!IS_ENABLED(CONFIG_USBC_PPC_VCONN)) {
+		ztest_test_skip();
+		return;
+	}
+
 	const struct emul *emul = EMUL;
 	uint8_t func_set4_reg;
 
