@@ -167,6 +167,9 @@ enum vendor_cmd_cc {
 
 	VENDOR_CC_USER_PRES = 60,
 
+	/* POP_LOG_ENTRY with a 64 bit previous timestamp in ms */
+	VENDOR_CC_POP_LOG_ENTRY_MS = 61,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 
