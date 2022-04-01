@@ -289,10 +289,24 @@ ZTEST_RULE(set_test_runner_tid, set_test_runner_tid_rule_before, NULL);
 #endif /* CONFIG_SET_TEST_RUNNER_TID_RULE */
 #endif /* TEST_BUILD */
 
-#if K_PRIO_PREEMPT(TASK_ID_COUNT - 1) >= K_IDLE_PRIO
-#error CONFIG_NUM_PREEMPT_PRIORITIES too small, some tasks would run at idle \
-	priority
-#endif
+BUILD_ASSERT((K_PRIO_PREEMPT(TASK_ID_COUNT - 1) < K_IDLE_PRIO),
+	"CONFIG_NUM_PREEMPT_PRIORITIES too small, some tasks would run at "
+	"idle priority");
+
+static void check_system_work_queue_priority(void)
+{
+	k_tid_t thread = &k_sys_work_q.thread;
+
+	/*
+	 * Numerically lower priorities take precedence, so verify the hook
+	 * related threads cannot preempt any of the shimmed tasks.
+	 */
+	if (k_thread_priority_get(thread) < (TASK_ID_COUNT - 1))
+		cprintf(CC_HOOK,
+			"ERROR: %s has priority %d but must be >= %d\n",
+			k_thread_name_get(thread),
+			k_thread_priority_get(thread), (TASK_ID_COUNT - 1));
+}
 
 void start_ec_tasks(void)
 {
@@ -355,6 +369,12 @@ void start_ec_tasks(void)
 
 	/* Create an entry for sysworkq we can send events to */
 	shimmed_tasks_dyn[TASK_ID_COUNT].zephyr_tid = &k_sys_work_q.thread;
+
+	/*
+	 * Now that all threads are created, validate the system workqueue
+	 * priority.
+	 */
+	check_system_work_queue_priority();
 
 	tasks_started = 1;
 }
