@@ -4,12 +4,9 @@
  */
 
 #include <logging/log.h>
-#include <drivers/i2c.h>
-#include <drivers/pinmux.h>
 
 #include "charge_state_v2.h"
 #include "chipset.h"
-#include "cros_board_info.h"
 #include "hooks.h"
 #include "usb_mux.h"
 #include "system.h"
@@ -313,6 +310,25 @@ void usb_c1_interrupt(enum gpio_signal s)
 }
 
 /*
+ * Check state of IRQ lines at startup, ensuring an IRQ that happened before
+ * the EC started up won't get lost (leaving the IRQ line asserted and blocking
+ * any further interrupts on the port).
+ *
+ * Although the PD task will check for pending TCPC interrupts on startup,
+ * the charger sharing the IRQ will not be polled automatically.
+ */
+void board_handle_initial_typec_irq(void)
+{
+	check_c0_line();
+	check_c1_line();
+}
+/*
+ * This must run after sub-board detection (which happens in EC main()),
+ * but isn't depended on by anything else either.
+ */
+DECLARE_HOOK(HOOK_INIT, board_handle_initial_typec_irq, HOOK_PRIO_LAST);
+
+/*
  * Handle charger interrupts in the PD task. Not doing so can lead to a priority
  * inversion where we fail to respond to TCPC alerts quickly enough because we
  * don't get another edge on a shared IRQ until the charger interrupt is cleared
@@ -343,6 +359,7 @@ int pd_snk_is_vbus_provided(int port)
 	return chg_det;
 }
 
+
 const struct usb_mux *nissa_get_c1_sb_mux(void)
 {
 	/*
@@ -358,31 +375,4 @@ const struct usb_mux *nissa_get_c1_sb_mux(void)
 	};
 
 	return &usbc1_tcpc_mux;
-}
-
-void nissa_configure_c1_sb_i2c(void)
-{
-	/*
-	 * Board rev 1+ runs I2C at 1.8V, while rev 0 is 3.3. The 3.3V bus still
-	 * works with 1.8V configuration, so we always configure the chip for
-	 * 1.8V operation.
-	 *
-	 * There is no API to set pin voltage aside from GPIO, so we hack it
-	 * by reconfiguring the pins as 1.8V GPIO then force them back to I2C.
-	 * This is fragile, but breakages will be evident because the sub-board
-	 * I2C will stop working.
-	 */
-	const struct gpio_dt_spec *const scl_pin =
-		GPIO_DT_FROM_NODELABEL(gpio_sb_4);
-	const struct gpio_dt_spec *const sda_pin =
-		GPIO_DT_FROM_NODELABEL(gpio_sb_3);
-	const struct device *const i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c4));
-	int rv;
-
-	__ASSERT_NO_MSG(device_is_ready(i2c_dev));
-	gpio_pin_configure_dt(sda_pin, GPIO_INPUT | GPIO_VOLTAGE_1P8);
-	gpio_pin_configure_dt(scl_pin, GPIO_INPUT | GPIO_VOLTAGE_1P8);
-	/* Recover the bus which also switches pins back to I2C function. */
-	rv = i2c_recover_bus(i2c_dev);
-	__ASSERT(rv == 0, "failed to reset I2C bus at 1.8V: %d", rv);
 }

@@ -4,8 +4,6 @@
  */
 
 #include <cros/thermistor/thermistor.dtsi>
-#include <dt-bindings/colors.h>
-
 
 / {
 	aliases {
@@ -133,7 +131,8 @@
 
 	named-temp-sensors {
 		memory {
-			compatible = "cros-ec,temp-sensor-thermistor";
+			compatible = "cros-ec,temp-sensor-thermistor",
+				     "cros-ec,temp-sensor";
 			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
 			label = "DDR and SOC";
 			enum-name = "TEMP_SENSOR_1";
@@ -145,7 +144,8 @@
 			adc = <&adc_temp_sensor_1>;
 		};
 		charger {
-			compatible = "cros-ec,temp-sensor-thermistor";
+			compatible = "cros-ec,temp-sensor-thermistor",
+				     "cros-ec,temp-sensor";
 			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
 			label = "Charger";
 			enum-name = "TEMP_SENSOR_CHARGER";
@@ -157,7 +157,8 @@
 			adc = <&adc_temp_sensor_2>;
 		};
 		ambient {
-			compatible = "cros-ec,temp-sensor-thermistor";
+			compatible = "cros-ec,temp-sensor-thermistor",
+				     "cros-ec,temp-sensor";
 			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
 			label = "Ambient";
 			enum-name = "TEMP_SENSOR_AMB";
@@ -186,29 +187,25 @@
 	};
 
 	usbc {
-		port0 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port0@0 {
+			compatible = "named-usbc-port";
+			reg = <0>;
 			bc12 {
 				compatible = "pericom,pi3usb9201";
 				port = <&i2c_ec_i2c_usb_c0>;
 			};
 		};
-		port1 {
+		port1@1 {
+			compatible = "named-usbc-port";
+			reg = <1>;
 			bc12 {
 				compatible = "pericom,pi3usb9201";
 				port = <&i2c_ec_i2c_sub_usb_c1>;
 			};
 		};
-	};
-	/*
-	 * LED PWM configuration
-	 */
-	leds: leds {
-		compatible = "cros-ec,multi-pwm-leds";
-		pwms = <&pwm1 1 PWM_POLARITY_INVERTED>,
-		       <&pwm2 2 PWM_POLARITY_INVERTED>,
-		       <&pwm3 3 PWM_POLARITY_INVERTED>;
-		frequency = <324>;
-		color-list = <RED GREEN BLUE>;
 	};
 };
 
@@ -270,20 +267,29 @@
 };
 
 &pwm1 {
-	status = "okay";
 	prescaler-cx = <PWM_PRESCALER_C4>;
 };
 
 &pwm2 {
-	status = "okay";
 	prescaler-cx = <PWM_PRESCALER_C4>;
 };
 
 &pwm3 {
-	status = "okay";
 	prescaler-cx = <PWM_PRESCALER_C4>;
 };
 
 &pwm_pwm_kb_bl {
 	frequency = <10000>;
+};
+
+&pwm_pwm_led_1_odl {
+	frequency = <324>;
+};
+
+&pwm_pwm_led_2_odl {
+	frequency = <324>;
+};
+
+&pwm_pwm_led_3_odl {
+	frequency = <324>;
 };

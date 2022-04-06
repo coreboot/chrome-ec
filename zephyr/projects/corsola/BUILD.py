@@ -37,8 +37,8 @@ register_corsola_project(
         here / "i2c_krabby.dts",
         here / "interrupts_krabby.dts",
         here / "cbi_eeprom.dts",
+        here / "led_krabby.dts",
         here / "motionsense_krabby.dts",
-        here / "pwm_krabby.dts",
         here / "usbc_krabby.dts",
     ],
     extra_kconfig_files=[here / "prj_krabby.conf"],
@@ -56,7 +56,7 @@ register_corsola_project(
         here / "gpio_kingler.dts",
         here / "led_kingler.dts",
         here / "motionsense_kingler.dts",
-        here / "pwm_kingler.dts",
+        here / "usbc_kingler.dts",
     ],
     extra_kconfig_files=[here / "prj_kingler.conf"],
 )

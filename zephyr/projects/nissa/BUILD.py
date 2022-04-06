@@ -18,7 +18,7 @@ def register_nissa_project(
     register_func(
         project_name=project_name,
         zephyr_board=chip,
-        dts_overlays=["cbi.dts", *extra_dts_overlays, "leds.dts"],
+        dts_overlays=["cbi.dts", *extra_dts_overlays],
         kconfig_files=[here / "prj.conf", *extra_kconfig_files],
     )
 
@@ -32,6 +32,7 @@ register_nissa_project(
         here / "nivviks_motionsense.dts",
         here / "nivviks_keyboard.dts",
         here / "nivviks_power_signals.dts",
+        here / "nivviks_pwm_leds.dts",
     ],
     extra_kconfig_files=[here / "prj_nivviks.conf"],
 )
@@ -45,6 +46,7 @@ register_nissa_project(
         here / "nereid_motionsense.dts",
         here / "nereid_keyboard.dts",
         here / "nereid_power_signals.dts",
+        here / "nereid_pwm_leds.dts",
     ],
     extra_kconfig_files=[here / "prj_nereid.conf"],
 )

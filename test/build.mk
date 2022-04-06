@@ -130,16 +130,9 @@ cov-dont-test += fpsensor_state
 cov-dont-test += version
 # interrupt: The test often times out if enabled for coverage.
 cov-dont-test += interrupt
-# Tests that use test_run_multistep are flaky.
-cov-dont-test += flash flash_write_protect kb_scan
-# As are some others for unknown reasons
-cov-dont-test += base32 online_calibration_spoof printf body_detection kb_8042
-cov-dont-test += accel_cal aes compile_time_macros fp mag_cal rsa
-cov-dont-test += stillness_detector usb_pe_drp_noextended charge_manager
-cov-dont-test += timer_dos cec float queue x25519 usb_pd_timer motion_sense_fifo
-cov-dont-test += kb_scan_strict entropy kb_mkbp cbi_wp gyro_cal newton_fit
-cov-dont-test += shmalloc usb_common usb_ppc utils_str battery_get_params_smart
-cov-dont-test += rtc charge_ramp kasa motion_angle_tablet usb_prl usb_pd_console
+# Flaky tests. The number of covered lines changes from run to run
+# b/213374060
+cov-dont-test += accel_cal entropy float kb_mkbp rsa
 
 cov-test-list-host = $(filter-out $(cov-dont-test), $(test-list-host))
 
@@ -198,6 +191,7 @@ kasa-y=kasa.o
 mpu-y=mpu.o
 mutex-y=mutex.o
 newton_fit-y=newton_fit.o
+panic_data-y=panic_data.o
 pingpong-y=pingpong.o
 power_button-y=power_button.o
 powerdemo-y=powerdemo.o

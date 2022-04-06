@@ -31,6 +31,8 @@ __override struct led_descriptor
 	[STATE_CHARGING_LVL_2]	     = {{EC_LED_COLOR_AMBER, LED_INDEFINITE} },
 	[STATE_CHARGING_FULL_CHARGE] = {{EC_LED_COLOR_WHITE, LED_INDEFINITE} },
 	[STATE_DISCHARGE_S0]	     = {{EC_LED_COLOR_WHITE, LED_INDEFINITE} },
+	[STATE_DISCHARGE_S0_BAT_LOW] = {{EC_LED_COLOR_WHITE, 2 * LED_ONE_SEC},
+					{LED_OFF,	     1 * LED_ONE_SEC} },
 	[STATE_DISCHARGE_S3]	     = {{EC_LED_COLOR_WHITE, 1 * LED_ONE_SEC},
 					{LED_OFF,	     1 * LED_ONE_SEC} },
 	[STATE_DISCHARGE_S5]         = {{LED_OFF,            LED_INDEFINITE} },
@@ -94,12 +96,9 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 	return EC_SUCCESS;
 }
 
-static int pwm_led_duty_init(const struct device *unused)
+static void pwm_led_duty_init(void)
 {
-	ARG_UNUSED(unused);
 	pwm_set_duty(PWM_CH_LED_CHRG, 100);
 	pwm_set_duty(PWM_CH_LED_FULL, 100);
-
-	return 0;
 }
-SYS_INIT(pwm_led_duty_init, APPLICATION, HOOK_PRIO_POST_PWM);
+DECLARE_HOOK(HOOK_INIT, pwm_led_duty_init, HOOK_PRIO_POST_PWM);
