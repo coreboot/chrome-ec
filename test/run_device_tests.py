@@ -30,6 +30,7 @@ from typing import Optional, BinaryIO, List
 
 # pylint: disable=import-error
 import colorama  # type: ignore[import]
+import fmap
 # pylint: enable=import-error
 
 EC_DIR = Path(os.path.dirname(os.path.realpath(__file__))).parent
@@ -66,6 +67,18 @@ SERVO_MICRO = 'servo_micro'
 GCC = 'gcc'
 CLANG = 'clang'
 
+TEST_ASSETS_BUCKET = 'gs://chromiumos-test-assets-public/fpmcu/RO'
+DARTMONKEY_IMAGE_PATH = os.path.join(
+    TEST_ASSETS_BUCKET, 'dartmonkey_v2.0.2887-311310808.bin')
+NOCTURNE_FP_IMAGE_PATH = os.path.join(
+    TEST_ASSETS_BUCKET, 'nocturne_fp_v2.2.64-58cf5974e.bin')
+NAMI_FP_IMAGE_PATH = os.path.join(
+    TEST_ASSETS_BUCKET, 'nami_fp_v2.2.144-7a08e07eb.bin')
+BLOONCHIPPER_V4277_IMAGE_PATH = os.path.join(
+    TEST_ASSETS_BUCKET, 'bloonchipper_v2.0.4277-9f652bb3.bin')
+BLOONCHIPPER_V5938_IMAGE_PATH = os.path.join(
+    TEST_ASSETS_BUCKET, 'bloonchipper_v2.0.5938-197506c1.bin')
+
 
 class ImageType(Enum):
     """EC Image type to use for the test."""
@@ -77,13 +90,15 @@ class BoardConfig:
     """Board-specific configuration."""
 
     def __init__(self, name, servo_uart_name, servo_power_enable,
-                 rollback_region0_regex, rollback_region1_regex, mpu_regex):
+                 rollback_region0_regex, rollback_region1_regex, mpu_regex,
+                 variants):
         self.name = name
         self.servo_uart_name = servo_uart_name
         self.servo_power_enable = servo_power_enable
         self.rollback_region0_regex = rollback_region0_regex
         self.rollback_region1_regex = rollback_region1_regex
         self.mpu_regex = mpu_regex
+        self.variants = variants
 
 
 class TestConfig:
@@ -92,7 +107,8 @@ class TestConfig:
     def __init__(self, name, image_to_use=ImageType.RW, finish_regexes=None,
                  fail_regexes=None, toggle_power=False, test_args=None,
                  num_flash_attempts=2, timeout_secs=10,
-                 enable_hw_write_protect=False):
+                 enable_hw_write_protect=False, ro_image=None,
+                 build_board=None):
         if test_args is None:
             test_args = []
         if finish_regexes is None:
@@ -114,6 +130,8 @@ class TestConfig:
         self.passed = False
         self.num_fails = 0
         self.num_passes = 0
+        self.ro_image = ro_image
+        self.build_board = build_board
 
 
 # All possible tests.
@@ -200,6 +218,15 @@ class AllTests:
         if board_config.name == BLOONCHIPPER:
             tests['stm32f_rtc'] = TestConfig(name='stm32f_rtc')
 
+        # Run panic data tests for all boards and RO versions.
+        for variant_name, variant_info in board_config.variants.items():
+            tests['panic_data_' + variant_name] = (
+                TestConfig(name='panic_data',
+                           fail_regexes=[SINGLE_CHECK_FAILED_REGEX,
+                                         ALL_TESTS_FAILED_REGEX],
+                           ro_image=variant_info.get('ro_image_path'),
+                           build_board=variant_info.get('build_board')))
+
         return tests
 
 
@@ -210,6 +237,14 @@ BLOONCHIPPER_CONFIG = BoardConfig(
     rollback_region0_regex=DATA_ACCESS_VIOLATION_8020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_8040000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
+    variants={
+        'bloonchipper_v2.0.4277': {
+            'ro_image_path': BLOONCHIPPER_V4277_IMAGE_PATH
+        },
+        'bloonchipper_v2.0.5938': {
+            'ro_image_path': BLOONCHIPPER_V5938_IMAGE_PATH
+        }
+    }
 )
 
 DARTMONKEY_CONFIG = BoardConfig(
@@ -219,12 +254,94 @@ DARTMONKEY_CONFIG = BoardConfig(
     rollback_region0_regex=DATA_ACCESS_VIOLATION_80C0000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_80E0000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_24000000_REGEX,
+    # For dartmonkey board, run panic data test also on nocturne_fp and
+    # nami_fp boards with appropriate RO image.
+    variants={
+        'dartmonkey_v2.0.2887': {
+            'ro_image_path': DARTMONKEY_IMAGE_PATH
+        },
+        'nocturne_fp_v2.2.64': {
+            'ro_image_path': NOCTURNE_FP_IMAGE_PATH,
+            'build_board': 'nocturne_fp'
+        },
+        'nami_fp_v2.2.144': {
+            'ro_image_path': NAMI_FP_IMAGE_PATH,
+            'build_board': 'nami_fp'
+        }
+    }
 )
 
 BOARD_CONFIGS = {
     'bloonchipper': BLOONCHIPPER_CONFIG,
     'dartmonkey': DARTMONKEY_CONFIG,
 }
+
+
+def read_file_gsutil(path: str) -> bytes:
+    """Get data from bucket, using gsutil tool"""
+    cmd = ['gsutil', 'cat', path]
+
+    logging.debug('Running command: "%s"', ' '.join(cmd))
+    gsutil = subprocess.run(cmd, stdout=subprocess.PIPE)  # pylint: disable=subprocess-run-check
+    gsutil.check_returncode()
+
+    return gsutil.stdout
+
+
+def find_section_offset_size(section: str, image: bytes) -> (int, int):
+    """Get offset and size of the section in image"""
+    areas = fmap.fmap_decode(image)['areas']
+    area = next(area for area in areas if area['name'] == section)
+    return area['offset'], area['size']
+
+
+def read_section(src: bytes, section: str) -> bytes:
+    """Read FMAP section content into byte array"""
+    (src_start, src_size) = find_section_offset_size(section, src)
+    src_end = src_start + src_size
+    return src[src_start:src_end]
+
+
+def write_section(data: bytes, image: bytearray, section: str):
+    """Replace the specified section in image with the contents of data"""
+    (section_start, section_size) = find_section_offset_size(section, image)
+
+    if section_size < len(data):
+        raise ValueError(section + ' section size is not enough to store data')
+
+    section_end = section_start + section_size
+    filling = bytes([0xff for _ in range(section_size - len(data))])
+
+    image[section_start:section_end] = data + filling
+
+
+def copy_section(src: bytes, dst: bytearray, section: str):
+    """Copy section from src image to dst image"""
+    (src_start, src_size) = find_section_offset_size(section, src)
+    (dst_start, dst_size) = find_section_offset_size(section, dst)
+
+    if dst_size < src_size:
+        raise ValueError('Section ' + section + ' from source image has '
+                         'greater size than the section in destination image')
+
+    src_end = src_start + src_size
+    dst_end = dst_start + dst_size
+    filling = bytes([0xff for _ in range(dst_size - src_size)])
+
+    dst[dst_start:dst_end] = src[src_start:src_end] + filling
+
+
+def replace_ro(image: bytearray, ro: bytes):
+    """Replace RO in image with provided one"""
+    # Backup RO public key since its private part was used to sign RW.
+    ro_pubkey = read_section(image, 'KEY_RO')
+
+    # Copy RO part of the firmware to the image. Please note that RO public key
+    # is copied too since EC_RO area includes KEY_RO area.
+    copy_section(ro, image, 'EC_RO')
+
+    # Restore RO public key.
+    write_section(ro_pubkey, image, 'KEY_RO')
 
 
 def get_console(board_config: BoardConfig) -> Optional[str]:
@@ -292,7 +409,7 @@ def build(test_name: str, board_name: str, compiler: str) -> None:
     subprocess.run(cmd).check_returncode()  # pylint: disable=subprocess-run-check
 
 
-def flash(test_name: str, board: str, flasher: str, remote: str) -> bool:
+def flash(image_path: str, board: str, flasher: str, remote: str) -> bool:
     """Flash specified test to specified board."""
     logging.info('Flashing test')
 
@@ -308,12 +425,22 @@ def flash(test_name: str, board: str, flasher: str, remote: str) -> bool:
         return False
     cmd.extend([
         '--board', board,
-        '--image', os.path.join(EC_DIR, 'build', board, test_name,
-                                test_name + '.bin'),
+        '--image', image_path,
     ])
     logging.debug('Running command: "%s"', ' '.join(cmd))
     completed_process = subprocess.run(cmd)  # pylint: disable=subprocess-run-check
     return completed_process.returncode == 0
+
+
+def patch_image(test: TestConfig, image_path: str):
+    """Replace RO part of the firmware with provided one."""
+    with open(image_path, 'rb+') as f:
+        image = bytearray(f.read())
+        ro = read_file_gsutil(test.ro_image)
+        replace_ro(image, ro)
+        f.seek(0)
+        f.write(image)
+        f.truncate()
 
 
 def readline(executor: ThreadPoolExecutor, f: BinaryIO, timeout_secs: int) -> \
@@ -413,11 +540,13 @@ def get_test_list(config: BoardConfig, test_args) -> List[TestConfig]:
     test_list = []
     for t in test_args:
         logging.debug('test: %s', t)
-        test_config = AllTests.get(config).get(t)
-        if test_config is None:
+        test_regex = re.compile(t)
+        tests = [v for k, v in AllTests.get(config).items()
+                 if test_regex.fullmatch(k)]
+        if not tests:
             logging.error('Unable to find test config for "%s"', t)
             sys.exit(1)
-        test_list.append(test_config)
+        test_list += tests
 
     return test_list
 
@@ -480,8 +609,26 @@ def main():
     logging.debug('Running tests: %s', [t.name for t in test_list])
 
     for test in test_list:
+        build_board = args.board
+        # If test provides this information, build image for board specified
+        # by test.
+        if test.build_board is not None:
+            build_board = test.build_board
+
         # build test binary
-        build(test.name, args.board, args.compiler)
+        build(test.name, build_board, args.compiler)
+
+        image_path = os.path.join(EC_DIR, 'build', build_board, test.name,
+                                  test.name + '.bin')
+
+        if test.ro_image is not None:
+            try:
+                patch_image(test, image_path)
+            except Exception as exception:
+                logging.warning('An exception occurred while patching '
+                                'image: %s', exception)
+                test.passed = False
+                continue
 
         # flash test binary
         # TODO(b/158327221): First attempt to flash fails after
@@ -489,7 +636,7 @@ def main():
         flash_succeeded = False
         for i in range(0, test.num_flash_attempts):
             logging.debug('Flash attempt %d', i + 1)
-            if flash(test.name, args.board, args.flasher, args.remote):
+            if flash(image_path, args.board, args.flasher, args.remote):
                 flash_succeeded = True
                 break
             time.sleep(1)

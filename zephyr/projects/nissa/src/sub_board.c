@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Nereid sub-board hardware configuration */
+/* Nissa sub-board hardware configuration */
 
 #include <ap_power/ap_power.h>
 #include <drivers/gpio.h>
@@ -11,8 +11,6 @@
 #include <kernel.h>
 #include <sys/printk.h>
 
-#include "driver/charger/sm5803.h"
-#include "driver/tcpm/ps8xxx_public.h"
 #include "driver/tcpm/tcpci.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
@@ -78,9 +76,8 @@ static void hdmi_hpd_interrupt(const struct device *device,
  * (indicated by CBI fw_config); this function configures them according to the
  * needs of the present sub-board.
  */
-static int nereid_subboard_init(const struct device *unused)
+static void nereid_subboard_config(void)
 {
-	ARG_UNUSED(unused);
 	enum nissa_sub_board_type sb = nissa_get_sb_type();
 
 	/*
@@ -108,23 +105,14 @@ static int nereid_subboard_init(const struct device *unused)
 	 * configuration provided.
 	 */
 	if (sb == NISSA_SB_C_A || sb == NISSA_SB_C_LTE) {
-		static const struct usb_mux usbc1_tcpc_mux = {
-			.usb_port = 1,
-			.i2c_port = I2C_PORT_USB_C1_TCPC,
-			.i2c_addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
-			.driver = &tcpci_tcpm_usb_mux_driver,
-			.hpd_update = &ps8xxx_tcpc_update_hpd_status,
-		};
-
 		/* Configure interrupt input */
 		gpio_pin_configure_dt(
 			GPIO_DT_FROM_ALIAS(gpio_usb_c1_int_odl),
 			GPIO_INPUT | GPIO_PULL_UP);
-		/*
-		 * Use TCPC-integrated mux via CONFIG_STANDARD_OUTPUT register
-		 * in PS8745.
-		 */
-		usb_muxes[1].next_mux = &usbc1_tcpc_mux;
+		usb_muxes[1].next_mux = nissa_get_c1_sb_mux();
+	} else {
+		/* Disable the port 1 charger task */
+		task_disable_task(TASK_ID_USB_CHG_P1);
 	}
 	/*
 	 * HDMI: two outputs control power which must be configured to
@@ -176,37 +164,22 @@ static int nereid_subboard_init(const struct device *unused)
 				   BIT(hpd_gpio->pin));
 		irq_unlock(irq_key);
 	}
-
-	return 0;
 }
-SYS_INIT(nereid_subboard_init, APPLICATION, HOOK_PRIO_POST_FIRST);
+DECLARE_HOOK(HOOK_INIT, nereid_subboard_config, HOOK_PRIO_POST_FIRST);
 
 /*
  * Enable interrupts
  */
-static int board_init(const struct device *unused)
+static void board_init(void)
 {
-	ARG_UNUSED(unused);
 	/*
 	 * Enable USB-C interrupts.
 	 */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0));
 	if (board_get_usb_pd_port_count() == 2)
 		gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1));
-
-	return 0;
 }
-SYS_INIT(board_init, APPLICATION, HOOK_PRIO_DEFAULT);
-
-__override void board_hibernate(void)
-{
-	/* Shut down the chargers */
-	if (board_get_usb_pd_port_count() == 2)
-		sm5803_hibernate(CHARGER_SECONDARY);
-	sm5803_hibernate(CHARGER_PRIMARY);
-	LOG_INF("Charger(s) hibernated");
-	cflush();
-}
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 /* Trigger shutdown by enabling the Z-sleep circuit */
 __override void board_hibernate_late(void)

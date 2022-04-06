@@ -310,6 +310,25 @@ void usb_c1_interrupt(enum gpio_signal s)
 }
 
 /*
+ * Check state of IRQ lines at startup, ensuring an IRQ that happened before
+ * the EC started up won't get lost (leaving the IRQ line asserted and blocking
+ * any further interrupts on the port).
+ *
+ * Although the PD task will check for pending TCPC interrupts on startup,
+ * the charger sharing the IRQ will not be polled automatically.
+ */
+void board_handle_initial_typec_irq(void)
+{
+	check_c0_line();
+	check_c1_line();
+}
+/*
+ * This must run after sub-board detection (which happens in EC main()),
+ * but isn't depended on by anything else either.
+ */
+DECLARE_HOOK(HOOK_INIT, board_handle_initial_typec_irq, HOOK_PRIO_LAST);
+
+/*
  * Handle charger interrupts in the PD task. Not doing so can lead to a priority
  * inversion where we fail to respond to TCPC alerts quickly enough because we
  * don't get another edge on a shared IRQ until the charger interrupt is cleared
@@ -338,4 +357,22 @@ int pd_snk_is_vbus_provided(int port)
 	sm5803_get_chg_det(port, &chg_det);
 
 	return chg_det;
+}
+
+
+const struct usb_mux *nissa_get_c1_sb_mux(void)
+{
+	/*
+	 * Use TCPC-integrated mux via CONFIG_STANDARD_OUTPUT register
+	 * in PS8745.
+	 */
+	static const struct usb_mux usbc1_tcpc_mux = {
+		.usb_port = 1,
+		.i2c_port = I2C_PORT_USB_C1_TCPC,
+		.i2c_addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
+		.driver = &tcpci_tcpm_usb_mux_driver,
+		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+	};
+
+	return &usbc1_tcpc_mux;
 }
