@@ -27,7 +27,6 @@
 #include "ap_ro_integrity_check.h"
 #include "ccd_config.h"
 #include "compile_time_macros.h"
-#include "dauntless_event.h"
 #include "flash_log.h"
 #include "generated_version.h"
 #include "gsctool.h"
@@ -2766,62 +2765,6 @@ static int process_tpm_mode(struct transfer_descriptor *td,
 	return rv;
 }
 
-#define MAX_PAYLOAD_SIZE 256
-struct parsed_flog_entry {
-	bool end_of_list;
-	char payload[MAX_PAYLOAD_SIZE];
-	size_t payload_size;
-	uint64_t raw_timestamp;
-	time_t timestamp;
-	uint32_t event_type;
-};
-
-static int pop_flog_dt(struct transfer_descriptor *td, struct parsed_flog_entry *parsed_entry)
-{
-	union dt_entry_u entry;
-	size_t resp_size = sizeof(entry);
-	int rv = send_vendor_command(td, VENDOR_CC_POP_LOG_ENTRY_MS,
-				 &parsed_entry->raw_timestamp, sizeof(parsed_entry->raw_timestamp),
-				 &entry, &resp_size);
-	if (rv)
-		return rv;
-	if (resp_size == 0) {
-		parsed_entry->end_of_list = true;
-		return 0;
-	}
-	parsed_entry->event_type = entry.evt.event_type;
-	parsed_entry->payload_size = MIN(entry.evt.size - sizeof(entry.evt.event_type),
-					 MAX_PAYLOAD_SIZE);
-	memcpy(parsed_entry->payload, entry.evt.payload, parsed_entry->payload_size);
-	parsed_entry->raw_timestamp = entry.evt.time;
-	parsed_entry->timestamp = parsed_entry->raw_timestamp / 1000;
-	return rv;
-
-}
-
-static int pop_flog(struct transfer_descriptor *td, struct parsed_flog_entry *parsed_entry)
-{
-	union entry_u entry;
-	size_t resp_size = sizeof(entry);
-	uint32_t ts = (uint32_t) parsed_entry->raw_timestamp;
-	int rv = send_vendor_command(td, VENDOR_CC_POP_LOG_ENTRY,
-				 &ts, sizeof(ts),
-				 &entry, &resp_size);
-	if (rv)
-		return rv;
-	if (resp_size == 0) {
-		parsed_entry->end_of_list = true;
-		return 0;
-	}
-	parsed_entry->event_type = entry.r.type;
-	parsed_entry->payload_size = MIN(entry.r.size, MAX_PAYLOAD_SIZE);
-	memcpy(parsed_entry->payload, entry.r.payload, parsed_entry->payload_size);
-	parsed_entry->raw_timestamp = ts;
-	parsed_entry->timestamp = ts;
-	return rv;
-
-}
-
 /*
  * Retrieve from H1 flash log entries which are newer than the passed in
  * timestamp.
@@ -2829,8 +2772,8 @@ static int pop_flog(struct transfer_descriptor *td, struct parsed_flog_entry *pa
  * On error retry a few times just in case flash log is locked by a concurrent
  * access.
  */
-static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
-			    bool show_machine_output, bool is_dauntless)
+static int process_get_flog(struct transfer_descriptor *td, uint32_t prev_stamp,
+			    bool show_machine_output)
 {
 	int rv;
 	const int max_retries = 3;
@@ -2838,16 +2781,17 @@ static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
 	bool time_zone_reported = false;
 
 	while (retries--) {
-		struct parsed_flog_entry entry = {0};
-		entry.raw_timestamp = prev_stamp;
+		union entry_u entry;
+		size_t resp_size;
 		size_t i;
 		struct tm loc_time;
+		time_t entry_epoch;
 		char date_str[25];
-		if (is_dauntless) {
-			rv = pop_flog_dt(td, &entry);
-		} else {
-			rv = pop_flog(td, &entry);
-		}
+
+		resp_size = sizeof(entry);
+		rv = send_vendor_command(td, VENDOR_CC_POP_LOG_ENTRY,
+					 &prev_stamp, sizeof(prev_stamp),
+					 &entry, &resp_size);
 
 		if (rv) {
 			/*
@@ -2859,14 +2803,16 @@ static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
 			continue;
 		}
 
-		if (entry.end_of_list)
+		if (resp_size == 0)
+			/* No more entries. */
 			return 0;
 
-		prev_stamp = entry.raw_timestamp;
+		memcpy(&prev_stamp, &entry.r.timestamp, sizeof(prev_stamp));
 		if  (show_machine_output) {
-			printf("%10lu:%02x", prev_stamp, entry.event_type);
+			printf("%10u:%02x", prev_stamp, entry.r.type);
 		} else {
-			localtime_r(&entry.timestamp, &loc_time);
+			entry_epoch = prev_stamp;
+			localtime_r(&entry_epoch, &loc_time);
 
 			if (!time_zone_reported) {
 				strftime(date_str, sizeof(date_str), "%Z",
@@ -2878,10 +2824,10 @@ static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
 			/* Date format is MMM DD YY HH:mm:ss */
 			strftime(date_str, sizeof(date_str), "%b %d %y %T",
 				 &loc_time);
-			printf("%s : %02x", date_str, entry.event_type);
+			printf("%s : %02x", date_str, entry.r.type);
 		}
-		for (i = 0; i < FLASH_LOG_PAYLOAD_SIZE(entry.payload_size); i++)
-			printf(" %02x", entry.payload[i]);
+		for (i = 0; i < FLASH_LOG_PAYLOAD_SIZE(entry.r.size); i++)
+			printf(" %02x", entry.r.payload[i]);
 		printf("\n");
 		retries = max_retries;
 	}
@@ -3447,8 +3393,8 @@ int main(int argc, char *argv[])
 	if (get_boot_mode)
 		exit(process_get_boot_mode(&td));
 
-	if (get_flog) 
-		process_get_flog(&td, prev_log_entry, show_machine_output, is_dauntless);
+	if (get_flog)
+		process_get_flog(&td, prev_log_entry, show_machine_output);
 
 	if (erase_ap_ro_hash)
 		process_erase_ap_ro_hash(&td);
