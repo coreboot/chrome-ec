@@ -11,6 +11,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "keyboard_backlight.h"
 #include "registers.h"
 #include "rgb_keyboard.h"
 #include "task.h"
@@ -38,16 +39,17 @@ uint8_t rgbkbd_table[EC_RGBKBD_MAX_KEY_COUNT];
 static int set_color_single(struct rgb_s color, int x, int y)
 {
 	struct rgbkbd *ctx = &rgbkbds[0];
-	uint8_t gid;
+	uint8_t grid;
 	uint8_t col = 0;
 	uint8_t offset;
+	int rv;
 
 	if (rgbkbd_hsize <= x || rgbkbd_vsize <= y) {
 		return EC_ERROR_OVERFLOW;
 	}
 
 	/* Search the grid where x belongs to. */
-	for (gid = 0; gid < rgbkbd_count; gid++, ctx++) {
+	for (grid = 0; grid < rgbkbd_count; grid++, ctx++) {
 		if (x < col + ctx->cfg->col_len)
 			break;
 		col += ctx->cfg->col_len;
@@ -56,9 +58,13 @@ static int set_color_single(struct rgb_s color, int x, int y)
 	offset = ctx->cfg->row_len * (x - col) + y;
 	ctx->buf[offset] = color;
 
-	CPRINTS("Set [%d,%d] to color=[%d,%d,%d] (gid=%u offset=%u)",
-		x, y, color.r, color.g, color.b, gid, offset);
-	return ctx->cfg->drv->set_color(ctx, offset, &ctx->buf[offset], 1);
+	rv = ctx->cfg->drv->set_color(ctx, offset, &ctx->buf[offset], 1);
+
+	CPRINTS("%set (%d,%d) to color=(%d,%d,%d) grid=%u offset=%u (%d)",
+		rv ? "Failed to s" : "S",
+		x, y, color.r, color.g, color.b, grid, offset, rv);
+
+	return rv;
 }
 
 test_export_static uint8_t get_grid_size(const struct rgbkbd *ctx)
@@ -228,28 +234,153 @@ void rgbkbd_init_lookup_table(void)
 	 */
 }
 
+int rgbkbd_set_global_brightness(uint8_t gcc)
+{
+	int e, grid;
+	int rv = EC_SUCCESS;
+
+	for (grid = 0; grid < rgbkbd_count; grid++) {
+		struct rgbkbd *ctx = &rgbkbds[grid];
+
+		e = ctx->cfg->drv->set_gcc(ctx, gcc);
+		if (e) {
+			CPRINTS("Failed to set GCC to %u for grid=%d (%d)",
+				gcc, grid, e);
+			rv = e;
+			continue;
+		}
+
+		ctx->gcc = gcc;
+	}
+
+	CPRINTS("Set GCC to %u", gcc);
+
+	/* Return EC_SUCCESS or the last error. */
+	return rv;
+}
+
+int rgbkbd_get_global_brightness(uint8_t *gcc)
+{
+	*gcc = rgbkbds[0].gcc;
+
+	return EC_SUCCESS;
+}
+
 __overridable void board_enable_rgb_keyboard(bool enable) {}
+
+static int rgbkbd_init(void)
+{
+	int rv = EC_SUCCESS;
+	int e, i;
+	bool updated = false;
+
+	for (i = 0; i < rgbkbd_count; i++) {
+		struct rgbkbd *ctx = &rgbkbds[i];
+
+		if (ctx->state >= RGBKBD_STATE_INITIALIZED)
+			continue;
+
+		e = ctx->cfg->drv->init(ctx);
+		if (e) {
+			CPRINTS("Failed to init GRID%d (%d)", i, e);
+			rv = e;
+			continue;
+		}
+
+		ctx->state = RGBKBD_STATE_INITIALIZED;
+		updated = true;
+
+		e = ctx->cfg->drv->set_scale(ctx, 0, 0x80, get_grid_size(ctx));
+		if (e) {
+			CPRINTS("Failed to set scale of GRID%d (%d)", i, e);
+			rv = e;
+		}
+	}
+
+	if (updated)
+		CPRINTS("Initialized (%d)", rv);
+
+	/* Return EC_SUCCESS or the last error. */
+	return rv;
+}
+
+static int rgbkbd_enable(int enable)
+{
+	int rv = EC_SUCCESS;
+	int e, i;
+	bool updated = false;
+
+	for (i = 0; i < rgbkbd_count; i++) {
+		struct rgbkbd *ctx = &rgbkbds[i];
+
+		if (ctx->state >= RGBKBD_STATE_ENABLED && enable)
+			continue;
+
+		e = ctx->cfg->drv->enable(ctx, enable);
+		if (e) {
+			CPRINTS("Failed to %s GRID%d (%d)",
+				enable ? "enable" : "disable", i, e);
+			rv = e;
+			continue;
+		}
+
+		ctx->state = enable ?
+				RGBKBD_STATE_ENABLED : RGBKBD_STATE_DISABLED;
+		updated = true;
+	}
+
+	if (updated)
+		CPRINTS("%s (%d)", enable ? "Enabled" : "Disabled", rv);
+
+	/* Return EC_SUCCESS or the last error. */
+	return rv;
+}
+
+static int rgbkbd_kblight_set(int percent)
+{
+	uint8_t gcc = DIV_ROUND_NEAREST(percent * RGBKBD_MAX_GCC_LEVEL, 100);
+	return rgbkbd_set_global_brightness(gcc);
+}
+
+static int rgbkbd_kblight_get(void)
+{
+	uint8_t gcc;
+
+	if (rgbkbd_get_global_brightness(&gcc))
+		return 0;
+
+	return DIV_ROUND_NEAREST(gcc * 100, RGBKBD_MAX_GCC_LEVEL);
+}
+
+static int rgbkbd_get_enabled(void)
+{
+	return rgbkbds[0].state >= RGBKBD_STATE_ENABLED;
+}
+
+const struct kblight_drv kblight_rgbkbd = {
+	.init = rgbkbd_init,
+	.set = rgbkbd_kblight_set,
+	.get = rgbkbd_kblight_get,
+	/*
+	 * We need to let RGBKBD manage enable/disable the backlight to keep
+	 * the LEDs under the control of RGBKBD. Registering NULL also avoids
+	 * ASSERT(!in_interrupt_context()) failure in task.c called from
+	 * rgbkbd_enable API.
+	 */
+	.enable = NULL,
+	.get_enabled = rgbkbd_get_enabled,
+};
 
 void rgbkbd_task(void *u)
 {
 	uint32_t event;
-	int i, rv;
 
 	board_enable_rgb_keyboard(true);
 
 	rgbkbd_init_lookup_table();
-
-	for (i = 0; i < rgbkbd_count; i++) {
-		struct rgbkbd *ctx = &rgbkbds[i];
-		rv = ctx->cfg->drv->init(ctx);
-		if (rv)
-			CPRINTS("Failed to init GRID%d (%d)", i, rv);
-		rv = ctx->cfg->drv->set_gcc(ctx, 0x80);
-		rv |= ctx->cfg->drv->set_scale(ctx, 0, 0x80,
-					       get_grid_size(ctx));
-		if (rv)
-			CPRINTS("Failed to set GCC or scale (%d)", rv);
-	}
+	rgbkbd_init();
+	rgbkbd_enable(1);
+	rgbkbd_set_global_brightness(0x80);
 
 	while (1) {
 		event = task_wait_event(100 * MSEC);
@@ -310,7 +441,6 @@ DECLARE_HOST_COMMAND(EC_CMD_RGBKBD, hc_rgbkbd, EC_VER_MASK(0));
 
 test_export_static int cc_rgbk(int argc, char **argv)
 {
-	struct rgbkbd *ctx;
 	char *end, *comma;
 	struct rgb_s color;
 	int gcc, x, y, val;
@@ -351,12 +481,7 @@ test_export_static int cc_rgbk(int argc, char **argv)
 		gcc = strtoi(argv[1], &end, 0);
 		if (*end || gcc < 0 || gcc > UINT8_MAX)
 			return EC_ERROR_PARAM1;
-		demo = RGBKBD_DEMO_OFF;
-		for (i = 0; i < rgbkbd_count; i++) {
-			ctx = &rgbkbds[i];
-			ctx->cfg->drv->set_gcc(ctx, gcc);
-		}
-		return EC_SUCCESS;
+		return rgbkbd_set_global_brightness(gcc);
 	}
 
 	if (argc != 5)

@@ -112,6 +112,53 @@ void host_cmd_motion_sense_dump(int max_sensor_count,
 		   "Failed to get motion_sense dump");
 }
 
+int host_cmd_motion_sense_data(uint8_t sensor_num,
+			       struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_DATA,
+		.sensor_odr = {
+			.sensor_num = sensor_num,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 4, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_info(uint8_t cmd_version, uint8_t sensor_num,
+			       struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_INFO,
+		.sensor_odr = {
+			.sensor_num = sensor_num,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, cmd_version, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_ec_rate(uint8_t sensor_num, int data_rate_ms,
+				  struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_EC_RATE,
+		.ec_rate = {
+			.sensor_num = sensor_num,
+			.data = data_rate_ms,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	printk("sensor_num=%u/%u\n", params.sensor_odr.sensor_num, sensor_num);
+	return host_command_process(&args);
+}
+
 void host_cmd_typec_discovery(int port, enum typec_partner_type partner_type,
 			      void *response, size_t response_size)
 {
