@@ -265,8 +265,8 @@ static const struct option_container cmd_line_options[] = {
 	{{"any", no_argument, NULL, 'a'},
 	 "Try any interfaces to find Cr50"
 	 " (-d, -s, -t are all ignored)"},
-	{{"get_apro_boot_status", no_argument, NULL, 'B'},
-	 "get the stored ap ro boot state"},
+	{{"apro_boot", optional_argument, NULL, 'B'},
+	 "[start] get the stored ap ro boot state or start ap ro verify"},
 	{{"binvers", no_argument, NULL, 'b'},
 	 "Report versions of Cr50 image's "
 	 "RW and RO headers, do not update"},
@@ -2284,6 +2284,19 @@ static int process_get_apro_hash(struct transfer_descriptor *td)
 	return 0;
 }
 
+static int process_start_apro_verify(struct transfer_descriptor *td)
+{
+	int rv = 0;
+
+	rv = send_vendor_command(td, VENDOR_CC_AP_RO_VALIDATE, NULL, 0, NULL,
+				 NULL);
+	if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr, "Error %d starting RO verify\n", rv);
+		return update_error;
+	}
+	return 0;
+}
+
 static int process_get_apro_boot_status(struct transfer_descriptor *td)
 {
 	size_t response_size;
@@ -3039,6 +3052,7 @@ int main(int argc, char *argv[])
 	int tpm_mode = 0;
 	int get_apro_hash = 0;
 	int get_apro_boot_status = 0;
+	int start_apro_verify = 0;
 	bool show_machine_output = false;
 	int tstamp = 0;
 	const char *tstamp_arg = NULL;
@@ -3063,7 +3077,6 @@ int main(int argc, char *argv[])
 	 */
 	const struct options_map omap[] = {
 		{ 'b', &binary_vers },
-		{ 'B', &get_apro_boot_status },
 		{ 'c', &corrupt_inactive_rw },
 		{ 'D', &is_dauntless },
 		{ 'f', &show_fw_ver },
@@ -3118,6 +3131,12 @@ int main(int argc, char *argv[])
 			try_all_transfer = 1;
 			/* Try dev_xfer first. */
 			td.ep_type = dev_xfer;
+			break;
+		case 'B':
+			if (optarg && !strcmp(optarg, "start"))
+				start_apro_verify = 1;
+			else
+				get_apro_boot_status = 1;
 			break;
 		case 'd':
 			if (!parse_vidpid(optarg, &vid, &pid)) {
@@ -3277,6 +3296,7 @@ int main(int argc, char *argv[])
 	    !show_fw_ver &&
 	    !sn_bits &&
 	    !sn_inc_rma &&
+	    !start_apro_verify &&
 	    !openbox_desc_file &&
 	    !tstamp &&
 	    !tpm_mode &&
@@ -3389,6 +3409,9 @@ int main(int argc, char *argv[])
 
 	if (get_apro_boot_status)
 		exit(process_get_apro_boot_status(&td));
+
+	if (start_apro_verify)
+		exit(process_start_apro_verify(&td));
 
 	if (get_boot_mode)
 		exit(process_get_boot_mode(&td));
