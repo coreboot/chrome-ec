@@ -47,7 +47,7 @@ def get_git_versions(cr50_file):
       MyError: if consistent version string was not found in the file.
 
     """
-    git_vers_regexp = re.compile(b'cr50_v[12].* tpm2.* 20[12][0-9]')
+    git_vers_regexp = re.compile(b'cr50_v[1-4].* tpm2.* 20[12][0-9]')
     text = open(cr50_file, 'rb').read()
     strings = git_vers_regexp.findall(text)
     hashes = []
