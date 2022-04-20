@@ -531,6 +531,9 @@ int system_process_retry_counter(void)
 	CPRINTS("%s: retry counter %d", __func__,
 		GREG32(PMU, LONG_LIFE_SCRATCH0));
 	system_clear_retry_counter();
+#if defined(CHIP_FAMILY_CR50)
+	system_notify_ap_boot();
+#endif
 
 	if (!system_rollback_detected())
 		return EC_SUCCESS;

@@ -18,16 +18,23 @@
 
 static enum device_state state = DEVICE_STATE_INIT;
 static bool disable_ds_temp;
+static bool inkernel;
 
 void print_ap_state(void)
 {
 	ccprintf("DS Dis:  %s\n", disable_ds_temp ? "on" : "off");
-	ccprintf("AP:      %s\n", device_state_name(state));
+	ccprintf("AP:      %s (%s)\n", device_state_name(state),
+		 !ap_is_on() ? "" : inkernel ? "K" : "F");
 }
 
 int ap_is_on(void)
 {
 	return state == DEVICE_STATE_ON;
+}
+
+void system_notify_ap_boot(void)
+{
+	inkernel = 1;
 }
 
 void pmu_check_tpm_rst(void)
@@ -203,6 +210,7 @@ void tpm_rst_asserted(enum gpio_signal unused)
 	if (!tpm_reset_in_progress())
 		ap_ro_device_reset();
 #endif
+	inkernel = 0;
 	/*
 	 * It's possible the signal is being pulsed. Wait 1 second to disable
 	 * functionality, so it's more likely the AP is fully off and not being

@@ -94,4 +94,9 @@ void system_pinhold_on_reset_disable(void);
  */
 void system_pinhold_disengage(void);
 
+/**
+ * Notify the board booted.
+ */
+void system_notify_ap_boot(void);
+
 #endif /* __CROS_EC_SYSTEM_CHIP_H */
