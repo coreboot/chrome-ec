@@ -93,7 +93,11 @@ static enum vendor_cmd_rc vc_factory_reset(enum vendor_cmd_cc code,
 		return VENDOR_RC_NOT_ALLOWED;
 
 	CPRINTF("factory reset\n");
-	enable_ccd_factory_mode(1);
+	/*
+	 * Don't reset the AP after enabling factory mode. Just wipe the TPM
+	 * and disable AP communications until the device resets on its own.
+	 */
+	enable_ccd_factory_mode(0);
 
 	return VENDOR_RC_SUCCESS;
 }
