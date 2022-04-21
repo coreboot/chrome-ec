@@ -7,11 +7,17 @@
 #define ZEPHYR_SHIM_INCLUDE_TEMP_SENSOR_TEMP_SENSOR_H_
 
 #include <devicetree.h>
+#include "include/temp_sensor.h"
 
 #ifdef CONFIG_PLATFORM_EC_TEMP_SENSOR
 
 #define ZSHIM_TEMP_SENSOR_ID(node_id) DT_STRING_UPPER_TOKEN(node_id, enum_name)
 #define TEMP_SENSOR_ID_WITH_COMMA(node_id) ZSHIM_TEMP_SENSOR_ID(node_id),
+
+#define HAS_POWER_GOOD_PIN(node_id) DT_NODE_HAS_PROP(node_id, power_good_pin) ||
+#define ANY_INST_HAS_POWER_GOOD_PIN					 \
+	(DT_FOREACH_STATUS_OKAY(cros_ec_temp_sensor, HAS_POWER_GOOD_PIN) \
+	0)
 
 enum temp_sensor_id {
 #if DT_NODE_EXISTS(DT_PATH(named_temp_sensors))
@@ -52,6 +58,16 @@ enum tmp112_sensor {
 };
 
 #undef TMP112_SENSOR_ID_WITH_COMMA
+
+struct zephyr_temp_sensor {
+	/* Read sensor value in K into temp_ptr; return non-zero if error. */
+	int (*read)(const struct temp_sensor_t *sensor, int *temp_ptr);
+	struct thermistor_info *thermistor;
+#if ANY_INST_HAS_POWER_GOOD_PIN
+	const struct device *power_good_dev;
+	gpio_pin_t power_good_pin;
+#endif
+};
 
 #endif /* CONFIG_PLATFORM_EC_TEMP_SENSOR */
 

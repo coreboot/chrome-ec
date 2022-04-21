@@ -458,7 +458,7 @@ struct irq_def {
 #define IRQ_HANDLER_OPT(irqname) CONCAT3(irq_, irqname, _handler_optional)
 #define DECLARE_IRQ(irq, routine, priority) DECLARE_IRQ_(irq, routine, priority)
 #define DECLARE_IRQ_(irq, routine, priority)             \
-	static void routine(void) __attribute__((used)); \
+	static void __keep routine(void); 		 \
 	void IRQ_HANDLER_OPT(irq)(void) __attribute__((alias(#routine)))
 
 /* Include ec.irqlist here for compilation dependency */
@@ -468,17 +468,5 @@ struct irq_def {
 #endif /* !defined(CONFIG_DFU_BOOTMANAGER_MAIN) */
 #endif /* CONFIG_COMMON_RUNTIME */
 #endif /* !CONFIG_ZEPHYR */
-
-#if defined(CONFIG_ZEPHYR) && defined(TEST_BUILD)
-#include <kernel.h>
-
-/**
- * @brief Get the Zephyr thread ID for the given task
- *
- * @param cros_tid A valid cros TASK_ID_* entry
- * @return The Zephyr thread ID
- */
-k_tid_t task_get_zephyr_tid(size_t cros_tid);
-#endif /* CONFIG_ZEPHYR && TEST_BUILD */
 
 #endif  /* __CROS_EC_TASK_H */

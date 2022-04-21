@@ -93,6 +93,18 @@ static int ps8743_tune_mux(const struct usb_mux *me)
 	return EC_SUCCESS;
 }
 
+void board_usb_mux_init(void)
+{
+	if (corsola_get_db_type() == CORSOLA_DB_TYPEC) {
+		/* Disable DCI function. This is not needed for ARM. */
+		ps8743_field_update(&usb_muxes[1],
+				   PS8743_REG_DCI_CONFIG_2,
+				   PS8743_AUTO_DCI_MODE_MASK,
+				   PS8743_AUTO_DCI_MODE_FORCE_USB);
+	}
+}
+DECLARE_HOOK(HOOK_INIT, board_usb_mux_init, HOOK_PRIO_INIT_I2C + 1);
+
 const struct usb_mux usbc0_virtual_mux = {
 	.usb_port = USBC_PORT_C0,
 	.driver = &virtual_usb_mux_driver,
@@ -150,9 +162,10 @@ void board_tcpc_init(void)
 
 	/* Enable TCPC interrupts */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_tcpc));
-	if (corsola_get_db_type() == CORSOLA_DB_TYPEC)
+	if (corsola_get_db_type() == CORSOLA_DB_TYPEC) {
 		gpio_enable_dt_interrupt(
 			GPIO_INT_FROM_NODELABEL(int_usb_c1_tcpc));
+	}
 
 	/* Enable BC1.2 interrupts. */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_bc12));
@@ -161,11 +174,12 @@ void board_tcpc_init(void)
 	 * Initialize HPD to low; after sysjump SOC needs to see
 	 * HPD pulse to enable video path
 	 */
-	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port) {
 		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
 					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
+	}
 }
-DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
+DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_POST_I2C);
 
 __override int board_rt1718s_init(int port)
 {
@@ -225,19 +239,14 @@ void board_reset_pd_mcu(void)
 /* Used by Vbus discharge common code with CONFIG_USB_PD_DISCHARGE */
 int board_vbus_source_enabled(int port)
 {
-	return tcpm_get_src_ctrl(port);
-}
-
-/* Used by USB charger task with CONFIG_USB_PD_5V_EN_CUSTOM */
-int board_is_sourcing_vbus(int port)
-{
-	return board_vbus_source_enabled(port);
+	return ppc_is_sourcing_vbus(port);
 }
 
 __override int board_rt1718s_set_snk_enable(int port, int enable)
 {
-	if (port == USBC_PORT_C1)
+	if (port == USBC_PORT_C1) {
 		rt1718s_gpio_set_level(port, GPIO_EN_USB_C1_SINK, enable);
+	}
 
 	return EC_SUCCESS;
 }
@@ -248,8 +257,9 @@ int board_set_active_charge_port(int port)
 	bool is_valid_port =
 		(port >= 0 && port < board_get_usb_pd_port_count());
 
-	if (!is_valid_port && port != CHARGE_PORT_NONE)
+	if (!is_valid_port && port != CHARGE_PORT_NONE) {
 		return EC_ERROR_INVAL;
+	}
 
 	if (port == CHARGE_PORT_NONE) {
 		CPRINTS("Disabling all charger ports");
@@ -260,8 +270,9 @@ int board_set_active_charge_port(int port)
 			 * Do not return early if one fails otherwise we can
 			 * get into a boot loop assertion failure.
 			 */
-			if (ppc_vbus_sink_enable(i, 0))
+			if (ppc_vbus_sink_enable(i, 0)) {
 				CPRINTS("Disabling C%d as sink failed.", i);
+			}
 		}
 
 		return EC_SUCCESS;
@@ -280,11 +291,13 @@ int board_set_active_charge_port(int port)
 	 * requested charge port.
 	 */
 	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
-		if (i == port)
+		if (i == port) {
 			continue;
+		}
 
-		if (ppc_vbus_sink_enable(i, 0))
+		if (ppc_vbus_sink_enable(i, 0)) {
 			CPRINTS("C%d: sink path disable failed.", i);
+		}
 	}
 
 	/* Enable requested charge port. */
@@ -303,12 +316,15 @@ uint16_t tcpc_get_alert_status(void)
 	if (!gpio_pin_get_dt(
 		GPIO_DT_FROM_NODELABEL(gpio_usb_c0_tcpc_int_odl))) {
 		if (!gpio_pin_get_dt(
-			GPIO_DT_FROM_NODELABEL(gpio_usb_c0_tcpc_rst)))
+			GPIO_DT_FROM_NODELABEL(gpio_usb_c0_tcpc_rst))) {
 			status |= PD_STATUS_TCPC_ALERT_0;
+		}
 	}
 
-	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c1_tcpc_int_odl)))
+	if (!gpio_pin_get_dt(
+		GPIO_DT_FROM_NODELABEL(gpio_usb_c1_tcpc_int_odl))) {
 		return status |= PD_STATUS_TCPC_ALERT_1;
+	}
 	return status;
 }
 

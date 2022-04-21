@@ -253,8 +253,10 @@ static int rt1718s_init(int port)
 				TCPC_REG_ALERT_MASK_VENDOR_DEF,
 				MASK_SET));
 
-	if (IS_ENABLED(CONFIG_USB_PD_FRS_TCPC))
-		rt1718s_frs_init(port);
+	if (IS_ENABLED(CONFIG_USB_PD_FRS))
+		/* Set Rx frs unmasked */
+		RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_RT_MASK1,
+					 RT1718S_RT_MASK1_M_RX_FRS, 0xFF));
 
 	RETURN_ERROR(board_rt1718s_init(port));
 
@@ -328,11 +330,11 @@ static void rt1718s_bc12_usb_charger_task(const int port)
 
 	while (1) {
 		uint32_t evt = task_wait_event(-1);
+		bool is_non_pd_sink = !pd_capable(port) &&
+			!usb_charger_port_is_sourcing_vbus(port) &&
+			pd_check_vbus_level(port, VBUS_PRESENT);
 
 		if (evt & USB_CHG_EVENT_VBUS) {
-			bool is_non_pd_sink = !pd_capable(port) &&
-				pd_get_power_role(port) == PD_ROLE_SINK &&
-				pd_snk_is_vbus_provided(port);
 
 			if (is_non_pd_sink)
 				rt1718s_enable_bc12_sink(port, true);
@@ -343,7 +345,12 @@ static void rt1718s_bc12_usb_charger_task(const int port)
 
 		/* detection done, update charge_manager and stop detection */
 		if (evt & USB_CHG_EVENT_BC12) {
-			int type = rt1718s_get_bc12_type(port);
+			int type;
+
+			if (is_non_pd_sink)
+				type = rt1718s_get_bc12_type(port);
+			else
+				type = CHARGE_SUPPLIER_NONE;
 
 			rt1718s_update_charge_manager(
 					port, type);
@@ -356,8 +363,7 @@ void rt1718s_vendor_defined_alert(int port)
 {
 	int rv, value;
 
-	if (IS_ENABLED(CONFIG_USB_PD_FRS_PPC) &&
-	    IS_ENABLED(CONFIG_USBC_PPC_RT1718S)) {
+	if (IS_ENABLED(CONFIG_USB_PD_FRS)) {
 		int int1;
 
 		rv = rt1718s_read8(port, RT1718S_RT_INT1, &int1);
@@ -512,6 +518,29 @@ out:
 	return rv;
 }
 
+#ifdef CONFIG_USB_PD_FRS
+int rt1718s_set_frs_enable(int port, int enable)
+{
+	/*
+	 * Use write instead of update to save 2 i2c read.
+	 * Assume other bits are at their reset value.
+	 */
+	int frs_ctrl2 = 0x10, vbus_ctrl_en = 0x3F;
+
+	if (enable) {
+		frs_ctrl2 |= RT1718S_FRS_CTRL2_RX_FRS_EN;
+		frs_ctrl2 |= RT1718S_FRS_CTRL2_VBUS_FRS_EN;
+
+		vbus_ctrl_en |= RT1718S_VBUS_CTRL_EN_GPIO2_VBUS_PATH_EN;
+		vbus_ctrl_en |= RT1718S_VBUS_CTRL_EN_GPIO1_VBUS_PATH_EN;
+	}
+
+	RETURN_ERROR(rt1718s_write8(port, RT1718S_FRS_CTRL2, frs_ctrl2));
+	RETURN_ERROR(rt1718s_write8(port, RT1718S_VBUS_CTRL_EN, vbus_ctrl_en));
+	return EC_SUCCESS;
+}
+#endif
+
 void rt1718s_gpio_set_flags(int port, enum rt1718s_gpio signal, uint32_t flags)
 {
 	int val = 0;
@@ -563,7 +592,7 @@ static int command_rt1718s_gpio(int argc, char **argv)
 				return EC_ERROR_UNKNOWN;
 
 			ccprintf("C%d GPIO%d OD=%d PU=%d PD=%d OE=%d HL=%d\n",
-				 i, j, !(flags & RT1718S_GPIO_CTRL_OD_N),
+				 i, j+1, !(flags & RT1718S_GPIO_CTRL_OD_N),
 				 !!(flags & RT1718S_GPIO_CTRL_PU),
 				 !!(flags & RT1718S_GPIO_CTRL_PD),
 				 !!(flags & RT1718S_GPIO_CTRL_OE),
@@ -611,6 +640,7 @@ const struct tcpm_drv rt1718s_tcpm_drv = {
 #ifdef CONFIG_USB_PD_FRS_TCPC
 	.set_frs_enable		= &rt1718s_set_frs_enable,
 #endif
+	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
 };
 
 const struct bc12_drv rt1718s_bc12_drv = {

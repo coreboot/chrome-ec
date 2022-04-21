@@ -59,7 +59,7 @@ static void baseboard_interrupt_init(void)
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_pg_groupc_s0));
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_pg_lpddr4x_s3));
 }
-DECLARE_HOOK(HOOK_INIT, baseboard_interrupt_init, HOOK_PRIO_INIT_I2C + 1);
+DECLARE_HOOK(HOOK_INIT, baseboard_interrupt_init, HOOK_PRIO_POST_I2C);
 
 /**
  * b/175324615: On G3->S5, wait for RSMRST_L to be deasserted before asserting
@@ -109,6 +109,11 @@ void baseboard_en_pwr_s0(enum gpio_signal signal)
 
 	/* Now chain off to the normal power signal interrupt handler. */
 	power_signal_interrupt(signal);
+}
+
+void baseboard_s5_pgood(enum gpio_signal signal)
+{
+	baseboard_en_pwr_s0(signal);
 }
 
 void baseboard_set_en_pwr_s3(enum gpio_signal signal)

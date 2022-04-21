@@ -37,6 +37,7 @@ test-list-y=\
        fpsensor_hw \
        mpu \
        mutex \
+       panic_data \
        pingpong \
        printf \
        queue \
@@ -49,6 +50,11 @@ test-list-y=\
        sha256_unrolled \
        static_if \
        stm32f_rtc \
+       system_is_locked \
        timer_dos \
        utils \
        utils_str \
+
+# Note that this variable includes the trailing "/"
+_hatch_fp_cur_dir:=$(dir $(lastword $(MAKEFILE_LIST)))
+-include $(_hatch_fp_cur_dir)../../private/board/hatch_fp/build.mk

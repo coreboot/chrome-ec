@@ -19,6 +19,7 @@
 
 #include "console.h"
 #include "printf.h"
+#include "task.h"
 #include "uart.h"
 #include "usb_console.h"
 #include "zephyr_console_shim.h"
@@ -37,7 +38,6 @@ LOG_MODULE_REGISTER(shim_console, LOG_LEVEL_ERR);
 
 static const struct device *uart_shell_dev =
 	DEVICE_DT_GET(DT_CHOSEN(zephyr_shell_uart));
-static int shell_priority = K_HIGHEST_APPLICATION_THREAD_PRIO;
 static const struct shell *shell_zephyr;
 static struct k_poll_signal shell_uninit_signal;
 static struct k_poll_signal shell_init_signal;
@@ -146,7 +146,8 @@ static void shell_init_from_work(struct k_work *work)
 	 * shell_init() always resets the priority back to the default.
 	 * Update the priority as setup by the shimmed task code.
 	 */
-	k_thread_priority_set(shell_zephyr->ctx->tid, shell_priority);
+	k_thread_priority_set(shell_zephyr->ctx->tid,
+			      EC_TASK_PRIORITY(EC_SHELL_PRIO));
 
 	uart_irq_rx_enable(uart_shell_dev);
 	uart_irq_tx_enable(uart_shell_dev);
@@ -179,15 +180,22 @@ void uart_shell_start(void)
 	k_poll(&event, 1, K_FOREVER);
 }
 
-void uart_shell_set_priority(int prio)
+#ifdef CONFIG_SHELL_HELP
+static void print_console_help(char *name,
+			       const struct zephyr_console_command *command)
 {
-	shell_priority = prio;
-	k_thread_priority_set(shell_zephyr->ctx->tid, shell_priority);
+	if (command->help)
+		printk("%s\n", command->help);
+	if (command->argdesc)
+		printk("Usage: %s %s\n", name, command->argdesc);
 }
+#endif
 
 int zshim_run_ec_console_command(const struct zephyr_console_command *command,
 				 size_t argc, char **argv)
 {
+	int ret;
+
 	/*
 	 * The Zephyr shell only displays the help string and not
 	 * the argument descriptor when passing "-h" or "--help".  Mimic the
@@ -198,16 +206,28 @@ int zshim_run_ec_console_command(const struct zephyr_console_command *command,
 		if (!command->help && !command->argdesc)
 			break;
 		if (!strcmp(argv[i], "help")) {
-			if (command->help)
-				printk("%s\n", command->help);
-			if (command->argdesc)
-				printk("Usage: %s\n", command->argdesc);
+			print_console_help(argv[0], command);
 			return 0;
 		}
 	}
 #endif
 
-	return command->handler(argc, argv);
+	ret = command->handler(argc, argv);
+	if (ret == EC_SUCCESS)
+		return ret;
+
+	/* Print common parameter error conditions and help on error */
+	if (ret >= EC_ERROR_PARAM1 && ret < EC_ERROR_PARAM_COUNT)
+		printk("Parameter %d invalid\n", ret - EC_ERROR_PARAM1 + 1);
+	else if (ret == EC_ERROR_PARAM_COUNT)
+		printk("Wrong number of parameters\n");
+	else
+		printk("Command returned error: %d\n", ret);
+
+#ifdef CONFIG_SHELL_HELP
+	print_console_help(argv[0], command);
+#endif
+	return ret;
 }
 
 #if defined(CONFIG_CONSOLE_CHANNEL) && DT_NODE_EXISTS(DT_PATH(ec_console))
@@ -387,12 +407,4 @@ int cprints(enum console_channel channel, const char *format, ...)
 	zephyr_print(buff, len);
 
 	return rv > 0 ? EC_SUCCESS : rv;
-}
-
-/*
- * Placeholder task so that the shell/console task priority can get set
- * correctly by shimmed_task_id.h
- */
-void console_task_nop(void *p)
-{
 }

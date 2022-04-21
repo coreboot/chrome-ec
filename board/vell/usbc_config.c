@@ -99,13 +99,19 @@ struct ppc_config_t ppc_chips[] = {
 	},
 	[USBC_PORT_C3] = {
 		.i2c_port = I2C_PORT_USB_C2_C3_PPC,
-		.i2c_addr_flags = SYV682X_ADDR3_FLAGS,
+		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
 		.drv = &syv682x_drv,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == USBC_PORT_COUNT);
 
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
+
+struct ppc_config_t ppc_chips_old_c3 = {
+	.i2c_port = I2C_PORT_USB_C2_C3_PPC,
+	.i2c_addr_flags = SYV682X_ADDR3_FLAGS,
+	.drv = &syv682x_drv,
+};
 
 /* USBC mux configuration - Alder Lake includes internal mux */
 static const struct usb_mux usbc0_tcss_usb_mux = {
@@ -336,6 +342,9 @@ static void board_tcpc_init(void)
 	for (i = 0; i < CONFIG_IO_EXPANDER_PORT_COUNT; ++i)
 		ioex_init(i);
 
+	if (get_board_id() < 2)
+		ppc_chips[USBC_PORT_C3] = ppc_chips_old_c3;
+
 	/* Enable PPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
@@ -359,10 +368,10 @@ uint16_t tcpc_get_alert_status(void)
 	uint16_t status = 0;
 
 	if (gpio_get_level(GPIO_USB_C0_C1_TCPC_INT_ODL) == 0)
-		status = PD_STATUS_TCPC_ALERT_0 | PD_STATUS_TCPC_ALERT_1;
+		status |= PD_STATUS_TCPC_ALERT_0 | PD_STATUS_TCPC_ALERT_1;
 
 	if (gpio_get_level(GPIO_USB_C2_C3_TCPC_INT_ODL) == 0)
-		status = PD_STATUS_TCPC_ALERT_2 | PD_STATUS_TCPC_ALERT_3;
+		status |= PD_STATUS_TCPC_ALERT_2 | PD_STATUS_TCPC_ALERT_3;
 
 	return status;
 }

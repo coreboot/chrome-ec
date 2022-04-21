@@ -116,6 +116,7 @@
 		};
 		gpio_en_pp3300_s5: en_pp3300_s5 {
 			gpios = <&gpioc 5 GPIO_OUTPUT>;
+			enum-name = "GPIO_TEMP_SENSOR_POWER";
 		};
 		gpio_en_pp5000_pen_x: en_pp5000_pen_x {
 			gpios = <&gpiob 5 GPIO_OUTPUT>;
@@ -178,6 +179,7 @@
 		};
 		gpio_sub_usb_a1_ilimit_sdp: sub_usb_a1_ilimit_sdp {
 			gpios = <&gpiof 1 GPIO_OUTPUT>;
+			enum-name = "GPIO_USB2_ILIM_SEL";
 		};
 		gpio_sys_rst_odl: sys_rst_odl {
 			gpios = <&gpiod 1 GPIO_ODR_HIGH>;
@@ -188,6 +190,7 @@
 		};
 		gpio_usb_a0_ilimit_sdp: usb_a0_ilimit_sdp {
 			gpios = <&gpiol 5 GPIO_OUTPUT>;
+			enum-name = "GPIO_USB1_ILIM_SEL";
 		};
 		gpio_usb_c0_frs: usb_c0_frs {
 			gpios = <&gpioc 4 GPIO_OUTPUT>;
@@ -235,23 +238,6 @@
 			enum-name = "I2C_PORT_USB_C0_TCPC";
 		};
 	};
-
-	named-pwms {
-		compatible = "named-pwms";
-
-		pwm_pwm_kb_bl: pwm_kb_bl {
-			pwms = <&pwm0 0 0>;
-		};
-		pwm_pwm_led_1_odl: pwm_led_1_odl {
-			pwms = <&pwm1 1 1>;
-		};
-		pwm_pwm_led_2_odl: pwm_led_2_odl {
-			pwms = <&pwm2 2 1>;
-		};
-		pwm_pwm_led_3_odl: pwm_led_3_odl {
-			pwms = <&pwm3 3 1>;
-		};
-	};
 };
 
 &adc0 {
@@ -275,21 +261,5 @@
 };
 
 &i2c5 {
-	status = "okay";
-};
-
-&pwm0 {
-	status = "okay";
-};
-
-&pwm1 {
-	status = "okay";
-};
-
-&pwm2 {
-	status = "okay";
-};
-
-&pwm3 {
 	status = "okay";
 };

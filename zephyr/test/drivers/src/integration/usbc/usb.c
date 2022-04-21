@@ -19,11 +19,11 @@
 #include "emul/tcpc/emul_tcpci_partner_snk.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
 #include "host_command.h"
-#include "stubs.h"
+#include "test/drivers/stubs.h"
 #include "tcpm/tcpci.h"
 #include "test/usb_pe.h"
-#include "utils.h"
-#include "test_state.h"
+#include "test/drivers/utils.h"
+#include "test/drivers/test_state.h"
 
 #define TCPCI_EMUL_LABEL DT_NODELABEL(tcpci_emul)
 #define TCPCI_EMUL_LABEL2 DT_NODELABEL(tcpci_ps8xxx_emul)
@@ -133,6 +133,7 @@ ZTEST(integration_usb, test_attach_drp)
 	 * TODO: Change it to examining EC_CMD_TYPEC_STATUS
 	 */
 	zassert_equal(PE_SNK_READY, get_state_pe(USBC_PORT_C0), NULL);
+	zassert_ok(tcpci_emul_disconnect_partner(tcpci_emul), NULL);
 }
 
 ZTEST_SUITE(integration_usb, drivers_predicate_post_main, NULL,

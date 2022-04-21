@@ -43,11 +43,11 @@
 
 /*
  * If we are trying to upgrade PD firmwares (TCPC chips, retimer, etc), we
- * need to ensure the battery has enough charge for this process. 100mAh
- * is about 5% of most batteries, and it should be enough charge to get us
+ * need to ensure the battery has enough charge for this process. Set the
+ * threshold to 10%, and it should be enough charge to get us
  * through the EC jump to RW and PD upgrade.
  */
-#define MIN_BATTERY_FOR_PD_UPGRADE_MAH 100 /* mAH */
+#define MIN_BATTERY_FOR_PD_UPGRADE_PERCENT 10 /* % */
 
 #if defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH)
 int hex8tou32(char *str, uint32_t *val)
@@ -148,12 +148,12 @@ bool pd_firmware_upgrade_check_power_readiness(int port)
 		 * charge to finish the upgrade.
 		 */
 		battery_get_params(&batt);
-		if (batt.flags & BATT_FLAG_BAD_REMAINING_CAPACITY ||
-			batt.remaining_capacity <
-				MIN_BATTERY_FOR_PD_UPGRADE_MAH) {
+		if (batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE ||
+			batt.state_of_charge <
+				MIN_BATTERY_FOR_PD_UPGRADE_PERCENT) {
 			CPRINTS("C%d: Cannot suspend for upgrade, not "
-					"enough battery (%dmAh)!",
-					port, batt.remaining_capacity);
+					"enough battery (%d%%)!",
+					port, batt.state_of_charge);
 			return false;
 		}
 	} else {
@@ -688,6 +688,12 @@ __overridable enum pd_dual_role_states pd_get_drp_state_in_suspend(void)
 {
 	/* Disable dual role when going to suspend */
 	return PD_DRP_TOGGLE_OFF;
+}
+
+__overridable enum pd_dual_role_states pd_get_drp_state_in_s0(void)
+{
+	/* Enable dual role when chipset on */
+	return PD_DRP_TOGGLE_ON;
 }
 
 __overridable void pd_try_execute_vconn_swap(int port, int flags)

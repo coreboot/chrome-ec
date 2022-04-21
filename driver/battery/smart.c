@@ -321,6 +321,11 @@ test_mockable int battery_device_chemistry(char *dest, int size)
 	return sb_read_string(SB_DEVICE_CHEMISTRY, dest, size);
 }
 
+int battery_manufacturer_data(char *data, int size)
+{
+	return sb_read_string(SB_MANUFACTURER_DATA, data, size);
+}
+
 int battery_get_avg_current(void)
 {
 	int current;
@@ -366,8 +371,16 @@ static void apply_fake_state_of_charge(struct batt_params *batt)
 
 void battery_get_params(struct batt_params *batt)
 {
-	struct batt_params batt_new = {0};
+	struct batt_params batt_new;
 	int v;
+
+	/*
+	 * Start with a copy so that only valid fields will be updated. Note
+	 * sb_read doesn't change the value if I2C fails. So, the current value
+	 * will be preserved.
+	 */
+	memcpy(&batt_new, batt, sizeof(*batt));
+	batt_new.flags = 0;
 
 	if (sb_read(SB_TEMPERATURE, &batt_new.temperature)
 			&& fake_temperature < 0)

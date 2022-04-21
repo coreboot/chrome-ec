@@ -28,11 +28,9 @@ LOG_MODULE_REGISTER(shim_cros_motionsense_sensors);
 DT_FOREACH_CHILD(SENSOR_MUTEX_NODE, DECLARE_SENSOR_MUTEX)
 #endif /* DT_NODE_EXISTS(SENSOR_MUTEX_NODE) */
 
-#define SENSOR_ROT_REF_NODE		DT_PATH(motionsense_rotation_ref)
-#define SENSOR_ROT_STD_REF_NAME(id)	DT_CAT(ROT_REF_, id)
 #define MAT_ITEM(i, id)	FLOAT_TO_FP((int32_t)(DT_PROP_BY_IDX(id, mat33, i)))
 #define DECLARE_SENSOR_ROT_REF(id)					\
-	static const mat33_fp_t SENSOR_ROT_STD_REF_NAME(id) = {	\
+	const mat33_fp_t SENSOR_ROT_STD_REF_NAME(id) = {	\
 		{							\
 			FOR_EACH_FIXED_ARG(MAT_ITEM, (,), id, 0, 1, 2)	\
 		},							\
@@ -392,9 +390,9 @@ DECLARE_HOOK(HOOK_INIT, sensor_enable_irqs, HOOK_PRIO_DEFAULT);
 #endif
 
 /* Handle the alternative motion sensors */
-#define CHECK_SSFC_AND_ENABLE_ALT_SENSOR(id, cbi_dev)                         \
+#define CHECK_SSFC_AND_ENABLE_ALT_SENSOR(id)                                  \
 	do {                                                                  \
-		if (cros_cbi_ssfc_check_match(cbi_dev, CBI_SSFC_VALUE_ID(     \
+		if (cros_cbi_ssfc_check_match(CBI_SSFC_VALUE_ID(              \
 				DT_PHANDLE(id, alternate_ssfc_indicator)))) { \
 			LOG_INF("Replacing \"%s\" for \"%s\" based on SSFC",  \
 				motion_sensors[SENSOR_ID(DT_PHANDLE(id,       \
@@ -404,10 +402,10 @@ DECLARE_HOOK(HOOK_INIT, sensor_enable_irqs, HOOK_PRIO_DEFAULT);
 		}                                                             \
 	} while (0)
 
-#define ALT_SENSOR_CHECK_SSFC_ID(id, cbi_dev)                                 \
+#define ALT_SENSOR_CHECK_SSFC_ID(id)                                          \
 	COND_CODE_1(UTIL_AND(DT_NODE_HAS_PROP(id, alternate_for),             \
 			     DT_NODE_HAS_PROP(id, alternate_ssfc_indicator)), \
-		    (CHECK_SSFC_AND_ENABLE_ALT_SENSOR(id, cbi_dev);), ())
+		    (CHECK_SSFC_AND_ENABLE_ALT_SENSOR(id);), ())
 
 #if DT_NODE_EXISTS(SENSOR_ALT_NODE)
 
@@ -432,12 +430,7 @@ int motion_sense_probe(enum sensor_alt_id alt_idx)
 
 void motion_sensors_check_ssfc(void)
 {
-	const struct device *dev = device_get_binding(CROS_CBI_LABEL);
-
-	if (dev != NULL) {
-		DT_FOREACH_CHILD_VARGS(SENSOR_ALT_NODE,
-				       ALT_SENSOR_CHECK_SSFC_ID, dev)
-	}
+	DT_FOREACH_CHILD(SENSOR_ALT_NODE, ALT_SENSOR_CHECK_SSFC_ID)
 }
 #endif /* DT_NODE_EXISTS(SENSOR_ALT_NODE) */
 

@@ -35,7 +35,7 @@ Chromium OS's meta-build tool for Zephyr
 
 ### zmake configure
 
-**Usage:** `zmake configure [-h] [-b] [--test] [-t TOOLCHAIN] [--bringup] [--clobber] [--allow-warnings] [-B BUILD_DIR] [-c] (-a | --host-tests-only | project_name [project_name ...])`
+**Usage:** `zmake configure [-h] [-t TOOLCHAIN] [--bringup] [--clobber] [--allow-warnings] [-B BUILD_DIR] [-c] [--extra-cflags EXTRA_CFLAGS] (-a | --host-tests-only | project_name [project_name ...])`
 
 #### Positional Arguments
 
@@ -48,20 +48,19 @@ Chromium OS's meta-build tool for Zephyr
 |   |   |
 |---|---|
 | `-h`, `--help` | show this help message and exit |
-| `-b`, `--build` | Run the build after configuration |
-| `--test` | Test the .elf file after building |
 | `-t TOOLCHAIN`, `--toolchain TOOLCHAIN` | Name of toolchain to use |
 | `--bringup` | Enable bringup debugging features |
 | `--clobber` | Delete existing build directories, even if configuration is unchanged |
 | `--allow-warnings` | Do not treat warnings as errors |
 | `-B BUILD_DIR`, `--build-dir BUILD_DIR` | Root build directory, project files will be in ${build_dir}/${project_name} |
 | `-c`, `--coverage` | Enable CONFIG_COVERAGE Kconfig. |
+| `--extra-cflags EXTRA_CFLAGS` | Additional CFLAGS to use for target builds |
 | `-a`, `--all` | Select all projects |
 | `--host-tests-only` | Select all test projects |
 
 ### zmake build
 
-**Usage:** `zmake build [-h] [-t TOOLCHAIN] [--bringup] [--clobber] [--allow-warnings] [-B BUILD_DIR] [-c] (-a | --host-tests-only | project_name [project_name ...])`
+**Usage:** `zmake build [-h] [-t TOOLCHAIN] [--bringup] [--clobber] [--allow-warnings] [-B BUILD_DIR] [-c] [--extra-cflags EXTRA_CFLAGS] (-a | --host-tests-only | project_name [project_name ...])`
 
 #### Positional Arguments
 
@@ -80,12 +79,13 @@ Chromium OS's meta-build tool for Zephyr
 | `--allow-warnings` | Do not treat warnings as errors |
 | `-B BUILD_DIR`, `--build-dir BUILD_DIR` | Root build directory, project files will be in ${build_dir}/${project_name} |
 | `-c`, `--coverage` | Enable CONFIG_COVERAGE Kconfig. |
+| `--extra-cflags EXTRA_CFLAGS` | Additional CFLAGS to use for target builds |
 | `-a`, `--all` | Select all projects |
 | `--host-tests-only` | Select all test projects |
 
 ### zmake list-projects
 
-**Usage:** `zmake list-projects [-h] [--format FORMAT] [search_dir]`
+**Usage:** `zmake list-projects [-h] [--format FMT] [search_dir]`
 
 #### Positional Arguments
 
@@ -98,11 +98,11 @@ Chromium OS's meta-build tool for Zephyr
 |   |   |
 |---|---|
 | `-h`, `--help` | show this help message and exit |
-| `--format FORMAT` | Output format to print projects (str.format(config=project.config) is called on this for each project). |
+| `--format FMT` | Output format to print projects (str.format(config=project.config) is called on this for each project). |
 
 ### zmake test
 
-**Usage:** `zmake test [-h] [--no-rebuild] [-t TOOLCHAIN] [--bringup] [--clobber] [--allow-warnings] [-B BUILD_DIR] [-c] (-a | --host-tests-only | project_name [project_name ...])`
+**Usage:** `zmake test [-h] [--no-rebuild] [-t TOOLCHAIN] [--bringup] [--clobber] [--allow-warnings] [-B BUILD_DIR] [-c] [--extra-cflags EXTRA_CFLAGS] (-a | --host-tests-only | project_name [project_name ...])`
 
 #### Positional Arguments
 
@@ -122,6 +122,7 @@ Chromium OS's meta-build tool for Zephyr
 | `--allow-warnings` | Do not treat warnings as errors |
 | `-B BUILD_DIR`, `--build-dir BUILD_DIR` | Root build directory, project files will be in ${build_dir}/${project_name} |
 | `-c`, `--coverage` | Enable CONFIG_COVERAGE Kconfig. |
+| `--extra-cflags EXTRA_CFLAGS` | Additional CFLAGS to use for target builds |
 | `-a`, `--all` | Select all projects |
 | `--host-tests-only` | Select all test projects |
 

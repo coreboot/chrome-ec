@@ -31,25 +31,25 @@
 			gpios = <&gpio9 5 GPIO_INPUT>;
 		};
 		ec_soc_pwr_good {
-			gpios = <&gpiod 3 GPIO_OUT_LOW>;
+			gpios = <&gpiod 3 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_PCH_SYS_PWROK";
 		};
 		ec_entering_rw {
-			gpios = <&gpio6 6 GPIO_OUT_LOW>;
+			gpios = <&gpio6 6 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_ENTERING_RW";
 		};
 		ec_clr_cmos {
-			gpios = <&gpioa 1 GPIO_OUT_LOW>;
+			gpios = <&gpioa 1 GPIO_OUTPUT_LOW>;
 		};
 		ec_mem_event {
-			gpios = <&gpioa 5 GPIO_OUT_LOW>;
+			gpios = <&gpioa 5 GPIO_OUTPUT_LOW>;
 		};
 		gpio_ec_soc_pwr_btn_l: ec_soc_pwr_btn_l {
-			gpios = <&gpio6 3 GPIO_OUT_HIGH>;
+			gpios = <&gpio6 3 GPIO_OUTPUT_HIGH>;
 			enum-name = "GPIO_PCH_PWRBTN_L";
 		};
 		ec_soc_int_l {
-			gpios = <&gpio8 3 GPIO_OUT_HIGH>;
+			gpios = <&gpio8 3 GPIO_OUTPUT_HIGH>;
 		};
 		soc_thermtrip_odl {
 			gpios = <&gpioe 5 GPIO_INPUT>;
@@ -89,7 +89,7 @@
 		ec_pwm7 {
 			gpios = <&gpio6 0 GPIO_INPUT_PULL_UP>;
 		};
-		6axis_int_l {
+		gpio_accel_gyro_int_l: accel_gyro_int_l {
 			gpios = <&gpioa 0 GPIO_INPUT_PULL_UP>;
 		};
 	};
@@ -113,7 +113,8 @@
 
 	named-temp-sensors {
 		soc-tmp112 {
-			compatible = "cros-ec,temp-sensor-tmp112";
+			compatible = "cros-ec,temp-sensor-tmp112",
+				     "cros-ec,temp-sensor";
 			label = "SOC";
 			enum-name = "TEMP_SENSOR_SOC";
 			tmp112-name = "TMP112_SOC";
@@ -126,23 +127,13 @@
 			temp_fan_max = <70>;
 		};
 		amb-tmp112 {
-			compatible = "cros-ec,temp-sensor-tmp112";
+			compatible = "cros-ec,temp-sensor-tmp112",
+				     "cros-ec,temp-sensor";
 			label = "Ambient";
 			enum-name = "TEMP_SENSOR_AMB";
 			tmp112-name = "TMP112_AMB";
 			port = <&i2c_sensor>;
 			i2c-addr-flags = "TMP112_I2C_ADDR_FLAGS1";
-		};
-		sb-tsi-sensor {
-			compatible = "cros-ec,temp-sensor-sb-tsi";
-			label = "CPU";
-			enum-name = "TEMP_SENSOR_CPU";
-			port = <&i2c_soc_thermal>;
-			temp_host_high = <100>;
-			temp_host_halt = <105>;
-			temp_host_release_high = <80>;
-			temp_fan_off = <60>;
-			temp_fan_max = <90>;
 		};
 	};
 
@@ -173,6 +164,27 @@
 			irq-pin = <&gpio_pg_groupc_s0_od>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "baseboard_en_pwr_pcore_s0";
+		};
+		int_s0_pgood: s0_pgood {
+			irq-pin = <&gpio_s0_pgood>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "power_signal_interrupt";
+		};
+	};
+
+	/* Rotation matrices for motion sensors. */
+	motionsense-rotation-ref {
+		compatible = "cros-ec,motionsense-rotation-ref";
+		lid_rot_ref: lid-rotation-ref {
+			mat33 = <0 (-1) 0
+				 (-1) 0 0
+				 0 0 (-1)>;
+		};
+
+		base_rot_ref: base-rotation-ref {
+			mat33 = <(-1) 0 0
+				 0 1 0
+				 0 0 (-1)>;
 		};
 	};
 };

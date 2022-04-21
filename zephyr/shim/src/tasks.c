@@ -9,16 +9,18 @@
 #include <shell/shell.h>
 
 #include "common.h"
-#include "console.h"
+#include "host_command.h"
 #include "timer.h"
 #include "task.h"
 
-/* We need to ensure that is one lower priority for the deferred task */
-BUILD_ASSERT(CONFIG_NUM_PREEMPT_PRIORITIES + 1 >= TASK_ID_COUNT,
-	     "Must increase number of available preempt priorities");
+/* Ensure that the idle task is at lower priority than lowest priority task. */
+BUILD_ASSERT(EC_TASK_PRIORITY(EC_TASK_PRIO_LOWEST) < K_IDLE_PRIO,
+	"CONFIG_NUM_PREEMPT_PRIORITIES too small, some tasks would run at "
+	"idle priority");
+
 
 /* Declare all task stacks here */
-#define CROS_EC_TASK(name, e, p, size) \
+#define CROS_EC_TASK(name, e, p, size, pr) \
 	K_THREAD_STACK_DEFINE(name##_STACK, size);
 #define TASK_TEST(name, e, p, size) CROS_EC_TASK(name, e, p, size)
 CROS_EC_TASK_LIST
@@ -33,7 +35,7 @@ CROS_EC_TASK_LIST
 #undef TASK_TEST
 
 /** Context for each CROS EC task that is run in its own zephyr thread */
-struct task_ctx_static {
+struct task_ctx_cfg {
 #ifdef CONFIG_THREAD_NAME
 	/** Name of thread (for debugging) */
 	const char *name;
@@ -46,66 +48,82 @@ struct task_ctx_static {
 	void (*entry)(void *p);
 	/** The parameter that is passed into the task entry point */
 	intptr_t parameter;
+	/** The task priority */
+	int priority;
 };
 
-struct task_ctx_dyn {
-	/** Zephyr thread structure that hosts EC tasks */
-	struct k_thread zephyr_thread;
-	/** Zephyr thread id for above thread */
-	k_tid_t zephyr_tid;
+struct task_ctx_base_data {
 	/** A wait-able event that is raised when a new task event is posted */
 	struct k_poll_signal new_event;
 	/** The current platform/ec events set for this task/thread */
 	atomic_t event_mask;
-	/**
-	 * The timer associated with this task, which can be set using
-	 * timer_arm().
-	 */
-	struct k_timer timer;
 };
 
-#ifdef CONFIG_THREAD_NAME
-#define CROS_EC_TASK(_name, _entry, _parameter, _size) \
-	{                                              \
-		.entry = _entry,                       \
-		.parameter = _parameter,               \
-		.stack = _name##_STACK,                \
-		.stack_size = _size,                   \
-		.name = #_name,                        \
+struct task_ctx_data {
+	/** Zephyr thread structure that hosts EC tasks */
+	struct k_thread zephyr_thread;
+	/** Zephyr thread id for above thread */
+	k_tid_t zephyr_tid;
+	/** Base context data */
+	struct task_ctx_base_data base;
+};
+
+#define CROS_EC_TASK(_name, _entry, _parameter, _size, _prio)          \
+	{                                                              \
+		.entry = _entry,                                       \
+		.parameter = _parameter,                               \
+		.stack = _name##_STACK,                                \
+		.stack_size = _size,                                   \
+		.priority = EC_TASK_PRIORITY(_prio),                   \
+		COND_CODE_1(CONFIG_THREAD_NAME, (.name = #_name,), ()) \
 	},
-#else
-#define CROS_EC_TASK(_name, _entry, _parameter, _size) \
-	{                                              \
-		.entry = _entry,                       \
-		.parameter = _parameter,               \
-		.stack = _name##_STACK,                \
-		.stack_size = _size,                   \
-	},
-#endif /* CONFIG_THREAD_NAME */
 #define TASK_TEST(_name, _entry, _parameter, _size) \
 	CROS_EC_TASK(_name, _entry, _parameter, _size)
-/* Note: no static entry is required for sysworkq, as it isn't started here */
-const static struct task_ctx_static shimmed_tasks_static[TASK_ID_COUNT] = {
+const static struct task_ctx_cfg shimmed_tasks_cfg[TASK_ID_COUNT] = {
 	CROS_EC_TASK_LIST
 #ifdef TEST_BUILD
 	[TASK_ID_TEST_RUNNER] = {},
 #endif
 };
 
-/* In dynamic tasks, allocate one extra spot for the sysworkq */
-static struct task_ctx_dyn shimmed_tasks_dyn[TASK_ID_COUNT + 1];
-
-#define TASK_ID_SYSWORKQ TASK_ID_COUNT
+static struct task_ctx_data shimmed_tasks_data[TASK_ID_COUNT];
+static struct task_ctx_base_data extra_tasks_data[EXTRA_TASK_COUNT];
+/* Task timer structures. Keep separate from the context ones to avoid memory
+ * holes due to int64_t fields in struct _timeout.
+ */
+static struct k_timer shimmed_tasks_timers[TASK_ID_COUNT + EXTRA_TASK_COUNT];
 
 static int tasks_started;
 #undef CROS_EC_TASK
 #undef TASK_TEST
 
+static struct task_ctx_base_data *task_get_base_data(task_id_t cros_task_id)
+{
+	if (cros_task_id >= TASK_ID_COUNT + EXTRA_TASK_COUNT) {
+		return NULL;
+	}
+
+	if (cros_task_id >= TASK_ID_COUNT) {
+		return &extra_tasks_data[cros_task_id - TASK_ID_COUNT];
+	}
+
+	return &shimmed_tasks_data[cros_task_id].base;
+}
+
 task_id_t task_get_current(void)
 {
-	/* Include sysworkq entry in search for the task ID */
-	for (size_t i = 0; i < TASK_ID_COUNT + 1; ++i) {
-		if (shimmed_tasks_dyn[i].zephyr_tid == k_current_get())
+	if (in_deferred_context()) {
+		return TASK_ID_SYSWORKQ;
+	}
+
+#ifdef CONFIG_TASK_HOSTCMD_THREAD_MAIN
+	if (in_host_command_main()) {
+		return TASK_ID_HOSTCMD;
+	}
+#endif
+
+	for (size_t i = 0; i < TASK_ID_COUNT; ++i) {
+		if (shimmed_tasks_data[i].zephyr_tid == k_current_get())
 			return i;
 	}
 
@@ -113,31 +131,33 @@ task_id_t task_get_current(void)
 	return 0;
 }
 
-__test_only k_tid_t task_get_zephyr_tid(size_t cros_tid)
-{
-	return shimmed_tasks_dyn[cros_tid].zephyr_tid;
-}
-
 atomic_t *task_get_event_bitmap(task_id_t cros_task_id)
 {
-	struct task_ctx_dyn *const ctx = &shimmed_tasks_dyn[cros_task_id];
+	struct task_ctx_base_data *data;
 
-	return &ctx->event_mask;
+	data = task_get_base_data(cros_task_id);
+
+	return &data->event_mask;
 }
 
 uint32_t task_set_event(task_id_t cros_task_id, uint32_t event)
 {
-	struct task_ctx_dyn *const ctx = &shimmed_tasks_dyn[cros_task_id];
+	struct task_ctx_base_data *data;
 
-	atomic_or(&ctx->event_mask, event);
-	k_poll_signal_raise(&ctx->new_event, 0);
+	data = task_get_base_data(cros_task_id);
+
+	atomic_or(&data->event_mask, event);
+	k_poll_signal_raise(&data->new_event, 0);
 
 	return 0;
 }
 
 uint32_t task_wait_event(int timeout_us)
 {
-	struct task_ctx_dyn *const ctx = &shimmed_tasks_dyn[task_get_current()];
+	struct task_ctx_base_data *data;
+
+	data = task_get_base_data(task_get_current());
+
 	const k_timeout_t timeout = (timeout_us == -1) ? K_FOREVER :
 							 K_USEC(timeout_us);
 	const int64_t tick_deadline =
@@ -146,14 +166,14 @@ uint32_t task_wait_event(int timeout_us)
 	struct k_poll_event poll_events[1] = {
 		K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
 					 K_POLL_MODE_NOTIFY_ONLY,
-					 &ctx->new_event),
+					 &data->new_event),
 	};
 
 	/* Wait for signal, then clear it before reading events */
 	const int rv = k_poll(poll_events, ARRAY_SIZE(poll_events), timeout);
 
-	k_poll_signal_reset(&ctx->new_event);
-	uint32_t events = atomic_set(&ctx->event_mask, 0);
+	k_poll_signal_reset(&data->new_event);
+	uint32_t events = atomic_set(&data->event_mask, 0);
 
 	if (rv == -EAGAIN) {
 		events |= TASK_EVENT_TIMER;
@@ -179,7 +199,10 @@ uint32_t task_wait_event(int timeout_us)
 
 uint32_t task_wait_event_mask(uint32_t event_mask, int timeout_us)
 {
-	struct task_ctx_dyn *const ctx = &shimmed_tasks_dyn[task_get_current()];
+	struct task_ctx_base_data *data;
+
+	data = task_get_base_data(task_get_current());
+
 	uint32_t events = 0;
 	const int64_t tick_deadline =
 		k_uptime_ticks() + k_us_to_ticks_near64(timeout_us);
@@ -198,37 +221,36 @@ uint32_t task_wait_event_mask(uint32_t event_mask, int timeout_us)
 		struct k_poll_event poll_events[1] = {
 			K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
 						 K_POLL_MODE_NOTIFY_ONLY,
-						 &ctx->new_event),
+						 &data->new_event),
 		};
 
 		/* Ensure to honor the -1 timeout as FOREVER */
 		k_poll(poll_events, ARRAY_SIZE(poll_events),
 		       timeout_us == -1 ? K_FOREVER : K_TICKS(ticks_left));
-		k_poll_signal_reset(&ctx->new_event);
-		events |= atomic_set(&ctx->event_mask, 0);
+		k_poll_signal_reset(&data->new_event);
+		events |= atomic_set(&data->event_mask, 0);
 	}
 
 	/* Replace any events that weren't in the mask */
 	if (events & ~event_mask) {
-		atomic_or(&ctx->event_mask, events & ~event_mask);
-		k_poll_signal_raise(&ctx->new_event, 0);
+		atomic_or(&data->event_mask, events & ~event_mask);
+		k_poll_signal_raise(&data->new_event, 0);
 	}
 
 	return events & event_mask;
 }
 
-static void task_entry(void *task_context_static,
-		       void *task_context_dyn,
+static void task_entry(void *task_context_cfg,
+		       void *task_context_data,
 		       void *unused1)
 {
-	ARG_UNUSED(task_context_dyn);
+	ARG_UNUSED(task_context_data);
 	ARG_UNUSED(unused1);
 
-	struct task_ctx_static *const ctx_static =
-			(struct task_ctx_static *)task_context_static;
+	struct task_ctx_cfg *const cfg = task_context_cfg;
 
 	/* Call into task entry point */
-	ctx_static->entry((void *)ctx_static->parameter);
+	cfg->entry((void *)cfg->parameter);
 }
 
 /*
@@ -237,17 +259,17 @@ static void task_entry(void *task_context_static,
  */
 static void timer_expire(struct k_timer *timer_id)
 {
-	struct task_ctx_dyn *const ctx =
-		CONTAINER_OF(timer_id, struct task_ctx_dyn, timer);
-	task_id_t cros_ec_task_id = ctx - shimmed_tasks_dyn;
+	task_id_t cros_ec_task_id = timer_id - shimmed_tasks_timers;
 
 	task_set_event(cros_ec_task_id, TASK_EVENT_TIMER);
 }
 
 int timer_arm(timestamp_t event, task_id_t cros_ec_task_id)
 {
+	struct k_timer *timer;
 	timestamp_t now = get_time();
-	struct task_ctx_dyn *const ctx = &shimmed_tasks_dyn[cros_ec_task_id];
+
+	timer = &shimmed_tasks_timers[cros_ec_task_id];
 
 	if (event.val <= now.val) {
 		/* Timer requested for now or in the past, fire right away */
@@ -256,24 +278,26 @@ int timer_arm(timestamp_t event, task_id_t cros_ec_task_id)
 	}
 
 	/* Check for a running timer */
-	if (k_timer_remaining_get(&ctx->timer))
+	if (k_timer_remaining_get(timer))
 		return EC_ERROR_BUSY;
 
-	k_timer_start(&ctx->timer, K_USEC(event.val - now.val), K_NO_WAIT);
+	k_timer_start(timer, K_USEC(event.val - now.val), K_NO_WAIT);
 	return EC_SUCCESS;
 }
 
 void timer_cancel(task_id_t cros_ec_task_id)
 {
-	struct task_ctx_dyn *const ctx = &shimmed_tasks_dyn[cros_ec_task_id];
+	struct k_timer *timer;
 
-	k_timer_stop(&ctx->timer);
+	timer = &shimmed_tasks_timers[cros_ec_task_id];
+
+	k_timer_stop(timer);
 }
 
 #ifdef TEST_BUILD
 void set_test_runner_tid(void)
 {
-	shimmed_tasks_dyn[TASK_ID_TEST_RUNNER].zephyr_tid = k_current_get();
+	shimmed_tasks_data[TASK_ID_TEST_RUNNER].zephyr_tid = k_current_get();
 }
 
 #ifdef CONFIG_SET_TEST_RUNNER_TID_RULE
@@ -289,43 +313,20 @@ ZTEST_RULE(set_test_runner_tid, set_test_runner_tid_rule_before, NULL);
 #endif /* CONFIG_SET_TEST_RUNNER_TID_RULE */
 #endif /* TEST_BUILD */
 
-#if K_PRIO_PREEMPT(TASK_ID_COUNT - 1) >= K_IDLE_PRIO
-#error CONFIG_NUM_PREEMPT_PRIORITIES too small, some tasks would run at idle \
-	priority
-#endif
-
 void start_ec_tasks(void)
 {
-	int priority;
+	for (size_t i = 0; i < TASK_ID_COUNT + EXTRA_TASK_COUNT; ++i) {
+		k_timer_init(&shimmed_tasks_timers[i], timer_expire, NULL);
+	}
 
-	/* Initialize all EC tasks, which does not include the sysworkq entry */
 	for (size_t i = 0; i < TASK_ID_COUNT; ++i) {
-		struct task_ctx_dyn *const ctx_dyn = &shimmed_tasks_dyn[i];
-		const struct task_ctx_static *const ctx_static =
-				&shimmed_tasks_static[i];
-
-		k_timer_init(&ctx_dyn->timer, timer_expire, NULL);
-
-		priority = K_PRIO_PREEMPT(TASK_ID_COUNT - i - 1);
+		struct task_ctx_data *const data = &shimmed_tasks_data[i];
+		const struct task_ctx_cfg *const cfg = &shimmed_tasks_cfg[i];
 
 #ifdef TEST_BUILD
 		/* Do not create thread for test runner; it will be set later */
 		if (i == TASK_ID_TEST_RUNNER) {
-			ctx_dyn->zephyr_tid = NULL;
-			continue;
-		}
-#endif
-
-#ifdef HAS_CONSOLE_STUB_TASK
-		/*
-		 * The console is run on the built-in Zephyr shell thread.
-		 * The TASK_ID_CONSOLE_STUB is a placeholder to determine
-		 * the correct priority of the shell thread based on the
-		 * enabled cros-ec tasks.
-		 */
-		if (i == TASK_ID_CONSOLE_STUB) {
-			ctx_dyn->zephyr_tid = NULL;
-			uart_shell_set_priority(priority);
+			data->zephyr_tid = NULL;
 			continue;
 		}
 #endif
@@ -335,26 +336,23 @@ void start_ec_tasks(void)
 		 * comment in config.h for CONFIG_TASK_LIST for existing flags
 		 * implementation.
 		 */
-		ctx_dyn->zephyr_tid = k_thread_create(
-			&ctx_dyn->zephyr_thread,
-			ctx_static->stack,
-			ctx_static->stack_size,
+		data->zephyr_tid = k_thread_create(
+			&data->zephyr_thread,
+			cfg->stack,
+			cfg->stack_size,
 			task_entry,
-			(void *)ctx_static,
-			ctx_dyn,
+			(void *)cfg,
+			data,
 			NULL,
-			priority,
+			cfg->priority,
 			0,
 			K_NO_WAIT);
 
 #ifdef CONFIG_THREAD_NAME
 		/* Name thread for debugging */
-		k_thread_name_set(ctx_dyn->zephyr_tid, ctx_static->name);
+		k_thread_name_set(data->zephyr_tid, cfg->name);
 #endif
 	}
-
-	/* Create an entry for sysworkq we can send events to */
-	shimmed_tasks_dyn[TASK_ID_COUNT].zephyr_tid = &k_sys_work_q.thread;
 
 	tasks_started = 1;
 }
@@ -368,11 +366,10 @@ int init_signals(const struct device *unused)
 {
 	ARG_UNUSED(unused);
 
-	/* Initialize event structures for all entries, including sysworkq */
-	for (size_t i = 0; i < TASK_ID_COUNT + 1; ++i) {
-		struct task_ctx_dyn *const ctx = &shimmed_tasks_dyn[i];
+	for (size_t i = 0; i < TASK_ID_COUNT + EXTRA_TASK_COUNT; ++i) {
+		struct task_ctx_base_data *const data = task_get_base_data(i);
 
-		k_poll_signal_init(&ctx->new_event);
+		k_poll_signal_init(&data->new_event);
 	}
 
 	return 0;

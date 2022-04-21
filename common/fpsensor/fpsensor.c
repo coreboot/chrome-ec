@@ -80,18 +80,12 @@ static inline int is_raw_capture(uint32_t mode)
 	     || capture_type == FP_CAPTURE_QUALITY_TEST);
 }
 
-#if defined(HAVE_FP_PRIVATE_DRIVER) || defined(CONFIG_CMD_FPSENSOR_DEBUG)
-static bool fp_match_success(int match_result)
+__maybe_unused static bool fp_match_success(int match_result)
 {
-	if (match_result == EC_MKBP_FP_ERR_MATCH_YES ||
-	    match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATED ||
-	    match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATE_FAILED) {
-		return true;
-	}
-
-	return false;
+	return match_result == EC_MKBP_FP_ERR_MATCH_YES ||
+	       match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATED ||
+	       match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATE_FAILED;
 }
-#endif
 
 #ifdef HAVE_FP_PRIVATE_DRIVER
 static inline int is_test_capture(uint32_t mode)
@@ -200,8 +194,11 @@ static uint32_t fp_process_match(void)
 static void fp_process_finger(void)
 {
 	timestamp_t t0 = get_time();
-	int res = fp_sensor_acquire_image_with_mode(fp_buffer,
-			FP_CAPTURE_TYPE(sensor_mode));
+	int res;
+
+	CPRINTS("Capturing ...");
+	res = fp_sensor_acquire_image_with_mode(fp_buffer,
+						FP_CAPTURE_TYPE(sensor_mode));
 	capture_time_us = time_since32(t0);
 	if (!res) {
 		uint32_t evt = EC_MKBP_FP_IMAGE_READY;

@@ -18,6 +18,7 @@
 
 #include "battery.h"
 #include "comm-host.h"
+#include "comm-usb.h"
 #include "chipset.h"
 #include "compile_time_macros.h"
 #include "crc.h"
@@ -41,6 +42,9 @@
  */
 #define HELLO_RESP(in_data) ((in_data) + 0x01020304)
 
+#define USB_VID_GOOGLE	0x18d1
+#define USB_PID_HAMMER	0x5022
+
 /* Command line options */
 enum {
 	OPT_DEV = 1000,
@@ -48,6 +52,7 @@ enum {
 	OPT_NAME,
 	OPT_ASCII,
 	OPT_I2C_BUS,
+	OPT_DEVICE,
 };
 
 static struct option long_opts[] = {
@@ -56,6 +61,7 @@ static struct option long_opts[] = {
 	{"name", 1, 0, OPT_NAME},
 	{"ascii", 0, 0, OPT_ASCII},
 	{"i2c_bus", 1, 0, OPT_I2C_BUS},
+	{"device", 1, 0, OPT_DEVICE},
 	{NULL, 0, 0, 0}
 };
 
@@ -273,6 +279,8 @@ const char help_str[] =
 	"      Requests that the EC will automatically reboot the AP after a\n"
 	"      configurable number of seconds the next time we enter the G3\n"
 	"      power state.\n"
+	"  rgbkbd ...\n"
+	"      Set/get RGB keyboard status, config, etc..\n"
 	"  rollbackinfo\n"
 	"      Print rollback block information\n"
 	"  rtcget\n"
@@ -337,6 +345,8 @@ const char help_str[] =
 			"[toggle|toggle-off|sink|source] [none|usb|dp|dock] "
 			"[dr_swap|pr_swap|vconn_swap]>\n"
 	"      Control USB PD/type-C [deprecated]\n"
+	"  usbpddps [enable | disable]\n"
+	"      Enable or disable dynamic pdo selection\n"
 	"  usbpdmuxinfo [tsv]\n"
 	"      Get USB-C SS mux info.\n"
 	"          tsv: Output as tab separated values. Columns are defined "
@@ -393,13 +403,17 @@ int parse_bool(const char *s, int *dest)
 
 void print_help(const char *prog, int print_cmds)
 {
-	printf("Usage: %s [--dev=n] [--interface=dev|i2c|lpc] [--i2c_bus=n]",
+	printf("Usage: %s [--dev=n] "
+	       "[--interface=dev|i2c|lpc] [--i2c_bus=n] [--device=vid:pid] ",
 	       prog);
 	printf("[--name=cros_ec|cros_fp|cros_pd|cros_scp|cros_ish] [--ascii] ");
 	printf("<command> [params]\n\n");
 	printf("  --i2c_bus=n  Specifies the number of an I2C bus to use. For\n"
 	       "               example, to use /dev/i2c-7, pass --i2c_bus=7.\n"
 	       "               Implies --interface=i2c.\n\n");
+	printf("  --interface Specifies the interface.\n\n");
+	printf("  --device    Specifies USB endpoint by vendor ID and product\n"
+	       "              ID (e.g. 18d1:5022).\n\n");
 	if (print_cmds)
 		puts(help_str);
 	else
@@ -1271,6 +1285,101 @@ int cmd_reboot_ap_on_g3(int argc, char *argv[])
 		cmdver = 0;
 
 	rv = ec_command(EC_CMD_REBOOT_AP_ON_G3, cmdver, &p, sizeof(p), NULL, 0);
+	return (rv < 0 ? rv : 0);
+}
+
+static void cmd_rgbkbd_help(char *cmd)
+{
+	fprintf(stderr,
+	"  Usage1: %s <key> <RGB>\n"
+	"          Set the color of <key> to <RGB>.\n"
+	"\n"
+	"  Usage2: %s clear <RGB>\n"
+	"          Set the color of all keys to <RGB>.\n"
+	"\n",
+	cmd, cmd);
+}
+
+static int cmd_rgbkbd_parse_rgb_text(const char *text, struct rgb_s *color)
+{
+	uint32_t rgb;
+	char *e;
+
+	rgb = strtoul(text, &e, 0);
+	if ((e && *e) || rgb > EC_RGBKBD_MAX_RGB_COLOR) {
+		fprintf(stderr, "Invalid color '%s'.\n", text);
+		return -1;
+	}
+	color->r = (rgb >> 16) & 0xff;
+	color->g = (rgb >> 8) & 0xff;
+	color->b = (rgb >> 0) & 0xff;
+
+	return 0;
+}
+
+static int cmd_rgbkbd_set_color(int argc, char *argv[])
+{
+	struct ec_params_rgbkbd_set_color *p;
+	int i, key, outlen;
+	char *e;
+	int rv = -1;
+
+	outlen = sizeof(*p) + sizeof(struct rgb_s) * EC_RGBKBD_MAX_KEY_COUNT;
+	p = malloc(outlen);
+	if (p == NULL)
+		return -1;
+	memset(p, 0, outlen);
+
+	key = strtol(argv[1], &e, 0);
+	if ((e && *e) || key >= EC_RGBKBD_MAX_KEY_COUNT) {
+		fprintf(stderr, "Invalid key ID '%s'.\n", argv[1]);
+		goto out;
+	}
+	p->start_key = key;
+
+	if (argc - 2 > EC_RGBKBD_MAX_KEY_COUNT) {
+		fprintf(stderr, "# of colors exceed max key count.\n");
+		goto out;
+	}
+
+	for (i = 2; i < argc; i++) {
+		if (cmd_rgbkbd_parse_rgb_text(argv[i], &p->color[p->length]))
+			goto out;
+		p->length++;
+	}
+
+	outlen = sizeof(*p) + sizeof(struct rgb_s) * p->length;
+	rv = ec_command(EC_CMD_RGBKBD_SET_COLOR, 0, p, outlen, NULL, 0);
+
+out:
+	free(p);
+
+	return rv;
+}
+
+static int cmd_rgbkbd(int argc, char *argv[])
+{
+	int rv = -1;;
+
+	if (argc < 3) {
+		cmd_rgbkbd_help(argv[0]);
+		return -1;
+	}
+
+	if (argc == 3 && !strcasecmp(argv[1], "clear")) {
+		/* Usage 2 */
+		struct ec_params_rgbkbd p;
+
+		p.subcmd = EC_RGBKBD_SUBCMD_CLEAR;
+		if (cmd_rgbkbd_parse_rgb_text(argv[2], &p.color))
+			return -1;
+
+		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), NULL, 0);
+	} else if (2 < argc) {
+		/* Usage 1 */
+		rv = cmd_rgbkbd_set_color(argc, argv);
+	}
+
 	return (rv < 0 ? rv : 0);
 }
 
@@ -6356,6 +6465,37 @@ int cmd_usb_pd(int argc, char *argv[])
 	return 0;
 }
 
+int cmd_usb_pd_dps(int argc, char *argv[])
+{
+	struct ec_params_usb_pd_dps_control p;
+	int rv;
+
+	/*
+	 * Set up requested flags.  If no flags were specified, p.mask will
+	 * be 0 and nothing will change.
+	 */
+	if (argc < 1) {
+		fprintf(stderr, "Usage: %s [enable|disable]\n", argv[0]);
+		return -1;
+	}
+
+	if (!strcasecmp(argv[1], "enable")) {
+		p.enable = 1;
+	} else if (!strcasecmp(argv[1], "disable")) {
+		p.enable = 0;
+	} else {
+		fprintf(stderr, "Usage: %s [enable|disable]\n", argv[0]);
+		return -1;
+	}
+
+	rv = ec_command(EC_CMD_USB_PD_DPS_CONTROL, 0,
+			&p, sizeof(p), NULL, 0);
+	if (rv < 0)
+		return rv;
+
+	return 0;
+}
+
 static void print_pd_power_info(struct ec_response_usb_pd_power_info *r)
 {
 	switch (r->role) {
@@ -7817,6 +7957,7 @@ int cmd_battery(int argc, char *argv[])
 	int rv, val;
 	char *e;
 	int index = 0;
+	uint8_t flags;
 
 	if (argc > 2) {
 		fprintf(stderr, "Usage: %s [index]\n", argv[0]);
@@ -7842,6 +7983,8 @@ int cmd_battery(int argc, char *argv[])
 		fprintf(stderr, "Battery version %d is not supported\n", val);
 		return -1;
 	}
+
+	flags = read_mapped_mem8(EC_MEMMAP_BATT_FLAG);
 
 	printf("Battery info:\n");
 
@@ -7895,15 +8038,15 @@ int cmd_battery(int argc, char *argv[])
 	val = read_mapped_mem32(EC_MEMMAP_BATT_RATE);
 	if (!is_battery_range(val))
 		goto cmd_error;
-	printf("  Present current         %u mA\n", val);
+	printf("  Present current         %u mA%s\n", val,
+	       flags & EC_BATT_FLAG_DISCHARGING ? " (discharging)" : "");
 
 	val = read_mapped_mem32(EC_MEMMAP_BATT_CAP);
 	if (!is_battery_range(val))
 		goto cmd_error;
 	printf("  Remaining capacity      %u mAh\n", val);
 
-	val = read_mapped_mem8(EC_MEMMAP_BATT_FLAG);
-	print_battery_flags(val);
+	print_battery_flags(flags);
 
 	return 0;
 cmd_error:
@@ -10610,6 +10753,7 @@ const struct command commands[] = {
 	{"rand", cmd_rand},
 	{"readtest", cmd_read_test},
 	{"reboot_ec", cmd_reboot_ec},
+	{"rgbkbd", cmd_rgbkbd},
 	{"rollbackinfo", cmd_rollback_info},
 	{"rtcget", cmd_rtc_get},
 	{"rtcgetalarm", cmd_rtc_get_alarm},
@@ -10641,6 +10785,7 @@ const struct command commands[] = {
 	{"usbchargemode", cmd_usb_charge_set_mode},
 	{"usbmux", cmd_usb_mux},
 	{"usbpd", cmd_usb_pd},
+	{"usbpddps", cmd_usb_pd_dps},
 	{"usbpdmuxinfo", cmd_usb_pd_mux_info},
 	{"usbpdpower", cmd_usb_pd_power},
 	{"version", cmd_version},
@@ -10657,6 +10802,7 @@ int main(int argc, char *argv[])
 	int interfaces = COMM_ALL;
 	int i2c_bus = -1;
 	char device_name[41] = CROS_EC_DEV_NAME;
+	uint16_t vid = USB_VID_GOOGLE, pid = USB_PID_HAMMER;
 	int rv = 1;
 	int parse_error = 0;
 	char *e;
@@ -10690,6 +10836,14 @@ int main(int argc, char *argv[])
 				interfaces = COMM_SERVO;
 			} else {
 				fprintf(stderr, "Invalid --interface\n");
+				parse_error = 1;
+			}
+			break;
+		case OPT_DEVICE:
+			if (parse_vidpid(optarg, &vid, &pid)) {
+				interfaces = COMM_USB;
+			} else {
+				fprintf(stderr, "Invalid --device\n");
 				parse_error = 1;
 			}
 			break;
@@ -10753,7 +10907,12 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Could not acquire GEC lock.\n");
 			exit(1);
 		}
-		if (comm_init_alt(interfaces, device_name, i2c_bus)) {
+		if (interfaces == COMM_USB) {
+			if (comm_init_usb(vid, pid)) {
+				fprintf(stderr, "Couldn't find EC on USB.\n");
+				goto out;
+			}
+		} else if (comm_init_alt(interfaces, device_name, i2c_bus)) {
 			fprintf(stderr, "Couldn't find EC\n");
 			goto out;
 		}
@@ -10778,5 +10937,9 @@ int main(int argc, char *argv[])
 
 out:
 	release_gec_lock();
+
+	if (interfaces == COMM_USB)
+		comm_usb_exit();
+
 	return !!rv;
 }

@@ -35,12 +35,7 @@
 		int_s5_pgood: s5_pgood {
 			irq-pin = <&gpio_pg_pwr_s5>;
 			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "baseboard_en_pwr_s0";
-		};
-		int_s0_pgood: s0_pgood {
-			irq-pin = <&gpio_s0_pgood>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "power_signal_interrupt";
+			handler = "baseboard_s5_pgood";
 		};
 		int_pg_groupc_s0: pg_groupc_s0 {
 			irq-pin = <&gpio_pg_groupc_s0_od>;
@@ -86,6 +81,11 @@
 			irq-pin = <&gpio_usb_c1_bc12_int_odl>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "bc12_interrupt";
+		};
+		int_accel_gyro: accel_gyro {
+			irq-pin = <&gpio_accel_gyro_int_l>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "bmi3xx_interrupt";
 		};
 	};
 };

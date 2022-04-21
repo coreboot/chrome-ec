@@ -63,6 +63,9 @@ if(DEFINED CONFIG_PLATFORM_EC)
   endif()
 endif()
 
+# Set extra compiler flags.
+zephyr_cc_option(-mno-unaligned-access)
+
 # The EC application is split into two libraries:
 #   app: contains all the legacy code
 #   ec_shim: contains all the code under platform/ec/shim
@@ -259,8 +262,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C_DEBUG
                                                 "${PLATFORM_EC}/common/i2c_trace.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C_VIRTUAL_BATTERY
                                                 "${PLATFORM_EC}/common/virtual_battery.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_IOEX
-                                                "${PLATFORM_EC}/common/ioexpander_commands.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_CCGXXF
                                                 "${PLATFORM_EC}/driver/ioexpander/ccgxxf.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_IT8801
@@ -294,6 +295,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM_KBLIGHT
                                                 "${PLATFORM_EC}/common/keyboard_backlight.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
                                                 "${PLATFORM_EC}/common/led_common.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_DT
+                                                "${PLATFORM_EC}/common/led_common.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_PWM
                                                 "${PLATFORM_EC}/common/led_pwm.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_ONOFF_STATES
@@ -326,6 +329,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_ICELAKE
                                                 "${PLATFORM_EC}/power/icelake.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
                                                 "${PLATFORM_EC}/power/intel_x86.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_METEORLAKE
+                                                "${PLATFORM_EC}/power/meteorlake.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8186
@@ -371,6 +376,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_CHARGER
                                                 "${PLATFORM_EC}/common/usb_charger.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PORT_POWER_DUMB
                                                 "${PLATFORM_EC}/common/usb_port_power_dumb.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PORT_POWER_SMART
+                                                "${PLATFORM_EC}/common/usb_port_power_smart.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
                                                 "${PLATFORM_EC}/common/usb_common.c"
@@ -389,6 +396,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_PD
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_FW_UPDATE
                                                 "${PLATFORM_EC}/common/usbc/usb_retimer_fw_update.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7483
+                                                "${PLATFORM_EC}/driver/retimer/anx7483.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
                                                 "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8818
@@ -408,6 +417,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_TUSB1044
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_VIRTUAL
                                                 "${PLATFORM_EC}/driver/usb_mux/virtual.c")
 
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DPS
+                                                "${PLATFORM_EC}/common/dps.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_LOGGING
                                                 "${PLATFORM_EC}/common/event_log.c"
                                                 "${PLATFORM_EC}/common/pd_log.c")
@@ -471,6 +482,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_DRIVER_IT83XX
                                                 "${PLATFORM_EC}/driver/tcpm/it83xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_DRIVER_IT8XXX2
                                                 "${PLATFORM_EC}/driver/tcpm/it8xxx2.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_FUSB302
+                                                "${PLATFORM_EC}/driver/tcpm/fusb302.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC
                                                 "${PLATFORM_EC}/common/usbc_ppc.c")
@@ -503,7 +516,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RTC
 						"${PLATFORM_EC}/common/rtc.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MATH_UTIL
 						"${PLATFORM_EC}/common/math_util.c")
-
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MAX695X_SEVEN_SEGMENT_DISPLAY
+						"${PLATFORM_EC}/driver/led/max695x.c")
+zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ_HOST_SLEEP
+						"${PLATFORM_EC}/power/host_sleep.c")
 # Switch to ec_shim library for all Zephyr sources
 set(ZEPHYR_CURRENT_LIBRARY ec_shim)
 

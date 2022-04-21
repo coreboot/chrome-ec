@@ -9,8 +9,7 @@ menuconfig PLATFORM_EC_CHARGER
 	select PLATFORM_EC_EXTPOWER
 	depends on PLATFORM_EC_BATTERY
 	help
-	  Enable the EC charging task.  This enables compilation of the
-          charge_state_v2 code.
+	  Enable the EC charging task.
 
 if PLATFORM_EC_CHARGER
 
@@ -36,7 +35,7 @@ config PLATFORM_EC_OCPC
 	  Additionally, `chgnum` is assumed to be the same as the
 	  charge port index.
 
-endchoice  # PLATFORM_EC_CHARGER_TYPE
+endchoice # PLATFORM_EC_CHARGER_TYPE
 
 config PLATFORM_EC_CHARGER_RUNTIME_CONFIG
 	bool "Allow charger configuration at runtime"
@@ -57,7 +56,8 @@ config PLATFORM_EC_CHARGE_MANAGER
 	  barrel jack connector), BC1.2 (Battery Charging 1.2) sources, and
 	  USB-C sources. When multiple charge sources are connected to a
 	  Chromebook simultaneously, the charge manager is responsible for
-	  picking the best source.
+	  picking the best source. This also enables compilation of the
+	  charge_state_v2 code.
 
 	  Note that the charge manager assumes that at least one USB-C power
 	  source is available on the hardware, so cannot be built without
@@ -190,7 +190,7 @@ config PLATFORM_EC_CHARGER_DISCHARGE_ON_AC
 
 if PLATFORM_EC_CHARGER_DISCHARGE_ON_AC
 
-choice "Discharge control method"
+choice PLATFORM_EC_CHARGER_DISCHARGE_MODE
 	prompt "Select the method of controlling discharge"
 	help
 	  Select which method is provided to enable and disable the discharge
@@ -218,9 +218,9 @@ config PLATFORM_EC_CHARGER_DISCHARGE_ON_AC_CUSTOM
 	  It should enable this feature if enabled is true, else disable it.
 	  The function should return EC_SUCCESS
 
-endchoice  # "Discharge control method"
+endchoice # PLATFORM_EC_CHARGER_DISCHARGE_MODE
 
-endif  # PLATFORM_EC_CHARGER_DISCHARGE_ON_AC
+endif # PLATFORM_EC_CHARGER_DISCHARGE_ON_AC
 
 config PLATFORM_EC_CHARGER_BQ25710_PSYS_SENSING
 	bool "Charger monitors PSYS"
@@ -241,6 +241,15 @@ config PLATFORM_EC_CHARGER_BQ25710_CMP_REF_1P2
 	  This changes the charger's internal comparator reference
 	  voltage to 1.2 V. The power-on default is 2.3 V. This must be
 	  enabled if the board was designed for 1.2 V instead of 2.3 V.
+
+config PLATFORM_EC_CHARGER_BQ25710_CMP_POL_EXTERNAL
+	bool "independent comparator output polarity"
+	default n
+	depends on PLATFORM_EC_CHARGER_BQ25710 || PLATFORM_EC_CHARGER_BQ25720
+	help
+	  Set the CMP_POL register. When CMPIN is above internal threshold,
+	  CMPOUT is LOW setting value is 0. When CMPIN is below internal threshold,
+	  CMPOUT is LOW setting value is 1.
 
 config PLATFORM_EC_CHARGER_BQ25710_PKPWR_TOVLD_DEG_CUSTOM
 	bool "PKPWR_TOVLD_DEG override"
@@ -288,6 +297,16 @@ config PLATFORM_EC_CHARGER_BQ25710_BATOC_VTH_MINIMUM
           with EN_BATOC. The minimum threshold is 150% of PROCHOT IDCHG
           on the bq25710 and 133% of PROCHOT IDCHG_TH2 on the
           bq25720. The default threshold is 200% on both chips.
+
+config PLATFORM_EC_CHARGER_BQ25710_PP_COMP
+	bool "Enable independent comparator PROCHOT"
+	default n
+	depends on PLATFORM_EC_CHARGER_BQ25710 || PLATFORM_EC_CHARGER_BQ25720
+	help
+	  Sets the PP_COMP in Prochot Option 1 register. When in low power
+	  mode(Battery only), this bit will lose controllability to independent
+	  comparator PROCHOT profiles. Need to use EN_PROCHOT_LPWR to enable
+	  independent comparator and its PROCHOT profile.
 
 config PLATFORM_EC_CHARGER_BQ25710_PP_INOM
 	bool "Enable PROCHOT on adapter current exceeding INOM"
@@ -562,8 +581,9 @@ config PLATFORM_EC_CHARGER_CHGRAMP_BROKEN
 	  This should be enabled by charger drivers which need it. It cannot
 	  be set otherwise, even in prj.conf
 
-choice "Charge-ramp method"
+choice PLATFORM_EC_CHARGE_RAMP_TYPE
 	prompt "Select the charge-ramp method"
+	optional
 	help
 	  Select the method used for ramping up charging of a battery. It is
 	  preferred to use the hardware method if the charger chip can support
@@ -587,7 +607,7 @@ config PLATFORM_EC_CHARGE_RAMP_SW
 	  current needs of the device. It handles the user plugging chargers in
 	  and removing them.
 
-endchoice  # "Charge-ramp method"
+endchoice # PLATFORM_EC_CHARGE_RAMP_TYPE
 
 config PLATFORM_EC_CONSOLE_CMD_CHARGER_ADC_AMON_BMON
 	bool "Console command: amonbmon"
@@ -626,5 +646,11 @@ config PLATFORM_EC_CONSOLE_CMD_CHARGER_DUMP
 	help
 	  Enable the "charger dump" subcommand. If the charger driver provides
 	  a dump_registers() function, this command shows its register dump.
+
+# TODO(b/229236582): Move this to devicetree
+config PLATFORM_EC_DEDICATED_CHARGE_PORT
+	bool "Dedicated charging port"
+	help
+	  Enable if there is a dedicated charging port on the system.
 
 endif # PLATFORM_EC_CHARGER

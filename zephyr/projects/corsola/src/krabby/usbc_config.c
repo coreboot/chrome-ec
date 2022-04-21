@@ -36,89 +36,44 @@ const struct charger_config_t chg_chips[] = {
 	},
 };
 
-/* PPC */
-struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{
-		.i2c_port = I2C_PORT_PPC0,
-		.i2c_addr_flags = RT1739_ADDR1_FLAGS,
-		.drv = &rt1739_ppc_drv,
-		.frs_en = GPIO_SIGNAL(DT_NODELABEL(usb_c0_ppc_frsinfo)),
-	},
-	{
-		.i2c_port = I2C_PORT_PPC1,
-		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
-		.drv = &syv682x_drv,
-		.frs_en = GPIO_SIGNAL(DT_ALIAS(gpio_usb_c1_frs_en)),
-	},
-};
-unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
-
-struct bc12_config bc12_ports[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{ .drv = &rt1739_bc12_drv },
-	{ .drv = &rt9490_bc12_drv },
-};
-
 void c0_bc12_interrupt(enum gpio_signal signal)
 {
 	rt1739_interrupt(0);
 }
 
-void c1_bc12_interrupt(enum gpio_signal signal)
-{
-	rt9490_interrupt(1);
-}
-
-
 static void board_sub_bc12_init(void)
 {
-	if (corsola_get_db_type() == CORSOLA_DB_TYPEC)
-		gpio_enable_dt_interrupt(
-			GPIO_INT_FROM_NODELABEL(int_usb_c1_bc12_charger));
-	else
+	if (corsola_get_db_type() == CORSOLA_DB_HDMI) {
 		/* If this is not a Type-C subboard, disable the task. */
 		task_disable_task(TASK_ID_USB_CHG_P1);
+	}
 }
 /* Must be done after I2C and subboard */
-DECLARE_HOOK(HOOK_INIT, board_sub_bc12_init, HOOK_PRIO_INIT_I2C + 1);
+DECLARE_HOOK(HOOK_INIT, board_sub_bc12_init, HOOK_PRIO_POST_I2C);
 
 static void board_usbc_init(void)
 {
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_ppc_bc12));
 }
-DECLARE_HOOK(HOOK_INIT, board_usbc_init, HOOK_PRIO_DEFAULT + 1);
-
-/* TCPC */
-struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{
-		.bus_type = EC_BUS_TYPE_EMBEDDED,
-		/* TCPC is embedded within EC so no i2c config needed */
-		.drv = &it8xxx2_tcpm_drv,
-		/* Alert is active-low, push-pull */
-		.flags = 0,
-	},
-	{
-		.bus_type = EC_BUS_TYPE_EMBEDDED,
-		/* TCPC is embedded within EC so no i2c config needed */
-		.drv = &it8xxx2_tcpm_drv,
-		/* Alert is active-low, push-pull */
-		.flags = 0,
-	},
-};
+DECLARE_HOOK(HOOK_INIT, board_usbc_init, HOOK_PRIO_POST_DEFAULT);
 
 void ppc_interrupt(enum gpio_signal signal)
 {
-	if (signal == GPIO_SIGNAL(DT_ALIAS(gpio_usb_c1_ppc_int_odl)))
+	if (signal == GPIO_SIGNAL(DT_ALIAS(gpio_usb_c1_ppc_int_odl))) {
 		syv682x_interrupt(1);
+	}
 }
 
 int ppc_get_alert_status(int port)
 {
-	if (port == 0)
+	if (port == 0) {
 		return gpio_pin_get_dt(
 			GPIO_DT_FROM_NODELABEL(usb_c0_ppc_bc12_int_odl)) == 0;
-	if (port == 1 && corsola_get_db_type() == CORSOLA_DB_TYPEC)
+	}
+	if (port == 1 && corsola_get_db_type() == CORSOLA_DB_TYPEC) {
 		return gpio_pin_get_dt(
 			GPIO_DT_FROM_ALIAS(gpio_usb_c1_ppc_int_odl)) == 0;
+	}
 
 	return 0;
 }
@@ -167,8 +122,9 @@ int board_set_active_charge_port(int port)
 	int i;
 	int is_valid_port = (port >= 0 && port < board_get_usb_pd_port_count());
 
-	if (!is_valid_port && port != CHARGE_PORT_NONE)
+	if (!is_valid_port && port != CHARGE_PORT_NONE) {
 		return EC_ERROR_INVAL;
+	}
 
 	if (port == CHARGE_PORT_NONE) {
 		CPRINTS("Disabling all charger ports");
@@ -179,8 +135,9 @@ int board_set_active_charge_port(int port)
 			 * Do not return early if one fails otherwise we can
 			 * get into a boot loop assertion failure.
 			 */
-			if (ppc_vbus_sink_enable(i, 0))
+			if (ppc_vbus_sink_enable(i, 0)) {
 				CPRINTS("Disabling C%d as sink failed.", i);
+			}
 		}
 
 		return EC_SUCCESS;
@@ -199,11 +156,13 @@ int board_set_active_charge_port(int port)
 	 * requested charge port.
 	 */
 	for (i = 0; i < ppc_cnt; i++) {
-		if (i == port)
+		if (i == port) {
 			continue;
+		}
 
-		if (ppc_vbus_sink_enable(i, 0))
+		if (ppc_vbus_sink_enable(i, 0)) {
 			CPRINTS("C%d: sink path disable failed.", i);
+		}
 	}
 
 	/* Enable requested charge port. */
@@ -247,10 +206,12 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 #ifdef CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
 enum adc_channel board_get_vbus_adc(int port)
 {
-	if (port == 0)
+	if (port == 0) {
 		return  ADC_VBUS_C0;
-	if (port == 1)
+	}
+	if (port == 1) {
 		return  ADC_VBUS_C1;
+	}
 	CPRINTSUSB("Unknown vbus adc port id: %d", port);
 	return ADC_VBUS_C0;
 }

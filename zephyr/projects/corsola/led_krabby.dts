@@ -1,0 +1,38 @@
+/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+/ {
+	pwmleds {
+		compatible = "pwm-leds";
+		/* NOTE: &pwm number needs same with channel number */
+		led_power_white: ec_led1_odl {
+			pwms = <&pwm0 PWM_CHANNEL_0 PWM_POLARITY_INVERTED>;
+		};
+		led_battery_amber: ec_led2_odl {
+			pwms = <&pwm1 PWM_CHANNEL_1 PWM_POLARITY_INVERTED>;
+		};
+		led_battery_white: ec_led3_odl {
+			pwms = <&pwm2 PWM_CHANNEL_2 PWM_POLARITY_INVERTED>;
+		};
+	};
+};
+
+/* LED1 */
+&pwm0 {
+	status = "okay";
+	prescaler-cx = <PWM_PRESCALER_C4>;
+};
+
+/* LED2 */
+&pwm1 {
+	status = "okay";
+	prescaler-cx = <PWM_PRESCALER_C4>;
+};
+
+/* LED3 */
+&pwm2 {
+	status = "okay";
+	prescaler-cx = <PWM_PRESCALER_C4>;
+};

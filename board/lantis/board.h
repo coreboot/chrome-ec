@@ -36,6 +36,7 @@
 
 /* Sensors */
 #define CONFIG_ACCEL_BMA255		/* Lid accel */
+#define CONFIG_ACCEL_BMA4XX		/* 2nd source Lid accel */
 #define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -64,6 +65,7 @@
 /* Keyboard */
 #define CONFIG_KEYBOARD_FACTORY_TEST
 #define CONFIG_PWM_KBLIGHT
+#define CONFIG_KEYBOARD_KEYPAD
 
 /* TCPC */
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
@@ -136,6 +138,9 @@ enum battery_type {
 	BATTERY_SIMPLO_COS,
 	BATTERY_SIMPLO_HIGHPOWER,
 	BATTERY_COS,
+	BATTERY_DYNAPACK_COS_44WH,
+	BATTERY_DYNAPACK_ATL_44WH,
+	BATTERY_SIMPLO_HIGHPOWER_44WH,
 	BATTERY_TYPE_COUNT,
 };
 

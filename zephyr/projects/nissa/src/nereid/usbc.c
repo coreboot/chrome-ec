@@ -15,7 +15,7 @@
 #include "driver/tcpm/ps8xxx_public.h"
 #include "driver/tcpm/tcpci.h"
 
-#include "sub_board.h"
+#include "nissa_common.h"
 
 LOG_MODULE_DECLARE(nissa, CONFIG_NISSA_LOG_LEVEL);
 
@@ -282,7 +282,7 @@ static void notify_c1_chips(void)
 {
 	schedule_deferred_pd_interrupt(1);
 	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
-	sm5803_interrupt(1);
+	/* Charger is handled in board_process_pd_alert */
 }
 
 static void check_c1_line(void)
@@ -309,6 +309,47 @@ void usb_c1_interrupt(enum gpio_signal s)
 	hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
 }
 
+/*
+ * Check state of IRQ lines at startup, ensuring an IRQ that happened before
+ * the EC started up won't get lost (leaving the IRQ line asserted and blocking
+ * any further interrupts on the port).
+ *
+ * Although the PD task will check for pending TCPC interrupts on startup,
+ * the charger sharing the IRQ will not be polled automatically.
+ */
+void board_handle_initial_typec_irq(void)
+{
+	check_c0_line();
+	check_c1_line();
+}
+/*
+ * This must run after sub-board detection (which happens in EC main()),
+ * but isn't depended on by anything else either.
+ */
+DECLARE_HOOK(HOOK_INIT, board_handle_initial_typec_irq, HOOK_PRIO_LAST);
+
+/*
+ * Handle charger interrupts in the PD task. Not doing so can lead to a priority
+ * inversion where we fail to respond to TCPC alerts quickly enough because we
+ * don't get another edge on a shared IRQ until the charger interrupt is cleared
+ * (or the IRQ is polled again), which happens in the low-priority charger task:
+ * the high-priority type-C handler is thus blocked on the lower-priority
+ * charger.
+ *
+ * To avoid that, we run charger interrupts at the same priority.
+ */
+void board_process_pd_alert(int port)
+{
+	/*
+	 * Port 0 doesn't use an external TCPC, so its interrupts don't need
+	 * this special handling.
+	 */
+	if (port == 1 &&
+	    !gpio_pin_get_dt(GPIO_DT_FROM_ALIAS(gpio_usb_c1_int_odl))) {
+		sm5803_handle_interrupt(port);
+	}
+}
+
 int pd_snk_is_vbus_provided(int port)
 {
 	int chg_det = 0;
@@ -316,4 +357,22 @@ int pd_snk_is_vbus_provided(int port)
 	sm5803_get_chg_det(port, &chg_det);
 
 	return chg_det;
+}
+
+
+const struct usb_mux *nissa_get_c1_sb_mux(void)
+{
+	/*
+	 * Use TCPC-integrated mux via CONFIG_STANDARD_OUTPUT register
+	 * in PS8745.
+	 */
+	static const struct usb_mux usbc1_tcpc_mux = {
+		.usb_port = 1,
+		.i2c_port = I2C_PORT_USB_C1_TCPC,
+		.i2c_addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
+		.driver = &tcpci_tcpm_usb_mux_driver,
+		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+	};
+
+	return &usbc1_tcpc_mux;
 }

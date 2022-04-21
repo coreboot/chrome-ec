@@ -14,14 +14,14 @@
 #include "emul/emul_common_i2c.h"
 #include "hooks.h"
 #include "i2c.h"
-#include "stubs.h"
+#include "test/drivers/stubs.h"
 #include "usb_prl_sm.h"
 #include "usb_tc_sm.h"
 #include "chipset.h"
 
 #include "driver/retimer/bb_retimer.h"
-#include "test_state.h"
-#include "utils.h"
+#include "test/drivers/test_state.h"
+#include "test/drivers/utils.h"
 
 #define GPIO_USB_C1_LS_EN_PATH DT_PATH(named_gpios, usb_c1_ls_en)
 #define GPIO_USB_C1_LS_EN_PORT DT_GPIO_PIN(GPIO_USB_C1_LS_EN_PATH, gpios)
@@ -411,8 +411,11 @@ ZTEST_USER(bb_retimer, test_bb_set_dfp_state)
 	conn = bb_emul_get_reg(emul, BB_RETIMER_REG_CONNECTION_STATE);
 	exp_conn = BB_RETIMER_DATA_CONNECTION_PRESENT |
 		   BB_RETIMER_TBT_CONNECTION |
-		   BB_RETIMER_VPRO_DOCK_DP_OVERDRIVE |
 		   BB_RETIMER_ACTIVE_PASSIVE;
+
+	if (IS_ENABLED(CONFIG_USBC_RETIMER_INTEL_BB_VPRO_CAPABLE))
+		exp_conn |= BB_RETIMER_VPRO_DOCK_DP_OVERDRIVE;
+
 	zassert_equal(exp_conn, conn, "Expected state 0x%lx, got 0x%lx",
 		      exp_conn, conn);
 

@@ -8,6 +8,7 @@
 #include <shell/shell_uart.h>
 #include <zephyr.h>
 
+#include "ap_power/ap_pwrseq.h"
 #include "button.h"
 #include "chipset.h"
 #include "ec_tasks.h"
@@ -78,7 +79,8 @@ void ec_app_main(void)
 	 * cooperative thread priority, blocking all preemptive threads until
 	 * the deferred work is completed.
 	 */
-	k_thread_priority_set(&k_sys_work_q.thread, LOWEST_THREAD_PRIORITY);
+	k_thread_priority_set(&k_sys_work_q.thread,
+			      EC_TASK_PRIORITY(EC_SYSWORKQ_PRIO));
 
 	/* Call init hooks before main tasks start */
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOOKS)) {
@@ -95,5 +97,8 @@ void ec_app_main(void)
 	/* Start the EC tasks after performing all main initialization */
 	if (IS_ENABLED(CONFIG_SHIMMED_TASKS)) {
 		start_ec_tasks();
+	}
+	if (IS_ENABLED(CONFIG_AP_PWRSEQ)) {
+		ap_pwrseq_task_start();
 	}
 }

@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+"""Define zmake projects for lazor."""
+
 register_npcx_project(
     project_name="lazor",
     zephyr_board="npcx7",
@@ -15,6 +17,7 @@ register_npcx_project(
         "keyboard.dts",
         "led.dts",
         "motionsense.dts",
-        "pwm.dts",
+        "pwm_led.dts",
+        "usbc.dts",
     ],
 )
