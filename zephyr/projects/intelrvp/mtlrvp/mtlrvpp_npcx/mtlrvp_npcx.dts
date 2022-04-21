@@ -4,6 +4,15 @@
  */
 
 / {
+	hibernate-wake-pins {
+		compatible = "cros-ec,hibernate-wake-pins";
+		wakeup-irqs = <
+			&int_ac_present
+			&int_lid_open
+			&int_power_button
+		>;
+	};
+
 	named-i2c-ports {
 		compatible = "named-i2c-ports";
 
@@ -15,6 +24,10 @@
 			i2c-port = <&i2c7_0>;
 			enum-name = "I2C_PORT_CHARGER";
 		};
+		eeprom {
+			i2c-port = <&i2c7_0>;
+			enum-name = "I2C_PORT_EEPROM";
+		};
 		typec_aic1: typec-aic1{
 			i2c-port = <&i2c0_0>;
 			enum-name = "I2C_PORT_TYPEC_AIC_1";
@@ -22,6 +35,31 @@
 		typec_aic2: typec-aic2{
 			i2c-port = <&i2c2_0>;
 			enum-name = "I2C_PORT_TYPEC_AIC_2";
+		};
+	};
+
+	named-adc-channels {
+		compatible = "named-adc-channels";
+
+		adc_ambient: ambient {
+			label = "ADC_TEMP_SNS_AMBIENT";
+			enum-name = "ADC_TEMP_SENSOR_1";
+			io-channels = <&adc0 3>;
+		};
+		adc_ddr: ddr {
+			label = "ADC_TEMP_SNS_DDR";
+			enum-name = "ADC_TEMP_SENSOR_2";
+			io-channels = <&adc0 4>;
+		};
+		adc_skin: skin {
+			label = "ADC_TEMP_SNS_SKIN";
+			enum-name = "ADC_TEMP_SENSOR_3";
+			io-channels = <&adc0 2>;
+		};
+		adc_vr: vr {
+			label = "ADC_TEMP_SNS_VR";
+			enum-name = "ADC_TEMP_SENSOR_4";
+			io-channels = <&adc0 1>;
 		};
 	};
 };

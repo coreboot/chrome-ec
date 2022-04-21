@@ -9,16 +9,17 @@
 #include <shell/shell.h>
 
 #include "common.h"
-#include "console.h"
 #include "timer.h"
 #include "task.h"
 
-/* We need to ensure that is one lower priority for the deferred task */
-BUILD_ASSERT(CONFIG_NUM_PREEMPT_PRIORITIES + 1 >= TASK_ID_COUNT,
-	     "Must increase number of available preempt priorities");
+/* Ensure that the idle task is at lower priority than lowest priority task. */
+BUILD_ASSERT(EC_TASK_PRIORITY(EC_TASK_PRIO_LOWEST) < K_IDLE_PRIO,
+	"CONFIG_NUM_PREEMPT_PRIORITIES too small, some tasks would run at "
+	"idle priority");
+
 
 /* Declare all task stacks here */
-#define CROS_EC_TASK(name, e, p, size) \
+#define CROS_EC_TASK(name, e, p, size, pr) \
 	K_THREAD_STACK_DEFINE(name##_STACK, size);
 #define TASK_TEST(name, e, p, size) CROS_EC_TASK(name, e, p, size)
 CROS_EC_TASK_LIST
@@ -46,6 +47,8 @@ struct task_ctx_cfg {
 	void (*entry)(void *p);
 	/** The parameter that is passed into the task entry point */
 	intptr_t parameter;
+	/** The task priority */
+	int priority;
 };
 
 struct task_ctx_base_data {
@@ -64,12 +67,13 @@ struct task_ctx_data {
 	struct task_ctx_base_data base;
 };
 
-#define CROS_EC_TASK(_name, _entry, _parameter, _size)                 \
+#define CROS_EC_TASK(_name, _entry, _parameter, _size, _prio)          \
 	{                                                              \
 		.entry = _entry,                                       \
 		.parameter = _parameter,                               \
 		.stack = _name##_STACK,                                \
 		.stack_size = _size,                                   \
+		.priority = EC_TASK_PRIORITY(_prio),                   \
 		COND_CODE_1(CONFIG_THREAD_NAME, (.name = #_name,), ()) \
 	},
 #define TASK_TEST(_name, _entry, _parameter, _size) \
@@ -82,14 +86,11 @@ const static struct task_ctx_cfg shimmed_tasks_cfg[TASK_ID_COUNT] = {
 };
 
 static struct task_ctx_data shimmed_tasks_data[TASK_ID_COUNT];
-static struct task_ctx_base_data sysworkq_task_data;
-/* Task timer structures, one extra for TASK_ID_SYSWORKQ. Keep separate from
- * the context ones to avoid memory holes due to int64_t fields in struct
- * _timeout.
+static struct task_ctx_base_data extra_tasks_data[EXTRA_TASK_COUNT];
+/* Task timer structures. Keep separate from the context ones to avoid memory
+ * holes due to int64_t fields in struct _timeout.
  */
-static struct k_timer shimmed_tasks_timers[TASK_ID_COUNT + 1];
-
-#define TASK_ID_SYSWORKQ TASK_ID_COUNT
+static struct k_timer shimmed_tasks_timers[TASK_ID_COUNT + EXTRA_TASK_COUNT];
 
 static int tasks_started;
 #undef CROS_EC_TASK
@@ -97,8 +98,12 @@ static int tasks_started;
 
 static struct task_ctx_base_data *task_get_base_data(task_id_t cros_task_id)
 {
-	if (cros_task_id == TASK_ID_SYSWORKQ) {
-		return &sysworkq_task_data;
+	if (cros_task_id >= TASK_ID_COUNT + EXTRA_TASK_COUNT) {
+		return NULL;
+	}
+
+	if (cros_task_id >= TASK_ID_COUNT) {
+		return &extra_tasks_data[cros_task_id - TASK_ID_COUNT];
 	}
 
 	return &shimmed_tasks_data[cros_task_id].base;
@@ -301,15 +306,9 @@ ZTEST_RULE(set_test_runner_tid, set_test_runner_tid_rule_before, NULL);
 #endif /* CONFIG_SET_TEST_RUNNER_TID_RULE */
 #endif /* TEST_BUILD */
 
-BUILD_ASSERT((K_PRIO_PREEMPT(TASK_ID_COUNT - 1) < K_IDLE_PRIO),
-	"CONFIG_NUM_PREEMPT_PRIORITIES too small, some tasks would run at "
-	"idle priority");
-
 void start_ec_tasks(void)
 {
-	int priority;
-
-	for (size_t i = 0; i < TASK_ID_COUNT + 1; ++i) {
+	for (size_t i = 0; i < TASK_ID_COUNT + EXTRA_TASK_COUNT; ++i) {
 		k_timer_init(&shimmed_tasks_timers[i], timer_expire, NULL);
 	}
 
@@ -317,26 +316,10 @@ void start_ec_tasks(void)
 		struct task_ctx_data *const data = &shimmed_tasks_data[i];
 		const struct task_ctx_cfg *const cfg = &shimmed_tasks_cfg[i];
 
-		priority = K_PRIO_PREEMPT(TASK_ID_COUNT - i - 1);
-
 #ifdef TEST_BUILD
 		/* Do not create thread for test runner; it will be set later */
 		if (i == TASK_ID_TEST_RUNNER) {
 			data->zephyr_tid = NULL;
-			continue;
-		}
-#endif
-
-#ifdef HAS_CONSOLE_STUB_TASK
-		/*
-		 * The console is run on the built-in Zephyr shell thread.
-		 * The TASK_ID_CONSOLE_STUB is a placeholder to determine
-		 * the correct priority of the shell thread based on the
-		 * enabled cros-ec tasks.
-		 */
-		if (i == TASK_ID_CONSOLE_STUB) {
-			data->zephyr_tid = NULL;
-			uart_shell_set_priority(priority);
 			continue;
 		}
 #endif
@@ -354,7 +337,7 @@ void start_ec_tasks(void)
 			(void *)cfg,
 			data,
 			NULL,
-			priority,
+			cfg->priority,
 			0,
 			K_NO_WAIT);
 
@@ -376,13 +359,11 @@ int init_signals(const struct device *unused)
 {
 	ARG_UNUSED(unused);
 
-	for (size_t i = 0; i < TASK_ID_COUNT; ++i) {
-		struct task_ctx_data *const data = &shimmed_tasks_data[i];
+	for (size_t i = 0; i < TASK_ID_COUNT + EXTRA_TASK_COUNT; ++i) {
+		struct task_ctx_base_data *const data = task_get_base_data(i);
 
-		k_poll_signal_init(&data->base.new_event);
+		k_poll_signal_init(&data->new_event);
 	}
-
-	k_poll_signal_init(&sysworkq_task_data.new_event);
 
 	return 0;
 }

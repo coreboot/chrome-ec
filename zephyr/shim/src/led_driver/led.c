@@ -24,18 +24,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(gpio_led, LOG_LEVEL_ERR);
 
-#define LED_ONE_SEC (1000 / HOOK_TICK_INTERVAL_MS)
-
-#define BAT_LED_ON 1
-#define BAT_LED_OFF 0
-
 #define LED_COLOR_NODE  DT_PATH(led_colors)
-
-const enum ec_led_id supported_led_ids[] = {
-	EC_LED_ID_BATTERY_LED,
-};
-
-const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
 struct led_color_node_t {
 	int led_color;
@@ -78,11 +67,12 @@ struct node_prop_t {
  * led_colors[1].acc_period = period value of color-0 + color-1 nodes
  * led_colors[2].acc_period = period value of color-0 + color-1 + color-2 nodes
  * and so on. If period prop or color node doesn't exist, period val is 0
+ * It is stored in terms of number of ticks by dividing it with
+ * HOOT_TICK_INTERVAL_MS
  */
 
-#define PERIOD_VAL(id) COND_CODE_1(DT_NODE_HAS_PROP(id, period),	\
-				   (DT_PROP(id, period)),		\
-				   (0))
+#define PERIOD_VAL(id) COND_CODE_1(DT_NODE_HAS_PROP(id, period_ms),	\
+		(DT_PROP(id, period_ms) / HOOK_TICK_INTERVAL_MS), (0))
 
 #define LED_PERIOD(color_num, state_id)					\
 	PERIOD_VAL(DT_CHILD(state_id, color_##color_num))
@@ -220,17 +210,20 @@ static int find_node(void)
 #define GET_PERIOD(n_idx, c_idx)  node_array[n_idx].led_colors[c_idx].acc_period
 #define GET_COLOR(n_idx, c_idx)   node_array[n_idx].led_colors[c_idx].led_color
 
-static int find_color(int node_idx, int ticks)
+static int find_color(int node_idx, uint32_t ticks)
 {
 	int color_idx = 0;
 
 	/* If period value at index 0 is not 0, it's a blinking LED */
 	if (GET_PERIOD(node_idx, 0) != 0) {
 		/*  Period is accumulated at the last index */
-		ticks = (ticks * LED_ONE_SEC) %
-			GET_PERIOD(node_idx, MAX_COLOR - 1);
+		ticks = ticks % GET_PERIOD(node_idx, MAX_COLOR - 1);
 
 		for (color_idx = 0; color_idx < MAX_COLOR; color_idx++) {
+			/*
+			 * Period value that we use here is in terms of number
+			 * of ticks stored during initialization of the struct
+			 */
 			if (ticks < GET_PERIOD(node_idx, color_idx))
 				break;
 		}
@@ -243,10 +236,17 @@ static void board_led_set_color(void)
 {
 	int color = LED_OFF;
 	int node = 0;
-	static int ticks;
+	static uint32_t ticks;
 
 	ticks++;
 
+	/*
+	 * Find a node that matches the current state of the system. Depending
+	 * on the policy defined in led.dts, a node could depend on power-state,
+	 * chipset-state, extra flags like battery percentage etc.
+	 * We should always find a node that indicates the LED Behavior for
+	 * current system state.
+	 */
 	node = find_node();
 
 	if (node < 0)
@@ -263,7 +263,7 @@ static void led_tick(void)
 	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
 		board_led_set_color();
 }
-DECLARE_HOOK(HOOK_SECOND, led_tick, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
 
 void led_control(enum ec_led_id led_id, enum ec_led_state state)
 {

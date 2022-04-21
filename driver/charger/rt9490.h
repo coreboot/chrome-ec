@@ -238,11 +238,16 @@ struct rt9490_init_setting {
 #define RT9490_AUTO_MIVR			BIT(2)
 #define RT9490_JEITA_COLD_HOT			BIT(0)
 
+/* ADD CTRL1 */
+#define RT9490_PWM_1MHZ_EN			BIT(4)
+
 extern const struct charger_drv rt9490_drv;
 extern const struct bc12_drv rt9490_bc12_drv;
 
 void rt9490_interrupt(int port);
 
 int rt9490_enable_adc(int chgnum, bool en);
+/* enable pwm frequency 1MHz mode */
+int rt9490_enable_pwm_1mhz(int chgnum, bool en);
 
 #endif /* __CROS_EC_RT9490_H */

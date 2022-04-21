@@ -144,6 +144,7 @@ void ap_power_force_shutdown(enum ap_power_shutdown_reason reason)
 {
 	board_ap_power_force_shutdown();
 	ap_power_ev_send_callbacks(AP_POWER_SHUTDOWN);
+	ap_power_ev_send_callbacks(AP_POWER_SHUTDOWN_COMPLETE);
 }
 
 void s3s0_action_handler(void)
@@ -172,12 +173,15 @@ enum power_states_ndsx chipset_pwr_sm_run(enum power_states_ndsx curr_state)
 	case SYS_POWER_STATE_S5:
 		break;
 	case SYS_POWER_STATE_S3S0:
+		board_ap_power_action_s3_s0();
 		s3s0_action_handler();
 		break;
 	case SYS_POWER_STATE_S0S3:
+		board_ap_power_action_s0_s3();
 		s0s3_action_handler();
 		break;
 	case SYS_POWER_STATE_S0:
+		board_ap_power_action_s0();
 		s0_action_handler();
 		break;
 	default:

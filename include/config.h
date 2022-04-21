@@ -1113,6 +1113,14 @@
  */
 #undef CONFIG_CHARGER_BQ25710_CMP_REF_1P2
 
+/*
+ * This config option is used to change the charger's independent comparator
+ * output polarity. The default setting is CMPIN is above internal threshold,
+ * CMPOUT is LOW (internal hysteresis).
+ */
+#undef CONFIG_CHARGER_BQ25710_CMP_POL_EXTERNAL
+
+
 /* Enable if CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG should be applied */
 #undef CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG_CUSTOM
 
@@ -1456,6 +1464,9 @@
  * and deasserting RSMRST to PCH.
  */
 #undef CONFIG_CHIPSET_X86_RSMRST_DELAY
+
+/* Passthrough RSMRST_L de-assertion after S5 */
+#undef CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
 
 /* Support PMIC reset(using LDO_EN) in chipset */
 #undef CONFIG_CHIPSET_HAS_PLATFORM_PMIC_RESET
@@ -6313,6 +6324,7 @@
 
 #if defined(CONFIG_CHIPSET_APL_GLK)
 #define CONFIG_CHIPSET_HAS_PRE_INIT_CALLBACK
+#define CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
 #endif
 
 #if defined(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540) || \

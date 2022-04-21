@@ -341,6 +341,12 @@ static int rt9490_init_setting(int chgnum)
 	return EC_SUCCESS;
 }
 
+int rt9490_enable_pwm_1mhz(int chgnum, bool en)
+{
+	return rt9490_update8(chgnum, RT9490_REG_ADD_CTRL1, RT9490_PWM_1MHZ_EN,
+			en ? MASK_SET : MASK_CLR);
+}
+
 static void rt9490_init(int chgnum)
 {
 	int ret = rt9490_init_setting(chgnum);
