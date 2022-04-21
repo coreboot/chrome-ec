@@ -32,7 +32,6 @@
 #define BREATH_HOLD_LENGTH	50
 #define BREATH_OFF_LENGTH	200
 
-
 const enum ec_led_id supported_led_ids[] = {
 	EC_LED_ID_BATTERY_LED,
 	EC_LED_ID_POWER_LED,
@@ -46,6 +45,10 @@ enum breath_status {
 	BREATH_OFF,
 };
 
+enum led_port {
+	RIGHT_PORT = 1,
+	LEFT_PORT
+};
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
@@ -254,32 +257,52 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 	return EC_SUCCESS;
 }
 
+static int led_get_charge_percent(void)
+{
+	return DIV_ROUND_NEAREST(charge_get_display_charge(), 10);
+}
+
 static void select_active_port_led(int port)
 {
-	if ((port == USBC_PORT_C0) || (port == USBC_PORT_C1)) {
-		gpio_set_level(GPIO_LEFT_SIDE, 0);
-		gpio_set_level(GPIO_RIGHT_SIDE, 1);
-	} else if ((port == USBC_PORT_C2) || (port == USBC_PORT_C3)) {
-		gpio_set_level(GPIO_LEFT_SIDE, 1);
-		gpio_set_level(GPIO_RIGHT_SIDE, 0);
-	} else if ((charge_get_state() == PWR_STATE_DISCHARGE &&
-			 charge_get_percent() < 10) ||
+	if ((charge_get_state() == PWR_STATE_DISCHARGE &&
+			 led_get_charge_percent() < 10) ||
 			 charge_get_state() == PWR_STATE_ERROR) {
 		gpio_set_level(GPIO_LEFT_SIDE, 1);
 		gpio_set_level(GPIO_RIGHT_SIDE, 1);
+	} else if (port == RIGHT_PORT) {
+		gpio_set_level(GPIO_LEFT_SIDE, 0);
+		gpio_set_level(GPIO_RIGHT_SIDE, 1);
+	} else if (port == LEFT_PORT) {
+		gpio_set_level(GPIO_LEFT_SIDE, 1);
+		gpio_set_level(GPIO_RIGHT_SIDE, 0);
 	} else {
 		gpio_set_level(GPIO_LEFT_SIDE, 0);
 		gpio_set_level(GPIO_RIGHT_SIDE, 0);
 	}
 }
 
+static int led_power_enable(void)
+{
+	if (gpio_get_level(GPIO_LEFT_SIDE) ||
+		gpio_get_level(GPIO_RIGHT_SIDE))
+		return true;
+
+	return false;
+}
+
 static void set_active_port_color(int color)
 {
-	int port = charge_manager_get_active_charge_port();
+	int usbc_port = charge_manager_get_active_charge_port();
+	int port = 0;
+
+	if ((usbc_port == USBC_PORT_C0) || (usbc_port == USBC_PORT_C1))
+		port = RIGHT_PORT;
+	else if ((usbc_port == USBC_PORT_C2) || (usbc_port == USBC_PORT_C3))
+		port = LEFT_PORT;
 
 	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED)) {
 		select_active_port_led(port);
-		set_pwm_led_color(PWM_LED0, port ? color : -1);
+		set_pwm_led_color(PWM_LED0, led_power_enable() ? color : -1);
 	}
 }
 
@@ -297,7 +320,7 @@ static void led_set_battery(void)
 		break;
 	case PWR_STATE_DISCHARGE:
 		if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED)) {
-			if (charge_get_percent() < 10)
+			if (led_get_charge_percent() < 10)
 				set_active_port_color((battery_ticks & 0x2) ?
 					EC_LED_COLOR_RED : -1);
 			else
@@ -307,6 +330,7 @@ static void led_set_battery(void)
 	case PWR_STATE_ERROR:
 		set_active_port_color((battery_ticks & 0x2) ?
 				EC_LED_COLOR_RED : -1);
+		break;
 	case PWR_STATE_CHARGE_NEAR_FULL:
 		set_active_port_color(EC_LED_COLOR_GREEN);
 		break;

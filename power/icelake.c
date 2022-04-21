@@ -51,7 +51,7 @@ const struct power_signal_info power_signal_list[] = {
 		.name = "SLP_S4_DEASSERTED",
 	},
 	[X86_SLP_S5_DEASSERTED] = {
-		.gpio = SLP_S5_SIGNAL_L,
+		.gpio = (enum gpio_signal)SLP_S5_SIGNAL_L,
 		.flags = POWER_SIGNAL_ACTIVE_HIGH,
 		.name = "SLP_S5_DEASSERTED",
 	},
@@ -118,6 +118,15 @@ void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 		power_5v_enable(task_get_current(), 0);
 	else
 		GPIO_SET_LEVEL(GPIO_EN_PP5000, 0);
+
+	/*
+	 * For JSL, we may not catch the DSW power good transitioning if this
+	 * occurs in suspend as our ADC interrupts are disabled for power
+	 * reasons. Therefore, kick the chipset state machine in order to catch
+	 * up with the current state of affairs.
+	 */
+	if (IS_ENABLED(CONFIG_CHIPSET_JASPERLAKE))
+		power_signal_interrupt(GPIO_PG_EC_DSW_PWROK);
 
 	/*
 	 * TODO(b/111810925): Replace this wait with

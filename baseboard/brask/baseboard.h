@@ -59,12 +59,7 @@
 /* Support Barrel Jack */
 #undef CONFIG_DEDICATED_CHARGE_PORT_COUNT
 #define CONFIG_DEDICATED_CHARGE_PORT_COUNT 1
-/*
- * TODO(b/197475210): Don't allow the system to boot to S0 when
- * the power is lower than CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON
- * since there is no battery.
- */
-#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		30000
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		45000
 
 /* Chipset config */
 #define CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540
@@ -76,6 +71,7 @@
 #define CONFIG_POWER_S4_RESIDENCY
 #define CONFIG_POWER_SLEEP_FAILURE_DETECTION
 #define CONFIG_POWER_TRACK_HOST_SLEEP_STATE
+#define CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
 
 /*
  * TODO(b/191742284): When DAM enabled coreboot image is flashed on top of DAM

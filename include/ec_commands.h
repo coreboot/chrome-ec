@@ -5667,6 +5667,15 @@ struct ec_response_charge_port_count {
 	uint8_t port_count;
 } __ec_align1;
 
+/*
+ * This command enable/disable dynamic PDO selection.
+ */
+#define EC_CMD_USB_PD_DPS_CONTROL 0x0106
+
+struct ec_params_usb_pd_dps_control {
+	uint8_t enable;
+} __ec_align1;
+
 /* Write USB-PD device FW */
 #define EC_CMD_USB_PD_FW_UPDATE 0x0110
 
@@ -7028,14 +7037,6 @@ struct ec_response_pchg_update {
 } __ec_align4;
 
 
-/*****************************************************************************
- * Get displayable charge percent
- *
- * Return
- * EC_RES_SUCCESS : Values successfully read
- * EC_RES_UNAVAILABLE : Values are currently unavailable,
- *			e.g. unresponsive battery.
- */
 #define EC_CMD_DISPLAY_SOC 0x0137
 
 struct ec_response_display_soc {
@@ -7082,13 +7083,19 @@ struct ec_response_i2c_control {
 	} cmd_response;
 } __ec_align_size1;
 
-#define EC_CMD_RGB_KEYBOARD 0x013A
+#define EC_CMD_RGBKBD_SET_COLOR	0x013A
+#define EC_CMD_RGBKBD		0x013B
+
+#define EC_RGBKBD_MAX_KEY_COUNT		128
+#define EC_RGBKBD_MAX_RGB_COLOR		0xFFFFFF
 
 enum rgbkbd_state {
 	/* RGB keyboard is reset and not initialized. */
 	RGBKBD_STATE_RESET = 0,
 	/* RGB keyboard is initialized but not enabled. */
 	RGBKBD_STATE_INITIALIZED,
+	/* RGB keyboard is disabled. */
+	RGBKBD_STATE_DISABLED,
 	/* RGB keyboard is enabled and ready to receive a command. */
 	RGBKBD_STATE_ENABLED,
 
@@ -7096,6 +7103,26 @@ enum rgbkbd_state {
 	RGBKBD_STATE_COUNT,
 };
 
+enum ec_rgbkbd_subcmd {
+	EC_RGBKBD_SUBCMD_CLEAR = 1,
+	EC_RGBKBD_SUBCMD_COUNT
+};
+
+struct ec_params_rgbkbd {
+	uint8_t subcmd;         /* Sub-command (enum ec_rgbkbd_subcmd) */
+	union {
+		struct rgb_s color;
+	};
+} __ec_align1;
+
+struct ec_params_rgbkbd_set_color {
+	/* Specifies the starting key ID whose color is being changed. */
+	uint8_t start_key;
+	/* Specifies # of elements in <color>. */
+	uint8_t length;
+	/* RGB color data array of length up to MAX_KEY_COUNT. */
+	struct rgb_s color[];
+} __ec_align1;
 
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */

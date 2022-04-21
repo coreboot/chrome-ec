@@ -162,6 +162,15 @@ extern struct i2c_stress_test i2c_stress_tests[];
 extern const int i2c_test_dev_used;
 #endif
 
+/*
+ * Data structure to define I2C Parameters for a command
+ */
+struct i2c_cmd_desc_t {
+	uint8_t port;		/* I2C port */
+	uint16_t addr_flags;	/* Peripheral address and flags */
+	uint8_t cmd;		/* command, only valid on write operations */
+};
+
 /* Flags for i2c_xfer_unlocked() */
 #define I2C_XFER_START BIT(0)  /* Start smbus session from idle state */
 #define I2C_XFER_STOP BIT(1)  /* Terminate smbus session with stop bit */
@@ -502,13 +511,13 @@ void i2c_init(void);
 
 /**
  * Board-level function to determine whether i2c passthru should be allowed
- * on a given port.
+ * on a given I2C command.
  *
- * @parm port I2C port
+ * @parm cmd_desc I2C command
  *
- * @return true, if passthru should be allowed on the port.
+ * @return true, if passthru should be allowed on the I2C command.
  */
-int board_allow_i2c_passthru(int port);
+int board_allow_i2c_passthru(const struct i2c_cmd_desc_t *cmd_desc);
 
 /**
  * Board level function that can indicate if a particular i2c bus is known to be
@@ -554,10 +563,11 @@ void i2c_end_xfer_notify(const int port,
  * @param out_size: size of data written
  * @param in_data: pointer to data read
  * @param in_size: size of data read
+ * @param ret: return of i2c transaction (EC_SUCCESS or otherwise on failure)
  */
 void i2c_trace_notify(int port, uint16_t addr_flags,
 		      const uint8_t *out_data, size_t out_size,
-		      const uint8_t *in_data, size_t in_size);
+		      const uint8_t *in_data, size_t in_size, int ret);
 
 /**
  * Convert an enum i2c_freq constant to numeric frequency in kHz.

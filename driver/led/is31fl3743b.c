@@ -91,8 +91,10 @@ static int is31fl3743b_enable(struct rgbkbd *ctx, bool enable)
 		return rv;
 	}
 
-	return is31fl3743b_write(ctx, IS31FL3743B_REG_CONFIG,
-				 u8 | BIT(3) | (enable ? BIT(0) : 0));
+	WRITE_BIT(u8, 3, 1);
+	WRITE_BIT(u8, 0, enable);
+
+	return is31fl3743b_write(ctx, IS31FL3743B_REG_CONFIG, u8);
 }
 
 static int is31fl3743b_set_color(struct rgbkbd *ctx, uint8_t offset,
@@ -164,11 +166,6 @@ static int is31fl3743b_init(struct rgbkbd *ctx)
 
 	rv = is31fl3743b_reset(ctx);
 	msleep(3);
-	rv |= is31fl3743b_enable(ctx, true);
-	if (rv) {
-		CPRINTS("Failed to enable or reset (%d)", rv);
-		return rv;
-	}
 
 	if (IS_ENABLED(CONFIG_RGB_KEYBOARD_DEBUG)) {
 		uint8_t val;

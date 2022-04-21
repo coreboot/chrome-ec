@@ -9,14 +9,14 @@
 
 #include "battery.h"
 #include "battery_smart.h"
-#include "charger_utils.h"
+#include "test/drivers/charger_utils.h"
 #include "driver/charger/isl923x.h"
 #include "driver/charger/isl923x_public.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_isl923x.h"
 #include "system.h"
-#include "test_mocks.h"
-#include "test_state.h"
+#include "test/drivers/test_mocks.h"
+#include "test/drivers/test_state.h"
 
 BUILD_ASSERT(CONFIG_CHARGER_SENSE_RESISTOR == 10 ||
 	     CONFIG_CHARGER_SENSE_RESISTOR == 5);
@@ -191,6 +191,11 @@ ZTEST(isl923x, test_isl923x_set_input_current_limit)
 			      expected_current_milli_amps[i],
 			      current_milli_amps);
 	}
+}
+
+ZTEST(isl923x, test_isl923x_psys)
+{
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "psys"), NULL);
 }
 
 ZTEST(isl923x, test_manufacturer_id)
@@ -615,8 +620,15 @@ ZTEST(isl923x, test_init)
 	zassert_ok(isl923x_drv.get_input_current_limit(CHARGER_NUM,
 						       &input_current),
 		   NULL);
-	zassert_equal(0, input_current,
-		      "Expected input current 0mV but got %dmV", input_current);
+	if (IS_ENABLED(CONFIG_CHARGE_RAMP_HW)) {
+		zassert_equal(512, input_current,
+			      "Expected input current 512mV but got %dmV",
+			      input_current);
+	} else {
+		zassert_equal(0, input_current,
+			      "Expected input current 0mV but got %dmV",
+			      input_current);
+	}
 
 	/* Test failed CTRL 0 write */
 	isl923x_emul_reset_registers(isl923x_emul);
@@ -627,8 +639,15 @@ ZTEST(isl923x, test_init)
 	zassert_ok(isl923x_drv.get_input_current_limit(CHARGER_NUM,
 						       &input_current),
 		   NULL);
-	zassert_equal(0, input_current,
-		      "Expected input current 0mV but got %dmV", input_current);
+	if (IS_ENABLED(CONFIG_CHARGE_RAMP_HW)) {
+		zassert_equal(512, input_current,
+			      "Expected input current 512mV but got %dmV",
+			      input_current);
+	} else {
+		zassert_equal(0, input_current,
+			      "Expected input current 0mV but got %dmV",
+			      input_current);
+	}
 
 	/* Test failed CTRL 3 read */
 	isl923x_emul_reset_registers(isl923x_emul);
@@ -666,12 +685,28 @@ ZTEST(isl923x, test_init)
 		   NULL);
 	zassert_equal(0, input_current,
 		      "Expected input current 0mV but got %dmV", input_current);
+}
 
-	/*
-	 * TODO(b/219520539): Test system_jumped_late being true (will not call
-	 * set_input_current_limit). It isn't clear how to stimulate the
-	 * code in system.c to cause a late jump.
+ZTEST(isl923x, test_init_late_jump)
+{
+	int input_current;
+
+	isl923x_drv.init(CHARGER_NUM);
+
+	/* Init again with system_jumped_late() returning true and make sure
+	 * the input current limit is still correct.
 	 */
+
+	system_jumped_late_fake.return_val = 1;
+	isl923x_drv.init(CHARGER_NUM);
+
+	zassert_equal(EC_SUCCESS,
+		      isl923x_drv.get_input_current_limit(CHARGER_NUM,
+							  &input_current),
+		      "Could not read input current limit.");
+	zassert_equal(CONFIG_CHARGER_INPUT_CURRENT, input_current,
+		      "Input current (%d) not at (%d)", input_current,
+		      CONFIG_CHARGER_INPUT_CURRENT);
 }
 
 ZTEST(isl923x, test_isl923x_is_acok)

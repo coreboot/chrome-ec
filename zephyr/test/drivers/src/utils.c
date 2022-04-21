@@ -15,9 +15,9 @@
 #include "emul/tcpc/emul_tcpci_partner_src.h"
 #include "hooks.h"
 #include "power.h"
-#include "stubs.h"
+#include "test/drivers/stubs.h"
 #include "chipset.h"
-#include "utils.h"
+#include "test/drivers/utils.h"
 
 #define BATTERY_ORD DT_DEP_ORD(DT_NODELABEL(battery))
 #define GPIO_BATT_PRES_ODL_PATH DT_PATH(named_gpios, ec_batt_pres_odl)
@@ -94,4 +94,105 @@ void disconnect_source_from_port(const struct emul *tcpci_emul,
 	zassume_ok(tcpci_emul_disconnect_partner(tcpci_emul), NULL);
 	isl923x_emul_set_adc_vbus(charger_emul, 0);
 	k_sleep(K_SECONDS(1));
+}
+
+void host_cmd_motion_sense_dump(int max_sensor_count,
+				struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_DUMP,
+		.dump = {
+			.max_sensor_count = max_sensor_count,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 4, *response, params);
+
+	zassume_ok(host_command_process(&args),
+		   "Failed to get motion_sense dump");
+}
+
+int host_cmd_motion_sense_data(uint8_t sensor_num,
+			       struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_DATA,
+		.sensor_odr = {
+			.sensor_num = sensor_num,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 4, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_info(uint8_t cmd_version, uint8_t sensor_num,
+			       struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_INFO,
+		.sensor_odr = {
+			.sensor_num = sensor_num,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, cmd_version, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_ec_rate(uint8_t sensor_num, int data_rate_ms,
+				  struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_EC_RATE,
+		.ec_rate = {
+			.sensor_num = sensor_num,
+			.data = data_rate_ms,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	printk("sensor_num=%u/%u\n", params.sensor_odr.sensor_num, sensor_num);
+	return host_command_process(&args);
+}
+
+void host_cmd_typec_discovery(int port, enum typec_partner_type partner_type,
+			      void *response, size_t response_size)
+{
+	struct ec_params_typec_discovery params = {
+		.port = port, .partner_type = partner_type
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND_PARAMS(
+		EC_CMD_TYPEC_DISCOVERY, 0, params);
+	/* The expected response to EC_CMD_TYPEC_DISCOVERY extends beyond the
+	 * bounds of struct ec_response_typec_discovery.
+	 */
+	args.response = response;
+	args.response_max = response_size;
+
+	zassume_ok(host_command_process(&args),
+		   "Failed to get Type-C state for port %d", port);
+}
+
+K_HEAP_DEFINE(test_heap, 2048);
+
+void *test_malloc(size_t bytes)
+{
+	void *mem;
+
+	mem = k_heap_alloc(&test_heap, bytes, K_NO_WAIT);
+
+	if (mem == NULL) {
+		printk("Failed to alloc %d bytes\n", bytes);
+	}
+
+	return mem;
+}
+
+void test_free(void *mem)
+{
+	k_heap_free(&test_heap, mem);
 }

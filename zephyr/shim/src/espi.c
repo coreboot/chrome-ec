@@ -12,6 +12,8 @@
 #include <stdint.h>
 #include <zephyr.h>
 
+#include <ap_power/ap_power.h>
+#include <ap_power/ap_power_events.h>
 #include "acpi.h"
 #include "chipset.h"
 #include "common.h"
@@ -81,6 +83,7 @@ static bool init_done;
 		return B;
 #define CASE_ZEPHYR_TO_CROS(A, B) CASE_CROS_TO_ZEPHYR(B, A)
 
+#if !defined(CONFIG_AP_PWRSEQ)
 /* Translate a platform/ec signal to a Zephyr signal */
 static enum espi_vwire_signal signal_to_zephyr_vwire(enum espi_vw_signal signal)
 {
@@ -136,10 +139,16 @@ static void espi_vwire_handler(const struct device *dev,
 	}
 }
 
+#endif /* !defined(CONFIG_AP_PWRSEQ) */
+
 #ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
 static void espi_chipset_reset(void)
 {
-	hook_notify(HOOK_CHIPSET_RESET);
+	if (IS_ENABLED(CONFIG_AP_PWRSEQ)) {
+		ap_power_ev_send_callbacks(AP_POWER_RESET);
+	} else {
+		hook_notify(HOOK_CHIPSET_RESET);
+	}
 }
 DECLARE_DEFERRED(espi_chipset_reset);
 
@@ -155,6 +164,7 @@ static void espi_reset_handler(const struct device *dev,
 
 #define espi_dev DEVICE_DT_GET(DT_CHOSEN(cros_ec_espi))
 
+#if !defined(CONFIG_AP_PWRSEQ)
 
 int espi_vw_set_wire(enum espi_vw_signal signal, uint8_t level)
 {
@@ -192,6 +202,8 @@ int espi_vw_disable_wire_int(enum espi_vw_signal signal)
 	return 0;
 }
 
+#endif /* !defined(CONFIG_AP_PWRSEQ) */
+
 uint8_t *lpc_get_memmap_range(void)
 {
 	uint32_t lpc_memmap = 0;
@@ -222,6 +234,8 @@ static void lpc_update_wake(host_event_t wake_events)
 			!wake_events);
 }
 
+#if !defined(CONFIG_AP_PWRSEQ)
+
 static void lpc_generate_smi(void)
 {
 	/* Enforce signal-high for long enough to debounce high */
@@ -241,6 +255,33 @@ static void lpc_generate_sci(void)
 	udelay(VWIRE_PULSE_TRIGGER_TIME);
 	espi_vw_set_wire(VW_SCI_L, 1);
 }
+
+#else
+
+/*
+ * Use Zephyr API.
+ */
+static void lpc_generate_signal(enum espi_vwire_signal signal)
+{
+	/* Enforce signal-high for long enough to debounce high */
+	espi_send_vwire(espi_dev, signal, 1);
+	udelay(VWIRE_PULSE_TRIGGER_TIME);
+	espi_send_vwire(espi_dev, signal, 0);
+	udelay(VWIRE_PULSE_TRIGGER_TIME);
+	espi_send_vwire(espi_dev, signal, 1);
+}
+
+static void lpc_generate_sci(void)
+{
+	lpc_generate_signal(ESPI_VWIRE_SIGNAL_SCI);
+}
+
+static void lpc_generate_smi(void)
+{
+	lpc_generate_signal(ESPI_VWIRE_SIGNAL_SMI);
+}
+
+#endif /* !defined(CONFIG_AP_PWRSEQ) */
 
 void lpc_update_host_event_status(void)
 {
@@ -517,10 +558,12 @@ static int zephyr_shim_setup_espi(const struct device *unused)
 		espi_callback_handler_t handler;
 		enum espi_bus_event event_type;
 	} callbacks[] = {
+#if !defined(CONFIG_AP_PWRSEQ)
 		{
 			.handler = espi_vwire_handler,
 			.event_type = ESPI_BUS_EVENT_VWIRE_RECEIVED,
 		},
+#endif
 		{
 			.handler = espi_peripheral_handler,
 			.event_type = ESPI_BUS_PERIPHERAL_NOTIFICATION,

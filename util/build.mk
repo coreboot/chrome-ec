@@ -24,9 +24,10 @@ $(out)/util/uartupdatetool: HOST_CFLAGS+=-Iutil/
 ifneq ("$(wildcard util/private/build.mk)","")
 include util/private/build.mk
 endif
+-include private/util_flags.mk
 
 comm-objs=$(util-lock-objs:%=lock/%) comm-host.o comm-dev.o
-comm-objs+=comm-lpc.o comm-i2c.o misc_util.o
+comm-objs+=comm-lpc.o comm-i2c.o misc_util.o comm-usb.o
 
 iteflash-objs = iteflash.o usb_if.o
 ectool-objs=ectool.o ectool_keyscan.o ec_flash.o ec_panicinfo.o $(comm-objs)

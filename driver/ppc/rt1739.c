@@ -10,6 +10,7 @@
 #include "console.h"
 #include "driver/ppc/rt1739.h"
 #include "driver/tcpm/tcpci.h"
+#include "gpio.h"
 #include "hooks.h"
 #include "usbc_ppc.h"
 #include "util.h"
@@ -20,6 +21,7 @@
 #endif
 
 #define RT1739_FLAGS_SOURCE_ENABLED BIT(0)
+#define RT1739_FLAGS_FRS_ENABLED BIT(1)
 static atomic_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
@@ -181,12 +183,48 @@ static int rt1739_workaround(int port)
 
 	case RT1739_DEVICE_ID_ES2:
 		CPRINTS("RT1739 ES2");
+		/* enter hidden mode */
+		RETURN_ERROR(write_reg(port, 0xF1, 0x62));
+		RETURN_ERROR(write_reg(port, 0xF0, 0x86));
+		/* turn off SWENB output */
+		RETURN_ERROR(write_reg(port, 0xE0, 0x07));
+		/* leave hidden mode */
+		RETURN_ERROR(write_reg(port, 0xF1, 0));
+		RETURN_ERROR(write_reg(port, 0xF0, 0));
 		break;
 
 	default:
 		CPRINTF("RT1739 unknown device id: %02X", device_id);
 		break;
 	}
+
+	return EC_SUCCESS;
+}
+
+static int rt1739_set_frs_enable(int port, int enable)
+{
+	/* Enable FRS RX detect */
+	RETURN_ERROR(update_reg(port, RT1739_REG_CC_FRS_CTRL1,
+				RT1739_FRS_RX_EN,
+				enable ? MASK_SET : MASK_CLR));
+
+	/*
+	 * To enable FRS, turn on FRS_RX interrupt and disable
+	 * all other interrupts (currently bc1.2 only).
+	 *
+	 * When interrupt triggered, we can always assume it's a FRS
+	 * event without spending extra time to read the flags.
+	 */
+	RETURN_ERROR(update_reg(port, RT1739_REG_INT_MASK5,
+				RT1739_BC12_SNK_DONE_MASK,
+				enable ? MASK_CLR : MASK_SET));
+	RETURN_ERROR(update_reg(port, RT1739_REG_INT_MASK4,
+				RT1739_FRS_RX_MASK,
+				enable ? MASK_SET : MASK_CLR));
+	if (enable)
+		atomic_or(&flags[port], RT1739_FLAGS_FRS_ENABLED);
+	else
+		atomic_clear_bits(&flags[port], RT1739_FLAGS_FRS_ENABLED);
 
 	return EC_SUCCESS;
 }
@@ -201,9 +239,7 @@ static int rt1739_init(int port)
 			       RT1739_OT_EN | RT1739_SHUTDOWN_OFF));
 
 	RETURN_ERROR(rt1739_workaround(port));
-	RETURN_ERROR(update_reg(port, RT1739_REG_INT_MASK5,
-				RT1739_BC12_SNK_DONE_MASK,
-				MASK_SET));
+	RETURN_ERROR(rt1739_set_frs_enable(port, false));
 	RETURN_ERROR(update_reg(port, RT1739_REG_VBUS_DET_EN,
 				RT1739_VBUS_PRESENT_EN,
 				MASK_SET));
@@ -301,8 +337,8 @@ static void rt1739_usb_charger_task(const int port)
 	while (1) {
 		uint32_t evt = task_wait_event(-1);
 		bool is_non_pd_sink = !pd_capable(port) &&
-			pd_get_power_role(port) == PD_ROLE_SINK &&
-			pd_snk_is_vbus_provided(port);
+			!usb_charger_port_is_sourcing_vbus(port) &&
+			pd_check_vbus_level(port, VBUS_PRESENT);
 
 		/* vbus change, start bc12 detection */
 		if (evt & USB_CHG_EVENT_VBUS) {
@@ -334,7 +370,7 @@ void rt1739_deferred_interrupt(void)
 	atomic_t current = atomic_clear(&pending_events);
 
 	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port) {
-		int reg;
+		int event4, event5;
 
 		if (!(current & BIT(port)))
 			continue;
@@ -342,20 +378,27 @@ void rt1739_deferred_interrupt(void)
 		if (ppc_chips[port].drv != &rt1739_ppc_drv)
 			continue;
 
-		if (read_reg(port, RT1739_REG_INT_EVENT5, &reg))
+		if (read_reg(port, RT1739_REG_INT_EVENT4, &event4))
+			continue;
+		if (read_reg(port, RT1739_REG_INT_EVENT5, &event5))
 			continue;
 
-		if (reg & RT1739_BC12_SNK_DONE_INT)
+		if (event5 & RT1739_BC12_SNK_DONE_INT)
 			task_set_event(USB_CHG_PORT_TO_TASK_ID(port),
 				       USB_CHG_EVENT_BC12);
 
-		write_reg(port, RT1739_REG_INT_EVENT5, reg);
+		/* write to clear EVENT4 since FRS interrupt has been handled */
+		write_reg(port, RT1739_REG_INT_EVENT4, event4);
+		write_reg(port, RT1739_REG_INT_EVENT5, event5);
 	}
 }
 DECLARE_DEFERRED(rt1739_deferred_interrupt);
 
 void rt1739_interrupt(int port)
 {
+	if (flags[port] & RT1739_FLAGS_FRS_ENABLED)
+		pd_got_frs_signal(port);
+
 	atomic_or(&pending_events, BIT(port));
 	hook_call_deferred(&rt1739_deferred_interrupt_data, 0);
 }
@@ -378,7 +421,7 @@ const struct ppc_drv rt1739_ppc_drv = {
 	.set_vconn = &rt1739_set_vconn,
 #endif
 #ifdef CONFIG_USB_PD_FRS_PPC
-	/* TODO: not implemented */
+	.set_frs_enable = &rt1739_set_frs_enable,
 #endif
 };
 

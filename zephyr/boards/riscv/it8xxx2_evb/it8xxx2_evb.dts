@@ -20,6 +20,15 @@
 		zephyr,flash-controller = &flashctrl;
 	};
 
+	pwmleds {
+		compatible = "pwm-leds";
+
+		/* NOTE: &pwm number needs same with channel number */
+		pwm_led_test: pwm_led_test {
+			pwms = <&pwm0 PWM_CHANNEL_0 PWM_POLARITY_NORMAL>;
+		};
+	};
+
 	aliases {
 		gpio-wp = &gpio_wp;
 	};
@@ -44,11 +53,11 @@
 			enum-name = "GPIO_PCH_RSMRST_L";
 		};
 		sys_reset_l {
-			gpios = <&gpiob 6 GPIO_OUT_HIGH>;
+			gpios = <&gpiob 6 GPIO_OUTPUT_HIGH>;
 			enum-name = "GPIO_SYS_RESET_L";
 		};
 		gpio_ec_pch_wake_odl: pch_wake_l {
-			gpios = <&gpiob 7 GPIO_OUT_HIGH>;
+			gpios = <&gpiob 7 GPIO_OUTPUT_HIGH>;
 		};
 		i2c_a_scl {
 			gpios = <&gpiob 3 GPIO_INPUT>;
@@ -142,30 +151,13 @@
 		};
 	};
 
-	named-pwms {
-		compatible = "named-pwms";
-
-		/* NOTE: &pwm number needs same with channel number */
-		pwm_test: test {
-			pwms = <&pwm0 PWM_CHANNEL_0 PWM_POLARITY_NORMAL>;
-			/*
-			 * If we need pwm output in ITE chip power saving
-			 * mode, then we should set frequency <=324Hz.
-			 */
-			frequency = <324>;
-		};
-		pwm_fan: fan {
-			pwms = <&pwm7 PWM_CHANNEL_7 PWM_POLARITY_NORMAL>;
-			frequency = <30000>;
-		};
-	};
-
 	named-fans {
 		compatible = "named-fans";
 
 		fan_0 {
 			label = "FAN_0";
-			pwm = <&pwm_fan>;
+			pwms = <&pwm7 PWM_CHANNEL_7 PWM_POLARITY_NORMAL>;
+			pwm-frequency = <30000>;
 			tach = <&tach0>;
 			rpm_min = <1500>;
 			rpm_start = <1500>;
@@ -271,9 +263,9 @@
 			/* gpioj5 */
 			<&gpioj 5 GPIO_INPUT_PULL_DOWN>,
 			/* gpioj6 */
-			<&gpioj 6 GPIO_OUT_LOW>,
+			<&gpioj 6 GPIO_OUTPUT_LOW>,
 			/* gpioj7 */
-			<&gpioj 7 GPIO_OUT_LOW>,
+			<&gpioj 7 GPIO_OUTPUT_LOW>,
 
 			/* gpiom0 */
 			<&gpiom 0 GPIO_INPUT_PULL_DOWN>,

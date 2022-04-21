@@ -24,6 +24,22 @@
 		gpio-wp = &gpio_wp_l;
 		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
 	};
+
+	usbc {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port0@0 {
+			compatible = "named-usbc-port";
+			reg = <0>;
+		};
+
+		port1@1 {
+			compatible = "named-usbc-port";
+			reg = <1>;
+		};
+	};
+
 	/*
 	 * Keep these GPIOs in pin order.
 	 * If you need to add one, make sure you increase
@@ -45,14 +61,14 @@
 					   GPIO_ACTIVE_LOW)>;
 		};
 		gpio_ec_kso_02_inv: ec_kso_02_inv {
-			gpios = <&gpio0 4 (GPIO_INPUT | GPIO_OUT_LOW)>;
+			gpios = <&gpio0 4 (GPIO_INPUT | GPIO_OUTPUT_LOW)>;
 		};
 		pg_ec_dsw_pwrok {
 			gpios = <&gpio0 4 GPIO_INPUT>;
 			enum-name = "GPIO_TEMP_SENSOR_POWER";
 		};
 		gpio_ec_pch_wake_odl: ec_pch_wake_odl {
-			gpios = <&gpio0 5 GPIO_OUT_HIGH>;
+			gpios = <&gpio0 5 GPIO_OUTPUT_HIGH>;
 		};
 		/* Setup USB C1 pin as output to check their state in test */
 		usb_c1_ls_en: usb_c1_ls_en {
@@ -63,7 +79,7 @@
 			gpios = <&gpio0 7 (GPIO_OUTPUT | GPIO_INPUT)>;
 		};
 		gpio_usb_c1_frs_en: usb_c1_frs_en {
-			gpios = <&gpio0 8 (GPIO_OUT_LOW)>;
+			gpios = <&gpio0 8 (GPIO_OUTPUT_LOW)>;
 		};
 		usb_c0_tcpc_int_odl: usb_c0_tcpc_int_odl {
 			gpios = <&gpio0 9 GPIO_INPUT>;
@@ -72,10 +88,10 @@
 			gpios = <&gpio0 10 GPIO_INPUT>;
 		};
 		usb_c0_tcpc_rst_l: usb_c0_tcpc_rst_l {
-			gpios = <&gpio0 11 (GPIO_OUT_HIGH | GPIO_INPUT)>;
+			gpios = <&gpio0 11 (GPIO_OUTPUT_HIGH | GPIO_INPUT)>;
 		};
 		usb_c1_tcpc_rst_l: usb_c1_tcpc_rst_l {
-			gpios = <&gpio0 12 (GPIO_OUT_HIGH | GPIO_INPUT)>;
+			gpios = <&gpio0 12 (GPIO_OUTPUT_HIGH | GPIO_INPUT)>;
 		};
 		gpio_usb_c1_ppc_int: usb_c1_ppc_int {
 			gpios = <&gpio0 13 GPIO_INPUT>;
@@ -121,7 +137,7 @@
 			enum-name = "GPIO_LID_OPEN";
 		};
 		gpio_switchcap_on: switchcap_on {
-			gpios = <&gpio0 24 (GPIO_INPUT | GPIO_OUT_LOW)>;
+			gpios = <&gpio0 24 (GPIO_INPUT | GPIO_OUTPUT_LOW)>;
 		};
 		gpio_ec_pwr_btn_odl: ec_pwr_btn_odl {
 			/* GPIO_PULL_UP will cause this start asserted,
@@ -232,13 +248,15 @@
 			i2c-port = <&i2c1>;
 			enum-name = "I2C_PORT_SENSOR";
 		};
+		virtual-battery {
+			i2c-port = <&i2c0>;
+			enum-name = "I2C_PORT_VIRTUAL_BATTERY";
+		};
 	};
 
-	named-batteries {
-		compatible = "named-batteries";
-
-		lgc011 {
-			enum-name = "lgc011";
+	batteries {
+		default_battery: lgc_ac17a8m {
+			compatible = "lgc,ac17a8m", "battery-smart";
 		};
 	};
 
@@ -293,7 +311,7 @@
 
 	adc0: adc {
 		compatible = "zephyr,adc-emul";
-		nchannels = <4>;
+		nchannels = <6>;
 		ref-internal-mv = <3300>;
 		#io-channel-cells = <1>;
 		label = "ADC_0";
@@ -323,13 +341,27 @@
 			enum-name = "ADC_TEMP_SENSOR_FAN";
 			io-channels = <&adc0 3>;
 		};
+		amon_bmon {
+			label = "AMON_BMON";
+			enum-name = "ADC_AMON_BMON";
+			io-channels = <&adc0 4>;
+			mul = <1000>;
+			div = <20>;
+		};
+		psys {
+			label = "PSYS";
+			enum-name = "ADC_PSYS";
+			io-channels = <&adc0 5>;
+			mul = <124000>;
+		};
 	};
 
 	named-temp-sensors {
 		charger {
 			thermistor = <&thermistor_3V3_13K7_47K_4050B>;
 			status = "okay";
-			compatible = "cros-ec,temp-sensor-thermistor";
+			compatible = "cros-ec,temp-sensor-thermistor",
+				     "cros-ec,temp-sensor";
 			label = "TEMP_SENSOR_CHARGER";
 			enum-name = "TEMP_SENSOR_CHARGER";
 			temp_fan_off = <40>;
@@ -342,7 +374,8 @@
 		pp3300-regulator {
 			thermistor = <&thermistor_3V3_30K9_47K_4050B>;
 			status = "okay";
-			compatible = "cros-ec,temp-sensor-thermistor";
+			compatible = "cros-ec,temp-sensor-thermistor",
+				     "cros-ec,temp-sensor";
 			label = "TEMP_SENSOR_PP3300_REGULATOR";
 			enum-name = "TEMP_SENSOR_PP3300_REGULATOR";
 			temp_fan_off = <40>;
@@ -355,7 +388,8 @@
 		ddr-soc {
 			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
 			status = "okay";
-			compatible = "cros-ec,temp-sensor-thermistor";
+			compatible = "cros-ec,temp-sensor-thermistor",
+				     "cros-ec,temp-sensor";
 			label = "TEMP_SENSOR_DDR_SOC";
 			enum-name = "TEMP_SENSOR_DDR_SOC";
 			temp_fan_off = <35>;
@@ -368,7 +402,8 @@
 		fan {
 			thermistor = <&thermistor_3V0_22K6_47K_4050B>;
 			status = "okay";
-			compatible = "cros-ec,temp-sensor-thermistor";
+			compatible = "cros-ec,temp-sensor-thermistor",
+				     "cros-ec,temp-sensor";
 			label = "TEMP_SENSOR_FAN";
 			enum-name = "TEMP_SENSOR_FAN";
 			temp_fan_off = <35>;
@@ -389,6 +424,10 @@
 	 */
 	motionsense-mutex {
 		compatible = "cros-ec,motionsense-mutex";
+		mutex_bma255: bma255-mutex {
+			label = "BMA255_MUTEX";
+		};
+
 		mutex_bmi260: bmi260-mutex {
 			label = "BMI260_MUTEX";
 		};
@@ -407,6 +446,11 @@
 	 * different motion sensors while they are using the same driver.
 	 */
 	motionsense-sensor-data {
+		bma255_data: bma255-drv-data {
+			compatible = "cros-ec,drvdata-bma255";
+			status = "okay";
+		};
+
 		bmi260_data: bmi260-drv-data {
 			compatible = "cros-ec,drvdata-bmi260";
 			status = "okay";
@@ -493,6 +537,35 @@
 	 * motion sensor IDs for lid angle calculation.
 	 */
 	motionsense-sensor {
+		ms_bma255: ms-bma255 {
+			compatible = "cros-ec,bma255";
+			status = "okay";
+
+			label = "BMA255";
+			location = "MOTIONSENSE_LOC_LID";
+			mutex = <&mutex_bma255>;
+			port = <&i2c_accel>;
+			default-range = <2>;
+			drv-data = <&bma255_data>;
+			i2c-spi-addr-flags = "BMA2x2_I2C_ADDR1_FLAGS";
+			configs {
+				compatible =
+					"cros-ec,motionsense-sensor-config";
+				ec-s0 {
+					/* Run ALS sensor in S0 */
+					label = "SENSOR_CONFIG_EC_S0";
+					odr = <1000>;
+				};
+				ec-s3 {
+					label = "SENSOR_CONFIG_EC_S3";
+					odr = <10000>;
+				};
+				ec-s5 {
+					label = "SENSOR_CONFIG_EC_S5";
+					odr = <10000>;
+				};
+			};
+		};
 		ms_bmi260_accel: ms-bmi260-accel {
 			compatible = "cros-ec,bmi260-accel";
 			status = "okay";
@@ -524,6 +597,7 @@
 			status = "okay";
 
 			label = "BMI160 emul accel";
+			active-mask = "SENSOR_ACTIVE_S0_S3_S5";
 			location = "MOTIONSENSE_LOC_BASE";
 			mutex = <&mutex_bmi160>;
 			port = <&i2c_sensor>;
@@ -588,6 +662,11 @@
 			default-range = <0x10000>; /* scale = 1x, uscale = 0 */
 			drv-data = <&tcs_rgb_data>;
 		};
+	};
+
+	motionsense-sensor-info {
+		compatible = "cros-ec,motionsense-sensor-info";
+		accel-force-mode-sensors = <&ms_bma255>;
 	};
 
 	/*

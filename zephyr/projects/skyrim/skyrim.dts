@@ -16,7 +16,7 @@
 			gpios = <&gpio5 0 GPIO_ODR_HIGH>;
 		};
 		gpio_en_pwr_s3: en_pwr_s3 {
-			gpios = <&gpio7 4 GPIO_OUT_LOW>;
+			gpios = <&gpio7 4 GPIO_OUTPUT_LOW>;
 		};
 		gpio_pg_groupc_s0_od: pg_groupc_s0_od {
 			gpios = <&gpiof 0 GPIO_INPUT>;
@@ -29,15 +29,15 @@
 		soc_thermtrip_odl {
 			gpios = <&gpio9 5 GPIO_INPUT>;
 		};
-		hub_rst {
-			gpios = <&gpio6 6 GPIO_OUT_LOW>;
+		gpio_hub_rst: hub_rst {
+			gpios = <&gpio6 6 GPIO_OUTPUT_HIGH>;
 		};
 		ec_soc_int_l {
-			gpios = <&gpioa 1 GPIO_OUT_HIGH>;
+			gpios = <&gpioa 1 GPIO_OUTPUT_HIGH>;
 			enum-name = "GPIO_EC_INT_L";
 		};
 		gpio_ec_soc_pwr_good: ec_soc_pwr_good {
-			gpios = <&gpiod 3 GPIO_OUT_LOW>;
+			gpios = <&gpiod 3 GPIO_OUTPUT_LOW>;
 		};
 		/* TODO: Add interrupt handler to shut down */
 		pcore_ocp_r_l {
@@ -58,7 +58,7 @@
 			gpios = <&gpioa 2 GPIO_INPUT_PULL_UP>;
 		};
 		gpio_ec_soc_pwr_btn_l: ec_soc_pwr_btn_l {
-			gpios = <&gpioa 7 GPIO_OUT_HIGH>;
+			gpios = <&gpioa 7 GPIO_OUTPUT_HIGH>;
 			enum-name = "GPIO_PCH_PWRBTN_L";
 		};
 		gpio_volup_btn_odl: volup_btn_odl {
@@ -70,10 +70,10 @@
 			enum-name = "GPIO_VOLUME_DOWN_L";
 		};
 		ec_sc_rst {
-			gpios = <&gpiob 0 GPIO_OUT_LOW>;
+			gpios = <&gpiob 0 GPIO_OUTPUT_LOW>;
 		};
 		gpio_cbi_wp: ec_cbi_wp {
-			gpios = <&gpio8 1 GPIO_OUT_LOW>;
+			gpios = <&gpio8 1 GPIO_OUTPUT_LOW>;
 		};
 		gpio_wp: ec_wp_l {
 			gpios = <&gpiod 7 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
@@ -84,7 +84,7 @@
 		ec_espi_rst_l {
 			gpios = <&gpio5 4 GPIO_PULL_DOWN>;
 		};
-		6axis_int_l {
+		gpio_accel_gyro_int_l: accel_gyro_int_l {
 			gpios = <&gpioa 0 GPIO_INPUT>;
 		};
 	};
@@ -101,7 +101,8 @@
 
 	named-temp-sensors {
 		soc-pct2075 {
-			compatible = "cros-ec,temp-sensor-pct2075";
+			compatible = "cros-ec,temp-sensor-pct2075",
+				     "cros-ec,temp-sensor";
 			label = "SOC";
 			enum-name = "TEMP_SENSOR_SOC";
 			pct2075-name = "PCT2075_SOC";
@@ -112,14 +113,17 @@
 			temp_host_release_high = <80>;
 			temp_fan_off = <0>;
 			temp_fan_max = <70>;
+			power-good-pin = <&gpio_pg_pwr_s5>;
 		};
 		amb-pct2075 {
-			compatible = "cros-ec,temp-sensor-pct2075";
+			compatible = "cros-ec,temp-sensor-pct2075",
+			             "cros-ec,temp-sensor";
 			label = "Ambient";
 			enum-name = "TEMP_SENSOR_AMB";
 			pct2075-name = "PCT2075_AMB";
 			port = <&i2c_sensor>;
 			i2c-addr-flags = "PCT2075_I2C_ADDR_FLAGS7";
+			power-good-pin = <&gpio_pg_pwr_s5>;
 		};
 	};
 
@@ -135,6 +139,70 @@
 			irq-pin = <&gpio_pg_lpddr5_s0_od>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "baseboard_set_soc_pwr_pgood";
+		};
+		int_s0_pgood: s0_pgood {
+			irq-pin = <&gpio_s0_pgood>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "baseboard_s0_pgood";
+		};
+	};
+
+	/*
+	 * Note this is expected to vary per-board, so we keep it in the board
+	 * dts files.
+	 */
+	skyrim-fw-config {
+		compatible = "cros-ec,cbi-fw-config";
+
+		form-factor {
+			enum-name = "FW_FORM_FACTOR";
+			start = <0>;
+			size = <1>;
+
+			ff-clamshell {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_FF_CLAMSHELL";
+				value = <0>;
+			};
+			ff-convertible {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_FF_CONVERTIBLE";
+				value = <1>;
+				default;
+			};
+		};
+		io-db {
+			enum-name = "FW_IO_DB";
+			start = <6>;
+			size = <2>;
+
+			io-db-ps8811-ps8818 {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_IO_DB_PS8811_PS8818";
+				value = <0>;
+			};
+			io-db-none-anx7483 {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_IO_DB_NONE_ANX7483";
+				value = <1>;
+				default;
+			};
+		};
+	};
+
+	/* Rotation matrices for motion sensors. */
+	motionsense-rotation-ref {
+		compatible = "cros-ec,motionsense-rotation-ref";
+		lid_rot_ref: lid-rotation-ref {
+			mat33 = <0 (-1) 0
+				 1 0 0
+				 0 0 1>;
+		};
+
+		base_rot_ref: base-rotation-ref {
+			mat33 = <0 1 0
+				 (-1) 0 0
+				 0 0 1>;
 		};
 	};
 };

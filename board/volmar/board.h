@@ -10,11 +10,6 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early Volmar boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
@@ -139,6 +134,9 @@
 #define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+
+/* Keyboard */
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 #ifndef __ASSEMBLER__
 

@@ -1113,6 +1113,14 @@
  */
 #undef CONFIG_CHARGER_BQ25710_CMP_REF_1P2
 
+/*
+ * This config option is used to change the charger's independent comparator
+ * output polarity. The default setting is CMPIN is above internal threshold,
+ * CMPOUT is LOW (internal hysteresis).
+ */
+#undef CONFIG_CHARGER_BQ25710_CMP_POL_EXTERNAL
+
+
 /* Enable if CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG should be applied */
 #undef CONFIG_CHARGER_BQ25710_PKPWR_TOVLD_DEG_CUSTOM
 
@@ -1167,6 +1175,13 @@
  * removed.
  */
 #undef CONFIG_CHARGER_BQ25710_PP_ACOK
+
+/*
+ * This config option sets the PP_COMP in Prochot Option 1
+ * register. Need to use EN_PROCHOT_LPWR to enable independent comparator
+ * and its PROCHOT profile.
+ */
+#undef CONFIG_CHARGER_BQ25710_PP_COMP
 
 /*
  * This config option sets the PP_IDCHG2 bit in the Charge Option 4
@@ -1396,6 +1411,7 @@
 #undef CONFIG_CHIPSET_GEMINILAKE	/* Intel Geminilake (x86) */
 #undef CONFIG_CHIPSET_ICELAKE		/* Intel Icelake (x86) */
 #undef CONFIG_CHIPSET_JASPERLAKE	/* Intel Jasperlake (x86) */
+#undef CONFIG_CHIPSET_METEORLAKE	/* Intel Meteorlake (x86) */
 #undef CONFIG_CHIPSET_MT817X		/* MediaTek MT817x */
 #undef CONFIG_CHIPSET_MT8183		/* MediaTek MT8183 */
 #undef CONFIG_CHIPSET_MT8192		/* MediaTek MT8192 */
@@ -1448,6 +1464,9 @@
  * and deasserting RSMRST to PCH.
  */
 #undef CONFIG_CHIPSET_X86_RSMRST_DELAY
+
+/* Passthrough RSMRST_L de-assertion after S5 */
+#undef CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
 
 /* Support PMIC reset(using LDO_EN) in chipset */
 #undef CONFIG_CHIPSET_HAS_PLATFORM_PMIC_RESET
@@ -3215,6 +3234,8 @@
 #undef CONFIG_HOST_INTERFACE_LPC
 /* Support host command interface over eSPI bus. */
 #undef CONFIG_HOST_INTERFACE_ESPI
+/* Support host command interface over USB. */
+#undef CONFIG_HOST_INTERFACE_USB
 
 /*
  * SLP signals (SLP_S3, SLP_S4, and SLP_S5) use virtual wires instead of
@@ -4780,6 +4801,7 @@
 /*
  * Type-C retimer drivers to be used.
  */
+#undef CONFIG_USBC_RETIMER_ANX7483
 #undef CONFIG_USBC_RETIMER_INTEL_BB
 #undef CONFIG_USBC_RETIMER_KB800X
 #undef CONFIG_USBC_RETIMER_NB7V904M
@@ -4816,6 +4838,9 @@
 
 /* Allow run-time configuration of the Burnside Bridge driver structure */
 #undef CONFIG_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG
+
+/* Enable vPro support for Intel Burnside Bridge on vPro supported platform */
+#undef CONFIG_USBC_RETIMER_INTEL_BB_VPRO_CAPABLE
 
 /* Require manual configuration of the KB800x crossbar mapping. */
 #undef CONFIG_KB800X_CUSTOM_XBAR
@@ -6180,6 +6205,7 @@
 #undef CONFIG_CHIPSET_GEMINILAKE
 #undef CONFIG_CHIPSET_ICELAKE
 #undef CONFIG_CHIPSET_JASPERLAKE
+#undef CONFIG_CHIPSET_METEORLAKE
 #undef CONFIG_CHIPSET_MT817X
 #undef CONFIG_CHIPSET_MT8183
 #undef CONFIG_CHIPSET_MT8192
@@ -6298,6 +6324,7 @@
 
 #if defined(CONFIG_CHIPSET_APL_GLK)
 #define CONFIG_CHIPSET_HAS_PRE_INIT_CALLBACK
+#define CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
 #endif
 
 #if defined(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540) || \
@@ -6308,6 +6335,7 @@
 	defined(CONFIG_CHIPSET_COMETLAKE_DISCRETE) || \
 	defined(CONFIG_CHIPSET_GEMINILAKE) || \
 	defined(CONFIG_CHIPSET_ICELAKE) || \
+	defined(CONFIG_CHIPSET_METEORLAKE) || \
 	defined(CONFIG_CHIPSET_SKYLAKE)
 #define CONFIG_POWER_COMMON
 #endif
@@ -6315,6 +6343,7 @@
 #if defined(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540) || \
 	defined(CONFIG_CHIPSET_CANNONLAKE) || \
 	defined(CONFIG_CHIPSET_ICELAKE) || \
+	defined(CONFIG_CHIPSET_METEORLAKE) || \
 	defined(CONFIG_CHIPSET_SKYLAKE)
 #define CONFIG_CHIPSET_X86_RSMRST_DELAY
 #endif

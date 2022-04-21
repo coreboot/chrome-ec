@@ -149,7 +149,7 @@ static enum ec_error_list rt9490_set_current(int chgnum, int current)
 	if (current == 0)
 		current = info->current_min;
 
-	if (!IN_RANGE(current, info->current_min, info->current_max + 1))
+	if (!IN_RANGE(current, info->current_min, info->current_max))
 		return EC_ERROR_PARAM2;
 	reg_ichg = current / info->current_step;
 
@@ -178,7 +178,7 @@ static enum ec_error_list rt9490_set_voltage(int chgnum, int voltage)
 	if (voltage == 0)
 		voltage = info->voltage_min;
 
-	if (!IN_RANGE(voltage, info->voltage_min, info->voltage_max + 1))
+	if (!IN_RANGE(voltage, info->voltage_min, info->voltage_max))
 		return EC_ERROR_PARAM2;
 	reg_cv = voltage / info->voltage_step;
 
@@ -198,9 +198,9 @@ enum ec_error_list rt9490_set_otg_current_voltage(int chgnum,
 {
 	uint16_t reg_cur, reg_vol;
 
-	if (!IN_RANGE(output_current, RT9490_IOTG_MIN, RT9490_IOTG_MAX + 1))
+	if (!IN_RANGE(output_current, RT9490_IOTG_MIN, RT9490_IOTG_MAX))
 		return EC_ERROR_PARAM2;
-	if (!IN_RANGE(output_voltage, RT9490_VOTG_MIN, RT9490_VOTG_MAX + 1))
+	if (!IN_RANGE(output_voltage, RT9490_VOTG_MIN, RT9490_VOTG_MAX))
 		return EC_ERROR_PARAM3;
 
 	reg_cur = (output_current - RT9490_IOTG_MIN) / RT9490_IOTG_STEP;
@@ -264,7 +264,7 @@ static inline int rt9490_enable_jeita(int chgnum, bool en)
 			      en ? MASK_CLR : MASK_SET);
 }
 
-static inline int rt9490_enable_adc(int chgnum, bool en)
+int rt9490_enable_adc(int chgnum, bool en)
 {
 	return rt9490_update8(chgnum, RT9490_REG_ADC_CTRL, RT9490_ADC_EN,
 			      en ? MASK_SET : MASK_CLR);
@@ -339,6 +339,12 @@ static int rt9490_init_setting(int chgnum)
 				    RT9490_CHG_IRQ_MASK5_ALL));
 
 	return EC_SUCCESS;
+}
+
+int rt9490_enable_pwm_1mhz(int chgnum, bool en)
+{
+	return rt9490_update8(chgnum, RT9490_REG_ADD_CTRL1, RT9490_PWM_1MHZ_EN,
+			en ? MASK_SET : MASK_CLR);
 }
 
 static void rt9490_init(int chgnum)
@@ -643,22 +649,22 @@ static void rt9490_usb_charger_task(const int port)
 
 	while (1) {
 		uint32_t evt = task_wait_event(-1);
+		/*
+		 * b/193753475#comment33: don't trigger bc1.2 detection
+		 * after PRSwap/FRSwap.
+		 *
+		 * Note that the only scenario we want to catch is power
+		 * role swap. For other cases, `is_non_pd_sink` may have
+		 * false positive (e.g. pd_capable() is false during
+		 * initial PD negotiation). But it's okay to always
+		 * trigger bc1.2 detection for other cases.
+		 */
+		bool is_non_pd_sink = !pd_capable(port) &&
+			!usb_charger_port_is_sourcing_vbus(port) &&
+			pd_check_vbus_level(port, VBUS_PRESENT);
 
 		/* vbus change, start bc12 detection */
 		if (evt & USB_CHG_EVENT_VBUS) {
-			/*
-			 * b/193753475#comment33: don't trigger bc1.2 detection
-			 * after PRSwap/FRSwap.
-			 *
-			 * Note that the only scenario we want to catch is power
-			 * role swap. For other cases, `is_non_pd_sink` may have
-			 * false positive (e.g. pd_capable() is false during
-			 * initial PD negotiation). But it's okay to always
-			 * trigger bc1.2 detection for other cases.
-			 */
-			bool is_non_pd_sink = !pd_capable(port) &&
-				pd_get_power_role(port) == PD_ROLE_SINK &&
-				pd_snk_is_vbus_provided(port);
 
 			if (is_non_pd_sink)
 				rt9490_enable_chgdet_flow(CHARGER_SOLO, true);
@@ -669,8 +675,13 @@ static void rt9490_usb_charger_task(const int port)
 
 		/* detection done, update charge_manager and stop detection */
 		if (evt & USB_CHG_EVENT_BC12) {
-			enum charge_supplier supplier =
-				rt9490_get_bc12_device_type(CHARGER_SOLO);
+			enum charge_supplier supplier;
+
+			if (is_non_pd_sink)
+				supplier = rt9490_get_bc12_device_type(
+						CHARGER_SOLO);
+			else
+				supplier = CHARGE_SUPPLIER_NONE;
 
 			rt9490_update_charge_manager(port, supplier);
 			rt9490_enable_chgdet_flow(CHARGER_SOLO, false);

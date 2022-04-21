@@ -13,8 +13,6 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-#define CONFIG_SYSTEM_UNLOCKED
-
 /*
  * This will happen automatically on NPCX9 ES2 and later. Do not remove
  * until we can confirm all earlier chips are out of service.
@@ -27,6 +25,10 @@
 #undef CONFIG_TABLET_MODE
 #undef CONFIG_TABLET_MODE_SWITCH
 #undef CONFIG_GMR_TABLET_MODE
+
+/* No side buttons */
+#undef CONFIG_MKBP_INPUT_DEVICES
+#undef CONFIG_VOLUME_BUTTONS
 
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
@@ -162,8 +164,7 @@
 #define CONFIG_8042_AUX
 #define CONFIG_PS2
 #define CONFIG_CMD_PS2
-/* Button */
-#undef CONFIG_VOLUME_BUTTONS
+#define PRIMUS_PS2_CH		NPCX_PS2_CH1
 
 #ifndef __ASSEMBLER__
 

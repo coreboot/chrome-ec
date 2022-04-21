@@ -1129,7 +1129,7 @@ void pd_resume_check_pr_swap_needed(int port);
 
 /* Control Message type */
 enum pd_ctrl_msg_type {
-	/* 0 Reserved */
+	PD_CTRL_INVALID  = 0, /* 0 Reserved - DO NOT PUT IN MESSAGES */
 	PD_CTRL_GOOD_CRC = 1,
 	PD_CTRL_GOTO_MIN = 2,
 	PD_CTRL_ACCEPT = 3,
@@ -1692,6 +1692,14 @@ __override_proto void pd_execute_data_swap(int port,
  */
 
 __override_proto enum pd_dual_role_states pd_get_drp_state_in_suspend(void);
+
+/**
+ * Get desired dual role state when chipset is on.
+ *
+ * Under some circumstances we are not allowed to be source
+ * during chipset on. This function should return appropriate state.
+ */
+__override_proto enum pd_dual_role_states pd_get_drp_state_in_s0(void);
 
 /**
  * Get PD device info used for VDO_CMD_SEND_INFO / VDO_CMD_READ_INFO

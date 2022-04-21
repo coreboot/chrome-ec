@@ -180,19 +180,6 @@ def get_argparser():
         "configure",
         help="Set up a build directory to be built later by the build subcommand",
     )
-    configure.add_argument(
-        "-b",
-        "--build",
-        action="store_true",
-        dest="build_after_configure",
-        help="Run the build after configuration",
-    )
-    configure.add_argument(
-        "--test",
-        action="store_true",
-        dest="test_after_configure",
-        help="Test the .elf file after building",
-    )
     add_common_configure_args(configure)
 
     build = sub.add_parser(
@@ -208,6 +195,7 @@ def get_argparser():
     list_projects.add_argument(
         "--format",
         default="{config.project_name}\n",
+        dest="fmt",
         help=(
             "Output format to print projects (str.format(config=project.config) is "
             "called on this for each project)."
@@ -300,6 +288,10 @@ def add_common_configure_args(sub_parser: argparse.ArgumentParser):
         dest="coverage",
         help="Enable CONFIG_COVERAGE Kconfig.",
     )
+    sub_parser.add_argument(
+        "--extra-cflags",
+        help="Additional CFLAGS to use for target builds",
+    )
     group = sub_parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "-a",
@@ -360,7 +352,7 @@ def main(argv=None):
         wait_rv = zmake.executor.wait()
         return result or wait_rv
     finally:
-        multiproc.wait_for_log_end()
+        multiproc.LogWriter.wait_for_log_end()
 
 
 if __name__ == "__main__":

@@ -19,7 +19,8 @@
  */
 #define CONFIG_HIBERNATE_PSL_VCC1_RST_WAKEUP
 
-/* Buttons */
+/* No side buttons */
+#undef CONFIG_MKBP_INPUT_DEVICES
 #undef CONFIG_VOLUME_BUTTONS
 
 /* Sensors */
@@ -178,6 +179,9 @@
 /* Keyboard features */
 #define CONFIG_KEYBOARD_FACTORY_TEST
 #define CONFIG_KEYBOARD_REFRESH_ROW3
+
+#undef CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE
+#define CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE	3
 
 /*
  * Older boards have a different ADC assignment.

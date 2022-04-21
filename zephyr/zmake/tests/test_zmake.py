@@ -26,7 +26,7 @@ OUR_PATH = os.path.dirname(os.path.realpath(__file__))
 class FakeProject:
     """A fake project which requests two builds and does no packing"""
 
-    # pylint: disable=too-few-public-methods,no-self-use
+    # pylint: disable=too-few-public-methods
 
     def __init__(self):
         self.packer = unittest.mock.Mock()
@@ -43,18 +43,21 @@ class FakeProject:
     @staticmethod
     def iter_builds():
         """Yield the two builds that zmake normally does"""
-        yield "build-ro", zmake.build_config.BuildConfig()
-        yield "build-rw", zmake.build_config.BuildConfig()
+        yield "ro", zmake.build_config.BuildConfig()
+        yield "rw", zmake.build_config.BuildConfig()
 
-    def prune_modules(self, _):
+    @staticmethod
+    def prune_modules(_):
         """Fake implementation of prune_modules."""
         return {}  # pathlib.Path('path')]
 
-    def find_dts_overlays(self, _):
+    @staticmethod
+    def find_dts_overlays(_):
         """Fake implementation of find_dts_overlays."""
         return zmake.build_config.BuildConfig()
 
-    def get_toolchain(self, module_paths, override=None):
+    @staticmethod
+    def get_toolchain(module_paths, override=None):
         """Fake implementation of get_toolchain."""
         return zmake.toolchains.GenericToolchain(
             override or "foo",
@@ -130,20 +133,18 @@ def do_test_with_log_level(zmake_factory_from_dir, log_level, fnames=None):
     with LogCapture(level=log_level) as cap:
         with unittest.mock.patch(
             "zmake.version.get_version_string", return_value="123"
+        ), unittest.mock.patch.object(
+            zmake.project,
+            "find_projects",
+            return_value={"fakeproject": FakeProject()},
+        ), unittest.mock.patch(
+            "zmake.version.write_version_header", autospec=True
         ):
-            with unittest.mock.patch.object(
-                zmake.project,
-                "find_projects",
-                return_value={"fakeproject": FakeProject()},
-            ):
-                with unittest.mock.patch(
-                    "zmake.version.write_version_header", autospec=True
-                ):
-                    zmk.build(
-                        ["fakeproject"],
-                        clobber=True,
-                    )
-                multiproc.wait_for_log_end()
+            zmk.build(
+                ["fakeproject"],
+                clobber=True,
+            )
+        multiproc.LogWriter.wait_for_log_end()
 
     recs = [rec.getMessage() for rec in cap.records]
     return recs
@@ -152,51 +153,50 @@ def do_test_with_log_level(zmake_factory_from_dir, log_level, fnames=None):
 class TestFilters:
     """Test filtering of stdout and stderr"""
 
-    # pylint: disable=no-self-use
-
-    def test_filter_normal(self, zmake_factory_from_dir):
+    @staticmethod
+    def test_filter_normal(zmake_factory_from_dir):
         """Test filtering of a normal build (with no errors)"""
         recs = do_test_with_log_level(zmake_factory_from_dir, logging.ERROR)
         assert not recs
 
-    def test_filter_info(self, zmake_factory_from_dir, tmp_path):
+    @staticmethod
+    def test_filter_info(zmake_factory_from_dir, tmp_path):
         """Test what appears on the INFO level"""
         recs = do_test_with_log_level(zmake_factory_from_dir, logging.INFO)
         # TODO: Remove sets and figure out how to check the lines are in the
         # right order.
         expected = {
-            "Configuring fakeproject:build-rw.",
-            "Configuring fakeproject:build-ro.",
+            "Configuring fakeproject:rw.",
+            "Configuring fakeproject:ro.",
             "Building fakeproject in {}/ec/build/zephyr/fakeproject.".format(tmp_path),
-            "Building fakeproject:build-ro: /usr/bin/ninja -C {}-build-ro".format(
+            "Building fakeproject:ro: /usr/bin/ninja -C {}-ro".format(
                 tmp_path / "ec/build/zephyr/fakeproject/build"
             ),
-            "Building fakeproject:build-rw: /usr/bin/ninja -C {}-build-rw".format(
+            "Building fakeproject:rw: /usr/bin/ninja -C {}-rw".format(
                 tmp_path / "ec/build/zephyr/fakeproject/build"
             ),
         }
         for suffix in ["ro", "rw"]:
             with open(get_test_filepath("%s_INFO" % suffix)) as file:
                 for line in file:
-                    expected.add(
-                        "[fakeproject:build-{}]{}".format(suffix, line.strip())
-                    )
+                    expected.add("[fakeproject:{}]{}".format(suffix, line.strip()))
         # This produces an easy-to-read diff if there is a difference
         assert expected == set(recs)
 
-    def test_filter_debug(self, zmake_factory_from_dir, tmp_path):
+    @staticmethod
+    def test_filter_debug(zmake_factory_from_dir, tmp_path):
         """Test what appears on the DEBUG level"""
         recs = do_test_with_log_level(zmake_factory_from_dir, logging.DEBUG)
         # TODO: Remove sets and figure out how to check the lines are in the
         # right order.
         expected = {
-            "Configuring fakeproject:build-rw.",
-            "Configuring fakeproject:build-ro.",
+            "Configuring fakeproject:rw.",
+            "Configuring fakeproject:ro.",
             "Building fakeproject in {}/ec/build/zephyr/fakeproject.".format(tmp_path),
-            "Building fakeproject:build-ro: /usr/bin/ninja -C {}-build-ro".format(
+            "Building fakeproject:ro: /usr/bin/ninja -C {}-ro".format(
                 tmp_path / "ec/build/zephyr/fakeproject/build"
             ),
-            "Building fakeproject:build-rw: /usr/bin/ninja -C {}-build-rw".format(
+            "Building fakeproject:rw: /usr/bin/ninja -C {}-rw".format(
                 tmp_path / "ec/build/zephyr/fakeproject/build"
             ),
             "Running cat {}/files/sample_ro.txt".format(OUR_PATH),
@@ -205,13 +205,12 @@ class TestFilters:
         for suffix in ["ro", "rw"]:
             with open(get_test_filepath(suffix)) as file:
                 for line in file:
-                    expected.add(
-                        "[fakeproject:build-{}]{}".format(suffix, line.strip())
-                    )
+                    expected.add("[fakeproject:{}]{}".format(suffix, line.strip()))
         # This produces an easy-to-read diff if there is a difference
         assert expected == set(recs)
 
-    def test_filter_devicetree_error(self, zmake_factory_from_dir):
+    @staticmethod
+    def test_filter_devicetree_error(zmake_factory_from_dir):
         """Test that devicetree errors appear"""
         recs = do_test_with_log_level(
             zmake_factory_from_dir,
@@ -284,7 +283,7 @@ def test_list_projects(
         autospec=True,
         return_value=fake_projects,
     ):
-        zmake_from_dir.list_projects(format=fmt, search_dir=search_dir)
+        zmake_from_dir.list_projects(fmt=fmt, search_dir=search_dir)
 
     captured = capsys.readouterr()
     assert captured.out == expected_output

@@ -25,7 +25,8 @@ Each feature includes the following sub-tasks:
   the feature. `Kconfig` options are enabled in one of the [project
   configuration files].
 - **Devicetree Nodes** - This section details the devicetree nodes and
-  properties required by the feature.
+  properties required by the feature. The [Zephyr Introduction to Devicetree]
+  provides a conceptual overview of devicetree and how Zephyr uses it.
 - **Board Specific Code** - When present, this section details any C code that
   your project must implement.
 - **Threads** - This section details the threads created by the feature and
@@ -52,18 +53,21 @@ feature.
 EC Feature                                                                  | Needed for Power On
 :-------------------------------------------------------------------------- | :-----------------:
 [Configure EC Chipset (TODO)](./zephyr_template.md)                         | yes
-[Configure AP to EC Communication (TOD0)](./zephyr_template.md)             | yes
+[Configure AP to EC Communication](./zephyr_ap_ec_comm.md)                  | yes
+[Configure AP Power Thresholds](./zephyr_ap_power.md)                       | yes
 [Configure AP Power Sequencing (TODO)](./zephyr_template.md)                | yes
+[Configure USB-A](./zephyr_usba.md)                                         | no
 [Configure USB-C (TODO)](./zephyr_template.md)                              | yes
 [Configure Charger (TODO)](./zephyr_template.md)                            | yes
 [Configure I2C Buses](./zephyr_i2c.md)                                      | yes
 [Configure GPIO](./zephyr_gpio.md)                                          | yes
 [Configure Batteries](./zephyr_battery.md)                                  | no
-[Configure CrOS Board Information (CBI) (TODO)](./zephyr_template.md)       | no
-[Configure CrOS CBI FW CONFIG](./zephyr_fw_config.md)                       | no
+[Configure CrOS Board Information (CBI)](./zephyr_cbi.md)                   | no
 [Configure Keyboard (TODO)](./zephyr_template.md)                           | no
 [Configure LEDs (TODO)](./zephyr_template.md)                               | no
 [Configure Motion Sensors](./zephyr_motionsense.md)                         | no
 [Configure BC1.2 Charger Detector (TODO)](./zephyr_template.md)             | no
 [Configure ADC](./zephyr_adc.md)                                            | no
 [Configure Temperature Sensors](./zephyr_temperature_sensor.md)             | no
+
+[Zephyr Introduction to Devicetree]: https://docs.zephyrproject.org/latest/build/dts/intro.html

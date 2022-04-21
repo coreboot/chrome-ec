@@ -456,16 +456,30 @@ static int cros_system_npcx_init(const struct device *dev)
 	struct cros_system_npcx_data *data = DRV_DATA(dev);
 
 	/* check reset cause */
+	data->reset = UNKNOWN_RST;
+	/* Use scratch bit to check power on reset or VCC1_RST reset. */
+	if (!IS_BIT_SET(inst_scfg->RSTCTL, NPCX_RSTCTL_VCC1_RST_SCRATCH)) {
+		bool is_vcc1_rst = IS_BIT_SET(inst_scfg->RSTCTL,
+				       NPCX_RSTCTL_VCC1_RST_STS);
+		data->reset = is_vcc1_rst ? VCC1_RST_PIN : POWERUP;
+	}
+
+	/*
+	 * Set scratch bit to distinguish VCC1_RST# is asserted again
+	 * or not. This bit will be clear automatically when VCC1_RST#
+	 * is asserted or power-on reset occurs.
+	 */
+	inst_scfg->RSTCTL |= BIT(NPCX_RSTCTL_VCC1_RST_SCRATCH);
+
+	if (IS_BIT_SET(inst_scfg->RSTCTL, NPCX_RSTCTL_DBGRST_STS)) {
+		data->reset = DEBUG_RST;
+		/* Clear debugger reset status initially */
+		inst_scfg->RSTCTL |= BIT(NPCX_RSTCTL_DBGRST_STS);
+	}
 	if (IS_BIT_SET(inst_twd->T0CSR, NPCX_T0CSR_WDRST_STS)) {
 		data->reset = WATCHDOG_RST;
+		/* Clear watchdog reset status initially */
 		inst_twd->T0CSR |= BIT(NPCX_T0CSR_WDRST_STS);
-	} else if (IS_BIT_SET(inst_scfg->RSTCTL, NPCX_RSTCTL_DBGRST_STS)) {
-		data->reset = DEBUG_RST;
-		inst_scfg->RSTCTL |= BIT(NPCX_RSTCTL_DBGRST_STS);
-	} else if (IS_BIT_SET(inst_scfg->RSTCTL, NPCX_RSTCTL_VCC1_RST_STS)) {
-		data->reset = VCC1_RST_PIN;
-	} else {
-		data->reset = POWERUP;
 	}
 
 	return 0;
@@ -558,7 +572,7 @@ static const struct cros_system_driver_api cros_system_driver_npcx_api = {
 	.chip_vendor = cros_system_npcx_get_chip_vendor,
 	.chip_name = cros_system_npcx_get_chip_name,
 	.chip_revision = cros_system_npcx_get_chip_revision,
-#ifdef CONFIG_NPCX_PM_TRACE
+#ifdef CONFIG_PM
 	.deep_sleep_ticks = cros_system_npcx_deep_sleep_ticks,
 #endif
 };

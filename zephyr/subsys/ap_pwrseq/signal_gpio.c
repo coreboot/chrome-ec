@@ -6,6 +6,7 @@
 #include <power_signals.h>
 #include <signal_gpio.h>
 #include <drivers/gpio.h>
+#include "sysjump.h"
 
 #define MY_COMPAT	intel_ap_pwrseq_gpio
 
@@ -23,6 +24,7 @@ DT_FOREACH_STATUS_OKAY(MY_COMPAT, INIT_GPIO_SPEC)
  */
 struct ps_gpio_int {
 	gpio_flags_t flags;
+	uint8_t signal;
 	unsigned output : 1;
 	unsigned no_enable : 1;
 };
@@ -30,6 +32,7 @@ struct ps_gpio_int {
 #define INIT_GPIO_CONFIG(id)					\
 	{							\
 		.flags = DT_PROP_OR(id, interrupt_flags, 0),	\
+		.signal = PWR_SIGNAL_ENUM(id),			\
 		.no_enable = DT_PROP(id, no_enable),		\
 		.output = DT_PROP(id, output),			\
 	 },
@@ -40,7 +43,7 @@ DT_FOREACH_STATUS_OKAY(MY_COMPAT, INIT_GPIO_CONFIG)
 
 static struct gpio_callback int_cb[ARRAY_SIZE(gpio_config)];
 
-int power_signal_gpio_enable_int(enum pwr_sig_gpio index)
+int power_signal_gpio_enable(enum pwr_sig_gpio index)
 {
 	gpio_flags_t flags;
 
@@ -62,7 +65,7 @@ int power_signal_gpio_enable_int(enum pwr_sig_gpio index)
 	return -EINVAL;
 }
 
-int power_signal_gpio_disable_int(enum pwr_sig_gpio index)
+int power_signal_gpio_disable(enum pwr_sig_gpio index)
 {
 	gpio_flags_t flags;
 
@@ -89,7 +92,10 @@ void power_signal_gpio_interrupt(const struct device *port,
 				 struct gpio_callback *cb,
 				 gpio_port_pins_t pins)
 {
-	power_signal_interrupt();
+	int index = cb - int_cb;
+
+	power_signal_interrupt(gpio_config[index].signal,
+			       gpio_pin_get_dt(&spec[index]));
 }
 
 int power_signal_gpio_get(enum pwr_sig_gpio index)
@@ -112,10 +118,19 @@ int power_signal_gpio_set(enum pwr_sig_gpio index, int value)
 }
 void power_signal_gpio_init(void)
 {
+	/*
+	 * If there has been a sysjump, do not set the output
+	 * to the deasserted state.
+	 * We can't use system_jumped_late() since that is not
+	 * initialised at this point.
+	 */
+	struct jump_data *jdata = get_jump_data();
+	gpio_flags_t out_flags = (jdata && jdata->magic == JUMP_DATA_MAGIC) ?
+				 GPIO_OUTPUT : GPIO_OUTPUT_INACTIVE;
+
 	for (int i = 0; i < ARRAY_SIZE(gpio_config); i++) {
 		if (gpio_config[i].output) {
-			/* Init to deasserted state */
-			gpio_pin_configure_dt(&spec[i], GPIO_OUTPUT_INACTIVE);
+			gpio_pin_configure_dt(&spec[i], out_flags);
 		} else {
 			gpio_pin_configure_dt(&spec[i], GPIO_INPUT);
 			/* If interrupt, initialise it */
@@ -129,7 +144,7 @@ void power_signal_gpio_init(void)
 				 * startup, enable the interrupt.
 				 */
 				if (!gpio_config[i].no_enable) {
-					power_signal_gpio_enable_int(i);
+					power_signal_gpio_enable(i);
 				}
 			}
 		}

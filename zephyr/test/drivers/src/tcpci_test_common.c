@@ -9,7 +9,7 @@
 #include "common.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/tcpc/emul_tcpci.h"
-#include "tcpci_test_common.h"
+#include "test/drivers/tcpci_test_common.h"
 
 #include "tcpm/tcpci.h"
 
@@ -23,6 +23,19 @@ void check_tcpci_reg_f(const struct emul *emul, int reg, uint16_t exp_val,
 		   "Failed tcpci_emul_get_reg(); line: %d", line);
 	zassert_equal(exp_val, reg_val, "Expected 0x%x, got 0x%x; line: %d",
 		      exp_val, reg_val, line);
+}
+
+/** Check TCPC register value with mask */
+void check_tcpci_reg_with_mask_f(const struct emul *emul, int reg,
+				 uint16_t exp_val, uint16_t mask, int line)
+{
+	uint16_t reg_val;
+
+	zassert_ok(tcpci_emul_get_reg(emul, reg, &reg_val),
+		   "Failed tcpci_emul_get_reg(); line: %d", line);
+	zassert_equal(exp_val & mask, reg_val & mask,
+		      "Expected 0x%x, got 0x%x, mask 0x%x; line: %d",
+		      exp_val, reg_val, mask, line);
 }
 
 /** Test TCPCI init and vbus level */
@@ -449,6 +462,7 @@ void test_tcpci_get_rx_message_raw(const struct emul *emul,
 	struct i2c_emul *i2c_emul = tcpci_emul_get_i2c_emul(emul);
 	struct tcpci_emul_msg msg;
 	uint32_t payload[7];
+	uint16_t rx_mask;
 	uint8_t buf[32];
 	int exp_head;
 	int i, head;
@@ -457,15 +471,18 @@ void test_tcpci_get_rx_message_raw(const struct emul *emul,
 	tcpci_emul_set_reg(emul, TCPC_REG_ALERT, 0x0);
 	tcpci_emul_set_reg(emul, TCPC_REG_DEV_CAP_2,
 			   TCPC_REG_DEV_CAP_2_LONG_MSG);
+	tcpci_emul_set_reg(emul, TCPC_REG_RX_DETECT,
+			   TCPC_REG_RX_DETECT_SOP | TCPC_REG_RX_DETECT_SOPP);
 
 	for (i = 0; i < 32; i++) {
 		buf[i] = i + 1;
 	}
 	msg.buf = buf;
-	msg.cnt = 32;
+	msg.cnt = 31;
 	msg.type = TCPCI_MSG_SOP;
-	zassert_ok(tcpci_emul_add_rx_msg(emul, &msg, true),
-		   "Failed to setup emulator message");
+	zassert_equal(TCPCI_EMUL_TX_SUCCESS,
+		      tcpci_emul_add_rx_msg(emul, &msg, true),
+		      "Failed to setup emulator message");
 
 	/* Test fail on reading byte count */
 	i2c_common_emul_set_read_fail_reg(i2c_emul, TCPC_REG_RX_BUFFER);
@@ -474,33 +491,37 @@ void test_tcpci_get_rx_message_raw(const struct emul *emul,
 	i2c_common_emul_set_read_fail_reg(i2c_emul,
 					  I2C_COMMON_EMUL_NO_FAIL_REG);
 	/* Get raw message should always clean RX alerts */
-	check_tcpci_reg(emul, TCPC_REG_ALERT, 0x0);
+	rx_mask = TCPC_REG_ALERT_RX_BUF_OVF | TCPC_REG_ALERT_RX_STATUS;
+	check_tcpci_reg_with_mask(emul, TCPC_REG_ALERT, 0x0, rx_mask);
 
 	/* Test too short message */
-	msg.cnt = 2;
-	zassert_ok(tcpci_emul_add_rx_msg(emul, &msg, true),
-		   "Failed to setup emulator message");
+	msg.cnt = 1;
+	zassert_equal(TCPCI_EMUL_TX_SUCCESS,
+		      tcpci_emul_add_rx_msg(emul, &msg, true),
+		      "Failed to setup emulator message");
 	zassert_equal(EC_ERROR_UNKNOWN,
 		      drv->get_message_raw(port, payload, &head), NULL);
-	check_tcpci_reg(emul, TCPC_REG_ALERT, 0x0);
+	check_tcpci_reg_with_mask(emul, TCPC_REG_ALERT, 0x0, rx_mask);
 
 	/* Test too long message */
-	msg.cnt = 32;
-	zassert_ok(tcpci_emul_add_rx_msg(emul, &msg, true),
-		   "Failed to setup emulator message");
+	msg.cnt = 31;
+	zassert_equal(TCPCI_EMUL_TX_SUCCESS,
+		      tcpci_emul_add_rx_msg(emul, &msg, true),
+		      "Failed to setup emulator message");
 	zassert_equal(EC_ERROR_UNKNOWN,
 		      drv->get_message_raw(port, payload, &head), NULL);
-	check_tcpci_reg(emul, TCPC_REG_ALERT, 0x0);
+	check_tcpci_reg_with_mask(emul, TCPC_REG_ALERT, 0x0, rx_mask);
 
 	/* Test alert register and message payload on success */
 	size = 28;
-	msg.cnt = size + 3;
+	msg.cnt = size + 2;
 	msg.type = TCPCI_MSG_SOP_PRIME;
-	zassert_ok(tcpci_emul_add_rx_msg(emul, &msg, true),
-		   "Failed to setup emulator message");
+	zassert_equal(TCPCI_EMUL_TX_SUCCESS,
+		      tcpci_emul_add_rx_msg(emul, &msg, true),
+		      "Failed to setup emulator message");
 	zassert_equal(EC_SUCCESS, drv->get_message_raw(port, payload, &head),
 		      NULL);
-	check_tcpci_reg(emul, TCPC_REG_ALERT, 0x0);
+	check_tcpci_reg_with_mask(emul, TCPC_REG_ALERT, 0x0, rx_mask);
 	/*
 	 * Type is in bits 31-28 of header, buf[0] is in bits 7-0,
 	 * buf[1] is in bits 15-8
@@ -643,6 +664,8 @@ void test_tcpci_alert_rx_message(const struct emul *emul, enum usbc_port port)
 	tcpci_emul_set_rev(emul, TCPCI_EMUL_REV2_0_VER1_1);
 	tcpci_emul_set_reg(emul, TCPC_REG_DEV_CAP_2,
 			   TCPC_REG_DEV_CAP_2_LONG_MSG);
+	tcpci_emul_set_reg(emul, TCPC_REG_RX_DETECT,
+			   TCPC_REG_RX_DETECT_SOP | TCPC_REG_RX_DETECT_SOPP);
 
 	for (i = 0; i < 32; i++) {
 		buf1[i] = i + 1;
@@ -658,8 +681,9 @@ void test_tcpci_alert_rx_message(const struct emul *emul, enum usbc_port port)
 	msg2.type = TCPCI_MSG_SOP_PRIME;
 
 	/* Test receiving one message */
-	zassert_ok(tcpci_emul_add_rx_msg(emul, &msg1, true),
-		   "Failed to setup emulator message");
+	zassert_equal(TCPCI_EMUL_TX_SUCCESS,
+		      tcpci_emul_add_rx_msg(emul, &msg1, true),
+		      "Failed to setup emulator message");
 	drv->tcpc_alert(port);
 	check_tcpci_reg(emul, TCPC_REG_ALERT, 0x0);
 
@@ -675,10 +699,12 @@ void test_tcpci_alert_rx_message(const struct emul *emul, enum usbc_port port)
 	zassert_false(tcpm_has_pending_message(port), NULL);
 
 	/* Test receiving two messages */
-	zassert_ok(tcpci_emul_add_rx_msg(emul, &msg1, true),
-		   "Failed to setup emulator message");
-	zassert_ok(tcpci_emul_add_rx_msg(emul, &msg2, true),
-		   "Failed to setup emulator message");
+	zassert_equal(TCPCI_EMUL_TX_SUCCESS,
+		      tcpci_emul_add_rx_msg(emul, &msg1, true),
+		      "Failed to setup emulator message");
+	zassert_equal(TCPCI_EMUL_TX_SUCCESS,
+		      tcpci_emul_add_rx_msg(emul, &msg2, true),
+		      "Failed to setup emulator message");
 	drv->tcpc_alert(port);
 	check_tcpci_reg(emul, TCPC_REG_ALERT, 0x0);
 
@@ -706,10 +732,12 @@ void test_tcpci_alert_rx_message(const struct emul *emul, enum usbc_port port)
 	msg1.cnt = 32;
 	tcpci_emul_set_reg(emul, TCPC_REG_DEV_CAP_2,
 			   TCPC_REG_DEV_CAP_2_LONG_MSG);
-	zassert_ok(tcpci_emul_add_rx_msg(emul, &msg1, true),
-		   "Failed to setup emulator message");
-	zassert_ok(tcpci_emul_add_rx_msg(emul, &msg2, true),
-		   "Failed to setup emulator message");
+	zassert_equal(TCPCI_EMUL_TX_SUCCESS,
+		      tcpci_emul_add_rx_msg(emul, &msg1, true),
+		      "Failed to setup emulator message");
+	zassert_equal(TCPCI_EMUL_TX_SUCCESS,
+		      tcpci_emul_add_rx_msg(emul, &msg2, true),
+		      "Failed to setup emulator message");
 	drv->tcpc_alert(port);
 	check_tcpci_reg(emul, TCPC_REG_ALERT, 0x0);
 
@@ -725,8 +753,9 @@ void test_tcpci_alert_rx_message(const struct emul *emul, enum usbc_port port)
 	zassert_false(tcpm_has_pending_message(port), NULL);
 
 	/* Test constant read message failure */
-	zassert_ok(tcpci_emul_add_rx_msg(emul, &msg1, true),
-		   "Failed to setup emulator message");
+	zassert_equal(TCPCI_EMUL_TX_SUCCESS,
+		      tcpci_emul_add_rx_msg(emul, &msg1, true),
+		      "Failed to setup emulator message");
 	/* Create loop with one message with wrong size */
 	msg1.next = &msg1;
 	drv->tcpc_alert(port);

@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+"""Define zmake projects for nissa."""
+
 # Nivviks has NPCX993F, Nereid has ITE81302
 
 
@@ -11,6 +13,7 @@ def register_nissa_project(
     extra_dts_overlays=(),
     extra_kconfig_files=(),
 ):
+    """Register a variant of nissa."""
     register_func = register_binman_project
     if chip.startswith("npcx9"):
         register_func = register_npcx_project
@@ -31,6 +34,8 @@ register_nissa_project(
         here / "nivviks_overlay.dts",
         here / "nivviks_motionsense.dts",
         here / "nivviks_keyboard.dts",
+        here / "nivviks_power_signals.dts",
+        here / "nivviks_pwm_leds.dts",
     ],
     extra_kconfig_files=[here / "prj_nivviks.conf"],
 )
@@ -43,6 +48,8 @@ register_nissa_project(
         here / "nereid_overlay.dts",
         here / "nereid_motionsense.dts",
         here / "nereid_keyboard.dts",
+        here / "nereid_power_signals.dts",
+        here / "nereid_pwm_leds.dts",
     ],
     extra_kconfig_files=[here / "prj_nereid.conf"],
 )

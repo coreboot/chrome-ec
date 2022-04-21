@@ -50,11 +50,10 @@ Example:
 
 ```
 
-Here `vendor_part` will be the default battery type. If this node label is
+Here `vendor_part` will be the default battery type. If this [*node label*] is
 present in the overlay, the [DEFAULT_BATTERY_TYPE] is set in the battery shim
 code with the labeled battery type. The `vendor` and `part` references must
-match an existing battery defined in the aforementioned [battery bindings
-directory].
+match an existing battery defined in [battery bindings directory].
 
 ##### Add the battery present GPIO node as a child of `named-gpios`
 
@@ -138,6 +137,10 @@ requires the battery module for correct operation.
 
 ## Testing and Debugging
 
+### EC Console Commands
+
+#### battery
+
 The `battery` [EC console command] may be invoked to check battery information
 on a flashed board.
 
@@ -170,17 +173,101 @@ full_factor:0.97
 shutdown_soc:4 %
 ```
 
+#### pwr_avg
+
+The `pwr_avg` [EC console command] logs the battery charging rate by querying
+the battery fuel gauge driver.
+
+Example output of `uart:~$ pwr_avg`:
+
+Charging
+
+```
+mv = 13073
+ma = 439
+mw = 573
+```
+
+Discharging
+
+```
+mv = 12824
+ma = -146
+mw = -1872
+```
+
+Note: A fully charged board may report `ma = 0` and `mw = 0` average rates.
+
+#### chgstate
+
+The `chgstate` [EC console command] may be invoked to debug and manipulate machine
+charging state.
+
+Example output of `uart:~$ chgstate`:
+
+```
+state = charge
+ac = 1
+batt_is_charging = 1
+chg.*:
+	voltage = 13200mV
+	current = 0mA
+	input_current = 3000mA
+	status = 0xc010
+	option = 0x2830004
+	flags = 0x0
+batt.*:
+	temperature = 26C
+	state_of_charge = 100%
+	voltage = 13037mV
+	current = 0mA
+	desired_voltage = 0mV
+	desired_current = 0mA
+	flags = 0x2
+	remaining_capacity = 4436mAh
+	full_capacity = 4436mAh
+	is_present = YES
+requested_voltage = 0mV
+requested_current = 0mA
+chg_ctl_mode = 0
+manual_voltage = -1
+manual_current = -1
+user_current_limit = -1mA
+battery_seems_to_be_dead = 0
+battery_seems_to_be_disconnected = 0
+battery_was_removed = 0
+debug output = off
+```
+
+### AP Console Commands (ectool)
+
+#### chargestate
+
+The `chargestate` [ectool] command may be invoked to debug and manipulate
+machine charging state.
+
+Usage output of `uart: # ectool chargestate`:
+
+```
+Usage:
+  chargestate show                  - show current state
+  chargestate param NUM [VALUE]     - get/set param NUM
+  chargestate param help            - show known param NUMs
+```
+
 <!-- Reference Links -->
 
+[CONFIG_PLATFORM_EC_BATTERY_PRESENT_CUSTOM]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/Kconfig.battery?q=%22PLATFORM_EC_BATTERY_PRESENT_CUSTOM%22&ss=chromiumos
 [DEFAULT_BATTERY_TYPE]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/shim/src/battery.c?q=%22DEFAULT_BATTERY_TYPE%22&ss=chromiumos
 [EC console command]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/README.md#useful-ec-console-commands
 [Example CL adding a new battery]: https://chromium-review.googlesource.com/c/chromiumos/platform/ec/+/3312506/
 [Example CL enabling batteries on a board]: https://chromium-review.googlesource.com/c/chromiumos/platform/ec/+/3200068/
 [Kconfig.battery]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/Kconfig.battery
-[CONFIG_PLATFORM_EC_BATTERY_PRESENT_CUSTOM]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/Kconfig.battery?q=%22PLATFORM_EC_BATTERY_PRESENT_CUSTOM%22&ss=chromiumos
 [Zephyr I2C]: zephyr_i2c.md#Mapping-legacy-I2C-port-numbers-to-Zephyr-devicetree-nodes
 [Zephyr gpios]: zephyr_gpio.md#Devicetree-Nodes
 [battery bindings directory]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/dts/bindings/battery/
 [battery-smart enum]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/dts/bindings/battery/battery-smart.yaml?q=%22enum:%22&ss=chromiumos
 [cros-ec-i2c-port-base.yaml]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/dts/bindings/i2c/cros-ec-i2c-port-base.yaml
+[ectool]: ../ap-ec-comm.md
 [task]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/shim/include/shimmed_task_id.h
+[*node label*]: https://docs.zephyrproject.org/latest/build/dts/intro.html#dt-node-labels

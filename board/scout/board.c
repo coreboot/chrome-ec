@@ -98,7 +98,7 @@ static struct tcs3400_rgb_drv_data_t g_tcs3400_rgb_data = {
 struct motion_sensor_t motion_sensors[] = {
 	[CLEAR_ALS] = {
 		.name = "Clear Light",
-		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.active_mask = SENSOR_ACTIVE_S0,
 		.chip = MOTIONSENSE_CHIP_TCS3400,
 		.type = MOTIONSENSE_TYPE_LIGHT,
 		.location = MOTIONSENSE_LOC_BASE,
@@ -119,7 +119,7 @@ struct motion_sensor_t motion_sensors[] = {
 	},
 	[RGB_ALS] = {
 		.name = "RGB Light",
-		.active_mask = SENSOR_ACTIVE_S0_S3,
+		.active_mask = SENSOR_ACTIVE_S0,
 		.chip = MOTIONSENSE_CHIP_TCS3400,
 		.type = MOTIONSENSE_TYPE_LIGHT_RGB,
 		.location = MOTIONSENSE_LOC_BASE,
@@ -560,10 +560,26 @@ void board_enable_s0_rails(int enable)
 	gpio_set_level(GPIO_EC_MX8M_ONOFF, enable);
 	gpio_set_level(GPIO_EC_CAM_V3P3_EN, enable);
 
-	gpio_set_level(GPIO_PP3300_TPU_A_EN, enable);
-
 	gpio_set_level(GPIO_EN_LOAD_SWITCH, enable);
 }
+
+/*
+ * TPU is turned on in S0, off in S0ix and lower.
+ */
+static void disable_tpu_power(void)
+{
+	gpio_set_level(GPIO_PP3300_TPU_A_EN, 0);
+	gpio_set_level(GPIO_EC_IMX8_EN, 0);
+}
+
+static void enable_tpu_power(void)
+{
+	gpio_set_level(GPIO_PP3300_TPU_A_EN, 1);
+	gpio_set_level(GPIO_EC_IMX8_EN, 1);
+}
+
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, disable_tpu_power, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, enable_tpu_power, HOOK_PRIO_DEFAULT);
 
 int ec_config_get_usb4_present(void)
 {

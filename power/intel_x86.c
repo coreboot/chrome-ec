@@ -179,7 +179,8 @@ static void lpc_s0ix_resume_restore_masks(void)
 	backup_sci_mask = backup_smi_mask = 0;
 }
 
-static void lpc_s0ix_hang_detected(void)
+__override void power_chipset_handle_sleep_hang(
+		enum sleep_hang_type hang_type)
 {
 	/*
 	 * Wake up the AP so they don't just chill in a non-suspended state and
@@ -570,18 +571,16 @@ void common_intel_x86_handle_rsmrst(enum power_state state)
 
 	board_before_rsmrst(rsmrst_in);
 
-#ifdef CONFIG_CHIPSET_APL_GLK
 	/* Only passthrough RSMRST_L de-assertion on power up */
-	if (rsmrst_in && !power_s5_up)
+	if (IS_ENABLED(CONFIG_CHIPSET_X86_RSMRST_AFTER_S5) &&
+		rsmrst_in && !power_s5_up)
 		return;
-#elif defined(CONFIG_CHIPSET_X86_RSMRST_DELAY)
 	/*
 	 * Wait at least 10ms between power signals going high
 	 * and deasserting RSMRST to PCH.
 	 */
-	if (rsmrst_in)
+	if (IS_ENABLED(CONFIG_CHIPSET_X86_RSMRST_DELAY) && rsmrst_in)
 		msleep(10);
-#endif
 
 	gpio_set_level(GPIO_PCH_RSMRST_L, rsmrst_in);
 
@@ -613,7 +612,7 @@ __override void power_chipset_handle_host_sleep_event(
 		 */
 		sleep_set_notify(SLEEP_NOTIFY_SUSPEND);
 
-		sleep_start_suspend(ctx, lpc_s0ix_hang_detected);
+		sleep_start_suspend(ctx);
 		power_signal_enable_interrupt(sleep_sig[SYS_SLEEP_S0IX]);
 	} else if (state == HOST_SLEEP_EVENT_S0IX_RESUME) {
 		/*

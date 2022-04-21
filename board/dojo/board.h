@@ -9,11 +9,7 @@
 
 #include "baseboard.h"
 
-/* Chipset config */
-#define CONFIG_BRINGUP
-
 /* Optional features */
-#define CONFIG_SYSTEM_UNLOCKED
 #define CONFIG_LTO
 #define CONFIG_PRESERVE_LOGS
 
@@ -30,6 +26,9 @@
 #define CONFIG_BATTERY_VENDOR_PARAM
 
 /* BC12 */
+
+/* Charger */
+#define CONFIG_CHARGER_PROFILE_OVERRIDE
 
 /* PD / USB-C / PPC */
 #undef CONFIG_USB_PD_DEBUG_LEVEL /* default to 1, configurable in ec console */
@@ -48,17 +47,20 @@
 #define CONFIG_GMR_TABLET_MODE
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
+#define CONFIG_I2C_XFER_LARGE_TRANSFER
 
 /* ICM426XX Base accel/gyro */
-#define CONFIG_ACCELGYRO_ICM42607
-#define CONFIG_ACCELGYRO_ICM42607_INT_EVENT \
+#define CONFIG_ACCELGYRO_ICM426XX
+#define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+/* BMI260 accel/gyro in base */
+#define CONFIG_ACCELGYRO_BMI260
+#define CONFIG_ACCELGYRO_BMI260_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 /* KX022 Lid accel */
 #define CONFIG_ACCEL_KX022
-
-/* BMA422 Lid accel */
-#define CONFIG_ACCEL_BMA4XX
 
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 
@@ -110,7 +112,32 @@ enum pwm_channel {
 	PWM_CH_COUNT,
 };
 
+/* Temperature charging level */
+enum temp_chg_lvl {
+	LEVEL_0 = 0,
+	LEVEL_1,
+	LEVEL_2,
+	CHG_LEVEL_COUNT,
+};
+
+/* Temperature charging struct */
+struct temp_chg_struct {
+	int lo_thre;
+	int hi_thre;
+	int chg_curr;
+};
+
+/* Forward declaration of temperature charging table */
+extern const struct temp_chg_struct temp_chg_table[];
+
+/* Vol-up key matrix struct */
+struct vol_up_key {
+	uint8_t row;
+	uint8_t col;
+};
+
 int board_accel_force_mode_mask(void);
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

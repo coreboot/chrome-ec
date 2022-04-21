@@ -351,7 +351,7 @@ int system_jumped_to_this_image(void)
 	return jumped_to_image;
 }
 
-int system_jumped_late(void)
+test_mockable int system_jumped_late(void)
 {
 	return !(reset_flags & EC_RESET_FLAG_EFS) && jumped_to_image;
 }
@@ -1068,8 +1068,9 @@ void system_enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	 * this is to prevent an action triggered by developers.
 	 * See: b/192259035
 	 */
-	if (IS_ENABLED(CONFIG_EXTPOWER) && IS_ENABLED(HAS_TASK_CHIPSET)
-			&& extpower_is_present()) {
+	if (IS_ENABLED(CONFIG_EXTPOWER) &&
+	    (IS_ENABLED(HAS_TASK_CHIPSET) || IS_ENABLED(CONFIG_AP_PWRSEQ)) &&
+	    extpower_is_present()) {
 		CPRINTS("AC on, skip hibernate");
 		return;
 	}

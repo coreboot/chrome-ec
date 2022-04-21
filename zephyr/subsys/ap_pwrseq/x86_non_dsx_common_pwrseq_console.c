@@ -16,8 +16,8 @@ static int powerinfo_handler(const struct shell *shell, size_t argc,
 	int state;
 
 	state = pwr_sm_get_state();
-	shell_fprintf(shell, SHELL_INFO, "Power state = %d (%s)\n",
-					state, pwrsm_dbg[state]);
+	shell_fprintf(shell, SHELL_INFO, "power state %d = %s, in 0x%04x\n",
+		      state, pwrsm_dbg[state], power_get_signals());
 	return 0;
 }
 
@@ -75,7 +75,7 @@ SHELL_CMD_REGISTER(apshutdown, NULL, NULL, apshutdown_handler);
 static int apreset_handler(const struct shell *shell, size_t argc,
 							char **argv)
 {
-	chipset_reset(PWRSEQ_CHIPSET_SHUTDOWN_CONSOLE_CMD);
+	ap_power_reset(AP_POWER_SHUTDOWN_CONSOLE_CMD);
 	return 0;
 }
 

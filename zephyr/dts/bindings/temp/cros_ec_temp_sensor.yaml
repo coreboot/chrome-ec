@@ -7,6 +7,8 @@ description: >
   Zero values in degrees K(-273 in degrees C)in thermal thresholds will
   be ignored
 
+compatible: cros-ec,temp-sensor
+
 properties:
     label:
       required: true
@@ -23,6 +25,8 @@ properties:
       enum:
       - TEMP_SENSOR_1
       - TEMP_SENSOR_2
+      - TEMP_SENSOR_3
+      - TEMP_SENSOR_4
       - TEMP_SENSOR_AMB
       - TEMP_SENSOR_CHARGER
       - TEMP_SENSOR_CPU
@@ -35,6 +39,13 @@ properties:
       - TEMP_SENSOR_2_AMBIENT
       - TEMP_SENSOR_3_CHARGER
       - TEMP_SENSOR_4_WWAN
+
+    power-good-pin:
+      type: phandle
+      description:
+        If this sensor will be unpowered some of the time, provide an input GPIO
+        which can be referenced to detect whether the sensor is powered before
+        reading.
 
     temp_fan_off:
       type: int
