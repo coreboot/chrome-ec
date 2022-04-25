@@ -1759,7 +1759,7 @@ static int command_accel_read_xyz(int argc, char **argv)
 
 	sensor = &motion_sensors[id];
 
-	while ((n == -1) || (n-- > 0)) {
+	while ((n-- > 0)) {
 		ret = sensor->drv->read(sensor, v);
 		if (ret == 0)
 			ccprintf("Current data %d: %-5d %-5d %-5d\n",
@@ -1807,7 +1807,7 @@ static int command_display_accel_info(int argc, char **argv)
 {
 	int val, i, j;
 
-	if (argc > 3)
+	if (argc >= 3)
 		return EC_ERROR_PARAM_COUNT;
 
 	ccprintf("Motion sensors count = %d\n", motion_sensor_count);
@@ -1845,9 +1845,8 @@ static int command_display_accel_info(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(accelinfo, command_display_accel_info,
-	"on/off [interval]",
-	"Print motion sensor info, lid angle calculations"
-	" and set calculation frequency.");
+	"on/off",
+	"Print motion sensor info, lid angle calculations.");
 #endif /* CONFIG_CMD_ACCEL_INFO */
 
 #endif /* CONFIG_CMD_ACCELS */

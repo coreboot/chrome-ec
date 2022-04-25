@@ -307,14 +307,11 @@
 
 /*
  * Note - ISL9241 chargers for all channels are configured with the same
- * switching frequency. Use the first ISL9241 instance found in the device tree.
+ * switching frequency set with the Kconfig config.
  */
 #undef CONFIG_ISL9241_SWITCHING_FREQ
-#define ISL9241_NODE	DT_INST(0, intersil_isl9241)
-#if DT_NODE_EXISTS(ISL9241_NODE) && \
-	DT_NODE_HAS_PROP(ISL9241_NODE, switching_frequency)
-#define CONFIG_ISL9241_SWITCHING_FREQ \
-	DT_PROP(ISL9241_NODE, switching_frequency)
+#if CONFIG_PLATFORM_EC_ISL9241_SWITCHING_FREQ != -1
+#define CONFIG_ISL9241_SWITCHING_FREQ CONFIG_PLATFORM_EC_ISL9241_SWITCHING_FREQ
 #endif
 
 #undef CONFIG_CHARGER_ISL9237
@@ -440,6 +437,11 @@
 #undef CONFIG_HOSTCMD_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
 #ifdef CONFIG_PLATFORM_EC_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
 #define CONFIG_HOSTCMD_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
+#endif
+
+#undef CONFIG_ESPI_DEFAULT_SCI_WIDTH_US
+#ifdef CONFIG_PLATFORM_EC_DEFAULT_SCI_WIDTH_US
+#define CONFIG_ESPI_DEFAULT_SCI_WIDTH_US CONFIG_PLATFORM_EC_DEFAULT_SCI_WIDTH_US
 #endif
 
 #if DT_HAS_CHOSEN(zephyr_flash)
@@ -823,6 +825,10 @@ extern struct jump_data mock_jump_data;
 #define CONFIG_CHIPSET_X86_RSMRST_DELAY
 #endif
 
+#ifdef CONFIG_PLATFORM_EC_POWERSEQ_RSMRST_AFTER_S5
+#define CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
+#endif
+
 #ifdef CONFIG_PLATFORM_EC_POWERSEQ_SLP_S3_L_OVERRIDE
 #define CONFIG_CHIPSET_SLP_S3_L_OVERRIDE
 #endif
@@ -1055,6 +1061,11 @@ extern struct jump_data mock_jump_data;
 		    (DT_PROP_LEN(DT_INST(0, cros_ec_usba_port_enable_pins),    \
 				 enable_pins)),                                \
 		    (0))
+
+#undef CONFIG_USB_PORT_ENABLE_DYNAMIC
+#ifdef CONFIG_PLATFORM_EC_USB_PORT_ENABLE_DYNAMIC
+#define CONFIG_USB_PORT_ENABLE_DYNAMIC
+#endif
 
 #undef CONFIG_USB_PORT_POWER_DUMB
 #ifdef CONFIG_PLATFORM_EC_USB_PORT_POWER_DUMB
@@ -1404,6 +1415,22 @@ extern struct jump_data mock_jump_data;
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT \
 	CONFIG_PLATFORM_EC_USB_PD_ITE_ACTIVE_PORT_COUNT
 #endif
+
+/* Remove PD_INT_C* task for ports managed by ITE embedded TCPC */
+#ifdef CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT
+#if CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT >= 1
+#undef HAS_TASK_PD_INT_C0
+#endif
+#if CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT >= 2
+#undef HAS_TASK_PD_INT_C1
+#endif
+#if CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT >= 3
+#undef HAS_TASK_PD_INT_C2
+#endif
+#if CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT >= 4
+#undef HAS_TASK_PD_INT_C3
+#endif
+#endif /* CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT */
 
 #undef CONFIG_USB_PD_PPC
 #ifdef CONFIG_PLATFORM_EC_USB_PD_PPC
@@ -1877,6 +1904,17 @@ extern struct jump_data mock_jump_data;
 #undef CONFIG_MATH_UTIL
 #ifdef CONFIG_PLATFORM_EC_MATH_UTIL
 #define CONFIG_MATH_UTIL
+#endif
+
+#undef CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY
+#ifdef CONFIG_PLATFORM_EC_MAX695X_SEVEN_SEGMENT_DISPLAY
+#define CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY
+#define PORT80_I2C_ADDR DT_REG_ADDR(DT_NODELABEL(seven_seg_display))
+#endif
+
+#undef CONFIG_CMD_SEVEN_SEG_DISPLAY
+#ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_SEVEN_SEGMENT_DISPLAY
+#define CONFIG_CMD_SEVEN_SEG_DISPLAY
 #endif
 
 #undef CONFIG_HOSTCMD_GET_UPTIME_INFO

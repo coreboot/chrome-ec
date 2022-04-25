@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Brya board configuration */
+/* Osiris board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
@@ -11,7 +11,7 @@
 #include "compile_time_macros.h"
 
 /*
- * Early brya boards are not set up for vivaldi
+ * Early osiris boards are not set up for vivaldi
  */
 #undef CONFIG_KEYBOARD_VIVALDI
 
@@ -43,13 +43,6 @@
 #define CONFIG_ACCEL_LSM6DSO_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
-/* TCS3400 ALS */
-#define CONFIG_ALS
-#define ALS_COUNT 1
-#define CONFIG_ALS_TCS3400
-#define CONFIG_ALS_TCS3400_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
-
 /* Enable sensor fifo, must also define the _SIZE and _THRES */
 #define CONFIG_ACCEL_FIFO
 /* FIFO size is in power of 2. */
@@ -58,8 +51,7 @@
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
 
 /* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK \
-	(BIT(LID_ACCEL) | BIT(CLEAR_ALS))
+#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 
 /* Lid accel */
 #define CONFIG_LID_ANGLE
@@ -103,7 +95,7 @@
 #define CONFIG_USBC_PPC_SYV682X
 #define CONFIG_USBC_PPC_NX20P3483
 
-/* TODO: b/177608416 - measure and check these values on brya */
+/* TODO: b/177608416 - measure and check these values on osiris */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 #define PD_VCONN_SWAP_DELAY		5000 /* us */
@@ -204,13 +196,10 @@
 #define CONFIG_FANS			FAN_CH_COUNT
 
 /* Charger defines */
-#define CONFIG_CHARGER_BQ25720
-#define CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
-#define CONFIG_CHARGER_BQ25720_VSYS_TH2_DV	70
+#define CONFIG_CHARGER_ISL9241
 #define CONFIG_CHARGE_RAMP_SW
-#define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR		10
-#define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC	10
-#define CONFIG_CHARGER_BQ25710_PSYS_SENSING
+#define CONFIG_CHARGER_SENSE_RESISTOR		10
+#define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
 
 /*
  * Older boards have a different ADC assignment.
@@ -228,7 +217,6 @@ enum adc_channel {
 	ADC_TEMP_SENSOR_1_DDR_SOC,
 	ADC_TEMP_SENSOR_2_AMBIENT,
 	ADC_TEMP_SENSOR_3_CHARGER,
-	ADC_TEMP_SENSOR_4_WWAN,
 	ADC_CH_COUNT
 };
 
@@ -236,7 +224,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
 	TEMP_SENSOR_2_AMBIENT,
 	TEMP_SENSOR_3_CHARGER,
-	TEMP_SENSOR_4_WWAN,
 	TEMP_SENSOR_COUNT
 };
 
@@ -244,8 +231,6 @@ enum sensor_id {
 	LID_ACCEL = 0,
 	BASE_ACCEL,
 	BASE_GYRO,
-	CLEAR_ALS,
-	RGB_ALS,
 	SENSOR_COUNT
 };
 
@@ -258,8 +243,7 @@ enum ioex_port {
 };
 
 enum battery_type {
-	BATTERY_POWER_TECH,
-	BATTERY_LGC011,
+	BATTERY_AP19B8M,
 	BATTERY_TYPE_COUNT
 };
 

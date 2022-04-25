@@ -1336,6 +1336,7 @@
 
 /* Wireless chargers */
 #undef CONFIG_WIRELESS_CHARGER_P9221_R7
+#undef CONFIG_CPS8100
 
 /*****************************************************************************/
 
@@ -1464,6 +1465,9 @@
  * and deasserting RSMRST to PCH.
  */
 #undef CONFIG_CHIPSET_X86_RSMRST_DELAY
+
+/* Passthrough RSMRST_L de-assertion after S5 */
+#undef CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
 
 /* Support PMIC reset(using LDO_EN) in chipset */
 #undef CONFIG_CHIPSET_HAS_PLATFORM_PMIC_RESET
@@ -3136,6 +3140,7 @@
 #undef CONFIG_LED_DRIVER_LP5562  /* LP5562, on I2C interface */
 #undef CONFIG_LED_DRIVER_MP3385   /* MPS MP3385, on I2C */
 #undef CONFIG_LED_DRIVER_OZ554   /* O2Micro OZ554, on I2C */
+#undef CONFIG_LED_DRIVER_IS31FL3733B /* Lumissil IS31FL3733B on I2C */
 #undef CONFIG_LED_DRIVER_IS31FL3743B /* Lumissil IS31FL3743B on SPI */
 #undef CONFIG_LED_DRIVER_AW20198     /* Awinic AW20198 on I2C */
 
@@ -5638,6 +5643,12 @@
  */
 #define CONFIG_CCD_USBC_PORT_NUMBER	0
 
+/*
+ * The historical default SCI pulse width to the host is 65 microseconds, but
+ * some chipsets may require different widths.
+ */
+#define CONFIG_ESPI_DEFAULT_SCI_WIDTH_US	65
+
 /*****************************************************************************/
 /*
  * Include board and core configs, since those hold the CONFIG_ constants for a
@@ -6321,6 +6332,7 @@
 
 #if defined(CONFIG_CHIPSET_APL_GLK)
 #define CONFIG_CHIPSET_HAS_PRE_INIT_CALLBACK
+#define CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
 #endif
 
 #if defined(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540) || \

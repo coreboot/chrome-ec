@@ -3,17 +3,12 @@
  * found in the LICENSE file.
  */
 
-/* Brya board configuration */
+/* Crota board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
 #include "compile_time_macros.h"
-
-/*
- * Early brya boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
 
 /* Baseboard features */
 #include "baseboard.h"
@@ -153,6 +148,9 @@
 /* System has back-lit keyboard */
 #define CONFIG_PWM_KBLIGHT
 
+/* Keyboard features */
+#define CONFIG_KEYBOARD_REFRESH_ROW3
+
 /* I2C Bus Configuration */
 
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
@@ -181,7 +179,9 @@
  * see b/174768555#comment22
  */
 #define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x56
-#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x57
+#define USBC_PORT_C1_SOC_BB_RETIMER_I2C_ADDR    0x57
+/* Type-C connector facing Burnside Bridge retimer */
+#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x58
 
 /* Enabling Thunderbolt-compatible mode */
 #define CONFIG_USB_PD_TBT_COMPAT_MODE
@@ -189,8 +189,11 @@
 /* Enabling USB4 mode */
 #define CONFIG_USB_PD_USB4
 
+/*
+ * TODO: b/229934138, Disable BBR firmware update temporarily.
+ */
 /* Retimer */
-#define CONFIG_USBC_RETIMER_FW_UPDATE
+#undef CONFIG_USBC_RETIMER_FW_UPDATE
 
 /* Thermal features */
 #define CONFIG_THERMISTOR

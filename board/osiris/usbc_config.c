@@ -341,13 +341,7 @@ void board_reset_pd_mcu(void)
 {
 	enum gpio_signal tcpc_rst;
 
-	if (get_board_id() == 1)
-/* TODO: explore how to handle board id in zephyr*/
-#ifndef CONFIG_ZEPHYR
-		tcpc_rst = GPIO_ID_1_USB_C0_C2_TCPC_RST_ODL;
-	else
-#endif /* !CONFIG_ZEPHYR */
-		tcpc_rst = GPIO_USB_C0_C2_TCPC_RST_ODL;
+	tcpc_rst = GPIO_USB_C0_C2_TCPC_RST_ODL;
 
 	/*
 	 * TODO(b/179648104): figure out correct timing
@@ -470,9 +464,6 @@ void bc12_interrupt(enum gpio_signal signal)
 		if (ec_cfg_usb_db_type() == DB_USB_ABSENT)
 			break;
 		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
-		break;
-	case GPIO_USB_C2_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P2, USB_CHG_EVENT_BC12);
 		break;
 	default:
 		break;

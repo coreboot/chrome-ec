@@ -47,16 +47,16 @@
  *                         v |                      |
  *                  +--------+------+               |
  *   +------------->|    ENABLED    |               |
- *   |              +-----+-+-------+               |
- *   |                    | |                       |
- *   |   DEVICE_CONNECTED | | DEVICE_DOCKED         |
- *   |                    | v                       |
- *   | DEVICE_LOST  +---------------+               |
- *   +--------------+     DOCKED    +---------------+
- *   |              +-------+-------+               |
- *   |                    | |                       |
- *   |                    | | DEVICE_CONNECTED      |
- *   |                    v v                       |
+ *   |              +-----+------+--+               |
+ *   |                    |      |                  |
+ *   |    DEVICE_DETECTED |      | DEVICE_CONNECTED |
+ *   |                    v      |                  |
+ *   | DEVICE_LOST  +----------+ |                  |
+ *   +--------------+ DETECTED +-|------------------+
+ *   |              +-----+----+ |     ERROR        |
+ *   |                    |      |                  |
+ *   |    DEVICE_CONNECTED|      |                  |
+ *   |                    v      v                  |
  *   |              +---------------+               |
  *   +--------------+   CONNECTED   +---------------+
  *   | DEVICE_LOST  +------+--------+  ERROR        |
@@ -69,7 +69,7 @@
  *     DEVICE_LOST  +---------------+  ERROR
  *
  *
- * In download (update firmware) mode, the state machine transitions as follows:
+ * In download (firmware update) mode, the state machine transitions as follows:
  *
  *                  +---------------+
  *                  |   DOWNLOAD    |
@@ -259,5 +259,13 @@ void pchg_irq(enum gpio_signal signal);
  * Task running a state machine for charging peripheral devices.
  */
 void pchg_task(void *u);
+
+/**
+ * Turn on/off power for a PCHG charger.
+ *
+ * @param port  Port number of the PCHG charger.
+ * @param on
+ */
+__override_proto void board_pchg_power_on(int port, bool on);
 
 #endif /* __CROS_EC_PERIPHERAL_CHARGER_H */

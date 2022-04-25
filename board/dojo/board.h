@@ -47,6 +47,7 @@
 #define CONFIG_GMR_TABLET_MODE
 #define CONFIG_TABLET_MODE
 #define CONFIG_TABLET_MODE_SWITCH
+#define CONFIG_I2C_XFER_LARGE_TRANSFER
 
 /* ICM426XX Base accel/gyro */
 #define CONFIG_ACCELGYRO_ICM426XX
@@ -128,6 +129,12 @@ struct temp_chg_struct {
 
 /* Forward declaration of temperature charging table */
 extern const struct temp_chg_struct temp_chg_table[];
+
+/* Vol-up key matrix struct */
+struct vol_up_key {
+	uint8_t row;
+	uint8_t col;
+};
 
 int board_accel_force_mode_mask(void);
 void motion_interrupt(enum gpio_signal signal);

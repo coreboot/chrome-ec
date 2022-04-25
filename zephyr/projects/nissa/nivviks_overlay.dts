@@ -192,6 +192,11 @@
 				 * usb_c0_interrupt.
 				 */
 			};
+			chg {
+				compatible = "intersil,isl923x";
+				status = "okay";
+				port = <&i2c_ec_i2c_usb_c0>;
+			};
 		};
 		/*
 		 * TODO(b:211693800): port1 may not be present on some
@@ -204,15 +209,19 @@
 				compatible = "pericom,pi3usb9201";
 				port = <&i2c_ec_i2c_sub_usb_c1>;
 			};
+			chg {
+				compatible = "intersil,isl923x";
+				status = "okay";
+				port = <&i2c_ec_i2c_sub_usb_c1>;
+			};
 		};
 	};
 
-	named-fans {
-		compatible = "named-fans";
+	fans {
+		compatible = "cros-ec,fans";
 
 		fan_0 {
-			label = "FAN_0";
-			pwms = <&pwm5 5 PWM_POLARITY_NORMAL>;
+			pwms = <&pwm5 5 0 PWM_POLARITY_NORMAL>;
 			pwm-frequency = <1000>;
 			rpm_min = <2200>;
 			rpm_start = <2200>;

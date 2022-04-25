@@ -30,6 +30,7 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pd_timer.h"
+#include "usb_pe_private.h"
 #include "usb_pe_sm.h"
 #include "usb_tbt_alt_mode.h"
 #include "usb_prl_sm.h"
@@ -71,9 +72,22 @@
 #define CPRINTS_L2(format, args...) CPRINTS_LX(2, format, ## args)
 #define CPRINTS_L3(format, args...) CPRINTS_LX(3, format, ## args)
 
-#define PE_SET_FLAG(port, flag) atomic_or(&pe[port].flags, (flag))
-#define PE_CLR_FLAG(port, flag) atomic_clear_bits(&pe[port].flags, (flag))
-#define PE_CHK_FLAG(port, flag) (pe[port].flags & (flag))
+#define PE_SET_FN(port, _fn) atomic_or(ATOMIC_ELEM(pe[port].flags_a, (_fn)), \
+				       ATOMIC_MASK(_fn))
+#define PE_CLR_FN(port, _fn) atomic_clear_bits(ATOMIC_ELEM(pe[port].flags_a, \
+						(_fn)), ATOMIC_MASK(_fn))
+#define PE_CHK_FN(port, _fn) (pe[port].flags_a[ATOMIC_ELEM(0, (_fn))] & \
+			      ATOMIC_MASK(_fn))
+
+#define PE_SET_FLAG(port, name) PE_SET_FN(port, (name ## _FN))
+#define PE_CLR_FLAG(port, name) PE_CLR_FN(port, (name ## _FN))
+#define PE_CHK_FLAG(port, name) PE_CHK_FN(port, (name ## _FN))
+
+/*
+ * TODO(b/229655319): support more than 32 bits
+ */
+#define PE_SET_MASK(port, mask) atomic_or(&pe[port].flags_a[0], (mask))
+#define PE_CLR_MASK(port, mask) atomic_clear_bits(&pe[port].flags_a[0], (mask))
 
 /*
  * These macros SET, CLEAR, and CHECK, a DPM (Device Policy Manager)
@@ -84,85 +98,11 @@
 	atomic_clear_bits(&pe[port].dpm_request, (req))
 #define PE_CHK_DPM_REQUEST(port, req) (pe[port].dpm_request & (req))
 
-/*
- * Policy Engine Layer Flags
- * These are reproduced in test/usb_pe.h. If they change here, they must change
- * there.
- */
-
-/* At least one successful PD communication packet received from port partner */
-#define PE_FLAGS_PD_CONNECTION               BIT(0)
-/* Accept message received from port partner */
-#define PE_FLAGS_ACCEPT                      BIT(1)
-/* Power Supply Ready message received from port partner */
-#define PE_FLAGS_PS_READY                    BIT(2)
-/* Protocol Error was determined based on error recovery current state */
-#define PE_FLAGS_PROTOCOL_ERROR              BIT(3)
-/* Set if we are in Modal Operation */
-#define PE_FLAGS_MODAL_OPERATION             BIT(4)
-/* A message we requested to be sent has been transmitted */
-#define PE_FLAGS_TX_COMPLETE                 BIT(5)
-/* A message sent by a port partner has been received */
-#define PE_FLAGS_MSG_RECEIVED                BIT(6)
-/* A hard reset has been requested but has not been sent, not currently used */
-#define PE_FLAGS_HARD_RESET_PENDING          BIT(7)
-/* Port partner sent a Wait message. Wait before we resend our message */
-#define PE_FLAGS_WAIT                        BIT(8)
-/* An explicit contract is in place with our port partner */
-#define PE_FLAGS_EXPLICIT_CONTRACT           BIT(9)
-/* Waiting for Sink Capabailities timed out.  Used for retry error handling */
-#define PE_FLAGS_SNK_WAIT_CAP_TIMEOUT        BIT(10)
-/* Power Supply voltage/current transition timed out */
-#define PE_FLAGS_PS_TRANSITION_TIMEOUT       BIT(11)
-/* Flag to note current Atomic Message Sequence is interruptible */
-#define PE_FLAGS_INTERRUPTIBLE_AMS           BIT(12)
-/* Flag to note Power Supply reset has completed */
-#define PE_FLAGS_PS_RESET_COMPLETE           BIT(13)
-/* VCONN swap operation has completed */
-#define PE_FLAGS_VCONN_SWAP_COMPLETE         BIT(14)
-/* Flag to note no more setup VDMs (discovery, etc.) should be sent */
-#define PE_FLAGS_VDM_SETUP_DONE              BIT(15)
-/* Flag to note PR Swap just completed for Startup entry */
-#define PE_FLAGS_PR_SWAP_COMPLETE	     BIT(16)
-/* Flag to note Port Discovery port partner replied with BUSY */
-#define PE_FLAGS_VDM_REQUEST_BUSY            BIT(17)
-/* Flag to note Port Discovery port partner replied with NAK */
-#define PE_FLAGS_VDM_REQUEST_NAKED           BIT(18)
-/* Flag to note FRS/PRS context in shared state machine path */
-#define PE_FLAGS_FAST_ROLE_SWAP_PATH         BIT(19)
-/* Flag to note if FRS listening is enabled */
-#define PE_FLAGS_FAST_ROLE_SWAP_ENABLED      BIT(20)
-/* Flag to note TCPC passed on FRS signal from port partner */
-#define PE_FLAGS_FAST_ROLE_SWAP_SIGNALED     BIT(21)
-/* TODO: POLICY decision: Triggers a DR SWAP attempt from UFP to DFP */
-#define PE_FLAGS_DR_SWAP_TO_DFP              BIT(22)
-/*
- * TODO: POLICY decision
- * Flag to trigger a message resend after receiving a WAIT from port partner
- */
-#define PE_FLAGS_WAITING_PR_SWAP             BIT(23)
-/* FLAG is set when an AMS is initiated locally. ie. AP requested a PR_SWAP */
-#define PE_FLAGS_LOCALLY_INITIATED_AMS       BIT(24)
-/* Flag to note the first message sent in PE_SRC_READY and PE_SNK_READY */
-#define PE_FLAGS_FIRST_MSG                   BIT(25)
-/* Flag to continue a VDM request if it was interrupted */
-#define PE_FLAGS_VDM_REQUEST_CONTINUE        BIT(26)
-/* TODO: POLICY decision: Triggers a Vconn SWAP attempt to on */
-#define PE_FLAGS_VCONN_SWAP_TO_ON	     BIT(27)
-/* FLAG to track that VDM request to port partner timed out */
-#define PE_FLAGS_VDM_REQUEST_TIMEOUT	     BIT(28)
-/* FLAG to note message was discarded due to incoming message */
-#define PE_FLAGS_MSG_DISCARDED		     BIT(29)
-/* FLAG to note that hard reset can't be performed due to battery low */
-#define PE_FLAGS_SNK_WAITING_BATT	     BIT(30)
-/* FLAG to note that a data reset is complete */
-#define PE_FLAGS_DATA_RESET_COMPLETE         BIT(31)
-
 /* Message flags which should not persist on returning to ready state */
-#define PE_FLAGS_READY_CLR		     (PE_FLAGS_LOCALLY_INITIATED_AMS \
-					     | PE_FLAGS_MSG_DISCARDED \
-					     | PE_FLAGS_VDM_REQUEST_TIMEOUT \
-					     | PE_FLAGS_INTERRUPTIBLE_AMS)
+#define PE_MASK_READY_CLR	(BIT(PE_FLAGS_LOCALLY_INITIATED_AMS_FN) | \
+				 BIT(PE_FLAGS_MSG_DISCARDED_FN) |	\
+				 BIT(PE_FLAGS_VDM_REQUEST_TIMEOUT_FN) |	\
+				 BIT(PE_FLAGS_INTERRUPTIBLE_AMS_FN))
 
 /*
  * Combination to check whether a reply to a message was received.  Our message
@@ -577,7 +517,7 @@ static struct policy_engine {
 	/* current port data role (DFP or UFP) */
 	enum pd_data_role data_role;
 	/* state machine flags */
-	atomic_t flags;
+	ATOMIC_DEFINE(flags_a, PE_FLAGS_COUNT);
 	/* Device Policy Manager Request */
 	atomic_t dpm_request;
 	uint32_t dpm_curr_request;
@@ -709,6 +649,14 @@ static void pe_set_ready_state(int port)
 		set_state_pe(port, PE_SNK_READY);
 }
 
+static void pe_set_hard_reset(int port)
+{
+	if (pe[port].power_role == PD_ROLE_SOURCE)
+		set_state_pe(port, PE_SRC_HARD_RESET);
+	else
+		set_state_pe(port, PE_SNK_HARD_RESET);
+}
+
 static inline void send_data_msg(int port, enum tcpci_msg_type type,
 				 enum pd_data_msg_type msg)
 {
@@ -761,7 +709,7 @@ static void set_cable_rev(int port)
 
 static void pe_init(int port)
 {
-	pe[port].flags = 0;
+	memset(&pe[port].flags_a, 0, sizeof(pe[port].flags_a));
 	pe[port].dpm_request = 0;
 	pe[port].dpm_curr_request = 0;
 	pd_timer_disable_range(port, PE_TIMER_RANGE);
@@ -836,10 +784,7 @@ void pe_run(int port, int evt, int en)
 		 */
 		if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_HARD_RESET_SEND)) {
 			pe_set_dpm_curr_request(port, DPM_REQUEST_HARD_RESET_SEND);
-			if (pd_get_power_role(port) == PD_ROLE_SOURCE)
-				set_state_pe(port, PE_SRC_HARD_RESET);
-			else
-				set_state_pe(port, PE_SNK_HARD_RESET);
+			pe_set_hard_reset(port);
 		}
 
 		/*
@@ -1163,10 +1108,7 @@ void pe_report_error(int port, enum pe_error e, enum tcpci_msg_type type)
 	 * while in PE_Send_Soft_Reset state.
 	 */
 	if (get_state_pe(port) == PE_SEND_SOFT_RESET) {
-		if (pe[port].power_role == PD_ROLE_SINK)
-			set_state_pe(port, PE_SNK_HARD_RESET);
-		else
-			set_state_pe(port, PE_SRC_HARD_RESET);
+		pe_set_hard_reset(port);
 		return;
 	}
 
@@ -1548,6 +1490,18 @@ static bool common_src_snk_dpm_requests(int port)
 		pe[port].tx_type = TCPCI_MSG_SOP_PRIME;
 		set_state_pe(port, PE_VCS_CBL_SEND_SOFT_RESET);
 		return true;
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_DR_SWAP)) {
+		pe_set_dpm_curr_request(port, DPM_REQUEST_DR_SWAP);
+		/* 6.3.9 DR_Swap Message in Revision 3.1, Version 1.3
+		 * If there are any Active Modes between the Port Partners when
+		 * a DR_Swap Message is a received, then a Hard Reset Shall be
+		 * performed
+		 */
+		if (PE_CHK_FLAG(port, PE_FLAGS_MODAL_OPERATION))
+			pe_set_hard_reset(port);
+		else
+			set_state_pe(port, PE_DRS_SEND_SWAP);
+		return true;
 	}
 #ifdef CONFIG_USB_PD_DATA_RESET_MSG
 	else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_DATA_RESET)) {
@@ -1591,23 +1545,11 @@ static bool source_dpm_requests(int port)
 
 		PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
 
-		if (PE_CHK_DPM_REQUEST(port,
-				       DPM_REQUEST_DR_SWAP)) {
-			pe_set_dpm_curr_request(port,
-						DPM_REQUEST_DR_SWAP);
-			if (PE_CHK_FLAG(port, PE_FLAGS_MODAL_OPERATION))
-				set_state_pe(port, PE_SRC_HARD_RESET);
-			else
-				set_state_pe(port, PE_DRS_SEND_SWAP);
-			return true;
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_PR_SWAP)) {
-			pe_set_dpm_curr_request(port,
-						DPM_REQUEST_PR_SWAP);
+		if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_PR_SWAP)) {
+			pe_set_dpm_curr_request(port, DPM_REQUEST_PR_SWAP);
 			set_state_pe(port, PE_PRS_SRC_SNK_SEND_SWAP);
 			return true;
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_GOTO_MIN)) {
+		} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_GOTO_MIN)) {
 			pe_set_dpm_curr_request(port,
 						DPM_REQUEST_GOTO_MIN);
 			set_state_pe(port, PE_SRC_TRANSITION_SUPPLY);
@@ -1618,14 +1560,12 @@ static bool source_dpm_requests(int port)
 						DPM_REQUEST_SRC_CAP_CHANGE);
 			set_state_pe(port, PE_SRC_SEND_CAPABILITIES);
 			return true;
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_GET_SRC_CAPS)) {
+		} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_GET_SRC_CAPS)) {
 			pe_set_dpm_curr_request(port,
 						DPM_REQUEST_GET_SRC_CAPS);
 			set_state_pe(port, PE_DR_SRC_GET_SOURCE_CAP);
 			return true;
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_SEND_PING)) {
+		} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_SEND_PING)) {
 			pe_set_dpm_curr_request(port,
 						DPM_REQUEST_SEND_PING);
 			set_state_pe(port, PE_SRC_PING);
@@ -1664,23 +1604,11 @@ static bool sink_dpm_requests(int port)
 
 		PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
 
-		if (PE_CHK_DPM_REQUEST(port,
-				       DPM_REQUEST_DR_SWAP)) {
-			pe_set_dpm_curr_request(port,
-						DPM_REQUEST_DR_SWAP);
-			if (PE_CHK_FLAG(port, PE_FLAGS_MODAL_OPERATION))
-				set_state_pe(port, PE_SNK_HARD_RESET);
-			else
-				set_state_pe(port, PE_DRS_SEND_SWAP);
-			return true;
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_PR_SWAP)) {
-			pe_set_dpm_curr_request(port,
-						DPM_REQUEST_PR_SWAP);
+		if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_PR_SWAP)) {
+			pe_set_dpm_curr_request(port, DPM_REQUEST_PR_SWAP);
 			set_state_pe(port, PE_PRS_SNK_SRC_SEND_SWAP);
 			return true;
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_SOURCE_CAP)) {
+		} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_SOURCE_CAP)) {
 			pe_set_dpm_curr_request(port,
 						DPM_REQUEST_SOURCE_CAP);
 			set_state_pe(port, PE_SNK_GET_SOURCE_CAP);
@@ -2454,7 +2382,7 @@ static void pe_src_send_capabilities_run(int port)
 	 */
 	if (pd_timer_is_expired(port, PE_TIMER_NO_RESPONSE)) {
 		if (pe[port].hard_reset_counter <= N_HARD_RESET_COUNT)
-			set_state_pe(port, PE_SRC_HARD_RESET);
+			pe_set_hard_reset(port);
 		else if (PE_CHK_FLAG(port, PE_FLAGS_PD_CONNECTION))
 			set_state_pe(port, PE_WAIT_FOR_ERROR_RECOVERY);
 		else
@@ -2467,7 +2395,7 @@ static void pe_src_send_capabilities_run(int port)
 	 *  1) The SenderResponseTimer times out.
 	 */
 	if (pd_timer_is_expired(port, PE_TIMER_SENDER_RESPONSE)) {
-		set_state_pe(port, PE_SRC_HARD_RESET);
+		pe_set_hard_reset(port);
 		return;
 	}
 }
@@ -2604,7 +2532,7 @@ static void pe_src_transition_supply_run(int port)
 	 */
 	if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
-		set_state_pe(port, PE_SRC_HARD_RESET);
+		pe_set_hard_reset(port);
 	}
 }
 
@@ -2643,7 +2571,7 @@ static void pe_src_ready_entry(int port)
 	print_current_state(port);
 
 	/* Ensure any message send flags are cleaned up */
-	PE_CLR_FLAG(port, PE_FLAGS_READY_CLR);
+	PE_CLR_MASK(port, PE_MASK_READY_CLR);
 
 	/* Clear DPM Current Request */
 	pe[port].dpm_curr_request = 0;
@@ -2736,7 +2664,7 @@ static void pe_src_ready_run(int port)
 			case PD_CTRL_DR_SWAP:
 				if (PE_CHK_FLAG(port,
 						PE_FLAGS_MODAL_OPERATION)) {
-					set_state_pe(port, PE_SRC_HARD_RESET);
+					pe_set_hard_reset(port);
 					return;
 				}
 
@@ -2914,9 +2842,10 @@ static void pe_src_hard_reset_entry(int port)
 	pd_timer_enable(port, PE_TIMER_PS_HARD_RESET, PD_T_PS_HARD_RESET);
 
 	/* Clear error flags */
-	PE_CLR_FLAG(port, PE_FLAGS_VDM_REQUEST_NAKED |
-			  PE_FLAGS_PROTOCOL_ERROR |
-			  PE_FLAGS_VDM_REQUEST_BUSY);
+	PE_CLR_MASK(port,
+		    BIT(PE_FLAGS_VDM_REQUEST_NAKED_FN) |
+		    BIT(PE_FLAGS_PROTOCOL_ERROR_FN) |
+		    BIT(PE_FLAGS_VDM_REQUEST_BUSY_FN));
 }
 
 static void pe_src_hard_reset_run(int port)
@@ -2971,7 +2900,7 @@ static void pe_src_transition_to_default_entry(int port)
 	print_current_state(port);
 
 	/* Reset flags */
-	pe[port].flags = 0;
+	memset(&pe[port].flags_a, 0, sizeof(pe[port].flags_a));
 
 	/* Reset DPM Request */
 	pe[port].dpm_request = 0;
@@ -3155,7 +3084,7 @@ static void pe_snk_wait_for_capabilities_run(int port)
 	/* When the SinkWaitCapTimer times out, perform a Hard Reset. */
 	if (pd_timer_is_expired(port, PE_TIMER_TIMEOUT)) {
 		PE_SET_FLAG(port, PE_FLAGS_SNK_WAIT_CAP_TIMEOUT);
-		set_state_pe(port, PE_SNK_HARD_RESET);
+		pe_set_hard_reset(port);
 	}
 }
 
@@ -3343,7 +3272,7 @@ static void pe_snk_select_capability_run(int port)
 
 	/* SenderResponsetimer timeout */
 	if (pd_timer_is_expired(port, PE_TIMER_SENDER_RESPONSE))
-		set_state_pe(port, PE_SNK_HARD_RESET);
+		pe_set_hard_reset(port);
 }
 
 void pe_snk_select_capability_exit(int port)
@@ -3411,7 +3340,7 @@ static void pe_snk_transition_sink_run(int port)
 			/*
 			 * Protocol Error
 			 */
-			set_state_pe(port, PE_SNK_HARD_RESET);
+			pe_set_hard_reset(port);
 		}
 		return;
 	}
@@ -3423,7 +3352,7 @@ static void pe_snk_transition_sink_run(int port)
 	    pe[port].hard_reset_counter <= N_HARD_RESET_COUNT) {
 		PE_SET_FLAG(port, PE_FLAGS_PS_TRANSITION_TIMEOUT);
 
-		set_state_pe(port, PE_SNK_HARD_RESET);
+		pe_set_hard_reset(port);
 	}
 }
 
@@ -3454,7 +3383,7 @@ static void pe_snk_ready_entry(int port)
 	print_current_state(port);
 
 	/* Ensure any message send flags are cleaned up */
-	PE_CLR_FLAG(port, PE_FLAGS_READY_CLR);
+	PE_CLR_MASK(port, PE_MASK_READY_CLR);
 
 	/* Clear DPM Current Request */
 	pe[port].dpm_curr_request = 0;
@@ -3557,7 +3486,7 @@ static void pe_snk_ready_run(int port)
 				return;
 			case PD_CTRL_DR_SWAP:
 				if (PE_CHK_FLAG(port, PE_FLAGS_MODAL_OPERATION))
-					set_state_pe(port, PE_SNK_HARD_RESET);
+					pe_set_hard_reset(port);
 				else
 					set_state_pe(port,
 							PE_DRS_EVALUATE_SWAP);
@@ -3711,10 +3640,11 @@ static void pe_snk_hard_reset_entry(int port)
 	}
 #endif
 
-	PE_CLR_FLAG(port, PE_FLAGS_SNK_WAIT_CAP_TIMEOUT |
-			  PE_FLAGS_VDM_REQUEST_NAKED |
-			  PE_FLAGS_PROTOCOL_ERROR |
-			  PE_FLAGS_VDM_REQUEST_BUSY);
+	PE_CLR_MASK(port,
+		    BIT(PE_FLAGS_SNK_WAIT_CAP_TIMEOUT_FN) |
+		    BIT(PE_FLAGS_VDM_REQUEST_NAKED_FN) |
+		    BIT(PE_FLAGS_PROTOCOL_ERROR_FN) |
+		    BIT(PE_FLAGS_VDM_REQUEST_BUSY_FN));
 
 	/* Request the generation of Hard Reset Signaling by the PHY Layer */
 	prl_execute_hard_reset(port);
@@ -3759,7 +3689,7 @@ static void pe_snk_transition_to_default_entry(int port)
 	print_current_state(port);
 
 	/* Reset flags */
-	pe[port].flags = 0;
+	memset(&pe[port].flags_a, 0, sizeof(pe[port].flags_a));
 
 	/* Reset DPM Request */
 	pe[port].dpm_request = 0;
@@ -3892,11 +3822,7 @@ static void pe_send_soft_reset_run(int port)
 	if (pd_timer_is_expired(port, PE_TIMER_SENDER_RESPONSE) ||
 			PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
-
-		if (pe[port].power_role == PD_ROLE_SINK)
-			set_state_pe(port, PE_SNK_HARD_RESET);
-		else
-			set_state_pe(port, PE_SRC_HARD_RESET);
+		pe_set_hard_reset(port);
 		return;
 	}
 }
@@ -3928,11 +3854,7 @@ static void  pe_soft_reset_run(int port)
 			set_state_pe(port, PE_SRC_SEND_CAPABILITIES);
 	} else if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
-
-		if (pe[port].power_role == PD_ROLE_SINK)
-			set_state_pe(port, PE_SNK_HARD_RESET);
-		else
-			set_state_pe(port, PE_SRC_HARD_RESET);
+		pe_set_hard_reset(port);
 	}
 }
 
@@ -4479,11 +4401,7 @@ static void pe_prs_src_snk_transition_to_off_entry(int port)
 	/* Contract is invalid */
 	pe_invalidate_explicit_contract(port);
 
-	/* Tell TypeC to power off the source */
-	tc_src_power_off(port);
-
-	pd_timer_enable(port, PE_TIMER_PS_SOURCE,
-			PD_POWER_SUPPLY_TURN_OFF_DELAY);
+	pd_timer_enable(port, PE_TIMER_SRC_TRANSITION, PD_T_SRC_TRANSITION);
 }
 
 static void pe_prs_src_snk_transition_to_off_run(int port)
@@ -4496,7 +4414,22 @@ static void pe_prs_src_snk_transition_to_off_run(int port)
 		PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
 
 		tc_pr_swap_complete(port, 0);
-		set_state_pe(port, PE_SRC_HARD_RESET);
+		pe_set_hard_reset(port);
+		return;
+	}
+
+	/* Wait tSrcTransition (~ 25ms) before turning off VBUS */
+	if (!pd_timer_is_expired(port, PE_TIMER_SRC_TRANSITION))
+		return;
+
+	if (!PE_CHK_FLAG(port, PE_FLAGS_SRC_SNK_SETTLE)) {
+		PE_SET_FLAG(port, PE_FLAGS_SRC_SNK_SETTLE);
+		/* Tell TypeC to power off the source */
+		tc_src_power_off(port);
+
+		pd_timer_enable(port, PE_TIMER_PS_SOURCE,
+				PD_POWER_SUPPLY_TURN_OFF_DELAY);
+		return;
 	}
 
 	/* Give time for supply to power off */
@@ -4507,6 +4440,8 @@ static void pe_prs_src_snk_transition_to_off_run(int port)
 
 static void pe_prs_src_snk_transition_to_off_exit(int port)
 {
+	PE_CLR_FLAG(port, PE_FLAGS_SRC_SNK_SETTLE);
+	pd_timer_disable(port, PE_TIMER_SRC_TRANSITION);
 	pd_timer_disable(port, PE_TIMER_PS_SOURCE);
 }
 
@@ -4934,7 +4869,7 @@ static void pe_prs_snk_src_send_swap_run(int port)
 	 */
 	if (msg_check & PE_MSG_DISCARDED) {
 		if (pe_in_frs_mode(port))
-			set_state_pe(port, PE_SNK_HARD_RESET);
+			pe_set_hard_reset(port);
 		else
 			set_state_pe(port, PE_SNK_READY);
 		return;
@@ -5334,14 +5269,15 @@ static void pe_vdm_send_request_entry(int port)
 	if ((pe[port].tx_type == TCPCI_MSG_SOP_PRIME ||
 	     pe[port].tx_type == TCPCI_MSG_SOP_PRIME_PRIME) &&
 	    !tc_is_vconn_src(port) && port_discovery_vconn_swap_policy(port,
-		PE_FLAGS_VCONN_SWAP_TO_ON)) {
+					BIT(PE_FLAGS_VCONN_SWAP_TO_ON_FN))) {
 		if (port_try_vconn_swap(port))
 			return;
 	}
 
 	/* All VDM sequences are Interruptible */
-	PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS |
-			PE_FLAGS_INTERRUPTIBLE_AMS);
+	PE_SET_MASK(port,
+		    BIT(PE_FLAGS_LOCALLY_INITIATED_AMS_FN) |
+		    BIT(PE_FLAGS_INTERRUPTIBLE_AMS_FN));
 }
 
 static void pe_vdm_send_request_run(int port)
@@ -6173,9 +6109,10 @@ static void pe_vdm_response_run(int port)
 	    PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR) ||
 	    PE_CHK_FLAG(port, PE_FLAGS_MSG_DISCARDED)) {
 
-		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE |
-			    PE_FLAGS_PROTOCOL_ERROR |
-			    PE_FLAGS_MSG_DISCARDED);
+		PE_CLR_MASK(port,
+			    BIT(PE_FLAGS_TX_COMPLETE_FN) |
+			    BIT(PE_FLAGS_PROTOCOL_ERROR_FN) |
+			    BIT(PE_FLAGS_MSG_DISCARDED_FN));
 
 		pe_set_ready_state(port);
 	}
@@ -6535,10 +6472,7 @@ static void pe_vcs_wait_for_vconn_swap_run(int port)
 	 *   1) The VCONNOnTimer times out.
 	 */
 	if (pd_timer_is_expired(port, PE_TIMER_VCONN_ON)) {
-		if (pe[port].power_role == PD_ROLE_SOURCE)
-			set_state_pe(port, PE_SRC_HARD_RESET);
-		else
-			set_state_pe(port, PE_SNK_HARD_RESET);
+		pe_set_hard_reset(port);
 	}
 }
 
@@ -7305,8 +7239,9 @@ void pd_dfp_mode_init(int port)
 	 * Clear the VDM Setup Done and Modal Operation flags so we will
 	 * have a fresh discovery
 	 */
-	PE_CLR_FLAG(port, PE_FLAGS_VDM_SETUP_DONE |
-			  PE_FLAGS_MODAL_OPERATION);
+	PE_CLR_MASK(port,
+		    BIT(PE_FLAGS_VDM_SETUP_DONE_FN) |
+		    BIT(PE_FLAGS_MODAL_OPERATION_FN));
 
 	memset(pe[port].partner_amodes, 0, sizeof(pe[port].partner_amodes));
 
@@ -7389,7 +7324,10 @@ const char *pe_get_current_state(int port)
 
 uint32_t pe_get_flags(int port)
 {
-	return pe[port].flags;
+	/*
+	 * TODO(b/229655319): support more than 32 bits
+	 */
+	return pe[port].flags_a[0];
 }
 
 static __const_data const struct usb_state pe_states[] = {
@@ -7768,25 +7706,17 @@ const struct test_sm_data test_pe_sm_data[] = {
 BUILD_ASSERT(ARRAY_SIZE(pe_states) == ARRAY_SIZE(pe_state_names));
 const int test_pe_sm_data_size = ARRAY_SIZE(test_pe_sm_data);
 
-void pe_set_flag(int port, int flag)
+void pe_set_fn(int port, int fn)
 {
-	PE_SET_FLAG(port, flag);
+	PE_SET_FN(port, fn);
 }
-void pe_clr_flag(int port, int flag)
+void pe_clr_fn(int port, int fn)
 {
-	PE_CLR_FLAG(port, flag);
+	PE_CLR_FN(port, fn);
 }
-int pe_chk_flag(int port, int flag)
+int pe_chk_fn(int port, int fn)
 {
-	return PE_CHK_FLAG(port, flag);
-}
-int pe_get_all_flags(int port)
-{
-	return pe[port].flags;
-}
-void pe_set_all_flags(int port, int flags)
-{
-	pe[port].flags = flags;
+	return PE_CHK_FN(port, fn);
 }
 void pe_clr_dpm_requests(int port)
 {
