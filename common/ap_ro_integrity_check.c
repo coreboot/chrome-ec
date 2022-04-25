@@ -1390,6 +1390,8 @@ static void release_ec_reset_override(void)
 {
 	hook_call_deferred(&keep_ec_in_reset_data, -1);
 	deassert_ec_rst();
+	/* b/229974371 Give AP_FLASH_SELECT at least 500us to discharge */
+	delay_sleep_by(1 * SECOND);
 	enable_sleep(SLEEP_MASK_AP_RO_VERIFICATION);
 }
 
