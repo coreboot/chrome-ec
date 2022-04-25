@@ -48,6 +48,8 @@
 
 /* Enable getting gpio flags to tell if open drain pins are asserted */
 #define CONFIG_GPIO_GET_EXTENDED
+/* Disable sleep when gpios with GPIO_SLEEP_DIS flags are asserted. */
+#define CONFIG_GPIO_DISABLE_SLEEP
 
 /* Flash configuration */
 #undef CONFIG_FLASH_PSTATE
