@@ -1807,6 +1807,9 @@
 /* Support getting gpio flags. */
 #undef CONFIG_GPIO_GET_EXTENDED
 
+/* Support disabling sleep with GPIO flags. */
+#undef CONFIG_GPIO_DISABLE_SLEEP
+
 /* Do we want to detect the lid angle? */
 #undef CONFIG_LID_ANGLE
 

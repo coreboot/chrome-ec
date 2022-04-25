@@ -359,7 +359,7 @@ enum {
 	SLEEP_MASK_UART       = BIT(1), /* UART communication ongoing */
 	SLEEP_MASK_I2C_CONTROLLER
 			      = BIT(2), /* I2C communication ongoing */
-	SLEEP_MASK_CHARGING   = BIT(3), /* Charging loop ongoing */
+	SLEEP_MASK_GPIO       = BIT(3), /* GPIO activity ongoing */
 	SLEEP_MASK_USB_PWR    = BIT(4), /* USB power loop ongoing */
 	SLEEP_MASK_USB_PD     = BIT(5), /* USB PD device connected */
 	SLEEP_MASK_SPI        = BIT(6), /* SPI communications ongoing */
