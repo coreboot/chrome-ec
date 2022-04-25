@@ -593,9 +593,9 @@ DECLARE_IRQ(GC_IRQNUM_PMU_INTR_WAKEUP_INT, pmu_wakeup_interrupt, 1);
 void board_configure_deep_sleep_wakepins(void)
 {
 	/*
-	 * Eventually asserting AP_FLASH_SELECT will disable deep sleep. Until
-	 * that's enabled make sure cr50 doesn't enter deep sleep with
-	 * AP_FLASH_SELECT asserted.
+	 * The AP_FLASH_SELECT gpio disables sleep when it's asserted, so it
+	 * shouldn't be possible to get here with it asserted.
+	 * Deassert it just to be safe.
 	 */
 	if (board_has_ec_cr50_comm_support())
 		gpio_set_level(GPIO_AP_FLASH_SELECT, 0);
