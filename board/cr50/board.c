@@ -593,6 +593,13 @@ DECLARE_IRQ(GC_IRQNUM_PMU_INTR_WAKEUP_INT, pmu_wakeup_interrupt, 1);
 void board_configure_deep_sleep_wakepins(void)
 {
 	/*
+	 * Eventually asserting AP_FLASH_SELECT will disable deep sleep. Until
+	 * that's enabled make sure cr50 doesn't enter deep sleep with
+	 * AP_FLASH_SELECT asserted.
+	 */
+	if (board_has_ec_cr50_comm_support())
+		gpio_set_level(GPIO_AP_FLASH_SELECT, 0);
+	/*
 	 * Disable the i2c and spi periph wake sources since the TPM is
 	 * not being used and reenable them in their init functions on
 	 * resume.
