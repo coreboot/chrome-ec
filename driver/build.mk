@@ -110,6 +110,7 @@ driver-$(CONFIG_LED_DRIVER_LM3630A)+=led/lm3630a.o
 driver-$(CONFIG_LED_DRIVER_LP5562)+=led/lp5562.o
 driver-$(CONFIG_LED_DRIVER_MP3385)+=led/mp3385.o
 driver-$(CONFIG_LED_DRIVER_OZ554)+=led/oz554.o
+driver-$(CONFIG_LED_DRIVER_IS31FL3733B)+=led/is31fl3733b.o
 driver-$(CONFIG_LED_DRIVER_IS31FL3743B)+=led/is31fl3743b.o
 driver-$(CONFIG_LED_DRIVER_AW20198)+=led/aw20198.o
 
@@ -226,6 +227,7 @@ driver-$(CONFIG_LN9310)+=ln9310.o
 driver-$(CONFIG_MCDP28X0)+=mcdp28x0.o
 
 # Wireless Power Chargers
+driver-$(CONFIG_CPS8100)+=wpc/cps8100.o
 driver-$(HAS_TASK_WPC) += wpc/p9221.o
 
 # Buck-Boost converters

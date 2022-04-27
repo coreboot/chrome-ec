@@ -80,6 +80,17 @@ enum {
 	PE_FLAGS_SNK_WAITING_BATT_FN,
 /* FLAG to note that a data reset is complete */
 	PE_FLAGS_DATA_RESET_COMPLETE_FN,
+/* Waiting for SRC to SNK settle time */
+	PE_FLAGS_SRC_SNK_SETTLE_FN,
+/* Last element */
+	PE_FLAGS_COUNT
 };
+
+#ifdef TEST_BUILD
+void pe_set_fn(int port, int fn);
+void pe_clr_fn(int port, int fn);
+int pe_chk_fn(int port, int fn);
+void pe_clr_dpm_requests(int port);
+#endif /* TEST_BUILD */
 
 #endif /* __CROS_EC_USB_PE_PRIVATE_H */

@@ -334,7 +334,7 @@ static inline int motion_sense_init(struct motion_sensor_t *sensor)
 #if defined(HAS_TASK_CONSOLE)
 	ASSERT((in_deferred_context()) ||
 	       (task_get_current() == TASK_ID_CONSOLE));
-#else
+#elif !defined(CONFIG_ZTEST)
 	ASSERT(in_deferred_context());
 #endif /* HAS_TASK_CONSOLE */
 
@@ -1759,7 +1759,7 @@ static int command_accel_read_xyz(int argc, char **argv)
 
 	sensor = &motion_sensors[id];
 
-	while ((n == -1) || (n-- > 0)) {
+	while ((n-- > 0)) {
 		ret = sensor->drv->read(sensor, v);
 		if (ret == 0)
 			ccprintf("Current data %d: %-5d %-5d %-5d\n",

@@ -59,7 +59,7 @@ static void *console_cmd_charge_manager_setup(void)
 	tcpci_emul_set_rev(test_fixture.tcpci_emul, TCPCI_EMUL_REV2_0_VER1_1);
 
 	/* Initialized the sink to request 5V and 3A */
-	tcpci_snk_emul_init(&test_fixture.sink_5v_3a);
+	tcpci_snk_emul_init(&test_fixture.sink_5v_3a, PD_REV20);
 	test_fixture.sink_5v_3a.data.pdo[1] =
 		PDO_FIXED(5000, 3000, PDO_FIXED_UNCONSTRAINED);
 
@@ -118,6 +118,9 @@ ZTEST_USER(console_cmd_charge_manager, test_chgoverride_0_from_off)
 
 ZTEST_USER_F(console_cmd_charge_manager, test_chgoverride_0_from_sink)
 {
+	test_set_chipset_to_g3();
+	k_sleep(K_SECONDS(1));
+
 	/* Set chipset to ON, this will set TCPM to DRP */
 	test_set_chipset_to_s0();
 

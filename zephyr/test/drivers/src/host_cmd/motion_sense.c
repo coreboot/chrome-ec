@@ -3,11 +3,15 @@
  * found in the LICENSE file.
  */
 
+#include <fff.h>
 #include <ztest.h>
 
+#include "driver/accel_bma2x2.h"
 #include "motion_sense.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+
+FAKE_VALUE_FUNC(int, mock_set_range, struct motion_sensor_t *, int, int);
 
 /**
  * Get the size needed for a struct ec_response_motion_sense
@@ -16,13 +20,43 @@
 	(sizeof(struct ec_response_motion_sense) + \
 	 n * sizeof(struct ec_response_motion_sensor_data))
 
+struct host_cmd_motion_sense_fixture {
+	const struct accelgyro_drv *sensor_0_drv;
+	struct accelgyro_drv mock_drv;
+};
+
+static struct host_cmd_motion_sense_fixture fixture = {
+	.mock_drv = {
+		.set_range = mock_set_range,
+	},
+};
+
+static void *host_cmd_motion_sense_setup(void)
+{
+	fixture.sensor_0_drv = motion_sensors[0].drv;
+
+	return &fixture;
+}
+
 static void host_cmd_motion_sense_before(void *state)
 {
+	ARG_UNUSED(state);
+	RESET_FAKE(mock_set_range);
+	FFF_RESET_HISTORY();
+
+	motion_sensors[0].config[SENSOR_CONFIG_AP].odr = 0;
 	motion_sensors[0].config[SENSOR_CONFIG_AP].ec_rate = 1000 * MSEC;
 }
 
-ZTEST_SUITE(host_cmd_motion_sense, drivers_predicate_post_main, NULL,
-	    host_cmd_motion_sense_before, NULL, NULL);
+static void host_cmd_motion_sense_after(void *state)
+{
+	ARG_UNUSED(state);
+	motion_sensors[0].drv = fixture.sensor_0_drv;
+}
+
+ZTEST_SUITE(host_cmd_motion_sense, drivers_predicate_post_main,
+	    host_cmd_motion_sense_setup, host_cmd_motion_sense_before,
+	    host_cmd_motion_sense_after, NULL);
 
 ZTEST_USER(host_cmd_motion_sense, test_dump)
 {
@@ -185,8 +219,130 @@ ZTEST_USER(host_cmd_motion_sense, test_set_ec_rate)
 			   /*sensor_num=*/0, /*data_rate_ms=*/2000, &response),
 		   NULL);
 	/* The command should return the previous rate */
-	zassert_equal(response.ec_rate.ret, 1000, NULL);
+	zassert_equal(response.ec_rate.ret, 1000, "Expected 1000, but got %d",
+		      response.ec_rate.ret);
 	/* The sensor's AP config value should be updated */
 	zassert_equal(motion_sensors[0].config[SENSOR_CONFIG_AP].ec_rate,
 		      2000 * MSEC, NULL);
+}
+
+ZTEST_USER(host_cmd_motion_sense, test_odr_invalid_sensor_num)
+{
+	struct ec_response_motion_sense response;
+
+	zassert_equal(EC_RES_INVALID_PARAM,
+		      host_cmd_motion_sense_odr(
+			      /*sensor_num=*/0xff,
+			      /*odr=*/EC_MOTION_SENSE_NO_VALUE,
+			      /*round_up=*/false, &response),
+		      NULL);
+}
+
+ZTEST_USER(host_cmd_motion_sense, test_odr_get)
+{
+	struct ec_response_motion_sense response;
+
+	zassume_ok(motion_sensors[0].drv->set_data_rate(&motion_sensors[0],
+							1000000, false),
+		   NULL);
+	zassert_ok(host_cmd_motion_sense_odr(/*sensor_num=*/0,
+					     /*odr=*/EC_MOTION_SENSE_NO_VALUE,
+					     /*round_up=*/false, &response),
+		   NULL);
+	zassert_equal(BMA2x2_REG_TO_BW(BMA2x2_BW_1000HZ),
+		      response.sensor_odr.ret, "Expected %d, but got %d",
+		      BMA2x2_REG_TO_BW(BMA2x2_BW_1000HZ),
+		      response.sensor_odr.ret);
+}
+
+ZTEST_USER(host_cmd_motion_sense, test_odr_set)
+{
+	struct ec_response_motion_sense response;
+
+	zassume_ok(motion_sensors[0].drv->set_data_rate(&motion_sensors[0], 0,
+							false),
+		   NULL);
+	zassert_ok(host_cmd_motion_sense_odr(/*sensor_num=*/0,
+					     /*odr=*/1000000,
+					     /*round_up=*/true, &response),
+		   NULL);
+	/* Check the set value */
+	zassert_equal(1000000 | ROUND_UP_FLAG,
+		      motion_sensors[0].config[SENSOR_CONFIG_AP].odr,
+		      "Expected %d, but got %d", 1000000 | ROUND_UP_FLAG,
+		      motion_sensors[0].config[SENSOR_CONFIG_AP].odr);
+	/* Check the returned value */
+	zassert_equal(BMA2x2_REG_TO_BW(BMA2x2_BW_7_81HZ),
+		      response.sensor_odr.ret, "Expected %d, but got %d",
+		      BMA2x2_REG_TO_BW(BMA2x2_BW_7_81HZ),
+		      response.sensor_odr.ret);
+}
+
+ZTEST_USER(host_cmd_motion_sense, test_range_invalid_sensor_num)
+{
+	struct ec_response_motion_sense response;
+
+	zassert_equal(EC_RES_INVALID_PARAM,
+		      host_cmd_motion_sense_range(
+			      /*sensor_num=*/0xff,
+			      /*range=*/EC_MOTION_SENSE_NO_VALUE,
+			      /*round_up=*/false, &response),
+		      NULL);
+}
+
+ZTEST_USER(host_cmd_motion_sense, test_get_range)
+{
+	struct ec_response_motion_sense response;
+
+	zassert_ok(host_cmd_motion_sense_range(
+			   /*sensor_num=*/0, /*range=*/EC_MOTION_SENSE_NO_VALUE,
+			   /*round_up=*/false, &response),
+		   NULL);
+	zassert_equal(motion_sensors[0].current_range,
+		      response.sensor_range.ret, "Expected %d, but got %d",
+		      motion_sensors[0].current_range,
+		      response.sensor_range.ret);
+}
+
+ZTEST_USER(host_cmd_motion_sense, test_null_set_range_in_driver)
+{
+	struct ec_response_motion_sense response;
+	struct accelgyro_drv drv = { 0 };
+
+	motion_sensors[0].drv = &drv;
+	zassert_equal(EC_RES_INVALID_COMMAND,
+		      host_cmd_motion_sense_range(/*sensor_num=*/0, /*range=*/4,
+						  /*round_up=*/false,
+						  &response),
+		      NULL);
+}
+
+ZTEST_USER_F(host_cmd_motion_sense, test_set_range_error)
+{
+	struct ec_response_motion_sense response;
+
+	mock_set_range_fake.return_val = 1;
+	motion_sensors[0].drv = &this->mock_drv;
+
+	zassert_equal(EC_RES_INVALID_PARAM,
+		      host_cmd_motion_sense_range(/*sensor_num=*/0, /*range=*/4,
+						  /*round_up=*/false,
+						  &response),
+		      NULL);
+	zassert_equal(1, mock_set_range_fake.call_count, NULL);
+}
+
+ZTEST_USER_F(host_cmd_motion_sense, test_set_range)
+{
+	struct ec_response_motion_sense response;
+
+	mock_set_range_fake.return_val = 0;
+	motion_sensors[0].drv = &this->mock_drv;
+
+	zassert_ok(host_cmd_motion_sense_range(/*sensor_num=*/0, /*range=*/4,
+					       /*round_up=*/false, &response),
+		   NULL);
+	zassert_equal(1, mock_set_range_fake.call_count, NULL);
+	zassert_equal(4, mock_set_range_fake.arg1_history[0], NULL);
+	zassert_equal(0, mock_set_range_fake.arg2_history[0], NULL);
 }

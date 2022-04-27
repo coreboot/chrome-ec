@@ -1336,6 +1336,7 @@
 
 /* Wireless chargers */
 #undef CONFIG_WIRELESS_CHARGER_P9221_R7
+#undef CONFIG_CPS8100
 
 /*****************************************************************************/
 
@@ -2783,8 +2784,8 @@
 /*
  * Support IT8801 I/O expander.
  *
- * I2C address IT8801_KEYBOARD_PWM_I2C_ADDR_FLAGS and I2C port
- * IT8801_KEYBOARD_PWM_I2C_PORT must be defined as well.
+ * I2C address KB_DISCRETE_I2C_ADDR_FLAGS and I2C port
+ * I2C_PORT_KB_DISCRETE must be defined as well.
  * Note: these values are only used when accessing the keyboard and PWM
  * function of the IT8801 chip.  I/O expander functions are accessed using
  * the ioex_config[] array.
@@ -2919,7 +2920,7 @@
  * chip. You might want this enabled if the keyboard is indirectly connected
  * to the EC, perhaps through an I2C controller.
  */
-#undef CONFIG_KEYBOARD_NOT_RAW
+#undef CONFIG_KEYBOARD_DISCRETE
 
 /* The board uses a negative edge-triggered GPIO for keyboard interrupts. */
 #undef CONFIG_KEYBOARD_IRQ_GPIO
@@ -3139,6 +3140,7 @@
 #undef CONFIG_LED_DRIVER_LP5562  /* LP5562, on I2C interface */
 #undef CONFIG_LED_DRIVER_MP3385   /* MPS MP3385, on I2C */
 #undef CONFIG_LED_DRIVER_OZ554   /* O2Micro OZ554, on I2C */
+#undef CONFIG_LED_DRIVER_IS31FL3733B /* Lumissil IS31FL3733B on I2C */
 #undef CONFIG_LED_DRIVER_IS31FL3743B /* Lumissil IS31FL3743B on SPI */
 #undef CONFIG_LED_DRIVER_AW20198     /* Awinic AW20198 on I2C */
 
@@ -5640,6 +5642,12 @@
  * The USB port used for CCD. Defaults to 0/C0.
  */
 #define CONFIG_CCD_USBC_PORT_NUMBER	0
+
+/*
+ * The historical default SCI pulse width to the host is 65 microseconds, but
+ * some chipsets may require different widths.
+ */
+#define CONFIG_ESPI_DEFAULT_SCI_WIDTH_US	65
 
 /*****************************************************************************/
 /*

@@ -72,19 +72,22 @@
 #define CPRINTS_L2(format, args...) CPRINTS_LX(2, format, ## args)
 #define CPRINTS_L3(format, args...) CPRINTS_LX(3, format, ## args)
 
-#define PE_SET_FN(port, _fn) atomic_or(&pe[port].flags,	\
-				       BIT(_fn))
-#define PE_CLR_FN(port, _fn) atomic_clear_bits(&pe[port].flags,	\
-					       BIT(_fn))
-#define PE_CHK_FN(port, _fn) (pe[port].flags & BIT(_fn))
+#define PE_SET_FN(port, _fn) atomic_or(ATOMIC_ELEM(pe[port].flags_a, (_fn)), \
+				       ATOMIC_MASK(_fn))
+#define PE_CLR_FN(port, _fn) atomic_clear_bits(ATOMIC_ELEM(pe[port].flags_a, \
+						(_fn)), ATOMIC_MASK(_fn))
+#define PE_CHK_FN(port, _fn) (pe[port].flags_a[ATOMIC_ELEM(0, (_fn))] & \
+			      ATOMIC_MASK(_fn))
 
 #define PE_SET_FLAG(port, name) PE_SET_FN(port, (name ## _FN))
 #define PE_CLR_FLAG(port, name) PE_CLR_FN(port, (name ## _FN))
 #define PE_CHK_FLAG(port, name) PE_CHK_FN(port, (name ## _FN))
 
-#define PE_SET_MASK(port, mask) atomic_or(&pe[port].flags, (mask))
-#define PE_CLR_MASK(port, mask) atomic_clear_bits(&pe[port].flags, (mask))
-#define PE_CHK_MASK(port, mask) (pe[port].flags & (mask))
+/*
+ * TODO(b/229655319): support more than 32 bits
+ */
+#define PE_SET_MASK(port, mask) atomic_or(&pe[port].flags_a[0], (mask))
+#define PE_CLR_MASK(port, mask) atomic_clear_bits(&pe[port].flags_a[0], (mask))
 
 /*
  * These macros SET, CLEAR, and CHECK, a DPM (Device Policy Manager)
@@ -514,7 +517,7 @@ static struct policy_engine {
 	/* current port data role (DFP or UFP) */
 	enum pd_data_role data_role;
 	/* state machine flags */
-	atomic_t flags;
+	ATOMIC_DEFINE(flags_a, PE_FLAGS_COUNT);
 	/* Device Policy Manager Request */
 	atomic_t dpm_request;
 	uint32_t dpm_curr_request;
@@ -706,7 +709,7 @@ static void set_cable_rev(int port)
 
 static void pe_init(int port)
 {
-	pe[port].flags = 0;
+	memset(&pe[port].flags_a, 0, sizeof(pe[port].flags_a));
 	pe[port].dpm_request = 0;
 	pe[port].dpm_curr_request = 0;
 	pd_timer_disable_range(port, PE_TIMER_RANGE);
@@ -2897,7 +2900,7 @@ static void pe_src_transition_to_default_entry(int port)
 	print_current_state(port);
 
 	/* Reset flags */
-	pe[port].flags = 0;
+	memset(&pe[port].flags_a, 0, sizeof(pe[port].flags_a));
 
 	/* Reset DPM Request */
 	pe[port].dpm_request = 0;
@@ -3686,7 +3689,7 @@ static void pe_snk_transition_to_default_entry(int port)
 	print_current_state(port);
 
 	/* Reset flags */
-	pe[port].flags = 0;
+	memset(&pe[port].flags_a, 0, sizeof(pe[port].flags_a));
 
 	/* Reset DPM Request */
 	pe[port].dpm_request = 0;
@@ -4398,11 +4401,7 @@ static void pe_prs_src_snk_transition_to_off_entry(int port)
 	/* Contract is invalid */
 	pe_invalidate_explicit_contract(port);
 
-	/* Tell TypeC to power off the source */
-	tc_src_power_off(port);
-
-	pd_timer_enable(port, PE_TIMER_PS_SOURCE,
-			PD_POWER_SUPPLY_TURN_OFF_DELAY);
+	pd_timer_enable(port, PE_TIMER_SRC_TRANSITION, PD_T_SRC_TRANSITION);
 }
 
 static void pe_prs_src_snk_transition_to_off_run(int port)
@@ -4416,6 +4415,21 @@ static void pe_prs_src_snk_transition_to_off_run(int port)
 
 		tc_pr_swap_complete(port, 0);
 		pe_set_hard_reset(port);
+		return;
+	}
+
+	/* Wait tSrcTransition (~ 25ms) before turning off VBUS */
+	if (!pd_timer_is_expired(port, PE_TIMER_SRC_TRANSITION))
+		return;
+
+	if (!PE_CHK_FLAG(port, PE_FLAGS_SRC_SNK_SETTLE)) {
+		PE_SET_FLAG(port, PE_FLAGS_SRC_SNK_SETTLE);
+		/* Tell TypeC to power off the source */
+		tc_src_power_off(port);
+
+		pd_timer_enable(port, PE_TIMER_PS_SOURCE,
+				PD_POWER_SUPPLY_TURN_OFF_DELAY);
+		return;
 	}
 
 	/* Give time for supply to power off */
@@ -4426,6 +4440,8 @@ static void pe_prs_src_snk_transition_to_off_run(int port)
 
 static void pe_prs_src_snk_transition_to_off_exit(int port)
 {
+	PE_CLR_FLAG(port, PE_FLAGS_SRC_SNK_SETTLE);
+	pd_timer_disable(port, PE_TIMER_SRC_TRANSITION);
 	pd_timer_disable(port, PE_TIMER_PS_SOURCE);
 }
 
@@ -7308,7 +7324,10 @@ const char *pe_get_current_state(int port)
 
 uint32_t pe_get_flags(int port)
 {
-	return pe[port].flags;
+	/*
+	 * TODO(b/229655319): support more than 32 bits
+	 */
+	return pe[port].flags_a[0];
 }
 
 static __const_data const struct usb_state pe_states[] = {
@@ -7687,17 +7706,17 @@ const struct test_sm_data test_pe_sm_data[] = {
 BUILD_ASSERT(ARRAY_SIZE(pe_states) == ARRAY_SIZE(pe_state_names));
 const int test_pe_sm_data_size = ARRAY_SIZE(test_pe_sm_data);
 
-void pe_set_flag(int port, int mask)
+void pe_set_fn(int port, int fn)
 {
-	PE_SET_MASK(port, mask);
+	PE_SET_FN(port, fn);
 }
-void pe_clr_flag(int port, int mask)
+void pe_clr_fn(int port, int fn)
 {
-	PE_CLR_MASK(port, mask);
+	PE_CLR_FN(port, fn);
 }
-int pe_chk_flag(int port, int mask)
+int pe_chk_fn(int port, int fn)
 {
-	return PE_CHK_MASK(port, mask);
+	return PE_CHK_FN(port, fn);
 }
 void pe_clr_dpm_requests(int port)
 {
