@@ -30,7 +30,7 @@ void rbox_clear_wakeup(void)
 
 int rbox_powerbtn_is_pressed(void)
 {
-	return !GREAD_FIELD(RBOX, CHECK_OUTPUT, PWRB_OUT);
+	return !GREAD_FIELD(RBOX, CHECK_INPUT, PWRB_IN);
 }
 
 /*
