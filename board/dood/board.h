@@ -54,6 +54,9 @@
 #undef CONFIG_SYV682X_HV_ILIM
 #define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
 
+/* prevent pd reset when battery soc under 2% */
+#define CONFIG_USB_PD_RESET_MIN_BATT_SOC 2
+
 
 #ifndef __ASSEMBLER__
 
