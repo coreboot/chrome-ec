@@ -14,10 +14,28 @@
 # different git branch. By default the other branch is
 # cros/firmware-cr50-9308.B, it can be changed as a command line argument
 # passed to this script.
+#
+# Usage
+# ./bcmp.sh [mp|prepvt|tot]
 
 tmpf="/tmp/bcmp.$$"
 trap '{ rm -f "${tmpf}" ; }' EXIT
-default_compare_to="cros/firmware-cr50-stab-14294.B"
+
+branch_name="${1}"
+
+if [ "${branch_name}" == "mp" ] ; then
+	compare_to_tpm2="cros/firmware-cr50-stab-mp-14300.B"
+	compare_to_cr50="${compare_to_tpm2}-cr50_stab"
+elif [ "${branch_name}" == "prepvt" ] ; then
+	compare_to_tpm2="cros/firmware-cr50-stab-14294.B"
+	compare_to_cr50="${compare_to_tpm2}-cr50_stab"
+elif [ "${branch_name}" == "tot" ] ; then
+	compare_to_tpm2="cros/main"
+	compare_to_cr50="cros/cr50_stab"
+else
+	echo "specify tot, mp, or prepvt branch"
+	exit 1
+fi
 
 find_src_file() {
   local f="$1"
@@ -68,20 +86,18 @@ fi
 cr50_dir="$(pwd)"
 tpm2_dir="$(readlink -f ../../third_party/tpm2/)"
 
-if ! branch_exists "${tpm2_dir}" "${compare_to}"; then
-  echo "Branch ${compare_to} not found in ${tpm2_dir}" >&2
+if ! branch_exists "${tpm2_dir}" "${compare_to_tpm2}"; then
+  echo "Branch ${compare_to_tpm2} not found in ${tpm2_dir}" >&2
   exit 1
 fi
 
-cr50_compare_to="${compare_to}"
-if ! branch_exists "${cr50_dir}" "${cr50_compare_to}"; then
-  # This could be a new branch with mangled name.
-  cr50_compare_to="${cr50_compare_to}-cr50_stab"
-  if ! branch_exists "${cr50_dir}" "${cr50_compare_to}"; then
-    echo "Branch ${compare_to} not found in ${cr50_dir}" >&2
-    exit 1
-  fi
+if ! branch_exists "${cr50_dir}" "${compare_to_cr50}"; then
+  echo "Branch ${compare_to_cr50} not found in platform/cr50" >&2
+  exit 1
 fi
+
+echo "cr50_branch: ${compare_to_cr50}"
+echo "tpm2_branch: ${compare_to_tpm2}"
 
 echo "Will rebuild CR50"
 if ! make BOARD=cr50 -j > /dev/null ; then
@@ -108,9 +124,9 @@ done
 
 sort "${tmpf}" | while read -r dir file; do
   if [[ ${dir} == */cr50 ]]; then
-    branch="${cr50_compare_to}"
+    branch="${compare_to_cr50}"
   else
-    branch="${compare_to}"
+    branch="${compare_to_tpm2}"
     # TPM2 .o files are placed in board/cr50 in the build directory. Strip the
     # prefix so that the matching .c file can be found in the TPM2 root.
     file="${file#board/cr50/}"
