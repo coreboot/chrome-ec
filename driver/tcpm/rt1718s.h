@@ -37,6 +37,7 @@
 #define RT1718S_VCONN_CONTROL_2_OVP_EN_CC1		BIT(7)
 #define RT1718S_VCONN_CONTROL_2_OVP_EN_CC2		BIT(6)
 #define RT1718S_VCONN_CONTROL_3				0x8C
+#define RT1718S_VCONN_CONTROL_3_VCONN_OCP_SEL		GENMASK(7, 5)
 #define RT1718S_VCONN_CONTROL_3_VCONN_OVP_DEG		BIT(1)
 
 #define RT1718S_SYS_CTRL2				0x90
@@ -253,6 +254,15 @@ int rt1718s_gpio_get_level(int port, enum rt1718s_gpio signal);
  */
 int rt1718s_set_frs_enable(int port, int enable);
 
+
+/**
+ * Board override for fast role swap.
+ *
+ * @param port		USB-C port
+ * @param enable	enable/disable FRS
+ * @return EC_SUCCESS if success, EC_ERROR_UNKNOWN otherwise.
+ */
+__override_proto int board_rt1718s_set_frs_enable(int port, int enable);
 
 /**
  * Software reset RT1718S

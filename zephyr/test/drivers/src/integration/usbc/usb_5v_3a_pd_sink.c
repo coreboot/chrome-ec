@@ -13,6 +13,7 @@
 #include "tcpm/tcpci.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+#include "timer.h"
 #include "usb_pd.h"
 
 struct usb_attach_5v_3a_pd_sink_fixture {
@@ -247,4 +248,44 @@ ZTEST_F(usb_attach_5v_3a_pd_sink, test_disconnect_power_info)
 	zassert_true(power_info.meas.current_lim >= 0,
 		     "Expected the PD current limit to be >= 0, but got %dmA",
 		     power_info.meas.current_lim);
+}
+
+/**
+ * @brief TestPurpose: Verify GotoMin message.
+ *
+ * @details
+ *  - TCPM is configured initially as Source
+ *  - Initiate Goto_Min request
+ *  - Verify emulated sink PD negotiation is completed
+ *
+ * Expected Results
+ *  - Sink completes Goto Min PD negotiation
+ */
+ZTEST_F(usb_attach_5v_3a_pd_sink, verify_goto_min)
+{
+	pd_dpm_request(0, DPM_REQUEST_GOTO_MIN);
+	k_sleep(K_SECONDS(1));
+
+	zassert_true(this->sink_5v_3a.data.pd_completed, NULL);
+}
+
+/**
+ * @brief TestPurpose: Verify Ping message.
+ *
+ * @details
+ *  - TCPM is configured initially as Source
+ *  - Initiate Ping request
+ *  - Verify emulated sink received ping message
+ *
+ * Expected Results
+ *  - Sink received ping message
+ */
+ZTEST_F(usb_attach_5v_3a_pd_sink, verify_ping_msg)
+{
+	tcpci_snk_emul_clear_ping_received(&this->sink_5v_3a.data);
+
+	pd_dpm_request(0, DPM_REQUEST_SEND_PING);
+	k_sleep(K_USEC(PD_T_SOURCE_ACTIVITY));
+
+	zassert_true(this->sink_5v_3a.data.ping_received, NULL);
 }
