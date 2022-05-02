@@ -19,7 +19,7 @@ LOG_MODULE_REGISTER(ap_pwrseq, CONFIG_AP_PWRSEQ_LOG_LEVEL);
 /**
  * @brief power_state names for debug
  */
-const char pwrsm_dbg[][25] = {
+static const char * const pwrsm_dbg[] = {
 	[SYS_POWER_STATE_G3] = "G3",
 	[SYS_POWER_STATE_S5] = "S5",
 	[SYS_POWER_STATE_S4] = "S4",
@@ -91,11 +91,17 @@ enum power_states_ndsx pwr_sm_get_state(void)
 	return pwrseq_ctx.power_state;
 }
 
+const char * const pwr_sm_get_state_name(enum power_states_ndsx state)
+{
+	return pwrsm_dbg[state];
+}
+
 void pwr_sm_set_state(enum power_states_ndsx new_state)
 {
 	/* Add locking mechanism if multiple thread can update it */
-	LOG_DBG("Power state: %s --> %s", pwrsm_dbg[pwrseq_ctx.power_state],
-					pwrsm_dbg[new_state]);
+	LOG_DBG("Power state: %s --> %s",
+		pwr_sm_get_state_name(pwrseq_ctx.power_state),
+		pwr_sm_get_state_name(new_state));
 	pwrseq_ctx.power_state = new_state;
 }
 
@@ -328,10 +334,6 @@ static int common_pwr_sm_run(int state)
 		return SYS_POWER_STATE_S0ix;
 
 	case SYS_POWER_STATE_S0ixS0:
-		if (power_get_host_sleep_state() !=
-			HOST_SLEEP_EVENT_S0IX_RESUME)
-			break;
-
 		/*
 		 * Disable idle task deep sleep. This means that the low
 		 * power idle task will not go into deep sleep while in S0.
@@ -425,13 +427,56 @@ static int common_pwr_sm_run(int state)
 	return state;
 }
 
+/*
+ * Determine the current CPU state and ensure it
+ * is matching what is required.
+ */
+static void pwr_seq_set_initial_state(void)
+{
+	uint32_t reset_flags = system_get_reset_flags();
+	/* Determine current state using chipset specific handler */
+	enum power_states_ndsx state = chipset_pwr_seq_get_state();
+
+	/*
+	 * Check reset flags, and ensure CPU is in correct state.
+	 */
+	if (reset_flags & EC_RESET_FLAG_AP_OFF) {
+		/*
+		 * AP is expected to be off.
+		 * If it isn't, force shutdown.
+		 */
+		if (state != SYS_POWER_STATE_G3) {
+			ap_power_force_shutdown(AP_POWER_SHUTDOWN_G3);
+		}
+		pwr_sm_set_state(SYS_POWER_STATE_G3);
+		return;
+	}
+	/*
+	 * Not in warm boot, but CPU is not shutdown.
+	 */
+	if (((reset_flags & EC_RESET_FLAG_SYSJUMP) == 0) &&
+	    (state != SYS_POWER_STATE_G3)) {
+		ap_power_force_shutdown(AP_POWER_SHUTDOWN_G3);
+		state = SYS_POWER_STATE_G3;
+	}
+	/*
+	 * If CPU is off, set the state to start powering it up.
+	 */
+	if (state == SYS_POWER_STATE_G3) {
+		state = SYS_POWER_STATE_G3S5;
+	}
+	pwr_sm_set_state(state);
+}
+
 static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 {
 	int32_t t_wait_ms = 10;
 	enum power_states_ndsx curr_state, new_state;
 	power_signal_mask_t this_in_signals;
 	power_signal_mask_t last_in_signals = 0;
-	enum power_states_ndsx last_state = pwr_sm_get_state();
+	enum power_states_ndsx last_state = -1;
+
+	pwr_seq_set_initial_state();
 
 	while (1) {
 		curr_state = pwr_sm_get_state();
@@ -447,7 +492,8 @@ static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 		if (this_in_signals != last_in_signals ||
 				curr_state != last_state) {
 			LOG_INF("power state %d = %s, in 0x%04x",
-				curr_state, pwrsm_dbg[curr_state],
+				curr_state,
+				pwr_sm_get_state_name(curr_state),
 				this_in_signals);
 			last_in_signals = this_in_signals;
 			last_state = curr_state;
@@ -481,7 +527,7 @@ static inline void create_pwrseq_thread(void)
 			K_KERNEL_STACK_SIZEOF(pwrseq_thread_stack),
 			(k_thread_entry_t)pwrseq_loop_thread,
 			NULL, NULL, NULL,
-			K_PRIO_COOP(8), 0,
+			CONFIG_AP_PWRSEQ_THREAD_PRIORITY, 0,
 			IS_ENABLED(CONFIG_AP_PWRSEQ_AUTOSTART) ? K_NO_WAIT
 							       : K_FOREVER);
 
@@ -499,8 +545,6 @@ static void init_pwr_seq_state(void)
 {
 	init_chipset_pwr_seq_state();
 	request_exit_hardoff(false);
-
-	pwr_sm_set_state(SYS_POWER_STATE_G3S5);
 }
 
 /* Initialize power sequence system state */
@@ -510,7 +554,6 @@ static int pwrseq_init(const struct device *dev)
 
 	/* Initialize signal handlers */
 	power_signal_init();
-	/* TODO: Define initial state of power sequence */
 	LOG_DBG("Init pwr seq state");
 	init_pwr_seq_state();
 	/* Create power sequence state handler core function thread */

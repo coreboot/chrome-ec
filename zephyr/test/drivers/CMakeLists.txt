@@ -21,6 +21,7 @@ target_sources(app PRIVATE
   src/charge_manager.c
   src/console_cmd/charge_manager.c
   src/console_cmd/charge_state.c
+  src/console_cmd/accelinit.c
   src/console_cmd/accelinfo.c
   src/console_cmd/accelspoof.c
   src/console_cmd/accelrate.c
@@ -38,6 +39,7 @@ target_sources(app PRIVATE
   src/integration/usbc/usb_alt_mode.c
   src/integration/usbc/usb_attach_src_snk.c
   src/integration/usbc/usb_pd_ctrl_msg.c
+  src/integration/usbc/usb_malfunction_sink.c
   src/i2c_passthru.c
   src/isl923x.c
   src/keyboard_scan.c

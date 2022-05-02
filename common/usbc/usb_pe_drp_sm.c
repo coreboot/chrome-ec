@@ -262,13 +262,10 @@ enum usb_pe_state {
 	PE_DR_SRC_GET_SOURCE_CAP,
 
 	/* PD3.0 only states below here*/
-#ifdef CONFIG_USB_PD_DATA_RESET_MSG
 	/* DFP Data Reset States */
 	PE_DDR_SEND_DATA_RESET,
 	PE_DDR_WAIT_FOR_VCONN_OFF,
 	PE_DDR_PERFORM_DATA_RESET,
-#endif /* CONFIG_USB_PD_DATA_RESET_MSG */
-
 	PE_FRS_SNK_SRC_START_AMS,
 	PE_GIVE_BATTERY_CAP,
 	PE_GIVE_BATTERY_STATUS,
@@ -457,6 +454,15 @@ GEN_NOT_SUPPORTED(PE_SNK_CHUNK_RECEIVED);
 #define PE_SNK_CHUNK_RECEIVED PE_SNK_CHUNK_RECEIVED_NOT_SUPPORTED
 #endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 
+#ifndef CONFIG_USB_PD_DATA_RESET_MSG
+GEN_NOT_SUPPORTED(PE_DDR_SEND_DATA_RESET);
+#define PE_DDR_SEND_DATA_RESET PE_DDR_SEND_DATA_RESET_NOT_SUPPORTED
+GEN_NOT_SUPPORTED(PE_DDR_WAIT_FOR_VCONN_OFF);
+#define PE_DDR_WAIT_FOR_VCONN_OFF PE_DDR_WAIT_FOR_VCONN_OFF_NOT_SUPPORTED
+GEN_NOT_SUPPORTED(PE_DDR_PERFORM_DATA_RESET);
+#define PE_DDR_PERFORM_DATA_RESET PE_DDR_PERFORM_DATA_RESET_NOT_SUPPORTED
+#endif /* CONFIG_USB_PD_DATA_RESET_MSG */
+
 static enum sm_local_state local_state[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /*
@@ -552,6 +558,10 @@ static struct policy_engine {
 	uint32_t vdm_cnt;
 	uint32_t vdm_data[VDO_HDR_SIZE + VDO_MAX_SIZE];
 	uint8_t vdm_ack_min_data_objects;
+
+	/* ADO - Used to store information about alert messages */
+	uint32_t ado;
+	mutex_t ado_lock;
 
 	/* Counters */
 
@@ -1129,11 +1139,10 @@ void pe_report_error(int port, enum pe_error e, enum tcpci_msg_type type)
 			get_state_pe(port) == PE_SRC_DISCOVERY ||
 			get_state_pe(port) == PE_VCS_CBL_SEND_SOFT_RESET ||
 			get_state_pe(port) == PE_VDM_IDENTITY_REQUEST_CBL) ||
-#ifdef CONFIG_USB_PD_DATA_RESET_MSG
-			get_state_pe(port) == PE_DDR_SEND_DATA_RESET ||
-			get_state_pe(port) == PE_DDR_WAIT_FOR_VCONN_OFF ||
-			get_state_pe(port) == PE_DDR_PERFORM_DATA_RESET ||
-#endif
+			(IS_ENABLED(CONFIG_USB_PD_DATA_RESET_MSG) &&
+			 (get_state_pe(port) == PE_DDR_SEND_DATA_RESET ||
+			  get_state_pe(port) == PE_DDR_WAIT_FOR_VCONN_OFF ||
+			  get_state_pe(port) == PE_DDR_PERFORM_DATA_RESET)) ||
 			(pe_in_frs_mode(port) &&
 			    get_state_pe(port) == PE_PRS_SNK_SRC_SEND_SWAP)
 			) {
@@ -1338,11 +1347,36 @@ static void pe_clear_port_data(int port)
 	/* Clear any stored discovery data, but leave modes for alt mode exit */
 	pd_dfp_discovery_init(port);
 
+	/* Clear any pending alerts */
+	pe_clear_ado(port);
+
 	dpm_remove_sink(port);
 	dpm_remove_source(port);
 
 	/* Exit BIST Test mode, in case the TCPC entered it. */
 	tcpc_set_bist_test_mode(port, false);
+}
+
+int pe_set_ado(int port, uint32_t data)
+{
+	/* return busy error if unable to set ado */
+	int ret = EC_ERROR_BUSY;
+
+	mutex_lock(&pe[port].ado_lock);
+	if (pe[port].ado == 0x0) {
+		pe[port].ado = data;
+		ret = EC_SUCCESS;
+	}
+
+	mutex_unlock(&pe[port].ado_lock);
+	return ret;
+}
+
+void pe_clear_ado(int port)
+{
+	mutex_lock(&pe[port].ado_lock);
+	pe[port].ado = 0x0;
+	mutex_unlock(&pe[port].ado_lock);
 }
 
 static void pe_handle_detach(void)
@@ -1502,9 +1536,8 @@ static bool common_src_snk_dpm_requests(int port)
 		else
 			set_state_pe(port, PE_DRS_SEND_SWAP);
 		return true;
-	}
-#ifdef CONFIG_USB_PD_DATA_RESET_MSG
-	else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_DATA_RESET)) {
+	} else if (IS_ENABLED(CONFIG_USB_PD_DATA_RESET_MSG) &&
+			PE_CHK_DPM_REQUEST(port, DPM_REQUEST_DATA_RESET)) {
 		if (prl_get_rev(port, TCPCI_MSG_SOP) < PD_REV30) {
 			dpm_data_reset_complete(port);
 			return false;
@@ -1517,7 +1550,7 @@ static bool common_src_snk_dpm_requests(int port)
 			return false;
 		return true;
 	}
-#endif /* CONFIG_USB_PD_DATA_RESET_MSG */
+
 	return false;
 }
 
@@ -2076,6 +2109,9 @@ static void pe_src_startup_entry(int port)
 
 	/* Clear explicit contract. */
 	pe_invalidate_explicit_contract(port);
+
+	/* Clear any pending PD events */
+	pe_clear_ado(port);
 
 	if (PE_CHK_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE);
@@ -2947,6 +2983,9 @@ static void pe_snk_startup_entry(int port)
 
 	/* Invalidate explicit contract */
 	pe_invalidate_explicit_contract(port);
+
+	/* Clear any pending PD events */
+	pe_clear_ado(port);
 
 	if (PE_CHK_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE);
@@ -4182,8 +4221,15 @@ static void pe_send_alert_entry(int port)
 
 	print_current_state(port);
 
-	if (pd_build_alert_msg(msg, len, pe[port].power_role) != EC_SUCCESS)
+	if (msg == NULL || len == NULL) {
 		pe_set_ready_state(port);
+	} else {
+		/* Get ADO from PE state, the ADO is a uint32_t */
+		mutex_lock(&pe[port].ado_lock);
+		*msg = pe[port].ado;
+		*len = sizeof(pe[port].ado);
+		mutex_unlock(&pe[port].ado_lock);
+	}
 
 	/* Request the Protocol Layer to send Alert Message. */
 	send_data_msg(port, TCPCI_MSG_SOP, PD_DATA_ALERT);
@@ -4193,6 +4239,7 @@ static void pe_send_alert_run(int port)
 {
 	if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+		pe_clear_ado(port);
 		pe_set_ready_state(port);
 	}
 }

@@ -329,6 +329,22 @@ static void tcpci_snk_emul_stop_partner_transition_timer(
 	data->wait_for_ps_rdy = false;
 }
 
+static enum tcpci_partner_handler_res
+tcpci_snk_emul_handle_goto_min_req(struct tcpci_snk_emul_data *data,
+				   struct tcpci_partner_data *common_data)
+{
+	data->wait_for_ps_rdy = true;
+	data->pd_completed = false;
+	tcpci_snk_emul_start_partner_transition_timer(data, common_data);
+
+	return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+}
+
+void tcpci_snk_emul_clear_ping_received(struct tcpci_snk_emul_data *data)
+{
+	data->ping_received = false;
+}
+
 /** Check description in emul_tcpci_snk.h */
 enum tcpci_partner_handler_res tcpci_snk_emul_handle_sop_msg(
 	struct tcpci_snk_emul_data *data,
@@ -357,7 +373,11 @@ enum tcpci_partner_handler_res tcpci_snk_emul_handle_sop_msg(
 							   0);
 			return TCPCI_PARTNER_COMMON_MSG_HANDLED;
 		case PD_CTRL_PING:
+			data->ping_received = true;
 			return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+		case PD_CTRL_GOTO_MIN:
+			return tcpci_snk_emul_handle_goto_min_req(data,
+								  common_data);
 		case PD_CTRL_PS_RDY:
 			__ASSERT(data->wait_for_ps_rdy,
 				 "Unexpected PS RDY message");
@@ -531,15 +551,15 @@ void tcpci_snk_emul_init_data(struct tcpci_snk_emul_data *data)
 
 }
 
-/** Check description in emul_tcpci_snk.h */
-void tcpci_snk_emul_init(struct tcpci_snk_emul *emul)
+/** Check description in emul_tcpci_partner_snk.h */
+void tcpci_snk_emul_init(struct tcpci_snk_emul *emul, enum pd_rev_type rev)
 {
 	tcpci_partner_init(&emul->common_data, tcpci_snk_emul_hard_reset,
 			   &emul->data);
 
 	emul->common_data.data_role = PD_ROLE_DFP;
 	emul->common_data.power_role = PD_ROLE_SINK;
-	emul->common_data.rev = PD_REV20;
+	emul->common_data.rev = rev;
 
 	emul->ops.transmit = tcpci_snk_emul_transmit_op;
 	emul->ops.rx_consumed = tcpci_snk_emul_rx_consumed_op;

@@ -35,6 +35,8 @@ struct tcpci_snk_emul_data {
 	bool wait_for_ps_rdy;
 	/** PS RDY was received and PD negotiation is completed */
 	bool pd_completed;
+	/** PD_CTRL_PING message received  */
+	bool ping_received;
 };
 
 /** Structure describing standalone sink device emulator */
@@ -52,8 +54,9 @@ struct tcpci_snk_emul {
  *        any other function that is using common_data.
  *
  * @param emul Pointer to USB-C sink device emulator
+ * @param rev The USB-PD revision this port partner supports
  */
-void tcpci_snk_emul_init(struct tcpci_snk_emul *emul);
+void tcpci_snk_emul_init(struct tcpci_snk_emul *emul, enum pd_rev_type rev);
 
 /**
  * @brief Initialise USB-C sink device data structure. Single PDO 5V@500mA is
@@ -104,6 +107,13 @@ enum tcpci_partner_handler_res tcpci_snk_emul_handle_sop_msg(
  * @param data Pointer to USB-C source device emulator data
  */
 void tcpci_snk_emul_hard_reset(void *data);
+
+/**
+ * @brief Clear the ping received flag.
+ *
+ * @param sink_data
+ */
+void tcpci_snk_emul_clear_ping_received(struct tcpci_snk_emul_data *sink_data);
 
 /**
  * @}

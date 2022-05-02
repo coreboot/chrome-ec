@@ -4,6 +4,7 @@
  */
 /* Dojo board configuration */
 
+#include "cbi_fw_config.h"
 #include "common.h"
 #include "console.h"
 #include "cros_board_info.h"
@@ -42,10 +43,39 @@ __override struct keyboard_scan_config keyscan_config = {
 };
 
 /* Vol-up key matrix at T13 */
-const struct vol_up_key vol_up_key_matrix = {
+const struct vol_up_key vol_up_key_matrix_T13 = {
 	.row = 3,
 	.col = 5,
 };
+
+/* Vol-up key matrix at T12 */
+const struct vol_up_key vol_up_key_matrix_T12 = {
+	.row = 1,
+	.col = 5,
+};
+
+/* Vol-up key update */
+static void board_update_vol_up_key(void)
+{
+	if (board_version >= 2) {
+		if (get_cbi_fw_config_kblayout() == KB_BL_TOGGLE_KEY_PRESENT) {
+			/*
+			 * Set vol up key to T13 for KB_BL_TOGGLE_KEY_PRESENT
+			 * and board_version >= 2
+			 */
+			set_vol_up_key(vol_up_key_matrix_T13.row, vol_up_key_matrix_T13.col);
+		} else {
+			/*
+			 * Set vol up key to T12 for KB_BL_TOGGLE_KEY_ABSENT
+			 * and board_version >= 2
+			 */
+			set_vol_up_key(vol_up_key_matrix_T12.row, vol_up_key_matrix_T12.col);
+		}
+	} else {
+		/* Set vol up key to T13 for board_version < 2 */
+		set_vol_up_key(vol_up_key_matrix_T13.row, vol_up_key_matrix_T13.col);
+	}
+}
 
 /* Temperature charging table */
 const struct temp_chg_struct temp_chg_table[] = {
@@ -86,6 +116,12 @@ static const mat33_fp_t lid_standard_ref = {
 	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0, FLOAT_TO_FP(-1), 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+static const mat33_fp_t bmi260_standard_ref = {
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
 struct motion_sensor_t motion_sensors[] = {
@@ -177,7 +213,7 @@ struct motion_sensor_t bmi260_base_accel = {
 	.drv_data = &g_bmi260_data,
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = BMI260_ADDR0_FLAGS,
-	.rot_standard_ref = &base_standard_ref,
+	.rot_standard_ref = &bmi260_standard_ref,
 	.min_frequency = BMI_ACCEL_MIN_FREQ,
 	.max_frequency = BMI_ACCEL_MAX_FREQ,
 	.default_range = 4, /* g */
@@ -207,7 +243,7 @@ struct motion_sensor_t bmi260_base_gyro = {
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = BMI260_ADDR0_FLAGS,
 	.default_range = 1000, /* dps */
-	.rot_standard_ref = &base_standard_ref,
+	.rot_standard_ref = &bmi260_standard_ref,
 	.min_frequency = BMI_GYRO_MIN_FREQ,
 	.max_frequency = BMI_GYRO_MAX_FREQ,
 };
@@ -290,9 +326,7 @@ static void board_init(void)
 	cbi_get_board_version(&board_version);
 
 	board_update_motion_sensor_config();
-
-	/* Set vol up key to T13 */
-	set_vol_up_key(vol_up_key_matrix.row, vol_up_key_matrix.col);
+	board_update_vol_up_key();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
