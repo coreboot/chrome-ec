@@ -572,6 +572,7 @@ def main(args):
         read_ro_ranges(ro_check_file, tmpd, ranges)
         digest = calculate_hash(ro_check_file, ranges)
 
+    LOG.log('Saving digest:', digest.hex())
     rv = send_to_cr50(ranges, digest)
     if rv != 0:
         err_str = error_codes.get(rv, 'Unknown')
