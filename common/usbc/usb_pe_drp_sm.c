@@ -262,16 +262,15 @@ enum usb_pe_state {
 	PE_DR_SRC_GET_SOURCE_CAP,
 
 	/* PD3.0 only states below here*/
-#ifdef CONFIG_USB_PD_DATA_RESET_MSG
 	/* DFP Data Reset States */
 	PE_DDR_SEND_DATA_RESET,
+	PE_DDR_DATA_RESET_RECEIVED,
 	PE_DDR_WAIT_FOR_VCONN_OFF,
 	PE_DDR_PERFORM_DATA_RESET,
-#endif /* CONFIG_USB_PD_DATA_RESET_MSG */
-
 	PE_FRS_SNK_SRC_START_AMS,
 	PE_GIVE_BATTERY_CAP,
 	PE_GIVE_BATTERY_STATUS,
+	PE_GIVE_STATUS,
 	PE_SEND_ALERT,
 	PE_SRC_CHUNK_RECEIVED,
 	PE_SNK_CHUNK_RECEIVED,
@@ -394,6 +393,7 @@ __maybe_unused static __const_data const char * const pe_state_names[] = {
 #ifdef CONFIG_USB_PD_EXTENDED_MESSAGES
 	[PE_GIVE_BATTERY_CAP] = "PE_Give_Battery_Cap",
 	[PE_GIVE_BATTERY_STATUS] = "PE_Give_Battery_Status",
+	[PE_GIVE_STATUS] = "PE_Give_Status",
 	[PE_SEND_ALERT] = "PE_Send_Alert",
 #else
 	[PE_SRC_CHUNK_RECEIVED] = "PE_SRC_Chunk_Received",
@@ -404,6 +404,7 @@ __maybe_unused static __const_data const char * const pe_state_names[] = {
 #endif
 #ifdef CONFIG_USB_PD_DATA_RESET_MSG
 	[PE_DDR_SEND_DATA_RESET] = "PE_DDR_Send_Data_Reset",
+	[PE_DDR_DATA_RESET_RECEIVED] = "PE_DDR_Data_Reset_Received",
 	[PE_DDR_WAIT_FOR_VCONN_OFF] = "PE_DDR_Wait_For_VCONN_Off",
 	[PE_DDR_PERFORM_DATA_RESET] = "PE_DDR_Perform_Data_Reset",
 #endif /* CONFIG_USB_PD_DATA_RESET_MSG */
@@ -446,6 +447,8 @@ GEN_NOT_SUPPORTED(PE_GIVE_BATTERY_CAP);
 #define PE_GIVE_BATTERY_CAP PE_GIVE_BATTERY_CAP_NOT_SUPPORTED
 GEN_NOT_SUPPORTED(PE_GIVE_BATTERY_STATUS);
 #define PE_GIVE_BATTERY_STATUS PE_GIVE_BATTERY_STATUS_NOT_SUPPORTED
+GEN_NOT_SUPPORTED(PE_GIVE_STATUS);
+#define PE_GIVE_STATUS PE_GIVE_STATUS_NOT_SUPPORTED
 GEN_NOT_SUPPORTED(PE_SEND_ALERT);
 #define PE_SEND_ALERT PE_SEND_ALERT_NOT_SUPPORTED
 #endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
@@ -456,6 +459,17 @@ GEN_NOT_SUPPORTED(PE_SRC_CHUNK_RECEIVED);
 GEN_NOT_SUPPORTED(PE_SNK_CHUNK_RECEIVED);
 #define PE_SNK_CHUNK_RECEIVED PE_SNK_CHUNK_RECEIVED_NOT_SUPPORTED
 #endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
+
+#ifndef CONFIG_USB_PD_DATA_RESET_MSG
+GEN_NOT_SUPPORTED(PE_DDR_SEND_DATA_RESET);
+#define PE_DDR_SEND_DATA_RESET PE_DDR_SEND_DATA_RESET_NOT_SUPPORTED
+GEN_NOT_SUPPORTED(PE_DDR_DATA_RESET_RECEIVED);
+#define PE_DDR_DATA_RESET_RECEIVED PE_DDR_DATA_RESET_RECEIVED_NOT_SUPPORTED
+GEN_NOT_SUPPORTED(PE_DDR_WAIT_FOR_VCONN_OFF);
+#define PE_DDR_WAIT_FOR_VCONN_OFF PE_DDR_WAIT_FOR_VCONN_OFF_NOT_SUPPORTED
+GEN_NOT_SUPPORTED(PE_DDR_PERFORM_DATA_RESET);
+#define PE_DDR_PERFORM_DATA_RESET PE_DDR_PERFORM_DATA_RESET_NOT_SUPPORTED
+#endif /* CONFIG_USB_PD_DATA_RESET_MSG */
 
 static enum sm_local_state local_state[CONFIG_USB_PD_PORT_MAX_COUNT];
 
@@ -552,6 +566,10 @@ static struct policy_engine {
 	uint32_t vdm_cnt;
 	uint32_t vdm_data[VDO_HDR_SIZE + VDO_MAX_SIZE];
 	uint8_t vdm_ack_min_data_objects;
+
+	/* ADO - Used to store information about alert messages */
+	uint32_t ado;
+	mutex_t ado_lock;
 
 	/* Counters */
 
@@ -1129,11 +1147,11 @@ void pe_report_error(int port, enum pe_error e, enum tcpci_msg_type type)
 			get_state_pe(port) == PE_SRC_DISCOVERY ||
 			get_state_pe(port) == PE_VCS_CBL_SEND_SOFT_RESET ||
 			get_state_pe(port) == PE_VDM_IDENTITY_REQUEST_CBL) ||
-#ifdef CONFIG_USB_PD_DATA_RESET_MSG
-			get_state_pe(port) == PE_DDR_SEND_DATA_RESET ||
-			get_state_pe(port) == PE_DDR_WAIT_FOR_VCONN_OFF ||
-			get_state_pe(port) == PE_DDR_PERFORM_DATA_RESET ||
-#endif
+			(IS_ENABLED(CONFIG_USB_PD_DATA_RESET_MSG) &&
+			 (get_state_pe(port) == PE_DDR_SEND_DATA_RESET ||
+			  get_state_pe(port) == PE_DDR_DATA_RESET_RECEIVED ||
+			  get_state_pe(port) == PE_DDR_WAIT_FOR_VCONN_OFF ||
+			  get_state_pe(port) == PE_DDR_PERFORM_DATA_RESET)) ||
 			(pe_in_frs_mode(port) &&
 			    get_state_pe(port) == PE_PRS_SNK_SRC_SEND_SWAP)
 			) {
@@ -1338,11 +1356,36 @@ static void pe_clear_port_data(int port)
 	/* Clear any stored discovery data, but leave modes for alt mode exit */
 	pd_dfp_discovery_init(port);
 
+	/* Clear any pending alerts */
+	pe_clear_ado(port);
+
 	dpm_remove_sink(port);
 	dpm_remove_source(port);
 
 	/* Exit BIST Test mode, in case the TCPC entered it. */
 	tcpc_set_bist_test_mode(port, false);
+}
+
+int pe_set_ado(int port, uint32_t data)
+{
+	/* return busy error if unable to set ado */
+	int ret = EC_ERROR_BUSY;
+
+	mutex_lock(&pe[port].ado_lock);
+	if (pe[port].ado == 0x0) {
+		pe[port].ado = data;
+		ret = EC_SUCCESS;
+	}
+
+	mutex_unlock(&pe[port].ado_lock);
+	return ret;
+}
+
+void pe_clear_ado(int port)
+{
+	mutex_lock(&pe[port].ado_lock);
+	pe[port].ado = 0x0;
+	mutex_unlock(&pe[port].ado_lock);
 }
 
 static void pe_handle_detach(void)
@@ -1502,9 +1545,8 @@ static bool common_src_snk_dpm_requests(int port)
 		else
 			set_state_pe(port, PE_DRS_SEND_SWAP);
 		return true;
-	}
-#ifdef CONFIG_USB_PD_DATA_RESET_MSG
-	else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_DATA_RESET)) {
+	} else if (IS_ENABLED(CONFIG_USB_PD_DATA_RESET_MSG) &&
+			PE_CHK_DPM_REQUEST(port, DPM_REQUEST_DATA_RESET)) {
 		if (prl_get_rev(port, TCPCI_MSG_SOP) < PD_REV30) {
 			dpm_data_reset_complete(port);
 			return false;
@@ -1517,7 +1559,7 @@ static bool common_src_snk_dpm_requests(int port)
 			return false;
 		return true;
 	}
-#endif /* CONFIG_USB_PD_DATA_RESET_MSG */
+
 	return false;
 }
 
@@ -2077,6 +2119,9 @@ static void pe_src_startup_entry(int port)
 	/* Clear explicit contract. */
 	pe_invalidate_explicit_contract(port);
 
+	/* Clear any pending PD events */
+	pe_clear_ado(port);
+
 	if (PE_CHK_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE);
 		/*
@@ -2600,14 +2645,19 @@ static void pe_src_ready_run(int port)
 		/* Extended Message Requests */
 		if (ext > 0) {
 			switch (type) {
-#if defined(CONFIG_USB_PD_EXTENDED_MESSAGES) && defined(CONFIG_BATTERY)
+#if defined(CONFIG_USB_PD_EXTENDED_MESSAGES)
+#if defined(CONFIG_BATTERY)
 			case PD_EXT_GET_BATTERY_CAP:
 				set_state_pe(port, PE_GIVE_BATTERY_CAP);
 				break;
 			case PD_EXT_GET_BATTERY_STATUS:
 				set_state_pe(port, PE_GIVE_BATTERY_STATUS);
 				break;
-#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES && CONFIG_BATTERY */
+#endif /* CONFIG_BATTERY */
+			case PD_CTRL_GET_STATUS:
+				set_state_pe(port, PE_GIVE_STATUS);
+				return;
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 			default:
 				extended_message_not_supported(port, payload);
 			}
@@ -2690,6 +2740,19 @@ static void pe_src_ready_run(int port)
 				pe_send_soft_reset(port,
 				  PD_HEADER_GET_SOP(rx_emsg[port].header));
 				return;
+#ifdef CONFIG_USB_PD_DATA_RESET_MSG
+			case PD_CTRL_DATA_RESET:
+				if (pe[port].data_role == PD_ROLE_DFP)
+					set_state_pe(port,
+						PE_DDR_DATA_RESET_RECEIVED);
+				/*
+				 * TODO(b/209628496): Support Data Reset as UFP
+				 */
+				else
+					set_state_pe(port,
+						PE_SEND_NOT_SUPPORTED);
+				return;
+#endif /* CONFIG_USB_PD_DATA_RESET_MSG */
 			/*
 			 * Receiving an unknown or unsupported message
 			 * shall be responded to with a not supported message.
@@ -2947,6 +3010,9 @@ static void pe_snk_startup_entry(int port)
 
 	/* Invalidate explicit contract */
 	pe_invalidate_explicit_contract(port);
+
+	/* Clear any pending PD events */
+	pe_clear_ado(port);
 
 	if (PE_CHK_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_PR_SWAP_COMPLETE);
@@ -3423,14 +3489,19 @@ static void pe_snk_ready_run(int port)
 		/* Extended Message Request */
 		if (ext > 0) {
 			switch (type) {
-#if defined(CONFIG_USB_PD_EXTENDED_MESSAGES) && defined(CONFIG_BATTERY)
+#if defined(CONFIG_USB_PD_EXTENDED_MESSAGES)
+#if defined(CONFIG_BATTERY)
 			case PD_EXT_GET_BATTERY_CAP:
 				set_state_pe(port, PE_GIVE_BATTERY_CAP);
 				break;
 			case PD_EXT_GET_BATTERY_STATUS:
 				set_state_pe(port, PE_GIVE_BATTERY_STATUS);
 				break;
-#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES && CONFIG_BATTERY */
+#endif /* CONFIG_BATTERY */
+			case PD_CTRL_GET_STATUS:
+				set_state_pe(port, PE_GIVE_STATUS);
+				return;
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 			default:
 				extended_message_not_supported(port, payload);
 			}
@@ -3499,6 +3570,19 @@ static void pe_snk_ready_run(int port)
 					set_state_pe(port,
 							PE_SEND_NOT_SUPPORTED);
 				return;
+#ifdef CONFIG_USB_PD_DATA_RESET_MSG
+			case PD_CTRL_DATA_RESET:
+				if (pe[port].data_role == PD_ROLE_DFP)
+					set_state_pe(port,
+						PE_DDR_DATA_RESET_RECEIVED);
+				/*
+				 * TODO(b/209628496): Support Data Reset as UFP
+				 */
+				else
+					set_state_pe(port,
+						PE_SEND_NOT_SUPPORTED);
+				return;
+#endif /* CONFIG_USB_PD_DATA_RESET_MSG */
 			case PD_CTRL_NOT_SUPPORTED:
 				/* Do nothing */
 				break;
@@ -4172,6 +4256,36 @@ static void pe_give_battery_status_run(int port)
 }
 
 /**
+ * PE_SRC_Give_Source_Status and
+ * PE_SNK_Give_Sink_Status
+ */
+static void pe_give_status_entry(int port)
+{
+	uint8_t *msg = (uint8_t *)tx_emsg[port].buf;
+	uint32_t *len = &tx_emsg[port].len;
+
+	print_current_state(port);
+	if (dpm_get_status_msg(port, msg, len) != EC_SUCCESS)
+		pe_set_ready_state(port);
+
+	send_ext_data_msg(port, TCPCI_MSG_SOP, PD_EXT_STATUS);
+}
+
+static void pe_give_status_run(int port)
+{
+	if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
+		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+		pe_set_ready_state(port);
+	} else if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR) ||
+		   PE_CHK_FLAG(port, PE_FLAGS_MSG_DISCARDED)) {
+		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
+		PE_CLR_FLAG(port, PE_FLAGS_MSG_DISCARDED);
+		pe_send_soft_reset(port, TCPCI_MSG_SOP);
+	}
+}
+
+
+/**
  * PE_SRC_Send_Source_Alert and
  * PE_SNK_Send_Sink_Alert
  */
@@ -4182,8 +4296,15 @@ static void pe_send_alert_entry(int port)
 
 	print_current_state(port);
 
-	if (pd_build_alert_msg(msg, len, pe[port].power_role) != EC_SUCCESS)
+	if (msg == NULL || len == NULL) {
 		pe_set_ready_state(port);
+	} else {
+		/* Get ADO from PE state, the ADO is a uint32_t */
+		mutex_lock(&pe[port].ado_lock);
+		*msg = pe[port].ado;
+		*len = sizeof(pe[port].ado);
+		mutex_unlock(&pe[port].ado_lock);
+	}
 
 	/* Request the Protocol Layer to send Alert Message. */
 	send_data_msg(port, TCPCI_MSG_SOP, PD_DATA_ALERT);
@@ -4193,6 +4314,7 @@ static void pe_send_alert_run(int port)
 {
 	if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+		pe_clear_ado(port);
 		pe_set_ready_state(port);
 	}
 }
@@ -7030,6 +7152,40 @@ static void pe_ddr_send_data_reset_exit(int port)
 }
 
 /*
+ * PE_DDR_Data_Reset_Received
+ */
+static void pe_ddr_data_reset_received_entry(int port)
+{
+	print_current_state(port);
+	/* Send Data Reset message */
+	send_ctrl_msg(port, TCPCI_MSG_SOP, PD_CTRL_ACCEPT);
+}
+
+static void pe_ddr_data_reset_received_run(int port)
+{
+	if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
+		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+		if (tc_is_vconn_src(port))
+			set_state_pe(port, PE_DDR_PERFORM_DATA_RESET);
+		else
+			set_state_pe(port, PE_DDR_WAIT_FOR_VCONN_OFF);
+	} else if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
+		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
+		set_state_pe(port, PE_WAIT_FOR_ERROR_RECOVERY);
+	}
+}
+
+static void pe_ddr_data_reset_received_exit(int port)
+{
+	/*
+	 * Start DataResetFailTimer
+	 * NOTE: This timer continues to run in every state until it is stopped
+	 *	or it times out.
+	 */
+	pd_timer_enable(port, PE_TIMER_DATA_RESET_FAIL, PD_T_DATA_RESET_FAIL);
+}
+
+/*
  * PE_DDR_Wait_For_VCONN_Off
  */
 static void pe_ddr_wait_for_vconn_off_entry(int port)
@@ -7650,6 +7806,10 @@ static __const_data const struct usb_state pe_states[] = {
 		.entry = pe_give_battery_status_entry,
 		.run   = pe_give_battery_status_run,
 	},
+	[PE_GIVE_STATUS] = {
+		.entry = pe_give_status_entry,
+		.run   = pe_give_status_run,
+	},
 	[PE_SEND_ALERT] = {
 		.entry = pe_send_alert_entry,
 		.run   = pe_send_alert_run,
@@ -7678,6 +7838,11 @@ static __const_data const struct usb_state pe_states[] = {
 		.entry = pe_ddr_send_data_reset_entry,
 		.run   = pe_ddr_send_data_reset_run,
 		.exit  = pe_ddr_send_data_reset_exit,
+	},
+	[PE_DDR_DATA_RESET_RECEIVED] = {
+		.entry = pe_ddr_data_reset_received_entry,
+		.run   = pe_ddr_data_reset_received_run,
+		.exit  = pe_ddr_data_reset_received_exit,
 	},
 	[PE_DDR_WAIT_FOR_VCONN_OFF] = {
 		.entry = pe_ddr_wait_for_vconn_off_entry,

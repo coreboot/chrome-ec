@@ -429,7 +429,6 @@ static void dpm_attempt_mode_exit(int port)
 		} else if (!DPM_CHK_FLAG(port, DPM_FLAG_DATA_RESET_DONE)) {
 			return;
 		}
-		/* TODO(b/209625351): Check for Not Supported case. */
 	}
 
 	/* TODO(b/209625351): Data Reset is the only real way to exit from USB4
@@ -452,7 +451,6 @@ static void dpm_attempt_mode_exit(int port)
 		/*
 		 * When the port is in USB4 mode and receives an exit request,
 		 * it leaves USB4 SOP in active state.
-		 * TODO(b/156749387): Support Data Reset for exiting USB4 SOP.
 		 */
 		CPRINTS("C%d: TBT teardown", port);
 		tbt_exit_mode_request(port);
@@ -787,4 +785,36 @@ int dpm_get_source_current(const int port)
 		return 1500;
 	else
 		return 500;
+}
+
+int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len)
+{
+	struct pd_sdb sdb;
+
+	/* TODO(b/227236917): Fill in fields of Status message */
+
+	/* Internal Temp */
+	sdb.internal_temp = 0x0;
+
+	/* Present Input */
+	sdb.present_input = 0x0;
+
+	/* Present Battery Input */
+	sdb.present_battery_input = 0x0;
+
+	/* Event Flags */
+	sdb.event_flags = 0x0;
+
+	/* Temperature Status */
+	sdb.temperature_status = PD_SDB_TEMPERATURE_STATUS_NOT_SUPPORTED;
+
+	/* Power Status */
+	sdb.power_status = 0x0;
+
+	/* USB PD Rev 3.0: 6.5.2 Status Message */
+	*len = 6;
+
+	memcpy(msg, &sdb, *len);
+
+	return EC_SUCCESS;
 }
