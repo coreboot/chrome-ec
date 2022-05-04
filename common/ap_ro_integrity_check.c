@@ -537,11 +537,23 @@ static enum vendor_cmd_rc vc_seed_ap_ro_check(enum vendor_cmd_cc code,
 
 	*response_size = 1; /* Just in case there is an error. */
 
-	/* Neither write nor erase are allowed once Board ID is programmed. */
+	/*
+	 * Neither write nor erase are allowed once Board ID type is programmed.
+	 *
+	 * Check the board id type insead of board_id_is_erased, because the
+	 * board id flags may be written before finalization. Board id type is
+	 * a better indicator for when RO is finalized and when to lock out
+	 * setting the hash.
+	 */
 #ifndef CR50_DEV
-	if (!board_id_is_erased()) {
-		*response = ARCVE_BID_PROGRAMMED;
-		return VENDOR_RC_NOT_ALLOWED;
+	{
+		struct board_id bid;
+
+		if (read_board_id(&bid) != EC_SUCCESS ||
+		    !board_id_type_is_blank(&bid)) {
+			*response = ARCVE_BID_PROGRAMMED;
+			return VENDOR_RC_NOT_ALLOWED;
+		}
 	}
 #endif
 
