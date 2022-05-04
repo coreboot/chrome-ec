@@ -183,8 +183,14 @@ build_boards: | $(FAILED_BOARDS_DIR)
 	@rm -f $(FAILED_BOARDS_DIR)/*
 	$(MAKE) try_build_boards
 
+.PHONY: build_cr50_extras
+build_cr50_extras: build_boards
+	$(MAKE) proj-cr50 CRYPTO_TEST=1 out=build/cr50_ct
+	$(MAKE) proj-cr50 CRYPTO_TEST=1 H1_RED_BOARD=1 out=build/cr50_ct_rb
+	$(MAKE) proj-cr50 CR50_DEV=1 out=build/cr50_dbg
+
 .PHONY: buildall
-buildall: build_boards
+buildall: build_cr50_extras
 	$(MAKE) buildfuzztests
 	$(MAKE) runtests
 	@touch .tests-passed
