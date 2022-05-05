@@ -264,15 +264,18 @@ enum usb_pe_state {
 	/* PD3.0 only states below here*/
 	/* DFP Data Reset States */
 	PE_DDR_SEND_DATA_RESET,
+	PE_DDR_DATA_RESET_RECEIVED,
 	PE_DDR_WAIT_FOR_VCONN_OFF,
 	PE_DDR_PERFORM_DATA_RESET,
 	PE_FRS_SNK_SRC_START_AMS,
 	PE_GIVE_BATTERY_CAP,
 	PE_GIVE_BATTERY_STATUS,
+	PE_GIVE_STATUS,
 	PE_SEND_ALERT,
 	PE_SRC_CHUNK_RECEIVED,
 	PE_SNK_CHUNK_RECEIVED,
 	PE_VCS_FORCE_VCONN,
+	PE_GET_REVISION,
 };
 
 /*
@@ -388,9 +391,11 @@ __maybe_unused static __const_data const char * const pe_state_names[] = {
 	/* PD3.0 only states below here*/
 #ifdef CONFIG_USB_PD_REV30
 	[PE_FRS_SNK_SRC_START_AMS] = "PE_FRS_SNK_SRC_Start_Ams",
+	[PE_GET_REVISION] = "PE_Get_Revision",
 #ifdef CONFIG_USB_PD_EXTENDED_MESSAGES
 	[PE_GIVE_BATTERY_CAP] = "PE_Give_Battery_Cap",
 	[PE_GIVE_BATTERY_STATUS] = "PE_Give_Battery_Status",
+	[PE_GIVE_STATUS] = "PE_Give_Status",
 	[PE_SEND_ALERT] = "PE_Send_Alert",
 #else
 	[PE_SRC_CHUNK_RECEIVED] = "PE_SRC_Chunk_Received",
@@ -401,6 +406,7 @@ __maybe_unused static __const_data const char * const pe_state_names[] = {
 #endif
 #ifdef CONFIG_USB_PD_DATA_RESET_MSG
 	[PE_DDR_SEND_DATA_RESET] = "PE_DDR_Send_Data_Reset",
+	[PE_DDR_DATA_RESET_RECEIVED] = "PE_DDR_Data_Reset_Received",
 	[PE_DDR_WAIT_FOR_VCONN_OFF] = "PE_DDR_Wait_For_VCONN_Off",
 	[PE_DDR_PERFORM_DATA_RESET] = "PE_DDR_Perform_Data_Reset",
 #endif /* CONFIG_USB_PD_DATA_RESET_MSG */
@@ -431,6 +437,8 @@ GEN_NOT_SUPPORTED(PE_SRC_CHUNK_RECEIVED);
 #define PE_SRC_CHUNK_RECEIVED PE_SRC_CHUNK_RECEIVED_NOT_SUPPORTED
 GEN_NOT_SUPPORTED(PE_SNK_CHUNK_RECEIVED);
 #define PE_SNK_CHUNK_RECEIVED PE_SNK_CHUNK_RECEIVED_NOT_SUPPORTED
+GEN_NOT_SUPPORTED(PE_GET_REVISION);
+#define PE_GET_REVISION PE_GET_REVISION_NOT_SUPPORTED
 #endif /* CONFIG_USB_PD_REV30 */
 
 #if !defined(CONFIG_USBC_VCONN) || !defined(CONFIG_USB_PD_REV30)
@@ -443,6 +451,8 @@ GEN_NOT_SUPPORTED(PE_GIVE_BATTERY_CAP);
 #define PE_GIVE_BATTERY_CAP PE_GIVE_BATTERY_CAP_NOT_SUPPORTED
 GEN_NOT_SUPPORTED(PE_GIVE_BATTERY_STATUS);
 #define PE_GIVE_BATTERY_STATUS PE_GIVE_BATTERY_STATUS_NOT_SUPPORTED
+GEN_NOT_SUPPORTED(PE_GIVE_STATUS);
+#define PE_GIVE_STATUS PE_GIVE_STATUS_NOT_SUPPORTED
 GEN_NOT_SUPPORTED(PE_SEND_ALERT);
 #define PE_SEND_ALERT PE_SEND_ALERT_NOT_SUPPORTED
 #endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
@@ -457,6 +467,8 @@ GEN_NOT_SUPPORTED(PE_SNK_CHUNK_RECEIVED);
 #ifndef CONFIG_USB_PD_DATA_RESET_MSG
 GEN_NOT_SUPPORTED(PE_DDR_SEND_DATA_RESET);
 #define PE_DDR_SEND_DATA_RESET PE_DDR_SEND_DATA_RESET_NOT_SUPPORTED
+GEN_NOT_SUPPORTED(PE_DDR_DATA_RESET_RECEIVED);
+#define PE_DDR_DATA_RESET_RECEIVED PE_DDR_DATA_RESET_RECEIVED_NOT_SUPPORTED
 GEN_NOT_SUPPORTED(PE_DDR_WAIT_FOR_VCONN_OFF);
 #define PE_DDR_WAIT_FOR_VCONN_OFF PE_DDR_WAIT_FOR_VCONN_OFF_NOT_SUPPORTED
 GEN_NOT_SUPPORTED(PE_DDR_PERFORM_DATA_RESET);
@@ -613,6 +625,9 @@ static struct policy_engine {
 	/* Last received sink cap */
 	uint32_t snk_caps[PDO_MAX_OBJECTS];
 	int snk_cap_cnt;
+
+	/* Last received Revision Message Data Object (RMDO) from the partner */
+	struct rmdo partner_rmdo;
 
 	/* Attached ChromeOS device id, RW hash, and current RO / RW image */
 	uint16_t dev_id;
@@ -1141,6 +1156,7 @@ void pe_report_error(int port, enum pe_error e, enum tcpci_msg_type type)
 			get_state_pe(port) == PE_VDM_IDENTITY_REQUEST_CBL) ||
 			(IS_ENABLED(CONFIG_USB_PD_DATA_RESET_MSG) &&
 			 (get_state_pe(port) == PE_DDR_SEND_DATA_RESET ||
+			  get_state_pe(port) == PE_DDR_DATA_RESET_RECEIVED ||
 			  get_state_pe(port) == PE_DDR_WAIT_FOR_VCONN_OFF ||
 			  get_state_pe(port) == PE_DDR_PERFORM_DATA_RESET)) ||
 			(pe_in_frs_mode(port) &&
@@ -1343,6 +1359,15 @@ static void pe_clear_port_data(int port)
 	 */
 	pd_set_src_caps(port, 0, NULL);
 	pe_set_snk_caps(port, 0, NULL);
+
+	/*
+	 * Saved Revision responses are no longer valid on disconnect
+	 */
+	pe[port].partner_rmdo.reserved = 0;
+	pe[port].partner_rmdo.minor_ver = 0;
+	pe[port].partner_rmdo.major_ver = 0;
+	pe[port].partner_rmdo.minor_rev = 0;
+	pe[port].partner_rmdo.major_rev = 0;
 
 	/* Clear any stored discovery data, but leave modes for alt mode exit */
 	pd_dfp_discovery_init(port);
@@ -1548,6 +1573,11 @@ static bool common_src_snk_dpm_requests(int port)
 			set_state_pe(port, PE_DDR_SEND_DATA_RESET);
 		else
 			return false;
+		return true;
+	} else if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
+		   PE_CHK_DPM_REQUEST(port, DPM_REQUEST_GET_REVISION)) {
+		pe_set_dpm_curr_request(port, DPM_REQUEST_GET_REVISION);
+		set_state_pe(port, PE_GET_REVISION);
 		return true;
 	}
 
@@ -2181,6 +2211,14 @@ static void pe_src_startup_entry(int port)
 						CONFIG_USB_PD_3A_PORTS > 0 ||
 						IS_ENABLED(CONFIG_USB_PD_FRS))
 			pd_dpm_request(port, DPM_REQUEST_GET_SNK_CAPS);
+
+		/*
+		 * Request partner's revision information. The PE_Get_Revision
+		 * state will only send Get_Revision to partners with major
+		 * revision 3.0
+		 */
+		pd_dpm_request(port, DPM_REQUEST_GET_REVISION);
+
 	}
 }
 
@@ -2636,14 +2674,19 @@ static void pe_src_ready_run(int port)
 		/* Extended Message Requests */
 		if (ext > 0) {
 			switch (type) {
-#if defined(CONFIG_USB_PD_EXTENDED_MESSAGES) && defined(CONFIG_BATTERY)
+#if defined(CONFIG_USB_PD_EXTENDED_MESSAGES)
+#if defined(CONFIG_BATTERY)
 			case PD_EXT_GET_BATTERY_CAP:
 				set_state_pe(port, PE_GIVE_BATTERY_CAP);
 				break;
 			case PD_EXT_GET_BATTERY_STATUS:
 				set_state_pe(port, PE_GIVE_BATTERY_STATUS);
 				break;
-#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES && CONFIG_BATTERY */
+#endif /* CONFIG_BATTERY */
+			case PD_CTRL_GET_STATUS:
+				set_state_pe(port, PE_GIVE_STATUS);
+				return;
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 			default:
 				extended_message_not_supported(port, payload);
 			}
@@ -2726,6 +2769,19 @@ static void pe_src_ready_run(int port)
 				pe_send_soft_reset(port,
 				  PD_HEADER_GET_SOP(rx_emsg[port].header));
 				return;
+#ifdef CONFIG_USB_PD_DATA_RESET_MSG
+			case PD_CTRL_DATA_RESET:
+				if (pe[port].data_role == PD_ROLE_DFP)
+					set_state_pe(port,
+						PE_DDR_DATA_RESET_RECEIVED);
+				/*
+				 * TODO(b/209628496): Support Data Reset as UFP
+				 */
+				else
+					set_state_pe(port,
+						PE_SEND_NOT_SUPPORTED);
+				return;
+#endif /* CONFIG_USB_PD_DATA_RESET_MSG */
 			/*
 			 * Receiving an unknown or unsupported message
 			 * shall be responded to with a not supported message.
@@ -3052,6 +3108,13 @@ static void pe_snk_startup_entry(int port)
 					CONFIG_USB_PD_3A_PORTS > 0 ||
 					IS_ENABLED(CONFIG_USB_PD_FRS))
 		pd_dpm_request(port, DPM_REQUEST_GET_SNK_CAPS);
+
+	/*
+	 * Request partner's revision information. The PE_Get_Revision
+	 * state will only send Get_Revision to partners with major
+	 * revision 3.0
+	 */
+	pd_dpm_request(port, DPM_REQUEST_GET_REVISION);
 
 }
 
@@ -3462,14 +3525,19 @@ static void pe_snk_ready_run(int port)
 		/* Extended Message Request */
 		if (ext > 0) {
 			switch (type) {
-#if defined(CONFIG_USB_PD_EXTENDED_MESSAGES) && defined(CONFIG_BATTERY)
+#if defined(CONFIG_USB_PD_EXTENDED_MESSAGES)
+#if defined(CONFIG_BATTERY)
 			case PD_EXT_GET_BATTERY_CAP:
 				set_state_pe(port, PE_GIVE_BATTERY_CAP);
 				break;
 			case PD_EXT_GET_BATTERY_STATUS:
 				set_state_pe(port, PE_GIVE_BATTERY_STATUS);
 				break;
-#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES && CONFIG_BATTERY */
+#endif /* CONFIG_BATTERY */
+			case PD_CTRL_GET_STATUS:
+				set_state_pe(port, PE_GIVE_STATUS);
+				return;
+#endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 			default:
 				extended_message_not_supported(port, payload);
 			}
@@ -3538,6 +3606,19 @@ static void pe_snk_ready_run(int port)
 					set_state_pe(port,
 							PE_SEND_NOT_SUPPORTED);
 				return;
+#ifdef CONFIG_USB_PD_DATA_RESET_MSG
+			case PD_CTRL_DATA_RESET:
+				if (pe[port].data_role == PD_ROLE_DFP)
+					set_state_pe(port,
+						PE_DDR_DATA_RESET_RECEIVED);
+				/*
+				 * TODO(b/209628496): Support Data Reset as UFP
+				 */
+				else
+					set_state_pe(port,
+						PE_SEND_NOT_SUPPORTED);
+				return;
+#endif /* CONFIG_USB_PD_DATA_RESET_MSG */
 			case PD_CTRL_NOT_SUPPORTED:
 				/* Do nothing */
 				break;
@@ -4209,6 +4290,36 @@ static void pe_give_battery_status_run(int port)
 		set_state_pe(port, PE_SRC_READY);
 	}
 }
+
+/**
+ * PE_SRC_Give_Source_Status and
+ * PE_SNK_Give_Sink_Status
+ */
+static void pe_give_status_entry(int port)
+{
+	uint8_t *msg = (uint8_t *)tx_emsg[port].buf;
+	uint32_t *len = &tx_emsg[port].len;
+
+	print_current_state(port);
+	if (dpm_get_status_msg(port, msg, len) != EC_SUCCESS)
+		pe_set_ready_state(port);
+
+	send_ext_data_msg(port, TCPCI_MSG_SOP, PD_EXT_STATUS);
+}
+
+static void pe_give_status_run(int port)
+{
+	if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
+		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+		pe_set_ready_state(port);
+	} else if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR) ||
+		   PE_CHK_FLAG(port, PE_FLAGS_MSG_DISCARDED)) {
+		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
+		PE_CLR_FLAG(port, PE_FLAGS_MSG_DISCARDED);
+		pe_send_soft_reset(port, TCPCI_MSG_SOP);
+	}
+}
+
 
 /**
  * PE_SRC_Send_Source_Alert and
@@ -6997,6 +7108,79 @@ static void pe_dr_src_get_source_cap_exit(int port)
 	pe_sender_response_msg_exit(port);
 }
 
+/*
+ * PE_Get_Revision
+ */
+__maybe_unused static void pe_get_revision_entry(int port)
+{
+	print_current_state(port);
+
+	/*
+	 * Only USB PD partners with major revision 3.0 could potentially
+	 * respond to Get_Revision.
+	 */
+	if (prl_get_rev(port, TCPCI_MSG_SOP) != PD_REV30)
+		return;
+
+	/* Send a Get_Revision message */
+	send_ctrl_msg(port, TCPCI_MSG_SOP, PD_CTRL_GET_REVISION);
+	pe_sender_response_msg_entry(port);
+}
+
+__maybe_unused static void pe_get_revision_run(int port)
+{
+	int type;
+	int cnt;
+	int ext;
+	enum pe_msg_check msg_check;
+
+	if (prl_get_rev(port, TCPCI_MSG_SOP) != PD_REV30) {
+		pe_set_ready_state(port);
+		return;
+	}
+
+	/* Check the state of the message sent */
+	msg_check = pe_sender_response_msg_run(port);
+
+	if ((msg_check & PE_MSG_SENT) &&
+	     PE_CHK_FLAG(port, PE_FLAGS_MSG_RECEIVED)) {
+		PE_CLR_FLAG(port, PE_FLAGS_MSG_RECEIVED);
+
+		type = PD_HEADER_TYPE(rx_emsg[port].header);
+		cnt = PD_HEADER_CNT(rx_emsg[port].header);
+		ext = PD_HEADER_EXT(rx_emsg[port].header);
+
+		if (ext == 0 && cnt == 1 && type == PD_DATA_REVISION) {
+			/* Revision returned by partner */
+			pe[port].partner_rmdo =
+			    *((struct rmdo *) rx_emsg[port].buf);
+		}
+
+		/*
+		 * Get_Revision is an interruptible AMS. Return to ready state
+		 * after response whether or not there was a protocol error.
+		 */
+		pe_set_ready_state(port);
+		return;
+	}
+
+	/*
+	 * Return to ready state if the message was discarded or timer expires
+	 */
+	if ((msg_check & PE_MSG_DISCARDED) ||
+	    pd_timer_is_expired(port, PE_TIMER_SENDER_RESPONSE))
+		pe_set_ready_state(port);
+
+}
+
+__maybe_unused static void pe_get_revision_exit(int port)
+{
+	if (prl_get_rev(port, TCPCI_MSG_SOP) != PD_REV30)
+		return;
+
+	pe_sender_response_msg_exit(port);
+}
+
 #ifdef CONFIG_USB_PD_DATA_RESET_MSG
 /*
  * PE_DDR_Send_Data_Reset
@@ -7074,6 +7258,40 @@ static void pe_ddr_send_data_reset_run(int port)
 static void pe_ddr_send_data_reset_exit(int port)
 {
 	pe_sender_response_msg_exit(port);
+}
+
+/*
+ * PE_DDR_Data_Reset_Received
+ */
+static void pe_ddr_data_reset_received_entry(int port)
+{
+	print_current_state(port);
+	/* Send Data Reset message */
+	send_ctrl_msg(port, TCPCI_MSG_SOP, PD_CTRL_ACCEPT);
+}
+
+static void pe_ddr_data_reset_received_run(int port)
+{
+	if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
+		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+		if (tc_is_vconn_src(port))
+			set_state_pe(port, PE_DDR_PERFORM_DATA_RESET);
+		else
+			set_state_pe(port, PE_DDR_WAIT_FOR_VCONN_OFF);
+	} else if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR)) {
+		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
+		set_state_pe(port, PE_WAIT_FOR_ERROR_RECOVERY);
+	}
+}
+
+static void pe_ddr_data_reset_received_exit(int port)
+{
+	/*
+	 * Start DataResetFailTimer
+	 * NOTE: This timer continues to run in every state until it is stopped
+	 *	or it times out.
+	 */
+	pd_timer_enable(port, PE_TIMER_DATA_RESET_FAIL, PD_T_DATA_RESET_FAIL);
 }
 
 /*
@@ -7688,6 +7906,11 @@ static __const_data const struct usb_state pe_states[] = {
 		.entry = pe_frs_snk_src_start_ams_entry,
 		.parent = &pe_states[PE_PRS_FRS_SHARED],
 	},
+	[PE_GET_REVISION] = {
+		.entry = pe_get_revision_entry,
+		.run   = pe_get_revision_run,
+		.exit  = pe_get_revision_exit,
+	},
 #ifdef CONFIG_USB_PD_EXTENDED_MESSAGES
 	[PE_GIVE_BATTERY_CAP] = {
 		.entry = pe_give_battery_cap_entry,
@@ -7696,6 +7919,10 @@ static __const_data const struct usb_state pe_states[] = {
 	[PE_GIVE_BATTERY_STATUS] = {
 		.entry = pe_give_battery_status_entry,
 		.run   = pe_give_battery_status_run,
+	},
+	[PE_GIVE_STATUS] = {
+		.entry = pe_give_status_entry,
+		.run   = pe_give_status_run,
 	},
 	[PE_SEND_ALERT] = {
 		.entry = pe_send_alert_entry,
@@ -7725,6 +7952,11 @@ static __const_data const struct usb_state pe_states[] = {
 		.entry = pe_ddr_send_data_reset_entry,
 		.run   = pe_ddr_send_data_reset_run,
 		.exit  = pe_ddr_send_data_reset_exit,
+	},
+	[PE_DDR_DATA_RESET_RECEIVED] = {
+		.entry = pe_ddr_data_reset_received_entry,
+		.run   = pe_ddr_data_reset_received_run,
+		.exit  = pe_ddr_data_reset_received_exit,
 	},
 	[PE_DDR_WAIT_FOR_VCONN_OFF] = {
 		.entry = pe_ddr_wait_for_vconn_off_entry,
