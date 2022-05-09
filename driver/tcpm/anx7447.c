@@ -561,6 +561,33 @@ static int anx7447_mux_get(int port, mux_state_t *mux_state)
 #endif /* CONFIG_USB_PD_TCPM_MUX */
 
 /* ANX7447 is a TCPCI compatible port controller */
+
+static int anx7447_get_chip_info(int port, int live,
+			struct ec_response_pd_chip_info_v1 **chip_info)
+{
+	int rv = tcpci_get_chip_info(port, live, chip_info);
+	int val;
+
+	if (rv)
+		return rv;
+
+	if ((*chip_info)->fw_version_number == -1 || live) {
+		/*
+		 * Before reading ANX7447 SPI slave address 0x7e for
+		 * new added FW version, need to read ANX7447 I2c
+		 * slave address 0x58 first to wake up ANX7447.
+		 */
+		tcpc_read(port, ANX7447_REG_OCM_VERSION, &val);
+		rv = anx7447_reg_read(port, ANX7447_REG_OCM_VERSION, &val);
+
+		if (rv)
+			return rv;
+		if (val != 0)
+			(*chip_info)->fw_version_number = val;
+	}
+
+	return rv;
+}
 const struct tcpm_drv anx7447_tcpm_drv = {
 	.init			= &anx7447_init,
 	.release		= &anx7447_release,
@@ -585,6 +612,7 @@ const struct tcpm_drv anx7447_tcpm_drv = {
 #endif
 	.get_chip_info		= &tcpci_get_chip_info,
 #ifdef CONFIG_USBC_PPC
+	.get_chip_info		= &anx7447_get_chip_info,
 	.set_snk_ctrl		= &tcpci_tcpm_set_snk_ctrl,
 	.set_src_ctrl		= &tcpci_tcpm_set_src_ctrl,
 #endif
