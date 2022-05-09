@@ -9,6 +9,7 @@
 #include "device_event.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "lid_switch.h"
 #include "mkbp_event.h"
 #include "peripheral_charger.h"
 #include "queue.h"
@@ -464,9 +465,13 @@ static int pchg_run(struct pchg *ctx)
 	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
 		return 0;
 
-	if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND))
-		return (ctx->event == PCHG_EVENT_DEVICE_DETECTED)
-			|| (ctx->event == PCHG_EVENT_DEVICE_LOST);
+	if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND)) {
+		if (IS_ENABLED(CONFIG_LID_SWITCH) && !lid_is_open())
+			/* Don't wake up if the lid is closed. */
+			return 0;
+		return (ctx->event == PCHG_EVENT_DEVICE_DETECTED ||
+				ctx->event == PCHG_EVENT_DEVICE_LOST);
+	}
 
 	if (ctx->event == PCHG_EVENT_CHARGE_UPDATE)
 		return ctx->battery_percent != previous_battery;
