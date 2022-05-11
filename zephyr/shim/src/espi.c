@@ -4,13 +4,13 @@
  */
 
 #include <atomic.h>
-#include <device.h>
-#include <drivers/espi.h>
-#include <drivers/gpio.h>
-#include <logging/log.h>
-#include <kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/espi.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/kernel.h>
 #include <stdint.h>
-#include <zephyr.h>
+#include <zephyr/zephyr.h>
 
 #include <ap_power/ap_power.h>
 #include <ap_power/ap_power_events.h>
@@ -28,7 +28,7 @@
 #include "timer.h"
 #include "zephyr_espi_shim.h"
 
-#define VWIRE_PULSE_TRIGGER_TIME 65
+#define VWIRE_PULSE_TRIGGER_TIME CONFIG_PLATFORM_EC_ESPI_DEFAULT_VW_WIDTH_US
 
 LOG_MODULE_REGISTER(espi_shim, CONFIG_ESPI_LOG_LEVEL);
 
@@ -250,9 +250,9 @@ static void lpc_generate_sci(void)
 {
 	/* Enforce signal-high for long enough to debounce high */
 	espi_vw_set_wire(VW_SCI_L, 1);
-	udelay(CONFIG_PLATFORM_EC_ESPI_DEFAULT_SCI_WIDTH_US);
+	udelay(VWIRE_PULSE_TRIGGER_TIME);
 	espi_vw_set_wire(VW_SCI_L, 0);
-	udelay(CONFIG_PLATFORM_EC_ESPI_DEFAULT_SCI_WIDTH_US);
+	udelay(VWIRE_PULSE_TRIGGER_TIME);
 	espi_vw_set_wire(VW_SCI_L, 1);
 }
 

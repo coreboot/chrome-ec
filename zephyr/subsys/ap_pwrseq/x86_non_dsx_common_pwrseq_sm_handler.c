@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include <init.h>
+#include <zephyr/init.h>
 
 #include <x86_non_dsx_common_pwrseq_sm_handler.h>
 
@@ -115,12 +115,61 @@ static bool chipset_is_exit_hardoff(void)
 	return pwrseq_ctx.want_g3_exit;
 }
 
+void ap_power_force_shutdown(enum ap_power_shutdown_reason reason)
+{
+	board_ap_power_force_shutdown();
+}
+
+static void shutdown_and_notify(enum ap_power_shutdown_reason reason)
+{
+	ap_power_force_shutdown(reason);
+	ap_power_ev_send_callbacks(AP_POWER_SHUTDOWN);
+	ap_power_ev_send_callbacks(AP_POWER_SHUTDOWN_COMPLETE);
+}
+
+void set_reboot_ap_at_g3_delay_seconds(uint32_t d_time)
+{
+	pwrseq_ctx.reboot_ap_at_g3_delay_ms = d_time * MSEC;
+}
+
 void apshutdown(void)
 {
 	if (pwr_sm_get_state() != SYS_POWER_STATE_G3) {
-		ap_power_force_shutdown(AP_POWER_SHUTDOWN_G3);
+		shutdown_and_notify(AP_POWER_SHUTDOWN_G3);
 		pwr_sm_set_state(SYS_POWER_STATE_G3);
 	}
+}
+
+void ap_power_reset(enum ap_power_shutdown_reason reason)
+{
+	/*
+	 * Irrespective of cold_reset value, always toggle SYS_RESET_L to
+	 * perform an AP reset. RCIN# which was used earlier to trigger
+	 * a warm reset is known to not work in certain cases where the CPU
+	 * is in a bad state (crbug.com/721853).
+	 *
+	 * The EC cannot control warm vs cold reset of the AP using
+	 * SYS_RESET_L; it's more of a request.
+	 */
+	LOG_DBG("%s: %d", __func__, reason);
+
+	/*
+	 * Toggling SYS_RESET_L will not have any impact when it's already
+	 * low (i,e. AP is in reset state).
+	 */
+	if (power_signal_get(PWR_SYS_RST)) {
+		LOG_DBG("Chipset is in reset state");
+		return;
+	}
+
+	power_signal_set(PWR_SYS_RST, 1);
+	/*
+	 * Debounce time for SYS_RESET_L is 16 ms. Wait twice that period
+	 * to be safe.
+	 */
+	k_msleep(AP_PWRSEQ_DT_VALUE(sys_reset_delay));
+	power_signal_set(PWR_SYS_RST, 0);
+	ap_power_ev_send_callbacks(AP_POWER_RESET);
 }
 
 /* Check RSMRST is fine to move from S5 to higher state */
@@ -146,12 +195,21 @@ void rsmrst_pass_thru_handler(void)
 	}
 }
 
+/* Common power sequencing */
 static int common_pwr_sm_run(int state)
 {
 	switch (state) {
 	case SYS_POWER_STATE_G3:
 		if (chipset_is_exit_hardoff()) {
 			request_exit_hardoff(false);
+			/*
+			 * G3->S0 transition should happen only after the
+			 * user specified delay. Hence, wait until the
+			 * user specified delay times out.
+			 */
+			k_msleep(pwrseq_ctx.reboot_ap_at_g3_delay_ms);
+			pwrseq_ctx.reboot_ap_at_g3_delay_ms = 0;
+
 			return SYS_POWER_STATE_G3S5;
 		}
 
@@ -193,7 +251,7 @@ static int common_pwr_sm_run(int state)
 		break;
 
 	case SYS_POWER_STATE_S5G3:
-		ap_power_force_shutdown(AP_POWER_SHUTDOWN_G3);
+		shutdown_and_notify(AP_POWER_SHUTDOWN_G3);
 		/* Notify power event before we enter G3 */
 		ap_power_ev_send_callbacks(AP_POWER_HARD_OFF);
 		return SYS_POWER_STATE_G3;
@@ -218,7 +276,7 @@ static int common_pwr_sm_run(int state)
 	case SYS_POWER_STATE_S4S3:
 		if (!power_signals_on(IN_PGOOD_ALL_CORE)) {
 			/* Required rail went away */
-			ap_power_force_shutdown(AP_POWER_SHUTDOWN_POWERFAIL);
+			shutdown_and_notify(AP_POWER_SHUTDOWN_POWERFAIL);
 			return SYS_POWER_STATE_G3;
 		}
 
@@ -238,7 +296,7 @@ static int common_pwr_sm_run(int state)
 		/* AP is out of suspend to RAM */
 		if (!power_signals_on(IN_PGOOD_ALL_CORE)) {
 			/* Required rail went away, go straight to S5 */
-			ap_power_force_shutdown(AP_POWER_SHUTDOWN_POWERFAIL);
+			shutdown_and_notify(AP_POWER_SHUTDOWN_POWERFAIL);
 			return SYS_POWER_STATE_G3;
 		} else if (signals_valid_and_off(IN_PCH_SLP_S3))
 			return SYS_POWER_STATE_S3S0;
@@ -249,7 +307,7 @@ static int common_pwr_sm_run(int state)
 
 	case SYS_POWER_STATE_S3S0:
 		if (!power_signals_on(IN_PGOOD_ALL_CORE)) {
-			ap_power_force_shutdown(AP_POWER_SHUTDOWN_POWERFAIL);
+			shutdown_and_notify(AP_POWER_SHUTDOWN_POWERFAIL);
 			return SYS_POWER_STATE_G3;
 		}
 
@@ -315,7 +373,7 @@ static int common_pwr_sm_run(int state)
 
 	case SYS_POWER_STATE_S0:
 		if (!power_signals_on(IN_PGOOD_ALL_CORE)) {
-			ap_power_force_shutdown(AP_POWER_SHUTDOWN_POWERFAIL);
+			shutdown_and_notify(AP_POWER_SHUTDOWN_POWERFAIL);
 			return SYS_POWER_STATE_G3;
 		} else if (signals_valid_and_on(IN_PCH_SLP_S3)) {
 			return SYS_POWER_STATE_S0S3;
@@ -328,12 +386,12 @@ static int common_pwr_sm_run(int state)
 		 * Ignore the SLP_S0 assertions in idle scenario by checking
 		 * the host sleep state.
 		 */
-		} else if (power_get_host_sleep_state()
-					== HOST_SLEEP_EVENT_S0IX_SUSPEND &&
-				power_signals_on(IN_PCH_SLP_S0)) {
-
+		} else if (ap_power_sleep_get_notify() ==
+					AP_POWER_SLEEP_SUSPEND &&
+					power_signals_on(IN_PCH_SLP_S0)) {
 			return SYS_POWER_STATE_S0S0ix;
-		} else {
+		} else if (ap_power_sleep_get_notify() ==
+					AP_POWER_SLEEP_RESUME) {
 			ap_power_sleep_notify_transition(AP_POWER_SLEEP_RESUME);
 #endif /* CONFIG_AP_PWRSEQ_S0IX */
 		}
@@ -403,32 +461,12 @@ static void pwr_seq_set_initial_state(void)
 	enum power_states_ndsx state = chipset_pwr_seq_get_state();
 
 	/*
-	 * Check reset flags, and ensure CPU is in correct state.
-	 */
-	if (reset_flags & EC_RESET_FLAG_AP_OFF) {
-		/*
-		 * AP is expected to be off.
-		 * If it isn't, force shutdown.
-		 */
-		if (state != SYS_POWER_STATE_G3) {
-			ap_power_force_shutdown(AP_POWER_SHUTDOWN_G3);
-		}
-		pwr_sm_set_state(SYS_POWER_STATE_G3);
-		return;
-	}
-	/*
 	 * Not in warm boot, but CPU is not shutdown.
 	 */
 	if (((reset_flags & EC_RESET_FLAG_SYSJUMP) == 0) &&
 	    (state != SYS_POWER_STATE_G3)) {
 		ap_power_force_shutdown(AP_POWER_SHUTDOWN_G3);
 		state = SYS_POWER_STATE_G3;
-	}
-	/*
-	 * If CPU is off, set the state to start powering it up.
-	 */
-	if (state == SYS_POWER_STATE_G3) {
-		state = SYS_POWER_STATE_G3S5;
 	}
 	pwr_sm_set_state(state);
 }
@@ -440,8 +478,6 @@ static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 	power_signal_mask_t this_in_signals;
 	power_signal_mask_t last_in_signals = 0;
 	enum power_states_ndsx last_state = -1;
-
-	pwr_seq_set_initial_state();
 
 	while (1) {
 		curr_state = pwr_sm_get_state();
@@ -508,8 +544,13 @@ void ap_pwrseq_task_start(void)
 
 static void init_pwr_seq_state(void)
 {
-	init_chipset_pwr_seq_state();
 	request_exit_hardoff(false);
+	/*
+	 * The state of the CPU needs to be determined now
+	 * so that init routines can check the state of
+	 * the CPU.
+	 */
+	pwr_seq_set_initial_state();
 }
 
 /* Initialize power sequence system state */

@@ -3,10 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr.h>
+#include <zephyr/zephyr.h>
 #include <ztest.h>
-#include <shell/shell_uart.h>
-#include <drivers/gpio/gpio_emul.h>
+#include <zephyr/shell/shell_uart.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
 
 #include "battery.h"
 #include "battery_smart.h"
@@ -196,7 +196,7 @@ int host_cmd_motion_sense_range(uint8_t sensor_num, int32_t range,
 int host_cmd_motion_sense_offset(uint8_t sensor_num, uint16_t flags,
 				 int16_t temperature, int16_t offset_x,
 				 int16_t offset_y, int16_t offset_z,
-				struct ec_response_motion_sense *response)
+				 struct ec_response_motion_sense *response)
 {
 	struct ec_params_motion_sense params = {
 		.cmd = MOTIONSENSE_CMD_SENSOR_OFFSET,
@@ -214,8 +214,8 @@ int host_cmd_motion_sense_offset(uint8_t sensor_num, uint16_t flags,
 }
 
 int host_cmd_motion_sense_scale(uint8_t sensor_num, uint16_t flags,
-				 int16_t temperature, int16_t scale_x,
-				 int16_t scale_y, int16_t scale_z,
+				int16_t temperature, int16_t scale_x,
+				int16_t scale_y, int16_t scale_z,
 				struct ec_response_motion_sense *response)
 {
 	struct ec_params_motion_sense params = {
@@ -282,6 +282,40 @@ int host_cmd_motion_sense_fifo_read(uint8_t buffer_length,
 		.cmd = MOTIONSENSE_CMD_FIFO_READ,
 		.fifo_read = {
 			.max_data_vector = buffer_length,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_int_enable(int8_t enable,
+				     struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_FIFO_INT_ENABLE,
+		.fifo_int_enable = {
+			.enable = enable,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_spoof(uint8_t sensor_num, uint8_t enable,
+				int16_t values0, int16_t values1,
+				int16_t values2,
+				struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_SPOOF,
+		.spoof = {
+			.sensor_id = sensor_num,
+			.spoof_enable = enable,
+			.components = { values0, values1, values2 },
 		},
 	};
 	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(

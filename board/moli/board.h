@@ -128,11 +128,9 @@
 /* ADC */
 #define CONFIG_ADC
 
-/*
- * TODO(b/197478860): Enable the fan control. We need
- * to check the sensor value and adjust the fan speed.
- */
- #define CONFIG_FANS			FAN_CH_COUNT
+/* Fan */
+#define CONFIG_FANS			FAN_CH_COUNT
+#define RPM_DEVIATION		1
 
 /* Include math_util for bitmask_uint64 used in pd_timers */
 #define CONFIG_MATH_UTIL
@@ -153,17 +151,16 @@ enum charge_port {
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_CPU,
 	ADC_TEMP_SENSOR_2_CPU_VR,
-	ADC_TEMP_SENSOR_3_WIFI,
-	ADC_TEMP_SENSOR_4_DIMM,
+	ADC_TEMP_SENSOR_3_DIMM,
 	ADC_VBUS,
+	ADC_PPVAR_IMON,              /* ADC3 */
 	ADC_CH_COUNT
 };
 
 enum temp_sensor_id {
 	TEMP_SENSOR_1_CPU,
 	TEMP_SENSOR_2_CPU_VR,
-	TEMP_SENSOR_3_WIFI,
-	TEMP_SENSOR_4_DIMM,
+	TEMP_SENSOR_3_DIMM,
 	TEMP_SENSOR_COUNT
 };
 
