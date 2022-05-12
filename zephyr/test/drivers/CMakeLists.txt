@@ -63,6 +63,7 @@ target_sources(app PRIVATE
   src/test_mocks.c
   src/test_rules.c
   src/thermistor.c
+  src/uart_hostcmd.c
   src/usb_mux.c
   src/usb_pd_host_cmd.c
   src/utils.c
@@ -71,3 +72,5 @@ target_sources(app PRIVATE
 )
 
 add_subdirectory(isl923x)
+
+set_compiler_property(APPEND PROPERTY coverage -O0)

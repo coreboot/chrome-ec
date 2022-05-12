@@ -14,6 +14,7 @@
 #include "test/drivers/stubs.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+#include "test/usb_pe.h"
 #include "usb_pd.h"
 
 #define TEST_USB_PORT USBC_PORT_C0
@@ -26,7 +27,7 @@ struct usb_pd_ctrl_msg_test_fixture {
 	struct tcpci_drp_emul partner_emul;
 	const struct emul *tcpci_emul;
 	const struct emul *charger_emul;
-	bool drp_partner_is_sink;
+	enum pd_power_role drp_parter_pd_role;
 };
 
 struct usb_pd_ctrl_msg_test_sink_fixture {
@@ -88,7 +89,7 @@ static void *usb_pd_ctrl_msg_sink_setup(void)
 	struct usb_pd_ctrl_msg_test_fixture *fixture =
 		usb_pd_ctrl_msg_setup_emul();
 
-	fixture->drp_partner_is_sink = true;
+	fixture->drp_parter_pd_role = PD_ROLE_SINK;
 
 	return fixture;
 }
@@ -98,7 +99,7 @@ static void *usb_pd_ctrl_msg_source_setup(void)
 	struct usb_pd_ctrl_msg_test_fixture *fixture =
 		usb_pd_ctrl_msg_setup_emul();
 
-	fixture->drp_partner_is_sink = false;
+	fixture->drp_parter_pd_role = PD_ROLE_SOURCE;
 
 	return fixture;
 }
@@ -118,7 +119,8 @@ static void usb_pd_ctrl_msg_before(void *data)
 	/* TODO(b/214401892): Check why need to give time TCPM to spin */
 	k_sleep(K_SECONDS(1));
 
-	tcpci_drp_emul_init(&fixture->partner_emul, PD_REV20);
+	tcpci_drp_emul_init_with_pd_role(&fixture->partner_emul, PD_REV20,
+					 fixture->drp_parter_pd_role);
 
 	/* Add additional Sink PDO to partner to verify
 	 * PE_DR_SNK_Get_Sink_Cap/PE_SRC_Get_Sink_Cap (these are shared PE
@@ -126,13 +128,8 @@ static void usb_pd_ctrl_msg_before(void *data)
 	 */
 	fixture->partner_emul.snk_data.pdo[1] = TEST_ADDED_PDO;
 
-	fixture->partner_emul.data.sink = fixture->drp_partner_is_sink;
-
 	/* Turn TCPCI rev 2 ON */
 	tcpc_config[TEST_USB_PORT].flags |= TCPC_FLAGS_TCPCI_REV2_0;
-
-	/* Reset to disconnected state */
-	disconnect_partner(fixture);
 
 	tcpci_drp_emul_connect_partner(&fixture->partner_emul,
 				       fixture->tcpci_emul,
@@ -339,4 +336,59 @@ ZTEST(usb_pd_ctrl_msg_test_sink, verify_get_sink_cap)
 
 	zassert_true(typec_status.sink_cap_count > 1, NULL);
 	zassert_equal(typec_status.sink_cap_pdos[1], TEST_ADDED_PDO, NULL);
+}
+
+/**
+ * @brief TestPurpose: Verify BIST TX MODE 2.
+ *
+ * @details
+ *  - TCPM is configured initially as Sink
+ *  - Initiate BIST TX
+ *
+ * Expected Results
+ *  - BIST occurs and we transition back to READY state
+ */
+ZTEST_F(usb_pd_ctrl_msg_test_source, verify_bist_tx_mode2)
+{
+	struct usb_pd_ctrl_msg_test_fixture *fixture = &this->fixture;
+	uint32_t bdo = BDO(BDO_MODE_CARRIER2, 0);
+
+	tcpci_partner_send_data_msg(&fixture->partner_emul.common_data,
+				    PD_DATA_BIST, &bdo, 1, 0);
+
+	pd_dpm_request(TEST_USB_PORT, DPM_REQUEST_BIST_TX);
+	k_sleep(K_MSEC(10));
+	zassert_equal(get_state_pe(TEST_USB_PORT), PE_BIST_TX, NULL);
+
+	k_sleep(K_SECONDS(5));
+	zassert_equal(get_state_pe(TEST_USB_PORT), PE_SNK_READY, NULL);
+}
+
+/**
+ * @brief TestPurpose: Verify BIST TX TEST DATA.
+ *
+ * @details
+ *  - TCPM is configured initially as Sink
+ *  - Initiate BIST TX
+ *  - End testing via signaling a Hard Reset
+ *
+ * Expected Results
+ *  - Partner remains in BIST_TX state until hard reset is received.
+ */
+ZTEST_F(usb_pd_ctrl_msg_test_source, verify_bist_tx_test_data)
+{
+	struct usb_pd_ctrl_msg_test_fixture *fixture = &this->fixture;
+	uint32_t bdo = BDO(BDO_MODE_TEST_DATA, 0);
+
+	tcpci_partner_send_data_msg(&fixture->partner_emul.common_data,
+				    PD_DATA_BIST, &bdo, 1, 0);
+
+	pd_dpm_request(TEST_USB_PORT, DPM_REQUEST_BIST_TX);
+	k_sleep(K_SECONDS(5));
+	zassert_equal(get_state_pe(TEST_USB_PORT), PE_BIST_TX, NULL);
+
+	tcpci_partner_common_send_hard_reset(
+		&fixture->partner_emul.common_data);
+	k_sleep(K_SECONDS(1));
+	zassert_equal(get_state_pe(TEST_USB_PORT), PE_SNK_READY, NULL);
 }
