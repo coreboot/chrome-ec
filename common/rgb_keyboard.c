@@ -22,15 +22,14 @@
 #define CPRINTF(fmt, args...) cprintf(CC_RGBKBD, "RGBKBD: " fmt, ##args)
 #define CPRINTS(fmt, args...) cprints(CC_RGBKBD, "RGBKBD: " fmt, ##args)
 
-test_export_static enum rgbkbd_demo demo =
+test_export_static enum ec_rgbkbd_demo demo =
 #if   defined(CONFIG_RGBKBD_DEMO_FLOW)
-	RGBKBD_DEMO_FLOW
+	EC_RGBKBD_DEMO_FLOW;
 #elif defined(CONFIG_RGBKBD_DEMO_DOT)
-	RGBKBD_DEMO_DOT
+	EC_RGBKBD_DEMO_DOT;
 #else
-	RGBKBD_DEMO_OFF
+	EC_RGBKBD_DEMO_OFF;
 #endif
-	;
 
 test_export_static
 uint8_t rgbkbd_table[EC_RGBKBD_MAX_KEY_COUNT];
@@ -170,16 +169,16 @@ static void rgbkbd_demo_dot(void)
 #endif
 }
 
-static void rgbkbd_demo(enum rgbkbd_demo id)
+static void rgbkbd_demo_run(enum ec_rgbkbd_demo id)
 {
 	switch (id) {
-	case RGBKBD_DEMO_FLOW:
+	case EC_RGBKBD_DEMO_FLOW:
 		rgbkbd_demo_flow();
 		break;
-	case RGBKBD_DEMO_DOT:
+	case EC_RGBKBD_DEMO_DOT:
 		rgbkbd_demo_dot();
 		break;
-	case RGBKBD_DEMO_OFF:
+	case EC_RGBKBD_DEMO_OFF:
 	default:
 		break;
 	}
@@ -228,7 +227,199 @@ void rgbkbd_init_lookup_table(void)
 	 */
 }
 
-__overridable void board_enable_rgb_keyboard(bool enable) {}
+static int rgbkbd_set_global_brightness(uint8_t gcc)
+{
+	int e, grid;
+	int rv = EC_SUCCESS;
+
+	for (grid = 0; grid < rgbkbd_count; grid++) {
+		struct rgbkbd *ctx = &rgbkbds[grid];
+
+		e = ctx->cfg->drv->set_gcc(ctx, gcc);
+		if (e) {
+			CPRINTS("Failed to set GCC to %u for grid=%d (%d)",
+				gcc, grid, e);
+			rv = e;
+			continue;
+		}
+	}
+
+	CPRINTS("Set GCC to %u", gcc);
+
+	/* Return EC_SUCCESS or the last error. */
+	return rv;
+}
+
+static int rgbkbd_set_scale(uint8_t scale)
+{
+	int e, i, rv = EC_SUCCESS;
+
+	for (i = 0; i < rgbkbd_count; i++) {
+		struct rgbkbd *ctx = &rgbkbds[i];
+
+		e = ctx->cfg->drv->set_scale(ctx, 0, scale, get_grid_size(ctx));
+		if (e) {
+			CPRINTS("Failed to set scale of GRID%d to %d (%d)",
+				i, scale, e);
+			rv = e;
+		}
+	}
+
+	return rv;
+}
+
+static int rgbkbd_init(void)
+{
+	int rv = EC_SUCCESS;
+	int e, i;
+
+	for (i = 0; i < rgbkbd_count; i++) {
+		struct rgbkbd *ctx = &rgbkbds[i];
+		uint8_t scale = ctx->init->scale;
+		uint8_t gcc = ctx->init->gcc;
+
+		e = ctx->cfg->drv->init(ctx);
+		if (e) {
+			CPRINTS("Failed to init GRID%d (%d)", i, e);
+			rv = e;
+			continue;
+		}
+
+		e = ctx->cfg->drv->set_scale(ctx, 0, scale, get_grid_size(ctx));
+		if (e) {
+			CPRINTS("Failed to set scale of GRID%d to %d (%d)",
+				i, scale, rv);
+			rv = e;
+			continue;
+		}
+
+		e = ctx->cfg->drv->set_gcc(ctx, gcc);
+		if (e) {
+			CPRINTS("Failed to set GCC to %u for grid=%d (%d)",
+				gcc, i, e);
+			rv = e;
+			continue;
+		}
+
+		rgbkbd_reset_color(ctx->init->color);
+
+		CPRINTS("Initialized GRID%d", i);
+	}
+
+	if (rv == EC_SUCCESS)
+		rgbkbd_state = RGBKBD_STATE_INITIALIZED;
+
+	return rv;
+}
+
+/* This is used to re-init on the first enable. */
+static bool reinitialized;
+static int rgbkbd_late_init(void)
+{
+	if (IS_ENABLED(CONFIG_IS31FL3743B_LATE_INIT)) {
+		if (!reinitialized) {
+			int rv;
+
+			CPRINTS("Re-initializing");
+			rv = rgbkbd_init();
+			if (rv)
+				return rv;
+			reinitialized = true;
+		}
+	}
+	return EC_SUCCESS;
+}
+
+static int rgbkbd_enable(int enable)
+{
+	int rv = EC_SUCCESS;
+	int e, i;
+
+	if (enable) {
+		if (rgbkbd_state == RGBKBD_STATE_ENABLED)
+			return EC_SUCCESS;
+		rv = rgbkbd_late_init();
+		if (rv)
+			return rv;
+	} else {
+		if (rgbkbd_state == RGBKBD_STATE_DISABLED)
+			return EC_SUCCESS;
+	}
+
+	for (i = 0; i < rgbkbd_count; i++) {
+		struct rgbkbd *ctx = &rgbkbds[i];
+
+		e = ctx->cfg->drv->enable(ctx, enable);
+		if (e) {
+			CPRINTS("Failed to %s GRID%d (%d)",
+				enable ? "enable" : "disable", i, e);
+			rv = e;
+			continue;
+		}
+
+		CPRINTS("%s GRID%d", enable ? "Enabled" : "Disabled", i);
+	}
+
+	if (rv == EC_SUCCESS) {
+		rgbkbd_state = enable ?
+				RGBKBD_STATE_ENABLED : RGBKBD_STATE_DISABLED;
+	}
+
+	/* Return EC_SUCCESS or the last error. */
+	return rv;
+}
+
+static void rgbkbd_demo_set(enum ec_rgbkbd_demo new_demo)
+{
+	CPRINTS("Setting demo %d with %d ms interval", demo, demo_interval_ms);
+
+	demo = new_demo;
+
+	/* suspend demo task */
+	demo_interval_ms = -1;
+	rgbkbd_init();
+	rgbkbd_enable(1);
+
+	if (demo == EC_RGBKBD_DEMO_OFF)
+		return;
+
+	demo_interval_ms = default_demo_interval_ms;
+
+	/* start demo */
+	task_wake(TASK_ID_RGBKBD);
+}
+
+static int rgbkbd_kblight_set(int percent)
+{
+	uint8_t gcc = DIV_ROUND_NEAREST(percent * RGBKBD_MAX_GCC_LEVEL, 100);
+	int rv = rgbkbd_late_init();
+
+	if (rv)
+		return rv;
+
+	return rgbkbd_set_global_brightness(gcc);
+}
+
+static int rgbkbd_get_enabled(void)
+{
+	return rgbkbd_state >= RGBKBD_STATE_ENABLED;
+}
+
+static void rgbkbd_reset(void)
+{
+	board_kblight_shutdown();
+	board_kblight_init();
+	rgbkbd_state = RGBKBD_STATE_RESET;
+	reinitialized = false;
+}
+
+const struct kblight_drv kblight_rgbkbd = {
+	.init = rgbkbd_init,
+	.set = rgbkbd_kblight_set,
+	.get = NULL,
+	.enable = rgbkbd_enable,
+	.get_enabled = rgbkbd_get_enabled,
+};
 
 void rgbkbd_task(void *u)
 {
@@ -292,12 +483,16 @@ DECLARE_HOST_COMMAND(EC_CMD_RGBKBD_SET_COLOR, hc_rgbkbd_set_color,
 static enum ec_status hc_rgbkbd(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_rgbkbd *p = args->params;
-	enum ec_status rv = EC_RES_ERROR;
+	enum ec_status rv = EC_RES_SUCCESS;
 
 	switch (p->subcmd) {
 	case EC_RGBKBD_SUBCMD_CLEAR:
 		rgbkbd_reset_color(p->color);
-		rv = EC_RES_SUCCESS;
+		break;
+	case EC_RGBKBD_SUBCMD_DEMO:
+		if (p->demo >= EC_RGBKBD_DEMO_COUNT)
+			return EC_RES_INVALID_PARAM;
+		rgbkbd_demo_set(p->demo);
 		break;
 	default:
 		rv = EC_RES_INVALID_PARAM;
@@ -338,7 +533,7 @@ test_export_static int cc_rgbk(int argc, char **argv)
 	} else if (!strcasecmp(argv[1], "demo")) {
 		/* Usage 4 */
 		val = strtoi(argv[2], &end, 0);
-		if (*end || val >= RGBKBD_DEMO_COUNT)
+		if (*end || val >= EC_RGBKBD_DEMO_COUNT)
 			return EC_ERROR_PARAM1;
 		demo = val;
 		rgbkbd_reset_color((struct rgb_s){.r = 0, .g = 0, .b = 0});
@@ -375,7 +570,7 @@ test_export_static int cc_rgbk(int argc, char **argv)
 		return EC_ERROR_PARAM4;
 	color.b = val;
 
-	demo = RGBKBD_DEMO_OFF;
+	rgbkbd_demo_set(EC_RGBKBD_DEMO_OFF);
 	if (y < 0 && x < 0) {
 		/* Usage 3 */
 		rgbkbd_reset_color(color);

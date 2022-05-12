@@ -204,8 +204,8 @@ static int test_rgbkbd_startup(void)
 	return EC_SUCCESS;
 }
 
-int cc_rgbk(int argc, char **argv);
-extern enum rgbkbd_demo demo;
+int cc_rgb(int argc, char **argv);
+extern enum ec_rgbkbd_demo demo;
 
 static int test_rgbkbd_console_command(void)
 {

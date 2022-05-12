@@ -12,12 +12,8 @@
 /* Use this instead of '3' for readability where applicable. */
 #define SIZE_OF_RGB		sizeof(struct rgb_s)
 
-enum rgbkbd_demo {
-	RGBKBD_DEMO_OFF = 0,
-	RGBKBD_DEMO_FLOW = 1,
-	RGBKBD_DEMO_DOT = 2,
-	RGBKBD_DEMO_COUNT
-};
+#define RGBKBD_MAX_GCC_LEVEL	0xff
+#define RGBKBD_MAX_SCALE	0xff
 
 struct rgbkbd_cfg {
 	/* Driver for LED IC */
