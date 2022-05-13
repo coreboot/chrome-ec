@@ -96,6 +96,11 @@
 /* USB-A */
 #define USBA_PORT_COUNT 1
 
+#ifdef BOARD_HAYATO
+/* Virutal battery optional MFG function */
+#define CONFIG_SMART_BATTERY_OPTIONAL_MFG_FUNC
+#endif
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
