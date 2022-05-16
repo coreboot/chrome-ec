@@ -68,6 +68,7 @@ VENDOR_RC_NO_SUCH_COMMAND_ERROR = 0x57f
 # The tag and format are the same for command and response.
 TPM_TAG = 0x8001
 HEADER_FMT = '>H2LH'
+MAX_BLOCK_SIZE = (4 * 1024 * 1024)
 
 class Logger(object):
     """A class to support printing into a log and on the console when required.
@@ -536,17 +537,28 @@ def main(args):
 
 
         for arg in rest:
-            if ':' in arg:
+            if arg in fmap:
+                offset, size = fmap[arg]
+                LOG.log('Using %r range from fmap %08x:%08x' %
+                        (arg, offset, size))
+            elif ':' in arg:
                 try:
-                    ranges.append(([int('%s' % x, 16) for
-                                    x in arg.split(':', 1)]),)
+                    offset_str, size_str = arg.split(':', 1)
+                    offset = int(offset_str, 16)
+                    size = int(size_str, 16)
                 except ValueError:
                     bad_ranges.append(arg)
-                continue
-            if arg not in fmap:
+                    continue
+            else:
                 bad_section_names.append(arg)
                 continue
-            ranges.append(fmap[arg])
+
+            while size:
+                chunk = min(size, MAX_BLOCK_SIZE)
+                LOG.log('Add range - %08x:%08x' % (offset, chunk))
+                ranges.append((offset, chunk))
+                size -= chunk
+                offset += chunk
 
         error_msg = ''
         if bad_ranges:
@@ -558,6 +570,7 @@ def main(args):
         if ranges:
             # Make sure the list is sorted by the first element.
             ranges.sort(key=lambda x: x[0])
+            LOG.log('Ranges: %r' % ranges)
 
             # Make sure ranges do not overlap and fall into the WP_RO section.
             error_msg += verify_ranges(ranges, fmap['WP_RO'])
