@@ -69,7 +69,7 @@ static int accel_set_data_rate(const struct motion_sensor_t *s,
 			      const int rate,
 			      const int rnd)
 {
-	test_data_rate[s - motion_sensors] = rate | (rnd ? ROUND_UP_FLAG : 0);
+	test_data_rate[s - motion_sensors] = rate;
 	return EC_SUCCESS;
 }
 
@@ -184,12 +184,7 @@ static int test_lid_angle(void)
 	hook_notify(HOOK_CHIPSET_RESUME);
 	msleep(1000);
 	TEST_ASSERT(sensor_active == SENSOR_ACTIVE_S0);
-<<<<<<< HEAD   (67a275 TCPMv1, TCPMv2: add pd event for receiving hard reset)
-	TEST_ASSERT(accel_get_data_rate(lid) == (119000 | ROUND_UP_FLAG));
-	TEST_ASSERT(motion_interval == TEST_LID_EC_RATE);
-=======
 	TEST_ASSERT(accel_get_data_rate(lid) == 119000);
->>>>>>> CHANGE (0c71c4 motion sense: Calculate loop time based on sensor needs)
 
 	/*
 	 * Set the base accelerometer as if it were sitting flat on a desk
