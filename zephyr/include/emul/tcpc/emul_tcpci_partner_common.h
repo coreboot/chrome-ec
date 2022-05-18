@@ -12,8 +12,8 @@
 #ifndef __EMUL_TCPCI_PARTNER_COMMON_H
 #define __EMUL_TCPCI_PARTNER_COMMON_H
 
-#include <drivers/emul.h>
-#include <kernel.h>
+#include <zephyr/drivers/emul.h>
+#include <zephyr/kernel.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -422,6 +422,16 @@ void tcpci_partner_common_set_ams_ctrl_msg(struct tcpci_partner_data *data,
  * @param data          Pointer to TCPCI partner data
  */
 void tcpci_partner_common_clear_ams_ctrl_msg(struct tcpci_partner_data *data);
+
+/**
+ * @brief Called by partner emulators internally. Resets the common tcpci
+ * partner data with the provided role.
+ *
+ * @param data          Pointer to TCPCI partner data
+ * @param power_role    USB PD power role
+ */
+void tcpci_partner_common_hard_reset_as_role(struct tcpci_partner_data *data,
+					     enum pd_power_role power_role);
 
 /**
  * @}

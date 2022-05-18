@@ -42,10 +42,15 @@ test-list-host += hooks
 test-list-host += host_command
 test-list-host += i2c_bitbang
 test-list-host += inductive_charging
-test-list-host += interrupt
+# This test times out in the CQ, and generally doesn't seem useful.
+# It is verifying the host test scheduler, which is never used in real boards.
+# test-list-host += interrupt
 test-list-host += irq_locking
 test-list-host += is_enabled
+ifeq ($(TEST_ASAN),)
+# is_enabled_error fails with TEST_ASAN
 test-list-host += is_enabled_error
+endif
 test-list-host += kasa
 test-list-host += kb_8042
 test-list-host += kb_mkbp

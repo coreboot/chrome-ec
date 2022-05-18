@@ -9,15 +9,15 @@ def register_variant(project_name, extra_dts_overlays=(), extra_kconfig_files=()
     """Register a variant of herobrine."""
     register_npcx_project(
         project_name=project_name,
-        zephyr_board="npcx9",
+        zephyr_board="npcx9m3f",
         dts_overlays=[
             # Common to all projects.
             here / "adc.dts",
-            here / "display.dts",
             here / "common.dts",
             here / "i2c.dts",
             here / "interrupts.dts",
             here / "keyboard.dts",
+            here / "default_gpio_pinctrl.dts",
             # Project-specific DTS customization.
             *extra_dts_overlays,
         ],
@@ -33,6 +33,7 @@ def register_variant(project_name, extra_dts_overlays=(), extra_kconfig_files=()
 register_variant(
     project_name="herobrine",
     extra_dts_overlays=[
+        here / "display.dts",
         here / "battery_herobrine.dts",
         here / "gpio.dts",
         here / "motionsense.dts",

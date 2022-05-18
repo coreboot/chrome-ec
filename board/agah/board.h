@@ -10,11 +10,6 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early agah boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
@@ -24,9 +19,14 @@
  */
 #define CONFIG_HIBERNATE_PSL_VCC1_RST_WAKEUP
 
+/*
+ * Agah blocks PG_PP3300_S5_OD instead to control AP power-on.
+ */
+#undef CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
+
 /* LED */
 #define CONFIG_LED_PWM
-#define CONFIG_LED_PWM_COUNT 2
+#define CONFIG_LED_PWM_COUNT 1
 #undef CONFIG_LED_PWM_NEAR_FULL_COLOR
 #undef CONFIG_LED_PWM_SOC_ON_COLOR
 #undef CONFIG_LED_PWM_SOC_SUSPEND_COLOR
@@ -49,8 +49,6 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USB Type C and USB PD defines */
-#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
-#define CONFIG_USB_PD_TCPM_PS8815
 #define CONFIG_USB_PD_TCPM_RT1715
 #undef CONFIG_USB_PD_TCPM_NCT38XX
 
@@ -114,14 +112,14 @@
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
 
 #define I2C_PORT_USB_C0_TCPC	NPCX_I2C_PORT1_0
-#define I2C_PORT_USB_C1_TCPC	NPCX_I2C_PORT2_0
+#define I2C_PORT_USB_C2_TCPC	NPCX_I2C_PORT2_0
 
 #define I2C_PORT_USB_C0_PPC	NPCX_I2C_PORT1_0
+#define I2C_PORT_USB_C2_PPC	NPCX_I2C_PORT2_0
 
 #define I2C_PORT_USB_C0_BC12	NPCX_I2C_PORT1_0
-#define I2C_PORT_USB_C1_BC12	NPCX_I2C_PORT2_0
+#define I2C_PORT_USB_C2_BC12	NPCX_I2C_PORT2_0
 
-#define I2C_PORT_USB_C1_MUX	NPCX_I2C_PORT2_0
 #define I2C_PORT_USBA1_RT	NPCX_I2C_PORT6_1
 
 #define I2C_PORT_BATTERY	NPCX_I2C_PORT5_0
@@ -180,23 +178,31 @@ enum battery_type {
 
 enum pwm_channel {
 	PWM_CH_LED2 = 0,		/* PWM0 (white charger) */
-	PWM_CH_LED3,			/* PWM1 */
 	PWM_CH_LED1,			/* PWM2 (orange charger) */
 	PWM_CH_KBLIGHT,			/* PWM3 */
 	PWM_CH_FAN,			/* PWM5 */
-	PWM_CH_LED4,			/* PWM7 */
+	PWM_CH_FAN2,			/* PWM4 */
 	PWM_CH_COUNT
 };
 
 enum fan_channel {
 	FAN_CH_0 = 0,
+	FAN_CH_1,
 	FAN_CH_COUNT
 };
 
 enum mft_channel {
 	MFT_CH_0 = 0,
+	MFT_CH_1,
 	MFT_CH_COUNT
 };
+
+/**
+ * Interrupt handler for PG_PP3300_S5_OD changes.
+ *
+ * @param signal	Signal which triggered the interrupt.
+ */
+void board_power_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr.h>
+#include <zephyr/zephyr.h>
 #include <ztest.h>
 
 #include <ap_power_override_functions.h>
@@ -76,6 +76,11 @@ void board_ap_power_action_s0_s3(void)
 
 void board_ap_power_action_s0(void)
 {
+}
+
+bool board_ap_power_check_power_rails_enabled(void)
+{
+	return false;
 }
 
 int extpower_is_present(void)

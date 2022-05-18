@@ -6,8 +6,8 @@
 #ifndef __X86_NON_DSX_COMMON_PWRSEQ_SM_HANDLER_H__
 #define __X86_NON_DSX_COMMON_PWRSEQ_SM_HANDLER_H__
 
-#include <init.h>
-#include <kernel.h>
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
 #include <zephyr/types.h>
 
 #include <ap_power/ap_power.h>
@@ -28,5 +28,6 @@ enum power_states_ndsx pwr_sm_get_state(void);
 const char * const pwr_sm_get_state_name(enum power_states_ndsx state);
 void apshutdown(void);
 void ap_pwrseq_handle_chipset_reset(void);
+void set_reboot_ap_at_g3_delay_seconds(uint32_t d_time);
 
 #endif /* __X86_NON_DSX_COMMON_PWRSEQ_SM_HANDLER_H__ */

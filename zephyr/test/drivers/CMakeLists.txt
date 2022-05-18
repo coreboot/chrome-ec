@@ -19,6 +19,7 @@ target_sources(app PRIVATE
   src/bmi160.c
   src/bmi260.c
   src/charge_manager.c
+  src/chargesplash.c
   src/console_cmd/charge_manager.c
   src/console_cmd/charge_state.c
   src/console_cmd/accelinit.c
@@ -28,6 +29,7 @@ target_sources(app PRIVATE
   src/console_cmd/accelrange.c
   src/console_cmd/accelread.c
   src/console_cmd/accelres.c
+  src/console_cmd/usb_pd_console.c
   src/cros_cbi.c
   src/espi.c
   src/gpio.c

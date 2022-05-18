@@ -19,9 +19,7 @@ import sys
 # pylint: disable=import-error
 from google.protobuf import json_format
 
-# TODO(crbug/1181505): Code outside of chromite should not be importing from
-# chromite.api.gen.  Import json_format after that so we get the matching one.
-from chromite.api.gen.chromite.api import firmware_pb2
+from chromite.api.gen_sdk.chromite.api import firmware_pb2
 
 
 DEFAULT_BUNDLE_DIRECTORY = '/tmp/artifact_bundles'
@@ -210,6 +208,11 @@ def test(opts):
         # rotted, so we only build the ones that compile.
         cmd = ['make', f'-j{opts.cpus}']
         cmd.extend(['tests-' + b for b in BOARDS_UNIT_TEST])
+        print(f"# Running {' '.join(cmd)}.")
+        subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
+
+        # Verify the tests pass with ASan also
+        cmd = ['make', 'TEST_ASAN=y', target, f'-j{opts.cpus}']
         print(f"# Running {' '.join(cmd)}.")
         subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 

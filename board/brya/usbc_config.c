@@ -49,6 +49,7 @@ enum ioex_port {
 };
 #endif /* CONFIG_ZEPHYR */
 
+#ifndef CONFIG_ZEPHYR
 /* USBC TCPC configuration */
 const struct tcpc_config_t tcpc_config[] = {
 	[USBC_PORT_C0] = {
@@ -85,6 +86,7 @@ const struct tcpc_config_t tcpc_config[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
+#endif  /* !CONFIG_ZEPHYR */
 
 /******************************************************************************/
 /* USB-A charging control */
@@ -341,13 +343,14 @@ void board_reset_pd_mcu(void)
 {
 	enum gpio_signal tcpc_rst;
 
-	if (get_board_id() == 1)
-/* TODO: explore how to handle board id in zephyr*/
 #ifndef CONFIG_ZEPHYR
+	if (get_board_id() == 1)
 		tcpc_rst = GPIO_ID_1_USB_C0_C2_TCPC_RST_ODL;
 	else
-#endif /* !CONFIG_ZEPHYR */
 		tcpc_rst = GPIO_USB_C0_C2_TCPC_RST_ODL;
+#else
+	tcpc_rst = GPIO_UNIMPLEMENTED;
+#endif /* !CONFIG_ZEPHYR */
 
 	/*
 	 * TODO(b/179648104): figure out correct timing

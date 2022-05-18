@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include <device.h>
+#include <zephyr/device.h>
 #include <ap_power/ap_power.h>
 
 #include "battery.h"
@@ -11,15 +11,23 @@
 #include "charge_state_v2.h"
 #include "chipset.h"
 #include "cros_cbi.h"
+#include "gpio/gpio_int.h"
 #include "hooks.h"
-#include "keyboard_scan.h"
 #include "usb_mux.h"
 #include "system.h"
+#include "throttle_ap.h"
 
 #include "nissa_common.h"
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(nissa, CONFIG_NISSA_LOG_LEVEL);
+
+#define PROCHOT_GPIO_ENUM \
+	GPIO_SIGNAL(DT_PROP(DT_NODELABEL(int_prochot), irq_pin))
+
+static const struct prochot_cfg nissa_prochot_cfg = {
+	.gpio_prochot_in = PROCHOT_GPIO_ENUM,
+};
 
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
@@ -80,6 +88,10 @@ static void board_setup_init(void)
 		cached_usb_pd_port_count = 2;
 		break;
 	}
+
+	/* Enable PROCHOT monitoring */
+	throttle_ap_config_prochot(&nissa_prochot_cfg);
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_prochot));
 }
 /*
  * Make sure setup is done after EEPROM is readable.
@@ -156,27 +168,4 @@ enum nissa_sub_board_type nissa_get_sb_type(void)
 		break;
 	}
 	return sb;
-}
-
-static const struct ec_response_keybd_config nissa_kb = {
-	.num_top_row_keys = 10,
-	.action_keys = {
-		TK_BACK,		/* T1 */
-		TK_REFRESH,		/* T2 */
-		TK_FULLSCREEN,		/* T3 */
-		TK_OVERVIEW,		/* T4 */
-		TK_SNAPSHOT,		/* T5 */
-		TK_BRIGHTNESS_DOWN,	/* T6 */
-		TK_BRIGHTNESS_UP,	/* T7 */
-		TK_VOL_MUTE,		/* T8 */
-		TK_VOL_DOWN,		/* T9 */
-		TK_VOL_UP,		/* T10 */
-	},
-	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
-};
-
-__override const struct ec_response_keybd_config
-*board_vivaldi_keybd_config(void)
-{
-	return &nissa_kb;
 }
