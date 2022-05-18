@@ -18,11 +18,15 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-/*
- * This will happen automatically on NPCX9 ES2 and later. Do not remove
- * until we can confirm all earlier chips are out of service.
- */
-#define CONFIG_HIBERNATE_PSL_VCC1_RST_WAKEUP
+/* Tablet mode is not supported */
+#undef CONFIG_TABLET_MODE
+#undef CONFIG_TABLET_MODE_SWITCH
+#undef CONFIG_LID_ANGLE
+
+/* BC1.2 is not supported */
+#undef CONFIG_USB_CHARGER
+#undef CONFIG_BC12_SINGLE_DRIVER
+#undef CONFIG_BC12_DETECT_PI3USB9201
 
 #define CONFIG_MP2964
 
@@ -38,55 +42,12 @@
 #define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
 #define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
 
-/* Sensors */
-#define CONFIG_ACCELGYRO_LSM6DSO	/* Base accel */
-#define CONFIG_ACCEL_LSM6DSO_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-
-/* TCS3400 ALS */
-#define CONFIG_ALS
-#define ALS_COUNT 1
-#define CONFIG_ALS_TCS3400
-#define CONFIG_ALS_TCS3400_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
-
-/* Enable sensor fifo, must also define the _SIZE and _THRES */
-#define CONFIG_ACCEL_FIFO
-/* FIFO size is in power of 2. */
-#define CONFIG_ACCEL_FIFO_SIZE 256
-/* Depends on how fast the AP boots and typical ODRs */
-#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
-
-/* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK \
-	(BIT(LID_ACCEL) | BIT(CLEAR_ALS))
-
-/* Lid accel */
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_UPDATE
-#define CONFIG_LID_ANGLE_SENSOR_BASE	BASE_ACCEL
-#define CONFIG_LID_ANGLE_SENSOR_LID	LID_ACCEL
-#define CONFIG_ACCEL_LIS2DWL
-#define CONFIG_ACCEL_LIS2DW_AS_BASE
-#define CONFIG_ACCEL_LIS2DW12_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
-
-#define CONFIG_ACCEL_INTERRUPTS
-
-/* Sensor console commands */
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
-
-/* USB Type A Features */
-#define USB_PORT_COUNT			1
-#define CONFIG_USB_PORT_POWER_DUMB
-
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
 #define CONFIG_IO_EXPANDER
 #define CONFIG_IO_EXPANDER_NCT38XX
-#define CONFIG_IO_EXPANDER_PORT_COUNT		4
+#define CONFIG_IO_EXPANDER_PORT_COUNT		2
 
 #define CONFIG_USB_PD_FRS_PPC
 
@@ -207,7 +168,6 @@
 #define CONFIG_CHARGER_BQ25720
 #define CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
 #define CONFIG_CHARGER_BQ25720_VSYS_TH2_DV	70
-#define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC	10
 #define CONFIG_CHARGER_BQ25710_PSYS_SENSING
@@ -241,19 +201,14 @@ enum temp_sensor_id {
 };
 
 enum sensor_id {
-	LID_ACCEL = 0,
-	BASE_ACCEL,
-	BASE_GYRO,
-	CLEAR_ALS,
+	CLEAR_ALS = 0,
 	RGB_ALS,
 	SENSOR_COUNT
 };
 
 enum ioex_port {
 	IOEX_C0_NCT38XX = 0,
-	IOEX_C2_NCT38XX,
-	IOEX_ID_1_C0_NCT38XX,
-	IOEX_ID_1_C2_NCT38XX,
+	IOEX_C1_NCT38XX,
 	IOEX_PORT_COUNT
 };
 
