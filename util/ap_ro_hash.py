@@ -382,23 +382,21 @@ def read_fmap(tmpd):
     """
     fmap_file = os.path.join(tmpd, 'fmap.bin')
     run('flashrom -i FMAP -r %s' % fmap_file, ignore_error=False)
-    fmap_text = run('dump_fmap ' + fmap_file, ignore_error=False)[0]
+    fmap_text = run('dump_fmap -F ' + fmap_file, ignore_error=False)[0]
 
     fmap = {}
     offset = 0
     size = 0
     for line in fmap_text.splitlines():
-        tokens = line.split()
-        if tokens[0] == 'area_offset:':
-            offset = int(tokens[1], 16)
-            continue
-        if tokens[0] == 'area_size:':
-            size = int(tokens[1], 16)
-            continue
-        if tokens[0] == 'area_name:':
-            fmap[tokens[1]] = (offset, size)
-            LOG.log('%20s: %08x:%08x' % (tokens[1], offset, offset + size - 1))
-            continue
+        # line format
+        # start_offset:end_offset secton_name
+        r, name = line.split()
+        start, end = r.split(':')
+        offset = int(start, 16)
+        end_offset = int(end, 16)
+        size = end_offset - offset + 1
+        fmap[name] = (offset, size)
+        LOG.log('%20s 0x%08x:0x%08x %s' % (name, offset, size, r))
     return fmap
 
 
