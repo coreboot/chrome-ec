@@ -18,6 +18,10 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+/* Buttons are not supported */
+#undef CONFIG_VOLUME_BUTTONS
+#undef CONFIG_MKBP_INPUT_DEVICES
+
 /* Tablet mode is not supported */
 #undef CONFIG_TABLET_MODE
 #undef CONFIG_TABLET_MODE_SWITCH
@@ -30,18 +34,6 @@
 
 #define CONFIG_MP2964
 
-/* LED */
-#define CONFIG_LED_PWM
-#define CONFIG_LED_PWM_COUNT 2
-#undef CONFIG_LED_PWM_NEAR_FULL_COLOR
-#undef CONFIG_LED_PWM_SOC_ON_COLOR
-#undef CONFIG_LED_PWM_SOC_SUSPEND_COLOR
-#undef CONFIG_LED_PWM_LOW_BATT_COLOR
-#define CONFIG_LED_PWM_NEAR_FULL_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
-
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
@@ -51,18 +43,9 @@
 
 #define CONFIG_USB_PD_FRS_PPC
 
-#define CONFIG_USB_PD_TCPM_PS8815
-#define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 #define CONFIG_USBC_RETIMER_INTEL_BB
 
-/* I2C speed console command */
-#define CONFIG_CMD_I2C_SPEED
-
-/* I2C control host command */
-#define CONFIG_HOSTCMD_I2C_CONTROL
-
 #define CONFIG_USBC_PPC_SYV682X
-#define CONFIG_USBC_PPC_NX20P3483
 
 /* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
@@ -162,8 +145,6 @@
 #define CONFIG_TEMP_SENSOR_POWER
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
-#define CONFIG_FANS			FAN_CH_COUNT
-
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
 #define CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
@@ -214,28 +195,17 @@ enum ioex_port {
 
 enum battery_type {
 	BATTERY_POWER_TECH,
-	BATTERY_LGC011,
+	BATTERY_SWD_ATL,
 	BATTERY_TYPE_COUNT
 };
 
 enum pwm_channel {
-	PWM_CH_LED2 = 0,		/* PWM0 (white charger) */
-	PWM_CH_LED3,			/* PWM1 (orange on DB) */
-	PWM_CH_LED1,			/* PWM2 (orange charger) */
+	PWM_CH_LED1 = 0,		/* PWM0 */
+	PWM_CH_LED2,			/* PWM1 */
+	PWM_CH_FAN2,			/* PWM2 */
 	PWM_CH_KBLIGHT,			/* PWM3 */
-	PWM_CH_FAN,			/* PWM5 */
-	PWM_CH_LED4,			/* PWM7 (white on DB) */
+	PWM_CH_FAN1,			/* PWM5 */
 	PWM_CH_COUNT
-};
-
-enum fan_channel {
-	FAN_CH_0 = 0,
-	FAN_CH_COUNT
-};
-
-enum mft_channel {
-	MFT_CH_0 = 0,
-	MFT_CH_COUNT
 };
 
 #endif /* !__ASSEMBLER__ */

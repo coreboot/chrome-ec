@@ -5,11 +5,13 @@
  * Battery pack vendor provided charging profile
  */
 
+#include "battery.h"
 #include "battery_fuel_gauge.h"
-#include "cbi.h"
 #include "common.h"
 #include "compile_time_macros.h"
 #include "gpio.h"
+#include "gpio_signal.h"
+
 /*
  * Battery info for all Brya battery types. Note that the fields
  * start_charging_min/max and charging_min/max are not used for the charger.
@@ -63,34 +65,36 @@ const struct board_batt_params board_battery_info[] = {
 			.discharging_max_c	= 60,
 		},
 	},
-	/* LGC L17L3PB0 Battery Information */
 	/*
-	 * Battery info provided by ODM on b/143477210, comment #11
+	 * TODO(b/233120385): verify these
 	 */
-	[BATTERY_LGC011] = {
+	[BATTERY_SWD_ATL] = {
+		/* BQ40Z50-R3 Fuel Gauge */
 		.fuel_gauge = {
-			.manuf_name = "LGC",
+			.manuf_name = "SWD",
+			.device_name = "1163985013",
 			.ship_mode = {
 				.reg_addr = 0x00,
 				.reg_data = { 0x0010, 0x0010 },
 			},
 			.fet = {
-				.reg_addr = 0x0,
-				.reg_mask = 0x6000,
-				.disconnect_val = 0x6000,
+				.mfgacc_support = 1,
+				.reg_addr = 0x00,
+				.reg_mask = 0x2000,		/* XDSG */
+				.disconnect_val = 0x2000,
 			}
 		},
 		.batt_info = {
-			.voltage_max		= TARGET_WITH_MARGIN(13200, 5),
-			.voltage_normal		= 11550, /* mV */
-			.voltage_min		= 9000, /* mV */
-			.precharge_current	= 256,	/* mA */
+			.voltage_max		= TARGET_WITH_MARGIN(8960, 5),
+			.voltage_normal		= 7780, /* mV */
+			.voltage_min		= 6000, /* mV */
+			.precharge_current	= 570,	/* mA */
 			.start_charging_min_c	= 0,
-			.start_charging_max_c	= 45,
+			.start_charging_max_c	= 60,
 			.charging_min_c		= 0,
 			.charging_max_c		= 60,
-			.discharging_min_c	= 0,
-			.discharging_max_c	= 75,
+			.discharging_min_c	= -20,
+			.discharging_max_c	= 60,
 		},
 	},
 };
