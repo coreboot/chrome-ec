@@ -1120,8 +1120,8 @@ static void fetch_header_versions(const void *image)
 
 
 /* Compare to signer headers and determine which one is newer. */
-static int a_newer_than_b(struct signed_header_version *a,
-			  struct signed_header_version *b)
+static int a_newer_than_b(const struct signed_header_version *a,
+			  const struct signed_header_version *b)
 {
 	uint32_t fields[][3] = {
 		{a->epoch, a->major, a->minor},
@@ -1152,6 +1152,32 @@ static int a_newer_than_b(struct signed_header_version *a,
 
 	return 0;	/* All else being equal A is no newer than B. */
 }
+
+/*
+ * Determine if the current RW version can be upgrade to the potential RW
+ * version. If not, will exit the program.
+ */
+static void check_rw_upgrade(const struct signed_header_version *current_rw,
+			     const struct signed_header_version *to_rw)
+{
+	/*
+	 * Disallow upgrade to 0.0.16+ without going through 0.0.15
+	 * first. This check won't be needed after 2023-01-01
+	 */
+	const struct signed_header_version ver15 = { .epoch = 0,
+						     .major = 0,
+						     .minor = 15 };
+	const int current_less_than_15 = a_newer_than_b(&ver15, current_rw);
+	const int to_greater_than_15 = a_newer_than_b(to_rw, &ver15);
+
+	if (image_magic == MAGIC_DAUNTLESS && current_less_than_15 &&
+	    to_greater_than_15) {
+		printf("Must upgrade to RW 0.0.15 first!\n");
+		/*  Do not continue with any upgrades RW or RO */
+		exit(update_error);
+	}
+}
+
 /*
  * Pick sections to transfer based on information retrieved from the target,
  * the new image, and the protocol version the target is running.
@@ -1180,8 +1206,12 @@ static void pick_sections(struct transfer_descriptor *td)
 			 */
 
 			if (a_newer_than_b(&sections[i].shv, &targ.shv[1]) ||
-			    !td->upstart_mode)
+			    !td->upstart_mode) {
+				/* Check will exit if disallowed */
+				check_rw_upgrade(&targ.shv[1],
+						 &sections[i].shv);
 				sections[i].ustatus = needed;
+			}
 			/* Rest of loop is RO */
 			continue;
 		}
