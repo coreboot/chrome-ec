@@ -5,7 +5,7 @@
 
 /* Guybrush family-specific USB-C configuration */
 
-#include <drivers/gpio.h>
+#include <zephyr/drivers/gpio.h>
 
 #include "cros_board_info.h"
 #include "cros_cbi.h"
@@ -51,28 +51,6 @@ enum usbc_port {
 BUILD_ASSERT(USBC_PORT_COUNT == CONFIG_USB_PD_PORT_MAX_COUNT);
 
 static void reset_nct38xx_port(int port);
-
-const struct tcpc_config_t tcpc_config[] = {
-	[USBC_PORT_C0] = {
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_TCPC0,
-			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
-		},
-		.drv = &nct38xx_tcpm_drv,
-		.flags = TCPC_FLAGS_TCPCI_REV2_0,
-	},
-	[USBC_PORT_C1] = {
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_TCPC1,
-			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
-		},
-		.drv = &nct38xx_tcpm_drv,
-		.flags = TCPC_FLAGS_TCPCI_REV2_0,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == CONFIG_USB_PD_PORT_MAX_COUNT);
 
 static void usbc_interrupt_init(void)
 {
@@ -132,11 +110,18 @@ struct usb_mux usbc1_sbu_mux = {
 	.driver = &ioex_sbu_mux_driver,
 };
 
+int baseboard_anx7483_mux_set(const struct usb_mux *me,
+			      mux_state_t mux_state)
+{
+	return anx7483_set_default_tuning(me, mux_state);
+}
+
 struct usb_mux usbc0_anx7483 = {
 	.usb_port = USBC_PORT_C0,
 	.i2c_port = I2C_PORT_TCPC0,
 	.i2c_addr_flags = ANX7483_I2C_ADDR0_FLAGS,
 	.driver = &anx7483_usb_retimer_driver,
+	.board_set = &baseboard_anx7483_mux_set,
 	.next_mux = &usbc0_sbu_mux,
 };
 
@@ -161,6 +146,7 @@ struct usb_mux usbc1_anx7483 = {
 	.i2c_port = I2C_PORT_TCPC1,
 	.i2c_addr_flags = ANX7483_I2C_ADDR0_FLAGS,
 	.driver = &anx7483_usb_retimer_driver,
+	.board_set = &baseboard_anx7483_mux_set,
 	.next_mux = &usbc1_sbu_mux,
 };
 

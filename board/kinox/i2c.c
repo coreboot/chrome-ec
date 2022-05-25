@@ -25,11 +25,12 @@ const struct i2c_port_t i2c_ports[] = {
 		.kbps = 400,
 		.scl = GPIO_EC_I2C_USB_C0_TCPC_SCL,
 		.sda = GPIO_EC_I2C_USB_C0_TCPC_SDA,
+		.flags = I2C_PORT_FLAG_DYNAMIC_SPEED,
 	},
 	{
 		/* I2C6 C0 BC1.2 */
 		.name = "bc12 C0",
-		.port = I2C_PORT_USB_C0_PPC,
+		.port = I2C_PORT_USB_C0_BC12,
 		.kbps = 1000,
 		.scl = GPIO_EC_I2C_USB_C0_MIX_SCL,
 		.sda = GPIO_EC_I2C_USB_C0_MIX_SDA,

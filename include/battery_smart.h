@@ -56,9 +56,14 @@
 #define SB_DEVICE_NAME                  0x21
 #define SB_DEVICE_CHEMISTRY             0x22
 #define SB_MANUFACTURER_DATA            0x23
+#define SB_OPTIONAL_MFG_FUNC1		0x3C
+#define SB_OPTIONAL_MFG_FUNC2		0x3D
+#define SB_OPTIONAL_MFG_FUNC3		0x3E
+#define SB_OPTIONAL_MFG_FUNC4		0x3F
 /* Extension of smart battery spec, may not be supported on all platforms */
 #define SB_PACK_STATUS                  0x43
 #define SB_ALT_MANUFACTURER_ACCESS      0x44
+#define SB_MANUFACTURE_INFO		0x70
 
 /* Battery mode */
 #define MODE_INTERNAL_CHARGE_CONTROLLER BIT(0)
@@ -152,6 +157,7 @@
 /* Manufacturer Access parameters */
 #define PARAM_SAFETY_STATUS             0x51
 #define PARAM_OPERATION_STATUS          0x54
+#define PARAM_FIRMWARE_RUNTIME          0x62
 /* Operation status masks -- 6 byte reply */
 /* reply[3] */
 #define BATTERY_DISCHARGING_DISABLED    0x20
@@ -165,12 +171,26 @@
 #define MANUFACTURE_DATE_YEAR_MASK	0xFE00
 #define MANUFACTURE_DATE_YEAR_SHIFT	9
 #define MANUFACTURE_DATE_YEAR_OFFSET	1980
+#define MANUFACTURE_RUNTIME_SIZE	4
 
 /* Read from battery */
 int sb_read(int cmd, int *param);
 
-/* Read sequence from battery */
+/**
+ * Read null-terminated string from battery
+ * @param offset	Battery register to read from
+ * @param data		Buffer to hold the string
+ * @param len		Length of data buffer
+ */
 int sb_read_string(int offset, uint8_t *data, int len);
+
+/**
+ * Read sized block of data from battery
+ * @param offset	Battery register to read from
+ * @param data		Buffer to hold read data
+ * @param len		Length of data buffer
+ */
+int sb_read_sized_block(int offset, uint8_t *data, int len);
 
 /* Write to battery */
 int sb_write(int cmd, int param);

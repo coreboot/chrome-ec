@@ -45,7 +45,6 @@
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(CLEAR_ALS)
 
-#define CONFIG_ACCEL_INTERRUPTS
 
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
@@ -57,8 +56,7 @@
 #define CONFIG_USBC_RETIMER_INTEL_BB
 
 #define CONFIG_USBC_PPC_SYV682X
-/* TODO: b/211791444 - Remove it after compile error fixed */
-#define CONFIG_USBC_PPC_NX20P3483
+
 #undef CONFIG_SYV682X_HV_ILIM
 #define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
 

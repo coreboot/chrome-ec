@@ -65,6 +65,10 @@ endif()
 
 # Set extra compiler flags.
 zephyr_cc_option(-mno-unaligned-access)
+if (DEFINED CONFIG_RISCV)
+  zephyr_cc_option(-fsanitize=integer-divide-by-zero)
+  zephyr_cc_option(-fsanitize-undefined-trap-on-error)
+endif()
 
 # The EC application is split into two libraries:
 #   app: contains all the legacy code
@@ -213,6 +217,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_RT9490
                                                 "${PLATFORM_EC}/driver/charger/rt9490.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_SM5803
                                                 "${PLATFORM_EC}/driver/charger/sm5803.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGESPLASH
+                                                "${PLATFORM_EC}/common/chargesplash.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_MANAGER
                                                 "${PLATFORM_EC}/common/charger.c"
                                                 "${PLATFORM_EC}/common/charge_manager.c"
@@ -400,6 +406,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7483
                                                 "${PLATFORM_EC}/driver/retimer/anx7483.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
                                                 "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_HB
+                                                "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8818
                                                 "${PLATFORM_EC}/driver/retimer/ps8818.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7451
@@ -413,6 +421,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_IT5205
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_PS8743
                                                 "${PLATFORM_EC}/driver/usb_mux/ps8743.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_TUSB1044
+                                                "${PLATFORM_EC}/driver/usb_mux/tusb1064.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_TUSB546
                                                 "${PLATFORM_EC}/driver/usb_mux/tusb1064.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_VIRTUAL
                                                 "${PLATFORM_EC}/driver/usb_mux/virtual.c")

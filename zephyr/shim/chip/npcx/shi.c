@@ -5,11 +5,11 @@
 
 /* Functions needed by Serial Host Interface module for Chrome EC */
 
-#include <device.h>
-#include <dt-bindings/clock/npcx_clock.h>
-#include <logging/log.h>
+#include <zephyr/device.h>
+#include <zephyr/dt-bindings/clock/npcx_clock.h>
+#include <zephyr/logging/log.h>
 #include <soc.h>
-#include <zephyr.h>
+#include <zephyr/zephyr.h>
 
 #include <ap_power/ap_power.h>
 #include "chipset.h"
@@ -83,7 +83,7 @@ static void shi_init(void)
 	ap_power_ev_init_callback(&cb, shi_power_change,
 #if CONFIG_PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
 				  AP_POWER_RESUME_INIT |
-				  AP_POWER_SHUTDOWN_COMPLETE
+				  AP_POWER_SUSPEND_COMPLETE
 #else
 				  AP_POWER_RESUME |
 				  AP_POWER_SUSPEND

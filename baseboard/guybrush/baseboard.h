@@ -155,6 +155,8 @@
 #define CONFIG_BATTERY_COUNT 1
 #define CONFIG_HOSTCMD_BATTERY_V2
 #define CONFIG_BC12_DETECT_PI3USB9201
+/* Enable PEC to detect potential corruption on read (b/230520109) */
+#define CONFIG_SMBUS_PEC
 
 /* Charger Config */
 #define CONFIG_CHARGER
@@ -224,7 +226,6 @@
 #define CONFIG_IO_EXPANDER_NCT38XX
 #define CONFIG_IO_EXPANDER_PORT_COUNT USBC_PORT_COUNT
 
-/* TODO(b/176988382): Tune values for guybrush */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 
@@ -277,7 +278,6 @@
 
 /* Fan Config */
 #define CONFIG_FANS FAN_CH_COUNT
-/* TODO: Set CONFIG_FAN_INIT_SPEED, defaults to 100 */
 
 /* LED Config */
 #define CONFIG_PWM

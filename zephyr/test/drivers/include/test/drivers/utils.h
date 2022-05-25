@@ -6,8 +6,8 @@
 #ifndef ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_
 #define ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_
 
-#include <drivers/emul.h>
-#include <drivers/gpio/gpio_emul.h>
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
 #include <string.h>
 
 #include "charger.h"
@@ -393,6 +393,33 @@ int host_cmd_motion_sense_fifo_read(uint8_t buffer_length,
 				    struct ec_response_motion_sense *response);
 
 /**
+ * @brief Call the int_enable motionsense host command
+ *
+ * @param enable 0 for disable, 1 for enable. All others are invalid
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_int_enable(int8_t enable,
+				     struct ec_response_motion_sense *response);
+
+/**
+ * @brief Call the spoof motion_sense subcommand
+ *
+ * @param sensor_num The sensor index in motion_sensors
+ * @param enable The enable field, for normal operations this will be one of
+ * enum motionsense_spoof_mode
+ * @param values0 The X value to set if using custom mode
+ * @param values1 The Y value to set if using custom mode
+ * @param values2 The Z value to set if using custom mode
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_spoof(uint8_t sensor_num, uint8_t enable,
+				int16_t values0, int16_t values1,
+				int16_t values2,
+				struct ec_response_motion_sense *response);
+
+/**
  * Run the host command to get the PD discovery responses.
  *
  * @param port          The USB-C port number
@@ -436,12 +463,14 @@ static inline void set_ac_enabled(bool enabled)
  *
  * Note: this is function currently only supports an ISL923X charger chip.
  *
- * @param src Pointer to the emulated source
+ * @param partner Pointer to the emulated TCPCI partner device
+ * @param src Pointer to the emulated source extension
  * @param pdo_index The index of the PDO object within the src to use
  * @param tcpci_emul The TCPCI emulator that the source will connect to
  * @param charger_emul The charger chip emulator
  */
-void connect_source_to_port(struct tcpci_src_emul *src, int pdo_index,
+void connect_source_to_port(struct tcpci_partner_data *partner,
+			    struct tcpci_src_emul_data *src, int pdo_index,
 			    const struct emul *tcpci_emul,
 			    const struct emul *charger_emul);
 

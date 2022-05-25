@@ -13,6 +13,11 @@
 		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
 	};
 
+	ec-console {
+		compatible = "ec-console";
+		disabled = "events", "lpc", "hostcmd";
+	};
+
 	batteries {
 		default_battery: lgc {
 			compatible = "lgc,ap18c8k", "battery-smart";
@@ -74,11 +79,6 @@
 			irq-pin = <&gpio_sb_1>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "usb_interrupt";
-		};
-		int_prochot: ap_prochot {
-			irq-pin = <&gpio_ec_prochot_odl>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "throttle_ap_prochot_input_interrupt";
 		};
 	};
 
@@ -242,6 +242,30 @@
 		compatible = "nuvoton,npcx-lvolctrl-def";
 		lvol-io-pads = <&lvol_iof5 &lvol_iof4>;
 	 };
+	 /*
+	  * Declare unused GPIOs so that they are shut down
+	  * and use minimal power
+	  */
+	  unused-pins {
+		compatible = "unused-gpios";
+		unused-gpios =
+			<&gpio3 2 0>,
+			<&gpio3 3 0>,
+			<&gpio3 5 0>,
+			<&gpio3 6 0>,
+			<&gpio5 7 0>,
+			<&gpio6 0 0>,
+			<&gpio6 3 0>,
+			<&gpio6 6 0>,
+			<&gpio7 3 0>,
+			<&gpio8 3 0>,
+			<&gpio8 6 0>,
+			<&gpiob 1 0>,
+			<&gpiob 7 0>,
+			<&gpioc 7 0>,
+			<&gpiof 2 0>,
+			<&gpiof 3 0>;
+	 };
 };
 
 &thermistor_3V3_51K1_47K_4050B {
@@ -296,16 +320,29 @@
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 };
 
+&pwm5_gpb7 {
+	drive-open-drain;
+};
+
 &pwm5 {
 	status = "okay";
-	drive-open-drain;
+	pinctrl-0 = <&pwm5_gpb7>;
+	pinctrl-names = "default";
 };
 
 /* Tachometer for fan speed measurement */
 &tach2 {
 	status = "okay";
-	pinctrl-0 = <&alt3_ta2_sl1>; /* Use TA2 as input pin */
+	pinctrl-0 = <&ta2_1_in_gp73>;
+	pinctrl-names = "default";
 	port = <NPCX_TACH_PORT_A>; /* port-A is selected */
 	sample-clk = <NPCX_TACH_FREQ_LFCLK>; /* Use LFCLK as sampling clock */
 	pulses-per-round = <2>; /* number of pulses per round of encoder */
+};
+
+/* host interface */
+&espi0 {
+	status = "okay";
+	pinctrl-0 = <&espi_lpc_gp46_47_51_52_53_54_55_57>;
+	pinctrl-names = "default";
 };

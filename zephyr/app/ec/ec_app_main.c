@@ -3,10 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include <kernel.h>
-#include <sys/printk.h>
-#include <shell/shell_uart.h>
-#include <zephyr.h>
+#include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/shell/shell_uart.h>
+#include <zephyr/zephyr.h>
 
 #include "ap_power/ap_pwrseq.h"
 #include "button.h"
@@ -26,8 +26,6 @@
  */
 void ec_app_main(void)
 {
-	system_common_pre_init();
-
 	/*
 	 * Initialize reset logs. This needs to be done before any updates of
 	 * reset logs because we need to verify if the values remain the same

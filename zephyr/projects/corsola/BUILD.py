@@ -15,7 +15,7 @@ def register_corsola_project(
 ):
     """Register a variant of corsola."""
     register_func = register_binman_project
-    if chip.startswith("npcx9"):
+    if chip.startswith("npcx"):
         register_func = register_npcx_project
 
     register_func(
@@ -49,10 +49,11 @@ register_corsola_project(
 
 register_corsola_project(
     project_name="kingler",
-    chip="npcx9",
+    chip="npcx9m3f",
     extra_dts_overlays=[
         here / "adc_kingler.dts",
         here / "battery_kingler.dts",
+        here / "host_kingler.dts",
         here / "i2c_kingler.dts",
         here / "interrupts_kingler.dts",
         here / "cbi_eeprom.dts",
@@ -60,6 +61,28 @@ register_corsola_project(
         here / "led_kingler.dts",
         here / "motionsense_kingler.dts",
         here / "usbc_kingler.dts",
+        here / "default_gpio_pinctrl_kingler.dts",
     ],
     extra_kconfig_files=[here / "prj_kingler.conf"],
+)
+
+register_corsola_project(
+    project_name="steelix",
+    chip="npcx9m3f",
+    extra_dts_overlays=[
+        here / "adc_kingler.dts",
+        here / "battery_steelix.dts",
+        here / "i2c_kingler.dts",
+        here / "interrupts_kingler.dts",
+        here / "cbi_eeprom.dts",
+        here / "gpio_steelix.dts",
+        here / "led_steelix.dts",
+        here / "motionsense_kingler.dts",
+        here / "usbc_kingler.dts",
+        here / "default_gpio_pinctrl_kingler.dts",
+    ],
+    extra_kconfig_files=[
+        here / "prj_kingler.conf",
+        here / "prj_steelix.conf",
+    ],
 )

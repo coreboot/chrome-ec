@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include <device.h>
+#include <zephyr/device.h>
 #include <ap_power/ap_power.h>
 
 #include "battery.h"
@@ -12,13 +12,12 @@
 #include "chipset.h"
 #include "cros_cbi.h"
 #include "hooks.h"
-#include "keyboard_scan.h"
 #include "usb_mux.h"
 #include "system.h"
 
 #include "nissa_common.h"
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(nissa, CONFIG_NISSA_LOG_LEVEL);
 
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
@@ -52,9 +51,22 @@ __override uint8_t board_get_usb_pd_port_count(void)
 static void board_power_change(struct ap_power_ev_callback *cb,
 			       struct ap_power_ev_data data)
 {
+	/*
+	 * Enable power to pen garage when system is active (safe even if no
+	 * pen is present).
+	 */
+	const struct gpio_dt_spec *const pen_power_gpio =
+		GPIO_DT_FROM_NODELABEL(gpio_en_pp5000_pen_x);
+
 	switch (data.event) {
+	case AP_POWER_STARTUP:
+		gpio_pin_set_dt(pen_power_gpio, 1);
+		break;
+	case AP_POWER_SHUTDOWN:
+		gpio_pin_set_dt(pen_power_gpio, 0);
+		break;
 	default:
-		return;
+		break;
 	}
 }
 
@@ -156,27 +168,4 @@ enum nissa_sub_board_type nissa_get_sb_type(void)
 		break;
 	}
 	return sb;
-}
-
-static const struct ec_response_keybd_config nissa_kb = {
-	.num_top_row_keys = 10,
-	.action_keys = {
-		TK_BACK,		/* T1 */
-		TK_REFRESH,		/* T2 */
-		TK_FULLSCREEN,		/* T3 */
-		TK_OVERVIEW,		/* T4 */
-		TK_SNAPSHOT,		/* T5 */
-		TK_BRIGHTNESS_DOWN,	/* T6 */
-		TK_BRIGHTNESS_UP,	/* T7 */
-		TK_VOL_MUTE,		/* T8 */
-		TK_VOL_DOWN,		/* T9 */
-		TK_VOL_UP,		/* T10 */
-	},
-	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
-};
-
-__override const struct ec_response_keybd_config
-*board_vivaldi_keybd_config(void)
-{
-	return &nissa_kb;
 }

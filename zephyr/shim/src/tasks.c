@@ -3,10 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include <kernel.h>
-#include <init.h>
-#include <sys/atomic.h>
-#include <shell/shell.h>
+#include <zephyr/kernel.h>
+#include <zephyr/init.h>
+#include <zephyr/sys/atomic.h>
+#include <zephyr/shell/shell.h>
 
 #include "common.h"
 #include "host_command.h"
@@ -180,7 +180,7 @@ uint32_t task_wait_event(int timeout_us)
 	}
 
 	/* If we didn't get an event, we need to wait again. There is a very
-	 * small change of us reading the event_mask one signaled event too
+	 * small chance of us reading the event_mask one signaled event too
 	 * early. In that case, just wait again for the remaining timeout
 	 */
 	if (events == 0) {

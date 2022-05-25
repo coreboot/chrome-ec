@@ -252,7 +252,7 @@
 			enum-name = "GPIO_USB_C1_RST_ODL";
 		};
 		usb_c0_c2_tcpc_rst_odl {
-			gpios = <&gpioa 7 GPIO_ODR_LOW>;
+			gpios = <&gpioa 7 GPIO_ODR_HIGH>;
 			enum-name = "GPIO_USB_C0_C2_TCPC_RST_ODL";
 		};
 		id_1_usb_c0_c2_tcpc_rst_odl {
@@ -279,11 +279,11 @@
 			enum-name = "IOEX_USB_C0_FRS_EN";
 		};
 		usb_c0_rt_rst_odl: usb_c0_rt_rst_odl {
-			gpios = <&ioex_port1 7 GPIO_ODR_HIGH>;
+			gpios = <&ioex_port1 7 GPIO_ODR_LOW>;
 			enum-name = "IOEX_USB_C0_RT_RST_ODL";
 		};
 		usb_c2_rt_rst_odl: usb_c2_rt_rst_odl {
-			gpios = <&ioex_port2 2 GPIO_ODR_HIGH>;
+			gpios = <&ioex_port2 2 GPIO_ODR_LOW>;
 			enum-name = "IOEX_USB_C2_RT_RST_ODL";
 		};
 		usb_c1_oc_odl {
@@ -314,15 +314,17 @@
 
 &i2c1_0 {
 	status = "okay";
+	pinctrl-0 = <&i2c1_0_sda_scl_gp87_90>;
+	pinctrl-names = "default";
 
-	nct3808_0_P1:nct3808_0_P1@70 {
+	nct3808_0_P1: nct3808_0_P1@70 {
 		#address-cells = <1>;
 		#size-cells = <0>;
 		compatible = "nuvoton,nct38xx-gpio";
 		reg = <0x70>;
 		label = "NCT3808_0_P1";
 
-		ioex_port1:gpio@0 {
+		ioex_port1: gpio@0 {
 			compatible = "nuvoton,nct38xx-gpio-port";
 			reg = <0x0>;
 			label = "NCT3808_0_P1_GPIO0";
@@ -334,14 +336,14 @@
 		};
 	};
 
-	nct3808_0_P2:nct3808_0_P2@74 {
+	nct3808_0_P2: nct3808_0_P2@74 {
 		#address-cells = <1>;
 		#size-cells = <0>;
 		compatible = "nuvoton,nct38xx-gpio";
 		reg = <0x74>;
 		label = "NCT3808_0_P2";
 
-		ioex_port2:gpio@0 {
+		ioex_port2: gpio@0 {
 			compatible = "nuvoton,nct38xx-gpio-port";
 			reg = <0x0>;
 			label = "NCT3808_0_P2_GPIO0";
