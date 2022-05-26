@@ -293,6 +293,11 @@ __maybe_unused static int nx20p3483_vbus_source_enable(int port, int enable)
 	return EC_ERROR_TIMEOUT;
 }
 
+__overridable int board_nx20p348x_init(int port)
+{
+	return EC_SUCCESS;
+}
+
 static int nx20p348x_init(int port)
 {
 	int reg;
@@ -373,6 +378,10 @@ static int nx20p348x_init(int port)
 	if (rv)
 		return rv;
 
+	rv = board_nx20p348x_init(port);
+	if (rv)
+		return rv;
+
 	return EC_SUCCESS;
 }
 
@@ -424,8 +433,10 @@ static void nx20p348x_handle_interrupt(int port)
 	}
 
 	/* Check for Vbus reverse current protection */
-	if (reg & NX20P348X_INT1_RCP_5VSRC)
+	if (reg & NX20P348X_INT1_RCP_5VSRC) {
 		ppc_prints("detected Vbus reverse current!", port);
+		pd_handle_overcurrent(port);
+	}
 
 	/* Check for Vbus short protection */
 	if (reg & NX20P348X_INT1_SC_5VSRC)

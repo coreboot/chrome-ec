@@ -12,6 +12,7 @@
 #include "system.h"
 #include "task.h"
 #include "tcpm/tcpm.h"
+#include "typec_control.h"
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
@@ -1042,8 +1043,14 @@ void tc_src_power_off(int port)
 					CHARGE_CEIL_NONE);
 }
 
+enum ocp_action {
+	OCP_CLEAR,
+	OCP_NO_ACTION,
+};
+
 /* Set what role the partner is right now, for the PPC and OCP module */
-static void tc_set_partner_role(int port, enum ppc_device_role role)
+static void tc_set_partner_role(int port, enum ppc_device_role role,
+				enum ocp_action ocp_command)
 {
 	if (IS_ENABLED(CONFIG_USBC_PPC))
 		ppc_dev_is_connected(port, role);
@@ -1052,9 +1059,9 @@ static void tc_set_partner_role(int port, enum ppc_device_role role)
 		usbc_ocp_snk_is_connected(port, role == PPC_DEV_SNK);
 		/*
 		 * Clear the overcurrent event counter
-		 * since we've detected a disconnect.
+		 * if we're not in ErrorRecovery due to OCP
 		 */
-		if (role == PPC_DEV_DISCONNECTED)
+		if (ocp_command == OCP_CLEAR)
 			usbc_ocp_clear_event_counter(port);
 	}
 }
@@ -1848,40 +1855,7 @@ static void set_vconn(int port, int enable)
 	else
 		TC_CLR_FLAG(port, TC_FLAGS_VCONN_ON);
 
-	/*
-	 * Check our OC event counter.  If we've exceeded our threshold, then
-	 * let's latch our source path off to prevent continuous cycling.  When
-	 * the PD state machine detects a disconnection on the CC lines, we will
-	 * reset our OC event counter.
-	 */
-	if (IS_ENABLED(CONFIG_USBC_OCP) &&
-	    enable && usbc_ocp_is_port_latched_off(port))
-		return;
-
-	/*
-	 * Disable PPC Vconn first then TCPC in case the voltage feeds back
-	 * to TCPC and damages.
-	 */
-	if (IS_ENABLED(CONFIG_USBC_PPC_VCONN) && !enable)
-		ppc_set_vconn(port, 0);
-
-	/*
-	 * Some TCPCs/PPC combinations can trigger OVP if the TCPC doesn't
-	 * source VCONN. This happens if the TCPC will trip OVP with 5V, and the
-	 * PPC doesn't isolate the TCPC from VCONN when sourcing. But, some PPCs
-	 * which do isolate the TCPC can't handle 5V on its host-side CC pins,
-	 * so the TCPC shouldn't source VCONN in those cases.
-	 *
-	 * In the first case, both TCPC and PPC will potentially source Vconn,
-	 * but that should be okay since Vconn has "make before break"
-	 * electrical requirements when swapping anyway.
-	 *
-	 * See b/72961003 and b/180973460
-	 */
-	tcpm_set_vconn(port, enable);
-
-	if (IS_ENABLED(CONFIG_USBC_PPC_VCONN) && enable)
-		ppc_set_vconn(port, 1);
+	typec_set_vconn(port, enable);
 }
 
 /* This must only be called from the PD task */
@@ -2274,7 +2248,7 @@ static void tc_unattached_snk_entry(const int port)
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
 		charge_manager_update_dualrole(port, CAP_UNKNOWN);
 
-	tc_set_partner_role(port, PPC_DEV_DISCONNECTED);
+	tc_set_partner_role(port, PPC_DEV_DISCONNECTED, OCP_CLEAR);
 
 	/*
 	 * Indicate that the port is disconnected so the board
@@ -2485,7 +2459,7 @@ static void tc_attached_snk_entry(const int port)
 	typec_select_pull(port, TYPEC_CC_RD);
 
 	/* Inform the PPC and OCP module that a source is connected */
-	tc_set_partner_role(port, PPC_DEV_SRC);
+	tc_set_partner_role(port, PPC_DEV_SRC, OCP_NO_ACTION);
 
 	if (IS_ENABLED(CONFIG_USB_PE_SM) &&
 	    TC_CHK_FLAG(port, TC_FLAGS_PR_SWAP_IN_PROGRESS)) {
@@ -2510,7 +2484,7 @@ static void tc_attached_snk_entry(const int port)
 		/* Get connector orientation */
 		tcpm_get_cc(port, &cc1, &cc2);
 		tc[port].polarity = get_snk_polarity(cc1, cc2);
-		pd_set_polarity(port, tc[port].polarity);
+		typec_set_polarity(port, tc[port].polarity);
 
 		tc_set_data_role(port, PD_ROLE_UFP);
 
@@ -2828,7 +2802,7 @@ static void tc_unattached_src_entry(const int port)
 	 */
 	bc12_role_change_handler(port, prev_data_role, tc[port].data_role);
 
-	tc_set_partner_role(port, PPC_DEV_DISCONNECTED);
+	tc_set_partner_role(port, PPC_DEV_DISCONNECTED, OCP_CLEAR);
 
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
 		charge_manager_update_dualrole(port, CAP_UNKNOWN);
@@ -3036,7 +3010,7 @@ static void tc_attached_src_entry(const int port)
 			/* Get connector orientation */
 			tcpm_get_cc(port, &cc1, &cc2);
 			tc[port].polarity = get_src_polarity(cc1, cc2);
-			pd_set_polarity(port, tc[port].polarity);
+			typec_set_polarity(port, tc[port].polarity);
 
 			/* Attached.SRC - enable AutoDischargeDisconnect */
 			tcpm_enable_auto_discharge_disconnect(port, 1);
@@ -3088,7 +3062,7 @@ static void tc_attached_src_entry(const int port)
 		/* Get connector orientation */
 		tcpm_get_cc(port, &cc1, &cc2);
 		tc[port].polarity = get_src_polarity(cc1, cc2);
-		pd_set_polarity(port, tc[port].polarity);
+		typec_set_polarity(port, tc[port].polarity);
 
 		/* Attached.SRC - enable AutoDischargeDisconnect */
 		tcpm_enable_auto_discharge_disconnect(port, 1);
@@ -3125,7 +3099,7 @@ static void tc_attached_src_entry(const int port)
 	}
 
 	/* Inform PPC and OCP module that a sink is connected. */
-	tc_set_partner_role(port, PPC_DEV_SNK);
+	tc_set_partner_role(port, PPC_DEV_SNK, OCP_NO_ACTION);
 
 	/* Initialize type-C supplier to seed the charge manger */
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
@@ -3881,7 +3855,11 @@ static void tc_cc_open_entry(const int port)
 	typec_select_pull(port, TYPEC_CC_OPEN);
 	typec_update_cc(port);
 
-	tc_set_partner_role(port, PPC_DEV_DISCONNECTED);
+	/*
+	 * While we've disconnected the partner, leave any OCP counts in place
+	 * to persist over ErrorRecovery
+	 */
+	tc_set_partner_role(port, PPC_DEV_DISCONNECTED, OCP_NO_ACTION);
 	tc_detached(port);
 }
 

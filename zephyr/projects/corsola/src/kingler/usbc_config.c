@@ -228,6 +228,7 @@ __override int board_rt1718s_set_frs_enable(int port, int enable)
 void board_reset_pd_mcu(void)
 {
 
+	CPRINTS("Resetting TCPCs...");
 	/* reset C0 ANX3447 */
 	/* Assert reset */
 	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c0_tcpc_rst), 1);
@@ -390,4 +391,15 @@ __override int board_get_vbus_voltage(int port)
 		return 0;
 	}
 	return voltage;
+}
+
+__override int board_nx20p348x_init(int port)
+{
+	int rv;
+
+	rv = i2c_update8(ppc_chips[port].i2c_port,
+			 ppc_chips[port].i2c_addr_flags,
+			 NX20P348X_DEVICE_CONTROL_REG, NX20P348X_CTRL_LDO_SD,
+			 MASK_SET);
+	return rv;
 }

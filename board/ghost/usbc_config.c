@@ -141,40 +141,6 @@ struct ioexpander_config_t ioex_config[] = {
 BUILD_ASSERT(ARRAY_SIZE(ioex_config) == CONFIG_IO_EXPANDER_PORT_COUNT);
 #endif /* !CONFIG_ZEPHYR */
 
-#ifdef CONFIG_CHARGE_RAMP_SW
-
-/*
- * TODO(b/181508008): tune this threshold
- */
-
-#define BC12_MIN_VOLTAGE 4400
-
-/**
- * Return true if VBUS is too low
- */
-int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
-{
-	int voltage;
-
-	if (charger_get_vbus_voltage(port, &voltage))
-		voltage = 0;
-
-	if (voltage == 0) {
-		CPRINTS("%s: must be disconnected", __func__);
-		return 1;
-	}
-
-	if (voltage < BC12_MIN_VOLTAGE) {
-		CPRINTS("%s: port %d: vbus %d lower than %d", __func__,
-			port, voltage, BC12_MIN_VOLTAGE);
-		return 1;
-	}
-
-	return 0;
-}
-
-#endif /* CONFIG_CHARGE_RAMP_SW */
-
 __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 {
 	enum ioex_signal rst_signal;
@@ -218,23 +184,23 @@ void board_reset_pd_mcu(void)
 
 	tcpc_rst = GPIO_USB_C0_C2_TCPC_RST_ODL;
 
-	/*
-	 * TODO(b/179648104): figure out correct timing
-	 */
-
 	gpio_set_level(tcpc_rst, 0);
 
 	/*
-	 * delay for power-on to reset-off and min. assertion time
+	 * delay for power-on to reset-off and min. assertion time.
+	 * the nct380x needs a 100 ns reset pulse.
 	 */
 
-	msleep(20);
+	msleep(1);
 
 	gpio_set_level(tcpc_rst, 1);
 
-	/* wait for chips to come up */
+	/*
+	 * wait for chips to come up.
+	 * the nct3808 needs 3 ms.
+	 */
 
-	msleep(50);
+	msleep(5);
 }
 
 static void board_tcpc_init(void)
@@ -307,7 +273,7 @@ void ppc_interrupt(enum gpio_signal signal)
 void retimer_interrupt(enum gpio_signal signal)
 {
 	/*
-	 * TODO(b/179513527): add USB-C support
+	 * TODO(b/233317538): do we need this interrupt
 	 */
 }
 

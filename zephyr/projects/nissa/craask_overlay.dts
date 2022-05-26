@@ -13,6 +13,11 @@
 		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
 	};
 
+	ec-console {
+		compatible = "ec-console";
+		disabled = "events", "lpc", "hostcmd";
+	};
+
 	batteries {
 		default_battery: lgc {
 			compatible = "lgc,ap18c8k", "battery-smart";
@@ -74,11 +79,6 @@
 			irq-pin = <&gpio_sb_1>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "usb_interrupt";
-		};
-		int_prochot: ap_prochot {
-			irq-pin = <&gpio_ec_prochot_odl>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "throttle_ap_prochot_input_interrupt";
 		};
 	};
 
@@ -286,4 +286,13 @@
 
 &pwm6 {
 	status = "okay";
+	pinctrl-0 = <&pwm6_gpc0>;
+	pinctrl-names = "default";
+};
+
+/* host interface */
+&espi0 {
+	status = "okay";
+	pinctrl-0 = <&espi_lpc_gp46_47_51_52_53_54_55_57>;
+	pinctrl-names = "default";
 };
