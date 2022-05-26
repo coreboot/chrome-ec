@@ -39,14 +39,16 @@ extern "C" {
 #define U2F_MAX_ATTEST_SIZE   256 /* Size of largest blob to sign */
 #define U2F_P256_SIZE	      32
 /* Origin seed is a random nonce generated during key handle creation. */
-#define U2F_ORIGIN_SEED_SIZE  32
-#define U2F_USER_SECRET_SIZE  32 /* Size of user secret */
+#define U2F_ORIGIN_SEED_SIZE 32
+#define U2F_USER_SECRET_SIZE 32 /* Size of user secret */
 
 #define U2F_AUTH_TIME_SECRET_SIZE 32
 
-#define SHA256_DIGEST_SIZE    32
+#define SHA256_DIGEST_SIZE	32
 #define U2F_MESSAGE_DIGEST_SIZE SHA256_DIGEST_SIZE
 
+#define CORP_CHAL_SIZE 16
+#define CORP_SALT_SIZE 16
 
 #define ENC_SIZE(x) ((x + 7) & 0xfff8)
 
@@ -69,15 +71,14 @@ struct u2f_ec_point {
 #define U2F_UV_ENABLED_KH 0x08
 
 /* Request v2 key handle. Should be used with U2F_UV_ENABLED_KH */
-#define U2F_V2_KH 0x10
+#define U2F_V2_KH      0x10
 #define U2F_V2_KH_MASK (U2F_V2_KH | U2F_UV_ENABLED_KH)
-
 
 #define U2F_KH_VERSION_1 0x01
 #define U2F_KH_VERSION_2 0x02
 
 #define U2F_AUTHORIZATION_SALT_SIZE 16
-#define U2F_V0_KH_SIZE 64
+#define U2F_V0_KH_SIZE		    64
 
 /**
  * Key handle version = 1 for WebAuthn, bound to device and user.
@@ -252,7 +253,8 @@ struct u2f_attest_req {
 	uint8_t userSecret[U2F_USER_SECRET_SIZE];
 	uint8_t format;
 	uint8_t dataLen;
-	uint8_t data[U2F_MAX_ATTEST_SIZE]; /* struct g2f_register_msg_vX */
+	/* struct g2f_register_msg_vX or corp_register_msg_vX */
+	uint8_t data[U2F_MAX_ATTEST_SIZE];
 };
 
 struct g2f_register_msg_v0 {
@@ -261,6 +263,23 @@ struct g2f_register_msg_v0 {
 	uint8_t challenge[U2F_CHAL_SIZE];
 	struct u2f_key_handle_v0 key_handle;
 	struct u2f_ec_point public_key;
+};
+
+struct corp_attest_data {
+	uint8_t challenge[CORP_CHAL_SIZE];
+	struct u2f_ec_point public_key;
+	uint8_t salt[65];
+};
+
+struct corp_register_msg_v0 {
+	struct corp_attest_data data;
+	uint8_t app_id[U2F_APPID_SIZE];
+	struct u2f_key_handle_v0 key_handle;
+};
+
+union u2f_attest_msg_variant {
+	struct g2f_register_msg_v0 g2f;
+	struct corp_register_msg_v0 corp;
 };
 
 struct u2f_attest_resp {
@@ -299,6 +318,9 @@ struct u2f_attest_resp {
 
 /* U2F Attest format for U2F Register Response. */
 #define U2F_ATTEST_FORMAT_REG_RESP 0
+
+/* Corp Attest format for U2F Register Response. */
+#define CORP_ATTEST_FORMAT_REG_RESP 1
 
 /* Vendor command to enable/disable the extensions */
 #define U2F_VENDOR_MODE U2F_VENDOR_LAST
