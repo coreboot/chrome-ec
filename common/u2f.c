@@ -266,6 +266,8 @@ static inline size_t u2f_attest_format_size(uint8_t format)
 	switch (format) {
 	case U2F_ATTEST_FORMAT_REG_RESP:
 		return sizeof(struct g2f_register_msg_v0);
+	case CORP_ATTEST_FORMAT_REG_RESP:
+		return sizeof(struct corp_attest_data);
 	default:
 		return 0;
 	}
@@ -277,8 +279,12 @@ enum vendor_cmd_rc u2f_attest_cmd(enum vendor_cmd_cc code, void *buf,
 {
 	const struct u2f_attest_req *req = buf;
 	struct u2f_attest_resp *resp;
-	struct g2f_register_msg_v0 *msg = (void *)req->data;
+	union u2f_attest_msg_variant *msg = (void *)req->data;
 	enum ec_error_list result;
+
+	const union u2f_key_handle_variant *kh;
+	const uint8_t *origin;
+	const struct u2f_ec_point *pubKey;
 
 	size_t response_buf_size = *response_size;
 
@@ -296,15 +302,30 @@ enum vendor_cmd_rc u2f_attest_cmd(enum vendor_cmd_cc code, void *buf,
 	    response_buf_size < sizeof(*resp))
 		return VENDOR_RC_BOGUS_ARGS;
 
-	/* Only one format is supported, key handle version is 0. */
-	if (req->format != U2F_ATTEST_FORMAT_REG_RESP)
-		return VENDOR_RC_NOT_ALLOWED;
+	/*
+	 * Two formats are supported, U2F Attest format and Corp Attest format,
+	 * both with key handle version 0.
+	 */
+	if (req->format == U2F_ATTEST_FORMAT_REG_RESP) {
+		if (req->dataLen != sizeof(struct g2f_register_msg_v0))
+			return VENDOR_RC_NOT_ALLOWED;
 
-	if (req->dataLen != sizeof(struct g2f_register_msg_v0))
-		return VENDOR_RC_NOT_ALLOWED;
+		if (msg->g2f.reserved != 0)
+			return VENDOR_RC_NOT_ALLOWED;
 
-	if (msg->reserved != 0)
+		kh = (union u2f_key_handle_variant *)&msg->g2f.key_handle;
+		origin = msg->g2f.app_id;
+		pubKey = &msg->g2f.public_key;
+	} else if (req->format == CORP_ATTEST_FORMAT_REG_RESP) {
+		if (req->dataLen != sizeof(struct corp_register_msg_v0))
+			return VENDOR_RC_NOT_ALLOWED;
+
+		kh = (union u2f_key_handle_variant *)&msg->corp.key_handle;
+		origin = msg->corp.app_id;
+		pubKey = &msg->corp.data.public_key;
+	} else {
 		return VENDOR_RC_NOT_ALLOWED;
+	}
 
 	/*
 	 * u2f_attest first consume all data from request 'req', and compute
@@ -316,18 +337,15 @@ enum vendor_cmd_rc u2f_attest_cmd(enum vendor_cmd_cc code, void *buf,
 	resp = buf;
 
 	/* TODO: If WebAuthn support is needed, pass AuthTimeSecret. */
-	result = u2f_attest(state,
-			    (union u2f_key_handle_variant *)&msg->key_handle, 0,
-			    req->userSecret, msg->app_id, NULL,
-			    &msg->public_key, req->data,
-			    u2f_attest_format_size(req->format),
+	result = u2f_attest(state, kh, 0, req->userSecret, origin, NULL, pubKey,
+			    req->data, u2f_attest_format_size(req->format),
 			    (struct u2f_signature *)resp);
 
 	if (result == EC_ERROR_ACCESS_DENIED)
 		return VENDOR_RC_NOT_ALLOWED;
 
 	if (result != EC_SUCCESS) {
-		CPRINTF("G2F Attestation failed");
+		CPRINTF("Attestation failed");
 		return VENDOR_RC_INTERNAL_ERROR;
 	}
 
