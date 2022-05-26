@@ -57,12 +57,20 @@ def u2f_sign(tpm, origin, user, auth, kh, msg, flag, fail=False):
         return b''
     return sig
 
-def u2f_attest(tpm, origin, user, challenge, kh, public_key, fail=False):
+def u2f_attest(tpm, origin, user, challenge, kh, public_key, corp_format=False, fail=False):
     origin = origin[:32].ljust(32, b'\0')
     user = user[:32].ljust(32, b'\0')
-    challenge = challenge[:32].ljust(32, b'\0')
-    g2f_cmd = b'\0' + origin + challenge + kh + public_key
-    cmd = user + b'\0' + len(g2f_cmd).to_bytes(1, 'big') + g2f_cmd
+    if not corp_format:
+        challenge = challenge[:32].ljust(32, b'\0')
+        g2f_cmd = b'\0' + origin + challenge + kh + public_key
+        cmd = user + b'\0' + len(g2f_cmd).to_bytes(1, 'big') + g2f_cmd
+    else:
+        challenge = challenge[:16].ljust(16, b'\0')
+        salt = b'\0' * 65
+        corp_data = challenge + public_key + salt
+        corp_cmd = corp_data + origin + kh
+        cmd = user + b'\1' + len(corp_cmd).to_bytes(1, 'big') + corp_cmd
+
     if fail==False:
         wrapped_response = tpm.command(tpm.wrap_ext_command(
                                        subcmd.U2F_ATTEST, cmd))
@@ -169,6 +177,11 @@ def u2f_test(tpm):
 
     print('U2F_ATTEST v0');
     sig_attest = u2f_attest(tpm, origin, user, auth, khv0, public_key0)
+    if tpm.debug_enabled():
+        print('sig attest = ',utils.hex_dump(sig_attest), len(sig_attest))
+
+    print('U2F_ATTEST corp');
+    sig_attest = u2f_attest(tpm, origin, user, auth, khv0, public_key0, corp_format=True)
     if tpm.debug_enabled():
         print('sig attest = ',utils.hex_dump(sig_attest), len(sig_attest))
     print('%sSUCCESS: %s' % (utils.cursor_back(), 'U2F test'))
