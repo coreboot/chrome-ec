@@ -49,4 +49,15 @@ static inline void keyboard_send_battery_key(void) { }
  */
 void mkbp_update_switches(uint32_t sw, int state);
 
+/**
+ * Board specific function to set support volume buttons.
+ *
+ * Although we're able to define CONFIG_VOLUME_BUTTONS for ec volume buttons,
+ * some boards might need to configure this settings at run time by several
+ * cases such as sharing the firmware with different designs.
+ *
+ * @return 1 if volume buttons supported else 0
+ */
+__override_proto int mkbp_support_volume_buttons(void);
+
 #endif  /* __CROS_EC_KEYBOARD_MKBP_H */
