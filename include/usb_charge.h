@@ -93,8 +93,10 @@ enum usb_switch {
 struct bc12_drv {
 	/* All fields below are optional */
 
-	/* BC1.2 detection task for this chip */
-	void (*usb_charger_task)(int port);
+	/* BC1.2 detection task init for this chip */
+	void (*usb_charger_task_init)(int port);
+	/* BC1.2 detection task process for this chip */
+	void (*usb_charger_task_event)(int port, uint32_t evt);
 	/* Configure USB data switches on type-C port */
 	void (*set_switches)(int port, enum usb_switch setting);
 	/* Check if ramping is allowed for given supplier */
@@ -165,6 +167,14 @@ static inline int usb_charger_ramp_max(int port, int supplier, int sup_curr)
 		return 0;
 	return bc12_ports[port].drv->ramp_max(supplier, sup_curr);
 }
+
+/**
+ * Set a task event for a specific usb charger port
+ *
+ * @param port port number
+ * @param event event bits (USB_CHG_EVENT_*)
+ */
+uint32_t usb_charger_task_set_event(int port, uint32_t event);
 
 /**
  * Reset available BC 1.2 chargers on all ports

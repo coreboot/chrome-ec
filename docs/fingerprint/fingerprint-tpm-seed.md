@@ -11,8 +11,8 @@ Last Updated: 2018-11-01
 
 ## Objective
 
-Increase security for Fingerprint (FP) templates by using a TPM-sourced seed in
-addition to internal FPMCU entropy while encrypting FP templates. The
+Increase security for Fingerprint (FP) templates by using a [TPM]-sourced seed
+in addition to internal FPMCU entropy while encrypting FP templates. The
 TPM-sourced seed will be derived from the system key which is loaded from the
 TPM during boot in mount-encrypted.
 
@@ -270,7 +270,7 @@ then set TPM.
     to produce the TPM-seed).
 *   In the unlikely event of the contents of the tmp file being modified before
     they are programmed into the FPMCU, FP unlock would fail (since the
-    encrypted templates would not longer be decrypted correctly, since the FPMCU
+    encrypted templates would no longer be decrypted correctly, since the FPMCU
     encryption key would have changed). The FP templates encryption key is a
     combination of both the `TPM_seed` as well as the internal `SBP_Src_Key`
     combined with a random salt, and since only the encrypted templates are
@@ -313,6 +313,7 @@ for the fingerprint templates to prevent their retrieval and mis-use.
 [Design Ideas]: #design-ideas
 [TPM seed generation]: #seed-generation
 [Alternatives Considered]: #alt-considered
+[TPM]: https://www.chromium.org/developers/design-documents/tpm-usage/
 
 <!-- Images -->
 

@@ -75,7 +75,7 @@ void usb_charger_vbus_change(int port, int vbus_level)
 
 #ifdef HAS_TASK_USB_CHG_P0
 	/* USB Charger task(s) */
-	task_set_event(USB_CHG_PORT_TO_TASK_ID(port), USB_CHG_EVENT_VBUS);
+	usb_charger_task_set_event(port, USB_CHG_EVENT_VBUS);
 
 	/* If we swapped to sourcing, drop any related charge suppliers */
 	if (usb_charger_port_is_sourcing_vbus(port))
@@ -116,6 +116,11 @@ void usb_charger_reset_charge(int port)
 
 }
 
+uint32_t usb_charger_task_set_event(int port, uint32_t event)
+{
+	return task_set_event(USB_CHG_PORT_TO_TASK_ID(port), event);
+}
+
 static void usb_charger_init(void)
 {
 	int i;
@@ -130,6 +135,8 @@ DECLARE_HOOK(HOOK_INIT, usb_charger_init, HOOK_PRIO_POST_CHARGE_MANAGER);
 void usb_charger_task(void *u)
 {
 	int port = TASK_ID_TO_USB_CHG_PORT(task_get_current());
+	uint32_t evt;
+	struct bc12_config *bc12_port;
 
 	/*
 	 * The actual number of ports may be less than the maximum
@@ -138,6 +145,15 @@ void usb_charger_task(void *u)
 	if (port >= board_get_usb_pd_port_count())
 		return;
 
-	ASSERT(bc12_ports[port].drv->usb_charger_task);
-	bc12_ports[port].drv->usb_charger_task(port);
+	bc12_port = &bc12_ports[port];
+
+	ASSERT(bc12_port->drv->usb_charger_task_init);
+	bc12_port->drv->usb_charger_task_init(port);
+
+	while (1) {
+		evt = task_wait_event(-1);
+
+		ASSERT(bc12_port->drv->usb_charger_task_event);
+		bc12_port->drv->usb_charger_task_event(port, evt);
+	}
 }
