@@ -23,6 +23,7 @@
 #include "driver/tcpm/tcpci.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "keyboard_mkbp.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "pi3usb9201.h"
@@ -780,3 +781,7 @@ uint16_t tcpc_get_alert_status(void)
 	return status;
 }
 
+__override int mkbp_support_volume_buttons(void)
+{
+	return board_has_side_volume_buttons();
+}
