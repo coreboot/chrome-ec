@@ -6687,6 +6687,7 @@ enum typec_control_command {
 	TYPEC_CONTROL_COMMAND_CLEAR_EVENTS,
 	TYPEC_CONTROL_COMMAND_ENTER_MODE,
 	TYPEC_CONTROL_COMMAND_TBT_UFP_REPLY,
+	TYPEC_CONTROL_COMMAND_USB_MUX_SET,
 };
 
 /* Modes (USB or alternate) that a type-C port may enter. */
@@ -6701,6 +6702,11 @@ enum typec_tbt_ufp_reply {
 	TYPEC_TBT_UFP_REPLY_NAK,
 	TYPEC_TBT_UFP_REPLY_ACK,
 };
+
+struct typec_usb_mux_set {
+	uint8_t mux_index;	/* Index of the mux to set in the chain */
+	uint8_t mux_flags;	/* USB_PD_MUX_*-encoded USB mux state to set */
+} __ec_align1;
 
 struct ec_params_typec_control {
 	uint8_t port;
@@ -6719,6 +6725,8 @@ struct ec_params_typec_control {
 		uint8_t mode_to_enter;
 		/* Used for TBT_UFP_REPLY - enum typec_tbt_ufp_reply */
 		uint8_t tbt_ufp_reply;
+		/* Used for USB_MUX_SET */
+		struct typec_usb_mux_set mux_params;
 		uint8_t placeholder[128];
 	};
 } __ec_align1;
@@ -6806,6 +6814,8 @@ enum tcpc_cc_polarity {
 #define PD_STATUS_EVENT_SOP_PRIME_DISC_DONE	BIT(1)
 #define PD_STATUS_EVENT_HARD_RESET		BIT(2)
 #define PD_STATUS_EVENT_DISCONNECTED		BIT(3)
+#define PD_STATUS_EVENT_MUX_0_SET_DONE		BIT(4)
+#define PD_STATUS_EVENT_MUX_1_SET_DONE		BIT(5)
 
 /*
  * Encode and decode for BCD revision response
