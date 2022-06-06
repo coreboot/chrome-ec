@@ -11,23 +11,14 @@
 #include "charge_state_v2.h"
 #include "chipset.h"
 #include "cros_cbi.h"
-#include "gpio/gpio_int.h"
 #include "hooks.h"
 #include "usb_mux.h"
 #include "system.h"
-#include "throttle_ap.h"
 
 #include "nissa_common.h"
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(nissa, CONFIG_NISSA_LOG_LEVEL);
-
-#define PROCHOT_GPIO_ENUM \
-	GPIO_SIGNAL(DT_PROP(DT_NODELABEL(int_prochot), irq_pin))
-
-static const struct prochot_cfg nissa_prochot_cfg = {
-	.gpio_prochot_in = PROCHOT_GPIO_ENUM,
-};
 
 struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
@@ -60,9 +51,22 @@ __override uint8_t board_get_usb_pd_port_count(void)
 static void board_power_change(struct ap_power_ev_callback *cb,
 			       struct ap_power_ev_data data)
 {
+	/*
+	 * Enable power to pen garage when system is active (safe even if no
+	 * pen is present).
+	 */
+	const struct gpio_dt_spec *const pen_power_gpio =
+		GPIO_DT_FROM_NODELABEL(gpio_en_pp5000_pen_x);
+
 	switch (data.event) {
+	case AP_POWER_STARTUP:
+		gpio_pin_set_dt(pen_power_gpio, 1);
+		break;
+	case AP_POWER_SHUTDOWN:
+		gpio_pin_set_dt(pen_power_gpio, 0);
+		break;
 	default:
-		return;
+		break;
 	}
 }
 
@@ -88,10 +92,6 @@ static void board_setup_init(void)
 		cached_usb_pd_port_count = 2;
 		break;
 	}
-
-	/* Enable PROCHOT monitoring */
-	throttle_ap_config_prochot(&nissa_prochot_cfg);
-	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_prochot));
 }
 /*
  * Make sure setup is done after EEPROM is readable.

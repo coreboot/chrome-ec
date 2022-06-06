@@ -12,6 +12,11 @@
 		int-wp = &int_wp_l;
 	};
 
+	ec-console {
+		compatible = "ec-console";
+		disabled = "events", "lpc", "hostcmd";
+	};
+
 	batteries {
 		default_battery: smp {
 			compatible = "smp,l20m3pg0", "battery-smart";
@@ -73,11 +78,6 @@
 			irq-pin = <&gpio_sb_1>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "usb_c1_interrupt";
-		};
-		int_prochot: ap_prochot {
-			irq-pin = <&gpio_ec_prochot_odl>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "throttle_ap_prochot_input_interrupt";
 		};
 	};
 

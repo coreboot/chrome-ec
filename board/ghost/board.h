@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Brya board configuration */
+/* Ghost board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
@@ -11,12 +11,16 @@
 #include "compile_time_macros.h"
 
 /*
- * Early brya boards are not set up for vivaldi
+ * Early ghost boards are not set up for vivaldi
  */
 #undef CONFIG_KEYBOARD_VIVALDI
 
 /* Baseboard features */
 #include "baseboard.h"
+
+/* Buttons are not supported */
+#undef CONFIG_VOLUME_BUTTONS
+#undef CONFIG_MKBP_INPUT_DEVICES
 
 /* Tablet mode is not supported */
 #undef CONFIG_TABLET_MODE
@@ -30,18 +34,6 @@
 
 #define CONFIG_MP2964
 
-/* LED */
-#define CONFIG_LED_PWM
-#define CONFIG_LED_PWM_COUNT 2
-#undef CONFIG_LED_PWM_NEAR_FULL_COLOR
-#undef CONFIG_LED_PWM_SOC_ON_COLOR
-#undef CONFIG_LED_PWM_SOC_SUSPEND_COLOR
-#undef CONFIG_LED_PWM_LOW_BATT_COLOR
-#define CONFIG_LED_PWM_NEAR_FULL_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
-
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
@@ -51,18 +43,9 @@
 
 #define CONFIG_USB_PD_FRS_PPC
 
-#define CONFIG_USB_PD_TCPM_PS8815
-#define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 #define CONFIG_USBC_RETIMER_INTEL_BB
 
-/* I2C speed console command */
-#define CONFIG_CMD_I2C_SPEED
-
-/* I2C control host command */
-#define CONFIG_HOSTCMD_I2C_CONTROL
-
 #define CONFIG_USBC_PPC_SYV682X
-#define CONFIG_USBC_PPC_NX20P3483
 
 /* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
@@ -107,11 +90,7 @@
 #define GPIO_PG_EC_RSMRST_ODL		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_POWER_BUTTON_L		GPIO_GSC_EC_PWR_BTN_ODL
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
-#define GPIO_VOLUME_DOWN_L		GPIO_EC_VOLDN_BTN_ODL
-#define GPIO_VOLUME_UP_L		GPIO_EC_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_ODL
-
-#define GPIO_ID_1_EC_KB_BL_EN		GPIO_EC_BATT_PRES_ODL
 
 /* System has back-lit keyboard */
 #define CONFIG_PWM_KBLIGHT
@@ -121,16 +100,10 @@
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
 
 #define I2C_PORT_USB_C0_C2_TCPC	NPCX_I2C_PORT1_0
-#define I2C_PORT_USB_C1_TCPC	NPCX_I2C_PORT4_1
 
 #define I2C_PORT_USB_C0_C2_PPC	NPCX_I2C_PORT2_0
-#define I2C_PORT_USB_C1_PPC	NPCX_I2C_PORT6_1
-
-#define I2C_PORT_USB_C0_C2_BC12	NPCX_I2C_PORT2_0
-#define I2C_PORT_USB_C1_BC12	NPCX_I2C_PORT6_1
 
 #define I2C_PORT_USB_C0_C2_MUX	NPCX_I2C_PORT3_0
-#define I2C_PORT_USB_C1_MUX	NPCX_I2C_PORT6_1
 
 #define I2C_PORT_BATTERY	NPCX_I2C_PORT5_0
 #define I2C_PORT_CHARGER	NPCX_I2C_PORT7_0
@@ -162,8 +135,6 @@
 #define CONFIG_TEMP_SENSOR_POWER
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
-#define CONFIG_FANS			FAN_CH_COUNT
-
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
 #define CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
@@ -171,12 +142,6 @@
 #define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC	10
 #define CONFIG_CHARGER_BQ25710_PSYS_SENSING
-
-/*
- * Older boards have a different ADC assignment.
- */
-
-#define CONFIG_ADC_CHANNELS_RUNTIME_CONFIG
 
 #ifndef __ASSEMBLER__
 
@@ -200,12 +165,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
-enum sensor_id {
-	CLEAR_ALS = 0,
-	RGB_ALS,
-	SENSOR_COUNT
-};
-
 enum ioex_port {
 	IOEX_C0_NCT38XX = 0,
 	IOEX_C1_NCT38XX,
@@ -214,28 +173,17 @@ enum ioex_port {
 
 enum battery_type {
 	BATTERY_POWER_TECH,
-	BATTERY_LGC011,
+	BATTERY_SWD_ATL,
 	BATTERY_TYPE_COUNT
 };
 
 enum pwm_channel {
-	PWM_CH_LED2 = 0,		/* PWM0 (white charger) */
-	PWM_CH_LED3,			/* PWM1 (orange on DB) */
-	PWM_CH_LED1,			/* PWM2 (orange charger) */
+	PWM_CH_LED1 = 0,		/* PWM0 */
+	PWM_CH_LED2,			/* PWM1 */
+	PWM_CH_FAN2,			/* PWM2 */
 	PWM_CH_KBLIGHT,			/* PWM3 */
-	PWM_CH_FAN,			/* PWM5 */
-	PWM_CH_LED4,			/* PWM7 (white on DB) */
+	PWM_CH_FAN1,			/* PWM5 */
 	PWM_CH_COUNT
-};
-
-enum fan_channel {
-	FAN_CH_0 = 0,
-	FAN_CH_COUNT
-};
-
-enum mft_channel {
-	MFT_CH_0 = 0,
-	MFT_CH_COUNT
 };
 
 #endif /* !__ASSEMBLER__ */

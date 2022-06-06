@@ -3,10 +3,12 @@
  * found in the LICENSE file.
  */
 
-/* Brya board-specific USB-C configuration */
+/* Ghost board-specific USB-C configuration */
 
 #ifndef __CROS_EC_USBC_CONFIG_H
 #define __CROS_EC_USBC_CONFIG_H
+
+#include "baseboard_usbc_config.h"
 
 #ifndef CONFIG_ZEPHYR
 #define CONFIG_USB_PD_PORT_MAX_COUNT	2

@@ -13,6 +13,7 @@
 #define SIZE_OF_RGB		sizeof(struct rgb_s)
 
 #define RGBKBD_MAX_GCC_LEVEL	0xff
+#define RGBKBD_MAX_SCALE	0xff
 
 enum rgbkbd_demo {
 	RGBKBD_DEMO_OFF = 0,
@@ -34,9 +35,22 @@ struct rgbkbd_cfg {
 	const uint8_t row_len;
 };
 
+struct rgbkbd_init {
+	/* Global current control */
+	const uint8_t gcc;
+	/* LED brightness  */
+	const uint8_t scale;
+	/* Color */
+	const struct rgb_s color;
+};
+
+extern const struct rgbkbd_init rgbkbd_default;
+
 struct rgbkbd {
 	/* Static configuration */
 	const struct rgbkbd_cfg * const cfg;
+	/* Start-up settings */
+	const struct rgbkbd_init * const init;
 	/* Current state of the port */
 	enum rgbkbd_state state;
 	/* Buffer containing color info for each dot. */

@@ -160,13 +160,12 @@
 
 #define CONFIG_ACCELGYRO_BMI160		/* Base accel */
 
-/* Lid operates in forced mode, base in FIFO */
+/* Lid operates in forced mode, base in interrupt mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 #define CONFIG_ACCEL_FIFO
 #define CONFIG_ACCEL_FIFO_SIZE 256	/* Must be a power of 2 */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
 
-#define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
@@ -184,8 +183,6 @@
 
 /* LIS2DS Lid accel */
 #define CONFIG_ACCEL_LIS2DS
-#define CONFIG_ACCEL_LIS2DS_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
 
 #ifndef __ASSEMBLER__
 
