@@ -4,10 +4,10 @@
  */
 
 #include <ztest.h>
-#include <drivers/gpio.h>
-#include <drivers/gpio/gpio_emul.h>
-#include <shell/shell.h>
-#include <shell/shell_uart.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/shell/shell_uart.h>
 
 #include "chipset.h"
 #include "common.h"
@@ -495,6 +495,9 @@ ZTEST(power_common_hibernation, test_power_hc_hibernation_delay)
 		EC_CMD_HIBERNATION_DELAY, 0, response, params);
 	uint32_t h_delay;
 	int sleep_time;
+
+	/* Ensure the lid is closed so AC connect does not boot system */
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "lidclose"), NULL);
 
 	zassert_equal(power_get_state(), POWER_G3,
 		"Power state is %d, expected G3", power_get_state());

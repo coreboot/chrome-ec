@@ -20,7 +20,7 @@
 #ifndef __AP_PWRSEQ_AP_POWER_BOARD_FUNCTIONS_H__
 #define __AP_PWRSEQ_AP_POWER_BOARD_FUNCTIONS_H__
 
-#include <devicetree.h>
+#include <zephyr/devicetree.h>
 
 /**
  * @brief Force AP shutdown
@@ -63,6 +63,14 @@ void board_ap_power_action_s0(void);
  * @return -1 Timeout or error
  */
 int board_ap_power_assert_pch_power_ok(void);
+
+/**
+ * @brief Check board power rails enabled or not
+ *
+ * @return true Enabled
+ * @return false Not enabled
+ */
+bool board_ap_power_check_power_rails_enabled(void);
 
 /**
  * @brief macro to access configuration properties from DTS

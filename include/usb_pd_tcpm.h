@@ -386,7 +386,6 @@ struct tcpm_drv {
 	int (*get_chip_info)(int port, int live,
 			struct ec_response_pd_chip_info_v1 *info);
 
-#ifdef CONFIG_USB_PD_PPC
 	/**
 	 * Request current sinking state of the TCPC
 	 * NOTE: this is most useful for PPCs that can not tell on their own
@@ -426,7 +425,6 @@ struct tcpm_drv {
 	 * @return EC_SUCCESS or error
 	 */
 	int (*set_src_ctrl)(int port, int enable);
-#endif
 
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	/**
@@ -497,6 +495,12 @@ struct tcpm_drv {
 	int (*reset_bist_type_2)(int port);
 };
 
+#ifdef CONFIG_ZEPHYR
+
+#include "dt-bindings/usb_pd_tcpm.h"
+
+#else /* !CONFIG_ZEPHYR */
+
 /*
  * Macros for tcpc_config_t flags field.
  *
@@ -520,6 +524,8 @@ struct tcpm_drv {
 #define TCPC_FLAGS_CONTROL_VCONN	BIT(6)
 #define TCPC_FLAGS_CONTROL_FRS		BIT(7)
 #define TCPC_FLAGS_VBUS_MONITOR		BIT(8)
+
+#endif /* !CONFIG_ZEPHYR */
 
 struct tcpc_config_t {
 	enum ec_bus_type bus_type;	/* enum ec_bus_type */

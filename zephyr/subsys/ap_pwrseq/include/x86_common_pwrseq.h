@@ -6,7 +6,7 @@
 #ifndef __X86_COMMON_PWRSEQ_H__
 #define __X86_COMMON_PWRSEQ_H__
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 #include <ap_power/ap_power_interface.h>
 #include <ap_power_override_functions.h>
 #include <power_signals.h>
@@ -18,6 +18,8 @@ struct pwrseq_context {
 	enum power_states_ndsx power_state;
 	/* Indicate should exit G3 power state or not */
 	bool want_g3_exit;
+	/* Indicate to exit G3 state or not with delay in ms*/
+	uint32_t reboot_ap_at_g3_delay_ms;
 
 };
 

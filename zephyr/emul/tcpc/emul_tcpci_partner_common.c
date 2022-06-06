@@ -3,12 +3,12 @@
  * found in the LICENSE file.
  */
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(tcpci_partner, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 
 #include <stdlib.h>
-#include <sys/byteorder.h>
-#include <zephyr.h>
+#include <zephyr/sys/byteorder.h>
+#include <zephyr/zephyr.h>
 #include <ztest.h>
 
 #include "common.h"
@@ -20,6 +20,15 @@ LOG_MODULE_REGISTER(tcpci_partner, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 #define TCPCI_MSG_DO_LEN	4
 /** Length of header in SOP message in bytes  */
 #define TCPCI_MSG_HEADER_LEN	2
+
+/** Check description in emul_common_tcpci_partner.h */
+void tcpci_partner_common_hard_reset_as_role(struct tcpci_partner_data *data,
+					     enum pd_power_role power_role)
+{
+	data->power_role = power_role;
+	data->data_role = power_role == PD_ROLE_SOURCE ? PD_ROLE_DFP :
+							 PD_ROLE_UFP;
+}
 
 /** Check description in emul_common_tcpci_partner.h */
 struct tcpci_partner_msg *tcpci_partner_alloc_msg(int data_objects)

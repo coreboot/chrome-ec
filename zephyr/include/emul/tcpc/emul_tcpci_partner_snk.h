@@ -12,7 +12,7 @@
 #ifndef __EMUL_TCPCI_PARTNER_SNK_H
 #define __EMUL_TCPCI_PARTNER_SNK_H
 
-#include <drivers/emul.h>
+#include <zephyr/drivers/emul.h>
 #include "emul/tcpc/emul_tcpci_partner_common.h"
 #include "emul/tcpc/emul_tcpci.h"
 #include "usb_pd.h"
@@ -29,6 +29,8 @@
 
 /** Structure describing sink device emulator data */
 struct tcpci_snk_emul_data {
+	/** Pointer to common TCPCI partner data */
+	struct tcpci_partner_data *common_data;
 	/** Power data objects returned in sink capabilities message */
 	uint32_t pdo[PDO_MAX_OBJECTS];
 	/** Emulator is waiting for PS RDY message */
@@ -37,6 +39,8 @@ struct tcpci_snk_emul_data {
 	bool pd_completed;
 	/** PD_CTRL_PING message received  */
 	bool ping_received;
+	/** PD_DATA_ALERT message received  */
+	bool alert_received;
 };
 
 /** Structure describing standalone sink device emulator */
@@ -63,8 +67,10 @@ void tcpci_snk_emul_init(struct tcpci_snk_emul *emul, enum pd_rev_type rev);
  *        created and all flags are cleared.
  *
  * @param data Pointer to USB-C sink device emulator data
+ * @param common_data Pointer to common TCPCI partner data
  */
-void tcpci_snk_emul_init_data(struct tcpci_snk_emul_data *data);
+void tcpci_snk_emul_init_data(struct tcpci_snk_emul_data *data,
+			      struct tcpci_partner_data *common_data);
 
 /**
  * @brief Connect emulated device to TCPCI
@@ -114,6 +120,13 @@ void tcpci_snk_emul_hard_reset(void *data);
  * @param sink_data
  */
 void tcpci_snk_emul_clear_ping_received(struct tcpci_snk_emul_data *sink_data);
+
+/**
+ * @brief Clear the alert received flag.
+ *
+ * @param sink_data
+ */
+void tcpci_snk_emul_clear_alert_received(struct tcpci_snk_emul_data *sink_data);
 
 /**
  * @}

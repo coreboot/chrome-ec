@@ -918,6 +918,11 @@
 /* Compile input current ramping support using software control */
 #undef CONFIG_CHARGE_RAMP_SW
 
+/* Enable EC support for charging splashscreen */
+#undef CONFIG_CHARGESPLASH
+#undef CONFIG_CHARGESPLASH_PERIOD
+#undef CONFIG_CHARGESPLASH_MAX_REQUESTS_PER_PERIOD
+
 /*****************************************************************************/
 /* Charger config */
 
@@ -2626,6 +2631,12 @@
 #undef CONFIG_I2C_DEBUG_PASSTHRU
 #undef CONFIG_I2C_PASSTHRU_RESTRICTED
 #undef CONFIG_I2C_VIRTUAL_BATTERY
+
+/*
+ * Define this configuration to support smart battery MFG function
+ * for virtual battery.
+ */
+#undef CONFIG_SMART_BATTERY_OPTIONAL_MFG_FUNC
 
 /*
  * Define this option if an i2c bus may be unpowered at a certain point during
@@ -5330,6 +5341,12 @@
 /* Support the Texas Instrument TUSB1064 Type-C Redriving Switch (UFP) */
 #undef CONFIG_USB_MUX_TUSB1064
 
+/*
+ * Support TI TUSB546 USB Type-C DP ALT Mode Linear Redriver Crosspoint
+ * Switch
+ */
+#undef CONFIG_USB_MUX_TUSB546
+
 /* Support the Parade PS8822 Type-C Redriving Demux Switch */
 #undef CONFIG_USB_MUX_PS8822
 
@@ -5655,7 +5672,7 @@
  * The historical default SCI pulse width to the host is 65 microseconds, but
  * some chipsets may require different widths.
  */
-#define CONFIG_ESPI_DEFAULT_SCI_WIDTH_US	65
+#define CONFIG_ESPI_DEFAULT_VW_WIDTH_US	65
 
 /*****************************************************************************/
 /*
@@ -6646,6 +6663,16 @@
 #endif
 #endif /* CONFIG_USB_PD_DISCHARGE_GPIO */
 #endif /* CONFIG_USB_PD_DISCHARGE */
+
+/* Chargesplash defaults */
+#ifdef CONFIG_CHARGESPLASH
+#ifndef CONFIG_CHARGESPLASH_PERIOD
+#define CONFIG_CHARGESPLASH_PERIOD 900
+#endif
+#ifndef CONFIG_CHARGESPLASH_MAX_REQUESTS_PER_PERIOD
+#define CONFIG_CHARGESPLASH_MAX_REQUESTS_PER_PERIOD 5
+#endif
+#endif
 
 /* EC Codec Wake-on-Voice related definitions */
 #ifdef CONFIG_AUDIO_CODEC_WOV

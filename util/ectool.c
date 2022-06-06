@@ -99,6 +99,8 @@ const char help_str[] =
 	"      Force the battery to stop charging or discharge\n"
 	"  chargeoverride\n"
 	"      Overrides charge port selection logic\n"
+	"  chargesplash\n"
+	"      Show and manipulate chargesplash variables\n"
 	"  chargestate\n"
 	"      Handle commands related to charge state v2 (and later)\n"
 	"  chipinfo\n"
@@ -6612,7 +6614,7 @@ int cmd_usb_pd_mux_info(int argc, char *argv[])
 			printf("USB=%d ",
 				!!(r.flags & USB_PD_MUX_USB_ENABLED));
 			printf("DP=%d ", !!(r.flags & USB_PD_MUX_DP_ENABLED));
-			printf("POLARITY=%s",
+			printf("POLARITY=%s ",
 				r.flags & USB_PD_MUX_POLARITY_INVERTED ?
 							"INVERTED" : "NORMAL");
 			printf("HPD_IRQ=%d ",
@@ -7587,6 +7589,53 @@ int cmd_charge_control(int argc, char *argv[])
 		break;
 	}
 	return 0;
+}
+
+
+static void print_bool(const char *name, bool value)
+{
+	printf("%s = %s\n", name, value ? "true" : "false");
+}
+
+static int cmd_chargesplash(int argc, char **argv)
+{
+	static struct {
+		const char *name;
+		enum ec_chargesplash_cmd cmd;
+	} actions[] = {
+		{ "state", EC_CHARGESPLASH_GET_STATE },
+		{ "request", EC_CHARGESPLASH_REQUEST },
+		{ "lockout", EC_CHARGESPLASH_LOCKOUT },
+		{ "reset", EC_CHARGESPLASH_RESET },
+	};
+	struct ec_params_chargesplash params;
+	struct ec_response_chargesplash resp;
+
+	if (argc != 2) {
+		goto usage;
+	}
+
+	for (int i = 0; i < ARRAY_SIZE(actions); i++) {
+		if (!strcasecmp(actions[i].name, argv[1])) {
+			params.cmd = actions[i].cmd;
+			if (ec_command(EC_CMD_CHARGESPLASH, 0, &params,
+				       sizeof(params), &resp,
+				       sizeof(resp)) < 0) {
+				fprintf(stderr, "Host command failed\n");
+				return -1;
+			}
+
+			print_bool("requested", resp.requested);
+			print_bool("display_initialized",
+				   resp.display_initialized);
+			print_bool("locked_out", resp.locked_out);
+			return 0;
+		}
+	}
+
+usage:
+	fprintf(stderr, "Usage: %s <state|request|lockout|reset>", argv[0]);
+	return -1;
 }
 
 
@@ -10665,6 +10714,7 @@ const struct command commands[] = {
 	{"chargecurrentlimit", cmd_charge_current_limit},
 	{"chargecontrol", cmd_charge_control},
 	{"chargeoverride", cmd_charge_port_override},
+	{"chargesplash", cmd_chargesplash},
 	{"chargestate", cmd_charge_state},
 	{"chipinfo", cmd_chipinfo},
 	{"cmdversions", cmd_cmdversions},

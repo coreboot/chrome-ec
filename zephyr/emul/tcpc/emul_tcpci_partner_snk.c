@@ -3,11 +3,11 @@
  * found in the LICENSE file.
  */
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(tcpci_snk_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 
-#include <sys/byteorder.h>
-#include <zephyr.h>
+#include <zephyr/sys/byteorder.h>
+#include <zephyr/zephyr.h>
 
 #include "common.h"
 #include "emul/tcpc/emul_tcpci.h"
@@ -345,6 +345,11 @@ void tcpci_snk_emul_clear_ping_received(struct tcpci_snk_emul_data *data)
 	data->ping_received = false;
 }
 
+void tcpci_snk_emul_clear_alert_received(struct tcpci_snk_emul_data *data)
+{
+	data->alert_received = false;
+}
+
 /** Check description in emul_tcpci_snk.h */
 enum tcpci_partner_handler_res tcpci_snk_emul_handle_sop_msg(
 	struct tcpci_snk_emul_data *data,
@@ -361,6 +366,9 @@ enum tcpci_partner_handler_res tcpci_snk_emul_handle_sop_msg(
 		case PD_DATA_SOURCE_CAP:
 			tcpci_snk_emul_handle_source_cap(data, common_data,
 							 msg);
+			return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+		case PD_DATA_ALERT:
+			data->alert_received = true;
 			return TCPCI_PARTNER_COMMON_MSG_HANDLED;
 		default:
 			return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
@@ -409,6 +417,9 @@ enum tcpci_partner_handler_res tcpci_snk_emul_handle_sop_msg(
 void tcpci_snk_emul_hard_reset(void *data)
 {
 	struct tcpci_snk_emul_data *snk_emul_data = data;
+
+	tcpci_partner_common_hard_reset_as_role(snk_emul_data->common_data,
+						PD_ROLE_SINK);
 
 	snk_emul_data->wait_for_ps_rdy = false;
 	snk_emul_data->pd_completed = false;
@@ -538,7 +549,8 @@ int tcpci_snk_emul_connect_to_tcpci(struct tcpci_snk_emul_data *data,
 }
 
 /** Check description in emul_tcpci_snk.h */
-void tcpci_snk_emul_init_data(struct tcpci_snk_emul_data *data)
+void tcpci_snk_emul_init_data(struct tcpci_snk_emul_data *data,
+			      struct tcpci_partner_data *common_data)
 {
 	/* By default there is only PDO 5v@500mA */
 	data->pdo[0] = PDO_FIXED(5000, 500, 0);
@@ -548,7 +560,7 @@ void tcpci_snk_emul_init_data(struct tcpci_snk_emul_data *data)
 
 	data->wait_for_ps_rdy = false;
 	data->pd_completed = false;
-
+	data->common_data = common_data;
 }
 
 /** Check description in emul_tcpci_partner_snk.h */
@@ -557,8 +569,11 @@ void tcpci_snk_emul_init(struct tcpci_snk_emul *emul, enum pd_rev_type rev)
 	tcpci_partner_init(&emul->common_data, tcpci_snk_emul_hard_reset,
 			   &emul->data);
 
-	emul->common_data.data_role = PD_ROLE_UFP;
-	emul->common_data.power_role = PD_ROLE_SINK;
+
+	/* Use common handler to initialize roles */
+	tcpci_partner_common_hard_reset_as_role(&emul->common_data,
+						PD_ROLE_SINK);
+
 	emul->common_data.rev = rev;
 
 	emul->ops.transmit = tcpci_snk_emul_transmit_op;
@@ -566,5 +581,5 @@ void tcpci_snk_emul_init(struct tcpci_snk_emul *emul, enum pd_rev_type rev)
 	emul->ops.control_change = NULL;
 	emul->ops.disconnect = tcpci_snk_emul_disconnect_op;
 
-	tcpci_snk_emul_init_data(&emul->data);
+	tcpci_snk_emul_init_data(&emul->data, &emul->common_data);
 }

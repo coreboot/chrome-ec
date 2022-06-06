@@ -12,7 +12,7 @@ import re
 import shutil
 import subprocess
 import uuid
-from typing import Dict, List, Optional, Union
+from typing import Dict, Optional, Set, Union
 
 import zmake.build_config
 import zmake.generate_readme
@@ -199,21 +199,21 @@ class Zmake:
 
     def _resolve_projects(
         self, project_names, all_projects=False, host_tests_only=False
-    ) -> List[zmake.project.Project]:
+    ) -> Set[zmake.project.Project]:
         """Finds all projects for the specified command line flags.
 
         Returns a list of projects.
         """
         found_projects = zmake.project.find_projects(self.module_paths["ec"] / "zephyr")
         if all_projects:
-            projects = list(found_projects.values())
+            projects = set(found_projects.values())
         elif host_tests_only:
-            projects = [p for p in found_projects.values() if p.config.is_test]
+            projects = {p for p in found_projects.values() if p.config.is_test}
         else:
-            projects = []
+            projects = set()
             for project_name in project_names:
                 try:
-                    projects.append(found_projects[project_name])
+                    projects.add(found_projects[project_name])
                 except KeyError as e:
                     raise KeyError("No project named {}".format(project_name)) from e
         return projects
@@ -258,6 +258,7 @@ class Zmake:
                     coverage=coverage,
                     allow_warnings=allow_warnings,
                     extra_cflags=extra_cflags,
+                    multiproject=len(projects) > 1,
                 )
             )
             if self._sequential:
@@ -424,6 +425,7 @@ class Zmake:
         coverage=False,
         allow_warnings=False,
         extra_cflags=None,
+        multiproject=False,
     ):
         # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
         # pylint: disable=too-many-statements
@@ -594,6 +596,7 @@ class Zmake:
                     project=project,
                     coverage=coverage,
                     output_files_out=output_files,
+                    multiproject=multiproject,
                 )
                 if result:
                     self.failed_projects.append(project.config.project_name)
@@ -619,12 +622,13 @@ class Zmake:
             self.failed_projects.append(project.config.project_name)
             raise
 
-    def _build(
+    def _build(  # pylint: disable=too-many-arguments
         self,
         build_dir,
         project: zmake.project.Project,
         output_files_out=None,
         coverage=False,
+        multiproject=False,
     ):
         # pylint: disable=too-many-locals,too-many-branches
         """Build a pre-configured build directory."""
@@ -687,6 +691,8 @@ class Zmake:
                 if self.goma:
                     # Go nuts ninja, goma does the heavy lifting!
                     cmd.append("-j1024")
+                elif multiproject:
+                    cmd.append("-j1")
                 # Only tests will actually build with coverage enabled.
                 if coverage and not project.config.is_test:
                     cmd.append("all.libraries")

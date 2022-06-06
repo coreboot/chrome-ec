@@ -24,7 +24,7 @@
 #include "virtual_battery.h"
 
 #ifdef CONFIG_ZEPHYR
-#include <drivers/i2c.h>
+#include <zephyr/drivers/i2c.h>
 #include "i2c/i2c.h"
 #endif /* CONFIG_ZEPHYR */
 
@@ -765,12 +765,15 @@ int i2c_write_offset16_block(const int port,
 	return rv;
 }
 
-int i2c_read_string(const int port,
-		    const uint16_t addr_flags,
-		    int offset, uint8_t *data, int len)
+int i2c_read_sized_block(const int port,
+			 const uint16_t addr_flags,
+			 int offset, uint8_t *data, int max_len, int *read_len)
 {
 	int i, rv;
 	uint8_t reg, block_length;
+
+	if (max_len == 0)
+		return EC_ERROR_INVAL;
 
 	if (!IS_ENABLED(CONFIG_SMBUS_PEC) && I2C_USE_PEC(addr_flags))
 		return EC_ERROR_UNIMPLEMENTED;
@@ -779,7 +782,7 @@ int i2c_read_string(const int port,
 	i2c_lock(port, 1);
 
 	for (i = 0; i <= CONFIG_I2C_NACK_RETRY_COUNT; i++) {
-		int data_length;
+		int data_length = 0;
 
 		/*
 		 * Send device reg space offset, and read back block length.
@@ -791,8 +794,8 @@ int i2c_read_string(const int port,
 		if (rv)
 			continue;
 
-		if (len && block_length > (len - 1))
-			data_length = len - 1;
+		if (block_length > max_len)
+			data_length = max_len;
 		else
 			data_length = block_length;
 
@@ -805,7 +808,6 @@ int i2c_read_string(const int port,
 
 			rv = i2c_xfer_unlocked(port, addr_flags,
 					       0, 0, data, data_length, 0);
-			data[data_length] = 0;
 			if (rv)
 				continue;
 
@@ -839,16 +841,32 @@ int i2c_read_string(const int port,
 			rv = i2c_xfer_unlocked(port, addr_flags,
 					       0, 0, data, data_length,
 					       I2C_XFER_STOP);
-			data[data_length] = 0;
 			if (rv)
 				continue;
 		}
 
 		/* execution reaches here implies rv=0, so we can exit now */
+		*read_len = data_length;
 		break;
 	}
 
 	i2c_lock(port, 0);
+	return rv;
+}
+
+int i2c_read_string(const int port,
+		    const uint16_t addr_flags,
+		    int offset, uint8_t *data, int len)
+{
+	int read_len = 0;
+	int rv = 0;
+
+	if (len == 0)
+		return EC_ERROR_INVAL;
+
+	rv = i2c_read_sized_block(port, addr_flags, offset, data, len - 1,
+				      &read_len);
+	data[read_len] = 0;
 	return rv;
 }
 

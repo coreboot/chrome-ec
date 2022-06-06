@@ -3,9 +3,9 @@
  * found in the LICENSE file.
  */
 
-#include <sys/atomic.h>
-#include <logging/log.h>
-#include <drivers/gpio.h>
+#include <zephyr/sys/atomic.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/drivers/gpio.h>
 
 #include <ap_power/ap_power.h>
 #include <ap_power/ap_power_events.h>
@@ -127,6 +127,13 @@ int board_ap_power_assert_pch_power_ok(void)
 	}
 
 	return 0;
+}
+
+bool board_ap_power_check_power_rails_enabled(void)
+{
+	return power_signal_get(PWR_EN_PP3300_A) &&
+			power_signal_get(PWR_EN_PP5000_A) &&
+			power_signal_get(PWR_EC_SOC_DSW_PWROK);
 }
 
 int board_power_signal_get(enum power_signal signal)
