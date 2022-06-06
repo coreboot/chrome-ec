@@ -86,6 +86,13 @@
 #define CONFIG_RAM_BASE             0x80100000
 #define CONFIG_RAM_SIZE             0x0000f000
 
+/*
+ * Workaround mul instruction bug, see:
+ * https://www.ite.com.tw/uploads/product_download/it81202-bx-chip-errata.pdf
+ */
+#undef CONFIG_RISCV_EXTENSION_M
+#define CONFIG_IT8XXX2_MUL_WORKAROUND
+
 /* Embedded flash is KGD */
 #define IT83XX_CHIP_FLASH_IS_KGD
 /* Set ILM (instruction local memory) size up to 1M bytes */
