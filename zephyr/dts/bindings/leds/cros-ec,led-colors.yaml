@@ -32,6 +32,11 @@ child-binding:
                 - PWR_STATE_IDLE
                 - PWR_STATE_CHARGE_NEAR_FULL
 
+        charge-port:
+            description: If the LED color depends on the charging port (left or right)
+            type: int
+            required: false
+
         chipset-state:
             description: If the LED color depends on chipset state, this
                          property is used to describe it.
@@ -42,6 +47,15 @@ child-binding:
                 - POWER_S3
                 - POWER_S5
 
+        batt-lvl:
+            description: If the LED color depends on current battery level, this property
+                         is used to describe the batt_lvl range using closed interval [x,y].
+                         Use the macros defined in dt-bindings/battery.h.
+                         e.g. <BATTERY_LEVEL_EMPTY BATTERY_LEVEL_LOW> describes battery level
+                         range of BATTERY_LEVEL_EMPTY to BATTERY_LEVEL_LOW inclusive.
+            type: array
+            required: false
+
         extra-flag:
             description: If the LED color depends on additional factors
             type: string
@@ -50,23 +64,15 @@ child-binding:
                 - NONE
                 - LED_CHFLAG_FORCE_IDLE
                 - LED_CHFLAG_DEFAULT
-                - LED_BATT_BELOW_10_PCT
-                - LED_BATT_ABOVE_10_PCT
 
     child-binding:
         description: Color enum
         properties:
             led-color:
-                type: string
+                description: Handle to LED pins node that describes pins to set
+                             to enable a particular color
+                type: phandle
                 required: true
-                enum:
-                    - LED_OFF
-                    - LED_RED
-                    - LED_GREEN
-                    - LED_BLUE
-                    - LED_YELLOW
-                    - LED_WHITE
-                    - LED_AMBER
             period-ms:
                 description: In case of blinking LEDs, amount of time in msecs
                              the LED color is active. This value must be a

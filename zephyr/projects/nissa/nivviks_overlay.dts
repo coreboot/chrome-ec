@@ -13,6 +13,11 @@
 		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
 	};
 
+	ec-console {
+		compatible = "ec-console";
+		disabled = "events", "lpc", "hostcmd";
+	};
+
 	batteries {
 		default_battery: lgc {
 			compatible = "lgc,ap18c8k", "battery-smart";
@@ -74,11 +79,6 @@
 			irq-pin = <&gpio_sb_1>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "usb_interrupt";
-		};
-		int_prochot: ap_prochot {
-			irq-pin = <&gpio_ec_prochot_odl>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "throttle_ap_prochot_input_interrupt";
 		};
 	};
 
@@ -192,6 +192,17 @@
 				 * usb_c0_interrupt.
 				 */
 			};
+			chg {
+				compatible = "intersil,isl923x";
+				status = "okay";
+				port = <&i2c_ec_i2c_usb_c0>;
+			};
+			usb-muxes = <&virtual_mux_0>;
+		};
+		port0-muxes {
+			virtual_mux_0: virtual-mux-0 {
+				compatible = "cros-ec,usbc-mux-virtual";
+			};
 		};
 		/*
 		 * TODO(b:211693800): port1 may not be present on some
@@ -204,15 +215,34 @@
 				compatible = "pericom,pi3usb9201";
 				port = <&i2c_ec_i2c_sub_usb_c1>;
 			};
+			chg {
+				compatible = "intersil,isl923x";
+				status = "okay";
+				port = <&i2c_ec_i2c_sub_usb_c1>;
+			};
+			/*
+			 * Some sub-boards may disable all usb muxes in chain
+			 * except virtual_mux_1
+			 */
+			usb-muxes = <&virtual_mux_1 &anx7483_mux_1>;
+		};
+		port1-muxes {
+			virtual_mux_1: virtual-mux-1 {
+				compatible = "cros-ec,usbc-mux-virtual";
+			};
+			anx7483_mux_1: anx7483-mux-1 {
+				compatible = "analogix,anx7483";
+				port = <&i2c_ec_i2c_sub_usb_c1>;
+				i2c-addr-flags = "ANX7483_I2C_ADDR0_FLAGS";
+			};
 		};
 	};
 
-	named-fans {
-		compatible = "named-fans";
+	fans {
+		compatible = "cros-ec,fans";
 
 		fan_0 {
-			label = "FAN_0";
-			pwms = <&pwm5 5 PWM_POLARITY_NORMAL>;
+			pwms = <&pwm5 5 PWM_KHZ(1) PWM_POLARITY_NORMAL>;
 			pwm-frequency = <1000>;
 			rpm_min = <2200>;
 			rpm_start = <2200>;
@@ -232,6 +262,30 @@
 	 def-lvol-io-list {
 		compatible = "nuvoton,npcx-lvolctrl-def";
 		lvol-io-pads = <&lvol_iof5 &lvol_iof4>;
+	 };
+	 /*
+	  * Declare unused GPIOs so that they are shut down
+	  * and use minimal power
+	  */
+	  unused-pins {
+		compatible = "unused-gpios";
+		unused-gpios =
+			<&gpio3 2 0>,
+			<&gpio3 3 0>,
+			<&gpio3 5 0>,
+			<&gpio3 6 0>,
+			<&gpio5 7 0>,
+			<&gpio6 0 0>,
+			<&gpio6 3 0>,
+			<&gpio6 6 0>,
+			<&gpio7 3 0>,
+			<&gpio8 3 0>,
+			<&gpio8 6 0>,
+			<&gpiob 1 0>,
+			<&gpiob 7 0>,
+			<&gpioc 7 0>,
+			<&gpiof 2 0>,
+			<&gpiof 3 0>;
 	 };
 };
 
@@ -287,16 +341,29 @@
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 };
 
+&pwm5_gpb7 {
+	drive-open-drain;
+};
+
 &pwm5 {
 	status = "okay";
-	drive-open-drain;
+	pinctrl-0 = <&pwm5_gpb7>;
+	pinctrl-names = "default";
 };
 
 /* Tachometer for fan speed measurement */
 &tach2 {
 	status = "okay";
-	pinctrl-0 = <&alt3_ta2_sl1>; /* Use TA2 as input pin */
+	pinctrl-0 = <&ta2_1_in_gp73>;
+	pinctrl-names = "default";
 	port = <NPCX_TACH_PORT_A>; /* port-A is selected */
 	sample-clk = <NPCX_TACH_FREQ_LFCLK>; /* Use LFCLK as sampling clock */
 	pulses-per-round = <2>; /* number of pulses per round of encoder */
+};
+
+/* host interface */
+&espi0 {
+	status = "okay";
+	pinctrl-0 = <&espi_lpc_gp46_47_51_52_53_54_55_57>;
+	pinctrl-names = "default";
 };

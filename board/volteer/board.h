@@ -23,7 +23,7 @@
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 
 /* Remove PRL state names to free flash space */
-#define CONFIG_USB_PD_DEBUG_LEVEL 2
+#define CONFIG_USB_PD_DEBUG_LEVEL 1
 
 #define CONFIG_VBOOT_EFS2
 
@@ -34,6 +34,7 @@
 
 /* Chipset features */
 #define CONFIG_POWER_PP5000_CONTROL
+#define CONFIG_CPU_PROCHOT_GATE_ON_C10
 
 /* LED defines */
 #define CONFIG_LED_PWM
@@ -162,6 +163,7 @@
 #undef CONFIG_CMD_CBI
 #undef CONFIG_CMD_CHARGER
 #undef CONFIG_CMD_CHARGE_SUPPLIER_INFO
+#undef CONFIG_CMD_HASH
 #undef CONFIG_CMD_IDLE_STATS
 #undef CONFIG_CMD_INA
 #undef CONFIG_CMD_MFALLOW

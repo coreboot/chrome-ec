@@ -3,13 +3,13 @@
  * found in the LICENSE file.
  */
 
-#define DT_DRV_COMPAT named_fans
+#define DT_DRV_COMPAT cros_ec_fans
 
-#include <drivers/gpio.h>
-#include <drivers/pwm.h>
-#include <drivers/sensor.h>
-#include <logging/log.h>
-#include <sys/util_macro.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/pwm.h>
+#include <zephyr/drivers/sensor.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/util_macro.h>
 
 #include "fan.h"
 #include "gpio_signal.h"
@@ -21,7 +21,7 @@
 LOG_MODULE_REGISTER(fan_shim, LOG_LEVEL_ERR);
 
 BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
-	     "Exactly one instance of named-fan should be defined.");
+	     "Exactly one instance of cros-ec,fans should be defined.");
 
 #define FAN_CONFIGS(node_id)                                                   \
 	const struct fan_conf node_id##_conf = {                               \
@@ -56,7 +56,7 @@ BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
 		.pwm = DEVICE_DT_GET(DT_PWMS_CTLR(node_id)),                 \
 		.channel = DT_PWMS_CHANNEL(node_id),                         \
 		.flags = DT_PWMS_FLAGS(node_id),                             \
-		.period_us = (USEC_PER_SEC/DT_PROP(node_id, pwm_frequency)), \
+		.period_ns = (NSEC_PER_SEC/DT_PROP(node_id, pwm_frequency)), \
 		.tach = DEVICE_DT_GET(DT_PHANDLE(node_id, tach)),            \
 	},
 
@@ -107,7 +107,7 @@ struct fan_config {
 	const struct device *pwm;
 	uint32_t channel;
 	pwm_flags_t flags;
-	uint32_t period_us;
+	uint32_t period_ns;
 
 	const struct device *tach;
 };
@@ -121,7 +121,7 @@ static void fan_pwm_update(int ch)
 {
 	const struct fan_config *cfg = &fan_config[ch];
 	struct fan_data *data = &fan_data[ch];
-	uint32_t pulse_us;
+	uint32_t pulse_ns;
 	int ret;
 
 	if (!device_is_ready(cfg->pwm)) {
@@ -130,20 +130,19 @@ static void fan_pwm_update(int ch)
 	}
 
 	if (data->pwm_enabled) {
-		pulse_us = DIV_ROUND_NEAREST(
-				cfg->period_us * data->pwm_percent, 100);
+		pulse_ns = DIV_ROUND_NEAREST(
+				cfg->period_ns * data->pwm_percent, 100);
 	} else {
-		pulse_us = 0;
+		pulse_ns = 0;
 	}
 
 	LOG_DBG("FAN PWM %s set percent (%d), pulse %d", cfg->pwm->name,
-		data->pwm_percent, pulse_us);
+		data->pwm_percent, pulse_ns);
 
-	ret = pwm_pin_set_usec(cfg->pwm, cfg->channel, cfg->period_us,
-			       pulse_us, cfg->flags);
+	ret = pwm_set(cfg->pwm, cfg->channel, cfg->period_ns, pulse_ns,
+		      cfg->flags);
 	if (ret) {
-		LOG_ERR("pwm_pin_set_usec() failed %s (%d)",
-			cfg->pwm->name, ret);
+		LOG_ERR("pwm_set() failed %s (%d)", cfg->pwm->name, ret);
 	}
 }
 

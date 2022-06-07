@@ -3,10 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include <kernel.h>
-#include <init.h>
-#include <sys/atomic.h>
-#include <shell/shell.h>
+#include <zephyr/kernel.h>
+#include <zephyr/init.h>
+#include <zephyr/sys/atomic.h>
+#include <zephyr/shell/shell.h>
 
 #include "common.h"
 #include "host_command.h"
@@ -140,7 +140,7 @@ atomic_t *task_get_event_bitmap(task_id_t cros_task_id)
 	return &data->event_mask;
 }
 
-uint32_t task_set_event(task_id_t cros_task_id, uint32_t event)
+void task_set_event(task_id_t cros_task_id, uint32_t event)
 {
 	struct task_ctx_base_data *data;
 
@@ -148,8 +148,6 @@ uint32_t task_set_event(task_id_t cros_task_id, uint32_t event)
 
 	atomic_or(&data->event_mask, event);
 	k_poll_signal_raise(&data->new_event, 0);
-
-	return 0;
 }
 
 uint32_t task_wait_event(int timeout_us)
@@ -180,7 +178,7 @@ uint32_t task_wait_event(int timeout_us)
 	}
 
 	/* If we didn't get an event, we need to wait again. There is a very
-	 * small change of us reading the event_mask one signaled event too
+	 * small chance of us reading the event_mask one signaled event too
 	 * early. In that case, just wait again for the remaining timeout
 	 */
 	if (events == 0) {
@@ -300,7 +298,8 @@ void set_test_runner_tid(void)
 	shimmed_tasks_data[TASK_ID_TEST_RUNNER].zephyr_tid = k_current_get();
 }
 
-#ifdef CONFIG_SET_TEST_RUNNER_TID_RULE
+#ifdef CONFIG_TASKS_SET_TEST_RUNNER_TID_RULE
+#include <ztest.h>
 static void set_test_runner_tid_rule_before(const struct ztest_unit_test *test,
 					    void *data)
 {
@@ -310,7 +309,7 @@ static void set_test_runner_tid_rule_before(const struct ztest_unit_test *test,
 }
 
 ZTEST_RULE(set_test_runner_tid, set_test_runner_tid_rule_before, NULL);
-#endif /* CONFIG_SET_TEST_RUNNER_TID_RULE */
+#endif /* CONFIG_TASKS_SET_TEST_RUNNER_TID_RULE */
 #endif /* TEST_BUILD */
 
 void start_ec_tasks(void)

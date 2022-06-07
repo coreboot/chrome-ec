@@ -18,10 +18,6 @@
 /* I2C bus configuraiton */
 #define I2C_PORT_ACCEL	I2C_PORT_SENSOR
 
-/* EC console commands  */
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
-
 #define CONFIG_LED_COMMON
 
 /* Sensors */
@@ -60,6 +56,9 @@
 #define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
 /* SYV682 isn't connected to CC, so TCPC must provide VCONN */
 #define CONFIG_USBC_PPC_SYV682X_NO_CC
+
+/* prevent pd reset when battery soc under 2% */
+#define CONFIG_USB_PD_RESET_MIN_BATT_SOC 2
 
 
 #ifndef __ASSEMBLER__

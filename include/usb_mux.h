@@ -14,10 +14,22 @@
 #include "usb_charge.h"
 #include "usb_pd.h"
 
+/*
+ * If compiling with Zephyr, include the USB_MUX_FLAG_ definitions that are
+ * shared with device tree
+ */
+#ifdef CONFIG_ZEPHYR
+
+#include "dt-bindings/usbc_mux.h"
+
+#else /* !CONFIG_ZEPHYR */
+
 /* Flags used for usb_mux.flags */
 #define USB_MUX_FLAG_NOT_TCPC BIT(0) /* TCPC/MUX device used only as MUX */
 #define USB_MUX_FLAG_SET_WITHOUT_FLIP BIT(1) /* SET should not flip */
 #define USB_MUX_FLAG_RESETS_IN_G3 BIT(2) /* Mux chip will reset in G3 */
+
+#endif /* CONFIG_ZEPHYR */
 
 /*
  * USB-C mux state
@@ -226,6 +238,18 @@ void usb_mux_init(int port);
 void usb_mux_set(int port, mux_state_t mux_mode,
 		 enum usb_switch usb_config, int polarity);
 
+/**
+ * Configure superspeed muxes on type-C port for only one index in the mux
+ * chain
+ *
+ * @param port port number.
+ * @param index index of mux or retimer to set
+ * @param mux_mode mux selected function.
+ * @param usb_config usb2.0 selected function.
+ * @param polarity plug polarity (0=CC1, 1=CC2).
+ */
+void usb_mux_set_single(int port, int index, mux_state_t mux_mode,
+			enum usb_switch usb_mode, int polarity);
 /**
  * Query superspeed mux status on type-C port.
  *

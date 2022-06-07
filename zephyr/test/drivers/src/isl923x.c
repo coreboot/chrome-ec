@@ -4,7 +4,7 @@
  */
 
 #include <ztest.h>
-#include <drivers/emul.h>
+#include <zephyr/drivers/emul.h>
 #include <fff.h>
 
 #include "battery.h"
@@ -597,7 +597,7 @@ ZTEST(isl923x, test_init)
 						       &input_current),
 		   NULL);
 	zassert_equal(0, input_current,
-		      "Expected input current 0mV but got %dmV", input_current);
+		      "Expected input current 0mA but got %dmA", input_current);
 
 	/* Test failed CTRL2 register write */
 	isl923x_emul_reset_registers(isl923x_emul);
@@ -609,7 +609,7 @@ ZTEST(isl923x, test_init)
 						       &input_current),
 		   NULL);
 	zassert_equal(0, input_current,
-		      "Expected input current 0mV but got %dmV", input_current);
+		      "Expected input current 0mA but got %dmA", input_current);
 
 	/* Test failed CTRL 0 read */
 	isl923x_emul_reset_registers(isl923x_emul);
@@ -620,15 +620,10 @@ ZTEST(isl923x, test_init)
 	zassert_ok(isl923x_drv.get_input_current_limit(CHARGER_NUM,
 						       &input_current),
 		   NULL);
-	if (IS_ENABLED(CONFIG_CHARGE_RAMP_HW)) {
-		zassert_equal(512, input_current,
-			      "Expected input current 512mV but got %dmV",
+
+	zassert_equal(0, input_current,
+			      "Expected input current 0mA but got %dmA",
 			      input_current);
-	} else {
-		zassert_equal(0, input_current,
-			      "Expected input current 0mV but got %dmV",
-			      input_current);
-	}
 
 	/* Test failed CTRL 0 write */
 	isl923x_emul_reset_registers(isl923x_emul);
@@ -639,15 +634,10 @@ ZTEST(isl923x, test_init)
 	zassert_ok(isl923x_drv.get_input_current_limit(CHARGER_NUM,
 						       &input_current),
 		   NULL);
-	if (IS_ENABLED(CONFIG_CHARGE_RAMP_HW)) {
-		zassert_equal(512, input_current,
-			      "Expected input current 512mV but got %dmV",
+
+	zassert_equal(0, input_current,
+			      "Expected input current 0mA but got %dmA",
 			      input_current);
-	} else {
-		zassert_equal(0, input_current,
-			      "Expected input current 0mV but got %dmV",
-			      input_current);
-	}
 
 	/* Test failed CTRL 3 read */
 	isl923x_emul_reset_registers(isl923x_emul);
@@ -659,7 +649,7 @@ ZTEST(isl923x, test_init)
 						       &input_current),
 		   NULL);
 	zassert_equal(0, input_current,
-		      "Expected input current 0mV but got %dmV", input_current);
+		      "Expected input current 0mA but got %dmA", input_current);
 
 	/* Test failed CTRL 3 write */
 	isl923x_emul_reset_registers(isl923x_emul);
@@ -671,7 +661,7 @@ ZTEST(isl923x, test_init)
 						       &input_current),
 		   NULL);
 	zassert_equal(0, input_current,
-		      "Expected input current 0mV but got %dmV", input_current);
+		      "Expected input current 0mA but got %dmA", input_current);
 
 	/* Test failed write adapter current limit */
 	isl923x_emul_reset_registers(isl923x_emul);
@@ -684,7 +674,7 @@ ZTEST(isl923x, test_init)
 						       &input_current),
 		   NULL);
 	zassert_equal(0, input_current,
-		      "Expected input current 0mV but got %dmV", input_current);
+		      "Expected input current 0mA but got %dmA", input_current);
 }
 
 ZTEST(isl923x, test_init_late_jump)
@@ -1067,9 +1057,8 @@ ZTEST(isl923x_hibernate, test_isl9238c_resume)
 
 	/* Part 1: Happy path */
 	control1_expected =
-		(isl923x_emul_peek_reg(i2c_emul, ISL923X_REG_CONTROL1) &
-			~ISL923X_C1_DISABLE_MON) | ISL923X_C1_ENABLE_PSYS
-		;
+		isl923x_emul_peek_reg(i2c_emul, ISL923X_REG_CONTROL1) |
+		ISL923X_C1_ENABLE_PSYS;
 	control2_expected =
 		isl923x_emul_peek_reg(i2c_emul, ISL923X_REG_CONTROL2) &
 		~ISL923X_C2_COMPARATOR;

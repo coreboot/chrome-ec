@@ -4,7 +4,7 @@
  */
 
 #include <atomic.h>
-#include <drivers/espi.h>
+#include <zephyr/drivers/espi.h>
 #include <x86_non_dsx_common_pwrseq_sm_handler.h>
 
 #include "signal_vw.h"
@@ -121,6 +121,8 @@ void power_signal_vw_init(void)
 					vw_config[i].invert
 						? !vw_value
 						: !!vw_value);
+				atomic_set_bit(&signal_valid, i);
+
 			}
 		}
 	}

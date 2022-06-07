@@ -6,8 +6,8 @@
 #ifndef ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_
 #define ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_
 
-#include <drivers/emul.h>
-#include <drivers/gpio/gpio_emul.h>
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
 #include <string.h>
 
 #include "charger.h"
@@ -277,6 +277,149 @@ int host_cmd_motion_sense_ec_rate(uint8_t sensor_num, int data_rate_ms,
 				  struct ec_response_motion_sense *response);
 
 /**
+ * @brief Call the host command MOTION_SENSE with the odr sub-command
+ *
+ * This function performs a read of the current odr by passing
+ * EC_MOTION_SENSE_NO_VALUE as the data rate. Otherwise, the data rate should be
+ * updated.
+ *
+ * @param sensor_num The sensor index in the motion_sensors array to query
+ * @param odr The new ODR to set
+ * @param round_up Whether or not to round up the ODR
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code form the host command
+ */
+int host_cmd_motion_sense_odr(uint8_t sensor_num, int32_t odr, bool round_up,
+			      struct ec_response_motion_sense *response);
+
+/**
+ * @brief Call the host command MOTION_SENSE with the sensor range sub-command
+ *
+ * This function attempts to set the sensor range and returns the range value.
+ * If the range value is EC_MOTION_SENSE_NO_VALUE, then the host command will
+ * not attempt to update the range.
+ *
+ * @param sensor_num The sensor index in the motion_sensors array to query
+ * @param range The new range to set
+ * @param round_up Whether or not to round up the range.
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_range(uint8_t sensor_num, int32_t range,
+				bool round_up,
+				struct ec_response_motion_sense *response);
+
+/**
+ * @brief Call the host command MOTION_SENSE with the sensor offset sub-command
+ *
+ * This function attempts to set the offset if the flags field includes
+ * MOTION_SENSE_SET_OFFSET. Otherwise, the temperature and offsets are ignored.
+ * The response field will include the current (after modification) offsets and
+ * temperature.
+ *
+ * @param sensor_num The sensor index in the motion_sensors array to query
+ * @param flags The flags to pass to the host command
+ * @param temperature The temperature at which the offsets were attained (set)
+ * @param offset_x The X offset to set
+ * @param offset_y The Y offset to set
+ * @param offset_z The Z offset to set
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_offset(uint8_t sensor_num, uint16_t flags,
+				 int16_t temperature, int16_t offset_x,
+				 int16_t offset_y, int16_t offset_z,
+				 struct ec_response_motion_sense *response);
+
+/**
+ * @brief Call the host command MOTION_SENSE with the sensor scale sub-command
+ *
+ * This function attempts to set the scale if the flags field includes
+ * MOTION_SENSE_SET_OFFSET. Otherwise, the temperature and scales are ignored.
+ * The response field will include the current (after modification) scales and
+ * temperature.
+ *
+ * @param sensor_num The sensor index in the motion_sensors array to query
+ * @param flags The flags to pass to the host command
+ * @param temperature The temperature at which the scales were attained (set)
+ * @param scale_x The X scale to set
+ * @param scale_y The Y scale to set
+ * @param scale_z The Z scale to set
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_scale(uint8_t sensor_num, uint16_t flags,
+				int16_t temperature, int16_t scale_x,
+				int16_t scale_y, int16_t scale_z,
+				struct ec_response_motion_sense *response);
+
+/**
+ * @brief Enable/disable sensor calibration via host command
+ *
+ * @param sensor_num The sensor index in the motion_sensors array to query
+ * @param enable Whether to enable or disable the calibration
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_calib(uint8_t sensor_num, bool enable,
+				struct ec_response_motion_sense *response);
+
+/**
+ * @brief Set the sensor's fifo flush bit
+ *
+ * @param sensor_num The sensor index in the motion_sensors array to query
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_fifo_flush(uint8_t sensor_num,
+				     struct ec_response_motion_sense *response);
+
+/**
+ * @brief Get the current fifo info
+ *
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_fifo_info(struct ec_response_motion_sense *response);
+
+/**
+ * @brief Get the current fifo data
+ *
+ * @param buffer_length The number of entries available on the response pointer
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_fifo_read(uint8_t buffer_length,
+				    struct ec_response_motion_sense *response);
+
+/**
+ * @brief Call the int_enable motionsense host command
+ *
+ * @param enable 0 for disable, 1 for enable. All others are invalid
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_int_enable(int8_t enable,
+				     struct ec_response_motion_sense *response);
+
+/**
+ * @brief Call the spoof motion_sense subcommand
+ *
+ * @param sensor_num The sensor index in motion_sensors
+ * @param enable The enable field, for normal operations this will be one of
+ * enum motionsense_spoof_mode
+ * @param values0 The X value to set if using custom mode
+ * @param values1 The Y value to set if using custom mode
+ * @param values2 The Z value to set if using custom mode
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_spoof(uint8_t sensor_num, uint8_t enable,
+				int16_t values0, int16_t values1,
+				int16_t values2,
+				struct ec_response_motion_sense *response);
+
+/**
  * Run the host command to get the PD discovery responses.
  *
  * @param port          The USB-C port number
@@ -320,12 +463,14 @@ static inline void set_ac_enabled(bool enabled)
  *
  * Note: this is function currently only supports an ISL923X charger chip.
  *
- * @param src Pointer to the emulated source
+ * @param partner Pointer to the emulated TCPCI partner device
+ * @param src Pointer to the emulated source extension
  * @param pdo_index The index of the PDO object within the src to use
  * @param tcpci_emul The TCPCI emulator that the source will connect to
  * @param charger_emul The charger chip emulator
  */
-void connect_source_to_port(struct tcpci_src_emul *src, int pdo_index,
+void connect_source_to_port(struct tcpci_partner_data *partner,
+			    struct tcpci_src_emul_data *src, int pdo_index,
 			    const struct emul *tcpci_emul,
 			    const struct emul *charger_emul);
 

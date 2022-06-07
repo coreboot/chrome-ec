@@ -20,7 +20,6 @@
 #include "driver/tcpm/tcpci.h"
 #include "gpio.h"
 #include "hooks.h"
-#include "led_common.h"
 #include "lid_switch.h"
 #include "mkbp_input_devices.h"
 #include "peripheral_charger.h"
@@ -72,7 +71,7 @@ static void tcpc_alert_event(enum gpio_signal signal)
 
 static void usb0_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 }
 
 static void ppc_interrupt(enum gpio_signal signal)
@@ -451,13 +450,6 @@ DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C+1);
 void board_hibernate(void)
 {
 	int i;
-	uint8_t brightness_range[EC_LED_COLOR_COUNT] = { 0 };
-
-	/*
-	 * Turn off LED.
-	 */
-	led_set_brightness(EC_LED_ID_BATTERY_LED, brightness_range);
-	led_auto_control(EC_LED_ID_BATTERY_LED, 0);
 
 	/*
 	 * Sensors are unpowered in hibernate. Apply PD to the

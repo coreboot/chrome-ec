@@ -3,9 +3,9 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr.h>
-#include <pm/pm.h>
-#include <pm/policy.h>
+#include <zephyr/zephyr.h>
+#include <zephyr/pm/pm.h>
+#include <zephyr/pm/policy.h>
 #include <soc.h>
 
 #include "console.h"
@@ -23,7 +23,8 @@ const struct pm_state_info *pm_policy_next_state(uint8_t cpu, int32_t ticks)
 	if (DEEP_SLEEP_ALLOWED) {
 		for (int i = ARRAY_SIZE(residency_info) - 1; i >= 0; i--) {
 			if (pm_policy_state_lock_is_active(
-				    residency_info[i].state)) {
+				    residency_info[i].state,
+				    PM_ALL_SUBSTATES)) {
 				continue;
 			}
 

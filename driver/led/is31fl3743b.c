@@ -33,6 +33,10 @@
 #define IS31FL3743B_REG_SPREAD_SPECTRUM	0x25
 #define IS31FL3743B_REG_RSTN		0x2f
 
+#define IS31FL3743B_CFG_SWS_1_11	0b0000
+#define IS31FL3743B_CONFIG(sws, osde, ssd) \
+	((sws) << 4 | BIT(3) | (osde) << 1 | (ssd) << 0)
+
 struct is31fl3743b_cmd {
 	uint8_t page: 4;
 	uint8_t id: 3;
@@ -45,6 +49,7 @@ struct is31fl3743b_msg {
 	uint8_t payload[];
 } __packed;
 
+__maybe_unused
 static int is31fl3743b_read(struct rgbkbd *ctx, uint8_t addr, uint8_t *value)
 {
 	uint8_t buf[8];
@@ -74,26 +79,11 @@ static int is31fl3743b_write(struct rgbkbd *ctx, uint8_t addr, uint8_t value)
 	return spi_transaction(SPI(ctx->cfg->spi), buf, frame_len, NULL, 0);
 }
 
-static int is31fl3743b_reset(struct rgbkbd *ctx)
-{
-	return is31fl3743b_write(ctx, IS31FL3743B_REG_RSTN, 0xae);
-}
-
 static int is31fl3743b_enable(struct rgbkbd *ctx, bool enable)
 {
-	uint8_t u8;
-	int rv;
-
-	gpio_set_level(GPIO_RGBKBD_SDB_L, enable ? 1 : 0);
-
-	rv = is31fl3743b_read(ctx, IS31FL3743B_REG_CONFIG, &u8);
-	if (rv) {
-		return rv;
-	}
-
-	WRITE_BIT(u8, 3, 1);
-	WRITE_BIT(u8, 0, enable);
-
+	uint8_t u8 = IS31FL3743B_CONFIG(IS31FL3743B_CFG_SWS_1_11, 0,
+					enable ? 1 : 0);
+	CPRINTS("Setting config register to 0b%pb", BINARY_VALUE(u8, 8));
 	return is31fl3743b_write(ctx, IS31FL3743B_REG_CONFIG, u8);
 }
 
@@ -164,20 +154,16 @@ static int is31fl3743b_init(struct rgbkbd *ctx)
 {
 	int rv;
 
-	rv = is31fl3743b_reset(ctx);
+	/* Reset registers to the default values. */
+	rv = is31fl3743b_write(ctx, IS31FL3743B_REG_RSTN, 0xae);
+	if (rv)
+		return rv;
 	msleep(3);
-
-	if (IS_ENABLED(CONFIG_RGB_KEYBOARD_DEBUG)) {
-		uint8_t val;
-		rv = is31fl3743b_read(ctx, IS31FL3743B_REG_PD_PU, &val);
-		CPRINTS("PD/PU. val=0x%02x (rv=%d)", val, rv);
-	}
 
 	return EC_SUCCESS;
 }
 
 const struct rgbkbd_drv is31fl3743b_drv = {
-	.reset = is31fl3743b_reset,
 	.init = is31fl3743b_init,
 	.enable = is31fl3743b_enable,
 	.set_color = is31fl3743b_set_color,

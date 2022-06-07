@@ -176,6 +176,30 @@ const char *pe_get_current_state(int port);
  */
 uint32_t pe_get_flags(int port);
 
+/**
+ * Sets the Alert Data Object (ADO) in the PE state
+ *
+ * @param port USB-C port number
+ * @param data - ADO data sent during alert messages
+ * @return EC_SUCCESS if successful and EC_ERROR_BUSY if not
+ */
+int pe_set_ado(int port, uint32_t data);
+
+/**
+ * Clears the Alert Data Object (ADO) in the PE state
+ *
+ * @param port USB-C port number
+ */
+void pe_clear_ado(int port);
+
+/**
+ * Gets port partner's RMDO from the PE state.
+ *
+ * @param port USB-C port number
+ * @return port partner's Revision Message Data Object (RMDO).
+ */
+struct rmdo pe_get_partner_rmdo(int port);
+
 #ifdef TEST_BUILD
 /**
  * Clears all internal port data, as we would on a detach event

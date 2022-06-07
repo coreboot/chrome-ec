@@ -604,7 +604,6 @@ int tcpci_tcpm_set_polarity(int port, enum tcpc_cc_polarity polarity)
 					? MASK_SET : MASK_CLR);
 }
 
-#ifdef CONFIG_USB_PD_PPC
 bool tcpci_tcpm_get_snk_ctrl(int port)
 {
 	int rv;
@@ -642,7 +641,6 @@ int tcpci_tcpm_set_src_ctrl(int port, int enable)
 
 	return tcpc_write(port, TCPC_REG_COMMAND, cmd);
 }
-#endif
 
 __maybe_unused int tcpci_tcpm_sop_prime_enable(int port, bool enable)
 {
@@ -1334,7 +1332,6 @@ void tcpci_tcpc_alert(int port)
 int tcpci_get_vbus_voltage(int port, int *vbus)
 {
 	int error, val;
-	int scale, measure;
 
 	if (!(dev_cap_1[port] & TCPC_REG_DEV_CAP_1_VBUS_MEASURE_ALARM_CAPABLE))
 		return EC_ERROR_UNIMPLEMENTED;
@@ -1343,16 +1340,7 @@ int tcpci_get_vbus_voltage(int port, int *vbus)
 	if (error)
 		return error;
 
-	/*
-	 * 00: the measurement is not scaled
-	 * 01: the measurement is divided by 2
-	 * 10: the measurement is divided by 4
-	 * 11: reserved
-	 */
-	scale = (val & TCPC_REG_VBUS_VOLTAGE_SCALE_FACTOR) >> 9;
-	measure = val & TCPC_REG_VBUS_VOLTAGE_MEASUREMENT;
-
-	*vbus = (1 << scale) * measure * TCPC_REG_VBUS_VOLTAGE_LSB;
+	*vbus = TCPC_REG_VBUS_VOLTAGE_VBUS(val);
 	return EC_SUCCESS;
 }
 
@@ -1873,12 +1861,10 @@ const struct tcpm_drv tcpci_tcpm_drv = {
 	.drp_toggle		= &tcpci_tcpc_drp_toggle,
 #endif
 	.get_chip_info		= &tcpci_get_chip_info,
-#ifdef CONFIG_USB_PD_PPC
 	.get_snk_ctrl		= &tcpci_tcpm_get_snk_ctrl,
 	.set_snk_ctrl		= &tcpci_tcpm_set_snk_ctrl,
 	.get_src_ctrl		= &tcpci_tcpm_get_src_ctrl,
 	.set_src_ctrl		= &tcpci_tcpm_set_src_ctrl,
-#endif
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode	= &tcpci_enter_low_power_mode,
 #endif

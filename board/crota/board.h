@@ -3,17 +3,12 @@
  * found in the LICENSE file.
  */
 
-/* Brya board configuration */
+/* Crota board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
 #include "compile_time_macros.h"
-
-/*
- * Early brya boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
 
 /* Baseboard features */
 #include "baseboard.h"
@@ -26,29 +21,10 @@
 
 #define CONFIG_MP2964
 
-/* LED */
-#define CONFIG_LED_PWM
-#define CONFIG_LED_PWM_COUNT 2
-#undef CONFIG_LED_PWM_NEAR_FULL_COLOR
-#undef CONFIG_LED_PWM_SOC_ON_COLOR
-#undef CONFIG_LED_PWM_SOC_SUSPEND_COLOR
-#undef CONFIG_LED_PWM_LOW_BATT_COLOR
-#define CONFIG_LED_PWM_NEAR_FULL_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
-
 /* Sensors */
 #define CONFIG_ACCELGYRO_LSM6DSO	/* Base accel */
 #define CONFIG_ACCEL_LSM6DSO_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-
-/* TCS3400 ALS */
-#define CONFIG_ALS
-#define ALS_COUNT 1
-#define CONFIG_ALS_TCS3400
-#define CONFIG_ALS_TCS3400_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
 
 /* Enable sensor fifo, must also define the _SIZE and _THRES */
 #define CONFIG_ACCEL_FIFO
@@ -57,21 +33,21 @@
 /* Depends on how fast the AP boots and typical ODRs */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
 
-/* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK \
-	(BIT(LID_ACCEL) | BIT(CLEAR_ALS))
-
 /* Lid accel */
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_UPDATE
 #define CONFIG_LID_ANGLE_SENSOR_BASE	BASE_ACCEL
 #define CONFIG_LID_ANGLE_SENSOR_LID	LID_ACCEL
 #define CONFIG_ACCEL_LIS2DWL
-#define CONFIG_ACCEL_LIS2DW_AS_BASE
 #define CONFIG_ACCEL_LIS2DW12_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(LID_ACCEL)
 
-#define CONFIG_ACCEL_INTERRUPTS
+#define CONFIG_BODY_DETECTION
+#define CONFIG_BODY_DETECTION_SENSOR           BASE_ACCEL
+#define CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR 150 /* % */
+#define CONFIG_GESTURE_DETECTION
+#define CONFIG_GESTURE_DETECTION_MASK BIT(CONFIG_BODY_DETECTION_SENSOR)
+#define CONFIG_GESTURE_HOST_DETECTION
 
 /* Sensor console commands */
 #define CONFIG_CMD_ACCELS
@@ -80,6 +56,7 @@
 /* USB Type A Features */
 #define USB_PORT_COUNT			1
 #define CONFIG_USB_PORT_POWER_DUMB
+#define CONFIG_USB_PORT_POWER_DUMB_CUSTOM_HOOK
 
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
@@ -88,8 +65,6 @@
 #define CONFIG_IO_EXPANDER_NCT38XX
 #define CONFIG_IO_EXPANDER_PORT_COUNT		2
 
-#define CONFIG_USB_PD_TCPM_PS8815
-#define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 #define CONFIG_USBC_RETIMER_INTEL_BB
 
 /* I2C speed console command */
@@ -99,7 +74,6 @@
 #define CONFIG_HOSTCMD_I2C_CONTROL
 
 #define CONFIG_USBC_PPC_SYV682X
-#define CONFIG_USBC_PPC_NX20P3483
 
 /* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
@@ -153,6 +127,9 @@
 /* System has back-lit keyboard */
 #define CONFIG_PWM_KBLIGHT
 
+/* Keyboard features */
+#define CONFIG_KEYBOARD_REFRESH_ROW3
+
 /* I2C Bus Configuration */
 
 #define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
@@ -181,7 +158,9 @@
  * see b/174768555#comment22
  */
 #define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x56
-#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x57
+#define USBC_PORT_C1_SOC_BB_RETIMER_I2C_ADDR    0x57
+/* Type-C connector facing Burnside Bridge retimer */
+#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x58
 
 /* Enabling Thunderbolt-compatible mode */
 #define CONFIG_USB_PD_TBT_COMPAT_MODE
@@ -189,8 +168,11 @@
 /* Enabling USB4 mode */
 #define CONFIG_USB_PD_USB4
 
+/*
+ * TODO: b/229934138, Disable BBR firmware update temporarily.
+ */
 /* Retimer */
-#define CONFIG_USBC_RETIMER_FW_UPDATE
+#undef CONFIG_USBC_RETIMER_FW_UPDATE
 
 /* Thermal features */
 #define CONFIG_THERMISTOR
@@ -200,6 +182,10 @@
 
 #define CONFIG_FANS			FAN_CH_COUNT
 
+/* LED defines */
+#define CONFIG_LED_ONOFF_STATES
+#define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
+
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
 #define CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
@@ -208,12 +194,6 @@
 #define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC	10
 #define CONFIG_CHARGER_BQ25710_PSYS_SENSING
-
-/*
- * Older boards have a different ADC assignment.
- */
-
-#define CONFIG_ADC_CHANNELS_RUNTIME_CONFIG
 
 #ifndef __ASSEMBLER__
 
@@ -241,8 +221,6 @@ enum sensor_id {
 	LID_ACCEL = 0,
 	BASE_ACCEL,
 	BASE_GYRO,
-	CLEAR_ALS,
-	RGB_ALS,
 	SENSOR_COUNT
 };
 
@@ -253,18 +231,26 @@ enum ioex_port {
 };
 
 enum battery_type {
-	BATTERY_POWER_TECH,
-	BATTERY_LGC011,
+	BATTERY_ATL,
+	BATTERY_BYD,
+	BATTERY_COM,
+	BATTERY_LGC,
+	BATTERY_SMP_ATL3,
+	BATTERY_SMP_COS3,
+	BATTERY_SWD_ATL3,
+	BATTERY_SWD_COS3,
+	BATTERY_SMP_ATL4,
+	BATTERY_SMP_COS4,
+	BATTERY_SWD_ATL4,
+	BATTERY_SWD_COS4,
 	BATTERY_TYPE_COUNT
 };
 
 enum pwm_channel {
 	PWM_CH_LED2 = 0,		/* PWM0 (white charger) */
-	PWM_CH_LED3,			/* PWM1 (orange on DB) */
 	PWM_CH_LED1,			/* PWM2 (orange charger) */
 	PWM_CH_KBLIGHT,			/* PWM3 */
 	PWM_CH_FAN,			/* PWM5 */
-	PWM_CH_LED4,			/* PWM7 (white on DB) */
 	PWM_CH_COUNT
 };
 

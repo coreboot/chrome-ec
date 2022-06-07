@@ -334,7 +334,7 @@ static inline int motion_sense_init(struct motion_sensor_t *sensor)
 #if defined(HAS_TASK_CONSOLE)
 	ASSERT((in_deferred_context()) ||
 	       (task_get_current() == TASK_ID_CONSOLE));
-#else
+#elif !defined(CONFIG_ZTEST)
 	ASSERT(in_deferred_context());
 #endif /* HAS_TASK_CONSOLE */
 
@@ -680,7 +680,7 @@ static inline void increment_sensor_collection(struct motion_sensor_t *sensor,
  *
  * @param s Pointer to the sensor.
  */
-static void motion_sense_push_raw_xyz(struct motion_sensor_t *s)
+void motion_sense_push_raw_xyz(struct motion_sensor_t *s)
 {
 	if (IS_ENABLED(CONFIG_ACCEL_FIFO)) {
 		struct ec_response_motion_sensor_data vector;
@@ -728,9 +728,8 @@ static int motion_sense_process(struct motion_sensor_t *sensor,
 		atomic_or(&odr_event_required, odr_pending);
 	}
 
-	if (IS_ENABLED(CONFIG_ACCEL_INTERRUPTS) &&
-	    ((*event & TASK_EVENT_MOTION_INTERRUPT_MASK || is_odr_pending) &&
-	     (sensor->drv->irq_handler != NULL))) {
+	if ((*event & TASK_EVENT_MOTION_INTERRUPT_MASK || is_odr_pending) &&
+	    (sensor->drv->irq_handler != NULL)) {
 		ret = sensor->drv->irq_handler(sensor, event);
 		if (ret == EC_SUCCESS)
 			has_data_read = 1;
@@ -1759,7 +1758,7 @@ static int command_accel_read_xyz(int argc, char **argv)
 
 	sensor = &motion_sensors[id];
 
-	while ((n == -1) || (n-- > 0)) {
+	while ((n-- > 0)) {
 		ret = sensor->drv->read(sensor, v);
 		if (ret == 0)
 			ccprintf("Current data %d: %-5d %-5d %-5d\n",

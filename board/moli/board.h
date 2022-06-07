@@ -16,7 +16,7 @@
 #define CONFIG_MP2964
 
 /* Barrel Jack */
-#define DEDICATED_CHARGE_PORT 3
+#define DEDICATED_CHARGE_PORT 2
 
 /* HDMI CEC */
 #define CONFIG_CEC
@@ -107,8 +107,8 @@
 
 #define I2C_ADDR_MP2964_FLAGS	0x20
 
-#define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x58
-#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x59
+#define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x56
+#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x57
 
 /* Enabling Thunderbolt-compatible mode */
 #define CONFIG_USB_PD_TBT_COMPAT_MODE
@@ -128,11 +128,9 @@
 /* ADC */
 #define CONFIG_ADC
 
-/*
- * TODO(b/197478860): Enable the fan control. We need
- * to check the sensor value and adjust the fan speed.
- */
- #define CONFIG_FANS			FAN_CH_COUNT
+/* Fan */
+#define CONFIG_FANS			FAN_CH_COUNT
+#define RPM_DEVIATION		1
 
 /* Include math_util for bitmask_uint64 used in pd_timers */
 #define CONFIG_MATH_UTIL
@@ -151,18 +149,17 @@ enum charge_port {
 };
 
 enum adc_channel {
-	ADC_TEMP_SENSOR_1_CPU,
+	ADC_TEMP_SENSOR_1_SSD,
 	ADC_TEMP_SENSOR_2_CPU_VR,
-	ADC_TEMP_SENSOR_3_WIFI,
 	ADC_TEMP_SENSOR_4_DIMM,
 	ADC_VBUS,
+	ADC_PPVAR_IMON,              /* ADC3 */
 	ADC_CH_COUNT
 };
 
 enum temp_sensor_id {
-	TEMP_SENSOR_1_CPU,
+	TEMP_SENSOR_1_SSD,
 	TEMP_SENSOR_2_CPU_VR,
-	TEMP_SENSOR_3_WIFI,
 	TEMP_SENSOR_4_DIMM,
 	TEMP_SENSOR_COUNT
 };
@@ -194,10 +191,10 @@ enum mft_channel {
  * firmware config fields
  */
 /*
- * Barrel-jack power (4 bits).
+ * Barrel-jack power (2 bits).
  */
 #define EC_CFG_BJ_POWER_L		0
-#define EC_CFG_BJ_POWER_H		3
+#define EC_CFG_BJ_POWER_H		1
 #define EC_CFG_BJ_POWER_MASK GENMASK(EC_CFG_BJ_POWER_H, EC_CFG_BJ_POWER_L)
 
 extern void adp_connect_interrupt(enum gpio_signal signal);

@@ -281,6 +281,20 @@
 #define TCPC_REG_VBUS_VOLTAGE_SCALE_FACTOR   GENMASK(11, 10)
 #define TCPC_REG_VBUS_VOLTAGE_LSB            25
 
+/*
+ * 00: the measurement is not scaled
+ * 01: the measurement is divided by 2
+ * 10: the measurement is divided by 4
+ * 11: reserved
+ */
+#define TCPC_REG_VBUS_VOLTAGE_SCALE(x)                                         \
+	(1 << (((x) & TCPC_REG_VBUS_VOLTAGE_SCALE_FACTOR) >> 9))
+#define TCPC_REG_VBUS_VOLTAGE_MEASURE(x)                                       \
+	((x) & TCPC_REG_VBUS_VOLTAGE_MEASUREMENT)
+#define TCPC_REG_VBUS_VOLTAGE_VBUS(x)                                          \
+	(TCPC_REG_VBUS_VOLTAGE_SCALE(x) * TCPC_REG_VBUS_VOLTAGE_MEASURE(x) *   \
+	 TCPC_REG_VBUS_VOLTAGE_LSB)
+
 #define TCPC_REG_VBUS_SINK_DISCONNECT_THRESH 0x72
 #define TCPC_REG_VBUS_SINK_DISCONNECT_THRESH_DEFAULT 0x008C /* 3.5 V */
 
@@ -337,12 +351,10 @@ int tcpci_tcpm_mux_enter_low_power(const struct usb_mux *me);
 int tcpci_get_chip_info(int port, int live,
 			struct ec_response_pd_chip_info_v1 *chip_info);
 int tcpci_get_vbus_voltage(int port, int *vbus);
-#ifdef CONFIG_USB_PD_PPC
 bool tcpci_tcpm_get_snk_ctrl(int port);
 int tcpci_tcpm_set_snk_ctrl(int port, int enable);
 bool tcpci_tcpm_get_src_ctrl(int port);
 int tcpci_tcpm_set_src_ctrl(int port, int enable);
-#endif
 
 int tcpci_tcpc_fast_role_swap_enable(int port, int enable);
 

@@ -9,14 +9,20 @@
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
+#include "hooks.h"
+#include "test/drivers/stubs.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
 #include "usb_pd.h"
+#include "usb_prl_sm.h"
 
 #define BATTERY_ORD DT_DEP_ORD(DT_NODELABEL(battery))
 
+#define TEST_USB_PORT USBC_PORT_C0
+
 struct usb_attach_5v_3a_pd_source_fixture {
-	struct tcpci_src_emul source_5v_3a;
+	struct tcpci_partner_data source_5v_3a;
+	struct tcpci_src_emul_data src_ext;
 	const struct emul *tcpci_emul;
 	const struct emul *charger_emul;
 };
@@ -31,9 +37,16 @@ static void *usb_attach_5v_3a_pd_source_setup(void)
 	test_fixture.charger_emul =
 		emul_get_binding(DT_LABEL(DT_NODELABEL(isl923x_emul)));
 
+	/* Configure TCPCI revision in board config and emulator */
+	tcpc_config[0].flags |= TCPC_FLAGS_TCPCI_REV2_0;
+	tcpci_emul_set_rev(test_fixture.tcpci_emul, TCPCI_EMUL_REV2_0_VER1_1);
+
 	/* Initialized the charger to supply 5V and 3A */
-	tcpci_src_emul_init(&test_fixture.source_5v_3a);
-	test_fixture.source_5v_3a.data.pdo[1] =
+	tcpci_partner_init(&test_fixture.source_5v_3a, PD_REV20);
+	test_fixture.source_5v_3a.extensions =
+		tcpci_src_emul_init(&test_fixture.src_ext,
+				    &test_fixture.source_5v_3a, NULL);
+	test_fixture.src_ext.pdo[1] =
 		PDO_FIXED(5000, 3000, PDO_FIXED_UNCONSTRAINED);
 
 	return &test_fixture;
@@ -43,8 +56,8 @@ static void usb_attach_5v_3a_pd_source_before(void *data)
 {
 	struct usb_attach_5v_3a_pd_source_fixture *fixture = data;
 
-	connect_source_to_port(&fixture->source_5v_3a, 1, fixture->tcpci_emul,
-			       fixture->charger_emul);
+	connect_source_to_port(&fixture->source_5v_3a, &fixture->src_ext, 1,
+			       fixture->tcpci_emul, fixture->charger_emul);
 }
 
 static void usb_attach_5v_3a_pd_source_after(void *data)
@@ -204,4 +217,59 @@ ZTEST_F(usb_attach_5v_3a_pd_source, test_disconnect_power_info)
 	zassert_true(power_info.meas.current_lim >= 0,
 		     "Expected the PD current limit to be >= 0, but got %dmA",
 		     power_info.meas.current_lim);
+}
+
+ZTEST_F(usb_attach_5v_3a_pd_source, verify_dock_with_power_button)
+{
+	/* Clear Alert and Status receive checks */
+	tcpci_src_emul_clear_alert_received(&this->src_ext);
+	tcpci_src_emul_clear_status_received(&this->src_ext);
+	zassert_false(this->src_ext.alert_received, NULL);
+	zassert_false(this->src_ext.status_received, NULL);
+
+	/* Setting up revision for the full Status message */
+	prl_set_rev(TEST_USB_PORT, TCPCI_MSG_SOP, PD_REV30);
+	k_sleep(K_MSEC(10));
+	pd_dpm_request(TEST_USB_PORT, DPM_REQUEST_GET_REVISION);
+	k_sleep(K_MSEC(10));
+
+	/* Suspend and check partner received Alert and Status messages */
+	hook_notify(HOOK_CHIPSET_SUSPEND);
+	k_sleep(K_SECONDS(2));
+	zassert_true(this->src_ext.alert_received, NULL);
+	zassert_true(this->src_ext.status_received, NULL);
+	tcpci_src_emul_clear_alert_received(&this->src_ext);
+	tcpci_src_emul_clear_status_received(&this->src_ext);
+	zassert_false(this->src_ext.alert_received, NULL);
+	zassert_false(this->src_ext.status_received, NULL);
+
+	/* Shutdown and check partner received Alert and Status messages */
+	hook_notify(HOOK_CHIPSET_SHUTDOWN);
+	k_sleep(K_SECONDS(2));
+	zassert_true(this->src_ext.alert_received, NULL);
+	zassert_true(this->src_ext.status_received, NULL);
+	tcpci_src_emul_clear_alert_received(&this->src_ext);
+	tcpci_src_emul_clear_status_received(&this->src_ext);
+	zassert_false(this->src_ext.alert_received, NULL);
+	zassert_false(this->src_ext.status_received, NULL);
+
+	/* Startup and check partner received Alert and Status messages */
+	hook_notify(HOOK_CHIPSET_STARTUP);
+	k_sleep(K_SECONDS(2));
+	zassert_true(this->src_ext.alert_received, NULL);
+	zassert_true(this->src_ext.status_received, NULL);
+	tcpci_src_emul_clear_alert_received(&this->src_ext);
+	tcpci_src_emul_clear_status_received(&this->src_ext);
+	zassert_false(this->src_ext.alert_received, NULL);
+	zassert_false(this->src_ext.status_received, NULL);
+
+	/* Resume and check partner received Alert and Status messages */
+	hook_notify(HOOK_CHIPSET_RESUME);
+	k_sleep(K_SECONDS(2));
+	zassert_true(this->src_ext.alert_received, NULL);
+	zassert_true(this->src_ext.status_received, NULL);
+	tcpci_src_emul_clear_alert_received(&this->src_ext);
+	tcpci_src_emul_clear_status_received(&this->src_ext);
+	zassert_false(this->src_ext.alert_received, NULL);
+	zassert_false(this->src_ext.status_received, NULL);
 }

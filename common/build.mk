@@ -63,6 +63,7 @@ common-$(CONFIG_CHARGE_MANAGER)+=charge_manager.o
 endif
 common-$(CONFIG_CHARGE_RAMP_HW)+=charge_ramp.o
 common-$(CONFIG_CHARGE_RAMP_SW)+=charge_ramp.o charge_ramp_sw.o
+common-$(CONFIG_CHARGESPLASH)+=chargesplash.o
 common-$(CONFIG_CHIP_INIT_ROM_REGION)+=init_rom.o
 common-$(CONFIG_CMD_CHARGEN) += chargen.o
 common-$(CONFIG_CHARGER)+=charger.o charge_state_v2.o
@@ -171,7 +172,7 @@ common-$(CONFIG_USB_PORT_POWER_DUMB)+=usb_port_power_dumb.o
 common-$(CONFIG_USB_PORT_POWER_SMART)+=usb_port_power_smart.o
 common-$(CONFIG_HAS_TASK_PD_INT)+=usbc_intr_task.o
 ifneq ($(CONFIG_USB_POWER_DELIVERY),)
-common-$(CONFIG_USB_POWER_DELIVERY)+=usb_common.o usb_pd_pdo.o
+common-$(CONFIG_USB_POWER_DELIVERY)+=usb_common.o usb_pd_pdo.o typec_control.o
 ifneq ($(CONFIG_USB_PD_TCPMV1),)
 common-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_protocol.o usb_pd_policy.o \
 	usb_pd_pdo.o

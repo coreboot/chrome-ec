@@ -3,11 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include <device.h>
-#include <kernel.h>
-#include <logging/log.h>
-
-#include "gpio.h"
+#include <zephyr/device.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 #include "gpio/gpio.h"
 
 LOG_MODULE_REGISTER(shim_cros_gpio, LOG_LEVEL_ERR);

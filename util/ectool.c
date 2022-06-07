@@ -99,6 +99,8 @@ const char help_str[] =
 	"      Force the battery to stop charging or discharge\n"
 	"  chargeoverride\n"
 	"      Overrides charge port selection logic\n"
+	"  chargesplash\n"
+	"      Show and manipulate chargesplash variables\n"
 	"  chargestate\n"
 	"      Handle commands related to charge state v2 (and later)\n"
 	"  chipinfo\n"
@@ -6612,7 +6614,7 @@ int cmd_usb_pd_mux_info(int argc, char *argv[])
 			printf("USB=%d ",
 				!!(r.flags & USB_PD_MUX_USB_ENABLED));
 			printf("DP=%d ", !!(r.flags & USB_PD_MUX_DP_ENABLED));
-			printf("POLARITY=%s",
+			printf("POLARITY=%s ",
 				r.flags & USB_PD_MUX_POLARITY_INVERTED ?
 							"INVERTED" : "NORMAL");
 			printf("HPD_IRQ=%d ",
@@ -7587,6 +7589,53 @@ int cmd_charge_control(int argc, char *argv[])
 		break;
 	}
 	return 0;
+}
+
+
+static void print_bool(const char *name, bool value)
+{
+	printf("%s = %s\n", name, value ? "true" : "false");
+}
+
+static int cmd_chargesplash(int argc, char **argv)
+{
+	static struct {
+		const char *name;
+		enum ec_chargesplash_cmd cmd;
+	} actions[] = {
+		{ "state", EC_CHARGESPLASH_GET_STATE },
+		{ "request", EC_CHARGESPLASH_REQUEST },
+		{ "lockout", EC_CHARGESPLASH_LOCKOUT },
+		{ "reset", EC_CHARGESPLASH_RESET },
+	};
+	struct ec_params_chargesplash params;
+	struct ec_response_chargesplash resp;
+
+	if (argc != 2) {
+		goto usage;
+	}
+
+	for (int i = 0; i < ARRAY_SIZE(actions); i++) {
+		if (!strcasecmp(actions[i].name, argv[1])) {
+			params.cmd = actions[i].cmd;
+			if (ec_command(EC_CMD_CHARGESPLASH, 0, &params,
+				       sizeof(params), &resp,
+				       sizeof(resp)) < 0) {
+				fprintf(stderr, "Host command failed\n");
+				return -1;
+			}
+
+			print_bool("requested", resp.requested);
+			print_bool("display_initialized",
+				   resp.display_initialized);
+			print_bool("locked_out", resp.locked_out);
+			return 0;
+		}
+	}
+
+usage:
+	fprintf(stderr, "Usage: %s <state|request|lockout|reset>", argv[0]);
+	return -1;
 }
 
 
@@ -9999,7 +10048,11 @@ int cmd_typec_control(int argc, char *argv[])
 			"    2: Enter mode\n"
 			"        args: <0: DP, 1:TBT, 2:USB4>\n"
 			"    3: Set TBT UFP Reply\n"
-			"        args: <0: NAK, 1: ACK>\n",
+			"        args: <0: NAK, 1: ACK>\n"
+			"    4: Set USB mux mode\n"
+			"        args: <mux_index> <mux_mode>\n"
+			"        <mux_mode> is one of: dp, dock, usb, tbt,\n"
+			"                              usb4, none, safe\n",
 			argv[0]);
 		return -1;
 	}
@@ -10042,6 +10095,7 @@ int cmd_typec_control(int argc, char *argv[])
 			return -1;
 		}
 		p.mode_to_enter = conversion_result;
+		break;
 	case TYPEC_CONTROL_COMMAND_TBT_UFP_REPLY:
 		if (argc < 4) {
 			fprintf(stderr, "Missing reply\n");
@@ -10055,6 +10109,39 @@ int cmd_typec_control(int argc, char *argv[])
 			return -1;
 		}
 		p.tbt_ufp_reply = conversion_result;
+		break;
+	case TYPEC_CONTROL_COMMAND_USB_MUX_SET:
+		if (argc < 5) {
+			fprintf(stderr, "Missing index or mode\n");
+			return -1;
+		}
+
+		conversion_result = strtol(argv[3], &endptr, 0);
+		if ((endptr && *endptr) || conversion_result > UINT8_MAX ||
+						conversion_result < 0) {
+			fprintf(stderr, "Bad index\n");
+			return -1;
+		}
+		p.mux_params.mux_index = conversion_result;
+		if (!strcmp(argv[4], "dp")) {
+			p.mux_params.mux_flags = USB_PD_MUX_DP_ENABLED;
+		} else if (!strcmp(argv[4], "dock")) {
+			p.mux_params.mux_flags = USB_PD_MUX_DOCK;
+		} else if (!strcmp(argv[4], "usb")) {
+			p.mux_params.mux_flags = USB_PD_MUX_USB_ENABLED;
+		} else if (!strcmp(argv[4], "tbt")) {
+			p.mux_params.mux_flags = USB_PD_MUX_TBT_COMPAT_ENABLED;
+		} else if (!strcmp(argv[4], "usb4")) {
+			p.mux_params.mux_flags = USB_PD_MUX_USB4_ENABLED;
+		} else if (!strcmp(argv[4], "none")) {
+			p.mux_params.mux_flags = USB_PD_MUX_NONE;
+		} else if (!strcmp(argv[4], "safe")) {
+			p.mux_params.mux_flags = USB_PD_MUX_SAFE_MODE;
+		} else {
+			fprintf(stderr, "Bad mux mode\n");
+			return -1;
+		}
+		break;
 	}
 
 	rv = ec_command(EC_CMD_TYPEC_CONTROL, 0, &p, sizeof(p),
@@ -10665,6 +10752,7 @@ const struct command commands[] = {
 	{"chargecurrentlimit", cmd_charge_current_limit},
 	{"chargecontrol", cmd_charge_control},
 	{"chargeoverride", cmd_charge_port_override},
+	{"chargesplash", cmd_chargesplash},
 	{"chargestate", cmd_charge_state},
 	{"chipinfo", cmd_chipinfo},
 	{"cmdversions", cmd_cmdversions},

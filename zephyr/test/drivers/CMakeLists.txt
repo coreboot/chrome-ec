@@ -19,11 +19,17 @@ target_sources(app PRIVATE
   src/bmi160.c
   src/bmi260.c
   src/charge_manager.c
+  src/chargesplash.c
   src/console_cmd/charge_manager.c
   src/console_cmd/charge_state.c
+  src/console_cmd/accelinit.c
   src/console_cmd/accelinfo.c
   src/console_cmd/accelspoof.c
+  src/console_cmd/accelrate.c
   src/console_cmd/accelrange.c
+  src/console_cmd/accelread.c
+  src/console_cmd/accelres.c
+  src/console_cmd/usb_pd_console.c
   src/cros_cbi.c
   src/espi.c
   src/gpio.c
@@ -35,6 +41,7 @@ target_sources(app PRIVATE
   src/integration/usbc/usb_alt_mode.c
   src/integration/usbc/usb_attach_src_snk.c
   src/integration/usbc/usb_pd_ctrl_msg.c
+  src/integration/usbc/usb_malfunction_sink.c
   src/i2c_passthru.c
   src/isl923x.c
   src/keyboard_scan.c
@@ -58,6 +65,7 @@ target_sources(app PRIVATE
   src/test_mocks.c
   src/test_rules.c
   src/thermistor.c
+  src/uart_hostcmd.c
   src/usb_mux.c
   src/usb_pd_host_cmd.c
   src/utils.c
@@ -66,3 +74,5 @@ target_sources(app PRIVATE
 )
 
 add_subdirectory(isl923x)
+
+set_compiler_property(APPEND PROPERTY coverage -O0)

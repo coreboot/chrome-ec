@@ -4,6 +4,7 @@
  */
 /* Dojo board configuration */
 
+#include "cbi_fw_config.h"
 #include "common.h"
 #include "console.h"
 #include "cros_board_info.h"
@@ -13,6 +14,8 @@
 #include "driver/accelgyro_icm_common.h"
 #include "driver/accelgyro_bmi_common_public.h"
 #include "driver/accelgyro_bmi260_public.h"
+#include "driver/retimer/ps8802.h"
+#include "driver/usb_mux/anx3443.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "keyboard_scan.h"
@@ -20,6 +23,7 @@
 #include "pwm.h"
 #include "pwm_chip.h"
 #include "system.h"
+#include "usb_mux.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
@@ -42,10 +46,39 @@ __override struct keyboard_scan_config keyscan_config = {
 };
 
 /* Vol-up key matrix at T13 */
-const struct vol_up_key vol_up_key_matrix = {
+const struct vol_up_key vol_up_key_matrix_T13 = {
 	.row = 3,
 	.col = 5,
 };
+
+/* Vol-up key matrix at T12 */
+const struct vol_up_key vol_up_key_matrix_T12 = {
+	.row = 1,
+	.col = 5,
+};
+
+/* Vol-up key update */
+static void board_update_vol_up_key(void)
+{
+	if (board_version >= 2) {
+		if (get_cbi_fw_config_kblayout() == KB_BL_TOGGLE_KEY_PRESENT) {
+			/*
+			 * Set vol up key to T13 for KB_BL_TOGGLE_KEY_PRESENT
+			 * and board_version >= 2
+			 */
+			set_vol_up_key(vol_up_key_matrix_T13.row, vol_up_key_matrix_T13.col);
+		} else {
+			/*
+			 * Set vol up key to T12 for KB_BL_TOGGLE_KEY_ABSENT
+			 * and board_version >= 2
+			 */
+			set_vol_up_key(vol_up_key_matrix_T12.row, vol_up_key_matrix_T12.col);
+		}
+	} else {
+		/* Set vol up key to T13 for board_version < 2 */
+		set_vol_up_key(vol_up_key_matrix_T13.row, vol_up_key_matrix_T13.col);
+	}
+}
 
 /* Temperature charging table */
 const struct temp_chg_struct temp_chg_table[] = {
@@ -86,6 +119,12 @@ static const mat33_fp_t lid_standard_ref = {
 	{ FLOAT_TO_FP(1), 0, 0},
 	{ 0, FLOAT_TO_FP(-1), 0},
 	{ 0, 0, FLOAT_TO_FP(-1)}
+};
+
+static const mat33_fp_t bmi260_standard_ref = {
+	{ 0, FLOAT_TO_FP(-1), 0},
+	{ FLOAT_TO_FP(1), 0, 0},
+	{ 0, 0, FLOAT_TO_FP(1)}
 };
 
 struct motion_sensor_t motion_sensors[] = {
@@ -177,7 +216,7 @@ struct motion_sensor_t bmi260_base_accel = {
 	.drv_data = &g_bmi260_data,
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = BMI260_ADDR0_FLAGS,
-	.rot_standard_ref = &base_standard_ref,
+	.rot_standard_ref = &bmi260_standard_ref,
 	.min_frequency = BMI_ACCEL_MIN_FREQ,
 	.max_frequency = BMI_ACCEL_MAX_FREQ,
 	.default_range = 4, /* g */
@@ -207,7 +246,7 @@ struct motion_sensor_t bmi260_base_gyro = {
 	.port = I2C_PORT_ACCEL,
 	.i2c_spi_addr_flags = BMI260_ADDR0_FLAGS,
 	.default_range = 1000, /* dps */
-	.rot_standard_ref = &base_standard_ref,
+	.rot_standard_ref = &bmi260_standard_ref,
 	.min_frequency = BMI_GYRO_MIN_FREQ,
 	.max_frequency = BMI_GYRO_MAX_FREQ,
 };
@@ -260,8 +299,7 @@ const struct pwm_t pwm_channels[] = {
 	},
 	[PWM_CH_KBLIGHT] = {
 		.channel = 3,
-		.flags = PWM_CONFIG_DSLEEP,
-		.freq_hz = 10000, /* SYV226 supports 10~100kHz */
+		.freq_hz = 10000,
 		.pcfsr_sel = PWM_PRESCALER_C6,
 	},
 	[PWM_CH_LED_C0_WHITE] = {
@@ -279,6 +317,72 @@ const struct pwm_t pwm_channels[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
+/* USB Mux */
+
+static int board_ps8762_mux_set(const struct usb_mux *me,
+				mux_state_t mux_state)
+{
+	/* Make sure the PS8802 is awake */
+	RETURN_ERROR(ps8802_i2c_wake(me));
+
+	/* USB specific config */
+	if (mux_state & USB_PD_MUX_USB_ENABLED) {
+		/* Boost the USB gain */
+		RETURN_ERROR(ps8802_i2c_field_update16(me,
+					PS8802_REG_PAGE2,
+					PS8802_REG2_USB_SSEQ_LEVEL,
+					PS8802_USBEQ_LEVEL_UP_MASK,
+					PS8802_USBEQ_LEVEL_UP_12DB));
+	}
+
+	/* DP specific config */
+	if (mux_state & USB_PD_MUX_DP_ENABLED) {
+		/* Boost the DP gain */
+		RETURN_ERROR(ps8802_i2c_field_update8(me,
+					PS8802_REG_PAGE2,
+					PS8802_REG2_DPEQ_LEVEL,
+					PS8802_DPEQ_LEVEL_UP_MASK,
+					PS8802_DPEQ_LEVEL_UP_9DB));
+	}
+
+	return EC_SUCCESS;
+}
+
+static int board_ps8762_mux_init(const struct usb_mux *me)
+{
+	return ps8802_i2c_field_update8(
+			me, PS8802_REG_PAGE1,
+			PS8802_REG_DCIRX,
+			PS8802_AUTO_DCI_MODE_DISABLE | PS8802_FORCE_DCI_MODE,
+			PS8802_AUTO_DCI_MODE_DISABLE);
+}
+
+static int board_anx3443_mux_set(const struct usb_mux *me,
+				 mux_state_t mux_state)
+{
+	gpio_set_level(GPIO_USB_C1_DP_IN_HPD,
+		       mux_state & USB_PD_MUX_DP_ENABLED);
+	return EC_SUCCESS;
+}
+
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	{
+		.usb_port = 0,
+		.i2c_port = I2C_PORT_USB_MUX0,
+		.i2c_addr_flags = PS8802_I2C_ADDR_FLAGS,
+		.driver = &ps8802_usb_mux_driver,
+		.board_init = &board_ps8762_mux_init,
+		.board_set = &board_ps8762_mux_set,
+	},
+	{
+		.usb_port = 1,
+		.i2c_port = I2C_PORT_USB_MUX1,
+		.i2c_addr_flags = ANX3443_I2C_ADDR0_FLAGS,
+		.driver = &anx3443_usb_mux_driver,
+		.board_set = &board_anx3443_mux_set,
+	},
+};
+
 /* Initialize board. */
 static void board_init(void)
 {
@@ -290,9 +394,7 @@ static void board_init(void)
 	cbi_get_board_version(&board_version);
 
 	board_update_motion_sensor_config();
-
-	/* Set vol up key to T13 */
-	set_vol_up_key(vol_up_key_matrix.row, vol_up_key_matrix.col);
+	board_update_vol_up_key();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 

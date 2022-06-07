@@ -13,13 +13,25 @@
 #include "tcpm/tcpci.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+#include "timer.h"
+#include "usb_common.h"
 #include "usb_pd.h"
 
 struct usb_attach_5v_3a_pd_sink_fixture {
-	struct tcpci_snk_emul sink_5v_3a;
+	struct tcpci_partner_data sink_5v_3a;
+	struct tcpci_snk_emul_data snk_ext;
 	const struct emul *tcpci_emul;
 	const struct emul *charger_emul;
 };
+
+/* Chromebooks only charge PD partners at 5v */
+#define TEST_SRC_PORT_VBUS_MV 5000
+#define TEST_SRC_PORT_TARGET_MA 3000
+
+#define TEST_INITIAL_SINK_CAP \
+	PDO_FIXED(TEST_SRC_PORT_VBUS_MV, TEST_SRC_PORT_TARGET_MA, 0)
+/* Only used to verify sink capabilities being received by SRC port */
+#define TEST_ADDITIONAL_SINK_CAP PDO_FIXED(TEST_SRC_PORT_VBUS_MV, 5000, 0)
 
 static void
 connect_sink_to_port(struct usb_attach_5v_3a_pd_sink_fixture *fixture)
@@ -38,10 +50,9 @@ connect_sink_to_port(struct usb_attach_5v_3a_pd_sink_fixture *fixture)
 	tcpci_tcpc_alert(0);
 	k_sleep(K_SECONDS(1));
 
-	zassume_ok(tcpci_snk_emul_connect_to_tcpci(
-			   &fixture->sink_5v_3a.data,
-			   &fixture->sink_5v_3a.common_data,
-			   &fixture->sink_5v_3a.ops, fixture->tcpci_emul),
+	zassume_ok(tcpci_partner_connect_to_tcpci(
+			   &fixture->sink_5v_3a,
+			   fixture->tcpci_emul),
 		   NULL);
 
 	/* Wait for PD negotiation and current ramp.
@@ -82,9 +93,12 @@ static void usb_attach_5v_3a_pd_sink_before(void *data)
 	k_sleep(K_SECONDS(1));
 
 	/* Initialized the sink to request 5V and 3A */
-	tcpci_snk_emul_init(&test_fixture->sink_5v_3a);
-	test_fixture->sink_5v_3a.data.pdo[1] =
-		PDO_FIXED(5000, 3000, PDO_FIXED_UNCONSTRAINED);
+	tcpci_partner_init(&test_fixture->sink_5v_3a, PD_REV20);
+	test_fixture->sink_5v_3a.extensions =
+		tcpci_snk_emul_init(&test_fixture->snk_ext,
+				    &test_fixture->sink_5v_3a, NULL);
+	test_fixture->snk_ext.pdo[0] = TEST_INITIAL_SINK_CAP;
+	test_fixture->snk_ext.pdo[1] = TEST_ADDITIONAL_SINK_CAP;
 	connect_sink_to_port(test_fixture);
 }
 
@@ -101,7 +115,7 @@ ZTEST_SUITE(usb_attach_5v_3a_pd_sink, drivers_predicate_post_main,
 
 ZTEST_F(usb_attach_5v_3a_pd_sink, test_partner_pd_completed)
 {
-	zassert_true(this->sink_5v_3a.data.pd_completed, NULL);
+	zassert_true(this->snk_ext.pd_completed, NULL);
 }
 
 ZTEST(usb_attach_5v_3a_pd_sink, test_battery_is_discharging)
@@ -146,10 +160,10 @@ ZTEST(usb_attach_5v_3a_pd_sink, test_power_info)
 		      "Expected charge voltage max of 0mV, but got %dmV",
 		      info.meas.voltage_max);
 	zassert_within(
-		info.meas.voltage_now, 5000, 500,
+		info.meas.voltage_now, TEST_SRC_PORT_VBUS_MV, 500,
 		"Charging voltage expected to be near 5000mV, but was %dmV",
 		info.meas.voltage_now);
-	zassert_equal(info.meas.current_max, 1500,
+	zassert_equal(info.meas.current_max, TEST_SRC_PORT_TARGET_MA,
 		      "Current max expected to be 1500mV, but was %dmV",
 		      info.meas.current_max);
 	zassert_equal(info.meas.current_lim, 0,
@@ -238,4 +252,67 @@ ZTEST_F(usb_attach_5v_3a_pd_sink, test_disconnect_power_info)
 	zassert_true(power_info.meas.current_lim >= 0,
 		     "Expected the PD current limit to be >= 0, but got %dmA",
 		     power_info.meas.current_lim);
+}
+
+/**
+ * @brief TestPurpose: Verify GotoMin message.
+ *
+ * @details
+ *  - TCPM is configured initially as Source
+ *  - Initiate Goto_Min request
+ *  - Verify emulated sink PD negotiation is completed
+ *
+ * Expected Results
+ *  - Sink completes Goto Min PD negotiation
+ */
+ZTEST_F(usb_attach_5v_3a_pd_sink, verify_goto_min)
+{
+	pd_dpm_request(0, DPM_REQUEST_GOTO_MIN);
+	k_sleep(K_SECONDS(1));
+
+	zassert_true(this->snk_ext.pd_completed, NULL);
+}
+
+/**
+ * @brief TestPurpose: Verify Ping message.
+ *
+ * @details
+ *  - TCPM is configured initially as Source
+ *  - Initiate Ping request
+ *  - Verify emulated sink received ping message
+ *
+ * Expected Results
+ *  - Sink received ping message
+ */
+ZTEST_F(usb_attach_5v_3a_pd_sink, verify_ping_msg)
+{
+	tcpci_snk_emul_clear_ping_received(&this->snk_ext);
+
+	pd_dpm_request(0, DPM_REQUEST_SEND_PING);
+	k_sleep(K_USEC(PD_T_SOURCE_ACTIVITY));
+
+	zassert_true(this->snk_ext.ping_received, NULL);
+}
+
+/**
+ * @brief TestPurpose: Verify Alert message.
+ *
+ * @details
+ *  - Clear alert_received in emulated partner
+ *  - Broadcast PD Alert
+ *  - Check pd_broadcast_alert_msg can set the ADO and run pd_dpm_request
+ *  - Check that emulated partner received a PD_DATA_ALERT message
+ *
+ * Expected Results
+ *  - EC_SUCCESS returned from pd_broadcast_alert_msg
+ *  - sink_5v_3a.data.alert_received is true
+ */
+ZTEST_F(usb_attach_5v_3a_pd_sink, verify_alert_msg)
+{
+	tcpci_snk_emul_clear_alert_received(&this->snk_ext);
+	zassert_false(this->snk_ext.alert_received, NULL);
+	zassert_equal(pd_broadcast_alert_msg(ADO_OTP_EVENT), EC_SUCCESS, NULL);
+
+	k_sleep(K_SECONDS(2));
+	zassert_true(this->snk_ext.alert_received, NULL);
 }

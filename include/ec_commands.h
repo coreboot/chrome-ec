@@ -106,10 +106,14 @@ extern "C" {
 /*
  * The actual block is 0x800-0x8ff, but some BIOSes think it's 0x880-0x8ff
  * and they tell the kernel that so we have to think of it as two parts.
+ *
+ * Other BIOSes report only the I/O port region spanned by the Microchip
+ * MEC series EC; an attempt to address a larger region may fail.
  */
-#define EC_HOST_CMD_REGION0    0x800
-#define EC_HOST_CMD_REGION1    0x880
-#define EC_HOST_CMD_REGION_SIZE 0x80
+#define EC_HOST_CMD_REGION0       0x800
+#define EC_HOST_CMD_REGION1       0x880
+#define EC_HOST_CMD_REGION_SIZE    0x80
+#define EC_HOST_CMD_MEC_REGION_SIZE 0x8
 
 /* EC command register bit functions */
 #define EC_LPC_CMDR_DATA	BIT(0)  /* Data ready for host to read */
@@ -825,11 +829,15 @@ struct ec_lpc_host_args {
 #define EC_SPI_PAST_END       0xed
 
 /*
- * EC is ready to receive, and has ignored the byte sent by the AP.  EC expects
+ * EC is ready to receive, and has ignored the byte sent by the AP. EC expects
  * that the AP will send a valid packet header (starting with
  * EC_COMMAND_PROTOCOL_3) in the next 32 bytes.
+ *
+ * NOTE: Some SPI configurations place the Most Significant Bit on SDO when
+ *	 CS goes low. This macro has the Most Significant Bit set to zero,
+ *	 so SDO will not be driven high when CS goes low.
  */
-#define EC_SPI_RX_READY       0xf8
+#define EC_SPI_RX_READY       0x78
 
 /*
  * EC has started receiving the request from the AP, but hasn't started
@@ -4716,6 +4724,39 @@ struct ec_params_dedicated_charger_limit {
 	uint16_t voltage_lim; /* in mV */
 } __ec_align2;
 
+/*
+ * Get and set charging splashscreen variables
+ */
+#define EC_CMD_CHARGESPLASH 0x00A4
+
+enum ec_chargesplash_cmd {
+	/* Get the current state variables */
+	EC_CHARGESPLASH_GET_STATE = 0,
+
+	/* Indicate initialization of the display loop */
+	EC_CHARGESPLASH_DISPLAY_READY,
+
+	/* Manually put the EC into the requested state */
+	EC_CHARGESPLASH_REQUEST,
+
+	/* Reset all state variables */
+	EC_CHARGESPLASH_RESET,
+
+	/* Manually trigger a lockout */
+	EC_CHARGESPLASH_LOCKOUT,
+};
+
+struct __ec_align1 ec_params_chargesplash {
+	/* enum ec_chargesplash_cmd */
+	uint8_t cmd;
+};
+
+struct __ec_align1 ec_response_chargesplash {
+	uint8_t requested;
+	uint8_t display_initialized;
+	uint8_t locked_out;
+};
+
 /*****************************************************************************/
 /* Hibernate/Deep Sleep Commands */
 
@@ -6646,6 +6687,7 @@ enum typec_control_command {
 	TYPEC_CONTROL_COMMAND_CLEAR_EVENTS,
 	TYPEC_CONTROL_COMMAND_ENTER_MODE,
 	TYPEC_CONTROL_COMMAND_TBT_UFP_REPLY,
+	TYPEC_CONTROL_COMMAND_USB_MUX_SET,
 };
 
 /* Modes (USB or alternate) that a type-C port may enter. */
@@ -6660,6 +6702,11 @@ enum typec_tbt_ufp_reply {
 	TYPEC_TBT_UFP_REPLY_NAK,
 	TYPEC_TBT_UFP_REPLY_ACK,
 };
+
+struct typec_usb_mux_set {
+	uint8_t mux_index;	/* Index of the mux to set in the chain */
+	uint8_t mux_flags;	/* USB_PD_MUX_*-encoded USB mux state to set */
+} __ec_align1;
 
 struct ec_params_typec_control {
 	uint8_t port;
@@ -6678,6 +6725,8 @@ struct ec_params_typec_control {
 		uint8_t mode_to_enter;
 		/* Used for TBT_UFP_REPLY - enum typec_tbt_ufp_reply */
 		uint8_t tbt_ufp_reply;
+		/* Used for USB_MUX_SET */
+		struct typec_usb_mux_set mux_params;
 		uint8_t placeholder[128];
 	};
 } __ec_align1;
@@ -6765,6 +6814,8 @@ enum tcpc_cc_polarity {
 #define PD_STATUS_EVENT_SOP_PRIME_DISC_DONE	BIT(1)
 #define PD_STATUS_EVENT_HARD_RESET		BIT(2)
 #define PD_STATUS_EVENT_DISCONNECTED		BIT(3)
+#define PD_STATUS_EVENT_MUX_0_SET_DONE		BIT(4)
+#define PD_STATUS_EVENT_MUX_1_SET_DONE		BIT(5)
 
 /*
  * Encode and decode for BCD revision response
@@ -7186,22 +7237,28 @@ struct ec_params_fp_passthru {
 /* Capture types defined in bits [30..28] */
 #define FP_MODE_CAPTURE_TYPE_SHIFT 28
 #define FP_MODE_CAPTURE_TYPE_MASK  (0x7 << FP_MODE_CAPTURE_TYPE_SHIFT)
-/*
- * This enum must remain ordered, if you add new values you must ensure that
- * FP_CAPTURE_TYPE_MAX is still the last one.
+/**
+ * enum fp_capture_type - Specifies the "mode" when capturing images.
+ *
+ * @FP_CAPTURE_VENDOR_FORMAT: Capture 1-3 images and choose the best quality
+ * image (produces 'frame_size' bytes)
+ * @FP_CAPTURE_SIMPLE_IMAGE: Simple raw image capture (produces width x height x
+ * bpp bits)
+ * @FP_CAPTURE_PATTERN0: Self test pattern (e.g. checkerboard)
+ * @FP_CAPTURE_PATTERN1: Self test pattern (e.g. inverted checkerboard)
+ * @FP_CAPTURE_QUALITY_TEST: Capture for Quality test with fixed contrast
+ * @FP_CAPTURE_RESET_TEST: Capture for pixel reset value test
+ * @FP_CAPTURE_TYPE_MAX: End of enum
+ *
+ * @note This enum must remain ordered, if you add new values you must ensure
+ * that FP_CAPTURE_TYPE_MAX is still the last one.
  */
 enum fp_capture_type {
-	/* Full blown vendor-defined capture (produces 'frame_size' bytes) */
 	FP_CAPTURE_VENDOR_FORMAT = 0,
-	/* Simple raw image capture (produces width x height x bpp bits) */
 	FP_CAPTURE_SIMPLE_IMAGE = 1,
-	/* Self test pattern (e.g. checkerboard) */
 	FP_CAPTURE_PATTERN0 = 2,
-	/* Self test pattern (e.g. inverted checkerboard) */
 	FP_CAPTURE_PATTERN1 = 3,
-	/* Capture for Quality test with fixed contrast */
 	FP_CAPTURE_QUALITY_TEST = 4,
-	/* Capture for pixel reset value test */
 	FP_CAPTURE_RESET_TEST = 5,
 	FP_CAPTURE_TYPE_MAX,
 };

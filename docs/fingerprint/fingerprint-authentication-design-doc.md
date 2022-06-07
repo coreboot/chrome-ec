@@ -1,4 +1,4 @@
-# Fingerprint Authentication on Chrome OS
+# Fingerprint Authentication on ChromeOS
 
 Authors: norvez@google.com, vpalatin@google.com
 
@@ -31,7 +31,7 @@ Last Updated: 2019-01-14
 
 To unlock their Chromebook users have to enter their password or a PIN.
 [Windows] and [macOS] let the user authenticate with their fingerprint for
-faster unlocking, we want to bring that capability to Chrome OS.
+faster unlocking, we want to bring that capability to ChromeOS.
 
 ### Fingerprint matching basics
 
@@ -184,7 +184,7 @@ replace this post-launch with a mechanism similar to
 FP templates are AES-encrypted with `HW_Key`. `HW_Key` is bound to this specific
 SBP so encrypted templates can only be deciphered by this specific SBP. To
 ensure that a powerwash/recovery/WP toggle/.../ makes the encryption key
-impossible to recover, `HW_Key` also depends on a secret held by the TPM.
+impossible to recover, `HW_Key` also depends on a secret held by the [TPM].
 
 We use an AEAD cipher (AES-GCM) to detect if the encrypted templates have been
 tampered with by an attacker controlling the AP.
@@ -379,7 +379,7 @@ used to protect the EC in detachable keyboards as described in
 
 The SBP has a minimalistic RO firmware that contains the public part of an
 RSA-3072 exponent 3 key pair. The corresponding private key is only accessible
-by the Chrome OS signers and is used to sign SBP firmwares. On boot the RO
+by the ChromeOS signers and is used to sign SBP firmwares. On boot the RO
 firmware verifies the signature of the RW firmware. If the RW signature is
 valid, the RO firmware protects itself by setting the WP bit of the Flash then
 jumps to RW.
@@ -753,6 +753,7 @@ The log file is `/var/log/cros_fp.log`.
 [Windows]: https://www.microsoft.com/en-us/windows/windows-hello
 [wrappers functions]: https://chrome-internal.googlesource.com/chromeos/platform/ec-private/+/9ebb3f10c611afff695f679aaeed1a35551a116b/fpc_sensor_pal.c#52
 [TPM Seed for Fingerprint MCU]: ../fingerprint/fingerprint-tpm-seed.md
+[TPM]: https://www.chromium.org/developers/design-documents/tpm-usage/
 
 <!-- Images -->
 

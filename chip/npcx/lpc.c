@@ -10,6 +10,7 @@
 #include "clock.h"
 #include "common.h"
 #include "console.h"
+#include "espi.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
@@ -38,6 +39,9 @@
 /* PM channel definitions */
 #define PMC_ACPI     PM_CHAN_1
 #define PMC_HOST_CMD PM_CHAN_2
+
+/* Microseconds to wait for eSPI VW changes to propagate */
+#define ESPI_DIRTY_WAIT_TIME_US	150
 
 #define PORT80_MAX_BUF_SIZE    16
 static uint16_t port80_buf[PORT80_MAX_BUF_SIZE];
@@ -145,20 +149,21 @@ static void lpc_generate_smi(void)
 	 * from SMIB/SCIB doesn't really reflect the SMI/SCI status. SMI/SCI
 	 * status should be read from bit 1/0 in eSPI VMEVSM(2) register.
 	 */
-	NPCX_HIPMIC(PMC_ACPI) = NPCX_VW_SMI(1);
-	udelay(65);
 	/* Generate a falling edge */
+	espi_wait_vw_not_dirty(VW_SMI_L, ESPI_DIRTY_WAIT_TIME_US);
 	NPCX_HIPMIC(PMC_ACPI) = NPCX_VW_SMI(0);
-	udelay(65);
+	udelay(CONFIG_ESPI_DEFAULT_VW_WIDTH_US);
+	espi_wait_vw_not_dirty(VW_SMI_L, ESPI_DIRTY_WAIT_TIME_US);
+
 	/* Set signal high */
 	NPCX_HIPMIC(PMC_ACPI) = NPCX_VW_SMI(1);
 #else
 	/* SET SMIB bit to pull SMI_L to high.*/
 	SET_BIT(NPCX_HIPMIC(PMC_ACPI), NPCX_HIPMIC_SMIB);
-	udelay(65);
+	udelay(CONFIG_ESPI_DEFAULT_VW_WIDTH_US);
 	/* Generate a falling edge */
 	CLEAR_BIT(NPCX_HIPMIC(PMC_ACPI), NPCX_HIPMIC_SMIB);
-	udelay(65);
+	udelay(CONFIG_ESPI_DEFAULT_VW_WIDTH_US);
 	/* Set signal high */
 	SET_BIT(NPCX_HIPMIC(PMC_ACPI), NPCX_HIPMIC_SMIB);
 #endif
@@ -177,10 +182,10 @@ static void lpc_generate_sci(void)
 #ifdef CONFIG_SCI_GPIO
 	/* Enforce signal-high for long enough to debounce high */
 	gpio_set_level(CONFIG_SCI_GPIO, 1);
-	udelay(CONFIG_ESPI_DEFAULT_SCI_WIDTH_US);
+	udelay(65);
 	/* Generate a falling edge */
 	gpio_set_level(CONFIG_SCI_GPIO, 0);
-	udelay(CONFIG_ESPI_DEFAULT_SCI_WIDTH_US);
+	udelay(65);
 	/* Set signal high, now that we've generated the edge */
 	gpio_set_level(CONFIG_SCI_GPIO, 1);
 #elif defined(CONFIG_HOST_INTERFACE_ESPI)
@@ -191,20 +196,21 @@ static void lpc_generate_sci(void)
 	 * from SMIB/SCIB doesn't really reflect the SMI/SCI status. SMI/SCI
 	 * status should be read from bit 1/0 in eSPI VMEVSM(2) register.
 	 */
-	NPCX_HIPMIC(PMC_ACPI) = NPCX_VW_SCI(1);
-	udelay(CONFIG_ESPI_DEFAULT_SCI_WIDTH_US);
 	/* Generate a falling edge */
+	espi_wait_vw_not_dirty(VW_SCI_L, ESPI_DIRTY_WAIT_TIME_US);
 	NPCX_HIPMIC(PMC_ACPI) = NPCX_VW_SCI(0);
-	udelay(CONFIG_ESPI_DEFAULT_SCI_WIDTH_US);
+	udelay(CONFIG_ESPI_DEFAULT_VW_WIDTH_US);
+	espi_wait_vw_not_dirty(VW_SCI_L, ESPI_DIRTY_WAIT_TIME_US);
+
 	/* Set signal high */
 	NPCX_HIPMIC(PMC_ACPI) = NPCX_VW_SCI(1);
 #else
 	/* Set SCIB bit to pull SCI_L to high.*/
 	SET_BIT(NPCX_HIPMIC(PMC_ACPI), NPCX_HIPMIC_SCIB);
-	udelay(CONFIG_ESPI_DEFAULT_SCI_WIDTH_US);
+	udelay(CONFIG_ESPI_DEFAULT_VW_WIDTH_US);
 	/* Generate a falling edge */
 	CLEAR_BIT(NPCX_HIPMIC(PMC_ACPI), NPCX_HIPMIC_SCIB);
-	udelay(CONFIG_ESPI_DEFAULT_SCI_WIDTH_US);
+	udelay(CONFIG_ESPI_DEFAULT_VW_WIDTH_US);
 	/* Set signal high */
 	SET_BIT(NPCX_HIPMIC(PMC_ACPI), NPCX_HIPMIC_SCIB);
 #endif

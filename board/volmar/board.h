@@ -29,8 +29,6 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USB Type C and USB PD defines */
-#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
-
 #undef CONFIG_USB_PD_TCPM_NCT38XX
 #define CONFIG_USB_PD_TCPM_RT1715 /* C0 */
 #define CONFIG_USB_PD_TCPM_PS8815 /* C1 */
@@ -135,8 +133,12 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
 
+#undef  CONFIG_POWER_BUTTON_INIT_TIMEOUT
+#define CONFIG_POWER_BUTTON_INIT_TIMEOUT 2
+
 /* Keyboard */
 #define CONFIG_KEYBOARD_REFRESH_ROW3
+#define CONFIG_KEYBOARD_FACTORY_TEST
 
 #ifndef __ASSEMBLER__
 
@@ -159,11 +161,9 @@ enum temp_sensor_id {
 };
 
 enum battery_type {
-	BATTERY_POWER_TECH,
-	BATTERY_LGC011,
-	BATTERY_AP19B8M,
 	BATTERY_COSMX_AP20CBL,
 	BATTERY_LGC_AP18C8K,
+	BATTERY_AP19B8M,
 	BATTERY_TYPE_COUNT
 };
 
@@ -182,6 +182,11 @@ enum mft_channel {
 	MFT_CH_0 = 0,
 	MFT_CH_COUNT
 };
+
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+extern const int keyboard_factory_scan_pins[][2];
+extern const int keyboard_factory_scan_pins_used;
+#endif
 
 #endif /* !__ASSEMBLER__ */
 

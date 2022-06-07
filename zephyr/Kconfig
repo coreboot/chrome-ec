@@ -39,6 +39,7 @@ rsource "Kconfig.adc"
 rsource "Kconfig.ap_power"
 rsource "Kconfig.battery"
 rsource "Kconfig.charger"
+rsource "Kconfig.chargesplash"
 rsource "Kconfig.board_version"
 rsource "Kconfig.cbi"
 rsource "Kconfig.console"
@@ -267,7 +268,7 @@ config PLATFORM_EC_CONSOLE_CMD_SHMEM
 
 config PLATFORM_EC_CROS_FWID_VERSION
 	bool "Include CrOS FWID version"
-	default y
+	default n
 	help
 	  Include Chrome OS FWID in version output. The CrOS FWID will be common
 	  across OS, AP firmware and EC firmware when built together.
@@ -338,15 +339,13 @@ config PLATFORM_EC_FLASH_CROS
 
 config PLATFORM_EC_FPU
 	bool "Support floating point"
-	depends on FPU && CPU_CORTEX_M && !NEWLIB_LIBC
+	depends on FPU && (CPU_CORTEX_M || RISCV) && !NEWLIB_LIBC
 	default y
 	help
 	  This enables support for floating point. This is generally already
 	  provided in Zephyr, but the EC side expects a few functions to be
 	  available which are not available with Zephyr's minimal lib: sqrtf()
 	  and fabsf(). Enabling this options defines them.
-
-	  For now this is only supported on Cortex-M4.
 
 config PLATFORM_EC_HOOKS
 	bool "Hooks and deferred compatibility shim"
@@ -549,8 +548,11 @@ config PLATFORM_EC_PWM_HC
 	  Enable the PWM (Pulse Width Modulation) host command support. This
 	  implements EC_CMD_PWM_SET_DUTY and EC_CMD_PWM_GET_DUTY.
 
+DT_COMPAT_CROS_EC_DISPLIGHT := cros-ec,displight
+
 config PLATFORM_EC_PWM_DISPLIGHT
 	bool "PWM display backlight"
+	default $(dt_compat_enabled,$(DT_COMPAT_CROS_EC_DISPLIGHT))
 	select PLATFORM_EC_PWM_HC
 	help
 	  Enables display backlight controlled by a PWM signal connected

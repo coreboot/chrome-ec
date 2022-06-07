@@ -3,10 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include <device.h>
-#include <drivers/bbram.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/bbram.h>
 #include <drivers/cros_system.h>
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 
 #include "common.h"
 #include "console.h"
@@ -369,6 +369,7 @@ static int system_preinitialize(const struct device *unused)
 			arch_nop();
 	}
 #endif
+	system_common_pre_init();
 	return 0;
 }
 

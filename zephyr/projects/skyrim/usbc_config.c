@@ -5,7 +5,7 @@
 
 /* Guybrush family-specific USB-C configuration */
 
-#include <drivers/gpio.h>
+#include <zephyr/drivers/gpio.h>
 
 #include "cros_board_info.h"
 #include "cros_cbi.h"
@@ -51,36 +51,6 @@ enum usbc_port {
 BUILD_ASSERT(USBC_PORT_COUNT == CONFIG_USB_PD_PORT_MAX_COUNT);
 
 static void reset_nct38xx_port(int port);
-
-const struct charger_config_t chg_chips[] = {
-	{
-		.i2c_port = I2C_PORT_CHARGER,
-		.i2c_addr_flags = ISL9241_ADDR_FLAGS,
-		.drv = &isl9241_drv,
-	},
-};
-
-const struct tcpc_config_t tcpc_config[] = {
-	[USBC_PORT_C0] = {
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_TCPC0,
-			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
-		},
-		.drv = &nct38xx_tcpm_drv,
-		.flags = TCPC_FLAGS_TCPCI_REV2_0,
-	},
-	[USBC_PORT_C1] = {
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_TCPC1,
-			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
-		},
-		.drv = &nct38xx_tcpm_drv,
-		.flags = TCPC_FLAGS_TCPCI_REV2_0,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == CONFIG_USB_PD_PORT_MAX_COUNT);
 
 static void usbc_interrupt_init(void)
 {
@@ -140,11 +110,18 @@ struct usb_mux usbc1_sbu_mux = {
 	.driver = &ioex_sbu_mux_driver,
 };
 
+int baseboard_anx7483_mux_set(const struct usb_mux *me,
+			      mux_state_t mux_state)
+{
+	return anx7483_set_default_tuning(me, mux_state);
+}
+
 struct usb_mux usbc0_anx7483 = {
 	.usb_port = USBC_PORT_C0,
 	.i2c_port = I2C_PORT_TCPC0,
 	.i2c_addr_flags = ANX7483_I2C_ADDR0_FLAGS,
 	.driver = &anx7483_usb_retimer_driver,
+	.board_set = &baseboard_anx7483_mux_set,
 	.next_mux = &usbc0_sbu_mux,
 };
 
@@ -169,6 +146,7 @@ struct usb_mux usbc1_anx7483 = {
 	.i2c_port = I2C_PORT_TCPC1,
 	.i2c_addr_flags = ANX7483_I2C_ADDR0_FLAGS,
 	.driver = &anx7483_usb_retimer_driver,
+	.board_set = &baseboard_anx7483_mux_set,
 	.next_mux = &usbc1_sbu_mux,
 };
 
@@ -400,15 +378,21 @@ void tcpc_alert_event(enum gpio_signal signal)
 static void reset_nct38xx_port(int port)
 {
 	const struct gpio_dt_spec *reset_gpio_l;
+	const struct device *ioex_port0, *ioex_port1;
 
-	/* TODO: Save and restore ioex signals */
-	if (port == USBC_PORT_C0)
+	/* TODO(b/225189538): Save and restore ioex signals */
+	if (port == USBC_PORT_C0) {
 		reset_gpio_l = GPIO_DT_FROM_NODELABEL(gpio_usb_c0_tcpc_rst_l);
-	else if (port == USBC_PORT_C1)
+		ioex_port0 = DEVICE_DT_GET(DT_NODELABEL(ioex_c0_port0));
+		ioex_port1 = DEVICE_DT_GET(DT_NODELABEL(ioex_c0_port1));
+	} else if (port == USBC_PORT_C1) {
 		reset_gpio_l = GPIO_DT_FROM_NODELABEL(gpio_usb_c1_tcpc_rst_l);
-	else
+		ioex_port0 = DEVICE_DT_GET(DT_NODELABEL(ioex_c1_port0));
+		ioex_port1 = DEVICE_DT_GET(DT_NODELABEL(ioex_c1_port1));
+	} else {
 		/* Invalid port: do nothing */
 		return;
+	}
 
 	gpio_pin_set_dt(reset_gpio_l, 0);
 	msleep(NCT38XX_RESET_HOLD_DELAY_MS);
@@ -416,6 +400,10 @@ static void reset_nct38xx_port(int port)
 	nct38xx_reset_notify(port);
 	if (NCT3807_RESET_POST_DELAY_MS != 0)
 		msleep(NCT3807_RESET_POST_DELAY_MS);
+
+	/* Re-enable the IO expander pins */
+	gpio_reset_port(ioex_port0);
+	gpio_reset_port(ioex_port1);
 }
 
 
@@ -473,11 +461,11 @@ void bc12_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_C0_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+		usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 		break;
 
 	case GPIO_USB_C1_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+		usb_charger_task_set_event(1, USB_CHG_EVENT_BC12);
 		break;
 
 	default:

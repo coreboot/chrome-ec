@@ -3,7 +3,8 @@
  * found in the LICENSE file.
  */
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
+#include <ap_power/ap_power.h>
 
 #include "charge_state_v2.h"
 #include "chipset.h"
@@ -79,6 +80,52 @@ __override bool pd_check_vbus_level(int port, enum vbus_level level)
 	LOG_WRN("Unrecognized vbus_level value: %d", level);
 	return false;
 }
+
+/*
+ * Putting chargers into LPM when in suspend reduces power draw by about 8mW
+ * per charger, but also seems critical to correct operation in source mode:
+ * if chargers are not in LPM when a sink is first connected, VBUS sourcing
+ * works even if the partner is later removed (causing LPM entry) and
+ * reconnected (causing LPM exit). If in LPM initially, sourcing VBUS
+ * consistently causes the charger to report (apparently spurious) overcurrent
+ * failures.
+ *
+ * In short, this is important to making things work correctly but we don't
+ * understand why.
+ */
+static void board_chargers_suspend(struct ap_power_ev_callback *const cb,
+				   const struct ap_power_ev_data data)
+{
+	void (*fn)(int chgnum);
+
+	switch (data.event) {
+	case AP_POWER_SUSPEND:
+		fn = sm5803_enable_low_power_mode;
+		break;
+	case AP_POWER_RESUME:
+		fn = sm5803_disable_low_power_mode;
+		break;
+	default:
+		LOG_WRN("%s: power event %d is not recognized",
+			__func__, data.event);
+		return;
+	}
+
+	fn(CHARGER_PRIMARY);
+	if (board_get_charger_chip_count() > 1)
+		fn(CHARGER_SECONDARY);
+}
+
+static int board_chargers_suspend_init(const struct device *unused)
+{
+	static struct ap_power_ev_callback cb = {
+		.handler = board_chargers_suspend,
+		.events = AP_POWER_SUSPEND | AP_POWER_RESUME,
+	};
+	ap_power_ev_add_callback(&cb);
+	return 0;
+}
+SYS_INIT(board_chargers_suspend_init, APPLICATION, 0);
 
 int board_set_active_charge_port(int port)
 {
@@ -246,7 +293,7 @@ DECLARE_DEFERRED(check_c0_line);
 
 static void notify_c0_chips(void)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 	sm5803_interrupt(0);
 }
 
@@ -281,7 +328,7 @@ DECLARE_DEFERRED(check_c1_line);
 static void notify_c1_chips(void)
 {
 	schedule_deferred_pd_interrupt(1);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(1, USB_CHG_EVENT_BC12);
 	/* Charger is handled in board_process_pd_alert */
 }
 
@@ -357,22 +404,4 @@ int pd_snk_is_vbus_provided(int port)
 	sm5803_get_chg_det(port, &chg_det);
 
 	return chg_det;
-}
-
-
-const struct usb_mux *nissa_get_c1_sb_mux(void)
-{
-	/*
-	 * Use TCPC-integrated mux via CONFIG_STANDARD_OUTPUT register
-	 * in PS8745.
-	 */
-	static const struct usb_mux usbc1_tcpc_mux = {
-		.usb_port = 1,
-		.i2c_port = I2C_PORT_USB_C1_TCPC,
-		.i2c_addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
-	};
-
-	return &usbc1_tcpc_mux;
 }

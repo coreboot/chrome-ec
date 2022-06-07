@@ -3,13 +3,13 @@
  * found in the LICENSE file.
  */
 
-#include <device.h>
-#include <drivers/clock_control.h>
-#include <dt-bindings/clock/npcx_clock.h>
-#include <kernel.h>
-#include <logging/log.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/clock_control.h>
+#include <zephyr/dt-bindings/clock/npcx_clock.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 #include <soc.h>
-#include <zephyr.h>
+#include <zephyr/zephyr.h>
 
 #include "clock_chip.h"
 #include "module_id.h"
@@ -41,11 +41,20 @@ void clock_turbo(void)
 {
 	struct cdcg_reg *const cdcg_base = HAL_CDCG_REG_BASE_ADDR;
 
+#if defined(CONFIG_SOC_SERIES_NPCX9)
+	/* For NPCX9:
+	 * Increase CORE_CLK (CPU) as the same as OSC_CLK. Since
+	 * CORE_CLK > 66MHz, we also need to set FIUDIV as 1 but
+	 * can keep AHB6DIV to 0.
+	 */
+	cdcg_base->HFCGP = 0x00;
+#else
 	/* For NPCX7:
 	 * Increase CORE_CLK (CPU) as the same as OSC_CLK. Since
 	 * CORE_CLK > 66MHz, we also need to set AHB6DIV and FIUDIV as 1.
 	 */
 	cdcg_base->HFCGP = 0x01;
+#endif
 	cdcg_base->HFCBCD = BIT(4);
 }
 

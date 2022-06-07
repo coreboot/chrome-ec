@@ -91,7 +91,7 @@ DECLARE_DEFERRED(check_c0_line);
 
 static void notify_c0_chips(void)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 	sm5803_interrupt(0);
 }
 
@@ -126,7 +126,7 @@ DECLARE_DEFERRED(check_c1_line);
 static void notify_c1_chips(void)
 {
 	schedule_deferred_pd_interrupt(1);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(1, USB_CHG_EVENT_BC12);
 }
 
 static void check_c1_line(void)
@@ -464,7 +464,7 @@ static const struct ec_response_keybd_config landrid_keybd_backlight = {
 		TK_SNAPSHOT,		/* T5 */
 		TK_BRIGHTNESS_DOWN,	/* T6 */
 		TK_BRIGHTNESS_UP,	/* T7 */
-		TK_KBD_BKLIGHT_TOGGLE,		/* T8 */
+		TK_KBD_BKLIGHT_TOGGLE,	/* T8 */
 		TK_PLAY_PAUSE,		/* T9 */
 		TK_MICMUTE,		/* T10 */
 		TK_VOL_MUTE,		/* T11 */
@@ -485,12 +485,12 @@ static const struct ec_response_keybd_config landrid_keybd = {
 		TK_SNAPSHOT,		/* T5 */
 		TK_BRIGHTNESS_DOWN,	/* T6 */
 		TK_BRIGHTNESS_UP,	/* T7 */
-		TK_PREV_TRACK,		/* T8 */
-		TK_PLAY_PAUSE,		/* T9 */
-		TK_MICMUTE,		/* T10 */
-		TK_VOL_MUTE,		/* T11 */
-		TK_VOL_DOWN,		/* T12 */
-		TK_VOL_UP,		/* T13 */
+		TK_PLAY_PAUSE,		/* T8 */
+		TK_MICMUTE,		/* T9 */
+		TK_VOL_MUTE,		/* T10 */
+		TK_VOL_DOWN,		/* T11 */
+		TK_VOL_UP,		/* T12 */
+		TK_MENU,		/* T13 */
 	},
 	.capabilities = KEYBD_CAP_NUMERIC_KEYPAD,
 	/* No function keys and no screenlock key */

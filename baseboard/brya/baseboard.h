@@ -57,6 +57,7 @@
 #define CONFIG_GMR_TABLET_MODE
 
 #define CONFIG_MKBP_EVENT
+/* GPIO is needed for EC events to show up in eventlog - b/222375516 */
 #define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
 #define CONFIG_MKBP_INPUT_DEVICES
 
@@ -99,6 +100,7 @@
 
 /* Chipset config */
 #define CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540
+#define CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
 
 #define CONFIG_CHIPSET_RESET_HOOK
 #define CONFIG_CPU_PROCHOT_ACTIVE_LOW
@@ -120,9 +122,10 @@
 #define CONFIG_CMD_AP_RESET_LOG
 #define CONFIG_HOSTCMD_AP_RESET
 
-/* ADL has new lower-power features that require extra-wide SCI pulses. */
-#undef CONFIG_ESPI_DEFAULT_SCI_WIDTH_US
-#define CONFIG_ESPI_DEFAULT_SCI_WIDTH_US 150
+/* ADL has new lower-power features that require extra-wide virtual wire
+ * pulses. The EDS specifies 100 microseconds. */
+#undef CONFIG_ESPI_DEFAULT_VW_WIDTH_US
+#define CONFIG_ESPI_DEFAULT_VW_WIDTH_US 100
 
 /* Buttons / Switches */
 #define CONFIG_VOLUME_BUTTONS
