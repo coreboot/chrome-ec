@@ -32,7 +32,7 @@
 			remote-port = <0>;
 			enum-name = "I2C_PORT_VIRTUAL_BATTERY";
 		};
-		charger {
+		i2c_charger: charger {
 			i2c-port = <&i2c0_0>;
 			remote-port = <0>;
 			enum-name = "I2C_PORT_CHARGER";
@@ -72,12 +72,8 @@
 	label = "I2C_POWER";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
-
-	isl9238: isl9238@9 {
-		compatible = "intersil,isl9238";
-		reg = <0x09>;
-		label = "ISL9238_CHARGER";
-	};
+	pinctrl-0 = <&i2c0_0_sda_scl_gpb4_b5>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl0 {
@@ -88,6 +84,8 @@
 	label = "I2C_USB_C0_PD";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
+	pinctrl-0 = <&i2c1_0_sda_scl_gp87_90>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl1 {
@@ -98,6 +96,8 @@
 	label = "I2C_USB_C1_PD";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
+	pinctrl-0 = <&i2c2_0_sda_scl_gp91_92>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl2 {
@@ -113,6 +113,8 @@
 	label = "I2C_RTC";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST>;
+	pinctrl-0 = <&i2c4_1_sda_scl_gpf2_f3>;
+	pinctrl-names = "default";
 
 	pcf85063a: pcf85063a@51 {
 		compatible = "nxp,rtc-pcf85063a";
@@ -130,6 +132,8 @@
 	label = "I2C_EEPROM";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST>;
+	pinctrl-0 = <&i2c5_0_sda_scl_gp33_36>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl5 {
@@ -140,6 +144,8 @@
 	label = "I2C_SENSOR";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST>;
+	pinctrl-0 = <&i2c7_0_sda_scl_gpb2_b3>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl7 {

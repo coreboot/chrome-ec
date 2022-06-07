@@ -3,6 +3,10 @@
  * found in the LICENSE file.
  */
 
+/*
+ * Kingler and Steelix use the same dts, take care of this when modify it.
+ */
+
 / {
 	named-i2c-ports {
 		compatible = "named-i2c-ports";
@@ -31,17 +35,18 @@
 			i2c-port = <&i2c3_0>;
 			enum-name = "I2C_PORT_EEPROM";
 		};
-		charger {
+		i2c_charger: charger {
 			i2c-port = <&i2c3_0>;
 			enum-name = "I2C_PORT_POWER";
 		};
 		battery {
 			i2c-port = <&i2c5_0>;
-			remote-port = <5>;
+			remote-port = <1>;
 			enum-name = "I2C_PORT_BATTERY";
 		};
 		virtual-battery {
 			i2c-port = <&i2c5_0>;
+			remote-port = <1>;
 			enum-name = "I2C_PORT_VIRTUAL_BATTERY";
 		};
 	};
@@ -51,6 +56,8 @@
 	label = "I2C_SENSOR";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST>;
+	pinctrl-0 = <&i2c0_0_sda_scl_gpb4_b5>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl0 {
@@ -61,6 +68,8 @@
 	label = "I2C_USB_C0";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
+	pinctrl-0 = <&i2c1_0_sda_scl_gp87_90>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl1 {
@@ -71,6 +80,8 @@
 	label = "I2C_USB_C1";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
+	pinctrl-0 = <&i2c2_0_sda_scl_gp91_92>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl2 {
@@ -81,12 +92,8 @@ i2c_pwr_cbi: &i2c3_0 {
 	label = "I2C_PWR_CBI";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST>;
-
-	isl9238: isl9238@9 {
-		compatible = "intersil,isl9238";
-		reg = <0x09>;
-		label = "ISL9238_CHARGER";
-	};
+	pinctrl-0 = <&i2c3_0_sda_scl_gpd0_d1>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl3 {
@@ -97,6 +104,8 @@ i2c_pwr_cbi: &i2c3_0 {
 	label = "I2C_BATTERY";
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c5_0_sda_scl_gp33_36>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl5 {

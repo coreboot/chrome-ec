@@ -50,6 +50,7 @@
 		};
 		ec_soc_int_l {
 			gpios = <&gpio8 3 GPIO_OUTPUT_HIGH>;
+			enum-name = "GPIO_EC_INT_L";
 		};
 		soc_thermtrip_odl {
 			gpios = <&gpioe 5 GPIO_INPUT>;
@@ -187,4 +188,11 @@
 				 0 0 (-1)>;
 		};
 	};
+};
+
+/* host interface */
+&espi0 {
+	status = "okay";
+	pinctrl-0 = <&espi_lpc_gp46_47_51_52_53_54_55_57>;
+	pinctrl-names = "default";
 };

@@ -13,11 +13,13 @@ register_npcx_project(
         "display.dts",
         "gpio.dts",
         "i2c.dts",
+        "host_interface_npcx.dts",
         "interrupts.dts",
         "keyboard.dts",
         "led.dts",
         "motionsense.dts",
         "pwm_led.dts",
         "usbc.dts",
+        "default_gpio_pinctrl.dts",
     ],
 )

@@ -19,16 +19,8 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
-#define vsafe5v_min (3800/25)
-#define vsafe0v_max (800/25)
-/*
- * These interface are workable while ADC is enabled, before
- * calling them should make sure ec driver finished chip initilization.
- */
-#define is_equal_greater_safe5v(port) \
-		(((anx7447_get_vbus_voltage(port))) > vsafe5v_min)
-#define is_equal_greater_safe0v(port) \
-		(((anx7447_get_vbus_voltage(port))) > vsafe0v_max)
+#define VSAFE5V_MIN 3800
+#define VSAFE0V_MAX 800
 
 struct anx_state {
 	uint16_t i2c_addr_flags;
@@ -208,7 +200,7 @@ static int anx7447_flash_is_empty(int port)
 {
 	int r;
 
-	anx7447_reg_read(port, ANX7447_REG_OCM_VERSION, &r);
+	anx7447_reg_read(port, ANX7447_REG_OCM_MAIN_VERSION, &r);
 
 	return ((r == 0) ? 1 : 0);
 }
@@ -403,14 +395,44 @@ static int anx7447_release(int port)
 	return EC_SUCCESS;
 }
 
-#ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
-static int anx7447_get_vbus_voltage(int port)
+static int anx7447_get_vbus_voltage(int port, int *vbus)
 {
-	int vbus_volt = 0;
+	int val;
+	int error;
 
-	tcpc_read16(port, TCPC_REG_VBUS_VOLTAGE, &vbus_volt);
+	/*
+	 * b:214893572#comment33: This function is partially copied from
+	 * tcpci_get_vbus_voltage because ANX7447 dev_cap_1 reports VBUS_MEASURE
+	 * unsupported, however, it actually does. So we have an identical
+	 * implementation but just skip the dev_cap_1 check.
+	 */
 
-	return vbus_volt;
+	error = tcpc_read16(port, TCPC_REG_VBUS_VOLTAGE, &val);
+	if (error)
+		return error;
+
+	*vbus = TCPC_REG_VBUS_VOLTAGE_VBUS(val);
+	return EC_SUCCESS;
+}
+
+#ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
+/*
+ * This interface are workable while ADC is enabled, before
+ * calling them should make sure ec driver finished chip initialization.
+ */
+static bool is_equal_greater_safe0v(int port)
+{
+	int vbus;
+	int error;
+
+	error = anx7447_get_vbus_voltage(port, &vbus);
+	if (error)
+		return true;
+
+	if (vbus > VSAFE0V_MAX)
+		return true;
+
+	return false;
 }
 
 int anx7447_set_power_supply_ready(int port)
@@ -825,6 +847,36 @@ static void anx7447_dump_registers(int port)
 }
 #endif /* defined(CONFIG_CMD_TCPC_DUMP) */
 
+static int anx7447_get_chip_info(int port, int live,
+			struct ec_response_pd_chip_info_v1 *chip_info)
+{
+	int main_version = 0x0, build_version = 0x0;
+
+	RETURN_ERROR(tcpci_get_chip_info(port, live, chip_info));
+
+	if (chip_info->fw_version_number == -1 || live) {
+		/*
+		 * Before reading ANX7447 SPI target address 0x7e for
+		 * new added FW version, need to read ANX7447 I2c
+		 * target address 0x58 first to wake up ANX7447.
+		 */
+		tcpc_read(port, ANX7447_REG_OCM_MAIN_VERSION, &main_version);
+
+		RETURN_ERROR(anx7447_reg_read(
+			port, ANX7447_REG_OCM_MAIN_VERSION, &main_version));
+		RETURN_ERROR(anx7447_reg_read(
+			port, ANX7447_REG_OCM_BUILD_VERSION, &build_version));
+	}
+
+	chip_info->fw_version_number = (main_version << 8) | build_version;
+
+	/* The minimum OCM firmware version to support FRS. */
+	if (IS_ENABLED(CONFIG_USB_PD_FRS))
+		chip_info->min_req_fw_version_number = 0x0115;
+
+	return EC_SUCCESS;
+}
+
 /*
  * ANX7447 is a TCPCI compatible port controller, with some caveats.
  * It seems to require both CC lines to be set always, instead of just
@@ -839,6 +891,7 @@ const struct tcpm_drv anx7447_tcpm_drv = {
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
 	.check_vbus_level	= &tcpci_tcpm_check_vbus_level,
 #endif
+	.get_vbus_voltage	= &anx7447_get_vbus_voltage,
 	.select_rp_value	= &tcpci_tcpm_select_rp_value,
 	.set_cc			= &anx7447_set_cc,
 	.set_polarity		= &anx7447_set_polarity,
@@ -857,11 +910,9 @@ const struct tcpm_drv anx7447_tcpm_drv = {
 #ifdef CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	.drp_toggle		= anx7447_tcpc_drp_toggle,
 #endif
-	.get_chip_info		= &tcpci_get_chip_info,
-#ifdef CONFIG_USB_PD_PPC
+	.get_chip_info		= &anx7447_get_chip_info,
 	.set_snk_ctrl		= &tcpci_tcpm_set_snk_ctrl,
 	.set_src_ctrl		= &tcpci_tcpm_set_src_ctrl,
-#endif
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode	= &tcpci_enter_low_power_mode,
 #endif

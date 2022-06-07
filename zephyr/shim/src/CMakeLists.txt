@@ -26,6 +26,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
                                                             battery.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_RT9490
                                                             bc12_rt9490.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER     charger.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI
                                                             espi.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN         fan.c)
@@ -34,10 +35,13 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOOKS       hooks.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD     host_command.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE
                                                             console_buffer.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX        ioex.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_CROS_DRV
+                                                            ioex.c
                                                             ioex_drv.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD    keyboard_raw.c)
+if (NOT DEFINED CONFIG_PLATFORM_EC_KEYBOARD_DISCRETE)
+  zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
+                                                            keyboard_raw.c)
+endif()
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD    keyscan.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MKBP_EVENT  mkbp_event.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
@@ -68,3 +72,4 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_TCPCI
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBA        usba.c)
 zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ power_host_sleep_api.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX     usb_muxes.c)

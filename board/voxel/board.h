@@ -30,6 +30,7 @@
 
 /* Chipset features */
 #define CONFIG_POWER_PP5000_CONTROL
+#define CONFIG_CPU_PROCHOT_GATE_ON_C10
 
 /* LED defines */
 #define CONFIG_LED_ONOFF_STATES
@@ -93,6 +94,7 @@
 #define CONFIG_USB_PD_USB4
 #define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x40
 #define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x41
+#define CONFIG_USB_PD_DATA_RESET_MSG
 
 /* USB Type A Features */
 #define USB_PORT_COUNT			1

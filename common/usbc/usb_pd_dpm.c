@@ -13,9 +13,11 @@
 #include "console.h"
 #include "ec_commands.h"
 #include "hooks.h"
+#include "power.h"
 #include "system.h"
 #include "task.h"
 #include "tcpm/tcpm.h"
+#include "temp_sensor.h"
 #include "usb_dp_alt_mode.h"
 #include "usb_mode.h"
 #include "usb_mux.h"
@@ -23,7 +25,12 @@
 #include "usb_pd_dpm.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pd_pdo.h"
+#include "usb_pe_sm.h"
 #include "usb_tbt_alt_mode.h"
+
+#ifdef CONFIG_ZEPHYR
+#include "temp_sensor/temp_sensor.h"
+#endif
 
 #ifdef CONFIG_COMMON_RUNTIME
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
@@ -429,7 +436,6 @@ static void dpm_attempt_mode_exit(int port)
 		} else if (!DPM_CHK_FLAG(port, DPM_FLAG_DATA_RESET_DONE)) {
 			return;
 		}
-		/* TODO(b/209625351): Check for Not Supported case. */
 	}
 
 	/* TODO(b/209625351): Data Reset is the only real way to exit from USB4
@@ -452,7 +458,6 @@ static void dpm_attempt_mode_exit(int port)
 		/*
 		 * When the port is in USB4 mode and receives an exit request,
 		 * it leaves USB4 SOP in active state.
-		 * TODO(b/156749387): Support Data Reset for exiting USB4 SOP.
 		 */
 		CPRINTS("C%d: TBT teardown", port);
 		tbt_exit_mode_request(port);
@@ -722,6 +727,32 @@ void dpm_add_non_pd_sink(int port)
 	balance_source_ports();
 }
 
+void dpm_evaluate_request_rdo(int port, uint32_t rdo)
+{
+	int idx;
+	int op_ma;
+
+	if (CONFIG_USB_PD_3A_PORTS == 0)
+		return;
+
+	idx = RDO_POS(rdo);
+	/* Check for invalid index */
+	if (!idx)
+		return;
+
+	op_ma = (rdo >> 10) & 0x3FF;
+	if ((BIT(port) && sink_max_pdo_requested) && (op_ma <= 150)) {
+		/*
+		 * sink_max_pdo_requested will be set when we get 5V/3A sink
+		 * capability from port partner. If port partner only request
+		 * 5V/1.5A, we need to provide 5V/1.5A.
+		 */
+		atomic_clear_bits(&sink_max_pdo_requested, BIT(port));
+
+		balance_source_ports();
+	}
+}
+
 void dpm_remove_sink(int port)
 {
 	if (CONFIG_USB_PD_3A_PORTS == 0)
@@ -787,4 +818,136 @@ int dpm_get_source_current(const int port)
 		return 1500;
 	else
 		return 500;
+}
+
+__overridable enum pd_sdb_power_indicator board_get_pd_sdb_power_indicator(
+enum pd_sdb_power_state power_state)
+{
+	/*
+	 *  LED on for S0 and blinking for S0ix/S3.
+	 *  LED off for all other power states (S4, S5, G3, NOT_SUPPORTED)
+	 */
+	switch (power_state) {
+	case PD_SDB_POWER_STATE_S0:
+		return PD_SDB_POWER_INDICATOR_ON;
+	case PD_SDB_POWER_STATE_MODERN_STANDBY:
+	case PD_SDB_POWER_STATE_S3:
+		return PD_SDB_POWER_INDICATOR_BLINKING;
+	default:
+		return PD_SDB_POWER_INDICATOR_OFF;
+	}
+}
+
+static uint8_t get_status_internal_temp(void)
+{
+	/*
+	 * Internal Temp
+	 */
+#ifdef CONFIG_TEMP_SENSOR
+	int temp_k, temp_c;
+
+	if (temp_sensor_read(CONFIG_USB_PD_TEMP_SENSOR, &temp_k) != EC_SUCCESS)
+		return 0;
+
+	/* Check temp is in expected range (<255°C) */
+	temp_c = K_TO_C(temp_k);
+	if (temp_c > 255)
+		return 0;
+	else if (temp_c < 2)
+		temp_c = 1;
+
+	return (uint8_t) temp_c;
+#else
+	return 0;
+#endif
+}
+
+static enum pd_sdb_temperature_status get_status_temp_status(void)
+{
+	/*
+	 * Temperature Status
+	 *
+	 * OTP events are currently unsupported by the EC, the temperature
+	 * status will be reported as "not supported" on temp sensor read
+	 * failures and "Normal" otherwise.
+	 */
+#ifdef CONFIG_TEMP_SENSOR
+	int temp_k;
+
+	if (temp_sensor_read(CONFIG_USB_PD_TEMP_SENSOR, &temp_k) != EC_SUCCESS)
+		return PD_SDB_TEMPERATURE_STATUS_NOT_SUPPORTED;
+
+	return PD_SDB_TEMPERATURE_STATUS_NORMAL;
+#else
+	return PD_SDB_TEMPERATURE_STATUS_NOT_SUPPORTED;
+#endif
+}
+
+static uint8_t get_status_power_state_change(void)
+{
+	enum pd_sdb_power_state ret = PD_SDB_POWER_STATE_NOT_SUPPORTED;
+
+#ifdef HAS_TASK_CHIPSET
+	if (chipset_in_or_transitioning_to_state(CHIPSET_STATE_HARD_OFF)) {
+		ret = PD_SDB_POWER_STATE_G3;
+	} else if (chipset_in_or_transitioning_to_state(
+			   CHIPSET_STATE_SOFT_OFF)) {
+		/*
+		 * SOFT_OFF includes S4; chipset_state API doesn't support S4
+		 * specifically, so fold S4 to S5
+		 */
+		ret = PD_SDB_POWER_STATE_S5;
+	} else if (chipset_in_or_transitioning_to_state(
+			   CHIPSET_STATE_SUSPEND)) {
+		ret = PD_SDB_POWER_STATE_S3;
+	} else if (chipset_in_or_transitioning_to_state(CHIPSET_STATE_ON)) {
+		ret = PD_SDB_POWER_STATE_S0;
+	} else if (chipset_in_or_transitioning_to_state(
+			   CHIPSET_STATE_STANDBY)) {
+		ret = PD_SDB_POWER_STATE_MODERN_STANDBY;
+	}
+#endif /* HAS_TASK_CHIPSET */
+
+	return ret | board_get_pd_sdb_power_indicator(ret);
+}
+
+int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len)
+{
+	struct pd_sdb sdb;
+	struct rmdo partner_rmdo;
+
+	/* TODO(b/227236917): Fill in fields of Status message */
+
+	/* Internal Temp */
+	sdb.internal_temp = get_status_internal_temp();
+
+	/* Present Input */
+	sdb.present_input = 0x0;
+
+	/* Present Battery Input */
+	sdb.present_battery_input = 0x0;
+
+	/* Event Flags */
+	sdb.event_flags = 0x0;
+
+	/* Temperature Status */
+	sdb.temperature_status = get_status_temp_status();
+
+	/* Power Status */
+	sdb.power_status = 0x0;
+
+	partner_rmdo = pe_get_partner_rmdo(port);
+	if ((partner_rmdo.major_rev == 3 && partner_rmdo.minor_rev >= 1) ||
+	    partner_rmdo.major_rev > 3) {
+		/* USB PD Rev 3.1: 6.5.2 Status Message */
+		sdb.power_state_change = get_status_power_state_change();
+		*len = 7;
+	} else {
+		/* USB PD Rev 3.0: 6.5.2 Status Message */
+		sdb.power_state_change = 0;
+		*len = 6;
+	}
+
+	memcpy(msg, &sdb, *len);
+	return EC_SUCCESS;
 }

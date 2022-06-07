@@ -5,7 +5,7 @@
  * Power and battery LED control.
  */
 
-#include <drivers/gpio.h>
+#include <zephyr/drivers/gpio.h>
 
 #include "battery.h"
 #include "charge_manager.h"
@@ -20,14 +20,14 @@
 #include "system.h"
 #include "util.h"
 
-#include <devicetree.h>
-#include <logging/log.h>
-LOG_MODULE_REGISTER(gpio_led, LOG_LEVEL_ERR);
+#include <zephyr/devicetree.h>
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(led, LOG_LEVEL_ERR);
 
 #define LED_COLOR_NODE  DT_PATH(led_colors)
 
 struct led_color_node_t {
-	int led_color;
+	struct led_pins_node_t *pins_node;
 	int acc_period;
 };
 
@@ -35,9 +35,16 @@ enum led_extra_flag_t {
 	NONE = 0,
 	LED_CHFLAG_FORCE_IDLE,
 	LED_CHFLAG_DEFAULT,
-	LED_BATT_BELOW_10_PCT,
-	LED_BATT_ABOVE_10_PCT,
 };
+
+#define DECLARE_PINS_NODE(id)						\
+extern struct led_pins_node_t PINS_NODE(id);
+
+#if DT_HAS_COMPAT_STATUS_OKAY(COMPAT_PWM_LED)
+DT_FOREACH_CHILD(PWM_LED_PINS_NODE, DECLARE_PINS_NODE)
+#elif DT_HAS_COMPAT_STATUS_OKAY(COMPAT_GPIO_LED)
+DT_FOREACH_CHILD(GPIO_LED_PINS_NODE, DECLARE_PINS_NODE)
+#endif
 
 /*
  * Currently 4 different colors are supported for blinking LED, each of which
@@ -58,6 +65,8 @@ struct node_prop_t {
 	enum charge_state pwr_state;
 	enum power_state chipset_state;
 	enum led_extra_flag_t led_extra_flag;
+	int8_t batt_lvl[2];
+	int8_t charge_port;
 	struct led_color_node_t led_colors[MAX_COLOR];
 };
 
@@ -83,10 +92,14 @@ struct node_prop_t {
 #define ACC_PERIOD(color_num, state_id)					\
 	(0 LISTIFY(color_num, LED_PLUS_PERIOD, (), state_id))
 
+#define PINS_NODE_ADDR(id)	DT_PHANDLE(id, led_color)
 #define LED_COLOR_INIT(color_num, color_num_plus_one, state_id)		\
 {									\
-	.led_color = GET_PROP(DT_CHILD(state_id, color_##color_num),	\
-							led_color),	\
+	.pins_node = COND_CODE_1(					\
+		DT_NODE_EXISTS(DT_CHILD(state_id, color_##color_num)),	\
+		(&PINS_NODE(PINS_NODE_ADDR(				\
+			DT_CHILD(state_id, color_##color_num)))),	\
+		(NULL)),						\
 	.acc_period = ACC_PERIOD(color_num_plus_one, state_id)		\
 }
 
@@ -98,6 +111,12 @@ struct node_prop_t {
 	.pwr_state = GET_PROP(state_id, charge_state),			\
 	.chipset_state = GET_PROP(state_id, chipset_state),		\
 	.led_extra_flag = GET_PROP(state_id, extra_flag),		\
+	.batt_lvl = COND_CODE_1(					\
+			DT_NODE_HAS_PROP(state_id, batt_lvl),		\
+			(DT_PROP(state_id, batt_lvl)), ({-1, -1})),	\
+	.charge_port = COND_CODE_1(					\
+			DT_NODE_HAS_PROP(state_id, charge_port),	\
+			(DT_PROP(state_id, charge_port)), (-1)),	\
 	.led_colors = {LED_COLOR_INIT(0, 1, state_id),			\
 		       LED_COLOR_INIT(1, 2, state_id),			\
 		       LED_COLOR_INIT(2, 3, state_id),			\
@@ -105,7 +124,7 @@ struct node_prop_t {
 		      }							\
 },
 
-struct node_prop_t node_array[] = {
+static const struct node_prop_t node_array[] = {
 	DT_FOREACH_CHILD(LED_COLOR_NODE, SET_LED_VALUES)
 };
 
@@ -147,18 +166,6 @@ static bool find_node_with_extra_flag(int i)
 				found_node = true;
 		}
 		break;
-	case LED_BATT_BELOW_10_PCT:
-	case LED_BATT_ABOVE_10_PCT:
-		if (charge_get_percent() < 10) {
-			if (node_array[i].led_extra_flag ==
-					LED_BATT_BELOW_10_PCT)
-				found_node = true;
-		} else {
-			if (node_array[i].led_extra_flag !=
-					LED_BATT_ABOVE_10_PCT)
-				found_node = true;
-		}
-		break;
 	default:
 		LOG_ERR("Invalid led extra flag %d",
 				node_array[i].led_extra_flag);
@@ -168,100 +175,128 @@ static bool find_node_with_extra_flag(int i)
 	return found_node;
 }
 
-static int find_node(void)
-{
-	int i = 0;
-
-	for (i = 0; i < ARRAY_SIZE(node_array); i++) {
-		/* Check if this node depends on power state */
-		if (node_array[i].pwr_state != PWR_STATE_UNCHANGE) {
-			enum charge_state pwr_state = charge_get_state();
-
-			if (node_array[i].pwr_state != pwr_state)
-				continue;
-		}
-
-		/* Check if this node depends on chipset state */
-		if (node_array[i].chipset_state != 0) {
-			enum power_state chipset_state =
-						get_chipset_state();
-
-			/* Continue at current index as nodes are in sequence */
-			if (node_array[i].chipset_state != chipset_state)
-				continue;
-		}
-
-		/* Check if the node depends on any special flags */
-		if (node_array[i].led_extra_flag != NONE)
-			if (!find_node_with_extra_flag(i))
-				continue;
-
-		/* We found the node */
-		return i;
-	}
-
-	/*
-	 * Didn't find a valid node that matches all the properties
-	 * Return -1 to signify error
-	 */
-	return -1;
-}
-
 #define GET_PERIOD(n_idx, c_idx)  node_array[n_idx].led_colors[c_idx].acc_period
-#define GET_COLOR(n_idx, c_idx)   node_array[n_idx].led_colors[c_idx].led_color
+#define GET_PIN_NODE(n_idx, c_idx) node_array[n_idx].led_colors[c_idx].pins_node
 
-static int find_color(int node_idx, uint32_t ticks)
+static void set_color(int node_idx, uint32_t ticks)
 {
 	int color_idx = 0;
 
-	/* If period value at index 0 is not 0, it's a blinking LED */
-	if (GET_PERIOD(node_idx, 0) != 0) {
+	/* If accumulated period value is not 0, it's a blinking LED */
+	if (GET_PERIOD(node_idx, MAX_COLOR - 1) != 0) {
 		/*  Period is accumulated at the last index */
 		ticks = ticks % GET_PERIOD(node_idx, MAX_COLOR - 1);
+	}
 
-		for (color_idx = 0; color_idx < MAX_COLOR; color_idx++) {
-			/*
-			 * Period value that we use here is in terms of number
-			 * of ticks stored during initialization of the struct
-			 */
-			if (ticks < GET_PERIOD(node_idx, color_idx))
-				break;
+	/*
+	 * Period value of 0 indicates solid LED color (non-blinking)
+	 * In case of dual port battery LEDs, period value of 0 is
+	 * also used to turn-off non-active port LED
+	 * Nodes with period value of 0 strictly need to be listed before
+	 * nodes with non-zero period values as we are accumulating the
+	 * period at each node.
+	 *
+	 * TODO: Remove the strict sequence requirement for listing the
+	 * zero-period value nodes.
+	 */
+	for (color_idx = 0; color_idx < MAX_COLOR; color_idx++) {
+		struct led_pins_node_t *pins_node =
+			GET_PIN_NODE(node_idx, color_idx);
+		int period = GET_PERIOD(node_idx, color_idx);
+
+		if (pins_node == NULL)
+			break; /* No more valid color nodes, break here */
+
+		if (!led_auto_control_is_enabled(pins_node->led_id))
+			break; /* Auto control is disabled */
+
+		/*
+		 * Period value that we use here is in terms of number
+		 * of ticks stored during initialization of the struct
+		 */
+		if (period == 0)
+			led_set_color_with_node(pins_node);
+		else if (ticks < period) {
+			led_set_color_with_node(pins_node);
+			break;
+		}
+	}
+}
+
+static int match_node(int node_idx)
+{
+	/* Check if this node depends on power state */
+	if (node_array[node_idx].pwr_state != PWR_STATE_UNCHANGE) {
+		enum charge_state pwr_state = charge_get_state();
+
+		if (node_array[node_idx].pwr_state != pwr_state)
+			return -1;
+
+		/* Check if this node depends on charge port */
+		if (node_array[node_idx].charge_port != -1) {
+			int port = charge_manager_get_active_charge_port();
+
+			if (node_array[node_idx].charge_port != port)
+				return -1;
 		}
 	}
 
-	return GET_COLOR(node_idx, color_idx);
+	/* Check if this node depends on chipset state */
+	if (node_array[node_idx].chipset_state != 0) {
+		enum power_state chipset_state = get_chipset_state();
+
+		if (node_array[node_idx].chipset_state != chipset_state)
+			return -1;
+	}
+
+	/* Check if this node depends on battery level */
+	if (node_array[node_idx].batt_lvl[0] != -1) {
+		int curr_batt_lvl = charge_get_percent();
+
+		if ((curr_batt_lvl < node_array[node_idx].batt_lvl[0]) ||
+		    (curr_batt_lvl > node_array[node_idx].batt_lvl[1]))
+			return -1;
+	}
+
+	/* Check if the node depends on any special flags */
+	if (node_array[node_idx].led_extra_flag != NONE)
+		if (!find_node_with_extra_flag(node_idx))
+			return -1;
+
+	/* We found the node that matches the current system state */
+	return node_idx;
 }
 
 static void board_led_set_color(void)
 {
-	int color = LED_OFF;
-	int node = 0;
 	static uint32_t ticks;
+	bool found_node = false;
 
 	ticks++;
 
 	/*
-	 * Find a node that matches the current state of the system. Depending
-	 * on the policy defined in led.dts, a node could depend on power-state,
-	 * chipset-state, extra flags like battery percentage etc.
-	 * We should always find a node that indicates the LED Behavior for
+	 * Find all the nodes that match the current state of the system and
+	 * set color for these nodes. Depending on the policy defined in
+	 * led.dts, a node could depend on power-state, chipset-state, extra
+	 * flags like battery percentage etc.
+	 * We must find at least one node that indicates the LED Behavior for
 	 * current system state.
 	 */
-	node = find_node();
+	for (int i = 0; i < ARRAY_SIZE(node_array); i++) {
+		if (match_node(i) != -1) {
+			found_node = true;
+			set_color(i, ticks);
+		}
+	}
 
-	if (node < 0)
-		LOG_ERR("Invalid node id, node with matching prop not found");
-	else
-		color = find_color(node, ticks);
-
-	led_set_color(color);
+	if (!found_node)
+		LOG_ERR("Node with matching prop not found");
 }
 
-/* Called by hook task every second */
+/* Called by hook task every HOOK_TICK_INTERVAL_MS */
 static void led_tick(void)
 {
-	if (led_auto_control_is_enabled(EC_LED_ID_BATTERY_LED))
-		board_led_set_color();
+	board_led_set_color();
 }
 DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
 
@@ -283,5 +318,5 @@ void led_control(enum ec_led_id led_id, enum ec_led_state state)
 
 	led_auto_control(EC_LED_ID_BATTERY_LED, 0);
 
-	led_set_color(color);
+	led_set_color(color, led_id);
 }

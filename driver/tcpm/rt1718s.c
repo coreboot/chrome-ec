@@ -12,18 +12,27 @@
 #include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/tcpm.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "stdint.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
+#include "usb_pe_sm.h"
 #include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
 
-#define RT1718S_SW_RESET_DELAY_MS 2
+#define RT1718S_SW_RESET_DELAY_MS	2
+/* Time for delay deasserting EN_FRS after FRS VBUS drop. */
+#define RT1718S_FRS_DIS_DELAY		(5 * MSEC)
+
+#define FLAG_FRS_ENABLED		BIT(0)
+#define FLAG_FRS_RX_SIGNALLED		BIT(1)
+#define FLAG_FRS_VBUS_VALID_FALL	BIT(2)
+static atomic_t frs_flag[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* i2c_write function which won't wake TCPC from low power mode. */
 static int rt1718s_write(int port, int reg, int val, int len)
@@ -229,6 +238,10 @@ static int rt1718s_init(int port)
 				RT1718S_RT2_VBUS_VOL_CTRL_VOL_SEL,
 				RT1718S_VBUS_VOL_TO_REG(20)));
 
+	/* Set VCONN_OCP_SEL to 400mA */
+	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_VCONN_CONTROL_3,
+				RT1718S_VCONN_CONTROL_3_VCONN_OCP_SEL, 0x7F));
+
 	/* Disable FOD function */
 	RETURN_ERROR(rt1718s_update_bits8(port, 0xCF, 0x40, 0x00));
 
@@ -253,10 +266,16 @@ static int rt1718s_init(int port)
 				TCPC_REG_ALERT_MASK_VENDOR_DEF,
 				MASK_SET));
 
-	if (IS_ENABLED(CONFIG_USB_PD_FRS))
-		/* Set Rx frs unmasked */
-		RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_RT_MASK1,
-					 RT1718S_RT_MASK1_M_RX_FRS, 0xFF));
+	if (IS_ENABLED(CONFIG_USB_PD_FRS)) {
+		memset(frs_flag, 0,
+		       sizeof(atomic_t) * CONFIG_USB_PD_PORT_MAX_COUNT);
+		/* Set Rx frs and valid vbus fall unmasked */
+		RETURN_ERROR(rt1718s_update_bits8(
+			port, RT1718S_RT_MASK1,
+			RT1718S_RT_MASK1_M_RX_FRS |
+				RT1718S_RT_MASK1_M_VBUS_FRS_LOW,
+			0xFF));
+	}
 
 	RETURN_ERROR(board_rt1718s_init(port));
 
@@ -324,40 +343,56 @@ static void rt1718s_update_charge_manager(int port,
 	}
 }
 
-static void rt1718s_bc12_usb_charger_task(const int port)
+static void rt1718s_bc12_usb_charger_task_init(const int port)
 {
 	rt1718s_enable_bc12_sink(port, false);
+}
 
-	while (1) {
-		uint32_t evt = task_wait_event(-1);
-		bool is_non_pd_sink = !pd_capable(port) &&
-			!usb_charger_port_is_sourcing_vbus(port) &&
-			pd_check_vbus_level(port, VBUS_PRESENT);
+static void rt1718s_bc12_usb_charger_task_event(const int port, uint32_t evt)
+{
+	bool is_non_pd_sink = !pd_capable(port) &&
+		!usb_charger_port_is_sourcing_vbus(port) &&
+		pd_check_vbus_level(port, VBUS_PRESENT);
 
-		if (evt & USB_CHG_EVENT_VBUS) {
+	if (evt & USB_CHG_EVENT_VBUS) {
 
-			if (is_non_pd_sink)
-				rt1718s_enable_bc12_sink(port, true);
-			else
-				rt1718s_update_charge_manager(
-						port, CHARGE_SUPPLIER_NONE);
-		}
-
-		/* detection done, update charge_manager and stop detection */
-		if (evt & USB_CHG_EVENT_BC12) {
-			int type;
-
-			if (is_non_pd_sink)
-				type = rt1718s_get_bc12_type(port);
-			else
-				type = CHARGE_SUPPLIER_NONE;
-
+		if (is_non_pd_sink)
+			rt1718s_enable_bc12_sink(port, true);
+		else
 			rt1718s_update_charge_manager(
-					port, type);
-			rt1718s_enable_bc12_sink(port, false);
+					port, CHARGE_SUPPLIER_NONE);
+	}
+
+	/* detection done, update charge_manager and stop detection */
+	if (evt & USB_CHG_EVENT_BC12) {
+		int type;
+
+		if (is_non_pd_sink)
+			type = rt1718s_get_bc12_type(port);
+		else
+			type = CHARGE_SUPPLIER_NONE;
+
+		rt1718s_update_charge_manager(port, type);
+		rt1718s_enable_bc12_sink(port, false);
+	}
+}
+
+static void frs_gpio_disable_deferred(void)
+{
+	int i;
+
+	for (i = 0; i < board_get_usb_pd_port_count(); ++i) {
+		if (frs_flag[i] & FLAG_FRS_VBUS_VALID_FALL) {
+			atomic_clear_bits(&frs_flag[i],
+					  FLAG_FRS_RX_SIGNALLED |
+						  FLAG_FRS_VBUS_VALID_FALL);
+			/* If the FRS gets enabled again, do not disable it. */
+			if (!(frs_flag[i] & FLAG_FRS_ENABLED))
+				board_rt1718s_set_frs_enable(i, 0);
 		}
 	}
 }
+DECLARE_DEFERRED(frs_gpio_disable_deferred);
 
 void rt1718s_vendor_defined_alert(int port)
 {
@@ -373,12 +408,68 @@ void rt1718s_vendor_defined_alert(int port)
 		if (rv)
 			return;
 
-		if ((int1 & RT1718S_RT_INT1_INT_RX_FRS)) {
-			pd_got_frs_signal(port);
+		if ((int1 & RT1718S_RT_INT1_INT_RX_FRS) &&
+		    frs_flag[port] & FLAG_FRS_ENABLED) {
+			/*
+			 * 1. Sometimes we get Rx signalled even if the
+			 * FRS is disabled, so filter it.
+			 * 2. Only call pd_got_frs_signal when this is the first
+			 * Rx interrupt for this FRS swap, and the FRS is
+			 * enabled.  The Rx interrupt may re-send when the
+			 * sink voltage is 5V, and this will make us re-entry
+			 * the FRS states.
+			 * 3. When a FRS hub detached, RT1718S will
+			 * raise FRS RX alert as well. In this case,
+			 * we are unable to audit the errors in time,
+			 * we will still enter the FRS AMS, but it will
+			 * fail eventually, and back to CC open state.
+			 */
+			if (!(frs_flag[port] & FLAG_FRS_RX_SIGNALLED)) {
+				atomic_or(&frs_flag[port],
+					  FLAG_FRS_RX_SIGNALLED);
+				/* notify TCPM we got FRS signal */
+				pd_got_frs_signal(port);
+			}
+		}
 
+		if ((int1 & RT1718S_RT_INT1_INT_VBUS_FRS_LOW)) {
+			/*
+			 * Only process if have had rx signalled.
+			 * VBUS_FRS_LOW alert could be raised multiple times
+			 * if VBUS 5V is glitched.
+			 */
+			if ((frs_flag[port] & FLAG_FRS_RX_SIGNALLED) &&
+			    !(frs_flag[port] & FLAG_FRS_VBUS_VALID_FALL)) {
+				atomic_or(&frs_flag[port],
+					  FLAG_FRS_VBUS_VALID_FALL);
+				/*
+				 * b/223086905:comment8&comment17
+				 * We deferred the FRS disable
+				 * (called to rt1718s_set_frs_enable()), now we
+				 * can disable it after the VBUS fell.
+				 */
+				rt1718s_set_frs_enable(port, 0);
+				/*
+				 * b/228422539:comment4
+				 * PPC HL5099 (pin-compatible to NX20P3483)
+				 * suggested FRS gpio should be disabled after
+				 * the SRC gpio enabled for 5ms to prevent the
+				 * PPC from stopping sourcing the VBUS.
+				 * Thought this is a workaround for HL5099, but
+				 * it shouldn't affect other PPC chips since
+				 * the DUT started sourcing the partner already.
+				 */
+				hook_call_deferred(
+					&frs_gpio_disable_deferred_data,
+					RT1718S_FRS_DIS_DELAY);
+			}
+		}
+
+		/* ignore other interrupts for faster frs handling */
+		if (int1 & (RT1718S_RT_INT1_INT_RX_FRS |
+			    RT1718S_RT_INT1_INT_VBUS_FRS_LOW)) {
 			tcpc_write16(port, TCPC_REG_ALERT,
-					TCPC_REG_ALERT_VENDOR_DEF);
-			/* ignore other interrupts for faster frs handling */
+				     TCPC_REG_ALERT_VENDOR_DEF);
 			return;
 		}
 	}
@@ -395,8 +486,7 @@ void rt1718s_vendor_defined_alert(int port)
 
 	/* check snk done */
 	if (value & RT1718S_RT_INT6_INT_BC12_SNK_DONE)
-		task_set_event(USB_CHG_PORT_TO_TASK_ID(port),
-			       USB_CHG_EVENT_BC12);
+		usb_charger_task_set_event(port, USB_CHG_EVENT_BC12);
 
 	/* clear the alerts from rt1718s_workaround() */
 	rv = rt1718s_write8(port, RT1718S_RT_INT2, 0xFF);
@@ -519,6 +609,12 @@ out:
 }
 
 #ifdef CONFIG_USB_PD_FRS
+
+__overridable int board_rt1718s_set_frs_enable(int port, int enable)
+{
+	return EC_SUCCESS;
+}
+
 int rt1718s_set_frs_enable(int port, int enable)
 {
 	/*
@@ -528,15 +624,38 @@ int rt1718s_set_frs_enable(int port, int enable)
 	int frs_ctrl2 = 0x10, vbus_ctrl_en = 0x3F;
 
 	if (enable) {
+		atomic_or(&frs_flag[port], FLAG_FRS_ENABLED);
 		frs_ctrl2 |= RT1718S_FRS_CTRL2_RX_FRS_EN;
 		frs_ctrl2 |= RT1718S_FRS_CTRL2_VBUS_FRS_EN;
 
 		vbus_ctrl_en |= RT1718S_VBUS_CTRL_EN_GPIO2_VBUS_PATH_EN;
 		vbus_ctrl_en |= RT1718S_VBUS_CTRL_EN_GPIO1_VBUS_PATH_EN;
+	} else {
+		atomic_clear_bits(&frs_flag[port], FLAG_FRS_ENABLED);
+		if (FLAG_FRS_RX_SIGNALLED ==
+		    (frs_flag[port] &
+		     (FLAG_FRS_RX_SIGNALLED | FLAG_FRS_VBUS_VALID_FALL))) {
+			/*
+			 * Skip disable if we had only FRS_RX_SIGNALLED, and
+			 * deferred the FRS register disable process in
+			 * rt1718s_vendor_defined_alert.
+			 */
+			return EC_SUCCESS;
+		}
 	}
 
 	RETURN_ERROR(rt1718s_write8(port, RT1718S_FRS_CTRL2, frs_ctrl2));
 	RETURN_ERROR(rt1718s_write8(port, RT1718S_VBUS_CTRL_EN, vbus_ctrl_en));
+
+	/*
+	 * b/223086905#comment13, b/228422539:comment4
+	 * If this function gets called when FRS RX signalled, then
+	 * we'll deferred the GPIO disabled until the VBUS valid drop. So
+	 * don't disable it here.
+	 */
+	if (enable || !(frs_flag[port] & FLAG_FRS_RX_SIGNALLED))
+		RETURN_ERROR(board_rt1718s_set_frs_enable(port, enable));
+
 	return EC_SUCCESS;
 }
 #endif
@@ -630,10 +749,8 @@ const struct tcpm_drv rt1718s_tcpm_drv = {
 	.drp_toggle		= &tcpci_tcpc_drp_toggle,
 #endif
 	.get_chip_info		= &tcpci_get_chip_info,
-#ifdef CONFIG_USB_PD_PPC
 	.set_snk_ctrl		= &rt1718s_tcpm_set_snk_ctrl,
 	.set_src_ctrl		= &tcpci_tcpm_set_src_ctrl,
-#endif
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode	= &rt1718s_enter_low_power_mode,
 #endif
@@ -644,5 +761,6 @@ const struct tcpm_drv rt1718s_tcpm_drv = {
 };
 
 const struct bc12_drv rt1718s_bc12_drv = {
-	.usb_charger_task = rt1718s_bc12_usb_charger_task,
+	.usb_charger_task_init = rt1718s_bc12_usb_charger_task_init,
+	.usb_charger_task_event = rt1718s_bc12_usb_charger_task_event,
 };

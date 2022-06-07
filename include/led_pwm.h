@@ -9,7 +9,7 @@
 #include "ec_commands.h"
 
 #ifdef CONFIG_ZEPHYR
-#include "drivers/pwm.h"
+#include <zephyr/drivers/pwm.h>
 #endif
 
 #ifdef CONFIG_ZEPHYR
@@ -20,7 +20,7 @@ struct pwm_led_dt_channel {
 	const struct device *dev;
 	uint32_t channel;
 	pwm_flags_t flags;
-	uint32_t period_us;
+	uint32_t period_ns;
 };
 
 struct pwm_led {

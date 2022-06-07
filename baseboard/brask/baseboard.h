@@ -84,6 +84,11 @@
 #define CONFIG_CMD_AP_RESET_LOG
 #define CONFIG_HOSTCMD_AP_RESET
 
+/* ADL has new low-power features that requires extra-wide virtual wire
+ * pulses. The EDS specifies 100 microseconds. */
+#undef CONFIG_ESPI_DEFAULT_VW_WIDTH_US
+#define CONFIG_ESPI_DEFAULT_VW_WIDTH_US	100
+
 /* Buttons */
 #define CONFIG_DEDICATED_RECOVERY_BUTTON
 #define CONFIG_EMULATED_SYSRQ
@@ -95,7 +100,7 @@
 /* Matrix Keyboard Protocol */
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_INPUT_DEVICES
-#define CONFIG_MKBP_USE_HOST_EVENT
+#define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
 
 /* Thermal features */
 #define CONFIG_DPTF

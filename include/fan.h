@@ -11,16 +11,16 @@
 #ifdef CONFIG_ZEPHYR
 #ifdef CONFIG_PLATFORM_EC_FAN
 
-#include <devicetree.h>
+#include <zephyr/devicetree.h>
 #define NODE_ID_AND_COMMA(node_id) node_id,
 enum fan_channel {
-#if DT_NODE_EXISTS(DT_INST(0, named_fans))
-	DT_FOREACH_CHILD(DT_INST(0, named_fans), NODE_ID_AND_COMMA)
-#endif /* named_fans */
+#if DT_NODE_EXISTS(DT_INST(0, cros_ec_fans))
+	DT_FOREACH_CHILD(DT_INST(0, cros_ec_fans), NODE_ID_AND_COMMA)
+#endif /* cros_ec_fans */
 	FAN_CH_COUNT
 };
 
-#define CONFIG_FANS FAN_CH_COUNT
+BUILD_ASSERT(FAN_CH_COUNT == CONFIG_PLATFORM_EC_NUM_FANS);
 
 #endif /* CONFIG_PLATFORM_EC_FAN */
 #endif /* CONFIG_ZEPHYR */

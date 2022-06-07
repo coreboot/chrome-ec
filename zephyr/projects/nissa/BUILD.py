@@ -4,7 +4,7 @@
 
 """Define zmake projects for nissa."""
 
-# Nivviks has NPCX993F, Nereid has ITE81302
+# Nivviks and Craask has NPCX993F, Nereid has ITE81302
 
 
 def register_nissa_project(
@@ -15,7 +15,7 @@ def register_nissa_project(
 ):
     """Register a variant of nissa."""
     register_func = register_binman_project
-    if chip.startswith("npcx9"):
+    if chip.startswith("npcx"):
         register_func = register_npcx_project
 
     register_func(
@@ -28,9 +28,10 @@ def register_nissa_project(
 
 register_nissa_project(
     project_name="nivviks",
-    chip="npcx9",
+    chip="npcx9m3f",
     extra_dts_overlays=[
         here / "nivviks_generated.dts",
+        here / "nivviks_cbi.dts",
         here / "nivviks_overlay.dts",
         here / "nivviks_motionsense.dts",
         here / "nivviks_keyboard.dts",
@@ -52,4 +53,17 @@ register_nissa_project(
         here / "nereid_pwm_leds.dts",
     ],
     extra_kconfig_files=[here / "prj_nereid.conf"],
+)
+
+register_nissa_project(
+    project_name="craask",
+    chip="npcx9m3f",
+    extra_dts_overlays=[
+        here / "craask_generated.dts",
+        here / "craask_overlay.dts",
+        here / "craask_motionsense.dts",
+        here / "craask_power_signals.dts",
+        here / "craask_pwm_leds.dts",
+    ],
+    extra_kconfig_files=[here / "prj_craask.conf"],
 )

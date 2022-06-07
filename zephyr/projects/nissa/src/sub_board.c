@@ -6,10 +6,10 @@
 /* Nissa sub-board hardware configuration */
 
 #include <ap_power/ap_power.h>
-#include <drivers/gpio.h>
-#include <init.h>
-#include <kernel.h>
-#include <sys/printk.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
 
 #include "driver/tcpm/tcpci.h"
 #include "gpio/gpio_int.h"
@@ -28,17 +28,13 @@ static void hdmi_power_handler(struct ap_power_ev_callback *cb,
 	/* Enable rails for S3 */
 	const struct gpio_dt_spec *s3_rail =
 		GPIO_DT_FROM_ALIAS(gpio_hdmi_en_odl);
-	/* Enable rails for S5 */
-	const struct gpio_dt_spec *s5_rail =
-		GPIO_DT_FROM_ALIAS(gpio_en_rails_odl);
-	/* Connect DDC to sub-board */
+	/* Connect AP's DDC to sub-board (default is USB-C aux) */
 	const struct gpio_dt_spec *ddc_select =
 		GPIO_DT_FROM_NODELABEL(gpio_hdmi_sel);
 
 	switch (data.event) {
 	case AP_POWER_PRE_INIT:
-		LOG_DBG("Enabling HDMI+USB-A PP5000 and selecting DDC");
-		gpio_pin_set_dt(s5_rail, 1);
+		LOG_DBG("Connecting HDMI DDC to sub-board");
 		gpio_pin_set_dt(ddc_select, 1);
 		break;
 	case AP_POWER_STARTUP:
@@ -50,9 +46,8 @@ static void hdmi_power_handler(struct ap_power_ev_callback *cb,
 		gpio_pin_set_dt(s3_rail, 0);
 		break;
 	case AP_POWER_HARD_OFF:
-		LOG_DBG("Disabling HDMI+USB-A PP5000 and deselecting DDC");
+		LOG_DBG("Disconnecting HDMI sub-board DDC");
 		gpio_pin_set_dt(ddc_select, 0);
-		gpio_pin_set_dt(s5_rail, 0);
 		break;
 	default:
 		LOG_ERR("Unhandled HDMI power event %d", data.event);
@@ -128,22 +123,21 @@ static void nereid_subboard_config(void)
 	}
 	/*
 	 * USB-C port: the default configuration has I2C on the I2C pins,
-	 * but the interrupt line needs to be configured and USB mux
-	 * configuration provided.
+	 * but the interrupt line needs to be configured.
 	 */
 	if (sb == NISSA_SB_C_A || sb == NISSA_SB_C_LTE) {
 		/* Configure interrupt input */
 		gpio_pin_configure_dt(
 			GPIO_DT_FROM_ALIAS(gpio_usb_c1_int_odl),
 			GPIO_INPUT | GPIO_PULL_UP);
-		usb_muxes[1].next_mux = nissa_get_c1_sb_mux();
 	} else {
 		/* Disable the port 1 charger task */
 		task_disable_task(TASK_ID_USB_CHG_P1);
+		usb_muxes[1].next_mux = NULL;
 	}
 
 	switch (sb) {
-	case NISSA_SB_HDMI_A:
+	case NISSA_SB_HDMI_A: {
 		/*
 		 * HDMI: two outputs control power which must be configured to
 		 * non-default settings, and HPD must be forwarded to the AP
@@ -192,7 +186,7 @@ static void nereid_subboard_config(void)
 				   BIT(hpd_gpio->pin));
 		irq_unlock(irq_key);
 		break;
-
+	}
 	case NISSA_SB_C_LTE:
 		/*
 		 * LTE: Set up callbacks for enabling/disabling

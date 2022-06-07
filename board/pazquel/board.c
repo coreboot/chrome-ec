@@ -67,12 +67,12 @@ static void tcpc_alert_event(enum gpio_signal signal)
 
 static void usb0_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 }
 
 static void usb1_evt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(1, USB_CHG_EVENT_BC12);
 }
 
 static void usba_oc_deferred(void)
@@ -409,7 +409,6 @@ static void board_chipset_suspend(void)
 	 * and the AP's will be AND'ed together in hardware.
 	 */
 	gpio_set_level(GPIO_ENABLE_BACKLIGHT, 0);
-	pwm_enable(PWM_CH_DISPLIGHT, 0);
 
 	/* PVC operates in automatic frequency mode in S3. */
 	da9313_pvc_mode_ctrl(1);
@@ -427,6 +426,17 @@ static void board_chipset_resume(void)
 		pwm_enable(PWM_CH_DISPLIGHT, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
+
+/* Called on S3 -> S5 transition */
+static void board_shutdown_complete(void)
+{
+	if (pwm_get_duty(PWM_CH_DISPLIGHT)) {
+		pwm_set_duty(PWM_CH_DISPLIGHT, 0);
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN_COMPLETE, board_shutdown_complete,
+		HOOK_PRIO_DEFAULT);
+
 
 void board_set_switchcap_power(int enable)
 {

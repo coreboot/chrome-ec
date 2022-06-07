@@ -198,13 +198,24 @@ static int get_amon_bmon(int chgnum, enum isl923x_amon_bmon amon,
 		ret = raw_write16(chgnum, ISL923X_REG_CONTROL1, reg);
 	}
 
-	mutex_unlock(&control1_mutex_isl923x);
-
 	if (ret)
-		return ret;
+		goto err;
 
 	*adc = adc_read_channel(ADC_AMON_BMON);
 
+	ret = raw_read16(chgnum, ISL923X_REG_CONTROL1, &reg);
+	if (ret)
+		goto err;
+
+	/* Disable monitor */
+	reg |= ISL923X_C1_DISABLE_MON;
+
+	ret = raw_write16(chgnum, ISL923X_REG_CONTROL1, reg);
+	if (ret)
+		goto err;
+
+err:
+	mutex_unlock(&control1_mutex_isl923x);
 	return ret;
 }
 #endif
@@ -490,6 +501,23 @@ static enum ec_error_list isl923x_post_init(int chgnum)
 	return EC_SUCCESS;
 }
 
+static enum ec_error_list isl923x_set_hw_ramp(int chgnum, int enable)
+{
+	int rv, reg;
+
+	rv = raw_read16(chgnum, ISL923X_REG_CONTROL0, &reg);
+	if (rv)
+		return rv;
+
+	/* HW ramp is controlled by input voltage regulation reference bits */
+	if (enable)
+		reg &= ~ISL923X_C0_DISABLE_VREG;
+	else
+		reg |= ISL923X_C0_DISABLE_VREG;
+
+	return raw_write16(chgnum, ISL923X_REG_CONTROL0, reg);
+}
+
 int isl923x_set_ac_prochot(int chgnum, uint16_t ma)
 {
 	int rv;
@@ -591,6 +619,16 @@ static void isl923x_init(int chgnum)
 			goto init_fail;
 	}
 
+	if (raw_read16(chgnum, ISL923X_REG_CONTROL1, &reg))
+		goto init_fail;
+	/*
+	 * Disable amon/bmon by default.
+	 */
+	reg |= ISL923X_C1_DISABLE_MON;
+
+	if (raw_write16(chgnum, ISL923X_REG_CONTROL1, reg))
+		goto init_fail;
+
 	if (IS_ENABLED(CONFIG_TRICKLE_CHARGING))
 		if (raw_write16(chgnum, ISL923X_REG_SYS_VOLTAGE_MIN,
 				precharge_voltage))
@@ -614,6 +652,14 @@ static void isl923x_init(int chgnum)
 	if (raw_write16(chgnum, ISL923X_REG_CONTROL2,
 			reg |
 			ISL923X_C2_ADAPTER_DEBOUNCE_150))
+		goto init_fail;
+
+	/*
+	 * Disable input regulation until other tasks such as USB-C,
+	 * charger_manager, etc. have had time to gather information
+	 * about the state of the connected charger
+	 */
+	if (isl923x_set_hw_ramp(chgnum, 0))
 		goto init_fail;
 
 	if (IS_ENABLED(CONFIG_CHARGE_RAMP_HW)) {
@@ -649,15 +695,6 @@ static void isl923x_init(int chgnum)
 			if (raw_write16(chgnum, ISL9238_REG_INPUT_VOLTAGE, reg))
 				goto init_fail;
 		}
-	} else {
-		if (raw_read16(chgnum, ISL923X_REG_CONTROL0, &reg))
-			goto init_fail;
-
-		/* Disable voltage regulation loop to disable charge ramp */
-		reg |= ISL923X_C0_DISABLE_VREG;
-
-		if (raw_write16(chgnum, ISL923X_REG_CONTROL0, reg))
-			goto init_fail;
 	}
 
 	if (IS_ENABLED(CONFIG_CHARGER_ISL9238C)) {
@@ -872,7 +909,7 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 		 */
 		regval |= RAA489000_C1_BGATE_FORCE_OFF;
 
-		/* Disable AMON/BMON */
+		/* Disable AMON/BMON. MON is enabled at get_amon_bmon() */
 		regval |= ISL923X_C1_DISABLE_MON;
 
 		/* Disable PSYS */
@@ -936,10 +973,6 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 
 enum ec_error_list isl9238c_hibernate(int chgnum)
 {
-	/* Disable IMON */
-	RETURN_ERROR(raw_update16(chgnum, ISL923X_REG_CONTROL1,
-				ISL923X_C1_DISABLE_MON, MASK_SET));
-
 	/* Disable PSYS */
 	RETURN_ERROR(raw_update16(chgnum, ISL923X_REG_CONTROL1,
 				ISL923X_C1_ENABLE_PSYS, MASK_CLR));
@@ -960,9 +993,6 @@ enum ec_error_list isl9238c_resume(int chgnum)
 {
 	/* Revert everything in isl9238c_hibernate() */
 	RETURN_ERROR(raw_update16(chgnum, ISL923X_REG_CONTROL1,
-				ISL923X_C1_DISABLE_MON, MASK_CLR));
-
-	RETURN_ERROR(raw_update16(chgnum, ISL923X_REG_CONTROL1,
 				ISL923X_C1_ENABLE_PSYS, MASK_SET));
 
 	RETURN_ERROR(raw_update16(chgnum, ISL923X_REG_CONTROL2,
@@ -979,23 +1009,6 @@ enum ec_error_list isl9238c_resume(int chgnum)
 /* Hardware current ramping */
 
 #ifdef CONFIG_CHARGE_RAMP_HW
-static enum ec_error_list isl923x_set_hw_ramp(int chgnum, int enable)
-{
-	int rv, reg;
-
-	rv = raw_read16(chgnum, ISL923X_REG_CONTROL0, &reg);
-	if (rv)
-		return rv;
-
-	/* HW ramp is controlled by input voltage regulation reference bits */
-	if (enable)
-		reg &= ~ISL923X_C0_DISABLE_VREG;
-	else
-		reg |= ISL923X_C0_DISABLE_VREG;
-
-	return raw_write16(chgnum, ISL923X_REG_CONTROL0, reg);
-}
-
 static int isl923x_ramp_is_stable(int chgnum)
 {
 	/*

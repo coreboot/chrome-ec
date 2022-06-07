@@ -91,6 +91,14 @@ void dpm_evaluate_sink_fixed_pdo(int port, uint32_t vsafe5v_pdo);
 void dpm_add_non_pd_sink(int port);
 
 /*
+ * Evaluates the request from port partner
+ *
+ * @param port		USB-C port number
+ * @param rdo		Request from port partner
+ */
+void dpm_evaluate_request_rdo(int port, uint32_t rdo);
+
+/*
  * Remove this port as a sink, and reallocate maximum current as needed.
  *
  * @param port		USB-C port number
@@ -121,6 +129,15 @@ int dpm_get_source_pdo(const uint32_t **src_pdo, const int port);
  * @return		Current offered, in mA
  */
 int dpm_get_source_current(const int port);
+
+/*
+ * Build SOP Status Data Block (SDB)
+ *
+ * @param port		USB-C port number
+ * @param *msg		pointer to pd message
+ * @param *len		pointer to uint32_t holding length of SDB
+ */
+int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len);
 
 /* Enum for modules to describe to the DPM their setup status */
 enum dpm_msg_setup_status {

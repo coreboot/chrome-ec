@@ -22,6 +22,7 @@
 #include "host_command.h"
 #include "system.h"
 #include "task.h"
+#include "typec_control.h"
 #include "usb_api.h"
 #include "usb_common.h"
 #include "usb_mux.h"
@@ -29,6 +30,7 @@
 #include "usb_pd_dpm.h"
 #include "usb_pd_flags.h"
 #include "usb_pd_tcpm.h"
+#include "usb_pe_sm.h"
 #include "usbc_ocp.h"
 #include "usbc_ppc.h"
 #include "util.h"
@@ -288,14 +290,6 @@ bool pd_is_debug_acc(int port)
 
 	return cc_state == PD_CC_UFP_DEBUG_ACC ||
 		cc_state == PD_CC_DFP_DEBUG_ACC;
-}
-
-void pd_set_polarity(int port, enum tcpc_cc_polarity polarity)
-{
-	tcpm_set_polarity(port, polarity);
-
-	if (IS_ENABLED(CONFIG_USBC_PPC_POLARITY))
-		ppc_set_polarity(port, polarity);
 }
 
 __overridable int pd_board_check_request(uint32_t rdo, int pdo_cnt)
@@ -568,8 +562,7 @@ void usb_mux_set_safe_mode(int port)
 	}
 
 	/* Isolate the SBU lines. */
-	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
-		ppc_set_sbu(port, 0);
+	typec_set_sbu(port, false);
 }
 
 void usb_mux_set_safe_mode_exit(int port)
@@ -579,44 +572,15 @@ void usb_mux_set_safe_mode_exit(int port)
 			    polarity_rm_dts(pd_get_polarity(port)));
 
 	/* Isolate the SBU lines. */
-	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
-		ppc_set_sbu(port, 0);
+	typec_set_sbu(port, false);
 }
 
-static void pd_send_hard_reset(int port)
+void pd_send_hard_reset(int port)
 {
 	task_set_event(PD_PORT_TO_TASK_ID(port), PD_EVENT_SEND_HARD_RESET);
 }
 
 #ifdef CONFIG_USBC_OCP
-
-static atomic_t port_oc_reset_req;
-
-static void re_enable_ports(void)
-{
-	uint32_t ports = atomic_clear(&port_oc_reset_req);
-
-	while (ports) {
-		int port = __fls(ports);
-
-		ports &= ~BIT(port);
-
-		/*
-		 * Let the board know that the overcurrent is
-		 * over since we're going to attempt re-enabling
-		 * the port.
-		 */
-		board_overcurrent_event(port, 0);
-
-		pd_send_hard_reset(port);
-		/*
-		 * TODO(b/117854867): PD3.0 to send an alert message
-		 * indicating OCP after explicit contract.
-		 */
-	}
-}
-DECLARE_DEFERRED(re_enable_ports);
-
 void pd_handle_overcurrent(int port)
 {
 	if ((port < 0) || (port >= board_get_usb_pd_port_count())) {
@@ -634,15 +598,11 @@ void pd_handle_overcurrent(int port)
 	if (pd_is_disconnected(port))
 		return;
 
-	/* Keep track of the overcurrent events. */
+	/*
+	 * Keep track of the overcurrent events and allow the module to perform
+	 * the spec-dictated recovery actions.
+	 */
 	usbc_ocp_add_event(port);
-
-	/* Let the board specific code know about the OC event. */
-	board_overcurrent_event(port, 1);
-
-	/* Wait 1s before trying to re-enable the port. */
-	atomic_or(&port_oc_reset_req, BIT(port));
-	hook_call_deferred(&re_enable_ports_data, SECOND);
 }
 
 #endif /* CONFIG_USBC_OCP */
@@ -715,12 +675,6 @@ __overridable int pd_is_valid_input_voltage(int mv)
 __overridable void pd_transition_voltage(int idx)
 {
 	/* Most devices are fixed 5V output. */
-}
-
-__overridable void typec_set_source_current_limit(int p, enum tcpc_rp_value rp)
-{
-	if (IS_ENABLED(CONFIG_USBC_PPC))
-		ppc_set_vbus_source_current_limit(p, rp);
 }
 
 /* ----------------- Vendor Defined Messages ------------------ */
@@ -1059,24 +1013,35 @@ void pd_srccaps_dump(int port)
 	}
 }
 
-int pd_build_alert_msg(uint32_t *msg, uint32_t *len, enum pd_power_role pr)
+int pd_broadcast_alert_msg(uint32_t ado)
 {
-	if (msg == NULL || len == NULL)
-		return EC_ERROR_INVAL;
+#if defined(CONFIG_USB_PD_TCPMV2) && defined(CONFIG_USB_PE_SM) && \
+	!defined(CONFIG_USB_VPD) && !defined(CONFIG_USB_CTVPD)
+	int ret = EC_SUCCESS;
 
-	/*
-	 * SOURCE: currently only supports OCP
-	 * SINK:   currently only supports OVP
-	 */
-	if (pr == PD_ROLE_SOURCE)
-		*msg = ADO_OCP_EVENT;
-	else
-		*msg = ADO_OVP_EVENT;
+	for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+		if (pd_send_alert_msg(i, ado) != EC_SUCCESS)
+			ret = EC_ERROR_BUSY;
+	}
 
-	/* Alert data is 4 bytes */
-	*len = 4;
+	return ret;
+#else
+	return EC_ERROR_INVALID_CONFIG;
+#endif
+}
 
+int pd_send_alert_msg(int port, uint32_t ado)
+{
+#if defined(CONFIG_USB_PD_TCPMV2) && defined(CONFIG_USB_PE_SM) && \
+	!defined(CONFIG_USB_VPD) && !defined(CONFIG_USB_CTVPD)
+	if (pe_set_ado(port, ado) != EC_SUCCESS)
+		return EC_ERROR_BUSY;
+
+	pd_dpm_request(port, DPM_REQUEST_SEND_ALERT);
 	return EC_SUCCESS;
+#else
+	return EC_ERROR_INVALID_CONFIG;
+#endif
 }
 
 #if defined(HAS_TASK_HOSTCMD) && !defined(TEST_BUILD)

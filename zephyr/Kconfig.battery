@@ -229,6 +229,14 @@ config PLATFORM_EC_BATTERY_COUNT
 	  PLATFORM_EC_BATTERY_V2 is enabled. Note this is different from
 	  BATTERY_TYPE_COUNT.
 
+config PLATFORM_EC_HOSTCMD_BATTERY_V2
+	bool "Enable host command battery API v2"
+	default y
+	help
+	  Include host commands to fetch battery information from
+	  ec_response_battery_static/dynamic_info structures, only make sense
+	  when PLATFORM_EC_BATTERY_V2 is enabled.
+
 endif # PLATFORM_EC_BATTERY_V2
 
 config PLATFORM_EC_BATTERY_TYPE_NO_AUTO_DETECT
@@ -238,5 +246,15 @@ config PLATFORM_EC_BATTERY_TYPE_NO_AUTO_DETECT
 	  based on only the manufacturer and device name. Your board code
 	  must call battery_set_fixed_battery_type() to set the fixed battery
 	  type, during board initialization.
+
+if PLATFORM_EC_I2C_VIRTUAL_BATTERY
+
+config PLATFORM_EC_SMART_BATTERY_OPTIONAL_MFG_FUNC
+	bool "Support smart battery optional MFG function"
+	help
+	  Enable this option when need support smart battery optional commands.
+	  Only make sense when PLATFORM_EC_I2C_VIRTUAL_BATTERY.
+
+endif # PLATFORM_EC_I2C_VIRTUAL_BATTERY
 
 endif # PLATFORM_EC_BATTERY

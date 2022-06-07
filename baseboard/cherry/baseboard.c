@@ -20,11 +20,9 @@
 #include "driver/charger/isl923x.h"
 #include "driver/ppc/rt1718s.h"
 #include "driver/ppc/syv682x.h"
-#include "driver/retimer/ps8802.h"
 #include "driver/tcpm/it83xx_pd.h"
 #include "driver/tcpm/rt1718s.h"
 #include "driver/temp_sensor/thermistor.h"
-#include "driver/usb_mux/anx3443.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -44,7 +42,6 @@
 #include "uart.h"
 #include "usb_charge.h"
 #include "usbc_ppc.h"
-#include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "usb_tc_sm.h"
@@ -180,7 +177,7 @@ struct bc12_config bc12_ports[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 
 static void bc12_interrupt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 }
 
 static void ppc_interrupt(enum gpio_signal signal)
@@ -229,72 +226,6 @@ __maybe_unused void xhci_init_done_interrupt(enum gpio_signal signal)
 		}
 	}
 }
-
-/* USB Mux */
-
-static int board_ps8762_mux_set(const struct usb_mux *me,
-				mux_state_t mux_state)
-{
-	/* Make sure the PS8802 is awake */
-	RETURN_ERROR(ps8802_i2c_wake(me));
-
-	/* USB specific config */
-	if (mux_state & USB_PD_MUX_USB_ENABLED) {
-		/* Boost the USB gain */
-		RETURN_ERROR(ps8802_i2c_field_update16(me,
-					PS8802_REG_PAGE2,
-					PS8802_REG2_USB_SSEQ_LEVEL,
-					PS8802_USBEQ_LEVEL_UP_MASK,
-					PS8802_USBEQ_LEVEL_UP_12DB));
-	}
-
-	/* DP specific config */
-	if (mux_state & USB_PD_MUX_DP_ENABLED) {
-		/* Boost the DP gain */
-		RETURN_ERROR(ps8802_i2c_field_update8(me,
-					PS8802_REG_PAGE2,
-					PS8802_REG2_DPEQ_LEVEL,
-					PS8802_DPEQ_LEVEL_UP_MASK,
-					PS8802_DPEQ_LEVEL_UP_12DB));
-	}
-
-	return EC_SUCCESS;
-}
-
-static int board_ps8762_mux_init(const struct usb_mux *me)
-{
-	return ps8802_i2c_field_update8(
-			me, PS8802_REG_PAGE1,
-			PS8802_REG_DCIRX,
-			PS8802_AUTO_DCI_MODE_DISABLE | PS8802_FORCE_DCI_MODE,
-			PS8802_AUTO_DCI_MODE_DISABLE);
-}
-
-static int board_anx3443_mux_set(const struct usb_mux *me,
-				 mux_state_t mux_state)
-{
-	gpio_set_level(GPIO_USB_C1_DP_IN_HPD,
-		       mux_state & USB_PD_MUX_DP_ENABLED);
-	return EC_SUCCESS;
-}
-
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{
-		.usb_port = 0,
-		.i2c_port = I2C_PORT_USB_MUX0,
-		.i2c_addr_flags = PS8802_I2C_ADDR_FLAGS,
-		.driver = &ps8802_usb_mux_driver,
-		.board_init = &board_ps8762_mux_init,
-		.board_set = &board_ps8762_mux_set,
-	},
-	{
-		.usb_port = 1,
-		.i2c_port = I2C_PORT_USB_MUX1,
-		.i2c_addr_flags = ANX3443_I2C_ADDR0_FLAGS,
-		.driver = &anx3443_usb_mux_driver,
-		.board_set = &board_anx3443_mux_set,
-	},
-};
 
 /*
  * I2C channels (A, B, and C) are using the same timing registers (00h~07h)
@@ -568,7 +499,7 @@ static void baseboard_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_DEFAULT - 1);
 
-__override int board_pd_set_frs_enable(int port, int enable)
+__override int board_rt1718s_set_frs_enable(int port, int enable)
 {
 	if (port == 1)
 		/*

@@ -300,6 +300,10 @@ void dpm_add_non_pd_sink(int port)
 {
 }
 
+void dpm_evaluate_request_rdo(int port, uint32_t rdo)
+{
+}
+
 void dpm_remove_sink(int port)
 {
 }
@@ -312,6 +316,11 @@ int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
 {
 	*src_pdo = pd_src_pdo;
 	return pd_src_pdo_cnt;
+}
+
+int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len)
+{
+	return EC_SUCCESS;
 }
 
 static enum tcpc_rp_value lcl_rp;

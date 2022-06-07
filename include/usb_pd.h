@@ -249,7 +249,7 @@ enum pd_rx_errors {
 #define PD_T_PR_SWAP_WAIT          (100*MSEC) /* tPRSwapWait 100ms */
 #define PD_T_DATA_RESET            (225*MSEC) /* between 200ms and 250ms */
 #define PD_T_DATA_RESET_FAIL       (300*MSEC) /* 300ms */
-#define PD_T_VCONN_REAPPLIED        (15*MSEC) /* between 10ms and 20ms */
+#define PD_T_VCONN_REAPPLIED        (10*MSEC) /* between 10ms and 20ms */
 #define PD_T_VCONN_DISCHARGE       (240*MSEC) /* between 160ms and 240ms */
 
 /*
@@ -588,6 +588,18 @@ struct partner_active_modes {
 
 #define VDO_PRODUCT(pid, bcd) (((pid) & 0xffff) << 16 | ((bcd) & 0xffff))
 #define PD_PRODUCT_PID(vdo) (((vdo) >> 16) & 0xffff)
+
+/*
+ * PD Rev 3.1 Revision Message Data Object (RMDO)
+ * Only bits 16-31 have data. A uint_16t is used to hold RMDOs upper 16 bits.
+ */
+struct rmdo {
+	int reserved : 16;
+	int minor_ver : 4;
+	int major_ver : 4;
+	int minor_rev : 4;
+	int major_rev : 4;
+};
 
 /*
  * Message id starts from 0 to 7. If last_msg_id is initialized to 0,
@@ -1017,6 +1029,7 @@ enum pd_dpm_request {
 	DPM_REQUEST_FRS_DET_ENABLE		= BIT(21),
 	DPM_REQUEST_FRS_DET_DISABLE		= BIT(22),
 	DPM_REQUEST_DATA_RESET                  = BIT(23),
+	DPM_REQUEST_GET_REVISION                = BIT(24),
 };
 
 /**
@@ -1152,7 +1165,11 @@ enum pd_ctrl_msg_type {
 	PD_CTRL_FR_SWAP = 19,
 	PD_CTRL_GET_PPS_STATUS = 20,
 	PD_CTRL_GET_COUNTRY_CODES = 21,
-	/* 22-31 Reserved */
+	PD_CTRL_GET_SINK_CAP_EXT = 22,
+	/* Used for REV 3.1 */
+	PD_CTRL_GET_SOURCE_INFO = 23,
+	PD_CTRL_GET_REVISION = 24,
+	/* 25-31 Reserved */
 };
 
 /* Control message types which always mark the start of an AMS */
@@ -1190,6 +1207,44 @@ enum pd_ctrl_msg_type {
  */
 #define BATT_CAP_REF(n)  (((n) >> 16) & 0xff)
 
+/* SOP SDB fields for PD Rev 3.0 Section 6.5.2.1 */
+enum pd_sdb_temperature_status {
+	PD_SDB_TEMPERATURE_STATUS_NOT_SUPPORTED    = 0,
+	PD_SDB_TEMPERATURE_STATUS_NORMAL           = 2,
+	PD_SDB_TEMPERATURE_STATUS_WARNING          = 4,
+	PD_SDB_TEMPERATURE_STATUS_OVER_TEMPERATURE = 6,
+} __packed;
+BUILD_ASSERT(sizeof(enum pd_sdb_temperature_status) == 1);
+
+struct pd_sdb {
+	/* SDB Fields for PD REV 3.0 */
+	uint8_t internal_temp;
+	uint8_t present_input;
+	uint8_t present_battery_input;
+	uint8_t event_flags;
+	enum pd_sdb_temperature_status temperature_status;
+	uint8_t power_status;
+	/* SDB Fields for PD REV 3.1 */
+	uint8_t power_state_change;
+};
+
+enum pd_sdb_power_state {
+	PD_SDB_POWER_STATE_NOT_SUPPORTED = 0,
+	PD_SDB_POWER_STATE_S0 = 1,
+	PD_SDB_POWER_STATE_MODERN_STANDBY = 2,
+	PD_SDB_POWER_STATE_S3 = 3,
+	PD_SDB_POWER_STATE_S4 = 4,
+	PD_SDB_POWER_STATE_S5 = 5,
+	PD_SDB_POWER_STATE_G3 = 6,
+};
+
+enum pd_sdb_power_indicator {
+	PD_SDB_POWER_INDICATOR_OFF = (0 << 3),
+	PD_SDB_POWER_INDICATOR_ON = (1 << 3),
+	PD_SDB_POWER_INDICATOR_BLINKING = (2 << 3),
+	PD_SDB_POWER_INDICATOR_BREATHING = (3 << 3),
+};
+
 /* Extended message type for REV 3.0 */
 enum pd_ext_msg_type {
 	/* 0 Reserved */
@@ -1207,18 +1262,35 @@ enum pd_ext_msg_type {
 	PD_EXT_PPS_STATUS = 12,
 	PD_EXT_COUNTRY_INFO = 13,
 	PD_EXT_COUNTRY_CODES = 14,
-	/* 15-31 Reserved */
+	/* Used for REV 3.1 */
+	PD_EXT_SINK_CAP = 15,
+	PD_EXT_CONTROL = 16,
+	PD_EXT_EPR_SOURCE_CAP = 17,
+	PD_EXT_EPR_SINK_CAP = 18,
+	/* 19-29 Reserved */
+	PD_EXT_VENDOR_DEF = 30,
+	/* 31 Reserved */
 };
 
+/* Alert Data Object fields for REV 3.1 */
+#define ADO_EXTENDED_ALERT_EVENT        (BIT(24) << 7)
 /* Alert Data Object fields for REV 3.0 */
-#define ADO_OVP_EVENT                   BIT(30)
-#define ADO_SOURCE_INPUT_CHANGE         BIT(29)
-#define ADO_OPERATING_CONDITION_CHANGE  BIT(28)
-#define ADO_OTP_EVENT                   BIT(27)
-#define ADO_OCP_EVENT                   BIT(26)
-#define ADO_BATTERY_STATUS_CHANGE       BIT(25)
+#define ADO_OVP_EVENT                   (BIT(24) << 6)
+#define ADO_SOURCE_INPUT_CHANGE         (BIT(24) << 5)
+#define ADO_OPERATING_CONDITION_CHANGE  (BIT(24) << 4)
+#define ADO_OTP_EVENT                   (BIT(24) << 3)
+#define ADO_OCP_EVENT                   (BIT(24) << 2)
+#define ADO_BATTERY_STATUS_CHANGE       (BIT(24) << 1)
 #define ADO_FIXED_BATTERIES(n)          ((n & 0xf) << 20)
 #define ADO_HOT_SWAPPABLE_BATTERIES(n)  ((n & 0xf) << 16)
+
+/* Extended alert event types for REV 3.1 */
+enum ado_extended_alert_event_type {
+	ADO_POWER_STATE_CHANGE = 0x1,
+	ADO_POWER_BUTTON_PRESS = 0x2,
+	ADO_POWER_BUTTON_RELEASE = 0x3,
+	ADO_CONTROLLER_INITIATED_WAKE = 0x4,
+};
 
 /* Data message type */
 enum pd_data_msg_type {
@@ -1227,13 +1299,19 @@ enum pd_data_msg_type {
 	PD_DATA_REQUEST = 2,
 	PD_DATA_BIST = 3,
 	PD_DATA_SINK_CAP = 4,
-	/* 5-14 Reserved for REV 2.0 */
+	/* Used for REV 3.0 */
 	PD_DATA_BATTERY_STATUS = 5,
 	PD_DATA_ALERT = 6,
 	PD_DATA_GET_COUNTRY_INFO = 7,
-	/* 8-14 Reserved for REV 3.0 */
 	PD_DATA_ENTER_USB = 8,
+	/* Used for REV 3.1 */
+	PD_DATA_EPR_REQUEST = 9,
+	PD_DATA_EPR_MODE = 10,
+	PD_DATA_SOURCE_INFO = 11,
+	PD_DATA_REVISION = 12,
+	/* 13-14 Reserved */
 	PD_DATA_VENDOR_DEF = 15,
+	/* 16-31 Reserved */
 };
 
 
@@ -1576,14 +1654,6 @@ typedef uint32_t typec_current_t;
 __override_proto void typec_set_input_current_limit(int port,
 						    typec_current_t max_ma,
 						    uint32_t supply_voltage);
-
-/**
- * Set the type-C current limit when sourcing current..
- *
- * @param port USB-C port number
- * @param rp One of enum tcpc_rp_value (eg TYPEC_RP_3A0) defining the limit.
- */
-void typec_set_source_current_limit(int port, enum tcpc_rp_value rp);
 
 /**
  * Verify board specific health status : current, voltages...
@@ -3151,14 +3221,6 @@ void board_reset_pd_mcu(void);
  */
 bool pd_is_debug_acc(int port);
 
-/**
- * Sets the polarity of the port
- *
- * @param port USB-C port number
- * @param polarity 0 for CC1, else 1 for CC2
- */
-void pd_set_polarity(int port, enum tcpc_cc_polarity polarity);
-
 /*
  * Notify the AP that we have entered into DisplayPort Alternate Mode.  This
  * sets a DP_ALT_MODE_ENTERED MKBP event which may wake the AP.
@@ -3457,6 +3519,17 @@ void typec_select_src_collision_rp(int port, enum tcpc_rp_value rp);
  * @return 0 on success else failure
  */
 int typec_update_cc(int port);
+
+/**
+ * Defines the New power state indicator bits in the Power State Change
+ * field of the Status Data Block (SDB) in USB PD Revision 3.1 and above.
+ *
+ * @param pd_sdb_power_state enum defining the New Power State field of the SDB
+ * @return pd_sdb_power_indicator enum for the SDB
+ */
+__override_proto enum pd_sdb_power_indicator board_get_pd_sdb_power_indicator(
+enum pd_sdb_power_state power_state);
+
 /****************************************************************************/
 
 #endif  /* __CROS_EC_USB_PD_H */

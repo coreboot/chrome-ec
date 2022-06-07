@@ -27,7 +27,7 @@
 #include "usbc_ppc.h"
 #include "charge_state_v2.h"
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(stubs);
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
@@ -52,22 +52,6 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
-
-/* Charger Chip Configuration */
-const struct charger_config_t chg_chips[] = {
-#ifdef CONFIG_PLATFORM_EC_CHARGER_ISL9238
-	{
-		.i2c_port = I2C_PORT_CHARGER,
-		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
-		.drv = &isl923x_drv,
-	},
-#endif
-};
-
-uint8_t board_get_charger_chip_count(void)
-{
-	return ARRAY_SIZE(chg_chips);
-}
 
 int board_set_active_charge_port(int port)
 {

@@ -109,10 +109,6 @@ def get_argparser():
     parser.add_argument(
         "-j",
         "--jobs",
-        # TODO(b/178196029): ninja doesn't know how to talk to a
-        # jobserver properly and spams our CPU on all cores.  Default
-        # to -j1 to execute sequentially until we switch to GNU Make.
-        default=1,
         type=int,
         help="Degree of multiprogramming to use",
     )
@@ -341,18 +337,20 @@ def main(argv=None):
         log_format = "%(levelname)s: %(message)s"
     else:
         log_format = "%(message)s"
-        multiproc.log_job_names = False
+        multiproc.LOG_JOB_NAMES = False
 
     logging.basicConfig(format=log_format, level=opts.log_level)
 
+    zmake = call_with_namespace(zm.Zmake, opts)
     try:
-        zmake = call_with_namespace(zm.Zmake, opts)
         subcommand_method = getattr(zmake, opts.subcommand.replace("-", "_"))
         result = call_with_namespace(subcommand_method, opts)
         wait_rv = zmake.executor.wait()
         return result or wait_rv
     finally:
         multiproc.LogWriter.wait_for_log_end()
+        if zmake.failed_projects:
+            logging.error("Failed projects: %s", zmake.failed_projects)
 
 
 if __name__ == "__main__":

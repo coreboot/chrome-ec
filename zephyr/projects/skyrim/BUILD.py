@@ -9,7 +9,7 @@ def register_variant(project_name):
     """Register a variant of skyrim."""
     register_npcx_project(
         project_name=project_name,
-        zephyr_board="npcx9",
+        zephyr_board="npcx9m3f",
         dts_overlays=[
             # Common to all projects.
             here / "adc.dts",
@@ -19,8 +19,9 @@ def register_variant(project_name):
             here / "i2c.dts",
             here / "interrupts.dts",
             here / "keyboard.dts",
+            here / "led_pins_skyrim.dts",
+            here / "led_policy_skyrim.dts",
             here / "motionsense.dts",
-            here / "pwm_leds.dts",
             here / "usbc.dts",
             # Project-specific DTS customizations.
             here / f"{project_name}.dts",
@@ -34,4 +35,4 @@ def register_variant(project_name):
 register_variant(project_name="skyrim")
 
 # TODO: Deprecate guybrush build after skyrim hardware is readily available.
-register_variant(project_name="guybrush")
+# register_variant(project_name="guybrush")

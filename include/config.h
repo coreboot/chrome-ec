@@ -112,12 +112,6 @@
 #undef CONFIG_ACCEL_LIS2DWL
 #undef CONFIG_ACCEL_LIS2DW_COMMON
 
-/* lis2dw driver support fifo and interrupt, but letting lid accel sensor work
- * at polling mode is a common selection in current usage model. We need get a
- * option to be able to select interrupt or polling (foced mode).
- */
-#undef CONFIG_ACCEL_LIS2DW_AS_BASE
-
 #undef CONFIG_ACCELGYRO_BMI160
 #undef CONFIG_ACCELGYRO_BMI220
 #undef CONFIG_ACCELGYRO_BMI260
@@ -375,6 +369,7 @@
 #undef CONFIG_ACCELGYRO_BMI260_INT_EVENT
 #undef CONFIG_ACCELGYRO_BMI3XX_INT_EVENT
 #undef CONFIG_ACCELGYRO_ICM426XX_INT_EVENT
+#undef CONFIG_ACCELGYRO_ICM42607_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSM_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSO_INT_EVENT
 #undef CONFIG_ACCEL_LIS2DS_INT_EVENT
@@ -918,6 +913,11 @@
 /* Compile input current ramping support using software control */
 #undef CONFIG_CHARGE_RAMP_SW
 
+/* Enable EC support for charging splashscreen */
+#undef CONFIG_CHARGESPLASH
+#undef CONFIG_CHARGESPLASH_PERIOD
+#undef CONFIG_CHARGESPLASH_MAX_REQUESTS_PER_PERIOD
+
 /*****************************************************************************/
 /* Charger config */
 
@@ -1336,6 +1336,7 @@
 
 /* Wireless chargers */
 #undef CONFIG_WIRELESS_CHARGER_P9221_R7
+#undef CONFIG_CPS8100
 
 /*****************************************************************************/
 
@@ -1562,6 +1563,7 @@
 #undef  CONFIG_CMD_BUTTON
 #define CONFIG_CMD_CBI
 #undef  CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE
+#undef  CONFIG_CMD_VBUS
 
 /*
  * HAS_TASK_CHIPSET implies the GSC presence.
@@ -2627,6 +2629,12 @@
 #undef CONFIG_I2C_VIRTUAL_BATTERY
 
 /*
+ * Define this configuration to support smart battery MFG function
+ * for virtual battery.
+ */
+#undef CONFIG_SMART_BATTERY_OPTIONAL_MFG_FUNC
+
+/*
  * Define this option if an i2c bus may be unpowered at a certain point during
  * runtime.  An example could be, a sensor bus which is not needed in lower
  * power states so the power rail for those sensors is completely disabled.
@@ -2783,8 +2791,8 @@
 /*
  * Support IT8801 I/O expander.
  *
- * I2C address IT8801_KEYBOARD_PWM_I2C_ADDR_FLAGS and I2C port
- * IT8801_KEYBOARD_PWM_I2C_PORT must be defined as well.
+ * I2C address KB_DISCRETE_I2C_ADDR_FLAGS and I2C port
+ * I2C_PORT_KB_DISCRETE must be defined as well.
  * Note: these values are only used when accessing the keyboard and PWM
  * function of the IT8801 chip.  I/O expander functions are accessed using
  * the ioex_config[] array.
@@ -2919,7 +2927,7 @@
  * chip. You might want this enabled if the keyboard is indirectly connected
  * to the EC, perhaps through an I2C controller.
  */
-#undef CONFIG_KEYBOARD_NOT_RAW
+#undef CONFIG_KEYBOARD_DISCRETE
 
 /* The board uses a negative edge-triggered GPIO for keyboard interrupts. */
 #undef CONFIG_KEYBOARD_IRQ_GPIO
@@ -3139,8 +3147,12 @@
 #undef CONFIG_LED_DRIVER_LP5562  /* LP5562, on I2C interface */
 #undef CONFIG_LED_DRIVER_MP3385   /* MPS MP3385, on I2C */
 #undef CONFIG_LED_DRIVER_OZ554   /* O2Micro OZ554, on I2C */
+#undef CONFIG_LED_DRIVER_IS31FL3733B /* Lumissil IS31FL3733B on I2C */
 #undef CONFIG_LED_DRIVER_IS31FL3743B /* Lumissil IS31FL3743B on SPI */
 #undef CONFIG_LED_DRIVER_AW20198     /* Awinic AW20198 on I2C */
+
+/* Enable late init for is31fl3743b. Work around b:232443638. */
+#undef CONFIG_IS31FL3743B_LATE_INIT
 
 /* Offset in flash where little firmware will live. */
 #undef CONFIG_LFW_OFFSET
@@ -3620,6 +3632,14 @@
  * the board.
  */
 #undef CONFIG_CPU_PROCHOT_ACTIVE_LOW
+
+/*
+ * When the AP enters C10, the power rails VCCIO, VCCSTG, and VCCPLL_OC may be
+ * turned off by the board.  If the PROCHOT# signal is pulled up by any of
+ * these rails, PROCHOT cannot be relied upon while C10 is active.
+ * Enable this option to gate PROCHOT detection when C10 is active.
+ */
+#undef CONFIG_CPU_PROCHOT_GATE_ON_C10
 
 /* Support PS/2 interface */
 #undef CONFIG_PS2
@@ -4883,6 +4903,13 @@
 #undef CONFIG_USB_PD_TCPM_MUX
 
 /*
+ * Some PD chips have integrated port protection for SBU lines.
+ * If the switches to enable those SBU lines are controlled by the PD
+ * chip, enable this config.
+ */
+#undef CONFIG_USB_PD_TCPM_SBU
+
+/*
  * The TCPM must know whether VBUS is present in order to make proper state
  * transitions. In addition, charge_manager must know about VBUS presence in
  * order to make charging decisions. VBUS state can be determined by various
@@ -4924,6 +4951,9 @@
 
 /* Set the default minimum battery percentage for Try.Src to be enabled */
 #define CONFIG_USB_PD_TRY_SRC_MIN_BATT_SOC 5
+
+/* Index for temperature sensor used in PD messages. Defaults to 0. */
+#define CONFIG_USB_PD_TEMP_SENSOR 0
 
 /*
  * Set the minimum battery percentage to allow a PD port to send resets as a
@@ -5272,6 +5302,9 @@
 /* Allow run-time completion of the usb mux driver structure */
 #undef CONFIG_USB_MUX_RUNTIME_CONFIG
 
+/* Allow the AP to send commands for mux control */
+#undef CONFIG_USB_MUX_AP_CONTROL
+
 /* Support the AMD FP5 USB/DP Mux */
 #undef CONFIG_USB_MUX_AMD_FP5
 
@@ -5319,6 +5352,12 @@
 
 /* Support the Texas Instrument TUSB1064 Type-C Redriving Switch (UFP) */
 #undef CONFIG_USB_MUX_TUSB1064
+
+/*
+ * Support TI TUSB546 USB Type-C DP ALT Mode Linear Redriver Crosspoint
+ * Switch
+ */
+#undef CONFIG_USB_MUX_TUSB546
 
 /* Support the Parade PS8822 Type-C Redriving Demux Switch */
 #undef CONFIG_USB_MUX_PS8822
@@ -5640,6 +5679,12 @@
  * The USB port used for CCD. Defaults to 0/C0.
  */
 #define CONFIG_CCD_USBC_PORT_NUMBER	0
+
+/*
+ * The historical default SCI pulse width to the host is 65 microseconds, but
+ * some chipsets may require different widths.
+ */
+#define CONFIG_ESPI_DEFAULT_VW_WIDTH_US	65
 
 /*****************************************************************************/
 /*
@@ -6034,6 +6079,7 @@
 #define CONFIG_USB_PD_DISCHARGE_TCPC
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_PPC
+#define CONFIG_USB_PD_TCPM_SBU
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC
@@ -6630,6 +6676,16 @@
 #endif
 #endif /* CONFIG_USB_PD_DISCHARGE_GPIO */
 #endif /* CONFIG_USB_PD_DISCHARGE */
+
+/* Chargesplash defaults */
+#ifdef CONFIG_CHARGESPLASH
+#ifndef CONFIG_CHARGESPLASH_PERIOD
+#define CONFIG_CHARGESPLASH_PERIOD 900
+#endif
+#ifndef CONFIG_CHARGESPLASH_MAX_REQUESTS_PER_PERIOD
+#define CONFIG_CHARGESPLASH_MAX_REQUESTS_PER_PERIOD 5
+#endif
+#endif
 
 /* EC Codec Wake-on-Voice related definitions */
 #ifdef CONFIG_AUDIO_CODEC_WOV

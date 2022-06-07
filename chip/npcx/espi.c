@@ -269,6 +269,31 @@ void espi_vw_power_signal_interrupt(enum espi_vw_signal signal)
 		power_signal_interrupt((enum gpio_signal) signal);
 }
 
+void espi_wait_vw_not_dirty(enum espi_vw_signal signal, unsigned int timeout_us)
+{
+	int sig_idx;
+	uint8_t offset;
+	uint64_t timeout;
+
+	sig_idx = espi_vw_get_signal_index(signal);
+
+	for (offset = 0; offset < ESPI_VWEVSM_NUM; offset++) {
+		uint8_t vw_idx = VWEVSM_IDX_GET(NPCX_VWEVSM(offset));
+
+		if (vw_idx == vw_events_list[sig_idx].evt_idx)
+			break;
+	}
+
+	if (offset == ESPI_VWEVSM_NUM)
+		return;
+
+	timeout = get_time().val + (uint64_t)timeout_us;
+	while ((NPCX_VWEVSM(offset) & VWEVSM_DIRTY(1)) &&
+		(get_time().val < timeout)) {
+		udelay(10);
+	}
+}
+
 /*****************************************************************************/
 /* IC specific low-level driver */
 
@@ -622,6 +647,15 @@ DECLARE_IRQ(NPCX_IRQ_ESPI, espi_interrupt, 4);
 void espi_init(void)
 {
 	int i;
+
+	if (IS_ENABLED(NPCX_ESPI_BYPASS_CH_ENABLE_FATAL_ERROR)) {
+		/* Enable the access to the NPCX_ONLY_ESPI_REG2 register */
+		NPCX_ONLY_ESPI_REG1 = NPCX_ONLY_ESPI_REG1_UNLOCK_REG2;
+		CLEAR_BIT(NPCX_ONLY_ESPI_REG2,
+			  NPCX_ONLY_ESPI_REG2_TRANS_END_CONFIG);
+		/* Disable the access to the NPCX_ONLY_ESPI_REG2 register */
+		NPCX_ONLY_ESPI_REG1 = NPCX_ONLY_ESPI_REG1_LOCK_REG2;
+	}
 
 	/* Support all channels */
 	NPCX_ESPICFG |= ESPI_SUPP_CH_ALL;

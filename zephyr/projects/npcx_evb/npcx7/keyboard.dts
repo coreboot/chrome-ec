@@ -31,11 +31,13 @@
 
 	kblight {
 		compatible = "cros-ec,kblight-pwm";
-		pwms = <&pwm2 0 PWM_POLARITY_NORMAL>;
+		pwms = <&pwm2 0 PWM_KHZ(10) PWM_POLARITY_NORMAL>;
 		frequency = <10000>;
 	};
 };
 
 &pwm2 {
 	status = "okay";
+	pinctrl-0 = <&pwm2_gpc4>;
+	pinctrl-names = "default";
 };

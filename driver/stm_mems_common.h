@@ -19,7 +19,6 @@
 
 #define ST_NORMALIZE_RATE(_fs)    (1 << __fls(_fs))
 
-#ifdef CONFIG_ACCEL_FIFO
 #define FIFO_BUFFER_NUM_PATTERN		8
 /* Define number of data to be read from FIFO each time
  * It must be a multiple of OUT_XYZ_SIZE.
@@ -28,8 +27,6 @@
  * FIFO_BUFFER_NUM_PATTERNpattern
  */
 #define FIFO_READ_LEN			(FIFO_BUFFER_NUM_PATTERN * OUT_XYZ_SIZE)
-
-#endif /* CONFIG_ACCEL_FIFO */
 
 /**
  * Read single register
@@ -118,6 +115,8 @@ void st_normalize(const struct motion_sensor_t *s, intv3_t v, uint8_t *data);
 /* Internal data structure for sensors */
 struct stprivate_data {
 	struct accelgyro_saved_data_t base;
+	uint8_t              enabled_activities;
+	uint8_t              disabled_activities;
 	int16_t offset[3];
 	uint8_t resol;
 };

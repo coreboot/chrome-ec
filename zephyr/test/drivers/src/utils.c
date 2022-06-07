@@ -3,10 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr.h>
+#include <zephyr/zephyr.h>
 #include <ztest.h>
-#include <shell/shell_uart.h>
-#include <drivers/gpio/gpio_emul.h>
+#include <zephyr/shell/shell_uart.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
 
 #include "battery.h"
 #include "battery_smart.h"
@@ -71,18 +71,16 @@ void test_set_chipset_to_g3(void)
 		      power_get_state());
 }
 
-void connect_source_to_port(struct tcpci_src_emul *src, int pdo_index,
+void connect_source_to_port(struct tcpci_partner_data *partner,
+			    struct tcpci_src_emul_data *src, int pdo_index,
 			    const struct emul *tcpci_emul,
 			    const struct emul *charger_emul)
 {
 	set_ac_enabled(true);
-	zassume_ok(tcpci_src_emul_connect_to_tcpci(&src->data,
-						   &src->common_data, &src->ops,
-						   tcpci_emul),
-		   NULL);
+	zassume_ok(tcpci_partner_connect_to_tcpci(partner, tcpci_emul), NULL);
 
 	isl923x_emul_set_adc_vbus(charger_emul,
-				  PDO_FIXED_GET_VOLT(src->data.pdo[pdo_index]));
+				  PDO_FIXED_GET_VOLT(src->pdo[pdo_index]));
 
 	k_sleep(K_SECONDS(10));
 }
@@ -155,7 +153,172 @@ int host_cmd_motion_sense_ec_rate(uint8_t sensor_num, int data_rate_ms,
 	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
 		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
 
-	printk("sensor_num=%u/%u\n", params.sensor_odr.sensor_num, sensor_num);
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_odr(uint8_t sensor_num, int32_t odr, bool round_up,
+			      struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_SENSOR_ODR,
+		.sensor_odr = {
+			.sensor_num = sensor_num,
+			.data = odr,
+			.roundup = round_up,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_range(uint8_t sensor_num, int32_t range,
+				bool round_up,
+				struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_SENSOR_RANGE,
+		.sensor_range = {
+			.sensor_num = sensor_num,
+			.data = range,
+			.roundup = round_up,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_offset(uint8_t sensor_num, uint16_t flags,
+				 int16_t temperature, int16_t offset_x,
+				 int16_t offset_y, int16_t offset_z,
+				 struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_SENSOR_OFFSET,
+		.sensor_offset = {
+			.sensor_num = sensor_num,
+			.flags = flags,
+			.temp = temperature,
+			.offset = { offset_x, offset_y, offset_z },
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_scale(uint8_t sensor_num, uint16_t flags,
+				int16_t temperature, int16_t scale_x,
+				int16_t scale_y, int16_t scale_z,
+				struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_SENSOR_SCALE,
+		.sensor_scale = {
+			.sensor_num = sensor_num,
+			.flags = flags,
+			.temp = temperature,
+			.scale = { scale_x, scale_y, scale_z },
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_calib(uint8_t sensor_num, bool enable,
+				struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_PERFORM_CALIB,
+		.perform_calib = {
+			.sensor_num = sensor_num,
+			.enable = enable,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_fifo_flush(uint8_t sensor_num,
+				     struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_FIFO_FLUSH,
+		.sensor_odr = {
+			.sensor_num = sensor_num,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_fifo_info(struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_FIFO_INFO,
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_fifo_read(uint8_t buffer_length,
+				    struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_FIFO_READ,
+		.fifo_read = {
+			.max_data_vector = buffer_length,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_int_enable(int8_t enable,
+				     struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_FIFO_INT_ENABLE,
+		.fifo_int_enable = {
+			.enable = enable,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_spoof(uint8_t sensor_num, uint8_t enable,
+				int16_t values0, int16_t values1,
+				int16_t values2,
+				struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_SPOOF,
+		.spoof = {
+			.sensor_id = sensor_num,
+			.spoof_enable = enable,
+			.components = { values0, values1, values2 },
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
 	return host_command_process(&args);
 }
 
@@ -165,8 +328,8 @@ void host_cmd_typec_discovery(int port, enum typec_partner_type partner_type,
 	struct ec_params_typec_discovery params = {
 		.port = port, .partner_type = partner_type
 	};
-	struct host_cmd_handler_args args = BUILD_HOST_COMMAND_PARAMS(
-		EC_CMD_TYPEC_DISCOVERY, 0, params);
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_DISCOVERY, 0, params);
 	/* The expected response to EC_CMD_TYPEC_DISCOVERY extends beyond the
 	 * bounds of struct ec_response_typec_discovery.
 	 */

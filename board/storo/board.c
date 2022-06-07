@@ -60,7 +60,7 @@ DECLARE_DEFERRED(check_c0_line);
 static void notify_c0_chips(void)
 {
 	schedule_deferred_pd_interrupt(0);
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 }
 
 static void check_c0_line(void)
@@ -94,7 +94,7 @@ DECLARE_DEFERRED(check_c1_line);
 static void notify_c1_chips(void)
 {
 	schedule_deferred_pd_interrupt(1);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(1, USB_CHG_EVENT_BC12);
 }
 
 static void check_c1_line(void)
@@ -235,6 +235,15 @@ enum tusb544_conf {
 	DP_INV
 };
 
+/*
+ * Registers we care about of are all the same between NCS8510 and TUSB544,
+ * so we leverage the driver of TUSB544 to control both of them.
+ *
+ * For EQ settings, these two chips are also almost the same, so we have one
+ * set of EQ settings here for both of them as well. When you need to modify
+ * the EQ settings, please make sure that both configurations are correct;
+ * otherwise you need to separate EQ settings then.
+ */
 static int board_tusb544_set(const struct usb_mux *me, mux_state_t mux_state)
 {
 	int  rv = EC_SUCCESS;

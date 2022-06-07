@@ -3,8 +3,8 @@
  * found in the LICENSE file.
  */
 
-#include <init.h>
-#include <drivers/gpio.h>
+#include <zephyr/init.h>
+#include <zephyr/drivers/gpio.h>
 
 #include <ap_power/ap_power.h>
 #include "charger.h"
@@ -15,8 +15,8 @@
 
 static void board_i2c3_ctrl(bool enable)
 {
-	if (DEVICE_DT_GET(DT_PHANDLE(DT_NODELABEL(i2c3), gpio_dev)) ==
-	    DEVICE_DT_GET(DT_NODELABEL(gpiof))) {
+	if (DEVICE_DT_GET(DT_GPIO_CTLR_BY_IDX(DT_NODELABEL(i2c3),
+	    scl_gpios, 0)) == DEVICE_DT_GET(DT_NODELABEL(gpiof))) {
 		/*
 		 * TODO(b/226296649):
 		 * Use pinctrl APIs to enable/disable an interface.

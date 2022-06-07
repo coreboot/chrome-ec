@@ -11,6 +11,7 @@
 #include "task.h"
 #include "task_id.h"
 #include "timer.h"
+#include "typec_control.h"
 #include "usb_common.h"
 #include "usb_charge.h"
 #include "usb_dp_alt_mode.h"
@@ -144,6 +145,7 @@ static int validate_mode_request(struct svdm_amode_data *modep,
 
 void pd_prepare_sysjump(void)
 {
+#ifndef CONFIG_ZEPHYR
 	int i;
 
 	/* Exit modes before sysjump so we can cleanly enter again later */
@@ -160,6 +162,7 @@ void pd_prepare_sysjump(void)
 		task_wait_event_mask(TASK_EVENT_SYSJUMP_READY, -1);
 		sysjump_task_waiting = TASK_ID_INVALID;
 	}
+#endif /* CONFIG_ZEPHYR */
 }
 
 /*
@@ -868,8 +871,7 @@ void set_tbt_compat_mode_ready(int port)
 	if (IS_ENABLED(CONFIG_USBC_SS_MUX) &&
 	    IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE)) {
 		/* Connect the SBU and USB lines to the connector. */
-		if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
-			ppc_set_sbu(port, 1);
+		typec_set_sbu(port, true);
 
 		/* Set usb mux to Thunderbolt-compatible mode */
 		usb_mux_set(port, USB_PD_MUX_TBT_COMPAT_ENABLED,
@@ -1299,8 +1301,8 @@ __overridable void svdm_dp_post_config(int port)
 {
 	mux_state_t mux_mode = svdm_dp_get_mux_mode(port);
 	/* Connect the SBU and USB lines to the connector. */
-	if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
-		ppc_set_sbu(port, 1);
+	typec_set_sbu(port, true);
+
 	usb_mux_set(port, mux_mode, USB_SWITCH_CONNECT,
 		polarity_rm_dts(pd_get_polarity(port)));
 
