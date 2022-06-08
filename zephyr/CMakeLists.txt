@@ -386,6 +386,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PORT_POWER_SMART
                                                 "${PLATFORM_EC}/common/usb_port_power_smart.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
+                                                "${PLATFORM_EC}/common/typec_control.c"
                                                 "${PLATFORM_EC}/common/usb_common.c"
                                                 "${PLATFORM_EC}/common/usb_pd_pdo.c"
                                                 "${PLATFORM_EC}/common/usbc/usbc_task.c"
@@ -420,9 +421,11 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_IT5205
                                                 "${PLATFORM_EC}/driver/usb_mux/it5205.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_PS8743
                                                 "${PLATFORM_EC}/driver/usb_mux/ps8743.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_TUSB546
+                                                "${PLATFORM_EC}/driver/usb_mux/tusb1064.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_TUSB1044
                                                 "${PLATFORM_EC}/driver/usb_mux/tusb1064.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_TUSB546
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_TUSB1064
                                                 "${PLATFORM_EC}/driver/usb_mux/tusb1064.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX_VIRTUAL
                                                 "${PLATFORM_EC}/driver/usb_mux/virtual.c")
@@ -468,6 +471,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PRL_SM
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_ANX7447
                                                 "${PLATFORM_EC}/driver/tcpm/anx7447.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_CCGXXF
+                                                "${PLATFORM_EC}/driver/tcpm/ccgxxf.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_NCT38XX
                                                 "${PLATFORM_EC}/driver/tcpm/nct38xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8751

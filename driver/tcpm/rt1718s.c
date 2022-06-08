@@ -343,38 +343,37 @@ static void rt1718s_update_charge_manager(int port,
 	}
 }
 
-static void rt1718s_bc12_usb_charger_task(const int port)
+static void rt1718s_bc12_usb_charger_task_init(const int port)
 {
 	rt1718s_enable_bc12_sink(port, false);
+}
 
-	while (1) {
-		uint32_t evt = task_wait_event(-1);
-		bool is_non_pd_sink = !pd_capable(port) &&
-			!usb_charger_port_is_sourcing_vbus(port) &&
-			pd_check_vbus_level(port, VBUS_PRESENT);
+static void rt1718s_bc12_usb_charger_task_event(const int port, uint32_t evt)
+{
+	bool is_non_pd_sink = !pd_capable(port) &&
+		!usb_charger_port_is_sourcing_vbus(port) &&
+		pd_check_vbus_level(port, VBUS_PRESENT);
 
-		if (evt & USB_CHG_EVENT_VBUS) {
+	if (evt & USB_CHG_EVENT_VBUS) {
 
-			if (is_non_pd_sink)
-				rt1718s_enable_bc12_sink(port, true);
-			else
-				rt1718s_update_charge_manager(
-						port, CHARGE_SUPPLIER_NONE);
-		}
-
-		/* detection done, update charge_manager and stop detection */
-		if (evt & USB_CHG_EVENT_BC12) {
-			int type;
-
-			if (is_non_pd_sink)
-				type = rt1718s_get_bc12_type(port);
-			else
-				type = CHARGE_SUPPLIER_NONE;
-
+		if (is_non_pd_sink)
+			rt1718s_enable_bc12_sink(port, true);
+		else
 			rt1718s_update_charge_manager(
-					port, type);
-			rt1718s_enable_bc12_sink(port, false);
-		}
+					port, CHARGE_SUPPLIER_NONE);
+	}
+
+	/* detection done, update charge_manager and stop detection */
+	if (evt & USB_CHG_EVENT_BC12) {
+		int type;
+
+		if (is_non_pd_sink)
+			type = rt1718s_get_bc12_type(port);
+		else
+			type = CHARGE_SUPPLIER_NONE;
+
+		rt1718s_update_charge_manager(port, type);
+		rt1718s_enable_bc12_sink(port, false);
 	}
 }
 
@@ -487,8 +486,7 @@ void rt1718s_vendor_defined_alert(int port)
 
 	/* check snk done */
 	if (value & RT1718S_RT_INT6_INT_BC12_SNK_DONE)
-		task_set_event(USB_CHG_PORT_TO_TASK_ID(port),
-			       USB_CHG_EVENT_BC12);
+		usb_charger_task_set_event(port, USB_CHG_EVENT_BC12);
 
 	/* clear the alerts from rt1718s_workaround() */
 	rv = rt1718s_write8(port, RT1718S_RT_INT2, 0xFF);
@@ -724,6 +722,22 @@ static int command_rt1718s_gpio(int argc, char **argv)
 }
 DECLARE_CONSOLE_COMMAND(rt1718s_gpio, command_rt1718s_gpio, "", "RT1718S GPIO");
 
+#ifdef CONFIG_USB_PD_TCPM_SBU
+static int rt1718s_set_sbu(int port, bool enable)
+{
+	/*
+	 * The `enable` here means to enable the SBU line (set 1)
+	 * - true: connect SBU lines from outer to the host
+	 * - false: isolate the SBU lines
+	 */
+	return rt1718s_update_bits8(port, RT1718S_RT2_SBU_CTRL_01,
+				    RT1718S_RT2_SBU_CTRL_01_SBU_VIEN |
+					    RT1718S_RT2_SBU_CTRL_01_SBU1_SWEN |
+					    RT1718S_RT2_SBU_CTRL_01_SBU2_SWEN,
+				    enable ? 0xFF : 0);
+}
+#endif
+
 /* RT1718S is a TCPCI compatible port controller */
 const struct tcpm_drv rt1718s_tcpm_drv = {
 	.init			= &rt1718s_init,
@@ -760,8 +774,12 @@ const struct tcpm_drv rt1718s_tcpm_drv = {
 	.set_frs_enable		= &rt1718s_set_frs_enable,
 #endif
 	.set_bist_test_mode	= &tcpci_set_bist_test_mode,
+#ifdef CONFIG_USB_PD_TCPM_SBU
+	.set_sbu		= &rt1718s_set_sbu,
+#endif
 };
 
 const struct bc12_drv rt1718s_bc12_drv = {
-	.usb_charger_task = rt1718s_bc12_usb_charger_task,
+	.usb_charger_task_init = rt1718s_bc12_usb_charger_task_init,
+	.usb_charger_task_event = rt1718s_bc12_usb_charger_task_event,
 };

@@ -7,8 +7,8 @@
 #define __CROS_EC_LED_H__
 
 #include <zephyr/devicetree.h>
-#include <drivers/gpio.h>
-#include <drivers/pwm.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/pwm.h>
 
 #define COMPAT_GPIO_LED cros_ec_gpio_led_pins
 #define COMPAT_PWM_LED  cros_ec_pwm_led_pins
@@ -118,5 +118,10 @@ void led_set_color(enum led_color color, enum ec_led_id led_id);
  *			to the node.
  */
 void led_set_color_with_node(const struct led_pins_node_t *pins_node);
+
+#ifdef TEST_BUILD
+const struct led_pins_node_t *led_get_node(enum led_color color,
+					   enum ec_led_id led_id);
+#endif /* TEST_BUILD */
 
 #endif /* __CROS_EC_LED_H__ */

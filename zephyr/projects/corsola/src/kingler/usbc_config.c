@@ -192,12 +192,6 @@ __override int board_rt1718s_init(int port)
 	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_GPIO2_VBUS_CTRL,
 			RT1718S_GPIO2_VBUS_CTRL_FRS_RX_VBUS, 0xFF));
 
-	/* Turn on SBU switch */
-	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_RT2_SBU_CTRL_01,
-				RT1718S_RT2_SBU_CTRL_01_SBU_VIEN |
-				RT1718S_RT2_SBU_CTRL_01_SBU2_SWEN |
-				RT1718S_RT2_SBU_CTRL_01_SBU1_SWEN,
-				0xFF));
 	/* Trigger GPIO 1/2 change when FRS signal received */
 	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_FRS_CTRL3,
 			RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO2 |
@@ -369,7 +363,7 @@ void ppc_interrupt(enum gpio_signal signal)
 
 void bc12_interrupt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 }
 
 __override int board_get_vbus_voltage(int port)
@@ -391,4 +385,15 @@ __override int board_get_vbus_voltage(int port)
 		return 0;
 	}
 	return voltage;
+}
+
+__override int board_nx20p348x_init(int port)
+{
+	int rv;
+
+	rv = i2c_update8(ppc_chips[port].i2c_port,
+			 ppc_chips[port].i2c_addr_flags,
+			 NX20P348X_DEVICE_CONTROL_REG, NX20P348X_CTRL_LDO_SD,
+			 MASK_SET);
+	return rv;
 }

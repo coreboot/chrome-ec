@@ -1563,6 +1563,7 @@
 #undef  CONFIG_CMD_BUTTON
 #define CONFIG_CMD_CBI
 #undef  CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE
+#undef  CONFIG_CMD_VBUS
 
 /*
  * HAS_TASK_CHIPSET implies the GSC presence.
@@ -4902,6 +4903,13 @@
 #undef CONFIG_USB_PD_TCPM_MUX
 
 /*
+ * Some PD chips have integrated port protection for SBU lines.
+ * If the switches to enable those SBU lines are controlled by the PD
+ * chip, enable this config.
+ */
+#undef CONFIG_USB_PD_TCPM_SBU
+
+/*
  * The TCPM must know whether VBUS is present in order to make proper state
  * transitions. In addition, charge_manager must know about VBUS presence in
  * order to make charging decisions. VBUS state can be determined by various
@@ -5293,6 +5301,9 @@
 
 /* Allow run-time completion of the usb mux driver structure */
 #undef CONFIG_USB_MUX_RUNTIME_CONFIG
+
+/* Allow the AP to send commands for mux control */
+#undef CONFIG_USB_MUX_AP_CONTROL
 
 /* Support the AMD FP5 USB/DP Mux */
 #undef CONFIG_USB_MUX_AMD_FP5
@@ -6068,6 +6079,7 @@
 #define CONFIG_USB_PD_DISCHARGE_TCPC
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_PPC
+#define CONFIG_USB_PD_TCPM_SBU
 #define CONFIG_USB_PD_TCPC_LOW_POWER
 #define CONFIG_USB_PD_TCPM_TCPCI
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC

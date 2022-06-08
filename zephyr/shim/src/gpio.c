@@ -154,16 +154,11 @@ void gpio_set_level_verbose(enum console_channel channel,
 
 void gpio_or_ioex_set_level(int signal, int value)
 {
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_IOEX) && signal_is_ioex(signal))
-		ioex_set_level(signal, value);
-	else
-		gpio_set_level(signal, value);
+	gpio_set_level(signal, value);
 }
 
 int gpio_or_ioex_get_level(int signal, int *value)
 {
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_IOEX) && signal_is_ioex(signal))
-		return ioex_get_level(signal, value);
 	*value = gpio_get_level(signal);
 	return EC_SUCCESS;
 }
@@ -314,6 +309,15 @@ void gpio_reset(enum gpio_signal signal)
 
 	gpio_pin_configure_dt(&configs[signal].spec,
 			      configs[signal].init_flags);
+}
+
+void gpio_reset_port(const struct device *port)
+{
+	for (size_t i = 0; i < ARRAY_SIZE(configs); ++i) {
+		if (port == configs[i].spec.port)
+			gpio_pin_configure_dt(&configs[i].spec,
+					      configs[i].init_flags);
+	}
 }
 
 void gpio_set_flags(enum gpio_signal signal, int flags)

@@ -53,7 +53,7 @@ target_sources(app PRIVATE
   src/panic.c
   src/power_common.c
   src/ppc_sn5s330.c
-  src/ppc_syv682c.c
+  src/ppc_syv682x.c
   src/ps8xxx.c
   src/smart.c
   src/stm_mems_common.c
@@ -74,5 +74,6 @@ target_sources(app PRIVATE
 )
 
 add_subdirectory(isl923x)
+add_subdirectory(led_driver)
 
 set_compiler_property(APPEND PROPERTY coverage -O0)

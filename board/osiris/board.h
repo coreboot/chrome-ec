@@ -10,11 +10,6 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early osiris boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
@@ -97,12 +92,10 @@
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
 #define GPIO_WP_L			GPIO_EC_WP_ODL
 
-/* System has back-lit keyboard */
-#define CONFIG_PWM_KBLIGHT
 
 /* I2C Bus Configuration */
 
-#define I2C_PORT_SENSOR		NPCX_I2C_PORT0_0
+#define I2C_PORT_RGBKB		NPCX_I2C_PORT0_0
 
 #define I2C_PORT_USB_C0_C2_TCPC	NPCX_I2C_PORT1_0
 #define I2C_PORT_USB_C1_TCPC	NPCX_I2C_PORT4_1
@@ -141,6 +134,18 @@
 
 #undef CONFIG_VOLUME_BUTTONS
 
+/* RGB Keyboard */
+#define CONFIG_KEYBOARD_BACKLIGHT
+#define GPIO_RGBKBD_SDB_L	GPIO_EC_KB_BL_EN_L
+#ifdef SECTION_IS_RW
+#define CONFIG_RGB_KEYBOARD
+#define CONFIG_LED_DRIVER_IS31FL3733B     /* is31fl3733b on I2C */
+#endif
+#define RGB_GRID0_COL		12
+#define RGB_GRID0_ROW		1
+#define I2C_PORT_KBMCU		I2C_PORT_RGBKB
+
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"	/* needed by registers.h */
@@ -163,6 +168,7 @@ enum temp_sensor_id {
 
 enum battery_type {
 	BATTERY_AP19B8M,
+	BATTERY_COSMX_AP22ABN,
 	BATTERY_TYPE_COUNT
 };
 

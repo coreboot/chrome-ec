@@ -55,13 +55,23 @@ extern const int usb_port_enable[USB_PORT_ENABLE_COUNT];
 int usb_charge_set_mode(int usb_port_id, enum usb_charge_mode mode,
 			enum usb_suspend_charge inhibit_charge);
 
-#define USB_CHG_EVENT_BC12	TASK_EVENT_CUSTOM_BIT(0)
-#define USB_CHG_EVENT_VBUS	TASK_EVENT_CUSTOM_BIT(1)
-#define USB_CHG_EVENT_INTR	TASK_EVENT_CUSTOM_BIT(2)
-#define USB_CHG_EVENT_DR_UFP	TASK_EVENT_CUSTOM_BIT(3)
-#define USB_CHG_EVENT_DR_DFP	TASK_EVENT_CUSTOM_BIT(4)
-#define USB_CHG_EVENT_CC_OPEN	TASK_EVENT_CUSTOM_BIT(5)
-#define USB_CHG_EVENT_MUX	TASK_EVENT_CUSTOM_BIT(6)
+#ifdef CONFIG_PLATFORM_EC_USB_CHARGER_SINGLE_TASK
+/*
+ * In single task mode we pack the event bits for up to 4 ports in a 32 bit
+ * atomic, make sure we don't define more than 8 event bits per port.
+ */
+#define USB_CHARGER_EVENT_BIT(x) BUILD_CHECK_INLINE(BIT(x), BIT(x) & 0xff)
+#else
+#define USB_CHARGER_EVENT_BIT(x) TASK_EVENT_CUSTOM_BIT(x)
+#endif
+
+#define USB_CHG_EVENT_BC12	USB_CHARGER_EVENT_BIT(0)
+#define USB_CHG_EVENT_VBUS	USB_CHARGER_EVENT_BIT(1)
+#define USB_CHG_EVENT_INTR	USB_CHARGER_EVENT_BIT(2)
+#define USB_CHG_EVENT_DR_UFP	USB_CHARGER_EVENT_BIT(3)
+#define USB_CHG_EVENT_DR_DFP	USB_CHARGER_EVENT_BIT(4)
+#define USB_CHG_EVENT_CC_OPEN	USB_CHARGER_EVENT_BIT(5)
+#define USB_CHG_EVENT_MUX	USB_CHARGER_EVENT_BIT(6)
 
 /*
  * Define USB_CHG_PORT_TO_TASK_ID() and TASK_ID_TO_USB_CHG_PORT() macros to
@@ -93,8 +103,10 @@ enum usb_switch {
 struct bc12_drv {
 	/* All fields below are optional */
 
-	/* BC1.2 detection task for this chip */
-	void (*usb_charger_task)(int port);
+	/* BC1.2 detection task init for this chip */
+	void (*usb_charger_task_init)(int port);
+	/* BC1.2 detection task process for this chip */
+	void (*usb_charger_task_event)(int port, uint32_t evt);
 	/* Configure USB data switches on type-C port */
 	void (*set_switches)(int port, enum usb_switch setting);
 	/* Check if ramping is allowed for given supplier */
@@ -165,6 +177,14 @@ static inline int usb_charger_ramp_max(int port, int supplier, int sup_curr)
 		return 0;
 	return bc12_ports[port].drv->ramp_max(supplier, sup_curr);
 }
+
+/**
+ * Set a task event for a specific usb charger port
+ *
+ * @param port port number
+ * @param event event bits (USB_CHG_EVENT_*)
+ */
+void usb_charger_task_set_event(int port, uint8_t event);
 
 /**
  * Reset available BC 1.2 chargers on all ports

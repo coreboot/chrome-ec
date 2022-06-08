@@ -43,7 +43,6 @@ register_intelrvp_project(
     chip="npcx9m7f",
     extra_dts_overlays=[
         here / "adlrvp/adlrvp_npcx/adlrvp_npcx.dts",
-        here / "adlrvp/adlrvp_npcx/bb_retimer.dts",
         here / "adlrvp/adlrvp_npcx/cbi_eeprom.dts",
         here / "adlrvp/adlrvp_npcx/fan.dts",
         here / "adlrvp/adlrvp_npcx/gpio.dts",
@@ -51,6 +50,7 @@ register_intelrvp_project(
         here / "adlrvp/adlrvp_npcx/keyboard.dts",
         here / "adlrvp/adlrvp_npcx/temp_sensor.dts",
         here / "adlrvp/adlrvp_npcx/usbc.dts",
+        here / "adlrvp/adlrvp_npcx/pwm_leds.dts",
     ],
     extra_kconfig_files=[
         here / "legacy_ec_pwrseq.conf",

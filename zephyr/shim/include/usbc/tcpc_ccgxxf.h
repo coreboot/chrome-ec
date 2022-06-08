@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include <devicetree.h>
+#include <zephyr/devicetree.h>
 #include "driver/tcpm/ccgxxf.h"
 
 #define CCGXXF_TCPC_COMPAT cypress_ccgxxf
@@ -16,6 +16,6 @@
 			.addr_flags = DT_STRING_UPPER_TOKEN(                  \
 					id, i2c_addr_flags),                  \
 		},                                                            \
-		.drv = &tcpci_tcpm_drv,                                       \
+		.drv = &ccgxxf_tcpm_drv,                                      \
 		.flags = TCPC_FLAGS_TCPCI_REV2_0,                             \
 	},

@@ -24,6 +24,7 @@
 #include "tcpm/tcpci.h"
 #include "tcpm/tcpm.h"
 #include "timer.h"
+#include "typec_control.h"
 #include "util.h"
 #include "usb_charge.h"
 #include "usb_common.h"
@@ -807,8 +808,7 @@ static inline void set_state(int port, enum pd_states next_state)
 		 * detach events are used to notify BC1.2 that it can be powered
 		 * down.
 		 */
-		task_set_event(USB_CHG_PORT_TO_TASK_ID(port),
-			       USB_CHG_EVENT_CC_OPEN);
+		usb_charger_task_set_event(port, USB_CHG_EVENT_CC_OPEN);
 #endif /* CONFIG_BC12_DETECT_DATA_ROLE_TRIGGER */
 #ifdef CONFIG_USBC_VCONN
 		set_vconn(port, 0);
@@ -1340,11 +1340,9 @@ static void pd_set_data_role(int port, enum pd_data_role role)
 	 * task and indicate the current data role.
 	 */
 	if (role == PD_ROLE_UFP)
-		task_set_event(USB_CHG_PORT_TO_TASK_ID(port),
-			       USB_CHG_EVENT_DR_UFP);
+		usb_charger_task_set_event(port, USB_CHG_EVENT_DR_UFP);
 	else if (role == PD_ROLE_DFP)
-		task_set_event(USB_CHG_PORT_TO_TASK_ID(port),
-			       USB_CHG_EVENT_DR_DFP);
+		usb_charger_task_set_event(port, USB_CHG_EVENT_DR_DFP);
 #endif /* CONFIG_BC12_DETECT_DATA_ROLE_TRIGGER */
 }
 
@@ -3167,7 +3165,7 @@ void pd_task(void *u)
 #endif
 			     (PD_ROLE_DEFAULT(port) == PD_ROLE_SOURCE &&
 			     pd[port].task_state == PD_STATE_SRC_READY))) {
-				pd_set_polarity(port, pd[port].polarity);
+				typec_set_polarity(port, pd[port].polarity);
 				tcpm_set_msg_header(port, pd[port].power_role,
 						    pd[port].data_role);
 				tcpm_set_rx_enable(port, 1);
@@ -3396,7 +3394,7 @@ void pd_task(void *u)
 					pd[port].polarity =
 						get_src_polarity(cc1, cc2);
 				}
-				pd_set_polarity(port, pd[port].polarity);
+				typec_set_polarity(port, pd[port].polarity);
 
 				/* initial data role for source is DFP */
 				pd_set_data_role(port, PD_ROLE_DFP);
@@ -4052,7 +4050,7 @@ void pd_task(void *u)
 			if (IS_ENABLED(CONFIG_COMMON_RUNTIME))
 				hook_notify(HOOK_USB_PD_CONNECT);
 			pd[port].polarity = get_snk_polarity(cc1, cc2);
-			pd_set_polarity(port, pd[port].polarity);
+			typec_set_polarity(port, pd[port].polarity);
 			/* reset message ID  on connection */
 			pd[port].msg_id = 0;
 			/* initial data role for sink is UFP */
