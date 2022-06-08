@@ -338,7 +338,7 @@ static enum ec_status fp_command_passthru(struct host_cmd_handler_args *args)
 	const struct ec_params_fp_passthru *params = args->params;
 	void *out = args->response;
 	int rc;
-	int ret = EC_RES_SUCCESS;
+	enum ec_status ret = EC_RES_SUCCESS;
 
 	if (system_is_locked())
 		return EC_RES_ACCESS_DENIED;
@@ -754,7 +754,7 @@ static enum ec_error_list fp_console_action(uint32_t mode)
 	while (tries--) {
 		if (!(sensor_mode & FP_MODE_ANY_CAPTURE)) {
 			CPRINTS("done (events:%x)", (int)fp_events);
-			return 0;
+			return EC_SUCCESS;
 		}
 		usleep(100 * MSEC);
 	}
