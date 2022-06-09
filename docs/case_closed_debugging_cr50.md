@@ -781,17 +781,17 @@ sudo flashrom -p raiden_debug_spi:target=AP -i FMAP -i RO_VPD -i RW_VPD -r /tmp/
 
 # This command will erase the entire flash chip in one shot, the fastest
 # possible way to erase.
-sudo flashrom -p raiden_debug_spi:target=AP -E --do-not-diff
+sudo flashrom -p raiden_debug_spi:target=AP -E
 
 # This command will program essential flash sections necessary for the
 # Chrome OS device to boot in recovery mode. Note that the SI_ALL section is
 # not always present in the flash image, do not include it if it is not in
 # dump_fmap output.
-sudo flashrom -p raiden_debug_spi:target=AP -w image-atlas.bin -i FMAP -i WP_RO [-i SI_ALL] --do-not-diff --noverify
+sudo flashrom -p raiden_debug_spi:target=AP -w image-atlas.bin -i FMAP -i WP_RO [-i SI_ALL] --noverify
 
 # This command will restore the previously preserved VPD sections of the
 # flash, provided it was saved in the first step above.
-sudo flashrom -p raiden_debug_spi:target=AP -w /tmp/bios.essential.bin -i RO_VPD -i RW_VPD --do-not-diff --noverify
+sudo flashrom -p raiden_debug_spi:target=AP -w /tmp/bios.essential.bin -i RO_VPD -i RW_VPD --noverify
 ```
 
 Once flash is programmed, the device can be booted in recovery mode and start
