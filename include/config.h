@@ -323,6 +323,9 @@
 /* Support base32 text encoding */
 #undef CONFIG_BASE32
 
+/* Support base64 text encoding */
+#undef CONFIG_BASE64
+
 /*****************************************************************************/
 /* Battery config */
 

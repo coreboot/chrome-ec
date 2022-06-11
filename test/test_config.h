@@ -27,6 +27,10 @@
 #define CONFIG_BASE32
 #endif
 
+#ifdef TEST_BASE64
+#define CONFIG_BASE64
+#endif
+
 #ifdef TEST_FLASH_LOG
 #define CONFIG_CRC8
 #define CONFIG_FLASH_ERASED_VALUE32 (-1U)
