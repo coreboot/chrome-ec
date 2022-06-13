@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Guybrush family-specific USB-C configuration */
+/* Skyrim family-specific USB-C configuration */
 
 #include <zephyr/drivers/gpio.h>
 
@@ -180,6 +180,13 @@ __overridable int board_c1_ps8818_mux_set(const struct usb_mux *me,
 					  mux_state_t mux_state)
 {
 	CPRINTSUSB("C1: PS8818 mux using default tuning");
+
+	/* Once a DP connection is established, we need to set IN_HPD */
+	if (mux_state & USB_PD_MUX_DP_ENABLED)
+		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
+	else
+		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
+
 	return 0;
 }
 
@@ -218,8 +225,6 @@ struct usb_mux usb_muxes[] = {
 	}
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == CONFIG_USB_PD_PORT_MAX_COUNT);
-
-/* TODO: HPD signal on PS8818 DB */
 
 /*
  * USB C0 (general) and C1 (just ANX DB) use IOEX pins to
@@ -401,10 +406,10 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 /* TODO: sbu_fault_interrupt from io expander */
 
 /* Round up 3250 max current to multiple of 128mA for ISL9241 AC prochot. */
-#define GUYBRUSH_AC_PROCHOT_CURRENT_MA 3328
+#define SKYRIM_AC_PROCHOT_CURRENT_MA 3328
 static void set_ac_prochot(void)
 {
-	isl9241_set_ac_prochot(CHARGER_SOLO, GUYBRUSH_AC_PROCHOT_CURRENT_MA);
+	isl9241_set_ac_prochot(CHARGER_SOLO, SKYRIM_AC_PROCHOT_CURRENT_MA);
 }
 DECLARE_HOOK(HOOK_INIT, set_ac_prochot, HOOK_PRIO_DEFAULT);
 
