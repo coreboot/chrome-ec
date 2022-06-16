@@ -35,7 +35,7 @@ struct addr_range {
  * success, or OS error of error. In particular ENODATA is returned if the
  * section for the required board ID is not found in the file.
  */
-int parser_find_board(const char *hash_file_name, const char board_id[4]);
+int parser_find_board(const char *hash_file_name, const char *board_id);
 
 /*
  * Find next range for the previousely defined board, parse it into the
