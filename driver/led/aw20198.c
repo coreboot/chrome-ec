@@ -107,13 +107,13 @@ static int aw20198_set_color(struct rgbkbd *ctx, uint8_t offset,
 			buf, frame_len, NULL, 0);
 }
 
-static int aw20198_set_scale(struct rgbkbd *ctx, uint8_t offset, uint8_t scale,
-			     uint8_t len)
+static int aw20198_set_scale(struct rgbkbd *ctx, uint8_t offset,
+			     struct rgb_s scale, uint8_t len)
 {
 	uint8_t buf[sizeof(offset) + BUF_SIZE];
 	const int frame_len = len * SIZE_OF_RGB + sizeof(offset);
 	const int frame_offset = offset * SIZE_OF_RGB;
-	int rv;
+	int i, rv;
 
 	if (frame_offset + frame_len > sizeof(buf)) {
 		return EC_ERROR_OVERFLOW;
@@ -124,8 +124,12 @@ static int aw20198_set_scale(struct rgbkbd *ctx, uint8_t offset, uint8_t scale,
 		return rv;
 	}
 
-	buf[0] = offset * SIZE_OF_RGB;
-	memset(&buf[1], scale, len * SIZE_OF_RGB);
+	buf[0] = frame_offset;
+	for (i = 0; i < len; i++) {
+		buf[i * SIZE_OF_RGB + 1] = scale.r;
+		buf[i * SIZE_OF_RGB + 2] = scale.g;
+		buf[i * SIZE_OF_RGB + 3] = scale.b;
+	}
 
 	return i2c_xfer(ctx->cfg->i2c, AW20198_I2C_ADDR_FLAG,
 			buf, frame_len, NULL, 0);
@@ -138,18 +142,28 @@ static int aw20198_set_gcc(struct rgbkbd *ctx, uint8_t level)
 
 static int aw20198_init(struct rgbkbd *ctx)
 {
-	uint8_t id;
+	uint8_t u8;
 	int rv;
 
 	rv = aw20198_reset(ctx);
 	msleep(3);
 
 	/* Read chip ID, assuming page is still 0. */
-	rv = aw20198_read(ctx, AW20198_REG_RSTN, &id);
+	rv = aw20198_read(ctx, AW20198_REG_RSTN, &u8);
 	if (rv) {
 		return rv;
 	}
-	CPRINTS("ID=0x%02x", id);
+	CPRINTS("ID=0x%02x", u8);
+
+	/* Modify SWSEL bit4-7 to match the LED layout */
+	rv = aw20198_get_config(ctx, AW20198_REG_GCR, &u8);
+	if (rv) {
+		return rv;
+	}  
+	u8 &= ~AW20198_REG_GCR_SWSEL_MASK;
+	u8 |= ((ctx->cfg->col_len - 1) << AW20198_REG_GCR_SWSEL_SHIFT);
+	rv = aw20198_write(ctx, AW20198_REG_GCR, u8);
+	CPRINTS("GCR=0x%02x", u8);
 
 	return rv;
 }

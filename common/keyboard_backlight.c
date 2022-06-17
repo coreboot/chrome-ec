@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "chipset.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "gpio.h"
@@ -113,9 +114,15 @@ static void keyboard_backlight_init(void)
 	/* Don't leave kblight enable state undetermined */
 	kblight_enable(0);
 }
-DECLARE_HOOK(HOOK_INIT, keyboard_backlight_init, HOOK_PRIO_DEFAULT);
-
 #ifdef HAS_TASK_CHIPSET
+/* We're running on a system EC. Initialize kblight once per AP start-up. */
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, keyboard_backlight_init, HOOK_PRIO_DEFAULT);
+#else
+/* We're running on a KBMCU thus powered when AP starts. Do init on reset. */
+DECLARE_HOOK(HOOK_INIT, keyboard_backlight_init, HOOK_PRIO_DEFAULT);
+#endif
+
+#ifdef CONFIG_AP_POWER_CONTROL
 static void kblight_suspend(void)
 {
 	kblight_enable(0);
@@ -130,7 +137,7 @@ static void kblight_resume(void)
 	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, kblight_resume, HOOK_PRIO_DEFAULT);
-#endif  // HAS_TASK_CHIPSET
+#endif  /* CONFIG_AP_POWER_CONTROL */
 
 #ifdef CONFIG_LID_SWITCH
 static void kblight_lid_change(void)

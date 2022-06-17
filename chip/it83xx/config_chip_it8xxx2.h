@@ -6,6 +6,8 @@
 #ifndef __CROS_EC_CONFIG_CHIP_IT8XXX2_H
 #define __CROS_EC_CONFIG_CHIP_IT8XXX2_H
 
+#define __RAM_CODE_ILM0_SECTION_NAME ".ram_code_ilm0"
+
 /* CPU core BFD configuration */
 #include "core/riscv-rv32i/config_core.h"
 
@@ -84,6 +86,13 @@
 || defined(CHIP_VARIANT_IT81302BX_1024) \
 || defined(CHIP_VARIANT_IT81302BX_512) \
 || defined(CHIP_VARIANT_IT81202BX_1024)
+
+/*
+ * Workaround mul instruction bug, see:
+ * https://www.ite.com.tw/uploads/product_download/it81202-bx-chip-errata.pdf
+ */
+#undef CONFIG_RISCV_EXTENSION_M
+#define CONFIG_IT8XXX2_MUL_WORKAROUND
 
 #if defined(CHIP_VARIANT_IT81302BX_512)
 #define CONFIG_FLASH_SIZE_BYTES     0x00080000

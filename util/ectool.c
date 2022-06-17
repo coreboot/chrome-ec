@@ -1293,13 +1293,22 @@ int cmd_reboot_ap_on_g3(int argc, char *argv[])
 static void cmd_rgbkbd_help(char *cmd)
 {
 	fprintf(stderr,
-	"  Usage1: %s <key> <RGB>\n"
-	"          Set the color of <key> to <RGB>.\n"
+	"  Usage1: %s <key> <RGB> [<RGB> ...]\n"
+	"          Set the color of <key> to <RGB>. Multiple colors for\n"
+	"          adjacent keys can be set at once.\n"
 	"\n"
 	"  Usage2: %s clear <RGB>\n"
 	"          Set the color of all keys to <RGB>.\n"
+	"\n"
+	"  Usage3: %s demo <num>\n"
+	"          Run demo-<num>. 0: Off, 1: Flow, 2: Dot.\n"
+	"\n"
+	"  Usage4: %s scale <key> <val>\n"
+	"          Set the scale parameter of key_<key> to <val>.\n"
+	"          <val> is a 24-bit integer where scale values are encoded\n"
+	"          as R=23:16, G=15:8, B=7:0.\n"
 	"\n",
-	cmd, cmd);
+	cmd, cmd, cmd, cmd);
 }
 
 static int cmd_rgbkbd_parse_rgb_text(const char *text, struct rgb_s *color)
@@ -1361,6 +1370,8 @@ out:
 
 static int cmd_rgbkbd(int argc, char *argv[])
 {
+	int val;
+	char *e;
 	int rv = -1;;
 
 	if (argc < 3) {
@@ -1377,7 +1388,35 @@ static int cmd_rgbkbd(int argc, char *argv[])
 			return -1;
 
 		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), NULL, 0);
-	} else if (2 < argc) {
+	} else if (argc == 3 && !strcasecmp(argv[1], "demo")) {
+		/* Usage 3 */
+		struct ec_params_rgbkbd p;
+
+		val = strtol(argv[2], &e, 0);
+		if ((e && *e) || val >= EC_RGBKBD_DEMO_COUNT) {
+			fprintf(stderr, "Invalid demo id: %s\n", argv[2]);
+			return -1;
+		}
+		p.subcmd = EC_RGBKBD_SUBCMD_DEMO;
+		p.demo = val;
+		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), NULL, 0);
+	} else if (argc == 4 && !strcasecmp(argv[1], "scale")) {
+		/* Usage 4 */
+		struct ec_params_rgbkbd p;
+
+		val = strtol(argv[2], &e, 0);
+		if ((e && *e) || val > EC_RGBKBD_MAX_KEY_COUNT) {
+			fprintf(stderr, "Invalid key number: %s\n", argv[2]);
+			return -1;
+		}
+		p.set_scale.key = val;
+		if (cmd_rgbkbd_parse_rgb_text(argv[3], &p.set_scale.scale)) {
+			fprintf(stderr, "Invalid scale value: %s\n", argv[3]);
+			return -1;
+		}
+		p.subcmd = EC_RGBKBD_SUBCMD_SET_SCALE;
+		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), NULL, 0);
+	} else {
 		/* Usage 1 */
 		rv = cmd_rgbkbd_set_color(argc, argv);
 	}

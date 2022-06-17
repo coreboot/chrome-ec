@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Guybrush family-specific USB-C configuration */
+/* Skyrim family-specific USB-C configuration */
 
 #include <zephyr/drivers/gpio.h>
 
@@ -110,10 +110,61 @@ struct usb_mux usbc1_sbu_mux = {
 	.driver = &ioex_sbu_mux_driver,
 };
 
-int baseboard_anx7483_mux_set(const struct usb_mux *me,
+int baseboard_anx7483_c0_mux_set(const struct usb_mux *me,
 			      mux_state_t mux_state)
 {
 	return anx7483_set_default_tuning(me, mux_state);
+}
+
+int baseboard_anx7483_c1_mux_set(const struct usb_mux *me,
+			      mux_state_t mux_state)
+{
+	bool flipped = mux_state & USB_PD_MUX_POLARITY_INVERTED;
+
+	/* Remove flipped from the state for easier compraisons */
+	mux_state = mux_state & ~USB_PD_MUX_POLARITY_INVERTED;
+
+	RETURN_ERROR(anx7483_set_default_tuning(me, mux_state));
+
+	if (mux_state == USB_PD_MUX_USB_ENABLED) {
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX1,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX2,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_DRX1,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_DRX2,
+					    ANX7483_EQ_SETTING_12_5DB));
+	} else if (mux_state == USB_PD_MUX_DP_ENABLED) {
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX1,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX2,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_UTX1,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_UTX2,
+					    ANX7483_EQ_SETTING_12_5DB));
+	} else if (mux_state == USB_PD_MUX_DOCK && !flipped) {
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX1,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX2,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_DRX1,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_UTX2,
+					    ANX7483_EQ_SETTING_12_5DB));
+	} else if (mux_state == USB_PD_MUX_DOCK && flipped) {
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX1,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX2,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_UTX1,
+					    ANX7483_EQ_SETTING_12_5DB));
+		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_DRX2,
+					    ANX7483_EQ_SETTING_12_5DB));
+	}
+
+	return EC_SUCCESS;
 }
 
 struct usb_mux usbc0_anx7483 = {
@@ -121,7 +172,7 @@ struct usb_mux usbc0_anx7483 = {
 	.i2c_port = I2C_PORT_TCPC0,
 	.i2c_addr_flags = ANX7483_I2C_ADDR0_FLAGS,
 	.driver = &anx7483_usb_retimer_driver,
-	.board_set = &baseboard_anx7483_mux_set,
+	.board_set = &baseboard_anx7483_c0_mux_set,
 	.next_mux = &usbc0_sbu_mux,
 };
 
@@ -129,6 +180,13 @@ __overridable int board_c1_ps8818_mux_set(const struct usb_mux *me,
 					  mux_state_t mux_state)
 {
 	CPRINTSUSB("C1: PS8818 mux using default tuning");
+
+	/* Once a DP connection is established, we need to set IN_HPD */
+	if (mux_state & USB_PD_MUX_DP_ENABLED)
+		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
+	else
+		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
+
 	return 0;
 }
 
@@ -146,7 +204,7 @@ struct usb_mux usbc1_anx7483 = {
 	.i2c_port = I2C_PORT_TCPC1,
 	.i2c_addr_flags = ANX7483_I2C_ADDR0_FLAGS,
 	.driver = &anx7483_usb_retimer_driver,
-	.board_set = &baseboard_anx7483_mux_set,
+	.board_set = &baseboard_anx7483_c1_mux_set,
 	.next_mux = &usbc1_sbu_mux,
 };
 
@@ -167,8 +225,6 @@ struct usb_mux usb_muxes[] = {
 	}
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == CONFIG_USB_PD_PORT_MAX_COUNT);
-
-/* TODO: HPD signal on PS8818 DB */
 
 /*
  * USB C0 (general) and C1 (just ANX DB) use IOEX pins to
@@ -350,10 +406,10 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 /* TODO: sbu_fault_interrupt from io expander */
 
 /* Round up 3250 max current to multiple of 128mA for ISL9241 AC prochot. */
-#define GUYBRUSH_AC_PROCHOT_CURRENT_MA 3328
+#define SKYRIM_AC_PROCHOT_CURRENT_MA 3328
 static void set_ac_prochot(void)
 {
-	isl9241_set_ac_prochot(CHARGER_SOLO, GUYBRUSH_AC_PROCHOT_CURRENT_MA);
+	isl9241_set_ac_prochot(CHARGER_SOLO, SKYRIM_AC_PROCHOT_CURRENT_MA);
 }
 DECLARE_HOOK(HOOK_INIT, set_ac_prochot, HOOK_PRIO_DEFAULT);
 

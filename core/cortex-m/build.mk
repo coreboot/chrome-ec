@@ -6,13 +6,33 @@
 # Cortex-M4 core OS files build
 #
 
-# Use coreboot-sdk
+
+ifeq ($(cc-name),gcc)
+# coreboot sdk
+CROSS_COMPILE_ARM_DEFAULT:=/opt/coreboot-sdk/bin/arm-eabi-
+else
+# llvm sdk
+CROSS_COMPILE_ARM_DEFAULT:=armv7m-cros-eabi-
+endif
+
 $(call set-option,CROSS_COMPILE,\
 	$(CROSS_COMPILE_arm),\
-	/opt/coreboot-sdk/bin/arm-eabi-)
+	$(CROSS_COMPILE_ARM_DEFAULT))
 
 # FPU compilation flags
-CFLAGS_FPU-$(CONFIG_FPU)=-mfpu=fpv4-sp-d16 -mfloat-abi=hard
+CFLAGS_FPU-$(CONFIG_FPU)=-mfloat-abi=hard
+ifeq ($(cc-name),gcc)
+# -mfpu=auto will choose correct hardware based on settings of -mcpu and -march
+# https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html.
+#
+# According to the above doc "-mfpu=auto" is the default and shouldn't be
+# required, but compilation using gcc fails without the flag.
+#
+# clang does not support "-mfpu=auto" flag, but will choose the correct floating
+# point unit based on the -mcpu flag:
+# https://lists.llvm.org/pipermail/llvm-dev/2018-September/126468.html
+CFLAGS_FPU-$(CONFIG_FPU)+=-mfpu=auto
+endif
 
 # CPU specific compilation flags
 CFLAGS_CPU+=-mthumb

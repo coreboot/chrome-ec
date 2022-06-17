@@ -2879,6 +2879,18 @@
 #undef CONFIG_IT83XX_VCC_3P3V
 
 /*
+ * Overwrite integer multiplication and division arithmetic library routines
+ * with using hardware multiplication and division and nop instructions.
+ */
+#undef CONFIG_IT8XXX2_MUL_WORKAROUND
+
+/*
+ * Support the standard integer multiplication and division instruction
+ * extension.
+ */
+#define CONFIG_RISCV_EXTENSION_M
+
+/*
  * If this is not defined, the firmware will revert the JTAG selection
  * triggered by the hardware strap pin.
  * Un-define this flag by default for all real platforms. see (b/129908668)
@@ -3150,6 +3162,7 @@
 #undef CONFIG_LED_DRIVER_IS31FL3733B /* Lumissil IS31FL3733B on I2C */
 #undef CONFIG_LED_DRIVER_IS31FL3743B /* Lumissil IS31FL3743B on SPI */
 #undef CONFIG_LED_DRIVER_AW20198     /* Awinic AW20198 on I2C */
+#undef CONFIG_LED_DRIVER_TLC59116F   /* TLC59116F on I2C */
 
 /* Enable late init for is31fl3743b. Work around b:232443638. */
 #undef CONFIG_IS31FL3743B_LATE_INIT
@@ -6264,6 +6277,17 @@
 #undef CONFIG_CHIPSET_TIGERLAKE
 #undef CONFIG_POWER_COMMON
 #endif
+
+/*
+ * If the chipset task is enabled, this implies there is an AP to manage power
+ * for. In Zephyr this can be implied by multiple options, so we provide the
+ * same symbol here instead of making code examine HAS_TASK_CHIPSET.
+ */
+#ifndef CONFIG_AP_POWER_CONTROL
+#ifdef HAS_TASK_CHIPSET
+#define CONFIG_AP_POWER_CONTROL
+#endif	/* HAS_TASK_CHIPSET */
+#endif /* CONFIG_AP_POWER_CONTROL */
 
 /*
  * If a board has a chipset task, set the minimum charger power required for
