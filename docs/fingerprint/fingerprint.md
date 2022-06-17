@@ -52,8 +52,8 @@ to determine the FPMCU that it contains:
 (dut) $ cros_config /fingerprint board
 ```
 
-Alternatively, if you have a Chromium OS build, you can use [ChromeOS Config]
-in the chroot to determine the FPMCU:
+Alternatively, if you have a Chromium OS build, you can use [ChromeOS Config] in
+the chroot to determine the FPMCU:
 
 ```bash
 (chroot) $  cros_config_host -c /build/<BOARD>/usr/share/chromeos-config/yaml/config.yaml -m <MODEL> get /fingerprint board
@@ -120,6 +120,12 @@ See the [Unit Tests] documentation for details on how to [run the unit tests].
 ```
 
 ## Build and run the `host_command` fuzz test
+
+<!-- mdformat off(b/139308852) -->
+*** note
+NOTE: For more details on fuzzing, see [Fuzz Testing in ChromeOS].
+***
+<!-- mdformat on -->
 
 ```bash
 (chroot) ~/trunk/src/platform/ec $ make run-host_command_fuzz
@@ -523,8 +529,8 @@ detail.
 The fingerprint sensor may only be included on certain SKUs for a given device.
 The fingerprint code uses [ChromeOS Config] to determine whether a device has a
 fingerprint sensor or not. For each SKU, there is an associated
-[fingerprint config][ChromeOS Config fingerprint]. [ChromeOS Config]
-determines the [SKU information][ChromeOS Config SKU] (and thus the
+[fingerprint config][ChromeOS Config fingerprint]. [ChromeOS Config] determines
+the [SKU information][ChromeOS Config SKU] (and thus the
 [fingerprint config][ChromeOS Config fingerprint]) from [CBI Info]. The SKU for
 a given device can be found by viewing `chrome://system/#platform_identity_sku`.
 
@@ -602,3 +608,4 @@ that are connected via UART use [`cros_ec_uart.c`].
 [`cros_ec`]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/third_party/kernel/upstream/drivers/platform/chrome/cros_ec.c
 [`cros_ec_spi.c`]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/third_party/kernel/upstream/drivers/platform/chrome/cros_ec_spi.c
 [`cros_ec_uart.c`]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/third_party/kernel/upstream/drivers/platform/chrome/cros_ec_uart.c
+[Fuzz Testing in ChromeOS]: https://chromium.googlesource.com/chromiumos/docs/+/HEAD/testing/fuzzing.md

@@ -29,6 +29,7 @@
 #include "tablet_mode.h"
 #include "throttle_ap.h"
 #include "usbc_config.h"
+#include "rgb_keyboard.h"
 
 #include "gpio_list.h" /* Must come after other header files. */
 
@@ -46,6 +47,12 @@ BUILD_ASSERT(ARRAY_SIZE(usb_port_enable) == USB_PORT_COUNT);
 
 /******************************************************************************/
 
+const struct rgbkbd_init rgbkbd_init_taniks = {
+	.gcc = RGBKBD_MAX_GCC_LEVEL / 2,
+	.scale = { .r = 190, .g = 255, .b = 255 },
+	.color = { .r = 255, .g = 255, .b = 255 },
+};
+
 __override void board_cbi_init(void)
 {
 	config_usb_db_type();
@@ -53,16 +60,9 @@ __override void board_cbi_init(void)
 
 void board_init(void)
 {
-
-	if (ec_cfg_has_tabletmode()) {
-
-	} else {
-		/* only clamshell todo */
-		gpio_set_flags(GPIO_EC_VOLUP_BTN_ODL, GPIO_INPUT | GPIO_PULL_DOWN);
-		gpio_set_flags(GPIO_EC_VOLDN_BTN_ODL, GPIO_INPUT | GPIO_PULL_DOWN);
-		button_disable_gpio(BUTTON_VOLUME_UP);
-		button_disable_gpio(BUTTON_VOLUME_DOWN);
-	}
+#ifdef SECTION_IS_RW
+	rgbkbd_register_init_setting(&rgbkbd_init_taniks);
+#endif
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 

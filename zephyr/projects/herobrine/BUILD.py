@@ -51,6 +51,8 @@ register_variant(
     extra_dts_overlays=[
         here / "battery_hoglin.dts",
         here / "gpio_hoglin.dts",
+        here / "led_pins_hoglin.dts",
+        here / "led_policy_hoglin.dts",
         here / "motionsense_hoglin.dts",
         here / "switchcap_hoglin.dts",
         here / "usbc_hoglin.dts",
@@ -64,8 +66,8 @@ register_variant(
     extra_dts_overlays=[
         here / "battery_villager.dts",
         here / "gpio_villager.dts",
-        here / "gpio_led_villager.dts",
-        here / "led_villager.dts",
+        here / "led_pins_villager.dts",
+        here / "led_policy_villager.dts",
         here / "motionsense_villager.dts",
         here / "switchcap.dts",
         here / "usbc_villager.dts",
