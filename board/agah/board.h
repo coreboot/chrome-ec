@@ -51,6 +51,7 @@
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_TCPM_RT1715
 #undef CONFIG_USB_PD_TCPM_NCT38XX
+#define CONFIG_USBC_RETIMER_PS8818
 
 /* I2C speed console command */
 #define CONFIG_CMD_I2C_SPEED
@@ -91,6 +92,7 @@
 #define GPIO_PCH_RTCRST			GPIO_EC_PCH_RTCRST
 #define GPIO_PCH_SLP_S0_L		GPIO_SYS_SLP_S0IX_L
 #define GPIO_PCH_SLP_S3_L		GPIO_SLP_S3_L
+#define GPIO_TEMP_SENSOR_POWER		GPIO_SEQ_EC_DSW_PWROK
 
 /*
  * GPIO_EC_PCH_INT_ODL is used for MKBP events as well as a PCH wakeup
@@ -131,16 +133,22 @@
 /* Thermal features */
 #define CONFIG_THERMISTOR
 #define CONFIG_TEMP_SENSOR
-#define CONFIG_TEMP_SENSOR_POWER_GPIO	GPIO_SEQ_EC_DSW_PWROK
+#define CONFIG_TEMP_SENSOR_POWER
+#define CONFIG_TEMP_SENSOR_FIRST_READ_DELAY_MS 500
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
 #define CONFIG_FANS			FAN_CH_COUNT
 
 /* Charger defines */
 #define CONFIG_CHARGER_ISL9241
-#define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_CHARGER_SENSE_RESISTOR		10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC	10
+
+/* Barrel jack adapter settings */
+#undef  CONFIG_DEDICATED_CHARGE_PORT_COUNT
+#define CONFIG_DEDICATED_CHARGE_PORT_COUNT	1
+/* This is the next available port # after USB-C ports. */
+#define DEDICATED_CHARGE_PORT			2
 
 /*
  * Older boards have a different ADC assignment.
@@ -197,12 +205,21 @@ enum mft_channel {
 	MFT_CH_COUNT
 };
 
+enum charge_port {
+	CHARGE_PORT_TYPEC0,
+	CHARGE_PORT_TYPEC1,
+	CHARGE_PORT_BARRELJACK,
+};
+
 /**
  * Interrupt handler for PG_PP3300_S5_OD changes.
  *
  * @param signal	Signal which triggered the interrupt.
  */
 void board_power_interrupt(enum gpio_signal signal);
+
+/* IRQ for BJ plug/unplug. */
+void bj_present_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

@@ -75,6 +75,8 @@
 
 #define CONFIG_USBC_PPC_SYV682X
 
+#define CONFIG_USB_PD_FRS_PPC
+
 /* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY	30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
@@ -157,10 +159,10 @@
 /*
  * see b/174768555#comment22
  */
-#define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x56
-#define USBC_PORT_C1_SOC_BB_RETIMER_I2C_ADDR    0x57
+#define USBC_PORT_C0_BB_RETIMER_I2C_ADDR	0x58
+#define USBC_PORT_C1_SOC_BB_RETIMER_I2C_ADDR    0x54
 /* Type-C connector facing Burnside Bridge retimer */
-#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x58
+#define USBC_PORT_C1_BB_RETIMER_I2C_ADDR	0x56
 
 /* Enabling Thunderbolt-compatible mode */
 #define CONFIG_USB_PD_TBT_COMPAT_MODE

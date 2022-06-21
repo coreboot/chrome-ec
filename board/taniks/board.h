@@ -23,10 +23,12 @@
 /* Baseboard features */
 #include "baseboard.h"
 
-#define CONFIG_SYSTEM_UNLOCKED
-#define CONFIG_BYPASS_CBI_EEPROM_WP_CHECK
-
+#undef CONFIG_CMD_POWERINDEBUG
 #undef CONFIG_MKBP_INPUT_DEVICES
+#undef CONFIG_TABLET_MODE
+#undef CONFIG_GMR_TABLET_MODE
+#undef CONFIG_TABLET_MODE_SWITCH
+#undef CONFIG_VOLUME_BUTTONS
 
 /*
  * This will happen automatically on NPCX9 ES2 and later. Do not remove
@@ -168,8 +170,6 @@
 #define GPIO_PG_EC_RSMRST_ODL		GPIO_SEQ_EC_RSMRST_ODL
 #define GPIO_POWER_BUTTON_L		GPIO_GSC_EC_PWR_BTN_ODL
 #define GPIO_SYS_RESET_L		GPIO_SYS_RST_ODL
-#define GPIO_VOLUME_DOWN_L		GPIO_EC_VOLDN_BTN_ODL
-#define GPIO_VOLUME_UP_L		GPIO_EC_VOLUP_BTN_ODL
 #define GPIO_WP_L			GPIO_EC_WP_ODL
 
 /* System has back-lit keyboard */
@@ -244,7 +244,7 @@
 #define CONFIG_RGB_KEYBOARD
 #define CONFIG_LED_DRIVER_AW20198     /* Awinic AW20198 on I2C */
 #endif
-#define RGB_GRID0_COL		11
+#define RGB_GRID0_COL		8
 #define RGB_GRID0_ROW		6
 
 #ifndef __ASSEMBLER__
