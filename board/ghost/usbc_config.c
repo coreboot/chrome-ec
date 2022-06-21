@@ -41,8 +41,8 @@ const struct tcpc_config_t tcpc_config[] = {
 	[USBC_PORT_C0] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
-			.port = I2C_PORT_USB_C0_C2_TCPC,
-			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
+			.port = I2C_PORT_USB_C0_C1_TCPC,
+			.addr_flags = NCT38XX_I2C_ADDR2_1_FLAGS,
 		},
 		.drv = &nct38xx_tcpm_drv,
 		.flags = TCPC_FLAGS_TCPCI_REV2_0 |
@@ -51,8 +51,8 @@ const struct tcpc_config_t tcpc_config[] = {
 	[USBC_PORT_C1] = {
 		.bus_type = EC_BUS_TYPE_I2C,
 		.i2c_info = {
-			.port = I2C_PORT_USB_C0_C2_TCPC,
-			.addr_flags = NCT38XX_I2C_ADDR2_1_FLAGS,
+			.port = I2C_PORT_USB_C0_C1_TCPC,
+			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		},
 		.drv = &nct38xx_tcpm_drv,
 		.flags = TCPC_FLAGS_TCPCI_REV2_0,
@@ -66,14 +66,14 @@ BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 /* USBC PPC configuration */
 struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
-		.i2c_port = I2C_PORT_USB_C0_C2_PPC,
-		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.i2c_port = I2C_PORT_USB_C0_C1_PPC,
+		.i2c_addr_flags = SYV682X_ADDR2_FLAGS,
 		.frs_en = IOEX_USB_C0_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C1] = {
-		.i2c_port = I2C_PORT_USB_C0_C2_PPC,
-		.i2c_addr_flags = SYV682X_ADDR2_FLAGS,
+		.i2c_port = I2C_PORT_USB_C0_C1_PPC,
+		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
 		.frs_en = IOEX_USB_C1_FRS_EN,
 		.drv = &syv682x_drv,
 	},
@@ -99,7 +99,7 @@ const struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C0,
 		.driver = &bb_usb_retimer,
 		.hpd_update = bb_retimer_hpd_update,
-		.i2c_port = I2C_PORT_USB_C0_C2_MUX,
+		.i2c_port = I2C_PORT_USB_C0_RT,
 		.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
 		.next_mux = &usbc0_tcss_usb_mux,
 	},
@@ -107,8 +107,8 @@ const struct usb_mux usb_muxes[] = {
 		.usb_port = USBC_PORT_C1,
 		.driver = &bb_usb_retimer,
 		.hpd_update = bb_retimer_hpd_update,
-		.i2c_port = I2C_PORT_USB_C0_C2_MUX,
-		.i2c_addr_flags = USBC_PORT_C2_BB_RETIMER_I2C_ADDR,
+		.i2c_port = I2C_PORT_USB_C1_RT,
+		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
 		.next_mux = &usbc1_tcss_usb_mux,
 	},
 };
@@ -126,14 +126,14 @@ BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
 
 struct ioexpander_config_t ioex_config[] = {
 	[IOEX_C0_NCT38XX] = {
-		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
-		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
+		.i2c_host_port = I2C_PORT_USB_C0_C1_TCPC,
+		.i2c_addr_flags = NCT38XX_I2C_ADDR2_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
 		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
 	[IOEX_C1_NCT38XX] = {
-		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
-		.i2c_addr_flags = NCT38XX_I2C_ADDR2_1_FLAGS,
+		.i2c_host_port = I2C_PORT_USB_C0_C1_TCPC,
+		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		.drv = &nct38xx_ioexpander_drv,
 		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
@@ -182,7 +182,7 @@ void board_reset_pd_mcu(void)
 {
 	enum gpio_signal tcpc_rst;
 
-	tcpc_rst = GPIO_USB_C0_C2_TCPC_RST_ODL;
+	tcpc_rst = GPIO_USB_C0_C1_TCPC_RST_ODL;
 
 	gpio_set_level(tcpc_rst, 0);
 
@@ -222,7 +222,7 @@ static void board_tcpc_init(void)
 	gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
 
 	/* Enable TCPC interrupts. */
-	gpio_enable_interrupt(GPIO_USB_C0_C2_TCPC_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C0_C1_TCPC_INT_ODL);
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_CHIPSET);
 
@@ -230,7 +230,7 @@ uint16_t tcpc_get_alert_status(void)
 {
 	uint16_t status = 0;
 
-	if (gpio_get_level(GPIO_USB_C0_C2_TCPC_INT_ODL) == 0)
+	if (gpio_get_level(GPIO_USB_C0_C1_TCPC_INT_ODL) == 0)
 		status |= PD_STATUS_TCPC_ALERT_0 | PD_STATUS_TCPC_ALERT_1;
 
 	return status;
@@ -248,7 +248,7 @@ int ppc_get_alert_status(int port)
 void tcpc_alert_event(enum gpio_signal signal)
 {
 	switch (signal) {
-	case GPIO_USB_C0_C2_TCPC_INT_ODL:
+	case GPIO_USB_C0_C1_TCPC_INT_ODL:
 		schedule_deferred_pd_interrupt(USBC_PORT_C0);
 		break;
 	default:

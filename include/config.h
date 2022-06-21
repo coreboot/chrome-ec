@@ -1401,7 +1401,6 @@
 						 * chip
 						 */
 #undef CONFIG_CHIPSET_APOLLOLAKE	/* Intel Apollolake (x86) */
-#undef CONFIG_CHIPSET_BRASWELL		/* Intel Braswell (x86) */
 #undef CONFIG_CHIPSET_CANNONLAKE	/* Intel Cannonlake (x86) */
 #undef CONFIG_CHIPSET_COMETLAKE		/* Intel Cometlake (x86) */
 #undef CONFIG_CHIPSET_COMETLAKE_DISCRETE	/* Intel Cometlake (x86),
@@ -6258,7 +6257,6 @@
 #undef CONFIG_CHIPSET_ALDERLAKE
 #undef CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540
 #undef CONFIG_CHIPSET_APOLLOLAKE
-#undef CONFIG_CHIPSET_BRASWELL
 #undef CONFIG_CHIPSET_CANNONLAKE
 #undef CONFIG_CHIPSET_COMETLAKE
 #undef CONFIG_CHIPSET_GEMINILAKE
@@ -6277,6 +6275,17 @@
 #undef CONFIG_CHIPSET_TIGERLAKE
 #undef CONFIG_POWER_COMMON
 #endif
+
+/*
+ * If the chipset task is enabled, this implies there is an AP to manage power
+ * for. In Zephyr this can be implied by multiple options, so we provide the
+ * same symbol here instead of making code examine HAS_TASK_CHIPSET.
+ */
+#ifndef CONFIG_AP_POWER_CONTROL
+#ifdef HAS_TASK_CHIPSET
+#define CONFIG_AP_POWER_CONTROL
+#endif	/* HAS_TASK_CHIPSET */
+#endif /* CONFIG_AP_POWER_CONTROL */
 
 /*
  * If a board has a chipset task, set the minimum charger power required for
@@ -6388,7 +6397,6 @@
 
 #if defined(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540) || \
 	defined(CONFIG_CHIPSET_APOLLOLAKE) || \
-	defined(CONFIG_CHIPSET_BRASWELL) || \
 	defined(CONFIG_CHIPSET_CANNONLAKE) || \
 	defined(CONFIG_CHIPSET_COMETLAKE) || \
 	defined(CONFIG_CHIPSET_COMETLAKE_DISCRETE) || \
