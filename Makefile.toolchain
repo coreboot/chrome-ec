@@ -140,17 +140,17 @@ HOST_CFLAGS+=-DCHROMIUM_EC=$(EMPTY)
 ifneq (${SYSROOT},)
   LDFLAGS_EXTRA+=--sysroot=${SYSROOT}
 endif
-LDFLAGS=-nostdlib -g -Wl,-X -Wl,--gc-sections -Wl,--build-id=none \
+LDFLAGS=-nostdlib -no-pie -g -Wl,-X -Wl,--gc-sections -Wl,--build-id=none \
   $(LDFLAGS_EXTRA) $(CFLAGS_CPU) $(CFLAGS_CHIP) $(CFLAGS_BOARD)
 BUILD_LDFLAGS=$(LIBFTDIUSB_LDLIBS)
 HOST_LDFLAGS=$(LIBFTDIUSB_LDLIBS)
 HOST_TEST_LDFLAGS=-Wl,-T core/host/host_exe.lds -lrt -pthread -rdynamic -lm -g \
-      -fuse-ld=bfd \
+      -fuse-ld=bfd -no-pie \
       $(if $(TEST_COVERAGE), -fprofile-arcs) \
       $(if $(TEST_ASAN), -fsanitize=address) \
       $(if $(TEST_MSAN), -fsanitize=memory) \
       $(if $(TEST_UBSAN), ${UBSAN_FLAGS}) \
-      $(if $(TEST_FUZZ), -fsanitize=fuzzer -no-pie -fcoverage-mapping -fprofile-instr-generate)
+      $(if $(TEST_FUZZ), -fsanitize=fuzzer -fcoverage-mapping -fprofile-instr-generate)
 
 # utility function to provide overridable defaults
 # $1: name of variable to set
