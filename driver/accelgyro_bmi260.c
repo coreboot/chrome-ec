@@ -29,7 +29,7 @@
 #endif /* CONFIG_ACCELGYRO_BMI220 */
 
 #if defined(CONFIG_ACCELGYRO_BMI260)
-#include "third/party/bmi260/accelgyro_bmi260_config_tbin.h"
+#include "third_party/bmi260/accelgyro_bmi260_config_tbin.h"
 #endif /* CONFIG_ACCELGYRO_BMI260 */
 
 
