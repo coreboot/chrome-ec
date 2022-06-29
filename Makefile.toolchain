@@ -98,7 +98,8 @@ CFLAGS_TEST=$(if $(TEST_BUILD),-DTEST_BUILD=$(EMPTY) \
             $(if $(TEST_ASAN),-fsanitize=address) \
             $(if $(TEST_MSAN),-fsanitize=memory) \
             $(if $(TEST_UBSAN),$(UBSAN_FLAGS)) \
-            $(if $(TEST_FUZZ),-fsanitize=fuzzer-no-link -DTEST_FUZZ=$(EMPTY))
+            $(if $(TEST_FUZZ),-fsanitize=fuzzer-no-link -fno-PIE \
+		-DTEST_FUZZ=$(EMPTY))
 CFLAGS_COVERAGE=$(if $(TEST_COVERAGE),--coverage \
 				      -DTEST_COVERAGE=$(EMPTY),)
 CFLAGS_HOSTTEST=$(if $(TEST_HOSTTEST),-DTEST_HOSTTEST=$(EMPTY),) -Iinclude/driver
@@ -123,7 +124,7 @@ HOST_CPPFLAGS=$(CFLAGS_DEFINE) $(CFLAGS_INCLUDE) $(CFLAGS_TEST) \
 	 $(EXTRA_CFLAGS) $(CFLAGS_COVERAGE) $(CFLAGS_HOSTTEST) $(LATE_CFLAGS_DEFINE) \
 	 -DSECTION_IS_$(BLD)=$(EMPTY) -DSECTION=$(BLD) $(CPPFLAGS_$(BLD))
 ifneq ($(BOARD),host)
-CPPFLAGS+=-ffreestanding -fno-builtin -nostdinc -nostdlib
+CPPFLAGS+=-ffreestanding -fno-builtin -nostdinc -nostdlib -fno-PIC
 CPPFLAGS+=-Ibuiltin/
 else
 CPPFLAGS+=-Og
@@ -132,6 +133,7 @@ CPPFLAGS+= -DCHROMIUM_EC=$(EMPTY)
 CFLAGS=$(CPPFLAGS) $(CFLAGS_CPU) $(CFLAGS_DEBUG) $(COMMON_WARN) $(CFLAGS_y)
 CFLAGS+= -ffunction-sections -fshort-wchar
 CFLAGS+= -fno-delete-null-pointer-checks
+CFLAGS+= -fno-PIC
 ifneq ($(cc-name),clang)
 CFLAGS+= -ffat-lto-objects
 CFLAGS+= -fconserve-stack
@@ -171,7 +173,7 @@ HOST_CXXFLAGS=$(HOST_CFLAGS)
 ifneq (${SYSROOT},)
   LDFLAGS_EXTRA+=--sysroot=${SYSROOT}
 endif
-LDFLAGS=-nostdlib -g -Wl,-X -Wl,--gc-sections -Wl,--build-id=none \
+LDFLAGS=-nostdlib -g -no-pie -Wl,-X -Wl,--gc-sections -Wl,--build-id=none \
 	$(LDFLAGS_EXTRA) $(CFLAGS_CPU)
 MEMSIZE_FLAGS=
 ifeq ($(cc-name),gcc)
@@ -180,7 +182,7 @@ endif
 BUILD_LDFLAGS=$(LIBFTDIUSB_LDLIBS)
 HOST_LDFLAGS=$(LIBFTDIUSB_LDLIBS)
 HOST_TEST_LDFLAGS=-Wl,-T core/host/host_exe.lds -lrt -pthread -rdynamic -lm\
-		  -fuse-ld=bfd \
+		  -fuse-ld=bfd -no-pie \
 		  $(if $(TEST_COVERAGE), --coverage,) \
 		  $(if $(TEST_ASAN), -fsanitize=address) \
 		  $(if $(TEST_MSAN), -fsanitize=memory) \

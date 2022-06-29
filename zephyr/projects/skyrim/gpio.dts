@@ -197,8 +197,7 @@
 			gpios = <&ioex_c0_port1 1 GPIO_OUTPUT_LOW>;
 			enum-name = "IOEX_USB_C0_PPC_ILIM_3A_EN";
 		};
-		/* TODO: figure out interrupts */
-		usb_c0_sbu_fault_odl {
+		ioex_usb_c0_sbu_fault_odl: usb_c0_sbu_fault_odl {
 			gpios = <&ioex_c0_port1 2 GPIO_INPUT>;
 			enum-name = "IOEX_USB_C0_FAULT_ODL";
 		};
@@ -206,8 +205,7 @@
 			gpios = <&ioex_c0_port1 5 GPIO_OUTPUT_LOW>;
 			enum-name = "IOEX_EN_PP5000_USB_A0_VBUS";
 		};
-		/* TODO: figure out interrupts */
-		usb_a0_fault_odl {
+		ioex_usb_a0_fault_odl: usb_a0_fault_odl {
 			gpios = <&ioex_c0_port1 6 GPIO_INPUT>;
 			enum-name = "IOEX_USB3_A0_FAULT_L";
 		};
@@ -240,8 +238,7 @@
 			gpios = <&ioex_c1_port1 1 GPIO_OUTPUT_LOW>;
 			enum-name = "IOEX_USB_C1_PPC_ILIM_3A_EN";
 		};
-		/* TODO: figure out interrupts */
-		usb_c1_sbu_fault_odl {
+		ioex_usb_c1_sbu_fault_odl: usb_c1_sbu_fault_odl {
 			gpios = <&ioex_c1_port1 2 GPIO_INPUT>;
 			enum-name = "IOEX_USB_C1_FAULT_ODL";
 		};
@@ -249,8 +246,7 @@
 			gpios = <&ioex_c1_port1 5 GPIO_OUTPUT_LOW>;
 			enum-name = "IOEX_EN_PP5000_USB_A1_VBUS_DB";
 		};
-		/* TODO: figure out interrupts */
-		usb_a1_fault_db_odl {
+		ioex_usb_a1_fault_db_odl: usb_a1_fault_db_odl {
 			gpios = <&ioex_c1_port1 6 GPIO_INPUT>;
 			enum-name = "IOEX_USB_A1_FAULT_DB_ODL";
 		};

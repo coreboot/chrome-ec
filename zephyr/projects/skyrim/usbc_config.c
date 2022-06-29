@@ -66,9 +66,30 @@ static void usbc_interrupt_init(void)
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_bc12));
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1_bc12));
 
-	/* TODO: Enable SBU fault interrupts (io expander )*/
+	/* Enable SBU fault interrupts */
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_sbu_fault));
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1_sbu_fault));
 }
 DECLARE_HOOK(HOOK_INIT, usbc_interrupt_init, HOOK_PRIO_POST_I2C);
+
+static void usb_fault_interrupt_init(void)
+{
+	/* Enable USB fault interrupts when we hit S5 */
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_hub_fault));
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_a0_fault));
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_a1_fault));
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, usb_fault_interrupt_init, HOOK_PRIO_DEFAULT);
+
+static void usb_fault_interrupt_disable(void)
+{
+	/* Disable USB fault interrupts leaving S5 */
+	gpio_disable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_hub_fault));
+	gpio_disable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_a0_fault));
+	gpio_disable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_a1_fault));
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, usb_fault_interrupt_disable,
+	     HOOK_PRIO_DEFAULT);
 
 struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
@@ -403,7 +424,35 @@ void board_set_charge_limit(int port, int supplier, int charge_ma,
 				       charge_mv);
 }
 
-/* TODO: sbu_fault_interrupt from io expander */
+void sbu_fault_interrupt(enum gpio_signal signal)
+{
+	int port = signal == IOEX_USB_C1_FAULT_ODL ? 1 : 0;
+
+	CPRINTSUSB("C%d: SBU fault", port);
+	pd_handle_overcurrent(port);
+}
+
+void usb_fault_interrupt(enum gpio_signal signal)
+{
+	int out;
+
+	CPRINTSUSB("USB fault(%d), alerting the SoC", signal);
+	out = gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_hub_fault_q_odl))
+	      && gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(ioex_usb_a0_fault_odl))
+	      &&
+	      gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(ioex_usb_a1_fault_db_odl));
+
+	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_fault_odl), out);
+}
+
+void usb_pd_soc_interrupt(enum gpio_signal signal)
+{
+	/*
+	 * This interrupt is unexpected with our use of the SoC mux, so just log
+	 * it as a point of interest.
+	 */
+	CPRINTSUSB("SOC PD Interrupt");
+}
 
 /* Round up 3250 max current to multiple of 128mA for ISL9241 AC prochot. */
 #define SKYRIM_AC_PROCHOT_CURRENT_MA 3328

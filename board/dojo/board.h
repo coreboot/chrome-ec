@@ -13,6 +13,10 @@
 #define CONFIG_LTO
 #define CONFIG_PRESERVE_LOGS
 
+/* Watchdog period in ms */
+#undef CONFIG_WATCHDOG_PERIOD_MS
+#define CONFIG_WATCHDOG_PERIOD_MS 2500
+
 /*
  * TODO: Remove this option once the VBAT no longer keeps high when
  * system's power isn't presented.
@@ -33,14 +37,15 @@
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
 
 /* PD / USB-C / PPC */
-#undef CONFIG_USB_PD_DEBUG_LEVEL /* default to 1, configurable in ec console */
+#undef CONFIG_USB_PD_DEBUG_LEVEL /* default to 1, configurable in ec console \
+				  */
 
 /* Optional console commands */
 #define CONFIG_CMD_FLASH
 #define CONFIG_CMD_SCRATCHPAD
 #define CONFIG_CMD_STACKOVERFLOW
 
-#define CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV	9000
+#define CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV 9000
 
 /* Keyboard */
 #define CONFIG_KEYBOARD_REFRESH_ROW3

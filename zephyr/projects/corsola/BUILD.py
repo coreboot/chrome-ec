@@ -77,6 +77,7 @@ register_corsola_project(
         here / "i2c_kingler.dts",
         here / "interrupts_kingler.dts",
         here / "cbi_eeprom.dts",
+        here / "cbi_steelix.dts",
         here / "gpio_steelix.dts",
         here / "npcx_keyboard.dts",
         here / "led_steelix.dts",
@@ -89,5 +90,25 @@ register_corsola_project(
     extra_kconfig_files=[
         here / "prj_kingler.conf",
         here / "prj_steelix.conf",
+    ],
+)
+
+
+register_corsola_project(
+    "tentacruel",
+    extra_dts_overlays=[
+        here / "adc_krabby.dts",
+        here / "battery_tentacruel.dts",
+        here / "gpio_tentacruel.dts",
+        here / "i2c_krabby.dts",
+        here / "interrupts_krabby.dts",
+        here / "cbi_eeprom.dts",
+        here / "led_tentacruel.dts",
+        here / "motionsense_krabby.dts",
+        here / "usbc_krabby.dts",
+    ],
+    extra_kconfig_files=[
+        here / "prj_krabby.conf",
+        here / "prj_tentacruel.conf",
     ],
 )

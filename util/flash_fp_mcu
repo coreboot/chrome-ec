@@ -542,10 +542,6 @@ config_nami() {
   readonly GPIO_PWREN=395
 }
 
-config_nami-kernelnext() {
-  config_nami
-}
-
 config_nocturne() {
   readonly TRANSPORT="SPI"
   readonly DEVICE="/dev/spidev32765.0"
@@ -672,6 +668,20 @@ config_guybrush() {
   readonly GPIO_BOOT0=400
   # FPMCU PWR_EN is on AGPIO 3 = 256 + 3 = 259
   readonly GPIO_PWREN=259
+}
+
+config_skyrim() {
+  readonly TRANSPORT="UART"
+
+  readonly DEVICE="/dev/ttyS1"
+
+  readonly GPIO_CHIP="gpiochip768"
+  # FPMCU RST_ODL is on AGPIO 12 = 768 + 12 = 780
+  readonly GPIO_NRST=780
+  # FPMCU BOOT0 is on AGPIO 130 = 768 + 130 = 898
+  readonly GPIO_BOOT0=898
+  # FPMCU PWR_EN is on AGPIO 4 = 768 + 4 = 772
+  readonly GPIO_PWREN=772
 }
 
 main() {

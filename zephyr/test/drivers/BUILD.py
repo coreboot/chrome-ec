@@ -2,17 +2,28 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""Register zmake project for drivers test."""
+"""Construct the drivers test binaries"""
 
-register_host_test(
-    "drivers",
+
+drivers = register_host_test(
+    test_name="drivers",
     dts_overlays=[
-        "overlay.dts",
-        here / "led_driver/led_pins.dts",
-        here / "led_driver/led_policy.dts",
+        here / "overlay.dts",
     ],
     kconfig_files=[
-        here / "led_driver/prj.conf",
+        here / "prj.conf",
     ],
-    test_args=["-flash={test_temp_dir}/flash.bin"],
+)
+
+isl923x = drivers.variant(
+    project_name="test-drivers-isl923x",
+)
+
+led_driver = drivers.variant(
+    project_name="test-drivers-led_driver",
+    dts_overlays=[
+        here / "led_driver" / "led_pins.dts",
+        here / "led_driver" / "led_policy.dts",
+    ],
+    kconfig_files=[here / "led_driver" / "prj.conf"],
 )

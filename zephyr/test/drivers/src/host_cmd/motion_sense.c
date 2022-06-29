@@ -4,9 +4,11 @@
  */
 
 #include <fff.h>
+#include <zephyr/shell/shell.h>
 #include <ztest.h>
 
 #include "atomic.h"
+#include "console.h"
 #include "driver/accel_bma2x2.h"
 #include "motion_sense.h"
 #include "motion_sense_fifo.h"
@@ -68,6 +70,8 @@ static void host_cmd_motion_sense_before(void *fixture)
 	RESET_FAKE(mock_perform_calib);
 	FFF_RESET_HISTORY();
 
+	zassume_ok(shell_execute_cmd(get_ec_shell(), "accelinit 0"), NULL);
+
 	atomic_clear(&motion_sensors[0].flush_pending);
 	motion_sensors[0].config[SENSOR_CONFIG_AP].odr = 0;
 	motion_sensors[0].config[SENSOR_CONFIG_AP].ec_rate = 1000 * MSEC;
@@ -100,10 +104,15 @@ ZTEST_USER(host_cmd_motion_sense, test_dump)
 		motion_sensors[i].xyz[1] = i + 1;
 		motion_sensors[i].xyz[2] = i + 2;
 	}
+
+	/* Make sure that the accelerometer status presence bit is off */
+	*host_get_memmap(EC_MEMMAP_ACC_STATUS) &=
+		~(EC_MEMMAP_ACC_STATUS_PRESENCE_BIT);
+
+	/* Dump all the sensors info */
 	host_cmd_motion_sense_dump(ALL_MOTION_SENSORS, result);
 
-	zassert_equal(result->dump.module_flags, MOTIONSENSE_MODULE_FLAG_ACTIVE,
-		      NULL);
+	zassert_equal(result->dump.module_flags, 0, NULL);
 	zassert_equal(result->dump.sensor_count, ALL_MOTION_SENSORS, NULL);
 
 	/*
@@ -119,6 +128,16 @@ ZTEST_USER(host_cmd_motion_sense, test_dump)
 		zassert_equal(result->dump.sensor[i].data[1], i + 1, NULL);
 		zassert_equal(result->dump.sensor[i].data[2], i + 2, NULL);
 	}
+
+	/* Make sure that the accelerometer status presence bit is on */
+	*host_get_memmap(EC_MEMMAP_ACC_STATUS) |=
+		EC_MEMMAP_ACC_STATUS_PRESENCE_BIT;
+
+	/* Dump all the sensors info */
+	host_cmd_motion_sense_dump(ALL_MOTION_SENSORS, result);
+
+	zassert_equal(result->dump.module_flags, MOTIONSENSE_MODULE_FLAG_ACTIVE,
+		      NULL);
 }
 
 ZTEST_USER(host_cmd_motion_sense, test_dump__large_max_sensor_count)
@@ -232,6 +251,10 @@ ZTEST_USER(host_cmd_motion_sense, test_get_ec_rate)
 {
 	struct ec_response_motion_sense response;
 
+	/* Set the power level to S3, the default config from device-tree is for
+	 * 100ms
+	 */
+	test_set_chipset_to_power_level(POWER_S3);
 	zassert_ok(host_cmd_motion_sense_ec_rate(
 			   /*sensor_num=*/0,
 			   /*data_rate_ms=*/EC_MOTION_SENSE_NO_VALUE,
@@ -244,6 +267,10 @@ ZTEST_USER(host_cmd_motion_sense, test_set_ec_rate)
 {
 	struct ec_response_motion_sense response;
 
+	/* Set the power level to S3, the default config from device-tree is for
+	 * 100ms
+	 */
+	test_set_chipset_to_power_level(POWER_S3);
 	zassert_ok(host_cmd_motion_sense_ec_rate(
 			   /*sensor_num=*/0, /*data_rate_ms=*/2000, &response),
 		   NULL);
