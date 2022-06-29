@@ -1303,8 +1303,11 @@ static void cmd_rgbkbd_help(char *cmd)
 	"          Set the scale parameter of key_<key> to <val>.\n"
 	"          <val> is a 24-bit integer where scale values are encoded\n"
 	"          as R=23:16, G=15:8, B=7:0.\n"
+	"\n"
+	"  Usage5: %s getconfig\n"
+	"          Get the HW config supported.\n"
 	"\n",
-	cmd, cmd, cmd, cmd);
+	cmd, cmd, cmd, cmd, cmd);
 }
 
 static int cmd_rgbkbd_parse_rgb_text(const char *text, struct rgb_s *color)
@@ -1368,26 +1371,24 @@ static int cmd_rgbkbd(int argc, char *argv[])
 {
 	int val;
 	char *e;
-	int rv = -1;;
+	int rv = -1;
+	struct ec_params_rgbkbd p;
+	struct ec_response_rgbkbd r;
 
-	if (argc < 3) {
+	if (argc < 2) {
 		cmd_rgbkbd_help(argv[0]);
 		return -1;
 	}
 
 	if (argc == 3 && !strcasecmp(argv[1], "clear")) {
 		/* Usage 2 */
-		struct ec_params_rgbkbd p;
-
 		p.subcmd = EC_RGBKBD_SUBCMD_CLEAR;
 		if (cmd_rgbkbd_parse_rgb_text(argv[2], &p.color))
 			return -1;
 
-		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), NULL, 0);
+		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), &r, 0);
 	} else if (argc == 3 && !strcasecmp(argv[1], "demo")) {
 		/* Usage 3 */
-		struct ec_params_rgbkbd p;
-
 		val = strtol(argv[2], &e, 0);
 		if ((e && *e) || val >= EC_RGBKBD_DEMO_COUNT) {
 			fprintf(stderr, "Invalid demo id: %s\n", argv[2]);
@@ -1395,11 +1396,9 @@ static int cmd_rgbkbd(int argc, char *argv[])
 		}
 		p.subcmd = EC_RGBKBD_SUBCMD_DEMO;
 		p.demo = val;
-		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), NULL, 0);
+		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), &r, 0);
 	} else if (argc == 4 && !strcasecmp(argv[1], "scale")) {
 		/* Usage 4 */
-		struct ec_params_rgbkbd p;
-
 		val = strtol(argv[2], &e, 0);
 		if ((e && *e) || val > EC_RGBKBD_MAX_KEY_COUNT) {
 			fprintf(stderr, "Invalid key number: %s\n", argv[2]);
@@ -1411,7 +1410,35 @@ static int cmd_rgbkbd(int argc, char *argv[])
 			return -1;
 		}
 		p.subcmd = EC_RGBKBD_SUBCMD_SET_SCALE;
-		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), NULL, 0);
+		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), &r, 0);
+	} else if (argc == 2 && !strcasecmp(argv[1], "getconfig")) {
+		/* Usage 5 */
+		char *type;
+
+		p.subcmd = EC_RGBKBD_SUBCMD_GET_CONFIG;
+		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), &r, sizeof(r));
+
+		if (rv < 0)
+			return rv;
+
+		switch ((enum ec_rgbkbd_type)r.rgbkbd_type) {
+		case EC_RGBKBD_TYPE_PER_KEY:
+			type = "EC_RGBKBD_TYPE_PER_KEY";
+			break;
+		case EC_RGBKBD_TYPE_FOUR_ZONES_40_LEDS:
+			type = "EC_RGBKBD_TYPE_FOUR_ZONES_40_LEDS";
+			break;
+		case EC_RGBKBD_TYPE_FOUR_ZONES_12_LEDS:
+			type = "EC_RGBKBD_TYPE_FOUR_ZONES_12_LEDS";
+			break;
+		case EC_RGBKBD_TYPE_FOUR_ZONES_15_LEDS:
+			type = "EC_RGBKBD_TYPE_FOUR_ZONES_15_LEDS";
+			break;
+		default:
+			type = "EC_RGBKBD_TYPE_UNKNOWN";
+		}
+
+		printf("RGBKBD_TYPE: %s\n", type);
 	} else {
 		/* Usage 1 */
 		rv = cmd_rgbkbd_set_color(argc, argv);
