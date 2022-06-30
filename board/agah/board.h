@@ -14,6 +14,11 @@
 #include "baseboard.h"
 
 /*
+ * Nvidia GPU
+ */
+#define CONFIG_GPU_NVIDIA
+
+/*
  * This will happen automatically on NPCX9 ES2 and later. Do not remove
  * until we can confirm all earlier chips are out of service.
  */
@@ -66,12 +71,9 @@
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY	30000 /* us */
 #define PD_VCONN_SWAP_DELAY		5000 /* us */
 
-/*
- * Passive USB-C cables only support up to 60W.
- */
 #define PD_OPERATING_POWER_MW	15000
-#define PD_MAX_POWER_MW		60000
-#define PD_MAX_CURRENT_MA	3000
+#define PD_MAX_POWER_MW		100000
+#define PD_MAX_CURRENT_MA	5000
 #define PD_MAX_VOLTAGE_MV	20000
 
 /*
@@ -164,17 +166,17 @@
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1_DDR_SOC,
-	ADC_TEMP_SENSOR_2_AMBIENT,
+	ADC_TEMP_SENSOR_2_GPU,
 	ADC_TEMP_SENSOR_3_CHARGER,
-	ADC_TEMP_SENSOR_4_WWAN,
+	ADC_CHARGER_IADP,
+	ADC_ADP_TYP,
 	ADC_CH_COUNT
 };
 
 enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
-	TEMP_SENSOR_2_AMBIENT,
+	TEMP_SENSOR_2_GPU,
 	TEMP_SENSOR_3_CHARGER,
-	TEMP_SENSOR_4_WWAN,
 	TEMP_SENSOR_COUNT
 };
 

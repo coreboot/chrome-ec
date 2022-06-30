@@ -4,14 +4,14 @@
  */
 /* Synchronous UART debug printf */
 
-#ifndef __CROS_EC_DEBUG_H
-#define __CROS_EC_DEBUG_H
+#ifndef __CROS_EC_DEBUG_PRINTF_H
+#define __CROS_EC_DEBUG_PRINTF_H
 
 #ifdef CONFIG_DEBUG_PRINTF
-__attribute__((__format__(__printf__, 1, 2)))
-void debug_printf(const char *format, ...);
+__attribute__((__format__(__printf__, 1, 2))) void
+debug_printf(const char *format, ...);
 #else
 #define debug_printf(...)
 #endif
 
-#endif /* __CROS_EC_DEBUG_H */
+#endif /* __CROS_EC_DEBUG_PRINTF_H */

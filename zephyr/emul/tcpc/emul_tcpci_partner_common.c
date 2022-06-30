@@ -18,9 +18,9 @@ LOG_MODULE_REGISTER(tcpci_partner, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 #include "util.h"
 
 /** Length of PDO, RDO and BIST request object in SOP message in bytes */
-#define TCPCI_MSG_DO_LEN	4
+#define TCPCI_MSG_DO_LEN 4
 /** Length of header in SOP message in bytes  */
-#define TCPCI_MSG_HEADER_LEN	2
+#define TCPCI_MSG_HEADER_LEN 2
 /** Length of extended header in bytes  */
 #define TCPCI_MSG_EXT_HEADER_LEN 2
 
@@ -136,10 +136,8 @@ tcpci_partner_alloc_extended_msg(size_t payload_size)
  * @return Pointer to message status
  */
 static enum tcpci_emul_tx_status *tcpci_partner_log_msg(
-	struct tcpci_partner_data *data,
-	const struct tcpci_emul_msg *msg,
-	enum tcpci_partner_msg_sender sender,
-	enum tcpci_emul_tx_status status)
+	struct tcpci_partner_data *data, const struct tcpci_emul_msg *msg,
+	enum tcpci_partner_msg_sender sender, enum tcpci_emul_tx_status status)
 {
 	struct tcpci_partner_log_msg *log_msg;
 	int cnt;
@@ -348,8 +346,8 @@ int tcpci_partner_send_msg(struct tcpci_partner_data *data,
 		return ret;
 	}
 
-	prev_msg = SYS_SLIST_PEEK_HEAD_CONTAINER(&data->to_send, prev_msg,
-						 node);
+	prev_msg =
+		SYS_SLIST_PEEK_HEAD_CONTAINER(&data->to_send, prev_msg, node);
 	/* Current message should be sent first */
 	if (prev_msg == NULL || prev_msg->time > msg->time) {
 		sys_slist_prepend(&data->to_send, &msg->node);
@@ -359,7 +357,8 @@ int tcpci_partner_send_msg(struct tcpci_partner_data *data,
 	}
 
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&data->to_send, prev_msg, next_msg,
-					  node) {
+					  node)
+	{
 		/*
 		 * If we reach tail or next message should be sent after new
 		 * message, insert new message to the list.
@@ -378,8 +377,7 @@ int tcpci_partner_send_msg(struct tcpci_partner_data *data,
 }
 
 int tcpci_partner_send_control_msg(struct tcpci_partner_data *data,
-				   enum pd_ctrl_msg_type type,
-				   uint64_t delay)
+				   enum pd_ctrl_msg_type type, uint64_t delay)
 {
 	struct tcpci_partner_msg *msg;
 
@@ -401,9 +399,8 @@ int tcpci_partner_send_control_msg(struct tcpci_partner_data *data,
 }
 
 int tcpci_partner_send_data_msg(struct tcpci_partner_data *data,
-				enum pd_data_msg_type type,
-				uint32_t *data_obj, int data_obj_num,
-				uint64_t delay)
+				enum pd_data_msg_type type, uint32_t *data_obj,
+				int data_obj_num, uint64_t delay)
 {
 	struct tcpci_partner_msg *msg;
 	int addr;
@@ -534,6 +531,30 @@ int tcpci_partner_send_extended_msg(struct tcpci_partner_data *data,
 	return tcpci_partner_send_msg(data, msg, delay);
 }
 
+/** Check description in emul_common_tcpci_partner.h */
+void tcpci_partner_common_send_get_battery_capabilities(
+	struct tcpci_partner_data *data, int battery_index)
+{
+	__ASSERT(battery_index >= 0 && battery_index < PD_BATT_MAX,
+		 "Battery index out of range");
+	__ASSERT(data->battery_capabilities.index < 0,
+		 "Get Battery Capabilities request already in progress");
+
+	LOG_INF("Send battery cap request");
+
+	/* Get_Battery_Cap message payload */
+	uint8_t payload[1] = { [0] = battery_index };
+
+	/* Keep track which battery we requested capabilities for */
+	data->battery_capabilities.index = battery_index;
+	int ret = tcpci_partner_send_extended_msg(data, PD_EXT_GET_BATTERY_CAP,
+						  0, payload, sizeof(payload));
+	if (ret) {
+		LOG_ERR("Send battery capacity result: %d", ret);
+	}
+	tcpci_partner_start_sender_response_timer(data);
+}
+
 /**
  * @brief Handler for response timeout
  *
@@ -542,9 +563,8 @@ int tcpci_partner_send_extended_msg(struct tcpci_partner_data *data,
 static void tcpci_partner_sender_response_timeout(struct k_work *work)
 {
 	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
-	struct tcpci_partner_data *data =
-		CONTAINER_OF(dwork, struct tcpci_partner_data,
-			     sender_response_timeout);
+	struct tcpci_partner_data *data = CONTAINER_OF(
+		dwork, struct tcpci_partner_data, sender_response_timeout);
 
 	if (k_mutex_lock(&data->transmit_mutex, K_NO_WAIT) != 0) {
 		/*
@@ -627,6 +647,24 @@ tcpci_partner_common_vdm_handler(struct tcpci_partner_data *data,
 						    0);
 		}
 		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+	case CMD_EXIT_MODE:
+		if (PD_VDO_VID(vdm_header) == USB_SID_DISPLAYPORT) {
+			uint32_t response_vdm_header;
+
+			if (data->displayport_configured) {
+				data->displayport_configured = false;
+				response_vdm_header = VDO(
+					USB_SID_DISPLAYPORT, true,
+					VDO_CMDT(CMDT_RSP_ACK) | CMD_EXIT_MODE);
+			} else {
+				response_vdm_header = VDO(
+					USB_SID_DISPLAYPORT, true,
+					VDO_CMDT(CMDT_RSP_NAK) | CMD_EXIT_MODE);
+			}
+			tcpci_partner_send_data_msg(data, PD_DATA_VENDOR_DEF,
+						    &response_vdm_header, 1, 0);
+		}
+		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
 	case CMD_DP_STATUS:
 		if (data->dp_status_vdos > 0 &&
 		    (PD_VDO_VID(vdm_header) == USB_SID_DISPLAYPORT)) {
@@ -648,6 +686,60 @@ tcpci_partner_common_vdm_handler(struct tcpci_partner_data *data,
 		/* TCPCI r. 2.0: Ignore unsupported commands. */
 		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
 	}
+}
+
+/**
+ * @brief Handle a received Battery Capability message from the TCPC. Save the
+ *        contents to the emulator data struct for analysis.
+ *
+ * @param data Emulator state
+ * @param message Received PD message
+ * @return enum tcpci_partner_handler_res
+ */
+static enum tcpci_partner_handler_res
+tcpci_partner_common_battery_capability_handler(
+	struct tcpci_partner_data *data, const struct tcpci_emul_msg *message)
+{
+	uint16_t header = sys_get_le16(&message->buf[0]);
+	uint16_t ext_header = sys_get_le16(&message->buf[2]);
+
+	/* Validate message header */
+	__ASSERT(PD_HEADER_TYPE(header) == PD_EXT_BATTERY_CAP,
+		 "wrong message type");
+	__ASSERT(PD_EXT_HEADER_DATA_SIZE(ext_header) == 9,
+		 "Data size mismatch");
+
+	int index = data->battery_capabilities.index;
+
+	data->battery_capabilities.index = -1;
+
+	if (index < 0) {
+		LOG_ERR("Received a Battery Capability message but it was "
+			"never requested");
+		return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
+	}
+
+	__ASSERT(index < PD_BATT_MAX, "Battery index out of range");
+
+	data->battery_capabilities.bcdb[index] = (struct pd_bcdb){
+		.vid = sys_get_le16(&message->buf[4]),
+		.pid = sys_get_le16(&message->buf[6]),
+		.design_cap = sys_get_le16(&message->buf[8]),
+		.last_full_charge_cap = sys_get_le16(&message->buf[10]),
+		.battery_type = message->buf[12],
+	};
+
+	data->battery_capabilities.have_response[index] = true;
+
+	LOG_INF("Saved data for battery index (%d): vid=%04x, pid=%04x, "
+		"cap=%u, last_cap=%u, type=%02x",
+		index, data->battery_capabilities.bcdb[index].vid,
+		data->battery_capabilities.bcdb[index].pid,
+		data->battery_capabilities.bcdb[index].design_cap,
+		data->battery_capabilities.bcdb[index].last_full_charge_cap,
+		data->battery_capabilities.bcdb[index].battery_type);
+
+	return TCPCI_PARTNER_COMMON_MSG_HANDLED;
 }
 
 static void tcpci_partner_common_set_vconn(struct tcpci_partner_data *data,
@@ -764,9 +856,9 @@ tcpi_partner_common_handle_accept(struct tcpci_partner_data *data)
  * @param TCPCI_PARTNER_COMMON_MSG_HARD_RESET Message was handled by sending
  *                                            hard reset
  */
-static enum tcpci_partner_handler_res tcpci_partner_common_sop_msg_handler(
-	struct tcpci_partner_data *data,
-	const struct tcpci_emul_msg *tx_msg)
+static enum tcpci_partner_handler_res
+tcpci_partner_common_sop_msg_handler(struct tcpci_partner_data *data,
+				     const struct tcpci_emul_msg *tx_msg)
 {
 	struct tcpci_partner_extension *ext;
 	uint16_t header;
@@ -786,7 +878,34 @@ static enum tcpci_partner_handler_res tcpci_partner_common_sop_msg_handler(
 
 	data->recv_msg_id = PD_HEADER_ID(header);
 
+	if (PD_HEADER_EXT(header)) {
+		/* Extended message */
+
+		if (PD_HEADER_REV(header) < PD_REV30) {
+			LOG_ERR("Received extended message but current PD rev "
+				"(0x%x) does not support them.",
+				PD_HEADER_REV(header));
+			return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
+		}
+
+		switch (PD_HEADER_TYPE(header)) {
+		case PD_EXT_GET_BATTERY_CAP:
+			/* Not implemented */
+			LOG_INF("Got PD_EXT_GET_BATTERY_CAP");
+			return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
+		case PD_EXT_BATTERY_CAP:
+			/* Received a Battery Capabilities response */
+			LOG_INF("Got PD_EXT_BATTERY_CAP");
+
+			return tcpci_partner_common_battery_capability_handler(
+				data, tx_msg);
+		default:
+			return TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED;
+		}
+	}
+
 	if (PD_HEADER_CNT(header)) {
+		/* Data message */
 		switch (PD_HEADER_TYPE(header)) {
 		case PD_DATA_VENDOR_DEF:
 			return tcpci_partner_common_vdm_handler(data, tx_msg);
@@ -940,8 +1059,10 @@ static char *tcpci_partner_sender_names[] = {
  *
  * @return Number of written bytes
  */
-static __printf_like(4, 5) int tcpci_partner_print_to_buf(
-	char *buf, const int buf_len, int start, const char *fmt, ...)
+static __printf_like(4, 5) int tcpci_partner_print_to_buf(char *buf,
+							  const int buf_len,
+							  int start,
+							  const char *fmt, ...)
 {
 	va_list ap;
 	int ret;
@@ -977,7 +1098,8 @@ void tcpci_partner_common_print_logged_msgs(struct tcpci_partner_data *data)
 	chars_in += tcpci_partner_print_to_buf(buf, buf_len, chars_in,
 					       "===PD messages log:\n");
 
-	SYS_SLIST_FOR_EACH_CONTAINER(&data->msg_log, msg, node) {
+	SYS_SLIST_FOR_EACH_CONTAINER(&data->msg_log, msg, node)
+	{
 		/*
 		 * If there is too many messages to keep them in local buffer,
 		 * accept possibility of lines interleaving on console and print
@@ -987,27 +1109,27 @@ void tcpci_partner_common_print_logged_msgs(struct tcpci_partner_data *data)
 			LOG_PRINTK("%s", buf);
 			chars_in = 0;
 		}
-		chars_in += tcpci_partner_print_to_buf(buf, buf_len, chars_in,
-				"\tAt %lld Msg SOP %d from %s (status 0x%x):\n",
-				msg->time, msg->sop,
-				tcpci_partner_sender_names[msg->sender],
-				msg->status);
+		chars_in += tcpci_partner_print_to_buf(
+			buf, buf_len, chars_in,
+			"\tAt %lld Msg SOP %d from %s (status 0x%x):\n",
+			msg->time, msg->sop,
+			tcpci_partner_sender_names[msg->sender], msg->status);
 		header = sys_get_le16(msg->buf);
+		chars_in += tcpci_partner_print_to_buf(
+			buf, buf_len, chars_in,
+			"\t\text=%d;cnt=%d;id=%d;pr=%d;dr=%d;rev=%d;type=%d\n",
+			PD_HEADER_EXT(header), PD_HEADER_CNT(header),
+			PD_HEADER_ID(header), PD_HEADER_PROLE(header),
+			PD_HEADER_DROLE(header), PD_HEADER_REV(header),
+			PD_HEADER_TYPE(header));
 		chars_in += tcpci_partner_print_to_buf(buf, buf_len, chars_in,
-				"\t\text=%d;cnt=%d;id=%d;pr=%d;dr=%d;rev=%d;type=%d\n",
-				PD_HEADER_EXT(header), PD_HEADER_CNT(header),
-				PD_HEADER_ID(header), PD_HEADER_PROLE(header),
-				PD_HEADER_DROLE(header), PD_HEADER_REV(header),
-				PD_HEADER_TYPE(header));
-		chars_in += tcpci_partner_print_to_buf(buf, buf_len, chars_in,
-				"\t\t");
+						       "\t\t");
 		for (i = 0; i < msg->cnt; i++) {
 			chars_in += tcpci_partner_print_to_buf(
-					buf, buf_len, chars_in,
-					"%02x ", msg->buf[i]);
+				buf, buf_len, chars_in, "%02x ", msg->buf[i]);
 		}
 		chars_in += tcpci_partner_print_to_buf(buf, buf_len, chars_in,
-				"\n");
+						       "\n");
 	}
 	LOG_PRINTK("%s===\n", buf);
 
@@ -1044,11 +1166,10 @@ void tcpci_partner_common_set_ams_ctrl_msg(struct tcpci_partner_data *data,
 					   enum pd_ctrl_msg_type msg_type)
 {
 	/* Make sure we handle one CTRL request at a time */
-	zassert_equal(
-		data->cur_ams_ctrl_req, PD_CTRL_INVALID,
-		"More than one CTRL msg handled in parallel"
-		" cur_ams_ctrl_req=%d, msg_type=%d",
-		data->cur_ams_ctrl_req, msg_type);
+	zassert_equal(data->cur_ams_ctrl_req, PD_CTRL_INVALID,
+		      "More than one CTRL msg handled in parallel"
+		      " cur_ams_ctrl_req=%d, msg_type=%d",
+		      data->cur_ams_ctrl_req, msg_type);
 	data->cur_ams_ctrl_req = msg_type;
 }
 
@@ -1079,7 +1200,6 @@ void tcpci_partner_received_msg_status(struct tcpci_partner_data *data,
 		LOG_WRN("Changing status of received message more than once");
 	}
 	*data->received_msg_status = status;
-
 }
 
 /**
@@ -1095,8 +1215,7 @@ void tcpci_partner_received_msg_status(struct tcpci_partner_data *data,
 static void tcpci_partner_transmit_op(const struct emul *emul,
 				      const struct tcpci_emul_partner_ops *ops,
 				      const struct tcpci_emul_msg *tx_msg,
-				      enum tcpci_msg_type type,
-				      int retry)
+				      enum tcpci_msg_type type, int retry)
 {
 	struct tcpci_partner_data *data =
 		CONTAINER_OF(ops, struct tcpci_partner_data, ops);
@@ -1104,9 +1223,8 @@ static void tcpci_partner_transmit_op(const struct emul *emul,
 	struct tcpci_partner_extension *ext;
 	int ret;
 
-	data->received_msg_status =
-		tcpci_partner_log_msg(data, tx_msg, TCPCI_PARTNER_SENDER_TCPM,
-				      TCPCI_EMUL_TX_UNKNOWN);
+	data->received_msg_status = tcpci_partner_log_msg(
+		data, tx_msg, TCPCI_PARTNER_SENDER_TCPM, TCPCI_EMUL_TX_UNKNOWN);
 
 	ret = k_mutex_lock(&data->transmit_mutex, K_FOREVER);
 	if (ret) {
@@ -1160,8 +1278,7 @@ static void tcpci_partner_transmit_op(const struct emul *emul,
 	}
 
 	/* Send reject for not handled messages (PD rev 2.0) */
-	tcpci_partner_send_control_msg(data,
-				       PD_CTRL_REJECT, 0);
+	tcpci_partner_send_control_msg(data, PD_CTRL_REJECT, 0);
 
 message_handled:
 	k_mutex_unlock(&data->transmit_mutex);
@@ -1175,14 +1292,13 @@ message_handled:
  * @param ops Pointer to partner operations structure
  * @param rx_msg Message that was consumed by TCPM
  */
-static void tcpci_partner_rx_consumed_op(
-		const struct emul *emul,
-		const struct tcpci_emul_partner_ops *ops,
-		const struct tcpci_emul_msg *rx_msg)
+static void
+tcpci_partner_rx_consumed_op(const struct emul *emul,
+			     const struct tcpci_emul_partner_ops *ops,
+			     const struct tcpci_emul_msg *rx_msg)
 {
-	struct tcpci_partner_msg *msg = CONTAINER_OF(rx_msg,
-						     struct tcpci_partner_msg,
-						     msg);
+	struct tcpci_partner_msg *msg =
+		CONTAINER_OF(rx_msg, struct tcpci_partner_msg, msg);
 
 	tcpci_partner_free_msg(msg);
 }
@@ -1193,9 +1309,9 @@ static void tcpci_partner_rx_consumed_op(
  * @param emul Pointer to TCPCI emulator
  * @param ops Pointer to partner operations structure
  */
-static void tcpci_partner_disconnect_op(
-		const struct emul *emul,
-		const struct tcpci_emul_partner_ops *ops)
+static void
+tcpci_partner_disconnect_op(const struct emul *emul,
+			    const struct tcpci_emul_partner_ops *ops)
 {
 	struct tcpci_partner_data *data =
 		CONTAINER_OF(ops, struct tcpci_partner_data, ops);
@@ -1237,7 +1353,18 @@ int tcpci_partner_connect_to_tcpci(struct tcpci_partner_data *data,
 		data->tcpci_emul = NULL;
 	}
 
+	/* Clear any received battery capability info */
+	tcpci_partner_reset_battery_capability_state(data);
+
 	return ret;
+}
+
+void tcpci_partner_reset_battery_capability_state(
+	struct tcpci_partner_data *data)
+{
+	memset(&data->battery_capabilities, 0,
+	       sizeof(data->battery_capabilities));
+	data->battery_capabilities.index = -1;
 }
 
 void tcpci_partner_init(struct tcpci_partner_data *data, enum pd_rev_type rev)
@@ -1269,4 +1396,8 @@ void tcpci_partner_init(struct tcpci_partner_data *data, enum pd_rev_type rev)
 	data->ops.control_change = NULL;
 	data->ops.disconnect = tcpci_partner_disconnect_op;
 	data->displayport_configured = false;
+
+	/* Reset the data structure used to store battery capability responses
+	 */
+	tcpci_partner_reset_battery_capability_state(data);
 }

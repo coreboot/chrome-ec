@@ -13,7 +13,7 @@
  *        argument. It allows to evaluate to "1 ||" for each named USBC port
  *        that has usb-muxes property.
  */
-#define USB_MUX_PORT_HAS_MUX(unused1, unused2)		1 ||
+#define USB_MUX_PORT_HAS_MUX(unused1, unused2) 1 ||
 
 /**
  * Check if there is any named USBC port with usb-muxes property. It evaluates
@@ -39,9 +39,8 @@
  * },
  * [1] = { ... },
  */
-MAYBE_CONST struct usb_mux usb_muxes[] = {
-	USB_MUX_FOREACH_USBC_PORT(USB_MUX_FIRST, USB_MUX_ARRAY)
-};
+MAYBE_CONST struct usb_mux usb_muxes[] = { USB_MUX_FOREACH_USBC_PORT(
+	USB_MUX_FIRST, USB_MUX_ARRAY) };
 
 /**
  * Define all USB muxes except roots e.g.
@@ -58,16 +57,16 @@ MAYBE_CONST struct usb_mux usb_muxes[] = {
  */
 USB_MUX_FOREACH_USBC_PORT(USB_MUX_NO_FIRST, USB_MUX_DEFINE)
 
-/* Create bb_controls only if BB retimer driver is enabled */
-#ifdef CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
+/* Create bb_controls only if BB or HB retimer driver is enabled */
+#if defined(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB) || \
+	defined(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_HB)
 /**
  * @brief bb_controls array should be constant only if configuration cannot
  *        change in runtime
  */
-#define BB_CONTROLS_CONST						\
-	COND_CODE_1(							\
-		CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG,\
-		(), (const))
+#define BB_CONTROLS_CONST                                                    \
+	COND_CODE_1(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB_RUNTIME_CONFIG, \
+		    (), (const))
 
 /**
  * Define bb_controls for BB retimers in USB muxes chain e.g.
@@ -80,6 +79,6 @@ USB_MUX_FOREACH_USBC_PORT(USB_MUX_NO_FIRST, USB_MUX_DEFINE)
 BB_CONTROLS_CONST struct bb_usb_control bb_controls[] = {
 	USB_MUX_FOREACH_USBC_PORT(USB_MUX_BB_RETIMERS, USB_MUX_ARRAY)
 };
-#endif /* CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB */
+#endif /* CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB/HB */
 
 #endif /* #if USB_MUX_FOREACH_USBC_PORT(USB_MUX_PORT_HAS_MUX, _) */

@@ -31,21 +31,20 @@
  */
 
 /** Timeout for other side to respond to PD message */
-#define TCPCI_PARTNER_RESPONSE_TIMEOUT_MS	30
-#define TCPCI_PARTNER_RESPONSE_TIMEOUT			\
-		K_MSEC(TCPCI_PARTNER_RESPONSE_TIMEOUT_MS)
+#define TCPCI_PARTNER_RESPONSE_TIMEOUT_MS 30
+#define TCPCI_PARTNER_RESPONSE_TIMEOUT K_MSEC(TCPCI_PARTNER_RESPONSE_TIMEOUT_MS)
 /** Timeout for source to transition to requested state after accept */
-#define TCPCI_PARTNER_TRANSITION_TIMEOUT_MS	550
-#define TCPCI_PARTNER_TRANSITION_TIMEOUT		\
-		K_MSEC(TCPCI_PARTNER_TRANSITION_TIMEOUT_MS)
+#define TCPCI_PARTNER_TRANSITION_TIMEOUT_MS 550
+#define TCPCI_PARTNER_TRANSITION_TIMEOUT \
+	K_MSEC(TCPCI_PARTNER_TRANSITION_TIMEOUT_MS)
 /** Timeout for source to send capability again after failure */
-#define TCPCI_SOURCE_CAPABILITY_TIMEOUT_MS	150
-#define TCPCI_SOURCE_CAPABILITY_TIMEOUT			\
-		K_MSEC(TCPCI_SOURCE_CAPABILITY_TIMEOUT_MS)
+#define TCPCI_SOURCE_CAPABILITY_TIMEOUT_MS 150
+#define TCPCI_SOURCE_CAPABILITY_TIMEOUT \
+	K_MSEC(TCPCI_SOURCE_CAPABILITY_TIMEOUT_MS)
 /** Timeout for source to send capability message after power swap */
-#define TCPCI_SWAP_SOURCE_START_TIMEOUT_MS	20
-#define TCPCI_SWAP_SOURCE_START_TIMEOUT			\
-		K_MSEC(TCPCI_SWAP_SOURCE_START_TIMEOUT_MS)
+#define TCPCI_SWAP_SOURCE_START_TIMEOUT_MS 20
+#define TCPCI_SWAP_SOURCE_START_TIMEOUT \
+	K_MSEC(TCPCI_SWAP_SOURCE_START_TIMEOUT_MS)
 
 /** Common data for TCPCI partner device emulators */
 struct tcpci_partner_data {
@@ -100,7 +99,7 @@ struct tcpci_partner_data {
 	 */
 	bool in_soft_reset;
 	/** Current AMS Control request being handled */
-	enum pd_ctrl_msg_type  cur_ams_ctrl_req;
+	enum pd_ctrl_msg_type cur_ams_ctrl_req;
 	/**
 	 * If common code should send GoodCRC for each message. If false,
 	 * then one of extensions should call tcpci_emul_partner_msg_status().
@@ -152,6 +151,22 @@ struct tcpci_partner_data {
 	/* VDMs sent when responding to DisplayPort config command */
 	uint32_t dp_config_vdm[VDO_MAX_SIZE];
 	int dp_config_vdos;
+	struct {
+		/* Index of the last battery we requested capabilities for. The
+		 * BCDB response does not include the index so we need to track
+		 * it manually. -1 indicates no outstanding request.
+		 */
+		int index;
+		/* Stores Battery Capability Data Blocks (BCDBs) requested and
+		 * received from the TCPM for later analysis. See USB-PD spec
+		 * Rev 3.1, Ver 1.3 section 6.5.5
+		 */
+		struct pd_bcdb bcdb[PD_BATT_MAX];
+		/* Stores a boolean status for each battery index indicating
+		 * whether we have received a BCDB response for that battery.
+		 */
+		bool have_response[PD_BATT_MAX];
+	} battery_capabilities;
 };
 
 /** Structure of message used by TCPCI partner emulator */
@@ -249,9 +264,8 @@ struct tcpci_partner_extension_ops {
 	 * @param ext Pointer to partner extension
 	 * @param common_data Pointer to TCPCI partner emulator
 	 */
-	void (*hard_reset)(
-		struct tcpci_partner_extension *ext,
-		struct tcpci_partner_data *common_data);
+	void (*hard_reset)(struct tcpci_partner_extension *ext,
+			   struct tcpci_partner_data *common_data);
 
 	/**
 	 * @brief Function called when SoftReset message is received
@@ -259,9 +273,8 @@ struct tcpci_partner_extension_ops {
 	 * @param ext Pointer to partner extension
 	 * @param common_data Pointer to TCPCI partner emulator
 	 */
-	void (*soft_reset)(
-		struct tcpci_partner_extension *ext,
-		struct tcpci_partner_data *common_data);
+	void (*soft_reset)(struct tcpci_partner_extension *ext,
+			   struct tcpci_partner_data *common_data);
 
 	/**
 	 * @brief Function called when partner emulator is disconnected from
@@ -270,9 +283,8 @@ struct tcpci_partner_extension_ops {
 	 * @param ext Pointer to partner extension
 	 * @param common_data Pointer to TCPCI partner emulator
 	 */
-	void (*disconnect)(
-		struct tcpci_partner_extension *ext,
-		struct tcpci_partner_data *common_data);
+	void (*disconnect)(struct tcpci_partner_extension *ext,
+			   struct tcpci_partner_data *common_data);
 
 	/**
 	 * @brief Function called when partner emulator is connected to TCPM.
@@ -284,9 +296,8 @@ struct tcpci_partner_extension_ops {
 	 * @return Negative value on error
 	 * @return 0 on success
 	 */
-	int (*connect)(
-		struct tcpci_partner_extension *ext,
-		struct tcpci_partner_data *common_data);
+	int (*connect)(struct tcpci_partner_extension *ext,
+		       struct tcpci_partner_data *common_data);
 };
 
 /**
@@ -344,8 +355,7 @@ int tcpci_partner_send_msg(struct tcpci_partner_data *data,
  * @return negative on failure
  */
 int tcpci_partner_send_control_msg(struct tcpci_partner_data *data,
-				   enum pd_ctrl_msg_type type,
-				   uint64_t delay);
+				   enum pd_ctrl_msg_type type, uint64_t delay);
 
 /**
  * @brief Send data message with optional delay. Data objects are copied to
@@ -364,9 +374,8 @@ int tcpci_partner_send_control_msg(struct tcpci_partner_data *data,
  * @return negative on failure
  */
 int tcpci_partner_send_data_msg(struct tcpci_partner_data *data,
-				enum pd_data_msg_type type,
-				uint32_t *data_obj, int data_obj_num,
-				uint64_t delay);
+				enum pd_data_msg_type type, uint32_t *data_obj,
+				int data_obj_num, uint64_t delay);
 
 /**
  * @brief Send an extended PD message to the port partner
@@ -379,8 +388,8 @@ int tcpci_partner_send_data_msg(struct tcpci_partner_data *data,
  * @return negative on failure, 0 on success
  */
 int tcpci_partner_send_extended_msg(struct tcpci_partner_data *data,
-				   enum pd_ext_msg_type type, uint64_t delay,
-				   uint8_t *payload, size_t payload_size);
+				    enum pd_ext_msg_type type, uint64_t delay,
+				    uint8_t *payload, size_t payload_size);
 
 /**
  * @brief Remove all messages that are in delayed message queue
@@ -407,6 +416,25 @@ void tcpci_partner_common_send_hard_reset(struct tcpci_partner_data *data);
  * @param data Pointer to TCPCI partner emulator
  */
 void tcpci_partner_common_send_soft_reset(struct tcpci_partner_data *data);
+
+/**
+ * @brief Send a Get Battery Capabilities request to the TCPM
+ *
+ * @param data Pointer to TCPCI partner emulator
+ * @param battery_index Request capability info on this battery. Must
+ *        be (0 <= battery_index < PD_BATT_MAX)
+ */
+void tcpci_partner_common_send_get_battery_capabilities(
+	struct tcpci_partner_data *data, int battery_index);
+
+/**
+ * @brief Resets the data structure used for tracking battery capability
+ *        requests and responses.
+ *
+ * @param data Emulator state
+ */
+void tcpci_partner_reset_battery_capability_state(
+	struct tcpci_partner_data *data);
 
 /**
  * @brief Start sender response timer for TCPCI_PARTNER_RESPONSE_TIMEOUT_MS.
