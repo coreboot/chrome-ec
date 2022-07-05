@@ -156,6 +156,7 @@
 			temp_host_halt = <90>;
 			temp_host_release_high = <80>;
 			adc = <&adc_temp_sensor_1>;
+			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 		};
 		charger {
 			compatible = "cros-ec,temp-sensor-thermistor",
@@ -169,6 +170,7 @@
 			temp_host_halt = <90>;
 			temp_host_release_high = <80>;
 			adc = <&adc_temp_sensor_2>;
+			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 		};
 		ambient {
 			compatible = "cros-ec,temp-sensor-thermistor",
@@ -182,6 +184,7 @@
 			temp_host_halt = <90>;
 			temp_host_release_high = <80>;
 			adc = <&adc_temp_sensor_3>;
+			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 		};
 	};
 
@@ -277,6 +280,15 @@
 	pinctrl-names = "default";
 };
 
+&pinctrl {
+	i2c4_clk_gpe0_sleep: i2c4_clk_gpe0_sleep {
+		pinmuxs = <&pinctrle 0 IT8XXX2_ALT_DEFAULT>;
+	};
+	i2c4_data_gpe7_sleep: i2c4_data_gpe7_sleep {
+		pinmuxs = <&pinctrle 7 IT8XXX2_ALT_DEFAULT>;
+	};
+};
+
 &i2c0 {
 	label = "I2C_EEPROM";
 	clock-frequency = <I2C_BITRATE_FAST>;
@@ -316,7 +328,19 @@
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
 	pinctrl-0 = <&i2c4_clk_gpe0_default
 		     &i2c4_data_gpe7_default>;
-	pinctrl-names = "default";
+	pinctrl-1 = <&i2c4_clk_gpe0_sleep
+		     &i2c4_data_gpe7_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
+&i2c_ec_i2c_sub_usb_c1 {
+	/*
+	 * Dynamic speed setting is used for AP-controlled firmware update
+	 * of PS8745 TCPC/redriver: the AP lowers speed to 400 kHz in order
+	 * to use more efficient window programming, then sets it back when
+	 * done.
+	 */
+	dynamic-speed;
 };
 
 &i2c5 {

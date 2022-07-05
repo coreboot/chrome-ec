@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,6 +7,7 @@
 
 #include <ap_power/ap_power.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/pinctrl.h>
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
@@ -66,7 +67,7 @@ static void hdmi_hpd_interrupt(const struct device *device,
 }
 
 static void lte_power_handler(struct ap_power_ev_callback *cb,
-			       struct ap_power_ev_data data)
+			      struct ap_power_ev_data data)
 {
 	/* Enable rails for S5 */
 	const struct gpio_dt_spec *s5_rail =
@@ -85,6 +86,30 @@ static void lte_power_handler(struct ap_power_ev_callback *cb,
 		break;
 	}
 }
+
+#ifdef CONFIG_SOC_IT8XXX2
+/*
+ * On it8xxx2, the below condition will break the EC to enter deep doze mode
+ * (b:237717730):
+ * Enhance i2c (GPE0/E7, GPH1/GPH2 or GPA4/GPA5) is enabled and its clock and
+ * data pins aren't both at high level.
+ *
+ * Since HDMI+type A SKU doesn't use i2c4, disable it for better power number.
+ */
+#define I2C4_NODE DT_NODELABEL(i2c4)
+#if DT_NODE_EXISTS(I2C4_NODE)
+PINCTRL_DT_DEFINE(I2C4_NODE);
+
+/* disable i2c4 alternate function  */
+static void soc_it8xxx2_disable_i2c4_alt(void)
+{
+	const struct pinctrl_dev_config *pcfg =
+		PINCTRL_DT_DEV_CONFIG_GET(I2C4_NODE);
+
+	pinctrl_apply_state(pcfg, PINCTRL_STATE_SLEEP);
+}
+#endif
+#endif /* CONFIG_SOC_IT8XXX2 */
 
 /**
  * Configure GPIOs (and other pin functions) that vary with present sub-board.
@@ -105,20 +130,18 @@ static void nereid_subboard_config(void)
 	 */
 	if (sb == NISSA_SB_C_A || sb == NISSA_SB_HDMI_A) {
 		/* Configure VBUS enable, default off */
-		gpio_pin_configure_dt(
-			GPIO_DT_FROM_ALIAS(gpio_en_usb_a1_vbus),
-			GPIO_OUTPUT_LOW);
+		gpio_pin_configure_dt(GPIO_DT_FROM_ALIAS(gpio_en_usb_a1_vbus),
+				      GPIO_OUTPUT_LOW);
 	} else {
 		/* Turn off unused pins */
 		gpio_pin_configure_dt(
 			GPIO_DT_FROM_NODELABEL(gpio_sub_usb_a1_ilimit_sdp),
 			GPIO_DISCONNECTED);
-		gpio_pin_configure_dt(
-			GPIO_DT_FROM_ALIAS(gpio_en_usb_a1_vbus),
-			GPIO_DISCONNECTED);
+		gpio_pin_configure_dt(GPIO_DT_FROM_ALIAS(gpio_en_usb_a1_vbus),
+				      GPIO_DISCONNECTED);
 		/* Disable second USB-A port enable GPIO */
 		__ASSERT(USB_PORT_ENABLE_COUNT == 2,
-		       "USB A port count != 2 (%d)", USB_PORT_ENABLE_COUNT);
+			 "USB A port count != 2 (%d)", USB_PORT_ENABLE_COUNT);
 		usb_port_enable[1] = -1;
 	}
 	/*
@@ -127,9 +150,8 @@ static void nereid_subboard_config(void)
 	 */
 	if (sb == NISSA_SB_C_A || sb == NISSA_SB_C_LTE) {
 		/* Configure interrupt input */
-		gpio_pin_configure_dt(
-			GPIO_DT_FROM_ALIAS(gpio_usb_c1_int_odl),
-			GPIO_INPUT | GPIO_PULL_UP);
+		gpio_pin_configure_dt(GPIO_DT_FROM_ALIAS(gpio_usb_c1_int_odl),
+				      GPIO_INPUT | GPIO_PULL_UP);
 	} else {
 		/* Disable the port 1 charger task */
 		task_disable_task(TASK_ID_USB_CHG_P1);
@@ -148,6 +170,10 @@ static void nereid_subboard_config(void)
 		static struct gpio_callback hdmi_hpd_cb;
 		int rv, irq_key;
 
+#if CONFIG_SOC_IT8XXX2 && DT_NODE_EXISTS(I2C4_NODE)
+		/* disable i2c4 alternate function for better power number */
+		soc_it8xxx2_disable_i2c4_alt();
+#endif
 		/* HDMI power enable outputs */
 		gpio_pin_configure_dt(GPIO_DT_FROM_ALIAS(gpio_en_rails_odl),
 				      GPIO_OUTPUT_INACTIVE | GPIO_OPEN_DRAIN |
@@ -197,9 +223,9 @@ static void nereid_subboard_config(void)
 		/* Control LTE power when CPU entering or
 		 * exiting S5 state.
 		 */
-		ap_power_ev_init_callback(
-			&power_cb, lte_power_handler,
-			AP_POWER_SHUTDOWN | AP_POWER_PRE_INIT);
+		ap_power_ev_init_callback(&power_cb, lte_power_handler,
+					  AP_POWER_SHUTDOWN |
+						  AP_POWER_PRE_INIT);
 		ap_power_ev_add_callback(&power_cb);
 		break;
 

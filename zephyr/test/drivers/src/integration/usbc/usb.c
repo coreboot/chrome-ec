@@ -58,6 +58,7 @@ static void integration_usb_before(void *state)
 	 */
 	zassert_ok(tcpc_config[0].drv->init(0), NULL);
 	zassert_ok(tcpc_config[1].drv->init(1), NULL);
+	tcpc_config[USBC_PORT_C0].flags &= ~TCPC_FLAGS_TCPCI_REV2_0;
 	tcpci_emul_set_rev(tcpci_emul, TCPCI_EMUL_REV1_0_VER1_0);
 	pd_set_suspend(0, 0);
 	pd_set_suspend(1, 0);
@@ -121,14 +122,12 @@ ZTEST(integration_usb, test_attach_drp)
 
 	/* Attach emulated sink */
 	tcpci_partner_init(&my_drp, PD_REV20);
-	my_drp.extensions =
-		tcpci_drp_emul_init(
-			&drp_ext, &my_drp, PD_ROLE_SINK,
-			tcpci_src_emul_init(&src_ext, &my_drp, NULL),
-			tcpci_snk_emul_init(&snk_ext, &my_drp, NULL));
+	my_drp.extensions = tcpci_drp_emul_init(
+		&drp_ext, &my_drp, PD_ROLE_SINK,
+		tcpci_src_emul_init(&src_ext, &my_drp, NULL),
+		tcpci_snk_emul_init(&snk_ext, &my_drp, NULL));
 
-	zassert_ok(tcpci_partner_connect_to_tcpci(&my_drp, tcpci_emul),
-		   NULL);
+	zassert_ok(tcpci_partner_connect_to_tcpci(&my_drp, tcpci_emul), NULL);
 
 	/* Wait for PD negotiation */
 	k_sleep(K_SECONDS(10));

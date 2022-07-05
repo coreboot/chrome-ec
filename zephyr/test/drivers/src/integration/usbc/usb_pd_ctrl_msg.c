@@ -41,10 +41,10 @@ struct usb_pd_ctrl_msg_test_source_fixture {
 	struct usb_pd_ctrl_msg_test_fixture fixture;
 };
 
-static void tcpci_drp_emul_connect_partner(
-	struct tcpci_partner_data *partner_emul,
-	const struct emul *tcpci_emul,
-	const struct emul *charger_emul)
+static void
+tcpci_drp_emul_connect_partner(struct tcpci_partner_data *partner_emul,
+			       const struct emul *tcpci_emul,
+			       const struct emul *charger_emul)
 {
 	/*
 	 * TODO(b/221439302) Updating the TCPCI emulator registers, updating the
@@ -79,8 +79,6 @@ static void *usb_pd_ctrl_msg_setup_emul(void)
 		emul_get_binding(DT_LABEL(DT_NODELABEL(tcpci_emul)));
 	fixture.charger_emul =
 		emul_get_binding(DT_LABEL(DT_NODELABEL(isl923x_emul)));
-
-	tcpci_emul_set_rev(fixture.tcpci_emul, TCPCI_EMUL_REV2_0_VER1_1);
 
 	return &fixture;
 }
@@ -122,15 +120,13 @@ static void usb_pd_ctrl_msg_before(void *data)
 
 	/* Initialized DRP */
 	tcpci_partner_init(&fixture->partner_emul, PD_REV20);
-	fixture->partner_emul.extensions =
-		tcpci_drp_emul_init(&fixture->drp_ext, &fixture->partner_emul,
-				    fixture->drp_partner_pd_role,
-				    tcpci_src_emul_init(&fixture->src_ext,
-							&fixture->partner_emul,
-							NULL),
-				    tcpci_snk_emul_init(&fixture->snk_ext,
-							&fixture->partner_emul,
-							NULL));
+	fixture->partner_emul.extensions = tcpci_drp_emul_init(
+		&fixture->drp_ext, &fixture->partner_emul,
+		fixture->drp_partner_pd_role,
+		tcpci_src_emul_init(&fixture->src_ext, &fixture->partner_emul,
+				    NULL),
+		tcpci_snk_emul_init(&fixture->snk_ext, &fixture->partner_emul,
+				    NULL));
 	/* Add additional Sink PDO to partner to verify
 	 * PE_DR_SNK_Get_Sink_Cap/PE_SRC_Get_Sink_Cap (these are shared PE
 	 * states) state was reached
@@ -362,8 +358,8 @@ ZTEST_F(usb_pd_ctrl_msg_test_source, verify_bist_tx_mode2)
 	struct usb_pd_ctrl_msg_test_fixture *super_fixture = &fixture->fixture;
 	uint32_t bdo = BDO(BDO_MODE_CARRIER2, 0);
 
-	tcpci_partner_send_data_msg(&super_fixture->partner_emul,
-				    PD_DATA_BIST, &bdo, 1, 0);
+	tcpci_partner_send_data_msg(&super_fixture->partner_emul, PD_DATA_BIST,
+				    &bdo, 1, 0);
 
 	pd_dpm_request(TEST_USB_PORT, DPM_REQUEST_BIST_TX);
 	k_sleep(K_MSEC(10));
@@ -389,8 +385,8 @@ ZTEST_F(usb_pd_ctrl_msg_test_source, verify_bist_tx_test_data)
 	struct usb_pd_ctrl_msg_test_fixture *super_fixture = &fixture->fixture;
 	uint32_t bdo = BDO(BDO_MODE_TEST_DATA, 0);
 
-	tcpci_partner_send_data_msg(&super_fixture->partner_emul,
-				    PD_DATA_BIST, &bdo, 1, 0);
+	tcpci_partner_send_data_msg(&super_fixture->partner_emul, PD_DATA_BIST,
+				    &bdo, 1, 0);
 
 	pd_dpm_request(TEST_USB_PORT, DPM_REQUEST_BIST_TX);
 	k_sleep(K_SECONDS(5));

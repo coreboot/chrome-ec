@@ -5,8 +5,8 @@
 
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/logging/log.h>
-
 #include "board_led.h"
+#include "chipset.h"
 #include "common.h"
 #include "led_common.h"
 #include "led_onoff_states.h"
@@ -30,30 +30,43 @@ __override const int led_charge_lvl_1 = 5;
 __override const int led_charge_lvl_2 = 95;
 
 __override struct led_descriptor
-		led_bat_state_table[LED_NUM_STATES][LED_NUM_PHASES] = {
-	[STATE_CHARGING_LVL_1]	     = {{EC_LED_COLOR_AMBER, LED_INDEFINITE} },
-	[STATE_CHARGING_LVL_2]	     = {{EC_LED_COLOR_AMBER, LED_INDEFINITE} },
-	[STATE_CHARGING_FULL_CHARGE] = {{EC_LED_COLOR_WHITE,  LED_INDEFINITE} },
-	[STATE_DISCHARGE_S0]	     = {{LED_OFF,  LED_INDEFINITE} },
-	[STATE_DISCHARGE_S0_BAT_LOW] = {{EC_LED_COLOR_AMBER,  1 * LED_ONE_SEC},
-					{LED_OFF,	    3 * LED_ONE_SEC} },
-	[STATE_DISCHARGE_S3]	     = {{LED_OFF,  LED_INDEFINITE} },
-	[STATE_DISCHARGE_S5]         = {{LED_OFF,  LED_INDEFINITE} },
-	[STATE_BATTERY_ERROR]        = {{EC_LED_COLOR_AMBER,  1 * LED_ONE_SEC},
-					{LED_OFF,	    1 * LED_ONE_SEC} },
-	[STATE_FACTORY_TEST]         = {{EC_LED_COLOR_WHITE,   2 * LED_ONE_SEC},
-					{EC_LED_COLOR_AMBER, 2 * LED_ONE_SEC} },
-};
+	led_bat_state_table[LED_NUM_STATES][LED_NUM_PHASES] = {
+		[STATE_CHARGING_LVL_1] = { { EC_LED_COLOR_AMBER,
+					     LED_INDEFINITE } },
+		[STATE_CHARGING_LVL_2] = { { EC_LED_COLOR_AMBER,
+					     LED_INDEFINITE } },
+		[STATE_CHARGING_FULL_CHARGE] = { { EC_LED_COLOR_WHITE,
+						   LED_INDEFINITE } },
+		[STATE_DISCHARGE_S0] = { { EC_LED_COLOR_WHITE,
+					   LED_INDEFINITE } },
+		[STATE_DISCHARGE_S0_BAT_LOW] = { { EC_LED_COLOR_AMBER,
+						   1 * LED_ONE_SEC },
+						 { LED_OFF, 3 * LED_ONE_SEC } },
+		[STATE_DISCHARGE_S3] = { { EC_LED_COLOR_WHITE,
+					   1 * LED_ONE_SEC },
+					 { LED_OFF, 3 * LED_ONE_SEC } },
+		[STATE_DISCHARGE_S5] = { { LED_OFF, LED_INDEFINITE } },
+		[STATE_BATTERY_ERROR] = { { EC_LED_COLOR_AMBER,
+					    1 * LED_ONE_SEC },
+					  { LED_OFF, 1 * LED_ONE_SEC } },
+		[STATE_FACTORY_TEST] = { { EC_LED_COLOR_WHITE,
+					   2 * LED_ONE_SEC },
+					 { EC_LED_COLOR_AMBER,
+					   2 * LED_ONE_SEC } },
+	};
 
 __override const struct led_descriptor
-		led_pwr_state_table[PWR_LED_NUM_STATES][LED_NUM_PHASES] = {
-	[PWR_LED_STATE_ON]           = {{EC_LED_COLOR_WHITE, LED_INDEFINITE} },
-	[PWR_LED_STATE_SUSPEND_AC]   = {{EC_LED_COLOR_WHITE, 1 * LED_ONE_SEC},
-					{LED_OFF,	     3 * LED_ONE_SEC} },
-	[PWR_LED_STATE_SUSPEND_NO_AC] = {{EC_LED_COLOR_WHITE, 1 * LED_ONE_SEC},
-					{LED_OFF,	     3 * LED_ONE_SEC} },
-	[PWR_LED_STATE_OFF]           = {{LED_OFF, LED_INDEFINITE} },
-};
+	led_pwr_state_table[PWR_LED_NUM_STATES][LED_NUM_PHASES] = {
+		[PWR_LED_STATE_ON] = { { EC_LED_COLOR_WHITE, LED_INDEFINITE } },
+		[PWR_LED_STATE_SUSPEND_AC] = { { EC_LED_COLOR_WHITE,
+						 1 * LED_ONE_SEC },
+					       { LED_OFF, 3 * LED_ONE_SEC } },
+		[PWR_LED_STATE_SUSPEND_NO_AC] = { { EC_LED_COLOR_WHITE,
+						    1 * LED_ONE_SEC },
+						  { LED_OFF,
+						    3 * LED_ONE_SEC } },
+		[PWR_LED_STATE_OFF] = { { LED_OFF, LED_INDEFINITE } },
+	};
 
 const enum ec_led_id supported_led_ids[] = {
 	EC_LED_ID_BATTERY_LED,
@@ -75,8 +88,8 @@ static void board_led_pwm_set_duty(const struct board_led_pwm_dt_channel *ch,
 
 	pulse_ns = DIV_ROUND_NEAREST(BOARD_LED_PWM_PERIOD_NS * percent, 100);
 
-	LOG_DBG("Board LED PWM %s set percent (%d), pulse %d",
-		ch->dev->name, percent, pulse_ns);
+	LOG_DBG("Board LED PWM %s set percent (%d), pulse %d", ch->dev->name,
+		percent, pulse_ns);
 
 	rv = pwm_set(ch->dev, ch->channel, BOARD_LED_PWM_PERIOD_NS, pulse_ns,
 		     ch->flags);
@@ -144,4 +157,25 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 	}
 
 	return EC_SUCCESS;
+}
+
+__override enum led_states board_led_get_state(enum led_states desired_state)
+{
+	/*
+	 * Battery error LED behavior as below:
+	 * S0: Blinking Amber LED, 1s on/ 1s off
+	 * S3/S5: following S3/S5 behavior
+	 * Add function to let battery error LED follow S3/S5 behavior in S3/S5.
+	 */
+
+	if (desired_state == STATE_BATTERY_ERROR) {
+		if (chipset_in_state(CHIPSET_STATE_ON)) {
+			return desired_state;
+		} else if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND)) {
+			return STATE_DISCHARGE_S3;
+		} else {
+			return STATE_DISCHARGE_S5;
+		}
+	}
+	return desired_state;
 }

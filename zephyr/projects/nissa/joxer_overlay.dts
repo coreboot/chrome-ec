@@ -156,6 +156,7 @@
 			temp_host_halt = <90>;
 			temp_host_release_high = <80>;
 			adc = <&adc_temp_sensor_1>;
+			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 		};
 		charger {
 			compatible = "cros-ec,temp-sensor-thermistor",
@@ -169,6 +170,7 @@
 			temp_host_halt = <90>;
 			temp_host_release_high = <80>;
 			adc = <&adc_temp_sensor_2>;
+			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 		};
 		ambient {
 			compatible = "cros-ec,temp-sensor-thermistor",
@@ -182,6 +184,7 @@
 			temp_host_halt = <90>;
 			temp_host_release_high = <80>;
 			adc = <&adc_temp_sensor_3>;
+			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 		};
 	};
 
@@ -317,6 +320,16 @@
 	pinctrl-0 = <&i2c4_clk_gpe0_default
 		     &i2c4_data_gpe7_default>;
 	pinctrl-names = "default";
+};
+
+&i2c_ec_i2c_sub_usb_c1 {
+	/*
+	 * Dynamic speed setting is used for AP-controlled firmware update
+	 * of PS8745 TCPC/redriver: the AP lowers speed to 400 kHz in order
+	 * to use more efficient window programming, then sets it back when
+	 * done.
+	 */
+	dynamic-speed;
 };
 
 &i2c5 {
