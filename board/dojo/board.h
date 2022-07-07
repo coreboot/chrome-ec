@@ -37,6 +37,9 @@
 /* Charger */
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
 
+/* Chipset */
+#define CONFIG_CHIPSET_RESUME_INIT_HOOK
+
 /* PD / USB-C / PPC */
 #undef CONFIG_USB_PD_DEBUG_LEVEL /* default to 1, configurable in ec console \
 				  */
@@ -60,6 +63,11 @@
 /* ICM426XX Base accel/gyro */
 #define CONFIG_ACCELGYRO_ICM426XX
 #define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+/* ICM42607 Base accel/gyro*/
+#define CONFIG_ACCELGYRO_ICM42607
+#define CONFIG_ACCELGYRO_ICM42607_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 /* BMI260 accel/gyro in base */

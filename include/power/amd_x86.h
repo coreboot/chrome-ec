@@ -1,17 +1,19 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-#ifndef __ZEPHYR_GPIO_MAP_H
-#define __ZEPHYR_GPIO_MAP_H
+#ifndef __CROS_EC_POWER_AMD_X86_H_
+#define __CROS_EC_POWER_AMD_X86_H_
 
-#include <zephyr/devicetree.h>
-#include <gpio_signal.h>
+/*
+ * In legacy EC-OS, the power signals are defined as part of
+ * the board include headers, but with Zephyr, this is common.
+ */
+#if defined(CONFIG_ZEPHYR) && defined(CONFIG_AP_X86_AMD)
 
 /* Power input signals */
 enum power_signal {
-	X86_SLP_S0_N, /* SOC  -> SLP_S3_S0I3_L */
 	X86_SLP_S3_N, /* SOC  -> SLP_S3_L */
 	X86_SLP_S5_N, /* SOC  -> SLP_S5_L */
 
@@ -22,4 +24,6 @@ enum power_signal {
 	POWER_SIGNAL_COUNT,
 };
 
-#endif /* __ZEPHYR_GPIO_MAP_H */
+#endif
+
+#endif /* __CROS_EC_POWER_AMD_X86_H_ */
