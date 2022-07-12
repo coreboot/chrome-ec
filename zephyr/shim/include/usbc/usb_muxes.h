@@ -12,6 +12,7 @@
 #include "usbc/anx7483_usb_mux.h"
 #include "usbc/bb_retimer_usb_mux.h"
 #include "usbc/it5205_usb_mux.h"
+#include "usbc/ps8743_usb_mux.h"
 #include "usbc/tcpci_usb_mux.h"
 #include "usbc/tusb1064_usb_mux.h"
 #include "usbc/virtual_usb_mux.h"
@@ -24,6 +25,7 @@
 	(ANX7483_USB_MUX_COMPAT, USB_MUX_CONFIG_ANX7483),               \
 		(BB_RETIMER_USB_MUX_COMPAT, USB_MUX_CONFIG_BB_RETIMER), \
 		(IT5205_USB_MUX_COMPAT, USB_MUX_CONFIG_IT5205),         \
+		(PS8743_USB_MUX_COMPAT, USB_MUX_CONFIG_PS8743),         \
 		(PS8XXX_USB_MUX_COMPAT, USB_MUX_CONFIG_TCPCI_TCPM),     \
 		(TCPCI_TCPM_USB_MUX_COMPAT, USB_MUX_CONFIG_TCPCI_TCPM), \
 		(TUSB1064_USB_MUX_COMPAT, USB_MUX_CONFIG_TUSB1064),     \
@@ -73,6 +75,29 @@
  */
 #define USB_MUX_STRUCT_DECLARE(mux_id) \
 	MAYBE_CONST struct usb_mux USB_MUX_STRUCT_NAME(mux_id)
+
+/**
+ * @brief Declaration of USB mux board_init function
+ *
+ * @param mux_id USB mux node ID
+ * @param port_id USBC node ID
+ * @param idx Position of USB mux in chain
+ * @param conf Driver configuration function
+ */
+#define USB_MUX_CB_BOARD_INIT_DECLARE(mux_id, port_id, idx, conf) \
+	int DT_STRING_TOKEN(mux_id, board_init)(const struct usb_mux *);
+
+/**
+ * @brief Declaration of USB mux board_set function
+ *
+ * @param mux_id USB mux node ID
+ * @param port_id USBC node ID
+ * @param idx Position of USB mux in chain
+ * @param conf Driver configuration function
+ */
+#define USB_MUX_CB_BOARD_SET_DECLARE(mux_id, port_id, idx, conf)       \
+	int DT_STRING_TOKEN(mux_id, board_set)(const struct usb_mux *, \
+					       mux_state_t);
 
 /**
  * @brief Get pointer by referencing @p name or NULL if @p name is EMPTY
@@ -265,6 +290,54 @@
 #define USB_MUX_NO_FIRST(port_id, op)                                         \
 	DT_FOREACH_PROP_ELEM_VARGS(port_id, usb_muxes, USB_MUX_DO_SKIP_FIRST, \
 				   op)
+
+/**
+ * @brief Call USB_MUX_DO if @p cb is not empty
+ *
+ * @param port_id USBC node ID
+ * @param mux_id USB mux node ID
+ * @param idx Position of USB mux in chain
+ * @param cb The callback name
+ * @param op Operation to perform on USB muxes
+ */
+#define USB_MUX_DO_SKIP_NO_CB(port_id, mux_id, idx, cb, op) \
+	COND_CODE_0(IS_EMPTY(DT_STRING_TOKEN(mux_id, cb)),  \
+		    (USB_MUX_DO(port_id, idx, op)), ())
+
+/**
+ * @brief If usb_muxes property of @p port_id has callback property @p cb
+ *
+ * @param port_id USBC node ID
+ * @param cb The callback name
+ * @param op Operation to perform on USB muxes. Needs to accept USB mux node
+ *           ID, USBC port node ID, position in chain, and driver config as
+ *           arguments.
+ */
+#define USB_MUX_HAS_CB(port_id, cb, op)                                       \
+	DT_FOREACH_PROP_ELEM_VARGS(port_id, usb_muxes, USB_MUX_DO_SKIP_NO_CB, \
+				   cb, op)
+
+/**
+ * @brief If usb_muxes property of @p port_id has callback board_init
+ *
+ * @param port_id USBC node ID
+ * @param op Operation to perform on USB muxes. Needs to accept USB mux node
+ *           ID, USBC port node ID, position in chain, and driver config as
+ *           arguments.
+ */
+#define USB_MUX_HAS_CB_BOARD_INIT(port_id, op) \
+	USB_MUX_HAS_CB(port_id, board_init, op)
+
+/**
+ * @brief If usb_muxes property of @p port_id has callback board_set
+ *
+ * @param port_id USBC node ID
+ * @param op Operation to perform on USB muxes. Needs to accept USB mux node
+ *           ID, USBC port node ID, position in chain, and driver config as
+ *           arguments.
+ */
+#define USB_MUX_HAS_CB_BOARD_SET(port_id, op) \
+	USB_MUX_HAS_CB(port_id, board_set, op)
 
 /**
  * @brief Call @p op if @p idx mux in chain has BB retimer compatible

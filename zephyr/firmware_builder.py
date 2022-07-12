@@ -29,13 +29,15 @@ def build(opts):
     """Builds all Zephyr firmware targets"""
     metric_list = firmware_pb2.FwBuildMetricList()
 
+    zephyr_dir = pathlib.Path(__file__).parent
+    platform_ec = zephyr_dir.resolve().parent
+    subprocess.run([platform_ec / "util" / "check_clang_format.py"], check=True)
+
     cmd = ['zmake', '-D', 'build', '-a']
     if opts.code_coverage:
         cmd.append('--coverage')
     subprocess.run(cmd, cwd=pathlib.Path(__file__).parent, check=True)
     if not opts.code_coverage:
-        zephyr_dir = pathlib.Path(__file__).parent
-        platform_ec = zephyr_dir.resolve().parent
         for project in zmake.project.find_projects(zephyr_dir).values():
             if project.config.is_test:
                 continue
@@ -193,7 +195,7 @@ def test(opts):
         cmd = [
             '/usr/bin/lcov',
             '-o',
-            build_dir / 'lcov.info',
+            build_dir / 'zephyr_merged.info',
             '--rc',
             'lcov_branch_coverage=1',
             '-a',
@@ -211,6 +213,32 @@ def test(opts):
             cwd=pathlib.Path(__file__).parent, check=True,
             stdout=subprocess.PIPE, universal_newlines=True).stdout
         _extract_lcov_summary('EC_ZEPHYR_TESTS', metrics, output)
+
+        cmd = ['make', 'coverage', f'-j{opts.cpus}']
+        print(f"# Running {' '.join(cmd)}.")
+        subprocess.run(cmd, cwd=platform_ec, check=True)
+
+        output = subprocess.run(
+            ['/usr/bin/lcov', '--summary', platform_ec / 'build/coverage/lcov.info'],
+            cwd=pathlib.Path(__file__).parent, check=True,
+            stdout=subprocess.PIPE, universal_newlines=True).stdout
+        _extract_lcov_summary('EC_LEGACY_MERGED', metrics, output)
+
+        cmd = [
+            '/usr/bin/lcov',
+            '-o',
+            build_dir / 'lcov.info',
+            '--rc',
+            'lcov_branch_coverage=1',
+            '-a',
+            build_dir / 'zephyr_merged.info',
+            '-a',
+            platform_ec / 'build/coverage/lcov.info',
+        ]
+        output = subprocess.run(
+            cmd, cwd=pathlib.Path(__file__).parent, check=True,
+            stdout=subprocess.PIPE, universal_newlines=True).stdout
+        _extract_lcov_summary('ALL_MERGED', metrics, output)
 
     with open(opts.metrics, 'w') as file:
         file.write(json_format.MessageToJson(metrics))

@@ -4,7 +4,15 @@
 # found in the LICENSE file.
 
 # Device test binaries
-test-list-y ?= flash_write_protect pingpong timer_calib timer_dos timer_jump mutex utils utils_str
+test-list-y ?= flash_write_protect \
+	pingpong \
+	stdlib \
+	timer_calib \
+	timer_dos \
+	timer_jump \
+	mutex \
+	utils \
+	utils_str
 #disable: powerdemo
 
 # Emulator tests
@@ -83,6 +91,10 @@ test-list-host += sha256_unrolled
 test-list-host += shmalloc
 test-list-host += static_if
 test-list-host += static_if_error
+# TODO(b/237823627): When building for the host, we're linking against the
+# toolchain's C standard library, so these tests are actually testing the
+# toolchain's C standard library.
+test-list-host += stdlib
 test-list-host += system
 test-list-host += thermal
 test-list-host += timer_dos
@@ -162,6 +174,7 @@ compile_time_macros-y=compile_time_macros.o
 console_edit-y=console_edit.o
 cortexm_fpu-y=cortexm_fpu.o
 crc-y=crc.o
+debug-y=debug.o
 entropy-y=entropy.o
 extpwr_gpio-y=extpwr_gpio.o
 fan-y=fan.o
@@ -218,6 +231,7 @@ sha256-y=sha256.o
 sha256_unrolled-y=sha256.o
 shmalloc-y=shmalloc.o
 static_if-y=static_if.o
+stdlib-y=stdlib.o
 stm32f_rtc-y=stm32f_rtc.o
 stress-y=stress.o
 system-y=system.o

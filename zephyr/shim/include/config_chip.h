@@ -562,15 +562,7 @@ extern struct jump_data mock_jump_data;
 
 #undef CONFIG_FLASH_SIZE_BYTES
 #ifdef CONFIG_PLATFORM_EC_FLASH_SIZE_BYTES
-/*
- * Flash size of IT81202 is 1MB.
- * We use only 3/4 space of flash to save time of erasing RW image from flash.
- */
-#ifdef CONFIG_SOC_IT8XXX2
-#define CONFIG_FLASH_SIZE_BYTES (CONFIG_PLATFORM_EC_FLASH_SIZE_BYTES * 3 / 4)
-#else
 #define CONFIG_FLASH_SIZE_BYTES CONFIG_PLATFORM_EC_FLASH_SIZE_BYTES
-#endif
 #endif /* CONFIG_PLATFORM_EC_FLASH_SIZE_BYTES */
 
 #undef CONFIG_ADC
@@ -951,23 +943,31 @@ extern struct jump_data mock_jump_data;
 /*
  * Define these here for now. They are not actually CONFIG options in the EC
  * code base. Ideally they would be defined in the devicetree (perhaps for a
- * 'board' driver if not in the USB chip driver itself).
+ * 'board' driver if not in the USB chip driver itself). Use Kconfig to allow
+ * projects to overwrite the power configurations.
  *
  * SN5S30 PPC supports up to 24V VBUS source and sink, however passive USB-C
  * cables only support up to 60W.
  */
-#define PD_OPERATING_POWER_MW 15000
-#define PD_MAX_POWER_MW 60000
-#define PD_MAX_CURRENT_MA 3000
-#define PD_MAX_VOLTAGE_MV 20000
+#define PD_OPERATING_POWER_MW CONFIG_PLATFORM_EC_PD_OPERATING_POWER_MW
+#define PD_MAX_POWER_MW CONFIG_PLATFORM_EC_PD_MAX_POWER_MW
+#define PD_MAX_CURRENT_MA CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA
+#define PD_MAX_VOLTAGE_MV CONFIG_PLATFORM_EC_PD_MAX_VOLTAGE_MV
 
-#define PD_POWER_SUPPLY_TURN_ON_DELAY 30000 /* us */
-#define PD_POWER_SUPPLY_TURN_OFF_DELAY 30000 /* us */
+#define PD_POWER_SUPPLY_TURN_ON_DELAY \
+	CONFIG_PLATFORM_EC_PD_POWER_SUPPLY_TURN_ON_DELAY
+#define PD_POWER_SUPPLY_TURN_OFF_DELAY \
+	CONFIG_PLATFORM_EC_PD_POWER_SUPPLY_TURN_OFF_DELAY
 #endif
 
 #undef CONFIG_CMD_PPC_DUMP
 #ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_PPC_DUMP
 #define CONFIG_CMD_PPC_DUMP
+#endif
+
+#undef CONFIG_USBC_PPC_LOGGING
+#ifdef CONFIG_PLATFORM_EC_USBC_PPC_LOGGING
+#define CONFIG_USBC_PPC_LOGGING
 #endif
 
 #undef CONFIG_CMD_TCPC_DUMP
