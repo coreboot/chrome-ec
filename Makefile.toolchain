@@ -105,6 +105,9 @@ CFLAGS+= -fno-PIC
 ifneq ($(cc-name),clang)
 CFLAGS+= -ffat-lto-objects
 CFLAGS+= -fconserve-stack
+# Disable assembler warnings
+# TODO (b/238039591) Remove this when binutils updates to 2.37+
+CFLAGS+= -Wa,-W
 endif
 CFLAGS+=$(CFLAGS_CHIP) $(CFLAGS_BOARD)
 
