@@ -24,8 +24,7 @@
 		gpio_ec_i2c_usbc_pd_int: ec_i2c_usbc_pd_int {
 			gpios = <&gpioa 3 GPIO_INPUT>;
 		};
-		/* TODO: Add interrupt handler */
-		soc_thermtrip_odl {
+		gpio_soc_thermtrip_odl: soc_thermtrip_odl {
 			gpios = <&gpio9 5 GPIO_INPUT>;
 		};
 		gpio_hub_rst: hub_rst {
@@ -104,7 +103,6 @@
 		soc-pct2075 {
 			compatible = "cros-ec,temp-sensor-pct2075",
 				     "cros-ec,temp-sensor";
-			label = "SOC";
 			enum-name = "TEMP_SENSOR_SOC";
 			pct2075-name = "PCT2075_SOC";
 			port = <&i2c_sensor>;
@@ -120,7 +118,6 @@
 		amb-pct2075 {
 			compatible = "cros-ec,temp-sensor-pct2075",
 				     "cros-ec,temp-sensor";
-			label = "Ambient";
 			enum-name = "TEMP_SENSOR_AMB";
 			pct2075-name = "PCT2075_AMB";
 			port = <&i2c_sensor>;
@@ -187,6 +184,31 @@
 				compatible = "cros-ec,cbi-fw-config-value";
 				enum-name = "FW_IO_DB_NONE_ANX7483";
 				value = <1>;
+				default;
+			};
+		};
+
+		/*
+		 * FW_CONFIG field to enable fan or not.
+		 */
+		fan {
+			enum-name = "FW_FAN";
+			start = <10>;
+			size = <1>;
+
+			no-fan {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_FAN_NOT_PRESENT";
+				value = <0>;
+			};
+			fan-present {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_FAN_PRESENT";
+				value = <1>;
+				/*
+				 * Set as default so that unprovisioned
+				 * configs will run the fan regardless.
+				 */
 				default;
 			};
 		};

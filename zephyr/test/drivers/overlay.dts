@@ -343,34 +343,28 @@
 		compatible = "named-adc-channels";
 
 		adc_charger: charger {
-			label = "ADC_TEMP_SENSOR_CHARGER";
 			enum-name = "ADC_TEMP_SENSOR_CHARGER";
 			io-channels = <&adc0 0>;
 		};
 		adc_pp3300_regulator: pp3300-regulator {
-			label = "ADC_TEMP_SENSOR_PP3300_REGULATOR";
 			enum-name = "ADC_TEMP_SENSOR_PP3300_REGULATOR";
 			io-channels = <&adc0 1>;
 		};
 		adc_ddr_soc: ddr-soc {
-			label = "ADC_TEMP_SENSOR_DDR_SOC";
 			enum-name = "ADC_TEMP_SENSOR_DDR_SOC";
 			io-channels = <&adc0 2>;
 		};
 		adc_fan: fan {
-			label = "ADC_TEMP_SENSOR_FAN";
 			enum-name = "ADC_TEMP_SENSOR_FAN";
 			io-channels = <&adc0 3>;
 		};
 		amon_bmon {
-			label = "AMON_BMON";
 			enum-name = "ADC_AMON_BMON";
 			io-channels = <&adc0 4>;
 			mul = <1000>;
 			div = <20>;
 		};
 		psys {
-			label = "PSYS";
 			enum-name = "ADC_PSYS";
 			io-channels = <&adc0 5>;
 			mul = <124000>;
@@ -383,7 +377,6 @@
 			status = "okay";
 			compatible = "cros-ec,temp-sensor-thermistor",
 				     "cros-ec,temp-sensor";
-			label = "TEMP_SENSOR_CHARGER";
 			enum-name = "TEMP_SENSOR_CHARGER";
 			temp_fan_off = <40>;
 			temp_fan_max = <55>;
@@ -397,7 +390,6 @@
 			status = "okay";
 			compatible = "cros-ec,temp-sensor-thermistor",
 				     "cros-ec,temp-sensor";
-			label = "TEMP_SENSOR_PP3300_REGULATOR";
 			enum-name = "TEMP_SENSOR_PP3300_REGULATOR";
 			temp_fan_off = <40>;
 			temp_fan_max = <55>;
@@ -411,7 +403,6 @@
 			status = "okay";
 			compatible = "cros-ec,temp-sensor-thermistor",
 				     "cros-ec,temp-sensor";
-			label = "TEMP_SENSOR_DDR_SOC";
 			enum-name = "TEMP_SENSOR_DDR_SOC";
 			temp_fan_off = <35>;
 			temp_fan_max = <50>;
@@ -425,7 +416,6 @@
 			status = "okay";
 			compatible = "cros-ec,temp-sensor-thermistor",
 				     "cros-ec,temp-sensor";
-			label = "TEMP_SENSOR_FAN";
 			enum-name = "TEMP_SENSOR_FAN";
 			temp_fan_off = <35>;
 			temp_fan_max = <50>;
@@ -446,19 +436,15 @@
 	motionsense-mutex {
 		compatible = "cros-ec,motionsense-mutex";
 		mutex_bma255: bma255-mutex {
-			label = "BMA255_MUTEX";
 		};
 
 		mutex_bmi260: bmi260-mutex {
-			label = "BMI260_MUTEX";
 		};
 
 		mutex_bmi160: bmi160-mutex {
-			label = "BMI160_MUTEX";
 		};
 
 		mutex_lis2dw12: lis2dw12-mutex {
-			label = "LIS2DW12_MUTEX";
 		};
 	};
 
@@ -554,7 +540,7 @@
 
 	/*
 	 * List of motion sensors that creates motion_sensors array.
-	 * The label "lid_accel" and "base_accel" are used to indicate
+	 * The nodelabel "lid_accel" and "base_accel" are used to indicate
 	 * motion sensor IDs for lid angle calculation.
 	 */
 	motionsense-sensor {
@@ -562,7 +548,6 @@
 			compatible = "cros-ec,bma255";
 			status = "okay";
 
-			label = "BMA255";
 			active-mask = "SENSOR_ACTIVE_S0_S3_S5";
 			location = "MOTIONSENSE_LOC_LID";
 			mutex = <&mutex_bma255>;
@@ -575,15 +560,12 @@
 					"cros-ec,motionsense-sensor-config";
 				ec-s0 {
 					/* Run ALS sensor in S0 */
-					label = "SENSOR_CONFIG_EC_S0";
 					odr = <1000>;
 				};
 				ec-s3 {
-					label = "SENSOR_CONFIG_EC_S3";
 					odr = <10000>;
 				};
 				ec-s5 {
-					label = "SENSOR_CONFIG_EC_S5";
 					odr = <10000>;
 				};
 			};
@@ -592,7 +574,6 @@
 			compatible = "cros-ec,bmi260-accel";
 			status = "okay";
 
-			label = "BMI260 emul accel";
 			location = "MOTIONSENSE_LOC_BASE";
 			mutex = <&mutex_bmi260>;
 			port = <&i2c_accel>;
@@ -605,7 +586,6 @@
 			compatible = "cros-ec,bmi260-gyro";
 			status = "okay";
 
-			label = "BMI260 emul gyro";
 			location = "MOTIONSENSE_LOC_BASE";
 			mutex = <&mutex_bmi260>;
 			port = <&i2c_accel>;
@@ -618,7 +598,6 @@
 			compatible = "cros-ec,bmi160-accel";
 			status = "okay";
 
-			label = "BMI160 emul accel";
 			active-mask = "SENSOR_ACTIVE_S0_S3_S5";
 			location = "MOTIONSENSE_LOC_BASE";
 			mutex = <&mutex_bmi160>;
@@ -632,7 +611,6 @@
 			compatible = "cros-ec,bmi160-gyro";
 			status = "okay";
 
-			label = "BMI160 emul gyro";
 			location = "MOTIONSENSE_LOC_BASE";
 			mutex = <&mutex_bmi160>;
 			port = <&i2c_sensor>;
@@ -645,7 +623,6 @@
 			compatible = "cros-ec,lis2dw12";
 			status = "okay";
 
-			label = "LIS2DW12";
 			location = "MOTIONSENSE_LOC_BASE";
 			mutex = <&mutex_lis2dw12>;
 			port = <&i2c_accel>;
@@ -658,7 +635,6 @@
 			compatible = "cros-ec,tcs3400-clear";
 			status = "okay";
 
-			label = "Clear Light";
 			location = "MOTIONSENSE_LOC_BASE";
 			port = <&i2c_sensor>;
 			default-range = <0x10000>;
@@ -669,7 +645,6 @@
 					"cros-ec,motionsense-sensor-config";
 				ec-s0 {
 					/* Run ALS sensor in S0 */
-					label = "SENSOR_CONFIG_EC_S0";
 					odr = <1000>;
 				};
 			};
@@ -679,7 +654,6 @@
 			compatible = "cros-ec,tcs3400-rgb";
 			status = "okay";
 
-			label = "RGB Light";
 			location = "MOTIONSENSE_LOC_BASE";
 			default-range = <0x10000>; /* scale = 1x, uscale = 0 */
 			drv-data = <&tcs_rgb_data>;
@@ -771,7 +745,6 @@
 
 	cros_flash: cros-flash {
 		compatible = "cros-ec,flash-emul";
-		label = "FLASH";
 	};
 };
 

@@ -12,6 +12,22 @@
 #include "test_util.h"
 #include "util.h"
 
+#ifdef USE_BUILTIN_STDLIB
+/*
+ * When USE_BUILTIN_STDLIB is defined, we want to test the EC printf
+ * implementation. We need to include the builtin header file directly so
+ * that we can call the EC version (crec_vsnprintf) when linking with the
+ * standard library on the host.
+ */
+#include "builtin/stdio.h"
+#define VSNPRINTF crec_vsnprintf
+static const bool use_builtin_stdlib = true;
+#else
+#include <stdio.h>
+#define VSNPRINTF vsnprintf
+static const bool use_builtin_stdlib = false;
+#endif
+
 #define INIT_VALUE 0x5E
 #define NO_BYTES_TOUCHED NULL
 
@@ -33,7 +49,7 @@ int run(int expect_ret, const char *expect, bool output_null, size_t size_limit,
 	TEST_ASSERT(expect_size <= size_limit);
 	memset(output, INIT_VALUE, sizeof(output));
 
-	rv = vsnprintf(output_null ? NULL : output, size_limit, format, args);
+	rv = VSNPRINTF(output_null ? NULL : output, size_limit, format, args);
 	ccprintf("received='%.*s'   | ret          =%d\n", 30, output, rv);
 
 	TEST_ASSERT_ARRAY_EQ(output, expect, expect_size);
@@ -87,27 +103,33 @@ test_static int test_vsnprintf_args(void)
 	T(expect_success("", ""));
 	T(expect_success("a", "a"));
 
-	T(expect(/* expect an invalid args error */
-		 EC_ERROR_INVAL, NO_BYTES_TOUCHED,
-		 /* given 0 as output size limit */
-		 false, 0, ""));
+	if (use_builtin_stdlib) {
+		/*
+		 * TODO(b/239233116): This differs from the C standard library
+		 * behavior and should probably be changed.
+		 */
+		T(expect(/* expect an invalid args error */
+			 EC_ERROR_INVAL, NO_BYTES_TOUCHED,
+			 /* given 0 as output size limit */
+			 false, 0, ""));
+		T(expect(/* expect an overflow error */
+			 EC_ERROR_OVERFLOW, "",
+			 /* given 1 as output size limit with a non-blank format
+			  */
+			 false, 1, "a"));
+		T(expect(/* expect an invalid args error */
+			 EC_ERROR_INVAL, NO_BYTES_TOUCHED,
+			 /* given NULL as the output buffer */
+			 true, sizeof(output), ""));
+		T(expect(/* expect an invalid args error */
+			 EC_ERROR_INVAL, NO_BYTES_TOUCHED,
+			 /* given a NULL format string */
+			 false, sizeof(output), NULL));
+	}
 	T(expect(/* expect SUCCESS */
 		 EC_SUCCESS, "",
 		 /* given 1 as output size limit and a blank format */
 		 false, 1, ""));
-	T(expect(/* expect an overflow error */
-		 EC_ERROR_OVERFLOW, "",
-		 /* given 1 as output size limit with a non-blank format */
-		 false, 1, "a"));
-
-	T(expect(/* expect an invalid args error */
-		 EC_ERROR_INVAL, NO_BYTES_TOUCHED,
-		 /* given NULL as the output buffer */
-		 true, sizeof(output), ""));
-	T(expect(/* expect an invalid args error */
-		 EC_ERROR_INVAL, NO_BYTES_TOUCHED,
-		 /* given a NULL format string */
-		 false, sizeof(output), NULL));
 
 	return EC_SUCCESS;
 }
@@ -125,42 +147,79 @@ test_static int test_vsnprintf_int(void)
 	T(expect_success(" +123", "%+5d", 123));
 	T(expect_success("00123", "%05d", 123));
 	T(expect_success("00123", "%005d", 123));
-	/*
-	 * TODO(crbug.com/974084): This odd behavior should be fixed.
-	 * T(expect_success("+0123",     "%+05d",   123));
-	 * Actual: "0+123"
-	 * T(expect_success("+0123",     "%+005d",  123));
-	 * Actual: "0+123"
-	 */
+	if (use_builtin_stdlib) {
+		/*
+		 * TODO(b/239233116): These are incorrect and should be fixed.
+		 */
+		T(expect_success("0+123", "%+05d", 123));
+		T(expect_success("0+123", "%+005d", 123));
+	} else {
+		T(expect_success("+0123", "%+05d", 123));
+		T(expect_success("+0123", "%+005d", 123));
+	}
 
 	T(expect_success("  123", "%*d", 5, 123));
 	T(expect_success(" +123", "%+*d", 5, 123));
 	T(expect_success("00123", "%0*d", 5, 123));
-	/*
-	 * TODO(crbug.com/974084): This odd behavior should be fixed.
-	 * T(expect_success("00123",     "%00*d",   5, 123));
-	 * Actual: "ERROR"
-	 */
-	T(expect_success("0+123", "%+0*d", 5, 123));
-	/*
-	 * TODO(crbug.com/974084): This odd behavior should be fixed.
-	 * T(expect_success("0+123",     "%+00*d",  5, 123));
-	 * Actual: "ERROR"
-	 */
+
+	if (use_builtin_stdlib) {
+		/*
+		 * TODO(b/239233116): This incorrect and should be fixed.
+		 */
+		T(expect_success(err_str, "%00*d", 5, 123));
+	} else {
+		T(expect_success("00123", "%00*d", 5, 123));
+	}
+
+	if (use_builtin_stdlib) {
+		/*
+		 * TODO(b/239233116): This is incorrect and should be fixed.
+		 */
+		T(expect_success("0+123", "%+0*d", 5, 123));
+	} else {
+		T(expect_success("+0123", "%+0*d", 5, 123));
+	}
+
+	if (use_builtin_stdlib) {
+		/*
+		 * TODO(b/239233116): This is incorrect and should be fixed.
+		 */
+		T(expect_success(err_str, "%+00*d", 5, 123));
+	} else {
+		T(expect_success("+0123", "%+00*d", 5, 123));
+	}
 
 	T(expect_success("123  ", "%-5d", 123));
 	T(expect_success("+123 ", "%-+5d", 123));
-	T(expect_success(err_str, "%+-5d", 123));
+	if (use_builtin_stdlib) {
+		/*
+		 * TODO(b/239233116): This incorrect and should be fixed.
+		 */
+		T(expect_success(err_str, "%+-5d", 123));
+	} else {
+		T(expect_success("+123 ", "%+-5d", 123));
+	}
 	T(expect_success("123  ", "%-05d", 123));
 	T(expect_success("123  ", "%-005d", 123));
 	T(expect_success("+123 ", "%-+05d", 123));
 	T(expect_success("+123 ", "%-+005d", 123));
 
-	T(expect_success("0.00123", "%.5d", 123));
-	T(expect_success("+0.00123", "%+.5d", 123));
-	T(expect_success("0.00123", "%7.5d", 123));
-	T(expect_success("  0.00123", "%9.5d", 123));
-	T(expect_success(" +0.00123", "%+9.5d", 123));
+	if (use_builtin_stdlib) {
+		/*
+		 * TODO(b/239233116): These are incorrect and should be fixed.
+		 */
+		T(expect_success("0.00123", "%.5d", 123));
+		T(expect_success("+0.00123", "%+.5d", 123));
+		T(expect_success("0.00123", "%7.5d", 123));
+		T(expect_success("  0.00123", "%9.5d", 123));
+		T(expect_success(" +0.00123", "%+9.5d", 123));
+	} else {
+		T(expect_success("00123", "%.5d", 123));
+		T(expect_success("+00123", "%+.5d", 123));
+		T(expect_success("  00123", "%7.5d", 123));
+		T(expect_success("    00123", "%9.5d", 123));
+		T(expect_success("   +00123", "%+9.5d", 123));
+	}
 
 	T(expect_success("123", "%u", 123));
 	T(expect_success("4294967295", "%u", -1));
@@ -247,8 +306,16 @@ test_static int test_vsnprintf_64bit_long_supported(void)
 	T(expect_success("00000123", "%08lu", 123));
 	T(expect_success("131415", "%d%lu%d", 13, 14L, 15));
 
-	T(expect_success(err_str, "%i", 123));
-	T(expect_success(err_str, "%li", 123));
+	if (use_builtin_stdlib) {
+		/*
+		 * TODO(b/239233116): These are incorrect and should be fixed.
+		 */
+		T(expect_success(err_str, "%i", 123));
+		T(expect_success(err_str, "%li", 123));
+	} else {
+		T(expect_success("123", "%i", 123));
+		T(expect_success("123", "%li", 123));
+	}
 
 	return EC_SUCCESS;
 }
@@ -287,20 +354,14 @@ test_static int test_vsnprintf_pointers(void)
 {
 	void *ptr = (void *)0x55005E00;
 
-	T(expect_success("55005e00", "%pP", ptr));
-	T(expect_success(err_str, "%P", ptr));
-	/* %p by itself is invalid */
-	T(expect(EC_ERROR_INVAL, "", false, sizeof(output), "%p"));
-	/* %p with an unknown suffix is invalid */
-	T(expect(EC_ERROR_INVAL, "", false, sizeof(output), "%p "));
-	/* %p with an unknown suffix is invalid */
-	T(expect(EC_ERROR_INVAL, "", false, sizeof(output), "%pQ"));
-
-	/*
-	 * Test %pb, which used to print binary, but is non-standard and no
-	 * longer supported.
-	 */
-	T(expect(EC_ERROR_INVAL, "", false, sizeof(output), "%pb", 0xff));
+	if (use_builtin_stdlib) {
+		/*
+		 * TODO(b/239233116): This incorrect and should be fixed.
+		 */
+		T(expect_success("55005e00", "%p", ptr));
+	} else {
+		T(expect_success("0x55005e00", "%p", ptr));
+	}
 
 	return EC_SUCCESS;
 }
@@ -323,12 +384,14 @@ test_static int test_vsnprintf_strings(void)
 	T(expect_success("a", "%.*s", 1, "abc"));
 	T(expect_success("", "%.0s", "abc"));
 	T(expect_success("", "%.*s", 0, "abc"));
-	/*
-	 * TODO(crbug.com/974084):
-	 * Ignoring the padding parameter is slightly
-	 * odd behavior and could use a review.
-	 */
-	T(expect_success("ab", "%5.2s", "abc"));
+	if (use_builtin_stdlib) {
+		/*
+		 * TODO(b/239233116): This incorrect and should be fixed.
+		 */
+		T(expect_success("ab", "%5.2s", "abc"));
+	} else {
+		T(expect_success("   ab", "%5.2s", "abc"));
+	}
 	T(expect_success("abc", "%.4s", "abc"));
 
 	/*
@@ -341,25 +404,110 @@ test_static int test_vsnprintf_strings(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_vsnprintf_timestamps(void)
+test_static int test_snprintf_timestamp(void)
 {
+	char str[PRINTF_TIMESTAMP_BUF_SIZE];
+	int size;
+	int ret;
 	uint64_t ts = 0;
 
-	T(expect_success("0.000000", "%pT", &ts));
+	/* Success cases. */
+
+	ret = snprintf_timestamp(str, sizeof(str), ts);
+	TEST_EQ(ret, 8, "%d");
+	TEST_ASSERT_ARRAY_EQ(str, "0.000000", sizeof("0.000000"));
+
 	ts = 123456;
-	T(expect_success("0.123456", "%pT", &ts));
+	ret = snprintf_timestamp(str, sizeof(str), ts);
+	TEST_EQ(ret, 8, "%d");
+	TEST_ASSERT_ARRAY_EQ(str, "0.123456", sizeof("0.123456"));
+
 	ts = 9999999000000;
-	T(expect_success("9999999.000000", "%pT", &ts));
+	ret = snprintf_timestamp(str, sizeof(str), ts);
+	TEST_EQ(ret, 14, "%d");
+	TEST_ASSERT_ARRAY_EQ(str, "9999999.000000", sizeof("9999999.000000"));
+
+	ts = UINT64_MAX;
+	ret = snprintf_timestamp(str, sizeof(str), ts);
+	TEST_EQ(ret, 21, "%d");
+	TEST_ASSERT_ARRAY_EQ(str, "18446744073709.551615",
+			     sizeof("18446744073709.551615"));
+
+	/* Error cases. */
+
+	/* Buffer is too small by one. */
+	size = 21;
+	ts = UINT64_MAX;
+	str[0] = 'f';
+	ret = snprintf_timestamp(str, size, ts);
+	TEST_EQ(ret, -EC_ERROR_OVERFLOW, "%d");
+	TEST_EQ(str[0], '\0', "%d");
+
+	/* Size is zero. */
+	size = 0;
+	ts = UINT64_MAX;
+	str[0] = 'f';
+	ret = snprintf_timestamp(str, size, ts);
+	TEST_EQ(ret, -EC_ERROR_INVAL, "%d");
+	TEST_EQ(str[0], 'f', "%d");
+
+	/* Size is one. */
+	size = 1;
+	ts = UINT64_MAX;
+	str[0] = 'f';
+	ret = snprintf_timestamp(str, size, ts);
+	TEST_EQ(ret, -EC_ERROR_OVERFLOW, "%d");
+	TEST_EQ(str[0], '\0', "%d");
+
 	return EC_SUCCESS;
 }
 
-test_static int test_vsnprintf_hexdump(void)
+test_static int test_snprintf_hex_buffer(void)
 {
-	const char bytes[] = { 0x00, 0x5E };
+	const uint8_t bytes[] = { 0xAB, 0x5E };
+	char str_buf[5];
+	int rv;
 
-	T(expect_success("005e", "%ph", HEX_BUF(bytes, 2)));
-	T(expect_success("", "%ph", HEX_BUF(bytes, 0)));
-	T(expect_success("00", "%ph", HEX_BUF(bytes, 1)));
+	/* Success cases. */
+
+	memset(str_buf, 0xff, sizeof(str_buf));
+	rv = snprintf_hex_buffer(str_buf, sizeof(str_buf), HEX_BUF(bytes, 2));
+	TEST_ASSERT_ARRAY_EQ(str_buf, "ab5e", sizeof("ab5e"));
+	TEST_EQ(rv, 4, "%d");
+
+	memset(str_buf, 0xff, sizeof(str_buf));
+	rv = snprintf_hex_buffer(str_buf, sizeof(str_buf), HEX_BUF(bytes, 0));
+	TEST_ASSERT_ARRAY_EQ(str_buf, "", sizeof(""));
+	TEST_EQ(rv, 0, "%d");
+
+	memset(str_buf, 0xff, sizeof(str_buf));
+	rv = snprintf_hex_buffer(str_buf, sizeof(str_buf), HEX_BUF(bytes, 1));
+	TEST_ASSERT_ARRAY_EQ(str_buf, "ab", sizeof("ab"));
+	TEST_EQ(rv, 2, "%d");
+
+	/* Error cases. */
+
+	/* Zero for buffer size argument is an error. */
+	memset(str_buf, 0xff, sizeof(str_buf));
+	TEST_ASSERT_MEMSET(str_buf, (char)0xff, sizeof(str_buf));
+	rv = snprintf_hex_buffer(str_buf, 0, HEX_BUF(bytes, 2));
+	TEST_EQ(rv, -EC_ERROR_INVAL, "%d");
+	TEST_ASSERT_MEMSET(str_buf, (char)0xff, sizeof(str_buf));
+
+	/* Buffer only has space for terminating '\0'. */
+	memset(str_buf, 0xff, sizeof(str_buf));
+	TEST_ASSERT_MEMSET(str_buf, (char)0xff, sizeof(str_buf));
+	rv = snprintf_hex_buffer(str_buf, 1, HEX_BUF(bytes, 1));
+	TEST_ASSERT_ARRAY_EQ(str_buf, "", sizeof(""));
+	TEST_EQ(rv, -EC_ERROR_OVERFLOW, "%d");
+
+	/* Buffer only has space for one character and '\0'. */
+	memset(str_buf, 0xff, sizeof(str_buf));
+	TEST_ASSERT_MEMSET(str_buf, (char)0xff, sizeof(str_buf));
+	rv = snprintf_hex_buffer(str_buf, 2, HEX_BUF(bytes, 1));
+	TEST_ASSERT_ARRAY_EQ(str_buf, "a", sizeof("a"));
+	TEST_EQ(rv, -EC_ERROR_OVERFLOW, "%d");
+
 	return EC_SUCCESS;
 }
 
@@ -367,6 +515,111 @@ test_static int test_vsnprintf_combined(void)
 {
 	T(expect_success("abc", "%c%s", 'a', "bc"));
 	T(expect_success("12\tbc", "%d\t%s", 12, "bc"));
+	return EC_SUCCESS;
+}
+
+test_static int test_uint64_to_str(void)
+{
+	/* Longest uin64 in decimal = 20, plus terminating NUL. */
+	char buf[21];
+	char *str;
+
+	str = uint64_to_str(buf, sizeof(buf), /*val=*/0, /*precision=*/-1,
+			    /*base=*/10, /*uppercase=*/false);
+	TEST_ASSERT_ARRAY_EQ(str, "0", sizeof("0"));
+
+	str = uint64_to_str(buf, sizeof(buf), /*val=*/UINT64_MAX,
+			    /*precision=*/-1, /*base=*/10,
+			    /*uppercase=*/false);
+	TEST_ASSERT_ARRAY_EQ(str, "18446744073709551615",
+			     sizeof("18446744073709551615"));
+
+	/* Buffer too small by 1. */
+	str = uint64_to_str(buf, /*buf_len=*/20, /*val=*/UINT64_MAX,
+			    /*precision=*/-1, /*base=*/10, /*uppercase=*/false);
+	TEST_ASSERT(str == NULL);
+
+	/* lower case hex */
+	str = uint64_to_str(buf, sizeof(buf), /*val=*/0, /*precision=*/-1,
+			    /*base=*/16, /*uppercase=*/false);
+	TEST_ASSERT_ARRAY_EQ(str, "0", sizeof("0"));
+
+	/* lower case hex */
+	str = uint64_to_str(buf, sizeof(buf), /*val=*/UINT64_MAX,
+			    /*precision=*/-1, /*base=*/16,
+			    /*uppercase=*/false);
+	TEST_ASSERT_ARRAY_EQ(str, "ffffffffffffffff",
+			     sizeof("fffffffffffffff"));
+
+	/* upper case hex */
+	str = uint64_to_str(buf, sizeof(buf), /*val=*/0, /*precision=*/-1,
+			    /*base=*/16, /*uppercase=*/true);
+	TEST_ASSERT_ARRAY_EQ(str, "0", sizeof("0"));
+
+	str = uint64_to_str(buf, sizeof(buf), /*val=*/UINT64_MAX,
+			    /*precision=*/-1, /*base=*/16,
+			    /*uppercase=*/true);
+	TEST_ASSERT_ARRAY_EQ(str, "FFFFFFFFFFFFFFFF",
+			     sizeof("FFFFFFFFFFFFFFF"));
+
+	/* precision 0 */
+	str = uint64_to_str(buf, sizeof(buf), /*val=*/1, /*precision=*/0,
+			    /*base=*/10, /*uppercase=*/false);
+	TEST_ASSERT_ARRAY_EQ(str, "1.", sizeof("1."));
+
+	/* precision 6 */
+	str = uint64_to_str(buf, sizeof(buf), /*val=*/1, /*precision=*/6,
+			    /*base=*/10, /*uppercase=*/false);
+	TEST_ASSERT_ARRAY_EQ(str, "0.000001", sizeof("0.000001"));
+
+	/* Reduced precision due to buffer that is too small. */
+	str = uint64_to_str(buf, /*buf_len=*/8, /*val=*/1, /*precision=*/6,
+			    /*base=*/10, /*uppercase=*/false);
+	TEST_ASSERT_ARRAY_EQ(str, "0.00001", sizeof("0.00001"));
+
+	/*
+	 * Reduced precision due to buffer that is too small, so precision
+	 * gets changed to 0.
+	 */
+	str = uint64_to_str(buf, /*buf_len=*/3, /*val=*/1, /*precision=*/6,
+			    /*base=*/10, /*uppercase=*/false);
+	TEST_ASSERT_ARRAY_EQ(str, "1.", sizeof("1."));
+
+	/* Precision is unable to fit in provided buffer. */
+	str = uint64_to_str(buf, /*buf_len=*/2, /*val=*/1, /*precision=*/6,
+			    /*base=*/10, /*uppercase=*/false);
+	TEST_ASSERT(str == NULL);
+
+	/* Negative base. */
+	str = uint64_to_str(buf, sizeof(buf), /*val=*/0, /*precision=*/-1,
+			    /*base=*/-1, /*uppercase=*/false);
+	TEST_ASSERT(str == NULL);
+
+	/* Base zero. */
+	str = uint64_to_str(buf, sizeof(buf), /*val=*/1, /*precision=*/-1,
+			    /*base=*/0, /*uppercase=*/false);
+	TEST_ASSERT(str == NULL);
+
+	/* Base one. */
+	str = uint64_to_str(buf, sizeof(buf), /*val=*/1, /*precision=*/-1,
+			    /*base=*/1, /*uppercase=*/false);
+	TEST_ASSERT(str == NULL);
+
+	/* Buffer size 1. */
+	str = uint64_to_str(buf, /*buf_len=*/1, /*val=*/0, /*precision=*/-1,
+			    /*base=*/10, /*uppercase=*/false);
+	TEST_ASSERT(str == NULL);
+
+	/* Buffer size 0. */
+	str = uint64_to_str(buf, /*buf_len=*/0, /*val=*/0, /*precision=*/-1,
+			    /*base=*/10, /*uppercase=*/false);
+	TEST_ASSERT(str == NULL);
+
+	/* Buffer size -1. */
+	str = uint64_to_str(buf, /*buf_len=*/-1, /*val=*/0, /*precision=*/-1,
+			    /*base=*/10, /*uppercase=*/false);
+	TEST_ASSERT(str == NULL);
+
 	return EC_SUCCESS;
 }
 
@@ -381,8 +634,10 @@ void run_test(int argc, char **argv)
 	RUN_TEST(test_vsnprintf_pointers);
 	RUN_TEST(test_vsnprintf_chars);
 	RUN_TEST(test_vsnprintf_strings);
-	RUN_TEST(test_vsnprintf_timestamps);
-	RUN_TEST(test_vsnprintf_hexdump);
 	RUN_TEST(test_vsnprintf_combined);
+	RUN_TEST(test_uint64_to_str);
+	RUN_TEST(test_snprintf_timestamp);
+	RUN_TEST(test_snprintf_hex_buffer);
+
 	test_print_result();
 }

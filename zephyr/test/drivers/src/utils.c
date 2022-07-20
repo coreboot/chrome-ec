@@ -10,6 +10,7 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "charge_state.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
@@ -49,6 +50,10 @@ void test_set_chipset_to_s0(void)
 	zassert_ok(gpio_emul_input_set(battery_gpio_dev,
 				       GPIO_BATT_PRES_ODL_PORT, 0),
 		   NULL);
+
+	/* We need to wait for the charge task to re-read battery parameters */
+	WAIT_FOR(!charge_want_shutdown(), CHARGE_MAX_SLEEP_USEC + 1,
+		 k_sleep(K_SECONDS(1)));
 
 	/* The easiest way to power on seems to be the shell command. */
 	zassert_equal(EC_SUCCESS, shell_execute_cmd(get_ec_shell(), "power on"),
@@ -367,17 +372,76 @@ void host_cmd_typec_discovery(int port, enum typec_partner_type partner_type,
 		   "Failed to get Type-C state for port %d", port);
 }
 
-void host_cmd_typec_control(int port, enum typec_control_command command,
-			    enum typec_mode mode)
+void host_cmd_typec_control_enter_mode(int port, enum typec_mode mode)
 {
-	struct ec_params_typec_control params = { .port = port,
-						  .command = command,
-						  .mode_to_enter = mode };
+	struct ec_params_typec_control params = {
+		.port = port,
+		.command = TYPEC_CONTROL_COMMAND_ENTER_MODE,
+		.mode_to_enter = mode
+	};
 	struct host_cmd_handler_args args =
 		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_CONTROL, 0, params);
 
 	zassume_ok(host_command_process(&args),
 		   "Failed to send Type-C control for port %d", port);
+}
+
+void host_cmd_typec_control_exit_modes(int port)
+{
+	struct ec_params_typec_control params = {
+		.port = port, .command = TYPEC_CONTROL_COMMAND_EXIT_MODES
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_CONTROL, 0, params);
+
+	zassume_ok(host_command_process(&args),
+		   "Failed to send Type-C control for port %d", port);
+}
+
+void host_cmd_typec_control_usb_mux_set(int port,
+					struct typec_usb_mux_set mux_set)
+{
+	struct ec_params_typec_control params = {
+		.port = port,
+		.command = TYPEC_CONTROL_COMMAND_USB_MUX_SET,
+		.mux_params = mux_set,
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_CONTROL, 0, params);
+
+	zassume_ok(host_command_process(&args),
+		   "Failed to send Type-C control for port %d", port);
+}
+
+void host_cmd_typec_control_clear_events(int port, uint32_t events)
+{
+	struct ec_params_typec_control params = {
+		.port = port,
+		.command = TYPEC_CONTROL_COMMAND_CLEAR_EVENTS,
+		.clear_events_mask = events,
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_CONTROL, 0, params);
+
+	zassume_ok(host_command_process(&args),
+		   "Failed to send Type-C control for port %d", port);
+}
+
+void host_cmd_usb_pd_get_amode(
+	uint8_t port, uint16_t svid_idx,
+	struct ec_params_usb_pd_get_mode_response *response, int *response_size)
+{
+	struct ec_params_usb_pd_get_mode_request params = {
+		.port = port,
+		.svid_idx = svid_idx,
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_USB_PD_GET_AMODE, 0, params);
+	args.response = response;
+
+	zassume_ok(host_command_process(&args),
+		   "Failed to get alternate-mode info for port %d", port);
+	*response_size = args.response_size;
 }
 
 K_HEAP_DEFINE(test_heap, 2048);
@@ -398,4 +462,37 @@ void *test_malloc(size_t bytes)
 void test_free(void *mem)
 {
 	k_heap_free(&test_heap, mem);
+}
+
+static struct k_poll_signal shutdown_complete_signal =
+	K_POLL_SIGNAL_INITIALIZER(shutdown_complete_signal);
+static struct k_poll_event shutdown_complete_event = K_POLL_EVENT_INITIALIZER(
+	K_POLL_TYPE_SIGNAL, K_POLL_MODE_NOTIFY_ONLY, &shutdown_complete_signal);
+
+static void handle_chipset_shutdown_complete_event(void)
+{
+	k_poll_signal_raise(&shutdown_complete_signal, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN_COMPLETE,
+	     handle_chipset_shutdown_complete_event, HOOK_PRIO_LAST);
+
+void test_set_chipset_to_g3_then_transition_to_s5(void)
+{
+	if (!chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
+		k_poll_signal_reset(&shutdown_complete_signal);
+		chipset_force_shutdown(CHIPSET_RESET_INIT);
+		k_poll(&shutdown_complete_event, 1, K_MSEC(1000));
+	}
+
+	/*
+	 * Signal will trigger during S3->S5, but we want to wait until we're
+	 * actually at S5.  Give it a quick sleep if required.
+	 */
+	WAIT_FOR(!chipset_in_state(CHIPSET_STATE_ANY_OFF), 1000000 /* 1s */,
+		 k_msleep(5));
+
+	/*
+	 * TODO(b/236726670): Why do we need to sleep after restarting chipset?
+	 */
+	k_sleep(K_SECONDS(1));
 }

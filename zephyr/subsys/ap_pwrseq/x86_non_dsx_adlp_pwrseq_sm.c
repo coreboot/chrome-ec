@@ -37,8 +37,15 @@ int all_sys_pwrgd_handler(void)
 {
 	int retry = 0;
 
+	/* SLP_S3 is off */
+	if (power_signal_get(PWR_SLP_S3) == 1) {
+		ap_off();
+		return 1;
+	}
+
 	/* TODO: Add condition for no power sequencer */
-	k_msleep(AP_PWRSEQ_DT_VALUE(all_sys_pwrgd_timeout));
+	power_wait_signals_timeout(POWER_SIGNAL_MASK(PWR_ALL_SYS_PWRGD),
+				   AP_PWRSEQ_DT_VALUE(all_sys_pwrgd_timeout));
 
 	if (power_signal_get(PWR_DSW_PWROK) == 0) {
 		/* Todo: Remove workaround for the retry
@@ -57,7 +64,7 @@ int all_sys_pwrgd_handler(void)
 
 	/* PG_EC_ALL_SYS_PWRGD is asserted, enable VCCST_PWRGD_OD. */
 
-	if (power_signal_get(PWR_VCCST_PWRGD) == 0) {
+	if (!power_signals_on(POWER_SIGNAL_MASK(PWR_VCCST_PWRGD))) {
 		k_msleep(AP_PWRSEQ_DT_VALUE(vccst_pwrgd_delay));
 		power_signal_set(PWR_VCCST_PWRGD, 1);
 	}

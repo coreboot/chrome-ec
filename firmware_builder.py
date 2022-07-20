@@ -45,13 +45,28 @@ def build(opts):
     """
     metric_list = firmware_pb2.FwBuildMetricList()
 
+    # Run formatting checks on all python files.
+    subprocess.run(["black", "--check", "."], cwd=os.path.dirname(__file__), check=True)
+    subprocess.run(
+        [
+            "isort",
+            "--settings-file=.isort.cfg",
+            "--check",
+            "--gitignore",
+            "--dont-follow-links",
+            ".",
+        ],
+        cwd=os.path.dirname(__file__),
+        check=True,
+    )
+
     if opts.code_coverage:
         print(
             "When --code-coverage is selected, 'build' is a no-op. "
             "Run 'test' with --code-coverage instead."
         )
-        with open(opts.metrics, "w") as f:
-            f.write(json_format.MessageToJson(metric_list))
+        with open(opts.metrics, "w") as file:
+            file.write(json_format.MessageToJson(metric_list))
         return
 
     ec_dir = pathlib.Path(__file__).parent
@@ -75,8 +90,8 @@ def build(opts):
             )
             if memsize_file.exists():
                 parse_memsize(memsize_file, metric, variant)
-    with open(opts.metrics, "w") as f:
-        f.write(json_format.MessageToJson(metric_list))
+    with open(opts.metrics, "w") as file:
+        file.write(json_format.MessageToJson(metric_list))
 
     # Ensure that there are no regressions for boards that build successfully
     # with clang: b/172020503.
@@ -94,6 +109,7 @@ UNITS = {
 
 
 def parse_memsize(filename, metric, variant):
+    """Parse the output of the build to extract the image size."""
     with open(filename, "r") as infile:
         # Skip header line
         infile.readline()
@@ -107,6 +123,7 @@ def parse_memsize(filename, metric, variant):
 
 
 def bundle(opts):
+    """Bundle the artifacts."""
     if opts.code_coverage:
         bundle_coverage(opts)
     else:
@@ -132,8 +149,8 @@ def write_metadata(opts, info):
     bundle_metadata_file = (
         opts.metadata if opts.metadata else DEFAULT_BUNDLE_METADATA_FILE
     )
-    with open(bundle_metadata_file, "w") as f:
-        f.write(json_format.MessageToJson(info))
+    with open(bundle_metadata_file, "w") as file:
+        file.write(json_format.MessageToJson(info))
 
 
 def bundle_coverage(opts):
@@ -192,8 +209,17 @@ def test(opts):
     """Runs all of the unit tests for EC firmware"""
     # TODO(b/169178847): Add appropriate metric information
     metrics = firmware_pb2.FwTestMetricList()
-    with open(opts.metrics, "w") as f:
-        f.write(json_format.MessageToJson(metrics))
+    with open(opts.metrics, "w") as file:
+        file.write(json_format.MessageToJson(metrics))
+
+    # Run python unit tests.
+    subprocess.run(
+        ["util/ec3po/run_tests.sh"], cwd=os.path.dirname(__file__), check=True
+    )
+    subprocess.run(
+        ["extra/stack_analyzer/run_tests.sh"], cwd=os.path.dirname(__file__), check=True
+    )
+    subprocess.run(["util/run_tests.sh"], cwd=os.path.dirname(__file__), check=True)
 
     # If building for code coverage, build the 'coverage' target, which
     # builds the posix-based unit tests for code coverage and assembles
@@ -242,6 +268,7 @@ def main(args):
 
 
 def parse_args(args):
+    """Parse all command line args and return opts dict."""
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument(
@@ -260,13 +287,13 @@ def parse_args(args):
     parser.add_argument(
         "--metadata",
         required=False,
-        help="Full pathname for the file in which to write build artifact " "metadata.",
+        help="Full pathname for the file in which to write build artifact metadata.",
     )
 
     parser.add_argument(
         "--output-dir",
         required=False,
-        help="Full pathanme for the directory in which to bundle build " "artifacts.",
+        help="Full pathanme for the directory in which to bundle build artifacts.",
     )
 
     parser.add_argument(
@@ -293,8 +320,7 @@ def parse_args(args):
 
     build_cmd = sub_cmds.add_parser(
         "bundle",
-        help="Creates a tarball containing build "
-        "artifacts from all firmware targets",
+        help="Creates a tarball containing build artifacts from all firmware targets",
     )
     build_cmd.set_defaults(func=bundle)
 

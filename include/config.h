@@ -4811,6 +4811,7 @@
  * to provide the product id per port.
  */
 #undef CONFIG_USB_PD_TCPM_MULTI_PS8XXX
+#undef CONFIG_USB_PD_TCPM_PS8745
 #undef CONFIG_USB_PD_TCPM_PS8751
 #undef CONFIG_USB_PD_TCPM_PS8755
 #undef CONFIG_USB_PD_TCPM_PS8705
@@ -6500,11 +6501,13 @@
 
 /*
  * By default, enable a request for an ACK from AP, on setting the mux, if the
- * board supports Burnside Bridge retimer.
+ * board supports Intel retimer.
  */
-#if defined(CONFIG_USBC_RETIMER_INTEL_BB) && defined(CONFIG_USB_MUX_VIRTUAL)
+#if (defined(CONFIG_USBC_RETIMER_INTEL_BB) ||  \
+     defined(CONFIG_USBC_RETIMER_INTEL_HB)) && \
+	defined(CONFIG_USB_MUX_VIRTUAL)
 #define CONFIG_USB_MUX_AP_ACK_REQUEST
-#endif /* CONFIG_USBC_RETIMER_INTEL_BB  */
+#endif /* CONFIG_USBC_RETIMER_INTEL_BB || CONFIG_USBC_RETIMER_INTEL_HB */
 
 /*****************************************************************************/
 

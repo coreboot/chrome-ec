@@ -356,19 +356,54 @@ int host_cmd_motion_sense_spoof(uint8_t sensor_num, uint8_t enable,
  */
 void host_cmd_typec_discovery(int port, enum typec_partner_type partner_type,
 			      void *response, size_t response_size);
+/**
+ * @brief Run the host command to get the PD alternative mode response.
+ *
+ * @param port          The USB-C port number
+ * @param response      Destination for command response.
+ * @param response_size Destination of response size from request params.
+ */
+void host_cmd_usb_pd_get_amode(
+	uint8_t port, uint16_t svid_idx,
+	struct ec_params_usb_pd_get_mode_response *response,
+	int *response_size);
 
 /**
- * Run the host command to control PD port behavior. For now, this function only
- * supports entering and exiting modes.
+ * Run the host command to control PD port behavior, with the sub-command of
+ * TYPEC_CONTROL_COMMAND_ENTER_MODE
+ *
+ * @param port	The USB-C port number
+ * @param mode	Mode to enter
+ */
+void host_cmd_typec_control_enter_mode(int port, enum typec_mode mode);
+
+/**
+ * Run the host command to control PD port behavior, with the sub-command of
+ * TYPEC_CONTROL_COMMAND_EXIT_MODES
  *
  * @param port      The USB-C port number
- * @param command   Sub-command to perform on the port
- * @param mode      The mode to enter if command is
- *                  TYPEC_CONTROL_COMMAND_ENTER_MODE.
- * @param response_size Number of bytes in response
  */
-void host_cmd_typec_control(int port, enum typec_control_command command,
-			    enum typec_mode mode);
+void host_cmd_typec_control_exit_modes(int port);
+
+/**
+ * Run the host command to control PD port behavior, with the sub-command of
+ * TYPEC_CONTROL_COMMAND_USB_MUX_SET
+ *
+ * @param port		The USB-C port number
+ * @param mux_set	Mode and mux index to set
+ */
+void host_cmd_typec_control_usb_mux_set(int port,
+					struct typec_usb_mux_set mux_set);
+
+/**
+ * Run the host command to control PD port behavior, with the sub-command of
+ * TYPEC_CONTROL_COMMAND_CLEAR_EVENTS
+ *
+ * @param port		The USB-C port number
+ * @param events	Events to clear for the port (see PD_STATUS_EVENT_*
+ *			definitions for options)
+ */
+void host_cmd_typec_control_clear_events(int port, uint32_t events);
 
 #define GPIO_ACOK_OD_NODE DT_NODELABEL(gpio_acok_od)
 #define GPIO_ACOK_OD_PIN DT_GPIO_PIN(GPIO_ACOK_OD_NODE, gpios)
@@ -438,5 +473,12 @@ void *test_malloc(size_t bytes);
  * @param mem Pointer to the memory
  */
 void test_free(void *mem);
+
+/**
+ * @brief Force the chipset to state G3 and then transition to S3 and finally
+ * S5.
+ *
+ */
+void test_set_chipset_to_g3_then_transition_to_s5(void);
 
 #endif /* ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_ */

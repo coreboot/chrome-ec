@@ -49,9 +49,10 @@ import subprocess
 import sys
 import time
 from concurrent.futures.thread import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import BinaryIO, List, Optional
+from typing import BinaryIO, Dict, List, Optional
 
 # pylint: disable=import-error
 import colorama  # type: ignore[import]
@@ -123,75 +124,52 @@ class ImageType(Enum):
     RW = 2
 
 
+@dataclass
 class BoardConfig:
     """Board-specific configuration."""
 
-    def __init__(
-        self,
-        name,
-        servo_uart_name,
-        servo_power_enable,
-        rollback_region0_regex,
-        rollback_region1_regex,
-        mpu_regex,
-        variants,
-    ):
-        self.name = name
-        self.servo_uart_name = servo_uart_name
-        self.servo_power_enable = servo_power_enable
-        self.rollback_region0_regex = rollback_region0_regex
-        self.rollback_region1_regex = rollback_region1_regex
-        self.mpu_regex = mpu_regex
-        self.variants = variants
+    name: str
+    servo_uart_name: str
+    servo_power_enable: str
+    rollback_region0_regex: object
+    rollback_region1_regex: object
+    mpu_regex: object
+    variants: Dict
 
 
+@dataclass
 class TestConfig:
     """Configuration for a given test."""
 
-    def __init__(
-        self,
-        test_name,
-        image_to_use=ImageType.RW,
-        finish_regexes=None,
-        fail_regexes=None,
-        toggle_power=False,
-        test_args=None,
-        num_flash_attempts=2,
-        timeout_secs=10,
-        enable_hw_write_protect=False,
-        ro_image=None,
-        build_board=None,
-        config_name=None,
-    ):
-        if test_args is None:
-            test_args = []
-        if finish_regexes is None:
-            finish_regexes = [ALL_TESTS_PASSED_REGEX, ALL_TESTS_FAILED_REGEX]
-        if fail_regexes is None:
-            fail_regexes = [
+    # pylint: disable=too-many-instance-attributes
+    test_name: str
+    image_to_use: ImageType = ImageType.RW
+    finish_regexes: List = None
+    fail_regexes: List = None
+    toggle_power: bool = False
+    test_args: List[str] = field(default_factory=list)
+    num_flash_attempts: int = 2
+    timeout_secs: int = 10
+    enable_hw_write_protect: bool = False
+    ro_image: str = None
+    build_board: str = None
+    config_name: str = None
+    logs: List = field(init=False, default_factory=list)
+    passed: bool = field(init=False, default=False)
+    num_passes: int = field(init=False, default=0)
+    num_fails: int = field(init=False, default=0)
+
+    def __post_init__(self):
+        if self.finish_regexes is None:
+            self.finish_regexes = [ALL_TESTS_PASSED_REGEX, ALL_TESTS_FAILED_REGEX]
+        if self.fail_regexes is None:
+            self.fail_regexes = [
                 SINGLE_CHECK_FAILED_REGEX,
                 ALL_TESTS_FAILED_REGEX,
                 ASSERTION_FAILURE_REGEX,
             ]
-        if config_name is None:
-            config_name = test_name
-
-        self.test_name = test_name
-        self.config_name = config_name
-        self.image_to_use = image_to_use
-        self.finish_regexes = finish_regexes
-        self.fail_regexes = fail_regexes
-        self.test_args = test_args
-        self.toggle_power = toggle_power
-        self.num_flash_attempts = num_flash_attempts
-        self.timeout_secs = timeout_secs
-        self.enable_hw_write_protect = enable_hw_write_protect
-        self.logs = []
-        self.passed = False
-        self.num_fails = 0
-        self.num_passes = 0
-        self.ro_image = ro_image
-        self.build_board = build_board
+        if self.config_name is None:
+            self.config_name = self.test_name
 
 
 # All possible tests.
@@ -200,6 +178,7 @@ class AllTests:
 
     @staticmethod
     def get(board_config: BoardConfig) -> List[TestConfig]:
+        """Return public and private test configs for the specified board."""
         public_tests = AllTests.get_public_tests(board_config)
         private_tests = AllTests.get_private_tests()
 
@@ -207,6 +186,7 @@ class AllTests:
 
     @staticmethod
     def get_public_tests(board_config: BoardConfig) -> List[TestConfig]:
+        """Return public test configs for the specified board."""
         tests = [
             TestConfig(test_name="aes"),
             TestConfig(test_name="cec"),
@@ -311,7 +291,7 @@ class AllTests:
 
     @staticmethod
     def get_private_tests() -> List[TestConfig]:
-        # Return all private tests, if the folder exists
+        """Return private test configs for the specified board, if available."""
         tests = []
         try:
             current_dir = os.path.dirname(__file__)
@@ -320,12 +300,12 @@ class AllTests:
             if not have_private:
                 return []
             sys.path.append(private_dir)
-            import private_tests  # pylint: disable=import-error
+            import private_tests  # pylint: disable=import-error,import-outside-toplevel
 
             for test_args in private_tests.tests:
                 tests.append(TestConfig(**test_args))
         # Catch all exceptions to avoid disruptions in public repo
-        except BaseException as e:
+        except BaseException as e:  # pylint: disable=broad-except
             logging.debug("Failed to get list of private tests: %s", str(e))
             logging.debug("Ignore error and continue.")
             return []
@@ -378,9 +358,7 @@ def read_file_gsutil(path: str) -> bytes:
     cmd = ["gsutil", "cat", path]
 
     logging.debug('Running command: "%s"', " ".join(cmd))
-    gsutil = subprocess.run(
-        cmd, stdout=subprocess.PIPE
-    )  # pylint: disable=subprocess-run-check
+    gsutil = subprocess.run(cmd, stdout=subprocess.PIPE, check=False)
     gsutil.check_returncode()
 
     return gsutil.stdout
@@ -571,6 +549,7 @@ def readlines_until_timeout(executor, f: BinaryIO, timeout_secs: int) -> List[by
 
 
 def process_console_output_line(line: bytes, test: TestConfig):
+    """Parse console output line and update test pass/fail counters."""
     try:
         line_str = line.decode()
 
@@ -661,7 +640,72 @@ def get_test_list(config: BoardConfig, test_args) -> List[TestConfig]:
     return test_list
 
 
+def flash_and_run_test(
+    test: TestConfig, board_config: BoardConfig, args: argparse.Namespace, executor
+) -> bool:
+    """Run a single test using the test and board configuration specified"""
+    build_board = args.board
+    # If test provides this information, build image for board specified
+    # by test.
+    if test.build_board is not None:
+        build_board = test.build_board
+
+    # build test binary
+    build(test.test_name, build_board, args.compiler)
+
+    image_path = os.path.join(
+        EC_DIR, "build", build_board, test.test_name, test.test_name + ".bin"
+    )
+
+    if test.ro_image is not None:
+        try:
+            patch_image(test, image_path)
+        except Exception as exception:  # pylint: disable=broad-except
+            logging.warning(
+                "An exception occurred while patching " "image: %s", exception
+            )
+            return False
+
+    # flash test binary
+    # TODO(b/158327221): First attempt to flash fails after
+    #  flash_write_protect test is run; works after second attempt.
+    flash_succeeded = False
+    for i in range(0, test.num_flash_attempts):
+        logging.debug("Flash attempt %d", i + 1)
+        if flash(image_path, args.board, args.flasher, args.remote, args.jlink_port):
+            flash_succeeded = True
+            break
+        time.sleep(1)
+
+    if not flash_succeeded:
+        logging.debug("Flashing failed after max attempts: %d", test.num_flash_attempts)
+        return False
+
+    if test.toggle_power:
+        power(board_config, on=False)
+        time.sleep(1)
+        power(board_config, on=True)
+
+    hw_write_protect(test.enable_hw_write_protect)
+
+    # run the test
+    logging.info('Running test: "%s"', test.config_name)
+
+    with ExitStack() as stack:
+        if args.remote and args.console_port:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((args.remote, args.console_port))
+            console = stack.enter_context(s.makefile(mode="rwb", buffering=0))
+        else:
+            console = stack.enter_context(
+                open(get_console(board_config), "wb+", buffering=0)
+            )
+
+        return run_test(test, console, executor=executor)
+
+
 def parse_remote_arg(remote: str) -> str:
+    """Convert the 'remote' input argument to IP address, if available."""
     if not remote:
         return ""
 
@@ -673,7 +717,44 @@ def parse_remote_arg(remote: str) -> str:
         sys.exit(1)
 
 
+def validate_args_combination(args: argparse.Namespace):
+    """Check that the current combination of arguments is supported.
+
+    Not all combinations of command line arguments are valid or currently
+    supported. If tests can't be executed, print and error message and exit.
+    """
+    if args.jlink_port and not args.flasher == JTRACE:
+        logging.error("jlink_port specified, but flasher is not set to J-Link.")
+        sys.exit(1)
+
+    if args.remote and not (args.jlink_port or args.console_port):
+        logging.error(
+            "jlink_port or console_port must be specified when using "
+            "the remote option."
+        )
+        sys.exit(1)
+
+    if (args.jlink_port or args.console_port) and not args.remote:
+        logging.error(
+            "The remote option must be specified when using the "
+            "jlink_port or console_port options."
+        )
+        sys.exit(1)
+
+    if args.remote and args.flasher == SERVO_MICRO:
+        logging.error(
+            "The remote option is not supported when flashing with servo "
+            "micro. Use J-Link instead or flash with a local servo micro."
+        )
+        sys.exit(1)
+
+    if args.board not in BOARD_CONFIGS:
+        logging.error('Unable to find a config for board: "%s"', args.board)
+        sys.exit(1)
+
+
 def main():
+    """Run unit tests on device and displays the results."""
     parser = argparse.ArgumentParser()
 
     default_board = "bloonchipper"
@@ -708,6 +789,7 @@ def main():
         "--remote",
         "-n",
         help="The remote host connected to one or both of: J-Link and Servo.",
+        type=parse_remote_arg,
     )
 
     parser.add_argument(
@@ -722,101 +804,15 @@ def main():
 
     args = parser.parse_args()
     logging.basicConfig(level=args.log_level)
-
-    if args.jlink_port and not args.flasher == JTRACE:
-        logging.error("jlink_port specified, but flasher is not set to J-Link.")
-        sys.exit(1)
-
-    if args.remote and not (args.jlink_port or args.console_port):
-        logging.error(
-            "jlink_port or console_port must be specified when using "
-            "the remote option."
-        )
-        sys.exit(1)
-
-    if (args.jlink_port or args.console_port) and not args.remote:
-        logging.error(
-            "The remote option must be specified when using the "
-            "jlink_port or console_port options."
-        )
-        sys.exit(1)
-
-    if args.board not in BOARD_CONFIGS:
-        logging.error('Unable to find a config for board: "%s"', args.board)
-        sys.exit(1)
+    validate_args_combination(args)
 
     board_config = BOARD_CONFIGS[args.board]
-
-    remote_ip = parse_remote_arg(args.remote)
-
     e = ThreadPoolExecutor(max_workers=1)
-
     test_list = get_test_list(board_config, args.tests)
     logging.debug("Running tests: %s", [test.config_name for test in test_list])
 
     for test in test_list:
-        build_board = args.board
-        # If test provides this information, build image for board specified
-        # by test.
-        if test.build_board is not None:
-            build_board = test.build_board
-
-        # build test binary
-        build(test.test_name, build_board, args.compiler)
-
-        image_path = os.path.join(
-            EC_DIR, "build", build_board, test.test_name, test.test_name + ".bin"
-        )
-
-        if test.ro_image is not None:
-            try:
-                patch_image(test, image_path)
-            except Exception as exception:
-                logging.warning(
-                    "An exception occurred while patching " "image: %s", exception
-                )
-                test.passed = False
-                continue
-
-        # flash test binary
-        # TODO(b/158327221): First attempt to flash fails after
-        #  flash_write_protect test is run; works after second attempt.
-        flash_succeeded = False
-        for i in range(0, test.num_flash_attempts):
-            logging.debug("Flash attempt %d", i + 1)
-            if flash(image_path, args.board, args.flasher, remote_ip, args.jlink_port):
-                flash_succeeded = True
-                break
-            time.sleep(1)
-
-        if not flash_succeeded:
-            logging.debug(
-                "Flashing failed after max attempts: %d", test.num_flash_attempts
-            )
-            test.passed = False
-            continue
-
-        if test.toggle_power:
-            power(board_config, on=False)
-            time.sleep(1)
-            power(board_config, on=True)
-
-        hw_write_protect(test.enable_hw_write_protect)
-
-        # run the test
-        logging.info('Running test: "%s"', test.config_name)
-
-        with ExitStack() as stack:
-            if remote_ip and args.console_port:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.connect((remote_ip, args.console_port))
-                console = stack.enter_context(s.makefile(mode="rwb", buffering=0))
-            else:
-                console = stack.enter_context(
-                    open(get_console(board_config), "wb+", buffering=0)
-                )
-
-            test.passed = run_test(test, console, executor=e)
+        test.passed = flash_and_run_test(test, board_config, args, e)
 
     colorama.init()
     exit_code = 0

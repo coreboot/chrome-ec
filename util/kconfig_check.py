@@ -25,6 +25,7 @@ import os
 import pathlib
 import re
 import sys
+import traceback
 
 # Try to use kconfiglib if available, but fall back to a simple recursive grep.
 # This is used by U-Boot in some situations so we keep it to avoid forking this
@@ -253,6 +254,14 @@ class KconfigCheck:
             ]
             if "Kconfig" in dirs:
                 dirs.remove("Kconfig")
+            if "boards" in dirs:
+                dirs.remove("boards")
+            if "projects" in dirs:
+                dirs.remove("projects")
+            if "test" in dirs:
+                dirs.remove("test")
+            if "chip" in dirs:
+                dirs.remove("chip")
         return kconfig_files
 
     @classmethod
@@ -331,6 +340,8 @@ class KconfigCheck:
         except kconfiglib.KconfigError:
             # If we don't actually have access to the full Kconfig then we may
             # get an error. Fall back to using manual methods.
+            print("WARNING: kconfiglib failed", file=sys.stderr)
+            traceback.print_exc()
             kconfigs = self.scan_kconfigs(
                 srcdir, prefix, search_paths, try_kconfiglib=False
             )
@@ -459,7 +470,7 @@ def main(argv):
             search_paths=args.search_path,
             ignore=args.ignore,
         )
-    elif args.cmd == "build":
+    if args.cmd == "build":
         return checker.do_build(
             configs_file=args.configs,
             srcdir=args.srctree,

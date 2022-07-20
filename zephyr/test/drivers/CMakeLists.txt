@@ -6,8 +6,9 @@ cmake_minimum_required(VERSION 3.13.1)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(${ZMAKE_PROJECT_NAME})
 
-zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-zephyr_include_directories("${PLATFORM_EC}/driver/ppc/")
+target_include_directories(app PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    "${PLATFORM_EC}/driver/ppc/")
 
 # Common sources
 target_sources(app PRIVATE
@@ -33,7 +34,6 @@ if(subproject_path STREQUAL "")
     src/bmi160.c
     src/bmi260.c
     src/charge_manager.c
-    src/chargesplash.c
     src/console_cmd/charge_manager.c
     src/console_cmd/charge_state.c
     src/console_cmd/accelinit.c
@@ -53,11 +53,9 @@ if(subproject_path STREQUAL "")
     src/integration/usbc/usb_20v_3a_pd_charger.c
     src/integration/usbc/usb_5v_3a_pd_sink.c
     src/integration/usbc/usb_5v_3a_pd_source.c
-    src/integration/usbc/usb_alt_mode.c
     src/integration/usbc/usb_attach_src_snk.c
     src/integration/usbc/usb_pd_ctrl_msg.c
     src/integration/usbc/usb_pd_rev3.c
-    src/integration/usbc/usb_malfunction_sink.c
     src/i2c_passthru.c
     src/isl923x.c
     src/keyboard_scan.c
@@ -83,6 +81,8 @@ if(subproject_path STREQUAL "")
     src/vboot_hash.c
     src/watchdog.c
   )
+
+    add_subdirectory(usb_malfunction_sink)
 else()
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}${subproject_path})
 endif()

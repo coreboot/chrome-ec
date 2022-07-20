@@ -131,6 +131,13 @@ def bundle_coverage(opts):
     meta.lcov_info.type = (
         firmware_pb2.FirmwareArtifactInfo.LcovTarballInfo.LcovType.LCOV
     )
+    tarball_name = "html.tbz2"
+    tarball_path = bundle_dir / tarball_name
+    cmd = ["tar", "cvfj", tarball_path, "lcov_rpt"]
+    subprocess.run(cmd, cwd=build_dir, check=True)
+    meta = info.objects.add()
+    meta.file_name = tarball_name
+    meta.coverage_html.SetInParent()
 
     write_metadata(opts, info)
 
@@ -171,10 +178,6 @@ def test(opts):
     # Run zmake tests to ensure we have a fully working zmake before
     # proceeding.
     subprocess.run([zephyr_dir / "zmake" / "run_tests.sh"], check=True)
-
-    # Run formatting checks on all BUILD.py files.
-    config_files = zephyr_dir.rglob("**/BUILD.py")
-    subprocess.run(["black", "--diff", "--check", *config_files], check=True)
 
     cmd = ["zmake", "-D", "test", "-a", "--no-rebuild"]
     if opts.code_coverage:
@@ -231,13 +234,29 @@ def test(opts):
         cmd = [
             "/usr/bin/lcov",
             "-o",
-            build_dir / "lcov.info",
+            build_dir / "lcov_unfiltered.info",
             "--rc",
             "lcov_branch_coverage=1",
             "-a",
             build_dir / "zephyr_merged.info",
             "-a",
             platform_ec / "build/coverage/lcov.info",
+        ]
+        subprocess.run(
+            cmd,
+            cwd=pathlib.Path(__file__).parent,
+            check=True,
+        )
+
+        cmd = [
+            "/usr/bin/lcov",
+            "-o",
+            build_dir / "lcov.info",
+            "--rc",
+            "lcov_branch_coverage=1",
+            "-r",
+            build_dir / "lcov_unfiltered.info",
+            platform_ec / "build/**",
         ]
         output = subprocess.run(
             cmd,
@@ -247,6 +266,22 @@ def test(opts):
             universal_newlines=True,
         ).stdout
         _extract_lcov_summary("ALL_MERGED", metrics, output)
+
+        subprocess.run(
+            [
+                "/usr/bin/genhtml",
+                "--branch-coverage",
+                "-q",
+                "-o",
+                build_dir / "lcov_rpt",
+                "-t",
+                "All boards and tests merged",
+                "-s",
+                build_dir / "lcov.info",
+            ],
+            cwd=pathlib.Path(__file__).parent,
+            check=True,
+        )
 
     with open(opts.metrics, "w") as file:
         file.write(json_format.MessageToJson(metrics))

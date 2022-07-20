@@ -189,6 +189,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_CM32183
                                                 "${PLATFORM_EC}/driver/als_cm32183.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACPI
                                                 "${PLATFORM_EC}/common/acpi.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AMD_SB_RMI
+						"${PLATFORM_EC}/driver/sb_rmi.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AMD_STT
+						"${PLATFORM_EC}/driver/amd_stt.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BACKLIGHT_LID
                                                 "${PLATFORM_EC}/common/backlight_lid.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
@@ -325,6 +329,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
                                                 "${PLATFORM_EC}/common/motion_sense.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MP2964
                                                 "${PLATFORM_EC}/driver/mp2964.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PERIPHERAL_CHARGER
+                                                "${PLATFORM_EC}/common/peripheral_charger.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PORT80
                                                 "${PLATFORM_EC}/common/port80.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWER_BUTTON

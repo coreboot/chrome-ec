@@ -10,7 +10,9 @@
 
 static K_KERNEL_STACK_DEFINE(pwrseq_thread_stack, CONFIG_AP_PWRSEQ_STACK_SIZE);
 static struct k_thread pwrseq_thread_data;
-static struct pwrseq_context pwrseq_ctx;
+static struct pwrseq_context pwrseq_ctx = {
+	.power_state = SYS_POWER_STATE_UNINIT,
+};
 /* S5 inactive timer*/
 K_TIMER_DEFINE(s5_inactive_timer, NULL, NULL);
 /*
@@ -31,6 +33,7 @@ LOG_MODULE_REGISTER(ap_pwrseq, CONFIG_AP_PWRSEQ_LOG_LEVEL);
  * @brief power_state names for debug
  */
 static const char *const pwrsm_dbg[] = {
+	[SYS_POWER_STATE_UNINIT] = "Unknown",
 	[SYS_POWER_STATE_G3] = "G3",
 	[SYS_POWER_STATE_S5] = "S5",
 	[SYS_POWER_STATE_S4] = "S4",
@@ -523,6 +526,11 @@ static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 	power_signal_mask_t last_in_signals = 0;
 	enum power_states_ndsx last_state = -1;
 
+	/*
+	 * Let clients know that the AP power state is now
+	 * initialized and ready.
+	 */
+	ap_power_ev_send_callbacks(AP_POWER_INITIALIZED);
 	while (1) {
 		curr_state = pwr_sm_get_state();
 
@@ -609,7 +617,7 @@ static int pwrseq_init(const struct device *dev)
 }
 
 /*
- * The initialisation must occur after system I/O initialisation that
+ * The initialization must occur after system I/O initialization that
  * the signals depend upon, such as GPIO, ADC etc.
  */
 SYS_INIT(pwrseq_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);

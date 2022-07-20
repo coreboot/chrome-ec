@@ -17,6 +17,12 @@
 #include <zephyr/zephyr.h>
 #include <zephyr/logging/log.h>
 
+/*
+ * TODO(b/238433667): Include EC printf functions
+ * (crec_vsnprintf/crec_snprintf) until we switch to the standard
+ * vsnprintf/snprintf.
+ */
+#include "builtin/stdio.h"
 #include "console.h"
 #include "printf.h"
 #include "task.h"
@@ -408,8 +414,7 @@ int cprints(enum console_channel channel, const char *format, ...)
 	if (console_channel_is_disabled(channel))
 		return EC_SUCCESS;
 
-	rv = crec_snprintf(buff, CONFIG_SHELL_PRINTF_BUFF_SIZE, "[%pT ",
-			   PRINTF_TIMESTAMP_NOW);
+	rv = snprintf_timestamp_now(buff, sizeof(buff));
 	handle_sprintf_rv(rv, &len);
 
 	va_start(args, format);

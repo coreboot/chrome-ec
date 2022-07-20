@@ -187,6 +187,12 @@
 #define __overridable __attribute__((weak))
 
 /*
+ * Attribute that will generate a compiler warning if the return value is not
+ * used.
+ */
+#define __warn_unused_result __attribute__((warn_unused_result))
+
+/*
  * Macros for combining bytes into larger integers. _LE and _BE signify little
  * and big endian versions respectively.
  */
@@ -366,8 +372,7 @@ enum ec_error_list {
 
 /*
  * Mark functions that collide with stdlib so they can be hidden when linking
- * against libraries that require stdlib. HIDE_EC_STDLIB should be defined
- * before including common.h from code that links to cstdlib.
+ * against libraries that require stdlib.
  */
 #ifdef TEST_FUZZ
 #define __stdlib_compat __attribute__((visibility("hidden")))
