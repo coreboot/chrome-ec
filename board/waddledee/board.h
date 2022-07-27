@@ -25,13 +25,15 @@
 
 /* Charger */
 #define CONFIG_CHARGER_SM5803 /* C0 and C1: Charger */
+#define PD_MAX_VOLTAGE_MV 15000
 #define CONFIG_USB_PD_VBUS_DETECT_CHARGER
 #define CONFIG_USB_PD_5V_CHARGER_CTRL
 #define CONFIG_CHARGER_OTG
 #undef CONFIG_CHARGER_SINGLE_CHIP
 #define CONFIG_OCPC
-#define CONFIG_OCPC_DEF_RBATT_MOHMS 21 /* R_DS(on) 10.7mOhm + 10mOhm sns rstr \
-					*/
+#define CONFIG_OCPC_DEF_RBATT_MOHMS               \
+	21 /* R_DS(on) 10.7mOhm + 10mOhm sns rstr \
+	    */
 
 /*
  * GPIO for C1 interrupts, for baseboard use

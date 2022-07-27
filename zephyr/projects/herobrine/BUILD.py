@@ -5,7 +5,9 @@
 """Define zmake projects for herobrine."""
 
 
-def register_variant(project_name, extra_dts_overlays=(), extra_kconfig_files=()):
+def register_variant(
+    project_name, extra_dts_overlays=(), extra_kconfig_files=()
+):
     """Register a variant of herobrine."""
     register_npcx_project(
         project_name=project_name,
@@ -73,4 +75,20 @@ register_variant(
         here / "usbc_villager.dts",
     ],
     extra_kconfig_files=[here / "prj_villager.conf"],
+)
+
+
+register_variant(
+    project_name="evoker",
+    extra_dts_overlays=[
+        here / "display.dts",
+        here / "battery_evoker.dts",
+        here / "gpio_evoker.dts",
+        here / "led_pins_evoker.dts",
+        here / "led_policy_evoker.dts",
+        here / "motionsense.dts",
+        here / "switchcap.dts",
+        here / "usbc_evoker.dts",
+    ],
+    extra_kconfig_files=[here / "prj_evoker.conf"],
 )

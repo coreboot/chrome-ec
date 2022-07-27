@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
+#define CONFIG_LTO
+
 /*
  * By default, enable all console messages excepted HC, ACPI and event:
  * The sensor stack is generating a lot of activity.
@@ -236,7 +238,6 @@
 #endif
 
 /* Define typical operating power and max power. */
-#define PD_MAX_VOLTAGE_MV 20000
 #define PD_MAX_CURRENT_MA 3000
 #define PD_MAX_POWER_MW 45000
 #define PD_OPERATING_POWER_MW 15000

@@ -26,13 +26,21 @@
 #include "usbc_config.h"
 #include "util.h"
 
+#include "driver/nvidia_gpu.h"
+
 #include "gpio_list.h" /* Must come after other header files. */
 
 /* Console output macros */
-#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
 
 static int block_sequence;
+
+struct d_notify_policy d_notify_policies[] = {
+	AC_ATLEAST_W(100),  AC_ATLEAST_W(65),  AC_DC,
+	DC_ATLEAST_SOC(20), DC_ATLEAST_SOC(5),
+};
+BUILD_ASSERT(ARRAY_SIZE(d_notify_policies) == D_NOTIFY_COUNT);
 
 __override void board_cbi_init(void)
 {
@@ -57,12 +65,14 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 static void board_init(void)
 {
 	if ((system_get_reset_flags() & EC_RESET_FLAG_AP_OFF) ||
-			(keyboard_scan_get_boot_keys() & BOOT_KEY_DOWN_ARROW)) {
+	    (keyboard_scan_get_boot_keys() & BOOT_KEY_DOWN_ARROW)) {
 		CPRINTS("PG_PP3300_S5_OD block is enabled");
 		block_sequence = 1;
 	}
 	gpio_enable_interrupt(GPIO_PG_PP3300_S5_OD);
 	gpio_enable_interrupt(GPIO_BJ_ADP_PRESENT_ODL);
+
+	nvidia_gpu_init_policy(d_notify_policies);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -101,3 +111,8 @@ static int cc_blockseq(int argc, char *argv[])
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(blockseq, cc_blockseq, "[on/off]", NULL);
+
+void gpu_overt_interrupt(enum gpio_signal signal)
+{
+	nvidia_gpu_over_temp(gpio_get_level(signal));
+}

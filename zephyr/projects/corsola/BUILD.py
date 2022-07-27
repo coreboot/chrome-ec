@@ -4,12 +4,12 @@
 
 """Define zmake projects for corsola."""
 
-# Default chip is it8xxx2, some variants will use NPCX9X.
+# Default chip is it81202bx, some variants will use NPCX9X.
 
 
 def register_corsola_project(
     project_name,
-    chip="it8xxx2",
+    chip="it81202bx",
     extra_dts_overlays=(),
     extra_kconfig_files=(),
 ):
@@ -44,7 +44,10 @@ register_corsola_project(
         here / "motionsense_krabby.dts",
         here / "usbc_krabby.dts",
     ],
-    extra_kconfig_files=[here / "prj_krabby.conf"],
+    extra_kconfig_files=[
+        here / "prj_it81202_base.conf",
+        here / "prj_krabby.conf",
+    ],
 )
 
 register_corsola_project(
@@ -64,7 +67,10 @@ register_corsola_project(
         here / "usbc_kingler.dts",
         here / "default_gpio_pinctrl_kingler.dts",
     ],
-    extra_kconfig_files=[here / "prj_kingler.conf"],
+    extra_kconfig_files=[
+        here / "prj_npcx993_base.conf",
+        here / "prj_kingler.conf",
+    ],
 )
 
 register_corsola_project(
@@ -88,7 +94,7 @@ register_corsola_project(
         here / "default_gpio_pinctrl_kingler.dts",
     ],
     extra_kconfig_files=[
-        here / "prj_kingler.conf",
+        here / "prj_npcx993_base.conf",
         here / "prj_steelix.conf",
     ],
 )
@@ -99,16 +105,17 @@ register_corsola_project(
     extra_dts_overlays=[
         here / "adc_krabby.dts",
         here / "battery_tentacruel.dts",
+        here / "cbi_tentacruel.dts",
         here / "gpio_tentacruel.dts",
         here / "i2c_krabby.dts",
-        here / "interrupts_krabby.dts",
+        here / "interrupts_tentacruel.dts",
         here / "cbi_eeprom.dts",
         here / "led_tentacruel.dts",
-        here / "motionsense_krabby.dts",
-        here / "usbc_krabby.dts",
+        here / "motionsense_tentacruel.dts",
+        here / "usbc_tentacruel.dts",
     ],
     extra_kconfig_files=[
-        here / "prj_krabby.conf",
+        here / "prj_it81202_base.conf",
         here / "prj_tentacruel.conf",
     ],
 )

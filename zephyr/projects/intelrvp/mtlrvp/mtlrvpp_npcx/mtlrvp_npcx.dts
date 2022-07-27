@@ -24,7 +24,7 @@
 			i2c-port = <&i2c7_0>;
 			enum-name = "I2C_PORT_BATTERY";
 		};
-		charger {
+		i2c_charger: charger {
 			i2c-port = <&i2c7_0>;
 			enum-name = "I2C_PORT_CHARGER";
 		};
@@ -45,7 +45,7 @@
 			enum-name = "I2C_PORT_TYPEC_AIC_1";
 		};
 		typec_aic2: typec-aic2{
-			i2c-port = <&i2c2_0>;
+			i2c-port = <&i2c1_0>;
 			enum-name = "I2C_PORT_TYPEC_AIC_2";
 		};
 	};
@@ -54,22 +54,18 @@
 		compatible = "named-adc-channels";
 
 		adc_ambient: ambient {
-			label = "ADC_TEMP_SNS_AMBIENT";
 			enum-name = "ADC_TEMP_SENSOR_1";
 			io-channels = <&adc0 3>;
 		};
 		adc_ddr: ddr {
-			label = "ADC_TEMP_SNS_DDR";
 			enum-name = "ADC_TEMP_SENSOR_2";
 			io-channels = <&adc0 4>;
 		};
 		adc_skin: skin {
-			label = "ADC_TEMP_SNS_SKIN";
 			enum-name = "ADC_TEMP_SENSOR_3";
 			io-channels = <&adc0 2>;
 		};
 		adc_vr: vr {
-			label = "ADC_TEMP_SNS_VR";
 			enum-name = "ADC_TEMP_SENSOR_4";
 			io-channels = <&adc0 1>;
 		};
@@ -116,7 +112,6 @@
 	kb_discrete: ite-it8801@39 {
 		compatible = "ite,it8801";
 		reg = <0x39>;
-		label = "KEYBOARD_DISCRETE";
 	};
 
 	seven_seg_display: max695x-seven-seg-display@38 {
@@ -150,14 +145,14 @@
 };
 
 /* typec_aic2 */
-&i2c2_0 {
+&i2c1_0 {
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_FAST>;
-	pinctrl-0 = <&i2c2_0_sda_scl_gp91_92>;
+	pinctrl-0 = <&i2c1_0_sda_scl_gp87_90>;
 	pinctrl-names = "default";
 };
 
-&i2c_ctrl2 {
+&i2c_ctrl1 {
 	status = "okay";
 };
 

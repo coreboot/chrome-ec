@@ -15,8 +15,8 @@
 #include "util.h"
 
 #ifndef TEST_BUILD
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 #else
 #define CPRINTF(args...)
 #define CPRINTS(args...)
@@ -24,20 +24,20 @@
 
 int ppc_prints(const char *string, int port)
 {
-#ifndef TEST_BUILD
-	return CPRINTS("ppc p%d %s", port, string);
-#else
+#if defined(TEST_BUILD) || !defined(CONFIG_USBC_PPC_LOGGING)
 	return 0;
-#endif
+#else
+	return CPRINTS("ppc p%d %s", port, string);
+#endif /* defined(TEST_BUILD) || !defined(CONFIG_USBC_PPC_LOGGING) */
 }
 
 int ppc_err_prints(const char *string, int port, int error)
 {
-#ifndef TEST_BUILD
-	return CPRINTS("ppc p%d %s (%d)", port, string, error);
-#else
+#if defined(TEST_BUILD) || !defined(CONFIG_USBC_PPC_LOGGING)
 	return 0;
-#endif
+#else
+	return CPRINTS("ppc p%d %s (%d)", port, string, error);
+#endif /* defined(TEST_BUILD) || !defined(CONFIG_USBC_PPC_LOGGING) */
 }
 
 __overridable bool board_port_has_ppc(int port)
@@ -277,7 +277,7 @@ int ppc_set_frs_enable(int port, int enable)
 	ppc = &ppc_chips[port];
 
 	if (ppc->drv->set_frs_enable)
-		rv = ppc->drv->set_frs_enable(port,enable);
+		rv = ppc->drv->set_frs_enable(port, enable);
 
 	return rv;
 }

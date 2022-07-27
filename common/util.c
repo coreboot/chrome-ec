@@ -9,19 +9,7 @@
 #include "console.h"
 #include "util.h"
 
-__stdlib_compat int strcasecmp(const char *s1, const char *s2)
-{
-	int diff;
-
-	do {
-		diff = tolower(*s1) - tolower(*s2);
-		if (diff)
-			return diff;
-	} while (*(s1++) && *(s2++));
-	return 0;
-}
-
-static int find_base(int base, int *c, const char **nptr)
+int find_base(int base, int *c, const char **nptr)
 {
 	if ((base == 0 || base == 16) && *c == '0' &&
 	    (**nptr == 'x' || **nptr == 'X')) {
@@ -71,58 +59,20 @@ int strtoi(const char *nptr, char **endptr, int base)
 	return neg ? -result : result;
 }
 
-#ifndef CONFIG_ZEPHYR
-__stdlib_compat unsigned long long int strtoull(const char *nptr, char **endptr,
-						int base)
-{
-	uint64_t result = 0;
-	int c = '\0';
-
-	while ((c = *nptr++) && isspace(c))
-		;
-
-	if (c == '+') {
-		c = *nptr++;
-	} else if (c == '-') {
-		if (endptr)
-			*endptr = (char *)nptr - 1;
-		return result;
-	}
-
-	base = find_base(base, &c, &nptr);
-
-	while (c) {
-		if (c >= '0' && c < '0' + MIN(base, 10))
-			result = result * base + (c - '0');
-		else if (c >= 'A' && c < 'A' + base - 10)
-			result = result * base + (c - 'A' + 10);
-		else if (c >= 'a' && c < 'a' + base - 10)
-			result = result * base + (c - 'a' + 10);
-		else
-			break;
-
-		c = *nptr++;
-	}
-
-	if (endptr)
-		*endptr = (char *)nptr - 1;
-	return result;
-}
-#endif /* !CONFIG_ZEPHYR */
-BUILD_ASSERT(sizeof(unsigned long long int) == sizeof(uint64_t));
-
 int parse_bool(const char *s, int *dest)
 {
 	/* off, disable, false, no */
 	if (!strcasecmp(s, "off") || !strncasecmp(s, "dis", 3) ||
-	    tolower(*s) == 'f' || tolower(*s) == 'n') {
+	    tolower((unsigned char)*s) == 'f' ||
+	    tolower((unsigned char)*s) == 'n') {
 		*dest = 0;
 		return 1;
 	}
 
 	/* on, enable, true, yes */
 	if (!strcasecmp(s, "on") || !strncasecmp(s, "ena", 3) ||
-	    tolower(*s) == 't' || tolower(*s) == 'y') {
+	    tolower((unsigned char)*s) == 't' ||
+	    tolower((unsigned char)*s) == 'y') {
 		*dest = 1;
 		return 1;
 	}

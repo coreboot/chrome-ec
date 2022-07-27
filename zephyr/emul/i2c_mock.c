@@ -41,8 +41,7 @@ static const struct i2c_emul_api i2c_mock_api = {
 	.transfer = i2c_common_emul_transfer,
 };
 
-static int i2c_mock_init(const struct emul *emul,
-			 const struct device *parent)
+static int i2c_mock_init(const struct emul *emul, const struct device *parent)
 {
 	const struct i2c_common_emul_cfg *cfg = emul->cfg;
 	struct i2c_common_emul_data *data = emul->data;
@@ -59,7 +58,7 @@ static int i2c_mock_init(const struct emul *emul,
 
 #define INIT_I2C_MOCK(n)                                              \
 	static const struct i2c_common_emul_cfg i2c_mock_cfg_##n = {  \
-		.i2c_label = DT_INST_BUS_LABEL(n),                    \
+		.i2c_label = DT_LABEL(DT_BUS(DT_DRV_INST(n))),        \
 		.dev_label = DT_INST_LABEL(n),                        \
 		.addr = DT_INST_REG_ADDR(n),                          \
 	};                                                            \

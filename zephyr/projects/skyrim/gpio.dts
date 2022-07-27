@@ -22,6 +22,7 @@
 		gpio_slp_s3_l: slp_s3_l {
 			gpios = <&gpio6 1 GPIO_INPUT>;
 			enum-name = "GPIO_PCH_SLP_S3_L";
+			alias = "GPIO_PCH_SLP_S0_L";
 		};
 		gpio_slp_s5_l: slp_s5_l {
 			gpios = <&gpio7 2 GPIO_INPUT>;
@@ -132,10 +133,10 @@
 			gpios = <&gpio8 7 GPIO_INPUT>;
 		};
 		ec_i2c_batt_scl {
-			gpios = <&gpio9 2 GPIO_INPUT>;
+			gpios = <&gpio9 2 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
 		ec_i2c_batt_sda {
-			gpios = <&gpio9 1 GPIO_INPUT>;
+			gpios = <&gpio9 1 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
 		ec_i2c_usbc_mux_scl {
 			gpios = <&gpiod 1 GPIO_INPUT>;
@@ -156,16 +157,16 @@
 			gpios = <&gpio3 6 GPIO_INPUT>;
 		};
 		ec_i2c_sensor_scl {
-			gpios = <&gpioe 4 GPIO_INPUT>;
+			gpios = <&gpioe 4 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
 		ec_i2c_sensor_sda {
-			gpios = <&gpioe 3 GPIO_INPUT>;
+			gpios = <&gpioe 3 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
 		ec_i2c_soc_sic {
-			gpios = <&gpiob 3 GPIO_INPUT>;
+			gpios = <&gpiob 3 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
 		ec_i2c_soc_sid {
-			gpios = <&gpiob 2 GPIO_INPUT>;
+			gpios = <&gpiob 2 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
 		en_kb_bl {
 			gpios = <&gpio9 7 GPIO_OUTPUT_HIGH>;
@@ -191,7 +192,6 @@
 		};
 		usb_c0_ppc_en_l {
 			gpios = <&ioex_c0_port1 0 GPIO_OUTPUT_LOW>;
-			enum-name = "IOEX_USB_C0_PPC_EN_L";
 		};
 		usb_c0_ppc_ilim_3a_en {
 			gpios = <&ioex_c0_port1 1 GPIO_OUTPUT_LOW>;
@@ -199,15 +199,12 @@
 		};
 		ioex_usb_c0_sbu_fault_odl: usb_c0_sbu_fault_odl {
 			gpios = <&ioex_c0_port1 2 GPIO_INPUT>;
-			enum-name = "IOEX_USB_C0_FAULT_ODL";
 		};
 		ioex_en_pp5000_usb_a0_vbus: en_pp5000_usb_a0_vbus {
 			gpios = <&ioex_c0_port1 5 GPIO_OUTPUT_LOW>;
-			enum-name = "IOEX_EN_PP5000_USB_A0_VBUS";
 		};
 		ioex_usb_a0_fault_odl: usb_a0_fault_odl {
 			gpios = <&ioex_c0_port1 6 GPIO_INPUT>;
-			enum-name = "IOEX_USB3_A0_FAULT_L";
 		};
 		usb_c0_sbu_flip {
 			gpios = <&ioex_c0_port1 7 GPIO_OUTPUT_LOW>;
@@ -220,7 +217,6 @@
 		};
 		usb_a1_retimer_rst {
 			gpios = <&ioex_c1_port0 1 GPIO_OUTPUT_LOW>;
-			enum-name = "IOEX_USB_A1_RETIMER_RST";
 		};
 		usb_c1_in_hpd {
 			gpios = <&ioex_c1_port0 3 GPIO_OUTPUT_LOW>;
@@ -232,7 +228,6 @@
 		};
 		usb_c1_ppc_en_l {
 			gpios = <&ioex_c1_port1 0 GPIO_OUTPUT_LOW>;
-			enum-name = "IOEX_USB_C1_PPC_EN_L";
 		};
 		usb_c1_ppc_ilim_3a_en {
 			gpios = <&ioex_c1_port1 1 GPIO_OUTPUT_LOW>;
@@ -244,11 +239,9 @@
 		};
 		ioex_en_pp5000_usb_a1_vbus: en_pp5000_usb_a1_vbus {
 			gpios = <&ioex_c1_port1 5 GPIO_OUTPUT_LOW>;
-			enum-name = "IOEX_EN_PP5000_USB_A1_VBUS_DB";
 		};
 		ioex_usb_a1_fault_db_odl: usb_a1_fault_db_odl {
 			gpios = <&ioex_c1_port1 6 GPIO_INPUT>;
-			enum-name = "IOEX_USB_A1_FAULT_DB_ODL";
 		};
 		usb_c1_sbu_flip {
 			gpios = <&ioex_c1_port1 7 GPIO_OUTPUT_LOW>;
@@ -261,28 +254,32 @@
 		enable-pins = <&ioex_en_pp5000_usb_a0_vbus
 			       &ioex_en_pp5000_usb_a1_vbus>;
 	};
-
-	vsby-psl-in-list {
-		/* PSL_IN1/2/4 are used to wake */
-		psl-in-pads = <&psl_in1 &psl_in2 &psl_in4>;
-		status = "okay";
-	};
 };
 
 /* PSL input pads*/
-&psl_in1 {
+&psl_in1_gpd2 {
 	/* MECH_PWR_BTN_ODL */
-	flag = <NPCX_PSL_FALLING_EDGE>;
+	psl-in-mode = "edge";
+	psl-in-pol = "low-falling";
 };
 
-&psl_in2 {
+&psl_in2_gp00 {
 	/* ACOK_OD */
-	flag = <NPCX_PSL_RISING_EDGE>;
+	psl-in-mode = "edge";
+	psl-in-pol = "high-rising";
 };
 
-&psl_in4 {
+&psl_in4_gp02 {
 	/* LID_OPEN */
-	flag = <NPCX_PSL_RISING_EDGE>;
+	psl-in-mode = "edge";
+	psl-in-pol = "high-rising";
+};
+
+/* Power domain device controlled by PSL (Power Switch Logic) IO pads */
+&power_ctrl_psl {
+	status = "okay";
+	pinctrl-names = "sleep";
+	pinctrl-0 = <&psl_in1_gpd2 &psl_in2_gp00 &psl_in4_gp02>;
 };
 
 &i2c0_0 {

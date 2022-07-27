@@ -1333,7 +1333,6 @@
 #undef CONFIG_TRICKLE_CHARGING
 
 /* Wireless chargers */
-#undef CONFIG_WIRELESS_CHARGER_P9221_R7
 #undef CONFIG_CPS8100
 
 /*****************************************************************************/
@@ -2338,6 +2337,11 @@
 /* Support getting gpio flags. */
 #undef CONFIG_GPIO_GET_EXTENDED
 
+/*
+ * GPU Drivers
+ */
+#undef CONFIG_GPU_NVIDIA
+
 /* Do we want to detect the lid angle? */
 #undef CONFIG_LID_ANGLE
 
@@ -3006,6 +3010,11 @@
 #undef CONFIG_KEYBOARD_CUSTOMIZATION
 
 /*
+ * Allow support multiple keyboard matrix for speical key.
+ */
+#undef CONFIG_KEYBOARD_MULTIPLE
+
+/*
  * Allow board-specific 8042 keyboard callback when a key state is changed.
  */
 #undef CONFIG_KEYBOARD_SCANCODE_CALLBACK
@@ -3629,10 +3638,12 @@
 #undef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 
 /*
- * Implement the '%li' printf format as a *32-bit* integer format,
- * as it might be expected by non-EC code.
+ * Allow the use of the "long" printf length modifier ('l') to be in 32-bit
+ * systems along with any supported conversion specifiers. Note that this also
+ * reenables support for the 'i' printf format. This config will only take
+ * effect if sizeof(long) == sizeof(uint32_t).
  */
-#undef CONFIG_PRINTF_LEGACY_LI_FORMAT
+#undef CONFIG_PRINTF_LONG_IS_32BITS
 
 /*
  * On x86 systems, define this option if the CPU_PROCHOT signal is active low.
@@ -4800,6 +4811,7 @@
  * to provide the product id per port.
  */
 #undef CONFIG_USB_PD_TCPM_MULTI_PS8XXX
+#undef CONFIG_USB_PD_TCPM_PS8745
 #undef CONFIG_USB_PD_TCPM_PS8751
 #undef CONFIG_USB_PD_TCPM_PS8755
 #undef CONFIG_USB_PD_TCPM_PS8705
@@ -4963,6 +4975,9 @@
 /* Index for temperature sensor used in PD messages. Defaults to 0. */
 #define CONFIG_USB_PD_TEMP_SENSOR 0
 
+/* Time limit in ms for a USB PD power button press to be considered valid. */
+#define CONFIG_USB_PD_LONG_PRESS_MAX_MS 8000
+
 /*
  * Set the minimum battery percentage to allow a PD port to send resets as a
  * sink (and risk a hard reset, losing Vbus).  Note this may cause a high-power
@@ -5059,6 +5074,9 @@
 /* PPC has level interrupts and has a dedicated interrupt pin to check */
 #undef CONFIG_USBC_PPC_DEDICATED_INT
 
+/* Enable logging related to the PPC. Undefine to reduce EC image size */
+#define CONFIG_USBC_PPC_LOGGING
+
 /* Support for USB type-c superspeed mux */
 #undef CONFIG_USBC_SS_MUX
 
@@ -5110,6 +5128,9 @@
 
 /* Common USB / BC1.2 charger detection routines */
 #undef CONFIG_USB_CHARGER
+
+/* Only allow PI3USB9201 to advertise itself as BC1.2 client */
+#undef CONFIG_BC12_CLIENT_MODE_ONLY_PI3USB9201
 
 /*
  * Used for bc1.2 chips that need to be triggered from data role swaps instead
@@ -6209,6 +6230,7 @@
 /* Define derived config options for BC1.2 detection */
 #ifdef CONFIG_BC12_DETECT_PI3USB9201
 #define CONFIG_BC12_DETECT_DATA_ROLE_TRIGGER
+#undef CONFIG_BC12_CLIENT_MODE_ONLY_PI3USB9201
 #endif
 
 /*****************************************************************************/
@@ -6483,11 +6505,13 @@
 
 /*
  * By default, enable a request for an ACK from AP, on setting the mux, if the
- * board supports Burnside Bridge retimer.
+ * board supports Intel retimer.
  */
-#if defined(CONFIG_USBC_RETIMER_INTEL_BB) && defined(CONFIG_USB_MUX_VIRTUAL)
+#if (defined(CONFIG_USBC_RETIMER_INTEL_BB) ||  \
+     defined(CONFIG_USBC_RETIMER_INTEL_HB)) && \
+	defined(CONFIG_USB_MUX_VIRTUAL)
 #define CONFIG_USB_MUX_AP_ACK_REQUEST
-#endif /* CONFIG_USBC_RETIMER_INTEL_BB  */
+#endif /* CONFIG_USBC_RETIMER_INTEL_BB || CONFIG_USBC_RETIMER_INTEL_HB */
 
 /*****************************************************************************/
 
@@ -6860,6 +6884,11 @@
  */
 #if defined(CONFIG_BOARD_HAS_RTC_RESET) && !defined(CONFIG_S5_EXIT_WAIT)
 #define CONFIG_S5_EXIT_WAIT 4
+#endif
+
+/* HAS_GPU_DRIVER enables D-Notify and throttling. */
+#if defined(CONFIG_GPU_NVIDIA)
+#define HAS_GPU_DRIVER
 #endif
 
 #endif /* __CROS_EC_CONFIG_H */

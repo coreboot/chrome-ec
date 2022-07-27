@@ -10,6 +10,7 @@
 #include "gpio.h"
 #include "i2c.h"
 #include "peripheral_charger.h"
+#include "printf.h"
 #include "timer.h"
 #include "util.h"
 #include "watchdog.h"
@@ -40,7 +41,6 @@ BUILD_ASSERT(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
 
 static const char *_text_instruction(uint8_t instruction)
 {
-	/* TODO: For normal build, use %pb and BINARY_VALUE(res->inst, 6) */
 	switch (instruction) {
 	case WLC_HOST_CTRL_RESET:
 		return "RESET";
@@ -257,8 +257,13 @@ static int _process_payload_response(struct pchg *ctx, struct ctn730_msg *res)
 		int rv = _i2c_read(ctx->cfg->i2c_port, buf, len);
 		if (rv)
 			return rv;
-		if (IS_ENABLED(CTN730_DEBUG))
-			CPRINTS("Payload: %ph", HEX_BUF(buf, len));
+		if (IS_ENABLED(CTN730_DEBUG)) {
+			char str_buf[hex_str_buf_size(len)];
+
+			snprintf_hex_buffer(str_buf, sizeof(str_buf),
+					    HEX_BUF(buf, len));
+			CPRINTS("Payload: %s", str_buf);
+		}
 	}
 
 	ctx->event = PCHG_EVENT_NONE;
@@ -358,8 +363,13 @@ static int _process_payload_event(struct pchg *ctx, struct ctn730_msg *res)
 		int rv = _i2c_read(ctx->cfg->i2c_port, buf, len);
 		if (rv)
 			return rv;
-		if (IS_ENABLED(CTN730_DEBUG))
-			CPRINTS("Payload: %ph", HEX_BUF(buf, len));
+		if (IS_ENABLED(CTN730_DEBUG)) {
+			char str_buf[hex_str_buf_size(len)];
+
+			snprintf_hex_buffer(str_buf, sizeof(str_buf),
+					    HEX_BUF(buf, len));
+			CPRINTS("Payload: %s", str_buf);
+		}
 	}
 
 	ctx->event = PCHG_EVENT_NONE;

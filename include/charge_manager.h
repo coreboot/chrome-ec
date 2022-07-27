@@ -51,11 +51,6 @@ enum charge_supplier {
 #if CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0
 	CHARGE_SUPPLIER_DEDICATED,
 #endif
-#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
-	CHARGE_SUPPLIER_WPC_BPP,
-	CHARGE_SUPPLIER_WPC_EPP,
-	CHARGE_SUPPLIER_WPC_GPP,
-#endif
 	CHARGE_SUPPLIER_COUNT
 };
 
@@ -76,14 +71,7 @@ enum charge_supplier {
 #else
 #define CHARGE_SUPPLIER_NAME_DEDICATED
 #endif
-#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
-#define CHARGE_SUPPLIER_NAME_QI               \
-	[CHARGE_SUPPLIER_WPC_BPP] = "QI_BPP", \
-	[CHARGE_SUPPLIER_WPC_EPP] = "QI_EPP", \
-	[CHARGE_SUPPLIER_WPC_GPP] = "QI_GPP",
-#else
 #define CHARGE_SUPPLIER_NAME_QI
-#endif
 
 #define CHARGE_SUPPLIER_NAME                                           \
 	[CHARGE_SUPPLIER_PD] = "PD", [CHARGE_SUPPLIER_TYPEC] = "USBC", \
@@ -235,7 +223,7 @@ int charge_manager_get_selected_charge_port(void);
  *
  * @return	Power limit (uW).
  */
-int charge_manager_get_power_limit_uw(void);
+test_mockable int charge_manager_get_power_limit_uw(void);
 
 /**
  * Get the charger current (mA) value.

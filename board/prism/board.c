@@ -102,11 +102,14 @@ const uint8_t rgbkbd_count = ARRAY_SIZE(rgbkbds);
 const uint8_t rgbkbd_hsize = RGB_GRID0_COL + RGB_GRID1_COL;
 const uint8_t rgbkbd_vsize = RGB_GRID0_ROW;
 
+const enum ec_rgbkbd_type rgbkbd_type = EC_RGBKBD_TYPE_PER_KEY;
+
 #define LED(x, y) RGBKBD_COORD((x), (y))
 #define DELM RGBKBD_DELM
+
 const uint8_t rgbkbd_map[] = {
 	DELM, /* 0: (null) */
-	LED(0, 1),  DELM, /* 1: ~ ` */
+	LED(0, 1),  LED(0, 2),	DELM, /* 1: ~ ` */
 	LED(1, 1),  LED(1, 2),	DELM, /* 2: ! 1 */
 	LED(2, 1),  LED(2, 2),	DELM, /* 3: @ 2 */
 	LED(3, 1),  LED(3, 2),	DELM, /* 4: # 3 */
@@ -121,7 +124,7 @@ const uint8_t rgbkbd_map[] = {
 	LED(12, 1), LED(12, 2), DELM, /* 13: + = */
 	DELM, /* 14: (null) */
 	LED(13, 1), LED(13, 2), DELM, /* 15: backspace */
-	LED(0, 3),  DELM, /* 16: tab */
+	LED(0, 3),  LED(15, 2), DELM, /* 16: tab */
 	LED(1, 3),  DELM, /* 17: q */
 	LED(2, 3),  DELM, /* 18: w */
 	LED(3, 3),  DELM, /* 19: e */
@@ -167,7 +170,7 @@ const uint8_t rgbkbd_map[] = {
 	LED(15, 0), DELM, /* 59: power */
 	LED(17, 2), LED(18, 2), LED(19, 2), DELM, /* 60: L-alt */
 	LED(17, 3), LED(18, 3), LED(19, 3), LED(20, 3),
-	LED(21, 3), DELM, /* 61: space */
+	LED(21, 3), LED(16, 2), DELM, /* 61: space */
 	LED(20, 2), DELM, /* 62: R-alt */
 	DELM, /* 63: (null) */
 	LED(21, 2), DELM, /* 64: R-ctrl */
@@ -347,7 +350,9 @@ __override const char *board_read_serial(void)
 		int i;
 
 		for (i = 0; i < idlen && pos < sizeof(str); i++, pos += 2) {
-			snprintf(&str[pos], sizeof(str) - pos, "%02x", id[i]);
+			if (snprintf(&str[pos], sizeof(str) - pos, "%02x",
+				     id[i]) < 0)
+				return NULL;
 		}
 	}
 

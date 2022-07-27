@@ -8,12 +8,16 @@
 
 #include <x86_non_dsx_common_pwrseq_sm_handler.h>
 
-static K_KERNEL_STACK_DEFINE(pwrseq_thread_stack,
-			CONFIG_AP_PWRSEQ_STACK_SIZE);
+static K_KERNEL_STACK_DEFINE(pwrseq_thread_stack, CONFIG_AP_PWRSEQ_STACK_SIZE);
 static struct k_thread pwrseq_thread_data;
-static struct pwrseq_context pwrseq_ctx;
+static struct pwrseq_context pwrseq_ctx = {
+	.power_state = SYS_POWER_STATE_UNINIT,
+};
+static struct k_sem pwrseq_sem;
+
+static void s5_inactive_timer_handler(struct k_timer *timer);
 /* S5 inactive timer*/
-K_TIMER_DEFINE(s5_inactive_timer, NULL, NULL);
+K_TIMER_DEFINE(s5_inactive_timer, s5_inactive_timer_handler, NULL);
 /*
  * Flags, may be set/cleared from other threads.
  */
@@ -26,13 +30,13 @@ static ATOMIC_DEFINE(flags, FLAGS_MAX);
 /* Delay in ms when starting from G3 */
 static uint32_t start_from_g3_delay_ms;
 
-
 LOG_MODULE_REGISTER(ap_pwrseq, CONFIG_AP_PWRSEQ_LOG_LEVEL);
 
 /**
  * @brief power_state names for debug
  */
-static const char * const pwrsm_dbg[] = {
+static const char *const pwrsm_dbg[] = {
+	[SYS_POWER_STATE_UNINIT] = "Unknown",
 	[SYS_POWER_STATE_G3] = "G3",
 	[SYS_POWER_STATE_S5] = "S5",
 	[SYS_POWER_STATE_S4] = "S4",
@@ -94,7 +98,7 @@ enum power_states_ndsx pwr_sm_get_state(void)
 	return pwrseq_ctx.power_state;
 }
 
-const char * const pwr_sm_get_state_name(enum power_states_ndsx state)
+const char *const pwr_sm_get_state_name(enum power_states_ndsx state)
 {
 	return pwrsm_dbg[state];
 }
@@ -106,6 +110,11 @@ void pwr_sm_set_state(enum power_states_ndsx new_state)
 		pwr_sm_get_state_name(pwrseq_ctx.power_state),
 		pwr_sm_get_state_name(new_state));
 	pwrseq_ctx.power_state = new_state;
+}
+
+void ap_pwrseq_wake(void)
+{
+	k_sem_give(&pwrseq_sem);
 }
 
 /*
@@ -130,11 +139,17 @@ void request_start_from_g3(void)
 	if (pwr_sm_get_state() == SYS_POWER_STATE_S5) {
 		atomic_clear_bit(flags, S5_INACTIVE_TIMER_RUNNING);
 	}
+	ap_pwrseq_wake();
 }
 
 void ap_power_force_shutdown(enum ap_power_shutdown_reason reason)
 {
 	board_ap_power_force_shutdown();
+}
+
+static void s5_inactive_timer_handler(struct k_timer *timer)
+{
+	ap_pwrseq_wake();
 }
 
 static void shutdown_and_notify(enum ap_power_shutdown_reason reason)
@@ -234,8 +249,14 @@ static int common_pwr_sm_run(int state)
 		break;
 
 	case SYS_POWER_STATE_G3S5:
+		if (!ap_power_is_ok_to_power_up()) {
+			LOG_INF("Power up inhibited!");
+			ap_power_force_shutdown(
+				AP_POWER_SHUTDOWN_BATTERY_INHIBIT);
+			return SYS_POWER_STATE_G3;
+		}
 		if ((power_get_signals() & PWRSEQ_G3S5_UP_SIGNAL) ==
-				PWRSEQ_G3S5_UP_VALUE)
+		    PWRSEQ_G3S5_UP_VALUE)
 			return SYS_POWER_STATE_S5;
 		else
 			return SYS_POWER_STATE_S5G3;
@@ -243,15 +264,15 @@ static int common_pwr_sm_run(int state)
 	case SYS_POWER_STATE_S5:
 		/* In S5 make sure no more signal lost */
 		/* If A-rails are stable then move to higher state */
-		if (board_ap_power_check_power_rails_enabled()
-					&& rsmrst_power_is_good()) {
+		if (board_ap_power_check_power_rails_enabled() &&
+		    rsmrst_power_is_good()) {
 			/* rsmrst is intact */
 			rsmrst_pass_thru_handler();
 			if (signals_valid_and_off(IN_PCH_SLP_S5)) {
 				k_timer_stop(&s5_inactive_timer);
 				/* Clear the timer running flag */
 				atomic_clear_bit(flags,
-					 S5_INACTIVE_TIMER_RUNNING);
+						 S5_INACTIVE_TIMER_RUNNING);
 				/* Clear any request to exit hard-off */
 				atomic_clear_bit(flags, START_FROM_G3);
 				LOG_INF("Clearing request to exit G3");
@@ -277,20 +298,20 @@ static int common_pwr_sm_run(int state)
 			 * and it is started (and the flag is set),
 			 * otherwise it is already set, so no change.
 			 */
-			if (!atomic_test_and_set_bit(flags,
-				S5_INACTIVE_TIMER_RUNNING)) {
+			if (!atomic_test_and_set_bit(
+				    flags, S5_INACTIVE_TIMER_RUNNING)) {
 				/*
 				 * Timer is not started, or needs
 				 * restarting.
 				 */
 				k_timer_start(&s5_inactive_timer,
-					K_SECONDS(AP_PWRSEQ_DT_VALUE(
-						s5_inactivity_timeout)),
-					K_NO_WAIT);
+					      K_SECONDS(AP_PWRSEQ_DT_VALUE(
+						      s5_inactivity_timeout)),
+					      K_NO_WAIT);
 			} else if (k_timer_status_get(&s5_inactive_timer) > 0) {
 				/* Timer is expired */
 				atomic_clear_bit(flags,
-					 S5_INACTIVE_TIMER_RUNNING);
+						 S5_INACTIVE_TIMER_RUNNING);
 				return SYS_POWER_STATE_S5G3;
 			}
 		}
@@ -373,7 +394,7 @@ static int common_pwr_sm_run(int state)
 	case SYS_POWER_STATE_S0ix:
 		/* System in S0 only if SLP_S0 and SLP_S3 are de-asserted */
 		if (power_signals_off(IN_PCH_SLP_S0) &&
-			signals_valid_and_off(IN_PCH_SLP_S3)) {
+		    signals_valid_and_off(IN_PCH_SLP_S3)) {
 			/* TODO: Make sure ap reset handling is done
 			 * before leaving S0ix.
 			 */
@@ -425,19 +446,19 @@ static int common_pwr_sm_run(int state)
 			return SYS_POWER_STATE_S0S3;
 
 #if CONFIG_AP_PWRSEQ_S0IX
-		/*
-		 * SLP_S0 may assert in system idle scenario without a kernel
-		 * freeze call. This may cause interrupt storm since there is
-		 * no freeze/unfreeze of threads/process in the idle scenario.
-		 * Ignore the SLP_S0 assertions in idle scenario by checking
-		 * the host sleep state.
-		 */
+			/*
+			 * SLP_S0 may assert in system idle scenario without a
+			 * kernel freeze call. This may cause interrupt storm
+			 * since there is no freeze/unfreeze of threads/process
+			 * in the idle scenario. Ignore the SLP_S0 assertions in
+			 * idle scenario by checking the host sleep state.
+			 */
 		} else if (ap_power_sleep_get_notify() ==
-					AP_POWER_SLEEP_SUSPEND &&
-					power_signals_on(IN_PCH_SLP_S0)) {
+				   AP_POWER_SLEEP_SUSPEND &&
+			   power_signals_on(IN_PCH_SLP_S0)) {
 			return SYS_POWER_STATE_S0S0ix;
 		} else if (ap_power_sleep_get_notify() ==
-					AP_POWER_SLEEP_RESUME) {
+			   AP_POWER_SLEEP_RESUME) {
 			ap_power_sleep_notify_transition(AP_POWER_SLEEP_RESUME);
 #endif /* CONFIG_AP_PWRSEQ_S0IX */
 		}
@@ -519,12 +540,16 @@ static void pwr_seq_set_initial_state(void)
 
 static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 {
-	int32_t t_wait_ms = 10;
 	enum power_states_ndsx curr_state, new_state;
 	power_signal_mask_t this_in_signals;
 	power_signal_mask_t last_in_signals = 0;
 	enum power_states_ndsx last_state = -1;
 
+	/*
+	 * Let clients know that the AP power state is now
+	 * initialized and ready.
+	 */
+	ap_power_ev_send_callbacks(AP_POWER_INITIALIZED);
 	while (1) {
 		curr_state = pwr_sm_get_state();
 
@@ -537,9 +562,8 @@ static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 		this_in_signals = power_get_signals();
 
 		if (this_in_signals != last_in_signals ||
-				curr_state != last_state) {
-			LOG_INF("power state %d = %s, in 0x%04x",
-				curr_state,
+		    curr_state != last_state) {
+			LOG_INF("power state %d = %s, in 0x%04x", curr_state,
 				pwr_sm_get_state_name(curr_state),
 				this_in_signals);
 			last_in_signals = this_in_signals;
@@ -561,22 +585,24 @@ static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 		if (curr_state != new_state) {
 			pwr_sm_set_state(new_state);
 			ap_power_set_active_wake_mask();
+		} else {
+			/*
+			 * No state transition, we can go to sleep and wait
+			 * for any event to wake us up.
+			 */
+			k_sem_take(&pwrseq_sem, K_FOREVER);
 		}
-
-		k_msleep(t_wait_ms);
 	}
 }
 
 static inline void create_pwrseq_thread(void)
 {
-	k_thread_create(&pwrseq_thread_data,
-			pwrseq_thread_stack,
+	k_thread_create(&pwrseq_thread_data, pwrseq_thread_stack,
 			K_KERNEL_STACK_SIZEOF(pwrseq_thread_stack),
-			(k_thread_entry_t)pwrseq_loop_thread,
-			NULL, NULL, NULL,
+			(k_thread_entry_t)pwrseq_loop_thread, NULL, NULL, NULL,
 			CONFIG_AP_PWRSEQ_THREAD_PRIORITY, 0,
-			IS_ENABLED(CONFIG_AP_PWRSEQ_AUTOSTART) ? K_NO_WAIT
-							       : K_FOREVER);
+			IS_ENABLED(CONFIG_AP_PWRSEQ_AUTOSTART) ? K_NO_WAIT :
+								 K_FOREVER);
 
 	k_thread_name_set(&pwrseq_thread_data, "pwrseq_task");
 }
@@ -604,6 +630,7 @@ static int pwrseq_init(const struct device *dev)
 {
 	LOG_INF("Pwrseq Init");
 
+	k_sem_init(&pwrseq_sem, 0, 1);
 	/* Initialize signal handlers */
 	power_signal_init();
 	LOG_DBG("Init pwr seq state");
@@ -614,7 +641,7 @@ static int pwrseq_init(const struct device *dev)
 }
 
 /*
- * The initialisation must occur after system I/O initialisation that
+ * The initialization must occur after system I/O initialization that
  * the signals depend upon, such as GPIO, ADC etc.
  */
 SYS_INIT(pwrseq_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);

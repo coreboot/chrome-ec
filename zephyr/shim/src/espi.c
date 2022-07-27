@@ -14,6 +14,7 @@
 
 #include <ap_power/ap_power.h>
 #include <ap_power/ap_power_events.h>
+#include <ap_power/ap_power_espi.h>
 #include "acpi.h"
 #include "chipset.h"
 #include "common.h"
@@ -492,7 +493,9 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO, lpc_get_protocol_info,
  * This function is needed only for the obsolete platform which uses the GPIO
  * for KBC's IRQ.
  */
-void lpc_keyboard_resume_irq(void) {}
+void lpc_keyboard_resume_irq(void)
+{
+}
 
 void lpc_keyboard_clear_buffer(void)
 {
@@ -534,8 +537,7 @@ static void kbc_ibf_obe_handler(uint32_t data)
 	uint32_t status = I8042_AUX_DATA;
 
 	if (is_ibf) {
-		keyboard_host_write(get_8042_data(data),
-				    get_8042_type(data));
+		keyboard_host_write(get_8042_data(data), get_8042_type(data));
 	} else if (IS_ENABLED(CONFIG_8042_AUX)) {
 		espi_write_lpc_request(espi_dev, E8042_CLEAR_FLAG, &status);
 	}
@@ -582,8 +584,7 @@ static void espi_peripheral_handler(const struct device *dev,
 
 static int zephyr_shim_setup_espi(const struct device *unused)
 {
-	static struct {
-		struct espi_callback cb;
+	static const struct {
 		espi_callback_handler_t handler;
 		enum espi_bus_event event_type;
 	} callbacks[] = {
@@ -598,7 +599,14 @@ static int zephyr_shim_setup_espi(const struct device *unused)
 			.handler = espi_peripheral_handler,
 			.event_type = ESPI_BUS_PERIPHERAL_NOTIFICATION,
 		},
+#if defined(CONFIG_AP_PWRSEQ) && DT_HAS_COMPAT_STATUS_OKAY(intel_ap_pwrseq_vw)
+		{
+			.handler = power_signal_espi_cb,
+			.event_type = POWER_SIGNAL_ESPI_BUS_EVENTS,
+		},
+#endif
 	};
+	static struct espi_callback cb[ARRAY_SIZE(callbacks)];
 
 	struct espi_cfg cfg = {
 		.io_caps = ESPI_IO_MODE_QUAD_LINES,
@@ -610,17 +618,17 @@ static int zephyr_shim_setup_espi(const struct device *unused)
 	if (!device_is_ready(espi_dev))
 		k_oops();
 
-	/* Configure eSPI */
+	/* Setup callbacks */
+	for (size_t i = 0; i < ARRAY_SIZE(callbacks); i++) {
+		espi_init_callback(&cb[i], callbacks[i].handler,
+				   callbacks[i].event_type);
+		espi_add_callback(espi_dev, &cb[i]);
+	}
+
+	/* Configure eSPI after callbacks are registered */
 	if (espi_config(espi_dev, &cfg)) {
 		LOG_ERR("Failed to configure eSPI device");
 		return -1;
-	}
-
-	/* Setup callbacks */
-	for (size_t i = 0; i < ARRAY_SIZE(callbacks); i++) {
-		espi_init_callback(&callbacks[i].cb, callbacks[i].handler,
-				   callbacks[i].event_type);
-		espi_add_callback(espi_dev, &callbacks[i].cb);
 	}
 
 	return 0;

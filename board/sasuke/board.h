@@ -23,10 +23,12 @@
 
 /* Charger */
 #define CONFIG_CHARGER_RAA489000
+#define PD_MAX_VOLTAGE_MV 20000
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
-#define CONFIG_OCPC_DEF_RBATT_MOHMS 22 /* R_DS(on) 11.6mOhm + 10mOhm sns rstr \
-					*/
+#define CONFIG_OCPC_DEF_RBATT_MOHMS               \
+	22 /* R_DS(on) 11.6mOhm + 10mOhm sns rstr \
+	    */
 #define CONFIG_OCPC
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
 #define CONFIG_CHARGE_RAMP_HW

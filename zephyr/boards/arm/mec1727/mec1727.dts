@@ -58,22 +58,18 @@
 		compatible = "named-adc-channels";
 
 		adc_ddr_soc: ddr_soc {
-			label = "TEMP_DDR_SOC";
 			enum-name = "ADC_TEMP_SENSOR_1_DDR_SOC";
 			io-channels = <&adc0 5>;
 		};
 		adc_ambient: ambient {
-			label = "TEMP_AMBIENT";
 			enum-name = "ADC_TEMP_SENSOR_2_AMBIENT";
 			io-channels = <&adc0 3>;
 		};
 		adc_charger: charger {
-			label = "TEMP_CHARGER";
 			enum-name = "ADC_TEMP_SENSOR_3_CHARGER";
 			io-channels = <&adc0 0>;
 		};
 		adc_wwan: wwan {
-			label = "TEMP_WWAN";
 			enum-name = "ADC_TEMP_SENSOR_4_WWAN";
 			io-channels = <&adc0 4>;
 		};
@@ -93,7 +89,6 @@
 		cros_kb_raw: cros-kb-raw@40009c00 {
 			compatible = "microchip,xec-cros-kb-raw";
 			reg = <0x40009c00 0x18>;
-			label = "CROS_KB_RAW_0";
 			interrupts = <135 0>;
 		};
 	};

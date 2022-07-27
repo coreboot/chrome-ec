@@ -9,13 +9,14 @@
 #include "console.h"
 #include "host_command.h"
 #include "panic.h"
+#include "printf.h"
 #include "registers.h"
 #include "system.h"
 #include "task.h"
 #include "trng.h"
 #include "util.h"
 
-uint32_t rand(void)
+uint32_t trng_rand(void)
 {
 	int tries = 300;
 	/* Wait for a valid random number */
@@ -28,10 +29,10 @@ uint32_t rand(void)
 	return STM32_RNG_DR;
 }
 
-test_mockable void rand_bytes(void *buffer, size_t len)
+test_mockable void trng_rand_bytes(void *buffer, size_t len)
 {
 	while (len) {
-		uint32_t number = rand();
+		uint32_t number = trng_rand();
 		size_t cnt = 4;
 		/* deal with the lack of alignment guarantee in the API */
 		uintptr_t align = (uintptr_t)buffer & 3;
@@ -47,7 +48,7 @@ test_mockable void rand_bytes(void *buffer, size_t len)
 	}
 }
 
-test_mockable void init_trng(void)
+test_mockable void trng_init(void)
 {
 #ifdef CHIP_FAMILY_STM32L4
 	/* Enable the 48Mhz internal RC oscillator */
@@ -84,7 +85,7 @@ test_mockable void init_trng(void)
 	STM32_RNG_CR |= STM32_RNG_CR_RNGEN;
 }
 
-test_mockable void exit_trng(void)
+test_mockable void trng_exit(void)
 {
 	STM32_RNG_CR &= ~STM32_RNG_CR_RNGEN;
 	STM32_RCC_AHB2ENR &= ~STM32_RCC_AHB2ENR_RNGEN;
@@ -106,12 +107,15 @@ test_mockable void exit_trng(void)
 static int command_rand(int argc, char **argv)
 {
 	uint8_t data[32];
+	char str_buf[hex_str_buf_size(sizeof(data))];
 
-	init_trng();
-	rand_bytes(data, sizeof(data));
-	exit_trng();
+	trng_init();
+	trng_rand_bytes(data, sizeof(data));
+	trng_exit();
 
-	ccprintf("rand %ph\n", HEX_BUF(data, sizeof(data)));
+	snprintf_hex_buffer(str_buf, sizeof(str_buf),
+			    HEX_BUF(data, sizeof(data)));
+	ccprintf("rand %s\n", str_buf);
 
 	return EC_SUCCESS;
 }
@@ -130,9 +134,9 @@ static enum ec_status host_command_rand(struct host_cmd_handler_args *args)
 	if (num_rand_bytes > args->response_max)
 		return EC_RES_OVERFLOW;
 
-	init_trng();
-	rand_bytes(r->rand, num_rand_bytes);
-	exit_trng();
+	trng_init();
+	trng_rand_bytes(r->rand, num_rand_bytes);
+	trng_exit();
 
 	args->response_size = num_rand_bytes;
 

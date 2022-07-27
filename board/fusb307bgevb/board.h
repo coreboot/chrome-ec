@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#define CONFIG_LTO
+
 /* 48 MHz SYSCLK clock frequency */
 #define CPU_CLOCK 48000000
 
@@ -85,6 +87,7 @@
 /* Enable control of GPIOs over USB */
 #define CONFIG_USB_GPIO
 
+#undef CONFIG_CMD_GETTIME
 #undef CONFIG_WATCHDOG_HELP
 #undef CONFIG_LID_SWITCH
 

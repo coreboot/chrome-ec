@@ -22,7 +22,7 @@
 #undef CONFIG_VBOOT_HASH
 #undef CONFIG_USB_PD_LOGGING
 
-#ifdef TEST_AES
+#if defined(TEST_AES) || defined(TEST_CRYPTO_BENCHMARK)
 #define CONFIG_AES
 #define CONFIG_AES_GCM
 #endif
@@ -140,6 +140,11 @@
 #ifdef TEST_RGB_KEYBOARD
 #define CONFIG_RGB_KEYBOARD
 #define CONFIG_RGBKBD_DEMO_DOT
+#endif
+
+#ifdef TEST_NVIDIA_GPU
+#define CONFIG_GPU_NVIDIA
+#define GPIO_NVIDIA_GPU_ACOFF_ODL 123
 #endif
 
 #ifdef TEST_STILLNESS_DETECTOR

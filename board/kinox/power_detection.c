@@ -29,8 +29,8 @@ static const char *const adp_id_names[] = {
 /* ADP_ID control */
 struct adpater_id_params tio1_power[] = {
 	{
-		.min_voltage = 3300,
-		.max_voltage = 3300,
+		.min_voltage = 2816,
+		.max_voltage = 2816,
 		.charge_voltage = 20000,
 		.charge_current = 6000,
 		.watt = 120,
@@ -96,7 +96,7 @@ struct adpater_id_params tio2_power[] = {
 	},
 	{
 		.min_voltage = 2816,
-		.max_voltage = 3300,
+		.max_voltage = 2816,
 		.charge_voltage = 20000,
 		.charge_current = 6000,
 		.watt = 120,
@@ -291,11 +291,13 @@ void set_the_obp(int power_type_index, int adp_type)
 		switch (adp_type) {
 		case TIO1:
 		case TIO2:
+			gpio_set_level(GPIO_SIO_LEGO_EN_L, 0);
 			charge_manager_update_charge(
 				CHARGE_SUPPLIER_PROPRIETARY,
 				DEDICATED_CHARGE_PORT, &pi);
 			break;
 		case TINY:
+			gpio_set_level(GPIO_SIO_LEGO_EN_L, 1);
 			charge_manager_update_charge(CHARGE_SUPPLIER_DEDICATED,
 						     DEDICATED_CHARGE_PORT,
 						     &pi);
@@ -319,10 +321,10 @@ void set_the_obp(int power_type_index, int adp_type)
  *  |            |                |
  *  |---220 ms---|-----400 ms-----|
  *
- * Tiny: Twice adapter ADC values are less than 0x3FF.
- * TIO1: Twice adapter ADC values are 0x3FF.
- * TIO2: First adapter ADC value less than 0x3FF.
- *       Second adpater ADC value is 0x3FF.
+ * Tiny: Twice adapter ADC values are less than 2.816v.
+ * TIO1: Twice adapter ADC values are 2.816v.
+ * TIO2: First adapter ADC value less than 2.816v.
+ *       Second adpater ADC value is 2.816v.
  */
 static void adp_id_deferred(void);
 DECLARE_DEFERRED(adp_id_deferred);
@@ -340,13 +342,16 @@ void adp_id_deferred(void)
 		adp_id_value_debounce = adp_id_value;
 		/* for delay the 400ms to get the next APD_ID value */
 		hook_call_deferred(&adp_id_deferred_data, 400 * MSEC);
-	} else if (adp_id_value_debounce == 0x3FF && adp_id_value == 0x3FF) {
+	} else if (adp_id_value_debounce == ADC_MAX_VOLT &&
+		   adp_id_value == ADC_MAX_VOLT) {
 		adp_finial_adc_value = adp_id_value;
 		adp_type = TIO1;
-	} else if (adp_id_value_debounce < 0x3FF && adp_id_value == 0x3FF) {
+	} else if (adp_id_value_debounce < ADC_MAX_VOLT &&
+		   adp_id_value == ADC_MAX_VOLT) {
 		adp_finial_adc_value = adp_id_value_debounce;
 		adp_type = TIO2;
-	} else if (adp_id_value_debounce < 0x3FF && adp_id_value < 0x3FF) {
+	} else if (adp_id_value_debounce < ADC_MAX_VOLT &&
+		   adp_id_value < ADC_MAX_VOLT) {
 		adp_finial_adc_value = adp_id_value;
 		adp_type = TINY;
 	} else {
@@ -384,10 +389,19 @@ void adp_id_deferred(void)
 
 static void barrel_jack_setting(void)
 {
+	struct charge_port_info pi = { 0 };
 	/* Check ADP_ID when barrel jack is present */
-	if (!gpio_get_level(GPIO_BJ_ADP_PRESENT_ODL))
+	if (!gpio_get_level(GPIO_BJ_ADP_PRESENT_ODL)) {
+		/* Set the default 65w adaptor */
+		pi.voltage = 20000;
+		pi.current = 3250;
+
+		charge_manager_update_charge(CHARGE_SUPPLIER_DEDICATED,
+					     DEDICATED_CHARGE_PORT, &pi);
+
 		/* Delay 220ms to get the first ADP_ID value */
 		hook_call_deferred(&adp_id_deferred_data, 220 * MSEC);
+	}
 }
 DECLARE_HOOK(HOOK_INIT, barrel_jack_setting, HOOK_PRIO_DEFAULT);
 
@@ -415,3 +429,10 @@ static void typec_adapter_setting(void)
 	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, typec_adapter_setting, HOOK_PRIO_DEFAULT);
+
+/* IRQ for BJ plug/unplug. It shouldn't be called if BJ is the power source. */
+void adp_connect_interrupt(enum gpio_signal signal)
+{
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		hook_call_deferred(&adp_id_deferred_data, 0);
+}

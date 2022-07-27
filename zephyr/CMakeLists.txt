@@ -92,12 +92,12 @@ set(ZEPHYR_CURRENT_LIBRARY app)
 # Custom function that ensures the include path is always updated for both
 # libraries.
 function(cros_ec_library_include_directories)
-  target_include_directories(app PRIVATE ${ARGN})
+  target_include_directories(app PUBLIC ${ARGN})
   target_include_directories(ec_shim PRIVATE ${ARGN})
 endfunction()
 function(cros_ec_library_include_directories_ifdef feature_toggle)
   if(${${feature_toggle}})
-    target_include_directories(app PRIVATE ${ARGN})
+    target_include_directories(app PUBLIC ${ARGN})
     target_include_directories(ec_shim PRIVATE ${ARGN})
   endif()
 endfunction()
@@ -134,7 +134,11 @@ configure_file(gcov.tmpl.sh ${CMAKE_BINARY_DIR}/gcov.sh)
 # included here, sorted by filename. This is common functionality which is
 # supported by all boards and emulators (including unit tests) using the shim
 # layer.
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC "${PLATFORM_EC}/common/base32.c"
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC
+                                                # TODO(b/237712836): Remove once
+                                                # Zephyr's libc has strcasecmp.
+                                                "${PLATFORM_EC}/builtin/stdlib.c"
+                                                "${PLATFORM_EC}/common/base32.c"
                                                 "${PLATFORM_EC}/common/console_output.c"
                                                 "${PLATFORM_EC}/common/ec_features.c"
                                                 "${PLATFORM_EC}/common/gpio_commands.c"
@@ -185,6 +189,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_CM32183
                                                 "${PLATFORM_EC}/driver/als_cm32183.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACPI
                                                 "${PLATFORM_EC}/common/acpi.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AMD_SB_RMI
+						"${PLATFORM_EC}/driver/sb_rmi.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AMD_STT
+						"${PLATFORM_EC}/driver/amd_stt.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BACKLIGHT_LID
                                                 "${PLATFORM_EC}/common/backlight_lid.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
@@ -321,6 +329,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
                                                 "${PLATFORM_EC}/common/motion_sense.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MP2964
                                                 "${PLATFORM_EC}/driver/mp2964.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PERIPHERAL_CHARGER
+                                                "${PLATFORM_EC}/common/peripheral_charger.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PORT80
                                                 "${PLATFORM_EC}/common/port80.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWER_BUTTON
@@ -477,11 +487,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_CCGXXF
                                                 "${PLATFORM_EC}/driver/tcpm/ccgxxf.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_NCT38XX
                                                 "${PLATFORM_EC}/driver/tcpm/nct38xx.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8751
-                                                "${PLATFORM_EC}/driver/tcpm/ps8xxx.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8805
-                                                "${PLATFORM_EC}/driver/tcpm/ps8xxx.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8815
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8XXX
                                                 "${PLATFORM_EC}/driver/tcpm/ps8xxx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_RAA489000
                                                 "${PLATFORM_EC}/driver/tcpm/raa489000.c")
@@ -547,3 +553,21 @@ add_subdirectory("app")
 add_subdirectory("drivers")
 add_subdirectory("emul")
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
+
+# Use external script to generate the ec_version.h header and add as
+# a dependency to the EC application library.
+add_custom_target(
+  ec_version_header
+  VERBATIM COMMAND
+  "PYTHONPATH=${PLATFORM_EC}/zephyr/zmake/" ${PYTHON_EXECUTABLE}
+  "${PLATFORM_EC}/zephyr/zmake/zephyr_build_tools/generate_ec_version.py"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/ec_version.h"
+  "--base" "${ZEPHYR_BASE}"
+  "--name" "${CMAKE_PROJECT_NAME}"
+  "--module" "${ZEPHYR_MODULES}"
+  ${EXTRA_EC_VERSION_FLAGS}
+)
+add_dependencies(app ec_version_header)
+
+# Include the directory containing the generated header.
+zephyr_include_directories("${CMAKE_CURRENT_BINARY_DIR}/include")

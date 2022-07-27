@@ -31,6 +31,7 @@ test-list-y=\
        compile_time_macros \
        cortexm_fpu \
        crc \
+       debug \
        flash_physical \
        flash_write_protect \
        fpsensor \
@@ -49,6 +50,7 @@ test-list-y=\
        sha256 \
        sha256_unrolled \
        static_if \
+       stdlib \
        stm32f_rtc \
        system_is_locked \
        timer_dos \

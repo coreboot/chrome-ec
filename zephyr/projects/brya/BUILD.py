@@ -5,7 +5,9 @@
 """Define zmake projects for brya."""
 
 
-def register_npcx9_variant(project_name, extra_dts_overlays=(), extra_kconfig_files=()):
+def register_npcx9_variant(
+    project_name, extra_dts_overlays=(), extra_kconfig_files=()
+):
     """Register a variant of a brya, even though this is not named as such."""
     return register_npcx_project(
         project_name=project_name,
@@ -39,9 +41,4 @@ brya = register_npcx9_variant(
     project_name="brya",
     extra_dts_overlays=[here / "brya.dts"],
     extra_kconfig_files=[here / "prj_brya.conf"],
-)
-
-ghost = brya.variant(
-    project_name="ghost",
-    kconfig_files=[here / "prj_ghost.conf"],
 )

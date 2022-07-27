@@ -10,10 +10,9 @@ import pathlib
 import string
 import tempfile
 
-import hypothesis
-import hypothesis.strategies as st
-import pytest
-
+import hypothesis  # pylint:disable=import-error
+import hypothesis.strategies as st  # pylint:disable=import-error
+import pytest  # pylint:disable=import-error
 import zmake.jobserver
 import zmake.util as util
 from zmake.build_config import BuildConfig
@@ -163,7 +162,9 @@ def test_popen_cmake_no_kconfig(conf: BuildConfig, project_dir, build_dir):
 
 @hypothesis.given(build_configs_with_at_least_one_kconfig, paths, paths)
 @hypothesis.settings(deadline=60000)
-def test_popen_cmake_kconfig_but_no_file(conf: BuildConfig, project_dir, build_dir):
+def test_popen_cmake_kconfig_but_no_file(
+    conf: BuildConfig, project_dir, build_dir
+):
     """Test that running popen_cmake with Kconfig definitions to write
     out, but no path to do so, should raise an error.
     """
@@ -184,7 +185,10 @@ def test_popen_cmake_kconfig(conf: BuildConfig, project_dir, build_dir):
 
     try:
         conf.popen_cmake(
-            job_client, project_dir, build_dir, kconfig_path=pathlib.Path(temp_path)
+            job_client,
+            project_dir,
+            build_dir,
+            kconfig_path=pathlib.Path(temp_path),
         )
 
         _, cmake_defs = parse_cmake_args(job_client.captured_argv)
@@ -215,7 +219,9 @@ def fake_kconfig_files(tmp_path):
     paths = [tmp_path / f"{letter}.conf" for letter in "ABCD"]
 
     for path, cfg_name in zip(paths, ("ONE", "TWO", "THREE", "FOUR")):
-        path.write_text(f"# Fake kconfig file for testing.\nCONFIG_{cfg_name}=y\n")
+        path.write_text(
+            f"# Fake kconfig file for testing.\nCONFIG_{cfg_name}=y\n"
+        )
 
     return paths
 
