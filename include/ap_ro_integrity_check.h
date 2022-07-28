@@ -10,11 +10,13 @@
 
 enum ap_ro_status {
 	AP_RO_NOT_RUN = 0,
-	AP_RO_PASS,
+	AP_RO_PASS_UNVERIFIED_GBB,
 	AP_RO_FAIL,
 	AP_RO_UNSUPPORTED_UNKNOWN, /* Deprecated */
 	AP_RO_UNSUPPORTED_NOT_TRIGGERED,
 	AP_RO_UNSUPPORTED_TRIGGERED,
+	AP_RO_PASS,
+	AP_RO_IN_PROGRESS,
 };
 /*
  * validate_ap_ro: based on information saved in an H1 RO flash page verify
