@@ -497,7 +497,8 @@ static int verify_keyblock(const struct kb_container *kbc,
 /* Clear validate_ap_ro_boot state. */
 void ap_ro_device_reset(void)
 {
-	if (apro_result == AP_RO_NOT_RUN || ec_rst_override())
+	if (apro_result == AP_RO_NOT_RUN || apro_result == AP_RO_IN_PROGRESS ||
+	    ec_rst_override())
 		return;
 	CPRINTS("%s: clear apro result", __func__);
 	apro_result = AP_RO_NOT_RUN;
@@ -1419,6 +1420,7 @@ static uint8_t do_ap_ro_check(void)
 	enum ap_ro_check_vc_errors support_status;
 	bool v1_record_found;
 
+	apro_result = AP_RO_IN_PROGRESS;
 	support_status = ap_ro_check_unsupported(true);
 	if ((support_status == ARCVE_BOARD_ID_BLOCKED) ||
 	    (support_status == ARCVE_FLASH_READ_FAILED)) {
@@ -1483,9 +1485,9 @@ static uint8_t do_ap_ro_check(void)
 		return EC_ERROR_UNIMPLEMENTED;
 	}
 
-	apro_result = AP_RO_PASS;
+	apro_result = AP_RO_PASS_UNVERIFIED_GBB;
 	ap_ro_add_flash_event(APROF_CHECK_SUCCEEDED);
-	CPRINTS("AP RO verification SUCCEEDED!");
+	CPRINTS("AP RO PASS!");
 	release_ec_reset_override();
 
 	return EC_SUCCESS;
