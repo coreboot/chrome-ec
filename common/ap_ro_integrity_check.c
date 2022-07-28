@@ -325,6 +325,8 @@ static const struct ap_ro_check *p_chk =
  * reset.
  */
 static enum ap_ro_status apro_result = AP_RO_NOT_RUN;
+static uint8_t apro_fail_status_cleared;
+
 
 /*
  * In dev signed Cr50 images this is the hash of
@@ -501,6 +503,7 @@ void ap_ro_device_reset(void)
 	    ec_rst_override())
 		return;
 	CPRINTS("%s: clear apro result", __func__);
+	apro_fail_status_cleared = 0;
 	apro_result = AP_RO_NOT_RUN;
 }
 
@@ -1408,9 +1411,20 @@ static void release_ec_reset_override(void)
 	enable_sleep(SLEEP_MASK_AP_RO_VERIFICATION);
 }
 
+/* Only call this through a key combo. */
+void ap_ro_clear_ec_rst_override(void)
+{
+	if (!ec_rst_override())
+		return;
+	apro_fail_status_cleared = 1;
+	release_ec_reset_override();
+	ap_ro_add_flash_event(APROF_FAIL_CLEARED);
+	CPRINTS("%s: done", __func__);
+}
+
 int ec_rst_override(void)
 {
-	return apro_result == AP_RO_FAIL;
+	return !apro_fail_status_cleared && apro_result == AP_RO_FAIL;
 }
 
 
@@ -1421,6 +1435,7 @@ static uint8_t do_ap_ro_check(void)
 	bool v1_record_found;
 
 	apro_result = AP_RO_IN_PROGRESS;
+	apro_fail_status_cleared = 0;
 	support_status = ap_ro_check_unsupported(true);
 	if ((support_status == ARCVE_BOARD_ID_BLOCKED) ||
 	    (support_status == ARCVE_FLASH_READ_FAILED)) {

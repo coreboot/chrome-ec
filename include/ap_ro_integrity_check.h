@@ -41,4 +41,10 @@ int ap_ro_board_id_blocked(void);
  */
 void ap_ro_device_reset(void);
 
+/*
+ * Clear the AP RO result and release the EC from reset. This should only be
+ * done through a key combo.
+ */
+void ap_ro_clear_ec_rst_override(void);
+
 #endif /* ! __CR50_INCLUDE_AP_RO_INTEGRITY_CHECK_H */
