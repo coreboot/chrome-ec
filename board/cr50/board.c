@@ -2,6 +2,7 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#include "ap_ro_integrity_check.h"
 #include "board_id.h"
 #include "ccd_config.h"
 #include "clock.h"
@@ -1239,6 +1240,10 @@ static void key_combo0_irq(void)
 		recovery_button_record();
 		hook_call_deferred(&board_reboot_ec_data, 0);
 	}
+
+#ifdef CONFIG_AP_RO_VERIFICATION
+	ap_ro_clear_ec_rst_override();
+#endif
 
 	CPRINTS("Recovery Requested");
 }

@@ -101,6 +101,7 @@ enum ap_ro_verification_ev {
 	APROF_CHECK_FAILED = 6,
 	APROF_CHECK_SUCCEEDED = 7,
 	APROF_CHECK_UNSUPPORTED = 8,
+	APROF_FAIL_CLEARED = 9,
 };
 
 struct ap_ro_entry_payload {
