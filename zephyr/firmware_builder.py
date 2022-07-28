@@ -23,23 +23,51 @@ DEFAULT_BUNDLE_DIRECTORY = "/tmp/artifact_bundles"
 DEFAULT_BUNDLE_METADATA_FILE = "/tmp/artifact_bundle_metadata"
 
 
+def run_twister(platform_ec, code_coverage=False, extra_args=None):
+    """Build the tests using twister."""
+    cmd = [platform_ec / "twister", "--outdir", platform_ec / "twister-out"]
+
+    if extra_args:
+        cmd.extend(extra_args)
+
+    if code_coverage:
+        # Tell Twister to collect coverage data. We must specify an explicit platform
+        # type in this case, as well.
+        cmd.extend(
+            [
+                "--coverage",
+                "-p",
+                "native_posix",
+                "--gcov-tool",
+                platform_ec / "util" / "llvm-gcov.sh",
+            ]
+        )
+    subprocess.run(cmd, check=True, cwd=platform_ec)
+
+
 def build(opts):
     """Builds all Zephyr firmware targets"""
     metric_list = firmware_pb2.FwBuildMetricList()
 
-    zephyr_dir = pathlib.Path(__file__).parent
-    platform_ec = zephyr_dir.resolve().parent
-    subprocess.run([platform_ec / "util" / "check_clang_format.py"], check=True)
+    zephyr_dir = pathlib.Path(__file__).parent.resolve()
+    platform_ec = zephyr_dir.parent
+    subprocess.run(
+        [platform_ec / "util" / "check_clang_format.py"],
+        check=True,
+        cwd=platform_ec,
+    )
 
     cmd = ["zmake", "-D", "build", "-a"]
     if opts.code_coverage:
         cmd.append("--coverage")
-    subprocess.run(cmd, cwd=pathlib.Path(__file__).parent, check=True)
+    subprocess.run(cmd, cwd=zephyr_dir, check=True)
     if not opts.code_coverage:
         for project in zmake.project.find_projects(zephyr_dir).values():
             if project.config.is_test:
                 continue
-            build_dir = platform_ec / "build" / "zephyr" / project.config.project_name
+            build_dir = (
+                platform_ec / "build" / "zephyr" / project.config.project_name
+            )
             metric = metric_list.value.add()
             metric.target_name = project.config.project_name
             metric.platform_name = project.config.zephyr_board
@@ -48,7 +76,8 @@ def build(opts):
                 parse_buildlog(build_log, metric, variant.upper())
     with open(opts.metrics, "w") as file:
         file.write(json_format.MessageToJson(metric_list))
-    return 0
+
+    run_twister(platform_ec, opts.code_coverage, ["--build-only"])
 
 
 UNITS = {
@@ -119,8 +148,8 @@ def bundle_coverage(opts):
     info = firmware_pb2.FirmwareArtifactInfo()
     info.bcs_version_info.version_string = opts.bcs_version
     bundle_dir = get_bundle_dir(opts)
-    zephyr_dir = pathlib.Path(__file__).parent
-    platform_ec = zephyr_dir.resolve().parent
+    zephyr_dir = pathlib.Path(__file__).parent.resolve()
+    platform_ec = zephyr_dir.parent
     build_dir = platform_ec / "build" / "zephyr"
     tarball_name = "coverage.tbz2"
     tarball_path = bundle_dir / tarball_name
@@ -147,12 +176,14 @@ def bundle_firmware(opts):
     info = firmware_pb2.FirmwareArtifactInfo()
     info.bcs_version_info.version_string = opts.bcs_version
     bundle_dir = get_bundle_dir(opts)
-    zephyr_dir = pathlib.Path(__file__).parent
-    platform_ec = zephyr_dir.resolve().parent
+    zephyr_dir = pathlib.Path(__file__).parent.resolve()
+    platform_ec = zephyr_dir.parent
     for project in zmake.project.find_projects(zephyr_dir).values():
         if project.config.is_test:
             continue
-        build_dir = platform_ec / "build" / "zephyr" / project.config.project_name
+        build_dir = (
+            platform_ec / "build" / "zephyr" / project.config.project_name
+        )
         artifacts_dir = build_dir / "output"
         tarball_name = f"{project.config.project_name}.firmware.tbz2"
         tarball_path = bundle_dir.joinpath(tarball_name)
@@ -177,25 +208,18 @@ def test(opts):
 
     # Run zmake tests to ensure we have a fully working zmake before
     # proceeding.
-    subprocess.run([zephyr_dir / "zmake" / "run_tests.sh"], check=True)
+    subprocess.run(
+        [zephyr_dir / "zmake" / "run_tests.sh"], check=True, cwd=zephyr_dir
+    )
 
     cmd = ["zmake", "-D", "test", "-a", "--no-rebuild"]
     if opts.code_coverage:
         cmd.append("--coverage")
-    ret = subprocess.run(cmd, check=True).returncode
-    if ret:
-        return ret
+    subprocess.run(cmd, check=True, cwd=zephyr_dir)
 
     # Twister-based tests
     platform_ec = zephyr_dir.parent
-    cmd = [platform_ec / "twister", "--outdir", platform_ec / "twister-out"]
-    if opts.code_coverage:
-        # Tell Twister to collect coverage data. We must specify an explicit platform
-        # type in this case, as well.
-        cmd.extend(["--coverage", "-p", "native_posix"])
-    ret = subprocess.run(cmd, check=True).returncode
-    if ret:
-        return ret
+    run_twister(platform_ec, opts.code_coverage, ["--test-only"])
 
     if opts.code_coverage:
         build_dir = platform_ec / "build" / "zephyr"
@@ -215,7 +239,7 @@ def test(opts):
         ]
         output = subprocess.run(
             cmd,
-            cwd=pathlib.Path(__file__).parent,
+            cwd=zephyr_dir,
             check=True,
             stdout=subprocess.PIPE,
             universal_newlines=True,
@@ -224,7 +248,7 @@ def test(opts):
 
         output = subprocess.run(
             ["/usr/bin/lcov", "--summary", build_dir / "all_tests.info"],
-            cwd=pathlib.Path(__file__).parent,
+            cwd=zephyr_dir,
             check=True,
             stdout=subprocess.PIPE,
             universal_newlines=True,
@@ -236,8 +260,12 @@ def test(opts):
         subprocess.run(cmd, cwd=platform_ec, check=True)
 
         output = subprocess.run(
-            ["/usr/bin/lcov", "--summary", platform_ec / "build/coverage/lcov.info"],
-            cwd=pathlib.Path(__file__).parent,
+            [
+                "/usr/bin/lcov",
+                "--summary",
+                platform_ec / "build/coverage/lcov.info",
+            ],
+            cwd=zephyr_dir,
             check=True,
             stdout=subprocess.PIPE,
             universal_newlines=True,
@@ -257,7 +285,7 @@ def test(opts):
         ]
         subprocess.run(
             cmd,
-            cwd=pathlib.Path(__file__).parent,
+            cwd=zephyr_dir,
             check=True,
         )
 
@@ -270,10 +298,12 @@ def test(opts):
             "-r",
             build_dir / "lcov_unfiltered.info",
             platform_ec / "build/**",
+            platform_ec / "twister-out*/**",
+            "/usr/include/**",
         ]
         output = subprocess.run(
             cmd,
-            cwd=pathlib.Path(__file__).parent,
+            cwd=zephyr_dir,
             check=True,
             stdout=subprocess.PIPE,
             universal_newlines=True,
@@ -292,16 +322,17 @@ def test(opts):
                 "-s",
                 build_dir / "lcov.info",
             ],
-            cwd=pathlib.Path(__file__).parent,
+            cwd=zephyr_dir,
             check=True,
         )
 
     with open(opts.metrics, "w") as file:
         file.write(json_format.MessageToJson(metrics))
-    return 0
 
 
-COVERAGE_RE = re.compile(r"lines\.*: *([0-9\.]+)% \(([0-9]+) of ([0-9]+) lines\)")
+COVERAGE_RE = re.compile(
+    r"lines\.*: *([0-9\.]+)% \(([0-9]+) of ([0-9]+) lines\)"
+)
 
 
 def _extract_lcov_summary(name, metrics, output):
@@ -323,7 +354,8 @@ def main(args):
         return -1
 
     # Run selected sub command function
-    return opts.func(opts)
+    opts.func(opts)
+    return 0
 
 
 def parse_args(args):
@@ -347,14 +379,18 @@ def parse_args(args):
         "--metadata",
         required=False,
         help=(
-            "Full pathname for the file in which to write build artifact " "metadata."
+            "Full pathname for the file in which to write build artifact "
+            "metadata."
         ),
     )
 
     parser.add_argument(
         "--output-dir",
         required=False,
-        help=("Full pathname for the directory in which to bundle build " "artifacts."),
+        help=(
+            "Full pathname for the directory in which to bundle build "
+            "artifacts."
+        ),
     )
 
     parser.add_argument(

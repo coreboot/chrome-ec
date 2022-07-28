@@ -190,11 +190,11 @@
 			gpios = <&gpioe 3 GPIO_INPUT>;
 		};
 		gpio_voldn_btn_odl: voldn_btn_odl {
-			gpios = <&gpioa 2 GPIO_INPUT_PULL_UP>;
+			gpios = <&gpio9 3 GPIO_INPUT_PULL_UP>;
 			enum-name = "GPIO_VOLUME_DOWN_L";
 		};
 		gpio_volup_btn_odl: volup_btn_odl {
-			gpios = <&gpio9 3 GPIO_INPUT_PULL_UP>;
+			gpios = <&gpioa 2 GPIO_INPUT_PULL_UP>;
 			enum-name = "GPIO_VOLUME_UP_L";
 		};
 	};
@@ -204,19 +204,19 @@
 
 		i2c_ec_i2c_eeprom: ec_i2c_eeprom {
 			i2c-port = <&i2c0_0>;
-			enum-name = "I2C_PORT_EEPROM";
+			enum-names = "I2C_PORT_EEPROM";
 		};
 		i2c_ec_i2c_sensor: ec_i2c_sensor {
 			i2c-port = <&i2c1_0>;
-			enum-name = "I2C_PORT_SENSOR";
+			enum-names = "I2C_PORT_SENSOR";
 		};
 		i2c_ec_i2c_usb_c0: ec_i2c_usb_c0 {
 			i2c-port = <&i2c3_0>;
-			enum-name = "I2C_PORT_USB_C0_TCPC";
+			enum-names = "I2C_PORT_USB_C0_TCPC";
 		};
 		i2c_ec_i2c_batt: ec_i2c_batt {
 			i2c-port = <&i2c7_0>;
-			enum-name = "I2C_PORT_BATTERY";
+			enum-names = "I2C_PORT_BATTERY";
 		};
 	};
 };

@@ -92,12 +92,12 @@ set(ZEPHYR_CURRENT_LIBRARY app)
 # Custom function that ensures the include path is always updated for both
 # libraries.
 function(cros_ec_library_include_directories)
-  target_include_directories(app PRIVATE ${ARGN})
+  target_include_directories(app PUBLIC ${ARGN})
   target_include_directories(ec_shim PRIVATE ${ARGN})
 endfunction()
 function(cros_ec_library_include_directories_ifdef feature_toggle)
   if(${${feature_toggle}})
-    target_include_directories(app PRIVATE ${ARGN})
+    target_include_directories(app PUBLIC ${ARGN})
     target_include_directories(ec_shim PRIVATE ${ARGN})
   endif()
 endfunction()
@@ -565,6 +565,7 @@ add_custom_target(
   "--base" "${ZEPHYR_BASE}"
   "--name" "${CMAKE_PROJECT_NAME}"
   "--module" "${ZEPHYR_MODULES}"
+  ${EXTRA_EC_VERSION_FLAGS}
 )
 add_dependencies(app ec_version_header)
 

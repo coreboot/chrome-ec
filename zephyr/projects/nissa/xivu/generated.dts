@@ -173,7 +173,7 @@
 			enum-name = "GPIO_TABLET_MODE_L";
 		};
 		gpio_usb_a0_ilimit_sdp: usb_a0_ilimit_sdp {
-			gpios = <&gpio8 5 GPIO_OUTPUT>;
+			gpios = <&gpio3 3 GPIO_OUTPUT>;
 			enum-name = "GPIO_USB1_ILIM_SEL";
 		};
 		gpio_usb_c0_int_odl: usb_c0_int_odl {
@@ -200,23 +200,23 @@
 
 		i2c_ec_i2c_eeprom: ec_i2c_eeprom {
 			i2c-port = <&i2c0_0>;
-			enum-name = "I2C_PORT_EEPROM";
+			enum-names = "I2C_PORT_EEPROM";
 		};
 		i2c_ec_i2c_sensor: ec_i2c_sensor {
 			i2c-port = <&i2c1_0>;
-			enum-name = "I2C_PORT_SENSOR";
+			enum-names = "I2C_PORT_SENSOR";
 		};
 		i2c_ec_i2c_usb_c0: ec_i2c_usb_c0 {
 			i2c-port = <&i2c3_0>;
-			enum-name = "I2C_PORT_USB_C0_TCPC";
+			enum-names = "I2C_PORT_USB_C0_TCPC";
 		};
 		i2c_ec_i2c_sub_usb_c1: ec_i2c_sub_usb_c1 {
 			i2c-port = <&i2c5_1>;
-			enum-name = "I2C_PORT_USB_C1_TCPC";
+			enum-names = "I2C_PORT_USB_C1_TCPC";
 		};
 		i2c_ec_i2c_batt: ec_i2c_batt {
 			i2c-port = <&i2c7_0>;
-			enum-name = "I2C_PORT_BATTERY";
+			enum-names = "I2C_PORT_BATTERY";
 		};
 	};
 };

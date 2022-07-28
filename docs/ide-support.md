@@ -69,6 +69,14 @@ ChromeOS source files.
 Support for `platform/ec` is not available out of the box (yet), but can be
 manually enabled following these steps.
 
+<!-- mdformat off(b/139308852) -->
+*** note
+NOTE: CrOS IDE uses the VSCode extension `clangd` for code completion and
+navigation. The installation of CrOS IDE disables the built-in
+`C/C++ IntelliSense` because it is not compatible with `clangd`.
+***
+<!-- mdformat on -->
+
 ### Prerequisites
 
 1.  Install CrOS IDE following the [quickstart guide]
@@ -97,7 +105,7 @@ manually enabled following these steps.
 
     ```bash
     (chroot) $ cd ~/chromiumos/chromite/ide_tooling/scripts
-    python compdb_no_chroot.py /home/${USER}/chromiumos \
+    python compdb_no_chroot.py ${EXTERNAL_TRUNK_PATH} \
       < ~/chromiumos/src/platform/ec/compile_commands_inside_chroot.json \
       > ~/chromiumos/src/platform/ec/compile_commands.json
     ```

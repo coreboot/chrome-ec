@@ -62,7 +62,9 @@ def main():
     ec_base = cros_checkout / "src" / "platform" / "ec"
 
     # Module paths, including third party modules and the EC application.
-    zephyr_modules = find_modules(cros_checkout / "src" / "third_party" / "zephyr")
+    zephyr_modules = find_modules(
+        cros_checkout / "src" / "third_party" / "zephyr"
+    )
     zephyr_modules.append(ec_base)
 
     # Prepare environment variables for export to Twister and inherit the
@@ -71,8 +73,8 @@ def main():
     twister_env.update(
         {
             "ZEPHYR_BASE": str(zephyr_base),
-            "TOOLCHAIN_ROOT": str(zephyr_base),
-            "ZEPHYR_TOOLCHAIN_VARIANT": "host",
+            "TOOLCHAIN_ROOT": str(ec_base / "zephyr"),
+            "ZEPHYR_TOOLCHAIN_VARIANT": "llvm",
         }
     )
 

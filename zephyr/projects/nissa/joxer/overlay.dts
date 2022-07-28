@@ -97,7 +97,6 @@
 		compatible = "unused-gpios";
 		unused-gpios = <&gpioc 3 0>,
 			       <&gpiod 4 0>,
-			       <&gpiod 7 0>,
 			       <&gpioh 2 0>,
 			       <&gpioj 7 0>,
 			       <&gpiol 4 0>;
@@ -132,6 +131,21 @@
 		gpio_fan_enable: fan-enable {
 			gpios = <&gpiol 4 GPIO_OUTPUT>;
 			no-auto-init;
+		};
+		gpio_power_led_gate: power_led_gate {
+			gpios = <&gpiof 1 GPIO_OUTPUT_LOW>;
+		};
+		gpio_led_1_odl: led_1_odl {
+			gpios = <&gpioa 1 GPIO_OUTPUT_HIGH>;
+		};
+		gpio_led_2_odl: led_2_odl {
+			gpios = <&gpioa 2 GPIO_OUTPUT_HIGH>;
+		};
+		gpio_led_3_l: led_3_l {
+			gpios = <&gpiol 2 GPIO_OUTPUT_HIGH>;
+		};
+		gpio_led_4_l: led_4_l {
+			gpios = <&gpiol 3 GPIO_OUTPUT_HIGH>;
 		};
 	};
 
@@ -271,7 +285,7 @@
 
 		fan_0 {
 			pwms = <&pwm7 PWM_CHANNEL_7 PWM_KHZ(30) PWM_POLARITY_NORMAL>;
-			tach = <&tach0>;
+			tach = <&tach1>;
 			rpm_min = <1500>;
 			rpm_start = <1500>;
 			rpm_max = <6500>;
@@ -401,10 +415,14 @@
 };
 
 /* fan tachometer sensor */
-&tach0 {
+&tach1 {
 	status = "okay";
 	channel = <IT8XXX2_TACH_CHANNEL_A>;
 	pulses-per-round = <2>;
 	pinctrl-0 = <&tach1a_gpd7_default>;
 	pinctrl-names = "default";
+};
+
+&usbpd0 {
+	status = "okay";
 };
