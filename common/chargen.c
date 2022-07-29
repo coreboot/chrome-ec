@@ -55,7 +55,7 @@ static int command_chargen(int argc, char **argv)
 	while (uart_getc() != 'x') {
 		timestamp_t current_time;
 
-		while (uart_buffer_full()) {
+		while (!uart_buffer_room()) {
 			/*
 			 * Let's sleep enough time to drain half of TX
 			 * buffer.
