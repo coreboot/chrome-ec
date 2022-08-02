@@ -11,6 +11,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "keyboard_backlight.h"
 #include "registers.h"
 #include "rgb_keyboard.h"
 #include "task.h"
@@ -23,7 +24,7 @@
 #define CPRINTS(fmt, args...) cprints(CC_RGBKBD, "RGBKBD: " fmt, ##args)
 
 test_export_static enum ec_rgbkbd_demo demo =
-#if   defined(CONFIG_RGBKBD_DEMO_FLOW)
+#if defined(CONFIG_RGBKBD_DEMO_FLOW)
 	EC_RGBKBD_DEMO_FLOW;
 #elif defined(CONFIG_RGBKBD_DEMO_DOT)
 	EC_RGBKBD_DEMO_DOT;
@@ -31,15 +32,17 @@ test_export_static enum ec_rgbkbd_demo demo =
 	EC_RGBKBD_DEMO_OFF;
 #endif
 
-test_export_static
-uint8_t rgbkbd_table[EC_RGBKBD_MAX_KEY_COUNT];
+const int default_demo_interval_ms = 250;
+test_export_static int demo_interval_ms = -1;
+
+test_export_static uint8_t rgbkbd_table[EC_RGBKBD_MAX_KEY_COUNT];
 
 static enum rgbkbd_state rgbkbd_state;
 
 const struct rgbkbd_init rgbkbd_init_default = {
 	.gcc = RGBKBD_MAX_GCC_LEVEL / 2,
 	.scale = { RGBKBD_MAX_SCALE, RGBKBD_MAX_SCALE, RGBKBD_MAX_SCALE },
-	.color = { .r = 0xff, .g = 0xff, .b = 0xff },  /* white */
+	.color = { .r = 0xff, .g = 0xff, .b = 0xff }, /* white */
 };
 
 const struct rgbkbd_init *rgbkbd_init_setting = &rgbkbd_init_default;
@@ -81,9 +84,13 @@ static int set_color_single(struct rgb_s color, int x, int y)
 	offset = ctx->cfg->row_len * (x - col) + y;
 	ctx->buf[offset] = color;
 
-	CPRINTS("Set [%d,%d] to color=[%d,%d,%d] (gid=%u offset=%u)",
-		x, y, color.r, color.g, color.b, gid, offset);
-	return ctx->cfg->drv->set_color(ctx, offset, &ctx->buf[offset], 1);
+	rv = ctx->cfg->drv->set_color(ctx, offset, &ctx->buf[offset], 1);
+
+	CPRINTS("%set (%d,%d) to color=(%d,%d,%d) grid=%u offset=%u (%d)",
+		rv ? "Failed to s" : "S", x, y, color.r, color.g, color.b, grid,
+		offset, rv);
+
+	return rv;
 }
 
 test_export_static uint8_t get_grid_size(const struct rgbkbd *ctx)
@@ -160,8 +167,6 @@ static void rgbkbd_demo_flow(void)
 
 #ifdef TEST_BUILD
 	task_wake(TASK_ID_TEST_RUNNER);
-#else
-	msleep(250);
 #endif
 }
 
@@ -190,8 +195,6 @@ static void rgbkbd_demo_dot(void)
 
 #ifdef TEST_BUILD
 	task_wake(TASK_ID_TEST_RUNNER);
-#else
-	msleep(250);
 #endif
 }
 
@@ -210,14 +213,13 @@ static void rgbkbd_demo_run(enum ec_rgbkbd_demo id)
 	}
 }
 
-test_export_static
-void rgbkbd_init_lookup_table(void)
+test_export_static void rgbkbd_init_lookup_table(void)
 {
 	bool add = true;
 	int i, k = 0;
 
 	if (rgbkbd_map[0] != RGBKBD_DELM ||
-			rgbkbd_map[rgbkbd_map_size - 1] != RGBKBD_DELM) {
+	    rgbkbd_map[rgbkbd_map_size - 1] != RGBKBD_DELM) {
 		CPRINTS("Invalid Key-LED map");
 		return;
 	}
@@ -263,8 +265,8 @@ static int rgbkbd_set_global_brightness(uint8_t gcc)
 
 		e = ctx->cfg->drv->set_gcc(ctx, gcc);
 		if (e) {
-			CPRINTS("Failed to set GCC to %u for grid=%d (%d)",
-				gcc, grid, e);
+			CPRINTS("Failed to set GCC to %u for grid=%d (%d)", gcc,
+				grid, e);
 			rv = e;
 			continue;
 		}
@@ -352,8 +354,8 @@ static int rgbkbd_init(void)
 
 		e = ctx->cfg->drv->set_gcc(ctx, gcc);
 		if (e) {
-			CPRINTS("Failed to set GCC to %u for grid=%d (%d)",
-				gcc, i, e);
+			CPRINTS("Failed to set GCC to %u for grid=%d (%d)", gcc,
+				i, e);
 			rv = e;
 			continue;
 		}
@@ -419,8 +421,8 @@ static int rgbkbd_enable(int enable)
 	}
 
 	if (rv == EC_SUCCESS) {
-		rgbkbd_state = enable ?
-				RGBKBD_STATE_ENABLED : RGBKBD_STATE_DISABLED;
+		rgbkbd_state = enable ? RGBKBD_STATE_ENABLED :
+					RGBKBD_STATE_DISABLED;
 	}
 
 	/* Return EC_SUCCESS or the last error. */
@@ -481,31 +483,12 @@ const struct kblight_drv kblight_rgbkbd = {
 
 void rgbkbd_task(void *u)
 {
-	uint32_t event;
-	int i, rv;
-
-	board_enable_rgb_keyboard(true);
-
 	rgbkbd_init_lookup_table();
 
-	for (i = 0; i < rgbkbd_count; i++) {
-		struct rgbkbd *ctx = &rgbkbds[i];
-		rv = ctx->cfg->drv->init(ctx);
-		if (rv)
-			CPRINTS("Failed to init GRID%d (%d)", i, rv);
-		rv = ctx->cfg->drv->set_gcc(ctx, 0x80);
-		rv |= ctx->cfg->drv->set_scale(ctx, 0, 0x80,
-					       get_grid_size(ctx));
-		if (rv)
-			CPRINTS("Failed to set GCC or scale (%d)", rv);
-	}
-
 	while (1) {
-		event = task_wait_event(100 * MSEC);
-		if (IS_ENABLED(CONFIG_RGB_KEYBOARD_DEBUG))
-			CPRINTS("event=0x%08x", event);
+		task_wait_event(demo_interval_ms * MSEC);
 		if (demo)
-			rgbkbd_demo(demo);
+			rgbkbd_demo_run(demo);
 	}
 }
 
@@ -517,18 +500,24 @@ static enum ec_status hc_rgbkbd_set_color(struct host_cmd_handler_args *args)
 	if (p->start_key + p->length > EC_RGBKBD_MAX_KEY_COUNT)
 		return EC_RES_INVALID_PARAM;
 
+	if (rgbkbd_late_init())
+		return EC_RES_ERROR;
+
 	for (i = 0; i < p->length; i++) {
 		uint8_t j = rgbkbd_table[p->start_key + i];
 		union rgbkbd_coord_u8 led;
 
-		if (j == RGBKBD_NONE || rgbkbd_map[j] == RGBKBD_DELM)
-			/* Empty entry */
+		if (j == RGBKBD_NONE)
+			/* Null or uninitialized entry */
 			continue;
 
 		do {
 			led.u8 = rgbkbd_map[j++];
-			if (set_color_single(p->color[i],
-					     led.coord.x, led.coord.y))
+			if (led.u8 == RGBKBD_DELM)
+				/* Reached end of the group. */
+				break;
+			if (set_color_single(p->color[i], led.coord.x,
+					     led.coord.y))
 				return EC_RES_ERROR;
 		} while (led.u8 != RGBKBD_DELM);
 	}
@@ -544,8 +533,7 @@ static enum ec_status hc_rgbkbd(struct host_cmd_handler_args *args)
 	struct ec_response_rgbkbd *r = args->response;
 	enum ec_status rv = EC_RES_SUCCESS;
 
-	/* Default value is 0 */
-	args->response_size = 0;
+	args->response_size = sizeof(*r);
 
 	if (rgbkbd_late_init())
 		return EC_RES_ERROR;
@@ -564,7 +552,6 @@ static enum ec_status hc_rgbkbd(struct host_cmd_handler_args *args)
 			rv = EC_RES_ERROR;
 		break;
 	case EC_RGBKBD_SUBCMD_GET_CONFIG:
-		args->response_size = sizeof(*r);
 		r->rgbkbd_type = rgbkbd_type;
 		break;
 	default:
@@ -594,7 +581,6 @@ static int int_to_rgb(const char *code, struct rgb_s *rgb)
 
 test_export_static int cc_rgb(int argc, char **argv)
 {
-	struct rgbkbd *ctx;
 	char *end, *comma;
 	struct rgb_s rgb, scale;
 	int gcc, x, y, val;
@@ -624,19 +610,19 @@ test_export_static int cc_rgb(int argc, char **argv)
 
 		if (y < 0) {
 			/* Set all LEDs on column x. */
-			ccprintf("Set column %d to 0x%02x%02x%02x\n",
-				 x, rgb.r, rgb.g, rgb.b);
+			ccprintf("Set column %d to 0x%02x%02x%02x\n", x, rgb.r,
+				 rgb.g, rgb.b);
 			for (i = 0; i < rgbkbd_vsize; i++)
 				rv = set_color_single(rgb, x, i);
 		} else if (x < 0) {
 			/* Set all LEDs on row y. */
-			ccprintf("Set row %d to 0x%02x%02x%02x\n",
-				 y, rgb.r, rgb.g, rgb.b);
+			ccprintf("Set row %d to 0x%02x%02x%02x\n", y, rgb.r,
+				 rgb.g, rgb.b);
 			for (i = 0; i < rgbkbd_hsize; i++)
 				rv = set_color_single(rgb, i, y);
 		} else {
-			ccprintf("Set (%d,%d) to 0x%02x%02x%02x\n",
-				 x, y, rgb.r, rgb.g, rgb.b);
+			ccprintf("Set (%d,%d) to 0x%02x%02x%02x\n", x, y, rgb.r,
+				 rgb.g, rgb.b);
 			rv = set_color_single(rgb, x, y);
 		}
 	} else if (!strcasecmp(argv[1], "all")) {
@@ -690,7 +676,7 @@ test_export_static int cc_rgb(int argc, char **argv)
 	return rv;
 }
 #ifndef TEST_BUILD
-DECLARE_CONSOLE_COMMAND(rgbk, cc_rgbk,
+DECLARE_CONSOLE_COMMAND(rgb, cc_rgb,
 			"\n"
 			"1. rgb <global-brightness>\n"
 			"2. rgb <col,row> <24-bit RGB code>\n"
@@ -698,6 +684,5 @@ DECLARE_CONSOLE_COMMAND(rgbk, cc_rgbk,
 			"4. rgb demo <id>\n"
 			"5. rgb reset/enable/disable/red\n"
 			"6. rgb scale <24-bit RGB scale>\n",
-			"Control RGB keyboard"
-			);
+			"Control RGB keyboard");
 #endif

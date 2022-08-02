@@ -5,14 +5,15 @@
 
 #define DT_DRV_COMPAT nuvoton_npcx_cros_shi
 
-#include <arch/arm/aarch32/cortex_m/cmsis.h>
+#include <zephyr/arch/arm/aarch32/cortex_m/cmsis.h>
 #include <assert.h>
-#include <dt-bindings/clock/npcx_clock.h>
-#include <drivers/clock_control.h>
+#include <zephyr/dt-bindings/clock/npcx_clock.h>
+#include <zephyr/drivers/clock_control.h>
+#include <zephyr/drivers/pinctrl.h>
 #include <drivers/cros_shi.h>
-#include <drivers/gpio.h>
-#include <logging/log.h>
-#include <kernel.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/kernel.h>
 #include <soc.h>
 #include <soc/nuvoton_npcx/reg_def_cros.h>
 
@@ -134,9 +135,8 @@ struct cros_shi_npcx_config {
 	uintptr_t base;
 	/* clock configuration */
 	struct npcx_clk_cfg clk_cfg;
-	/* pinmux configuration */
-	const uint8_t alts_size;
-	const struct npcx_alt *alts_list;
+	/* Pin control configuration */
+	const struct pinctrl_dev_config *pcfg;
 	/* SHI IRQ */
 	int irq;
 	struct npcx_wui shi_cs_wui;
@@ -155,13 +155,12 @@ struct shi_bus_parameters {
 	uint64_t rx_deadline; /* deadline of receiving            */
 } shi_params;
 
-static const struct npcx_alt cros_shi_alts[] = NPCX_DT_ALT_ITEMS_LIST(0);
+PINCTRL_DT_INST_DEFINE(0);
 
 static const struct cros_shi_npcx_config cros_shi_cfg = {
 	.base = DT_INST_REG_ADDR(0),
 	.clk_cfg = NPCX_DT_CLK_CFG_ITEM(0),
-	.alts_size = ARRAY_SIZE(cros_shi_alts),
-	.alts_list = cros_shi_alts,
+	.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(0),
 	.irq = DT_INST_IRQN(0),
 	.shi_cs_wui = NPCX_DT_WUI_ITEM_BY_NAME(0, shi_cs_wui),
 };
@@ -743,7 +742,7 @@ static void cros_shi_npcx_reset_prepare(struct shi_reg *const inst)
 	 */
 	for (i = 1; i < SHI_OBUF_FULL_SIZE; i++)
 		inst->OBUF[i] = EC_SPI_RECEIVING;
-	inst->OBUF[0] = EC_SPI_OLD_READY;
+	inst->OBUF[0] = EC_SPI_RX_READY;
 
 	/* SHI/Host Write/input buffer wrap-around enable */
 	inst->SHICFG1 = BIT(NPCX_SHICFG1_IWRAP) | BIT(NPCX_SHICFG1_WEN) |
@@ -764,13 +763,26 @@ static void cros_shi_npcx_reset_prepare(struct shi_reg *const inst)
 static int cros_shi_npcx_enable(const struct device *dev)
 {
 	const struct cros_shi_npcx_config *const config = DRV_CONFIG(dev);
+	const struct device *clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 	struct shi_reg *const inst = HAL_INSTANCE(dev);
+	int ret;
+
+	ret = clock_control_on(clk_dev,
+			       (clock_control_subsys_t *)&config->clk_cfg);
+	if (ret < 0) {
+		DEBUG_CPRINTF("Turn on SHI clock fail %d", ret);
+		return ret;
+	}
 
 	cros_shi_npcx_reset_prepare(inst);
 	npcx_miwu_irq_disable(&config->shi_cs_wui);
 
-	/* Configure pin-mux from GPIO to SHI. */
-	npcx_pinctrl_mux_configure(config->alts_list, config->alts_size, 1);
+	/* Configure pin control for SHI */
+	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+	if (ret < 0) {
+		LOG_ERR("cros_shi_npcx pinctrl setup failed (%d)", ret);
+		return ret;
+	}
 
 	NVIC_ClearPendingIRQ(DT_INST_IRQN(0));
 	npcx_miwu_irq_enable(&config->shi_cs_wui);
@@ -782,14 +794,27 @@ static int cros_shi_npcx_enable(const struct device *dev)
 static int cros_shi_npcx_disable(const struct device *dev)
 {
 	const struct cros_shi_npcx_config *const config = DRV_CONFIG(dev);
+	const struct device *clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
+	int ret;
 
 	state = SHI_STATE_DISABLED;
 
 	irq_disable(DT_INST_IRQN(0));
 	npcx_miwu_irq_disable(&config->shi_cs_wui);
 
-	/* Configure pin-mux from SHI to GPIO. */
-	npcx_pinctrl_mux_configure(config->alts_list, config->alts_size, 0);
+	/* Configure pin control back to GPIO */
+	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+	if (ret < 0) {
+		LOG_ERR("KB Raw pinctrl setup failed (%d)", ret);
+		return ret;
+	}
+
+	ret = clock_control_off(clk_dev,
+				(clock_control_subsys_t *)&config->clk_cfg);
+	if (ret < 0) {
+		DEBUG_CPRINTF("Turn off SHI clock fail %d", ret);
+		return ret;
+	}
 
 	/*
 	 * Allow deep sleep again in case CS dropped before ec was

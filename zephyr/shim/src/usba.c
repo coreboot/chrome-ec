@@ -5,16 +5,23 @@
 
 #define DT_DRV_COMPAT cros_ec_usba_port_enable_pins
 
-#include <devicetree.h>
+#include <zephyr/devicetree.h>
 #include "hooks.h"
 
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
-BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) > 0,
-		"No compatible USBA Port Enable instance found");
+#define PIN(node_id, prop, idx) \
+	GPIO_SIGNAL(DT_PHANDLE_BY_IDX(node_id, prop, idx)),
 
-const int usb_port_enable[] = {
-	DT_FOREACH_CHILD(DT_PATH(usba_port_enable_list), GPIO_SIGNAL_WITH_COMMA)
-};
+BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) > 0,
+	     "No compatible USBA Port Enable instance found");
+
+#define USBA_ENABLE_PINS(inst) DT_INST_FOREACH_PROP_ELEM(inst, enable_pins, PIN)
+
+#if !IS_ENABLED(CONFIG_PLATFORM_EC_USB_PORT_ENABLE_DYNAMIC)
+const
+#endif
+	int usb_port_enable[] = { DT_INST_FOREACH_STATUS_OKAY(
+		USBA_ENABLE_PINS) };
 
 #endif /* DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT) */

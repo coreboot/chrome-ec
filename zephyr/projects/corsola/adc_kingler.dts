@@ -3,12 +3,15 @@
  * found in the LICENSE file.
  */
 
+/*
+ * Kingler and Steelix use the same dts, take care of this when modify it.
+ */
+
 / {
 	named-adc-channels {
 		compatible = "named-adc-channels";
 
 		adc_charger_pmon_r {
-			label = "ADC_CHARGER_PMON_R";
 			enum-name = "ADC_PSYS";
 			io-channels = <&adc0 0>;
 			/*
@@ -17,17 +20,14 @@
 			mul = <21043>;
 		};
 		adc_ec_id0 {
-			label = "ADC_EC_ID0";
 			enum-name = "ADC_ID_0";
 			io-channels = <&adc0 1>;
 		};
 		adc_ec_id1 {
-			label = "ADC_EC_ID1";
 			enum-name = "ADC_ID_1";
 			io-channels = <&adc0 2>;
 		};
 		adc_charger_amon_r {
-			label = "ADC_AMON_R";
 			enum-name = "ADC_AMON_BMON";
 			io-channels = <&adc0 3>;
 			mul = <1000>;
@@ -38,4 +38,9 @@
 
 &adc0 {
 	status = "okay";
+	pinctrl-0 = <&adc0_chan0_gp45
+		     &adc0_chan1_gp44
+		     &adc0_chan2_gp43
+		     &adc0_chan3_gp42>;
+	pinctrl-names = "default";
 };

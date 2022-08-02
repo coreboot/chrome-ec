@@ -7,29 +7,28 @@
 
 #include <stdint.h>
 
+#include "cbi.h"
 #include "battery.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "ec_commands.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "host_command.h"
 #include "led_common.h"
 #include "task.h"
 #include "util.h"
 
-#define BAT_LED_ON 0
-#define BAT_LED_OFF 1
+#define BATT_LOW_BCT 10
 
 #define LED_TICK_INTERVAL_MS (500 * MSEC)
-#define LED_CYCLE_TIME_MS    (2000 * MSEC)
-#define LED_TICKS_PER_CYCLE  (LED_CYCLE_TIME_MS / LED_TICK_INTERVAL_MS)
-#define LED_ON_TIME_MS       (1000 * MSEC)
-#define LED_ON_TICKS         (LED_ON_TIME_MS / LED_TICK_INTERVAL_MS)
+#define LED_CYCLE_TIME_MS (2000 * MSEC)
+#define LED_TICKS_PER_CYCLE (LED_CYCLE_TIME_MS / LED_TICK_INTERVAL_MS)
+#define LED_ON_TIME_MS (1000 * MSEC)
+#define LED_ON_TICKS (LED_ON_TIME_MS / LED_TICK_INTERVAL_MS)
 
-const enum ec_led_id supported_led_ids[] = {
-	EC_LED_ID_LEFT_LED,
-	EC_LED_ID_RIGHT_LED
-};
+const enum ec_led_id supported_led_ids[] = { EC_LED_ID_LEFT_LED,
+					     EC_LED_ID_RIGHT_LED };
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
@@ -37,35 +36,47 @@ enum led_color {
 	LED_OFF = 0,
 	LED_AMBER,
 	LED_WHITE,
-	LED_COLOR_COUNT  /* Number of colors, not a color itself */
+	LED_COLOR_COUNT /* Number of colors, not a color itself */
 };
 
-enum led_port {
-	RIGHT_PORT = 0,
-	LEFT_PORT
-};
+enum led_port { RIGHT_PORT = 0, LEFT_PORT };
+
+uint8_t bat_led_on;
+uint8_t bat_led_off;
+
+static void led_init(void)
+{
+	if (get_board_id() < 2) {
+		bat_led_on = 0;
+		bat_led_off = 1;
+	} else {
+		bat_led_on = 1;
+		bat_led_off = 0;
+	}
+}
+DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_DEFAULT);
 
 static void led_set_color_battery(int port, enum led_color color)
 {
 	enum gpio_signal amber_led, white_led;
 
 	amber_led = (port == RIGHT_PORT ? GPIO_RIGHT_LED_AMBER_L :
-				 GPIO_LEFT_LED_AMBER_L);
+					  GPIO_LEFT_LED_AMBER_L);
 	white_led = (port == RIGHT_PORT ? GPIO_RIGHT_LED_WHITE_L :
-				 GPIO_LEFT_LED_WHITE_L);
+					  GPIO_LEFT_LED_WHITE_L);
 
 	switch (color) {
 	case LED_WHITE:
-		gpio_set_level(white_led, BAT_LED_ON);
-		gpio_set_level(amber_led, BAT_LED_OFF);
+		gpio_set_level(white_led, bat_led_on);
+		gpio_set_level(amber_led, bat_led_off);
 		break;
 	case LED_AMBER:
-		gpio_set_level(white_led, BAT_LED_OFF);
-		gpio_set_level(amber_led, BAT_LED_ON);
+		gpio_set_level(white_led, bat_led_off);
+		gpio_set_level(amber_led, bat_led_on);
 		break;
 	case LED_OFF:
-		gpio_set_level(white_led, BAT_LED_OFF);
-		gpio_set_level(amber_led, BAT_LED_OFF);
+		gpio_set_level(white_led, bat_led_off);
+		gpio_set_level(amber_led, bat_led_off);
 		break;
 	default:
 		break;
@@ -132,10 +143,10 @@ static void set_active_port_color(enum led_color color)
 
 	if (led_auto_control_is_enabled(EC_LED_ID_RIGHT_LED))
 		led_set_color_battery(RIGHT_PORT,
-				(port == RIGHT_PORT) ? color : LED_OFF);
+				      (port == RIGHT_PORT) ? color : LED_OFF);
 	if (led_auto_control_is_enabled(EC_LED_ID_LEFT_LED))
 		led_set_color_battery(LEFT_PORT,
-				(port == LEFT_PORT) ? color : LED_OFF);
+				      (port == LEFT_PORT) ? color : LED_OFF);
 }
 
 static void led_set_battery(void)
@@ -151,30 +162,57 @@ static void led_set_battery(void)
 		set_active_port_color(LED_AMBER);
 		break;
 	case PWR_STATE_DISCHARGE:
+		/*
+		 * Blinking amber LEDs slowly if battery is lower 10
+		 * percentage.
+		 */
 		if (led_auto_control_is_enabled(EC_LED_ID_RIGHT_LED)) {
-			if (charge_get_percent() < 10)
-				led_set_color_battery(RIGHT_PORT,
-					(battery_ticks % LED_TICKS_PER_CYCLE
-					 < LED_ON_TICKS) ? LED_WHITE : LED_OFF);
+			if (charge_get_percent() < BATT_LOW_BCT)
+				led_set_color_battery(
+					RIGHT_PORT,
+					(battery_ticks % LED_TICKS_PER_CYCLE <
+					 LED_ON_TICKS) ?
+						LED_AMBER :
+						LED_OFF);
 			else
 				led_set_color_battery(RIGHT_PORT, LED_OFF);
 		}
 
-		if (led_auto_control_is_enabled(EC_LED_ID_LEFT_LED))
-			led_set_color_battery(LEFT_PORT, LED_OFF);
+		if (led_auto_control_is_enabled(EC_LED_ID_LEFT_LED)) {
+			if (charge_get_percent() < BATT_LOW_BCT)
+				led_set_color_battery(
+					LEFT_PORT,
+					(battery_ticks % LED_TICKS_PER_CYCLE <
+					 LED_ON_TICKS) ?
+						LED_AMBER :
+						LED_OFF);
+			else
+				led_set_color_battery(LEFT_PORT, LED_OFF);
+		}
 		break;
 	case PWR_STATE_ERROR:
-		set_active_port_color((battery_ticks & 0x1) ?
-				LED_WHITE : LED_OFF);
+		if (led_auto_control_is_enabled(EC_LED_ID_RIGHT_LED)) {
+			led_set_color_battery(
+				RIGHT_PORT,
+				(battery_ticks & 0x1) ? LED_AMBER : LED_OFF);
+		}
+
+		if (led_auto_control_is_enabled(EC_LED_ID_LEFT_LED)) {
+			led_set_color_battery(LEFT_PORT, (battery_ticks & 0x1) ?
+								 LED_AMBER :
+								 LED_OFF);
+		}
 		break;
 	case PWR_STATE_CHARGE_NEAR_FULL:
 		set_active_port_color(LED_WHITE);
 		break;
 	case PWR_STATE_IDLE: /* External power connected in IDLE */
 		if (chflags & CHARGE_FLAG_FORCE_IDLE)
-			set_active_port_color((battery_ticks %
-				LED_TICKS_PER_CYCLE < LED_ON_TICKS) ?
-				LED_AMBER : LED_OFF);
+			set_active_port_color(
+				(battery_ticks % LED_TICKS_PER_CYCLE <
+				 LED_ON_TICKS) ?
+					LED_AMBER :
+					LED_OFF);
 		else
 			set_active_port_color(LED_WHITE);
 		break;

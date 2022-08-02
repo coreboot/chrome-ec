@@ -4,7 +4,15 @@
 # found in the LICENSE file.
 
 # Device test binaries
-test-list-y ?= flash_write_protect pingpong timer_calib timer_dos timer_jump mutex utils utils_str
+test-list-y ?= flash_write_protect \
+	pingpong \
+	stdlib \
+	timer_calib \
+	timer_dos \
+	timer_jump \
+	mutex \
+	utils \
+	utils_str
 #disable: powerdemo
 
 # Emulator tests
@@ -42,10 +50,15 @@ test-list-host += hooks
 test-list-host += host_command
 test-list-host += i2c_bitbang
 test-list-host += inductive_charging
-test-list-host += interrupt
+# This test times out in the CQ, and generally doesn't seem useful.
+# It is verifying the host test scheduler, which is never used in real boards.
+# test-list-host += interrupt
 test-list-host += irq_locking
 test-list-host += is_enabled
+ifeq ($(TEST_ASAN),)
+# is_enabled_error fails with TEST_ASAN
 test-list-host += is_enabled_error
+endif
 test-list-host += kasa
 test-list-host += kb_8042
 test-list-host += kb_mkbp
@@ -61,6 +74,7 @@ test-list-host += motion_lid
 test-list-host += motion_sense_fifo
 test-list-host += mutex
 test-list-host += newton_fit
+test-list-host += nvidia_gpu
 test-list-host += online_calibration
 test-list-host += online_calibration_spoof
 test-list-host += pingpong
@@ -77,6 +91,10 @@ test-list-host += sha256_unrolled
 test-list-host += shmalloc
 test-list-host += static_if
 test-list-host += static_if_error
+# TODO(b/237823627): When building for the host, we're linking against the
+# toolchain's C standard library, so these tests are actually testing the
+# toolchain's C standard library.
+test-list-host += stdlib
 test-list-host += system
 test-list-host += thermal
 test-list-host += timer_dos
@@ -111,6 +129,7 @@ test-list-host += vboot
 test-list-host += version
 test-list-host += x25519
 test-list-host += stillness_detector
+-include private/test/build.mk
 endif
 
 # Build up the list of coverage test targets based on test-list-host, but
@@ -130,16 +149,10 @@ cov-dont-test += fpsensor_state
 cov-dont-test += version
 # interrupt: The test often times out if enabled for coverage.
 cov-dont-test += interrupt
-# Tests that use test_run_multistep are flaky.
-cov-dont-test += flash flash_write_protect kb_scan
-# As are some others for unknown reasons
-cov-dont-test += base32 online_calibration_spoof printf body_detection kb_8042
-cov-dont-test += accel_cal aes compile_time_macros fp mag_cal rsa
-cov-dont-test += stillness_detector usb_pe_drp_noextended charge_manager
-cov-dont-test += timer_dos cec float queue x25519 usb_pd_timer motion_sense_fifo
-cov-dont-test += kb_scan_strict entropy kb_mkbp cbi_wp gyro_cal newton_fit
-cov-dont-test += shmalloc usb_common usb_ppc utils_str battery_get_params_smart
-cov-dont-test += rtc charge_ramp kasa motion_angle_tablet usb_prl usb_pd_console
+# Flaky tests. The number of covered lines changes from run to run
+# b/213374060
+cov-dont-test += accel_cal entropy flash float kb_mkbp kb_scan kb_scan_strict
+cov-dont-test += rsa
 
 cov-test-list-host = $(filter-out $(cov-dont-test), $(test-list-host))
 
@@ -161,6 +174,7 @@ compile_time_macros-y=compile_time_macros.o
 console_edit-y=console_edit.o
 cortexm_fpu-y=cortexm_fpu.o
 crc-y=crc.o
+debug-y=debug.o
 entropy-y=entropy.o
 extpwr_gpio-y=extpwr_gpio.o
 fan-y=fan.o
@@ -191,6 +205,7 @@ motion_angle-y=motion_angle.o motion_angle_data_literals.o motion_common.o
 motion_angle_tablet-y=motion_angle_tablet.o motion_angle_data_literals_tablet.o motion_common.o
 motion_lid-y=motion_lid.o
 motion_sense_fifo-y=motion_sense_fifo.o
+nvidia_gpu-y=nvidia_gpu.o
 online_calibration-y=online_calibration.o
 online_calibration_spoof-y=online_calibration_spoof.o gyro_cal_init_for_test.o
 rgb_keyboard-y=rgb_keyboard.o
@@ -198,6 +213,7 @@ kasa-y=kasa.o
 mpu-y=mpu.o
 mutex-y=mutex.o
 newton_fit-y=newton_fit.o
+panic_data-y=panic_data.o
 pingpong-y=pingpong.o
 power_button-y=power_button.o
 powerdemo-y=powerdemo.o
@@ -215,9 +231,11 @@ sha256-y=sha256.o
 sha256_unrolled-y=sha256.o
 shmalloc-y=shmalloc.o
 static_if-y=static_if.o
+stdlib-y=stdlib.o
 stm32f_rtc-y=stm32f_rtc.o
 stress-y=stress.o
 system-y=system.o
+system_is_locked-y=system_is_locked.o
 thermal-y=thermal.o
 timer_calib-y=timer_calib.o
 timer_dos-y=timer_dos.o

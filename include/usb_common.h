@@ -33,10 +33,10 @@ enum pd_drp_next_states {
  *			us of a connection.
  *
  */
-enum pd_drp_next_states drp_auto_toggle_next_state(uint64_t *drp_sink_time,
-	enum pd_power_role power_role, enum pd_dual_role_states drp_state,
-	enum tcpc_cc_voltage_status cc1, enum tcpc_cc_voltage_status cc2,
-	bool auto_toggle_supported);
+enum pd_drp_next_states drp_auto_toggle_next_state(
+	uint64_t *drp_sink_time, enum pd_power_role power_role,
+	enum pd_dual_role_states drp_state, enum tcpc_cc_voltage_status cc1,
+	enum tcpc_cc_voltage_status cc2, bool auto_toggle_supported);
 
 enum pd_pref_type {
 	/* prefer voltage larger than or equal to pd_pref_config.mv */
@@ -105,7 +105,8 @@ int usb_get_battery_soc(void);
  * @return current limit (mA) with DTS flag set if appropriate
  */
 typec_current_t usb_get_typec_current_limit(enum tcpc_cc_polarity polarity,
-	enum tcpc_cc_voltage_status cc1, enum tcpc_cc_voltage_status cc2);
+					    enum tcpc_cc_voltage_status cc1,
+					    enum tcpc_cc_voltage_status cc2);
 
 /**
  * Returns the polarity of a Sink.
@@ -115,7 +116,7 @@ typec_current_t usb_get_typec_current_limit(enum tcpc_cc_polarity polarity,
  * @return polarity
  */
 enum tcpc_cc_polarity get_snk_polarity(enum tcpc_cc_voltage_status cc1,
-	enum tcpc_cc_voltage_status cc2);
+				       enum tcpc_cc_voltage_status cc2);
 
 /**
  * Returns the polarity of a Source.
@@ -125,7 +126,7 @@ enum tcpc_cc_polarity get_snk_polarity(enum tcpc_cc_voltage_status cc1,
  * @return polarity
  */
 enum tcpc_cc_polarity get_src_polarity(enum tcpc_cc_voltage_status cc1,
-	enum tcpc_cc_voltage_status cc2);
+				       enum tcpc_cc_voltage_status cc2);
 
 /**
  * Find PDO index that offers the most amount of power and stays within
@@ -137,8 +138,8 @@ enum tcpc_cc_polarity get_src_polarity(enum tcpc_cc_voltage_status cc1,
  * @param pdo raw pdo corresponding to index, or index 0 on error (output)
  * @return index of PDO within source cap packet
  */
-int pd_find_pdo_index(uint32_t src_cap_cnt, const uint32_t * const src_caps,
-	int max_mv, uint32_t *selected_pdo);
+int pd_find_pdo_index(uint32_t src_cap_cnt, const uint32_t *const src_caps,
+		      int max_mv, uint32_t *selected_pdo);
 
 /**
  * Extract power information out of a Power Data Object (PDO)
@@ -161,7 +162,7 @@ void pd_extract_pdo_power(uint32_t pdo, uint32_t *ma, uint32_t *max_mv,
  * @param port USB-C port number
  */
 void pd_build_request(int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma,
-			uint32_t *mv, int port);
+		      uint32_t *mv, int port);
 
 /**
  * Notifies a task that is waiting on a system jump, that it's complete.
@@ -226,14 +227,28 @@ int pd_get_saved_port_flags(int port, uint8_t *flags);
 void pd_update_saved_port_flags(int port, uint8_t flag, uint8_t do_set);
 
 /**
- * Build PD alert message
+ * Sets up and sends PD alert message with given ADO on all ports.
  *
- * @param msg pointer where message is stored
- * @param len pointer where length of message is stored in bytes
- * @param pr  current PD power role
+ * @param ado - Alert Data Object defining alert sent to the PD partner
  * @return EC_SUCCESS on success else EC_ERROR_INVAL
  */
-int pd_build_alert_msg(uint32_t *msg, uint32_t *len, enum pd_power_role pr);
+int pd_broadcast_alert_msg(uint32_t ado);
+
+/**
+ * Sets up and sends PD alert message with given ADO on one port.
+ *
+ * @param port - the port to send the alert message on
+ * @param ado - Alert Data Object defining alert sent to the PD partner
+ * @return EC_SUCCESS on success else EC_ERROR_INVAL
+ */
+int pd_send_alert_msg(int port, uint32_t ado);
+
+/**
+ * Sets up a hard reset to send on the port
+ *
+ * @param port - the port to send the hard reset on
+ */
+void pd_send_hard_reset(int port);
 
 /**
  * During USB retimer firmware update, process operation

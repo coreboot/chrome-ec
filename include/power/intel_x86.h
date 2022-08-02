@@ -5,7 +5,6 @@
 
 /* Intel X86 chipset power control module for Chrome EC */
 
-
 #ifndef __CROS_EC_INTEL_X86_H
 #define __CROS_EC_INTEL_X86_H
 
@@ -26,6 +25,8 @@
 #include "cometlake-discrete.h"
 #elif defined(CONFIG_CHIPSET_ICELAKE)
 #include "icelake.h"
+#elif defined(CONFIG_CHIPSET_METEORLAKE)
+#include "meteorlake.h"
 #elif defined(CONFIG_CHIPSET_SKYLAKE)
 #include "skylake.h"
 #endif

@@ -3,10 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include <pm/pm.h>
-#include <pm/policy.h>
+#include <zephyr/pm/pm.h>
+#include <zephyr/pm/policy.h>
 #include <soc.h>
-#include <zephyr.h>
+#include <zephyr/zephyr.h>
 
 #include "system.h"
 
@@ -29,7 +29,8 @@ const struct pm_state_info *pm_policy_next_state(uint8_t cpu, int32_t ticks)
 			 * To check if given power state is enabled and
 			 * could be used.
 			 */
-			if (!pm_constraint_get(pm_states[i].state)) {
+			if (pm_policy_state_lock_is_active(pm_states[i].state,
+							   PM_ALL_SUBSTATES)) {
 				continue;
 			}
 

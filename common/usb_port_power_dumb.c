@@ -16,14 +16,19 @@
 #include "util.h"
 
 #define CPUTS(outstr) cputs(CC_USBCHARGE, outstr)
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
 
 static uint8_t charge_mode[USB_PORT_COUNT];
 
 static void usb_port_set_enabled(int port_id, int en)
 {
-	gpio_set_level(usb_port_enable[port_id], en);
-	charge_mode[port_id] = en;
+	/*
+	 * Only enable valid ports.
+	 */
+	if (usb_port_enable[port_id] >= 0) {
+		gpio_or_ioex_set_level(usb_port_enable[port_id], en);
+		charge_mode[port_id] = en;
+	}
 }
 
 __maybe_unused static void usb_port_all_ports_on(void)
@@ -70,14 +75,13 @@ usb_port_command_set_mode(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_usb_charge_set_mode *p = args->params;
 
-	if (usb_charge_set_mode(p->usb_port_id, p->mode,
-		p->inhibit_charge) != EC_SUCCESS)
+	if (usb_charge_set_mode(p->usb_port_id, p->mode, p->inhibit_charge) !=
+	    EC_SUCCESS)
 		return EC_RES_ERROR;
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_USB_CHARGE_SET_MODE,
-		     usb_port_command_set_mode,
+DECLARE_HOST_COMMAND(EC_CMD_USB_CHARGE_SET_MODE, usb_port_command_set_mode,
 		     EC_VER_MASK(0));
 
 /*****************************************************************************/
@@ -103,17 +107,15 @@ static int command_set_mode(int argc, char **argv)
 		/* fallthrough */
 	case 1:
 		for (i = 0; i < USB_PORT_COUNT; i++)
-			ccprintf("Port %d: %s\n",
-				 i, charge_mode[i] ? "on" : "off");
+			ccprintf("Port %d: %s\n", i,
+				 charge_mode[i] ? "on" : "off");
 		return EC_SUCCESS;
 	}
 
 	return EC_ERROR_PARAM_COUNT;
 }
-DECLARE_CONSOLE_COMMAND(usbchargemode, command_set_mode,
-			"[<port> <on | off>]",
+DECLARE_CONSOLE_COMMAND(usbchargemode, command_set_mode, "[<port> <on | off>]",
 			"Set USB charge mode");
-
 
 /*****************************************************************************/
 /* Hooks */
@@ -130,10 +132,10 @@ static void usb_port_init(void)
 	const uint8_t *prev;
 	int version, size, i;
 
-	prev = (const uint8_t *)system_get_jump_tag(USB_SYSJUMP_TAG,
-						    &version, &size);
+	prev = (const uint8_t *)system_get_jump_tag(USB_SYSJUMP_TAG, &version,
+						    &size);
 	if (!prev || version != USB_HOOK_VERSION ||
-			size != sizeof(charge_mode)) {
+	    size != sizeof(charge_mode)) {
 		usb_port_all_ports_off();
 		return;
 	}
@@ -157,4 +159,4 @@ static void usb_port_shutdown(void)
 	usb_port_all_ports_off();
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, usb_port_shutdown, HOOK_PRIO_DEFAULT);
-#endif  /* CONFIG_USB_PORT_POWER_DUMB_CUSTOM_HOOK */
+#endif /* CONFIG_USB_PORT_POWER_DUMB_CUSTOM_HOOK */

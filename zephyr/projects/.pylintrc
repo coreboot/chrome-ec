@@ -1,0 +1,13 @@
+[MESSAGES CONTROL]
+
+disable=format,fixme
+
+[BASIC]
+additional-builtins=
+    here,
+    register_binman_project,
+    register_host_project,
+    register_host_test,
+    register_npcx_project,
+    register_raw_project,
+good-names=BUILD

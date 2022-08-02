@@ -5,11 +5,11 @@
 
 #define DT_DRV_COMPAT cros_ec_kb_raw_emul
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(emul_kb_raw);
 
-#include <device.h>
-#include <drivers/emul.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/emul.h>
 #include <drivers/cros_kb_raw.h>
 #include <keyboard_raw.h>
 
@@ -109,7 +109,7 @@ static const struct cros_kb_raw_driver_api emul_kb_raw_driver_api = {
 	static struct kb_raw_emul_data kb_raw_emul_data_##n = {            \
 		.matrix = kb_raw_emul_matrix_##n,                          \
 	};                                                                 \
-									   \
+                                                                           \
 	static const struct kb_raw_emul_cfg kb_raw_emul_cfg_##n = {        \
 		.dev_label = DT_INST_LABEL(n),                             \
 		.data = &kb_raw_emul_data_##n,                             \

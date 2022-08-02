@@ -3,24 +3,30 @@
  * found in the LICENSE file.
  */
 
+#define DT_DRV_COMPAT cros_ec_fans
+
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/pwm.h>
+#include <zephyr/drivers/sensor.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/util_macro.h>
+
 #include "fan.h"
-#include "pwm.h"
-#include "pwm/pwm.h"
-#include "system.h"
-#include "math_util.h"
-#include "hooks.h"
 #include "gpio_signal.h"
-#include "gpio.h"
-#include <logging/log.h>
-#include <sys/util_macro.h>
-#include <drivers/sensor.h>
+#include "hooks.h"
+#include "math_util.h"
+#include "system.h"
+#include "util.h"
 
 LOG_MODULE_REGISTER(fan_shim, LOG_LEVEL_ERR);
 
+BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
+	     "Exactly one instance of cros-ec,fans should be defined.");
+
 #define FAN_CONFIGS(node_id)                                                   \
 	const struct fan_conf node_id##_conf = {                               \
-		.flags = (COND_CODE_1(DT_PROP(node_id, not_use_rpm_mode),      \
-				      (0), (FAN_USE_RPM_MODE))) |              \
+		.flags = (COND_CODE_1(DT_PROP(node_id, not_use_rpm_mode), (0), \
+				      (FAN_USE_RPM_MODE))) |                   \
 			 (COND_CODE_1(DT_PROP(node_id, use_fast_start),        \
 				      (FAN_USE_FAST_START), (0))),             \
 		.ch = node_id,                                                 \
@@ -39,31 +45,21 @@ LOG_MODULE_REGISTER(fan_shim, LOG_LEVEL_ERR);
 		.rpm_max = DT_PROP(node_id, rpm_max),                          \
 	};
 
-#define FAN_INST(node_id)              \
-	[node_id] = {                  \
+#define FAN_INST(node_id)                \
+	[node_id] = {                    \
 		.conf = &node_id##_conf, \
 		.rpm = &node_id##_rpm,   \
 	},
 
-#define FAN_CONTROL_INST(node_id)                                \
-	[node_id] = {                                            \
-		.pwm_id = PWM_CHANNEL(DT_PHANDLE(node_id, pwm)), \
+#define FAN_CONTROL_INST(node_id)                                 \
+	[node_id] = {                                             \
+		.pwm = PWM_DT_SPEC_GET(node_id),                  \
+		.tach = DEVICE_DT_GET(DT_PHANDLE(node_id, tach)), \
 	},
 
-#if DT_NODE_EXISTS(DT_INST(0, named_fans))
-DT_FOREACH_CHILD(DT_INST(0, named_fans), FAN_CONFIGS)
-#endif /* named_fan */
+DT_INST_FOREACH_CHILD(0, FAN_CONFIGS)
 
-const struct fan_t fans[] = {
-#if DT_NODE_EXISTS(DT_INST(0, named_fans))
-	DT_FOREACH_CHILD(DT_INST(0, named_fans), FAN_INST)
-#endif /* named_fan */
-};
-
-#define TACHO_DEV_INIT(node_id) {                         \
-	fan_control[node_id].tach =                       \
-		DEVICE_DT_GET(DT_PHANDLE(node_id, tach)); \
-	}
+const struct fan_t fans[FAN_CH_COUNT] = { DT_INST_FOREACH_CHILD(0, FAN_INST) };
 
 /* Rpm deviation (Unit:percent) */
 #ifndef RPM_DEVIATION
@@ -82,32 +78,65 @@ enum fan_mode {
 };
 
 /* Fan status data structure */
-struct fan_status_t {
+struct fan_data {
 	/* Fan mode */
 	enum fan_mode current_fan_mode;
 	/* Actual rpm */
 	int rpm_actual;
+	/* Previous rpm */
+	int rpm_pre;
 	/* Target rpm */
 	int rpm_target;
 	/* Fan config flags */
 	unsigned int flags;
 	/* Automatic fan status */
 	enum fan_status auto_status;
+	/* Current PWM duty cycle percentage */
+	int pwm_percent;
+	/* Whether the PWM channel is enabled */
+	bool pwm_enabled;
 };
 
-/* Data structure to define tachometer. */
-struct fan_control_t {
+/* Data structure to define PWM and tachometer. */
+struct fan_config {
+	struct pwm_dt_spec pwm;
+
 	const struct device *tach;
-	enum pwm_channel pwm_id;
 };
 
-static struct fan_status_t fan_status[FAN_CH_COUNT];
-static int rpm_pre[FAN_CH_COUNT];
-static struct fan_control_t fan_control[] = {
-#if DT_NODE_EXISTS(DT_INST(0, named_fans))
-	DT_FOREACH_CHILD(DT_INST(0, named_fans), FAN_CONTROL_INST)
-#endif /* named_fan */
+static struct fan_data fan_data[FAN_CH_COUNT];
+static const struct fan_config fan_config[FAN_CH_COUNT] = {
+	DT_INST_FOREACH_CHILD(0, FAN_CONTROL_INST)
 };
+
+static void fan_pwm_update(int ch)
+{
+	const struct fan_config *cfg = &fan_config[ch];
+	struct fan_data *data = &fan_data[ch];
+	const struct device *pwm_dev = cfg->pwm.dev;
+	uint32_t pulse_ns;
+	int ret;
+
+	if (!device_is_ready(pwm_dev)) {
+		LOG_ERR("PWM device %s not ready", pwm_dev->name);
+		return;
+	}
+
+	if (data->pwm_enabled) {
+		pulse_ns = DIV_ROUND_NEAREST(
+			cfg->pwm.period * data->pwm_percent, 100);
+	} else {
+		pulse_ns = 0;
+	}
+
+	LOG_DBG("FAN PWM %s set percent (%d), pulse %d", pwm_dev->name,
+		data->pwm_percent, pulse_ns);
+
+	ret = pwm_set_dt(&cfg->pwm, cfg->pwm.period, pulse_ns);
+	if (ret) {
+		LOG_ERR("pwm_set() failed %s (%d)", pwm_dev->name, ret);
+	}
+}
 
 /**
  * Get fan rpm value
@@ -117,10 +146,17 @@ static struct fan_control_t fan_control[] = {
  */
 static int fan_rpm(int ch)
 {
+	const struct device *dev = fan_config[ch].tach;
 	struct sensor_value val = { 0 };
 
-	sensor_sample_fetch_chan(fan_control[ch].tach, SENSOR_CHAN_RPM);
-	sensor_channel_get(fan_control[ch].tach, SENSOR_CHAN_RPM, &val);
+	if (!device_is_ready(dev)) {
+		LOG_ERR("Tach device %s not ready", dev->name);
+		return 0;
+	}
+
+	sensor_sample_fetch_chan(dev, SENSOR_CHAN_RPM);
+	sensor_channel_get(dev, SENSOR_CHAN_RPM, &val);
+
 	return (int)val.val1;
 }
 
@@ -133,9 +169,11 @@ static int fan_all_disabled(void)
 {
 	int ch;
 
-	for (ch = 0; ch < fan_get_count(); ch++)
-		if (fan_status[ch].auto_status != FAN_STATUS_STOPPED)
+	for (ch = 0; ch < fan_get_count(); ch++) {
+		if (fan_data[ch].auto_status != FAN_STATUS_STOPPED) {
 			return 0;
+		}
+	}
 	return 1;
 }
 
@@ -151,22 +189,24 @@ static void fan_adjust_duty(int ch, int rpm_diff, int duty)
 	int duty_step = 0;
 
 	/* Find suitable duty step */
-	if (ABS(rpm_diff) >= 2000)
+	if (ABS(rpm_diff) >= 2000) {
 		duty_step = 20;
-	else if (ABS(rpm_diff) >= 1000)
+	} else if (ABS(rpm_diff) >= 1000) {
 		duty_step = 10;
-	else if (ABS(rpm_diff) >= 500)
+	} else if (ABS(rpm_diff) >= 500) {
 		duty_step = 5;
-	else if (ABS(rpm_diff) >= 250)
+	} else if (ABS(rpm_diff) >= 250) {
 		duty_step = 3;
-	else
+	} else {
 		duty_step = 1;
+	}
 
 	/* Adjust fan duty step by step */
-	if (rpm_diff > 0)
+	if (rpm_diff > 0) {
 		duty = MIN(duty + duty_step, 100);
-	else
+	} else {
 		duty = MAX(duty - duty_step, 1);
+	}
 
 	fan_set_duty(ch, duty);
 
@@ -179,40 +219,43 @@ static void fan_adjust_duty(int ch, int rpm_diff, int duty)
  * The function sets the pwm duty to reach the target rpm
  *
  * @param   ch         operation channel
- * @param   rpm_actual actual operation rpm value
- * @param   rpm_target target operation rpm value
- * @return  current    fan control status
  */
-enum fan_status fan_smart_control(int ch, int rpm_actual, int rpm_target)
+enum fan_status fan_smart_control(int ch)
 {
+	struct fan_data *data = &fan_data[ch];
 	int duty, rpm_diff;
+	int rpm_actual = data->rpm_actual;
+	int rpm_target = data->rpm_target;
 
 	/* wait rpm is stable */
-	if (ABS(rpm_actual - rpm_pre[ch]) > RPM_MARGIN(rpm_actual)) {
-		rpm_pre[ch] = rpm_actual;
+	if (ABS(rpm_actual - data->rpm_pre) > RPM_MARGIN(rpm_actual)) {
+		data->rpm_pre = rpm_actual;
 		return FAN_STATUS_CHANGING;
 	}
 
 	/* Record previous rpm */
-	rpm_pre[ch] = rpm_actual;
+	data->rpm_pre = rpm_actual;
 
 	/* Adjust PWM duty */
 	rpm_diff = rpm_target - rpm_actual;
 	duty = fan_get_duty(ch);
-	if (duty == 0 && rpm_target == 0)
+	if (duty == 0 && rpm_target == 0) {
 		return FAN_STATUS_STOPPED;
+	}
 
-	/* Increase PWM duty */
 	if (rpm_diff > RPM_MARGIN(rpm_target)) {
-		if (duty == 100)
+		/* Increase PWM duty */
+		if (duty == 100) {
 			return FAN_STATUS_FRUSTRATED;
+		}
 
 		fan_adjust_duty(ch, rpm_diff, duty);
 		return FAN_STATUS_CHANGING;
-		/* Decrease PWM duty */
 	} else if (rpm_diff < -RPM_MARGIN(rpm_target)) {
-		if (duty == 1 && rpm_target != 0)
+		/* Decrease PWM duty */
+		if (duty == 1 && rpm_target != 0) {
 			return FAN_STATUS_FRUSTRATED;
+		}
 
 		fan_adjust_duty(ch, rpm_diff, duty);
 		return FAN_STATUS_CHANGING;
@@ -221,131 +264,144 @@ enum fan_status fan_smart_control(int ch, int rpm_actual, int rpm_target)
 	return FAN_STATUS_LOCKED;
 }
 
+static void fan_tick_func_rpm(int ch)
+{
+	struct fan_data *data = &fan_data[ch];
+
+	if (!fan_get_enabled(ch))
+		return;
+
+	/* Get actual rpm */
+	data->rpm_actual = fan_rpm(ch);
+
+	/* Do smart fan stuff */
+	data->auto_status = fan_smart_control(ch);
+}
+
+static void fan_tick_func_duty(int ch)
+{
+	struct fan_data *data = &fan_data[ch];
+
+	/* Fan in duty mode still want rpm_actual being updated. */
+	if (data->flags & FAN_USE_RPM_MODE) {
+		data->rpm_actual = fan_rpm(ch);
+		if (data->rpm_actual > 0) {
+			data->auto_status = FAN_STATUS_LOCKED;
+		} else {
+			data->auto_status = FAN_STATUS_STOPPED;
+		}
+	} else {
+		if (fan_get_duty(ch) > 0) {
+			data->auto_status = FAN_STATUS_LOCKED;
+		} else {
+			data->auto_status = FAN_STATUS_STOPPED;
+		}
+	}
+}
+
 void fan_tick_func(void)
 {
 	int ch;
 
-	for (ch = 0; ch < FAN_CH_COUNT; ch++) {
-		volatile struct fan_status_t *p_status = fan_status + ch;
-		/* Make sure rpm mode is enabled */
-		if (p_status->current_fan_mode != FAN_RPM) {
-			/* Fan in duty mode still want rpm_actual being updated.
-			 */
-			if (p_status->flags & FAN_USE_RPM_MODE) {
-				p_status->rpm_actual = fan_rpm(ch);
-				if (p_status->rpm_actual > 0)
-					p_status->auto_status =
-						FAN_STATUS_LOCKED;
-				else
-					p_status->auto_status =
-						FAN_STATUS_STOPPED;
-				continue;
-			} else {
-				if (fan_get_duty(ch) > 0)
-					p_status->auto_status =
-						FAN_STATUS_LOCKED;
-				else
-					p_status->auto_status =
-						FAN_STATUS_STOPPED;
-			}
-			continue;
+	for (ch = 0; ch < fan_get_count(); ch++) {
+		switch (fan_data[ch].current_fan_mode) {
+		case FAN_RPM:
+			fan_tick_func_rpm(ch);
+			break;
+		case FAN_DUTY:
+			fan_tick_func_duty(ch);
+			break;
+		default:
+			LOG_ERR("Invalid fan %d mode: %d", ch,
+				fan_data[ch].current_fan_mode);
 		}
-		if (!fan_get_enabled(ch))
-			continue;
-		/* Get actual rpm */
-		p_status->rpm_actual = fan_rpm(ch);
-		/* Do smart fan stuff */
-		p_status->auto_status = fan_smart_control(
-			ch, p_status->rpm_actual, p_status->rpm_target);
 	}
 }
 DECLARE_HOOK(HOOK_TICK, fan_tick_func, HOOK_PRIO_DEFAULT);
 
 int fan_get_duty(int ch)
 {
-	enum pwm_channel pwm_id = fan_control[ch].pwm_id;
-
-	/* Return percent */
-	return pwm_get_duty(pwm_id);
+	return fan_data[ch].pwm_percent;
 }
 
 int fan_get_rpm_mode(int ch)
 {
-	return fan_status[ch].current_fan_mode == FAN_RPM ? 1 : 0;
+	return fan_data[ch].current_fan_mode == FAN_RPM ? 1 : 0;
 }
 
 void fan_set_rpm_mode(int ch, int rpm_mode)
 {
-	if (rpm_mode && (fan_status[ch].flags & FAN_USE_RPM_MODE))
-		fan_status[ch].current_fan_mode = FAN_RPM;
-	else
-		fan_status[ch].current_fan_mode = FAN_DUTY;
+	struct fan_data *data = &fan_data[ch];
+
+	if (rpm_mode && (data->flags & FAN_USE_RPM_MODE)) {
+		data->current_fan_mode = FAN_RPM;
+	} else {
+		data->current_fan_mode = FAN_DUTY;
+	}
 }
 
 int fan_get_rpm_actual(int ch)
 {
 	/* Check PWM is enabled first */
-	if (fan_get_duty(ch) == 0)
+	if (fan_get_duty(ch) == 0) {
 		return 0;
+	}
 
-	LOG_DBG("fan %d: get actual rpm = %d", ch, fan_status[ch].rpm_actual);
-	return fan_status[ch].rpm_actual;
+	LOG_DBG("fan %d: get actual rpm = %d", ch, fan_data[ch].rpm_actual);
+	return fan_data[ch].rpm_actual;
 }
 
 int fan_get_enabled(int ch)
 {
-	enum pwm_channel pwm_id = fan_control[ch].pwm_id;
-
-	return pwm_get_enabled(pwm_id);
+	return fan_data[ch].pwm_enabled;
 }
 
 void fan_set_enabled(int ch, int enabled)
 {
-	enum pwm_channel pwm_id = fan_control[ch].pwm_id;
+	if (!enabled) {
+		fan_data[ch].auto_status = FAN_STATUS_STOPPED;
+	}
 
-	if (!enabled)
-		fan_status[ch].auto_status = FAN_STATUS_STOPPED;
-	pwm_enable(pwm_id, enabled);
+	fan_data[ch].pwm_enabled = enabled;
+
+	fan_pwm_update(ch);
 }
 
 void fan_channel_setup(int ch, unsigned int flags)
 {
-	volatile struct fan_status_t *p_status = fan_status + ch;
+	struct fan_data *data = &fan_data[ch];
 
-	if (flags & FAN_USE_RPM_MODE) {
-		DT_FOREACH_CHILD(DT_INST(0, named_fans), TACHO_DEV_INIT)
-	}
-
-	p_status->flags = flags;
+	data->flags = flags;
 	/* Set default fan states */
-	p_status->current_fan_mode = FAN_DUTY;
-	p_status->auto_status = FAN_STATUS_STOPPED;
+	data->current_fan_mode = FAN_DUTY;
+	data->auto_status = FAN_STATUS_STOPPED;
 }
 
 void fan_set_duty(int ch, int percent)
 {
-	enum pwm_channel pwm_id = fan_control[ch].pwm_id;
-
 	/* duty is zero */
 	if (!percent) {
-		fan_status[ch].auto_status = FAN_STATUS_STOPPED;
-		if (fan_all_disabled())
+		fan_data[ch].auto_status = FAN_STATUS_STOPPED;
+		if (fan_all_disabled()) {
 			enable_sleep(SLEEP_MASK_FAN);
-	} else
+		}
+	} else {
 		disable_sleep(SLEEP_MASK_FAN);
+	}
 
-	/* Set the duty cycle of PWM */
-	pwm_set_duty(pwm_id, percent);
+	fan_data[ch].pwm_percent = percent;
+
+	fan_pwm_update(ch);
 }
 
 int fan_get_rpm_target(int ch)
 {
-	return fan_status[ch].rpm_target;
+	return fan_data[ch].rpm_target;
 }
 
 enum fan_status fan_get_status(int ch)
 {
-	return fan_status[ch].auto_status;
+	return fan_data[ch].auto_status;
 }
 
 void fan_set_rpm_target(int ch, int rpm)
@@ -355,17 +411,19 @@ void fan_set_rpm_target(int ch, int rpm)
 		fan_set_duty(ch, 0);
 	} else {
 		/* This is the counterpart of disabling PWM above. */
-		if (!fan_get_enabled(ch))
+		if (!fan_get_enabled(ch)) {
 			fan_set_enabled(ch, 1);
-		if (rpm > fans[ch].rpm->rpm_max)
+		}
+		if (rpm > fans[ch].rpm->rpm_max) {
 			rpm = fans[ch].rpm->rpm_max;
-		else if (rpm < fans[ch].rpm->rpm_min)
+		} else if (rpm < fans[ch].rpm->rpm_min) {
 			rpm = fans[ch].rpm->rpm_min;
+		}
 	}
 
 	/* Set target rpm */
-	fan_status[ch].rpm_target = rpm;
-	LOG_DBG("fan %d: set target rpm = %d", ch, fan_status[ch].rpm_target);
+	fan_data[ch].rpm_target = rpm;
+	LOG_DBG("fan %d: set target rpm = %d", ch, fan_data[ch].rpm_target);
 }
 
 int fan_is_stalled(int ch)
@@ -374,8 +432,9 @@ int fan_is_stalled(int ch)
 	const struct gpio_dt_spec *gp =
 		gpio_get_dt_spec(fans[ch].conf->enable_gpio);
 
-	if (gp != NULL)
+	if (gp != NULL) {
 		is_pgood = gpio_pin_get_dt(gp);
+	}
 
 	return fan_get_enabled(ch) && fan_get_duty(ch) &&
 	       !fan_get_rpm_actual(ch) && is_pgood;

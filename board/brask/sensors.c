@@ -46,35 +46,34 @@ const struct adc_t adc_channels[] = {
 		.factor_mul = ADC_MAX_VOLT * 39,
 		.factor_div = (ADC_READ_MAX + 1) * 5,
 	},
+	[ADC_PPVAR_IMON] = {  /* 872.3 mV/A */
+		.name = "PPVAR_IMON",
+		.input_ch = NPCX_ADC_CH3,
+		.factor_mul = ADC_MAX_VOLT * 1433,
+		.factor_div = (ADC_READ_MAX + 1) * 1250,
+	},
+
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /* Temperature sensor configuration */
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1_CPU] = {
-		.name = "CPU",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_1_CPU
-	},
-	[TEMP_SENSOR_2_CPU_VR] = {
-		.name = "CPU VR",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_2_CPU_VR
-	},
-	[TEMP_SENSOR_3_WIFI] = {
-		.name = "WIFI",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_3_WIFI
-	},
-	[TEMP_SENSOR_4_DIMM] = {
-		.name = "DIMM",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_4_DIMM
-	},
+	[TEMP_SENSOR_1_CPU] = { .name = "CPU",
+				.type = TEMP_SENSOR_TYPE_BOARD,
+				.read = get_temp_3v3_30k9_47k_4050b,
+				.idx = ADC_TEMP_SENSOR_1_CPU },
+	[TEMP_SENSOR_2_CPU_VR] = { .name = "CPU VR",
+				   .type = TEMP_SENSOR_TYPE_BOARD,
+				   .read = get_temp_3v3_30k9_47k_4050b,
+				   .idx = ADC_TEMP_SENSOR_2_CPU_VR },
+	[TEMP_SENSOR_3_WIFI] = { .name = "WIFI",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_3v3_30k9_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_3_WIFI },
+	[TEMP_SENSOR_4_DIMM] = { .name = "DIMM",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_3v3_30k9_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_4_DIMM },
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -88,8 +87,8 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 /*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_CPU \
-	{ \
+#define THERMAL_CPU              \
+	{                        \
 		.temp_host = { \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \

@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+"""Configuration to allow pip install."""
 import setuptools
 
 setuptools.setup(
@@ -17,7 +18,7 @@ setuptools.setup(
     keywords="chromeos",
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    packages=["zmake"],
+    packages=["zmake", "zephyr_build_tools"],
     python_requires=">=3.6, <4",
     # List run-time dependencies here.  These will be installed by pip when
     # your project is installed. For an analysis of "install_requires" vs pip's
@@ -33,6 +34,14 @@ setuptools.setup(
     entry_points={
         "console_scripts": [
             "zmake=zmake.__main__:main",
+        ],
+    },
+    extras_require={
+        "tests": [
+            "coverage",
+            "pytest",
+            "hypothesis",
+            "testfixtures",
         ],
     },
 )

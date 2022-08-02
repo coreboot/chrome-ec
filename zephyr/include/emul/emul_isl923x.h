@@ -6,9 +6,9 @@
 #ifndef ZEPHYR_INCLUDE_EMUL_EMUL_ISL923X_H_
 #define ZEPHYR_INCLUDE_EMUL_EMUL_ISL923X_H_
 
-#include <device.h>
-#include <drivers/i2c_emul.h>
-#include <drivers/emul.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/i2c_emul.h>
+#include <zephyr/drivers/emul.h>
 
 /**
  * @brief Get the emulator's parent bus device
@@ -33,7 +33,7 @@ struct i2c_emul *isl923x_emul_get_i2c_emul(const struct emul *emulator);
  *
  * @param emulator The emulator to modify
  */
-void isl923x_emul_reset(const struct emul *emulator);
+void isl923x_emul_reset_registers(const struct emul *emulator);
 
 /**
  * @brief Set the manufacturer ID
@@ -94,6 +94,15 @@ void raa489000_emul_set_acok_pin(const struct emul *emulator, uint16_t value);
  * @param reg The address of the register to query
  * @return The 16-bit value of the register
  */
-uint16_t isl923x_emul_peek_reg(struct i2c_emul *i2c_emul, int reg);
+uint16_t isl923x_emul_peek_reg(const struct emul *emul, int reg);
+
+/**
+ * @brief Saves current internal state of sensors to emulator's registers.
+ *
+ * @param emul Pointer to ISL923X emulator
+ * @return Pointer to ISL923X emulator associated i2c_common_emul_data
+ */
+struct i2c_common_emul_data *
+emul_isl923x_get_i2c_common_data(const struct emul *emul);
 
 #endif /* ZEPHYR_INCLUDE_EMUL_EMUL_ISL923X_H_ */

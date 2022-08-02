@@ -12,6 +12,49 @@
 #include "compiler.h"
 #include "host_command.h"
 
+/*
+ * If compiling with Zephyr, include the BATTERY_LEVEL_ definitions that are
+ * shared with device tree
+ */
+#ifdef CONFIG_ZEPHYR
+
+#include "dt-bindings/battery.h"
+
+#else /* !CONFIG_ZEPHYR */
+
+/* Stop charge when charging and battery level >= this percentage */
+#define BATTERY_LEVEL_FULL 100
+
+/* Tell host we're charged when battery level >= this percentage */
+#ifdef CONFIG_BATTERY_LEVEL_NEAR_FULL
+#define BATTERY_LEVEL_NEAR_FULL CONFIG_BATTERY_LEVEL_NEAR_FULL
+#else
+#define BATTERY_LEVEL_NEAR_FULL 97
+#endif
+
+/*
+ * Send battery-low host event when discharging and battery level <= this level
+ */
+#define BATTERY_LEVEL_LOW 10
+
+/*
+ * Send battery-critical host event when discharging and battery level <= this
+ * level.
+ */
+#define BATTERY_LEVEL_CRITICAL 5
+
+/*
+ * Shut down main processor and/or hibernate EC when discharging and battery
+ * level < this level. Setting this too low makes the battery discharge too
+ * deeply, which isn't good for the battery health.
+ */
+#define BATTERY_LEVEL_SHUTDOWN 3
+
+#endif /* CONFIG_ZEPHYR */
+
+/* Full-capacity change reqd for host event */
+#define LFCC_EVENT_THRESH 5
+
 /* Battery index, only used with CONFIG_BATTERY_V2. */
 enum battery_index {
 	BATT_IDX_INVALID = -1,
@@ -19,42 +62,11 @@ enum battery_index {
 	BATT_IDX_BASE = 1,
 };
 
-/* Stop charge when charging and battery level >= this percentage */
-#define BATTERY_LEVEL_FULL		100
-
-/* Tell host we're charged when battery level >= this percentage */
-#ifdef CONFIG_BATTERY_LEVEL_NEAR_FULL
-#define BATTERY_LEVEL_NEAR_FULL		 CONFIG_BATTERY_LEVEL_NEAR_FULL
-#else
-#define BATTERY_LEVEL_NEAR_FULL		 97
-#endif
-
-/*
- * Send battery-low host event when discharging and battery level <= this level
- */
-#define BATTERY_LEVEL_LOW		 10
-
-/*
- * Send battery-critical host event when discharging and battery level <= this
- * level.
- */
-#define BATTERY_LEVEL_CRITICAL		  5
-
-/*
- * Shut down main processor and/or hibernate EC when discharging and battery
- * level < this level. Setting this too low makes the battery discharge too
- * deeply, which isn't good for the battery health.
- */
-#define BATTERY_LEVEL_SHUTDOWN		  3
-
-/* Full-capacity change reqd for host event */
-#define LFCC_EVENT_THRESH 5
-
 /*
  * Sometimes we have hardware to detect battery present, sometimes we have to
  * wait until we've been able to talk to the battery.
  */
-FORWARD_DECLARE_ENUM(battery_present) {
+FORWARD_DECLARE_ENUM(battery_present){
 	BP_NOT_INIT = -1,
 	BP_NO = 0,
 	BP_YES = 1,
@@ -85,10 +97,10 @@ struct battery_static_info {
 	 * char chemistry[32];
 	 */
 	/* Max string size in the SB spec is 31. */
-	char manufacturer_ext[32];	/* SB_MANUFACTURER_NAME */
-	char model_ext[32];		/* SB_DEVICE_NAME */
-	char serial_ext[32];		/* SB_SERIAL_NUMBER */
-	char type_ext[32];		/* SB_DEVICE_CHEMISTRY */
+	char manufacturer_ext[32]; /* SB_MANUFACTURER_NAME */
+	char model_ext[32]; /* SB_DEVICE_NAME */
+	char serial_ext[32]; /* SB_SERIAL_NUMBER */
+	char type_ext[32]; /* SB_DEVICE_CHEMISTRY */
 #ifdef CONFIG_BATTERY_VENDOR_PARAM
 	uint8_t vendor_param[32];
 #endif
@@ -99,18 +111,18 @@ extern struct ec_response_battery_dynamic_info battery_dynamic[];
 
 /* Battery parameters */
 struct batt_params {
-	int temperature;      /* Temperature in 0.1 K */
-	int state_of_charge;  /* State of charge (percent, 0-100) */
-	int voltage;          /* Battery voltage (mV) */
-	int current;          /* Battery current (mA); negative=discharging */
-	int desired_voltage;  /* Charging voltage desired by battery (mV) */
-	int desired_current;  /* Charging current desired by battery (mA) */
-	int remaining_capacity;  /* Remaining capacity in mAh */
-	int full_capacity;    /* Capacity in mAh (might change occasionally) */
-	int display_charge;   /* Display charge in 10ths of a % (1000=100.0%) */
-	int status;	      /* Battery status */
+	int temperature; /* Temperature in 0.1 K */
+	int state_of_charge; /* State of charge (percent, 0-100) */
+	int voltage; /* Battery voltage (mV) */
+	int current; /* Battery current (mA); negative=discharging */
+	int desired_voltage; /* Charging voltage desired by battery (mV) */
+	int desired_current; /* Charging current desired by battery (mA) */
+	int remaining_capacity; /* Remaining capacity in mAh */
+	int full_capacity; /* Capacity in mAh (might change occasionally) */
+	int display_charge; /* Display charge in 10ths of a % (1000=100.0%) */
+	int status; /* Battery status */
 	enum battery_present is_present; /* Is the battery physically present */
-	int flags;            /* Flags */
+	int flags; /* Flags */
 };
 
 /*
@@ -126,25 +138,25 @@ int battery_get_avg_voltage(void); /* in mV */
 /* Flags for batt_params */
 
 /* Battery wants to be charged */
-#define BATT_FLAG_WANT_CHARGE			0x00000001
+#define BATT_FLAG_WANT_CHARGE 0x00000001
 
 /* Battery is responsive (talking to us via I2C) */
-#define BATT_FLAG_RESPONSIVE			0x00000002
+#define BATT_FLAG_RESPONSIVE 0x00000002
 
 /* Bits to indicate which parameter(s) could not be read */
-#define BATT_FLAG_BAD_TEMPERATURE		0x00000004
-#define BATT_FLAG_BAD_STATE_OF_CHARGE		0x00000008
-#define BATT_FLAG_BAD_VOLTAGE			0x00000010
-#define BATT_FLAG_BAD_CURRENT			0x00000020
-#define BATT_FLAG_BAD_DESIRED_VOLTAGE		0x00000040
-#define BATT_FLAG_BAD_DESIRED_CURRENT		0x00000080
-#define BATT_FLAG_BAD_REMAINING_CAPACITY	0x00000100
-#define BATT_FLAG_BAD_FULL_CAPACITY		0x00000200
-#define BATT_FLAG_BAD_STATUS			0x00000400
-#define BATT_FLAG_IMBALANCED_CELL		0x00000800
-#define BATT_FLAG_BAD_AVERAGE_CURRENT		0x00001000
+#define BATT_FLAG_BAD_TEMPERATURE 0x00000004
+#define BATT_FLAG_BAD_STATE_OF_CHARGE 0x00000008
+#define BATT_FLAG_BAD_VOLTAGE 0x00000010
+#define BATT_FLAG_BAD_CURRENT 0x00000020
+#define BATT_FLAG_BAD_DESIRED_VOLTAGE 0x00000040
+#define BATT_FLAG_BAD_DESIRED_CURRENT 0x00000080
+#define BATT_FLAG_BAD_REMAINING_CAPACITY 0x00000100
+#define BATT_FLAG_BAD_FULL_CAPACITY 0x00000200
+#define BATT_FLAG_BAD_STATUS 0x00000400
+#define BATT_FLAG_IMBALANCED_CELL 0x00000800
+#define BATT_FLAG_BAD_AVERAGE_CURRENT 0x00001000
 /* All of the above BATT_FLAG_BAD_* bits */
-#define BATT_FLAG_BAD_ANY			0x000017fc
+#define BATT_FLAG_BAD_ANY 0x000017fc
 
 /* Battery constants */
 struct battery_info {
@@ -393,6 +405,23 @@ int battery_device_chemistry(char *dest, int size);
  * @return non-zero if error.
  */
 int battery_manufacturer_date(int *year, int *month, int *day);
+
+/**
+ * Read battery manufacturer data.
+ *
+ * @param dest		Destination buffer.
+ * @param size		Length of destination buffer.
+ * @return non-zero if error.
+ */
+int battery_manufacturer_data(char *data, int size);
+
+/**
+ * Write battery manufacturer access.
+ *
+ * @param cmd		Destiation for battery manufacturer access command.
+ * @retun non-zeor if error.
+ */
+int battery_manufacturer_access(int cmd);
 
 /**
  * Report the absolute difference between the highest and lowest cell voltage in

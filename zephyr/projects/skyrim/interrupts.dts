@@ -35,17 +35,17 @@
 		int_s5_pgood: s5_pgood {
 			irq-pin = <&gpio_pg_pwr_s5>;
 			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "baseboard_en_pwr_s0";
-		};
-		int_s0_pgood: s0_pgood {
-			irq-pin = <&gpio_s0_pgood>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "power_signal_interrupt";
+			handler = "baseboard_s5_pgood";
 		};
 		int_pg_groupc_s0: pg_groupc_s0 {
 			irq-pin = <&gpio_pg_groupc_s0_od>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "baseboard_set_en_pwr_pcore";
+		};
+		int_soc_thermtrip: soc_thermtrip {
+			irq-pin = <&gpio_soc_thermtrip_odl>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "baseboard_soc_thermtrip";
 		};
 		int_volume_up: volume_up {
 			irq-pin = <&gpio_volup_btn_odl>;
@@ -56,6 +56,26 @@
 			irq-pin = <&gpio_voldn_btn_odl>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "button_interrupt";
+		};
+		int_usb_a0_fault: a0_fault {
+			irq-pin = <&ioex_usb_a0_fault_odl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "usb_fault_interrupt";
+		};
+		int_usb_a1_fault: a1_fault {
+			irq-pin = <&ioex_usb_a1_fault_db_odl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "usb_fault_interrupt";
+		};
+		int_usb_c0_sbu_fault: c0_sbu_fault {
+			irq-pin = <&ioex_usb_c0_sbu_fault_odl>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "sbu_fault_interrupt";
+		};
+		int_usb_c1_sbu_fault: c1_sbu_fault {
+			irq-pin = <&ioex_usb_c1_sbu_fault_odl>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "sbu_fault_interrupt";
 		};
 		int_usb_c0_tcpc: usb_c0_tcpc {
 			irq-pin = <&gpio_usb_c0_tcpc_int_odl>;
@@ -86,6 +106,21 @@
 			irq-pin = <&gpio_usb_c1_bc12_int_odl>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "bc12_interrupt";
+		};
+		int_usb_hub_fault: hub_fault {
+			irq-pin = <&gpio_usb_hub_fault_q_odl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "usb_fault_interrupt";
+		};
+		int_usb_pd_soc: usb_pd_soc {
+			irq-pin = <&gpio_ec_i2c_usbc_pd_int>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "usb_pd_soc_interrupt";
+		};
+		int_accel_gyro: accel_gyro {
+			irq-pin = <&gpio_accel_gyro_int_l>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "bmi3xx_interrupt";
 		};
 	};
 };

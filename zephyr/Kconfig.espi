@@ -8,13 +8,13 @@ config PLATFORM_EC_ESPI_VW_SLP_S3
 	bool "SLP_S3 is an eSPI virtual wire instead of a GPIO"
 	help
 	  For power sequencing, use an eSPI virtual wire instead of
-	  defining GPIO_PCH_SLP_S3 in gpio_map.h.
+	  defining GPIO_PCH_SLP_S3 in the GPIO device tree.
 
 config PLATFORM_EC_ESPI_VW_SLP_S4
 	bool "SLP_S4 is an eSPI virtual wire instead of a GPIO"
 	help
 	  For power sequencing, use an eSPI virtual wire instead of
-	  defining GPIO_PCH_SLP_S4 in gpio_map.h.
+	  defining GPIO_PCH_SLP_S4 in the GPIO device tree.
 
 config PLATFORM_EC_ESPI_VW_SLP_S5
 	bool "SLP_S5 is an eSPI virtual wire instead of an alias for SLP_S4"
@@ -30,5 +30,12 @@ config PLATFORM_EC_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
 	  the platform implements the Deep-Sx entry as EC needs to
 	  maintain these pins' states per request. Note that this is
 	  currently unimplemented for Zephyr. Please see b/183148073.
+
+config PLATFORM_EC_ESPI_DEFAULT_VW_WIDTH_US
+	int "Virtual wire pulse width (microseconds)"
+	default 65
+	help
+	  The minimum pulse width of a eSPI/LPC virtual wire signals to the
+	  host. May vary by host chipset.
 
 endif # PLATFORM_EC_HOST_INTERFACE_ESPI

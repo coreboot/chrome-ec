@@ -17,9 +17,9 @@ type testChip struct {
 	name  string
 	nodes []string
 	adc   string
-	gpio  string
+	gc    string
+	gp    int
 	i2c   string
-	pwm   string
 }
 
 func (c *testChip) Name() string {
@@ -34,16 +34,12 @@ func (c *testChip) Adc(pin string) string {
 	return c.adc
 }
 
-func (c *testChip) Gpio(pin string) string {
-	return c.gpio
+func (c *testChip) Gpio(pin string) (string, int) {
+	return c.gc, c.gp
 }
 
 func (c *testChip) I2c(pin string) string {
 	return c.i2c
-}
-
-func (c *testChip) Pwm(pin string) string {
-	return c.pwm
 }
 
 func TestName(t *testing.T) {

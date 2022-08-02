@@ -6,17 +6,12 @@
 # Cortex-M0 core OS files build
 #
 
-# Use coreboot-sdk
-$(call set-option,CROSS_COMPILE,\
-	$(CROSS_COMPILE_arm),\
-	/opt/coreboot-sdk/bin/arm-eabi-)
-
 # CPU specific compilation flags
 CFLAGS_CPU+=-mthumb
 ifeq ($(cc-name),clang)
 CFLAGS_CPU+=-Oz		# Like -Os (and thus -O2), but reduces code size further.
 # Link compiler-rt when using clang, so clang finds the builtins it provides.
-LDFLAGS_EXTRA+=-lclang_rt.builtins-arm
+LDFLAGS_EXTRA+=-lclang_rt.builtins-armv6m
 else
 CFLAGS_CPU+=-Os
 CFLAGS_CPU+=-mno-sched-prolog

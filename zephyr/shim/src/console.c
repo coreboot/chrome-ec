@@ -3,22 +3,29 @@
  * found in the LICENSE file.
  */
 
-#include <device.h>
-#include <drivers/uart.h>
-#include <shell/shell.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/uart.h>
+#include <zephyr/shell/shell.h>
 #ifdef CONFIG_SHELL_BACKEND_DUMMY /* nocheck */
-#include <shell/shell_dummy.h> /* nocheck */
+#include <zephyr/shell/shell_dummy.h> /* nocheck */
 #endif
-#include <shell/shell_uart.h>
+#include <zephyr/shell/shell_uart.h>
 #include <stdbool.h>
 #include <string.h>
-#include <sys/printk.h>
-#include <sys/ring_buffer.h>
-#include <zephyr.h>
-#include <logging/log.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/sys/ring_buffer.h>
+#include <zephyr/zephyr.h>
+#include <zephyr/logging/log.h>
 
+/*
+ * TODO(b/238433667): Include EC printf functions
+ * (crec_vsnprintf/crec_snprintf) until we switch to the standard
+ * vsnprintf/snprintf.
+ */
+#include "builtin/stdio.h"
 #include "console.h"
 #include "printf.h"
+#include "task.h"
 #include "uart.h"
 #include "usb_console.h"
 #include "zephyr_console_shim.h"
@@ -33,14 +40,22 @@
 #error Must select only one shell backend
 #endif
 
+BUILD_ASSERT(EC_TASK_PRIORITY(EC_SHELL_PRIO) == CONFIG_SHELL_THREAD_PRIORITY,
+	     "EC_SHELL_PRIO does not match CONFIG_SHELL_THREAD_PRIORITY.");
+
 LOG_MODULE_REGISTER(shim_console, LOG_LEVEL_ERR);
 
 static const struct device *uart_shell_dev =
 	DEVICE_DT_GET(DT_CHOSEN(zephyr_shell_uart));
-static int shell_priority = K_HIGHEST_APPLICATION_THREAD_PRIO;
 static const struct shell *shell_zephyr;
 static struct k_poll_signal shell_uninit_signal;
 static struct k_poll_signal shell_init_signal;
+/*
+ * A flag is kept to indicate if the shell has been (or is about
+ * to be) stopped, so that output won't be sent via zephyr_fprintf()
+ * (which requires locking the shell).
+ */
+static bool shell_stopped;
 RING_BUF_DECLARE(rx_buffer, CONFIG_UART_RX_BUF_SIZE);
 
 static void uart_rx_handle(const struct device *dev)
@@ -103,6 +118,11 @@ int uart_shell_stop(void)
 		K_POLL_TYPE_SIGNAL, K_POLL_MODE_NOTIFY_ONLY,
 		&shell_uninit_signal);
 
+	/*
+	 * Set the shell_stopped flag so that no output will
+	 * be sent to the uart via zephyr_fprintf after this point.
+	 */
+	shell_stopped = true;
 	/* Clear all pending input */
 	uart_clear_input();
 
@@ -139,14 +159,15 @@ static void shell_init_from_work(struct k_work *work)
 #endif
 
 	/* Initialize the shell and re-enable both RX and TX */
-	shell_init(shell_zephyr, uart_shell_dev,
-		   shell_cfg_flags, log_backend, level);
+	shell_init(shell_zephyr, uart_shell_dev, shell_cfg_flags, log_backend,
+		   level);
 
 	/*
 	 * shell_init() always resets the priority back to the default.
 	 * Update the priority as setup by the shimmed task code.
 	 */
-	k_thread_priority_set(shell_zephyr->ctx->tid, shell_priority);
+	k_thread_priority_set(shell_zephyr->ctx->tid,
+			      EC_TASK_PRIORITY(EC_SHELL_PRIO));
 
 	uart_irq_rx_enable(uart_shell_dev);
 	uart_irq_tx_enable(uart_shell_dev);
@@ -177,17 +198,25 @@ void uart_shell_start(void)
 
 	/* Wait for initialization to be run, the signal will wake us */
 	k_poll(&event, 1, K_FOREVER);
+	shell_stopped = false;
 }
 
-void uart_shell_set_priority(int prio)
+#ifdef CONFIG_SHELL_HELP
+static void print_console_help(char *name,
+			       const struct zephyr_console_command *command)
 {
-	shell_priority = prio;
-	k_thread_priority_set(shell_zephyr->ctx->tid, shell_priority);
+	if (command->help)
+		printk("%s\n", command->help);
+	if (command->argdesc)
+		printk("Usage: %s %s\n", name, command->argdesc);
 }
+#endif
 
 int zshim_run_ec_console_command(const struct zephyr_console_command *command,
 				 size_t argc, char **argv)
 {
+	int ret;
+
 	/*
 	 * The Zephyr shell only displays the help string and not
 	 * the argument descriptor when passing "-h" or "--help".  Mimic the
@@ -198,22 +227,34 @@ int zshim_run_ec_console_command(const struct zephyr_console_command *command,
 		if (!command->help && !command->argdesc)
 			break;
 		if (!strcmp(argv[i], "help")) {
-			if (command->help)
-				printk("%s\n", command->help);
-			if (command->argdesc)
-				printk("Usage: %s\n", command->argdesc);
+			print_console_help(argv[0], command);
 			return 0;
 		}
 	}
 #endif
 
-	return command->handler(argc, argv);
+	ret = command->handler(argc, argv);
+	if (ret == EC_SUCCESS)
+		return ret;
+
+	/* Print common parameter error conditions and help on error */
+	if (ret >= EC_ERROR_PARAM1 && ret < EC_ERROR_PARAM_COUNT)
+		printk("Parameter %d invalid\n", ret - EC_ERROR_PARAM1 + 1);
+	else if (ret == EC_ERROR_PARAM_COUNT)
+		printk("Wrong number of parameters\n");
+	else
+		printk("Command returned error: %d\n", ret);
+
+#ifdef CONFIG_SHELL_HELP
+	print_console_help(argv[0], command);
+#endif
+	return ret;
 }
 
 #if defined(CONFIG_CONSOLE_CHANNEL) && DT_NODE_EXISTS(DT_PATH(ec_console))
 #define EC_CONSOLE DT_PATH(ec_console)
 
-static const char * const disabled_channels[] = DT_PROP(EC_CONSOLE, disabled);
+static const char *const disabled_channels[] = DT_PROP(EC_CONSOLE, disabled);
 static const size_t disabled_channel_count = DT_PROP_LEN(EC_CONSOLE, disabled);
 static int init_ec_console(const struct device *unused)
 {
@@ -221,20 +262,22 @@ static int init_ec_console(const struct device *unused)
 		console_channel_disable(disabled_channels[i]);
 
 	return 0;
-} SYS_INIT(init_ec_console, PRE_KERNEL_1, 50);
+}
+SYS_INIT(init_ec_console, PRE_KERNEL_1, 50);
 #endif /* CONFIG_CONSOLE_CHANNEL && DT_NODE_EXISTS(DT_PATH(ec_console)) */
 
 static int init_ec_shell(const struct device *unused)
 {
 #if defined(CONFIG_SHELL_BACKEND_SERIAL)
-		shell_zephyr = shell_backend_uart_get_ptr();
+	shell_zephyr = shell_backend_uart_get_ptr();
 #elif defined(CONFIG_SHELL_BACKEND_DUMMY) /* nocheck */
-		shell_zephyr = shell_backend_dummy_get_ptr(); /* nocheck */
+	shell_zephyr = shell_backend_dummy_get_ptr(); /* nocheck */
 #else
 #error A shell backend must be enabled
 #endif
 	return 0;
-} SYS_INIT(init_ec_shell, PRE_KERNEL_1, 50);
+}
+SYS_INIT(init_ec_shell, PRE_KERNEL_1, 50);
 
 #ifdef TEST_BUILD
 const struct shell *get_ec_shell(void)
@@ -268,7 +311,6 @@ void uart_write_char(char c)
 
 void uart_flush_output(void)
 {
-	shell_process(shell_zephyr);
 	uart_tx_flush();
 }
 
@@ -290,8 +332,7 @@ int uart_getc(void)
 
 void uart_clear_input(void)
 {
-	/* Clear any remaining shell processing. */
-	shell_process(shell_zephyr);
+	/* Reset the input ring buffer */
 	ring_buf_reset(&rx_buffer);
 }
 
@@ -309,10 +350,13 @@ static void zephyr_print(const char *buff, size_t size)
 {
 	/*
 	 * shell_* functions can not be used in ISRs so use printk instead.
+	 * If the shell is about to be (or is) stopped, use printk, since the
+	 * output may be stalled and the shell mutex held.
 	 * Also, console_buf_notify_chars uses a mutex, which may not be
 	 * locked in ISRs.
 	 */
-	if (k_is_in_isr() || shell_zephyr->ctx->state != SHELL_STATE_ACTIVE) {
+	if (k_is_in_isr() || shell_stopped ||
+	    shell_zephyr->ctx->state != SHELL_STATE_ACTIVE) {
 		printk("%s", buff);
 	} else {
 		shell_fprintf(shell_zephyr, SHELL_NORMAL, "%s", buff);
@@ -370,29 +414,27 @@ int cprints(enum console_channel channel, const char *format, ...)
 	if (console_channel_is_disabled(channel))
 		return EC_SUCCESS;
 
-	rv = crec_snprintf(buff, CONFIG_SHELL_PRINTF_BUFF_SIZE, "[%pT ",
-			 PRINTF_TIMESTAMP_NOW);
+	buff[0] = '[';
+	len = 1;
+
+	rv = snprintf_timestamp_now(buff + len, sizeof(buff) - len);
+	handle_sprintf_rv(rv, &len);
+
+	rv = crec_snprintf(buff + len, CONFIG_SHELL_PRINTF_BUFF_SIZE - len,
+			   " ");
 	handle_sprintf_rv(rv, &len);
 
 	va_start(args, format);
 	rv = crec_vsnprintf(buff + len, CONFIG_SHELL_PRINTF_BUFF_SIZE - len,
-			  format, args);
+			    format, args);
 	va_end(args);
 	handle_sprintf_rv(rv, &len);
 
 	rv = crec_snprintf(buff + len, CONFIG_SHELL_PRINTF_BUFF_SIZE - len,
-			 "]\n");
+			   "]\n");
 	handle_sprintf_rv(rv, &len);
 
 	zephyr_print(buff, len);
 
 	return rv > 0 ? EC_SUCCESS : rv;
-}
-
-/*
- * Placeholder task so that the shell/console task priority can get set
- * correctly by shimmed_task_id.h
- */
-void console_task_nop(void *p)
-{
 }

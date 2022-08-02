@@ -10,43 +10,37 @@
 #include "console.h"
 #include "driver/ppc/rt1718s.h"
 #include "driver/tcpm/tcpci.h"
+#include "usb_pe_sm.h"
 #include "usbc_ppc.h"
 #include "util.h"
-
 
 #define RT1718S_FLAGS_SOURCE_ENABLED BIT(0)
 static atomic_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
 static int read_reg(uint8_t port, int reg, int *val)
 {
 	if (reg > 0xFF) {
-		return i2c_read_offset16(
-			ppc_chips[port].i2c_port,
-			ppc_chips[port].i2c_addr_flags,
-			reg, val, 1);
+		return i2c_read_offset16(ppc_chips[port].i2c_port,
+					 ppc_chips[port].i2c_addr_flags, reg,
+					 val, 1);
 	} else {
-		return i2c_read8(
-			ppc_chips[port].i2c_port,
-			ppc_chips[port].i2c_addr_flags,
-			reg, val);
+		return i2c_read8(ppc_chips[port].i2c_port,
+				 ppc_chips[port].i2c_addr_flags, reg, val);
 	}
 }
 
 static int write_reg(uint8_t port, int reg, int val)
 {
 	if (reg > 0xFF) {
-		return i2c_write_offset16(
-			ppc_chips[port].i2c_port,
-			ppc_chips[port].i2c_addr_flags,
-			reg, val, 1);
+		return i2c_write_offset16(ppc_chips[port].i2c_port,
+					  ppc_chips[port].i2c_addr_flags, reg,
+					  val, 1);
 	} else {
-		return i2c_write8(
-			ppc_chips[port].i2c_port,
-			ppc_chips[port].i2c_addr_flags,
-			reg, val);
+		return i2c_write8(ppc_chips[port].i2c_port,
+				  ppc_chips[port].i2c_addr_flags, reg, val);
 	}
 }
 
@@ -71,18 +65,10 @@ static int rt1718s_is_sourcing_vbus(int port)
 
 static int rt1718s_vbus_source_enable(int port, int enable)
 {
-	atomic_t prev_flag;
-
 	if (enable)
-		prev_flag = atomic_or(&flags[port],
-				RT1718S_FLAGS_SOURCE_ENABLED);
+		atomic_or(&flags[port], RT1718S_FLAGS_SOURCE_ENABLED);
 	else
-		prev_flag = atomic_clear_bits(&flags[port],
-				RT1718S_FLAGS_SOURCE_ENABLED);
-
-	/* Return if status doesn't change */
-	if (!!(prev_flag & RT1718S_FLAGS_SOURCE_ENABLED) == !!enable)
-		return EC_SUCCESS;
+		atomic_clear_bits(&flags[port], RT1718S_FLAGS_SOURCE_ENABLED);
 
 	RETURN_ERROR(tcpm_set_src_ctrl(port, enable));
 
@@ -104,10 +90,9 @@ static int rt1718s_vbus_sink_enable(int port, int enable)
 
 static int rt1718s_discharge_vbus(int port, int enable)
 {
-	return update_bits(port,
-		TCPC_REG_POWER_CTRL,
-		TCPC_REG_POWER_CTRL_FORCE_DISCHARGE,
-		enable ? 0xFF : 0x00);
+	return update_bits(port, TCPC_REG_POWER_CTRL,
+			   TCPC_REG_POWER_CTRL_FORCE_DISCHARGE,
+			   enable ? 0xFF : 0x00);
 }
 
 #ifdef CONFIG_CMD_PPC_DUMP
@@ -169,20 +154,9 @@ static int rt1718s_is_vbus_present(int port)
 }
 #endif
 
-int rt1718s_frs_init(int port)
-{
-	/* Set Rx frs unmasked */
-	RETURN_ERROR(update_bits(port, RT1718S_RT_MASK1,
-				 RT1718S_RT_MASK1_M_RX_FRS, 0xFF));
-	return EC_SUCCESS;
-}
-
 static int rt1718s_init(int port)
 {
 	atomic_clear(&flags[port]);
-
-	if (IS_ENABLED(CONFIG_USB_PD_FRS_PPC))
-		RETURN_ERROR(rt1718s_frs_init(port));
 
 	return EC_SUCCESS;
 }
@@ -193,27 +167,6 @@ static int rt1718s_set_polarity(int port, int polarity)
 	return tcpci_tcpm_set_polarity(port, polarity);
 }
 #endif
-
-int rt1718s_set_frs_enable(int port, int enable)
-{
-	/*
-	 * Use write instead of update to save 2 i2c read.
-	 * Assume other bits are at their reset value.
-	 */
-	int frs_ctrl2 = 0x10, vbus_ctrl_en = 0x3F;
-
-	if (enable) {
-		frs_ctrl2 |= RT1718S_FRS_CTRL2_RX_FRS_EN;
-		frs_ctrl2 |= RT1718S_FRS_CTRL2_VBUS_FRS_EN;
-
-		vbus_ctrl_en |= RT1718S_VBUS_CTRL_EN_GPIO2_VBUS_PATH_EN;
-		vbus_ctrl_en |= RT1718S_VBUS_CTRL_EN_GPIO1_VBUS_PATH_EN;
-	}
-
-	RETURN_ERROR(write_reg(port, RT1718S_FRS_CTRL2, frs_ctrl2));
-	RETURN_ERROR(write_reg(port, RT1718S_VBUS_CTRL_EN, vbus_ctrl_en));
-	return EC_SUCCESS;
-}
 
 const struct ppc_drv rt1718s_ppc_drv = {
 	.init = &rt1718s_init,

@@ -22,33 +22,42 @@
 #include "util.h"
 
 /* Console output macros */
-#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
 #define CPRINTS(format, args...) \
-	cprints(CC_CHARGER, "%s " format, "RT9490", ## args)
+	cprints(CC_CHARGER, "%s " format, "RT9490", ##args)
 
 /* Charger parameters */
-#define CHARGER_NAME    "rt9490"
-#define CHARGE_V_MAX    18800
-#define CHARGE_V_MIN    3000
-#define CHARGE_V_STEP   10
-#define CHARGE_I_MAX    5000
-#define CHARGE_I_MIN    50
-#define CHARGE_I_STEP   10
-#define INPUT_I_MAX     3300
-#define INPUT_I_MIN     100
-#define INPUT_I_STEP    10
+#define CHARGER_NAME "rt9490"
+#define CHARGE_V_MAX 18800
+#define CHARGE_V_MIN 3000
+#define CHARGE_V_STEP 10
+#define CHARGE_I_MAX 5000
+
+/* b/238980988
+ * RT9490 can't measure the 50mA charge current precisely due to insufficient
+ * ADC resolution, and faulty leads it into battery supply mode.
+ * the final number would be expected between 100mA ~ 200mA.
+ * In reality, we don't actually need that small charging current.
+ * Tentacool's battery pack requests 256mA as the minimum current,
+ * so that can be a SW workaround.
+ */
+#define CHARGE_I_MIN 256
+#define CHARGE_I_STEP 10
+#define INPUT_I_MAX 3300
+#define INPUT_I_MIN 100
+#define INPUT_I_STEP 10
 
 /* Charger parameters */
 static const struct charger_info rt9490_charger_info = {
-	.name         = CHARGER_NAME,
-	.voltage_max  = CHARGE_V_MAX,
-	.voltage_min  = CHARGE_V_MIN,
+	.name = CHARGER_NAME,
+	.voltage_max = CHARGE_V_MAX,
+	.voltage_min = CHARGE_V_MIN,
 	.voltage_step = CHARGE_V_STEP,
-	.current_max  = CHARGE_I_MAX,
-	.current_min  = CHARGE_I_MIN,
+	.current_max = CHARGE_I_MAX,
+	.current_min = CHARGE_I_MIN,
 	.current_step = CHARGE_I_STEP,
-	.input_current_max  = INPUT_I_MAX,
-	.input_current_min  = INPUT_I_MIN,
+	.input_current_max = INPUT_I_MAX,
+	.input_current_min = INPUT_I_MIN,
 	.input_current_step = INPUT_I_STEP,
 };
 
@@ -62,13 +71,13 @@ static const struct rt9490_init_setting default_init_setting = {
 static enum ec_error_list rt9490_read8(int chgnum, int reg, int *val)
 {
 	return i2c_read8(chg_chips[chgnum].i2c_port,
-			chg_chips[chgnum].i2c_addr_flags, reg, val);
+			 chg_chips[chgnum].i2c_addr_flags, reg, val);
 }
 
 static enum ec_error_list rt9490_write8(int chgnum, int reg, int val)
 {
 	return i2c_write8(chg_chips[chgnum].i2c_port,
-			chg_chips[chgnum].i2c_addr_flags, reg, val);
+			  chg_chips[chgnum].i2c_addr_flags, reg, val);
 }
 
 static enum ec_error_list rt9490_read16(int chgnum, int reg, uint16_t *val)
@@ -76,7 +85,8 @@ static enum ec_error_list rt9490_read16(int chgnum, int reg, uint16_t *val)
 	int reg_val;
 
 	RETURN_ERROR(i2c_read16(chg_chips[chgnum].i2c_port,
-			chg_chips[chgnum].i2c_addr_flags, reg, &reg_val));
+				chg_chips[chgnum].i2c_addr_flags, reg,
+				&reg_val));
 
 	*val = be16toh(reg_val);
 
@@ -88,22 +98,21 @@ static enum ec_error_list rt9490_write16(int chgnum, int reg, uint16_t val)
 	int reg_val = htobe16(val);
 
 	return i2c_write16(chg_chips[chgnum].i2c_port,
-			chg_chips[chgnum].i2c_addr_flags, reg, reg_val);
+			   chg_chips[chgnum].i2c_addr_flags, reg, reg_val);
 }
 
 static int rt9490_field_update8(int chgnum, int reg, int mask, int val)
 {
 	return i2c_field_update8(chg_chips[chgnum].i2c_port,
-				 chg_chips[chgnum].i2c_addr_flags,
-				 reg, mask, val);
+				 chg_chips[chgnum].i2c_addr_flags, reg, mask,
+				 val);
 }
 
 static inline int rt9490_update8(int chgnum, int reg, int mask,
 				 enum mask_update_action action)
 {
 	return i2c_update8(chg_chips[chgnum].i2c_port,
-			   chg_chips[chgnum].i2c_addr_flags,
-			   reg, mask, action);
+			   chg_chips[chgnum].i2c_addr_flags, reg, mask, action);
 }
 
 static inline int rt9490_set_bit(int chgnum, int reg, int mask)
@@ -130,7 +139,7 @@ static const struct charger_info *rt9490_get_info(int chgnum)
 static enum ec_error_list rt9490_get_current(int chgnum, int *current)
 {
 	uint16_t val = 0;
-	const struct charger_info * const info = rt9490_get_info(chgnum);
+	const struct charger_info *const info = rt9490_get_info(chgnum);
 
 	RETURN_ERROR(rt9490_read16(chgnum, RT9490_REG_ICHG_CTRL, &val));
 
@@ -149,7 +158,7 @@ static enum ec_error_list rt9490_set_current(int chgnum, int current)
 	if (current == 0)
 		current = info->current_min;
 
-	if (!IN_RANGE(current, info->current_min, info->current_max + 1))
+	if (!IN_RANGE(current, info->current_min, info->current_max))
 		return EC_ERROR_PARAM2;
 	reg_ichg = current / info->current_step;
 
@@ -159,7 +168,7 @@ static enum ec_error_list rt9490_set_current(int chgnum, int current)
 static enum ec_error_list rt9490_get_voltage(int chgnum, int *voltage)
 {
 	uint16_t val = 0;
-	const struct charger_info * const info = rt9490_get_info(chgnum);
+	const struct charger_info *const info = rt9490_get_info(chgnum);
 
 	RETURN_ERROR(rt9490_read16(chgnum, RT9490_REG_VCHG_CTRL, &val));
 
@@ -178,7 +187,7 @@ static enum ec_error_list rt9490_set_voltage(int chgnum, int voltage)
 	if (voltage == 0)
 		voltage = info->voltage_min;
 
-	if (!IN_RANGE(voltage, info->voltage_min, info->voltage_max + 1))
+	if (!IN_RANGE(voltage, info->voltage_min, info->voltage_max))
 		return EC_ERROR_PARAM2;
 	reg_cv = voltage / info->voltage_step;
 
@@ -198,9 +207,9 @@ enum ec_error_list rt9490_set_otg_current_voltage(int chgnum,
 {
 	uint16_t reg_cur, reg_vol;
 
-	if (!IN_RANGE(output_current, RT9490_IOTG_MIN, RT9490_IOTG_MAX + 1))
+	if (!IN_RANGE(output_current, RT9490_IOTG_MIN, RT9490_IOTG_MAX))
 		return EC_ERROR_PARAM2;
-	if (!IN_RANGE(output_voltage, RT9490_VOTG_MIN, RT9490_VOTG_MAX + 1))
+	if (!IN_RANGE(output_voltage, RT9490_VOTG_MIN, RT9490_VOTG_MAX))
 		return EC_ERROR_PARAM3;
 
 	reg_cur = (output_current - RT9490_IOTG_MIN) / RT9490_IOTG_STEP;
@@ -264,7 +273,7 @@ static inline int rt9490_enable_jeita(int chgnum, bool en)
 			      en ? MASK_CLR : MASK_SET);
 }
 
-static inline int rt9490_enable_adc(int chgnum, bool en)
+int rt9490_enable_adc(int chgnum, bool en)
 {
 	return rt9490_update8(chgnum, RT9490_REG_ADC_CTRL, RT9490_ADC_EN,
 			      en ? MASK_SET : MASK_CLR);
@@ -287,43 +296,58 @@ static int rt9490_init_setting(int chgnum)
 	/*  Disable boost-mode output voltage */
 	RETURN_ERROR(rt9490_enable_otg_power(chgnum, 0));
 	RETURN_ERROR(rt9490_set_otg_current_voltage(
-			chgnum,
-			default_init_setting.boost_current,
-			default_init_setting.boost_voltage));
+		chgnum, default_init_setting.boost_current,
+		default_init_setting.boost_voltage));
 #endif
 	/* Disable ILIM_HZ pin current limit */
-	RETURN_ERROR(rt9490_clr_bit(
-			chgnum, RT9490_REG_CHG_CTRL5, RT9490_ILIM_HZ_EN));
+	RETURN_ERROR(rt9490_clr_bit(chgnum, RT9490_REG_CHG_CTRL5,
+				    RT9490_ILIM_HZ_EN));
 	/* Disable BC 1.2 detection by default. It will be enabled on demand */
 	RETURN_ERROR(rt9490_enable_chgdet_flow(chgnum, false));
 	/* Disable WDT */
 	RETURN_ERROR(rt9490_enable_wdt(chgnum, false));
 	/* Disable battery thermal protection */
-	RETURN_ERROR(rt9490_set_bit(
-			chgnum, RT9490_REG_ADD_CTRL0, RT9490_JEITA_COLD_HOT));
+	RETURN_ERROR(rt9490_set_bit(chgnum, RT9490_REG_ADD_CTRL0,
+				    RT9490_JEITA_COLD_HOT));
 	/* Disable AUTO_AICR / AUTO_MIVR */
-	RETURN_ERROR(rt9490_clr_bit(
-			chgnum,
-			RT9490_REG_ADD_CTRL0,
-			RT9490_AUTO_AICR | RT9490_AUTO_MIVR));
+	RETURN_ERROR(rt9490_clr_bit(chgnum, RT9490_REG_ADD_CTRL0,
+				    RT9490_AUTO_AICR | RT9490_AUTO_MIVR));
 	/* Disable charge timer */
-	RETURN_ERROR(rt9490_clr_bit(
-			chgnum,
-			RT9490_REG_SAFETY_TMR_CTRL,
-			RT9490_EN_TRICHG_TMR |
-			RT9490_EN_PRECHG_TMR |
-			RT9490_EN_FASTCHG_TMR));
+	RETURN_ERROR(rt9490_clr_bit(chgnum, RT9490_REG_SAFETY_TMR_CTRL,
+				    RT9490_EN_TRICHG_TMR |
+					    RT9490_EN_PRECHG_TMR |
+					    RT9490_EN_FASTCHG_TMR));
 	RETURN_ERROR(rt9490_set_mivr(chgnum, default_init_setting.mivr));
 	RETURN_ERROR(rt9490_set_ieoc(chgnum, default_init_setting.eoc_current));
 	RETURN_ERROR(rt9490_set_iprec(chgnum, batt_info->precharge_current));
 	RETURN_ERROR(rt9490_enable_adc(chgnum, true));
 	RETURN_ERROR(rt9490_enable_jeita(chgnum, false));
 	RETURN_ERROR(rt9490_field_update8(
-			chgnum, RT9490_REG_CHG_CTRL1, RT9490_VAC_OVP_MASK,
-			RT9490_VAC_OVP_26V << RT9490_VAC_OVP_SHIFT));
+		chgnum, RT9490_REG_CHG_CTRL1, RT9490_VAC_OVP_MASK,
+		RT9490_VAC_OVP_26V << RT9490_VAC_OVP_SHIFT));
 
+	/* Mask all interrupts except BC12 done */
+	RETURN_ERROR(rt9490_set_bit(chgnum, RT9490_REG_CHG_IRQ_MASK0,
+				    RT9490_CHG_IRQ_MASK0_ALL));
+	RETURN_ERROR(rt9490_set_bit(chgnum, RT9490_REG_CHG_IRQ_MASK1,
+				    RT9490_CHG_IRQ_MASK1_ALL &
+					    ~RT9490_BC12_DONE_MASK));
+	RETURN_ERROR(rt9490_set_bit(chgnum, RT9490_REG_CHG_IRQ_MASK2,
+				    RT9490_CHG_IRQ_MASK2_ALL));
+	RETURN_ERROR(rt9490_set_bit(chgnum, RT9490_REG_CHG_IRQ_MASK3,
+				    RT9490_CHG_IRQ_MASK3_ALL));
+	RETURN_ERROR(rt9490_set_bit(chgnum, RT9490_REG_CHG_IRQ_MASK4,
+				    RT9490_CHG_IRQ_MASK4_ALL));
+	RETURN_ERROR(rt9490_set_bit(chgnum, RT9490_REG_CHG_IRQ_MASK5,
+				    RT9490_CHG_IRQ_MASK5_ALL));
 
 	return EC_SUCCESS;
+}
+
+int rt9490_enable_pwm_1mhz(int chgnum, bool en)
+{
+	return rt9490_update8(chgnum, RT9490_REG_ADD_CTRL1, RT9490_PWM_1MHZ_EN,
+			      en ? MASK_SET : MASK_CLR);
 }
 
 static void rt9490_init(int chgnum)
@@ -439,10 +463,11 @@ static enum ec_error_list rt9490_get_input_current_limit(int chgnum,
 static enum ec_error_list rt9490_get_input_current(int chgnum,
 						   int *input_current)
 {
-	uint16_t reg_val;
+	int16_t reg_val;
 
-	RETURN_ERROR(rt9490_read16(chgnum, RT9490_REG_IBUS_ADC, &reg_val));
-	*input_current = (int)reg_val * 1000;
+	RETURN_ERROR(rt9490_read16(chgnum, RT9490_REG_IBUS_ADC,
+				   (uint16_t *)&reg_val));
+	*input_current = reg_val;
 	return EC_SUCCESS;
 }
 
@@ -492,6 +517,37 @@ static int rt9490_ramp_get_current_limit(int chgnum)
 }
 #endif
 
+#ifdef CONFIG_CMD_CHARGER_DUMP
+static void dump_range(int chgnum, int from, int to)
+{
+	for (int reg = from; reg <= to; ++reg) {
+		int val = 0;
+
+		if (!rt9490_read8(chgnum, reg, &val))
+			CPRINTS("    0x%02x: 0x%02x", reg, val);
+		else
+			CPRINTS("    0x%02x: (error)", reg);
+	}
+}
+
+static void rt9490_dump_registers(int chgnum)
+{
+	uint16_t ts, tdie;
+
+	CPRINTS("CHG_STATUS:");
+	dump_range(chgnum, RT9490_REG_CHG_STATUS0, RT9490_REG_CHG_STATUS4);
+	CPRINTS("FAULT_STATUS:");
+	dump_range(chgnum, RT9490_REG_FAULT_STATUS0, RT9490_REG_FAULT_STATUS1);
+	CPRINTS("IRQ_FLAG:");
+	dump_range(chgnum, RT9490_REG_CHG_IRQ_FLAG0, RT9490_REG_CHG_IRQ_FLAG5);
+
+	rt9490_read16(chgnum, RT9490_REG_TS_ADC, &ts);
+	CPRINTS("TS_ADC: %d.%d%%", ts / 10, ts % 10);
+	rt9490_read16(chgnum, RT9490_REG_TDIE_ADC, &tdie);
+	CPRINTS("TDIE_ADC: %d deg C", tdie);
+}
+#endif
+
 const struct charger_drv rt9490_drv = {
 	.init = &rt9490_init,
 	.get_info = &rt9490_get_info,
@@ -520,4 +576,163 @@ const struct charger_drv rt9490_drv = {
 	.ramp_is_detected = &rt9490_ramp_is_detected,
 	.ramp_get_current_limit = &rt9490_ramp_get_current_limit,
 #endif
+#ifdef CONFIG_CMD_CHARGER_DUMP
+	.dump_registers = &rt9490_dump_registers,
+#endif
 };
+
+/* BC1.2 */
+static int rt9490_get_bc12_ilim(enum charge_supplier supplier)
+{
+	switch (supplier) {
+	case CHARGE_SUPPLIER_BC12_DCP:
+	case CHARGE_SUPPLIER_BC12_CDP:
+		return USB_CHARGER_MAX_CURR_MA;
+	case CHARGE_SUPPLIER_BC12_SDP:
+	default:
+		return USB_CHARGER_MIN_CURR_MA;
+	}
+}
+
+static enum charge_supplier rt9490_get_bc12_device_type(int chgnum)
+{
+	int reg, vbus_stat;
+
+	if (rt9490_read8(chgnum, RT9490_REG_CHG_STATUS1, &reg))
+		return CHARGE_SUPPLIER_NONE;
+
+	vbus_stat = (reg & RT9490_VBUS_STAT_MASK) >> RT9490_VBUS_STAT_SHIFT;
+
+	switch (vbus_stat) {
+	case RT9490_SDP:
+		CPRINTS("BC12 SDP");
+		return CHARGE_SUPPLIER_BC12_SDP;
+	case RT9490_CDP:
+		CPRINTS("BC12 CDP");
+		return CHARGE_SUPPLIER_BC12_CDP;
+	case RT9490_DCP:
+		CPRINTS("BC12 DCP");
+		return CHARGE_SUPPLIER_BC12_DCP;
+	default:
+		CPRINTS("BC12 UNKNOWN 0x%02X", vbus_stat);
+		return CHARGE_SUPPLIER_NONE;
+	}
+}
+
+static void rt9490_update_charge_manager(int port,
+					 enum charge_supplier new_bc12_type)
+{
+	static enum charge_supplier current_bc12_type = CHARGE_SUPPLIER_NONE;
+
+	if (new_bc12_type != current_bc12_type) {
+		if (current_bc12_type >= 0)
+			charge_manager_update_charge(current_bc12_type, port,
+						     NULL);
+
+		if (new_bc12_type != CHARGE_SUPPLIER_NONE) {
+			struct charge_port_info chg = {
+				.current = rt9490_get_bc12_ilim(new_bc12_type),
+				.voltage = USB_CHARGER_VOLTAGE_MV,
+			};
+
+			charge_manager_update_charge(new_bc12_type, port, &chg);
+		}
+
+		current_bc12_type = new_bc12_type;
+	}
+}
+
+/* TODO: chgnum is not passed into the task, assuming only one charger */
+#ifndef CONFIG_CHARGER_SINGLE_CHIP
+#error rt9490 bc1.2 driver only works in single charger mode.
+#endif
+
+static void rt9490_usb_charger_task_init(const int port)
+{
+	rt9490_enable_chgdet_flow(CHARGER_SOLO, false);
+}
+
+static void rt9490_usb_charger_task_event(const int port, uint32_t evt)
+{
+	/*
+	 * b/193753475#comment33: don't trigger bc1.2 detection after
+	 * PRSwap/FRSwap.
+	 *
+	 * Note that the only scenario we want to catch is power role swap. For
+	 * other cases, `is_non_pd_sink` may have false positive (e.g.
+	 * pd_capable() is false during initial PD negotiation). But it's okay
+	 * to always trigger bc1.2 detection for other cases.
+	 */
+	bool is_non_pd_sink = !pd_capable(port) &&
+			      !usb_charger_port_is_sourcing_vbus(port) &&
+			      pd_check_vbus_level(port, VBUS_PRESENT);
+
+	/* vbus change, start bc12 detection */
+	if (evt & USB_CHG_EVENT_VBUS) {
+		if (is_non_pd_sink)
+			rt9490_enable_chgdet_flow(CHARGER_SOLO, true);
+		else
+			rt9490_update_charge_manager(port,
+						     CHARGE_SUPPLIER_NONE);
+	}
+
+	/* detection done, update charge_manager and stop detection */
+	if (evt & USB_CHG_EVENT_BC12) {
+		enum charge_supplier supplier;
+
+		if (is_non_pd_sink)
+			supplier = rt9490_get_bc12_device_type(CHARGER_SOLO);
+		else
+			supplier = CHARGE_SUPPLIER_NONE;
+
+		rt9490_update_charge_manager(port, supplier);
+		rt9490_enable_chgdet_flow(CHARGER_SOLO, false);
+	}
+}
+
+static atomic_t pending_events;
+
+void rt9490_deferred_interrupt(void)
+{
+	atomic_t current = atomic_clear(&pending_events);
+
+	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port) {
+		int ret, irq_flag;
+
+		if (!(current & BIT(port)))
+			continue;
+
+		if (bc12_ports[port].drv != &rt9490_bc12_drv)
+			continue;
+
+		/* IRQ flag is read clear, no need to write back */
+		ret = rt9490_read8(CHARGER_SOLO, RT9490_REG_CHG_IRQ_FLAG1,
+				   &irq_flag);
+		if (ret)
+			return;
+
+		if (irq_flag & RT9490_BC12_DONE_FLAG)
+			usb_charger_task_set_event(port, USB_CHG_EVENT_BC12);
+	}
+}
+DECLARE_DEFERRED(rt9490_deferred_interrupt);
+
+void rt9490_interrupt(int port)
+{
+	atomic_or(&pending_events, BIT(port));
+	hook_call_deferred(&rt9490_deferred_interrupt_data, 0);
+}
+
+const struct bc12_drv rt9490_bc12_drv = {
+	.usb_charger_task_init = rt9490_usb_charger_task_init,
+	.usb_charger_task_event = rt9490_usb_charger_task_event,
+};
+
+#ifdef CONFIG_BC12_SINGLE_DRIVER
+/* provide a default bc12_ports[] for backward compatibility */
+struct bc12_config bc12_ports[CHARGE_PORT_COUNT] = {
+	[0 ... (CHARGE_PORT_COUNT - 1)] = {
+		.drv = &rt9490_bc12_drv,
+	},
+};
+#endif /* CONFIG_BC12_SINGLE_DRIVER */

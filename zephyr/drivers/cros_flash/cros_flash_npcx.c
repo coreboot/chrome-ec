@@ -6,15 +6,14 @@
 #define DT_DRV_COMPAT nuvoton_npcx_cros_flash
 
 #include <drivers/cros_flash.h>
-#include <drivers/flash.h>
-#include <drivers/gpio.h>
-#include <drivers/spi.h>
-#include <kernel.h>
-#include <logging/log.h>
+#include <zephyr/drivers/flash.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/spi.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 #include <soc.h>
 
 #include "flash.h"
-#include "gpio.h"
 #include "spi_flash_reg.h"
 #include "write_protect.h"
 #include "../drivers/flash/spi_nor.h"

@@ -4,9 +4,9 @@
  */
 
 #include <flash.h>
-#include <kernel.h>
-#include <logging/log.h>
-#include <drivers/flash.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/drivers/flash.h>
 
 #include "console.h"
 #include "drivers/cros_flash.h"
@@ -167,8 +167,7 @@ uint32_t crec_flash_physical_get_writable_flags(uint32_t cur_flags)
 }
 
 #if IS_ENABLED(CONFIG_SHELL)
-static int command_flashchip(const struct shell *shell,
-			     size_t argc,
+static int command_flashchip(const struct shell *shell, size_t argc,
 			     char **argv)
 {
 	uint8_t manufacturer;
@@ -177,23 +176,19 @@ static int command_flashchip(const struct shell *shell,
 	uint8_t status2;
 	int res;
 
-	res = cros_flash_physical_get_status(cros_flash_dev,
-					     &status1,
+	res = cros_flash_physical_get_status(cros_flash_dev, &status1,
 					     &status2);
 
 	if (!res)
-		shell_fprintf(shell,
-			      SHELL_NORMAL,
-			      "Status 1: 0x%02x, Status 2: 0x%02x\n",
-			      status1, status2);
+		shell_fprintf(shell, SHELL_NORMAL,
+			      "Status 1: 0x%02x, Status 2: 0x%02x\n", status1,
+			      status2);
 
-	res = cros_flash_physical_get_jedec_id(cros_flash_dev,
-					       &manufacturer,
+	res = cros_flash_physical_get_jedec_id(cros_flash_dev, &manufacturer,
 					       &device);
 
 	if (!res)
-		shell_fprintf(shell,
-			      SHELL_NORMAL,
+		shell_fprintf(shell, SHELL_NORMAL,
 			      "Manufacturer: 0x%02x, DID: 0x%04x\n",
 			      manufacturer, device);
 
@@ -205,15 +200,23 @@ SHELL_CMD_REGISTER(flashchip, NULL, "Information about flash chip",
 
 /*
  * The priority flash_dev_init should be lower than GPIO initialization because
- * it calls gpio_get_level function.
+ * it calls gpio_pin_get_dt function.
  */
 #if CONFIG_PLATFORM_EC_FLASH_INIT_PRIORITY <= \
 	CONFIG_PLATFORM_EC_GPIO_INIT_PRIORITY
 #error "Flash must be initialized after GPIOs"
 #endif
+#if IS_ENABLED(CONFIG_SOC_FAMILY_NPCX)
 #if CONFIG_PLATFORM_EC_FLASH_INIT_PRIORITY <= \
 	CONFIG_CROS_FLASH_NPCX_INIT_PRIORITY
 #error "CONFIG_PLATFORM_EC_FLASH_INIT_PRIORITY must be greater than" \
 	"CONFIG_CROS_FLASH_NPCX_INIT_PRIORITY."
+#endif
+#elif IS_ENABLED(CONFIG_SOC_FAMILY_MEC)
+#if CONFIG_PLATFORM_EC_FLASH_INIT_PRIORITY <= \
+	CONFIG_CROS_FLASH_MCHP_INIT_PRIORITY
+#error "CONFIG_PLATFORM_EC_FLASH_INIT_PRIORITY must be greater than" \
+	"CONFIG_CROS_FLASH_MCHP_INIT_PRIORITY."
+#endif
 #endif
 SYS_INIT(flash_dev_init, POST_KERNEL, CONFIG_PLATFORM_EC_FLASH_INIT_PRIORITY);

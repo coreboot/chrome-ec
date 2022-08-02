@@ -32,7 +32,6 @@
 #define CONFIG_MAG_LIS2MDL
 #define CONFIG_MAG_CALIBRATE
 
-#define CONFIG_ACCEL_INTERRUPTS
 /* Enable sensor fifo, must also define the _SIZE and _THRES */
 #define CONFIG_ACCEL_FIFO
 /* FIFO size is a power of 2. */
@@ -95,8 +94,8 @@
 #define CONFIG_ISH_PM_D3
 #define CONFIG_ISH_PM_RESET_PREP
 
-#define CONFIG_ISH_D0I2_MIN_USEC        (15*MSEC)
-#define CONFIG_ISH_D0I3_MIN_USEC        (100*MSEC)
+#define CONFIG_ISH_D0I2_MIN_USEC (15 * MSEC)
+#define CONFIG_ISH_D0I3_MIN_USEC (100 * MSEC)
 
 #ifndef __ASSEMBLER__
 
@@ -108,13 +107,7 @@
  * Note: Since we aren't using LPC memory map to transmit sensor data, the
  * order of this enum does not need to be accel, accel, gyro
  */
-enum sensor_id {
-	LID_ACCEL,
-	LID_GYRO,
-	BASE_ACCEL,
-	LID_MAG,
-	SENSOR_COUNT
-};
+enum sensor_id { LID_ACCEL, LID_GYRO, BASE_ACCEL, LID_MAG, SENSOR_COUNT };
 
 #endif /* !__ASSEMBLER__ */
 

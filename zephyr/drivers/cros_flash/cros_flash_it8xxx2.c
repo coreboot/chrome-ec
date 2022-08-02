@@ -6,9 +6,9 @@
 #define DT_DRV_COMPAT ite_it8xxx2_cros_flash
 
 #include <drivers/cros_flash.h>
-#include <drivers/flash.h>
-#include <kernel.h>
-#include <logging/log.h>
+#include <zephyr/drivers/flash.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 #include <soc.h>
 
 #include "flash.h"
@@ -25,11 +25,14 @@ struct cros_flash_it8xxx2_data {
 	bool all_protected;
 };
 
+#define GCTRL_IT8XXX2_REG_BASE \
+	((struct gctrl_it8xxx2_regs *)DT_REG_ADDR(DT_NODELABEL(gctrl)))
+
 /* Driver convenience defines */
 #define DRV_DATA(dev) ((struct cros_flash_it8xxx2_data *)(dev)->data)
 
-#define FLASH_DEV_NAME DT_CHOSEN_ZEPHYR_FLASH_CONTROLLER_LABEL
-static const struct device *flash_controller;
+static const struct device *const flash_controller =
+	DEVICE_DT_GET(DT_CHOSEN(zephyr_flash_controller));
 
 #define FWP_REG(bank) (bank / 8)
 #define FWP_MASK(bank) (1 << (bank % 8))
@@ -99,7 +102,7 @@ static int cros_flash_it8xxx2_init(const struct device *dev)
 	reset_flags = system_get_reset_flags();
 	prot_flags = crec_flash_get_protect();
 	unwanted_prot_flags = EC_FLASH_PROTECT_ALL_NOW |
-		EC_FLASH_PROTECT_ERROR_INCONSISTENT;
+			      EC_FLASH_PROTECT_ERROR_INCONSISTENT;
 
 	/*
 	 * If we have already jumped between images, an earlier image could
@@ -110,12 +113,12 @@ static int cros_flash_it8xxx2_init(const struct device *dev)
 
 	if (prot_flags & EC_FLASH_PROTECT_GPIO_ASSERTED) {
 		/* Protect the entire flash of host interface */
-		flash_protect_banks(0,
-			CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE,
+		flash_protect_banks(
+			0, CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE,
 			FLASH_WP_HOST);
 		/* Protect the entire flash of DBGR interface */
-		flash_protect_banks(0,
-			CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE,
+		flash_protect_banks(
+			0, CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE,
 			FLASH_WP_DBGR);
 		/*
 		 * Write protect is asserted.  If we want RO flash protected,
@@ -123,8 +126,9 @@ static int cros_flash_it8xxx2_init(const struct device *dev)
 		 */
 		if ((prot_flags & EC_FLASH_PROTECT_RO_AT_BOOT) &&
 		    !(prot_flags & EC_FLASH_PROTECT_RO_NOW)) {
-			int rv = crec_flash_set_protect(EC_FLASH_PROTECT_RO_NOW,
-						   EC_FLASH_PROTECT_RO_NOW);
+			int rv =
+				crec_flash_set_protect(EC_FLASH_PROTECT_RO_NOW,
+						       EC_FLASH_PROTECT_RO_NOW);
 			if (rv)
 				return rv;
 
@@ -203,13 +207,13 @@ static int cros_flash_it8xxx2_erase(const struct device *dev, int offset,
 	 * during erasing.
 	 */
 	if (IS_ENABLED(HAS_TASK_HOSTCMD) &&
-		IS_ENABLED(CONFIG_HOST_COMMAND_STATUS)) {
+	    IS_ENABLED(CONFIG_HOST_COMMAND_STATUS)) {
 		irq_enable(DT_IRQN(DT_NODELABEL(shi)));
 	}
 	/* Always use sector erase command */
 	for (; size > 0; size -= CONFIG_FLASH_ERASE_SIZE) {
 		ret = flash_erase(flash_controller, offset,
-			CONFIG_FLASH_ERASE_SIZE);
+				  CONFIG_FLASH_ERASE_SIZE);
 		if (ret)
 			break;
 
@@ -265,23 +269,29 @@ static int cros_flash_it8xxx2_protect_at_boot(const struct device *dev,
 
 static int cros_flash_it8xxx2_protect_now(const struct device *dev, int all)
 {
+	struct gctrl_it8xxx2_regs *const gctrl_base = GCTRL_IT8XXX2_REG_BASE;
 	struct cros_flash_it8xxx2_data *const data = DRV_DATA(dev);
 
 	if (all) {
 		/* Protect the entire flash */
-		flash_protect_banks(0,
-			CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE,
+		flash_protect_banks(
+			0, CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE,
 			FLASH_WP_EC);
 		data->all_protected = 1;
 	} else {
 		/* Protect the read-only section and persistent state */
-		flash_protect_banks(WP_BANK_OFFSET,
-			WP_BANK_COUNT, FLASH_WP_EC);
+		flash_protect_banks(WP_BANK_OFFSET, WP_BANK_COUNT, FLASH_WP_EC);
 #ifdef PSTATE_BANK
-		flash_protect_banks(PSTATE_BANK,
-			PSTATE_BANK_COUNT, FLASH_WP_EC);
+		flash_protect_banks(PSTATE_BANK, PSTATE_BANK_COUNT,
+				    FLASH_WP_EC);
 #endif
 	}
+
+	/*
+	 * Eflash protect lock register which can only be write 1 and only be
+	 * cleared by power-on reset.
+	 */
+	gctrl_base->GCTRL_EPLR |= IT8XXX2_GCTRL_EPLR_ENABLE;
 
 	return EC_SUCCESS;
 }
@@ -301,9 +311,9 @@ static int flash_it8xxx2_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	flash_controller = device_get_binding(FLASH_DEV_NAME);
-	if (!flash_controller) {
-		LOG_ERR("Fail to find %s", FLASH_DEV_NAME);
+	if (!device_is_ready(flash_controller)) {
+		LOG_ERR("Selected flash device %s is not ready",
+			flash_controller->name);
 		return -ENODEV;
 	}
 

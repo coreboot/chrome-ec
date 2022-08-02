@@ -7,15 +7,15 @@
 
 #include <assert.h>
 #include <drivers/cros_rtc.h>
-#include <drivers/gpio.h>
-#include <kernel.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/kernel.h>
 #include <soc.h>
 #include <soc/microchip_xec/reg_def_cros.h>
 
 #include "ec_tasks.h"
 #include "task.h"
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(cros_rtc, LOG_LEVEL_ERR);
 
 /* Driver config */
@@ -123,7 +123,7 @@ static const struct cros_rtc_xec_config cros_rtc_xec_cfg_0 = {
 
 static struct cros_rtc_xec_data cros_rtc_xec_data_0;
 
-DEVICE_DT_INST_DEFINE(0, cros_rtc_xec_init, NULL,
-		      &cros_rtc_xec_data_0, &cros_rtc_xec_cfg_0, POST_KERNEL,
+DEVICE_DT_INST_DEFINE(0, cros_rtc_xec_init, NULL, &cros_rtc_xec_data_0,
+		      &cros_rtc_xec_cfg_0, POST_KERNEL,
 		      CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		      &cros_rtc_xec_driver_api);

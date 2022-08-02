@@ -19,6 +19,7 @@
 #include "system.h"
 #include "tcpm/tcpm.h"
 #include "timer.h"
+#include "typec_control.h"
 #include "usb_common.h"
 #include "usb_pd.h"
 #include "usb_pd_dpm.h"
@@ -29,13 +30,13 @@
 #error Mock defined HAS_MOCK_CHARGE_MANAGER
 #endif
 
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
 
 #define POWER(charge_port) ((charge_port.current) * (charge_port.voltage))
 
 /* Timeout for delayed override power swap, allow for 500ms extra */
-#define POWER_SWAP_TIMEOUT (PD_T_SRC_RECOVER_MAX + PD_T_SRC_TURN_ON + \
-			    PD_T_SAFE_0V + 500 * MSEC)
+#define POWER_SWAP_TIMEOUT \
+	(PD_T_SRC_RECOVER_MAX + PD_T_SRC_TURN_ON + PD_T_SAFE_0V + 500 * MSEC)
 
 /*
  * Default charge supplier priority
@@ -69,14 +70,12 @@ __overridable const int supplier_priority[] = {
 	[CHARGE_SUPPLIER_OTHER] = 4,
 	[CHARGE_SUPPLIER_VBUS] = 4,
 #endif
-#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
-	[CHARGE_SUPPLIER_WPC_BPP] = 5,
-	[CHARGE_SUPPLIER_WPC_EPP] = 5,
-	[CHARGE_SUPPLIER_WPC_GPP] = 5,
-#endif
 
 };
 BUILD_ASSERT(ARRAY_SIZE(supplier_priority) == CHARGE_SUPPLIER_COUNT);
+
+const char *charge_supplier_name[] = { CHARGE_SUPPLIER_NAME };
+BUILD_ASSERT(ARRAY_SIZE(charge_supplier_name) == CHARGE_SUPPLIER_COUNT);
 
 /* Keep track of available charge for each charge port. */
 static struct charge_port_info available_charge[CHARGE_SUPPLIER_COUNT]
@@ -149,7 +148,7 @@ enum charge_manager_change_type {
 	CHANGE_DUALROLE,
 };
 
-static int is_pd_port(int port)
+int is_pd_port(int port)
 {
 	return port >= 0 && port < board_get_usb_pd_port_count();
 }
@@ -203,9 +202,8 @@ static int is_connected(int port)
  */
 static int charge_manager_spoof_dualrole_capability(void)
 {
-	return (system_get_image_copy() == EC_IMAGE_RO &&
-		system_is_locked()) || !left_safe_mode;
-
+	return (system_get_image_copy() == EC_IMAGE_RO && system_is_locked()) ||
+	       !left_safe_mode;
 }
 #endif /* !CONFIG_CHARGE_MANAGER_DRP_CHARGING */
 
@@ -234,7 +232,7 @@ static void charge_manager_init(void)
 			source_port_rp[i] = CONFIG_USB_PD_PULLUP;
 	}
 }
-DECLARE_HOOK(HOOK_INIT, charge_manager_init, HOOK_PRIO_CHARGE_MANAGER_INIT);
+DECLARE_HOOK(HOOK_INIT, charge_manager_init, HOOK_PRIO_INIT_CHARGE_MANAGER);
 
 /**
  * Check if the charge manager is seeded.
@@ -256,9 +254,9 @@ static int charge_manager_is_seeded(void)
 			if (!is_valid_port(j))
 				continue;
 			if (available_charge[i][j].current ==
-			    CHARGE_CURRENT_UNINITIALIZED ||
+				    CHARGE_CURRENT_UNINITIALIZED ||
 			    available_charge[i][j].voltage ==
-			    CHARGE_VOLTAGE_UNINITIALIZED)
+				    CHARGE_VOLTAGE_UNINITIALIZED)
 				return 0;
 		}
 	}
@@ -339,8 +337,8 @@ static enum charge_supplier get_current_supplier(int port)
 
 	return supplier;
 }
-static enum usb_power_roles get_current_power_role(int port,
-		enum charge_supplier supplier)
+static enum usb_power_roles
+get_current_power_role(int port, enum charge_supplier supplier)
 {
 	enum usb_power_roles role;
 	if (charge_port == port)
@@ -396,9 +394,39 @@ static int get_vbus_voltage(int port, enum usb_power_roles current_role)
 
 int charge_manager_get_vbus_voltage(int port)
 {
-	return get_vbus_voltage(port, get_current_power_role(port,
-				get_current_supplier(port)));
+	return get_vbus_voltage(
+		port, get_current_power_role(port, get_current_supplier(port)));
 }
+
+#ifdef CONFIG_CMD_VBUS
+static int command_vbus(int argc, char **argv)
+{
+	/* port = -1 to print all the ports */
+	int port = -1;
+	int vbus, vsys;
+
+	if (argc == 2)
+		port = atoi(argv[1]);
+
+	ccprintf("       VBUS     VSYS\n");
+	for (int i = 0; i < CHARGE_PORT_COUNT; i++) {
+		if (port < 0 || i == port) {
+			vbus = charge_manager_get_vbus_voltage(i);
+			if (charger_get_vsys_voltage(i, &vsys))
+				vsys = -1;
+			ccprintf("  P%d %6dmV ", i, vbus);
+			if (vsys >= 0)
+				ccprintf("%6dmV\n", vsys);
+			else
+				ccprintf("(unknown)\n");
+		}
+	}
+
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(vbus, command_vbus, "[port]",
+			"Print VBUS & VSYS of the given port");
+#endif
 
 /**
  * Fills passed power_info structure with current info about the passed port.
@@ -406,8 +434,9 @@ int charge_manager_get_vbus_voltage(int port)
  * @param port	Charge port.
  * @param r	USB PD power info to be updated.
  */
-static void charge_manager_fill_power_info(int port,
-	struct ec_response_usb_pd_power_info *r)
+static void
+charge_manager_fill_power_info(int port,
+			       struct ec_response_usb_pd_power_info *r)
 {
 	enum charge_supplier sup = get_current_supplier(port);
 
@@ -438,6 +467,8 @@ static void charge_manager_fill_power_info(int port,
 		}
 	} else {
 		int use_ramp_current;
+		uint32_t max_mv, max_ma, pdo, unused;
+
 		switch (sup) {
 		case CHARGE_SUPPLIER_PD:
 			r->type = USB_CHG_TYPE_PD;
@@ -463,30 +494,32 @@ static void charge_manager_fill_power_info(int port,
 			r->type = USB_CHG_TYPE_VBUS;
 			break;
 #endif
-#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
-		/*
-		 * Todo:need kernel add wpc device node in power_supply
-		 * before that use USB_CHG_TYPE_PROPRIETARY to present WPC.
-		 */
-		case CHARGE_SUPPLIER_WPC_BPP:
-		case CHARGE_SUPPLIER_WPC_EPP:
-		case CHARGE_SUPPLIER_WPC_GPP:
-			r->type = USB_CHG_TYPE_PROPRIETARY;
-			break;
-#endif
 #if CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0
 		case CHARGE_SUPPLIER_DEDICATED:
 			r->type = USB_CHG_TYPE_DEDICATED;
 			break;
 #endif
 		default:
-#ifdef CONFIG_WIRELESS_CHARGER_P9221_R7
-			r->type = USB_CHG_TYPE_VBUS;
-#else
 			r->type = USB_CHG_TYPE_OTHER;
-#endif
 		}
-		r->meas.voltage_max = available_charge[sup][port].voltage;
+
+		if (IS_ENABLED(CONFIG_USB_PD_DPS) && dps_is_enabled() &&
+		    sup == CHARGE_SUPPLIER_PD) {
+			/*
+			 * Returns the maximum power the system can request when
+			 * DPS enabled. This is to prevent the system think it's
+			 * using a low power charger.
+			 */
+			pd_find_pdo_index(pd_get_src_cap_cnt(port),
+					  pd_get_src_caps(port),
+					  pd_get_max_voltage(), &pdo);
+			pd_extract_pdo_power(pdo, &max_ma, &max_mv, &unused);
+		} else {
+			max_mv = available_charge[sup][port].voltage;
+			max_ma = available_charge[sup][port].current;
+		}
+
+		r->meas.voltage_max = max_mv;
 
 		/*
 		 * Report unknown charger CHARGE_DETECT_DELAY after supplier
@@ -500,15 +533,15 @@ static void charge_manager_fill_power_info(int port,
 		 * lose power again).
 		 */
 #ifdef CONFIG_BATTERY
-		if (get_time().val < registration_time[port].val +
-				     CHARGE_DETECT_DELAY)
+		if (get_time().val <
+		    registration_time[port].val + CHARGE_DETECT_DELAY)
 			r->type = USB_CHG_TYPE_UNKNOWN;
 #endif
 
 #if defined(HAS_TASK_CHG_RAMP) || defined(CONFIG_CHARGE_RAMP_HW)
 		/* Read ramped current if active charging port */
-		use_ramp_current =
-			(charge_port == port) && chg_ramp_allowed(port, sup);
+		use_ramp_current = (charge_port == port) &&
+				   chg_ramp_allowed(port, sup);
 #else
 		use_ramp_current = 0;
 #endif
@@ -525,17 +558,15 @@ static void charge_manager_fill_power_info(int port,
 			 * If ramp is not allowed, max current is just the
 			 * available charge current.
 			 */
-			r->meas.current_max = chg_ramp_is_stable() ?
-				r->meas.current_lim : chg_ramp_max(port, sup,
-					available_charge[sup][port].current);
+			r->meas.current_max =
+				chg_ramp_is_stable() ?
+					r->meas.current_lim :
+					chg_ramp_max(port, sup, max_ma);
 
-			r->max_power =
-				r->meas.current_max * r->meas.voltage_max;
 		} else {
-			r->meas.current_max = r->meas.current_lim =
-				available_charge[sup][port].current;
-			r->max_power = POWER(available_charge[sup][port]);
+			r->meas.current_max = r->meas.current_lim = max_ma;
 		}
+		r->max_power = r->meas.current_max * r->meas.voltage_max;
 
 		r->meas.voltage_now = get_vbus_voltage(port, r->role);
 	}
@@ -565,8 +596,8 @@ void charge_manager_save_log(int port)
 		 (pinfo.dualrole ? CHARGE_FLAGS_DUAL_ROLE : 0);
 
 	pd_log_event(PD_EVENT_MCU_CHARGE,
-		     PD_LOG_PORT_SIZE(port, sizeof(pinfo.meas)),
-		     flags, &pinfo.meas);
+		     PD_LOG_PORT_SIZE(port, sizeof(pinfo.meas)), flags,
+		     &pinfo.meas);
 }
 #endif /* CONFIG_USB_PD_LOGGING */
 
@@ -627,7 +658,6 @@ static void charge_manager_get_best_charge_port(int *new_port,
 
 	/* Skip port selection on OVERRIDE_DONT_CHARGE. */
 	if (override_port != OVERRIDE_DONT_CHARGE) {
-
 		/*
 		 * Charge supplier selection logic:
 		 * 1. Prefer DPS charge port.
@@ -657,8 +687,7 @@ static void charge_manager_get_best_charge_port(int *new_port,
 				 * charge on another override port.
 				 */
 				if (override_port != OVERRIDE_OFF &&
-				    override_port == port &&
-				    override_port != j)
+				    override_port == port && override_port != j)
 					continue;
 
 #ifndef CONFIG_CHARGE_MANAGER_DRP_CHARGING
@@ -683,31 +712,36 @@ static void charge_manager_get_best_charge_port(int *new_port,
 					supplier = i;
 					port = j;
 					break;
-				/* Select if no supplier chosen yet. */
+					/* Select if no supplier chosen yet. */
 				} else if (supplier == CHARGE_SUPPLIER_NONE ||
-				/* ..or if supplier priority is higher. */
-				    supplier_priority[i] <
-				    supplier_priority[supplier] ||
-				/* ..or if this is our override port. */
-				   (j == override_port &&
-				    port != override_port) ||
-				/* ..or if priority is tied and.. */
-				   (supplier_priority[i] ==
-				    supplier_priority[supplier] &&
-				/* candidate port can supply more power or.. */
-				   (candidate_port_power > best_port_power ||
-				/*
-				 * candidate port is the active port and can
-				 * supply the same amount of power.
-				 */
-				   (candidate_port_power == best_port_power &&
-				    charge_port == j)))) {
+					   /* ..or if supplier priority is
+					      higher. */
+					   supplier_priority[i] <
+						   supplier_priority[supplier] ||
+					   /* ..or if this is our override port.
+					    */
+					   (j == override_port &&
+					    port != override_port) ||
+					   /* ..or if priority is tied and.. */
+					   (supplier_priority[i] ==
+						    supplier_priority[supplier] &&
+					    /* candidate port can supply more
+					       power or.. */
+					    (candidate_port_power >
+						     best_port_power ||
+					     /*
+					      * candidate port is the active
+					      * port and can supply the same
+					      * amount of power.
+					      */
+					     (candidate_port_power ==
+						      best_port_power &&
+					      charge_port == j)))) {
 					supplier = i;
 					port = j;
 					best_port_power = candidate_port_power;
 				}
 			}
-
 	}
 
 #ifdef CONFIG_BATTERY
@@ -715,8 +749,7 @@ static void charge_manager_get_best_charge_port(int *new_port,
 	 * if no battery present then retain same charge port
 	 * and charge supplier to avoid the port switching
 	 */
-	if (charge_port != CHARGE_SUPPLIER_NONE &&
-	    charge_port != port &&
+	if (charge_port != CHARGE_SUPPLIER_NONE && charge_port != port &&
 	    (battery_is_present() == BP_NO ||
 	     (battery_is_present() == BP_YES &&
 	      battery_is_cut_off() != BATTERY_CUTOFF_STATE_NORMAL))) {
@@ -759,9 +792,8 @@ static void charge_manager_refresh(void)
 		 * the port, for example, if the port has become a charge
 		 * source.
 		 */
-		if (active_charge_port_initialized &&
-		     new_port == charge_port &&
-		     new_supplier == charge_supplier)
+		if (active_charge_port_initialized && new_port == charge_port &&
+		    new_supplier == charge_supplier)
 			break;
 
 		/*
@@ -821,8 +853,8 @@ static void charge_manager_refresh(void)
 		/* Enforce port charge ceiling. */
 		ceil = charge_manager_get_ceil(new_port);
 		if (left_safe_mode && ceil != CHARGE_CEIL_NONE)
-			new_charge_current = MIN(ceil,
-						 new_charge_current_uncapped);
+			new_charge_current =
+				MIN(ceil, new_charge_current_uncapped);
 		else
 			new_charge_current = new_charge_current_uncapped;
 
@@ -843,19 +875,19 @@ static void charge_manager_refresh(void)
 	if (new_port != charge_port || new_charge_current != charge_current ||
 	    new_supplier != charge_supplier) {
 #ifdef HAS_TASK_CHG_RAMP
-		chg_ramp_charge_supplier_change(
-				new_port, new_supplier, new_charge_current,
-				registration_time[new_port],
-				new_charge_voltage);
+		chg_ramp_charge_supplier_change(new_port, new_supplier,
+						new_charge_current,
+						registration_time[new_port],
+						new_charge_voltage);
 #else
 #ifdef CONFIG_CHARGE_RAMP_HW
 		/* Enable or disable charge ramp */
 		charger_set_hw_ramp(chg_ramp_allowed(new_port, new_supplier));
 #endif
 		board_set_charge_limit(new_port, new_supplier,
-					new_charge_current,
-					new_charge_current_uncapped,
-					new_charge_voltage);
+				       new_charge_current,
+				       new_charge_current_uncapped,
+				       new_charge_voltage);
 #endif /* HAS_TASK_CHG_RAMP */
 
 		power_changed = 1;
@@ -923,9 +955,9 @@ static void charge_manager_refresh(void)
 	if (is_pd_port(updated_new_port)) {
 		/* Check if we can get requested voltage/current */
 		if ((IS_ENABLED(CONFIG_USB_PD_TCPMV1) &&
-		    IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE)) ||
+		     IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE)) ||
 		    (IS_ENABLED(CONFIG_USB_PD_TCPMV2) &&
-		    IS_ENABLED(CONFIG_USB_PE_SM))) {
+		     IS_ENABLED(CONFIG_USB_PE_SM))) {
 			uint32_t pdo;
 			uint32_t max_voltage;
 			uint32_t max_current;
@@ -936,9 +968,9 @@ static void charge_manager_refresh(void)
 			 * than requested. If yes, send new power request
 			 */
 			if (pd_get_requested_voltage(updated_new_port) !=
-			    charge_voltage ||
+				    charge_voltage ||
 			    pd_get_requested_current(updated_new_port) !=
-			    charge_current_uncapped)
+				    charge_current_uncapped)
 				new_req = true;
 
 			if (IS_ENABLED(CONFIG_USB_PD_DPS) && dps_is_enabled()) {
@@ -973,9 +1005,11 @@ static void charge_manager_refresh(void)
 	if (is_pd_port(updated_old_port))
 		pd_set_new_power_request(updated_old_port);
 
-	if (power_changed)
+	if (power_changed) {
+		hook_notify(HOOK_POWER_SUPPLY_CHANGE);
 		/* notify host of power info change */
 		pd_send_host_event(PD_EVENT_POWER_CHANGE);
+	}
 }
 DECLARE_DEFERRED(charge_manager_refresh);
 
@@ -1008,8 +1042,7 @@ DECLARE_DEFERRED(charger_detect_debounced);
  * @param charge		Charge port current / voltage.
  */
 static void charge_manager_make_change(enum charge_manager_change_type change,
-				       int supplier,
-				       int port,
+				       int supplier, int port,
 				       const struct charge_port_info *charge)
 {
 	int i;
@@ -1025,9 +1058,8 @@ static void charge_manager_make_change(enum charge_manager_change_type change,
 	case CHANGE_CHARGE:
 		/* Ignore changes where charge is identical */
 		if (available_charge[supplier][port].current ==
-		    charge->current &&
-		    available_charge[supplier][port].voltage ==
-		    charge->voltage)
+			    charge->current &&
+		    available_charge[supplier][port].voltage == charge->voltage)
 			return;
 		if (charge->current > 0 &&
 		    available_charge[supplier][port].current == 0)
@@ -1061,12 +1093,13 @@ static void charge_manager_make_change(enum charge_manager_change_type change,
 	}
 
 	/* Remove override when a charger is plugged */
-	if (clear_override && override_port != port
+	if (clear_override &&
+	    override_port != port
 #ifndef CONFIG_CHARGE_MANAGER_DRP_CHARGING
 	    /* only remove override when it's a dedicated charger */
 	    && dualrole_capability[port] == CAP_DEDICATED
 #endif
-	    ) {
+	) {
 		override_port = OVERRIDE_OFF;
 		if (delayed_override_port != OVERRIDE_OFF) {
 			delayed_override_port = OVERRIDE_OFF;
@@ -1094,7 +1127,7 @@ static void charge_manager_make_change(enum charge_manager_change_type change,
 		/*
 		 * If we have a charge on our delayed override port within
 		 * the deadline, make it our override port.
-		*/
+		 */
 		if (port == delayed_override_port && charge->current > 0 &&
 		    is_sink(delayed_override_port) &&
 		    get_time().val < delayed_override_deadline.val) {
@@ -1179,11 +1212,10 @@ void typec_set_input_current_limit(int port, typec_current_t max_ma,
 						     NULL);
 }
 
-void charge_manager_update_charge(int supplier,
-				  int port,
+void charge_manager_update_charge(int supplier, int port,
 				  const struct charge_port_info *charge)
 {
-	struct charge_port_info zero = {0};
+	struct charge_port_info zero = { 0 };
 	if (!charge)
 		charge = &zero;
 	charge_manager_make_change(CHANGE_CHARGE, supplier, port, charge);
@@ -1265,8 +1297,8 @@ int charge_manager_set_override(int port)
 		if (override_port != port) {
 			override_port = port;
 			if (charge_manager_is_seeded())
-				hook_call_deferred(
-					&charge_manager_refresh_data, 0);
+				hook_call_deferred(&charge_manager_refresh_data,
+						   0);
 		}
 	}
 	/*
@@ -1274,13 +1306,13 @@ int charge_manager_set_override(int port)
 	 * power swap and set the delayed override for swap completion.
 	 */
 	else if (!is_sink(port) && dualrole_capability[port] == CAP_DUALROLE) {
-		delayed_override_deadline.val = get_time().val +
-						POWER_SWAP_TIMEOUT;
+		delayed_override_deadline.val =
+			get_time().val + POWER_SWAP_TIMEOUT;
 		delayed_override_port = port;
 		hook_call_deferred(&charge_override_timeout_data,
 				   POWER_SWAP_TIMEOUT);
 		pd_request_power_swap(port);
-	/* Can't charge from requested port -- return error. */
+		/* Can't charge from requested port -- return error. */
 	} else
 		retval = EC_ERROR_INVAL;
 
@@ -1338,7 +1370,7 @@ int charge_manager_get_power_limit_uw(void)
 
 /* Bitmap of ports used as power source */
 static volatile uint32_t source_port_bitmap;
-BUILD_ASSERT(sizeof(source_port_bitmap)*8 >= CONFIG_USB_PD_PORT_MAX_COUNT);
+BUILD_ASSERT(sizeof(source_port_bitmap) * 8 >= CONFIG_USB_PD_PORT_MAX_COUNT);
 
 static inline int has_other_active_source(int port)
 {
@@ -1369,7 +1401,7 @@ static int can_supply_max_current(int port)
 		if (p == port)
 			continue;
 		if (source_port_rp[p] ==
-				CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT)
+		    CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT)
 			return 0;
 	}
 	return 1;
@@ -1395,8 +1427,8 @@ void charge_manager_source_port(int port, int enable)
 	/* Set port limit according to policy */
 	for (p = 0; p < board_get_usb_pd_port_count(); p++) {
 		rp = can_supply_max_current(p) ?
-				CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT :
-				CONFIG_USB_PD_PULLUP;
+			     CONFIG_USB_PD_MAX_SINGLE_SOURCE_CURRENT :
+			     CONFIG_USB_PD_PULLUP;
 		source_port_rp[p] = rp;
 
 #ifdef CONFIG_USB_PD_LOGGING
@@ -1448,8 +1480,7 @@ static enum ec_status hc_pd_power_info(struct host_cmd_handler_args *args)
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_USB_PD_POWER_INFO,
-		     hc_pd_power_info,
+DECLARE_HOST_COMMAND(EC_CMD_USB_PD_POWER_INFO, hc_pd_power_info,
 		     EC_VER_MASK(0));
 
 static enum ec_status hc_charge_port_count(struct host_cmd_handler_args *args)
@@ -1461,8 +1492,7 @@ static enum ec_status hc_charge_port_count(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_CHARGE_PORT_COUNT,
-		     hc_charge_port_count,
+DECLARE_HOST_COMMAND(EC_CMD_CHARGE_PORT_COUNT, hc_charge_port_count,
 		     EC_VER_MASK(0));
 
 static enum ec_status
@@ -1476,15 +1506,15 @@ hc_charge_port_override(struct host_cmd_handler_args *args)
 		return EC_RES_INVALID_PARAM;
 
 	return charge_manager_set_override(override_port) == EC_SUCCESS ?
-		EC_RES_SUCCESS : EC_RES_ERROR;
+		       EC_RES_SUCCESS :
+		       EC_RES_ERROR;
 }
-DECLARE_HOST_COMMAND(EC_CMD_PD_CHARGE_PORT_OVERRIDE,
-		     hc_charge_port_override,
+DECLARE_HOST_COMMAND(EC_CMD_PD_CHARGE_PORT_OVERRIDE, hc_charge_port_override,
 		     EC_VER_MASK(0));
 
 #if CONFIG_DEDICATED_CHARGE_PORT_COUNT > 0
-static enum ec_status hc_override_dedicated_charger_limit(
-		struct host_cmd_handler_args *args)
+static enum ec_status
+hc_override_dedicated_charger_limit(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_dedicated_charger_limit *p = args->params;
 	struct charge_port_info ci = {
@@ -1505,8 +1535,7 @@ static enum ec_status hc_override_dedicated_charger_limit(
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_OVERRIDE_DEDICATED_CHARGER_LIMIT,
-		     hc_override_dedicated_charger_limit,
-		     EC_VER_MASK(0));
+		     hc_override_dedicated_charger_limit, EC_VER_MASK(0));
 #endif
 
 static int command_charge_port_override(int argc, char **argv)
@@ -1523,12 +1552,12 @@ static int command_charge_port_override(int argc, char **argv)
 		ret = charge_manager_set_override(port);
 	}
 
-	ccprintf("Override: %d\n", (argc >= 2 && ret == EC_SUCCESS) ?
-					port : override_port);
+	ccprintf("Override: %d\n",
+		 (argc >= 2 && ret == EC_SUCCESS) ? port : override_port);
 	return ret;
 }
-DECLARE_CONSOLE_COMMAND(chgoverride, command_charge_port_override,
-	"[port | -1 | -2]",
+DECLARE_CONSOLE_COMMAND(
+	chgoverride, command_charge_port_override, "[port | -1 | -2]",
 	"Force charging from a given port (-1 = off, -2 = disable charging)");
 
 #ifdef CONFIG_CHARGE_MANAGER_EXTERNAL_POWER_LIMIT
@@ -1565,13 +1594,11 @@ hc_external_power_limit(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_external_power_limit_v1 *p = args->params;
 
-	charge_manager_set_external_power_limit(p->current_lim,
-						p->voltage_lim);
+	charge_manager_set_external_power_limit(p->current_lim, p->voltage_lim);
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_EXTERNAL_POWER_LIMIT,
-		     hc_external_power_limit,
+DECLARE_HOST_COMMAND(EC_CMD_EXTERNAL_POWER_LIMIT, hc_external_power_limit,
 		     EC_VER_MASK(1));
 
 static int command_external_power_limit(int argc, char **argv)
@@ -1600,41 +1627,63 @@ static int command_external_power_limit(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(chglim, command_external_power_limit,
-	"[max_current (mA)] [max_voltage (mV)]",
-	"Set max charger current / voltage");
+			"[max_current (mA)] [max_voltage (mV)]",
+			"Set max charger current / voltage");
 #endif /* CONFIG_CHARGE_MANAGER_EXTERNAL_POWER_LIMIT */
 
 #ifdef CONFIG_CMD_CHARGE_SUPPLIER_INFO
 static int charge_supplier_info(int argc, char **argv)
 {
-	ccprintf("port=%d, type=%d, cur=%dmA, vtg=%dmV, lsm=%d\n",
-			charge_manager_get_active_charge_port(),
-			charge_supplier,
-			charge_current,
-			charge_voltage,
-			left_safe_mode);
+	int p, s;
+	int port_printed;
 
+	ccprintf("\n");
+	ccprintf("Port --Supplier-- Prio -Available Power-\n");
+	for (p = 0; p < CHARGE_PORT_COUNT; p++) {
+		port_printed = 0;
+		for (s = 0; s < CHARGE_SUPPLIER_COUNT; s++) {
+			if (available_charge[s][p].current == 0 &&
+			    available_charge[s][p].voltage == 0)
+				continue;
+			if (charge_manager_get_active_charge_port() == p &&
+			    charge_manager_get_supplier() == s)
+				ccprintf("*");
+			else
+				ccprintf(" ");
+			if (!port_printed) {
+				ccprintf("P%d  ", p);
+				port_printed = 1;
+			} else {
+				ccprintf("    ");
+			}
+			ccprintf("%-10s  %4d  %5dmA %5dmV\n",
+				 charge_supplier_name[s], supplier_priority[s],
+				 available_charge[s][p].current,
+				 available_charge[s][p].voltage);
+		}
+	}
+	ccprintf("\n");
+	ccprintf("  %s safe mode\n", left_safe_mode ? "Left" : "In");
+	ccprintf("  Override port = P%d\n", charge_manager_get_override());
+	ccprintf("\n");
 	return 0;
 }
-DECLARE_CONSOLE_COMMAND(chgsup, charge_supplier_info,
-			NULL, "print chg supplier info");
+DECLARE_CONSOLE_COMMAND(chgsup, charge_supplier_info, NULL,
+			"print chg supplier info");
 #endif
 
-__overridable
-int board_charge_port_is_sink(int port)
+__overridable int board_charge_port_is_sink(int port)
 {
 	return 1;
 }
 
-__overridable
-int board_charge_port_is_connected(int port)
+__overridable int board_charge_port_is_connected(int port)
 {
 	return 1;
 }
 
-__overridable
-void board_fill_source_power_info(int port,
-				  struct ec_response_usb_pd_power_info *r)
+__overridable void
+board_fill_source_power_info(int port, struct ec_response_usb_pd_power_info *r)
 {
 	r->meas.voltage_now = 0;
 	r->meas.voltage_max = 0;

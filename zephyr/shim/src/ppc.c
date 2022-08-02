@@ -3,13 +3,17 @@
  * found in the LICENSE file.
  */
 
-#include <devicetree.h>
+#include <zephyr/devicetree.h>
 #include "usbc_ppc.h"
+#include "usbc/ppc_nx20p348x.h"
+#include "usbc/ppc_rt1739.h"
 #include "usbc/ppc_sn5s330.h"
 #include "usbc/ppc_syv682x.h"
 #include "usbc/ppc.h"
 
-#if DT_HAS_COMPAT_STATUS_OKAY(SN5S330_COMPAT) || \
+#if DT_HAS_COMPAT_STATUS_OKAY(NX20P348X_COMPAT) ||      \
+	DT_HAS_COMPAT_STATUS_OKAY(RT1739_PPC_COMPAT) || \
+	DT_HAS_COMPAT_STATUS_OKAY(SN5S330_COMPAT) ||    \
 	DT_HAS_COMPAT_STATUS_OKAY(SYV682X_COMPAT)
 
 #define PPC_CHIP_PRIM(id, fn)                                \
@@ -20,25 +24,38 @@
 	COND_CODE_1(DT_NODE_HAS_PROP(id, alternate_for), \
 		    (PPC_CHIP_ELE_ALT(id, fn)), ())
 
-#define PPC_CHIP_ELE_PRIM(id, fn) [PPC_USBC_PORT(id)] = fn(id)
+#define PPC_CHIP_ELE_PRIM(id, fn) [USBC_PORT(id)] = fn(id)
 
 #define PPC_CHIP_ELE_ALT(id, fn) [PPC_ID(id)] = fn(id)
 
 /* Power Path Controller */
+/* Enable clang-format when the formatted code is readable. */
+/* clang-format off */
 struct ppc_config_t ppc_chips[] = {
+	DT_FOREACH_STATUS_OKAY_VARGS(NX20P348X_COMPAT, PPC_CHIP_PRIM,
+				     PPC_CHIP_NX20P348X)
+	DT_FOREACH_STATUS_OKAY_VARGS(RT1739_PPC_COMPAT, PPC_CHIP_PRIM,
+				     PPC_CHIP_RT1739)
 	DT_FOREACH_STATUS_OKAY_VARGS(SN5S330_COMPAT, PPC_CHIP_PRIM,
 				     PPC_CHIP_SN5S330)
 	DT_FOREACH_STATUS_OKAY_VARGS(SYV682X_COMPAT, PPC_CHIP_PRIM,
 				     PPC_CHIP_SYV682X)
 };
+/* clang-format on */
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
 /* Alt Power Path Controllers */
+/* clang-format off */
 struct ppc_config_t ppc_chips_alt[] = {
+	DT_FOREACH_STATUS_OKAY_VARGS(NX20P348X_COMPAT, PPC_CHIP_ALT,
+				     PPC_CHIP_NX20P348X)
+	DT_FOREACH_STATUS_OKAY_VARGS(RT1739_PPC_COMPAT, PPC_CHIP_ALT,
+				     PPC_CHIP_RT1739)
 	DT_FOREACH_STATUS_OKAY_VARGS(SN5S330_COMPAT, PPC_CHIP_ALT,
 				     PPC_CHIP_SN5S330)
 	DT_FOREACH_STATUS_OKAY_VARGS(SYV682X_COMPAT, PPC_CHIP_ALT,
 				     PPC_CHIP_SYV682X)
 };
+/* clang-format on */
 
 #endif /* #if DT_HAS_COMPAT_STATUS_OKAY */

@@ -12,9 +12,9 @@
 #ifndef __EMUL_PI3USB9201_H
 #define __EMUL_PI3USB9201_H
 
-#include <drivers/emul.h>
-#include <drivers/i2c.h>
-#include <drivers/i2c_emul.h>
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/i2c_emul.h>
 
 #define PI3USB9201_REG_CTRL_1 0x0
 #define PI3USB9201_REG_CTRL_2 0x1
@@ -28,7 +28,7 @@
  *
  * @return Pointer to pi3usb9201 emulator
  */
-struct i2c_emul *pi3usb9201_emul_get(int ord);
+const struct emul *pi3usb9201_emul_get(int ord);
 
 /**
  * @brief Set value of given register of pi3usb9201
@@ -39,7 +39,7 @@ struct i2c_emul *pi3usb9201_emul_get(int ord);
  *
  * @return 0 on success or error
  */
-int pi3usb9201_emul_set_reg(struct i2c_emul *emul, int reg, uint8_t val);
+int pi3usb9201_emul_set_reg(const struct emul *emul, int reg, uint8_t val);
 
 /**
  * @brief Get value of given register of pi3usb9201
@@ -50,6 +50,6 @@ int pi3usb9201_emul_set_reg(struct i2c_emul *emul, int reg, uint8_t val);
  *
  * @return 0 on success or error
  */
-int pi3usb9201_emul_get_reg(struct i2c_emul *emul, int reg, uint8_t *val);
+int pi3usb9201_emul_get_reg(const struct emul *emul, int reg, uint8_t *val);
 
 #endif /* __EMUL_PI3USB9201_H */

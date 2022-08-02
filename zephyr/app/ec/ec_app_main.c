@@ -3,13 +3,15 @@
  * found in the LICENSE file.
  */
 
-#include <kernel.h>
-#include <sys/printk.h>
-#include <shell/shell_uart.h>
-#include <zephyr.h>
+#include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/shell/shell_uart.h>
+#include <zephyr/zephyr.h>
 
+#include "ap_power/ap_pwrseq.h"
 #include "button.h"
 #include "chipset.h"
+#include "cros_board_info.h"
 #include "ec_tasks.h"
 #include "hooks.h"
 #include "keyboard_scan.h"
@@ -25,8 +27,6 @@
  */
 void ec_app_main(void)
 {
-	system_common_pre_init();
-
 	/*
 	 * Initialize reset logs. This needs to be done before any updates of
 	 * reset logs because we need to verify if the values remain the same
@@ -39,7 +39,7 @@ void ec_app_main(void)
 	system_print_banner();
 
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG) &&
-		!IS_ENABLED(CONFIG_WDT_DISABLE_AT_BOOT)) {
+	    !IS_ENABLED(CONFIG_WDT_DISABLE_AT_BOOT)) {
 		watchdog_init();
 	}
 
@@ -72,18 +72,18 @@ void ec_app_main(void)
 		vboot_main();
 	}
 
-	/*
-	 * Hooks run from the system workqueue and must be the lowest priority
-	 * thread. By default, the system workqueue is run at the lowest
-	 * cooperative thread priority, blocking all preemptive threads until
-	 * the deferred work is completed.
-	 */
-	k_thread_priority_set(&k_sys_work_q.thread, LOWEST_THREAD_PRIORITY);
-
 	/* Call init hooks before main tasks start */
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOOKS)) {
 		hook_notify(HOOK_INIT);
 	}
+
+	/*
+	 * If the EC has exclusive control over the CBI EEPROM WP signal, have
+	 * the EC set the WP if appropriate.  Note that once the WP is set, the
+	 * EC must be reset via EC_RST_ODL in order for the WP to become unset.
+	 */
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_EEPROM_CBI_WP) && system_is_locked())
+		cbi_latch_eeprom_wp();
 
 	/*
 	 * Print the init time.  Not completely accurate because it can't take
@@ -95,5 +95,8 @@ void ec_app_main(void)
 	/* Start the EC tasks after performing all main initialization */
 	if (IS_ENABLED(CONFIG_SHIMMED_TASKS)) {
 		start_ec_tasks();
+	}
+	if (IS_ENABLED(CONFIG_AP_PWRSEQ)) {
+		ap_pwrseq_task_start();
 	}
 }

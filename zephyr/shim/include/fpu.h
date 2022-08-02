@@ -25,11 +25,7 @@ static inline float sqrtf(float v)
 	float root;
 
 	/* Use the CPU instruction */
-	__asm__ volatile(
-		"fsqrts %0, %1"
-		: "=w" (root)
-		: "w" (v)
-	);
+	__asm__ volatile("fsqrts %0, %1" : "=w"(root) : "w"(v));
 
 	return root;
 }
@@ -39,18 +35,30 @@ static inline float fabsf(float v)
 	float root;
 
 	/* Use the CPU instruction */
-	__asm__ volatile(
-		"fabss %0, %1"
-		: "=w" (root)
-		: "w" (v)
-	);
+	__asm__ volatile("fabss %0, %1" : "=w"(root) : "w"(v));
 
 	return root;
 }
+#elif CONFIG_RISCV
+static inline float sqrtf(float v)
+{
+	float root;
+
+	__asm__("fsqrt.s %0, %1" : "=f"(root) : "f"(v));
+	return root;
+}
+
+static inline float fabsf(float v)
+{
+	float abs;
+
+	__asm__("fabs.s %0, %1" : "=f"(abs) : "f"(v));
+	return abs;
+}
 #else
 #error "Unsupported core: please add an implementation"
-#endif /* CONFIG_CPU_CORTEX_M */
+#endif
 
-#endif  /* CONFIG_PLATFORM_EC_FPU */
+#endif /* CONFIG_PLATFORM_EC_FPU */
 
-#endif  /* __CROS_EC_MATH_H */
+#endif /* __CROS_EC_MATH_H */

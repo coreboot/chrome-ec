@@ -7,6 +7,7 @@ import hashlib
 import json
 import pathlib
 
+import zmake.jobserver
 import zmake.util as util
 
 
@@ -18,11 +19,15 @@ class BuildConfig:
     """
 
     def __init__(
-        self, environ_defs={}, cmake_defs={}, kconfig_defs={}, kconfig_files=[]
+        self,
+        environ_defs=None,
+        cmake_defs=None,
+        kconfig_defs=None,
+        kconfig_files=None,
     ):
-        self.environ_defs = dict(environ_defs)
-        self.cmake_defs = dict(cmake_defs)
-        self.kconfig_defs = dict(kconfig_defs)
+        self.environ_defs = dict(environ_defs or {})
+        self.cmake_defs = dict(cmake_defs or {})
+        self.kconfig_defs = dict(kconfig_defs or {})
 
         def _remove_duplicate_paths(files):
             # Remove multiple of the same kconfig file in a row.
@@ -32,10 +37,15 @@ class BuildConfig:
                     result.append(path)
             return result
 
-        self.kconfig_files = _remove_duplicate_paths(kconfig_files)
+        self.kconfig_files = _remove_duplicate_paths(kconfig_files or [])
 
     def popen_cmake(
-        self, jobclient, project_dir, build_dir, kconfig_path=None, **kwargs
+        self,
+        jobclient: zmake.jobserver.JobClient,
+        project_dir,
+        build_dir,
+        kconfig_path=None,
+        **kwargs
     ):
         """Run Cmake with this config using a jobclient.
 
@@ -62,7 +72,9 @@ class BuildConfig:
             )
             conf_file_config = BuildConfig(
                 cmake_defs={
-                    "CONF_FILE": ";".join(str(p.resolve()) for p in kconfig_files)
+                    "CONF_FILE": ";".join(
+                        str(p.resolve()) for p in kconfig_files
+                    )
                 }
             )
             return (base_config | conf_file_config).popen_cmake(
@@ -87,7 +99,9 @@ class BuildConfig:
         """Combine two BuildConfig instances."""
         if not isinstance(other, BuildConfig):
             raise TypeError(
-                "Unsupported operation | for {} and {}".format(type(self), type(other))
+                "Unsupported operation | for {} and {}".format(
+                    type(self), type(other)
+                )
             )
 
         return BuildConfig(

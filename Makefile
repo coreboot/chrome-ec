@@ -115,6 +115,14 @@ CFLAGS_BASEBOARD=
 endif
 include chip/$(CHIP)/build.mk
 
+# The toolchain must be set before referencing any toolchain-related variables
+# (CC, CPP, CXX, etc.) so that the correct toolchain is used. The CORE variable
+# is set in the CHIP build file, so this include must come after including the
+# CHIP build file.
+ifneq ($(BOARD), host)
+include core/$(CORE)/toolchain.mk
+endif
+
 # Create uppercase config variants, to avoid mixed case constants.
 # Also translate '-' to '_', so 'cortex-m' turns into 'CORTEX_M'.  This must
 # be done before evaluating config.h.
@@ -150,6 +158,7 @@ endif
 _tsk_lst_flags+=-I$(BDIR) -DBOARD_$(UC_BOARD)=$(EMPTY) -I$(BASEDIR) \
 		-DBASEBOARD_$(UC_BASEBOARD)=$(EMPTY) \
 		-D_MAKEFILE=$(EMPTY) -imacros $(_tsk_lst_file)
+-include private/task_list_flags.mk
 
 _tsk_lst_ro:=$(shell $(CPP) -P -DSECTION_IS_RO=$(EMPTY) \
 	$(_tsk_lst_flags) include/task_filter.h)
@@ -212,13 +221,15 @@ _mock_cfg := $(foreach t,$(_mock_lst) ,HAS_MOCK_$(t))
 CPPFLAGS += $(foreach t,$(_mock_cfg),-D$(t)=$(EMPTY))
 $(foreach c,$(_mock_cfg),$(eval $(c)=y))
 
-ifneq "$(CONFIG_COMMON_RUNTIME)" "y"
+ifneq ($(CONFIG_COMMON_RUNTIME),y)
+ifneq ($(CONFIG_DFU_BOOTMANAGER_MAIN),ro)
 	_irq_list:=$(shell $(CPP) $(CPPFLAGS) -P -Ichip/$(CHIP) -I$(BASEDIR) \
 		-I$(BDIR) -D"ENABLE_IRQ(x)=EN_IRQ x" \
 		-imacros chip/$(CHIP)/registers.h \
 		- < $(BDIR)/ec.irqlist | grep "EN_IRQ .*" | cut -c8-)
 	CPPFLAGS+=$(foreach irq,$(_irq_list),\
 		    -D"irq_$(irq)_handler_optional=irq_$(irq)_handler")
+endif
 endif
 
 # Compute RW firmware size and offset
@@ -256,6 +267,9 @@ endif
 include $(BASEDIR)/build.mk
 ifneq ($(BASEDIR),$(BDIR))
 include $(BDIR)/build.mk
+endif
+ifeq ($(USE_BUILTIN_STDLIB), 1)
+include builtin/build.mk
 endif
 include chip/$(CHIP)/build.mk
 include core/$(CORE)/build.mk
@@ -296,6 +310,9 @@ ifneq ($(PBDIR),)
 all-obj-$(1)+=$(call objs_from_dir_p,$(PBDIR),board-private,$(1))
 endif
 all-obj-$(1)+=$(call objs_from_dir_p,common,common,$(1))
+ifeq ($(USE_BUILTIN_STDLIB), 1)
+all-obj-$(1)+=$(call objs_from_dir_p,builtin,builtin,$(1))
+endif
 all-obj-$(1)+=$(call objs_from_dir_p,driver,driver,$(1))
 all-obj-$(1)+=$(call objs_from_dir_p,power,power,$(1))
 ifdef CTS_MODULE
@@ -342,6 +359,9 @@ dirs=core/$(CORE) chip/$(CHIP) $(BASEDIR) $(BDIR) common fuzz power test \
 dirs+= private private-kandou $(PDIR) $(PBDIR)
 dirs+=$(shell find common -type d)
 dirs+=$(shell find driver -type d)
+ifeq ($(USE_BUILTIN_STDLIB), 1)
+dirs+=builtin
+endif
 common_dirs=util
 
 ifeq ($(custom-ro_objs-y),)

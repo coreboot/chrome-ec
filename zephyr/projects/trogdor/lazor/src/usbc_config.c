@@ -14,7 +14,7 @@
 #include "common.h"
 #include "config.h"
 #include "driver/ln9310.h"
-#include "gpio.h"
+#include "gpio_signal.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
 #include "ppc/sn5s330_public.h"
@@ -23,21 +23,12 @@
 #include "tcpm/tcpci.h"
 #include "timer.h"
 #include "usb_pd.h"
-#include "usbc_config.h"
 #include "usb_mux.h"
 #include "usbc_ocp.h"
 #include "usbc_ppc.h"
 
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
-
-const struct charger_config_t chg_chips[] = {
-	{
-		.i2c_port = I2C_PORT_CHARGER,
-		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
-		.drv = &isl923x_drv,
-	},
-};
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
 int charger_profile_override(struct charge_state_data *curr)
 {
@@ -77,22 +68,12 @@ enum ec_status charger_profile_override_set_param(uint32_t param,
 	return EC_RES_INVALID_PARAM;
 }
 
-void usb0_evt(enum gpio_signal signal)
-{
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
-}
-
-void usb1_evt(enum gpio_signal signal)
-{
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
-}
-
 static void usba_oc_deferred(void)
 {
 	/* Use next number after all USB-C ports to indicate the USB-A port */
-	board_overcurrent_event(CONFIG_USB_PD_PORT_MAX_COUNT,
-				!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(
-					gpio_usb_a0_oc_odl)));
+	board_overcurrent_event(
+		CONFIG_USB_PD_PORT_MAX_COUNT,
+		!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_a0_oc_odl)));
 }
 DECLARE_DEFERRED(usba_oc_deferred);
 
@@ -149,41 +130,6 @@ void tcpc_alert_event(enum gpio_signal signal)
 	schedule_deferred_pd_interrupt(port);
 }
 
-/* Power Path Controller */
-struct ppc_config_t ppc_chips[] = {
-	{
-		.i2c_port = I2C_PORT_TCPC0,
-		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
-		.drv = &sn5s330_drv
-	},
-	{
-		.i2c_port = I2C_PORT_TCPC1,
-		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
-		.drv = &sn5s330_drv
-	},
-};
-unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
-
-/* TCPC mux configuration */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_TCPC0,
-			.addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
-		},
-		.drv = &ps8xxx_tcpm_drv,
-	},
-	{
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_TCPC1,
-			.addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
-		},
-		.drv = &ps8xxx_tcpm_drv,
-	},
-};
-
 /*
  * Port-0/1 USB mux driver.
  *
@@ -204,22 +150,6 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	}
 };
 
-const int usb_port_enable[USB_PORT_COUNT] = {
-	GPIO_EN_USB_A_5V,
-};
-
-/* BC1.2 */
-const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
-	{
-		.i2c_port = I2C_PORT_POWER,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-	},
-	{
-		.i2c_port = I2C_PORT_EEPROM,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-	},
-};
-
 __override int board_get_default_battery_type(void)
 {
 	/*
@@ -237,10 +167,6 @@ __override int board_get_default_battery_type(void)
 /* Initialize board USC-C things */
 static void board_init_usbc(void)
 {
-	/* Enable BC1.2 interrupts */
-	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_bc12));
-	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1_bc12));
-
 	/* Enable USB-A overcurrent interrupt */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_a0_oc));
 	/*
@@ -273,9 +199,9 @@ void board_tcpc_init(void)
 	 */
 	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
 		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
-					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
+						 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
-DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
+DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_POST_I2C);
 
 void board_reset_pd_mcu(void)
 {
@@ -318,8 +244,7 @@ void board_overcurrent_event(int port, int is_overcurrented)
 
 int board_set_active_charge_port(int port)
 {
-	int is_real_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
+	int is_real_port = (port >= 0 && port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 
 	if (!is_real_port && port != CHARGE_PORT_NONE)
@@ -347,7 +272,6 @@ int board_set_active_charge_port(int port)
 		return EC_ERROR_INVAL;
 	}
 
-
 	CPRINTS("New charge port: p%d", port);
 
 	/*
@@ -371,23 +295,21 @@ int board_set_active_charge_port(int port)
 	return EC_SUCCESS;
 }
 
-void board_set_charge_limit(int port, int supplier, int charge_ma,
-			    int max_ma, int charge_mv)
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
 {
 	/*
 	 * Ignore lower charge ceiling on PD transition if our battery is
 	 * critical, as we may brownout.
 	 */
-	if (supplier == CHARGE_SUPPLIER_PD &&
-	    charge_ma < 1500 &&
+	if (supplier == CHARGE_SUPPLIER_PD && charge_ma < 1500 &&
 	    charge_get_percent() < CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON) {
 		CPRINTS("Using max ilim %d", max_ma);
 		charge_ma = max_ma;
 	}
 
-	charge_set_input_current_limit(MAX(charge_ma,
-					   CONFIG_CHARGER_INPUT_CURRENT),
-				       charge_mv);
+	charge_set_input_current_limit(
+		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -396,11 +318,11 @@ uint16_t tcpc_get_alert_status(void)
 
 	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c0_pd_int_odl)))
 		if (gpio_pin_get_dt(
-			GPIO_DT_FROM_NODELABEL(gpio_usb_c0_pd_rst_l)))
+			    GPIO_DT_FROM_NODELABEL(gpio_usb_c0_pd_rst_l)))
 			status |= PD_STATUS_TCPC_ALERT_0;
 	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c0_pd_int_odl)))
 		if (gpio_pin_get_dt(
-			GPIO_DT_FROM_NODELABEL(gpio_usb_c1_pd_rst_l)))
+			    GPIO_DT_FROM_NODELABEL(gpio_usb_c1_pd_rst_l)))
 			status |= PD_STATUS_TCPC_ALERT_1;
 
 	return status;

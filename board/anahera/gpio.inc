@@ -10,8 +10,6 @@
 /* INTERRUPT GPIOs: */
 GPIO_INT(ACOK_OD,                        PIN(0, 0), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH, extpower_interrupt)
 GPIO_INT(EC_PROCHOT_IN_L,                PIN(F, 0), GPIO_INT_BOTH, throttle_ap_prochot_input_interrupt)
-GPIO_INT(EC_VOLDN_BTN_ODL,               PIN(9, 3), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
-GPIO_INT(EC_VOLUP_BTN_ODL,               PIN(9, 7), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)
 GPIO_INT(EC_WP_ODL,                      PIN(A, 1), GPIO_INT_BOTH, switch_interrupt)
 GPIO_INT(GSC_EC_PWR_BTN_ODL,             PIN(0, 1), GPIO_INT_BOTH | GPIO_HIB_WAKE_LOW, power_button_interrupt)
 GPIO_INT(LID_OPEN,                       PIN(D, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH, lid_interrupt)
@@ -61,7 +59,7 @@ GPIO(EC_PCH_RTCRST,                  PIN(7, 6), GPIO_OUT_LOW)
 GPIO(EC_PCH_SYS_PWROK,               PIN(3, 7), GPIO_OUT_LOW)
 GPIO(EC_PCH_WAKE_R_ODL,              PIN(C, 0), GPIO_ODR_HIGH)
 GPIO(EC_PROCHOT_ODL,                 PIN(6, 3), GPIO_ODR_HIGH)
-GPIO(EN_PP5000_FAN,                  PIN(6, 1), GPIO_OUT_HIGH)
+GPIO(EN_PP5000_FAN,                  PIN(6, 1), GPIO_OUT_LOW)
 GPIO(EN_PP5000_USBA_R,               PIN(D, 7), GPIO_OUT_LOW)
 GPIO(EN_S5_RAILS,                    PIN(B, 6), GPIO_OUT_LOW)
 GPIO(IMVP9_VRRDY_OD,                 PIN(4, 3), GPIO_INPUT)
@@ -130,6 +128,8 @@ UNUSED(PIN(B, 5))       /* GPIOB5/I2C0_SCL0 */
 UNUSED(PIN(C, 2))       /* GPIOC2/PWM1/I2C6_SCL0 */
 UNUSED(PIN(D, 4))       /* GPIOD4/CR_SIN3 */
 UNUSED(PIN(F, 5))       /* GPIOF5/I2C5_SCL1 */
+UNUSED(PIN(9, 3))       /* GPIO93/TA1/F_DIO2 */
+UNUSED(PIN(9, 7))       /* GPIO97 */
 
 /* Pre-configured PSL balls:  J8  K6 */
 
@@ -141,9 +141,10 @@ UNUSED(PIN(F, 5))       /* GPIOF5/I2C5_SCL1 */
 GPIO(EC_KSO_02_INV,               PIN(1, 7), GPIO_OUT_LOW)
 
 IOEX(USB_C0_OC_ODL,          EXPIN(IOEX_C0_NCT38XX, 0, 4), GPIO_ODR_HIGH)
-IOEX(USB_C0_FRS_EN,          EXPIN(IOEX_C0_NCT38XX, 0, 6), GPIO_LOW)
+IOEX(USB_C0_FRS_EN,          EXPIN(IOEX_C0_NCT38XX, 0, 6), GPIO_OUT_LOW)
 IOEX(USB_C0_RT_RST_ODL,      EXPIN(IOEX_C0_NCT38XX, 0, 7), GPIO_ODR_LOW)
 
 IOEX(USB_C1_OC_ODL,          EXPIN(IOEX_C1_NCT38XX, 0, 4), GPIO_ODR_HIGH)
-IOEX(USB_C1_FRS_EN,          EXPIN(IOEX_C1_NCT38XX, 0, 6), GPIO_LOW)
+IOEX(USB_C1_FRS_EN,          EXPIN(IOEX_C1_NCT38XX, 0, 6), GPIO_OUT_LOW)
 IOEX(USB_C1_RT_RST_ODL,      EXPIN(IOEX_C1_NCT38XX, 0, 7), GPIO_ODR_LOW)
+IOEX(USB_A1_PD_R_L,          EXPIN(IOEX_C1_NCT38XX, 1, 7), GPIO_OUT_LOW)

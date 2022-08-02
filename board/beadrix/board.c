@@ -10,8 +10,6 @@
 #include "charge_manager.h"
 #include "charge_state_v2.h"
 #include "charger.h"
-#include "driver/accel_kionix.h"
-#include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl923x.h"
 #include "driver/retimer/nb7v904m.h"
@@ -33,7 +31,6 @@
 #include "pwm_chip.h"
 #include "switch.h"
 #include "system.h"
-#include "tablet_mode.h"
 #include "task.h"
 #include "temp_sensor.h"
 #include "uart.h"
@@ -42,8 +39,8 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
 
 #define INT_RECHECK_US 5000
 
@@ -58,7 +55,7 @@ static void notify_c0_chips(void)
 	 * chip.  Therefore we'll need to check both ICs.
 	 */
 	schedule_deferred_pd_interrupt(0);
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 }
 
 static void check_c0_line(void)
@@ -92,7 +89,7 @@ DECLARE_DEFERRED(check_c1_line);
 static void notify_c1_chips(void)
 {
 	schedule_deferred_pd_interrupt(1);
-	task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(1, USB_CHG_EVENT_BC12);
 }
 
 static void check_c1_line(void)
@@ -125,39 +122,46 @@ static void c0_ccsbu_ovp_interrupt(enum gpio_signal s)
 	pd_handle_cc_overvoltage(0);
 }
 
+__override void board_pulse_entering_rw(void)
+{
+	/*
+	 * On the ITE variants, the EC_ENTERING_RW signal was connected to a pin
+	 * which is active high by default.  This causes Cr50 to think that the
+	 * EC has jumped to its RW image even though this may not be the case.
+	 * The pin is changed to GPIO_EC_ENTERING_RW2.
+	 */
+	gpio_set_level(GPIO_EC_ENTERING_RW, 1);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 1);
+	usleep(MSEC);
+	gpio_set_level(GPIO_EC_ENTERING_RW, 0);
+	gpio_set_level(GPIO_EC_ENTERING_RW2, 0);
+}
+
 /* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 /* ADC channels */
 const struct adc_t adc_channels[] = {
-	[ADC_VSNS_PP3300_A] = {
-		.name = "PP3300_A_PGOOD",
-		.factor_mul = ADC_MAX_MVOLT,
-		.factor_div = ADC_READ_MAX + 1,
-		.shift = 0,
-		.channel = CHIP_ADC_CH0
-	},
-	[ADC_TEMP_SENSOR_1] = {
-		.name = "TEMP_SENSOR1",
-		.factor_mul = ADC_MAX_MVOLT,
-		.factor_div = ADC_READ_MAX + 1,
-		.shift = 0,
-		.channel = CHIP_ADC_CH2
-	},
-	[ADC_TEMP_SENSOR_2] = {
-		.name = "TEMP_SENSOR2",
-		.factor_mul = ADC_MAX_MVOLT,
-		.factor_div = ADC_READ_MAX + 1,
-		.shift = 0,
-		.channel = CHIP_ADC_CH3
-	},
-	[ADC_SUB_ANALOG] = {
-		.name = "SUB_ANALOG",
-		.factor_mul = ADC_MAX_MVOLT,
-		.factor_div = ADC_READ_MAX + 1,
-		.shift = 0,
-		.channel = CHIP_ADC_CH13
-	},
+	[ADC_VSNS_PP3300_A] = { .name = "PP3300_A_PGOOD",
+				.factor_mul = ADC_MAX_MVOLT,
+				.factor_div = ADC_READ_MAX + 1,
+				.shift = 0,
+				.channel = CHIP_ADC_CH0 },
+	[ADC_TEMP_SENSOR_1] = { .name = "TEMP_SENSOR1",
+				.factor_mul = ADC_MAX_MVOLT,
+				.factor_div = ADC_READ_MAX + 1,
+				.shift = 0,
+				.channel = CHIP_ADC_CH2 },
+	[ADC_TEMP_SENSOR_2] = { .name = "TEMP_SENSOR2",
+				.factor_mul = ADC_MAX_MVOLT,
+				.factor_div = ADC_READ_MAX + 1,
+				.shift = 0,
+				.channel = CHIP_ADC_CH3 },
+	[ADC_SUB_ANALOG] = { .name = "SUB_ANALOG",
+			     .factor_mul = ADC_MAX_MVOLT,
+			     .factor_div = ADC_READ_MAX + 1,
+			     .shift = 0,
+			     .channel = CHIP_ADC_CH13 },
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
@@ -211,12 +215,16 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
+static int board_nb7v904m_mux_set(const struct usb_mux *me,
+				  mux_state_t mux_state);
+
 /* USB Retimer */
 const struct usb_mux usbc1_retimer = {
 	.usb_port = 1,
 	.i2c_port = I2C_PORT_SUB_USB_C1,
 	.i2c_addr_flags = NB7V904M_I2C_ADDR0,
 	.driver = &nb7v904m_usb_redriver_drv,
+	.board_set = &board_nb7v904m_mux_set,
 };
 
 /* USB Muxes */
@@ -227,7 +235,8 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
 		.driver = &it5205_usb_mux_driver,
 	},
-	{	/* Used as MUX only*/
+	{
+		/* Used as MUX only*/
 		.usb_port = 1,
 		.i2c_port = I2C_PORT_SUB_USB_C1,
 		.i2c_addr_flags = AN7447_TCPC0_I2C_ADDR_FLAGS,
@@ -236,6 +245,87 @@ struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.next_mux = &usbc1_retimer,
 	},
 };
+
+/* USB Mux */
+static int board_nb7v904m_mux_set(const struct usb_mux *me,
+				  mux_state_t mux_state)
+{
+	int rv = EC_SUCCESS;
+	int flipped = !!(mux_state & USB_PD_MUX_POLARITY_INVERTED);
+
+	if (mux_state & USB_PD_MUX_USB_ENABLED) {
+		/* USB with DP */
+		if (mux_state & USB_PD_MUX_DP_ENABLED) {
+			if (flipped) { /* CC2 */
+				rv |= nb7v904m_tune_usb_set_eq(
+					me, NB7V904M_CH_A_EQ_0_DB,
+					NB7V904M_CH_B_EQ_4_DB,
+					NB7V904M_CH_C_EQ_0_DB,
+					NB7V904M_CH_D_EQ_0_DB);
+				rv |= nb7v904m_tune_usb_flat_gain(
+					me, NB7V904M_CH_A_GAIN_0_DB,
+					NB7V904M_CH_B_GAIN_3P5_DB,
+					NB7V904M_CH_C_GAIN_0_DB,
+					NB7V904M_CH_D_GAIN_0_DB);
+				rv |= nb7v904m_set_loss_profile_match(
+					me, NB7V904M_LOSS_PROFILE_A,
+					NB7V904M_LOSS_PROFILE_A,
+					NB7V904M_LOSS_PROFILE_D,
+					NB7V904M_LOSS_PROFILE_D);
+			} /* CC1 */
+			else {
+				rv |= nb7v904m_tune_usb_set_eq(
+					me, NB7V904M_CH_A_EQ_0_DB,
+					NB7V904M_CH_B_EQ_0_DB,
+					NB7V904M_CH_C_EQ_4_DB,
+					NB7V904M_CH_D_EQ_0_DB);
+				rv |= nb7v904m_tune_usb_flat_gain(
+					me, NB7V904M_CH_A_GAIN_0_DB,
+					NB7V904M_CH_B_GAIN_0_DB,
+					NB7V904M_CH_C_GAIN_3P5_DB,
+					NB7V904M_CH_D_GAIN_0_DB);
+				rv |= nb7v904m_set_loss_profile_match(
+					me, NB7V904M_LOSS_PROFILE_D,
+					NB7V904M_LOSS_PROFILE_D,
+					NB7V904M_LOSS_PROFILE_A,
+					NB7V904M_LOSS_PROFILE_A);
+			}
+		} else {
+			/* USB only */
+			rv |= nb7v904m_tune_usb_set_eq(me,
+						       NB7V904M_CH_A_EQ_0_DB,
+						       NB7V904M_CH_B_EQ_4_DB,
+						       NB7V904M_CH_C_EQ_4_DB,
+						       NB7V904M_CH_D_EQ_0_DB);
+			rv |= nb7v904m_tune_usb_flat_gain(
+				me, NB7V904M_CH_A_GAIN_0_DB,
+				NB7V904M_CH_B_GAIN_3P5_DB,
+				NB7V904M_CH_C_GAIN_3P5_DB,
+				NB7V904M_CH_D_GAIN_0_DB);
+			rv |= nb7v904m_set_loss_profile_match(
+				me, NB7V904M_LOSS_PROFILE_A,
+				NB7V904M_LOSS_PROFILE_A,
+				NB7V904M_LOSS_PROFILE_A,
+				NB7V904M_LOSS_PROFILE_A);
+		}
+
+	} else if (mux_state & USB_PD_MUX_DP_ENABLED) {
+		/* 4 lanes DP */
+		rv |= nb7v904m_tune_usb_set_eq(me, NB7V904M_CH_A_EQ_0_DB,
+					       NB7V904M_CH_B_EQ_0_DB,
+					       NB7V904M_CH_C_EQ_0_DB,
+					       NB7V904M_CH_D_EQ_0_DB);
+		rv |= nb7v904m_tune_usb_flat_gain(me, NB7V904M_CH_A_GAIN_0_DB,
+						  NB7V904M_CH_B_GAIN_0_DB,
+						  NB7V904M_CH_C_GAIN_0_DB,
+						  NB7V904M_CH_D_GAIN_0_DB);
+		rv |= nb7v904m_set_loss_profile_match(
+			me, NB7V904M_LOSS_PROFILE_D, NB7V904M_LOSS_PROFILE_D,
+			NB7V904M_LOSS_PROFILE_D, NB7V904M_LOSS_PROFILE_D);
+	}
+
+	return rv;
+}
 
 void board_init(void)
 {
@@ -255,8 +345,6 @@ void board_init(void)
 	check_c1_line();
 
 	gpio_enable_interrupt(GPIO_USB_C0_CCSBU_OVP_ODL);
-	/* Enable Base Accel interrupt */
-	gpio_enable_interrupt(GPIO_BASE_SIXAXIS_INT_L);
 
 	/* Turn on 5V if the system is on, otherwise turn it off. */
 	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
@@ -307,8 +395,7 @@ int board_is_sourcing_vbus(int port)
 
 int board_set_active_charge_port(int port)
 {
-	int is_real_port = (port >= 0 &&
-			    port < board_get_usb_pd_port_count());
+	int is_real_port = (port >= 0 && port < board_get_usb_pd_port_count());
 	int i;
 	int old_port;
 
@@ -344,22 +431,24 @@ int board_set_active_charge_port(int port)
 	 * Turn off the other ports' sink path FETs, before enabling the
 	 * requested charge port.
 	 */
-	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
-		if (i == port)
-			continue;
+	if (old_port != CHARGE_PORT_NONE && old_port != port) {
+		for (i = 0; i < board_get_usb_pd_port_count(); i++) {
+			if (i == port)
+				continue;
 
-		if (tcpc_write(i, TCPC_REG_COMMAND,
-			       TCPC_REG_COMMAND_SNK_CTRL_LOW))
-			CPRINTS("p%d: sink path disable failed.", i);
-		raa489000_enable_asgate(i, false);
-	}
+			if (tcpc_write(i, TCPC_REG_COMMAND,
+				       TCPC_REG_COMMAND_SNK_CTRL_LOW))
+				CPRINTS("p%d: sink path disable failed.", i);
+			raa489000_enable_asgate(i, false);
+		}
 
-	/*
-	 * Stop the charger IC from switching while changing ports.  Otherwise,
-	 * we can overcurrent the adapter we're switching to. (crbug.com/926056)
-	 */
-	if (old_port != CHARGE_PORT_NONE)
+		/*
+		 * Stop the charger IC from switching while changing ports.
+		 * Otherwise, we can overcurrent the adapter we're switching to.
+		 * (crbug.com/926056)
+		 */
 		charger_discharge_on_ac(1);
+	}
 
 	/* Enable requested charge port. */
 	if (raa489000_enable_asgate(port, true) ||
@@ -377,8 +466,8 @@ int board_set_active_charge_port(int port)
 }
 
 /* Vconn control for integrated ITE TCPC */
-void board_set_charge_limit(int port, int supplier, int charge_ma,
-				int max_ma, int charge_mv)
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
 {
 	int icl = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
 
@@ -419,7 +508,7 @@ uint16_t tcpc_get_alert_status(void)
 	}
 
 	if (board_get_usb_pd_port_count() > 1 &&
-				!gpio_get_level(GPIO_USB_C1_INT_V1_ODL)) {
+	    !gpio_get_level(GPIO_USB_C1_INT_V1_ODL)) {
 		if (!tcpc_read16(1, TCPC_REG_ALERT, &regval)) {
 			/* TCPCI spec Rev 1.0 says to ignore bits 14:12. */
 			if (!(tcpc_config[1].flags & TCPC_FLAGS_TCPCI_REV2_0))
@@ -433,9 +522,8 @@ uint16_t tcpc_get_alert_status(void)
 	return status;
 }
 
-__override void ocpc_get_pid_constants(int *kp, int *kp_div,
-				       int *ki, int *ki_div,
-				       int *kd, int *kd_div)
+__override void ocpc_get_pid_constants(int *kp, int *kp_div, int *ki,
+				       int *ki_div, int *kd, int *kd_div)
 {
 	*kp = 1;
 	*kp_div = 20;
@@ -451,136 +539,25 @@ int pd_snk_is_vbus_provided(int port)
 }
 
 /* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
-const struct pwm_t pwm_channels[] = {
-	[PWM_CH_KBLIGHT] = {
-		.channel = 0,
-		.flags = PWM_CONFIG_DSLEEP,
-		.freq_hz = 10000,
-	}
-};
+const struct pwm_t pwm_channels[] = { [PWM_CH_KBLIGHT] = {
+					      .channel = 0,
+					      .flags = PWM_CONFIG_DSLEEP,
+					      .freq_hz = 10000,
+				      } };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
-
-/* Sensor Mutexes */
-static struct mutex g_lid_mutex;
-static struct mutex g_base_mutex;
-
-/* Sensor Data */
-static struct kionix_accel_data  g_kx022_data;
-static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
-
-/* Drivers */
-struct motion_sensor_t motion_sensors[] = {
-	[LID_ACCEL] = {
-		.name = "Lid Accel",
-		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_KX022,
-		.type = MOTIONSENSE_TYPE_ACCEL,
-		.location = MOTIONSENSE_LOC_LID,
-		.drv = &kionix_accel_drv,
-		.mutex = &g_lid_mutex,
-		.drv_data = &g_kx022_data,
-		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = KX022_ADDR1_FLAGS,
-		.rot_standard_ref = NULL,
-		.default_range = 2, /* g */
-		/* We only use 2g because its resolution is only 8-bits */
-		.min_frequency = KX022_ACCEL_MIN_FREQ,
-		.max_frequency = KX022_ACCEL_MAX_FREQ,
-		.config = {
-			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 10000 | ROUND_UP_FLAG,
-			},
-			[SENSOR_CONFIG_EC_S3] = {
-				.odr = 10000 | ROUND_UP_FLAG,
-			},
-		},
-	},
-	[BASE_ACCEL] = {
-		.name = "Base Accel",
-		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LSM6DSM,
-		.type = MOTIONSENSE_TYPE_ACCEL,
-		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &lsm6dsm_drv,
-		.mutex = &g_base_mutex,
-		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
-				MOTIONSENSE_TYPE_ACCEL),
-		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-		.rot_standard_ref = NULL,
-		.default_range = 4,  /* g */
-		.min_frequency = LSM6DSM_ODR_MIN_VAL,
-		.max_frequency = LSM6DSM_ODR_MAX_VAL,
-		.config = {
-			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 13000 | ROUND_UP_FLAG,
-				.ec_rate = 100 * MSEC,
-			},
-			[SENSOR_CONFIG_EC_S3] = {
-				.odr = 10000 | ROUND_UP_FLAG,
-				.ec_rate = 100 * MSEC,
-			},
-		},
-	},
-	[BASE_GYRO] = {
-		.name = "Base Gyro",
-		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LSM6DSM,
-		.type = MOTIONSENSE_TYPE_GYRO,
-		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &lsm6dsm_drv,
-		.mutex = &g_base_mutex,
-		.drv_data = LSM6DSM_ST_DATA(lsm6dsm_data,
-				MOTIONSENSE_TYPE_GYRO),
-		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LSM6DSM_ADDR0_FLAGS,
-		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-		.rot_standard_ref = NULL,
-		.min_frequency = LSM6DSM_ODR_MIN_VAL,
-		.max_frequency = LSM6DSM_ODR_MAX_VAL,
-	},
-};
-
-const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 /* Thermistors */
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1] = {.name = "Memory",
-			   .type = TEMP_SENSOR_TYPE_BOARD,
-			   .read = get_temp_3v3_51k1_47k_4050b,
-			   .idx = ADC_TEMP_SENSOR_1},
-	[TEMP_SENSOR_2] = {.name = "Ambient",
-			   .type = TEMP_SENSOR_TYPE_BOARD,
-			   .read = get_temp_3v3_51k1_47k_4050b,
-			   .idx = ADC_TEMP_SENSOR_2},
+	[TEMP_SENSOR_1] = { .name = "Memory",
+			    .type = TEMP_SENSOR_TYPE_BOARD,
+			    .read = get_temp_3v3_51k1_47k_4050b,
+			    .idx = ADC_TEMP_SENSOR_1 },
+	[TEMP_SENSOR_2] = { .name = "Ambient",
+			    .type = TEMP_SENSOR_TYPE_BOARD,
+			    .read = get_temp_3v3_51k1_47k_4050b,
+			    .idx = ADC_TEMP_SENSOR_2 },
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
-
-/* This callback disables keyboard when convertibles are fully open */
-__override void lid_angle_peripheral_enable(int enable)
-{
-	int chipset_in_s0 = chipset_in_state(CHIPSET_STATE_ON);
-
-	/*
-	 * If the lid is in tablet position via other sensors,
-	 * ignore the lid angle, which might be faulty then
-	 * disable keyboard.
-	 */
-	if (tablet_get_mode())
-		enable = 0;
-
-	if (enable) {
-		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
-	} else {
-		/*
-		 * Ensure that the chipset is off before disabling the keyboard.
-		 * When the chipset is on, the EC keeps the keyboard enabled and
-		 * the AP decides whether to ignore input devices or not.
-		 */
-		if (!chipset_in_s0)
-			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-	}
-}
 
 static const struct ec_response_keybd_config keybd1 = {
 	.num_top_row_keys = 10,
@@ -599,8 +576,8 @@ static const struct ec_response_keybd_config keybd1 = {
 	/* No function keys, no numeric keypad and no screenlock key */
 };
 
-__override const struct ec_response_keybd_config
-*board_vivaldi_keybd_config(void)
+__override const struct ec_response_keybd_config *
+board_vivaldi_keybd_config(void)
 {
 	/*
 	 * Future boards should use fw_config if needed.

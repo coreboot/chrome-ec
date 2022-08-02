@@ -9,7 +9,7 @@
 # MEC1322 SoC has a Cortex-M4 ARM core
 CORE:=cortex-m
 # Allow the full Cortex-M4 instruction set
-CFLAGS_CPU+=-march=armv7e-m -mcpu=cortex-m4
+CFLAGS_CPU+=-mcpu=cortex-m4
 
 ifeq ($(CONFIG_LTO),y)
 # Re-include the core's build.mk file so we can remove the lto flag.
@@ -25,7 +25,7 @@ chip-$(CONFIG_I2C)+=i2c.o
 chip-$(CONFIG_HOST_INTERFACE_LPC)+=lpc.o
 chip-$(CONFIG_PWM)+=pwm.o
 chip-$(CONFIG_WATCHDOG)+=watchdog.o
-ifndef CONFIG_KEYBOARD_NOT_RAW
+ifndef CONFIG_KEYBOARD_DISCRETE
 chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
 endif
 chip-$(CONFIG_DMA)+=dma.o

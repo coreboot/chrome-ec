@@ -11,7 +11,7 @@
 #include "adc_chip.h"
 #include "common.h"
 
-#define ADC_READ_ERROR -1  /* Value returned by adc_read_channel() on error */
+#define ADC_READ_ERROR -1 /* Value returned by adc_read_channel() on error */
 
 #ifdef CONFIG_ZEPHYR
 #include <zephyr_adc.h>
@@ -25,6 +25,13 @@
 extern const struct adc_t adc_channels[];
 #else
 extern struct adc_t adc_channels[];
+#endif
+
+/**
+ * ADC initial.
+ */
+#ifdef CONFIG_KEYBOARD_SCAN_ADC
+void adc_init(void);
 #endif
 
 /*
@@ -73,4 +80,4 @@ int adc_disable_watchdog(void);
  */
 int adc_set_watchdog_delay(int delay_ms);
 
-#endif  /* __CROS_EC_ADC_H */
+#endif /* __CROS_EC_ADC_H */

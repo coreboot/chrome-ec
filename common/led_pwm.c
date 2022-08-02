@@ -31,7 +31,9 @@
 
 #define PULSE_TICK (250 * MSEC)
 
+#ifndef CONFIG_LED_PWM_TASK_DISABLED
 static uint8_t led_is_pulsing;
+#endif /* CONFIG_LED_PWM_TASK_DISABLED */
 
 static int get_led_id_color(enum pwm_led_id id, int color)
 {
@@ -120,8 +122,9 @@ static void init_leds_off(void)
 	set_pwm_led_enable(PWM_LED1, 1);
 #endif /* CONFIG_LED_PWM_COUNT >= 2 */
 }
-DECLARE_HOOK(HOOK_INIT, init_leds_off, HOOK_PRIO_INIT_PWM + 1);
+DECLARE_HOOK(HOOK_INIT, init_leds_off, HOOK_PRIO_POST_PWM);
 
+#ifndef CONFIG_LED_PWM_TASK_DISABLED
 static uint8_t pulse_period;
 static uint8_t pulse_ontime;
 static enum ec_led_colors pulse_color;
@@ -259,6 +262,8 @@ static void update_leds(void)
 }
 DECLARE_HOOK(HOOK_TICK, update_leds, HOOK_PRIO_DEFAULT);
 
+#endif /* CONFIG_LED_PWM_TASK_DISABLED */
+
 #ifdef CONFIG_CMD_LEDTEST
 static int command_ledtest(int argc, char **argv)
 {
@@ -275,9 +280,8 @@ static int command_ledtest(int argc, char **argv)
 	led_id = supported_led_ids[pwm_led_id];
 
 	if (argc == 2) {
-		ccprintf("PWM LED %d: led_id=%d, auto_control=%d\n",
-			 pwm_led_id, led_id,
-			 led_auto_control_is_enabled(led_id) != 0);
+		ccprintf("PWM LED %d: led_id=%d, auto_control=%d\n", pwm_led_id,
+			 led_id, led_auto_control_is_enabled(led_id) != 0);
 		return EC_SUCCESS;
 	}
 	if (!parse_bool(argv[2], &enable))

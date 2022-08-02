@@ -38,9 +38,7 @@ struct temp_sensor_t {
 	 * to all use OO style sensor argument to get adc idx.
 	 */
 #ifdef CONFIG_ZEPHYR
-	/* Read sensor value in K into temp_ptr; return non-zero if error. */
-	int (*read)(const struct temp_sensor_t *sensor, int *temp_ptr);
-	struct thermistor_info *thermistor;
+	struct zephyr_temp_sensor *zephyr_info;
 #else
 	/* Read sensor value in K into temp_ptr; return non-zero if error. */
 	int (*read)(int idx, int *temp_ptr);
@@ -74,4 +72,4 @@ int temp_sensor_read(enum temp_sensor_id id, int *temp_ptr);
  */
 int print_temps(void);
 
-#endif  /* __CROS_EC_TEMP_SENSOR_H */
+#endif /* __CROS_EC_TEMP_SENSOR_H */

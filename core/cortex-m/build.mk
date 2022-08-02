@@ -6,20 +6,27 @@
 # Cortex-M4 core OS files build
 #
 
-# Use coreboot-sdk
-$(call set-option,CROSS_COMPILE,\
-	$(CROSS_COMPILE_arm),\
-	/opt/coreboot-sdk/bin/arm-eabi-)
-
 # FPU compilation flags
-CFLAGS_FPU-$(CONFIG_FPU)=-mfpu=fpv4-sp-d16 -mfloat-abi=hard
+CFLAGS_FPU-$(CONFIG_FPU)=-mfloat-abi=hard
+ifeq ($(cc-name),gcc)
+# -mfpu=auto will choose correct hardware based on settings of -mcpu and -march
+# https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html.
+#
+# According to the above doc "-mfpu=auto" is the default and shouldn't be
+# required, but compilation using gcc fails without the flag.
+#
+# clang does not support "-mfpu=auto" flag, but will choose the correct floating
+# point unit based on the -mcpu flag:
+# https://lists.llvm.org/pipermail/llvm-dev/2018-September/126468.html
+CFLAGS_FPU-$(CONFIG_FPU)+=-mfpu=auto
+endif
 
 # CPU specific compilation flags
 CFLAGS_CPU+=-mthumb
 ifeq ($(cc-name),clang)
 CFLAGS_CPU+=-Oz		# Like -Os (and thus -O2), but reduces code size further.
 # Link compiler-rt when using clang, so clang finds the builtins it provides.
-LDFLAGS_EXTRA+=-lclang_rt.builtins-arm
+LDFLAGS_EXTRA+=-lclang_rt.builtins-armv7m
 else
 CFLAGS_CPU+=-Os
 CFLAGS_CPU+=-mno-sched-prolog

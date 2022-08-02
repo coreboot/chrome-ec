@@ -4,18 +4,21 @@
  */
 
 #include <atomic.h>
-#include <device.h>
-#include <drivers/espi.h>
-#include <logging/log.h>
-#include <kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/espi.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/kernel.h>
 #include <stdint.h>
-#include <zephyr.h>
+#include <zephyr/zephyr.h>
 
+#include <ap_power/ap_power.h>
+#include <ap_power/ap_power_events.h>
+#include <ap_power/ap_power_espi.h>
 #include "acpi.h"
 #include "chipset.h"
 #include "common.h"
 #include "espi.h"
-#include "gpio.h"
 #include "hooks.h"
 #include "i8042_protocol.h"
 #include "keyboard_protocol.h"
@@ -26,9 +29,27 @@
 #include "timer.h"
 #include "zephyr_espi_shim.h"
 
-#define VWIRE_PULSE_TRIGGER_TIME 65
+#define VWIRE_PULSE_TRIGGER_TIME CONFIG_PLATFORM_EC_ESPI_DEFAULT_VW_WIDTH_US
 
 LOG_MODULE_REGISTER(espi_shim, CONFIG_ESPI_LOG_LEVEL);
+
+/*
+ * Some functions are compiled depending on combinations of
+ * CONFIG_PLATFORM_EC_POWERSEQ, CONFIG_AP_PWRSEQ and
+ * CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK.
+ *
+ * Tests are compiled without CONFIG_PLATFORM_EC_POWERSEQ and
+ * CONFIG_AP_PWRSEQ defined, but use the lpc functions.
+ *
+ * Legacy vwire power signal handling is required
+ * by CONFIG_PLATFORM_EC_POWERSEQ.
+ *
+ * CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK is used to handle
+ * the PLTRST# vwire signal separate to the legacy power signal handling.
+ *
+ * Where !defined(CONFIG_AP_PWRSEQ) is used, the code is required either
+ * by the tests, or by the legacy power signal handling.
+ */
 
 /* host command packet handler structure */
 static struct host_packet lpc_packet;
@@ -81,6 +102,7 @@ static bool init_done;
 		return B;
 #define CASE_ZEPHYR_TO_CROS(A, B) CASE_CROS_TO_ZEPHYR(B, A)
 
+#if !defined(CONFIG_AP_PWRSEQ)
 /* Translate a platform/ec signal to a Zephyr signal */
 static enum espi_vwire_signal signal_to_zephyr_vwire(enum espi_vw_signal signal)
 {
@@ -92,6 +114,7 @@ static enum espi_vwire_signal signal_to_zephyr_vwire(enum espi_vw_signal signal)
 	}
 }
 
+#if defined(CONFIG_PLATFORM_EC_POWERSEQ)
 /* Translate a Zephyr vwire to a platform/ec signal */
 static enum espi_vw_signal zephyr_vwire_to_signal(enum espi_vwire_signal vwire)
 {
@@ -102,6 +125,7 @@ static enum espi_vw_signal zephyr_vwire_to_signal(enum espi_vwire_signal vwire)
 		return -1;
 	}
 }
+#endif /* defined(CONFIG_PLATFORM_EC_POWERSEQ) */
 
 /*
  * Bit field for each signal which can have an interrupt enabled.
@@ -123,38 +147,54 @@ static uint32_t signal_to_interrupt_bit(enum espi_vw_signal signal)
 	}
 }
 
-/* Callback for vwire received */
+#endif /* !defined(CONFIG_AP_PWRSEQ) */
+
+#ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
+/*
+ * Deferred handler for PLTRST processing.
+ */
+static void espi_chipset_reset(void)
+{
+	if (IS_ENABLED(CONFIG_AP_PWRSEQ)) {
+		ap_power_ev_send_callbacks(AP_POWER_RESET);
+	} else {
+		hook_notify(HOOK_CHIPSET_RESET);
+	}
+}
+DECLARE_DEFERRED(espi_chipset_reset);
+#endif /* CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK */
+
+/*
+ * Callback for vwire received.
+ * PLTRST (platform reset) is handled specially by
+ * invoking HOOK_CHIPSET_RESET.
+ */
+#if defined(CONFIG_PLATFORM_EC_POWERSEQ) || \
+	defined(CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK)
 static void espi_vwire_handler(const struct device *dev,
 			       struct espi_callback *cb,
 			       struct espi_event event)
 {
+#if defined(CONFIG_PLATFORM_EC_POWERSEQ)
 	int ec_signal = zephyr_vwire_to_signal(event.evt_details);
 
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_POWERSEQ) &&
-	    (signal_interrupt_enabled & signal_to_interrupt_bit(ec_signal))) {
+	if (signal_interrupt_enabled & signal_to_interrupt_bit(ec_signal)) {
 		power_signal_interrupt(ec_signal);
 	}
+#endif
+#if defined(CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK)
+	/* If PLTRST# asserted (low) then send reset hook */
+	if (event.evt_details == ESPI_VWIRE_SIGNAL_PLTRST &&
+	    event.evt_data == 0) {
+		hook_call_deferred(&espi_chipset_reset_data, MSEC);
+	}
+#endif
 }
-
-#ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
-static void espi_chipset_reset(void)
-{
-	hook_notify(HOOK_CHIPSET_RESET);
-}
-DECLARE_DEFERRED(espi_chipset_reset);
-
-/* Callback for reset */
-static void espi_reset_handler(const struct device *dev,
-			       struct espi_callback *cb,
-			       struct espi_event event)
-{
-	hook_call_deferred(&espi_chipset_reset_data, MSEC);
-
-}
-#endif /* CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK */
+#endif
 
 #define espi_dev DEVICE_DT_GET(DT_CHOSEN(cros_ec_espi))
 
+#if !defined(CONFIG_AP_PWRSEQ)
 
 int espi_vw_set_wire(enum espi_vw_signal signal, uint8_t level)
 {
@@ -192,6 +232,8 @@ int espi_vw_disable_wire_int(enum espi_vw_signal signal)
 	return 0;
 }
 
+#endif /* !defined(CONFIG_AP_PWRSEQ) */
+
 uint8_t *lpc_get_memmap_range(void)
 {
 	uint32_t lpc_memmap = 0;
@@ -222,6 +264,8 @@ static void lpc_update_wake(host_event_t wake_events)
 			!wake_events);
 }
 
+#if !defined(CONFIG_AP_PWRSEQ)
+
 static void lpc_generate_smi(void)
 {
 	/* Enforce signal-high for long enough to debounce high */
@@ -241,6 +285,33 @@ static void lpc_generate_sci(void)
 	udelay(VWIRE_PULSE_TRIGGER_TIME);
 	espi_vw_set_wire(VW_SCI_L, 1);
 }
+
+#else
+
+/*
+ * Use Zephyr API.
+ */
+static void lpc_generate_signal(enum espi_vwire_signal signal)
+{
+	/* Enforce signal-high for long enough to debounce high */
+	espi_send_vwire(espi_dev, signal, 1);
+	udelay(VWIRE_PULSE_TRIGGER_TIME);
+	espi_send_vwire(espi_dev, signal, 0);
+	udelay(VWIRE_PULSE_TRIGGER_TIME);
+	espi_send_vwire(espi_dev, signal, 1);
+}
+
+static void lpc_generate_sci(void)
+{
+	lpc_generate_signal(ESPI_VWIRE_SIGNAL_SCI);
+}
+
+static void lpc_generate_smi(void)
+{
+	lpc_generate_signal(ESPI_VWIRE_SIGNAL_SMI);
+}
+
+#endif /* !defined(CONFIG_AP_PWRSEQ) */
 
 void lpc_update_host_event_status(void)
 {
@@ -422,7 +493,9 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO, lpc_get_protocol_info,
  * This function is needed only for the obsolete platform which uses the GPIO
  * for KBC's IRQ.
  */
-void lpc_keyboard_resume_irq(void) {}
+void lpc_keyboard_resume_irq(void)
+{
+}
 
 void lpc_keyboard_clear_buffer(void)
 {
@@ -464,8 +537,7 @@ static void kbc_ibf_obe_handler(uint32_t data)
 	uint32_t status = I8042_AUX_DATA;
 
 	if (is_ibf) {
-		keyboard_host_write(get_8042_data(data),
-				    get_8042_type(data));
+		keyboard_host_write(get_8042_data(data), get_8042_type(data));
 	} else if (IS_ENABLED(CONFIG_8042_AUX)) {
 		espi_write_lpc_request(espi_dev, E8042_CLEAR_FLAG, &status);
 	}
@@ -512,26 +584,29 @@ static void espi_peripheral_handler(const struct device *dev,
 
 static int zephyr_shim_setup_espi(const struct device *unused)
 {
-	static struct {
-		struct espi_callback cb;
+	static const struct {
 		espi_callback_handler_t handler;
 		enum espi_bus_event event_type;
 	} callbacks[] = {
+#if defined(CONFIG_PLATFORM_EC_POWERSEQ) || \
+	defined(CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK)
 		{
 			.handler = espi_vwire_handler,
 			.event_type = ESPI_BUS_EVENT_VWIRE_RECEIVED,
 		},
+#endif
 		{
 			.handler = espi_peripheral_handler,
 			.event_type = ESPI_BUS_PERIPHERAL_NOTIFICATION,
 		},
-#ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
+#if defined(CONFIG_AP_PWRSEQ) && DT_HAS_COMPAT_STATUS_OKAY(intel_ap_pwrseq_vw)
 		{
-			.handler = espi_reset_handler,
-			.event_type = ESPI_BUS_RESET,
+			.handler = power_signal_espi_cb,
+			.event_type = POWER_SIGNAL_ESPI_BUS_EVENTS,
 		},
 #endif
 	};
+	static struct espi_callback cb[ARRAY_SIZE(callbacks)];
 
 	struct espi_cfg cfg = {
 		.io_caps = ESPI_IO_MODE_QUAD_LINES,
@@ -543,17 +618,17 @@ static int zephyr_shim_setup_espi(const struct device *unused)
 	if (!device_is_ready(espi_dev))
 		k_oops();
 
-	/* Configure eSPI */
+	/* Setup callbacks */
+	for (size_t i = 0; i < ARRAY_SIZE(callbacks); i++) {
+		espi_init_callback(&cb[i], callbacks[i].handler,
+				   callbacks[i].event_type);
+		espi_add_callback(espi_dev, &cb[i]);
+	}
+
+	/* Configure eSPI after callbacks are registered */
 	if (espi_config(espi_dev, &cfg)) {
 		LOG_ERR("Failed to configure eSPI device");
 		return -1;
-	}
-
-	/* Setup callbacks */
-	for (size_t i = 0; i < ARRAY_SIZE(callbacks); i++) {
-		espi_init_callback(&callbacks[i].cb, callbacks[i].handler,
-				   callbacks[i].event_type);
-		espi_add_callback(espi_dev, &callbacks[i].cb);
 	}
 
 	return 0;

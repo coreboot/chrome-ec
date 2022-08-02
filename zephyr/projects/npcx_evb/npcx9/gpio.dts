@@ -31,18 +31,17 @@
 			enum-name = "GPIO_LID_OPEN";
 		};
 		entering_rw {
-			gpios = <&gpio3 6 GPIO_OUT_LOW>;
+			gpios = <&gpio3 6 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_ENTERING_RW";
 		};
 		gpio_ec_pch_wake_odl: pch_wake_l {
-			gpios = <&gpio5 0 GPIO_OUT_HIGH>;
+			gpios = <&gpio5 0 GPIO_OUTPUT_HIGH>;
 		};
 		gpio_pgood_fan: pgood_fan {
 			gpios = <&gpioc 7 GPIO_INPUT_PULL_UP>;
-			enum-name = "GPIO_PGOOD_FAN";
 		};
 		spi_cs_l {
-			gpios = <&gpioa 5 GPIO_OUT_HIGH>;
+			gpios = <&gpioa 5 GPIO_OUTPUT_HIGH>;
 		};
 		board_version1 {
 			gpios = <&gpio6 4 GPIO_INPUT>;
@@ -57,13 +56,17 @@
 			enum-name = "GPIO_BOARD_VERSION3";
 		};
 	};
+};
 
-	hibernate-wake-pins {
-		compatible = "cros-ec,hibernate-wake-pins";
-		wakeup-irqs = <
-			&int_ac_present
-			&int_power_button
-			&int_lid_open
-		>;
-	};
+/* A falling edge detection type for PSL_IN2 */
+&psl_in2_gp00 {
+	psl-in-mode = "edge";
+	psl-in-pol = "low-falling";
+};
+
+/* Power domain device controlled by PSL (Power Switch Logic) IO pads */
+&power_ctrl_psl {
+	status = "okay";
+	pinctrl-names = "sleep";
+	pinctrl-0 = <&psl_in2_gp00>;
 };

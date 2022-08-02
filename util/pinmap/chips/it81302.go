@@ -189,20 +189,25 @@ func (c *It81302) Adc(p string) string {
 	}
 }
 
-// Gpio returns the configuration of this pin as a GPIO.
-func (c *It81302) Gpio(p string) string {
+// Gpio returns the configuration of this pin as a
+// GPIO controller name and a pin number.
+func (c *It81302) Gpio(p string) (string, int) {
 	s, ok := it81302_pins[p]
 	if ok {
 		// Found the pin, now find the GP name.
 		for _, ss := range strings.Split(s, "/") {
 			if strings.HasPrefix(ss, "GP") && len(ss) == 4 {
 				lc := strings.ToLower(ss)
-				return fmt.Sprintf("gpio%c %c", lc[2], lc[3])
+				pin := int(lc[3] - '0')
+				if pin < 0 || pin > 9 {
+					return "", 0
+				}
+				return fmt.Sprintf("gpio%c", lc[2]), pin
 			}
 		}
-		return ""
+		return "", 0
 	} else {
-		return ""
+		return "", 0
 	}
 }
 
@@ -216,24 +221,6 @@ func (c *It81302) I2c(p string) string {
 				i2c := fmt.Sprintf("i2c%s", ss[5:])
 				c.okay = append(c.okay, i2c)
 				return i2c
-			}
-		}
-		return ""
-	} else {
-		return ""
-	}
-}
-
-// Pwm returns the configuration of this pin as a PWM.
-func (c *It81302) Pwm(p string) string {
-	s, ok := it81302_pins[p]
-	if ok {
-		// Found the pin, now find the PWM name.
-		for _, ss := range strings.Split(s, "/") {
-			if strings.HasPrefix(ss, "PWM") && len(ss) > 3 {
-				pwm := fmt.Sprintf("pwm%s", ss[3:])
-				c.okay = append(c.okay, pwm)
-				return fmt.Sprintf("%s %s", pwm, ss[3:])
 			}
 		}
 		return ""

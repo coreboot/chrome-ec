@@ -5,6 +5,8 @@
 
 /* Herobrine board-specific USB-C configuration */
 
+#include <zephyr/drivers/gpio.h>
+
 #include "charger.h"
 #include "charger/isl923x_public.h"
 #include "charge_manager.h"
@@ -12,7 +14,6 @@
 #include "common.h"
 #include "config.h"
 #include "cros_board_info.h"
-#include "gpio.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
 #include "ppc/sn5s330_public.h"
@@ -27,9 +28,8 @@
 #include "usbc_ppc.h"
 #include "usbc/ppc.h"
 
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
-
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
 /* GPIO Interrupt Handlers */
 void tcpc_alert_event(enum gpio_signal signal)
@@ -53,9 +53,9 @@ void tcpc_alert_event(enum gpio_signal signal)
 static void usba_oc_deferred(void)
 {
 	/* Use next number after all USB-C ports to indicate the USB-A port */
-	board_overcurrent_event(CONFIG_USB_PD_PORT_MAX_COUNT,
-				!gpio_pin_get_dt(
-				 GPIO_DT_FROM_NODELABEL(gpio_usb_a0_oc_odl)));
+	board_overcurrent_event(
+		CONFIG_USB_PD_PORT_MAX_COUNT,
+		!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_a0_oc_odl)));
 }
 DECLARE_DEFERRED(usba_oc_deferred);
 
@@ -79,14 +79,6 @@ void ppc_interrupt(enum gpio_signal signal)
 		break;
 	}
 }
-
-const struct charger_config_t chg_chips[] = {
-	{
-		.i2c_port = I2C_PORT_CHARGER,
-		.i2c_addr_flags = ISL923X_ADDR_FLAGS,
-		.drv = &isl923x_drv,
-	},
-};
 
 int charger_profile_override(struct charge_state_data *curr)
 {
@@ -126,26 +118,6 @@ enum ec_status charger_profile_override_set_param(uint32_t param,
 	return EC_RES_INVALID_PARAM;
 }
 
-/*
- * Port-0/1 USB mux driver.
- *
- * The USB mux is handled by TCPC chip and the HPD update is through a GPIO
- * to AP. But the TCPC chip is also needed to know the HPD status; otherwise,
- * the mux misbehaves.
- */
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{
-		.usb_port = 0,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
-	},
-	{
-		.usb_port = 1,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
-	}
-};
-
 /* Initialize board USC-C things */
 static void board_init_usbc(void)
 {
@@ -175,9 +147,9 @@ void board_tcpc_init(void)
 	 */
 	for (int port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; ++port)
 		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
-					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
+						 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
-DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_I2C + 1);
+DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_POST_I2C);
 
 void board_reset_pd_mcu(void)
 {
@@ -221,8 +193,7 @@ void board_overcurrent_event(int port, int is_overcurrented)
 
 int board_set_active_charge_port(int port)
 {
-	int is_real_port = (port >= 0 &&
-			    port < CONFIG_USB_PD_PORT_MAX_COUNT);
+	int is_real_port = (port >= 0 && port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 
 	if (!is_real_port && port != CHARGE_PORT_NONE)
@@ -250,7 +221,6 @@ int board_set_active_charge_port(int port)
 		return EC_ERROR_INVAL;
 	}
 
-
 	CPRINTS("New charge port: p%d", port);
 
 	/*
@@ -274,23 +244,21 @@ int board_set_active_charge_port(int port)
 	return EC_SUCCESS;
 }
 
-void board_set_charge_limit(int port, int supplier, int charge_ma,
-			    int max_ma, int charge_mv)
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
 {
 	/*
 	 * Ignore lower charge ceiling on PD transition if our battery is
 	 * critical, as we may brownout.
 	 */
-	if (supplier == CHARGE_SUPPLIER_PD &&
-	    charge_ma < 1500 &&
+	if (supplier == CHARGE_SUPPLIER_PD && charge_ma < 1500 &&
 	    charge_get_percent() < CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON) {
 		CPRINTS("Using max ilim %d", max_ma);
 		charge_ma = max_ma;
 	}
 
-	charge_set_input_current_limit(MAX(charge_ma,
-					   CONFIG_CHARGER_INPUT_CURRENT),
-				       charge_mv);
+	charge_set_input_current_limit(
+		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -299,11 +267,11 @@ uint16_t tcpc_get_alert_status(void)
 
 	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c0_pd_int_odl)))
 		if (gpio_pin_get_dt(
-			GPIO_DT_FROM_NODELABEL(gpio_usb_c0_pd_rst_l)))
+			    GPIO_DT_FROM_NODELABEL(gpio_usb_c0_pd_rst_l)))
 			status |= PD_STATUS_TCPC_ALERT_0;
 	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c1_pd_int_odl)))
 		if (gpio_pin_get_dt(
-			GPIO_DT_FROM_NODELABEL(gpio_usb_c1_pd_rst_l)))
+			    GPIO_DT_FROM_NODELABEL(gpio_usb_c1_pd_rst_l)))
 			status |= PD_STATUS_TCPC_ALERT_1;
 
 	return status;

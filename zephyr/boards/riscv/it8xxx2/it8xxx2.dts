@@ -7,7 +7,7 @@
 
 #include <dt-bindings/gpio_defines.h>
 #include <cros/ite/it8xxx2.dtsi>
-#include <it8xxx2.dtsi>
+#include <ite/it8xxx2.dtsi>
 
 / {
 	model = "Google IT8XXX2 Baseboard";
@@ -23,13 +23,6 @@
 	/* Override keyboard scanning */
 	soc {
 		/delete-node/ kscan@f01d00;
-
-		cros_kb_raw: cros-kb-raw@f01d00 {
-			compatible = "ite,it8xxx2-cros-kb-raw";
-			reg = <0x00f01d00 0x29>;
-			interrupt-parent = <&intc>;
-			interrupts = <13 IRQ_TYPE_LEVEL_HIGH>;
-		};
 	};
 };
 
@@ -41,8 +34,15 @@
 
 &ite_uart1_wrapper {
 	status = "okay";
+	pinctrl-0 = <&uart1_rx_gpb0_default
+		     &uart1_tx_gpb1_default>;
+	pinctrl-names = "default";
 };
 
 &cros_kb_raw {
 	status = "okay";	/* Override in project dts if not required */
+};
+
+&espi0 {
+	status = "okay";
 };

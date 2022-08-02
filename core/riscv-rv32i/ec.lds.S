@@ -83,6 +83,7 @@ SECTIONS
 		       "__flash_dma_size < IT83XX_ILM_BLOCK_SIZE");
 		. = ALIGN(IT83XX_ILM_BLOCK_SIZE);
 		__ilm0_ram_code = .;
+		KEEP(*(.ram_code_ilm0))
 		OUTDIR/chip/it83xx/i2c.o (.text*)
 		OUTDIR/chip/it83xx/i2c.o (.rodata)
 		OUTDIR/chip/it83xx/hwtimer.o (.text*)
@@ -232,6 +233,10 @@ SECTIONS
 		KEEP(*(.rodata.HOOK_USB_PD_CONNECT))
 		__hooks_usb_pd_connect_end = .;
 
+		__hooks_power_supply_change = .;
+		KEEP(*(.rodata.HOOK_POWER_SUPPLY_CHANGE))
+		__hooks_power_supply_change_end = .;
+
 		__deferred_funcs = .;
 		KEEP(*(.rodata.deferred))
 		__deferred_funcs_end = .;
@@ -331,6 +336,12 @@ SECTIONS
 
 		. = ALIGN(4);
 		__bss_end = .;
+
+		/*
+		 * _sbrk in newlib expects "end" symbol to point to start of
+		 * free memory.
+		 */
+		end = .;
 
 		/*
 		 * Shared memory buffer must be at the end of preallocated RAM,

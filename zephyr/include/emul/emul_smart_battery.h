@@ -12,9 +12,9 @@
 #ifndef __EMUL_SMART_BATTERY_H
 #define __EMUL_SMART_BATTERY_H
 
-#include <drivers/emul.h>
-#include <drivers/i2c.h>
-#include <drivers/i2c_emul.h>
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/i2c_emul.h>
 #include <stdint.h>
 
 /**
@@ -38,11 +38,11 @@
  */
 
 /* Value used to indicate that no command is selected */
-#define SBAT_EMUL_NO_CMD	-1
+#define SBAT_EMUL_NO_CMD -1
 /* Maximum size of data that can be returned in SMBus block transaction */
-#define MAX_BLOCK_SIZE		32
+#define MAX_BLOCK_SIZE 32
 /* Maximum length of command to send is maximum size of data + len byte + PEC */
-#define MSG_BUF_LEN		(MAX_BLOCK_SIZE + 2)
+#define MSG_BUF_LEN (MAX_BLOCK_SIZE + 2)
 
 /** @brief Emulated smart battery properties */
 struct sbat_emul_bat_data {
@@ -77,8 +77,12 @@ struct sbat_emul_bat_data {
 	uint16_t max_error;
 	/** Capacity of the battery at the moment in mAh */
 	uint16_t cap;
+	/** Default capacity of the battery at the moment in mAh */
+	const uint16_t default_cap;
 	/** Full capacity of the battery in mAh */
 	uint16_t full_cap;
+	/** Default full capacity of the battery at the moment in mAh */
+	const uint16_t default_full_cap;
 	/** Design battery capacity in mAh */
 	uint16_t design_cap;
 	/** Charging current requested by battery */
@@ -120,7 +124,7 @@ struct sbat_emul_bat_data {
  *
  * @return Pointer to smart battery emulator
  */
-struct i2c_emul *sbat_emul_get_ptr(int ord);
+const struct emul *sbat_emul_get_ptr(int ord);
 
 /**
  * @brief Function which allows to get properties of emulated smart battery
@@ -129,7 +133,7 @@ struct i2c_emul *sbat_emul_get_ptr(int ord);
  *
  * @return Pointer to smart battery properties
  */
-struct sbat_emul_bat_data *sbat_emul_get_bat_data(struct i2c_emul *emul);
+struct sbat_emul_bat_data *sbat_emul_get_bat_data(const struct emul *emul);
 
 /**
  * @brief Convert date to format used by smart battery
@@ -156,7 +160,7 @@ uint16_t sbat_emul_date_to_word(unsigned int day, unsigned int month,
  * @return 1 if command is unknown or return type different then word
  * @return negative on error while reading value
  */
-int sbat_emul_get_word_val(struct i2c_emul *emul, int cmd, uint16_t *val);
+int sbat_emul_get_word_val(const struct emul *emul, int cmd, uint16_t *val);
 
 /**
  * @brief Function which gets return value for read commands that returns block
@@ -171,7 +175,7 @@ int sbat_emul_get_word_val(struct i2c_emul *emul, int cmd, uint16_t *val);
  * @return 1 if command is unknown or return type different then word
  * @return negative on error while reading value
  */
-int sbat_emul_get_block_data(struct i2c_emul *emul, int cmd, uint8_t **blk,
+int sbat_emul_get_block_data(const struct emul *emul, int cmd, uint8_t **blk,
 			     int *len);
 
 /**
@@ -184,8 +188,17 @@ int sbat_emul_get_block_data(struct i2c_emul *emul, int cmd, uint8_t **blk,
  * @param len Length of the response
  * @param fail If emulator should fail to send response
  */
-void sbat_emul_set_response(struct i2c_emul *emul, int cmd, uint8_t *buf,
+void sbat_emul_set_response(const struct emul *emul, int cmd, uint8_t *buf,
 			    int len, bool fail);
+
+/**
+ * @brief Saves current internal state of sensors to emulator's registers.
+ *
+ * @param emul Pointer to smart_battery emulator
+ * @return Pointer to smart_battery emulator associated i2c_common_emul_data
+ */
+struct i2c_common_emul_data *
+emul_smart_battery_get_i2c_common_data(const struct emul *emul);
 
 /**
  * @}

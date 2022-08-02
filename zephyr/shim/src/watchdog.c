@@ -3,10 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include <device.h>
-#include <drivers/watchdog.h>
-#include <logging/log.h>
-#include <zephyr.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/watchdog.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/zephyr.h>
 
 #include "config.h"
 #include "hooks.h"
@@ -24,9 +24,14 @@ static void wdt_warning_handler(const struct device *wdt_dev, int channel_id)
 {
 	/* TODO(b/176523207): watchdog warning message */
 	printk("Watchdog deadline is close!\n");
-	#ifdef TEST_BUILD
+#ifdef TEST_BUILD
 	wdt_warning_triggered = true;
-	#endif
+#endif
+#ifdef CONFIG_SOC_SERIES_MEC172X
+	extern void cros_chip_wdt_handler(const struct device *wdt_dev,
+					  int channel_id);
+	cros_chip_wdt_handler(wdt_dev, channel_id);
+#endif
 }
 
 int watchdog_init(void)

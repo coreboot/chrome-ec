@@ -21,13 +21,14 @@ __override struct keyboard_scan_config keyscan_config = {
 	.min_post_scan_delay_us = 1000,
 	.poll_timeout_us = 100 * MSEC,
 	.actual_key_mask = {
-		0x1c, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
-		0xa4, 0xff, 0xfe, 0x55, 0xfe, 0xff, 0xff, 0xff,  /* full set */
+		0x1c, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xa4, 0xff, 0xff, 0x55, 0xff, 0xff, 0xff, 0xff,  /* full set */
 	},
+	.ksi_threshold_mv = 250,
 };
 
 static const struct ec_response_keybd_config taniks_kb = {
-	.num_top_row_keys = 11,
+	.num_top_row_keys = 14,
 	.action_keys = {
 		TK_BACK,		/* T1 */
 		TK_REFRESH,		/* T2 */
@@ -36,10 +37,13 @@ static const struct ec_response_keybd_config taniks_kb = {
 		TK_SNAPSHOT,		/* T5 */
 		TK_BRIGHTNESS_DOWN,	/* T6 */
 		TK_BRIGHTNESS_UP,	/* T7 */
-		TK_MICMUTE,		/* T8 */
-		TK_VOL_MUTE,		/* T9 */
-		TK_VOL_DOWN,		/* T10 */
-		TK_VOL_UP,		/* T11 */
+		TK_ABSENT,		/* T8 */
+		TK_ABSENT,		/* T9 */
+		TK_ABSENT,		/* T10 */
+		TK_MICMUTE,		/* T11 */
+		TK_VOL_MUTE,		/* T12 */
+		TK_VOL_DOWN,		/* T13 */
+		TK_VOL_UP,		/* T14 */
 	},
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY | KEYBD_CAP_NUMERIC_KEYPAD,
 };
@@ -68,12 +72,24 @@ const enum ec_rgbkbd_type rgbkbd_type = EC_RGBKBD_TYPE_FOUR_ZONES_40_LEDS;
 #define DELM RGBKBD_DELM
 
 const uint8_t rgbkbd_map[] = {
-	RGBKBD_DELM,
+	DELM, LED(0, 0), DELM, LED(1, 0), DELM, LED(2, 0), DELM, LED(3, 0),
+	DELM, LED(4, 0), DELM, LED(5, 0), DELM, LED(6, 0), DELM, LED(7, 0),
+	DELM, LED(0, 1), DELM, LED(1, 1), DELM, LED(2, 1), DELM, LED(3, 1),
+	DELM, LED(4, 1), DELM, LED(5, 1), DELM, LED(6, 1), DELM, LED(7, 1),
+	DELM, LED(0, 2), DELM, LED(1, 2), DELM, LED(2, 2), DELM, LED(3, 2),
+	DELM, LED(4, 2), DELM, LED(5, 2), DELM, LED(6, 2), DELM, LED(7, 2),
+	DELM, LED(0, 3), DELM, LED(1, 3), DELM, LED(2, 3), DELM, LED(3, 3),
+	DELM, LED(4, 3), DELM, LED(5, 3), DELM, LED(6, 3), DELM, LED(7, 3),
+	DELM, LED(0, 4), DELM, LED(1, 4), DELM, LED(2, 4), DELM, LED(3, 4),
+	DELM, LED(4, 4), DELM, LED(5, 4), DELM, LED(6, 4), DELM, LED(7, 4),
+	DELM, DELM,
 };
+#undef LED
+#undef DELM
 const size_t rgbkbd_map_size = ARRAY_SIZE(rgbkbd_map);
 
-__override const struct ec_response_keybd_config
-*board_vivaldi_keybd_config(void)
+__override const struct ec_response_keybd_config *
+board_vivaldi_keybd_config(void)
 {
 	return &taniks_kb;
 }

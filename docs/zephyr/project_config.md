@@ -73,6 +73,10 @@ When `BUILD.py` is sourced, the following two globals are defined:
   build in a limited environment where not all modules are available.
 - `is_test` (optional): `True` if the code should be executed as a
   test after compilation, `False` otherwise.  Defaults to `False`.
+- `test_args` (optional): A list of command line arguments that should
+  be used when running the test.  Instances of `{test_temp_dir}`
+  inside of an argument will be replaced with a path to a temporary
+  directory guaranteed to be unique for the current execution.
 - `dts_overlays` (optional): A list of files which should be
   concatenated together and applied as a Zephyr device-tree overlay.
   Defaults to no overlays (empty list).
@@ -112,9 +116,9 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(ec)
 ```
 
-You may additionally want to specify any C files or include
-directories your project needs using `zephyr_library_sources` or
-`zephyr_library_include_directories`.
+You may additionally want to specify any C files your project needs
+using `zephyr_library_sources`. If you need to add extra include
+directories, use `cros_ec_library_include_directories`.
 
 ### prj.conf and prj_${project_name}.conf
 
@@ -149,7 +153,7 @@ Below is an example of how programs may wish to structure this in
 # found in the LICENSE file.
 
 def register_variant(project_name, chip="it8xx2", extra_dts_overlays=()):
-    register_binman_project(
+    return register_binman_project(
         project_name=project_name,
         zephyr_board=chip,
         dts_overlays=[
@@ -172,3 +176,21 @@ register_variant(
     extra_dts_overlays=[here / "hayato_gpios.dts"],
 )
 ```
+
+If a project is going to be a simple variant of another project (e.g.,
+project `bar` is exactly identical to project `foo` but has just a few
+device-tree/Kconfig changes), you can spin a new variant using the
+return value of the register functions:
+
+``` python
+foo = register_variant(project_name="foo")
+bar = foo.variant(
+    project_name="bar",
+    dts_overlays=[here / "bar_extras.dts"],
+)
+```
+
+With this simple variant syntax, lists (like Kconfig files and DTS
+overlays) are concatenated.  This means it's not possible to remove
+files during variant registration for this syntax, so it's only
+recommended for the simple case.

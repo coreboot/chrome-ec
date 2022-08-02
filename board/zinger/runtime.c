@@ -68,11 +68,9 @@ void interrupt_enable(void)
 	asm("cpsie i");
 }
 
-uint32_t task_set_event(task_id_t tskid, uint32_t event)
+void task_set_event(task_id_t tskid, uint32_t event)
 {
 	last_event = event;
-
-	return 0;
 }
 
 static void tim2_interrupt(void)
@@ -108,7 +106,7 @@ static void zinger_config_hispeed_clock(void)
 	STM32_RCC_CR |= BIT(24);
 	/* Wait for PLL to be ready */
 	while (!(STM32_RCC_CR & BIT(25)))
-			;
+		;
 
 	/* switch SYSCLK to PLL */
 	STM32_RCC_CFGR = 0x00288002;
@@ -137,7 +135,7 @@ void runtime_init(void)
  * SET_RTC_MATCH_DELAY: max time to set RTC match alarm. if we set the alarm
  * in the past, it will never wake up and cause a watchdog.
  */
-#define STOP_MODE_LATENCY 300   /* us */
+#define STOP_MODE_LATENCY 300 /* us */
 #define SET_RTC_MATCH_DELAY 200 /* us */
 #define MAX_LATENCY (STOP_MODE_LATENCY + SET_RTC_MATCH_DELAY)
 
@@ -163,10 +161,10 @@ uint32_t task_wait_event(int timeout_us)
 	while (1) {
 		/* set timeout on timer */
 		if (timeout_us < 0) {
-			asm volatile ("wfi");
+			asm volatile("wfi");
 		} else if (timeout_us <= MAX_LATENCY ||
-			  t1.le.lo - timeout_us > t1.le.lo + MAX_LATENCY ||
-			  !DEEP_SLEEP_ALLOWED) {
+			   t1.le.lo - timeout_us > t1.le.lo + MAX_LATENCY ||
+			   !DEEP_SLEEP_ALLOWED) {
 			STM32_TIM32_CCR1(2) = STM32_TIM32_CNT(2) + timeout_us;
 			STM32_TIM_DIER(2) = 3; /*  match interrupt and UIE */
 
@@ -179,8 +177,8 @@ uint32_t task_wait_event(int timeout_us)
 			/* set deep sleep bit */
 			CPU_SCB_SYSCTRL |= 0x4;
 
-			set_rtc_alarm(0, timeout_us - STOP_MODE_LATENCY,
-				      &rtc0, 0);
+			set_rtc_alarm(0, timeout_us - STOP_MODE_LATENCY, &rtc0,
+				      0);
 
 			asm volatile("wfi");
 
@@ -235,8 +233,7 @@ uint32_t task_wait_event_mask(uint32_t event_mask, int timeout_us)
 	return evt & event_mask;
 }
 
-noreturn
-void __keep cpu_reset(void)
+noreturn void __keep cpu_reset(void)
 {
 	/* Disable interrupts */
 	interrupt_disable();
@@ -269,7 +266,8 @@ void exception_panic(void)
 		"bl debug_printf\n"
 #endif
 		"bl cpu_reset\n"
-	: : "r"("PANIC PC=%08x LR=%08x\n\n"));
+		:
+		: "r"("PANIC PC=%08x LR=%08x\n\n"));
 }
 
 void panic_reboot(void)
@@ -288,7 +286,9 @@ enum ec_image system_get_image_copy(void)
 
 /* --- stubs --- */
 void __hw_timer_enable_clock(int n, int enable)
-{ /* Done in hardware init */ }
+{ /* Done in hardware init */
+}
 
 void usleep(unsigned us)
-{ /* Used only as a workaround */ }
+{ /* Used only as a workaround */
+}

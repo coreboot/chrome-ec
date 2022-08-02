@@ -31,12 +31,14 @@ test-list-y=\
        compile_time_macros \
        cortexm_fpu \
        crc \
+       debug \
        flash_physical \
        flash_write_protect \
        fpsensor \
        fpsensor_hw \
        mpu \
        mutex \
+       panic_data \
        pingpong \
        printf \
        queue \
@@ -48,6 +50,12 @@ test-list-y=\
        sha256 \
        sha256_unrolled \
        static_if \
+       stdlib \
+       system_is_locked \
        timer_dos \
        utils \
        utils_str \
+
+# Note that this variable includes the trailing "/"
+_nocturne_fp_cur_dir:=$(dir $(lastword $(MAKEFILE_LIST)))
+-include $(_nocturne_fp_cur_dir)../../private/board/nocturne_fp/build.mk

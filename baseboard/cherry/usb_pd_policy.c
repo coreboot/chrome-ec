@@ -8,6 +8,7 @@
 #include "chipset.h"
 #include "driver/tcpm/rt1718s.h"
 #include "driver/tcpm/tcpci.h"
+#include "gpio.h"
 #include "timer.h"
 #include "usb_dp_alt_mode.h"
 #include "usb_mux.h"
@@ -18,8 +19,8 @@
 #error Cherry reference must have at least one 3.0 A port
 #endif
 
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 
 /* The port that the aux channel is on. */
 static enum {
@@ -89,8 +90,7 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 
 	dp_status[port] = payload[1];
 
-	if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND) &&
-	    (irq || lvl))
+	if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND) && (irq || lvl))
 		/*
 		 * Wake up the AP.  IRQ or level high indicates a DP sink is now
 		 * present.
@@ -154,6 +154,22 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 	return 1;
 }
 
+__override void svdm_exit_dp_mode(int port)
+{
+	dp_flags[port] = 0;
+	dp_status[port] = 0;
+#ifdef CONFIG_USB_PD_DP_HPD_GPIO
+	if (aux_port == port)
+		svdm_set_hpd_gpio(port, 0);
+#endif /* CONFIG_USB_PD_DP_HPD_GPIO */
+	usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
+					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
+#ifdef USB_PD_PORT_TCPC_MST
+	if (port == USB_PD_PORT_TCPC_MST)
+		baseboard_mst_enable_control(port, 0);
+#endif
+}
+
 int pd_snk_is_vbus_provided(int port)
 {
 	static atomic_t vbus_prev[CONFIG_USB_PD_PORT_MAX_COUNT];
@@ -187,16 +203,11 @@ int pd_snk_is_vbus_provided(int port)
 
 void pd_power_supply_reset(int port)
 {
-	int prev_en;
-
-	prev_en = ppc_is_sourcing_vbus(port);
-
 	/* Disable VBUS. */
 	ppc_vbus_source_enable(port, 0);
 
 	/* Enable discharge if we were previously sourcing 5V */
-	if (prev_en)
-		pd_set_vbus_discharge(port, 1);
+	pd_set_vbus_discharge(port, 1);
 
 	if (port == 1)
 		rt1718s_gpio_set_level(port, GPIO_EN_USB_C1_5V_OUT, 0);

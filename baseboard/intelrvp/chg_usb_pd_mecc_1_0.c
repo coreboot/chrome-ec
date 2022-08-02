@@ -9,13 +9,18 @@
 #include "charge_state_v2.h"
 #include "console.h"
 #include "driver/ppc/sn5s330.h"
+#include "gpio.h"
 #include "hooks.h"
 #include "tcpm/tcpci.h"
 #include "system.h"
 #include "usbc_ppc.h"
 
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#ifdef CONFIG_ZEPHYR
+#include "intelrvp.h"
+#endif /* CONFIG_ZEPHYR */
+
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
 /* Reset PD MCU */
 void board_reset_pd_mcu(void)
@@ -92,7 +97,7 @@ void ppc_interrupt(enum gpio_signal signal)
 
 	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 		if (tcpc_aic_gpios[i].ppc_intr_handler &&
-			signal == tcpc_aic_gpios[i].ppc_alert) {
+		    signal == tcpc_aic_gpios[i].ppc_alert) {
 			tcpc_aic_gpios[i].ppc_intr_handler(i);
 			break;
 		}
@@ -102,6 +107,6 @@ void ppc_interrupt(enum gpio_signal signal)
 void board_charging_enable(int port, int enable)
 {
 	if (ppc_vbus_sink_enable(port, enable))
-		CPRINTS("C%d: sink path %s failed",
-				port, enable ? "en" : "dis");
+		CPRINTS("C%d: sink path %s failed", port,
+			enable ? "en" : "dis");
 }

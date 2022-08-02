@@ -12,7 +12,7 @@
 #include "board_revs.h"
 
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)  /* 512KB internal spi flash */
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024) /* 512KB internal spi flash */
 
 /* Keyboard */
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
@@ -38,7 +38,6 @@
 /* Sensors */
 /* BMI160 Base accel/gyro */
 #define CONFIG_ACCELGYRO_BMI160
-#define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define OPT3001_I2C_ADDR_FLAGS OPT3001_I2C_ADDR1_FLAGS
@@ -73,12 +72,7 @@
 #include "gpio_signal.h"
 #include "registers.h"
 
-enum adc_channel {
-	ADC_VBUS,
-	ADC_AMON_BMON,
-	ADC_PSYS,
-	ADC_CH_COUNT
-};
+enum adc_channel { ADC_VBUS, ADC_AMON_BMON, ADC_PSYS, ADC_CH_COUNT };
 
 /* Motion sensors */
 enum sensor_id {
@@ -88,11 +82,7 @@ enum sensor_id {
 	SENSOR_COUNT,
 };
 
-enum pwm_channel {
-	PWM_CH_KBLIGHT = 0,
-	PWM_CH_DISPLIGHT,
-	PWM_CH_COUNT
-};
+enum pwm_channel { PWM_CH_KBLIGHT = 0, PWM_CH_DISPLIGHT, PWM_CH_COUNT };
 
 enum battery_type {
 	BATTERY_BYD,

@@ -12,7 +12,7 @@
 #ifndef ZEPHYR_INCLUDE_EMUL_EMUL_LN9310_H_
 #define ZEPHYR_INCLUDE_EMUL_EMUL_LN9310_H_
 
-#include <drivers/emul.h>
+#include <zephyr/drivers/emul.h>
 #include "driver/ln9310.h"
 #include <stdbool.h>
 
@@ -79,5 +79,14 @@ bool ln9310_emul_is_init(const struct emul *emulator);
  * @return Pointer to the I2C emulator struct
  */
 struct i2c_emul *ln9310_emul_get_i2c_emul(const struct emul *emulator);
+
+/**
+ * @brief Saves current internal state of sensors to emulator's registers.
+ *
+ * @param emul Pointer to LN9310 emulator
+ * @return Pointer to LN9310 emulator associated i2c_common_emul_data
+ */
+struct i2c_common_emul_data *
+emul_ln9310_get_i2c_common_data(const struct emul *emul);
 
 #endif /* ZEPHYR_INCLUDE_EMUL_EMUL_LN9310_H_ */

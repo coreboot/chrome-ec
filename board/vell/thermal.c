@@ -15,17 +15,17 @@
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_THERMAL, outstr)
-#define CPRINTS(format, args...) cprints(CC_THERMAL, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_THERMAL, format, ##args)
 
 struct fan_step {
 	/*
-	 * Sensor 1~4 trigger point, set -1 if we're not using this
+	 * Sensor 1~5 trigger point, set -1 if we're not using this
 	 * sensor to determine fan speed.
 	 */
 	int8_t on[TEMP_SENSOR_COUNT];
 
 	/*
-	 * Sensor 1~4 trigger point, set -1 if we're not using this
+	 * Sensor 1~5 trigger point, set -1 if we're not using this
 	 * sensor to determine fan speed.
 	 */
 	int8_t off[TEMP_SENSOR_COUNT];
@@ -37,45 +37,27 @@ struct fan_step {
 static const struct fan_step fan_table[] = {
 	{
 		/* level 0 */
-		.on = {47, 58, -1, 48, -1},
-		.off = {99, 99, -1, 99, -1},
-		.rpm = {0},
+		.on = { 48, 60, 48, 47, -1 },
+		.off = { 99, 99, 99, 99, -1 },
+		.rpm = { 0 },
 	},
 	{
 		/* level 1 */
-		.on = {48, 58, -1, 49, -1},
-		.off = {46, 99, -1, 47, -1},
-		.rpm = {3400},
+		.on = { 50, 60, 50, 49, -1 },
+		.off = { 47, 99, 47, 46, -1 },
+		.rpm = { 3100 },
 	},
 	{
 		/* level 2 */
-		.on = {49, 58, -1, 50, -1},
-		.off = {47, 99, -1, 48, -1},
-		.rpm = {4000},
+		.on = { 53, 60, 53, 52, -1 },
+		.off = { 49, 99, 49, 48, -1 },
+		.rpm = { 3850 },
 	},
 	{
 		/* level 3 */
-		.on = {50, 58, -1, 51, -1},
-		.off = {48, 99, -1, 49, -1},
-		.rpm = {4300},
-	},
-	{
-		/* level 4 */
-		.on = {51, 59, -1, 52, -1},
-		.off = {49, 58, -1, 50, -1},
-		.rpm = {4450},
-	},
-	{
-		/* level 5 */
-		.on = {52, 60, -1, 53, -1},
-		.off = {50, 58, -1, 51, -1},
-		.rpm = {4700},
-	},
-	{
-		/* level 6 */
-		.on = {100, 100, -1, 100, -1},
-		.off = {51, 59, -1, 52, -1},
-		.rpm = {5500},
+		.on = { 100, 100, 100, 100, -1 },
+		.off = { 51, 59, 51, 50, -1 },
+		.rpm = { 5500 },
 	},
 };
 
@@ -96,30 +78,35 @@ static int fan_table_to_rpm(int fan, int *temp)
 	 */
 	if (temp[TEMP_SENSOR_1_SOC] < prev_tmp[TEMP_SENSOR_1_SOC] ||
 	    temp[TEMP_SENSOR_2_CHARGER] < prev_tmp[TEMP_SENSOR_2_CHARGER] ||
+	    temp[TEMP_SENSOR_3_WWAN] < prev_tmp[TEMP_SENSOR_3_WWAN] ||
 	    temp[TEMP_SENSOR_4_DDR] < prev_tmp[TEMP_SENSOR_4_DDR]) {
 		for (i = current_level; i > 0; i--) {
 			if (temp[TEMP_SENSOR_1_SOC] <
-				fan_table[i].off[TEMP_SENSOR_1_SOC] &&
-			    temp[TEMP_SENSOR_4_DDR] <
-				fan_table[i].off[TEMP_SENSOR_4_DDR] &&
+				    fan_table[i].off[TEMP_SENSOR_1_SOC] &&
 			    temp[TEMP_SENSOR_2_CHARGER] <
-				fan_table[i].off[TEMP_SENSOR_2_CHARGER])
+				    fan_table[i].off[TEMP_SENSOR_2_CHARGER] &&
+			    temp[TEMP_SENSOR_3_WWAN] <
+				    fan_table[i].off[TEMP_SENSOR_3_WWAN] &&
+			    temp[TEMP_SENSOR_4_DDR] <
+				    fan_table[i].off[TEMP_SENSOR_4_DDR])
 				current_level = i - 1;
 			else
 				break;
 		}
 	} else if (temp[TEMP_SENSOR_1_SOC] > prev_tmp[TEMP_SENSOR_1_SOC] ||
 		   temp[TEMP_SENSOR_2_CHARGER] >
-			prev_tmp[TEMP_SENSOR_2_CHARGER] ||
-		   temp[TEMP_SENSOR_4_DDR] >
-			prev_tmp[TEMP_SENSOR_4_DDR]) {
+			   prev_tmp[TEMP_SENSOR_2_CHARGER] ||
+		   temp[TEMP_SENSOR_3_WWAN] > prev_tmp[TEMP_SENSOR_3_WWAN] ||
+		   temp[TEMP_SENSOR_4_DDR] > prev_tmp[TEMP_SENSOR_4_DDR]) {
 		for (i = current_level; i < NUM_FAN_LEVELS; i++) {
 			if (temp[TEMP_SENSOR_1_SOC] >
-				fan_table[i].on[TEMP_SENSOR_1_SOC] ||
+				    fan_table[i].on[TEMP_SENSOR_1_SOC] ||
+			    (temp[TEMP_SENSOR_2_CHARGER] >
+				     fan_table[i].on[TEMP_SENSOR_2_CHARGER] &&
+			     temp[TEMP_SENSOR_3_WWAN] >
+				     fan_table[i].on[TEMP_SENSOR_3_WWAN]) ||
 			    temp[TEMP_SENSOR_4_DDR] >
-				fan_table[i].on[TEMP_SENSOR_4_DDR] ||
-			    temp[TEMP_SENSOR_2_CHARGER] >
-				fan_table[i].on[TEMP_SENSOR_2_CHARGER])
+				    fan_table[i].on[TEMP_SENSOR_4_DDR])
 				current_level = i + 1;
 			else
 				break;
@@ -140,10 +127,8 @@ static int fan_table_to_rpm(int fan, int *temp)
 
 void board_override_fan_control(int fan, int *tmp)
 {
-	if (chipset_in_state(CHIPSET_STATE_ON |
-		CHIPSET_STATE_ANY_SUSPEND)) {
+	if (chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND)) {
 		fan_set_rpm_mode(FAN_CH(fan), 1);
-		fan_set_rpm_target(FAN_CH(fan),
-			fan_table_to_rpm(fan, tmp));
+		fan_set_rpm_target(FAN_CH(fan), fan_table_to_rpm(fan, tmp));
 	}
 }

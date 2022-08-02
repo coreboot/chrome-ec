@@ -15,10 +15,10 @@
 #include "usb_pd.h"
 #include "util.h"
 
+#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
-#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
-
+#ifndef CONFIG_ZEPHYR
 /* Charger Chip Configuration */
 const struct charger_config_t chg_chips[] = {
 	{
@@ -28,6 +28,7 @@ const struct charger_config_t chg_chips[] = {
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(chg_chips) == CHARGER_NUM);
+#endif
 
 int board_set_active_charge_port(int port)
 {
@@ -84,7 +85,6 @@ int board_set_active_charge_port(int port)
 __overridable void board_set_charge_limit(int port, int supplier, int charge_ma,
 					  int max_ma, int charge_mv)
 {
-	charge_set_input_current_limit(MAX(charge_ma,
-					   CONFIG_CHARGER_INPUT_CURRENT),
-				       charge_mv);
+	charge_set_input_current_limit(
+		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }

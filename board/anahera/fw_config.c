@@ -9,7 +9,7 @@
 #include "cros_board_info.h"
 #include "fw_config.h"
 
-#define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ##args)
 
 static union anahera_cbi_fw_config fw_config;
 BUILD_ASSERT(sizeof(fw_config) == sizeof(uint32_t));
@@ -57,4 +57,9 @@ bool ec_cfg_has_eps(void)
 bool ec_cfg_has_kblight(void)
 {
 	return (fw_config.kb_bl == KEYBOARD_BACKLIGHT_ENABLED);
+}
+
+bool ec_cfg_has_lte(void)
+{
+	return (fw_config.lte_db == LTE_PRESENT);
 }

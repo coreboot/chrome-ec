@@ -11,11 +11,12 @@
 #include "console.h"
 #include "hooks.h"
 #include "host_command.h"
+#include "math_util.h"
 #include "printf.h"
 #include "util.h"
 
-#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
 
 /*
  * Store battery information in these 2 structures. Main (lid) battery is always
@@ -68,7 +69,11 @@ static void battery_update(enum battery_index i)
 	batt_str[EC_MEMMAP_TEXT_MAX - 1] = 0;
 
 	*memmap_volt = battery_dynamic[i].actual_voltage;
-	*memmap_rate = battery_dynamic[i].actual_current;
+	/*
+	 * Rate must be absolute, flags will indicate whether
+	 * the battery is charging or discharging.
+	 */
+	*memmap_rate = ABS(battery_dynamic[i].actual_current);
 	*memmap_cap = battery_dynamic[i].remaining_capacity;
 	*memmap_lfcc = battery_dynamic[i].full_capacity;
 	*memmap_flags = battery_dynamic[i].flags;
@@ -130,8 +135,7 @@ host_command_battery_get_static(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_BATTERY_GET_STATIC,
-		     host_command_battery_get_static,
+DECLARE_HOST_COMMAND(EC_CMD_BATTERY_GET_STATIC, host_command_battery_get_static,
 		     EC_VER_MASK(0) | EC_VER_MASK(1));
 
 static enum ec_status
@@ -149,8 +153,7 @@ host_command_battery_get_dynamic(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_BATTERY_GET_DYNAMIC,
-		     host_command_battery_get_dynamic,
-		     EC_VER_MASK(0));
+		     host_command_battery_get_dynamic, EC_VER_MASK(0));
 #endif /* CONFIG_HOSTCMD_BATTERY_V2 */
 
 void battery_memmap_refresh(enum battery_index index)
@@ -191,7 +194,7 @@ static int is_battery_string_reliable(const char *buf)
 	 * include 0xFF.
 	 */
 	while (*buf) {
-		if ((*buf) == 0xFF)
+		if ((*buf) == '\xff')
 			return 0;
 		buf++;
 	}
@@ -217,8 +220,9 @@ int update_static_battery_info(void)
 	/* Smart battery serial number is 16 bits */
 	rv = battery_serial_number(&batt_serial);
 	if (!rv)
-		snprintf(bs->serial_ext, sizeof(bs->serial_ext),
-			 "%04X", batt_serial);
+		if (snprintf(bs->serial_ext, sizeof(bs->serial_ext), "%04X",
+			     batt_serial) <= 0)
+			rv |= EC_ERROR_UNKNOWN;
 
 	/* Design Capacity of Full */
 	ret = battery_design_capacity(&val);
@@ -317,7 +321,7 @@ void update_dynamic_battery_info(void)
 		batt_present = 0;
 	}
 
-	if (curr->batt.flags & EC_BATT_FLAG_INVALID_DATA)
+	if (curr->batt.flags & BATT_FLAG_BAD_ANY)
 		tmp |= EC_BATT_FLAG_INVALID_DATA;
 
 	if (!(curr->batt.flags & BATT_FLAG_BAD_VOLTAGE))
@@ -339,17 +343,17 @@ void update_dynamic_battery_info(void)
 		 * to Chrome OS powerd.
 		 */
 		if (curr->batt.remaining_capacity == 0 &&
-				!curr->batt_is_charging)
+		    !curr->batt_is_charging)
 			bd->remaining_capacity = 1;
 		else
 			bd->remaining_capacity = curr->batt.remaining_capacity;
 	}
 
 	if (!(curr->batt.flags & BATT_FLAG_BAD_FULL_CAPACITY) &&
-		(curr->batt.full_capacity <=
-			(bd->full_capacity - LFCC_EVENT_THRESH) ||
-		 curr->batt.full_capacity >=
-			(bd->full_capacity + LFCC_EVENT_THRESH))) {
+	    (curr->batt.full_capacity <=
+		     (bd->full_capacity - LFCC_EVENT_THRESH) ||
+	     curr->batt.full_capacity >=
+		     (bd->full_capacity + LFCC_EVENT_THRESH))) {
 		bd->full_capacity = curr->batt.full_capacity;
 		/* Poke the AP if the full_capacity changes. */
 		send_batt_info_event++;
@@ -361,7 +365,7 @@ void update_dynamic_battery_info(void)
 		tmp |= EC_BATT_FLAG_LEVEL_CRITICAL;
 
 	tmp |= curr->batt_is_charging ? EC_BATT_FLAG_CHARGING :
-				       EC_BATT_FLAG_DISCHARGING;
+					EC_BATT_FLAG_DISCHARGING;
 
 	/* Tell the AP to re-read battery status if charge state changes */
 	if (bd->flags != tmp)

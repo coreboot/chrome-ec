@@ -10,21 +10,22 @@
 #include "common.h"
 #include "ec_commands.h"
 
-#define CBI_VERSION_MAJOR	0
-#define CBI_VERSION_MINOR	0
+#define CBI_VERSION_MAJOR 0
+#define CBI_VERSION_MINOR 0
 
 #ifdef CONFIG_CBI_GPIO
 /*
  * if CBI is sourced from GPIO, the CBI cache only needs to accomondate
  * BOARD_VERSION and SKU_ID
  */
-#define CBI_IMAGE_SIZE		(sizeof(struct cbi_header) +  (2 * \
-				(sizeof(struct cbi_data) + sizeof(uint32_t))))
+#define CBI_IMAGE_SIZE               \
+	(sizeof(struct cbi_header) + \
+	 (2 * (sizeof(struct cbi_data) + sizeof(uint32_t))))
 #else
-#define CBI_IMAGE_SIZE		256
+#define CBI_IMAGE_SIZE 256
 #endif
 
-static const uint8_t cbi_magic[] = { 0x43, 0x42, 0x49 };  /* 'C' 'B' 'I' */
+static const uint8_t cbi_magic[] = { 0x43, 0x42, 0x49 }; /* 'C' 'B' 'I' */
 
 struct cbi_header {
 	uint8_t magic[3];
@@ -47,9 +48,9 @@ struct cbi_header {
 } __attribute__((packed));
 
 struct cbi_data {
-	uint8_t tag;		/* enum cbi_data_tag */
-	uint8_t size;		/* size of value[] */
-	uint8_t value[];	/* data value */
+	uint8_t tag; /* enum cbi_data_tag */
+	uint8_t size; /* size of value[] */
+	uint8_t value[]; /* data value */
 } __attribute__((packed));
 
 enum cbi_cache_status {
@@ -98,6 +99,7 @@ int cbi_get_fw_config(uint32_t *fw_config);
 int cbi_get_pcb_supplier(uint32_t *pcb_supplier);
 int cbi_get_ssfc(uint32_t *ssfc);
 int cbi_get_rework_id(uint64_t *id);
+int cbi_get_factory_calibration_data(uint32_t *calibration_data);
 
 /**
  * Get data from CBI store
@@ -143,8 +145,8 @@ uint8_t cbi_crc8(const struct cbi_header *h);
  * @return	Address of the byte following the stored data in the
  * 		destination buffer
  */
-uint8_t *cbi_set_data(uint8_t *p, enum cbi_data_tag tag,
-		      const void *buf, int size);
+uint8_t *cbi_set_data(uint8_t *p, enum cbi_data_tag tag, const void *buf,
+		      int size);
 
 /**
  * Store string data in memory in CBI data format.
@@ -191,9 +193,9 @@ int cbi_board_override(enum cbi_data_tag tag, uint8_t *buf, uint8_t *size);
 /**
  * Set and update FW_CONFIG tag field
  *
- * This function is only included when HAS_TASK_CHIPSET is not defined. It is
- * intended to be used for projects which want CBI functions, but do not have an
- * AP and ectool host command access.
+ * This function is only included when CONFIG_AP_POWER_CONTROL is disabled. It
+ * is intended to be used for projects which want CBI functions, but do not
+ * have an AP and ectool host command access.
  *
  * @param fw_config	updated value for FW_CONFIG tag
  * @return EC_SUCCESS to indicate the field was written correctly.

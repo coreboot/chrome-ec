@@ -8,6 +8,7 @@
 #include "system.h"
 #include "task.h"
 #include "tcpm/tcpm.h"
+#include "typec_control.h"
 #include "usb_pd.h"
 #include "usb_tc_sm.h"
 #include "vpd_api.h"
@@ -15,18 +16,18 @@
 /* USB Type-C CTVPD module */
 
 #ifdef CONFIG_COMMON_RUNTIME
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 #else /* CONFIG_COMMON_RUNTIME */
 #define CPRINTF(format, args...)
 #define CPRINTS(format, args...)
 #endif
 
 /* Type-C Layer Flags */
-#define TC_FLAGS_VCONN_ON           BIT(0)
+#define TC_FLAGS_VCONN_ON BIT(0)
 
-#define SUPPORT_TIMER_RESET_INIT     0
-#define SUPPORT_TIMER_RESET_REQUEST  1
+#define SUPPORT_TIMER_RESET_INIT 0
+#define SUPPORT_TIMER_RESET_REQUEST 1
 #define SUPPORT_TIMER_RESET_COMPLETE 2
 
 /**
@@ -104,9 +105,8 @@ enum usb_tc_state {
 /* Forward declare the full list of states. This is indexed by usb_tc_state */
 static const struct usb_state tc_states[];
 
-
 /* List of human readable state names for console debugging */
-__maybe_unused const char * const tc_state_names[] = {
+__maybe_unused const char *const tc_state_names[] = {
 #ifdef CONFIG_COMMON_RUNTIME
 	[TC_DISABLED] = "Disabled",
 	[TC_UNATTACHED_SNK] = "Unattached.SNK",
@@ -168,6 +168,17 @@ uint8_t tc_get_pd_enabled(int port)
 void tc_reset_support_timer(int port)
 {
 	tc[port].support_timer_reset |= SUPPORT_TIMER_RESET_REQUEST;
+}
+
+void tc_start_error_recovery(int port)
+{
+	assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
+
+	/*
+	 *   The port should transition to the ErrorRecovery state
+	 *   from any other state when directed.
+	 */
+	set_state_tc(port, TC_ERROR_RECOVERY);
 }
 
 /*
@@ -245,9 +256,9 @@ test_mockable_static void print_current_state(const int port)
 int pd_is_connected(int port)
 {
 	return (get_state_tc(port) == TC_ATTACHED_SNK) ||
-			(get_state_tc(port) == TC_ATTACHED_SRC) ||
-			(get_state_tc(port) == TC_CT_ATTACHED_UNSUPPORTED) ||
-			(get_state_tc(port) == TC_CT_ATTACHED_VPD);
+	       (get_state_tc(port) == TC_ATTACHED_SRC) ||
+	       (get_state_tc(port) == TC_CT_ATTACHED_UNSUPPORTED) ||
+	       (get_state_tc(port) == TC_CT_ATTACHED_VPD);
 }
 
 bool pd_is_disconnected(int port)
@@ -386,7 +397,7 @@ static void tc_unattached_snk_run(const int port)
 	 *   2) VBUS is detected
 	 */
 	if (vpd_is_ct_vbus_present() &&
-				tc[port].cc_state == PD_CC_DFP_ATTACHED) {
+	    tc[port].cc_state == PD_CC_DFP_ATTACHED) {
 		set_state_tc(port, TC_UNATTACHED_SRC);
 		return;
 	}
@@ -424,11 +435,11 @@ static void tc_attach_wait_snk_run(const int port)
 	if (tc[port].host_cc_state != host_new_cc_state) {
 		tc[port].host_cc_state = host_new_cc_state;
 		if (host_new_cc_state == PD_CC_DFP_ATTACHED)
-			tc[port].host_cc_debounce = get_time().val +
-							PD_T_CC_DEBOUNCE;
+			tc[port].host_cc_debounce =
+				get_time().val + PD_T_CC_DEBOUNCE;
 		else
-			tc[port].host_cc_debounce = get_time().val +
-							PD_T_PD_DEBOUNCE;
+			tc[port].host_cc_debounce =
+				get_time().val + PD_T_PD_DEBOUNCE;
 		return;
 	}
 
@@ -446,7 +457,7 @@ static void tc_attach_wait_snk_run(const int port)
 	 * CC2 pins is SNK.Open for at least tPDDebounce.
 	 */
 	if (tc[port].host_cc_state == PD_CC_DFP_ATTACHED &&
-			(vpd_is_vconn_present() || vpd_is_host_vbus_present()))
+	    (vpd_is_vconn_present() || vpd_is_host_vbus_present()))
 		set_state_tc(port, TC_ATTACHED_SNK);
 	else if (tc[port].host_cc_state == PD_CC_NONE)
 		set_state_tc(port, TC_UNATTACHED_SNK);
@@ -461,7 +472,7 @@ static void tc_attached_snk_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	pd_set_polarity(port, 0);
+	typec_set_polarity(port, 0);
 
 	/*
 	 * This state can only be entered from states AttachWait.SNK
@@ -539,7 +550,7 @@ static void tc_attached_snk_run(const int port)
 
 	/* Check the Support Timer */
 	if (get_time().val > tc[port].support_timer &&
-					!tc[port].billboard_presented) {
+	    !tc[port].billboard_presented) {
 		/*
 		 * Present USB Billboard Device Class interface
 		 * indicating that Charge-Through is not supported
@@ -642,7 +653,7 @@ static void tc_unattached_src_run(const int port)
 	 * if Charge-Through VBUS is removed.
 	 */
 	if (!vpd_is_ct_vbus_present() ||
-				get_time().val > tc[port].next_role_swap) {
+	    get_time().val > tc[port].next_role_swap) {
 		set_state_tc(port, TC_UNATTACHED_SNK);
 		return;
 	}
@@ -707,7 +718,7 @@ static void tc_attach_wait_src_run(const int port)
 	 * state is on the Host-side port’s CC pin for at least tCCDebounce.
 	 */
 	if (tc[port].host_cc_state == PD_CC_UFP_ATTACHED &&
-						!vpd_is_host_vbus_present()) {
+	    !vpd_is_host_vbus_present()) {
 		set_state_tc(port, TC_TRY_SNK);
 		return;
 	}
@@ -722,7 +733,7 @@ static void tc_attached_src_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	pd_set_polarity(port, 0);
+	typec_set_polarity(port, 0);
 
 	/* Connect Charge-Through VBUS to Host VBUS */
 	vpd_vbus_pass_en(1);
@@ -835,7 +846,7 @@ static void tc_try_snk_run(const int port)
 	 * for tTryCCDebounce.
 	 */
 	if (tc[port].host_cc_state == PD_CC_DFP_ATTACHED &&
-			(vpd_is_host_vbus_present() || vpd_is_vconn_present()))
+	    (vpd_is_host_vbus_present() || vpd_is_vconn_present()))
 		set_state_tc(port, TC_ATTACHED_SNK);
 	else if (tc[port].host_cc_state == PD_CC_NONE)
 		set_state_tc(port, TC_TRY_WAIT_SRC);
@@ -875,7 +886,7 @@ static void tc_try_wait_src_run(const int port)
 	if (tc[port].host_cc_state != host_new_cc_state) {
 		tc[port].host_cc_state = host_new_cc_state;
 		tc[port].host_cc_debounce =
-					get_time().val + PD_T_TRY_CC_DEBOUNCE;
+			get_time().val + PD_T_TRY_CC_DEBOUNCE;
 		return;
 	}
 
@@ -887,7 +898,7 @@ static void tc_try_wait_src_run(const int port)
 		 * at least tTryCCDebounce.
 		 */
 		if (tc[port].host_cc_state == PD_CC_UFP_ATTACHED &&
-						!vpd_is_host_vbus_present()) {
+		    !vpd_is_host_vbus_present()) {
 			set_state_tc(port, TC_ATTACHED_SRC);
 			return;
 		}
@@ -922,7 +933,7 @@ static void tc_ct_try_snk_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	pd_set_polarity(port, 0);
+	typec_set_polarity(port, 0);
 
 	tc[port].cc_state = PD_CC_UNSET;
 	tc[port].next_role_swap = get_time().val + PD_T_DRP_TRY;
@@ -976,7 +987,7 @@ static void tc_ct_try_snk_run(const int port)
 		 * Charge-Through port.
 		 */
 		if (tc[port].cc_state == PD_CC_DFP_ATTACHED &&
-				vpd_is_ct_vbus_present()) {
+		    vpd_is_ct_vbus_present()) {
 			set_state_tc(port, TC_CT_ATTACHED_VPD);
 			return;
 		}
@@ -989,8 +1000,7 @@ static void tc_ct_try_snk_run(const int port)
 		 * for tDRPTryWait.
 		 */
 		if (tc[port].cc_state == PD_CC_NONE) {
-			set_state_tc(port,
-					TC_CT_ATTACHED_UNSUPPORTED);
+			set_state_tc(port, TC_CT_ATTACHED_UNSUPPORTED);
 			return;
 		}
 	}
@@ -1018,7 +1028,7 @@ static void tc_ct_attach_wait_unsupported_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	pd_set_polarity(port, 0);
+	typec_set_polarity(port, 0);
 
 	tc[port].cc_state = PD_CC_UNSET;
 }
@@ -1148,7 +1158,7 @@ static void tc_ct_unattached_unsupported_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	pd_set_polarity(port, 0);
+	typec_set_polarity(port, 0);
 
 	tc[port].next_role_swap = get_time().val + PD_T_DRP_SRC;
 }
@@ -1169,8 +1179,7 @@ static void tc_ct_unattached_unsupported_run(const int port)
 	 * on both the CC1 and CC2 pins.
 	 */
 	if (cc_is_at_least_one_rd(cc1, cc2) || cc_is_audio_acc(cc1, cc2)) {
-		set_state_tc(port,
-				TC_CT_ATTACH_WAIT_UNSUPPORTED);
+		set_state_tc(port, TC_CT_ATTACH_WAIT_UNSUPPORTED);
 		return;
 	}
 
@@ -1216,7 +1225,7 @@ static void tc_ct_unattached_vpd_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	pd_set_polarity(port, 0);
+	typec_set_polarity(port, 0);
 
 	tc[port].cc_state = PD_CC_UNSET;
 }
@@ -1331,7 +1340,7 @@ static void tc_ct_attached_vpd_entry(const int port)
 	 * pins is connected through the cable
 	 */
 	vpd_ct_get_cc(&cc1, &cc2);
-	tc[port].ct_cc  = cc_is_rp(cc2) ? CT_CC2 : CT_CC1;
+	tc[port].ct_cc = cc_is_rp(cc2) ? CT_CC2 : CT_CC1;
 
 	/*
 	 * 1. Remove or reduce any additional capacitance on the
@@ -1423,7 +1432,7 @@ static void tc_ct_attach_wait_vpd_entry(const int port)
 
 	/* Enable PD */
 	tc[port].pd_enable = 1;
-	pd_set_polarity(port, 0);
+	typec_set_polarity(port, 0);
 
 	tc[port].cc_state = PD_CC_UNSET;
 }
@@ -1456,10 +1465,8 @@ static void tc_ct_attach_wait_vpd_run(const int port)
 	/* Debounce the cc state */
 	if (new_cc_state != tc[port].cc_state) {
 		tc[port].cc_state = new_cc_state;
-		tc[port].cc_debounce = get_time().val +
-						PD_T_CC_DEBOUNCE;
-		tc[port].pd_debounce = get_time().val +
-						PD_T_PD_DEBOUNCE;
+		tc[port].cc_debounce = get_time().val + PD_T_CC_DEBOUNCE;
+		tc[port].pd_debounce = get_time().val + PD_T_PD_DEBOUNCE;
 		return;
 	}
 
@@ -1470,7 +1477,7 @@ static void tc_ct_attach_wait_vpd_run(const int port)
 		 * port’s CC1 and CC2 pins are SNK.Open for at least
 		 * tPDDebounce.
 		 */
-		if (tc[port].cc_state  == PD_CC_NONE) {
+		if (tc[port].cc_state == PD_CC_NONE) {
 			set_state_tc(port, TC_CT_UNATTACHED_VPD);
 			return;
 		}
@@ -1484,8 +1491,8 @@ static void tc_ct_attach_wait_vpd_run(const int port)
 		 * least tCCDebounce and VBUS on the Charge-Through port is
 		 * detected.
 		 */
-		if (tc[port].cc_state  == PD_CC_DFP_ATTACHED &&
-						vpd_is_ct_vbus_present()) {
+		if (tc[port].cc_state == PD_CC_DFP_ATTACHED &&
+		    vpd_is_ct_vbus_present()) {
 			set_state_tc(port, TC_CT_ATTACHED_VPD);
 			return;
 		}

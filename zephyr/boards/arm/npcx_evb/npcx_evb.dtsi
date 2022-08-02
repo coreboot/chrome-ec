@@ -22,23 +22,23 @@
 
 		i2c_evb_0_0 {
 			i2c-port = <&i2c0_0>;
-			enum-name = "I2C_PORT_EVB_0";
+			enum-names = "I2C_PORT_EVB_0";
 		};
 		i2c_evb_1_0 {
 			i2c-port = <&i2c1_0>;
-			enum-name = "I2C_PORT_EVB_1";
+			enum-names = "I2C_PORT_EVB_1";
 		};
 		i2c_evb_2_0 {
 			i2c-port = <&i2c2_0>;
-			enum-name = "I2C_PORT_EVB_2";
+			enum-names = "I2C_PORT_EVB_2";
 		};
 		i2c_evb_3_0 {
 			i2c-port = <&i2c3_0>;
-			enum-name = "I2C_PORT_EVB_3";
+			enum-names = "I2C_PORT_EVB_3";
 		};
 		i2c_evb_7_0 {
 			i2c-port = <&i2c7_0>;
-			enum-name = "I2C_PORT_EVB_7";
+			enum-names = "I2C_PORT_EVB_7";
 		};
 	};
 
@@ -46,41 +46,33 @@
 		compatible = "named-adc-channels";
 
 		adc_ch_0 {
-			label = "ADC0";
 			enum-name = "ADC_EVB_CH_0";
 			io-channels = <&adc0 0>;
 		};
 		adc_ch_1 {
-			label = "ADC1";
 			enum-name = "ADC_EVB_CH_1";
 			io-channels = <&adc0 1>;
 		};
 		adc_ch_2 {
-			label = "ADC2";
 			enum-name = "ADC_EVB_CH_2";
 			io-channels = <&adc0 2>;
 		};
 		adc_ch_3 {
-			label = "ADC3";
 			enum-name = "ADC_EVB_CH_3";
 			io-channels = <&adc0 3>;
 		};
 		adc_ch_4 {
-			label = "ADC4";
 			enum-name = "ADC_EVB_CH_4";
 			io-channels = <&adc0 4>;
 		};
-	};
-
-	vsby-psl-in-list {
-		/* Use PSL_IN1/2/3 as detection pins from hibernate mode */
-		psl-in-pads = <&psl_in1 &psl_in2 &psl_in3>;
 	};
 };
 
 &i2c0_0 {
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c0_0_sda_scl_gpb4_b5>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl0 {
@@ -90,6 +82,8 @@
 &i2c1_0 {
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c1_0_sda_scl_gp87_90>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl1 {
@@ -99,6 +93,8 @@
 &i2c2_0 {
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c2_0_sda_scl_gp91_92>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl2 {
@@ -108,6 +104,8 @@
 &i2c3_0 {
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c3_0_sda_scl_gpd0_d1>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl3 {
@@ -117,6 +115,8 @@
 &i2c7_0 {
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c7_0_sda_scl_gpb2_b3>;
+	pinctrl-names = "default";
 };
 
 &i2c_ctrl7 {
@@ -125,41 +125,43 @@
 
 &adc0 {
 	status = "okay";
+	pinctrl-0 = <&adc0_chan0_gp45
+		     &adc0_chan1_gp44
+		     &adc0_chan2_gp43
+		     &adc0_chan3_gp42
+		     &adc0_chan4_gp41>;
+	pinctrl-names = "default";
 };
 
-/* Power switch logic input pads */
-&psl_in1 {
-	flag = <NPCX_PSL_FALLING_EDGE>;
-};
-&psl_in2 {
-	flag = <NPCX_PSL_FALLING_EDGE>;
-};
-&psl_in3 {
-	flag = <NPCX_PSL_RISING_EDGE>;
+&espi0 {
+	status = "okay";
+	pinctrl-0 = <&espi_lpc_gp46_47_51_52_53_54_55_57>;
+	pinctrl-names = "default";
 };
 
 &cros_kb_raw {
 	status = "okay";
-	pinctrl-0 = <&alt7_no_ksi0_sl
-		     &alt7_no_ksi1_sl
-		     &alt7_no_ksi2_sl
-		     &alt7_no_ksi3_sl
-		     &alt7_no_ksi4_sl
-		     &alt7_no_ksi5_sl
-		     &alt7_no_ksi6_sl
-		     &alt7_no_ksi7_sl
-		     &alt8_no_kso00_sl
-		     &alt8_no_kso01_sl
-		     &alt8_no_kso02_sl
-		     &alt8_no_kso03_sl
-		     &alt8_no_kso04_sl
-		     &alt8_no_kso05_sl
-		     &alt8_no_kso06_sl
-		     &alt8_no_kso07_sl
-		     &alt9_no_kso08_sl
-		     &alt9_no_kso09_sl
-		     &alt9_no_kso10_sl
-		     &alt9_no_kso11_sl
-		     &alt9_no_kso12_sl
+	pinctrl-0 = <&ksi0_gp31
+		     &ksi1_gp30
+		     &ksi2_gp27
+		     &ksi3_gp26
+		     &ksi4_gp25
+		     &ksi5_gp24
+		     &ksi6_gp23
+		     &ksi7_gp22
+		     &kso00_gp21
+		     &kso01_gp20
+		     &kso02_gp17
+		     &kso03_gp16
+		     &kso04_gp15
+		     &kso05_gp14
+		     &kso06_gp13
+		     &kso07_gp12
+		     &kso08_gp11
+		     &kso09_gp10
+		     &kso10_gp07
+		     &kso11_gp06
+		     &kso12_gp05
 		     >;
+	pinctrl-names = "default";
 };

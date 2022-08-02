@@ -12,18 +12,18 @@
  * By default, enable all console messages excepted HC, ACPI and event:
  * The sensor stack is generating a lot of activity.
  */
-#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
+#define CC_DEFAULT (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
 #undef CONFIG_HOSTCMD_DEBUG_MODE
 #define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 
 /* NPCX9 config */
-#define NPCX9_PWM1_SEL    1  /* GPIO C2 is used as PWM1. */
+#define NPCX9_PWM1_SEL 1 /* GPIO C2 is used as PWM1. */
 /*
  * This defines which pads (GPIO10/11 or GPIO64/65) are connected to
  * the "UART1" (NPCX_UART_PORT0) controller when used for
  * CONSOLE_UART.
  */
-#define NPCX_UART_MODULE2	1 /* 1:GPIO64/65 for UART1 */
+#define NPCX_UART_MODULE2 1 /* 1:GPIO64/65 for UART1 */
 
 /* EC Defines */
 #define CONFIG_LTO
@@ -57,7 +57,8 @@
 #define CONFIG_GMR_TABLET_MODE
 
 #define CONFIG_MKBP_EVENT
-#define CONFIG_MKBP_USE_HOST_EVENT
+/* GPIO is needed for EC events to show up in eventlog - b/222375516 */
+#define CONFIG_MKBP_USE_GPIO_AND_HOST_EVENT
 #define CONFIG_MKBP_INPUT_DEVICES
 
 /* LED */
@@ -67,7 +68,7 @@
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_CHARGER
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
-#define CONFIG_CHARGER_INPUT_CURRENT		512
+#define CONFIG_CHARGER_INPUT_CURRENT 512
 
 #define CONFIG_CMD_CHARGER_DUMP
 
@@ -78,8 +79,8 @@
  * Don't allow the system to boot to S0 when the battery is low and unable to
  * communicate on locked systems (which haven't PD negotiated)
  */
-#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT	15000
-#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON		15001
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON_WITH_BATT 15000
+#define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 15001
 
 /* Common battery defines */
 #define CONFIG_BATTERY_SMART
@@ -99,6 +100,7 @@
 
 /* Chipset config */
 #define CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540
+#define CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
 
 #define CONFIG_CHIPSET_RESET_HOOK
 #define CONFIG_CPU_PROCHOT_ACTIVE_LOW
@@ -113,16 +115,17 @@
 
 #define CONFIG_HOSTCMD_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
 
-/*
- * TODO(b/191742284): When DAM enabled coreboot image is flashed on top of DAM
- * disabled coreboot, S5 exit is taking more than 4 seconds, then EC triggers
- * system shutdown. This WA deselects CONFIG_BOARD_HAS_RTC_RESET to prevent
- * EC from system shutdown.
- */
-/* #define CONFIG_BOARD_HAS_RTC_RESET */
+#define CONFIG_BOARD_HAS_RTC_RESET
+#undef CONFIG_S5_EXIT_WAIT
+#define CONFIG_S5_EXIT_WAIT 10
 
 #define CONFIG_CMD_AP_RESET_LOG
 #define CONFIG_HOSTCMD_AP_RESET
+
+/* ADL has new lower-power features that require extra-wide virtual wire
+ * pulses. The EDS specifies 100 microseconds. */
+#undef CONFIG_ESPI_DEFAULT_VW_WIDTH_US
+#define CONFIG_ESPI_DEFAULT_VW_WIDTH_US 100
 
 /* Buttons / Switches */
 #define CONFIG_VOLUME_BUTTONS
@@ -178,7 +181,7 @@
 #define CONFIG_USB_PD_TCPM_NCT38XX
 
 #define CONFIG_USB_PD_TCPM_MUX
-#define CONFIG_HOSTCMD_PD_CONTROL		/* Needed for TCPC FW update */
+#define CONFIG_HOSTCMD_PD_CONTROL /* Needed for TCPC FW update */
 #define CONFIG_CMD_USB_PD_PE
 
 /*
@@ -186,7 +189,7 @@
  * with non-PD chargers.  Override the default low-power mode exit delay.
  */
 #undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
-#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE	(50*MSEC)
+#define CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE (50 * MSEC)
 
 /* Enable USB3.2 DRD */
 #define CONFIG_USB_PD_USB32_DRD
@@ -227,13 +230,13 @@
  * bytes. Task stack sizes not listed here use more generic values (see
  * ec.tasklist).
  */
-#define BASEBOARD_CHARGER_TASK_STACK_SIZE	1088
-#define BASEBOARD_CHG_RAMP_TASK_STACK_SIZE	1088
-#define BASEBOARD_CHIPSET_TASK_STACK_SIZE	1152
-#define BASEBOARD_PD_INT_TASK_STACK_SIZE	 800
-#define BASEBOARD_PD_TASK_STACK_SIZE		1216
-#define BASEBOARD_POWERBTN_TASK_STACK_SIZE	1088
-#define BASEBOARD_RGBKBD_TASK_STACK_SIZE	2048
+#define BASEBOARD_CHARGER_TASK_STACK_SIZE 1088
+#define BASEBOARD_CHG_RAMP_TASK_STACK_SIZE 1088
+#define BASEBOARD_CHIPSET_TASK_STACK_SIZE 1152
+#define BASEBOARD_PD_INT_TASK_STACK_SIZE 800
+#define BASEBOARD_PD_TASK_STACK_SIZE 1216
+#define BASEBOARD_POWERBTN_TASK_STACK_SIZE 1088
+#define BASEBOARD_RGBKBD_TASK_STACK_SIZE 2048
 
 #ifndef __ASSEMBLER__
 
@@ -244,7 +247,6 @@
 #include "common.h"
 #include "baseboard_usbc_config.h"
 #include "extpower.h"
-
 
 /*
  * Check battery disconnect state.

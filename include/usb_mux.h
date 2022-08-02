@@ -14,10 +14,22 @@
 #include "usb_charge.h"
 #include "usb_pd.h"
 
+/*
+ * If compiling with Zephyr, include the USB_MUX_FLAG_ definitions that are
+ * shared with device tree
+ */
+#ifdef CONFIG_ZEPHYR
+
+#include "dt-bindings/usbc_mux.h"
+
+#else /* !CONFIG_ZEPHYR */
+
 /* Flags used for usb_mux.flags */
 #define USB_MUX_FLAG_NOT_TCPC BIT(0) /* TCPC/MUX device used only as MUX */
 #define USB_MUX_FLAG_SET_WITHOUT_FLIP BIT(1) /* SET should not flip */
 #define USB_MUX_FLAG_RESETS_IN_G3 BIT(2) /* Mux chip will reset in G3 */
+
+#endif /* CONFIG_ZEPHYR */
 
 /*
  * USB-C mux state
@@ -145,8 +157,7 @@ struct usb_mux {
 	 * @param[out] ack_required: indication of whether this function
 	 *	       requires a wait for an AP ACK after
 	 */
-	void (*hpd_update)(const struct usb_mux *me,
-			   mux_state_t mux_state,
+	void (*hpd_update)(const struct usb_mux *me, mux_state_t mux_state,
 			   bool *ack_required);
 };
 
@@ -181,30 +192,30 @@ void virtual_hpd_update(const struct usb_mux *me, mux_state_t mux_state,
 #ifdef CONFIG_USB_PD_TCPM_MUX
 static inline int mux_write(const struct usb_mux *me, int reg, int val)
 {
-	return me->flags & USB_MUX_FLAG_NOT_TCPC
-		? i2c_write8(me->i2c_port, me->i2c_addr_flags, reg, val)
-		: tcpc_write(me->usb_port, reg, val);
+	return me->flags & USB_MUX_FLAG_NOT_TCPC ?
+		       i2c_write8(me->i2c_port, me->i2c_addr_flags, reg, val) :
+		       tcpc_write(me->usb_port, reg, val);
 }
 
 static inline int mux_read(const struct usb_mux *me, int reg, int *val)
 {
-	return me->flags & USB_MUX_FLAG_NOT_TCPC
-		? i2c_read8(me->i2c_port, me->i2c_addr_flags, reg, val)
-		: tcpc_read(me->usb_port, reg, val);
+	return me->flags & USB_MUX_FLAG_NOT_TCPC ?
+		       i2c_read8(me->i2c_port, me->i2c_addr_flags, reg, val) :
+		       tcpc_read(me->usb_port, reg, val);
 }
 
 static inline int mux_write16(const struct usb_mux *me, int reg, int val)
 {
-	return me->flags & USB_MUX_FLAG_NOT_TCPC
-		? i2c_write16(me->i2c_port, me->i2c_addr_flags, reg, val)
-		: tcpc_write16(me->usb_port, reg, val);
+	return me->flags & USB_MUX_FLAG_NOT_TCPC ?
+		       i2c_write16(me->i2c_port, me->i2c_addr_flags, reg, val) :
+		       tcpc_write16(me->usb_port, reg, val);
 }
 
 static inline int mux_read16(const struct usb_mux *me, int reg, int *val)
 {
-	return me->flags & USB_MUX_FLAG_NOT_TCPC
-		? i2c_read16(me->i2c_port, me->i2c_addr_flags, reg, val)
-		: tcpc_read16(me->usb_port, reg, val);
+	return me->flags & USB_MUX_FLAG_NOT_TCPC ?
+		       i2c_read16(me->i2c_port, me->i2c_addr_flags, reg, val) :
+		       tcpc_read16(me->usb_port, reg, val);
 }
 #endif /* CONFIG_USB_PD_TCPM_MUX */
 
@@ -223,9 +234,21 @@ void usb_mux_init(int port);
  * @param usb_config usb2.0 selected function.
  * @param polarity plug polarity (0=CC1, 1=CC2).
  */
-void usb_mux_set(int port, mux_state_t mux_mode,
-		 enum usb_switch usb_config, int polarity);
+void usb_mux_set(int port, mux_state_t mux_mode, enum usb_switch usb_config,
+		 int polarity);
 
+/**
+ * Configure superspeed muxes on type-C port for only one index in the mux
+ * chain
+ *
+ * @param port port number.
+ * @param index index of mux or retimer to set
+ * @param mux_mode mux selected function.
+ * @param usb_config usb2.0 selected function.
+ * @param polarity plug polarity (0=CC1, 1=CC2).
+ */
+void usb_mux_set_single(int port, int index, mux_state_t mux_mode,
+			enum usb_switch usb_mode, int polarity);
 /**
  * Query superspeed mux status on type-C port.
  *

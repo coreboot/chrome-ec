@@ -8,8 +8,8 @@
 #endif
 #define __CROS_EC_ZEPHYR_GPIO_SIGNAL_H
 
-#include <devicetree.h>
-#include <toolchain.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/toolchain.h>
 
 /** @brief Returns the enum-name property as a token
  *
@@ -34,23 +34,48 @@
  * a GPIO signal name from either the enum-name or a
  * unique name generated using the DTS ordinal.
  */
-#define GPIO_SIGNAL_NAME(id)					\
-	COND_CODE_1(DT_NODE_HAS_PROP(id, enum_name),		\
-		(GPIO_SIGNAL_NAME_FROM_ENUM(id)),		\
-		(GPIO_SIGNAL_NAME_FROM_ORD(id ## _ORD)))
+#define GPIO_SIGNAL_NAME(id)                          \
+	COND_CODE_1(DT_NODE_HAS_PROP(id, enum_name),  \
+		    (GPIO_SIGNAL_NAME_FROM_ENUM(id)), \
+		    (GPIO_SIGNAL_NAME_FROM_ORD(id##_ORD)))
 
-#define GPIO_SIGNAL(id)		GPIO_SIGNAL_NAME(id)
-#define GPIO_SIGNAL_WITH_COMMA(id) \
-	GPIO_SIGNAL(id),
+#define GPIO_SIGNAL(id) GPIO_SIGNAL_NAME(id)
+
+#define GPIO_IMPL_SIGNAL(id) \
+	COND_CODE_1(DT_NODE_HAS_PROP(id, gpios), (GPIO_SIGNAL(id), ), ())
+
+#define GPIO_UNIMPL_SIGNAL(id)                       \
+	COND_CODE_1(DT_NODE_HAS_PROP(id, gpios), (), \
+		    (GPIO_SIGNAL_NAME(id) = GPIO_UNIMPLEMENTED, ))
+/*
+ * Create a list of aliases to allow remapping of aliased names.
+ */
+#define GPIO_DT_MK_ALIAS(id) \
+	DT_STRING_UPPER_TOKEN(id, alias) = DT_STRING_UPPER_TOKEN(id, enum_name),
+
+#define GPIO_DT_ALIAS_LIST(id) \
+	COND_CODE_1(DT_NODE_HAS_PROP(id, alias), (GPIO_DT_MK_ALIAS(id)), ())
+
 enum gpio_signal {
 	GPIO_UNIMPLEMENTED = -1,
 #if DT_NODE_EXISTS(DT_PATH(named_gpios))
-	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_SIGNAL_WITH_COMMA)
+	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_IMPL_SIGNAL)
 #endif
-	GPIO_COUNT,
-	GPIO_LIMIT = 0x0FFF,
+		GPIO_COUNT,
+#if DT_NODE_EXISTS(DT_PATH(named_gpios))
+	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_UNIMPL_SIGNAL)
+		DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_DT_ALIAS_LIST)
+#endif
+			GPIO_LIMIT = 0x0FFF,
+
+	IOEX_SIGNAL_START = GPIO_LIMIT + 1,
+	IOEX_SIGNAL_END = IOEX_SIGNAL_START,
+	IOEX_LIMIT = 0x1FFF,
 };
-#undef GPIO_SIGNAL_WITH_COMMA
+#undef GPIO_DT_ALIAS_LIST
+#undef GPIO_DT_MK_ALIAS
+#undef GPIO_IMPL_SIGNAL
+#undef GPIO_UNIMPL_SIGNAL
 
 BUILD_ASSERT(GPIO_COUNT < GPIO_LIMIT);
 
@@ -114,8 +139,8 @@ BUILD_ASSERT(GPIO_COUNT < GPIO_LIMIT);
  */
 struct gpio_dt_spec;
 
-#define GPIO_DT_PTR_DECL(id) extern const struct gpio_dt_spec * const \
-	GPIO_DT_NAME(GPIO_SIGNAL(id));
+#define GPIO_DT_PTR_DECL(id) \
+	extern const struct gpio_dt_spec *const GPIO_DT_NAME(GPIO_SIGNAL(id));
 
 DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_DT_PTR_DECL)
 
@@ -123,36 +148,22 @@ DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_DT_PTR_DECL)
 
 #endif /* DT_NODE_EXISTS(DT_PATH(named_gpios)) */
 
-/*
- * Define enums for IO expanders and signals
- */
-#define IOEX_SIGNAL(id) DT_STRING_UPPER_TOKEN(id, enum_name)
-#define IOEX_SIGNAL_WITH_COMMA(id) \
-	COND_CODE_1(DT_NODE_HAS_PROP(id, enum_name), (IOEX_SIGNAL(id), ), ())
-enum ioex_signal {
-	IOEX_SIGNAL_START = GPIO_LIMIT + 1,
-	/* Used to ensure that the first IOEX signal is same as start */
-	__IOEX_PLACEHOLDER = GPIO_LIMIT,
-#if DT_NODE_EXISTS(DT_PATH(named_ioexes))
-	DT_FOREACH_CHILD(DT_PATH(named_ioexes), IOEX_SIGNAL_WITH_COMMA)
-#endif
-	IOEX_SIGNAL_END,
-	IOEX_LIMIT = 0x1FFF,
-};
-BUILD_ASSERT(IOEX_SIGNAL_END < IOEX_LIMIT);
-
-#undef IOEX_SIGNAL_WITH_COMMA
-#undef IOEX_SIGNAL
-
-#define IOEX_COUNT (IOEX_SIGNAL_END - IOEX_SIGNAL_START)
-
 #define IOEXPANDER_ID_EXPAND(id) ioex_chip_##id
 #define IOEXPANDER_ID(id) IOEXPANDER_ID_EXPAND(id)
 #define IOEXPANDER_ID_FROM_INST_WITH_COMMA(id) IOEXPANDER_ID(id),
 enum ioexpander_id {
 	DT_FOREACH_STATUS_OKAY(cros_ioex_chip,
-		IOEXPANDER_ID_FROM_INST_WITH_COMMA)
-	CONFIG_IO_EXPANDER_PORT_COUNT
+			       IOEXPANDER_ID_FROM_INST_WITH_COMMA)
+		CONFIG_IO_EXPANDER_PORT_COUNT
 };
+
+/**
+ * Obtain the gpio_dt_spec structure associated with
+ * this gpio signal.
+ *
+ * @param signal	GPIO signal to get gpio_dt_spec for
+ * @returns		gpio_dt_spec associated with signal, or 0 if invalid
+ */
+const struct gpio_dt_spec *gpio_get_dt_spec(enum gpio_signal signal);
 
 #undef IOEXPANDER_ID_FROM_INST_WITH_COMMA

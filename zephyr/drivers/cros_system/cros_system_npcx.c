@@ -3,16 +3,16 @@
  * found in the LICENSE file.
  */
 
-#include <arch/arm/aarch32/cortex_m/cmsis.h>
-#include <drivers/cros_system.h>
-#include <drivers/gpio.h>
-#include <drivers/watchdog.h>
-#include <logging/log.h>
+#include <zephyr/arch/arm/aarch32/cortex_m/cmsis.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/pinctrl.h>
+#include <zephyr/drivers/watchdog.h>
+#include <zephyr/logging/log.h>
 #include <soc.h>
 #include <soc/nuvoton_npcx/reg_def_cros.h>
-#include <sys/util.h>
+#include <zephyr/sys/util.h>
 
-#include "gpio.h"
+#include "drivers/cros_system.h"
 #include "gpio/gpio_int.h"
 #include "rom_chip.h"
 #include "soc_gpio.h"
@@ -65,10 +65,15 @@ struct cros_system_npcx_data {
  * total RAM size = code ram + data ram + extra 2K for ROM functions
  * divided by the block size 32k.
  */
+#if DT_NODE_EXISTS(DT_NODELABEL(bootloader_ram))
+#define BT_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(bootloader_ram))
+#else
+#define BT_RAM_SIZE 0
+#endif
 #define DATA_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(sram0))
 #define CODE_RAM_SIZE DT_REG_SIZE(DT_NODELABEL(flash0))
 #define NPCX_RAM_BLOCK_COUNT \
-	((DATA_RAM_SIZE + CODE_RAM_SIZE + KB(2)) / NPCX_RAM_BLOCK_SIZE)
+	((DATA_RAM_SIZE + CODE_RAM_SIZE + BT_RAM_SIZE) / NPCX_RAM_BLOCK_SIZE)
 
 /* Valid bit-depth of RAM block Power-Down control (RAM_PD) registers. Use its
  * mask to power down all unnecessary RAM blocks before hibernating.
@@ -77,7 +82,7 @@ struct cros_system_npcx_data {
 #define NPCX_RAM_BLOCK_PD_MASK (BIT(NPCX_RAM_PD_DEPTH) - 1)
 
 /* Get saved reset flag address in battery-backed ram */
-#define BBRAM_SAVED_RESET_FLAG_ADDR                         \
+#define BBRAM_SAVED_RESET_FLAG_ADDR                    \
 	(DT_REG_ADDR(DT_INST(0, nuvoton_npcx_bbram)) + \
 	 DT_PROP(DT_PATH(named_bbram_regions, saved_reset_flags), offset))
 
@@ -85,8 +90,8 @@ struct cros_system_npcx_data {
 static int system_npcx_watchdog_stop(void)
 {
 	if (IS_ENABLED(CONFIG_WATCHDOG)) {
-		const struct device *wdt_dev = DEVICE_DT_GET(
-				DT_NODELABEL(twd0));
+		const struct device *wdt_dev =
+			DEVICE_DT_GET(DT_NODELABEL(twd0));
 		if (!device_is_ready(wdt_dev)) {
 			LOG_ERR("Error: device %s is not ready", wdt_dev->name);
 			return -ENODEV;
@@ -177,7 +182,7 @@ static void system_npcx_set_wakeup_gpios_before_hibernate(void)
 /*
  * Get the interrupt DTS node for this wakeup pin
  */
-#define WAKEUP_INT(id, prop, idx)  DT_PHANDLE_BY_IDX(id, prop, idx)
+#define WAKEUP_INT(id, prop, idx) DT_PHANDLE_BY_IDX(id, prop, idx)
 
 /*
  * Get the named-gpio node for this wakeup pin by reading the
@@ -189,19 +194,19 @@ static void system_npcx_set_wakeup_gpios_before_hibernate(void)
 /*
  * Reset and re-enable interrupts on this wake pin.
  */
-#define WAKEUP_SETUP(id, prop, idx)		\
-do {									       \
-	gpio_pin_configure_dt(GPIO_DT_FROM_NODE(WAKEUP_NGPIO(id, prop, idx)),  \
-			      GPIO_INPUT);				       \
-	gpio_enable_dt_interrupt(					       \
-		GPIO_INT_FROM_NODE(WAKEUP_INT(id, prop, idx)));	       \
+#define WAKEUP_SETUP(id, prop, idx)                                     \
+	do {                                                            \
+		gpio_pin_configure_dt(                                  \
+			GPIO_DT_FROM_NODE(WAKEUP_NGPIO(id, prop, idx)), \
+			GPIO_INPUT);                                    \
+		gpio_enable_dt_interrupt(                               \
+			GPIO_INT_FROM_NODE(WAKEUP_INT(id, prop, idx))); \
 	} while (0);
 
-/*
- * For all the wake-pins, re-init the GPIO and re-enable the interrupt.
- */
-	DT_FOREACH_PROP_ELEM(SYSTEM_DT_NODE_HIBERNATE_CONFIG,
-			     wakeup_irqs,
+	/*
+	 * For all the wake-pins, re-init the GPIO and re-enable the interrupt.
+	 */
+	DT_FOREACH_PROP_ELEM(SYSTEM_DT_NODE_HIBERNATE_CONFIG, wakeup_irqs,
 			     WAKEUP_SETUP);
 
 #undef WAKEUP_INT
@@ -407,11 +412,42 @@ static const char *cros_system_npcx_get_chip_revision(const struct device *dev)
 	return rev;
 }
 
+#define PSL_NODE DT_INST(0, nuvoton_npcx_power_psl)
+#if DT_NODE_HAS_STATUS(PSL_NODE, okay)
+PINCTRL_DT_DEFINE(PSL_NODE);
+static int cros_system_npcx_configure_psl_in(void)
+{
+	const struct pinctrl_dev_config *pcfg =
+		PINCTRL_DT_DEV_CONFIG_GET(PSL_NODE);
+
+	return pinctrl_apply_state(pcfg, PINCTRL_STATE_SLEEP);
+}
+
+static void cros_system_npcx_psl_out_inactive(void)
+{
+	struct gpio_dt_spec enable = GPIO_DT_SPEC_GET(PSL_NODE, enable_gpios);
+
+	gpio_pin_set_dt(&enable, 1);
+}
+#else
+static int cros_system_npcx_configure_psl_in(void)
+{
+	return -EINVAL;
+}
+
+static void cros_system_npcx_psl_out_inactive(void)
+{
+	return;
+}
+#endif
+
 static void system_npcx_hibernate_by_psl(const struct device *dev,
 					 uint32_t seconds,
 					 uint32_t microseconds)
 {
 	ARG_UNUSED(dev);
+	int ret;
+
 	/*
 	 * TODO(b/178230662): RTC wake-up in PSL mode only support in npcx9
 	 * series. Nuvoton will introduce CLs for it later.
@@ -419,11 +455,12 @@ static void system_npcx_hibernate_by_psl(const struct device *dev,
 	ARG_UNUSED(seconds);
 	ARG_UNUSED(microseconds);
 
-	/*
-	 * Configure PSL input pads from "psl-in-pads" property in device tree
-	 * file.
-	 */
-	npcx_pinctrl_psl_input_configure();
+	/* Configure detection settings of PSL_IN pads first */
+	ret = cros_system_npcx_configure_psl_in();
+	if (ret < 0) {
+		LOG_ERR("PSL_IN pinctrl setup failed (%d)", ret);
+		return;
+	}
 
 	/*
 	 * Give the board a chance to do any late stage hibernation work.  This
@@ -434,8 +471,12 @@ static void system_npcx_hibernate_by_psl(const struct device *dev,
 	if (board_hibernate_late)
 		board_hibernate_late();
 
-	/* Turn off VCC1 to enter ultra-low-power mode for hibernating */
-	npcx_pinctrl_psl_output_set_inactive();
+	/*
+	 * A transition from 0 to 1 of specific IO (GPIO85) data-out bit
+	 * set PSL_OUT to inactive state. Then, it will turn Core Domain
+	 * power supply (VCC1) off for better power consumption.
+	 */
+	cros_system_npcx_psl_out_inactive();
 }
 
 static int cros_system_npcx_get_reset_cause(const struct device *dev)
@@ -452,16 +493,30 @@ static int cros_system_npcx_init(const struct device *dev)
 	struct cros_system_npcx_data *data = DRV_DATA(dev);
 
 	/* check reset cause */
+	data->reset = UNKNOWN_RST;
+	/* Use scratch bit to check power on reset or VCC1_RST reset. */
+	if (!IS_BIT_SET(inst_scfg->RSTCTL, NPCX_RSTCTL_VCC1_RST_SCRATCH)) {
+		bool is_vcc1_rst =
+			IS_BIT_SET(inst_scfg->RSTCTL, NPCX_RSTCTL_VCC1_RST_STS);
+		data->reset = is_vcc1_rst ? VCC1_RST_PIN : POWERUP;
+	}
+
+	/*
+	 * Set scratch bit to distinguish VCC1_RST# is asserted again
+	 * or not. This bit will be clear automatically when VCC1_RST#
+	 * is asserted or power-on reset occurs.
+	 */
+	inst_scfg->RSTCTL |= BIT(NPCX_RSTCTL_VCC1_RST_SCRATCH);
+
+	if (IS_BIT_SET(inst_scfg->RSTCTL, NPCX_RSTCTL_DBGRST_STS)) {
+		data->reset = DEBUG_RST;
+		/* Clear debugger reset status initially */
+		inst_scfg->RSTCTL |= BIT(NPCX_RSTCTL_DBGRST_STS);
+	}
 	if (IS_BIT_SET(inst_twd->T0CSR, NPCX_T0CSR_WDRST_STS)) {
 		data->reset = WATCHDOG_RST;
+		/* Clear watchdog reset status initially */
 		inst_twd->T0CSR |= BIT(NPCX_T0CSR_WDRST_STS);
-	} else if (IS_BIT_SET(inst_scfg->RSTCTL, NPCX_RSTCTL_DBGRST_STS)) {
-		data->reset = DEBUG_RST;
-		inst_scfg->RSTCTL |= BIT(NPCX_RSTCTL_DBGRST_STS);
-	} else if (IS_BIT_SET(inst_scfg->RSTCTL, NPCX_RSTCTL_VCC1_RST_STS)) {
-		data->reset = VCC1_RST_PIN;
-	} else {
-		data->reset = POWERUP;
 	}
 
 	return 0;
@@ -501,6 +556,16 @@ static int cros_system_npcx_soc_reset(const struct device *dev)
 	/* should never return */
 	return 0;
 }
+
+#if defined(CONFIG_PLATFORM_EC_HIBERNATE_PSL)
+#if DT_HAS_COMPAT_STATUS_OKAY(cros_ec_hibernate_wake_pins)
+#error "cros-ec,hibernate-wake-pins cannot be used with HIBERNATE_PSL"
+#endif
+#else
+#if DT_NODE_HAS_STATUS(PSL_NODE, okay)
+#error "power_ctrl_psl cannot be used with non-HIBERNATE_PSL"
+#endif
+#endif
 
 static int cros_system_npcx_hibernate(const struct device *dev,
 				      uint32_t seconds, uint32_t microseconds)
@@ -544,7 +609,7 @@ static const struct cros_system_driver_api cros_system_driver_npcx_api = {
 	.chip_vendor = cros_system_npcx_get_chip_vendor,
 	.chip_name = cros_system_npcx_get_chip_name,
 	.chip_revision = cros_system_npcx_get_chip_revision,
-#ifdef CONFIG_SOC_POWER_MANAGEMENT_TRACE
+#ifdef CONFIG_PM
 	.deep_sleep_ticks = cros_system_npcx_deep_sleep_ticks,
 #endif
 };
@@ -558,26 +623,29 @@ DEVICE_DEFINE(cros_system_npcx_0, "CROS_SYSTEM", cros_system_npcx_init, NULL,
 #define HAL_DBG_REG_BASE_ADDR \
 	((struct dbg_reg *)DT_REG_ADDR(DT_INST(0, nuvoton_npcx_cros_dbg)))
 
-#define DBG_NODE           DT_NODELABEL(dbg)
-#define DBG_PINCTRL_PH     DT_PHANDLE_BY_IDX(DBG_NODE, pinctrl_0, 0)
-#define DBG_ALT_FILED(f)   DT_PHA_BY_IDX(DBG_PINCTRL_PH, alts, 0, f)
+#define DBG_NODE DT_NODELABEL(dbg)
+#define DBG_PINCTRL_PH DT_PHANDLE_BY_IDX(DBG_NODE, pinctrl_0, 0)
+#define DBG_ALT_FILED(f) DT_PHA_BY_IDX(DBG_PINCTRL_PH, alts, 0, f)
+
+PINCTRL_DT_DEFINE(DBG_NODE);
 
 static int jtag_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 	struct dbg_reg *const dbg_reg_base = HAL_DBG_REG_BASE_ADDR;
-	const struct npcx_alt jtag_alts[] = {
-		{
-			.group = DBG_ALT_FILED(group),
-			.bit = DBG_ALT_FILED(bit),
-			.inverted = DBG_ALT_FILED(inv)
-		}
-	};
-
+	const struct pinctrl_dev_config *pcfg =
+		PINCTRL_DT_DEV_CONFIG_GET(DBG_NODE);
 	dbg_reg_base->DBGCTRL = 0x04;
 	dbg_reg_base->DBGFRZEN3 &= ~BIT(NPCX_DBGFRZEN3_GLBL_FRZ_DIS);
-	if (DT_NODE_HAS_STATUS(DT_NODELABEL(dbg), okay))
-		npcx_pinctrl_mux_configure(jtag_alts, 1, 1);
+	if (DT_NODE_HAS_STATUS(DT_NODELABEL(dbg), okay)) {
+		int ret;
+
+		ret = pinctrl_apply_state(pcfg, PINCTRL_STATE_DEFAULT);
+		if (ret < 0) {
+			LOG_ERR("DBG pinctrl setup failed (%d)", ret);
+		}
+		return ret;
+	}
 
 	return 0;
 }

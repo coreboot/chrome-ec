@@ -10,11 +10,21 @@
 
 #include "ec_commands.h"
 
-/* Defined in led_<board>.c */
+/* Defined in led_<board>.c, not needed if led_is_supported is overridden */
 extern const enum ec_led_id supported_led_ids[];
 
-/* Defined in led_<board>.c */
+/* Defined in led_<board>.c, not needed if led_is_supported is overridden */
 extern const int supported_led_ids_count;
+
+/**
+ * Whether an LED is supported.
+ *
+ * @param led_id	ID of LED to query.
+ *
+ * @returns		1 if LED is supported. 0 if it is not.
+ *
+ */
+__override_proto int led_is_supported(enum ec_led_id led_id);
 
 /**
  * Enable or disable automatic control of an LED.
@@ -69,8 +79,8 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness);
 void led_enable(int enable);
 
 enum ec_led_state {
-	LED_STATE_OFF   = 0,
-	LED_STATE_ON    = 1,
+	LED_STATE_OFF = 0,
+	LED_STATE_ON = 1,
 	LED_STATE_RESET = 2,
 };
 

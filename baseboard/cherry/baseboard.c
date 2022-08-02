@@ -20,11 +20,9 @@
 #include "driver/charger/isl923x.h"
 #include "driver/ppc/rt1718s.h"
 #include "driver/ppc/syv682x.h"
-#include "driver/retimer/ps8802.h"
 #include "driver/tcpm/it83xx_pd.h"
 #include "driver/tcpm/rt1718s.h"
 #include "driver/temp_sensor/thermistor.h"
-#include "driver/usb_mux/anx3443.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -44,7 +42,6 @@
 #include "uart.h"
 #include "usb_charge.h"
 #include "usbc_ppc.h"
-#include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "usb_tc_sm.h"
@@ -55,8 +52,8 @@ static void xhci_init_done_interrupt(enum gpio_signal signal);
 
 #include "gpio_list.h"
 
-#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ##args)
 
 /* Wake-up pins for hibernate */
 enum gpio_signal hibernate_wake_pins[] = {
@@ -79,10 +76,10 @@ static void baseboard_charger_init(void)
 {
 	/* b/198707662#comment9 */
 	int reg = (4096 / ISL9238_INPUT_VOLTAGE_REF_STEP)
-			<< ISL9238_INPUT_VOLTAGE_REF_SHIFT;
+		  << ISL9238_INPUT_VOLTAGE_REF_SHIFT;
 
 	i2c_write16(I2C_PORT_CHARGER, ISL923X_ADDR_FLAGS,
-			ISL9238_REG_INPUT_VOLTAGE, reg);
+		    ISL9238_REG_INPUT_VOLTAGE, reg);
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_charger_init, HOOK_PRIO_DEFAULT + 2);
 
@@ -116,14 +113,14 @@ void rt1718s_tcpc_interrupt(enum gpio_signal signal)
 /* ADC channels. Must be in the exactly same order as in enum adc_channel. */
 const struct adc_t adc_channels[] = {
 	/* Convert to mV (3000mV/1024). */
-	{"VBUS", ADC_MAX_MVOLT * 10, ADC_READ_MAX + 1, 0, CHIP_ADC_CH0},
-	{"BOARD_ID_0", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH1},
-	{"BOARD_ID_1", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH2},
+	{ "VBUS", ADC_MAX_MVOLT * 10, ADC_READ_MAX + 1, 0, CHIP_ADC_CH0 },
+	{ "BOARD_ID_0", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH1 },
+	{ "BOARD_ID_1", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH2 },
 	/* AMON/BMON gain = 17.97 */
-	{"CHARGER_AMON_R", ADC_MAX_MVOLT * 1000 / 17.97, ADC_READ_MAX + 1, 0,
-	 CHIP_ADC_CH3},
-	{"CHARGER_PMON", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH6},
-	{"TEMP_SENSOR_CHG", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH7},
+	{ "CHARGER_AMON_R", ADC_MAX_MVOLT * 1000 / 17.97, ADC_READ_MAX + 1, 0,
+	  CHIP_ADC_CH3 },
+	{ "CHARGER_PMON", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH6 },
+	{ "TEMP_SENSOR_CHG", ADC_MAX_MVOLT, ADC_READ_MAX + 1, 0, CHIP_ADC_CH7 },
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
@@ -180,7 +177,7 @@ struct bc12_config bc12_ports[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 
 static void bc12_interrupt(enum gpio_signal signal)
 {
-	task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+	usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 }
 
 static void ppc_interrupt(enum gpio_signal signal)
@@ -213,7 +210,8 @@ BUILD_ASSERT(ARRAY_SIZE(usb_port_enable) == USB_PORT_COUNT);
 __maybe_unused void xhci_init_done_interrupt(enum gpio_signal signal)
 {
 	enum usb_charge_mode mode = gpio_get_level(signal) ?
-		USB_CHARGE_MODE_ENABLED : USB_CHARGE_MODE_DISABLED;
+					    USB_CHARGE_MODE_ENABLED :
+					    USB_CHARGE_MODE_DISABLED;
 
 	for (int i = 0; i < USB_PORT_COUNT; i++)
 		usb_charge_set_mode(i, mode, USB_ALLOW_SUSPEND_CHARGE);
@@ -229,72 +227,6 @@ __maybe_unused void xhci_init_done_interrupt(enum gpio_signal signal)
 		}
 	}
 }
-
-/* USB Mux */
-
-static int board_ps8762_mux_set(const struct usb_mux *me,
-				mux_state_t mux_state)
-{
-	/* Make sure the PS8802 is awake */
-	RETURN_ERROR(ps8802_i2c_wake(me));
-
-	/* USB specific config */
-	if (mux_state & USB_PD_MUX_USB_ENABLED) {
-		/* Boost the USB gain */
-		RETURN_ERROR(ps8802_i2c_field_update16(me,
-					PS8802_REG_PAGE2,
-					PS8802_REG2_USB_SSEQ_LEVEL,
-					PS8802_USBEQ_LEVEL_UP_MASK,
-					PS8802_USBEQ_LEVEL_UP_12DB));
-	}
-
-	/* DP specific config */
-	if (mux_state & USB_PD_MUX_DP_ENABLED) {
-		/* Boost the DP gain */
-		RETURN_ERROR(ps8802_i2c_field_update8(me,
-					PS8802_REG_PAGE2,
-					PS8802_REG2_DPEQ_LEVEL,
-					PS8802_DPEQ_LEVEL_UP_MASK,
-					PS8802_DPEQ_LEVEL_UP_12DB));
-	}
-
-	return EC_SUCCESS;
-}
-
-static int board_ps8762_mux_init(const struct usb_mux *me)
-{
-	return ps8802_i2c_field_update8(
-			me, PS8802_REG_PAGE1,
-			PS8802_REG_DCIRX,
-			PS8802_AUTO_DCI_MODE_DISABLE | PS8802_FORCE_DCI_MODE,
-			PS8802_AUTO_DCI_MODE_DISABLE);
-}
-
-static int board_anx3443_mux_set(const struct usb_mux *me,
-				 mux_state_t mux_state)
-{
-	gpio_set_level(GPIO_USB_C1_DP_IN_HPD,
-		       mux_state & USB_PD_MUX_DP_ENABLED);
-	return EC_SUCCESS;
-}
-
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{
-		.usb_port = 0,
-		.i2c_port = I2C_PORT_USB_MUX0,
-		.i2c_addr_flags = PS8802_I2C_ADDR_FLAGS,
-		.driver = &ps8802_usb_mux_driver,
-		.board_init = &board_ps8762_mux_init,
-		.board_set = &board_ps8762_mux_set,
-	},
-	{
-		.usb_port = 1,
-		.i2c_port = I2C_PORT_USB_MUX1,
-		.i2c_addr_flags = ANX3443_I2C_ADDR0_FLAGS,
-		.driver = &anx3443_usb_mux_driver,
-		.board_set = &board_anx3443_mux_set,
-	},
-};
 
 /*
  * I2C channels (A, B, and C) are using the same timing registers (00h~07h)
@@ -315,40 +247,32 @@ const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 
 /* I2C ports */
 const struct i2c_port_t i2c_ports[] = {
-	{
-		.name = "bat_chg",
-		.port = IT83XX_I2C_CH_A,
-		.kbps = 100,
-		.scl  = GPIO_I2C_A_SCL,
-		.sda  = GPIO_I2C_A_SDA
-	},
-	{
-		.name = "sensor",
-		.port = IT83XX_I2C_CH_B,
-		.kbps = 400,
-		.scl  = GPIO_I2C_B_SCL,
-		.sda  = GPIO_I2C_B_SDA
-	},
-	{
-		.name = "usb0",
-		.port = IT83XX_I2C_CH_C,
-		.kbps = 400,
-		.scl  = GPIO_I2C_C_SCL,
-		.sda  = GPIO_I2C_C_SDA
-	},
-	{
-		.name = "usb1",
-		.port = IT83XX_I2C_CH_E,
-		.kbps = 1000,
-		.scl  = GPIO_I2C_E_SCL,
-		.sda  = GPIO_I2C_E_SDA
-	},
+	{ .name = "bat_chg",
+	  .port = IT83XX_I2C_CH_A,
+	  .kbps = 100,
+	  .scl = GPIO_I2C_A_SCL,
+	  .sda = GPIO_I2C_A_SDA },
+	{ .name = "sensor",
+	  .port = IT83XX_I2C_CH_B,
+	  .kbps = 400,
+	  .scl = GPIO_I2C_B_SCL,
+	  .sda = GPIO_I2C_B_SDA },
+	{ .name = "usb0",
+	  .port = IT83XX_I2C_CH_C,
+	  .kbps = 400,
+	  .scl = GPIO_I2C_C_SCL,
+	  .sda = GPIO_I2C_C_SDA },
+	{ .name = "usb1",
+	  .port = IT83XX_I2C_CH_E,
+	  .kbps = 1000,
+	  .scl = GPIO_I2C_E_SCL,
+	  .sda = GPIO_I2C_E_SDA },
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
-int board_allow_i2c_passthru(int port)
+int board_allow_i2c_passthru(const struct i2c_cmd_desc_t *cmd_desc)
 {
-	return (port == I2C_PORT_VIRTUAL_BATTERY);
+	return (cmd_desc->port == I2C_PORT_VIRTUAL_BATTERY);
 }
 
 /* TCPC */
@@ -384,26 +308,30 @@ __override int board_rt1718s_init(int port)
 
 	/* gpio 1/2 output high when receiving frx signal */
 	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_GPIO1_VBUS_CTRL,
-			RT1718S_GPIO1_VBUS_CTRL_FRS_RX_VBUS, 0xFF));
+					  RT1718S_GPIO1_VBUS_CTRL_FRS_RX_VBUS,
+					  0xFF));
 	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_GPIO2_VBUS_CTRL,
-			RT1718S_GPIO2_VBUS_CTRL_FRS_RX_VBUS, 0xFF));
+					  RT1718S_GPIO2_VBUS_CTRL_FRS_RX_VBUS,
+					  0xFF));
 
 	/* Turn on SBU switch */
-	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_RT2_SBU_CTRL_01,
-				RT1718S_RT2_SBU_CTRL_01_SBU_VIEN |
-				RT1718S_RT2_SBU_CTRL_01_SBU2_SWEN |
-				RT1718S_RT2_SBU_CTRL_01_SBU1_SWEN,
-				0xFF));
+	RETURN_ERROR(
+		rt1718s_update_bits8(port, RT1718S_RT2_SBU_CTRL_01,
+				     RT1718S_RT2_SBU_CTRL_01_SBU_VIEN |
+					     RT1718S_RT2_SBU_CTRL_01_SBU2_SWEN |
+					     RT1718S_RT2_SBU_CTRL_01_SBU1_SWEN,
+				     0xFF));
 	/* Trigger GPIO 1/2 change when FRS signal received */
-	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_FRS_CTRL3,
-			RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO2 |
+	RETURN_ERROR(rt1718s_update_bits8(
+		port, RT1718S_FRS_CTRL3,
+		RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO2 |
 			RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO1,
-			RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO2 |
+		RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO2 |
 			RT1718S_FRS_CTRL3_FRS_RX_WAIT_GPIO1));
 	/* Set FRS signal detect time to 46.875us */
 	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_FRS_CTRL1,
-			RT1718S_FRS_CTRL1_FRSWAPRX_MASK,
-			0xFF));
+					  RT1718S_FRS_CTRL1_FRSWAPRX_MASK,
+					  0xFF));
 
 	return EC_SUCCESS;
 }
@@ -438,13 +366,6 @@ void board_reset_pd_mcu(void)
 	 * but it will get reset when the EC gets reset.
 	 */
 	/* C1: Add code if TCPC chips need a reset */
-}
-
-void board_set_charge_limit(int port, int supplier, int charge_ma,
-			    int max_ma, int charge_mv)
-{
-	charge_set_input_current_limit(
-		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }
 
 void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
@@ -521,13 +442,12 @@ int ppc_get_alert_status(int port)
 	return 0;
 }
 /* SD Card */
-int board_regulator_get_info(uint32_t index, char *name,
-			     uint16_t *num_voltages, uint16_t *voltages_mv)
+int board_regulator_get_info(uint32_t index, char *name, uint16_t *num_voltages,
+			     uint16_t *voltages_mv)
 {
 	enum mt6360_regulator_id id = index;
 
-	return mt6360_regulator_get_info(id, name, num_voltages,
-					 voltages_mv);
+	return mt6360_regulator_get_info(id, name, num_voltages, voltages_mv);
 }
 
 int board_regulator_enable(uint32_t index, uint8_t enable)
@@ -568,7 +488,7 @@ static void baseboard_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_DEFAULT - 1);
 
-__override int board_pd_set_frs_enable(int port, int enable)
+__override int board_rt1718s_set_frs_enable(int port, int enable)
 {
 	if (port == 1)
 		/*
@@ -577,7 +497,7 @@ __override int board_pd_set_frs_enable(int port, int enable)
 		 * FRS path.
 		 */
 		rt1718s_gpio_set_flags(port, GPIO_EN_USB_C1_FRS,
-				enable ? GPIO_OUT_HIGH : GPIO_OUT_LOW);
+				       enable ? GPIO_OUT_HIGH : GPIO_OUT_LOW);
 	return EC_SUCCESS;
 }
 

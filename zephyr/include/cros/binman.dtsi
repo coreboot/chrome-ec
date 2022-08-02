@@ -3,13 +3,11 @@
  * found in the LICENSE file.
  */
 
-/dts-v1/;
-
 / {
 	#address-cells = <1>;
 	#size-cells = <1>;
 	binman {
-		filename = "zephyr.bin";
+		filename = "ec.bin";
 		pad-byte = <0x1d>;
 		wp-ro {
 			compatible = "cros-ec,flash-layout";

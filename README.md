@@ -2,6 +2,12 @@
 
 [TOC]
 
+> **Note** - This document covers the legacy Chrome EC implementation. The
+> legacy EC implementation is used by all Chromebook reference designs prior to
+> July 2021. On newer Chromebook designs, the EC implementation is based on the
+> Zephyr RTOS. Refer to the [Zephyr EC Introduction](./docs/zephyr/README.md)
+> for details on the Zephyr EC implementation.
+
 ## Introduction
 
 The Chromium OS project includes open source software for embedded controllers
@@ -173,7 +179,7 @@ cd ~/trunk/src/platform/ec
 make -j BOARD=<boardname>
 ```
 
-Where **<boardname>** is replaced by the name of the board you want to build an
+Where `<boardname>` is replaced by the name of the board you want to build an
 EC binary for. For example, the boardname for the Chromebook Pixel is “link”.
 The make command will generate an EC binary at `build/<boardname>/ec.bin`. The
 `-j` tells make to build multi-threaded which can be much faster on a multi-core
@@ -203,6 +209,14 @@ The generated EC binary from emerge is found at:
 ```
 (chroot) $ /build/<boardname>/firmware/ec.bin
 ```
+
+or
+
+```
+(chroot) $ /build/<boardname>/firmware/<devicename>/ec.bin
+```
+
+The `devicename` is the name of a device (also referred as board or variant) which belongs to a family of baseboard. `boardname` is the baseboard name in this case. Example : `/build/dedede/firmware/madoo/ec.bin`
 
 The ebuild file used by Chromium OS is found
 [here](https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/main/chromeos-base/chromeos-ec/chromeos-ec-9999.ebuild):
@@ -242,6 +256,14 @@ If you build Chrome OS with `build_packages` the firmware image will be at:
 ```bash
 (chroot) $ /build/<boardname>/firmware/ec.bin
 ```
+
+or
+
+```
+(chroot) $ /build/<boardname>/firmware/<devicename>/ec.bin
+```
+
+The `devicename` is the name of a device (also referred as board or variant) which belongs to a family of baseboard. `boardname` is the baseboard name in this case. Example : `/build/dedede/firmware/madoo/ec.bin`
 
 Specifying `--image` is optional. If you leave off the `--image` argument, the
 `flash_ec` script will first look for a locally built `ec.bin` followed by one
@@ -467,7 +489,7 @@ Other style notes:
     all contributions to the Chromium project:
 
     ```
-    /* Copyright <year> The Chromium OS Authors. All rights reserved.
+    /* Copyright <year> The ChromiumOS Authors.
      * Use of this source code is governed by a BSD-style license that can be
      * found in the LICENSE file.
      */
@@ -638,3 +660,20 @@ cheese_v1.1.1755-4da9520
 ```
 
 [Firmware Write Protection]: ./docs/write_protection.md
+
+## CQ builder
+
+To test the cq builder script run these commands:
+
+### firmware-ec-cq
+```
+rm -rf /tmp/artifact_bundles /tmp/artifact_bundle_metadata \
+  ~/chromiumos/src/platform/ec/build
+./firmware_builder.py --metrics /tmp/metrics_build build && \
+./firmware_builder.py --metrics /tmp/metrics_test test && \
+./firmware_builder.py --metrics /tmp/metrics_bundle bundle && \
+echo PASSED
+cat /tmp/artifact_bundle_metadata
+cat /tmp/metrics_build
+ls -l /tmp/artifact_bundles/
+```

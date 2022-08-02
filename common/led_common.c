@@ -16,7 +16,7 @@
 
 static uint32_t led_auto_control_flags = ~0x00;
 
-static int led_is_supported(enum ec_led_id led_id)
+__overridable int led_is_supported(enum ec_led_id led_id)
 {
 	int i;
 	static int supported_leds = -1;
@@ -91,8 +91,8 @@ static enum ec_status led_command_control(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_LED_CONTROL, led_command_control, EC_VER_MASK(1));
 
-__attribute__((weak))
-void led_control(enum ec_led_id led_id, enum ec_led_state state)
+__attribute__((weak)) void led_control(enum ec_led_id led_id,
+				       enum ec_led_state state)
 {
 	/*
 	 * Default weak implementation that does not affect the state of

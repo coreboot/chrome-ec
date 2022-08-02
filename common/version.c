@@ -17,8 +17,7 @@
 BUILD_ASSERT(CONFIG_ROLLBACK_VERSION >= 0);
 BUILD_ASSERT(CONFIG_ROLLBACK_VERSION <= INT32_MAX);
 
-const struct image_data __keep current_image_data
-	FIXED_SECTION("ver") = {
+const struct image_data __keep current_image_data FIXED_SECTION("ver") = {
 	.cookie1 = CROS_EC_IMAGE_DATA_COOKIE1,
 	.version = CROS_EC_VERSION32,
 #ifndef TEST_BUILD
@@ -40,6 +39,7 @@ const char build_info[] __keep __attribute__((section(".rodata.buildinfo"))) =
 	VERSION " " DATE " " BUILDER;
 #endif
 
+/* LCOV_EXCL_START - this function doesn't work in GitLab */
 static int get_num_commits(const struct image_data *data)
 {
 	int numperiods = 0;
@@ -68,9 +68,10 @@ static int get_num_commits(const struct image_data *data)
 	}
 
 	return (i == sizeof(data->version) ? 0 : ret);
-
 }
+/* LCOV_EXCL_STOP */
 
+/* LCOV_EXCL_START - this function doesn't work in GitLab */
 int ver_get_num_commits(enum ec_image copy)
 {
 	const struct image_data *data;
@@ -80,3 +81,4 @@ int ver_get_num_commits(enum ec_image copy)
 		data = &current_image_data;
 	return data ? get_num_commits(data) : 0;
 }
+/* LCOV_EXCL_STOP */

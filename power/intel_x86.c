@@ -23,8 +23,8 @@
 #include "wireless.h"
 
 /* Console output macros */
-#define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_CHIPSET, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_CHIPSET, format, ##args)
 
 enum sys_sleep_state {
 	SYS_SLEEP_S3,
@@ -44,7 +44,7 @@ static const int sleep_sig[] = {
 #endif
 };
 
-static int power_s5_up;       /* Chipset is sequencing up or down */
+static int power_s5_up; /* Chipset is sequencing up or down */
 
 #ifdef CONFIG_CHARGER
 /* Flag to indicate if power up was inhibited due to low battery SOC level. */
@@ -61,7 +61,7 @@ static int is_power_up_inhibited(void)
 	const int power_button_pressed = 0;
 
 	return charge_prevent_power_on(power_button_pressed) ||
-		charge_want_shutdown();
+	       charge_want_shutdown();
 }
 
 static void power_up_inhibited_cb(void)
@@ -105,7 +105,8 @@ static enum power_state power_wait_s5_rtc_reset(void)
 	while ((power_get_signals() & IN_PCH_SLP_S4_DEASSERTED) == 0) {
 		/* Handle RSMRST passthru event while waiting */
 		common_intel_x86_handle_rsmrst(POWER_S5);
-		if (task_wait_event(SECOND*4) == TASK_EVENT_TIMER) {
+		if (task_wait_event(SECOND * CONFIG_S5_EXIT_WAIT) ==
+		    TASK_EVENT_TIMER) {
 			CPRINTS("timeout waiting for S5 exit");
 			chipset_force_g3();
 
@@ -178,7 +179,7 @@ static void lpc_s0ix_resume_restore_masks(void)
 	backup_sci_mask = backup_smi_mask = 0;
 }
 
-static void lpc_s0ix_hang_detected(void)
+__override void power_chipset_handle_sleep_hang(enum sleep_hang_type hang_type)
 {
 	/*
 	 * Wake up the AP so they don't just chill in a non-suspended state and
@@ -257,8 +258,8 @@ enum power_state power_chipset_init(void)
 		CPRINTS("already in S0");
 		return POWER_S0;
 	}
-	if ((power_get_signals() & CHIPSET_G3S5_POWERUP_SIGNAL)
-			== CHIPSET_G3S5_POWERUP_SIGNAL) {
+	if ((power_get_signals() & CHIPSET_G3S5_POWERUP_SIGNAL) ==
+	    CHIPSET_G3S5_POWERUP_SIGNAL) {
 		/* case #2 & #3 */
 		CPRINTS("already in S5");
 		return POWER_S5;
@@ -319,16 +320,16 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 			/* Power down to next state */
 			return POWER_S0S3;
 #ifdef CONFIG_POWER_S0IX
-		/*
-		 * SLP_S0 may assert in system idle scenario without a kernel
-		 * freeze call. This may cause interrupt storm since there is
-		 * no freeze/unfreeze of threads/process in the idle scenario.
-		 * Ignore the SLP_S0 assertions in idle scenario by checking
-		 * the host sleep state.
-		 */
-		} else if (power_get_host_sleep_state()
-					== HOST_SLEEP_EVENT_S0IX_SUSPEND &&
-				chipset_get_sleep_signal(SYS_SLEEP_S0IX) == 0) {
+			/*
+			 * SLP_S0 may assert in system idle scenario without a
+			 * kernel freeze call. This may cause interrupt storm
+			 * since there is no freeze/unfreeze of threads/process
+			 * in the idle scenario. Ignore the SLP_S0 assertions in
+			 * idle scenario by checking the host sleep state.
+			 */
+		} else if (power_get_host_sleep_state() ==
+				   HOST_SLEEP_EVENT_S0IX_SUSPEND &&
+			   chipset_get_sleep_signal(SYS_SLEEP_S0IX) == 0) {
 			return POWER_S0S0ix;
 		} else {
 			sleep_notify_transition(SLEEP_NOTIFY_RESUME,
@@ -342,7 +343,7 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 	case POWER_S0ix:
 		/* System in S0 only if SLP_S0 and SLP_S3 are de-asserted */
 		if ((chipset_get_sleep_signal(SYS_SLEEP_S0IX) == 1) &&
-		   (chipset_get_sleep_signal(SYS_SLEEP_S3) == 1)) {
+		    (chipset_get_sleep_signal(SYS_SLEEP_S3) == 1)) {
 			return POWER_S0ixS0;
 		} else if (!power_has_signals(IN_PGOOD_ALL_CORE)) {
 			return POWER_S0;
@@ -569,18 +570,16 @@ void common_intel_x86_handle_rsmrst(enum power_state state)
 
 	board_before_rsmrst(rsmrst_in);
 
-#ifdef CONFIG_CHIPSET_APL_GLK
 	/* Only passthrough RSMRST_L de-assertion on power up */
-	if (rsmrst_in && !power_s5_up)
+	if (IS_ENABLED(CONFIG_CHIPSET_X86_RSMRST_AFTER_S5) && rsmrst_in &&
+	    !power_s5_up)
 		return;
-#elif defined(CONFIG_CHIPSET_X86_RSMRST_DELAY)
 	/*
 	 * Wait at least 10ms between power signals going high
 	 * and deasserting RSMRST to PCH.
 	 */
-	if (rsmrst_in)
+	if (IS_ENABLED(CONFIG_CHIPSET_X86_RSMRST_DELAY) && rsmrst_in)
 		msleep(10);
-#endif
 
 	gpio_set_level(GPIO_PCH_RSMRST_L, rsmrst_in);
 
@@ -591,15 +590,15 @@ void common_intel_x86_handle_rsmrst(enum power_state state)
 
 #ifdef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
 
-__overridable void power_board_handle_host_sleep_event(
-		enum host_sleep_event state)
+__overridable void
+power_board_handle_host_sleep_event(enum host_sleep_event state)
 {
 	/* Default weak implementation -- no action required. */
 }
 
-__override void power_chipset_handle_host_sleep_event(
-		enum host_sleep_event state,
-		struct host_sleep_event_context *ctx)
+__override void
+power_chipset_handle_host_sleep_event(enum host_sleep_event state,
+				      struct host_sleep_event_context *ctx)
 {
 	power_board_handle_host_sleep_event(state);
 
@@ -612,7 +611,7 @@ __override void power_chipset_handle_host_sleep_event(
 		 */
 		sleep_set_notify(SLEEP_NOTIFY_SUSPEND);
 
-		sleep_start_suspend(ctx, lpc_s0ix_hang_detected);
+		sleep_start_suspend(ctx);
 		power_signal_enable_interrupt(sleep_sig[SYS_SLEEP_S0IX]);
 	} else if (state == HOST_SLEEP_EVENT_S0IX_RESUME) {
 		/*
@@ -635,7 +634,6 @@ __override void power_chipset_handle_host_sleep_event(
 		power_signal_disable_interrupt(sleep_sig[SYS_SLEEP_S0IX]);
 	}
 #endif
-
 }
 
 #endif
@@ -687,8 +685,7 @@ enum ec_error_list intel_x86_wait_power_up_ok(void)
 	 * Allow charger to be initialized for up to defined tries,
 	 * in case we're trying to boot the AP with no battery.
 	 */
-	while ((tries < CHARGER_INITIALIZED_TRIES) &&
-	       is_power_up_inhibited()) {
+	while ((tries < CHARGER_INITIALIZED_TRIES) && is_power_up_inhibited()) {
 		msleep(CHARGER_INITIALIZED_DELAY_MS);
 		tries++;
 	}

@@ -9,7 +9,7 @@ if (NOT DEFINED CONFIG_COVERAGE)
   add_subdirectory(npcx_monitor)
 endif()
 
-zephyr_library_include_directories(include)
+cros_ec_library_include_directories(include)
 
 zephyr_library_sources(clock.c)
 zephyr_library_sources(gpio.c)
@@ -21,4 +21,4 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_EXTERNAL_STORAGE
         system_external_storage.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_WORKAROUND_FLASH_DOWNLOAD_API
         system_download_from_flash.c)
-zephyr_library_sources_ifdef(CONFIG_PM_POLICY_APP     power_policy.c)
+zephyr_library_sources_ifdef(CONFIG_PM_POLICY_CUSTOM  power_policy.c)

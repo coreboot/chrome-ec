@@ -9,7 +9,7 @@
 # Note that this variable includes the trailing "/"
 _common_dir:=$(dir $(lastword $(MAKEFILE_LIST)))
 
-common-y=util.o util_stdlib.o
+common-y=util.o
 common-y+=version.o printf.o queue.o queue_policies.o irq_locking.o
 
 common-$(CONFIG_ACCELGYRO_BMI160)+=math_util.o
@@ -63,6 +63,7 @@ common-$(CONFIG_CHARGE_MANAGER)+=charge_manager.o
 endif
 common-$(CONFIG_CHARGE_RAMP_HW)+=charge_ramp.o
 common-$(CONFIG_CHARGE_RAMP_SW)+=charge_ramp.o charge_ramp_sw.o
+common-$(CONFIG_CHARGESPLASH)+=chargesplash.o
 common-$(CONFIG_CHIP_INIT_ROM_REGION)+=init_rom.o
 common-$(CONFIG_CMD_CHARGEN) += chargen.o
 common-$(CONFIG_CHARGER)+=charger.o charge_state_v2.o
@@ -165,12 +166,13 @@ common-$(CONFIG_THROTTLE_AP_ON_BAT_DISCHG_CURRENT)+=throttle_ap.o
 common-$(CONFIG_THROTTLE_AP_ON_BAT_VOLTAGE)+=throttle_ap.o
 common-$(CONFIG_USB_CHARGER)+=usb_charger.o
 common-$(CONFIG_USB_CONSOLE_STREAM)+=usb_console_stream.o
+common-$(CONFIG_HOST_INTERFACE_USB)+=usb_host_command.o
 common-$(CONFIG_USB_I2C)+=usb_i2c.o
 common-$(CONFIG_USB_PORT_POWER_DUMB)+=usb_port_power_dumb.o
 common-$(CONFIG_USB_PORT_POWER_SMART)+=usb_port_power_smart.o
 common-$(CONFIG_HAS_TASK_PD_INT)+=usbc_intr_task.o
 ifneq ($(CONFIG_USB_POWER_DELIVERY),)
-common-$(CONFIG_USB_POWER_DELIVERY)+=usb_common.o usb_pd_pdo.o
+common-$(CONFIG_USB_POWER_DELIVERY)+=usb_common.o usb_pd_pdo.o typec_control.o
 ifneq ($(CONFIG_USB_PD_TCPMV1),)
 common-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_protocol.o usb_pd_policy.o \
 	usb_pd_pdo.o
@@ -216,8 +218,10 @@ common-$(CONFIG_AUDIO_CODEC_WOV)+=hotword_dsp_api.o
 endif
 
 ifneq ($(CONFIG_COMMON_RUNTIME),)
+ifneq ($(CONFIG_DFU_BOOTMANAGER_MAIN),ro)
 common-$(CONFIG_MALLOC)+=shmalloc.o
 common-$(call not_cfg,$(CONFIG_MALLOC))+=shared_mem.o
+endif
 endif
 
 ifeq ($(CTS_MODULE),)

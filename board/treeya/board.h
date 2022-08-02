@@ -12,11 +12,25 @@
 
 #include "baseboard.h"
 
+/* b/203442963
+ * It's workaround to reduce keyboard's "Silver Migration".
+ * From keyboard vendor's feedback, there are two factors to cause
+ * "Silver Migration".
+ * 1. A voltage potential between trace.
+ * 2. The presence of an electrolyte , such as moisture.
+ * The reason cause voltage potential between KSIxx trace is EC enter ec
+ * hibernate PSL and turn EC's VCC1 power off. Besides KSI2, the other
+ * KSIxx will be turn off. KSI2 is powered by H1.
+ * To avoid voltage potential is keep KSIxx on. That means not to enter
+ * ec hibernate PSL.
+ */
+#undef CONFIG_HIBERNATE_PSL
+
 /*
  * By default, enable all console messages excepted HC, ACPI and event:
  * The sensor stack is generating a lot of activity.
  */
-#define CC_DEFAULT     (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
+#define CC_DEFAULT (CC_ALL & ~(CC_MASK(CC_EVENTS) | CC_MASK(CC_LPC)))
 #undef CONFIG_HOSTCMD_DEBUG_MODE
 #define CONFIG_HOSTCMD_DEBUG_MODE HCDEBUG_OFF
 
@@ -36,7 +50,6 @@
 #define CONFIG_ACCELGYRO_BMI160
 #define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-#define CONFIG_ACCEL_INTERRUPTS
 #define CONFIG_ACCEL_KX022
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
@@ -48,7 +61,7 @@
 /*
  * Slew rate on the PP1800_SENSOR load switch requires a short delay on startup.
  */
-#undef  CONFIG_MOTION_SENSE_RESUME_DELAY_US
+#undef CONFIG_MOTION_SENSE_RESUME_DELAY_US
 #define CONFIG_MOTION_SENSE_RESUME_DELAY_US (10 * MSEC)
 
 /* Second set of sensor drivers */
@@ -58,7 +71,6 @@
 #define CONFIG_ACCEL_LIS2DWL
 
 #ifndef __ASSEMBLER__
-
 
 enum battery_type {
 	BATTERY_SMP,

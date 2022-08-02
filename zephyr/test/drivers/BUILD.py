@@ -2,4 +2,43 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-register_host_test("drivers", dts_overlays=["overlay.dts"])
+"""Construct the drivers test binaries"""
+
+
+drivers = register_host_test(
+    test_name="drivers",
+    dts_overlays=[
+        here / "boards/native_posix.overlay",
+    ],
+    kconfig_files=[
+        here / "prj.conf",
+    ],
+)
+
+# Per Suite Builds
+
+ap_mux_control = drivers.variant(
+    project_name="test-drivers-ap_mux_control",
+    kconfig_files=[here / "ap_mux_control" / "prj.conf"],
+)
+
+chargesplash = drivers.variant(
+    project_name="test-drivers-chargesplash",
+)
+
+isl923x = drivers.variant(
+    project_name="test-drivers-isl923x",
+)
+
+usbc_alt_mode = drivers.variant(
+    project_name="test-drivers-usbc_alt_mode",
+)
+
+led_driver = drivers.variant(
+    project_name="test-drivers-led_driver",
+    dts_overlays=[
+        here / "led_driver" / "led_pins.dts",
+        here / "led_driver" / "led_policy.dts",
+    ],
+    kconfig_files=[here / "led_driver" / "prj.conf"],
+)

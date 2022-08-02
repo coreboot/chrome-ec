@@ -20,7 +20,7 @@
 #include "tablet_mode.h"
 #include "util.h"
 
-#define CPRINTS(format, args...) cprints(CC_KEYBOARD, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_KEYBOARD, format, ##args)
 
 /* Buttons and switch state. */
 static uint32_t mkbp_button_state;
@@ -69,7 +69,7 @@ void mkbp_button_update(enum keyboard_button_type button, int is_pressed)
 	CPRINTS("mkbp buttons: %x", mkbp_button_state);
 
 	mkbp_fifo_add(EC_MKBP_EVENT_BUTTON,
-			(const uint8_t *)&mkbp_button_state);
+		      (const uint8_t *)&mkbp_button_state);
 };
 
 void mkbp_update_switches(uint32_t sw, int state)
@@ -86,9 +86,8 @@ void mkbp_update_switches(uint32_t sw, int state)
 	 */
 	if (mkbp_init_done)
 		mkbp_fifo_add(EC_MKBP_EVENT_SWITCH,
-				(const uint8_t *)&mkbp_switch_state);
+			      (const uint8_t *)&mkbp_switch_state);
 }
-
 
 /*****************************************************************************/
 /* Hooks */
@@ -99,8 +98,7 @@ void mkbp_update_switches(uint32_t sw, int state)
  */
 static void keyboard_power_button(void)
 {
-	mkbp_button_update(KEYBOARD_BUTTON_POWER,
-			       power_button_is_pressed());
+	mkbp_button_update(KEYBOARD_BUTTON_POWER, power_button_is_pressed());
 }
 DECLARE_HOOK(HOOK_POWER_BUTTON_CHANGE, keyboard_power_button,
 	     HOOK_PRIO_DEFAULT);
@@ -115,7 +113,7 @@ static void mkbp_lid_change(void)
 	mkbp_update_switches(EC_MKBP_LID_OPEN, lid_is_open());
 }
 DECLARE_HOOK(HOOK_LID_CHANGE, mkbp_lid_change, HOOK_PRIO_LAST);
-DECLARE_HOOK(HOOK_INIT, mkbp_lid_change, HOOK_PRIO_INIT_LID+1);
+DECLARE_HOOK(HOOK_INIT, mkbp_lid_change, HOOK_PRIO_POST_LID);
 #endif
 
 #ifdef CONFIG_TABLET_MODE_SWITCH
@@ -124,7 +122,7 @@ static void mkbp_tablet_mode_change(void)
 	mkbp_update_switches(EC_MKBP_TABLET_MODE, tablet_get_mode());
 }
 DECLARE_HOOK(HOOK_TABLET_MODE_CHANGE, mkbp_tablet_mode_change, HOOK_PRIO_LAST);
-DECLARE_HOOK(HOOK_INIT, mkbp_tablet_mode_change, HOOK_PRIO_INIT_LID+1);
+DECLARE_HOOK(HOOK_INIT, mkbp_tablet_mode_change, HOOK_PRIO_POST_LID);
 #endif
 
 #ifdef CONFIG_BASE_ATTACHED_SWITCH
@@ -134,7 +132,7 @@ static void mkbp_base_attached_change(void)
 }
 DECLARE_HOOK(HOOK_BASE_ATTACHED_CHANGE, mkbp_base_attached_change,
 	     HOOK_PRIO_LAST);
-DECLARE_HOOK(HOOK_INIT, mkbp_base_attached_change, HOOK_PRIO_INIT_LID+1);
+DECLARE_HOOK(HOOK_INIT, mkbp_base_attached_change, HOOK_PRIO_POST_LID);
 #endif
 
 static void mkbp_report_switch_on_init(void)
@@ -142,7 +140,7 @@ static void mkbp_report_switch_on_init(void)
 	/* All switches initialized, report switch state to AP */
 	mkbp_init_done = true;
 	mkbp_fifo_add(EC_MKBP_EVENT_SWITCH,
-			(const uint8_t *)&mkbp_switch_state);
+		      (const uint8_t *)&mkbp_switch_state);
 }
 DECLARE_HOOK(HOOK_INIT, mkbp_report_switch_on_init, HOOK_PRIO_LAST);
 
@@ -188,7 +186,7 @@ uint8_t keyboard_cols = KEYBOARD_COLS_MAX;
 static void simulate_key(int row, int col, int pressed)
 {
 	if ((simulated_key[col] & BIT(row)) == ((pressed ? 1 : 0) << row))
-		return;  /* No change */
+		return; /* No change */
 
 	simulated_key[col] &= ~BIT(row);
 	if (pressed)
@@ -239,7 +237,6 @@ static int command_mkbp_keyboard_press(int argc, char **argv)
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(kbpress, command_mkbp_keyboard_press,
-			"[col row [0 | 1]]",
-			"Simulate keypress");
+			"[col row [0 | 1]]", "Simulate keypress");
 
 #endif /* !defined(HAS_TASK_KEYSCAN) */

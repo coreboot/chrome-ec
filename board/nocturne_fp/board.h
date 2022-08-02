@@ -51,28 +51,28 @@
 #undef CONFIG_WP_STORAGE_OFF
 #undef CONFIG_WP_STORAGE_SIZE
 
-#define CONFIG_SHAREDLIB_SIZE   0
+#define CONFIG_SHAREDLIB_SIZE 0
 
-#define CONFIG_RO_MEM_OFF       0
-#define CONFIG_RO_STORAGE_OFF   0
-#define CONFIG_RO_SIZE          (768*1024)
+#define CONFIG_RO_MEM_OFF 0
+#define CONFIG_RO_STORAGE_OFF 0
+#define CONFIG_RO_SIZE (768 * 1024)
 
 /* EC rollback protection block */
 #define CONFIG_ROLLBACK_OFF (CONFIG_RO_MEM_OFF + CONFIG_RO_SIZE)
 #define CONFIG_ROLLBACK_SIZE (CONFIG_FLASH_BANK_SIZE * 2)
 
-#define CONFIG_RW_MEM_OFF	(CONFIG_ROLLBACK_OFF + CONFIG_ROLLBACK_SIZE)
-#define CONFIG_RW_STORAGE_OFF	0
-#define CONFIG_RW_SIZE		(CONFIG_FLASH_SIZE_BYTES -		\
-				(CONFIG_RW_MEM_OFF - CONFIG_RO_MEM_OFF))
+#define CONFIG_RW_MEM_OFF (CONFIG_ROLLBACK_OFF + CONFIG_ROLLBACK_SIZE)
+#define CONFIG_RW_STORAGE_OFF 0
+#define CONFIG_RW_SIZE \
+	(CONFIG_FLASH_SIZE_BYTES - (CONFIG_RW_MEM_OFF - CONFIG_RO_MEM_OFF))
 
-#define CONFIG_EC_PROTECTED_STORAGE_OFF         CONFIG_RO_MEM_OFF
-#define CONFIG_EC_PROTECTED_STORAGE_SIZE        CONFIG_RO_SIZE
-#define CONFIG_EC_WRITABLE_STORAGE_OFF          CONFIG_RW_MEM_OFF
-#define CONFIG_EC_WRITABLE_STORAGE_SIZE         CONFIG_RW_SIZE
+#define CONFIG_EC_PROTECTED_STORAGE_OFF CONFIG_RO_MEM_OFF
+#define CONFIG_EC_PROTECTED_STORAGE_SIZE CONFIG_RO_SIZE
+#define CONFIG_EC_WRITABLE_STORAGE_OFF CONFIG_RW_MEM_OFF
+#define CONFIG_EC_WRITABLE_STORAGE_SIZE CONFIG_RW_SIZE
 
-#define CONFIG_WP_STORAGE_OFF           CONFIG_EC_PROTECTED_STORAGE_OFF
-#define CONFIG_WP_STORAGE_SIZE          CONFIG_EC_PROTECTED_STORAGE_SIZE
+#define CONFIG_WP_STORAGE_OFF CONFIG_EC_PROTECTED_STORAGE_OFF
+#define CONFIG_WP_STORAGE_SIZE CONFIG_EC_PROTECTED_STORAGE_SIZE
 
 /*
  * We want to prevent flash readout, and use it as indicator of protection
@@ -106,7 +106,7 @@
 #undef CONFIG_LID_SWITCH
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
-#define CONFIG_PRINTF_LEGACY_LI_FORMAT
+#define CONFIG_PRINTF_LONG_IS_32BITS
 #define CONFIG_SHA256
 #define CONFIG_SHA256_UNROLLED
 #define CONFIG_SPI
@@ -116,9 +116,46 @@
 #define CONFIG_WP_ACTIVE_HIGH
 #define CONFIG_PANIC_STRIP_GPR
 
+#if defined(BOARD_NOCTURNE_FP) || defined(BOARD_NAMI_FP)
+/*
+ * FPMCU RO for nocturne (nocturne_fp_v2.2.64-58cf5974e) and
+ * FPMCU RO for nami (nami_fp_v2.2.144-7a08e07eb)
+ * don't have the RV32I core panic data in their panic data structure.
+ * As a consequence the size of panic data structure is different between RO
+ * and RW (RO panic data structure is smaller). This results in overwriting RW
+ * panic data (if it exists) by RO when jumping to RW. Another problem is that
+ * RW can't find the jump data, because owerwritten panic data structure created
+ * by RW still contains RW panic data structure size (bigger than RO's), so
+ * calculated jump data address is wrong.
+ *
+ * The problem is fixed by excluding RV32I core panic data from RW, only when
+ * compiling firmware for nami_fp and nocturne_fp. Expected size of the
+ * structure is 116 bytes.
+ */
+#define CONFIG_DO_NOT_INCLUDE_RV32I_PANIC_DATA
+#define CONFIG_RO_PANIC_DATA_SIZE 116
+
+/*
+ * FPMCU RO for nocturne and nami don't support extended reset flags in backup
+ * RAM. RO interprets the register as saved panic reason, so it tries to restore
+ * panic data when value in the register is different than 0. Another problem is
+ * that panic data saved in backup RAM on hard reset is restored incorrectly.
+ *
+ * CL:1295890 is the change which introduced extended reset flags.
+ */
+#undef CONFIG_STM32_EXTENDED_RESET_FLAGS
+#else
+/*
+ * Dartmonkey FPMCU RO (dartmonkey_v2.0.2887-311310808) has RV32I core panic
+ * data structure in their panic data structure, so expected size of the
+ * structure is 144 bytes.
+ */
+#define CONFIG_RO_PANIC_DATA_SIZE 144
+#endif /* defined(BOARD_NOCTURNE_FP) || defined(BOARD_NAMI_FP) */
+
 /* SPI configuration for the fingerprint sensor */
 #define CONFIG_SPI_CONTROLLER
-#define CONFIG_SPI_FP_PORT  2 /* SPI4: third master config */
+#define CONFIG_SPI_FP_PORT 2 /* SPI4: third master config */
 
 #define CONFIG_FINGERPRINT_MCU
 #ifdef SECTION_IS_RW
@@ -131,7 +168,7 @@
  */
 #define CONFIG_MALLOC
 /* Special memory regions to store large arrays */
-#define FP_FRAME_SECTION    __SECTION(ahb4)
+#define FP_FRAME_SECTION __SECTION(ahb4)
 #define FP_TEMPLATE_SECTION __SECTION(ahb)
 
 #else /* SECTION_IS_RO */

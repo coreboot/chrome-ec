@@ -26,21 +26,16 @@ type Chip interface {
 	 */
 	Adc(pin string) string
 	/*
-	 * Gpio will return a DTS reference to the appropriate GPIO
-	 * that is connected to this pin.
+	 * Gpio will return a gpio controller and a pin number for
+	 * the appropriate GPIO that is connected to this pin.
 	 */
-	Gpio(pin string) string
+	Gpio(pin string) (string, int)
 	/*
 	 * I2C will return a DTS reference to the appropriate I2C
 	 * bus that is connected to this pin. The pin is assumed to be
 	 * the I2C clock pin of the 2 wire bus.
 	 */
 	I2c(pin string) string
-	/*
-	 * Pwm will return a DTS reference to the appropriate PWM
-	 * that is connected to this pin.
-	 */
-	Pwm(pin string) string
 }
 
 // chipList contains a list of registered chips.

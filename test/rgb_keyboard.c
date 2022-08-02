@@ -8,6 +8,7 @@
 
 #include "common.h"
 #include "console.h"
+#include "keyboard_backlight.h"
 #include "rgb_keyboard.h"
 #include "task.h"
 #include "test_util.h"
@@ -53,11 +54,8 @@ const uint8_t rgbkbd_vsize = RGB_GRID0_ROW;
 const enum ec_rgbkbd_type rgbkbd_type = EC_RGBKBD_TYPE_UNKNOWN;
 
 const uint8_t rgbkbd_map[] = {
-	RGBKBD_DELM,
-	RGBKBD_COORD(1, 2), RGBKBD_DELM,
-	RGBKBD_COORD(3, 4), RGBKBD_COORD(5, 6), RGBKBD_DELM,
-	RGBKBD_DELM,
-	RGBKBD_DELM,
+	RGBKBD_DELM,	    RGBKBD_COORD(1, 2), RGBKBD_DELM, RGBKBD_COORD(3, 4),
+	RGBKBD_COORD(5, 6), RGBKBD_DELM,	RGBKBD_DELM, RGBKBD_DELM,
 };
 const size_t rgbkbd_map_size = ARRAY_SIZE(rgbkbd_map);
 
@@ -72,6 +70,14 @@ static struct rgbkbd_mock {
 	uint32_t count_drv_set_gcc;
 	uint32_t gcc_level;
 } mock_state;
+
+__override void board_kblight_init(void)
+{
+}
+
+__override void board_kblight_shutdown(void)
+{
+}
 
 void before_test(void)
 {
@@ -103,7 +109,6 @@ static int test_drv_set_color(struct rgbkbd *ctx, uint8_t offset,
 	return EC_SUCCESS;
 }
 
-
 static int test_drv_set_scale(struct rgbkbd *ctx, uint8_t offset,
 			      struct rgb_s scale, uint8_t len)
 {
@@ -118,13 +123,17 @@ static int test_drv_set_gcc(struct rgbkbd *ctx, uint8_t level)
 	return EC_SUCCESS;
 }
 
+void rgbkbd_init_lookup_table(void);
+
 static int test_rgbkbd_map(void)
 {
 	union rgbkbd_coord_u8 led;
 
+	rgbkbd_init_lookup_table();
+
 	led.u8 = rgbkbd_map[rgbkbd_table[0]];
-	zassert_equal(RGBKBD_COORD(led.coord.x, led.coord.y),
-		      RGBKBD_DELM, "key[0] -> None");
+	zassert_equal(RGBKBD_COORD(led.coord.x, led.coord.y), RGBKBD_DELM,
+		      "key[0] -> None");
 
 	led.u8 = rgbkbd_map[rgbkbd_table[1]];
 	zassert_equal(RGBKBD_COORD(led.coord.x, led.coord.y),
@@ -138,12 +147,12 @@ static int test_rgbkbd_map(void)
 		      RGBKBD_COORD(5, 6), "key[2] -> LED(5,6)");
 
 	led.u8 = rgbkbd_map[rgbkbd_table[3]];
-	zassert_equal(RGBKBD_COORD(led.coord.x, led.coord.y),
-		      RGBKBD_DELM, "key[3] -> None");
+	zassert_equal(RGBKBD_COORD(led.coord.x, led.coord.y), RGBKBD_DELM,
+		      "key[3] -> None");
 
 	led.u8 = rgbkbd_map[rgbkbd_table[4]];
-	zassert_equal(RGBKBD_COORD(led.coord.x, led.coord.y),
-		      RGBKBD_DELM, "key[4] -> None");
+	zassert_equal(RGBKBD_COORD(led.coord.x, led.coord.y), RGBKBD_DELM,
+		      "key[4] -> None");
 
 	return EC_SUCCESS;
 }
@@ -157,21 +166,18 @@ const struct rgbkbd_drv test_drv = {
 	.set_gcc = test_drv_set_gcc,
 };
 
+extern int demo_interval_ms;
+
 static int test_rgbkbd_startup(void)
 {
 	struct rgbkbd *ctx;
 	struct rgb_s color;
 	int g, x, y, c, r;
 
+	demo_interval_ms = 1;
+
 	/* Let RGBKBD task run. */
 	task_wait_event(-1);
-
-	zassert_equal(mock_state.count_drv_init, rgbkbd_count,
-		      "init() called");
-	zassert_equal(mock_state.count_drv_set_gcc, rgbkbd_count,
-		      "set_gcc() called");
-	zassert_equal(mock_state.count_drv_set_scale, rgbkbd_count,
-		      "set_scale() called");
 
 	/* Check 'DOT' demo. */
 	for (x = 0; x < rgbkbd_hsize; x++) {
@@ -216,22 +222,22 @@ static int test_rgbkbd_console_command(void)
 	char buf[8];
 	int i, x, y, r, c;
 	uint8_t offset;
-	char *argv_demo[] = {"rgbk", "demo", "0"};
-	char *argv_gcc[] = {"rgbk", "100"};
-	char *argv_color[] = {"rgbk", buf, "0x010203"};
-	char *argv_all[] = {"rgbk", "all", "0x010203"};
+	char *argv_demo[] = { "rgbk", "demo", "0" };
+	char *argv_gcc[] = { "rgbk", "100" };
+	char *argv_color[] = { "rgbk", buf, "0x010203" };
+	char *argv_all[] = { "rgbk", "all", "0x010203" };
 
 	/* Test 'rgbk demo 0'. */
 	before_test();
 	argc = ARRAY_SIZE(argv_demo);
 	zassert_equal(demo, 2, "demo == 2");
-	zassert_equal(cc_rgbk(argc, argv_demo), EC_SUCCESS, "rgbk demo 0");
+	zassert_equal(cc_rgb(argc, argv_demo), EC_SUCCESS, "rgbk demo 0");
 	zassert_equal(demo, 0, "demo == 0");
 
 	/* Test 'rgbk 100'. */
 	before_test();
 	argc = ARRAY_SIZE(argv_gcc);
-	zassert_equal(cc_rgbk(argc, argv_gcc), EC_SUCCESS, "rgbk 100");
+	zassert_equal(cc_rgb(argc, argv_gcc), EC_SUCCESS, "rgbk 100");
 	zassert_equal(mock_state.count_drv_set_gcc, rgbkbd_count,
 		      "set_gcc() called");
 	zassert_equal(mock_state.gcc_level, 100, "gcc == 100");
@@ -244,8 +250,8 @@ static int test_rgbkbd_console_command(void)
 	offset = rgbkbd_vsize * x + y;
 	sprintf(buf, "%d,%d", x, y);
 	argc = ARRAY_SIZE(argv_color);
-	zassert_equal(cc_rgb(argc, argv_color), EC_SUCCESS,
-		      "rgbk %s 0x010203", buf);
+	zassert_equal(cc_rgb(argc, argv_color), EC_SUCCESS, "rgbk %s 0x010203",
+		      buf);
 	zassert_equal(ctx->buf[offset].r, 1, "R = 1");
 	zassert_equal(ctx->buf[offset].g, 2, "G = 2");
 	zassert_equal(ctx->buf[offset].b, 3, "B = 3");
@@ -257,8 +263,8 @@ static int test_rgbkbd_console_command(void)
 	y = -1;
 	sprintf(buf, "%d,%d", x, y);
 	argc = ARRAY_SIZE(argv_color);
-	zassert_equal(cc_rgbk(argc, argv_color), EC_SUCCESS,
-		      "rgbk %s 1 2 3", buf);
+	zassert_equal(cc_rgb(argc, argv_color), EC_SUCCESS, "rgbk %s 1 2 3",
+		      buf);
 	for (r = 0; r < rgbkbd_vsize; r++) {
 		offset = rgbkbd_vsize * x + r;
 		zassert_equal(ctx->buf[offset].r, 1, "R = 1");
@@ -272,8 +278,8 @@ static int test_rgbkbd_console_command(void)
 	y = 1;
 	sprintf(buf, "%d,%d", x, y);
 	argc = ARRAY_SIZE(argv_color);
-	zassert_equal(cc_rgbk(argc, argv_color), EC_SUCCESS,
-		      "rgbk %s 1 2 3", buf);
+	zassert_equal(cc_rgb(argc, argv_color), EC_SUCCESS, "rgbk %s 1 2 3",
+		      buf);
 	for (c = 0; c < rgbkbd_hsize; c++) {
 		ctx = &rgbkbds[c / rgbkbds[0].cfg->col_len];
 		offset = rgbkbd_vsize * (c % ctx->cfg->col_len) + y;
@@ -285,7 +291,7 @@ static int test_rgbkbd_console_command(void)
 	/* Test 'rgbk all 1 2 3'. */
 	before_test();
 	argc = ARRAY_SIZE(argv_all);
-	zassert_equal(cc_rgbk(argc, argv_all), EC_SUCCESS, "rgbk all 1 2 3");
+	zassert_equal(cc_rgb(argc, argv_all), EC_SUCCESS, "rgbk all 1 2 3");
 	for (i = 0; i < rgbkbd_count; i++) {
 		ctx = &rgbkbds[i];
 		for (c = 0; c < ctx->cfg->col_len; c++) {
@@ -336,7 +342,7 @@ static int test_rgbkbd_rotate_color(void)
 static int test_rgbkbd_demo_flow(void)
 {
 	struct rgb_s copy[ARRAY_SIZE(rgbkbds)][RGB_GRID0_COL * RGB_GRID0_ROW];
-	char *argv_demo[] = {"rgbk", "demo", "1"};
+	char *argv_demo[] = { "rgbk", "demo", "1" };
 	struct rgb_s *p;
 	int argc;
 	struct rgbkbd *ctx;
@@ -346,7 +352,7 @@ static int test_rgbkbd_demo_flow(void)
 	int i, j, g;
 
 	argc = ARRAY_SIZE(argv_demo);
-	zassert_equal(cc_rgbk(argc, argv_demo), EC_SUCCESS, "rgbk demo flow");
+	zassert_equal(cc_rgb(argc, argv_demo), EC_SUCCESS, "rgbk demo flow");
 
 	for (j = 0; j < 0x100 / step; j++) {
 		/* Take a snapshot. */

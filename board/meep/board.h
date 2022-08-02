@@ -19,15 +19,11 @@
 #define GPIO_VOLUME_UP_L GPIO_EC_VOLUP_BTN_ODL
 #define GPIO_VOLUME_DOWN_L GPIO_EC_VOLDN_BTN_ODL
 
-/* EC console commands  */
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
-
 #define CONFIG_LED_COMMON
 
 /* Sensors */
-#define CONFIG_ACCEL_KX022		/* Lid accel */
-#define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
+#define CONFIG_ACCEL_KX022 /* Lid accel */
+#define CONFIG_ACCELGYRO_LSM6DSM /* Base accel */
 
 /* Sensors without hardware FIFO are in forced mode */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
@@ -70,10 +66,10 @@
 #include "registers.h"
 
 enum adc_channel {
-	ADC_TEMP_SENSOR_AMB,		/* ADC0 */
-	ADC_TEMP_SENSOR_CHARGER,	/* ADC1 */
-	ADC_VBUS_C0,			/* ADC9 */
-	ADC_VBUS_C1,			/* ADC4 */
+	ADC_TEMP_SENSOR_AMB, /* ADC0 */
+	ADC_TEMP_SENSOR_CHARGER, /* ADC1 */
+	ADC_VBUS_C0, /* ADC9 */
+	ADC_VBUS_C1, /* ADC4 */
 	ADC_CH_COUNT
 };
 
@@ -84,18 +80,10 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
-enum pwm_channel {
-	PWM_CH_KBLIGHT,
-	PWM_CH_COUNT
-};
+enum pwm_channel { PWM_CH_KBLIGHT, PWM_CH_COUNT };
 
 /* Motion sensors */
-enum sensor_id {
-	LID_ACCEL,
-	BASE_ACCEL,
-	BASE_GYRO,
-	SENSOR_COUNT
-};
+enum sensor_id { LID_ACCEL, BASE_ACCEL, BASE_GYRO, SENSOR_COUNT };
 
 enum battery_type {
 	BATTERY_DYNAPACK_COS,

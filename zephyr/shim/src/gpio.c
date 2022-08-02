@@ -3,15 +3,18 @@
  * found in the LICENSE file.
  */
 
-#include <device.h>
-#include <init.h>
-#include <kernel.h>
-#include <logging/log.h>
+#include <zephyr/device.h>
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
+#ifdef __REQUIRE_ZEPHYR_GPIOS__
+#undef __REQUIRE_ZEPHYR_GPIOS__
+#endif
 #include "gpio.h"
 #include "gpio/gpio.h"
 #include "ioexpander.h"
-#include "sysjump.h"
+#include "system.h"
 #include "cros_version.h"
 
 LOG_MODULE_REGISTER(gpio_shim, LOG_LEVEL_ERR);
@@ -38,26 +41,30 @@ struct gpio_config {
  * whereas the standard macros assume that only 8 bits of initial flags
  * will be needed.
  */
-#define OUR_DT_SPEC(id)						\
-	{							\
-		.port = DEVICE_DT_GET(DT_GPIO_CTLR(id, gpios)),	\
-		.pin = DT_GPIO_PIN(id, gpios),			\
-		.dt_flags = 0xFF & (DT_GPIO_FLAGS(id, gpios)),	\
+#define OUR_DT_SPEC(id)                                         \
+	{                                                       \
+		.port = DEVICE_DT_GET(DT_GPIO_CTLR(id, gpios)), \
+		.pin = DT_GPIO_PIN(id, gpios),                  \
+		.dt_flags = 0xFF & (DT_GPIO_FLAGS(id, gpios)),  \
 	}
 
-#define GPIO_CONFIG(id)                                      \
-	{                                                    \
-		.spec = OUR_DT_SPEC(id),		     \
-		.name = DT_NODE_FULL_NAME(id),               \
-		.init_flags = DT_GPIO_FLAGS(id, gpios),      \
-		.no_auto_init = DT_PROP(id, no_auto_init),   \
+#define GPIO_CONFIG(id)                                    \
+	{                                                  \
+		.spec = OUR_DT_SPEC(id),                   \
+		.name = DT_NODE_FULL_NAME(id),             \
+		.init_flags = DT_GPIO_FLAGS(id, gpios),    \
+		.no_auto_init = DT_PROP(id, no_auto_init), \
 	},
+#define GPIO_IMPL_CONFIG(id) \
+	COND_CODE_1(DT_NODE_HAS_PROP(id, gpios), (GPIO_CONFIG(id)), ())
+
 static const struct gpio_config configs[] = {
 #if DT_NODE_EXISTS(DT_PATH(named_gpios))
-	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_CONFIG)
+	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_IMPL_CONFIG)
 #endif
 };
 
+#undef GPIO_IMPL_CONFIG
 #undef GPIO_CONFIG
 #undef OUR_DT_SPEC
 
@@ -70,9 +77,9 @@ static const struct gpio_config configs[] = {
  * point directly into the table by exposing the gpio_config struct.
  */
 
-#define GPIO_PTRS(id) const struct gpio_dt_spec * const	\
-	GPIO_DT_NAME(GPIO_SIGNAL(id)) =			\
-	&configs[GPIO_SIGNAL(id)].spec;
+#define GPIO_PTRS(id)                                                    \
+	const struct gpio_dt_spec *const GPIO_DT_NAME(GPIO_SIGNAL(id)) = \
+		&configs[GPIO_SIGNAL(id)].spec;
 
 #if DT_NODE_EXISTS(DT_PATH(named_gpios))
 DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_PTRS)
@@ -87,6 +94,24 @@ int gpio_get_level(enum gpio_signal signal)
 {
 	if (!gpio_is_implemented(signal))
 		return 0;
+
+	/*
+	 * If an output GPIO, get the configured value of the output
+	 * rather than the raw value of the pin.
+	 */
+	if (IS_ENABLED(CONFIG_GPIO_GET_CONFIG) &&
+	    configs[signal].init_flags & GPIO_OUTPUT) {
+		int rv;
+		gpio_flags_t flags;
+
+		rv = gpio_pin_get_config_dt(&configs[signal].spec, &flags);
+		if (rv != 0) {
+			LOG_ERR("Cannot get config for %s (%d)",
+				configs[signal].name, rv);
+			return 0;
+		}
+		return (flags & GPIO_OUTPUT_INIT_HIGH) ? 1 : 0;
+	}
 
 	const int l = gpio_pin_get_raw(configs[signal].spec.port,
 				       configs[signal].spec.pin);
@@ -134,8 +159,7 @@ void gpio_set_level(enum gpio_signal signal, int value)
 		return;
 
 	int rv = gpio_pin_set_raw(configs[signal].spec.port,
-				  configs[signal].spec.pin,
-				  value);
+				  configs[signal].spec.pin, value);
 
 	if (rv < 0) {
 		LOG_ERR("Cannot write %s (%d)", configs[signal].name, rv);
@@ -151,36 +175,28 @@ void gpio_set_level_verbose(enum console_channel channel,
 
 void gpio_or_ioex_set_level(int signal, int value)
 {
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_IOEX) && signal_is_ioex(signal))
-		ioex_set_level(signal, value);
-	else
-		gpio_set_level(signal, value);
+	gpio_set_level(signal, value);
 }
 
 int gpio_or_ioex_get_level(int signal, int *value)
 {
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_IOEX) && signal_is_ioex(signal))
-		return ioex_get_level(signal, value);
 	*value = gpio_get_level(signal);
 	return EC_SUCCESS;
 }
 
 /* GPIO flags which are the same in Zephyr and this codebase */
-#define GPIO_CONVERSION_SAME_BITS                                       \
-	(GPIO_OPEN_DRAIN | GPIO_PULL_UP | GPIO_PULL_DOWN | GPIO_INPUT | \
-	 GPIO_OUTPUT)
+#define GPIO_CONVERSION_SAME_BITS                                             \
+	(GPIO_OPEN_DRAIN | GPIO_PULL_UP | GPIO_PULL_DOWN | GPIO_VOLTAGE_1P8 | \
+	 GPIO_INPUT | GPIO_OUTPUT | GPIO_OUTPUT_INIT_LOW |                    \
+	 GPIO_OUTPUT_INIT_HIGH)
 
-#define FLAGS_HANDLED_FROM_ZEPHYR                                              \
-	(GPIO_DISCONNECTED | GPIO_OPEN_DRAIN | GPIO_PULL_UP | GPIO_PULL_DOWN | \
-	 GPIO_OUTPUT_INIT_LOW | GPIO_OUTPUT_INIT_HIGH | GPIO_INPUT |           \
-	 GPIO_OUTPUT | GPIO_INT_ENABLE | GPIO_INT_EDGE | GPIO_INT_HIGH_1 |     \
-	 GPIO_INT_LOW_0 | GPIO_VOLTAGE_1P8)
+#define FLAGS_HANDLED_FROM_ZEPHYR                                      \
+	(GPIO_CONVERSION_SAME_BITS | GPIO_INT_ENABLE | GPIO_INT_EDGE | \
+	 GPIO_INT_HIGH_1 | GPIO_INT_LOW_0)
 
-#define FLAGS_HANDLED_TO_ZEPHYR                                                \
-	(GPIO_FLAG_NONE | GPIO_OPEN_DRAIN | GPIO_PULL_UP | GPIO_PULL_DOWN |    \
-	 GPIO_LOW | GPIO_HIGH | GPIO_INPUT | GPIO_OUTPUT | GPIO_INT_F_RISING | \
-	 GPIO_INT_F_FALLING | GPIO_INT_F_LOW | GPIO_INT_F_HIGH |               \
-	 GPIO_SEL_1P8V)
+#define FLAGS_HANDLED_TO_ZEPHYR                                               \
+	(GPIO_CONVERSION_SAME_BITS | GPIO_INT_F_RISING | GPIO_INT_F_FALLING | \
+	 GPIO_INT_F_LOW | GPIO_INT_F_HIGH)
 
 int convert_from_zephyr_flags(const gpio_flags_t zephyr)
 {
@@ -193,13 +209,6 @@ int convert_from_zephyr_flags(const gpio_flags_t zephyr)
 		LOG_WRN("Unhandled GPIO bits in zephyr->ec conversion: 0x%08X",
 			unhandled_flags);
 	}
-
-	if (zephyr == GPIO_DISCONNECTED)
-		ec_flags = GPIO_FLAG_NONE;
-	if (zephyr & GPIO_OUTPUT_INIT_LOW)
-		ec_flags |= GPIO_LOW;
-	if (zephyr & GPIO_OUTPUT_INIT_HIGH)
-		ec_flags |= GPIO_HIGH;
 
 	if (zephyr & GPIO_INT_ENABLE) {
 		if (zephyr & GPIO_INT_EDGE) {
@@ -214,9 +223,6 @@ int convert_from_zephyr_flags(const gpio_flags_t zephyr)
 				ec_flags |= GPIO_INT_F_HIGH;
 		}
 	}
-
-	if (zephyr & GPIO_VOLTAGE_1P8)
-		ec_flags |= GPIO_SEL_1P8V;
 
 	return ec_flags;
 }
@@ -233,24 +239,16 @@ gpio_flags_t convert_to_zephyr_flags(int ec_flags)
 			unhandled_flags);
 	}
 
-	if (ec_flags == GPIO_FLAG_NONE)
-		zephyr_flags = GPIO_DISCONNECTED;
-	if (ec_flags & GPIO_LOW)
-		zephyr_flags |= GPIO_OUTPUT_INIT_LOW;
-	if (ec_flags & GPIO_HIGH)
-		zephyr_flags |= GPIO_OUTPUT_INIT_HIGH;
 	if (ec_flags & GPIO_INT_F_RISING)
-		zephyr_flags |= GPIO_INT_ENABLE
-			| GPIO_INT_EDGE | GPIO_INT_HIGH_1;
+		zephyr_flags |= GPIO_INT_ENABLE | GPIO_INT_EDGE |
+				GPIO_INT_HIGH_1;
 	if (ec_flags & GPIO_INT_F_FALLING)
-		zephyr_flags |= GPIO_INT_ENABLE
-			| GPIO_INT_EDGE | GPIO_INT_LOW_0;
+		zephyr_flags |= GPIO_INT_ENABLE | GPIO_INT_EDGE |
+				GPIO_INT_LOW_0;
 	if (ec_flags & GPIO_INT_F_LOW)
 		zephyr_flags |= GPIO_INT_ENABLE | GPIO_INT_LOW_0;
 	if (ec_flags & GPIO_INT_F_HIGH)
 		zephyr_flags |= GPIO_INT_ENABLE | GPIO_INT_HIGH_1;
-	if (ec_flags & GPIO_SEL_1P8V)
-		zephyr_flags |= GPIO_VOLTAGE_1P8;
 
 	return zephyr_flags;
 }
@@ -273,8 +271,7 @@ const struct gpio_dt_spec *gpio_get_dt_spec(enum gpio_signal signal)
 static int init_gpios(const struct device *unused)
 {
 	gpio_flags_t flags;
-	struct jump_data *jdata = get_jump_data();
-	bool is_sys_jumped = (jdata && jdata->magic == JUMP_DATA_MAGIC);
+	bool is_sys_jumped = system_jumped_to_this_image();
 
 	ARG_UNUSED(unused);
 
@@ -296,16 +293,11 @@ static int init_gpios(const struct device *unused)
 		flags = configs[i].init_flags;
 
 		/*
-		 * For warm boot, retrieve the current value of any
-		 * output pins so that no changes are made.
+		 * For warm boot, do not set the output state.
 		 */
 		if (is_sys_jumped && (flags & GPIO_OUTPUT)) {
-			int current = gpio_pin_get_dt(&configs[i].spec);
-
 			flags &=
-			    ~(GPIO_OUTPUT_INIT_LOW | GPIO_OUTPUT_INIT_HIGH);
-			flags |= current ? GPIO_OUTPUT_INIT_HIGH
-					 : GPIO_OUTPUT_INIT_LOW;
+				~(GPIO_OUTPUT_INIT_LOW | GPIO_OUTPUT_INIT_HIGH);
 		}
 
 		rv = gpio_pin_configure_dt(&configs[i].spec, flags);
@@ -338,6 +330,15 @@ void gpio_reset(enum gpio_signal signal)
 
 	gpio_pin_configure_dt(&configs[signal].spec,
 			      configs[signal].init_flags);
+}
+
+void gpio_reset_port(const struct device *port)
+{
+	for (size_t i = 0; i < ARRAY_SIZE(configs); ++i) {
+		if (port == configs[i].spec.port)
+			gpio_pin_configure_dt(&configs[i].spec,
+					      configs[i].init_flags);
+	}
 }
 
 void gpio_set_flags(enum gpio_signal signal, int flags)

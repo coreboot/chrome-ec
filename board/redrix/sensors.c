@@ -6,9 +6,12 @@
 #include "common.h"
 #include "accelgyro.h"
 #include "adc_chip.h"
+#include "cbi_ssfc.h"
 #include "driver/accel_bma2x2.h"
+#include "driver/accel_bma422.h"
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/als_tcs3400_public.h"
+#include "gpio.h"
 #include "hooks.h"
 #include "motion_sense.h"
 #include "temp_sensor.h"
@@ -51,19 +54,16 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 K_MUTEX_DEFINE(g_lid_accel_mutex);
 K_MUTEX_DEFINE(g_base_accel_mutex);
 static struct accelgyro_saved_data_t g_bma253_data;
+static struct accelgyro_saved_data_t g_bma422_data;
 static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
-static const mat33_fp_t lid_standard_ref = {
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ 0, 0, FLOAT_TO_FP(-1)}
-};
+static const mat33_fp_t lid_standard_ref = { { FLOAT_TO_FP(-1), 0, 0 },
+					     { 0, FLOAT_TO_FP(1), 0 },
+					     { 0, 0, FLOAT_TO_FP(-1) } };
 
-static const mat33_fp_t base_standard_ref = {
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ 0, 0, FLOAT_TO_FP(-1)}
-};
+static const mat33_fp_t base_standard_ref = { { FLOAT_TO_FP(-1), 0, 0 },
+					      { 0, FLOAT_TO_FP(1), 0 },
+					      { 0, 0, FLOAT_TO_FP(-1) } };
 
 /* TCS3400 private data */
 static struct als_drv_data_t g_tcs3400_data = {
@@ -233,6 +233,41 @@ struct motion_sensor_t motion_sensors[] = {
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
+struct motion_sensor_t bma422_lid_accel = {
+	.name = "Lid Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_BMA422,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_LID,
+	.drv = &bma4_accel_drv,
+	.mutex = &g_lid_accel_mutex,
+	.drv_data = &g_bma422_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = BMA4_I2C_ADDR_PRIMARY,
+	.rot_standard_ref = &lid_standard_ref,
+	.default_range = 2, /* g, enough for laptop. */
+	.min_frequency = BMA4_ACCEL_MIN_FREQ,
+	.max_frequency = BMA4_ACCEL_MAX_FREQ,
+	.config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 12500 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+		/* Sensor on in S3 */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 12500 | ROUND_UP_FLAG,
+			.ec_rate = 0,
+		},
+	},
+};
+
+static void board_update_motion_sensor_config(void)
+{
+	if (get_cbi_ssfc_lid_sensor() == SSFC_SENSOR_LID_BMA422)
+		motion_sensors[LID_ACCEL] = bma422_lid_accel;
+}
+
 /* ALS instances when LPC mapping is needed. Each entry directs to a sensor. */
 const struct motion_sensor_t *motion_als_sensors[] = {
 	&motion_sensors[CLEAR_ALS],
@@ -245,59 +280,48 @@ static void board_sensors_init(void)
 	gpio_enable_interrupt(GPIO_EC_ALS_RGB_INT_R_L);
 	/* Enable gpio interrupt for base accelgyro sensor */
 	gpio_enable_interrupt(GPIO_EC_IMU_INT_R_L);
+
+	board_update_motion_sensor_config();
 }
 DECLARE_HOOK(HOOK_INIT, board_sensors_init, HOOK_PRIO_INIT_I2C + 1);
 
 /* Temperature sensor configuration */
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1_DDR] = {
-		.name = "DDR",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_1_DDR
-	},
-	[TEMP_SENSOR_2_SOC] = {
-		.name = "SOC",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_2_SOC
-	},
-	[TEMP_SENSOR_3_CHARGER] = {
-		.name = "Charger",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_3_CHARGER
-	},
-	[TEMP_SENSOR_4_REGULATOR] = {
-		.name = "Regulator",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_4_REGULATOR
-	},
+	[TEMP_SENSOR_1_DDR] = { .name = "DDR",
+				.type = TEMP_SENSOR_TYPE_BOARD,
+				.read = get_temp_3v3_30k9_47k_4050b,
+				.idx = ADC_TEMP_SENSOR_1_DDR },
+	[TEMP_SENSOR_2_SOC] = { .name = "SOC",
+				.type = TEMP_SENSOR_TYPE_BOARD,
+				.read = get_temp_3v3_30k9_47k_4050b,
+				.idx = ADC_TEMP_SENSOR_2_SOC },
+	[TEMP_SENSOR_3_CHARGER] = { .name = "Charger",
+				    .type = TEMP_SENSOR_TYPE_BOARD,
+				    .read = get_temp_3v3_30k9_47k_4050b,
+				    .idx = ADC_TEMP_SENSOR_3_CHARGER },
+	[TEMP_SENSOR_4_REGULATOR] = { .name = "Regulator",
+				      .type = TEMP_SENSOR_TYPE_BOARD,
+				      .read = get_temp_3v3_30k9_47k_4050b,
+				      .idx = ADC_TEMP_SENSOR_4_REGULATOR },
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 /*
- * TODO(b/195673113): Need to update for Alder Lake/redrix
- */
-/*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_DDR \
-	{ \
+#define THERMAL_DDR              \
+	{                        \
 		.temp_host = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
 		}, \
 		.temp_host_release = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
 		}, \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_ddr = THERMAL_DDR;
 
 /*
- * TODO(b/195673113): Need to update for Alder Lake/redrix
- *
  * Tiger Lake specifies 100 C as maximum TDP temperature.  THRMTRIP# occurs at
  * 130 C.  However, sensor is located next to SOC, so we need to use the lower
  * SOC temperature limit (85 C)
@@ -305,26 +329,23 @@ __maybe_unused static const struct ec_thermal_config thermal_ddr = THERMAL_DDR;
 /*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_CPU \
-	{ \
+#define THERMAL_CPU              \
+	{                        \
 		.temp_host = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
 		}, \
 		.temp_host_release = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
 		}, \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 
 /*
- * TODO(b/195673113): Need to update for Alder Lake/redrix
- */
-/*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_CHARGER \
-	{ \
+#define THERMAL_CHARGER          \
+	{                        \
 		.temp_host = { \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(85), \
@@ -337,13 +358,10 @@ __maybe_unused static const struct ec_thermal_config thermal_charger =
 	THERMAL_CHARGER;
 
 /*
- * TODO(b/195673113): Need to update for Alder Lake/redrix
- */
-/*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_REGULATOR \
-	{ \
+#define THERMAL_REGULATOR        \
+	{                        \
 		.temp_host = { \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(85), \

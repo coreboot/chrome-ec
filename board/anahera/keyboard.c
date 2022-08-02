@@ -45,7 +45,8 @@ static const struct ec_response_keybd_config keybd_wo_privacy_w_kblight = {
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
 
-static const struct ec_response_keybd_config keybd_wo_privacy_wo_kblight = {
+static const struct ec_response_keybd_config
+	keybd_wo_privacy_wo_kblight_old = {
 	.num_top_row_keys = 13,
 	.action_keys = {
 		TK_BACK,			/* T1 */
@@ -61,6 +62,27 @@ static const struct ec_response_keybd_config keybd_wo_privacy_wo_kblight = {
 		TK_VOL_MUTE,			/* T11 */
 		TK_VOL_DOWN,			/* T12 */
 		TK_VOL_UP,			/* T13 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+static const struct ec_response_keybd_config
+	keybd_wo_privacy_wo_kblight_new = {
+	.num_top_row_keys = 13,
+	.action_keys = {
+		TK_BACK,			/* T1 */
+		TK_REFRESH,			/* T2 */
+		TK_FULLSCREEN,			/* T3 */
+		TK_OVERVIEW,			/* T4 */
+		TK_SNAPSHOT,			/* T5 */
+		TK_BRIGHTNESS_DOWN,		/* T6 */
+		TK_BRIGHTNESS_UP,		/* T7 */
+		TK_PLAY_PAUSE,			/* T8 */
+		TK_MICMUTE,			/* T9 */
+		TK_VOL_MUTE,			/* T10 */
+		TK_VOL_DOWN,			/* T11 */
+		TK_VOL_UP,			/* T12 */
+		TK_MENU,			/* T13 */
 	},
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
@@ -116,8 +138,12 @@ board_vivaldi_keybd_config(void)
 	} else {
 		if (ec_cfg_has_kblight())
 			return &keybd_wo_privacy_w_kblight;
-		else
-			return &keybd_wo_privacy_wo_kblight;
+		else {
+			if (get_board_id() <= 3)
+				return &keybd_wo_privacy_wo_kblight_old;
+			else
+				return &keybd_wo_privacy_wo_kblight_new;
+		}
 	}
 }
 
@@ -128,13 +154,13 @@ board_vivaldi_keybd_config(void)
  * The connector has 24 pins total, and there is no pin 0.
  */
 const int keyboard_factory_scan_pins[][2] = {
-		{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
-		{0, 7}, {1, 4}, {1, 3}, {1, 6}, {1, 7},
-		{3, 1}, {2, 0}, {1, 5}, {2, 6}, {2, 7},
-		{2, 1}, {2, 4}, {2, 5}, {1, 2}, {2, 3},
-		{2, 2}, {3, 0}, {-1, -1}, {-1, -1}, {-1, -1},
+	{ -1, -1 }, { 0, 5 }, { 1, 1 },	  { 1, 0 },   { 0, 6 },
+	{ 0, 7 },   { 1, 4 }, { 1, 3 },	  { 1, 6 },   { 1, 7 },
+	{ 3, 1 },   { 2, 0 }, { 1, 5 },	  { 2, 6 },   { 2, 7 },
+	{ 2, 1 },   { 2, 4 }, { 2, 5 },	  { 1, 2 },   { 2, 3 },
+	{ 2, 2 },   { 3, 0 }, { -1, -1 }, { -1, -1 }, { -1, -1 },
 };
 
 const int keyboard_factory_scan_pins_used =
-			ARRAY_SIZE(keyboard_factory_scan_pins);
+	ARRAY_SIZE(keyboard_factory_scan_pins);
 #endif

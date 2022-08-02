@@ -19,8 +19,8 @@
 #include "util.h"
 
 #ifdef CONFIG_COMMON_RUNTIME
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 #else
 #define CPRINTS(format, args...)
 #define CPRINTF(format, args...)
@@ -35,21 +35,22 @@ static int enable_debug_prints;
 static atomic_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* Device is in low power mode. */
-#define USB_MUX_FLAG_IN_LPM		BIT(0)
+#define USB_MUX_FLAG_IN_LPM BIT(0)
 
 /* Device initialized at least once */
-#define USB_MUX_FLAG_INIT		BIT(1)
+#define USB_MUX_FLAG_INIT BIT(1)
 
 /* Coordinate mux accesses by-port among the tasks */
 static mutex_t mux_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /* Coordinate which task requires an ACK event */
 static task_id_t ack_task[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	[0 ... CONFIG_USB_PD_PORT_MAX_COUNT - 1] = TASK_ID_INVALID };
+	[0 ... CONFIG_USB_PD_PORT_MAX_COUNT - 1] = TASK_ID_INVALID
+};
 
-static void perform_mux_set(int port, mux_state_t mux_mode,
+static void perform_mux_set(int port, int index, mux_state_t mux_mode,
 			    enum usb_switch usb_mode, int polarity);
-static void perform_mux_hpd_update(int port, mux_state_t hpd_state);
+static void perform_mux_hpd_update(int port, int index, mux_state_t hpd_state);
 
 enum mux_config_type {
 	USB_MUX_INIT,
@@ -59,6 +60,9 @@ enum mux_config_type {
 	USB_MUX_CHIPSET_RESET,
 	USB_MUX_HPD_UPDATE,
 };
+
+/* Set all muxes for this board's port */
+#define USB_MUX_ALL_CHIPS 0xff
 
 /* Define a USB mux task ID for the purpose of linking */
 #ifndef HAS_TASK_USB_MUX
@@ -76,7 +80,7 @@ enum mux_config_type {
  * Depth must be a power of 2, which is normally enforced by the queue init
  * code, but must be manually enforced here.
  */
-#define MUX_QUEUE_DEPTH		4
+#define MUX_QUEUE_DEPTH 4
 BUILD_ASSERT(POWER_OF_TWO(MUX_QUEUE_DEPTH));
 
 /* Define in order to enable debug info about how long the queue takes */
@@ -84,9 +88,10 @@ BUILD_ASSERT(POWER_OF_TWO(MUX_QUEUE_DEPTH));
 
 struct mux_queue_entry {
 	enum mux_config_type type;
-	mux_state_t mux_mode;		/* For both HPD and mux set */
-	enum usb_switch usb_config;	/* Set only */
-	int polarity;			/* Set only */
+	int index; /* Index to set, or USB_MUX_ALL_CHIPS */
+	mux_state_t mux_mode; /* For both HPD and mux set */
+	enum usb_switch usb_config; /* Set only */
+	int polarity; /* Set only */
 #ifdef DEBUG_MUX_QUEUE_TIME
 	timestamp_t enqueued_time;
 #endif
@@ -104,10 +109,9 @@ struct mux_queue_entry {
  */
 static struct queue mux_queue[CONFIG_USB_PD_PORT_MAX_COUNT];
 __maybe_unused static struct queue_state
-				queue_states[CONFIG_USB_PD_PORT_MAX_COUNT];
+	queue_states[CONFIG_USB_PD_PORT_MAX_COUNT];
 __maybe_unused static struct mux_queue_entry
-				queue_buffers[CONFIG_USB_PD_PORT_MAX_COUNT]
-					     [MUX_QUEUE_DEPTH];
+	queue_buffers[CONFIG_USB_PD_PORT_MAX_COUNT][MUX_QUEUE_DEPTH];
 static mutex_t queue_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
 #else
 extern struct queue const mux_queue[];
@@ -132,10 +136,9 @@ static int init_mux_mutex(const struct device *dev)
 SYS_INIT(init_mux_mutex, POST_KERNEL, 50);
 #endif /* CONFIG_ZEPHYR */
 
-__maybe_unused static void mux_task_enqueue(int port, enum mux_config_type type,
-					    mux_state_t mux_mode,
-					    enum usb_switch usb_config,
-					    int polarity)
+__maybe_unused static void
+mux_task_enqueue(int port, int index, enum mux_config_type type,
+		 mux_state_t mux_mode, enum usb_switch usb_config, int polarity)
 {
 	struct mux_queue_entry new_entry;
 
@@ -143,6 +146,7 @@ __maybe_unused static void mux_task_enqueue(int port, enum mux_config_type type,
 		return;
 
 	new_entry.type = type;
+	new_entry.index = index;
 	new_entry.mux_mode = mux_mode;
 	new_entry.usb_config = usb_config;
 	new_entry.polarity = polarity;
@@ -171,7 +175,7 @@ static void init_queue_structs(void)
 		mux_queue[i].buffer_units = MUX_QUEUE_DEPTH;
 		mux_queue[i].buffer_units_mask = MUX_QUEUE_DEPTH - 1;
 		mux_queue[i].unit_bytes = sizeof(struct mux_queue_entry);
-		mux_queue[i].buffer = (uint8_t *) &queue_buffers[i][0];
+		mux_queue[i].buffer = (uint8_t *)&queue_buffers[i][0];
 	}
 }
 DECLARE_HOOK(HOOK_INIT, init_queue_structs, HOOK_PRIO_FIRST);
@@ -212,15 +216,17 @@ __maybe_unused void usb_mux_task(void *u)
 					port, time_since32(next.enqueued_time));
 #endif
 				if (next.type == USB_MUX_SET_MODE)
-					perform_mux_set(port, next.mux_mode,
+					perform_mux_set(port, next.index,
+							next.mux_mode,
 							next.usb_config,
 							next.polarity);
 				else if (next.type == USB_MUX_HPD_UPDATE)
-					perform_mux_hpd_update(port,
+					perform_mux_hpd_update(port, next.index,
 							       next.mux_mode);
 				else
 					CPRINTS("Error: Unknown mux task type:"
-						"%d", next.type);
+						"%d",
+						next.type);
 
 #ifdef DEBUG_MUX_QUEUE_TIME
 				CPRINTS("C%d: Completed mux set queued %d "
@@ -247,15 +253,14 @@ __maybe_unused void usb_mux_task(void *u)
 }
 
 /* Configure the MUX */
-static int configure_mux(int port,
-			 enum mux_config_type config,
+static int configure_mux(int port, int index, enum mux_config_type config,
 			 mux_state_t *mux_state)
 {
 	int rv = EC_SUCCESS;
 	const struct usb_mux *mux_ptr;
+	int chip = 0;
 
-	if (config == USB_MUX_SET_MODE ||
-	    config == USB_MUX_GET_MODE) {
+	if (config == USB_MUX_SET_MODE || config == USB_MUX_GET_MODE) {
 		if (mux_state == NULL)
 			return EC_ERROR_INVAL;
 
@@ -268,12 +273,14 @@ static int configure_mux(int port,
 	 * MUXes.  So when we change one, we traverse the whole list
 	 * to make sure they are all updated appropriately.
 	 */
-	for (mux_ptr = &usb_muxes[port];
-	     rv == EC_SUCCESS && mux_ptr != NULL;
-	     mux_ptr = mux_ptr->next_mux) {
+	for (mux_ptr = &usb_muxes[port]; rv == EC_SUCCESS && mux_ptr != NULL;
+	     mux_ptr = mux_ptr->next_mux, chip++) {
 		mux_state_t lcl_state;
 		const struct usb_mux_driver *drv = mux_ptr->driver;
 		bool ack_required = false;
+
+		if (index != USB_MUX_ALL_CHIPS && index != chip)
+			continue;
 
 		/* Action time!  Lock this mux */
 		mutex_lock(&mux_lock[port]);
@@ -321,6 +328,18 @@ static int configure_mux(int port,
 			if (mux_ptr->board_set)
 				rv = mux_ptr->board_set(mux_ptr, lcl_state);
 
+			/* Inform the AP its selected mux is set */
+			if (IS_ENABLED(CONFIG_USB_MUX_AP_CONTROL)) {
+				if (chip == 0)
+					pd_notify_event(
+						port,
+						PD_STATUS_EVENT_MUX_0_SET_DONE);
+				else if (chip == 1)
+					pd_notify_event(
+						port,
+						PD_STATUS_EVENT_MUX_1_SET_DONE);
+			}
+
 			break;
 
 		case USB_MUX_GET_MODE:
@@ -342,7 +361,6 @@ static int configure_mux(int port,
 			if (mux_ptr->hpd_update)
 				mux_ptr->hpd_update(mux_ptr, *mux_state,
 						    &ack_required);
-
 		}
 
 		/* Unlock before any host command waits */
@@ -359,10 +377,10 @@ static int configure_mux(int port,
 				assert(task_get_current() == TASK_ID_USB_MUX);
 			} else {
 #if defined(CONFIG_ZEPHYR) && defined(TEST_BUILD)
-				assert(port ==
-				       TASK_ID_TO_PD_PORT(task_get_current()) ||
+				assert(port == TASK_ID_TO_PD_PORT(
+						       task_get_current()) ||
 				       task_get_current() ==
-				       TASK_ID_TEST_RUNNER);
+					       TASK_ID_TEST_RUNNER);
 #else
 				assert(port ==
 				       TASK_ID_TO_PD_PORT(task_get_current()));
@@ -376,7 +394,7 @@ static int configure_mux(int port,
 			 * mux, but could be made configurable for other
 			 * purposes.
 			 */
-			task_wait_event_mask(PD_EVENT_AP_MUX_DONE, 100*MSEC);
+			task_wait_event_mask(PD_EVENT_AP_MUX_DONE, 100 * MSEC);
 			ack_task[port] = TASK_ID_INVALID;
 
 			usleep(12.5 * MSEC);
@@ -384,8 +402,7 @@ static int configure_mux(int port,
 	}
 
 	if (rv)
-		CPRINTS("mux config:%d, port:%d, rv:%d",
-			config, port, rv);
+		CPRINTS("mux config:%d, port:%d, rv:%d", config, port, rv);
 
 	return rv;
 }
@@ -400,7 +417,7 @@ static void enter_low_power_mode(int port)
 	atomic_or(&flags[port], USB_MUX_FLAG_IN_LPM);
 
 	/* Apply any low power customization if present */
-	configure_mux(port, USB_MUX_LOW_POWER, NULL);
+	configure_mux(port, USB_MUX_ALL_CHIPS, USB_MUX_LOW_POWER, NULL);
 }
 
 static int exit_low_power_mode(int port)
@@ -432,7 +449,7 @@ void usb_mux_init(int port)
 		return;
 	}
 
-	rv = configure_mux(port, USB_MUX_INIT, NULL);
+	rv = configure_mux(port, USB_MUX_ALL_CHIPS, USB_MUX_INIT, NULL);
 
 	if (rv == EC_SUCCESS)
 		atomic_or(&flags[port], USB_MUX_FLAG_INIT);
@@ -447,13 +464,13 @@ void usb_mux_init(int port)
 		atomic_clear_bits(&flags[port], USB_MUX_FLAG_IN_LPM);
 }
 
-static void perform_mux_set(int port, mux_state_t mux_mode,
+static void perform_mux_set(int port, int index, mux_state_t mux_mode,
 			    enum usb_switch usb_mode, int polarity)
 {
 	mux_state_t mux_state;
 	const int should_enter_low_power_mode =
 		(mux_mode == USB_PD_MUX_NONE &&
-		usb_mode == USB_SWITCH_DISCONNECT);
+		 usb_mode == USB_SWITCH_DISCONNECT);
 
 	/* Perform initialization if not initialized yet */
 	if (!(flags[port] & USB_MUX_FLAG_INIT))
@@ -475,17 +492,16 @@ static void perform_mux_set(int port, mux_state_t mux_mode,
 		return;
 
 	/* Configure superspeed lanes */
-	mux_state = ((mux_mode != USB_PD_MUX_NONE) && polarity)
-			? mux_mode | USB_PD_MUX_POLARITY_INVERTED
-			: mux_mode;
+	mux_state = ((mux_mode != USB_PD_MUX_NONE) && polarity) ?
+			    mux_mode | USB_PD_MUX_POLARITY_INVERTED :
+			    mux_mode;
 
-	if (configure_mux(port, USB_MUX_SET_MODE, &mux_state))
+	if (configure_mux(port, index, USB_MUX_SET_MODE, &mux_state))
 		return;
 
 	if (enable_debug_prints)
-		CPRINTS(
-		     "usb/dp mux: port(%d) typec_mux(%d) usb2(%d) polarity(%d)",
-		     port, mux_mode, usb_mode, polarity);
+		CPRINTS("usb/dp mux: port(%d) typec_mux(%d) usb2(%d) polarity(%d)",
+			port, mux_mode, usb_mode, polarity);
 
 	/*
 	 * If we are completely disconnecting the mux, then we should put it in
@@ -495,18 +511,33 @@ static void perform_mux_set(int port, mux_state_t mux_mode,
 		enter_low_power_mode(port);
 }
 
-void usb_mux_set(int port, mux_state_t mux_mode,
-		 enum usb_switch usb_mode, int polarity)
+void usb_mux_set(int port, mux_state_t mux_mode, enum usb_switch usb_mode,
+		 int polarity)
 {
 	if (port >= board_get_usb_pd_port_count())
 		return;
 
 	/* Block if we have no mux task, but otherwise queue it up and return */
 	if (IS_ENABLED(HAS_TASK_USB_MUX))
-		mux_task_enqueue(port, USB_MUX_SET_MODE, mux_mode,
+		mux_task_enqueue(port, USB_MUX_ALL_CHIPS, USB_MUX_SET_MODE,
+				 mux_mode, usb_mode, polarity);
+	else
+		perform_mux_set(port, USB_MUX_ALL_CHIPS, mux_mode, usb_mode,
+				polarity);
+}
+
+void usb_mux_set_single(int port, int index, mux_state_t mux_mode,
+			enum usb_switch usb_mode, int polarity)
+{
+	if (port >= board_get_usb_pd_port_count())
+		return;
+
+	/* Block if we have no mux task, but otherwise queue it up and return */
+	if (IS_ENABLED(HAS_TASK_USB_MUX))
+		mux_task_enqueue(port, index, USB_MUX_SET_MODE, mux_mode,
 				 usb_mode, polarity);
 	else
-		perform_mux_set(port,  mux_mode, usb_mode, polarity);
+		perform_mux_set(port, index, mux_mode, usb_mode, polarity);
 }
 
 bool usb_mux_set_completed(int port)
@@ -522,9 +553,9 @@ bool usb_mux_set_completed(int port)
 	mutex_lock(&queue_lock[port]);
 
 	for (queue_begin(&mux_queue[port], &it); it.ptr != NULL;
-					queue_next(&mux_queue[port], &it)) {
+	     queue_next(&mux_queue[port], &it)) {
 		const struct mux_queue_entry *check =
-					(struct mux_queue_entry *) it.ptr;
+			(struct mux_queue_entry *)it.ptr;
 
 		if (check->type == USB_MUX_SET_MODE) {
 			sets_pending = true;
@@ -551,7 +582,8 @@ static enum ec_error_list try_usb_mux_get(int port, mux_state_t *mux_state)
 		return EC_SUCCESS;
 	}
 
-	return configure_mux(port, USB_MUX_GET_MODE, mux_state);
+	return configure_mux(port, USB_MUX_ALL_CHIPS, USB_MUX_GET_MODE,
+			     mux_state);
 }
 
 mux_state_t usb_mux_get(int port)
@@ -579,7 +611,8 @@ void usb_mux_flip(int port)
 	if (exit_low_power_mode(port) != EC_SUCCESS)
 		return;
 
-	if (configure_mux(port, USB_MUX_GET_MODE, &mux_state))
+	if (configure_mux(port, USB_MUX_ALL_CHIPS, USB_MUX_GET_MODE,
+			  &mux_state))
 		return;
 
 	if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
@@ -587,10 +620,10 @@ void usb_mux_flip(int port)
 	else
 		mux_state |= USB_PD_MUX_POLARITY_INVERTED;
 
-	configure_mux(port, USB_MUX_SET_MODE, &mux_state);
+	configure_mux(port, USB_MUX_ALL_CHIPS, USB_MUX_SET_MODE, &mux_state);
 }
 
-static void perform_mux_hpd_update(int port, mux_state_t hpd_state)
+static void perform_mux_hpd_update(int port, int index, mux_state_t hpd_state)
 {
 	/* Perform initialization if not initialized yet */
 	if (!(flags[port] & USB_MUX_FLAG_INIT))
@@ -599,7 +632,7 @@ static void perform_mux_hpd_update(int port, mux_state_t hpd_state)
 	if (exit_low_power_mode(port) != EC_SUCCESS)
 		return;
 
-	configure_mux(port, USB_MUX_HPD_UPDATE, &hpd_state);
+	configure_mux(port, index, USB_MUX_HPD_UPDATE, &hpd_state);
 }
 
 void usb_mux_hpd_update(int port, mux_state_t hpd_state)
@@ -609,10 +642,10 @@ void usb_mux_hpd_update(int port, mux_state_t hpd_state)
 
 	/* Send to the mux task if present to maintain sequencing with sets */
 	if (IS_ENABLED(HAS_TASK_USB_MUX))
-		mux_task_enqueue(port, USB_MUX_HPD_UPDATE, hpd_state,
-				 0, 0);
+		mux_task_enqueue(port, USB_MUX_ALL_CHIPS, USB_MUX_HPD_UPDATE,
+				 hpd_state, 0, 0);
 	else
-		perform_mux_hpd_update(port, hpd_state);
+		perform_mux_hpd_update(port, USB_MUX_ALL_CHIPS, hpd_state);
 }
 
 int usb_mux_retimer_fw_update_port_info(void)
@@ -625,8 +658,8 @@ int usb_mux_retimer_fw_update_port_info(void)
 		mux_ptr = &usb_muxes[i];
 		while (mux_ptr) {
 			if (mux_ptr->driver &&
-				mux_ptr->driver->is_retimer_fw_update_capable &&
-				mux_ptr->driver->is_retimer_fw_update_capable())
+			    mux_ptr->driver->is_retimer_fw_update_capable &&
+			    mux_ptr->driver->is_retimer_fw_update_capable())
 				port_info |= BIT(i);
 			mux_ptr = mux_ptr->next_mux;
 		}
@@ -639,7 +672,8 @@ static void mux_chipset_reset(void)
 	int port;
 
 	for (port = 0; port < board_get_usb_pd_port_count(); ++port)
-		configure_mux(port, USB_MUX_CHIPSET_RESET, NULL);
+		configure_mux(port, USB_MUX_ALL_CHIPS, USB_MUX_CHIPSET_RESET,
+			      NULL);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESET, mux_chipset_reset, HOOK_PRIO_DEFAULT);
 
@@ -659,7 +693,7 @@ static void usb_mux_reset_in_g3(void)
 			if (mux_ptr->flags & USB_MUX_FLAG_RESETS_IN_G3) {
 				atomic_clear_bits(&flags[port],
 						  USB_MUX_FLAG_INIT |
-						  USB_MUX_FLAG_IN_LPM);
+							  USB_MUX_FLAG_IN_LPM);
 			}
 			mux_ptr = mux_ptr->next_mux;
 		}
@@ -670,7 +704,7 @@ DECLARE_HOOK(HOOK_CHIPSET_HARD_OFF, usb_mux_reset_in_g3, HOOK_PRIO_DEFAULT);
 #ifdef CONFIG_CMD_TYPEC
 static int command_typec(int argc, char **argv)
 {
-	const char * const mux_name[] = {"none", "usb", "dp", "dock"};
+	const char *const mux_name[] = { "none", "usb", "dp", "dock" };
 	char *e;
 	int port;
 	mux_state_t mux = USB_PD_MUX_NONE;
@@ -693,16 +727,16 @@ static int command_typec(int argc, char **argv)
 
 		mux_state = usb_mux_get(port);
 		ccprintf("Port %d: USB=%d DP=%d POLARITY=%s HPD_IRQ=%d "
-			"HPD_LVL=%d SAFE=%d TBT=%d USB4=%d\n", port,
-			!!(mux_state & USB_PD_MUX_USB_ENABLED),
-			!!(mux_state & USB_PD_MUX_DP_ENABLED),
-			mux_state & USB_PD_MUX_POLARITY_INVERTED ?
-				"INVERTED" : "NORMAL",
-			!!(mux_state & USB_PD_MUX_HPD_IRQ),
-			!!(mux_state & USB_PD_MUX_HPD_LVL),
-			!!(mux_state & USB_PD_MUX_SAFE_MODE),
-			!!(mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED),
-			!!(mux_state & USB_PD_MUX_USB4_ENABLED));
+			 "HPD_LVL=%d SAFE=%d TBT=%d USB4=%d\n",
+			 port, !!(mux_state & USB_PD_MUX_USB_ENABLED),
+			 !!(mux_state & USB_PD_MUX_DP_ENABLED),
+			 mux_state & USB_PD_MUX_POLARITY_INVERTED ? "INVERTED" :
+								    "NORMAL",
+			 !!(mux_state & USB_PD_MUX_HPD_IRQ),
+			 !!(mux_state & USB_PD_MUX_HPD_LVL),
+			 !!(mux_state & USB_PD_MUX_SAFE_MODE),
+			 !!(mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED),
+			 !!(mux_state & USB_PD_MUX_USB4_ENABLED));
 
 		return EC_SUCCESS;
 	}
@@ -710,14 +744,13 @@ static int command_typec(int argc, char **argv)
 	for (i = 0; i < ARRAY_SIZE(mux_name); i++)
 		if (!strcasecmp(argv[2], mux_name[i]))
 			mux = i;
-	usb_mux_set(port, mux, mux == USB_PD_MUX_NONE ?
-				      USB_SWITCH_DISCONNECT :
-				      USB_SWITCH_CONNECT,
-			  polarity_rm_dts(pd_get_polarity(port)));
+	usb_mux_set(port, mux,
+		    mux == USB_PD_MUX_NONE ? USB_SWITCH_DISCONNECT :
+					     USB_SWITCH_CONNECT,
+		    polarity_rm_dts(pd_get_polarity(port)));
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(typec, command_typec,
-			"[port|debug] [none|usb|dp|dock]",
+DECLARE_CONSOLE_COMMAND(typec, command_typec, "[port|debug] [none|usb|dp|dock]",
 			"Control type-C connector muxing");
 #endif
 
@@ -744,8 +777,7 @@ static enum ec_status hc_usb_pd_mux_info(struct host_cmd_handler_args *args)
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_USB_PD_MUX_INFO,
-		     hc_usb_pd_mux_info,
+DECLARE_HOST_COMMAND(EC_CMD_USB_PD_MUX_INFO, hc_usb_pd_mux_info,
 		     EC_VER_MASK(0));
 
 static enum ec_status hc_usb_pd_mux_ack(struct host_cmd_handler_args *args)
@@ -760,6 +792,4 @@ static enum ec_status hc_usb_pd_mux_ack(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_USB_PD_MUX_ACK,
-		     hc_usb_pd_mux_ack,
-		     EC_VER_MASK(0));
+DECLARE_HOST_COMMAND(EC_CMD_USB_PD_MUX_ACK, hc_usb_pd_mux_ack, EC_VER_MASK(0));

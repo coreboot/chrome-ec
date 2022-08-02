@@ -40,10 +40,10 @@
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
 
-#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
-#define CPRINTSCHIP(format, args...) cprints(CC_CHIPSET, format ## args)
+#define CPRINTSCHIP(format, args...) cprints(CC_CHIPSET, format##args)
 
 static void reset_nct38xx_port(int port);
 
@@ -53,7 +53,7 @@ const enum gpio_signal hibernate_wake_pins[] = {
 	GPIO_AC_PRESENT,
 	GPIO_POWER_BUTTON_L,
 };
-const int hibernate_wake_pins_used =  ARRAY_SIZE(hibernate_wake_pins);
+const int hibernate_wake_pins_used = ARRAY_SIZE(hibernate_wake_pins);
 
 /* Power Signal Input List */
 const struct power_signal_info power_signal_list[] = {
@@ -145,8 +145,6 @@ const struct i2c_port_t i2c_ports[] = {
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
-
-
 const struct charger_config_t chg_chips[] = {
 	{
 		.i2c_port = I2C_PORT_CHARGER,
@@ -235,25 +233,7 @@ const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
 
-/*
- * .init is not necessary here because it has nothing
- * to do. Primary mux will handle mux state so .get is
- * not needed as well. usb_mux.c can handle the situation
- * properly.
- */
-static int fsusb42umx_set_mux(const struct usb_mux*, mux_state_t, bool *);
-struct usb_mux_driver usbc0_sbu_mux_driver = {
-	.set = fsusb42umx_set_mux,
-};
-
-/*
- * Since FSUSB42UMX is not a i2c device, .i2c_port and
- * .i2c_addr_flags are not required here.
- */
-struct usb_mux usbc0_sbu_mux = {
-	.usb_port = USBC_PORT_C0,
-	.driver = &usbc0_sbu_mux_driver,
-};
+static int fsusb42umx_set_mux(const struct usb_mux *, mux_state_t);
 
 __overridable int board_c1_ps8818_mux_set(const struct usb_mux *me,
 					  mux_state_t mux_state)
@@ -293,7 +273,7 @@ struct usb_mux usb_muxes[] = {
 		.i2c_port = I2C_PORT_USB_MUX,
 		.i2c_addr_flags = AMD_FP6_C0_MUX_I2C_ADDR,
 		.driver = &amd_fp6_usb_mux_driver,
-		.next_mux = &usbc0_sbu_mux,
+		.board_set = &fsusb42umx_set_mux,
 	},
 	[USBC_PORT_C1] = {
 		.usb_port = USBC_PORT_C1,
@@ -376,14 +356,10 @@ BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 /*
  * USB C0 port SBU mux use standalone FSUSB42UMX
  * chip and it needs a board specific driver.
- * Overall, it will use chained mux framework.
+ * It is called through the C0 mux's board_set.
  */
-static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state,
-			      bool *ack_required)
+static int fsusb42umx_set_mux(const struct usb_mux *me, mux_state_t mux_state)
 {
-	/* This driver does not use host command ACKs */
-	*ack_required = false;
-
 	if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
 		ioex_set_level(IOEX_USB_C0_SBU_FLIP, 1);
 	else
@@ -411,8 +387,7 @@ DECLARE_HOOK(HOOK_INIT, setup_mux, HOOK_PRIO_INIT_I2C);
 
 int board_set_active_charge_port(int port)
 {
-	int is_valid_port = (port >= 0 &&
-			     port < CONFIG_USB_PD_PORT_MAX_COUNT);
+	int is_valid_port = (port >= 0 && port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 	int rv;
 
@@ -426,7 +401,7 @@ int board_set_active_charge_port(int port)
 			 * ahead and reset it so EN_SNK responds properly.
 			 */
 			if (nct38xx_get_boot_type(i) ==
-						NCT38XX_BOOT_DEAD_BATTERY) {
+			    NCT38XX_BOOT_DEAD_BATTERY) {
 				reset_nct38xx_port(i);
 				pd_set_error_recovery(i);
 			}
@@ -475,7 +450,7 @@ int board_set_active_charge_port(int port)
 				 * change because we'll brown out.
 				 */
 				if (nct38xx_get_boot_type(port) ==
-						NCT38XX_BOOT_DEAD_BATTERY) {
+				    NCT38XX_BOOT_DEAD_BATTERY) {
 					reset_nct38xx_port(i);
 					pd_set_error_recovery(i);
 				} else {
@@ -527,7 +502,9 @@ int board_is_i2c_port_powered(int port)
 	case I2C_PORT_THERMAL_AP:
 		/* SOC thermal i2c bus is unpowered in S0i3/S3/S5/Z1 */
 		return chipset_in_state(CHIPSET_STATE_ANY_OFF |
-					CHIPSET_STATE_ANY_SUSPEND) ? 0 : 1;
+					CHIPSET_STATE_ANY_SUSPEND) ?
+			       0 :
+			       1;
 	default:
 		return 1;
 	}
@@ -538,8 +515,7 @@ int board_is_i2c_port_powered(int port)
  * the attached NCT3807 to control a GPIO to indicate 1A5 or 3A0
  * current limits.
  */
-int board_aoz1380_set_vbus_source_current_limit(int port,
-						enum tcpc_rp_value rp)
+int board_aoz1380_set_vbus_source_current_limit(int port, enum tcpc_rp_value rp)
 {
 	int rv;
 
@@ -550,18 +526,18 @@ int board_aoz1380_set_vbus_source_current_limit(int port,
 	return rv;
 }
 
-void board_set_charge_limit(int port, int supplier, int charge_ma,
-			    int max_ma, int charge_mv)
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
 {
-	charge_set_input_current_limit(MAX(charge_ma,
-					   CONFIG_CHARGER_INPUT_CURRENT),
-				       charge_mv);
+	charge_set_input_current_limit(
+		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }
 
 void sbu_fault_interrupt(enum ioex_signal signal)
 {
 	int port = (signal == IOEX_USB_C0_SBU_FAULT_ODL) ? 0 : 1;
 
+	CPRINTSUSB("C%d: SBU fault", port);
 	pd_handle_overcurrent(port);
 }
 
@@ -592,10 +568,10 @@ void tcpc_alert_event(enum gpio_signal signal)
 static void reset_nct38xx_port(int port)
 {
 	int rv;
-	int saved_state[IOEX_COUNT] = {0};
+	int saved_state[IOEX_COUNT] = { 0 };
 	enum gpio_signal reset_gpio_l = (port == USBC_PORT_C0) ?
-						      GPIO_USB_C0_TCPC_RST_L :
-						      GPIO_USB_C1_TCPC_RST_L;
+						GPIO_USB_C0_TCPC_RST_L :
+						GPIO_USB_C1_TCPC_RST_L;
 
 	if (port < 0 || port > USBC_PORT_COUNT) {
 		CPRINTSUSB("%s invalid port %d", __func__, port);
@@ -678,11 +654,11 @@ void bc12_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_C0_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+		usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 		break;
 
 	case GPIO_USB_C1_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+		usb_charger_task_set_event(1, USB_CHG_EVENT_BC12);
 		break;
 
 	default:
@@ -865,8 +841,6 @@ DECLARE_DEFERRED(baseboard_a1_retimer_setup);
 
 static void baseboard_chipset_suspend(void)
 {
-	/* Disable display and keyboard backlights. */
-	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 1);
 	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, baseboard_chipset_suspend,
@@ -874,8 +848,6 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, baseboard_chipset_suspend,
 
 static void baseboard_chipset_resume(void)
 {
-	/* Enable display and keyboard backlights. */
-	gpio_set_level(GPIO_EC_DISABLE_DISP_BL, 0);
 	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 1);
 	/* Some retimers take several ms to be ready, so defer setup call */
 	hook_call_deferred(&baseboard_a1_retimer_setup_data, 20 * MSEC);
@@ -902,9 +874,9 @@ static void baseboard_set_en_pwr_pcore(void)
 	 * EN_PWR_S0_R.
 	 */
 	gpio_set_level(GPIO_EN_PWR_PCORE_S0_R,
-					gpio_get_level(GPIO_PG_LPDDR4X_S3_OD) &&
-					gpio_get_level(GPIO_PG_GROUPC_S0_OD) &&
-					gpio_get_level(GPIO_EN_PWR_S0_R));
+		       gpio_get_level(GPIO_PG_LPDDR4X_S3_OD) &&
+			       gpio_get_level(GPIO_PG_GROUPC_S0_OD) &&
+			       gpio_get_level(GPIO_EN_PWR_S0_R));
 }
 
 void baseboard_en_pwr_pcore_signal(enum gpio_signal signal)
@@ -916,19 +888,17 @@ static void baseboard_check_groupc_low(void)
 {
 	/* Warn if we see unexpected sequencing here */
 	if (!gpio_get_level(GPIO_EN_PWR_S0_R) &&
-					gpio_get_level(GPIO_PG_GROUPC_S0_OD))
+	    gpio_get_level(GPIO_PG_GROUPC_S0_OD))
 		CPRINTSCHIP("WARN: PG_GROUPC_S0_OD high while EN_PWR_S0_R low");
-
 }
 DECLARE_DEFERRED(baseboard_check_groupc_low);
 
 void baseboard_en_pwr_s0(enum gpio_signal signal)
 {
-
 	/* EC must AND signals SLP_S3_L and PG_PWR_S5 */
 	gpio_set_level(GPIO_EN_PWR_S0_R,
-					gpio_get_level(GPIO_SLP_S3_L) &&
-					gpio_get_level(GPIO_PG_PWR_S5));
+		       gpio_get_level(GPIO_SLP_S3_L) &&
+			       gpio_get_level(GPIO_PG_PWR_S5));
 
 	/*
 	 * If we set EN_PWR_S0_R low, then check PG_GROUPC_S0_OD went low as
@@ -944,3 +914,118 @@ void baseboard_en_pwr_s0(enum gpio_signal signal)
 	/* Now chain off to the normal power signal interrupt handler. */
 	power_signal_interrupt(signal);
 }
+
+#if defined(SECTION_IS_RW) && defined(CONFIG_POWER_SLEEP_FAILURE_DETECTION)
+
+/**
+ * S0ix Hang Recovery Fallback Routines.
+ *
+ * Only runs in RW to de-risk an unrecoverable boot loop in RO.
+ * power_board_s0ix_hang_detected is triggered by the common host_sleep S0ix
+ * hang detection. The default behavior is to send a wake event. Additional
+ * hang recovery fallback remedies are defined here.
+ * S3 sleep is not supported on guybrush, so not handled here.
+ */
+
+/* This timeout begins after CONFIG_SLEEP_TIMEOUT_MS */
+#define HARD_SLEEP_HANG_TIMEOUT 10000
+
+/* These counters are reset whenever there's a successful resume */
+static int soft_sleep_hang_count;
+static int hard_sleep_hang_count;
+
+/* Shutdown or reset on hard hang */
+static int shutdown_on_hard_hang;
+
+static void board_handle_hard_sleep_hang(void);
+DECLARE_DEFERRED(board_handle_hard_sleep_hang);
+
+static void stop_hard_hang_timer(void);
+
+__override void power_board_handle_sleep_hang(enum sleep_hang_type hang_type)
+{
+	soft_sleep_hang_count += 1;
+
+	/* Avoid race condition */
+	stop_hard_hang_timer();
+
+	if (hang_type == SLEEP_HANG_S0IX_SUSPEND)
+		ccprints("S0ix suspend sleep hang detected!");
+	else if (hang_type == SLEEP_HANG_S0IX_RESUME)
+		ccprints("S0ix resume sleep hang detected!");
+
+	ccprints("Consecutive sleep hang count: soft=%d hard=%d",
+		 soft_sleep_hang_count, hard_sleep_hang_count);
+
+	if (hard_sleep_hang_count == 0) {
+		/* Try an AP reset first */
+		shutdown_on_hard_hang = false;
+		ccprints("AP will be force reset in %dms if hang persists",
+			 HARD_SLEEP_HANG_TIMEOUT);
+	} else {
+		/* Avoid reboot loop that drains battery and just shutdown */
+		shutdown_on_hard_hang = true;
+		ccprints("Consecutive(%d) hard sleep hangs detected!",
+			 hard_sleep_hang_count);
+		ccprints("AP will be force shutdown in %dms if hang persists",
+			 HARD_SLEEP_HANG_TIMEOUT);
+	}
+
+	hook_call_deferred(&board_handle_hard_sleep_hang_data,
+			   HARD_SLEEP_HANG_TIMEOUT * MSEC);
+}
+
+/**
+ * Reboot or shutdown when hard sleep hang detected.
+ * This timer is stopped on suspend, resume, reset or shutdown events.
+ */
+static void board_handle_hard_sleep_hang(void)
+{
+	hard_sleep_hang_count += 1;
+	/* Avoid race condition */
+	stop_hard_hang_timer();
+
+	if (shutdown_on_hard_hang) {
+		ccprints("Very hard S0ix sleep hang detected!!! "
+			 "Shutting down AP now!");
+		chipset_force_shutdown(CHIPSET_SHUTDOWN_BOARD_CUSTOM);
+	} else {
+		ccprints("Hard S0ix sleep hang detected!! Resetting AP now!");
+		/* If AP reset does not break hang, force a shutdown */
+		shutdown_on_hard_hang = true;
+		ccprints("AP will be shutdown in %dms if hang persists",
+			 HARD_SLEEP_HANG_TIMEOUT);
+		hook_call_deferred(&board_handle_hard_sleep_hang_data,
+				   HARD_SLEEP_HANG_TIMEOUT * MSEC);
+		chipset_reset(CHIPSET_RESET_HANG_REBOOT);
+	}
+}
+
+/**
+ * Reset hang counters whenever a resume is successful
+ */
+static void reset_hang_counters(void)
+{
+	if (hard_sleep_hang_count || soft_sleep_hang_count)
+		ccprints("Successful S0ix resume after consecutive hangs: "
+			 "soft=%d hard=%d",
+			 soft_sleep_hang_count, hard_sleep_hang_count);
+	hard_sleep_hang_count = 0;
+	soft_sleep_hang_count = 0;
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, reset_hang_counters, HOOK_PRIO_DEFAULT);
+
+/**
+ * Hard hang detection timers are stopped on any suspend, resume, reset or
+ * shutdown event.
+ */
+static void stop_hard_hang_timer(void)
+{
+	hook_call_deferred(&board_handle_hard_sleep_hang_data, -1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, stop_hard_hang_timer, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, stop_hard_hang_timer, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESET, stop_hard_hang_timer, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, stop_hard_hang_timer, HOOK_PRIO_DEFAULT);
+
+#endif /* SECTION_IS_RW && CONFIG_POWER_SLEEP_FAILURE_DETECTION */

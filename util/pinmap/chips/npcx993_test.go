@@ -29,11 +29,9 @@ func TestMissing(t *testing.T) {
 	if n.Adc(none) != "" {
 		t.Errorf("Expected empty string, got %s for Adc()", n.Adc(none))
 	}
-	if n.Gpio(none) != "" {
-		t.Errorf("Expected empty string, got %s for Gpio()", n.Gpio(none))
-	}
-	if n.Pwm(none) != "" {
-		t.Errorf("Expected empty string, got %s for Pwm()", n.Pwm(none))
+	gc, gp := n.Gpio(none)
+	if gc != "" {
+		t.Errorf("Expected empty string, got %s %d for Gpio()", gc, gp)
 	}
 	if n.I2c(none) != "" {
 		t.Errorf("Expected empty string, got %s for I2c()", n.I2c(none))
@@ -47,18 +45,12 @@ func TestMulti(t *testing.T) {
 	if n.Adc(pin) != "10" {
 		t.Errorf("Expected \"10\", got %s for Adc()", n.Adc(pin))
 	}
-	if n.Gpio(pin) != "gpioe 0" {
-		t.Errorf("Expected \"gpioe 0\", got %s for Gpio()", n.Gpio(pin))
-	}
-	if n.Pwm(pin) != "" {
-		t.Errorf("Expected empty string, got %s for Pwm()", n.Pwm(pin))
+	gc, gp := n.Gpio(pin)
+	if gc != "gpioe" || gp != 0 {
+		t.Errorf("Expected \"gpioe 0\", got %s %d for Gpio()", gc, gp)
 	}
 	if n.I2c(pin) != "" {
 		t.Errorf("Expected empty string, got %s for I2c()", n.I2c(pin))
-	}
-	pin = "L9"
-	if n.Pwm(pin) != "pwm4 4" {
-		t.Errorf("Expected \"pwm4 4\", got %s for Pwm()", n.Pwm(pin))
 	}
 	pin = "F8"
 	if n.I2c(pin) != "i2c3_0" {

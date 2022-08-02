@@ -6,6 +6,7 @@
 / {
 	aliases {
 		gpio-wp = &gpio_ec_wp_odl;
+		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
 	};
 
 	named-gpios {
@@ -29,15 +30,12 @@
 		};
 		gpio_usb_c0_bc12_int_l: usb_c0_bc12_int_l {
 			gpios = <&gpio6 1 GPIO_INPUT_PULL_UP>;
-			enum-name = "GPIO_USB_C0_BC12_INT_L";
 		};
 		gpio_usb_c1_bc12_int_l: usb_c1_bc12_int_l {
 			gpios = <&gpio8 2 GPIO_INPUT_PULL_UP>;
-			enum-name = "GPIO_USB_C1_BC12_INT_L";
 		};
 		gpio_usb_a0_oc_odl: usb_a0_oc_odl {
 			gpios = <&gpiof 4 GPIO_INPUT_PULL_UP>;
-			enum-name = "GPIO_USB_A0_OC_ODL";
 		};
 		gpio_chg_acok_od: chg_acok_od {
 			gpios = <&gpiod 2 GPIO_INPUT>;
@@ -94,10 +92,9 @@
 		};
 		gpio_rtc_ec_wake_odl: rtc_ec_wake_odl {
 			gpios = <&gpio0 2 GPIO_INPUT>;
-			enum-name = "GPIO_EC_RST_ODL";
 		};
 		ec_entering_rw {
-			gpios = <&gpio7 2 GPIO_OUT_LOW>;
+			gpios = <&gpio7 2 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_ENTERING_RW";
 		};
 		ccd_mode_odl {
@@ -109,7 +106,7 @@
 			enum-name = "GPIO_BATT_PRES_ODL";
 		};
 		ec_gsc_packet_mode {
-			gpios = <&gpio8 3 GPIO_OUT_LOW>;
+			gpios = <&gpio8 3 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_PACKET_MODE_EN";
 		};
 		pmic_resin_l {
@@ -125,11 +122,11 @@
 			enum-name = "GPIO_EC_INT_L";
 		};
 		gpio_switchcap_on: switchcap_on {
-			gpios = <&gpiod 5 GPIO_OUT_LOW>;
+			gpios = <&gpiod 5 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_SWITCHCAP_ON";
 		};
 		gpio_en_pp5000_s5: en_pp5000_s5 {
-			gpios = <&gpio7 3 GPIO_OUT_HIGH>;
+			gpios = <&gpio7 3 GPIO_OUTPUT_HIGH>;
 			enum-name = "GPIO_EN_PP5000";
 		};
 		ec_bl_disable_l {
@@ -143,59 +140,55 @@
 		};
 		lid_accel_int_l {
 			gpios = <&gpioa 1 GPIO_INPUT>;
-			enum-name = "GPIO_LID_ACCEL_INT_L";
 		};
 		tp_int_gate {
-			gpios = <&gpio7 4 GPIO_OUT_LOW>;
+			gpios = <&gpio7 4 GPIO_OUTPUT_LOW>;
 		};
 		gpio_usb_c0_pd_rst_l: usb_c0_pd_rst_l {
-			gpios = <&gpiof 1 GPIO_OUT_HIGH>;
-			enum-name = "GPIO_USB_C0_PD_RST_L";
+			gpios = <&gpiof 1 GPIO_OUTPUT_HIGH>;
 		};
 		gpio_usb_c1_pd_rst_l: usb_c1_pd_rst_l {
-			gpios = <&gpioe 4 GPIO_OUT_HIGH>;
-			enum-name = "GPIO_USB_C1_PD_RST_L";
+			gpios = <&gpioe 4 GPIO_OUTPUT_HIGH>;
 		};
 		gpio_dp_mux_oe_l: dp_mux_oe_l {
 			gpios = <&gpiob 1 GPIO_ODR_HIGH>;
 		};
 		gpio_dp_mux_sel: dp_mux_sel {
-			gpios = <&gpio4 5 GPIO_OUT_LOW>;
-			enum-name = "GPIO_DP_MUX_SEL";
+			gpios = <&gpio4 5 GPIO_OUTPUT_LOW>;
 		};
 		gpio_dp_hot_plug_det_r: dp_hot_plug_det_r {
-			gpios = <&gpio9 5 GPIO_OUT_LOW>;
+			gpios = <&gpio9 5 GPIO_OUTPUT_LOW>;
 		};
 		gpio_en_usb_a_5v: en_usb_a_5v {
-			gpios = <&gpiof 0 GPIO_OUT_LOW>;
+			gpios = <&gpiof 0 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_EN_USB_A_5V";
 		};
 		usb_a_cdp_ilim_en_l {
-			gpios = <&gpio7 5 GPIO_OUT_HIGH>;
+			gpios = <&gpio7 5 GPIO_OUTPUT_HIGH>;
 		};
-		usb_c0_frs_en {
-			gpios = <&gpioc 5 GPIO_OUT_LOW>;
+		gpio_usb_c0_frs_en: usb_c0_frs_en {
+			gpios = <&gpioc 5 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_USB_C0_FRS_EN";
 		};
-		usb_c1_frs_en {
-			gpios = <&gpioc 1 GPIO_OUT_LOW>;
+		gpio_usb_c1_frs_en: usb_c1_frs_en {
+			gpios = <&gpioc 1 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_USB_C1_FRS_EN";
 		};
 		gpio_ec_chg_led_y_c0: ec_chg_led_y_c0 {
-			gpios = <&gpio6 0 GPIO_OUT_LOW>;
-			enum-name = "GPIO_EC_CHG_LED_Y_C0";
+			#led-pin-cells = <1>;
+			gpios = <&gpio6 0 GPIO_OUTPUT_LOW>;
 		};
 		gpio_ec_chg_led_w_c0: ec_chg_led_w_c0 {
-			gpios = <&gpioc 0 GPIO_OUT_LOW>;
-			enum-name = "GPIO_EC_CHG_LED_W_C0";
+			#led-pin-cells = <1>;
+			gpios = <&gpioc 0 GPIO_OUTPUT_LOW>;
 		};
 		gpio_ec_chg_led_y_c1: ec_chg_led_y_c1 {
-			gpios = <&gpioc 3 GPIO_OUT_LOW>;
-			enum-name = "GPIO_EC_CHG_LED_Y_C1";
+			#led-pin-cells = <1>;
+			gpios = <&gpioc 3 GPIO_OUTPUT_LOW>;
 		};
 		gpio_ec_chg_led_w_c1: ec_chg_led_w_c1 {
-			gpios = <&gpioc 4 GPIO_OUT_LOW>;
-			enum-name = "GPIO_EC_CHG_LED_W_C1";
+			#led-pin-cells = <1>;
+			gpios = <&gpioc 4 GPIO_OUTPUT_LOW>;
 		};
 		ap_ec_spi_mosi {
 			gpios = <&gpio4 6 GPIO_INPUT_PULL_DOWN>;
@@ -220,45 +213,34 @@
 		};
 		gpio_sku_id0: sku_id0 {
 			gpios = <&gpio6 7 GPIO_INPUT>;
-			enum-name = "GPIO_SKU_ID0";
 		};
 		gpio_sku_id1: sku_id1 {
 			gpios = <&gpio7 0 GPIO_INPUT>;
-			enum-name = "GPIO_SKU_ID1";
 		};
 		gpio_sku_id2: sku_id2 {
 			gpios = <&gpioe 1 GPIO_INPUT>;
-			enum-name = "GPIO_SKU_ID2";
 		};
 		gpio_switchcap_pg: src_vph_pwr_pg {
 			gpios = <&gpioe 2 GPIO_INPUT_PULL_DOWN>;
 			enum-name = "GPIO_SWITCHCAP_PG";
 		};
 		arm_x86 {
-			gpios = <&gpio6 6 GPIO_OUT_LOW>;
+			gpios = <&gpio6 6 GPIO_OUTPUT_LOW>;
 		};
-		ec_kso_02_inv {
-			gpios = <&gpio1 7 GPIO_OUT_LOW>;
-			enum-name = "GPIO_KBD_KSO2";
+		ec-i2c-sensor-scl {
+			gpios = <&gpiob 3 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
+		};
+		ec-i2c-sensor-sda {
+			gpios = <&gpiob 2 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
+		};
+		gpio_ec_kso_02_inv: ec_kso_02_inv {
+			gpios = <&gpio1 7 (GPIO_OUTPUT_LOW | GPIO_ACTIVE_LOW)>;
 		};
 	};
 
 	usba-port-enable-list {
 		compatible = "cros-ec,usba-port-enable-pins";
 		enable-pins = <&gpio_en_usb_a_5v>;
-	};
-
-	def-lvol-io-list {
-		compatible = "nuvoton,npcx-lvolctrl-def";
-		lvol-io-pads = <
-			&lvol_iob3 /* EC_I2C_SENSOR_SCL */
-			&lvol_iob2 /* EC_I2C_SENSOR_SDA */
-		>;
-	};
-
-	vsby-psl-in-list {
-		/* Use PSL_IN1/2/3/4 as detection pins from hibernate mode */
-		psl-in-pads = <&psl_in1 &psl_in2 &psl_in3 &psl_in4>;
 	};
 
 	sku {
@@ -315,22 +297,33 @@
 };
 
 /* Power switch logic input pads */
-&psl_in1 {
+&psl_in1_gpd2 {
 	/* ACOK_OD */
-	flag = <NPCX_PSL_RISING_EDGE>;
+	psl-in-mode = "edge";
+	psl-in-pol = "high-rising";
 };
 
-&psl_in2 {
+&psl_in2_gp00 {
 	/* EC_PWR_BTN_ODL */
-	flag = <NPCX_PSL_FALLING_EDGE>;
+	psl-in-mode = "edge";
+	psl-in-pol = "low-falling";
 };
 
-&psl_in3 {
+&psl_in3_gp01 {
 	/* LID_OPEN_EC */
-	flag = <NPCX_PSL_RISING_EDGE>;
+	psl-in-mode = "edge";
+	psl-in-pol = "high-rising";
 };
 
-&psl_in4 {
+&psl_in4_gp02 {
 	/* RTC_EC_WAKE_ODL */
-	flag = <NPCX_PSL_FALLING_EDGE>;
+	psl-in-mode = "edge";
+	psl-in-pol = "low-falling";
+};
+
+/* Power domain device controlled by PSL (Power Switch Logic) IO pads */
+&power_ctrl_psl {
+	status = "okay";
+	pinctrl-names = "sleep";
+	pinctrl-0 = <&psl_in1_gpd2 &psl_in2_gp00 &psl_in3_gp01 &psl_in4_gp02>;
 };

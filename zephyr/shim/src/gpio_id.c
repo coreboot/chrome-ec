@@ -3,20 +3,23 @@
  * found in the LICENSE file.
  */
 
-#include <devicetree.h>
+#include <zephyr/devicetree.h>
+
+#ifdef __REQUIRE_ZEPHYR_GPIOS__
+#undef __REQUIRE_ZEPHYR_GPIOS__
+#endif
 #include "gpio.h"
 #include "util.h"
 
-#define IS_BOARD_COMPATIBLE \
-	DT_NODE_HAS_COMPAT(DT_PATH(board), cros_ec_gpio_id)
-#define IS_SKU_COMPATIBLE \
-	DT_NODE_HAS_COMPAT(DT_PATH(sku), cros_ec_gpio_id)
+#define IS_BOARD_COMPATIBLE DT_NODE_HAS_COMPAT(DT_PATH(board), cros_ec_gpio_id)
+#define IS_SKU_COMPATIBLE DT_NODE_HAS_COMPAT(DT_PATH(sku), cros_ec_gpio_id)
 
 #define CONVERT_NUMERAL_SYSTEM_EVAL(system, bits, nbits) \
 	system##_from_bits(bits, nbits)
 #define CONVERT_NUMERAL_SYSTEM(system, bits, nbits) \
 	CONVERT_NUMERAL_SYSTEM_EVAL(system, bits, nbits)
 
+/* TODO: b/218904113: Convert to using Zephyr GPIOs */
 #define READ_PIN_FROM_PHANDLE(node_id, prop, idx) \
 	gpio_get_ternary(GPIO_SIGNAL(DT_PHANDLE_BY_IDX(node_id, prop, idx))),
 
@@ -27,11 +30,8 @@ __override uint32_t board_get_sku_id(void)
 	static uint32_t sku_id = (uint32_t)-1;
 
 	if (sku_id == (uint32_t)-1) {
-		int bits[] = {
-			DT_FOREACH_PROP_ELEM(DT_PATH(sku),
-					bits,
-					READ_PIN_FROM_PHANDLE)
-		};
+		int bits[] = { DT_FOREACH_PROP_ELEM(DT_PATH(sku), bits,
+						    READ_PIN_FROM_PHANDLE) };
 
 		if (sizeof(bits) == 0)
 			return (uint32_t)-1;
@@ -53,11 +53,8 @@ __override int board_get_version(void)
 	static int board_version = -1;
 
 	if (board_version == -1) {
-		int bits[] = {
-			DT_FOREACH_PROP_ELEM(DT_PATH(board),
-					bits,
-					READ_PIN_FROM_PHANDLE)
-		};
+		int bits[] = { DT_FOREACH_PROP_ELEM(DT_PATH(board), bits,
+						    READ_PIN_FROM_PHANDLE) };
 
 		if (sizeof(bits) == 0)
 			return -1;

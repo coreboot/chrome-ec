@@ -14,6 +14,7 @@
 #include "chipset.h"
 #include "common.h"
 #include "cros_board_info.h"
+#include "driver/charger/isl9241.h"
 #include "driver/retimer/pi3hdx1204.h"
 #include "driver/retimer/ps8811.h"
 #include "driver/retimer/ps8818.h"
@@ -44,16 +45,15 @@ static void hdmi_hpd_interrupt(enum gpio_signal signal);
  * that we don't have pin 0.
  */
 const int keyboard_factory_scan_pins[][2] = {
-	{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
-	{0, 7}, {-1, -1}, {-1, -1}, {1, 4}, {1, 3},
-	{-1, -1}, {1, 6}, {1, 7}, {3, 1}, {2, 0},
-	{1, 5}, {2, 6}, {2, 7}, {2, 1}, {2, 4},
-	{2, 5}, {1, 2}, {2, 3}, {2, 2}, {3, 0},
-	{-1, -1}, {0, 4}, {-1, -1}, {8, 2}, {-1, -1},
-	{-1, -1},
+	{ -1, -1 }, { 0, 5 },	{ 1, 1 }, { 1, 0 },   { 0, 6 },	  { 0, 7 },
+	{ -1, -1 }, { -1, -1 }, { 1, 4 }, { 1, 3 },   { -1, -1 }, { 1, 6 },
+	{ 1, 7 },   { 3, 1 },	{ 2, 0 }, { 1, 5 },   { 2, 6 },	  { 2, 7 },
+	{ 2, 1 },   { 2, 4 },	{ 2, 5 }, { 1, 2 },   { 2, 3 },	  { 2, 2 },
+	{ 3, 0 },   { -1, -1 }, { 0, 4 }, { -1, -1 }, { 8, 2 },	  { -1, -1 },
+	{ -1, -1 },
 };
 const int keyboard_factory_scan_pins_used =
-		ARRAY_SIZE(keyboard_factory_scan_pins);
+	ARRAY_SIZE(keyboard_factory_scan_pins);
 
 __override enum ec_error_list
 board_a1_ps8811_retimer_init(const struct usb_mux *me)
@@ -61,57 +61,47 @@ board_a1_ps8811_retimer_init(const struct usb_mux *me)
 	return EC_SUCCESS;
 }
 
-/*
- * PS8818 set mux board tuning.
- * Adds in board specific gain and DP lane count configuration
- * TODO(b/179036200): Adjust PS8818 tuning for guybrush reference
- */
 __override int board_c1_ps8818_mux_set(const struct usb_mux *me,
-				    mux_state_t mux_state)
+				       mux_state_t mux_state)
 {
 	int rv = EC_SUCCESS;
 
 	/* USB specific config */
 	if (mux_state & USB_PD_MUX_USB_ENABLED) {
 		/* Boost the USB gain */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX1EQ_10G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_APTX1EQ_10G_LEVEL,
+					      PS8818_EQ_LEVEL_UP_MASK,
+					      PS8818_EQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
 
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX2EQ_10G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_APTX2EQ_10G_LEVEL,
+					      PS8818_EQ_LEVEL_UP_MASK,
+					      PS8818_EQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
 
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX1EQ_5G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_APTX1EQ_5G_LEVEL,
+					      PS8818_EQ_LEVEL_UP_MASK,
+					      PS8818_EQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
 
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX2EQ_5G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_APTX2EQ_5G_LEVEL,
+					      PS8818_EQ_LEVEL_UP_MASK,
+					      PS8818_EQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
 
 		/* Set the RX input termination */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_RX_PHY,
-					PS8818_RX_INPUT_TERM_MASK,
-					PS8818_RX_INPUT_TERM_112_OHM);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_RX_PHY,
+					      PS8818_RX_INPUT_TERM_MASK,
+					      PS8818_RX_INPUT_TERM_112_OHM);
 		if (rv)
 			return rv;
 	}
@@ -119,11 +109,10 @@ __override int board_c1_ps8818_mux_set(const struct usb_mux *me,
 	/* DP specific config */
 	if (mux_state & USB_PD_MUX_DP_ENABLED) {
 		/* Boost the DP gain */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_DPEQ_LEVEL,
-					PS8818_DPEQ_LEVEL_UP_MASK,
-					PS8818_DPEQ_LEVEL_UP_19DB);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_DPEQ_LEVEL,
+					      PS8818_DPEQ_LEVEL_UP_MASK,
+					      PS8818_DPEQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
 
@@ -149,8 +138,7 @@ static void board_chipset_startup(void)
 	if (get_board_version() > 1)
 		pct2075_init();
 }
-DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup,
-	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
 
 int board_get_soc_temp_k(int idx, int *temp_k)
 {
@@ -295,8 +283,8 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 	},
 	[TEMP_SENSOR_5V_REGULATOR] = {
 		.temp_host = {
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(54),
-			[EC_TEMP_THRESH_HALT] = C_TO_K(57),
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(55),
+			[EC_TEMP_THRESH_HALT] = C_TO_K(58),
 		},
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(47),
@@ -337,22 +325,20 @@ static int check_hdmi_hpd_status(void)
 static void board_chipset_resume(void)
 {
 	ioex_set_level(IOEX_USB_A1_PD_R_L, 1);
-	ioex_set_level(IOEX_HDMI_DATA_EN, 1);
 	ioex_set_level(IOEX_EN_PWR_HDMI, 1);
+	ioex_set_level(IOEX_HDMI_DATA_EN, 1);
 	msleep(PI3HDX1204_POWER_ON_DELAY_MS);
-	pi3hdx1204_enable(I2C_PORT_TCPC1,
-		PI3HDX1204_I2C_ADDR_FLAGS,
-		check_hdmi_hpd_status());
+	pi3hdx1204_enable(I2C_PORT_TCPC1, PI3HDX1204_I2C_ADDR_FLAGS,
+			  check_hdmi_hpd_status());
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
 
 /* Called on AP suspend */
 static void board_chipset_suspend(void)
 {
-	pi3hdx1204_enable(I2C_PORT_TCPC1,
-		PI3HDX1204_I2C_ADDR_FLAGS, 0);
-	ioex_set_level(IOEX_EN_PWR_HDMI, 0);
+	pi3hdx1204_enable(I2C_PORT_TCPC1, PI3HDX1204_I2C_ADDR_FLAGS, 0);
 	ioex_set_level(IOEX_HDMI_DATA_EN, 0);
+	ioex_set_level(IOEX_EN_PWR_HDMI, 0);
 	ioex_set_level(IOEX_USB_A1_PD_R_L, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
@@ -360,7 +346,8 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 /*
  * With privacy screen, with keyboard backlight
  */
-static const struct ec_response_keybd_config keybd_w_privacy_w_kblight = {
+static const struct ec_response_keybd_config
+	keybd_w_privacy_w_kblight = {
 	.num_top_row_keys = 13,
 	.action_keys = {
 		TK_BACK,			/* T1 */
@@ -383,7 +370,8 @@ static const struct ec_response_keybd_config keybd_w_privacy_w_kblight = {
 /*
  * Without privacy screen, with keyboard backlight
  */
-static const struct ec_response_keybd_config keybd_wo_privacy_w_kblight = {
+static const struct ec_response_keybd_config
+	keybd_wo_privacy_w_kblight = {
 	.num_top_row_keys = 13,
 	.action_keys = {
 		TK_BACK,			/* T1 */
@@ -406,7 +394,8 @@ static const struct ec_response_keybd_config keybd_wo_privacy_w_kblight = {
 /*
  * With privacy screen, without keyboard backlight
  */
-static const struct ec_response_keybd_config keybd_w_privacy_wo_kblight = {
+static const struct ec_response_keybd_config
+	keybd_w_privacy_wo_kblight = {
 	.num_top_row_keys = 13,
 	.action_keys = {
 		TK_BACK,			/* T1 */
@@ -429,7 +418,8 @@ static const struct ec_response_keybd_config keybd_w_privacy_wo_kblight = {
 /*
  * Without privacy screen, without keyboard backlight
  */
-static const struct ec_response_keybd_config keybd_wo_privacy_wo_kblight = {
+static const struct ec_response_keybd_config
+	keybd_wo_privacy_wo_kblight_V0 = {
 	.num_top_row_keys = 13,
 	.action_keys = {
 		TK_BACK,			/* T1 */
@@ -449,6 +439,27 @@ static const struct ec_response_keybd_config keybd_wo_privacy_wo_kblight = {
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
 
+static const struct ec_response_keybd_config
+	keybd_wo_privacy_wo_kblight_V1 = {
+	.num_top_row_keys = 13,
+	.action_keys = {
+		TK_BACK,			/* T1 */
+		TK_REFRESH,			/* T2 */
+		TK_FULLSCREEN,			/* T3 */
+		TK_OVERVIEW,			/* T4 */
+		TK_SNAPSHOT,			/* T5 */
+		TK_BRIGHTNESS_DOWN,		/* T6 */
+		TK_BRIGHTNESS_UP,		/* T7 */
+		TK_PLAY_PAUSE,			/* T8 */
+		TK_MICMUTE,			/* T9 */
+		TK_VOL_MUTE,			/* T10 */
+		TK_VOL_DOWN,			/* T11 */
+		TK_VOL_UP,			/* T12 */
+		TK_MENU,			/* T13 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
 __override const struct ec_response_keybd_config *
 board_vivaldi_keybd_config(void)
 {
@@ -458,8 +469,12 @@ board_vivaldi_keybd_config(void)
 		return &keybd_wo_privacy_w_kblight;
 	else if (board_has_privacy_panel() && !board_has_kblight())
 		return &keybd_w_privacy_wo_kblight;
-	else
-		return &keybd_wo_privacy_wo_kblight;
+	else {
+		if (get_board_version() <= 3)
+			return &keybd_wo_privacy_wo_kblight_V0;
+		else
+			return &keybd_wo_privacy_wo_kblight_V1;
+	}
 }
 
 const struct pi3hdx1204_tuning pi3hdx1204_tuning = {
@@ -474,10 +489,9 @@ static void hdmi_hpd_handler(void)
 	int hpd = check_hdmi_hpd_status();
 
 	ccprints("HDMI HPD %d", hpd);
-	pi3hdx1204_enable(I2C_PORT_TCPC1,
-			  PI3HDX1204_I2C_ADDR_FLAGS,
-			  chipset_in_or_transitioning_to_state(CHIPSET_STATE_ON)
-			  && hpd);
+	pi3hdx1204_enable(
+		I2C_PORT_TCPC1, PI3HDX1204_I2C_ADDR_FLAGS,
+		chipset_in_or_transitioning_to_state(CHIPSET_STATE_ON) && hpd);
 }
 DECLARE_DEFERRED(hdmi_hpd_handler);
 
@@ -503,3 +517,14 @@ void board_set_current_limit(void)
 }
 DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, board_set_current_limit,
 	     HOOK_PRIO_INIT_EXTPOWER);
+
+/* Set the DCPROCHOT base on battery over discharging current 5.888A */
+static void set_dc_prochot(void)
+{
+	/*
+	 * Only bits 13:8 are usable for this register, any other bits will be
+	 * truncated.  Valid values are 256 mA to 16128 mA at 256 mA intervals.
+	 */
+	isl9241_set_dc_prochot(CHARGER_SOLO, 5888);
+}
+DECLARE_HOOK(HOOK_INIT, set_dc_prochot, HOOK_PRIO_DEFAULT);

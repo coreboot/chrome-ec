@@ -14,14 +14,14 @@ import (
 	"pinmap/readers/csv"
 )
 
-const chipName = "MyCHIP"
+const column = "B"
 
 func TestName(t *testing.T) {
 	var r csv.CSVReader
 	if r.Name() != "csv" {
 		t.Errorf("expected %s, got %s", "csv", r.Name())
 	}
-	pins, err := r.Read(chipName, filepath.Join("testdata", "data.csv"))
+	pins, err := r.Read(column, filepath.Join("testdata", "data.csv"))
 	if err != nil {
 		t.Fatalf("data.csv: %v", err)
 	}
@@ -38,15 +38,10 @@ func TestName(t *testing.T) {
 			&pm.Pin{pm.OutputODL, "F6", "EC_GPIO_3", ""},
 			&pm.Pin{pm.InputPU, "K10", "EC_GPIO_4", ""},
 		},
-		Pwm: []*pm.Pin{
-			&pm.Pin{pm.PWM, "C3", "EC_PWM_1", "FAN_1"},
-			&pm.Pin{pm.PWM_INVERT, "J9", "EC_PWM_2", "LED_1"},
-		},
 	}
 	check(t, "ADc", exp.Adc, pins.Adc)
 	check(t, "I2c", exp.I2c, pins.I2c)
 	check(t, "Gpio", exp.Gpio, pins.Gpio)
-	check(t, "Pwm", exp.Pwm, pins.Pwm)
 }
 
 func check(t *testing.T, name string, exp, got []*pm.Pin) {

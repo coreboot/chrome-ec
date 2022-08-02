@@ -3,11 +3,14 @@
  * found in the LICENSE file.
  */
 
-#include <device.h>
-#include <init.h>
-#include <kernel.h>
-#include <logging/log.h>
+#include <zephyr/device.h>
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
+#ifdef __REQUIRE_ZEPHYR_GPIOS__
+#undef __REQUIRE_ZEPHYR_GPIOS__
+#endif
 #include "gpio.h"
 #include "gpio/gpio.h"
 #include "gpio/gpio_int.h"
@@ -42,24 +45,6 @@ BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(cros_ec_gpio_interrupts) == 1,
 #define DT_IRQ_NODE DT_COMPAT_GET_ANY_STATUS_OKAY(cros_ec_gpio_interrupts)
 
 /*
- * Unique enum name for the interrupt.
- */
-#define INT_ENUM(id) DT_CAT(INT_ENUM_, id)
-
-/*
- * Create an internal enum list of the interrupts
- */
-#define INT_ENUM_WITH_COMMA(id) INT_ENUM(id),
-enum {
-#if DT_HAS_COMPAT_STATUS_OKAY(cros_ec_gpio_interrupts)
-	DT_FOREACH_CHILD(DT_IRQ_NODE, INT_ENUM_WITH_COMMA)
-#endif
-		INT_ENUM_COUNT
-};
-
-#undef INT_ENUM_WITH_COMMA
-
-/*
  * Declare all the external handlers.
  */
 
@@ -76,7 +61,7 @@ DT_FOREACH_CHILD(DT_IRQ_NODE, INT_HANDLER_DECLARE)
  * Create an array of callbacks. This is separate from the
  * configuration so that the writable data is in BSS.
  */
-struct gpio_callback int_cb_data[INT_ENUM_COUNT];
+struct gpio_callback int_cb_data[GPIO_INT_COUNT];
 
 /*
  * Create an instance of a gpio_int_config structure from a DTS node
@@ -118,7 +103,7 @@ static const struct gpio_int_config gpio_int_data[] = {
 
 #define INT_CONFIG_PTR_DECLARE(id)                                   \
 	const struct gpio_int_config *const GPIO_INT_FROM_NODE(id) = \
-		&gpio_int_data[INT_ENUM(id)];
+		&gpio_int_data[GPIO_INT_ENUM(id)];
 
 #if DT_HAS_COMPAT_STATUS_OKAY(cros_ec_gpio_interrupts)
 
@@ -127,6 +112,21 @@ DT_FOREACH_CHILD(DT_IRQ_NODE, INT_CONFIG_PTR_DECLARE)
 #endif
 
 #undef INT_CONFIG_PTR_DECLARE
+
+/*
+ * Mapping of GPIO signal to interrupt configuration block.
+ */
+static const struct gpio_int_config *
+signal_to_interrupt(enum gpio_signal signal)
+{
+#if DT_HAS_COMPAT_STATUS_OKAY(cros_ec_gpio_interrupts)
+	for (int i = 0; i < ARRAY_SIZE(gpio_int_data); i++) {
+		if (signal == gpio_int_data[i].signal)
+			return &gpio_int_data[i];
+	}
+#endif
+	return NULL;
+}
 
 #if DT_HAS_COMPAT_STATUS_OKAY(cros_ec_gpio_interrupts)
 /*
@@ -172,30 +172,11 @@ int gpio_enable_dt_interrupt(const struct gpio_int_config *conf)
 	flags = (conf->flags | GPIO_INT_ENABLE) & ~GPIO_INT_DISABLE;
 	return gpio_pin_interrupt_configure(conf->port, conf->pin, flags);
 }
-#endif
 
-/*
- * Disable the interrupt by setting the GPIO_INT_DISABLE flag.
- */
-int gpio_disable_dt_interrupt(const struct gpio_int_config *conf)
+const struct gpio_int_config *
+gpio_interrupt_get_config(enum gpio_interrupts intr)
 {
-	return gpio_pin_interrupt_configure(conf->port, conf->pin,
-					    GPIO_INT_DISABLE);
-}
-
-/*
- * Mapping of GPIO signal to interrupt configuration block.
- */
-static const struct gpio_int_config *
-signal_to_interrupt(enum gpio_signal signal)
-{
-#if DT_HAS_COMPAT_STATUS_OKAY(cros_ec_gpio_interrupts)
-	for (int i = 0; i < ARRAY_SIZE(gpio_int_data); i++) {
-		if (signal == gpio_int_data[i].signal)
-			return &gpio_int_data[i];
-	}
-#endif
-	return NULL;
+	return &gpio_int_data[intr];
 }
 
 /*
@@ -209,6 +190,17 @@ int gpio_enable_interrupt(enum gpio_signal signal)
 		return -1;
 
 	return gpio_enable_dt_interrupt(ic);
+}
+
+#endif
+
+/*
+ * Disable the interrupt by setting the GPIO_INT_DISABLE flag.
+ */
+int gpio_disable_dt_interrupt(const struct gpio_int_config *conf)
+{
+	return gpio_pin_interrupt_configure(conf->port, conf->pin,
+					    GPIO_INT_DISABLE);
 }
 
 int gpio_disable_interrupt(enum gpio_signal signal)

@@ -117,8 +117,8 @@ void board_base_reset(void);
  * @param curr Pointer to struct charge_state_data
  * @return Action to take.
  */
-enum critical_shutdown board_critical_shutdown_check(
-		struct charge_state_data *curr);
+enum critical_shutdown
+board_critical_shutdown_check(struct charge_state_data *curr);
 
 /**
  * Callback to set battery level for shutdown
@@ -210,5 +210,24 @@ enum problem_type {
 void charge_problem(enum problem_type p, int v);
 
 struct charge_state_data *charge_get_status(void);
+
+enum ec_charge_control_mode get_chg_ctrl_mode(void);
+
+__test_only void reset_prev_disp_charge(void);
+
+/**
+ * Whether or not the charging progress was shown. Note, calling this function
+ * will reset the value to false.
+ *
+ * @return Whether or not the charging progress was printed to the console
+ */
+__test_only bool charging_progress_displayed(void);
+
+/**
+ * Callback for boards to request charger to enable bypass mode on/off.
+ *
+ * @return True for requesting bypass on. False for requesting bypass off.
+ */
+int board_should_charger_bypass(void);
 
 #endif /* __CROS_EC_CHARGE_STATE_V2_H */

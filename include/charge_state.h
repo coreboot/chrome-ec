@@ -14,14 +14,14 @@
 #define PRECHARGE_TIMEOUT CONFIG_BATTERY_PRECHARGE_TIMEOUT
 
 /* Power state task polling periods in usec */
-#define CHARGE_POLL_PERIOD_VERY_LONG   MINUTE
-#define CHARGE_POLL_PERIOD_LONG        (MSEC * 500)
-#define CHARGE_POLL_PERIOD_CHARGE      (MSEC * 250)
-#define CHARGE_POLL_PERIOD_SHORT       (MSEC * 100)
-#define CHARGE_MIN_SLEEP_USEC          (MSEC * 50)
+#define CHARGE_POLL_PERIOD_VERY_LONG MINUTE
+#define CHARGE_POLL_PERIOD_LONG (MSEC * 500)
+#define CHARGE_POLL_PERIOD_CHARGE (MSEC * 250)
+#define CHARGE_POLL_PERIOD_SHORT (MSEC * 100)
+#define CHARGE_MIN_SLEEP_USEC (MSEC * 50)
 /* If a board hasn't provided a max sleep, use 1 minute as default */
 #ifndef CHARGE_MAX_SLEEP_USEC
-#define CHARGE_MAX_SLEEP_USEC          MINUTE
+#define CHARGE_MAX_SLEEP_USEC MINUTE
 #endif
 
 /* Power states */
@@ -61,20 +61,13 @@ enum charge_state {
 /* Debugging constants, in the same order as enum charge_state. This string
  * table was moved here to sync with enum above.
  */
-#define CHARGE_STATE_NAME_TABLE { \
-		"unchange",	\
-		"init",		\
-		"reinit",	\
-		"idle0",	\
-		"idle",		\
-		"discharge",	\
-		"discharge_full",	\
-		"charge",	\
-		"charge_near_full",      \
-		"error"		\
+#define CHARGE_STATE_NAME_TABLE                                             \
+	{                                                                   \
+		"unchange", "init", "reinit", "idle0", "idle", "discharge", \
+			"discharge_full", "charge", "charge_near_full",     \
+			"error"                                             \
 	}
-	/* End of CHARGE_STATE_NAME_TABLE macro */
-
+/* End of CHARGE_STATE_NAME_TABLE macro */
 
 /**
  * Return current charge state.
@@ -96,17 +89,15 @@ int charge_keep_power_off(void);
  */
 uint32_t charge_get_flags(void);
 
-#if defined(CONFIG_CHARGER)
 /**
  * Return current battery charge percentage.
  */
 int charge_get_percent(void);
-#elif defined(CONFIG_BATTERY)
+
 /**
  * Return current battery charge if not using charge manager sub-system.
  */
 int board_get_battery_soc(void);
-#endif
 
 /**
  * Return current display charge in 10ths of a percent (e.g. 1000 = 100.0%)
@@ -161,8 +152,7 @@ int charge_get_battery_temp(int idx, int *temp_ptr);
  */
 const struct batt_params *charger_current_battery_params(void);
 
-
 /* Config Charger */
 #include "charge_state_v2.h"
 
-#endif	/* __CROS_EC_CHARGE_STATE_H */
+#endif /* __CROS_EC_CHARGE_STATE_H */

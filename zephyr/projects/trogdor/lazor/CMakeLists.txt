@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.13.1)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(lazor)
 
-zephyr_library_include_directories(include)
+cros_ec_library_include_directories(include)
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC
   "src/power.c"
@@ -21,6 +21,3 @@ zephyr_library_sources(
 # Board specific implementation
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C
   "src/i2c.c")
-
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
-  "src/led.c")

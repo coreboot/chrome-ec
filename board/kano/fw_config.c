@@ -9,7 +9,7 @@
 #include "cros_board_info.h"
 #include "fw_config.h"
 
-#define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ##args)
 
 static union kano_cbi_fw_config fw_config;
 BUILD_ASSERT(sizeof(fw_config) == sizeof(uint32_t));
@@ -20,6 +20,7 @@ BUILD_ASSERT(sizeof(fw_config) == sizeof(uint32_t));
  */
 static const union kano_cbi_fw_config fw_config_defaults = {
 	.kb_bl = KEYBOARD_BACKLIGHT_ENABLED,
+	.thermal_solution = THERMAL_SOLUTION_15W,
 };
 
 /****************************************************************************
@@ -52,4 +53,9 @@ union kano_cbi_fw_config get_fw_config(void)
 bool ec_cfg_has_kblight(void)
 {
 	return (fw_config.kb_bl == KEYBOARD_BACKLIGHT_ENABLED);
+}
+
+enum ec_cfg_thermal_solution_type ec_cfg_thermal_solution(void)
+{
+	return fw_config.thermal_solution;
 }

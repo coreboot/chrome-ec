@@ -3,10 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include <device.h>
-#include <drivers/bbram.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/bbram.h>
 #include <drivers/cros_system.h>
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 
 #include "common.h"
 #include "console.h"
@@ -14,10 +14,10 @@
 #include "system.h"
 #include "watchdog.h"
 
-#define BBRAM_REGION_PD0	DT_PATH(named_bbram_regions, pd0)
-#define BBRAM_REGION_PD1	DT_PATH(named_bbram_regions, pd1)
-#define BBRAM_REGION_PD2	DT_PATH(named_bbram_regions, pd2)
-#define BBRAM_REGION_TRY_SLOT	DT_PATH(named_bbram_regions, try_slot)
+#define BBRAM_REGION_PD0 DT_PATH(named_bbram_regions, pd0)
+#define BBRAM_REGION_PD1 DT_PATH(named_bbram_regions, pd1)
+#define BBRAM_REGION_PD2 DT_PATH(named_bbram_regions, pd2)
+#define BBRAM_REGION_TRY_SLOT DT_PATH(named_bbram_regions, try_slot)
 
 #define GET_BBRAM_OFFSET(node) \
 	DT_PROP(DT_PATH(named_bbram_regions, node), offset)
@@ -172,9 +172,8 @@ static int command_idle_stats(int argc, char **argv)
 	ccprintf("Total time on:                       %.6llds\n", ts.val);
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(idlestats, command_idle_stats,
-		"",
-		"Print last idle stats");
+DECLARE_CONSOLE_COMMAND(idlestats, command_idle_stats, "",
+			"Print last idle stats");
 #endif
 
 const char *system_get_chip_vendor(void)
@@ -369,6 +368,7 @@ static int system_preinitialize(const struct device *unused)
 			arch_nop();
 	}
 #endif
+	system_common_pre_init();
 	return 0;
 }
 

@@ -36,12 +36,12 @@ void dpm_mode_exit_complete(int port)
 }
 
 void dpm_vdm_acked(int port, enum tcpci_msg_type type, int vdo_count,
-		uint32_t *vdm)
+		   uint32_t *vdm)
 {
 }
 
 void dpm_vdm_naked(int port, enum tcpci_msg_type type, uint16_t svid,
-		uint8_t vdm_cmd)
+		   uint8_t vdm_cmd)
 {
 }
 
@@ -61,6 +61,10 @@ void dpm_add_non_pd_sink(int port)
 {
 }
 
+void dpm_evaluate_request_rdo(int port, uint32_t rdo)
+{
+}
+
 void dpm_remove_sink(int port)
 {
 }
@@ -73,4 +77,13 @@ int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
 {
 	*src_pdo = pd_src_pdo;
 	return pd_src_pdo_cnt;
+}
+
+int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len)
+{
+	return EC_SUCCESS;
+}
+
+void dpm_handle_alert(int port, uint32_t ado)
+{
 }

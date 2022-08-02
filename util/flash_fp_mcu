@@ -430,19 +430,7 @@ flash_fp_mcu_stm32() {
   fi
 
   # Go back to normal mode
-  gpio out "${gpio_nrst}"
-  gpio 0   "${gpio_boot0}" "${gpio_nrst}"
-  gpio 1   "${gpio_nrst}"
-
-  # Give up GPIO control, unless we need to keep these driving as
-  # outputs because they're not open-drain signals.
-  # TODO(b/179839337): Make this the default and properly support
-  # open-drain outputs on other platforms.
-  if [[ "${PLATFORM_BASE_NAME}" != "strongbad" ]] &&
-     [[ "${PLATFORM_BASE_NAME}" != "herobrine" ]]; then
-    gpio in       "${gpio_boot0}" "${gpio_nrst}"
-  fi
-  gpio unexport "${gpio_boot0}" "${gpio_nrst}"
+  gpio 0   "${gpio_boot0}"
 
   # Dartmonkey's RO has a flashprotect logic issue that forces reboot loops
   # when SW-WP is enabled and HW-WP is disabled. It is avoided if a POR is
@@ -458,7 +446,24 @@ flash_fp_mcu_stm32() {
     gpio 1      "${gpio_pwren}"
     # Power enable line is externally pulled down, so leave as output-high.
     gpio unexport "${gpio_pwren}"
+  else
+    echo "Reset the FPMCU."
+    gpio out	"${gpio_nrst}"
+    gpio 0	"${gpio_nrst}"
+    # Make sure that we keep nRST line low long enough.
+    sleep 0.01
+    gpio 1	"${gpio_nrst}"
   fi
+
+  # Give up GPIO control, unless we need to keep these driving as
+  # outputs because they're not open-drain signals.
+  # TODO(b/179839337): Make this the default and properly support
+  # open-drain outputs on other platforms.
+  if [[ "${PLATFORM_BASE_NAME}" != "strongbad" ]] &&
+     [[ "${PLATFORM_BASE_NAME}" != "herobrine" ]]; then
+    gpio in       "${gpio_boot0}" "${gpio_nrst}"
+  fi
+  gpio unexport "${gpio_boot0}" "${gpio_nrst}"
 
   # Put back cros_fp driver if transport is SPI
   if [[ "${transport}" != "UART" ]]; then
@@ -493,13 +498,25 @@ config_hatch() {
   # for pin name to number mapping.
   # Examine `cat /sys/kernel/debug/pinctrl/INT34BB:00/gpio-ranges` on a hatch
   # device to determine gpio number from pin number.
-  readonly GPIO_CHIP="gpiochip200"
-  # FPMCU RST_ODL is on GPP_A12 = 200 + 12 = 212
-  readonly GPIO_NRST=212
-  # FPMCU BOOT0 is on GPP_A22 = 200 + 22 = 222
-  readonly GPIO_BOOT0=222
-  # FP_PWR_EN is on GPP_C11 = 456 + (192 - 181) = 456 + 11 = 467
-  readonly GPIO_PWREN=467
+ 
+  local gpiochip="gpiochip712"
+  # Support kernel version 4.x, 5.4 and 5.10 during transition to 5.15+
+  match_kernel_regex "^((4\..)|(5\.4\.)|(5\.10\.))" && gpiochip="gpiochip200"
+  readonly GPIO_CHIP="${gpiochip}"
+  local offset=0
+  # Support kernel version 4.x, 5.4 and 5.10 during transition to 5.15+
+  # v4.4 has GPIOs that are offset by -512
+  match_kernel_regex "^((4\..)|(5\.4\.)|(5\.10\.))" && offset=512
+  
+  # FPMCU RST_ODL is on GPP_A12 = 712 + 12 = 724
+  local gpionrst=724
+  readonly GPIO_NRST=$(( gpionrst - offset ))
+  # FPMCU BOOT0 is on GPP_A22 = 712 + 22 = 734
+  local gpioboot=734
+  readonly GPIO_BOOT0=$(( gpioboot - offset ))
+  # FP_PWR_EN is on GPP_C11 = 968 + (192 - 181) = 968 + 11 = 979
+  local gpiopwren=979
+  readonly GPIO_PWREN=$(( gpiopwren - offset ))
 }
 
 config_herobrine() {
@@ -540,10 +557,6 @@ config_nami() {
   readonly GPIO_BOOT0=437
   # FP_PWR_EN is on GPP_B11 = 360 + 35 = 395
   readonly GPIO_PWREN=395
-}
-
-config_nami-kernelnext() {
-  config_nami
 }
 
 config_nocturne() {
@@ -590,9 +603,14 @@ config_strongbad() {
   readonly GPIO_NRST=$((${gpiobase} + $(gpiofind FP_RST_L|cut -f2 -d" ")))
   # FPMCU BOOT0 is $(gpiofind FPMCU_BOOT0) is gpiochip0 10
   readonly GPIO_BOOT0=$((${gpiobase} + $(gpiofind FPMCU_BOOT0|cut -f2 -d" ")))
-  # TODO(b/179839337): Hardware currently doesn't support PWREN, but the
-  # next revision will. Add a comment here about the power enable gpio.
-  readonly GPIO_PWREN=-1
+
+  # EN FP RAILS is $(gpiofind EN_FP_RAILS) is gpiochip0 74 (if available)
+  local en_fp_rails
+  if en_fp_rails=$(gpiofind EN_FP_RAILS); then
+    readonly GPIO_PWREN=$((${gpiobase} + $(echo $en_fp_rails|cut -f2 -d" ")))
+  else
+    readonly GPIO_PWREN=-1
+  fi
 }
 
 config_volteer() {
@@ -605,15 +623,26 @@ config_volteer() {
   # volteer device to determine gpio number from pin number.
   # For example: GPP_C23 is UART2_CTS which can be queried from EDS
   # the pin number is 194. From the gpio-ranges, the gpio value is
-  # 408 + (194-171) = 431
+  # 920 + (194-171) = 943
 
-  readonly GPIO_CHIP="gpiochip152"
-  # FPMCU RST_ODL is on GPP_C23 = 408 + (194 - 171) = 431
-  readonly GPIO_NRST=431
-  # FPMCU BOOT0 is on GPP_C22 = 408 + (193 - 171) = 430
-  readonly GPIO_BOOT0=430
-  # FP_PWR_EN is on GPP_A21 = 216 + (63 - 42) = 237
-  readonly GPIO_PWREN=237
+  local gpiochip="gpiochip664"
+  # Support kernel version 4.x, 5.4, 5.10 during transition to 5.15+
+  match_kernel_regex "^((4\..)|(5\.4\.)|(5\.10\..))" && gpiochip="gpiochip152"
+  readonly GPIO_CHIP="${gpiochip}"
+  local offset=0
+  # Support kernel version 4.x, 5.4, 5.10 during transition to 5.15+
+  # v4.4 has GPIOs that are offset by -512
+  match_kernel_regex "^((4\..)|(5\.4\.)|(5\.10\.))" && offset=512
+
+  # FPMCU RST_ODL is on GPP_C23 = 920 + (194 - 171) = 943
+  local gpionrst=943
+  readonly GPIO_NRST=$(( gpionrst - offset ))
+  # FPMCU BOOT0 is on GPP_C22 = 920 + (193 - 171) = 942
+  local gpioboot=942
+  readonly GPIO_BOOT0=$(( gpioboot - offset ))
+  # FP_PWR_EN is on GPP_A21 = 728 + (63 - 42) = 749
+  local gpiopwren=749
+  readonly GPIO_PWREN=$(( gpiopwren - offset ))
 }
 
 config_brya() {
@@ -626,15 +655,27 @@ config_brya() {
   # brya device to determine gpio number from pin number.
   # For example: GPP_D1 is ISH_GP_1 which can be queried from EDS
   # the pin number is 100 from the pinctrl-tigerlake.c.
-  # From the gpio-ranges, the gpio value is 312 + (100-99) = 313
+  # From the gpio-ranges, the gpio value is 824 + (100-99) = 825
 
-  readonly GPIO_CHIP="gpiochip152"
-  # FPMCU RST_ODL is on GPP_D1 = 312 + (100 - 99) = 313
-  readonly GPIO_NRST=313
-  # FPMCU BOOT0 is on GPP_D0 = 312 + (99 - 99) = 312
-  readonly GPIO_BOOT0=312
-  # FP_PWR_EN is on GPP_D2 = 312 + (101 - 99) = 314
-  readonly GPIO_PWREN=314
+  local gpiochip="gpiochip664"
+  # Support kernel version 5.10 during transition to 5.15+
+  match_kernel_regex "^5\.10\." && gpiochip="gpiochip152"
+  readonly GPIO_CHIP="${gpiochip}"
+
+  local offset=0
+  # Support kernel version 5.10 during transition to 5.15+
+  # v5.10 has GPIOs that are offset by -512
+  match_kernel_regex "^5\.10\." && offset=512
+
+  # FPMCU RST_ODL is on GPP_D1 = 824 + (100 - 99) = 825
+  local gpionrst=825
+  readonly GPIO_NRST=$(( gpionrst - offset ))
+  # FPMCU BOOT0 is on GPP_D0 = 824 + (99 - 99) = 824
+  local gpioboot=824
+  readonly GPIO_BOOT0=$(( gpioboot - offset ))
+  # FP_PWR_EN is on GPP_D2 = 824 + (101 - 99) = 826
+  local gpiopwren=826
+  readonly GPIO_PWREN=$(( gpiopwren - offset ))
 }
 
 config_brask() {
@@ -651,9 +692,8 @@ config_zork() {
   readonly GPIO_NRST=267
   # FPMCU BOOT0 is on AGPIO 69 = 256 + 69 = 325
   readonly GPIO_BOOT0=325
-  # FPMCU PWR_EN is on AGPIO 32 = 256 + 32 = 288, but should not be
-  # necessary for flashing. Set invalid value.
-  readonly GPIO_PWREN=-1
+  # FPMCU PWR_EN is on AGPIO 32 = 256 + 32 = 288
+  readonly GPIO_PWREN=288
 }
 
 config_guybrush() {
@@ -666,9 +706,22 @@ config_guybrush() {
   readonly GPIO_NRST=267
   # FPMCU BOOT0 is on AGPIO 144 = 256 + 144 = 400
   readonly GPIO_BOOT0=400
-  # FPMCU PWR_EN is on AGPIO 32 = 256 + 32 = 288, but should not be
-  # necessary for flashing. Set invalid value.
-  readonly GPIO_PWREN=-1
+  # FPMCU PWR_EN is on AGPIO 3 = 256 + 3 = 259
+  readonly GPIO_PWREN=259
+}
+
+config_skyrim() {
+  readonly TRANSPORT="UART"
+
+  readonly DEVICE="/dev/ttyS1"
+
+  readonly GPIO_CHIP="gpiochip768"
+  # FPMCU RST_ODL is on AGPIO 12 = 768 + 12 = 780
+  readonly GPIO_NRST=780
+  # FPMCU BOOT0 is on AGPIO 130 = 768 + 130 = 898
+  readonly GPIO_BOOT0=898
+  # FPMCU PWR_EN is on AGPIO 4 = 768 + 4 = 772
+  readonly GPIO_PWREN=772
 }
 
 main() {

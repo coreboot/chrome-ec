@@ -3,16 +3,14 @@
  * found in the LICENSE file.
  */
 
-#include <arch/arm/aarch32/cortex_m/cmsis.h>
+#include <zephyr/arch/arm/aarch32/cortex_m/cmsis.h>
 #include <drivers/cros_system.h>
-#include <drivers/gpio.h>
-#include <drivers/watchdog.h>
-#include <logging/log.h>
+#include <zephyr/drivers/watchdog.h>
+#include <zephyr/logging/log.h>
 #include <soc.h>
 #include <soc/microchip_xec/reg_def_cros.h>
-#include <sys/util.h>
+#include <zephyr/sys/util.h>
 
-#include "gpio.h"
 #include "system.h"
 #include "system_chip.h"
 
@@ -40,7 +38,7 @@ struct cros_system_xec_data {
 #define HAL_WDOG_INST(dev) (struct wdt_regs *)(DRV_CONFIG(dev)->base_wdog)
 
 /* Get saved reset flag address in battery-backed ram */
-#define BBRAM_SAVED_RESET_FLAG_ADDR                         \
+#define BBRAM_SAVED_RESET_FLAG_ADDR                     \
 	(DT_REG_ADDR(DT_INST(0, microchip_xec_bbram)) + \
 	 DT_PROP(DT_PATH(named_bbram_regions, saved_reset_flags), offset))
 
@@ -48,8 +46,8 @@ struct cros_system_xec_data {
 static int system_xec_watchdog_stop(void)
 {
 	if (IS_ENABLED(CONFIG_WATCHDOG)) {
-		const struct device *wdt_dev = DEVICE_DT_GET(
-				DT_NODELABEL(wdog));
+		const struct device *wdt_dev =
+			DEVICE_DT_GET(DT_NODELABEL(wdog));
 		if (!device_is_ready(wdt_dev)) {
 			LOG_ERR("Error: device %s is not ready", wdt_dev->name);
 			return -ENODEV;
@@ -132,8 +130,8 @@ noreturn static int cros_system_xec_soc_reset(const struct device *dev)
 	/* return 0; */
 }
 
-static int cros_system_xec_hibernate(const struct device *dev,
-				     uint32_t seconds, uint32_t microseconds)
+static int cros_system_xec_hibernate(const struct device *dev, uint32_t seconds,
+				     uint32_t microseconds)
 {
 	/* Disable interrupt first */
 	interrupt_disable_all();

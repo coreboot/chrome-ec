@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-image: jbettis/ubuntu-29sep21
+image: sjg20/ubuntu-25feb22c
 
 # You can update that image using this repo:
 #   https://gitlab.com/zephyr-ec/gitlab-ci-runner/-/tree/main
@@ -43,7 +43,7 @@ before_script:
   - test -d "${MODULES_DIR}/cryptoc" || git clone --depth 1 -b main https://chromium.googlesource.com/chromiumos/third_party/cryptoc "${MODULES_DIR}/cryptoc"
   - ln -s "$(pwd)" "${MODULES_DIR}/ec"
   - python3 -V  # Print out python version for debugging
-  - python3 -m pip install zephyr/zmake --user
+  - python3 -m pip install 'zephyr/zmake[tests]' --user
   - python3 -m pip install pyyaml packaging
   - export BUILD_DIR=build
   - export PATH="$PATH:$HOME/.local/bin"
@@ -71,8 +71,8 @@ seed_cache:
   needs: ["seed_cache"]
   script:
     - zmake --zephyr-base "${ZEPHYR_BASE}"
-      --modules-dir "${MODULES_DIR}" -l DEBUG configure -b
-      -B "${BUILD_DIR}/${PROJECT}" -t ${TOOLCHAIN:-zephyr}
+      --modules-dir "${MODULES_DIR}" -l DEBUG build
+      -B "${BUILD_DIR}" -t ${TOOLCHAIN:-zephyr}
       "${PROJECT}"
     - for b in "${BUILD_DIR}/${PROJECT}"/build-* ; do
       bdir=$(basename ${b}) ;
@@ -92,13 +92,15 @@ seed_cache:
 # Builds the project with coverage enabled, removes the non-ec files.
 # Then merges with the tests, excludes all files not used by this project,
 # and generates a report.
+# NOTE: If you change the lcov -r command below, also edit the one in
+# merged_coverage
 .coverage_template: &coverage_template
   stage: test
   needs: ["merged_coverage", "zephyr_coverage", "twister_coverage"]
   script:
     - zmake --zephyr-base "${ZEPHYR_BASE}"
-      --modules-dir "${MODULES_DIR}" -l DEBUG configure -b --coverage
-      -B "${BUILD_DIR}/${PROJECT}" -t ${TOOLCHAIN:-zephyr}
+      --modules-dir "${MODULES_DIR}" -l DEBUG build --coverage
+      -B "${BUILD_DIR}" -t ${TOOLCHAIN:-zephyr}
       "${PROJECT}"
     - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/${PROJECT}/output/merged_twister.info" -a "${BUILD_DIR}/${PROJECT}/output/zephyr.info" -a "${BUILD_DIR}/zephyr_codecov/fixed.info"
     - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/${PROJECT}/output/merged_twister_no_ec.info" -e "${BUILD_DIR}/${PROJECT}/output/merged_twister.info" "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
@@ -114,10 +116,24 @@ seed_cache:
       -a "${BUILD_DIR}/${PROJECT}/output/zephyr.info" -a build/merged.info
     - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/${PROJECT}/output/no_zephyr.info"
       -r "${BUILD_DIR}/${PROJECT}/output/zephyr.info" "${ZEPHYR_BASE}/**"
-      "${MODULES_DIR}/*" "${EC_DIR}/zephyr/drivers/*" '/usr/include/x86_64-linux-gnu/*'
+      "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
+      "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
+      "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
+      "${EC_DIR}/zephyr/projects/**" "/usr/include/x86_64-linux-gnu/**"
+      "${EC_DIR}/build/*/build-*/zephyr/*/generated/**" "${EC_DIR}/test/**"
+      "${EC_DIR}/zephyr/shim/chip/npcx/npcx_monitor/**"
+      "${EC_DIR}/zephyr/emul/**" "${EC_DIR}/zephyr/test/**"
+      "**/testsuite/**" "**/subsys/emul/**"
     - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/${PROJECT}/output/merged_no_zephyr.info"
-      -r "${BUILD_DIR}/${PROJECT}/output/merged.info" "${ZEPHYR_BASE}/**"
-      "${MODULES_DIR}/*" "${EC_DIR}/zephyr/drivers/*" '/usr/include/x86_64-linux-gnu/*'
+      -r "${BUILD_DIR}/${PROJECT}/output/merged.info"
+      "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
+      "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
+      "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
+      "${EC_DIR}/zephyr/projects/**" "/usr/include/x86_64-linux-gnu/**"
+      "${EC_DIR}/build/*/build-*/zephyr/*/generated/**" "${EC_DIR}/test/**"
+      "${EC_DIR}/zephyr/shim/chip/npcx/npcx_monitor/**"
+      "${EC_DIR}/zephyr/emul/**" "${EC_DIR}/zephyr/test/**"
+      "**/testsuite/**" "**/subsys/emul/**"
     - grep "SF:" "${BUILD_DIR}/${PROJECT}/output/no_zephyr.info" | sort -u |
       sed -e 's|^SF:||' | xargs lcov --rc lcov_branch_coverage=1
       -o "${BUILD_DIR}/${PROJECT}/output/filtered_no_zephyr.info"
@@ -135,14 +151,14 @@ seed_cache:
     when: always
   coverage: '/lines\.*: \d+\.\d+%/'
 
-herobrine_npcx9:
+herobrine:
   variables:
-    PROJECT: "herobrine_npcx9"
+    PROJECT: "herobrine"
   <<: *build_template
 
-herobrine_npcx9_coverage:
+herobrine_coverage:
   variables:
-    PROJECT: "herobrine_npcx9"
+    PROJECT: "herobrine"
   <<: *coverage_template
 
 it8xxx2_evb:
@@ -175,12 +191,6 @@ lazor:
     PROJECT: "lazor"
   <<: *build_template
 
-native_posix:
-  variables:
-    PROJECT: "posix-ec"
-    TOOLCHAIN: "host"
-  <<: *build_template
-
 npcx7_evb:
   variables:
     PROJECT: "npcx7"
@@ -200,11 +210,6 @@ skyrim_coverage:
   variables:
     PROJECT: "skyrim"
   <<: *coverage_template
-
-volteer:
-  variables:
-    PROJECT: "volteer"
-  <<: *build_template
 
 ec_coverage:
   stage: test
@@ -226,26 +231,66 @@ zephyr_coverage:
   needs: ["seed_cache"]
   script:
     - zmake --zephyr-base "${ZEPHYR_BASE}"
-      --modules-dir "${MODULES_DIR}" -l DEBUG coverage
-      "${BUILD_DIR}/zcoverage"
+      --modules-dir "${MODULES_DIR}" -l DEBUG test
+      --coverage --host-tests-only
   artifacts:
     paths:
-      - build/zcoverage/coverage_rpt/*
-      - build/zcoverage/*.info
+      - build/zephyr/all_tests.info
     expire_in: 1 week
   coverage: '/lines\.*: \d+\.\d+%/'
 
+zephyr_boards_coverage:
+  stage: build
+  needs: ["seed_cache"]
+  script:
+    - zmake --zephyr-base "${ZEPHYR_BASE}"
+      --modules-dir "${MODULES_DIR}" -l DEBUG build
+      --coverage --boards-only --delete-intermediates
+  artifacts:
+    paths:
+      - build/zephyr/all_builds.info
+    expire_in: 1 week
+  coverage: '/lines\.*: \d+\.\d+%/'
+
+# NOTE: If you change the lcov -r command below, also edit the one in
+# .coverage_template
 merged_coverage:
   stage: test
-  needs: ["ec_coverage", "zephyr_coverage"]
+  needs: ["ec_coverage", "zephyr_coverage", "zephyr_boards_coverage"]
   script:
-    - lcov --rc lcov_branch_coverage=1 -o build/merged.info -a build/coverage/lcov.info -a build/zcoverage/lcov.info
-    - lcov --rc lcov_branch_coverage=1 -o build/merged_no_zephyr.info -r build/merged.info
+    - lcov --rc lcov_branch_coverage=1 -o build/merged.info
+      -a build/coverage/lcov.info -a build/zephyr/all_tests.info
+    - lcov --rc lcov_branch_coverage=1 -o build/merged_no_zephyr.info
+      -r build/merged.info
       "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
       "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
       "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
-      "${EC_DIR}/zephyr/projects/**"
-      '/usr/include/x86_64-linux-gnu/**'
+      "${EC_DIR}/zephyr/projects/**" "/usr/include/x86_64-linux-gnu/**"
+      "${EC_DIR}/build/*/build-*/zephyr/*/generated/**" "${EC_DIR}/test/**"
+      "${EC_DIR}/zephyr/shim/chip/npcx/npcx_monitor/**"
+      "${EC_DIR}/zephyr/emul/**" "${EC_DIR}/zephyr/test/**"
+      "**/testsuite/**" "**/subsys/emul/**"
+    - lcov --rc lcov_branch_coverage=1 -o "build/all_builds_merged.info"
+      -a "build/zephyr/all_builds.info" -a build/merged.info
+    - lcov --rc lcov_branch_coverage=1 -o "build/all_builds_no_zephyr.info"
+      -r "build/all_builds_merged.info" "${ZEPHYR_BASE}/**"
+      "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
+      "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
+      "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
+      "${EC_DIR}/zephyr/projects/**" "/usr/include/x86_64-linux-gnu/**"
+      "${EC_DIR}/build/*/build-*/zephyr/*/generated/**" "${EC_DIR}/test/**"
+      "${EC_DIR}/zephyr/shim/chip/npcx/npcx_monitor/**"
+      "${EC_DIR}/zephyr/emul/**" "${EC_DIR}/zephyr/test/**"
+      "**/testsuite/**" "**/subsys/emul/**"
+    - grep "SF:" "build/zephyr/all_builds.info" | sort -u |
+      sed -e 's|^SF:||' | xargs lcov --rc lcov_branch_coverage=1
+      -o "build/all_builds_filtered.info"
+      -e "build/all_builds_no_zephyr.info"
+    - /usr/bin/genhtml --branch-coverage -q
+      -o "build/all_builds_filtered_rpt"
+      -t "All boards coverage w/o zephyr"
+      -p ${EC_DIR}
+      -s "build/all_builds_filtered.info"
   artifacts:
     paths:
       - build/*.info
@@ -258,7 +303,7 @@ testall:
   needs: ["seed_cache"]
   script:
     - zmake --zephyr-base "${ZEPHYR_BASE}"
-      --modules-dir "${MODULES_DIR}" -l DEBUG testall
+      --modules-dir "${MODULES_DIR}" -l DEBUG test --host-tests-only
 
 twister_coverage:
   stage: test
@@ -286,3 +331,17 @@ twister_coverage:
       - build/zephyr_codecov/fixed.info
     expire_in: 1 week
   coverage: '/lines\.*: \d+\.\d+%/'
+
+zmake_coverage:
+  stage: test
+  needs: ["seed_cache"]
+  script:
+    - cd zephyr/zmake
+    - coverage run --source=zmake -m pytest .
+    - coverage report
+    - coverage html
+  artifacts:
+    paths:
+      - zephyr/zmake/htmlcov/*
+    expire_in: 1 week
+  coverage: '/^TOTAL.+?(\d+\%)$/'

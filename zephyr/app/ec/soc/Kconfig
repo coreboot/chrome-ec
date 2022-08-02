@@ -34,9 +34,15 @@ config AP_X86_INTEL_ADL
 
 config AP_X86_AMD
 	bool "AP is an AMD chipset"
-	select AP_x86
+	select AP_X86
 	help
 	  The application processor is a product of AMD.
+
+config AP_X86_INTEL_MTL
+	bool "AP is MTL chipset"
+	select AP_X86_INTEL
+	help
+	  The application processor is Intel Meteor Lake (MTL) chipset.
 
 config AP_ARM_MTK_MT8192
 	bool "MediaTek MT8192"

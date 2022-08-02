@@ -23,4 +23,16 @@
 			0xca	/* C12 */
 			>;
 	};
+
+	kblight {
+		compatible = "cros-ec,kblight-pwm";
+		pwms = <&pwm3 0 PWM_KHZ(10) PWM_POLARITY_NORMAL>;
+		generic-pwm-channel = <0>;
+	};
+};
+
+&pwm3 {
+	status = "okay";
+	pinctrl-0 = <&pwm3_gp80>;
+	pinctrl-names = "default";
 };

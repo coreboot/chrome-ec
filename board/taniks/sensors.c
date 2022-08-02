@@ -12,6 +12,7 @@
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/accelgyro_lsm6dso.h"
 #include "fw_config.h"
+#include "gpio.h"
 #include "hooks.h"
 #include "i2c.h"
 #include "motion_sense.h"
@@ -21,8 +22,8 @@
 #include "tablet_mode.h"
 
 #if 1
-#define CPRINTS(format, args...) ccprints(format, ## args)
-#define CPRINTF(format, args...) ccprintf(format, ## args)
+#define CPRINTS(format, args...) ccprints(format, ##args)
+#define CPRINTF(format, args...) ccprintf(format, ##args)
 #else
 #define CPRINTS(format, args...)
 #define CPRINTF(format, args...)
@@ -33,13 +34,6 @@ const struct adc_t adc_channels[] = {
 	[ADC_TEMP_SENSOR_1_DDR_SOC] = {
 		.name = "TEMP_DDR_SOC",
 		.input_ch = NPCX_ADC_CH0,
-		.factor_mul = ADC_MAX_VOLT,
-		.factor_div = ADC_READ_MAX + 1,
-		.shift = 0,
-	},
-	[ADC_TEMP_SENSOR_2_FAN] = {
-		.name = "TEMP_FAN",
-		.input_ch = NPCX_ADC_CH1,
 		.factor_mul = ADC_MAX_VOLT,
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
@@ -58,6 +52,62 @@ const struct adc_t adc_channels[] = {
 		.factor_div = ADC_READ_MAX + 1,
 		.shift = 0,
 	},
+	[ADC_KSI_00] = {
+		.name = "KSI_00",
+		.input_ch = NPCX_ADC_CH1,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_KSI_01] = {
+		.name = "KSI_01",
+		.input_ch = NPCX_ADC_CH2,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_KSI_02] = {
+		.name = "KSI_02",
+		.input_ch = NPCX_ADC_CH4,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_KSI_03] = {
+		.name = "KSI_03",
+		.input_ch = NPCX_ADC_CH5,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_KSI_04] = {
+		.name = "KSI_04",
+		.input_ch = NPCX_ADC_CH8,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_KSI_05] = {
+		.name = "KSI_05",
+		.input_ch = NPCX_ADC_CH9,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_KSI_06] = {
+		.name = "KSI_06",
+		.input_ch = NPCX_ADC_CH10,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
+	[ADC_KSI_07] = {
+		.name = "KSI_07",
+		.input_ch = NPCX_ADC_CH11,
+		.factor_mul = ADC_MAX_VOLT,
+		.factor_div = ADC_READ_MAX + 1,
+		.shift = 0,
+	},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
@@ -69,17 +119,13 @@ static struct lsm6dso_data lsm6dso_data;
 static struct lsm6dsm_data lsm6dsm_data = LSM6DSM_DATA;
 
 /* Matrix to rotate lid and base sensor into standard reference frame */
-static const mat33_fp_t lid_standard_ref = {
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
+static const mat33_fp_t lid_standard_ref = { { 0, FLOAT_TO_FP(1), 0 },
+					     { FLOAT_TO_FP(-1), 0, 0 },
+					     { 0, 0, FLOAT_TO_FP(1) } };
 
-static const mat33_fp_t base_standard_ref = {
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ 0, 0, FLOAT_TO_FP(-1)}
-};
+static const mat33_fp_t base_standard_ref = { { FLOAT_TO_FP(-1), 0, 0 },
+					      { 0, FLOAT_TO_FP(1), 0 },
+					      { 0, 0, FLOAT_TO_FP(-1) } };
 
 struct motion_sensor_t bma422_lid_accel = {
 	.name = "Lid Accel - BMA",
@@ -237,7 +283,6 @@ unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 #endif
 
-
 static void board_detect_motionsensor(void)
 {
 	int ret;
@@ -254,12 +299,10 @@ static void board_detect_motionsensor(void)
 		return;
 
 	/* Check lid accel chip */
-	ret = i2c_read8(I2C_PORT_SENSOR, LIS2DW12_ADDR1,
-			LIS2DW12_WHO_AM_I_REG, &val);
+	ret = i2c_read8(I2C_PORT_SENSOR, LIS2DW12_ADDR1, LIS2DW12_WHO_AM_I_REG,
+			&val);
 	if (ret == 0 && val == LIS2DW12_WHO_AM_I) {
-		CPRINTS("LID_ACCEL is IS2DW12");
-		/* Enable gpio interrupt for lid accel sensor */
-		gpio_enable_interrupt(GPIO_EC_ACCEL_INT_R_L);
+		CPRINTS("LID_ACCEL is LIS2DW12");
 		return;
 	}
 
@@ -284,93 +327,31 @@ static void board_detect_motionsensor(void)
 	CPRINTS("No LID_ACCEL are detected");
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_detect_motionsensor,
-		HOOK_PRIO_DEFAULT);
+	     HOOK_PRIO_DEFAULT);
 
 static void baseboard_sensors_init(void)
 {
 	CPRINTS("baseboard_sensors_init");
-	/* b/194765820
-	 * Dynamic motion sensor count
-	 * All board supports tablet mode if board id > 0
-	 */
-	if (ec_cfg_has_tabletmode()) {
-		/*
-		 * GPIO_EC_ACCEL_INT_R_L
-		 * The interrupt of lid accel is disabled by default.
-		 * We'll enable it later if lid accel is LIS2DW12.
-		 */
 
-		/* Change Request (b/199529373)
-		 * GYRO sensor change from ST LSM6DSOETR3TR to ST LSM6DS3TR-C
-		 *	LSM6DSOETR3TR base accel/gyro if board id = 0
-		 *	LSM6DS3TR-C Base accel/gyro if board id > 0
-		 */
-		if (get_board_id() > 0) {
-			motion_sensors[BASE_ACCEL] = lsm6dsm_base_accel;
-			motion_sensors[BASE_GYRO] = lsm6dsm_base_gyro;
-		}
-
-		/* Enable gpio interrupt for base accelgyro sensor */
-		gpio_enable_interrupt(GPIO_EC_IMU_INT_R_L);
-	} else {
-		CPRINTS("Clamshell");
-		motion_sensor_count = 0;
-		gmr_tablet_switch_disable();
-		gpio_set_flags(GPIO_TABLET_MODE_L, GPIO_INPUT | GPIO_PULL_DOWN);
-		/* Gyro is not present, don't allow line to float */
-		gpio_set_flags(GPIO_EC_IMU_INT_R_L, GPIO_INPUT |
-				GPIO_PULL_DOWN);
-	}
+	CPRINTS("Clamshell");
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_sensors_init, HOOK_PRIO_INIT_I2C + 1);
 
-void motion_interrupt(enum gpio_signal signal)
-{
-	if (motion_sensors[LID_ACCEL].chip == MOTIONSENSE_CHIP_LIS2DW12) {
-		lis2dw12_interrupt(signal);
-		CPRINTS("IS2DW12 interrupt");
-		return;
-	}
-
-	/*
-	 * From other project, ex. guybrush, it seem BMA422 doesn't have
-	 * interrupt handler when EC_ACCEL_INT_R_L is asserted.
-	 * However, I don't see BMA422 assert EC_ACCEL_INT_R_L when it has
-	 * power. That could be the reason EC code doesn't register any
-	 * interrupt handler.
-	 */
-	CPRINTS("BMA422 interrupt");
-
-}
-
 /* Temperature sensor configuration */
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1_DDR_SOC] = {
-		.name = "DDR and SOC",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_1_DDR_SOC
-	},
-	[TEMP_SENSOR_2_FAN] = {
-		.name = "FAN",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_2_FAN
-	},
-	[TEMP_SENSOR_3_CHARGER] = {
-		.name = "CHARGER",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_3_CHARGER
-	},
-	[TEMP_SENSOR_4_CPUCHOKE] = {
-		.name = "CPU CHOKE",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_4_CPUCHOKE
-	},
+	[TEMP_SENSOR_1_DDR_SOC] = { .name = "DDR and SOC",
+				    .type = TEMP_SENSOR_TYPE_BOARD,
+				    .read = get_temp_3v3_30k9_47k_4050b,
+				    .idx = ADC_TEMP_SENSOR_1_DDR_SOC },
+	[TEMP_SENSOR_3_CHARGER] = { .name = "CHARGER",
+				    .type = TEMP_SENSOR_TYPE_BOARD,
+				    .read = get_temp_3v3_30k9_47k_4050b,
+				    .idx = ADC_TEMP_SENSOR_3_CHARGER },
+	[TEMP_SENSOR_4_CPUCHOKE] = { .name = "CPU CHOKE",
+				     .type = TEMP_SENSOR_TYPE_BOARD,
+				     .read = get_temp_3v3_30k9_47k_4050b,
+				     .idx = ADC_TEMP_SENSOR_4_CPUCHOKE },
 };
-
 
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -384,8 +365,8 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 /*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_CPU \
-	{ \
+#define THERMAL_CPU              \
+	{                        \
 		.temp_host = { \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(90), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(100), \
@@ -394,7 +375,7 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(85), \
 		}, \
 		.temp_fan_off = C_TO_K(35), \
-		.temp_fan_max = C_TO_K(60), \
+		.temp_fan_max = C_TO_K(70), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 
@@ -414,8 +395,8 @@ __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 /*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_FAN \
-	{ \
+#define THERMAL_FAN              \
+	{                        \
 		.temp_host = { \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(90), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(100), \
@@ -424,14 +405,13 @@ __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(85), \
 		}, \
 		.temp_fan_off = C_TO_K(35), \
-		.temp_fan_max = C_TO_K(60), \
+		.temp_fan_max = C_TO_K(70), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_fan = THERMAL_FAN;
 
 /* this should really be "const" */
 struct ec_thermal_config thermal_params[] = {
 	[TEMP_SENSOR_1_DDR_SOC] = THERMAL_CPU,
-	[TEMP_SENSOR_2_FAN] = THERMAL_FAN,
 	[TEMP_SENSOR_3_CHARGER] = THERMAL_FAN,
 	[TEMP_SENSOR_4_CPUCHOKE] = THERMAL_FAN,
 };

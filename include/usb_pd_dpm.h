@@ -51,7 +51,7 @@ void dpm_data_reset_complete(int port);
  * @param vdm       The VDM payload of the ACK
  */
 void dpm_vdm_acked(int port, enum tcpci_msg_type type, int vdo_count,
-		uint32_t *vdm);
+		   uint32_t *vdm);
 
 /*
  * Informs the DPM that a VDM NAK was received. Also applies when a VDM request
@@ -63,7 +63,7 @@ void dpm_vdm_acked(int port, enum tcpci_msg_type type, int vdo_count,
  * @param vdm_cmd The VDM command of the request
  */
 void dpm_vdm_naked(int port, enum tcpci_msg_type type, uint16_t svid,
-		uint8_t vdm_cmd);
+		   uint8_t vdm_cmd);
 
 /*
  * Drives the Policy Engine through entry/exit mode process
@@ -89,6 +89,14 @@ void dpm_evaluate_sink_fixed_pdo(int port, uint32_t vsafe5v_pdo);
  * @param port		USB-C port number
  */
 void dpm_add_non_pd_sink(int port);
+
+/*
+ * Evaluates the request from port partner
+ *
+ * @param port		USB-C port number
+ * @param rdo		Request from port partner
+ */
+void dpm_evaluate_request_rdo(int port, uint32_t rdo);
 
 /*
  * Remove this port as a sink, and reallocate maximum current as needed.
@@ -122,6 +130,23 @@ int dpm_get_source_pdo(const uint32_t **src_pdo, const int port);
  */
 int dpm_get_source_current(const int port);
 
+/*
+ * Build SOP Status Data Block (SDB)
+ *
+ * @param port		USB-C port number
+ * @param *msg		pointer to pd message
+ * @param *len		pointer to uint32_t holding length of SDB
+ */
+int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len);
+
+/*
+ * DPM function to handle a received alert message
+ *
+ * @param port		USB-C port number
+ * @param ado		Alert Data Object (ado) received from partner
+ */
+void dpm_handle_alert(int port, uint32_t ado);
+
 /* Enum for modules to describe to the DPM their setup status */
 enum dpm_msg_setup_status {
 	MSG_SETUP_SUCCESS,
@@ -130,4 +155,10 @@ enum dpm_msg_setup_status {
 	MSG_SETUP_MUX_WAIT,
 };
 
-#endif  /* __CROS_EC_USB_DPM_H */
+/* Enum to describe current state of connected USB PD buttons */
+enum dpm_pd_button_state {
+	DPM_PD_BUTTON_IDLE,
+	DPM_PD_BUTTON_PRESSED,
+	DPM_PD_BUTTON_RELEASED,
+};
+#endif /* __CROS_EC_USB_DPM_H */

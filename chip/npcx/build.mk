@@ -9,7 +9,7 @@
 # NPCX SoC has a Cortex-M4F ARM core
 CORE:=cortex-m
 # Allow the full Cortex-M4 instruction set
-CFLAGS_CPU+=-march=armv7e-m -mcpu=cortex-m4
+CFLAGS_CPU+=-mcpu=cortex-m4
 
 # Disable overlapping section warning that linker emits due to NPCX_RO_HEADER.
 LDFLAGS_EXTRA+=-Wl,--no-check-sections
@@ -41,7 +41,7 @@ chip-$(CONFIG_CEC)+=cec.o
 chip-$(CONFIG_PWM)+=pwm.o
 chip-$(CONFIG_SPI)+=spi.o
 chip-$(CONFIG_WATCHDOG)+=watchdog.o
-ifndef CONFIG_KEYBOARD_NOT_RAW
+ifndef CONFIG_KEYBOARD_DISCRETE
 chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
 endif
 

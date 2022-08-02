@@ -12,6 +12,7 @@
 #include "host_command.h"
 #include "link_defs.h"
 #include "lpc.h"
+#include "printf.h"
 #include "shared_mem.h"
 #include "system.h"
 #include "task.h"
@@ -20,8 +21,8 @@
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_HOSTCMD, outstr)
-#define CPRINTF(format, args...) cprintf(CC_HOSTCMD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_HOSTCMD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_HOSTCMD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_HOSTCMD, format, ##args)
 
 #define TASK_EVENT_CMD_PENDING TASK_EVENT_CUSTOM_BIT(0)
 
@@ -42,18 +43,19 @@ static uint8_t host_memmap[EC_MEMMAP_SIZE] __aligned(4);
 #endif
 
 static enum {
-	HCDEBUG_OFF,     /* No host command debug output */
-	HCDEBUG_NORMAL,  /* Normal output mode; skips repeated commands */
-	HCDEBUG_EVERY,   /* Print every command */
-	HCDEBUG_PARAMS,  /* ... and print params for request/response */
+	HCDEBUG_OFF, /* No host command debug output */
+	HCDEBUG_NORMAL, /* Normal output mode; skips repeated commands */
+	HCDEBUG_EVERY, /* Print every command */
+	HCDEBUG_PARAMS, /* ... and print params for request/response */
 
 	/* Number of host command debug modes */
 	HCDEBUG_MODES
 } hcdebug = CONFIG_HOSTCMD_DEBUG_MODE;
 
 #ifdef CONFIG_CMD_HCDEBUG
-static const char * const hcdebug_mode_names[HCDEBUG_MODES] = {
-	"off", "normal", "every", "params"};
+static const char *const hcdebug_mode_names[HCDEBUG_MODES] = { "off", "normal",
+							       "every",
+							       "params" };
 #endif
 
 #ifdef CONFIG_HOST_COMMAND_STATUS
@@ -343,8 +345,8 @@ void host_packet_receive(struct host_packet *pkt)
 	args0.version = r->command_version;
 	args0.params_size = r->data_len;
 	args0.response = (struct ec_host_response *)(pkt->response) + 1;
-	args0.response_max = pkt->response_max -
-		sizeof(struct ec_host_response);
+	args0.response_max =
+		pkt->response_max - sizeof(struct ec_host_response);
 	args0.response_size = 0;
 	args0.result = EC_RES_SUCCESS;
 
@@ -440,7 +442,7 @@ void host_command_task(void *u)
 		/* Process it */
 		if ((evt & TASK_EVENT_CMD_PENDING) && pending_args) {
 			pending_args->result =
-					host_command_process(pending_args);
+				host_command_process(pending_args);
 			host_send_response(pending_args);
 		}
 
@@ -473,8 +475,7 @@ host_command_proto_version(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_PROTO_VERSION,
-		     host_command_proto_version,
+DECLARE_HOST_COMMAND(EC_CMD_PROTO_VERSION, host_command_proto_version,
 		     EC_VER_MASK(0));
 
 static enum ec_status host_command_hello(struct host_cmd_handler_args *args)
@@ -488,9 +489,7 @@ static enum ec_status host_command_hello(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_HELLO,
-		     host_command_hello,
-		     EC_VER_MASK(0));
+DECLARE_HOST_COMMAND(EC_CMD_HELLO, host_command_hello, EC_VER_MASK(0));
 
 static enum ec_status host_command_read_test(struct host_cmd_handler_args *args)
 {
@@ -511,9 +510,7 @@ static enum ec_status host_command_read_test(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_READ_TEST,
-		     host_command_read_test,
-		     EC_VER_MASK(0));
+DECLARE_HOST_COMMAND(EC_CMD_READ_TEST, host_command_read_test, EC_VER_MASK(0));
 
 #ifndef CONFIG_HOSTCMD_X86
 /*
@@ -543,8 +540,7 @@ host_command_read_memmap(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_READ_MEMMAP,
-		     host_command_read_memmap,
+DECLARE_HOST_COMMAND(EC_CMD_READ_MEMMAP, host_command_read_memmap,
 		     EC_VER_MASK(0));
 #endif
 
@@ -555,9 +551,9 @@ host_command_get_cmd_versions(struct host_cmd_handler_args *args)
 	const struct ec_params_get_cmd_versions_v1 *p_v1 = args->params;
 	struct ec_response_get_cmd_versions *r = args->response;
 
-	const struct host_command *cmd =
-		(args->version == 1) ? find_host_command(p_v1->cmd) :
-				       find_host_command(p->cmd);
+	const struct host_command *cmd = (args->version == 1) ?
+						 find_host_command(p_v1->cmd) :
+						 find_host_command(p->cmd);
 
 	if (!cmd)
 		return EC_RES_INVALID_PARAM;
@@ -568,8 +564,7 @@ host_command_get_cmd_versions(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_CMD_VERSIONS,
-		     host_command_get_cmd_versions,
+DECLARE_HOST_COMMAND(EC_CMD_GET_CMD_VERSIONS, host_command_get_cmd_versions,
 		     EC_VER_MASK(0) | EC_VER_MASK(1));
 
 static int host_command_is_suppressed(uint16_t cmd)
@@ -594,11 +589,13 @@ static void dump_host_command_suppressed(int force)
 {
 #ifdef CONFIG_SUPPRESSED_HOST_COMMANDS
 	int i;
+	char ts_str[PRINTF_TIMESTAMP_BUF_SIZE];
 
 	if (!force && !timestamp_expired(suppressed_cmd_deadline, NULL))
 		return;
 
-	CPRINTF("[%pT HC Suppressed:", PRINTF_TIMESTAMP_NOW);
+	snprintf_timestamp_now(ts_str, sizeof(ts_str));
+	CPRINTF("[%s HC Suppressed:", ts_str);
 	for (i = 0; i < ARRAY_SIZE(hc_suppressed_cmd); i++) {
 		CPRINTF(" 0x%x=%d", hc_suppressed_cmd[i], hc_suppressed_cnt[i]);
 		hc_suppressed_cnt[i] = 0;
@@ -614,10 +611,9 @@ static void dump_host_command_suppressed_(void)
 {
 	dump_host_command_suppressed(1);
 }
-DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN,
-	     dump_host_command_suppressed_, HOOK_PRIO_DEFAULT);
-DECLARE_HOOK(HOOK_SYSJUMP,
-	     dump_host_command_suppressed_, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, dump_host_command_suppressed_,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_SYSJUMP, dump_host_command_suppressed_, HOOK_PRIO_DEFAULT);
 #else
 }
 #endif /* CONFIG_SUPPRESSED_HOST_COMMANDS */
@@ -659,12 +655,15 @@ static void host_command_debug_request(struct host_cmd_handler_args *args)
 		hc_prev_cmd = args->command;
 	}
 
-	if (hcdebug >= HCDEBUG_PARAMS && args->params_size)
-		CPRINTS("HC 0x%02x.%d:%ph", args->command,
-			args->version,
-			HEX_BUF(args->params, args->params_size));
-	else
-		CPRINTS("HC 0x%02x", args->command);
+	if (hcdebug >= HCDEBUG_PARAMS && args->params_size) {
+		char str_buf[hex_str_buf_size(args->params_size)];
+
+		snprintf_hex_buffer(str_buf, sizeof(str_buf),
+				    HEX_BUF(args->params, args->params_size));
+		CPRINTS("HC 0x%04x.%d:%s", args->command, args->version,
+			str_buf);
+	} else
+		CPRINTS("HC 0x%04x", args->command);
 }
 
 uint16_t host_command_process(struct host_cmd_handler_args *args)
@@ -693,9 +692,9 @@ uint16_t host_command_process(struct host_cmd_handler_args *args)
 	if (args->command >= EC_CMD_PASSTHRU_OFFSET(1) &&
 	    args->command <= EC_CMD_PASSTHRU_MAX(1)) {
 		rv = pd_host_command(args->command - EC_CMD_PASSTHRU_OFFSET(1),
-				     args->version,
-				     args->params, args->params_size,
-				     args->response, args->response_max);
+				     args->version, args->params,
+				     args->params_size, args->response,
+				     args->response_max);
 		if (rv >= 0) {
 			/* Success; store actual response size */
 			args->response_size = rv;
@@ -717,11 +716,16 @@ uint16_t host_command_process(struct host_cmd_handler_args *args)
 	}
 
 	if (rv != EC_RES_SUCCESS)
-		CPRINTS("HC 0x%02x err %d", args->command, rv);
+		CPRINTS("HC 0x%04x err %d", args->command, rv);
 
-	if (hcdebug >= HCDEBUG_PARAMS && args->response_size)
-		CPRINTS("HC resp:%ph",
-			HEX_BUF(args->response, args->response_size));
+	if (hcdebug >= HCDEBUG_PARAMS && args->response_size) {
+		char str_buf[hex_str_buf_size(args->response_size)];
+
+		snprintf_hex_buffer(str_buf, sizeof(str_buf),
+				    HEX_BUF(args->response,
+					    args->response_size));
+		CPRINTS("HC resp:%s", str_buf);
+	}
 
 	return rv;
 }
@@ -739,8 +743,7 @@ host_command_get_comms_status(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 
-DECLARE_HOST_COMMAND(EC_CMD_GET_COMMS_STATUS,
-		     host_command_get_comms_status,
+DECLARE_HOST_COMMAND(EC_CMD_GET_COMMS_STATUS, host_command_get_comms_status,
 		     EC_VER_MASK(0));
 
 /* Resend the last saved response */
@@ -756,8 +759,7 @@ host_command_resend_response(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 
-DECLARE_HOST_COMMAND(EC_CMD_RESEND_RESPONSE,
-		     host_command_resend_response,
+DECLARE_HOST_COMMAND(EC_CMD_RESEND_RESPONSE, host_command_resend_response,
 		     EC_VER_MASK(0));
 #endif /* CONFIG_HOST_COMMAND_STATUS */
 
@@ -775,8 +777,7 @@ host_command_test_protocol(struct host_cmd_handler_args *args)
 
 	return p->ec_result;
 }
-DECLARE_HOST_COMMAND(EC_CMD_TEST_PROTOCOL,
-		     host_command_test_protocol,
+DECLARE_HOST_COMMAND(EC_CMD_TEST_PROTOCOL, host_command_test_protocol,
 		     EC_VER_MASK(0));
 
 /* Returns supported features. */
@@ -791,10 +792,8 @@ host_command_get_features(struct host_cmd_handler_args *args)
 	r->flags[1] = get_feature_flags1();
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_FEATURES,
-		     host_command_get_features,
+DECLARE_HOST_COMMAND(EC_CMD_GET_FEATURES, host_command_get_features,
 		     EC_VER_MASK(0));
-
 
 /*****************************************************************************/
 /* Console commands */
@@ -888,17 +887,19 @@ static int command_host_command(int argc, char **argv)
 
 	if (res != EC_RES_SUCCESS)
 		ccprintf("Command returned %d\n", res);
-	else if (args.response_size)
-		ccprintf("Response: %ph\n",
-			 HEX_BUF(cmd_params, args.response_size));
-	else
+	else if (args.response_size) {
+		char str_buf[hex_str_buf_size(args.response_size)];
+
+		snprintf_hex_buffer(str_buf, sizeof(str_buf),
+				    HEX_BUF(cmd_params, args.response_size));
+		ccprintf("Response: %s\n", str_buf);
+	} else
 		ccprintf("Command succeeded; no response.\n");
 
 	shared_mem_release(cmd_params);
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(hostcmd, command_host_command,
-			"cmd ver param",
+DECLARE_CONSOLE_COMMAND(hostcmd, command_host_command, "cmd ver param",
 			"Fake host command");
 #endif /* CONFIG_CMD_HOSTCMD */
 

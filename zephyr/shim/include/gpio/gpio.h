@@ -6,8 +6,8 @@
 #ifndef ZEPHYR_SHIM_INCLUDE_GPIO_GPIO_H_
 #define ZEPHYR_SHIM_INCLUDE_GPIO_GPIO_H_
 
-#include <device.h>
-#include <devicetree.h>
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
 
 /*
  * Validate interrupt flags are valid for the Zephyr GPIO driver.
@@ -74,8 +74,8 @@ int gpio_config_unused_pins(void) __attribute__((weak));
  */
 #define UNUSED_GPIO_CONFIG_BY_IDX(i, _)                                       \
 	{                                                                     \
-		.dev_name = DT_GPIO_LABEL_BY_IDX(UNUSED_PINS_LIST,            \
-						 unused_gpios, i),            \
+		.dev_name = DEVICE_DT_NAME(DT_GPIO_CTLR_BY_IDX(               \
+			UNUSED_PINS_LIST, unused_gpios, i)),                  \
 		.pin = DT_GPIO_PIN_BY_IDX(UNUSED_PINS_LIST, unused_gpios, i), \
 		.flags = DT_GPIO_FLAGS_BY_IDX(UNUSED_PINS_LIST, unused_gpios, \
 					      i),                             \
@@ -83,7 +83,7 @@ int gpio_config_unused_pins(void) __attribute__((weak));
 
 /**
  * @brief Macro function to construct a list of unused_pin_config items by
- *        UTIL_LISTIFY func.
+ *        LISTIFY func.
  *
  * Example devicetree fragment:
  *    / {
@@ -102,7 +102,7 @@ int gpio_config_unused_pins(void) __attribute__((weak));
  * @return a list of unused_pin_config items
  */
 #define UNUSED_GPIO_CONFIG_LIST \
-	UTIL_LISTIFY(UNUSED_GPIOS_LIST_LEN, UNUSED_GPIO_CONFIG_BY_IDX, _)
+	LISTIFY(UNUSED_GPIOS_LIST_LEN, UNUSED_GPIO_CONFIG_BY_IDX, (), _)
 
 #else
 #define UNUSED_GPIO_CONFIG_LIST /* Nothing if no 'unused-pins' node */

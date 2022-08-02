@@ -17,26 +17,30 @@
 
 #define SPI(id) (&(spi_devices[id]))
 
-#define IS31FL3743B_ROW_SIZE	6
-#define IS31FL3743B_COL_SIZE	11
-#define IS31FL3743B_GRID_SIZE	(IS31FL3743B_COL_SIZE * IS31FL3743B_ROW_SIZE)
-#define IS31FL3743B_BUF_SIZE	(SIZE_OF_RGB * IS31FL3743B_GRID_SIZE)
+#define IS31FL3743B_ROW_SIZE 6
+#define IS31FL3743B_COL_SIZE 11
+#define IS31FL3743B_GRID_SIZE (IS31FL3743B_COL_SIZE * IS31FL3743B_ROW_SIZE)
+#define IS31FL3743B_BUF_SIZE (SIZE_OF_RGB * IS31FL3743B_GRID_SIZE)
 
-#define IS31FL3743B_CMD_ID	0b101
-#define IS31FL3743B_PAGE_PWM	0
-#define IS31FL3743B_PAGE_SCALE	1
-#define IS31FL3743B_PAGE_FUNC	2
+#define IS31FL3743B_CMD_ID 0b101
+#define IS31FL3743B_PAGE_PWM 0
+#define IS31FL3743B_PAGE_SCALE 1
+#define IS31FL3743B_PAGE_FUNC 2
 
-#define IS31FL3743B_REG_CONFIG		0x00
-#define IS31FL3743B_REG_GCC		0x01
-#define IS31FL3743B_REG_PD_PU		0x02
-#define IS31FL3743B_REG_SPREAD_SPECTRUM	0x25
-#define IS31FL3743B_REG_RSTN		0x2f
+#define IS31FL3743B_REG_CONFIG 0x00
+#define IS31FL3743B_REG_GCC 0x01
+#define IS31FL3743B_REG_PD_PU 0x02
+#define IS31FL3743B_REG_SPREAD_SPECTRUM 0x25
+#define IS31FL3743B_REG_RSTN 0x2f
+
+#define IS31FL3743B_CFG_SWS_1_11 0b0000
+#define IS31FL3743B_CONFIG(sws, osde, ssd) \
+	((sws) << 4 | BIT(3) | (osde) << 1 | (ssd) << 0)
 
 struct is31fl3743b_cmd {
-	uint8_t page: 4;
-	uint8_t id: 3;
-	uint8_t read: 1;
+	uint8_t page : 4;
+	uint8_t id : 3;
+	uint8_t read : 1;
 } __packed;
 
 struct is31fl3743b_msg {
@@ -45,7 +49,8 @@ struct is31fl3743b_msg {
 	uint8_t payload[];
 } __packed;
 
-static int is31fl3743b_read(struct rgbkbd *ctx, uint8_t addr, uint8_t *value)
+__maybe_unused static int is31fl3743b_read(struct rgbkbd *ctx, uint8_t addr,
+					   uint8_t *value)
 {
 	uint8_t buf[8];
 	struct is31fl3743b_msg *msg = (void *)buf;
@@ -74,25 +79,12 @@ static int is31fl3743b_write(struct rgbkbd *ctx, uint8_t addr, uint8_t value)
 	return spi_transaction(SPI(ctx->cfg->spi), buf, frame_len, NULL, 0);
 }
 
-static int is31fl3743b_reset(struct rgbkbd *ctx)
-{
-	return is31fl3743b_write(ctx, IS31FL3743B_REG_RSTN, 0xae);
-}
-
 static int is31fl3743b_enable(struct rgbkbd *ctx, bool enable)
 {
-	uint8_t u8;
-	int rv;
-
-	gpio_set_level(GPIO_RGBKBD_SDB_L, enable ? 1 : 0);
-
-	rv = is31fl3743b_read(ctx, IS31FL3743B_REG_CONFIG, &u8);
-	if (rv) {
-		return rv;
-	}
-
-	return is31fl3743b_write(ctx, IS31FL3743B_REG_CONFIG,
-				 u8 | BIT(3) | (enable ? BIT(0) : 0));
+	uint8_t u8 =
+		IS31FL3743B_CONFIG(IS31FL3743B_CFG_SWS_1_11, 0, enable ? 1 : 0);
+	CPRINTS("Setting config register to 0x%x", u8);
+	return is31fl3743b_write(ctx, IS31FL3743B_REG_CONFIG, u8);
 }
 
 static int is31fl3743b_set_color(struct rgbkbd *ctx, uint8_t offset,
@@ -112,7 +104,7 @@ static int is31fl3743b_set_color(struct rgbkbd *ctx, uint8_t offset,
 		return EC_ERROR_OVERFLOW;
 	}
 
-	msg->addr = frame_offset + 1;	/* Register addr base is 1. */
+	msg->addr = frame_offset + 1; /* Register addr base is 1. */
 	for (i = 0; i < len; i++) {
 		msg->payload[i * SIZE_OF_RGB + 0] = color[i].r;
 		msg->payload[i * SIZE_OF_RGB + 1] = color[i].g;
@@ -139,7 +131,7 @@ static int is31fl3743b_set_scale(struct rgbkbd *ctx, uint8_t offset,
 		return EC_ERROR_OVERFLOW;
 	}
 
-	msg->addr = frame_offset + 1;	/* Address base is 1. */
+	msg->addr = frame_offset + 1; /* Address base is 1. */
 	for (i = 0; i < len; i++) {
 		msg->payload[i * SIZE_OF_RGB + 0] = scale.r;
 		msg->payload[i * SIZE_OF_RGB + 1] = scale.g;
@@ -168,25 +160,16 @@ static int is31fl3743b_init(struct rgbkbd *ctx)
 {
 	int rv;
 
-	rv = is31fl3743b_reset(ctx);
-	msleep(3);
-	rv |= is31fl3743b_enable(ctx, true);
-	if (rv) {
-		CPRINTS("Failed to enable or reset (%d)", rv);
+	/* Reset registers to the default values. */
+	rv = is31fl3743b_write(ctx, IS31FL3743B_REG_RSTN, 0xae);
+	if (rv)
 		return rv;
-	}
-
-	if (IS_ENABLED(CONFIG_RGB_KEYBOARD_DEBUG)) {
-		uint8_t val;
-		rv = is31fl3743b_read(ctx, IS31FL3743B_REG_PD_PU, &val);
-		CPRINTS("PD/PU. val=0x%02x (rv=%d)", val, rv);
-	}
+	msleep(3);
 
 	return EC_SUCCESS;
 }
 
 const struct rgbkbd_drv is31fl3743b_drv = {
-	.reset = is31fl3743b_reset,
 	.init = is31fl3743b_init,
 	.enable = is31fl3743b_enable,
 	.set_color = is31fl3743b_set_color,

@@ -5,6 +5,7 @@
 menuconfig PLATFORM_EC_POWERSEQ
 	bool "Power sequencing"
 	depends on AP
+	depends on !AP_PWRSEQ
 	select HAS_TASK_CHIPSET
 	help
 	  Enable shimming the platform/ec AP power sequencing code. This
@@ -14,6 +15,14 @@ menuconfig PLATFORM_EC_POWERSEQ
 	  sequencing must run in its own task.
 
 if PLATFORM_EC_POWERSEQ
+
+config PLATFORM_EC_POWERSEQ_S0IX
+	bool "Enable S0ix sleep states"
+	select PLATFORM_EC_POWERSEQ_HOST_SLEEP
+	help
+	  Enable the CONFIG_POWER_S0IX platform/ec configuration
+	  option, Intel's low-power idle sleep state, also known as
+	  "modern sleep".
 
 config PLATFORM_EC_POWERSEQ_HOST_SLEEP
 	bool "Track host sleep states"
@@ -49,6 +58,14 @@ config PLATFORM_EC_POWERSEQ_PP5000_CONTROL
 	help
 	  Guard access to the PP5000 GPIO using mutex locks, allowing
 	  the rail to be changed in a task-safe manner.
+
+config PLATFORM_EC_POWERSEQ_RSMRST_DELAY
+	bool "Wait at least 10ms before deasserting RSMRST to PCH"
+	default y if AP_X86_INTEL_TGL
+	depends on AP_X86_AMD || AP_X86_INTEL
+	help
+	  Wait at least 10ms between power signals going high and
+	  deasserting RSMRST to PCH.
 
 config PLATFORM_EC_POWERSEQ_FAKE_CONTROL
 	bool "Console command: powerfake"
@@ -96,33 +113,28 @@ config PLATFORM_EC_POWERSEQ_CPU_PROCHOT_ACTIVE_LOW
 	  If CPU_PROCHOT should be treated as active-low, enable this
 	  configuration option.
 
-config PLATFORM_EC_POWERSEQ_RSMRST_DELAY
-	bool "Wait at least 10ms before deasserting RSMRST to PCH"
-	default y if AP_X86_INTEL_TGL
+config PLATFORM_EC_POWERSEQ_CPU_PROCHOT_GATE_ON_C10
+	bool "Gate PROCHOT detection based on the AP C10 state"
+	default y if PLATFORM_EC_POWERSEQ_CPU_PROCHOT_ACTIVE_LOW
 	help
-	  Wait at least 10ms between power signals going high and
-	  deasserting RSMRST to PCH.
+	  When the AP enters C10, the power rails VCCIO, VCCSTG, and VCCPLL_OC
+	  may be turned off by the board.  If the PROCHOT# signal is pulled up
+	  by any of these rails, PROCHOT is not valid while the AP is in C10,
+	  Enable this option to gate PROCHOT detection when C10 is active.
 
 config PLATFORM_EC_POWERSEQ_RTC_RESET
 	bool "Board has an RTC reset"
 	help
 	  This project has a gpio named GPIO_PCH_RTCRST defined in
-	  gpio_map.h, which can be used to reset the AP's RTC when set
-	  high.
-
-config PLATFORM_EC_POWERSEQ_S0IX
-	bool "Enable S0ix sleep states"
-	select PLATFORM_EC_POWERSEQ_HOST_SLEEP
-	help
-	  Enable the CONFIG_POWER_S0IX platform/ec configuration
-	  option, Intel's low-power idle sleep state, also known as
-	  "modern sleep".
+	  the GPIO configuration, which can be used to reset the AP's RTC when
+	  set high.
 
 config PLATFORM_EC_POWERSEQ_S4
 	bool "Advertise S4 residency"
 	depends on PLATFORM_EC_ESPI_VW_SLP_S5
 	default y if AP_X86_INTEL_TGL
 	default y if AP_X86_INTEL_ADL
+	default y if AP_X86_INTEL_MTL
 	help
 	  Advertise S4 residency capabilities to the AP. This is required for
 	  AP hibernate (suspend-to-disk) on Intel platforms with Key Locker
@@ -143,10 +155,18 @@ config CHIPSET_ALDERLAKE_SLG4BD44540
           Use this for AlderLake power sequencing with the
           Silego chips.
 
+config PLATFORM_EC_POWERSEQ_METEORLAKE
+	bool "Use common Meteorlake code for power sequencing"
+	depends on AP_X86_INTEL_MTL
+	default n
+	help
+	  Use the Meteorlake common code for power sequencing. Note that
+	  this applies to Meteorlake and potentially future SoCs.
+
 menuconfig PLATFORM_EC_POWERSEQ_ICELAKE
 	bool "Use common Icelake code for power sequencing"
 	depends on AP_X86_INTEL_TGL
-	default y
+	default n
 	help
 	  Use the Icelake common code for power sequencing.  Note that
 	  this applies to more platforms than just Icelake.  For
@@ -169,6 +189,17 @@ config PLATFORM_EC_POWERSEQ_PP3300_RAIL_FIRST
 	  the PP5500 rail.
 
 endif # PLATFORM_EC_POWERSEQ_ICELAKE
+
+if PLATFORM_EC_POWERSEQ_RTC_RESET
+
+config PLATFORM_EC_S5_EXIT_WAIT
+	int "time(in secs) for EC to wait for system to exit from S5"
+	default 4
+	help
+	  Timeout value for which EC has to wait for system to exit from S5
+	  before performing RTC reset and moving the system to G3.
+
+endif # PLATFORM_EC_POWERSEQ_RTC_RESET
 
 endif # PLATFORM_EC_POWERSEQ_INTEL
 

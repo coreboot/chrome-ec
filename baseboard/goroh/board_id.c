@@ -34,21 +34,8 @@
  * 14 |   47 |  680 | 3086.7
  */
 const static int voltage_map[] = {
-	136,
-	388,
-	584,
-	785,
-	993,
-	1220,
-	1432,
-	1650,
-	1875,
-	2084,
-	2273,
-	2461,
-	2672,
-	2888,
-	3086,
+	136,  388,  584,  785,	993,  1220, 1432, 1650,
+	1875, 2084, 2273, 2461, 2672, 2888, 3086,
 };
 
 const int threshold_mv = 100;
@@ -79,7 +66,7 @@ static int adc_value_to_numeric_id(enum adc_channel ch)
 
 	for (int i = 0; i < ARRAY_SIZE(voltage_map); i++) {
 		if (IN_RANGE(mv, voltage_map[i] - threshold_mv,
-			     voltage_map[i] + threshold_mv))
+			     voltage_map[i] + threshold_mv - 1))
 			return i;
 	}
 

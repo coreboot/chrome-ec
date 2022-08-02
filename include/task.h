@@ -22,48 +22,47 @@
 #define TASK_EVENT_SYSJUMP_READY BIT(16)
 
 /* Used to signal that IPC layer is available for sending new data */
-#define TASK_EVENT_IPC_READY	BIT(17)
+#define TASK_EVENT_IPC_READY BIT(17)
 
-#define TASK_EVENT_PD_AWAKE	BIT(18)
+#define TASK_EVENT_PD_AWAKE BIT(18)
 
 /* npcx peci event */
-#define TASK_EVENT_PECI_DONE	BIT(19)
+#define TASK_EVENT_PECI_DONE BIT(19)
 
 /* I2C tx/rx interrupt handler completion event. */
 #ifdef CHIP_STM32
-#define TASK_EVENT_I2C_COMPLETION(port) \
-				(1 << ((port) + 20))
-#define TASK_EVENT_I2C_IDLE	(TASK_EVENT_I2C_COMPLETION(0))
-#define TASK_EVENT_MAX_I2C	6
+#define TASK_EVENT_I2C_COMPLETION(port) (1 << ((port) + 20))
+#define TASK_EVENT_I2C_IDLE (TASK_EVENT_I2C_COMPLETION(0))
+#define TASK_EVENT_MAX_I2C 6
 #ifdef I2C_PORT_COUNT
 #if (I2C_PORT_COUNT > TASK_EVENT_MAX_I2C)
 #error "Too many i2c ports for i2c events"
 #endif
 #endif
 #else
-#define TASK_EVENT_I2C_IDLE	BIT(20)
-#define TASK_EVENT_PS2_DONE	BIT(21)
+#define TASK_EVENT_I2C_IDLE BIT(20)
+#define TASK_EVENT_PS2_DONE BIT(21)
 #endif
 
 /* DMA transmit complete event */
-#define TASK_EVENT_DMA_TC       BIT(26)
+#define TASK_EVENT_DMA_TC BIT(26)
 /* ADC interrupt handler event */
-#define TASK_EVENT_ADC_DONE	BIT(27)
+#define TASK_EVENT_ADC_DONE BIT(27)
 /*
  * task_reset() that was requested has been completed
  *
  * For test-only builds, may be used by some tasks to restart themselves.
  */
-#define TASK_EVENT_RESET_DONE   BIT(28)
+#define TASK_EVENT_RESET_DONE BIT(28)
 /* task_wake() called on task */
-#define TASK_EVENT_WAKE		BIT(29)
+#define TASK_EVENT_WAKE BIT(29)
 /* Mutex unlocking */
-#define TASK_EVENT_MUTEX	BIT(30)
+#define TASK_EVENT_MUTEX BIT(30)
 /*
  * Timer expired.  For example, task_wait_event() timed out before receiving
  * another event.
  */
-#define TASK_EVENT_TIMER	(1U << 31)
+#define TASK_EVENT_TIMER (1U << 31)
 
 /* Maximum time for task_wait_event() */
 #define TASK_MAX_WAIT_US 0x7fffffff
@@ -149,9 +148,8 @@ void set_int_mask(uint32_t val);
  *
  * @param tskid		Task to set event for
  * @param event		Event bitmap to set (TASK_EVENT_*)
- * @return		The bitmap of events which occurred if wait!=0, else 0.
  */
-uint32_t task_set_event(task_id_t tskid, uint32_t event);
+void task_set_event(task_id_t tskid, uint32_t event);
 
 /**
  * Wake a task.  This sends it the TASK_EVENT_WAKE event.
@@ -403,7 +401,7 @@ typedef struct mutex mutex_t;
  * initialize it.  We provide the same macro for CrOS EC OS so that we
  * can use it in shared code.
  */
-#define K_MUTEX_DEFINE(name) static mutex_t name = { }
+#define K_MUTEX_DEFINE(name) static mutex_t name = {}
 
 /**
  * Lock a mutex.
@@ -457,26 +455,16 @@ struct irq_def {
 #define IRQ_HANDLER(irqname) CONCAT3(irq_, irqname, _handler)
 #define IRQ_HANDLER_OPT(irqname) CONCAT3(irq_, irqname, _handler_optional)
 #define DECLARE_IRQ(irq, routine, priority) DECLARE_IRQ_(irq, routine, priority)
-#define DECLARE_IRQ_(irq, routine, priority)             \
-	static void routine(void) __attribute__((used)); \
+#define DECLARE_IRQ_(irq, routine, priority) \
+	static void __keep routine(void);    \
 	void IRQ_HANDLER_OPT(irq)(void) __attribute__((alias(#routine)))
 
 /* Include ec.irqlist here for compilation dependency */
 #define ENABLE_IRQ(x)
+#if !defined(CONFIG_DFU_BOOTMANAGER_MAIN)
 #include "ec.irqlist"
+#endif /* !defined(CONFIG_DFU_BOOTMANAGER_MAIN) */
 #endif /* CONFIG_COMMON_RUNTIME */
 #endif /* !CONFIG_ZEPHYR */
 
-#if defined(CONFIG_ZEPHYR) && defined(TEST_BUILD)
-#include <kernel.h>
-
-/**
- * @brief Get the Zephyr thread ID for the given task
- *
- * @param cros_tid A valid cros TASK_ID_* entry
- * @return The Zephyr thread ID
- */
-k_tid_t task_get_zephyr_tid(size_t cros_tid);
-#endif /* CONFIG_ZEPHYR && TEST_BUILD */
-
-#endif  /* __CROS_EC_TASK_H */
+#endif /* __CROS_EC_TASK_H */

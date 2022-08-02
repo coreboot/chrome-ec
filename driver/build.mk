@@ -110,11 +110,16 @@ driver-$(CONFIG_LED_DRIVER_LM3630A)+=led/lm3630a.o
 driver-$(CONFIG_LED_DRIVER_LP5562)+=led/lp5562.o
 driver-$(CONFIG_LED_DRIVER_MP3385)+=led/mp3385.o
 driver-$(CONFIG_LED_DRIVER_OZ554)+=led/oz554.o
+driver-$(CONFIG_LED_DRIVER_IS31FL3733B)+=led/is31fl3733b.o
 driver-$(CONFIG_LED_DRIVER_IS31FL3743B)+=led/is31fl3743b.o
 driver-$(CONFIG_LED_DRIVER_AW20198)+=led/aw20198.o
+driver-$(CONFIG_LED_DRIVER_TLC59116F)+=led/tlc59116f.o
 
 # 7-segment display
 driver-$(CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY)+=led/max695x.o
+
+# Nvidia GPU D-Notify driver
+driver-$(CONFIG_GPU_NVIDIA)+=nvidia_gpu.o
 
 # Voltage regulators
 driver-$(CONFIG_REGULATOR_IR357X)+=regulator_ir357x.o
@@ -147,6 +152,7 @@ driver-$(CONFIG_THERMISTOR)+=temp_sensor/thermistor.o
 driver-$(CONFIG_THERMISTOR_NCP15WB)+=temp_sensor/thermistor_ncp15wb.o
 
 # Type-C port controller (TCPC) drivers
+driver-$(CONFIG_USB_PD_TCPM_CCGXXF)+=tcpm/ccgxxf.o
 driver-$(CONFIG_USB_PD_TCPM_STUB)+=tcpm/stub.o
 driver-$(CONFIG_USB_PD_TCPM_TCPCI)+=tcpm/tcpci.o
 driver-$(CONFIG_USB_PD_TCPM_FUSB302)+=tcpm/fusb302.o
@@ -159,6 +165,7 @@ endif
 driver-$(CONFIG_USB_PD_TCPM_ANX74XX)+=tcpm/anx74xx.o
 driver-$(CONFIG_USB_PD_TCPM_ANX7688)+=tcpm/anx7688.o
 driver-$(CONFIG_USB_PD_TCPM_ANX7447)+=tcpm/anx7447.o
+driver-$(CONFIG_USB_PD_TCPM_PS8745)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_PS8751)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_PS8755)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_PS8705)+=tcpm/ps8xxx.o
@@ -173,6 +180,7 @@ driver-$(CONFIG_USB_PD_TCPM_FUSB307)+=tcpm/fusb307.o
 driver-$(CONFIG_USB_PD_TCPM_STM32GX)+=tcpm/stm32gx.o
 
 # Type-C Retimer drivers
+driver-$(CONFIG_USBC_RETIMER_ANX7483)+=retimer/anx7483.o
 driver-$(CONFIG_USBC_RETIMER_INTEL_BB)+=retimer/bb_retimer.o
 driver-$(CONFIG_USBC_RETIMER_KB800X)+=retimer/kb800x.o
 driver-$(CONFIG_USBC_RETIMER_NB7V904M)+=retimer/nb7v904m.o
@@ -201,6 +209,7 @@ driver-$(CONFIG_USB_MUX_PS8743)+=usb_mux/ps8743.o
 driver-$(CONFIG_USB_MUX_PS8822)+=usb_mux/ps8822.o
 driver-$(CONFIG_USB_MUX_TUSB1044)+=usb_mux/tusb1064.o
 driver-$(CONFIG_USB_MUX_TUSB1064)+=usb_mux/tusb1064.o
+driver-$(CONFIG_USB_MUX_TUSB546)+=usb_mux/tusb1064.o
 driver-$(CONFIG_USB_MUX_VIRTUAL)+=usb_mux/virtual.o
 
 # USB Hub with I2C interface
@@ -225,6 +234,7 @@ driver-$(CONFIG_LN9310)+=ln9310.o
 driver-$(CONFIG_MCDP28X0)+=mcdp28x0.o
 
 # Wireless Power Chargers
+driver-$(CONFIG_CPS8100)+=wpc/cps8100.o
 driver-$(HAS_TASK_WPC) += wpc/p9221.o
 
 # Buck-Boost converters

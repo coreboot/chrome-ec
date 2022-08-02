@@ -8,13 +8,13 @@
 #ifndef __CROS_EC_COMPILE_TIME_MACROS_H
 #define __CROS_EC_COMPILE_TIME_MACROS_H
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_ZEPHYR)
 #include <type_traits>
 #endif
 
 /* sys/util.h in zephyr provides equivalents to most of these macros */
 #ifdef CONFIG_ZEPHYR
-#include <sys/util.h>
+#include <zephyr/sys/util.h>
 #endif
 
 #ifdef __cplusplus
@@ -69,7 +69,7 @@
 
 /* Just in case - http://gcc.gnu.org/onlinedocs/gcc/Offsetof.html */
 #ifndef offsetof
-#define offsetof(type, member)  __builtin_offsetof(type, member)
+#define offsetof(type, member) __builtin_offsetof(type, member)
 #endif
 
 #define member_size(type, member) sizeof(((type *)0)->member)
@@ -78,9 +78,15 @@
  * Bit operation macros.
  */
 #ifndef CONFIG_ZEPHYR
-#define BIT(nr)			(1U << (nr))
+#define BIT(nr) (1U << (nr))
+/*
+ * Set or clear <bit> of <var> depending on <set>.
+ * It also supports setting and clearing (e.g. SET_BIT, CLR_BIT) macros.
+ */
+#define WRITE_BIT(var, bit, set) \
+	((var) = (set) ? ((var) | BIT(bit)) : ((var) & ~BIT(bit)))
 #endif
-#define BIT_ULL(nr)		(1ULL << (nr))
+#define BIT_ULL(nr) (1ULL << (nr))
 
 /*
  * Create a bit mask from least significant bit |l|
@@ -96,8 +102,8 @@
  * warnings for BIT(31+1).
  */
 #ifndef CONFIG_ZEPHYR
-#define GENMASK(h, l)     (((BIT(h)<<1)     - 1) ^ (BIT(l)     - 1))
-#define GENMASK_ULL(h, l) (((BIT_ULL(h)<<1) - 1) ^ (BIT_ULL(l) - 1))
+#define GENMASK(h, l) (((BIT(h) << 1) - 1) ^ (BIT(l) - 1))
+#define GENMASK_ULL(h, l) (((BIT_ULL(h) << 1) - 1) ^ (BIT_ULL(l) - 1))
 #endif
 
 #endif /* __CROS_EC_COMPILE_TIME_MACROS_H */

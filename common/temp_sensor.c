@@ -19,6 +19,7 @@
 #include "temp_sensor/temp_sensor.h"
 #endif
 
+#ifndef CONFIG_ZEPHYR
 int temp_sensor_read(enum temp_sensor_id id, int *temp_ptr)
 {
 	const struct temp_sensor_t *sensor;
@@ -27,12 +28,9 @@ int temp_sensor_read(enum temp_sensor_id id, int *temp_ptr)
 		return EC_ERROR_INVAL;
 	sensor = temp_sensors + id;
 
-#ifdef CONFIG_ZEPHYR
-	return sensor->read(sensor, temp_ptr);
-#else
 	return sensor->read(sensor->idx, temp_ptr);
-#endif
 }
+#endif
 
 static void update_mapped_memory(void)
 {
@@ -46,8 +44,7 @@ static void update_mapped_memory(void)
 		 */
 		if (i == EC_TEMP_SENSOR_ENTRIES)
 			mptr = host_get_memmap(EC_MEMMAP_TEMP_SENSOR_B);
-		else if (i >= EC_TEMP_SENSOR_ENTRIES +
-			 EC_TEMP_SENSOR_B_ENTRIES)
+		else if (i >= EC_TEMP_SENSOR_ENTRIES + EC_TEMP_SENSOR_B_ENTRIES)
 			break;
 
 		switch (temp_sensor_read(i, &t)) {
@@ -149,8 +146,7 @@ static int command_temps(int argc, char **argv)
 {
 	return print_temps();
 }
-DECLARE_CONSOLE_COMMAND(temps, command_temps,
-			NULL,
+DECLARE_CONSOLE_COMMAND(temps, command_temps, NULL,
 			"Print temp sensors and fan speed");
 #endif
 
@@ -174,6 +170,5 @@ temp_sensor_command_get_info(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_TEMP_SENSOR_GET_INFO,
-		     temp_sensor_command_get_info,
+DECLARE_HOST_COMMAND(EC_CMD_TEMP_SENSOR_GET_INFO, temp_sensor_command_get_info,
 		     EC_VER_MASK(0));

@@ -36,8 +36,8 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
 /* USBC TCPC configuration */
 const struct tcpc_config_t tcpc_config[] = {
@@ -86,21 +86,25 @@ struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		.i2c_port = I2C_PORT_USB_PPC_BC12,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.frs_en = IOEX_USB_C0_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C1] = {
 		.i2c_port = I2C_PORT_USB_PPC_BC12,
 		.i2c_addr_flags = SYV682X_ADDR2_FLAGS,
+		.frs_en = IOEX_USB_C1_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C2] = {
 		.i2c_port = I2C_PORT_USB_PPC_BC12,
 		.i2c_addr_flags = SYV682X_ADDR1_FLAGS,
+		.frs_en = IOEX_USB_C2_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C3] = {
 		.i2c_port = I2C_PORT_USB_PPC_BC12,
 		.i2c_addr_flags = SYV682X_ADDR3_FLAGS,
+		.frs_en = IOEX_USB_C3_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 };
@@ -136,7 +140,7 @@ const struct usb_mux usb_muxes[] = {
 		.driver = &bb_usb_retimer,
 		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_C0_C1_MUX,
-		.i2c_addr_flags = USBC_PORT_C0_C2_BB_RETIMER_I2C_ADDR,
+		.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
 		.next_mux = &usbc0_tcss_usb_mux,
 	},
 	[USBC_PORT_C1] = {
@@ -144,7 +148,7 @@ const struct usb_mux usb_muxes[] = {
 		.driver = &bb_usb_retimer,
 		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_C0_C1_MUX,
-		.i2c_addr_flags = USBC_PORT_C1_C3_BB_RETIMER_I2C_ADDR,
+		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
 		.next_mux = &usbc1_tcss_usb_mux,
 	},
 	[USBC_PORT_C2] = {
@@ -152,7 +156,7 @@ const struct usb_mux usb_muxes[] = {
 		.driver = &bb_usb_retimer,
 		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_C2_C3_MUX,
-		.i2c_addr_flags = USBC_PORT_C0_C2_BB_RETIMER_I2C_ADDR,
+		.i2c_addr_flags = USBC_PORT_C2_BB_RETIMER_I2C_ADDR,
 		.next_mux = &usbc2_tcss_usb_mux,
 	},
 	[USBC_PORT_C3] = {
@@ -160,7 +164,7 @@ const struct usb_mux usb_muxes[] = {
 		.driver = &bb_usb_retimer,
 		.hpd_update = bb_retimer_hpd_update,
 		.i2c_port = I2C_PORT_USB_C2_C3_MUX,
-		.i2c_addr_flags = USBC_PORT_C1_C3_BB_RETIMER_I2C_ADDR,
+		.i2c_addr_flags = USBC_PORT_C3_BB_RETIMER_I2C_ADDR,
 		.next_mux = &usbc3_tcss_usb_mux,
 	},
 };
@@ -248,8 +252,8 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	}
 
 	if (voltage < BC12_MIN_VOLTAGE) {
-		CPRINTS("%s: port %d: vbus %d lower than %d", __func__,
-			port, voltage, BC12_MIN_VOLTAGE);
+		CPRINTS("%s: port %d: vbus %d lower than %d", __func__, port,
+			voltage, BC12_MIN_VOLTAGE);
 		return 1;
 	}
 
@@ -290,7 +294,7 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 		 * which powers I2C controller within retimer
 		 */
 		msleep(1);
-	} else{
+	} else {
 		ioex_set_level(rst_signal, 0);
 		msleep(1);
 	}
@@ -304,23 +308,21 @@ void board_reset_pd_mcu(void)
 	 */
 	gpio_set_level(GPIO_USB_C0_C1_TCPC_RST_ODL, 0);
 	gpio_set_level(GPIO_USB_C2_C3_TCPC_RST_ODL, 0);
-	gpio_set_level(IOEX_USB_C0_RT_RST_ODL, 0);
-	gpio_set_level(IOEX_USB_C1_RT_RST_ODL, 0);
-	gpio_set_level(IOEX_USB_C2_RT_RST_ODL, 0);
-	gpio_set_level(IOEX_USB_C3_RT_RST_ODL, 0);
 	/*
 	 * delay for power-on to reset-off and min. assertion time
 	 */
-	msleep(20);
+	msleep(NCT38XX_RESET_HOLD_DELAY_MS);
 	gpio_set_level(GPIO_USB_C0_C1_TCPC_RST_ODL, 1);
 	gpio_set_level(GPIO_USB_C2_C3_TCPC_RST_ODL, 1);
-	gpio_set_level(IOEX_USB_C0_RT_RST_ODL, 1);
-	gpio_set_level(IOEX_USB_C1_RT_RST_ODL, 1);
-	gpio_set_level(IOEX_USB_C2_RT_RST_ODL, 1);
-	gpio_set_level(IOEX_USB_C3_RT_RST_ODL, 1);
+
+	nct38xx_reset_notify(USBC_PORT_C0);
+	nct38xx_reset_notify(USBC_PORT_C1);
+	nct38xx_reset_notify(USBC_PORT_C2);
+	nct38xx_reset_notify(USBC_PORT_C3);
 
 	/* wait for chips to come up */
-	msleep(50);
+	if (NCT3808_RESET_POST_DELAY_MS != 0)
+		msleep(NCT3808_RESET_POST_DELAY_MS);
 }
 
 static void board_tcpc_init(void)
@@ -363,6 +365,7 @@ uint16_t tcpc_get_alert_status(void)
 
 	if (gpio_get_level(GPIO_USB_C0_C1_TCPC_INT_ODL) == 0)
 		status |= PD_STATUS_TCPC_ALERT_0 | PD_STATUS_TCPC_ALERT_1;
+
 	if (gpio_get_level(GPIO_USB_C2_C3_TCPC_INT_ODL) == 0)
 		status |= PD_STATUS_TCPC_ALERT_2 | PD_STATUS_TCPC_ALERT_3;
 
@@ -389,7 +392,7 @@ void tcpc_alert_event(enum gpio_signal signal)
 		schedule_deferred_pd_interrupt(USBC_PORT_C0);
 		break;
 	case GPIO_USB_C2_C3_TCPC_INT_ODL:
-		schedule_deferred_pd_interrupt(USBC_PORT_C1);
+		schedule_deferred_pd_interrupt(USBC_PORT_C2);
 		break;
 	default:
 		break;
@@ -400,16 +403,16 @@ void bc12_interrupt(enum gpio_signal signal)
 {
 	switch (signal) {
 	case GPIO_USB_C0_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P0, USB_CHG_EVENT_BC12);
+		usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 		break;
 	case GPIO_USB_C1_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P1, USB_CHG_EVENT_BC12);
+		usb_charger_task_set_event(1, USB_CHG_EVENT_BC12);
 		break;
 	case GPIO_USB_C2_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P2, USB_CHG_EVENT_BC12);
+		usb_charger_task_set_event(2, USB_CHG_EVENT_BC12);
 		break;
 	case GPIO_USB_C3_BC12_INT_ODL:
-		task_set_event(TASK_ID_USB_CHG_P3, USB_CHG_EVENT_BC12);
+		usb_charger_task_set_event(3, USB_CHG_EVENT_BC12);
 		break;
 	default:
 		break;

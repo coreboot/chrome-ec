@@ -4,6 +4,7 @@
  */
 #include "charge_manager.h"
 #include "chipset.h"
+#include "gpio.h"
 #include "timer.h"
 #include "usb_dp_alt_mode.h"
 #include "usb_mux.h"
@@ -14,8 +15,8 @@
 #error Goroh reference must have at least one 3.0 A port
 #endif
 
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 
 void svdm_set_hpd_gpio(int port, int en)
 {
@@ -37,15 +38,7 @@ int svdm_get_hpd_gpio(int port)
 
 int pd_snk_is_vbus_provided(int port)
 {
-	/* TODO(yllin): check SNK VBUS detection */
 	return ppc_is_vbus_present(port);
-
-	/*
-	 * (b:181203590#comment20) TODO(yllin): use
-	 *  PD_VSINK_DISCONNECT_PD for non-5V case.
-	 */
-	return charge_manager_get_vbus_voltage(port) >=
-	       PD_V_SINK_DISCONNECT_MAX;
 }
 
 void pd_power_supply_reset(int port)

@@ -35,7 +35,8 @@ Download the [Dragonclaw schematics, layout, and BOM][dragonclaw schematics].
 
 <!-- mdformat off(b/139308852) -->
 *** note
-**Googlers**: You can pick up the Dragonclaw development board at Chromestop.
+**Googlers**: You can pick up a Dragonclaw development board at Chromestop.
+
 **Partners**: You can request a Dragonclaw development board from Google.
 ***
 
@@ -46,37 +47,53 @@ have already been reworked.
 ***
 <!-- mdformat on -->
 
-This FPMCU board is the Dartmonkey Rev 0.1. |
-------------------------------------------- |
-![Dartmonkey board]                         |
+This FPMCU board is Icetower Rev 0.1. |
+------------------------------------- |
+![Icetower board]                     |
+
+<!-- mdformat off(b/139308852) -->
+*** note
+**Googlers**: You can pick up an Icetower development board at Chromestop.
+
+**Partners**: You can request an Icetower development board from Google.
+***
+
+*** note
+The instructions below to flash the FPMCU using the [Servo Micro] and `flash_ec`
+do not work at the moment with the Icetower board.
+See details in this
+[bug report](https://issuetracker.google.com/177331210).
+
+The recommended workaround is to
+[use J-Link to flash the FPMCU](./fingerprint-debugging.md#flash).
+***
+<!-- mdformat on -->
 
 ### Servo
 
 Servo is a general purpose debug board that connects to a header on the FPMCU
 board. Among other things, the servo supplies power to the FPMCU and can be used
 to program the FPMCU, interact with the EC console, take power measurements, and
-debug a running program. It supports SPI, UART, I2C, as well as JTAG/SWD.
+debug a running program.
 
-There are two different servo debugger setups supported, the
-[Servo Micro](#servo-micro) and the [Servo V2 + Yoshi](#servo-v2-yoshi). The
-servo micro is recommended for its simplicity. It lacks builtin JTAG/SWD support
-for single step debugging, but Dragonclaw v0.2 has an
+There are several variants of Servo and the fingerprint team uses the
+[Servo Micro](#servo-micro) for its simplicity. It lacks builtin JTAG/SWD
+support for single step debugging, but Dragonclaw v0.2 and Icetower v0.1 have an
 [SWD connector](#servo-micro-swd) that can be used.
 
-[Servo Micro](#servo-micro) | [ServoV2 + Yoshi](#servo-v2-yoshi)
---------------------------- | ----------------------------------
-![Servo Micro]              | ServoV2 ![Servo v2] Yoshi Flex ![Standard Yoshi Flex]
+[Servo Micro](#servo-micro) |
+--------------------------- |
+![Servo Micro]              |
 
 <!-- mdformat off(b/139308852) -->
 *** note
-For more information about both servos, see [servo].
+For more information about Servo, see [servo].
 ***
 <!-- mdformat on -->
 
 ### Servo Micro
 
-Unlike the Servo V2, the newer servo micro does not require any adapters to
-interface with the FPMCU board.
+Servo Micro does not require any adapters to interface with the FPMCU board.
 
 As you can see below, one end connects to the FPMCU board and the other connect
 to the developer's computer over micro USB.
@@ -92,68 +109,6 @@ For more information about Servo Micro, see [Servo Micro Info].
 #### Using SWD (Optional) {#servo-micro-swd}
 
 Instructions for setup are described in [Fingerprint Debugging].
-
-### Servo V2 + Yoshi
-
-Servo V2 is the original full featured debugger. It requires a
-[Yoshi Flex Cable](#yoshi-flex-cable) to interface with the FPMCU.
-
-![Servo v2]
-
-<!-- mdformat off(b/139308852) -->
-*** note
-NOTE: More information on servo can be found in the [servo] documentation.
-***
-<!-- mdformat on -->
-
-#### Yoshi Flex Cable
-
-The Yoshi Flex cable is used to connect Servo v2 to the FPMCU board. The
-standard cable does not work with SWD, but a simple rework can be performed to
-support SWD.
-
-Standard Yoshi Flex    | Yoshi Flex Reworked to Support SWD
----------------------- | -------------------------------------
-![Standard Yoshi Flex] | ![Yoshi Flex Reworked to Support SWD]
-
-Rework steps:
-
-*   Remove R18 and R19
-*   Wire from Pin 6 of U21 to right side of R18
-*   Wire from Pin 6 of U21 to right side of R19
-
-#### Micro USB Cable
-
-A micro USB cable is needed to connect the the servo v2 board to your host Linux
-development machine.
-
-*   [Micro USB Cable]
-
-#### Servo V2 Hardware Setup
-
-1.  Connect the Yoshi Flex cable to servo, paying attention to the pin
-    numbering.
-
-    ![Connect Yoshi Flex] ![Another Yoshi Flex image]
-
-2.  Connect the other end of the Yoshi Flex cable to the servo header on the
-    FPMCU board.
-
-    ![Connect Yoshi Flex to FPMCU board] ![Another image]
-
-3.  Connect the fingerprint sensor to the header on the FPMCU board.
-
-4.  Connect the micro USB cable to servo's `HOST_IN` port. The other end of the
-    USB cable should be plugged into your host development machine.
-
-    ![Connect USB to Servo]
-
-5.  Optional: Connect SWD Debugger
-
-    If you want to use SWD for debugging, connect your debugger to the `JTAG`
-    header on servo v2.
-
-    ![Connect SWD Debugger]
 
 ## Software Setup
 
@@ -360,6 +315,11 @@ You can get a summary of the power over `N` seconds with:
 (chroot) $ dut-control -t N pp3300_dx_mcu_mv pp3300_dx_fp_mv pp1800_dx_fp_mv pp3300_dx_mcu_mw pp3300_dx_fp_mw pp1800_dx_fp_mw
 ```
 
+When measuring the power, make sure that any debuggers are disconnected. The
+most reliable way to make sure it is disconnected is to physically disconnect
+the debugger and servo_micro from the board. Then re-attach servo_micro and
+restart `servod`.
+
 <!-- mdformat off(b/139308852) -->
 *** note
 The `_mv` suffix denotes millivolt and `_mw` suffix denotes milliwatt.
@@ -411,7 +371,7 @@ some docs to help you get started:
 *   [Git: Concepts and Workflow]: Good overview of how `git` actually works.
 *   [Gerrit: Concepts and Workflow]: Good overview of how Gerrit works; assumes
     you understand `git` basics.
-*   [Life of a patch]: Android workflow, but similar to Chrome OS.
+*   [Life of a patch]: Android workflow, but similar to ChromeOS.
 
 The Gerrit dashboard that will show your pending reviews (and ones we have for
 you):
@@ -478,7 +438,7 @@ from the UI.
 
 ### Developer Mode and Write Protection
 
-Make sure that your fingerprint-equipped Chrome OS device is in [developer mode]
+Make sure that your fingerprint-equipped ChromeOS device is in [developer mode]
 with a *test* image flashed and [hardware write protection] disabled. Using the
 test image will allow you to SSH into the device and disabling hardware write
 protection allows you to have full access to flashing the FPMCU firmware.
@@ -529,6 +489,8 @@ From the DUT, flash the firmware you copied:
 ## Commit-queue Prototype Environment
 
 ![CQ Prototype Environment]
+
+![FPMCU devboard environment v2 with satlab]
 
 ## Troubleshooting
 
@@ -632,18 +594,9 @@ Make sure that this interface is disabled:
 
 [Servo Micro]: ../images/servo_micro.jpg
 [Servo Micro with Dragonclaw]: ../images/servomicro_dragonclaw.jpg
-[Servo v2]: ../images/servo_v2.jpg
-[Standard Yoshi Flex]: ../images/yoshi_flex.jpg
-[Yoshi Flex Reworked to Support SWD]: ../images/yoshi_flex_swd_rework.jpg
 [Dragonclaw board]: ../images/dragonclaw_rev_0.2.jpg
 [Dragonclaw servo fix diagram]: ../images/dragonclaw_servo_fix.jpg
-[Connect USB to Servo]: ../images/servo_v2_with_micro_usb.jpg
-[Connect Yoshi Flex]: ../images/servo_v2_with_yoshi_flex.jpg
-[Another Yoshi Flex image]: ../images/servo_v2_with_yoshi_flex2.jpg
-[Connect Yoshi Flex to FPMCU board]: ../images/dragonclaw_yoshi_flex_header.jpg
-[Another image]: ../images/dragonclaw_yoshi_flex_header2.jpg
-[Connect SWD Debugger]: ../images/servo_v2_jtag_header.jpg
-[Dartmonkey board]: ../images/dartmonkey.jpg
+[Icetower board]: ../images/icetower_v0.1.jpg
 
 <!-- If you make changes to the docs below make sure to regenerate the JPEGs by
      appending "export/pdf" to the Google Drive link. -->
@@ -655,3 +608,7 @@ Make sure that this interface is disabled:
 <!-- https://docs.google.com/drawings/d/1w2qbb4AsSxY-KTK2vXZ6TKeWHveWvS3Dkgh61ocu0wc -->
 
 [CQ Prototype Environment]: ../images/CQ_Prototype_Environment.jpg
+
+<!-- https://docs.google.com/drawings/d/13hsnPBa1aeMVU7CjrK1nz-aeYSQcdLxrylOEJNOiEA0 -->
+
+[FPMCU devboard environment v2 with satlab]: ../images/FPMCU_devboard_environment_v2_with_Satlab.jpg

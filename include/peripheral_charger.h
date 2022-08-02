@@ -47,16 +47,16 @@
  *                         v |                      |
  *                  +--------+------+               |
  *   +------------->|    ENABLED    |               |
- *   |              +-----+-+-------+               |
- *   |                    | |                       |
- *   |   DEVICE_CONNECTED | | DEVICE_DOCKED         |
- *   |                    | v                       |
- *   | DEVICE_LOST  +---------------+               |
- *   +--------------+     DOCKED    +---------------+
- *   |              +-------+-------+               |
- *   |                    | |                       |
- *   |                    | | DEVICE_CONNECTED      |
- *   |                    v v                       |
+ *   |              +-----+------+--+               |
+ *   |                    |      |                  |
+ *   |    DEVICE_DETECTED |      | DEVICE_CONNECTED |
+ *   |                    v      |                  |
+ *   | DEVICE_LOST  +----------+ |                  |
+ *   +--------------+ DETECTED +-|------------------+
+ *   |              +-----+----+ |     ERROR        |
+ *   |                    |      |                  |
+ *   |    DEVICE_CONNECTED|      |                  |
+ *   |                    v      v                  |
  *   |              +---------------+               |
  *   +--------------+   CONNECTED   +---------------+
  *   | DEVICE_LOST  +------+--------+  ERROR        |
@@ -69,7 +69,7 @@
  *     DEVICE_LOST  +---------------+  ERROR
  *
  *
- * In download (update firmware) mode, the state machine transitions as follows:
+ * In download (firmware update) mode, the state machine transitions as follows:
  *
  *                  +---------------+
  *                  |   DOWNLOAD    |
@@ -87,7 +87,7 @@
  */
 
 /* Size of event queue. Use it to initialize struct pchg.events. */
-#define PCHG_EVENT_QUEUE_SIZE	8
+#define PCHG_EVENT_QUEUE_SIZE 8
 
 enum pchg_event {
 	/* No event */
@@ -143,7 +143,7 @@ enum pchg_error {
 	PCHG_ERROR_OTHER,
 };
 
-#define PCHG_ERROR_MASK(e)	BIT(e)
+#define PCHG_ERROR_MASK(e) BIT(e)
 
 enum pchg_mode {
 	PCHG_MODE_NORMAL = 0,
@@ -189,7 +189,7 @@ struct pchg_update {
  */
 struct pchg {
 	/* Static configuration */
-	const struct pchg_config * const cfg;
+	const struct pchg_config *const cfg;
 	/* Current state of the port */
 	enum pchg_state state;
 	/* Event queue */
@@ -206,6 +206,8 @@ struct pchg {
 	uint8_t battery_percent;
 	/* Number of dropped events (due to queue overflow) */
 	uint32_t dropped_event_count;
+	/* Number of dropped host events (due to queue overflow) */
+	uint32_t dropped_host_event_count;
 	/* enum pchg_mode */
 	uint8_t mode;
 	/* FW version */
@@ -244,7 +246,7 @@ extern struct pchg pchgs[];
 extern const int pchg_count;
 
 /* Utility macro converting port config to port number. */
-#define PCHG_CTX_TO_PORT(ctx)	((ctx) - &pchgs[0])
+#define PCHG_CTX_TO_PORT(ctx) ((ctx) - &pchgs[0])
 
 /**
  * Interrupt handler for a peripheral charger.
@@ -257,5 +259,13 @@ void pchg_irq(enum gpio_signal signal);
  * Task running a state machine for charging peripheral devices.
  */
 void pchg_task(void *u);
+
+/**
+ * Turn on/off power for a PCHG charger.
+ *
+ * @param port  Port number of the PCHG charger.
+ * @param on
+ */
+__override_proto void board_pchg_power_on(int port, bool on);
 
 #endif /* __CROS_EC_PERIPHERAL_CHARGER_H */

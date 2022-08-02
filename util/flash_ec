@@ -120,6 +120,7 @@ BOARDS_NPCX_SPI=(
 
 BOARDS_NPCX_INT_SPI=(
 	adlrvpp_npcx
+	mtlrvpp_npcx
 )
 
 BOARDS_SPI_1800MV=(
@@ -398,6 +399,9 @@ SERVO_TYPE="$(dut_control_get servo_type || :)"
 
 if [[ "${SERVO_TYPE}" =~ ^servo_v4(p1)?_with_.*$ ]]; then
 	ACTIVE_DEVICE="$(dut_control_get active_dut_controller)"
+	if [[ ${ACTIVE_DEVICE} == neither ]]; then
+          die "Could not determine servo V4 active device"
+        fi
 else
 	ACTIVE_DEVICE="${SERVO_TYPE}"
 fi
@@ -672,8 +676,6 @@ fi
 # Possible default EC images
 if [ "${FLAGS_ro}" = ${FLAGS_TRUE} ] ; then
 	EC_FILE=ec.RO.flat
-elif [ "${FLAGS_zephyr}" = ${FLAGS_TRUE} ] ; then
-	EC_FILE=zephyr.bin
 else
 	EC_FILE=ec.bin
 fi
@@ -829,8 +831,9 @@ function servo_restore() {
 
 function claim_pty() {
 	if grep -q cros_sdk /proc/1/cmdline; then
-		die "You must run this tool in a chroot that was entered with" \
-		    "'cros_sdk --no-ns-pid' (see crbug.com/444931 for details)"
+		warn "You might want to run this tool in a chroot that was" \
+		     "entered with 'cros_sdk --no-ns-pid'" \
+		     "(see crbug.com/444931 for details)"
 	fi
 
 	if [[ -z "$1" ]]; then
@@ -1258,7 +1261,7 @@ function dut_i2c_dev() {
 	local has_i2c_pseudo="$(dut_control_get_or_die \
 		"${ACTIVE_DEVICE}_i2c_pseudo_is_running")"
 	if [[ "${has_i2c_pseudo}" == False ]]; then
-		error "i2c-pseudo module is not running."
+		error "i2c-pseudo module is not running on ${ACTIVE_DEVICE}."
 		error "Please follow https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/util/iteflash.md#i2c-pseudo"
 		die "to install i2c-pseudo module."
 	fi
@@ -1496,8 +1499,26 @@ function flash_npcx_uut() {
 		if [[ "${FLAGS_verbose}" = ${FLAGS_TRUE} ]]; then
 			echo "${UUT_MON[*]}"
 		fi
+
+		local monitor_res=0
 		print_or_run timeout -k 10 -s 9 "${FLAGS_timeout}" \
-			"${UUT_MON[@]}" || die "Failed to load monitor binary."
+			"${UUT_MON[@]}" || monitor_res=$?
+
+		if [[ ${monitor_res} != 0 ]]; then
+			# Try to determine if WP is enabled
+			local dut_res=0
+			local wp_state
+			wp_state=$(dut-control fw_wp_state) || dut_res=$?
+
+			if [[ ${dut_res} = 0 ]]; then
+				if echo "${wp_state}" | grep "on"; then
+					die "Failed to load monitor binary, WP is enabled"
+				fi
+			fi
+
+			die "Failed to load monitor binary."
+		fi
+
 
 		info "Programming EC firmware image."
 		local UUT_WR=( "${NPCX_UUT}" "${UUT_ARGS[@]}"      \

@@ -50,7 +50,7 @@ struct charger_drv {
 	enum ec_error_list (*post_init)(int chgnum);
 
 	/* Get charger information */
-	const struct charger_info * (*get_info)(int chgnum);
+	const struct charger_info *(*get_info)(int chgnum);
 
 	/* Get smart battery charger status. Supported flags may vary. */
 	enum ec_error_list (*get_status)(int chgnum, int *status);
@@ -85,17 +85,19 @@ struct charger_drv {
 	enum ec_error_list (*get_voltage)(int chgnum, int *voltage);
 	enum ec_error_list (*set_voltage)(int chgnum, int voltage);
 
-
 	/* Get the measured charge current and voltage in mA/mV */
 	enum ec_error_list (*get_actual_current)(int chgnum, int *current);
 	enum ec_error_list (*get_actual_voltage)(int chgnum, int *voltage);
-
 
 	/* Discharge battery when on AC power. */
 	enum ec_error_list (*discharge_on_ac)(int chgnum, int enable);
 
 	/* Get the VBUS voltage (mV) from the charger */
 	enum ec_error_list (*get_vbus_voltage)(int chgnum, int port,
+					       int *voltage);
+
+	/* Get the Vsys voltage (mV) from the charger */
+	enum ec_error_list (*get_vsys_voltage)(int chgnum, int port,
 					       int *voltage);
 
 	/* Set desired input current value */
@@ -136,6 +138,14 @@ struct charger_drv {
 	/* Enable/disable linear charging */
 	enum ec_error_list (*enable_linear_charge)(int chgnum, bool enable);
 
+	/*
+	 * Enable/disable bypass mode
+	 *
+	 * Callers are responsible for checking required conditions beforehand.
+	 * (e.g supplier == CHARGE_SUPPLIER_DEDICATED, 20 V < input_voltage)
+	 */
+	enum ec_error_list (*enable_bypass_mode)(int chgnum, bool enable);
+
 	/* Dumps charger registers */
 	void (*dump_registers)(int chgnum);
 };
@@ -172,13 +182,13 @@ enum chg_id {
 void charger_get_params(struct charger_params *chg);
 
 /* Bits to indicate which fields of struct charger_params could not be read */
-#define CHG_FLAG_BAD_CURRENT		0x00000001
-#define CHG_FLAG_BAD_VOLTAGE		0x00000002
-#define CHG_FLAG_BAD_INPUT_CURRENT	0x00000004
-#define CHG_FLAG_BAD_STATUS		0x00000008
-#define CHG_FLAG_BAD_OPTION		0x00000010
+#define CHG_FLAG_BAD_CURRENT 0x00000001
+#define CHG_FLAG_BAD_VOLTAGE 0x00000002
+#define CHG_FLAG_BAD_INPUT_CURRENT 0x00000004
+#define CHG_FLAG_BAD_STATUS 0x00000008
+#define CHG_FLAG_BAD_OPTION 0x00000010
 /* All of the above CHG_FLAG_BAD_* bits */
-#define CHG_FLAG_BAD_ANY                0x0000001f
+#define CHG_FLAG_BAD_ANY 0x0000001f
 
 /**
  * Return the closest match the charger can supply to the requested current.
@@ -268,6 +278,9 @@ enum ec_error_list charger_discharge_on_ac(int enable);
 
 /* Get the VBUS voltage (mV) from the charger */
 enum ec_error_list charger_get_vbus_voltage(int port, int *voltage);
+
+/* Get the Vsys voltage (mV) from the charger */
+enum ec_error_list charger_get_vsys_voltage(int port, int *voltage);
 
 /* Custom board function to discharge battery when on AC power */
 int board_discharge_on_ac(int enable);
@@ -363,6 +376,18 @@ enum ec_error_list charger_is_icl_reached(int chgnum, bool *reached);
  * @return EC_SUCCESS on success, error otherwise.
  */
 enum ec_error_list charger_enable_linear_charge(int chgnum, bool enable);
+
+/**
+ * Enable/disable bypass mode
+ *
+ * Bypass mode allows AC power to be supplied directly to the system rail
+ * instead of going through the charger.
+ *
+ * @param chgnum: Active charge port
+ * @param enable: Whether to enable or disable bypass mode.
+ * @return EC_SUCCESS on success, error otherwise.
+ */
+enum ec_error_list charger_enable_bypass_mode(int chgnum, int enable);
 
 /*
  * Print all charger info for debugging purposes

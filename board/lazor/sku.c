@@ -14,8 +14,8 @@
 #include "system.h"
 #include "util.h"
 
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
 static uint8_t sku_id;
 
@@ -90,4 +90,9 @@ int board_has_buck_ic(void)
 int board_has_ln9310(void)
 {
 	return get_model() == LIMOZEEN && system_get_board_version() < 8;
+}
+
+int board_has_side_volume_buttons(void)
+{
+	return get_model() == LAZOR;
 }

@@ -9,8 +9,8 @@
 	named-gpios {
 		compatible = "named-gpios";
 
-		entering_rw {
-			gpios = <&gpio0 1 GPIO_OUT_LOW>;
+		entering-rw {
+			gpios = <&gpio0 1 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_ENTERING_RW";
 		};
 	};

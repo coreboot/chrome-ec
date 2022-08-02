@@ -33,7 +33,7 @@ config PLATFORM_EC_DPTF
 
 config PLATFORM_EC_THERMISTOR
 	bool "Thermistor support"
-	depends on PLATFORM_EC_ADC
+	depends on ADC
 	help
 	  Enables support for thermistors (resistor whose resistance is
 	  strongly dependent on temperature) as temperature-sensor type.
@@ -79,7 +79,8 @@ endif # PLATFORM_EC_TEMP_SENSOR_FIRST_READ_DELAY
 
 config PLATFORM_EC_FAN
 	bool "Fan support"
-	depends on PLATFORM_EC_PWM
+	default y
+	depends on DT_HAS_CROS_EC_FANS_ENABLED
 	help
 	  Enables support for fans. Allows periodic thermal task to
 	  automatically set the fan speed (control temperature).
@@ -88,3 +89,14 @@ config PLATFORM_EC_FAN
 	  EC_CMD_PWM_SET_FAN_DUTY, EC_CMD_THERMAL_AUTO_FAN_CTRL are
 	  available. Also enables a periodic task (1s) to verify fan is
 	  running (is not stalled).
+
+if PLATFORM_EC_FAN
+
+config PLATFORM_EC_NUM_FANS
+	int "Number of fans"
+	default 1
+	help
+	  Declare the number of fans supported on this board and avilable
+	  for control through fan APIs.
+
+endif # PLATFORM_EC_FAN

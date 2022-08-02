@@ -28,10 +28,10 @@
 #define BDCR_SRC BDCR_SRC_LSI
 #define BDCR_RDY 0
 #endif
-#define BDCR_ENABLE_VALUE (STM32_RCC_BDCR_RTCEN | BDCR_RTCSEL(BDCR_SRC) | \
-			BDCR_RDY)
-#define BDCR_ENABLE_MASK (BDCR_ENABLE_VALUE | BDCR_RTCSEL_MASK | \
-			STM32_RCC_BDCR_BDRST)
+#define BDCR_ENABLE_VALUE \
+	(STM32_RCC_BDCR_RTCEN | BDCR_RTCSEL(BDCR_SRC) | BDCR_RDY)
+#define BDCR_ENABLE_MASK \
+	(BDCR_ENABLE_VALUE | BDCR_RTCSEL_MASK | STM32_RCC_BDCR_BDRST)
 
 #ifdef CONFIG_USB_PD_DUAL_ROLE
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT <= 3);
@@ -149,62 +149,61 @@ void chip_pre_init(void)
 	uint32_t apb2fz_reg = 0;
 
 #if defined(CHIP_FAMILY_STM32F0)
-	apb1fz_reg =
-		STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 | STM32_RCC_PB1_TIM6 |
-		STM32_RCC_PB1_TIM7 | STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
+	apb1fz_reg = STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 |
+		     STM32_RCC_PB1_TIM6 | STM32_RCC_PB1_TIM7 |
+		     STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
 	apb2fz_reg = STM32_RCC_PB2_TIM15 | STM32_RCC_PB2_TIM16 |
-		STM32_RCC_PB2_TIM17 | STM32_RCC_PB2_TIM1;
+		     STM32_RCC_PB2_TIM17 | STM32_RCC_PB2_TIM1;
 
 	/* enable clock to debug module before writing */
 	STM32_RCC_APB2ENR |= STM32_RCC_DBGMCUEN;
 #elif defined(CHIP_FAMILY_STM32F3)
-	apb1fz_reg =
-		STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 | STM32_RCC_PB1_TIM4 |
-		STM32_RCC_PB1_TIM5 | STM32_RCC_PB1_TIM6 | STM32_RCC_PB1_TIM7 |
-		STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
-	apb2fz_reg =
-		STM32_RCC_PB2_TIM15 | STM32_RCC_PB2_TIM16 | STM32_RCC_PB2_TIM17;
+	apb1fz_reg = STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 |
+		     STM32_RCC_PB1_TIM4 | STM32_RCC_PB1_TIM5 |
+		     STM32_RCC_PB1_TIM6 | STM32_RCC_PB1_TIM7 |
+		     STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
+	apb2fz_reg = STM32_RCC_PB2_TIM15 | STM32_RCC_PB2_TIM16 |
+		     STM32_RCC_PB2_TIM17;
 #elif defined(CHIP_FAMILY_STM32F4)
-	apb1fz_reg =
-		STM32_RCC_PB1_TIM2  | STM32_RCC_PB1_TIM3  | STM32_RCC_PB1_TIM4 |
-		STM32_RCC_PB1_TIM5  | STM32_RCC_PB1_TIM6  | STM32_RCC_PB1_TIM7 |
-		STM32_RCC_PB1_TIM12 | STM32_RCC_PB1_TIM13 | STM32_RCC_PB1_TIM14|
-		STM32_RCC_PB1_RTC   | STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
-	apb2fz_reg =
-		STM32_RCC_PB2_TIM1  | STM32_RCC_PB2_TIM8  | STM32_RCC_PB2_TIM9 |
-		STM32_RCC_PB2_TIM10 | STM32_RCC_PB2_TIM11;
+	apb1fz_reg = STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 |
+		     STM32_RCC_PB1_TIM4 | STM32_RCC_PB1_TIM5 |
+		     STM32_RCC_PB1_TIM6 | STM32_RCC_PB1_TIM7 |
+		     STM32_RCC_PB1_TIM12 | STM32_RCC_PB1_TIM13 |
+		     STM32_RCC_PB1_TIM14 | STM32_RCC_PB1_RTC |
+		     STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
+	apb2fz_reg = STM32_RCC_PB2_TIM1 | STM32_RCC_PB2_TIM8 |
+		     STM32_RCC_PB2_TIM9 | STM32_RCC_PB2_TIM10 |
+		     STM32_RCC_PB2_TIM11;
 #elif defined(CHIP_FAMILY_STM32L4)
 
-#ifdef	CHIP_VARIANT_STM32L431X
-	apb1fz_reg =
-		STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM7 | STM32_RCC_PB1_TIM6 |
-		STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
-	apb2fz_reg =
-		STM32_RCC_PB2_TIM1 | STM32_RCC_PB2_TIM15 | STM32_RCC_PB2_TIM16;
+#ifdef CHIP_VARIANT_STM32L431X
+	apb1fz_reg = STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM7 |
+		     STM32_RCC_PB1_TIM6 | STM32_RCC_PB1_WWDG |
+		     STM32_RCC_PB1_IWDG;
+	apb2fz_reg = STM32_RCC_PB2_TIM1 | STM32_RCC_PB2_TIM15 |
+		     STM32_RCC_PB2_TIM16;
 #else
-	apb1fz_reg =
-		STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 | STM32_RCC_PB1_TIM4 |
-		STM32_RCC_PB1_TIM5 | STM32_RCC_PB1_TIM6 | STM32_RCC_PB1_TIM7 |
-		STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
+	apb1fz_reg = STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 |
+		     STM32_RCC_PB1_TIM4 | STM32_RCC_PB1_TIM5 |
+		     STM32_RCC_PB1_TIM6 | STM32_RCC_PB1_TIM7 |
+		     STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
 	apb2fz_reg = STM32_RCC_PB2_TIM1 | STM32_RCC_PB2_TIM8;
 #endif
 #elif defined(CHIP_FAMILY_STM32L)
-	apb1fz_reg =
-		STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 | STM32_RCC_PB1_TIM4 |
-		STM32_RCC_PB1_WWDG | STM32_RCC_PB1_IWDG;
+	apb1fz_reg = STM32_RCC_PB1_TIM2 | STM32_RCC_PB1_TIM3 |
+		     STM32_RCC_PB1_TIM4 | STM32_RCC_PB1_WWDG |
+		     STM32_RCC_PB1_IWDG;
 	apb2fz_reg = STM32_RCC_PB2_TIM9 | STM32_RCC_PB2_TIM10 |
-		STM32_RCC_PB2_TIM11;
+		     STM32_RCC_PB2_TIM11;
 #elif defined(CHIP_FAMILY_STM32G4)
-	apb1fz_reg =
-		STM32_DBGMCU_APB1FZ_TIM2 | STM32_DBGMCU_APB1FZ_TIM3 |
-		STM32_DBGMCU_APB1FZ_TIM4 | STM32_DBGMCU_APB1FZ_TIM5 |
-		STM32_DBGMCU_APB1FZ_TIM6 | STM32_DBGMCU_APB1FZ_TIM7 |
-		STM32_DBGMCU_APB1FZ_RTC  | STM32_DBGMCU_APB1FZ_WWDG |
-		STM32_DBGMCU_APB1FZ_IWDG;
-	apb2fz_reg =
-		STM32_DBGMCU_APB2FZ_TIM1 | STM32_DBGMCU_APB2FZ_TIM8 |
-		STM32_DBGMCU_APB2FZ_TIM15 | STM32_DBGMCU_APB2FZ_TIM16 |
-		STM32_DBGMCU_APB2FZ_TIM17 | STM32_DBGMCU_APB2FZ_TIM20;
+	apb1fz_reg = STM32_DBGMCU_APB1FZ_TIM2 | STM32_DBGMCU_APB1FZ_TIM3 |
+		     STM32_DBGMCU_APB1FZ_TIM4 | STM32_DBGMCU_APB1FZ_TIM5 |
+		     STM32_DBGMCU_APB1FZ_TIM6 | STM32_DBGMCU_APB1FZ_TIM7 |
+		     STM32_DBGMCU_APB1FZ_RTC | STM32_DBGMCU_APB1FZ_WWDG |
+		     STM32_DBGMCU_APB1FZ_IWDG;
+	apb2fz_reg = STM32_DBGMCU_APB2FZ_TIM1 | STM32_DBGMCU_APB2FZ_TIM8 |
+		     STM32_DBGMCU_APB2FZ_TIM15 | STM32_DBGMCU_APB2FZ_TIM16 |
+		     STM32_DBGMCU_APB2FZ_TIM17 | STM32_DBGMCU_APB2FZ_TIM20;
 #elif defined(CHIP_FAMILY_STM32H7)
 	/* TODO(b/67081508) */
 #endif
@@ -269,11 +268,12 @@ void system_pre_init(void)
 #ifdef CONFIG_SOFTWARE_PANIC
 	uint16_t reason, info;
 	uint8_t exception, panic_flags;
+	struct panic_data *pdata;
 #endif
 
 	/* enable clock on Power module */
 #ifndef CHIP_FAMILY_STM32H7
-#ifdef	CHIP_FAMILY_STM32L4
+#ifdef CHIP_FAMILY_STM32L4
 	STM32_RCC_APB1ENR1 |= STM32_RCC_PWREN;
 #else
 	STM32_RCC_APB1ENR |= STM32_RCC_PWREN;
@@ -321,10 +321,10 @@ void system_pre_init(void)
 		/* Enable RTC and use LSI as clock source */
 		STM32_RCC_CSR = (STM32_RCC_CSR & ~0x00C30000) | 0x00420000;
 	}
-#elif defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32F3) || \
-	defined(CHIP_FAMILY_STM32L4) || \
-	defined(CHIP_FAMILY_STM32L5) || defined(CHIP_FAMILY_STM32F4) ||	\
-	defined(CHIP_FAMILY_STM32H7) || defined(CHIP_FAMILY_STM32G4)
+#elif defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32F3) ||   \
+	defined(CHIP_FAMILY_STM32L4) || defined(CHIP_FAMILY_STM32L5) || \
+	defined(CHIP_FAMILY_STM32F4) || defined(CHIP_FAMILY_STM32H7) || \
+	defined(CHIP_FAMILY_STM32G4)
 	if ((STM32_RCC_BDCR & BDCR_ENABLE_MASK) != BDCR_ENABLE_VALUE) {
 		/* The RTC settings are bad, we need to reset it */
 		STM32_RCC_BDCR |= STM32_RCC_BDCR_BDRST;
@@ -350,13 +350,24 @@ void system_pre_init(void)
 	reason = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_REASON);
 	info = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_INFO);
 	exception = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_EXCEPTION);
-	panic_flags = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_FLAGS);
-	if (reason || info || exception || panic_flags) {
+	if (reason || info || exception) {
 		panic_set_reason(reason, info, exception);
-		panic_get_data()->flags = panic_flags;
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_REASON, 0);
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_INFO, 0);
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_EXCEPTION, 0);
+	}
+
+	/*
+	 * Older ROs restore reason, info, and exception, but do not support
+	 * the saved panic flags. In that case, we will let RW handle restoring
+	 * the panic flags. If we get to this point in the code and the panic
+	 * data does not exist, it doesn't make sense to try to only restore
+	 * the panic flags, the information was lost.
+	 */
+	pdata = panic_get_data();
+	panic_flags = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_FLAGS);
+	if (pdata && panic_flags) {
+		pdata->flags = panic_flags;
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_FLAGS, 0);
 	}
 #endif
@@ -411,17 +422,25 @@ void system_reset(int flags)
 
 	if (flags & SYSTEM_RESET_HARD) {
 #ifdef CONFIG_SOFTWARE_PANIC
-		uint32_t reason, info;
-		uint8_t exception;
-		uint8_t panic_flags = panic_get_data()->flags;
-
 		/* Panic data will be wiped by hard reset, so save it */
-		panic_get_reason(&reason, &info, &exception);
-		/* 16 bits stored - upper 16 bits of reason / info are lost */
-		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_REASON, reason);
-		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_INFO, info);
-		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_EXCEPTION, exception);
-		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_FLAGS, panic_flags);
+		uint32_t reason, info;
+		uint8_t exception, panic_flags;
+		struct panic_data *pdata = panic_get_data();
+
+		if (pdata) {
+			panic_flags = pdata->flags;
+			panic_get_reason(&reason, &info, &exception);
+			/*
+			 * 16 bits stored - upper 16 bits of reason / info
+			 * are lost.
+			 */
+			bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_REASON, reason);
+			bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_INFO, info);
+			bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_EXCEPTION,
+				      exception);
+			bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_FLAGS,
+				      panic_flags);
+		}
 #endif
 
 #if defined(CHIP_FAMILY_STM32L) || defined(CHIP_FAMILY_STM32L4)
@@ -613,19 +632,19 @@ int system_is_reboot_warm(void)
 #elif defined(CHIP_FAMILY_STM32L)
 	return ((STM32_RCC_AHBENR & 0x3f) == 0x3f);
 #elif defined(CHIP_FAMILY_STM32L4)
-	return ((STM32_RCC_AHB2ENR & STM32_RCC_AHB2ENR_GPIOMASK)
-			== STM32_RCC_AHB2ENR_GPIOMASK);
+	return ((STM32_RCC_AHB2ENR & STM32_RCC_AHB2ENR_GPIOMASK) ==
+		STM32_RCC_AHB2ENR_GPIOMASK);
 #elif defined(CHIP_FAMILY_STM32L5)
-	return ((STM32_RCC_AHB2ENR & STM32_RCC_AHB2ENR_GPIOMASK)
-			== STM32_RCC_AHB2ENR_GPIOMASK);
+	return ((STM32_RCC_AHB2ENR & STM32_RCC_AHB2ENR_GPIOMASK) ==
+		STM32_RCC_AHB2ENR_GPIOMASK);
 #elif defined(CHIP_FAMILY_STM32F4)
-	return ((STM32_RCC_AHB1ENR & STM32_RCC_AHB1ENR_GPIOMASK)
-			== gpio_required_clocks());
+	return ((STM32_RCC_AHB1ENR & STM32_RCC_AHB1ENR_GPIOMASK) ==
+		gpio_required_clocks());
 #elif defined(CHIP_FAMILY_STM32G4)
-	return ((STM32_RCC_AHB2ENR & STM32_RCC_AHB2ENR_GPIOMASK)
-			== gpio_required_clocks());
+	return ((STM32_RCC_AHB2ENR & STM32_RCC_AHB2ENR_GPIOMASK) ==
+		gpio_required_clocks());
 #elif defined(CHIP_FAMILY_STM32H7)
-	return ((STM32_RCC_AHB4ENR & STM32_RCC_AHB4ENR_GPIOMASK)
-			== STM32_RCC_AHB4ENR_GPIOMASK);
+	return ((STM32_RCC_AHB4ENR & STM32_RCC_AHB4ENR_GPIOMASK) ==
+		STM32_RCC_AHB4ENR_GPIOMASK);
 #endif
 }
