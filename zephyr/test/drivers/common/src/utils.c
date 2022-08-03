@@ -3,21 +3,23 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/shell/shell_uart.h>
 #include <zephyr/zephyr.h>
 #include <ztest.h>
-#include <zephyr/shell/shell_uart.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
 
 #include "battery.h"
 #include "battery_smart.h"
 #include "charge_state.h"
+#include "chipset.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
+#include "emul/emul_stub_device.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
 #include "hooks.h"
 #include "power.h"
+#include "task.h"
 #include "test/drivers/stubs.h"
-#include "chipset.h"
 #include "test/drivers/utils.h"
 
 #define BATTERY_ORD DT_DEP_ORD(DT_NODELABEL(battery))
@@ -27,12 +29,15 @@
 void test_set_chipset_to_s0(void)
 {
 	struct sbat_emul_bat_data *bat;
-	struct i2c_emul *emul;
+	const struct emul *emul = sbat_emul_get_ptr(BATTERY_ORD);
 	const struct device *battery_gpio_dev =
 		DEVICE_DT_GET(DT_GPIO_CTLR(GPIO_BATT_PRES_ODL_PATH, gpios));
 
 	printk("%s: Forcing power on\n", __func__);
-	emul = sbat_emul_get_ptr(BATTERY_ORD);
+
+	task_wake(TASK_ID_CHIPSET);
+	k_sleep(K_SECONDS(1));
+
 	bat = sbat_emul_get_bat_data(emul);
 
 	/*
@@ -76,6 +81,8 @@ void test_set_chipset_to_power_level(enum power_state new_state)
 #endif
 		     ,
 		     "Power state must be one of the steady states");
+	task_wake(TASK_ID_CHIPSET);
+	k_sleep(K_SECONDS(1));
 
 	if (new_state == POWER_G3) {
 		test_set_chipset_to_g3();
@@ -95,6 +102,10 @@ void test_set_chipset_to_power_level(enum power_state new_state)
 
 void test_set_chipset_to_g3(void)
 {
+	/* Let power code to settle on a particular state first. */
+	task_wake(TASK_ID_CHIPSET);
+	k_sleep(K_SECONDS(1));
+
 	printk("%s: Forcing shutdown\n", __func__);
 	chipset_force_shutdown(CHIPSET_RESET_KB_SYSRESET);
 	k_sleep(K_SECONDS(20));
@@ -464,35 +475,13 @@ void test_free(void *mem)
 	k_heap_free(&test_heap, mem);
 }
 
-static struct k_poll_signal shutdown_complete_signal =
-	K_POLL_SIGNAL_INITIALIZER(shutdown_complete_signal);
-static struct k_poll_event shutdown_complete_event = K_POLL_EVENT_INITIALIZER(
-	K_POLL_TYPE_SIGNAL, K_POLL_MODE_NOTIFY_ONLY, &shutdown_complete_signal);
-
-static void handle_chipset_shutdown_complete_event(void)
+int emul_init_stub(const struct device *dev)
 {
-	k_poll_signal_raise(&shutdown_complete_signal, 0);
+	ARG_UNUSED(dev);
+
+	return 0;
 }
-DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN_COMPLETE,
-	     handle_chipset_shutdown_complete_event, HOOK_PRIO_LAST);
 
-void test_set_chipset_to_g3_then_transition_to_s5(void)
-{
-	if (!chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
-		k_poll_signal_reset(&shutdown_complete_signal);
-		chipset_force_shutdown(CHIPSET_RESET_INIT);
-		k_poll(&shutdown_complete_event, 1, K_MSEC(1000));
-	}
-
-	/*
-	 * Signal will trigger during S3->S5, but we want to wait until we're
-	 * actually at S5.  Give it a quick sleep if required.
-	 */
-	WAIT_FOR(!chipset_in_state(CHIPSET_STATE_ANY_OFF), 1000000 /* 1s */,
-		 k_msleep(5));
-
-	/*
-	 * TODO(b/236726670): Why do we need to sleep after restarting chipset?
-	 */
-	k_sleep(K_SECONDS(1));
-}
+/* These 2 lines are needed because we don't define an espi host driver */
+#define DT_DRV_COMPAT zephyr_espi_emul_espi_host
+DT_INST_FOREACH_STATUS_OKAY(EMUL_STUB_DEVICE);
