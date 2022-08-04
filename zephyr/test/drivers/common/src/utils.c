@@ -3,22 +3,24 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/shell/shell_uart.h>
 #include <zephyr/zephyr.h>
 #include <ztest.h>
-#include <zephyr/shell/shell_uart.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
 
 #include "battery.h"
 #include "battery_smart.h"
 #include "charge_state.h"
+#include "chipset.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
 #include "emul/emul_stub_device.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
 #include "hooks.h"
 #include "power.h"
+#include "task.h"
+#include "tcpm/tcpci.h"
 #include "test/drivers/stubs.h"
-#include "chipset.h"
 #include "test/drivers/utils.h"
 
 #define BATTERY_ORD DT_DEP_ORD(DT_NODELABEL(battery))
@@ -33,6 +35,9 @@ void test_set_chipset_to_s0(void)
 		DEVICE_DT_GET(DT_GPIO_CTLR(GPIO_BATT_PRES_ODL_PATH, gpios));
 
 	printk("%s: Forcing power on\n", __func__);
+
+	task_wake(TASK_ID_CHIPSET);
+	k_sleep(K_SECONDS(1));
 
 	bat = sbat_emul_get_bat_data(emul);
 
@@ -77,6 +82,8 @@ void test_set_chipset_to_power_level(enum power_state new_state)
 #endif
 		     ,
 		     "Power state must be one of the steady states");
+	task_wake(TASK_ID_CHIPSET);
+	k_sleep(K_SECONDS(1));
 
 	if (new_state == POWER_G3) {
 		test_set_chipset_to_g3();
@@ -96,6 +103,10 @@ void test_set_chipset_to_power_level(enum power_state new_state)
 
 void test_set_chipset_to_g3(void)
 {
+	/* Let power code to settle on a particular state first. */
+	task_wake(TASK_ID_CHIPSET);
+	k_sleep(K_SECONDS(1));
+
 	printk("%s: Forcing shutdown\n", __func__);
 	chipset_force_shutdown(CHIPSET_RESET_KB_SYSRESET);
 	k_sleep(K_SECONDS(20));
@@ -124,6 +135,41 @@ void disconnect_source_from_port(const struct emul *tcpci_emul,
 	set_ac_enabled(false);
 	zassume_ok(tcpci_emul_disconnect_partner(tcpci_emul), NULL);
 	isl923x_emul_set_adc_vbus(charger_emul, 0);
+	k_sleep(K_SECONDS(1));
+}
+
+void connect_sink_to_port(struct tcpci_partner_data *partner,
+			  const struct emul *tcpci_emul,
+			  const struct emul *charger_emul)
+{
+	/*
+	 * TODO(b/221439302) Updating the TCPCI emulator registers, updating the
+	 *   vbus, as well as alerting should all be a part of the connect
+	 *   function.
+	 */
+	/* Enforce that we only support the isl923x emulator for now */
+	__ASSERT_NO_MSG(emul_get_binding(DT_LABEL(
+				DT_NODELABEL(isl923x_emul))) == charger_emul);
+	isl923x_emul_set_adc_vbus(charger_emul, 0);
+	tcpci_emul_set_reg(tcpci_emul, TCPC_REG_POWER_STATUS,
+			   TCPC_REG_POWER_STATUS_VBUS_DET);
+	tcpci_emul_set_reg(tcpci_emul, TCPC_REG_EXT_STATUS,
+			   TCPC_REG_EXT_STATUS_SAFE0V);
+
+	tcpci_tcpc_alert(0);
+	k_sleep(K_SECONDS(1));
+
+	zassume_ok(tcpci_partner_connect_to_tcpci(partner, tcpci_emul), NULL);
+
+	/* Wait for PD negotiation and current ramp.
+	 * TODO(b/213906889): Check message timing and contents.
+	 */
+	k_sleep(K_SECONDS(10));
+}
+
+void disconnect_sink_from_port(const struct emul *tcpci_emul)
+{
+	zassume_ok(tcpci_emul_disconnect_partner(tcpci_emul), NULL);
 	k_sleep(K_SECONDS(1));
 }
 
@@ -463,39 +509,6 @@ void *test_malloc(size_t bytes)
 void test_free(void *mem)
 {
 	k_heap_free(&test_heap, mem);
-}
-
-static struct k_poll_signal shutdown_complete_signal =
-	K_POLL_SIGNAL_INITIALIZER(shutdown_complete_signal);
-static struct k_poll_event shutdown_complete_event = K_POLL_EVENT_INITIALIZER(
-	K_POLL_TYPE_SIGNAL, K_POLL_MODE_NOTIFY_ONLY, &shutdown_complete_signal);
-
-static void handle_chipset_shutdown_complete_event(void)
-{
-	k_poll_signal_raise(&shutdown_complete_signal, 0);
-}
-DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN_COMPLETE,
-	     handle_chipset_shutdown_complete_event, HOOK_PRIO_LAST);
-
-void test_set_chipset_to_g3_then_transition_to_s5(void)
-{
-	if (!chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
-		k_poll_signal_reset(&shutdown_complete_signal);
-		chipset_force_shutdown(CHIPSET_RESET_INIT);
-		k_poll(&shutdown_complete_event, 1, K_MSEC(1000));
-	}
-
-	/*
-	 * Signal will trigger during S3->S5, but we want to wait until we're
-	 * actually at S5.  Give it a quick sleep if required.
-	 */
-	WAIT_FOR(!chipset_in_state(CHIPSET_STATE_ANY_OFF), 1000000 /* 1s */,
-		 k_msleep(5));
-
-	/*
-	 * TODO(b/236726670): Why do we need to sleep after restarting chipset?
-	 */
-	k_sleep(K_SECONDS(1));
 }
 
 int emul_init_stub(const struct device *dev)
