@@ -13,7 +13,7 @@ LOG_MODULE_REGISTER(emul_tcs);
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
-#include <ztest.h>
+#include <zephyr/ztest.h>
 
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_tcs3400.h"
@@ -617,7 +617,6 @@ static int tcs_emul_init(const struct emul *emul, const struct device *parent)
 	};         \
                                                                      \
 	static const struct i2c_common_emul_cfg tcs_emul_cfg_##n = { \
-		.i2c_label = DT_LABEL(DT_BUS(DT_DRV_INST(n))),       \
 		.dev_label = DT_INST_LABEL(n),                       \
 		.data = &tcs_emul_data_##n.common,                   \
 		.addr = DT_INST_REG_ADDR(n),                         \

@@ -11,7 +11,7 @@
 #include <zephyr/drivers/emul.h>
 #include <errno.h>
 #include <zephyr/sys/__assert.h>
-#include <ztest.h>
+#include <zephyr/ztest.h>
 
 #include "driver/charger/isl923x.h"
 #include "driver/charger/isl923x_public.h"
@@ -438,7 +438,6 @@ static int emul_isl923x_init(const struct emul *emul,
 	}; \
 	static struct isl923x_emul_cfg isl923x_emul_cfg_##n = {                \
 	.common = {                                                            \
-		.i2c_label = DT_LABEL(DT_BUS(DT_DRV_INST(n))),                 \
 		.dev_label = DT_INST_LABEL(n),                                 \
 		.addr = DT_INST_REG_ADDR(n),                                   \
 		},                                                             \
