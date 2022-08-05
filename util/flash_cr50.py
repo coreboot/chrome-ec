@@ -56,8 +56,8 @@ REQUIRED_CONTROLS = {
         r'servo_type:(servo_v2|servo_micro|c2d2)',
     ],
     'type-c_servo_v4': [
-        r'servo_v4_type:type-c',
-        r'servo_v4_role:\S+',
+        r'root.dut_connection_type:type-c',
+        r'servo_pd_role:\S+',
     ],
 }
 # Supported methods to resetting cr50.
@@ -240,9 +240,9 @@ class Cr50Reset(object):
             Error if something is wrong with the setup.
         """
         # If this failed before and didn't cleanup correctly, the device may be
-        # cutoff. Try to set the servo_v4_role to recover the device before
+        # cutoff. Try to set the servo_pd_role to recover the device before
         # checking the device state.
-        self._servo.dut_control('servo_v4_role:src', check_error=False)
+        self._servo.dut_control('servo_pd_role:src', check_error=False)
 
         logging.info('Requirements for %s: %s', self._reset_name,
                      pprint.pformat(self.REQUIRED_SETUP))
@@ -284,9 +284,9 @@ class Cr50Reset(object):
 
         # Toggle the servo v4 role if possible to try and get the device out of
         # cutoff.
-        self._servo.dut_control('servo_v4_role:snk', check_error=False)
-        self._servo.dut_control('servo_v4_role:src', check_error=False)
-        self.restore_control('servo_v4_role')
+        self._servo.dut_control('servo_pd_role:snk', check_error=False)
+        self._servo.dut_control('servo_pd_role:src', check_error=False)
+        self.restore_control('servo_pd_role')
 
         # Restore the ccd watchdog.
         self.enable_ccd_watchdog(self._original_watchdog_state)
@@ -431,7 +431,7 @@ class BatteryCutoffReset(Cr50Reset):
 
     def run_reset(self):
         """Use EC commands to cutoff the battery."""
-        self._servo.dut_control('servo_v4_role:snk')
+        self._servo.dut_control('servo_pd_role:snk')
 
         if self._servo.dut_control('ec_board', check_error=False)[0]:
             logging.warning('EC is unresponsive. Cutoff may not work.')
@@ -453,7 +453,7 @@ class BatteryCutoffReset(Cr50Reset):
     def recover_from_reset(self):
         """Connect power using servo v4 to recover from cutoff."""
         logging.info('"Connecting" adapter')
-        self._servo.dut_control('servo_v4_role:src', wait=True)
+        self._servo.dut_control('servo_pd_role:src', wait=True)
 
 
 class ManualReset(Cr50Reset):
