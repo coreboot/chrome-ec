@@ -16,7 +16,7 @@
 LOG_MODULE_REGISTER(syv682x);
 #include <stdint.h>
 #include <string.h>
-#include <ztest.h>
+#include <zephyr/ztest.h>
 
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_syv682x.h"
@@ -268,13 +268,12 @@ static int syv682x_emul_init(const struct emul *emul,
 	}; \
 	static const struct syv682x_emul_cfg syv682x_emul_cfg_##n = {          \
 		.common = {                                                    \
-			.i2c_label = DT_LABEL(DT_BUS(DT_DRV_INST(n))),         \
 			.dev_label = DT_INST_LABEL(n),                         \
 			.addr = DT_INST_REG_ADDR(n),                           \
 		},                                                             \
 	}; \
-	EMUL_DEFINE(syv682x_emul_init, DT_DRV_INST(n), &syv682x_emul_cfg_##n,    \
-		    &syv682x_emul_data_##n, &i2c_common_emul_api)
+	EMUL_DT_INST_DEFINE(n, syv682x_emul_init, &syv682x_emul_data_##n,        \
+			    &syv682x_emul_cfg_##n, &i2c_common_emul_api)
 
 DT_INST_FOREACH_STATUS_OKAY(SYV682X_EMUL)
 

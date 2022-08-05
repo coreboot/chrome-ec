@@ -329,13 +329,12 @@ static int bb_emul_init(const struct emul *emul, const struct device *parent)
 	};         \
                                                                     \
 	static const struct i2c_common_emul_cfg bb_emul_cfg_##n = { \
-		.i2c_label = DT_LABEL(DT_BUS(DT_DRV_INST(n))),      \
 		.dev_label = DT_INST_LABEL(n),                      \
 		.data = &bb_emul_data_##n.common,                   \
 		.addr = DT_INST_REG_ADDR(n),                        \
 	};                                                          \
-	EMUL_DEFINE(bb_emul_init, DT_DRV_INST(n), &bb_emul_cfg_##n, \
-		    &bb_emul_data_##n, &i2c_common_emul_api)
+	EMUL_DT_INST_DEFINE(n, bb_emul_init, &bb_emul_data_##n,     \
+			    &bb_emul_cfg_##n, &i2c_common_emul_api)
 
 DT_INST_FOREACH_STATUS_OKAY(BB_RETIMER_EMUL)
 

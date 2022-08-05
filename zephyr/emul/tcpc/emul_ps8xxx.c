@@ -12,7 +12,7 @@ LOG_MODULE_REGISTER(ps8xxx_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
-#include <ztest.h>
+#include <zephyr/ztest.h>
 
 #include "tcpm/tcpci.h"
 
@@ -637,19 +637,16 @@ static int ps8xxx_emul_init(const struct emul *emul,
                                                                       \
 	static const struct ps8xxx_emul_cfg ps8xxx_emul_cfg_##n = {	\
 		.p0_cfg = {						\
-			.i2c_label = DT_LABEL(DT_BUS(DT_DRV_INST(n))),	\
 			.dev_label = DT_INST_LABEL(n),			\
 			.data = &ps8xxx_emul_data_##n.p0_data,		\
 			.addr = DT_INST_PROP(n, p0_i2c_addr),		\
 		},							\
 		.p1_cfg = {						\
-			.i2c_label = DT_LABEL(DT_BUS(DT_DRV_INST(n))),	\
 			.dev_label = DT_INST_LABEL(n),			\
 			.data = &ps8xxx_emul_data_##n.p1_data,		\
 			.addr = DT_INST_PROP(n, p1_i2c_addr),		\
 		},							\
 		.gpio_cfg = {						\
-			.i2c_label = DT_LABEL(DT_BUS(DT_DRV_INST(n))),	\
 			.dev_label = DT_INST_LABEL(n),			\
 			.data = &ps8xxx_emul_data_##n.gpio_data,	\
 			.addr = DT_INST_PROP(n, gpio_i2c_addr),		\
@@ -662,7 +659,7 @@ DT_INST_FOREACH_STATUS_OKAY(PS8XXX_EMUL)
 
 #ifdef CONFIG_ZTEST_NEW_API
 #define PS8XXX_EMUL_RESET_RULE_BEFORE(n) \
-	ps8xxx_emul_tcpc_reset(&EMUL_REG_NAME(DT_DRV_INST(n)));
+	ps8xxx_emul_tcpc_reset(EMUL_DT_GET(DT_DRV_INST(n)));
 static void ps8xxx_emul_reset_rule_before(const struct ztest_unit_test *test,
 					  void *data)
 {

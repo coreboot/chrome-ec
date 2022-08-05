@@ -12,7 +12,7 @@ LOG_MODULE_REGISTER(tcpci_generic_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
-#include <ztest.h>
+#include <zephyr/ztest.h>
 
 #include "tcpm/tcpci.h"
 #include "emul/emul_stub_device.h"
@@ -160,7 +160,7 @@ DT_INST_FOREACH_STATUS_OKAY(TCPCI_GENERIC_EMUL)
 
 #ifdef CONFIG_ZTEST_NEW_API
 #define TCPCI_GENERIC_EMUL_RESET_RULE_BEFORE(n) \
-	tcpci_generic_emul_reset(&EMUL_REG_NAME(DT_DRV_INST(n)));
+	tcpci_generic_emul_reset(EMUL_DT_GET(DT_DRV_INST(n)));
 static void
 tcpci_generic_emul_reset_rule_before(const struct ztest_unit_test *test,
 				     void *data)

@@ -11,7 +11,7 @@ def register_variant(
     """Register a variant of rex."""
     register_npcx_project(
         project_name=project_name,
-        zephyr_board="npcx9m3f",
+        zephyr_board="npcx9m7f",
         dts_overlays=[
             # Common to all projects.
             here / "rex.dts",
@@ -32,6 +32,9 @@ register_variant(
     extra_dts_overlays=[
         here / "generated.dts",
         here / "interrupts.dts",
+        here / "power_signals.dts",
+        here / "battery.dts",
+        here / "usbc.dts",
     ],
     extra_kconfig_files=[here / "prj_rex.conf"],
 )

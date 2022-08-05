@@ -118,13 +118,12 @@ struct tcpc_emul_data {
 		.tcpci_ctx = &tcpci_ctx##n,                                \
 		.chip_data = chip_data_ptr,                                \
 		.i2c_cfg = {                                               \
-			.i2c_label = DT_LABEL(DT_BUS(DT_DRV_INST(n))),     \
 			.dev_label = DT_INST_LABEL(n),                     \
 			.data = &tcpci_ctx##n.common,                      \
 			.addr = DT_INST_REG_ADDR(n),                       \
 		},                                                         \
 	}; \
-	EMUL_DEFINE(init, DT_DRV_INST(n), cfg_ptr, &tcpc_emul_data_##n, bus_api)
+	EMUL_DT_INST_DEFINE(n, init, &tcpc_emul_data_##n, cfg_ptr, bus_api)
 
 /** Response from TCPCI specific device operations */
 enum tcpci_emul_ops_resp {

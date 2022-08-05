@@ -4,7 +4,7 @@
  */
 
 #include <zephyr/zephyr.h>
-#include <ztest.h>
+#include <zephyr/ztest.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/gpio/gpio_emul.h>
 
@@ -505,4 +505,10 @@ static void *tcpci_setup(void)
 	return NULL;
 }
 
-ZTEST_SUITE(tcpci, drivers_predicate_post_main, tcpci_setup, NULL, NULL, NULL);
+static void tcpci_after(void *state)
+{
+	set_usb_mux_tcpc();
+}
+
+ZTEST_SUITE(tcpci, drivers_predicate_pre_main, tcpci_setup, NULL, tcpci_after,
+	    NULL);

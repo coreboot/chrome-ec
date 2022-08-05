@@ -48,6 +48,12 @@
 		reg = <0x5f>;
 		irq = <&int_usb_c0_bc12>;
 	};
+
+	charger: isl923x@9 {
+		compatible = "intersil,isl923x";
+		status = "okay";
+		reg = <0x9>;
+	};
 };
 
 &i2c_ctrl0 {
@@ -59,6 +65,12 @@
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
 	pinctrl-0 = <&i2c1_0_sda_scl_gp87_90>;
 	pinctrl-names = "default";
+
+	tcpc_port0: ps8xxx@b {
+		compatible = "parade,ps8xxx";
+		status = "okay";
+		reg = <0xb>;
+	};
 };
 
 &i2c_ctrl1 {
@@ -70,6 +82,12 @@
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
 	pinctrl-0 = <&i2c2_0_sda_scl_gp91_92>;
 	pinctrl-names = "default";
+
+	tcpc_port1: ps8xxx@b {
+		compatible = "parade,ps8xxx";
+		status = "okay";
+		reg = <0xb>;
+	};
 };
 
 &i2c_ctrl2 {
