@@ -21,15 +21,13 @@
 #define CONFIG_USB_PD_VBUS_DETECT_CHARGER
 #define CONFIG_USB_PD_5V_CHARGER_CTRL
 #define CONFIG_CHARGER_OTG
-#undef CONFIG_CHARGER_SINGLE_CHIP
 
 /* PWM */
 #define CONFIG_PWM
 
 /* TCPC */
-#define CONFIG_USB_PD_PORT_MAX_COUNT 2
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_PD_TCPM_ITE_ON_CHIP /* C0: ITE EC TCPC */
-#define CONFIG_USB_PD_TCPM_PS8705 /* C1: PS8705 TCPC*/
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 1
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_TCPC_LOW_POWER
@@ -50,6 +48,14 @@
 /* Buttons */
 #define CONFIG_POWER_BUTTON_IGNORE_LID
 
+/* Dedicated barreljack charger port */
+#undef CONFIG_DEDICATED_CHARGE_PORT_COUNT
+#define CONFIG_DEDICATED_CHARGE_PORT_COUNT 1
+#define DEDICATED_CHARGE_PORT 1
+
+/* LED backlight controller */
+#define CONFIG_LED_DRIVER_OZ554
+
 /* Unused Features */
 #undef CONFIG_BACKLIGHT_LID
 #undef CONFIG_CMD_KEYBOARD
@@ -60,16 +66,13 @@
 #undef CONFIG_USB_CHARGER
 #undef CONFIG_VOLUME_BUTTONS
 
+/* I2C Bus Configuration */
+#define I2C_PORT_BACKLIGHT I2C_PORT_SENSOR
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
 #include "registers.h"
-
-enum chg_id {
-	CHARGER_PRIMARY,
-	CHARGER_SECONDARY,
-	CHARGER_NUM,
-};
 
 enum pwm_channel {
 	PWM_CH_COUNT,
@@ -108,6 +111,14 @@ enum battery_type {
 	BATTERY_ATL,
 	BATTERY_TYPE_COUNT,
 };
+
+enum charge_port {
+	CHARGE_PORT_TYPEC0,
+	CHARGE_PORT_BARRELJACK,
+};
+
+/* Pin renaming */
+#define GPIO_AC_PRESENT GPIO_BJ_ADP_PRESENT_L
 
 #endif /* !__ASSEMBLER__ */
 
