@@ -24,7 +24,7 @@
 /* TODO replace counting macros with DT macro when
  * https://github.com/zephyrproject-rtos/zephyr/issues/38715 lands
  */
-#define _ACCUMULATOR(x)
+#define _ACCUMULATOR(x) 1 +
 #define NAMED_TEMP_SENSORS_SIZE                                     \
 	DT_FOREACH_CHILD(DT_PATH(named_temp_sensors), _ACCUMULATOR) \
 	0
@@ -259,9 +259,9 @@ ZTEST_USER(thermistor, test_thermistors_adc_temperature_conversion)
 	int sensor_idx;
 
 	const static int reference_mv_arr[] = { DT_FOREACH_STATUS_OKAY(
-		cros_temp_sensor, GET_THERMISTOR_REF_MV) };
+		cros_ec_temp_sensor, GET_THERMISTOR_REF_MV) };
 	const static int reference_res_arr[] = { DT_FOREACH_STATUS_OKAY(
-		cros_temp_sensor, GET_THERMISTOR_REF_RES) };
+		cros_ec_temp_sensor, GET_THERMISTOR_REF_RES) };
 
 	for (sensor_idx = 0; sensor_idx < NAMED_TEMP_SENSORS_SIZE; sensor_idx++)
 		do_thermistor_test(&temp_sensors[sensor_idx],
@@ -291,5 +291,31 @@ static void *thermistor_setup(void)
 	return NULL;
 }
 
+static void thermistor_cleanup(void *state)
+{
+	int sensor_idx;
+	const struct device *adc_dev = DEVICE_DT_GET(ADC_DEVICE_NODE);
+
+	const static int reference_mv_arr[] = { DT_FOREACH_STATUS_OKAY(
+		cros_ec_temp_sensor, GET_THERMISTOR_REF_MV) };
+	const static int reference_res_arr[] = { DT_FOREACH_STATUS_OKAY(
+		cros_ec_temp_sensor, GET_THERMISTOR_REF_RES) };
+
+	if (adc_dev == NULL)
+		TC_ERROR("Cannot get ADC device");
+
+	for (sensor_idx = 0; sensor_idx < NAMED_TEMP_SENSORS_SIZE;
+	     sensor_idx++) {
+		/* Setup ADC to return 27*C (300K) which is reasonable value */
+		adc_emul_const_value_set(
+			adc_dev, temp_sensors[sensor_idx].idx,
+			volt_divider(reference_mv_arr[sensor_idx],
+				     reference_res_arr[sensor_idx],
+				     resistance_47kohm_B4050(300)));
+		adc_emul_ref_voltage_set(adc_dev, ADC_REF_INTERNAL,
+					 reference_mv_arr[sensor_idx]);
+	}
+}
+
 ZTEST_SUITE(thermistor, drivers_predicate_post_main, thermistor_setup, NULL,
-	    NULL, NULL);
+	    NULL, thermistor_cleanup);

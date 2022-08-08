@@ -13,6 +13,7 @@
 #include "charger.h"
 #include "cros_board_info.h"
 #include "driver/charger/sm5803.h"
+#include "driver/led/oz554.h"
 #include "driver/temp_sensor/thermistor.h"
 #include "driver/tcpm/it83xx_pd.h"
 #include "driver/tcpm/ps8xxx.h"
@@ -44,21 +45,6 @@ uint32_t board_version;
 const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A_5V,
 };
-
-__override void board_process_pd_alert(int port)
-{
-	/*
-	 * PD_INT task will process this alert, and that task is only needed on
-	 * C1.
-	 */
-	if (port != 1)
-		return;
-
-	if (gpio_get_level(GPIO_USB_C1_INT_ODL))
-		return;
-
-	sm5803_handle_interrupt(port);
-}
 
 /* C0 interrupt line triggered by charger */
 static void check_c0_line(void);
@@ -93,44 +79,86 @@ static void usb_c0_interrupt(enum gpio_signal s)
 	hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
 }
 
-/* C1 interrupt line shared by TCPC and charger */
-static void check_c1_line(void);
-DECLARE_DEFERRED(check_c1_line);
-
-static void notify_c1_chips(void)
-{
-	schedule_deferred_pd_interrupt(1);
-}
-
-static void check_c1_line(void)
-{
-	/*
-	 * If line is still being held low, see if there's more to process from
-	 * one of the chips.
-	 */
-	if (!gpio_get_level(GPIO_USB_C1_INT_ODL)) {
-		notify_c1_chips();
-		hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
-	}
-}
-
-static void usb_c1_interrupt(enum gpio_signal s)
-{
-	/* Cancel any previous calls to check the interrupt line */
-	hook_call_deferred(&check_c1_line_data, -1);
-
-	/* Notify all chips using this line that an interrupt came in */
-	notify_c1_chips();
-
-	/* Check the line again in 5ms */
-	hook_call_deferred(&check_c1_line_data, INT_RECHECK_US);
-}
-
 static void c0_ccsbu_ovp_interrupt(enum gpio_signal s)
 {
 	cprints(CC_USBPD, "C0: CC OVP, SBU OVP, or thermal event");
 	pd_handle_cc_overvoltage(0);
 }
+
+/******************************************************************************/
+/*
+ * Barrel jack power supply handling
+ *
+ * EN_PPVAR_BJ_ADP_L must default active to ensure we can power on when the
+ * barrel jack is connected, and the USB-C port can bring the EC up fine in
+ * dead-battery mode. Both the USB-C and barrel jack switches do reverse
+ * protection, so we're safe to turn one on then the other off- but we should
+ * only do that if the system is off since it might still brown out.
+ */
+
+static int barrel_jack_adapter_is_present(void)
+{
+	/* Shotzo barrel jack adapter present pin is active low. */
+	return !gpio_get_level(GPIO_BJ_ADP_PRESENT_L);
+}
+
+/*
+ * Barrel-jack power adapter ratings.
+ */
+
+#define BJ_ADP_RATING_DEFAULT 0 /* BJ power ratings default */
+static const struct {
+	int voltage;
+	int current;
+} bj_power[] = {
+	{ /* 0 - 90W (also default) */
+	  .voltage = 19500,
+	  .current = 4500 },
+};
+
+/* Debounced connection state of the barrel jack */
+static int8_t adp_connected = -1;
+static void adp_connect_deferred(void)
+{
+	struct charge_port_info pi = { 0 };
+	int connected = barrel_jack_adapter_is_present();
+
+	/* Debounce */
+	if (connected == adp_connected)
+		return;
+	if (connected) {
+		unsigned int bj = BJ_ADP_RATING_DEFAULT;
+
+		pi.voltage = bj_power[bj].voltage;
+		pi.current = bj_power[bj].current;
+	}
+	charge_manager_update_charge(CHARGE_SUPPLIER_DEDICATED,
+				     DEDICATED_CHARGE_PORT, &pi);
+	adp_connected = connected;
+}
+DECLARE_DEFERRED(adp_connect_deferred);
+
+#define ADP_DEBOUNCE_MS 1000 /* Debounce time for BJ plug/unplug */
+/* IRQ for BJ plug/unplug. It shouldn't be called if BJ is the power source. */
+static void adp_connect_interrupt(enum gpio_signal signal)
+{
+	hook_call_deferred(&adp_connect_deferred_data, ADP_DEBOUNCE_MS * MSEC);
+}
+static void adp_state_init(void)
+{
+	/*
+	 * Initialize all charge suppliers to 0. The charge manager waits until
+	 * all ports have reported in before doing anything.
+	 */
+	for (int i = 0; i < CHARGE_PORT_COUNT; i++) {
+		for (int j = 0; j < CHARGE_SUPPLIER_COUNT; j++)
+			charge_manager_update_charge(j, i, NULL);
+	}
+
+	/* Report charge state from the barrel jack. */
+	adp_connect_deferred();
+}
+DECLARE_HOOK(HOOK_INIT, adp_state_init, HOOK_PRIO_INIT_CHARGE_MANAGER + 1);
 
 /* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
@@ -171,58 +199,73 @@ const struct adc_t adc_channels[] = {
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /* Charger chips */
-const struct charger_config_t chg_chips[] = {
-	[CHARGER_PRIMARY] = {
-		.i2c_port = I2C_PORT_USB_C0,
-		.i2c_addr_flags = SM5803_ADDR_CHARGER_FLAGS,
-		.drv = &sm5803_drv,
-	},
-	[CHARGER_SECONDARY] = {
-		.i2c_port = I2C_PORT_SUB_USB_C1,
-		.i2c_addr_flags = SM5803_ADDR_CHARGER_FLAGS,
-		.drv = &sm5803_drv,
-	},
-};
+const struct charger_config_t
+	chg_chips[] = { [CHARGER_SOLO] = {
+				.i2c_port = I2C_PORT_USB_C0,
+				.i2c_addr_flags = SM5803_ADDR_CHARGER_FLAGS,
+				.drv = &sm5803_drv,
+			} };
 
 /* TCPCs */
-const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{
-		.bus_type = EC_BUS_TYPE_EMBEDDED,
-		.drv = &it83xx_tcpm_drv,
-	},
-	{
-		.bus_type = EC_BUS_TYPE_I2C,
-		.i2c_info = {
-			.port = I2C_PORT_SUB_USB_C1,
-			.addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
-		},
-		.drv = &ps8xxx_tcpm_drv,
-	},
-};
+const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = { {
+	.bus_type = EC_BUS_TYPE_EMBEDDED,
+	.drv = &it83xx_tcpm_drv,
+} };
 
 /* USB Muxes */
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	{
-		.usb_port = 0,
-		.i2c_port = I2C_PORT_USB_C0,
-		.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
-		.driver = &it5205_usb_mux_driver,
-	},
-	{
-		.usb_port = 1,
-		.i2c_port = I2C_PORT_SUB_USB_C1,
-		.i2c_addr_flags = PS8XXX_I2C_ADDR1_FLAGS,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
-	},
-};
+const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = { {
+	.usb_port = 0,
+	.i2c_port = I2C_PORT_USB_C0,
+	.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
+	.driver = &it5205_usb_mux_driver,
+} };
+
+void oz554_board_init(void)
+{
+	int panel_id = 0;
+	int oz554_id;
+
+	oz554_id = gpio_get_level(GPIO_BL_OZ554_ID);
+	panel_id |= gpio_get_level(GPIO_PANEL_ID0) << 0;
+	panel_id |= gpio_get_level(GPIO_PANEL_ID1) << 1;
+	panel_id |= gpio_get_level(GPIO_PANEL_ID2) << 2;
+	panel_id |= gpio_get_level(GPIO_PANEL_ID3) << 3;
+
+	if (oz554_id == 0)
+		CPRINTUSB("OZ554ELN");
+	else if (oz554_id == 1)
+		CPRINTUSB("OZ554ALN");
+	else
+		CPRINTUSB("OZ554A UNKNOWN");
+
+	switch (panel_id) {
+	case 0x00:
+		CPRINTUSB("PANEL M238HAN");
+		oz554_set_config(0, 0xF1);
+		oz554_set_config(1, 0x43);
+		oz554_set_config(2, 0x44);
+		oz554_set_config(5, 0xBF);
+		break;
+	case 0x08:
+		CPRINTUSB("PANEL MV238FHM");
+		oz554_set_config(0, 0xF1);
+		oz554_set_config(1, 0x43);
+		oz554_set_config(2, 0x3C);
+		oz554_set_config(5, 0xD7);
+		break;
+	default:
+		CPRINTUSB("PANEL UNKNOWN");
+		break;
+	}
+}
 
 void board_init(void)
 {
 	int on;
 
+	gpio_enable_interrupt(GPIO_BJ_ADP_PRESENT_L);
+
 	gpio_enable_interrupt(GPIO_USB_C0_INT_ODL);
-	gpio_enable_interrupt(GPIO_USB_C1_INT_ODL);
 
 	/* Store board version for use in determining charge limits */
 	cbi_get_board_version(&board_version);
@@ -233,19 +276,15 @@ void board_init(void)
 	 */
 	if (!gpio_get_level(GPIO_USB_C0_INT_ODL))
 		hook_call_deferred(&check_c0_line_data, 0);
-	if (!gpio_get_level(GPIO_USB_C1_INT_ODL))
-		hook_call_deferred(&check_c1_line_data, 0);
 
 	gpio_enable_interrupt(GPIO_USB_C0_CCSBU_OVP_ODL);
 
-	/* Charger on the MB will be outputting PROCHOT_ODL and OD CHG_DET */
-	sm5803_configure_gpio0(CHARGER_PRIMARY, GPIO0_MODE_PROCHOT, 1);
-	sm5803_configure_chg_det_od(CHARGER_PRIMARY, 1);
+	oz554_board_init();
+	gpio_enable_interrupt(GPIO_PANEL_BACKLIGHT_EN);
 
-	if (board_get_charger_chip_count() > 1) {
-		/* Charger on the sub-board will be a push-pull GPIO */
-		sm5803_configure_gpio0(CHARGER_SECONDARY, GPIO0_MODE_OUTPUT, 0);
-	}
+	/* Charger on the MB will be outputting PROCHOT_ODL and OD CHG_DET */
+	sm5803_configure_gpio0(CHARGER_SOLO, GPIO0_MODE_PROCHOT, 1);
+	sm5803_configure_chg_det_od(CHARGER_SOLO, 1);
 
 	/* Turn on 5V if the system is on, otherwise turn it off */
 	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
@@ -256,17 +295,13 @@ DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
 static void board_resume(void)
 {
-	sm5803_disable_low_power_mode(CHARGER_PRIMARY);
-	if (board_get_charger_chip_count() > 1)
-		sm5803_disable_low_power_mode(CHARGER_SECONDARY);
+	sm5803_disable_low_power_mode(CHARGER_SOLO);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_resume, HOOK_PRIO_DEFAULT);
 
 static void board_suspend(void)
 {
-	sm5803_enable_low_power_mode(CHARGER_PRIMARY);
-	if (board_get_charger_chip_count() > 1)
-		sm5803_enable_low_power_mode(CHARGER_SECONDARY);
+	sm5803_enable_low_power_mode(CHARGER_SOLO);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_suspend, HOOK_PRIO_DEFAULT);
 
@@ -293,8 +328,7 @@ __override void board_pulse_entering_rw(void)
 void board_reset_pd_mcu(void)
 {
 	/*
-	 * Nothing to do.  TCPC C0 is internal, TCPC C1 reset pin is not
-	 * connected to the EC.
+	 * Nothing to do.  TCPC C0 is internal.
 	 */
 }
 
@@ -305,12 +339,6 @@ __override void board_power_5v_enable(int enable)
 	 * sets it through the charger GPIO.
 	 */
 	gpio_set_level(GPIO_EN_PP5000, !!enable);
-
-	if (board_get_charger_chip_count() > 1) {
-		if (sm5803_set_gpio0_level(1, !!enable))
-			CPRINTUSB("Failed to %sable sub rails!",
-				  enable ? "en" : "dis");
-	}
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -319,67 +347,93 @@ uint16_t tcpc_get_alert_status(void)
 	 * TCPC 0 is embedded in the EC and processes interrupts in the chip
 	 * code (it83xx/intc.c)
 	 */
-
-	uint16_t status = 0;
-	int regval;
-
-	/* Check whether TCPC 1 pulled the shared interrupt line */
-	if (!gpio_get_level(GPIO_USB_C1_INT_ODL)) {
-		if (!tcpc_read16(1, TCPC_REG_ALERT, &regval)) {
-			if (regval)
-				status = PD_STATUS_TCPC_ALERT_1;
-		}
-	}
-
-	return status;
+	return 0;
 }
 
 void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 			    int charge_mv)
 {
-	int icl = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
+}
 
-	/* Limit C1 on board version 0 to 2.0 A */
-	if ((board_version == 0) && (port == 1))
-		icl = MIN(icl, 2000);
-	/*
-	 * TODO(b/151955431): Characterize the input current limit in case a
-	 * scaling needs to be applied here
-	 */
-	charge_set_input_current_limit(icl, charge_mv);
+__override int extpower_is_present(void)
+{
+	int port;
+	int rv;
+	bool acok;
+
+	for (port = 0; port < board_get_usb_pd_port_count(); port++) {
+		rv = sm5803_is_acok(port, &acok);
+		if ((rv == EC_SUCCESS) && acok)
+			return 1;
+	}
+
+	if (!gpio_get_level(GPIO_EN_PPVAR_BJ_ADP_L))
+		return 1;
+
+	CPRINTUSB("No external power present.");
+
+	return 0;
 }
 
 int board_set_active_charge_port(int port)
 {
-	int is_valid_port = (port >= 0 && port < board_get_usb_pd_port_count());
-
-	if (!is_valid_port && port != CHARGE_PORT_NONE)
-		return EC_ERROR_INVAL;
-
-	if (port == CHARGE_PORT_NONE) {
-		CPRINTUSB("Disabling all charge ports");
-
-		sm5803_vbus_sink_enable(CHARGER_PRIMARY, 0);
-
-		if (board_get_charger_chip_count() > 1)
-			sm5803_vbus_sink_enable(CHARGER_SECONDARY, 0);
-
-		return EC_SUCCESS;
-	}
-
-	CPRINTUSB("New chg p%d", port);
+	CPRINTUSB("Requested charge port change to %d", port);
 
 	/*
-	 * Ensure other port is turned off, then enable new charge port
+	 * The charge manager may ask us to switch to no charger if we're
+	 * running off USB-C only but upstream doesn't support PD. It requires
+	 * that we accept this switch otherwise it triggers an assert and EC
+	 * reset; it's not possible to boot the AP anyway, but we want to avoid
+	 * resetting the EC so we can continue to do the "low power" LED blink.
 	 */
-	if (port == 0) {
-		if (board_get_charger_chip_count() > 1)
-			sm5803_vbus_sink_enable(CHARGER_SECONDARY, 0);
-		sm5803_vbus_sink_enable(CHARGER_PRIMARY, 1);
+	if (port == CHARGE_PORT_NONE)
+		return EC_SUCCESS;
 
-	} else {
-		sm5803_vbus_sink_enable(CHARGER_PRIMARY, 0);
-		sm5803_vbus_sink_enable(CHARGER_SECONDARY, 1);
+	if (port < 0 || CHARGE_PORT_COUNT <= port)
+		return EC_ERROR_INVAL;
+
+	if (port == charge_manager_get_active_charge_port())
+		return EC_SUCCESS;
+
+	/* Don't charge from a source port */
+	if (board_vbus_source_enabled(port))
+		return EC_ERROR_INVAL;
+
+	if (!chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
+		int bj_active, bj_requested;
+
+		if (charge_manager_get_active_charge_port() != CHARGE_PORT_NONE)
+			/* Change is only permitted while the system is off */
+			return EC_ERROR_INVAL;
+
+		/*
+		 * Current setting is no charge port but the AP is on, so the
+		 * charge manager is out of sync (probably because we're
+		 * reinitializing after sysjump). Reject requests that aren't
+		 * in sync with our outputs.
+		 */
+		bj_active = !gpio_get_level(GPIO_EN_PPVAR_BJ_ADP_L);
+		bj_requested = port == CHARGE_PORT_BARRELJACK;
+		if (bj_active != bj_requested)
+			return EC_ERROR_INVAL;
+	}
+
+	CPRINTUSB("New charger p%d", port);
+
+	switch (port) {
+	case CHARGE_PORT_TYPEC0:
+		sm5803_vbus_sink_enable(CHARGER_SOLO, 1);
+		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_L, 1);
+		break;
+	case CHARGE_PORT_BARRELJACK:
+		/* Make sure BJ adapter is sourcing power */
+		if (!barrel_jack_adapter_is_present())
+			return EC_ERROR_INVAL;
+		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_L, 0);
+		sm5803_vbus_sink_enable(CHARGER_SOLO, 0);
+		break;
+	default:
+		return EC_ERROR_INVAL;
 	}
 
 	return EC_SUCCESS;
