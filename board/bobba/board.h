@@ -77,6 +77,13 @@
 #undef CONFIG_SYV682X_HV_ILIM
 #define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
 
+/*
+ * SMP battery sleep mode time is 5 second.
+ * Change max sleep time from once/min to once/4sec to prevent
+ * battery entering sleeping mode. See b/226259582.
+ */
+#define CHARGE_MAX_SLEEP_USEC (4 * SECOND)
+
 #ifndef __ASSEMBLER__
 
 /* support factory keyboard test */
