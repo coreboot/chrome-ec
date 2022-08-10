@@ -8,6 +8,7 @@
 
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/ztest.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -457,6 +458,26 @@ void connect_source_to_port(struct tcpci_partner_data *partner,
  */
 void disconnect_source_from_port(const struct emul *tcpci_emul,
 				 const struct emul *charger_emul);
+
+/**
+ * @brief Connect a power sink to a given port.
+ *
+ * Note: this is function currently only supports an ISL923X charger chip.
+ *
+ * @param partner Pointer to the emulated TCPCI partner device
+ * @param tcpci_emul The TCPCI emulator that the source will connect to
+ * @param charger_emul The charger chip emulator
+ */
+void connect_sink_to_port(struct tcpci_partner_data *partner,
+			  const struct emul *tcpci_emul,
+			  const struct emul *charger_emul);
+
+/**
+ * @brief Disconnect a power sink from a given port.
+ *
+ * @param tcpci_emul The TCPCI emulator that will be disconnected
+ */
+void disconnect_sink_from_port(const struct emul *tcpci_emul);
 
 /**
  * @brief Allocate memory for a test pourpose

@@ -6,6 +6,7 @@
 #include "atomic.h"
 #include "battery.h"
 #include "battery_smart.h"
+#include "builtin/assert.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "common.h"
@@ -550,6 +551,8 @@ static void pe_sender_response_msg_exit(const int port);
 /* Debug log level - higher number == more log */
 #ifdef CONFIG_USB_PD_DEBUG_LEVEL
 static const enum debug_level pe_debug_level = CONFIG_USB_PD_DEBUG_LEVEL;
+#elif defined(CONFIG_USB_PD_INITIAL_DEBUG_LEVEL)
+static enum debug_level pe_debug_level = CONFIG_USB_PD_INITIAL_DEBUG_LEVEL;
 #else
 static enum debug_level pe_debug_level = DEBUG_LEVEL_1;
 #endif
@@ -5285,6 +5288,18 @@ static void pe_bist_tx_entry(int port)
 		 */
 		if (tcpc_set_bist_test_mode(port, true) != EC_SUCCESS)
 			CPRINTS("C%d: Failed to enter BIST Test Mode", port);
+	} else if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
+		   mode == BIST_SHARED_MODE_ENTER) {
+		/* Notify the DPM and return to ready */
+		dpm_bist_shared_mode_enter(port);
+		pe_set_ready_state(port);
+		return;
+	} else if (IS_ENABLED(CONFIG_USB_PD_REV30) &&
+		   mode == BIST_SHARED_MODE_EXIT) {
+		/* Notify the DPM and return to ready */
+		dpm_bist_shared_mode_exit(port);
+		pe_set_ready_state(port);
+		return;
 	} else {
 		/* Ignore unsupported BIST messages. */
 		pe_set_ready_state(port);

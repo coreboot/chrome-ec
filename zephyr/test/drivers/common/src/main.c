@@ -4,7 +4,7 @@
  */
 
 #include <zephyr/zephyr.h>
-#include <ztest.h>
+#include <zephyr/ztest.h>
 #include "ec_app_main.h"
 #include "test/drivers/test_state.h"
 
@@ -25,14 +25,11 @@ void test_main(void)
 	};
 
 	/* Run all the suites that depend on main not being called yet */
-	ztest_run_test_suites(&state);
+	ztest_run_all(&state);
 
 	ec_app_main();
 	state.ec_app_main_run = true;
 
 	/* Run all the suites that depend on main being called */
-	ztest_run_test_suites(&state);
-
-	/* Check that every suite ran */
-	ztest_verify_all_test_suites_ran();
+	ztest_run_all(&state);
 }

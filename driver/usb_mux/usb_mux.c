@@ -6,6 +6,7 @@
 /* USB mux high-level driver. */
 
 #include "atomic.h"
+#include "builtin/assert.h"
 #include "common.h"
 #include "console.h"
 #include "chipset.h"
@@ -62,7 +63,7 @@ enum mux_config_type {
 };
 
 /* Set all muxes for this board's port */
-#define USB_MUX_ALL_CHIPS -1
+#define USB_MUX_ALL_CHIPS 0xff
 
 /* Define a USB mux task ID for the purpose of linking */
 #ifndef HAS_TASK_USB_MUX

@@ -54,6 +54,8 @@
 
 #define CONFIG_USBC_PPC_SYV682X
 #define CONFIG_USB_PD_FRS_PPC
+#undef CONFIG_SYV682X_HV_ILIM
+#define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
 
 #define PD_POWER_SUPPLY_TURN_ON_DELAY 30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 30000 /* us */
@@ -63,6 +65,9 @@
 #define PD_MAX_POWER_MW 100000
 #define PD_MAX_CURRENT_MA 5000
 #define PD_MAX_VOLTAGE_MV 20000
+
+#undef CONFIG_EXTPOWER_DEBOUNCE_MS
+#define CONFIG_EXTPOWER_DEBOUNCE_MS 500
 
 /*
  * Macros for GPIO signals used in common code that don't match the

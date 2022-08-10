@@ -10,39 +10,27 @@
 		battery {
 			i2c-port = <&i2c1>;
 			remote-port = <1>;
-			enum-name = "I2C_PORT_BATTERY";
-		};
-		virtual-battery {
-			i2c-port = <&i2c1>;
-			enum-name = "I2C_PORT_VIRTUAL_BATTERY";
-		};
-		eeprom {
-			i2c-port = <&i2c0>;
-			enum-name = "I2C_PORT_EEPROM";
+			enum-names = "I2C_PORT_BATTERY",
+				"I2C_PORT_VIRTUAL_BATTERY";
 		};
 		i2c_charger: charger {
 			i2c-port = <&i2c0>;
-			enum-name = "I2C_PORT_CHARGER";
+			enum-names = "I2C_PORT_CHARGER",
+				"I2C_PORT_EEPROM";
 		};
 		i2c_sensor: sensor {
 			i2c-port = <&i2c3>;
-			enum-name = "I2C_PORT_SENSOR";
+			enum-names = "I2C_PORT_SENSOR";
 		};
 		i2c_usb_c0: usb-c0 {
 			i2c-port = <&i2c2>;
-			enum-name = "I2C_PORT_USB_C0";
+			enum-names = "I2C_PORT_USB_C0",
+				"I2C_PORT_USB_MUX0";
 		};
 		i2c_usb_c1: usb-c1 {
 			i2c-port = <&i2c4>;
-			enum-name = "I2C_PORT_USB_C1";
-		};
-		i2c_usb_mux0: usb-mux0 {
-			i2c-port = <&i2c2>;
-			enum-name = "I2C_PORT_USB_MUX0";
-		};
-		i2c_usb_mux1: usb-mux1 {
-			i2c-port = <&i2c4>;
-			enum-name = "I2C_PORT_USB_MUX1";
+			enum-names = "I2C_PORT_USB_C1",
+				"I2C_PORT_USB_MUX1";
 		};
 	};
 
@@ -65,6 +53,12 @@ i2c_pwr_cbi: &i2c0 {
 	pinctrl-0 = <&i2c0_clk_gpb3_default
 		     &i2c0_data_gpb4_default>;
 	pinctrl-names = "default";
+
+	charger: rt9490@53 {
+		compatible = "richtek,rt9490";
+		status = "okay";
+		reg = <0x53>;
+	};
 };
 
 &i2c1 {
@@ -85,6 +79,12 @@ i2c_pwr_cbi: &i2c0 {
 	pinctrl-0 = <&i2c2_clk_gpf6_default
 		     &i2c2_data_gpf7_default>;
 	pinctrl-names = "default";
+
+	bc12_port0: rt1739-bc12@70 {
+		compatible = "richtek,rt1739-bc12";
+		status = "okay";
+		reg = <0x70>;
+	};
 };
 
 &i2c3 {
@@ -111,4 +111,11 @@ i2c_pwr_cbi: &i2c0 {
 		     &i2c4_data_gpe7_default>;
 	pinctrl-names = "default";
 	prescale-scl-low = <1>;
+
+	bc12_port1: rt9490-bc12@53 {
+		compatible = "richtek,rt9490-bc12";
+		status = "okay";
+		reg = <0x53>;
+		irq = <&int_usb_c1_bc12_charger>;
+	};
 };

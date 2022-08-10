@@ -155,6 +155,19 @@
 			adc = <&adc_temp_sensor_2>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 		};
+		ambient {
+			compatible = "cros-ec,temp-sensor-thermistor",
+				     "cros-ec,temp-sensor";
+			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
+			enum-name = "TEMP_SENSOR_3";
+			temp_fan_off = <35>;
+			temp_fan_max = <60>;
+			temp_host_high = <85>;
+			temp_host_halt = <90>;
+			temp_host_release_high = <80>;
+			adc = <&adc_temp_sensor_3>;
+			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
+		};
 	};
 
 	usba {
@@ -179,20 +192,8 @@
 		port0@0 {
 			compatible = "named-usbc-port";
 			reg = <0>;
-			bc12 {
-				compatible = "pericom,pi3usb9201";
-				port = <&i2c_ec_i2c_usb_c0>;
-				/*
-				 * BC1.2 interrupt is shared with TCPC, so
-				 * IRQ is not specified here and handled by
-				 * usb_c0_interrupt.
-				 */
-			};
-			chg {
-				compatible = "intersil,isl923x";
-				status = "okay";
-				port = <&i2c_ec_i2c_usb_c0>;
-			};
+			bc12 = <&bc12_port0>;
+			chg = <&chg_port0>;
 			usb-muxes = <&virtual_mux_0>;
 		};
 		port0-muxes {
@@ -207,15 +208,8 @@
 		port1@1 {
 			compatible = "named-usbc-port";
 			reg = <1>;
-			bc12 {
-				compatible = "pericom,pi3usb9201";
-				port = <&i2c_ec_i2c_sub_usb_c1>;
-			};
-			chg {
-				compatible = "intersil,isl923x";
-				status = "okay";
-				port = <&i2c_ec_i2c_sub_usb_c1>;
-			};
+			bc12 = <&bc12_port1>;
+			chg = <&chg_port1>;
 			/*
 			 * Some sub-boards may disable all usb muxes in chain
 			 * except virtual_mux_1
@@ -286,11 +280,40 @@
 &i2c3_0 {
 	label = "I2C_USB_C0_TCPC";
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
+
+	bc12_port0: pi3usb9201@5f {
+		compatible = "pericom,pi3usb9201";
+		status = "okay";
+		reg = <0x5f>;
+		/*
+		 * BC1.2 interrupt is shared with TCPC, so
+		 * IRQ is not specified here and handled by
+		 * usb_c0_interrupt.
+		 */
+	};
+
+	chg_port0: isl923x@9 {
+		compatible = "intersil,isl923x";
+		status = "okay";
+		reg = <0x9>;
+	};
 };
 
 &i2c5_1 {
 	label = "I2C_SUB_C1_TCPC";
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
+
+	bc12_port1: pi3usb9201@5f {
+		compatible = "pericom,pi3usb9201";
+		status = "okay";
+		reg = <0x5f>;
+	};
+
+	chg_port1: isl923x@9 {
+		compatible = "intersil,isl923x";
+		status = "okay";
+		reg = <0x9>;
+	};
 };
 
 &i2c7_0 {

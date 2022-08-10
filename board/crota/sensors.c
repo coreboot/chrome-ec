@@ -8,6 +8,7 @@
 #include "accelgyro.h"
 #include "adc.h"
 #include "driver/accel_lis2dw12.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/accelgyro_lsm6dso.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -53,16 +54,19 @@ K_MUTEX_DEFINE(g_lid_accel_mutex);
 K_MUTEX_DEFINE(g_base_accel_mutex);
 static struct stprivate_data g_lis2dw12_data;
 static struct lsm6dso_data lsm6dso_data;
+static struct bmi_drv_data_t g_bmi260_data;
 
-/* TODO(b/184779333): calibrate the orientation matrix on later board stage */
 static const mat33_fp_t lid_standard_ref = { { FLOAT_TO_FP(1), 0, 0 },
 					     { 0, FLOAT_TO_FP(-1), 0 },
 					     { 0, 0, FLOAT_TO_FP(-1) } };
 
-/* TODO(b/184779743): verify orientation matrix */
 static const mat33_fp_t base_standard_ref = { { FLOAT_TO_FP(-1), 0, 0 },
 					      { 0, FLOAT_TO_FP(1), 0 },
 					      { 0, 0, FLOAT_TO_FP(-1) } };
+
+static const mat33_fp_t base_standard_ref_id_1 = { { 0, FLOAT_TO_FP(1), 0 },
+						   { FLOAT_TO_FP(1), 0, 0 },
+						   { 0, 0, FLOAT_TO_FP(-1) } };
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
@@ -140,6 +144,75 @@ struct motion_sensor_t motion_sensors[] = {
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
+struct motion_sensor_t bmi260_base_accel = {
+	.name = "Base Accel",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_BMI260,
+	.type = MOTIONSENSE_TYPE_ACCEL,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &bmi260_drv,
+	.mutex = &g_base_accel_mutex,
+	.drv_data = &g_bmi260_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = BMI260_ADDR0_FLAGS,
+	.rot_standard_ref = &base_standard_ref_id_1,
+	.min_frequency = BMI_ACCEL_MIN_FREQ,
+	.max_frequency = BMI_ACCEL_MAX_FREQ,
+	.default_range = 4, /* g */
+	.config = {
+		/* EC use accel for angle detection */
+		[SENSOR_CONFIG_EC_S0] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+		/* Sensor on in S3 */
+		[SENSOR_CONFIG_EC_S3] = {
+			.odr = 10000 | ROUND_UP_FLAG,
+			.ec_rate = 100 * MSEC,
+		},
+	},
+};
+struct motion_sensor_t bmi260_base_gyro = {
+	.name = "Base Gyro",
+	.active_mask = SENSOR_ACTIVE_S0_S3,
+	.chip = MOTIONSENSE_CHIP_BMI260,
+	.type = MOTIONSENSE_TYPE_GYRO,
+	.location = MOTIONSENSE_LOC_BASE,
+	.drv = &bmi260_drv,
+	.mutex = &g_base_accel_mutex,
+	.drv_data = &g_bmi260_data,
+	.port = I2C_PORT_SENSOR,
+	.i2c_spi_addr_flags = BMI260_ADDR0_FLAGS,
+	.default_range = 1000, /* dps */
+	.rot_standard_ref = &base_standard_ref_id_1,
+	.min_frequency = BMI_GYRO_MIN_FREQ,
+	.max_frequency = BMI_GYRO_MAX_FREQ,
+};
+
+void motion_interrupt(enum gpio_signal signal)
+{
+	if (get_board_id() > 1) {
+		if (gpio_get_level(GPIO_EC_SENSOR_STRAP) == 0)
+			bmi260_interrupt(signal);
+		else
+			lsm6dso_interrupt(signal);
+	} else
+		lsm6dso_interrupt(signal);
+}
+
+static void board_update_motion_sensor_config(void)
+{
+	if (get_board_id() > 1 && gpio_get_level(GPIO_EC_SENSOR_STRAP) == 0) {
+		motion_sensors[BASE_ACCEL] = bmi260_base_accel;
+		motion_sensors[BASE_GYRO] = bmi260_base_gyro;
+		ccprints("BASE IMU is BMI260");
+	} else {
+		ccprints("BASE IMU is LSM6DSO");
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_update_motion_sensor_config,
+	     HOOK_PRIO_INIT_I2C + 1);
+
 static void baseboard_sensors_init(void)
 {
 	/* Enable gpio interrupt for lid accel sensor */
@@ -187,27 +260,34 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 		.temp_host_release = { \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(77), \
 		}, \
-		.temp_fan_off = C_TO_K(39), \
-		.temp_fan_max = C_TO_K(52), \
+		.temp_fan_off = C_TO_K(35), \
+		.temp_fan_max = C_TO_K(45), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 
+#define THERMAL_DDR                                                     \
+	{                                                               \
+		.temp_fan_off = C_TO_K(56), .temp_fan_max = C_TO_K(59), \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_ddr = THERMAL_DDR;
+
 #define THERMAL_CHARGER                                                 \
 	{                                                               \
-		.temp_fan_off = C_TO_K(59), .temp_fan_max = C_TO_K(65), \
+		.temp_fan_off = C_TO_K(67), .temp_fan_max = C_TO_K(70), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_charger =
 	THERMAL_CHARGER;
 
 #define THERMAL_AMBIENT                                                 \
 	{                                                               \
-		.temp_fan_off = C_TO_K(26), .temp_fan_max = C_TO_K(31), \
+		.temp_fan_off = C_TO_K(38), .temp_fan_max = C_TO_K(45), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_ambient =
 	THERMAL_AMBIENT;
 
 struct ec_thermal_config thermal_params[] = {
 	[TEMP_SENSOR_1_SOC] = THERMAL_CPU,
+	[TEMP_SENSOR_2_DDR] = THERMAL_DDR,
 	[TEMP_SENSOR_3_CHARGER] = THERMAL_CHARGER,
 	[TEMP_SENSOR_4_AMBIENT] = THERMAL_AMBIENT,
 };

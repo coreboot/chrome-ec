@@ -22,7 +22,11 @@
 #define CONFIG_MP2964
 
 /* Sensors */
-#define CONFIG_ACCELGYRO_LSM6DSO /* Base accel */
+#define CONFIG_ACCELGYRO_BMI260 /* Base accel/gyro */
+#define CONFIG_ACCELGYRO_BMI260_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+#define CONFIG_ACCELGYRO_LSM6DSO /* Base accel/gyro */
 #define CONFIG_ACCEL_LSM6DSO_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
@@ -152,6 +156,9 @@
 #define I2C_PORT_EEPROM NPCX_I2C_PORT7_0
 #define I2C_PORT_MP2964 NPCX_I2C_PORT7_0
 
+/* define this to avoid error on CONFIG_ACCELGYRO_BMI_COMM_I2C */
+#define I2C_PORT_ACCEL I2C_PORT_SENSOR
+
 #define I2C_ADDR_EEPROM_FLAGS 0x50
 
 #define I2C_ADDR_MP2964_FLAGS 0x20
@@ -169,11 +176,8 @@
 /* Enabling USB4 mode */
 #define CONFIG_USB_PD_USB4
 
-/*
- * TODO: b/229934138, Disable BBR firmware update temporarily.
- */
 /* Retimer */
-#undef CONFIG_USBC_RETIMER_FW_UPDATE
+#define CONFIG_USBC_RETIMER_FW_UPDATE
 
 /* Thermal features */
 #define CONFIG_THERMISTOR
@@ -181,15 +185,15 @@
 #define CONFIG_TEMP_SENSOR_POWER
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
-#define CONFIG_FANS FAN_CH_COUNT
-
 /* LED defines */
 #define CONFIG_LED_ONOFF_STATES
 #define CONFIG_LED_ONOFF_STATES_BAT_LOW 10
 
 /* Fan features */
 #define CONFIG_CUSTOM_FAN_CONTROL
+#define CONFIG_FANS FAN_CH_COUNT
 #define CONFIG_FAN_DYNAMIC
+#define RPM_DEVIATION 1
 
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25720
@@ -253,7 +257,18 @@ enum pwm_channel {
 
 enum fan_channel { FAN_CH_0 = 0, FAN_CH_COUNT };
 
+enum fan_rpm_table {
+	RPM_TABLE_CPU0,
+	RPM_TABLE_CPU1,
+	RPM_TABLE_DDR,
+	RPM_TABLE_CHARGER,
+	RPM_TABLE_AMBIENT,
+	FAN_RPM_TABLE_COUNT
+};
+
 enum mft_channel { MFT_CH_0 = 0, MFT_CH_COUNT };
+
+void motion_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

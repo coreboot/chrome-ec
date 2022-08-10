@@ -8,6 +8,7 @@
 #include "accelgyro.h"
 #include "atomic.h"
 #include "body_detection.h"
+#include "builtin/assert.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
@@ -196,6 +197,10 @@ int motion_sense_set_data_rate(struct motion_sensor_t *sensor)
 	sensor->collection_rate = odr > 0 ? SECOND * 1000 / odr : 0;
 	sensor->next_collection = ts.le.lo + sensor->collection_rate;
 	sensor->oversampling = 0;
+	if (IS_ENABLED(CONFIG_ACCEL_FIFO)) {
+		motion_sense_set_data_period(sensor - motion_sensors,
+					     sensor->collection_rate);
+	}
 	mutex_unlock(&g_sensor_mutex);
 	if (IS_ENABLED(CONFIG_BODY_DETECTION) &&
 	    (sensor - motion_sensors == CONFIG_BODY_DETECTION_SENSOR))
@@ -1327,10 +1332,6 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 			break;
 		}
 		motion_sense_fifo_get_info(&out->fifo_info, 1);
-		for (i = 0; i < motion_sensor_count; i++) {
-			out->fifo_info.lost[i] = motion_sensors[i].lost;
-			motion_sensors[i].lost = 0;
-		}
 		args->response_size = sizeof(out->fifo_info) +
 				      sizeof(uint16_t) * motion_sensor_count;
 		break;

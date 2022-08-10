@@ -4,7 +4,7 @@
 
 cmake_minimum_required(VERSION 3.13.1)
 
-find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+find_package(Zephyr REQUIRED HINTS "${ZEPHYR_BASE}")
 
 zephyr_include_directories(include)
 zephyr_library_sources("src/common.c")
@@ -27,6 +27,7 @@ if(DEFINED CONFIG_BOARD_NEREID)
 	zephyr_library_sources(
 			"src/led.c"
 			"nereid/src/keyboard.c"
+			"nereid/src/hdmi.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "nereid/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "nereid/src/charger.c")
@@ -46,6 +47,7 @@ if(DEFINED CONFIG_BOARD_PUJJO)
 	zephyr_library_sources(
 			"pujjo/src/led.c"
 			"pujjo/src/keyboard.c"
+			"pujjo/src/hdmi.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "pujjo/src/fan.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "pujjo/src/usbc.c")
@@ -59,7 +61,7 @@ endif()
 if(DEFINED CONFIG_BOARD_JOXER)
 	project(joxer)
 	zephyr_library_sources(
-			"src/led.c"
+			"joxer/src/led.c"
 			"joxer/src/keyboard.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "joxer/src/usbc.c")

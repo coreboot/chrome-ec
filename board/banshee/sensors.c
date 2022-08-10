@@ -44,10 +44,10 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 static struct als_drv_data_t g_cm32183_data = {
 	/**
 	 * adjusted_value = raw_value * scale + raw_value * uscale / 10000
-	 * the coeficient we need is 3.8
+	 * the coeficient we need is 3.2
 	 */
 	.als_cal.scale = 3,
-	.als_cal.uscale = 8000,
+	.als_cal.uscale = 2000,
 	.als_cal.offset = 0,
 	.als_cal.channel_scale = {
 		/* TODO(b/219424210):  Calibrate ALS CM32183A3OP */
@@ -130,7 +130,7 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 			[EC_TEMP_THRESH_WARN] = C_TO_K(75), \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(81), \
 		}, \
-		.temp_fan_off = C_TO_K(40), \
+		.temp_fan_off = C_TO_K(50), \
 		.temp_fan_max = C_TO_K(58), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
@@ -162,7 +162,7 @@ __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 			[EC_TEMP_THRESH_WARN] = C_TO_K(70), \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(86), \
 		}, \
-		.temp_fan_off = C_TO_K(40), \
+		.temp_fan_off = C_TO_K(50), \
 		.temp_fan_max = C_TO_K(58), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_ambient =
@@ -193,7 +193,7 @@ __maybe_unused static const struct ec_thermal_config thermal_ambient =
 			[EC_TEMP_THRESH_WARN] = C_TO_K(85), \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(91), \
 		}, \
-		.temp_fan_off = C_TO_K(40), \
+		.temp_fan_off = C_TO_K(50), \
 		.temp_fan_max = C_TO_K(58), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_charger =

@@ -4,7 +4,7 @@
 
 cmake_minimum_required(VERSION 3.13.1)
 
-find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+find_package(Zephyr REQUIRED HINTS "${ZEPHYR_BASE}")
 
 cros_ec_library_include_directories(include)
 
@@ -41,6 +41,7 @@ elseif(DEFINED CONFIG_BOARD_KINGLER)
 				     "src/kingler/button.c")
 elseif(DEFINED CONFIG_BOARD_STEELIX)
 	project(steelix)
+	zephyr_library_sources("src/kingler/board_steelix.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C "src/kingler/i2c.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
 				     "src/kingler/led_steelix.c")

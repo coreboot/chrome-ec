@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "builtin/assert.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "common.h"
@@ -303,6 +304,8 @@ __maybe_unused static __const_data const char *const tc_state_names[] = {
 /* Debug log level - higher number == more log */
 #ifdef CONFIG_USB_PD_DEBUG_LEVEL
 static const enum debug_level tc_debug_level = CONFIG_USB_PD_DEBUG_LEVEL;
+#elif defined(CONFIG_USB_PD_INITIAL_DEBUG_LEVEL)
+static enum debug_level tc_debug_level = CONFIG_USB_PD_INITIAL_DEBUG_LEVEL;
 #else
 static enum debug_level tc_debug_level = DEBUG_LEVEL_1;
 #endif

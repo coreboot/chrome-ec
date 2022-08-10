@@ -97,7 +97,6 @@
 		compatible = "unused-gpios";
 		unused-gpios = <&gpioc 3 0>,
 			       <&gpiod 4 0>,
-			       <&gpiod 7 0>,
 			       <&gpioh 2 0>,
 			       <&gpioj 7 0>,
 			       <&gpiol 4 0>;
@@ -132,6 +131,21 @@
 		gpio_fan_enable: fan-enable {
 			gpios = <&gpiol 4 GPIO_OUTPUT>;
 			no-auto-init;
+		};
+		gpio_power_led_gate: power_led_gate {
+			gpios = <&gpiof 1 GPIO_OUTPUT_LOW>;
+		};
+		gpio_led_1_odl: led_1_odl {
+			gpios = <&gpioa 1 GPIO_OUTPUT_HIGH>;
+		};
+		gpio_led_2_odl: led_2_odl {
+			gpios = <&gpioa 2 GPIO_OUTPUT_HIGH>;
+		};
+		gpio_led_3_l: led_3_l {
+			gpios = <&gpiol 2 GPIO_OUTPUT_HIGH>;
+		};
+		gpio_led_4_l: led_4_l {
+			gpios = <&gpiol 3 GPIO_OUTPUT_HIGH>;
 		};
 	};
 
@@ -223,15 +237,8 @@
 		port0@0 {
 			compatible = "named-usbc-port";
 			reg = <0>;
-			bc12 {
-				compatible = "pericom,pi3usb9201";
-				port = <&i2c_ec_i2c_usb_c0>;
-			};
-			chg {
-				compatible = "siliconmitus,sm5803";
-				status = "okay";
-				port = <&i2c_ec_i2c_usb_c0>;
-			};
+			bc12 = <&bc12_port0>;
+			chg = <&chg_port0>;
 			usb-muxes = <&virtual_mux_0>;
 		};
 		port0-muxes {
@@ -242,15 +249,8 @@
 		port1@1 {
 			compatible = "named-usbc-port";
 			reg = <1>;
-			bc12 {
-				compatible = "pericom,pi3usb9201";
-				port = <&i2c_ec_i2c_sub_usb_c1>;
-			};
-			chg {
-				compatible = "siliconmitus,sm5803";
-				status = "okay";
-				port = <&i2c_ec_i2c_sub_usb_c1>;
-			};
+			bc12 = <&bc12_port1>;
+			chg = <&chg_port1>;
 			/*
 			 * Some sub-boards may disable all usb muxes in chain
 			 * except virtual_mux_1
@@ -271,7 +271,7 @@
 
 		fan_0 {
 			pwms = <&pwm7 PWM_CHANNEL_7 PWM_KHZ(30) PWM_POLARITY_NORMAL>;
-			tach = <&tach0>;
+			tach = <&tach1>;
 			rpm_min = <1500>;
 			rpm_start = <1500>;
 			rpm_max = <6500>;
@@ -372,6 +372,18 @@
 	pinctrl-0 = <&i2c4_clk_gpe0_default
 		     &i2c4_data_gpe7_default>;
 	pinctrl-names = "default";
+
+	bc12_port1: pi3usb9201@5f {
+		compatible = "pericom,pi3usb9201";
+		status = "okay";
+		reg = <0x5f>;
+	};
+
+	chg_port1: sm5803@32 {
+		compatible = "siliconmitus,sm5803";
+		status = "okay";
+		reg = <0x32>;
+	};
 };
 
 &i2c_ec_i2c_sub_usb_c1 {
@@ -390,6 +402,18 @@
 	pinctrl-0 = <&i2c5_clk_gpa4_default
 		     &i2c5_data_gpa5_default>;
 	pinctrl-names = "default";
+
+	bc12_port0: pi3usb9201@5f {
+		compatible = "pericom,pi3usb9201";
+		status = "okay";
+		reg = <0x5f>;
+	};
+
+	chg_port0: sm5803@32 {
+		compatible = "siliconmitus,sm5803";
+		status = "okay";
+		reg = <0x32>;
+	};
 };
 
 /* pwm for fan */
@@ -401,10 +425,14 @@
 };
 
 /* fan tachometer sensor */
-&tach0 {
+&tach1 {
 	status = "okay";
 	channel = <IT8XXX2_TACH_CHANNEL_A>;
 	pulses-per-round = <2>;
 	pinctrl-0 = <&tach1a_gpd7_default>;
 	pinctrl-names = "default";
+};
+
+&usbpd0 {
+	status = "okay";
 };

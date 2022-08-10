@@ -26,6 +26,10 @@
 			enum-name = "ADC_TEMP_SENSOR_2";
 			io-channels = <&adc0 1>;
 		};
+		adc_temp_sensor_3: temp_sensor_3 {
+			enum-name = "ADC_TEMP_SENSOR_3";
+			io-channels = <&adc0 10>;
+		};
 	};
 
 	named-gpios {
@@ -200,23 +204,23 @@
 
 		i2c_ec_i2c_eeprom: ec_i2c_eeprom {
 			i2c-port = <&i2c0_0>;
-			enum-name = "I2C_PORT_EEPROM";
+			enum-names = "I2C_PORT_EEPROM";
 		};
 		i2c_ec_i2c_sensor: ec_i2c_sensor {
 			i2c-port = <&i2c1_0>;
-			enum-name = "I2C_PORT_SENSOR";
+			enum-names = "I2C_PORT_SENSOR";
 		};
 		i2c_ec_i2c_usb_c0: ec_i2c_usb_c0 {
 			i2c-port = <&i2c3_0>;
-			enum-name = "I2C_PORT_USB_C0_TCPC";
+			enum-names = "I2C_PORT_USB_C0_TCPC";
 		};
 		i2c_ec_i2c_sub_usb_c1: ec_i2c_sub_usb_c1 {
 			i2c-port = <&i2c5_1>;
-			enum-name = "I2C_PORT_USB_C1_TCPC";
+			enum-names = "I2C_PORT_USB_C1_TCPC";
 		};
 		i2c_ec_i2c_batt: ec_i2c_batt {
 			i2c-port = <&i2c7_0>;
-			enum-name = "I2C_PORT_BATTERY";
+			enum-names = "I2C_PORT_BATTERY";
 		};
 	};
 };
@@ -226,7 +230,8 @@
 	pinctrl-0 = <&adc0_chan0_gp45
 		     &adc0_chan1_gp44
 		     &adc0_chan4_gp41
-		     &adc0_chan6_gp34>;
+		     &adc0_chan6_gp34
+		     &adc0_chan10_gpe0>;
 	pinctrl-names = "default";
 };
 
