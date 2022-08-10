@@ -46,6 +46,9 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* Buttons */
+#define CONFIG_DEDICATED_RECOVERY_BUTTON
+#define CONFIG_DEDICATED_RECOVERY_BUTTON_2
+#define CONFIG_EMULATED_SYSRQ
 #define CONFIG_POWER_BUTTON_IGNORE_LID
 
 /* Dedicated barreljack charger port */
@@ -65,6 +68,7 @@
 #undef CONFIG_LID_SWITCH
 #undef CONFIG_USB_CHARGER
 #undef CONFIG_VOLUME_BUTTONS
+#undef GPIO_USB_C1_DP_HPD
 
 /* I2C Bus Configuration */
 #define I2C_PORT_BACKLIGHT I2C_PORT_SENSOR
@@ -75,6 +79,7 @@
 #include "registers.h"
 
 enum pwm_channel {
+	PWM_CH_LED_WHITE,
 	PWM_CH_COUNT,
 };
 
@@ -117,8 +122,14 @@ enum charge_port {
 	CHARGE_PORT_BARRELJACK,
 };
 
+/* Board specific handlers */
+void led_alert(int enable);
+#define PORT_TO_HPD(port) (GPIO_USB_C0_DP_HPD)
+
 /* Pin renaming */
 #define GPIO_AC_PRESENT GPIO_BJ_ADP_PRESENT_L
+#define GPIO_RECOVERY_L GPIO_EC_RECOVERY_BTN_ODL
+#define GPIO_RECOVERY_L_2 GPIO_H1_EC_RECOVERY_BTN_ODL
 
 #endif /* !__ASSEMBLER__ */
 
