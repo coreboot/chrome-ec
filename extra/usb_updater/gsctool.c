@@ -2358,9 +2358,6 @@ static int process_get_apro_boot_status(struct transfer_descriptor *td)
 	case AP_RO_PASS:
 		printf("pass\n");
 		break;
-	case AP_RO_PASS_UNVERIFIED_GBB:
-		printf("pass - unverified gbb!\n");
-		break;
 	case AP_RO_FAIL:
 		printf("FAIL\n");
 		break;
@@ -2369,15 +2366,6 @@ static int process_get_apro_boot_status(struct transfer_descriptor *td)
 		break;
 	case AP_RO_UNSUPPORTED_UNKNOWN:
 		printf("not supported\ntriggered: unknown\n");
-		break;
-	case AP_RO_UNSUPPORTED_NOT_TRIGGERED:
-		printf("not supported\ntriggered: no\n");
-		break;
-	case AP_RO_IN_PROGRESS:
-		printf("in progress.");
-		break;
-	case AP_RO_FAIL_CLEARED:
-		printf("fail CLEARED!");
 		break;
 	case AP_RO_UNSUPPORTED_NOT_TRIGGERED:
 		printf("not supported\ntriggered: no\n");
