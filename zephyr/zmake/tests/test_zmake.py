@@ -74,8 +74,7 @@ class FakeJobserver(zmake.jobserver.GNUMakeJobServer):
             fnames: Dict of regexp to filename. If the regexp matches the
             command, then the filename will be returned as the output.
         """
-        super().__init__()
-        self.jobserver = zmake.jobserver.GNUMakeJobServer(jobs=2)
+        super().__init__(jobs=2)
         self.fnames = fnames
 
     def get_job(self):
@@ -96,8 +95,12 @@ class FakeJobserver(zmake.jobserver.GNUMakeJobServer):
                 break
         else:
             raise Exception('No pattern matched "%s"' % " ".join(cmd))
-        kwargs.pop("env", None)
-        return self.jobserver.popen(new_cmd, *args, **kwargs)
+        kwargs["env"] = {}
+        return super().popen(new_cmd, *args, **kwargs)
+
+    def env(self):
+        """Runs test commands with an empty environment for simpler logs."""
+        return {}
 
 
 def get_test_filepath(suffix):
@@ -207,8 +210,8 @@ class TestFilters:
             "Building fakeproject:rw: /usr/bin/ninja -C {}-rw".format(
                 tmp_path / "ec/build/zephyr/fakeproject/build"
             ),
-            "Running cat {}/files/sample_ro.txt".format(OUR_PATH),
-            "Running cat {}/files/sample_rw.txt".format(OUR_PATH),
+            "Running `env -i cat {}/files/sample_ro.txt`".format(OUR_PATH),
+            "Running `env -i cat {}/files/sample_rw.txt`".format(OUR_PATH),
         }
         for suffix in ["ro", "rw"]:
             with open(get_test_filepath(suffix)) as file:
