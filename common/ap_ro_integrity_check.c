@@ -31,6 +31,7 @@
 #define LOWEST_FMAP_ALIGNMENT  (4 * 1024)
 #define FMAP_SIGNATURE	       "__FMAP__"
 #define FMAP_AREA_NAME	       "FMAP"
+#define FMAP_GBB_AREA_NAME     "GBB"
 #define FMAP_SIGNATURE_SIZE    (sizeof(FMAP_SIGNATURE) - 1)
 #define FMAP_NAMELEN	       32
 #define FMAP_MAJOR_VERSION     1
@@ -107,7 +108,6 @@ struct ap_ro_check {
 	struct ap_ro_check_payload payload;
 };
 
-#ifdef FIND_FMAP
 /*****************************************************************************/
 /* FMAP structures borrowed from host/lib/include/fmap.h in vboot_reference. */
 
@@ -127,7 +127,81 @@ struct fmap_area_header {
 	char area_name[FMAP_NAMELEN];
 	uint16_t area_flags;
 } __packed;
-#endif /* FIND_FMAP */
+
+/*****************************************************************************/
+/* GBB information from vboot_reference/firmware/2lib/include/2struct.h */
+/*
+ * Signature at start of the GBB
+ */
+#define VB2_GBB_SIGNATURE "$GBB"
+#define VB2_GBB_SIGNATURE_SIZE (sizeof(VB2_GBB_SIGNATURE) - 1)
+
+#define VB2_GBB_HWID_DIGEST_SIZE 32
+
+/* Supported VB2 GBB struct version */
+#define VB2_GBB_MAJOR_VER 1
+#define VB2_GBB_MINOR_VER 2
+
+#define VB2_GBB_HEADER_SIZE 128
+#define VB2_GBB_HEADER_FLAG_OFFSET 12
+#define VB2_GBB_HEADER_FLAG_SIZE 4
+/*
+ * GBB header saved in AP RO flash.
+ * v1.2 - added fields for sha256 digest of the HWID
+ */
+struct vb2_gbb_header {
+	/* Fields present in version 1.1 */
+	uint8_t  signature[VB2_GBB_SIGNATURE_SIZE]; /* VB2_GBB_SIGNATURE */
+	uint16_t major_version;   /* See VB2_GBB_MAJOR_VER */
+	uint16_t minor_version;   /* See VB2_GBB_MINOR_VER */
+	uint32_t header_size;     /* Size of GBB header in bytes */
+
+	/* Flags.
+	 * b/236844541 - APRO verification v1 has to confirm the flags are set
+	 *               to 0.
+	 */
+	uint32_t flags;
+
+	/* Offsets (from start of header) and sizes (in bytes) of components */
+	uint32_t hwid_offset;		/* HWID */
+	uint32_t hwid_size;
+	uint32_t rootkey_offset;	/* Root key */
+	uint32_t rootkey_size;
+	uint32_t bmpfv_offset;		/* BMP FV; deprecated in current FW */
+	uint32_t bmpfv_size;
+	uint32_t recovery_key_offset;	/* Recovery key */
+	uint32_t recovery_key_size;
+
+	/* Added in version 1.2 */
+	uint8_t  hwid_digest[VB2_GBB_HWID_DIGEST_SIZE];	/* SHA-256 of HWID */
+
+	/* Pad to match VB2_GBB_HEADER_SIZE.  Initialize to 0. */
+	uint8_t  pad[48];
+} __packed;
+BUILD_ASSERT(sizeof(struct vb2_gbb_header) == VB2_GBB_HEADER_SIZE);
+BUILD_ASSERT(offsetof(struct vb2_gbb_header, flags) ==
+	VB2_GBB_HEADER_FLAG_OFFSET);
+
+struct gbb_descriptor {
+	/*
+	 * If validate_flags is true, verify the gbb flags are set to 0 during
+	 * verification. If the gbb flags are in the hash, AP RO verification
+	 * will need to validate them.
+	 */
+	bool validate_flags;
+	/*
+	 * The FMAP range information. The FMAP must be in the hash ranges for
+	 * verification to pass.
+	 */
+	struct ro_range fmap;
+	/* The full GBB range information. */
+	struct ro_range gbb;
+	/*
+	 * The GBB flag range information. The flags are only verified if
+	 * they're in the hash.
+	 */
+	struct ro_range gbb_flags;
+} __packed;
 
 /*****************************************************************************/
 /* V1 Factory Support (AP_RO_HASH_TYPE_FACTORY) */
@@ -359,6 +433,15 @@ static enum ap_ro_check_vc_errors ap_ro_check_unsupported(int add_flash_event)
 	return ARCVE_OK;
 }
 
+/* Returns true if part_range is fully within full_range. */
+static bool is_in_range(const struct ro_range part_range,
+			const struct ro_range full_range)
+{
+	return (part_range.flash_offset >= full_range.flash_offset) &&
+		(part_range.flash_offset + part_range.range_size <=
+		 full_range.flash_offset + full_range.range_size);
+}
+
 /**
  * Validate hash of AP flash ranges.
  *
@@ -404,8 +487,8 @@ enum ap_ro_check_result validate_ranges_sha(const struct ro_range *ranges,
 	return ROV_SUCCEEDED;
 }
 
-
-#ifdef FIND_FMAP
+/*****************************************************************************/
+/* V1 Factory Verify GBB Support */
 /**
  * Read AP flash area into provided buffer.
  *
@@ -435,22 +518,153 @@ static int read_ap_spi(void *buf, uint32_t offset, size_t size, int code_line)
 	return 0;
 }
 
-/*
- * Find the FMAP in RO flash.
+/**
+ * Find GBB FMAP area in the FMAP table.
  *
- * Iterate through AP flash at 4K intervals looking for FMAP.
- * This isn't used right now. It was used as a part of v2 support. It'll
- * get used to find the gbb in a followup cl.
+ * @param offset offset of the fmap in the flash
+ * @param nareas number of areas in fmap
+ * @param gbbah fmap area header to save GBB area information in
  *
- * Return ROV_SUCCEEDED if a valid FMAP was found, ROV_FAILED otherwise.
+ * @return zero on success, -1 if the GBB is not found.
  */
-static enum ap_ro_check_result find_fmap(void)
+static int find_gbb_fmah(uint32_t offset, uint16_t nareas,
+			 struct fmap_area_header *gbbah)
+{
+	uint16_t i;
+	struct fmap_area_header fmah;
+
+	if (nareas > 64) {
+		CPRINTS("%s: too many areas: %d", __func__, nareas);
+		return -1;
+	}
+
+	for (i = 0; i < nareas; i++) {
+		if (read_ap_spi(&fmah, offset, sizeof(fmah), __LINE__))
+			return -1;
+
+		if (!memcmp(fmah.area_name, FMAP_GBB_AREA_NAME,
+			    sizeof(FMAP_GBB_AREA_NAME))) {
+			memcpy(gbbah, &fmah, sizeof(*gbbah));
+			return 0;
+		}
+		offset += sizeof(fmah);
+	}
+
+	CPRINTS("Could not find %s area", FMAP_GBB_AREA_NAME);
+
+	return -1;
+}
+
+/*
+ * If the range is covered by one of the AP RO Verification ranges, then the
+ * range is in the hash.
+ *
+ * Returns:
+ *   EC_SUCCESS if if the range is in one of the AP RO ranges.
+ *   EC_ERROR_CRC if p_chk is invalid.
+ *   EC_ERROR_INVAL if p_chk is valid, but range isn't in one of the AP RO
+ *                  ranges.
+ */
+static int range_is_in_hash(const struct ro_range range)
+{
+	uint16_t i;
+
+	for (i = 0; i < p_chk->header.num_ranges; i++) {
+		if (is_in_range(range, p_chk->payload.ranges[i]))
+			return EC_SUCCESS;
+	}
+	return EC_ERROR_INVAL;
+}
+
+/*
+ * Verify the GBB contents and validate the GBB flags are set to 0.
+ *
+ * @param gbbd pointer to the gbb descriptor with the fmap, gbb, gbb_flags,
+ *             and validate_flags information from init_gbbd.
+ *
+ * Returns:
+ *   ROV_SUCCEEDED if the flags are outside of the hash or if the flags
+ *                 are in the hash and set to 0.
+ *   ROV_FAILED if the gbb format is invalid.
+ */
+static enum ap_ro_check_result validate_gbbd(struct gbb_descriptor *gbbd)
+{
+	struct vb2_gbb_header gbb;
+
+	/*
+	 * The GBB flags are outside of the hash, so there's no need to validate
+	 * them.
+	 * The location was found in the FMAP which will be verified. If it's
+	 * pointing to the wrong place, AP RO verification will fail.
+	 */
+	if (!gbbd->validate_flags) {
+		CPRINTS("%s: GBB flags not in hash", __func__);
+		return ROV_SUCCEEDED;
+	}
+
+	if (gbbd->gbb.range_size < VB2_GBB_HEADER_SIZE) {
+		CPRINTS("%s: invalid GBB size %u", __func__,
+			gbbd->gbb.range_size);
+		return ROV_FAILED;
+	}
+
+	/* Read and verify the contents of the GBB */
+	if (read_ap_spi(&gbb, gbbd->gbb.flash_offset, sizeof(gbb), __LINE__))
+		return ROV_FAILED;
+
+	/*
+	 * Verify the gbb version and signature to make sure it looks
+	 * reasonable.
+	 */
+	if (gbb.header_size != VB2_GBB_HEADER_SIZE) {
+		CPRINTS("%s: inconsistent contents", __func__);
+		return ROV_FAILED;
+	}
+	if ((gbb.major_version != VB2_GBB_MAJOR_VER) ||
+	    (gbb.minor_version != VB2_GBB_MINOR_VER)) {
+		CPRINTS("%s: unsupported ver %d %d", __func__,
+			gbb.major_version, gbb.minor_version);
+		return ROV_FAILED;
+	}
+	if (memcmp(gbb.signature, VB2_GBB_SIGNATURE,
+		   VB2_GBB_SIGNATURE_SIZE)) {
+		CPRINTS("%s: invalid signature", __func__);
+		return ROV_FAILED;
+	}
+
+	/* Verify the GBB flags are set to 0. */
+	if (gbb.flags) {
+		CPRINTS("%s: invalid flags %x", __func__, gbb.flags);
+		return ROV_FAILED;
+	}
+
+	CPRINTS("%s: ok", __func__);
+	return ROV_SUCCEEDED;
+}
+/*
+ * Initialize the gbb descriptor using the FMAP and GBB found in RO flash.
+ *
+ * Iterate through AP flash at 4K intervals looking for FMAP. Once FMAP is
+ * found call find the FMAP GBB section. Populate the FMAP and GBB information
+ * in the gbb descriptor.
+ *
+ * @param gbbd pointer to the gbb descriptor.
+ *
+ * Returns:
+ *   ROV_SUCCEEDED if a valid GBB was found using FMAP information from a
+ *                 section covered by the AP RO hash.
+ *   ROV_FAILED if no FMAP section was found in the AP RO hash or if the
+ *              GBB wasn't found in FMAP.
+ */
+static enum ap_ro_check_result init_gbbd(struct gbb_descriptor *gbbd)
 {
 	uint32_t offset;
+	int rv;
 
 	for (offset = 0; offset < MAX_SUPPORTED_FLASH_SIZE;
 	     offset += LOWEST_FMAP_ALIGNMENT) {
 		struct fmap_header fmh;
+		struct fmap_area_header gbbah;
 
 		if (read_ap_spi(fmh.fmap_signature, offset,
 				sizeof(fmh.fmap_signature), __LINE__))
@@ -475,12 +689,38 @@ static enum ap_ro_check_result find_fmap(void)
 			continue;
 		}
 
+		/* Find the GBB area header in FMAP. */
+		if (find_gbb_fmah(offset + sizeof(struct fmap_header),
+				  fmh.fmap_nareas, &gbbah))
+			continue;
+
+		gbbd->fmap.flash_offset = offset;
+		gbbd->fmap.range_size = sizeof(struct fmap_header) +
+			sizeof(struct fmap_area_header) * fmh.fmap_nareas;
+		/*
+		 * The FMAP isn't in the AP RO hash, so the GBB location can't
+		 * be trusted. Continue searching for a fmap in the hash.
+		 */
+		rv = range_is_in_hash(gbbd->fmap);
+		if (rv != EC_SUCCESS) {
+			CPRINTS("%s: FMAP(%x:%x) not in hash.", __func__,
+				gbbd->fmap.flash_offset, gbbd->fmap.range_size);
+			continue;
+		}
+
+		gbbd->gbb.flash_offset = gbbah.area_offset;
+		gbbd->gbb.range_size = gbbah.area_size;
+		gbbd->gbb_flags.flash_offset = gbbah.area_offset +
+			VB2_GBB_HEADER_FLAG_OFFSET;
+		gbbd->gbb_flags.range_size = VB2_GBB_HEADER_FLAG_SIZE;
+		gbbd->validate_flags = range_is_in_hash(gbbd->gbb_flags) ==
+			EC_SUCCESS;
+
 		return ROV_SUCCEEDED;
 	}
 
 	return ROV_FAILED;
 }
-#endif /* FIND_FMAP */
 
 /*
  * A hook used to keep the EC in reset, no matter what keys the user presses,
@@ -532,6 +772,7 @@ int ec_rst_override(void)
 static uint8_t do_ap_ro_check(void)
 {
 	enum ap_ro_check_result rv;
+	struct gbb_descriptor gbbd;
 
 	apro_result = AP_RO_IN_PROGRESS;
 	apro_fail_status_cleared = 0;
@@ -544,9 +785,15 @@ static uint8_t do_ap_ro_check(void)
 
 	enable_ap_spi_hash_shortcut();
 
-	rv = validate_ranges_sha(p_chk->payload.ranges,
-				 p_chk->header.num_ranges,
-				 p_chk->payload.digest);
+	/* Find the GBB and FMAP locations. */
+	rv = init_gbbd(&gbbd);
+	/* Check the GBB flags are 0 before validating any AP RO ranges. */
+	if (rv == ROV_SUCCEEDED)
+		rv = validate_gbbd(&gbbd);
+	if (rv == ROV_SUCCEEDED)
+		rv = validate_ranges_sha(p_chk->payload.ranges,
+					 p_chk->header.num_ranges,
+					 p_chk->payload.digest);
 
 	disable_ap_spi_hash_shortcut();
 
@@ -567,7 +814,7 @@ static uint8_t do_ap_ro_check(void)
 		 */
 		return EC_ERROR_CRC;
 	}
-	apro_result = AP_RO_PASS_UNVERIFIED_GBB;
+	apro_result = AP_RO_PASS;
 	ap_ro_add_flash_event(APROF_CHECK_SUCCEEDED);
 	CPRINTS("AP RO PASS!");
 	release_ec_reset_override();
