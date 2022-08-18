@@ -113,6 +113,14 @@ struct ap_ro_check_header {
 	uint32_t checksum;
 };
 
+/*
+ * Saved AP RO data includes the ap ro check header, the sha digest of the
+ * firmware and the RO ranges. Make sure the header, digest, and maximum number
+ * of ranges fit in the AP RO space.
+ */
+BUILD_ASSERT(AP_RO_DATA_SPACE_SIZE >=
+	sizeof(struct ap_ro_check_header) + SHA256_DIGEST_SIZE +
+	APRO_MAX_NUM_RANGES * sizeof(struct ro_range));
 /* Format of the AP RO check information saved in the H1 flash page. */
 struct ap_ro_check {
 	struct ap_ro_check_header header;
