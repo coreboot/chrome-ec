@@ -705,10 +705,15 @@ int usb_spi_read_buffer(void *buf, unsigned int offset,  size_t bytes)
 }
 
 int usb_spi_sha256_update(struct sha256_ctx *ctx, uint32_t offset,
-			  uint32_t size)
+			  uint32_t size, bool print_range)
 {
 	uint8_t data[SPI_HASH_CHUNK_SIZE];
 
+	if (print_range) {
+		CPRINTS("%s: %x:%x", __func__, offset, size);
+		/* Make sure the message gets out before verification starts. */
+		cflush();
+	}
 	while (size) {
 		const int this_chunk = MIN(size, SPI_HASH_CHUNK_SIZE);
 
@@ -761,7 +766,7 @@ static enum vendor_cmd_rc spi_hash_sha256(uint8_t *dest, uint32_t offset,
 	if (usb_spi_sha256_start(&sha) != EC_SUCCESS)
 		return VENDOR_RC_INTERNAL_ERROR;
 
-	if (usb_spi_sha256_update(&sha, offset, size) != EC_SUCCESS)
+	if (usb_spi_sha256_update(&sha, offset, size, false) != EC_SUCCESS)
 		return VENDOR_RC_READ_FLASH_FAIL;
 
 	usb_spi_sha256_final(&sha, dest, SHA256_DIGEST_SIZE);

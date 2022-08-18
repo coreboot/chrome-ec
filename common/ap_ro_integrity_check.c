@@ -464,14 +464,9 @@ enum ap_ro_check_result validate_ranges_sha(const struct ro_range *ranges,
 	struct sha256_ctx ctx;
 
 	usb_spi_sha256_start(&ctx);
-	for (i = 0; i < count; i++) {
-		CPRINTS("%s: %x:%x", __func__, ranges[i].flash_offset,
-			ranges[i].range_size);
-		/* Make sure the message gets out before verification starts. */
-		cflush();
+	for (i = 0; i < count; i++)
 		usb_spi_sha256_update(&ctx, ranges[i].flash_offset,
-				      ranges[i].range_size);
-	}
+				      ranges[i].range_size, true);
 
 	usb_spi_sha256_final(&ctx, digest, sizeof(digest));
 	if (DCRYPTO_equals(digest, expected_digest, sizeof(digest)) !=
