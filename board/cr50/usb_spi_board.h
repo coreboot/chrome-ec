@@ -6,7 +6,7 @@
 
 int usb_spi_sha256_start(struct sha256_ctx *ctx);
 int usb_spi_sha256_update(struct sha256_ctx *ctx, uint32_t offset,
-			  uint32_t size);
+			  uint32_t size, bool print_range);
 void usb_spi_sha256_final(struct sha256_ctx *ctx, void *digest,
 			  size_t digest_size);
 
