@@ -1762,7 +1762,7 @@ static void unmarshal_state_reset(uint8_t *pad, int size, uint32_t offset)
 	TPM2B_AUTH_Unmarshal(&srd->nullProof, &pad, &size);
 	TPM2B_DIGEST_Unmarshal((TPM2B_DIGEST *)(&srd->nullSeed), &pad, &size);
 	UINT32_Unmarshal(&srd->clearCount, &pad, &size);
-	UINT64_Marshal(&srd->objectContextID, &pad, &size);
+	UINT64_Unmarshal(&srd->objectContextID, &pad, &size);
 
 	memcpy(srd->contextArray, pad, sizeof(srd->contextArray));
 	size -= sizeof(srd->contextArray);
