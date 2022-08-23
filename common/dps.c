@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 
-#include "adc.h"
 #include "dps.h"
 #include "atomic.h"
 #include "battery.h"
@@ -15,7 +14,6 @@
 #include "charger.h"
 #include "charge_manager.h"
 #include "charge_state.h"
-#include "charge_state_v2.h"
 #include "ec_commands.h"
 #include "math_util.h"
 #include "task.h"
@@ -23,8 +21,6 @@
 #include "usb_common.h"
 #include "usb_pd.h"
 #include "util.h"
-#include "usb_pe_sm.h"
-
 
 #define K_MORE_PWR 96
 #define K_LESS_PWR 93
@@ -33,17 +29,16 @@
 #define T_REQUEST_STABLE_TIME (10 * SECOND)
 #define T_NEXT_CHECK_TIME (5 * SECOND)
 
-#define DPS_FLAG_DISABLED		BIT(0)
-#define DPS_FLAG_NO_SRCCAP		BIT(1)
-#define DPS_FLAG_WAITING		BIT(2)
-#define DPS_FLAG_SAMPLED		BIT(3)
-#define DPS_FLAG_NEED_MORE_PWR		BIT(4)
+#define DPS_FLAG_DISABLED BIT(0)
+#define DPS_FLAG_NO_SRCCAP BIT(1)
+#define DPS_FLAG_WAITING BIT(2)
+#define DPS_FLAG_SAMPLED BIT(3)
+#define DPS_FLAG_NEED_MORE_PWR BIT(4)
 
-#define DPS_FLAG_STOP_EVENTS		(DPS_FLAG_DISABLED | \
-					 DPS_FLAG_NO_SRCCAP)
-#define DPS_FLAG_ALL			GENMASK(31, 0)
+#define DPS_FLAG_STOP_EVENTS (DPS_FLAG_DISABLED | DPS_FLAG_NO_SRCCAP)
+#define DPS_FLAG_ALL GENMASK(31, 0)
 
-#define MAX_MOVING_AVG_WINDOW		5
+#define MAX_MOVING_AVG_WINDOW 5
 
 BUILD_ASSERT(K_MORE_PWR > K_LESS_PWR && 100 >= K_MORE_PWR && 100 >= K_LESS_PWR);
 
@@ -135,8 +130,7 @@ static void dps_init(void)
 		CPRINTS("ERR:WIN");
 	}
 
-	if (dps_config.k_less_pwr > 100 ||
-	    dps_config.k_more_pwr > 100 ||
+	if (dps_config.k_less_pwr > 100 || dps_config.k_more_pwr > 100 ||
 	    dps_config.k_more_pwr <= dps_config.k_less_pwr) {
 		dps_config.k_less_pwr = K_LESS_PWR;
 		dps_config.k_more_pwr = K_MORE_PWR;
@@ -197,6 +191,26 @@ static int get_desired_input_power(int *vbus, int *input_current)
 	return (*vbus) * (*input_current) / 1000;
 }
 
+static int get_battery_target_voltage(int *target_mv)
+{
+	int charger_id = charge_get_active_chg_chip();
+	int error = charger_get_voltage(charger_id, target_mv);
+
+	if (!error) {
+		return EC_SUCCESS;
+	}
+	if (error != EC_ERROR_UNIMPLEMENTED) {
+		CPRINTS("Failed to get voltage for charge port %d: %d",
+			charger_id, error);
+		return error;
+	}
+	/*
+	 * Fall back to battery design voltage if charger output voltage
+	 * is not available.
+	 */
+	return battery_design_voltage(target_mv);
+}
+
 /*
  * Get the most efficient PDO voltage for the battery of the charging port
  *
@@ -224,7 +238,7 @@ int get_efficient_voltage(void)
 	if (!input_pwr)
 		return 0;
 
-	if (battery_design_voltage(&batt_mv))
+	if (get_battery_target_voltage(&batt_mv))
 		return 0;
 
 	batt_pwr = batt->current * batt->voltage / 1000;
@@ -258,16 +272,16 @@ struct pdo_candidate {
 };
 
 #define UPDATE_CANDIDATE(new_port, new_mv, new_mw) \
-	do { \
-		cand->port = new_port; \
-		cand->mv = new_mv; \
-		cand->mw = new_mw; \
+	do {                                       \
+		cand->port = new_port;             \
+		cand->mv = new_mv;                 \
+		cand->mw = new_mw;                 \
 	} while (0)
 
-#define CLEAR_AND_RETURN() \
-	do { \
+#define CLEAR_AND_RETURN()            \
+	do {                          \
 		moving_avg_count = 0; \
-		return false; \
+		return false;         \
 	} while (0)
 
 /*
@@ -305,7 +319,7 @@ static bool has_new_power_request(struct pdo_candidate *cand)
 	if (!req_mv)
 		CLEAR_AND_RETURN();
 
-	if (battery_design_voltage(&batt_mv))
+	if (get_battery_target_voltage(&batt_mv))
 		CLEAR_AND_RETURN();
 
 	/* if last sample is not the same as the current one, reset counting. */
@@ -360,7 +374,7 @@ static bool has_new_power_request(struct pdo_candidate *cand)
 			input_curr, input_pwr_avg, input_curr_avg);
 
 	for (int i = 0; i < board_get_usb_pd_port_count(); ++i) {
-		const uint32_t * const src_caps = pd_get_src_caps(i);
+		const uint32_t *const src_caps = pd_get_src_caps(i);
 
 		/* If the port is not SNK, skip evaluating this port. */
 		if (pd_get_power_role(i) != PD_ROLE_SINK)
@@ -380,7 +394,7 @@ static bool has_new_power_request(struct pdo_candidate *cand)
 			if (mv > max_mv)
 				continue;
 
-			mw = ma * mv / 1000;
+			mw = MIN(ma, PD_MAX_CURRENT_MA) * mv / 1000;
 			efficient = is_more_efficient(mv, cand->mv, batt_mv,
 						      batt_pwr, input_pwr_avg);
 
@@ -419,7 +433,6 @@ static bool has_new_power_request(struct pdo_candidate *cand)
 				}
 			}
 
-
 			/*
 			 * if the candidate is the same as the current one, pick
 			 * the one at active charge port.
@@ -454,14 +467,14 @@ void dps_update_stabilized_time(int port)
 
 void dps_task(void *u)
 {
-	struct pdo_candidate last_cand = {CHARGE_PORT_NONE, 0, 0};
+	struct pdo_candidate last_cand = { CHARGE_PORT_NONE, 0, 0 };
 	int sample_count = 0;
 
 	dps_init();
 	update_timeout(dps_config.t_check);
 
 	while (1) {
-		struct pdo_candidate curr_cand = {CHARGE_PORT_NONE, 0, 0};
+		struct pdo_candidate curr_cand = { CHARGE_PORT_NONE, 0, 0 };
 		timestamp_t now;
 
 		now = get_time();
@@ -505,8 +518,7 @@ void dps_task(void *u)
 		if (sample_count == dps_config.k_sample) {
 			dynamic_mv = curr_cand.mv;
 			dps_port = curr_cand.port;
-			pd_dpm_request(dps_port,
-				       DPM_REQUEST_NEW_POWER_LEVEL);
+			pd_dpm_request(dps_port, DPM_REQUEST_NEW_POWER_LEVEL);
 			sample_count = 0;
 			flag &= ~(DPS_FLAG_SAMPLED | DPS_FLAG_NEED_MORE_PWR);
 		}
@@ -545,7 +557,7 @@ static int command_dps(int argc, char **argv)
 			return EC_SUCCESS;
 		}
 
-		battery_design_voltage(&batt_mv);
+		get_battery_target_voltage(&batt_mv);
 		input_pwr = get_desired_input_power(&vbus, &input_curr);
 		if (!(flag & DPS_FLAG_NO_SRCCAP)) {
 			last_mv = pd_get_requested_voltage(port);
@@ -557,10 +569,8 @@ static int command_dps(int argc, char **argv)
 			 "Efficient: %dmV\n"
 			 "Batt:      %dmv\n"
 			 "PDMaxMV:   %dmV\n",
-			 port, last_mv, last_ma,
-			 vbus, input_curr, input_pwr,
-			 get_efficient_voltage(),
-			 batt_mv,
+			 port, last_mv, last_ma, vbus, input_curr, input_pwr,
+			 get_efficient_voltage(), batt_mv,
 			 pd_get_max_voltage());
 		return EC_SUCCESS;
 	}
@@ -657,6 +667,5 @@ static enum ec_status hc_usb_pd_dps_control(struct host_cmd_handler_args *args)
 	dps_enable(p->enable);
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_USB_PD_DPS_CONTROL,
-		     hc_usb_pd_dps_control,
+DECLARE_HOST_COMMAND(EC_CMD_USB_PD_DPS_CONTROL, hc_usb_pd_dps_control,
 		     EC_VER_MASK(0));

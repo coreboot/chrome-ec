@@ -7,14 +7,14 @@
 import os
 import pathlib
 
-import hypothesis
-import pytest
-
+import hypothesis  # pylint:disable=import-error
+import pytest  # pylint:disable=import-error
 import zmake.zmake as zm
 
 hypothesis.settings.register_profile(
     "cq", suppress_health_check=hypothesis.HealthCheck.all()
 )
+hypothesis.settings.load_profile("cq")
 
 # pylint: disable=redefined-outer-name,unused-argument
 

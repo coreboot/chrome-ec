@@ -399,6 +399,9 @@ SERVO_TYPE="$(dut_control_get servo_type || :)"
 
 if [[ "${SERVO_TYPE}" =~ ^servo_v4(p1)?_with_.*$ ]]; then
 	ACTIVE_DEVICE="$(dut_control_get active_dut_controller)"
+	if [[ ${ACTIVE_DEVICE} == neither ]]; then
+          die "Could not determine servo V4 active device"
+        fi
 else
 	ACTIVE_DEVICE="${SERVO_TYPE}"
 fi
@@ -673,8 +676,6 @@ fi
 # Possible default EC images
 if [ "${FLAGS_ro}" = ${FLAGS_TRUE} ] ; then
 	EC_FILE=ec.RO.flat
-elif [ "${FLAGS_zephyr}" = ${FLAGS_TRUE} ] ; then
-	EC_FILE=zephyr.bin
 else
 	EC_FILE=ec.bin
 fi
@@ -1260,7 +1261,7 @@ function dut_i2c_dev() {
 	local has_i2c_pseudo="$(dut_control_get_or_die \
 		"${ACTIVE_DEVICE}_i2c_pseudo_is_running")"
 	if [[ "${has_i2c_pseudo}" == False ]]; then
-		error "i2c-pseudo module is not running."
+		error "i2c-pseudo module is not running on ${ACTIVE_DEVICE}."
 		error "Please follow https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/util/iteflash.md#i2c-pseudo"
 		die "to install i2c-pseudo module."
 	fi
@@ -1291,7 +1292,10 @@ function flash_it83xx() {
 		dut_control_or_die i2c_ec_bus_speed:400
 
 		# We need to swing the DUT-side muxes to I2C instead of UART.
-		# This is done by convention with EC_FLASH_SELECT pin from H1
+		# This is done by convention with EC_FLASH_SELECT pin of the
+		# GSC. Also make sure that the setting is restored after
+		# completion.
+		servo_save_add "ec_flash_select" "off"
 		dut_control_or_die ec_flash_select:on
 	fi
 

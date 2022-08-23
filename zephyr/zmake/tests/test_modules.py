@@ -7,9 +7,8 @@
 import pathlib
 import tempfile
 
-import hypothesis
-import hypothesis.strategies as st
-
+import hypothesis  # pylint:disable=import-error
+import hypothesis.strategies as st  # pylint:disable=import-error
 import zmake.modules
 
 module_lists = st.lists(
@@ -37,4 +36,6 @@ def test_locate_in_directory(modules):
 
             expected_modules[module] = module_dir
 
-        assert zmake.modules.locate_from_directory(modules_dir) == expected_modules
+        assert (
+            zmake.modules.locate_from_directory(modules_dir) == expected_modules
+        )

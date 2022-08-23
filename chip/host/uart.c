@@ -11,6 +11,7 @@
 #include <termio.h>
 #include <unistd.h>
 
+#include "builtin/assert.h"
 #include "common.h"
 #include "queue.h"
 #include "task.h"
@@ -54,7 +55,6 @@ static void test_capture_char(char c)
 		return;
 	capture_buf[capture_size++] = c;
 }
-
 
 const char *test_get_captured_console(void)
 {
@@ -190,6 +190,6 @@ void uart_init(void)
 	pthread_mutex_unlock(&mutex);
 #endif
 
-	stopped = 1;  /* Not transmitting yet */
+	stopped = 1; /* Not transmitting yet */
 	init_done = 1;
 }

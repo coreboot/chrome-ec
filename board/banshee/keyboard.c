@@ -25,7 +25,7 @@ __override struct keyboard_scan_config keyscan_config = {
 	},
 };
 
-static const struct ec_response_keybd_config banshee_kb = {
+static const struct ec_response_keybd_config banshee_kb_id1 = {
 	.num_top_row_keys = 12,
 	.action_keys = {
 		TK_BACK,		/* T1 */
@@ -44,10 +44,32 @@ static const struct ec_response_keybd_config banshee_kb = {
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
 
-__override const struct ec_response_keybd_config
-*board_vivaldi_keybd_config(void)
+static const struct ec_response_keybd_config banshee_kb_id2 = {
+	.num_top_row_keys = 12,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_KBD_BKLIGHT_TOGGLE,	/* T8 */
+		TK_PLAY_PAUSE,		/* T9 */
+		TK_VOL_MUTE,		/* T10 */
+		TK_VOL_DOWN,		/* T11 */
+		TK_VOL_UP,		/* T12 */
+	},
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
+};
+
+__override const struct ec_response_keybd_config *
+board_vivaldi_keybd_config(void)
 {
-	return &banshee_kb;
+	if (get_board_id() <= 1)
+		return &banshee_kb_id1;
+	else
+		return &banshee_kb_id2;
 }
 
 /*
@@ -59,20 +81,20 @@ __override const struct key {
 	uint8_t row;
 	uint8_t col;
 } vivaldi_keys[] = {
-	{.row = 3, .col = 5},	/* T1 */
-	{.row = 2, .col = 5},	/* T2 */
-	{.row = 6, .col = 4},	/* T3 */
-	{.row = 3, .col = 4},	/* T4 */
-	{.row = 4, .col = 10},	/* T5 */
-	{.row = 3, .col = 10},	/* T6 */
-	{.row = 2, .col = 10},	/* T7 */
-	{.row = 1, .col = 15},	/* T8 */
-	{.row = 3, .col = 11},	/* T9 */
-	{.row = 4, .col = 8},	/* T10 */
-	{.row = 6, .col = 8},	/* T11 */
-	{.row = 3, .col = 13},	/* T12 */
-	{.row = 3, .col = 5},	/* T13 */
-	{.row = 0, .col = 9},	/* T14 */
-	{.row = 0, .col = 11},	/* T15 */
+	{ .row = 3, .col = 5 }, /* T1 */
+	{ .row = 2, .col = 5 }, /* T2 */
+	{ .row = 6, .col = 4 }, /* T3 */
+	{ .row = 3, .col = 4 }, /* T4 */
+	{ .row = 4, .col = 10 }, /* T5 */
+	{ .row = 3, .col = 10 }, /* T6 */
+	{ .row = 2, .col = 10 }, /* T7 */
+	{ .row = 1, .col = 15 }, /* T8 */
+	{ .row = 3, .col = 11 }, /* T9 */
+	{ .row = 4, .col = 8 }, /* T10 */
+	{ .row = 6, .col = 8 }, /* T11 */
+	{ .row = 3, .col = 13 }, /* T12 */
+	{ .row = 3, .col = 5 }, /* T13 */
+	{ .row = 0, .col = 9 }, /* T14 */
+	{ .row = 0, .col = 11 }, /* T15 */
 };
 BUILD_ASSERT(ARRAY_SIZE(vivaldi_keys) == MAX_TOP_ROW_KEYS);

@@ -9,12 +9,12 @@
 
 #define TCPCI_COMPAT cros_ec_tcpci
 
-#define TCPC_CONFIG_TCPCI(id)                                                 \
-	{                                                                     \
-		.bus_type = EC_BUS_TYPE_I2C,                                  \
-		.i2c_info = {                                                 \
-			.port = I2C_PORT(DT_PHANDLE(id, port)),               \
-			.addr_flags = DT_PROP(id, i2c_addr_flags),            \
-		},                                                            \
-		.drv = &tcpci_tcpm_drv,                                       \
+#define TCPC_CONFIG_TCPCI(id) \
+	{                                              \
+		.bus_type = EC_BUS_TYPE_I2C,           \
+		.i2c_info = {                          \
+			.port = I2C_PORT_BY_DEV(id),   \
+			.addr_flags = DT_REG_ADDR(id), \
+		},                                     \
+		.drv = &tcpci_tcpm_drv,                \
 	},

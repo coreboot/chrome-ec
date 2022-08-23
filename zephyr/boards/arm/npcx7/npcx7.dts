@@ -38,10 +38,6 @@
 	named-adc-channels {
 		compatible = "named-adc-channels";
 	};
-
-	def-lvol-io-list {
-		compatible = "nuvoton,npcx-lvolctrl-def";
-	};
 };
 
 &uart1 {
@@ -87,4 +83,9 @@
 		     &kso12_gp05
 		     >;
 	pinctrl-names = "default";
+};
+
+/* PSL_OUT is fixed to GPIO85 in npcx7 series. */
+&power_ctrl_psl {
+	enable-gpios = <&gpio8 5 0>;
 };

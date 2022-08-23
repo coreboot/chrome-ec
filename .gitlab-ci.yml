@@ -44,7 +44,7 @@ before_script:
   - ln -s "$(pwd)" "${MODULES_DIR}/ec"
   - python3 -V  # Print out python version for debugging
   - python3 -m pip install 'zephyr/zmake[tests]' --user
-  - python3 -m pip install pyyaml packaging
+  - python3 -m pip install pyyaml packaging ply
   - export BUILD_DIR=build
   - export PATH="$PATH:$HOME/.local/bin"
   - export PYTHONIOENCODING=utf-8
@@ -191,12 +191,6 @@ lazor:
     PROJECT: "lazor"
   <<: *build_template
 
-native_posix:
-  variables:
-    PROJECT: "posix-ec"
-    TOOLCHAIN: "host"
-  <<: *build_template
-
 npcx7_evb:
   variables:
     PROJECT: "npcx7"
@@ -222,7 +216,6 @@ ec_coverage:
   needs: ["seed_cache"]
   script:
     - make -j8 CRYPTOC_DIR="${MODULES_DIR}/cryptoc"
-      HOSTGCOV='gcov'
       CROSS_COMPILE_arm=/opt/zephyr-sdk/arm-zephyr-eabi/bin/arm-zephyr-eabi-
       test-coverage
   artifacts:
@@ -236,12 +229,11 @@ zephyr_coverage:
   stage: test
   needs: ["seed_cache"]
   script:
-    - zmake --zephyr-base "${ZEPHYR_BASE}"
-      --modules-dir "${MODULES_DIR}" -l DEBUG test
-      --coverage --host-tests-only
+    - ${EC_DIR}/twister --coverage --outdir "${EC_DIR}/twister-out/"
+      -v -i -p native_posix -p unit_testing
   artifacts:
     paths:
-      - build/zephyr/all_tests.info
+      - ${EC_DIR}/twister-out/coverage.info
     expire_in: 1 week
   coverage: '/lines\.*: \d+\.\d+%/'
 
@@ -251,7 +243,7 @@ zephyr_boards_coverage:
   script:
     - zmake --zephyr-base "${ZEPHYR_BASE}"
       --modules-dir "${MODULES_DIR}" -l DEBUG build
-      --coverage -a
+      --coverage --boards-only --delete-intermediates
   artifacts:
     paths:
       - build/zephyr/all_builds.info
@@ -265,7 +257,7 @@ merged_coverage:
   needs: ["ec_coverage", "zephyr_coverage", "zephyr_boards_coverage"]
   script:
     - lcov --rc lcov_branch_coverage=1 -o build/merged.info
-      -a build/coverage/lcov.info -a build/zephyr/all_tests.info
+      -a build/coverage/lcov.info -a "${EC_DIR}/twister-out/coverage.info"
     - lcov --rc lcov_branch_coverage=1 -o build/merged_no_zephyr.info
       -r build/merged.info
       "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
@@ -308,8 +300,8 @@ testall:
   stage: test
   needs: ["seed_cache"]
   script:
-    - zmake --zephyr-base "${ZEPHYR_BASE}"
-      --modules-dir "${MODULES_DIR}" -l DEBUG test --host-tests-only
+    - ${EC_DIR}/twister --outdir "${EC_DIR}/twister-out/"
+      -v -i -p native_posix -p unit_testing
 
 twister_coverage:
   stage: test

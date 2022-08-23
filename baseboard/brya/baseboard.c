@@ -26,8 +26,10 @@ __override void lid_angle_peripheral_enable(int enable)
 	 * ignore the lid angle, which might be faulty then
 	 * disable keyboard.
 	 */
+#ifdef CONFIG_TABLET_MODE
 	if (tablet_get_mode())
 		enable = 0;
+#endif
 
 	if (enable) {
 		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_ANGLE);
@@ -39,5 +41,5 @@ __override void lid_angle_peripheral_enable(int enable)
 		 */
 		if (!chipset_in_state(CHIPSET_STATE_ON))
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-		}
+	}
 }

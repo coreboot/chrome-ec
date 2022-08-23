@@ -35,8 +35,8 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
 /* USBC TCPC configuration */
 const struct tcpc_config_t tcpc_config[] = {
@@ -85,21 +85,25 @@ struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		.i2c_port = I2C_PORT_USB_C0_C1_PPC,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.frs_en = IOEX_USB_C0_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C1] = {
 		.i2c_port = I2C_PORT_USB_C0_C1_PPC,
 		.i2c_addr_flags = SYV682X_ADDR1_FLAGS,
+		.frs_en = IOEX_USB_C1_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C2] = {
 		.i2c_port = I2C_PORT_USB_C2_C3_PPC,
 		.i2c_addr_flags = SYV682X_ADDR2_FLAGS,
+		.frs_en = IOEX_USB_C2_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C3] = {
 		.i2c_port = I2C_PORT_USB_C2_C3_PPC,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.frs_en = IOEX_USB_C3_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 };
@@ -110,6 +114,7 @@ unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 struct ppc_config_t ppc_chips_old_c3 = {
 	.i2c_port = I2C_PORT_USB_C2_C3_PPC,
 	.i2c_addr_flags = SYV682X_ADDR3_FLAGS,
+	.frs_en = IOEX_USB_C3_FRS_EN,
 	.drv = &syv682x_drv,
 };
 
@@ -253,8 +258,8 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	}
 
 	if (voltage < BC12_MIN_VOLTAGE) {
-		CPRINTS("%s: port %d: vbus %d lower than %d", __func__,
-			port, voltage, BC12_MIN_VOLTAGE);
+		CPRINTS("%s: port %d: vbus %d lower than %d", __func__, port,
+			voltage, BC12_MIN_VOLTAGE);
 		return 1;
 	}
 

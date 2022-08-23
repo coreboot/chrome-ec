@@ -28,23 +28,34 @@
 #error "SM5803 is a NVDC charger, please enable CONFIG_CHARGER_NARROW_VDC."
 #endif
 
+#ifdef PD_MAX_VOLTAGE_MV
+#if PD_MAX_VOLTAGE_MV > 15000
+/* See https://issuetracker.google.com/230712704 for details. */
+#error "VBUS >15V is forbidden for SM5803 because it can cause hardware damage"
+#endif
+#endif
+
+#ifdef CONFIG_CHARGER_SINGLE_CHIP
+#define CHARGER_PRIMARY CHARGER_SOLO
+#endif
+
 /* Console output macros */
-#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
 
 #define UNKNOWN_DEV_ID -1
 static int dev_id = UNKNOWN_DEV_ID;
 
 static const struct charger_info sm5803_charger_info = {
-	.name         = CHARGER_NAME,
-	.voltage_max  = CHARGE_V_MAX,
-	.voltage_min  = CHARGE_V_MIN,
+	.name = CHARGER_NAME,
+	.voltage_max = CHARGE_V_MAX,
+	.voltage_min = CHARGE_V_MIN,
 	.voltage_step = CHARGE_V_STEP,
-	.current_max  = CHARGE_I_MAX,
-	.current_min  = CHARGE_I_MIN,
+	.current_max = CHARGE_I_MAX,
+	.current_min = CHARGE_I_MIN,
 	.current_step = CHARGE_I_STEP,
-	.input_current_max  = INPUT_I_MAX,
-	.input_current_min  = INPUT_I_MIN,
+	.input_current_max = INPUT_I_MAX,
+	.input_current_min = INPUT_I_MIN,
 	.input_current_step = INPUT_I_STEP,
 };
 
@@ -77,9 +88,8 @@ static int attempt_bfet_enable;
  */
 static bool fast_charge_disabled;
 
-
-#define CHARGING_FAILURE_MAX_COUNT	5
-#define CHARGING_FAILURE_INTERVAL	MINUTE
+#define CHARGING_FAILURE_MAX_COUNT 5
+#define CHARGING_FAILURE_INTERVAL MINUTE
 
 static int sm5803_is_sourcing_otg_power(int chgnum, int port);
 static enum ec_error_list sm5803_get_dev_id(int chgnum, int *id);
@@ -88,62 +98,105 @@ static enum ec_error_list sm5803_set_current(int chgnum, int current);
 static inline enum ec_error_list chg_read8(int chgnum, int offset, int *value)
 {
 	return i2c_read8(chg_chips[chgnum].i2c_port,
-			 chg_chips[chgnum].i2c_addr_flags,
-			 offset, value);
+			 chg_chips[chgnum].i2c_addr_flags, offset, value);
 }
 
 static inline enum ec_error_list chg_write8(int chgnum, int offset, int value)
 {
 	return i2c_write8(chg_chips[chgnum].i2c_port,
-			  chg_chips[chgnum].i2c_addr_flags,
-			  offset, value);
+			  chg_chips[chgnum].i2c_addr_flags, offset, value);
 }
 
 static inline enum ec_error_list meas_read8(int chgnum, int offset, int *value)
 {
-	return i2c_read8(chg_chips[chgnum].i2c_port,
-			 SM5803_ADDR_MEAS_FLAGS,
+	return i2c_read8(chg_chips[chgnum].i2c_port, SM5803_ADDR_MEAS_FLAGS,
 			 offset, value);
 }
 
 static inline enum ec_error_list meas_write8(int chgnum, int offset, int value)
 {
-	return i2c_write8(chg_chips[chgnum].i2c_port,
-			 SM5803_ADDR_MEAS_FLAGS,
-			 offset, value);
+	return i2c_write8(chg_chips[chgnum].i2c_port, SM5803_ADDR_MEAS_FLAGS,
+			  offset, value);
 }
 
 static inline enum ec_error_list main_read8(int chgnum, int offset, int *value)
 {
-	return i2c_read8(chg_chips[chgnum].i2c_port,
-			 SM5803_ADDR_MAIN_FLAGS,
+	return i2c_read8(chg_chips[chgnum].i2c_port, SM5803_ADDR_MAIN_FLAGS,
 			 offset, value);
 }
 
 static inline enum ec_error_list main_write8(int chgnum, int offset, int value)
 {
-	return i2c_write8(chg_chips[chgnum].i2c_port,
-			 SM5803_ADDR_MAIN_FLAGS,
-			 offset, value);
+	return i2c_write8(chg_chips[chgnum].i2c_port, SM5803_ADDR_MAIN_FLAGS,
+			  offset, value);
 }
 
 static inline enum ec_error_list test_write8(int chgnum, int offset, int value)
 {
-	return i2c_write8(chg_chips[chgnum].i2c_port,
-			 SM5803_ADDR_TEST_FLAGS,
-			 offset, value);
+	return i2c_write8(chg_chips[chgnum].i2c_port, SM5803_ADDR_TEST_FLAGS,
+			  offset, value);
 }
 
-static inline enum ec_error_list test_update8(int chgnum, const int offset,
-					      const uint8_t mask,
-					const enum mask_update_action action)
+static inline enum ec_error_list
+test_update8(int chgnum, const int offset, const uint8_t mask,
+	     const enum mask_update_action action)
 {
-	return i2c_update8(chg_chips[chgnum].i2c_port,
-			   SM5803_ADDR_TEST_FLAGS, offset, mask, action);
+	return i2c_update8(chg_chips[chgnum].i2c_port, SM5803_ADDR_TEST_FLAGS,
+			   offset, mask, action);
 }
 
-static enum ec_error_list sm5803_flow1_update(int chgnum, const uint8_t mask,
-					const enum mask_update_action action)
+/*
+ * Ensure the charger configuration is safe for operation, updating registers
+ * as necessary to become safe.
+ *
+ * The SM5803 runs multiple digital control loops that are important to correct
+ * operation. The CLOCK_SEL_LOW register reduces their speed by about 10x, which
+ * is dangerous when either sinking or sourcing is to be enabled because the
+ * control loops will respond much more slowly. Leaving clocks at low speed can
+ * cause incorrect operation or even hardware damage.
+ *
+ * The GPADCs are inputs to the control loops, and disabling them can also cause
+ * incorrect operation or hardware damage. They must be enabled for the charger
+ * to be safe to operate.
+ *
+ * This function is used by the functions that enable sinking or sourcing to
+ * ensure the current configuration is safe before enabling switching on the
+ * charger.
+ */
+static int sm5803_set_active_safe(int chgnum)
+{
+	int rv, val;
+
+	/*
+	 * Set clocks to full speed.
+	 *
+	 * This should occur first because enabling GPADCs with clocks slowed
+	 * can cause spurious acquisition.
+	 */
+	rv = main_read8(chgnum, SM5803_REG_CLOCK_SEL, &val);
+	if (rv == 0 && val & SM5803_CLOCK_SEL_LOW) {
+		rv = main_write8(chgnum, SM5803_REG_CLOCK_SEL,
+				 val & ~SM5803_CLOCK_SEL_LOW);
+	}
+	if (rv) {
+		goto out;
+	}
+
+	/* Enable default GPADCs */
+	rv = meas_write8(chgnum, SM5803_REG_GPADC_CONFIG1,
+			 SM5803_GPADCC1_DEFAULT_ENABLE);
+
+out:
+	if (rv) {
+		CPRINTS("%s %d: failed to set clocks to full speed: %d",
+			CHARGER_NAME, chgnum, rv);
+	}
+	return rv;
+}
+
+static enum ec_error_list
+sm5803_flow1_update(int chgnum, const uint8_t mask,
+		    const enum mask_update_action action)
 {
 	int rv;
 
@@ -151,8 +204,7 @@ static enum ec_error_list sm5803_flow1_update(int chgnum, const uint8_t mask,
 	mutex_lock(&flow1_access_lock[chgnum]);
 
 	rv = i2c_update8(chg_chips[chgnum].i2c_port,
-			 chg_chips[chgnum].i2c_addr_flags,
-			 SM5803_REG_FLOW1,
+			 chg_chips[chgnum].i2c_addr_flags, SM5803_REG_FLOW1,
 			 mask, action);
 
 	mutex_unlock(&flow1_access_lock[chgnum]);
@@ -160,16 +212,16 @@ static enum ec_error_list sm5803_flow1_update(int chgnum, const uint8_t mask,
 	return rv;
 }
 
-static enum ec_error_list sm5803_flow2_update(int chgnum, const uint8_t mask,
-					const enum mask_update_action action)
+static enum ec_error_list
+sm5803_flow2_update(int chgnum, const uint8_t mask,
+		    const enum mask_update_action action)
 {
 	int rv;
 
 	mutex_lock(&flow2_access_lock[chgnum]);
 
 	rv = i2c_update8(chg_chips[chgnum].i2c_port,
-			 chg_chips[chgnum].i2c_addr_flags,
-			 SM5803_REG_FLOW2,
+			 chg_chips[chgnum].i2c_addr_flags, SM5803_REG_FLOW2,
 			 mask, action);
 
 	mutex_unlock(&flow2_access_lock[chgnum]);
@@ -282,8 +334,6 @@ enum ec_error_list sm5803_set_vbus_disch(int chgnum, int enable)
 	return rv;
 }
 
-static int validate_sink_safety(int chgnum);
-
 enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable)
 {
 	enum ec_error_list rv;
@@ -294,15 +344,10 @@ enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable)
 		return rv;
 
 	if (enable) {
-		/*
-		 * Incorrect value for some registers can cause hardware
-		 * damage; verify current configuration is safe before
-		 * enabling sinking to prevent damage and allow debugging.
-		 *
-		 * TODO(b:230712704) remove this check when cause of
-		 * incorrect behavior is understood.
-		 */
-		rv |= validate_sink_safety(chgnum);
+		rv = sm5803_set_active_safe(chgnum);
+		if (rv) {
+			return rv;
+		}
 
 		if (chgnum == CHARGER_PRIMARY) {
 			/* Magic for new silicon */
@@ -317,15 +362,16 @@ enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable)
 			 */
 			if (battery_get_disconnect_state() ==
 			    BATTERY_NOT_DISCONNECTED) {
-				rv = sm5803_flow2_update(chgnum,
-						 SM5803_FLOW2_AUTO_ENABLED,
-						 MASK_SET);
+				rv = sm5803_flow2_update(
+					chgnum, SM5803_FLOW2_AUTO_ENABLED,
+					MASK_SET);
 				fast_charge_disabled = false;
 			} else {
-				rv = sm5803_flow2_update(chgnum,
-						SM5803_FLOW2_AUTO_TRKL_EN |
+				rv = sm5803_flow2_update(
+					chgnum,
+					SM5803_FLOW2_AUTO_TRKL_EN |
 						SM5803_FLOW2_AUTO_PRECHG_EN,
-						MASK_SET);
+					MASK_SET);
 				fast_charge_disabled = true;
 			}
 		} else {
@@ -352,10 +398,10 @@ enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable)
 		rv |= sm5803_flow1_update(chgnum, CHARGER_MODE_SINK, MASK_SET);
 	} else {
 		if (chgnum == CHARGER_PRIMARY)
-			rv |= sm5803_flow2_update(chgnum,
-						  SM5803_FLOW2_AUTO_ENABLED,
-						  MASK_CLR);
+			rv |= sm5803_flow2_update(
+				chgnum, SM5803_FLOW2_AUTO_ENABLED, MASK_CLR);
 
+#ifndef CONFIG_CHARGER_SINGLE_CHIP
 		if (chgnum == CHARGER_SECONDARY) {
 			rv |= sm5803_flow1_update(CHARGER_PRIMARY,
 						  SM5803_FLOW1_LINEAR_CHARGE_EN,
@@ -367,7 +413,7 @@ enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable)
 			rv |= chg_write8(CHARGER_PRIMARY, SM5803_REG_FLOW3,
 					 regval);
 		}
-
+#endif
 
 		/* Disable sink mode, unless currently sourcing out */
 		if (!sm5803_is_sourcing_otg_power(chgnum, chgnum))
@@ -376,7 +422,6 @@ enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable)
 	}
 
 	return rv;
-
 }
 
 /*
@@ -384,8 +429,8 @@ enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable)
  * boot.  This should prevent us from re-running inits after sysjumps.
  */
 static bool chip_inited[CHARGER_NUM];
-#define SM5803_SYSJUMP_TAG	0x534D /* SM */
-#define SM5803_HOOK_VERSION	1
+#define SM5803_SYSJUMP_TAG 0x534D /* SM */
+#define SM5803_HOOK_VERSION 1
 
 static void init_status_preserve(void)
 {
@@ -399,10 +444,9 @@ static void init_status_retrieve(void)
 	const uint8_t *tag_contents;
 	int version, size;
 
-	tag_contents = system_get_jump_tag(SM5803_SYSJUMP_TAG,
-						  &version, &size);
+	tag_contents = system_get_jump_tag(SM5803_SYSJUMP_TAG, &version, &size);
 	if (tag_contents && (version == SM5803_HOOK_VERSION) &&
-					(size == sizeof(chip_inited)))
+	    (size == sizeof(chip_inited)))
 		/* Valid init status found, restore before charger chip init */
 		memcpy(&chip_inited, tag_contents, size);
 }
@@ -434,7 +478,10 @@ static void sm5803_init(int chgnum)
 	 * If a charger is not currently present, disable switching per OCPC
 	 * requirements
 	 */
-	rv = charger_get_vbus_voltage(chgnum, &vbus_mv);
+	/* Reset clocks and enable GPADCs */
+	rv = sm5803_set_active_safe(chgnum);
+
+	rv |= charger_get_vbus_voltage(chgnum, &vbus_mv);
 	if (rv == EC_SUCCESS) {
 		if (vbus_mv < 4000) {
 			/*
@@ -520,7 +567,7 @@ static void sm5803_init(int chgnum)
 		rv = main_read8(chgnum, SM5803_REG_PLATFORM, &platform_id);
 		if (rv) {
 			CPRINTS("%s %d: Failed to read platform during init",
-							CHARGER_NAME, chgnum);
+				CHARGER_NAME, chgnum);
 			return;
 		}
 		platform_id &= SM5803_PLATFORM_ID;
@@ -529,10 +576,10 @@ static void sm5803_init(int chgnum)
 			/* 3S Battery inits */
 			/* set 13.3V VBAT_SNSP TH GPADC THRESHOLD*/
 			rv |= meas_write8(chgnum, 0x26,
-				SM5803_VBAT_SNSP_MAXTH_3S_LEVEL);
+					  SM5803_VBAT_SNSP_MAXTH_3S_LEVEL);
 			/* OV_VBAT HW second level (14.1V) */
 			rv |= chg_write8(chgnum, 0x21,
-				SM5803_VBAT_PWR_MINTH_3S_LEVEL);
+					 SM5803_VBAT_PWR_MINTH_3S_LEVEL);
 			rv |= main_write8(chgnum, 0x30, 0xC0);
 			rv |= main_write8(chgnum, 0x80, 0x01);
 			rv |= main_write8(chgnum, 0x1A, 0x08);
@@ -578,11 +625,11 @@ static void sm5803_init(int chgnum)
 			 * threshold for interrupt generation.
 			 */
 			rv |= meas_write8(chgnum, 0x26,
-				SM5803_VBAT_SNSP_MAXTH_2S_LEVEL);
+					  SM5803_VBAT_SNSP_MAXTH_2S_LEVEL);
 
 			/* Set OV_VBAT HW second level threshold as 9.4V */
 			rv |= chg_write8(chgnum, 0x21,
-				SM5803_VBAT_PWR_MINTH_2S_LEVEL);
+					 SM5803_VBAT_PWR_MINTH_2S_LEVEL);
 
 			rv |= main_write8(chgnum, 0x30, 0xC0);
 			rv |= main_write8(chgnum, 0x80, 0x01);
@@ -639,24 +686,6 @@ static void sm5803_init(int chgnum)
 	reg &= ~(BIT(0) | BIT(1));
 	rv |= main_write8(chgnum, SM5803_REG_REFERENCE, reg);
 
-	/* Set a higher clock speed in case it was lowered for z-state */
-	rv |= main_read8(chgnum, SM5803_REG_CLOCK_SEL, &reg);
-	reg &= ~SM5803_CLOCK_SEL_LOW;
-	rv |= main_write8(chgnum, SM5803_REG_CLOCK_SEL, reg);
-
-	/*
-	 * Turn on GPADCs to default.  Enable the IBAT_CHG ADC in order to
-	 * measure battery current and calculate system resistance.
-	 */
-	reg = SM5803_GPADCC1_TINT_EN     |
-	      SM5803_GPADCC1_VSYS_EN     |
-	      SM5803_GPADCC1_VCHGPWR_EN  |
-	      SM5803_GPADCC1_VBUS_EN     |
-	      SM5803_GPADCC1_IBAT_CHG_EN |
-	      SM5803_GPADCC1_IBAT_DIS_EN |
-	      SM5803_GPADCC1_VBATSNSP_EN;
-	rv |= meas_write8(chgnum, SM5803_REG_GPADC_CONFIG1, reg);
-
 	/* Enable Psys DAC */
 	rv |= meas_read8(chgnum, SM5803_REG_PSYS1, &reg);
 	reg |= SM5803_PSYS1_DAC_EN;
@@ -679,26 +708,26 @@ static void sm5803_init(int chgnum)
 	rv |= chg_write8(chgnum, SM5803_REG_DPM_VL_SET_LSB, (reg & 0x7));
 
 	/* Set default input current */
-	reg = SM5803_CURRENT_TO_REG(CONFIG_CHARGER_INPUT_CURRENT)
-		& SM5803_CHG_ILIM_RAW;
+	reg = SM5803_CURRENT_TO_REG(CONFIG_CHARGER_INPUT_CURRENT) &
+	      SM5803_CHG_ILIM_RAW;
 	rv |= chg_write8(chgnum, SM5803_REG_CHG_ILIM, reg);
 
 	/* Configure charger insertion interrupts */
 	rv |= main_write8(chgnum, SM5803_REG_INT1_EN, SM5803_INT1_CHG);
 	/* Enable end of charge interrupts for logging */
-	rv |= main_write8(chgnum, SM5803_REG_INT4_EN, SM5803_INT4_CHG_FAIL |
-						      SM5803_INT4_CHG_DONE |
-						      SM5803_INT4_OTG_FAIL);
+	rv |= main_write8(chgnum, SM5803_REG_INT4_EN,
+			  SM5803_INT4_CHG_FAIL | SM5803_INT4_CHG_DONE |
+				  SM5803_INT4_OTG_FAIL);
 
 	/* Set TINT interrupts for higher threshold 360 K */
 	rv |= meas_write8(chgnum, SM5803_REG_TINT_HIGH_TH,
-						SM5803_TINT_HIGH_LEVEL);
+			  SM5803_TINT_HIGH_LEVEL);
 	/*
 	 * Set TINT interrupts for lower threshold to 0 when not
 	 * throttled to prevent trigger interrupts continually
 	 */
 	rv |= meas_write8(chgnum, SM5803_REG_TINT_LOW_TH,
-						SM5803_TINT_MIN_LEVEL);
+			  SM5803_TINT_MIN_LEVEL);
 
 	/*
 	 * Configure VBAT_SNSP high interrupt to fire after thresholds are set.
@@ -706,7 +735,6 @@ static void sm5803_init(int chgnum)
 	rv |= main_read8(chgnum, SM5803_REG_INT2_EN, &reg);
 	reg |= SM5803_INT2_VBATSNSP;
 	rv |= main_write8(chgnum, SM5803_REG_INT2_EN, reg);
-
 
 	/* Configure TINT interrupts to fire after thresholds are set */
 	rv |= main_write8(chgnum, SM5803_REG_INT2_EN, SM5803_INT2_TINT);
@@ -764,7 +792,7 @@ static void sm5803_init(int chgnum)
 		rv |= meas_write8(chgnum, SM5803_REG_BFET_PWR_MAX_TH, reg);
 		reg = (6000 * 10) / 292;
 		rv |= meas_write8(chgnum, SM5803_REG_BFET_PWR_HWSAFE_MAX_TH,
-				 reg);
+				  reg);
 		rv |= main_read8(chgnum, SM5803_REG_INT3_EN, &reg);
 		reg |= SM5803_INT3_BFET_PWR_LIMIT |
 		       SM5803_INT3_BFET_PWR_HWSAFE_LIMIT;
@@ -850,10 +878,9 @@ static void sm5803_disable_runtime_low_power_mode(void)
 			chgnum);
 		return;
 	}
-	/* Set a higher clock speed */
-	rv |= main_read8(chgnum, SM5803_REG_CLOCK_SEL, &reg);
-	reg &= ~SM5803_CLOCK_SEL_LOW;
-	rv |= main_write8(chgnum, SM5803_REG_CLOCK_SEL, reg);
+
+	/* Reset clocks and enable GPADCs */
+	rv = sm5803_set_active_safe(chgnum);
 
 	/* Enable ADC sigma delta */
 	rv |= chg_read8(chgnum, SM5803_REG_CC_CONFIG1, &reg);
@@ -864,9 +891,8 @@ static void sm5803_disable_runtime_low_power_mode(void)
 		CPRINTS("%s %d: Failed to set in disable runtime LPM",
 			CHARGER_NAME, chgnum);
 }
-DECLARE_HOOK(HOOK_USB_PD_CONNECT,
-		sm5803_disable_runtime_low_power_mode,
-		HOOK_PRIO_FIRST);
+DECLARE_HOOK(HOOK_USB_PD_CONNECT, sm5803_disable_runtime_low_power_mode,
+	     HOOK_PRIO_FIRST);
 
 static enum ec_error_list sm5803_enable_linear_charge(int chgnum, bool enable)
 {
@@ -895,18 +921,15 @@ static enum ec_error_list sm5803_enable_linear_charge(int chgnum, bool enable)
 					 batt_info->precharge_current);
 
 		/* Enable linear charge mode. */
-		rv |= sm5803_flow1_update(chgnum,
-					  SM5803_FLOW1_LINEAR_CHARGE_EN,
-					 MASK_SET);
+		rv |= sm5803_flow1_update(chgnum, SM5803_FLOW1_LINEAR_CHARGE_EN,
+					  MASK_SET);
 		rv |= chg_read8(chgnum, SM5803_REG_FLOW3, &regval);
 		regval |= BIT(6) | BIT(5) | BIT(4);
 		rv |= chg_write8(chgnum, SM5803_REG_FLOW3, regval);
 	} else {
-		rv = sm5803_flow1_update(chgnum,
-					 SM5803_FLOW1_LINEAR_CHARGE_EN,
+		rv = sm5803_flow1_update(chgnum, SM5803_FLOW1_LINEAR_CHARGE_EN,
 					 MASK_CLR);
-		rv |= sm5803_flow2_update(chgnum,
-					  SM5803_FLOW2_AUTO_ENABLED,
+		rv |= sm5803_flow2_update(chgnum, SM5803_FLOW2_AUTO_ENABLED,
 					  MASK_CLR);
 		rv |= chg_read8(chgnum, SM5803_REG_FLOW3, &regval);
 		regval &= ~(BIT(6) | BIT(5) | BIT(4) |
@@ -933,10 +956,22 @@ static void sm5803_enable_runtime_low_power_mode(void)
 			chgnum);
 		return;
 	}
-	/* Slow the clock speed */
-	rv |= main_read8(chgnum, SM5803_REG_CLOCK_SEL, &reg);
-	reg |= SM5803_CLOCK_SEL_LOW;
-	rv |= main_write8(chgnum, SM5803_REG_CLOCK_SEL, reg);
+
+	/*
+	 * Turn off GPADCs.
+	 *
+	 * This is only safe to do if the charger is inactive. We ensure that
+	 * they are enabled again in sm5803_set_active_safe() before the charger
+	 * is enabled, and verify here that the charger is not currently active.
+	 */
+	rv |= chg_read8(chgnum, SM5803_REG_FLOW1, &reg);
+	if (rv == 0 && (reg & SM5803_FLOW1_MODE) == CHARGER_MODE_DISABLED) {
+		rv |= meas_write8(chgnum, SM5803_REG_GPADC_CONFIG1, 0);
+		rv |= meas_write8(chgnum, SM5803_REG_GPADC_CONFIG2, 0);
+	} else {
+		CPRINTS("%s %d: FLOW1 %x is active! Not disabling GPADCs",
+			CHARGER_NAME, chgnum, reg);
+	}
 
 	/* Disable ADC sigma delta */
 	rv |= chg_read8(chgnum, SM5803_REG_CC_CONFIG1, &reg);
@@ -951,13 +986,17 @@ static void sm5803_enable_runtime_low_power_mode(void)
 		rv |= chg_write8(chgnum, SM5803_REG_PHOT1, reg);
 	}
 
+	/* Slow the clock speed */
+	rv |= main_read8(chgnum, SM5803_REG_CLOCK_SEL, &reg);
+	reg |= SM5803_CLOCK_SEL_LOW;
+	rv |= main_write8(chgnum, SM5803_REG_CLOCK_SEL, reg);
+
 	if (rv)
 		CPRINTS("%s %d: Failed to set in enable runtime LPM",
 			CHARGER_NAME, chgnum);
 }
-DECLARE_HOOK(HOOK_USB_PD_DISCONNECT,
-		sm5803_enable_runtime_low_power_mode,
-		HOOK_PRIO_LAST);
+DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, sm5803_enable_runtime_low_power_mode,
+	     HOOK_PRIO_LAST);
 
 void sm5803_disable_low_power_mode(int chgnum)
 {
@@ -1016,7 +1055,6 @@ void sm5803_enable_low_power_mode(int chgnum)
 		reg |= SM5803_PHOT1_VBUS_MON_EN;
 	rv |= chg_write8(chgnum, SM5803_REG_PHOT1, reg);
 
-
 	if (rv)
 		CPRINTS("%s %d: Failed to set in enable low power mode",
 			CHARGER_NAME, chgnum);
@@ -1037,8 +1075,8 @@ void sm5803_restart_charging(void)
 			 * Enough time has passed since our last failure,
 			 * restart the timing and count from now.
 			 */
-			failure_tracker[act_chg].time.val = now.val +
-						CHARGING_FAILURE_INTERVAL;
+			failure_tracker[act_chg].time.val =
+				now.val + CHARGING_FAILURE_INTERVAL;
 			failure_tracker[act_chg].count = 1;
 
 			sm5803_vbus_sink_enable(act_chg, 1);
@@ -1101,27 +1139,27 @@ void sm5803_handle_interrupt(int chgnum)
 		if ((meas_reg <= SM5803_TINT_LOW_LEVEL) && throttled) {
 			throttled = false;
 			throttle_ap(THROTTLE_OFF, THROTTLE_HARD,
-							THROTTLE_SRC_THERMAL);
+				    THROTTLE_SRC_THERMAL);
 			/*
 			 * Set back higher threshold to 360 K and set lower
 			 * threshold to 0.
 			 */
 			rv |= meas_write8(chgnum, SM5803_REG_TINT_LOW_TH,
-							SM5803_TINT_MIN_LEVEL);
+					  SM5803_TINT_MIN_LEVEL);
 			rv |= meas_write8(chgnum, SM5803_REG_TINT_HIGH_TH,
-							SM5803_TINT_HIGH_LEVEL);
+					  SM5803_TINT_HIGH_LEVEL);
 		} else if (meas_reg >= SM5803_TINT_HIGH_LEVEL) {
 			throttled = true;
 			throttle_ap(THROTTLE_ON, THROTTLE_HARD,
-							THROTTLE_SRC_THERMAL);
+				    THROTTLE_SRC_THERMAL);
 			/*
 			 * Set back lower threshold to 330 K and set higher
 			 * threshold to maximum.
 			 */
 			rv |= meas_write8(chgnum, SM5803_REG_TINT_HIGH_TH,
-							SM5803_TINT_MAX_LEVEL);
+					  SM5803_TINT_MAX_LEVEL);
 			rv |= meas_write8(chgnum, SM5803_REG_TINT_LOW_TH,
-							SM5803_TINT_LOW_LEVEL);
+					  SM5803_TINT_LOW_LEVEL);
 		}
 		/*
 		 * If the interrupt came in and we're not currently throttling
@@ -1137,25 +1175,23 @@ void sm5803_handle_interrupt(int chgnum)
 		rv = main_read8(chgnum, SM5803_REG_PLATFORM, &platform_id);
 		if (rv) {
 			CPRINTS("%s %d: Failed to read platform in interrupt",
-							CHARGER_NAME, chgnum);
+				CHARGER_NAME, chgnum);
 			return;
 		}
 		platform_id &= SM5803_PLATFORM_ID;
 		act_chg = charge_manager_get_active_charge_port();
-		rv = meas_read8(CHARGER_PRIMARY,
-					SM5803_REG_VBATSNSP_MEAS_MSB,
-					&meas_reg);
+		rv = meas_read8(CHARGER_PRIMARY, SM5803_REG_VBATSNSP_MEAS_MSB,
+				&meas_reg);
 		if (rv)
 			return;
 		meas_volt = meas_reg << 2;
-		rv = meas_read8(CHARGER_PRIMARY,
-					SM5803_REG_VBATSNSP_MEAS_LSB,
-					&meas_reg);
+		rv = meas_read8(CHARGER_PRIMARY, SM5803_REG_VBATSNSP_MEAS_LSB,
+				&meas_reg);
 		if (rv)
 			return;
 		meas_volt |= meas_reg & 0x03;
-		rv = meas_read8(CHARGER_PRIMARY,
-			SM5803_REG_VBATSNSP_MAX_TH, &meas_reg);
+		rv = meas_read8(CHARGER_PRIMARY, SM5803_REG_VBATSNSP_MAX_TH,
+				&meas_reg);
 		if (rv)
 			return;
 
@@ -1164,8 +1200,7 @@ void sm5803_handle_interrupt(int chgnum)
 			CPRINTS("%s %d : VBAT_SNSP_HIGH_TH: %d mV ! - "
 				"VBAT %d mV",
 				CHARGER_NAME, CHARGER_PRIMARY,
-				meas_reg * 408/10,
-				meas_volt * 102/10);
+				meas_reg * 408 / 10, meas_volt * 102 / 10);
 		}
 
 		if (is_platform_id_3s(platform_id)) {
@@ -1173,28 +1208,27 @@ void sm5803_handle_interrupt(int chgnum)
 			CPRINTS("%s %d : VBAT_SNSP_HIGH_TH: %d mV ! "
 				"- VBAT %d mV",
 				CHARGER_NAME, CHARGER_PRIMARY,
-				meas_reg * 616/10,
-				meas_volt * 154/10);
+				meas_reg * 616 / 10, meas_volt * 154 / 10);
 		}
 
 		/* Set Vbat Threshold to Max value to re-arm the interrupt */
-		rv = meas_write8(CHARGER_PRIMARY,
-			SM5803_REG_VBATSNSP_MAX_TH, 0xFF);
+		rv = meas_write8(CHARGER_PRIMARY, SM5803_REG_VBATSNSP_MAX_TH,
+				 0xFF);
 
 		/* Disable battery charge */
 		rv |= sm5803_flow1_update(chgnum, CHARGER_MODE_DISABLED,
-			MASK_CLR);
+					  MASK_CLR);
 		if (is_platform_id_2s(platform_id)) {
 			/* 2S battery: set VBAT_SENSP TH 9V */
 			rv |= meas_write8(CHARGER_PRIMARY,
-				SM5803_REG_VBATSNSP_MAX_TH,
-				SM5803_VBAT_SNSP_MAXTH_2S_LEVEL);
+					  SM5803_REG_VBATSNSP_MAX_TH,
+					  SM5803_VBAT_SNSP_MAXTH_2S_LEVEL);
 		}
 		if (is_platform_id_3s(platform_id)) {
 			/* 3S battery: set VBAT_SENSP TH 13.3V */
 			rv |= meas_write8(CHARGER_PRIMARY,
-				SM5803_REG_VBATSNSP_MAX_TH,
-				SM5803_VBAT_SNSP_MAXTH_3S_LEVEL);
+					  SM5803_REG_VBATSNSP_MAX_TH,
+					  SM5803_VBAT_SNSP_MAXTH_3S_LEVEL);
 		}
 
 		active_restart_port = act_chg;
@@ -1215,7 +1249,7 @@ void sm5803_handle_interrupt(int chgnum)
 		act_chg = charge_manager_get_active_charge_port();
 		CPRINTS("%s BFET power limit reached! (%s)", CHARGER_NAME,
 			(int_reg & SM5803_INT3_BFET_PWR_LIMIT) ? "warn" :
-			"FATAL");
+								 "FATAL");
 		CPRINTS("\tVbat: %dmV", bp.voltage);
 		CPRINTS("\tIbat: %dmA", bp.current);
 		charger_get_voltage(act_chg, &val);
@@ -1252,7 +1286,7 @@ void sm5803_handle_interrupt(int chgnum)
 			hook_call_deferred(&sm5803_restart_charging_data,
 					   30 * SECOND);
 		} else if ((status_reg & SM5803_STATUS_CHG_OV_VBAT) &&
-						act_chg == CHARGER_PRIMARY) {
+			   act_chg == CHARGER_PRIMARY) {
 			active_restart_port = act_chg;
 			hook_call_deferred(&sm5803_restart_charging_data,
 					   1 * SECOND);
@@ -1284,11 +1318,12 @@ void sm5803_handle_interrupt(int chgnum)
 		 * will detect us as sinking in this failure case.
 		 */
 		if (status_reg == 0)
-			rv = sm5803_flow1_update(chgnum, CHARGER_MODE_SOURCE |
-						 SM5803_FLOW1_DIRECTCHG_SRC_EN,
-						 MASK_CLR);
+			rv = sm5803_flow1_update(
+				chgnum,
+				CHARGER_MODE_SOURCE |
+					SM5803_FLOW1_DIRECTCHG_SRC_EN,
+				MASK_CLR);
 	}
-
 }
 
 static void sm5803_irq_deferred(void)
@@ -1319,7 +1354,6 @@ static enum ec_error_list sm5803_get_dev_id(int chgnum, int *id)
 		*id = dev_id;
 
 	return rv;
-
 }
 
 static const struct charger_info *sm5803_get_info(int chgnum)
@@ -1338,7 +1372,6 @@ static enum ec_error_list sm5803_get_status(int chgnum, int *status)
 	rv = chg_read8(chgnum, SM5803_REG_FLOW1, &reg);
 	if (rv)
 		return rv;
-
 
 	if ((reg & SM5803_FLOW1_MODE) == CHARGER_MODE_DISABLED &&
 	    !(reg & SM5803_FLOW1_LINEAR_CHARGE_EN))
@@ -1400,6 +1433,18 @@ static enum ec_error_list sm5803_set_current(int chgnum, int current)
 {
 	enum ec_error_list rv;
 	int reg;
+
+	if (current == 0) {
+		/*
+		 * Per Silicon Mitus, setting the fast charge current limit to 0
+		 * causes "much unstable". This normally happens when the
+		 * battery is fully charged (so we don't expect fast charge to
+		 * be in use): turn 0 into the minimum nonzero value so we
+		 * avoid setting this register to 0 but still make the requested
+		 * current as small as possible.
+		 */
+		current = SM5803_REG_TO_CURRENT(1);
+	}
 
 	rv = chg_read8(chgnum, SM5803_REG_FAST_CONF4, &reg);
 	if (rv)
@@ -1472,8 +1517,7 @@ static enum ec_error_list sm5803_set_voltage(int chgnum, int voltage)
 	/* Once battery is connected, set up fast charge enable */
 	if (fast_charge_disabled && chgnum == CHARGER_PRIMARY &&
 	    battery_get_disconnect_state() == BATTERY_NOT_DISCONNECTED) {
-		rv = sm5803_flow2_update(chgnum,
-					 SM5803_FLOW2_AUTO_ENABLED,
+		rv = sm5803_flow2_update(chgnum, SM5803_FLOW2_AUTO_ENABLED,
 					 MASK_SET);
 		fast_charge_disabled = false;
 	}
@@ -1521,11 +1565,19 @@ static enum ec_error_list sm5803_discharge_on_ac(int chgnum, int enable)
 }
 
 static enum ec_error_list sm5803_get_vbus_voltage(int chgnum, int port,
-						   int *voltage)
+						  int *voltage)
 {
 	enum ec_error_list rv;
 	int reg;
 	int volt_bits;
+
+	rv = meas_read8(chgnum, SM5803_REG_GPADC_CONFIG1, &reg);
+	if (rv)
+		return rv;
+	if ((reg & SM5803_GPADCC1_VBUS_EN) == 0) {
+		/* VBUS ADC is currently disabled */
+		return EC_ERROR_NOT_POWERED;
+	}
 
 	rv = meas_read8(chgnum, SM5803_REG_VBUS_MEAS_MSB, &reg);
 	if (rv)
@@ -1540,6 +1592,54 @@ static enum ec_error_list sm5803_get_vbus_voltage(int chgnum, int port,
 	/* Vbus ADC is in 23.4 mV steps */
 	*voltage = (volt_bits * 234) / 10;
 	return rv;
+}
+
+bool sm5803_check_vbus_level(int chgnum, enum vbus_level level)
+{
+	int rv, vbus_voltage;
+
+	/*
+	 * Analog reading of VBUS is more accurate and helps reliability when
+	 * doing power role swaps, but if the charger is in LPM with the GPADCs
+	 * disabled then the reading won't update.
+	 *
+	 * Digital VBUS presence (with transitions flagged by STATUS1_CHG_DET
+	 * interrupt) still works when GPADCs are off, and shouldn't otherwise
+	 * impact performance because the GPADCs should be enabled in any
+	 * situation where we're doing a PRS.
+	 */
+	rv = sm5803_get_vbus_voltage(chgnum, chgnum, &vbus_voltage);
+	if (rv == EC_ERROR_NOT_POWERED) {
+		/* VBUS ADC is disabled, use digital presence */
+		switch (level) {
+		case VBUS_PRESENT:
+			return sm5803_is_vbus_present(chgnum);
+		case VBUS_SAFE0V:
+		case VBUS_REMOVED:
+			return !sm5803_is_vbus_present(chgnum);
+		default:
+			CPRINTS("%s: unrecognized vbus_level value: %d",
+				__func__, level);
+			return false;
+		}
+	}
+	if (rv != EC_SUCCESS) {
+		/* Unhandled communication error; assume unsatisfied */
+		return false;
+	}
+
+	switch (level) {
+	case VBUS_PRESENT:
+		return vbus_voltage > PD_V_SAFE5V_MIN;
+	case VBUS_SAFE0V:
+		return vbus_voltage < PD_V_SAFE0V_MAX;
+	case VBUS_REMOVED:
+		return vbus_voltage < PD_V_SINK_DISCONNECT_MAX;
+	default:
+		CPRINTS("%s: unrecognized vbus_level value: %d", __func__,
+			level);
+		return false;
+	}
 }
 
 static enum ec_error_list sm5803_set_input_current_limit(int chgnum,
@@ -1690,13 +1790,13 @@ static enum ec_error_list sm5803_set_otg_current_voltage(int chgnum,
 
 	reg &= ~SM5803_DISCH_CONF5_CLS_LIMIT;
 	reg |= MIN((output_current / SM5803_CLS_CURRENT_STEP),
-						SM5803_DISCH_CONF5_CLS_LIMIT);
+		   SM5803_DISCH_CONF5_CLS_LIMIT);
 	rv |= chg_write8(chgnum, SM5803_REG_DISCH_CONF5, reg);
 
 	reg = SM5803_VOLTAGE_TO_REG(output_voltage);
 	rv = chg_write8(chgnum, SM5803_REG_VPWR_MSB, (reg >> 3));
 	rv |= chg_write8(chgnum, SM5803_REG_DISCH_CONF2,
-					reg & SM5803_DISCH_CONF5_VPWR_LSB);
+			 reg & SM5803_DISCH_CONF5_VPWR_LSB);
 
 	return rv;
 }
@@ -1708,6 +1808,11 @@ static enum ec_error_list sm5803_enable_otg_power(int chgnum, int enabled)
 
 	if (enabled) {
 		int selected_current;
+
+		rv = sm5803_set_active_safe(chgnum);
+		if (rv) {
+			return rv;
+		}
 
 		rv = chg_read8(chgnum, SM5803_REG_ANA_EN1, &reg);
 		if (rv)
@@ -1732,7 +1837,7 @@ static enum ec_error_list sm5803_enable_otg_power(int chgnum, int enabled)
 			return rv;
 
 		selected_current = (reg & SM5803_DISCH_CONF5_CLS_LIMIT) *
-			SM5803_CLS_CURRENT_STEP;
+				   SM5803_CLS_CURRENT_STEP;
 		sm5803_set_otg_current_voltage(chgnum, selected_current, 4800);
 
 		/*
@@ -1740,8 +1845,9 @@ static enum ec_error_list sm5803_enable_otg_power(int chgnum, int enabled)
 		 *	   DIRECTCHG_SOURCE_EN - enable current loop
 		 *	   (for designs with no external Vbus FET)
 		 */
-		rv = sm5803_flow1_update(chgnum, CHARGER_MODE_SOURCE |
-					 SM5803_FLOW1_DIRECTCHG_SRC_EN,
+		rv = sm5803_flow1_update(chgnum,
+					 CHARGER_MODE_SOURCE |
+						 SM5803_FLOW1_DIRECTCHG_SRC_EN,
 					 MASK_SET);
 		usleep(4000);
 
@@ -1777,9 +1883,11 @@ static enum ec_error_list sm5803_enable_otg_power(int chgnum, int enabled)
 			return rv;
 
 		if ((reg & SM5803_FLOW1_MODE) != CHARGER_MODE_SINK || status)
-			rv = sm5803_flow1_update(chgnum, CHARGER_MODE_SOURCE |
-						 SM5803_FLOW1_DIRECTCHG_SRC_EN,
-						 MASK_CLR);
+			rv = sm5803_flow1_update(
+				chgnum,
+				CHARGER_MODE_SOURCE |
+					SM5803_FLOW1_DIRECTCHG_SRC_EN,
+				MASK_CLR);
 	}
 
 	return rv;
@@ -1806,7 +1914,6 @@ static enum ec_error_list sm5803_set_vsys_compensation(int chgnum,
 						       int current_ma,
 						       int voltage_mv)
 {
-
 	int rv;
 	int regval;
 	int r;
@@ -1914,25 +2021,6 @@ static void command_sm5803_dump(int chgnum)
 	}
 }
 #endif /* CONFIG_CMD_CHARGER_DUMP */
-
-static int validate_sink_safety(int chgnum)
-{
-	int regval = 0;
-	int out = chg_read8(chgnum, 0x5C, &regval);
-
-	if (regval != 0x7A) {
-		CPRINTS("Register 0x5C had unexpected value 0x%02X"
-			" when enabling sinking", regval);
-#ifdef CONFIG_CMD_CHARGER_DUMP
-		CPRINTS("Dumping all registers:");
-		command_sm5803_dump(chgnum);
-#endif
-		CPRINTS("Updating register 5C to expected 0x7A"
-			" and continuing..");
-		out |= chg_write8(chgnum, 0x5C, 0x7A);
-	}
-	return out;
-}
 
 const struct charger_drv sm5803_drv = {
 	.init = &sm5803_init,

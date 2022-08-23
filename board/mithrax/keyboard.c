@@ -6,7 +6,9 @@
 #include "common.h"
 #include "ec_commands.h"
 #include "keyboard_scan.h"
+#include "rgb_keyboard.h"
 #include "timer.h"
+#include "tlc59116f.h"
 
 /* Keyboard scan setting */
 __override struct keyboard_scan_config keyscan_config = {
@@ -19,8 +21,8 @@ __override struct keyboard_scan_config keyscan_config = {
 	.min_post_scan_delay_us = 1000,
 	.poll_timeout_us = 100 * MSEC,
 	.actual_key_mask = {
-		0x1c, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff,
-		0xa4, 0xff, 0xfe, 0x55, 0xfe, 0xff, 0xff, 0xff,  /* full set */
+		0x1c, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0x86, 0xff, 0xff, 0x55, 0xff, 0xff, 0xff, 0xff,  /* full set */
 	},
 };
 
@@ -38,11 +40,69 @@ static const struct ec_response_keybd_config mithrax_kb = {
 		TK_VOL_DOWN,		/* T9 */
 		TK_VOL_UP,		/* T10 */
 	},
-	.capabilities = KEYBD_CAP_SCRNLOCK_KEY | KEYBD_CAP_NUMERIC_KEYPAD,
+	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
 
-__override const struct ec_response_keybd_config
-*board_vivaldi_keybd_config(void)
+static struct rgb_s grid0[RGB_GRID0_COL * RGB_GRID0_ROW];
+
+struct rgbkbd rgbkbds[] = {
+	[0] = {
+		.cfg = &(const struct rgbkbd_cfg) {
+			.drv = &tlc59116f_drv,
+			.i2c = I2C_PORT_KBMCU,
+			.col_len = RGB_GRID0_COL,
+			.row_len = RGB_GRID0_ROW,
+		},
+		.buf = grid0,
+	},
+};
+const uint8_t rgbkbd_count = ARRAY_SIZE(rgbkbds);
+
+const uint8_t rgbkbd_hsize = RGB_GRID0_COL;
+const uint8_t rgbkbd_vsize = RGB_GRID0_ROW;
+
+const enum ec_rgbkbd_type rgbkbd_type = EC_RGBKBD_TYPE_FOUR_ZONES_4_LEDS;
+
+#define LED(x, y) RGBKBD_COORD((x), (y))
+#define DELM RGBKBD_DELM
+
+const uint8_t rgbkbd_map[] = {
+	DELM,	   LED(0, 0), DELM,	 LED(1, 0), DELM,
+	LED(2, 0), DELM,      LED(3, 0), DELM,	    DELM,
+};
+#undef LED
+#undef DELM
+const size_t rgbkbd_map_size = ARRAY_SIZE(rgbkbd_map);
+
+__override const struct ec_response_keybd_config *
+board_vivaldi_keybd_config(void)
 {
 	return &mithrax_kb;
 }
+
+/*
+ * Row Column info for Top row keys T1 - T15.
+ * on mithrax_kb keyboard Row Column is customization
+ * need define row col to mapping matrix layout.
+ */
+__override const struct key {
+	uint8_t row;
+	uint8_t col;
+} vivaldi_keys[] = {
+	{ .row = 4, .col = 2 }, /* T1 */
+	{ .row = 3, .col = 2 }, /* T2 */
+	{ .row = 2, .col = 2 }, /* T3 */
+	{ .row = 1, .col = 2 }, /* T4 */
+	{ .row = 4, .col = 4 }, /* T5 */
+	{ .row = 3, .col = 4 }, /* T6 */
+	{ .row = 2, .col = 4 }, /* T7 */
+	{ .row = 2, .col = 9 }, /* T8 */
+	{ .row = 1, .col = 9 }, /* T9 */
+	{ .row = 1, .col = 4 }, /* T10 */
+	{ .row = 0, .col = 4 }, /* T11 */
+	{ .row = 1, .col = 5 }, /* T12 */
+	{ .row = 3, .col = 5 }, /* T13 */
+	{ .row = 2, .col = 1 }, /* T14 */
+	{ .row = 0, .col = 1 }, /* T15 */
+};
+BUILD_ASSERT(ARRAY_SIZE(vivaldi_keys) == MAX_TOP_ROW_KEYS);

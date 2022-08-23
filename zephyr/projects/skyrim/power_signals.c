@@ -4,13 +4,17 @@
  */
 
 #include "ap_power/ap_power.h"
+#include "charger.h"
 #include "chipset.h"
 #include "config.h"
+#include "cros_board_info.h"
 #include "gpio_signal.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
+#include "i2c.h"
 #include "ioexpander.h"
 #include "power.h"
+#include "power/amd_x86.h"
 #include "timer.h"
 
 /* Power Signal Input List */
@@ -49,15 +53,15 @@ static void baseboard_suspend_change(struct ap_power_ev_callback *cb,
 
 	case AP_POWER_SUSPEND:
 		/* Disable display backlight and retimer */
-		gpio_pin_set_dt(
-			GPIO_DT_FROM_NODELABEL(gpio_ec_disable_disp_bl), 1);
+		gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_ec_disable_disp_bl),
+				1);
 		ioex_set_level(IOEX_USB_A1_RETIMER_EN, 0);
 		break;
 
 	case AP_POWER_RESUME:
 		/* Enable retimer and display backlight */
-		gpio_pin_set_dt(
-			GPIO_DT_FROM_NODELABEL(gpio_ec_disable_disp_bl), 0);
+		gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_ec_disable_disp_bl),
+				0);
 		ioex_set_level(IOEX_USB_A1_RETIMER_EN, 1);
 		/* Any retimer tuning can be done after the retimer turns on */
 		break;
@@ -76,6 +80,9 @@ static void baseboard_init(void)
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_pg_groupc_s0));
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_pg_lpddr_s0));
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_pg_lpddr_s3));
+
+	/* Enable thermtrip interrupt */
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_soc_thermtrip));
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_POST_I2C);
 
@@ -84,7 +91,7 @@ DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_POST_I2C);
  * PCH_PWRBTN_L.  This can be as long as ~65ms after cold boot.  Then wait an
  * additional delay of T1a defined in the EDS before changing the power button.
  */
-#define RSMRST_WAIT_DELAY	     70
+#define RSMRST_WAIT_DELAY 70
 #define EDS_PWR_BTN_RSMRST_T1A_DELAY 16
 void board_pwrbtn_to_pch(int level)
 {
@@ -96,13 +103,13 @@ void board_pwrbtn_to_pch(int level)
 		start = get_time();
 		do {
 			usleep(500);
-			if (gpio_pin_get_dt(
-				GPIO_DT_FROM_NODELABEL(gpio_ec_soc_rsmrst_l)))
+			if (gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(
+				    gpio_ec_soc_rsmrst_l)))
 				break;
 		} while (time_since32(start) < (RSMRST_WAIT_DELAY * MSEC));
 
 		if (!gpio_pin_get_dt(
-			GPIO_DT_FROM_NODELABEL(gpio_ec_soc_rsmrst_l)))
+			    GPIO_DT_FROM_NODELABEL(gpio_ec_soc_rsmrst_l)))
 			ccprints("Error pwrbtn: RSMRST_L still low");
 
 		msleep(EDS_PWR_BTN_RSMRST_T1A_DELAY);
@@ -113,11 +120,34 @@ void board_pwrbtn_to_pch(int level)
 /* Note: signal parameter unused */
 void baseboard_set_soc_pwr_pgood(enum gpio_signal unused)
 {
-	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_ec_soc_pwr_good),
-	    gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_en_pwr_pcore_s0_r)) &&
-	    gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_pg_lpddr5_s0_od)) &&
-	    gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_s0_pgood)));
+	gpio_pin_set_dt(
+		GPIO_DT_FROM_NODELABEL(gpio_ec_soc_pwr_good),
+		gpio_pin_get_dt(
+			GPIO_DT_FROM_NODELABEL(gpio_en_pwr_pcore_s0_r)) &&
+			gpio_pin_get_dt(
+				GPIO_DT_FROM_NODELABEL(gpio_pg_lpddr5_s0_od)) &&
+			gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_s0_pgood)));
 }
+
+/* TODO: Remove when board versions are no longer supported */
+#define MP2845A_I2C_ADDR_FLAGS 0x20
+#define MP2854A_MFR_VOUT_CMPS_MAX_REG 0x69
+#define MP2854A_MFR_LOW_PWR_SEL BIT(12)
+
+static void setup_mp2845(void)
+{
+	int version;
+
+	/* TODO: Remove when board versions are no longer supported */
+	if ((cbi_get_board_version(&version) == EC_SUCCESS) && version > 3)
+		return;
+
+	if (i2c_update16(chg_chips[CHARGER_SOLO].i2c_port,
+			 MP2845A_I2C_ADDR_FLAGS, MP2854A_MFR_VOUT_CMPS_MAX_REG,
+			 MP2854A_MFR_LOW_PWR_SEL, MASK_CLR))
+		ccprints("Failed to send mp2845 workaround");
+}
+DECLARE_DEFERRED(setup_mp2845);
 
 void baseboard_s0_pgood(enum gpio_signal signal)
 {
@@ -125,6 +155,10 @@ void baseboard_s0_pgood(enum gpio_signal signal)
 
 	/* Chain off power signal interrupt handler for PG_PCORE_S0_R_OD */
 	power_signal_interrupt(signal);
+
+	/* Set up the MP2845, which is powered in S0 */
+	if (gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_s0_pgood)))
+		hook_call_deferred(&setup_mp2845_data, 50 * MSEC);
 }
 
 /* Note: signal parameter unused */
@@ -134,10 +168,13 @@ void baseboard_set_en_pwr_pcore(enum gpio_signal unused)
 	 * EC must AND signals PG_LPDDR5_S3_OD, PG_GROUPC_S0_OD, and
 	 * EN_PWR_S0_R
 	 */
-	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_en_pwr_pcore_s0_r),
-	    gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_pg_lpddr5_s3_od)) &&
-	    gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_pg_groupc_s0_od)) &&
-	    gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_en_pwr_s0_r)));
+	gpio_pin_set_dt(
+		GPIO_DT_FROM_NODELABEL(gpio_en_pwr_pcore_s0_r),
+		gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_pg_lpddr5_s3_od)) &&
+			gpio_pin_get_dt(
+				GPIO_DT_FROM_NODELABEL(gpio_pg_groupc_s0_od)) &&
+			gpio_pin_get_dt(
+				GPIO_DT_FROM_NODELABEL(gpio_en_pwr_s0_r)));
 
 	/* Update EC_SOC_PWR_GOOD based on our results */
 	baseboard_set_soc_pwr_pgood(unused);
@@ -146,9 +183,11 @@ void baseboard_set_en_pwr_pcore(enum gpio_signal unused)
 void baseboard_en_pwr_s0(enum gpio_signal signal)
 {
 	/* EC must AND signals SLP_S3_L and PG_PWR_S5 */
-	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_en_pwr_s0_r),
-	    gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_slp_s3_l)) &&
-	    gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_pg_pwr_s5)));
+	gpio_pin_set_dt(
+		GPIO_DT_FROM_NODELABEL(gpio_en_pwr_s0_r),
+		gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_slp_s3_l)) &&
+			gpio_pin_get_dt(
+				GPIO_DT_FROM_NODELABEL(gpio_pg_pwr_s5)));
 
 	/* Change EN_PWR_PCORE_S0_R if needed*/
 	baseboard_set_en_pwr_pcore(signal);
@@ -179,8 +218,14 @@ void baseboard_set_en_pwr_s3(enum gpio_signal signal)
 {
 	/* EC must enable PWR_S3 when SLP_S5_L goes high, disable on low */
 	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_en_pwr_s3),
-	    gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_slp_s5_l)));
+			gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_slp_s5_l)));
 
 	/* Chain off the normal power signal interrupt handler */
 	power_signal_interrupt(signal);
+}
+
+void baseboard_soc_thermtrip(enum gpio_signal signal)
+{
+	ccprints("SoC thermtrip reported, shutting down");
+	chipset_force_shutdown(CHIPSET_SHUTDOWN_THERMAL);
 }

@@ -2,7 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-zephyr_library_sources(chipset_api.c)
 zephyr_library_sources(console.c)
 zephyr_library_sources(crc.c)
 zephyr_library_sources(gpio.c)
@@ -21,12 +20,13 @@ endif()
 
 zephyr_library_sources_ifdef(no_libgcc                  libgcc_${ARCH}.S)
 
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ADC         adc.c)
+zephyr_library_sources_ifdef(CONFIG_ADC                     adc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
                                                             battery.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_RT9490
                                                             bc12_rt9490.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER     charger.c)
+zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ               chipset_api.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI
                                                             espi.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN         fan.c)

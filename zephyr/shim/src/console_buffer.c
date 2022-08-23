@@ -36,8 +36,10 @@ void console_buf_notify_chars(const char *s, size_t len)
 	/* We got the mutex. */
 	while (len--) {
 		/* Don't copy null byte into buffer */
-		if (!(*s))
+		if (!(*s)) {
+			s++;
 			continue;
+		}
 
 		uint32_t new_tail = next_idx(tail_idx);
 
@@ -47,11 +49,9 @@ void console_buf_notify_chars(const char *s, size_t len)
 		if (new_tail == head_idx)
 			head_idx = next_idx(head_idx);
 		if (new_tail == previous_snapshot_idx)
-			previous_snapshot_idx =
-				next_idx(previous_snapshot_idx);
+			previous_snapshot_idx = next_idx(previous_snapshot_idx);
 		if (new_tail == current_snapshot_idx)
-			current_snapshot_idx =
-				next_idx(current_snapshot_idx);
+			current_snapshot_idx = next_idx(current_snapshot_idx);
 		if (new_tail == read_next_idx)
 			read_next_idx = next_idx(read_next_idx);
 
@@ -118,6 +118,7 @@ int uart_console_read_buffer(uint8_t type, char *dest, uint16_t dest_size,
 	if (*head == current_snapshot_idx) {
 		/* No new data, return empty response */
 		k_mutex_unlock(&console_write_lock);
+		*write_count_out = 0;
 		return EC_RES_SUCCESS;
 	}
 

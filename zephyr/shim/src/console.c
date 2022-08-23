@@ -17,6 +17,12 @@
 #include <zephyr/zephyr.h>
 #include <zephyr/logging/log.h>
 
+/*
+ * TODO(b/238433667): Include EC printf functions
+ * (crec_vsnprintf/crec_snprintf) until we switch to the standard
+ * vsnprintf/snprintf.
+ */
+#include "builtin/stdio.h"
 #include "console.h"
 #include "printf.h"
 #include "task.h"
@@ -33,6 +39,9 @@
 	defined(CONFIG_SHELL_BACKEND_DUMMY) /* nocheck */
 #error Must select only one shell backend
 #endif
+
+BUILD_ASSERT(EC_TASK_PRIORITY(EC_SHELL_PRIO) == CONFIG_SHELL_THREAD_PRIORITY,
+	     "EC_SHELL_PRIO does not match CONFIG_SHELL_THREAD_PRIORITY.");
 
 LOG_MODULE_REGISTER(shim_console, LOG_LEVEL_ERR);
 
@@ -150,8 +159,8 @@ static void shell_init_from_work(struct k_work *work)
 #endif
 
 	/* Initialize the shell and re-enable both RX and TX */
-	shell_init(shell_zephyr, uart_shell_dev,
-		   shell_cfg_flags, log_backend, level);
+	shell_init(shell_zephyr, uart_shell_dev, shell_cfg_flags, log_backend,
+		   level);
 
 	/*
 	 * shell_init() always resets the priority back to the default.
@@ -245,7 +254,7 @@ int zshim_run_ec_console_command(const struct zephyr_console_command *command,
 #if defined(CONFIG_CONSOLE_CHANNEL) && DT_NODE_EXISTS(DT_PATH(ec_console))
 #define EC_CONSOLE DT_PATH(ec_console)
 
-static const char * const disabled_channels[] = DT_PROP(EC_CONSOLE, disabled);
+static const char *const disabled_channels[] = DT_PROP(EC_CONSOLE, disabled);
 static const size_t disabled_channel_count = DT_PROP_LEN(EC_CONSOLE, disabled);
 static int init_ec_console(const struct device *unused)
 {
@@ -253,20 +262,22 @@ static int init_ec_console(const struct device *unused)
 		console_channel_disable(disabled_channels[i]);
 
 	return 0;
-} SYS_INIT(init_ec_console, PRE_KERNEL_1, 50);
+}
+SYS_INIT(init_ec_console, PRE_KERNEL_1, 50);
 #endif /* CONFIG_CONSOLE_CHANNEL && DT_NODE_EXISTS(DT_PATH(ec_console)) */
 
 static int init_ec_shell(const struct device *unused)
 {
 #if defined(CONFIG_SHELL_BACKEND_SERIAL)
-		shell_zephyr = shell_backend_uart_get_ptr();
+	shell_zephyr = shell_backend_uart_get_ptr();
 #elif defined(CONFIG_SHELL_BACKEND_DUMMY) /* nocheck */
-		shell_zephyr = shell_backend_dummy_get_ptr(); /* nocheck */
+	shell_zephyr = shell_backend_dummy_get_ptr(); /* nocheck */
 #else
 #error A shell backend must be enabled
 #endif
 	return 0;
-} SYS_INIT(init_ec_shell, PRE_KERNEL_1, 50);
+}
+SYS_INIT(init_ec_shell, PRE_KERNEL_1, 50);
 
 #ifdef TEST_BUILD
 const struct shell *get_ec_shell(void)
@@ -344,7 +355,8 @@ static void zephyr_print(const char *buff, size_t size)
 	 * Also, console_buf_notify_chars uses a mutex, which may not be
 	 * locked in ISRs.
 	 */
-	if (k_is_in_isr() || shell_stopped) {
+	if (k_is_in_isr() || shell_stopped ||
+	    shell_zephyr->ctx->state != SHELL_STATE_ACTIVE) {
 		printk("%s", buff);
 	} else {
 		shell_fprintf(shell_zephyr, SHELL_NORMAL, "%s", buff);
@@ -402,18 +414,24 @@ int cprints(enum console_channel channel, const char *format, ...)
 	if (console_channel_is_disabled(channel))
 		return EC_SUCCESS;
 
-	rv = crec_snprintf(buff, CONFIG_SHELL_PRINTF_BUFF_SIZE, "[%pT ",
-			 PRINTF_TIMESTAMP_NOW);
+	buff[0] = '[';
+	len = 1;
+
+	rv = snprintf_timestamp_now(buff + len, sizeof(buff) - len);
+	handle_sprintf_rv(rv, &len);
+
+	rv = crec_snprintf(buff + len, CONFIG_SHELL_PRINTF_BUFF_SIZE - len,
+			   " ");
 	handle_sprintf_rv(rv, &len);
 
 	va_start(args, format);
 	rv = crec_vsnprintf(buff + len, CONFIG_SHELL_PRINTF_BUFF_SIZE - len,
-			  format, args);
+			    format, args);
 	va_end(args);
 	handle_sprintf_rv(rv, &len);
 
 	rv = crec_snprintf(buff + len, CONFIG_SHELL_PRINTF_BUFF_SIZE - len,
-			 "]\n");
+			   "]\n");
 	handle_sprintf_rv(rv, &len);
 
 	zephyr_print(buff, len);

@@ -15,7 +15,7 @@ endif
 # MCHP MEC SoC's have a Cortex-M4 ARM core
 CORE:=cortex-m
 # Allow the full Cortex-M4 instruction set
-CFLAGS_CPU+=-march=armv7e-m -mcpu=cortex-m4
+CFLAGS_CPU+=-mcpu=cortex-m4
 
 # JTAG debug with Keil ARM MDK debugger
 # do not allow GCC dwarf debug extensions
@@ -81,9 +81,11 @@ chip-lfw-flat = $(out)/RW/$(chip-lfw)-lfw.flat
 
 # build these specifically for lfw with -lfw suffix
 objs_lfw = $(patsubst %, $(out)/RW/%-lfw.o, \
-		$(addprefix common/, util util_stdlib gpio) \
+		$(addprefix common/, util gpio) \
 		$(addprefix chip/$(CHIP)/, spi qmspi dma gpio clock hwtimer tfdp) \
-		core/$(CORE)/cpu $(chip-lfw))
+		core/$(CORE)/cpu $(chip-lfw) \
+		builtin/stdlib \
+		)
 
 # reuse version.o (and its dependencies) from main board
 objs_lfw += $(out)/RW/common/version.o

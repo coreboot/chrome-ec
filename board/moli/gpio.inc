@@ -25,11 +25,6 @@ GPIO_INT(EC_RECOVERY_BTN_ODL,        PIN(2, 3), GPIO_INT_BOTH, button_interrupt)
 GPIO_INT(USB_C1_RT_INT_ODL,          PIN(4, 1), GPIO_INT_FALLING, retimer_interrupt)
 GPIO_INT(USB_C1_BC12_INT_ODL,        PIN(8, 3), GPIO_INT_FALLING, bc12_interrupt)
 GPIO_INT(USB_C1_PPC_INT_ODL,         PIN(7, 0), GPIO_INT_FALLING, ppc_interrupt)
-GPIO_INT(HDMI_CONN_OC_ODL,           PIN(2, 4), GPIO_INPUT | GPIO_INT_BOTH, port_ocp_interrupt)
-GPIO_INT(USB_A1_OC_ODL,              PIN(3, 0), GPIO_INPUT | GPIO_PULL_UP | GPIO_INT_BOTH, port_ocp_interrupt)
-GPIO_INT(USB_A2_OC_ODL,              PIN(2, 7), GPIO_INPUT | GPIO_PULL_UP | GPIO_INT_BOTH, port_ocp_interrupt)
-GPIO_INT(USB_A3_OC_ODL,              PIN(2, 6), GPIO_INPUT | GPIO_PULL_UP | GPIO_INT_BOTH, port_ocp_interrupt)
-GPIO_INT(USB_A4_OC_ODL,              PIN(0, 6), GPIO_INPUT | GPIO_PULL_UP | GPIO_INT_BOTH, port_ocp_interrupt)
 
 /* CCD */
 GPIO(CCD_MODE_ODL,                   PIN(E, 5), GPIO_INPUT)
@@ -79,6 +74,9 @@ GPIO(EC_QI_PWR,                      PIN(D, 2), GPIO_OUT_HIGH)
 GPIO(EC_I2C_QI_RESET_L,              PIN(9, 3), GPIO_OUT_HIGH)
 GPIO(EC_I2C_QI_INT_ODL,              PIN(9, 6), GPIO_INPUT)
 
+/* HDMI */
+GPIO(HDMI_CONN_OC_ODL,               PIN(2, 4), GPIO_INPUT)
+
 /* HDMI CEC */
 /* TODO(b/197474873): Enable HDMI CEC */
 GPIO(HDMI_CEC_IN,                    PIN(4, 0), GPIO_INPUT)
@@ -103,15 +101,23 @@ GPIO(EC_I2C_USB_A0_A1_MIX_SDA,       PIN(E, 3), GPIO_INPUT)
 GPIO(EN_PP5000_USBA,                 PIN(D, 7), GPIO_OUT_LOW)
 GPIO(USB_A1_STATUS_L,                PIN(2, 0), GPIO_INPUT)
 GPIO(USB_A2_STATUS_L,                PIN(1, 7), GPIO_INPUT)
-GPIO(USB_A_LOW_PWR1_OD,              PIN(1, 4), GPIO_INPUT | GPIO_PULL_DOWN)
-GPIO(USB_A_LOW_PWR2_OD,              PIN(1, 1), GPIO_INPUT | GPIO_PULL_DOWN)
+GPIO(USB_A_LOW_PWR1_OD,              PIN(1, 4), GPIO_OUT_LOW)
+GPIO(USB_A_LOW_PWR2_OD,              PIN(1, 1), GPIO_OUT_LOW)
 GPIO(USB_A_OC_SOC_L,                 PIN(8, 0), GPIO_OUT_HIGH)
+GPIO(USB_A1_OC_ODL,                  PIN(3, 0), GPIO_INPUT)
+GPIO(USB_A2_OC_ODL,                  PIN(2, 7), GPIO_INPUT)
+GPIO(USB_A3_OC_ODL,                  PIN(2, 6), GPIO_INPUT)
+GPIO(USB_A4_OC_ODL,                  PIN(0, 6), GPIO_INPUT)
 
 /* USBC */
 GPIO(USB_C0_C1_TCPC_RST_ODL,         PIN(F, 5), GPIO_ODR_LOW)
 
 /* LAN */
 GPIO(LAN_PWR_GOOD,                   PIN(0, 2), GPIO_INPUT)
+
+/* LED */
+GPIO(LED_ORANGE_CONTROL,             PIN(3, 1), GPIO_ODR_LOW)
+GPIO(LED_BLUE_CONTROL,               PIN(2, 5), GPIO_ODR_LOW)
 
 /* Option Board */
 GPIO(HDMI1_MONITOR_ON,               PIN(B, 4), GPIO_INPUT)
@@ -151,7 +157,6 @@ ALTERNATE(PIN_MASK(E, 0x02), 0, MODULE_ADC, 0)               /* GPIOE1/ADC7 */
 
 /* Unused Pins */
 UNUSED(PIN(D, 6))       /* GPOD6/CR_SOUT3/SHDF_ESPI_L */
-UNUSED(PIN(3, 1))       /* KSI0/GPIO31/TRACEDATA3/GP_MOSI */
 UNUSED(PIN(3, 2))       /* GPO32/TRIS_L */
 UNUSED(PIN(3, 5))       /* GPO35/CR_SOUT4/TEST_L */
 UNUSED(PIN(6, 6))       /* GPIO66 */
@@ -167,7 +172,6 @@ UNUSED(PIN(5, 0))       /* GPIO50 */
 UNUSED(PIN(9, 4))       /* GPIO94 */
 UNUSED(PIN(A, 0))       /* F_CS0_L/GPIOA0 */
 UNUSED(PIN(3, 4))       /* GPIO34/PS2_DAT2/ADC6 */
-UNUSED(PIN(2, 5))       /* KSI4/GPIO25/TRACECLK/GP_SCLK */
 UNUSED(PIN(F, 3))       /* GPIOF3/I2C4_SCL1 */
 UNUSED(PIN(F, 2))       /* GPIOF2/I2C4_SDA1 */
 UNUSED(PIN(A, 7))       /* GPIOA7/PS2_DAT3/TB2/F_DIO3 */

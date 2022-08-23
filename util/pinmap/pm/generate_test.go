@@ -85,7 +85,6 @@ func TestGenerate(t *testing.T) {
 		compatible = "named-adc-channels";
 
 		adc_ec_adc_1: ec_adc_1 {
-			label = "EC_ADC_1";
 			enum-name = "ENUM_ADC_1";
 			io-channels = <&adc0 A1>;
 		};
@@ -117,15 +116,15 @@ func TestGenerate(t *testing.T) {
 
 		i2c_ec_c_i2c_clk: ec_c_i2c_clk {
 			i2c-port = <&i2c0>;
-			enum-name = "ENUM_I2C_0";
+			enum-names = "ENUM_I2C_0";
 		};
 		i2c_ec_b_i2c_clk: ec_b_i2c_clk {
 			i2c-port = <&i2c1>;
-			enum-name = "ENUM_I2C_1";
+			enum-names = "ENUM_I2C_1";
 		};
 		i2c_ec_a_i2c_clk: ec_a_i2c_clk {
 			i2c-port = <&i2c2>;
-			enum-name = "ENUM_I2C_2";
+			enum-names = "ENUM_I2C_2";
 		};
 	};
 };

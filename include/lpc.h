@@ -89,6 +89,13 @@ enum lpc_host_event_type {
  */
 host_event_t lpc_get_host_events(void);
 
+#ifdef TEST_BUILD
+/**
+ * Set host events.
+ */
+void lpc_set_host_event_state(host_event_t events);
+#endif
+
 /**
  * Get host events that are set based on the type provided.
  *
@@ -162,4 +169,4 @@ void lpc_init_mask(void);
  */
 void lpc_s3_resume_clear_masks(void);
 
-#endif  /* __CROS_EC_LPC_H */
+#endif /* __CROS_EC_LPC_H */

@@ -12,6 +12,7 @@
  * the system will have to charge ramp.
  */
 
+#include "builtin/assert.h"
 #include "max14637.h"
 #include "charge_manager.h"
 #include "chipset.h"
@@ -28,7 +29,7 @@
 #include "usb_pd.h"
 #include "util.h"
 
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
 #if defined(CONFIG_CHARGE_RAMP_SW) || defined(CONFIG_CHARGE_RAMP_HW)
 /**
@@ -38,10 +39,10 @@
  * @return 1 if charger detect is activated (high when active high or
  *	low with active low), otherwise 0.
  */
-static int is_chg_det_activated(const struct max14637_config_t * const cfg)
+static int is_chg_det_activated(const struct max14637_config_t *const cfg)
 {
 	return !!gpio_get_level(cfg->chg_det_pin) ^
-		!!(cfg->flags & MAX14637_FLAGS_CHG_DET_ACTIVE_LOW);
+	       !!(cfg->flags & MAX14637_FLAGS_CHG_DET_ACTIVE_LOW);
 }
 #endif
 
@@ -52,12 +53,12 @@ static int is_chg_det_activated(const struct max14637_config_t * const cfg)
  * @param enable 1 to activate gpio (high for active high and low for active
  *	low).
  */
-static void activate_chip_enable(
-	const struct max14637_config_t * const cfg, const int enable)
+static void activate_chip_enable(const struct max14637_config_t *const cfg,
+				 const int enable)
 {
-	gpio_set_level(
-		cfg->chip_enable_pin,
-		!!enable ^ !!(cfg->flags & MAX14637_FLAGS_ENABLE_ACTIVE_LOW));
+	gpio_set_level(cfg->chip_enable_pin,
+		       !!enable ^ !!(cfg->flags &
+				     MAX14637_FLAGS_ENABLE_ACTIVE_LOW));
 }
 
 /**
@@ -67,7 +68,7 @@ static void activate_chip_enable(
  */
 static void update_bc12_status_to_charger_manager(const int port)
 {
-	const struct max14637_config_t * const cfg = &max14637_config[port];
+	const struct max14637_config_t *const cfg = &max14637_config[port];
 	struct charge_port_info new_chg;
 
 	new_chg.voltage = USB_CHARGER_VOLTAGE_MV;
@@ -100,7 +101,7 @@ static void update_bc12_status_to_charger_manager(const int port)
  */
 static void bc12_detect(const int port)
 {
-	const struct max14637_config_t * const cfg = &max14637_config[port];
+	const struct max14637_config_t *const cfg = &max14637_config[port];
 
 	/*
 	 * Enable the IC to begin detection and connect switches if
@@ -147,7 +148,7 @@ static void detect_or_power_down_ic(const int port)
 #endif /* !defined(CONFIG_USB_PD_VBUS_DETECT_TCPC) */
 
 	if (vbus_present) {
-#if defined(CONFIG_POWER_PP5000_CONTROL) && defined(HAS_TASK_CHIPSET)
+#if defined(CONFIG_POWER_PP5000_CONTROL) && defined(CONFIG_AP_POWER_CONTROL)
 		/* Turn on the 5V rail to allow the chip to be powered. */
 		power_5v_enable(task_get_current(), 1);
 #endif
@@ -167,7 +168,7 @@ static void detect_or_power_down_ic(const int port)
 		 * switch of USB2.0 can be kept close from now on.
 		 */
 		bc12_detect(port);
-#if defined(CONFIG_POWER_PP5000_CONTROL) && defined(HAS_TASK_CHIPSET)
+#if defined(CONFIG_POWER_PP5000_CONTROL) && defined(CONFIG_AP_POWER_CONTROL)
 		/* Issue a request to turn off the rail. */
 		power_5v_enable(task_get_current(), 0);
 #endif
@@ -176,7 +177,7 @@ static void detect_or_power_down_ic(const int port)
 
 static void max14637_usb_charger_task_init(const int port)
 {
-	const struct max14637_config_t * const cfg = &max14637_config[port];
+	const struct max14637_config_t *const cfg = &max14637_config[port];
 
 	ASSERT(port >= 0 && port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	/*

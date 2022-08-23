@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "chipset.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "gpio.h"
@@ -14,16 +15,20 @@
 #include "timer.h"
 #include "util.h"
 
-#define CPRINTF(format, args...) cprintf(CC_KEYBOARD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_KEYBOARD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_KEYBOARD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_KEYBOARD, format, ##args)
 
 static struct kblight_conf kblight;
 static int current_percent;
 static uint8_t current_enable;
 
-__overridable void board_kblight_init(void) {}
+__overridable void board_kblight_init(void)
+{
+}
 
-__overridable void board_kblight_shutdown(void) {}
+__overridable void board_kblight_shutdown(void)
+{
+}
 
 static int kblight_init(void)
 {
@@ -88,7 +93,6 @@ int kblight_get_enabled(void)
 	return -1;
 }
 
-
 int kblight_register(const struct kblight_drv *drv)
 {
 	kblight.drv = drv;
@@ -121,7 +125,7 @@ DECLARE_HOOK(HOOK_CHIPSET_STARTUP, keyboard_backlight_init, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_INIT, keyboard_backlight_init, HOOK_PRIO_DEFAULT);
 #endif
 
-#ifdef HAS_TASK_CHIPSET
+#ifdef CONFIG_AP_POWER_CONTROL
 static void kblight_suspend(void)
 {
 	kblight_enable(0);
@@ -136,7 +140,7 @@ static void kblight_resume(void)
 	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, kblight_resume, HOOK_PRIO_DEFAULT);
-#endif  // HAS_TASK_CHIPSET
+#endif /* CONFIG_AP_POWER_CONTROL */
 
 #ifdef CONFIG_LID_SWITCH
 static void kblight_lid_change(void)
@@ -161,12 +165,11 @@ static int cc_kblight(int argc, char **argv)
 		if (kblight_enable(i > 0))
 			return EC_ERROR_PARAM1;
 	}
-	ccprintf("Keyboard backlight: %d%% enabled: %d\n",
-		kblight_get(), kblight_get_enabled());
+	ccprintf("Keyboard backlight: %d%% enabled: %d\n", kblight_get(),
+		 kblight_get_enabled());
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(kblight, cc_kblight,
-			"percent",
+DECLARE_CONSOLE_COMMAND(kblight, cc_kblight, "percent",
 			"Get/set keyboard backlight");
 
 static enum ec_status
@@ -181,8 +184,7 @@ hc_get_keyboard_backlight(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_PWM_GET_KEYBOARD_BACKLIGHT,
-		     hc_get_keyboard_backlight,
-		     EC_VER_MASK(0));
+		     hc_get_keyboard_backlight, EC_VER_MASK(0));
 
 static enum ec_status
 hc_set_keyboard_backlight(struct host_cmd_handler_args *args)
@@ -196,5 +198,4 @@ hc_set_keyboard_backlight(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_PWM_SET_KEYBOARD_BACKLIGHT,
-		     hc_set_keyboard_backlight,
-		     EC_VER_MASK(0));
+		     hc_set_keyboard_backlight, EC_VER_MASK(0));

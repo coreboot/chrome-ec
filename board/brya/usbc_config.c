@@ -36,17 +36,11 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
 #ifdef CONFIG_ZEPHYR
-enum ioex_port {
-	IOEX_C0_NCT38XX = 0,
-	IOEX_C2_NCT38XX,
-	IOEX_ID_1_C0_NCT38XX,
-	IOEX_ID_1_C2_NCT38XX,
-	IOEX_PORT_COUNT
-};
+enum ioex_port { IOEX_C0_NCT38XX = 0, IOEX_C2_NCT38XX, IOEX_PORT_COUNT };
 #endif /* CONFIG_ZEPHYR */
 
 #ifndef CONFIG_ZEPHYR
@@ -86,7 +80,7 @@ const struct tcpc_config_t tcpc_config[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == USBC_PORT_COUNT);
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
-#endif  /* !CONFIG_ZEPHYR */
+#endif /* !CONFIG_ZEPHYR */
 
 /******************************************************************************/
 /* USB-A charging control */
@@ -215,18 +209,6 @@ struct ioexpander_config_t ioex_config[] = {
 		.drv = &nct38xx_ioexpander_drv,
 		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
 	},
-	[IOEX_ID_1_C0_NCT38XX] = {
-		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
-		.i2c_addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
-		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
-	},
-	[IOEX_ID_1_C2_NCT38XX] = {
-		.i2c_host_port = I2C_PORT_USB_C0_C2_TCPC,
-		.i2c_addr_flags = NCT38XX_I2C_ADDR2_1_FLAGS,
-		.drv = &nct38xx_ioexpander_drv,
-		.flags = IOEX_FLAGS_DEFAULT_INIT_DISABLED,
-	},
 };
 BUILD_ASSERT(ARRAY_SIZE(ioex_config) == CONFIG_IO_EXPANDER_PORT_COUNT);
 #endif /* !CONFIG_ZEPHYR */
@@ -255,8 +237,8 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	}
 
 	if (voltage < BC12_MIN_VOLTAGE) {
-		CPRINTS("%s: port %d: vbus %d lower than %d", __func__,
-			port, voltage, BC12_MIN_VOLTAGE);
+		CPRINTS("%s: port %d: vbus %d lower than %d", __func__, port,
+			voltage, BC12_MIN_VOLTAGE);
 		return 1;
 	}
 
@@ -283,10 +265,7 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 	if (me->usb_port == USBC_PORT_C0) {
 /* TODO: explore how to handle board id in zephyr*/
 #ifndef CONFIG_ZEPHYR
-		if (get_board_id() == 1)
-			rst_signal = IOEX_ID_1_USB_C0_RT_RST_ODL;
-		else
-			rst_signal = IOEX_USB_C0_RT_RST_ODL;
+		rst_signal = IOEX_USB_C0_RT_RST_ODL;
 #else
 		/* On Zephyr use bb_controls generated from DTS */
 		rst_signal = bb_controls[me->usb_port].retimer_rst_gpio;
@@ -294,10 +273,7 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 	} else if (me->usb_port == USBC_PORT_C2) {
 /* TODO: explore how to handle board id in zephyr*/
 #ifndef CONFIG_ZEPHYR
-		if (get_board_id() == 1)
-			rst_signal = IOEX_ID_1_USB_C2_RT_RST_ODL;
-		else
-			rst_signal = IOEX_USB_C2_RT_RST_ODL;
+		rst_signal = IOEX_USB_C2_RT_RST_ODL;
 #else
 		/* On Zephyr use bb_controls generated from DTS */
 		rst_signal = bb_controls[me->usb_port].retimer_rst_gpio;
@@ -324,20 +300,6 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 		 * which powers I2C controller within retimer
 		 */
 		msleep(1);
-		if (get_board_id() == 1) {
-			int val;
-
-			/*
-			 * Check if we were able to deassert
-			 * reset. Board ID 1 uses a GPIO that is
-			 * uncontrollable when a debug accessory is
-			 * connected.
-			 */
-			if (ioex_get_level(rst_signal, &val) != EC_SUCCESS)
-				return EC_ERROR_UNKNOWN;
-			if (val != 1)
-				return EC_ERROR_NOT_POWERED;
-		}
 	} else {
 		ioex_set_level(rst_signal, 0);
 		msleep(1);
@@ -350,10 +312,7 @@ void board_reset_pd_mcu(void)
 	enum gpio_signal tcpc_rst;
 
 #ifndef CONFIG_ZEPHYR
-	if (get_board_id() == 1)
-		tcpc_rst = GPIO_ID_1_USB_C0_C2_TCPC_RST_ODL;
-	else
-		tcpc_rst = GPIO_USB_C0_C2_TCPC_RST_ODL;
+	tcpc_rst = GPIO_USB_C0_C2_TCPC_RST_ODL;
 #else
 	tcpc_rst = GPIO_UNIMPLEMENTED;
 #endif /* !CONFIG_ZEPHYR */
@@ -391,19 +350,14 @@ static void board_tcpc_init(void)
 	if (!system_jumped_late())
 		board_reset_pd_mcu();
 
-	/*
-	 * These IO expander pins are implemented using the
-	 * C0/C2 TCPC, so they must be set up after the TCPC has
-	 * been taken out of reset.
-	 */
+		/*
+		 * These IO expander pins are implemented using the
+		 * C0/C2 TCPC, so they must be set up after the TCPC has
+		 * been taken out of reset.
+		 */
 #ifndef CONFIG_ZEPHYR
-	if (get_board_id() == 1) {
-		ioex_init(IOEX_ID_1_C0_NCT38XX);
-		ioex_init(IOEX_ID_1_C2_NCT38XX);
-	} else {
-		ioex_init(IOEX_C0_NCT38XX);
-		ioex_init(IOEX_C2_NCT38XX);
-	}
+	ioex_init(IOEX_C0_NCT38XX);
+	ioex_init(IOEX_C2_NCT38XX);
 #else
 	gpio_reset_port(DEVICE_DT_GET(DT_NODELABEL(ioex_port1)));
 	gpio_reset_port(DEVICE_DT_GET(DT_NODELABEL(ioex_port2)));

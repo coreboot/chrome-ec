@@ -6,17 +6,18 @@
 #include "common.h"
 
 #include "compile_time_macros.h"
+#include "gpio.h"
 #include "hooks.h"
 #include "pwm.h"
 #include "pwm_chip.h"
 
 const struct pwm_t pwm_channels[] = {
-	[PWM_CH_LED1] = {
+	[PWM_CH_GLOGO] = {
 		.channel = 0,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 4800,
+		.flags = 0,
+		.freq = 12000,
 	},
-	[PWM_CH_LED2] = {
+	[PWM_CH_CAM_LED] = {
 		.channel = 1,
 		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
 		.freq = 4800,
@@ -35,7 +36,7 @@ const struct pwm_t pwm_channels[] = {
 		 * lower PWM frequencies, but higher frequencies record a much
 		 * lower maximum power.
 		 */
-		.freq = 2400,
+		.freq = 12000,
 	},
 	[PWM_CH_FAN1] = {
 		.channel = 5,
@@ -50,10 +51,12 @@ static void board_pwm_init(void)
 	/*
 	 * Turn on all the LEDs at 50%.
 	 */
-	pwm_enable(PWM_CH_LED1, 1);
-	pwm_set_duty(PWM_CH_LED1, 50);
-	pwm_enable(PWM_CH_LED2, 1);
-	pwm_set_duty(PWM_CH_LED2, 50);
+	gpio_set_level(GPIO_GLOGO_EN, 1);
+	pwm_enable(PWM_CH_GLOGO, 1);
+	pwm_set_duty(PWM_CH_GLOGO, 50);
+
+	pwm_enable(PWM_CH_CAM_LED, 1);
+	pwm_set_duty(PWM_CH_CAM_LED, 50);
 
 	pwm_enable(PWM_CH_KBLIGHT, 1);
 	pwm_set_duty(PWM_CH_KBLIGHT, 50);

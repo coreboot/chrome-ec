@@ -204,9 +204,11 @@ def get_argparser():
         help="Optional directory to search for BUILD.py files in.",
     )
 
+    # TODO(b/b/242563072): Remove stub support for test and testall entirely after users have gotten
+    # used to twister.
     test = sub.add_parser(
         "test",
-        help="Configure, build and run tests on specified projects",
+        help="Configure, build and run tests on specified projects; DEPRECATED",
     )
     test.add_argument(
         "--no-rebuild",
@@ -217,7 +219,7 @@ def get_argparser():
 
     testall = sub.add_parser(
         "testall",
-        help="Alias for test --all",
+        help="Alias for test --all; DEPRECATED",
     )
     testall.add_argument(
         "--clobber",
@@ -225,7 +227,15 @@ def get_argparser():
         dest="clobber",
         help="Delete existing build directories, even if configuration is unchanged",
     )
-    testall.add_argument("-B", "--build-dir", type=pathlib.Path, help="Build directory")
+    testall.add_argument(
+        "-B", "--build-dir", type=pathlib.Path, help="Build directory"
+    )
+    testall.add_argument(
+        "--static",
+        action="store_true",
+        dest="static_version",
+        help="Generate static version information for reproducible builds",
+    )
 
     generate_readme = sub.add_parser(
         "generate-readme",
@@ -251,7 +261,9 @@ def get_argparser():
 
 def add_common_configure_args(sub_parser: argparse.ArgumentParser):
     """Adds common arguments used by configure-like subcommands."""
-    sub_parser.add_argument("-t", "--toolchain", help="Name of toolchain to use")
+    sub_parser.add_argument(
+        "-t", "--toolchain", help="Name of toolchain to use"
+    )
     sub_parser.add_argument(
         "--bringup",
         action="store_true",
@@ -263,6 +275,12 @@ def add_common_configure_args(sub_parser: argparse.ArgumentParser):
         action="store_true",
         dest="clobber",
         help="Delete existing build directories, even if configuration is unchanged",
+    )
+    sub_parser.add_argument(
+        "--static",
+        action="store_true",
+        dest="static_version",
+        help="Generate static version information for reproducible builds",
     )
     sub_parser.add_argument(
         "--allow-warnings",
@@ -288,6 +306,12 @@ def add_common_configure_args(sub_parser: argparse.ArgumentParser):
         "--extra-cflags",
         help="Additional CFLAGS to use for target builds",
     )
+    sub_parser.add_argument(
+        "--delete-intermediates",
+        action="store_true",
+        dest="delete_intermediates",
+        help="Delete intermediate files to save disk space",
+    )
     group = sub_parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "-a",
@@ -301,6 +325,12 @@ def add_common_configure_args(sub_parser: argparse.ArgumentParser):
         action="store_true",
         dest="host_tests_only",
         help="Select all test projects",
+    )
+    group.add_argument(
+        "--boards-only",
+        action="store_true",
+        dest="boards_only",
+        help="Select all board projects (not tests)",
     )
     group.add_argument(
         "project_names",

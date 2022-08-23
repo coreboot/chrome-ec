@@ -37,22 +37,13 @@
  */
 
 /**
- * @brief Get pointer to BB retimer emulator using device tree order number.
- *
- * @param ord Device tree order number obtained from DT_DEP_ORD macro
- *
- * @return Pointer to BB retimer emulator
- */
-struct i2c_emul *bb_emul_get(int ord);
-
-/**
  * @brief Set value of given register of BB retimer
  *
  * @param emul Pointer to BB retimer emulator
  * @param reg Register address which value will be changed
  * @param val New value of the register
  */
-void bb_emul_set_reg(struct i2c_emul *emul, int reg, uint32_t val);
+void bb_emul_set_reg(const struct emul *emul, int reg, uint32_t val);
 
 /**
  * @brief Get value of given register of BB retimer
@@ -62,7 +53,7 @@ void bb_emul_set_reg(struct i2c_emul *emul, int reg, uint32_t val);
  *
  * @return Value of the register
  */
-uint32_t bb_emul_get_reg(struct i2c_emul *emul, int reg);
+uint32_t bb_emul_get_reg(const struct emul *emul, int reg);
 
 /**
  * @brief Set if error should be generated when read only register is being
@@ -71,7 +62,7 @@ uint32_t bb_emul_get_reg(struct i2c_emul *emul, int reg);
  * @param emul Pointer to BB retimer emulator
  * @param set Check for this error
  */
-void bb_emul_set_err_on_ro_write(struct i2c_emul *emul, bool set);
+void bb_emul_set_err_on_ro_write(const struct emul *emul, bool set);
 
 /**
  * @brief Set if error should be generated when reserved bits of register are
@@ -80,7 +71,16 @@ void bb_emul_set_err_on_ro_write(struct i2c_emul *emul, bool set);
  * @param emul Pointer to BB retimer emulator
  * @param set Check for this error
  */
-void bb_emul_set_err_on_rsvd_write(struct i2c_emul *emul, bool set);
+void bb_emul_set_err_on_rsvd_write(const struct emul *emul, bool set);
+
+/**
+ * @brief Saves current internal state of sensors to emulator's registers.
+ *
+ * @param emul Pointer to bb retimer emulator
+ * @return Pointer to bb retimer emulator associated i2c_common_emul_data
+ */
+struct i2c_common_emul_data *
+emul_bb_retimer_get_i2c_common_data(const struct emul *emul);
 
 /**
  * @}

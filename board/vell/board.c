@@ -17,6 +17,7 @@
 #include "fw_config.h"
 #include "hooks.h"
 #include "lid_switch.h"
+#include "panic.h"
 #include "power_button.h"
 #include "power.h"
 #include "registers.h"
@@ -27,8 +28,8 @@
 #include "gpio_list.h" /* Must come after other header files. */
 
 /* Console output macros */
-#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
 
 static void board_chipset_startup(void)
 {
