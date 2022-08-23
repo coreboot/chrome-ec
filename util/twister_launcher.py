@@ -12,6 +12,7 @@ parameters that may be used, please consult the Twister documentation.
 
 import argparse
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -33,18 +34,8 @@ def find_checkout() -> Path:
         return None
 
 
-def find_modules(mod_dir: Path) -> list:
-    """Find Zephyr modules in the given directory `dir`."""
-
-    modules = []
-    for child in mod_dir.iterdir():
-        if child.is_dir() and (child / "zephyr" / "module.yml").exists():
-            modules.append(child)
-    return modules
-
-
-def main():
-    """Run Twister using defaults for the EC project."""
+def find_paths():
+    """Find EC base, Zephyr base, and Zephyr modules paths and return as a 3-tuple."""
 
     # Determine where the source tree is checked out. Will be None if operating outside
     # of the chroot (e.g. Gitlab builds). In this case, additional paths need to be
@@ -77,18 +68,40 @@ def main():
                 "MODULES_DIR unspecified. Please pass as env var or use chroot."
             ) from err
 
+    return (ec_base, zephyr_base, zephyr_modules_dir)
+
+
+def find_modules(mod_dir: Path) -> list:
+    """Find Zephyr modules in the given directory `dir`."""
+
+    modules = []
+    for child in mod_dir.iterdir():
+        if child.is_dir() and (child / "zephyr" / "module.yml").exists():
+            modules.append(child)
+    return modules
+
+
+def main():
+    """Run Twister using defaults for the EC project."""
+
+    # Get paths for the build.
+    ec_base, zephyr_base, zephyr_modules_dir = find_paths()
+
     zephyr_modules = find_modules(zephyr_modules_dir)
     zephyr_modules.append(ec_base)
 
-    # Prepare environment variables for export to Twister and inherit the
-    # parent environment.
+    # Prepare environment variables for export to Twister. Inherit the parent
+    # process's environment, but set some default values if not already set.
     twister_env = dict(os.environ)
-    twister_env.update(
-        {
-            "TOOLCHAIN_ROOT": str(ec_base / "zephyr"),
-            "ZEPHYR_TOOLCHAIN_VARIANT": "llvm",
-        }
-    )
+    extra_env_vars = {
+        "TOOLCHAIN_ROOT": os.environ.get(
+            "TOOLCHAIN_ROOT", str(ec_base / "zephyr")
+        ),
+        "ZEPHYR_TOOLCHAIN_VARIANT": os.environ.get(
+            "ZEPHYR_TOOLCHAIN_VARIANT", "llvm"
+        ),
+    }
+    twister_env.update(extra_env_vars)
 
     # Twister CLI args
     twister_cli = [
@@ -98,8 +111,6 @@ def main():
         f"-x=SYSCALL_INCLUDE_DIRS={str(ec_base / 'zephyr' / 'include' / 'drivers')}",
         f"-x=ZEPHYR_BASE={zephyr_base}",
         f"-x=ZEPHYR_MODULES={';'.join([str(p) for p in zephyr_modules])}",
-        "--gcov-tool",
-        ec_base / "util" / "llvm-gcov.sh",
     ]
 
     # `-T` flags (used for specifying test directories to build and run)
@@ -110,9 +121,13 @@ def main():
     # user does pass their own `-T` flags, pass them through instead. Do the
     # same with verbosity. Other arguments get passed straight through,
     # including -h/--help so that Twister's own help text gets displayed.
-    parser = argparse.ArgumentParser(add_help=False)
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("-T", "--testsuite-root", action="append")
+    parser.add_argument("-p", "--platform", action="append")
     parser.add_argument("-v", "--verbose", action="count", default=0)
+    parser.add_argument(
+        "--gcov-tool", default=str(ec_base / "util" / "llvm-gcov.sh")
+    )
     intercepted_args, other_args = parser.parse_known_args()
 
     for _ in range(intercepted_args.verbose):
@@ -127,23 +142,49 @@ def main():
         # Use EC base dir when no -T args specified. This will cause all
         # Twister-compatible EC tests to run.
         twister_cli.extend(["-T", str(ec_base)])
+        twister_cli.extend(["-T", str(zephyr_base / "tests/subsys/shell")])
+
+    # Pass through the chosen coverage tool, or fall back on the default choice
+    # (see add_argument above).
+    twister_cli.extend(
+        [
+            "--gcov-tool",
+            intercepted_args.gcov_tool,
+        ]
+    )
+    if intercepted_args.platform:
+        # Pass user-provided -p args when present.
+        for arg in intercepted_args.platform:
+            twister_cli.extend(["-p", arg])
+    else:
+        # posix_native and unit_testing when nothing was requested by user.
+        twister_cli.extend(["-p", "native_posix"])
+        twister_cli.extend(["-p", "unit_testing"])
 
     # Append additional user-supplied args
     twister_cli.extend(other_args)
 
     # Print exact CLI args and environment variables depending on verbosity.
     if intercepted_args.verbose > 0:
-        print("Calling:", twister_cli)
-    if intercepted_args.verbose > 1:
-        print("With environment:", twister_env)
+        print("Calling:", " ".join(shlex.quote(str(x)) for x in twister_cli))
+        print(
+            "With environment overrides:",
+            " ".join(
+                f"{name}={shlex.quote(val)}"
+                for name, val in extra_env_vars.items()
+            ),
+        )
+        sys.stdout.flush()
 
     # Invoke Twister and wait for it to exit.
-    with subprocess.Popen(
-        twister_cli,
-        env=twister_env,
-    ) as proc:
-        proc.wait()
-        sys.exit(proc.returncode)
+    result = subprocess.run(twister_cli, env=twister_env, check=False)
+
+    if result.returncode == 0:
+        print("TEST EXECUTION SUCCESSFUL")
+    else:
+        print("TEST EXECUTION FAILED")
+
+    sys.exit(result.returncode)
 
 
 if __name__ == "__main__":

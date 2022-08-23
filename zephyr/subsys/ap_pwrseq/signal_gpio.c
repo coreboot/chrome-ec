@@ -107,20 +107,26 @@ int power_signal_gpio_get(enum pwr_sig_gpio index)
 	 * physical level of the pin (open drain outputs
 	 * may have a low voltage).
 	 */
-	if (gpio_config[index].output) {
+	if (IS_ENABLED(CONFIG_GPIO_GET_CONFIG) && gpio_config[index].output) {
 		int rv;
 		gpio_flags_t flags;
 
 		rv = gpio_pin_get_config_dt(&spec[index], &flags);
-		if (rv != 0) {
+		if (rv == 0) {
+			int pin = (flags & GPIO_OUTPUT_INIT_HIGH) ? 1 : 0;
+			/* If active low signal, invert it */
+			if (spec[index].dt_flags & GPIO_ACTIVE_LOW) {
+				pin = !pin;
+			}
+			return pin;
+		}
+		/*
+		 * -ENOSYS is returned when this API call is not supported,
+		 *  so drop into the default method of returning the pin value.
+		 */
+		if (rv != -ENOSYS) {
 			return rv;
 		}
-		rv = (flags & GPIO_OUTPUT_INIT_HIGH) ? 1 : 0;
-		/* If active low signal, invert it */
-		if (spec[index].dt_flags & GPIO_ACTIVE_LOW) {
-			rv = !rv;
-		}
-		return rv;
 	}
 	return gpio_pin_get_dt(&spec[index]);
 }

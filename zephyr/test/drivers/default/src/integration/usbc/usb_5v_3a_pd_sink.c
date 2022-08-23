@@ -37,10 +37,8 @@ static void *usb_attach_5v_3a_pd_sink_setup(void)
 	static struct usb_attach_5v_3a_pd_sink_fixture test_fixture;
 
 	/* Get references for the emulators */
-	test_fixture.tcpci_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(tcpci_emul)));
-	test_fixture.charger_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(isl923x_emul)));
+	test_fixture.tcpci_emul = EMUL_GET_USBC_BINDING(0, tcpc);
+	test_fixture.charger_emul = EMUL_GET_USBC_BINDING(0, chg);
 
 	return &test_fixture;
 }
@@ -84,8 +82,7 @@ ZTEST_F(usb_attach_5v_3a_pd_sink, test_partner_pd_completed)
 
 ZTEST(usb_attach_5v_3a_pd_sink, test_battery_is_discharging)
 {
-	const struct emul *emul =
-		sbat_emul_get_ptr(DT_DEP_ORD(DT_NODELABEL(battery)));
+	const struct emul *emul = EMUL_DT_GET(DT_NODELABEL(battery));
 	uint16_t battery_status;
 
 	zassume_ok(sbat_emul_get_word_val(emul, SB_BATTERY_STATUS,
@@ -140,8 +137,7 @@ ZTEST(usb_attach_5v_3a_pd_sink, test_power_info)
 
 ZTEST_F(usb_attach_5v_3a_pd_sink, test_disconnect_battery_discharging)
 {
-	const struct emul *emul =
-		sbat_emul_get_ptr(DT_DEP_ORD(DT_NODELABEL(battery)));
+	const struct emul *emul = EMUL_DT_GET(DT_NODELABEL(battery));
 	uint16_t battery_status;
 
 	disconnect_sink_from_port(fixture->tcpci_emul);

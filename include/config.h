@@ -1999,6 +1999,15 @@
  */
 #undef CONFIG_FAN_UPDATE_PERIOD
 
+/*
+ * Enable fan slow response control mechanism.
+ * A specific type of fan needs a longer time to output the TACH
+ * signal to EC after EC outputs the PWM signal to the fan.
+ * During this period, the driver will read two consecutive RPM = 0.
+ * In this case, don't step the PWM duty too aggressively
+ */
+#undef CONFIG_FAN_BYPASS_SLOW_RESPONSE
+
 /*****************************************************************************/
 /* Flash configuration */
 
@@ -3406,9 +3415,6 @@
  * interface.
  */
 #undef CONFIG_MCDP28X0
-
-/* Define clock input to MFT module. */
-#undef CONFIG_MFT_INPUT_LFCLK
 
 /* Minute-IA watchdog timer vector number. */
 #define CONFIG_MIA_WDT_VEC 0xFF
@@ -4974,6 +4980,12 @@
 
 /* Index for temperature sensor used in PD messages. Defaults to 0. */
 #define CONFIG_USB_PD_TEMP_SENSOR 0
+
+/*
+ * Time limit in ms for a USB PD power button press to be considered a short
+ * press
+ */
+#define CONFIG_USB_PD_SHORT_PRESS_MAX_MS 4000
 
 /* Time limit in ms for a USB PD power button press to be considered valid. */
 #define CONFIG_USB_PD_LONG_PRESS_MAX_MS 8000

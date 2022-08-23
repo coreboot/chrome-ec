@@ -7,6 +7,7 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "chipset.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
@@ -17,8 +18,6 @@
 #include "usb_common.h"
 #include "usb_pd.h"
 #include "util.h"
-
-#define BATTERY_ORD DT_DEP_ORD(DT_NODELABEL(battery))
 
 struct usb_attach_5v_3a_pd_source_rev3_fixture {
 	struct tcpci_partner_data source_5v_3a;
@@ -32,10 +31,8 @@ static void *usb_attach_5v_3a_pd_source_setup(void)
 	static struct usb_attach_5v_3a_pd_source_rev3_fixture test_fixture;
 
 	/* Get references for the emulators */
-	test_fixture.tcpci_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(tcpci_emul)));
-	test_fixture.charger_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(isl923x_emul)));
+	test_fixture.tcpci_emul = EMUL_GET_USBC_BINDING(0, tcpc);
+	test_fixture.charger_emul = EMUL_GET_USBC_BINDING(0, chg);
 
 	/* Initialized the charger to supply 5V and 3A */
 	tcpci_partner_init(&test_fixture.source_5v_3a, PD_REV30);
@@ -59,6 +56,9 @@ static void usb_attach_5v_3a_pd_source_before(void *data)
 	tcpci_src_emul_clear_status_received(&fixture->src_ext);
 	zassume_false(fixture->src_ext.alert_received, NULL);
 	zassume_false(fixture->src_ext.status_received, NULL);
+
+	/* Initial check on power state */
+	zassume_true(chipset_in_state(CHIPSET_STATE_ON), NULL);
 }
 
 static void usb_attach_5v_3a_pd_source_after(void *data)
@@ -224,6 +224,7 @@ ZTEST_F(usb_attach_5v_3a_pd_source_rev3,
 	k_sleep(K_SECONDS(2));
 	zassert_false(fixture->src_ext.alert_received, NULL);
 	zassert_false(fixture->src_ext.status_received, NULL);
+	zassert_true(chipset_in_state(CHIPSET_STATE_ON), NULL);
 }
 
 ZTEST_F(usb_attach_5v_3a_pd_source_rev3,
@@ -240,6 +241,7 @@ ZTEST_F(usb_attach_5v_3a_pd_source_rev3,
 	tcpci_src_emul_clear_status_received(&fixture->src_ext);
 	zassume_false(fixture->src_ext.alert_received, NULL);
 	zassume_false(fixture->src_ext.status_received, NULL);
+	zassume_true(chipset_in_state(CHIPSET_STATE_ANY_OFF), NULL);
 
 	/* While in S5/G3 expect nothing on invalid (too long) press */
 	ado = ADO_EXTENDED_ALERT_EVENT | ADO_POWER_BUTTON_PRESS;
@@ -252,6 +254,7 @@ ZTEST_F(usb_attach_5v_3a_pd_source_rev3,
 	k_sleep(K_SECONDS(2));
 	zassert_false(fixture->src_ext.alert_received, NULL);
 	zassert_false(fixture->src_ext.status_received, NULL);
+	zassert_true(chipset_in_state(CHIPSET_STATE_ANY_OFF), NULL);
 
 	/* Wake device to setup for subsequent tests */
 	chipset_power_on();
@@ -271,6 +274,7 @@ ZTEST_F(usb_attach_5v_3a_pd_source_rev3, verify_startup_on_pd_button_press)
 	tcpci_src_emul_clear_status_received(&fixture->src_ext);
 	zassume_false(fixture->src_ext.alert_received, NULL);
 	zassume_false(fixture->src_ext.status_received, NULL);
+	zassume_true(chipset_in_state(CHIPSET_STATE_ANY_OFF), NULL);
 
 	/* While in S5/G3 expect Alert->Get_Status->Status on valid press */
 	ado = ADO_EXTENDED_ALERT_EVENT | ADO_POWER_BUTTON_PRESS;
@@ -283,4 +287,72 @@ ZTEST_F(usb_attach_5v_3a_pd_source_rev3, verify_startup_on_pd_button_press)
 	k_sleep(K_SECONDS(2));
 	zassert_true(fixture->src_ext.alert_received, NULL);
 	zassert_true(fixture->src_ext.status_received, NULL);
+	zassert_true(chipset_in_state(CHIPSET_STATE_ON), NULL);
+}
+
+ZTEST_F(usb_attach_5v_3a_pd_source_rev3, verify_chipset_on_pd_button_behavior)
+{
+	uint32_t ado;
+
+	/* Expect no power state change on short press */
+	ado = ADO_EXTENDED_ALERT_EVENT | ADO_POWER_BUTTON_PRESS;
+	tcpci_partner_send_data_msg(&fixture->source_5v_3a, PD_DATA_ALERT, &ado,
+				    1, 0);
+	k_sleep(K_SECONDS(2));
+	ado = ADO_EXTENDED_ALERT_EVENT | ADO_POWER_BUTTON_RELEASE;
+	tcpci_partner_send_data_msg(&fixture->source_5v_3a, PD_DATA_ALERT, &ado,
+				    1, 0);
+	k_sleep(K_SECONDS(2));
+	zassert_false(fixture->src_ext.alert_received, NULL);
+	zassert_false(fixture->src_ext.status_received, NULL);
+	zassert_true(chipset_in_state(CHIPSET_STATE_ON), NULL);
+
+	/* Expect no change on invalid button press while chipset is on */
+	ado = ADO_EXTENDED_ALERT_EVENT | ADO_POWER_BUTTON_PRESS;
+	tcpci_partner_send_data_msg(&fixture->source_5v_3a, PD_DATA_ALERT, &ado,
+				    1, 0);
+	k_sleep(K_SECONDS(10));
+	ado = ADO_EXTENDED_ALERT_EVENT | ADO_POWER_BUTTON_RELEASE;
+	tcpci_partner_send_data_msg(&fixture->source_5v_3a, PD_DATA_ALERT, &ado,
+				    1, 0);
+	k_sleep(K_SECONDS(2));
+	zassert_false(fixture->src_ext.alert_received, NULL);
+	zassert_false(fixture->src_ext.status_received, NULL);
+	zassert_true(chipset_in_state(CHIPSET_STATE_ON), NULL);
+
+	/*
+	 * Expect no power state change on 6 second press->press->release due
+	 * to the timers resetting on the second press.
+	 */
+	ado = ADO_EXTENDED_ALERT_EVENT | ADO_POWER_BUTTON_PRESS;
+	tcpci_partner_send_data_msg(&fixture->source_5v_3a, PD_DATA_ALERT, &ado,
+				    1, 0);
+	k_sleep(K_SECONDS(3));
+	tcpci_partner_send_data_msg(&fixture->source_5v_3a, PD_DATA_ALERT, &ado,
+				    1, 0);
+	k_sleep(K_SECONDS(3));
+	ado = ADO_EXTENDED_ALERT_EVENT | ADO_POWER_BUTTON_RELEASE;
+	tcpci_partner_send_data_msg(&fixture->source_5v_3a, PD_DATA_ALERT, &ado,
+				    1, 0);
+	k_sleep(K_SECONDS(2));
+	zassert_false(fixture->src_ext.alert_received, NULL);
+	zassert_false(fixture->src_ext.status_received, NULL);
+	zassert_true(chipset_in_state(CHIPSET_STATE_ON), NULL);
+
+	/* Expect power state change on long press */
+	ado = ADO_EXTENDED_ALERT_EVENT | ADO_POWER_BUTTON_PRESS;
+	tcpci_partner_send_data_msg(&fixture->source_5v_3a, PD_DATA_ALERT, &ado,
+				    1, 0);
+	k_sleep(K_SECONDS(6));
+	ado = ADO_EXTENDED_ALERT_EVENT | ADO_POWER_BUTTON_RELEASE;
+	tcpci_partner_send_data_msg(&fixture->source_5v_3a, PD_DATA_ALERT, &ado,
+				    1, 0);
+	k_sleep(K_SECONDS(2));
+	zassert_true(fixture->src_ext.alert_received, NULL);
+	zassert_true(fixture->src_ext.status_received, NULL);
+	zassert_true(chipset_in_state(CHIPSET_STATE_ANY_OFF), NULL);
+
+	/* Wake device to setup for subsequent tests */
+	chipset_power_on();
+	k_sleep(K_SECONDS(10));
 }

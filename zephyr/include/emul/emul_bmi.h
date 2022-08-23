@@ -183,6 +183,19 @@ struct bmi_emul_type_data {
 	int (*handle_read)(uint8_t *regs, const struct emul *emul, int reg,
 			   int byte, char *buf);
 	/**
+	 * @brief Model specific finish read function. It should modify state of
+	 *        emulator if required.
+	 *
+	 * @param regs Pointer to array of emulator's registers
+	 * @param emul Pointer to BMI emulator
+	 * @param reg Selected register
+	 * @param bytes Number of bytes read
+	 *
+	 * @return 0 on success
+	 */
+	int (*finish_read)(uint8_t *regs, const struct emul *emul, int reg,
+			   int bytes);
+	/**
 	 * @brief Model specific reset function. It should modify state of
 	 *        emulator to imitate after reset conditions.
 	 *
@@ -219,15 +232,6 @@ const struct bmi_emul_type_data *get_bmi160_emul_type_data(void);
  * @return Pointer to BMI260 specific structure
  */
 const struct bmi_emul_type_data *get_bmi260_emul_type_data(void);
-
-/**
- * @brief Get pointer to BMI emulator using device tree order number.
- *
- * @param ord Device tree order number obtained from DT_DEP_ORD macro
- *
- * @return Pointer to BMI emulator
- */
-const struct emul *bmi_emul_get(int ord);
 
 /**
  * @brief Set value of given register of BMI

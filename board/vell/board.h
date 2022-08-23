@@ -147,6 +147,7 @@
 
 /* Enabling USB4 mode */
 #define CONFIG_USB_PD_USB4
+#define CONFIG_USB_PD_DATA_RESET_MSG
 
 /* Retimer */
 #define CONFIG_USBC_RETIMER_FW_UPDATE
@@ -159,6 +160,7 @@
 
 /* Fan features */
 #define CONFIG_FANS FAN_CH_COUNT
+#define CONFIG_FAN_BYPASS_SLOW_RESPONSE
 #define CONFIG_CUSTOM_FAN_CONTROL
 #define RPM_DEVIATION 1
 

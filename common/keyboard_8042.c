@@ -14,6 +14,7 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "i8042_protocol.h"
+#include "atkbd_protocol.h"
 #include "keyboard_8042_sharedlib.h"
 #include "keyboard_config.h"
 #include "keyboard_protocol.h"
@@ -51,17 +52,17 @@
 #endif
 
 static enum {
-	STATE_NORMAL = 0,
-	STATE_SCANCODE,
-	STATE_SETLEDS,
-	STATE_EX_SETLEDS_1, /* Expect 2-byte parameter */
-	STATE_EX_SETLEDS_2,
-	STATE_WRITE_CMD_BYTE,
-	STATE_WRITE_OUTPUT_PORT,
-	STATE_ECHO_MOUSE,
-	STATE_SETREP,
-	STATE_SEND_TO_MOUSE,
-} data_port_state = STATE_NORMAL;
+	STATE_ATKBD_CMD = 0,
+	STATE_ATKBD_SCANCODE,
+	STATE_ATKBD_SETLEDS,
+	STATE_ATKBD_EX_SETLEDS_1, /* Expect 2-byte parameter */
+	STATE_ATKBD_EX_SETLEDS_2,
+	STATE_8042_WRITE_CMD_BYTE,
+	STATE_8042_WRITE_OUTPUT_PORT,
+	STATE_8042_ECHO_MOUSE,
+	STATE_ATKBD_SETREP,
+	STATE_8042_SEND_TO_MOUSE,
+} data_port_state = STATE_ATKBD_CMD;
 
 enum scancode_set_list {
 	SCANCODE_GET_SET = 0,
@@ -267,7 +268,8 @@ static void aux_enable_irq(int enable)
  * @param to_host	Data to send
  * @param chan		Channel to send data on
  */
-static void i8042_send_to_host(int len, const uint8_t *bytes, uint8_t chan)
+static void i8042_send_to_host(int len, const uint8_t *bytes, uint8_t chan,
+			       int is_typematic)
 {
 	int i;
 	struct data_byte data;
@@ -275,15 +277,20 @@ static void i8042_send_to_host(int len, const uint8_t *bytes, uint8_t chan)
 	/* Enqueue output data if there's space */
 	mutex_lock(&to_host_mutex);
 
-	for (i = 0; i < len; i++)
-		kblog_put(chan == CHAN_AUX ? 'a' : 's', bytes[i]);
+	if (is_typematic && !typematic_len) {
+		for (i = 0; i < len; i++)
+			kblog_put('r', bytes[i]);
+	} else {
+		for (i = 0; i < len; i++)
+			kblog_put(chan == CHAN_AUX ? 'a' : 's', bytes[i]);
 
-	if (queue_space(&to_host) >= len) {
-		kblog_put('t', to_host.state->tail);
-		for (i = 0; i < len; i++) {
-			data.chan = chan;
-			data.byte = bytes[i];
-			queue_add_unit(&to_host, &data);
+		if (queue_space(&to_host) >= len) {
+			kblog_put('t', to_host.state->tail);
+			for (i = 0; i < len; i++) {
+				data.chan = chan;
+				data.byte = bytes[i];
+				queue_add_unit(&to_host, &data);
+			}
 		}
 	}
 	mutex_unlock(&to_host_mutex);
@@ -453,7 +460,7 @@ void keyboard_state_changed(int row, int col, int is_pressed)
 	if (ret == EC_SUCCESS) {
 		ASSERT(len > 0);
 		if (keystroke_enabled)
-			i8042_send_to_host(len, scan_code, CHAN_KBD);
+			i8042_send_to_host(len, scan_code, CHAN_KBD, 0);
 	}
 
 	if (is_pressed) {
@@ -556,19 +563,19 @@ static int handle_mouse_data(uint8_t data, uint8_t *output, int *count)
 	int out_len = 0;
 
 	switch (data_port_state) {
-	case STATE_ECHO_MOUSE:
-		CPRINTS5("STATE_ECHO_MOUSE: 0x%02x", data);
+	case STATE_8042_ECHO_MOUSE:
+		CPRINTS5("STATE_8042_ECHO_MOUSE: 0x%02x", data);
 		output[out_len++] = data;
-		data_port_state = STATE_NORMAL;
+		data_port_state = STATE_ATKBD_CMD;
 		break;
 
-	case STATE_SEND_TO_MOUSE:
-		CPRINTS5("STATE_SEND_TO_MOUSE: 0x%02x", data);
+	case STATE_8042_SEND_TO_MOUSE:
+		CPRINTS5("STATE_8042_SEND_TO_MOUSE: 0x%02x", data);
 		send_aux_data_to_device(data);
-		data_port_state = STATE_NORMAL;
+		data_port_state = STATE_ATKBD_CMD;
 		break;
 
-	default: /* STATE_NORMAL */
+	default: /* STATE_ATKBD_CMD */
 		return 0;
 	}
 
@@ -591,118 +598,119 @@ static int handle_keyboard_data(uint8_t data, uint8_t *output)
 	int i;
 
 	switch (data_port_state) {
-	case STATE_SCANCODE:
-		CPRINTS5("KB eaten by STATE_SCANCODE: 0x%02x", data);
+	case STATE_ATKBD_SCANCODE:
+		CPRINTS5("KB eaten by STATE_ATKBD_SCANCODE: 0x%02x", data);
 		if (data == SCANCODE_GET_SET) {
-			output[out_len++] = I8042_RET_ACK;
+			output[out_len++] = ATKBD_RET_ACK;
 			output[out_len++] = scancode_set;
 		} else {
 			scancode_set = data;
 			CPRINTS("KB scancode set to %d", scancode_set);
-			output[out_len++] = I8042_RET_ACK;
+			output[out_len++] = ATKBD_RET_ACK;
 		}
-		data_port_state = STATE_NORMAL;
+		data_port_state = STATE_ATKBD_CMD;
 		break;
 
-	case STATE_SETLEDS:
-		CPRINTS5("KB eaten by STATE_SETLEDS");
-		output[out_len++] = I8042_RET_ACK;
-		data_port_state = STATE_NORMAL;
+	case STATE_ATKBD_SETLEDS:
+		CPRINTS5("KB eaten by STATE_ATKBD_SETLEDS");
+		output[out_len++] = ATKBD_RET_ACK;
+		data_port_state = STATE_ATKBD_CMD;
 		break;
 
-	case STATE_EX_SETLEDS_1:
-		CPRINTS5("KB eaten by STATE_EX_SETLEDS_1");
-		output[out_len++] = I8042_RET_ACK;
-		data_port_state = STATE_EX_SETLEDS_2;
+	case STATE_ATKBD_EX_SETLEDS_1:
+		CPRINTS5("KB eaten by STATE_ATKBD_EX_SETLEDS_1");
+		output[out_len++] = ATKBD_RET_ACK;
+		data_port_state = STATE_ATKBD_EX_SETLEDS_2;
 		break;
 
-	case STATE_EX_SETLEDS_2:
-		CPRINTS5("KB eaten by STATE_EX_SETLEDS_2");
-		output[out_len++] = I8042_RET_ACK;
-		data_port_state = STATE_NORMAL;
+	case STATE_ATKBD_EX_SETLEDS_2:
+		CPRINTS5("KB eaten by STATE_ATKBD_EX_SETLEDS_2");
+		output[out_len++] = ATKBD_RET_ACK;
+		data_port_state = STATE_ATKBD_CMD;
 		break;
 
-	case STATE_WRITE_CMD_BYTE:
-		CPRINTS5("KB eaten by STATE_WRITE_CMD_BYTE: 0x%02x", data);
+	case STATE_8042_WRITE_CMD_BYTE:
+		CPRINTS5("KB eaten by STATE_8042_WRITE_CMD_BYTE: 0x%02x", data);
 		update_ctl_ram(controller_ram_address, data);
-		data_port_state = STATE_NORMAL;
+		data_port_state = STATE_ATKBD_CMD;
 		break;
 
-	case STATE_WRITE_OUTPUT_PORT:
-		CPRINTS5("KB eaten by STATE_WRITE_OUTPUT_PORT: 0x%02x", data);
+	case STATE_8042_WRITE_OUTPUT_PORT:
+		CPRINTS5("KB eaten by STATE_8042_WRITE_OUTPUT_PORT: 0x%02x",
+			 data);
 		A20_status = (data & BIT(1)) ? 1 : 0;
-		data_port_state = STATE_NORMAL;
+		data_port_state = STATE_ATKBD_CMD;
 		break;
 
-	case STATE_SETREP:
-		CPRINTS5("KB eaten by STATE_SETREP: 0x%02x", data);
+	case STATE_ATKBD_SETREP:
+		CPRINTS5("KB eaten by STATE_ATKBD_SETREP: 0x%02x", data);
 		set_typematic_delays(data);
 
-		output[out_len++] = I8042_RET_ACK;
-		data_port_state = STATE_NORMAL;
+		output[out_len++] = ATKBD_RET_ACK;
+		data_port_state = STATE_ATKBD_CMD;
 		break;
 
-	default: /* STATE_NORMAL */
+	default: /* STATE_ATKBD_CMD */
 		switch (data) {
-		case I8042_CMD_GSCANSET: /* also I8042_CMD_SSCANSET */
-			output[out_len++] = I8042_RET_ACK;
-			data_port_state = STATE_SCANCODE;
+		case ATKBD_CMD_GSCANSET: /* also ATKBD_CMD_SSCANSET */
+			output[out_len++] = ATKBD_RET_ACK;
+			data_port_state = STATE_ATKBD_SCANCODE;
 			break;
 
-		case I8042_CMD_SETLEDS:
+		case ATKBD_CMD_SETLEDS:
 			/* Chrome OS doesn't have keyboard LEDs, so ignore */
-			output[out_len++] = I8042_RET_ACK;
-			data_port_state = STATE_SETLEDS;
+			output[out_len++] = ATKBD_RET_ACK;
+			data_port_state = STATE_ATKBD_SETLEDS;
 			break;
 
-		case I8042_CMD_EX_SETLEDS:
-			output[out_len++] = I8042_RET_ACK;
-			data_port_state = STATE_EX_SETLEDS_1;
+		case ATKBD_CMD_EX_SETLEDS:
+			output[out_len++] = ATKBD_RET_ACK;
+			data_port_state = STATE_ATKBD_EX_SETLEDS_1;
 			break;
 
-		case I8042_CMD_DIAG_ECHO:
-			output[out_len++] = I8042_RET_ACK;
-			output[out_len++] = I8042_CMD_DIAG_ECHO;
+		case ATKBD_CMD_DIAG_ECHO:
+			output[out_len++] = ATKBD_RET_ACK;
+			output[out_len++] = ATKBD_RET_ECHO;
 			break;
 
-		case I8042_CMD_GETID: /* fall-thru */
-		case I8042_CMD_OK_GETID:
-			output[out_len++] = I8042_RET_ACK;
+		case ATKBD_CMD_GETID: /* fall-thru */
+		case ATKBD_CMD_OK_GETID:
+			output[out_len++] = ATKBD_RET_ACK;
 			output[out_len++] = 0xab; /* Regular keyboards */
 			output[out_len++] = 0x83;
 			break;
 
-		case I8042_CMD_SETREP:
-			output[out_len++] = I8042_RET_ACK;
-			data_port_state = STATE_SETREP;
+		case ATKBD_CMD_SETREP:
+			output[out_len++] = ATKBD_RET_ACK;
+			data_port_state = STATE_ATKBD_SETREP;
 			break;
 
-		case I8042_CMD_ENABLE:
-			output[out_len++] = I8042_RET_ACK;
+		case ATKBD_CMD_ENABLE:
+			output[out_len++] = ATKBD_RET_ACK;
 			keystroke_enable(1);
 			keyboard_clear_buffer();
 			break;
 
-		case I8042_CMD_RESET_DIS:
-			output[out_len++] = I8042_RET_ACK;
+		case ATKBD_CMD_RESET_DIS:
+			output[out_len++] = ATKBD_RET_ACK;
 			keystroke_enable(0);
 			reset_rate_and_delay();
 			keyboard_clear_buffer();
 			break;
 
-		case I8042_CMD_RESET_DEF:
-			output[out_len++] = I8042_RET_ACK;
+		case ATKBD_CMD_RESET_DEF:
+			output[out_len++] = ATKBD_RET_ACK;
 			reset_rate_and_delay();
 			keyboard_clear_buffer();
 			break;
 
-		case I8042_CMD_RESET:
+		case ATKBD_CMD_RESET:
 			reset_rate_and_delay();
 			keyboard_clear_buffer();
-			output[out_len++] = I8042_RET_ACK;
+			output[out_len++] = ATKBD_RET_ACK;
 			break;
 
-		case I8042_CMD_RESEND:
+		case ATKBD_CMD_RESEND:
 			save_for_resend = 0;
 			for (i = 0; i < resend_command_len; ++i)
 				output[out_len++] = resend_command[i];
@@ -713,12 +721,13 @@ static int handle_keyboard_data(uint8_t data, uint8_t *output)
 			/* U-boot hack.  Just ignore; don't reply. */
 			break;
 
-		case I8042_CMD_SETALL_MB: /* fall-thru */
-		case I8042_CMD_SETALL_MBR:
-		case I8042_CMD_EX_ENABLE:
+		case ATKBD_CMD_SETALL_MB: /* fall-thru */
+		case ATKBD_CMD_SETALL_MBR:
+		case ATKBD_CMD_EX_ENABLE:
 		default:
-			output[out_len++] = I8042_RET_NAK;
-			CPRINTS("KB Unsupported i8042 data 0x%02x", data);
+			output[out_len++] = ATKBD_RET_RESEND;
+			CPRINTS("KB Unsupported AT keyboard command 0x%02x",
+				data);
 			break;
 		}
 	}
@@ -761,7 +770,7 @@ static int handle_keyboard_command(uint8_t command, uint8_t *output)
 		break;
 
 	case I8042_WRITE_CMD_BYTE:
-		data_port_state = STATE_WRITE_CMD_BYTE;
+		data_port_state = STATE_8042_WRITE_CMD_BYTE;
 		controller_ram_address = command - 0x60;
 		break;
 
@@ -787,7 +796,7 @@ static int handle_keyboard_command(uint8_t command, uint8_t *output)
 		break;
 
 	case I8042_WRITE_OUTPUT_PORT:
-		data_port_state = STATE_WRITE_OUTPUT_PORT;
+		data_port_state = STATE_8042_WRITE_OUTPUT_PORT;
 		break;
 
 	case I8042_RESET_SELF_TEST:
@@ -811,11 +820,11 @@ static int handle_keyboard_command(uint8_t command, uint8_t *output)
 		break;
 
 	case I8042_ECHO_MOUSE:
-		data_port_state = STATE_ECHO_MOUSE;
+		data_port_state = STATE_8042_ECHO_MOUSE;
 		break;
 
 	case I8042_SEND_TO_MOUSE:
-		data_port_state = STATE_SEND_TO_MOUSE;
+		data_port_state = STATE_8042_SEND_TO_MOUSE;
 		break;
 
 	case I8042_SYSTEM_RESET:
@@ -828,7 +837,7 @@ static int handle_keyboard_command(uint8_t command, uint8_t *output)
 			output[out_len++] = read_ctl_ram(command - 0x20);
 		} else if (command >= I8042_WRITE_CTL_RAM &&
 			   command <= I8042_WRITE_CTL_RAM_END) {
-			data_port_state = STATE_WRITE_CMD_BYTE;
+			data_port_state = STATE_8042_WRITE_CMD_BYTE;
 			controller_ram_address = command - 0x60;
 		} else if (command == I8042_DISABLE_A20) {
 			A20_status = 0;
@@ -846,7 +855,7 @@ static int handle_keyboard_command(uint8_t command, uint8_t *output)
 			reset_rate_and_delay();
 			keyboard_clear_buffer();
 			output[out_len++] = I8042_RET_NAK;
-			data_port_state = STATE_NORMAL;
+			data_port_state = STATE_ATKBD_CMD;
 		}
 		break;
 	}
@@ -875,7 +884,7 @@ static void i8042_handle_from_host(void)
 				ret_len = handle_keyboard_data(h.byte, output);
 		}
 
-		i8042_send_to_host(ret_len, output, chan);
+		i8042_send_to_host(ret_len, output, chan, 0);
 	}
 }
 
@@ -903,7 +912,7 @@ void keyboard_protocol_task(void *u)
 				if (keystroke_enabled)
 					i8042_send_to_host(typematic_len,
 							   typematic_scan_code,
-							   CHAN_KBD);
+							   CHAN_KBD, 1);
 				typematic_deadline.val =
 					t.val + typematic_inter_delay;
 				wait = typematic_inter_delay;
@@ -974,7 +983,7 @@ static void send_aux_data_to_host_deferred(void)
 	while (!queue_is_empty(&aux_to_host_queue)) {
 		queue_remove_unit(&aux_to_host_queue, &data);
 		if (aux_chan_enabled && IS_ENABLED(CONFIG_8042_AUX))
-			i8042_send_to_host(1, &data, CHAN_AUX);
+			i8042_send_to_host(1, &data, CHAN_AUX, 0);
 		else
 			CPRINTS("AUX Callback ignored");
 	}
@@ -1032,7 +1041,7 @@ test_mockable void keyboard_update_button(enum keyboard_button_type button,
 	if (keystroke_enabled) {
 		CPRINTS5("KB UPDATE BTN");
 
-		i8042_send_to_host(len, scan_code, CHAN_KBD);
+		i8042_send_to_host(len, scan_code, CHAN_KBD, 0);
 		task_wake(TASK_ID_KEYPROTO);
 	}
 }

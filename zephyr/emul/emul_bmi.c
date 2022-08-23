@@ -1019,6 +1019,31 @@ static int bmi_emul_handle_read(const struct emul *emul, int reg, uint8_t *buf,
 	return 0;
 }
 
+/**
+ * @brief Called at the end of I2C read message.
+ *
+ * @param target Pointer to emulator
+ * @param reg Address which is now accessed by read command (first byte of last
+ *            I2C write message)
+ * @param bytes Number of bytes responeded to the I2C read message
+ *
+ * @return 0 on success
+ * @return -EIO on error
+ */
+static int bmi_emul_finish_read(const struct emul *emul, int reg, int bytes)
+{
+	struct bmi_emul_data *data;
+	int ret;
+
+	data = emul->data;
+
+	if (data->type_data->finish_read == NULL) {
+		return 0;
+	}
+	ret = data->type_data->finish_read(data->reg, emul, reg, bytes);
+	return ret;
+}
+
 /* Device instantiation */
 
 /**
@@ -1034,13 +1059,9 @@ static int bmi_emul_handle_read(const struct emul *emul, int reg, uint8_t *buf,
  */
 static int bmi_emul_init(const struct emul *emul, const struct device *parent)
 {
-	const struct i2c_common_emul_cfg *cfg = emul->cfg;
 	struct bmi_emul_data *data = emul->data;
 
-	data->common.emul.addr = cfg->addr;
-	data->common.emul.target = emul;
 	data->common.i2c = parent;
-	data->common.cfg = cfg;
 	i2c_common_emul_init(&data->common);
 
 	switch (data->type) {
@@ -1075,7 +1096,7 @@ static int bmi_emul_init(const struct emul *emul, const struct device *parent)
 			.finish_write = NULL,				\
 			.start_read = NULL,				\
 			.read_byte = bmi_emul_handle_read,		\
-			.finish_read = NULL,				\
+			.finish_read = bmi_emul_finish_read,		\
 			.access_reg = NULL,				\
 		},							\
 	};         \
@@ -1088,21 +1109,6 @@ static int bmi_emul_init(const struct emul *emul, const struct device *parent)
 			    &bmi_emul_cfg_##n, &i2c_common_emul_api)
 
 DT_INST_FOREACH_STATUS_OKAY(BMI_EMUL)
-
-#define BMI_EMUL_CASE(n)         \
-	case DT_INST_DEP_ORD(n): \
-		return bmi_emul_data_##n.common.emul.target;
-
-/** Check description in emul_bmi.h */
-const struct emul *bmi_emul_get(int ord)
-{
-	switch (ord) {
-		DT_INST_FOREACH_STATUS_OKAY(BMI_EMUL_CASE)
-
-	default:
-		return NULL;
-	}
-}
 
 DT_INST_FOREACH_STATUS_OKAY(EMUL_STUB_DEVICE);
 

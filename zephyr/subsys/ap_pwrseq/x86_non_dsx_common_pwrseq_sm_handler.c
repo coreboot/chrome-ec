@@ -249,12 +249,6 @@ static int common_pwr_sm_run(int state)
 		break;
 
 	case SYS_POWER_STATE_G3S5:
-		if (!ap_power_is_ok_to_power_up()) {
-			LOG_INF("Power up inhibited!");
-			ap_power_force_shutdown(
-				AP_POWER_SHUTDOWN_BATTERY_INHIBIT);
-			return SYS_POWER_STATE_G3;
-		}
 		if ((power_get_signals() & PWRSEQ_G3S5_UP_SIGNAL) ==
 		    PWRSEQ_G3S5_UP_VALUE)
 			return SYS_POWER_STATE_S5;
@@ -410,6 +404,7 @@ static int common_pwr_sm_run(int state)
 		 * HC already set sleep suspend state.
 		 */
 		ap_power_sleep_notify_transition(AP_POWER_SLEEP_SUSPEND);
+		ap_power_ev_send_callbacks(AP_POWER_S0IX_SUSPEND);
 
 		/*
 		 * Enable idle task deep sleep. Allow the low power idle task
@@ -430,9 +425,11 @@ static int common_pwr_sm_run(int state)
 		 */
 		disable_sleep(SLEEP_MASK_AP_RUN);
 
+		ap_power_ev_send_callbacks(AP_POWER_S0IX_RESUME
 #if CONFIG_PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
-		ap_power_ev_send_callbacks(AP_POWER_RESUME_INIT);
+					   | AP_POWER_RESUME_INIT
 #endif
+		);
 
 		return SYS_POWER_STATE_S0;
 
