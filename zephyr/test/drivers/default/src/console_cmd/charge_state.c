@@ -173,10 +173,8 @@ static void *console_cmd_charge_state_setup(void)
 	static struct console_cmd_charge_state_fixture fixture;
 
 	/* Get references for the emulators */
-	fixture.tcpci_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(tcpci_emul)));
-	fixture.charger_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(isl923x_emul)));
+	fixture.tcpci_emul = EMUL_GET_USBC_BINDING(0, tcpc);
+	fixture.charger_emul = EMUL_GET_USBC_BINDING(0, chg);
 
 	/* Initialized the source to supply 5V and 3A */
 	tcpci_partner_init(&fixture.source_5v_3a, PD_REV20);
@@ -277,7 +275,8 @@ ZTEST_USER(console_cmd_charge_state, test_sustain)
 	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgstate sustain 30 50"),
 		   NULL);
 
-	charge_control_values = host_cmd_get_charge_control();
+	charge_control_values = host_cmd_charge_control(
+		CHARGE_CONTROL_NORMAL, EC_CHARGE_CONTROL_CMD_GET);
 	zassert_equal(charge_control_values.sustain_soc.lower, 30, NULL);
 	zassert_equal(charge_control_values.sustain_soc.upper, 50, NULL);
 }

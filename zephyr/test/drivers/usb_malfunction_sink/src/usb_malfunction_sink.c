@@ -10,35 +10,43 @@
 #include "battery_smart.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
-#include "emul/tcpc/emul_tcpci_partner_faulty_snk.h"
+#include "emul/tcpc/emul_tcpci_partner_faulty_ext.h"
 #include "emul/tcpc/emul_tcpci_partner_snk.h"
 #include "tcpm/tcpci.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+#include "test/drivers/stubs.h"
 #include "usb_pd.h"
+#include "usb_tc_sm.h"
+#include "timer.h"
+
+/* USB-C port used to connect port partner in this testsuite */
+#define TEST_PORT 0
+BUILD_ASSERT(TEST_PORT == USBC_PORT_C0);
 
 struct usb_malfunction_sink_fixture {
 	struct tcpci_partner_data sink;
-	struct tcpci_faulty_snk_emul_data faulty_snk_ext;
+	struct tcpci_faulty_ext_data faulty_snk_ext;
 	struct tcpci_snk_emul_data snk_ext;
 	const struct emul *tcpci_emul;
 	const struct emul *charger_emul;
-	struct tcpci_faulty_snk_action actions[2];
+	struct tcpci_faulty_ext_action actions[2];
+	enum usbc_port port;
 };
 
 static void *usb_malfunction_sink_setup(void)
 {
 	static struct usb_malfunction_sink_fixture test_fixture;
 
+	test_fixture.port = TEST_PORT;
+
 	/* Get references for the emulators */
-	test_fixture.tcpci_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(tcpci_emul)));
-	test_fixture.charger_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(isl923x_emul)));
+	test_fixture.tcpci_emul = EMUL_GET_USBC_BINDING(TEST_PORT, tcpc);
+	test_fixture.charger_emul = EMUL_GET_USBC_BINDING(TEST_PORT, chg);
 
 	/* Initialized the sink to request 5V and 3A */
 	tcpci_partner_init(&test_fixture.sink, PD_REV20);
-	test_fixture.sink.extensions = tcpci_faulty_snk_emul_init(
+	test_fixture.sink.extensions = tcpci_faulty_ext_init(
 		&test_fixture.faulty_snk_ext, &test_fixture.sink,
 		tcpci_snk_emul_init(&test_fixture.snk_ext, &test_fixture.sink,
 				    NULL));
@@ -61,7 +69,7 @@ static void usb_malfunction_sink_after(void *data)
 {
 	struct usb_malfunction_sink_fixture *fixture = data;
 
-	tcpci_faulty_snk_emul_clear_actions_list(&fixture->faulty_snk_ext);
+	tcpci_faulty_ext_clear_actions_list(&fixture->faulty_snk_ext);
 	disconnect_sink_from_port(fixture->tcpci_emul);
 	tcpci_partner_common_clear_logged_msgs(&fixture->sink);
 }
@@ -78,10 +86,10 @@ ZTEST_F(usb_malfunction_sink, test_fail_source_cap_and_pd_disable)
 	 * Fail on SourceCapabilities message to make TCPM change PD port state
 	 * to disabled
 	 */
-	fixture->actions[0].action_mask = TCPCI_FAULTY_SNK_FAIL_SRC_CAP;
-	fixture->actions[0].count = TCPCI_FAULTY_SNK_INFINITE_ACTION;
-	tcpci_faulty_snk_emul_append_action(&fixture->faulty_snk_ext,
-					    &fixture->actions[0]);
+	fixture->actions[0].action_mask = TCPCI_FAULTY_EXT_FAIL_SRC_CAP;
+	fixture->actions[0].count = TCPCI_FAULTY_EXT_INFINITE_ACTION;
+	tcpci_faulty_ext_append_action(&fixture->faulty_snk_ext,
+				       &fixture->actions[0]);
 
 	connect_sink_to_port(&fixture->sink, fixture->tcpci_emul,
 			     fixture->charger_emul);
@@ -103,10 +111,10 @@ ZTEST_F(usb_malfunction_sink, test_fail_source_cap_and_pd_connect)
 	 * Fail only few times on SourceCapabilities message to prevent entering
 	 * PE_SRC_Disabled state by TCPM
 	 */
-	fixture->actions[0].action_mask = TCPCI_FAULTY_SNK_FAIL_SRC_CAP;
+	fixture->actions[0].action_mask = TCPCI_FAULTY_EXT_FAIL_SRC_CAP;
 	fixture->actions[0].count = 3;
-	tcpci_faulty_snk_emul_append_action(&fixture->faulty_snk_ext,
-					    &fixture->actions[0]);
+	tcpci_faulty_ext_append_action(&fixture->faulty_snk_ext,
+				       &fixture->actions[0]);
 
 	connect_sink_to_port(&fixture->sink, fixture->tcpci_emul,
 			     fixture->charger_emul);
@@ -150,10 +158,10 @@ ZTEST_F(usb_malfunction_sink, test_ignore_source_cap)
 	bool expect_hard_reset = false;
 	int msg_cnt = 0;
 
-	fixture->actions[0].action_mask = TCPCI_FAULTY_SNK_IGNORE_SRC_CAP;
-	fixture->actions[0].count = TCPCI_FAULTY_SNK_INFINITE_ACTION;
-	tcpci_faulty_snk_emul_append_action(&fixture->faulty_snk_ext,
-					    &fixture->actions[0]);
+	fixture->actions[0].action_mask = TCPCI_FAULTY_EXT_IGNORE_SRC_CAP;
+	fixture->actions[0].count = TCPCI_FAULTY_EXT_INFINITE_ACTION;
+	tcpci_faulty_ext_append_action(&fixture->faulty_snk_ext,
+				       &fixture->actions[0]);
 
 	tcpci_partner_common_enable_pd_logging(&fixture->sink, true);
 	connect_sink_to_port(&fixture->sink, fixture->tcpci_emul,
@@ -194,6 +202,44 @@ ZTEST_F(usb_malfunction_sink, test_ignore_source_cap)
 	}
 }
 
+ZTEST_F(usb_malfunction_sink, test_hard_reset_disconnect)
+{
+	struct ec_response_typec_status typec_status;
+	int try_count;
+
+	/*
+	 * Test if disconnection during the power sequence doesn't have impact
+	 * on next tries
+	 */
+	for (try_count = 1; try_count < 5; try_count++) {
+		/* Connect port partner and check Vconn state */
+		connect_sink_to_port(&fixture->sink, fixture->tcpci_emul,
+				     fixture->charger_emul);
+		typec_status = host_cmd_typec_status(fixture->port);
+		zassert_equal(typec_status.vconn_role, PD_ROLE_VCONN_SRC,
+			      "Vconn should be present after connection (%d)",
+			      try_count);
+
+		/* Send hard reset to trigger power sequence on source side */
+		tcpci_partner_common_send_hard_reset(&fixture->sink);
+
+		/*
+		 * Wait for start of power sequence after hard reset and half
+		 * the time of source recovery (first step of power sequence
+		 * when vconn should be disabled)
+		 */
+		k_sleep(K_USEC(PD_T_PS_HARD_RESET + PD_T_SRC_RECOVER / 2));
+
+		typec_status = host_cmd_typec_status(fixture->port);
+		zassert_equal(typec_status.vconn_role, PD_ROLE_VCONN_OFF,
+			      "Vconn should be disabled at power sequence (%d)",
+			      try_count);
+
+		/* Disconnect partner at the middle of power sequence */
+		disconnect_sink_from_port(fixture->tcpci_emul);
+	}
+}
+
 ZTEST_F(usb_malfunction_sink, test_ignore_source_cap_and_pd_disable)
 {
 	struct ec_response_typec_status typec_status;
@@ -202,14 +248,14 @@ ZTEST_F(usb_malfunction_sink, test_ignore_source_cap_and_pd_disable)
 	 * Ignore first SourceCapabilities message and discard others by sending
 	 * different messages. This will lead to PD disable.
 	 */
-	fixture->actions[0].action_mask = TCPCI_FAULTY_SNK_IGNORE_SRC_CAP;
+	fixture->actions[0].action_mask = TCPCI_FAULTY_EXT_IGNORE_SRC_CAP;
 	fixture->actions[0].count = 1;
-	tcpci_faulty_snk_emul_append_action(&fixture->faulty_snk_ext,
-					    &fixture->actions[0]);
-	fixture->actions[1].action_mask = TCPCI_FAULTY_SNK_DISCARD_SRC_CAP;
-	fixture->actions[1].count = TCPCI_FAULTY_SNK_INFINITE_ACTION;
-	tcpci_faulty_snk_emul_append_action(&fixture->faulty_snk_ext,
-					    &fixture->actions[1]);
+	tcpci_faulty_ext_append_action(&fixture->faulty_snk_ext,
+				       &fixture->actions[0]);
+	fixture->actions[1].action_mask = TCPCI_FAULTY_EXT_DISCARD_SRC_CAP;
+	fixture->actions[1].count = TCPCI_FAULTY_EXT_INFINITE_ACTION;
+	tcpci_faulty_ext_append_action(&fixture->faulty_snk_ext,
+				       &fixture->actions[1]);
 
 	connect_sink_to_port(&fixture->sink, fixture->tcpci_emul,
 			     fixture->charger_emul);

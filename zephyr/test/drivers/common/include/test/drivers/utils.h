@@ -17,6 +17,36 @@
 #include "extpower.h"
 #include "host_command.h"
 #include "power.h"
+#include "usbc/utils.h"
+
+/**
+ * @brief Helper macro for EMUL_GET_USBC_BINDING. If @p usbc_id has the same
+ *        port number as @p port, then emul_get_binding for @p chip phandle is
+ *        returned.
+ *
+ * @param usbc_id Named usbc port ID
+ * @param port Port number to match with named usbc port
+ * @param chip Name of chip phandle property
+ */
+#define EMUL_GET_USBC_BINDING_IF_PORT_MATCH(usbc_id, port, chip)             \
+	COND_CODE_1(IS_EQ(USBC_PORT_NEW(usbc_id), port),                     \
+		    (emul_get_binding(DT_LABEL(DT_PHANDLE(usbc_id, chip)))), \
+		    ())
+
+/**
+ * @brief Get struct emul using emul_get_binding from phandle @p chip property
+ *        of USBC @p port
+ *
+ * @param port Named usbc port number. The value has to be integer literal.
+ * @param chip Name of chip property that is phandle to required emulator.
+ */
+#define EMUL_GET_USBC_BINDING(port, chip)                                 \
+	DT_FOREACH_STATUS_OKAY_VARGS(named_usbc_port,                     \
+				     EMUL_GET_USBC_BINDING_IF_PORT_MATCH, \
+				     port, chip)
+
+/** @brief Set emulated battery level. Call all necessary hooks. */
+void test_set_battery_level(int percentage);
 
 /** @brief Set chipset to S0 state. Call all necessary hooks. */
 void test_set_chipset_to_s0(void);
@@ -51,6 +81,28 @@ void test_set_chipset_to_g3(void);
  * @param msg Optional message to print if the assumption fails
  */
 #define zassume_unreachable(msg, ...) zassert_unreachable(msg, ##__VA_ARGS__)
+
+/**
+ * Run an ACPI read to the specified address.
+ *
+ * This function assumes a successful ACPI read process and will make a
+ * call to the zassume_* API. A failure here will skip the calling test.
+ *
+ * @param acpi_addr Address to query
+ * @return Byte read
+ */
+uint8_t acpi_read(uint8_t acpi_addr);
+
+/**
+ * Run an ACPI write to the specified address.
+ *
+ * This function assumes a successful ACPI write process and will make a
+ * call to the zassume_* API. A failure here will skip the calling test.
+ *
+ * @param acpi_addr Address to write
+ * @param write_byte Byte to write to address
+ */
+void acpi_write(uint8_t acpi_addr, uint8_t write_byte);
 
 /**
  * Run the host command to get the charge state for a given charger number.
@@ -133,16 +185,40 @@ host_cmd_usb_pd_control(int port, enum usb_pd_control_swap swap)
 }
 
 /**
- * Run the host command to get the charge state.
+ * Run the host command to suspend/resume PD ports
+ *
+ * This function assumes a successful host command processing and will make a
+ * call to the zassume_* API. A failure here will skip the calling test.
+ *
+ * @param port The USB port to operate on
+ * @param cmd The sub-command to run
+ */
+static inline void host_cmd_pd_control(int port, enum ec_pd_control_cmd cmd)
+{
+	struct ec_params_pd_control params = { .chip = port, .subcmd = cmd };
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_PD_CONTROL, 0, params);
+
+	zassume_ok(host_command_process(&args),
+		   "Failed to process pd_control for port %d, cmd %d", port,
+		   cmd);
+}
+
+/**
+ * Run the host command to control or query the charge state
  *
  * @return The result of the query.
  */
 static inline struct ec_response_charge_control
-host_cmd_get_charge_control(void)
+host_cmd_charge_control(enum ec_charge_control_mode mode,
+			enum ec_charge_control_cmd cmd)
 {
-	struct ec_params_charge_control params = {
-		.cmd = EC_CHARGE_CONTROL_CMD_GET
-	};
+	struct ec_params_charge_control params = { .cmd = cmd,
+						   .mode = mode,
+						   .sustain_soc = {
+							   .lower = -1,
+							   .upper = -1,
+						   } };
 	struct ec_response_charge_control response;
 	struct host_cmd_handler_args args =
 		BUILD_HOST_COMMAND(EC_CMD_CHARGE_CONTROL, 2, response, params);

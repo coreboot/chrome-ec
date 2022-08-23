@@ -17,9 +17,8 @@
 #include "test/usb_pe.h"
 #include "usb_pd.h"
 
-#define TEST_USB_PORT USBC_PORT_C0
-
-#define TCPCI_EMUL_LABEL DT_NODELABEL(tcpci_emul)
+#define TEST_USB_PORT 0
+BUILD_ASSERT(TEST_USB_PORT == USBC_PORT_C0);
 
 #define TEST_ADDED_PDO PDO_FIXED(10000, 3000, PDO_FIXED_UNCONSTRAINED)
 
@@ -75,10 +74,8 @@ static void *usb_pd_ctrl_msg_setup_emul(void)
 	static struct usb_pd_ctrl_msg_test_fixture fixture;
 
 	/* Get references for the emulators */
-	fixture.tcpci_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(tcpci_emul)));
-	fixture.charger_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(isl923x_emul)));
+	fixture.tcpci_emul = EMUL_GET_USBC_BINDING(TEST_USB_PORT, tcpc);
+	fixture.charger_emul = EMUL_GET_USBC_BINDING(TEST_USB_PORT, chg);
 
 	return &fixture;
 }

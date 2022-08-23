@@ -31,10 +31,8 @@ static void *usb_attach_5v_3a_pd_source_setup(void)
 	static struct usb_attach_5v_3a_pd_source_rev3_fixture test_fixture;
 
 	/* Get references for the emulators */
-	test_fixture.tcpci_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(tcpci_emul)));
-	test_fixture.charger_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(isl923x_emul)));
+	test_fixture.tcpci_emul = EMUL_GET_USBC_BINDING(0, tcpc);
+	test_fixture.charger_emul = EMUL_GET_USBC_BINDING(0, chg);
 
 	/* Initialized the charger to supply 5V and 3A */
 	tcpci_partner_init(&test_fixture.source_5v_3a, PD_REV30);
@@ -353,4 +351,8 @@ ZTEST_F(usb_attach_5v_3a_pd_source_rev3, verify_chipset_on_pd_button_behavior)
 	zassert_true(fixture->src_ext.alert_received, NULL);
 	zassert_true(fixture->src_ext.status_received, NULL);
 	zassert_true(chipset_in_state(CHIPSET_STATE_ANY_OFF), NULL);
+
+	/* Wake device to setup for subsequent tests */
+	chipset_power_on();
+	k_sleep(K_SECONDS(10));
 }

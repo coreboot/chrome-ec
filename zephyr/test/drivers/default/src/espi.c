@@ -3,10 +3,12 @@
  * found in the LICENSE file.
  */
 
+#include <string.h>
 #include <zephyr/zephyr.h>
 #include <zephyr/ztest.h>
 
 #include "ec_commands.h"
+#include "gpio.h"
 #include "host_command.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
@@ -89,7 +91,6 @@ ZTEST_USER(espi, test_host_command_gpio_get_v0)
 	struct host_cmd_handler_args args =
 		BUILD_HOST_COMMAND(EC_CMD_GPIO_GET, 0, response, p);
 
-	/* Test true */
 	set_ac_enabled(true);
 
 	zassert_ok(host_command_process(&args), NULL);
@@ -97,7 +98,6 @@ ZTEST_USER(espi, test_host_command_gpio_get_v0)
 	zassert_equal(args.response_size, sizeof(response), NULL);
 	zassert_true(response.val, NULL);
 
-	/* Test false */
 	set_ac_enabled(false);
 
 	zassert_ok(host_command_process(&args), NULL);
@@ -120,7 +120,6 @@ ZTEST_USER(espi, test_host_command_gpio_get_v1_get_by_name)
 	struct host_cmd_handler_args args =
 		BUILD_HOST_COMMAND(EC_CMD_GPIO_GET, 1, response, p);
 
-	/* Test true */
 	set_ac_enabled(true);
 
 	zassert_ok(host_command_process(&args), NULL);
@@ -129,7 +128,6 @@ ZTEST_USER(espi, test_host_command_gpio_get_v1_get_by_name)
 		      NULL);
 	zassert_true(response.get_info.val, NULL);
 
-	/* Test false */
 	set_ac_enabled(false);
 
 	zassert_ok(host_command_process(&args), NULL);
@@ -137,6 +135,154 @@ ZTEST_USER(espi, test_host_command_gpio_get_v1_get_by_name)
 	zassert_equal(args.response_size, sizeof(response.get_value_by_name),
 		      NULL);
 	zassert_false(response.get_info.val, NULL);
+}
+
+ZTEST_USER(espi, test_host_command_gpio_get_v1_get_count)
+{
+	struct ec_params_gpio_get_v1 p = {
+		.subcmd = EC_GPIO_GET_COUNT,
+	};
+	struct ec_response_gpio_get_v1 response;
+
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND(EC_CMD_GPIO_GET, 1, response, p);
+
+	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(args.result, NULL);
+	zassert_equal(args.response_size, sizeof(response.get_count), NULL);
+	zassert_equal(response.get_count.val, GPIO_COUNT, NULL);
+}
+
+ZTEST_USER(espi, test_host_command_gpio_get_v1_get_info)
+{
+	const enum gpio_signal signal = GPIO_SIGNAL(DT_NODELABEL(gpio_acok_od));
+	struct ec_params_gpio_get_v1 p = {
+		.subcmd = EC_GPIO_GET_INFO,
+		.get_info = {
+			.index = signal,
+		},
+	};
+	struct ec_response_gpio_get_v1 response;
+
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND(EC_CMD_GPIO_GET, 1, response, p);
+
+	set_ac_enabled(true);
+
+	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(args.result, NULL);
+	zassert_equal(args.response_size, sizeof(response), NULL);
+	zassert_ok(strcmp(response.get_info.name, AC_OK_OD_GPIO_NAME), NULL);
+	zassert_true(response.get_info.val, NULL);
+
+	set_ac_enabled(false);
+
+	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(args.result, NULL);
+	zassert_equal(args.response_size, sizeof(response), NULL);
+	zassert_ok(strcmp(response.get_info.name, AC_OK_OD_GPIO_NAME), NULL);
+	zassert_false(response.get_info.val, NULL);
+}
+
+ZTEST_USER(espi, test_host_command_gpio_set)
+{
+	struct nothing {
+		int place_holder;
+	};
+	const struct gpio_dt_spec *gp = GPIO_DT_FROM_NODELABEL(gpio_test);
+	struct ec_params_gpio_set p = {
+		.name = "test",
+		.val = 0,
+	};
+
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_GPIO_SET, 0, p);
+
+	/* Force value to 1 to see change */
+	zassume_ok(gpio_pin_set_dt(gp, 1), NULL);
+
+	zassert_ok(host_command_process(&args), NULL);
+	zassert_equal(gpio_pin_get_dt(gp), p.val, NULL);
+
+	p.val = 1;
+
+	zassert_ok(host_command_process(&args), NULL);
+	zassert_equal(gpio_pin_get_dt(gp), p.val, NULL);
+}
+
+ZTEST(espi, test_hc_gpio_get_v0_invalid_name)
+{
+	struct ec_response_gpio_get response;
+	struct ec_params_gpio_get params = { .name = "INVALID_GPIO_NAME" };
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND(EC_CMD_GPIO_GET, 0, response, params);
+
+	zassert_equal(EC_RES_ERROR, host_command_process(&args), NULL);
+}
+
+ZTEST(espi, test_hc_gpio_get_v1_get_by_name_invalid_name)
+{
+	struct ec_response_gpio_get_v1 response;
+	struct ec_params_gpio_get_v1 params = {
+		.subcmd = EC_GPIO_GET_BY_NAME,
+		.get_value_by_name.name = "INVALID_GPIO_NAME",
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND(EC_CMD_GPIO_GET, 1, response, params);
+
+	zassert_equal(EC_RES_ERROR, host_command_process(&args), NULL);
+}
+
+ZTEST(espi, test_hc_gpio_get_v1_get_info_invalid_index)
+{
+	struct ec_response_gpio_get_v1 response;
+	struct ec_params_gpio_get_v1 params = {
+		.subcmd = EC_GPIO_GET_INFO,
+		.get_info.index = GPIO_COUNT,
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND(EC_CMD_GPIO_GET, 1, response, params);
+
+	zassert_equal(EC_RES_ERROR, host_command_process(&args), NULL);
+}
+
+ZTEST(espi, test_hc_gpio_get_v1_invalid_subcmd)
+{
+	struct ec_response_gpio_get_v1 response;
+	struct ec_params_gpio_get_v1 params = {
+		.subcmd = EC_CMD_GPIO_GET,
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND(EC_CMD_GPIO_GET, 1, response, params);
+
+	zassert_equal(EC_RES_INVALID_PARAM, host_command_process(&args), NULL);
+}
+
+/* EC_CMD_GET_FEATURES */
+ZTEST_USER(espi, test_host_command_ec_cmd_get_features)
+{
+	struct ec_response_get_features response;
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND_RESPONSE(EC_CMD_GET_FEATURES, 0, response);
+
+	int rv = host_command_process(&args);
+
+	zassert_equal(rv, EC_RES_SUCCESS, "Expected %d, but got %d",
+		      EC_RES_SUCCESS, rv);
+
+	/* Check features returned */
+	uint32_t feature_mask;
+
+	feature_mask = EC_FEATURE_MASK_0(EC_FEATURE_FLASH);
+	feature_mask |= EC_FEATURE_MASK_0(EC_FEATURE_MOTION_SENSE);
+	feature_mask |= EC_FEATURE_MASK_0(EC_FEATURE_KEYB);
+	zassert_true((response.flags[0] & feature_mask),
+		     "Known features were not returned.");
+	feature_mask = EC_FEATURE_MASK_1(EC_FEATURE_UNIFIED_WAKE_MASKS);
+	feature_mask |= EC_FEATURE_MASK_1(EC_FEATURE_HOST_EVENT64);
+	feature_mask |= EC_FEATURE_MASK_1(EC_FEATURE_EXEC_IN_RAM);
+	zassert_true((response.flags[1] & feature_mask),
+		     "Known features were not returned.");
 }
 
 ZTEST_SUITE(espi, drivers_predicate_post_main, NULL, NULL, NULL, NULL);
