@@ -20,7 +20,8 @@
 #include "test/drivers/utils.h"
 #include "test/drivers/test_state.h"
 
-#define TEST_PORT USBC_PORT_C0
+#define TEST_PORT 0
+BUILD_ASSERT(TEST_PORT == USBC_PORT_C0);
 
 struct usbc_alt_mode_fixture {
 	const struct emul *tcpci_emul;
@@ -147,10 +148,8 @@ static void *usbc_alt_mode_setup(void)
 	partner->extensions = tcpci_snk_emul_init(snk_ext, partner, NULL);
 
 	/* Get references for the emulators */
-	fixture.tcpci_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(tcpci_emul)));
-	fixture.charger_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(isl923x_emul)));
+	fixture.tcpci_emul = EMUL_GET_USBC_BINDING(TEST_PORT, tcpc);
+	fixture.charger_emul = EMUL_GET_USBC_BINDING(TEST_PORT, chg);
 
 	add_discovery_responses(partner);
 	add_displayport_mode_responses(partner);
@@ -171,13 +170,11 @@ static void *usbc_alt_mode_dp_unsupported_setup(void)
 	partner->extensions = tcpci_snk_emul_init(snk_ext, partner, NULL);
 
 	/* Get references for the emulators */
-	fixture.tcpci_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(tcpci_emul)));
+	fixture.tcpci_emul = EMUL_GET_USBC_BINDING(TEST_PORT, tcpc);
 	/* The configured TCPCI rev must match the emulator's supported rev. */
 	tcpc_config[TEST_PORT].flags |= TCPC_FLAGS_TCPCI_REV2_0;
 	tcpci_emul_set_rev(fixture.tcpci_emul, TCPCI_EMUL_REV2_0_VER1_1);
-	fixture.charger_emul =
-		emul_get_binding(DT_LABEL(DT_NODELABEL(isl923x_emul)));
+	fixture.charger_emul = EMUL_GET_USBC_BINDING(TEST_PORT, chg);
 
 	/*
 	 * Respond to discovery REQs to indicate DisplayPort support, but do not
@@ -247,6 +244,7 @@ ZTEST_F(usbc_alt_mode, verify_displayport_mode_entry)
 	k_sleep(K_SECONDS(1));
 
 	/* Verify host command when VDOs are present. */
+	struct ec_response_typec_status status;
 	struct ec_params_usb_pd_get_mode_response response;
 	int response_size;
 
@@ -261,6 +259,38 @@ ZTEST_F(usbc_alt_mode, verify_displayport_mode_entry)
 	/* DPM configures the partner on DP mode entry */
 	/* Verify port partner thinks its configured for DisplayPort */
 	zassert_true(fixture->partner.displayport_configured, NULL);
+	/* Verify we also set up DP on our mux */
+	status = host_cmd_typec_status(TEST_PORT);
+	zassert_equal((status.mux_state & USB_PD_MUX_DP_ENABLED),
+		      USB_PD_MUX_DP_ENABLED, "Failed to see DP set in mux");
+
+	/*
+	 * DP alt mode partner sends HPD through VDM:Attention, which uses the
+	 * same format as the DP Status data
+	 */
+	uint32_t vdm_attention_data[2];
+
+	vdm_attention_data[0] =
+		VDO(USB_SID_DISPLAYPORT, 1,
+		    VDO_OPOS(1) | VDO_CMDT(CMDT_INIT) | CMD_ATTENTION);
+	vdm_attention_data[1] = VDO_DP_STATUS(1, /* IRQ_HPD */
+					      true, /* HPD_HI|LOW - Changed*/
+					      0, /* request exit DP */
+					      0, /* request exit USB */
+					      0, /* MF pref */
+					      true, /* DP Enabled */
+					      0, /* power low e.g. normal */
+					      0x2 /* Connected as Sink */);
+	tcpci_partner_send_data_msg(&fixture->partner, PD_DATA_VENDOR_DEF,
+				    vdm_attention_data, 2, 0);
+
+	k_sleep(K_SECONDS(1));
+	/* Verify the board's HPD notification triggered */
+	status = host_cmd_typec_status(TEST_PORT);
+	zassert_equal((status.mux_state & USB_PD_MUX_HPD_LVL),
+		      USB_PD_MUX_HPD_LVL, "Failed to set HPD level in mux");
+	zassert_equal((status.mux_state & USB_PD_MUX_HPD_IRQ),
+		      USB_PD_MUX_HPD_IRQ, "Failed to set HPD IRQin mux");
 }
 
 ZTEST_F(usbc_alt_mode, verify_displayport_mode_reentry)

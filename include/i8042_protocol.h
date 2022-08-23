@@ -2,39 +2,17 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
- * i8042 keyboard protocol constants
+ * i8042 keyboard protocol constants.
+ *
+ * See the IBM PS/2 Hardware Interface Technical Reference Manual
+ *
+ * https://archive.org/details/ps-2-hardware-interface-technical-reference-ocr/PS2HardwareInterfaceTechnicalReference-OCR/page/n371/mode/1up
  */
 
 #ifndef __CROS_EC_I8042_PROTOCOL_H
 #define __CROS_EC_I8042_PROTOCOL_H
 
 /* Some commands appear more than once.  Why? */
-
-/* port 0x60 */
-#define I8042_CMD_MOUSE_1_1 0xe6
-#define I8042_CMD_MOUSE_2_1 0xe7
-#define I8042_CMD_MOUSE_RES 0xe8
-#define I8042_CMD_OK_GETID 0xe8
-#define I8042_CMD_GET_MOUSE 0xe9
-#define I8042_CMD_EX_ENABLE 0xea
-#define I8042_CMD_EX_SETLEDS 0xeb
-#define I8042_CMD_SETLEDS 0xed
-#define I8042_CMD_DIAG_ECHO 0xee
-#define I8042_CMD_GSCANSET 0xf0
-#define I8042_CMD_SSCANSET 0xf0
-#define I8042_CMD_GETID 0xf2
-#define I8042_CMD_SETREP 0xf3
-#define I8042_CMD_ENABLE 0xf4
-#define I8042_CMD_RESET_DIS 0xf5
-#define I8042_CMD_RESET_DEF 0xf6
-#define I8042_CMD_ALL_TYPEM 0xf7
-#define I8042_CMD_SETALL_MB 0xf8
-#define I8042_CMD_SETALL_MBR 0xfa
-#define I8042_CMD_SET_A_KEY_T 0xfb
-#define I8042_CMD_SET_A_KEY_MR 0xfc
-#define I8042_CMD_SET_A_KEY_M 0xfd
-#define I8042_CMD_RESET 0xff
-#define I8042_CMD_RESEND 0xfe
 
 /* port 0x64 */
 #define I8042_READ_CMD_BYTE 0x20
@@ -51,6 +29,11 @@
 #define I8042_DIS_MOUSE 0xa7
 #define I8042_ENA_MOUSE 0xa8
 #define I8042_TEST_MOUSE 0xa9
+#define I8042_TEST_MOUSE_NO_ERROR 0x00
+#define I8042_TEST_MOUSE_CLK_STUCK_LOW 0x01
+#define I8042_TEST_MOUSE_CLK_STUCK_HIGH 0x02
+#define I8042_TEST_MOUSE_DATA_STUCK_LOW 0x03
+#define I8042_TEST_MOUSE_DATA_STUCK_HIGH 0x04
 #define I8042_RESET_SELF_TEST 0xaa
 #define I8042_TEST_KB_PORT 0xab
 #define I8042_DIS_KB 0xad
@@ -66,17 +49,7 @@
 #define I8042_PULSE_END 0xff
 
 /* port 0x60 return value */
-#define I8042_RET_EMUL0 0xe0
-#define I8042_RET_EMUL1 0xe1
-#define I8042_RET_ECHO 0xee
-#define I8042_RET_RELEASE 0xf0
-#define I8042_RET_HANJA 0xf1
-#define I8042_RET_HANGEUL 0xf2
-#define I8042_RET_ACK 0xfa
-#define I8042_RET_TEST_FAIL 0xfc
-#define I8042_RET_INTERNAL_FAIL 0xfd
 #define I8042_RET_NAK 0xfe
-#define I8042_RET_ERR 0xff
 
 /* port 64 - command byte bits */
 #define I8042_XLATE BIT(6)

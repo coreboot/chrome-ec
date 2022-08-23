@@ -6,6 +6,9 @@ target_sources(app PRIVATE
     src/bmi160.c
     src/bmi260.c
     src/charge_manager.c
+    src/console.c
+    src/console_cmd/adc.c
+    src/console_cmd/battery.c
     src/console_cmd/charge_manager.c
     src/console_cmd/charge_state.c
     src/console_cmd/charger.c
@@ -16,11 +19,17 @@ target_sources(app PRIVATE
     src/console_cmd/accelrange.c
     src/console_cmd/accelread.c
     src/console_cmd/accelres.c
+    src/console_cmd/gpio.c
+    src/console_cmd/md.c
+    src/console_cmd/panic_output.c
+    src/console_cmd/tcpci_dump.c
     src/console_cmd/usb_pd_console.c
+    src/console_cmd/waitms.c
     src/cros_cbi.c
     src/espi.c
     src/gpio.c
     src/host_cmd/host_event_commands.c
+    src/host_cmd/get_pd_port_caps.c
     src/host_cmd/motion_sense.c
     src/integration/usbc/usb.c
     src/integration/usbc/usb_20v_3a_pd_charger.c
