@@ -37,9 +37,6 @@
 #define USB_PORT_COUNT 1
 #define CONFIG_USB_PORT_POWER_DUMB
 
-/* No side volume button */
-#undef CONFIG_VOLUME_BUTTONS
-
 /* Sensors */
 #define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 
@@ -74,6 +71,8 @@
 #define DA9313_PVC_CTRL_PVC_MODE BIT(1)
 #define DA9313_PVC_CTRL_PVC_EN BIT(0)
 
+/* Button Config*/
+#define CONFIG_BUTTONS_RUNTIME_CONFIG
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
@@ -100,6 +99,7 @@ enum battery_type {
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);
 int board_is_clamshell(void);
+int board_has_side_volume_buttons(void);
 
 #endif /* !defined(__ASSEMBLER__) */
 
