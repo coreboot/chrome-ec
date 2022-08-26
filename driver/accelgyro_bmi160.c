@@ -372,6 +372,13 @@ static int list_activities(const struct motion_sensor_t *s,
 }
 #endif
 
+#ifdef CONFIG_BODY_DETECTION
+static int get_rms_noise(const struct motion_sensor_t *s)
+{
+	return bmi_get_rms_noise(s, BMI160_ACCEL_RMS_NOISE_100HZ);
+}
+#endif
+
 static __maybe_unused int config_interrupt(const struct motion_sensor_t *s)
 {
 	int ret, tmp;
@@ -739,7 +746,7 @@ const struct accelgyro_drv bmi160_drv = {
 	.list_activities = list_activities,
 #endif
 #ifdef CONFIG_BODY_DETECTION
-	.get_rms_noise = bmi_get_rms_noise,
+	.get_rms_noise = get_rms_noise,
 #endif
 };
 
