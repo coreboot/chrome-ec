@@ -7,6 +7,7 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "builtin/assert.h"
 #include "builtin/endian.h"
 #include "charger.h"
 #include "charge_manager.h"
@@ -20,6 +21,7 @@
 #include "usb_charge.h"
 #include "usb_pd.h"
 #include "util.h"
+#include "temp_sensor/temp_sensor.h"
 
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
@@ -37,11 +39,10 @@
  * RT9490 can't measure the 50mA charge current precisely due to insufficient
  * ADC resolution, and faulty leads it into battery supply mode.
  * the final number would be expected between 100mA ~ 200mA.
- * In reality, we don't actually need that small charging current.
- * Tentacool's battery pack requests 256mA as the minimum current,
- * so that can be a SW workaround.
+ * Vendor has done the FT correlation and will revise the datasheet's
+ * CHARGE_I_MIN value from 50mA to 150mA as the final solution.
  */
-#define CHARGE_I_MIN 256
+#define CHARGE_I_MIN 150
 #define CHARGE_I_STEP 10
 #define INPUT_I_MAX 3300
 #define INPUT_I_MIN 100
@@ -312,11 +313,6 @@ static int rt9490_init_setting(int chgnum)
 	/* Disable AUTO_AICR / AUTO_MIVR */
 	RETURN_ERROR(rt9490_clr_bit(chgnum, RT9490_REG_ADD_CTRL0,
 				    RT9490_AUTO_AICR | RT9490_AUTO_MIVR));
-	/* Disable charge timer */
-	RETURN_ERROR(rt9490_clr_bit(chgnum, RT9490_REG_SAFETY_TMR_CTRL,
-				    RT9490_EN_TRICHG_TMR |
-					    RT9490_EN_PRECHG_TMR |
-					    RT9490_EN_FASTCHG_TMR));
 	RETURN_ERROR(rt9490_set_mivr(chgnum, default_init_setting.mivr));
 	RETURN_ERROR(rt9490_set_ieoc(chgnum, default_init_setting.eoc_current));
 	RETURN_ERROR(rt9490_set_iprec(chgnum, batt_info->precharge_current));
@@ -340,6 +336,10 @@ static int rt9490_init_setting(int chgnum)
 				    RT9490_CHG_IRQ_MASK4_ALL));
 	RETURN_ERROR(rt9490_set_bit(chgnum, RT9490_REG_CHG_IRQ_MASK5,
 				    RT9490_CHG_IRQ_MASK5_ALL));
+	/* Reduce SW freq from 1.5MHz to 1MHz
+	 * for 10% higher current rating b/215294785
+	 */
+	RETURN_ERROR(rt9490_enable_pwm_1mhz(CHARGER_SOLO, true));
 
 	return EC_SUCCESS;
 }
@@ -736,3 +736,65 @@ struct bc12_config bc12_ports[CHARGE_PORT_COUNT] = {
 	},
 };
 #endif /* CONFIG_BC12_SINGLE_DRIVER */
+
+__overridable struct charger_thermistor_data_pair charger_thermistor_data[] = {
+	{ 731, 0 },   { 708, 5 },  { 682, 10 }, { 653, 15 }, { 622, 20 },
+	{ 589, 25 },  { 554, 30 }, { 519, 35 }, { 483, 40 }, { 446, 45 },
+	{ 411, 50 },  { 376, 55 }, { 343, 60 }, { 312, 65 }, { 284, 70 },
+	{ 257, 75 },  { 232, 80 }, { 209, 85 }, { 188, 90 }, { 169, 95 },
+	{ 152, 100 },
+};
+
+__overridable struct charger_thermistor_info charger_thermistor_info = {
+	.num_pairs = ARRAY_SIZE(charger_thermistor_data),
+	.data = charger_thermistor_data,
+};
+
+int thermistor_linear(uint16_t mv, const struct charger_thermistor_info *info)
+{
+	const struct charger_thermistor_data_pair *data = info->data;
+	int v_high = 0, v_low = 0, t_low, t_high, num_steps;
+	int head, tail, mid = 0;
+	/* We need at least two points to form a line. */
+	ASSERT(info->num_pairs >= 2);
+
+	/*
+	 * If input value is out of bounds return the lowest or highest
+	 * value in the data sets provided.
+	 */
+	if (mv > data[0].mv)
+		return data[0].temp;
+	else if (mv < data[info->num_pairs - 1].mv)
+		return data[info->num_pairs - 1].temp;
+
+	head = 0;
+	tail = info->num_pairs - 1;
+	while (head != tail) {
+		mid = (head + tail) / 2;
+		v_high = data[mid].mv;
+		v_low = data[mid + 1].mv;
+		if ((mv <= v_high) && (mv >= v_low))
+			break;
+		else if (mv > v_high)
+			tail = mid;
+		else if (mv < v_low)
+			head = mid + 1;
+	}
+
+	t_low = data[mid].temp;
+	t_high = data[mid + 1].temp;
+	num_steps = ((v_high - mv) * (t_high - t_low)) / (v_high - v_low);
+	return t_low + num_steps;
+}
+
+int rt9490_get_thermistor_val(int idx, int *temp_ptr)
+{
+	uint16_t mv;
+
+	if (idx != 0)
+		return EC_ERROR_PARAM1;
+	rt9490_read16(idx, RT9490_REG_TS_ADC, &mv);
+	*temp_ptr = thermistor_linear(mv, &charger_thermistor_info);
+	*temp_ptr = C_TO_K(*temp_ptr);
+	return EC_SUCCESS;
+}

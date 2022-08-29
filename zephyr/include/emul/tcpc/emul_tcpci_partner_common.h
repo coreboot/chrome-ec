@@ -64,9 +64,13 @@ struct tcpci_partner_data {
 	/** Mutex for to_send queue */
 	struct k_mutex to_send_mutex;
 	/** Next SOP message id */
-	int msg_id;
+	int sop_msg_id;
+	/** Next SOP' message id */
+	int sop_prime_msg_id;
 	/** Last received message id */
-	int recv_msg_id;
+	int sop_recv_msg_id;
+	/** Last received SOP' message id */
+	int sop_prime_recv_msg_id;
 	/** Power role (used in message header) */
 	enum pd_power_role power_role;
 	/** Data role (used in message header) */
@@ -131,10 +135,12 @@ struct tcpci_partner_data {
 	enum tcpci_emul_tx_status *received_msg_status;
 	/** Whether port partner is configured in DisplayPort mode */
 	bool displayport_configured;
-	/** The number of DisplayPort Enter Mode REQs received since connection
+	/** The number of Enter Mode REQs received since connection
 	 *  or the last Hard Reset, whichever was more recent.
 	 */
-	atomic_t displayport_enter_attempts;
+	atomic_t mode_enter_attempts;
+	/* SVID of entered mode (0 if no mode is entered) */
+	uint16_t entered_svid;
 
 	/* VDMs with which the partner responds to discovery REQs. The VDM
 	 * buffers include the VDM header, and the VDO counts include 1 for the
@@ -147,9 +153,9 @@ struct tcpci_partner_data {
 	int svids_vdos;
 	uint32_t modes_vdm[VDO_MAX_SIZE];
 	int modes_vdos;
-	/* VDMs sent when responding to DisplayPort mode entry command */
-	uint32_t dp_enter_mode_vdm[VDO_MAX_SIZE];
-	int dp_enter_mode_vdos;
+	/* VDMs sent when responding to a mode entry command */
+	uint32_t enter_mode_vdm[VDO_MAX_SIZE];
+	int enter_mode_vdos;
 	/* VDMs sent when responding to DisplayPort status update command */
 	uint32_t dp_status_vdm[VDO_MAX_SIZE];
 	int dp_status_vdos;
@@ -172,6 +178,24 @@ struct tcpci_partner_data {
 		 */
 		bool have_response[PD_BATT_MAX];
 	} battery_capabilities;
+
+	/*
+	 * Cable which is "plugged in" to this port partner
+	 * Note: Much as in real life, cable should be attached before the port
+	 * partner can be plugged in to properly discover its information.
+	 * For tests, this means this poitner should be set before connecting
+	 * the source or sink partner.
+	 */
+	struct tcpci_cable_data *cable;
+};
+
+struct tcpci_cable_data {
+	/*
+	 * Identity VDM ACKs which the cable is expected to send
+	 * These include the VDM header
+	 */
+	uint32_t identity_vdm[VDO_MAX_SIZE];
+	int identity_vdos;
 };
 
 /** Structure of message used by TCPCI partner emulator */
@@ -223,7 +247,8 @@ struct tcpci_partner_log_msg {
 enum tcpci_partner_handler_res {
 	TCPCI_PARTNER_COMMON_MSG_HANDLED,
 	TCPCI_PARTNER_COMMON_MSG_NOT_HANDLED,
-	TCPCI_PARTNER_COMMON_MSG_HARD_RESET
+	TCPCI_PARTNER_COMMON_MSG_HARD_RESET,
+	TCPCI_PARTNER_COMMON_MSG_NO_GOODCRC,
 };
 
 /** Structure of TCPCI partner extension */
