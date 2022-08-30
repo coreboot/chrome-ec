@@ -88,7 +88,11 @@ def main():
     ec_base, zephyr_base, zephyr_modules_dir = find_paths()
 
     zephyr_modules = find_modules(zephyr_modules_dir)
-    zephyr_modules.append(ec_base)
+
+    # Add the EC dir as a module if not already included (resolve all paths to
+    # account for symlinked or relative paths)
+    if ec_base.resolve() not in {p.resolve() for p in zephyr_modules}:
+        zephyr_modules.append(ec_base)
 
     # Prepare environment variables for export to Twister. Inherit the parent
     # process's environment, but set some default values if not already set.
@@ -104,9 +108,14 @@ def main():
     twister_env.update(extra_env_vars)
 
     # Twister CLI args
+    # TODO(b/239165779): Reduce or remove the usage of label properties
+    # Zephyr upstream has deprecated the label property. We need to allow
+    # warnings during twister runs until all the label properties are removed
+    # from all board and test overlays.
     twister_cli = [
         str(zephyr_base / "scripts" / "twister"),  # Executable path
         "--ninja",
+        "--disable-warnings-as-errors",
         f"-x=DTS_ROOT={str( ec_base / 'zephyr')}",
         f"-x=SYSCALL_INCLUDE_DIRS={str(ec_base / 'zephyr' / 'include' / 'drivers')}",
         f"-x=ZEPHYR_BASE={zephyr_base}",

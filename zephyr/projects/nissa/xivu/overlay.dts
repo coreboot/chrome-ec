@@ -134,38 +134,47 @@
 				     "cros-ec,temp-sensor";
 			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
 			enum-name = "TEMP_SENSOR_1";
-			temp_fan_off = <35>;
-			temp_fan_max = <60>;
 			temp_host_high = <85>;
 			temp_host_halt = <90>;
 			temp_host_release_high = <80>;
+			temp_host_release_halt = <80>;
 			adc = <&adc_temp_sensor_1>;
-			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
-		};
-		charger {
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
-			enum-name = "TEMP_SENSOR_2";
-			temp_fan_off = <35>;
-			temp_fan_max = <60>;
-			temp_host_high = <85>;
-			temp_host_halt = <90>;
-			temp_host_release_high = <80>;
-			adc = <&adc_temp_sensor_2>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 		};
 		ambient {
 			compatible = "cros-ec,temp-sensor-thermistor",
 				     "cros-ec,temp-sensor";
 			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
-			enum-name = "TEMP_SENSOR_3";
-			temp_fan_off = <35>;
-			temp_fan_max = <60>;
+			enum-name = "TEMP_SENSOR_2";
 			temp_host_high = <85>;
 			temp_host_halt = <90>;
 			temp_host_release_high = <80>;
+			temp_host_release_halt = <80>;
+			adc = <&adc_temp_sensor_2>;
+			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
+		};
+		charger1 {
+			compatible = "cros-ec,temp-sensor-thermistor",
+				     "cros-ec,temp-sensor";
+			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
+			enum-name = "TEMP_SENSOR_3";
+			temp_host_high = <85>;
+			temp_host_halt = <90>;
+			temp_host_release_high = <80>;
+			temp_host_release_halt = <80>;
 			adc = <&adc_temp_sensor_3>;
+			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
+		};
+		charger2 {
+			compatible = "cros-ec,temp-sensor-thermistor",
+				     "cros-ec,temp-sensor";
+			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
+			enum-name = "TEMP_SENSOR_4";
+			temp_host_high = <85>;
+			temp_host_halt = <90>;
+			temp_host_release_high = <80>;
+			temp_host_release_halt = <80>;
+			adc = <&adc_temp_sensor_4>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 		};
 	};
@@ -219,11 +228,6 @@
 		port1-muxes {
 			virtual_mux_1: virtual-mux-1 {
 				compatible = "cros-ec,usbc-mux-virtual";
-			};
-			anx7483_mux_1: anx7483-mux-1 {
-				compatible = "analogix,anx7483";
-				port = <&i2c_ec_i2c_sub_usb_c1>;
-				i2c-addr-flags = "ANX7483_I2C_ADDR0_FLAGS";
 			};
 		};
 	};
@@ -312,6 +316,11 @@
 		compatible = "intersil,isl923x";
 		status = "okay";
 		reg = <0x9>;
+	};
+
+	anx7483_mux_1: anx7483-mux-1@3e {
+		compatible = "analogix,anx7483";
+		reg = <0x3e>;
 	};
 };
 

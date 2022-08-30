@@ -17,16 +17,22 @@ config LINK_TEST_SUITE_ISL923X
 config LINK_TEST_SUITE_LED_DRIVER
 	bool "Link and test the led_driver tests"
 
-config LINK_TEST_SUITE_PWM_LED_DRIVER
-	bool "Link and test the pwm_led_driver tests"
-
 config LINK_TEST_SUITE_USB_MALFUNCTION_SINK
 	bool "Link and test the usb_malfunction_sink tests"
+
+config LINK_TEST_SUITE_USB_PD_DPS
+	bool "Link and test the dps tests"
 
 config LINK_TEST_SUITE_USB_RETIMER_FW_UPDATE
 	bool "Link and test the usb_retimer_fw_update tests"
 
 config LINK_TEST_SUITE_USBC_ALT_MODE
 	bool "Link and test the usbc_alt_mode tests"
+
+config LINK_TEST_SUITE_USBC_TBT_MODE
+	bool "Link and test the usbc_tbt_mode tests"
+
+config LINK_TEST_SUITE_HOST_COMMANDS
+	bool "Link and test the host command tests"
 
 source "Kconfig.zephyr"
