@@ -1856,21 +1856,6 @@ void charger_task(void *u)
 		if (curr.batt.state_of_charge >=
 			    CONFIG_CHARGE_MANAGER_BAT_PCT_SAFE_MODE_EXIT &&
 		    !battery_seems_disconnected) {
-			/*
-			 * Sometimes the fuel gauge will report that it has
-			 * sufficient state of charge and remaining capacity,
-			 * but in actuality it doesn't.  When the EC sees that
-			 * information, it trusts it and leaves charge manager
-			 * safe mode.  Doing so will allow CHARGE_PORT_NONE to
-			 * be selected, thereby cutting off the input FETs.
-			 * When the battery cannot provide the charge it claims,
-			 * the system loses power, shuts down, and the battery
-			 * is not charged even though the charger is plugged in.
-			 * By waiting 500ms, we can avoid the selection of
-			 * CHARGE_PORT_NONE around init time and not cut off the
-			 * input FETs.
-			 */
-			msleep(500);
 			charge_manager_leave_safe_mode();
 		}
 #endif
@@ -2709,7 +2694,7 @@ DECLARE_HOST_COMMAND(EC_CMD_CHARGE_STATE, charge_command_charge_state,
 
 #ifdef CONFIG_CMD_PWR_AVG
 
-static int command_pwr_avg(int argc, char **argv)
+static int command_pwr_avg(int argc, const char **argv)
 {
 	int avg_mv;
 	int avg_ma;
@@ -2733,7 +2718,7 @@ DECLARE_CONSOLE_COMMAND(pwr_avg, command_pwr_avg, NULL,
 
 #endif /* CONFIG_CMD_PWR_AVG */
 
-static int command_chgstate(int argc, char **argv)
+static int command_chgstate(int argc, const char **argv)
 {
 	int rv;
 	int val;
@@ -2791,7 +2776,7 @@ DECLARE_CONSOLE_COMMAND(chgstate, command_chgstate,
 			"Get/set charge state machine status");
 
 #ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-static int command_chgdualdebug(int argc, char **argv)
+static int command_chgdualdebug(int argc, const char **argv)
 {
 	int val;
 	char *e;

@@ -105,3 +105,9 @@ DECLARE_FAKE_VALUE_FUNC(int, init_rom_copy, int, int, int);
 
 /* Mocks for common/system.c */
 DECLARE_FAKE_VALUE_FUNC(int, system_jumped_late);
+DECLARE_FAKE_VOID_FUNC(system_reset, int);
+DECLARE_FAKE_VOID_FUNC(software_panic, uint32_t, uint32_t);
+DECLARE_FAKE_VOID_FUNC(assert_post_action, const char *, unsigned int);
+
+/* Mocks for common/lid_angle.c */
+DECLARE_FAKE_VOID_FUNC(lid_angle_peripheral_enable, int);

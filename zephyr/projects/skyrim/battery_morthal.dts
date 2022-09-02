@@ -3,13 +3,13 @@
  * found in the LICENSE file.
  */
 
-&i2c_pwr_cbi {
-	cbi_eeprom: eeprom@50 {
-		compatible = "atmel,at24";
-		reg = <0x50>;
-		size = <2048>;
-		pagesize = <16>;
-		address-width = <8>;
-		timeout = <5>;
+/ {
+	batteries {
+		default_battery: aec_5477109 {
+			compatible = "aec,5477109", "battery-smart";
+		};
+		smp_l20m3pg1 {
+			compatible = "smp,l20m3pg1", "battery-smart";
+		};
 	};
 };

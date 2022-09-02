@@ -20,6 +20,7 @@ target_sources(app PRIVATE
     src/console_cmd/accelrange.c
     src/console_cmd/accelread.c
     src/console_cmd/accelres.c
+    src/console_cmd/crash.c
     src/console_cmd/cutoff.c
     src/console_cmd/gpio.c
     src/console_cmd/i2c_portmap.c
@@ -51,12 +52,14 @@ target_sources(app PRIVATE
     src/isl923x.c
     src/keyboard_scan.c
     src/led.c
+    src/lid_angle.c
     src/lid_switch.c
     src/lis2dw12.c
     src/ln9310.c
     src/locate_chip.c
     src/motion_sense/motion_sense.c
     src/panic.c
+    src/panic_output.c
     src/port80.c
     src/power_common.c
     src/ppc_sn5s330.c
