@@ -10,11 +10,14 @@
 #include "ec_commands.h"
 #include "fpsensor_crypto.h"
 #include "fpsensor_state.h"
+#include "mock/fpsensor_crypto_mock.h"
 #include "mock/fpsensor_state_mock.h"
 #include "mock/rollback_mock.h"
 #include "mock/timer_mock.h"
 #include "test_util.h"
 #include "util.h"
+
+extern int get_ikm(uint8_t *ikm);
 
 static const uint8_t fake_positive_match_salt[] = {
 	0x04, 0x1f, 0x5a, 0xac, 0x5f, 0x79, 0x10, 0xaf,
@@ -97,6 +100,69 @@ static const uint8_t expected_positive_match_secret_for_fake_user_id[] = {
 	0xc6, 0xca, 0x8a, 0x41, 0x69, 0x8a, 0xd3, 0xcf, 0x0b, 0xc4, 0x5a,
 	0x5f, 0x4d, 0x54, 0xeb, 0x7b, 0xad, 0x5d, 0x1b, 0xbe, 0x30,
 };
+
+test_static int test_get_ikm_failure_seed_not_set(void)
+{
+	uint8_t ikm;
+
+	TEST_ASSERT(fp_tpm_seed_is_set() == 0);
+	TEST_ASSERT(get_ikm(&ikm) == EC_ERROR_ACCESS_DENIED);
+	return EC_SUCCESS;
+}
+
+test_static int test_get_ikm_failure_cannot_get_rollback_secret(void)
+{
+	uint8_t ikm[CONFIG_ROLLBACK_SECRET_SIZE + FP_CONTEXT_TPM_BYTES];
+
+	/* Given that the tmp seed has been set. */
+	TEST_ASSERT(fp_tpm_seed_is_set());
+
+	/* GIVEN that reading the rollback secret will fail. */
+	mock_ctrl_rollback.get_secret_fail = true;
+
+	/* THEN get_ikm should fail. */
+	TEST_ASSERT(get_ikm(ikm) == EC_ERROR_HW_INTERNAL);
+
+	/*
+	 * Enable get_rollback_secret to succeed before returning from this
+	 * test function.
+	 */
+	mock_ctrl_rollback.get_secret_fail = false;
+
+	return EC_SUCCESS;
+}
+
+test_static int test_get_ikm_success(void)
+{
+	/*
+	 * Expected ikm is the concatenation of the rollback secret and the
+	 * seed from the TPM.
+	 */
+	uint8_t ikm[CONFIG_ROLLBACK_SECRET_SIZE + FP_CONTEXT_TPM_BYTES];
+	static const uint8_t expected_ikm[] = {
+		0xcf, 0xe3, 0x23, 0x76, 0x35, 0x04, 0xc2, 0x0f, 0x0d, 0xb6,
+		0x02, 0xa9, 0x68, 0xba, 0x2a, 0x61, 0x86, 0x2a, 0x85, 0xd1,
+		0xca, 0x09, 0x54, 0x8a, 0x6b, 0xe2, 0xe3, 0x38, 0xde, 0x5d,
+		0x59, 0x14, 0xd9, 0x71, 0xaf, 0xc4, 0xcd, 0x36, 0xe3, 0x60,
+		0xf8, 0x5a, 0xa0, 0xa6, 0x2c, 0xb3, 0xf5, 0xe2, 0xeb, 0xb9,
+		0xd8, 0x2f, 0xb5, 0x78, 0x5c, 0x79, 0x82, 0xce, 0x06, 0x3f,
+		0xcc, 0x23, 0xb9, 0xe7
+	};
+
+	/* GIVEN that the TPM seed has been set. */
+	TEST_ASSERT(fp_tpm_seed_is_set());
+
+	/* GIVEN that reading the rollback secret will succeed. */
+	mock_ctrl_rollback.get_secret_fail = false;
+
+	/* THEN get_ikm will succeed. */
+	TEST_ASSERT(get_ikm(ikm) == EC_SUCCESS);
+	TEST_ASSERT_ARRAY_EQ(ikm, expected_ikm,
+			     CONFIG_ROLLBACK_SECRET_SIZE +
+				     FP_CONTEXT_TPM_BYTES);
+
+	return EC_SUCCESS;
+}
 
 static int test_hkdf_expand_raw(const uint8_t *prk, size_t prk_size,
 				const uint8_t *info, size_t info_size,
@@ -413,6 +479,92 @@ test_static int test_derive_positive_match_secret_fail_salt_trivial(void)
 	return EC_SUCCESS;
 }
 
+test_static int test_derive_positive_match_secret_fail_trivial_key_0x00(void)
+{
+	static uint8_t output[FP_POSITIVE_MATCH_SECRET_BYTES];
+
+	/* GIVEN that the user ID is set to a known value. */
+	memcpy(user_id, fake_user_id, sizeof(fake_user_id));
+
+	/*
+	 * GIVEN that the TPM seed is set, and reading the rollback secret will
+	 * succeed.
+	 */
+	TEST_ASSERT(fp_tpm_seed_is_set() &&
+		    !mock_ctrl_rollback.get_secret_fail);
+
+	/* GIVEN that the salt is not trivial. */
+	TEST_ASSERT(!bytes_are_trivial(fake_positive_match_salt,
+				       sizeof(fake_positive_match_salt)));
+
+	/* GIVEN that the sha256 output is trivial (0x00) */
+	mock_ctrl_fpsensor_crypto.output_type =
+		MOCK_CTRL_FPSENSOR_CRYPTO_SHA256_TYPE_ZEROS;
+
+	/* THEN the derivation will fail with EC_ERROR_HW_INTERNAL. */
+	TEST_ASSERT(derive_positive_match_secret(output,
+						 fake_positive_match_salt) ==
+		    EC_ERROR_HW_INTERNAL);
+
+	/* Now verify success is possible after reverting */
+
+	/* GIVEN that the sha256 output is non-trivial */
+	mock_ctrl_fpsensor_crypto.output_type =
+		MOCK_CTRL_FPSENSOR_CRYPTO_SHA256_TYPE_REAL;
+
+	/* THEN the derivation will succeed */
+	TEST_ASSERT(derive_positive_match_secret(
+			    output, fake_positive_match_salt) == EC_SUCCESS);
+
+	/* Clean up any mock changes */
+	mock_ctrl_fpsensor_crypto = MOCK_CTRL_DEFAULT_FPSENSOR_CRYPTO;
+
+	return EC_SUCCESS;
+}
+
+test_static int test_derive_positive_match_secret_fail_trivial_key_0xff(void)
+{
+	static uint8_t output[FP_POSITIVE_MATCH_SECRET_BYTES];
+
+	/* GIVEN that the user ID is set to a known value. */
+	memcpy(user_id, fake_user_id, sizeof(fake_user_id));
+
+	/*
+	 * GIVEN that the TPM seed is set, and reading the rollback secret will
+	 * succeed.
+	 */
+	TEST_ASSERT(fp_tpm_seed_is_set() &&
+		    !mock_ctrl_rollback.get_secret_fail);
+
+	/* GIVEN that the salt is not trivial. */
+	TEST_ASSERT(!bytes_are_trivial(fake_positive_match_salt,
+				       sizeof(fake_positive_match_salt)));
+
+	/* GIVEN that the sha256 output is trivial (0xFF) */
+	mock_ctrl_fpsensor_crypto.output_type =
+		MOCK_CTRL_FPSENSOR_CRYPTO_SHA256_TYPE_FF;
+
+	/* THEN the derivation will fail with EC_ERROR_HW_INTERNAL. */
+	TEST_ASSERT(derive_positive_match_secret(output,
+						 fake_positive_match_salt) ==
+		    EC_ERROR_HW_INTERNAL);
+
+	/* Now verify success is possible after reverting */
+
+	/* GIVEN that the sha256 output is non-trivial */
+	mock_ctrl_fpsensor_crypto.output_type =
+		MOCK_CTRL_FPSENSOR_CRYPTO_SHA256_TYPE_REAL;
+
+	/* THEN the derivation will succeed */
+	TEST_ASSERT(derive_positive_match_secret(
+			    output, fake_positive_match_salt) == EC_SUCCESS);
+
+	/* Clean up any mock changes */
+	mock_ctrl_fpsensor_crypto = MOCK_CTRL_DEFAULT_FPSENSOR_CRYPTO;
+
+	return EC_SUCCESS;
+}
+
 static int test_enable_positive_match_secret_once(
 	struct positive_match_secret_state *dumb_state)
 {
@@ -597,12 +749,12 @@ test_static int test_command_read_match_secret_unreadable(void)
 	return EC_SUCCESS;
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	RUN_TEST(test_hkdf_expand);
 	RUN_TEST(test_derive_encryption_key_failure_seed_not_set);
 	RUN_TEST(test_derive_positive_match_secret_fail_seed_not_set);
-
+	RUN_TEST(test_get_ikm_failure_seed_not_set);
 	/*
 	 * Set the TPM seed here because it can only be set once and cannot be
 	 * cleared.
@@ -611,11 +763,15 @@ void run_test(int argc, char **argv)
 	       EC_SUCCESS);
 
 	/* The following test requires TPM seed to be already set. */
+	RUN_TEST(test_get_ikm_failure_cannot_get_rollback_secret);
+	RUN_TEST(test_get_ikm_success);
 	RUN_TEST(test_derive_encryption_key);
 	RUN_TEST(test_derive_encryption_key_failure_rollback_fail);
 	RUN_TEST(test_derive_new_pos_match_secret);
 	RUN_TEST(test_derive_positive_match_secret_fail_rollback_fail);
 	RUN_TEST(test_derive_positive_match_secret_fail_salt_trivial);
+	RUN_TEST(test_derive_positive_match_secret_fail_trivial_key_0x00);
+	RUN_TEST(test_derive_positive_match_secret_fail_trivial_key_0xff);
 	RUN_TEST(test_enable_positive_match_secret);
 	RUN_TEST(test_disable_positive_match_secret);
 	RUN_TEST(test_command_read_match_secret);

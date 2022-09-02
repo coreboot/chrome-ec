@@ -547,7 +547,7 @@ void dps_task(void *u)
 	}
 }
 
-static int command_dps(int argc, char **argv)
+static int command_dps(int argc, const char **argv)
 {
 	int port = charge_manager_get_active_charge_port();
 	int input_pwr, vbus, input_curr;
@@ -685,3 +685,22 @@ static enum ec_status hc_usb_pd_dps_control(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_USB_PD_DPS_CONTROL, hc_usb_pd_dps_control,
 		     EC_VER_MASK(0));
+
+#ifdef TEST_BUILD
+__test_only bool dps_is_fake_enabled(void)
+{
+	return fake_enabled;
+}
+__test_only int dps_get_fake_mv(void)
+{
+	return fake_mv;
+}
+__test_only int dps_get_fake_ma(void)
+{
+	return fake_ma;
+}
+__test_only int *dps_get_debug_level(void)
+{
+	return &debug_level;
+}
+#endif /* TEST_BUILD */

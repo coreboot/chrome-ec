@@ -912,7 +912,7 @@ void tcpc_dump_registers(int port, const struct tcpc_reg_dump_map *reg,
 	}
 }
 
-static int command_tcpc_dump(int argc, char **argv)
+static int command_tcpc_dump(int argc, const char **argv)
 {
 	int port;
 
@@ -1064,6 +1064,15 @@ void pd_send_host_event(int mask)
 	host_set_single_event(EC_HOST_EVENT_PD_MCU);
 }
 #endif /* defined(HAS_TASK_HOSTCMD) && !defined(TEST_BUILD) */
+
+#ifdef CONFIG_MKBP_EVENT
+static int dp_alt_mode_entry_get_next_event(uint8_t *data)
+{
+	return EC_SUCCESS;
+}
+DECLARE_EVENT_SOURCE(EC_MKBP_EVENT_DP_ALT_MODE_ENTERED,
+		     dp_alt_mode_entry_get_next_event);
+#endif /* CONFIG_MKBP_EVENT */
 
 __overridable void pd_notify_dp_alt_mode_entry(int port)
 {
