@@ -400,7 +400,7 @@ int charge_manager_get_vbus_voltage(int port)
 }
 
 #ifdef CONFIG_CMD_VBUS
-static int command_vbus(int argc, char **argv)
+static int command_vbus(int argc, const char **argv)
 {
 	/* port = -1 to print all the ports */
 	int port = -1;
@@ -1240,6 +1240,21 @@ void charge_manager_leave_safe_mode(void)
 	if (left_safe_mode)
 		return;
 
+	/*
+	 * Sometimes the fuel gauge will report that it has
+	 * sufficient state of charge and remaining capacity,
+	 * but in actuality it doesn't.  When the EC sees that
+	 * information, it trusts it and leaves charge manager
+	 * safe mode.  Doing so will allow CHARGE_PORT_NONE to
+	 * be selected, thereby cutting off the input FETs.
+	 * When the battery cannot provide the charge it claims,
+	 * the system loses power, shuts down, and the battery
+	 * is not charged even though the charger is plugged in.
+	 * By waiting 500ms, we can avoid the selection of
+	 * CHARGE_PORT_NONE around init time and not cut off the
+	 * input FETs.
+	 */
+	msleep(500);
 	CPRINTS("%s()", __func__);
 	cflush();
 	left_safe_mode = 1;
@@ -1539,7 +1554,7 @@ DECLARE_HOST_COMMAND(EC_CMD_OVERRIDE_DEDICATED_CHARGER_LIMIT,
 		     hc_override_dedicated_charger_limit, EC_VER_MASK(0));
 #endif
 
-static int command_charge_port_override(int argc, char **argv)
+static int command_charge_port_override(int argc, const char **argv)
 {
 	int port = OVERRIDE_OFF;
 	int ret = EC_SUCCESS;
@@ -1602,7 +1617,7 @@ hc_external_power_limit(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_EXTERNAL_POWER_LIMIT, hc_external_power_limit,
 		     EC_VER_MASK(1));
 
-static int command_external_power_limit(int argc, char **argv)
+static int command_external_power_limit(int argc, const char **argv)
 {
 	int max_current;
 	int max_voltage;
@@ -1633,7 +1648,7 @@ DECLARE_CONSOLE_COMMAND(chglim, command_external_power_limit,
 #endif /* CONFIG_CHARGE_MANAGER_EXTERNAL_POWER_LIMIT */
 
 #ifdef CONFIG_CMD_CHARGE_SUPPLIER_INFO
-static int charge_supplier_info(int argc, char **argv)
+static int charge_supplier_info(int argc, const char **argv)
 {
 	int p, s;
 	int port_printed;

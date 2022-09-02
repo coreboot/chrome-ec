@@ -17,11 +17,19 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AMD_STT
 	"stt.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "fan.c")
 
+if(DEFINED CONFIG_BOARD_MORTHAL)
+	project(morthal)
+	zephyr_library_sources(
+		"usbc_config.c"
+)
+endif()
+
 if(DEFINED CONFIG_BOARD_SKYRIM)
 	project(skyrim)
 	cros_ec_library_include_directories_ifdef(CONFIG_BOARD_SKYRIM include)
 	zephyr_library_sources(
 			"src/skyrim/form_factor.c"
+			"src/skyrim/alt_charger.c"
 			"usbc_config.c"
 	)
 endif()

@@ -121,7 +121,7 @@ void panic_reboot(void)
 }
 
 /* Complete the processing of a panic, after the initial message is shown */
-static noreturn void complete_panic(int linenum)
+test_mockable_static_noreturn void complete_panic(int linenum)
 {
 	if (IS_ENABLED(CONFIG_SOFTWARE_PANIC))
 		software_panic(PANIC_SW_ASSERT, linenum);
@@ -334,7 +334,7 @@ static void stack_overflow_recurse(int n)
 /*****************************************************************************/
 /* Console commands */
 #ifdef CONFIG_CMD_CRASH
-static int command_crash(int argc, char **argv)
+static int command_crash(int argc, const char **argv)
 {
 	if (argc < 2)
 		return EC_ERROR_PARAM1;
@@ -386,7 +386,7 @@ DECLARE_CONSOLE_COMMAND(crash, command_crash,
 			"Crash the system (for testing)");
 #endif /* CONFIG_CMD_CRASH */
 
-static int command_panicinfo(int argc, char **argv)
+static int command_panicinfo(int argc, const char **argv)
 {
 	struct panic_data *const pdata_ptr = panic_get_data();
 

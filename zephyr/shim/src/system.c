@@ -160,7 +160,7 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 /**
  * Print low power idle statistics
  */
-static int command_idle_stats(int argc, char **argv)
+static int command_idle_stats(int argc, const char **argv)
 {
 	const struct device *sys_dev = device_get_binding("CROS_SYSTEM");
 
@@ -197,7 +197,7 @@ const char *system_get_chip_revision(void)
 	return cros_system_chip_revision(sys_dev);
 }
 
-void system_reset(int flags)
+test_mockable void system_reset(int flags)
 {
 	int err;
 	uint32_t save_flags;
