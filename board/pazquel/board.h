@@ -42,17 +42,10 @@
 
 /* Sensors */
 #define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
-<<<<<<< HEAD
-/* BMI160 Base accel/gyro */
-#define CONFIG_ACCELGYRO_BMI160
-#define CONFIG_ACCEL_INTERRUPTS
-#define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
-=======
 
 /* BMI323 Base accel/gyro */
 #define CONFIG_ACCELGYRO_BMI3XX
 #define CONFIG_ACCELGYRO_BMI3XX_INT_EVENT \
->>>>>>> 5ae49e09bb... Pazquel360: update board sensor config from sku
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define OPT3001_I2C_ADDR_FLAGS OPT3001_I2C_ADDR1_FLAGS
 
