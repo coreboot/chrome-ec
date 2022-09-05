@@ -27,9 +27,11 @@ target_sources(app PRIVATE
     src/console_cmd/md.c
     src/console_cmd/hcdebug.c
     src/console_cmd/hibdelay.c
+    src/console_cmd/hostevent.c
     src/console_cmd/panic_output.c
     src/console_cmd/port80.c
     src/console_cmd/powerindebug.c
+    src/console_cmd/power_button.c
     src/console_cmd/rw.c
     src/console_cmd/sleeptimeout.c
     src/console_cmd/tcpci_dump.c
