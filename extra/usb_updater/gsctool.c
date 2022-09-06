@@ -1968,8 +1968,9 @@ static uint32_t common_process_password(struct transfer_descriptor *td,
 	uint32_t rv;
 	char *password = NULL;
 	char *password_copy = NULL;
-	size_t copy_len = 0;
-	size_t len = 0;
+	ssize_t copy_len;
+	ssize_t len;
+	size_t zero = 0;
 	struct termios oldattr, newattr;
 
 	/* Suppress command line echo while password is being entered. */
@@ -1981,20 +1982,23 @@ static uint32_t common_process_password(struct transfer_descriptor *td,
 
 	/* With command line echo suppressed request password entry twice. */
 	printf("Enter password:");
-	len = getline(&password, &len, stdin);
+	len = getline(&password, &zero, stdin);
 	printf("Re-enter password:");
-	getline(&password_copy, &copy_len, stdin);
+	zero = 0;
+	copy_len = getline(&password_copy, &zero, stdin);
 
 	/* Restore command line echo. */
 	tcsetattr(STDIN_FILENO, TCSANOW, &oldattr);
 
 	/* Empty password will still have the newline. */
-	if ((len <= 1) || !password_copy) {
+	if ((len <= 1) || !password_copy || (copy_len != len)) {
+		fprintf(stderr, "Error reading password\n");
 		if (password)
 			free(password);
 		if (password_copy)
 			free(password_copy);
-		fprintf(stderr, "Error reading password\n");
+		if ((copy_len >= 0) && (len >= 0) && (copy_len != len))
+			fprintf(stderr, "Password length mismatch\n");
 		exit(update_error);
 	}
 
