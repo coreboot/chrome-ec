@@ -40,6 +40,85 @@
 #include "usb_descriptor.h"
 #include "verify_ro.h"
 
+
+/*
+ * This enum must match CcdCap enum in applications/sys_mgr/src/ccd.rs in the
+ * Ti50 common git tree.
+ */
+enum Ti50CcdCapabilities {
+	TI50_CCD_CAP_UART_GSC_RX_AP_TX = 0,
+	TI50_CCD_CAP_UART_GSC_TX_AP_RX,
+	TI50_CCD_CAP_UART_GSC_RX_EC_TX,
+	TI50_CCD_CAP_UART_GSC_TX_EC_RX,
+	TI50_CCD_CAP_UART_GSC_RX_FPMCU_TX,
+	TI50_CCD_CAP_UART_GSC_TX_FPMCU_RX,
+	TI50_CCD_CAP_FLASH_AP,
+	TI50_CCD_CAP_FLASH_EC,
+	TI50_CCD_CAP_OVERRIDE_WP,
+	TI50_CCD_CAP_REBOOT_ECAP,
+	TI50_CCD_CAP_GSC_FULL_CONSOLE,
+	TI50_CCD_CAP_UNLOCK_NO_REBOOT,
+	TI50_CCD_CAP_UNLOCK_NO_SHORT_PP,
+	TI50_CCD_CAP_OPEN_NO_TPM_WIPE,
+	TI50_CCD_CAP_OPEN_NO_LONG_PP,
+	TI50_CCD_CAP_REMOVE_BATTERY_BYPASS_PP,
+	TI50_CCD_CAP_I2_C,
+	TI50_CCD_CAP_FLASH_READ,
+	TI50_CCD_CAP_OPEN_NO_DEV_MODE,
+	TI50_CCD_CAP_OPEN_FROM_USB,
+	TI50_CCD_CAP_OVERRIDE_BATT,
+	TI50_CCD_CAP_BOOT_UNVERIFIED_RO,
+	TI50_CCD_CAP_COUNT,
+};
+
+static const struct ccd_capability_info ti50_cap_info[] = {
+	{"UartGscRxAPTx", CCD_CAP_STATE_ALWAYS},
+	{"UartGscTxAPRx", CCD_CAP_STATE_ALWAYS},
+	{"UartGscRxECTx", CCD_CAP_STATE_ALWAYS},
+	{"UartGscTxECRx", CCD_CAP_STATE_IF_OPENED},
+	{"UartGscRxFpmcuTx", CCD_CAP_STATE_ALWAYS},
+	{"UartGscTxFpmcuRx", CCD_CAP_STATE_IF_OPENED},
+	{"FlashAP", CCD_CAP_STATE_IF_OPENED},
+	{"FlashEC", CCD_CAP_STATE_IF_OPENED},
+	{"OverrideWP", CCD_CAP_STATE_IF_OPENED},
+	{"RebootECAP", CCD_CAP_STATE_IF_OPENED},
+	{"GscFullConsole", CCD_CAP_STATE_IF_OPENED},
+	{"UnlockNoReboot", CCD_CAP_STATE_ALWAYS},
+	{"UnlockNoShortPP", CCD_CAP_STATE_ALWAYS},
+	{"OpenNoTPMWipe", CCD_CAP_STATE_IF_OPENED},
+	{"OpenNoLongPP", CCD_CAP_STATE_IF_OPENED},
+	{"RemoveBatteryBypassPP", CCD_CAP_STATE_ALWAYS},
+	{"I2C", CCD_CAP_STATE_IF_OPENED},
+	{"FlashRead", CCD_CAP_STATE_ALWAYS},
+	/*
+	 * The below two settings do not match ccd.rs value, which is
+	 * controlled at compile time.
+	 */
+	{"OpenNoDevMode", CCD_CAP_STATE_IF_OPENED},
+	{"OpenFromUSB", CCD_CAP_STATE_IF_OPENED},
+	{"OverrideBatt", CCD_CAP_STATE_IF_OPENED},
+	/* The below capability is presently set to 'never' in ccd.rs. */
+	{"BootUnverifiedRo", CCD_CAP_STATE_IF_OPENED},
+};
+
+#define CR50_CCD_CAP_COUNT CCD_CAP_COUNT
+
+/*
+ * One of the basic assumptions of the code handling multiple ccd_info layouts
+ * is that the number of words in the capabilities array is the same for all
+ * layouts. Let's verify this at compile time.
+ */
+BUILD_ASSERT((CR50_CCD_CAP_COUNT/32) == (TI50_CCD_CAP_COUNT/32));
+
+/*
+ * Version 0 CCD info packet does not include the header, the actual packet
+ * size is used to conclude that the received payload is of version 0.
+ *
+ * Let's hardcode this size to make sure that it is fixed even if the
+ * underlying structure (struct ccd_info_response) size changes in the future.
+ */
+#define CCD_INFO_V0_SIZE 23
+
 /*
  * This file contains the source code of a Linux application used to update
  * CR50 device firmware.
@@ -161,6 +240,33 @@
 #define D2_PID 0x504A
 #define SUBCLASS USB_SUBCLASS_GOOGLE_CR50
 #define PROTOCOL USB_PROTOCOL_GOOGLE_CR50_NON_HC_FW_UPDATE
+
+/*
+ * CCD Info from GSC is communicated using different structure layouts.
+ * Version 0 does not have a header and includes just the payload information.
+ * Version 2 is prepended by a header which has a distinct value in the first
+ * word, and the version number and the total size in the two halfwords after
+ * that.
+ *
+ * Once the payload is received, the absence of the distinct value in the
+ * first word and the match of the payload size to the expected size of the
+ * version 0 payload indicates that this is indeed a version 0 packet. The
+ * distinct first header value and the match of the size field indicates that
+ * this is a later version packet.
+ */
+#define CCD_INFO_MAGIC 0x49444343  /* This is 'CCDI' in little endian. */
+#define CCD_VERSION             1  /* Ti50 CCD INFO layout. */
+
+struct ccd_info_response_header {
+	uint32_t ccd_magic;
+	uint16_t ccd_version;
+	uint16_t ccd_size;
+} __packed;
+
+struct ccd_info_response_packet {
+	struct ccd_info_response_header cir_header;
+	struct ccd_info_response cir_body;
+};
 
 /*
  * Need to create an entire TPM PDU when upgrading over /dev/tpm0 and need to
@@ -2091,22 +2197,101 @@ void poll_for_pp(struct transfer_descriptor *td,
 
 }
 
+/* Determine the longest capability name found in the passed in table. */
+static size_t longest_cap_name_len(const struct ccd_capability_info *table,
+				   size_t count)
+{
+	size_t i;
+	size_t result = 0;
+
+	for (i = 0; i < count; i++) {
+		size_t this_size;
+
+		this_size = strlen(table[i].name);
+		if (this_size > result)
+			result = this_size;
+	}
+	return result;
+}
+
+/*
+ * Print the passed in capability name padded to the longest length determined
+ * earlier.
+ */
+static void print_aligned(const char *name, size_t field_size)
+{
+	size_t name_len;
+
+	name_len = strlen(name);
+
+	printf("%s", name);
+	while (name_len < field_size) {
+		printf(" ");
+		name_len++;
+	}
+}
+
 static void print_ccd_info(void *response, size_t response_size)
 {
+	struct ccd_info_response_header ccd_info_header;
 	struct ccd_info_response ccd_info;
 	size_t i;
-	const struct ccd_capability_info cap_info[] = CAP_INFO_DATA;
+	const struct ccd_capability_info cr50_cap_info[] = CAP_INFO_DATA;
 	const char *state_names[] = CCD_STATE_NAMES;
 	const char *cap_state_names[] = CCD_CAP_STATE_NAMES;
 	uint32_t caps_bitmap = 0;
+	uint32_t ccd_info_version;
 
-	if (response_size != sizeof(ccd_info)) {
+	/*
+	 * CCD info structure is different for different GSCs. Two layouts are
+	 * defined at this time, version 0 (Cr50) and version 1 (Ti50). The
+	 * array below indexed by version number provides access to version
+	 * specific information about the layout.
+	 */
+	const struct {
+		size_t cap_count;
+		const struct ccd_capability_info *info_table;
+	} version_to_ccd[] = {
+		{CR50_CCD_CAP_COUNT, cr50_cap_info},
+		{TI50_CCD_CAP_COUNT, ti50_cap_info},
+	};
+
+	/* Run time determined properties of the CCD info table. */
+	size_t gsc_cap_count;
+	const struct ccd_capability_info *gsc_capability_info;
+	size_t name_column_width;
+
+	if (response_size < sizeof(ccd_info_header)) {
+		fprintf(stderr, "CCD info response too short %zd\n",
+			response_size);
+		exit(update_error);
+	}
+
+	/* Let's check if this is a newer version response. */
+	memcpy(&ccd_info_header, response, sizeof(ccd_info_header));
+	if ((ccd_info_header.ccd_magic == CCD_INFO_MAGIC) &&
+	    (ccd_info_header.ccd_size == response_size) &&
+	    /* Verify that payload size matches ccd_info size. */
+	    ((response_size - sizeof(ccd_info_header)) == sizeof(ccd_info))) {
+		ccd_info_version = ccd_info_header.ccd_version;
+		memcpy(&ccd_info,
+		       (uint8_t *)response +
+		       sizeof(struct ccd_info_response_header),
+		       sizeof(ccd_info));
+	} else if (response_size == CCD_INFO_V0_SIZE) {
+		ccd_info_version = 0; /* Default, Cr50 case. */
+		memcpy(&ccd_info, response, sizeof(ccd_info));
+	} else {
 		fprintf(stderr, "Unexpected CCD info response size %zd\n",
 			response_size);
 		exit(update_error);
 	}
 
-	memcpy(&ccd_info, response, sizeof(ccd_info));
+	if (ccd_info_version >= ARRAY_SIZE(version_to_ccd)) {
+		fprintf(stderr, "Unsupported CCD info version number %d\n",
+			ccd_info_version);
+		exit(update_error);
+	}
 
 	/* Convert it back to host endian format. */
 	ccd_info.ccd_flags = be32toh(ccd_info.ccd_flags);
@@ -2124,7 +2309,12 @@ static void print_ccd_info(void *response, size_t response_size)
 		      CCD_INDICATOR_BIT_HAS_PASSWORD) ? "Set" : "None");
 	printf("Flags: %#06x\n", ccd_info.ccd_flags);
 	printf("Capabilities, current and default:\n");
-	for (i = 0; i < CCD_CAP_COUNT; i++) {
+
+	gsc_cap_count = version_to_ccd[ccd_info_version].cap_count;
+	gsc_capability_info = version_to_ccd[ccd_info_version].info_table;
+	name_column_width = longest_cap_name_len(gsc_capability_info,
+						 gsc_cap_count) + 1;
+	for (i = 0; i < gsc_cap_count; i++) {
 		int is_enabled;
 		int index;
 		int shift;
@@ -2157,8 +2347,9 @@ static void print_ccd_info(void *response, size_t response_size)
 			}
 		}
 
-		printf("  %-15s %c %s",
-		       cap_info[i].name,
+		printf("  ");
+		print_aligned(gsc_capability_info[i].name, name_column_width);
+		printf("%c %s",
 		       is_enabled ? 'Y' : '-',
 		       cap_state_names[cap_current]);
 
@@ -2180,7 +2371,7 @@ static void process_ccd_state(struct transfer_descriptor *td, int ccd_unlock,
 {
 	uint8_t payload;
 	 /* Max possible response size is when ccd_info is requested. */
-	uint8_t response[sizeof(struct ccd_info_response)];
+	uint8_t response[sizeof(struct ccd_info_response_packet)];
 	size_t response_size;
 	int rv;
 
