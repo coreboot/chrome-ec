@@ -133,21 +133,21 @@ void enable_lid_detect(bool enable)
 	}
 }
 
-static int command_lidopen(int argc, char **argv)
+static int command_lidopen(int argc, const char **argv)
 {
 	lid_switch_open();
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(lidopen, command_lidopen, NULL, "Simulate lid open");
 
-static int command_lidclose(int argc, char **argv)
+static int command_lidclose(int argc, const char **argv)
 {
 	lid_switch_close();
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(lidclose, command_lidclose, NULL, "Simulate lid close");
 
-static int command_lidstate(int argc, char **argv)
+static int command_lidstate(int argc, const char **argv)
 {
 	ccprintf("lid state: %s\n", debounced_lid_open ? "open" : "closed");
 
@@ -161,12 +161,14 @@ DECLARE_CONSOLE_COMMAND(lidstate, command_lidstate, NULL, "Get state of lid");
 static enum ec_status hc_force_lid_open(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_force_lid_open *p = args->params;
+	int old_state = forced_lid_open;
 
 	/* Override lid open if necessary */
 	forced_lid_open = p->enabled ? 1 : 0;
 
 	/* Make this take effect immediately; no debounce time */
-	hook_call_deferred(&lid_change_deferred_data, 0);
+	if (forced_lid_open != old_state)
+		hook_call_deferred(&lid_change_deferred_data, 0);
 
 	return EC_RES_SUCCESS;
 }

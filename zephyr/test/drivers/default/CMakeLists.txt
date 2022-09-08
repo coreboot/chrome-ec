@@ -9,6 +9,7 @@ target_sources(app PRIVATE
     src/console.c
     src/console_cmd/adc.c
     src/console_cmd/battery.c
+    src/console_cmd/cbi.c
     src/console_cmd/charge_manager.c
     src/console_cmd/charge_state.c
     src/console_cmd/charger.c
@@ -19,18 +20,28 @@ target_sources(app PRIVATE
     src/console_cmd/accelrange.c
     src/console_cmd/accelread.c
     src/console_cmd/accelres.c
+    src/console_cmd/button.c
+    src/console_cmd/crash.c
+    src/console_cmd/cutoff.c
     src/console_cmd/gpio.c
+    src/console_cmd/i2c_portmap.c
     src/console_cmd/md.c
+    src/console_cmd/hcdebug.c
+    src/console_cmd/hibdelay.c
+    src/console_cmd/hostevent.c
     src/console_cmd/panic_output.c
+    src/console_cmd/port80.c
+    src/console_cmd/powerindebug.c
+    src/console_cmd/power_button.c
+    src/console_cmd/rw.c
+    src/console_cmd/sleeptimeout.c
     src/console_cmd/tcpci_dump.c
     src/console_cmd/usb_pd_console.c
     src/console_cmd/waitms.c
     src/cros_cbi.c
     src/espi.c
+    src/flash.c
     src/gpio.c
-    src/host_cmd/host_event_commands.c
-    src/host_cmd/get_pd_port_caps.c
-    src/host_cmd/motion_sense.c
     src/integration/usbc/usb.c
     src/integration/usbc/usb_20v_3a_pd_charger.c
     src/integration/usbc/usb_5v_3a_pd_sink.c
@@ -39,14 +50,20 @@ target_sources(app PRIVATE
     src/integration/usbc/usb_pd_bist_shared.c
     src/integration/usbc/usb_pd_ctrl_msg.c
     src/integration/usbc/usb_pd_rev3.c
+    src/i2c.c
     src/i2c_passthru.c
     src/isl923x.c
     src/keyboard_scan.c
+    src/led.c
+    src/lid_angle.c
     src/lid_switch.c
     src/lis2dw12.c
     src/ln9310.c
+    src/locate_chip.c
     src/motion_sense/motion_sense.c
     src/panic.c
+    src/panic_output.c
+    src/port80.c
     src/power_common.c
     src/ppc_sn5s330.c
     src/ppc_syv682x.c
@@ -54,6 +71,7 @@ target_sources(app PRIVATE
     src/smart.c
     src/stm_mems_common.c
     src/system.c
+    src/tablet_mode.c
     src/tcpci.c
     src/tcpci_test_common.c
     src/tcs3400.c
@@ -63,5 +81,7 @@ target_sources(app PRIVATE
     src/usb_mux.c
     src/usb_pd_host_cmd.c
     src/vboot_hash.c
+    src/virtual_battery.c
+    src/vstore.c
     src/watchdog.c
 )

@@ -14,7 +14,7 @@ zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ "src/board_power.c")
 if(DEFINED CONFIG_BOARD_NIVVIKS)
 	project(nivviks)
 	zephyr_library_sources(
-			"src/led.c"
+			"nivviks/src/led.c"
 			"nivviks/src/form_factor.c"
 			"nivviks/src/keyboard.c"
 	)
@@ -54,9 +54,12 @@ if(DEFINED CONFIG_BOARD_PUJJO)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "pujjo/src/charger.c")
 endif()
 if(DEFINED CONFIG_BOARD_XIVU)
-        project(xivu)
-        zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "xivu/src/usbc.c")
-        zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "xivu/src/charger.c")
+	project(xivu)
+	zephyr_library_sources(
+			"xivu/src/keyboard.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "xivu/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "xivu/src/charger.c")
 endif()
 if(DEFINED CONFIG_BOARD_JOXER)
 	project(joxer)

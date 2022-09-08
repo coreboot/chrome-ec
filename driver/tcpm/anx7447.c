@@ -36,6 +36,7 @@ static int anx7447_mux_set(const struct usb_mux *me, mux_state_t mux_state,
 
 static struct anx_state anx[CONFIG_USB_PD_PORT_MAX_COUNT];
 static struct anx_usb_mux mux[CONFIG_USB_PD_PORT_MAX_COUNT];
+static bool anx7447_bist_test_mode[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 #ifdef CONFIG_USB_PD_FRS_TCPC
 /* an array to indicate which port is waiting for FRS disablement. */
@@ -249,7 +250,7 @@ int anx7447_flash_erase(int port)
 }
 
 /* Add console command to erase OCM flash if needed. */
-static int command_anx_ocm(int argc, char **argv)
+static int command_anx_ocm(int argc, const char **argv)
 {
 	char *e = NULL;
 	int port;
@@ -492,6 +493,29 @@ static void anx7447_tcpc_alert(int port)
 	/* process and clear alert status */
 	tcpci_tcpc_alert(port);
 }
+
+#ifdef CONFIG_USB_PD_TCPC_LOW_POWER
+static int anx7447_tcpc_enter_low_power_mode(int port)
+{
+	int rv;
+
+	/*
+	 * if anx7447 is in source mode, need to set Rp to default before
+	 * entering the low power mode.
+	 */
+	if (pd_get_dual_role(port) == PD_DRP_FORCE_SOURCE) {
+		rv = tcpc_write(
+			port, TCPC_REG_ROLE_CTRL,
+			TCPC_REG_ROLE_CTRL_SET(TYPEC_NO_DRP, TYPEC_RP_USB,
+					       TYPEC_CC_RP, TYPEC_CC_RP));
+		if (rv) {
+			return rv;
+		}
+	}
+
+	return tcpci_enter_low_power_mode(port);
+}
+#endif
 
 #ifdef CONFIG_USB_PD_FRS_TCPC
 static void anx7447_disable_frs_deferred(void)
@@ -978,6 +1002,15 @@ enum ec_error_list anx7447_set_bist_test_mode(const int port, const bool enable)
 	RETURN_ERROR(tcpc_write(port, ANX7447_REG_CC_DEBOUNCE_TIME,
 				enable ? 2 : 10));
 
+	anx7447_bist_test_mode[port] = enable;
+
+	return EC_SUCCESS;
+}
+
+enum ec_error_list anx7447_get_bist_test_mode(const int port, bool *enable)
+{
+	*enable = anx7447_bist_test_mode[port];
+
 	return EC_SUCCESS;
 }
 
@@ -1018,12 +1051,13 @@ const struct tcpm_drv anx7447_tcpm_drv = {
 	.set_snk_ctrl = &tcpci_tcpm_set_snk_ctrl,
 	.set_src_ctrl = &tcpci_tcpm_set_src_ctrl,
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
-	.enter_low_power_mode = &tcpci_enter_low_power_mode,
+	.enter_low_power_mode = &anx7447_tcpc_enter_low_power_mode,
 #endif
 #ifdef CONFIG_USB_PD_FRS_TCPC
 	.set_frs_enable = &anx7447_set_frs_enable,
 #endif
 	.set_bist_test_mode = &anx7447_set_bist_test_mode,
+	.get_bist_test_mode = &anx7447_get_bist_test_mode,
 #ifdef CONFIG_CMD_TCPC_DUMP
 	.dump_registers = &anx7447_dump_registers,
 #endif

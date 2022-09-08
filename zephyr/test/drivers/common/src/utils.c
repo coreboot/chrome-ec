@@ -13,6 +13,7 @@
 #include "battery_smart.h"
 #include "charge_state.h"
 #include "chipset.h"
+#include "lpc.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
 #include "emul/emul_stub_device.h"
@@ -60,11 +61,12 @@ void test_set_chipset_to_s0(void)
 	/*
 	 * Make sure that battery is in good condition to
 	 * not trigger hibernate in charge_state_v2.c
-	 * Set battery voltage to expected value and capacity to 75%. Battery
+	 * Set battery voltage to expected value and capacity to 50%. Battery
 	 * will not be full and accepts charging, but will not trigger
-	 * hibernate. Charge level is chosen arbitrary.
+	 * hibernate. Charge level is set to the default value of an emulator
+	 * (emul/emul_smart_battery.c). b/244366201.
 	 */
-	test_set_battery_level(75);
+	test_set_battery_level(50);
 
 	/* The easiest way to power on seems to be the shell command. */
 	zassert_equal(EC_SUCCESS, shell_execute_cmd(get_ec_shell(), "power on"),
@@ -153,8 +155,8 @@ void connect_sink_to_port(struct tcpci_partner_data *partner,
 	 *   function.
 	 */
 	/* Enforce that we only support the isl923x emulator for now */
-	__ASSERT_NO_MSG(emul_get_binding(DT_LABEL(
-				DT_NODELABEL(isl923x_emul))) == charger_emul);
+	__ASSERT_NO_MSG(EMUL_DT_GET(DT_NODELABEL(isl923x_emul)) ==
+			charger_emul);
 	isl923x_emul_set_adc_vbus(charger_emul, 0);
 	tcpci_emul_set_reg(tcpci_emul, TCPC_REG_POWER_STATUS,
 			   TCPC_REG_POWER_STATUS_VBUS_DET);
@@ -211,6 +213,24 @@ void acpi_write(uint8_t acpi_addr, uint8_t write_byte)
 	/* Finally, time to write the data */
 	zassume_ok(acpi_ap_to_ec(false, write_byte, &readval),
 		   "Failed to write value");
+}
+
+enum ec_status host_cmd_host_event(enum ec_host_event_action action,
+				   enum ec_host_event_mask_type mask_type,
+				   struct ec_response_host_event *r)
+{
+	enum ec_status ret_val;
+
+	struct ec_params_host_event params = {
+		.action = action,
+		.mask_type = mask_type,
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND(EC_CMD_HOST_EVENT, 0, *r, params);
+
+	ret_val = host_command_process(&args);
+
+	return ret_val;
 }
 
 void host_cmd_motion_sense_dump(int max_sensor_count,
@@ -529,6 +549,26 @@ void host_cmd_usb_pd_get_amode(
 	zassume_ok(host_command_process(&args),
 		   "Failed to get alternate-mode info for port %d", port);
 	*response_size = args.response_size;
+}
+
+void host_events_save(struct host_events_ctx *host_events_ctx)
+{
+	host_events_ctx->lpc_host_events = lpc_get_host_events();
+
+	for (int i = 0; i < LPC_HOST_EVENT_COUNT; i++) {
+		host_events_ctx->lpc_host_event_mask[i] =
+			lpc_get_host_events_by_type(i);
+	}
+}
+
+void host_events_restore(struct host_events_ctx *host_events_ctx)
+{
+	lpc_set_host_event_state(host_events_ctx->lpc_host_events);
+
+	for (int i = 0; i < LPC_HOST_EVENT_COUNT; i++) {
+		lpc_set_host_event_mask(
+			i, host_events_ctx->lpc_host_event_mask[i]);
+	}
 }
 
 K_HEAP_DEFINE(test_heap, 2048);

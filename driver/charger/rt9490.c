@@ -7,6 +7,7 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "builtin/assert.h"
 #include "builtin/endian.h"
 #include "charger.h"
 #include "charge_manager.h"
@@ -20,6 +21,8 @@
 #include "usb_charge.h"
 #include "usb_pd.h"
 #include "util.h"
+#include "temp_sensor/temp_sensor.h"
+#include "temp_sensor/thermistor.h"
 
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
@@ -37,11 +40,10 @@
  * RT9490 can't measure the 50mA charge current precisely due to insufficient
  * ADC resolution, and faulty leads it into battery supply mode.
  * the final number would be expected between 100mA ~ 200mA.
- * In reality, we don't actually need that small charging current.
- * Tentacool's battery pack requests 256mA as the minimum current,
- * so that can be a SW workaround.
+ * Vendor has done the FT correlation and will revise the datasheet's
+ * CHARGE_I_MIN value from 50mA to 150mA as the final solution.
  */
-#define CHARGE_I_MIN 256
+#define CHARGE_I_MIN 150
 #define CHARGE_I_STEP 10
 #define INPUT_I_MAX 3300
 #define INPUT_I_MIN 100
@@ -312,11 +314,6 @@ static int rt9490_init_setting(int chgnum)
 	/* Disable AUTO_AICR / AUTO_MIVR */
 	RETURN_ERROR(rt9490_clr_bit(chgnum, RT9490_REG_ADD_CTRL0,
 				    RT9490_AUTO_AICR | RT9490_AUTO_MIVR));
-	/* Disable charge timer */
-	RETURN_ERROR(rt9490_clr_bit(chgnum, RT9490_REG_SAFETY_TMR_CTRL,
-				    RT9490_EN_TRICHG_TMR |
-					    RT9490_EN_PRECHG_TMR |
-					    RT9490_EN_FASTCHG_TMR));
 	RETURN_ERROR(rt9490_set_mivr(chgnum, default_init_setting.mivr));
 	RETURN_ERROR(rt9490_set_ieoc(chgnum, default_init_setting.eoc_current));
 	RETURN_ERROR(rt9490_set_iprec(chgnum, batt_info->precharge_current));
@@ -340,6 +337,10 @@ static int rt9490_init_setting(int chgnum)
 				    RT9490_CHG_IRQ_MASK4_ALL));
 	RETURN_ERROR(rt9490_set_bit(chgnum, RT9490_REG_CHG_IRQ_MASK5,
 				    RT9490_CHG_IRQ_MASK5_ALL));
+	/* Reduce SW freq from 1.5MHz to 1MHz
+	 * for 10% higher current rating b/215294785
+	 */
+	RETURN_ERROR(rt9490_enable_pwm_1mhz(CHARGER_SOLO, true));
 
 	return EC_SUCCESS;
 }
@@ -412,7 +413,7 @@ static enum ec_error_list rt9490_get_actual_current(int chgnum, int *current)
 	uint16_t reg_val;
 
 	RETURN_ERROR(rt9490_read16(chgnum, RT9490_REG_IBAT_ADC, &reg_val));
-	*current = (int)reg_val * 1000;
+	*current = (int)reg_val;
 	return EC_SUCCESS;
 }
 
@@ -421,7 +422,7 @@ static enum ec_error_list rt9490_get_actual_voltage(int chgnum, int *voltage)
 	uint16_t reg_val;
 
 	RETURN_ERROR(rt9490_read16(chgnum, RT9490_REG_VBAT_ADC, &reg_val));
-	*voltage = (int)reg_val * 1000;
+	*voltage = (int)reg_val;
 	return EC_SUCCESS;
 }
 
@@ -436,7 +437,7 @@ static enum ec_error_list rt9490_get_vbus_voltage(int chgnum, int port,
 	uint16_t reg_val;
 
 	RETURN_ERROR(rt9490_read16(chgnum, RT9490_REG_VBUS_ADC, &reg_val));
-	*voltage = (int)reg_val * 1000;
+	*voltage = (int)reg_val;
 	return EC_SUCCESS;
 }
 
@@ -736,3 +737,21 @@ struct bc12_config bc12_ports[CHARGE_PORT_COUNT] = {
 	},
 };
 #endif /* CONFIG_BC12_SINGLE_DRIVER */
+
+int rt9490_get_thermistor_val(const struct temp_sensor_t *sensor, int *temp_ptr)
+{
+	uint16_t mv;
+	int idx = sensor->idx;
+#if IS_ENABLED(CONFIG_ZEPHYR) && IS_ENABLED(CONFIG_TEMP_SENSOR)
+	const struct thermistor_info *info = sensor->zephyr_info->thermistor;
+#else
+	const struct thermistor_info *info = &rt9490_thermistor_info;
+#endif
+
+	if (idx != 0)
+		return EC_ERROR_PARAM1;
+	RETURN_ERROR(rt9490_read16(idx, RT9490_REG_TS_ADC, &mv));
+	*temp_ptr = thermistor_linear_interpolate(mv, info);
+	*temp_ptr = C_TO_K(*temp_ptr);
+	return EC_SUCCESS;
+}

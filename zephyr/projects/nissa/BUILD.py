@@ -72,11 +72,11 @@ pujjo = register_nissa_project(
     chip="npcx9m3f",
     extra_dts_overlays=[
         "generated.dts",
+        "cbi.dts",
         "overlay.dts",
         "motionsense.dts",
         "keyboard.dts",
         "power_signals.dts",
-        "pwm_leds.dts",
     ],
 )
 
@@ -85,6 +85,7 @@ xivu = register_nissa_project(
     chip="npcx9m3f",
     extra_dts_overlays=[
         "generated.dts",
+        "cbi.dts",
         "overlay.dts",
         "motionsense.dts",
         "keyboard.dts",
@@ -99,6 +100,7 @@ joxer = register_nissa_project(
     chip="it81302bx",
     extra_dts_overlays=[
         "generated.dts",
+        "cbi.dts",
         "overlay.dts",
         "motionsense.dts",
         "keyboard.dts",
@@ -113,7 +115,6 @@ yaviks = register_nissa_project(
     extra_dts_overlays=[
         "gpio.dts",
         "overlay.dts",
-        "motionsense.dts",
         "keyboard.dts",
         "power_signals.dts",
         "pwm_leds.dts",

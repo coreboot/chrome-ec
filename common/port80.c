@@ -62,7 +62,9 @@ void port_80_write(int data)
 			data);
 	}
 
-	hook_call_deferred(&port80_dump_buffer_data, 4 * SECOND);
+	if (!IS_ENABLED(CONFIG_PORT80_QUIET)) {
+		hook_call_deferred(&port80_dump_buffer_data, 4 * SECOND);
+	}
 
 	/* Save current port80 code if system is resetting */
 	if (data == PORT_80_EVENT_RESET && writes) {
@@ -133,7 +135,7 @@ static void port80_dump_buffer(void)
 /*****************************************************************************/
 /* Console commands */
 
-static int command_port80(int argc, char **argv)
+static int command_port80(int argc, const char **argv)
 {
 	/*
 	 * 'port80 scroll' toggles whether port 80 output begins with a newline

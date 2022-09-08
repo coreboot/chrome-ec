@@ -14,6 +14,7 @@
 		cros-ec,espi = &espi0;
 		cros-ec,watchdog = &wdt_counter;
 		cros-ec,raw-kb = &cros_kb_raw;
+		cros-ec,flash = &flash0;
 		cros-ec,flash-controller = &cros_flash;
 	};
 
@@ -52,19 +53,24 @@
 		compatible = "named-gpios";
 
 		gpio_acok_od: acok_od {
-			gpios = <&gpio0 2 GPIO_INPUT>;
+			gpios = <&gpio0 0 GPIO_INPUT>;
 			enum-name = "GPIO_AC_PRESENT";
 		};
+
+		/* <&gpio0 1 x> is reserved as 'entering-rw' in
+		 * src/platform/ec/zephyr/dts/board-overlays/native_posix.dts
+		 */
+
 		/* In test WP is output because CBI use it, but it is also
 		 * input, because test_all_tags set it to enable write
 		 * protection.
 		 */
 		gpio_wp_l: wp_l {
-			gpios = <&gpio0 3 (GPIO_INPUT | GPIO_OUTPUT |
+			gpios = <&gpio0 2 (GPIO_INPUT | GPIO_OUTPUT |
 					   GPIO_ACTIVE_LOW)>;
 		};
 		gpio_ec_kso_02_inv: ec_kso_02_inv {
-			gpios = <&gpio0 4 (GPIO_INPUT | GPIO_OUTPUT_LOW)>;
+			gpios = <&gpio0 3 (GPIO_INPUT | GPIO_OUTPUT_LOW)>;
 		};
 		pg_ec_dsw_pwrok {
 			gpios = <&gpio0 4 GPIO_INPUT>;
@@ -123,11 +129,11 @@
 			enum-name = "GPIO_AP_SUSPEND";
 		};
 		gpio_pmic_kpd_pwr_odl: pmic_kpd_pwr_odl {
-			gpios = <&gpio0 20 GPIO_ODR_HIGH>;
+			gpios = <&gpio0 20 GPIO_OUTPUT_HIGH>;
 			enum-name = "GPIO_PMIC_KPD_PWR_ODL";
 		};
 		gpio_pmic_resin_l: pmic_resin_l {
-			gpios = <&gpio0 21 GPIO_ODR_HIGH>;
+			gpios = <&gpio0 21 GPIO_OUTPUT_HIGH>;
 			enum-name = "GPIO_PMIC_RESIN_L";
 		};
 		gpio_warm_reset_l: warm_reset_l {
@@ -172,14 +178,40 @@
 			#led-pin-cells = <1>;
 			gpios = <&gpio0 31 (GPIO_INPUT | GPIO_OUTPUT_LOW)>;
 		};
+		/* gpio1 */
 		gpio_ec_chg_led_y_c1: ec_chg_led_y_c1 {
 			#led-pin-cells = <1>;
-			gpios = <&gpio0 32 (GPIO_INPUT | GPIO_OUTPUT_LOW)>;
+			gpios = <&gpio1 0 (GPIO_INPUT | GPIO_OUTPUT_LOW)>;
 		};
 		gpio_ec_chg_led_w_c1: ec_chg_led_w_c1 {
 			#led-pin-cells = <1>;
-			gpios = <&gpio0 33 (GPIO_INPUT | GPIO_OUTPUT_LOW)>;
+			gpios = <&gpio1 1 (GPIO_INPUT | GPIO_OUTPUT_LOW)>;
 		};
+		ap_ec_int_l {
+			gpios = <&gpio1 2 GPIO_OUTPUT_HIGH>;
+			enum-name = "GPIO_EC_INT_L";
+		};
+		gpio_ec_voldn_btn_odl: ec_voldn_btn_odl {
+			gpios = <&gpio1 3 GPIO_INPUT_PULL_UP>;
+			enum-name = "GPIO_VOLUME_DOWN_L";
+		};
+		gpio_ec_volup_btn_odl: ec_volup_btn_odl {
+			gpios = <&gpio1 4 GPIO_INPUT_PULL_UP>;
+			enum-name = "GPIO_VOLUME_UP_L";
+		};
+	};
+
+	gpio1: gpio@101 {
+		status = "okay";
+		compatible = "zephyr,gpio-emul";
+		reg = <0x101 0x4>;
+		rising-edge;
+		falling-edge;
+		high-level;
+		low-level;
+		gpio-controller;
+		#gpio-cells = <2>;
+		ngpios = <5>;
 	};
 
 	gpio-interrupts {
@@ -250,10 +282,12 @@
 		};
 		named_i2c2: i2c2 {
 			i2c-port = <&i2c2>;
+			dynamic-speed;
 			enum-names = "I2C_PORT_USB_C0";
 		};
 		named_i2c3: i2c3 {
 			i2c-port = <&i2c3>;
+			dynamic-speed;
 			enum-names = "I2C_PORT_USB_C1";
 		};
 	};
@@ -318,7 +352,6 @@
 		nchannels = <6>;
 		ref-internal-mv = <3300>;
 		#io-channel-cells = <1>;
-		label = "ADC_0";
 		status = "okay";
 	};
 
@@ -527,7 +560,7 @@
 	 * motion sensor IDs for lid angle calculation.
 	 */
 	motionsense-sensor {
-		ms_bma255: ms-bma255 {
+		base_accel: ms_bma255: ms-bma255 {
 			compatible = "cros-ec,bma255";
 			status = "okay";
 
@@ -553,7 +586,7 @@
 				};
 			};
 		};
-		ms_bmi260_accel: ms-bmi260-accel {
+		lid_accel: ms_bmi260_accel: ms-bmi260-accel {
 			compatible = "cros-ec,bmi260-accel";
 			status = "okay";
 
@@ -659,12 +692,10 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		reg = <0x400 4>;
-		label = "I2C_1";
 
 		tcs_emul: tcs@39 {
 			compatible = "zephyr,tcs3400";
 			reg = <0x39>;
-			label = "TCS_EMUL";
 			error-on-ro-write;
 			error-on-reserved-bit-write;
 			error-on-msb-first-access;
@@ -673,7 +704,6 @@
 		accel_bmi160: bmi160@68 {
 			compatible = "zephyr,bmi";
 			reg = <0x68>;
-			label = "BMI160";
 			device-model = "BMI_EMUL_160";
 			error-on-ro-write;
 			error-on-wo-read;
@@ -689,18 +719,15 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		reg = <0x500 4>;
-		label = "I2C_2";
 
 		pi3usb9201_emul: pi3usb9201@5f {
 			compatible = "zephyr,pi3usb9201-emul";
 			reg = <0x5f>;
-			label = "PI3USB9201_EMUL";
 		};
 
 		sn5s330_emul: sn5s330@40 {
 			compatible = "cros,sn5s330-emul";
 			reg = <0x40>;
-			label = "SN5S330_EMUL";
 			int-pin = <&gpio_usb_c0_ppc_int>;
 		};
 
@@ -708,7 +735,6 @@
 			compatible = "cros,tcpci-generic-emul";
 			status = "okay";
 			reg = <0x82>;
-			label = "TCPCI_EMUL";
 			alert_gpio = <&usb_c0_tcpc_int_odl>;
 		};
 	};
@@ -720,12 +746,10 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		reg = <0x600 4>;
-		label = "I2C_3";
 
 		syv682x_emul: syv682x@41 {
 			compatible = "zephyr,syv682x-emul";
 			reg = <0x41>;
-			label = "SYV682X_EMUL";
 			frs_en_gpio = <&gpio_usb_c1_frs_en>;
 			alert_gpio = <&gpio_usb_c1_ppc_int>;
 		};
@@ -733,7 +757,6 @@
 		usb_c1_bb_retimer_emul: bbretimer@42 {
 			compatible = "cros,bb-retimer-emul";
 			reg = <0x42>;
-			label = "USB_C1_BB_RETIMER";
 			vendor = "BB_RETIMER_VENDOR_ID_1";
 			error-on-ro-write;
 			error-on-reserved-bit-write;
@@ -746,7 +769,6 @@
 			p0-i2c-addr = <0x8>;
 			p1-i2c-addr = <0x9>;
 			gpio-i2c-addr = <0x1a>;
-			label = "PS8XXX_EMUL";
 		};
 	};
 
@@ -759,16 +781,114 @@
 		compatible = "zephyr,counter-watchdog";
 		status = "okay";
 		counter = <&counter0>;
-		label = "WDT_COUNTER";
 	};
 
 	cros_kb_raw: kb-raw-emul {
 		compatible = "cros-ec,kb-raw-emul";
-		label = "KB_RAW";
 	};
 
 	cros_flash: cros-flash {
 		compatible = "cros-ec,flash-emul";
+	};
+
+	pwms {
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		pwm_blue_left: pwm@0 {
+			compatible = "cros,pwm-mock";
+			reg = <0 1>;
+			#pwm-cells = <2>;
+			status = "okay";
+		};
+		pwm_white_left: pwm@1 {
+			compatible = "cros,pwm-mock";
+			reg = <1 1>;
+			#pwm-cells = <2>;
+			status = "okay";
+		};
+		pwm_amber_right: pwm@2 {
+			compatible = "cros,pwm-mock";
+			reg = <2 1>;
+			#pwm-cells = <2>;
+			status = "okay";
+		};
+		pwm_white_right: pwm@3 {
+			compatible = "cros,pwm-mock";
+			reg = <3 1>;
+			#pwm-cells = <2>;
+			status = "okay";
+		};
+	};
+
+	pwmleds {
+		compatible = "cros-ec,pwm-pin-config";
+
+		pwmled_blue_left: pwmled_b_left {
+			#led-pin-cells = <1>;
+			pwms = <&pwm_blue_left 0 1000000>;
+		};
+		pwmled_white_left: pwmled_w_left {
+			#led-pin-cells = <1>;
+			pwms = <&pwm_white_left 0 1000000>;
+		};
+		pwmled_amber_right: pwmled_y_right {
+			#led-pin-cells = <1>;
+			pwms = <&pwm_amber_right 0 1000000>;
+		};
+		pwmled_white_right: pwmled_w_right {
+			#led-pin-cells = <1>;
+			pwms = <&pwm_white_right 0 1000000>;
+		};
+	};
+
+	pwm-led-pins {
+		compatible = "cros-ec,pwm-led-pins";
+
+		color-off-left {
+			led-color = "LED_OFF";
+			led-id = "EC_LED_ID_LEFT_LED";
+			led-pins = <&pwmled_blue_left 0>,
+				   <&pwmled_white_left 0>;
+		};
+		color-off-right {
+			led-color = "LED_OFF";
+			led-id = "EC_LED_ID_RIGHT_LED";
+			led-pins = <&pwmled_amber_right 0>,
+				   <&pwmled_white_right 0>;
+		};
+		color-blue-left {
+			led-color = "LED_BLUE";
+			led-id = "EC_LED_ID_LEFT_LED";
+			br-color = "EC_LED_COLOR_BLUE";
+			led-pins = <&pwmled_blue_left 100>,
+				   <&pwmled_white_left 0>;
+		};
+		color-amber-right {
+			led-color = "LED_AMBER";
+			led-id = "EC_LED_ID_RIGHT_LED";
+			br-color = "EC_LED_COLOR_AMBER";
+			led-pins = <&pwmled_amber_right 100>,
+				   <&pwmled_white_right 0>;
+		};
+		color-white-left {
+			led-color = "LED_WHITE";
+			led-id = "EC_LED_ID_LEFT_LED";
+			br-color = "EC_LED_COLOR_WHITE";
+			led-pins = <&pwmled_blue_left 0>,
+				   <&pwmled_white_left 100>;
+		};
+		color-white-right {
+			led-color = "LED_WHITE";
+			led-id = "EC_LED_ID_RIGHT_LED";
+			br-color = "EC_LED_COLOR_WHITE";
+			led-pins = <&pwmled_amber_right 0>,
+				   <&pwmled_white_right 100>;
+		};
+	};
+
+	led-colors {
+		compatible = "cros-ec,led-policy";
 	};
 };
 
@@ -777,12 +897,11 @@
 		status = "okay";
 		compatible = "zephyr,espi-emul-espi-host";
 		reg = <0x0>;
-		label = "ESPI_HOST";
 	};
 };
 
 &gpio0 {
-	ngpios = <34>;
+	ngpios = <32>;
 };
 
 &i2c0 {
@@ -798,18 +917,18 @@
 	battery: sb@b {
 		compatible = "zephyr,smart-battery";
 		reg = <0xb>;
-		label = "BATTERY";
 		cycle-count = <99>;
 		version = "BATTERY_SPEC_VER_1_1_WITH_PEC";
 		/* Real battery voltages are multiples of 4.4V. */
 		desired-charg-volt = <5000>;
 		desired-charg-cur = <1000>;
+		mf-name = "LGC";
+		dev-name = "AC17A8M";
 	};
 
 	bma_emul: bma@18 {
 		compatible = "zephyr,bma255";
 		reg = <0x18>;
-		label = "BMA_EMUL";
 		error-on-compensation-not-ready;
 		error-on-ro-write;
 		error-on-reserved-bit-write;
@@ -819,7 +938,6 @@
 	accel_bmi260: bmi260@68 {
 		compatible = "zephyr,bmi";
 		reg = <0x68>;
-		label = "BMI260";
 		device-model = "BMI_EMUL_260";
 		error-on-ro-write;
 		error-on-wo-read;
@@ -827,11 +945,10 @@
 		simulate-command-exec-time;
 	};
 
-	ln9310: ln9310@80 {
+	ln9310: ln9310@72 {
 		compatible = "cros,ln9310-emul";
 		status = "okay";
-		reg = <0x80>;
-		label = "LN9310";
+		reg = <0x72>;
 		pg-int-pin = <&gpio_switchcap_pg_int_l>;
 	};
 
@@ -839,21 +956,18 @@
 		compatible = "cros,lis2dw12-emul";
 		status = "okay";
 		reg = <0x19>;
-		label = "LIS2DW12_EMUL";
 	};
 
 	i2c_mock: i2c_mock@84 {
 		compatible = "cros,i2c-mock";
 		status = "okay";
 		reg = <0x84>;
-		label = "I2C_MOCK";
 	};
 
 	isl923x_emul: isl923x@9 {
 		compatible = "cros,isl923x-emul";
 		status = "okay";
 		reg = <0x9>;
-		label = "ISL923X_EMUL";
 		battery = <&battery>;
 	};
 
@@ -875,4 +989,10 @@
 
 &thermistor_3V3_51K1_47K_4050B  {
 	status = "okay";
+};
+
+&flash0 {
+        erase-block-size = <0x10000>;
+        write-block-size = <1>;
+        reg = <0x00000000 DT_SIZE_K(512)>;
 };

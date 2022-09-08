@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env vpython3
 
 # Copyright 2022 The ChromiumOS Authors.
 # Use of this source code is governed by a BSD-style license that can be
@@ -9,6 +9,58 @@ This script is a wrapper for invoking Twister, the Zephyr test runner, using
 default parameters for the ChromiumOS EC project. For an overview of CLI
 parameters that may be used, please consult the Twister documentation.
 """
+
+# [VPYTHON:BEGIN]
+# python_version: "3.8"
+# wheel: <
+#   name: "infra/python/wheels/anytree-py2_py3"
+#   version: "version:2.8.0"
+# >
+# wheel: <
+#   name: "infra/python/wheels/colorama-py3"
+#   version: "version:0.4.1"
+# >
+# wheel: <
+#   name: "infra/python/wheels/docopt-py2_py3"
+#   version: "version:0.6.2"
+# >
+# wheel: <
+#   name: "infra/python/wheels/ply-py2_py3"
+#   version: "version:3.11"
+# >
+# wheel: <
+#   name: "infra/python/wheels/psutil/${vpython_platform}"
+#   version: "version:5.8.0.chromium.3"
+# >
+# wheel: <
+#   name: "infra/python/wheels/pykwalify-py2_py3"
+#   version: "version:1.8.0"
+# >
+# wheel: <
+#   name: "infra/python/wheels/pyserial-py2_py3"
+#   version: "version:3.4"
+# >
+# wheel: <
+#   name: "infra/python/wheels/python-dateutil-py2_py3"
+#   version: "version:2.8.1"
+# >
+# wheel: <
+#   name: "infra/python/wheels/pyyaml-py3"
+#   version: "version:5.3.1"
+# >
+# wheel: <
+#   name: "infra/python/wheels/ruamel_yaml_clib/${vpython_platform}"
+#   version: "version:0.2.6"
+# >
+# wheel: <
+#   name: "infra/python/wheels/ruamel_yaml-py3"
+#   version: "version:0.17.16"
+# >
+# wheel: <
+#   name: "infra/python/wheels/six-py2_py3"
+#   version: "version:1.16.0"
+# >
+# [VPYTHON:END]
 
 import argparse
 import os
@@ -77,7 +129,7 @@ def find_modules(mod_dir: Path) -> list:
     modules = []
     for child in mod_dir.iterdir():
         if child.is_dir() and (child / "zephyr" / "module.yml").exists():
-            modules.append(child)
+            modules.append(child.resolve())
     return modules
 
 
@@ -88,7 +140,11 @@ def main():
     ec_base, zephyr_base, zephyr_modules_dir = find_paths()
 
     zephyr_modules = find_modules(zephyr_modules_dir)
-    zephyr_modules.append(ec_base)
+
+    # Add the EC dir as a module if not already included (resolve all paths to
+    # account for symlinked or relative paths)
+    if ec_base.resolve() not in zephyr_modules:
+        zephyr_modules.append(ec_base)
 
     # Prepare environment variables for export to Twister. Inherit the parent
     # process's environment, but set some default values if not already set.
@@ -104,9 +160,15 @@ def main():
     twister_env.update(extra_env_vars)
 
     # Twister CLI args
+    # TODO(b/239165779): Reduce or remove the usage of label properties
+    # Zephyr upstream has deprecated the label property. We need to allow
+    # warnings during twister runs until all the label properties are removed
+    # from all board and test overlays.
     twister_cli = [
+        sys.executable,
         str(zephyr_base / "scripts" / "twister"),  # Executable path
         "--ninja",
+        "--disable-warnings-as-errors",
         f"-x=DTS_ROOT={str( ec_base / 'zephyr')}",
         f"-x=SYSCALL_INCLUDE_DIRS={str(ec_base / 'zephyr' / 'include' / 'drivers')}",
         f"-x=ZEPHYR_BASE={zephyr_base}",

@@ -204,10 +204,17 @@ enum pd_rx_errors {
 #ifndef CONFIG_USB_PD_TCPMV2
 #define PD_T_SENDER_RESPONSE (30 * MSEC) /* between 24ms and 30ms */
 #else
-#define PD_T_SENDER_RESPONSE (24 * MSEC) /* between 24ms and 30ms */
+/*
+ * In USB Power Delivery Specification Revision 3.1, Version 1.5,
+ * the tSenderResponse have changed to min 26/ max 32 ms.
+ */
+#define PD_T_SENDER_RESPONSE (26 * MSEC) /* between 26ms and 32ms */
 #endif
 #define PD_T_PS_TRANSITION (500 * MSEC) /* between 450ms and 550ms */
-#define PD_T_PS_SOURCE_ON (480 * MSEC) /* between 390ms and 480ms */
+/*
+ * This is adjusted for PD3.1 Compliance test TEST.PD.PROT.SRC.10.
+ */
+#define PD_T_PS_SOURCE_ON (435 * MSEC) /* between 390ms and 480ms */
 #define PD_T_PS_SOURCE_OFF (835 * MSEC) /* between 750ms and 920ms */
 #define PD_T_PS_HARD_RESET (25 * MSEC) /* between 25ms and 35ms */
 #define PD_T_ERROR_RECOVERY (240 * MSEC) /* min 240ms if sourcing VConn */
@@ -581,17 +588,17 @@ struct partner_active_modes {
 #define VDO_PRODUCT(pid, bcd) (((pid)&0xffff) << 16 | ((bcd)&0xffff))
 #define PD_PRODUCT_PID(vdo) (((vdo) >> 16) & 0xffff)
 
-/*
- * PD Rev 3.1 Revision Message Data Object (RMDO)
- * Only bits 16-31 have data. A uint_16t is used to hold RMDOs upper 16 bits.
- */
+/* PD Rev 3.1 Revision Message Data Object (RMDO) */
 struct rmdo {
-	int reserved : 16;
-	int minor_ver : 4;
-	int major_ver : 4;
-	int minor_rev : 4;
-	int major_rev : 4;
+	uint32_t reserved : 16;
+	uint32_t minor_ver : 4;
+	uint32_t major_ver : 4;
+	uint32_t minor_rev : 4;
+	uint32_t major_rev : 4;
 };
+
+/* Confirm RMDO is 32 bits. */
+BUILD_ASSERT(sizeof(struct rmdo) == 4);
 
 /*
  * Message id starts from 0 to 7. If last_msg_id is initialized to 0,
@@ -2602,6 +2609,15 @@ extern const uint32_t pd_src_pdo_max[];
 extern const int pd_src_pdo_max_cnt;
 extern const uint32_t pd_snk_pdo[];
 extern const int pd_snk_pdo_cnt;
+
+/**
+ * TEST ONLY: Set PD_CONTROL command to enabled on this port
+ *
+ * @param port USB-C port number
+ */
+#ifdef TEST_BUILD
+void pd_control_port_enable(int port);
+#endif
 
 /**
  * Request that a host event be sent to notify the AP of a PD power event.

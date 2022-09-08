@@ -123,6 +123,15 @@
 		status = "okay";
 		reg = <0x9>;
 	};
+
+	cbi_eeprom: eeprom@50 {
+		compatible = "atmel,at24";
+		reg = <0x50>;
+		size = <2048>;
+		pagesize = <16>;
+		address-width = <8>;
+		timeout = <5>;
+	};
 };
 
 &i2c_ctrl7 {
@@ -139,6 +148,13 @@
 	tcpc_port0: fusb302@22 {
 		compatible = "fairchild,fusb302";
 		reg = <0x22>;
+	};
+
+	usb_c0_bb_retimer: jhl8040r-c0@56 {
+		compatible = "intel,jhl8040r";
+		reg = <0x56>;
+		reset-pin = <&usb_c0_bb_retimer_rst>;
+		ls-en-pin = <&usb_c0_bb_retimer_ls_en>;
 	};
 };
 
@@ -157,6 +173,13 @@
 		compatible = "fairchild,fusb302";
 		reg = <0x22>;
 	};
+
+	usb_c1_bb_retimer: jhl8040r-c1@57 {
+		compatible = "intel,jhl8040r";
+		reg = <0x57>;
+		reset-pin = <&usb_c1_bb_retimer_rst>;
+		ls-en-pin = <&usb_c1_bb_retimer_ls_en>;
+	};
 };
 
 &i2c_ctrl2 {
@@ -174,6 +197,13 @@
 		compatible = "fairchild,fusb302";
 		reg = <0x22>;
 	};
+
+	usb_c2_bb_retimer: jhl8040r-c2@58 {
+		compatible = "intel,jhl8040r";
+		reg = <0x58>;
+		reset-pin = <&usb_c2_bb_retimer_rst>;
+		ls-en-pin = <&usb_c2_bb_retimer_ls_en>;
+	};
 };
 
 &i2c_ctrl1 {
@@ -190,6 +220,13 @@
 	tcpc_port3: fusb302@22 {
 		compatible = "fairchild,fusb302";
 		reg = <0x22>;
+	};
+
+	usb_c3_bb_retimer: jhl8040r-c3@59 {
+		compatible = "intel,jhl8040r";
+		reg = <0x59>;
+		reset-pin = <&usb_c3_bb_retimer_rst>;
+		ls-en-pin = <&usb_c3_bb_retimer_ls_en>;
 	};
 };
 

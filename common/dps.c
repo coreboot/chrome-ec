@@ -10,6 +10,7 @@
 #include "dps.h"
 #include "atomic.h"
 #include "battery.h"
+#include "common.h"
 #include "console.h"
 #include "charger.h"
 #include "charge_manager.h"
@@ -66,6 +67,11 @@ __overridable struct dps_config_t dps_config = {
 	.is_more_efficient = NULL,
 };
 
+__test_only struct dps_config_t *dps_get_config(void)
+{
+	return &dps_config;
+}
+
 int dps_get_dynamic_voltage(void)
 {
 	return dynamic_mv;
@@ -81,14 +87,15 @@ bool dps_is_enabled(void)
 	return is_enabled;
 }
 
-static void dps_enable(bool en)
+test_export_static void dps_enable(bool en)
 {
 	bool prev_en = is_enabled;
 
 	is_enabled = en;
 
-	if (is_enabled && !prev_en)
+	if (is_enabled && !prev_en) {
 		task_wake(TASK_ID_DPS);
+	}
 
 	if (!is_enabled) {
 		/* issue a new PD request for a default voltage */
@@ -121,21 +128,24 @@ static void dps_reset(void)
 /*
  * DPS initialization.
  */
-static void dps_init(void)
+test_export_static int dps_init(void)
 {
+	int rc = EC_SUCCESS;
+
 	dps_reset();
 
 	if (dps_config.k_window > MAX_MOVING_AVG_WINDOW) {
-		dps_config.k_window = MAX_MOVING_AVG_WINDOW;
 		CPRINTS("ERR:WIN");
+		rc = EC_ERROR_INVALID_CONFIG;
 	}
 
 	if (dps_config.k_less_pwr > 100 || dps_config.k_more_pwr > 100 ||
 	    dps_config.k_more_pwr <= dps_config.k_less_pwr) {
-		dps_config.k_less_pwr = K_LESS_PWR;
-		dps_config.k_more_pwr = K_MORE_PWR;
 		CPRINTS("ERR:COEF");
+		rc = EC_ERROR_INVALID_CONFIG;
 	}
+
+	return rc;
 }
 
 static bool is_near_limit(int val, int limit)
@@ -290,7 +300,7 @@ struct pdo_candidate {
  * @param struct pdo_candidate: The candidate PDO. (Return value)
  * @return true if a new power request, or false otherwise.
  */
-static bool has_new_power_request(struct pdo_candidate *cand)
+__maybe_unused static bool has_new_power_request(struct pdo_candidate *cand)
 {
 	int vbus, input_curr, input_pwr;
 	int input_pwr_avg = 0, input_curr_avg = 0;
@@ -449,7 +459,7 @@ static bool has_new_power_request(struct pdo_candidate *cand)
 	return (cand->mv != req_mv);
 }
 
-static bool has_srccap(void)
+__maybe_unused static bool has_srccap(void)
 {
 	for (int i = 0; i < board_get_usb_pd_port_count(); ++i) {
 		if (pd_is_connected(i) &&
@@ -469,8 +479,14 @@ void dps_task(void *u)
 {
 	struct pdo_candidate last_cand = { CHARGE_PORT_NONE, 0, 0 };
 	int sample_count = 0;
+	int rv;
 
-	dps_init();
+	rv = dps_init();
+	if (rv) {
+		CPRINTS("ERR:INIT%d", rv);
+		return;
+	}
+
 	update_timeout(dps_config.t_check);
 
 	while (1) {
@@ -531,7 +547,7 @@ void dps_task(void *u)
 	}
 }
 
-static int command_dps(int argc, char **argv)
+static int command_dps(int argc, const char **argv)
 {
 	int port = charge_manager_get_active_charge_port();
 	int input_pwr, vbus, input_curr;
@@ -669,3 +685,22 @@ static enum ec_status hc_usb_pd_dps_control(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_USB_PD_DPS_CONTROL, hc_usb_pd_dps_control,
 		     EC_VER_MASK(0));
+
+#ifdef TEST_BUILD
+__test_only bool dps_is_fake_enabled(void)
+{
+	return fake_enabled;
+}
+__test_only int dps_get_fake_mv(void)
+{
+	return fake_mv;
+}
+__test_only int dps_get_fake_ma(void)
+{
+	return fake_ma;
+}
+__test_only int *dps_get_debug_level(void)
+{
+	return &debug_level;
+}
+#endif /* TEST_BUILD */

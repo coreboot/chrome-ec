@@ -6,6 +6,8 @@
  */
 #include <stdbool.h>
 
+#include "temp_sensor.h"
+
 #ifndef __CROS_EC_RT9490_H
 #define __CROS_EC_RT9490_H
 
@@ -252,3 +254,12 @@ int rt9490_enable_adc(int chgnum, bool en);
 int rt9490_enable_pwm_1mhz(int chgnum, bool en);
 
 #endif /* __CROS_EC_RT9490_H */
+
+/*
+ * Required for TS_ADC temperature calculation.
+ * Non-zephyr devices that using TS_ADC must define this in board layer.
+ */
+extern const struct thermistor_info rt9490_thermistor_info;
+
+int rt9490_get_thermistor_val(const struct temp_sensor_t *sensor,
+			      int *temp_ptr);

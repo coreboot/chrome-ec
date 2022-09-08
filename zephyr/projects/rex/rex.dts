@@ -43,13 +43,9 @@
 		};
 	};
 
-	hibernate-wake-pins {
-		compatible = "cros-ec,hibernate-wake-pins";
-		wakeup-irqs = <
-			&int_ac_present
-			&int_power_button
-			&int_lid_open
-		>;
+	usba-port-enable-list {
+		compatible = "cros-ec,usba-port-enable-pins";
+		enable-pins = <&gpio_en_pp5000_usba_r>;
 	};
 };
 
@@ -58,6 +54,38 @@
 	status = "okay";
 	pinctrl-0 = <&espi_lpc_gp46_47_51_52_53_54_55_57>;
 	pinctrl-names = "default";
+};
+
+/* Power switch logic input pads */
+&psl_in1_gpd2 {
+	/* LID_OPEN */
+	psl-in-mode = "edge";
+	psl-in-pol = "high-rising";
+};
+
+&psl_in2_gp00 {
+	/* ACOK_OD */
+	psl-in-mode = "edge";
+	psl-in-pol = "high-rising";
+};
+
+&psl_in3_gp01 {
+	/* GSC_EC_PWR_BTN_ODL */
+	psl-in-mode = "edge";
+	psl-in-pol = "low-falling";
+};
+
+&psl_in4_gp02 {
+	/* MECH_PWR_BTN_ODL */
+	psl-in-mode = "edge";
+	psl-in-pol = "low-falling";
+};
+
+/* Power domain device controlled by PSL (Power Switch Logic) IO pads */
+&power_ctrl_psl {
+	status = "okay";
+	pinctrl-names = "sleep";
+	pinctrl-0 = <&psl_in1_gpd2 &psl_in2_gp00 &psl_in3_gp01 &psl_in4_gp02>;
 };
 
 /* ADC and GPIO alt-function specifications */
@@ -154,6 +182,14 @@
 
 	pinctrl-0 = <&i2c3_0_sda_scl_gpd0_d1>;
 	pinctrl-names = "default";
+
+	usb_c0_hb_retimer: jhl8040r-c0@56 {
+		compatible = "intel,jhl8040r";
+		reg = <0x56>;
+		ls-en-pin = <&gpio_usb_c0_rt_3p3_sx_en>;
+		int-pin = <&gpio_usb_c0_rt_int_odl>;
+		reset-pin = <&ioex_usb_c0_rt_rst_ls_l>;
+	};
 };
 
 &i2c4_1 {

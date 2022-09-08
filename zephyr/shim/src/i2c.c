@@ -75,9 +75,13 @@ int i2c_get_port_from_remote_port(int remote_port)
 }
 
 #ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_I2C_PORTMAP
-static int command_i2c_portmap(int argc, char **argv)
+static int command_i2c_portmap(int argc, const char **argv)
 {
 	int i;
+
+	if (argc > 1) {
+		return EC_ERROR_PARAM_COUNT;
+	}
 
 	ccprintf("Zephyr remote I2C ports (%d):\n", I2C_PORT_COUNT);
 	for (i = 0; i < I2C_PORT_COUNT; i++) {
