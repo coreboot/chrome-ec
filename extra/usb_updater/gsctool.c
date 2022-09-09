@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 The Chromium OS Authors. All rights reserved.
+ * Copyright 2015 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -3134,7 +3134,7 @@ int main(int argc, char *argv[])
 	int binary_vers = 0;
 	int show_fw_ver = 0;
 	int rma = 0;
-	const char *rma_auth_code;
+	const char *rma_auth_code = "";
 	int get_endorsement_seed = 0;
 	const char *endorsement_seed_str;
 	int corrupt_inactive_rw = 0;
@@ -3168,7 +3168,7 @@ int main(int argc, char *argv[])
 	int sn_bits = 0;
 	uint8_t sn_bits_arg[SN_BITS_SIZE];
 	int sn_inc_rma = 0;
-	uint8_t sn_inc_rma_arg;
+	uint8_t sn_inc_rma_arg = 0;
 	int erase_ap_ro_hash = 0;
 	int is_dauntless = 0;
 
