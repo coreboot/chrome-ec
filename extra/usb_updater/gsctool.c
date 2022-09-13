@@ -327,7 +327,12 @@ static void sha_final_into_block_digest(union sha_ctx *ctx, void *block_digest,
  * This by far exceeds the largest vendor command response size we ever
  * expect.
  */
-#define MAX_BUF_SIZE	500
+#define MAX_RX_BUF_SIZE	500
+
+/*
+ * Maximum update payload block size plus packet header size.
+ */
+#define MAX_TX_BUF_SIZE	(SIGNED_TRANSFER_SIZE + sizeof(struct upgrade_pkt))
 
 /*
  * Max. length of the board ID string representation.
@@ -594,7 +599,7 @@ static int tpm_send_pkt(struct transfer_descriptor *td, unsigned int digest,
 			uint16_t subcmd)
 {
 	/* Used by transfer to /dev/tpm0 */
-	static uint8_t outbuf[MAX_BUF_SIZE];
+	static uint8_t outbuf[MAX_TX_BUF_SIZE];
 	struct upgrade_pkt *out = (struct upgrade_pkt *)outbuf;
 	int len, done;
 	int response_offset = offsetof(struct upgrade_pkt, command.data);
@@ -1574,7 +1579,7 @@ uint32_t send_vendor_command(struct transfer_descriptor *td,
 		 * to be stripped from the actual response body by this
 		 * function.
 		 */
-		uint8_t temp_response[MAX_BUF_SIZE];
+		uint8_t temp_response[MAX_RX_BUF_SIZE];
 		size_t max_response_size;
 
 		if (!response_size) {
