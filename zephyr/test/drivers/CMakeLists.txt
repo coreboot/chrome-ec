@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -47,7 +47,9 @@ add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_DEFAULT default)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_AP_MUX_CONTROL ap_mux_control)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_CHARGESPLASH chargesplash)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_ISL923X isl923x)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_KEYBOARD_SCAN keyboard_scan)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_LED_DRIVER led_driver)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_MKBP mkbp)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USB_MALFUNCTION_SINK usb_malfunction_sink)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USB_PD_DPS dps)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USB_RETIMER_FW_UPDATE usb_retimer_fw_update)

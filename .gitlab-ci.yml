@@ -1,8 +1,8 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-image: sjg20/ubuntu-25feb22c
+image: jbettis/ubuntu-07sep22
 
 # You can update that image using this repo:
 #   https://gitlab.com/zephyr-ec/gitlab-ci-runner/-/tree/main
@@ -77,7 +77,7 @@ before_script:
   # Install Python and packages
   - python3 -V  # Print out python version for debugging
   - python3 -m pip install "${EC_DIR}/zephyr/zmake[tests]" --user
-  - python3 -m pip install pyyaml packaging ply psutil
+  - python3 -m pip install pyyaml packaging ply psutil 'pyelftools>=0.28'
   - export PATH="$PATH:$HOME/.local/bin"
   - export PYTHONIOENCODING=utf-8
   # Build directory
@@ -113,11 +113,17 @@ seed_cache:
       -B "${BUILD_DIR}" -t ${TOOLCHAIN:-zephyr}
       "${PROJECT}"
     - for b in "${BUILD_DIR}/${PROJECT}"/build-* ; do
-      bdir=$(basename ${b}) ;
-      ninja -C ${b} ram_report >"${BUILD_DIR}/${PROJECT}/output/${bdir}_ram_report.txt" ;
-      cp ${b}/ram.json "${BUILD_DIR}/${PROJECT}/output/${bdir}_ram.json" ;
-      ninja -C ${b} rom_report >"${BUILD_DIR}/${PROJECT}/output/${bdir}_rom_report.txt" ;
-      cp ${b}/rom.json "${BUILD_DIR}/${PROJECT}/output/${bdir}_rom.json" ;
+        bdir=$(basename ${b}) ;
+        if ninja -C ${b} ram_report >"${BUILD_DIR}/${PROJECT}/output/${bdir}_ram_report.txt" ; then
+          cp ${b}/ram.json "${BUILD_DIR}/${PROJECT}/output/${bdir}_ram.json" ;
+        else
+          echo "Ram report failed" ;
+        fi ;
+        if ninja -C ${b} rom_report >"${BUILD_DIR}/${PROJECT}/output/${bdir}_rom_report.txt" ; then
+          cp ${b}/rom.json "${BUILD_DIR}/${PROJECT}/output/${bdir}_rom.json" ;
+        else
+          echo "Rom report failed" ;
+        fi ;
       done
     - ls "${BUILD_DIR}/${PROJECT}" "${BUILD_DIR}/${PROJECT}/output"
   artifacts:

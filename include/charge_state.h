@@ -1,4 +1,4 @@
-/* Copyright 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -99,7 +99,7 @@ int charge_get_percent(void);
 #else
 static inline int charge_get_percent(void)
 {
-	return 100;
+	return 0;
 }
 #endif
 

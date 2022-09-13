@@ -1,4 +1,4 @@
-# Copyright 2022 The ChromiumOS Authors.
+# Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -37,6 +37,9 @@ register_variant(
         here / "usbc.dts",
         here / "keyboard.dts",
         here / "led.dts",
+        here / "fan.dts",
+        here / "temp_sensors.dts",
+        here / "motionsense.dts",
     ],
     extra_kconfig_files=[here / "prj_rex.conf"],
 )

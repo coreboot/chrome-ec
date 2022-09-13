@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -12,13 +12,13 @@
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
 
-struct jump_data mock_jump_data = {};
+char mock_jump_data[sizeof(struct jump_data) + 256];
 
 /* When CONFIG_RAM_SIZE is defined, this is provided by common/system.c */
 #ifndef CONFIG_RAM_SIZE
 struct jump_data *get_jump_data(void)
 {
-	return &mock_jump_data;
+	return (struct jump_data *)&mock_jump_data;
 }
 #endif
 

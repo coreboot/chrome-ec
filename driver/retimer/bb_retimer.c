@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -597,8 +597,16 @@ static int retimer_init(const struct usb_mux *me)
 		return rv;
 
 	rv = bb_retimer_read(me, BB_RETIMER_REG_VENDOR_ID, &data);
+	/*
+	 * After reset, i2c controller may not be ready, if this fails,
+	 * retry one more time.
+	 * TODO: revisit the delay time after retimer reset.
+	 */
+	if (rv != EC_SUCCESS)
+		rv = bb_retimer_read(me, BB_RETIMER_REG_VENDOR_ID, &data);
 	if (rv != EC_SUCCESS)
 		return rv;
+	CPRINTS("C%d: retimer power enable success", me->usb_port);
 #ifdef CONFIG_USBC_RETIMER_INTEL_HB
 	if (data != BB_RETIMER_DEVICE_ID)
 		return EC_ERROR_INVAL;
@@ -630,6 +638,7 @@ static int console_command_bb_retimer(int argc, const char **argv)
 	int port, reg, data, val = 0;
 	int rv = EC_SUCCESS;
 	const struct usb_mux *mux;
+	const struct usb_mux_chain *mux_chain;
 
 	if (argc < 4)
 		return EC_ERROR_PARAM_COUNT;
@@ -639,14 +648,15 @@ static int console_command_bb_retimer(int argc, const char **argv)
 	if (*e || !board_is_usb_pd_port_present(port))
 		return EC_ERROR_PARAM1;
 
-	mux = &usb_muxes[port];
-	while (mux) {
+	mux_chain = &usb_muxes[port];
+	while (mux_chain) {
+		mux = mux_chain->mux;
 		if (mux->driver == &bb_usb_retimer)
 			break;
-		mux = mux->next_mux;
+		mux_chain = mux_chain->next;
 	}
 
-	if (!mux)
+	if (!mux_chain)
 		return EC_ERROR_PARAM1;
 
 	/* Validate r/w selection */
@@ -666,7 +676,8 @@ static int console_command_bb_retimer(int argc, const char **argv)
 			return EC_ERROR_PARAM4;
 	}
 
-	for (; mux != NULL; mux = mux->next_mux) {
+	for (; mux_chain != NULL; mux_chain = mux_chain->next) {
+		mux = mux_chain->mux;
 		if (mux->driver == &bb_usb_retimer) {
 			if (rw == 'r')
 				rv = bb_retimer_read(mux, reg, &data);

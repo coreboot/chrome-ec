@@ -1,4 +1,4 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -69,12 +69,6 @@
 	psl-in-pol = "high-rising";
 };
 
-&psl_in3_gp01 {
-	/* GSC_EC_PWR_BTN_ODL */
-	psl-in-mode = "edge";
-	psl-in-pol = "low-falling";
-};
-
 &psl_in4_gp02 {
 	/* MECH_PWR_BTN_ODL */
 	psl-in-mode = "edge";
@@ -92,8 +86,8 @@
 &adc0 {
 	pinctrl-0 = <&adc0_chan0_gp45
 		     &adc0_chan1_gp44
-		     &adc0_chan7_gpe1
-		     &adc0_chan8_gpf1>;
+		     &adc0_chan8_gpf1
+		     &adc0_chan7_gpe1>;
 	pinctrl-names = "default";
 };
 

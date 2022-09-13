@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -138,7 +138,7 @@ static volatile int kbd_polls;
 /* If true, we'll force a keyboard poll */
 static volatile int force_poll;
 
-static int keyboard_scan_is_enabled(void)
+test_export_static int keyboard_scan_is_enabled(void)
 {
 	/* NOTE: this is just an instantaneous glimpse of the variable. */
 	return !disable_scanning_mask;
@@ -572,7 +572,7 @@ static int has_ghosting(const uint8_t *state)
 }
 
 /* Inform keyboard module if scanning is enabled */
-static void key_state_changed(int row, int col, uint8_t state)
+test_mockable_static void key_state_changed(int row, int col, uint8_t state)
 {
 	if (!keyboard_scan_is_enabled())
 		return;
@@ -1237,3 +1237,15 @@ static int command_keyboard_press(int argc, const char **argv)
 DECLARE_CONSOLE_COMMAND(kbpress, command_keyboard_press, "[col row [0 | 1]]",
 			"Simulate keypress");
 #endif
+
+#ifdef TEST_BUILD
+__test_only int keyboard_scan_get_print_state_changes(void)
+{
+	return print_state_changes;
+}
+
+__test_only void keyboard_scan_set_print_state_changes(int val)
+{
+	print_state_changes = val;
+}
+#endif /* TEST_BUILD */

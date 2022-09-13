@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -42,9 +42,9 @@
 
 /* Host communication */
 #define CONFIG_HOST_INTERFACE_ESPI
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_S5
-#define CONFIG_HOSTCMD_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
+#define CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S4
+#define CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S5
+#define CONFIG_HOST_INTERFACE_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
 
 /* LED */
 #define CONFIG_LED_COMMON
@@ -86,8 +86,8 @@
 
 /* ADL has new low-power features that requires extra-wide virtual wire
  * pulses. The EDS specifies 100 microseconds. */
-#undef CONFIG_ESPI_DEFAULT_VW_WIDTH_US
-#define CONFIG_ESPI_DEFAULT_VW_WIDTH_US 100
+#undef CONFIG_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US
+#define CONFIG_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US 100
 
 /* Buttons */
 #define CONFIG_DEDICATED_RECOVERY_BUTTON

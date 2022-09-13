@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -430,29 +430,30 @@
 #endif
 
 /* eSPI signals */
-#undef CONFIG_HOSTCMD_ESPI_VW_SLP_S3
-#ifdef CONFIG_PLATFORM_EC_ESPI_VW_SLP_S3
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_S3
+#undef CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S3
+#ifdef CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI_VW_SLP_S3
+#define CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S3
 #endif
 
-#undef CONFIG_HOSTCMD_ESPI_VW_SLP_S4
-#ifdef CONFIG_PLATFORM_EC_ESPI_VW_SLP_S4
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
+#undef CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S4
+#ifdef CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI_VW_SLP_S4
+#define CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S4
 #endif
 
-#undef CONFIG_HOSTCMD_ESPI_VW_SLP_S5
-#ifdef CONFIG_PLATFORM_EC_ESPI_VW_SLP_S5
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_S5
+#undef CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S5
+#ifdef CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI_VW_SLP_S5
+#define CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S5
 #endif
 
-#undef CONFIG_HOSTCMD_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
-#ifdef CONFIG_PLATFORM_EC_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
-#define CONFIG_HOSTCMD_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
+#undef CONFIG_HOST_INTERFACE_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
+#ifdef CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
+#define CONFIG_HOST_INTERFACE_ESPI_RESET_SLP_SX_VW_ON_ESPI_RST
 #endif
 
-#undef CONFIG_ESPI_DEFAULT_VW_WIDTH_US
+#undef CONFIG_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US
 #ifdef CONFIG_PLATFORM_EC_DEFAULT_SCI_WIDTH_US
-#define CONFIG_ESPI_DEFAULT_VW_WIDTH_US CONFIG_PLATFORM_EC_DEFAULT_SCI_WIDTH_US
+#define CONFIG_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US \
+	CONFIG_PLATFORM_EC_DEFAULT_SCI_WIDTH_US
 #endif
 
 #if DT_HAS_CHOSEN(zephyr_flash)
@@ -468,10 +469,11 @@
 /* The jump data goes at the end of data ram, so for posix, the end of ram is
  * wherever the jump data ended up.
  */
-extern struct jump_data mock_jump_data;
+#include "sysjump.h"
+extern char mock_jump_data[sizeof(struct jump_data) + 256];
 #define CONFIG_RAM_BASE 0x0
 #define CONFIG_DATA_RAM_SIZE \
-	(((uintptr_t)&mock_jump_data) + sizeof(struct jump_data))
+	(((uintptr_t)&mock_jump_data) + sizeof(mock_jump_data))
 #else
 #error "A zephyr,sram device must be chosen in the device tree"
 #endif

@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -74,7 +74,7 @@ endif()
 if(DEFINED CONFIG_BOARD_YAVIKS)
 	project(yaviks)
 	zephyr_library_sources(
-			"src/led.c"
+			"yaviks/src/led.c"
 			"yaviks/src/keyboard.c"
 			"yaviks/src/hdmi.c"
 	)

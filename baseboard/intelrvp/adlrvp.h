@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -35,8 +35,8 @@
 
 /* ADL has new low-power features that require extra-wide virtual wire
  * pulses. The EDS specifies 100 microseconds. */
-#undef CONFIG_ESPI_DEFAULT_VW_WIDTH_US
-#define CONFIG_ESPI_DEFAULT_VW_WIDTH_US 100
+#undef CONFIG_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US
+#define CONFIG_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US 100
 
 /* USB PD config */
 #if defined(HAS_TASK_PD_C3)

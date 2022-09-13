@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -60,7 +60,7 @@ elseif(DEFINED CONFIG_BOARD_TENTACRUEL)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC
 				"src/krabby/usb_pd_policy.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC
-				"src/krabby/usbc_config_tentacruel.c")
+				"src/krabby/usbc_config.c")
 
 elseif(DEFINED CONFIG_BOARD_MAGIKARP)
 	project(magikarp)
@@ -70,7 +70,7 @@ elseif(DEFINED CONFIG_BOARD_MAGIKARP)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC
 				"src/krabby/usb_pd_policy.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC
-				"src/krabby/usbc_config_magikarp.c")
+				"src/krabby/usbc_config.c")
 
 endif()
 

@@ -33,10 +33,14 @@ target_sources(app PRIVATE
     src/console_cmd/port80.c
     src/console_cmd/powerindebug.c
     src/console_cmd/power_button.c
+    src/console_cmd/rtc.c
     src/console_cmd/rw.c
+    src/console_cmd/sleepmask.c
     src/console_cmd/sleeptimeout.c
+    src/console_cmd/sysinfo.c
     src/console_cmd/tcpci_dump.c
     src/console_cmd/usb_pd_console.c
+    src/console_cmd/version.c
     src/console_cmd/waitms.c
     src/cros_cbi.c
     src/espi.c
@@ -53,7 +57,6 @@ target_sources(app PRIVATE
     src/i2c.c
     src/i2c_passthru.c
     src/isl923x.c
-    src/keyboard_scan.c
     src/led.c
     src/lid_angle.c
     src/lid_switch.c

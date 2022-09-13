@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,7 +7,7 @@
 LOG_MODULE_REGISTER(tcpci_faulty_ext, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 
 #include <zephyr/sys/byteorder.h>
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 
 #include "common.h"
 #include "emul/tcpc/emul_tcpci.h"
