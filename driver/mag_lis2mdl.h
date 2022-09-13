@@ -1,4 +1,4 @@
-/* Copyright 2018 The Chromium OS Authors. All rights reserved.
+/* Copyright 2018 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -89,4 +89,3 @@ void lis2mdl_normalize(const struct motion_sensor_t *s,
 extern const struct accelgyro_drv lis2mdl_drv;
 
 #endif /* __CROS_EC_MAG_LIS2MDL_H */
-

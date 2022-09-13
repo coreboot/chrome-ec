@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -518,4 +518,3 @@ int crec_vsnprintf(char *str, size_t size, const char *format, va_list args)
 
 	return (rv == EC_SUCCESS) ? (ctx.str - str) : -rv;
 }
-
