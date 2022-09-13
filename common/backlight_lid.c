@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -81,5 +81,3 @@ switch_command_enable_backlight(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_SWITCH_ENABLE_BKLIGHT,
 		     switch_command_enable_backlight,
 		     EC_VER_MASK(0));
-
-

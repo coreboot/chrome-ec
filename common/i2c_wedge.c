@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -338,4 +338,3 @@ static int command_i2c_unwedge(int argc, char **argv)
 DECLARE_CONSOLE_COMMAND(i2cunwedge, command_i2c_unwedge,
 	"",
 	"Unwedge host I2C bus");
-
