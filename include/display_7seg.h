@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -24,4 +24,3 @@ enum seven_seg_module_display {
 int display_7seg_write(enum seven_seg_module_display module, uint16_t data);
 
 #endif  /* __CROS_EC_DISPLAY_7SEG_H */
-

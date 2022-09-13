@@ -1,4 +1,4 @@
-/* Copyright 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -46,4 +46,3 @@ int flash_regions_to_enable(struct g_flash_region *regions,
 			    int max_regions);
 
 #endif  /* ! __EC_CHIP_G_FLASH_CONFIG_H */
-
