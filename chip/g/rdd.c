@@ -245,6 +245,12 @@ static int command_rdd_keepalive(int argc, char **argv)
 		/* Go back to actual hardware state */
 		ccprintf("Using actual Rdd state\n");
 		ccd_set_flag(CCD_FLAG_RDDKEEPALIVE_AT_BOOT, 0);
+		/*
+		 * Cancel rdd_connect and call rdd_interrupt to use the
+		 * actual state.
+		 */
+		hook_call_deferred(&rdd_connect_data, -1);
+		rdd_interrupt();
 	}
 
 	return EC_SUCCESS;
