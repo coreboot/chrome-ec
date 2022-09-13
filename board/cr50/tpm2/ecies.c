@@ -1,4 +1,4 @@
-/* Copyright 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -123,4 +123,3 @@ static void ecies_command_handler(void *cmd_body, size_t cmd_size,
 DECLARE_EXTENSION_COMMAND(EXTENSION_ECIES, ecies_command_handler);
 
 #endif   /* CRYPTO_TEST_SETUP */
-

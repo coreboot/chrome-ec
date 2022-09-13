@@ -1,4 +1,4 @@
-/* Copyright 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -169,4 +169,3 @@ void usb_spi_enable(struct usb_spi_config const *config, int enabled)
 
 	hook_call_deferred(config->deferred, 0);
 }
-

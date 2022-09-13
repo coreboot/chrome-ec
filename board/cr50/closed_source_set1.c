@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 The Chromium OS Authors. All rights reserved.
+ * Copyright 2018 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -159,4 +159,3 @@ DECLARE_SAFE_CONSOLE_COMMAND(ectrust, ec_trust_level,
 	"[0|1|2]",
 	"Get/set the EC trust level");
 #endif
-

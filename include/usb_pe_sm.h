@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -171,4 +171,3 @@ void pe_dpm_request(int port, enum pe_dpm_request req);
 int pd_is_port_partner_dualrole(int port);
 
 #endif /* __CROS_EC_USB_PE_H */
-

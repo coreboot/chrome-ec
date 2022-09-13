@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -168,4 +168,3 @@ int sb_write_block(int reg, const uint8_t *val, int len);
 int sb_read_mfgacc(int cmd, int block, uint8_t *data, int len);
 
 #endif /* __CROS_EC_BATTERY_SMART_H */
-

@@ -1,4 +1,4 @@
-/* Copyright 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -15,4 +15,3 @@
 void rand_bytes(void *buf, size_t num);
 
 #endif  /* ! __EC_TEST_TPM_TEST_TESTLIB_COMMON_H */
-

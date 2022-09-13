@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -368,4 +368,3 @@ void tc_reset_support_timer(int port);
 void tc_ctvpd_detected(int port);
 #endif /* CONFIG_USB_TYPEC_CTVPD */
 #endif /* __CROS_EC_USB_TC_H */
-
