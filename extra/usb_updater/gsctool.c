@@ -2283,6 +2283,18 @@ static void print_ccd_info(void *response, size_t response_size)
 		       (uint8_t *)response +
 		       sizeof(struct ccd_info_response_header),
 		       sizeof(ccd_info));
+		/*
+		 * V1 CCD info structure has the capabilities bitmaps
+		 * represented as a single little endian u64, whereas this
+		 * utility expects it to be two big endian u32s. This function
+		 * fixes the V1 representation.
+		 */
+		for (i = 0; i < ARRAY_SIZE(ccd_info.ccd_caps_current); i++) {
+			ccd_info.ccd_caps_current[i] =
+				htobe32(ccd_info.ccd_caps_current[i]);
+			ccd_info.ccd_caps_defaults[i] =
+				htobe32(ccd_info.ccd_caps_defaults[i]);
+		}
 	} else if (response_size == CCD_INFO_V0_SIZE) {
 		ccd_info_version = 0; /* Default, Cr50 case. */
 		memcpy(&ccd_info, response, sizeof(ccd_info));
