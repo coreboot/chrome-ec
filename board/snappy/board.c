@@ -955,43 +955,6 @@ struct motion_sensor_t motion_sensors[] = {
 		 },
 	 },
 	},
-
-	[BASE_MAG] = {
-	 .name = "Base Mag",
-	 .active_mask = SENSOR_ACTIVE_S0_S3,
-	 .chip = MOTIONSENSE_CHIP_BMI160,
-	 .type = MOTIONSENSE_TYPE_MAG,
-	 .location = MOTIONSENSE_LOC_BASE,
-	 .drv = &bmi160_drv,
-	 .mutex = &g_base_mutex,
-	 .drv_data = &g_bmi160_data,
-	 .port = I2C_PORT_GYRO,
-	 .addr = BMI160_ADDR0,
-	 .default_range = 1 << 11, /* 16LSB / uT, fixed */
-	 .rot_standard_ref = NULL,
-	 .config = {
-		 /* AP: by default shutdown all sensors */
-		 [SENSOR_CONFIG_AP] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* EC does not need in S0 */
-		 [SENSOR_CONFIG_EC_S0] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S3] = {
-			.odr = 0,
-			.ec_rate = 0,
-		 },
-		 /* Sensor off in S3/S5 */
-		 [SENSOR_CONFIG_EC_S5] = {
-			 .odr = 0,
-			 .ec_rate = 0,
-		 },
-	 },
-	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
@@ -1109,7 +1072,7 @@ static void board_init_late(void)
 	if (version <= BOARD_VERSION_4) {
 		int i;
 
-		for (i = BASE_ACCEL; i <= BASE_MAG; ++i)
+		for (i = BASE_ACCEL; i <= BASE_GYRO; ++i)
 			motion_sensors[i].active_mask = SENSOR_ACTIVE_S0;
 	}
 
