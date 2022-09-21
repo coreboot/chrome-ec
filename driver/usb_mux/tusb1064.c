@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -95,6 +95,10 @@ static int tusb1064_set_mux(const struct usb_mux *me, mux_state_t mux_state,
 	uint8_t reg;
 	int rv;
 	int mask;
+
+	/* This driver treats safe mode as none */
+	if (mux_state == USB_PD_MUX_SAFE_MODE)
+		mux_state = USB_PD_MUX_NONE;
 
 	rv = tusb1064_read(me, TUSB1064_REG_GENERAL, &reg);
 	if (rv)

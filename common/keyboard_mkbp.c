@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -125,7 +125,7 @@ static void set_keyscan_config(const struct ec_mkbp_config *src,
 		task_wake(TASK_ID_KEYSCAN);
 }
 
-static void get_keyscan_config(struct ec_mkbp_config *dst)
+test_export_static void get_keyscan_config(struct ec_mkbp_config *dst)
 {
 	const struct keyboard_scan_config *ksc = keyboard_scan_get_config();
 

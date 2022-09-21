@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -192,6 +192,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_ICM42607
                                                 "${PLATFORM_EC}/driver/accelgyro_icm42607.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_LSM6DSO
                                                 "${PLATFORM_EC}/driver/accelgyro_lsm6dso.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_LSM6DSM
+                                                "${PLATFORM_EC}/driver/accelgyro_lsm6dsm.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_FIFO
                                                 "${PLATFORM_EC}/common/motion_sense_fifo.c")
 zephyr_library_sources_ifdef(CONFIG_ADC
@@ -251,6 +253,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_HW
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_SW
                                                 "${PLATFORM_EC}/common/charge_ramp.c"
                                                 "${PLATFORM_EC}/common/charge_ramp_sw.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CPS8100
+                                                "${PLATFORM_EC}/driver/wpc/cps8100.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_OCPC
                                                 "${PLATFORM_EC}/common/ocpc.c")
 
@@ -563,6 +567,7 @@ add_subdirectory(linker)
 add_subdirectory("app")
 add_subdirectory("drivers")
 add_subdirectory("emul")
+add_subdirectory("fake")
 add_subdirectory("mock")
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 

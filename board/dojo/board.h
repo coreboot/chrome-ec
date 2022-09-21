@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -53,6 +53,8 @@
 
 /* Keyboard */
 #define CONFIG_KEYBOARD_REFRESH_ROW3
+#define CONFIG_KEYBOARD_FACTORY_TEST
+#define GPIO_KBD_KSO2 GPIO_EC_KSO_02_INV
 
 /* Sensor */
 #define CONFIG_GMR_TABLET_MODE

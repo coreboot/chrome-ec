@@ -1,4 +1,4 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -29,7 +29,7 @@ static int average_tempature(void)
 	static int avg_temp;
 	int cur_temp, t;
 
-	temp_sensor_read(TEMP_SENSOR_CHARGER, &t);
+	temp_sensor_read(TEMP_SENSOR_ID(DT_NODELABEL(temp_charger)), &t);
 	cur_temp = K_TO_C(t);
 	past_temp = temp_history_buffer[buff_ptr];
 	temp_history_buffer[buff_ptr] = cur_temp;

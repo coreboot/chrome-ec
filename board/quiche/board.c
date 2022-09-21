@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -135,7 +135,7 @@ const size_t board_power_seq_count = ARRAY_SIZE(board_power_seq);
  */
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("Quiche"),
 	[USB_STR_SERIALNO] = 0,
 	[USB_STR_VERSION] =
@@ -186,20 +186,24 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_HOST] = {
-		.usb_port = USB_PD_PORT_HOST,
-		.i2c_port = I2C_PORT_I2C1,
-		.i2c_addr_flags = PS8822_I2C_ADDR3_FLAG,
-		.driver = &ps8822_usb_mux_driver,
-		.board_set = &board_ps8822_mux_set,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USB_PD_PORT_HOST,
+			.i2c_port = I2C_PORT_I2C1,
+			.i2c_addr_flags = PS8822_I2C_ADDR3_FLAG,
+			.driver = &ps8822_usb_mux_driver,
+			.board_set = &board_ps8822_mux_set,
+		},
 	},
 	[USB_PD_PORT_DP] = {
-		.usb_port = USB_PD_PORT_DP,
-		.i2c_port = I2C_PORT_I2C1,
-		.i2c_addr_flags = PS8XXX_I2C_ADDR2_FLAGS,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USB_PD_PORT_DP,
+			.i2c_port = I2C_PORT_I2C1,
+			.i2c_addr_flags = PS8XXX_I2C_ADDR2_FLAGS,
+			.driver = &tcpci_tcpm_usb_mux_driver,
+			.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		},
 	},
 };
 

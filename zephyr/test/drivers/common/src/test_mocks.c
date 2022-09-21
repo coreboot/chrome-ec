@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,6 +16,7 @@ DEFINE_FAKE_VALUE_FUNC(int, init_rom_copy, int, int, int);
 
 /* Mocks for common/system.c */
 DEFINE_FAKE_VALUE_FUNC(int, system_jumped_late);
+DEFINE_FAKE_VALUE_FUNC(int, system_is_locked);
 DEFINE_FAKE_VOID_FUNC(system_reset, int);
 DEFINE_FAKE_VOID_FUNC(software_panic, uint32_t, uint32_t);
 DEFINE_FAKE_VOID_FUNC(assert_post_action, const char *, unsigned int);

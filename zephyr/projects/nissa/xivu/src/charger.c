@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -36,8 +36,16 @@ int extpower_is_present(void)
  */
 __override void board_check_extpower(void)
 {
+	static int last_extpower_present;
 	int extpower_present_p0 = 0;
 	int extpower_present_p1 = 0;
+
+	int extpower_present = extpower_is_present();
+
+	if (last_extpower_present ^ extpower_present)
+		extpower_handle_update(extpower_present);
+
+	last_extpower_present = extpower_present;
 
 	if (pd_is_connected(0))
 		extpower_present_p0 = extpower_is_present();

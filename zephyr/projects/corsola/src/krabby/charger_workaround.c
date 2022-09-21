@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -17,7 +17,7 @@
  * Newer project should have all of these fixed.
  */
 BUILD_ASSERT(IS_ENABLED(CONFIG_BOARD_KRABBY) ||
-	     IS_ENABLED(CONFIG_BOARD_TENTACRUEL));
+	     IS_ENABLED(CONFIG_BOARD_TENTACRUEL) || IS_ENABLED(CONFIG_TEST));
 
 static void enter_hidden_mode(void)
 {

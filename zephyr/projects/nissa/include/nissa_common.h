@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -17,8 +17,6 @@ enum nissa_sub_board_type {
 	NISSA_SB_C_LTE = 2, /* USB type C, WWAN LTE */
 	NISSA_SB_HDMI_A = 3, /* HDMI, USB type A */
 };
-
-extern struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 enum nissa_sub_board_type nissa_get_sb_type(void);
 

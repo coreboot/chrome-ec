@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium OS Authors. All rights reserved.
+# Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,11 +14,20 @@ config LINK_TEST_SUITE_CHARGESPLASH
 config LINK_TEST_SUITE_ISL923X
 	bool "Link and test the isl923x tests"
 
+config LINK_TEST_SUITE_KEYBOARD_SCAN
+	bool "Link and test the keyboard_scan tests"
+
 config LINK_TEST_SUITE_LED_DRIVER
 	bool "Link and test the led_driver tests"
 
+config LINK_TEST_SUITE_MKBP
+	bool "Link and test the mkbp tests"
+
 config LINK_TEST_SUITE_USB_MALFUNCTION_SINK
 	bool "Link and test the usb_malfunction_sink tests"
+
+config LINK_TEST_SUITE_USB_PORT_POWER_DUMB
+	bool "Link and test the usb_port_power_dumb tests"
 
 config LINK_TEST_SUITE_USB_PD_DPS
 	bool "Link and test the dps tests"
@@ -34,5 +43,8 @@ config LINK_TEST_SUITE_USBC_TBT_MODE
 
 config LINK_TEST_SUITE_HOST_COMMANDS
 	bool "Link and test the host command tests"
+
+config LINK_TEST_SUITE_USBC_OCP
+	bool "Link tests for common USBC OCP code"
 
 source "Kconfig.zephyr"

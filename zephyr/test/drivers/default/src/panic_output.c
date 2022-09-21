@@ -1,4 +1,4 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -58,8 +58,7 @@ ZTEST(panic_output, test_panic_assert_fail)
 {
 	int line_num = __LINE__;
 
-	panic_assert_fail("Test panic message", __func__, __FILE_NAME__,
-			  line_num);
+	panic_assert_fail("Test panic message", __func__, __FILE__, line_num);
 	zassert_equal(1, software_panic_fake.call_count,
 		      "Expected sofware_panic() to be called once, but was "
 		      "called %d times",

@@ -1,4 +1,4 @@
-/* Copyright 2015 The Chromium OS Authors. All rights reserved.
+/* Copyright 2015 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -1587,6 +1587,10 @@ int tcpci_tcpm_mux_set(const struct usb_mux *me, mux_state_t mux_state,
 
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
+
+	/* This driver treats safe mode as none */
+	if (mux_state == USB_PD_MUX_SAFE_MODE)
+		mux_state = USB_PD_MUX_NONE;
 
 	/* Parameter is port only */
 	rv = mux_read(me, TCPC_REG_CONFIG_STD_OUTPUT, &reg);

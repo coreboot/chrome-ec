@@ -1,10 +1,10 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #include <zephyr/fff.h>
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
 
 #include "common.h"
@@ -1960,7 +1960,7 @@ ZTEST_USER(bmi260, test_unsupported_configs)
 	memcpy(&ms_fake, &motion_sensors[BMI_ACC_SENSOR_ID], sizeof(ms_fake));
 	ms_fake.type = MOTIONSENSE_TYPE_MAG;
 
-	int16_t offset[3];
+	int16_t offset[3] = { 0 };
 	int ret =
 		ms_fake.drv->set_offset(&ms_fake, (const int16_t *)&offset, 0);
 	zassert_equal(

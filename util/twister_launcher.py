@@ -1,6 +1,6 @@
-#!/usr/bin/env python3
+#!/usr/bin/env vpython3
 
-# Copyright 2022 The ChromiumOS Authors.
+# Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -10,12 +10,67 @@ default parameters for the ChromiumOS EC project. For an overview of CLI
 parameters that may be used, please consult the Twister documentation.
 """
 
+# [VPYTHON:BEGIN]
+# python_version: "3.8"
+# wheel: <
+#   name: "infra/python/wheels/anytree-py2_py3"
+#   version: "version:2.8.0"
+# >
+# wheel: <
+#   name: "infra/python/wheels/colorama-py3"
+#   version: "version:0.4.1"
+# >
+# wheel: <
+#   name: "infra/python/wheels/docopt-py2_py3"
+#   version: "version:0.6.2"
+# >
+# wheel: <
+#   name: "infra/python/wheels/ply-py2_py3"
+#   version: "version:3.11"
+# >
+# wheel: <
+#   name: "infra/python/wheels/psutil/${vpython_platform}"
+#   version: "version:5.8.0.chromium.3"
+# >
+# wheel: <
+#   name: "infra/python/wheels/pykwalify-py2_py3"
+#   version: "version:1.8.0"
+# >
+# wheel: <
+#   name: "infra/python/wheels/pyserial-py2_py3"
+#   version: "version:3.4"
+# >
+# wheel: <
+#   name: "infra/python/wheels/python-dateutil-py2_py3"
+#   version: "version:2.8.1"
+# >
+# wheel: <
+#   name: "infra/python/wheels/pyyaml-py3"
+#   version: "version:5.3.1"
+# >
+# wheel: <
+#   name: "infra/python/wheels/ruamel_yaml_clib/${vpython_platform}"
+#   version: "version:0.2.6"
+# >
+# wheel: <
+#   name: "infra/python/wheels/ruamel_yaml-py3"
+#   version: "version:0.17.16"
+# >
+# wheel: <
+#   name: "infra/python/wheels/six-py2_py3"
+#   version: "version:1.16.0"
+# >
+# [VPYTHON:END]
+
 import argparse
 import os
+import re
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
+from shutil import which
 
 
 def find_checkout() -> Path:
@@ -81,6 +136,58 @@ def find_modules(mod_dir: Path) -> list:
     return modules
 
 
+def is_tool(name):
+    """Check if 'name' is on PATH and marked executable."""
+    return which(name) is not None
+
+
+def is_rdb_login():
+    """Checks if user is logged into rdb"""
+    cmd = ["rdb", "auth-info"]
+    ret = subprocess.run(cmd, capture_output=True, text=True, check=False)
+
+    if ret.returncode == 0:
+        print("\nrdb auth-info: " + ret.stdout.split("\n")[0])
+    else:
+        print("\nrdb auth-info: " + ret.stderr)
+
+    return ret.returncode == 0
+
+
+def upload_results(ec_base):
+    """Uploads Zephyr Test results to ResultDB"""
+    flag = False
+
+    if is_rdb_login():
+        json_path = ec_base / "twister-out" / "twister.json"
+        cmd = [
+            "rdb",
+            "stream",
+            "-new",
+            "-realm",
+            "chromium:public",
+            "--",
+            str(ec_base / "util/zephyr_to_resultdb.py"),
+            "--result=" + str(json_path),
+            "--upload=True",
+        ]
+
+        start_time = time.time()
+        ret = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        end_time = time.time()
+
+        # Extract URL to test report from captured output
+        rdb_url = re.search(
+            r"(?P<url>https?://[^\s]+)", ret.stderr.split("\n")[0]
+        ).group("url")
+        print(f"\nTEST RESULTS ({end_time - start_time:.3f}s): {rdb_url}\n")
+        flag = ret.returncode == 0
+    else:
+        print("Unable to upload test results, please run 'rdb auth-login'\n")
+
+    return flag
+
+
 def main():
     """Run Twister using defaults for the EC project."""
 
@@ -97,12 +204,14 @@ def main():
     # Prepare environment variables for export to Twister. Inherit the parent
     # process's environment, but set some default values if not already set.
     twister_env = dict(os.environ)
+    is_in_chroot = Path("/etc/cros_chroot_version").is_file()
     extra_env_vars = {
         "TOOLCHAIN_ROOT": os.environ.get(
-            "TOOLCHAIN_ROOT", str(ec_base / "zephyr")
+            "TOOLCHAIN_ROOT",
+            str(ec_base / "zephyr") if is_in_chroot else zephyr_base,
         ),
         "ZEPHYR_TOOLCHAIN_VARIANT": os.environ.get(
-            "ZEPHYR_TOOLCHAIN_VARIANT", "llvm"
+            "ZEPHYR_TOOLCHAIN_VARIANT", "llvm" if is_in_chroot else "host"
         ),
     }
     twister_env.update(extra_env_vars)
@@ -113,6 +222,7 @@ def main():
     # warnings during twister runs until all the label properties are removed
     # from all board and test overlays.
     twister_cli = [
+        sys.executable,
         str(zephyr_base / "scripts" / "twister"),  # Executable path
         "--ninja",
         "--disable-warnings-as-errors",
@@ -137,6 +247,10 @@ def main():
     parser.add_argument(
         "--gcov-tool", default=str(ec_base / "util" / "llvm-gcov.sh")
     )
+    parser.add_argument(
+        "--no-upload-cros-rdb", dest="upload_cros_rdb", action="store_false"
+    )
+
     intercepted_args, other_args = parser.parse_known_args()
 
     for _ in range(intercepted_args.verbose):
@@ -192,6 +306,9 @@ def main():
         print("TEST EXECUTION SUCCESSFUL")
     else:
         print("TEST EXECUTION FAILED")
+
+    if is_tool("rdb") and intercepted_args.upload_cros_rdb:
+        upload_results(ec_base)
 
     sys.exit(result.returncode)
 

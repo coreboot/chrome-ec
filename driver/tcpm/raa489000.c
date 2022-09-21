@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -374,5 +374,8 @@ const struct tcpm_drv raa489000_tcpm_drv = {
 	.debug_detach = &raa489000_debug_detach,
 #ifdef CONFIG_CMD_TCPC_DUMP
 	.dump_registers = &raa489000_dump_registers,
+#endif
+#ifdef CONFIG_USB_PD_FRS
+	.set_frs_enable = &tcpci_tcpc_fast_role_swap_enable,
 #endif
 };

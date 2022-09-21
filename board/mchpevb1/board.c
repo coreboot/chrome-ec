@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -349,18 +349,24 @@ struct pi3usb9281_config pi3usb9281_chips[] = {
 BUILD_ASSERT(ARRAY_SIZE(pi3usb9281_chips) ==
 	     CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT);
 
-struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.usb_port = 0,
-		.i2c_port = I2C_PORT_USB_MUX,
-		.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
-		.driver = &pi3usb3x532_usb_mux_driver,
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 0,
+				.i2c_port = I2C_PORT_USB_MUX,
+				.i2c_addr_flags = PI3USB3X532_I2C_ADDR0,
+				.driver = &pi3usb3x532_usb_mux_driver,
+			},
 	},
 	{
-		.usb_port = 1,
-		.i2c_port = I2C_PORT_USB_MUX,
-		.i2c_addr_flags = 0x10,
-		.driver = &ps8740_usb_mux_driver,
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 1,
+				.i2c_port = I2C_PORT_USB_MUX,
+				.i2c_addr_flags = 0x10,
+				.driver = &ps8740_usb_mux_driver,
+			},
 	}
 };
 #endif
@@ -599,16 +605,6 @@ void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 	charge_set_input_current_limit(
 		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }
-#else
-/*
- * TODO HACK providing functions from common/charge_state_v2.c
- * which is not compiled in when no charger
- */
-int charge_prevent_power_on(int power_button_pressed)
-{
-	return 0;
-}
-
 #endif
 
 /*

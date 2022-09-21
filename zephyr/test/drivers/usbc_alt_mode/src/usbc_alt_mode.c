@@ -1,10 +1,10 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #include <stdint.h>
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
 #include <zephyr/drivers/gpio/gpio_emul.h>
 
@@ -21,6 +21,11 @@
 #include "test/drivers/test_state.h"
 
 #define TEST_PORT 0
+
+/* Arbitrary */
+#define PARTNER_PRODUCT_ID 0x1234
+#define PARTNER_DEV_BINARY_CODED_DECIMAL 0x5678
+
 BUILD_ASSERT(TEST_PORT == USBC_PORT_C0);
 
 struct usbc_alt_mode_fixture {
@@ -79,7 +84,8 @@ static void add_discovery_responses(struct tcpci_partner_data *partner)
 		/* USB host */ false, /* USB device */ false, IDH_PTYPE_AMA,
 		/* modal operation */ true, USB_VID_GOOGLE);
 	partner->identity_vdm[VDO_INDEX_CSTAT] = 0xabcdabcd;
-	partner->identity_vdm[VDO_INDEX_PRODUCT] = VDO_PRODUCT(0x1234, 0x5678);
+	partner->identity_vdm[VDO_INDEX_PRODUCT] = VDO_PRODUCT(
+		PARTNER_PRODUCT_ID, PARTNER_DEV_BINARY_CODED_DECIMAL);
 	/* Hardware version 1, firmware version 2 */
 	partner->identity_vdm[VDO_INDEX_AMA] = 0x12000000;
 	partner->identity_vdos = VDO_INDEX_AMA + 1;
@@ -237,11 +243,10 @@ ZTEST_F(usbc_alt_mode, verify_discovery)
 
 ZTEST_F(usbc_alt_mode, verify_displayport_mode_entry)
 {
-	/* TODO(b/237553647): Test EC-driven mode entry (requires a separate
-	 * config).
-	 */
-	host_cmd_typec_control_enter_mode(TEST_PORT, TYPEC_MODE_DP);
-	k_sleep(K_SECONDS(1));
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY)) {
+		host_cmd_typec_control_enter_mode(TEST_PORT, TYPEC_MODE_DP);
+		k_sleep(K_SECONDS(1));
+	}
 
 	/* Verify host command when VDOs are present. */
 	struct ec_response_typec_status status;
@@ -295,6 +300,10 @@ ZTEST_F(usbc_alt_mode, verify_displayport_mode_entry)
 
 ZTEST_F(usbc_alt_mode, verify_displayport_mode_reentry)
 {
+	if (!IS_ENABLED(CONFIG_PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY)) {
+		ztest_test_skip();
+	}
+
 	host_cmd_typec_control_enter_mode(TEST_PORT, TYPEC_MODE_DP);
 	k_sleep(K_SECONDS(1));
 
@@ -323,6 +332,54 @@ ZTEST_F(usbc_alt_mode, verify_displayport_mode_reentry)
 		      fixture->partner.modes_vdm[response.opos], NULL);
 }
 
+ZTEST_F(usbc_alt_mode, verify_discovery_via_pd_host_cmd)
+{
+	struct ec_params_usb_pd_info_request params = { .port = TEST_PORT };
+	struct ec_params_usb_pd_discovery_entry response;
+
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_USB_PD_DISCOVERY, 0, response, params);
+
+	zassert_ok(host_command_process(&args));
+	zassert_equal(args.response_size, sizeof(response), NULL);
+	zassert_equal(response.ptype, IDH_PTYPE_AMA);
+	zassert_equal(response.vid, USB_VID_GOOGLE);
+	zassert_equal(response.pid, PARTNER_PRODUCT_ID);
+}
+
+ZTEST_F(usbc_alt_mode, verify_mode_entry_via_pd_host_cmd)
+{
+	if (!IS_ENABLED(CONFIG_PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY)) {
+		ztest_test_skip();
+	}
+
+	/* Verify entering mode */
+	struct ec_params_usb_pd_set_mode_request set_mode_params = {
+		.cmd = PD_ENTER_MODE,
+		.port = TEST_PORT,
+		.opos = 1, /* Second VDO (after Discovery Responses) */
+		.svid = USB_SID_DISPLAYPORT,
+	};
+
+	struct host_cmd_handler_args set_mode_args = BUILD_HOST_COMMAND_PARAMS(
+		EC_CMD_USB_PD_SET_AMODE, 0, set_mode_params);
+
+	zassert_ok(host_command_process(&set_mode_args));
+
+	/* Verify that DisplayPort is the active alternate mode. */
+	struct ec_params_usb_pd_get_mode_response get_mode_response;
+	int response_size;
+
+	host_cmd_usb_pd_get_amode(TEST_PORT, 0, &get_mode_response,
+				  &response_size);
+
+	/* Response should be populated with a DisplayPort VDO */
+	zassert_equal(response_size, sizeof(get_mode_response), NULL);
+	zassert_equal(get_mode_response.svid, USB_SID_DISPLAYPORT, NULL);
+	zassert_equal(get_mode_response.vdo[0],
+		      fixture->partner.modes_vdm[get_mode_response.opos], NULL);
+}
+
 ZTEST_SUITE(usbc_alt_mode, drivers_predicate_post_main, usbc_alt_mode_setup,
 	    usbc_alt_mode_before, usbc_alt_mode_after, NULL);
 
@@ -332,8 +389,10 @@ ZTEST_SUITE(usbc_alt_mode, drivers_predicate_post_main, usbc_alt_mode_setup,
  */
 ZTEST_F(usbc_alt_mode_dp_unsupported, verify_discovery)
 {
-	host_cmd_typec_control_enter_mode(TEST_PORT, TYPEC_MODE_DP);
-	k_sleep(K_SECONDS(1));
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY)) {
+		host_cmd_typec_control_enter_mode(TEST_PORT, TYPEC_MODE_DP);
+		k_sleep(K_SECONDS(1));
+	}
 
 	uint8_t response_buffer[EC_LPC_HOST_PACKET_SIZE];
 	struct ec_response_typec_discovery *discovery =
@@ -370,8 +429,10 @@ ZTEST_F(usbc_alt_mode_dp_unsupported, verify_discovery)
  */
 ZTEST_F(usbc_alt_mode_dp_unsupported, verify_displayport_mode_nonentry)
 {
-	host_cmd_typec_control_enter_mode(TEST_PORT, TYPEC_MODE_DP);
-	k_sleep(K_SECONDS(1));
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY)) {
+		host_cmd_typec_control_enter_mode(TEST_PORT, TYPEC_MODE_DP);
+		k_sleep(K_SECONDS(1));
+	}
 
 	zassert_false(fixture->partner.displayport_configured, NULL);
 	int dp_attempts = atomic_get(&fixture->partner.mode_enter_attempts);

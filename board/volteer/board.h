@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -23,7 +23,7 @@
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 
 /* Remove PRL state names to free flash space */
-#define CONFIG_USB_PD_DEBUG_LEVEL 1
+#define CONFIG_USB_PD_DEBUG_LEVEL 0
 
 #define CONFIG_VBOOT_EFS2
 

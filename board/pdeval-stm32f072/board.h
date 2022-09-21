@@ -1,4 +1,4 @@
-/* Copyright 2015 The Chromium OS Authors. All rights reserved.
+/* Copyright 2015 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -14,6 +14,8 @@
 /* the UART console is on USART2 (PA14/PA15) */
 #undef CONFIG_UART_CONSOLE
 #define CONFIG_UART_CONSOLE 2
+
+#define CONFIG_LTO
 
 /* Optional features */
 #define CONFIG_HW_CRC
@@ -32,6 +34,7 @@
 #define CONFIG_USB_PD_VBUS_DETECT_TCPC
 #define CONFIG_USB_PD_TCPM_ANX7447
 #define CONFIG_USB_PD_TCPM_MUX
+#define CONFIG_USBC_SS_MUX
 
 #undef CONFIG_USB_PD_INITIAL_DRP_STATE
 #define CONFIG_USB_PD_INITIAL_DRP_STATE PD_DRP_TOGGLE_ON

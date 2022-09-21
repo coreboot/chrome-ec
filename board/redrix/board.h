@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -166,6 +166,7 @@
 
 /* Enabling USB4 mode */
 #define CONFIG_USB_PD_USB4
+#define CONFIG_USB_PD_DATA_RESET_MSG
 
 /* Retimer */
 #define CONFIG_USBC_RETIMER_FW_UPDATE

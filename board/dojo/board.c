@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -49,6 +49,31 @@ __override struct keyboard_scan_config keyscan_config = {
 		0xa4, 0xff, 0xfe, 0x55, 0xfa, 0xca  /* full set */
 	},
 };
+
+/* Support keyboard factory test */
+#ifdef CONFIG_KEYBOARD_FACTORY_TEST
+/*
+ * Map keyboard connector pins to EC GPIO pins for factory test.
+ * Pins mapped to {-1, -1} are skipped.
+ * The connector has 30 pins total, and there is no pin 0.
+ */
+const int keyboard_factory_scan_pins[][2] = {
+	{ -1, -1 },	   { GPIO_KSO_H, 4 }, { GPIO_KSO_H, 0 },
+	{ GPIO_KSO_H, 1 }, { GPIO_KSO_H, 3 }, { GPIO_KSO_H, 2 },
+	{ -1, -1 },	   { -1, -1 },	      { GPIO_KSO_L, 5 },
+	{ GPIO_KSO_L, 6 }, { -1, -1 },	      { GPIO_KSO_L, 3 },
+	{ GPIO_KSO_L, 2 }, { GPIO_KSI, 0 },   { GPIO_KSO_L, 1 },
+	{ GPIO_KSO_L, 4 }, { GPIO_KSI, 3 },   { GPIO_KSI, 2 },
+	{ GPIO_KSO_L, 0 }, { GPIO_KSI, 5 },   { GPIO_KSI, 4 },
+	{ GPIO_KSO_L, 7 }, { GPIO_KSI, 6 },   { GPIO_KSI, 7 },
+	{ GPIO_KSI, 1 },   { -1, -1 },	      { GPIO_KSO_H, 5 },
+	{ -1, -1 },	   { GPIO_KSO_H, 6 }, { -1, -1 },
+	{ -1, -1 },
+};
+
+const int keyboard_factory_scan_pins_used =
+	ARRAY_SIZE(keyboard_factory_scan_pins);
+#endif
 
 /* Vol-up key matrix at T13 */
 const struct vol_up_key vol_up_key_matrix_T13 = {
@@ -417,21 +442,27 @@ static int board_anx3443_mux_set(const struct usb_mux *me,
 	return EC_SUCCESS;
 }
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.usb_port = 0,
-		.i2c_port = I2C_PORT_USB_MUX0,
-		.i2c_addr_flags = PS8802_I2C_ADDR_FLAGS,
-		.driver = &ps8802_usb_mux_driver,
-		.board_init = &board_ps8762_mux_init,
-		.board_set = &board_ps8762_mux_set,
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 0,
+				.i2c_port = I2C_PORT_USB_MUX0,
+				.i2c_addr_flags = PS8802_I2C_ADDR_FLAGS,
+				.driver = &ps8802_usb_mux_driver,
+				.board_init = &board_ps8762_mux_init,
+				.board_set = &board_ps8762_mux_set,
+			},
 	},
 	{
-		.usb_port = 1,
-		.i2c_port = I2C_PORT_USB_MUX1,
-		.i2c_addr_flags = ANX3443_I2C_ADDR0_FLAGS,
-		.driver = &anx3443_usb_mux_driver,
-		.board_set = &board_anx3443_mux_set,
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 1,
+				.i2c_port = I2C_PORT_USB_MUX1,
+				.i2c_addr_flags = ANX3443_I2C_ADDR0_FLAGS,
+				.driver = &anx3443_usb_mux_driver,
+				.board_set = &board_anx3443_mux_set,
+			},
 	},
 };
 

@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,7 +10,6 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/kernel.h>
 #include <stdint.h>
-#include <zephyr/zephyr.h>
 
 #include <ap_power/ap_power.h>
 #include <ap_power/ap_power_events.h>
@@ -29,7 +28,8 @@
 #include "timer.h"
 #include "zephyr_espi_shim.h"
 
-#define VWIRE_PULSE_TRIGGER_TIME CONFIG_PLATFORM_EC_ESPI_DEFAULT_VW_WIDTH_US
+#define VWIRE_PULSE_TRIGGER_TIME \
+	CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US
 
 LOG_MODULE_REGISTER(espi_shim, CONFIG_ESPI_LOG_LEVEL);
 

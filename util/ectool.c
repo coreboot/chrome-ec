@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -1379,7 +1379,7 @@ static int cmd_rgbkbd_set_color(int argc, char *argv[])
 	int rv = -1;
 
 	outlen = sizeof(*p) + sizeof(struct rgb_s) * EC_RGBKBD_MAX_KEY_COUNT;
-	p = malloc(outlen);
+	p = (struct ec_params_rgbkbd_set_color *)malloc(outlen);
 	if (p == NULL)
 		return -1;
 	memset(p, 0, outlen);
@@ -1457,7 +1457,7 @@ static int cmd_rgbkbd(int argc, char *argv[])
 		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), &r, sizeof(r));
 	} else if (argc == 2 && !strcasecmp(argv[1], "getconfig")) {
 		/* Usage 5 */
-		char *type;
+		const char *type;
 
 		p.subcmd = EC_RGBKBD_SUBCMD_GET_CONFIG;
 		rv = ec_command(EC_CMD_RGBKBD, 0, &p, sizeof(p), &r, sizeof(r));

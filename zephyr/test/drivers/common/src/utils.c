@@ -1,11 +1,13 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/shell/shell_dummy.h> /* nocheck */
 #include <zephyr/shell/shell_uart.h>
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
 
 #include "acpi.h"
@@ -13,6 +15,7 @@
 #include "battery_smart.h"
 #include "charge_state.h"
 #include "chipset.h"
+#include "lpc.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
 #include "emul/emul_stub_device.h"
@@ -212,6 +215,24 @@ void acpi_write(uint8_t acpi_addr, uint8_t write_byte)
 	/* Finally, time to write the data */
 	zassume_ok(acpi_ap_to_ec(false, write_byte, &readval),
 		   "Failed to write value");
+}
+
+enum ec_status host_cmd_host_event(enum ec_host_event_action action,
+				   enum ec_host_event_mask_type mask_type,
+				   struct ec_response_host_event *r)
+{
+	enum ec_status ret_val;
+
+	struct ec_params_host_event params = {
+		.action = action,
+		.mask_type = mask_type,
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND(EC_CMD_HOST_EVENT, 0, *r, params);
+
+	ret_val = host_command_process(&args);
+
+	return ret_val;
 }
 
 void host_cmd_motion_sense_dump(int max_sensor_count,
@@ -532,6 +553,26 @@ void host_cmd_usb_pd_get_amode(
 	*response_size = args.response_size;
 }
 
+void host_events_save(struct host_events_ctx *host_events_ctx)
+{
+	host_events_ctx->lpc_host_events = lpc_get_host_events();
+
+	for (int i = 0; i < LPC_HOST_EVENT_COUNT; i++) {
+		host_events_ctx->lpc_host_event_mask[i] =
+			lpc_get_host_events_by_type(i);
+	}
+}
+
+void host_events_restore(struct host_events_ctx *host_events_ctx)
+{
+	lpc_set_host_event_state(host_events_ctx->lpc_host_events);
+
+	for (int i = 0; i < LPC_HOST_EVENT_COUNT; i++) {
+		lpc_set_host_event_mask(
+			i, host_events_ctx->lpc_host_event_mask[i]);
+	}
+}
+
 K_HEAP_DEFINE(test_heap, 2048);
 
 void *test_malloc(size_t bytes)
@@ -562,3 +603,25 @@ int emul_init_stub(const struct device *dev)
 /* These 2 lines are needed because we don't define an espi host driver */
 #define DT_DRV_COMPAT zephyr_espi_emul_espi_host
 DT_INST_FOREACH_STATUS_OKAY(EMUL_STUB_DEVICE);
+
+void check_console_cmd(const char *cmd, const char *expected_output,
+		       const int expected_rv, const char *file, const int line)
+{
+	const char *buffer;
+	size_t buffer_size;
+	int rv;
+
+	shell_backend_dummy_clear_output(get_ec_shell());
+	rv = shell_execute_cmd(get_ec_shell(), cmd);
+
+	zassert_equal(expected_rv, rv,
+		      "%s:%u \'%s\' - Expected %d, returned %d", file, line,
+		      cmd, expected_rv, rv);
+
+	if (expected_output) {
+		buffer = shell_backend_dummy_get_output(get_ec_shell(),
+							&buffer_size);
+		zassert_true(strstr(buffer, expected_output),
+			     "Invalid console output %s", buffer);
+	}
+}

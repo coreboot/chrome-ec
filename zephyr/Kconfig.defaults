@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -30,5 +30,8 @@ config SHELL_THREAD_PRIORITY_OVERRIDE
 
 config SHELL_THREAD_PRIORITY
 	default 12  # track EC_SHELL_PRIO
+
+config EXTRA_EXCEPTION_INFO
+	default y if ARCH_HAS_EXTRA_EXCEPTION_INFO
 
 orsource "Kconfig.defaults-$(ARCH)"

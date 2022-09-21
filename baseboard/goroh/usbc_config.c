@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -14,7 +14,7 @@
 #include "hooks.h"
 #include "driver/tcpm/it8xxx2_pd_public.h"
 #include "driver/ppc/syv682x_public.h"
-#include "driver/retimer/ps8818.h"
+#include "driver/retimer/ps8818_public.h"
 #include "driver/tcpm/tcpci.h"
 #include "usb_pd.h"
 #include "usbc_ppc.h"
@@ -76,25 +76,32 @@ static struct usb_mux_driver goroh_usb_c0_mux_driver = {
 	.get = goroh_usb_c0_get_mux,
 };
 
-static const struct usb_mux goroh_usb_c1_ps8818_retimer = {
-	.usb_port = USBC_PORT_C1,
-	.i2c_port = I2C_PORT_USB_C1,
-	.i2c_addr_flags = PS8818_I2C_ADDR_FLAGS,
-	.driver = &ps8818_usb_retimer_driver,
-	.next_mux = NULL,
+static const struct usb_mux_chain goroh_usb_c1_ps8818_retimer = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C1,
+			.i2c_port = I2C_PORT_USB_C1,
+			.i2c_addr_flags = PS8818_I2C_ADDR_FLAGS,
+			.driver = &ps8818_usb_retimer_driver,
+		},
+	.next = NULL,
 };
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USBC_PORT_C0] = {
-		.usb_port = USBC_PORT_C0,
-		.driver = &goroh_usb_c0_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C0,
+			.driver = &goroh_usb_c0_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
 	},
 	[USBC_PORT_C1] = {
-		.usb_port = USBC_PORT_C1,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-		.next_mux = &goroh_usb_c1_ps8818_retimer,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C1,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
+		.next = &goroh_usb_c1_ps8818_retimer,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);

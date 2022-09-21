@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -62,6 +62,9 @@
 #define PD_MAX_POWER_MW 60000
 #define PD_MAX_CURRENT_MA 3000
 #define PD_MAX_VOLTAGE_MV 20000
+
+#define CONFIG_CHARGER_PROFILE_OVERRIDE
+#define CONFIG_PWR_STATE_DISCHARGE_FULL
 
 /*
  * Macros for GPIO signals used in common code that don't match the
@@ -167,6 +170,7 @@ enum temp_sensor_id {
 
 enum battery_type {
 	BATTERY_COSMX_AP20CBL,
+	BATTERY_COSMX_AP20CBL_004,
 	BATTERY_LGC_AP18C8K,
 	BATTERY_AP19B8M,
 	BATTERY_TYPE_COUNT

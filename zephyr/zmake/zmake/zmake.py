@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -204,8 +204,6 @@ class Zmake:
         self,
         project_names,
         all_projects=False,
-        host_tests_only=False,
-        boards_only=False,
     ) -> Set[zmake.project.Project]:
         """Finds all projects for the specified command line flags.
 
@@ -216,12 +214,6 @@ class Zmake:
         )
         if all_projects:
             projects = set(found_projects.values())
-        elif host_tests_only:
-            projects = {p for p in found_projects.values() if p.config.is_test}
-        elif boards_only:
-            projects = {
-                p for p in found_projects.values() if not p.config.is_test
-            }
         else:
             projects = set()
             for project_name in project_names:
@@ -244,11 +236,10 @@ class Zmake:
         coverage=False,
         allow_warnings=False,
         all_projects=False,
-        host_tests_only=False,
         extra_cflags=None,
         delete_intermediates=False,
-        boards_only=False,
         static_version=False,
+        save_temps=False,
     ):
         """Locate and configure the specified projects."""
         # Resolve build_dir if needed.
@@ -258,8 +249,6 @@ class Zmake:
         projects = self._resolve_projects(
             project_names,
             all_projects=all_projects,
-            host_tests_only=host_tests_only,
-            boards_only=boards_only,
         )
         for project in projects:
             project_build_dir = (
@@ -280,6 +269,7 @@ class Zmake:
                     multiproject=len(projects) > 1,
                     delete_intermediates=delete_intermediates,
                     static_version=static_version,
+                    save_temps=save_temps,
                 )
             )
             if self._sequential:
@@ -311,11 +301,10 @@ class Zmake:
         coverage=False,
         allow_warnings=False,
         all_projects=False,
-        host_tests_only=False,
         extra_cflags=None,
         delete_intermediates=False,
-        boards_only=False,
         static_version=False,
+        save_temps=False,
     ):
         """Locate and build the specified projects."""
         return self.configure(
@@ -327,12 +316,11 @@ class Zmake:
             coverage=coverage,
             allow_warnings=allow_warnings,
             all_projects=all_projects,
-            host_tests_only=host_tests_only,
             extra_cflags=extra_cflags,
             build_after_configure=True,
             delete_intermediates=delete_intermediates,
-            boards_only=boards_only,
             static_version=static_version,
+            save_temps=save_temps,
         )
 
     def test(  # pylint: disable=unused-argument
@@ -375,6 +363,7 @@ class Zmake:
         multiproject=False,
         delete_intermediates=False,
         static_version=False,
+        save_temps=False,
     ):
         """Set up a build directory to later be built by "zmake build"."""
         try:
@@ -408,6 +397,11 @@ class Zmake:
                     **(
                         {"EXTRA_EC_VERSION_FLAGS": "--static"}
                         if static_version
+                        else {}
+                    ),
+                    **(
+                        {"EXTRA_CFLAGS": "-save-temps=obj"}
+                        if save_temps
                         else {}
                     ),
                 },
