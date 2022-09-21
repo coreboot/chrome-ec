@@ -1,4 +1,4 @@
-/* Copyright 2021 The ChromiumOS Authors.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -17,11 +17,10 @@
 #include "charger.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl9241.h"
-#include "driver/ppc/aoz1380_public.h"
 #include "driver/ppc/nx20p348x.h"
 #include "driver/retimer/anx7483_public.h"
 #include "driver/retimer/ps8811.h"
-#include "driver/retimer/ps8818.h"
+#include "driver/retimer/ps8818_public.h"
 #include "driver/tcpm/nct38xx.h"
 #include "driver/usb_mux/amd_fp6.h"
 #include "gpio/gpio_int.h"
@@ -31,6 +30,7 @@
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
+#include "usbc/usb_muxes.h"
 
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ##args)
@@ -82,207 +82,6 @@ static void usb_fault_interrupt_disable(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, usb_fault_interrupt_disable,
 	     HOOK_PRIO_DEFAULT);
-
-struct ppc_config_t ppc_chips[] = {
-	[USBC_PORT_C0] = {
-		/* Device does not talk I2C */
-		.drv = &aoz1380_drv
-	},
-
-	[USBC_PORT_C1] = {
-		.i2c_port = I2C_PORT_TCPC1,
-		.i2c_addr_flags = NX20P3483_ADDR1_FLAGS,
-		.drv = &nx20p348x_drv
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == CONFIG_USB_PD_PORT_MAX_COUNT);
-unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
-
-/*
- * .init is not necessary here because it has nothing
- * to do. Primary mux will handle mux state so .get is
- * not needed as well. usb_mux.c can handle the situation
- * properly.
- */
-static int ioex_set_flip(const struct usb_mux *, mux_state_t, bool *);
-struct usb_mux_driver ioex_sbu_mux_driver = {
-	.set = ioex_set_flip,
-};
-
-/*
- * Since NX3DV221GM is not a i2c device, .i2c_port and
- * .i2c_addr_flags are not required here.
- */
-struct usb_mux usbc0_sbu_mux = {
-	.usb_port = USBC_PORT_C0,
-	.driver = &ioex_sbu_mux_driver,
-};
-
-struct usb_mux usbc1_sbu_mux = {
-	.usb_port = USBC_PORT_C1,
-	.driver = &ioex_sbu_mux_driver,
-};
-
-int baseboard_anx7483_c0_mux_set(const struct usb_mux *me,
-				 mux_state_t mux_state)
-{
-	return anx7483_set_default_tuning(me, mux_state);
-}
-
-int baseboard_anx7483_c1_mux_set(const struct usb_mux *me,
-				 mux_state_t mux_state)
-{
-	bool flipped = mux_state & USB_PD_MUX_POLARITY_INVERTED;
-
-	/* Remove flipped from the state for easier compraisons */
-	mux_state = mux_state & ~USB_PD_MUX_POLARITY_INVERTED;
-
-	RETURN_ERROR(anx7483_set_default_tuning(me, mux_state));
-
-	if (mux_state == USB_PD_MUX_USB_ENABLED) {
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX1,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX2,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_DRX1,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_DRX2,
-					    ANX7483_EQ_SETTING_12_5DB));
-	} else if (mux_state == USB_PD_MUX_DP_ENABLED) {
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX1,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX2,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_UTX1,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_UTX2,
-					    ANX7483_EQ_SETTING_12_5DB));
-	} else if (mux_state == USB_PD_MUX_DOCK && !flipped) {
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX1,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX2,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_DRX1,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_UTX2,
-					    ANX7483_EQ_SETTING_12_5DB));
-	} else if (mux_state == USB_PD_MUX_DOCK && flipped) {
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX1,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX2,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_UTX1,
-					    ANX7483_EQ_SETTING_12_5DB));
-		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_DRX2,
-					    ANX7483_EQ_SETTING_12_5DB));
-	}
-
-	return EC_SUCCESS;
-}
-
-struct usb_mux usbc0_anx7483 = {
-	.usb_port = USBC_PORT_C0,
-	.i2c_port = I2C_PORT_TCPC0,
-	.i2c_addr_flags = ANX7483_I2C_ADDR0_FLAGS,
-	.driver = &anx7483_usb_retimer_driver,
-	.board_set = &baseboard_anx7483_c0_mux_set,
-	.next_mux = &usbc0_sbu_mux,
-};
-
-__overridable int board_c1_ps8818_mux_set(const struct usb_mux *me,
-					  mux_state_t mux_state)
-{
-	CPRINTSUSB("C1: PS8818 mux using default tuning");
-
-	/* Once a DP connection is established, we need to set IN_HPD */
-	if (mux_state & USB_PD_MUX_DP_ENABLED)
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 1);
-	else
-		ioex_set_level(IOEX_USB_C1_HPD_IN_DB, 0);
-
-	return 0;
-}
-
-struct usb_mux usbc1_ps8818 = {
-	.usb_port = USBC_PORT_C1,
-	.i2c_port = I2C_PORT_TCPC1,
-	.flags = USB_MUX_FLAG_RESETS_IN_G3,
-	.i2c_addr_flags = PS8818_I2C_ADDR_FLAGS,
-	.driver = &ps8818_usb_retimer_driver,
-	.board_set = &board_c1_ps8818_mux_set,
-};
-
-struct usb_mux usbc1_anx7483 = {
-	.usb_port = USBC_PORT_C1,
-	.i2c_port = I2C_PORT_TCPC1,
-	.i2c_addr_flags = ANX7483_I2C_ADDR0_FLAGS,
-	.driver = &anx7483_usb_retimer_driver,
-	.board_set = &baseboard_anx7483_c1_mux_set,
-	.next_mux = &usbc1_sbu_mux,
-};
-
-struct usb_mux usb_muxes[] = {
-	[USBC_PORT_C0] = {
-		.usb_port = USBC_PORT_C0,
-		.i2c_port = I2C_PORT_USB_MUX,
-		.i2c_addr_flags = AMD_FP6_C0_MUX_I2C_ADDR,
-		.driver = &amd_fp6_usb_mux_driver,
-		.next_mux = &usbc0_anx7483,
-	},
-	[USBC_PORT_C1] = {
-		.usb_port = USBC_PORT_C1,
-		.i2c_port = I2C_PORT_USB_MUX,
-		.i2c_addr_flags = AMD_FP6_C4_MUX_I2C_ADDR,
-		.driver = &amd_fp6_usb_mux_driver,
-		/* .next_mux = filled in by setup_mux based on fw_config */
-	}
-};
-BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == CONFIG_USB_PD_PORT_MAX_COUNT);
-
-/*
- * USB C0 (general) and C1 (just ANX DB) use IOEX pins to
- * indicate flipped polarity to a protection switch.
- */
-static int ioex_set_flip(const struct usb_mux *me, mux_state_t mux_state,
-			 bool *ack_required)
-{
-	/* This driver does not use host command ACKs */
-	*ack_required = false;
-
-	if (me->usb_port == USBC_PORT_C0) {
-		if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
-			ioex_set_level(IOEX_USB_C0_SBU_FLIP, 1);
-		else
-			ioex_set_level(IOEX_USB_C0_SBU_FLIP, 0);
-	} else {
-		if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
-			ioex_set_level(IOEX_USB_C1_SBU_FLIP, 1);
-		else
-			ioex_set_level(IOEX_USB_C1_SBU_FLIP, 0);
-	}
-
-	return EC_SUCCESS;
-}
-
-static void setup_mux(void)
-{
-	uint32_t val;
-
-	if (cros_cbi_get_fw_config(FW_IO_DB, &val) != 0)
-		CPRINTSUSB("Error finding FW_DB_IO in CBI FW_CONFIG");
-	/* Val will have our dts default on error, so continue setup */
-
-	if (val == FW_IO_DB_PS8811_PS8818) {
-		CPRINTSUSB("C1: Setting PS8818 mux");
-		usb_muxes[USBC_PORT_C1].next_mux = &usbc1_ps8818;
-	} else if (val == FW_IO_DB_NONE_ANX7483) {
-		CPRINTSUSB("C1: Setting ANX7483 mux");
-		usb_muxes[USBC_PORT_C1].next_mux = &usbc1_anx7483;
-	} else {
-		CPRINTSUSB("Unexpected DB_IO board: %d", val);
-	}
-}
-DECLARE_HOOK(HOOK_INIT, setup_mux, HOOK_PRIO_INIT_I2C);
 
 int board_set_active_charge_port(int port)
 {
@@ -389,21 +188,6 @@ int board_set_active_charge_port(int port)
 	}
 
 	return EC_SUCCESS;
-}
-
-/*
- * In the AOZ1380 PPC, there are no programmable features.  We use
- * the attached NCT3807 to control a GPIO to indicate 1A5 or 3A0
- * current limits.
- */
-int board_aoz1380_set_vbus_source_current_limit(int port, enum tcpc_rp_value rp)
-{
-	int rv = EC_SUCCESS;
-
-	rv = ioex_set_level(IOEX_USB_C0_PPC_ILIM_3A_EN,
-			    (rp == TYPEC_RP_3A0) ? 1 : 0);
-
-	return rv;
 }
 
 void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
@@ -532,22 +316,6 @@ uint16_t tcpc_get_alert_status(void)
 	}
 
 	return status;
-}
-
-void ppc_interrupt(enum gpio_signal signal)
-{
-	switch (signal) {
-	case GPIO_USB_C0_PPC_INT_ODL:
-		aoz1380_interrupt(USBC_PORT_C0);
-		break;
-
-	case GPIO_USB_C1_PPC_INT_ODL:
-		nx20p348x_interrupt(USBC_PORT_C1);
-		break;
-
-	default:
-		break;
-	}
 }
 
 void bc12_interrupt(enum gpio_signal signal)

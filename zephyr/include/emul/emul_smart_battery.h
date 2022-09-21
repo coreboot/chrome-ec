@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -67,6 +67,8 @@ struct sbat_emul_bat_data {
 	uint16_t error_code;
 	/** Design battery voltage in mV */
 	uint16_t design_mv;
+	/** Default Design battery voltage in mV */
+	const uint16_t default_design_mv;
 	/** Battery temperature at the moment in Kelvins */
 	uint16_t temp;
 	/** Battery voltage at the moment in mV */
@@ -117,6 +119,10 @@ struct sbat_emul_bat_data {
 	uint8_t mf_data[MAX_BLOCK_SIZE];
 	/** Manufacturer data length */
 	int mf_data_len;
+	/** Manufacture info */
+	uint8_t mf_info[MAX_BLOCK_SIZE];
+	/** Manufacture info length */
+	int mf_info_len;
 };
 
 /**

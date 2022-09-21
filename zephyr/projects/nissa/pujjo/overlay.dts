@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -70,7 +70,7 @@
 		int_imu: ec_imu {
 			irq-pin = <&gpio_imu_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "bmi3xx_interrupt";
+			handler = "motion_interrupt";
 		};
 		int_vol_down: vol_down {
 			irq-pin = <&gpio_voldn_btn_odl>;
@@ -137,45 +137,50 @@
 		gpio-en-sub-s5-rails = &gpio_sb_2;
 	};
 
+	temp_cpu: cpu {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V3_51K1_47K_4050B>;
+		adc = <&adc_temp_sensor_1>;
+	};
+	temp_ddr: ddr {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V3_51K1_47K_4050B>;
+		adc = <&adc_temp_sensor_2>;
+	};
+	temp_ambient: ambient {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V3_51K1_47K_4050B>;
+		adc = <&adc_temp_sensor_3>;
+	};
+
 	named-temp-sensors {
-		CPU {
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
-			enum-name = "TEMP_SENSOR_1";
+		compatible = "cros-ec,temp-sensors";
+		cpu {
 			temp_fan_off = <35>;
 			temp_fan_max = <60>;
 			temp_host_high = <90>;
 			temp_host_halt = <100>;
 			temp_host_release_high = <85>;
-			adc = <&adc_temp_sensor_1>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
+			sensor = <&temp_cpu>;
 		};
-		DDR {
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
-			enum-name = "TEMP_SENSOR_2";
+		ddr {
 			temp_fan_off = <35>;
 			temp_fan_max = <60>;
 			temp_host_high = <90>;
 			temp_host_halt = <100>;
 			temp_host_release_high = <85>;
-			adc = <&adc_temp_sensor_2>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
+			sensor = <&temp_ddr>;
 		};
 		ambient {
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
-			enum-name = "TEMP_SENSOR_3";
 			temp_fan_off = <35>;
 			temp_fan_max = <60>;
 			temp_host_high = <90>;
 			temp_host_halt = <100>;
 			temp_host_release_high = <85>;
-			adc = <&adc_temp_sensor_3>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
+			sensor = <&temp_ambient>;
 		};
 	};
 
@@ -203,7 +208,10 @@
 			reg = <0>;
 			bc12 = <&bc12_port0>;
 			chg = <&chg_port0>;
-			usb-muxes = <&virtual_mux_0>;
+			usb-mux-chain-0 {
+				compatible = "cros-ec,usb-mux-chain";
+				usb-muxes = <&virtual_mux_0>;
+			};
 		};
 		port0-muxes {
 			virtual_mux_0: virtual-mux-0 {

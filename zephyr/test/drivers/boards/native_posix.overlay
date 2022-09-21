@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,6 +7,7 @@
 #include <cros/binman.dtsi>
 #include <cros/thermistor/thermistor.dtsi>
 #include <dt-bindings/gpio_defines.h>
+#include <dt-bindings/pwm/pwm.h>
 #include <freq.h>
 
 / {
@@ -16,6 +17,7 @@
 		cros-ec,raw-kb = &cros_kb_raw;
 		cros-ec,flash = &flash0;
 		cros-ec,flash-controller = &cros_flash;
+		cros,rtc = &cros_rtc;
 	};
 
 	aliases {
@@ -187,7 +189,7 @@
 			#led-pin-cells = <1>;
 			gpios = <&gpio1 1 (GPIO_INPUT | GPIO_OUTPUT_LOW)>;
 		};
-		ap_ec_int_l {
+		gpio_ap_ec_int_l: ap_ec_int_l {
 			gpios = <&gpio1 2 GPIO_OUTPUT_HIGH>;
 			enum-name = "GPIO_EC_INT_L";
 		};
@@ -198,6 +200,13 @@
 		gpio_ec_volup_btn_odl: ec_volup_btn_odl {
 			gpios = <&gpio1 4 GPIO_INPUT_PULL_UP>;
 			enum-name = "GPIO_VOLUME_UP_L";
+		};
+		gpio_ec_pg_pin_temp: ec_pg_pin_temp {
+			gpios = <&gpio0 4 GPIO_INPUT>;
+		};
+		gpio_en_pp5000_usba_r: en_pp5000_usba_r {
+			gpios = <&gpio1 5 GPIO_OUTPUT_LOW>;
+			enum-name = "GPIO_EN_PP5000_USBA_R";
 		};
 	};
 
@@ -211,7 +220,7 @@
 		low-level;
 		gpio-controller;
 		#gpio-cells = <2>;
-		ngpios = <5>;
+		ngpios = <6>;
 	};
 
 	gpio-interrupts {
@@ -387,58 +396,68 @@
 		};
 	};
 
+	temp_charger: charger {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V3_13K7_47K_4050B>;
+		adc = <&adc_charger>;
+	};
+	temp_pp3300_regulator: pp3300-regulator {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V3_30K9_47K_4050B>;
+		adc = <&adc_pp3300_regulator>;
+	};
+	temp_ddr_soc: ddr-soc {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V3_51K1_47K_4050B>;
+		adc = <&adc_ddr_soc>;
+	};
+	temp_fan: fan {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V0_22K6_47K_4050B>;
+		adc = <&adc_fan>;
+	};
+
 	named-temp-sensors {
-		charger {
-			thermistor = <&thermistor_3V3_13K7_47K_4050B>;
+		compatible = "cros-ec,temp-sensors";
+		named_temp_charger: charger {
 			status = "okay";
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			enum-name = "TEMP_SENSOR_CHARGER";
 			temp_fan_off = <40>;
 			temp_fan_max = <55>;
 			temp_host_high = <75>;
 			temp_host_halt = <80>;
 			temp_host_release_high = <65>;
-			adc = <&adc_charger>;
+			power-good-pin = <&gpio_ec_pg_pin_temp>;
+			sensor = <&temp_charger>;
 		};
-		pp3300-regulator {
-			thermistor = <&thermistor_3V3_30K9_47K_4050B>;
+		named_temp_pp3300_regulator: pp3300-regulator {
 			status = "okay";
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			enum-name = "TEMP_SENSOR_PP3300_REGULATOR";
 			temp_fan_off = <40>;
 			temp_fan_max = <55>;
 			temp_host_high = <75>;
 			temp_host_halt = <80>;
 			temp_host_release_high = <65>;
-			adc = <&adc_pp3300_regulator>;
+			power-good-pin = <&gpio_ec_pg_pin_temp>;
+			sensor = <&temp_pp3300_regulator>;
 		};
-		ddr-soc {
-			thermistor = <&thermistor_3V3_51K1_47K_4050B>;
+		named_temp_ddr_soc: ddr-soc {
 			status = "okay";
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			enum-name = "TEMP_SENSOR_DDR_SOC";
 			temp_fan_off = <35>;
 			temp_fan_max = <50>;
 			temp_host_high = <70>;
 			temp_host_halt = <80>;
 			temp_host_release_high = <65>;
-			adc = <&adc_ddr_soc>;
+			power-good-pin = <&gpio_ec_pg_pin_temp>;
+			sensor = <&temp_ddr_soc>;
 		};
-		fan {
-			thermistor = <&thermistor_3V0_22K6_47K_4050B>;
+		named_temp_fan: fan {
 			status = "okay";
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			enum-name = "TEMP_SENSOR_FAN";
 			temp_fan_off = <35>;
 			temp_fan_max = <50>;
 			temp_host_high = <70>;
 			temp_host_halt = <80>;
 			temp_host_release_high = <65>;
-			adc = <&adc_fan>;
+			power-good-pin = <&gpio_ec_pg_pin_temp>;
+			sensor = <&temp_fan>;
 		};
 	};
 
@@ -791,6 +810,10 @@
 		compatible = "cros-ec,flash-emul";
 	};
 
+	cros_rtc: cros-rtc {
+		compatible = "cros-ec,rtc-emul";
+	};
+
 	pwms {
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -798,25 +821,31 @@
 		pwm_blue_left: pwm@0 {
 			compatible = "cros,pwm-mock";
 			reg = <0 1>;
-			#pwm-cells = <2>;
+			#pwm-cells = <3>;
 			status = "okay";
 		};
 		pwm_white_left: pwm@1 {
 			compatible = "cros,pwm-mock";
 			reg = <1 1>;
-			#pwm-cells = <2>;
+			#pwm-cells = <3>;
 			status = "okay";
 		};
 		pwm_amber_right: pwm@2 {
 			compatible = "cros,pwm-mock";
 			reg = <2 1>;
-			#pwm-cells = <2>;
+			#pwm-cells = <3>;
 			status = "okay";
 		};
 		pwm_white_right: pwm@3 {
 			compatible = "cros,pwm-mock";
 			reg = <3 1>;
-			#pwm-cells = <2>;
+			#pwm-cells = <3>;
+			status = "okay";
+		};
+		pwm_kblight: pwm@4 {
+			compatible = "cros,pwm-mock";
+			reg = <4 1>;
+			#pwm-cells = <3>;
 			status = "okay";
 		};
 	};
@@ -826,19 +855,19 @@
 
 		pwmled_blue_left: pwmled_b_left {
 			#led-pin-cells = <1>;
-			pwms = <&pwm_blue_left 0 1000000>;
+			pwms = <&pwm_blue_left 0 1000000 PWM_POLARITY_NORMAL>;
 		};
 		pwmled_white_left: pwmled_w_left {
 			#led-pin-cells = <1>;
-			pwms = <&pwm_white_left 0 1000000>;
+			pwms = <&pwm_white_left 0 1000000 PWM_POLARITY_NORMAL>;
 		};
 		pwmled_amber_right: pwmled_y_right {
 			#led-pin-cells = <1>;
-			pwms = <&pwm_amber_right 0 1000000>;
+			pwms = <&pwm_amber_right 0 1000000 PWM_POLARITY_NORMAL>;
 		};
 		pwmled_white_right: pwmled_w_right {
 			#led-pin-cells = <1>;
-			pwms = <&pwm_white_right 0 1000000>;
+			pwms = <&pwm_white_right 0 1000000 PWM_POLARITY_NORMAL>;
 		};
 	};
 
@@ -889,6 +918,12 @@
 
 	led-colors {
 		compatible = "cros-ec,led-policy";
+	};
+
+	kblight {
+		compatible = "cros-ec,kblight-pwm";
+		pwms = <&pwm_kblight 0 PWM_KHZ(10) PWM_POLARITY_NORMAL>;
+		generic-pwm-channel = <0>;
 	};
 };
 

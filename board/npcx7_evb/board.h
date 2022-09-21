@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -29,8 +29,8 @@
 #define CONFIG_I2C
 /* Features of eSPI */
 #define CONFIG_HOST_INTERFACE_ESPI
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_S3
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
+#define CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S3
+#define CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S4
 
 /* Optional features */
 #define CONFIG_ENABLE_JTAG_SELECTION

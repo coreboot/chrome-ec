@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,7 +9,7 @@
 #include <zephyr/dt-bindings/clock/npcx_clock.h>
 #include <zephyr/logging/log.h>
 #include <soc.h>
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 
 #include <ap_power/ap_power.h>
 #include "chipset.h"

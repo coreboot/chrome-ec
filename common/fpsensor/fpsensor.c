@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -481,7 +481,11 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 				FP_CONTEXT_ENCRYPTION_SALT_BYTES);
 		trng_exit();
 
-		if (fgr == template_newly_enrolled) {
+		/*
+		 * TODO(http://b/244781166): Use consistent types so cast is
+		 * not needed.
+		 */
+		if (fgr == (uint32_t)template_newly_enrolled) {
 			/*
 			 * Newly enrolled templates need new positive match
 			 * salt, new positive match secret and new validation

@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -778,3 +778,10 @@ enum ec_error_list charger_enable_linear_charge(int chgnum, bool enable)
 
 	return EC_ERROR_UNIMPLEMENTED;
 }
+
+#ifdef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
+inline int charger_get_min_bat_pct_for_power_on(void)
+{
+	return CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON;
+}
+#endif

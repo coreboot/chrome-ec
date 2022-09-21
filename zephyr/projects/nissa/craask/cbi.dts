@@ -1,9 +1,58 @@
-/* Copyright 2022 The Chromium OS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 / {
+	/* Craask-specific fw_config fields. */
+	nissa-fw-config {
+		/*
+		 * FW_CONFIG field to describe Lid sensor orientation.
+		 */
+		lid-inversion {
+			enum-name = "FW_LID_INVERSION";
+			start = <8>;
+			size = <1>;
+
+			/*
+			 * 0: regular placement of the lid sensor
+			 * 1: rotate 180' of xy plane.
+			 */
+			regular {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_LID_REGULAR";
+				value = <0>;
+				default;
+			};
+			xy_rotate_180 {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_LID_XY_ROT_180";
+				value = <1>;
+			};
+		};
+		/*
+		 * FW_CONFIG field to describe Clamshell/Convertible.
+		 */
+		form_factor {
+			enum-name = "FORM_FACTOR";
+			start = <9>;
+			size = <1>;
+
+			/*
+			 * 0: convertible, 1: clamshell
+			 */
+			convertible {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "CONVERTIBLE";
+				value = <0>;
+			};
+			clamshell {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "CLAMSHELL";
+				value = <1>;
+			};
+		};
+	};
 	/* Craask-specific ssfc fields. */
 	cbi-ssfc {
 		compatible = "named-cbi-ssfc";

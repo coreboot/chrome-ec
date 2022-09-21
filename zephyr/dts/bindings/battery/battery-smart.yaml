@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -41,12 +41,14 @@ properties:
          - "panasonic,ap19a5k"
          - "powertech,batgqa05l22"
          - "smp,atlxdy9k"
+         - "smp,c31n1915"
          - "smp,c31n2005"
          - "smp,l20m3pg0"
          - "smp,l20m3pg1"
          - "smp,l20m3pg2"
          - "smp,l22m3pg0"
          - "smp,l22m3pg1"
+         - "smp,pc-vp-bp153"
          - "smp,coslight_gh02047xl"
          - "smp,cosxdy9k"
          - "smp,highpower_gh02047xl"

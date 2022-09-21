@@ -1,25 +1,24 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #include <string.h>
 #include <zephyr/fff.h>
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
 
 #include "ec_commands.h"
 #include "gpio.h"
 #include "host_command.h"
 #include "system.h"
+#include "test/drivers/test_mocks.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
 
 #define PORT 0
 
 #define AC_OK_OD_GPIO_NAME "acok_od"
-
-FAKE_VALUE_FUNC(int, system_is_locked);
 
 static void espi_before(void *state)
 {

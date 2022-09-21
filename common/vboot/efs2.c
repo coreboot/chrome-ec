@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -29,6 +29,9 @@
 #define CPRINTS(format, args...) cprints(CC_VBOOT, "VB " format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_VBOOT, "VB " format, ##args)
 
+/* LCOV_EXCL_START - TODO(b/172210316) implement is_battery_ready(), and remove
+ * this lcov excl.
+ */
 static const char *boot_mode_to_string(uint8_t mode)
 {
 	static const char *boot_mode_str[] = {
@@ -39,6 +42,7 @@ static const char *boot_mode_to_string(uint8_t mode)
 		return boot_mode_str[mode];
 	return "UNDEF";
 }
+/* LCOV_EXCL_STOP */
 
 /*
  * Check whether the session has successfully ended or not. ERR_TIMEOUT is
@@ -74,8 +78,13 @@ static enum cr50_comm_err send_to_cr50(const uint8_t *data, size_t size)
 
 	if (uart_shell_stop()) {
 		/* Failed to stop the shell. */
+		/* LCOV_EXCL_START - At least on posix systems, uart_shell_stop
+		 * will never fail, it will crash the binary or hang forever on
+		 * error.
+		 */
 		board_enable_packet_mode(false);
 		return CR50_COMM_ERR_UNKNOWN;
+		/* LCOV_EXCL_STOP */
 	}
 
 	/*
@@ -191,6 +200,9 @@ static enum cr50_comm_err verify_hash(void)
 	return cmd_to_cr50(CR50_COMM_CMD_VERIFY_HASH, hash, SHA256_DIGEST_SIZE);
 }
 
+/* LCOV_EXCL_START - TODO(b/172210316) implement is_battery_ready(), and remove
+ * this lcov excl.
+ */
 static enum cr50_comm_err set_boot_mode(uint8_t mode)
 {
 	enum cr50_comm_err rv;
@@ -202,6 +214,7 @@ static enum cr50_comm_err set_boot_mode(uint8_t mode)
 		CPRINTS("Failed to set boot mode");
 	return rv;
 }
+/* LCOV_EXCL_STOP */
 
 static bool pd_comm_enabled;
 
@@ -223,10 +236,12 @@ void vboot_disable_pd(void)
 }
 #endif
 
+/* LCOV_EXCL_START - This is just a stub intended to be overridden */
 __overridable void show_critical_error(void)
 {
 	CPRINTS("%s", __func__);
 }
+/* LCOV_EXCL_STOP */
 
 static void verify_and_jump(void)
 {
@@ -251,14 +266,16 @@ static void verify_and_jump(void)
 	}
 }
 
+/* LCOV_EXCL_START - This is just a stub intended to be overridden */
 __overridable void show_power_shortage(void)
 {
 	CPRINTS("%s", __func__);
 }
+/* LCOV_EXCL_STOP */
 
 static bool is_battery_ready(void)
 {
-	/* TODO: Add battery check (https://crbug.com/1045216) */
+	/* TODO(b/172210316): Add battery check */
 	return true;
 }
 
@@ -300,12 +317,16 @@ void vboot_main(void)
 		 * If battery is drained or bad, we will boot in NO_BOOT mode to
 		 * inform the user of the problem.
 		 */
+		/* LCOV_EXCL_START - TODO(b/172210316) implement
+		 * is_battery_ready(), and remove this lcov excl.
+		 */
 		if (!is_battery_ready()) {
 			CPRINTS("Battery not ready or bad");
 			if (set_boot_mode(BOOT_MODE_NO_BOOT) ==
 			    CR50_COMM_SUCCESS)
 				enable_pd();
 		}
+		/* LCOV_EXCL_STOP */
 
 		/* We'll enter recovery mode immediately, later, or never. */
 		return;

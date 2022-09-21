@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -360,8 +360,7 @@ void update_dynamic_battery_info(void)
 	}
 
 	if (curr->batt.is_present == BP_YES &&
-	    !(curr->batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE) &&
-	    curr->batt.state_of_charge <= BATTERY_LEVEL_CRITICAL)
+	    battery_is_below_threshold(BATT_THRESHOLD_TYPE_SHUTDOWN, false))
 		tmp |= EC_BATT_FLAG_LEVEL_CRITICAL;
 
 	tmp |= curr->batt_is_charging ? EC_BATT_FLAG_CHARGING :

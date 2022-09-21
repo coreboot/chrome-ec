@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -51,4 +51,7 @@
 #endif
 #ifdef CONFIG_PLATFORM_EC_ACCELGYRO_LSM6DSO
 #include "lsm6dso-drvinfo.inc"
+#endif
+#ifdef CONFIG_PLATFORM_EC_ACCELGYRO_LSM6DSM
+#include "lsm6dsm-drvinfo.inc"
 #endif

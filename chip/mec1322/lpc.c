@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -83,7 +83,7 @@ static void lpc_generate_sci(void)
 	gpio_set_level(CONFIG_SCI_GPIO, 1);
 #else
 	MEC1322_ACPI_PM_STS |= 1;
-	udelay(CONFIG_ESPI_DEFAULT_VW_WIDTH_US);
+	udelay(CONFIG_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US);
 	MEC1322_ACPI_PM_STS &= ~1;
 #endif
 }

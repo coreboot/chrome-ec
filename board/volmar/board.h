@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -170,6 +170,7 @@ enum temp_sensor_id {
 
 enum battery_type {
 	BATTERY_COSMX_AP20CBL,
+	BATTERY_COSMX_AP20CBL_004,
 	BATTERY_LGC_AP18C8K,
 	BATTERY_AP19B8M,
 	BATTERY_TYPE_COUNT

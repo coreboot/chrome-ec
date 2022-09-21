@@ -1,4 +1,4 @@
-/* Copyright 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -331,7 +331,6 @@ static const char *const pd_state_names[] = {
 	"BIST_RX",
 	"BIST_TX",
 	"DRP_AUTO_TOGGLE",
-	"ENTER_USB",
 };
 BUILD_ASSERT(ARRAY_SIZE(pd_state_names) == PD_STATE_COUNT);
 #endif
@@ -368,9 +367,6 @@ int pd_get_rev(int port, enum tcpci_msg_type type)
 	/* TCPMv1 Only stores PD revision for SOP and SOP' types */
 	ASSERT(type < NUM_SOP_STAR_TYPES - 1);
 
-	if (type == TCPCI_MSG_SOP_PRIME)
-		return get_usb_pd_cable_revision(port);
-
 	return pd[port].rev;
 #else
 	return PD_REV20;
@@ -380,9 +376,6 @@ int pd_get_rev(int port, enum tcpci_msg_type type)
 int pd_get_vdo_ver(int port, enum tcpci_msg_type type)
 {
 #ifdef CONFIG_USB_PD_REV30
-	if (type == TCPCI_MSG_SOP_PRIME)
-		return vdo_ver[get_usb_pd_cable_revision(port)];
-
 	return vdo_ver[pd[port].rev];
 #else
 	return VDM_VER10;
@@ -692,24 +685,15 @@ static bool consume_sop_repeat_message(int port, uint8_t msg_id)
  * @param port USB PD TCPC port number
  * @param msg_header Message Header containing the RX message ID
  * @return True if the received message is a duplicate one, False otherwise.
- *
- * From USB PD version 1.3 section 6.7.1, the port which communicates
- * using SOP* Packets Shall maintain copies of the last MessageID for
- * each type of SOP* it uses.
  */
 static bool consume_repeat_message(int port, uint32_t msg_header)
 {
 	uint8_t msg_id = PD_HEADER_ID(msg_header);
-	enum tcpci_msg_type sop = PD_HEADER_GET_SOP(msg_header);
 
 	/* If repeat message ignore, except softreset control request. */
 	if (PD_HEADER_TYPE(msg_header) == PD_CTRL_SOFT_RESET &&
 	    PD_HEADER_CNT(msg_header) == 0) {
 		return false;
-	} else if (sop == TCPCI_MSG_SOP_PRIME) {
-		return consume_sop_prime_repeat_msg(port, msg_id);
-	} else if (sop == TCPCI_MSG_SOP_PRIME_PRIME) {
-		return consume_sop_prime_prime_repeat_msg(port, msg_id);
 	} else {
 		return consume_sop_repeat_message(port, msg_id);
 	}
@@ -807,7 +791,6 @@ static inline void set_state(int port, enum pd_states next_state)
 		if (last_state != PD_STATE_SNK_DISCONNECTED_DEBOUNCE &&
 		    last_state != PD_STATE_SRC_DISCONNECTED_DEBOUNCE) {
 			pd[port].flags &= ~PD_FLAGS_RESET_ON_DISCONNECT_MASK;
-			reset_pd_cable(port);
 		}
 
 		/* Clear the input current limit */
@@ -1664,12 +1647,6 @@ static void handle_data_request(int port, uint32_t head, uint32_t *payload)
 #ifdef CONFIG_USB_PD_REV30
 	case PD_DATA_BATTERY_STATUS:
 		break;
-		/* TODO : Add case PD_DATA_RESET for exiting USB4 */
-
-		/*
-		 * TODO : Add case PD_DATA_ENTER_USB to accept or reject
-		 * Enter_USB request from port partner.
-		 */
 #endif
 	case PD_DATA_VENDOR_DEF:
 		handle_vdm_request(port, cnt, payload, head);
@@ -1835,21 +1812,6 @@ static void handle_ctrl_request(int port, uint32_t head, uint32_t *payload)
 		break;
 #endif
 	case PD_CTRL_REJECT:
-		if (pd[port].task_state == PD_STATE_ENTER_USB) {
-			if (!IS_ENABLED(CONFIG_USBC_SS_MUX))
-				break;
-
-			/*
-			 * Since Enter USB sets the mux state to SAFE mode,
-			 * resetting the mux state back to USB mode on
-			 * recieveing a NACK.
-			 */
-			usb_mux_set(port, USB_PD_MUX_USB_ENABLED,
-				    USB_SWITCH_CONNECT, pd[port].polarity);
-
-			set_state(port, READY_RETURN_STATE(port));
-			break;
-		}
 	case PD_CTRL_WAIT:
 		if (pd[port].task_state == PD_STATE_DR_SWAP) {
 			if (type == PD_CTRL_WAIT) /* try again ... */
@@ -1912,20 +1874,7 @@ static void handle_ctrl_request(int port, uint32_t head, uint32_t *payload)
 #endif
 		break;
 	case PD_CTRL_ACCEPT:
-		if (pd[port].task_state == PD_STATE_ENTER_USB) {
-			if (!IS_ENABLED(CONFIG_USBC_SS_MUX))
-				break;
-
-			/* Connect the SBU and USB lines to the connector */
-			if (IS_ENABLED(CONFIG_USBC_PPC_SBU))
-				ppc_set_sbu(port, 1);
-
-			/* Set usb mux to USB4 mode */
-			usb_mux_set(port, USB_PD_MUX_USB4_ENABLED,
-				    USB_SWITCH_CONNECT, pd[port].polarity);
-
-			set_state(port, READY_RETURN_STATE(port));
-		} else if (pd[port].task_state == PD_STATE_SOFT_RESET) {
+		if (pd[port].task_state == PD_STATE_SOFT_RESET) {
 			/*
 			 * For the case that we sent soft reset in SNK_DISCOVERY
 			 * on startup due to VBUS never low, clear the flag.
@@ -2172,50 +2121,10 @@ static uint64_t vdm_get_ready_timeout(uint32_t vdm_hdr)
 	return timeout;
 }
 
-static void exit_tbt_mode_sop_prime(int port)
-{
-	/* Exit Thunderbolt-Compatible mode SOP' */
-	uint16_t header;
-	int opos;
-
-	if (!IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE))
-		return;
-
-	opos = pd_alt_mode(port, TCPCI_MSG_SOP, USB_VID_INTEL);
-	if (opos <= 0)
-		return;
-
-	CPRINTS("C%d Cable exiting TBT Compat mode", port);
-	/*
-	 * Note: TCPMv2 contemplates separate discovery structures for each SOP
-	 * type. TCPMv1 only uses one discovery structure, so all accesses
-	 * specify TCPCI_MSG_SOP.
-	 */
-	if (pd_dfp_exit_mode(port, TCPCI_MSG_SOP, USB_VID_INTEL, opos))
-		usb_mux_set_safe_mode(port);
-	else
-		return;
-
-	header = PD_HEADER(PD_DATA_VENDOR_DEF, pd[port].power_role,
-			   pd[port].data_role, pd[port].msg_id,
-			   (int)pd[port].vdo_count,
-			   pd_get_rev(port, TCPCI_MSG_SOP), 0);
-
-	pd[port].vdo_data[0] =
-		VDO(USB_VID_INTEL, 1, CMD_EXIT_MODE | VDO_OPOS(opos));
-
-	pd_transmit(port, TCPCI_MSG_SOP_PRIME, header, pd[port].vdo_data,
-		    AMS_START);
-
-	usb_mux_set(port, USB_PD_MUX_USB_ENABLED, USB_SWITCH_CONNECT,
-		    polarity_rm_dts(pd_get_polarity(port)));
-}
-
 static void pd_vdm_send_state_machine(int port)
 {
 	int res;
 	uint16_t header;
-	enum tcpci_msg_type msg_type = pd[port].xmit_type;
 
 	switch (pd[port].vdm_state) {
 	case VDM_STATE_READY:
@@ -2232,70 +2141,13 @@ static void pd_vdm_send_state_machine(int port)
 		if (pdo_busy(port))
 			break;
 
-		/*
-		 * To communicate with the cable plug, an explicit contract
-		 * should be established, VCONN should be enabled and data role
-		 * that can communicate with the cable plug should be in place.
-		 * For USB3.0, UFP/DFP can communicate whereas in case of
-		 * USB2.0 only DFP can talk to the cable plug.
-		 *
-		 * For communication between USB2.0 UFP and cable plug,
-		 * data role swap takes place during source and sink
-		 * negotiation and in case of failure, a soft reset is issued.
-		 */
-		if ((msg_type == TCPCI_MSG_SOP_PRIME) ||
-		    (msg_type == TCPCI_MSG_SOP_PRIME_PRIME)) {
-			/* Prepare SOP'/SOP'' header and send VDM */
-			header = PD_HEADER(PD_DATA_VENDOR_DEF,
-					   PD_PLUG_FROM_DFP_UFP, 0,
-					   pd[port].msg_id,
-					   (int)pd[port].vdo_count,
-					   pd_get_rev(port, TCPCI_MSG_SOP), 0);
-			res = pd_transmit(port, msg_type, header,
-					  pd[port].vdo_data, AMS_START);
-			/*
-			 * In the case of SOP', if there is no response from
-			 * the cable, it's a non-emark cable and therefore the
-			 * pd flow should continue irrespective of cable
-			 * response, sending discover_identity so the pd flow
-			 * remains intact.
-			 *
-			 * In the case of SOP'', if there is no response from
-			 * the cable, exit Thunderbolt-Compatible mode
-			 * discovery, reset the mux state since, the mux will
-			 * be set to a safe state before entering
-			 * Thunderbolt-Compatible mode and enter the default
-			 * mode.
-			 */
-			if (res < 0) {
-				header = PD_HEADER(
-					PD_DATA_VENDOR_DEF, pd[port].power_role,
-					pd[port].data_role, pd[port].msg_id,
-					(int)pd[port].vdo_count,
-					pd_get_rev(port, TCPCI_MSG_SOP), 0);
-
-				if ((msg_type == TCPCI_MSG_SOP_PRIME_PRIME) &&
-				    IS_ENABLED(CONFIG_USBC_SS_MUX)) {
-					exit_tbt_mode_sop_prime(port);
-				} else if (msg_type == TCPCI_MSG_SOP_PRIME) {
-					pd[port].vdo_data[0] =
-						VDO(USB_SID_PD, 1,
-						    CMD_DISCOVER_SVID);
-				}
-				res = pd_transmit(port, TCPCI_MSG_SOP, header,
-						  pd[port].vdo_data, AMS_START);
-				reset_pd_cable(port);
-			}
-		} else {
-			/* Prepare SOP header and send VDM */
-			header = PD_HEADER(PD_DATA_VENDOR_DEF,
-					   pd[port].power_role,
-					   pd[port].data_role, pd[port].msg_id,
-					   (int)pd[port].vdo_count,
-					   pd_get_rev(port, TCPCI_MSG_SOP), 0);
-			res = pd_transmit(port, TCPCI_MSG_SOP, header,
-					  pd[port].vdo_data, AMS_START);
-		}
+		/* Prepare SOP header and send VDM */
+		header = PD_HEADER(PD_DATA_VENDOR_DEF, pd[port].power_role,
+				   pd[port].data_role, pd[port].msg_id,
+				   (int)pd[port].vdo_count,
+				   pd_get_rev(port, TCPCI_MSG_SOP), 0);
+		res = pd_transmit(port, TCPCI_MSG_SOP, header,
+				  pd[port].vdo_data, AMS_START);
 
 		if (res < 0) {
 			pd[port].vdm_state = VDM_STATE_ERR_SEND;
@@ -2789,45 +2641,6 @@ static int pd_restart_tcpc(int port)
 	return tcpm_init(port);
 }
 #endif
-
-static void pd_send_enter_usb(int port, int *timeout)
-{
-	uint32_t usb4_payload;
-	uint16_t header;
-	int res;
-
-	/*
-	 * TODO: Enable Enter USB for cables (SOP').
-	 * This is needed for active cables
-	 */
-	if (!IS_ENABLED(CONFIG_USBC_SS_MUX) ||
-	    !IS_ENABLED(CONFIG_USB_PD_USB4) ||
-	    !IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
-		return;
-
-	usb4_payload = get_enter_usb_msg_payload(port);
-
-	header = PD_HEADER(PD_DATA_ENTER_USB, pd[port].power_role,
-			   pd[port].data_role, pd[port].msg_id, 1, PD_REV30, 0);
-
-	res = pd_transmit(port, TCPCI_MSG_SOP, header, &usb4_payload,
-			  AMS_START);
-	if (res < 0) {
-		*timeout = 10 * MSEC;
-		/*
-		 * If failed to get goodCRC, send soft reset, otherwise ignore
-		 * failure.
-		 */
-		set_state(port, res == -1 ? PD_STATE_SOFT_RESET :
-					    READY_RETURN_STATE(port));
-		return;
-	}
-
-	/* Disable Enter USB4 mode prevent re-entry */
-	disable_enter_usb4_mode(port);
-
-	set_state(port, PD_STATE_ENTER_USB);
-}
 
 void pd_task(void *u)
 {
@@ -3498,8 +3311,6 @@ void pd_task(void *u)
 			set_state(port, PD_STATE_SRC_STARTUP);
 			break;
 		case PD_STATE_SRC_STARTUP:
-			/* Reset cable attributes and flags */
-			reset_pd_cable(port);
 			/* Wait for power source to enable */
 			if (pd[port].last_state != pd[port].task_state) {
 				pd[port].flags |= PD_FLAGS_CHECK_IDENTITY;
@@ -3717,15 +3528,6 @@ void pd_task(void *u)
 					    CMD_DISCOVER_IDENT, NULL, 0);
 #endif
 				pd[port].flags &= ~PD_FLAGS_CHECK_IDENTITY;
-				break;
-			}
-
-			/*
-			 * Enter_USB if port partner and cable are
-			 * USB4 compatible.
-			 */
-			if (should_enter_usb4_mode(port)) {
-				pd_send_enter_usb(port, &timeout);
 				break;
 			}
 
@@ -4083,9 +3885,6 @@ void pd_task(void *u)
 				pd[port].flags |= PD_FLAGS_CHECK_PR_ROLE |
 						  PD_FLAGS_CHECK_DR_ROLE |
 						  PD_FLAGS_CHECK_IDENTITY;
-				/* Reset cable attributes and flags */
-				reset_pd_cable(port);
-
 				if (new_cc_state == PD_CC_DFP_DEBUG_ACC)
 					pd[port].flags |=
 						PD_FLAGS_TS_DTS_PARTNER;
@@ -4364,15 +4163,6 @@ void pd_task(void *u)
 				pd_send_vdm(port, USB_SID_PD,
 					    CMD_DISCOVER_IDENT, NULL, 0);
 				pd[port].flags &= ~PD_FLAGS_CHECK_IDENTITY;
-				break;
-			}
-
-			/*
-			 * Enter_USB if port partner and cable are
-			 * USB4 compatible.
-			 */
-			if (should_enter_usb4_mode(port)) {
-				pd_send_enter_usb(port, &timeout);
 				break;
 			}
 
@@ -4779,14 +4569,6 @@ void pd_task(void *u)
 			break;
 		}
 #endif
-		case PD_STATE_ENTER_USB:
-			if (pd[port].last_state != pd[port].task_state) {
-				set_state_timeout(port,
-						  get_time().val +
-							  PD_T_SENDER_RESPONSE,
-						  READY_RETURN_STATE(port));
-			}
-			break;
 		default:
 			break;
 		}
@@ -4929,8 +4711,6 @@ static void pd_chipset_startup(void)
 	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 		pd_set_dual_role_no_wakeup(i, PD_DRP_TOGGLE_OFF);
 		pd[i].flags |= PD_FLAGS_CHECK_IDENTITY;
-		/* Reset cable attributes and flags */
-		reset_pd_cable(i);
 		task_set_event(PD_PORT_TO_TASK_ID(i),
 			       PD_EVENT_POWER_STATE_CHANGE |
 				       PD_EVENT_UPDATE_DUAL_ROLE);
@@ -5456,5 +5236,4 @@ DECLARE_HOST_COMMAND(EC_CMD_USB_PD_FW_UPDATE, hc_remote_flash, EC_VER_MASK(0));
 #endif /* CONFIG_HOSTCMD_FLASHPD */
 
 #endif /* HAS_TASK_HOSTCMD */
-
 #endif /* CONFIG_COMMON_RUNTIME */

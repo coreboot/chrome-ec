@@ -1,4 +1,4 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -19,9 +19,6 @@
 #define CONFIG_USB_PD_VBUS_DETECT_CHARGER
 #define CONFIG_USB_PD_5V_CHARGER_CTRL
 #define CONFIG_CHARGER_OTG
-
-/* PWM */
-#define CONFIG_PWM
 
 /* TCPC */
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
@@ -80,11 +77,6 @@
 
 #include "gpio_signal.h"
 #include "registers.h"
-
-enum pwm_channel {
-	PWM_CH_LED_WHITE,
-	PWM_CH_COUNT,
-};
 
 /* ADC channels */
 enum adc_channel {

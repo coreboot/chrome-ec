@@ -1,4 +1,4 @@
-# Copyright 2021 The ChromiumOS Authors.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -19,7 +19,6 @@ def register_skyrim_project(
             here / "adc.dts",
             here / "fan.dts",
             here / "gpio.dts",
-            here / "i2c.dts",
             here / "interrupts.dts",
             here / "keyboard.dts",
             here / "motionsense.dts",
