@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -32,11 +32,12 @@ uint8_t fp_enc_buffer[FP_ALGORITHM_ENCRYPTED_TEMPLATE_SIZE] FP_TEMPLATE_SECTION;
 uint8_t fp_positive_match_salt[FP_MAX_FINGER_COUNT]
 			      [FP_POSITIVE_MATCH_SALT_BYTES];
 
-struct positive_match_secret_state positive_match_secret_state = {
-	.template_matched = FP_NO_SUCH_TEMPLATE,
-	.readable = false,
-	.deadline.val = 0,
-};
+struct positive_match_secret_state
+	positive_match_secret_state = { .template_matched = FP_NO_SUCH_TEMPLATE,
+					.readable = false,
+					.deadline = {
+						.val = 0,
+					} };
 
 /* Index of the last enrolled but not retrieved template. */
 int8_t template_newly_enrolled = FP_NO_SUCH_TEMPLATE;
@@ -177,7 +178,7 @@ static int validate_fp_mode(const uint32_t mode)
 	return EC_SUCCESS;
 }
 
-int fp_set_sensor_mode(uint32_t mode, uint32_t *mode_output)
+enum ec_status fp_set_sensor_mode(uint32_t mode, uint32_t *mode_output)
 {
 	int ret;
 
@@ -204,7 +205,7 @@ static enum ec_status fp_command_mode(struct host_cmd_handler_args *args)
 	const struct ec_params_fp_mode *p = args->params;
 	struct ec_response_fp_mode *r = args->response;
 
-	int ret = fp_set_sensor_mode(p->mode, &r->mode);
+	enum ec_status ret = fp_set_sensor_mode(p->mode, &r->mode);
 
 	if (ret == EC_RES_SUCCESS)
 		args->response_size = sizeof(*r);

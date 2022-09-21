@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -17,12 +17,11 @@
 #include "misc_util.h"
 #include "usb_descriptor.h"
 
-#define USB_ERROR(m, r)                                                        \
-	fprintf(stderr, "%s:%d, %s returned %d (%s)\n", __FILE__, __LINE__, m, \
-		r, libusb_strerror(r))
+#define USB_ERROR(m, r) print_libusb_error(__FILE__, __LINE__, m, r)
 
 #ifdef DEBUG
-#define debug(fmt, arg...) printf("%s:%d: " fmt, __FILE__, __LINE__, ##arg)
+#define debug(fmt, arg...) \
+	fprintf(stderr, "%s:%d: " fmt, __FILE__, __LINE__, ##arg)
 #else
 #define debug(...)
 #endif
@@ -35,6 +34,16 @@ struct usb_endpoint {
 };
 
 struct usb_endpoint uep;
+
+static void print_libusb_error(const char *file, int line, const char *message,
+			       int error_code)
+{
+	/*
+	 * TODO(b/247573723): Remove cast when libusb is upgraded.
+	 */
+	fprintf(stderr, "%s:%d, %s returned %d (%s)\n", file, line, message,
+		error_code, libusb_strerror((enum libusb_error)error_code));
+}
 
 void comm_usb_exit(void)
 {
@@ -53,7 +62,8 @@ void comm_usb_exit(void)
  * Actual USB transfer function, <allow_less> indicates that a valid response
  * (e.g. EC_CMD_GET_BUILD_INFO) could be shorter than <inlen>.
  *
- * Returns enum libusb_error (< 0) or -EECRESULT on error, <outlen> on success.
+ * Returns enum libusb_error (< 0) or -EECRESULT on error. On success, returns
+ * actually transferred OUT data size or IN data size if read is performed.
  */
 static int do_xfer(struct usb_endpoint *uep, void *outbuf, int outlen,
 		   void *inbuf, int inlen, int allow_less)
@@ -63,9 +73,10 @@ static int do_xfer(struct usb_endpoint *uep, void *outbuf, int outlen,
 	/* Send data out */
 	if (outbuf && outlen) {
 		actual = 0;
-		r = libusb_bulk_transfer(uep->devh, uep->ep_num, outbuf, outlen,
-					 &actual, 2000);
-		if (r < 0) {
+		r = libusb_bulk_transfer(uep->devh, uep->ep_num,
+					 (uint8_t *)outbuf, outlen, &actual,
+					 2000);
+		if (r != 0) {
 			USB_ERROR("libusb_bulk_transfer", r);
 			return r;
 		}
@@ -75,14 +86,19 @@ static int do_xfer(struct usb_endpoint *uep, void *outbuf, int outlen,
 			return -EECRESULT;
 		}
 	}
-	debug("Sent %d bytes, expecting %d bytes.\n", outlen, inlen);
+	debug("Sent %d bytes, expecting to receive %d bytes.\n", outlen, inlen);
 
 	/* Read reply back */
 	if (inbuf && inlen) {
 		actual = 0;
+		/*
+		 * libusb_bulk_transfer may time out if actual < inlen and
+		 * actual is a multiple of ep->wMaxPacketSize.
+		 */
 		r = libusb_bulk_transfer(uep->devh, uep->ep_num | USB_DIR_IN,
-					 inbuf, inlen, &actual, 5000);
-		if (r < 0) {
+					 (uint8_t *)inbuf, inlen, &actual,
+					 5000);
+		if (r != 0) {
 			USB_ERROR("libusb_bulk_transfer", r);
 			return r;
 		}
@@ -93,8 +109,10 @@ static int do_xfer(struct usb_endpoint *uep, void *outbuf, int outlen,
 		}
 	}
 
-	debug("Received %d bytes.\n", inlen);
-	return outlen;
+	debug("Received %d bytes.\n", actual);
+
+	/* actual is useful for allow_less. */
+	return actual;
 }
 
 /* Return iface # or -1 if not found. */
@@ -289,9 +307,9 @@ static int ec_command_usb(int command, int version, const void *outdata,
 	assert(insize == 0 || indata != NULL);
 
 	req_len = sizeof(*req) + outsize;
-	req = malloc(req_len);
+	req = (struct ec_host_request *)malloc(req_len);
 	res_len = sizeof(*res) + insize;
-	res = malloc(res_len);
+	res = (struct ec_host_response *)malloc(res_len);
 	if (req == NULL || res == NULL)
 		goto out;
 
@@ -314,9 +332,10 @@ static int ec_command_usb(int command, int version, const void *outdata,
 
 	if (indata)
 		memcpy(indata, &res[1], insize);
-	if (res->result != EC_RES_SUCCESS) {
+	if (res->result == EC_RES_SUCCESS)
+		rv = res->data_len;
+	else
 		rv = -EECRESULT - res->result;
-	}
 
 out:
 	if (req)

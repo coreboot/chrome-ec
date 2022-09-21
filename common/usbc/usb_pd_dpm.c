@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -87,6 +87,11 @@ static int init_vdm_attention_mutex(const struct device *dev)
 }
 SYS_INIT(init_vdm_attention_mutex, POST_KERNEL, 50);
 #endif /* CONFIG_ZEPHYR */
+
+__overridable bool board_is_tbt_usb4_port(int port)
+{
+	return true;
+}
 
 enum ec_status pd_request_vdm_attention(int port, const uint32_t *data,
 					int vdo_count)

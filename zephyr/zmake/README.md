@@ -35,7 +35,7 @@ Chromium OS's meta-build tool for Zephyr
 
 ### zmake configure
 
-**Usage:** `zmake configure [-h] [-t TOOLCHAIN] [--bringup] [--clobber] [--static] [--allow-warnings] [-B BUILD_DIR] [-c] [--extra-cflags EXTRA_CFLAGS] [--delete-intermediates] (-a | --host-tests-only | --boards-only | project_name [project_name ...])`
+**Usage:** `zmake configure [-h] [-t TOOLCHAIN] [--bringup] [--clobber] [--static] [--save-temps] [--allow-warnings] [-B BUILD_DIR] [-c] [--extra-cflags EXTRA_CFLAGS] [--delete-intermediates] (-a | project_name [project_name ...])`
 
 #### Positional Arguments
 
@@ -52,18 +52,17 @@ Chromium OS's meta-build tool for Zephyr
 | `--bringup` | Enable bringup debugging features |
 | `--clobber` | Delete existing build directories, even if configuration is unchanged |
 | `--static` | Generate static version information for reproducible builds |
+| `--save-temps` | Save the temporary files containing preprocessor output |
 | `--allow-warnings` | Do not treat warnings as errors |
 | `-B BUILD_DIR`, `--build-dir BUILD_DIR` | Root build directory, project files will be in ${build_dir}/${project_name} |
 | `-c`, `--coverage` | Enable CONFIG_COVERAGE Kconfig. |
 | `--extra-cflags EXTRA_CFLAGS` | Additional CFLAGS to use for target builds |
 | `--delete-intermediates` | Delete intermediate files to save disk space |
 | `-a`, `--all` | Select all projects |
-| `--host-tests-only` | Select all test projects |
-| `--boards-only` | Select all board projects (not tests) |
 
 ### zmake build
 
-**Usage:** `zmake build [-h] [-t TOOLCHAIN] [--bringup] [--clobber] [--static] [--allow-warnings] [-B BUILD_DIR] [-c] [--extra-cflags EXTRA_CFLAGS] [--delete-intermediates] (-a | --host-tests-only | --boards-only | project_name [project_name ...])`
+**Usage:** `zmake build [-h] [-t TOOLCHAIN] [--bringup] [--clobber] [--static] [--save-temps] [--allow-warnings] [-B BUILD_DIR] [-c] [--extra-cflags EXTRA_CFLAGS] [--delete-intermediates] (-a | project_name [project_name ...])`
 
 #### Positional Arguments
 
@@ -80,14 +79,13 @@ Chromium OS's meta-build tool for Zephyr
 | `--bringup` | Enable bringup debugging features |
 | `--clobber` | Delete existing build directories, even if configuration is unchanged |
 | `--static` | Generate static version information for reproducible builds |
+| `--save-temps` | Save the temporary files containing preprocessor output |
 | `--allow-warnings` | Do not treat warnings as errors |
 | `-B BUILD_DIR`, `--build-dir BUILD_DIR` | Root build directory, project files will be in ${build_dir}/${project_name} |
 | `-c`, `--coverage` | Enable CONFIG_COVERAGE Kconfig. |
 | `--extra-cflags EXTRA_CFLAGS` | Additional CFLAGS to use for target builds |
 | `--delete-intermediates` | Delete intermediate files to save disk space |
 | `-a`, `--all` | Select all projects |
-| `--host-tests-only` | Select all test projects |
-| `--boards-only` | Select all board projects (not tests) |
 
 ### zmake list-projects
 
@@ -108,7 +106,7 @@ Chromium OS's meta-build tool for Zephyr
 
 ### zmake test
 
-**Usage:** `zmake test [-h] [--no-rebuild] [-t TOOLCHAIN] [--bringup] [--clobber] [--static] [--allow-warnings] [-B BUILD_DIR] [-c] [--extra-cflags EXTRA_CFLAGS] [--delete-intermediates] (-a | --host-tests-only | --boards-only | project_name [project_name ...])`
+**Usage:** `zmake test [-h] [--no-rebuild] [-t TOOLCHAIN] [--bringup] [--clobber] [--static] [--save-temps] [--allow-warnings] [-B BUILD_DIR] [-c] [--extra-cflags EXTRA_CFLAGS] [--delete-intermediates] (-a | project_name [project_name ...])`
 
 #### Positional Arguments
 
@@ -126,14 +124,13 @@ Chromium OS's meta-build tool for Zephyr
 | `--bringup` | Enable bringup debugging features |
 | `--clobber` | Delete existing build directories, even if configuration is unchanged |
 | `--static` | Generate static version information for reproducible builds |
+| `--save-temps` | Save the temporary files containing preprocessor output |
 | `--allow-warnings` | Do not treat warnings as errors |
 | `-B BUILD_DIR`, `--build-dir BUILD_DIR` | Root build directory, project files will be in ${build_dir}/${project_name} |
 | `-c`, `--coverage` | Enable CONFIG_COVERAGE Kconfig. |
 | `--extra-cflags EXTRA_CFLAGS` | Additional CFLAGS to use for target builds |
 | `--delete-intermediates` | Delete intermediate files to save disk space |
 | `-a`, `--all` | Select all projects |
-| `--host-tests-only` | Select all test projects |
-| `--boards-only` | Select all board projects (not tests) |
 
 ### zmake testall
 

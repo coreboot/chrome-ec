@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -74,8 +74,8 @@
 #define CONFIG_CHIPSET_HAS_PRE_INIT_CALLBACK
 #define CONFIG_CHIPSET_RESET_HOOK
 #define CONFIG_HOST_INTERFACE_ESPI
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_S3
-#define CONFIG_HOSTCMD_ESPI_VW_SLP_S4
+#define CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S3
+#define CONFIG_HOST_INTERFACE_ESPI_VW_SLP_S4
 #define CONFIG_HOSTCMD_FLASH_SPI_INFO
 #define GPIO_PG_EC_RSMRST_ODL GPIO_RSMRST_L_PGOOD
 

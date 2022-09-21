@@ -1,5 +1,5 @@
 # -*- makefile -*-
-# Copyright 2012 The Chromium OS Authors. All rights reserved.
+# Copyright 2012 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -29,8 +29,19 @@ endif
 # library.
 USE_BUILTIN_STDLIB:=1
 
+# Set the prefix for the compiler if specified (e.g., "x86_64-pc-linux-gnu-").
+ifeq ($(origin BUILDCC_PREFIX),undefined)
+# If building with Portage use the environment variable it provides.
+# https://wiki.gentoo.org/wiki/Embedded_Handbook/General/Introduction#Environment_variables
+ifneq ($(CBUILD),)
+BUILDCC_PREFIX:=$(CBUILD)-
+else
+BUILDCC_PREFIX:=x86_64-pc-linux-gnu-
+endif
+endif
+
 # Extract cc-name
-cc-name:=$(shell $(CC) -v 2>&1 | grep -q "clang version" && echo clang || echo gcc)
+cc-name:=$(shell $(BUILDCC_PREFIX)$(CC) -v 2>&1 | grep -q "clang version" && echo clang || echo gcc)
 
 # Assume we want to use same compiler for both C and C++
 ifeq ($(cc-name),gcc)
@@ -42,7 +53,13 @@ endif
 # Try not to assume too much about optional tools and prefixes
 CCACHE:=$(shell which ccache 2>/dev/null)
 ifeq ($(origin HOST_CROSS_COMPILE),undefined)
+# If building with Portage use the environment variable it provides.
+# https://wiki.gentoo.org/wiki/Embedded_Handbook/General/Introduction#Environment_variables
+ifneq ($(CHOST),)
+HOST_CROSS_COMPILE:=$(CHOST)-
+else
 HOST_CROSS_COMPILE:=$(if $(shell which x86_64-pc-linux-gnu-$(cc-name) 2>/dev/null),x86_64-pc-linux-gnu-,)
+endif
 endif
 
 AR=$(CROSS_COMPILE)ar
@@ -55,7 +72,7 @@ OBJCOPY=$(CROSS_COMPILE)objcopy
 OBJDUMP=$(CROSS_COMPILE)objdump
 ADDR2LINE=$(CROSS_COMPILE)addr2line
 PKG_CONFIG?=pkg-config
-BUILDCC?=$(CCACHE) $(cc-name)
+BUILDCC?=$(CCACHE) $(BUILDCC_PREFIX)$(cc-name)
 HOSTCC?=$(CCACHE) $(HOST_CROSS_COMPILE)$(cc-name)
 HOSTCXX?=$(CCACHE) $(HOST_CROSS_COMPILE)clang++
 HOST_PKG_CONFIG?=$(HOST_CROSS_COMPILE)pkg-config
@@ -202,6 +219,9 @@ MEMSIZE_FLAGS+=-Wl,--print-memory-usage
 endif
 BUILD_LDFLAGS=$(LIBFTDIUSB_LDLIBS)
 HOST_LDFLAGS=$(LIBFTDIUSB_LDLIBS)
+ifneq (${HOST_SYSROOT},)
+  HOST_LDFLAGS+=--sysroot=${HOST_SYSROOT}
+endif
 HOST_TEST_LDFLAGS=-Wl,-T core/host/host_exe.lds -lrt -pthread -rdynamic -lm\
 		  -fuse-ld=bfd -no-pie \
 		  $(if $(TEST_COVERAGE), --coverage,) \

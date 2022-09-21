@@ -1,4 +1,4 @@
-# Copyright 2011 The Chromium OS Authors. All rights reserved.
+# Copyright 2011 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -119,9 +119,7 @@ include chip/$(CHIP)/build.mk
 # (CC, CPP, CXX, etc.) so that the correct toolchain is used. The CORE variable
 # is set in the CHIP build file, so this include must come after including the
 # CHIP build file.
-ifneq ($(BOARD), host)
 include core/$(CORE)/toolchain.mk
-endif
 
 # Create uppercase config variants, to avoid mixed case constants.
 # Also translate '-' to '_', so 'cortex-m' turns into 'CORTEX_M'.  This must

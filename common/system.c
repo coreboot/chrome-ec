@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -1042,7 +1042,8 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 	}
 }
 
-void system_enter_hibernate(uint32_t seconds, uint32_t microseconds)
+test_mockable void system_enter_hibernate(uint32_t seconds,
+					  uint32_t microseconds)
 {
 	if (!IS_ENABLED(CONFIG_HIBERNATE))
 		return;
@@ -1827,6 +1828,7 @@ __test_only void system_common_reset_state(void)
 	jdata = 0;
 	reset_flags = 0;
 	jumped_to_image = 0;
+	system_info_flags = 0;
 }
 
 __test_only enum ec_reboot_cmd system_common_get_reset_reboot_at_shutdown(void)

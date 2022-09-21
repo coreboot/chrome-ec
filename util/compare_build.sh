@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 # * all       - All boards that are built by the "buildall" target
 # * fp        - All relevant boards for fingerprint
 # * stm32     - All boards that use an STM32 chip
+# * stm32f0   - All boards that use an STM32F0 family of chip
 # * stm32f4   - All boards that use an STM32F4 family of chip
 # * stm32h7   - All boards that use an STM32H7 family of chip
 # * npcx      - "
@@ -61,6 +62,9 @@ DEFINE_boolean 'private' "${FLAGS_PRIVATE_DEFAULT}" \
 
 # Usage: assoc-add-keys <associate_array_name> [item1 [item2...]]
 assoc-add-keys() {
+  # Shellcheck doesn't seem to support nameref variables yet.
+  # See https://github.com/koalaman/shellcheck/issues/1544.
+  # shellcheck disable=SC2034,SC2178
   local -n arr="${1}"
   shift
 
@@ -71,6 +75,9 @@ assoc-add-keys() {
 
 # Usage: assoc-rm-keys <associate_array_name> [item1 [item2...]
 assoc-rm-keys() {
+  # Shellcheck doesn't seem to support nameref variables yet.
+  # See https://github.com/koalaman/shellcheck/issues/1544.
+  # shellcheck disable=SC2034,SC2178
   local -n arr="${1}"
   shift
 
@@ -102,6 +109,8 @@ boards-with() {
 
 # Usage: parse-boards <associate_array_name> [board-grp1 [board-grp2...]]
 parse-boards() {
+  # Shellcheck doesn't seem to support nameref variables yet.
+  # See https://github.com/koalaman/shellcheck/issues/1544.
   # shellcheck disable=SC2034
   local -n boards="$1"
   shift
@@ -116,6 +125,7 @@ parse-boards() {
     [all]="$(make-print-boards)"
     [fp]="dartmonkey bloonchipper nucleo-dartmonkey nucleo-h743zi"
     [stm32]="$(boards-with 'CHIP[[:space:]:=]*stm32')"
+    [stm32f0]="$(boards-with 'CHIP_VARIANT[[:space:]:=]*stm32f0')"
     [stm32f4]="$(boards-with 'CHIP_VARIANT[[:space:]:=]*stm32f4')"
     [stm32h7]="$(boards-with 'CHIP_VARIANT[[:space:]:=]*stm32h7')"
     [npcx]="$(boards-with 'CHIP[[:space:]:=]*npcx')"

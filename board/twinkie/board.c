@@ -1,4 +1,4 @@
-/* Copyright 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -76,7 +76,7 @@ const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("Twinkie"),
 	[USB_STR_VERSION] = USB_STRING_DESC(CROS_EC_VERSION32),
 	[USB_STR_SNIFFER] = USB_STRING_DESC("USB-PD Sniffer"),

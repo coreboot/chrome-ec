@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -54,12 +54,6 @@
 		     &i2c0_data_gpb4_default>;
 	pinctrl-names = "default";
 
-	charger: rt9490@53 {
-		compatible = "richtek,rt9490";
-		status = "okay";
-		reg = <0x53>;
-	};
-
 	cbi_eeprom: eeprom@50 {
 		compatible = "atmel,at24";
 		reg = <0x50>;
@@ -67,6 +61,13 @@
 		pagesize = <16>;
 		address-width = <8>;
 		timeout = <5>;
+	};
+
+	bc12_port1: rt9490-bc12@53 {
+		compatible = "richtek,rt9490-bc12";
+		status = "okay";
+		reg = <0x53>;
+		irq = <&int_usb_c1_bc12_charger>;
 	};
 };
 
@@ -125,13 +126,6 @@
 		     &i2c4_data_gpe7_default>;
 	pinctrl-names = "default";
 	prescale-scl-low = <1>;
-
-	bc12_port1: rt9490-bc12@53 {
-		compatible = "richtek,rt9490-bc12";
-		status = "okay";
-		reg = <0x53>;
-		irq = <&int_usb_c1_bc12_charger>;
-	};
 
 	ppc_port1: syv682x@40 {
 		compatible = "silergy,syv682x";

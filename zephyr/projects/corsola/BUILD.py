@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -115,5 +115,24 @@ register_corsola_project(
     extra_kconfig_files=[
         here / "prj_it81202_base.conf",
         here / "prj_tentacruel.conf",
+    ],
+)
+
+register_corsola_project(
+    "magikarp",
+    extra_dts_overlays=[
+        here / "adc_magikarp.dts",
+        here / "battery_magikarp.dts",
+        here / "cbi_magikarp.dts",
+        here / "gpio_magikarp.dts",
+        here / "i2c_magikarp.dts",
+        here / "interrupts_magikarp.dts",
+        here / "led_magikarp.dts",
+        here / "motionsense_magikarp.dts",
+        here / "usbc_magikarp.dts",
+    ],
+    extra_kconfig_files=[
+        here / "prj_it81202_base.conf",
+        here / "prj_magikarp.conf",
     ],
 )

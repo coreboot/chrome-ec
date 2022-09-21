@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -86,6 +86,7 @@
 #define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
 #define CONFIG_USBC_PPC_SYV682X
 #define CONFIG_USBC_PPC_NX20P3483
+#define CONFIG_USBC_NX20P348X_RCP_5VSRC_MASK_ENABLE
 
 /* I2C speed console command */
 #define CONFIG_CMD_I2C_SPEED

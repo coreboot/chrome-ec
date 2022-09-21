@@ -1,4 +1,4 @@
-/* Copyright 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,6 +7,7 @@
 
 #include "common.h"
 #include "timer.h"
+#include "stdbool.h"
 
 /* Stuff that's common to all charger implementations can go here. */
 
@@ -94,7 +95,14 @@ uint32_t charge_get_flags(void);
 /**
  * Return current battery charge percentage.
  */
+#if defined(CONFIG_BATTERY) || defined(TEST_BUILD)
 int charge_get_percent(void);
+#else
+static inline int charge_get_percent(void)
+{
+	return 0;
+}
+#endif
 
 /**
  * Return current battery charge if not using charge manager sub-system.
@@ -119,10 +127,31 @@ __override_proto int charge_is_consuming_full_input_current(void);
 /**
  * Return non-zero if discharging and battery so low we should shut down.
  */
-#ifdef CONFIG_CHARGER
+#if defined(CONFIG_CHARGER) && defined(CONFIG_BATTERY)
 int charge_want_shutdown(void);
 #else
 static inline int charge_want_shutdown(void)
+{
+	return 0;
+}
+#endif
+
+/**
+ * Return true if battery level is below threshold, false otherwise,
+ * or if SoC can't be determined.
+ *
+ * @param transitioned	True to check if SoC is previously above threshold
+ */
+enum batt_threshold_type {
+	BATT_THRESHOLD_TYPE_LOW = 0,
+	BATT_THRESHOLD_TYPE_SHUTDOWN
+};
+#if defined(CONFIG_CHARGER) && defined(CONFIG_BATTERY)
+int battery_is_below_threshold(enum batt_threshold_type type,
+			       bool transitioned);
+#else
+static inline int battery_is_below_threshold(enum batt_threshold_type type,
+					     bool transitioned)
 {
 	return 0;
 }
@@ -135,7 +164,14 @@ static inline int charge_want_shutdown(void)
  * @param power_button_pressed	True if the power-up attempt is caused by a
  *				power button press.
  */
+#ifdef CONFIG_BATTERY
 int charge_prevent_power_on(int power_button_pressed);
+#else
+static inline int charge_prevent_power_on(int power_button_pressed)
+{
+	return 0;
+}
+#endif
 
 /**
  * Get the last polled battery/charger temperature.

@@ -1,9 +1,9 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
 
 #include "battery.h"
@@ -109,19 +109,25 @@ static int virtual_battery_read_str(uint8_t command, char **read_buf,
 	return len;
 }
 
+static void virtual_battery_read_data(uint8_t command, char **read_buf,
+				      int read_len)
+{
+	uint8_t write_buf[1] = { command };
+
+	virtual_battery_xfer(write_buf, 1, (uint8_t **)read_buf, read_len);
+}
+
 #define BATTERY_NODE DT_NODELABEL(battery)
 
 ZTEST_USER(virtual_battery, test_read_regs)
 {
-	struct sbat_emul_bat_data *bat;
 	const struct emul *emul = EMUL_DT_GET(BATTERY_NODE);
+	struct sbat_emul_bat_data *bat = sbat_emul_get_bat_data(emul);
 	int16_t int16;
 	uint16_t word;
 	int expected;
 	char *str;
 	int len;
-
-	bat = sbat_emul_get_bat_data(emul);
 
 	/*
 	 * Iterate all the registers, which issues the I2C passthru host
@@ -170,18 +176,20 @@ ZTEST_USER(virtual_battery, test_read_regs)
 	word = virtual_battery_read16(SB_REMAINING_CAPACITY);
 	zassert_equal(bat->cap, word, "%d != %d", bat->cap, word);
 
-	len = virtual_battery_read_str(SB_MANUFACTURER_NAME, &str, 32);
+	len = virtual_battery_read_str(SB_MANUFACTURER_NAME, &str,
+				       SB_MAX_STR_SIZE);
 	zassert_equal(bat->mf_name_len, len, "%d != %d", bat->mf_name_len, len);
 	zassert_mem_equal(str, bat->mf_name, bat->mf_name_len, "%s != %s", str,
 			  bat->mf_name);
 
-	len = virtual_battery_read_str(SB_DEVICE_NAME, &str, 32);
+	len = virtual_battery_read_str(SB_DEVICE_NAME, &str, SB_MAX_STR_SIZE);
 	zassert_equal(bat->dev_name_len, len, "%d != %d", bat->dev_name_len,
 		      len);
 	zassert_mem_equal(str, bat->dev_name, bat->dev_name_len, "%s != %s",
 			  str, bat->dev_name);
 
-	len = virtual_battery_read_str(SB_DEVICE_CHEMISTRY, &str, 32);
+	len = virtual_battery_read_str(SB_DEVICE_CHEMISTRY, &str,
+				       SB_MAX_STR_SIZE);
 	zassert_equal(bat->dev_chem_len, len, "%d != %d", bat->dev_chem_len,
 		      len);
 	zassert_mem_equal(str, bat->dev_chem, bat->dev_chem_len, "%s != %s",
@@ -216,13 +224,22 @@ ZTEST_USER(virtual_battery, test_read_regs)
 	word = virtual_battery_read16(SB_SPECIFICATION_INFO);
 	zassert_equal(expected, word, "%d != %d", expected, word);
 
-	/*
-	 * TODO: Test the following registers:
-	 *   SB_BATTERY_STATUS
-	 *   SB_DESIGN_VOLTAGE
-	 *   SB_MANUFACTURER_DATA
-	 *   SB_MANUFACTURE_INFO
-	 */
+	zassume_ok(battery_status(&expected));
+	word = virtual_battery_read16(SB_BATTERY_STATUS);
+	zassert_equal(expected, word, "%d != %d", expected, word);
+
+	zassume_ok(battery_design_voltage(&expected));
+	word = virtual_battery_read16(SB_DESIGN_VOLTAGE);
+	zassert_equal(expected, word, "%d != %d", expected, word);
+
+	virtual_battery_read_data(SB_MANUFACTURER_DATA, &str, bat->mf_data_len);
+	zassert_mem_equal(str, bat->mf_data, bat->mf_data_len, "%s != %s", str,
+			  bat->mf_data);
+
+	/* At present, this command is used nowhere in our codebase. */
+	virtual_battery_read_data(SB_MANUFACTURE_INFO, &str, bat->mf_info_len);
+	zassert_mem_equal(str, bat->mf_info, bat->mf_info_len, "%s != %s", str,
+			  bat->mf_info);
 }
 
 ZTEST_USER(virtual_battery, test_write_mfgacc)

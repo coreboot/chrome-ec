@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -81,6 +81,7 @@ int board_vbus_source_enabled(int port)
 	return ppc_is_sourcing_vbus(port);
 }
 
+#ifdef CONFIG_USB_PD_TBT_COMPAT_MODE
 /* ----------------- Vendor Defined Messages ------------------ */
 /* Responses specifically for the enablement of TBT mode in the role of UFP */
 
@@ -121,29 +122,45 @@ static const uint32_t vdo_dfp =
 
 static int svdm_tbt_compat_response_identity(int port, uint32_t *payload)
 {
-	/* TODO(b/154962766): Get an XID */
-	payload[VDO_I(CSTAT)] = VDO_CSTAT(0);
-	payload[VDO_I(PRODUCT)] = vdo_product;
+	/*
+	 * For PD 3.1 compliance test TEST.PD.VDM.SRC.2,
+	 * we should return NAK if we cannot recognized the incoming SVID.
+	 */
+	if (PD_VDO_VID(payload[0]) == USB_SID_PD) {
+		/* TODO(b/154962766): Get an XID */
+		payload[VDO_I(CSTAT)] = VDO_CSTAT(0);
+		payload[VDO_I(PRODUCT)] = vdo_product;
 
-	if (pd_get_rev(port, TCPCI_MSG_SOP) == PD_REV30) {
-		/* PD Revision 3.0 */
-		payload[VDO_I(IDH)] = vdo_idh_rev30;
-		payload[VDO_I(PTYPE_UFP1_VDO)] = vdo_ufp1;
-		/* TODO(b/181620145): Customize for brya */
-		payload[VDO_I(PTYPE_UFP2_VDO)] = 0;
-		payload[VDO_I(PTYPE_DFP_VDO)] = vdo_dfp;
-		return VDO_I(PTYPE_DFP_VDO) + 1;
+		if (pd_get_rev(port, TCPCI_MSG_SOP) == PD_REV30) {
+			/* PD Revision 3.0 */
+			payload[VDO_I(IDH)] = vdo_idh_rev30;
+			payload[VDO_I(PTYPE_UFP1_VDO)] = vdo_ufp1;
+			/* TODO(b/181620145): Customize for brya */
+			payload[VDO_I(PTYPE_UFP2_VDO)] = 0;
+			payload[VDO_I(PTYPE_DFP_VDO)] = vdo_dfp;
+			return VDO_I(PTYPE_DFP_VDO) + 1;
+		}
+
+		/* PD Revision 2.0 */
+		payload[VDO_I(IDH)] = vdo_idh;
+		return VDO_I(PRODUCT) + 1;
+	} else {
+		return 0; /* NAK */
 	}
-
-	/* PD Revision 2.0 */
-	payload[VDO_I(IDH)] = vdo_idh;
-	return VDO_I(PRODUCT) + 1;
 }
 
 static int svdm_tbt_compat_response_svids(int port, uint32_t *payload)
 {
-	payload[1] = VDO_SVID(USB_VID_INTEL, 0);
-	return 2;
+	/*
+	 * For PD 3.1 compliance test TEST.PD.VDM.SRC.2,
+	 * we should return NAK if we cannot recognized the incoming SVID.
+	 */
+	if (PD_VDO_VID(payload[0]) == USB_SID_PD) {
+		payload[1] = VDO_SVID(USB_VID_INTEL, 0);
+		return 2;
+	} else {
+		return 0; /* NAK */
+	}
 }
 
 static int svdm_tbt_compat_response_modes(int port, uint32_t *payload)
@@ -225,3 +242,4 @@ const struct svdm_response svdm_rsp = {
 	.amode = NULL,
 	.exit_mode = NULL,
 };
+#endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */

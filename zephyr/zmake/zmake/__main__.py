@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -283,6 +283,12 @@ def add_common_configure_args(sub_parser: argparse.ArgumentParser):
         help="Generate static version information for reproducible builds",
     )
     sub_parser.add_argument(
+        "--save-temps",
+        action="store_true",
+        dest="save_temps",
+        help="Save the temporary files containing preprocessor output",
+    )
+    sub_parser.add_argument(
         "--allow-warnings",
         action="store_true",
         default=False,
@@ -319,18 +325,6 @@ def add_common_configure_args(sub_parser: argparse.ArgumentParser):
         action="store_true",
         dest="all_projects",
         help="Select all projects",
-    )
-    group.add_argument(
-        "--host-tests-only",
-        action="store_true",
-        dest="host_tests_only",
-        help="Select all test projects",
-    )
-    group.add_argument(
-        "--boards-only",
-        action="store_true",
-        dest="boards_only",
-        help="Select all board projects (not tests)",
     )
     group.add_argument(
         "project_names",

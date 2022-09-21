@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -139,11 +139,14 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.usb_port = 0,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 0,
+				.driver = &virtual_usb_mux_driver,
+				.hpd_update = &virtual_hpd_update,
+			},
 	},
 };
 
@@ -427,11 +430,5 @@ int board_allow_i2c_passthru(const struct i2c_cmd_desc_t *cmd_desc)
 	 * Battery port is the only port passthru is allowed on and this board
 	 * does not have a battery, therefore always return false.
 	 */
-	return 0;
-}
-
-int charge_prevent_power_on(int power_button_pressed)
-{
-	/* Assume there is always sufficient power from charger to power on. */
 	return 0;
 }

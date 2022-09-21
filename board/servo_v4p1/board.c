@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -85,14 +85,20 @@ static int board_tusb1064_dp_rx_eq_set(const struct usb_mux *me,
 	return rv;
 }
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	[CHG] = { /* CHG port connected directly to USB 3.0 hub, no mux */ },
-	[DUT] = { /* DUT port with UFP mux */
-		.usb_port = DUT,
-		.i2c_port = I2C_PORT_MASTER,
-		.i2c_addr_flags = TUSB1064_I2C_ADDR10_FLAGS,
-		.driver = &tusb1064_usb_mux_driver,
-		.board_set = &board_tusb1064_dp_rx_eq_set,
+const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+	[CHG] = {
+		/* CHG port connected directly to USB 3.0 hub, no mux */
+	},
+	[DUT] = {
+		/* DUT port with UFP mux */
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = DUT,
+				.i2c_port = I2C_PORT_MASTER,
+				.i2c_addr_flags = TUSB1064_I2C_ADDR10_FLAGS,
+				.driver = &tusb1064_usb_mux_driver,
+				.board_set = &board_tusb1064_dp_rx_eq_set,
+			},
 	}
 };
 
@@ -357,7 +363,7 @@ const struct usb_interface_descriptor USB_IFACE_DESC(USB_IFACE_EMPTY) = {
 
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("Servo V4p1"),
 	[USB_STR_SERIALNO] = USB_STRING_DESC("1234-a"),
 	[USB_STR_VERSION] = USB_STRING_DESC(CROS_EC_VERSION32),

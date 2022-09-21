@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -77,8 +77,21 @@ config EMUL_KB_RAW
 config EMUL_CROS_FLASH
 	bool "Emulated flash driver for the Zephyr shim"
 	select PLATFORM_EC_FLASH_CROS
+	imply SYSTEM_FAKE
 	help
 	  This option enables the flash emulator for testing.
+
+config EMUL_RTC
+	bool "Emulated RTC driver for Zephyr shim"
+	help
+	  This options enables the RTC emulator for testing.
+
+config EMUL_RT9490
+	bool "Rt9490 charger emulator"
+	select EMUL_COMMON_I2C
+	help
+	  Enable the RT9490 light sensor emulator. This driver use emulated I2C
+	  bus. Emulators API is available in zephyr/include/emul/emul_rt9490.h.
 
 config PWM_MOCK
 	bool "Mock implementation of an PWM device"

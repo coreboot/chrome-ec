@@ -1,4 +1,4 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -23,8 +23,6 @@
 #include "intc.h"
 #include "power.h"
 #include "power_button.h"
-#include "pwm.h"
-#include "pwm_chip.h"
 #include "switch.h"
 #include "system.h"
 #include "task.h"
@@ -213,11 +211,14 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = { {
 } };
 
 /* USB Muxes */
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = { {
-	.usb_port = 0,
-	.i2c_port = I2C_PORT_USB_C0,
-	.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
-	.driver = &it5205_usb_mux_driver,
+const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = { {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = 0,
+			.i2c_port = I2C_PORT_USB_C0,
+			.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
+			.driver = &it5205_usb_mux_driver,
+		},
 } };
 
 void oz554_board_init(void)
@@ -353,6 +354,9 @@ uint16_t tcpc_get_alert_status(void)
 void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 			    int charge_mv)
 {
+	if (port == CHARGER_SOLO) {
+		charger_set_input_current_limit(CHARGER_SOLO, max_ma);
+	}
 }
 
 __override int extpower_is_present(void)
@@ -463,16 +467,6 @@ __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
 
 	charger_set_otg_current_voltage(port, current, 5000);
 }
-
-/* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
-const struct pwm_t pwm_channels[] = {
-	[PWM_CH_LED_WHITE] = {
-		.channel = 1,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq_hz = 2000,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /* Thermistors */
 const struct temp_sensor_t temp_sensors[] = {

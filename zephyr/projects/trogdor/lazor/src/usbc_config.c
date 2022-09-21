@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -137,16 +137,22 @@ void tcpc_alert_event(enum gpio_signal signal)
  * to AP. But the TCPC chip is also needed to know the HPD status; otherwise,
  * the mux misbehaves.
  */
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.usb_port = 0,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 0,
+				.driver = &tcpci_tcpm_usb_mux_driver,
+				.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+			},
 	},
 	{
-		.usb_port = 1,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 1,
+				.driver = &tcpci_tcpm_usb_mux_driver,
+				.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+			},
 	}
 };
 
