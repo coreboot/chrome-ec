@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -656,6 +656,13 @@ void delay_sleep_by(uint32_t us);
  */
 void disable_deep_sleep(void);
 void enable_deep_sleep(void);
+
+/**
+ * This function is made visible for tests only, it allows overriding the RTC.
+ *
+ * @param seconds
+ */
+void system_set_rtc(uint32_t seconds);
 
 /**
  * Use hibernate module to set up an RTC interrupt at a given

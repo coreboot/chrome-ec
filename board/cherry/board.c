@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -238,21 +238,27 @@ static int board_anx3443_mux_set(const struct usb_mux *me,
 	return EC_SUCCESS;
 }
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.usb_port = 0,
-		.i2c_port = I2C_PORT_USB_MUX0,
-		.i2c_addr_flags = PS8802_I2C_ADDR_FLAGS,
-		.driver = &ps8802_usb_mux_driver,
-		.board_init = &board_ps8762_mux_init,
-		.board_set = &board_ps8762_mux_set,
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 0,
+				.i2c_port = I2C_PORT_USB_MUX0,
+				.i2c_addr_flags = PS8802_I2C_ADDR_FLAGS,
+				.driver = &ps8802_usb_mux_driver,
+				.board_init = &board_ps8762_mux_init,
+				.board_set = &board_ps8762_mux_set,
+			},
 	},
 	{
-		.usb_port = 1,
-		.i2c_port = I2C_PORT_USB_MUX1,
-		.i2c_addr_flags = ANX3443_I2C_ADDR0_FLAGS,
-		.driver = &anx3443_usb_mux_driver,
-		.board_set = &board_anx3443_mux_set,
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 1,
+				.i2c_port = I2C_PORT_USB_MUX1,
+				.i2c_addr_flags = ANX3443_I2C_ADDR0_FLAGS,
+				.driver = &anx3443_usb_mux_driver,
+				.board_set = &board_anx3443_mux_set,
+			},
 	},
 };
 

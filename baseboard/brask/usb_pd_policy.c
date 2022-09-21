@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -81,6 +81,7 @@ int board_vbus_source_enabled(int port)
 	return ppc_is_sourcing_vbus(port);
 }
 
+#ifdef CONFIG_USB_PD_TBT_COMPAT_MODE
 /* ----------------- Vendor Defined Messages ------------------ */
 /* Responses specifically for the enablement of TBT mode in the role of UFP */
 
@@ -225,3 +226,4 @@ const struct svdm_response svdm_rsp = {
 	.amode = NULL,
 	.exit_mode = NULL,
 };
+#endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */

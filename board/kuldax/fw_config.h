@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -15,7 +15,7 @@
  */
 enum ec_cfg_audio_type { DB_AUDIO_UNKNOWN = 0, DB_NAU88L25B_I2S = 1 };
 
-enum ec_cfg_bj_power { BJ_135W = 0, BJ_230W = 1 };
+enum ec_cfg_bj_power { BJ_150W = 0, BJ_230W = 1, BJ_65W = 2, BJ_135W = 3 };
 
 union brask_cbi_fw_config {
 	struct {

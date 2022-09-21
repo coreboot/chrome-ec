@@ -1,10 +1,11 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
  * Battery pack vendor provided charging profile
  */
 
+#include "battery.h"
 #include "battery_fuel_gauge.h"
 #include "cbi.h"
 #include "charge_ramp.h"
@@ -40,6 +41,37 @@ const struct board_batt_params board_battery_info[] = {
 	[BATTERY_COSMX_AP20CBL] = {
 		.fuel_gauge = {
 			.manuf_name = "COSMX KT0030B002",
+			.device_name = "AP20CBL",
+			.ship_mode = {
+				.reg_addr = 0x3A,
+				.reg_data = { 0xC574, 0xC574 },
+			},
+			.fet = {
+				.mfgacc_support = 1,
+				.reg_addr = 0x0,
+				.reg_mask = 0x2000,
+				.disconnect_val = 0x2000,
+				.cfet_mask = 0x4000,
+				.cfet_off_val = 0x4000,
+			},
+		},
+		.batt_info = {
+			.voltage_max            = 13200,
+			.voltage_normal         = 11550,
+			.voltage_min            = 9000,
+			.precharge_current      = 256,
+			.start_charging_min_c   = 0,
+			.start_charging_max_c   = 50,
+			.charging_min_c         = 0,
+			.charging_max_c         = 60,
+			.discharging_min_c      = -20,
+			.discharging_max_c      = 75,
+		},
+	},
+	/* COSMX AP20CBL Battery Information (new firmware ver) */
+	[BATTERY_COSMX_AP20CBL_004] = {
+		.fuel_gauge = {
+			.manuf_name = "COSMX KT0030B004",
 			.device_name = "AP20CBL",
 			.ship_mode = {
 				.reg_addr = 0x3A,
@@ -139,6 +171,10 @@ static int charger_should_discharge_on_ac(struct charge_state_data *curr)
 {
 	/* can not discharge on AC without battery */
 	if (curr->batt.is_present != BP_YES)
+		return 0;
+
+	/* Do not discharge when battery disconnect */
+	if (battery_get_disconnect_state() != BATTERY_NOT_DISCONNECTED)
 		return 0;
 
 	/* Do not discharge on AC if the battery is still waking up */

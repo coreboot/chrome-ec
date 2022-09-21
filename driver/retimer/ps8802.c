@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -187,6 +187,10 @@ static int ps8802_set_mux(const struct usb_mux *me, mux_state_t mux_state,
 
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
+
+	/* This driver treats safe mode as none */
+	if (mux_state == USB_PD_MUX_SAFE_MODE)
+		mux_state = USB_PD_MUX_NONE;
 
 	if (chipset_in_state(CHIPSET_STATE_HARD_OFF))
 		return (mux_state == USB_PD_MUX_NONE) ? EC_SUCCESS :

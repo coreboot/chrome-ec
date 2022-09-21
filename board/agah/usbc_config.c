@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -14,7 +14,7 @@
 #include "console.h"
 #include "driver/bc12/pi3usb9201_public.h"
 #include "driver/ppc/syv682x_public.h"
-#include "driver/retimer/ps8818.h"
+#include "driver/retimer/ps8818_public.h"
 #include "driver/tcpm/rt1715.h"
 #include "driver/tcpm/tcpci.h"
 #include "ec_commands.h"
@@ -144,26 +144,33 @@ int board_ps8818_mux_set(const struct usb_mux *me, mux_state_t mux_state)
 	return rv;
 }
 
-const static struct usb_mux usbc2_ps8818 = {
-	.usb_port = USBC_PORT_C2,
-	.i2c_port = I2C_PORT_USB_C2_TCPC,
-	.i2c_addr_flags = PS8818_I2C_ADDR_FLAGS,
-	.driver = &ps8818_usb_retimer_driver,
-	.board_set = &board_ps8818_mux_set,
+const static struct usb_mux_chain usbc2_ps8818 = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C2,
+			.i2c_port = I2C_PORT_USB_C2_TCPC,
+			.i2c_addr_flags = PS8818_I2C_ADDR_FLAGS,
+			.driver = &ps8818_usb_retimer_driver,
+			.board_set = &board_ps8818_mux_set,
+		},
 };
 
 /* USBC mux configuration - Alder Lake includes internal mux */
-const struct usb_mux usb_muxes[] = {
+const struct usb_mux_chain usb_muxes[] = {
 	[USBC_PORT_C0] = {
-		.usb_port = USBC_PORT_C0,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C0,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
 	},
 	[USBC_PORT_C2] = {
-		.usb_port = USBC_PORT_C2,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-		.next_mux = &usbc2_ps8818,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C2,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
+		.next = &usbc2_ps8818,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);

@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -25,6 +25,7 @@
 	CHECK_COMPAT(ISL923X_EMUL_COMPAT, usbc_id, chg_id, CHG_CONFIG_ISL923X) \
 	CHECK_COMPAT(ISL9241_CHG_COMPAT, usbc_id, chg_id, CHG_CONFIG_ISL9241)  \
 	CHECK_COMPAT(RT9490_CHG_COMPAT, usbc_id, chg_id, CHG_CONFIG_RT9490)    \
+	CHECK_COMPAT(RT9490_EMUL_COMPAT, usbc_id, chg_id, CHG_CONFIG_RT9490)   \
 	CHECK_COMPAT(SM5803_CHG_COMPAT, usbc_id, chg_id, CHG_CONFIG_SM5803)
 
 #define CHG_CHIP(usbc_id)                           \

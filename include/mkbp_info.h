@@ -19,4 +19,9 @@
  */
 __override_proto int mkbp_support_volume_buttons(void);
 
+#ifdef TEST_BUILD
+uint32_t get_supported_buttons(void);
+uint32_t get_supported_switches(void);
+#endif /* TEST_BUILD */
+
 #endif /* __CROS_EC_MKBP_INFO_H */

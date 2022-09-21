@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -389,10 +389,15 @@ enum ec_error_list charger_enable_linear_charge(int chgnum, bool enable);
  */
 enum ec_error_list charger_enable_bypass_mode(int chgnum, int enable);
 
-/*
+/**
  * Print all charger info for debugging purposes
  * @param chgnum: charger IC index.
  */
 void print_charger_debug(int chgnum);
+
+/**
+ * Get the value of CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
+ */
+int charger_get_min_bat_pct_for_power_on(void);
 
 #endif /* __CROS_EC_CHARGER_H */

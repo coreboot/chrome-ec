@@ -1,4 +1,4 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -11,11 +11,15 @@
 		port0@0 {
 			compatible = "named-usbc-port";
 			reg = <0>;
-			bc12 = <&bc12_ppc_port0>;
+			bc12 = <&bc12_port0>;
 			ppc = <&bc12_ppc_port0>;
+			ppc_alt = <&ppc_port0>;
 			tcpc = <&usbpd0>;
 			chg = <&charger>;
-			usb-muxes = <&it5205_mux_0 &virtual_mux_0>;
+			usb-mux-chain-0 {
+				compatible = "cros-ec,usb-mux-chain";
+				usb-muxes = <&it5205_mux_0 &virtual_mux_0>;
+			};
 		};
 		port0-muxes {
 			virtual_mux_0: virtual-mux-0 {
@@ -29,7 +33,15 @@
 			bc12 = <&bc12_port1>;
 			ppc = <&ppc_port1>;
 			tcpc = <&usbpd1>;
-			usb-muxes = <&ps8743_mux_1 &virtual_mux_1>;
+			usb-mux-chain-1 {
+				compatible = "cros-ec,usb-mux-chain";
+				usb-muxes = <&ps8743_mux_1 &virtual_mux_1>;
+			};
+			usb_mux_chain_1_hdmi_db: usb-mux-chain-1-hdmi-db {
+				compatible = "cros-ec,usb-mux-chain";
+				alternative-chain;
+				usb-muxes = <&virtual_mux_1>;
+			};
 		};
 		port1-muxes {
 			virtual_mux_1: virtual-mux-1 {

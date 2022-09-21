@@ -1,4 +1,4 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -48,11 +48,12 @@ static int rt9490_emul_read(const struct emul *emul, int reg, uint8_t *val,
 {
 	struct rt9490_data *data = emul->data;
 	uint8_t *regs = data->regs;
+	int pos = reg + bytes;
 
-	if (!IN_RANGE(reg, 0, RT9490_REG_MAX)) {
+	if (!IN_RANGE(pos, 0, RT9490_REG_MAX)) {
 		return -1;
 	}
-	*val = regs[reg];
+	*val = regs[pos];
 
 	return 0;
 }
@@ -62,11 +63,12 @@ static int rt9490_emul_write(const struct emul *emul, int reg, uint8_t val,
 {
 	struct rt9490_data *data = emul->data;
 	uint8_t *regs = data->regs;
+	int pos = reg + bytes - 1;
 
-	if (!IN_RANGE(reg, 0, RT9490_REG_MAX) || !IN_RANGE(val, 0, UINT8_MAX)) {
+	if (!IN_RANGE(pos, 0, RT9490_REG_MAX) || !IN_RANGE(val, 0, UINT8_MAX)) {
 		return -1;
 	}
-	regs[reg] = val;
+	regs[pos] = val;
 
 	return 0;
 }

@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -76,7 +76,9 @@ int zshim_run_ec_console_command(const struct zephyr_console_command *command,
  *
  * @s:			The pointer to the string.
  * @len:		The size of the string.
+ *
+ * Return: the number of bytes consumed.
  */
-void console_buf_notify_chars(const char *s, size_t len);
+size_t console_buf_notify_chars(const char *s, size_t len);
 
 #endif /* __CROS_EC_ZEPHYR_CONSOLE_SHIM_H */

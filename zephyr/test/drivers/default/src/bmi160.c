@@ -1,9 +1,9 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
 
 #include "common.h"
@@ -1964,7 +1964,7 @@ ZTEST_USER(bmi160, test_bmi_set_offset_invalid_type)
 {
 	struct motion_sensor_t ms_fake;
 	int ret;
-	int16_t unused_offset;
+	int16_t unused_offset = 0;
 	int16_t temp = 0;
 
 	/* make a copy of the accel motion sensor so we modify its type */

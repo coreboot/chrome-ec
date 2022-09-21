@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -543,20 +543,33 @@ static void pchg_startup(void)
 {
 	struct pchg *ctx;
 	int p;
+	int active_pchg_count = 0;
+	int rv;
 
 	CPRINTS("%s", __func__);
 	queue_init(&host_events);
 
 	for (p = 0; p < pchg_count; p++) {
+		rv = EC_SUCCESS;
 		ctx = &pchgs[p];
 		_clear_port(ctx);
 		ctx->mode = PCHG_MODE_NORMAL;
+		gpio_disable_interrupt(ctx->cfg->irq_pin);
 		board_pchg_power_on(p, 1);
 		ctx->cfg->drv->reset(ctx);
-		gpio_enable_interrupt(ctx->cfg->irq_pin);
+		if (ctx->cfg->drv->get_chip_info)
+			rv = ctx->cfg->drv->get_chip_info(ctx);
+		if (rv == EC_SUCCESS) {
+			gpio_enable_interrupt(ctx->cfg->irq_pin);
+			active_pchg_count++;
+		} else {
+			CPRINTS("ERR: Failed to probe P%d", p);
+			board_pchg_power_on(p, 0);
+		}
 	}
 
-	task_wake(TASK_ID_PCHG);
+	if (active_pchg_count)
+		task_wake(TASK_ID_PCHG);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, pchg_startup, HOOK_PRIO_DEFAULT);
 

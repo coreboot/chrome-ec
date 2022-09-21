@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -95,6 +95,10 @@ static int anx3443_set_mux(const struct usb_mux *me, mux_state_t mux_state,
 
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
+
+	/* This driver treats safe mode as none */
+	if (mux_state == USB_PD_MUX_SAFE_MODE)
+		mux_state = USB_PD_MUX_NONE;
 
 	saved_mux_state[me->usb_port].mux_state = mux_state;
 
@@ -194,7 +198,7 @@ static bool anx3443_port_is_usb2_only(const struct usb_mux *me)
 static void anx3443_suspend(void)
 {
 	for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
-		const struct usb_mux *mux = &usb_muxes[i];
+		const struct usb_mux *mux = usb_muxes[i].mux;
 
 		if (mux->driver != &anx3443_usb_mux_driver)
 			continue;
@@ -208,14 +212,14 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, anx3443_suspend, HOOK_PRIO_DEFAULT);
 static void anx3443_resume(void)
 {
 	for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
-		int port = usb_muxes[i].usb_port;
+		int port = usb_muxes[i].mux->usb_port;
 		bool ack_required;
 
-		if (usb_muxes[i].driver != &anx3443_usb_mux_driver)
+		if (usb_muxes[i].mux->driver != &anx3443_usb_mux_driver)
 			continue;
 
-		anx3443_set_mux(&usb_muxes[i], saved_mux_state[port].mux_state,
-				&ack_required);
+		anx3443_set_mux(usb_muxes[i].mux,
+				saved_mux_state[port].mux_state, &ack_required);
 	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, anx3443_resume, HOOK_PRIO_DEFAULT);

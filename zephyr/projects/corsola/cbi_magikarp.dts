@@ -1,4 +1,4 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -12,7 +12,7 @@
 		 */
 		base-gyro {
 			enum-name = "FW_BASE_GYRO";
-			start = <8>;
+			start = <0>;
 			size = <2>;
 
 			None {
