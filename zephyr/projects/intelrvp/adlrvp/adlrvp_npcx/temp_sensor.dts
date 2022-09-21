@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -6,19 +6,36 @@
 #include <cros/thermistor/thermistor.dtsi>
 
 / {
+	temp_ambient: ambient {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V0_22K6_47K_4050B>;
+		adc = <&adc_ambient>;
+	};
+	temp_ddr: ddr {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V0_22K6_47K_4050B>;
+		adc = <&adc_ddr>;
+	};
+	temp_skin: skin {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V0_22K6_47K_4050B>;
+		adc = <&adc_skin>;
+	};
+	temp_vr: vr {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V0_22K6_47K_4050B>;
+		adc = <&adc_vr>;
+	};
+
 	named-temp-sensors {
+		compatible = "cros-ec,temp-sensors";
 		ambient {
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			thermistor = <&thermistor_3V0_22K6_47K_4050B>;
-			label = "Ambient";
-			enum-name = "TEMP_SENSOR_1";
 			temp_fan_off = <15>;
 			temp_fan_max = <50>;
 			temp_host_high = <75>;
 			temp_host_halt = <80>;
 			temp_host_release_high = <65>;
-			adc = <&adc_ambient>;
+			sensor = <&temp_ambient>;
 		};
 
 		/*
@@ -30,7 +47,6 @@
 		 *	compatible = "cros-ec,temp-sensor-thermistor",
 		 *		     "cros-ec,temp-sensor";
 		 *	thermistor = < >;
-		 *	label = "Battery";
 		 *	enum-name = "";
 		 *	temp_fan_off = <15>;
 		 *	temp_fan_max = <50>;
@@ -42,43 +58,28 @@
 		 */
 
 		ddr {
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			thermistor = <&thermistor_3V0_22K6_47K_4050B>;
-			label = "DDR";
-			enum-name = "TEMP_SENSOR_2";
 			temp_fan_off = <15>;
 			temp_fan_max = <50>;
 			temp_host_high = <75>;
 			temp_host_halt = <80>;
 			temp_host_release_high = <65>;
-			adc = <&adc_ddr>;
+			sensor = <&temp_ddr>;
 		};
 		skin {
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			thermistor = <&thermistor_3V0_22K6_47K_4050B>;
-			label = "Skin";
-			enum-name = "TEMP_SENSOR_3";
 			temp_fan_off = <15>;
 			temp_fan_max = <50>;
 			temp_host_high = <75>;
 			temp_host_halt = <80>;
 			temp_host_release_high = <65>;
-			adc = <&adc_skin>;
+			sensor = <&temp_skin>;
 		};
 		vr {
-			compatible = "cros-ec,temp-sensor-thermistor",
-				     "cros-ec,temp-sensor";
-			thermistor = <&thermistor_3V0_22K6_47K_4050B>;
-			label = "VR";
-			enum-name = "TEMP_SENSOR_4";
 			temp_fan_off = <15>;
 			temp_fan_max = <50>;
 			temp_host_high = <75>;
 			temp_host_halt = <80>;
 			temp_host_release_high = <65>;
-			adc = <&adc_vr>;
+			sensor = <&temp_vr>;
 		};
 	};
 };

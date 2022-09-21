@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -12,8 +12,8 @@
 #include "power/qcom.h"
 #include "system.h"
 
-#define CPRINTS(format, args...) cprints(CC_I2C, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_I2C, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_I2C, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_I2C, format, ##args)
 
 void board_set_switchcap_power(int enable)
 {

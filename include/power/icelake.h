@@ -1,4 +1,4 @@
-/* Copyright 2018 The Chromium OS Authors. All rights reserved.
+/* Copyright 2018 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -11,13 +11,13 @@
 #include "stdbool.h"
 
 /* Input state flags. */
-#define IN_PCH_SLP_S3_DEASSERTED  POWER_SIGNAL_MASK(X86_SLP_S3_DEASSERTED)
-#define IN_PCH_SLP_S4_DEASSERTED  POWER_SIGNAL_MASK(X86_SLP_S4_DEASSERTED)
+#define IN_PCH_SLP_S3_DEASSERTED POWER_SIGNAL_MASK(X86_SLP_S3_DEASSERTED)
+#define IN_PCH_SLP_S4_DEASSERTED POWER_SIGNAL_MASK(X86_SLP_S4_DEASSERTED)
 #define IN_PCH_SLP_SUS_DEASSERTED POWER_SIGNAL_MASK(X86_SLP_SUS_DEASSERTED)
 
-#define IN_ALL_PM_SLP_DEASSERTED (IN_PCH_SLP_S3_DEASSERTED | \
-				  IN_PCH_SLP_S4_DEASSERTED | \
-				  IN_PCH_SLP_SUS_DEASSERTED)
+#define IN_ALL_PM_SLP_DEASSERTED                               \
+	(IN_PCH_SLP_S3_DEASSERTED | IN_PCH_SLP_S4_DEASSERTED | \
+	 IN_PCH_SLP_SUS_DEASSERTED)
 
 #define IN_PGOOD_ALL_CORE POWER_SIGNAL_MASK(X86_DSW_DPWROK)
 

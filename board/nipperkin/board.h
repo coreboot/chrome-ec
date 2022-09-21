@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -21,11 +21,11 @@
 #define CONFIG_CMD_BUTTON
 
 /* USB Type C and USB PD defines */
-#define PD_OPERATING_POWER_MW   15000
-#define PD_MAX_CURRENT_MA       5000
-#define PD_MAX_VOLTAGE_MV       20000
+#define PD_OPERATING_POWER_MW 15000
+#define PD_MAX_CURRENT_MA 5000
+#define PD_MAX_VOLTAGE_MV 20000
 /* Max Power = 100 W */
-#define PD_MAX_POWER_MW         ((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
+#define PD_MAX_POWER_MW ((PD_MAX_VOLTAGE_MV * PD_MAX_CURRENT_MA) / 1000)
 
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
 

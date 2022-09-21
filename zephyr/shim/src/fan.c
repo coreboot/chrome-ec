@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -25,8 +25,8 @@ BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
 
 #define FAN_CONFIGS(node_id)                                                   \
 	const struct fan_conf node_id##_conf = {                               \
-		.flags = (COND_CODE_1(DT_PROP(node_id, not_use_rpm_mode),      \
-				      (0), (FAN_USE_RPM_MODE))) |              \
+		.flags = (COND_CODE_1(DT_PROP(node_id, not_use_rpm_mode), (0), \
+				      (FAN_USE_RPM_MODE))) |                   \
 			 (COND_CODE_1(DT_PROP(node_id, use_fast_start),        \
 				      (FAN_USE_FAST_START), (0))),             \
 		.ch = node_id,                                                 \
@@ -45,26 +45,21 @@ BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
 		.rpm_max = DT_PROP(node_id, rpm_max),                          \
 	};
 
-#define FAN_INST(node_id)              \
-	[node_id] = {                  \
+#define FAN_INST(node_id)                \
+	[node_id] = {                    \
 		.conf = &node_id##_conf, \
 		.rpm = &node_id##_rpm,   \
 	},
 
-#define FAN_CONTROL_INST(node_id)                                            \
-	[node_id] = {                                                        \
-		.pwm = DEVICE_DT_GET(DT_PWMS_CTLR(node_id)),                 \
-		.channel = DT_PWMS_CHANNEL(node_id),                         \
-		.flags = DT_PWMS_FLAGS(node_id),                             \
-		.period_ns = (NSEC_PER_SEC/DT_PROP(node_id, pwm_frequency)), \
-		.tach = DEVICE_DT_GET(DT_PHANDLE(node_id, tach)),            \
+#define FAN_CONTROL_INST(node_id)                                 \
+	[node_id] = {                                             \
+		.pwm = PWM_DT_SPEC_GET(node_id),                  \
+		.tach = DEVICE_DT_GET(DT_PHANDLE(node_id, tach)), \
 	},
 
 DT_INST_FOREACH_CHILD(0, FAN_CONFIGS)
 
-const struct fan_t fans[FAN_CH_COUNT] = {
-	DT_INST_FOREACH_CHILD(0, FAN_INST)
-};
+const struct fan_t fans[FAN_CH_COUNT] = { DT_INST_FOREACH_CHILD(0, FAN_INST) };
 
 /* Rpm deviation (Unit:percent) */
 #ifndef RPM_DEVIATION
@@ -104,10 +99,7 @@ struct fan_data {
 
 /* Data structure to define PWM and tachometer. */
 struct fan_config {
-	const struct device *pwm;
-	uint32_t channel;
-	pwm_flags_t flags;
-	uint32_t period_ns;
+	struct pwm_dt_spec pwm;
 
 	const struct device *tach;
 };
@@ -121,28 +113,28 @@ static void fan_pwm_update(int ch)
 {
 	const struct fan_config *cfg = &fan_config[ch];
 	struct fan_data *data = &fan_data[ch];
+	const struct device *pwm_dev = cfg->pwm.dev;
 	uint32_t pulse_ns;
 	int ret;
 
-	if (!device_is_ready(cfg->pwm)) {
-		LOG_ERR("PWM device %s not ready", cfg->pwm->name);
+	if (!device_is_ready(pwm_dev)) {
+		LOG_ERR("PWM device %s not ready", pwm_dev->name);
 		return;
 	}
 
 	if (data->pwm_enabled) {
 		pulse_ns = DIV_ROUND_NEAREST(
-				cfg->period_ns * data->pwm_percent, 100);
+			cfg->pwm.period * data->pwm_percent, 100);
 	} else {
 		pulse_ns = 0;
 	}
 
-	LOG_DBG("FAN PWM %s set percent (%d), pulse %d", cfg->pwm->name,
+	LOG_DBG("FAN PWM %s set percent (%d), pulse %d", pwm_dev->name,
 		data->pwm_percent, pulse_ns);
 
-	ret = pwm_set(cfg->pwm, cfg->channel, cfg->period_ns, pulse_ns,
-		      cfg->flags);
+	ret = pwm_set_dt(&cfg->pwm, cfg->pwm.period, pulse_ns);
 	if (ret) {
-		LOG_ERR("pwm_set() failed %s (%d)", cfg->pwm->name, ret);
+		LOG_ERR("pwm_set() failed %s (%d)", pwm_dev->name, ret);
 	}
 }
 
@@ -320,8 +312,8 @@ void fan_tick_func(void)
 			fan_tick_func_duty(ch);
 			break;
 		default:
-			LOG_ERR("Invalid fan %d mode: %d",
-				ch, fan_data[ch].current_fan_mode);
+			LOG_ERR("Invalid fan %d mode: %d", ch,
+				fan_data[ch].current_fan_mode);
 		}
 	}
 }

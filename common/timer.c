@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -6,6 +6,7 @@
 /* Timer module for Chrome EC operating system */
 
 #include "atomic.h"
+#include "builtin/assert.h"
 #include "common.h"
 #include "console.h"
 #include "hooks.h"
@@ -19,19 +20,19 @@
 #ifdef CONFIG_ZEPHYR
 #include <zephyr/kernel.h> /* For k_usleep() */
 #else
-extern __error("k_usleep() should only be called from Zephyr code")
-int32_t k_usleep(int32_t);
+extern __error("k_usleep() should only be called from Zephyr code") int32_t
+	k_usleep(int32_t);
 #endif /* CONFIG_ZEPHYR */
 
 #ifdef CONFIG_COMMON_RUNTIME
-#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ##args)
 #else
 #define CPRINTS(format, args...)
 #define CPRINTF(format, args...)
 #endif
 
-#define TIMER_SYSJUMP_TAG 0x4d54  /* "TM" */
+#define TIMER_SYSJUMP_TAG 0x4d54 /* "TM" */
 
 /* High 32-bits of the 64-bit timestamp counter. */
 STATIC_IF_NOT(CONFIG_HWTIMER_64BIT) volatile uint32_t clksrc_high;
@@ -82,7 +83,6 @@ void process_timers(int overflow)
 			/* read atomically the current state of timer running */
 			check_timer = running_t0 = timer_running;
 			while (check_timer) {
-
 				int tskid = __fls(check_timer);
 				/* timer has expired ? */
 				if (timer_deadline[tskid].val <= now.val)
@@ -95,7 +95,7 @@ void process_timers(int overflow)
 
 				check_timer &= ~BIT(tskid);
 			}
-		/* if there is a new timer, let's retry */
+			/* if there is a new timer, let's retry */
 		} while (timer_running & ~running_t0);
 
 		if (next.le.hi == 0xffffffff) {
@@ -203,7 +203,7 @@ void usleep(unsigned us)
 	do {
 		evt |= task_wait_event(us);
 	} while (!(evt & TASK_EVENT_TIMER) &&
-		((__hw_clock_source_read() - t0) < us));
+		 ((__hw_clock_source_read() - t0) < us));
 
 	/* Re-queue other events which happened in the meanwhile */
 	if (evt)
@@ -246,7 +246,7 @@ timestamp_t get_time(void)
 clock_t clock(void)
 {
 	/* __hw_clock_source_read() returns a microsecond resolution timer.*/
-	return (clock_t) __hw_clock_source_read() / 1000;
+	return (clock_t)__hw_clock_source_read() / 1000;
 }
 
 void force_time(timestamp_t ts)
@@ -299,8 +299,7 @@ void __hw_clock_source_set(uint32_t ts)
 void timer_print_info(void)
 {
 	timestamp_t t = get_time();
-	uint64_t deadline = (uint64_t)t.le.hi << 32 |
-		__hw_clock_event_get();
+	uint64_t deadline = (uint64_t)t.le.hi << 32 | __hw_clock_event_get();
 	int tskid;
 
 	ccprintf("Time:     0x%016llx us, %11.6lld s\n"
@@ -354,7 +353,7 @@ static void timer_sysjump(void)
 DECLARE_HOOK(HOOK_SYSJUMP, timer_sysjump, HOOK_PRIO_DEFAULT);
 
 #ifdef CONFIG_CMD_WAITMS
-static int command_wait(int argc, char **argv)
+static int command_wait(int argc, const char **argv)
 {
 	char *e;
 	int i;
@@ -364,6 +363,9 @@ static int command_wait(int argc, char **argv)
 
 	i = strtoi(argv[1], &e, 0);
 	if (*e)
+		return EC_ERROR_PARAM1;
+
+	if (i < 0)
 		return EC_ERROR_PARAM1;
 
 	/*
@@ -384,8 +386,7 @@ static int command_wait(int argc, char **argv)
 	return EC_SUCCESS;
 }
 /* Typically a large delay (e.g. 3s) will cause a reset */
-DECLARE_CONSOLE_COMMAND(waitms, command_wait,
-			"msec",
+DECLARE_CONSOLE_COMMAND(waitms, command_wait, "msec",
 			"Busy-wait for msec (large delays will reset)");
 #endif
 
@@ -395,7 +396,7 @@ DECLARE_CONSOLE_COMMAND(waitms, command_wait,
  * especially when going "backward" in time, because task deadlines are
  * left un-adjusted.
  */
-static int command_force_time(int argc, char **argv)
+static int command_force_time(int argc, const char **argv)
 {
 	char *e;
 	timestamp_t new;
@@ -416,32 +417,29 @@ static int command_force_time(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(forcetime, command_force_time,
-			"hi lo",
+DECLARE_CONSOLE_COMMAND(forcetime, command_force_time, "hi lo",
 			"Force current time");
 #endif
 
 #ifdef CONFIG_CMD_GETTIME
-static int command_get_time(int argc, char **argv)
+static int command_get_time(int argc, const char **argv)
 {
 	timestamp_t ts = get_time();
 	ccprintf("Time: 0x%016llx = %.6lld s\n", ts.val, ts.val);
 
 	return EC_SUCCESS;
 }
-DECLARE_SAFE_CONSOLE_COMMAND(gettime, command_get_time,
-			     NULL,
+DECLARE_SAFE_CONSOLE_COMMAND(gettime, command_get_time, NULL,
 			     "Print current time");
 #endif
 
 #ifdef CONFIG_CMD_TIMERINFO
-static int command_timer_info(int argc, char **argv)
+static int command_timer_info(int argc, const char **argv)
 {
 	timer_print_info();
 
 	return EC_SUCCESS;
 }
-DECLARE_SAFE_CONSOLE_COMMAND(timerinfo, command_timer_info,
-			     NULL,
+DECLARE_SAFE_CONSOLE_COMMAND(timerinfo, command_timer_info, NULL,
 			     "Print timer info");
 #endif

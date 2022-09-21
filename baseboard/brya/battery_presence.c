@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -18,8 +18,9 @@ __overridable bool board_battery_is_initialized(void)
 {
 	int batt_status;
 
-	return battery_status(&batt_status) != EC_SUCCESS ? false :
-		!!(batt_status & STATUS_INITIALIZED);
+	return battery_status(&batt_status) != EC_SUCCESS ?
+		       false :
+		       !!(batt_status & STATUS_INITIALIZED);
 }
 
 /*

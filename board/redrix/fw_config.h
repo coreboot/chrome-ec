@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -19,20 +19,17 @@ enum ec_cfg_keyboard_backlight_type {
 	KEYBOARD_BACKLIGHT_ENABLED = 1
 };
 
-enum ec_cfg_eps_type {
-	EPS_DISABLED = 0,
-	EPS_ENABLED = 1
-};
+enum ec_cfg_eps_type { EPS_DISABLED = 0, EPS_ENABLED = 1 };
 
 union redrix_cbi_fw_config {
 	struct {
-		uint32_t				sd_db : 2;
-		enum ec_cfg_keyboard_backlight_type	kb_bl : 1;
-		uint32_t				audio : 3;
-		uint32_t				lte_db : 2;
-		uint32_t				ufc : 2;
-		enum ec_cfg_eps_type			eps : 1;
-		uint32_t				reserved_1 : 21;
+		uint32_t sd_db : 2;
+		enum ec_cfg_keyboard_backlight_type kb_bl : 1;
+		uint32_t audio : 3;
+		uint32_t lte_db : 2;
+		uint32_t ufc : 2;
+		enum ec_cfg_eps_type eps : 1;
+		uint32_t reserved_1 : 21;
 	};
 	uint32_t raw_value;
 };

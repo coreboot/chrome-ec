@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,7 +10,7 @@
 #include "driver/accel_kionix.h"
 #include "driver/accelgyro_lsm6dsm.h"
 #include "driver/bc12/pi3usb9201.h"
-#include "driver/ppc/aoz1380.h"
+#include "driver/ppc/aoz1380_public.h"
 #include "driver/ppc/nx20p348x.h"
 #include "driver/tcpm/nct38xx.h"
 #include "driver/usb_mux/amd_fp5.h"
@@ -36,8 +36,8 @@
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
 
-#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
 /* This I2C moved. Temporarily detect and support the V0 HW. */
 int I2C_PORT_BATTERY = I2C_PORT_BATTERY_V1;
@@ -49,21 +49,17 @@ static struct mutex g_lid_mutex;
 static struct mutex g_base_mutex;
 
 /* sensor private data */
-static struct kionix_accel_data  g_kx022_data;
+static struct kionix_accel_data g_kx022_data;
 static struct lsm6dsm_data g_lsm6dsm_data = LSM6DSM_DATA;
 
 /* Matrix to rotate accelrator into standard reference frame */
-static const mat33_fp_t lid_standard_ref = {
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
+static const mat33_fp_t lid_standard_ref = { { FLOAT_TO_FP(-1), 0, 0 },
+					     { 0, FLOAT_TO_FP(-1), 0 },
+					     { 0, 0, FLOAT_TO_FP(1) } };
 
-static const mat33_fp_t base_standard_ref = {
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
+static const mat33_fp_t base_standard_ref = { { FLOAT_TO_FP(-1), 0, 0 },
+					      { 0, FLOAT_TO_FP(-1), 0 },
+					      { 0, 0, FLOAT_TO_FP(1) } };
 
 /* TODO(gcc >= 5.0) Remove the casts to const pointer at rot_standard_ref */
 struct motion_sensor_t motion_sensors[] = {
@@ -199,33 +195,43 @@ const struct usb_mux_driver usbc0_sbu_mux_driver = {
  * Since PI3USB221 is not a i2c device, .i2c_port and
  * .i2c_addr_flags are not required here.
  */
-const struct usb_mux usbc0_sbu_mux = {
-	.usb_port = USBC_PORT_C0,
-	.driver = &usbc0_sbu_mux_driver,
+const struct usb_mux_chain usbc0_sbu_mux = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C0,
+			.driver = &usbc0_sbu_mux_driver,
+		},
 };
 
-struct usb_mux usbc1_amd_fp5_usb_mux = {
-	.usb_port = USBC_PORT_C1,
-	.i2c_port = I2C_PORT_USB_AP_MUX,
-	.i2c_addr_flags = AMD_FP5_MUX_I2C_ADDR_FLAGS,
-	.driver = &amd_fp5_usb_mux_driver,
-	.flags = USB_MUX_FLAG_SET_WITHOUT_FLIP,
+struct usb_mux_chain usbc1_amd_fp5_usb_mux = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C1,
+			.i2c_port = I2C_PORT_USB_AP_MUX,
+			.i2c_addr_flags = AMD_FP5_MUX_I2C_ADDR_FLAGS,
+			.driver = &amd_fp5_usb_mux_driver,
+			.flags = USB_MUX_FLAG_SET_WITHOUT_FLIP,
+		},
 };
 
-struct usb_mux usb_muxes[] = {
+struct usb_mux_chain usb_muxes[] = {
 	[USBC_PORT_C0] = {
-		.usb_port = USBC_PORT_C0,
-		.i2c_port = I2C_PORT_USB_AP_MUX,
-		.i2c_addr_flags = AMD_FP5_MUX_I2C_ADDR_FLAGS,
-		.driver = &amd_fp5_usb_mux_driver,
-		.next_mux = &usbc0_sbu_mux,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C0,
+			.i2c_port = I2C_PORT_USB_AP_MUX,
+			.i2c_addr_flags = AMD_FP5_MUX_I2C_ADDR_FLAGS,
+			.driver = &amd_fp5_usb_mux_driver,
+		},
+		.next = &usbc0_sbu_mux,
 	},
 	[USBC_PORT_C1] = {
-		.usb_port = USBC_PORT_C1,
-		.i2c_port = I2C_PORT_TCPC1,
-		.i2c_addr_flags = PS8743_I2C_ADDR1_FLAG,
-		.driver = &ps8743_usb_mux_driver,
-		.next_mux = &usbc1_amd_fp5_usb_mux,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C1,
+			.i2c_port = I2C_PORT_TCPC1,
+			.i2c_addr_flags = PS8743_I2C_ADDR1_FLAG,
+			.driver = &ps8743_usb_mux_driver,
+		},
+		.next = &usbc1_amd_fp5_usb_mux,
 	}
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
@@ -268,8 +274,7 @@ void ppc_interrupt(enum gpio_signal signal)
 
 int board_set_active_charge_port(int port)
 {
-	int is_valid_port = (port >= 0 &&
-			     port < CONFIG_USB_PD_PORT_MAX_COUNT);
+	int is_valid_port = (port >= 0 && port < CONFIG_USB_PD_PORT_MAX_COUNT);
 	int i;
 
 	if (port == CHARGE_PORT_NONE) {
@@ -289,7 +294,6 @@ int board_set_active_charge_port(int port)
 	} else if (!is_valid_port) {
 		return EC_ERROR_INVAL;
 	}
-
 
 	/* Check if the port is sourcing VBUS. */
 	if (ppc_is_sourcing_vbus(port)) {
@@ -392,7 +396,6 @@ static void reset_nct38xx_port(int port)
 		msleep(NCT3807_RESET_POST_DELAY_MS);
 }
 
-
 void board_reset_pd_mcu(void)
 {
 	/* Reset TCPC0 */
@@ -463,11 +466,9 @@ int board_pd_set_frs_enable(int port, int enable)
 
 	/* Use the TCPC to enable fast switch when FRS included */
 	if (port == USBC_PORT_C0) {
-		rv = ioex_set_level(IOEX_USB_C0_TCPC_FASTSW_CTL_EN,
-				    !!enable);
+		rv = ioex_set_level(IOEX_USB_C0_TCPC_FASTSW_CTL_EN, !!enable);
 	} else {
-		rv = ioex_set_level(IOEX_USB_C1_TCPC_FASTSW_CTL_EN,
-				    !!enable);
+		rv = ioex_set_level(IOEX_USB_C1_TCPC_FASTSW_CTL_EN, !!enable);
 	}
 
 	return rv;
@@ -539,14 +540,13 @@ int usb_port_enable[USBA_PORT_COUNT] = {
  * The connector has 24 pins total, and there is no pin 0.
  */
 const int keyboard_factory_scan_pins[][2] = {
-		{0, 5}, {1, 1}, {1, 0}, {0, 6}, {0, 7},
-		{1, 4}, {1, 3}, {1, 6}, {1, 7}, {3, 1},
-		{2, 0}, {1, 5}, {2, 6}, {2, 7}, {2, 1},
-		{2, 4}, {2, 5}, {1, 2}, {2, 3}, {2, 2},
-		{3, 0}, {-1, -1}, {-1, -1}, {-1, -1},
+	{ 0, 5 }, { 1, 1 }, { 1, 0 }, { 0, 6 },	  { 0, 7 },   { 1, 4 },
+	{ 1, 3 }, { 1, 6 }, { 1, 7 }, { 3, 1 },	  { 2, 0 },   { 1, 5 },
+	{ 2, 6 }, { 2, 7 }, { 2, 1 }, { 2, 4 },	  { 2, 5 },   { 1, 2 },
+	{ 2, 3 }, { 2, 2 }, { 3, 0 }, { -1, -1 }, { -1, -1 }, { -1, -1 },
 };
 const int keyboard_factory_scan_pins_used =
-			ARRAY_SIZE(keyboard_factory_scan_pins);
+	ARRAY_SIZE(keyboard_factory_scan_pins);
 #endif
 
 #define CHARGING_CURRENT_500MA 500
@@ -586,12 +586,11 @@ int charger_profile_override(struct charge_state_data *curr)
 	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
 		return 0;
 
-	curr->requested_current = (limit_charge) ? CHARGING_CURRENT_500MA
-						 : curr->batt.desired_current;
+	curr->requested_current = (limit_charge) ? CHARGING_CURRENT_500MA :
+						   curr->batt.desired_current;
 
 	if (limit_usbc_power != limit_usbc_power_backup) {
-		rp = (limit_usbc_power) ? TYPEC_RP_1A5
-					: TYPEC_RP_3A0;
+		rp = (limit_usbc_power) ? TYPEC_RP_1A5 : TYPEC_RP_3A0;
 
 		ppc_set_vbus_source_current_limit(0, rp);
 		tcpm_select_rp_value(0, rp);
@@ -605,13 +604,13 @@ int charger_profile_override(struct charge_state_data *curr)
 }
 
 enum ec_status charger_profile_override_get_param(uint32_t param,
-							uint32_t *value)
+						  uint32_t *value)
 {
 	return EC_RES_INVALID_PARAM;
 }
 
 enum ec_status charger_profile_override_set_param(uint32_t param,
-							uint32_t value)
+						  uint32_t value)
 {
 	return EC_RES_INVALID_PARAM;
 }

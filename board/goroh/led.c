@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,13 +9,10 @@
 #include "pwm.h"
 
 struct pwm_led_color_map led_color_map[EC_LED_COLOR_COUNT] = {
-				/* Green, Red */
-	[EC_LED_COLOR_RED]    = {   0, 100 },
-	[EC_LED_COLOR_GREEN]  = { 100,   0 },
-	[EC_LED_COLOR_BLUE]   = {   0,   0 },
-	[EC_LED_COLOR_YELLOW] = {   0,   0 },
-	[EC_LED_COLOR_WHITE]  = {   0,   0 },
-	[EC_LED_COLOR_AMBER]  = {   0,   0 },
+	/* Green, Red */
+	[EC_LED_COLOR_RED] = { 0, 100 }, [EC_LED_COLOR_GREEN] = { 100, 0 },
+	[EC_LED_COLOR_BLUE] = { 0, 0 },	 [EC_LED_COLOR_YELLOW] = { 0, 0 },
+	[EC_LED_COLOR_WHITE] = { 0, 0 }, [EC_LED_COLOR_AMBER] = { 0, 0 },
 };
 
 struct pwm_led pwm_leds[CONFIG_LED_PWM_COUNT] = {

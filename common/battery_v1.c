@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -15,8 +15,8 @@
 #include "printf.h"
 #include "util.h"
 
-#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
 
 /* Returns zero if every item was updated. */
 int update_static_battery_info(void)
@@ -34,8 +34,11 @@ int update_static_battery_info(void)
 	batt_str = (char *)host_get_memmap(EC_MEMMAP_BATT_SERIAL);
 	memset(batt_str, 0, EC_MEMMAP_TEXT_MAX);
 	rv = battery_serial_number(&batt_serial);
-	if (!rv)
-		snprintf(batt_str, EC_MEMMAP_TEXT_MAX, "%04X", batt_serial);
+	if (!rv) {
+		if (snprintf(batt_str, EC_MEMMAP_TEXT_MAX, "%04X",
+			     batt_serial) <= 0)
+			rv |= EC_ERROR_UNKNOWN;
+	}
 
 	/* Design Capacity of Full */
 	rv |= battery_design_capacity(
@@ -136,7 +139,8 @@ void update_dynamic_battery_info(void)
 		 * Don't report zero charge, as that has special meaning
 		 * to Chrome OS powerd.
 		 */
-		if (curr->batt.remaining_capacity == 0 && !curr->batt_is_charging)
+		if (curr->batt.remaining_capacity == 0 &&
+		    !curr->batt_is_charging)
 			*memmap_cap = 1;
 		else
 			*memmap_cap = curr->batt.remaining_capacity;
@@ -151,12 +155,11 @@ void update_dynamic_battery_info(void)
 	}
 
 	if (curr->batt.is_present == BP_YES &&
-	    !(curr->batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE) &&
-	    curr->batt.state_of_charge <= BATTERY_LEVEL_CRITICAL)
+	    battery_is_below_threshold(BATT_THRESHOLD_TYPE_SHUTDOWN, false))
 		tmp |= EC_BATT_FLAG_LEVEL_CRITICAL;
 
 	tmp |= curr->batt_is_charging ? EC_BATT_FLAG_CHARGING :
-				       EC_BATT_FLAG_DISCHARGING;
+					EC_BATT_FLAG_DISCHARGING;
 
 	/* Tell the AP to re-read battery status if charge state changes */
 	if (*memmap_flags != tmp)

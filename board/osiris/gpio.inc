@@ -1,6 +1,6 @@
 /* -*- mode:c -*-
  *
- * Copyright 2022 The Chromium OS Authors. All rights reserved.
+ * Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -19,7 +19,6 @@ GPIO_INT(SEQ_EC_RSMRST_ODL,              PIN(E, 2), GPIO_INT_BOTH, power_signal_
 GPIO_INT(SLP_S3_L,                       PIN(A, 5), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(SLP_SUS_L,                      PIN(F, 1), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(SYS_SLP_S0IX_L,                 PIN(D, 5), GPIO_INT_BOTH, power_signal_interrupt)
-GPIO_INT(TABLET_MODE_L,                  PIN(9, 5), GPIO_INT_BOTH, gmr_tablet_switch_isr)
 GPIO_INT(USB_C0_BC12_INT_ODL,            PIN(C, 6), GPIO_INT_FALLING, bc12_interrupt)
 GPIO_INT(USB_C0_C2_TCPC_INT_ODL,         PIN(E, 0), GPIO_INT_FALLING, tcpc_alert_event)
 GPIO_INT(USB_C0_PPC_INT_ODL,             PIN(6, 2), GPIO_INT_FALLING, ppc_interrupt)
@@ -59,7 +58,8 @@ GPIO(EC_PCH_RTCRST,                  PIN(7, 6), GPIO_OUT_LOW)
 GPIO(EC_PCH_SYS_PWROK,               PIN(3, 7), GPIO_OUT_LOW)
 GPIO(EC_PCH_WAKE_R_ODL,              PIN(C, 0), GPIO_ODR_HIGH)
 GPIO(EC_PROCHOT_ODL,                 PIN(6, 3), GPIO_ODR_HIGH)
-GPIO(EN_PP5000_FAN,                  PIN(6, 1), GPIO_OUT_HIGH)
+GPIO(EN_PP5000_FAN,                  PIN(6, 1), GPIO_OUT_LOW)
+GPIO(EN_PP5000_FAN2,                 PIN(9, 7), GPIO_OUT_LOW)
 GPIO(EN_PP5000_USBA_R,               PIN(D, 7), GPIO_OUT_LOW)
 GPIO(EN_S5_RAILS,                    PIN(B, 6), GPIO_OUT_LOW)
 GPIO(IMVP9_VRRDY_OD,                 PIN(4, 3), GPIO_INPUT)
@@ -74,7 +74,6 @@ GPIO(LED_1_L,                        PIN(C, 4), GPIO_OUT_HIGH)
 GPIO(LED_2_L,                        PIN(C, 3), GPIO_OUT_HIGH)
 GPIO(KYBL_EN,                        PIN(A, 7), GPIO_OUT_LOW)
 GPIO(AMP_PWR_EN,                     PIN(5, 7), GPIO_OUT_LOW)
-GPIO(EC_FAN_TACH_2,                  PIN(7, 3), GPIO_INPUT)
 GPIO(RGB_KB_INT,                     PIN(5, 6), GPIO_INPUT)
 
 /* UART alternate functions */
@@ -92,6 +91,7 @@ ALTERNATE(PIN_MASK(F, 0x0c), 0, MODULE_I2C, 0)               /* GPIOF3/I2C4_SCL1
 
 /* PWM alternate functions */
 ALTERNATE(PIN_MASK(4, 0x01), 0, MODULE_PWM, 0)               /* GPIO40/TA1 */
+ALTERNATE(PIN_MASK(7, 0x08), 0, MODULE_PWM, 0)               /* GPIO73/TA2 */
 ALTERNATE(PIN_MASK(8, 0x01), 0, MODULE_PWM, 0)               /* GPIO80/PWM3 */
 ALTERNATE(PIN_MASK(B, 0x80), 0, MODULE_PWM, 0)               /* GPIOB7/PWM5 */
 
@@ -122,9 +122,9 @@ UNUSED(PIN(8, 3))       /* GPIO83 */
 UNUSED(PIN(7, 0))       /* GPIO70 */
 UNUSED(PIN(8, 1))       /* GPIO81 */
 UNUSED(PIN(9, 3))       /* GPIO93 */
-UNUSED(PIN(9, 7))       /* GPIO97 */
 UNUSED(PIN(D, 0))       /* GPIOD0/I2C3_SDA0 */
 UNUSED(PIN(D, 1))       /* GPIOD1/I2C3_SCL0 */
+UNUSED(PIN(9, 5))       /* GPIO95 */
 
 /* Pre-configured PSL balls:  J8  K6 */
 

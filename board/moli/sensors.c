@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -51,58 +51,52 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /* Temperature sensor configuration */
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1_SSD] = {
-		.name = "SSD",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_1_SSD
-	},
-	[TEMP_SENSOR_2_CPU_VR] = {
-		.name = "CPU VR",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_2_CPU_VR
-	},
-	[TEMP_SENSOR_4_DIMM] = {
-		.name = "DIMM",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_4_DIMM
-	},
+	[TEMP_SENSOR_1_SSD] = { .name = "SSD",
+				.type = TEMP_SENSOR_TYPE_BOARD,
+				.read = get_temp_3v3_30k9_47k_4050b,
+				.idx = ADC_TEMP_SENSOR_1_SSD },
+	[TEMP_SENSOR_2_CPU_VR] = { .name = "CPU VR",
+				   .type = TEMP_SENSOR_TYPE_BOARD,
+				   .read = get_temp_3v3_30k9_47k_4050b,
+				   .idx = ADC_TEMP_SENSOR_2_CPU_VR },
+	[TEMP_SENSOR_4_DIMM] = { .name = "DIMM",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_3v3_30k9_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_4_DIMM },
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
-/*
- * TODO(b/180681346): update for Alder Lake/brya
- *
- * Tiger Lake specifies 100 C as maximum TDP temperature.  THRMTRIP# occurs at
- * 130 C.  However, sensor is located next to DDR, so we need to use the lower
- * DDR temperature limit (85 C)
- */
-/*
- * TODO(b/202062363): Remove when clang is fixed.
- */
-#define THERMAL_CPU \
-	{ \
-		.temp_host = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
-			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
-		}, \
-		.temp_host_release = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
-		}, \
-		.temp_fan_off = C_TO_K(35), \
-		.temp_fan_max = C_TO_K(50), \
+#define THERMAL_SSD                                         \
+	{                                                   \
+		.temp_host = {                              \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(64), \
+		},                                          \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_ssd = THERMAL_SSD;
+
+#define THERMAL_CPU                                          \
+	{                                                    \
+		.temp_host = {                               \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(100), \
+		},                                           \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 
+#define THERMAL_DIMM                                        \
+	{                                                   \
+		.temp_host = {                              \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(67), \
+		},                                          \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_dimm =
+	THERMAL_DIMM;
 /*
  * TODO(b/197478860): add the thermal sensor setting
  */
 /* this should really be "const" */
 struct ec_thermal_config thermal_params[] = {
-	[TEMP_SENSOR_1_SSD] = THERMAL_CPU,
+	[TEMP_SENSOR_1_SSD] = THERMAL_SSD,
 	[TEMP_SENSOR_2_CPU_VR] = THERMAL_CPU,
-	[TEMP_SENSOR_4_DIMM] = THERMAL_CPU,
+	[TEMP_SENSOR_4_DIMM] = THERMAL_DIMM,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);

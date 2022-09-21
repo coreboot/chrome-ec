@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -23,7 +23,7 @@
 
 /* Host event queue. Shared by all ports. */
 static struct queue const host_events =
-		QUEUE_NULL(PCHG_EVENT_QUEUE_SIZE, uint32_t);
+	QUEUE_NULL(PCHG_EVENT_QUEUE_SIZE, uint32_t);
 struct mutex host_event_mtx;
 
 static void pchg_queue_event(struct pchg *ctx, enum pchg_event event)
@@ -59,7 +59,7 @@ static void pchg_queue_host_event(struct pchg *ctx, uint32_t event)
 static const char *_text_state(enum pchg_state state)
 {
 	/* TODO: Use "S%d" for normal build. */
-	static const char * const state_names[] = EC_PCHG_STATE_TEXT;
+	static const char *const state_names[] = EC_PCHG_STATE_TEXT;
 	BUILD_ASSERT(ARRAY_SIZE(state_names) == PCHG_STATE_COUNT);
 
 	if (state >= sizeof(state_names))
@@ -71,7 +71,7 @@ static const char *_text_state(enum pchg_state state)
 static const char *_text_event(enum pchg_event event)
 {
 	/* TODO: Use "S%d" for normal build. */
-	static const char * const event_names[] = {
+	static const char *const event_names[] = {
 		[PCHG_EVENT_NONE] = "NONE",
 		[PCHG_EVENT_IRQ] = "IRQ",
 		[PCHG_EVENT_RESET] = "RESET",
@@ -118,7 +118,8 @@ static void _clear_port(struct pchg *ctx)
 }
 
 __overridable void board_pchg_power_on(int port, bool on)
-{}
+{
+}
 
 static enum pchg_state pchg_reset(struct pchg *ctx)
 {
@@ -504,7 +505,7 @@ static int pchg_run(struct pchg *ctx)
 			/* Don't wake up if the lid is closed. */
 			return 0;
 		return (ctx->event == PCHG_EVENT_DEVICE_DETECTED ||
-				ctx->event == PCHG_EVENT_DEVICE_LOST);
+			ctx->event == PCHG_EVENT_DEVICE_LOST);
 	}
 
 	if (ctx->event == PCHG_EVENT_CHARGE_UPDATE)
@@ -538,25 +539,37 @@ void pchg_irq(enum gpio_signal signal)
 	}
 }
 
-
 static void pchg_startup(void)
 {
 	struct pchg *ctx;
 	int p;
+	int active_pchg_count = 0;
+	int rv;
 
 	CPRINTS("%s", __func__);
 	queue_init(&host_events);
 
 	for (p = 0; p < pchg_count; p++) {
+		rv = EC_SUCCESS;
 		ctx = &pchgs[p];
 		_clear_port(ctx);
 		ctx->mode = PCHG_MODE_NORMAL;
+		gpio_disable_interrupt(ctx->cfg->irq_pin);
 		board_pchg_power_on(p, 1);
 		ctx->cfg->drv->reset(ctx);
-		gpio_enable_interrupt(ctx->cfg->irq_pin);
+		if (ctx->cfg->drv->get_chip_info)
+			rv = ctx->cfg->drv->get_chip_info(ctx);
+		if (rv == EC_SUCCESS) {
+			gpio_enable_interrupt(ctx->cfg->irq_pin);
+			active_pchg_count++;
+		} else {
+			CPRINTS("ERR: Failed to probe P%d", p);
+			board_pchg_power_on(p, 0);
+		}
 	}
 
-	task_wake(TASK_ID_PCHG);
+	if (active_pchg_count)
+		task_wake(TASK_ID_PCHG);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, pchg_startup, HOOK_PRIO_DEFAULT);
 
@@ -630,8 +643,8 @@ static enum ec_status hc_pchg(struct host_cmd_handler_args *args)
 
 	ctx = &pchgs[port];
 
-	if (ctx->state == PCHG_STATE_CONNECTED
-			&& ctx->battery_percent >= ctx->cfg->full_percent)
+	if (ctx->state == PCHG_STATE_CONNECTED &&
+	    ctx->battery_percent >= ctx->cfg->full_percent)
 		r->state = PCHG_STATE_FULL;
 	else
 		r->state = ctx->state;
@@ -643,7 +656,8 @@ static enum ec_status hc_pchg(struct host_cmd_handler_args *args)
 	r->dropped_host_event_count = ctx->dropped_host_event_count;
 
 	args->response_size = args->version == 1 ?
-			sizeof(struct ec_response_pchg) : sizeof(*r);
+				      sizeof(struct ec_response_pchg) :
+				      sizeof(*r);
 
 	return EC_RES_SUCCESS;
 }
@@ -743,7 +757,7 @@ static enum ec_status hc_pchg_update(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_PCHG_UPDATE, hc_pchg_update, EC_VER_MASK(0));
 
-static int cc_pchg(int argc, char **argv)
+static int cc_pchg(int argc, const char **argv)
 {
 	int port;
 	char *end;
@@ -758,11 +772,11 @@ static int cc_pchg(int argc, char **argv)
 	ctx = &pchgs[port];
 
 	if (argc == 2) {
-		ccprintf("P%d STATE_%s EVENT_%s SOC=%d%%\n",
-			 port, _text_state(ctx->state), _text_event(ctx->event),
+		ccprintf("P%d STATE_%s EVENT_%s SOC=%d%%\n", port,
+			 _text_state(ctx->state), _text_event(ctx->event),
 			 ctx->battery_percent);
-		ccprintf("error=0x%x dropped=%u fw_version=0x%x\n",
-			 ctx->error, ctx->dropped_event_count, ctx->fw_version);
+		ccprintf("error=0x%x dropped=%u fw_version=0x%x\n", ctx->error,
+			 ctx->dropped_event_count, ctx->fw_version);
 		return EC_SUCCESS;
 	}
 

@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -37,7 +37,7 @@ enum ec_ssfc_lid_sensor {
  * Mux Redriver (Bit 6)
  */
 enum ec_ssfc_mux_redriver {
-	SSFC_MUX_DEFAULT = 0,		/* IT5205 + TUSB544 */
+	SSFC_MUX_DEFAULT = 0, /* IT5205 + TUSB544 */
 	SSFC_MUX_PS8743 = 1,
 };
 

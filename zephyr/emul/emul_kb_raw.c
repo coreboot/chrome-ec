@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -97,6 +97,16 @@ int emul_kb_raw_set_kbstate(const struct device *dev, uint8_t row, uint8_t col,
 	return 0;
 }
 
+void emul_kb_raw_reset(const struct device *dev)
+{
+	const struct kb_raw_emul_cfg *cfg = dev->config;
+	struct kb_raw_emul_data *data = dev->data;
+
+	for (int col = 0; col < cfg->cols; col++) {
+		data->matrix[col] = 0;
+	}
+}
+
 static const struct cros_kb_raw_driver_api emul_kb_raw_driver_api = {
 	.init = emul_kb_raw_init,
 	.drive_colum = emul_kb_raw_drive_column,
@@ -109,9 +119,9 @@ static const struct cros_kb_raw_driver_api emul_kb_raw_driver_api = {
 	static struct kb_raw_emul_data kb_raw_emul_data_##n = {            \
 		.matrix = kb_raw_emul_matrix_##n,                          \
 	};                                                                 \
-									   \
+                                                                           \
 	static const struct kb_raw_emul_cfg kb_raw_emul_cfg_##n = {        \
-		.dev_label = DT_INST_LABEL(n),                             \
+		.dev_label = DT_NODE_FULL_NAME(DT_DRV_INST(n)),            \
 		.data = &kb_raw_emul_data_##n,                             \
 		.rows = DT_INST_PROP(n, rows),                             \
 		.cols = DT_INST_PROP(n, cols),                             \

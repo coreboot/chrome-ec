@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -41,6 +41,8 @@ struct tcpci_snk_emul_data {
 	bool ping_received;
 	/** PD_DATA_ALERT message received  */
 	bool alert_received;
+	/** Last received 5V fixed source cap */
+	uint32_t last_5v_source_cap;
 };
 
 /**
@@ -53,10 +55,10 @@ struct tcpci_snk_emul_data {
  *
  * @return Pointer to USB-C sink extension
  */
-struct tcpci_partner_extension *tcpci_snk_emul_init(
-	struct tcpci_snk_emul_data *data,
-	struct tcpci_partner_data *common_data,
-	struct tcpci_partner_extension *ext);
+struct tcpci_partner_extension *
+tcpci_snk_emul_init(struct tcpci_snk_emul_data *data,
+		    struct tcpci_partner_data *common_data,
+		    struct tcpci_partner_extension *ext);
 
 /**
  * @brief Clear the ping received flag.
@@ -71,6 +73,13 @@ void tcpci_snk_emul_clear_ping_received(struct tcpci_snk_emul_data *sink_data);
  * @param sink_data
  */
 void tcpci_snk_emul_clear_alert_received(struct tcpci_snk_emul_data *sink_data);
+
+/**
+ * @brief Clear the last received 5V fixed source cap.
+ *
+ * @param sink_data
+ */
+void tcpci_snk_emul_clear_last_5v_cap(struct tcpci_snk_emul_data *sink_data);
 
 /**
  * @}

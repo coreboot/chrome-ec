@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -37,10 +37,6 @@
 
 	named-adc-channels {
 		compatible = "named-adc-channels";
-	};
-
-	def-lvol-io-list {
-		compatible = "nuvoton,npcx-lvolctrl-def";
 	};
 };
 
@@ -87,4 +83,9 @@
 		     &kso12_gp05
 		     >;
 	pinctrl-names = "default";
+};
+
+/* PSL_OUT is fixed to GPIO85 in npcx7 series. */
+&power_ctrl_psl {
+	enable-gpios = <&gpio8 5 0>;
 };

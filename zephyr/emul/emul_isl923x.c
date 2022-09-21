@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -11,7 +11,7 @@
 #include <zephyr/drivers/emul.h>
 #include <errno.h>
 #include <zephyr/sys/__assert.h>
-#include <ztest.h>
+#include <zephyr/ztest.h>
 
 #include "driver/charger/isl923x.h"
 #include "driver/charger/isl923x_public.h"
@@ -19,13 +19,10 @@
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
 #include "i2c.h"
+#include "emul/emul_stub_device.h"
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(isl923x_emul, CONFIG_ISL923X_EMUL_LOG_LEVEL);
-
-#define ISL923X_DATA_FROM_I2C_EMUL(_emul)                                    \
-	CONTAINER_OF(CONTAINER_OF(_emul, struct i2c_common_emul_data, emul), \
-		     struct isl923x_emul_data, common)
 
 /** Mask used for the charge current register */
 #define REG_CHG_CURRENT_MASK GENMASK(12, 2)
@@ -71,7 +68,7 @@ LOG_MODULE_REGISTER(isl923x_emul, CONFIG_ISL923X_EMUL_LOG_LEVEL);
 
 #define DEFAULT_R_SNS 10
 #define R_SNS CONFIG_CHARGER_SENSE_RESISTOR
-#define REG_TO_CURRENT(REG) ((REG) * DEFAULT_R_SNS / R_SNS)
+#define REG_TO_CURRENT(REG) ((REG)*DEFAULT_R_SNS / R_SNS)
 
 struct isl923x_emul_data {
 	/** Common I2C data */
@@ -113,7 +110,7 @@ struct isl923x_emul_data {
 	/** Emulated input voltage register */
 	uint16_t input_voltage_reg;
 	/** Pointer to battery emulator. */
-	int battery_ord;
+	const struct emul *battery_emul;
 };
 
 struct isl923x_emul_cfg {
@@ -128,11 +125,10 @@ const struct device *isl923x_emul_get_parent(const struct emul *emulator)
 	return data->common.i2c;
 }
 
-struct i2c_emul *isl923x_emul_get_i2c_emul(const struct emul *emulator)
+const struct i2c_common_emul_cfg *
+isl923x_emul_get_cfg(const struct emul *emulator)
 {
-	struct isl923x_emul_data *data = emulator->data;
-
-	return &(data->common.emul);
+	return emulator->cfg;
 }
 
 static void isl923x_emul_reset(struct isl923x_emul_data *data)
@@ -145,11 +141,11 @@ void isl923x_emul_reset_registers(const struct emul *emulator)
 {
 	struct isl923x_emul_data *data = emulator->data;
 	struct i2c_common_emul_data common_backup = data->common;
-	int battery_ord = data->battery_ord;
+	const struct emul *battery_emul = data->battery_emul;
 
 	memset(data, 0, sizeof(struct isl923x_emul_data));
 	data->common = common_backup;
-	data->battery_ord = battery_ord;
+	data->battery_emul = battery_emul;
 }
 
 void isl923x_emul_set_manufacturer_id(const struct emul *emulator,
@@ -160,8 +156,7 @@ void isl923x_emul_set_manufacturer_id(const struct emul *emulator,
 	data->manufacturer_id_reg = manufacturer_id;
 }
 
-void isl923x_emul_set_device_id(const struct emul *emulator,
-				uint16_t device_id)
+void isl923x_emul_set_device_id(const struct emul *emulator, uint16_t device_id)
 {
 	struct isl923x_emul_data *data = emulator->data;
 
@@ -215,10 +210,10 @@ void raa489000_emul_set_acok_pin(const struct emul *emulator, uint16_t value)
 		break;                                           \
 	} while (0)
 
-static int isl923x_emul_read_byte(struct i2c_emul *emul, int reg, uint8_t *val,
-				  int bytes)
+static int isl923x_emul_read_byte(const struct emul *emul, int reg,
+				  uint8_t *val, int bytes)
 {
-	struct isl923x_emul_data *data = ISL923X_DATA_FROM_I2C_EMUL(emul);
+	struct isl923x_emul_data *data = emul->data;
 
 	switch (reg) {
 	case ISL923X_REG_CHG_CURRENT:
@@ -283,12 +278,12 @@ static int isl923x_emul_read_byte(struct i2c_emul *emul, int reg, uint8_t *val,
 	return 0;
 }
 
-uint16_t isl923x_emul_peek_reg(struct i2c_emul *i2c_emul, int reg)
+uint16_t isl923x_emul_peek_reg(const struct emul *emul, int reg)
 {
 	uint8_t bytes[2];
 
-	isl923x_emul_read_byte(i2c_emul, reg, &bytes[0], 0);
-	isl923x_emul_read_byte(i2c_emul, reg, &bytes[1], 1);
+	isl923x_emul_read_byte(emul, reg, &bytes[0], 0);
+	isl923x_emul_read_byte(emul, reg, &bytes[1], 1);
 
 	return bytes[1] << 8 | bytes[0];
 }
@@ -303,10 +298,10 @@ uint16_t isl923x_emul_peek_reg(struct i2c_emul *i2c_emul, int reg)
 			(REG) |= ((VAL) << 8) & (MASK);        \
 	} while (0)
 
-static int isl923x_emul_write_byte(struct i2c_emul *emul, int reg, uint8_t val,
-				   int bytes)
+static int isl923x_emul_write_byte(const struct emul *emul, int reg,
+				   uint8_t val, int bytes)
 {
-	struct isl923x_emul_data *data = ISL923X_DATA_FROM_I2C_EMUL(emul);
+	struct isl923x_emul_data *data = emul->data;
 
 	switch (reg) {
 	case ISL923X_REG_CHG_CURRENT:
@@ -366,38 +361,42 @@ static int isl923x_emul_write_byte(struct i2c_emul *emul, int reg, uint8_t val,
 		break;
 	case ISL9238_REG_INPUT_VOLTAGE:
 		WRITE_REG_16(data->input_voltage_reg, bytes, val,
-					REG_INPUT_VOLTAGE_MASK);
+			     REG_INPUT_VOLTAGE_MASK);
 		break;
 	default:
 		__ASSERT(false, "Attempt to write unimplemented reg 0x%02x",
 			 reg);
 		return -EINVAL;
 	}
+
 	return 0;
 }
 
-static int isl923x_emul_finish_write(struct i2c_emul *emul, int reg, int bytes)
+static int isl923x_emul_finish_write(const struct emul *emul, int reg,
+				     int bytes)
 {
-	struct isl923x_emul_data *data = ISL923X_DATA_FROM_I2C_EMUL(emul);
-	struct i2c_emul *battery_i2c_emul;
+	struct isl923x_emul_data *data = emul->data;
 	struct sbat_emul_bat_data *bat;
 	int16_t current;
+
+	/* This write only selected register for I2C read message */
+	if (bytes < 2) {
+		return 0;
+	}
 
 	switch (reg) {
 	case ISL923X_REG_CHG_CURRENT:
 		/* Write current to battery. */
-		if (data->battery_ord >= 0) {
-			battery_i2c_emul = sbat_emul_get_ptr(data->battery_ord);
-			if (battery_i2c_emul != NULL) {
-				bat = sbat_emul_get_bat_data(battery_i2c_emul);
-				if (bat != NULL) {
-					current = REG_TO_CURRENT(
-						data->current_limit_reg);
-					if (current > 0)
-						bat->cur = current;
-					else
-						bat->cur = -5;
-				}
+		if (data->battery_emul != NULL) {
+			/* We only have a single battery */
+			bat = sbat_emul_get_bat_data(data->battery_emul);
+			if (bat != NULL) {
+				current =
+					REG_TO_CURRENT(data->current_limit_reg);
+				if (current > 0)
+					bat->cur = current;
+				else
+					bat->cur = -5;
 			}
 		}
 		break;
@@ -408,40 +407,34 @@ static int isl923x_emul_finish_write(struct i2c_emul *emul, int reg, int bytes)
 static int emul_isl923x_init(const struct emul *emul,
 			     const struct device *parent)
 {
-	const struct isl923x_emul_cfg *cfg = emul->cfg;
 	struct isl923x_emul_data *data = emul->data;
 
-	data->common.emul.api = &i2c_common_emul_api;
-	data->common.emul.addr = cfg->common.addr;
-	data->common.emul.parent = emul;
 	data->common.i2c = parent;
-	data->common.cfg = &cfg->common;
 	i2c_common_emul_init(&data->common);
 
-	return i2c_emul_register(parent, emul->dev_label, &data->common.emul);
+	return 0;
 }
 
-#define INIT_ISL923X(n)                                                        \
+#define INIT_ISL923X(n)                                                          \
 	static struct isl923x_emul_data isl923x_emul_data_##n = {              \
 		.common = {                                                    \
 			.write_byte = isl923x_emul_write_byte,                 \
 			.read_byte = isl923x_emul_read_byte,                   \
 			.finish_write = isl923x_emul_finish_write,             \
 		},                                                             \
-		.battery_ord = COND_CODE_1(                                    \
+		.battery_emul = COND_CODE_1(                                   \
 			DT_INST_NODE_HAS_PROP(n, battery),                     \
-			(DT_DEP_ORD(DT_INST_PROP(n, battery))),                \
-			(-1)),                                                 \
-	};                                                                     \
+			(EMUL_DT_GET(DT_INST_PROP(n, battery))),               \
+			(NULL)),                                               \
+	}; \
 	static struct isl923x_emul_cfg isl923x_emul_cfg_##n = {                \
 	.common = {                                                            \
-		.i2c_label = DT_INST_BUS_LABEL(n),                             \
-		.dev_label = DT_INST_LABEL(n),                                 \
+		.dev_label = DT_NODE_FULL_NAME(DT_DRV_INST(n)),                \
 		.addr = DT_INST_REG_ADDR(n),                                   \
 		},                                                             \
-	};                                                                     \
-	EMUL_DEFINE(emul_isl923x_init, DT_DRV_INST(n), &isl923x_emul_cfg_##n,  \
-		    &isl923x_emul_data_##n)
+	}; \
+	EMUL_DT_INST_DEFINE(n, emul_isl923x_init, &isl923x_emul_data_##n,        \
+			    &isl923x_emul_cfg_##n, &i2c_common_emul_api)
 
 DT_INST_FOREACH_STATUS_OKAY(INIT_ISL923X)
 
@@ -460,3 +453,11 @@ static void emul_isl923x_reset_before(const struct ztest_unit_test *test,
 }
 ZTEST_RULE(emul_isl923x_reset, emul_isl923x_reset_before, NULL);
 #endif /* CONFIG_ZTEST_NEW_API */
+
+DT_INST_FOREACH_STATUS_OKAY(EMUL_STUB_DEVICE);
+
+struct i2c_common_emul_data *
+emul_isl923x_get_i2c_common_data(const struct emul *emul)
+{
+	return emul->data;
+}

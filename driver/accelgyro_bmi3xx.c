@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -11,6 +11,7 @@
 #include "accelgyro.h"
 #include "accelgyro_bmi323.h"
 #include "accelgyro_bmi_common.h"
+#include "builtin/assert.h"
 #include "console.h"
 #include "hwtimer.h"
 #include "i2c.h"
@@ -28,15 +29,17 @@
 #endif
 
 #define CPUTS(outstr) cputs(CC_ACCEL, outstr)
-#define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_ACCEL, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_ACCEL, format, ##args)
+
+#define OFFSET_UPDATE_PER_TRY 10
 
 /* Sensor definition */
 STATIC_IF(CONFIG_BMI_ORIENTATION_SENSOR)
-	void irq_set_orientation(struct motion_sensor_t *s);
+void irq_set_orientation(struct motion_sensor_t *s);
 
 STATIC_IF(ACCELGYRO_BMI3XX_INT_ENABLE)
-	volatile uint32_t last_interrupt_timestamp;
+volatile uint32_t last_interrupt_timestamp;
 
 static inline int bmi3_read_n(const struct motion_sensor_t *s, const int reg,
 			      uint8_t *data_ptr, const int len)
@@ -61,7 +64,7 @@ static void irq_set_orientation(struct motion_sensor_t *s)
 	uint8_t orient_data;
 
 	enum motionsensor_orientation orientation =
-					MOTIONSENSE_ORIENTATION_UNKNOWN;
+		MOTIONSENSE_ORIENTATION_UNKNOWN;
 
 	RETURN_ERROR(bmi3_read_n(s, BMI3_FEATURE_EVENT_EXT, reg_data, 4));
 
@@ -94,7 +97,7 @@ static void irq_set_orientation(struct motion_sensor_t *s)
 	}
 }
 
-#endif  /* CONFIG_BMI_ORIENTATION_SENSOR */
+#endif /* CONFIG_BMI_ORIENTATION_SENSOR */
 
 /*
  * bmi3xx_interrupt - called when the sensor activates the interrupt line.
@@ -121,14 +124,14 @@ static int enable_fifo(const struct motion_sensor_t *s, int enable)
 		if (s->type == MOTIONSENSE_TYPE_ACCEL)
 			reg_data[3] |= BMI3_FIFO_ACC_EN;
 		else
-			reg_data[3] |=  BMI3_FIFO_GYR_EN;
+			reg_data[3] |= BMI3_FIFO_GYR_EN;
 
 		data->flags |= 1 << (s->type + BMI_FIFO_FLAG_OFFSET);
 	} else {
 		if (s->type == MOTIONSENSE_TYPE_ACCEL)
 			reg_data[3] &= ~BMI3_FIFO_ACC_EN;
 		else
-			reg_data[3] &=  ~BMI3_FIFO_GYR_EN;
+			reg_data[3] &= ~BMI3_FIFO_GYR_EN;
 
 		data->flags &= ~(1 << (s->type + BMI_FIFO_FLAG_OFFSET));
 	}
@@ -139,7 +142,7 @@ static int enable_fifo(const struct motion_sensor_t *s, int enable)
 static int config_interrupt(const struct motion_sensor_t *s)
 {
 	int ret;
-	uint8_t reg_data[6] = {0};
+	uint8_t reg_data[6] = { 0 };
 
 	if (s->type != MOTIONSENSE_TYPE_ACCEL)
 		return EC_SUCCESS;
@@ -162,8 +165,8 @@ static int config_interrupt(const struct motion_sensor_t *s)
 	reg_data[5] = BMI3_SET_BITS(reg_data[5], BMI3_FFULL_INT, BMI3_INT1);
 	if (IS_ENABLED(CONFIG_BMI_ORIENTATION_SENSOR)) {
 		/* Map orientation to INT1 pin */
-		reg_data[2] = BMI3_SET_BITS(reg_data[2], BMI3_ORIENT_INT,
-						BMI3_INT1);
+		reg_data[2] =
+			BMI3_SET_BITS(reg_data[2], BMI3_ORIENT_INT, BMI3_INT1);
 	}
 
 	ret = bmi3_write_n(s, BMI3_REG_INT_MAP1, &reg_data[2], 4);
@@ -186,8 +189,8 @@ static int config_interrupt(const struct motion_sensor_t *s)
 	reg_data[2] = BMI3_SET_BIT_POS0(reg_data[2], BMI3_INT1_LVL,
 					BMI3_INT_ACTIVE_LOW);
 
-	reg_data[2] = BMI3_SET_BITS(reg_data[2], BMI3_INT1_OD,
-				    BMI3_INT_PUSH_PULL);
+	reg_data[2] =
+		BMI3_SET_BITS(reg_data[2], BMI3_INT1_OD, BMI3_INT_PUSH_PULL);
 
 	reg_data[2] = BMI3_SET_BITS(reg_data[2], BMI3_INT1_OUTPUT_EN,
 				    BMI3_INT_OUTPUT_ENABLE);
@@ -287,17 +290,17 @@ static void bmi3_parse_fifo_data(struct motion_sensor_t *s,
 				rotate(v, *sens_output->rot_standard_ref, v);
 
 				if (IS_ENABLED(CONFIG_ACCEL_FIFO)) {
-					struct ec_response_motion_sensor_data vect;
+					struct ec_response_motion_sensor_data
+						vect;
 
 					vect.data[X] = v[X];
 					vect.data[Y] = v[Y];
 					vect.data[Z] = v[Z];
 					vect.flags = 0;
-					vect.sensor_num = sens_output -
-						motion_sensors;
-					motion_sense_fifo_stage_data(&vect,
-							sens_output, 3,
-							last_ts);
+					vect.sensor_num =
+						sens_output - motion_sensors;
+					motion_sense_fifo_stage_data(
+						&vect, sens_output, 3, last_ts);
 				} else {
 					motion_sense_push_raw_xyz(sens_output);
 				}
@@ -313,8 +316,7 @@ static void bmi3_parse_fifo_data(struct motion_sensor_t *s,
  * For now, we just print out. We should set a bitmask motion sense code will
  * act upon.
  */
-static int irq_handler(struct motion_sensor_t *s,
-		uint32_t *event)
+static int irq_handler(struct motion_sensor_t *s, uint32_t *event)
 {
 	bool has_read_fifo = false;
 	uint16_t int_status[2];
@@ -335,15 +337,15 @@ static int irq_handler(struct motion_sensor_t *s,
 			irq_set_orientation(s);
 
 		if ((int_status[1] &
-		    (BMI3_INT_STATUS_FWM | BMI3_INT_STATUS_FFULL)) == 0)
+		     (BMI3_INT_STATUS_FWM | BMI3_INT_STATUS_FFULL)) == 0)
 			break;
 
 		/* Get the FIFO fill level in words */
 		RETURN_ERROR(bmi3_read_n(s, BMI3_REG_FIFO_FILL_LVL,
 					 (uint8_t *)reg_data, 4));
 
-		reg_data[1] = BMI3_GET_BIT_POS0(reg_data[1],
-						BMI3_FIFO_FILL_LVL);
+		reg_data[1] =
+			BMI3_GET_BIT_POS0(reg_data[1], BMI3_FIFO_FILL_LVL);
 
 		/* Add space for the initial 16bit read. */
 		fifo_frame.available_fifo_len = reg_data[1] + 1;
@@ -354,16 +356,15 @@ static int irq_handler(struct motion_sensor_t *s,
 		 */
 		if (fifo_frame.available_fifo_len > ARRAY_SIZE(fifo_frame.data))
 			CPRINTS("unexpected large FIFO: %d",
-					fifo_frame.available_fifo_len);
+				fifo_frame.available_fifo_len);
 
 		fifo_frame.available_fifo_len =
 			MIN(fifo_frame.available_fifo_len,
-					ARRAY_SIZE(fifo_frame.data));
+			    ARRAY_SIZE(fifo_frame.data));
 		/* Read FIFO data */
-		RETURN_ERROR(bmi3_read_n(s, BMI3_REG_FIFO_DATA,
-					 (uint8_t *)fifo_frame.data,
-					 fifo_frame.available_fifo_len *
-					 sizeof(uint16_t)));
+		RETURN_ERROR(bmi3_read_n(
+			s, BMI3_REG_FIFO_DATA, (uint8_t *)fifo_frame.data,
+			fifo_frame.available_fifo_len * sizeof(uint16_t)));
 
 		bmi3_parse_fifo_data(s, &fifo_frame, last_interrupt_timestamp);
 		has_read_fifo = true;
@@ -381,50 +382,13 @@ static int read_temp(const struct motion_sensor_t *s, int *temp_ptr)
 	return EC_ERROR_UNIMPLEMENTED;
 }
 
-static int reset_offset(const struct motion_sensor_t *s, uint8_t offset_en)
-{
-	uint8_t offset_sel[2] = { BMI3_REG_UGAIN_OFF_SEL, 0 };
-	uint8_t reg_data[4] = { 0 };
-
-	/* Reset the existing offset values by setting the bits in DMA*/
-	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX,
-				offset_sel, 2));
-
-	reg_data[0] = offset_en;
-	reg_data[1] = 0;
-
-	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX_DATA,
-				reg_data, 2));
-
-	/* Update the offset change to the sensor engine */
-	reg_data[0] = (uint8_t)(BMI3_CMD_USR_GAIN_OFFS_UPDATE &
-				BMI3_SET_LOW_BYTE);
-	reg_data[1] = (uint8_t)((BMI3_CMD_USR_GAIN_OFFS_UPDATE &
-				 BMI3_SET_HIGH_BYTE) >> 8);
-	RETURN_ERROR(bmi3_write_n(s, BMI3_REG_CMD, reg_data, 2));
-
-	/* Delay time for offset update */
-	msleep(OFFSET_UPDATE_DELAY);
-
-	/* Read the configuration from the feature engine register */
-	RETURN_ERROR(bmi3_read_n(s, BMI3_FEATURE_IO_1, reg_data, 4));
-
-	if ((reg_data[3] & BMI3_UGAIN_OFFS_UPD_COMPLETE)
-		&& ((reg_data[2] & BMI3_FEATURE_IO_1_ERROR_MASK)
-			    == BMI3_FEATURE_IO_1_NO_ERROR)) {
-		return EC_SUCCESS;
-	}
-
-	return EC_ERROR_NOT_CALIBRATED;
-}
-
 int get_gyro_offset(const struct motion_sensor_t *s, intv3_t v)
 {
 	int i;
 	uint8_t reg_data[14] = { 0 };
 
 	/* Get the accel offset values */
-	RETURN_ERROR(bmi3_read_n(s, GYR_DP_OFF_X, reg_data, 14));
+	RETURN_ERROR(bmi3_read_n(s, BMI3_GYR_DP_OFF_X, reg_data, 14));
 
 	v[0] = ((uint16_t)(reg_data[3] << 8) | reg_data[2]) & 0x03FF;
 	v[1] = ((uint16_t)(reg_data[7] << 8) | reg_data[6]) & 0x03FF;
@@ -444,53 +408,23 @@ int get_gyro_offset(const struct motion_sensor_t *s, intv3_t v)
 static int write_gyro_offset(const struct motion_sensor_t *s, int *val)
 {
 	uint8_t reg_data[6] = { 0 };
-	uint8_t base_addr[2] = { BMI3_GYRO_OFFSET_ADDR, 0 };
-	uint8_t offset_sel[2] = { BMI3_REG_UGAIN_OFF_SEL, 0 };
 
-	/* Enable user gain/offset update*/
-	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX,
-				    offset_sel, 2));
-	reg_data[0] = 0;
-	reg_data[1] = 0;
-	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX_DATA,
-				    reg_data, 2));
-	/*
-	 * Set the user gyro offset base address to feature engine
-	 * transmission address to start DMA transaction
-	 */
-	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX,
-				    base_addr, 2));
-
+	/* x-axis offset */
 	reg_data[0] = (uint8_t)(val[0] & BMI3_SET_LOW_BYTE);
 	reg_data[1] = (uint8_t)((val[0] & 0x0300) >> 8);
+	/* y-axis offset */
 	reg_data[2] = (uint8_t)(val[1] & BMI3_SET_LOW_BYTE);
 	reg_data[3] = (uint8_t)((val[1] & 0x0300) >> 8);
+	/* z-axis offset */
 	reg_data[4] = (uint8_t)(val[2] & BMI3_SET_LOW_BYTE);
 	reg_data[5] = (uint8_t)((val[2] & 0x0300) >> 8);
 
-	/* Set the configuration to the feature engine register */
-	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX_DATA,
-				    reg_data, 6));
+	/* Update the gyro data path offset registers */
+	RETURN_ERROR(bmi3_write_n(s, BMI3_GYR_DP_OFF_X, &reg_data[0], 2));
+	RETURN_ERROR(bmi3_write_n(s, BMI3_GYR_DP_OFF_Y, &reg_data[2], 2));
+	RETURN_ERROR(bmi3_write_n(s, BMI3_GYR_DP_OFF_Z, &reg_data[4], 2));
 
-	/* Update the offset to the sensor engine */
-	reg_data[0] = (uint8_t)(BMI3_CMD_USR_GAIN_OFFS_UPDATE &
-				 BMI3_SET_LOW_BYTE);
-	reg_data[1] = (uint8_t)((BMI3_CMD_USR_GAIN_OFFS_UPDATE &
-				 BMI3_SET_HIGH_BYTE) >> 8);
-	RETURN_ERROR(bmi3_write_n(s, BMI3_REG_CMD, reg_data, 2));
-
-	msleep(OFFSET_UPDATE_DELAY);
-
-	/* Read the configuration from the feature engine register */
-	RETURN_ERROR(bmi3_read_n(s, BMI3_FEATURE_IO_1, reg_data, 4));
-
-	if ((reg_data[3] & BMI3_UGAIN_OFFS_UPD_COMPLETE)
-		&& ((reg_data[2] & BMI3_FEATURE_IO_1_ERROR_MASK)
-			    == BMI3_FEATURE_IO_1_NO_ERROR)) {
-		return EC_SUCCESS;
-	}
-
-	return EC_ERROR_NOT_CALIBRATED;
+	return EC_SUCCESS;
 }
 
 int set_gyro_offset(const struct motion_sensor_t *s, intv3_t v)
@@ -501,7 +435,7 @@ int set_gyro_offset(const struct motion_sensor_t *s, intv3_t v)
 
 	for (i = X; i <= Z; ++i) {
 		val[i] = round_divide((int64_t)v[i] * BMI_OFFSET_GYRO_DIV_MDS,
-					BMI_OFFSET_GYRO_MULTI_MDS);
+				      BMI3_OFFSET_GYR_MDPS);
 		if (val[i] > 511)
 			val[i] = 511;
 		if (val[i] < -512)
@@ -520,9 +454,6 @@ int set_gyro_offset(const struct motion_sensor_t *s, intv3_t v)
 	reg_data[3] = 0x00;
 	RETURN_ERROR(bmi3_write_n(s, BMI3_REG_ACC_CONF, reg_data, 4));
 
-	/* Reset the existing offset values */
-	RETURN_ERROR(reset_offset(s, 2));
-
 	/* Set the gyro offset in the sensor registers */
 	RETURN_ERROR(write_gyro_offset(s, val));
 
@@ -538,15 +469,15 @@ int get_accel_offset(const struct motion_sensor_t *s, intv3_t v)
 	uint8_t reg_data[14] = { 0 };
 
 	/* Get the accel offset values from user registers */
-	RETURN_ERROR(bmi3_read_n(s, ACC_DP_OFF_X, reg_data, 14));
+	RETURN_ERROR(bmi3_read_n(s, BMI3_ACC_DP_OFF_X, reg_data, 14));
 
-	v[0] = ((uint16_t)(reg_data[3] << 8) | reg_data[2]) & 0x1FFF;
-	v[1] = ((uint16_t)(reg_data[7] << 8) | reg_data[6]) & 0x1FFF;
-	v[2] = ((uint16_t)(reg_data[11] << 8) | reg_data[10]) & 0x1FFF;
+	v[0] = ((uint16_t)(reg_data[3] << 8) | reg_data[2]) & 0x3FFF;
+	v[1] = ((uint16_t)(reg_data[7] << 8) | reg_data[6]) & 0x3FFF;
+	v[2] = ((uint16_t)(reg_data[11] << 8) | reg_data[10]) & 0x3FFF;
 
 	for (i = X; i <= Z; ++i) {
-		if (v[i] > 0x0FFF)
-			v[i] = -8192 + v[i];
+		if (v[i] > 0x1FFF)
+			v[i] = -16384 + v[i];
 
 		v[i] = round_divide((int64_t)v[i] * BMI3_OFFSET_ACC_MULTI_MG,
 				    BMI_OFFSET_ACC_DIV_MG);
@@ -557,60 +488,27 @@ int get_accel_offset(const struct motion_sensor_t *s, intv3_t v)
 
 static int write_accel_offsets(const struct motion_sensor_t *s, int *val)
 {
-	uint8_t base_addr[2] = { BMI3_ACC_OFFSET_ADDR, 0 };
-	uint8_t offset_sel[2] = { BMI3_REG_UGAIN_OFF_SEL, 0 };
-	uint8_t reg_data[6] = {0};
+	uint8_t reg_data[6] = { 0 };
 
-	/* Enable user gain/offset update*/
-	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX,
-				    offset_sel, 2));
-	reg_data[0] = 0;
-	reg_data[1] = 0;
-	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX_DATA,
-				    reg_data, 2));
-	/*
-	 * Set the user accel offset base address to feature engine
-	 * transmission address to start DMA transaction
-	 */
-	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX,
-				    base_addr, 2));
-
+	/* x-axis offset */
 	reg_data[0] = (uint8_t)(val[0] & BMI3_SET_LOW_BYTE);
-	reg_data[1] = (uint8_t)((val[0] & 0x1F00) >> 8);
+	reg_data[1] = (uint8_t)((val[0] & 0x3F00) >> 8);
+	/* y-axis offset */
 	reg_data[2] = (uint8_t)(val[1] & BMI3_SET_LOW_BYTE);
-	reg_data[3] = (uint8_t)((val[1] & 0x1F00) >> 8);
+	reg_data[3] = (uint8_t)((val[1] & 0x3F00) >> 8);
+	/* z-axis offset */
 	reg_data[4] = (uint8_t)(val[2] & BMI3_SET_LOW_BYTE);
-	reg_data[5] = (uint8_t)((val[2] & 0x1F00) >> 8);
+	reg_data[5] = (uint8_t)((val[2] & 0x3F00) >> 8);
 
-	/* Set the configuration to the feature engine register */
-	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX_DATA,
-				    reg_data, 6));
+	/* Update the acc data path offset registers */
+	RETURN_ERROR(bmi3_write_n(s, BMI3_ACC_DP_OFF_X, &reg_data[0], 2));
+	RETURN_ERROR(bmi3_write_n(s, BMI3_ACC_DP_OFF_Y, &reg_data[2], 2));
+	RETURN_ERROR(bmi3_write_n(s, BMI3_ACC_DP_OFF_Z, &reg_data[4], 2));
 
-	/* Update the offset to the sensor engine */
-	reg_data[0] = (uint8_t)(BMI3_CMD_USR_GAIN_OFFS_UPDATE &
-				BMI3_SET_LOW_BYTE);
-
-	reg_data[1] = (uint8_t)((BMI3_CMD_USR_GAIN_OFFS_UPDATE &
-				 BMI3_SET_HIGH_BYTE) >> 8);
-
-	RETURN_ERROR(bmi3_write_n(s, BMI3_REG_CMD, reg_data, 2));
-
-	msleep(OFFSET_UPDATE_DELAY);
-
-	/* Read the configuration from the feature engine register */
-	RETURN_ERROR(bmi3_read_n(s, BMI3_FEATURE_IO_1, reg_data, 4));
-
-	if ((reg_data[3] & BMI3_UGAIN_OFFS_UPD_COMPLETE)
-		&& ((reg_data[2] & BMI3_FEATURE_IO_1_ERROR_MASK)
-			    == BMI3_FEATURE_IO_1_NO_ERROR)) {
-		return EC_SUCCESS;
-	}
-
-	return EC_ERROR_NOT_CALIBRATED;
+	return EC_SUCCESS;
 }
 
-int set_accel_offset(const struct motion_sensor_t *s, intv3_t v,
-					    uint8_t reset_en)
+int set_accel_offset(const struct motion_sensor_t *s, intv3_t v)
 {
 	uint8_t reg_data[4] = { 0 };
 	uint8_t saved_conf[6] = { 0 };
@@ -619,12 +517,12 @@ int set_accel_offset(const struct motion_sensor_t *s, intv3_t v,
 	for (i = X; i <= Z; ++i) {
 		val[i] = round_divide((int64_t)v[i] * BMI_OFFSET_ACC_DIV_MG,
 				      BMI3_OFFSET_ACC_MULTI_MG);
-		if (val[i] > 4095)
-			val[i] = 4095;
-		if (val[i] < -4096)
-			val[i] = -4096;
+		if (val[i] > 8191)
+			val[i] = 8191;
+		if (val[i] < -8192)
+			val[i] = -8192;
 		if (val[i] < 0)
-			val[i] += 8192;
+			val[i] += 16384;
 	}
 
 	/* Set the power mode as suspend */
@@ -637,90 +535,11 @@ int set_accel_offset(const struct motion_sensor_t *s, intv3_t v,
 	reg_data[3] = 0x00;
 	RETURN_ERROR(bmi3_write_n(s, BMI3_REG_ACC_CONF, reg_data, 4));
 
-	/* Reset the existing offset values */
-	if (reset_en) {
-		/* Reset is only done for writing offset and not for FOC */
-		RETURN_ERROR(reset_offset(s, 1));
-	}
-
 	/* Set the accel offset in the sensor registers */
 	RETURN_ERROR(write_accel_offsets(s, val));
 
 	/* Restore ACC_CONF by storing saved_conf data */
 	RETURN_ERROR(bmi3_write_n(s, BMI3_REG_ACC_CONF, &saved_conf[2], 4));
-
-	return EC_SUCCESS;
-}
-
-static int wait_and_read_data(const struct motion_sensor_t *s,
-			      intv3_t accel_data)
-{
-	uint8_t reg_data[8] = {0};
-
-	/* Retry 5 times */
-	uint8_t try_cnt = FOC_TRY_COUNT;
-
-	/* Check if data is ready */
-	while (try_cnt && (!(reg_data[2] & BMI3_STAT_DATA_RDY_ACCEL_MSK))) {
-		/* 20ms delay for 50Hz ODR */
-		msleep(FOC_DELAY);
-
-		/* Read the status register */
-		RETURN_ERROR(bmi3_read_n(s, BMI3_REG_STATUS, reg_data, 4));
-		try_cnt--;
-	}
-
-	if (!(reg_data[2] & BMI3_STAT_DATA_RDY_ACCEL_MSK))
-		return EC_ERROR_TIMEOUT;
-
-	/* Read the sensor data */
-	RETURN_ERROR(bmi3_read_n(s, BMI3_REG_ACC_DATA_X, reg_data, 8));
-
-	accel_data[0] = ((int16_t)((reg_data[3] << 8) | reg_data[2]));
-	accel_data[1] = ((int16_t)((reg_data[5] << 8) | reg_data[4]));
-	accel_data[2] = ((int16_t)((reg_data[7] << 8) | reg_data[6]));
-
-	rotate(accel_data, *s->rot_standard_ref, accel_data);
-
-	return EC_SUCCESS;
-}
-
-/*!
- * @brief This internal API performs Fast Offset Compensation for accelerometer.
- */
-static int8_t perform_accel_foc(struct motion_sensor_t *s, int *target,
-				int sens_range)
-{
-	intv3_t accel_data, offset;
-	int32_t delta_value[3] = {0, 0, 0};
-
-	/* Variable to define count */
-	uint8_t i, loop, sample_count = 0;
-
-	for (loop = 0; loop < BMI3_FOC_SAMPLE_LIMIT; loop++) {
-
-		RETURN_ERROR(wait_and_read_data(s, accel_data));
-
-		sample_count++;
-
-		/* Store the data in a temporary structure */
-		delta_value[0] += accel_data[0] - target[X];
-		delta_value[1] += accel_data[1] - target[Y];
-		delta_value[2] += accel_data[2] - target[Z];
-	}
-
-	/* The data is in LSB so -> [(LSB)*1000*range/2^15] (mdps | mg) */
-	for (i = X; i <= Z; ++i) {
-		offset[i] = (((int64_t)(delta_value[i] * 1000 * sens_range
-			     / sample_count) >> 15) * -1);
-	}
-
-	rotate_inv(offset, *s->rot_standard_ref, offset);
-
-	/* Set accel offset without resetting the existing offsets
-	 * since we calculated the bias with the existing offsets
-	 */
-	RETURN_ERROR(set_accel_offset(s, offset, BMI3_DISABLE));
 
 	return EC_SUCCESS;
 }
@@ -737,8 +556,8 @@ static int set_gyro_foc_config(struct motion_sensor_t *s)
 	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX, base_addr, 2));
 
 	/* Read the configuration from the feature engine register */
-	RETURN_ERROR(bmi3_read_n(s, BMI3_FEATURE_ENGINE_DMA_TX_DATA, reg_data,
-			4));
+	RETURN_ERROR(
+		bmi3_read_n(s, BMI3_FEATURE_ENGINE_DMA_TX_DATA, reg_data, 4));
 	/* Enable self calibration */
 	reg_data[2] |= 0x07;
 
@@ -746,12 +565,12 @@ static int set_gyro_foc_config(struct motion_sensor_t *s)
 
 	/* Set the configuration to the feature engine register */
 	RETURN_ERROR(bmi3_write_n(s, BMI3_FEATURE_ENGINE_DMA_TX_DATA,
-			&reg_data[2], 2));
+				  &reg_data[2], 2));
 
 	/* Trigger bmi3 gyro self calibration */
 	reg_data[0] = (uint8_t)(BMI3_CMD_SELF_CALIB & BMI3_SET_LOW_BYTE);
-	reg_data[1] = (uint8_t)((BMI3_CMD_SELF_CALIB & BMI3_SET_HIGH_BYTE)
-				>> 8);
+	reg_data[1] =
+		(uint8_t)((BMI3_CMD_SELF_CALIB & BMI3_SET_HIGH_BYTE) >> 8);
 
 	RETURN_ERROR(bmi3_write_n(s, BMI3_REG_CMD, reg_data, 2));
 
@@ -770,13 +589,6 @@ static int get_calib_result(struct motion_sensor_t *s)
 		RETURN_ERROR(bmi3_read_n(s, BMI3_FEATURE_IO_1, reg_data, 4));
 
 		switch (s->type) {
-		case MOTIONSENSE_TYPE_ACCEL:
-			if ((reg_data[3] & BMI3_UGAIN_OFFS_UPD_COMPLETE)
-			    && ((reg_data[2] & BMI3_FEATURE_IO_1_ERROR_MASK)
-			    == BMI3_FEATURE_IO_1_NO_ERROR)) {
-				return EC_SUCCESS;
-			}
-			break;
 		case MOTIONSENSE_TYPE_GYRO:
 			if (reg_data[2] & BMI3_SC_ST_STATUS_MASK) {
 				/* Check calibration result */
@@ -795,22 +607,17 @@ static int get_calib_result(struct motion_sensor_t *s)
 static int perform_calib(struct motion_sensor_t *s, int enable)
 {
 	int ret;
-	intv3_t target = {0, 0, 0};
-	uint8_t saved_conf[6] = {0};
-
-	/* Sensor is configured to be in 16G range */
-	int sens_range = 16;
+	uint8_t saved_conf[6] = { 0 };
 
 	/* Variable to set the accelerometer configuration value 50Hz for FOC */
-	uint8_t acc_conf_data[2] = {BMI3_FOC_ACC_CONF_VAL_LSB,
-					BMI3_FOC_ACC_CONF_VAL_MSB};
+	uint8_t acc_conf_data[2] = { BMI3_FOC_ACC_CONF_VAL_LSB,
+				     BMI3_FOC_ACC_CONF_VAL_MSB };
 
 	if (!enable)
 		return EC_SUCCESS;
 
 	/* Get default configurations for the type of feature selected. */
-	RETURN_ERROR(bmi3_read_n(s, BMI3_REG_ACC_CONF, saved_conf,
-				6));
+	RETURN_ERROR(bmi3_read_n(s, BMI3_REG_ACC_CONF, saved_conf, 6));
 
 	ret = bmi3_write_n(s, BMI3_REG_ACC_CONF, acc_conf_data, 2);
 	if (ret)
@@ -820,19 +627,8 @@ static int perform_calib(struct motion_sensor_t *s, int enable)
 
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:
-		target[Z] = BMI3_ACC_DATA_PLUS_1G(sens_range);
-
-		/* Perform accel calibration */
-		ret = perform_accel_foc(s, target, sens_range);
-		if (ret)
-			goto end_calib;
-
-		/* Get caliration results */
-		ret = get_calib_result(s);
-		if (ret)
-			goto end_calib;
-
-		break;
+		ret = EC_RES_INVALID_COMMAND;
+		goto end_calib;
 	case MOTIONSENSE_TYPE_GYRO:
 		ret = set_gyro_foc_config(s);
 		if (ret)
@@ -849,7 +645,6 @@ static int perform_calib(struct motion_sensor_t *s, int enable)
 		goto end_calib;
 	}
 
-
 end_calib:
 	/* Restore ACC_CONF before exiting */
 	RETURN_ERROR(bmi3_write_n(s, BMI3_REG_ACC_CONF, &saved_conf[2], 4));
@@ -858,7 +653,7 @@ end_calib:
 }
 
 static int get_offset(const struct motion_sensor_t *s, int16_t *offset,
-		    int16_t *temp)
+		      int16_t *temp)
 {
 	int i;
 	intv3_t v;
@@ -891,9 +686,8 @@ static int get_offset(const struct motion_sensor_t *s, int16_t *offset,
 	return EC_SUCCESS;
 }
 
-static int set_offset(const struct motion_sensor_t *s,
-		      const int16_t *offset,
-		      int16_t    temp)
+static int set_offset(const struct motion_sensor_t *s, const int16_t *offset,
+		      int16_t temp)
 {
 	intv3_t v = { offset[X], offset[Y], offset[Z] };
 	(void)temp;
@@ -903,7 +697,7 @@ static int set_offset(const struct motion_sensor_t *s,
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:
 		/* Offset should be in units of mg */
-		RETURN_ERROR(set_accel_offset(s, v, BMI3_ENABLE));
+		RETURN_ERROR(set_accel_offset(s, v));
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
 		/* Offset should be in units of mdps */
@@ -917,9 +711,9 @@ static int set_offset(const struct motion_sensor_t *s,
 }
 
 #ifdef CONFIG_BODY_DETECTION
-int get_rms_noise(const struct motion_sensor_t *s)
+static int get_rms_noise(const struct motion_sensor_t *s)
 {
-	return EC_ERROR_UNIMPLEMENTED;
+	return bmi_get_rms_noise(s, BMI3_ACCEL_RMS_NOISE_100HZ);
 }
 #endif
 
@@ -936,7 +730,7 @@ static int set_scale(const struct motion_sensor_t *s, const uint16_t *scale,
 }
 
 static int get_scale(const struct motion_sensor_t *s, uint16_t *scale,
-		   int16_t *temp)
+		     int16_t *temp)
 {
 	struct accelgyro_saved_data_t *saved_data = BMI_GET_SAVED_DATA(s);
 
@@ -949,7 +743,6 @@ static int get_scale(const struct motion_sensor_t *s, uint16_t *scale,
 	return EC_SUCCESS;
 }
 
-
 static int get_data_rate(const struct motion_sensor_t *s)
 {
 	struct accelgyro_saved_data_t *saved_data = BMI_GET_SAVED_DATA(s);
@@ -957,8 +750,7 @@ static int get_data_rate(const struct motion_sensor_t *s)
 	return saved_data->odr;
 }
 
-static int set_data_rate(const struct motion_sensor_t *s,
-			 int rate, int rnd)
+static int set_data_rate(const struct motion_sensor_t *s, int rate, int rnd)
 {
 	int ret;
 	int normalized_rate = 0;
@@ -968,8 +760,8 @@ static int set_data_rate(const struct motion_sensor_t *s,
 	struct accelgyro_saved_data_t *saved_data = BMI_GET_SAVED_DATA(s);
 
 	if (rate > 0)
-		RETURN_ERROR(bmi_get_normalized_rate(s, rate, rnd,
-						 &normalized_rate, &reg_val));
+		RETURN_ERROR(bmi_get_normalized_rate(
+			s, rate, rnd, &normalized_rate, &reg_val));
 
 	/*
 	 * Lock accel resource to prevent another task from attempting
@@ -997,8 +789,8 @@ static int set_data_rate(const struct motion_sensor_t *s,
 			 * Accel does not have suspend mode.
 			 */
 			reg_data[3] = BMI3_SET_BITS(reg_data[3],
-				BMI3_POWER_MODE,
-				BMI3_ACC_MODE_DISABLE);
+						    BMI3_POWER_MODE,
+						    BMI3_ACC_MODE_DISABLE);
 
 			saved_data->odr = 0;
 		} else if (saved_data->odr == 0) {
@@ -1007,8 +799,8 @@ static int set_data_rate(const struct motion_sensor_t *s,
 			 * normal
 			 */
 			reg_data[3] = BMI3_SET_BITS(reg_data[3],
-				      BMI3_POWER_MODE,
-				      BMI3_ACC_MODE_NORMAL);
+						    BMI3_POWER_MODE,
+						    BMI3_ACC_MODE_NORMAL);
 		}
 	} else if (s->type == MOTIONSENSE_TYPE_GYRO) {
 		if (rate == 0) {
@@ -1021,8 +813,8 @@ static int set_data_rate(const struct motion_sensor_t *s,
 			 * however keep internal driver enabled
 			 */
 			reg_data[3] = BMI3_SET_BITS(reg_data[3],
-				      BMI3_POWER_MODE,
-				      BMI3_GYR_MODE_SUSPEND);
+						    BMI3_POWER_MODE,
+						    BMI3_GYR_MODE_SUSPEND);
 
 			saved_data->odr = 0;
 		} else if (saved_data->odr == 0) {
@@ -1030,8 +822,8 @@ static int set_data_rate(const struct motion_sensor_t *s,
 			 * normal
 			 */
 			reg_data[3] = BMI3_SET_BITS(reg_data[3],
-				      BMI3_POWER_MODE,
-				      BMI3_GYR_MODE_NORMAL);
+						    BMI3_POWER_MODE,
+						    BMI3_GYR_MODE_NORMAL);
 		}
 	}
 
@@ -1068,7 +860,7 @@ static int set_range(struct motion_sensor_t *s, int range, int rnd)
 	int ret;
 	uint8_t index, sens_size = 0;
 	uint8_t reg_data[4] = { 0 };
-	int (*sensor_range)[2];
+	int(*sensor_range)[2];
 
 	int acc_sensor_range[4][2] = {
 		{ 2, BMI3_ACC_RANGE_2G },
@@ -1119,8 +911,8 @@ static int set_range(struct motion_sensor_t *s, int range, int rnd)
 					    sensor_range[index][1]);
 
 		/* Set the accel/gyro configurations. */
-		ret = bmi3_write_n(s, BMI3_REG_ACC_CONF + s->type,
-				   &reg_data[2], 2);
+		ret = bmi3_write_n(s, BMI3_REG_ACC_CONF + s->type, &reg_data[2],
+				   2);
 
 		/* Now that we have set the range, update the driver's value. */
 		if (ret == EC_SUCCESS)
@@ -1198,8 +990,8 @@ static int init(struct motion_sensor_t *s)
 	 * BMI3xx driver only supports MOTIONSENSE_TYPE_ACCEL and
 	 * MOTIONSENSE_TYPE_GYR0
 	 */
-	if (s->type != MOTIONSENSE_TYPE_ACCEL
-	    && s->type != MOTIONSENSE_TYPE_GYRO)
+	if (s->type != MOTIONSENSE_TYPE_ACCEL &&
+	    s->type != MOTIONSENSE_TYPE_GYRO)
 		return EC_ERROR_UNIMPLEMENTED;
 
 	/* Read chip id */
@@ -1210,10 +1002,11 @@ static int init(struct motion_sensor_t *s)
 
 	if (s->type == MOTIONSENSE_TYPE_ACCEL) {
 		/* Reset bmi3 device */
-		reg_data[0] = (uint8_t)(BMI3_CMD_SOFT_RESET
-					& BMI3_SET_LOW_BYTE);
-		reg_data[1] = (uint8_t)((BMI3_CMD_SOFT_RESET
-					 & BMI3_SET_HIGH_BYTE) >> 8);
+		reg_data[0] =
+			(uint8_t)(BMI3_CMD_SOFT_RESET & BMI3_SET_LOW_BYTE);
+		reg_data[1] =
+			(uint8_t)((BMI3_CMD_SOFT_RESET & BMI3_SET_HIGH_BYTE) >>
+				  8);
 
 		RETURN_ERROR(bmi3_write_n(s, BMI3_REG_CMD, reg_data, 2));
 
@@ -1238,8 +1031,8 @@ static int init(struct motion_sensor_t *s)
 	saved_data->odr = 0;
 
 	/* Flags used in FIFO parsing */
-	data->flags &= ~(BMI_FLAG_SEC_I2C_ENABLED
-			| (BMI_FIFO_ALL_MASK << BMI_FIFO_FLAG_OFFSET));
+	data->flags &= ~(BMI_FLAG_SEC_I2C_ENABLED |
+			 (BMI_FIFO_ALL_MASK << BMI_FIFO_FLAG_OFFSET));
 
 	return sensor_init_done(s);
 }

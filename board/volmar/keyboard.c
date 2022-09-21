@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -40,8 +40,8 @@ static const struct ec_response_keybd_config volmar_kb = {
 	},
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
-__override const struct ec_response_keybd_config
-*board_vivaldi_keybd_config(void)
+__override const struct ec_response_keybd_config *
+board_vivaldi_keybd_config(void)
 {
 	return &volmar_kb;
 }

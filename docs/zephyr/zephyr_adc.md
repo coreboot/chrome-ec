@@ -8,19 +8,11 @@
 
 ## Kconfig Options
 
-Kconfig Option                     | Default state | Documentation
-:--------------------------------- | :------------ | :------------
-`CONFIG_PLATFORM_EC_ADC`           | Enabled       | [EC ADC]
+The [`CONFIG_ADC`] option enables ADC support in the Zephyr EC application.
+Use the [`CONFIG_ADC_SHELL`] option to enable ADC related shell commands.
 
-The following options are available only when `CONFIG_PLATFORM_EC_ADC=y`.
-
-Kconfig sub-option                               | Default | Documentation
-:----------------------------------------------- | :-----: | :------------
-`CONFIG_ADC_SHELL`                               | n       | [CONFIG_ADC_SHELL]
-`CONFIG_PLATFORM_EC_ADC_CMD`                     | y       | [ADC cmd]
-`CONFIG_PLATFORM_EC_ADC_RESOLUTION`              | 10      | [ADC resolution]
-`CONFIG_PLATFORM_EC_ADC_OVERSAMPLING`            | 0       | [ADC oversampling]
-`CONFIG_PLATFORM_EC_ADC_CHANNELS_RUNTIME_CONFIG` | n       | [ADC runtime config]
+Refer to [Kconfig.adc] for all sub-options related to ADC support that are
+specific to the Zephyr EC application.
 
 ## Devicetree Nodes
 
@@ -56,7 +48,6 @@ enumeration and the Zephyr ADC driver's channel_id.
 named-adc-channels {
 	compatible = "named-adc-channels";
 	vbus {
-		label = "VBUS";
 		enum-name = "ADC_VBUS";
 		io-channels = <&adc0 1>;
 		/* Measure VBUS through a 1/10 voltage divider */
@@ -158,22 +149,18 @@ named-adc-channels {
 	compatible = "named-adc-channels";
 
 	adc_charger: charger {
-		label = "TEMP_CHARGER";
 		enum-name = "ADC_TEMP_SENSOR_CHARGER";
 		io-channels = <&adc0 0>;
 	};
 	adc_pp3300_regulator: pp3300_regulator {
-		label = "TEMP_PP3300_REGULATOR";
 		enum-name = "ADC_TEMP_SENSOR_PP3300_REGULATOR";
 		io-channels = <&adc0 1>;
 	};
 	adc_ddr_soc: ddr_soc {
-		label = "TEMP_DDR_SOC";
 		enum-name = "ADC_TEMP_SENSOR_DDR_SOC";
 		io-channels = <&adc0 8>;
 	};
 	adc_fan: fan {
-		label = "TEMP_FAN";
 		enum-name = "ADC_TEMP_SENSOR_FAN";
 		io-channels = <&adc0 3>;
 	};
@@ -182,17 +169,10 @@ named-adc-channels {
 
 [ADC]: ../ec_terms.md#adc
 [ADC Example]: ../images/volteer_adc.png
-[EC ADC]:
-https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/Kconfig.adc?q=%22menuconfig%20PLATFORM_EC_ADC%22&ss=chromiumos
-[CONFIG_ADC_SHELL]:
+[Kconfig.adc]: ../../zephyr/Kconfig.adc
+[`CONFIG_ADC`]:
+https://docs.zephyrproject.org/latest/kconfig.html#CONFIG_ADC
+[`CONFIG_ADC_SHELL`]:
 https://docs.zephyrproject.org/latest/kconfig.html#CONFIG_ADC_SHELL
-[ADC cmd]:
-https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/Kconfig.adc?q=%22config%20PLATFORM_EC_ADC_CMD%22&ss=chromiumos
-[ADC resolution]:
-https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/Kconfig.adc?q=%22config%20PLATFORM_EC_ADC_RESOLUTION%22&ss=chromiumos
-[ADC oversampling]:
-https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/Kconfig.adc?q=%22config%20PLATFORM_EC_ADC_OVERSAMPLING%22&ss=chromiumos
-[ADC runtime config]:
-https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/Kconfig.adc?q=%22config%20PLATFORM_EC_ADC_CHANNELS_RUNTIME_CONFIG%22&ss=chromiumos
 [named-adc.yaml]:
 ../../zephyr/dts/bindings/adc/named-adc.yaml

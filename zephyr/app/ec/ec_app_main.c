@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -6,11 +6,11 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/shell/shell_uart.h>
-#include <zephyr/zephyr.h>
 
 #include "ap_power/ap_pwrseq.h"
 #include "button.h"
 #include "chipset.h"
+#include "cros_board_info.h"
 #include "ec_tasks.h"
 #include "hooks.h"
 #include "keyboard_scan.h"
@@ -38,7 +38,7 @@ void ec_app_main(void)
 	system_print_banner();
 
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_WATCHDOG) &&
-		!IS_ENABLED(CONFIG_WDT_DISABLE_AT_BOOT)) {
+	    !IS_ENABLED(CONFIG_WDT_DISABLE_AT_BOOT)) {
 		watchdog_init();
 	}
 
@@ -75,6 +75,14 @@ void ec_app_main(void)
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOOKS)) {
 		hook_notify(HOOK_INIT);
 	}
+
+	/*
+	 * If the EC has exclusive control over the CBI EEPROM WP signal, have
+	 * the EC set the WP if appropriate.  Note that once the WP is set, the
+	 * EC must be reset via EC_RST_ODL in order for the WP to become unset.
+	 */
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_EEPROM_CBI_WP) && system_is_locked())
+		cbi_latch_eeprom_wp();
 
 	/*
 	 * Print the init time.  Not completely accurate because it can't take

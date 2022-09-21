@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -18,7 +18,7 @@ struct venc_msg {
 	unsigned char msg[288];
 };
 BUILD_ASSERT(member_size(struct venc_msg, msg) <=
-		CONFIG_IPC_SHARED_OBJ_BUF_SIZE);
+	     CONFIG_IPC_SHARED_OBJ_BUF_SIZE);
 
 /* Functions provided by private overlay. */
 void venc_h264_msg_handler(void *data);

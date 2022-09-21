@@ -1,10 +1,11 @@
 /*
- * Copyright 2020 The Chromium OS Authors. All rights reserved.
+ * Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 /* SHA256 module for Chrome EC */
+#include "builtin/assert.h"
 #include "common.h"
 #include "sha256.h"
 #include "util.h"
@@ -31,7 +32,7 @@ enum ncl_sha_type {
  * The base address of the table that holds the function pointer for each
  * SHA256 API in ROM.
  */
-#define NCL_SHA_BASE_ADDR          0x00000100UL
+#define NCL_SHA_BASE_ADDR 0x00000100UL
 struct ncl_sha {
 	/* Get the SHA context size required by SHA APIs. */
 	uint32_t (*get_context_size)(void);
@@ -57,7 +58,8 @@ struct ncl_sha {
 	enum ncl_status (*finish)(void *ctx, uint8_t *hashDigest);
 	/* Perform a complete SHA calculation */
 	enum ncl_status (*calc)(void *ctx, enum ncl_sha_type type,
-			const uint8_t *data, uint32_t Len, uint8_t *hashDigest);
+				const uint8_t *data, uint32_t Len,
+				uint8_t *hashDigest);
 	/* Power on/off the SHA module. */
 	enum ncl_status (*power)(void *ctx, uint8_t enable);
 	/* Reset the SHA hardware and terminate any in-progress operations. */
@@ -95,9 +97,9 @@ uint8_t *SHA256_final(struct sha256_ctx *ctx)
 	return ctx->buf;
 }
 
-static void hmac_SHA256_step(uint8_t *output, uint8_t mask,
-			const uint8_t *key, const int key_len,
-			const uint8_t *data, const int data_len)
+static void hmac_SHA256_step(uint8_t *output, uint8_t mask, const uint8_t *key,
+			     const int key_len, const uint8_t *data,
+			     const int data_len)
 {
 	struct sha256_ctx hmac_ctx;
 	uint8_t *key_pad = hmac_ctx.buf;
@@ -120,7 +122,7 @@ static void hmac_SHA256_step(uint8_t *output, uint8_t mask,
  * hmac_SHA256_step.
  */
 void hmac_SHA256(uint8_t *output, const uint8_t *key, const int key_len,
-		const uint8_t *message, const int message_len)
+		 const uint8_t *message, const int message_len)
 {
 	/* This code does not support key_len > block_size. */
 	ASSERT(key_len <= SHA256_BLOCK_SIZE);
@@ -137,5 +139,5 @@ void hmac_SHA256(uint8_t *output, const uint8_t *key, const int key_len,
 	 * output = hash(o_key_pad || output)
 	 */
 	hmac_SHA256_step(output, 0x5c, key, key_len, output,
-				SHA256_DIGEST_SIZE);
+			 SHA256_DIGEST_SIZE);
 }

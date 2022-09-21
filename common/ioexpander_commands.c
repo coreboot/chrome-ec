@@ -1,7 +1,9 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+
+#include "builtin/assert.h"
 #include "console.h"
 #include "gpio.h"
 #include "ioexpander.h"
@@ -69,14 +71,13 @@ static void print_ioex_info(enum ioex_signal signal)
 
 	changed = last_val_changed(signal, val);
 
-	ccprintf("  %d%c %s%s%s%s%s%s\n", val,
-		 (changed ? '*' : ' '),
+	ccprintf("  %d%c %s%s%s%s%s%s\n", val, (changed ? '*' : ' '),
 		 (flags & GPIO_INPUT ? "I " : ""),
 		 (flags & GPIO_OUTPUT ? "O " : ""),
 		 (flags & GPIO_LOW ? "L " : ""),
 		 (flags & GPIO_HIGH ? "H " : ""),
 		 (flags & GPIO_OPEN_DRAIN ? "ODR " : ""),
-		ioex_get_name(signal));
+		 ioex_get_name(signal));
 
 	/* Flush console to avoid truncating output */
 	cflush();
@@ -99,7 +100,7 @@ static enum ec_error_list ioex_set(const char *name, int value)
 	return ioex_set_level(signal, value);
 }
 
-static int command_ioex_set(int argc, char **argv)
+static int command_ioex_set(int argc, const char **argv)
 {
 	char *e;
 	int v;
@@ -116,11 +117,10 @@ static int command_ioex_set(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(ioexset, command_ioex_set,
-			"name <0 | 1>",
+DECLARE_CONSOLE_COMMAND(ioexset, command_ioex_set, "name <0 | 1>",
 			"Set level of a IO expander pin");
 
-static int command_ioex_get(int argc, char **argv)
+static int command_ioex_get(int argc, const char **argv)
 {
 	enum ioex_signal signal;
 
@@ -140,6 +140,5 @@ static int command_ioex_get(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_SAFE_CONSOLE_COMMAND(ioexget, command_ioex_get,
-			     "[name]",
+DECLARE_SAFE_CONSOLE_COMMAND(ioexget, command_ioex_get, "[name]",
 			     "Read level of IO expander pin(s)");

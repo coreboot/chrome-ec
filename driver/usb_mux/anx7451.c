@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -22,17 +22,16 @@
 #define ANX7451_I2C_WAKE_TIMEOUT_MS 20
 #define ANX7451_I2C_WAKE_RETRY_DELAY_US 500
 
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
-static inline int anx7451_read(const struct usb_mux *me,
-			       uint8_t reg, int *val)
+static inline int anx7451_read(const struct usb_mux *me, uint8_t reg, int *val)
 {
 	return i2c_read8(me->i2c_port, me->i2c_addr_flags, reg, val);
 }
 
-static inline int anx7451_write(const struct usb_mux *me,
-				uint8_t reg, uint8_t val)
+static inline int anx7451_write(const struct usb_mux *me, uint8_t reg,
+				uint8_t val)
 {
 	return i2c_write8(me->i2c_port, me->i2c_addr_flags, reg, val);
 }
@@ -96,6 +95,10 @@ static int anx7451_set_mux(const struct usb_mux *me, mux_state_t mux_state,
 
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
+
+	/* This driver treats safe mode as none */
+	if (mux_state == USB_PD_MUX_SAFE_MODE)
+		mux_state = USB_PD_MUX_NONE;
 
 	/*
 	 * Mux is not powered in Z1, and will start up in USB mode.  Ensure any

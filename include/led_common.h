@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -79,8 +79,8 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness);
 void led_enable(int enable);
 
 enum ec_led_state {
-	LED_STATE_OFF   = 0,
-	LED_STATE_ON    = 1,
+	LED_STATE_OFF = 0,
+	LED_STATE_ON = 1,
 	LED_STATE_RESET = 2,
 };
 

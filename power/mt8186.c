@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -21,8 +21,8 @@
  *  - Pressing and releaseing power within that 8s is ignored
  */
 
-#include "assert.h"
 #include "battery.h"
+#include "builtin/assert.h"
 #include "chipset.h"
 #include "common.h"
 #include "gpio.h"
@@ -71,10 +71,11 @@
 #ifndef CONFIG_ZEPHYR
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
-	{GPIO_AP_EC_SYSRST_ODL, POWER_SIGNAL_ACTIVE_LOW, "AP_IN_RST"},
-	{GPIO_AP_IN_SLEEP_L, POWER_SIGNAL_ACTIVE_LOW, "AP_IN_S3"},
-	{GPIO_AP_EC_WDTRST_L, POWER_SIGNAL_ACTIVE_LOW, "AP_WDT_ASSERTED"},
-	{GPIO_AP_EC_WARM_RST_REQ, POWER_SIGNAL_ACTIVE_HIGH, "AP_WARM_RST_REQ"},
+	{ GPIO_AP_EC_SYSRST_ODL, POWER_SIGNAL_ACTIVE_LOW, "AP_IN_RST" },
+	{ GPIO_AP_IN_SLEEP_L, POWER_SIGNAL_ACTIVE_LOW, "AP_IN_S3" },
+	{ GPIO_AP_EC_WDTRST_L, POWER_SIGNAL_ACTIVE_LOW, "AP_WDT_ASSERTED" },
+	{ GPIO_AP_EC_WARM_RST_REQ, POWER_SIGNAL_ACTIVE_HIGH,
+	  "AP_WARM_RST_REQ" },
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 #endif /* CONFIG_ZEPHYR */
@@ -136,7 +137,7 @@ DECLARE_DEFERRED(release_power_button);
 
 void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 {
-	CPRINTS("%s(%d)", __func__, reason);
+	CPRINTS("%s: 0x%x", __func__, reason);
 	report_ap_reset(reason);
 
 	is_shutdown = true;
@@ -145,10 +146,12 @@ void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 	 * transitions to G3.
 	 */
 	GPIO_SET_LEVEL(GPIO_SYS_RST_ODL, 0);
-	CPRINTS("Forcing pmic off with long press.");
-	GPIO_SET_LEVEL(GPIO_EC_PMIC_EN_ODL, 0);
-	hook_call_deferred(&release_power_button_data,
-			   FORCED_SHUTDOWN_DELAY + SECOND);
+	if (reason != CHIPSET_SHUTDOWN_BUTTON) {
+		CPRINTS("Forcing pmic off with long press.");
+		GPIO_SET_LEVEL(GPIO_EC_PMIC_EN_ODL, 0);
+		hook_call_deferred(&release_power_button_data,
+				   FORCED_SHUTDOWN_DELAY + SECOND);
+	}
 
 	task_wake(TASK_ID_CHIPSET);
 }
@@ -191,7 +194,7 @@ DECLARE_DEFERRED(reset_flag_deferred);
 
 void chipset_reset(enum chipset_shutdown_reason reason)
 {
-	CPRINTS("%s: %d", __func__, reason);
+	CPRINTS("%s: 0x%x", __func__, reason);
 	report_ap_reset(reason);
 
 	is_resetting = true;
@@ -278,7 +281,7 @@ enum power_state power_chipset_init(void)
 	} else if (system_get_reset_flags() & EC_RESET_FLAG_AP_OFF) {
 		exit_hard_off = 0;
 	} else if ((system_get_reset_flags() & EC_RESET_FLAG_HIBERNATE) &&
-			gpio_get_level(GPIO_AC_PRESENT)) {
+		   gpio_get_level(GPIO_AC_PRESENT)) {
 		/*
 		 * If AC present, assume this is a wake-up by AC insert.
 		 * Boot EC only.
@@ -297,9 +300,14 @@ enum power_state power_chipset_init(void)
 		 */
 		battery_wait_for_stable();
 
-	if (exit_hard_off)
-		/* Auto-power on */
-		mt8186_exit_off();
+	if (exit_hard_off) {
+		if (init_state == POWER_S5 || init_state == POWER_G3) {
+			/* Auto-power on */
+			mt8186_exit_off();
+		} else {
+			is_exiting_off = false;
+		}
+	}
 
 	if (init_state != POWER_G3 && !exit_hard_off)
 		/* Force shutdown from S5 if the PMIC is already up. */
@@ -365,7 +373,6 @@ enum power_state power_handle_state(enum power_state state)
 			/* Give up, go back to G3. */
 			return POWER_S5G3;
 
-		msleep(500);
 		/* Call hooks now that rails are up */
 		hook_notify(HOOK_CHIPSET_STARTUP);
 		/*
@@ -420,9 +427,18 @@ enum power_state power_handle_state(enum power_state state)
 		 * In case the power button is held awaiting power-off timeout,
 		 * power off immediately now that we're entering S3.
 		 */
-		if (power_button_is_pressed())
+		if (power_button_is_pressed()) {
 			hook_call_deferred(&chipset_force_shutdown_button_data,
 					   -1);
+			/*
+			 * if the ap is shutting down, but it doesn't report
+			 * the reason, report it now.
+			 */
+			if (!is_shutdown)
+				chipset_force_shutdown_button();
+		}
+
+		hook_notify(HOOK_CHIPSET_SUSPEND_COMPLETE);
 
 		return POWER_S3;
 
@@ -473,16 +489,15 @@ static void power_button_changed(void)
 DECLARE_HOOK(HOOK_POWER_BUTTON_CHANGE, power_button_changed, HOOK_PRIO_DEFAULT);
 
 #ifdef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
-__override void power_chipset_handle_sleep_hang(
-		enum sleep_hang_type hang_type)
+__override void power_chipset_handle_sleep_hang(enum sleep_hang_type hang_type)
 {
 	CPRINTS("Warning: Detected sleep hang! Waking host up!");
 	host_set_single_event(EC_HOST_EVENT_HANG_DETECT);
 }
 
-__override void power_chipset_handle_host_sleep_event(
-		enum host_sleep_event state,
-		struct host_sleep_event_context *ctx)
+__override void
+power_chipset_handle_host_sleep_event(enum host_sleep_event state,
+				      struct host_sleep_event_context *ctx)
 {
 	CPRINTS("Handle sleep: %d", state);
 
@@ -503,7 +518,6 @@ __override void power_chipset_handle_host_sleep_event(
 		sleep_set_notify(SLEEP_NOTIFY_RESUME);
 		task_wake(TASK_ID_CHIPSET);
 		sleep_complete_resume(ctx);
-
 	}
 }
 #endif /* CONFIG_POWER_TRACK_HOST_SLEEP_STATE */

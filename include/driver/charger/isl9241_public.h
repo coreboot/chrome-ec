@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -8,10 +8,10 @@
 #ifndef __CROS_EC_DRIVER_CHARGER_ISL9241_PUBLIC_H
 #define __CROS_EC_DRIVER_CHARGER_ISL9241_PUBLIC_H
 
-#define ISL9241_ADDR_FLAGS	0x09
+#define ISL9241_ADDR_FLAGS 0x09
 
 /* Default minimum VIN voltage controlled by ISL9241_REG_VIN_VOLTAGE */
-#define ISL9241_BC12_MIN_VOLTAGE	4096
+#define ISL9241_BC12_MIN_VOLTAGE 4096
 
 extern const struct charger_drv isl9241_drv;
 
@@ -33,9 +33,9 @@ int isl9241_set_ac_prochot(int chgnum, int ma);
  */
 int isl9241_set_dc_prochot(int chgnum, int ma);
 
-#define ISL9241_AC_PROCHOT_CURRENT_MIN  128     /* mA */
-#define ISL9241_AC_PROCHOT_CURRENT_MAX  6400    /* mA */
-#define ISL9241_DC_PROCHOT_CURRENT_MIN  256     /* mA */
-#define ISL9241_DC_PROCHOT_CURRENT_MAX  12800   /* mA */
+#define ISL9241_AC_PROCHOT_CURRENT_MIN 128 /* mA */
+#define ISL9241_AC_PROCHOT_CURRENT_MAX 6400 /* mA */
+#define ISL9241_DC_PROCHOT_CURRENT_MIN 256 /* mA */
+#define ISL9241_DC_PROCHOT_CURRENT_MAX 12800 /* mA */
 
 #endif /* __CROS_EC_DRIVER_CHARGER_ISL9241_PUBLIC_H */

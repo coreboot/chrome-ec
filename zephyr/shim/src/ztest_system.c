@@ -1,27 +1,33 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-#include "system.h"
-#include "cros_version.h"
 #include "battery.h"
 #include "charge_manager.h"
+#include "common.h"
+#include "cros_version.h"
 #include "sysjump.h"
+#include "system.h"
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
 
-struct jump_data mock_jump_data = {};
+char mock_jump_data[sizeof(struct jump_data) + 256];
 
 /* When CONFIG_RAM_SIZE is defined, this is provided by common/system.c */
 #ifndef CONFIG_RAM_SIZE
 struct jump_data *get_jump_data(void)
 {
-	return &mock_jump_data;
+	return (struct jump_data *)&mock_jump_data;
 }
 #endif
 
 __attribute__((weak)) void system_reset(int flags)
+{
+	__builtin_unreachable();
+}
+
+__attribute__((weak)) void software_panic(uint32_t reason, uint32_t info)
 {
 	__builtin_unreachable();
 }
@@ -86,7 +92,7 @@ test_mockable const char *system_get_chip_revision(void)
 	return "";
 }
 
-void board_reset_pd_mcu(void)
+test_mockable void board_reset_pd_mcu(void)
 {
 }
 

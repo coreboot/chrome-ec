@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -41,5 +41,5 @@ __override void lid_angle_peripheral_enable(int enable)
 		 */
 		if (!chipset_in_state(CHIPSET_STATE_ON))
 			keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_ANGLE);
-		}
+	}
 }

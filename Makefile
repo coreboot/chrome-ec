@@ -1,4 +1,4 @@
-# Copyright 2011 The Chromium OS Authors. All rights reserved.
+# Copyright 2011 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -114,6 +114,12 @@ BASEDIR:=$(BDIR)
 CFLAGS_BASEBOARD=
 endif
 include chip/$(CHIP)/build.mk
+
+# The toolchain must be set before referencing any toolchain-related variables
+# (CC, CPP, CXX, etc.) so that the correct toolchain is used. The CORE variable
+# is set in the CHIP build file, so this include must come after including the
+# CHIP build file.
+include core/$(CORE)/toolchain.mk
 
 # Create uppercase config variants, to avoid mixed case constants.
 # Also translate '-' to '_', so 'cortex-m' turns into 'CORTEX_M'.  This must
@@ -260,6 +266,9 @@ include $(BASEDIR)/build.mk
 ifneq ($(BASEDIR),$(BDIR))
 include $(BDIR)/build.mk
 endif
+ifeq ($(USE_BUILTIN_STDLIB), 1)
+include builtin/build.mk
+endif
 include chip/$(CHIP)/build.mk
 include core/$(CORE)/build.mk
 include common/build.mk
@@ -299,6 +308,9 @@ ifneq ($(PBDIR),)
 all-obj-$(1)+=$(call objs_from_dir_p,$(PBDIR),board-private,$(1))
 endif
 all-obj-$(1)+=$(call objs_from_dir_p,common,common,$(1))
+ifeq ($(USE_BUILTIN_STDLIB), 1)
+all-obj-$(1)+=$(call objs_from_dir_p,builtin,builtin,$(1))
+endif
 all-obj-$(1)+=$(call objs_from_dir_p,driver,driver,$(1))
 all-obj-$(1)+=$(call objs_from_dir_p,power,power,$(1))
 ifdef CTS_MODULE
@@ -345,6 +357,9 @@ dirs=core/$(CORE) chip/$(CHIP) $(BASEDIR) $(BDIR) common fuzz power test \
 dirs+= private private-kandou $(PDIR) $(PBDIR)
 dirs+=$(shell find common -type d)
 dirs+=$(shell find driver -type d)
+ifeq ($(USE_BUILTIN_STDLIB), 1)
+dirs+=builtin
+endif
 common_dirs=util
 
 ifeq ($(custom-ro_objs-y),)

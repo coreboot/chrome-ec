@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -75,7 +75,7 @@ bool board_ap_power_check_power_rails_enabled(void);
 /**
  * @brief macro to access configuration properties from DTS
  */
-#define AP_PWRSEQ_DT_VALUE(p)					\
-	DT_PROP(DT_COMPAT_GET_ANY_STATUS_OKAY(intel_ap_pwrseq), p)	\
+#define AP_PWRSEQ_DT_VALUE(p) \
+	DT_PROP(DT_COMPAT_GET_ANY_STATUS_OKAY(intel_ap_pwrseq), p)
 
 #endif /* __AP_PWRSEQ_AP_POWER_BOARD_FUNCTIONS_H__ */

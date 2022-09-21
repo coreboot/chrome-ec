@@ -1,4 +1,4 @@
-/* Copyright 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -21,9 +21,9 @@
 #include "rsa2048-F4.h"
 #endif
 
-static uint32_t rsa_workbuf[3 * RSANUMBYTES/4];
+static uint32_t rsa_workbuf[3 * RSANUMBYTES / 4];
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	int good;
 
@@ -45,7 +45,7 @@ void run_test(int argc, char **argv)
 	ccprintf("RSA verify FAILED (as expected)\n");
 
 	/* Test with a wrong signature */
-	good = rsa_verify(rsa_key, sig+1, hash, rsa_workbuf);
+	good = rsa_verify(rsa_key, sig + 1, hash, rsa_workbuf);
 	if (good) {
 		ccprintf("RSA verify OK (expected fail)\n");
 		test_fail();

@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -23,18 +23,21 @@
 #include "driver/tcpm/tusb422_public.h"
 #include "driver/tcpm/tcpci.h"
 
-#define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ##args)
 
 /*
  * USB3 DB mux configuration - the top level mux still needs to be set to the
  * virtual_usb_mux_driver so the AP gets notified of mux changes and updates
  * the TCSS configuration on state changes.
  */
-static const struct usb_mux usbc1_usb3_db_retimer = {
-	.usb_port = USBC_PORT_C1,
-	.driver = &tcpci_tcpm_usb_mux_driver,
-	.hpd_update = &ps8xxx_tcpc_update_hpd_status,
-	.next_mux = NULL,
+static const struct usb_mux_chain usbc1_usb3_db_retimer = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C1,
+			.driver = &tcpci_tcpm_usb_mux_driver,
+			.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		},
+	.next = NULL,
 };
 
 /******************************************************************************/
@@ -104,17 +107,21 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 
 /******************************************************************************/
 /* USBC mux configuration - Tiger Lake includes internal mux */
-const struct usb_mux usb_muxes[] = {
+const struct usb_mux_chain usb_muxes[] = {
 	[USBC_PORT_C0] = {
-		.usb_port = USBC_PORT_C0,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C0,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
 	},
 	[USBC_PORT_C1] = {
-		.usb_port = USBC_PORT_C1,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-		.next_mux = &usbc1_usb3_db_retimer,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C1,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
+		.next = &usbc1_usb3_db_retimer,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
@@ -124,8 +131,7 @@ static void ps8815_reset(void)
 	int val;
 
 	gpio_set_level(GPIO_USB_C1_RT_RST_ODL, 0);
-	msleep(GENERIC_MAX(PS8XXX_RESET_DELAY_MS,
-			   PS8815_PWR_H_RST_H_DELAY_MS));
+	msleep(GENERIC_MAX(PS8XXX_RESET_DELAY_MS, PS8815_PWR_H_RST_H_DELAY_MS));
 	gpio_set_level(GPIO_USB_C1_RT_RST_ODL, 1);
 	msleep(PS8815_FW_INIT_DELAY_MS);
 
@@ -136,16 +142,16 @@ static void ps8815_reset(void)
 
 	CPRINTS("%s: patching ps8815 registers", __func__);
 
-	if (i2c_read8(I2C_PORT_USB_C1,
-		      PS8XXX_I2C_ADDR1_P2_FLAGS, 0x0f, &val) == EC_SUCCESS)
+	if (i2c_read8(I2C_PORT_USB_C1, PS8XXX_I2C_ADDR1_P2_FLAGS, 0x0f, &val) ==
+	    EC_SUCCESS)
 		CPRINTS("ps8815: reg 0x0f was %02x", val);
 
-	if (i2c_write8(I2C_PORT_USB_C1,
-		       PS8XXX_I2C_ADDR1_P2_FLAGS, 0x0f, 0x31) == EC_SUCCESS)
+	if (i2c_write8(I2C_PORT_USB_C1, PS8XXX_I2C_ADDR1_P2_FLAGS, 0x0f,
+		       0x31) == EC_SUCCESS)
 		CPRINTS("ps8815: reg 0x0f set to 0x31");
 
-	if (i2c_read8(I2C_PORT_USB_C1,
-		      PS8XXX_I2C_ADDR1_P2_FLAGS, 0x0f, &val) == EC_SUCCESS)
+	if (i2c_read8(I2C_PORT_USB_C1, PS8XXX_I2C_ADDR1_P2_FLAGS, 0x0f, &val) ==
+	    EC_SUCCESS)
 		CPRINTS("ps8815: reg 0x0f now %02x", val);
 }
 
@@ -207,7 +213,7 @@ void board_reset_pd_mcu(void)
 	/* Daughterboard specific reset for port 1 */
 	ps8815_reset();
 	usb_mux_hpd_update(USBC_PORT_C1, USB_PD_MUX_HPD_LVL_DEASSERTED |
-					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
+						 USB_PD_MUX_HPD_IRQ_DEASSERTED);
 }
 
 static void board_tcpc_init(void)

@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -41,8 +41,8 @@
 #include "usbc_ppc.h"
 #include "util.h"
 
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
 /* GPIO to enable/disable the USB Type-A port. */
 const int usb_port_enable[CONFIG_USB_PORT_POWER_SMART_PORT_COUNT] = {
@@ -108,16 +108,16 @@ static void bc12_interrupt(enum gpio_signal signal)
 
 /******************************************************************************/
 /* SPI devices */
-const struct spi_device_t spi_devices[] = {
-};
+const struct spi_device_t spi_devices[] = {};
 const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 
 /******************************************************************************/
 /* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
 const struct pwm_t pwm_channels[] = {
-	[PWM_CH_KBLIGHT]   = { .channel = 3, .flags = 0, .freq = 10000 },
-	[PWM_CH_FAN] = {.channel = 5, .flags = PWM_CONFIG_OPEN_DRAIN,
-			.freq = 25000},
+	[PWM_CH_KBLIGHT] = { .channel = 3, .flags = 0, .freq = 10000 },
+	[PWM_CH_FAN] = { .channel = 5,
+			 .flags = PWM_CONFIG_OPEN_DRAIN,
+			 .freq = 25000 },
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
@@ -143,16 +143,20 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_TCPC_0] = {
-		.usb_port = USB_PD_PORT_TCPC_0,
-		.driver = &anx7447_usb_mux_driver,
-		.hpd_update = &anx7447_tcpc_update_hpd_status,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USB_PD_PORT_TCPC_0,
+			.driver = &anx7447_usb_mux_driver,
+			.hpd_update = &anx7447_tcpc_update_hpd_status,
+		},
 	},
 	[USB_PD_PORT_TCPC_1] = {
-		.usb_port = USB_PD_PORT_TCPC_1,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USB_PD_PORT_TCPC_1,
+			.driver = &tcpci_tcpm_usb_mux_driver,
+			.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		},
 	}
 };
 
@@ -181,22 +185,18 @@ static struct bmi_drv_data_t g_bmi160_data;
 static struct accelgyro_saved_data_t g_bma255_data;
 
 /* Matrix to rotate accelrator into standard reference frame */
-static const mat33_fp_t base_standard_ref = {
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
+static const mat33_fp_t base_standard_ref = { { 0, FLOAT_TO_FP(1), 0 },
+					      { FLOAT_TO_FP(-1), 0, 0 },
+					      { 0, 0, FLOAT_TO_FP(1) } };
 
 /*
  * TODO(b/124337208): P0 boards don't have this sensor mounted so the rotation
  * matrix can't be tested properly. This needs to be revisited after EVT to make
  * sure the rotaiton matrix for the lid sensor is correct.
  */
-static const mat33_fp_t lid_standard_ref = {
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(-1)}
-};
+static const mat33_fp_t lid_standard_ref = { { 0, FLOAT_TO_FP(-1), 0 },
+					     { FLOAT_TO_FP(-1), 0, 0 },
+					     { 0, 0, FLOAT_TO_FP(-1) } };
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
@@ -277,7 +277,7 @@ unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
 
 const struct fan_conf fan_conf_0 = {
 	.flags = FAN_USE_RPM_MODE,
-	.ch = MFT_CH_0,	/* Use MFT id to control fan */
+	.ch = MFT_CH_0, /* Use MFT id to control fan */
 	.pgood_gpio = -1,
 	.enable_gpio = GPIO_EN_PP5000_FAN,
 };
@@ -296,31 +296,30 @@ const struct fan_t fans[FAN_CH_COUNT] = {
 /******************************************************************************/
 /* MFT channels. These are logically separate from pwm_channels. */
 const struct mft_t mft_channels[] = {
-	[MFT_CH_0] = {NPCX_MFT_MODULE_1, TCKC_LFCLK, PWM_CH_FAN},
+	[MFT_CH_0] = { NPCX_MFT_MODULE_1, TCKC_LFCLK, PWM_CH_FAN },
 };
 BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
 /* ADC channels */
 const struct adc_t adc_channels[] = {
-	[ADC_TEMP_SENSOR_1] = {
-		"TEMP_AMB", NPCX_ADC_CH0, ADC_MAX_VOLT, ADC_READ_MAX+1, 0},
-	[ADC_TEMP_SENSOR_2] = {
-		"TEMP_CHARGER", NPCX_ADC_CH1, ADC_MAX_VOLT, ADC_READ_MAX+1, 0},
+	[ADC_TEMP_SENSOR_1] = { "TEMP_AMB", NPCX_ADC_CH0, ADC_MAX_VOLT,
+				ADC_READ_MAX + 1, 0 },
+	[ADC_TEMP_SENSOR_2] = { "TEMP_CHARGER", NPCX_ADC_CH1, ADC_MAX_VOLT,
+				ADC_READ_MAX + 1, 0 },
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1] = {.name = "Temp1",
-				 .type = TEMP_SENSOR_TYPE_BOARD,
-				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_1},
-	[TEMP_SENSOR_2] = {.name = "Temp2",
-				 .type = TEMP_SENSOR_TYPE_BOARD,
-				 .read = get_temp_3v3_30k9_47k_4050b,
-				 .idx = ADC_TEMP_SENSOR_2},
+	[TEMP_SENSOR_1] = { .name = "Temp1",
+			    .type = TEMP_SENSOR_TYPE_BOARD,
+			    .read = get_temp_3v3_30k9_47k_4050b,
+			    .idx = ADC_TEMP_SENSOR_1 },
+	[TEMP_SENSOR_2] = { .name = "Temp2",
+			    .type = TEMP_SENSOR_TYPE_BOARD,
+			    .read = get_temp_3v3_30k9_47k_4050b,
+			    .idx = ADC_TEMP_SENSOR_2 },
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
-
 
 /* Stryke Temperature sensors */
 /*
@@ -331,8 +330,8 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 /*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_A \
-	{ \
+#define THERMAL_A                \
+	{                        \
 		.temp_host = { \
 			[EC_TEMP_THRESH_WARN] = 0, \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
@@ -387,7 +386,6 @@ static void board_gpio_set_pp5000(void)
 	} else if (board_id >= 1) {
 		reset_gpio_flags(GPIO_EN_PP5000_A_V1, GPIO_OUT_LOW);
 	}
-
 }
 
 static void board_init(void)

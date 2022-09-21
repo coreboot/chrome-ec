@@ -1,14 +1,10 @@
 # -*- makefile -*-
-# Copyright 2019 The Chromium OS Authors. All rights reserved.
+# Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
 # RISC-V core OS files build
 #
-
-# Select RISC-V bare-metal toolchain
-$(call set-option,CROSS_COMPILE,$(CROSS_COMPILE_riscv),\
-	/opt/coreboot-sdk/bin/riscv64-elf-)
 
 # Enable FPU extension if config option of FPU is enabled.
 _FPU_EXTENSION=$(if $(CONFIG_FPU),f,)

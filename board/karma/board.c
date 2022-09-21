@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,8 +8,8 @@
 #include "hooks.h"
 #include "oz554.h"
 
-#define CPRINTS(format, args...) cprints(CC_I2C, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_I2C, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_I2C, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_I2C, format, ##args)
 
 void oz554_board_init(void)
 {

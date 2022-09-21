@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 import os
 import pathlib
 
-import pytest
-
+import pytest  # pylint:disable=import-error
 import zmake.output_packers
 import zmake.project as project
 import zmake.toolchains as toolchains
@@ -138,9 +137,6 @@ def test_zephyr(fake_project: project.Project, zephyr_exists, no_environ):
         "ZEPHYR_TOOLCHAIN_VARIANT": "zephyr",
         "ZEPHYR_SDK_INSTALL_DIR": str(pathlib.Path("/opt/zephyr-sdk")),
     }
-    assert config.environ_defs == {
-        "ZEPHYR_SDK_INSTALL_DIR": str(pathlib.Path("/opt/zephyr-sdk")),
-    }
 
 
 def test_zephyr_from_env(mockfs, monkeypatch, fake_project):
@@ -157,9 +153,6 @@ def test_zephyr_from_env(mockfs, monkeypatch, fake_project):
     config = chain.get_build_config()
     assert config.cmake_defs == {
         "ZEPHYR_TOOLCHAIN_VARIANT": "zephyr",
-        "ZEPHYR_SDK_INSTALL_DIR": str(zephyr_sdk_path),
-    }
-    assert config.environ_defs == {
         "ZEPHYR_SDK_INSTALL_DIR": str(zephyr_sdk_path),
     }
 
@@ -197,9 +190,13 @@ def test_no_toolchains(fake_project: project.Project, mockfs, no_environ):
         fake_project.get_toolchain(module_paths)
 
 
-def test_override_without_sdk(fake_project: project.Project, mockfs, no_environ):
+def test_override_without_sdk(
+    fake_project: project.Project, mockfs, no_environ
+):
     """Check for error override is set to zephyr, but it can't be found."""
     chain = fake_project.get_toolchain(module_paths, override="zephyr")
 
-    with pytest.raises(RuntimeError, match=r"No installed Zephyr SDK was found"):
+    with pytest.raises(
+        RuntimeError, match=r"No installed Zephyr SDK was found"
+    ):
         chain.get_build_config()

@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -202,8 +202,7 @@ void online_calibration_init(void)
 		void *type_specific_data = NULL;
 
 		s->online_calib_data->last_temperature = -1;
-		type_specific_data =
-			s->online_calib_data->type_specific_data;
+		type_specific_data = s->online_calib_data->type_specific_data;
 
 		if (!type_specific_data)
 			continue;

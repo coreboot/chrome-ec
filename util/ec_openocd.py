@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright 2022 The Chromium OS Authors. All rights reserved.
+# Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -16,6 +16,7 @@ import time
 Flashes and debugs the EC through openocd
 """
 
+
 @dataclasses.dataclass
 class BoardInfo:
     gdb_variant: str
@@ -24,9 +25,7 @@ class BoardInfo:
 
 
 # Debuggers for each board, OpenOCD currently only supports GDB
-boards = {
-    "skyrim": BoardInfo("arm-none-eabi-gdb", 6, 4)
-}
+boards = {"skyrim": BoardInfo("arm-none-eabi-gdb", 6, 4)}
 
 
 def create_openocd_args(interface, board):
@@ -36,9 +35,12 @@ def create_openocd_args(interface, board):
     board_info = boards[board]
     args = [
         "openocd",
-        "-f", f"interface/{interface}.cfg",
-        "-c", "add_script_search_dir openocd",
-        "-f", f"board/{board}.cfg",
+        "-f",
+        f"interface/{interface}.cfg",
+        "-c",
+        "add_script_search_dir openocd",
+        "-f",
+        f"board/{board}.cfg",
     ]
 
     return args
@@ -53,11 +55,13 @@ def create_gdb_args(board, port, executable):
         board_info.gdb_variant,
         executable,
         # GDB can't autodetect these according to OpenOCD
-        "-ex", f"set remote hardware-breakpoint-limit {board_info.num_breakpoints}",
-        "-ex", f"set remote hardware-watchpoint-limit {board_info.num_watchpoints}",
-
+        "-ex",
+        f"set remote hardware-breakpoint-limit {board_info.num_breakpoints}",
+        "-ex",
+        f"set remote hardware-watchpoint-limit {board_info.num_watchpoints}",
         # Connect to OpenOCD
-        "-ex", f"target extended-remote localhost:{port}",
+        "-ex",
+        f"target extended-remote localhost:{port}",
     ]
 
     return args
@@ -79,7 +83,10 @@ def debug(interface, board, port, executable):
     openocd_args += ["-c", f"gdb_port {port}"]
 
     openocd = subprocess.Popen(
-        openocd_args, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        openocd_args,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
     )
 
     # Wait for OpenOCD to start, it'll open a port for GDB connections
@@ -134,7 +141,7 @@ def get_flash_file(board):
         / "zephyr"
         / board
         / "output"
-        / "zephyr.bin"
+        / "ec.bin"
     ).resolve()
 
 
@@ -209,11 +216,15 @@ def main():
         target_file = args.file.resolve()
 
     if args.command == "flash":
-        image_file = get_flash_file(args.board) if target_file == None else target_file
+        image_file = (
+            get_flash_file(args.board) if target_file == None else target_file
+        )
         flash(args.interface, args.board, image_file, args.verify)
     elif args.command == "debug":
         executable_file = (
-            get_executable_file(args.board) if target_file == None else target_file
+            get_executable_file(args.board)
+            if target_file == None
+            else target_file
         )
         debug(args.interface, args.board, args.port, executable_file)
     else:

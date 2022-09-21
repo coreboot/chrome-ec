@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -91,8 +91,8 @@ static enum ec_status led_command_control(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_LED_CONTROL, led_command_control, EC_VER_MASK(1));
 
-__attribute__((weak))
-void led_control(enum ec_led_id led_id, enum ec_led_state state)
+__attribute__((weak)) void led_control(enum ec_led_id led_id,
+				       enum ec_led_state state)
 {
 	/*
 	 * Default weak implementation that does not affect the state of

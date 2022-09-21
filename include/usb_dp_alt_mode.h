@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -34,6 +34,17 @@ void dp_init(int port);
 bool dp_is_active(int port);
 
 /*
+ * Returns True if DisplayPort mode entry has not started, or mode exit has
+ * already finished.
+ * TODO(b/235984702): Consolidate the DP state API
+ *
+ * @param port      USB-C port number
+ * @return          True if DisplayPort mode is in inactive state
+ *                  False otherwise.
+ */
+bool dp_is_idle(int port);
+
+/*
  * Checks whether the mode entry sequence for DisplayPort alternate mode is done
  * for a port.
  *
@@ -52,7 +63,7 @@ bool dp_entry_is_done(int port);
  * @param vdm       VDM from ACK
  */
 void dp_vdm_acked(int port, enum tcpci_msg_type type, int vdo_count,
-		uint32_t *vdm);
+		  uint32_t *vdm);
 
 /*
  * Handles NAKed (or Not Supported or timed out) DisplayPort VDM requests.
@@ -77,4 +88,4 @@ void dp_vdm_naked(int port, enum tcpci_msg_type type, uint8_t vdm_cmd);
 enum dpm_msg_setup_status dp_setup_next_vdm(int port, int *vdo_count,
 					    uint32_t *vdm);
 
-#endif  /* __CROS_EC_USB_DP_ALT_MODE_H */
+#endif /* __CROS_EC_USB_DP_ALT_MODE_H */

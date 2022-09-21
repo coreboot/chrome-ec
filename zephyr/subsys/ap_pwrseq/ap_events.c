@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -71,7 +71,8 @@ void ap_power_ev_send_callbacks(enum ap_power_events event)
 		return;
 	}
 	data.event = event;
-	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&callbacks, cb, tmp, node) {
+	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&callbacks, cb, tmp, node)
+	{
 		if (cb->events & event) {
 			cb->handler(cb, data);
 		}

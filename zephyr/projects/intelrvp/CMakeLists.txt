@@ -1,10 +1,10 @@
-# Copyright 2022 The Chromium OS Authors. All rights reserved.
+# Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 cmake_minimum_required(VERSION 3.13.1)
 
-find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+find_package(Zephyr REQUIRED HINTS "${ZEPHYR_BASE}")
 project(intelrvp)
 
 cros_ec_library_include_directories(include)
@@ -26,4 +26,7 @@ endif()
 if(DEFINED CONFIG_BOARD_MTLRVP_NPCX)
   add_subdirectory(mtlrvp)
   zephyr_library_sources("src/intelrvp.c")
+  zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "src/usb_pd_policy_mecc_1_1.c")
+  zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "src/chg_usb_pd_mecc_1_1.c")
+  zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "src/chg_usb_pd.c")
 endif()

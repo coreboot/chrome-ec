@@ -1,4 +1,4 @@
-/* Copyright 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -37,7 +37,7 @@ static int test_8(void)
 {
 	uint32_t crc;
 	const uint32_t input = 0xdeadbeef;
-	const uint8_t *p = (const uint8_t *) &input;
+	const uint8_t *p = (const uint8_t *)&input;
 	int i;
 
 	crc32_init();
@@ -83,7 +83,7 @@ static int test_cros_crc8(void)
 	return EC_SUCCESS;
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	test_reset();
 

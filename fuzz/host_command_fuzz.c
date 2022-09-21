@@ -1,4 +1,4 @@
-/* Copyright 2018 The Chromium OS Authors. All rights reserved.
+/* Copyright 2018 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -8,10 +8,12 @@
 #include <pthread.h>
 #include <sys/time.h>
 
+#include "builtin/assert.h"
 #include "common.h"
 #include "console.h"
 #include "host_command.h"
 #include "host_test.h"
+#include "printf.h"
 #include "task.h"
 #include "test_util.h"
 #include "timer.h"
@@ -75,7 +77,7 @@ static int hostcmd_fill(const uint8_t *data, size_t size)
 	chunks[2].start = chunks[1].start + chunks[1].size + data_len_size;
 	chunks[2].size = sizeof(req_buf) - chunks[2].start;
 #else
-	struct chunk chunks[1] = { {0, sizeof(req_buf)} };
+	struct chunk chunks[1] = { { 0, sizeof(req_buf) } };
 #endif
 
 	/*
@@ -89,7 +91,7 @@ static int hostcmd_fill(const uint8_t *data, size_t size)
 	 * over checksum and data_len.
 	 */
 	for (i = 0; i < ARRAY_SIZE(chunks) && ipos < size; i++) {
-		int cp_size = MIN(chunks[i].size, size-ipos);
+		int cp_size = MIN(chunks[i].size, size - ipos);
 
 		memcpy(req_buf + chunks[i].start, data + ipos, cp_size);
 
@@ -112,8 +114,11 @@ static int hostcmd_fill(const uint8_t *data, size_t size)
 	 * issues.
 	 */
 	if (first) {
-		ccprintf("Request: cmd=%04x data=%ph\n",
-			req->command, HEX_BUF(req_buf, req_size));
+		char str_buf[hex_str_buf_size(req_size)];
+
+		snprintf_hex_buffer(str_buf, sizeof(str_buf),
+				    HEX_BUF(req_buf, req_size));
+		ccprintf("Request: cmd=%04x data=%s\n", req->command, str_buf);
 		first = 0;
 	}
 
@@ -130,7 +135,7 @@ static int hostcmd_fill(const uint8_t *data, size_t size)
 static pthread_cond_t done_cond;
 static pthread_mutex_t lock;
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	ccprints("Fuzzing task started");
 	wait_for_task_started();

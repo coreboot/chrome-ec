@@ -1,11 +1,11 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #include <zephyr/kernel.h>
 #include <stdbool.h>
-#include <ztest.h>
+#include <zephyr/ztest.h>
 
 #include "ec_tasks.h"
 #include "task.h"
@@ -107,7 +107,6 @@ static void test_task_get_current(void)
 	run_test(&task_get_current1, &task_get_current2);
 }
 
-
 static void timeout1(void)
 {
 	const uint32_t start_ms = k_uptime_get();
@@ -201,7 +200,6 @@ static void test_event_delivered(void)
 	run_test(&event_delivered1, &event_delivered2);
 }
 
-
 static void event_mask_not_delivered1(void)
 {
 	task_set_event(TASK_ID_TASK_2, 0x007F);
@@ -225,7 +223,6 @@ static void test_event_mask_not_delivered(void)
 {
 	run_test(&event_mask_not_delivered1, &event_mask_not_delivered2);
 }
-
 
 static void event_mask_extra1(void)
 {
@@ -253,7 +250,6 @@ static void test_event_mask_extra(void)
 	run_test(&event_mask_extra1, &event_mask_extra2);
 }
 
-
 static void empty_set_mask1(void)
 {
 	k_sleep(K_SECONDS(1));
@@ -280,7 +276,6 @@ static void test_empty_set_mask(void)
 {
 	run_test(&empty_set_mask1, &empty_set_mask2);
 }
-
 
 void test_main(void)
 {

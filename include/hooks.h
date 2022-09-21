@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -12,12 +12,12 @@
 
 enum hook_priority {
 	/* Generic values across all hooks */
-	HOOK_PRIO_FIRST = 1,       /* Highest priority */
+	HOOK_PRIO_FIRST = 1, /* Highest priority */
 	HOOK_PRIO_POST_FIRST = HOOK_PRIO_FIRST + 1,
-	HOOK_PRIO_DEFAULT = 5000,  /* Default priority */
+	HOOK_PRIO_DEFAULT = 5000, /* Default priority */
 	HOOK_PRIO_PRE_DEFAULT = HOOK_PRIO_DEFAULT - 1,
 	HOOK_PRIO_POST_DEFAULT = HOOK_PRIO_DEFAULT + 1,
-	HOOK_PRIO_LAST = 9999,     /* Lowest priority */
+	HOOK_PRIO_LAST = 9999, /* Lowest priority */
 
 	/* Specific hook vales for HOOK_INIT */
 	/* DMA inits before ADC, I2C, SPI */
@@ -253,6 +253,11 @@ enum hook_type {
 	 */
 	HOOK_USB_PD_CONNECT,
 
+	/*
+	 * Power supply change event.
+	 */
+	HOOK_POWER_SUPPLY_CHANGE,
+
 #ifdef TEST_BUILD
 	/*
 	 * Special hook types to be used by unit tests of the hooks
@@ -261,7 +266,7 @@ enum hook_type {
 	HOOK_TEST_1,
 	HOOK_TEST_2,
 	HOOK_TEST_3,
-#endif  /* TEST_BUILD */
+#endif /* TEST_BUILD */
 
 	/*
 	 * Not a hook type (instead the number of hooks). This should
@@ -346,11 +351,12 @@ int hook_call_deferred(const struct deferred_data *data, int us);
  *			unless there's a compelling reason to care about the
  *			order in which hooks are called.
  */
-#define DECLARE_HOOK(hooktype, routine, priority)			\
-	const struct hook_data __keep __no_sanitize_address		\
-	CONCAT4(__hook_, hooktype, _, routine)				\
-	__attribute__((section(".rodata." STRINGIFY(hooktype))))	\
-	     = {routine, priority}
+#define DECLARE_HOOK(hooktype, routine, priority)                            \
+	const struct hook_data __keep __no_sanitize_address CONCAT4(         \
+		__hook_, hooktype, _, routine)                               \
+		__attribute__((section(".rodata." STRINGIFY(hooktype)))) = { \
+			routine, priority                                    \
+		}
 
 /**
  * Register a deferred function call.
@@ -371,21 +377,26 @@ int hook_call_deferred(const struct deferred_data *data, int us);
  *
  * @param routine	Function pointer, with prototype void routine(void)
  */
-#define DECLARE_DEFERRED(routine)					\
-	const struct deferred_data __keep __no_sanitize_address		\
-	CONCAT2(routine, _data)						\
-	__attribute__((section(".rodata.deferred")))			\
-	     = {routine}
+#define DECLARE_DEFERRED(routine)                                        \
+	const struct deferred_data __keep __no_sanitize_address CONCAT2( \
+		routine, _data)                                          \
+		__attribute__((section(".rodata.deferred"))) = { routine }
 #else
 /*
  * Stub implementation in case hooks are disabled (neither
  * CONFIG_COMMON_RUNTIME nor CONFIG_PLATFORM_EC_HOOKS is defined)
  */
 #define hook_call_deferred(unused1, unused2) -1
-#define DECLARE_HOOK(t, func, p)				\
-	void CONCAT2(unused_hook_, func)(void) { func(); }
-#define DECLARE_DEFERRED(func)					\
-	void CONCAT2(unused_deferred_, func)(void) { func(); }
+#define DECLARE_HOOK(t, func, p)               \
+	void CONCAT2(unused_hook_, func)(void) \
+	{                                      \
+		func();                        \
+	}
+#define DECLARE_DEFERRED(func)                     \
+	void CONCAT2(unused_deferred_, func)(void) \
+	{                                          \
+		func();                            \
+	}
 #endif
 
-#endif  /* __CROS_EC_HOOKS_H */
+#endif /* __CROS_EC_HOOKS_H */

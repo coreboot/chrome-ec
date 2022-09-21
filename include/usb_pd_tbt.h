@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -106,7 +106,7 @@ enum vendor_specific_support {
 
 /* TBT Alternate Mode */
 #define TBT_ALTERNATE_MODE 0x0001
-#define PD_VDO_RESP_MODE_INTEL_TBT(x)	(((x) & 0xff) == TBT_ALTERNATE_MODE)
+#define PD_VDO_RESP_MODE_INTEL_TBT(x) (((x)&0xff) == TBT_ALTERNATE_MODE)
 
 union tbt_mode_resp_device {
 	struct {

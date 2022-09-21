@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -22,6 +22,7 @@
  */
 
 #include "battery.h"
+#include "builtin/assert.h"
 #include "chipset.h"
 #include "common.h"
 #include "gpio.h"
@@ -81,9 +82,9 @@
 
 /* power signal list.  Must match order of enum power_signal. */
 const struct power_signal_info power_signal_list[] = {
-	{GPIO_PMIC_EC_PWRGD, POWER_SIGNAL_ACTIVE_HIGH, "PMIC_PWR_GOOD"},
-	{GPIO_AP_IN_SLEEP_L, POWER_SIGNAL_ACTIVE_LOW, "AP_IN_S3_L"},
-	{GPIO_AP_EC_WATCHDOG_L, POWER_SIGNAL_ACTIVE_LOW, "AP_WDT_ASSERTED"},
+	{ GPIO_PMIC_EC_PWRGD, POWER_SIGNAL_ACTIVE_HIGH, "PMIC_PWR_GOOD" },
+	{ GPIO_AP_IN_SLEEP_L, POWER_SIGNAL_ACTIVE_LOW, "AP_IN_S3_L" },
+	{ GPIO_AP_EC_WATCHDOG_L, POWER_SIGNAL_ACTIVE_LOW, "AP_WDT_ASSERTED" },
 };
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
@@ -204,6 +205,7 @@ DECLARE_HOOK(HOOK_CHIPSET_RESET, handle_chipset_reset, HOOK_PRIO_FIRST);
 enum power_state power_chipset_init(void)
 {
 	int exit_hard_off = 1;
+	uint32_t reset_flags = system_get_reset_flags();
 
 	/* Enable reboot / sleep control inputs from AP */
 	gpio_enable_interrupt(GPIO_AP_EC_WARM_RST_REQ);
@@ -216,10 +218,11 @@ enum power_state power_chipset_init(void)
 			CPRINTS("already in S0");
 			return POWER_S0;
 		}
-	} else if (system_get_reset_flags() & EC_RESET_FLAG_AP_OFF) {
+	} else if ((reset_flags & EC_RESET_FLAG_AP_OFF) ||
+		   (reset_flags & EC_RESET_FLAG_AP_IDLE)) {
 		exit_hard_off = 0;
-	} else if ((system_get_reset_flags() & EC_RESET_FLAG_HIBERNATE) &&
-			gpio_get_level(GPIO_AC_PRESENT)) {
+	} else if ((reset_flags & EC_RESET_FLAG_HIBERNATE) &&
+		   gpio_get_level(GPIO_AC_PRESENT)) {
 		/*
 		 * If AC present, assume this is a wake-up by AC insert.
 		 * Boot EC only.
@@ -392,6 +395,11 @@ enum power_state power_handle_state(enum power_state state)
 		return POWER_S3;
 
 	case POWER_S3S0:
+#ifdef CONFIG_CHIPSET_RESUME_INIT_HOOK
+		/* Call hooks prior to chipset resume */
+		hook_notify(HOOK_CHIPSET_RESUME_INIT);
+#endif
+
 		if (power_wait_signals(IN_PGOOD_S0)) {
 			chipset_force_shutdown(CHIPSET_SHUTDOWN_WAIT);
 			return POWER_S0S3;
@@ -416,6 +424,10 @@ enum power_state power_handle_state(enum power_state state)
 	case POWER_S0S3:
 		/* Call hooks before we remove power rails */
 		hook_notify(HOOK_CHIPSET_SUSPEND);
+#ifdef CONFIG_CHIPSET_RESUME_INIT_HOOK
+		/* Call hooks after chipset suspend */
+		hook_notify(HOOK_CHIPSET_SUSPEND_COMPLETE);
+#endif
 
 #ifdef CONFIG_POWER_SLEEP_FAILURE_DETECTION
 		sleep_suspend_transition();
@@ -505,16 +517,16 @@ static void power_button_changed(void)
 DECLARE_HOOK(HOOK_POWER_BUTTON_CHANGE, power_button_changed, HOOK_PRIO_DEFAULT);
 
 #ifdef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
-__overridable void power_chipset_handle_sleep_hang(
-		enum sleep_hang_type hang_type)
+__overridable void
+power_chipset_handle_sleep_hang(enum sleep_hang_type hang_type)
 {
 	CPRINTS("Warning: Detected sleep hang! Waking host up!");
 	host_set_single_event(EC_HOST_EVENT_HANG_DETECT);
 }
 
-__override void power_chipset_handle_host_sleep_event(
-		enum host_sleep_event state,
-		struct host_sleep_event_context *ctx)
+__override void
+power_chipset_handle_host_sleep_event(enum host_sleep_event state,
+				      struct host_sleep_event_context *ctx)
 {
 	CPRINTS("Handle sleep: %d", state);
 
@@ -535,7 +547,6 @@ __override void power_chipset_handle_host_sleep_event(
 		sleep_set_notify(SLEEP_NOTIFY_RESUME);
 		task_wake(TASK_ID_CHIPSET);
 		sleep_complete_resume(ctx);
-
 	}
 }
 #endif /* CONFIG_POWER_TRACK_HOST_SLEEP_STATE */

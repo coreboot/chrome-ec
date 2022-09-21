@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -41,26 +41,30 @@ struct gpio_config {
  * whereas the standard macros assume that only 8 bits of initial flags
  * will be needed.
  */
-#define OUR_DT_SPEC(id)						\
-	{							\
-		.port = DEVICE_DT_GET(DT_GPIO_CTLR(id, gpios)),	\
-		.pin = DT_GPIO_PIN(id, gpios),			\
-		.dt_flags = 0xFF & (DT_GPIO_FLAGS(id, gpios)),	\
+#define OUR_DT_SPEC(id)                                         \
+	{                                                       \
+		.port = DEVICE_DT_GET(DT_GPIO_CTLR(id, gpios)), \
+		.pin = DT_GPIO_PIN(id, gpios),                  \
+		.dt_flags = 0xFF & (DT_GPIO_FLAGS(id, gpios)),  \
 	}
 
-#define GPIO_CONFIG(id)                                      \
-	{                                                    \
-		.spec = OUR_DT_SPEC(id),		     \
-		.name = DT_NODE_FULL_NAME(id),               \
-		.init_flags = DT_GPIO_FLAGS(id, gpios),      \
-		.no_auto_init = DT_PROP(id, no_auto_init),   \
+#define GPIO_CONFIG(id)                                    \
+	{                                                  \
+		.spec = OUR_DT_SPEC(id),                   \
+		.name = DT_NODE_FULL_NAME(id),             \
+		.init_flags = DT_GPIO_FLAGS(id, gpios),    \
+		.no_auto_init = DT_PROP(id, no_auto_init), \
 	},
+#define GPIO_IMPL_CONFIG(id) \
+	COND_CODE_1(DT_NODE_HAS_PROP(id, gpios), (GPIO_CONFIG(id)), ())
+
 static const struct gpio_config configs[] = {
 #if DT_NODE_EXISTS(DT_PATH(named_gpios))
-	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_CONFIG)
+	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_IMPL_CONFIG)
 #endif
 };
 
+#undef GPIO_IMPL_CONFIG
 #undef GPIO_CONFIG
 #undef OUR_DT_SPEC
 
@@ -73,9 +77,9 @@ static const struct gpio_config configs[] = {
  * point directly into the table by exposing the gpio_config struct.
  */
 
-#define GPIO_PTRS(id) const struct gpio_dt_spec * const	\
-	GPIO_DT_NAME(GPIO_SIGNAL(id)) =			\
-	&configs[GPIO_SIGNAL(id)].spec;
+#define GPIO_PTRS(id)                                                    \
+	const struct gpio_dt_spec *const GPIO_DT_NAME(GPIO_SIGNAL(id)) = \
+		&configs[GPIO_SIGNAL(id)].spec;
 
 #if DT_NODE_EXISTS(DT_PATH(named_gpios))
 DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_PTRS)
@@ -90,6 +94,30 @@ int gpio_get_level(enum gpio_signal signal)
 {
 	if (!gpio_is_implemented(signal))
 		return 0;
+
+	/*
+	 * If an output GPIO, get the configured value of the output
+	 * rather than the raw value of the pin.
+	 */
+	if (IS_ENABLED(CONFIG_GPIO_GET_CONFIG) &&
+	    configs[signal].init_flags & GPIO_OUTPUT) {
+		int rv;
+		gpio_flags_t flags;
+
+		rv = gpio_pin_get_config_dt(&configs[signal].spec, &flags);
+		if (rv == 0) {
+			return (flags & GPIO_OUTPUT_INIT_HIGH) ? 1 : 0;
+		}
+		/*
+		 * -ENOSYS is returned when this API call is not supported,
+		 *  so drop into the default method of returning the pin value.
+		 */
+		if (rv != -ENOSYS) {
+			LOG_ERR("Cannot get config for %s (%d)",
+				configs[signal].name, rv);
+			return 0;
+		}
+	}
 
 	const int l = gpio_pin_get_raw(configs[signal].spec.port,
 				       configs[signal].spec.pin);
@@ -137,8 +165,7 @@ void gpio_set_level(enum gpio_signal signal, int value)
 		return;
 
 	int rv = gpio_pin_set_raw(configs[signal].spec.port,
-				  configs[signal].spec.pin,
-				  value);
+				  configs[signal].spec.pin, value);
 
 	if (rv < 0) {
 		LOG_ERR("Cannot write %s (%d)", configs[signal].name, rv);
@@ -167,15 +194,15 @@ int gpio_or_ioex_get_level(int signal, int *value)
 #define GPIO_CONVERSION_SAME_BITS                                             \
 	(GPIO_OPEN_DRAIN | GPIO_PULL_UP | GPIO_PULL_DOWN | GPIO_VOLTAGE_1P8 | \
 	 GPIO_INPUT | GPIO_OUTPUT | GPIO_OUTPUT_INIT_LOW |                    \
-	GPIO_OUTPUT_INIT_HIGH)
+	 GPIO_OUTPUT_INIT_HIGH)
 
 #define FLAGS_HANDLED_FROM_ZEPHYR                                      \
 	(GPIO_CONVERSION_SAME_BITS | GPIO_INT_ENABLE | GPIO_INT_EDGE | \
-	GPIO_INT_HIGH_1 | GPIO_INT_LOW_0)
+	 GPIO_INT_HIGH_1 | GPIO_INT_LOW_0)
 
 #define FLAGS_HANDLED_TO_ZEPHYR                                               \
 	(GPIO_CONVERSION_SAME_BITS | GPIO_INT_F_RISING | GPIO_INT_F_FALLING | \
-	GPIO_INT_F_LOW | GPIO_INT_F_HIGH)
+	 GPIO_INT_F_LOW | GPIO_INT_F_HIGH)
 
 int convert_from_zephyr_flags(const gpio_flags_t zephyr)
 {
@@ -219,11 +246,11 @@ gpio_flags_t convert_to_zephyr_flags(int ec_flags)
 	}
 
 	if (ec_flags & GPIO_INT_F_RISING)
-		zephyr_flags |= GPIO_INT_ENABLE
-			| GPIO_INT_EDGE | GPIO_INT_HIGH_1;
+		zephyr_flags |= GPIO_INT_ENABLE | GPIO_INT_EDGE |
+				GPIO_INT_HIGH_1;
 	if (ec_flags & GPIO_INT_F_FALLING)
-		zephyr_flags |= GPIO_INT_ENABLE
-			| GPIO_INT_EDGE | GPIO_INT_LOW_0;
+		zephyr_flags |= GPIO_INT_ENABLE | GPIO_INT_EDGE |
+				GPIO_INT_LOW_0;
 	if (ec_flags & GPIO_INT_F_LOW)
 		zephyr_flags |= GPIO_INT_ENABLE | GPIO_INT_LOW_0;
 	if (ec_flags & GPIO_INT_F_HIGH)
@@ -276,7 +303,7 @@ static int init_gpios(const struct device *unused)
 		 */
 		if (is_sys_jumped && (flags & GPIO_OUTPUT)) {
 			flags &=
-			    ~(GPIO_OUTPUT_INIT_LOW | GPIO_OUTPUT_INIT_HIGH);
+				~(GPIO_OUTPUT_INIT_LOW | GPIO_OUTPUT_INIT_HIGH);
 		}
 
 		rv = gpio_pin_configure_dt(&configs[i].spec, flags);

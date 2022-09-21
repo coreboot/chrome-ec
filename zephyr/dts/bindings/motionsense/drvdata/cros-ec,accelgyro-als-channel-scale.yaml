@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,7 +6,7 @@ description: |
   Bindings for als_channel_scale_t in accelgyro.h.
   Each channel has scaling factor for normalization & cover
 
-compatible: cros-ec,accelgyro-als-channel-scale
+compatible: "cros-ec,accelgyro-als-channel-scale"
 
 properties:
   k-channel-scale:

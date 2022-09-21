@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,23 +8,49 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		/* TODO(b/227359727): kingler: convert USB-C configuration to
-		 * devicetree
-		 */
 		port0@0 {
 			compatible = "named-usbc-port";
 			reg = <0>;
+			bc12 = <&bc12_port0>;
+			tcpc = <&tcpc_port0>;
+			ppc = <&ppc_port0>;
+			chg = <&charger>;
+			usb-mux-chain-0 {
+				compatible = "cros-ec,usb-mux-chain";
+				usb-muxes = <&anx7447_mux_0 &virtual_mux_0>;
+			};
+		};
 
-			chg {
-				compatible = "intersil,isl923x";
-				status = "okay";
-				port = <&i2c_charger>;
+		port0-muxes {
+			anx7447_mux_0: anx7447-mux-0 {
+				compatible = "analogix,usbc-mux-anx7447";
+			};
+			virtual_mux_0: virtual-mux-0 {
+				compatible = "cros-ec,usbc-mux-virtual";
 			};
 		};
 
 		port1@1 {
 			compatible = "named-usbc-port";
 			reg = <1>;
+			bc12 = <&bc12_port1>;
+			tcpc = <&tcpc_port1>;
+			ppc = <&ppc_port1>;
+			usb-mux-chain-0 {
+				compatible = "cros-ec,usb-mux-chain";
+				usb-muxes = <&ps8743_mux_1 &virtual_mux_1>;
+			};
+			usb_mux_chain_1_hdmi_db: usb-mux-chain-1-hdmi-db {
+				compatible = "cros-ec,usb-mux-chain";
+				alternative-chain;
+				usb-muxes = <&virtual_mux_1>;
+			};
+		};
+
+		port1-muxes {
+			virtual_mux_1: virtual-mux-1 {
+				compatible = "cros-ec,usbc-mux-virtual";
+			};
 		};
 	};
 };

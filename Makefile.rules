@@ -1,6 +1,6 @@
 # -*- makefile -*-
 # vim: set filetype=make :
-# Copyright 2012 The Chromium OS Authors. All rights reserved.
+# Copyright 2012 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -101,7 +101,7 @@ cmd_run_fuzz = build/host/$*/$*.exe -seed=1 -runs=1 $(silent) \
 cmd_exe = $(CC) $(ro-objs) $(HOST_TEST_LDFLAGS) $(LDFLAGS_EXTRA) -o $@
 cmd_c_to_o = $(CC) -std=gnu11 $(C_WARN) $(CFLAGS) -MMD -MP -MF $@.d -c $< \
 		-MT $(@D)/$(@F) -o $(@D)/$(@F)
-cmd_cxx_to_o = $(CXX) -std=c++11 $(CFLAGS) $(CXXFLAGS) -MMD -MP -MF $@.d -c $< \
+cmd_cxx_to_o = $(CXX) -std=gnu++17 $(CFLAGS) $(CXXFLAGS) -MMD -MP -MF $@.d -c $< \
 		      -MT $(@D)/$(@F) -o $(@D)/$(@F)
 cmd_c_to_build = $(BUILDCC) $(BUILD_CFLAGS) \
 	         $(sort $(foreach c,$($(*F)-objs),util/$(c:%.o=%.c)) $(wildcard $*.c)) \
@@ -116,7 +116,7 @@ cmd_cxx_to_host = $(HOSTCXX) -std=gnu++17 $(HOST_CXXFLAGS) \
 		$(sort $(foreach c,$($(*F)-objs),util/$(c:%.o=%.cc)) $(wildcard $*.cc)) $(HOST_LDFLAGS)
 cmd_o_to_a = $(AR) rcs $@ $^
 cmd_host_test = $(MAKE) BOARD=host PROJECT=$* \
-	V=$(V) out=build/host/$* TEST_BUILD=y EMU_BUILD=y CROSS_COMPILE= \
+	V=$(V) out=build/host/$* TEST_BUILD=y EMU_BUILD=y \
 	$(if $(TEST_SCRIPT),TEST_SCRIPT=$(TEST_SCRIPT)) $(TEST_FLAG) \
 	build/host/$*/$*.exe
 cmd_coverage_test = $(subst build/host,build/coverage,$(cmd_host_test))
@@ -233,6 +233,11 @@ print-boards:
 	$(call cmd_pretty_print_list,\
 		$(sort $(boards)))
 
+# The zephyr path can be overridden on invocation, as in the following example:
+# $ make ZEPHYR_BASE=~/zephyr/main BOARD=dartmonkey
+ZEPHYR_BASE ?= $(abspath ../../../src/third_party/zephyr/main)
+export ZEPHYR_BASE
+
 ifeq ($(ALLOW_CONFIG),)
 
 # These are options defined by both ECOS and Zephyr. We need to tolerate this
@@ -243,12 +248,14 @@ ifeq ($(ALLOW_CONFIG),)
 # Zephyr upstream happens to add the same option, since we are requiring new
 # ECOS options to have a corresponding Kconfig anyway.
 conflicting_options := \
+	ADC \
 	AUDIO_CODEC \
 	DAC \
 	DMA \
 	EEPROM \
 	I2C_BITBANG \
 	INA219 \
+	MPU \
 	PECI \
 	PS2 \
 	SPI \
@@ -256,7 +263,7 @@ conflicting_options := \
 
 cmd_check_allowed = ./util/kconfig_check.py -c ${config} \
 	 -a util/config_allowed.txt -p PLATFORM_EC_ -s zephyr/ \
-	 -I $(abspath ../../../src/third_party/zephyr/main) \
+	 -I "${ZEPHYR_BASE}" \
 	 $(foreach opt,$(conflicting_options),-i $(opt)) check
 else
 cmd_check_allowed = true
@@ -368,8 +375,7 @@ run-fuzz-test-targets=$(foreach t,$(fuzz-test-list-host),run-$(t))
 
 $(fuzz-test-targets): TEST_FLAG=TEST_FUZZ=y TEST_ASAN=$(TEST_ASAN) \
 	TEST_MSAN=$(TEST_MSAN) TEST_UBSAN=$(TEST_UBSAN) \
-	CROSS_COMPILE=$(shell echo $(HOSTCC) | grep -v ccache | \
-		sed -e 's/[^-]*$$//')
+	CROSS_COMPILE=$(HOST_CROSS_COMPILE)
 $(fuzz-test-targets): host-%: | $(FAILED_BOARDS_DIR)
 	@touch $(FAILED_BOARDS_DIR)/test-$*
 	+$(call quiet,host_test,BUILD  )
@@ -443,8 +449,6 @@ cmd_merge_cov=lcov --rc lcov_branch_coverage=1 -o build/coverage/lcov.info \
 	$(foreach info,$^,-a ${info})
 cmd_report_cov=genhtml --branch-coverage -q -o build/coverage/coverage_rpt -t \
 	       "EC Unittest "$(bldversion) -s $^
-cmd_strip_lcov=sed -i build/coverage/lcov.info \
-	-e 's/\/mnt\/host\/source\/src\/platform\/ec\///'
 
 # Unless V is set to 0 we always want the 'size:' target to report its output,
 # there is no point in generating a short form command trace when calculating
@@ -492,7 +496,6 @@ coverage: TEST_FLAG=TEST_COVERAGE=y
 coverage: $(cov-test-targets) $(cov-initial-targets)
 	$(call quiet,merge_cov,MERGE  )
 	$(call quiet,report_cov,REPORT )
-	$(call quiet,strip_lcov,STRIP  )
 test-coverage: TEST_FLAG=TEST_COVERAGE=y
 test-coverage: $(cov-test-targets)
 	$(call quiet,merge_cov,MERGE  )
@@ -826,6 +829,8 @@ help:
 	@echo "  V=1                  - Show make output"
 	@echo "  BOARD=               - Set the board name to build (Default is $(BOARD))"
 	@echo "  STATIC_VERSION=1     - Force a constant version string for reproducable builds"
+	@echo "  BUILDCC_PREFIX=      - Set the compiler prefix for the system doing "
+	@echo "     the build (defaults to 'x86_64-pc-linux-gnu-')."
 	@echo "  CROSS_COMPILE=       - Set the compiler for the board"
 	@echo "  CROSS_COMPILE_arch=  - Set the compiler for arch"
 	@echo "     The board picks its CROSS_COMPILE_arch if CROSS_COMPILE is not set."
@@ -940,6 +945,9 @@ build_cros_ec_commands: $(out_cros_ec_commands)
 
 $(out_cros_ec_commands): include/ec_commands.h util/make_linux_ec_commands_h.sh
 	util/make_linux_ec_commands_h.sh $< $@
+
+# Include IDE configurations targets.
+include Makefile.ide
 
 # Pull in special rules/targets for third_party software
 -include third_party/rules.mk

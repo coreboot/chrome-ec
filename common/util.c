@@ -1,30 +1,19 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 /* Utility functions for Chrome EC */
 
+#include "builtin/assert.h"
 #include "common.h"
 #include "console.h"
 #include "util.h"
 
-__stdlib_compat int strcasecmp(const char *s1, const char *s2)
+int find_base(int base, int *c, const char **nptr)
 {
-	int diff;
-
-	do {
-		diff = tolower(*s1) - tolower(*s2);
-		if (diff)
-			return diff;
-	} while (*(s1++) && *(s2++));
-	return 0;
-}
-
-static int find_base(int base, int *c, const char **nptr)
-{
-	if ((base == 0 || base == 16) && *c == '0'
-	    && (**nptr == 'x' || **nptr == 'X')) {
+	if ((base == 0 || base == 16) && *c == '0' &&
+	    (**nptr == 'x' || **nptr == 'X')) {
 		*c = (*nptr)[1];
 		(*nptr) += 2;
 		base = 16;
@@ -35,7 +24,7 @@ static int find_base(int base, int *c, const char **nptr)
 }
 
 /* Like strtol(), but for integers */
-__stdlib_compat int strtoi(const char *nptr, char **endptr, int base)
+int strtoi(const char *nptr, char **endptr, int base)
 {
 	int result = 0;
 	int neg = 0;
@@ -71,58 +60,20 @@ __stdlib_compat int strtoi(const char *nptr, char **endptr, int base)
 	return neg ? -result : result;
 }
 
-#ifndef CONFIG_ZEPHYR
-__stdlib_compat unsigned long long int strtoull(const char *nptr, char **endptr,
-						int base)
-{
-	uint64_t result = 0;
-	int c = '\0';
-
-	while ((c = *nptr++) && isspace(c))
-		;
-
-	if (c == '+') {
-		c = *nptr++;
-	} else if (c == '-') {
-		if (endptr)
-			*endptr = (char *)nptr - 1;
-		return result;
-	}
-
-	base = find_base(base, &c, &nptr);
-
-	while (c) {
-		if (c >= '0' && c < '0' + MIN(base, 10))
-			result = result * base + (c - '0');
-		else if (c >= 'A' && c < 'A' + base - 10)
-			result = result * base + (c - 'A' + 10);
-		else if (c >= 'a' && c < 'a' + base - 10)
-			result = result * base + (c - 'a' + 10);
-		else
-			break;
-
-		c = *nptr++;
-	}
-
-	if (endptr)
-		*endptr = (char *)nptr - 1;
-	return result;
-}
-#endif /* !CONFIG_ZEPHYR */
-BUILD_ASSERT(sizeof(unsigned long long int) == sizeof(uint64_t));
-
-__stdlib_compat int parse_bool(const char *s, int *dest)
+int parse_bool(const char *s, int *dest)
 {
 	/* off, disable, false, no */
 	if (!strcasecmp(s, "off") || !strncasecmp(s, "dis", 3) ||
-	    tolower(*s) == 'f' || tolower(*s) == 'n') {
+	    tolower((unsigned char)*s) == 'f' ||
+	    tolower((unsigned char)*s) == 'n') {
 		*dest = 0;
 		return 1;
 	}
 
 	/* on, enable, true, yes */
 	if (!strcasecmp(s, "on") || !strncasecmp(s, "ena", 3) ||
-	    tolower(*s) == 't' || tolower(*s) == 'y') {
+	    tolower((unsigned char)*s) == 't' ||
+	    tolower((unsigned char)*s) == 'y') {
 		*dest = 1;
 		return 1;
 	}
@@ -130,7 +81,6 @@ __stdlib_compat int parse_bool(const char *s, int *dest)
 	/* dunno */
 	return 0;
 }
-
 
 /* Constant-time memory comparison */
 int safe_memcmp(const void *s1, const void *s2, size_t size)
@@ -166,7 +116,7 @@ void reverse(void *dest, size_t len)
 	}
 }
 
-__stdlib_compat char *strzcpy(char *dest, const char *src, int len)
+char *strzcpy(char *dest, const char *src, int len)
 {
 	char *d = dest;
 	if (len <= 0)
@@ -253,7 +203,7 @@ bool is_aligned(uint32_t addr, uint32_t align)
 
 int alignment_log2(unsigned int x)
 {
-	ASSERT(x != 0);	/* ctz(0) is undefined */
+	ASSERT(x != 0); /* ctz(0) is undefined */
 	return __builtin_ctz(x);
 }
 
@@ -261,9 +211,9 @@ int alignment_log2(unsigned int x)
 /* stateful conditional stuff */
 
 enum cond_internal_bits {
-	COND_CURR_MASK = BIT(0),		/* current value */
-	COND_RISE_MASK = BIT(1),		/* set if 0->1 */
-	COND_FALL_MASK = BIT(2),		/* set if 1->0 */
+	COND_CURR_MASK = BIT(0), /* current value */
+	COND_RISE_MASK = BIT(1), /* set if 0->1 */
+	COND_FALL_MASK = BIT(2), /* set if 1->0 */
 };
 
 void cond_init(cond_t *c, int val)
@@ -319,8 +269,8 @@ int cond_went(cond_t *c, int val)
  * *offset<0.  If argc<shift+1, leaves size unchanged, returning error if
  * *size<0.
  */
-int parse_offset_size(int argc, char **argv, int shift,
-			     int *offset, int *size)
+int parse_offset_size(int argc, const char **argv, int shift, int *offset,
+		      int *size)
 {
 	char *e;
 	int i;
@@ -417,10 +367,10 @@ int binary_first_base3_from_bits(int *bits, int nbits)
 			switch (bits[i]) {
 			case 0: /* Ignore '0' digits. */
 				break;
-			case 1:	/* Account for binaries 0 to 2^i - 1. */
+			case 1: /* Account for binaries 0 to 2^i - 1. */
 				binary_below += 1 << i;
 				break;
-			case 2:	/* Account for binaries 0 to 2^(i+1) - 1. */
+			case 2: /* Account for binaries 0 to 2^(i+1) - 1. */
 				binary_below += 1 << (i + 1);
 				has_z = 1;
 			}

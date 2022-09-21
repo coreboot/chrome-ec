@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Types which provide many builds and composite them into a single binary."""
@@ -85,8 +85,10 @@ class BasePacker:
         Returns:
             The file if it passes the test.
         """
-        max_size = self._get_max_image_bytes(  # pylint: disable=assignment-from-none
-            dir_map
+        max_size = (
+            self._get_max_image_bytes(  # pylint: disable=assignment-from-none
+                dir_map
+            )
         )
         if max_size is None or file.stat().st_size <= max_size:
             return file
@@ -106,7 +108,7 @@ class RawBinPacker(BasePacker):
 
     def pack_firmware(self, work_dir, jobclient, dir_map, version_string=""):
         del version_string
-        yield dir_map["singleimage"] / "zephyr" / "zephyr.bin", "zephyr.bin"
+        yield dir_map["singleimage"] / "zephyr" / "zephyr.bin", "ec.bin"
 
 
 class BinmanPacker(BasePacker):
@@ -120,11 +122,19 @@ class BinmanPacker(BasePacker):
         super().__init__(project)
 
     def configs(self):
-        yield "ro", build_config.BuildConfig(kconfig_defs={"CONFIG_CROS_EC_RO": "y"})
-        yield "rw", build_config.BuildConfig(kconfig_defs={"CONFIG_CROS_EC_RW": "y"})
+        yield "ro", build_config.BuildConfig(
+            kconfig_defs={"CONFIG_CROS_EC_RO": "y"}
+        )
+        yield "rw", build_config.BuildConfig(
+            kconfig_defs={"CONFIG_CROS_EC_RW": "y"}
+        )
 
     def pack_firmware(
-        self, work_dir, jobclient: zmake.jobserver.JobClient, dir_map, version_string=""
+        self,
+        work_dir,
+        jobclient: zmake.jobserver.JobClient,
+        dir_map,
+        version_string="",
     ):
         """Pack RO and RW sections using Binman.
 
@@ -148,8 +158,12 @@ class BinmanPacker(BasePacker):
 
         # Copy the inputs into the work directory so that Binman can
         # find them under a hard-coded name.
-        shutil.copy2(ro_dir / "zephyr" / self.ro_file, work_dir / "zephyr_ro.bin")
-        shutil.copy2(rw_dir / "zephyr" / self.rw_file, work_dir / "zephyr_rw.bin")
+        shutil.copy2(
+            ro_dir / "zephyr" / self.ro_file, work_dir / "zephyr_ro.bin"
+        )
+        shutil.copy2(
+            rw_dir / "zephyr" / self.rw_file, work_dir / "zephyr_rw.bin"
+        )
 
         # Version in FRID/FWID can be at most 31 bytes long (32, minus
         # one for null character).
@@ -176,12 +190,16 @@ class BinmanPacker(BasePacker):
             encoding="utf-8",
         )
 
-        zmake.multiproc.LogWriter.log_output(self.logger, logging.DEBUG, proc.stdout)
-        zmake.multiproc.LogWriter.log_output(self.logger, logging.ERROR, proc.stderr)
+        zmake.multiproc.LogWriter.log_output(
+            self.logger, logging.DEBUG, proc.stdout
+        )
+        zmake.multiproc.LogWriter.log_output(
+            self.logger, logging.ERROR, proc.stderr
+        )
         if proc.wait(timeout=60):
             raise OSError("Failed to run binman")
 
-        yield work_dir / "zephyr.bin", "zephyr.bin"
+        yield work_dir / "ec.bin", "ec.bin"
         yield ro_dir / "zephyr" / "zephyr.elf", "zephyr.ro.elf"
         yield rw_dir / "zephyr" / "zephyr.elf", "zephyr.rw.elf"
 
@@ -220,10 +238,10 @@ class NpcxPacker(BinmanPacker):
             dir_map,
             version_string=version_string,
         ):
-            if output_file == "zephyr.bin":
+            if output_file == "ec.bin":
                 yield (
                     self._check_packed_file_size(path, dir_map),
-                    "zephyr.bin",
+                    "ec.bin",
                 )
             else:
                 yield path, output_file

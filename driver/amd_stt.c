@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -18,9 +18,9 @@ static bool amd_stt_debug;
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_THERMAL, outstr)
-#define CPRINTS(format, args...) cprints(CC_THERMAL, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_THERMAL, format, ##args)
 
-static const char * const amd_stt_sensor_name[] = {
+static const char *const amd_stt_sensor_name[] = {
 	[AMD_STT_PCB_SENSOR_APU] = "APU",
 	[AMD_STT_PCB_SENSOR_REMOTE] = "Ambient",
 	[AMD_STT_PCB_SENSOR_GPU] = "GPU",
@@ -108,9 +108,9 @@ static void amd_stt_handler(void)
 		return;
 	}
 }
-DECLARE_HOOK(HOOK_SECOND, amd_stt_handler, HOOK_PRIO_TEMP_SENSOR+1);
+DECLARE_HOOK(HOOK_SECOND, amd_stt_handler, HOOK_PRIO_TEMP_SENSOR + 1);
 
-static int command_stt(int argc, char **argv)
+static int command_stt(int argc, const char **argv)
 {
 	int sensor_id;
 	int temp;

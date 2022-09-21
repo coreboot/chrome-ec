@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,7 +9,6 @@
 
 		fan_0 {
 			pwms = <&pwm3 0 PWM_KHZ(30) PWM_POLARITY_NORMAL>;
-			pwm-frequency = <30000>;
 			rpm_min = <3000>;
 			rpm_start = <3000>;
 			rpm_max = <10000>;

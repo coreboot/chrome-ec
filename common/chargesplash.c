@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -171,7 +171,7 @@ static void handle_chipset_shutdown(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, handle_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
-static int command_chargesplash(int argc, char **argv)
+static int command_chargesplash(int argc, const char **argv)
 {
 	if (argc != 2) {
 		return EC_ERROR_PARAM_COUNT;

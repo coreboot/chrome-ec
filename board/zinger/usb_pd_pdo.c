@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,7 +9,7 @@
 
 /* Power Delivery Objects */
 const uint32_t pd_src_pdo[] = {
-	[PDO_IDX_5V]  = PDO_FIXED(5000,  RATED_CURRENT, PDO_FIXED_FLAGS),
+	[PDO_IDX_5V] = PDO_FIXED(5000, RATED_CURRENT, PDO_FIXED_FLAGS),
 	[PDO_IDX_12V] = PDO_FIXED(12000, RATED_CURRENT, PDO_FIXED_FLAGS),
 	[PDO_IDX_20V] = PDO_FIXED(20000, RATED_CURRENT, PDO_FIXED_FLAGS),
 };

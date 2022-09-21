@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 register_raw_project(
     project_name="it8xxx2_evb",
-    zephyr_board="it8xxx2",
+    zephyr_board="it81302bx",
     dts_overlays=[
         "adc.dts",
         "fan.dts",

@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -13,13 +13,13 @@
 #define CONFIG_IT83XX_VCC_1P8V
 
 /* ADC channels */
-#define ADC_TEMP_SNS_AMBIENT_CHANNEL	CHIP_ADC_CH13
-#define ADC_TEMP_SNS_DDR_CHANNEL	CHIP_ADC_CH15
-#define ADC_TEMP_SNS_SKIN_CHANNEL	CHIP_ADC_CH6
-#define ADC_TEMP_SNS_VR_CHANNEL		CHIP_ADC_CH1
+#define ADC_TEMP_SNS_AMBIENT_CHANNEL CHIP_ADC_CH13
+#define ADC_TEMP_SNS_DDR_CHANNEL CHIP_ADC_CH15
+#define ADC_TEMP_SNS_SKIN_CHANNEL CHIP_ADC_CH6
+#define ADC_TEMP_SNS_VR_CHANNEL CHIP_ADC_CH1
 
 #ifdef CONFIG_USBC_VCONN
-	#define CONFIG_USBC_VCONN_SWAP
-	/* delay to turn on/off vconn */
+#define CONFIG_USBC_VCONN_SWAP
+/* delay to turn on/off vconn */
 #endif
 #endif /* __CROS_EC_ITE_EC_H */

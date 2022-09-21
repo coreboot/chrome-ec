@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -41,14 +41,6 @@ const struct i2c_port_t i2c_ports[] = {
 		.kbps = 1000,
 		.scl = GPIO_EC_I2C_USB_C0_C2_RT_SCL,
 		.sda = GPIO_EC_I2C_USB_C0_C2_RT_SDA,
-	},
-	{
-		/* I2C4 C1 TCPC */
-		.name = "tcpc1",
-		.port = I2C_PORT_USB_C1_TCPC,
-		.kbps = 400,
-		.scl = GPIO_EC_I2C_USB_C1_TCPC_SCL,
-		.sda = GPIO_EC_I2C_USB_C1_TCPC_SDA,
 	},
 	{
 		/* I2C5 */

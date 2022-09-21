@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -39,8 +39,8 @@ const struct pwm_t pwm_channels[] = {
 	},
 	[PWM_CH_FAN] = {
 		.channel = 5,
-		.flags = PWM_CONFIG_OPEN_DRAIN | PWM_CONFIG_DSLEEP,
-		.freq = 1000
+		.flags = PWM_CONFIG_OPEN_DRAIN,
+		.freq = 25000,
 	},
 	[PWM_CH_LED4] = {
 		.channel = 7,

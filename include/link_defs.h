@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -82,6 +82,8 @@ extern const struct hook_data __hooks_usb_pd_disconnect[];
 extern const struct hook_data __hooks_usb_pd_disconnect_end[];
 extern const struct hook_data __hooks_usb_pd_connect[];
 extern const struct hook_data __hooks_usb_pd_connect_end[];
+extern const struct hook_data __hooks_power_supply_change[];
+extern const struct hook_data __hooks_power_supply_change_end[];
 
 /* Deferrable functions and firing times*/
 extern const struct deferred_data __deferred_funcs[];
@@ -131,7 +133,7 @@ extern void *__dram_bss_end;
 /* Helper for special chip-specific memory sections */
 #if defined(CONFIG_CHIP_MEMORY_REGIONS) || defined(CONFIG_DRAM_BASE)
 #define __SECTION(name) __attribute__((section("." STRINGIFY(name) ".50_auto")))
-#define __SECTION_KEEP(name)                                                   \
+#define __SECTION_KEEP(name) \
 	__keep __attribute__((section("." STRINGIFY(name) ".keep.50_auto")))
 #else
 #define __SECTION(name)
@@ -146,7 +148,7 @@ extern void *__dram_bss_end;
 #endif /* __CROS_EC_LINK_DEFS_H */
 
 #ifdef CONFIG_PRESERVE_LOGS
-#define __preserved_logs(name)                                                 \
+#define __preserved_logs(name) \
 	__attribute__((section(".preserved_logs." STRINGIFY(name))))
 /* preserved_logs section. */
 extern const char __preserved_logs_start[];

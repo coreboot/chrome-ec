@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "builtin/assert.h"
 #include "util.h"
 
 /* The longest path in a chroot seems to be about 280 characters (as of
@@ -60,9 +61,10 @@ static void get_storage_path(char *out)
 		current = strchr(current, '/');
 	}
 
+	sz = snprintf(out, PATH_MAX - 1, "/dev/shm/EC_persist_%.*s", max_len,
+		      buf);
+	ASSERT(sz > 0);
 
-	sz = snprintf(out, PATH_MAX - 1, "/dev/shm/EC_persist_%.*s",
-		max_len, buf);
 	out[PATH_MAX - 1] = '\0';
 
 	ASSERT(sz <= max_len + max_prefix_len);
@@ -72,6 +74,7 @@ FILE *get_persistent_storage(const char *tag, const char *mode)
 {
 	char buf[PATH_MAX];
 	char path[PATH_MAX];
+	int sz;
 
 	/* There's no longer tag in use right now, and there shouldn't be. */
 	ASSERT(strlen(tag) < 32);
@@ -81,8 +84,9 @@ FILE *get_persistent_storage(const char *tag, const char *mode)
 	 * be named 'bar_persist_foo'
 	 */
 	get_storage_path(buf);
-	snprintf(path, PATH_MAX - 1, "%.*s_%32s",
-		max_len + max_prefix_len, buf, tag);
+	sz = snprintf(path, PATH_MAX - 1, "%.*s_%32s", max_len + max_prefix_len,
+		      buf, tag);
+	ASSERT(sz > 0);
 	path[PATH_MAX - 1] = '\0';
 
 	return fopen(path, mode);
@@ -97,13 +101,15 @@ void remove_persistent_storage(const char *tag)
 {
 	char buf[PATH_MAX];
 	char path[PATH_MAX];
+	int sz;
 
 	/* There's no longer tag in use right now, and there shouldn't be. */
 	ASSERT(strlen(tag) < 32);
 
 	get_storage_path(buf);
-	snprintf(path, PATH_MAX - 1, "%.*s_%32s",
-		max_len + max_prefix_len, buf, tag);
+	sz = snprintf(path, PATH_MAX - 1, "%.*s_%32s", max_len + max_prefix_len,
+		      buf, tag);
+	ASSERT(sz > 0);
 	path[PATH_MAX - 1] = '\0';
 
 	unlink(path);

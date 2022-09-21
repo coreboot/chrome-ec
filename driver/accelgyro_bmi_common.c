@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,7 +7,6 @@
  * BMI accelerometer and gyro module for Chrome EC
  * 3D digital accelerometer & 3D digital gyroscope
  */
-
 
 #include "accelgyro.h"
 #include "console.h"
@@ -20,29 +19,29 @@
 #include "spi.h"
 
 #define CPUTS(outstr) cputs(CC_ACCEL, outstr)
-#define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_ACCEL, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_ACCEL, format, ##args)
 
-#if !defined(CONFIG_ACCELGYRO_BMI160) && \
-    !defined(CONFIG_ACCELGYRO_BMI220) && \
-    !defined(CONFIG_ACCELGYRO_BMI260) && \
-    !defined(CONFIG_ACCELGYRO_BMI3XX)
+#if !defined(CONFIG_ACCELGYRO_BMI160) && !defined(CONFIG_ACCELGYRO_BMI220) && \
+	!defined(CONFIG_ACCELGYRO_BMI260) && !defined(CONFIG_ACCELGYRO_BMI3XX)
 #error "Must use following sensors BMI160 BMI220 BMI260 BMI3XX"
 #endif
 
 #if (defined(CONFIG_ACCELGYRO_BMI260) || defined(CONFIG_ACCELGYRO_BMI220)) && \
-    !defined(CONFIG_ACCELGYRO_BMI160)
+	!defined(CONFIG_ACCELGYRO_BMI160)
 #define V(s_) 1
-#elif defined(CONFIG_ACCELGYRO_BMI160) && \
-      !(defined(CONFIG_ACCELGYRO_BMI260) || defined(CONFIG_ACCELGYRO_BMI220))
+#elif defined(CONFIG_ACCELGYRO_BMI160) &&     \
+	!(defined(CONFIG_ACCELGYRO_BMI260) || \
+	  defined(CONFIG_ACCELGYRO_BMI220))
 #define V(s_) 0
 #else
-#define V(s_) ((s_)->chip == MOTIONSENSE_CHIP_BMI260 || \
-	       (s_)->chip == MOTIONSENSE_CHIP_BMI220)
+#define V(s_)                                     \
+	((s_)->chip == MOTIONSENSE_CHIP_BMI260 || \
+	 (s_)->chip == MOTIONSENSE_CHIP_BMI220)
 #endif
 /* Index for which table to use. */
 #if defined(CONFIG_ACCELGYRO_BMI160) && \
-    (defined(CONFIG_ACCELGYRO_BMI220) || defined(CONFIG_ACCELGYRO_BMI260))
+	(defined(CONFIG_ACCELGYRO_BMI220) || defined(CONFIG_ACCELGYRO_BMI260))
 #define T(s_) V(s_)
 #else
 #define T(s_) 0
@@ -51,16 +50,16 @@
 /* List of range values in +/-G's and their associated register values. */
 const struct bmi_accel_param_pair g_ranges[][4] = {
 #ifdef CONFIG_ACCELGYRO_BMI160
-	{ {2,  BMI160_GSEL_2G},
-	  {4,  BMI160_GSEL_4G},
-	  {8,  BMI160_GSEL_8G},
-	  {16, BMI160_GSEL_16G} },
+	{ { 2, BMI160_GSEL_2G },
+	  { 4, BMI160_GSEL_4G },
+	  { 8, BMI160_GSEL_8G },
+	  { 16, BMI160_GSEL_16G } },
 #endif
 #if defined(CONFIG_ACCELGYRO_BMI220) || defined(CONFIG_ACCELGYRO_BMI260)
-	{ {2,  BMI260_GSEL_2G},
-	  {4,  BMI260_GSEL_4G},
-	  {8,  BMI260_GSEL_8G},
-	  {16, BMI260_GSEL_16G} },
+	{ { 2, BMI260_GSEL_2G },
+	  { 4, BMI260_GSEL_4G },
+	  { 8, BMI260_GSEL_8G },
+	  { 16, BMI260_GSEL_16G } },
 #endif
 };
 
@@ -70,18 +69,18 @@ const struct bmi_accel_param_pair g_ranges[][4] = {
  */
 const struct bmi_accel_param_pair dps_ranges[][5] = {
 #ifdef CONFIG_ACCELGYRO_BMI160
-	{ {125,  BMI160_DPS_SEL_125},
-	  {250,  BMI160_DPS_SEL_250},
-	  {500,  BMI160_DPS_SEL_500},
-	  {1000, BMI160_DPS_SEL_1000},
-	  {2000, BMI160_DPS_SEL_2000} },
+	{ { 125, BMI160_DPS_SEL_125 },
+	  { 250, BMI160_DPS_SEL_250 },
+	  { 500, BMI160_DPS_SEL_500 },
+	  { 1000, BMI160_DPS_SEL_1000 },
+	  { 2000, BMI160_DPS_SEL_2000 } },
 #endif
 #if defined(CONFIG_ACCELGYRO_BMI220) || defined(CONFIG_ACCELGYRO_BMI260)
-	{ {125,  BMI260_DPS_SEL_125},
-	  {250,  BMI260_DPS_SEL_250},
-	  {500,  BMI260_DPS_SEL_500},
-	  {1000, BMI260_DPS_SEL_1000},
-	  {2000, BMI260_DPS_SEL_2000} },
+	{ { 125, BMI260_DPS_SEL_125 },
+	  { 250, BMI260_DPS_SEL_250 },
+	  { 500, BMI260_DPS_SEL_500 },
+	  { 1000, BMI260_DPS_SEL_1000 },
+	  { 2000, BMI260_DPS_SEL_2000 } },
 #endif
 };
 
@@ -99,8 +98,8 @@ int bmi_get_xyz_reg(const struct motion_sensor_t *s)
 	}
 }
 
-const struct bmi_accel_param_pair *bmi_get_range_table(
-		const struct motion_sensor_t *s, int *psize)
+const struct bmi_accel_param_pair *
+bmi_get_range_table(const struct motion_sensor_t *s, int *psize)
 {
 	if (s->type == MOTIONSENSE_TYPE_ACCEL) {
 		if (psize)
@@ -119,8 +118,7 @@ const struct bmi_accel_param_pair *bmi_get_range_table(
  * outside the range of values, it returns the closest valid reg value.
  */
 int bmi_get_reg_val(const int eng_val, const int round_up,
-		    const struct bmi_accel_param_pair *pairs,
-		    const int size)
+		    const struct bmi_accel_param_pair *pairs, const int size)
 {
 	int i;
 
@@ -128,7 +126,7 @@ int bmi_get_reg_val(const int eng_val, const int round_up,
 		if (eng_val <= pairs[i].val)
 			break;
 
-		if (eng_val < pairs[i+1].val) {
+		if (eng_val < pairs[i + 1].val) {
 			if (round_up)
 				i += 1;
 			break;
@@ -154,8 +152,8 @@ int bmi_get_engineering_val(const int reg_val,
 }
 
 #ifdef CONFIG_ACCELGYRO_BMI_COMM_SPI
-static int bmi_spi_raw_read(const int addr, const uint8_t reg,
-		     uint8_t *data, const int len)
+static int bmi_spi_raw_read(const int addr, const uint8_t reg, uint8_t *data,
+			    const int len)
 {
 	uint8_t cmd = 0x80 | reg;
 
@@ -166,8 +164,8 @@ static int bmi_spi_raw_read(const int addr, const uint8_t reg,
 /**
  * Read 8bit register from accelerometer.
  */
-int bmi_read8(const int port, const uint16_t i2c_spi_addr_flags,
-	      const int reg, int *data_ptr)
+int bmi_read8(const int port, const uint16_t i2c_spi_addr_flags, const int reg,
+	      int *data_ptr)
 {
 	int rv;
 
@@ -189,8 +187,8 @@ int bmi_read8(const int port, const uint16_t i2c_spi_addr_flags,
 /**
  * Write 8bit register from accelerometer.
  */
-int bmi_write8(const int port, const uint16_t i2c_spi_addr_flags,
-	       const int reg, int data)
+int bmi_write8(const int port, const uint16_t i2c_spi_addr_flags, const int reg,
+	       int data)
 {
 	int rv;
 
@@ -381,16 +379,16 @@ int bmi_decode_header(struct motion_sensor_t *accel, enum fifo_header hdr,
 				    s->flags & MOTIONSENSE_FLAG_IN_SPOOF_MODE)
 					v = s->spoof_xyz;
 				if (IS_ENABLED(CONFIG_ACCEL_FIFO)) {
-					struct ec_response_motion_sensor_data vector;
+					struct ec_response_motion_sensor_data
+						vector;
 
 					vector.flags = 0;
 					vector.data[X] = v[X];
 					vector.data[Y] = v[Y];
 					vector.data[Z] = v[Z];
 					vector.sensor_num = s - motion_sensors;
-					motion_sense_fifo_stage_data(&vector, s,
-								     3,
-								     last_ts);
+					motion_sense_fifo_stage_data(
+						&vector, s, 3, last_ts);
 				} else {
 					motion_sense_push_raw_xyz(s);
 				}
@@ -626,30 +624,21 @@ int bmi_get_offset(const struct motion_sensor_t *s, int16_t *offset,
 }
 
 #ifdef CONFIG_BODY_DETECTION
-int bmi_get_rms_noise(const struct motion_sensor_t *s)
+int bmi_get_rms_noise(const struct motion_sensor_t *accel,
+		      int rms_noise_100hz_mg)
 {
-	int ret;
-	fp_t noise_100hz, rate, sqrt_rate_ratio;
+	fp_t rate, sqrt_rate_ratio;
 
-	switch (s->type) {
-	case MOTIONSENSE_TYPE_ACCEL:
-		/* change unit of ODR to Hz to prevent INT_TO_FP() overflow */
-		rate = INT_TO_FP(bmi_get_data_rate(s) / 1000);
-		/*
-		 * Since the noise is proportional to sqrt(ODR) in BMI, and we
-		 * have rms noise in 100 Hz, we multiply it with the sqrt(ratio
-		 * of ODR to 100Hz) to get current noise.
-		 */
-		noise_100hz = INT_TO_FP(BMI_ACCEL_RMS_NOISE_100HZ(V(s)));
-		sqrt_rate_ratio =
-			fp_sqrtf(fp_div(rate, INT_TO_FP(BMI_ACCEL_100HZ)));
-		ret = FP_TO_INT(fp_mul(noise_100hz, sqrt_rate_ratio));
-		break;
-	default:
-		CPRINTS("%s with gyro/mag is not implemented", __func__);
-		return 0;
-	}
-	return ret;
+	/* change unit of ODR to Hz to prevent INT_TO_FP() overflow */
+	rate = INT_TO_FP(bmi_get_data_rate(accel) / 1000);
+	/*
+	 * Since the noise is proportional to sqrt(ODR) in BMI, and we
+	 * have rms noise in 100 Hz, we multiply it with the sqrt(ratio
+	 * of ODR to 100Hz) to get current noise.
+	 */
+	sqrt_rate_ratio = fp_sqrtf(fp_div(rate, INT_TO_FP(BMI_ACCEL_100HZ)));
+	return FP_TO_INT(
+		fp_mul(INT_TO_FP(rms_noise_100hz_mg), sqrt_rate_ratio));
 }
 #endif
 
@@ -859,7 +848,7 @@ int bmi_set_accel_offset(const struct motion_sensor_t *accel, intv3_t v)
 }
 
 int bmi_set_gyro_offset(const struct motion_sensor_t *gyro, intv3_t v,
-			 int *val98_ptr)
+			int *val98_ptr)
 {
 	int i, val, ret;
 
@@ -903,8 +892,7 @@ void motion_orientation_update(const struct motion_sensor_t *s)
 }
 #endif
 
-int bmi_list_activities(const struct motion_sensor_t *s,
-			uint32_t *enabled,
+int bmi_list_activities(const struct motion_sensor_t *s, uint32_t *enabled,
 			uint32_t *disabled)
 {
 	struct bmi_drv_data_t *data = BMI_GET_DATA(s);

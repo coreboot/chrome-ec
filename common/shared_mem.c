@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -62,14 +62,13 @@ void shared_mem_release(void *ptr)
 }
 
 #ifdef CONFIG_CMD_SHMEM
-static int command_shmem(int argc, char **argv)
+static int command_shmem(int argc, const char **argv)
 {
 	ccprintf("Size:%6d\n", shared_mem_size());
 	ccprintf("Used:%6d\n", buf_in_use);
 	ccprintf("Max: %6d\n", max_used);
 	return EC_SUCCESS;
 }
-DECLARE_SAFE_CONSOLE_COMMAND(shmem, command_shmem,
-			     NULL,
+DECLARE_SAFE_CONSOLE_COMMAND(shmem, command_shmem, NULL,
 			     "Print shared memory stats");
 #endif

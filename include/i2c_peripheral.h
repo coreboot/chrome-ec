@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,9 +10,9 @@
 
 /* Data structure to define I2C peripheral port configuration. */
 struct i2c_periph_port_t {
-	const char *name;     /* Port name */
-	int port;             /* Port */
-	uint8_t addr;         /* address(7-bit without R/W) */
+	const char *name; /* Port name */
+	int port; /* Port */
+	uint8_t addr; /* address(7-bit without R/W) */
 };
 
 extern const struct i2c_periph_port_t i2c_periph_ports[];

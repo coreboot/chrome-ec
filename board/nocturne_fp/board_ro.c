@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -14,7 +14,6 @@
 #ifndef SECTION_IS_RO
 #error "This file should only be built for RO."
 #endif
-
 
 /**
  * Disable restricted commands when the system is locked.

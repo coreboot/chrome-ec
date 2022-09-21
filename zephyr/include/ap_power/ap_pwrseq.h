@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,4 +9,5 @@
 /** Starts the AP power sequence thread */
 void ap_pwrseq_task_start(void);
 
+void ap_pwrseq_wake(void);
 #endif /* __AP_POWER_AP_PWRSEQ_H__ */

@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -15,7 +15,7 @@
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_EVENTS, outstr)
-#define CPRINTS(format, args...) cprints(CC_EVENTS, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_EVENTS, format, ##args)
 
 static atomic_t device_current_events;
 static atomic_t device_enabled_events;
@@ -87,7 +87,7 @@ void device_enable_event(enum ec_device_event event)
 /* Console commands */
 
 #ifdef CONFIG_CMD_DEVICE_EVENT
-static int command_device_event(int argc, char **argv)
+static int command_device_event(int argc, const char **argv)
 {
 	/* Handle sub-commands */
 	if (argc == 3) {

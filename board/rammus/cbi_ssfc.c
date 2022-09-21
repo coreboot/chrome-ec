@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -23,7 +23,7 @@ static void cbi_ssfc_init(void)
 
 	CPRINTS("Read CBI SSFC : 0x%04X", cached_ssfc.raw_value);
 }
-DECLARE_HOOK(HOOK_INIT, cbi_ssfc_init, HOOK_PRIO_INIT_I2C+1);
+DECLARE_HOOK(HOOK_INIT, cbi_ssfc_init, HOOK_PRIO_INIT_I2C + 1);
 
 enum ec_ssfc_lid_sensor get_cbi_ssfc_lid_sensor(void)
 {

@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -57,5 +57,15 @@ config PLATFORM_EC_THROTTLE_AP_ON_BAT_LOW_VOLTAGE_THRESH
 	int "Low voltage threshold in millivolts"
 	default 0
 endif
+
+config PLATFORM_EC_GPU_NVIDIA
+	bool "Nvidia GPU supports throttling"
+	default n
+	help
+	  Enable GPU throttling. When the GPU is throttled, a software (D-Notify)
+	  and a hardware throttle (GPIO_NVIDIA_GPU_ACOFF_ODL) are enabled. A
+	  hardware throttle will be automatically disabled after a fixed period
+	  of time but a software throttle may remain and keep changing as the
+	  situation changes.
 
 endif # PLATFORM_EC_THROTTLE_AP

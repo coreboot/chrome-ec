@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -38,7 +38,9 @@ void chipset_reset(enum chipset_shutdown_reason reason)
 /* TODO: b/214509787
  * To be added later when this functionality is implemented in ap_pwrseq.
  */
-void chipset_throttle_cpu(int throttle) { }
+void chipset_throttle_cpu(int throttle)
+{
+}
 
 void init_reset_log(void)
 {

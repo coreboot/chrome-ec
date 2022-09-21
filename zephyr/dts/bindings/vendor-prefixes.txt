@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,9 +9,14 @@ cros-ec	The Chromium OS Embedded Controller Project
 cros	The Chromium OS Embedded Controller Project
 intersil	Intersil
 lgc	LG Chem
-as3gwrc3ka	Battery vendor
 smp	Battery vendor
 aec	Battery vendor
 powertech	Battery vendor
 getac	Battery vendor
 ganfeng	Battery vendor
+byd	Battery vendor
+celxpert	Battery vendor
+sunwoda	Battery vendor
+cosmx	Battery vendor
+dynapack	Battery vendor
+atl	Battery vendor

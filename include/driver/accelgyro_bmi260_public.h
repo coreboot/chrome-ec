@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -18,7 +18,7 @@
  */
 
 /* I2C addresses */
-#define BMI260_ADDR0_FLAGS	0x68
+#define BMI260_ADDR0_FLAGS 0x68
 
 extern const struct accelgyro_drv bmi260_drv;
 

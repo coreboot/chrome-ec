@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -21,105 +21,105 @@ LOG_MODULE_REGISTER(emul_bmi160);
 
 /** Mask reserved bits in each register of BMI160 */
 static const uint8_t bmi_emul_160_rsvd_mask[] = {
-	[BMI160_CHIP_ID]		= 0x00,
-	[0x01]				= 0xff, /* Reserved */
-	[BMI160_ERR_REG]		= 0x00,
-	[BMI160_PMU_STATUS]		= 0xc0,
-	[BMI160_MAG_X_L_G]		= 0x00,
-	[BMI160_MAG_X_H_G]		= 0x00,
-	[BMI160_MAG_Y_L_G]		= 0x00,
-	[BMI160_MAG_Y_H_G]		= 0x00,
-	[BMI160_MAG_Z_L_G]		= 0x00,
-	[BMI160_MAG_Z_H_G]		= 0x00,
-	[BMI160_RHALL_L_G]		= 0x00,
-	[BMI160_RHALL_H_G]		= 0x00,
-	[BMI160_GYR_X_L_G]		= 0x00,
-	[BMI160_GYR_X_H_G]		= 0x00,
-	[BMI160_GYR_Y_L_G]		= 0x00,
-	[BMI160_GYR_Y_H_G]		= 0x00,
-	[BMI160_GYR_Z_L_G]		= 0x00,
-	[BMI160_GYR_Z_H_G]		= 0x00,
-	[BMI160_ACC_X_L_G]		= 0x00,
-	[BMI160_ACC_X_H_G]		= 0x00,
-	[BMI160_ACC_Y_L_G]		= 0x00,
-	[BMI160_ACC_Y_H_G]		= 0x00,
-	[BMI160_ACC_Z_L_G]		= 0x00,
-	[BMI160_ACC_Z_H_G]		= 0x00,
-	[BMI160_SENSORTIME_0]		= 0x00,
-	[BMI160_SENSORTIME_1]		= 0x00,
-	[BMI160_SENSORTIME_2]		= 0x00,
-	[BMI160_STATUS]			= 0x01,
-	[BMI160_INT_STATUS_0]		= 0x00,
-	[BMI160_INT_STATUS_1]		= 0x03,
-	[BMI160_INT_STATUS_2]		= 0x00,
-	[BMI160_INT_STATUS_3]		= 0x00,
-	[BMI160_TEMPERATURE_0]		= 0x00,
-	[BMI160_TEMPERATURE_1]		= 0x00,
-	[BMI160_FIFO_LENGTH_0]		= 0x00,
-	[BMI160_FIFO_LENGTH_1]		= 0xf8,
-	[BMI160_FIFO_DATA]		= 0x00,
-	[0x25 ... 0x3f]			= 0xff, /* Reserved */
-	[BMI160_ACC_CONF]		= 0x00,
-	[BMI160_ACC_RANGE]		= 0xf0,
-	[BMI160_GYR_CONF]		= 0xc0,
-	[BMI160_GYR_RANGE]		= 0xf8,
-	[BMI160_MAG_CONF]		= 0xf0,
-	[BMI160_FIFO_DOWNS]		= 0x00,
-	[BMI160_FIFO_CONFIG_0]		= 0x00,
-	[BMI160_FIFO_CONFIG_1]		= 0x01,
-	[0x48 ... 0x4a]			= 0xff, /* Reserved */
-	[BMI160_MAG_IF_0]		= 0x01,
-	[BMI160_MAG_IF_1]		= 0x40,
-	[BMI160_MAG_IF_2]		= 0x00,
-	[BMI160_MAG_IF_3]		= 0x00,
-	[BMI160_MAG_IF_4]		= 0x00,
-	[BMI160_INT_EN_0]		= 0x08,
-	[BMI160_INT_EN_1]		= 0x80,
-	[BMI160_INT_EN_2]		= 0xf0,
-	[BMI160_INT_OUT_CTRL]		= 0x00,
-	[BMI160_INT_LATCH]		= 0xc0,
-	[BMI160_INT_MAP_0]		= 0x00,
-	[BMI160_INT_MAP_1]		= 0x00,
-	[BMI160_INT_MAP_2]		= 0x00,
-	[BMI160_INT_DATA_0]		= 0x77,
-	[BMI160_INT_DATA_1]		= 0x7f,
-	[BMI160_INT_LOW_HIGH_0]		= 0x00,
-	[BMI160_INT_LOW_HIGH_1]		= 0x00,
-	[BMI160_INT_LOW_HIGH_2]		= 0x3c,
-	[BMI160_INT_LOW_HIGH_3]		= 0x00,
-	[BMI160_INT_LOW_HIGH_4]		= 0x00,
-	[BMI160_INT_MOTION_0]		= 0x00,
-	[BMI160_INT_MOTION_1]		= 0x00,
-	[BMI160_INT_MOTION_2]		= 0x00,
-	[BMI160_INT_MOTION_3]		= 0xc0,
-	[BMI160_INT_TAP_0]		= 0x38,
-	[BMI160_INT_TAP_1]		= 0xe0,
-	[BMI160_INT_ORIENT_0]		= 0x00,
-	[BMI160_INT_ORIENT_1]		= 0x00,
-	[BMI160_INT_FLAT_0]		= 0xc0,
-	[BMI160_INT_FLAT_1]		= 0xc8,
-	[BMI160_FOC_CONF]		= 0x80,
-	[BMI160_CONF]			= 0xfd,
-	[BMI160_IF_CONF]		= 0xce,
-	[BMI160_PMU_TRIGGER]		= 0x80,
-	[BMI160_SELF_TEST]		= 0xe0,
-	[0x6e]				= 0xff, /* Reserved */
-	[0x6f]				= 0xff, /* Reserved */
-	[BMI160_NV_CONF]		= 0xf0,
-	[BMI160_OFFSET_ACC70]		= 0x00,
-	[BMI160_OFFSET_ACC70 + 1]	= 0x00,
-	[BMI160_OFFSET_ACC70 + 2]	= 0x00,
-	[BMI160_OFFSET_GYR70]		= 0x00,
-	[BMI160_OFFSET_GYR70 + 1]	= 0x00,
-	[BMI160_OFFSET_GYR70 + 2]	= 0x00,
-	[BMI160_OFFSET_EN_GYR98]	= 0x00,
-	[BMI160_STEP_CNT_0]		= 0x00,
-	[BMI160_STEP_CNT_1]		= 0x00,
-	[BMI160_STEP_CONF_0]		= 0x00,
-	[BMI160_STEP_CONF_1]		= 0xf0,
-	[0x7c]				= 0xff, /* Reserved */
-	[0x7d]				= 0xff, /* Reserved */
-	[BMI160_CMD_REG]		= 0x00,
+	[BMI160_CHIP_ID] = 0x00,
+	[0x01] = 0xff, /* Reserved */
+	[BMI160_ERR_REG] = 0x00,
+	[BMI160_PMU_STATUS] = 0xc0,
+	[BMI160_MAG_X_L_G] = 0x00,
+	[BMI160_MAG_X_H_G] = 0x00,
+	[BMI160_MAG_Y_L_G] = 0x00,
+	[BMI160_MAG_Y_H_G] = 0x00,
+	[BMI160_MAG_Z_L_G] = 0x00,
+	[BMI160_MAG_Z_H_G] = 0x00,
+	[BMI160_RHALL_L_G] = 0x00,
+	[BMI160_RHALL_H_G] = 0x00,
+	[BMI160_GYR_X_L_G] = 0x00,
+	[BMI160_GYR_X_H_G] = 0x00,
+	[BMI160_GYR_Y_L_G] = 0x00,
+	[BMI160_GYR_Y_H_G] = 0x00,
+	[BMI160_GYR_Z_L_G] = 0x00,
+	[BMI160_GYR_Z_H_G] = 0x00,
+	[BMI160_ACC_X_L_G] = 0x00,
+	[BMI160_ACC_X_H_G] = 0x00,
+	[BMI160_ACC_Y_L_G] = 0x00,
+	[BMI160_ACC_Y_H_G] = 0x00,
+	[BMI160_ACC_Z_L_G] = 0x00,
+	[BMI160_ACC_Z_H_G] = 0x00,
+	[BMI160_SENSORTIME_0] = 0x00,
+	[BMI160_SENSORTIME_1] = 0x00,
+	[BMI160_SENSORTIME_2] = 0x00,
+	[BMI160_STATUS] = 0x01,
+	[BMI160_INT_STATUS_0] = 0x00,
+	[BMI160_INT_STATUS_1] = 0x03,
+	[BMI160_INT_STATUS_2] = 0x00,
+	[BMI160_INT_STATUS_3] = 0x00,
+	[BMI160_TEMPERATURE_0] = 0x00,
+	[BMI160_TEMPERATURE_1] = 0x00,
+	[BMI160_FIFO_LENGTH_0] = 0x00,
+	[BMI160_FIFO_LENGTH_1] = 0xf8,
+	[BMI160_FIFO_DATA] = 0x00,
+	[0x25 ... 0x3f] = 0xff, /* Reserved */
+	[BMI160_ACC_CONF] = 0x00,
+	[BMI160_ACC_RANGE] = 0xf0,
+	[BMI160_GYR_CONF] = 0xc0,
+	[BMI160_GYR_RANGE] = 0xf8,
+	[BMI160_MAG_CONF] = 0xf0,
+	[BMI160_FIFO_DOWNS] = 0x00,
+	[BMI160_FIFO_CONFIG_0] = 0x00,
+	[BMI160_FIFO_CONFIG_1] = 0x01,
+	[0x48 ... 0x4a] = 0xff, /* Reserved */
+	[BMI160_MAG_IF_0] = 0x01,
+	[BMI160_MAG_IF_1] = 0x40,
+	[BMI160_MAG_IF_2] = 0x00,
+	[BMI160_MAG_IF_3] = 0x00,
+	[BMI160_MAG_IF_4] = 0x00,
+	[BMI160_INT_EN_0] = 0x08,
+	[BMI160_INT_EN_1] = 0x80,
+	[BMI160_INT_EN_2] = 0xf0,
+	[BMI160_INT_OUT_CTRL] = 0x00,
+	[BMI160_INT_LATCH] = 0xc0,
+	[BMI160_INT_MAP_0] = 0x00,
+	[BMI160_INT_MAP_1] = 0x00,
+	[BMI160_INT_MAP_2] = 0x00,
+	[BMI160_INT_DATA_0] = 0x77,
+	[BMI160_INT_DATA_1] = 0x7f,
+	[BMI160_INT_LOW_HIGH_0] = 0x00,
+	[BMI160_INT_LOW_HIGH_1] = 0x00,
+	[BMI160_INT_LOW_HIGH_2] = 0x3c,
+	[BMI160_INT_LOW_HIGH_3] = 0x00,
+	[BMI160_INT_LOW_HIGH_4] = 0x00,
+	[BMI160_INT_MOTION_0] = 0x00,
+	[BMI160_INT_MOTION_1] = 0x00,
+	[BMI160_INT_MOTION_2] = 0x00,
+	[BMI160_INT_MOTION_3] = 0xc0,
+	[BMI160_INT_TAP_0] = 0x38,
+	[BMI160_INT_TAP_1] = 0xe0,
+	[BMI160_INT_ORIENT_0] = 0x00,
+	[BMI160_INT_ORIENT_1] = 0x00,
+	[BMI160_INT_FLAT_0] = 0xc0,
+	[BMI160_INT_FLAT_1] = 0xc8,
+	[BMI160_FOC_CONF] = 0x80,
+	[BMI160_CONF] = 0xfd,
+	[BMI160_IF_CONF] = 0xce,
+	[BMI160_PMU_TRIGGER] = 0x80,
+	[BMI160_SELF_TEST] = 0xe0,
+	[0x6e] = 0xff, /* Reserved */
+	[0x6f] = 0xff, /* Reserved */
+	[BMI160_NV_CONF] = 0xf0,
+	[BMI160_OFFSET_ACC70] = 0x00,
+	[BMI160_OFFSET_ACC70 + 1] = 0x00,
+	[BMI160_OFFSET_ACC70 + 2] = 0x00,
+	[BMI160_OFFSET_GYR70] = 0x00,
+	[BMI160_OFFSET_GYR70 + 1] = 0x00,
+	[BMI160_OFFSET_GYR70 + 2] = 0x00,
+	[BMI160_OFFSET_EN_GYR98] = 0x00,
+	[BMI160_STEP_CNT_0] = 0x00,
+	[BMI160_STEP_CNT_1] = 0x00,
+	[BMI160_STEP_CONF_0] = 0x00,
+	[BMI160_STEP_CONF_1] = 0xf0,
+	[0x7c] = 0xff, /* Reserved */
+	[0x7d] = 0xff, /* Reserved */
+	[BMI160_CMD_REG] = 0x00,
 };
 
 /**
@@ -182,95 +182,95 @@ static int bmi160_emul_gyr_range_to_shift(uint8_t range)
  * @param regs Pointer to array of emulator's registers
  * @param emul Pointer to BMI emulator
  */
-static void bmi160_emul_reset(uint8_t *regs, struct i2c_emul *emul)
+static void bmi160_emul_reset(uint8_t *regs, const struct emul *emul)
 {
 	bool tag_time;
 	bool header;
 
-	regs[BMI160_CHIP_ID]		= 0xd1;
-	regs[BMI160_ERR_REG]		= 0x00;
-	regs[BMI160_PMU_STATUS]		= 0x00;
-	regs[BMI160_MAG_X_L_G]		= 0x00;
-	regs[BMI160_MAG_X_H_G]		= 0x00;
-	regs[BMI160_MAG_Y_L_G]		= 0x00;
-	regs[BMI160_MAG_Y_H_G]		= 0x00;
-	regs[BMI160_MAG_Z_L_G]		= 0x00;
-	regs[BMI160_MAG_Z_H_G]		= 0x00;
-	regs[BMI160_RHALL_L_G]		= 0x00;
-	regs[BMI160_RHALL_H_G]		= 0x00;
-	regs[BMI160_GYR_X_L_G]		= 0x00;
-	regs[BMI160_GYR_X_H_G]		= 0x00;
-	regs[BMI160_GYR_Y_L_G]		= 0x00;
-	regs[BMI160_GYR_Y_H_G]		= 0x00;
-	regs[BMI160_GYR_Z_L_G]		= 0x00;
-	regs[BMI160_GYR_Z_H_G]		= 0x00;
-	regs[BMI160_ACC_X_L_G]		= 0x00;
-	regs[BMI160_ACC_X_H_G]		= 0x00;
-	regs[BMI160_ACC_Y_L_G]		= 0x00;
-	regs[BMI160_ACC_Y_H_G]		= 0x00;
-	regs[BMI160_ACC_Z_L_G]		= 0x00;
-	regs[BMI160_ACC_Z_H_G]		= 0x00;
-	regs[BMI160_SENSORTIME_0]	= 0x00;
-	regs[BMI160_SENSORTIME_1]	= 0x00;
-	regs[BMI160_SENSORTIME_2]	= 0x00;
-	regs[BMI160_STATUS]		= 0x01;
-	regs[BMI160_INT_STATUS_0]	= 0x00;
-	regs[BMI160_INT_STATUS_1]	= 0x00;
-	regs[BMI160_INT_STATUS_2]	= 0x00;
-	regs[BMI160_INT_STATUS_3]	= 0x00;
-	regs[BMI160_TEMPERATURE_0]	= 0x00;
-	regs[BMI160_TEMPERATURE_1]	= 0x00;
-	regs[BMI160_FIFO_LENGTH_0]	= 0x00;
-	regs[BMI160_FIFO_LENGTH_1]	= 0x00;
-	regs[BMI160_FIFO_DATA]		= 0x00;
-	regs[BMI160_ACC_CONF]		= 0x28;
-	regs[BMI160_ACC_RANGE]		= 0x03;
-	regs[BMI160_GYR_CONF]		= 0x28;
-	regs[BMI160_GYR_RANGE]		= 0x00;
-	regs[BMI160_MAG_CONF]		= 0x0b;
-	regs[BMI160_FIFO_DOWNS]		= 0x88;
-	regs[BMI160_FIFO_CONFIG_0]	= 0x80;
-	regs[BMI160_FIFO_CONFIG_1]	= 0x10;
-	regs[BMI160_MAG_IF_0]		= 0x20;
-	regs[BMI160_MAG_IF_1]		= 0x80;
-	regs[BMI160_MAG_IF_2]		= 0x42;
-	regs[BMI160_MAG_IF_3]		= 0x4c;
-	regs[BMI160_MAG_IF_4]		= 0x00;
-	regs[BMI160_INT_EN_0]		= 0x00;
-	regs[BMI160_INT_EN_1]		= 0x00;
-	regs[BMI160_INT_EN_2]		= 0x00;
-	regs[BMI160_INT_OUT_CTRL]	= 0x00;
-	regs[BMI160_INT_LATCH]		= 0x00;
-	regs[BMI160_INT_MAP_0]		= 0x00;
-	regs[BMI160_INT_MAP_1]		= 0x00;
-	regs[BMI160_INT_MAP_2]		= 0x00;
-	regs[BMI160_INT_DATA_0]		= 0x00;
-	regs[BMI160_INT_DATA_1]		= 0x00;
-	regs[BMI160_INT_LOW_HIGH_0]	= 0x07;
-	regs[BMI160_INT_LOW_HIGH_1]	= 0x30;
-	regs[BMI160_INT_LOW_HIGH_2]	= 0x81;
-	regs[BMI160_INT_LOW_HIGH_3]	= 0xdb;
-	regs[BMI160_INT_LOW_HIGH_4]	= 0xc0;
-	regs[BMI160_INT_MOTION_0]	= 0x00;
-	regs[BMI160_INT_MOTION_1]	= 0x14;
-	regs[BMI160_INT_MOTION_2]	= 0x14;
-	regs[BMI160_INT_MOTION_3]	= 0x24;
-	regs[BMI160_INT_TAP_0]		= 0x04;
-	regs[BMI160_INT_TAP_1]		= 0xda;
-	regs[BMI160_INT_ORIENT_0]	= 0x18;
-	regs[BMI160_INT_ORIENT_1]	= 0x48;
-	regs[BMI160_INT_FLAT_0]		= 0x08;
-	regs[BMI160_INT_FLAT_1]		= 0x11;
-	regs[BMI160_FOC_CONF]		= 0x00;
-	regs[BMI160_CONF]		= 0x00;
-	regs[BMI160_IF_CONF]		= 0x00;
-	regs[BMI160_PMU_TRIGGER]	= 0x00;
-	regs[BMI160_SELF_TEST]		= 0x00;
-	regs[BMI160_STEP_CNT_0]		= 0x00;
-	regs[BMI160_STEP_CNT_1]		= 0x00;
-	regs[BMI160_STEP_CONF_0]	= 0x00;
-	regs[BMI160_STEP_CONF_1]	= 0x15;
-	regs[BMI160_CMD_REG]		= 0x03;
+	regs[BMI160_CHIP_ID] = 0xd1;
+	regs[BMI160_ERR_REG] = 0x00;
+	regs[BMI160_PMU_STATUS] = 0x00;
+	regs[BMI160_MAG_X_L_G] = 0x00;
+	regs[BMI160_MAG_X_H_G] = 0x00;
+	regs[BMI160_MAG_Y_L_G] = 0x00;
+	regs[BMI160_MAG_Y_H_G] = 0x00;
+	regs[BMI160_MAG_Z_L_G] = 0x00;
+	regs[BMI160_MAG_Z_H_G] = 0x00;
+	regs[BMI160_RHALL_L_G] = 0x00;
+	regs[BMI160_RHALL_H_G] = 0x00;
+	regs[BMI160_GYR_X_L_G] = 0x00;
+	regs[BMI160_GYR_X_H_G] = 0x00;
+	regs[BMI160_GYR_Y_L_G] = 0x00;
+	regs[BMI160_GYR_Y_H_G] = 0x00;
+	regs[BMI160_GYR_Z_L_G] = 0x00;
+	regs[BMI160_GYR_Z_H_G] = 0x00;
+	regs[BMI160_ACC_X_L_G] = 0x00;
+	regs[BMI160_ACC_X_H_G] = 0x00;
+	regs[BMI160_ACC_Y_L_G] = 0x00;
+	regs[BMI160_ACC_Y_H_G] = 0x00;
+	regs[BMI160_ACC_Z_L_G] = 0x00;
+	regs[BMI160_ACC_Z_H_G] = 0x00;
+	regs[BMI160_SENSORTIME_0] = 0x00;
+	regs[BMI160_SENSORTIME_1] = 0x00;
+	regs[BMI160_SENSORTIME_2] = 0x00;
+	regs[BMI160_STATUS] = 0x01;
+	regs[BMI160_INT_STATUS_0] = 0x00;
+	regs[BMI160_INT_STATUS_1] = 0x00;
+	regs[BMI160_INT_STATUS_2] = 0x00;
+	regs[BMI160_INT_STATUS_3] = 0x00;
+	regs[BMI160_TEMPERATURE_0] = 0x00;
+	regs[BMI160_TEMPERATURE_1] = 0x00;
+	regs[BMI160_FIFO_LENGTH_0] = 0x00;
+	regs[BMI160_FIFO_LENGTH_1] = 0x00;
+	regs[BMI160_FIFO_DATA] = 0x00;
+	regs[BMI160_ACC_CONF] = 0x28;
+	regs[BMI160_ACC_RANGE] = 0x03;
+	regs[BMI160_GYR_CONF] = 0x28;
+	regs[BMI160_GYR_RANGE] = 0x00;
+	regs[BMI160_MAG_CONF] = 0x0b;
+	regs[BMI160_FIFO_DOWNS] = 0x88;
+	regs[BMI160_FIFO_CONFIG_0] = 0x80;
+	regs[BMI160_FIFO_CONFIG_1] = 0x10;
+	regs[BMI160_MAG_IF_0] = 0x20;
+	regs[BMI160_MAG_IF_1] = 0x80;
+	regs[BMI160_MAG_IF_2] = 0x42;
+	regs[BMI160_MAG_IF_3] = 0x4c;
+	regs[BMI160_MAG_IF_4] = 0x00;
+	regs[BMI160_INT_EN_0] = 0x00;
+	regs[BMI160_INT_EN_1] = 0x00;
+	regs[BMI160_INT_EN_2] = 0x00;
+	regs[BMI160_INT_OUT_CTRL] = 0x00;
+	regs[BMI160_INT_LATCH] = 0x00;
+	regs[BMI160_INT_MAP_0] = 0x00;
+	regs[BMI160_INT_MAP_1] = 0x00;
+	regs[BMI160_INT_MAP_2] = 0x00;
+	regs[BMI160_INT_DATA_0] = 0x00;
+	regs[BMI160_INT_DATA_1] = 0x00;
+	regs[BMI160_INT_LOW_HIGH_0] = 0x07;
+	regs[BMI160_INT_LOW_HIGH_1] = 0x30;
+	regs[BMI160_INT_LOW_HIGH_2] = 0x81;
+	regs[BMI160_INT_LOW_HIGH_3] = 0xdb;
+	regs[BMI160_INT_LOW_HIGH_4] = 0xc0;
+	regs[BMI160_INT_MOTION_0] = 0x00;
+	regs[BMI160_INT_MOTION_1] = 0x14;
+	regs[BMI160_INT_MOTION_2] = 0x14;
+	regs[BMI160_INT_MOTION_3] = 0x24;
+	regs[BMI160_INT_TAP_0] = 0x04;
+	regs[BMI160_INT_TAP_1] = 0xda;
+	regs[BMI160_INT_ORIENT_0] = 0x18;
+	regs[BMI160_INT_ORIENT_1] = 0x48;
+	regs[BMI160_INT_FLAT_0] = 0x08;
+	regs[BMI160_INT_FLAT_1] = 0x11;
+	regs[BMI160_FOC_CONF] = 0x00;
+	regs[BMI160_CONF] = 0x00;
+	regs[BMI160_IF_CONF] = 0x00;
+	regs[BMI160_PMU_TRIGGER] = 0x00;
+	regs[BMI160_SELF_TEST] = 0x00;
+	regs[BMI160_STEP_CNT_0] = 0x00;
+	regs[BMI160_STEP_CNT_1] = 0x00;
+	regs[BMI160_STEP_CONF_0] = 0x00;
+	regs[BMI160_STEP_CONF_1] = 0x15;
+	regs[BMI160_CMD_REG] = 0x03;
 
 	/* Call generic reset */
 	tag_time = regs[BMI160_FIFO_CONFIG_1] & BMI160_FIFO_TAG_TIME_EN;
@@ -349,7 +349,7 @@ static int16_t bmi160_emul_get_acc_target_off(int32_t acc, uint8_t target)
  * @param regs Pointer to array of emulator's registers
  * @param emul Pointer to BMI emulator
  */
-static void bmi160_emul_handle_off_comp(uint8_t *regs, struct i2c_emul *emul)
+static void bmi160_emul_handle_off_comp(uint8_t *regs, const struct emul *emul)
 {
 	uint8_t target;
 	int16_t off;
@@ -361,6 +361,7 @@ static void bmi160_emul_handle_off_comp(uint8_t *regs, struct i2c_emul *emul)
 		bmi_emul_set_off(emul, BMI_EMUL_GYR_X, off);
 		val = bmi_emul_get_value(emul, BMI_EMUL_GYR_Y);
 		off = bmi160_emul_get_gyr_target_off(val);
+
 		bmi_emul_set_off(emul, BMI_EMUL_GYR_Y, off);
 		val = bmi_emul_get_value(emul, BMI_EMUL_GYR_Z);
 		off = bmi160_emul_get_gyr_target_off(val);
@@ -401,7 +402,8 @@ static void bmi160_emul_handle_off_comp(uint8_t *regs, struct i2c_emul *emul)
  * @return 0 on success
  * @return -EIO on failure
  */
-static int bmi160_emul_start_cmd(uint8_t *regs, struct i2c_emul *emul, int cmd)
+static int bmi160_emul_start_cmd(uint8_t *regs, const struct emul *emul,
+				 int cmd)
 {
 	int time;
 
@@ -470,7 +472,7 @@ static int bmi160_emul_start_cmd(uint8_t *regs, struct i2c_emul *emul, int cmd)
  * @param regs Pointer to array of emulator's registers
  * @param emul Pointer to BMI emulator
  */
-static void bmi160_emul_end_cmd(uint8_t *regs, struct i2c_emul *emul)
+static void bmi160_emul_end_cmd(uint8_t *regs, const struct emul *emul)
 {
 	uint8_t pmu_status;
 	bool tag_time;
@@ -560,7 +562,7 @@ static void bmi160_emul_end_cmd(uint8_t *regs, struct i2c_emul *emul)
  * @return BMI_EMUL_ACCESS_E on RO register access
  * @return -EIO on error
  */
-static int bmi160_emul_handle_write(uint8_t *regs, struct i2c_emul *emul,
+static int bmi160_emul_handle_write(uint8_t *regs, const struct emul *emul,
 				    int reg, int byte, uint8_t val)
 {
 	bool tag_time;
@@ -618,7 +620,7 @@ static int bmi160_emul_handle_write(uint8_t *regs, struct i2c_emul *emul,
  *
  * @return Currently accessed register
  */
-static int bmi160_emul_access_reg(struct i2c_emul *emul, int reg, int byte,
+static int bmi160_emul_access_reg(const struct emul *emul, int reg, int byte,
 				  bool read)
 {
 	if (!read) {
@@ -654,7 +656,7 @@ static int bmi160_emul_access_reg(struct i2c_emul *emul, int reg, int byte,
  * @return BMI_EMUL_ACCESS_E on WO register access
  * @return -EIO on other error
  */
-static int bmi160_emul_handle_read(uint8_t *regs, struct i2c_emul *emul,
+static int bmi160_emul_handle_read(uint8_t *regs, const struct emul *emul,
 				   int reg, int byte, char *buf)
 {
 	uint16_t fifo_len;
@@ -714,8 +716,8 @@ static int bmi160_emul_handle_read(uint8_t *regs, struct i2c_emul *emul,
 			bmi_emul_state_to_reg(emul, acc_shift, gyr_shift,
 					      BMI160_ACC_X_L_G,
 					      BMI160_GYR_X_L_G,
-					      BMI160_SENSORTIME_0,
-					      acc_off_en, gyr_off_en);
+					      BMI160_SENSORTIME_0, acc_off_en,
+					      gyr_off_en);
 		}
 		break;
 	case BMI160_FIFO_LENGTH_0:
@@ -738,21 +740,35 @@ static int bmi160_emul_handle_read(uint8_t *regs, struct i2c_emul *emul,
 	return 0;
 }
 
+static int bmi160_emul_finish_read(uint8_t *regs, const struct emul *emul,
+				   int reg, int bytes)
+{
+	int i;
+
+	switch (reg) {
+	case BMI160_INT_STATUS_0:
+		/* Clear interrupt status after reading. */
+		for (i = 0; i < bytes; ++i) {
+			regs[BMI160_INT_STATUS_0 + i] = 0;
+		}
+		break;
+	}
+	return 0;
+}
+
 /** Registers backed in NVM by BMI160 */
-const int bmi160_nvm_reg[] = {BMI160_NV_CONF,
-			      BMI160_OFFSET_ACC70,
-			      BMI160_OFFSET_ACC70 + 1,
-			      BMI160_OFFSET_ACC70 + 2,
-			      BMI160_OFFSET_GYR70,
-			      BMI160_OFFSET_GYR70 + 1,
-			      BMI160_OFFSET_GYR70 + 2,
-			      BMI160_OFFSET_EN_GYR98};
+const int bmi160_nvm_reg[] = {
+	BMI160_NV_CONF,		 BMI160_OFFSET_ACC70,	BMI160_OFFSET_ACC70 + 1,
+	BMI160_OFFSET_ACC70 + 2, BMI160_OFFSET_GYR70,	BMI160_OFFSET_GYR70 + 1,
+	BMI160_OFFSET_GYR70 + 2, BMI160_OFFSET_EN_GYR98
+};
 
 /** Confguration of BMI160 */
 struct bmi_emul_type_data bmi160_emul = {
 	.sensortime_follow_config_frame = false,
 	.handle_write = bmi160_emul_handle_write,
 	.handle_read = bmi160_emul_handle_read,
+	.finish_read = bmi160_emul_finish_read,
 	.access_reg = bmi160_emul_access_reg,
 	.reset = bmi160_emul_reset,
 	.rsvd_mask = bmi_emul_160_rsvd_mask,

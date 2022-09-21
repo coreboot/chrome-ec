@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -15,6 +15,7 @@ test-list-y=\
        cec \
        compile_time_macros \
        crc \
+       debug \
        flash_physical \
        flash_write_protect \
        fpsensor \
@@ -32,6 +33,7 @@ test-list-y=\
        sha256 \
        sha256_unrolled \
        static_if \
+       stdlib \
        timer_dos \
        utils \
        utils_str \

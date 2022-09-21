@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -47,19 +47,20 @@ enum ps8xxx_emul_port {
 };
 
 /* For now all devices supported by this emulator has the same FW rev reg */
-#define PS8XXX_REG_FW_REV		0x82
+#define PS8XXX_REG_FW_REV 0x82
 
 /**
- * @brief Get pointer to specific "hidden" I2C device
+ * @brief Get pointer to i2c_common_data for specific "hidden" I2C device
  *
  * @param emul Pointer to PS8xxx emulator
  * @param port Select which "hidden" I2C device should be obtained
  *
  * @return NULL if given "hidden" I2C device cannot be found
- * @return pointer to "hidden" I2C device
+ * @return pointer to "hidden" device i2c_common_emul_data
  */
-struct i2c_emul *ps8xxx_emul_get_i2c_emul(const struct emul *emul,
-					  enum ps8xxx_emul_port port);
+struct i2c_common_emul_data *
+ps8xxx_emul_get_i2c_common_data(const struct emul *emul,
+				enum ps8xxx_emul_port port);
 
 /**
  * @brief Get pointer to TCPCI emulator that is base for PS8xxx emulator

@@ -1,10 +1,9 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #include <zephyr/kernel.h>
-#include <zephyr/zephyr.h>
 
 #include "common.h"
 #include "console.h"
@@ -24,7 +23,7 @@ static inline uint32_t next_idx(uint32_t cur_idx)
 
 K_MUTEX_DEFINE(console_write_lock);
 
-void console_buf_notify_chars(const char *s, size_t len)
+size_t console_buf_notify_chars(const char *s, size_t len)
 {
 	/*
 	 * This is just notifying of console characters for debugging
@@ -32,12 +31,14 @@ void console_buf_notify_chars(const char *s, size_t len)
 	 * then just drop the string.
 	 */
 	if (k_mutex_lock(&console_write_lock, K_NO_WAIT))
-		return;
+		return 0;
 	/* We got the mutex. */
-	while (len--) {
+	for (size_t i = 0; i < len; i++) {
 		/* Don't copy null byte into buffer */
-		if (!(*s))
+		if (!(*s)) {
+			s++;
 			continue;
+		}
 
 		uint32_t new_tail = next_idx(tail_idx);
 
@@ -47,11 +48,9 @@ void console_buf_notify_chars(const char *s, size_t len)
 		if (new_tail == head_idx)
 			head_idx = next_idx(head_idx);
 		if (new_tail == previous_snapshot_idx)
-			previous_snapshot_idx =
-				next_idx(previous_snapshot_idx);
+			previous_snapshot_idx = next_idx(previous_snapshot_idx);
 		if (new_tail == current_snapshot_idx)
-			current_snapshot_idx =
-				next_idx(current_snapshot_idx);
+			current_snapshot_idx = next_idx(current_snapshot_idx);
 		if (new_tail == read_next_idx)
 			read_next_idx = next_idx(read_next_idx);
 
@@ -59,6 +58,7 @@ void console_buf_notify_chars(const char *s, size_t len)
 		tail_idx = new_tail;
 	}
 	k_mutex_unlock(&console_write_lock);
+	return len;
 }
 
 enum ec_status uart_console_read_buffer_init(void)
@@ -118,6 +118,7 @@ int uart_console_read_buffer(uint8_t type, char *dest, uint16_t dest_size,
 	if (*head == current_snapshot_idx) {
 		/* No new data, return empty response */
 		k_mutex_unlock(&console_write_lock);
+		*write_count_out = 0;
 		return EC_RES_SUCCESS;
 	}
 

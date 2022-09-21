@@ -1,4 +1,4 @@
-/* Copyright 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -32,7 +32,7 @@ enum npcx_adc_input_channel {
 #if NPCX_FAMILY_VERSION >= NPCX_FAMILY_NPCX9
 	NPCX_ADC_CH10,
 	NPCX_ADC_CH11,
- #endif
+#endif
 	NPCX_ADC_CH_COUNT
 };
 

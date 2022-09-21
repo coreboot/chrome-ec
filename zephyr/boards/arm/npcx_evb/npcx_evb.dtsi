@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -22,23 +22,23 @@
 
 		i2c_evb_0_0 {
 			i2c-port = <&i2c0_0>;
-			enum-name = "I2C_PORT_EVB_0";
+			enum-names = "I2C_PORT_EVB_0";
 		};
 		i2c_evb_1_0 {
 			i2c-port = <&i2c1_0>;
-			enum-name = "I2C_PORT_EVB_1";
+			enum-names = "I2C_PORT_EVB_1";
 		};
 		i2c_evb_2_0 {
 			i2c-port = <&i2c2_0>;
-			enum-name = "I2C_PORT_EVB_2";
+			enum-names = "I2C_PORT_EVB_2";
 		};
 		i2c_evb_3_0 {
 			i2c-port = <&i2c3_0>;
-			enum-name = "I2C_PORT_EVB_3";
+			enum-names = "I2C_PORT_EVB_3";
 		};
 		i2c_evb_7_0 {
 			i2c-port = <&i2c7_0>;
-			enum-name = "I2C_PORT_EVB_7";
+			enum-names = "I2C_PORT_EVB_7";
 		};
 	};
 
@@ -46,27 +46,22 @@
 		compatible = "named-adc-channels";
 
 		adc_ch_0 {
-			label = "ADC0";
 			enum-name = "ADC_EVB_CH_0";
 			io-channels = <&adc0 0>;
 		};
 		adc_ch_1 {
-			label = "ADC1";
 			enum-name = "ADC_EVB_CH_1";
 			io-channels = <&adc0 1>;
 		};
 		adc_ch_2 {
-			label = "ADC2";
 			enum-name = "ADC_EVB_CH_2";
 			io-channels = <&adc0 2>;
 		};
 		adc_ch_3 {
-			label = "ADC3";
 			enum-name = "ADC_EVB_CH_3";
 			io-channels = <&adc0 3>;
 		};
 		adc_ch_4 {
-			label = "ADC4";
 			enum-name = "ADC_EVB_CH_4";
 			io-channels = <&adc0 4>;
 		};

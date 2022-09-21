@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -20,8 +20,8 @@ enum throttle_level {
  * Types of throttling desired. These are independent.
  */
 enum throttle_type {
-	THROTTLE_SOFT = 0,			/* for example, host events */
-	THROTTLE_HARD,				/* for example, PROCHOT */
+	THROTTLE_SOFT = 0, /* for example, host events */
+	THROTTLE_HARD, /* for example, PROCHOT */
 	NUM_THROTTLE_TYPES
 };
 
@@ -32,6 +32,7 @@ enum throttle_sources {
 	THROTTLE_SRC_THERMAL = 0,
 	THROTTLE_SRC_BAT_DISCHG_CURRENT,
 	THROTTLE_SRC_BAT_VOLTAGE,
+	THROTTLE_SRC_AC,
 };
 
 /**
@@ -57,12 +58,11 @@ struct prochot_cfg {
  * @param type          Type of throttling desired
  * @param source        Which task is requesting throttling
  */
-#if defined(CONFIG_THROTTLE_AP) || \
+#if defined(CONFIG_THROTTLE_AP) ||                           \
 	defined(CONFIG_THROTTLE_AP_ON_BAT_DISCHG_CURRENT) || \
 	defined(CONFIG_THROTTLE_AP_ON_BAT_VOLTAGE)
 
-void throttle_ap(enum throttle_level level,
-		 enum throttle_type type,
+void throttle_ap(enum throttle_level level, enum throttle_type type,
 		 enum throttle_sources source);
 
 /**
@@ -102,7 +102,11 @@ void throttle_ap_c10_input_interrupt(enum gpio_signal signal);
 static inline void throttle_ap(enum throttle_level level,
 			       enum throttle_type type,
 			       enum throttle_sources source)
-{}
+{
+}
 #endif
 
-#endif	/* __CROS_EC_THROTTLE_AP_H */
+void throttle_gpu(enum throttle_level level, enum throttle_type type,
+		  enum throttle_sources source);
+
+#endif /* __CROS_EC_THROTTLE_AP_H */

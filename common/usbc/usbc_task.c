@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -6,6 +6,7 @@
 #include "battery.h"
 #include "battery_smart.h"
 #include "board.h"
+#include "builtin/assert.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "chipset.h"
@@ -36,8 +37,8 @@
 #define USBC_EVENT_TIMEOUT (5 * MSEC)
 #define USBC_MIN_EVENT_TIMEOUT (1 * MSEC)
 
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
 /*
  * If CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT is not defined then

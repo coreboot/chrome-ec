@@ -1,8 +1,7 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -32,8 +31,8 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
 /* USBC TCPC configuration */
 const struct tcpc_config_t tcpc_config[] = {
@@ -75,33 +74,43 @@ BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == USBC_PORT_COUNT);
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
 /* USBC mux configuration - Alder Lake includes internal mux */
-static const struct usb_mux usbc0_tcss_usb_mux = {
-	.usb_port = USBC_PORT_C0,
-	.driver = &virtual_usb_mux_driver,
-	.hpd_update = &virtual_hpd_update,
+static const struct usb_mux_chain usbc0_tcss_usb_mux = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C0,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
 };
-static const struct usb_mux usbc1_tcss_usb_mux = {
-	.usb_port = USBC_PORT_C1,
-	.driver = &virtual_usb_mux_driver,
-	.hpd_update = &virtual_hpd_update,
+static const struct usb_mux_chain usbc1_tcss_usb_mux = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C1,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
 };
 
-const struct usb_mux usb_muxes[] = {
+const struct usb_mux_chain usb_muxes[] = {
 	[USBC_PORT_C0] = {
-		.usb_port = USBC_PORT_C0,
-		.driver = &bb_usb_retimer,
-		.hpd_update = bb_retimer_hpd_update,
-		.i2c_port = I2C_PORT_USB_C0_C1_RT,
-		.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
-		.next_mux = &usbc0_tcss_usb_mux,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C0,
+			.driver = &bb_usb_retimer,
+			.hpd_update = bb_retimer_hpd_update,
+			.i2c_port = I2C_PORT_USB_C0_C1_RT,
+			.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
+		},
+		.next = &usbc0_tcss_usb_mux,
 	},
 	[USBC_PORT_C1] = {
-		.usb_port = USBC_PORT_C1,
-		.driver = &bb_usb_retimer,
-		.hpd_update = bb_retimer_hpd_update,
-		.i2c_port = I2C_PORT_USB_C0_C1_RT,
-		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
-		.next_mux = &usbc1_tcss_usb_mux,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C1,
+			.driver = &bb_usb_retimer,
+			.hpd_update = bb_retimer_hpd_update,
+			.i2c_port = I2C_PORT_USB_C0_C1_RT,
+			.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
+		},
+		.next = &usbc1_tcss_usb_mux,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
@@ -178,7 +187,6 @@ void board_reset_pd_mcu(void)
 
 static void board_tcpc_init(void)
 {
-
 	/* Don't reset TCPCs after initial reset */
 	if (!system_jumped_late()) {
 		board_reset_pd_mcu();
@@ -195,7 +203,6 @@ static void board_tcpc_init(void)
 	/* Enable BC1.2 interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
-
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_CHIPSET);
 

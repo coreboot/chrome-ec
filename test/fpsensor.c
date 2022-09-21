@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -84,7 +84,7 @@ test_static int test_host_command_protocol_info_spi(void)
 		FP_TRANSPORT_TYPE_SPI, &expected_info[FP_TRANSPORT_TYPE_SPI]);
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	if (IS_ENABLED(HAS_TASK_FPSENSOR)) {
 		/* TODO(b/171924356): The "emulator" build only builds RO and

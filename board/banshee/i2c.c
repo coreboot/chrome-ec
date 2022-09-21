@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,8 +7,9 @@
 #include "compile_time_macros.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "i2c_bitbang.h"
 
-#define BOARD_ID_FAST_PLUS_CAPABLE	2
+#define BOARD_ID_FAST_PLUS_CAPABLE 2
 
 /* I2C port map configuration */
 const struct i2c_port_t i2c_ports[] = {
@@ -40,7 +41,7 @@ const struct i2c_port_t i2c_ports[] = {
 		/* I2C3 */
 		.name = "retimer0,1",
 		.port = I2C_PORT_USB_C0_C1_MUX,
-		.kbps = 1000,
+		.kbps = 400,
 		.scl = GPIO_EC_I2C_USB_C0_C1_RT_SCL,
 		.sda = GPIO_EC_I2C_USB_C0_C1_RT_SDA,
 	},
@@ -64,7 +65,7 @@ const struct i2c_port_t i2c_ports[] = {
 		/* I2C6 */
 		.name = "retimer2,3",
 		.port = I2C_PORT_USB_C2_C3_MUX,
-		.kbps = 1000,
+		.kbps = 400,
 		.scl = GPIO_EC_I2C_USB_C2_C3_RT_SCL,
 		.sda = GPIO_EC_I2C_USB_C2_C3_RT_SDA,
 	},
@@ -78,3 +79,16 @@ const struct i2c_port_t i2c_ports[] = {
 	},
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
+
+const struct i2c_port_t i2c_bitbang_ports[] = {
+	[I2C_BITBANG_CHAN_BRD_ID] = {
+		.name = "bitbang_brd_id",
+		.port = I2C_PORT_EEPROM,
+		.kbps = 100,
+		.scl = GPIO_EC_I2C_MISC_SCL_R,
+		.sda = GPIO_EC_I2C_MISC_SDA_R,
+		.drv = &bitbang_drv,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(i2c_bitbang_ports) == I2C_BITBANG_CHAN_COUNT);
+const unsigned int i2c_bitbang_ports_used = ARRAY_SIZE(i2c_bitbang_ports);

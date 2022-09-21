@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,10 +9,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-enum body_detect_states {
-	BODY_DETECTION_OFF_BODY,
-	BODY_DETECTION_ON_BODY
-};
+enum body_detect_states { BODY_DETECTION_OFF_BODY, BODY_DETECTION_ON_BODY };
 
 /* get/set the state of body detection */
 enum body_detect_states body_detect_get_state(void);

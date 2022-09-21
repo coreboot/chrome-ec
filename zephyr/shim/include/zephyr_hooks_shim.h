@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,7 +10,6 @@
 
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
-#include <zephyr/zephyr.h>
 
 #include "common.h"
 #include "cros_version.h"
@@ -31,7 +30,7 @@ int hook_call_deferred(const struct deferred_data *data, int us);
 	K_WORK_DELAYABLE_DEFINE(routine##_work_data,                 \
 				(void (*)(struct k_work *))routine); \
 	__maybe_unused const struct deferred_data routine##_data = { \
-		.work = &routine##_work_data,                \
+		.work = &routine##_work_data,                        \
 	}
 
 /**

@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -31,8 +31,8 @@
 #include "usb_tc_sm.h"
 #include "util.h"
 
-#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ##args)
 
 #define QUICHE_PD_DEBUG_LVL 1
 
@@ -102,27 +102,27 @@ static void board_pwr_btn_interrupt(enum gpio_signal signal)
  * signals is driven by USB/MST hub power sequencing requirements.
  */
 const struct power_seq board_power_seq[] = {
-	{GPIO_EN_AC_JACK,               1, 20},
-	{GPIO_EN_PP5000_A,              1, 31},
-	{GPIO_EN_PP3300_A,              1, 135},
-	{GPIO_EN_BB,                    1, 30},
-	{GPIO_EN_PP1100_A,              1, 30},
-	{GPIO_EN_PP1000_A,              1, 20},
-	{GPIO_EN_PP1050_A,              1, 30},
-	{GPIO_EN_PP1200_A,              1, 20},
-	{GPIO_EN_PP5000_HSPORT,         1, 31},
-	{GPIO_EN_DP_SINK,               1, 80},
-	{GPIO_MST_LP_CTL_L,             1, 80},
-	{GPIO_MST_RST_L,                1, 41},
-	{GPIO_EC_HUB1_RESET_L,          1, 41},
-	{GPIO_EC_HUB2_RESET_L,          1, 33},
-	{GPIO_USBC_DP_PD_RST_L,         1, 100},
-	{GPIO_USBC_UF_RESET_L,          1, 33},
-	{GPIO_DEMUX_DUAL_DP_PD_N,       1, 100},
-	{GPIO_DEMUX_DUAL_DP_RESET_N,    1, 100},
-	{GPIO_DEMUX_DP_HDMI_PD_N,       1, 10},
-	{GPIO_DEMUX_DUAL_DP_MODE,       1, 10},
-	{GPIO_DEMUX_DP_HDMI_MODE,       1, 1},
+	{ GPIO_EN_AC_JACK, 1, 20 },
+	{ GPIO_EN_PP5000_A, 1, 31 },
+	{ GPIO_EN_PP3300_A, 1, 135 },
+	{ GPIO_EN_BB, 1, 30 },
+	{ GPIO_EN_PP1100_A, 1, 30 },
+	{ GPIO_EN_PP1000_A, 1, 20 },
+	{ GPIO_EN_PP1050_A, 1, 30 },
+	{ GPIO_EN_PP1200_A, 1, 20 },
+	{ GPIO_EN_PP5000_HSPORT, 1, 31 },
+	{ GPIO_EN_DP_SINK, 1, 80 },
+	{ GPIO_MST_LP_CTL_L, 1, 80 },
+	{ GPIO_MST_RST_L, 1, 41 },
+	{ GPIO_EC_HUB1_RESET_L, 1, 41 },
+	{ GPIO_EC_HUB2_RESET_L, 1, 33 },
+	{ GPIO_USBC_DP_PD_RST_L, 1, 100 },
+	{ GPIO_USBC_UF_RESET_L, 1, 33 },
+	{ GPIO_DEMUX_DUAL_DP_PD_N, 1, 100 },
+	{ GPIO_DEMUX_DUAL_DP_RESET_N, 1, 100 },
+	{ GPIO_DEMUX_DP_HDMI_PD_N, 1, 10 },
+	{ GPIO_DEMUX_DUAL_DP_MODE, 1, 10 },
+	{ GPIO_DEMUX_DP_HDMI_MODE, 1, 1 },
 };
 
 const size_t board_power_seq_count = ARRAY_SIZE(board_power_seq);
@@ -131,13 +131,13 @@ const size_t board_power_seq_count = ARRAY_SIZE(board_power_seq);
  * Define the strings used in our USB descriptors.
  */
 const void *const usb_strings[] = {
-	[USB_STR_DESC]         = usb_string_desc,
-	[USB_STR_VENDOR]       = USB_STRING_DESC("Google Inc."),
-	[USB_STR_PRODUCT]      = USB_STRING_DESC("Gingerbread"),
-	[USB_STR_SERIALNO]     = 0,
-	[USB_STR_VERSION]      =
-			USB_STRING_DESC(CROS_EC_SECTION ":" CROS_EC_VERSION32),
-	[USB_STR_UPDATE_NAME]  = USB_STRING_DESC("Firmware update"),
+	[USB_STR_DESC] = usb_string_desc,
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
+	[USB_STR_PRODUCT] = USB_STRING_DESC("Gingerbread"),
+	[USB_STR_SERIALNO] = 0,
+	[USB_STR_VERSION] =
+		USB_STRING_DESC(CROS_EC_SECTION ":" CROS_EC_VERSION32),
+	[USB_STR_UPDATE_NAME] = USB_STRING_DESC("Firmware update"),
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_strings) == USB_STR_COUNT);
 
@@ -186,33 +186,33 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	[USB_PD_PORT_HOST] = {
-		.usb_port = USB_PD_PORT_HOST,
-		.i2c_port = I2C_PORT_I2C1,
-		.i2c_addr_flags = TUSB1064_I2C_ADDR0_FLAGS,
-		.driver = &tusb1064_usb_mux_driver,
-		.board_set = &board_tusb1064_dp_rx_eq_set,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USB_PD_PORT_HOST,
+			.i2c_port = I2C_PORT_I2C1,
+			.i2c_addr_flags = TUSB1064_I2C_ADDR0_FLAGS,
+			.driver = &tusb1064_usb_mux_driver,
+			.board_set = &board_tusb1064_dp_rx_eq_set,
+		},
 	},
 	[USB_PD_PORT_DP] = {
-		.usb_port = USB_PD_PORT_DP,
-		.i2c_port = I2C_PORT_I2C3,
-		.i2c_addr_flags = PS8XXX_I2C_ADDR2_FLAGS,
-		.driver = &tcpci_tcpm_usb_mux_driver,
-		.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USB_PD_PORT_DP,
+			.i2c_port = I2C_PORT_I2C3,
+			.i2c_addr_flags = PS8XXX_I2C_ADDR2_FLAGS,
+			.driver = &tcpci_tcpm_usb_mux_driver,
+			.hpd_update = &ps8xxx_tcpc_update_hpd_status,
+		},
 	},
 };
 
 /* USB-C PPC Configuration */
 struct ppc_config_t ppc_chips[CONFIG_USB_PD_PORT_MAX_COUNT] = {
-	[USB_PD_PORT_HOST] = {
-		.i2c_port = I2C_PORT_I2C3,
-		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
-		.drv = &sn5s330_drv
-	},
-	[USB_PD_PORT_DP] = {
-		.drv = &board_ppc_null_drv
-	},
+	[USB_PD_PORT_HOST] = { .i2c_port = I2C_PORT_I2C3,
+			       .i2c_addr_flags = SN5S330_ADDR0_FLAGS,
+			       .drv = &sn5s330_drv },
+	[USB_PD_PORT_DP] = { .drv = &board_ppc_null_drv },
 };
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
@@ -239,7 +239,6 @@ void board_reset_pd_mcu(void)
 	msleep(PS8805_FW_INIT_DELAY_MS);
 }
 
-
 /* Power Delivery and charging functions */
 void board_enable_usbc_interrupts(void)
 {
@@ -253,7 +252,6 @@ void board_enable_usbc_interrupts(void)
 
 	/* Enable HPD interrupt */
 	gpio_enable_interrupt(GPIO_DDI_MST_IN_HPD);
-
 }
 
 /* Power Delivery and charging functions */
@@ -267,7 +265,6 @@ void board_disable_usbc_interrupts(void)
 
 	/* Disable HPD interrupt */
 	gpio_disable_interrupt(GPIO_DDI_MST_IN_HPD);
-
 }
 
 void board_tcpc_init(void)
@@ -351,7 +348,7 @@ static void board_usb_tc_disconnect(void)
 		gpio_set_level(GPIO_EC_HUB2_RESET_L, 0);
 	}
 }
-DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, board_usb_tc_disconnect, \
+DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, board_usb_tc_disconnect,
 	     HOOK_PRIO_DEFAULT);
 
 #endif /* SECTION_IS_RW */

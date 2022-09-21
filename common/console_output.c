@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -6,6 +6,7 @@
 /* Console output module for Chrome EC */
 
 #include "console.h"
+#include "printf.h"
 #include "uart.h"
 #include "usb_console.h"
 #include "util.h"
@@ -27,14 +28,14 @@ static uint32_t channel_mask_saved = CC_DEFAULT;
  * might also become more important if we have >32 channels - for example, if
  * we decide to replace enum console_channel with enum module_id.
  */
-static const char * const channel_names[] = {
-	#define CONSOLE_CHANNEL(enumeration, string) string,
-	#include "console_channel.inc"
-	#undef CONSOLE_CHANNEL
+static const char *const channel_names[] = {
+#define CONSOLE_CHANNEL(enumeration, string) string,
+#include "console_channel.inc"
+#undef CONSOLE_CHANNEL
 };
 BUILD_ASSERT(ARRAY_SIZE(channel_names) == CC_CHANNEL_COUNT);
 /* ensure that we are not silently masking additional channels */
-BUILD_ASSERT(CC_CHANNEL_COUNT <= 8*sizeof(uint32_t));
+BUILD_ASSERT(CC_CHANNEL_COUNT <= 8 * sizeof(uint32_t));
 
 static int console_channel_name_to_index(const char *name)
 {
@@ -114,12 +115,14 @@ int cprints(enum console_channel channel, const char *format, ...)
 {
 	int r, rv;
 	va_list args;
+	char ts_str[PRINTF_TIMESTAMP_BUF_SIZE];
 
 	/* Filter out inactive channels */
 	if (console_channel_is_disabled(channel))
 		return EC_SUCCESS;
 
-	rv = cprintf(channel, "[%pT ", PRINTF_TIMESTAMP_NOW);
+	snprintf_timestamp_now(ts_str, sizeof(ts_str));
+	rv = cprintf(channel, "[%s ", ts_str);
 
 	va_start(args, format);
 	r = uart_vprintf(format, args);
@@ -148,7 +151,7 @@ void cflush(void)
 
 #ifdef CONFIG_CONSOLE_CHANNEL
 /* Set active channels */
-static int command_ch(int argc, char **argv)
+static int command_ch(int argc, const char **argv)
 {
 	int i;
 	char *e;
@@ -178,15 +181,13 @@ static int command_ch(int argc, char **argv)
 	/* Print the list of channels */
 	ccputs(" # Mask     E Channel\n");
 	for (i = 0; i < CC_CHANNEL_COUNT; i++) {
-		ccprintf("%2d %08x %c %s\n",
-			 i, CC_MASK(i),
+		ccprintf("%2d %08x %c %s\n", i, CC_MASK(i),
 			 (channel_mask & CC_MASK(i)) ? '*' : ' ',
 			 channel_names[i]);
 		cflush();
 	}
 	return EC_SUCCESS;
 };
-DECLARE_SAFE_CONSOLE_COMMAND(chan, command_ch,
-			     "[ save | restore | <mask> ]",
+DECLARE_SAFE_CONSOLE_COMMAND(chan, command_ch, "[ save | restore | <mask> ]",
 			     "Save, restore, get or set console channel mask");
 #endif /* CONFIG_CONSOLE_CHANNEL */

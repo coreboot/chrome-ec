@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -67,7 +67,7 @@ test_static int test_rtc_match_delay(void)
 	}
 
 	ccprintf("Expected number of RTC alarm interrupts %d\n",
-	    rtc_match_delay_iterations);
+		 rtc_match_delay_iterations);
 	ccprintf("Actual number of RTC alarm interrupts %d\n", rtc_fired);
 
 	/* Make sure each set_rtc_alarm() generated the interrupt. */
@@ -76,7 +76,7 @@ test_static int test_rtc_match_delay(void)
 	return EC_SUCCESS;
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	test_reset();
 

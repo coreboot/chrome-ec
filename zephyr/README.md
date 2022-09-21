@@ -25,9 +25,10 @@ See the piplines [here](https://gitlab.com/zephyr-ec/ec/-/pipelines).
 To test the cq builder script run these commands:
 
 ### firmware-zephyr-cq
+
 ```
 rm -rf /tmp/artifact_bundles /tmp/artifact_bundle_metadata \
-  ~/chromiumos/src/platform/ec/build
+ ~/chromiumos/src/platform/ec/build
 ( cd ~/chromiumos/src/platform/ec/zephyr ; \
 ./firmware_builder.py --metrics /tmp/metrics-build build && \
 ./firmware_builder.py --metrics /tmp/metrics-test test && \
@@ -39,6 +40,7 @@ ls -l /tmp/artifact_bundles/
 ```
 
 ### firmware-zephyr-cov-cq
+
 ```
 rm -rf /tmp/artifact_bundles-cov /tmp/artifact_bundle_metadata-cov \
   ~/chromiumos/src/platform/ec/build && \

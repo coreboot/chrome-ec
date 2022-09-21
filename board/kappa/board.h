@@ -1,4 +1,4 @@
-/* Copyright 2018 The Chromium OS Authors. All rights reserved.
+/* Copyright 2018 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -50,16 +50,16 @@
 #undef CONFIG_TABLET_MODE_SWITCH
 
 /* I2C ports */
-#define I2C_PORT_BC12               0
-#define I2C_PORT_TCPC0              0
-#define I2C_PORT_USB_MUX            0
-#define I2C_PORT_BATTERY            2
-#define I2C_PORT_CHARGER            1
-#define I2C_PORT_KB_DISCRETE        1
-#define I2C_PORT_VIRTUAL_BATTERY    I2C_PORT_BATTERY
+#define I2C_PORT_BC12 0
+#define I2C_PORT_TCPC0 0
+#define I2C_PORT_USB_MUX 0
+#define I2C_PORT_BATTERY 2
+#define I2C_PORT_CHARGER 1
+#define I2C_PORT_KB_DISCRETE 1
+#define I2C_PORT_VIRTUAL_BATTERY I2C_PORT_BATTERY
 
 /* IT8801 I2C address */
-#define KB_DISCRETE_I2C_ADDR_FLAGS  IT8801_I2C_ADDR1
+#define KB_DISCRETE_I2C_ADDR_FLAGS IT8801_I2C_ADDR1
 
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
 #define CONFIG_MKBP_EVENT

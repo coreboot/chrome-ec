@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -13,6 +13,10 @@
 #define CONFIG_LTO
 #define CONFIG_PRESERVE_LOGS
 
+/* Watchdog period in ms */
+#undef CONFIG_WATCHDOG_PERIOD_MS
+#define CONFIG_WATCHDOG_PERIOD_MS 2500
+
 /*
  * TODO: Remove this option once the VBAT no longer keeps high when
  * system's power isn't presented.
@@ -25,6 +29,7 @@
 #define CONFIG_BATTERY_COUNT 1
 #define CONFIG_HOSTCMD_BATTERY_V2
 #define CONFIG_BATTERY_PRESENT_CUSTOM
+#define CONFIG_BATTERY_REVIVE_DISCONNECT
 #define CONFIG_BATTERY_VENDOR_PARAM
 
 /* BC12 */
@@ -32,18 +37,24 @@
 /* Charger */
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
 
+/* Chipset */
+#define CONFIG_CHIPSET_RESUME_INIT_HOOK
+
 /* PD / USB-C / PPC */
-#undef CONFIG_USB_PD_DEBUG_LEVEL /* default to 1, configurable in ec console */
+#undef CONFIG_USB_PD_DEBUG_LEVEL /* default to 1, configurable in ec console \
+				  */
 
 /* Optional console commands */
 #define CONFIG_CMD_FLASH
 #define CONFIG_CMD_SCRATCHPAD
 #define CONFIG_CMD_STACKOVERFLOW
 
-#define CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV	9000
+#define CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV 9000
 
 /* Keyboard */
 #define CONFIG_KEYBOARD_REFRESH_ROW3
+#define CONFIG_KEYBOARD_FACTORY_TEST
+#define GPIO_KBD_KSO2 GPIO_EC_KSO_02_INV
 
 /* Sensor */
 #define CONFIG_GMR_TABLET_MODE
@@ -54,6 +65,11 @@
 /* ICM426XX Base accel/gyro */
 #define CONFIG_ACCELGYRO_ICM426XX
 #define CONFIG_ACCELGYRO_ICM426XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
+
+/* ICM42607 Base accel/gyro*/
+#define CONFIG_ACCELGYRO_ICM42607
+#define CONFIG_ACCELGYRO_ICM42607_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 
 /* BMI260 accel/gyro in base */

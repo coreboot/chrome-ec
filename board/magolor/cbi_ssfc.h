@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -45,12 +45,12 @@ union dedede_cbi_ssfc {
 	struct {
 		uint32_t base_sensor : 3;
 		uint32_t lid_sensor : 3;
-		uint32_t cam_wfc: 3;
-		uint32_t cam_ufc: 2;
-		uint32_t cam_vcm: 2;
-		uint32_t TS_Source: 4;
-		uint32_t AUDIO_CODEC_SOURCE: 3;
-		uint32_t usb_mux: 2;
+		uint32_t cam_wfc : 3;
+		uint32_t cam_ufc : 2;
+		uint32_t cam_vcm : 2;
+		uint32_t TS_Source : 4;
+		uint32_t AUDIO_CODEC_SOURCE : 3;
+		uint32_t usb_mux : 2;
 		uint32_t reserved_2 : 10;
 	};
 	uint32_t raw_value;

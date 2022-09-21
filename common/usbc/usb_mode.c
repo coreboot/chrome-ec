@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -26,8 +26,8 @@
 #include "usbc_ppc.h"
 
 #ifdef CONFIG_COMMON_RUNTIME
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 #else
 #define CPRINTF(format, args...)
 #define CPRINTS(format, args...)
@@ -117,7 +117,7 @@ static void usb4_debug_prints(int port, enum usb4_mode_status usb4_status)
 bool enter_usb_entry_is_done(int port)
 {
 	return usb4_state[port] == USB4_ACTIVE ||
-		usb4_state[port] == USB4_INACTIVE;
+	       usb4_state[port] == USB4_INACTIVE;
 }
 
 void usb4_exit_mode_request(int port)
@@ -153,7 +153,7 @@ static bool enter_usb_response_valid(int port, enum tcpci_msg_type type)
 	 * Check for an unexpected response.
 	 */
 	if (get_usb_pd_cable_type(port) == IDH_PTYPE_PCABLE &&
-	     type != TCPCI_MSG_SOP) {
+	    type != TCPCI_MSG_SOP) {
 		enter_usb_failed(port);
 		return false;
 	}
@@ -163,7 +163,7 @@ static bool enter_usb_response_valid(int port, enum tcpci_msg_type type)
 bool enter_usb_port_partner_is_capable(int port)
 {
 	const struct pd_discovery *disc =
-			pd_get_am_discovery(port, TCPCI_MSG_SOP);
+		pd_get_am_discovery(port, TCPCI_MSG_SOP);
 
 	if (usb4_state[port] == USB4_INACTIVE)
 		return false;
@@ -185,7 +185,7 @@ bool enter_usb_cable_is_capable(int port)
 
 		if (pd_get_vdo_ver(port, TCPCI_MSG_SOP_PRIME) >= VDM_VER20 &&
 		    disc_sop_prime->identity.product_t1.a_rev30.vdo_ver >=
-							VDO_VERSION_1_3) {
+			    VDO_VERSION_1_3) {
 			union active_cable_vdo2_rev30 a2_rev30 =
 				disc_sop_prime->identity.product_t2.a2_rev30;
 			/*
@@ -195,25 +195,25 @@ bool enter_usb_cable_is_capable(int port)
 			 */
 			if (a2_rev30.usb_40_support == USB4_NOT_SUPPORTED)
 				return false;
-		/*
-		 * For VDM version < 2.0 or VDO version < 1.3, do not enter USB4
-		 * mode if the cable -
-		 * doesn't support modal operation or
-		 * doesn't support Intel SVID or
-		 * doesn't have rounded support.
-		 */
+			/*
+			 * For VDM version < 2.0 or VDO version < 1.3, do not
+			 * enter USB4 mode if the cable - doesn't support modal
+			 * operation or doesn't support Intel SVID or doesn't
+			 * have rounded support.
+			 */
 		} else {
 			const struct pd_discovery *disc =
 				pd_get_am_discovery(port, TCPCI_MSG_SOP);
 			union tbt_mode_resp_cable cable_mode_resp = {
-				.raw_value = pd_get_tbt_mode_vdo(port,
-							TCPCI_MSG_SOP_PRIME) };
+				.raw_value = pd_get_tbt_mode_vdo(
+					port, TCPCI_MSG_SOP_PRIME)
+			};
 
 			if (!disc->identity.idh.modal_support ||
-			   !pd_is_mode_discovered_for_svid(port,
-					TCPCI_MSG_SOP_PRIME, USB_VID_INTEL) ||
+			    !pd_is_mode_discovered_for_svid(
+				    port, TCPCI_MSG_SOP_PRIME, USB_VID_INTEL) ||
 			    cable_mode_resp.tbt_rounded !=
-					TBT_GEN3_GEN4_ROUNDED_NON_ROUNDED)
+				    TBT_GEN3_GEN4_ROUNDED_NON_ROUNDED)
 				return false;
 		}
 	} else {
@@ -288,7 +288,7 @@ uint32_t enter_usb_setup_next_msg(int port, enum tcpci_msg_type *type)
 
 		if (pd_get_vdo_ver(port, TCPCI_MSG_SOP_PRIME) < VDM_VER20 ||
 		    disc_sop_prime->identity.product_t1.a_rev30.vdo_ver <
-							VDO_VERSION_1_3 ||
+			    VDO_VERSION_1_3 ||
 		    get_usb_pd_cable_type(port) == IDH_PTYPE_PCABLE) {
 			usb4_state[port] = USB4_ENTER_SOP;
 		} else {
@@ -311,4 +311,108 @@ uint32_t enter_usb_setup_next_msg(int port, enum tcpci_msg_type *type)
 		return 0;
 	}
 	return get_enter_usb_msg_payload(port);
+}
+
+/*
+ * For Cable rev 3.0: USB4 cable speed is set according to speed supported by
+ * the port and the response received from the cable, whichever is least.
+ *
+ * For Cable rev 2.0: If get_tbt_cable_speed() is less than
+ * TBT_SS_U31_GEN1, return USB_R30_SS_U2_ONLY speed since the board
+ * doesn't support superspeed else the USB4 cable speed is set according to
+ * the cable response.
+ */
+enum usb_rev30_ss get_usb4_cable_speed(int port)
+{
+	enum tbt_compat_cable_speed tbt_speed = get_tbt_cable_speed(port);
+	enum usb_rev30_ss max_usb4_speed;
+
+	if (tbt_speed < TBT_SS_U31_GEN1)
+		return USB_R30_SS_U2_ONLY;
+
+	/*
+	 * Converting Thunderbolt-Compatible board speed to equivalent USB4
+	 * speed.
+	 */
+	max_usb4_speed = tbt_speed == TBT_SS_TBT_GEN3 ? USB_R30_SS_U40_GEN3 :
+							USB_R30_SS_U32_U40_GEN2;
+
+	if ((get_usb_pd_cable_type(port) == IDH_PTYPE_ACABLE) &&
+	    pd_get_rev(port, TCPCI_MSG_SOP_PRIME) == PD_REV30) {
+		const struct pd_discovery *disc =
+			pd_get_am_discovery(port, TCPCI_MSG_SOP_PRIME);
+		union active_cable_vdo1_rev30 a_rev30 =
+			disc->identity.product_t1.a_rev30;
+
+		if (a_rev30.vdo_ver >= VDO_VERSION_1_3) {
+			return max_usb4_speed < a_rev30.ss ? max_usb4_speed :
+							     a_rev30.ss;
+		}
+	}
+
+	return max_usb4_speed;
+}
+
+uint32_t get_enter_usb_msg_payload(int port)
+{
+	/*
+	 * Ref: USB Power Delivery Specification Revision 3.0, Version 2.0
+	 * Table 6-47 Enter_USB Data Object
+	 */
+	union enter_usb_data_obj eudo;
+	const struct pd_discovery *disc;
+	union tbt_mode_resp_cable cable_mode_resp;
+
+	if (!IS_ENABLED(CONFIG_USB_PD_USB4))
+		return 0;
+
+	disc = pd_get_am_discovery(port, TCPCI_MSG_SOP_PRIME);
+	eudo.mode = USB_PD_40;
+	eudo.usb4_drd_cap = IS_ENABLED(CONFIG_USB_PD_USB4_DRD);
+	eudo.usb3_drd_cap = IS_ENABLED(CONFIG_USB_PD_USB32_DRD);
+	eudo.cable_speed = get_usb4_cable_speed(port);
+
+	if (disc->identity.idh.product_type == IDH_PTYPE_ACABLE) {
+		if (pd_get_rev(port, TCPCI_MSG_SOP_PRIME) == PD_REV30) {
+			enum retimer_active_element active_element =
+				disc->identity.product_t2.a2_rev30.active_elem;
+			eudo.cable_type = active_element == ACTIVE_RETIMER ?
+						  CABLE_TYPE_ACTIVE_RETIMER :
+						  CABLE_TYPE_ACTIVE_REDRIVER;
+		} else {
+			cable_mode_resp.raw_value =
+				pd_get_tbt_mode_vdo(port, TCPCI_MSG_SOP_PRIME);
+
+			eudo.cable_type = cable_mode_resp.retimer_type ==
+							  USB_RETIMER ?
+						  CABLE_TYPE_ACTIVE_RETIMER :
+						  CABLE_TYPE_ACTIVE_REDRIVER;
+		}
+	} else {
+		cable_mode_resp.raw_value =
+			pd_get_tbt_mode_vdo(port, TCPCI_MSG_SOP_PRIME);
+
+		eudo.cable_type = cable_mode_resp.tbt_active_passive ==
+						  TBT_CABLE_ACTIVE ?
+					  CABLE_TYPE_ACTIVE_REDRIVER :
+					  CABLE_TYPE_PASSIVE;
+	}
+
+	switch (disc->identity.product_t1.p_rev20.vbus_cur) {
+	case USB_VBUS_CUR_3A:
+		eudo.cable_current = USB4_CABLE_CURRENT_3A;
+		break;
+	case USB_VBUS_CUR_5A:
+		eudo.cable_current = USB4_CABLE_CURRENT_5A;
+		break;
+	default:
+		eudo.cable_current = USB4_CABLE_CURRENT_INVALID;
+		break;
+	}
+	eudo.pcie_supported = IS_ENABLED(CONFIG_USB_PD_PCIE_TUNNELING);
+	eudo.dp_supported = IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP);
+	eudo.tbt_supported = IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE);
+	eudo.host_present = 1;
+
+	return eudo.raw_value;
 }

@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,13 +9,6 @@ include: base.yaml
 properties:
   status:
     required: true
-  label:
-    type: string
-    required: true
-    description: |
-        Human readable string describing the motion sensor.
-        This is used as the name of the motion sensor.
-        e.g) label = "Lid Accel";
   active-mask:
     type: string
     description: indicates system power state for sensor to be active
@@ -53,7 +46,10 @@ properties:
   drv-data:
     type: phandle
     required: false
-    description: phandle to driver data to be used for the motion sensor
+    description: phandle to driver data to be used for the motion sensor.
+      Some drivers require this to be a global shared datas structure
+      used by all instances of this device, others require separate
+      data structures for each instance.
   alternate-for:
     type: phandle
     description: phandle to another sensor that can be swapped with this one
@@ -73,7 +69,6 @@ properties:
 #           compatible = "cros-ec,bma255";
 #           status = "okay";
 #
-#           label = "Lid Accel";
 #           active-mask = "SENSOR_ACTIVE_S0_S3";
 #           location = "MOTIONSENSE_LOC_LID";
 #           mutex = <&mutex_bma255>;

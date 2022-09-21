@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -17,27 +17,13 @@
 #include <zephyr/drivers/i2c_emul.h>
 #include <usb_pd_tcpm.h>
 
+#include "emul/emul_common_i2c.h"
+
 /**
- * @brief TCPCI emulator backend API
- * @defgroup tcpci_emul TCPCI emulator
- * @{
- *
- * TCPCI emulator supports access to its registers using I2C messages.
- * It follows Type-C Port Controller Interface Specification. It is possible
- * to use this emulator as base for implementation of specific TCPC emulator
- * which follows TCPCI specification. Emulator allows to set callbacks
- * on change of CC status or transmitting message to implement partner emulator.
- * There is also callback used to inform about alert line state change.
- * Application may alter emulator state:
- *
- * - call @ref tcpci_emul_set_reg and @ref tcpci_emul_get_reg to set and get
- *   value of TCPCI registers
- * - call functions from emul_common_i2c.h to setup custom handlers for I2C
- *   messages
- * - call @ref tcpci_emul_add_rx_msg to setup received SOP messages
- * - call @ref tcpci_emul_get_tx_msg to examine sended message
- * - call @ref tcpci_emul_set_rev to set revision of emulated TCPCI
+ * Number of emulated register. This include vendor registers defined in TCPCI
+ * specification
  */
+#define TCPCI_EMUL_REG_COUNT 0x100
 
 /** SOP message structure */
 struct tcpci_emul_msg {
@@ -46,7 +32,7 @@ struct tcpci_emul_msg {
 	/** Number of bytes in buf */
 	int cnt;
 	/** Type of message (SOP, SOP', etc) */
-	uint8_t type;
+	uint8_t sop_type;
 	/** Index used to mark accessed byte */
 	int idx;
 	/** Pointer to optional second message */
@@ -64,6 +50,80 @@ struct tcpci_emul_msg {
 typedef void (*tcpci_emul_alert_state_func)(const struct emul *emul, bool alert,
 					    void *data);
 
+/** Run-time data used by the emulator */
+struct tcpci_ctx {
+	/** Common I2C data for TCPC */
+	struct i2c_common_emul_data common;
+
+	/** Current state of all emulated TCPCI registers */
+	uint8_t reg[TCPCI_EMUL_REG_COUNT];
+
+	/** Structures representing TX and RX buffers */
+	struct tcpci_emul_msg *rx_msg;
+	struct tcpci_emul_msg *tx_msg;
+
+	/** Data that should be written to register (except TX_BUFFER) */
+	uint16_t write_data;
+
+	/** Return error when trying to write to RO register */
+	bool error_on_ro_write;
+	/** Return error when trying to write 1 to reserved bit */
+	bool error_on_rsvd_write;
+
+	/** User function called when alert line could change */
+	tcpci_emul_alert_state_func alert_callback;
+	/** Data passed to alert_callback */
+	void *alert_callback_data;
+
+	/** Callbacks for TCPCI partner */
+	const struct tcpci_emul_partner_ops *partner;
+
+	/** Reference to Alert# GPIO emulator. */
+	const struct device *alert_gpio_port;
+	gpio_pin_t alert_gpio_pin;
+};
+
+/** Run-time data used by the emulator */
+struct tcpc_emul_data {
+	/** Pointer to the common TCPCI emulator context */
+	struct tcpci_ctx *tcpci_ctx;
+
+	/** Pointer to chip specific data */
+	void *chip_data;
+
+	const struct i2c_common_emul_cfg i2c_cfg;
+};
+
+#define TCPCI_EMUL_DEFINE(n, init, cfg_ptr, chip_data_ptr, bus_api)          \
+	static uint8_t tcpci_emul_tx_buf_##n[128];                           \
+	static struct tcpci_emul_msg tcpci_emul_tx_msg_##n = {               \
+		.buf = tcpci_emul_tx_buf_##n,                                \
+	};                                                                   \
+	static struct tcpci_ctx tcpci_ctx##n = {                             \
+		.tx_msg = &tcpci_emul_tx_msg_##n,                            \
+		.error_on_ro_write = true,                                   \
+		.error_on_rsvd_write = true,                                 \
+		.alert_gpio_port = COND_CODE_1(                              \
+			DT_INST_NODE_HAS_PROP(n, alert_gpio),                \
+			(DEVICE_DT_GET(DT_GPIO_CTLR(                         \
+				DT_INST_PROP(n, alert_gpio), gpios))),       \
+			(NULL)),                                             \
+		.alert_gpio_pin = COND_CODE_1(                               \
+			DT_INST_NODE_HAS_PROP(n, alert_gpio),                \
+			(DT_GPIO_PIN(DT_INST_PROP(n, alert_gpio), gpios)),   \
+			(0)),                                                \
+	};                                                                   \
+	static struct tcpc_emul_data tcpc_emul_data_##n = {                \
+		.tcpci_ctx = &tcpci_ctx##n,                                \
+		.chip_data = chip_data_ptr,                                \
+		.i2c_cfg = {                                               \
+			.dev_label = DT_NODE_FULL_NAME(DT_DRV_INST(n)),    \
+			.data = &tcpci_ctx##n.common,                      \
+			.addr = DT_INST_REG_ADDR(n),                       \
+		},                                                         \
+	}; \
+	EMUL_DT_INST_DEFINE(n, init, &tcpc_emul_data_##n, cfg_ptr, bus_api)
+
 /** Response from TCPCI specific device operations */
 enum tcpci_emul_ops_resp {
 	TCPCI_EMUL_CONTINUE = 0,
@@ -72,10 +132,7 @@ enum tcpci_emul_ops_resp {
 };
 
 /** Revisions supported by TCPCI emaluator */
-enum tcpci_emul_rev {
-	TCPCI_EMUL_REV1_0_VER1_0 = 0,
-	TCPCI_EMUL_REV2_0_VER1_1
-};
+enum tcpci_emul_rev { TCPCI_EMUL_REV1_0_VER1_0 = 0, TCPCI_EMUL_REV2_0_VER1_1 };
 
 /** Status of TX message send to TCPCI emulator partner */
 enum tcpci_emul_tx_status {
@@ -88,67 +145,6 @@ enum tcpci_emul_tx_status {
 	 * the TCPCI spec.
 	 */
 	TCPCI_EMUL_TX_UNKNOWN
-};
-
-/** TCPCI specific device operations. Not all of them need to be implemented. */
-struct tcpci_emul_dev_ops {
-	/**
-	 * @brief Function called for each byte of read message
-	 *
-	 * @param emul Pointer to TCPCI emulator
-	 * @param ops Pointer to device operations structure
-	 * @param reg First byte of last write message
-	 * @param val Pointer where byte to read should be stored
-	 * @param bytes Number of bytes already readded
-	 *
-	 * @return TCPCI_EMUL_CONTINUE to continue with default handler
-	 * @return TCPCI_EMUL_DONE to immedietly return success
-	 * @return TCPCI_EMUL_ERROR to immedietly return error
-	 */
-	enum tcpci_emul_ops_resp (*read_byte)(const struct emul *emul,
-					const struct tcpci_emul_dev_ops *ops,
-					int reg, uint8_t *val, int bytes);
-
-	/**
-	 * @brief Function called for each byte of write message
-	 *
-	 * @param emul Pointer to TCPCI emulator
-	 * @param ops Pointer to device operations structure
-	 * @param reg First byte of write message
-	 * @param val Received byte of write message
-	 * @param bytes Number of bytes already received
-	 *
-	 * @return TCPCI_EMUL_CONTINUE to continue with default handler
-	 * @return TCPCI_EMUL_DONE to immedietly return success
-	 * @return TCPCI_EMUL_ERROR to immedietly return error
-	 */
-	enum tcpci_emul_ops_resp (*write_byte)(const struct emul *emul,
-					const struct tcpci_emul_dev_ops *ops,
-					int reg, uint8_t val, int bytes);
-
-	/**
-	 * @brief Function called on the end of write message
-	 *
-	 * @param emul Pointer to TCPCI emulator
-	 * @param ops Pointer to device operations structure
-	 * @param reg Register which is written
-	 * @param msg_len Length of handled I2C message
-	 *
-	 * @return TCPCI_EMUL_CONTINUE to continue with default handler
-	 * @return TCPCI_EMUL_DONE to immedietly return success
-	 * @return TCPCI_EMUL_ERROR to immedietly return error
-	 */
-	enum tcpci_emul_ops_resp (*handle_write)(const struct emul *emul,
-					const struct tcpci_emul_dev_ops *ops,
-					int reg, int msg_len);
-
-	/**
-	 * @brief Function called on reset
-	 *
-	 * @param emul Pointer to TCPCI emulator
-	 * @param ops Pointer to device operations structure
-	 */
-	void (*reset)(const struct emul *emul, struct tcpci_emul_dev_ops *ops);
 };
 
 /** TCPCI partner operations. Not all of them need to be implemented. */
@@ -166,8 +162,7 @@ struct tcpci_emul_partner_ops {
 	void (*transmit)(const struct emul *emul,
 			 const struct tcpci_emul_partner_ops *ops,
 			 const struct tcpci_emul_msg *tx_msg,
-			 enum tcpci_msg_type type,
-			 int retry);
+			 enum tcpci_msg_type type, int retry);
 
 	/**
 	 * @brief Function called when control settings change to allow partner
@@ -201,18 +196,9 @@ struct tcpci_emul_partner_ops {
 };
 
 /**
- * @brief Get i2c_emul for TCPCI emulator
- *
- * @param emul Pointer to TCPCI emulator
- *
- * @return Pointer to I2C TCPCI emulator
- */
-struct i2c_emul *tcpci_emul_get_i2c_emul(const struct emul *emul);
-
-/**
  * @brief Set value of given register of TCPCI
  *
- * @param emul Pointer to TCPCI emulator
+ * @param emul Pointer to TCPC emulator
  * @param reg Register address which value will be changed
  * @param val New value of the register
  *
@@ -220,6 +206,68 @@ struct i2c_emul *tcpci_emul_get_i2c_emul(const struct emul *emul);
  * @return -EINVAL when register is out of range defined in TCPCI specification
  */
 int tcpci_emul_set_reg(const struct emul *emul, int reg, uint16_t val);
+
+/**
+ * @brief Function called for each byte of read message from TCPCI
+ *
+ * @param emul Pointer to TCPC emulator
+ * @param reg First byte of last write message
+ * @param val Pointer where byte to read should be stored
+ * @param bytes Number of bytes already readded
+ *
+ * @return 0 on success
+ */
+int tcpci_emul_read_byte(const struct emul *emul, int reg, uint8_t *val,
+			 int bytes);
+
+/**
+ * @brief Function called for each byte of write message from TCPCI.
+ *        Data are stored in write_data field of tcpci_emul_data or in tx_msg
+ *        in case of writing to TX buffer.
+ *
+ * @param emul Pointer to TCPC emulator
+ * @param reg First byte of write message
+ * @param val Received byte of write message
+ * @param bytes Number of bytes already received
+ *
+ * @return 0 on success
+ * @return -EIO on invalid write to TX buffer
+ */
+int tcpci_emul_write_byte(const struct emul *emul, int reg, uint8_t val,
+			  int bytes);
+
+/**
+ * @brief Handle I2C write message. It is checked if accessed register isn't RO
+ *        and reserved bits are set to 0.
+ *
+ * @param emul Pointer to TCPC emulator
+ * @param reg Register which is written
+ * @param msg_len Length of handled I2C message
+ *
+ * @return 0 on success
+ * @return -EIO on error
+ */
+int tcpci_emul_handle_write(const struct emul *emul, int reg, int msg_len);
+
+/**
+ * @brief Set up a new TCPCI emulator
+ *
+ * This should be called for each TCPC device that needs to be
+ * registered on the I2C bus.
+ *
+ * @param emul Pointer to TCPC emulator
+ * @param parent Pointer to emulated I2C bus
+ */
+void tcpci_emul_i2c_init(const struct emul *emul, const struct device *i2c_dev);
+
+/**
+ * @brief Reset registers to default values. Vendor and reserved registers
+ *        are not changed.
+ *
+ * @param emul Pointer to TCPC emulator
+ * @return 0 if successful
+ */
+int tcpci_emul_reset(const struct emul *emul);
 
 /**
  * @brief Get value of given register of TCPCI
@@ -237,7 +285,7 @@ int tcpci_emul_get_reg(const struct emul *emul, int reg, uint16_t *val);
 /**
  * @brief Add up to two SOP RX messages
  *
- * @param emul Pointer to TCPCI emulator
+ * @param emul Pointer to TCPC emulator
  * @param rx_msg Pointer to message that is added
  * @param alert Select if alert register should be updated
  *
@@ -255,7 +303,7 @@ int tcpci_emul_add_rx_msg(const struct emul *emul,
 /**
  * @brief Get SOP TX message to examine what was sended by TCPM
  *
- * @param emul Pointer to TCPCI emulator
+ * @param emul Pointer to TCPC emulator
  *
  * @return Pointer to TX message
  */
@@ -264,24 +312,15 @@ struct tcpci_emul_msg *tcpci_emul_get_tx_msg(const struct emul *emul);
 /**
  * @brief Set TCPCI revision in PD_INT_REV register
  *
- * @param emul Pointer to TCPCI emulator
+ * @param emul Pointer to TCPC emulator
  * @param rev Requested revision
  */
 void tcpci_emul_set_rev(const struct emul *emul, enum tcpci_emul_rev rev);
 
 /**
- * @brief Set callbacks for specific TCPC device emulator
- *
- * @param emul Pointer to TCPCI emulator
- * @param dev_ops Pointer to callbacks
- */
-void tcpci_emul_set_dev_ops(const struct emul *emul,
-			    struct tcpci_emul_dev_ops *dev_ops);
-
-/**
  * @brief Set callback which is called when alert register is changed
  *
- * @param emul Pointer to TCPCI emulator
+ * @param emul Pointer to TCPC emulator
  * @param alert_callback Pointer to callback
  * @param alert_callback_data Pointer to data passed to callback as an argument
  */
@@ -292,7 +331,7 @@ void tcpci_emul_set_alert_callback(const struct emul *emul,
 /**
  * @brief Set callbacks for port partner device emulator
  *
- * @param emul Pointer to TCPCI emulator
+ * @param emul Pointer to TCPC emulator
  * @param partner Pointer to callbacks
  */
 void tcpci_emul_set_partner_ops(const struct emul *emul,
@@ -301,7 +340,7 @@ void tcpci_emul_set_partner_ops(const struct emul *emul,
 /**
  * @brief Emulate connection of specific device to emulated TCPCI
  *
- * @param emul Pointer to TCPCI emulator
+ * @param emul Pointer to TCPC emulator
  * @param partner_power_role Power role of connected partner (sink or source)
  * @param partner_cc1 Voltage on partner CC1 line (usually Rd or Rp)
  * @param partner_cc2 Voltage on partner CC2 line (usually open or Ra if active
@@ -321,7 +360,7 @@ int tcpci_emul_connect_partner(const struct emul *emul,
 
 /** @brief Emulate the disconnection of the partner device to emulated TCPCI
  *
- * @param emul Pointer to TCPCI emulator
+ * @param emul Pointer to TCPC emulator
  *
  * @return 0 on success
  */
@@ -330,11 +369,20 @@ int tcpci_emul_disconnect_partner(const struct emul *emul);
 /**
  * @brief Allows port partner to select if message was received correctly
  *
- * @param emul Pointer to TCPCI emulator
+ * @param emul Pointer to TCPC emulator
  * @param status Status of sended message
  */
 void tcpci_emul_partner_msg_status(const struct emul *emul,
 				   enum tcpci_emul_tx_status status);
+
+/**
+ * @brief Gets the common data associated with the tcpci chip overall
+ *
+ * @param emul Pointer to TCPC emulator
+ * @return Pointer to struct i2c_common_emul_data
+ */
+struct i2c_common_emul_data *
+emul_tcpci_generic_get_i2c_common_data(const struct emul *emul);
 
 /**
  * @}

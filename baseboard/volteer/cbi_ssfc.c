@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -38,4 +38,9 @@ enum ec_ssfc_lid_sensor get_cbi_ssfc_lid_sensor(void)
 enum ec_ssfc_lightbar get_cbi_ssfc_lightbar(void)
 {
 	return cached_ssfc.lightbar;
+}
+
+enum ec_ssfc_keyboard get_cbi_ssfc_keyboard(void)
+{
+	return cached_ssfc.keyboard;
 }

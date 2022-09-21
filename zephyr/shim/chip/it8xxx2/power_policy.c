@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -6,7 +6,7 @@
 #include <zephyr/pm/pm.h>
 #include <zephyr/pm/policy.h>
 #include <soc.h>
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 
 #include "system.h"
 
@@ -29,8 +29,8 @@ const struct pm_state_info *pm_policy_next_state(uint8_t cpu, int32_t ticks)
 			 * To check if given power state is enabled and
 			 * could be used.
 			 */
-			if (pm_policy_state_lock_is_active(
-				    pm_states[i].state, PM_ALL_SUBSTATES)) {
+			if (pm_policy_state_lock_is_active(pm_states[i].state,
+							   PM_ALL_SUBSTATES)) {
 				continue;
 			}
 

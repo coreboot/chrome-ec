@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -9,9 +9,9 @@
 #define __CROS_EC_USB_RETIMER_ANX7491_H
 
 /* I2C interface addresses */
-#define ANX7491_I2C_ADDR0_FLAGS		0x10
-#define ANX7491_I2C_ADDR1_FLAGS		0x14
-#define ANX7491_I2C_ADDR2_FLAGS		0x16
-#define ANX7491_I2C_ADDR3_FLAGS		0x11
+#define ANX7491_I2C_ADDR0_FLAGS 0x10
+#define ANX7491_I2C_ADDR1_FLAGS 0x14
+#define ANX7491_I2C_ADDR2_FLAGS 0x16
+#define ANX7491_I2C_ADDR3_FLAGS 0x11
 
 #endif /* __CROS_EC_USB_RETIMER_ANX7491_H */

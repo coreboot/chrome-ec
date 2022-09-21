@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,14 +11,14 @@ setuptools.setup(
     description="CrOS Zephyr Utilities",
     long_description="Utilities used for working on a Zephyr-based EC",
     url="https://chromium.googlesource.com/chromiumos/platform/ec",
-    author="Chromium OS Authors",
+    author="ChromiumOS Authors",
     author_email="chromiumos-dev@chromium.org",
     license="BSD",
     # What does your project relate to?
     keywords="chromeos",
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    packages=["zmake"],
+    packages=["zmake", "zephyr_build_tools"],
     python_requires=">=3.6, <4",
     # List run-time dependencies here.  These will be installed by pip when
     # your project is installed. For an analysis of "install_requires" vs pip's

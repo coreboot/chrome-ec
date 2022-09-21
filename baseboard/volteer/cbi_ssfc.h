@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -40,12 +40,19 @@ enum ec_ssfc_lightbar {
 	SSFC_LIGHTBAR_12_LED = 2
 };
 
+/*
+ * Keyboard Type (Bit 12)
+ */
+enum ec_ssfc_keyboard { SSFC_KEYBOARD_DEFAULT = 0, SSFC_KEYBOARD_GAMING = 1 };
+
 union volteer_cbi_ssfc {
 	struct {
 		enum ec_ssfc_base_sensor base_sensor : 3;
 		enum ec_ssfc_lid_sensor lid_sensor : 3;
 		enum ec_ssfc_lightbar lightbar : 2;
-		uint32_t reserved_2 : 24;
+		uint32_t reserved_2 : 4;
+		enum ec_ssfc_keyboard keyboard : 1;
+		uint32_t reserved_3 : 19;
 	};
 	uint32_t raw_value;
 };
@@ -70,5 +77,12 @@ enum ec_ssfc_lid_sensor get_cbi_ssfc_lid_sensor(void);
  * @return the lightbar type.
  */
 enum ec_ssfc_lightbar get_cbi_ssfc_lightbar(void);
+
+/**
+ * Get keyboard type from SSFC_CONFIG.
+ *
+ * @return the keyboard type.
+ */
+enum ec_ssfc_keyboard get_cbi_ssfc_keyboard(void);
 
 #endif /* _Volteer_CBI_SSFC__H_ */

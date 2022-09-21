@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -46,4 +46,4 @@ int fp_sensor_maintenance(uint8_t *image_data,
  */
 int fpc_get_hwid(uint16_t *id);
 
-#endif  /* __CROS_EC_FPC_PRIVATE_H */
+#endif /* __CROS_EC_FPC_PRIVATE_H */

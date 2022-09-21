@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -25,7 +25,7 @@ BUILD_ASSERT(ARRAY_SIZE(mft_channels) == MFT_CH_COUNT);
 
 static const struct fan_conf fan_conf_0 = {
 	.flags = FAN_USE_RPM_MODE,
-	.ch = MFT_CH_0,	/* Use MFT id to control fan */
+	.ch = MFT_CH_0, /* Use MFT id to control fan */
 	.pgood_gpio = -1,
 	.enable_gpio = GPIO_EN_PP12000_FAN,
 };
@@ -37,9 +37,9 @@ static const struct fan_conf fan_conf_0 = {
  * Set minimum at around 30% PWM.
  */
 static const struct fan_rpm fan_rpm_0 = {
-	.rpm_min = 750,
-	.rpm_start = 750,
-	.rpm_max = 5200,
+	.rpm_min = 1000,
+	.rpm_start = 1000,
+	.rpm_max = 4200,
 };
 
 const struct fan_t fans[FAN_CH_COUNT] = {

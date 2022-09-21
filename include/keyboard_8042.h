@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -59,4 +59,4 @@ void send_aux_data_to_host_interrupt(uint8_t data);
  */
 void send_aux_data_to_device(uint8_t data);
 
-#endif  /* __CROS_EC_KEYBOARD_8042_H */
+#endif /* __CROS_EC_KEYBOARD_8042_H */

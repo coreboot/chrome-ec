@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -47,25 +47,16 @@
  * Axis argument used in @ref bma_emul_set_acc @ref bma_emul_get_acc
  * @ref bma_emul_set_off and @ref bma_emul_get_off
  */
-#define BMA_EMUL_AXIS_X		0
-#define BMA_EMUL_AXIS_Y		1
-#define BMA_EMUL_AXIS_Z		2
+#define BMA_EMUL_AXIS_X 0
+#define BMA_EMUL_AXIS_Y 1
+#define BMA_EMUL_AXIS_Z 2
 
 /**
  * Acceleration 1g in internal emulator units. It is helpful for using
  * functions @ref bma_emul_set_acc @ref bma_emul_get_acc
  * @ref bma_emul_set_off and @ref bma_emul_get_off
  */
-#define BMA_EMUL_1G		BIT(10)
-
-/**
- * @brief Get pointer to BMA255 emulator using device tree order number.
- *
- * @param ord Device tree order number obtained from DT_DEP_ORD macro
- *
- * @return Pointer to BMA255 emulator
- */
-struct i2c_emul *bma_emul_get(int ord);
+#define BMA_EMUL_1G BIT(10)
 
 /**
  * @brief Set value of given register of BMA255
@@ -74,7 +65,7 @@ struct i2c_emul *bma_emul_get(int ord);
  * @param reg Register address which value will be changed
  * @param val New value of the register
  */
-void bma_emul_set_reg(struct i2c_emul *emul, int reg, uint8_t val);
+void bma_emul_set_reg(const struct emul *emul, int reg, uint8_t val);
 
 /**
  * @brief Get value of given register of BMA255
@@ -84,7 +75,7 @@ void bma_emul_set_reg(struct i2c_emul *emul, int reg, uint8_t val);
  *
  * @return Value of the register
  */
-uint8_t bma_emul_get_reg(struct i2c_emul *emul, int reg);
+uint8_t bma_emul_get_reg(const struct emul *emul, int reg);
 
 /**
  * @brief Get internal value of offset for given axis
@@ -94,7 +85,7 @@ uint8_t bma_emul_get_reg(struct i2c_emul *emul, int reg);
  *
  * @return Offset of given axis. LSB is 0.97mg
  */
-int16_t bma_emul_get_off(struct i2c_emul *emul, int axis);
+int16_t bma_emul_get_off(const struct emul *emul, int axis);
 
 /**
  * @brief Set internal value of offset for given axis
@@ -103,7 +94,7 @@ int16_t bma_emul_get_off(struct i2c_emul *emul, int axis);
  * @param axis Axis to access: 0 - X, 1 - Y, 2 - Z
  * @param val New value of offset. LSB is 0.97mg
  */
-void bma_emul_set_off(struct i2c_emul *emul, int axis, int16_t val);
+void bma_emul_set_off(const struct emul *emul, int axis, int16_t val);
 
 /**
  * @brief Get internal value of accelerometer for given axis
@@ -113,7 +104,7 @@ void bma_emul_set_off(struct i2c_emul *emul, int axis, int16_t val);
  *
  * @return Acceleration of given axis. LSB is 0.97mg
  */
-int16_t bma_emul_get_acc(struct i2c_emul *emul, int axis);
+int16_t bma_emul_get_acc(const struct emul *emul, int axis);
 
 /**
  * @brief Set internal value of accelerometr for given axis
@@ -122,7 +113,7 @@ int16_t bma_emul_get_acc(struct i2c_emul *emul, int axis);
  * @param axis Axis to access: 0 - X, 1 - Y, 2 - Z
  * @param val New value of accelerometer axis. LSB is 0.97mg
  */
-void bma_emul_set_acc(struct i2c_emul *emul, int axis, int16_t val);
+void bma_emul_set_acc(const struct emul *emul, int axis, int16_t val);
 
 /**
  * @brief Set if error should be generated when fast compensation is triggered
@@ -131,7 +122,7 @@ void bma_emul_set_acc(struct i2c_emul *emul, int axis, int16_t val);
  * @param emul Pointer to BMA255 emulator
  * @param set Check for this error
  */
-void bma_emul_set_err_on_cal_nrdy(struct i2c_emul *emul, bool set);
+void bma_emul_set_err_on_cal_nrdy(const struct emul *emul, bool set);
 
 /**
  * @brief Set if error should be generated when fast compensation is triggered
@@ -140,7 +131,7 @@ void bma_emul_set_err_on_cal_nrdy(struct i2c_emul *emul, bool set);
  * @param emul Pointer to BMA255 emulator
  * @param set Check for this error
  */
-void bma_emul_set_err_on_cal_bad_range(struct i2c_emul *emul, bool set);
+void bma_emul_set_err_on_cal_bad_range(const struct emul *emul, bool set);
 
 /**
  * @brief Set if error should be generated when read only register is being
@@ -149,7 +140,7 @@ void bma_emul_set_err_on_cal_bad_range(struct i2c_emul *emul, bool set);
  * @param emul Pointer to BMA255 emulator
  * @param set Check for this error
  */
-void bma_emul_set_err_on_ro_write(struct i2c_emul *emul, bool set);
+void bma_emul_set_err_on_ro_write(const struct emul *emul, bool set);
 
 /**
  * @brief Set if error should be generated when reserved bits of register are
@@ -158,7 +149,7 @@ void bma_emul_set_err_on_ro_write(struct i2c_emul *emul, bool set);
  * @param emul Pointer to BMA255 emulator
  * @param set Check for this error
  */
-void bma_emul_set_err_on_rsvd_write(struct i2c_emul *emul, bool set);
+void bma_emul_set_err_on_rsvd_write(const struct emul *emul, bool set);
 
 /**
  * @brief Set if error should be generated when MSB register is accessed before
@@ -167,7 +158,7 @@ void bma_emul_set_err_on_rsvd_write(struct i2c_emul *emul, bool set);
  * @param emul Pointer to BMA255 emulator
  * @param set Check for this error
  */
-void bma_emul_set_err_on_msb_first(struct i2c_emul *emul, bool set);
+void bma_emul_set_err_on_msb_first(const struct emul *emul, bool set);
 
 /**
  * @brief Function calculate register that should be accessed when I2C message
@@ -182,7 +173,16 @@ void bma_emul_set_err_on_msb_first(struct i2c_emul *emul, bool set);
  *
  * @retval Register address that should be accessed
  */
-int bma_emul_access_reg(struct i2c_emul *emul, int reg, int bytes, bool read);
+int bma_emul_access_reg(const struct emul *emul, int reg, int bytes, bool read);
+
+/**
+ * @brief Returns pointer to i2c_common_emul_data for argument emul
+ *
+ * @param emul Pointer to BMA emulator
+ * @return Pointer to i2c_common_emul_data from argument emul
+ */
+struct i2c_common_emul_data *
+emul_bma_get_i2c_common_data(const struct emul *emul);
 
 /**
  * @}

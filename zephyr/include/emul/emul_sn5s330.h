@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -46,5 +46,14 @@ void sn5s330_emul_make_vbus_overcurrent(const struct emul *emul);
  * @param emul The sn5s330 chip emulator.
  */
 void sn5s330_emul_lower_vbus_below_minv(const struct emul *emul);
+
+/**
+ * @brief Returns pointer to i2c_common_emul_data for argument emul
+ *
+ * @param emul Pointer to SN5S330 emulator
+ * @return Pointer to i2c_common_emul_data from argument emul
+ */
+struct i2c_common_emul_data *
+emul_sn5s330_get_i2c_common_data(const struct emul *emul);
 
 #endif /* ZEPHYR_INCLUDE_EMUL_EMUL_SN5S330_H_ */

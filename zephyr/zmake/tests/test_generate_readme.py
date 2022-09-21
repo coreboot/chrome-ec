@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium OS Authors. All rights reserved.
+# Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 Tests for the generate_readme.py file.
 """
 
-import pytest
-
+import pytest  # pylint:disable=import-error
 import zmake.generate_readme as gen_readme
 
 
@@ -34,7 +33,7 @@ def test_generate_readme_diff(
     expected_contents,
     actual_contents,
     return_code,
-):  # pylint: disable=too-many-arguments
+):
     """Verify that the diff function can detect different text."""
 
     def generate_readme():

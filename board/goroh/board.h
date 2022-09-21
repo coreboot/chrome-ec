@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -46,7 +46,7 @@
 #define CONFIG_CMD_SCRATCHPAD
 #define CONFIG_CMD_STACKOVERFLOW
 
-#define CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV	9000
+#define CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV 9000
 
 /* Sensor */
 #define CONFIG_GMR_TABLET_MODE
@@ -99,20 +99,16 @@ enum sensor_id {
 };
 
 enum adc_channel {
-	ADC_BOARD_ID,            /* ADC 1 */
-	ADC_TEMP_SENSOR_CPU,     /* ADC 2 */
-	ADC_TEMP_SENSOR_GPU,     /* ADC 3 */
+	ADC_BOARD_ID, /* ADC 1 */
+	ADC_TEMP_SENSOR_CPU, /* ADC 2 */
+	ADC_TEMP_SENSOR_GPU, /* ADC 3 */
 	ADC_TEMP_SENSOR_CHARGER, /* ADC 5 */
 
 	/* Number of ADC channels */
 	ADC_CH_COUNT,
 };
 
-enum usbc_port {
-	USBC_PORT_C0 = 0,
-	USBC_PORT_C1,
-	USBC_PORT_COUNT
-};
+enum usbc_port { USBC_PORT_C0 = 0, USBC_PORT_C1, USBC_PORT_COUNT };
 
 enum pwm_channel {
 	PWM_CH_LED_GREEN,
@@ -122,10 +118,7 @@ enum pwm_channel {
 	PWM_CH_COUNT,
 };
 
-enum fan_channel {
-	FAN_CH_0,
-	FAN_CH_COUNT
-};
+enum fan_channel { FAN_CH_0, FAN_CH_COUNT };
 
 enum temp_sensor_id {
 	TEMP_SENSOR_CPU,

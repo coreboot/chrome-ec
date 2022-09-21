@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -20,7 +20,7 @@ endif()
 
 zephyr_library_sources_ifdef(no_libgcc                  libgcc_${ARCH}.S)
 
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ADC         adc.c)
+zephyr_library_sources_ifdef(CONFIG_ADC                     adc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
                                                             battery.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_RT9490
@@ -43,6 +43,8 @@ if (NOT DEFINED CONFIG_PLATFORM_EC_KEYBOARD_DISCRETE)
                                                             keyboard_raw.c)
 endif()
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD    keyscan.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LOG_BACKEND_CONSOLE_BUFFER
+                             log_backend_console_buffer.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MKBP_EVENT  mkbp_event.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
                                                             motionsense_sensors.c)
@@ -73,3 +75,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_TCPCI
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBA        usba.c)
 zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ power_host_sleep_api.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX     usb_muxes.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
+                                                            bb_retimer_usb_mux.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_HB
+                                                            bb_retimer_usb_mux.c)

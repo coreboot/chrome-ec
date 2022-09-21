@@ -1,9 +1,10 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #include <ap_power/ap_power_interface.h>
+#include <ap_power/ap_pwrseq.h>
 #include <x86_non_dsx_common_pwrseq_sm_handler.h>
 
 LOG_MODULE_DECLARE(ap_pwrseq, CONFIG_AP_PWRSEQ_LOG_LEVEL);
@@ -11,8 +12,9 @@ LOG_MODULE_DECLARE(ap_pwrseq, CONFIG_AP_PWRSEQ_LOG_LEVEL);
 #if CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI
 
 /* If host doesn't program S0ix lazy wake mask, use default S0ix mask */
-#define DEFAULT_WAKE_MASK_S0IX  (EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) | \
-				EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE))
+#define DEFAULT_WAKE_MASK_S0IX                        \
+	(EC_HOST_EVENT_MASK(EC_HOST_EVENT_LID_OPEN) | \
+	 EC_HOST_EVENT_MASK(EC_HOST_EVENT_MODE_CHANGE))
 
 /*
  * Set the wake mask according to the current power state:
@@ -33,7 +35,7 @@ void power_update_wake_mask(void)
 	if (state == SYS_POWER_STATE_S0)
 		wake_mask = 0;
 	else if (lpc_is_active_wm_set_by_host() ||
-		ap_power_get_lazy_wake_mask(state, &wake_mask))
+		 ap_power_get_lazy_wake_mask(state, &wake_mask))
 		return;
 #if CONFIG_AP_PWRSEQ_S0IX
 	if ((state == SYS_POWER_STATE_S0ix) && (wake_mask == 0))
@@ -48,8 +50,8 @@ static void power_update_wake_mask_deferred(struct k_work *work)
 	power_update_wake_mask();
 }
 
-static K_WORK_DELAYABLE_DEFINE(
-	power_update_wake_mask_deferred_data, power_update_wake_mask_deferred);
+static K_WORK_DELAYABLE_DEFINE(power_update_wake_mask_deferred_data,
+			       power_update_wake_mask_deferred);
 
 void ap_power_set_active_wake_mask(void)
 {
@@ -74,14 +76,16 @@ void ap_power_set_active_wake_mask(void)
 		 * has changed again and the work is not processed, we should
 		 * reschedule it.
 		 */
-		rv = k_work_reschedule(
-			&power_update_wake_mask_deferred_data, K_MSEC(5));
+		rv = k_work_reschedule(&power_update_wake_mask_deferred_data,
+				       K_MSEC(5));
 	}
 	__ASSERT(rv >= 0, "Set wake mask work queue error");
 }
 
 #else /* CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI */
-static void ap_power_set_active_wake_mask(void) { }
+static void ap_power_set_active_wake_mask(void)
+{
+}
 #endif /* CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI */
 
 #if CONFIG_AP_PWRSEQ_S0IX
@@ -180,11 +184,14 @@ void ap_power_sleep_notify_transition(enum ap_power_sleep_type check_state)
 #if CONFIG_AP_PWRSEQ_HOST_SLEEP
 #define HOST_SLEEP_EVENT_DEFAULT_RESET 0
 
+static struct host_sleep_event_context *g_ctx;
+
 void ap_power_reset_host_sleep_state(void)
 {
 	power_set_host_sleep_state(HOST_SLEEP_EVENT_DEFAULT_RESET);
-	ap_power_chipset_handle_host_sleep_event(
-			HOST_SLEEP_EVENT_DEFAULT_RESET, NULL);
+	ap_power_ev_send_callbacks(AP_POWER_S0IX_RESET_TRACKING);
+	ap_power_chipset_handle_host_sleep_event(HOST_SLEEP_EVENT_DEFAULT_RESET,
+						 NULL);
 }
 
 /* TODO: hook to reset event */
@@ -195,19 +202,21 @@ void ap_power_handle_chipset_reset(void)
 }
 
 void ap_power_chipset_handle_host_sleep_event(
-		enum host_sleep_event state,
-		struct host_sleep_event_context *ctx)
+	enum host_sleep_event state, struct host_sleep_event_context *ctx)
 {
 	LOG_DBG("host sleep event = %d!", state);
+
+	g_ctx = ctx;
+
 #if CONFIG_AP_PWRSEQ_S0IX
 	if (state == HOST_SLEEP_EVENT_S0IX_SUSPEND) {
-
 		/*
 		 * Indicate to power state machine that a new host event for
 		 * s0ix/s3 suspend has been received and so chipset suspend
 		 * notification needs to be sent to listeners.
 		 */
 		ap_power_sleep_set_notify(AP_POWER_SLEEP_SUSPEND);
+		ap_power_ev_send_callbacks(AP_POWER_S0IX_SUSPEND_START);
 		power_signal_enable(PWR_SLP_S0);
 
 	} else if (state == HOST_SLEEP_EVENT_S0IX_RESUME) {
@@ -218,6 +227,7 @@ void ap_power_chipset_handle_host_sleep_event(
 		ap_power_sleep_set_notify(AP_POWER_SLEEP_RESUME);
 		power_s0ix_resume_restore_masks();
 		power_signal_disable(PWR_SLP_S0);
+		ap_power_ev_send_callbacks(AP_POWER_S0IX_RESUME_COMPLETE);
 
 		/*
 		 * If the sleep signal timed out and never transitioned, then
@@ -231,6 +241,17 @@ void ap_power_chipset_handle_host_sleep_event(
 		power_signal_disable(PWR_SLP_S0);
 	}
 #endif /* CONFIG_AP_PWRSEQ_S0IX */
+	ap_pwrseq_wake();
+}
+
+uint16_t host_get_sleep_timeout(void)
+{
+	return g_ctx->sleep_timeout_ms;
+}
+
+void host_set_sleep_transitions(uint32_t val)
+{
+	g_ctx->sleep_transitions = val;
 }
 
 #endif /* CONFIG_AP_PWRSEQ_HOST_SLEEP */

@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,14 +9,15 @@
 bool board_is_convertible(void)
 {
 	return (get_fw_config_field(FW_CONFIG_FORM_FACTOR_OFFSET,
-			FW_CONFIG_FORM_FACTOR_WIDTH)
-			== FW_CONFIG_FORM_FACTOR_CONVERTIBLE);
+				    FW_CONFIG_FORM_FACTOR_WIDTH) ==
+		FW_CONFIG_FORM_FACTOR_CONVERTIBLE);
 }
 
 bool board_has_kblight(void)
 {
 	return (get_fw_config_field(FW_CONFIG_KBLIGHT_OFFSET,
-			FW_CONFIG_KBLIGHT_WIDTH) == FW_CONFIG_KBLIGHT_YES);
+				    FW_CONFIG_KBLIGHT_WIDTH) ==
+		FW_CONFIG_KBLIGHT_YES);
 }
 
 enum board_usb_c1_mux board_get_usb_c1_mux(void)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Build, bundle, or test all of the EC boards.
@@ -16,21 +16,20 @@ import pathlib
 import subprocess
 import sys
 
+from chromite.api.gen_sdk.chromite.api import firmware_pb2
+
 # pylint: disable=import-error
 from google.protobuf import json_format
 
-from chromite.api.gen_sdk.chromite.api import firmware_pb2
-
-
-DEFAULT_BUNDLE_DIRECTORY = '/tmp/artifact_bundles'
-DEFAULT_BUNDLE_METADATA_FILE = '/tmp/artifact_bundle_metadata'
+DEFAULT_BUNDLE_DIRECTORY = "/tmp/artifact_bundles"
+DEFAULT_BUNDLE_METADATA_FILE = "/tmp/artifact_bundle_metadata"
 
 # The the list of boards whose on-device unit tests we will verify compilation.
 # TODO(b/172501728) On-device unit tests should build for all boards, but
 # they've bit rotted, so we only build the ones that compile.
 BOARDS_UNIT_TEST = [
-    'bloonchipper',
-    'dartmonkey',
+    "bloonchipper",
+    "dartmonkey",
 ]
 
 
@@ -46,67 +45,87 @@ def build(opts):
     """
     metric_list = firmware_pb2.FwBuildMetricList()
 
+    # Run formatting checks on all python files.
+    subprocess.run(
+        ["black", "--check", "."], cwd=os.path.dirname(__file__), check=True
+    )
+    subprocess.run(
+        [
+            "isort",
+            "--settings-file=.isort.cfg",
+            "--check",
+            "--gitignore",
+            "--dont-follow-links",
+            ".",
+        ],
+        cwd=os.path.dirname(__file__),
+        check=True,
+    )
+
     if opts.code_coverage:
         print(
             "When --code-coverage is selected, 'build' is a no-op. "
             "Run 'test' with --code-coverage instead."
         )
-        with open(opts.metrics, 'w') as f:
-            f.write(json_format.MessageToJson(metric_list))
+        with open(opts.metrics, "w") as file:
+            file.write(json_format.MessageToJson(metric_list))
         return
 
-    cmd = ['make', 'buildall_only', f'-j{opts.cpus}']
+    ec_dir = pathlib.Path(__file__).parent
+    subprocess.run([ec_dir / "util" / "check_clang_format.py"], check=True)
+
+    cmd = ["make", "buildall_only", f"-j{opts.cpus}"]
     print(f"# Running {' '.join(cmd)}.")
     subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
     ec_dir = os.path.dirname(__file__)
-    build_dir = os.path.join(ec_dir, 'build')
+    build_dir = os.path.join(ec_dir, "build")
     for build_target in sorted(os.listdir(build_dir)):
         metric = metric_list.value.add()
         metric.target_name = build_target
-        metric.platform_name = 'ec'
-        for variant in ['RO', 'RW']:
+        metric.platform_name = "ec"
+        for variant in ["RO", "RW"]:
             memsize_file = (
                 pathlib.Path(build_dir)
                 / build_target
                 / variant
-                / f'ec.{variant}.elf.memsize.txt'
+                / f"ec.{variant}.elf.memsize.txt"
             )
             if memsize_file.exists():
                 parse_memsize(memsize_file, metric, variant)
-    with open(opts.metrics, 'w') as f:
-        f.write(json_format.MessageToJson(metric_list))
+    with open(opts.metrics, "w") as file:
+        file.write(json_format.MessageToJson(metric_list))
 
     # Ensure that there are no regressions for boards that build successfully
     # with clang: b/172020503.
-    cmd = ['./util/build_with_clang.py']
+    cmd = ["./util/build_with_clang.py"]
     print(f'# Running {" ".join(cmd)}.')
-    subprocess.run(cmd,
-                   cwd=os.path.dirname(__file__),
-                   check=True)
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
 
 UNITS = {
-    'B': 1,
-    'KB': 1024,
-    'MB': 1024 * 1024,
-    'GB': 1024 * 1024 * 1024,
+    "B": 1,
+    "KB": 1024,
+    "MB": 1024 * 1024,
+    "GB": 1024 * 1024 * 1024,
 }
 
 
 def parse_memsize(filename, metric, variant):
-    with open(filename, 'r') as infile:
+    """Parse the output of the build to extract the image size."""
+    with open(filename, "r") as infile:
         # Skip header line
         infile.readline()
         for line in infile.readlines():
             parts = line.split()
             fw_section = metric.fw_section.add()
-            fw_section.region = variant + '_' + parts[0][:-1]
+            fw_section.region = variant + "_" + parts[0][:-1]
             fw_section.used = int(parts[1]) * UNITS[parts[2]]
             fw_section.total = int(parts[3]) * UNITS[parts[4]]
             fw_section.track_on_gerrit = False
 
 
 def bundle(opts):
+    """Bundle the artifacts."""
     if opts.code_coverage:
         bundle_coverage(opts)
     else:
@@ -132,8 +151,8 @@ def write_metadata(opts, info):
     bundle_metadata_file = (
         opts.metadata if opts.metadata else DEFAULT_BUNDLE_METADATA_FILE
     )
-    with open(bundle_metadata_file, 'w') as f:
-        f.write(json_format.MessageToJson(info))
+    with open(bundle_metadata_file, "w") as file:
+        file.write(json_format.MessageToJson(info))
 
 
 def bundle_coverage(opts):
@@ -142,10 +161,10 @@ def bundle_coverage(opts):
     info.bcs_version_info.version_string = opts.bcs_version
     bundle_dir = get_bundle_dir(opts)
     ec_dir = os.path.dirname(__file__)
-    tarball_name = 'coverage.tbz2'
+    tarball_name = "coverage.tbz2"
     tarball_path = os.path.join(bundle_dir, tarball_name)
-    cmd = ['tar', 'cvfj', tarball_path, 'lcov.info']
-    subprocess.run(cmd, cwd=os.path.join(ec_dir, 'build/coverage'), check=True)
+    cmd = ["tar", "cvfj", tarball_path, "lcov.info"]
+    subprocess.run(cmd, cwd=os.path.join(ec_dir, "build/coverage"), check=True)
     meta = info.objects.add()
     meta.file_name = tarball_name
     meta.lcov_info.type = (
@@ -161,16 +180,20 @@ def bundle_firmware(opts):
     info.bcs_version_info.version_string = opts.bcs_version
     bundle_dir = get_bundle_dir(opts)
     ec_dir = os.path.dirname(__file__)
-    for build_target in sorted(os.listdir(os.path.join(ec_dir, 'build'))):
-        tarball_name = ''.join([build_target, '.firmware.tbz2'])
+    for build_target in sorted(os.listdir(os.path.join(ec_dir, "build"))):
+        tarball_name = "".join([build_target, ".firmware.tbz2"])
         tarball_path = os.path.join(bundle_dir, tarball_name)
         cmd = [
-            'tar', 'cvfj', tarball_path,
-            '--exclude=*.o.d', '--exclude=*.o', '.',
+            "tar",
+            "cvfj",
+            tarball_path,
+            "--exclude=*.o.d",
+            "--exclude=*.o",
+            ".",
         ]
         subprocess.run(
             cmd,
-            cwd=os.path.join(ec_dir, 'build', build_target),
+            cwd=os.path.join(ec_dir, "build", build_target),
             check=True,
         )
         meta = info.objects.add()
@@ -188,8 +211,21 @@ def test(opts):
     """Runs all of the unit tests for EC firmware"""
     # TODO(b/169178847): Add appropriate metric information
     metrics = firmware_pb2.FwTestMetricList()
-    with open(opts.metrics, 'w') as f:
-        f.write(json_format.MessageToJson(metrics))
+    with open(opts.metrics, "w") as file:
+        file.write(json_format.MessageToJson(metrics))
+
+    # Run python unit tests.
+    subprocess.run(
+        ["util/ec3po/run_tests.sh"], cwd=os.path.dirname(__file__), check=True
+    )
+    subprocess.run(
+        ["extra/stack_analyzer/run_tests.sh"],
+        cwd=os.path.dirname(__file__),
+        check=True,
+    )
+    subprocess.run(
+        ["util/run_tests.sh"], cwd=os.path.dirname(__file__), check=True
+    )
 
     # If building for code coverage, build the 'coverage' target, which
     # builds the posix-based unit tests for code coverage and assembles
@@ -197,8 +233,8 @@ def test(opts):
     #
     # Otherwise, build the 'runtests' target, which verifies all
     # posix-based unit tests build and pass.
-    target = 'coverage' if opts.code_coverage else 'runtests'
-    cmd = ['make', target, f'-j{opts.cpus}']
+    target = "coverage" if opts.code_coverage else "runtests"
+    cmd = ["make", target, f"-j{opts.cpus}"]
     print(f"# Running {' '.join(cmd)}.")
     subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
@@ -206,13 +242,13 @@ def test(opts):
         # Verify compilation of the on-device unit test binaries.
         # TODO(b/172501728) These should build  for all boards, but they've bit
         # rotted, so we only build the ones that compile.
-        cmd = ['make', f'-j{opts.cpus}']
-        cmd.extend(['tests-' + b for b in BOARDS_UNIT_TEST])
+        cmd = ["make", f"-j{opts.cpus}"]
+        cmd.extend(["tests-" + b for b in BOARDS_UNIT_TEST])
         print(f"# Running {' '.join(cmd)}.")
         subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
         # Verify the tests pass with ASan also
-        cmd = ['make', 'TEST_ASAN=y', target, f'-j{opts.cpus}']
+        cmd = ["make", "TEST_ASAN=y", target, f"-j{opts.cpus}"]
         print(f"# Running {' '.join(cmd)}.")
         subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
@@ -224,8 +260,8 @@ def main(args):
     """
     opts = parse_args(args)
 
-    if not hasattr(opts, 'func'):
-        print('Must select a valid sub command!')
+    if not hasattr(opts, "func"):
+        print("Must select a valid sub command!")
         return -1
 
     # Run selected sub command function
@@ -238,69 +274,67 @@ def main(args):
 
 
 def parse_args(args):
+    """Parse all command line args and return opts dict."""
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument(
-        '--cpus',
+        "--cpus",
         default=multiprocessing.cpu_count(),
-        help='The number of cores to use.',
+        help="The number of cores to use.",
     )
 
     parser.add_argument(
-        '--metrics',
-        dest='metrics',
+        "--metrics",
+        dest="metrics",
         required=True,
-        help='File to write the json-encoded MetricsList proto message.',
+        help="File to write the json-encoded MetricsList proto message.",
     )
 
     parser.add_argument(
-        '--metadata',
+        "--metadata",
         required=False,
-        help='Full pathname for the file in which to write build artifact '
-        'metadata.',
+        help="Full pathname for the file in which to write build artifact metadata.",
     )
 
     parser.add_argument(
-        '--output-dir',
+        "--output-dir",
         required=False,
-        help='Full pathanme for the directory in which to bundle build '
-        'artifacts.',
+        help="Full pathanme for the directory in which to bundle build artifacts.",
     )
 
     parser.add_argument(
-        '--code-coverage',
+        "--code-coverage",
         required=False,
-        action='store_true',
-        help='Build host-based unit tests for code coverage.',
+        action="store_true",
+        help="Build host-based unit tests for code coverage.",
     )
 
     parser.add_argument(
-        '--bcs-version',
-        dest='bcs_version',
-        default='',
+        "--bcs-version",
+        dest="bcs_version",
+        default="",
         required=False,
         # TODO(b/180008931): make this required=True.
-        help='BCS version to include in metadata.',
+        help="BCS version to include in metadata.",
     )
 
     # Would make this required=True, but not available until 3.7
     sub_cmds = parser.add_subparsers()
 
-    build_cmd = sub_cmds.add_parser('build', help='Builds all firmware targets')
+    build_cmd = sub_cmds.add_parser("build", help="Builds all firmware targets")
     build_cmd.set_defaults(func=build)
 
     build_cmd = sub_cmds.add_parser(
-        'bundle',
-        help='Creates a tarball containing build '
-        'artifacts from all firmware targets',
+        "bundle",
+        help="Creates a tarball containing build artifacts from all firmware targets",
     )
     build_cmd.set_defaults(func=bundle)
 
-    test_cmd = sub_cmds.add_parser('test', help='Runs all firmware unit tests')
+    test_cmd = sub_cmds.add_parser("test", help="Runs all firmware unit tests")
     test_cmd.set_defaults(func=test)
 
     return parser.parse_args(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))

@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -56,37 +56,29 @@ const struct adc_t adc_channels[] = {
 		.name = "ADP_ID",
 		.input_ch = NPCX_ADC_CH4,
 		.factor_mul = ADC_MAX_VOLT,
-		.factor_div = ADC_READ_MAX + 1,
+		.factor_div = ADC_READ_MAX,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /* Temperature sensor configuration */
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1_CPU] = {
-		.name = "CPU",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_1_CPU
-	},
-	[TEMP_SENSOR_2_CPU_VR] = {
-		.name = "CPU VR",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_2_CPU_VR
-	},
-	[TEMP_SENSOR_3_WIFI] = {
-		.name = "WIFI",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_3_WIFI
-	},
-	[TEMP_SENSOR_4_DIMM] = {
-		.name = "DIMM",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_4_DIMM
-	},
+	[TEMP_SENSOR_1_CPU] = { .name = "CPU",
+				.type = TEMP_SENSOR_TYPE_BOARD,
+				.read = get_temp_3v3_30k9_47k_4050b,
+				.idx = ADC_TEMP_SENSOR_1_CPU },
+	[TEMP_SENSOR_2_CPU_VR] = { .name = "CPU VR",
+				   .type = TEMP_SENSOR_TYPE_BOARD,
+				   .read = get_temp_3v3_30k9_47k_4050b,
+				   .idx = ADC_TEMP_SENSOR_2_CPU_VR },
+	[TEMP_SENSOR_3_WIFI] = { .name = "WIFI",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_3v3_30k9_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_3_WIFI },
+	[TEMP_SENSOR_4_DIMM] = { .name = "DIMM",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_3v3_30k9_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_4_DIMM },
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
@@ -100,8 +92,8 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 /*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_CPU \
-	{ \
+#define THERMAL_CPU              \
+	{                        \
 		.temp_host = { \
 			[EC_TEMP_THRESH_WARN] = 0, \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(95), \
@@ -112,8 +104,8 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(90), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(90), \
 		}, \
-		.temp_fan_off = C_TO_K(35), \
-		.temp_fan_max = C_TO_K(65), \
+		.temp_fan_off = C_TO_K(25), \
+		.temp_fan_max = C_TO_K(75), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 

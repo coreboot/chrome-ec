@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -29,6 +29,5 @@ static enum ec_status i2c_get_protocol_info(struct host_cmd_handler_args *args)
 
 	return EC_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO,
-		     i2c_get_protocol_info,
+DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO, i2c_get_protocol_info,
 		     EC_VER_MASK(0));

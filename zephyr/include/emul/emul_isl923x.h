@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -19,14 +19,13 @@
 const struct device *isl923x_emul_get_parent(const struct emul *emulator);
 
 /**
- * @brief Get the I2C emulator struct
- *
- * This is generally coupled with calls to i2c_common_emul_* functions.
+ * @brief Get pointer to emulator i2c_common_emul_cfg
  *
  * @param emulator The emulator to look-up
- * @return Pointer to the I2C emulator struct
+ * @return Pointer to the i2c_common_emul_cfg struct
  */
-struct i2c_emul *isl923x_emul_get_i2c_emul(const struct emul *emulator);
+const struct i2c_common_emul_cfg *
+isl923x_emul_get_cfg(const struct emul *emulator);
 
 /**
  * @brief Reset all registers
@@ -94,6 +93,15 @@ void raa489000_emul_set_acok_pin(const struct emul *emulator, uint16_t value);
  * @param reg The address of the register to query
  * @return The 16-bit value of the register
  */
-uint16_t isl923x_emul_peek_reg(struct i2c_emul *i2c_emul, int reg);
+uint16_t isl923x_emul_peek_reg(const struct emul *emul, int reg);
+
+/**
+ * @brief Returns pointer to i2c_common_emul_data for argument emul
+ *
+ * @param emul Pointer to ISL923X emulator
+ * @return Pointer to i2c_common_emul_data from argument emul
+ */
+struct i2c_common_emul_data *
+emul_isl923x_get_i2c_common_data(const struct emul *emul);
 
 #endif /* ZEPHYR_INCLUDE_EMUL_EMUL_ISL923X_H_ */

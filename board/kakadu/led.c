@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -16,13 +16,13 @@ const enum ec_led_id supported_led_ids[] = { EC_LED_ID_BATTERY_LED };
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
-#define LED_OFF		MT6370_LED_ID_OFF
-#define LED_AMBER	MT6370_LED_ID1
-#define LED_WHITE	MT6370_LED_ID2
+#define LED_OFF MT6370_LED_ID_OFF
+#define LED_AMBER MT6370_LED_ID1
+#define LED_WHITE MT6370_LED_ID2
 
-#define LED_MASK_OFF	0
-#define LED_MASK_AMBER	MT6370_MASK_RGB_ISNK1DIM_EN
-#define LED_MASK_WHITE	MT6370_MASK_RGB_ISNK2DIM_EN
+#define LED_MASK_OFF 0
+#define LED_MASK_AMBER MT6370_MASK_RGB_ISNK1DIM_EN
+#define LED_MASK_WHITE MT6370_MASK_RGB_ISNK2DIM_EN
 
 static void kakadu_led_set_battery(void)
 {

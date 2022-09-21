@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,10 +10,10 @@
 
 /* Interval between HOOK_TICK notifications */
 #define HOOK_TICK_INTERVAL_MS 500
-#define HOOK_TICK_INTERVAL    (HOOK_TICK_INTERVAL_MS * MSEC)
+#define HOOK_TICK_INTERVAL (HOOK_TICK_INTERVAL_MS * MSEC)
 
 /* RW only, no flash */
-#undef  CONFIG_FW_INCLUDE_RO
+#undef CONFIG_FW_INCLUDE_RO
 #define CONFIG_RO_MEM_OFF 0
 #define CONFIG_RO_SIZE 0
 #define CONFIG_RW_MEM_OFF 0

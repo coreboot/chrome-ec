@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -19,16 +19,16 @@
 #include "timer.h"
 #include "util.h"
 
-#define CPRINTS(format, args...) cprints(CC_GPIO, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_GPIO, format, ##args)
 
 /*
  * Due to the CSME-Lite processing, upon startup the CPU transitions through
  * S0->S3->S5->S3->S0, causing the LED to turn on/off/on, so
  * delay turning off the LED during suspend/shutdown.
  */
-#define LED_CPU_DELAY_MS	(2000 * MSEC)
+#define LED_CPU_DELAY_MS (2000 * MSEC)
 
-const enum ec_led_id supported_led_ids[] = {EC_LED_ID_POWER_LED};
+const enum ec_led_id supported_led_ids[] = { EC_LED_ID_POWER_LED };
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
 enum led_color {
@@ -61,15 +61,21 @@ static int set_color_power(enum led_color color, int duty)
 		return EC_ERROR_UNKNOWN;
 	}
 
-	if (blue)
+	if (blue && duty) {
+		gpio_set_level(GPIO_LED_BLUE_CONTROL, 1);
 		pwm_set_duty(PWM_CH_LED_BLUE, duty);
-	else
+	} else {
+		gpio_set_level(GPIO_LED_BLUE_CONTROL, 0);
 		pwm_set_duty(PWM_CH_LED_BLUE, 0);
+	}
 
-	if (amber)
+	if (amber && duty) {
+		gpio_set_level(GPIO_LED_ORANGE_CONTROL, 1);
 		pwm_set_duty(PWM_CH_LED_AMBER, duty);
-	else
+	} else {
+		gpio_set_level(GPIO_LED_ORANGE_CONTROL, 0);
 		pwm_set_duty(PWM_CH_LED_AMBER, 0);
+	}
 
 	return EC_SUCCESS;
 }
@@ -84,9 +90,11 @@ static int set_color(enum ec_led_id id, enum led_color color, int duty)
 	}
 }
 
-#define LED_PULSE_US		(2 * SECOND)
-/* 40 msec for nice and smooth transition. */
-#define LED_PULSE_TICK_US	(40 * MSEC)
+#define LED_PERIOD (4 * SECOND)
+#define LED_DUTY_CYCLE (25)
+#define LED_PULSE_US (LED_PERIOD * LED_DUTY_CYCLE / 100 / 2)
+/* 10 msec for nice and smooth transition. */
+#define LED_PULSE_TICK_US (10 * MSEC)
 
 /*
  * When pulsing is enabled, brightness is incremented by <duty_inc> every
@@ -98,17 +106,26 @@ static struct {
 	int duty_inc;
 	enum led_color color;
 	int duty;
+	uint32_t time_off;
 } led_pulse;
 
-#define CONFIG_TICK(interval, color) \
-	config_tick((interval), 100 / (LED_PULSE_US / (interval)), (color))
+/*
+ * LED_PERIOD = time_on + time_off;
+ * time_on = LED_PULSE_US * 2;
+ * time_off = LED_PERIOD - LED_PULSE_US * 2;
+ */
+#define CONFIG_TICK(interval, period, color)                       \
+	config_tick((interval), 100 / (LED_PULSE_US / (interval)), \
+		    LED_PERIOD - LED_PULSE_US * 2, (color))
 
-static void config_tick(uint32_t interval, int duty_inc, enum led_color color)
+static void config_tick(uint32_t interval, int duty_inc, int time_off,
+			enum led_color color)
 {
 	led_pulse.interval = interval;
 	led_pulse.duty_inc = duty_inc;
 	led_pulse.color = color;
 	led_pulse.duty = 0;
+	led_pulse.time_off = time_off;
 }
 
 static void pulse_power_led(enum led_color color)
@@ -133,12 +150,15 @@ static void led_tick(void)
 		pulse_power_led(led_pulse.color);
 	elapsed = get_time().le.lo - start;
 	next = led_pulse.interval > elapsed ? led_pulse.interval - elapsed : 0;
+	next = (led_pulse.duty - led_pulse.duty_inc) ?
+		       next :
+		       next + led_pulse.time_off;
 	hook_call_deferred(&led_tick_data, next);
 }
 
 static void led_suspend(void)
 {
-	CONFIG_TICK(LED_PULSE_TICK_US, LED_AMBER);
+	CONFIG_TICK(LED_PULSE_TICK_US, LED_PERIOD, LED_BLUE);
 	led_tick();
 }
 DECLARE_DEFERRED(led_suspend);
@@ -178,7 +198,7 @@ static void led_resume(void)
 	hook_call_deferred(&led_suspend_data, -1);
 	hook_call_deferred(&led_shutdown_data, -1);
 	if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED))
-		set_color(EC_LED_ID_POWER_LED, LED_AMBER, 100);
+		set_color(EC_LED_ID_POWER_LED, LED_BLUE, 100);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, led_resume, HOOK_PRIO_DEFAULT);
 
@@ -186,7 +206,7 @@ void led_alert(int enable)
 {
 	if (enable) {
 		/* Overwrite the current signal */
-		config_tick(1 * SECOND, 100, LED_BLUE);
+		config_tick(1 * SECOND, 100, 0, LED_AMBER);
 		led_tick();
 	} else {
 		/* Restore the previous signal */
@@ -203,10 +223,10 @@ void show_critical_error(void)
 {
 	hook_call_deferred(&led_tick_data, -1);
 	if (led_auto_control_is_enabled(EC_LED_ID_POWER_LED))
-		set_color(EC_LED_ID_POWER_LED, LED_BLUE, 100);
+		set_color(EC_LED_ID_POWER_LED, LED_AMBER, 100);
 }
 
-static int command_led(int argc, char **argv)
+static int command_led(int argc, const char **argv)
 {
 	enum ec_led_id id = EC_LED_ID_POWER_LED;
 
@@ -231,8 +251,7 @@ static int command_led(int argc, char **argv)
 	}
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(led, command_led,
-			"[debug|blue|amber|off|alert|crit]",
+DECLARE_CONSOLE_COMMAND(led, command_led, "[debug|blue|amber|off|alert|crit]",
 			"Turn on/off LED.");
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
@@ -251,8 +270,8 @@ int led_set_brightness(enum ec_led_id id, const uint8_t *brightness)
 		return set_color(id, LED_OFF, 0);
 }
 
-void board_set_charge_limit(int port, int supplier, int charge_ma,
-				int max_ma, int charge_mv)
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
 {
 	/* Blink alert if insufficient power per system_can_boot_ap(). */
 	int insufficient_power =

@@ -1,10 +1,11 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 /* Clocks, PLL and power settings */
 
+#include "builtin/assert.h"
 #include "clock.h"
 #include "clock_chip.h"
 #include "common.h"
@@ -14,11 +15,12 @@
 #include "timer.h"
 #include "util.h"
 
-#define CPRINTF(format, args...) cprintf(CC_CLOCK, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CLOCK, format, ##args)
 
-#define ULPOSC_CAL_MIN_VALUE   3
-#define ULPOSC_CAL_MAX_VALUE   60
-#define ULPOSC_CAL_START_VALUE ((ULPOSC_CAL_MIN_VALUE + ULPOSC_CAL_MAX_VALUE)/2)
+#define ULPOSC_CAL_MIN_VALUE 3
+#define ULPOSC_CAL_MAX_VALUE 60
+#define ULPOSC_CAL_START_VALUE \
+	((ULPOSC_CAL_MIN_VALUE + ULPOSC_CAL_MAX_VALUE) / 2)
 
 static struct opp_ulposc_cfg {
 	uint32_t osc;
@@ -29,11 +31,19 @@ static struct opp_ulposc_cfg {
 	uint32_t target_mhz;
 } opp[] = {
 	{
-		.osc = 1, .target_mhz = ULPOSC2_CLOCK_MHZ, .div = 16, .iband = 4, .mod = 1,
+		.osc = 1,
+		.target_mhz = ULPOSC2_CLOCK_MHZ,
+		.div = 16,
+		.iband = 4,
+		.mod = 1,
 		.cali = ULPOSC_CAL_START_VALUE,
 	},
 	{
-		.osc = 0, .target_mhz = ULPOSC1_CLOCK_MHZ, .div = 12, .iband = 4, .mod = 1,
+		.osc = 0,
+		.target_mhz = ULPOSC1_CLOCK_MHZ,
+		.div = 12,
+		.iband = 4,
+		.mod = 1,
 		.cali = ULPOSC_CAL_START_VALUE,
 	},
 };
@@ -90,17 +100,23 @@ static void clock_ulposc_config_cali(struct opp_ulposc_cfg *opp,
 
 static unsigned int clock_ulposc_measure_freq(int osc)
 {
-	unsigned int result = 0;
+	unsigned int clk_dbg_cfg, clk_misc_cfg_0, clk26cali_0, clk26cali_1,
+		result = 0;
 	int cnt;
 
+	/* backup */
+	clk_dbg_cfg = AP_CLK_DBG_CFG;
+	clk_misc_cfg_0 = AP_CLK_MISC_CFG_0;
+	clk26cali_0 = AP_SCP_CFG_0;
+	clk26cali_1 = AP_SCP_CFG_1;
+
 	/* Before select meter clock input, bit[1:0] = b00 */
-	AP_CLK_DBG_CFG = (AP_CLK_DBG_CFG & ~DBG_MODE_MASK) |
-			 DBG_MODE_SET_CLOCK;
+	AP_CLK_DBG_CFG = (AP_CLK_DBG_CFG & ~DBG_MODE_MASK) | DBG_MODE_SET_CLOCK;
 
 	/* Select source, bit[21:16] = clk_src */
-	AP_CLK_DBG_CFG = (AP_CLK_DBG_CFG & ~DBG_BIST_SOURCE_MASK) |
-			 (osc == 0 ? DBG_BIST_SOURCE_ULPOSC1 :
-				     DBG_BIST_SOURCE_ULPOSC2);
+	AP_CLK_DBG_CFG =
+		(AP_CLK_DBG_CFG & ~DBG_BIST_SOURCE_MASK) |
+		(osc == 0 ? DBG_BIST_SOURCE_ULPOSC1 : DBG_BIST_SOURCE_ULPOSC2);
 
 	/* Set meter divisor to 1, bit[31:24] = b00000000 */
 	AP_CLK_MISC_CFG_0 = (AP_CLK_MISC_CFG_0 & ~MISC_METER_DIVISOR_MASK) |
@@ -129,10 +145,17 @@ static unsigned int clock_ulposc_measure_freq(int osc)
 
 	/* Disable freq meter */
 	AP_SCP_CFG_0 &= ~CFG_FREQ_METER_ENABLE;
+
+	/* restore */
+	AP_CLK_DBG_CFG = clk_dbg_cfg;
+	AP_CLK_MISC_CFG_0 = clk_misc_cfg_0;
+	AP_SCP_CFG_0 = clk26cali_0;
+	AP_SCP_CFG_1 = clk26cali_1;
+
 	return result;
 }
 
-#define CAL_MIS_RATE	40
+#define CAL_MIS_RATE 40
 static int clock_ulposc_is_calibrated(struct opp_ulposc_cfg *opp)
 {
 	uint32_t curr, target;
@@ -231,13 +254,12 @@ static void clock_calibrate_ulposc(struct opp_ulposc_cfg *opp)
 	clock_ulposc_config_default(opp);
 	clock_high_enable(opp->osc);
 
-
 	/* Calibrate only if it is not accurate enough. */
 	if (!clock_ulposc_is_calibrated(opp))
 		opp->cali = clock_ulposc_process_cali(opp);
 
-	CPRINTF("osc:%u, target=%uMHz, cal:%u\n",
-		opp->osc, opp->target_mhz, opp->cali);
+	CPRINTF("osc:%u, target=%uMHz, cal:%u\n", opp->osc, opp->target_mhz,
+		opp->cali);
 }
 
 void scp_use_clock(enum scp_clock_source src)
@@ -257,13 +279,32 @@ void scp_use_clock(enum scp_clock_source src)
 
 void clock_init(void)
 {
+	/* Enable fast wakeup support */
+	SCP_CLK_ON_CTRL = (SCP_CLK_ON_CTRL & ~HIGH_FINAL_VAL_MASK) |
+			  HIGH_FINAL_VAL_DEFAULT;
+	SCP_FAST_WAKE_CNT_END =
+		(SCP_FAST_WAKE_CNT_END & ~FAST_WAKE_CNT_END_MASK) |
+		FAST_WAKE_CNT_END_DEFAULT;
+
+	/* Set slow wake clock */
+	SCP_WAKE_CKSW = (SCP_WAKE_CKSW & ~WAKE_CKSW_SEL_SLOW_MASK) |
+			WAKE_CKSW_SEL_SLOW_DEFAULT;
+
+	/* Select CLK_HIGH as wakeup clock */
+	SCP_CLK_SLOW_SEL = (SCP_CLK_SLOW_SEL &
+			    (CKSW_SEL_SLOW_MASK | CKSW_SEL_SLOW_DIV_MASK)) |
+			   CKSW_SEL_SLOW_ULPOSC2_CLK;
+}
+
+void scp_enable_clock(void)
+{
 	int i;
 
 	/* Select default CPU clock */
 	scp_use_clock(SCP_CLK_26M);
 
 	/* VREQ */
-	SCP_CPU_VREQ = VREQ_SEL | VREQ_DVFS_SEL;
+	SCP_CPU_VREQ = VREQ_DVFS_SEL;
 	SCP_SECURE_CTRL |= ENABLE_SPM_MASK_VREQ;
 	SCP_CLK_CTRL_GENERAL_CTRL &= ~VREQ_PMIC_WRAP_SEL;
 
@@ -271,17 +312,23 @@ void clock_init(void)
 	SCP_SYS_CTRL |= AUTO_DDREN;
 
 	/* Set settle time */
-	SCP_CLK_SYS_VAL =
-		(SCP_CLK_SYS_VAL & ~CLK_SYS_VAL_MASK) | CLK_SYS_VAL(1);
-	SCP_CLK_HIGH_VAL =
-		(SCP_CLK_HIGH_VAL & ~CLK_HIGH_VAL_MASK) | CLK_HIGH_VAL(1);
-	SCP_CLK_SLEEP_CTRL =
-		(SCP_CLK_SLEEP_CTRL & ~VREQ_COUNTER_MASK) | VREQ_COUNTER_VAL(1);
+	SCP_CLK_SYS_VAL = (SCP_CLK_SYS_VAL & ~CLK_SYS_VAL_MASK) |
+			  CLK_SYS_VAL(1);
+	SCP_CLK_HIGH_VAL = (SCP_CLK_HIGH_VAL & ~CLK_HIGH_VAL_MASK) |
+			   CLK_HIGH_VAL(1);
+	SCP_CLK_SLEEP_CTRL = (SCP_CLK_SLEEP_CTRL & ~VREQ_COUNTER_MASK) |
+			     VREQ_COUNTER_VAL(1);
+
+	/* Disable slow wake */
+	SCP_CLK_SLEEP = SLOW_WAKE_DISABLE;
+	/* Disable SPM sleep control, disable sleep mode */
+	SCP_CLK_SLEEP_CTRL &= ~(SPM_SLEEP_MODE | EN_SLEEP_CTRL);
 
 	/* Set RG MUX to SW mode */
-	AP_PLL_CON0 = LTECLKSQ_EN | LTECLKSQ_LPF_EN | LTECLKSQ_HYS_EN | LTECLKSQ_VOD_EN |
-		LTECLKSQ_HYS_SEL | CLKSQ_RESERVE | SSUSB26M_CK2_EN | SSUSB26M_CK_EN|
-		XTAL26M_CK_EN | ULPOSC_CTRL_SEL;
+	AP_PLL_CON0 = LTECLKSQ_EN | LTECLKSQ_LPF_EN | LTECLKSQ_HYS_EN |
+		      LTECLKSQ_VOD_EN | LTECLKSQ_HYS_SEL | CLKSQ_RESERVE |
+		      SSUSB26M_CK2_EN | SSUSB26M_CK_EN | XTAL26M_CK_EN |
+		      ULPOSC_CTRL_SEL;
 
 	/* Turn off ULPOSC2 */
 	SCP_CLK_ON_CTRL |= HIGH_CORE_DIS_SUB;
@@ -318,13 +365,12 @@ void clock_fast_wakeup_irq(void)
 }
 
 /* Console command */
-static int command_ulposc(int argc, char *argv[])
+static int command_ulposc(int argc, const char *argv[])
 {
 	int i;
 
 	for (i = 0; i <= 1; ++i)
-		ccprintf("ULPOSC%u frequency: %u kHz\n",
-			 i + 1,
+		ccprintf("ULPOSC%u frequency: %u kHz\n", i + 1,
 			 clock_ulposc_measure_freq(i) * 26 * 1000 / 1024);
 	return EC_SUCCESS;
 }

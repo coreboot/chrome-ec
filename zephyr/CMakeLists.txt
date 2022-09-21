@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -28,6 +28,19 @@ endif()
 if(DEFINED ZMAKE_INCLUDE_DIR)
   zephyr_include_directories("${ZMAKE_INCLUDE_DIR}")
 endif()
+
+# When CONFIG_ASSERT is enabled, the __FILE__ macro may add full paths into the
+# read-only strings. This wastes space and can cause non-reproducible builds.
+# When the compiler supports it, replace common path prefixes with static
+# strings.
+
+# PLATFORM_EC points to the build directory, which symlinks to the actual
+# source. ZEPHYR_CURRENT_CMAKE_DIR points to the actual source directory
+# containing this file.  Set the PLATFORM_EC_SRC to the parent.
+# Replace the paths of the both the build and source directories with "EC_BASE".
+cmake_path(GET ZEPHYR_CURRENT_CMAKE_DIR PARENT_PATH PLATFORM_EC_SRC)
+zephyr_cc_option(-fmacro-prefix-map=${PLATFORM_EC}=EC_BASE)
+zephyr_cc_option(-fmacro-prefix-map=${PLATFORM_EC_SRC}=EC_BASE)
 
 if(DEFINED CONFIG_PLATFORM_EC)
   # Add CHROMIUM_EC definition, which is used by ec_commands.h to
@@ -65,6 +78,8 @@ endif()
 
 # Set extra compiler flags.
 zephyr_cc_option(-mno-unaligned-access)
+zephyr_cc_option(-fno-PIC)
+
 if (DEFINED CONFIG_RISCV)
   zephyr_cc_option(-fsanitize=integer-divide-by-zero)
   zephyr_cc_option(-fsanitize-undefined-trap-on-error)
@@ -90,12 +105,12 @@ set(ZEPHYR_CURRENT_LIBRARY app)
 # Custom function that ensures the include path is always updated for both
 # libraries.
 function(cros_ec_library_include_directories)
-  target_include_directories(app PRIVATE ${ARGN})
+  target_include_directories(app PUBLIC ${ARGN})
   target_include_directories(ec_shim PRIVATE ${ARGN})
 endfunction()
 function(cros_ec_library_include_directories_ifdef feature_toggle)
   if(${${feature_toggle}})
-    target_include_directories(app PRIVATE ${ARGN})
+    target_include_directories(app PUBLIC ${ARGN})
     target_include_directories(ec_shim PRIVATE ${ARGN})
   endif()
 endfunction()
@@ -132,7 +147,11 @@ configure_file(gcov.tmpl.sh ${CMAKE_BINARY_DIR}/gcov.sh)
 # included here, sorted by filename. This is common functionality which is
 # supported by all boards and emulators (including unit tests) using the shim
 # layer.
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC "${PLATFORM_EC}/common/base32.c"
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC
+                                                # TODO(b/237712836): Remove once
+                                                # Zephyr's libc has strcasecmp.
+                                                "${PLATFORM_EC}/builtin/stdlib.c"
+                                                "${PLATFORM_EC}/common/base32.c"
                                                 "${PLATFORM_EC}/common/console_output.c"
                                                 "${PLATFORM_EC}/common/ec_features.c"
                                                 "${PLATFORM_EC}/common/gpio_commands.c"
@@ -173,9 +192,11 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_ICM42607
                                                 "${PLATFORM_EC}/driver/accelgyro_icm42607.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_LSM6DSO
                                                 "${PLATFORM_EC}/driver/accelgyro_lsm6dso.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_LSM6DSM
+                                                "${PLATFORM_EC}/driver/accelgyro_lsm6dsm.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_FIFO
                                                 "${PLATFORM_EC}/common/motion_sense_fifo.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ADC_CMD
+zephyr_library_sources_ifdef(CONFIG_ADC
                                                 "${PLATFORM_EC}/common/adc.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_TCS3400
                                                 "${PLATFORM_EC}/driver/als_tcs3400.c")
@@ -183,6 +204,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_CM32183
                                                 "${PLATFORM_EC}/driver/als_cm32183.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACPI
                                                 "${PLATFORM_EC}/common/acpi.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AMD_SB_RMI
+						"${PLATFORM_EC}/driver/sb_rmi.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AMD_STT
+						"${PLATFORM_EC}/driver/amd_stt.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BACKLIGHT_LID
                                                 "${PLATFORM_EC}/common/backlight_lid.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
@@ -228,6 +253,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_HW
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_SW
                                                 "${PLATFORM_EC}/common/charge_ramp.c"
                                                 "${PLATFORM_EC}/common/charge_ramp_sw.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CPS8100
+                                                "${PLATFORM_EC}/driver/wpc/cps8100.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_OCPC
                                                 "${PLATFORM_EC}/common/ocpc.c")
 
@@ -319,6 +346,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MOTIONSENSE
                                                 "${PLATFORM_EC}/common/motion_sense.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MP2964
                                                 "${PLATFORM_EC}/driver/mp2964.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PERIPHERAL_CHARGER
+                                                "${PLATFORM_EC}/common/peripheral_charger.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PORT80
                                                 "${PLATFORM_EC}/common/port80.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWER_BUTTON
@@ -475,11 +504,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_CCGXXF
                                                 "${PLATFORM_EC}/driver/tcpm/ccgxxf.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_NCT38XX
                                                 "${PLATFORM_EC}/driver/tcpm/nct38xx.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8751
-                                                "${PLATFORM_EC}/driver/tcpm/ps8xxx.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8805
-                                                "${PLATFORM_EC}/driver/tcpm/ps8xxx.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8815
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8XXX
                                                 "${PLATFORM_EC}/driver/tcpm/ps8xxx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_RAA489000
                                                 "${PLATFORM_EC}/driver/tcpm/raa489000.c")
@@ -535,8 +560,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MAX695X_SEVEN_SEGMENT_DISPLAY
 						"${PLATFORM_EC}/driver/led/max695x.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_DRIVER_TLC59116F
                                                 "${PLATFORM_EC}/driver/led/tlc59116f.c")
-zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ_HOST_SLEEP
-						"${PLATFORM_EC}/power/host_sleep.c")
 # Switch to ec_shim library for all Zephyr sources
 set(ZEPHYR_CURRENT_LIBRARY ec_shim)
 
@@ -544,4 +567,24 @@ add_subdirectory(linker)
 add_subdirectory("app")
 add_subdirectory("drivers")
 add_subdirectory("emul")
+add_subdirectory("fake")
+add_subdirectory("mock")
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
+
+# Use external script to generate the ec_version.h header and add as
+# a dependency to the EC application library.
+add_custom_target(
+  ec_version_header
+  VERBATIM COMMAND
+  "PYTHONPATH=${PLATFORM_EC}/zephyr/zmake/" ${PYTHON_EXECUTABLE}
+  "${PLATFORM_EC}/zephyr/zmake/zephyr_build_tools/generate_ec_version.py"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/ec_version.h"
+  "--base" "${ZEPHYR_BASE}"
+  "--name" "${CMAKE_PROJECT_NAME}"
+  "--module" "${ZEPHYR_MODULES}"
+  ${EXTRA_EC_VERSION_FLAGS}
+)
+add_dependencies(app ec_version_header)
+
+# Include the directory containing the generated header.
+zephyr_include_directories("${CMAKE_CURRENT_BINARY_DIR}/include")

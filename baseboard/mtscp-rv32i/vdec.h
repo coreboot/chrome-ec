@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -19,7 +19,7 @@ struct vdec_msg {
 	unsigned char msg[48];
 };
 BUILD_ASSERT(member_size(struct vdec_msg, msg) <=
-		CONFIG_IPC_SHARED_OBJ_BUF_SIZE);
+	     CONFIG_IPC_SHARED_OBJ_BUF_SIZE);
 
 /* Functions provided by private overlay. */
 void vdec_core_msg_handler(void *msg);

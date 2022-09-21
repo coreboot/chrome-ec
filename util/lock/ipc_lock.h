@@ -1,5 +1,4 @@
-/* Copyright 2012, Google Inc.
- * All rights reserved.
+/* Copyright 2012 Google LLC
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -11,7 +10,7 @@
  *      copyright notice, this list of conditions and the following
  *      disclaimer in the documentation and/or other materials provided
  *      with the distribution.
- *    * Neither the name of Google Inc. nor the names of its
+ *    * Neither the name of Google LLC nor the names of its
  *      contributors may be used to endorse or promote products derived
  *      from this software without specific prior written permission.
  *
@@ -32,17 +31,17 @@
 #define __UTIL_IPC_LOCK_H
 
 struct ipc_lock {
-	int is_held;	/* internal */
-	const char *filename;	/* provided by the developer */
-	int fd;		/* internal */
+	int is_held; /* internal */
+	const char *filename; /* provided by the developer */
+	int fd; /* internal */
 };
 
 /* don't use C99 initializers here, so this can be used in C++ code */
-#define LOCKFILE_INIT(lockfile) \
-	{ \
-		0,		/* is_held */	\
-		lockfile,	/* filename */	\
-		-1,		/* fd */	\
+#define LOCKFILE_INIT(lockfile)                  \
+	{                                        \
+		0, /* is_held */                 \
+			lockfile, /* filename */ \
+			-1, /* fd */             \
 	}
 
 /*

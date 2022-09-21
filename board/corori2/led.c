@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -20,13 +20,10 @@ const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
  * both LEDs being off.
  */
 struct pwm_led_color_map led_color_map[EC_LED_COLOR_COUNT] = {
-				/* Amber, White */
-	[EC_LED_COLOR_RED]    = {   0,   0 },
-	[EC_LED_COLOR_GREEN]  = {   0,   0 },
-	[EC_LED_COLOR_BLUE]   = {   0,   0 },
-	[EC_LED_COLOR_YELLOW] = {   0,   0 },
-	[EC_LED_COLOR_WHITE]  = {   0, 100 },
-	[EC_LED_COLOR_AMBER]  = {  100,  0 },
+	/* Amber, White */
+	[EC_LED_COLOR_RED] = { 0, 0 },	   [EC_LED_COLOR_GREEN] = { 0, 0 },
+	[EC_LED_COLOR_BLUE] = { 0, 0 },	   [EC_LED_COLOR_YELLOW] = { 0, 0 },
+	[EC_LED_COLOR_WHITE] = { 0, 100 }, [EC_LED_COLOR_AMBER] = { 100, 0 },
 };
 
 /* One logical LED with amber and white channels. */

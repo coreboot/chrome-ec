@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -17,6 +17,18 @@
  * List of all timers that will be managed by usb_pd_timer
  */
 enum pd_task_timer {
+	/*
+	 * Timer to check if a USB PD power button press exceeds the long press
+	 * time limit.
+	 */
+	DPM_TIMER_PD_BUTTON_LONG_PRESS,
+
+	/*
+	 * Timer to check if a USB PD power button press exceeds the short press
+	 * time limit.
+	 */
+	DPM_TIMER_PD_BUTTON_SHORT_PRESS,
+
 	/*
 	 * In BIST_TX mode, this timer is used by a UUT to ensure that a
 	 * Continuous BIST Mode (i.e. BIST Carrier Mode) is exited in a timely
@@ -167,7 +179,6 @@ enum pd_task_timer {
 	 */
 	PE_TIMER_WAIT_AND_ADD_JITTER,
 
-
 	/* Chunk Sender Response timer */
 	PR_TIMER_CHUNK_SENDER_RESPONSE,
 
@@ -182,7 +193,6 @@ enum pd_task_timer {
 
 	/* timeout to limit waiting on TCPC response (not in spec) */
 	PR_TIMER_TCPC_TX_TIMEOUT,
-
 
 	/* Time a port shall wait before it can determine it is attached */
 	TC_TIMER_CC_DEBOUNCE,
@@ -222,18 +232,22 @@ enum pd_task_timer {
 };
 
 enum pd_timer_range {
+	DPM_TIMER_RANGE,
 	PE_TIMER_RANGE,
 	PR_TIMER_RANGE,
 	TC_TIMER_RANGE,
 };
-#define PE_TIMER_START		PE_TIMER_BIST_CONT_MODE
-#define PE_TIMER_END		PE_TIMER_WAIT_AND_ADD_JITTER
+#define DPM_TIMER_START DPM_TIMER_PD_BUTTON_LONG_PRESS
+#define DPM_TIMER_END DPM_TIMER_PD_BUTTON_SHORT_PRESS
 
-#define PR_TIMER_START		PR_TIMER_CHUNK_SENDER_RESPONSE
-#define PR_TIMER_END		PR_TIMER_TCPC_TX_TIMEOUT
+#define PE_TIMER_START PE_TIMER_BIST_CONT_MODE
+#define PE_TIMER_END PE_TIMER_WAIT_AND_ADD_JITTER
 
-#define TC_TIMER_START		TC_TIMER_CC_DEBOUNCE
-#define TC_TIMER_END		TC_TIMER_VBUS_DEBOUNCE
+#define PR_TIMER_START PR_TIMER_CHUNK_SENDER_RESPONSE
+#define PR_TIMER_END PR_TIMER_TCPC_TX_TIMEOUT
+
+#define TC_TIMER_START TC_TIMER_CC_DEBOUNCE
+#define TC_TIMER_END TC_TIMER_VBUS_DEBOUNCE
 
 /*
  * pd_timer_init
@@ -311,7 +325,6 @@ void pd_timer_manage_expired(int port);
  */
 int pd_timer_next_expiration(int port);
 
-
 /*
  * pd_timer_dump
  * Debug display of the timers for a given port
@@ -333,30 +346,30 @@ void pd_timer_dump(int port);
  */
 
 /* exported: number of USB-C ports */
-#define MAX_PD_PORTS		CONFIG_USB_PD_PORT_MAX_COUNT
+#define MAX_PD_PORTS CONFIG_USB_PD_PORT_MAX_COUNT
 
 /* PD timers have three possible states: Active, Inactive and Disabled */
 /* exported: timer_active indicates if a timer is currently active */
-extern ATOMIC_DEFINE(timer_active, PD_TIMER_COUNT * MAX_PD_PORTS);
+extern ATOMIC_DEFINE(timer_active, PD_TIMER_COUNT *MAX_PD_PORTS);
 /* exported: timer_disabled indicates if a timer is currently disabled */
-extern ATOMIC_DEFINE(timer_disabled, PD_TIMER_COUNT * MAX_PD_PORTS);
+extern ATOMIC_DEFINE(timer_disabled, PD_TIMER_COUNT *MAX_PD_PORTS);
 
 /* exported: set/clear/check the current timer_active for a timer */
 #define PD_SET_ACTIVE(p, bit) \
-	atomic_set_bit(timer_active, (p) * PD_TIMER_COUNT + (bit))
+	atomic_set_bit(timer_active, (p)*PD_TIMER_COUNT + (bit))
 #define PD_CLR_ACTIVE(p, bit) \
-	atomic_clear_bit(timer_active, (p) * PD_TIMER_COUNT + (bit))
+	atomic_clear_bit(timer_active, (p)*PD_TIMER_COUNT + (bit))
 #define PD_CHK_ACTIVE(p, bit) \
-	atomic_test_bit(timer_active, (p) * PD_TIMER_COUNT + (bit))
+	atomic_test_bit(timer_active, (p)*PD_TIMER_COUNT + (bit))
 
 /* exported: set/clear/check the current timer_disabled for a timer */
 #define PD_SET_DISABLED(p, bit) \
-	atomic_set_bit(timer_disabled, (p) * PD_TIMER_COUNT + (bit))
+	atomic_set_bit(timer_disabled, (p)*PD_TIMER_COUNT + (bit))
 #define PD_CLR_DISABLED(p, bit) \
-	atomic_clear_bit(timer_disabled, (p) * PD_TIMER_COUNT + (bit))
+	atomic_clear_bit(timer_disabled, (p)*PD_TIMER_COUNT + (bit))
 #define PD_CHK_DISABLED(p, bit) \
-	atomic_test_bit(timer_disabled, (p) * PD_TIMER_COUNT + (bit))
+	atomic_test_bit(timer_disabled, (p)*PD_TIMER_COUNT + (bit))
 
 #endif /* TEST_BUILD */
 
-#endif  /* __CROS_EC_USB_PD_TIMER_H */
+#endif /* __CROS_EC_USB_PD_TIMER_H */

@@ -1,16 +1,19 @@
-# Copyright 2022 The Chromium OS Authors. All rights reserved.
+# Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 menuconfig AP_PWRSEQ
 	bool "AP Power sequencing support"
 	select HAS_TASK_POWERBTN
+	select GPIO_GET_CONFIG
 	help
 	  Enables AP power sequencing support with
 	  embedded controller. This includes normal shutdown, critical
 	  shutdown and reset handling.
 	  Enabling this automatically enables HAS_TASK_POWERBTN since this task
 	  is required to handle power button pressed/released by user.
+	  Enabling this also enables retrieving the GPIO config feature
+	  so that the value of output GPIOs can be determined.
 
 if AP_PWRSEQ
 
@@ -103,5 +106,15 @@ config AP_PWRSEQ_S0IX
 	  This option enables power state S0ix for Intel x86 chipset. As
 	  required, AP_PWRSEQ_HOST_SLEEP for host sleep event handling is
 	  enabled.
+
+config AP_PWRSEQ_S0IX_ERROR_RECOVERY
+	bool "Detect failure to enter or exit Sleep state"
+	depends on AP_PWRSEQ_HOST_SLEEP
+	help
+	  Enables detection of the AP failing to go to sleep, perhaps due to a
+	  bug in the internal SoC periodic housekeeping code.
+
+	  Failure information is reported via the EC_CMD_HOST_SLEEP_EVENT host
+	  command.
 
 endif

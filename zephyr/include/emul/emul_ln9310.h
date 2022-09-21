@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -79,5 +79,14 @@ bool ln9310_emul_is_init(const struct emul *emulator);
  * @return Pointer to the I2C emulator struct
  */
 struct i2c_emul *ln9310_emul_get_i2c_emul(const struct emul *emulator);
+
+/**
+ * @brief Returns pointer to i2c_common_emul_data for argument emul
+ *
+ * @param emul Pointer to LN9310 emulator
+ * @return Pointer to i2c_common_emul_data from argument emul
+ */
+struct i2c_common_emul_data *
+emul_ln9310_get_i2c_common_data(const struct emul *emul);
 
 #endif /* ZEPHYR_INCLUDE_EMUL_EMUL_LN9310_H_ */

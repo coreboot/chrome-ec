@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,10 +7,9 @@
 import pathlib
 import tempfile
 
-import hypothesis
-import hypothesis.strategies as st
-import pytest
-
+import hypothesis  # pylint:disable=import-error
+import hypothesis.strategies as st  # pylint:disable=import-error
+import pytest  # pylint:disable=import-error
 import zmake.util as util
 
 # Strategies for use with hypothesis

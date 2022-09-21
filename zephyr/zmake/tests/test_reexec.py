@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Test the zmake re-exec functionality."""
@@ -7,8 +7,7 @@ import os
 import sys
 import unittest.mock as mock
 
-import pytest
-
+import pytest  # pylint:disable=import-error
 import zmake.__main__ as main
 
 

@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -35,15 +35,15 @@ enum led_color {
 	LED_OFF = 0,
 	LED_AMBER,
 	LED_BLUE,
-	LED_COLOR_COUNT  /* Number of colors, not a color itself */
+	LED_COLOR_COUNT /* Number of colors, not a color itself */
 };
 
 static void led_set_color(enum led_color color)
 {
 	gpio_set_level(GPIO_LED_ORANGE,
-		(color == LED_AMBER) ? BAT_LED_ON : BAT_LED_OFF);
+		       (color == LED_AMBER) ? BAT_LED_ON : BAT_LED_OFF);
 	gpio_set_level(GPIO_LED_BLUE,
-		(color == LED_BLUE) ? BAT_LED_ON : BAT_LED_OFF);
+		       (color == LED_BLUE) ? BAT_LED_ON : BAT_LED_OFF);
 }
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
@@ -69,7 +69,6 @@ static void board_led_set_battery(void)
 	static int battery_ticks;
 	int color = LED_OFF;
 	int period = 0;
-	uint32_t chflags = charge_get_flags();
 
 	battery_ticks++;
 
@@ -80,7 +79,7 @@ static void board_led_set_battery(void)
 		break;
 	case PWR_STATE_DISCHARGE:
 		if (chipset_in_or_transitioning_to_state(
-		    CHIPSET_STATE_ANY_SUSPEND)) {
+			    CHIPSET_STATE_ANY_SUSPEND)) {
 			/* Discharging in S3: Amber 1 sec, off 3 sec */
 			period = (1 + 3) * LED_ONE_SEC;
 			battery_ticks = battery_ticks % period;
@@ -89,7 +88,7 @@ static void board_led_set_battery(void)
 			else
 				color = LED_OFF;
 		} else if (chipset_in_or_transitioning_to_state(
-			   CHIPSET_STATE_ANY_OFF)) {
+				   CHIPSET_STATE_ANY_OFF)) {
 			/* Discharging in S5: off */
 			color = LED_OFF;
 		} else {
@@ -111,16 +110,16 @@ static void board_led_set_battery(void)
 		color = LED_BLUE;
 		break;
 	case PWR_STATE_IDLE: /* External power connected in IDLE */
-		if (chflags & CHARGE_FLAG_FORCE_IDLE) {
-			/* Factory mode: Blue 2 sec, Amber 2 sec */
-			period = (2 + 2) * LED_ONE_SEC;
-			battery_ticks = battery_ticks % period;
-			if (battery_ticks < 2 * LED_ONE_SEC)
-				color = LED_BLUE;
-			else
-				color = LED_AMBER;
-		} else
+		color = LED_BLUE;
+		break;
+	case PWR_STATE_FORCED_IDLE:
+		/* Factory mode: Blue 2 sec, Amber 2 sec */
+		period = (2 + 2) * LED_ONE_SEC;
+		battery_ticks = battery_ticks % period;
+		if (battery_ticks < 2 * LED_ONE_SEC)
 			color = LED_BLUE;
+		else
+			color = LED_AMBER;
 		break;
 	default:
 		/* Other states don't alter LED behavior */

@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -29,17 +29,18 @@
  * I'll compare it myself with the state(s) I want."
  */
 enum chipset_state_mask {
-	CHIPSET_STATE_HARD_OFF = 0x01,   /* Hard off (G3) */
-	CHIPSET_STATE_SOFT_OFF = 0x02,   /* Soft off (S5, S4) */
-	CHIPSET_STATE_SUSPEND  = 0x04,   /* Suspend (S3) */
-	CHIPSET_STATE_ON       = 0x08,   /* On (S0) */
-	CHIPSET_STATE_STANDBY  = 0x10,   /* Standby (S0ix) */
+	CHIPSET_STATE_HARD_OFF = 0x01, /* Hard off (G3) */
+	CHIPSET_STATE_SOFT_OFF = 0x02, /* Soft off (S5, S4) */
+	CHIPSET_STATE_SUSPEND = 0x04, /* Suspend (S3) */
+	CHIPSET_STATE_ON = 0x08, /* On (S0) */
+	CHIPSET_STATE_STANDBY = 0x10, /* Standby (S0ix) */
 	/* Common combinations */
-	CHIPSET_STATE_ANY_OFF = (CHIPSET_STATE_HARD_OFF |
-				 CHIPSET_STATE_SOFT_OFF),  /* Any off state */
+	CHIPSET_STATE_ANY_OFF =
+		(CHIPSET_STATE_HARD_OFF | CHIPSET_STATE_SOFT_OFF), /* Any off
+								      state */
 	/* This combination covers any kind of suspend i.e. S3 or S0ix. */
-	CHIPSET_STATE_ANY_SUSPEND = (CHIPSET_STATE_SUSPEND |
-				     CHIPSET_STATE_STANDBY),
+	CHIPSET_STATE_ANY_SUSPEND =
+		(CHIPSET_STATE_SUSPEND | CHIPSET_STATE_STANDBY),
 };
 
 enum critical_shutdown {
@@ -138,23 +139,47 @@ static inline int chipset_in_or_transitioning_to_state(int state_mask)
 	return state_mask & CHIPSET_STATE_ANY_OFF;
 }
 
-static inline void chipset_exit_hard_off(void) { }
-static inline void chipset_throttle_cpu(int throttle) { }
+static inline void chipset_exit_hard_off(void)
+{
+}
+static inline void chipset_throttle_cpu(int throttle)
+{
+}
 static inline void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 {
 }
 
-static inline void chipset_reset(enum chipset_shutdown_reason reason) { }
-static inline void power_interrupt(enum gpio_signal signal) { }
-static inline void chipset_handle_espi_reset_assert(void) { }
-static inline void chipset_handle_reboot(void) { }
-static inline void chipset_reset_request_interrupt(enum gpio_signal signal) { }
-static inline void chipset_warm_reset_interrupt(enum gpio_signal signal) { }
-static inline void chipset_ap_rst_interrupt(enum gpio_signal signal) { }
-static inline void chipset_power_good_interrupt(enum gpio_signal signal) { }
-static inline void chipset_watchdog_interrupt(enum gpio_signal signal) { }
+static inline void chipset_reset(enum chipset_shutdown_reason reason)
+{
+}
+static inline void power_interrupt(enum gpio_signal signal)
+{
+}
+static inline void chipset_handle_espi_reset_assert(void)
+{
+}
+static inline void chipset_handle_reboot(void)
+{
+}
+static inline void chipset_reset_request_interrupt(enum gpio_signal signal)
+{
+}
+static inline void chipset_warm_reset_interrupt(enum gpio_signal signal)
+{
+}
+static inline void chipset_ap_rst_interrupt(enum gpio_signal signal)
+{
+}
+static inline void chipset_power_good_interrupt(enum gpio_signal signal)
+{
+}
+static inline void chipset_watchdog_interrupt(enum gpio_signal signal)
+{
+}
 
-static inline void init_reset_log(void) { }
+static inline void init_reset_log(void)
+{
+}
 
 #endif /* !CONFIG_AP_POWER_CONTROL */
 
@@ -215,8 +240,9 @@ void chipset_watchdog_interrupt(enum gpio_signal signal);
  * @param now                Current time
  * @return Action to take
  */
-__override_proto enum critical_shutdown board_system_is_idle(
-		uint64_t last_shutdown_time, uint64_t *target, uint64_t now);
+__override_proto enum critical_shutdown
+board_system_is_idle(uint64_t last_shutdown_time, uint64_t *target,
+		     uint64_t now);
 
 #ifdef CONFIG_CMD_AP_RESET_LOG
 
@@ -237,9 +263,19 @@ get_ap_reset_stats(struct ap_reset_log_entry *reset_log_entries,
 		   size_t num_reset_log_entries,
 		   uint32_t *resets_since_ec_boot);
 
+/**
+ * Check the reason given in the last call to report_ap_reset() .
+ *
+ * @return Reason argument that was passed to the last call to
+ * report_ap_reset(). Zero if report_ap_reset() has not been called.
+ */
+enum chipset_shutdown_reason chipset_get_shutdown_reason(void);
+
 #else
 
-static inline void report_ap_reset(enum chipset_shutdown_reason reason) { }
+static inline void report_ap_reset(enum chipset_shutdown_reason reason)
+{
+}
 
 test_mockable_static_inline enum ec_error_list
 get_ap_reset_stats(struct ap_reset_log_entry *reset_log_entries,
@@ -248,6 +284,11 @@ get_ap_reset_stats(struct ap_reset_log_entry *reset_log_entries,
 	return EC_SUCCESS;
 }
 
+static inline enum chipset_shutdown_reason chipset_get_shutdown_reason(void)
+{
+	return CHIPSET_RESET_UNKNOWN;
+}
+
 #endif /* !CONFIG_CMD_AP_RESET_LOG */
 
-#endif  /* __CROS_EC_CHIPSET_H */
+#endif /* __CROS_EC_CHIPSET_H */

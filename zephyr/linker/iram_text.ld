@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,7 +7,7 @@
 
 /* This code taken from core/cortex-m/ec.lds.S */
 
-#if defined(CONFIG_PLATFORM_EC_MPU)
+#if defined(CONFIG_MPU)
 /* MPU regions must be aligned to a 32-byte boundary */
 #define _IRAM_ALIGN	32
 #else

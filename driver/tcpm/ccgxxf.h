@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,15 +10,37 @@
 #ifndef __CROS_EC_DRIVER_TCPM_CCGXXF_H
 #define __CROS_EC_DRIVER_TCPM_CCGXXF_H
 
-#define CCGXXF_I2C_ADDR1_FLAGS	0x0B
-#define CCGXXF_I2C_ADDR2_FLAGS	0x1B
+#define CCGXXF_I2C_ADDR1_FLAGS 0x0B
+#define CCGXXF_I2C_ADDR2_FLAGS 0x1B
 
 /* SBU FET control register */
-#define CCGXXF_REG_SBU_MUX_CTL	0xBB
+#define CCGXXF_REG_SBU_MUX_CTL 0xBB
 
 /* F/W info register */
-#define CCGXXF_REG_FW_VERSION		0x94
-#define CCGXXF_REG_FW_VERSION_BUILD	0x96
+#define CCGXXF_REG_FW_VERSION 0x94
+#define CCGXXF_REG_FW_VERSION_BUILD 0x96
+
+/* Firmware update / reset control register */
+#define CCGXXF_REG_FWU_COMMAND 0x92
+#define CCGXXF_FWU_CMD_RESET 0x0077
+
+/**
+ * Reset CCGXXF chip
+ *
+ * CCGXXF's reset line is connected to an internal LDO hence external GPIOs
+ * should not control the reset line as it can prevent it booting from dead
+ * battery, instead a software mechanism can be used to reset the chip.
+ * Care must be taken by board level function in below scenarios;
+ * 1. During dead battery boot from CCGXXF ports, do not reset the chip as
+ *    it will lose the dead battery boot scenario content.
+ * 2. If dual port solution chip is used, resetting one port resets other port
+ *    as well.
+ * 3. Built-in I/O expander also gets reset.
+ *
+ * @param port Type-C port number
+ * @return EC_SUCCESS or error
+ */
+int ccgxxf_reset(int port);
 
 extern const struct tcpm_drv ccgxxf_tcpm_drv;
 
@@ -45,13 +67,13 @@ enum ccgxxf_io_pins {
 	CCGXXF_IO_7
 };
 
-#define CCGXXF_REG_GPIO_CONTROL(port)	((port) + 0x80)
-#define CCGXXF_REG_GPIO_STATUS(port)	((port) + 0x84)
+#define CCGXXF_REG_GPIO_CONTROL(port) ((port) + 0x80)
+#define CCGXXF_REG_GPIO_STATUS(port) ((port) + 0x84)
 
-#define CCGXXF_REG_GPIO_MODE		0x88
-#define CCGXXF_GPIO_PIN_MASK_SHIFT	8
-#define CCGXXF_GPIO_PIN_MODE_SHIFT	2
-#define CCGXXF_GPIO_1P8V_SEL		BIT(7)
+#define CCGXXF_REG_GPIO_MODE 0x88
+#define CCGXXF_GPIO_PIN_MASK_SHIFT 8
+#define CCGXXF_GPIO_PIN_MODE_SHIFT 2
+#define CCGXXF_GPIO_1P8V_SEL BIT(7)
 
 enum ccgxxf_gpio_mode {
 	CCGXXF_GPIO_MODE_HIZ_ANALOG,

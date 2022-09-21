@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,35 +16,12 @@
 #include "util.h"
 
 #ifndef TEST_BUILD
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 #else
 #define CPRINTF(args...)
 #define CPRINTS(args...)
 #endif
-
-/*
- * PD 3.1 Ver 1.3 7.1.7.1 Output Over Current Protection
- *
- * "After three consecutive over current events Source Shall go to
- * ErrorRecovery.
- *
- * Sources Should attempt to send a Hard Reset message when over
- * current protection engages followed by an Alert Message indicating
- * an OCP event once an Explicit Contract has been established.
- *
- * The Source Shall prevent continual system or port cycling if over
- * current protection continues to engage after initially resuming
- * either default operation or renegotiation. Latching off the port or
- * system is an acceptable response to recurring over current."
- *
- * Our policy will be first two OCPs -> hard reset
- * 3rd -> ErrorRecovery
- * 4th -> port latched off
- */
-#define OCP_HR_CNT 2
-
-#define OCP_MAX_CNT 4
 
 /*
  * Number of seconds until a latched-off port is re-enabled for sourcing after
@@ -102,7 +79,6 @@ static void re_enable_ports(void)
 }
 DECLARE_DEFERRED(re_enable_ports);
 
-
 int usbc_ocp_add_event(int port)
 {
 	int delay = 0;
@@ -122,8 +98,8 @@ int usbc_ocp_add_event(int port)
 
 	if (oc_event_cnt_tbl[port] >= OCP_MAX_CNT) {
 		CPRINTS("C%d: OC event limit reached! "
-			   "Source path disabled until physical disconnect.",
-			   port);
+			"Source path disabled until physical disconnect.",
+			port);
 		pd_power_supply_reset(port);
 	} else if (oc_event_cnt_tbl[port] <= OCP_HR_CNT) {
 		/*
@@ -132,7 +108,7 @@ int usbc_ocp_add_event(int port)
 		 * contract.
 		 */
 		pd_send_hard_reset(port);
-		delay = PD_T_SRC_RECOVER + 100*MSEC;
+		delay = PD_T_SRC_RECOVER + 100 * MSEC;
 	} else {
 		/*
 		 * ErrorRecovery must be performed past the third OCP event,
@@ -140,7 +116,7 @@ int usbc_ocp_add_event(int port)
 		 * contract is in place
 		 */
 		pd_set_error_recovery(port);
-		delay = PD_T_ERROR_RECOVERY + 100*MSEC;
+		delay = PD_T_ERROR_RECOVERY + 100 * MSEC;
 	}
 
 	if (delay) {
@@ -148,10 +124,8 @@ int usbc_ocp_add_event(int port)
 		hook_call_deferred(&re_enable_ports_data, delay);
 	}
 
-
 	return EC_SUCCESS;
 }
-
 
 int usbc_ocp_clear_event_counter(int port)
 {
@@ -168,8 +142,7 @@ int usbc_ocp_clear_event_counter(int port)
 	 * actually detect the physical disconnect.
 	 */
 	if (oc_event_cnt_tbl[port]) {
-		hook_call_deferred(&clear_oc_tbl_data,
-				   OCP_COOLDOWN_DELAY_US);
+		hook_call_deferred(&clear_oc_tbl_data, OCP_COOLDOWN_DELAY_US);
 	}
 	return EC_SUCCESS;
 }

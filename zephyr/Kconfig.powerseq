@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -126,12 +126,12 @@ config PLATFORM_EC_POWERSEQ_RTC_RESET
 	bool "Board has an RTC reset"
 	help
 	  This project has a gpio named GPIO_PCH_RTCRST defined in
-	  gpio_map.h, which can be used to reset the AP's RTC when set
-	  high.
+	  the GPIO configuration, which can be used to reset the AP's RTC when
+	  set high.
 
 config PLATFORM_EC_POWERSEQ_S4
 	bool "Advertise S4 residency"
-	depends on PLATFORM_EC_ESPI_VW_SLP_S5
+	depends on PLATFORM_HOST_INTERFACE_EC_HOST_INTERFACE_ESPI_VW_SLP_S5
 	default y if AP_X86_INTEL_TGL
 	default y if AP_X86_INTEL_ADL
 	default y if AP_X86_INTEL_MTL

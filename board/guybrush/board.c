@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,6 +8,7 @@
 #include "adc.h"
 #include "base_fw_config.h"
 #include "board_fw_config.h"
+#include "builtin/assert.h"
 #include "button.h"
 #include "common.h"
 #include "cros_board_info.h"
@@ -16,7 +17,7 @@
 #include "driver/accelgyro_bmi323.h"
 #include "driver/accel_bma422.h"
 #include "driver/retimer/ps8811.h"
-#include "driver/retimer/ps8818.h"
+#include "driver/retimer/ps8818_public.h"
 #include "driver/temp_sensor/sb_tsi.h"
 #include "driver/temp_sensor/tmp112.h"
 #include "extpower.h"
@@ -45,17 +46,13 @@ static struct bmi_drv_data_t g_bmi_data;
 static struct accelgyro_saved_data_t g_bma422_data;
 
 /* Matrix to rotate accelrator into standard reference frame */
-const mat33_fp_t base_standard_ref = {
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(1),  0},
-	{ 0, 0,  FLOAT_TO_FP(-1)}
-};
+const mat33_fp_t base_standard_ref = { { FLOAT_TO_FP(-1), 0, 0 },
+				       { 0, FLOAT_TO_FP(1), 0 },
+				       { 0, 0, FLOAT_TO_FP(-1) } };
 
-const mat33_fp_t lid_standard_ref = {
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, 0,  FLOAT_TO_FP(-1)}
-};
+const mat33_fp_t lid_standard_ref = { { 0, FLOAT_TO_FP(-1), 0 },
+				      { FLOAT_TO_FP(-1), 0, 0 },
+				      { 0, 0, FLOAT_TO_FP(-1) } };
 
 /*
  * We have total 30 pins for keyboard connecter {-1, -1} mean
@@ -63,16 +60,15 @@ const mat33_fp_t lid_standard_ref = {
  * that we don't have pin 0.
  */
 const int keyboard_factory_scan_pins[][2] = {
-	{-1, -1}, {0, 5}, {1, 1}, {1, 0}, {0, 6},
-	{0, 7}, {-1, -1}, {-1, -1}, {1, 4}, {1, 3},
-	{-1, -1}, {1, 6}, {1, 7}, {3, 1}, {2, 0},
-	{1, 5}, {2, 6}, {2, 7}, {2, 1}, {2, 4},
-	{2, 5}, {1, 2}, {2, 3}, {2, 2}, {3, 0},
-	{-1, -1}, {0, 4}, {-1, -1}, {8, 2}, {-1, -1},
-	{-1, -1},
+	{ -1, -1 }, { 0, 5 },	{ 1, 1 }, { 1, 0 },   { 0, 6 },	  { 0, 7 },
+	{ -1, -1 }, { -1, -1 }, { 1, 4 }, { 1, 3 },   { -1, -1 }, { 1, 6 },
+	{ 1, 7 },   { 3, 1 },	{ 2, 0 }, { 1, 5 },   { 2, 6 },	  { 2, 7 },
+	{ 2, 1 },   { 2, 4 },	{ 2, 5 }, { 1, 2 },   { 2, 3 },	  { 2, 2 },
+	{ 3, 0 },   { -1, -1 }, { 0, 4 }, { -1, -1 }, { 8, 2 },	  { -1, -1 },
+	{ -1, -1 },
 };
 const int keyboard_factory_scan_pins_used =
-		ARRAY_SIZE(keyboard_factory_scan_pins);
+	ARRAY_SIZE(keyboard_factory_scan_pins);
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
@@ -222,51 +218,46 @@ board_a1_ps8811_retimer_init(const struct usb_mux *me)
 }
 
 __override int board_c1_ps8818_mux_set(const struct usb_mux *me,
-				    mux_state_t mux_state)
+				       mux_state_t mux_state)
 {
 	int rv = EC_SUCCESS;
 
 	/* USB specific config */
 	if (mux_state & USB_PD_MUX_USB_ENABLED) {
 		/* Boost the USB gain */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX1EQ_10G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_APTX1EQ_10G_LEVEL,
+					      PS8818_EQ_LEVEL_UP_MASK,
+					      PS8818_EQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
 
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX2EQ_10G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_APTX2EQ_10G_LEVEL,
+					      PS8818_EQ_LEVEL_UP_MASK,
+					      PS8818_EQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
 
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX1EQ_5G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_APTX1EQ_5G_LEVEL,
+					      PS8818_EQ_LEVEL_UP_MASK,
+					      PS8818_EQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
 
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_APTX2EQ_5G_LEVEL,
-					PS8818_EQ_LEVEL_UP_MASK,
-					PS8818_EQ_LEVEL_UP_19DB);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_APTX2EQ_5G_LEVEL,
+					      PS8818_EQ_LEVEL_UP_MASK,
+					      PS8818_EQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
 
 		/* Set the RX input termination */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_RX_PHY,
-					PS8818_RX_INPUT_TERM_MASK,
-					PS8818_RX_INPUT_TERM_112_OHM);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_RX_PHY,
+					      PS8818_RX_INPUT_TERM_MASK,
+					      PS8818_RX_INPUT_TERM_112_OHM);
 		if (rv)
 			return rv;
 	}
@@ -274,11 +265,10 @@ __override int board_c1_ps8818_mux_set(const struct usb_mux *me,
 	/* DP specific config */
 	if (mux_state & USB_PD_MUX_DP_ENABLED) {
 		/* Boost the DP gain */
-		rv = ps8818_i2c_field_update8(me,
-					PS8818_REG_PAGE1,
-					PS8818_REG1_DPEQ_LEVEL,
-					PS8818_DPEQ_LEVEL_UP_MASK,
-					PS8818_DPEQ_LEVEL_UP_19DB);
+		rv = ps8818_i2c_field_update8(me, PS8818_REG_PAGE1,
+					      PS8818_REG1_DPEQ_LEVEL,
+					      PS8818_DPEQ_LEVEL_UP_MASK,
+					      PS8818_DPEQ_LEVEL_UP_19DB);
 		if (rv)
 			return rv;
 
@@ -356,8 +346,7 @@ static void board_chipset_startup(void)
 	if (get_board_version() > 1)
 		tmp112_init();
 }
-DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup,
-	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_chipset_startup, HOOK_PRIO_DEFAULT);
 
 int board_get_soc_temp_k(int idx, int *temp_k)
 {
@@ -490,8 +479,7 @@ struct ec_thermal_config thermal_params[TEMP_SENSOR_COUNT] = {
 		.temp_host_release = {
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(80),
 		},
-		/* TODO: Setting fan off to 0 so it's allways on */
-		.temp_fan_off = C_TO_K(0),
+		.temp_fan_off = C_TO_K(25),
 		.temp_fan_max = C_TO_K(70),
 	},
 	[TEMP_SENSOR_CHARGER] = {

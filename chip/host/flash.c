@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 
+#include "builtin/assert.h"
 #include "common.h"
 #include "config_chip.h"
 #include "flash.h"
@@ -26,8 +27,7 @@ test_mockable int flash_pre_op(void)
 static int flash_check_protect(int offset, int size)
 {
 	int first_bank = offset / CONFIG_FLASH_BANK_SIZE;
-	int last_bank = DIV_ROUND_UP(offset + size,
-				     CONFIG_FLASH_BANK_SIZE);
+	int last_bank = DIV_ROUND_UP(offset + size, CONFIG_FLASH_BANK_SIZE);
 	int bank;
 
 	for (bank = first_bank; bank < last_bank; ++bank)
@@ -124,8 +124,7 @@ int crec_flash_physical_protect_now(int all)
 
 uint32_t crec_flash_physical_get_valid_flags(void)
 {
-	return EC_FLASH_PROTECT_RO_AT_BOOT |
-	       EC_FLASH_PROTECT_RO_NOW |
+	return EC_FLASH_PROTECT_RO_AT_BOOT | EC_FLASH_PROTECT_RO_NOW |
 	       EC_FLASH_PROTECT_ALL_NOW;
 }
 
@@ -163,8 +162,9 @@ int crec_flash_pre_init(void)
 		 */
 		if ((prot_flags & EC_FLASH_PROTECT_RO_AT_BOOT) &&
 		    !(prot_flags & EC_FLASH_PROTECT_RO_NOW)) {
-			int rv = crec_flash_set_protect(EC_FLASH_PROTECT_RO_NOW,
-						   EC_FLASH_PROTECT_RO_NOW);
+			int rv =
+				crec_flash_set_protect(EC_FLASH_PROTECT_RO_NOW,
+						       EC_FLASH_PROTECT_RO_NOW);
 			if (rv)
 				return rv;
 

@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -67,8 +67,9 @@ int watchdog_init(void)
 	STM32_IWDG_PR = IWDG_PRESCALER & 7;
 
 	/* Set the reload value of the watchdog counter */
-	STM32_IWDG_RLR = MIN(STM32_IWDG_RLR_MAX, CONFIG_WATCHDOG_PERIOD_MS *
-			     (LSI_CLOCK / IWDG_PRESCALER_DIV) / 1000);
+	STM32_IWDG_RLR = MIN(STM32_IWDG_RLR_MAX,
+			     CONFIG_WATCHDOG_PERIOD_MS *
+				     (LSI_CLOCK / IWDG_PRESCALER_DIV) / 1000);
 #ifdef CHIP_FAMILY_STM32L4
 	tickstart = get_time();
 	/* Wait for SR */

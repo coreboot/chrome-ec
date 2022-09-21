@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -58,65 +58,60 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /* Temperature sensor configuration */
 const struct temp_sensor_t temp_sensors[] = {
-	[TEMP_SENSOR_1_CPU] = {
-		.name = "CPU",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_1_CPU
-	},
-	[TEMP_SENSOR_2_CPU_VR] = {
-		.name = "CPU VR",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_2_CPU_VR
-	},
-	[TEMP_SENSOR_3_WIFI] = {
-		.name = "WIFI",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_3_WIFI
-	},
-	[TEMP_SENSOR_4_DIMM] = {
-		.name = "DIMM",
-		.type = TEMP_SENSOR_TYPE_BOARD,
-		.read = get_temp_3v3_30k9_47k_4050b,
-		.idx = ADC_TEMP_SENSOR_4_DIMM
-	},
+	[TEMP_SENSOR_1_CPU] = { .name = "CPU",
+				.type = TEMP_SENSOR_TYPE_BOARD,
+				.read = get_temp_3v3_30k9_47k_4050b,
+				.idx = ADC_TEMP_SENSOR_1_CPU },
+	[TEMP_SENSOR_2_CPU_VR] = { .name = "CPU VR",
+				   .type = TEMP_SENSOR_TYPE_BOARD,
+				   .read = get_temp_3v3_30k9_47k_4050b,
+				   .idx = ADC_TEMP_SENSOR_2_CPU_VR },
+	[TEMP_SENSOR_3_WIFI] = { .name = "WIFI",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_3v3_30k9_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_3_WIFI },
+	[TEMP_SENSOR_4_DIMM] = { .name = "DIMM",
+				 .type = TEMP_SENSOR_TYPE_BOARD,
+				 .read = get_temp_3v3_30k9_47k_4050b,
+				 .idx = ADC_TEMP_SENSOR_4_DIMM },
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 /*
- * TODO(b/180681346): update for Alder Lake/brya
- *
- * Tiger Lake specifies 100 C as maximum TDP temperature.  THRMTRIP# occurs at
- * 130 C.  However, sensor is located next to DDR, so we need to use the lower
- * DDR temperature limit (85 C)
+ * TODO(b/238260272): add the thermal sensor setting
  */
-/*
- * TODO(b/202062363): Remove when clang is fixed.
- */
-#define THERMAL_CPU \
-	{ \
+#define THERMAL_CPU              \
+	{                        \
 		.temp_host = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
-			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(90), \
 		}, \
 		.temp_host_release = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(65), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(70), \
 		}, \
 		.temp_fan_off = C_TO_K(35), \
-		.temp_fan_max = C_TO_K(50), \
+		.temp_fan_max = C_TO_K(89), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 
-/*
- * TODO(b/197478860): add the thermal sensor setting
- */
-/* this should really be "const" */
+#define THERMAL_FAN              \
+	{                        \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = 0, \
+			[EC_TEMP_THRESH_HALT] = 0, \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = 0, \
+		}, \
+		.temp_fan_off = 0, \
+		.temp_fan_max = 0, \
+	}
+__maybe_unused static const struct ec_thermal_config thermal_fan = THERMAL_FAN;
+
 struct ec_thermal_config thermal_params[] = {
 	[TEMP_SENSOR_1_CPU] = THERMAL_CPU,
-	[TEMP_SENSOR_2_CPU_VR] = THERMAL_CPU,
-	[TEMP_SENSOR_3_WIFI] = THERMAL_CPU,
-	[TEMP_SENSOR_4_DIMM] = THERMAL_CPU,
+	[TEMP_SENSOR_2_CPU_VR] = THERMAL_FAN,
+	[TEMP_SENSOR_3_WIFI] = THERMAL_FAN,
+	[TEMP_SENSOR_4_DIMM] = THERMAL_FAN,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);

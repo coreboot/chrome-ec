@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -60,49 +60,49 @@ enum bmi_emul_axis {
 };
 
 /** BMI emulator models */
-#define BMI_EMUL_160		1
-#define BMI_EMUL_260		2
+#define BMI_EMUL_160 1
+#define BMI_EMUL_260 2
 
 /** Last register supported by emulator */
-#define BMI_EMUL_MAX_REG	0x80
+#define BMI_EMUL_MAX_REG 0x80
 /** Maximum number of registers that can be backed in NVM */
-#define BMI_EMUL_MAX_NVM_REGS	10
+#define BMI_EMUL_MAX_NVM_REGS 10
 
 /** Headers used in FIFO frames */
-#define BMI_EMUL_FIFO_HEAD_SKIP			0x40
-#define BMI_EMUL_FIFO_HEAD_TIME			0x44
-#define BMI_EMUL_FIFO_HEAD_CONFIG		0x48
-#define BMI_EMUL_FIFO_HEAD_EMPTY		0x80
-#define BMI_EMUL_FIFO_HEAD_DATA			0x80
-#define BMI_EMUL_FIFO_HEAD_DATA_MAG		BIT(4)
-#define BMI_EMUL_FIFO_HEAD_DATA_GYR		BIT(3)
-#define BMI_EMUL_FIFO_HEAD_DATA_ACC		BIT(2)
-#define BMI_EMUL_FIFO_HEAD_DATA_TAG_MASK	0x03
+#define BMI_EMUL_FIFO_HEAD_SKIP 0x40
+#define BMI_EMUL_FIFO_HEAD_TIME 0x44
+#define BMI_EMUL_FIFO_HEAD_CONFIG 0x48
+#define BMI_EMUL_FIFO_HEAD_EMPTY 0x80
+#define BMI_EMUL_FIFO_HEAD_DATA 0x80
+#define BMI_EMUL_FIFO_HEAD_DATA_MAG BIT(4)
+#define BMI_EMUL_FIFO_HEAD_DATA_GYR BIT(3)
+#define BMI_EMUL_FIFO_HEAD_DATA_ACC BIT(2)
+#define BMI_EMUL_FIFO_HEAD_DATA_TAG_MASK 0x03
 
 /**
  * Acceleration 1g in internal emulator units. It is helpful for using
  * functions @ref bmi_emul_set_value @ref bmi_emul_get_value
  * @ref bmi_emul_set_off and @ref bmi_emul_get_off
  */
-#define BMI_EMUL_1G		BIT(14)
+#define BMI_EMUL_1G BIT(14)
 /**
  * Gyroscope 125°/s in internal emulator units. It is helpful for using
  * functions @ref bmi_emul_set_value @ref bmi_emul_get_value
  * @ref bmi_emul_set_off and @ref bmi_emul_get_off
  */
-#define BMI_EMUL_125_DEG_S	BIT(15)
+#define BMI_EMUL_125_DEG_S BIT(15)
 
 /** Type of frames that can be added to the emulator frames list */
-#define BMI_EMUL_FRAME_CONFIG	BIT(0)
-#define BMI_EMUL_FRAME_ACC	BIT(1)
-#define BMI_EMUL_FRAME_MAG	BIT(2)
-#define BMI_EMUL_FRAME_GYR	BIT(3)
+#define BMI_EMUL_FRAME_CONFIG BIT(0)
+#define BMI_EMUL_FRAME_ACC BIT(1)
+#define BMI_EMUL_FRAME_MAG BIT(2)
+#define BMI_EMUL_FRAME_GYR BIT(3)
 
 /**
  * Code returned by model specific handle_read and handle_write functions, when
  * RO register is accessed on write or WO register is accessed on read
  */
-#define BMI_EMUL_ACCESS_E	1
+#define BMI_EMUL_ACCESS_E 1
 
 /** Structure used to describe single FIFO frame */
 struct bmi_emul_frame {
@@ -147,7 +147,8 @@ struct bmi_emul_type_data {
 	 *
 	 * @return Register address that will be accessed
 	 */
-	int (*access_reg)(struct i2c_emul *emul, int reg, int byte, bool read);
+	int (*access_reg)(const struct emul *emul, int reg, int byte,
+			  bool read);
 
 	/**
 	 * @brief Model specific write function. It should modify state of
@@ -163,7 +164,7 @@ struct bmi_emul_type_data {
 	 * @return BMI_EMUL_ACCESS_E on RO register access
 	 * @return other on error
 	 */
-	int (*handle_write)(uint8_t *regs, struct i2c_emul *emul, int reg,
+	int (*handle_write)(uint8_t *regs, const struct emul *emul, int reg,
 			    int byte, uint8_t val);
 	/**
 	 * @brief Model specific read function. It should modify state of
@@ -179,8 +180,21 @@ struct bmi_emul_type_data {
 	 * @return BMI_EMUL_ACCESS_E on WO register access
 	 * @return other on error
 	 */
-	int (*handle_read)(uint8_t *regs, struct i2c_emul *emul, int reg,
+	int (*handle_read)(uint8_t *regs, const struct emul *emul, int reg,
 			   int byte, char *buf);
+	/**
+	 * @brief Model specific finish read function. It should modify state of
+	 *        emulator if required.
+	 *
+	 * @param regs Pointer to array of emulator's registers
+	 * @param emul Pointer to BMI emulator
+	 * @param reg Selected register
+	 * @param bytes Number of bytes read
+	 *
+	 * @return 0 on success
+	 */
+	int (*finish_read)(uint8_t *regs, const struct emul *emul, int reg,
+			   int bytes);
 	/**
 	 * @brief Model specific reset function. It should modify state of
 	 *        emulator to imitate after reset conditions.
@@ -188,7 +202,7 @@ struct bmi_emul_type_data {
 	 * @param regs Pointer to array of emulator's registers
 	 * @param emul Pointer to BMI emulator
 	 */
-	void (*reset)(uint8_t *regs, struct i2c_emul *emul);
+	void (*reset)(uint8_t *regs, const struct emul *emul);
 
 	/** Array of reserved bits mask for each register */
 	const uint8_t *rsvd_mask;
@@ -220,22 +234,13 @@ const struct bmi_emul_type_data *get_bmi160_emul_type_data(void);
 const struct bmi_emul_type_data *get_bmi260_emul_type_data(void);
 
 /**
- * @brief Get pointer to BMI emulator using device tree order number.
- *
- * @param ord Device tree order number obtained from DT_DEP_ORD macro
- *
- * @return Pointer to BMI emulator
- */
-struct i2c_emul *bmi_emul_get(int ord);
-
-/**
  * @brief Set value of given register of BMI
  *
  * @param emul Pointer to BMI emulator
  * @param reg Register address which value will be changed
  * @param val New value of the register
  */
-void bmi_emul_set_reg(struct i2c_emul *emul, int reg, uint8_t val);
+void bmi_emul_set_reg(const struct emul *emul, int reg, uint8_t val);
 
 /**
  * @brief Get value of given register of BMI
@@ -245,7 +250,7 @@ void bmi_emul_set_reg(struct i2c_emul *emul, int reg, uint8_t val);
  *
  * @return Value of the register
  */
-uint8_t bmi_emul_get_reg(struct i2c_emul *emul, int reg);
+uint8_t bmi_emul_get_reg(const struct emul *emul, int reg);
 
 /**
  * @brief Get internal value of offset for given axis and sensor
@@ -256,7 +261,7 @@ uint8_t bmi_emul_get_reg(struct i2c_emul *emul, int reg);
  * @return Offset of given axis. LSB for accelerometer is 0.061mg and for
  *         gyroscope is 0.0037°/s.
  */
-int16_t bmi_emul_get_off(struct i2c_emul *emul, enum bmi_emul_axis axis);
+int16_t bmi_emul_get_off(const struct emul *emul, enum bmi_emul_axis axis);
 
 /**
  * @brief Set internal value of offset for given axis and sensor
@@ -266,7 +271,7 @@ int16_t bmi_emul_get_off(struct i2c_emul *emul, enum bmi_emul_axis axis);
  * @param val New value of given axis. LSB for accelerometer is 0.061mg and for
  *            gyroscope is 0.0037°/s.
  */
-void bmi_emul_set_off(struct i2c_emul *emul, enum bmi_emul_axis axis,
+void bmi_emul_set_off(const struct emul *emul, enum bmi_emul_axis axis,
 		      int16_t val);
 
 /**
@@ -278,7 +283,7 @@ void bmi_emul_set_off(struct i2c_emul *emul, enum bmi_emul_axis axis,
  * @return Sensor value of given axis. LSB for accelerometer is 0.061mg and for
  *         gyroscope is 0.0037°/s.
  */
-int32_t bmi_emul_get_value(struct i2c_emul *emul, enum bmi_emul_axis axis);
+int32_t bmi_emul_get_value(const struct emul *emul, enum bmi_emul_axis axis);
 
 /**
  * @brief Set internal value of sensor for given axis
@@ -288,7 +293,7 @@ int32_t bmi_emul_get_value(struct i2c_emul *emul, enum bmi_emul_axis axis);
  * @param val New value of given axis. LSB for accelerometer is 0.061mg and for
  *            gyroscope is 0.0037°/s.
  */
-void bmi_emul_set_value(struct i2c_emul *emul, enum bmi_emul_axis axis,
+void bmi_emul_set_value(const struct emul *emul, enum bmi_emul_axis axis,
 			int32_t val);
 
 /**
@@ -298,7 +303,7 @@ void bmi_emul_set_value(struct i2c_emul *emul, enum bmi_emul_axis axis,
  * @param emul Pointer to BMI emulator
  * @param set Check for this error
  */
-void bmi_emul_set_err_on_ro_write(struct i2c_emul *emul, bool set);
+void bmi_emul_set_err_on_ro_write(const struct emul *emul, bool set);
 
 /**
  * @brief Set if error should be generated when reserved bits of register are
@@ -307,7 +312,7 @@ void bmi_emul_set_err_on_ro_write(struct i2c_emul *emul, bool set);
  * @param emul Pointer to BMI emulator
  * @param set Check for this error
  */
-void bmi_emul_set_err_on_rsvd_write(struct i2c_emul *emul, bool set);
+void bmi_emul_set_err_on_rsvd_write(const struct emul *emul, bool set);
 
 /**
  * @brief Set if error should be generated when write only register is read
@@ -315,7 +320,7 @@ void bmi_emul_set_err_on_rsvd_write(struct i2c_emul *emul, bool set);
  * @param emul Pointer to BMI emulator
  * @param set Check for this error
  */
-void bmi_emul_set_err_on_wo_read(struct i2c_emul *emul, bool set);
+void bmi_emul_set_err_on_wo_read(const struct emul *emul, bool set);
 
 /**
  * @brief Set if effect of simulated command should take place after simulated
@@ -324,7 +329,7 @@ void bmi_emul_set_err_on_wo_read(struct i2c_emul *emul, bool set);
  * @param emul Pointer to BMI emulator
  * @param set Simulate command execution time
  */
-void bmi_emul_simulate_cmd_exec_time(struct i2c_emul *emul, bool set);
+void bmi_emul_simulate_cmd_exec_time(const struct emul *emul, bool set);
 
 /**
  * @brief Set number of skipped frames. It will generate skip frame on next
@@ -333,7 +338,7 @@ void bmi_emul_simulate_cmd_exec_time(struct i2c_emul *emul, bool set);
  * @param emul Pointer to BMI emulator
  * @param skip Number of skipped frames
  */
-void bmi_emul_set_skipped_frames(struct i2c_emul *emul, uint8_t skip);
+void bmi_emul_set_skipped_frames(const struct emul *emul, uint8_t skip);
 
 /**
  * @brief Clear all FIFO frames, set current frame to empty and reset fifo_skip
@@ -343,14 +348,14 @@ void bmi_emul_set_skipped_frames(struct i2c_emul *emul, uint8_t skip);
  * @param tag_time Indicate if sensor time should be included in empty frame
  * @param header Indicate if header should be included in frame
  */
-void bmi_emul_flush_fifo(struct i2c_emul *emul, bool tag_time, bool header);
+void bmi_emul_flush_fifo(const struct emul *emul, bool tag_time, bool header);
 
 /**
  * @brief Restore registers backed by NVM, reset sensor time and flush FIFO
  *
  * @param emul Pointer to BMI emulator
  */
-void bmi_emul_reset_common(struct i2c_emul *emul, bool tag_time, bool header);
+void bmi_emul_reset_common(const struct emul *emul, bool tag_time, bool header);
 
 /**
  * @brief Set command end time to @p time ms from now
@@ -358,14 +363,14 @@ void bmi_emul_reset_common(struct i2c_emul *emul, bool tag_time, bool header);
  * @param emul Pointer to BMI emulator
  * @param time After this amount of ms command should end
  */
-void bmi_emul_set_cmd_end_time(struct i2c_emul *emul, int time);
+void bmi_emul_set_cmd_end_time(const struct emul *emul, int time);
 
 /**
  * @brief Check if command should end
  *
  * @param emul Pointer to BMI emulator
  */
-bool bmi_emul_is_cmd_end(struct i2c_emul *emul);
+bool bmi_emul_is_cmd_end(const struct emul *emul);
 
 /**
  * @brief Append FIFO @p frame to the emulator list of frames. It can be read
@@ -376,7 +381,8 @@ bool bmi_emul_is_cmd_end(struct i2c_emul *emul);
  *              emulator may use this frame (until flush of FIFO or reading
  *              it out through I2C)
  */
-void bmi_emul_append_frame(struct i2c_emul *emul, struct bmi_emul_frame *frame);
+void bmi_emul_append_frame(const struct emul *emul,
+			   struct bmi_emul_frame *frame);
 
 /**
  * @brief Get length of all frames that are on the emulator list of frames.
@@ -385,7 +391,7 @@ void bmi_emul_append_frame(struct i2c_emul *emul, struct bmi_emul_frame *frame);
  * @param tag_time Indicate if sensor time should be included in empty frame
  * @param header Indicate if header should be included in frame
  */
-uint16_t bmi_emul_fifo_len(struct i2c_emul *emul, bool tag_time, bool header);
+uint16_t bmi_emul_fifo_len(const struct emul *emul, bool tag_time, bool header);
 
 /**
  * @brief Get next byte that should be returned on FIFO data access.
@@ -400,9 +406,8 @@ uint16_t bmi_emul_fifo_len(struct i2c_emul *emul, bool tag_time, bool header);
  *
  * @return FIFO data byte
  */
-uint8_t bmi_emul_get_fifo_data(struct i2c_emul *emul, int byte,
-			       bool tag_time, bool header, int acc_shift,
-			       int gyr_shift);
+uint8_t bmi_emul_get_fifo_data(const struct emul *emul, int byte, bool tag_time,
+			       bool header, int acc_shift, int gyr_shift);
 
 /**
  * @brief Saves current internal state of sensors to emulator's registers.
@@ -419,10 +424,18 @@ uint8_t bmi_emul_get_fifo_data(struct i2c_emul *emul, int byte,
  * @param gyr_off_en Indicate if gyroscope offset should be included to
  *                   sensor data value
  */
-void bmi_emul_state_to_reg(struct i2c_emul *emul, int acc_shift,
+void bmi_emul_state_to_reg(const struct emul *emul, int acc_shift,
 			   int gyr_shift, int acc_reg, int gyr_reg,
 			   int sensortime_reg, bool acc_off_en,
 			   bool gyr_off_en);
+/**
+ * @brief Returns pointer to i2c_common_emul_data for given emul
+ *
+ * @param emul Pointer to BMI emulator
+ * @return Pointer to i2c_common_emul_data for emul argument
+ */
+struct i2c_common_emul_data *
+emul_bmi_get_i2c_common_data(const struct emul *emul);
 
 /**
  * @}

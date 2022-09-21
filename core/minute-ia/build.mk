@@ -1,14 +1,10 @@
 # -*- makefile -*-
-# Copyright 2016 The Chromium OS Authors. All rights reserved.
+# Copyright 2016 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
 # Minute-IA core build
 #
-
-# Select Minute-IA bare-metal toolchain
-$(call set-option,CROSS_COMPILE,$(CROSS_COMPILE_i386),\
-	/opt/coreboot-sdk/bin/i386-elf-)
 
 # FPU compilation flags
 CFLAGS_FPU-$(CONFIG_FPU)=

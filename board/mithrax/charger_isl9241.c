@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -15,9 +15,8 @@
 #include "usb_pd.h"
 #include "util.h"
 
-
-#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
 /* Charger Chip Configuration */
 const struct charger_config_t chg_chips[] = {
@@ -85,7 +84,6 @@ __overridable void board_set_charge_limit(int port, int supplier, int charge_ma,
 					  int max_ma, int charge_mv)
 {
 	charge_ma = (charge_ma * 90) / 100;
-	charge_set_input_current_limit(MAX(charge_ma,
-					   CONFIG_CHARGER_INPUT_CURRENT),
-				       charge_mv);
+	charge_set_input_current_limit(
+		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }

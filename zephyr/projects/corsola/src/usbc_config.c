@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -32,12 +32,13 @@
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
 #include "usb_tc_sm.h"
+#include "usbc/usb_muxes.h"
 #include "usbc_ppc.h"
 
 #include "variant_db_detection.h"
 
-#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ##args)
 
 /* a flag for indicating the tasks are inited. */
 static bool tasks_inited;
@@ -59,6 +60,8 @@ __override uint8_t board_get_usb_pd_port_count(void)
 		} else {
 			return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
 		}
+	} else if (corsola_get_db_type() == CORSOLA_DB_NONE) {
+		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
 	}
 
 	return CONFIG_USB_PD_PORT_MAX_COUNT;
@@ -67,9 +70,10 @@ __override uint8_t board_get_usb_pd_port_count(void)
 /* USB-A */
 void usb_a0_interrupt(enum gpio_signal signal)
 {
-	enum usb_charge_mode mode = gpio_pin_get_dt(
-		GPIO_DT_FROM_NODELABEL(gpio_ap_xhci_init_done)) ?
-		USB_CHARGE_MODE_ENABLED : USB_CHARGE_MODE_DISABLED;
+	enum usb_charge_mode mode = gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(
+					    gpio_ap_xhci_init_done)) ?
+					    USB_CHARGE_MODE_ENABLED :
+					    USB_CHARGE_MODE_DISABLED;
 
 	const int xhci_stat = gpio_get_level(signal);
 
@@ -96,16 +100,15 @@ void usb_a0_interrupt(enum gpio_signal signal)
 
 __override enum pd_dual_role_states pd_get_drp_state_in_s0(void)
 {
-	if (gpio_pin_get_dt(
-		GPIO_DT_FROM_NODELABEL(gpio_ap_xhci_init_done))) {
+	if (gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_ap_xhci_init_done))) {
 		return PD_DRP_TOGGLE_ON;
 	} else {
 		return PD_DRP_FORCE_SINK;
 	}
 }
 
-void board_set_charge_limit(int port, int supplier, int charge_ma,
-			    int max_ma, int charge_mv)
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
 {
 	charge_set_input_current_limit(
 		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
@@ -127,8 +130,8 @@ int debounced_hpd;
 
 static void ps185_hdmi_hpd_deferred(void)
 {
-	const int new_hpd = gpio_pin_get_dt(
-				GPIO_DT_FROM_ALIAS(gpio_ps185_ec_dp_hpd));
+	const int new_hpd =
+		gpio_pin_get_dt(GPIO_DT_FROM_ALIAS(gpio_ps185_ec_dp_hpd));
 
 	/* HPD status not changed, probably a glitch, just return. */
 	if (debounced_hpd == new_hpd) {
@@ -155,8 +158,7 @@ static void ps185_hdmi_hpd_deferred(void)
 				      0, /* power low?  ... no */
 				      (!!DP_FLAGS_DP_ON));
 		/* update C1 virtual mux */
-		usb_mux_set(USBC_PORT_C1,
-			    USB_PD_MUX_DP_ENABLED,
+		usb_mux_set(USBC_PORT_C1, USB_PD_MUX_DP_ENABLED,
 			    USB_SWITCH_DISCONNECT,
 			    0 /* polarity, don't care */);
 
@@ -171,8 +173,8 @@ DECLARE_DEFERRED(ps185_hdmi_hpd_deferred);
 
 static void ps185_hdmi_hpd_disconnect_deferred(void)
 {
-	const int new_hpd = gpio_pin_get_dt(
-				GPIO_DT_FROM_ALIAS(gpio_ps185_ec_dp_hpd));
+	const int new_hpd =
+		gpio_pin_get_dt(GPIO_DT_FROM_ALIAS(gpio_ps185_ec_dp_hpd));
 
 	if (debounced_hpd == new_hpd && !new_hpd) {
 		dp_status[USBC_PORT_C1] =
@@ -188,7 +190,6 @@ static void ps185_hdmi_hpd_disconnect_deferred(void)
 			    USB_SWITCH_DISCONNECT,
 			    0 /* polarity, don't care */);
 	}
-
 }
 DECLARE_DEFERRED(ps185_hdmi_hpd_disconnect_deferred);
 
@@ -256,6 +257,11 @@ static void baseboard_x_ec_gpio2_init(void)
 	static struct tcpm_drv virtual_tcpc_drv = { 0 };
 	static struct bc12_drv virtual_bc12_drv = { 0 };
 
+	/* no sub board */
+	if (corsola_get_db_type() == CORSOLA_DB_NONE) {
+		return;
+	}
+
 	/* type-c: USB_C1_PPC_INT_ODL / hdmi: PS185_EC_DP_HPD */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_x_ec_gpio2));
 
@@ -281,11 +287,7 @@ static void baseboard_x_ec_gpio2_init(void)
 	bc12_ports[USBC_PORT_C1] =
 		(const struct bc12_config){ .drv = &virtual_bc12_drv };
 	/* Use virtual mux to notify AP the mainlink direction. */
-	usb_muxes[USBC_PORT_C1] = (struct usb_mux){
-		.usb_port = USBC_PORT_C1,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
-	};
+	USB_MUX_ENABLE_ALTERNATIVE(usb_mux_chain_1_hdmi_db);
 
 	/*
 	 * If a HDMI DB is attached, C1 port tasks will be exiting in that

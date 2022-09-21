@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -12,7 +12,7 @@
 
 #include "espi.h"
 
-#define MCHP_HOST_IF_LPC  (0)
+#define MCHP_HOST_IF_LPC (0)
 #define MCHP_HOST_IF_ESPI (1)
 
 /* eSPI Initialization functions */

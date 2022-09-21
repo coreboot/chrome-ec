@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -33,11 +33,7 @@ static float divf(float a, float b)
 {
 	float result;
 
-	asm volatile(
-		"fdivs %0, %1, %2"
-		: "=w"(result)
-		: "w"(a), "w"(b)
-	);
+	asm volatile("fdivs %0, %1, %2" : "=w"(result) : "w"(a), "w"(b));
 
 	return result;
 }
@@ -162,7 +158,7 @@ test_static int test_cortexm_fpu_inexact(void)
 	return EC_SUCCESS;
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	test_reset();
 

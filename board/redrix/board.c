@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -31,8 +31,8 @@
 #include "gpio_list.h" /* Must come after other header files. */
 
 /* Console output macros */
-#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
 
 /* Battery discharging over-current limit is 8A */
 #define BATT_OC_LIMIT -8000

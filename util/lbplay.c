@@ -1,4 +1,4 @@
-/* Copyright 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -126,11 +126,8 @@ int main(int argc, char **argv)
 	 * to see what the limit is. The default is 50msec (20Hz).
 	 */
 	for (i = 0; i < 256; i += 4) {
-		sprintf(buf, "0 %d %d %d 1 %d %d %d 2 %d %d %d 3 %d %d %d",
-			i, 0, 0,
-			0, 0, i,
-			255-i, 255, 0,
-			0, 255, 255-i);
+		sprintf(buf, "0 %d %d %d 1 %d %d %d 2 %d %d %d 3 %d %d %d", i,
+			0, 0, 0, 0, i, 255 - i, 255, 0, 0, 255, 255 - i);
 		lseek(fd_l, 0, SEEK_SET);
 		if (write(fd_l, buf, strlen(buf) + 1) < 0)
 			perror("write to led control");

@@ -1,39 +1,36 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #define DT_DRV_COMPAT cros_ln9310_emul
 
+#include <errno.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree/gpio.h>
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/gpio/gpio_emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
-#include <zephyr/drivers/emul.h>
-#include <errno.h>
 #include <zephyr/sys/__assert.h>
 
 #include "driver/ln9310.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_ln9310.h"
+#include "hooks.h"
 #include "i2c.h"
+#include "emul/emul_stub_device.h"
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(ln9310_emul, CONFIG_LN9310_EMUL_LOG_LEVEL);
-
-#define LN9310_DATA_FROM_I2C_EMUL(_emul)                                     \
-	CONTAINER_OF(CONTAINER_OF(_emul, struct i2c_common_emul_data, emul), \
-		     struct ln9310_emul_data, common)
 
 enum functional_mode {
 	/* TODO shutdown_mode, */
 	/* TODO bypass, */
 	FUNCTIONAL_MODE_STANDBY = LN9310_SYS_STANDBY,
-	FUNCTIONAL_MODE_SWITCHING_21 =
-		LN9310_SYS_SWITCHING21_ACTIVE,
-	FUNCTIONAL_MODE_SWITCHING_31 =
-		LN9310_SYS_SWITCHING31_ACTIVE
+	FUNCTIONAL_MODE_SWITCHING_21 = LN9310_SYS_SWITCHING21_ACTIVE,
+	FUNCTIONAL_MODE_SWITCHING_31 = LN9310_SYS_SWITCHING31_ACTIVE
 };
 
 struct ln9310_emul_data {
@@ -251,20 +248,20 @@ enum battery_cell_type board_get_battery_cell_type(void)
 	return data->battery_cell_type;
 }
 
-static int ln9310_emul_start_write(struct i2c_emul *emul, int reg)
+static int ln9310_emul_start_write(const struct emul *emul, int reg)
 {
 	return 0;
 }
 
-static int ln9310_emul_finish_write(struct i2c_emul *emul, int reg, int bytes)
+static int ln9310_emul_finish_write(const struct emul *emul, int reg, int bytes)
 {
 	return 0;
 }
 
-static int ln9310_emul_write_byte(struct i2c_emul *emul, int reg, uint8_t val,
+static int ln9310_emul_write_byte(const struct emul *emul, int reg, uint8_t val,
 				  int bytes)
 {
-	struct ln9310_emul_data *data = LN9310_DATA_FROM_I2C_EMUL(emul);
+	struct ln9310_emul_data *data = emul->data;
 
 	__ASSERT(bytes == 1, "bytes 0x%x != 0x1 on reg 0x%x", bytes, reg);
 
@@ -352,14 +349,14 @@ static int ln9310_emul_write_byte(struct i2c_emul *emul, int reg, uint8_t val,
 	return 0;
 }
 
-static int ln9310_emul_start_read(struct i2c_emul *emul, int reg)
+static int ln9310_emul_start_read(const struct emul *emul, int reg)
 {
 	return 0;
 }
 
-static int ln9310_emul_finish_read(struct i2c_emul *emul, int reg, int bytes)
+static int ln9310_emul_finish_read(const struct emul *emul, int reg, int bytes)
 {
-	struct ln9310_emul_data *data = LN9310_DATA_FROM_I2C_EMUL(emul);
+	struct ln9310_emul_data *data = emul->data;
 
 	switch (reg) {
 	case LN9310_REG_INT1:
@@ -370,10 +367,10 @@ static int ln9310_emul_finish_read(struct i2c_emul *emul, int reg, int bytes)
 	return 0;
 }
 
-static int ln9310_emul_read_byte(struct i2c_emul *emul, int reg, uint8_t *val,
+static int ln9310_emul_read_byte(const struct emul *emul, int reg, uint8_t *val,
 				 int bytes)
 {
-	struct ln9310_emul_data *data = LN9310_DATA_FROM_I2C_EMUL(emul);
+	struct ln9310_emul_data *data = emul->data;
 
 	__ASSERT(bytes == 0, "bytes 0x%x != 0x0 on reg 0x%x", bytes, reg);
 
@@ -459,7 +456,7 @@ static int ln9310_emul_read_byte(struct i2c_emul *emul, int reg, uint8_t *val,
 	return 0;
 }
 
-static int ln9310_emul_access_reg(struct i2c_emul *emul, int reg, int bytes,
+static int ln9310_emul_access_reg(const struct emul *emul, int reg, int bytes,
 				  bool read)
 {
 	return reg;
@@ -468,19 +465,14 @@ static int ln9310_emul_access_reg(struct i2c_emul *emul, int reg, int bytes,
 static int emul_ln9310_init(const struct emul *emul,
 			    const struct device *parent)
 {
-	const struct i2c_common_emul_cfg *cfg = emul->cfg;
 	struct ln9310_emul_data *data = emul->data;
 
-	data->common.emul.api = &i2c_common_emul_api;
-	data->common.emul.addr = cfg->addr;
-	data->common.emul.parent = emul;
 	data->common.i2c = parent;
-	data->common.cfg = cfg;
 	i2c_common_emul_init(&data->common);
 
 	singleton = emul;
 
-	return i2c_emul_register(parent, emul->dev_label, &data->common.emul);
+	return 0;
 }
 
 #define LN9310_GET_GPIO_INT_PORT(n) \
@@ -489,11 +481,11 @@ static int emul_ln9310_init(const struct emul *emul,
 #define LN9310_GET_GPIO_INT_PIN(n) \
 	DT_GPIO_PIN(DT_INST_PROP(n, pg_int_pin), gpios)
 
-#define INIT_LN9310(n)                                                         \
-	const struct ln9310_config_t ln9310_config = {                         \
-		.i2c_port = NAMED_I2C(power),                                  \
-		.i2c_addr_flags = DT_INST_REG_ADDR(n),                         \
-	};                                                                     \
+#define INIT_LN9310(n)                                                           \
+	const struct ln9310_config_t ln9310_config = {                           \
+		.i2c_port = I2C_PORT_NODELABEL(i2c0),                            \
+		.i2c_addr_flags = DT_INST_REG_ADDR(n),                           \
+	};                                                                       \
 	static struct ln9310_emul_data ln9310_emul_data_##n = {                \
 		.common = {                                                    \
 			.start_write = ln9310_emul_start_write,                \
@@ -506,13 +498,19 @@ static int emul_ln9310_init(const struct emul *emul,
 		},                                                             \
 		.gpio_int_port = LN9310_GET_GPIO_INT_PORT(n),		       \
 		.gpio_int_pin = LN9310_GET_GPIO_INT_PIN(n),		       \
-	};                                                                     \
-	static const struct i2c_common_emul_cfg ln9310_emul_cfg_##n = {        \
-		.i2c_label = DT_INST_BUS_LABEL(n),                             \
-		.dev_label = DT_INST_LABEL(n),                                 \
-		.addr = DT_INST_REG_ADDR(n),                                   \
-	};                                                                     \
-	EMUL_DEFINE(emul_ln9310_init, DT_DRV_INST(n), &ln9310_emul_cfg_##n,    \
-		    &ln9310_emul_data_##n)
+	}; \
+	static const struct i2c_common_emul_cfg ln9310_emul_cfg_##n = {          \
+		.dev_label = DT_NODE_FULL_NAME(DT_DRV_INST(n)),                  \
+		.addr = DT_INST_REG_ADDR(n),                                     \
+	};                                                                       \
+	EMUL_DT_INST_DEFINE(n, emul_ln9310_init, &ln9310_emul_data_##n,          \
+			    &ln9310_emul_cfg_##n, &i2c_common_emul_api)
 
 DT_INST_FOREACH_STATUS_OKAY(INIT_LN9310)
+DT_INST_FOREACH_STATUS_OKAY(EMUL_STUB_DEVICE);
+
+struct i2c_common_emul_data *
+emul_ln9310_get_i2c_common_data(const struct emul *emul)
+{
+	return emul->data;
+}

@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -20,6 +20,7 @@ child-binding:
             description:
               Enum values used only for description purposes
             enum:
+            - AUDIO_CODEC
             - BASE_SENSOR
             - LID_SENSOR
             - LIGHTBAR

@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,10 +8,9 @@ import pathlib
 import string
 import tempfile
 
-import hypothesis
-import hypothesis.strategies as st
-import pytest
-
+import hypothesis  # pylint:disable=import-error
+import hypothesis.strategies as st  # pylint:disable=import-error
+import pytest  # pylint:disable=import-error
 import zmake.modules
 import zmake.output_packers
 import zmake.project
@@ -34,7 +33,9 @@ def test_find_dts_overlays(modules):
             with tempfile.TemporaryDirectory() as modpath:
                 modpath = pathlib.Path(modpath)
                 for board in boards:
-                    dts_path = zmake.project.module_dts_overlay_name(modpath, board)
+                    dts_path = zmake.project.module_dts_overlay_name(
+                        modpath, board
+                    )
                     dts_path.parent.mkdir(parents=True, exist_ok=True)
                     dts_path.touch()
                 setup_modules_and_dispatch(
@@ -49,7 +50,9 @@ def test_find_dts_overlays(modules):
         board_file_mapping = {}
         for modpath, board_list in zip(module_paths, modules):
             for board in board_list:
-                file_name = zmake.project.module_dts_overlay_name(modpath, board)
+                file_name = zmake.project.module_dts_overlay_name(
+                    modpath, board
+                )
                 files = board_file_mapping.get(board, set())
                 board_file_mapping[board] = files | {file_name}
 
@@ -258,4 +261,6 @@ def test_kconfig_files(tmp_path, actual_files, config_files, expected_files):
     assert len(builds) == 1
 
     _, config = builds[0]
-    assert sorted(f.name for f in config.kconfig_files) == sorted(expected_files)
+    assert sorted(f.name for f in config.kconfig_files) == sorted(
+        expected_files
+    )

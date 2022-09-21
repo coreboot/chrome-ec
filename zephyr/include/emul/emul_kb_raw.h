@@ -1,7 +1,9 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+
+#include <stdint.h>
 
 /**
  * @file
@@ -34,6 +36,13 @@ struct device;
  */
 int emul_kb_raw_set_kbstate(const struct device *dev, uint8_t row, uint8_t col,
 			    int pressed);
+
+/**
+ * @brief Resets the keyboard to its initial state.
+ *
+ * @param dev Pointer to kb_raw emulator device.
+ */
+void emul_kb_raw_reset(const struct device *dev);
 
 /**
  * @}

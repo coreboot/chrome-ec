@@ -1,4 +1,4 @@
-/* Copyright 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -23,8 +23,8 @@ static void usart_rx_init(struct usart_config const *config)
 
 static void usart_rx_interrupt_handler(struct usart_config const *config)
 {
-	intptr_t base   = config->hw->base;
-	int32_t  status = STM32_USART_SR(base);
+	intptr_t base = config->hw->base;
+	int32_t status = STM32_USART_SR(base);
 
 	if (status & STM32_USART_SR_RXNE) {
 		uint8_t byte = STM32_USART_RDR(base);

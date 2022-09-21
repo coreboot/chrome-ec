@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -14,10 +14,10 @@
 #include "system.h"
 #include "watchdog.h"
 
-#define BBRAM_REGION_PD0	DT_PATH(named_bbram_regions, pd0)
-#define BBRAM_REGION_PD1	DT_PATH(named_bbram_regions, pd1)
-#define BBRAM_REGION_PD2	DT_PATH(named_bbram_regions, pd2)
-#define BBRAM_REGION_TRY_SLOT	DT_PATH(named_bbram_regions, try_slot)
+#define BBRAM_REGION_PD0 DT_PATH(named_bbram_regions, pd0)
+#define BBRAM_REGION_PD1 DT_PATH(named_bbram_regions, pd1)
+#define BBRAM_REGION_PD2 DT_PATH(named_bbram_regions, pd2)
+#define BBRAM_REGION_TRY_SLOT DT_PATH(named_bbram_regions, try_slot)
 
 #define GET_BBRAM_OFFSET(node) \
 	DT_PROP(DT_PATH(named_bbram_regions, node), offset)
@@ -160,7 +160,7 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 /**
  * Print low power idle statistics
  */
-static int command_idle_stats(int argc, char **argv)
+static int command_idle_stats(int argc, const char **argv)
 {
 	const struct device *sys_dev = device_get_binding("CROS_SYSTEM");
 
@@ -172,9 +172,8 @@ static int command_idle_stats(int argc, char **argv)
 	ccprintf("Total time on:                       %.6llds\n", ts.val);
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(idlestats, command_idle_stats,
-		"",
-		"Print last idle stats");
+DECLARE_CONSOLE_COMMAND(idlestats, command_idle_stats, "",
+			"Print last idle stats");
 #endif
 
 const char *system_get_chip_vendor(void)
@@ -198,7 +197,7 @@ const char *system_get_chip_revision(void)
 	return cros_system_chip_revision(sys_dev);
 }
 
-void system_reset(int flags)
+test_mockable void system_reset(int flags)
 {
 	int err;
 	uint32_t save_flags;

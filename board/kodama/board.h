@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -14,7 +14,6 @@
 #define VARIANT_KUKUI_POGO_KEYBOARD
 #define VARIANT_KUKUI_TABLET_PWRBTN
 #undef CONFIG_CMD_MFALLOW
-
 
 #ifndef SECTION_IS_RW
 #define VARIANT_KUKUI_NO_SENSORS
@@ -39,7 +38,7 @@
 #define CONFIG_SMBUS_PEC
 
 /* Battery */
-#define BATTERY_DESIRED_CHARGING_CURRENT    2000  /* mA */
+#define BATTERY_DESIRED_CHARGING_CURRENT 2000 /* mA */
 
 #define CONFIG_CHARGER_MT6370_BACKLIGHT
 #define CONFIG_CHARGER_MAINTAIN_VBAT
@@ -53,19 +52,18 @@
 /* Camera VSYNC */
 #define CONFIG_SYNC
 #define CONFIG_SYNC_COMMAND
-#define CONFIG_SYNC_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(VSYNC)
+#define CONFIG_SYNC_INT_EVENT TASK_EVENT_MOTION_SENSOR_INTERRUPT(VSYNC)
 #endif /* SECTION_IS_RW */
 
 /* Disable verbose output in EC pd */
 #define CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE
 
 /* I2C ports */
-#define I2C_PORT_CHARGER  0
-#define I2C_PORT_TCPC0    0
-#define I2C_PORT_USB_MUX  0
-#define I2C_PORT_ACCEL    1
-#define I2C_PORT_BATTERY  board_get_battery_i2c()
+#define I2C_PORT_CHARGER 0
+#define I2C_PORT_TCPC0 0
+#define I2C_PORT_USB_MUX 0
+#define I2C_PORT_ACCEL 1
+#define I2C_PORT_BATTERY board_get_battery_i2c()
 #define I2C_PORT_VIRTUAL_BATTERY I2C_PORT_BATTERY
 
 /* Define the host events which are allowed to wakeup AP in S3. */

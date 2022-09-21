@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,6 +10,7 @@
 #include "gpio.h"
 #include "i2c.h"
 #include "peripheral_charger.h"
+#include "printf.h"
 #include "timer.h"
 #include "util.h"
 #include "watchdog.h"
@@ -31,16 +32,15 @@ static const int _wake_up_delay_ms = 10;
 static const int _detection_interval_ms = 500;
 
 /* Buffer size for i2c read & write */
-#define CTN730_MESSAGE_BUFFER_SIZE	0x20
+#define CTN730_MESSAGE_BUFFER_SIZE 0x20
 
 /* This driver isn't compatible with big endian. */
-BUILD_ASSERT(__BYTE_ORDER__  == __ORDER_LITTLE_ENDIAN__);
+BUILD_ASSERT(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
 
 #define CPRINTS(fmt, args...) cprints(CC_PCHG, "CTN730: " fmt, ##args)
 
 static const char *_text_instruction(uint8_t instruction)
 {
-	/* TODO: For normal build, use %pb and BINARY_VALUE(res->inst, 6) */
 	switch (instruction) {
 	case WLC_HOST_CTRL_RESET:
 		return "RESET";
@@ -158,8 +158,7 @@ static int _i2c_read(int i2c_port, uint8_t *in, int in_len)
 
 static void _print_header(const struct ctn730_msg *msg)
 {
-	CPRINTS("%s_%s",
-		_text_instruction(msg->instruction),
+	CPRINTS("%s_%s", _text_instruction(msg->instruction),
 		_text_message_type(msg->message_type));
 }
 
@@ -206,9 +205,9 @@ static int ctn730_init(struct pchg *ctx)
 	cmd->message_type = CTN730_MESSAGE_TYPE_COMMAND;
 	cmd->instruction = WLC_HOST_CTRL_RESET;
 	cmd->length = WLC_HOST_CTRL_RESET_CMD_SIZE;
-	cmd->payload[0] = ctx->mode == PCHG_MODE_NORMAL
-			? WLC_HOST_CTRL_RESET_CMD_MODE_NORMAL
-			: WLC_HOST_CTRL_RESET_CMD_MODE_DOWNLOAD;
+	cmd->payload[0] = ctx->mode == PCHG_MODE_NORMAL ?
+				  WLC_HOST_CTRL_RESET_CMD_MODE_NORMAL :
+				  WLC_HOST_CTRL_RESET_CMD_MODE_DOWNLOAD;
 
 	/* TODO: Run 1 sec timeout timer. */
 	rv = _send_command(ctx, cmd);
@@ -258,8 +257,13 @@ static int _process_payload_response(struct pchg *ctx, struct ctn730_msg *res)
 		int rv = _i2c_read(ctx->cfg->i2c_port, buf, len);
 		if (rv)
 			return rv;
-		if (IS_ENABLED(CTN730_DEBUG))
-			CPRINTS("Payload: %ph", HEX_BUF(buf, len));
+		if (IS_ENABLED(CTN730_DEBUG)) {
+			char str_buf[hex_str_buf_size(len)];
+
+			snprintf_hex_buffer(str_buf, sizeof(str_buf),
+					    HEX_BUF(buf, len));
+			CPRINTS("Payload: %s", str_buf);
+		}
 	}
 
 	ctx->event = PCHG_EVENT_NONE;
@@ -359,8 +363,13 @@ static int _process_payload_event(struct pchg *ctx, struct ctn730_msg *res)
 		int rv = _i2c_read(ctx->cfg->i2c_port, buf, len);
 		if (rv)
 			return rv;
-		if (IS_ENABLED(CTN730_DEBUG))
-			CPRINTS("Payload: %ph", HEX_BUF(buf, len));
+		if (IS_ENABLED(CTN730_DEBUG)) {
+			char str_buf[hex_str_buf_size(len)];
+
+			snprintf_hex_buffer(str_buf, sizeof(str_buf),
+					    HEX_BUF(buf, len));
+			CPRINTS("Payload: %s", str_buf);
+		}
 	}
 
 	ctx->event = PCHG_EVENT_NONE;
@@ -510,8 +519,8 @@ static int ctn730_get_soc(struct pchg *ctx)
 
 static int ctn730_update_open(struct pchg *ctx)
 {
-	uint8_t buf[sizeof(struct ctn730_msg)
-		    + WLC_HOST_CTRL_DL_OPEN_SESSION_CMD_SIZE];
+	uint8_t buf[sizeof(struct ctn730_msg) +
+		    WLC_HOST_CTRL_DL_OPEN_SESSION_CMD_SIZE];
 	struct ctn730_msg *cmd = (void *)buf;
 	uint32_t version = ctx->update.version;
 	int rv;
@@ -531,16 +540,16 @@ static int ctn730_update_open(struct pchg *ctx)
 
 static int ctn730_update_write(struct pchg *ctx)
 {
-	uint8_t buf[sizeof(struct ctn730_msg)
-		    + WLC_HOST_CTRL_DL_WRITE_FLASH_CMD_SIZE];
+	uint8_t buf[sizeof(struct ctn730_msg) +
+		    WLC_HOST_CTRL_DL_WRITE_FLASH_CMD_SIZE];
 	struct ctn730_msg *cmd = (void *)buf;
 	uint32_t *a = (void *)cmd->payload;
 	uint8_t *d = (void *)&cmd->payload[CTN730_FLASH_ADDR_SIZE];
 	int rv;
 
 	/* Address is 3 bytes. FW size must be a multiple of 128 bytes. */
-	if (ctx->update.addr & GENMASK(31, 24)
-		|| ctx->update.size != WLC_HOST_CTRL_DL_WRITE_FLASH_BLOCK_SIZE)
+	if (ctx->update.addr & GENMASK(31, 24) ||
+	    ctx->update.size != WLC_HOST_CTRL_DL_WRITE_FLASH_BLOCK_SIZE)
 		return EC_ERROR_INVAL;
 
 	cmd->message_type = CTN730_MESSAGE_TYPE_COMMAND;
@@ -563,8 +572,8 @@ static int ctn730_update_write(struct pchg *ctx)
 
 static int ctn730_update_close(struct pchg *ctx)
 {
-	uint8_t buf[sizeof(struct ctn730_msg)
-		    + WLC_HOST_CTRL_DL_COMMIT_SESSION_CMD_SIZE];
+	uint8_t buf[sizeof(struct ctn730_msg) +
+		    WLC_HOST_CTRL_DL_COMMIT_SESSION_CMD_SIZE];
 	struct ctn730_msg *cmd = (void *)buf;
 	uint32_t *crc32 = (void *)cmd->payload;
 	int rv;
@@ -654,7 +663,7 @@ const struct pchg_drv ctn730_drv = {
 	.update_close = ctn730_update_close,
 };
 
-static int cc_ctn730(int argc, char **argv)
+static int cc_ctn730(int argc, const char **argv)
 {
 	int port;
 	char *end;

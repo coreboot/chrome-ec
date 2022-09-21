@@ -1,5 +1,5 @@
 # -*- makefile -*-
-# Copyright 2022 The Chromium OS Authors. All rights reserved.
+# Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -22,6 +22,5 @@ board-y+=keyboard.o
 board-y+=led.o
 board-y+=pwm.o
 board-y+=sensors.o
-board-y+=tune_mp2964.o
 board-y+=usbc_config.o
 board-y+=keyboard_customization.o

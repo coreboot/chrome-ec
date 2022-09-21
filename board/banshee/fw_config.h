@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -14,7 +14,6 @@
  * Source of truth is the project/brya/brya/config.star configuration file.
  */
 
-
 enum ec_cfg_keyboard_backlight_type {
 	KEYBOARD_BACKLIGHT_DISABLED = 0,
 	KEYBOARD_BACKLIGHT_ENABLED = 1
@@ -22,11 +21,11 @@ enum ec_cfg_keyboard_backlight_type {
 
 union banshee_cbi_fw_config {
 	struct {
-		uint32_t				sd_db : 2;
-		uint32_t				lte_db : 1;
-		enum ec_cfg_keyboard_backlight_type	kb_bl : 1;
-		uint32_t				audio : 3;
-		uint32_t				reserved_1 : 21;
+		uint32_t sd_db : 2;
+		uint32_t lte_db : 1;
+		enum ec_cfg_keyboard_backlight_type kb_bl : 1;
+		uint32_t audio : 3;
+		uint32_t reserved_1 : 21;
 	};
 	uint32_t raw_value;
 };
