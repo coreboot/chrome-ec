@@ -54,11 +54,14 @@
 /* Version of the AP RO check information saved in the H1 flash page. */
 #define AP_RO_HASH_LAYOUT_VERSION_0 0
 #define AP_RO_HASH_LAYOUT_VERSION_1 1
+#define AP_RO_GBBD_LAYOUT_VERSION_2 2 /* Used to store the gbb descriptor */
 
 /* Verification scheme V1. */
 #define AP_RO_HASH_TYPE_FACTORY 0
 /* Verification scheme V2. */
 #define AP_RO_HASH_TYPE_GSCVD	1
+/* Use the factory gbb flags to generate the V1 hash */
+#define AP_RO_HASH_TYPE_GBBD	2
 
 /* A flash range included in hash calculations. */
 struct ro_range {
@@ -88,20 +91,6 @@ struct ap_ro_check_header {
 	uint8_t type;
 	uint16_t num_ranges;
 	uint32_t checksum;
-};
-
-/*
- * Saved AP RO data includes the ap ro check header, the sha digest of the
- * firmware and the RO ranges. Make sure the header, digest, and maximum number
- * of ranges fit in the AP RO space.
- */
-BUILD_ASSERT(AP_RO_DATA_SPACE_SIZE >=
-	sizeof(struct ap_ro_check_header) + SHA256_DIGEST_SIZE +
-	AP_RO_MAX_NUM_RANGES * sizeof(struct ro_range));
-/* Format of the AP RO check information saved in the H1 flash page. */
-struct ap_ro_check {
-	struct ap_ro_check_header header;
-	struct ap_ro_check_payload payload;
 };
 
 /*****************************************************************************/
@@ -178,13 +167,21 @@ BUILD_ASSERT(sizeof(struct vb2_gbb_header) == VB2_GBB_HEADER_SIZE);
 BUILD_ASSERT(offsetof(struct vb2_gbb_header, flags) ==
 	VB2_GBB_HEADER_FLAG_OFFSET);
 
+/* One of the AP RO verification outcomes, internal representation. */
+enum gbbd_status {
+	GS_INJECT_FLAGS       = BIT(0), /* Generate the hash using a factory */
+					/* flag value. */
+	GS_FLAGS_IN_HASH      = BIT(1), /* The gbb flags are covered by the */
+					/* hash. */
+};
+
 struct gbb_descriptor {
 	/*
 	 * If validate_flags is true, verify the gbb flags are set to 0 during
 	 * verification. If the gbb flags are in the hash, AP RO verification
 	 * will need to validate them.
 	 */
-	bool validate_flags;
+	enum gbbd_status status;
 	/*
 	 * The FMAP range information. The FMAP must be in the hash ranges for
 	 * verification to pass.
@@ -200,10 +197,29 @@ struct gbb_descriptor {
 
 	/* Flags used to generate the hash */
 	uint32_t injected_flags;
-} __packed;
+};
 
 /*****************************************************************************/
 /* V1 Factory Support (AP_RO_HASH_TYPE_FACTORY) */
+
+/* Format of the AP RO check information saved in the H1 flash page. */
+struct ap_ro_check {
+	/* AP_RO_HASH_TYPE_FACTORY data */
+	struct ap_ro_check_header header;
+	/* Used by the V1 scheme. */
+	struct ap_ro_check_payload payload;
+
+	/* Optional GBB flag data. */
+	struct ap_ro_check_header gbbd_header;
+	/* Used to save the injected gbb flags. */
+	struct gbb_descriptor gbbd;
+};
+/*
+ * Make sure all saved AP RO data can fit in the AP RO space. This includes
+ * two ap ro check headers, the sha digest of the firmware, the maximum number
+ * of AP RO ranges, and a gbb descriptor.
+ */
+BUILD_ASSERT(sizeof(struct ap_ro_check) <= AP_RO_DATA_SPACE_SIZE);
 
 /* One of the AP RO verification outcomes, internal representation. */
 enum ap_ro_check_result {
@@ -215,6 +231,24 @@ enum ap_ro_check_result {
 /* Page offset for H1 flash operations. */
 static const uint32_t h1_flash_offset_ =
 	AP_RO_DATA_SPACE_ADDR - CONFIG_PROGRAM_MEMORY_BASE;
+static const uint32_t h1_apro_gbbd_data_flash_offset_ =
+	h1_flash_offset_ + offsetof(struct ap_ro_check, gbbd_header);
+
+/*
+ * Enforce flash_write checks at build to ensure the chip can write the AP RO
+ * data to flash. Check all structs.
+ */
+/* Verify the chip supports writing the struct sizes. */
+BUILD_ASSERT(sizeof(struct ap_ro_check_payload) % CONFIG_FLASH_WRITE_SIZE == 0);
+BUILD_ASSERT(sizeof(struct ap_ro_check_header) % CONFIG_FLASH_WRITE_SIZE == 0);
+BUILD_ASSERT(sizeof(struct gbb_descriptor) % CONFIG_FLASH_WRITE_SIZE == 0);
+BUILD_ASSERT(sizeof(struct ap_ro_check) % CONFIG_FLASH_WRITE_SIZE == 0);
+/* Verify the chip will be able to write to the header offsets. */
+BUILD_ASSERT((AP_RO_DATA_SPACE_ADDR - CONFIG_PROGRAM_MEMORY_BASE) %
+	     CONFIG_FLASH_WRITE_SIZE == 0);
+BUILD_ASSERT((AP_RO_DATA_SPACE_ADDR - CONFIG_PROGRAM_MEMORY_BASE +
+	     offsetof(struct ap_ro_check, gbbd_header)) %
+	     CONFIG_FLASH_WRITE_SIZE == 0);
 
 /* Fixed pointer at the H1 flash page storing the AP RO check information. */
 static const struct ap_ro_check *p_chk =
@@ -572,7 +606,7 @@ enum ap_ro_check_result validate_ranges_sha(const struct ro_range *ranges,
 		 * the injected gbb flag value and the actual data from before
 		 * and after the gbb flags to calculate the hash.
 		 */
-		if (gbbd->validate_flags &&
+		if (gbbd->status & GS_INJECT_FLAGS &&
 		    is_in_range(gbbd->gbb_flags, ranges[i])) {
 			update_sha_with_gbb_range(&ctx, ranges[i], gbbd);
 			continue;
@@ -635,8 +669,24 @@ static enum ap_ro_check_result validate_ranges_sha_with_factory_flags(
 					expected_digest,
 					gbbd) ==  ROV_SUCCEEDED) {
 			CPRINTS("matched gbb %x", gbbd->injected_flags);
+			/*
+			 * If the hash was generated with 0 GBB flags, then
+			 * there's no need for special handling.
+			 */
+			if (!gbbd->injected_flags)
+				gbbd->status &= ~GS_INJECT_FLAGS;
+
 			return ROV_SUCCEEDED;
 		}
+		/*
+		 * If the flags aren't getting injected, then there's no point
+		 * in trying other flags. Nothing is getting substituted, so the
+		 * calculated hash will not change with different flag values.
+		 * If it failed, then it will keep failing. Go ahead and fail
+		 * now.
+		 */
+		if (!(gbbd->status & GS_INJECT_FLAGS))
+			return ROV_FAILED;
 	}
 	return ROV_FAILED;
 }
@@ -670,6 +720,68 @@ static int read_ap_spi(void *buf, uint32_t offset, size_t size, int code_line)
 	}
 
 	return 0;
+}
+
+static int verify_ap_ro_gbb_space(void)
+{
+	uint32_t checksum;
+
+	if ((p_chk->gbbd_header.type != AP_RO_HASH_TYPE_GBBD) ||
+	    (p_chk->gbbd_header.version != AP_RO_GBBD_LAYOUT_VERSION_2))
+		return EC_ERROR_CRC;
+	/* The GBB descriptor is only valid for FACTORY hashes. */
+	if (p_chk->header.type != AP_RO_HASH_TYPE_FACTORY)
+		return EC_ERROR_CRC;
+
+	/* The V1 header saved too many ranges. The stored GBBD is invalid */
+	if (p_chk->header.num_ranges > AP_RO_MAX_NUM_RANGES) {
+		CPRINTS("%s: V1 stored too many ranges", __func__);
+		return EC_ERROR_CRC;
+	}
+	if (p_chk->gbbd_header.num_ranges != p_chk->header.num_ranges) {
+		CPRINTS("%s: gbbd doesn't match v1 header", __func__);
+		return EC_ERROR_CRC;
+	}
+
+	app_compute_hash(&p_chk->gbbd, sizeof(struct gbb_descriptor),
+			 &checksum, sizeof(checksum));
+
+	if (memcmp(&checksum, &p_chk->gbbd_header.checksum, sizeof(checksum))) {
+		CPRINTS("%s: AP RO GBB Checksum corrupted", __func__);
+		return EC_ERROR_CRC;
+	}
+
+	return EC_SUCCESS;
+}
+
+/**
+ * Load the saved gbb descriptor.
+ *
+ * @param gbbd pointer to the gbb descriptor with the fmap, gbb, gbb_flags,
+ *             and status.
+ *
+ * @return ROV_SUCCEEDED on success, ROV_NOT_FOUND if there's no saved gbbd
+ *	   data, ROV_FAILED if reading the saved gbbd failed.
+ */
+static enum ap_ro_check_result get_saved_gbbd(struct gbb_descriptor *gbbd)
+{
+	/*
+	 * It's not possible to save the gbbd with 0xffff num ranges. If it's
+	 * set to 0xffff, then the gbbd is probably erased. This is the same
+	 * check ap_ro_check_unsupported uses to verify the v1 header.
+	 */
+	if (p_chk->gbbd_header.num_ranges == (uint16_t)~0) {
+		CPRINTS("%s: not programmed", __func__);
+		return ROV_NOT_FOUND;
+	}
+
+	if (verify_ap_ro_gbb_space() != EC_SUCCESS)
+		return ROV_FAILED;
+
+	memcpy(gbbd, &p_chk->gbbd, sizeof(*gbbd));
+	CPRINTS("%s (0x%x): flags 0x%x", __func__, gbbd->status,
+		gbbd->injected_flags);
+	return ROV_SUCCEEDED;
 }
 
 /**
@@ -729,12 +841,51 @@ static int range_is_in_hash(const struct ro_range range)
 	}
 	return EC_ERROR_INVAL;
 }
+/*
+ * Verify the GBB flags are set to 0.
+ *
+ * @param gbbd pointer to the gbb descriptor with the fmap, gbb, gbb_flags,
+ *             and status information.
+ *
+ * Returns:
+ *   ROV_SUCCEEDED if the flags are outside of the hash or if the flags
+ *                 are in the hash and set to 0.
+ *   ROV_FAILED if the gbb format is invalid.
+ */
+static enum ap_ro_check_result validate_gbb_flags(struct gbb_descriptor *gbbd)
+{
+	uint32_t gbb_flags;
 
+	/*
+	 * There's no special GBB handling, so there's no need to validate the
+	 * GBB outside of the standard AP RO verification.
+	 */
+	if (!(gbbd->status & GS_INJECT_FLAGS)) {
+		CPRINTS("%s: skip GBB check", __func__);
+		return ROV_SUCCEEDED;
+	}
+
+	if (gbbd->gbb_flags.range_size != sizeof(gbb_flags)) {
+		CPRINTS("%s: invalid size", __func__);
+		return ROV_FAILED;
+	}
+
+	if (read_ap_spi(&gbb_flags, gbbd->gbb_flags.flash_offset,
+			sizeof(gbb_flags), __LINE__))
+		return ROV_FAILED;
+
+	if (gbb_flags) {
+		CPRINTS("%s: invalid flags %x", __func__, gbb_flags);
+		return ROV_FAILED;
+	}
+	CPRINTS("%s: ok", __func__);
+	return ROV_SUCCEEDED;
+}
 /*
  * Verify the GBB contents and validate the GBB flags are set to 0.
  *
  * @param gbbd pointer to the gbb descriptor with the fmap, gbb, gbb_flags,
- *             and validate_flags information from init_gbbd.
+ *             and status information.
  *
  * Returns:
  *   ROV_SUCCEEDED if the flags are outside of the hash or if the flags
@@ -746,13 +897,11 @@ static enum ap_ro_check_result validate_gbbd(struct gbb_descriptor *gbbd)
 	struct vb2_gbb_header gbb;
 
 	/*
-	 * The GBB flags are outside of the hash, so there's no need to validate
-	 * them.
-	 * The location was found in the FMAP which will be verified. If it's
-	 * pointing to the wrong place, AP RO verification will fail.
+	 * There's no special GBB handling, so there's no need to validate the
+	 * GBB outside of the standard AP RO verification.
 	 */
-	if (!gbbd->validate_flags) {
-		CPRINTS("%s: GBB flags not in hash", __func__);
+	if (!(gbbd->status & GS_INJECT_FLAGS)) {
+		CPRINTS("%s: skip GBB check", __func__);
 		return ROV_SUCCEEDED;
 	}
 
@@ -787,12 +936,9 @@ static enum ap_ro_check_result validate_gbbd(struct gbb_descriptor *gbbd)
 	}
 
 	/* Verify the GBB flags are set to 0. */
-	if (gbb.flags) {
-		CPRINTS("%s: invalid flags %x", __func__, gbb.flags);
+	if (validate_gbb_flags(gbbd) != ROV_SUCCEEDED)
 		return ROV_FAILED;
-	}
 
-	CPRINTS("%s: ok", __func__);
 	return ROV_SUCCEEDED;
 }
 /*
@@ -810,11 +956,13 @@ static enum ap_ro_check_result validate_gbbd(struct gbb_descriptor *gbbd)
  *   ROV_FAILED if no FMAP section was found in the AP RO hash or if the
  *              GBB wasn't found in FMAP.
  */
-static enum ap_ro_check_result init_gbbd(struct gbb_descriptor *gbbd)
+static enum ap_ro_check_result find_gbb_with_fmap(struct gbb_descriptor *gbbd)
 {
 	uint32_t offset;
 	int rv;
 
+	/* Set entire gbbd contents to zero. */
+	memset(gbbd, 0, sizeof(gbbd));
 	for (offset = 0; offset < MAX_SUPPORTED_FLASH_SIZE;
 	     offset += LOWEST_FMAP_ALIGNMENT) {
 		struct fmap_header fmh;
@@ -867,15 +1015,39 @@ static enum ap_ro_check_result init_gbbd(struct gbb_descriptor *gbbd)
 		gbbd->gbb_flags.flash_offset = gbbah.area_offset +
 			VB2_GBB_HEADER_FLAG_OFFSET;
 		gbbd->gbb_flags.range_size = VB2_GBB_HEADER_FLAG_SIZE;
-		gbbd->validate_flags = range_is_in_hash(gbbd->gbb_flags) ==
-			EC_SUCCESS;
+		/* Verify the flags if they're in the hash. */
+		if (range_is_in_hash(gbbd->gbb_flags) == EC_SUCCESS)
+			gbbd->status = GS_INJECT_FLAGS | GS_FLAGS_IN_HASH;
 
 		return ROV_SUCCEEDED;
 	}
 
 	return ROV_FAILED;
 }
+/*
+ * Initialize the gbb descriptor using the FMAP and GBB found in RO flash.
+ *
+ * Iterate through AP flash at 4K intervals looking for FMAP. Once FMAP is
+ * found call find the FMAP GBB section. Populate the FMAP and GBB information
+ * in the gbb descriptor.
+ *
+ * @param gbbd pointer to the gbb descriptor.
+ *
+ * Returns:
+ *   ROV_SUCCEEDED if a valid GBB was found using FMAP information from a
+ *                 section covered by the AP RO hash.
+ *   ROV_FAILED if no FMAP section was found in the AP RO hash or if the
+ *              GBB wasn't found in FMAP.
+ */
+static enum ap_ro_check_result init_gbbd(struct gbb_descriptor *gbbd)
+{
+	enum ap_ro_check_result rv = find_gbb_with_fmap(gbbd);
 
+	if (rv != ROV_SUCCEEDED)
+		return rv;
+
+	return validate_gbbd(gbbd);
+}
 /*
  * A hook used to keep the EC in reset, no matter what keys the user presses,
  * the only way out is the Cr50 reboot, most likely through power cycle by
@@ -922,7 +1094,6 @@ int ec_rst_override(void)
 	return !apro_fail_status_cleared && apro_result == AP_RO_FAIL;
 }
 
-
 static uint8_t do_ap_ro_check(void)
 {
 	enum ap_ro_check_result rv;
@@ -939,23 +1110,61 @@ static uint8_t do_ap_ro_check(void)
 
 	enable_ap_spi_hash_shortcut();
 
-	/* Find the GBB and FMAP locations. */
-	rv = init_gbbd(&gbbd);
-	/* Check the GBB flags are 0 before validating any AP RO ranges. */
-	if (rv == ROV_SUCCEEDED)
-		rv = validate_gbbd(&gbbd);
-	if (rv == ROV_SUCCEEDED) {
-		if (gbbd.validate_flags)
+	/* Try and load the GBB and FMAP locations from flash. */
+	rv = get_saved_gbbd(&gbbd);
+	switch (rv) {
+	case ROV_SUCCEEDED:
+		/* Use the saved gbbd to verify RO */
+		rv = validate_gbb_flags(&gbbd);
+		if (rv == ROV_SUCCEEDED)
+			rv = validate_ranges_sha(p_chk->payload.ranges,
+						 p_chk->header.num_ranges,
+						 p_chk->payload.digest,
+						 &gbbd);
+		break;
+	case ROV_NOT_FOUND:
+		/* Initialize the gbbd if there's no saved data. */
+		rv = init_gbbd(&gbbd);
+
+		/*
+		 * Run AP RO verification with all of the factory flags.
+		 *
+		 * The saved hash could have been generated with non-zero
+		 * factory flags. Try recalculating the hash with common
+		 * factory flags to see if any of them pass.
+		 *
+		 * If it passes, save the gbbd, so future runs won't need
+		 * to retry all of them.
+		 */
+		if (rv == ROV_SUCCEEDED)
 			rv = validate_ranges_sha_with_factory_flags(
 				p_chk->payload.ranges,
 				p_chk->header.num_ranges,
 				p_chk->payload.digest,
 				&gbbd);
-		else
-			rv = validate_ranges_sha(p_chk->payload.ranges,
-						 p_chk->header.num_ranges,
-						 p_chk->payload.digest,
-						 &gbbd);
+
+		/* If verification succeeded, try to save the gbbd. */
+		if (rv == ROV_SUCCEEDED) {
+			if (write_ap_ro_check_data(
+					AP_RO_GBBD_LAYOUT_VERSION_2,
+					AP_RO_HASH_TYPE_GBBD,
+					p_chk->header.num_ranges,
+					h1_apro_gbbd_data_flash_offset_,
+					(uint32_t *)(&p_chk->gbbd_header),
+					&gbbd,
+					sizeof(gbbd)) == ARCVE_OK) {
+				CPRINTS("%s: saved gbbd", __func__);
+				ap_ro_add_flash_event(APROF_SAVED_GBBD);
+			} else {
+				CPRINTS("%s: save gbbd failed", __func__);
+				ap_ro_add_flash_event(
+					APROF_FAILED_TO_SAVE_GBBD);
+			}
+		}
+		break;
+	default:
+		CPRINTS("%s: FAIL corrupted GBBD", __func__);
+		break;
 	}
 
 	disable_ap_spi_hash_shortcut();
@@ -977,7 +1186,7 @@ static uint8_t do_ap_ro_check(void)
 		 */
 		return EC_ERROR_CRC;
 	}
-	/* TODO(b/236844541): save gbbd */
+
 	apro_result = AP_RO_PASS;
 	ap_ro_add_flash_event(APROF_CHECK_SUCCEEDED);
 	CPRINTS("AP RO PASS!");
@@ -1085,7 +1294,18 @@ static int ap_ro_info_cmd(int argc, char **argv)
 	/* All other AP RO verificaiton unsupported reasons are fine */
 	if (rv)
 		return EC_SUCCESS;
-
+	rv = verify_ap_ro_gbb_space();
+	ccprintf("gbbd      : ");
+	if (rv == EC_SUCCESS) {
+		ccprintf("ok (%d)\n", p_chk->gbbd.status);
+		ccprintf("flags     : ");
+		if (p_chk->gbbd.status & GS_FLAGS_IN_HASH)
+			ccprintf("0x%x\n", p_chk->gbbd.injected_flags);
+		else
+			ccprintf("na\n");
+	} else {
+		ccprintf("na (%d)\n", rv);
+	}
 	ccprintf("sha256 hash %ph\n",
 		 HEX_BUF(p_chk->payload.digest, sizeof(p_chk->payload.digest)));
 	ccprintf("Covered ranges:\n");
