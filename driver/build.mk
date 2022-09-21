@@ -1,5 +1,5 @@
 # -*- makefile -*-
-# Copyright 2014 The Chromium OS Authors. All rights reserved.
+# Copyright 2014 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -118,6 +118,9 @@ driver-$(CONFIG_LED_DRIVER_TLC59116F)+=led/tlc59116f.o
 # 7-segment display
 driver-$(CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY)+=led/max695x.o
 
+# Nvidia GPU D-Notify driver
+driver-$(CONFIG_GPU_NVIDIA)+=nvidia_gpu.o
+
 # Voltage regulators
 driver-$(CONFIG_REGULATOR_IR357X)+=regulator_ir357x.o
 
@@ -162,6 +165,7 @@ endif
 driver-$(CONFIG_USB_PD_TCPM_ANX74XX)+=tcpm/anx74xx.o
 driver-$(CONFIG_USB_PD_TCPM_ANX7688)+=tcpm/anx7688.o
 driver-$(CONFIG_USB_PD_TCPM_ANX7447)+=tcpm/anx7447.o
+driver-$(CONFIG_USB_PD_TCPM_PS8745)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_PS8751)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_PS8755)+=tcpm/ps8xxx.o
 driver-$(CONFIG_USB_PD_TCPM_PS8705)+=tcpm/ps8xxx.o

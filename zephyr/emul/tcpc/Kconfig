@@ -1,12 +1,9 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-DT_COMPAT_TCPCI_EMUL := cros,tcpci-emul
-
 menuconfig EMUL_TCPCI
-	bool "TCPCI emulator"
-	default $(dt_compat_enabled,$(DT_COMPAT_TCPCI_EMUL))
+	bool "TCPCI common functionality"
 	depends on I2C_EMUL
 	help
 	  Enable the TCPCI emulator. This driver uses the emulated I2C bus.
@@ -63,13 +60,13 @@ config EMUL_TCPCI_PARTNER_DRP
 	  emulator. API of dual role device emulator is available in
 	  zephyr/include/emul/tcpc/emul_tcpci_partner_drp.h
 
-config EMUL_TCPCI_PARTNER_FAULTY_SNK
-	bool "USB-C malfunctioning sink device emulator"
+config EMUL_TCPCI_PARTNER_FAULTY_EXT
+	bool "USB-C malfunctioning device emulator"
 	select EMUL_TCPCI_PARTNER_COMMON
 	select EMUL_TCPCI_PARTNER_SNK
 	help
-	  Enable USB-C malfunctioning sink device emulator which may be attached
-	  to TCPCI emulator. API of malfunctioning sink device emulator is
-	  available in zephyr/include/emul/tcpc/emul_tcpci_partner_faulty_snk.h
+	  Enable USB-C malfunctioning device emulator which may be attached
+	  to TCPCI emulator. API of malfunctioning device emulator is
+	  available in zephyr/include/emul/tcpc/emul_tcpci_partner_faulty_ext.h
 
 endif # EMUL_TCPCI

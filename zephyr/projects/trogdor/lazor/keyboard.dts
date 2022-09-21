@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -27,7 +27,6 @@
 	kblight {
 		compatible = "cros-ec,kblight-pwm";
 		pwms = <&pwm3 0 PWM_KHZ(10) PWM_POLARITY_NORMAL>;
-		frequency = <10000>;
 		generic-pwm-channel = <0>;
 	};
 };

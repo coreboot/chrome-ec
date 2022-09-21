@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -19,27 +19,25 @@
 #include "util.h"
 
 #define LED_ONE_SEC (1000 / HOOK_TICK_INTERVAL_MS)
-#define BAT_LED_ON	0
-#define BAT_LED_OFF	1
+#define BAT_LED_ON 0
+#define BAT_LED_OFF 1
 
-const enum ec_led_id supported_led_ids[] = {
-	EC_LED_ID_BATTERY_LED
-};
+const enum ec_led_id supported_led_ids[] = { EC_LED_ID_BATTERY_LED };
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
 enum led_color {
 	LED_OFF = 0,
 	LED_RED,
 	LED_BLUE,
-	LED_COLOR_COUNT  /* Number of colors, not a color itself */
+	LED_COLOR_COUNT /* Number of colors, not a color itself */
 };
 
 static void led_set_color(enum led_color color)
 {
 	gpio_set_level(GPIO_EC_LED_R_ODL,
-		(color == LED_RED) ? BAT_LED_ON : BAT_LED_OFF);
+		       (color == LED_RED) ? BAT_LED_ON : BAT_LED_OFF);
 	gpio_set_level(GPIO_EC_LED_B_ODL,
-		(color == LED_BLUE) ? BAT_LED_ON : BAT_LED_OFF);
+		       (color == LED_BLUE) ? BAT_LED_ON : BAT_LED_OFF);
 }
 
 void led_get_brightness_range(enum ec_led_id led_id, uint8_t *brightness_range)
@@ -65,7 +63,6 @@ static void board_led_set_battery(void)
 	static int battery_ticks;
 	enum led_color color = LED_OFF;
 	int period = 0;
-	uint32_t chflags = charge_get_flags();
 
 	battery_ticks++;
 
@@ -105,16 +102,16 @@ static void board_led_set_battery(void)
 		color = LED_BLUE;
 		break;
 	case PWR_STATE_IDLE: /* External power connected in IDLE */
-		if (chflags & CHARGE_FLAG_FORCE_IDLE) {
-			/* Factory mode: Blue 2 sec, Red 2 sec */
-			period = (2 + 2) * LED_ONE_SEC;
-			battery_ticks = battery_ticks % period;
-			if (battery_ticks < 2 * LED_ONE_SEC)
-				color = LED_BLUE;
-			else
-				color = LED_RED;
-		} else
+		color = LED_BLUE;
+		break;
+	case PWR_STATE_FORCED_IDLE:
+		/* Factory mode: Blue 2 sec, Red 2 sec */
+		period = (2 + 2) * LED_ONE_SEC;
+		battery_ticks = battery_ticks % period;
+		if (battery_ticks < 2 * LED_ONE_SEC)
 			color = LED_BLUE;
+		else
+			color = LED_RED;
 		break;
 	default:
 		/* Other states don't alter LED behavior */

@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -23,11 +23,9 @@
 #define LED_TICKS_PER_CYCLE 10
 #define LED_ON_TICKS 5
 
-const enum ec_led_id supported_led_ids[] = {
-	EC_LED_ID_LEFT_LED,
-	EC_LED_ID_RIGHT_LED,
-	EC_LED_ID_POWER_LED
-};
+const enum ec_led_id supported_led_ids[] = { EC_LED_ID_LEFT_LED,
+					     EC_LED_ID_RIGHT_LED,
+					     EC_LED_ID_POWER_LED };
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
@@ -35,13 +33,10 @@ enum led_color {
 	LED_OFF = 0,
 	LED_AMBER,
 	LED_WHITE,
-	LED_COLOR_COUNT  /* Number of colors, not a color itself */
+	LED_COLOR_COUNT /* Number of colors, not a color itself */
 };
 
-enum led_port {
-	LEFT_PORT = 0,
-	RIGHT_PORT
-};
+enum led_port { LEFT_PORT = 0, RIGHT_PORT };
 
 static void led_set_color_battery(int port, enum led_color color)
 {
@@ -51,9 +46,9 @@ static void led_set_color_battery(int port, enum led_color color)
 
 	cbi_get_board_version(&board_ver);
 	amber_led = (port == LEFT_PORT ? GPIO_LED_CHRG_L :
-				 IOEX_C1_CHARGER_LED_AMBER_DB);
+					 IOEX_C1_CHARGER_LED_AMBER_DB);
 	white_led = (port == LEFT_PORT ? GPIO_LED_FULL_L :
-				 IOEX_C1_CHARGER_LED_WHITE_DB);
+					 IOEX_C1_CHARGER_LED_WHITE_DB);
 
 	if ((board_ver >= 2) && (port == RIGHT_PORT)) {
 		led_batt_on_lvl = 1;
@@ -156,16 +151,15 @@ static void set_active_port_color(enum led_color color)
 
 	if (led_auto_control_is_enabled(EC_LED_ID_RIGHT_LED))
 		led_set_color_battery(RIGHT_PORT,
-				(port == RIGHT_PORT) ? color : LED_OFF);
+				      (port == RIGHT_PORT) ? color : LED_OFF);
 	if (led_auto_control_is_enabled(EC_LED_ID_LEFT_LED))
 		led_set_color_battery(LEFT_PORT,
-				(port == LEFT_PORT) ? color : LED_OFF);
+				      (port == LEFT_PORT) ? color : LED_OFF);
 }
 
 static void led_set_battery(void)
 {
 	static int battery_ticks;
-	uint32_t chflags = charge_get_flags();
 
 	battery_ticks++;
 
@@ -177,9 +171,12 @@ static void led_set_battery(void)
 	case PWR_STATE_DISCHARGE:
 		if (led_auto_control_is_enabled(EC_LED_ID_RIGHT_LED)) {
 			if (charge_get_percent() < 10)
-				led_set_color_battery(RIGHT_PORT,
-					(battery_ticks % LED_TICKS_PER_CYCLE
-					 < LED_ON_TICKS) ? LED_WHITE : LED_OFF);
+				led_set_color_battery(
+					RIGHT_PORT,
+					(battery_ticks % LED_TICKS_PER_CYCLE <
+					 LED_ON_TICKS) ?
+						LED_WHITE :
+						LED_OFF);
 			else
 				led_set_color_battery(RIGHT_PORT, LED_OFF);
 		}
@@ -188,19 +185,20 @@ static void led_set_battery(void)
 			led_set_color_battery(LEFT_PORT, LED_OFF);
 		break;
 	case PWR_STATE_ERROR:
-		set_active_port_color((battery_ticks & 0x2) ?
-				LED_WHITE : LED_OFF);
+		set_active_port_color((battery_ticks & 0x2) ? LED_WHITE :
+							      LED_OFF);
 		break;
 	case PWR_STATE_CHARGE_NEAR_FULL:
 		set_active_port_color(LED_WHITE);
 		break;
 	case PWR_STATE_IDLE: /* External power connected in IDLE */
-		if (chflags & CHARGE_FLAG_FORCE_IDLE)
-			set_active_port_color((battery_ticks %
-				LED_TICKS_PER_CYCLE < LED_ON_TICKS) ?
-				LED_AMBER : LED_OFF);
-		else
-			set_active_port_color(LED_WHITE);
+		set_active_port_color(LED_WHITE);
+		break;
+	case PWR_STATE_FORCED_IDLE:
+		set_active_port_color(
+			(battery_ticks % LED_TICKS_PER_CYCLE < LED_ON_TICKS) ?
+				LED_AMBER :
+				LED_OFF);
 		break;
 	default:
 		/* Other states don't alter LED behavior */
@@ -217,9 +215,10 @@ static void led_set_power(void)
 	if (chipset_in_state(CHIPSET_STATE_ON))
 		led_set_color_power(LED_WHITE);
 	else if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND))
-		led_set_color_power((power_tick %
-			LED_TICKS_PER_CYCLE < LED_ON_TICKS) ?
-			LED_WHITE : LED_OFF);
+		led_set_color_power(
+			(power_tick % LED_TICKS_PER_CYCLE < LED_ON_TICKS) ?
+				LED_WHITE :
+				LED_OFF);
 	else
 		led_set_color_power(LED_OFF);
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright 2012 The Chromium OS Authors. All rights reserved.
+# Copyright 2012 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -77,7 +77,7 @@ get_tree_version() {
     # Ex VCSID: 0.0.1-r1519-9b368af6a4943b90941471d0bdf7e7208788f898
     if [[ -n "${VCSID}" ]]; then
       ghash="${VCSID##*-}"
-      vbase="1.1.9999-${ghash:0:7}"
+      vbase="v2.1.9999-${ghash:0:8}"
     else
       # then ultimately fails to "no_version"
       vbase="no_version"
@@ -140,9 +140,11 @@ main() {
       if [[ -n "${values[1]}" ]]; then
         # From each modified repo get the most recently modified file.
         most_recent_file="$(git status --porcelain | \
-                                 awk '$1 ~ /[M|A|?]/ {print $2}' |  \
-                                 xargs ls -t | head -1)"
-        most_recents+=("$(realpath "${most_recent_file}")")
+                                 awk '$1 ~ /[M|A|?]/ {print $2}' | \
+                                 xargs -r ls -t | head -1)"
+        if [[ -n "${most_recent_file}" ]]; then
+          most_recents+=("$(realpath "${most_recent_file}")")
+        fi
       fi
       if [ "${component}" != "." ]; then
       ver+=" ${component}:"

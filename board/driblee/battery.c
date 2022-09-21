@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -638,8 +638,8 @@ const enum battery_type DEFAULT_BATTERY_TYPE = BATTERY_BYD_1VX1H;
 int charger_profile_override(struct charge_state_data *curr)
 {
 	if (chipset_in_state(CHIPSET_STATE_ON)) {
-		curr->requested_current = MIN(curr->requested_current,
-				CHARGING_CURRENT_1100MA);
+		curr->requested_current =
+			MIN(curr->requested_current, CHARGING_CURRENT_1100MA);
 	}
 
 	return 0;

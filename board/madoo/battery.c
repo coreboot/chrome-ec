@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -12,7 +12,7 @@
 #include "extpower.h"
 
 /* Shutdown mode parameter to write to manufacturer access register */
-#define SB_SHUTDOWN_DATA	0x0010
+#define SB_SHUTDOWN_DATA 0x0010
 
 const struct board_batt_params board_battery_info[] = {
 	[BATTERY_SIMPLO_HIGHPOWER] = {

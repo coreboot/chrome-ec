@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -11,7 +11,7 @@
 #include "baseboard.h"
 
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)  /* 512KB internal spi flash */
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024) /* 512KB internal spi flash */
 
 /* Keyboard */
 #define CONFIG_KEYBOARD_PROTOCOL_MKBP
@@ -37,19 +37,16 @@
 #define USB_PORT_COUNT 1
 #define CONFIG_USB_PORT_POWER_DUMB
 
-/* No side volume button */
-#undef CONFIG_VOLUME_BUTTONS
-
 /* Sensors */
 #define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
-/* BMI160 Base accel/gyro */
-#define CONFIG_ACCELGYRO_BMI160
-#define CONFIG_ACCELGYRO_BMI160_INT_EVENT \
+/* BMI323 Base accel/gyro */
+#define CONFIG_ACCELGYRO_BMI3XX
+#define CONFIG_ACCELGYRO_BMI3XX_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
 #define OPT3001_I2C_ADDR_FLAGS OPT3001_I2C_ADDR1_FLAGS
 
-/* BMA253 lid accel */
-#define CONFIG_ACCEL_BMA255
+/* KX022 lid accel */
+#define CONFIG_ACCEL_KX022
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 
 #define CONFIG_LID_ANGLE
@@ -72,17 +69,14 @@
 #define DA9313_PVC_CTRL_PVC_MODE BIT(1)
 #define DA9313_PVC_CTRL_PVC_EN BIT(0)
 
+/* Button Config*/
+#define CONFIG_BUTTONS_RUNTIME_CONFIG
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
 #include "registers.h"
 
-enum adc_channel {
-	ADC_VBUS,
-	ADC_AMON_BMON,
-	ADC_PSYS,
-	ADC_CH_COUNT
-};
+enum adc_channel { ADC_VBUS, ADC_AMON_BMON, ADC_PSYS, ADC_CH_COUNT };
 
 /* Motion sensors */
 enum sensor_id {
@@ -92,11 +86,7 @@ enum sensor_id {
 	SENSOR_COUNT,
 };
 
-enum pwm_channel {
-	PWM_CH_KBLIGHT = 0,
-	PWM_CH_DISPLIGHT,
-	PWM_CH_COUNT
-};
+enum pwm_channel { PWM_CH_KBLIGHT = 0, PWM_CH_DISPLIGHT, PWM_CH_COUNT };
 
 enum battery_type {
 	BATTERY_GANFENG,
@@ -106,6 +96,8 @@ enum battery_type {
 /* Reset all TCPCs. */
 void board_reset_pd_mcu(void);
 void board_set_tcpc_power_mode(int port, int mode);
+int board_is_clamshell(void);
+int board_has_side_volume_buttons(void);
 
 #endif /* !defined(__ASSEMBLER__) */
 

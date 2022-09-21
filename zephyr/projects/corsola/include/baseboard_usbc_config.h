@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,20 +8,19 @@
 #ifndef __CROS_EC_BASEBOARD_USBC_CONFIG_H
 #define __CROS_EC_BASEBOARD_USBC_CONFIG_H
 
+#ifdef CONFIG_PLATFORM_EC_USB_PD_TCPM_RT1718S
+#define GPIO_EN_USB_C1_SINK RT1718S_GPIO1
+#define GPIO_EN_USB_C1_SOURCE RT1718S_GPIO2
+#define GPIO_EN_USB_C1_FRS RT1718S_GPIO3
+#endif
+
 void ppc_interrupt(enum gpio_signal signal);
 
 /* USB-A ports */
-enum usba_port {
-	USBA_PORT_A0 = 0,
-	USBA_PORT_COUNT
-};
+enum usba_port { USBA_PORT_A0 = 0, USBA_PORT_COUNT };
 
 /* USB-C ports */
-enum usbc_port {
-	USBC_PORT_C0 = 0,
-	USBC_PORT_C1,
-	USBC_PORT_COUNT
-};
+enum usbc_port { USBC_PORT_C0 = 0, USBC_PORT_C1, USBC_PORT_COUNT };
 BUILD_ASSERT(USBC_PORT_COUNT == CONFIG_USB_PD_PORT_MAX_COUNT);
 
 /**

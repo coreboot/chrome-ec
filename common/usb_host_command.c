@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,6 +9,7 @@
 #include "ec_commands.h"
 #include "queue_policies.h"
 #include "host_command.h"
+#include "printf.h"
 #include "system.h"
 #include "usb_api.h"
 #include "usb_hw.h"
@@ -16,13 +17,11 @@
 #include "util.h"
 
 #define CPUTS(outstr) cputs(CC_USB, outstr)
-#define CPRINTS(format, args...) cprints(CC_HOSTCMD, "USBHC: " format, ## args)
+#define CPRINTS(format, args...) cprints(CC_HOSTCMD, "USBHC: " format, ##args)
 
 enum usbhc_state {
-	/* Not enabled (initial state, and when chipset is off) */
-	USBHC_STATE_DISABLED = 0,
-	/* Ready to receive next request */
-	USBHC_STATE_READY_TO_RX,
+	/* Initial State - Ready to receive next request */
+	USBHC_STATE_READY_TO_RX = 0,
 	/* Receiving request */
 	USBHC_STATE_RECEIVING,
 	/* Processing request */
@@ -38,26 +37,16 @@ struct producer const hostcmd_producer;
 struct usb_stream_config const usbhc_stream;
 
 /* RX (Host->EC) queue */
-static struct queue const usb_to_hostcmd = QUEUE_DIRECT(64,
-							uint8_t,
-							usbhc_stream.producer,
-							hostcmd_consumer);
+static struct queue const usb_to_hostcmd =
+	QUEUE_DIRECT(64, uint8_t, usbhc_stream.producer, hostcmd_consumer);
 /* TX (EC->Host) queue */
-static struct queue const hostcmd_to_usb = QUEUE_DIRECT(64,
-							uint8_t,
-							hostcmd_producer,
-							usbhc_stream.consumer);
+static struct queue const hostcmd_to_usb =
+	QUEUE_DIRECT(64, uint8_t, hostcmd_producer, usbhc_stream.consumer);
 
-USB_STREAM_CONFIG_FULL(usbhc_stream,
-		       USB_IFACE_HOSTCMD,
-		       USB_CLASS_VENDOR_SPEC,
-		       USB_SUBCLASS_GOOGLE_HOSTCMD,
-		       USB_PROTOCOL_GOOGLE_HOSTCMD,
-		       USB_STR_HOSTCMD_NAME,
-		       USB_EP_HOSTCMD,
-		       USB_MAX_PACKET_SIZE,
-		       USB_MAX_PACKET_SIZE,
-		       usb_to_hostcmd,
+USB_STREAM_CONFIG_FULL(usbhc_stream, USB_IFACE_HOSTCMD, USB_CLASS_VENDOR_SPEC,
+		       USB_SUBCLASS_GOOGLE_HOSTCMD, USB_PROTOCOL_GOOGLE_HOSTCMD,
+		       USB_STR_HOSTCMD_NAME, USB_EP_HOSTCMD,
+		       USB_MAX_PACKET_SIZE, USB_MAX_PACKET_SIZE, usb_to_hostcmd,
 		       hostcmd_to_usb)
 
 static uint8_t in_msg[USBHC_MAX_REQUEST_SIZE];
@@ -94,7 +83,7 @@ static void usbhc_read(struct producer const *producer, size_t count)
 
 struct producer const hostcmd_producer = {
 	.queue = &hostcmd_to_usb,
-	.ops   = &((struct producer_ops const) {
+	.ops = &((struct producer_ops const){
 		.read = usbhc_read,
 	}),
 };
@@ -171,8 +160,13 @@ static void usbhc_written(struct consumer const *consumer, size_t count)
 		block_index = 0;
 		/* Only version 3 is supported. Using in_msg as a courtesy. */
 		QUEUE_REMOVE_UNITS(consumer->queue, in_msg, count);
-		if (IS_ENABLED(DEBUG))
-			CPRINTS("%ph", HEX_BUF(in_msg, count));
+		if (IS_ENABLED(DEBUG)) {
+			char str_buf[hex_str_buf_size(count)];
+
+			snprintf_hex_buffer(str_buf, sizeof(str_buf),
+					    HEX_BUF(in_msg, count));
+			CPRINTS("%s", str_buf);
+		}
 		if (in_msg[0] != EC_HOST_REQUEST_VERSION) {
 			CPRINTS("Unsupported version: %u", in_msg[0]);
 			return;
@@ -206,7 +200,6 @@ static void usbhc_written(struct consumer const *consumer, size_t count)
 		return;
 	case USBHC_STATE_PROCESSING:
 	case USBHC_STATE_SENDING:
-	case USBHC_STATE_DISABLED:
 		/*
 		 * Take no action and return though we may have resource to
 		 * receive a new request. Host will get a buffer full error or
@@ -229,7 +222,7 @@ static void usbhc_written(struct consumer const *consumer, size_t count)
 	block_index += count;
 
 	if (block_index < expected_size)
-		return;	/* More to come. */
+		return; /* More to come. */
 
 	if (IS_ENABLED(DEBUG))
 		CPRINTS("Rx complete (%d bytes)", block_index);
@@ -247,13 +240,13 @@ static void usbhc_written(struct consumer const *consumer, size_t count)
 
 struct consumer const hostcmd_consumer = {
 	.queue = &usb_to_hostcmd,
-	.ops   = &((struct consumer_ops const) {
+	.ops = &((struct consumer_ops const){
 		.written = usbhc_written,
 	}),
 };
 
-static enum ec_status host_command_protocol_info(
-		struct host_cmd_handler_args *args)
+static enum ec_status
+host_command_protocol_info(struct host_cmd_handler_args *args)
 {
 	struct ec_response_get_protocol_info *r = args->response;
 
@@ -267,6 +260,5 @@ static enum ec_status host_command_protocol_info(
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO,
-		     host_command_protocol_info,
+DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO, host_command_protocol_info,
 		     EC_VER_MASK(0));

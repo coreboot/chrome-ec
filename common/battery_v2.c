@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -15,8 +15,8 @@
 #include "printf.h"
 #include "util.h"
 
-#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
 
 /*
  * Store battery information in these 2 structures. Main (lid) battery is always
@@ -135,8 +135,7 @@ host_command_battery_get_static(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_BATTERY_GET_STATIC,
-		     host_command_battery_get_static,
+DECLARE_HOST_COMMAND(EC_CMD_BATTERY_GET_STATIC, host_command_battery_get_static,
 		     EC_VER_MASK(0) | EC_VER_MASK(1));
 
 static enum ec_status
@@ -154,8 +153,7 @@ host_command_battery_get_dynamic(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_BATTERY_GET_DYNAMIC,
-		     host_command_battery_get_dynamic,
-		     EC_VER_MASK(0));
+		     host_command_battery_get_dynamic, EC_VER_MASK(0));
 #endif /* CONFIG_HOSTCMD_BATTERY_V2 */
 
 void battery_memmap_refresh(enum battery_index index)
@@ -222,8 +220,9 @@ int update_static_battery_info(void)
 	/* Smart battery serial number is 16 bits */
 	rv = battery_serial_number(&batt_serial);
 	if (!rv)
-		snprintf(bs->serial_ext, sizeof(bs->serial_ext),
-			 "%04X", batt_serial);
+		if (snprintf(bs->serial_ext, sizeof(bs->serial_ext), "%04X",
+			     batt_serial) <= 0)
+			rv |= EC_ERROR_UNKNOWN;
 
 	/* Design Capacity of Full */
 	ret = battery_design_capacity(&val);
@@ -344,29 +343,31 @@ void update_dynamic_battery_info(void)
 		 * to Chrome OS powerd.
 		 */
 		if (curr->batt.remaining_capacity == 0 &&
-				!curr->batt_is_charging)
+		    !curr->batt_is_charging)
 			bd->remaining_capacity = 1;
 		else
 			bd->remaining_capacity = curr->batt.remaining_capacity;
 	}
 
 	if (!(curr->batt.flags & BATT_FLAG_BAD_FULL_CAPACITY) &&
-		(curr->batt.full_capacity <=
-			(bd->full_capacity - LFCC_EVENT_THRESH) ||
-		 curr->batt.full_capacity >=
-			(bd->full_capacity + LFCC_EVENT_THRESH))) {
+	    (curr->batt.full_capacity <=
+		     (bd->full_capacity - LFCC_EVENT_THRESH) ||
+	     curr->batt.full_capacity >=
+		     (bd->full_capacity + LFCC_EVENT_THRESH))) {
 		bd->full_capacity = curr->batt.full_capacity;
 		/* Poke the AP if the full_capacity changes. */
 		send_batt_info_event++;
 	}
 
 	if (curr->batt.is_present == BP_YES &&
-	    !(curr->batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE) &&
-	    curr->batt.state_of_charge <= BATTERY_LEVEL_CRITICAL)
+	    battery_is_below_threshold(BATT_THRESHOLD_TYPE_SHUTDOWN, false))
 		tmp |= EC_BATT_FLAG_LEVEL_CRITICAL;
 
 	tmp |= curr->batt_is_charging ? EC_BATT_FLAG_CHARGING :
-				       EC_BATT_FLAG_DISCHARGING;
+					EC_BATT_FLAG_DISCHARGING;
+
+	if (battery_is_cut_off())
+		tmp |= EC_BATT_FLAG_CUT_OFF;
 
 	/* Tell the AP to re-read battery status if charge state changes */
 	if (bd->flags != tmp)

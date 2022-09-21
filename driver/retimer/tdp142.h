@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -20,11 +20,11 @@
 #define TDP142_I2C_ADDR3 0x0F
 
 /* Registers */
-#define TDP142_REG_GENERAL		0x0A
-#define TDP142_GENERAL_CTLSEL		GENMASK(1, 0)
-#define TDP142_GENERAL_HPDIN_OVRRIDE	BIT(3)
-#define TDP142_GENERAL_EQ_OVERRIDE	BIT(4)
-#define TDP142_GENERAL_SWAP_HPDIN	BIT(5)
+#define TDP142_REG_GENERAL 0x0A
+#define TDP142_GENERAL_CTLSEL GENMASK(1, 0)
+#define TDP142_GENERAL_HPDIN_OVRRIDE BIT(3)
+#define TDP142_GENERAL_EQ_OVERRIDE BIT(4)
+#define TDP142_GENERAL_SWAP_HPDIN BIT(5)
 
 enum tdp142_ctlsel {
 	TDP142_CTLSEL_SHUTDOWN,

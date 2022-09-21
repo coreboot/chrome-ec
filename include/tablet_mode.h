@@ -1,4 +1,4 @@
-/* Copyright 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -14,8 +14,8 @@
 int tablet_get_mode(void);
 
 /* Bit mask of tablet mode trigger */
-#define TABLET_TRIGGER_LID	BIT(0)
-#define TABLET_TRIGGER_BASE	BIT(1)
+#define TABLET_TRIGGER_LID BIT(0)
+#define TABLET_TRIGGER_BASE BIT(1)
 
 /**
  * Set tablet mode state
@@ -56,4 +56,7 @@ void gmr_tablet_switch_disable(void);
  */
 int board_sensor_at_360(void);
 
-#endif  /* __CROS_EC_TABLET_MODE_H */
+/** Reset internal tablet mode state, used for testing. */
+__test_only void tablet_reset(void);
+
+#endif /* __CROS_EC_TABLET_MODE_H */

@@ -1,11 +1,10 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
  * Test peripheral device charger module.
  */
 
-#define HIDE_EC_STDLIB
 #include "common.h"
 #include "compile_time_macros.h"
 #include "driver/nfc/ctn730.h"
@@ -40,15 +39,15 @@ static pthread_cond_t done_cond;
 static pthread_mutex_t lock;
 
 #define MAX_MESSAGES 8
-#define MAX_MESSAGE_SIZE (sizeof(struct ctn730_msg) \
-			  + member_size(struct ctn730_msg, length) * 256)
+#define MAX_MESSAGE_SIZE             \
+	(sizeof(struct ctn730_msg) + \
+	 member_size(struct ctn730_msg, length) * 256)
 static uint8_t input[MAX_MESSAGE_SIZE * MAX_MESSAGES];
 static uint8_t *head, *tail;
 static bool data_available;
 
-int pchg_i2c_xfer(int port, uint16_t addr_flags,
-		  const uint8_t *out, int out_size,
-		  uint8_t *in, int in_size, int flags)
+int pchg_i2c_xfer(int port, uint16_t addr_flags, const uint8_t *out,
+		  int out_size, uint8_t *in, int in_size, int flags)
 {
 	if (port != I2C_PORT_WLC || addr_flags != CTN730_I2C_ADDR)
 		return EC_ERROR_INVAL;
@@ -92,10 +91,9 @@ void irq_task(int argc, char **argv)
 		pthread_cond_signal(&done_cond);
 		pthread_mutex_unlock(&lock);
 	}
-
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	ccprints("Fuzzing task started");
 	task_wait_event(-1);

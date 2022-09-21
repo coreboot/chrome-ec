@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -26,8 +26,8 @@ static int td_pd_ll_e5(enum pd_data_role data_role)
 	/*
 	 * a) Run PROC.PD.E1 Bring-up according to the UUT role.
 	 */
-	TEST_EQ(proc_pd_e1(data_role, INITIAL_AND_ALREADY_ATTACHED),
-		EC_SUCCESS, "%d");
+	TEST_EQ(proc_pd_e1(data_role, INITIAL_AND_ALREADY_ATTACHED), EC_SUCCESS,
+		"%d");
 
 	/*
 	 * Make sure we are idle. Reject everything that is pending

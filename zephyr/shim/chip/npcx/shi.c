@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,7 +9,7 @@
 #include <zephyr/dt-bindings/clock/npcx_clock.h>
 #include <zephyr/logging/log.h>
 #include <soc.h>
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 
 #include <ap_power/ap_power.h>
 #include "chipset.h"
@@ -83,12 +83,11 @@ static void shi_init(void)
 	ap_power_ev_init_callback(&cb, shi_power_change,
 #if CONFIG_PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
 				  AP_POWER_RESUME_INIT |
-				  AP_POWER_SUSPEND_COMPLETE
+					  AP_POWER_SUSPEND_COMPLETE
 #else
-				  AP_POWER_RESUME |
-				  AP_POWER_SUSPEND
+				  AP_POWER_RESUME | AP_POWER_SUSPEND
 #endif
-				  );
+	);
 	ap_power_ev_add_callback(&cb);
 
 	if (IS_ENABLED(CONFIG_CROS_SHI_NPCX_DEBUG) ||

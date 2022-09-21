@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -27,6 +27,7 @@
 /* Charger */
 #define CONFIG_CHARGE_RAMP_HW
 #define CONFIG_CHARGER_RAA489000
+#define PD_MAX_VOLTAGE_MV 20000
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE
@@ -42,13 +43,13 @@
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 
-#define CONFIG_ACCEL_LIS2DWL		/* Lid accel */
-#define CONFIG_ACCELGYRO_LSM6DSM    /* Base accel */
+#define CONFIG_ACCEL_LIS2DWL /* Lid accel */
+#define CONFIG_ACCELGYRO_LSM6DSM /* Base accel */
 
 /* Lid operates in forced mode, base in FIFO */
 #define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
 #define CONFIG_ACCEL_FIFO
-#define CONFIG_ACCEL_FIFO_SIZE 256	/* Must be a power of 2 */
+#define CONFIG_ACCEL_FIFO_SIZE 256 /* Must be a power of 2 */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
 
 #define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
@@ -112,12 +113,7 @@ enum pwm_channel {
 };
 
 /* Motion sensors */
-enum sensor_id {
-	LID_ACCEL,
-	BASE_ACCEL,
-	BASE_GYRO,
-	SENSOR_COUNT
-};
+enum sensor_id { LID_ACCEL, BASE_ACCEL, BASE_GYRO, SENSOR_COUNT };
 
 /* ADC channels */
 enum adc_channel {

@@ -1,5 +1,4 @@
-/* Copyright 2016, Google Inc.
- * All rights reserved.
+/* Copyright 2016 Google LLC
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -11,7 +10,7 @@
  *      copyright notice, this list of conditions and the following
  *      disclaimer in the documentation and/or other materials provided
  *      with the distribution.
- *    * Neither the name of Google Inc. nor the names of its
+ *    * Neither the name of Google LLC nor the names of its
  *      contributors may be used to endorse or promote products derived
  *      from this software without specific prior written permission.
  *
@@ -59,7 +58,7 @@
 #include "ipc_lock.h"
 #include "locks.h"
 
-#define SLEEP_INTERVAL_MS	50
+#define SLEEP_INTERVAL_MS 50
 
 static void msecs_to_timespec(int msecs, struct timespec *tmspec)
 {
@@ -100,8 +99,8 @@ static int file_lock_open_or_create(struct ipc_lock *lock)
 		if (!tmpdir)
 			return -1;
 
-		if (snprintf(path, sizeof(path), "%s/%s",
-				tmpdir, lock->filename) < 0) {
+		if (snprintf(path, sizeof(path), "%s/%s", tmpdir,
+			     lock->filename) < 0) {
 			return -1;
 		}
 	} else {
@@ -115,10 +114,9 @@ static int file_lock_open_or_create(struct ipc_lock *lock)
 				return -1;
 		}
 
-		if (snprintf(path, sizeof(path),
-			"%s/%s", dir, lock->filename) < 0)
+		if (snprintf(path, sizeof(path), "%s/%s", dir, lock->filename) <
+		    0)
 			return -1;
-
 	}
 
 	lock->fd = open(path, O_RDWR | O_CREAT, 0600);
@@ -180,9 +178,9 @@ static int file_lock_write_pid(struct ipc_lock *lock)
 {
 	ssize_t len;
 	/*
-         * PIDs are usually 5 digits, but we'll reserve enough room for
+	 * PIDs are usually 5 digits, but we'll reserve enough room for
 	 * a value of 2^32 (10 digits) out of paranoia.
-         */
+	 */
 	char pid_str[11];
 
 	if (ftruncate(lock->fd, 0) < 0) {

@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,10 +16,11 @@
 LOG_MODULE_REGISTER(syv682x);
 #include <stdint.h>
 #include <string.h>
-#include <ztest.h>
+#include <zephyr/ztest.h>
 
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_syv682x.h"
+#include "emul/emul_stub_device.h"
 
 #define EMUL_REG_COUNT (SYV682X_CONTROL_4_REG + 1)
 #define EMUL_REG_IS_VALID(reg) (reg >= 0 && reg < EMUL_REG_COUNT)
@@ -53,29 +54,18 @@ struct syv682x_emul_cfg {
 	const struct i2c_common_emul_cfg common;
 };
 
-/* Gets the SYV682x data struct that contains an I2C emulator struct. */
-static struct syv682x_emul_data *
-i2c_emul_to_syv682x_emul_data(const struct i2c_emul *emul)
-{
-	struct i2c_common_emul_data *i2c_common_data =
-		CONTAINER_OF(emul, struct i2c_common_emul_data, emul);
-	struct syv682x_emul_data *syv682x_data =
-		CONTAINER_OF(i2c_common_data, struct syv682x_emul_data, common);
-	return syv682x_data;
-}
-
 /* Asserts or deasserts the interrupt signal to the EC. */
 static void syv682x_emul_set_alert(struct syv682x_emul_data *data, bool alert)
 {
 	int res = gpio_emul_input_set(data->alert_gpio_port,
-			/* The signal is inverted. */
-			data->alert_gpio_pin, !alert);
+				      /* The signal is inverted. */
+				      data->alert_gpio_pin, !alert);
 	__ASSERT_NO_MSG(res == 0);
 }
 
-int syv682x_emul_set_reg(struct i2c_emul *emul, int reg, uint8_t val)
+int syv682x_emul_set_reg(const struct emul *emul, int reg, uint8_t val)
 {
-	struct syv682x_emul_data *data = i2c_emul_to_syv682x_emul_data(emul);
+	struct syv682x_emul_data *data = emul->data;
 
 	if (!EMUL_REG_IS_VALID(reg))
 		return -EIO;
@@ -85,13 +75,13 @@ int syv682x_emul_set_reg(struct i2c_emul *emul, int reg, uint8_t val)
 	return 0;
 }
 
-void syv682x_emul_set_condition(struct i2c_emul *emul, uint8_t status,
-		uint8_t control_4)
+void syv682x_emul_set_condition(const struct emul *emul, uint8_t status,
+				uint8_t control_4)
 {
 	uint8_t control_4_interrupt = control_4 & SYV682X_CONTROL_4_INT_MASK;
-	struct syv682x_emul_data *data = i2c_emul_to_syv682x_emul_data(emul);
+	struct syv682x_emul_data *data = emul->data;
 	int frs_en_gpio = gpio_emul_output_get(data->frs_en_gpio_port,
-			data->frs_en_gpio_pin);
+					       data->frs_en_gpio_pin);
 
 	__ASSERT_NO_MSG(frs_en_gpio >= 0);
 
@@ -108,8 +98,8 @@ void syv682x_emul_set_condition(struct i2c_emul *emul, uint8_t status,
 	data->reg[SYV682X_CONTROL_4_REG] |= control_4_interrupt;
 
 	/* These conditions disable the power path. */
-	if (status & (SYV682X_STATUS_TSD | SYV682X_STATUS_OVP |
-				SYV682X_STATUS_OC_HV)) {
+	if (status &
+	    (SYV682X_STATUS_TSD | SYV682X_STATUS_OVP | SYV682X_STATUS_OC_HV)) {
 		data->reg[SYV682X_CONTROL_1_REG] |= SYV682X_CONTROL_1_PWR_ENB;
 	}
 
@@ -123,18 +113,17 @@ void syv682x_emul_set_condition(struct i2c_emul *emul, uint8_t status,
 
 	/* VBAT_OVP disconnects CC and VCONN. */
 	if (control_4_interrupt & SYV682X_CONTROL_4_VBAT_OVP) {
-		data->reg[SYV682X_CONTROL_4_REG] &= ~(SYV682X_CONTROL_4_CC1_BPS
-				| SYV682X_CONTROL_4_CC2_BPS
-				| SYV682X_CONTROL_4_VCONN1
-				| SYV682X_CONTROL_4_VCONN2);
+		data->reg[SYV682X_CONTROL_4_REG] &= ~(
+			SYV682X_CONTROL_4_CC1_BPS | SYV682X_CONTROL_4_CC2_BPS |
+			SYV682X_CONTROL_4_VCONN1 | SYV682X_CONTROL_4_VCONN2);
 	}
 
 	syv682x_emul_set_alert(data, status | control_4_interrupt);
 }
 
-void syv682x_emul_set_busy_reads(struct i2c_emul *emul, int reads)
+void syv682x_emul_set_busy_reads(const struct emul *emul, int reads)
 {
-	struct syv682x_emul_data *data = i2c_emul_to_syv682x_emul_data(emul);
+	struct syv682x_emul_data *data = emul->data;
 	data->busy_read_count = reads;
 	if (reads)
 		data->reg[SYV682X_CONTROL_3_REG] |= SYV682X_BUSY;
@@ -142,9 +131,9 @@ void syv682x_emul_set_busy_reads(struct i2c_emul *emul, int reads)
 		data->reg[SYV682X_CONTROL_3_REG] &= ~SYV682X_BUSY;
 }
 
-int syv682x_emul_get_reg(struct i2c_emul *emul, int reg, uint8_t *val)
+int syv682x_emul_get_reg(const struct emul *emul, int reg, uint8_t *val)
 {
-	struct syv682x_emul_data *data = i2c_emul_to_syv682x_emul_data(emul);
+	struct syv682x_emul_data *data = emul->data;
 
 	if (!EMUL_REG_IS_VALID(reg))
 		return -EIO;
@@ -154,10 +143,10 @@ int syv682x_emul_get_reg(struct i2c_emul *emul, int reg, uint8_t *val)
 	return 0;
 }
 
-static int syv682x_emul_write_byte(struct i2c_emul *emul, int reg, uint8_t val,
-				   int bytes)
+static int syv682x_emul_write_byte(const struct emul *emul, int reg,
+				   uint8_t val, int bytes)
 {
-	struct syv682x_emul_data *data = i2c_emul_to_syv682x_emul_data(emul);
+	struct syv682x_emul_data *data = emul->data;
 
 	zassert_equal(bytes, 1, "Write: bytes == %i at offset 0x%x", bytes,
 		      reg);
@@ -183,10 +172,10 @@ static int syv682x_emul_write_byte(struct i2c_emul *emul, int reg, uint8_t val,
 	return syv682x_emul_set_reg(emul, reg, val);
 }
 
-static int syv682x_emul_read_byte(struct i2c_emul *emul, int reg, uint8_t *val,
-				  int bytes)
+static int syv682x_emul_read_byte(const struct emul *emul, int reg,
+				  uint8_t *val, int bytes)
 {
-	struct syv682x_emul_data *data = i2c_emul_to_syv682x_emul_data(emul);
+	struct syv682x_emul_data *data = emul->data;
 	int ret = syv682x_emul_get_reg(emul, reg, val);
 
 	zassert_equal(bytes, 0, "Read: bytes == %i at offset 0x%x", bytes, reg);
@@ -220,8 +209,10 @@ static int syv682x_emul_read_byte(struct i2c_emul *emul, int reg, uint8_t *val,
 	return ret;
 }
 
-static void syv682x_emul_reset(struct syv682x_emul_data *data)
+static void syv682x_emul_reset(const struct emul *emul)
 {
+	struct syv682x_emul_data *data = emul->data;
+
 	memset(data->reg, 0, sizeof(data->reg));
 
 	syv682x_emul_set_alert(data, false);
@@ -244,26 +235,19 @@ static void syv682x_emul_reset(struct syv682x_emul_data *data)
  * @return 0 on success or an error code on failure
  */
 static int syv682x_emul_init(const struct emul *emul,
-			  const struct device *parent)
+			     const struct device *parent)
 {
-	const struct syv682x_emul_cfg *cfg = emul->cfg;
 	struct syv682x_emul_data *data = emul->data;
 
-	data->cfg = cfg;
-
-	data->common.emul.api = &i2c_common_emul_api;
-	data->common.emul.addr = cfg->common.addr;
-	data->common.emul.parent = emul;
 	data->common.i2c = parent;
-	data->common.cfg = &cfg->common;
 	i2c_common_emul_init(&data->common);
 
-	syv682x_emul_reset(data);
-	return i2c_emul_register(parent, emul->dev_label, &data->common.emul);
+	syv682x_emul_reset(emul);
+	return 0;
 }
 
 /* Device instantiation */
-#define SYV682X_EMUL(n)                                                        \
+#define SYV682X_EMUL(n)                                                          \
 	static struct syv682x_emul_data syv682x_emul_data_##n = {              \
 		.common = {                                                    \
 			.write_byte = syv682x_emul_write_byte,                 \
@@ -277,36 +261,23 @@ static int syv682x_emul_init(const struct emul *emul,
 					DT_INST_PROP(n, alert_gpio), gpios)),  \
 		.alert_gpio_pin = DT_GPIO_PIN(                                 \
 				DT_INST_PROP(n, alert_gpio), gpios),           \
-	};                                                                     \
+	}; \
 	static const struct syv682x_emul_cfg syv682x_emul_cfg_##n = {          \
 		.common = {                                                    \
-			.i2c_label = DT_INST_BUS_LABEL(n),                     \
-			.dev_label = DT_INST_LABEL(n),                         \
+			.dev_label = DT_NODE_FULL_NAME(DT_DRV_INST(n)),        \
 			.addr = DT_INST_REG_ADDR(n),                           \
 		},                                                             \
-	};                                                                     \
-	EMUL_DEFINE(syv682x_emul_init, DT_DRV_INST(n), &syv682x_emul_cfg_##n,  \
-		    &syv682x_emul_data_##n)
+	}; \
+	EMUL_DT_INST_DEFINE(n, syv682x_emul_init, &syv682x_emul_data_##n,        \
+			    &syv682x_emul_cfg_##n, &i2c_common_emul_api)
 
 DT_INST_FOREACH_STATUS_OKAY(SYV682X_EMUL)
 
-#define SYV682X_EMUL_CASE(n) \
-	case DT_INST_DEP_ORD(n): return &syv682x_emul_data_##n.common.emul;
-
-
-struct i2c_emul *syv682x_emul_get(int ord)
-{
-	switch (ord) {
-	DT_INST_FOREACH_STATUS_OKAY(SYV682X_EMUL_CASE)
-
-	default:
-		return NULL;
-	}
-}
-
 #ifdef CONFIG_ZTEST_NEW_API
+
 #define SYV682X_EMUL_RESET_RULE_BEFORE(n) \
-	syv682x_emul_reset(&syv682x_emul_data_##n);
+	syv682x_emul_reset(EMUL_DT_GET(DT_DRV_INST(n)));
+
 static void emul_syv682x_reset_before(const struct ztest_unit_test *test,
 				      void *data)
 {
@@ -316,3 +287,11 @@ static void emul_syv682x_reset_before(const struct ztest_unit_test *test,
 }
 ZTEST_RULE(emul_syv682x_reset, emul_syv682x_reset_before, NULL);
 #endif /* CONFIG_ZTEST_NEW_API */
+
+DT_INST_FOREACH_STATUS_OKAY(EMUL_STUB_DEVICE);
+
+struct i2c_common_emul_data *
+emul_syv682x_get_i2c_common_data(const struct emul *emul)
+{
+	return emul->data;
+}

@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -123,7 +123,7 @@ static const struct cros_rtc_xec_config cros_rtc_xec_cfg_0 = {
 
 static struct cros_rtc_xec_data cros_rtc_xec_data_0;
 
-DEVICE_DT_INST_DEFINE(0, cros_rtc_xec_init, NULL,
-		      &cros_rtc_xec_data_0, &cros_rtc_xec_cfg_0, POST_KERNEL,
+DEVICE_DT_INST_DEFINE(0, cros_rtc_xec_init, NULL, &cros_rtc_xec_data_0,
+		      &cros_rtc_xec_cfg_0, POST_KERNEL,
 		      CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		      &cros_rtc_xec_driver_api);

@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -133,6 +133,6 @@ BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == CONFIG_USB_PD_PORT_MAX_COUNT);
 
 /* SPI devices */
 const struct spi_device_t spi_devices[] = {
-	{ QMSPI0_PORT, 4, GPIO_QMSPI_CS0},
+	{ QMSPI0_PORT, 4, GPIO_QMSPI_CS0 },
 };
 const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);

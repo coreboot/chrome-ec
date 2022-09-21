@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -35,8 +35,8 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
 /* USBC TCPC configuration */
 const struct tcpc_config_t tcpc_config[] = {
@@ -85,21 +85,25 @@ struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		.i2c_port = I2C_PORT_USB_C0_C1_PPC,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.frs_en = IOEX_USB_C0_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C1] = {
 		.i2c_port = I2C_PORT_USB_C0_C1_PPC,
 		.i2c_addr_flags = SYV682X_ADDR1_FLAGS,
+		.frs_en = IOEX_USB_C1_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C2] = {
 		.i2c_port = I2C_PORT_USB_C2_C3_PPC,
 		.i2c_addr_flags = SYV682X_ADDR2_FLAGS,
+		.frs_en = IOEX_USB_C2_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 	[USBC_PORT_C3] = {
 		.i2c_port = I2C_PORT_USB_C2_C3_PPC,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.frs_en = IOEX_USB_C3_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 };
@@ -110,63 +114,84 @@ unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 struct ppc_config_t ppc_chips_old_c3 = {
 	.i2c_port = I2C_PORT_USB_C2_C3_PPC,
 	.i2c_addr_flags = SYV682X_ADDR3_FLAGS,
+	.frs_en = IOEX_USB_C3_FRS_EN,
 	.drv = &syv682x_drv,
 };
 
 /* USBC mux configuration - Alder Lake includes internal mux */
-static const struct usb_mux usbc0_tcss_usb_mux = {
-	.usb_port = USBC_PORT_C0,
-	.driver = &virtual_usb_mux_driver,
-	.hpd_update = &virtual_hpd_update,
+static const struct usb_mux_chain usbc0_tcss_usb_mux = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C0,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
 };
-static const struct usb_mux usbc1_tcss_usb_mux = {
-	.usb_port = USBC_PORT_C1,
-	.driver = &virtual_usb_mux_driver,
-	.hpd_update = &virtual_hpd_update,
+static const struct usb_mux_chain usbc1_tcss_usb_mux = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C1,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
 };
-static const struct usb_mux usbc2_tcss_usb_mux = {
-	.usb_port = USBC_PORT_C2,
-	.driver = &virtual_usb_mux_driver,
-	.hpd_update = &virtual_hpd_update,
+static const struct usb_mux_chain usbc2_tcss_usb_mux = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C2,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
 };
-static const struct usb_mux usbc3_tcss_usb_mux = {
-	.usb_port = USBC_PORT_C3,
-	.driver = &virtual_usb_mux_driver,
-	.hpd_update = &virtual_hpd_update,
+static const struct usb_mux_chain usbc3_tcss_usb_mux = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C3,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
 };
 
-const struct usb_mux usb_muxes[] = {
+const struct usb_mux_chain usb_muxes[] = {
 	[USBC_PORT_C0] = {
-		.usb_port = USBC_PORT_C0,
-		.driver = &bb_usb_retimer,
-		.hpd_update = bb_retimer_hpd_update,
-		.i2c_port = I2C_PORT_USB_C0_C1_MUX,
-		.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
-		.next_mux = &usbc0_tcss_usb_mux,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C0,
+			.driver = &bb_usb_retimer,
+			.hpd_update = bb_retimer_hpd_update,
+			.i2c_port = I2C_PORT_USB_C0_C1_MUX,
+			.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
+		},
+		.next = &usbc0_tcss_usb_mux,
 	},
 	[USBC_PORT_C1] = {
-		.usb_port = USBC_PORT_C1,
-		.driver = &bb_usb_retimer,
-		.hpd_update = bb_retimer_hpd_update,
-		.i2c_port = I2C_PORT_USB_C0_C1_MUX,
-		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
-		.next_mux = &usbc1_tcss_usb_mux,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C1,
+			.driver = &bb_usb_retimer,
+			.hpd_update = bb_retimer_hpd_update,
+			.i2c_port = I2C_PORT_USB_C0_C1_MUX,
+			.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
+		},
+		.next = &usbc1_tcss_usb_mux,
 	},
 	[USBC_PORT_C2] = {
-		.usb_port = USBC_PORT_C2,
-		.driver = &bb_usb_retimer,
-		.hpd_update = bb_retimer_hpd_update,
-		.i2c_port = I2C_PORT_USB_C2_C3_MUX,
-		.i2c_addr_flags = USBC_PORT_C2_BB_RETIMER_I2C_ADDR,
-		.next_mux = &usbc2_tcss_usb_mux,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C2,
+			.driver = &bb_usb_retimer,
+			.hpd_update = bb_retimer_hpd_update,
+			.i2c_port = I2C_PORT_USB_C2_C3_MUX,
+			.i2c_addr_flags = USBC_PORT_C2_BB_RETIMER_I2C_ADDR,
+		},
+		.next = &usbc2_tcss_usb_mux,
 	},
 	[USBC_PORT_C3] = {
-		.usb_port = USBC_PORT_C3,
-		.driver = &bb_usb_retimer,
-		.hpd_update = bb_retimer_hpd_update,
-		.i2c_port = I2C_PORT_USB_C2_C3_MUX,
-		.i2c_addr_flags = USBC_PORT_C3_BB_RETIMER_I2C_ADDR,
-		.next_mux = &usbc3_tcss_usb_mux,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C3,
+			.driver = &bb_usb_retimer,
+			.hpd_update = bb_retimer_hpd_update,
+			.i2c_port = I2C_PORT_USB_C2_C3_MUX,
+			.i2c_addr_flags = USBC_PORT_C3_BB_RETIMER_I2C_ADDR,
+		},
+		.next = &usbc3_tcss_usb_mux,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
@@ -253,8 +278,8 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	}
 
 	if (voltage < BC12_MIN_VOLTAGE) {
-		CPRINTS("%s: port %d: vbus %d lower than %d", __func__,
-			port, voltage, BC12_MIN_VOLTAGE);
+		CPRINTS("%s: port %d: vbus %d lower than %d", __func__, port,
+			voltage, BC12_MIN_VOLTAGE);
 		return 1;
 	}
 

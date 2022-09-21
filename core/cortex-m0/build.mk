@@ -1,22 +1,10 @@
 # -*- makefile -*-
-# Copyright 2014 The Chromium OS Authors. All rights reserved.
+# Copyright 2014 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
 # Cortex-M0 core OS files build
 #
-
-ifeq ($(cc-name),gcc)
-# coreboot sdk
-CROSS_COMPILE_ARM_DEFAULT:=/opt/coreboot-sdk/bin/arm-eabi-
-else
-# llvm sdk
-CROSS_COMPILE_ARM_DEFAULT:=arm-none-eabi-
-endif
-
-$(call set-option,CROSS_COMPILE,\
-	$(CROSS_COMPILE_arm),\
-	$(CROSS_COMPILE_ARM_DEFAULT))
 
 # CPU specific compilation flags
 CFLAGS_CPU+=-mthumb

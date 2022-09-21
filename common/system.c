@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -41,17 +41,17 @@
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_SYSTEM, outstr)
-#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
 
 /* Round up to a multiple of 4 */
 #define ROUNDUP4(x) (((x) + 3) & ~3)
 
 /* Data for an individual jump tag */
 struct jump_tag {
-	uint16_t tag;		/* Tag ID */
-	uint8_t data_size;	/* Size of data which follows */
-	uint8_t data_version;	/* Data version */
+	uint16_t tag; /* Tag ID */
+	uint8_t data_size; /* Size of data which follows */
+	uint8_t data_version; /* Data version */
 
 	/* Followed by data_size bytes of data */
 };
@@ -59,10 +59,10 @@ struct jump_tag {
 /* Jump data (at end of RAM, or preceding panic data) */
 static struct jump_data *jdata;
 
-static uint32_t reset_flags;  /* EC_RESET_FLAG_* */
+static uint32_t reset_flags; /* EC_RESET_FLAG_* */
 static int jumped_to_image;
-static int disable_jump;  /* Disable ALL jumps if system is locked */
-static int force_locked;  /* Force system locked even if WP isn't enabled */
+static int disable_jump; /* Disable ALL jumps if system is locked */
+static int force_locked; /* Force system locked even if WP isn't enabled */
 static enum ec_reboot_cmd reboot_at_shutdown;
 
 static enum sysinfo_flags system_info_flags;
@@ -83,8 +83,8 @@ static uint32_t ap_sku_id;
 
 #ifdef CONFIG_HOSTCMD_AP_SET_SKUID
 
-#define AP_SKUID_SYSJUMP_TAG		0x4153 /* AS */
-#define AP_SKUID_HOOK_VERSION		1
+#define AP_SKUID_SYSJUMP_TAG 0x4153 /* AS */
+#define AP_SKUID_HOOK_VERSION 1
 
 /**
  * Preserve AP SKUID across a sysjump.
@@ -109,7 +109,7 @@ static void ap_sku_id_restore_state(void)
 		AP_SKUID_SYSJUMP_TAG, &version, &size);
 
 	if (prev_ap_sku_id && version == AP_SKUID_HOOK_VERSION &&
-		size == sizeof(prev_ap_sku_id)) {
+	    size == sizeof(prev_ap_sku_id)) {
 		memcpy(&ap_sku_id, prev_ap_sku_id, sizeof(ap_sku_id));
 	}
 }
@@ -271,8 +271,8 @@ static void print_reset_flags(uint32_t flags)
 {
 	int count = 0;
 	int i;
-	static const char * const reset_flag_descs[] = {
-		#include "reset_flag_desc.inc"
+	static const char *const reset_flag_descs[] = {
+#include "reset_flag_desc.inc"
 	};
 
 	if (!flags) {
@@ -311,9 +311,8 @@ void system_print_banner(void)
 			CPRINTS("UART initialized after sysjump");
 		else
 			CPUTS("\n--- UART initialized after reboot ---\n");
-		CPRINTF("[Image: %s, %s]\n",
-			 system_get_image_copy_string(),
-			 system_get_build_info());
+		CPRINTF("[Image: %s, %s]\n", system_get_image_copy_string(),
+			system_get_build_info());
 		CPUTS("[Reset cause: ");
 		system_print_reset_flags();
 		CPUTS("]\n");
@@ -415,9 +414,8 @@ void system_disable_jump(void)
 		 */
 		ret = mpu_protect_data_ram();
 		if (ret == EC_SUCCESS) {
-			CPRINTS("data RAM locked. Exclusion %pP-%pP",
-				&__iram_text_start,
-				&__iram_text_end);
+			CPRINTS("data RAM locked. Exclusion %p-%p",
+				&__iram_text_start, &__iram_text_end);
 		} else {
 			CPRINTS("Failed to lock data RAM (%d)", ret);
 			return;
@@ -441,11 +439,11 @@ void system_disable_jump(void)
 		 */
 		switch (system_get_image_copy()) {
 		case EC_IMAGE_RO:
-			ret =  mpu_lock_rw_flash();
+			ret = mpu_lock_rw_flash();
 			copy = EC_IMAGE_RW;
 			break;
 		case EC_IMAGE_RW:
-			ret =  mpu_lock_ro_flash();
+			ret = mpu_lock_ro_flash();
 			copy = EC_IMAGE_RO;
 			break;
 		default:
@@ -453,8 +451,7 @@ void system_disable_jump(void)
 			ret = !EC_SUCCESS;
 		}
 		if (ret == EC_SUCCESS) {
-			CPRINTS("%s image locked",
-				ec_image_to_string(copy));
+			CPRINTS("%s image locked", ec_image_to_string(copy));
 		} else {
 			CPRINTS("Failed to lock %s image (%d)",
 				ec_image_to_string(copy), ret);
@@ -477,8 +474,8 @@ test_mockable enum ec_image system_get_image_copy(void)
 	/* Return which region is used in program memory */
 	return system_get_shrspi_image_copy();
 #else
-	uintptr_t my_addr = (uintptr_t)system_get_image_copy -
-			    CONFIG_PROGRAM_MEMORY_BASE;
+	uintptr_t my_addr =
+		(uintptr_t)system_get_image_copy - CONFIG_PROGRAM_MEMORY_BASE;
 
 	if (my_addr >= CONFIG_RO_MEM_OFF &&
 	    my_addr < (CONFIG_RO_MEM_OFF + CONFIG_RO_SIZE))
@@ -541,9 +538,8 @@ const char *system_get_image_copy_string(void)
 
 const char *ec_image_to_string(enum ec_image copy)
 {
-	static const char * const image_names[] = {
-		"unknown", "RO", "RW", "RO_B", "RW_B"
-	};
+	static const char *const image_names[] = { "unknown", "RO", "RW",
+						   "RO_B", "RW_B" };
 	return image_names[copy < ARRAY_SIZE(image_names) ? copy : 0];
 }
 
@@ -604,7 +600,7 @@ static void jump_to_image(uintptr_t init_addr)
 	jdata->magic = JUMP_DATA_MAGIC;
 	jdata->version = JUMP_DATA_VERSION;
 	jdata->reset_flags = reset_flags;
-	jdata->jump_tag_total = 0;  /* Reset tags */
+	jdata->jump_tag_total = 0; /* Reset tags */
 	jdata->struct_size = sizeof(struct jump_data);
 
 	/* Call other hooks; these may add tags */
@@ -619,7 +615,7 @@ static void jump_to_image(uintptr_t init_addr)
 #endif /* CONFIG_DMA */
 
 	/* Jump to the reset vector */
-	resetvec = (void(*)(void))init_addr;
+	resetvec = (void (*)(void))init_addr;
 	resetvec();
 }
 
@@ -688,8 +684,8 @@ static int system_run_image_copy_with_flags(enum ec_image copy,
 	if (copy == EC_IMAGE_RO)
 		system_clear_reset_flags(EC_RESET_FLAG_EFS);
 
-	CPRINTS("Jumping to image %s (0x%08x)",
-		ec_image_to_string(copy), system_get_reset_flags());
+	CPRINTS("Jumping to image %s (0x%08x)", ec_image_to_string(copy),
+		system_get_reset_flags());
 
 	jump_to_image(init_addr);
 
@@ -715,9 +711,9 @@ enum ec_image system_get_active_copy(void)
 
 enum ec_image system_get_update_copy(void)
 {
-#ifdef CONFIG_VBOOT_EFS		/* Not needed for EFS2, which is single-slot. */
-	return system_get_active_copy() == EC_IMAGE_RW_A ?
-			EC_IMAGE_RW_B : EC_IMAGE_RW_A;
+#ifdef CONFIG_VBOOT_EFS /* Not needed for EFS2, which is single-slot. */
+	return system_get_active_copy() == EC_IMAGE_RW_A ? EC_IMAGE_RW_B :
+							   EC_IMAGE_RW_A;
 #else
 	return EC_IMAGE_RW_A;
 #endif
@@ -764,7 +760,7 @@ const struct image_data *system_get_image_data(enum ec_image copy)
 	 * it's the same offset as in the current image.  Find that offset.
 	 */
 	addr = ((uintptr_t)&current_image_data -
-	       get_program_memory_addr(active_copy));
+		get_program_memory_addr(active_copy));
 
 	/*
 	 * Read the version information from the proper location
@@ -792,14 +788,14 @@ const struct image_data *system_get_image_data(enum ec_image copy)
 	return NULL;
 }
 
-__attribute__((weak))	   /* Weird chips may need their own implementations */
-const char *system_get_version(enum ec_image copy)
+__attribute__((weak)) /* Weird chips may need their own implementations */
+const char *
+system_get_version(enum ec_image copy)
 {
 	const struct image_data *data = system_get_image_data(copy);
 
 	return data ? data->version : "";
 }
-
 
 const char *system_get_cros_fwid(enum ec_image copy)
 {
@@ -807,9 +803,8 @@ const char *system_get_cros_fwid(enum ec_image copy)
 
 	if (IS_ENABLED(CONFIG_CROS_FWID_VERSION)) {
 		data = system_get_image_data(copy);
-		if (data &&
-		    (data->cookie3 & CROS_EC_IMAGE_DATA_COOKIE3_MASK) ==
-			    CROS_EC_IMAGE_DATA_COOKIE3)
+		if (data && (data->cookie3 & CROS_EC_IMAGE_DATA_COOKIE3_MASK) ==
+				    CROS_EC_IMAGE_DATA_COOKIE3)
 			return data->cros_fwid;
 		else
 			return CROS_FWID_MISSING_STR;
@@ -870,8 +865,9 @@ int system_get_board_version(void)
 	return board_get_version();
 }
 
-__attribute__((weak))	   /* Weird chips may need their own implementations */
-const char *system_get_build_info(void)
+__attribute__((weak)) /* Weird chips may need their own implementations */
+const char *
+system_get_build_info(void)
 {
 	return build_info;
 }
@@ -917,7 +913,7 @@ void system_common_pre_init(void)
 		 * the new fields below.
 		 */
 		if (jdata->version == 1)
-			delta = 0;  /* No tags in v1, so no need for move */
+			delta = 0; /* No tags in v1, so no need for move */
 		else if (jdata->version == 2)
 			delta = sizeof(struct jump_data) - JUMP_DATA_SIZE_V2;
 		else
@@ -975,8 +971,8 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 	case EC_REBOOT_CANCEL:
 		return EC_SUCCESS;
 	case EC_REBOOT_JUMP_RO:
-		return system_run_image_copy_with_flags(EC_IMAGE_RO,
-						EC_RESET_FLAG_STAY_IN_RO);
+		return system_run_image_copy_with_flags(
+			EC_IMAGE_RO, EC_RESET_FLAG_STAY_IN_RO);
 	case EC_REBOOT_JUMP_RW:
 		return system_run_image_copy(system_get_active_copy());
 	case EC_REBOOT_COLD:
@@ -1046,7 +1042,8 @@ static int handle_pending_reboot(enum ec_reboot_cmd cmd)
 	}
 }
 
-void system_enter_hibernate(uint32_t seconds, uint32_t microseconds)
+test_mockable void system_enter_hibernate(uint32_t seconds,
+					  uint32_t microseconds)
 {
 	if (!IS_ENABLED(CONFIG_HIBERNATE))
 		return;
@@ -1059,8 +1056,8 @@ void system_enter_hibernate(uint32_t seconds, uint32_t microseconds)
 	 * this is to prevent an action triggered by developers.
 	 * See: b/192259035
 	 */
-	if (IS_ENABLED(CONFIG_EXTPOWER) && IS_ENABLED(CONFIG_AP_POWER_CONTROL)
-	    && extpower_is_present()) {
+	if (IS_ENABLED(CONFIG_EXTPOWER) &&
+	    IS_ENABLED(CONFIG_AP_POWER_CONTROL) && extpower_is_present()) {
 		CPRINTS("AC on, skip hibernate");
 		return;
 	}
@@ -1125,7 +1122,7 @@ static int sysinfo(struct ec_response_sysinfo *info)
 	return EC_SUCCESS;
 }
 
-static int command_sysinfo(int argc, char **argv)
+static int command_sysinfo(int argc, const char **argv)
 {
 	struct ec_response_sysinfo info;
 	int rv;
@@ -1160,8 +1157,7 @@ static int command_sysinfo(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_SAFE_CONSOLE_COMMAND(sysinfo, command_sysinfo,
-			     NULL,
+DECLARE_SAFE_CONSOLE_COMMAND(sysinfo, command_sysinfo, NULL,
 			     "Print system info");
 
 static enum ec_status host_command_sysinfo(struct host_cmd_handler_args *args)
@@ -1181,7 +1177,7 @@ DECLARE_HOST_COMMAND(EC_CMD_SYSINFO, host_command_sysinfo,
 #endif
 
 #ifdef CONFIG_CMD_SCRATCHPAD
-static int command_scratchpad(int argc, char **argv)
+static int command_scratchpad(int argc, const char **argv)
 {
 	int rv = EC_SUCCESS;
 	uint32_t scratchpad_value;
@@ -1207,12 +1203,11 @@ static int command_scratchpad(int argc, char **argv)
 		ccprintf("Scratchpad: 0x%08x\n", scratchpad_value);
 	return rv;
 }
-DECLARE_CONSOLE_COMMAND(scratchpad, command_scratchpad,
-			"[val]",
+DECLARE_CONSOLE_COMMAND(scratchpad, command_scratchpad, "[val]",
 			"Get or set scratchpad value");
 #endif /* CONFIG_CMD_SCRATCHPAD */
 
-__maybe_unused static int command_hibernate(int argc, char **argv)
+__maybe_unused static int command_hibernate(int argc, const char **argv)
 {
 	int seconds = 0;
 	int microseconds = 0;
@@ -1238,8 +1233,7 @@ __maybe_unused static int command_hibernate(int argc, char **argv)
 	return EC_SUCCESS;
 }
 #ifdef CONFIG_HIBERNATE
-DECLARE_CONSOLE_COMMAND(hibernate, command_hibernate,
-			"[sec] [usec]",
+DECLARE_CONSOLE_COMMAND(hibernate, command_hibernate, "[sec] [usec]",
 			"Hibernate the EC");
 #endif /* CONFIG_HIBERNATE */
 
@@ -1284,7 +1278,7 @@ static void print_build_string(void)
 	ccprintf("\n");
 }
 
-static int command_version(int argc, char **argv)
+static int command_version(int argc, const char **argv)
 {
 	int board_version;
 	const char *fw_version;
@@ -1353,12 +1347,10 @@ static int command_version(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_SAFE_CONSOLE_COMMAND(version, command_version,
-			     NULL,
-			     "Print versions");
+DECLARE_SAFE_CONSOLE_COMMAND(version, command_version, NULL, "Print versions");
 
 #ifdef CONFIG_CMD_SYSJUMP
-static int command_sysjump(int argc, char **argv)
+static int command_sysjump(int argc, const char **argv)
 {
 	uint32_t addr;
 	char *e;
@@ -1368,8 +1360,8 @@ static int command_sysjump(int argc, char **argv)
 
 	/* Handle named images */
 	if (!strcasecmp(argv[1], "RO"))
-		return system_run_image_copy_with_flags(EC_IMAGE_RO,
-						EC_RESET_FLAG_STAY_IN_RO);
+		return system_run_image_copy_with_flags(
+			EC_IMAGE_RO, EC_RESET_FLAG_STAY_IN_RO);
 	else if (!strcasecmp(argv[1], "RW") || !strcasecmp(argv[1], "A"))
 		return system_run_image_copy(EC_IMAGE_RW);
 	else if (!strcasecmp(argv[1], "B")) {
@@ -1402,7 +1394,7 @@ DECLARE_CONSOLE_COMMAND(sysjump, command_sysjump,
 			"Jump to a system image or address");
 #endif
 
-static int command_reboot(int argc, char **argv)
+static int command_reboot(int argc, const char **argv)
 {
 	int flags = SYSTEM_RESET_MANUALLY_TRIGGERED;
 	int i;
@@ -1449,13 +1441,12 @@ DECLARE_CONSOLE_COMMAND(
 	"Reboot the EC");
 
 #ifdef CONFIG_CMD_SYSLOCK
-static int command_system_lock(int argc, char **argv)
+static int command_system_lock(int argc, const char **argv)
 {
 	force_locked = 1;
 	return EC_SUCCESS;
 }
-DECLARE_SAFE_CONSOLE_COMMAND(syslock, command_system_lock,
-			     NULL,
+DECLARE_SAFE_CONSOLE_COMMAND(syslock, command_system_lock, NULL,
 			     "Lock the system, even if WP is disabled");
 #endif
 
@@ -1464,7 +1455,7 @@ DECLARE_SAFE_CONSOLE_COMMAND(syslock, command_system_lock,
  * Modify and print the sleep mask which controls access to deep sleep
  * mode in the idle task.
  */
-static int command_sleepmask(int argc, char **argv)
+static int command_sleepmask(int argc, const char **argv)
 {
 #ifdef CONFIG_CMD_SLEEPMASK_SET
 	int v;
@@ -1496,7 +1487,7 @@ DECLARE_SAFE_CONSOLE_COMMAND(sleepmask, command_sleepmask,
 #endif
 
 #ifdef CONFIG_CMD_JUMPTAGS
-static int command_jumptags(int argc, char **argv)
+static int command_jumptags(int argc, const char **argv)
 {
 	const struct jump_tag *t;
 	int used = 0;
@@ -1510,21 +1501,18 @@ static int command_jumptags(int argc, char **argv)
 		t = (const struct jump_tag *)(system_usable_ram_end() + used);
 		used += sizeof(struct jump_tag) + ROUNDUP4(t->data_size);
 
-		ccprintf("%08x: 0x%04x %c%c.%d %3d\n",
-			 (uintptr_t)t,
-			 t->tag, t->tag >> 8, (uint8_t)t->tag,
-			 t->data_version, t->data_size);
+		ccprintf("%08x: 0x%04x %c%c.%d %3d\n", (uintptr_t)t, t->tag,
+			 t->tag >> 8, (uint8_t)t->tag, t->data_version,
+			 t->data_size);
 	}
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(jumptags, command_jumptags,
-			NULL,
-			"List jump tags");
+DECLARE_CONSOLE_COMMAND(jumptags, command_jumptags, NULL, "List jump tags");
 #endif /* CONFIG_CMD_JUMPTAGS */
 
 #ifdef CONFIG_EMULATED_SYSRQ
-static int command_sysrq(int argc, char **argv)
+static int command_sysrq(int argc, const char **argv)
 {
 	char key = 'x';
 
@@ -1535,20 +1523,18 @@ static int command_sysrq(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(sysrq, command_sysrq,
-			"[key]",
+DECLARE_CONSOLE_COMMAND(sysrq, command_sysrq, "[key]",
 			"Simulate sysrq press (default: x)");
 #endif /* CONFIG_EMULATED_SYSRQ */
 
 #ifdef CONFIG_CMD_RESET_FLAGS
-static int command_rflags(int argc, char **argv)
+static int command_rflags(int argc, const char **argv)
 {
 	print_reset_flags(chip_read_reset_flags());
 	ccprintf("\n");
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(rflags, command_rflags,
-			NULL,
+DECLARE_CONSOLE_COMMAND(rflags, command_rflags, NULL,
 			"Print reset flags saved in non-volatile memory");
 #endif
 
@@ -1606,8 +1592,7 @@ host_command_get_version(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_VERSION,
-		     host_command_get_version,
+DECLARE_HOST_COMMAND(EC_CMD_GET_VERSION, host_command_get_version,
 		     EC_VER_MASK(0) | EC_VER_MASK(1));
 
 #ifdef CONFIG_HOSTCMD_SKUID
@@ -1621,8 +1606,7 @@ host_command_get_sku_id(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_SKU_ID,
-		     host_command_get_sku_id,
+DECLARE_HOST_COMMAND(EC_CMD_GET_SKU_ID, host_command_get_sku_id,
 		     EC_VER_MASK(0));
 #endif
 
@@ -1636,8 +1620,7 @@ host_command_set_sku_id(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_SET_SKU_ID,
-		     host_command_set_sku_id,
+DECLARE_HOST_COMMAND(EC_CMD_SET_SKU_ID, host_command_set_sku_id,
 		     EC_VER_MASK(0));
 #endif
 
@@ -1652,8 +1635,7 @@ host_command_get_keyboard_id(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_KEYBOARD_ID,
-		     host_command_get_keyboard_id,
+DECLARE_HOST_COMMAND(EC_CMD_GET_KEYBOARD_ID, host_command_get_keyboard_id,
 		     EC_VER_MASK(0));
 #endif
 
@@ -1665,8 +1647,7 @@ host_command_build_info(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_BUILD_INFO,
-		     host_command_build_info,
+DECLARE_HOST_COMMAND(EC_CMD_GET_BUILD_INFO, host_command_build_info,
 		     EC_VER_MASK(0));
 
 static enum ec_status
@@ -1682,8 +1663,7 @@ host_command_get_chip_info(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_CHIP_INFO,
-		     host_command_get_chip_info,
+DECLARE_HOST_COMMAND(EC_CMD_GET_CHIP_INFO, host_command_get_chip_info,
 		     EC_VER_MASK(0));
 
 static enum ec_status
@@ -1703,8 +1683,7 @@ host_command_get_board_version(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_GET_BOARD_VERSION,
-		     host_command_get_board_version,
+DECLARE_HOST_COMMAND(EC_CMD_GET_BOARD_VERSION, host_command_get_board_version,
 		     EC_VER_MASK(0));
 
 static enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
@@ -1738,10 +1717,8 @@ static enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
 	}
 
 #ifdef HAS_TASK_HOSTCMD
-	if (p.cmd == EC_REBOOT_JUMP_RO ||
-	    p.cmd == EC_REBOOT_JUMP_RW ||
-	    p.cmd == EC_REBOOT_COLD ||
-	    p.cmd == EC_REBOOT_HIBERNATE ||
+	if (p.cmd == EC_REBOOT_JUMP_RO || p.cmd == EC_REBOOT_JUMP_RW ||
+	    p.cmd == EC_REBOOT_COLD || p.cmd == EC_REBOOT_HIBERNATE ||
 	    p.cmd == EC_REBOOT_COLD_AP_OFF) {
 		/* Clean busy bits on host for commands that won't return */
 		args->result = EC_RES_SUCCESS;
@@ -1761,21 +1738,18 @@ static enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
 		return EC_RES_ERROR;
 	}
 }
-DECLARE_HOST_COMMAND(EC_CMD_REBOOT_EC,
-		     host_command_reboot,
-		     EC_VER_MASK(0));
+DECLARE_HOST_COMMAND(EC_CMD_REBOOT_EC, host_command_reboot, EC_VER_MASK(0));
 
 int system_can_boot_ap(void)
 {
 	int soc = -1;
 	int pow = -1;
 
-#if defined(CONFIG_BATTERY) && \
-	defined(CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
+#if defined(CONFIG_BATTERY) && defined(CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
 	/* Require a minimum battery level to power on. If battery isn't
 	 * present, battery_state_of_charge_abs returns false. */
 	if (battery_state_of_charge_abs(&soc) == EC_SUCCESS &&
-			soc >= CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
+	    soc >= CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON)
 		return 1;
 #endif
 
@@ -1816,7 +1790,7 @@ __overridable int board_write_serial(const char *serialno)
 	else
 		return EC_ERROR_UNIMPLEMENTED;
 }
-#endif  /* CONFIG_SERIALNO_LEN */
+#endif /* CONFIG_SERIALNO_LEN */
 
 #ifdef CONFIG_MAC_ADDR_LEN
 /* By default, read MAC address from flash, can be overridden. */
@@ -1838,10 +1812,10 @@ __overridable int board_write_mac_addr(const char *mac_addr)
 	else
 		return EC_ERROR_UNIMPLEMENTED;
 }
-#endif  /* CONFIG_MAC_ADDR_LEN */
+#endif /* CONFIG_MAC_ADDR_LEN */
 
-__attribute__((weak))
-void clock_enable_module(enum module_id module, int enable)
+__attribute__((weak)) void clock_enable_module(enum module_id module,
+					       int enable)
 {
 	/*
 	 * Default weak implementation - for chips that don't support this
@@ -1854,4 +1828,14 @@ __test_only void system_common_reset_state(void)
 	jdata = 0;
 	reset_flags = 0;
 	jumped_to_image = 0;
+	system_info_flags = 0;
+}
+
+__test_only enum ec_reboot_cmd system_common_get_reset_reboot_at_shutdown(void)
+{
+	int ret = reboot_at_shutdown;
+
+	reboot_at_shutdown = 0;
+
+	return ret;
 }

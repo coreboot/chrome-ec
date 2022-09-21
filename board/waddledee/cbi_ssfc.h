@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -55,6 +55,5 @@ enum ec_ssfc_base_sensor get_cbi_ssfc_base_sensor(void);
  * @return the Lid sensor board type.
  */
 enum ec_ssfc_lid_sensor get_cbi_ssfc_lid_sensor(void);
-
 
 #endif /* _DEDEDE_CBI_SSFC__H_ */

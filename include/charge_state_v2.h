@@ -1,4 +1,4 @@
-/* Copyright 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -117,8 +117,8 @@ void board_base_reset(void);
  * @param curr Pointer to struct charge_state_data
  * @return Action to take.
  */
-enum critical_shutdown board_critical_shutdown_check(
-		struct charge_state_data *curr);
+enum critical_shutdown
+board_critical_shutdown_check(struct charge_state_data *curr);
 
 /**
  * Callback to set battery level for shutdown
@@ -222,5 +222,12 @@ __test_only void reset_prev_disp_charge(void);
  * @return Whether or not the charging progress was printed to the console
  */
 __test_only bool charging_progress_displayed(void);
+
+/**
+ * Callback for boards to request charger to enable bypass mode on/off.
+ *
+ * @return True for requesting bypass on. False for requesting bypass off.
+ */
+int board_should_charger_bypass(void);
 
 #endif /* __CROS_EC_CHARGE_STATE_V2_H */

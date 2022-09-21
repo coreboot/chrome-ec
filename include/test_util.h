@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,60 +8,66 @@
 #ifndef __CROS_EC_TEST_UTIL_H
 #define __CROS_EC_TEST_UTIL_H
 
+#include "compile_time_macros.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "common.h"
 #include "console.h"
 #include "stack_trace.h"
 
 #ifdef CONFIG_ZTEST
-#include <ztest.h>
+#include <zephyr/ztest.h>
 #include "ec_tasks.h"
 #endif /* CONFIG_ZTEST */
 
 /* This allows tests to be easily commented out in run_test for debugging */
 #define test_static static __attribute__((unused))
 
-#define RUN_TEST(n) \
-	do { \
+#define RUN_TEST(n)                              \
+	do {                                     \
 		ccprintf("Running %s...\n", #n); \
-		cflush(); \
-		before_test(); \
-		if (n() == EC_SUCCESS) { \
-			ccputs("OK\n"); \
-		} else { \
-			ccputs("Fail\n"); \
-			__test_error_count++; \
-		} \
-		after_test(); \
+		cflush();                        \
+		before_test();                   \
+		if (n() == EC_SUCCESS) {         \
+			ccputs("OK\n");          \
+		} else {                         \
+			ccputs("Fail\n");        \
+			__test_error_count++;    \
+		}                                \
+		after_test();                    \
 	} while (0)
 
-#define TEST_ASSERT(n) \
-	do { \
-		if (!(n)) { \
-			ccprintf("%s:%d: ASSERTION failed: %s\n", \
-				 __FILE__, __LINE__, #n); \
-			task_dump_trace(); \
-			return EC_ERROR_UNKNOWN; \
-		} \
+#define TEST_ASSERT(n)                                                      \
+	do {                                                                \
+		if (!(n)) {                                                 \
+			ccprintf("%s:%d: ASSERTION failed: %s\n", __FILE__, \
+				 __LINE__, #n);                             \
+			task_dump_trace();                                  \
+			return EC_ERROR_UNKNOWN;                            \
+		}                                                           \
 	} while (0)
 
 #if defined(__cplusplus) && !defined(__auto_type)
 #define __auto_type auto
 #endif
 
-#define TEST_OPERATOR(a, b, op, fmt) \
-	do { \
-		__auto_type _a = (a);                                       \
-		__auto_type _b = (b);                                       \
-		if (!(_a op _b)) {                                          \
-			ccprintf("%s:%d: ASSERTION failed: %s " #op " %s\n",   \
-				 __FILE__, __LINE__, #a, #b);               \
-			ccprintf("\t\tEVAL: " fmt " " #op " " fmt "\n",     \
-				 _a, _b);                                   \
-			task_dump_trace();                                  \
-			return EC_ERROR_UNKNOWN;                            \
-		} else  {                                                   \
-			ccprintf("Pass: %s " #op " %s\n", #a, #b);        \
-		}                                                           \
+#define TEST_OPERATOR(a, b, op, fmt)                                         \
+	do {                                                                 \
+		__auto_type _a = (a);                                        \
+		__auto_type _b = (b);                                        \
+		if (!(_a op _b)) {                                           \
+			ccprintf("%s:%d: ASSERTION failed: %s " #op " %s\n", \
+				 __FILE__, __LINE__, #a, #b);                \
+			ccprintf("\t\tEVAL: " fmt " " #op " " fmt "\n", _a,  \
+				 _b);                                        \
+			task_dump_trace();                                   \
+			return EC_ERROR_UNKNOWN;                             \
+		} else {                                                     \
+			ccprintf("Pass: %s " #op " %s\n", #a, #b);           \
+		}                                                            \
 	} while (0)
 
 #define TEST_EQ(a, b, fmt) TEST_OPERATOR(a, b, ==, fmt)
@@ -70,8 +76,8 @@
 #define TEST_LE(a, b, fmt) TEST_OPERATOR(a, b, <=, fmt)
 #define TEST_GT(a, b, fmt) TEST_OPERATOR(a, b, >, fmt)
 #define TEST_GE(a, b, fmt) TEST_OPERATOR(a, b, >=, fmt)
-#define TEST_BITS_SET(a, bits) TEST_OPERATOR(a & (int)bits, (int)bits, ==, "%u")
-#define TEST_BITS_CLEARED(a, bits) TEST_OPERATOR(a & (int)bits, 0, ==, "%u")
+#define TEST_BITS_SET(a, bits) TEST_OPERATOR(a &(int)bits, (int)bits, ==, "%u")
+#define TEST_BITS_CLEARED(a, bits) TEST_OPERATOR(a &(int)bits, 0, ==, "%u")
 #define TEST_NEAR(a, b, epsilon, fmt) \
 	TEST_OPERATOR(ABS((a) - (b)), epsilon, <, fmt)
 
@@ -79,40 +85,32 @@
 
 #define TEST_ASSERT_ABS_LESS(n, t) TEST_OPERATOR(__ABS(n), t, <, "%d")
 
-#define TEST_ASSERT_ARRAY_EQ(s, d, n) \
-	do { \
-		int __i; \
-		for (__i = 0; __i < n; ++__i) \
-			if ((s)[__i] != (d)[__i]) { \
+#define TEST_ASSERT_ARRAY_EQ(s, d, n)                                        \
+	do {                                                                 \
+		int __i;                                                     \
+		for (__i = 0; __i < n; ++__i)                                \
+			if ((s)[__i] != (d)[__i]) {                          \
 				ccprintf("%s:%d: ASSERT_ARRAY_EQ failed at " \
-					 "index=%d: %d != %d\n", \
-					 __FILE__,  __LINE__, \
-					 __i, (int)(s)[__i], (int)(d)[__i]); \
-				task_dump_trace(); \
-				return EC_ERROR_UNKNOWN; \
-			} \
+					 "index=%d: %d != %d\n",             \
+					 __FILE__, __LINE__, __i,            \
+					 (int)(s)[__i], (int)(d)[__i]);      \
+				task_dump_trace();                           \
+				return EC_ERROR_UNKNOWN;                     \
+			}                                                    \
 	} while (0)
 
-#define TEST_ASSERT_MEMSET(d, c, n) \
-	do { \
-		int __i; \
-		for (__i = 0; __i < n; ++__i) \
-			if ((d)[__i] != (c)) { \
+#define TEST_ASSERT_MEMSET(d, c, n)                                        \
+	do {                                                               \
+		int __i;                                                   \
+		for (__i = 0; __i < n; ++__i)                              \
+			if ((d)[__i] != (c)) {                             \
 				ccprintf("%s:%d: ASSERT_MEMSET failed at " \
-					 "index=%d: %d != %d\n", \
-					 __FILE__, __LINE__, \
-					 __i, (int)(d)[__i], (c)); \
-				task_dump_trace(); \
-				return EC_ERROR_UNKNOWN; \
-			} \
-	} while (0)
-
-#define TEST_CHECK(n) \
-	do { \
-		if (n) \
-			return EC_SUCCESS; \
-		else \
-			return EC_ERROR_UNKNOWN; \
+					 "index=%d: %d != %d\n",           \
+					 __FILE__, __LINE__, __i,          \
+					 (int)(d)[__i], (c));              \
+				task_dump_trace();                         \
+				return EC_ERROR_UNKNOWN;                   \
+			}                                                  \
 	} while (0)
 
 /* Mutlistep test states */
@@ -147,7 +145,7 @@ void before_test(void);
 void after_test(void);
 
 /* Test entry point */
-void run_test(int argc, char **argv);
+void run_test(int argc, const char **argv);
 
 /* Test entry point for fuzzing tests. */
 int test_fuzz_one_input(const uint8_t *data, unsigned int size);
@@ -195,8 +193,12 @@ void interrupt_generator_udelay(unsigned us);
 void wait_for_task_started(void);
 void wait_for_task_started_nosleep(void);
 #else
-static inline void wait_for_task_started(void) { }
-static inline void wait_for_task_started_nosleep(void) { }
+static inline void wait_for_task_started(void)
+{
+}
+static inline void wait_for_task_started_nosleep(void)
+{
+}
 #endif
 
 uint32_t prng(uint32_t seed);
@@ -271,8 +273,8 @@ struct test_i2c_read_string_dev {
 struct test_i2c_xfer {
 	/* I2C xfer handler */
 	int (*routine)(const int port, const uint16_t i2c_addr_flags,
-		       const uint8_t *out, int out_size,
-		       uint8_t *in, int in_size, int flags);
+		       const uint8_t *out, int out_size, uint8_t *in,
+		       int in_size, int flags);
 };
 
 struct test_i2c_write_dev {
@@ -290,11 +292,10 @@ struct test_i2c_write_dev {
  *
  * @param routine     Function pointer, with the same prototype as i2c_xfer()
  */
-#define DECLARE_TEST_I2C_XFER(routine)					\
-	const struct test_i2c_xfer __no_sanitize_address		\
-	__test_i2c_xfer_##routine					\
-	__attribute__((section(".rodata.test_i2c.xfer")))		\
-		= {routine}
+#define DECLARE_TEST_I2C_XFER(routine)                    \
+	const struct test_i2c_xfer __no_sanitize_address  \
+		__test_i2c_xfer_##routine __attribute__(( \
+			section(".rodata.test_i2c.xfer"))) = { routine }
 
 /*
  * Detach an I2C device. Once detached, any read/write command regarding the
@@ -377,14 +378,14 @@ int test_attach_i2c(const int port, const uint16_t addr_flags);
 #define TEST_MAIN() void test_main(void)
 #define TEST_SUITE(name) void name(void)
 #else
-#define TEST_MAIN()                          \
-	void test_main(void);                \
-	void run_test(int argc, char **argv) \
-	{                                    \
-		test_reset();                \
-		test_main();                 \
-		test_print_result();         \
-	}                                    \
+#define TEST_MAIN()                                \
+	void test_main(void);                      \
+	void run_test(int argc, const char **argv) \
+	{                                          \
+		test_reset();                      \
+		test_main();                       \
+		test_print_result();               \
+	}                                          \
 	void test_main(void)
 #define TEST_SUITE(name) TEST_MAIN()
 #endif
@@ -413,7 +414,7 @@ struct unit_test {
  */
 #define ztest_unit_test_setup_teardown(fn, setup, teardown) \
 	{                                                   \
-		#fn, fn, setup, teardown                    \
+#fn, fn, setup, teardown                    \
 	}
 
 /**
@@ -477,7 +478,7 @@ void z_ztest_run_test_suite(const char *name, struct unit_test *suite);
 #define zassert_unreachable(msg, ...) TEST_ASSERT(0)
 #define zassert_true(cond, msg, ...) TEST_ASSERT(cond)
 #define zassert_false(cond, msg, ...) TEST_ASSERT(!(cond))
-#define zassert_ok(cond, msg, ...) TEST_ASSERT(cond)
+#define zassert_ok(cond, msg, ...) TEST_ASSERT(!(cond))
 #define zassert_is_null(ptr, msg, ...) TEST_ASSERT((ptr) == NULL)
 #define zassert_not_null(ptr, msg, ...) TEST_ASSERT((ptr) != NULL)
 #define zassert_equal(a, b, msg, ...) TEST_EQ((a), (b), "0x%x")
@@ -488,5 +489,9 @@ void z_ztest_run_test_suite(const char *name, struct unit_test *suite);
 #define zassert_mem_equal(buf, exp, size, msg, ...) \
 	TEST_ASSERT_ARRAY_EQ(buf, exp, size)
 #endif /* CONFIG_ZEPHYR */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __CROS_EC_TEST_UTIL_H */

@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium OS Authors. All rights reserved.
+# Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,6 +8,7 @@ mock-$(HAS_MOCK_ADC) += adc_mock.o
 mock-$(HAS_MOCK_BATTERY) += battery_mock.o
 mock-$(HAS_MOCK_CHARGE_MANAGER) += charge_manager_mock.o
 mock-$(HAS_MOCK_FP_SENSOR) += fp_sensor_mock.o
+mock-$(HAS_MOCK_FPSENSOR_CRYPTO) += fpsensor_crypto_mock.o
 mock-$(HAS_MOCK_FPSENSOR_DETECT) += fpsensor_detect_mock.o
 mock-$(HAS_MOCK_FPSENSOR_STATE) += fpsensor_state_mock.o
 mock-$(HAS_MOCK_MKBP_EVENTS) += mkbp_events_mock.o

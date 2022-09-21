@@ -1,7 +1,7 @@
-/* Copyright 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
- * Copyright 2011 Google Inc.
+ * Copyright 2011 Google LLC
  *
  * Tasks for mutexes basic tests.
  */
@@ -23,7 +23,7 @@ static struct mutex mtx;
 
 int mutex_random_task(void *unused)
 {
-	char letter = 'A'+(TASK_ID_MTX3A - task_get_current());
+	char letter = 'A' + (TASK_ID_MTX3A - task_get_current());
 	/* wait to be activated */
 
 	while (1) {

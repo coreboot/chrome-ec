@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -12,8 +12,8 @@
 #include "timer.h"
 #include "usb_mux.h"
 
-#define CPRINTS(format, args...) cprints(CC_USB, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USB, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USB, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USB, format, ##args)
 
 #define OVP_RETRY_DELAY_US_MIN (100 * MSEC)
 

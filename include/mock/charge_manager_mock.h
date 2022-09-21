@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,7 +16,7 @@ struct mock_ctrl_charge_manager {
 };
 
 #define MOCK_CTRL_DEFAULT_CHARGE_MANAGER    \
-	((struct mock_ctrl_charge_manager) { \
+	((struct mock_ctrl_charge_manager){ \
 		.vbus_voltage_mv = 0,       \
 	})
 

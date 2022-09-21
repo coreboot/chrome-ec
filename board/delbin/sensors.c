@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -34,22 +34,18 @@ static struct bmi_drv_data_t g_bmi260_data;
 static struct icm_drv_data_t g_icm426xx_data;
 
 /* Rotation matrix for the lid accelerometer */
-static const mat33_fp_t lid_standard_ref = {
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
+static const mat33_fp_t lid_standard_ref = { { FLOAT_TO_FP(-1), 0, 0 },
+					     { 0, FLOAT_TO_FP(-1), 0 },
+					     { 0, 0, FLOAT_TO_FP(1) } };
 
-const mat33_fp_t base_standard_ref = {
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
+const mat33_fp_t base_standard_ref = { { FLOAT_TO_FP(1), 0, 0 },
+				       { 0, FLOAT_TO_FP(1), 0 },
+				       { 0, 0, FLOAT_TO_FP(1) } };
 
 const mat33_fp_t base_standard_ref_icm = {
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(1)},
+	{ 0, FLOAT_TO_FP(-1), 0 },
+	{ FLOAT_TO_FP(1), 0, 0 },
+	{ 0, 0, FLOAT_TO_FP(1) },
 };
 
 struct motion_sensor_t icm426xx_base_accel = {

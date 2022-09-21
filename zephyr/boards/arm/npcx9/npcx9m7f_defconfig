@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium OS Authors. All rights reserved.
+# Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,6 +8,10 @@ CONFIG_SOC_NPCX9M7F=y
 
 # Platform Configuration
 CONFIG_BOARD_NPCX9=y
+
+# ADC
+CONFIG_ADC=y
+CONFIG_ADC_SHELL=n
 
 # Serial Drivers
 CONFIG_SERIAL=y
@@ -25,6 +29,7 @@ CONFIG_PINCTRL=y
 
 # GPIO Controller
 CONFIG_GPIO=y
+CONFIG_GPIO_GET_CONFIG=y
 
 # Clock configuration
 CONFIG_CLOCK_CONTROL=y

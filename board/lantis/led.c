@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -19,11 +19,9 @@
 #define POWER_LED_ON 0
 #define POWER_LED_OFF 1
 
-const enum ec_led_id supported_led_ids[] = {
-	EC_LED_ID_LEFT_LED,
-	EC_LED_ID_RIGHT_LED,
-	EC_LED_ID_POWER_LED
-};
+const enum ec_led_id supported_led_ids[] = { EC_LED_ID_LEFT_LED,
+					     EC_LED_ID_RIGHT_LED,
+					     EC_LED_ID_POWER_LED };
 
 const int supported_led_ids_count = ARRAY_SIZE(supported_led_ids);
 
@@ -31,22 +29,19 @@ enum led_color {
 	LED_OFF = 0,
 	LED_AMBER,
 	LED_WHITE,
-	LED_COLOR_COUNT  /* Number of colors, not a color itself */
+	LED_COLOR_COUNT /* Number of colors, not a color itself */
 };
 
-enum led_port {
-	LEFT_PORT = 0,
-	RIGHT_PORT
-};
+enum led_port { LEFT_PORT = 0, RIGHT_PORT };
 
 static int led_set_color_battery(int port, enum led_color color)
 {
 	enum gpio_signal amber_led, white_led;
 
 	amber_led = (port == RIGHT_PORT ? GPIO_BAT_LED_AMBER_C1 :
-				 GPIO_BAT_LED_AMBER_C0);
+					  GPIO_BAT_LED_AMBER_C0);
 	white_led = (port == RIGHT_PORT ? GPIO_BAT_LED_WHITE_C1 :
-				 GPIO_BAT_LED_WHITE_C0);
+					  GPIO_BAT_LED_WHITE_C0);
 
 	switch (color) {
 	case LED_OFF:
@@ -144,7 +139,7 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 static bool is_led_old_policy(void)
 {
 	if (get_cbi_fw_config_numeric_pad() == NUMERIC_PAD_ABSENT &&
-		get_cbi_fw_config_tablet_mode() == TABLET_MODE_ABSENT)
+	    get_cbi_fw_config_tablet_mode() == TABLET_MODE_ABSENT)
 		return 1;
 	else
 		return 0;
@@ -160,17 +155,16 @@ static void set_active_port_color(enum led_color color)
 
 	if (led_auto_control_is_enabled(EC_LED_ID_RIGHT_LED))
 		led_set_color_battery(RIGHT_PORT,
-				(port == RIGHT_PORT) ? color : LED_OFF);
+				      (port == RIGHT_PORT) ? color : LED_OFF);
 	if (led_auto_control_is_enabled(EC_LED_ID_LEFT_LED))
 		led_set_color_battery(LEFT_PORT,
-				(port == LEFT_PORT) ? color : LED_OFF);
+				      (port == LEFT_PORT) ? color : LED_OFF);
 }
 
 static void led_set_battery(void)
 {
 	static int battery_ticks;
 	static int power_ticks;
-	uint32_t chflags = charge_get_flags();
 
 	battery_ticks++;
 
@@ -181,14 +175,15 @@ static void led_set_battery(void)
 	 */
 	if (get_cbi_fw_config_tablet_mode() == TABLET_MODE_ABSENT) {
 		if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND) &&
-			charge_get_state() != PWR_STATE_CHARGE) {
-
+		    charge_get_state() != PWR_STATE_CHARGE) {
 			power_ticks++;
 
 			led_set_color_battery(RIGHT_PORT, power_ticks & 0x2 ?
-						  LED_WHITE : LED_OFF);
+								  LED_WHITE :
+								  LED_OFF);
 			led_set_color_battery(LEFT_PORT, power_ticks & 0x2 ?
-						  LED_WHITE : LED_OFF);
+								 LED_WHITE :
+								 LED_OFF);
 			return;
 		}
 	}
@@ -212,22 +207,25 @@ static void led_set_battery(void)
 		 */
 		if (charge_get_percent() < 10) {
 			if (is_led_old_policy()) {
-				led_set_color_battery(
-					RIGHT_PORT, (battery_ticks & 0x2) ?
-					LED_WHITE : LED_OFF);
+				led_set_color_battery(RIGHT_PORT,
+						      (battery_ticks & 0x2) ?
+							      LED_WHITE :
+							      LED_OFF);
 			} else {
 				if (led_auto_control_is_enabled(
-					EC_LED_ID_RIGHT_LED))
+					    EC_LED_ID_RIGHT_LED))
 					led_set_color_battery(
 						RIGHT_PORT,
 						(battery_ticks & 0x2) ?
-						LED_AMBER : LED_OFF);
+							LED_AMBER :
+							LED_OFF);
 				if (led_auto_control_is_enabled(
-					EC_LED_ID_LEFT_LED))
+					    EC_LED_ID_LEFT_LED))
 					led_set_color_battery(
 						LEFT_PORT,
 						(battery_ticks & 0x2) ?
-						LED_AMBER : LED_OFF);
+							LED_AMBER :
+							LED_OFF);
 			}
 		} else {
 			set_active_port_color(LED_OFF);
@@ -245,11 +243,11 @@ static void led_set_battery(void)
 		set_active_port_color(LED_WHITE);
 		break;
 	case PWR_STATE_IDLE: /* External power connected in IDLE */
-		if (chflags & CHARGE_FLAG_FORCE_IDLE)
-			set_active_port_color(
-				(battery_ticks & 0x2) ? LED_AMBER : LED_OFF);
-		else
-			set_active_port_color(LED_WHITE);
+		set_active_port_color(LED_WHITE);
+		break;
+	case PWR_STATE_FORCED_IDLE:
+		set_active_port_color((battery_ticks & 0x2) ? LED_AMBER :
+							      LED_OFF);
 		break;
 	default:
 		/* Other states don't alter LED behavior */
@@ -266,8 +264,7 @@ static void led_set_power(void)
 	if (chipset_in_state(CHIPSET_STATE_ON))
 		led_set_color_power(LED_WHITE);
 	else if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND))
-		led_set_color_power(
-			(power_tick & 0x2) ? LED_WHITE : LED_OFF);
+		led_set_color_power((power_tick & 0x2) ? LED_WHITE : LED_OFF);
 	else
 		led_set_color_power(LED_OFF);
 }

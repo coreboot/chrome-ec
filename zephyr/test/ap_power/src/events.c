@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,9 +10,11 @@
 
 #include <zephyr/device.h>
 
+#include <zephyr/drivers/espi.h>
+#include <zephyr/drivers/espi_emul.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/zephyr.h>
-#include <ztest.h>
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
 
 #include "ap_power/ap_power.h"
 #include "ap_power/ap_power_events.h"
@@ -66,7 +68,7 @@ ZTEST(events, test_registration)
 	ap_power_ev_remove_callback(&cb.cb);
 	ap_power_ev_send_callbacks(AP_POWER_RESET);
 	zassert_equal(1, cb.count, "Callback called");
-	cb.count = 0;	/* Reset to make it clear */
+	cb.count = 0; /* Reset to make it clear */
 	cb.event = 0;
 	/* Add it twice */
 	ap_power_ev_add_callback(&cb.cb);
@@ -77,6 +79,36 @@ ZTEST(events, test_registration)
 	ap_power_ev_remove_callback(&cb.cb);
 	/* Second remove should be no-op */
 	ap_power_ev_remove_callback(&cb.cb);
+}
+
+/**
+ * @brief TestPurpose: Verify reset callback from ESPI
+ *
+ * @details
+ * Validate that the reset callback is sent with ESPI PLTRST#
+ *
+ * Expected Results
+ *  - The AP_POWER_RESET event is sent
+ */
+ZTEST(events, test_pltrst)
+{
+	static struct events cb;
+	const struct device *espi =
+		DEVICE_DT_GET_ANY(zephyr_espi_emul_controller);
+
+	zassert_not_null(espi, "Cannot get ESPI device");
+
+	ap_power_ev_init_callback(&cb.cb, ev_handler, AP_POWER_RESET);
+	ap_power_ev_add_callback(&cb.cb);
+
+	emul_espi_host_send_vw(espi, ESPI_VWIRE_SIGNAL_PLTRST, 0);
+	/*
+	 * Since the event is being sent via a deferred function,
+	 * wait for the deferral time.
+	 */
+	k_usleep(2 * 1000);
+	zassert_equal(1, cb.count, "Callback not called");
+	zassert_equal(AP_POWER_RESET, cb.event, "Wrong event");
 }
 
 /**
@@ -145,9 +177,9 @@ ZTEST(events, test_hooks)
 	zassert_equal(0, count_hook_shutdown, "shutdown hook called");
 	zassert_equal(1, count_hook_startup, "startup hook not called");
 	zassert_equal(0, count_hook_shutdown,
-		"reset event, shutdown hook called");
+		      "reset event, shutdown hook called");
 	zassert_equal(1, count_hook_startup,
-		"reset event, startup hook called");
+		      "reset event, startup hook called");
 	ap_power_ev_send_callbacks(AP_POWER_SHUTDOWN);
 	zassert_equal(1, count_hook_shutdown, "shutdown hook not called");
 	zassert_equal(1, count_hook_startup, "startup hook called");
@@ -156,5 +188,4 @@ ZTEST(events, test_hooks)
 /**
  * @brief Test Suite: Verifies AP power notification functionality.
  */
-ZTEST_SUITE(events, ap_power_predicate_post_main,
-	    NULL, NULL, NULL, NULL);
+ZTEST_SUITE(events, ap_power_predicate_post_main, NULL, NULL, NULL, NULL);

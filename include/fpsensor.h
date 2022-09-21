@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -17,8 +17,9 @@
 #endif
 
 /*  Four-character-code */
-#define FOURCC(a, b, c, d) ((uint32_t)(a) | ((uint32_t)(b) << 8) | \
-			   ((uint32_t)(c) << 16) | ((uint32_t)(d) << 24))
+#define FOURCC(a, b, c, d)                                              \
+	((uint32_t)(a) | ((uint32_t)(b) << 8) | ((uint32_t)(c) << 16) | \
+	 ((uint32_t)(d) << 24))
 
 /* 8-bit greyscale pixel format as defined by V4L2 headers */
 #define V4L2_PIX_FMT_GREY FOURCC('G', 'R', 'E', 'Y')

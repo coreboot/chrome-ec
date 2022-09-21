@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Module for job counters, limiting the amount of concurrent executions."""
@@ -8,6 +8,7 @@ import multiprocessing
 import os
 import re
 import select
+import shlex
 import subprocess
 
 import zmake
@@ -48,11 +49,19 @@ class JobClient:
         Returns:
             A Popen object.
         """
-        kwargs.setdefault("env", os.environ)
+        # By default, we scrub the environment for all commands we run, setting
+        # the bare minimum (PATH only).  This prevents us from building obscure
+        # dependencies on the environment variables.
+        kwargs.setdefault("env", {"PATH": "/bin:/usr/bin"})
         kwargs["env"].update(self.env())
 
         logger = logging.getLogger(self.__class__.__name__)
-        logger.debug("Running %s", zmake.util.repr_command(argv))
+        logger.debug(
+            "Running `env -i %s%s%s`",
+            " ".join(f"{k}={shlex.quote(v)}" for k, v in kwargs["env"].items()),
+            " " if kwargs["env"] else "",
+            zmake.util.repr_command(argv),
+        )
         return subprocess.Popen(argv, **kwargs)
 
 

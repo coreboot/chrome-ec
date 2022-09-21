@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 The Chromium OS Authors
+ * Copyright 2021 The ChromiumOS Authors
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -68,9 +68,8 @@
 		};
 	};
 
-	fiu0: cros-flash{
+	fiu0: cros-flash {
 		compatible = "nuvoton,npcx-cros-flash";
-		label = "INTERNAL_FLASH";
 	};
 
 	soc {
@@ -78,7 +77,6 @@
 		cros_kb_raw: cros-kb-raw@400a3000 {
 			compatible = "nuvoton,npcx-cros-kb-raw";
 			reg = <0x400a3000 0x2000>;
-			label = "CROS_KB_RAW_0";
 			interrupts = <49 4>;
 			clocks = <&pcc NPCX_CLOCK_BUS_APB1 NPCX_PWDWN_CTL1 0>;
 			wui_maps = <&wui_io31 &wui_io30 &wui_io27 &wui_io26
@@ -89,7 +87,6 @@
 			compatible = "nuvoton,npcx-cros-mtc";
 			reg = <0x400b7000 0x2000>;
 			mtc-alarm = <&wui_mtc>;
-			label = "MTC";
 		};
 
 		shi: shi@4000f000 {

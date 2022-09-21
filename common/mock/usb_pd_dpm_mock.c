@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -36,12 +36,12 @@ void dpm_mode_exit_complete(int port)
 }
 
 void dpm_vdm_acked(int port, enum tcpci_msg_type type, int vdo_count,
-		uint32_t *vdm)
+		   uint32_t *vdm)
 {
 }
 
 void dpm_vdm_naked(int port, enum tcpci_msg_type type, uint16_t svid,
-		uint8_t vdm_cmd)
+		   uint8_t vdm_cmd)
 {
 }
 
@@ -73,6 +73,14 @@ void dpm_remove_source(int port)
 {
 }
 
+void dpm_bist_shared_mode_enter(int port)
+{
+}
+
+void dpm_bist_shared_mode_exit(int port)
+{
+}
+
 int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
 {
 	*src_pdo = pd_src_pdo;
@@ -82,4 +90,8 @@ int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
 int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len)
 {
 	return EC_SUCCESS;
+}
+
+void dpm_handle_alert(int port, uint32_t ado)
+{
 }

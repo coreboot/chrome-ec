@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -195,9 +195,10 @@ int test_pd_timers(void)
 		TEST_ASSERT(pd_timer_is_disabled(port, bit));
 
 	/*
-	 * Disable the PE timer range, which contains the previously enabled
-	 * timers 1-5.
+	 * Disable the PE and DPM timer ranges, which contain the previously
+	 * enabled timers 1-5.
 	 */
+	pd_timer_disable_range(port, DPM_TIMER_RANGE);
 	pd_timer_disable_range(port, PE_TIMER_RANGE);
 	/* Verify all timers are disabled. */
 	for (bit = 0; bit < PD_TIMER_COUNT; ++bit)
@@ -206,7 +207,7 @@ int test_pd_timers(void)
 	return EC_SUCCESS;
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	RUN_TEST(test_pd_timers_init);
 	RUN_TEST(test_pd_timers_bit_ops);

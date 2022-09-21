@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -14,7 +14,7 @@
 /**
  * Debounce time for lid switch
  */
-#define LID_DEBOUNCE_US    (30 * MSEC)
+#define LID_DEBOUNCE_US (30 * MSEC)
 
 /**
  * Return non-zero if lid is open.
@@ -37,4 +37,4 @@ void lid_interrupt(enum gpio_signal signal);
  */
 void enable_lid_detect(bool enable);
 
-#endif  /* __CROS_EC_LID_SWITCH_H */
+#endif /* __CROS_EC_LID_SWITCH_H */

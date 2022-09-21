@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -11,21 +11,16 @@
 #include "pwm_chip.h"
 
 const struct pwm_t pwm_channels[] = {
-	[PWM_CH_LED_GREEN] = {
-		.channel = 0,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 2000
-	},
-	[PWM_CH_FAN] = {
-		.channel = 5,
-		.flags = PWM_CONFIG_OPEN_DRAIN | PWM_CONFIG_DSLEEP,
-		.freq = 1000
-	},
-	[PWM_CH_LED_RED] = {
-		.channel = 2,
-		.flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
-		.freq = 2000
-	},
+	[PWM_CH_LED_GREEN] = { .channel = 0,
+			       .flags = PWM_CONFIG_ACTIVE_LOW |
+					PWM_CONFIG_DSLEEP,
+			       .freq = 2000 },
+	[PWM_CH_FAN] = { .channel = 5,
+			 .flags = PWM_CONFIG_OPEN_DRAIN | PWM_CONFIG_DSLEEP,
+			 .freq = 1000 },
+	[PWM_CH_LED_RED] = { .channel = 2,
+			     .flags = PWM_CONFIG_ACTIVE_LOW | PWM_CONFIG_DSLEEP,
+			     .freq = 2000 },
 };
 BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 

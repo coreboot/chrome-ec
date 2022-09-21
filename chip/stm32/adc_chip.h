@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -48,7 +48,7 @@ struct adc_t {
 #endif
 
 #if defined(CHIP_FAMILY_STM32F0) || defined(CHIP_FAMILY_STM32L4)
-	enum stm32_adc_smpr sample_rate;  /* Sampling Rate of the channel */
+	enum stm32_adc_smpr sample_rate; /* Sampling Rate of the channel */
 #endif
 };
 

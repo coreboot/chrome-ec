@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -107,4 +107,4 @@ void restore_host_wake_alarm(void);
 void low_power_init(void);
 #endif
 
-#endif  /* __CROS_EC_CLOCK_L4_H */
+#endif /* __CROS_EC_CLOCK_L4_H */

@@ -1,4 +1,4 @@
-/* Copyright 2018 The Chromium OS Authors. All rights reserved.
+/* Copyright 2018 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -66,7 +66,6 @@ struct board_batt_params {
 /* Forward declare board specific data used by common code */
 extern const struct board_batt_params board_battery_info[];
 extern const enum battery_type DEFAULT_BATTERY_TYPE;
-
 
 #ifdef CONFIG_BATTERY_MEASURE_IMBALANCE
 /**

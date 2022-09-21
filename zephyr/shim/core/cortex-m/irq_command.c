@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -21,7 +21,7 @@ void sys_trace_isr_enter_user(int nested_interrupts)
 	irq_count[irq]++;
 }
 
-static int command_irq(int argc, char **argv)
+static int command_irq(int argc, const char **argv)
 {
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);

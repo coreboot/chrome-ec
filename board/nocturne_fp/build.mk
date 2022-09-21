@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium OS Authors. All rights reserved.
+# Copyright 2017 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -31,6 +31,7 @@ test-list-y=\
        compile_time_macros \
        cortexm_fpu \
        crc \
+       debug \
        flash_physical \
        flash_write_protect \
        fpsensor \
@@ -49,6 +50,7 @@ test-list-y=\
        sha256 \
        sha256_unrolled \
        static_if \
+       stdlib \
        system_is_locked \
        timer_dos \
        utils \

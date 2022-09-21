@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -49,8 +49,7 @@ DECLARE_EC_TEST(test_wp)
 TEST_SUITE(test_suite_cbi_wp)
 {
 	ztest_test_suite(test_cbi_wp,
-			 ztest_unit_test_setup_teardown(test_wp,
-							test_setup,
+			 ztest_unit_test_setup_teardown(test_wp, test_setup,
 							test_teardown));
 	ztest_run_test_suite(test_cbi_wp);
 }

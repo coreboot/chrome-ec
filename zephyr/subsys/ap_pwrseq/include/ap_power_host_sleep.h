@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -22,8 +22,8 @@ void ap_power_set_active_wake_mask(void);
  *
  * @return 0 for success; -EINVAL if power state is not S3/S5/S0ix
  */
-int ap_power_get_lazy_wake_mask(
-	enum power_states_ndsx state, host_event_t *mask);
+int ap_power_get_lazy_wake_mask(enum power_states_ndsx state,
+				host_event_t *mask);
 
 #if CONFIG_AP_PWRSEQ_S0IX
 /* For S0ix path, flag to notify sleep change */
@@ -55,5 +55,18 @@ enum ap_power_sleep_type ap_power_sleep_get_notify(void);
  */
 void ap_power_sleep_notify_transition(enum ap_power_sleep_type check_state);
 #endif /* CONFIG_AP_PWRSEQ_S0IX */
+
+/*
+ * Get sleep timeout from host command context
+ */
+uint16_t host_get_sleep_timeout(void);
+
+/*
+ * Set sleep transitions for host command response
+ *
+ * @param val sleep transitions
+ *
+ */
+void host_set_sleep_transitions(uint32_t val);
 
 #endif /* __AP_PWRSEQ_HOST_SLEEP_H */

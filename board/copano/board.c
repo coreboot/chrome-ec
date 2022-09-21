@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -42,7 +42,7 @@
 
 #include "gpio_list.h" /* Must come after other header files. */
 
-#define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_CHIPSET, format, ##args)
 
 /* Keyboard scan setting */
 __override struct keyboard_scan_config keyscan_config = {
@@ -77,8 +77,8 @@ static const struct ec_response_keybd_config copano_kb = {
 	.capabilities = KEYBD_CAP_SCRNLOCK_KEY,
 };
 
-__override const struct ec_response_keybd_config
-*board_vivaldi_keybd_config(void)
+__override const struct ec_response_keybd_config *
+board_vivaldi_keybd_config(void)
 {
 	return &copano_kb;
 }
@@ -93,7 +93,6 @@ union volteer_cbi_fw_config fw_config_defaults = {
 
 static void board_init(void)
 {
-
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -180,8 +179,8 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 /*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_CPU \
-	{ \
+#define THERMAL_CPU              \
+	{                        \
 		.temp_host = { \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(70), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
@@ -208,8 +207,8 @@ __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 /*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_INDUCTOR \
-	{ \
+#define THERMAL_INDUCTOR         \
+	{                        \
 		.temp_host = { \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(80), \
@@ -251,12 +250,15 @@ void board_reset_pd_mcu(void)
 }
 
 /* USBC mux configuration - Tiger Lake includes internal mux */
-struct usb_mux usbc0_usb4_mb_retimer = {
-	.usb_port = USBC_PORT_C0,
-	.driver = &bb_usb_retimer,
-	.hpd_update = bb_retimer_hpd_update,
-	.i2c_port = I2C_PORT_USB_0_MIX,
-	.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
+struct usb_mux_chain usbc0_usb4_mb_retimer = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C0,
+			.driver = &bb_usb_retimer,
+			.hpd_update = bb_retimer_hpd_update,
+			.i2c_port = I2C_PORT_USB_0_MIX,
+			.i2c_addr_flags = USBC_PORT_C0_BB_RETIMER_I2C_ADDR,
+		},
 };
 /*****************************************************************************
  * USB-C MUX/Retimer dynamic configuration.
@@ -265,7 +267,7 @@ static void setup_mux(void)
 {
 	CPRINTS("C0 supports bb-retimer");
 	/* USB-C port 0 have a retimer */
-	usb_muxes[USBC_PORT_C0].next_mux = &usbc0_usb4_mb_retimer;
+	usb_muxes[USBC_PORT_C0].next = &usbc0_usb4_mb_retimer;
 }
 
 __override void board_cbi_init(void)
@@ -277,7 +279,6 @@ __override void board_cbi_init(void)
 	/* Reassign USB_C0_RT_RST_ODL */
 	bb_controls[USBC_PORT_C0].usb_ls_en_gpio = GPIO_USB_C0_LS_EN;
 	bb_controls[USBC_PORT_C0].retimer_rst_gpio = GPIO_USB_C0_RT_RST_ODL;
-
 }
 
 /******************************************************************************/
@@ -353,24 +354,31 @@ BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 /******************************************************************************/
 /* USBC mux configuration - Tiger Lake includes internal mux */
-struct usb_mux usbc1_tcss_usb_mux = {
-	.usb_port = USBC_PORT_C1,
-	.driver = &virtual_usb_mux_driver,
-	.hpd_update = &virtual_hpd_update,
+struct usb_mux_chain usbc1_tcss_usb_mux = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C1,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
 };
-struct usb_mux usb_muxes[] = {
+struct usb_mux_chain usb_muxes[] = {
 	[USBC_PORT_C0] = {
-		.usb_port = USBC_PORT_C0,
-		.driver = &virtual_usb_mux_driver,
-		.hpd_update = &virtual_hpd_update,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C0,
+			.driver = &virtual_usb_mux_driver,
+			.hpd_update = &virtual_hpd_update,
+		},
 	},
 	[USBC_PORT_C1] = {
-		.usb_port = USBC_PORT_C1,
-		.next_mux = &usbc1_tcss_usb_mux,
-		.driver = &bb_usb_retimer,
-		.hpd_update = bb_retimer_hpd_update,
-		.i2c_port = I2C_PORT_USB_1_MIX,
-		.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C1,
+			.driver = &bb_usb_retimer,
+			.hpd_update = bb_retimer_hpd_update,
+			.i2c_port = I2C_PORT_USB_1_MIX,
+			.i2c_addr_flags = USBC_PORT_C1_BB_RETIMER_I2C_ADDR,
+		},
+		.next = &usbc1_tcss_usb_mux,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);

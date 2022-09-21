@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -58,7 +58,7 @@ int board_get_temp(int idx, int *temp_k)
 
 		/* adc power not ready when transition to S5 */
 		if (chipset_in_or_transitioning_to_state(
-			CHIPSET_STATE_SOFT_OFF))
+			    CHIPSET_STATE_SOFT_OFF))
 			return EC_ERROR_NOT_POWERED;
 
 		channel = ADC_TEMP_SENSOR_SOC;

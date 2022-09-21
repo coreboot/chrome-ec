@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -97,7 +97,8 @@ DECLARE_IPI(SCP_IPI_HOST_COMMAND, hostcmd_handler, 0);
 /*
  * Get protocol information
  */
-static enum ec_status hostcmd_get_protocol_info(struct host_cmd_handler_args *args)
+static enum ec_status
+hostcmd_get_protocol_info(struct host_cmd_handler_args *args)
 {
 	struct ec_response_get_protocol_info *r = args->response;
 

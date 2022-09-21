@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -19,20 +19,7 @@ cd "$(dirname "$(realpath -e "${BASH_SOURCE[0]}")")"
 export PYTHONPATH="${PWD}"
 
 # Run pytest.
-# TODO(jrosenth): --hypothesis-profile=cq is very likely to be
-# unnecessary, as this was only needed when we were heavily taxing the
-# CPU by running pytest alongside all the ninjas, which no longer
-# happens.  Remove this flag.
-pytest --hypothesis-profile=cq .
-
-# Check import sorting.
-isort --check .
-
-# Check black formatting.
-black --check --diff .
-
-# Check flake8 reports no issues.
-flake8 .
+pytest . -v
 
 # Check auto-generated README.md is as expected.
 python -m zmake generate-readme --diff

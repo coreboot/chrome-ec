@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -34,21 +34,8 @@
  * 14 |   47 |  680 | 3086.7
  */
 const static int voltage_map[] = {
-	136,
-	388,
-	584,
-	785,
-	993,
-	1220,
-	1432,
-	1650,
-	1875,
-	2084,
-	2273,
-	2461,
-	2672,
-	2888,
-	3086,
+	136,  388,  584,  785,	993,  1220, 1432, 1650,
+	1875, 2084, 2273, 2461, 2672, 2888, 3086,
 };
 
 const int threshold_mv = 100;

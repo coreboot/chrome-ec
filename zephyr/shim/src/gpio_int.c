@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -174,7 +174,7 @@ int gpio_enable_dt_interrupt(const struct gpio_int_config *conf)
 }
 
 const struct gpio_int_config *
-	gpio_interrupt_get_config(enum gpio_interrupts intr)
+gpio_interrupt_get_config(enum gpio_interrupts intr)
 {
 	return &gpio_int_data[intr];
 }

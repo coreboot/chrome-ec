@@ -1,11 +1,12 @@
 /*
- * Copyright 2014 The Chromium OS Authors. All rights reserved.
+ * Copyright 2014 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
  * SPI flash driver for Chrome EC.
  */
 
+#include "builtin/assert.h"
 #include "common.h"
 #include "console.h"
 #include "host_command.h"
@@ -22,12 +23,12 @@
 /*
  * Time to sleep when chip is busy
  */
-#define SPI_FLASH_SLEEP_USEC	100
+#define SPI_FLASH_SLEEP_USEC 100
 
 /*
  * This is the max time for 32kb flash erase
  */
-#define SPI_FLASH_TIMEOUT_USEC	(800*MSEC)
+#define SPI_FLASH_TIMEOUT_USEC (800 * MSEC)
 
 /* Internal buffer used by SPI flash driver */
 static uint8_t buf[SPI_FLASH_MAX_MESSAGE_SIZE];
@@ -109,13 +110,12 @@ uint8_t spi_flash_get_status2(void)
  */
 int spi_flash_set_status(int reg1, int reg2)
 {
-	uint8_t cmd[3] = {SPI_FLASH_WRITE_SR, reg1, reg2};
+	uint8_t cmd[3] = { SPI_FLASH_WRITE_SR, reg1, reg2 };
 	int rv = EC_SUCCESS;
 
 	/* fail if both HW pin is asserted and SRP(s) is 1 */
 	if (spi_flash_check_wp() != SPI_WP_NONE &&
-		(crec_flash_get_protect() &
-		EC_FLASH_PROTECT_GPIO_ASSERTED) != 0)
+	    (crec_flash_get_protect() & EC_FLASH_PROTECT_GPIO_ASSERTED) != 0)
 		return EC_ERROR_ACCESS_DENIED;
 
 	/* Enable writing to SPI flash */
@@ -123,7 +123,7 @@ int spi_flash_set_status(int reg1, int reg2)
 	if (rv)
 		return rv;
 
-	/* Second status register not present */
+		/* Second status register not present */
 #ifndef CONFIG_SPI_FLASH_HAS_SR2
 	reg2 = -1;
 #endif
@@ -163,11 +163,8 @@ int spi_flash_read(uint8_t *buf_usr, unsigned int offset, unsigned int bytes)
 		cmd[2] = (spi_addr >> 8) & 0xFF;
 		cmd[3] = spi_addr & 0xFF;
 		read_size = MIN((bytes - i), SPI_FLASH_MAX_READ_SIZE);
-		ret = spi_transaction(SPI_FLASH_DEVICE,
-			cmd,
-			4,
-			buf_usr + i,
-			read_size);
+		ret = spi_transaction(SPI_FLASH_DEVICE, cmd, 4, buf_usr + i,
+				      read_size);
 		if (ret != EC_SUCCESS)
 			break;
 		msleep(CONFIG_SPI_FLASH_READ_WAIT_MS);
@@ -276,7 +273,7 @@ int spi_flash_erase(unsigned int offset, unsigned int bytes)
  * @return EC_SUCCESS, or non-zero if any error.
  */
 int spi_flash_write(unsigned int offset, unsigned int bytes,
-	const uint8_t *data)
+		    const uint8_t *data)
 {
 	int rv, write_size;
 
@@ -288,8 +285,10 @@ int spi_flash_write(unsigned int offset, unsigned int bytes,
 	while (bytes > 0) {
 		watchdog_reload();
 		/* Write length can not go beyond the end of the flash page */
-		write_size = MIN(bytes, SPI_FLASH_MAX_WRITE_SIZE -
-		(offset & (SPI_FLASH_MAX_WRITE_SIZE - 1)));
+		write_size =
+			MIN(bytes,
+			    SPI_FLASH_MAX_WRITE_SIZE -
+				    (offset & (SPI_FLASH_MAX_WRITE_SIZE - 1)));
 
 		/* Wait for previous operation to complete */
 		rv = spi_flash_wait();
@@ -310,8 +309,8 @@ int spi_flash_write(unsigned int offset, unsigned int bytes,
 		buf[2] = (offset) >> 8;
 		buf[3] = offset;
 
-		rv = spi_transaction(SPI_FLASH_DEVICE,
-				     buf, 4 + write_size, NULL, 0);
+		rv = spi_transaction(SPI_FLASH_DEVICE, buf, 4 + write_size,
+				     NULL, 0);
 		if (rv)
 			return rv;
 
@@ -345,7 +344,7 @@ int spi_flash_get_jedec_id(uint8_t *dest)
  */
 int spi_flash_get_mfr_dev_id(uint8_t *dest)
 {
-	uint8_t cmd[4] = {SPI_FLASH_MFR_DEV_ID, 0, 0, 0};
+	uint8_t cmd[4] = { SPI_FLASH_MFR_DEV_ID, 0, 0, 0 };
 
 	return spi_transaction(SPI_FLASH_DEVICE, cmd, sizeof(cmd), dest, 2);
 }
@@ -358,7 +357,7 @@ int spi_flash_get_mfr_dev_id(uint8_t *dest)
  */
 int spi_flash_get_unique_id(uint8_t *dest)
 {
-	uint8_t cmd[5] = {SPI_FLASH_UNIQUE_ID, 0, 0, 0, 0};
+	uint8_t cmd[5] = { SPI_FLASH_UNIQUE_ID, 0, 0, 0, 0 };
 
 	return spi_transaction(SPI_FLASH_DEVICE, cmd, sizeof(cmd), dest, 8);
 }
@@ -480,7 +479,7 @@ int spi_flash_set_protect(unsigned int offset, unsigned int bytes)
 	return spi_flash_set_status(sr1, sr2);
 }
 
-static int command_spi_flashinfo(int argc, char **argv)
+static int command_spi_flashinfo(int argc, const char **argv)
 {
 	uint8_t jedec[3];
 	uint8_t unique[8];
@@ -497,18 +496,17 @@ static int command_spi_flashinfo(int argc, char **argv)
 	spi_flash_get_jedec_id(jedec);
 	spi_flash_get_unique_id(unique);
 
-	ccprintf("Manufacturer ID: %02x\nDevice ID: %02x %02x\n",
-		 jedec[0], jedec[1], jedec[2]);
+	ccprintf("Manufacturer ID: %02x\nDevice ID: %02x %02x\n", jedec[0],
+		 jedec[1], jedec[2]);
 	ccprintf("Unique ID: %02x %02x %02x %02x %02x %02x %02x %02x\n",
-		 unique[0], unique[1], unique[2], unique[3],
-		 unique[4], unique[5], unique[6], unique[7]);
+		 unique[0], unique[1], unique[2], unique[3], unique[4],
+		 unique[5], unique[6], unique[7]);
 	ccprintf("Capacity: %4d kB\n", SPI_FLASH_SIZE(jedec[2]) / 1024);
 
 	return rv;
 }
-DECLARE_CONSOLE_COMMAND(spi_flashinfo, command_spi_flashinfo,
-	NULL,
-	"Print SPI flash info");
+DECLARE_CONSOLE_COMMAND(spi_flashinfo, command_spi_flashinfo, NULL,
+			"Print SPI flash info");
 
 #ifdef CONFIG_HOSTCMD_FLASH_SPI_INFO
 static enum ec_status flash_command_spi_info(struct host_cmd_handler_args *args)
@@ -524,13 +522,12 @@ static enum ec_status flash_command_spi_info(struct host_cmd_handler_args *args)
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_FLASH_SPI_INFO,
-		     flash_command_spi_info,
+DECLARE_HOST_COMMAND(EC_CMD_FLASH_SPI_INFO, flash_command_spi_info,
 		     EC_VER_MASK(0));
-#endif  /* CONFIG_HOSTCMD_FLASH_SPI_INFO */
+#endif /* CONFIG_HOSTCMD_FLASH_SPI_INFO */
 
 #ifdef CONFIG_CMD_SPI_FLASH
-static int command_spi_flasherase(int argc, char **argv)
+static int command_spi_flasherase(int argc, const char **argv)
 {
 	int offset = -1;
 	int bytes = 4096;
@@ -549,10 +546,9 @@ static int command_spi_flasherase(int argc, char **argv)
 	return spi_flash_erase(offset, bytes);
 }
 DECLARE_CONSOLE_COMMAND(spi_flasherase, command_spi_flasherase,
-	"offset [bytes]",
-	"Erase flash");
+			"offset [bytes]", "Erase flash");
 
-static int command_spi_flashwrite(int argc, char **argv)
+static int command_spi_flashwrite(int argc, const char **argv)
 {
 	int offset = -1;
 	int bytes = SPI_FLASH_MAX_WRITE_SIZE;
@@ -578,7 +574,8 @@ static int command_spi_flashwrite(int argc, char **argv)
 	while (bytes > 0) {
 		/* First write multiples of 256, then (bytes % 256) last */
 		write_len = ((bytes % SPI_FLASH_MAX_WRITE_SIZE) == bytes) ?
-					bytes : SPI_FLASH_MAX_WRITE_SIZE;
+				    bytes :
+				    SPI_FLASH_MAX_WRITE_SIZE;
 
 		/* Perform write */
 		rv = spi_flash_write(offset, write_len, buf);
@@ -594,10 +591,9 @@ static int command_spi_flashwrite(int argc, char **argv)
 	return rv;
 }
 DECLARE_CONSOLE_COMMAND(spi_flashwrite, command_spi_flashwrite,
-	"offset [bytes]",
-	"Write pattern to flash");
+			"offset [bytes]", "Write pattern to flash");
 
-static int command_spi_flashread(int argc, char **argv)
+static int command_spi_flashread(int argc, const char **argv)
 {
 	int i;
 	int offset = -1;
@@ -627,8 +623,8 @@ static int command_spi_flashread(int argc, char **argv)
 
 		/* First read (bytes % 256), then in multiples of 256 */
 		read_len = (bytes % SPI_FLASH_MAX_READ_SIZE) ?
-					(bytes % SPI_FLASH_MAX_READ_SIZE) :
-					SPI_FLASH_MAX_READ_SIZE;
+				   (bytes % SPI_FLASH_MAX_READ_SIZE) :
+				   SPI_FLASH_MAX_READ_SIZE;
 
 		rv = spi_flash_read(buf, offset, read_len);
 		if (rv)
@@ -651,11 +647,10 @@ static int command_spi_flashread(int argc, char **argv)
 	ASSERT(bytes == 0);
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(spi_flashread, command_spi_flashread,
-	"offset bytes",
-	"Read flash");
+DECLARE_CONSOLE_COMMAND(spi_flashread, command_spi_flashread, "offset bytes",
+			"Read flash");
 
-static int command_spi_flashread_sr(int argc, char **argv)
+static int command_spi_flashread_sr(int argc, const char **argv)
 {
 	spi_enable(SPI_FLASH_DEVICE, 1);
 
@@ -664,11 +659,10 @@ static int command_spi_flashread_sr(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(spi_flash_rsr, command_spi_flashread_sr,
-	NULL,
-	"Read status registers");
+DECLARE_CONSOLE_COMMAND(spi_flash_rsr, command_spi_flashread_sr, NULL,
+			"Read status registers");
 
-static int command_spi_flashwrite_sr(int argc, char **argv)
+static int command_spi_flashwrite_sr(int argc, const char **argv)
 {
 	int val1 = 0;
 	int val2 = 0;
@@ -684,10 +678,9 @@ static int command_spi_flashwrite_sr(int argc, char **argv)
 	return spi_flash_set_status(val1, val2);
 }
 DECLARE_CONSOLE_COMMAND(spi_flash_wsr, command_spi_flashwrite_sr,
-	"value1 value2",
-	"Write to status registers");
+			"value1 value2", "Write to status registers");
 
-static int command_spi_flashprotect(int argc, char **argv)
+static int command_spi_flashprotect(int argc, const char **argv)
 {
 	int val1 = 0;
 	int val2 = 0;
@@ -698,10 +691,10 @@ static int command_spi_flashprotect(int argc, char **argv)
 
 	spi_enable(SPI_FLASH_DEVICE, 1);
 
-	ccprintf("Setting protection for 0x%06x to 0x%06x\n", val1, val1+val2);
+	ccprintf("Setting protection for 0x%06x to 0x%06x\n", val1,
+		 val1 + val2);
 	return spi_flash_set_protect(val1, val2);
 }
-DECLARE_CONSOLE_COMMAND(spi_flash_prot, command_spi_flashprotect,
-	"offset len",
-	"Set block protection");
+DECLARE_CONSOLE_COMMAND(spi_flash_prot, command_spi_flashprotect, "offset len",
+			"Set block protection");
 #endif

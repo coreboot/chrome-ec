@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -37,8 +37,8 @@
 
 #include "gpio_list.h"
 
-#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
 /* Motion sensors */
 static struct mutex g_lid_mutex;
@@ -205,8 +205,8 @@ static void board_chipset_resume(void)
 		int val;
 
 		rv = i2c_read8(I2C_PORT_USBA0,
-				PS8811_I2C_ADDR_FLAGS3 + PS8811_REG_PAGE1,
-				PS8811_REG1_USB_BEQ_LEVEL, &val);
+			       PS8811_I2C_ADDR_FLAGS3 + PS8811_REG_PAGE1,
+			       PS8811_REG1_USB_BEQ_LEVEL, &val);
 		if (!rv)
 			break;
 	}
@@ -220,10 +220,10 @@ static void board_chipset_resume(void)
 		rv = i2c_write8(I2C_PORT_USBA1,
 				PS8811_I2C_ADDR_FLAGS3 + PS8811_REG_PAGE1,
 				PS8811_REG1_USB_BEQ_LEVEL,
-				(PS8811_BEQ_I2C_LEVEL_UP_13DB <<
-				PS8811_BEQ_I2C_LEVEL_UP_SHIFT) |
-				(PS8811_BEQ_PIN_LEVEL_UP_18DB <<
-				PS8811_BEQ_PIN_LEVEL_UP_SHIFT));
+				(PS8811_BEQ_I2C_LEVEL_UP_13DB
+				 << PS8811_BEQ_I2C_LEVEL_UP_SHIFT) |
+					(PS8811_BEQ_PIN_LEVEL_UP_18DB
+					 << PS8811_BEQ_PIN_LEVEL_UP_SHIFT));
 		if (!rv)
 			break;
 	}
@@ -233,9 +233,7 @@ static void board_chipset_resume(void)
 	}
 
 	if (ec_config_has_hdmi_retimer_pi3hdx1204()) {
-		pi3hdx1204_enable(I2C_PORT_TCPC1,
-				  PI3HDX1204_I2C_ADDR_FLAGS,
-				  1);
+		pi3hdx1204_enable(I2C_PORT_TCPC1, PI3HDX1204_I2C_ADDR_FLAGS, 1);
 	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
@@ -246,9 +244,7 @@ static void board_chipset_suspend(void)
 	ioex_set_level(IOEX_USB_A1_RETIMER_EN, 0);
 
 	if (ec_config_has_hdmi_retimer_pi3hdx1204()) {
-		pi3hdx1204_enable(I2C_PORT_TCPC1,
-				  PI3HDX1204_I2C_ADDR_FLAGS,
-				  0);
+		pi3hdx1204_enable(I2C_PORT_TCPC1, PI3HDX1204_I2C_ADDR_FLAGS, 0);
 	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
@@ -256,6 +252,10 @@ DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 /*****************************************************************************
  * USB-C MUX/Retimer dynamic configuration
  */
+
+/* Place holder for second mux in USBC1 chain */
+struct usb_mux_chain usbc1_mux1;
+
 static void setup_mux(void)
 {
 	if (ec_config_has_usbc1_retimer_ps8802()) {
@@ -265,12 +265,10 @@ static void setup_mux(void)
 		 * Replace usb_muxes[USBC_PORT_C1] with the PS8802
 		 * table entry.
 		 */
-		memcpy(&usb_muxes[USBC_PORT_C1],
-		       &usbc1_ps8802,
-		       sizeof(struct usb_mux));
+		usb_muxes[USBC_PORT_C1].mux = &usbc1_ps8802;
 
 		/* Set the AMD FP5 as the secondary MUX */
-		usb_muxes[USBC_PORT_C1].next_mux = &usbc1_amd_fp5_usb_mux;
+		usbc1_mux1.mux = &usbc1_amd_fp5_usb_mux;
 
 		/* Don't have the AMD FP5 flip */
 		usbc1_amd_fp5_usb_mux.flags = USB_MUX_FLAG_SET_WITHOUT_FLIP;
@@ -282,12 +280,10 @@ static void setup_mux(void)
 		 * Replace usb_muxes[USBC_PORT_C1] with the AMD FP5
 		 * table entry.
 		 */
-		memcpy(&usb_muxes[USBC_PORT_C1],
-		       &usbc1_amd_fp5_usb_mux,
-		       sizeof(struct usb_mux));
+		usb_muxes[USBC_PORT_C1].mux = &usbc1_amd_fp5_usb_mux;
 
 		/* Set the PS8818 as the secondary MUX */
-		usb_muxes[USBC_PORT_C1].next_mux = &usbc1_ps8818;
+		usbc1_mux1.mux = &usbc1_ps8818;
 	}
 }
 
@@ -301,23 +297,29 @@ const struct pi3dpx1207_usb_control pi3dpx1207_controls[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(pi3dpx1207_controls) == USBC_PORT_COUNT);
 
-const struct usb_mux usbc0_pi3dpx1207_usb_retimer = {
-	.usb_port = USBC_PORT_C0,
-	.i2c_port = I2C_PORT_TCPC0,
-	.i2c_addr_flags = PI3DPX1207_I2C_ADDR_FLAGS,
-	.driver = &pi3dpx1207_usb_retimer,
+const struct usb_mux_chain usbc0_pi3dpx1207_usb_retimer = {
+	.mux =
+		&(const struct usb_mux){
+			.usb_port = USBC_PORT_C0,
+			.i2c_port = I2C_PORT_TCPC0,
+			.i2c_addr_flags = PI3DPX1207_I2C_ADDR_FLAGS,
+			.driver = &pi3dpx1207_usb_retimer,
+		},
 };
 
-struct usb_mux usb_muxes[] = {
+struct usb_mux_chain usb_muxes[] = {
 	[USBC_PORT_C0] = {
-		.usb_port = USBC_PORT_C0,
-		.i2c_port = I2C_PORT_USB_AP_MUX,
-		.i2c_addr_flags = AMD_FP5_MUX_I2C_ADDR_FLAGS,
-		.driver = &amd_fp5_usb_mux_driver,
-		.next_mux = &usbc0_pi3dpx1207_usb_retimer,
+		.mux = &(const struct usb_mux) {
+			.usb_port = USBC_PORT_C0,
+			.i2c_port = I2C_PORT_USB_AP_MUX,
+			.i2c_addr_flags = AMD_FP5_MUX_I2C_ADDR_FLAGS,
+			.driver = &amd_fp5_usb_mux_driver,
+		},
+		.next = &usbc0_pi3dpx1207_usb_retimer,
 	},
 	[USBC_PORT_C1] = {
 		/* Filled in dynamically at startup */
+		.next = &usbc1_mux1,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
@@ -361,7 +363,7 @@ DECLARE_HOOK(HOOK_INIT, setup_fw_config, HOOK_PRIO_INIT_I2C + 2);
 /* Physical fans. These are logically separate from pwm_channels. */
 const struct fan_conf fan_conf_0 = {
 	.flags = FAN_USE_RPM_MODE,
-	.ch = MFT_CH_0,	/* Use MFT id to control fan */
+	.ch = MFT_CH_0, /* Use MFT id to control fan */
 	.pgood_gpio = -1,
 	.enable_gpio = -1,
 };
@@ -452,8 +454,8 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 /*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_THERMISTOR \
-	{ \
+#define THERMAL_THERMISTOR       \
+	{                        \
 		.temp_host = { \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(90), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(92), \
@@ -470,8 +472,8 @@ __maybe_unused static const struct ec_thermal_config thermal_thermistor =
 /*
  * TODO(b/202062363): Remove when clang is fixed.
  */
-#define THERMAL_CPU \
-	{ \
+#define THERMAL_CPU              \
+	{                        \
 		.temp_host = { \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(90), \
 			[EC_TEMP_THRESH_HALT] = C_TO_K(92), \

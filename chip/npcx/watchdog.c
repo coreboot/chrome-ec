@@ -1,4 +1,4 @@
-/* Copyright 2014 The Chromium OS Authors. All rights reserved.
+/* Copyright 2014 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -108,18 +108,18 @@ void IRQ_HANDLER(ITIM_INT(ITIM_WDG_NO))(void)
 {
 	/* Naked call so we can extract raw LR and SP */
 	asm volatile("mov r0, lr\n"
-			"mov r1, sp\n"
-			/* Must push registers in pairs to keep 64-bit aligned
-			 * stack for ARM EABI.  This also conveninently saves
-			 * R0=LR so we can pass it to task_resched_if_needed. */
-			"push {r0, lr}\n"
-			"bl watchdog_check\n"
-			"pop {r0, lr}\n"
-			"b task_resched_if_needed\n");
+		     "mov r1, sp\n"
+		     /* Must push registers in pairs to keep 64-bit aligned
+		      * stack for ARM EABI.  This also conveninently saves
+		      * R0=LR so we can pass it to task_resched_if_needed. */
+		     "push {r0, lr}\n"
+		     "bl watchdog_check\n"
+		     "pop {r0, lr}\n"
+		     "b task_resched_if_needed\n");
 }
 const struct irq_priority __keep IRQ_PRIORITY(ITIM_INT(ITIM_WDG_NO))
-__attribute__((section(".rodata.irqprio")))
-= {ITIM_INT(ITIM_WDG_NO), 0};
+	__attribute__((section(".rodata.irqprio"))) = { ITIM_INT(ITIM_WDG_NO),
+							0 };
 /* put the watchdog at the highest priority */
 
 void watchdog_reload(void)

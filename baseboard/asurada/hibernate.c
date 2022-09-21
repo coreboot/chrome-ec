@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -23,8 +23,8 @@ __override void board_hibernate_late(void)
 	 */
 	if (board_get_version() <= 1) {
 		if (IS_ENABLED(BOARD_ASURADA) ||
-			(IS_ENABLED(CONFIG_ZEPHYR) &&
-			IS_ENABLED(CONFIG_BOARD_ASURADA)))
+		    (IS_ENABLED(CONFIG_ZEPHYR) &&
+		     IS_ENABLED(CONFIG_BOARD_ASURADA)))
 			return;
 	}
 

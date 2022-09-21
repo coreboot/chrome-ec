@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -85,4 +85,4 @@ static inline atomic_val_t atomic_and(atomic_t *addr, atomic_val_t bits)
 	return ret;
 }
 
-#endif  /* __CROS_EC_ATOMIC_H */
+#endif /* __CROS_EC_ATOMIC_H */

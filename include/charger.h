@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -50,7 +50,7 @@ struct charger_drv {
 	enum ec_error_list (*post_init)(int chgnum);
 
 	/* Get charger information */
-	const struct charger_info * (*get_info)(int chgnum);
+	const struct charger_info *(*get_info)(int chgnum);
 
 	/* Get smart battery charger status. Supported flags may vary. */
 	enum ec_error_list (*get_status)(int chgnum, int *status);
@@ -85,17 +85,19 @@ struct charger_drv {
 	enum ec_error_list (*get_voltage)(int chgnum, int *voltage);
 	enum ec_error_list (*set_voltage)(int chgnum, int voltage);
 
-
 	/* Get the measured charge current and voltage in mA/mV */
 	enum ec_error_list (*get_actual_current)(int chgnum, int *current);
 	enum ec_error_list (*get_actual_voltage)(int chgnum, int *voltage);
-
 
 	/* Discharge battery when on AC power. */
 	enum ec_error_list (*discharge_on_ac)(int chgnum, int enable);
 
 	/* Get the VBUS voltage (mV) from the charger */
 	enum ec_error_list (*get_vbus_voltage)(int chgnum, int port,
+					       int *voltage);
+
+	/* Get the Vsys voltage (mV) from the charger */
+	enum ec_error_list (*get_vsys_voltage)(int chgnum, int port,
 					       int *voltage);
 
 	/* Set desired input current value */
@@ -180,13 +182,13 @@ enum chg_id {
 void charger_get_params(struct charger_params *chg);
 
 /* Bits to indicate which fields of struct charger_params could not be read */
-#define CHG_FLAG_BAD_CURRENT		0x00000001
-#define CHG_FLAG_BAD_VOLTAGE		0x00000002
-#define CHG_FLAG_BAD_INPUT_CURRENT	0x00000004
-#define CHG_FLAG_BAD_STATUS		0x00000008
-#define CHG_FLAG_BAD_OPTION		0x00000010
+#define CHG_FLAG_BAD_CURRENT 0x00000001
+#define CHG_FLAG_BAD_VOLTAGE 0x00000002
+#define CHG_FLAG_BAD_INPUT_CURRENT 0x00000004
+#define CHG_FLAG_BAD_STATUS 0x00000008
+#define CHG_FLAG_BAD_OPTION 0x00000010
 /* All of the above CHG_FLAG_BAD_* bits */
-#define CHG_FLAG_BAD_ANY                0x0000001f
+#define CHG_FLAG_BAD_ANY 0x0000001f
 
 /**
  * Return the closest match the charger can supply to the requested current.
@@ -276,6 +278,9 @@ enum ec_error_list charger_discharge_on_ac(int enable);
 
 /* Get the VBUS voltage (mV) from the charger */
 enum ec_error_list charger_get_vbus_voltage(int port, int *voltage);
+
+/* Get the Vsys voltage (mV) from the charger */
+enum ec_error_list charger_get_vsys_voltage(int port, int *voltage);
 
 /* Custom board function to discharge battery when on AC power */
 int board_discharge_on_ac(int enable);
@@ -384,10 +389,15 @@ enum ec_error_list charger_enable_linear_charge(int chgnum, bool enable);
  */
 enum ec_error_list charger_enable_bypass_mode(int chgnum, int enable);
 
-/*
+/**
  * Print all charger info for debugging purposes
  * @param chgnum: charger IC index.
  */
 void print_charger_debug(int chgnum);
+
+/**
+ * Get the value of CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
+ */
+int charger_get_min_bat_pct_for_power_on(void);
 
 #endif /* __CROS_EC_CHARGER_H */

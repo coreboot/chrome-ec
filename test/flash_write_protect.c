@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -97,7 +97,6 @@ test_static int test_cbi_wb_asserted_immediately(void)
 	/* Now make sure EC_CBI_WP is asserted immediately. */
 	TEST_EQ(gpio_get_level(GPIO_EC_CBI_WP), 1, "%d");
 
-
 	return EC_SUCCESS;
 }
 
@@ -131,7 +130,7 @@ int task_test(void *unused)
 	return EC_SUCCESS;
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	msleep(30); /* Wait for TASK_ID_TEST to initialize */
 	task_wake(TASK_ID_TEST);

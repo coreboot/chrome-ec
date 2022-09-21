@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -25,7 +25,7 @@
 #define MXC_FLASH_PAGE_MASK ~(MXC_FLASH_PAGE_SIZE - 1)
 
 /// Calculate the address of a page in flash from the page number
-#define MXC_FLASH_PAGE_ADDR(page)                                              \
+#define MXC_FLASH_PAGE_ADDR(page) \
 	(MXC_FLASH_MEM_BASE + ((unsigned long)page * MXC_FLASH_PAGE_SIZE))
 
 void flash_operation(void)
@@ -123,7 +123,6 @@ int crec_flash_physical_write(int offset, int size, const char *data)
 
 	// Align the address and read/write if we have to
 	if (offset & 0x3) {
-
 		// Figure out how many bytes we have to write to round up the
 		// address
 		bytes_written = 4 - (offset & 0x3);
@@ -163,7 +162,6 @@ int crec_flash_physical_write(int offset, int size, const char *data)
 	}
 
 	if (size >= 16) {
-
 		// write in 128-bit bursts while we can
 		MXC_FLC->cn &= ~MXC_F_FLC_CN_WDTH;
 
@@ -308,7 +306,7 @@ int crec_flash_pre_init(void)
  * NOTE: This is a DESTRUCTIVE test for the range of flash pages tested
  *       make sure that PAGE_START is beyond your flash code.
  */
-static int command_flash_test1(int argc, char **argv)
+static int command_flash_test1(int argc, const char **argv)
 {
 	int i;
 	uint8_t *ptr;
@@ -330,8 +328,8 @@ static int command_flash_test1(int argc, char **argv)
 		/*
 		 * erase page
 		 */
-		error_status = crec_flash_physical_erase(flash_address,
-						    CONFIG_FLASH_ERASE_SIZE);
+		error_status = crec_flash_physical_erase(
+			flash_address, CONFIG_FLASH_ERASE_SIZE);
 		if (error_status != EC_SUCCESS) {
 			CPRINTS("Error with crec_flash_physical_erase\n");
 			return EC_ERROR_UNKNOWN;
@@ -389,8 +387,8 @@ static int command_flash_test1(int argc, char **argv)
 	 */
 	for (page = PAGE_START; page <= PAGE_END; page++) {
 		flash_address = page * CONFIG_FLASH_ERASE_SIZE;
-		error_status = crec_flash_physical_erase(flash_address,
-						    CONFIG_FLASH_ERASE_SIZE);
+		error_status = crec_flash_physical_erase(
+			flash_address, CONFIG_FLASH_ERASE_SIZE);
 		if (error_status != EC_SUCCESS) {
 			CPRINTS("Error with crec_flash_physical_erase\n");
 			return EC_ERROR_UNKNOWN;

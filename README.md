@@ -179,7 +179,7 @@ cd ~/trunk/src/platform/ec
 make -j BOARD=<boardname>
 ```
 
-Where **<boardname>** is replaced by the name of the board you want to build an
+Where `<boardname>` is replaced by the name of the board you want to build an
 EC binary for. For example, the boardname for the Chromebook Pixel is “link”.
 The make command will generate an EC binary at `build/<boardname>/ec.bin`. The
 `-j` tells make to build multi-threaded which can be much faster on a multi-core
@@ -489,7 +489,7 @@ Other style notes:
     all contributions to the Chromium project:
 
     ```
-    /* Copyright <year> The Chromium OS Authors. All rights reserved.
+    /* Copyright <year> The ChromiumOS Authors
      * Use of this source code is governed by a BSD-style license that can be
      * found in the LICENSE file.
      */
@@ -677,18 +677,3 @@ cat /tmp/artifact_bundle_metadata
 cat /tmp/metrics_build
 ls -l /tmp/artifact_bundles/
 ```
-
-### firmware-ec-cov-cq
-```
-rm -rf /tmp/artifact_bundles-cov /tmp/artifact_bundle_metadata-cov \
-  ~/chromiumos/src/platform/ec/build
-./firmware_builder.py --metrics /tmp/metrics_build_cov --code-coverage build && \
-./firmware_builder.py --metrics /tmp/metrics_test_cov --code-coverage test && \
-./firmware_builder.py --metrics /tmp/metrics_bundle_cov --code-coverage \
-  --output-dir=/tmp/artifact_bundles-cov \
-  --metadata=/tmp/artifact_bundle_metadata-cov bundle && \
-echo PASSED
-cat /tmp/artifact_bundle_metadata-cov
-ls -l /tmp/artifact_bundles-cov
-```
-

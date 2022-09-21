@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,13 +8,15 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
-/* TODO: May remove CONFIG_SYSTEM_UNLOCKED prior to building MP FW. */
-#define CONFIG_SYSTEM_UNLOCKED
+/* Prism doesn't use WP GPIO, set WP enabled */
+#ifdef SECTION_IS_RO
+#define CONFIG_WP_ALWAYS
+#endif
 
 /* TODO: May define FLASH_PSTATE_LOCKED prior to building MP FW. */
 #undef CONFIG_FLASH_PSTATE_LOCKED
 
-/* USB ID. TODO: May need to find one for Prism. */
+/* USB ID for Prism */
 #define CONFIG_USB_PID 0x5022
 
 /* 48 MHz SYSCLK clock frequency */
@@ -24,15 +26,15 @@
 #ifdef SECTION_IS_RW
 #define CONFIG_KEYBOARD_BACKLIGHT
 #define CONFIG_RGB_KEYBOARD
-#define GPIO_RGBKBD_SDB_L	GPIO_SDB_L
-#define GPIO_RGBKBD_POWER	GPIO_L_POWER
+#define GPIO_RGBKBD_SDB_L GPIO_SDB_L
+#define GPIO_RGBKBD_POWER GPIO_L_POWER
 #define CONFIG_LED_DRIVER_IS31FL3743B
-#define SPI_RGB0_DEVICE_ID	0
-#define SPI_RGB1_DEVICE_ID	1
-#define RGB_GRID0_COL		11
-#define RGB_GRID0_ROW		6
-#define RGB_GRID1_COL		11
-#define RGB_GRID1_ROW		6
+#define SPI_RGB0_DEVICE_ID 0
+#define SPI_RGB1_DEVICE_ID 1
+#define RGB_GRID0_COL 11
+#define RGB_GRID0_ROW 6
+#define RGB_GRID1_COL 11
+#define RGB_GRID1_ROW 6
 
 /* Enable control of SPI over USB */
 #define CONFIG_SPI_CONTROLLER
@@ -74,27 +76,27 @@
 /* Do not use a dedicated PSTATE bank */
 #undef CONFIG_FLASH_PSTATE_BANK
 
-#define CONFIG_SHAREDLIB_SIZE	0
+#define CONFIG_SHAREDLIB_SIZE 0
 
-#define CONFIG_RO_MEM_OFF	0
-#define CONFIG_RO_STORAGE_OFF	0
-#define CONFIG_RO_SIZE		(44*1024)
+#define CONFIG_RO_MEM_OFF 0
+#define CONFIG_RO_STORAGE_OFF 0
+#define CONFIG_RO_SIZE (44 * 1024)
 
 /* EC rollback protection block */
 #define CONFIG_ROLLBACK_OFF (CONFIG_RO_MEM_OFF + CONFIG_RO_SIZE)
 #define CONFIG_ROLLBACK_SIZE CONFIG_FLASH_BANK_SIZE
 
-#define CONFIG_RW_MEM_OFF	(CONFIG_ROLLBACK_OFF + CONFIG_ROLLBACK_SIZE)
-#define CONFIG_RW_STORAGE_OFF	0
-#define CONFIG_RW_SIZE		(CONFIG_FLASH_SIZE_BYTES - CONFIG_RW_MEM_OFF)
+#define CONFIG_RW_MEM_OFF (CONFIG_ROLLBACK_OFF + CONFIG_ROLLBACK_SIZE)
+#define CONFIG_RW_STORAGE_OFF 0
+#define CONFIG_RW_SIZE (CONFIG_FLASH_SIZE_BYTES - CONFIG_RW_MEM_OFF)
 
-#define CONFIG_EC_PROTECTED_STORAGE_OFF		CONFIG_RO_MEM_OFF
-#define CONFIG_EC_PROTECTED_STORAGE_SIZE	CONFIG_RO_SIZE
-#define CONFIG_EC_WRITABLE_STORAGE_OFF		CONFIG_RW_MEM_OFF
-#define CONFIG_EC_WRITABLE_STORAGE_SIZE		CONFIG_RW_SIZE
+#define CONFIG_EC_PROTECTED_STORAGE_OFF CONFIG_RO_MEM_OFF
+#define CONFIG_EC_PROTECTED_STORAGE_SIZE CONFIG_RO_SIZE
+#define CONFIG_EC_WRITABLE_STORAGE_OFF CONFIG_RW_MEM_OFF
+#define CONFIG_EC_WRITABLE_STORAGE_SIZE CONFIG_RW_SIZE
 
-#define CONFIG_WP_STORAGE_OFF		CONFIG_EC_PROTECTED_STORAGE_OFF
-#define CONFIG_WP_STORAGE_SIZE		CONFIG_EC_PROTECTED_STORAGE_SIZE
+#define CONFIG_WP_STORAGE_OFF CONFIG_EC_PROTECTED_STORAGE_OFF
+#define CONFIG_WP_STORAGE_SIZE CONFIG_EC_PROTECTED_STORAGE_SIZE
 
 /* The UART console is on USART1 (PA9/PA10) */
 #undef CONFIG_UART_CONSOLE
@@ -120,24 +122,24 @@
 
 #define CONFIG_USB_SERIALNO
 /* Replaced at runtime (board_read_serial) by chip unique-id-based number. */
-#define DEFAULT_SERIALNO ""
+#define DEFAULT_SERIALNO "Uninitialized"
 
 /* USB interface indexes (use define rather than enum to expand them) */
-#undef  CONFIG_HOSTCMD_EVENTS
-#define USB_IFACE_UPDATE	0
+#undef CONFIG_HOSTCMD_EVENTS
+#define USB_IFACE_UPDATE 0
 #ifdef SECTION_IS_RW
 #define CONFIG_HOST_INTERFACE_USB
-#define USB_IFACE_HOSTCMD	1
-#define USB_IFACE_COUNT		2
+#define USB_IFACE_HOSTCMD 1
+#define USB_IFACE_COUNT 2
 #else
-#define USB_IFACE_COUNT		1
+#define USB_IFACE_COUNT 1
 #endif
 
 /* USB endpoint indexes (use define rather than enum to expand them) */
-#define USB_EP_CONTROL		0
-#define USB_EP_UPDATE		1
-#define USB_EP_HOSTCMD		2
-#define USB_EP_COUNT		3
+#define USB_EP_CONTROL 0
+#define USB_EP_UPDATE 1
+#define USB_EP_HOSTCMD 2
+#define USB_EP_COUNT 3
 
 /* Optional features */
 #define CONFIG_BOARD_PRE_INIT
@@ -192,10 +194,10 @@
 #endif
 
 /* Maximum current to draw. */
-#define MAX_CURRENT_MA			2000
+#define MAX_CURRENT_MA 2000
 /* Maximum current/voltage to provide over OTG. */
-#define MAX_OTG_CURRENT_MA		2000
-#define MAX_OTG_VOLTAGE_MV		20000
+#define MAX_OTG_CURRENT_MA 2000
+#define MAX_OTG_VOLTAGE_MV 20000
 
 #ifndef __ASSEMBLER__
 

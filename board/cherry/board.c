@@ -1,9 +1,11 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 /* Cherry board configuration */
 
+#include "charge_manager.h"
+#include "charge_state_v2.h"
 #include "common.h"
 #include "console.h"
 #include "driver/accel_bma422.h"
@@ -21,8 +23,8 @@
 #include "system.h"
 #include "usb_mux.h"
 
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
 /* Sensor */
 static struct mutex g_base_mutex;
@@ -33,17 +35,13 @@ static struct kionix_accel_data g_kx022_data;
 static struct accelgyro_saved_data_t g_bma422_data;
 
 /* Matrix to rotate accelrator into standard reference frame */
-static const mat33_fp_t base_standard_ref = {
-	{ 0, FLOAT_TO_FP(1), 0},
-	{ FLOAT_TO_FP(1), 0, 0},
-	{ 0, 0, FLOAT_TO_FP(-1)}
-};
+static const mat33_fp_t base_standard_ref = { { 0, FLOAT_TO_FP(1), 0 },
+					      { FLOAT_TO_FP(1), 0, 0 },
+					      { 0, 0, FLOAT_TO_FP(-1) } };
 
-static const mat33_fp_t lid_standard_ref = {
-	{ FLOAT_TO_FP(-1), 0, 0},
-	{ 0, FLOAT_TO_FP(-1), 0},
-	{ 0, 0, FLOAT_TO_FP(1)}
-};
+static const mat33_fp_t lid_standard_ref = { { FLOAT_TO_FP(-1), 0, 0 },
+					     { 0, FLOAT_TO_FP(-1), 0 },
+					     { 0, 0, FLOAT_TO_FP(1) } };
 
 struct motion_sensor_t motion_sensors[] = {
 	/*
@@ -199,8 +197,7 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /* USB Mux */
 
-static int board_ps8762_mux_set(const struct usb_mux *me,
-				mux_state_t mux_state)
+static int board_ps8762_mux_set(const struct usb_mux *me, mux_state_t mux_state)
 {
 	/* Make sure the PS8802 is awake */
 	RETURN_ERROR(ps8802_i2c_wake(me));
@@ -208,21 +205,18 @@ static int board_ps8762_mux_set(const struct usb_mux *me,
 	/* USB specific config */
 	if (mux_state & USB_PD_MUX_USB_ENABLED) {
 		/* Boost the USB gain */
-		RETURN_ERROR(ps8802_i2c_field_update16(me,
-					PS8802_REG_PAGE2,
-					PS8802_REG2_USB_SSEQ_LEVEL,
-					PS8802_USBEQ_LEVEL_UP_MASK,
-					PS8802_USBEQ_LEVEL_UP_12DB));
+		RETURN_ERROR(ps8802_i2c_field_update16(
+			me, PS8802_REG_PAGE2, PS8802_REG2_USB_SSEQ_LEVEL,
+			PS8802_USBEQ_LEVEL_UP_MASK,
+			PS8802_USBEQ_LEVEL_UP_12DB));
 	}
 
 	/* DP specific config */
 	if (mux_state & USB_PD_MUX_DP_ENABLED) {
 		/* Boost the DP gain */
-		RETURN_ERROR(ps8802_i2c_field_update8(me,
-					PS8802_REG_PAGE2,
-					PS8802_REG2_DPEQ_LEVEL,
-					PS8802_DPEQ_LEVEL_UP_MASK,
-					PS8802_DPEQ_LEVEL_UP_12DB));
+		RETURN_ERROR(ps8802_i2c_field_update8(
+			me, PS8802_REG_PAGE2, PS8802_REG2_DPEQ_LEVEL,
+			PS8802_DPEQ_LEVEL_UP_MASK, PS8802_DPEQ_LEVEL_UP_12DB));
 	}
 
 	return EC_SUCCESS;
@@ -230,11 +224,10 @@ static int board_ps8762_mux_set(const struct usb_mux *me,
 
 static int board_ps8762_mux_init(const struct usb_mux *me)
 {
-	return ps8802_i2c_field_update8(
-			me, PS8802_REG_PAGE1,
-			PS8802_REG_DCIRX,
-			PS8802_AUTO_DCI_MODE_DISABLE | PS8802_FORCE_DCI_MODE,
-			PS8802_AUTO_DCI_MODE_DISABLE);
+	return ps8802_i2c_field_update8(me, PS8802_REG_PAGE1, PS8802_REG_DCIRX,
+					PS8802_AUTO_DCI_MODE_DISABLE |
+						PS8802_FORCE_DCI_MODE,
+					PS8802_AUTO_DCI_MODE_DISABLE);
 }
 
 static int board_anx3443_mux_set(const struct usb_mux *me,
@@ -245,23 +238,36 @@ static int board_anx3443_mux_set(const struct usb_mux *me,
 	return EC_SUCCESS;
 }
 
-const struct usb_mux usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
+const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	{
-		.usb_port = 0,
-		.i2c_port = I2C_PORT_USB_MUX0,
-		.i2c_addr_flags = PS8802_I2C_ADDR_FLAGS,
-		.driver = &ps8802_usb_mux_driver,
-		.board_init = &board_ps8762_mux_init,
-		.board_set = &board_ps8762_mux_set,
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 0,
+				.i2c_port = I2C_PORT_USB_MUX0,
+				.i2c_addr_flags = PS8802_I2C_ADDR_FLAGS,
+				.driver = &ps8802_usb_mux_driver,
+				.board_init = &board_ps8762_mux_init,
+				.board_set = &board_ps8762_mux_set,
+			},
 	},
 	{
-		.usb_port = 1,
-		.i2c_port = I2C_PORT_USB_MUX1,
-		.i2c_addr_flags = ANX3443_I2C_ADDR0_FLAGS,
-		.driver = &anx3443_usb_mux_driver,
-		.board_set = &board_anx3443_mux_set,
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 1,
+				.i2c_port = I2C_PORT_USB_MUX1,
+				.i2c_addr_flags = ANX3443_I2C_ADDR0_FLAGS,
+				.driver = &anx3443_usb_mux_driver,
+				.board_set = &board_anx3443_mux_set,
+			},
 	},
 };
+
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
+{
+	charge_set_input_current_limit(
+		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
+}
 
 /* Initialize board. */
 static void board_init(void)

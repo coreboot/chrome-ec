@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -23,24 +23,14 @@
 
 #include "variant_db_detection.h"
 
-#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ## args)
+#define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ##args)
 
 void c0_bc12_interrupt(enum gpio_signal signal)
 {
 	rt1739_interrupt(0);
 }
-
-static void board_sub_bc12_init(void)
-{
-	if (corsola_get_db_type() == CORSOLA_DB_HDMI) {
-		/* If this is not a Type-C subboard, disable the task. */
-		task_disable_task(TASK_ID_USB_CHG_P1);
-	}
-}
-/* Must be done after I2C and subboard */
-DECLARE_HOOK(HOOK_INIT, board_sub_bc12_init, HOOK_PRIO_POST_I2C);
 
 static void board_usbc_init(void)
 {
@@ -58,12 +48,12 @@ void ppc_interrupt(enum gpio_signal signal)
 int ppc_get_alert_status(int port)
 {
 	if (port == 0) {
-		return gpio_pin_get_dt(
-			GPIO_DT_FROM_NODELABEL(usb_c0_ppc_bc12_int_odl)) == 0;
+		return gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(
+			       usb_c0_ppc_bc12_int_odl)) == 0;
 	}
 	if (port == 1 && corsola_get_db_type() == CORSOLA_DB_TYPEC) {
-		return gpio_pin_get_dt(
-			GPIO_DT_FROM_ALIAS(gpio_usb_c1_ppc_int_odl)) == 0;
+		return gpio_pin_get_dt(GPIO_DT_FROM_ALIAS(
+			       gpio_usb_c1_ppc_int_odl)) == 0;
 	}
 
 	return 0;
@@ -73,15 +63,19 @@ const struct cc_para_t *board_get_cc_tuning_parameter(enum usbpd_port port)
 {
 	const static struct cc_para_t
 		cc_parameter[CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT] = {
-		{
-			.rising_time = IT83XX_TX_PRE_DRIVING_TIME_1_UNIT,
-			.falling_time = IT83XX_TX_PRE_DRIVING_TIME_2_UNIT,
-		},
-		{
-			.rising_time = IT83XX_TX_PRE_DRIVING_TIME_1_UNIT,
-			.falling_time = IT83XX_TX_PRE_DRIVING_TIME_2_UNIT,
-		},
-	};
+			{
+				.rising_time =
+					IT83XX_TX_PRE_DRIVING_TIME_1_UNIT,
+				.falling_time =
+					IT83XX_TX_PRE_DRIVING_TIME_2_UNIT,
+			},
+			{
+				.rising_time =
+					IT83XX_TX_PRE_DRIVING_TIME_1_UNIT,
+				.falling_time =
+					IT83XX_TX_PRE_DRIVING_TIME_2_UNIT,
+			},
+		};
 
 	return &cc_parameter[port];
 }
@@ -169,10 +163,10 @@ int board_set_active_charge_port(int port)
 enum adc_channel board_get_vbus_adc(int port)
 {
 	if (port == 0) {
-		return  ADC_VBUS_C0;
+		return ADC_VBUS_C0;
 	}
 	if (port == 1) {
-		return  ADC_VBUS_C1;
+		return ADC_VBUS_C1;
 	}
 	CPRINTSUSB("Unknown vbus adc port id: %d", port);
 	return ADC_VBUS_C0;

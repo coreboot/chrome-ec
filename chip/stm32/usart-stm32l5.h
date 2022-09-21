@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,5 +16,6 @@ extern struct usart_hw_config const usart2_hw;
 extern struct usart_hw_config const usart3_hw;
 extern struct usart_hw_config const usart4_hw;
 extern struct usart_hw_config const usart5_hw;
+extern struct usart_hw_config const usart9_hw; /* LPUART1 */
 
 #endif /* __CROS_EC_USART_STM32L5_H */

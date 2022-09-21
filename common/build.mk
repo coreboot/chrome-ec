@@ -1,5 +1,5 @@
 # -*- makefile -*-
-# Copyright 2014 The Chromium OS Authors. All rights reserved.
+# Copyright 2014 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -9,7 +9,7 @@
 # Note that this variable includes the trailing "/"
 _common_dir:=$(dir $(lastword $(MAKEFILE_LIST)))
 
-common-y=util.o util_stdlib.o
+common-y=util.o
 common-y+=version.o printf.o queue.o queue_policies.o irq_locking.o
 
 common-$(CONFIG_ACCELGYRO_BMI160)+=math_util.o
@@ -66,7 +66,10 @@ common-$(CONFIG_CHARGE_RAMP_SW)+=charge_ramp.o charge_ramp_sw.o
 common-$(CONFIG_CHARGESPLASH)+=chargesplash.o
 common-$(CONFIG_CHIP_INIT_ROM_REGION)+=init_rom.o
 common-$(CONFIG_CMD_CHARGEN) += chargen.o
-common-$(CONFIG_CHARGER)+=charger.o charge_state_v2.o
+common-$(CONFIG_CHARGER)+=charger.o
+ifneq ($(CONFIG_CHARGER),)
+common-$(CONFIG_BATTERY)+=charge_state_v2.o
+endif
 common-$(CONFIG_CHARGER_PROFILE_OVERRIDE_COMMON)+=charger_profile_override.o
 common-$(CONFIG_CMD_I2CWEDGE)+=i2c_wedge.o
 common-$(CONFIG_COMMON_GPIO)+=gpio.o gpio_commands.o

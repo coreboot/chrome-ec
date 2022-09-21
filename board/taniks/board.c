@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -34,8 +34,8 @@
 #include "gpio_list.h" /* Must come after other header files. */
 
 /* Console output macros */
-#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
 
 /******************************************************************************/
 /* USB-A charging control */
@@ -60,9 +60,7 @@ __override void board_cbi_init(void)
 
 void board_init(void)
 {
-#ifdef SECTION_IS_RW
 	rgbkbd_register_init_setting(&rgbkbd_init_taniks);
-#endif
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -102,8 +100,8 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	}
 
 	if (voltage < BC12_MIN_VOLTAGE) {
-		CPRINTS("%s: port %d: vbus %d lower than %d", __func__,
-			port, voltage, BC12_MIN_VOLTAGE);
+		CPRINTS("%s: port %d: vbus %d lower than %d", __func__, port,
+			voltage, BC12_MIN_VOLTAGE);
 		return 1;
 	}
 
@@ -119,7 +117,7 @@ enum battery_present battery_hw_present(void)
 }
 
 __override void board_set_charge_limit(int port, int supplier, int charge_ma,
-			    int max_ma, int charge_mv)
+				       int max_ma, int charge_mv)
 {
 	/*
 	 * Follow OEM request to limit the input current to
@@ -127,7 +125,6 @@ __override void board_set_charge_limit(int port, int supplier, int charge_ma,
 	 */
 	charge_ma = charge_ma * 95 / 100;
 
-	charge_set_input_current_limit(MAX(charge_ma,
-					CONFIG_CHARGER_INPUT_CURRENT),
-					charge_mv);
+	charge_set_input_current_limit(
+		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }

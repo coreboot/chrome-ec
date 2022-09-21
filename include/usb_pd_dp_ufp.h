@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -32,4 +32,4 @@ void usb_pd_hpd_edge_event(int signal);
  */
 void usb_pd_hpd_converter_enable(int enable);
 
-#endif  /* __CROS_EC_USB_PD_DP_UFP_H */
+#endif /* __CROS_EC_USB_PD_DP_UFP_H */

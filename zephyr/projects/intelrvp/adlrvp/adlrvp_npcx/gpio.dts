@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -124,6 +124,7 @@
 		ec-ds3 {
 			gpios = <&gpioc 4 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_EN_PP3300_A";
+			alias = "GPIO_TEMP_SENSOR_POWER";
 		};
 		pch-pwrok-ec {
 			gpios = <&gpioa 0 GPIO_INPUT>;
@@ -319,11 +320,9 @@
 		};
 		usb-c2-usb-mux-cntrl-1 {
 			gpios = <&ioex_c2_port 4 GPIO_OUTPUT_LOW>;
-			enum-name = "IOEX_USB_C2_USB_MUX_CNTRL_1";
 		};
 		usb-c2-usb-mux-cntrl-0 {
 			gpios = <&ioex_c2_port 5 GPIO_OUTPUT_LOW>;
-			enum-name = "IOEX_USB_C2_USB_MUX_CNTRL_0";
 		};
 		usb_c3_bb_retimer_rst: usb-c3-bb-retimer-rst {
 			gpios = <&ioex_c3_port 0 GPIO_OUTPUT_LOW>;
@@ -336,6 +335,10 @@
 		usb-c2-c3-oc {
 			gpios = <&ioex_c3_port 8 GPIO_OUTPUT_HIGH>;
 			enum-name = "IOEX_USB_C2_C3_OC";
+		};
+		/* unimplemented GPIOs */
+		en-pp5000 {
+			enum-name = "GPIO_EN_PP5000";
 		};
 	};
 };

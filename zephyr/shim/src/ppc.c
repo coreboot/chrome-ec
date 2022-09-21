@@ -1,50 +1,52 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #include <zephyr/devicetree.h>
 #include "usbc_ppc.h"
+#include "usbc/ppc_aoz1380.h"
+#include "usbc/ppc_nx20p348x.h"
 #include "usbc/ppc_rt1739.h"
 #include "usbc/ppc_sn5s330.h"
 #include "usbc/ppc_syv682x.h"
 #include "usbc/ppc.h"
 
-#if DT_HAS_COMPAT_STATUS_OKAY(RT1739_PPC_COMPAT) || \
-	DT_HAS_COMPAT_STATUS_OKAY(SN5S330_COMPAT) || \
+#if DT_HAS_COMPAT_STATUS_OKAY(AOZ1380_COMPAT) ||        \
+	DT_HAS_COMPAT_STATUS_OKAY(NX20P348X_COMPAT) ||  \
+	DT_HAS_COMPAT_STATUS_OKAY(RT1739_PPC_COMPAT) || \
+	DT_HAS_COMPAT_STATUS_OKAY(SN5S330_COMPAT) ||    \
 	DT_HAS_COMPAT_STATUS_OKAY(SYV682X_COMPAT)
 
-#define PPC_CHIP_PRIM(id, fn)                                \
-	COND_CODE_1(DT_NODE_HAS_PROP(id, alternate_for), (), \
-		    (PPC_CHIP_ELE_PRIM(id, fn)))
+#define PPC_CHIP_ENTRY(usbc_id, ppc_id, config_fn) \
+	[USBC_PORT_NEW(usbc_id)] = config_fn(ppc_id)
 
-#define PPC_CHIP_ALT(id, fn)                             \
-	COND_CODE_1(DT_NODE_HAS_PROP(id, alternate_for), \
-		    (PPC_CHIP_ELE_ALT(id, fn)), ())
+#define CHECK_COMPAT(compat, usbc_id, ppc_id, config_fn) \
+	COND_CODE_1(DT_NODE_HAS_COMPAT(ppc_id, compat),  \
+		    (PPC_CHIP_ENTRY(usbc_id, ppc_id, config_fn)), ())
 
-#define PPC_CHIP_ELE_PRIM(id, fn) [USBC_PORT(id)] = fn(id)
+#define PPC_CHIP_FIND(usbc_id, ppc_id)                                      \
+	CHECK_COMPAT(AOZ1380_COMPAT, usbc_id, ppc_id, PPC_CHIP_AOZ1380)     \
+	CHECK_COMPAT(NX20P348X_COMPAT, usbc_id, ppc_id, PPC_CHIP_NX20P348X) \
+	CHECK_COMPAT(RT1739_PPC_COMPAT, usbc_id, ppc_id, PPC_CHIP_RT1739)   \
+	CHECK_COMPAT(SN5S330_COMPAT, usbc_id, ppc_id, PPC_CHIP_SN5S330)     \
+	CHECK_COMPAT(SYV682X_COMPAT, usbc_id, ppc_id, PPC_CHIP_SYV682X)
 
-#define PPC_CHIP_ELE_ALT(id, fn) [PPC_ID(id)] = fn(id)
+#define PPC_CHIP(usbc_id)                           \
+	COND_CODE_1(DT_NODE_HAS_PROP(usbc_id, ppc), \
+		    (PPC_CHIP_FIND(usbc_id, DT_PHANDLE(usbc_id, ppc))), ())
 
-/* Power Path Controller */
-struct ppc_config_t ppc_chips[] = {
-	DT_FOREACH_STATUS_OKAY_VARGS(RT1739_PPC_COMPAT, PPC_CHIP_PRIM,
-				     PPC_CHIP_RT1739)
-	DT_FOREACH_STATUS_OKAY_VARGS(SN5S330_COMPAT, PPC_CHIP_PRIM,
-				     PPC_CHIP_SN5S330)
-	DT_FOREACH_STATUS_OKAY_VARGS(SYV682X_COMPAT, PPC_CHIP_PRIM,
-				     PPC_CHIP_SYV682X)
-};
+#define PPC_CHIP_ALT(usbc_id)                                               \
+	COND_CODE_1(DT_NODE_HAS_PROP(usbc_id, ppc_alt),                     \
+		    (PPC_CHIP_FIND(usbc_id, DT_PHANDLE(usbc_id, ppc_alt))), \
+		    ())
+
+struct ppc_config_t ppc_chips[] = { DT_FOREACH_STATUS_OKAY(named_usbc_port,
+							   PPC_CHIP) };
+
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
-/* Alt Power Path Controllers */
-struct ppc_config_t ppc_chips_alt[] = {
-	DT_FOREACH_STATUS_OKAY_VARGS(RT1739_PPC_COMPAT, PPC_CHIP_ALT,
-				     PPC_CHIP_RT1739)
-	DT_FOREACH_STATUS_OKAY_VARGS(SN5S330_COMPAT, PPC_CHIP_ALT,
-				     PPC_CHIP_SN5S330)
-	DT_FOREACH_STATUS_OKAY_VARGS(SYV682X_COMPAT, PPC_CHIP_ALT,
-				     PPC_CHIP_SYV682X)
-};
+struct ppc_config_t ppc_chips_alt[] = { DT_FOREACH_STATUS_OKAY(named_usbc_port,
+							       PPC_CHIP_ALT) };
 
 #endif /* #if DT_HAS_COMPAT_STATUS_OKAY */

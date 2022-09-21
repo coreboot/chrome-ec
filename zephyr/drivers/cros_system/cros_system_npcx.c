@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -82,7 +82,7 @@ struct cros_system_npcx_data {
 #define NPCX_RAM_BLOCK_PD_MASK (BIT(NPCX_RAM_PD_DEPTH) - 1)
 
 /* Get saved reset flag address in battery-backed ram */
-#define BBRAM_SAVED_RESET_FLAG_ADDR                         \
+#define BBRAM_SAVED_RESET_FLAG_ADDR                    \
 	(DT_REG_ADDR(DT_INST(0, nuvoton_npcx_bbram)) + \
 	 DT_PROP(DT_PATH(named_bbram_regions, saved_reset_flags), offset))
 
@@ -90,8 +90,8 @@ struct cros_system_npcx_data {
 static int system_npcx_watchdog_stop(void)
 {
 	if (IS_ENABLED(CONFIG_WATCHDOG)) {
-		const struct device *wdt_dev = DEVICE_DT_GET(
-				DT_NODELABEL(twd0));
+		const struct device *wdt_dev =
+			DEVICE_DT_GET(DT_NODELABEL(twd0));
 		if (!device_is_ready(wdt_dev)) {
 			LOG_ERR("Error: device %s is not ready", wdt_dev->name);
 			return -ENODEV;
@@ -182,7 +182,7 @@ static void system_npcx_set_wakeup_gpios_before_hibernate(void)
 /*
  * Get the interrupt DTS node for this wakeup pin
  */
-#define WAKEUP_INT(id, prop, idx)  DT_PHANDLE_BY_IDX(id, prop, idx)
+#define WAKEUP_INT(id, prop, idx) DT_PHANDLE_BY_IDX(id, prop, idx)
 
 /*
  * Get the named-gpio node for this wakeup pin by reading the
@@ -194,19 +194,19 @@ static void system_npcx_set_wakeup_gpios_before_hibernate(void)
 /*
  * Reset and re-enable interrupts on this wake pin.
  */
-#define WAKEUP_SETUP(id, prop, idx)		\
-do {									       \
-	gpio_pin_configure_dt(GPIO_DT_FROM_NODE(WAKEUP_NGPIO(id, prop, idx)),  \
-			      GPIO_INPUT);				       \
-	gpio_enable_dt_interrupt(					       \
-		GPIO_INT_FROM_NODE(WAKEUP_INT(id, prop, idx)));	       \
+#define WAKEUP_SETUP(id, prop, idx)                                     \
+	do {                                                            \
+		gpio_pin_configure_dt(                                  \
+			GPIO_DT_FROM_NODE(WAKEUP_NGPIO(id, prop, idx)), \
+			GPIO_INPUT);                                    \
+		gpio_enable_dt_interrupt(                               \
+			GPIO_INT_FROM_NODE(WAKEUP_INT(id, prop, idx))); \
 	} while (0);
 
-/*
- * For all the wake-pins, re-init the GPIO and re-enable the interrupt.
- */
-	DT_FOREACH_PROP_ELEM(SYSTEM_DT_NODE_HIBERNATE_CONFIG,
-			     wakeup_irqs,
+	/*
+	 * For all the wake-pins, re-init the GPIO and re-enable the interrupt.
+	 */
+	DT_FOREACH_PROP_ELEM(SYSTEM_DT_NODE_HIBERNATE_CONFIG, wakeup_irqs,
 			     WAKEUP_SETUP);
 
 #undef WAKEUP_INT
@@ -412,11 +412,42 @@ static const char *cros_system_npcx_get_chip_revision(const struct device *dev)
 	return rev;
 }
 
+#define PSL_NODE DT_INST(0, nuvoton_npcx_power_psl)
+#if DT_NODE_HAS_STATUS(PSL_NODE, okay)
+PINCTRL_DT_DEFINE(PSL_NODE);
+static int cros_system_npcx_configure_psl_in(void)
+{
+	const struct pinctrl_dev_config *pcfg =
+		PINCTRL_DT_DEV_CONFIG_GET(PSL_NODE);
+
+	return pinctrl_apply_state(pcfg, PINCTRL_STATE_SLEEP);
+}
+
+static void cros_system_npcx_psl_out_inactive(void)
+{
+	struct gpio_dt_spec enable = GPIO_DT_SPEC_GET(PSL_NODE, enable_gpios);
+
+	gpio_pin_set_dt(&enable, 1);
+}
+#else
+static int cros_system_npcx_configure_psl_in(void)
+{
+	return -EINVAL;
+}
+
+static void cros_system_npcx_psl_out_inactive(void)
+{
+	return;
+}
+#endif
+
 static void system_npcx_hibernate_by_psl(const struct device *dev,
 					 uint32_t seconds,
 					 uint32_t microseconds)
 {
 	ARG_UNUSED(dev);
+	int ret;
+
 	/*
 	 * TODO(b/178230662): RTC wake-up in PSL mode only support in npcx9
 	 * series. Nuvoton will introduce CLs for it later.
@@ -424,11 +455,12 @@ static void system_npcx_hibernate_by_psl(const struct device *dev,
 	ARG_UNUSED(seconds);
 	ARG_UNUSED(microseconds);
 
-	/*
-	 * Configure PSL input pads from "psl-in-pads" property in device tree
-	 * file.
-	 */
-	npcx_pinctrl_psl_input_configure();
+	/* Configure detection settings of PSL_IN pads first */
+	ret = cros_system_npcx_configure_psl_in();
+	if (ret < 0) {
+		LOG_ERR("PSL_IN pinctrl setup failed (%d)", ret);
+		return;
+	}
 
 	/*
 	 * Give the board a chance to do any late stage hibernation work.  This
@@ -439,8 +471,12 @@ static void system_npcx_hibernate_by_psl(const struct device *dev,
 	if (board_hibernate_late)
 		board_hibernate_late();
 
-	/* Turn off VCC1 to enter ultra-low-power mode for hibernating */
-	npcx_pinctrl_psl_output_set_inactive();
+	/*
+	 * A transition from 0 to 1 of specific IO (GPIO85) data-out bit
+	 * set PSL_OUT to inactive state. Then, it will turn Core Domain
+	 * power supply (VCC1) off for better power consumption.
+	 */
+	cros_system_npcx_psl_out_inactive();
 }
 
 static int cros_system_npcx_get_reset_cause(const struct device *dev)
@@ -460,8 +496,8 @@ static int cros_system_npcx_init(const struct device *dev)
 	data->reset = UNKNOWN_RST;
 	/* Use scratch bit to check power on reset or VCC1_RST reset. */
 	if (!IS_BIT_SET(inst_scfg->RSTCTL, NPCX_RSTCTL_VCC1_RST_SCRATCH)) {
-		bool is_vcc1_rst = IS_BIT_SET(inst_scfg->RSTCTL,
-				       NPCX_RSTCTL_VCC1_RST_STS);
+		bool is_vcc1_rst =
+			IS_BIT_SET(inst_scfg->RSTCTL, NPCX_RSTCTL_VCC1_RST_STS);
 		data->reset = is_vcc1_rst ? VCC1_RST_PIN : POWERUP;
 	}
 
@@ -526,8 +562,8 @@ static int cros_system_npcx_soc_reset(const struct device *dev)
 #error "cros-ec,hibernate-wake-pins cannot be used with HIBERNATE_PSL"
 #endif
 #else
-#if DT_HAS_COMPAT_STATUS_OKAY(nuvoton_npcx_pslctrl_def)
-#error "vsby-psl-in-list cannot be used with non-HIBERNATE_PSL"
+#if DT_NODE_HAS_STATUS(PSL_NODE, okay)
+#error "power_ctrl_psl cannot be used with non-HIBERNATE_PSL"
 #endif
 #endif
 
@@ -587,9 +623,9 @@ DEVICE_DEFINE(cros_system_npcx_0, "CROS_SYSTEM", cros_system_npcx_init, NULL,
 #define HAL_DBG_REG_BASE_ADDR \
 	((struct dbg_reg *)DT_REG_ADDR(DT_INST(0, nuvoton_npcx_cros_dbg)))
 
-#define DBG_NODE           DT_NODELABEL(dbg)
-#define DBG_PINCTRL_PH     DT_PHANDLE_BY_IDX(DBG_NODE, pinctrl_0, 0)
-#define DBG_ALT_FILED(f)   DT_PHA_BY_IDX(DBG_PINCTRL_PH, alts, 0, f)
+#define DBG_NODE DT_NODELABEL(dbg)
+#define DBG_PINCTRL_PH DT_PHANDLE_BY_IDX(DBG_NODE, pinctrl_0, 0)
+#define DBG_ALT_FILED(f) DT_PHA_BY_IDX(DBG_PINCTRL_PH, alts, 0, f)
 
 PINCTRL_DT_DEFINE(DBG_NODE);
 

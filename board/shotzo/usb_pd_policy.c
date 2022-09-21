@@ -1,4 +1,4 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -13,8 +13,8 @@
 #include "driver/tcpm/tcpci.h"
 #include "usb_pd.h"
 
-#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
 int pd_check_vconn_swap(int port)
 {
@@ -65,21 +65,18 @@ int pd_set_power_supply_ready(int port)
 
 __override bool pd_check_vbus_level(int port, enum vbus_level level)
 {
-	int vbus_voltage;
-
-	/* If we're unable to speak to the charger, best to guess false */
-	if (charger_get_vbus_voltage(port, &vbus_voltage))
-		return false;
-
-	if (level == VBUS_SAFE0V)
-		return vbus_voltage < PD_V_SAFE0V_MAX;
-	else if (level == VBUS_PRESENT)
-		return vbus_voltage > PD_V_SAFE5V_MIN;
-	else
-		return vbus_voltage < PD_V_SINK_DISCONNECT_MAX;
+	return sm5803_check_vbus_level(port, level);
 }
 
 int pd_snk_is_vbus_provided(int port)
 {
 	return sm5803_is_vbus_present(port);
+}
+
+int board_vbus_source_enabled(int port)
+{
+	/* Ignore non-PD ports (the barrel jack). */
+	if (port >= CONFIG_USB_PD_PORT_MAX_COUNT)
+		return 0;
+	return charger_is_sourcing_otg_power(port);
 }

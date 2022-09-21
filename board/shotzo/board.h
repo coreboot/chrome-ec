@@ -1,4 +1,4 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -12,66 +12,17 @@
 #define VARIANT_DEDEDE_EC_IT8320
 #include "baseboard.h"
 
-#undef GPIO_VOLUME_UP_L
-#define GPIO_VOLUME_UP_L GPIO_VOLUP_BTN_ODL_HDMI_HPD
-
-/* Battery */
-#define CONFIG_BATTERY_FUEL_GAUGE
-
-/* BC 1.2 */
-#define CONFIG_BC12_DETECT_PI3USB9201
-
 /* Charger */
-#define CONFIG_CHARGE_RAMP_HW
-#define CONFIG_CHARGER_SM5803		/* C0 and C1: Charger */
+#define CONFIG_CHARGER
+#define CONFIG_CHARGER_SM5803 /* C0 and C1: Charger */
+#define PD_MAX_VOLTAGE_MV 15000
 #define CONFIG_USB_PD_VBUS_DETECT_CHARGER
 #define CONFIG_USB_PD_5V_CHARGER_CTRL
 #define CONFIG_CHARGER_OTG
-#undef  CONFIG_CHARGER_SINGLE_CHIP
-#define CONFIG_OCPC
-#define CONFIG_OCPC_DEF_RBATT_MOHMS 21 /* R_DS(on) 10.7mOhm + 10mOhm sns rstr */
-
-/* PWM */
-#define CONFIG_PWM
-
-/* Sensors */
-#define CONFIG_ACCEL_BMA255		/* Lid accel */
-#define CONFIG_ACCEL_BMA4XX		/* 2nd source Lid accel */
-#define CONFIG_ACCELGYRO_LSM6DSM	/* Base accel */
-/* Sensors without hardware FIFO are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(LID_ACCEL)
-
-#define CONFIG_CMD_ACCELS
-#define CONFIG_CMD_ACCEL_INFO
-
-/* Enable sensor fifo, must also define the _SIZE and _THRES */
-#define CONFIG_ACCEL_FIFO
-/* Power of 2 - Too large of a fifo causes too much timestamp jitter */
-#define CONFIG_ACCEL_FIFO_SIZE 256
-#define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
-
-#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
-
-#define CONFIG_LID_ANGLE
-#define CONFIG_LID_ANGLE_UPDATE
-#define CONFIG_LID_ANGLE_SENSOR_BASE BASE_ACCEL
-#define CONFIG_LID_ANGLE_SENSOR_LID LID_ACCEL
-
-#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-
-#define CONFIG_TABLET_MODE
-#define CONFIG_TABLET_MODE_SWITCH
-#define CONFIG_GMR_TABLET_MODE
-
-/* Keyboard */
-#define CONFIG_KEYBOARD_FACTORY_TEST
-#define CONFIG_PWM_KBLIGHT
 
 /* TCPC */
-#define CONFIG_USB_PD_PORT_MAX_COUNT 2
-#define CONFIG_USB_PD_TCPM_ITE_ON_CHIP	/* C0: ITE EC TCPC */
-#define CONFIG_USB_PD_TCPM_PS8705	/* C1: PS8705 TCPC*/
+#define CONFIG_USB_PD_PORT_MAX_COUNT 1
+#define CONFIG_USB_PD_TCPM_ITE_ON_CHIP /* C0: ITE EC TCPC */
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 1
 #define CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 #define CONFIG_USB_PD_TCPC_LOW_POWER
@@ -82,45 +33,59 @@
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
 
 /* USB Mux and Retimer */
-#define CONFIG_USB_MUX_IT5205			/* C1: ITE Mux */
-#define I2C_PORT_USB_MUX I2C_PORT_USB_C0	/* Required for ITE Mux */
+#define CONFIG_USB_MUX_IT5205 /* C1: ITE Mux */
+#define I2C_PORT_USB_MUX I2C_PORT_USB_C0 /* Required for ITE Mux */
 
 /* USB Type A Features */
 #define USB_PORT_COUNT 1
 #define CONFIG_USB_PORT_POWER_DUMB
+
+/* Buttons */
+#define CONFIG_DEDICATED_RECOVERY_BUTTON
+#define CONFIG_DEDICATED_RECOVERY_BUTTON_2
+#define CONFIG_EMULATED_SYSRQ
+#define CONFIG_POWER_BUTTON_IGNORE_LID
+
+/* Dedicated barreljack charger port */
+#undef CONFIG_DEDICATED_CHARGE_PORT_COUNT
+#define CONFIG_DEDICATED_CHARGE_PORT_COUNT 1
+#define DEDICATED_CHARGE_PORT 1
+
+/* LED backlight controller */
+#define CONFIG_LED_DRIVER_OZ554
+
+/* Unused Features */
+#undef CONFIG_BACKLIGHT_LID
+#undef CONFIG_BATTERY_CUT_OFF
+#undef CONFIG_BATTERY_PRESENT_GPIO
+#undef CONFIG_BATTERY_SMART
+#undef CONFIG_BATTERY_REQUESTS_NIL_WHEN_DEAD
+#undef CONFIG_BATTERY_REVIVE_DISCONNECT
+#undef CONFIG_CMD_KEYBOARD
+#undef CONFIG_HIBERNATE
+#undef CONFIG_KEYBOARD_BOOT_KEYS
+#undef CONFIG_KEYBOARD_RUNTIME_KEYS
+#undef CONFIG_LID_SWITCH
+#undef CONFIG_USB_CHARGER
+#undef CONFIG_VOLUME_BUTTONS
+#undef GPIO_USB_C1_DP_HPD
+
+/* I2C Bus Configuration */
+#define I2C_PORT_BACKLIGHT I2C_PORT_SENSOR
 
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
 #include "registers.h"
 
-enum chg_id {
-	CHARGER_PRIMARY,
-	CHARGER_SECONDARY,
-	CHARGER_NUM,
-};
-
-enum pwm_channel {
-	PWM_CH_KBLIGHT,
-	PWM_CH_COUNT,
-};
-
-/* Motion sensors */
-enum sensor_id {
-	LID_ACCEL,
-	BASE_ACCEL,
-	BASE_GYRO,
-	SENSOR_COUNT
-};
-
 /* ADC channels */
 enum adc_channel {
-	ADC_VSNS_PP3300_A,     /* ADC0 */
-	ADC_TEMP_SENSOR_1,     /* ADC2 */
-	ADC_TEMP_SENSOR_2,     /* ADC3 */
-	ADC_SUB_ANALOG,        /* ADC13 */
-	ADC_TEMP_SENSOR_3,     /* ADC15 */
-	ADC_TEMP_SENSOR_4,     /* ADC16 */
+	ADC_VSNS_PP3300_A, /* ADC0 */
+	ADC_TEMP_SENSOR_1, /* ADC2 */
+	ADC_TEMP_SENSOR_2, /* ADC3 */
+	ADC_SUB_ANALOG, /* ADC13 */
+	ADC_TEMP_SENSOR_3, /* ADC15 */
+	ADC_TEMP_SENSOR_4, /* ADC16 */
 	ADC_CH_COUNT
 };
 
@@ -132,20 +97,19 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
-/* List of possible batteries */
-enum battery_type {
-	BATTERY_DYNAPACK_COS,
-	BATTERY_DYNAPACK_ATL,
-	BATTERY_DYNAPACK_HIGHPOWER,
-	BATTERY_DYNAPACK_BYD,
-	BATTERY_SAMSUNG_SDI,
-	BATTERY_SIMPLO_COS,
-	BATTERY_SIMPLO_HIGHPOWER,
-	BATTERY_COS,
-	BATTERY_COS_2,
-	BATTERY_ATL,
-	BATTERY_TYPE_COUNT,
+enum charge_port {
+	CHARGE_PORT_TYPEC0,
+	CHARGE_PORT_BARRELJACK,
 };
+
+/* Board specific handlers */
+void led_alert(int enable);
+#define PORT_TO_HPD(port) (GPIO_USB_C0_DP_HPD)
+
+/* Pin renaming */
+#define GPIO_AC_PRESENT GPIO_BJ_ADP_PRESENT_L
+#define GPIO_RECOVERY_L GPIO_EC_RECOVERY_BTN_ODL
+#define GPIO_RECOVERY_L_2 GPIO_H1_EC_RECOVERY_BTN_ODL
 
 #endif /* !__ASSEMBLER__ */
 

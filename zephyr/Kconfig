@@ -1,10 +1,12 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 rsource "app/Kconfig"
 rsource "drivers/Kconfig"
 rsource "emul/Kconfig"
+rsource "fake/Kconfig"
+rsource "mock/Kconfig"
 rsource "subsys/Kconfig"
 
 if ZTEST
@@ -72,6 +74,7 @@ rsource "Kconfig.throttle_ap"
 rsource "Kconfig.usba"
 rsource "Kconfig.usbc"
 rsource "Kconfig.watchdog"
+rsource "Kconfig.wireless_charger"
 
 # Define PLATFORM_EC_... options to enable EC features. Each Kconfig should be
 # matched by a line in zephyr/shim/include/config_chip.h which #defines the
@@ -327,7 +330,7 @@ config PLATFORM_EC_EXTPOWER_GPIO
 	  Enable shimming the extpower_gpio module, which provides
 	  GPIO-based external power presence detection features.  The
 	  project should define a GPIO pin named GPIO_AC_PRESENT, with
-	  extpower_interrupt configured as the handler in gpio_map.h.
+	  extpower_interrupt configured as the handler.
 
 config PLATFORM_EC_FLASH_CROS
 	bool
@@ -429,7 +432,7 @@ config PLATFORM_EC_LID_SWITCH
 	  behaviour. For example, when the lid is opened, the device may
 	  automatically power on.
 
-	  This requires a GPIO named GPIO_LID_OPEN to be defined in gpio_map.h.
+	  This requires a GPIO named GPIO_LID_OPEN to be defined or aliased.
 
 config PLATFORM_EC_MKBP_INPUT_DEVICES
 	bool "Input devices via MKBP"
@@ -490,23 +493,6 @@ config PLATFORM_EC_MKBP_HOST_EVENT_WAKEUP_MASK
                           HOST_EVENT_AC_CONNECTED)>;
       The host events are defined in dt-bindings/wake_mask_event_defines.h
 
-config PLATFORM_EC_MPU
-	bool "Support Memory-Protection Unit (MPU)"
-	depends on CPU_CORTEX_M
-	select ARM_MPU
-	default y
-	help
-	  This enables support a Memory-Protection Unit which can limit access
-	  to certain areas of memory. This can be used to protect code or data
-	  from being written to improve security or to find bugs.
-
-	  It causes any code in the iram.text section to be protected when
-	  system jump is disabled (see system_disable_jump()). It also stops
-	  execution of the image that is not currently being executed (read-only
-	  or read-write). If internal storage is used, this is achieved by not
-	  allowing code execution in that area. For external storage, it
-	  disallows loading any code into RAM.
-
 config PLATFORM_EC_PANIC
 	bool "Panic output"
 	default y
@@ -540,7 +526,7 @@ config PLATFORM_EC_POWER_BUTTON
 	  commands in platform/ec.  This is used to implement the Chromium OS
 	  shutdown sequence.
 
-	  This requires a GPIO named GPIO_POWER_BUTTON_L in gpio_map.h.
+	  This requires a GPIO named GPIO_POWER_BUTTON_L.
 
 config PLATFORM_EC_PWM_HC
 	bool
@@ -548,11 +534,10 @@ config PLATFORM_EC_PWM_HC
 	  Enable the PWM (Pulse Width Modulation) host command support. This
 	  implements EC_CMD_PWM_SET_DUTY and EC_CMD_PWM_GET_DUTY.
 
-DT_COMPAT_CROS_EC_DISPLIGHT := cros-ec,displight
-
 config PLATFORM_EC_PWM_DISPLIGHT
 	bool "PWM display backlight"
-	default $(dt_compat_enabled,$(DT_COMPAT_CROS_EC_DISPLIGHT))
+	default y
+	depends on DT_HAS_CROS_EC_DISPLIGHT_ENABLED
 	select PLATFORM_EC_PWM_HC
 	help
 	  Enables display backlight controlled by a PWM signal connected

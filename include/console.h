@@ -1,4 +1,4 @@
-/* Copyright 2012 The Chromium OS Authors. All rights reserved.
+/* Copyright 2012 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -14,6 +14,10 @@
 
 #ifdef CONFIG_ZEPHYR
 #include "zephyr_console_shim.h"
+#endif
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 /*
@@ -54,25 +58,9 @@ struct hex_buffer_params {
 	uint16_t size;
 };
 
-#define HEX_BUF(_buffer, _size) (&(const struct hex_buffer_params){ \
-	.buffer = (_buffer), \
-	.size = (_size) \
-})
-
-/*
- * Define parameters to printing in binary: the value to print, and the number
- * of digits to print.
- */
-
-struct binary_print_params {
-	unsigned int value;
-	uint8_t count;
-};
-
-#define BINARY_VALUE(_value, _count) (&(const struct binary_print_params){ \
-	.value = (_value), \
-	.count = (_count) \
-})
+#define HEX_BUF(_buffer, _size)                                  \
+	(&(const struct hex_buffer_params){ .buffer = (_buffer), \
+					    .size = (_size) })
 
 #define PRINTF_TIMESTAMP_NOW NULL
 
@@ -81,7 +69,7 @@ struct console_command {
 	/* Command name.  Case-insensitive. */
 	const char *name;
 	/* Handler for the command.  argv[0] will be the command name. */
-	int (*handler)(int argc, char **argv);
+	int (*handler)(int argc, const char **argv);
 #ifdef CONFIG_CONSOLE_CMDHELP
 	/* Description of args */
 	const char *argdesc;
@@ -94,7 +82,7 @@ struct console_command {
 };
 
 /* Flag bits for when CONFIG_CONSOLE_COMMAND_FLAGS is enabled */
-#define CMD_FLAG_RESTRICTED  0x00000001
+#define CMD_FLAG_RESTRICTED 0x00000001
 
 /* The default .flags value can be overridden in board.h */
 #ifndef CONFIG_CONSOLE_COMMAND_FLAGS_DEFAULT
@@ -116,19 +104,19 @@ static inline int console_is_restricted(void)
 
 /* Console channels */
 enum console_channel {
-	#define CONSOLE_CHANNEL(enumeration, string) enumeration,
-	#include "console_channel.inc"
-	#undef CONSOLE_CHANNEL
+#define CONSOLE_CHANNEL(enumeration, string) enumeration,
+#include "console_channel.inc"
+#undef CONSOLE_CHANNEL
 
 	/* Channel count; not itself a channel */
 	CC_CHANNEL_COUNT
 };
 
 /* Mask in channel_mask for a particular channel */
-#define CC_MASK(channel)	(1U << (channel))
+#define CC_MASK(channel) (1U << (channel))
 
 /* Mask to use to enable all channels */
-#define CC_ALL			0xffffffffU
+#define CC_ALL 0xffffffffU
 
 /**
  * Enable a console channel by name
@@ -178,20 +166,20 @@ int cputs(enum console_channel channel, const char *outstr);
  *
  * @return non-zero if output was truncated.
  */
-__attribute__((__format__(__printf__, 2, 3)))
-int cprintf(enum console_channel channel, const char *format, ...);
+__attribute__((__format__(__printf__, 2, 3))) int
+cprintf(enum console_channel channel, const char *format, ...);
 
 /**
  * Print formatted output with timestamp. This is like:
- *   cprintf(channel, "[%pT " + format + "]\n", PRINTF_TIMESTAMP_NOW, ...)
+ *   cprintf(channel, "[<TIMESTAMP> " + format + "]\n", ...)
  *
  * @param channel	Output channel
  * @param format	Format string; see printf.h for valid formatting codes
  *
  * @return non-zero if output was truncated.
  */
-__attribute__((__format__(__printf__, 2, 3)))
-int cprints(enum console_channel channel, const char *format, ...);
+__attribute__((__format__(__printf__, 2, 3))) int
+cprints(enum console_channel channel, const char *format, ...);
 
 /**
  * Flush the console output for all channels.
@@ -205,8 +193,8 @@ void cflush(void);
 #define ccputs(outstr) cputs(CC_COMMAND, outstr)
 /* gcc allows variable arg lists in macros; see
  * http://gcc.gnu.org/onlinedocs/gcc/Variadic-Macros.html */
-#define ccprintf(format, args...) cprintf(CC_COMMAND, format, ## args)
-#define ccprints(format, args...) cprints(CC_COMMAND, format, ## args)
+#define ccprintf(format, args...) cprintf(CC_COMMAND, format, ##args)
+#define ccprints(format, args...) cprints(CC_COMMAND, format, ##args)
 
 /**
  * Called by UART when a line of input is pending.
@@ -221,51 +209,47 @@ void console_has_input(void);
  *                      long (excluding null terminator).  Note this is NOT in
  *                      quotes so it can be concatenated to form a struct name.
  * @param routine       Command handling routine, of the form
- *                      int handler(int argc, char **argv)
+ *                      int handler(int argc, const char **argv)
  * @param argdesc       String describing arguments to command; NULL if none.
  * @param help          String with one-line description of command, or NULL.
  * @param flags         Per-command flags, if needed.
  */
 #if !defined(HAS_TASK_CONSOLE) && !defined(CONFIG_ZEPHYR)
-#define DECLARE_CONSOLE_COMMAND(NAME, ROUTINE, ARGDESC, HELP)		\
-	static int (ROUTINE)(int argc, char **argv) __attribute__((unused))
-#define DECLARE_SAFE_CONSOLE_COMMAND(NAME, ROUTINE, ARGDESC, HELP)	\
-	static int (ROUTINE)(int argc, char **argv) __attribute__((unused))
+#define DECLARE_CONSOLE_COMMAND(NAME, ROUTINE, ARGDESC, HELP) \
+	static int(ROUTINE)(int argc, const char **argv) __attribute__((unused))
+#define DECLARE_SAFE_CONSOLE_COMMAND(NAME, ROUTINE, ARGDESC, HELP) \
+	static int(ROUTINE)(int argc, const char **argv) __attribute__((unused))
 #define DECLARE_CONSOLE_COMMAND_FLAGS(NAME, ROUTINE, ARGDESC, HELP, FLAGS) \
-	static int (ROUTINE)(int argc, char **argv) __attribute__((unused))
+	static int(ROUTINE)(int argc, const char **argv) __attribute__((unused))
 #elif defined(HAS_TASK_CONSOLE)
 
 /* We always provde help args, but we may discard them to save space. */
 #if defined(CONFIG_CONSOLE_CMDHELP)
-#define _HELP_ARGS(A, H)						\
-	.argdesc = A,							\
-	.help = H,
+#define _HELP_ARGS(A, H) .argdesc = A, .help = H,
 #else
 #define _HELP_ARGS(A, H)
 #endif
 
 /* We may or may not have a .flags field */
 #ifdef CONFIG_CONSOLE_COMMAND_FLAGS
-#define _FLAG_ARGS(F)							\
-	.flags = F,
+#define _FLAG_ARGS(F) .flags = F,
 #else
 #define _FLAG_ARGS(F)
 #endif
 
 /* This macro takes all possible args and discards the ones we don't use */
-#define _DCL_CON_CMD_ALL(NAME, ROUTINE, ARGDESC, HELP, FLAGS)		\
-	static int (ROUTINE)(int argc, char **argv);			\
-	static const char __con_cmd_label_##NAME[] = #NAME;		\
-	_STATIC_ASSERT(sizeof(__con_cmd_label_##NAME) < 16,		\
-		       "command name '" #NAME "' is too long");		\
-	const struct console_command __keep __no_sanitize_address	\
-	__con_cmd_##NAME						\
-	__attribute__((section(".rodata.cmds." #NAME))) =		\
-	{ .name = __con_cmd_label_##NAME,				\
-	  .handler = ROUTINE,						\
-	  _HELP_ARGS(ARGDESC, HELP)					\
-	  _FLAG_ARGS(FLAGS)						\
-	}
+#define _DCL_CON_CMD_ALL(NAME, ROUTINE, ARGDESC, HELP, FLAGS)       \
+	static int(ROUTINE)(int argc, const char **argv);           \
+	static const char __con_cmd_label_##NAME[] = #NAME;         \
+	_STATIC_ASSERT(sizeof(__con_cmd_label_##NAME) < 16,         \
+		       "command name '" #NAME "' is too long");     \
+	const struct console_command __keep __no_sanitize_address   \
+		__con_cmd_##NAME                                    \
+		__attribute__((section(".rodata.cmds." #NAME))) = { \
+			.name = __con_cmd_label_##NAME,             \
+			.handler = ROUTINE,                         \
+			_HELP_ARGS(ARGDESC, HELP) _FLAG_ARGS(FLAGS) \
+		}
 
 /*
  * If the .flags field exists, we can use this to specify its value. If not,
@@ -275,8 +259,8 @@ void console_has_input(void);
 	_DCL_CON_CMD_ALL(NAME, ROUTINE, ARGDESC, HELP, FLAGS)
 
 /* This works as before, for the same reason. */
-#define DECLARE_CONSOLE_COMMAND(NAME, ROUTINE, ARGDESC, HELP)	\
-	_DCL_CON_CMD_ALL(NAME, ROUTINE, ARGDESC, HELP,		\
+#define DECLARE_CONSOLE_COMMAND(NAME, ROUTINE, ARGDESC, HELP) \
+	_DCL_CON_CMD_ALL(NAME, ROUTINE, ARGDESC, HELP,        \
 			 CONFIG_CONSOLE_COMMAND_FLAGS_DEFAULT)
 
 /*
@@ -284,11 +268,15 @@ void console_has_input(void);
  * the command is never restricted. BE CAREFUL! You should only use this for
  * commands that either do nothing or that do only safe things.
  */
-#define DECLARE_SAFE_CONSOLE_COMMAND(NAME, ROUTINE, ARGDESC, HELP)	\
-	_DCL_CON_CMD_ALL(NAME, ROUTINE, ARGDESC, HELP,			\
-			 (CONFIG_CONSOLE_COMMAND_FLAGS_DEFAULT &	\
+#define DECLARE_SAFE_CONSOLE_COMMAND(NAME, ROUTINE, ARGDESC, HELP) \
+	_DCL_CON_CMD_ALL(NAME, ROUTINE, ARGDESC, HELP,             \
+			 (CONFIG_CONSOLE_COMMAND_FLAGS_DEFAULT &   \
 			  ~CMD_FLAG_RESTRICTED))
 
-#endif	/* HAS_TASK_CONSOLE */
+#endif /* HAS_TASK_CONSOLE */
 
-#endif  /* __CROS_EC_CONSOLE_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __CROS_EC_CONSOLE_H */

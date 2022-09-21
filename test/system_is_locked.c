@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -60,7 +60,7 @@ void test_run_step(uint32_t state)
 		else if (write_protect_enabled) {
 			ccprintf("Request RO protection at boot\n");
 			crec_flash_set_protect(EC_FLASH_PROTECT_RO_AT_BOOT,
-			    EC_FLASH_PROTECT_RO_AT_BOOT);
+					       EC_FLASH_PROTECT_RO_AT_BOOT);
 			test_reboot_to_next_step(TEST_STATE_STEP_2);
 		} else {
 			/* Write protect is disabled, nothing else to do */
@@ -90,7 +90,7 @@ int task_test(void *unused)
 	return EC_SUCCESS;
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	test_reset();
 

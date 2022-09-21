@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -29,7 +29,6 @@ struct flash_info flash_info = {
 #else
 #error "Flash info not defined for this chip. Please add it."
 #endif
-
 
 test_static int test_lock_option_bytes(void)
 {
@@ -119,7 +118,7 @@ test_static int test_flash_config(void)
 	return EC_SUCCESS;
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	ccprintf("Running flash physical test\n");
 	RUN_TEST(test_flash_config);

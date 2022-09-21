@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,16 +8,14 @@
 #include <zephyr/drivers/gpio.h>
 #include "system.h"
 
-#define MY_COMPAT	intel_ap_pwrseq_gpio
+#define MY_COMPAT intel_ap_pwrseq_gpio
 
 #if HAS_GPIO_SIGNALS
 
-#define INIT_GPIO_SPEC(id)	\
-	GPIO_DT_SPEC_GET(id, gpios),
+#define INIT_GPIO_SPEC(id) GPIO_DT_SPEC_GET(id, gpios),
 
-const static struct gpio_dt_spec spec[] = {
-DT_FOREACH_STATUS_OKAY(MY_COMPAT, INIT_GPIO_SPEC)
-};
+const static struct gpio_dt_spec spec[] = { DT_FOREACH_STATUS_OKAY(
+	MY_COMPAT, INIT_GPIO_SPEC) };
 
 /*
  * Configuration for GPIO inputs.
@@ -29,17 +27,16 @@ struct ps_gpio_int {
 	unsigned no_enable : 1;
 };
 
-#define INIT_GPIO_CONFIG(id)					\
-	{							\
-		.flags = DT_PROP_OR(id, interrupt_flags, 0),	\
-		.signal = PWR_SIGNAL_ENUM(id),			\
-		.no_enable = DT_PROP(id, no_enable),		\
-		.output = DT_PROP(id, output),			\
-	 },
+#define INIT_GPIO_CONFIG(id)                                 \
+	{                                                    \
+		.flags = DT_PROP_OR(id, interrupt_flags, 0), \
+		.signal = PWR_SIGNAL_ENUM(id),               \
+		.no_enable = DT_PROP(id, no_enable),         \
+		.output = DT_PROP(id, output),               \
+	},
 
-const static struct ps_gpio_int gpio_config[] = {
-DT_FOREACH_STATUS_OKAY(MY_COMPAT, INIT_GPIO_CONFIG)
-};
+const static struct ps_gpio_int gpio_config[] = { DT_FOREACH_STATUS_OKAY(
+	MY_COMPAT, INIT_GPIO_CONFIG) };
 
 static struct gpio_callback int_cb[ARRAY_SIZE(gpio_config)];
 
@@ -103,6 +100,34 @@ int power_signal_gpio_get(enum pwr_sig_gpio index)
 	if (index < 0 || index >= ARRAY_SIZE(gpio_config)) {
 		return -EINVAL;
 	}
+	/*
+	 * Getting the current value of an output is
+	 * done by retrieving the config and checking what the
+	 * output state has been set to, not by reading the
+	 * physical level of the pin (open drain outputs
+	 * may have a low voltage).
+	 */
+	if (IS_ENABLED(CONFIG_GPIO_GET_CONFIG) && gpio_config[index].output) {
+		int rv;
+		gpio_flags_t flags;
+
+		rv = gpio_pin_get_config_dt(&spec[index], &flags);
+		if (rv == 0) {
+			int pin = (flags & GPIO_OUTPUT_INIT_HIGH) ? 1 : 0;
+			/* If active low signal, invert it */
+			if (spec[index].dt_flags & GPIO_ACTIVE_LOW) {
+				pin = !pin;
+			}
+			return pin;
+		}
+		/*
+		 * -ENOSYS is returned when this API call is not supported,
+		 *  so drop into the default method of returning the pin value.
+		 */
+		if (rv != -ENOSYS) {
+			return rv;
+		}
+	}
 	return gpio_pin_get_dt(&spec[index]);
 }
 
@@ -123,7 +148,8 @@ void power_signal_gpio_init(void)
 	 * to the deasserted state.
 	 */
 	gpio_flags_t out_flags = system_jumped_to_this_image() ?
-				 GPIO_OUTPUT : GPIO_OUTPUT_INACTIVE;
+					 GPIO_OUTPUT :
+					 GPIO_OUTPUT_INACTIVE;
 
 	for (int i = 0; i < ARRAY_SIZE(gpio_config); i++) {
 		if (gpio_config[i].output) {
@@ -133,8 +159,8 @@ void power_signal_gpio_init(void)
 			/* If interrupt, initialise it */
 			if (gpio_config[i].flags) {
 				gpio_init_callback(&int_cb[i],
-					   power_signal_gpio_interrupt,
-					   BIT(spec[i].pin));
+						   power_signal_gpio_interrupt,
+						   BIT(spec[i].pin));
 				gpio_add_callback(spec[i].port, &int_cb[i]);
 				/*
 				 * If the interrupt is to be enabled at

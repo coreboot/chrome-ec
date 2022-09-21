@@ -1,4 +1,4 @@
-/* Copyright 2018 The Chromium OS Authors. All rights reserved.
+/* Copyright 2018 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -195,7 +195,6 @@ int ipi_send(int32_t id, const void *buf, uint32_t len, int wait)
 
 		return EC_ERROR_BUSY;
 	}
-
 
 	scp_send_obj->id = id;
 	scp_send_obj->len = len;

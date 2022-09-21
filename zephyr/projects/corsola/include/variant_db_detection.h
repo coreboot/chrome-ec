@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -9,7 +9,8 @@
 #define __CROS_EC_CORSOLA_DB_DETECTION_H
 
 enum corsola_db_type {
-	CORSOLA_DB_NONE = -1,
+	CORSOLA_DB_UNINIT = -1,
+	CORSOLA_DB_NONE,
 	CORSOLA_DB_TYPEC,
 	CORSOLA_DB_HDMI,
 	CORSOLA_DB_COUNT,

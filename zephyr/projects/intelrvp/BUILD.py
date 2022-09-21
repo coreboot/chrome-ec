@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium OS Authors. All rights reserved.
+# Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -43,7 +43,6 @@ register_intelrvp_project(
     chip="npcx9m7f",
     extra_dts_overlays=[
         here / "adlrvp/adlrvp_npcx/adlrvp_npcx.dts",
-        here / "adlrvp/adlrvp_npcx/cbi_eeprom.dts",
         here / "adlrvp/adlrvp_npcx/fan.dts",
         here / "adlrvp/adlrvp_npcx/gpio.dts",
         here / "adlrvp/adlrvp_npcx/interrupts.dts",
@@ -62,17 +61,18 @@ register_intelrvp_project(
     project_name="mtlrvpp_npcx",
     chip="npcx9m3f",
     extra_dts_overlays=[
-        here / "adlrvp/adlrvp_npcx/cbi_eeprom.dts",
         here / "mtlrvp/mtlrvpp_npcx/fan.dts",
         here / "mtlrvp/mtlrvpp_npcx/gpio.dts",
         here / "mtlrvp/mtlrvpp_npcx/keyboard.dts",
         here / "mtlrvp/mtlrvpp_npcx/interrupts.dts",
         here / "mtlrvp/ioex.dts",
         here / "mtlrvp/mtlrvpp_npcx/mtlrvp_npcx.dts",
+        here / "mtlrvp/mtlrvpp_npcx/mtlrvp_npcx_power_signals.dts",
         here / "adlrvp/adlrvp_npcx/temp_sensor.dts",
+        here / "mtlrvp/usbc.dts",
     ],
     extra_kconfig_files=[
-        here / "legacy_ec_pwrseq.conf",
+        here / "zephyr_ap_pwrseq.conf",
         here / "mtlrvp/mtlrvpp_npcx/prj.conf",
     ],
 )

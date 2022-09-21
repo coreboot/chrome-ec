@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -69,4 +69,11 @@ int64_t get_time_dsw_pwrok(void);
  */
 void board_pwrbtn_to_pch(int level);
 
-#endif  /* __CROS_EC_POWER_BUTTON_H */
+/**
+ * Simulates a power button press.
+ *
+ * @param duration	Simulated power button press duration in ms.
+ */
+void power_button_simulate_press(unsigned int duration);
+
+#endif /* __CROS_EC_POWER_BUTTON_H */

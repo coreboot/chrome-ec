@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,10 +10,10 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/kernel.h>
 #include <stdint.h>
-#include <zephyr/zephyr.h>
 
 #include <ap_power/ap_power.h>
 #include <ap_power/ap_power_events.h>
+#include <ap_power/ap_power_espi.h>
 #include "acpi.h"
 #include "chipset.h"
 #include "common.h"
@@ -28,9 +28,28 @@
 #include "timer.h"
 #include "zephyr_espi_shim.h"
 
-#define VWIRE_PULSE_TRIGGER_TIME CONFIG_PLATFORM_EC_ESPI_DEFAULT_VW_WIDTH_US
+#define VWIRE_PULSE_TRIGGER_TIME \
+	CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US
 
 LOG_MODULE_REGISTER(espi_shim, CONFIG_ESPI_LOG_LEVEL);
+
+/*
+ * Some functions are compiled depending on combinations of
+ * CONFIG_PLATFORM_EC_POWERSEQ, CONFIG_AP_PWRSEQ and
+ * CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK.
+ *
+ * Tests are compiled without CONFIG_PLATFORM_EC_POWERSEQ and
+ * CONFIG_AP_PWRSEQ defined, but use the lpc functions.
+ *
+ * Legacy vwire power signal handling is required
+ * by CONFIG_PLATFORM_EC_POWERSEQ.
+ *
+ * CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK is used to handle
+ * the PLTRST# vwire signal separate to the legacy power signal handling.
+ *
+ * Where !defined(CONFIG_AP_PWRSEQ) is used, the code is required either
+ * by the tests, or by the legacy power signal handling.
+ */
 
 /* host command packet handler structure */
 static struct host_packet lpc_packet;
@@ -95,6 +114,7 @@ static enum espi_vwire_signal signal_to_zephyr_vwire(enum espi_vw_signal signal)
 	}
 }
 
+#if defined(CONFIG_PLATFORM_EC_POWERSEQ)
 /* Translate a Zephyr vwire to a platform/ec signal */
 static enum espi_vw_signal zephyr_vwire_to_signal(enum espi_vwire_signal vwire)
 {
@@ -105,6 +125,7 @@ static enum espi_vw_signal zephyr_vwire_to_signal(enum espi_vwire_signal vwire)
 		return -1;
 	}
 }
+#endif /* defined(CONFIG_PLATFORM_EC_POWERSEQ) */
 
 /*
  * Bit field for each signal which can have an interrupt enabled.
@@ -126,22 +147,12 @@ static uint32_t signal_to_interrupt_bit(enum espi_vw_signal signal)
 	}
 }
 
-/* Callback for vwire received */
-static void espi_vwire_handler(const struct device *dev,
-			       struct espi_callback *cb,
-			       struct espi_event event)
-{
-	int ec_signal = zephyr_vwire_to_signal(event.evt_details);
-
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_POWERSEQ) &&
-	    (signal_interrupt_enabled & signal_to_interrupt_bit(ec_signal))) {
-		power_signal_interrupt(ec_signal);
-	}
-}
-
 #endif /* !defined(CONFIG_AP_PWRSEQ) */
 
 #ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
+/*
+ * Deferred handler for PLTRST processing.
+ */
 static void espi_chipset_reset(void)
 {
 	if (IS_ENABLED(CONFIG_AP_PWRSEQ)) {
@@ -151,16 +162,35 @@ static void espi_chipset_reset(void)
 	}
 }
 DECLARE_DEFERRED(espi_chipset_reset);
+#endif /* CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK */
 
-/* Callback for reset */
-static void espi_reset_handler(const struct device *dev,
+/*
+ * Callback for vwire received.
+ * PLTRST (platform reset) is handled specially by
+ * invoking HOOK_CHIPSET_RESET.
+ */
+#if defined(CONFIG_PLATFORM_EC_POWERSEQ) || \
+	defined(CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK)
+static void espi_vwire_handler(const struct device *dev,
 			       struct espi_callback *cb,
 			       struct espi_event event)
 {
-	hook_call_deferred(&espi_chipset_reset_data, MSEC);
+#if defined(CONFIG_PLATFORM_EC_POWERSEQ)
+	int ec_signal = zephyr_vwire_to_signal(event.evt_details);
 
+	if (signal_interrupt_enabled & signal_to_interrupt_bit(ec_signal)) {
+		power_signal_interrupt(ec_signal);
+	}
+#endif
+#if defined(CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK)
+	/* If PLTRST# asserted (low) then send reset hook */
+	if (event.evt_details == ESPI_VWIRE_SIGNAL_PLTRST &&
+	    event.evt_data == 0) {
+		hook_call_deferred(&espi_chipset_reset_data, MSEC);
+	}
+#endif
 }
-#endif /* CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK */
+#endif
 
 #define espi_dev DEVICE_DT_GET(DT_CHOSEN(cros_ec_espi))
 
@@ -289,46 +319,76 @@ void lpc_update_host_event_status(void)
 	uint32_t status;
 	int need_sci = 0;
 	int need_smi = 0;
+	int rv;
 
 	if (!init_done)
 		return;
 
 	/* Disable PMC1 interrupt while updating status register */
 	enable = 0;
-	espi_write_lpc_request(espi_dev, ECUSTOM_HOST_SUBS_INTERRUPT_EN,
-			       &enable);
-
-	espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
-	if (lpc_get_host_events_by_type(LPC_HOST_EVENT_SMI)) {
-		/* Only generate SMI for first event */
-		if (!(status & EC_LPC_STATUS_SMI_PENDING))
-			need_smi = 1;
-
-		status |= EC_LPC_STATUS_SMI_PENDING;
-		espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
-	} else {
-		status &= ~EC_LPC_STATUS_SMI_PENDING;
-		espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+	rv = espi_write_lpc_request(espi_dev, ECUSTOM_HOST_SUBS_INTERRUPT_EN,
+				    &enable);
+	if (rv) {
+		LOG_ERR("ESPI write failed: "
+			"ECUSTOM_HOST_SUBS_INTERRUPT_EN = %d",
+			rv);
+		return;
 	}
 
-	espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
-	if (lpc_get_host_events_by_type(LPC_HOST_EVENT_SCI)) {
-		/* Generate SCI for every event */
-		need_sci = 1;
-
-		status |= EC_LPC_STATUS_SCI_PENDING;
-		espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+	rv = espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	if (rv) {
+		LOG_ERR("ESPI read failed: EACPI_READ_STS = %d", rv);
 	} else {
-		status &= ~EC_LPC_STATUS_SCI_PENDING;
-		espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+		if (lpc_get_host_events_by_type(LPC_HOST_EVENT_SMI)) {
+			/* Only generate SMI for first event */
+			if (!(status & EC_LPC_STATUS_SMI_PENDING))
+				need_smi = 1;
+
+			status |= EC_LPC_STATUS_SMI_PENDING;
+			rv = espi_write_lpc_request(espi_dev, EACPI_WRITE_STS,
+						    &status);
+		} else {
+			status &= ~EC_LPC_STATUS_SMI_PENDING;
+			rv = espi_write_lpc_request(espi_dev, EACPI_WRITE_STS,
+						    &status);
+		}
+		if (rv) {
+			LOG_ERR("ESPI write failed: EACPI_WRITE_STS = %d", rv);
+		}
+	}
+
+	rv = espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	if (rv) {
+		LOG_ERR("ESPI read failed: EACPI_READ_STS = %d", rv);
+	} else {
+		if (lpc_get_host_events_by_type(LPC_HOST_EVENT_SCI)) {
+			/* Generate SCI for every event */
+			need_sci = 1;
+
+			status |= EC_LPC_STATUS_SCI_PENDING;
+			rv = espi_write_lpc_request(espi_dev, EACPI_WRITE_STS,
+						    &status);
+		} else {
+			status &= ~EC_LPC_STATUS_SCI_PENDING;
+			rv = espi_write_lpc_request(espi_dev, EACPI_WRITE_STS,
+						    &status);
+		}
+		if (rv) {
+			LOG_ERR("ESPI write failed: EACPI_WRITE_STS = %d", rv);
+		}
 	}
 
 	*(host_event_t *)host_get_memmap(EC_MEMMAP_HOST_EVENTS) =
 		lpc_get_host_events();
 
 	enable = 1;
-	espi_write_lpc_request(espi_dev, ECUSTOM_HOST_SUBS_INTERRUPT_EN,
-			       &enable);
+	rv = espi_write_lpc_request(espi_dev, ECUSTOM_HOST_SUBS_INTERRUPT_EN,
+				    &enable);
+	if (rv) {
+		LOG_ERR("ESPI write failed: "
+			"ECUSTOM_HOST_SUBS_INTERRUPT_EN = %d",
+			rv);
+	}
 
 	/* Process the wake events. */
 	lpc_update_wake(lpc_get_host_events_by_type(LPC_HOST_EVENT_WAKE));
@@ -362,19 +422,30 @@ static void handle_acpi_write(uint32_t data)
 	uint8_t value, result;
 	uint8_t is_cmd = is_acpi_command(data);
 	uint32_t status;
+	int rv;
 
 	value = get_acpi_value(data);
 
 	/* Handle whatever this was. */
 	if (acpi_ap_to_ec(is_cmd, value, &result)) {
 		data = result;
-		espi_write_lpc_request(espi_dev, EACPI_WRITE_CHAR, &data);
+		rv = espi_write_lpc_request(espi_dev, EACPI_WRITE_CHAR, &data);
+		if (rv) {
+			LOG_ERR("ESPI write failed: EACPI_WRITE_CHAR = %d", rv);
+		}
 	}
 
 	/* Clear processing flag */
-	espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
-	status &= ~EC_LPC_STATUS_PROCESSING;
-	espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+	rv = espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	if (rv) {
+		LOG_ERR("ESPI read failed: EACPI_READ_STS = %d", rv);
+	} else {
+		status &= ~EC_LPC_STATUS_PROCESSING;
+		rv = espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+		if (rv) {
+			LOG_ERR("ESPI write failed: EACPI_WRITE_STS = %d", rv);
+		}
+	}
 
 	/*
 	 * ACPI 5.0-12.6.1: Generate SCI for Input Buffer Empty / Output Buffer
@@ -386,17 +457,24 @@ static void handle_acpi_write(uint32_t data)
 static void lpc_send_response_packet(struct host_packet *pkt)
 {
 	uint32_t data;
+	int rv;
 
 	/* TODO(b/176523211): check whether add EC_RES_IN_PROGRESS handle */
 
 	/* Write result to the data byte.  This sets the TOH status bit. */
 	data = pkt->driver_result;
-	espi_write_lpc_request(espi_dev, ECUSTOM_HOST_CMD_SEND_RESULT, &data);
+	rv = espi_write_lpc_request(espi_dev, ECUSTOM_HOST_CMD_SEND_RESULT,
+				    &data);
+	if (rv) {
+		LOG_ERR("ESPI write failed: ECUSTOM_HOST_CMD_SEND_RESULT = %d",
+			rv);
+	}
 }
 
 static void handle_host_write(uint32_t data)
 {
 	uint32_t shm_mem_host_cmd;
+	int rv;
 
 	if (EC_COMMAND_PROTOCOL_3 != (data & 0xff)) {
 		LOG_ERR("Don't support this version of the host command");
@@ -404,9 +482,12 @@ static void handle_host_write(uint32_t data)
 		return;
 	}
 
-	espi_read_lpc_request(espi_dev, ECUSTOM_HOST_CMD_GET_PARAM_MEMORY,
-			      &shm_mem_host_cmd);
-
+	rv = espi_read_lpc_request(espi_dev, ECUSTOM_HOST_CMD_GET_PARAM_MEMORY,
+				   &shm_mem_host_cmd);
+	if (rv) {
+		LOG_ERR("ESPI read failed: EACPI_READ_STS = %d", rv);
+		return;
+	}
 	lpc_packet.send_response = lpc_send_response_packet;
 
 	lpc_packet.request = (const void *)shm_mem_host_cmd;
@@ -428,17 +509,35 @@ static void handle_host_write(uint32_t data)
 void lpc_set_acpi_status_mask(uint8_t mask)
 {
 	uint32_t status;
-	espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	int rv;
+
+	rv = espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	if (rv) {
+		LOG_ERR("ESPI read failed: EACPI_READ_STS = %d", rv);
+		return;
+	}
 	status |= mask;
-	espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+	rv = espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+	if (rv) {
+		LOG_ERR("ESPI write failed: EACPI_WRITE_STS = %d", rv);
+	}
 }
 
 void lpc_clear_acpi_status_mask(uint8_t mask)
 {
 	uint32_t status;
-	espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	int rv;
+
+	rv = espi_read_lpc_request(espi_dev, EACPI_READ_STS, &status);
+	if (rv) {
+		LOG_ERR("ESPI read failed: EACPI_READ_STS = %d", rv);
+		return;
+	}
 	status &= ~mask;
-	espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+	rv = espi_write_lpc_request(espi_dev, EACPI_WRITE_STS, &status);
+	if (rv) {
+		LOG_ERR("ESPI write failed: EACPI_WRITE_STS = %d", rv);
+	}
 }
 
 /* Get protocol information */
@@ -463,27 +562,44 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_PROTOCOL_INFO, lpc_get_protocol_info,
  * This function is needed only for the obsolete platform which uses the GPIO
  * for KBC's IRQ.
  */
-void lpc_keyboard_resume_irq(void) {}
+void lpc_keyboard_resume_irq(void)
+{
+}
 
 void lpc_keyboard_clear_buffer(void)
 {
+	int rv;
 	/* Clear OBF flag in host STATUS and HIKMST regs */
-	espi_write_lpc_request(espi_dev, E8042_CLEAR_OBF, 0);
+	rv = espi_write_lpc_request(espi_dev, E8042_CLEAR_OBF, 0);
+	if (rv) {
+		LOG_ERR("ESPI write failed: E8042_CLEAR_OBF = %d", rv);
+	}
 }
+
 int lpc_keyboard_has_char(void)
 {
 	uint32_t status;
+	int rv;
 
 	/* if OBF bit is '1', that mean still have a data in DBBOUT */
-	espi_read_lpc_request(espi_dev, E8042_OBF_HAS_CHAR, &status);
+	rv = espi_read_lpc_request(espi_dev, E8042_OBF_HAS_CHAR, &status);
+	if (rv) {
+		LOG_ERR("ESPI read failed: E8042_OBF_HAS_CHAR = %d", rv);
+		return 0;
+	}
 	return status;
 }
 
 void lpc_keyboard_put_char(uint8_t chr, int send_irq)
 {
 	uint32_t kb_char = chr;
+	int rv;
 
-	espi_write_lpc_request(espi_dev, E8042_WRITE_KB_CHAR, &kb_char);
+	rv = espi_write_lpc_request(espi_dev, E8042_WRITE_KB_CHAR, &kb_char);
+	if (rv) {
+		LOG_ERR("ESPI write failed: E8042_WRITE_KB_CHAR = %d", rv);
+		return;
+	}
 	LOG_INF("KB put %02x", kb_char);
 }
 
@@ -492,9 +608,16 @@ void lpc_aux_put_char(uint8_t chr, int send_irq)
 {
 	uint32_t kb_char = chr;
 	uint32_t status = I8042_AUX_DATA;
+	int rv;
 
-	espi_write_lpc_request(espi_dev, E8042_SET_FLAG, &status);
-	espi_write_lpc_request(espi_dev, E8042_WRITE_KB_CHAR, &kb_char);
+	rv = espi_write_lpc_request(espi_dev, E8042_SET_FLAG, &status);
+	if (rv) {
+		LOG_ERR("ESPI write failed: E8042_SET_FLAG = %d", rv);
+	}
+	rv = espi_write_lpc_request(espi_dev, E8042_WRITE_KB_CHAR, &kb_char);
+	if (rv) {
+		LOG_ERR("ESPI write failed: E8042_WRITE_KB_CHAR = %d", rv);
+	}
 	LOG_INF("AUX put %02x", kb_char);
 }
 
@@ -503,12 +626,16 @@ static void kbc_ibf_obe_handler(uint32_t data)
 #ifdef HAS_TASK_KEYPROTO
 	uint8_t is_ibf = is_8042_ibf(data);
 	uint32_t status = I8042_AUX_DATA;
+	int rv;
 
 	if (is_ibf) {
-		keyboard_host_write(get_8042_data(data),
-				    get_8042_type(data));
+		keyboard_host_write(get_8042_data(data), get_8042_type(data));
 	} else if (IS_ENABLED(CONFIG_8042_AUX)) {
-		espi_write_lpc_request(espi_dev, E8042_CLEAR_FLAG, &status);
+		rv = espi_write_lpc_request(espi_dev, E8042_CLEAR_FLAG,
+					    &status);
+		if (rv) {
+			LOG_ERR("ESPI write failed: E8042_CLEAR_FLAG = %d", rv);
+		}
 	}
 	task_wake(TASK_ID_KEYPROTO);
 #endif
@@ -517,9 +644,14 @@ static void kbc_ibf_obe_handler(uint32_t data)
 int lpc_keyboard_input_pending(void)
 {
 	uint32_t status;
+	int rv;
 
 	/* if IBF bit is '1', that mean still have a data in DBBIN */
-	espi_read_lpc_request(espi_dev, E8042_IBF_HAS_CHAR, &status);
+	rv = espi_read_lpc_request(espi_dev, E8042_IBF_HAS_CHAR, &status);
+	if (rv) {
+		LOG_ERR("ESPI read failed: E8042_IBF_HAS_CHAR = %d", rv);
+		return 0;
+	}
 	return status;
 }
 
@@ -553,12 +685,12 @@ static void espi_peripheral_handler(const struct device *dev,
 
 static int zephyr_shim_setup_espi(const struct device *unused)
 {
-	static struct {
-		struct espi_callback cb;
+	static const struct {
 		espi_callback_handler_t handler;
 		enum espi_bus_event event_type;
 	} callbacks[] = {
-#if !defined(CONFIG_AP_PWRSEQ)
+#if defined(CONFIG_PLATFORM_EC_POWERSEQ) || \
+	defined(CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK)
 		{
 			.handler = espi_vwire_handler,
 			.event_type = ESPI_BUS_EVENT_VWIRE_RECEIVED,
@@ -568,13 +700,14 @@ static int zephyr_shim_setup_espi(const struct device *unused)
 			.handler = espi_peripheral_handler,
 			.event_type = ESPI_BUS_PERIPHERAL_NOTIFICATION,
 		},
-#ifdef CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK
+#if defined(CONFIG_AP_PWRSEQ) && DT_HAS_COMPAT_STATUS_OKAY(intel_ap_pwrseq_vw)
 		{
-			.handler = espi_reset_handler,
-			.event_type = ESPI_BUS_RESET,
+			.handler = power_signal_espi_cb,
+			.event_type = POWER_SIGNAL_ESPI_BUS_EVENTS,
 		},
 #endif
 	};
+	static struct espi_callback cb[ARRAY_SIZE(callbacks)];
 
 	struct espi_cfg cfg = {
 		.io_caps = ESPI_IO_MODE_QUAD_LINES,
@@ -586,17 +719,17 @@ static int zephyr_shim_setup_espi(const struct device *unused)
 	if (!device_is_ready(espi_dev))
 		k_oops();
 
-	/* Configure eSPI */
+	/* Setup callbacks */
+	for (size_t i = 0; i < ARRAY_SIZE(callbacks); i++) {
+		espi_init_callback(&cb[i], callbacks[i].handler,
+				   callbacks[i].event_type);
+		espi_add_callback(espi_dev, &cb[i]);
+	}
+
+	/* Configure eSPI after callbacks are registered */
 	if (espi_config(espi_dev, &cfg)) {
 		LOG_ERR("Failed to configure eSPI device");
 		return -1;
-	}
-
-	/* Setup callbacks */
-	for (size_t i = 0; i < ARRAY_SIZE(callbacks); i++) {
-		espi_init_callback(&callbacks[i].cb, callbacks[i].handler,
-				   callbacks[i].event_type);
-		espi_add_callback(espi_dev, &callbacks[i].cb);
 	}
 
 	return 0;

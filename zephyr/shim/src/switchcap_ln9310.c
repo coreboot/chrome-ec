@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -18,11 +18,9 @@
 
 #define SC_PIN_ENABLE_PHANDLE \
 	DT_PHANDLE_BY_IDX(DT_PATH(switchcap), enable_pin, 0)
-#define SC_PIN_ENABLE \
-	GPIO_DT_FROM_NODE(SC_PIN_ENABLE_PHANDLE)
+#define SC_PIN_ENABLE GPIO_DT_FROM_NODE(SC_PIN_ENABLE_PHANDLE)
 
-#define SC_PORT_PHANDLE \
-	DT_PHANDLE(DT_PATH(switchcap), port)
+#define SC_PORT_PHANDLE DT_PHANDLE(DT_PATH(switchcap), port)
 #define SC_PORT DT_STRING_UPPER_TOKEN(SC_PORT_PHANDLE, enum_name)
 
 #define SC_ADDR_FLAGS DT_STRING_UPPER_TOKEN(DT_PATH(switchcap), addr_flags)

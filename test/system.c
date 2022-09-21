@@ -1,4 +1,4 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -13,8 +13,8 @@
 #include "timer.h"
 #include "util.h"
 
-#define TEST_STATE_STEP_2	(1 << 0)
-#define TEST_STATE_FAIL		(1 << 1)
+#define TEST_STATE_STEP_2 (1 << 0)
+#define TEST_STATE_FAIL (1 << 1)
 
 static int test_reboot_on_shutdown(void)
 {
@@ -92,7 +92,7 @@ static void fail_and_clean_up(void)
 	test_fail();
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	uint32_t state = 0;
 

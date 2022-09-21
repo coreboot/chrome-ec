@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,10 +7,9 @@
 import pathlib
 import tempfile
 
-import hypothesis
-import hypothesis.strategies as st
-import pytest
-
+import hypothesis  # pylint:disable=import-error
+import hypothesis.strategies as st  # pylint:disable=import-error
+import pytest  # pylint:disable=import-error
 import zmake.output_packers as packers
 
 # Strategies for use with hypothesis
@@ -54,7 +53,7 @@ def test_file_size_in_bounds(data):
     """Test with file size limited."""
     packer = FakePacker(100)
     with tempfile.TemporaryDirectory() as temp_dir_name:
-        file = pathlib.Path(temp_dir_name) / "zephyr.bin"
+        file = pathlib.Path(temp_dir_name) / "ec.bin"
         with open(file, "wb") as outfile:
             outfile.write(data)
         assert packer.check_packed_file_size(file=file, dir_map={}) == file
@@ -66,7 +65,7 @@ def test_file_size_out_of_bounds(data):
     """Test with file size limited, and file exceeds limit."""
     packer = FakePacker(100)
     with tempfile.TemporaryDirectory() as temp_dir_name:
-        file = pathlib.Path(temp_dir_name) / "zephyr.bin"
+        file = pathlib.Path(temp_dir_name) / "ec.bin"
         with open(file, "wb") as outfile:
             outfile.write(data)
         with pytest.raises(RuntimeError):

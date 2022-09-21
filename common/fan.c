@@ -1,11 +1,11 @@
-/* Copyright 2013 The Chromium OS Authors. All rights reserved.
+/* Copyright 2013 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 /* Basic Chrome OS fan control */
 
-#include "assert.h"
+#include "builtin/assert.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
@@ -56,7 +56,7 @@ void fan_set_count(int count)
  * Convert the percentage to a target RPM. We can't simply scale all
  * the way down to zero because most fans won't turn that slowly, so
  * we'll map [1,100] => [FAN_MIN,FAN_MAX], and [0] => "off".
-*/
+ */
 int fan_percent_to_rpm(int fan, int pct)
 {
 	int rpm, max, min;
@@ -71,7 +71,7 @@ int fan_percent_to_rpm(int fan, int pct)
 
 	return rpm;
 }
-#endif	/* CONFIG_FAN_RPM_CUSTOM */
+#endif /* CONFIG_FAN_RPM_CUSTOM */
 
 /* The thermal task will only call this function with pct in [0,100]. */
 test_mockable void fan_set_percent_needed(int fan, int pct)
@@ -94,8 +94,7 @@ test_mockable void fan_set_percent_needed(int fan, int pct)
 	/* If we want to turn and the fans are currently significantly below
 	 * the minimum turning speed, we should turn at least as fast as the
 	 * necessary start speed instead. */
-	if (new_rpm &&
-	    actual_rpm < fans[fan].rpm->rpm_min * 9 / 10 &&
+	if (new_rpm && actual_rpm < fans[fan].rpm->rpm_min * 9 / 10 &&
 	    new_rpm < fans[fan].rpm->rpm_start)
 		new_rpm = fans[fan].rpm->rpm_start;
 
@@ -137,7 +136,7 @@ static void set_duty_cycle(int fan, int percent)
 /*****************************************************************************/
 /* Console commands */
 
-static int cc_fanauto(int argc, char **argv)
+static int cc_fanauto(int argc, const char **argv)
 {
 	char *e;
 	int fan = 0;
@@ -157,8 +156,7 @@ static int cc_fanauto(int argc, char **argv)
 	set_thermal_control_enabled(fan, 1);
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(fanauto, cc_fanauto,
-			"{fan}",
+DECLARE_CONSOLE_COMMAND(fanauto, cc_fanauto, "{fan}",
 			"Enable thermal fan control");
 
 /* Return 0 for off, 1 for on, -1 for unknown */
@@ -176,28 +174,27 @@ static int is_powered(int fan)
 	return is_pgood;
 }
 
-static int cc_faninfo(int argc, char **argv)
+static int cc_faninfo(int argc, const char **argv)
 {
-	static const char * const human_status[] = {
-		"not spinning", "changing", "locked", "frustrated"
-	};
+	static const char *const human_status[] = { "not spinning", "changing",
+						    "locked", "frustrated" };
 	int tmp, is_pgood;
 	int fan;
 	char leader[20] = "";
 	for (fan = 0; fan < fan_count; fan++) {
 		if (fan_count > 1)
-			snprintf(leader, sizeof(leader), "Fan %d ", fan);
+			if (snprintf(leader, sizeof(leader), "Fan %d ", fan) <
+			    0)
+				leader[0] = '\0';
 		if (fan)
 			ccprintf("\n");
 		ccprintf("%sActual: %4d rpm\n", leader,
 			 fan_get_rpm_actual(FAN_CH(fan)));
 		ccprintf("%sTarget: %4d rpm\n", leader,
 			 fan_get_rpm_target(FAN_CH(fan)));
-		ccprintf("%sDuty:   %d%%\n", leader,
-			 fan_get_duty(FAN_CH(fan)));
+		ccprintf("%sDuty:   %d%%\n", leader, fan_get_duty(FAN_CH(fan)));
 		tmp = fan_get_status(FAN_CH(fan));
-		ccprintf("%sStatus: %d (%s)\n", leader,
-			 tmp, human_status[tmp]);
+		ccprintf("%sStatus: %d (%s)\n", leader, tmp, human_status[tmp]);
 		ccprintf("%sMode:   %s\n", leader,
 			 fan_get_rpm_mode(FAN_CH(fan)) ? "rpm" : "duty");
 		ccprintf("%sAuto:   %s\n", leader,
@@ -212,11 +209,9 @@ static int cc_faninfo(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(faninfo, cc_faninfo,
-			NULL,
-			"Print fan info");
+DECLARE_CONSOLE_COMMAND(faninfo, cc_faninfo, NULL, "Print fan info");
 
-static int cc_fanset(int argc, char **argv)
+static int cc_fanset(int argc, const char **argv)
 {
 	const char *rpm_str;
 	int rpm;
@@ -247,7 +242,7 @@ static int cc_fanset(int argc, char **argv)
 	}
 
 	rpm = strtoi(rpm_str, &e, 0);
-	if (*e == '%') {		/* Wait, that's a percentage */
+	if (*e == '%') { /* Wait, that's a percentage */
 		ccprintf("Fan rpm given as %d%%\n", rpm);
 		if (rpm < 0)
 			rpm = 0;
@@ -273,11 +268,10 @@ static int cc_fanset(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(fanset, cc_fanset,
-			"[fan] (rpm | pct%)",
+DECLARE_CONSOLE_COMMAND(fanset, cc_fanset, "[fan] (rpm | pct%)",
 			"Set fan speed");
 
-static int cc_fanduty(int argc, char **argv)
+static int cc_fanduty(int argc, const char **argv)
 {
 	const char *percent_str;
 	int percent = 0;
@@ -316,8 +310,7 @@ static int cc_fanduty(int argc, char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(fanduty, cc_fanduty,
-			"[fan] percent",
+DECLARE_CONSOLE_COMMAND(fanduty, cc_fanduty, "[fan] percent",
 			"Set fan duty cycle");
 
 /*****************************************************************************/
@@ -326,7 +319,7 @@ DECLARE_CONSOLE_COMMAND(fanduty, cc_fanduty,
 /* 0-100% if in duty mode. -1 if not */
 int dptf_get_fan_duty_target(void)
 {
-	int fan = 0;				/* TODO(crosbug.com/p/23803) */
+	int fan = 0; /* TODO(crosbug.com/p/23803) */
 
 	if (fan_count == 0)
 		return -1;
@@ -370,8 +363,7 @@ hc_pwm_get_fan_target_rpm(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_PWM_GET_FAN_TARGET_RPM,
-		     hc_pwm_get_fan_target_rpm,
+DECLARE_HOST_COMMAND(EC_CMD_PWM_GET_FAN_TARGET_RPM, hc_pwm_get_fan_target_rpm,
 		     EC_VER_MASK(0));
 
 static enum ec_status
@@ -399,7 +391,7 @@ hc_pwm_set_fan_target_rpm(struct host_cmd_handler_args *args)
 		return EC_RES_ERROR;
 
 	/* enable the fan if rpm is non-zero */
-	set_enabled(fan, (p_v1->rpm > 0) ? 1 :0);
+	set_enabled(fan, (p_v1->rpm > 0) ? 1 : 0);
 
 	set_thermal_control_enabled(fan, 0);
 	fan_set_rpm_mode(FAN_CH(fan), 1);
@@ -407,8 +399,7 @@ hc_pwm_set_fan_target_rpm(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_PWM_SET_FAN_TARGET_RPM,
-		     hc_pwm_set_fan_target_rpm,
+DECLARE_HOST_COMMAND(EC_CMD_PWM_SET_FAN_TARGET_RPM, hc_pwm_set_fan_target_rpm,
 		     EC_VER_MASK(0) | EC_VER_MASK(1));
 
 static enum ec_status hc_pwm_set_fan_duty(struct host_cmd_handler_args *args)
@@ -432,8 +423,7 @@ static enum ec_status hc_pwm_set_fan_duty(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_PWM_SET_FAN_DUTY,
-		     hc_pwm_set_fan_duty,
+DECLARE_HOST_COMMAND(EC_CMD_PWM_SET_FAN_DUTY, hc_pwm_set_fan_duty,
 		     EC_VER_MASK(0) | EC_VER_MASK(1));
 
 static enum ec_status
@@ -457,10 +447,8 @@ hc_thermal_auto_fan_ctrl(struct host_cmd_handler_args *args)
 
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_THERMAL_AUTO_FAN_CTRL,
-		     hc_thermal_auto_fan_ctrl,
-		     EC_VER_MASK(0)|EC_VER_MASK(1));
-
+DECLARE_HOST_COMMAND(EC_CMD_THERMAL_AUTO_FAN_CTRL, hc_thermal_auto_fan_ctrl,
+		     EC_VER_MASK(0) | EC_VER_MASK(1));
 
 /*****************************************************************************/
 /* Hooks */
@@ -471,18 +459,18 @@ DECLARE_HOST_COMMAND(EC_CMD_THERMAL_AUTO_FAN_CTRL,
  */
 BUILD_ASSERT(CONFIG_FANS <= EC_FAN_SPEED_ENTRIES);
 
-#define PWMFAN_SYSJUMP_TAG 0x5046  /* "PF" */
+#define PWMFAN_SYSJUMP_TAG 0x5046 /* "PF" */
 #define PWM_HOOK_VERSION 1
 /* Saved PWM state across sysjumps */
 struct pwm_fan_state {
 	/* TODO(crosbug.com/p/23530): Still treating all fans as one. */
 	uint16_t rpm;
-	uint8_t flag;	/* FAN_STATE_FLAG_* */
+	uint8_t flag; /* FAN_STATE_FLAG_* */
 };
 
 /* For struct pwm_fan_state.flag */
-#define FAN_STATE_FLAG_ENABLED	BIT(0)
-#define FAN_STATE_FLAG_THERMAL	BIT(1)
+#define FAN_STATE_FLAG_ENABLED BIT(0)
+#define FAN_STATE_FLAG_THERMAL BIT(1)
 
 static void pwm_fan_init(void)
 {
@@ -500,8 +488,8 @@ static void pwm_fan_init(void)
 		fan_channel_setup(FAN_CH(fan), fans[fan].conf->flags);
 
 	/* Restore previous state. */
-	prev = (const struct pwm_fan_state *)
-		system_get_jump_tag(PWMFAN_SYSJUMP_TAG, &version, &size);
+	prev = (const struct pwm_fan_state *)system_get_jump_tag(
+		PWMFAN_SYSJUMP_TAG, &version, &size);
 	if (prev && version == PWM_HOOK_VERSION && size == sizeof(*prev)) {
 		memcpy(&state, prev, sizeof(state));
 	} else {
@@ -513,7 +501,7 @@ static void pwm_fan_init(void)
 				state.flag & FAN_STATE_FLAG_ENABLED);
 		fan_set_rpm_target(FAN_CH(fan), state.rpm);
 		set_thermal_control_enabled(
-				fan, state.flag & FAN_STATE_FLAG_THERMAL);
+			fan, state.flag & FAN_STATE_FLAG_THERMAL);
 	}
 
 	/* Initialize memory-mapped data */
@@ -553,7 +541,7 @@ DECLARE_HOOK(HOOK_SECOND, pwm_fan_second, HOOK_PRIO_DEFAULT);
 
 static void pwm_fan_preserve_state(void)
 {
-	struct pwm_fan_state state = {0};
+	struct pwm_fan_state state = { 0 };
 	int fan = 0;
 
 	if (fan_count == 0)
@@ -566,8 +554,8 @@ static void pwm_fan_preserve_state(void)
 		state.flag |= FAN_STATE_FLAG_THERMAL;
 	state.rpm = fan_get_rpm_target(FAN_CH(fan));
 
-	system_add_jump_tag(PWMFAN_SYSJUMP_TAG, PWM_HOOK_VERSION,
-			    sizeof(state), &state);
+	system_add_jump_tag(PWMFAN_SYSJUMP_TAG, PWM_HOOK_VERSION, sizeof(state),
+			    &state);
 }
 DECLARE_HOOK(HOOK_SYSJUMP, pwm_fan_preserve_state, HOOK_PRIO_DEFAULT);
 
@@ -578,9 +566,11 @@ static void pwm_fan_control(int enable)
 	/* TODO(crosbug.com/p/23530): Still treating all fans as one. */
 	for (fan = 0; fan < fan_count; fan++) {
 		set_thermal_control_enabled(fan, enable);
-		fan_set_rpm_target(FAN_CH(fan), enable ?
-			fan_percent_to_rpm(FAN_CH(fan), CONFIG_FAN_INIT_SPEED) :
-			0);
+		fan_set_rpm_target(
+			FAN_CH(fan),
+			enable ? fan_percent_to_rpm(FAN_CH(fan),
+						    CONFIG_FAN_INIT_SPEED) :
+				 0);
 		set_enabled(fan, enable);
 	}
 }

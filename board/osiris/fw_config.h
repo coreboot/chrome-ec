@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -21,10 +21,10 @@ enum ec_cfg_keyboard_backlight_type {
 
 union osiris_cbi_fw_config {
 	struct {
-		enum ec_cfg_keyboard_backlight_type	kb_bl : 1;
-		uint32_t				reserved_1 : 1;
-		uint32_t				audio : 2;
-		uint32_t				reserved_2 : 28;
+		enum ec_cfg_keyboard_backlight_type kb_bl : 1;
+		uint32_t reserved_1 : 1;
+		uint32_t audio : 2;
+		uint32_t reserved_2 : 28;
 	};
 	uint32_t raw_value;
 };

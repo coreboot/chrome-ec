@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Encapsulation of a build configuration."""
@@ -14,14 +14,16 @@ import zmake.util as util
 class BuildConfig:
     """A container for build configurations.
 
-    A build config is a tuple of environment variables, cmake
-    variables, kconfig definitons, and kconfig files.
+    A build config is a tuple of cmake variables, kconfig definitions,
+    and kconfig files.
     """
 
     def __init__(
-        self, environ_defs=None, cmake_defs=None, kconfig_defs=None, kconfig_files=None
+        self,
+        cmake_defs=None,
+        kconfig_defs=None,
+        kconfig_files=None,
     ):
-        self.environ_defs = dict(environ_defs or {})
         self.cmake_defs = dict(cmake_defs or {})
         self.kconfig_defs = dict(kconfig_defs or {})
 
@@ -63,19 +65,18 @@ class BuildConfig:
             )
 
         if kconfig_files:
-            base_config = BuildConfig(
-                environ_defs=self.environ_defs, cmake_defs=self.cmake_defs
-            )
+            base_config = BuildConfig(cmake_defs=self.cmake_defs)
             conf_file_config = BuildConfig(
                 cmake_defs={
-                    "CONF_FILE": ";".join(str(p.resolve()) for p in kconfig_files)
+                    "CONF_FILE": ";".join(
+                        str(p.resolve()) for p in kconfig_files
+                    )
                 }
             )
             return (base_config | conf_file_config).popen_cmake(
                 jobclient, project_dir, build_dir, **kwargs
             )
 
-        kwargs["env"] = dict(**kwargs.get("env", {}), **self.environ_defs)
         return jobclient.popen(
             [
                 "/usr/bin/cmake",
@@ -93,11 +94,12 @@ class BuildConfig:
         """Combine two BuildConfig instances."""
         if not isinstance(other, BuildConfig):
             raise TypeError(
-                "Unsupported operation | for {} and {}".format(type(self), type(other))
+                "Unsupported operation | for {} and {}".format(
+                    type(self), type(other)
+                )
             )
 
         return BuildConfig(
-            environ_defs=dict(**self.environ_defs, **other.environ_defs),
             cmake_defs=dict(**self.cmake_defs, **other.cmake_defs),
             kconfig_defs=dict(**self.kconfig_defs, **other.kconfig_defs),
             kconfig_files=[*self.kconfig_files, *other.kconfig_files],
@@ -108,7 +110,6 @@ class BuildConfig:
             ", ".join(
                 "{}={!r}".format(name, getattr(self, name))
                 for name in [
-                    "environ_defs",
                     "cmake_defs",
                     "kconfig_defs",
                     "kconfig_files",
@@ -150,7 +151,6 @@ class BuildConfig:
         """Provide a stable JSON representation of the build config."""
         return json.dumps(
             {
-                "environ_defs": self.environ_defs,
                 "cmake_defs": self.cmake_defs,
                 "kconfig_defs": self.kconfig_defs,
                 "kconfig_files": [str(p.resolve()) for p in self.kconfig_files],

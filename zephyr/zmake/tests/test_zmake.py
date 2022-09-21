@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -10,15 +10,14 @@ import pathlib
 import re
 import unittest.mock
 
-import pytest
-from testfixtures import LogCapture
-
+import pytest  # pylint:disable=import-error
 import zmake.build_config
 import zmake.jobserver
 import zmake.multiproc as multiproc
 import zmake.output_packers
 import zmake.project
 import zmake.toolchains
+from testfixtures import LogCapture  # pylint:disable=import-error
 
 OUR_PATH = os.path.dirname(os.path.realpath(__file__))
 
@@ -75,8 +74,7 @@ class FakeJobserver(zmake.jobserver.GNUMakeJobServer):
             fnames: Dict of regexp to filename. If the regexp matches the
             command, then the filename will be returned as the output.
         """
-        super().__init__()
-        self.jobserver = zmake.jobserver.GNUMakeJobServer(jobs=2)
+        super().__init__(jobs=2)
         self.fnames = fnames
 
     def get_job(self):
@@ -88,14 +86,21 @@ class FakeJobserver(zmake.jobserver.GNUMakeJobServer):
         """Ignores the provided command and just runs 'cat' instead"""
         for pattern, filename in self.fnames.items():
             # Convert to a list of strings
-            cmd = [isinstance(c, pathlib.PosixPath) and c.as_posix() or c for c in cmd]
+            cmd = [
+                isinstance(c, pathlib.PosixPath) and c.as_posix() or c
+                for c in cmd
+            ]
             if pattern.match(" ".join(cmd)):
                 new_cmd = ["cat", filename]
                 break
         else:
             raise Exception('No pattern matched "%s"' % " ".join(cmd))
-        kwargs.pop("env", None)
-        return self.jobserver.popen(new_cmd, *args, **kwargs)
+        kwargs["env"] = {}
+        return super().popen(new_cmd, *args, **kwargs)
+
+    def env(self):
+        """Runs test commands with an empty environment for simpler logs."""
+        return {}
 
 
 def get_test_filepath(suffix):
@@ -168,7 +173,9 @@ class TestFilters:
         expected = {
             "Configuring fakeproject:rw.",
             "Configuring fakeproject:ro.",
-            "Building fakeproject in {}/ec/build/zephyr/fakeproject.".format(tmp_path),
+            "Building fakeproject in {}/ec/build/zephyr/fakeproject.".format(
+                tmp_path
+            ),
             "Building fakeproject:ro: /usr/bin/ninja -C {}-ro".format(
                 tmp_path / "ec/build/zephyr/fakeproject/build"
             ),
@@ -179,7 +186,9 @@ class TestFilters:
         for suffix in ["ro", "rw"]:
             with open(get_test_filepath("%s_INFO" % suffix)) as file:
                 for line in file:
-                    expected.add("[fakeproject:{}]{}".format(suffix, line.strip()))
+                    expected.add(
+                        "[fakeproject:{}]{}".format(suffix, line.strip())
+                    )
         # This produces an easy-to-read diff if there is a difference
         assert expected == set(recs)
 
@@ -192,20 +201,24 @@ class TestFilters:
         expected = {
             "Configuring fakeproject:rw.",
             "Configuring fakeproject:ro.",
-            "Building fakeproject in {}/ec/build/zephyr/fakeproject.".format(tmp_path),
+            "Building fakeproject in {}/ec/build/zephyr/fakeproject.".format(
+                tmp_path
+            ),
             "Building fakeproject:ro: /usr/bin/ninja -C {}-ro".format(
                 tmp_path / "ec/build/zephyr/fakeproject/build"
             ),
             "Building fakeproject:rw: /usr/bin/ninja -C {}-rw".format(
                 tmp_path / "ec/build/zephyr/fakeproject/build"
             ),
-            "Running cat {}/files/sample_ro.txt".format(OUR_PATH),
-            "Running cat {}/files/sample_rw.txt".format(OUR_PATH),
+            "Running `env -i cat {}/files/sample_ro.txt`".format(OUR_PATH),
+            "Running `env -i cat {}/files/sample_rw.txt`".format(OUR_PATH),
         }
         for suffix in ["ro", "rw"]:
             with open(get_test_filepath(suffix)) as file:
                 for line in file:
-                    expected.add("[fakeproject:{}]{}".format(suffix, line.strip()))
+                    expected.add(
+                        "[fakeproject:{}]{}".format(suffix, line.strip())
+                    )
         # This produces an easy-to-read diff if there is a difference
         assert expected == set(recs)
 
@@ -219,7 +232,9 @@ class TestFilters:
         )
 
         dt_errs = [rec for rec in recs if "adc" in rec]
-        assert "devicetree error: 'adc' is marked as required" in list(dt_errs)[0]
+        assert (
+            "devicetree error: 'adc' is marked as required" in list(dt_errs)[0]
+        )
 
 
 @pytest.mark.parametrize(
@@ -265,7 +280,7 @@ class TestFilters:
 )
 def test_list_projects(
     project_names, fmt, search_dir, expected_output, capsys, zmake_from_dir
-):  # pylint: disable=too-many-arguments
+):
     """Test listing projects with default directory."""
     fake_projects = {
         name: zmake.project.Project(

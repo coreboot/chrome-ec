@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,16 +10,19 @@
 
 #include "baseboard.h"
 
+/* Free up flash space */
+#undef CONFIG_CONSOLE_CMDHELP
+
 #define CONFIG_BUTTON_TRIGGERED_RECOVERY
 
 /* Internal SPI flash on NPCX7 */
-#define CONFIG_FLASH_SIZE_BYTES (512 * 1024)  /* 512KB internal spi flash */
+#define CONFIG_FLASH_SIZE_BYTES (512 * 1024) /* 512KB internal spi flash */
 
 /* Switchcap */
 #define CONFIG_LN9310
 
 /* Battery */
-#define CONFIG_BATTERY_DEVICE_CHEMISTRY  "LION"
+#define CONFIG_BATTERY_DEVICE_CHEMISTRY "LION"
 #define CONFIG_BATTERY_REVIVE_DISCONNECT
 #define CONFIG_BATTERY_FUEL_GAUGE
 #define CONFIG_BATTERY_VENDOR_PARAM
@@ -90,10 +93,7 @@ enum sensor_id {
 	SENSOR_COUNT,
 };
 
-enum pwm_channel {
-	PWM_CH_DISPLIGHT = 0,
-	PWM_CH_COUNT
-};
+enum pwm_channel { PWM_CH_DISPLIGHT = 0, PWM_CH_COUNT };
 
 /* List of possible batteries */
 enum battery_type {

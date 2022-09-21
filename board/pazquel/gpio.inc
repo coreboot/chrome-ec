@@ -1,6 +1,6 @@
 /* -*- mode:c -*-
  *
- * Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -21,6 +21,8 @@ GPIO_INT(USB_A0_OC_ODL,        PIN(D, 1), GPIO_INT_BOTH | GPIO_PULL_UP, usba_oc_
 GPIO_INT(CHG_ACOK_OD,       PIN(0, 0), GPIO_INT_BOTH, extpower_interrupt)  /* ACOK */
 GPIO_INT(CCD_MODE_ODL,      PIN(E, 3), GPIO_INT_FALLING, board_connect_c0_sbu)  /* Case Closed Debug Mode */
 GPIO_INT(EC_PWR_BTN_ODL,    PIN(0, 1), GPIO_INT_BOTH, power_button_interrupt)  /* Power button */
+GPIO_INT(EC_VOLDN_BTN_ODL,  PIN(7, 0), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)  /* Volume Down button */
+GPIO_INT(EC_VOLUP_BTN_ODL,  PIN(F, 2), GPIO_INT_BOTH | GPIO_PULL_UP, button_interrupt)  /* Volume Up button */
 GPIO_INT(EC_WP_ODL,         PIN(A, 1), GPIO_INT_BOTH, switch_interrupt)  /* Write protection */
 GPIO_INT(LID_OPEN_EC,       PIN(D, 2), GPIO_INT_BOTH, lid_interrupt)  /* Lid open */
 GPIO_INT(AP_RST_L,          PIN(C, 1), GPIO_INT_BOTH | GPIO_SEL_1P8V, chipset_ap_rst_interrupt)  /* PMIC to signal AP reset */
@@ -39,7 +41,7 @@ GPIO_INT(AP_EC_SPI_CS_L,    PIN(5, 3), GPIO_INT_FALLING | GPIO_PULL_DOWN, shi_cs
 
 /* Sensor interrupts */
 GPIO_INT(TABLET_MODE_L,     PIN(C, 6), GPIO_INT_BOTH, gmr_tablet_switch_isr)
-GPIO_INT(ACCEL_GYRO_INT_L,  PIN(A, 0), GPIO_INT_FALLING, bmi160_interrupt)  /* Accelerometer/gyro interrupt */
+GPIO_INT(ACCEL_GYRO_INT_L,  PIN(A, 0), GPIO_INT_FALLING, bmi3xx_interrupt)  /* Accelerometer/gyro interrupt */
 
 /*
  * EC_RST_ODL used to be a wake source from PSL mode. However, we disabled
@@ -157,8 +159,6 @@ UNUSED(PIN(8, 3))
 UNUSED(PIN(B, 1))
 UNUSED(PIN(5, 0))
 UNUSED(PIN(D, 3))
-UNUSED(PIN(7, 0))
-UNUSED(PIN(F, 2))
 
 /* Alternate functions GPIO definitions */
 ALTERNATE(PIN_MASK(6, 0x30), 0, MODULE_UART, 0)            /* UART (GPIO64/65) */

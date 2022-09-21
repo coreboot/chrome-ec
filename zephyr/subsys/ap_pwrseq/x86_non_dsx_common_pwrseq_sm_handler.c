@@ -1,25 +1,42 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
+#include <atomic.h>
 #include <zephyr/init.h>
 
 #include <x86_non_dsx_common_pwrseq_sm_handler.h>
 
-static K_KERNEL_STACK_DEFINE(pwrseq_thread_stack,
-			CONFIG_AP_PWRSEQ_STACK_SIZE);
+static K_KERNEL_STACK_DEFINE(pwrseq_thread_stack, CONFIG_AP_PWRSEQ_STACK_SIZE);
 static struct k_thread pwrseq_thread_data;
-static struct pwrseq_context pwrseq_ctx;
+static struct pwrseq_context pwrseq_ctx = {
+	.power_state = SYS_POWER_STATE_UNINIT,
+};
+static struct k_sem pwrseq_sem;
+
+static void s5_inactive_timer_handler(struct k_timer *timer);
 /* S5 inactive timer*/
-K_TIMER_DEFINE(s5_inactive_timer, NULL, NULL);
+K_TIMER_DEFINE(s5_inactive_timer, s5_inactive_timer_handler, NULL);
+/*
+ * Flags, may be set/cleared from other threads.
+ */
+enum {
+	S5_INACTIVE_TIMER_RUNNING,
+	START_FROM_G3,
+	FLAGS_MAX,
+};
+static ATOMIC_DEFINE(flags, FLAGS_MAX);
+/* Delay in ms when starting from G3 */
+static uint32_t start_from_g3_delay_ms;
 
 LOG_MODULE_REGISTER(ap_pwrseq, CONFIG_AP_PWRSEQ_LOG_LEVEL);
 
 /**
  * @brief power_state names for debug
  */
-static const char * const pwrsm_dbg[] = {
+static const char *const pwrsm_dbg[] = {
+	[SYS_POWER_STATE_UNINIT] = "Unknown",
 	[SYS_POWER_STATE_G3] = "G3",
 	[SYS_POWER_STATE_S5] = "S5",
 	[SYS_POWER_STATE_S4] = "S4",
@@ -48,17 +65,17 @@ static const char * const pwrsm_dbg[] = {
  */
 static inline bool signals_valid(power_signal_mask_t signals)
 {
-#if defined(CONFIG_PLATFORM_EC_ESPI_VW_SLP_S3)
+#if defined(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI_VW_SLP_S3)
 	if ((signals & POWER_SIGNAL_MASK(PWR_SLP_S3)) &&
 	    power_signal_get(PWR_SLP_S3) < 0)
 		return false;
 #endif
-#if defined(CONFIG_PLATFORM_EC_ESPI_VW_SLP_S4)
+#if defined(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI_VW_SLP_S4)
 	if ((signals & POWER_SIGNAL_MASK(PWR_SLP_S4)) &&
 	    power_signal_get(PWR_SLP_S4) < 0)
 		return false;
 #endif
-#if defined(CONFIG_PLATFORM_EC_ESPI_VW_SLP_S5)
+#if defined(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI_VW_SLP_S5)
 	if ((signals & POWER_SIGNAL_MASK(PWR_SLP_S5)) &&
 	    power_signal_get(PWR_SLP_S5) < 0)
 		return false;
@@ -81,7 +98,7 @@ enum power_states_ndsx pwr_sm_get_state(void)
 	return pwrseq_ctx.power_state;
 }
 
-const char * const pwr_sm_get_state_name(enum power_states_ndsx state)
+const char *const pwr_sm_get_state_name(enum power_states_ndsx state)
 {
 	return pwrsm_dbg[state];
 }
@@ -95,19 +112,44 @@ void pwr_sm_set_state(enum power_states_ndsx new_state)
 	pwrseq_ctx.power_state = new_state;
 }
 
-void request_exit_hardoff(bool should_exit)
+void ap_pwrseq_wake(void)
 {
-	pwrseq_ctx.want_g3_exit = should_exit;
+	k_sem_give(&pwrseq_sem);
 }
 
-static bool chipset_is_exit_hardoff(void)
+/*
+ * Set a flag to enable starting the AP once it is in G3.
+ * This is called from ap_power_exit_hardoff() which checks
+ * to ensure that the AP is in S5 or G3 state before calling
+ * this function.
+ * It can also be called via a hostcmd, which allows the flag
+ * to be set in any AP state.
+ */
+void request_start_from_g3(void)
 {
-	return pwrseq_ctx.want_g3_exit;
+	LOG_INF("Request start from G3");
+	atomic_set_bit(flags, START_FROM_G3);
+	/*
+	 * If in S5, restart the timer to give the CPU more time
+	 * to respond to a power button press (which is presumably
+	 * why we are being called). This avoids having the S5
+	 * inactivity timer expiring before the AP can process
+	 * the power button press and start up.
+	 */
+	if (pwr_sm_get_state() == SYS_POWER_STATE_S5) {
+		atomic_clear_bit(flags, S5_INACTIVE_TIMER_RUNNING);
+	}
+	ap_pwrseq_wake();
 }
 
 void ap_power_force_shutdown(enum ap_power_shutdown_reason reason)
 {
 	board_ap_power_force_shutdown();
+}
+
+static void s5_inactive_timer_handler(struct k_timer *timer)
+{
+	ap_pwrseq_wake();
 }
 
 static void shutdown_and_notify(enum ap_power_shutdown_reason reason)
@@ -117,9 +159,9 @@ static void shutdown_and_notify(enum ap_power_shutdown_reason reason)
 	ap_power_ev_send_callbacks(AP_POWER_SHUTDOWN_COMPLETE);
 }
 
-void set_reboot_ap_at_g3_delay_seconds(uint32_t d_time)
+void set_start_from_g3_delay_seconds(uint32_t d_time)
 {
-	pwrseq_ctx.reboot_ap_at_g3_delay_ms = d_time * MSEC;
+	start_from_g3_delay_ms = d_time * MSEC;
 }
 
 void apshutdown(void)
@@ -190,15 +232,16 @@ static int common_pwr_sm_run(int state)
 {
 	switch (state) {
 	case SYS_POWER_STATE_G3:
-		if (chipset_is_exit_hardoff()) {
-			request_exit_hardoff(false);
-			/*
-			 * G3->S0 transition should happen only after the
-			 * user specified delay. Hence, wait until the
-			 * user specified delay times out.
-			 */
-			k_msleep(pwrseq_ctx.reboot_ap_at_g3_delay_ms);
-			pwrseq_ctx.reboot_ap_at_g3_delay_ms = 0;
+		/*
+		 * If the START_FROM_G3 flag is set, begin starting
+		 * the AP. There may be a delay set, so only start
+		 * after that delay.
+		 */
+		if (atomic_test_and_clear_bit(flags, START_FROM_G3)) {
+			LOG_INF("Starting from G3, delay %d ms",
+				start_from_g3_delay_ms);
+			k_msleep(start_from_g3_delay_ms);
+			start_from_g3_delay_ms = 0;
 
 			return SYS_POWER_STATE_G3S5;
 		}
@@ -207,7 +250,7 @@ static int common_pwr_sm_run(int state)
 
 	case SYS_POWER_STATE_G3S5:
 		if ((power_get_signals() & PWRSEQ_G3S5_UP_SIGNAL) ==
-				PWRSEQ_G3S5_UP_VALUE)
+		    PWRSEQ_G3S5_UP_VALUE)
 			return SYS_POWER_STATE_S5;
 		else
 			return SYS_POWER_STATE_S5G3;
@@ -215,29 +258,56 @@ static int common_pwr_sm_run(int state)
 	case SYS_POWER_STATE_S5:
 		/* In S5 make sure no more signal lost */
 		/* If A-rails are stable then move to higher state */
-		if (board_ap_power_check_power_rails_enabled()
-					&& rsmrst_power_is_good()) {
+		if (board_ap_power_check_power_rails_enabled() &&
+		    rsmrst_power_is_good()) {
 			/* rsmrst is intact */
 			rsmrst_pass_thru_handler();
 			if (signals_valid_and_off(IN_PCH_SLP_S5)) {
 				k_timer_stop(&s5_inactive_timer);
+				/* Clear the timer running flag */
+				atomic_clear_bit(flags,
+						 S5_INACTIVE_TIMER_RUNNING);
+				/* Clear any request to exit hard-off */
+				atomic_clear_bit(flags, START_FROM_G3);
+				LOG_INF("Clearing request to exit G3");
 				return SYS_POWER_STATE_S5S4;
 			}
 		}
-		/* S5 inactivity timeout, go to S5G3 */
+		/*
+		 * S5 state has an inactivity timer, so moving
+		 * to S5G3 (where the power rails are turned off) is
+		 * delayed for some time, usually ~10 seconds or so.
+		 * The purpose of this delay is:
+		 *  - to handle AP initiated cold boot, where the AP
+		 *    will go to S5 for a short time and then restart.
+		 *  - give time for the power button to be pressed,
+		 *    which may set the START_FROM_G3 flag.
+		 */
 		if (AP_PWRSEQ_DT_VALUE(s5_inactivity_timeout) == 0)
 			return SYS_POWER_STATE_S5G3;
 		else if (AP_PWRSEQ_DT_VALUE(s5_inactivity_timeout) > 0) {
-			if (k_timer_status_get(&s5_inactive_timer) > 0)
-				/* Timer is expired */
-				return SYS_POWER_STATE_S5G3;
-			else if (k_timer_remaining_get(
-						&s5_inactive_timer) == 0)
-				/* Timer is not started or stopped */
+			/*
+			 * Test and set timer running flag.
+			 * If it was 0, then the timer wasn't running
+			 * and it is started (and the flag is set),
+			 * otherwise it is already set, so no change.
+			 */
+			if (!atomic_test_and_set_bit(
+				    flags, S5_INACTIVE_TIMER_RUNNING)) {
+				/*
+				 * Timer is not started, or needs
+				 * restarting.
+				 */
 				k_timer_start(&s5_inactive_timer,
-					K_SECONDS(AP_PWRSEQ_DT_VALUE(
-						s5_inactivity_timeout)),
-					K_NO_WAIT);
+					      K_SECONDS(AP_PWRSEQ_DT_VALUE(
+						      s5_inactivity_timeout)),
+					      K_NO_WAIT);
+			} else if (k_timer_status_get(&s5_inactive_timer) > 0) {
+				/* Timer is expired */
+				atomic_clear_bit(flags,
+						 S5_INACTIVE_TIMER_RUNNING);
+				return SYS_POWER_STATE_S5G3;
+			}
 		}
 		break;
 
@@ -318,7 +388,7 @@ static int common_pwr_sm_run(int state)
 	case SYS_POWER_STATE_S0ix:
 		/* System in S0 only if SLP_S0 and SLP_S3 are de-asserted */
 		if (power_signals_off(IN_PCH_SLP_S0) &&
-			signals_valid_and_off(IN_PCH_SLP_S3)) {
+		    signals_valid_and_off(IN_PCH_SLP_S3)) {
 			/* TODO: Make sure ap reset handling is done
 			 * before leaving S0ix.
 			 */
@@ -334,6 +404,7 @@ static int common_pwr_sm_run(int state)
 		 * HC already set sleep suspend state.
 		 */
 		ap_power_sleep_notify_transition(AP_POWER_SLEEP_SUSPEND);
+		ap_power_ev_send_callbacks(AP_POWER_S0IX_SUSPEND);
 
 		/*
 		 * Enable idle task deep sleep. Allow the low power idle task
@@ -354,9 +425,11 @@ static int common_pwr_sm_run(int state)
 		 */
 		disable_sleep(SLEEP_MASK_AP_RUN);
 
+		ap_power_ev_send_callbacks(AP_POWER_S0IX_RESUME
 #if CONFIG_PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
-		ap_power_ev_send_callbacks(AP_POWER_RESUME_INIT);
+					   | AP_POWER_RESUME_INIT
 #endif
+		);
 
 		return SYS_POWER_STATE_S0;
 
@@ -370,19 +443,19 @@ static int common_pwr_sm_run(int state)
 			return SYS_POWER_STATE_S0S3;
 
 #if CONFIG_AP_PWRSEQ_S0IX
-		/*
-		 * SLP_S0 may assert in system idle scenario without a kernel
-		 * freeze call. This may cause interrupt storm since there is
-		 * no freeze/unfreeze of threads/process in the idle scenario.
-		 * Ignore the SLP_S0 assertions in idle scenario by checking
-		 * the host sleep state.
-		 */
+			/*
+			 * SLP_S0 may assert in system idle scenario without a
+			 * kernel freeze call. This may cause interrupt storm
+			 * since there is no freeze/unfreeze of threads/process
+			 * in the idle scenario. Ignore the SLP_S0 assertions in
+			 * idle scenario by checking the host sleep state.
+			 */
 		} else if (ap_power_sleep_get_notify() ==
-					AP_POWER_SLEEP_SUSPEND &&
-					power_signals_on(IN_PCH_SLP_S0)) {
+				   AP_POWER_SLEEP_SUSPEND &&
+			   power_signals_on(IN_PCH_SLP_S0)) {
 			return SYS_POWER_STATE_S0S0ix;
 		} else if (ap_power_sleep_get_notify() ==
-					AP_POWER_SLEEP_RESUME) {
+			   AP_POWER_SLEEP_RESUME) {
 			ap_power_sleep_notify_transition(AP_POWER_SLEEP_RESUME);
 #endif /* CONFIG_AP_PWRSEQ_S0IX */
 		}
@@ -464,12 +537,16 @@ static void pwr_seq_set_initial_state(void)
 
 static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 {
-	int32_t t_wait_ms = 10;
 	enum power_states_ndsx curr_state, new_state;
 	power_signal_mask_t this_in_signals;
 	power_signal_mask_t last_in_signals = 0;
 	enum power_states_ndsx last_state = -1;
 
+	/*
+	 * Let clients know that the AP power state is now
+	 * initialized and ready.
+	 */
+	ap_power_ev_send_callbacks(AP_POWER_INITIALIZED);
 	while (1) {
 		curr_state = pwr_sm_get_state();
 
@@ -482,9 +559,8 @@ static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 		this_in_signals = power_get_signals();
 
 		if (this_in_signals != last_in_signals ||
-				curr_state != last_state) {
-			LOG_INF("power state %d = %s, in 0x%04x",
-				curr_state,
+		    curr_state != last_state) {
+			LOG_INF("power state %d = %s, in 0x%04x", curr_state,
 				pwr_sm_get_state_name(curr_state),
 				this_in_signals);
 			last_in_signals = this_in_signals;
@@ -506,22 +582,24 @@ static void pwrseq_loop_thread(void *p1, void *p2, void *p3)
 		if (curr_state != new_state) {
 			pwr_sm_set_state(new_state);
 			ap_power_set_active_wake_mask();
+		} else {
+			/*
+			 * No state transition, we can go to sleep and wait
+			 * for any event to wake us up.
+			 */
+			k_sem_take(&pwrseq_sem, K_FOREVER);
 		}
-
-		k_msleep(t_wait_ms);
 	}
 }
 
 static inline void create_pwrseq_thread(void)
 {
-	k_thread_create(&pwrseq_thread_data,
-			pwrseq_thread_stack,
+	k_thread_create(&pwrseq_thread_data, pwrseq_thread_stack,
 			K_KERNEL_STACK_SIZEOF(pwrseq_thread_stack),
-			(k_thread_entry_t)pwrseq_loop_thread,
-			NULL, NULL, NULL,
+			(k_thread_entry_t)pwrseq_loop_thread, NULL, NULL, NULL,
 			CONFIG_AP_PWRSEQ_THREAD_PRIORITY, 0,
-			IS_ENABLED(CONFIG_AP_PWRSEQ_AUTOSTART) ? K_NO_WAIT
-							       : K_FOREVER);
+			IS_ENABLED(CONFIG_AP_PWRSEQ_AUTOSTART) ? K_NO_WAIT :
+								 K_FOREVER);
 
 	k_thread_name_set(&pwrseq_thread_data, "pwrseq_task");
 }
@@ -535,7 +613,7 @@ void ap_pwrseq_task_start(void)
 
 static void init_pwr_seq_state(void)
 {
-	request_exit_hardoff(false);
+	atomic_clear_bit(flags, START_FROM_G3);
 	/*
 	 * The state of the CPU needs to be determined now
 	 * so that init routines can check the state of
@@ -549,6 +627,7 @@ static int pwrseq_init(const struct device *dev)
 {
 	LOG_INF("Pwrseq Init");
 
+	k_sem_init(&pwrseq_sem, 0, 1);
 	/* Initialize signal handlers */
 	power_signal_init();
 	LOG_DBG("Init pwr seq state");
@@ -559,7 +638,7 @@ static int pwrseq_init(const struct device *dev)
 }
 
 /*
- * The initialisation must occur after system I/O initialisation that
+ * The initialization must occur after system I/O initialization that
  * the signals depend upon, such as GPIO, ADC etc.
  */
 SYS_INIT(pwrseq_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);

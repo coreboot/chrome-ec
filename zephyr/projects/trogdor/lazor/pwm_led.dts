@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -20,7 +20,6 @@
 
 	pwm-led-pins {
 		compatible = "cros-ec,pwm-led-pins";
-		pwm-frequency = <324>;
 
 		color_off: color-off {
 			led-color = "LED_OFF";

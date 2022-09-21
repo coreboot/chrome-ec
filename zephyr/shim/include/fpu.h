@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -25,11 +25,7 @@ static inline float sqrtf(float v)
 	float root;
 
 	/* Use the CPU instruction */
-	__asm__ volatile(
-		"fsqrts %0, %1"
-		: "=w" (root)
-		: "w" (v)
-	);
+	__asm__ volatile("fsqrts %0, %1" : "=w"(root) : "w"(v));
 
 	return root;
 }
@@ -39,11 +35,7 @@ static inline float fabsf(float v)
 	float root;
 
 	/* Use the CPU instruction */
-	__asm__ volatile(
-		"fabss %0, %1"
-		: "=w" (root)
-		: "w" (v)
-	);
+	__asm__ volatile("fabss %0, %1" : "=w"(root) : "w"(v));
 
 	return root;
 }
@@ -67,6 +59,6 @@ static inline float fabsf(float v)
 #error "Unsupported core: please add an implementation"
 #endif
 
-#endif  /* CONFIG_PLATFORM_EC_FPU */
+#endif /* CONFIG_PLATFORM_EC_FPU */
 
-#endif  /* __CROS_EC_MATH_H */
+#endif /* __CROS_EC_MATH_H */

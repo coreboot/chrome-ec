@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -125,8 +125,7 @@ static int mock_set_msg_header(int port, int power_role, int data_role)
 		return EC_SUCCESS;
 
 	ccprints("[TCPC] Setting TCPM-side header to %s %s",
-		 from_pd_power_role(power_role),
-		 from_pd_data_role(data_role));
+		 from_pd_power_role(power_role), from_pd_data_role(data_role));
 
 	return EC_SUCCESS;
 }
@@ -141,8 +140,8 @@ static int mock_get_message_raw(int port, uint32_t *payload, int *head)
 	return EC_SUCCESS;
 }
 
-static int mock_transmit(int port, enum tcpci_msg_type type,
-			 uint16_t header, const uint32_t *data)
+static int mock_transmit(int port, enum tcpci_msg_type type, uint16_t header,
+			 const uint32_t *data)
 {
 	return EC_SUCCESS;
 }

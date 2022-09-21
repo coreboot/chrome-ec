@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -10,40 +10,45 @@
 #include "common.h"
 #include "console.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "i2c.h"
 #include "task.h"
 #include "timer.h"
 #include "usb_pd.h"
 #include "util.h"
 
-#define BB_RETIMER_REG_SIZE	4
-#define BB_RETIMER_READ_SIZE	(BB_RETIMER_REG_SIZE + 1)
-#define BB_RETIMER_WRITE_SIZE	(BB_RETIMER_REG_SIZE + 2)
-#define BB_RETIMER_MUX_DATA_PRESENT (USB_PD_MUX_USB_ENABLED \
-				| USB_PD_MUX_DP_ENABLED \
-				| USB_PD_MUX_SAFE_MODE \
-				| USB_PD_MUX_TBT_COMPAT_ENABLED \
-				| USB_PD_MUX_USB4_ENABLED)
+#define BB_RETIMER_REG_SIZE 4
+#define BB_RETIMER_READ_SIZE (BB_RETIMER_REG_SIZE + 1)
+#define BB_RETIMER_WRITE_SIZE (BB_RETIMER_REG_SIZE + 2)
+#define BB_RETIMER_MUX_DATA_PRESENT                             \
+	(USB_PD_MUX_USB_ENABLED | USB_PD_MUX_DP_ENABLED |       \
+	 USB_PD_MUX_SAFE_MODE | USB_PD_MUX_TBT_COMPAT_ENABLED | \
+	 USB_PD_MUX_USB4_ENABLED)
 
-#define BB_RETIMER_MUX_USB_ALT_MODE (USB_PD_MUX_USB_ENABLED\
-				| USB_PD_MUX_DP_ENABLED \
-				| USB_PD_MUX_TBT_COMPAT_ENABLED \
-				| USB_PD_MUX_USB4_ENABLED)
+#define BB_RETIMER_MUX_USB_ALT_MODE                       \
+	(USB_PD_MUX_USB_ENABLED | USB_PD_MUX_DP_ENABLED | \
+	 USB_PD_MUX_TBT_COMPAT_ENABLED | USB_PD_MUX_USB4_ENABLED)
 
-#define BB_RETIMER_MUX_USB_DP_MODE (USB_PD_MUX_USB_ENABLED \
-				| USB_PD_MUX_DP_ENABLED \
-				| USB_PD_MUX_USB4_ENABLED)
+#define BB_RETIMER_MUX_USB_DP_MODE                        \
+	(USB_PD_MUX_USB_ENABLED | USB_PD_MUX_DP_ENABLED | \
+	 USB_PD_MUX_USB4_ENABLED)
 
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
+#define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
-#define BB_RETIMER_I2C_RETRY	5
+#define BB_RETIMER_I2C_RETRY 5
+
+/*
+ * Mutex for BB_RETIMER_REG_CONNECTION_STATE register, which can be
+ * accessed from multiple tasks.
+ */
+static mutex_t bb_retimer_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 /**
  * Utility functions
  */
-static int bb_retimer_read(const struct usb_mux *me,
-			   const uint8_t offset, uint32_t *data)
+static int bb_retimer_read(const struct usb_mux *me, const uint8_t offset,
+			   uint32_t *data)
 {
 	int rv, retry = 0;
 	uint8_t buf[BB_RETIMER_READ_SIZE];
@@ -60,15 +65,15 @@ static int bb_retimer_read(const struct usb_mux *me,
 		 * byte[1:4] : Data [LSB -> MSB]
 		 * Stop
 		 */
-		rv = i2c_xfer(me->i2c_port, me->i2c_addr_flags,
-		      &offset, 1, buf, BB_RETIMER_READ_SIZE);
+		rv = i2c_xfer(me->i2c_port, me->i2c_addr_flags, &offset, 1, buf,
+			      BB_RETIMER_READ_SIZE);
 
 		if (rv == EC_SUCCESS)
 			break;
 
 		if (++retry >= BB_RETIMER_I2C_RETRY) {
-			CPRINTS("C%d: Retimer I2C read err=%d",
-				me->usb_port, rv);
+			CPRINTS("C%d: Retimer I2C read err=%d", me->usb_port,
+				rv);
 			return rv;
 		}
 		msleep(10);
@@ -82,8 +87,8 @@ static int bb_retimer_read(const struct usb_mux *me,
 	return EC_SUCCESS;
 }
 
-static int bb_retimer_write(const struct usb_mux *me,
-			    const uint8_t offset, uint32_t data)
+static int bb_retimer_write(const struct usb_mux *me, const uint8_t offset,
+			    uint32_t data)
 {
 	int rv, retry = 0;
 	uint8_t buf[BB_RETIMER_WRITE_SIZE];
@@ -109,14 +114,14 @@ static int bb_retimer_write(const struct usb_mux *me,
 	 */
 	while (1) {
 		rv = i2c_xfer(me->i2c_port, me->i2c_addr_flags, buf,
-			     BB_RETIMER_WRITE_SIZE, NULL, 0);
+			      BB_RETIMER_WRITE_SIZE, NULL, 0);
 
 		if (rv == EC_SUCCESS)
 			break;
 
 		if (++retry >= BB_RETIMER_I2C_RETRY) {
-			CPRINTS("C%d: Retimer I2C write err=%d",
-				me->usb_port, rv);
+			CPRINTS("C%d: Retimer I2C write err=%d", me->usb_port,
+				rv);
 			break;
 		}
 		msleep(10);
@@ -157,7 +162,8 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 				  uint32_t *set_retimer_con)
 {
 	union tbt_mode_resp_cable cable_resp = {
-		.raw_value = pd_get_tbt_mode_vdo(port, TCPCI_MSG_SOP_PRIME) };
+		.raw_value = pd_get_tbt_mode_vdo(port, TCPCI_MSG_SOP_PRIME)
+	};
 	union tbt_mode_resp_device dev_resp;
 	enum idh_ptype cable_type = get_usb_pd_cable_type(port);
 
@@ -171,7 +177,7 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 	 *
 	 */
 	if (is_active_cable_element_retimer(port) &&
-	   (mux_state & BB_RETIMER_MUX_USB_DP_MODE))
+	    (mux_state & BB_RETIMER_MUX_USB_DP_MODE))
 		*set_retimer_con |= BB_RETIMER_RE_TIMER_DRIVER;
 
 	/*
@@ -184,7 +190,7 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 	 */
 	if ((mux_state & BB_RETIMER_MUX_USB_ALT_MODE) &&
 	    ((cable_type == IDH_PTYPE_ACABLE) ||
-	      cable_resp.tbt_active_passive == TBT_CABLE_ACTIVE))
+	     cable_resp.tbt_active_passive == TBT_CABLE_ACTIVE))
 		*set_retimer_con |= BB_RETIMER_ACTIVE_PASSIVE;
 
 	if (mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED ||
@@ -239,7 +245,7 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 		 */
 		if ((cable_type == IDH_PTYPE_ACABLE ||
 		     cable_resp.tbt_active_passive == TBT_CABLE_ACTIVE) &&
-		     cable_resp.lsrx_comm == UNIDIR_LSRX_COMM)
+		    cable_resp.lsrx_comm == UNIDIR_LSRX_COMM)
 			*set_retimer_con |= BB_RETIMER_TBT_ACTIVE_LINK_TRAINING;
 
 		/*
@@ -251,9 +257,9 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 		 * 10..11b - Reserved
 		 */
 		*set_retimer_con |= BB_RETIMER_USB4_TBT_CABLE_SPEED_SUPPORT(
-				    mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED ?
-				    get_tbt_cable_speed(port) :
-				    get_usb4_cable_speed(port));
+			mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED ?
+				get_tbt_cable_speed(port) :
+				get_usb4_cable_speed(port));
 
 		/*
 		 * Bits 29-28: TBT_GEN_SUPPORT
@@ -262,8 +268,8 @@ static void retimer_set_state_dfp(int port, mux_state_t mux_state,
 		 *                           20.0625Gb/s, 20.000Gb/s)
 		 * 10..11b - Reserved
 		 */
-		*set_retimer_con |= BB_RETIMER_TBT_CABLE_GENERATION(
-				       cable_resp.tbt_rounded);
+		*set_retimer_con |=
+			BB_RETIMER_TBT_CABLE_GENERATION(cable_resp.tbt_rounded);
 	}
 }
 
@@ -284,7 +290,8 @@ static void retimer_set_state_ufp(int port, mux_state_t mux_state,
 	/* TODO:b/168890624: Set USB4 retimer config for UFP */
 	if (mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED) {
 		union tbt_dev_mode_enter_cmd ufp_tbt_enter_mode = {
-			.raw_value = pd_ufp_get_enter_mode(port)};
+			.raw_value = pd_ufp_get_enter_mode(port)
+		};
 		/*
 		 * Bit 2: RE_TIMER_DRIVER
 		 * 0 - Re-driver
@@ -316,9 +323,9 @@ static void retimer_set_state_ufp(int port, mux_state_t mux_state,
 		 */
 		if ((IS_ENABLED(CONFIG_USBC_RETIMER_INTEL_BB_VPRO_CAPABLE) &&
 		     ufp_tbt_enter_mode.intel_spec_b0 ==
-					VENDOR_SPECIFIC_SUPPORTED) ||
+			     VENDOR_SPECIFIC_SUPPORTED) ||
 		    ufp_tbt_enter_mode.vendor_spec_b1 ==
-					VENDOR_SPECIFIC_SUPPORTED)
+			    VENDOR_SPECIFIC_SUPPORTED)
 			*set_retimer_con |= BB_RETIMER_VPRO_DOCK_DP_OVERDRIVE;
 
 		/*
@@ -352,7 +359,7 @@ static void retimer_set_state_ufp(int port, mux_state_t mux_state,
 		 * Set according to TBT3 Enter Mode bit 18:16
 		 */
 		*set_retimer_con |= BB_RETIMER_USB4_TBT_CABLE_SPEED_SUPPORT(
-					ufp_tbt_enter_mode.tbt_cable_speed);
+			ufp_tbt_enter_mode.tbt_cable_speed);
 		/*
 		 * Bits 29-28: TBT_GEN_SUPPORT
 		 * 00b - 3rd generation TBT (10.3125 and 20.625Gb/s)
@@ -363,7 +370,7 @@ static void retimer_set_state_ufp(int port, mux_state_t mux_state,
 		 * Set according to TBT3 Enter Mode bit 20:19
 		 */
 		*set_retimer_con |= BB_RETIMER_TBT_CABLE_GENERATION(
-				       ufp_tbt_enter_mode.tbt_rounded);
+			ufp_tbt_enter_mode.tbt_rounded);
 	}
 }
 
@@ -376,9 +383,12 @@ static int retimer_set_state(const struct usb_mux *me, mux_state_t mux_state,
 	uint32_t set_retimer_con = 0;
 	uint8_t dp_pin_mode;
 	int port = me->usb_port;
+	int rv = 0;
 
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
+
+	mutex_lock(&bb_retimer_lock[port]);
 
 	/*
 	 * Bit 0: DATA_CONNECTION_PRESENT
@@ -413,14 +423,7 @@ static int retimer_set_state(const struct usb_mux *me, mux_state_t mux_state,
 			set_retimer_con |= BB_RETIMER_USB_3_SPEED;
 	}
 
-	/*
-	 * Bit 8: DP_CONNECTION
-	 * 0 – No DP connection
-	 * 1 – DP connected
-	 */
 	if (mux_state & USB_PD_MUX_DP_ENABLED) {
-		set_retimer_con |= BB_RETIMER_DP_CONNECTION;
-
 		/*
 		 * Bit 11-10: DP_PIN_ASSIGNMENT (ignored if BIT8 = 0)
 		 * 00 – Pin assignments E/E’
@@ -429,7 +432,7 @@ static int retimer_set_state(const struct usb_mux *me, mux_state_t mux_state,
 		 */
 		dp_pin_mode = get_dp_pin_mode(port);
 		if (dp_pin_mode == MODE_DP_PIN_C ||
-			dp_pin_mode == MODE_DP_PIN_D)
+		    dp_pin_mode == MODE_DP_PIN_D)
 			set_retimer_con |= BB_RETIMER_DP_PIN_ASSIGNMENT;
 
 		/*
@@ -471,22 +474,28 @@ static int retimer_set_state(const struct usb_mux *me, mux_state_t mux_state,
 		retimer_set_state_ufp(port, mux_state, &set_retimer_con);
 
 	/* Writing the register4 */
-	return bb_retimer_write(me, BB_RETIMER_REG_CONNECTION_STATE,
-			set_retimer_con);
+	rv = bb_retimer_write(me, BB_RETIMER_REG_CONNECTION_STATE,
+			      set_retimer_con);
+	mutex_unlock(&bb_retimer_lock[port]);
+	return rv;
 }
 
 void bb_retimer_hpd_update(const struct usb_mux *me, mux_state_t mux_state,
 			   bool *ack_required)
 {
 	uint32_t retimer_con_reg = 0;
+	int port = me->usb_port;
 
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
 
-	if (bb_retimer_read(me, BB_RETIMER_REG_CONNECTION_STATE,
-			    &retimer_con_reg) != EC_SUCCESS)
-		return;
+	mutex_lock(&bb_retimer_lock[port]);
 
+	if (bb_retimer_read(me, BB_RETIMER_REG_CONNECTION_STATE,
+			    &retimer_con_reg) != EC_SUCCESS) {
+		mutex_unlock(&bb_retimer_lock[port]);
+		return;
+	}
 	/*
 	 * Bit 14: IRQ_HPD (ignored if BIT8 = 0)
 	 * 0 - No IRQ_HPD
@@ -498,18 +507,68 @@ void bb_retimer_hpd_update(const struct usb_mux *me, mux_state_t mux_state,
 		retimer_con_reg &= ~BB_RETIMER_IRQ_HPD;
 
 	/*
+	 * Bit 8: DP_CONNECTION
+	 * 0 - No DP connection
+	 * 1 - DP connected
+	 *
 	 * Bit 15: HPD_LVL (ignored if BIT8 = 0)
 	 * 0 - HPD_State Low
 	 * 1 - HPD_State High
+	 *
+	 * HDMI card connect to chromebook the DP_CONNECTION bit
+	 * would be enable.
+	 * It will increase BBR power consumption, so enable the DP bit
+	 * only when the HPD bit is set so that the retimer stays in
+	 * low power mode until the external monitor is connected.
 	 */
 	if (mux_state & USB_PD_MUX_HPD_LVL)
-		retimer_con_reg |= BB_RETIMER_HPD_LVL;
+		retimer_con_reg |=
+			(BB_RETIMER_HPD_LVL | BB_RETIMER_DP_CONNECTION);
 	else
-		retimer_con_reg &= ~BB_RETIMER_HPD_LVL;
+		retimer_con_reg &=
+			~(BB_RETIMER_HPD_LVL | BB_RETIMER_DP_CONNECTION);
 
 	/* Writing the register4 */
 	bb_retimer_write(me, BB_RETIMER_REG_CONNECTION_STATE, retimer_con_reg);
+
+	mutex_unlock(&bb_retimer_lock[port]);
 }
+
+void bb_retimer_set_usb3(const struct usb_mux *me, bool enable)
+{
+	int rv;
+	uint32_t reg_val = 0;
+	int port = me->usb_port;
+
+	mutex_lock(&bb_retimer_lock[port]);
+
+	rv = bb_retimer_read(me, BB_RETIMER_REG_CONNECTION_STATE, &reg_val);
+	if (rv != EC_SUCCESS) {
+		mutex_unlock(&bb_retimer_lock[port]);
+		return;
+	}
+	/* Bit 5: USB_3_CONNECTION */
+	WRITE_BIT(reg_val, 5, enable);
+	rv = bb_retimer_write(me, BB_RETIMER_REG_CONNECTION_STATE, reg_val);
+	if (rv != EC_SUCCESS) {
+		mutex_unlock(&bb_retimer_lock[port]);
+		return;
+	}
+
+	mutex_unlock(&bb_retimer_lock[port]);
+}
+
+#ifdef CONFIG_ZEPHYR
+static void init_retimer_mutexes(void)
+{
+	int port;
+
+	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
+		k_mutex_init(&bb_retimer_lock[port]);
+	}
+}
+DECLARE_HOOK(HOOK_INIT, init_retimer_mutexes, HOOK_PRIO_FIRST);
+#endif
 
 static int retimer_low_power_mode(const struct usb_mux *me)
 {
@@ -538,14 +597,21 @@ static int retimer_init(const struct usb_mux *me)
 		return rv;
 
 	rv = bb_retimer_read(me, BB_RETIMER_REG_VENDOR_ID, &data);
+	/*
+	 * After reset, i2c controller may not be ready, if this fails,
+	 * retry one more time.
+	 * TODO: revisit the delay time after retimer reset.
+	 */
+	if (rv != EC_SUCCESS)
+		rv = bb_retimer_read(me, BB_RETIMER_REG_VENDOR_ID, &data);
 	if (rv != EC_SUCCESS)
 		return rv;
+	CPRINTS("C%d: retimer power enable success", me->usb_port);
 #ifdef CONFIG_USBC_RETIMER_INTEL_HB
 	if (data != BB_RETIMER_DEVICE_ID)
 		return EC_ERROR_INVAL;
 #else
-	if ((data != BB_RETIMER_VENDOR_ID_1) &&
-			data != BB_RETIMER_VENDOR_ID_2)
+	if ((data != BB_RETIMER_VENDOR_ID_1) && data != BB_RETIMER_VENDOR_ID_2)
 		return EC_ERROR_INVAL;
 
 	rv = bb_retimer_read(me, BB_RETIMER_REG_DEVICE_ID, &data);
@@ -566,12 +632,13 @@ const struct usb_mux_driver bb_usb_retimer = {
 };
 
 #ifdef CONFIG_CMD_RETIMER
-static int console_command_bb_retimer(int argc, char **argv)
+static int console_command_bb_retimer(int argc, const char **argv)
 {
 	char rw, *e;
 	int port, reg, data, val = 0;
 	int rv = EC_SUCCESS;
 	const struct usb_mux *mux;
+	const struct usb_mux_chain *mux_chain;
 
 	if (argc < 4)
 		return EC_ERROR_PARAM_COUNT;
@@ -581,14 +648,15 @@ static int console_command_bb_retimer(int argc, char **argv)
 	if (*e || !board_is_usb_pd_port_present(port))
 		return EC_ERROR_PARAM1;
 
-	mux = &usb_muxes[port];
-	while (mux) {
+	mux_chain = &usb_muxes[port];
+	while (mux_chain) {
+		mux = mux_chain->mux;
 		if (mux->driver == &bb_usb_retimer)
 			break;
-		mux = mux->next_mux;
+		mux_chain = mux_chain->next;
 	}
 
-	if (!mux)
+	if (!mux_chain)
 		return EC_ERROR_PARAM1;
 
 	/* Validate r/w selection */
@@ -608,17 +676,17 @@ static int console_command_bb_retimer(int argc, char **argv)
 			return EC_ERROR_PARAM4;
 	}
 
-	for (; mux != NULL; mux = mux->next_mux) {
+	for (; mux_chain != NULL; mux_chain = mux_chain->next) {
+		mux = mux_chain->mux;
 		if (mux->driver == &bb_usb_retimer) {
 			if (rw == 'r')
 				rv = bb_retimer_read(mux, reg, &data);
 			else {
 				rv = bb_retimer_write(mux, reg, val);
 				if (rv == EC_SUCCESS) {
-					rv = bb_retimer_read(
-						mux, reg, &data);
-				if (rv == EC_SUCCESS && data != val)
-					rv = EC_ERROR_UNKNOWN;
+					rv = bb_retimer_read(mux, reg, &data);
+					if (rv == EC_SUCCESS && data != val)
+						rv = EC_ERROR_UNKNOWN;
 				}
 			}
 			if (rv == EC_SUCCESS)

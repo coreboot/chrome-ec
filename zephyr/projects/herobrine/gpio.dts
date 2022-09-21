@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -227,6 +227,12 @@
 		arm_x86 {
 			gpios = <&gpio6 6 GPIO_OUTPUT_LOW>;
 		};
+		ec-i2c-sensor-scl {
+			gpios = <&gpiob 3 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
+		};
+		ec-i2c-sensor-sda {
+			gpios = <&gpiob 2 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
+		};
 		gpio_ec_kso_02_inv: ec_kso_02_inv {
 			gpios = <&gpio1 7 (GPIO_OUTPUT_LOW | GPIO_ACTIVE_LOW)>;
 		};
@@ -235,20 +241,6 @@
 	usba-port-enable-list {
 		compatible = "cros-ec,usba-port-enable-pins";
 		enable-pins = <&gpio_en_usb_a_5v>;
-	};
-
-	def-lvol-io-list {
-		compatible = "nuvoton,npcx-lvolctrl-def";
-		lvol-io-pads = <
-			&lvol_iob3 /* EC_I2C_SENSOR_SCL */
-			&lvol_iob2 /* EC_I2C_SENSOR_SDA */
-		>;
-	};
-
-	vsby-psl-in-list {
-		/* Use PSL_IN1/2/3/4 as detection pins from hibernate mode */
-		psl-in-pads = <&psl_in1 &psl_in2 &psl_in3 &psl_in4>;
-		status = "okay";
 	};
 
 	sku {
@@ -305,22 +297,33 @@
 };
 
 /* Power switch logic input pads */
-&psl_in1 {
+&psl_in1_gpd2 {
 	/* ACOK_OD */
-	flag = <NPCX_PSL_RISING_EDGE>;
+	psl-in-mode = "edge";
+	psl-in-pol = "high-rising";
 };
 
-&psl_in2 {
+&psl_in2_gp00 {
 	/* EC_PWR_BTN_ODL */
-	flag = <NPCX_PSL_FALLING_EDGE>;
+	psl-in-mode = "edge";
+	psl-in-pol = "low-falling";
 };
 
-&psl_in3 {
+&psl_in3_gp01 {
 	/* LID_OPEN_EC */
-	flag = <NPCX_PSL_RISING_EDGE>;
+	psl-in-mode = "edge";
+	psl-in-pol = "high-rising";
 };
 
-&psl_in4 {
+&psl_in4_gp02 {
 	/* RTC_EC_WAKE_ODL */
-	flag = <NPCX_PSL_FALLING_EDGE>;
+	psl-in-mode = "edge";
+	psl-in-pol = "low-falling";
+};
+
+/* Power domain device controlled by PSL (Power Switch Logic) IO pads */
+&power_ctrl_psl {
+	status = "okay";
+	pinctrl-names = "sleep";
+	pinctrl-0 = <&psl_in1_gpd2 &psl_in2_gp00 &psl_in3_gp01 &psl_in4_gp02>;
 };

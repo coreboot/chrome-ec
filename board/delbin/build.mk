@@ -1,5 +1,5 @@
 # -*- makefile -*-
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -16,3 +16,4 @@ board-y=board.o
 board-y+=battery.o
 board-y+=led.o
 board-y+=sensors.o
+board-$(CONFIG_KEYBOARD_CUSTOMIZATION)+=keyboard_customization.o

@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -56,6 +56,7 @@ config PLATFORM_EC_USBC_OCP
 
 config PLATFORM_EC_USB_PID
 	hex "USB Product ID"
+	default 0
 	help
 	  Each platform (e.g. baseboard set) should have a single VID/PID
 	  combination. If there is a big enough change within a platform,
@@ -133,6 +134,16 @@ config PLATFORM_EC_CONSOLE_CMD_PPC_DUMP
 	  reference to the datasheet for the part this can help you figure out
 	  what is going on.
 
+config PLATFORM_EC_USBC_PPC_LOGGING
+	bool "Enable PPC Related logging"
+	depends on PLATFORM_EC_USBC_PPC
+	default y
+	help
+	  PPC drivers use two print functions for logging error messages
+	  (ppc_prints and ppc_err_prints). Setting this config adds the
+	  CPRINTS call to both of these function which will enable PPC
+	  related logging but increase EC image size.
+
 config PLATFORM_EC_USB_PD_TCPM_DRIVER_IT83XX
 	bool "Enable IT83XX driver"
 	depends on PLATFORM_EC_USB_PD_TCPM_ITE_ON_CHIP
@@ -162,5 +173,56 @@ config PLATFORM_EC_USB_PD_ONLY_FIXED_PDOS
 	help
 	  Ignore all non-fixed PDOs received from a src_caps message. Enable
 	  this for boards (like servo_v4) which only support FIXED PDO types.
+
+# Define power related settings here for now to allow projects to overwrite
+# them. Ideally they would be defined in the devicetree.
+config PLATFORM_EC_PD_OPERATING_POWER_MW
+	int "PD operating power in milliwatt"
+	default 15000
+	help
+	  Base configuration for PD power operating power value, which is used
+	  in PD negotiation. The final PD parameter used in negotiation is
+	  affected by PLATFORM_EC_PD_MAX_POWER_MW,
+	  PLATFORM_EC_PD_MAX_CURRENT_MA, and PLATFORM_EC_PD_MAX_VOLTAGE_MV.
+	  Increase this value is the system requires more than 15 watts to boot
+	  without a battery.
+
+config PLATFORM_EC_PD_MAX_POWER_MW
+	int "PD maximum power in milliwatt"
+	default 60000
+	help
+	  The maximum PD negotiated power for the system. The value should match
+	  with configured PLATFORM_EC_PD_MAX_CURRENT_MA and
+	  PLATFORM_EC_PD_MAX_VOLTAGE_MV.
+
+config PLATFORM_EC_PD_MAX_CURRENT_MA
+	int "PD maximum current in milliampere"
+	default 3000
+	help
+	  The maximum PD negotiated current for the system. The value should
+	  match with configured PLATFORM_EC_PD_MAX_POWER_MW and
+	  PLATFORM_EC_PD_MAX_VOLTAGE_MV.
+
+config PLATFORM_EC_PD_MAX_VOLTAGE_MV
+	int "PD maximum voltage in millivolt"
+	default 20000
+	help
+	  The maximum PD negotiated voltage for the system. The value should
+	  match with configured PLATFORM_EC_PD_MAX_POWER_MW and
+	  PLATFORM_EC_PD_MAX_CURRENT_MA.
+
+config PLATFORM_EC_PD_POWER_SUPPLY_TURN_ON_DELAY
+	int "Power supply turn on delay in us"
+	default 30000
+	help
+	  Each platform could have different power sequencing and transition
+	  timing for turning on the power on the PD port.
+
+config PLATFORM_EC_PD_POWER_SUPPLY_TURN_OFF_DELAY
+	int "Power supply turn off delay in us"
+	default 30000
+	help
+	  Each platform could have different power sequencing and transition
+	  timing for turning off the power on the PD port.
 
 endif  # PLATFORM_EC_USBC

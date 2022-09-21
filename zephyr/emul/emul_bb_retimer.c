@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,12 +16,9 @@ LOG_MODULE_REGISTER(emul_bb_retimer);
 
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_bb_retimer.h"
+#include "emul/emul_stub_device.h"
 
 #include "driver/retimer/bb_retimer.h"
-
-#define BB_DATA_FROM_I2C_EMUL(_emul)					     \
-	CONTAINER_OF(CONTAINER_OF(_emul, struct i2c_common_emul_data, emul), \
-		     struct bb_emul_data, common)
 
 /** Run-time data used by the emulator */
 struct bb_emul_data {
@@ -44,7 +41,7 @@ struct bb_emul_data {
 };
 
 /** Check description in emul_bb_retimer.h */
-void bb_emul_set_reg(struct i2c_emul *emul, int reg, uint32_t val)
+void bb_emul_set_reg(const struct emul *emul, int reg, uint32_t val)
 {
 	struct bb_emul_data *data;
 
@@ -52,12 +49,12 @@ void bb_emul_set_reg(struct i2c_emul *emul, int reg, uint32_t val)
 		return;
 	}
 
-	data = BB_DATA_FROM_I2C_EMUL(emul);
+	data = emul->data;
 	data->reg[reg] = val;
 }
 
 /** Check description in emul_bb_retimer.h */
-uint32_t bb_emul_get_reg(struct i2c_emul *emul, int reg)
+uint32_t bb_emul_get_reg(const struct emul *emul, int reg)
 {
 	struct bb_emul_data *data;
 
@@ -65,39 +62,39 @@ uint32_t bb_emul_get_reg(struct i2c_emul *emul, int reg)
 		return 0;
 	}
 
-	data = BB_DATA_FROM_I2C_EMUL(emul);
+	data = emul->data;
 
 	return data->reg[reg];
 }
 
 /** Check description in emul_bb_retimer.h */
-void bb_emul_set_err_on_ro_write(struct i2c_emul *emul, bool set)
+void bb_emul_set_err_on_ro_write(const struct emul *emul, bool set)
 {
 	struct bb_emul_data *data;
 
-	data = BB_DATA_FROM_I2C_EMUL(emul);
+	data = emul->data;
 	data->error_on_ro_write = set;
 }
 
 /** Check description in emul_bb_retimer.h */
-void bb_emul_set_err_on_rsvd_write(struct i2c_emul *emul, bool set)
+void bb_emul_set_err_on_rsvd_write(const struct emul *emul, bool set)
 {
 	struct bb_emul_data *data;
 
-	data = BB_DATA_FROM_I2C_EMUL(emul);
+	data = emul->data;
 	data->error_on_rsvd_write = set;
 }
 
 /** Mask reserved bits in each register of BB retimer */
 static const uint32_t bb_emul_rsvd_mask[] = {
-	[BB_RETIMER_REG_VENDOR_ID]		= 0x00000000,
-	[BB_RETIMER_REG_DEVICE_ID]		= 0x00000000,
-	[0x02]					= 0xffffffff, /* Reserved */
-	[0x03]					= 0xffffffff, /* Reserved */
-	[BB_RETIMER_REG_CONNECTION_STATE]	= 0xc0201000,
-	[BB_RETIMER_REG_TBT_CONTROL]		= 0xffffdfff,
-	[0x06]					= 0xffffffff, /* Reserved */
-	[BB_RETIMER_REG_EXT_CONNECTION_MODE]	= 0x08007f00,
+	[BB_RETIMER_REG_VENDOR_ID] = 0x00000000,
+	[BB_RETIMER_REG_DEVICE_ID] = 0x00000000,
+	[0x02] = 0xffffffff, /* Reserved */
+	[0x03] = 0xffffffff, /* Reserved */
+	[BB_RETIMER_REG_CONNECTION_STATE] = 0xc0201000,
+	[BB_RETIMER_REG_TBT_CONTROL] = 0xffffdfff,
+	[0x06] = 0xffffffff, /* Reserved */
+	[BB_RETIMER_REG_EXT_CONNECTION_MODE] = 0x08007f00,
 };
 
 /**
@@ -105,20 +102,20 @@ static const uint32_t bb_emul_rsvd_mask[] = {
  *
  * @param emul Pointer to BB retimer emulator
  */
-static void bb_emul_reset(struct i2c_emul *emul)
+static void bb_emul_reset(const struct emul *emul)
 {
 	struct bb_emul_data *data;
 
-	data = BB_DATA_FROM_I2C_EMUL(emul);
+	data = emul->data;
 
-	data->reg[BB_RETIMER_REG_VENDOR_ID]		= data->vendor_id;
-	data->reg[BB_RETIMER_REG_DEVICE_ID]		= BB_RETIMER_DEVICE_ID;
-	data->reg[0x02]					= 0x00; /* Reserved */
-	data->reg[0x03]					= 0x00; /* Reserved */
-	data->reg[BB_RETIMER_REG_CONNECTION_STATE]	= 0x00;
-	data->reg[BB_RETIMER_REG_TBT_CONTROL]		= 0x00;
-	data->reg[0x06]					= 0x00; /* Reserved */
-	data->reg[BB_RETIMER_REG_EXT_CONNECTION_MODE]	= 0x00;
+	data->reg[BB_RETIMER_REG_VENDOR_ID] = data->vendor_id;
+	data->reg[BB_RETIMER_REG_DEVICE_ID] = BB_RETIMER_DEVICE_ID;
+	data->reg[0x02] = 0x00; /* Reserved */
+	data->reg[0x03] = 0x00; /* Reserved */
+	data->reg[BB_RETIMER_REG_CONNECTION_STATE] = 0x00;
+	data->reg[BB_RETIMER_REG_TBT_CONTROL] = 0x00;
+	data->reg[0x06] = 0x00; /* Reserved */
+	data->reg[BB_RETIMER_REG_EXT_CONNECTION_MODE] = 0x00;
 }
 
 /**
@@ -133,12 +130,12 @@ static void bb_emul_reset(struct i2c_emul *emul)
  * @return 0 on success
  * @return -EIO on error
  */
-static int bb_emul_handle_write(struct i2c_emul *emul, int reg, int msg_len)
+static int bb_emul_handle_write(const struct emul *emul, int reg, int msg_len)
 {
 	struct bb_emul_data *data;
 	uint32_t val;
 
-	data = BB_DATA_FROM_I2C_EMUL(emul);
+	data = emul->data;
 
 	/* This write only selected register for I2C read message */
 	if (msg_len < 2) {
@@ -155,8 +152,7 @@ static int bb_emul_handle_write(struct i2c_emul *emul, int reg, int msg_len)
 		LOG_WRN("Got %d bytes of WR data, expected 4", msg_len - 2);
 	}
 
-	if (reg <= BB_RETIMER_REG_DEVICE_ID ||
-	    reg >= BB_RETIMER_REG_COUNT ||
+	if (reg <= BB_RETIMER_REG_DEVICE_ID || reg >= BB_RETIMER_REG_COUNT ||
 	    reg == BB_RETIMER_REG_TBT_CONTROL) {
 		if (data->error_on_ro_write) {
 			LOG_ERR("Writing to reg 0x%x which is RO", reg);
@@ -191,11 +187,11 @@ static int bb_emul_handle_write(struct i2c_emul *emul, int reg, int msg_len)
  * @return 0 on success
  * @return -EIO on error
  */
-static int bb_emul_handle_read(struct i2c_emul *emul, int reg)
+static int bb_emul_handle_read(const struct emul *emul, int reg)
 {
 	struct bb_emul_data *data;
 
-	data = BB_DATA_FROM_I2C_EMUL(emul);
+	data = emul->data;
 
 	if (reg >= BB_RETIMER_REG_COUNT) {
 		LOG_ERR("Read unknown register 0x%x", reg);
@@ -219,12 +215,12 @@ static int bb_emul_handle_read(struct i2c_emul *emul, int reg)
  *
  * @return 0 on success
  */
-static int bb_emul_write_byte(struct i2c_emul *emul, int reg, uint8_t val,
+static int bb_emul_write_byte(const struct emul *emul, int reg, uint8_t val,
 			      int bytes)
 {
 	struct bb_emul_data *data;
 
-	data = BB_DATA_FROM_I2C_EMUL(emul);
+	data = emul->data;
 
 	if (bytes == 1) {
 		data->data_dword = 0;
@@ -249,12 +245,12 @@ static int bb_emul_write_byte(struct i2c_emul *emul, int reg, uint8_t val,
  *
  * @return 0 on success
  */
-static int bb_emul_read_byte(struct i2c_emul *emul, int reg, uint8_t *val,
+static int bb_emul_read_byte(const struct emul *emul, int reg, uint8_t *val,
 			     int bytes)
 {
 	struct bb_emul_data *data;
 
-	data = BB_DATA_FROM_I2C_EMUL(emul);
+	data = emul->data;
 
 	/* First byte of read message is read size which is always 4 */
 	if (bytes == 0) {
@@ -279,7 +275,7 @@ static int bb_emul_read_byte(struct i2c_emul *emul, int reg, uint8_t *val,
  *
  * @return Currently accessed register
  */
-static int bb_emul_access_reg(struct i2c_emul *emul, int reg, int bytes,
+static int bb_emul_access_reg(const struct emul *emul, int reg, int bytes,
 			      bool read)
 {
 	return reg;
@@ -298,27 +294,20 @@ static int bb_emul_access_reg(struct i2c_emul *emul, int reg, int bytes,
  *
  * @return 0 indicating success (always)
  */
-static int bb_emul_init(const struct emul *emul,
-			const struct device *parent)
+static int bb_emul_init(const struct emul *emul, const struct device *parent)
 {
-	const struct i2c_common_emul_cfg *cfg = emul->cfg;
-	struct i2c_common_emul_data *data = cfg->data;
-	int ret;
+	struct bb_emul_data *data = emul->data;
 
-	data->emul.api = &i2c_common_emul_api;
-	data->emul.addr = cfg->addr;
-	data->i2c = parent;
-	data->cfg = cfg;
-	i2c_common_emul_init(data);
+	data->common.i2c = parent;
 
-	ret = i2c_emul_register(parent, emul->dev_label, &data->emul);
+	i2c_common_emul_init(&data->common);
 
-	bb_emul_reset(&data->emul);
+	bb_emul_reset(emul);
 
-	return ret;
+	return 0;
 }
 
-#define BB_RETIMER_EMUL(n)						\
+#define BB_RETIMER_EMUL(n)                                          \
 	static struct bb_emul_data bb_emul_data_##n = {			\
 		.vendor_id = DT_STRING_TOKEN(DT_DRV_INST(n), vendor),	\
 		.error_on_ro_write = DT_INST_PROP(n, error_on_ro_write),\
@@ -333,29 +322,22 @@ static int bb_emul_init(const struct emul *emul,
 			.finish_read = NULL,				\
 			.access_reg = bb_emul_access_reg,		\
 		},							\
-	};								\
-									\
-	static const struct i2c_common_emul_cfg bb_emul_cfg_##n = {	\
-		.i2c_label = DT_INST_BUS_LABEL(n),			\
-		.dev_label = DT_INST_LABEL(n),                          \
-		.data = &bb_emul_data_##n.common,			\
-		.addr = DT_INST_REG_ADDR(n),				\
-	};								\
-	EMUL_DEFINE(bb_emul_init, DT_DRV_INST(n), &bb_emul_cfg_##n,	\
-		    &bb_emul_data_##n)
+	};         \
+                                                                    \
+	static const struct i2c_common_emul_cfg bb_emul_cfg_##n = { \
+		.dev_label = DT_NODE_FULL_NAME(DT_DRV_INST(n)),     \
+		.data = &bb_emul_data_##n.common,                   \
+		.addr = DT_INST_REG_ADDR(n),                        \
+	};                                                          \
+	EMUL_DT_INST_DEFINE(n, bb_emul_init, &bb_emul_data_##n,     \
+			    &bb_emul_cfg_##n, &i2c_common_emul_api)
 
 DT_INST_FOREACH_STATUS_OKAY(BB_RETIMER_EMUL)
 
-#define BB_RETIMER_EMUL_CASE(n)					\
-	case DT_INST_DEP_ORD(n): return &bb_emul_data_##n.common.emul;
+DT_INST_FOREACH_STATUS_OKAY(EMUL_STUB_DEVICE);
 
-/** Check description in emul_bb_emulator.h */
-struct i2c_emul *bb_emul_get(int ord)
+struct i2c_common_emul_data *
+emul_bb_retimer_get_i2c_common_data(const struct emul *emul)
 {
-	switch (ord) {
-	DT_INST_FOREACH_STATUS_OKAY(BB_RETIMER_EMUL_CASE)
-
-	default:
-		return NULL;
-	}
+	return emul->data;
 }

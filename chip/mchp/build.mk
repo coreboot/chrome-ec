@@ -1,5 +1,5 @@
 # -*- makefile -*-
-# Copyright 2013 The Chromium OS Authors. All rights reserved.
+# Copyright 2013 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -81,9 +81,11 @@ chip-lfw-flat = $(out)/RW/$(chip-lfw)-lfw.flat
 
 # build these specifically for lfw with -lfw suffix
 objs_lfw = $(patsubst %, $(out)/RW/%-lfw.o, \
-		$(addprefix common/, util util_stdlib gpio) \
+		$(addprefix common/, util gpio) \
 		$(addprefix chip/$(CHIP)/, spi qmspi dma gpio clock hwtimer tfdp) \
-		core/$(CORE)/cpu $(chip-lfw))
+		core/$(CORE)/cpu $(chip-lfw) \
+		builtin/stdlib \
+		)
 
 # reuse version.o (and its dependencies) from main board
 objs_lfw += $(out)/RW/common/version.o

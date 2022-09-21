@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -63,7 +63,7 @@ const struct board_batt_params board_battery_info[] = {
 		},
 	},
 	/* BYD 13076993-009 Battery Information */
-	[BATTERY_BYD] = {
+	[BATTERY_BYD_GSL4] = {
 		.fuel_gauge = {
 			.manuf_name = "BYD",
 			.device_name = "DELL WV3K8",
@@ -210,7 +210,7 @@ const struct board_batt_params board_battery_info[] = {
 	/* SWD 1002000008482 Battery Information */
 	[BATTERY_SWD_ATL3] = {
 		.fuel_gauge = {
-			.manuf_name = "SWD-ATL3.661",
+			.manuf_name = "SWD-ATL3.660",
 			.device_name = "DELL VKYJX",
 			.ship_mode = {
 				.reg_addr = 0x00,
@@ -323,6 +323,35 @@ const struct board_batt_params board_battery_info[] = {
 			.discharging_max_c	= 70,
 		},
 	},
+	/* BYD 13148981-00 Battery Information */
+	[BATTERY_BYD_CSL4] = {
+		.fuel_gauge = {
+			.manuf_name = "BYD",
+			.device_name = "DELL JGCCT",
+			.ship_mode = {
+				.reg_addr = 0x00,
+				.reg_data = { 0x0010, 0x0010 },
+			},
+			.fet = {
+				.mfgacc_support = 0,
+				.reg_addr = 0x00,
+				.reg_mask = 0x2000,
+				.disconnect_val = 0x2000,
+			}
+		},
+		.batt_info = {
+			.voltage_max		= 17400,  /* mV */
+			.voltage_normal		= 15000,  /* mV */
+			.voltage_min		= 12000,  /* mV */
+			.precharge_current	= 256,	  /* mA */
+			.start_charging_min_c	= 0,
+			.start_charging_max_c	= 60,
+			.charging_min_c		= 0,
+			.charging_max_c		= 60,
+			.discharging_min_c	= 0,
+			.discharging_max_c	= 70,
+		},
+	},
 	/* Sunwoda 1002000009262 Battery Information */
 	[BATTERY_SWD_ATL4] = {
 		.fuel_gauge = {
@@ -392,6 +421,11 @@ enum battery_present battery_hw_present(void)
 
 	batt_pres = GPIO_EC_BATT_PRES_ODL;
 
-	/* The GPIO is low when the battery is physically present */
-	return gpio_get_level(batt_pres) ? BP_NO : BP_YES;
+	/*
+	 * The GPIO is low when the battery is physically present.
+	 * But if battery cell voltage < 2.5V, it will not able to
+	 * pull down EC_BATT_PRES_ODL. So we need to set pre-charge
+	 * current even EC_BATT_PRES_ODL is high.
+	 */
+	return gpio_get_level(batt_pres) ? BP_NOT_SURE : BP_YES;
 }

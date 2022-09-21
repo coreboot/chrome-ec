@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -43,19 +43,19 @@
  * light, value obtainded with 128 cycles will be two times smaller than value
  * obtained with 256 cycles.
  */
-#define TCS_EMUL_MAX_CYCLES	256
+#define TCS_EMUL_MAX_CYCLES 256
 /**
  * Maximum gain supported by TCS3400. Value read from sensor is multiplied by
  * gain selected in CONTROL register.
  */
-#define TCS_EMUL_MAX_GAIN	64
+#define TCS_EMUL_MAX_GAIN 64
 
 /**
  * Emulator units are value returned with gain x64 and 256 integration cycles.
  * Max value is 1024 returned when gain is x1 and 1 integration cycle. Max value
  * represented in emulator units is 1024 * 64 * 256
  */
-#define TCS_EMUL_MAX_VALUE	(1024 * TCS_EMUL_MAX_GAIN * TCS_EMUL_MAX_CYCLES)
+#define TCS_EMUL_MAX_VALUE (1024 * TCS_EMUL_MAX_GAIN * TCS_EMUL_MAX_CYCLES)
 
 /** Axis argument used in @ref tcs_emul_set_val @ref tcs_emul_get_val */
 enum tcs_emul_axis {
@@ -70,18 +70,9 @@ enum tcs_emul_axis {
  * Emulator saves only those registers in memory. IR select is stored sparately
  * and other registers are write only.
  */
-#define TCS_EMUL_FIRST_REG	TCS_I2C_ENABLE
-#define TCS_EMUL_LAST_REG	TCS_I2C_BDATAH
-#define TCS_EMUL_REG_COUNT	(TCS_EMUL_LAST_REG - TCS_EMUL_FIRST_REG + 1)
-
-/**
- * @brief Get pointer to TCS3400 emulator using device tree order number.
- *
- * @param ord Device tree order number obtained from DT_DEP_ORD macro
- *
- * @return Pointer to TCS3400 emulator
- */
-struct i2c_emul *tcs_emul_get(int ord);
+#define TCS_EMUL_FIRST_REG TCS_I2C_ENABLE
+#define TCS_EMUL_LAST_REG TCS_I2C_BDATAH
+#define TCS_EMUL_REG_COUNT (TCS_EMUL_LAST_REG - TCS_EMUL_FIRST_REG + 1)
 
 /**
  * @brief Set value of given register of TCS3400
@@ -90,7 +81,7 @@ struct i2c_emul *tcs_emul_get(int ord);
  * @param reg Register address which value will be changed
  * @param val New value of the register
  */
-void tcs_emul_set_reg(struct i2c_emul *emul, int reg, uint8_t val);
+void tcs_emul_set_reg(const struct emul *emul, int reg, uint8_t val);
 
 /**
  * @brief Get value of given register of TCS3400
@@ -100,7 +91,7 @@ void tcs_emul_set_reg(struct i2c_emul *emul, int reg, uint8_t val);
  *
  * @return Value of the register
  */
-uint8_t tcs_emul_get_reg(struct i2c_emul *emul, int reg);
+uint8_t tcs_emul_get_reg(const struct emul *emul, int reg);
 
 /**
  * @brief Get internal value of light sensor for given axis
@@ -110,7 +101,7 @@ uint8_t tcs_emul_get_reg(struct i2c_emul *emul, int reg);
  *
  * @return Value of given axis with gain x64 and 256 integration cycles
  */
-int tcs_emul_get_val(struct i2c_emul *emul, enum tcs_emul_axis axis);
+int tcs_emul_get_val(const struct emul *emul, enum tcs_emul_axis axis);
 
 /**
  * @brief Set internal value of light sensor for given axis
@@ -120,7 +111,8 @@ int tcs_emul_get_val(struct i2c_emul *emul, enum tcs_emul_axis axis);
  * @param val New value of light sensor for given axis with gain x64 and
  *            256 integration cycles
  */
-void tcs_emul_set_val(struct i2c_emul *emul, enum tcs_emul_axis axis, int val);
+void tcs_emul_set_val(const struct emul *emul, enum tcs_emul_axis axis,
+		      int val);
 
 /**
  * @brief Set if error should be generated when read only register is being
@@ -129,7 +121,7 @@ void tcs_emul_set_val(struct i2c_emul *emul, enum tcs_emul_axis axis, int val);
  * @param emul Pointer to TCS3400 emulator
  * @param set Check for this error
  */
-void tcs_emul_set_err_on_ro_write(struct i2c_emul *emul, bool set);
+void tcs_emul_set_err_on_ro_write(const struct emul *emul, bool set);
 
 /**
  * @brief Set if error should be generated when reserved bits of register are
@@ -138,7 +130,7 @@ void tcs_emul_set_err_on_ro_write(struct i2c_emul *emul, bool set);
  * @param emul Pointer to TCS3400 emulator
  * @param set Check for this error
  */
-void tcs_emul_set_err_on_rsvd_write(struct i2c_emul *emul, bool set);
+void tcs_emul_set_err_on_rsvd_write(const struct emul *emul, bool set);
 
 /**
  * @brief Set if error should be generated when MSB register is accessed before
@@ -147,7 +139,16 @@ void tcs_emul_set_err_on_rsvd_write(struct i2c_emul *emul, bool set);
  * @param emul Pointer to TCS3400 emulator
  * @param set Check for this error
  */
-void tcs_emul_set_err_on_msb_first(struct i2c_emul *emul, bool set);
+void tcs_emul_set_err_on_msb_first(const struct emul *emul, bool set);
+
+/**
+ * @brief Returns pointer to i2c_common_emul_data for argument emul
+ *
+ * @param emul Pointer to tcs3400 emulator
+ * @return Pointer to i2c_common_emul_data from argument emul
+ */
+struct i2c_common_emul_data *
+emul_tcs3400_get_i2c_common_data(const struct emul *emul);
 
 /**
  * @}

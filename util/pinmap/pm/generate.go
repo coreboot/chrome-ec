@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium OS Authors. All rights reserved.
+// Copyright 2021 The ChromiumOS Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ type lineName struct {
 	name string // Pin name
 }
 
-const header = `/* Copyright %d The Chromium OS Authors. All rights reserved.
+const header = `/* Copyright %d The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -87,7 +87,6 @@ func adcConfig(out io.Writer, pin *Pin, chip Chip) {
 	}
 	lc := strings.ToLower(pin.Signal)
 	fmt.Fprintf(out, "\t\tadc_%s: %s {\n", lc, lc)
-	fmt.Fprintf(out, "\t\t\tlabel = \"%s\";\n", pin.Signal)
 	if len(pin.Enum) > 0 {
 		fmt.Fprintf(out, "\t\t\tenum-name = \"%s\";\n", pin.Enum)
 	}
@@ -153,7 +152,7 @@ func i2cConfig(out io.Writer, pin *Pin, chip Chip) {
 	fmt.Fprintf(out, "\t\ti2c_%s: %s {\n", lc, lc)
 	fmt.Fprintf(out, "\t\t\ti2c-port = <&%s>;\n", c)
 	if len(pin.Enum) > 0 {
-		fmt.Fprintf(out, "\t\t\tenum-name = \"%s\";\n", pin.Enum)
+		fmt.Fprintf(out, "\t\t\tenum-names = \"%s\";\n", pin.Enum)
 	}
 	fmt.Fprintf(out, "\t\t};\n")
 }
@@ -193,7 +192,7 @@ func generateEnabledNodes(out io.Writer, nodes []string) {
 func generateLineNames(out io.Writer, gpios map[string][]lineName) {
 	// Sort the GPIO controller names.
 	var gcList []string
-	for gc, _ := range gpios {
+	for gc := range gpios {
 		gcList = append(gcList, gc)
 	}
 	sort.Strings(gcList)

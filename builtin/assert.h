@@ -1,4 +1,4 @@
-/* Copyright 2016 The Chromium OS Authors. All rights reserved.
+/* Copyright 2016 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -11,6 +11,8 @@
 /* Include CONFIG definitions for EC sources. */
 #ifndef THIRD_PARTY
 #include "common.h"
+#else
+#define test_mockable_noreturn noreturn
 #endif
 
 #ifdef __cplusplus
@@ -21,7 +23,7 @@ extern "C" {
 #ifdef CONFIG_DEBUG_ASSERT_REBOOTS
 
 #ifdef CONFIG_DEBUG_ASSERT_BRIEF
-noreturn void panic_assert_fail(const char *fname, int linenum);
+test_mockable_noreturn void panic_assert_fail(const char *fname, int linenum);
 #define ASSERT(cond)                                           \
 	do {                                                   \
 		if (!(cond))                                   \
@@ -30,8 +32,8 @@ noreturn void panic_assert_fail(const char *fname, int linenum);
 
 #else /* !CONFIG_DEBUG_ASSERT_BRIEF */
 
-noreturn void panic_assert_fail(const char *msg, const char *func,
-				const char *fname, int linenum);
+test_mockable_noreturn void panic_assert_fail(const char *msg, const char *func,
+					      const char *fname, int linenum);
 #define ASSERT(cond)                                                 \
 	do {                                                         \
 		if (!(cond))                                         \

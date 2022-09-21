@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -39,7 +39,7 @@ const struct test_sm_data test_pe_sm_data[] = {};
 const int test_pe_sm_data_size;
 #endif
 
-test_static int test_no_parent_cycles(const struct test_sm_data * const sm_data)
+test_static int test_no_parent_cycles(const struct test_sm_data *const sm_data)
 {
 	int i;
 

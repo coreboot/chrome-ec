@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,6 +10,6 @@
 
 #include "accelgyro_bmi3xx.h"
 
-#define BMI323_CHIP_ID			0x43
+#define BMI323_CHIP_ID 0x43
 
 #endif /* __CROS_EC_ACCELGYRO_BMI323_H */

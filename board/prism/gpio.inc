@@ -1,11 +1,9 @@
 /* -*- mode:c -*-
  *
- * Copyright 2021 The Chromium OS Authors. All rights reserved.
+ * Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
-GPIO(WP_L,			PIN(A, 13), GPIO_INPUT | GPIO_PULL_UP)
 
 #ifdef SECTION_IS_RW
 
@@ -24,3 +22,4 @@ ALTERNATE(PIN_MASK(A, 0x00e0), 0, MODULE_SPI_CONTROLLER, GPIO_PULL_UP)
 ALTERNATE(PIN_MASK(A, 0x0600), 1, MODULE_UART, GPIO_PULL_UP)
 
 UNIMPLEMENTED(ENTERING_RW)
+UNIMPLEMENTED(WP_L)

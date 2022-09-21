@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -6,7 +6,7 @@
 #include <zephyr/drivers/adc.h>
 #include <zephyr/drivers/adc/adc_emul.h>
 #include <zephyr/shell/shell.h>
-#include <ztest.h>
+#include <zephyr/ztest.h>
 
 #include "adc.h"
 #include "console.h"
@@ -21,7 +21,7 @@
 
 #define ADC_DEVICE_NODE DT_NODELABEL(adc0)
 #define CHARGER_NUM get_charger_num(&isl923x_drv)
-#define ISL923X_EMUL emul_get_binding(DT_LABEL(DT_NODELABEL(isl923x_emul)))
+#define ISL923X_EMUL EMUL_DT_GET(DT_NODELABEL(isl923x_emul))
 
 ZTEST_SUITE(console_cmd_amon_bmon, drivers_predicate_post_main, NULL, NULL,
 	    NULL, NULL);
@@ -60,13 +60,14 @@ ZTEST(console_cmd_amon_bmon, test_isl923x_amonbmon_get_input_current)
 }
 
 ZTEST(console_cmd_amon_bmon,
-	test_isl923x_amonbmon_get_input_current_read_fail_req1)
+      test_isl923x_amonbmon_get_input_current_read_fail_req1)
 {
 	const struct emul *isl923x_emul = ISL923X_EMUL;
-	struct i2c_emul *i2c_emul = isl923x_emul_get_i2c_emul(isl923x_emul);
+	struct i2c_common_emul_data *common_data =
+		emul_isl923x_get_i2c_common_data(isl923x_emul);
 	int current_milli_amps;
 
-	i2c_common_emul_set_read_fail_reg(i2c_emul, ISL923X_REG_CONTROL1);
+	i2c_common_emul_set_read_fail_reg(common_data, ISL923X_REG_CONTROL1);
 	zassert_equal(EC_ERROR_INVAL,
 		      isl923x_drv.get_input_current(CHARGER_NUM,
 						    &current_milli_amps),
@@ -76,13 +77,14 @@ ZTEST(console_cmd_amon_bmon,
 }
 
 ZTEST(console_cmd_amon_bmon,
-	test_isl923x_amonbmon_get_input_current_read_fail_req3)
+      test_isl923x_amonbmon_get_input_current_read_fail_req3)
 {
 	const struct emul *isl923x_emul = ISL923X_EMUL;
-	struct i2c_emul *i2c_emul = isl923x_emul_get_i2c_emul(isl923x_emul);
+	struct i2c_common_emul_data *common_data =
+		emul_isl923x_get_i2c_common_data(isl923x_emul);
 	int current_milli_amps;
 
-	i2c_common_emul_set_read_fail_reg(i2c_emul, ISL9238_REG_CONTROL3);
+	i2c_common_emul_set_read_fail_reg(common_data, ISL9238_REG_CONTROL3);
 	zassert_equal(EC_ERROR_INVAL,
 		      isl923x_drv.get_input_current(CHARGER_NUM,
 						    &current_milli_amps),
@@ -90,13 +92,14 @@ ZTEST(console_cmd_amon_bmon,
 }
 
 ZTEST(console_cmd_amon_bmon,
-	test_isl923x_amonbmon_get_input_current_write_fail_req1)
+      test_isl923x_amonbmon_get_input_current_write_fail_req1)
 {
 	const struct emul *isl923x_emul = ISL923X_EMUL;
-	struct i2c_emul *i2c_emul = isl923x_emul_get_i2c_emul(isl923x_emul);
+	struct i2c_common_emul_data *common_data =
+		emul_isl923x_get_i2c_common_data(isl923x_emul);
 	int current_milli_amps;
 
-	i2c_common_emul_set_write_fail_reg(i2c_emul, ISL923X_REG_CONTROL1);
+	i2c_common_emul_set_write_fail_reg(common_data, ISL923X_REG_CONTROL1);
 	zassert_equal(EC_ERROR_INVAL,
 		      isl923x_drv.get_input_current(CHARGER_NUM,
 						    &current_milli_amps),
@@ -104,13 +107,14 @@ ZTEST(console_cmd_amon_bmon,
 }
 
 ZTEST(console_cmd_amon_bmon,
-	test_isl923x_amonbmon_get_input_current_write_fail_req3)
+      test_isl923x_amonbmon_get_input_current_write_fail_req3)
 {
 	const struct emul *isl923x_emul = ISL923X_EMUL;
-	struct i2c_emul *i2c_emul = isl923x_emul_get_i2c_emul(isl923x_emul);
+	struct i2c_common_emul_data *common_data =
+		emul_isl923x_get_i2c_common_data(isl923x_emul);
 	int current_milli_amps;
 
-	i2c_common_emul_set_write_fail_reg(i2c_emul, ISL9238_REG_CONTROL3);
+	i2c_common_emul_set_write_fail_reg(common_data, ISL9238_REG_CONTROL3);
 	zassert_equal(EC_ERROR_INVAL,
 		      isl923x_drv.get_input_current(CHARGER_NUM,
 						    &current_milli_amps),

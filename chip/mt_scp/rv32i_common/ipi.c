@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -177,7 +177,7 @@ static void irq_group7_handler(void)
 	if (SCP_GIPC_IN_SET & GIPC_IN(0)) {
 		ipi_handler();
 		SCP_GIPC_IN_CLR = GIPC_IN(0);
-		asm volatile ("fence.i" ::: "memory");
+		asm volatile("fence.i" ::: "memory");
 		task_clear_pending_irq(ec_int);
 	}
 }

@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -17,7 +17,9 @@
 #define VDEC_CAP_H264_SLICE BIT(8)
 #define VDEC_CAP_VP8_FRAME BIT(9)
 #define VDEC_CAP_VP9_FRAME BIT(10)
+#define VDEC_CAP_AV1_FRAME BIT(11)
 #define VDEC_CAP_IRQ_IN_SCP BIT(16)
+#define VDEC_CAP_INNER_RACING BIT(17)
 
 /*
  * Video encoder supported capability:

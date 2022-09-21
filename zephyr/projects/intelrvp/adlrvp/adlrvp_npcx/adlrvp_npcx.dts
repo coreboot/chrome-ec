@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -20,37 +20,28 @@
 	named-i2c-ports {
 		compatible = "named-i2c-ports";
 
-		battery {
-			i2c-port = <&i2c7_0>;
-			enum-name = "I2C_PORT_BATTERY";
-		};
 		i2c_charger: charger {
 			i2c-port = <&i2c7_0>;
-			enum-name = "I2C_PORT_CHARGER";
-		};
-		eeprom {
-			i2c-port = <&i2c7_0>;
-			enum-name = "I2C_PORT_EEPROM";
-		};
-		port80 {
-			i2c-port = <&i2c7_0>;
-			enum-name = "I2C_PORT_PORT80";
+			enum-names = "I2C_PORT_BATTERY",
+				"I2C_PORT_CHARGER",
+				"I2C_PORT_EEPROM",
+				"I2C_PORT_PORT80";
 		};
 		typec_0: typec-0 {
 			i2c-port = <&i2c0_0>;
-			enum-name = "I2C_PORT_TYPEC_0";
+			enum-names = "I2C_PORT_TYPEC_0";
 		};
 		typec_1: typec-1 {
 			i2c-port = <&i2c2_0>;
-			enum-name = "I2C_PORT_TYPEC_1";
+			enum-names = "I2C_PORT_TYPEC_1";
 		};
 		typec_2: typec-2 {
 			i2c-port = <&i2c1_0>;
-			enum-name = "I2C_PORT_TYPEC_2";
+			enum-names = "I2C_PORT_TYPEC_2";
 		};
 		typec_3: typec-3 {
 			i2c-port = <&i2c3_0>;
-			enum-name = "I2C_PORT_TYPEC_3";
+			enum-names = "I2C_PORT_TYPEC_3";
 		};
 	};
 
@@ -58,22 +49,18 @@
 		compatible = "named-adc-channels";
 
 		adc_ambient: ambient {
-			label = "ADC_TEMP_SNS_AMBIENT";
 			enum-name = "ADC_TEMP_SENSOR_1";
 			io-channels = <&adc0 3>;
 		};
 		adc_ddr: ddr {
-			label = "ADC_TEMP_SNS_DDR";
 			enum-name = "ADC_TEMP_SENSOR_2";
 			io-channels = <&adc0 4>;
 		};
 		adc_skin: skin {
-			label = "ADC_TEMP_SNS_SKIN";
 			enum-name = "ADC_TEMP_SENSOR_3";
 			io-channels = <&adc0 2>;
 		};
 		adc_vr: vr {
-			label = "ADC_TEMP_SNS_VR";
 			enum-name = "ADC_TEMP_SENSOR_4";
 			io-channels = <&adc0 1>;
 		};
@@ -130,6 +117,21 @@
 		reg = <0x38>;
 		label = "MAX695X_SEVEN_SEG_DISPLAY";
 	};
+
+	charger: isl9241@9 {
+		compatible = "intersil,isl9241";
+		status = "okay";
+		reg = <0x9>;
+	};
+
+	cbi_eeprom: eeprom@50 {
+		compatible = "atmel,at24";
+		reg = <0x50>;
+		size = <2048>;
+		pagesize = <16>;
+		address-width = <8>;
+		timeout = <5>;
+	};
 };
 
 &i2c_ctrl7 {
@@ -142,6 +144,25 @@
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-0 = <&i2c0_0_sda_scl_gpb4_b5>;
 	pinctrl-names = "default";
+
+	tcpc_port0: fusb302@22 {
+		compatible = "fairchild,fusb302";
+		reg = <0x22>;
+	};
+
+	usb_c0_soc_side_bb_retimer: jhl8040r-c0-soc-side@54 {
+		compatible = "intel,jhl8040r";
+		reg = <0x54>;
+		reset-pin = <&usb_c0_bb_retimer_rst>;
+		ls-en-pin = <&usb_c0_bb_retimer_ls_en>;
+	};
+
+	usb_c0_bb_retimer: jhl8040r-c0@56 {
+		compatible = "intel,jhl8040r";
+		reg = <0x56>;
+		reset-pin = <&usb_c0_bb_retimer_rst>;
+		ls-en-pin = <&usb_c0_bb_retimer_ls_en>;
+	};
 };
 
 &i2c_ctrl0 {
@@ -154,6 +175,25 @@
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-0 = <&i2c2_0_sda_scl_gp91_92>;
 	pinctrl-names = "default";
+
+	tcpc_port1: fusb302@22 {
+		compatible = "fairchild,fusb302";
+		reg = <0x22>;
+	};
+
+	usb_c1_soc_side_bb_retimer: jhl8040r-c1-soc-side@55 {
+		compatible = "intel,jhl8040r";
+		reg = <0x55>;
+		reset-pin = <&usb_c1_bb_retimer_rst>;
+		ls-en-pin = <&usb_c1_bb_retimer_ls_en>;
+	};
+
+	usb_c1_bb_retimer: jhl8040r-c1@57 {
+		compatible = "intel,jhl8040r";
+		reg = <0x57>;
+		reset-pin = <&usb_c1_bb_retimer_rst>;
+		ls-en-pin = <&usb_c1_bb_retimer_ls_en>;
+	};
 };
 
 &i2c_ctrl2 {
@@ -166,6 +206,18 @@
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-0 = <&i2c1_0_sda_scl_gp87_90>;
 	pinctrl-names = "default";
+
+	tcpc_port2: fusb302@22 {
+		compatible = "fairchild,fusb302";
+		reg = <0x22>;
+	};
+
+	usb_c2_bb_retimer: jhl8040r-c2@58 {
+		compatible = "intel,jhl8040r";
+		reg = <0x58>;
+		reset-pin = <&usb_c2_bb_retimer_rst>;
+		ls-en-pin = <&usb_c2_bb_retimer_ls_en>;
+	};
 };
 
 &i2c_ctrl1 {
@@ -178,6 +230,18 @@
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-0 = <&i2c3_0_sda_scl_gpd0_d1>;
 	pinctrl-names = "default";
+
+	tcpc_port3: fusb302@22 {
+		compatible = "fairchild,fusb302";
+		reg = <0x22>;
+	};
+
+	usb_c3_bb_retimer: jhl8040r-c3@59 {
+		compatible = "intel,jhl8040r";
+		reg = <0x59>;
+		reset-pin = <&usb_c3_bb_retimer_rst>;
+		ls-en-pin = <&usb_c3_bb_retimer_ls_en>;
+	};
 };
 
 &i2c_ctrl3 {

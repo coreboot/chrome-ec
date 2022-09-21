@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -20,8 +20,7 @@ static int check_pch_out_of_suspend(void)
 	/*
 	 * Wait for SLP_SUS deasserted.
 	 */
-	ret = power_wait_mask_signals_timeout(IN_PCH_SLP_SUS,
-					      0,
+	ret = power_wait_mask_signals_timeout(IN_PCH_SLP_SUS, 0,
 					      IN_PCH_SLP_SUS_WAIT_TIME_MS);
 	if (ret == 0) {
 		LOG_DBG("SLP_SUS now %d", power_signal_get(PWR_SLP_SUS));
@@ -38,14 +37,21 @@ int all_sys_pwrgd_handler(void)
 {
 	int retry = 0;
 
+	/* SLP_S3 is off */
+	if (power_signal_get(PWR_SLP_S3) == 1) {
+		ap_off();
+		return 1;
+	}
+
 	/* TODO: Add condition for no power sequencer */
-	k_msleep(AP_PWRSEQ_DT_VALUE(all_sys_pwrgd_timeout));
+	power_wait_signals_timeout(POWER_SIGNAL_MASK(PWR_ALL_SYS_PWRGD),
+				   AP_PWRSEQ_DT_VALUE(all_sys_pwrgd_timeout));
 
 	if (power_signal_get(PWR_DSW_PWROK) == 0) {
-	/* Todo: Remove workaround for the retry
-	 * without this change the system hits G3 as it detects
-	 * ALL_SYS_PWRGD as 0 and then 1 as a glitch
-	 */
+		/* Todo: Remove workaround for the retry
+		 * without this change the system hits G3 as it detects
+		 * ALL_SYS_PWRGD as 0 and then 1 as a glitch
+		 */
 		while (power_signal_get(PWR_ALL_SYS_PWRGD) == 0) {
 			if (++retry > 2) {
 				LOG_ERR("PG_EC_ALL_SYS_PWRGD not ok");
@@ -58,7 +64,7 @@ int all_sys_pwrgd_handler(void)
 
 	/* PG_EC_ALL_SYS_PWRGD is asserted, enable VCCST_PWRGD_OD. */
 
-	if (power_signal_get(PWR_VCCST_PWRGD) == 0) {
+	if (!power_signals_on(POWER_SIGNAL_MASK(PWR_VCCST_PWRGD))) {
 		k_msleep(AP_PWRSEQ_DT_VALUE(vccst_pwrgd_delay));
 		power_signal_set(PWR_VCCST_PWRGD, 1);
 	}

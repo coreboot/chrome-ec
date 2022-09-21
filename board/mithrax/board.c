@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -25,12 +25,15 @@
 #include "tablet_mode.h"
 #include "throttle_ap.h"
 #include "usbc_config.h"
+#include "keyboard_backlight.h"
+#include "rgb_keyboard.h"
+#include "ec_commands.h"
 
 #include "gpio_list.h" /* Must come after other header files. */
 
 /* Console output macros */
-#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ## args)
-#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
 
 static void rgb_backlight_config(void);
 
@@ -56,14 +59,6 @@ static void board_chipset_resume(void)
 	gpio_set_level(GPIO_EC_KB_BL_EN_L, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, board_chipset_resume, HOOK_PRIO_DEFAULT);
-
-/* Called on AP S0 -> S3 transition */
-static void board_chipset_suspend(void)
-{
-	/* Turn off the keyboard backlight if it's on. */
-	gpio_set_level(GPIO_EC_KB_BL_EN_L, 1);
-}
-DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
 
 /* Called on AP S5 -> S3 transition */
 static void board_chipset_startup(void)
@@ -97,8 +92,8 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	}
 
 	if (voltage < BC12_MIN_VOLTAGE) {
-		CPRINTS("%s: port %d: vbus %d lower than %d", __func__,
-			port, voltage, BC12_MIN_VOLTAGE);
+		CPRINTS("%s: port %d: vbus %d lower than %d", __func__, port,
+			voltage, BC12_MIN_VOLTAGE);
 		return 1;
 	}
 
@@ -119,17 +114,10 @@ enum battery_present battery_hw_present(void)
 
 static void board_init(void)
 {
-	if (ec_cfg_usb_db_type() == DB_USB4_NCT3807)
-		db_update_usb4_config_from_config();
-
-	if (ec_cfg_usb_mb_type() == MB_USB4_TBT)
-		mb_update_usb4_tbt_config_from_config();
-
 	if (ec_cfg_stylus() == STYLUS_PRSENT)
 		gpio_enable_interrupt(GPIO_PEN_DET_ODL);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
-
 
 /**
  * Deferred function to handle pen detect change
@@ -153,8 +141,7 @@ DECLARE_HOOK(HOOK_INIT, pendetect_deferred, HOOK_PRIO_DEFAULT);
 void pen_detect_interrupt(enum gpio_signal s)
 {
 	/* Trigger deferred notification of pen detect change */
-	hook_call_deferred(&pendetect_deferred_data,
-			500 * MSEC);
+	hook_call_deferred(&pendetect_deferred_data, 500 * MSEC);
 }
 
 void pen_config(void)
@@ -181,4 +168,17 @@ static void rgb_backlight_config(void)
 		gpio_set_level(GPIO_EN_PP5000_LED, 1);
 	else
 		gpio_set_level(GPIO_EN_PP5000_LED, 0);
+}
+
+void board_kblight_init(void)
+{
+	if ((IS_ENABLED(CONFIG_PWM_KBLIGHT)) &&
+	    (ec_cfg_kb_backlight() == SOLID_COLOR)) {
+		kblight_register(&kblight_pwm);
+		rgbkbd_type = EC_RGBKBD_TYPE_UNKNOWN;
+	} else if ((IS_ENABLED(CONFIG_RGB_KEYBOARD)) &&
+		   (ec_cfg_kb_backlight() == RGB)) {
+		kblight_register(&kblight_rgbkbd);
+		rgbkbd_type = EC_RGBKBD_TYPE_FOUR_ZONES_4_LEDS;
+	}
 }

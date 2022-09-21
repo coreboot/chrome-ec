@@ -1,11 +1,11 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #include "test_util.h"
 
-#include "assert.h"
+#include "builtin/assert.h"
 #include "panic.h"
 #include "system.h"
 #include "task.h"
@@ -132,7 +132,7 @@ int task_test(void *unused)
 	return EC_SUCCESS;
 }
 
-void run_test(int argc, char **argv)
+void run_test(int argc, const char **argv)
 {
 	test_reset();
 	msleep(30); /* Wait for TASK_ID_TEST to initialize */

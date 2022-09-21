@@ -322,7 +322,8 @@ a lot easier during both development and testing.
 ## Power
 
 See [Measuring Power] for instructions on how to measure power with the
-fingerprint development boards.
+fingerprint development boards. *Make sure that any debuggers are completely
+disconnected.*
 
 ### Dragonclaw v0.2
 
@@ -331,7 +332,7 @@ fingerprint development boards.
 ```
 
 **Firmware Version**:
-`bloonchipper_v2.0.4277-9f652bb3-RO_v2.0.7314-3dfc5ff6-RW.bin`
+`bloonchipper_v2.0.4277-9f652bb3-RO_v2.0.14348-e5fb0b9-RW.bin`
 
 #### MCU is idle
 
@@ -341,13 +342,13 @@ fingerprint development boards.
 
 ```
 @@               NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
-@@       sample_msecs    113   533.56   40.91   658.52   447.06
-@@    pp1800_dx_fp_mv    113  1800.00    0.00  1800.00  1800.00
-@@    pp1800_dx_fp_mw    113     0.00    0.00     0.00     0.00
-@@    pp3300_dx_fp_mv    113  3280.00    0.00  3280.00  3280.00
-@@    pp3300_dx_fp_mw    113     0.01    0.05     0.26     0.00
-@@   pp3300_dx_mcu_mv    113  3280.00    0.00  3280.00  3280.00
-@@   pp3300_dx_mcu_mw    113    24.67    0.00    24.67    24.67
+@@       sample_msecs    478   125.49   26.02   431.96    92.23
+@@    pp1800_dx_fp_mv    478  1800.00    0.00  1800.00  1800.00
+@@    pp1800_dx_fp_mw    478     0.00    0.00     0.00     0.00
+@@    pp3300_dx_fp_mv    478  3280.00    0.00  3280.00  3280.00
+@@    pp3300_dx_fp_mw    478     0.00    0.03     0.26     0.00
+@@   pp3300_dx_mcu_mv    478  3280.00    0.00  3280.00  3280.00
+@@   pp3300_dx_mcu_mw    478    21.78    0.06    23.09    21.78
 ```
 
 #### MCU in low power mode (suspend)
@@ -358,13 +359,13 @@ fingerprint development boards.
 
 ```
 @@               NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
-@@       sample_msecs    115   526.56   36.79   607.60   426.58
-@@    pp1800_dx_fp_mv    115  1800.00    0.00  1800.00  1800.00
-@@    pp1800_dx_fp_mw    115     0.00    0.00     0.00     0.00
-@@    pp3300_dx_fp_mv    115  3287.30    2.25  3288.00  3280.00
-@@    pp3300_dx_fp_mw    115     0.00    0.02     0.26     0.00
-@@   pp3300_dx_mcu_mv    115  3280.97    2.62  3288.00  3280.00
-@@   pp3300_dx_mcu_mw    115     4.02    0.64    10.76     3.94
+@@       sample_msecs    488   122.99   26.37   458.47    92.69
+@@    pp1800_dx_fp_mv    488  1800.00    0.00  1800.00  1800.00
+@@    pp1800_dx_fp_mw    488     0.00    0.00     0.00     0.00
+@@    pp3300_dx_fp_mv    488  3287.79    1.29  3288.00  3280.00
+@@    pp3300_dx_fp_mw    488     0.01    0.04     0.26     0.00
+@@   pp3300_dx_mcu_mv    488  3283.38    3.95  3288.00  3280.00
+@@   pp3300_dx_mcu_mw    488     1.57    0.59     9.73     1.31
 ```
 
 ### Icetower v0.1
@@ -385,7 +386,7 @@ measure releases before that point.
 ```
 
 **Firmware Version**:
-`dartmonkey_v2.0.2887-311310808-RO_v2.0.7304-441100b93-RW.bin`
+`dartmonkey_v2.0.2887-311310808-RO_v2.0.14340-6c1587ca7-RW.bin`
 
 #### MCU is idle
 
@@ -395,11 +396,11 @@ measure releases before that point.
 
 ```
 @@               NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
-@@       sample_msecs    178   337.13   20.91   404.32   289.82
-@@    pp3300_dx_fp_mv    178  3256.00    0.00  3256.00  3256.00
-@@    pp3300_dx_fp_mw    178     0.00    0.00     0.00     0.00
-@@   pp3300_dx_mcu_mv    178  3248.00    0.00  3248.00  3248.00
-@@   pp3300_dx_mcu_mw    178    45.17    0.09    45.21    44.95
+@@       sample_msecs    523   114.85   18.33   386.55    88.95
+@@    pp3300_dx_fp_mv    523  3256.00    0.00  3256.00  3256.00
+@@    pp3300_dx_fp_mw    523     0.00    0.00     0.00     0.00
+@@   pp3300_dx_mcu_mv    523  3248.00    0.00  3248.00  3248.00
+@@   pp3300_dx_mcu_mw    523    43.86    0.10    43.91    43.65
 ```
 
 #### MCU in low power mode (suspend)
@@ -410,11 +411,11 @@ measure releases before that point.
 
 ```
 @@               NAME  COUNT  AVERAGE  STDDEV      MAX      MIN
-@@       sample_msecs    174   345.60   31.93   457.62   283.00
-@@    pp3300_dx_fp_mv    174  3264.00    0.00  3264.00  3264.00
-@@    pp3300_dx_fp_mw    174     0.00    0.00     0.00     0.00
-@@   pp3300_dx_mcu_mv    174  3260.69    3.94  3264.00  3256.00
-@@   pp3300_dx_mcu_mw    174     5.47    0.10     5.48     4.17
+@@       sample_msecs    501   119.79   14.72   381.92    89.22
+@@    pp3300_dx_fp_mv    501  3256.00    0.00  3256.00  3256.00
+@@    pp3300_dx_fp_mw    501     0.00    0.00     0.00     0.00
+@@   pp3300_dx_mcu_mv    501  3256.00    0.00  3256.00  3256.00
+@@   pp3300_dx_mcu_mw    501     5.74    0.28    11.98     5.73
 ```
 
 ## ChromeOS Build (portage / ebuild)

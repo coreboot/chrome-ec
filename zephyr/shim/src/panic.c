@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,7 +7,7 @@
 #include <zephyr/fatal.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
-#include <zephyr/zephyr.h>
+#include <zephyr/kernel.h>
 
 #include "common.h"
 #include "panic.h"
@@ -27,15 +27,37 @@
 
 #if defined(CONFIG_ARM)
 #define PANIC_ARCH PANIC_ARCH_CORTEX_M
-#define PANIC_REG_LIST(M)             \
-	M(basic.r0, cm.frame[0], a1)  \
-	M(basic.r1, cm.frame[1], a2)  \
-	M(basic.r2, cm.frame[2], a3)  \
-	M(basic.r3, cm.frame[3], a4)  \
-	M(basic.r12, cm.frame[4], ip) \
-	M(basic.lr, cm.frame[5], lr)  \
-	M(basic.pc, cm.frame[6], pc)  \
-	M(basic.xpsr, cm.frame[7], xpsr)
+#if defined(CONFIG_EXTRA_EXCEPTION_INFO)
+#define EXTRA_PANIC_REG_LIST(M)                                              \
+	M(extra_info.callee->v1, cm.regs[CORTEX_PANIC_REGISTER_R4], v1)      \
+	M(extra_info.callee->v2, cm.regs[CORTEX_PANIC_REGISTER_R5], v2)      \
+	M(extra_info.callee->v3, cm.regs[CORTEX_PANIC_REGISTER_R6], v3)      \
+	M(extra_info.callee->v4, cm.regs[CORTEX_PANIC_REGISTER_R7], v4)      \
+	M(extra_info.callee->v5, cm.regs[CORTEX_PANIC_REGISTER_R8], v5)      \
+	M(extra_info.callee->v6, cm.regs[CORTEX_PANIC_REGISTER_R9], v6)      \
+	M(extra_info.callee->v7, cm.regs[CORTEX_PANIC_REGISTER_R10], v7)     \
+	M(extra_info.callee->v8, cm.regs[CORTEX_PANIC_REGISTER_R11], v8)     \
+	M(extra_info.callee->psp, cm.regs[CORTEX_PANIC_REGISTER_PSP], psp)   \
+	M(extra_info.exc_return, cm.regs[CORTEX_PANIC_REGISTER_LR], exc_rtn) \
+	M(extra_info.msp, cm.regs[CORTEX_PANIC_REGISTER_MSP], msp)
+/*
+ * IPSR is not copied. IPSR is a subset of xPSR, which is already
+ * captured in PANIC_REG_LIST.
+ */
+#else
+#define EXTRA_PANIC_REG_LIST(M)
+#endif
+/* TODO(b/245423691): Copy other status registers (e.g. CFSR) when available. */
+#define PANIC_REG_LIST(M)                \
+	M(basic.r0, cm.frame[0], a1)     \
+	M(basic.r1, cm.frame[1], a2)     \
+	M(basic.r2, cm.frame[2], a3)     \
+	M(basic.r3, cm.frame[3], a4)     \
+	M(basic.r12, cm.frame[4], ip)    \
+	M(basic.lr, cm.frame[5], lr)     \
+	M(basic.pc, cm.frame[6], pc)     \
+	M(basic.xpsr, cm.frame[7], xpsr) \
+	EXTRA_PANIC_REG_LIST(M)
 #define PANIC_REG_EXCEPTION(pdata) pdata->cm.regs[1]
 #define PANIC_REG_REASON(pdata) pdata->cm.regs[3]
 #define PANIC_REG_INFO(pdata) pdata->cm.regs[4]
@@ -48,13 +70,13 @@
  */
 #define PANIC_ARCH PANIC_ARCH_RISCV_RV32I
 #define PANIC_REG_LIST(M)         \
-	M(ra, riscv.regs[29], ra)  \
-	M(a0, riscv.regs[26], a0)  \
-	M(a1, riscv.regs[25], a1)  \
-	M(a2, riscv.regs[24], a2)  \
-	M(a3, riscv.regs[23], a3)  \
-	M(a4, riscv.regs[22], a4)  \
-	M(a5, riscv.regs[21], a5)  \
+	M(ra, riscv.regs[29], ra) \
+	M(a0, riscv.regs[26], a0) \
+	M(a1, riscv.regs[25], a1) \
+	M(a2, riscv.regs[24], a2) \
+	M(a3, riscv.regs[23], a3) \
+	M(a4, riscv.regs[22], a4) \
+	M(a5, riscv.regs[21], a5) \
 	M(a6, riscv.regs[20], a6) \
 	M(a7, riscv.regs[19], a7) \
 	M(t0, riscv.regs[18], t0) \
@@ -99,8 +121,9 @@ static void copy_esf_to_panic_data(const z_arch_esf_t *esf,
 {
 	pdata->arch = PANIC_ARCH;
 	pdata->struct_version = 2;
-	pdata->flags = (PANIC_ARCH == PANIC_ARCH_CORTEX_M)
-		? PANIC_DATA_FLAG_FRAME_VALID : 0;
+	pdata->flags = (PANIC_ARCH == PANIC_ARCH_CORTEX_M) ?
+			       PANIC_DATA_FLAG_FRAME_VALID :
+			       0;
 	pdata->reserved = 0;
 	pdata->struct_size = sizeof(*pdata);
 	pdata->magic = PANIC_DATA_MAGIC;
@@ -137,7 +160,7 @@ void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
 #ifdef CONFIG_PLATFORM_EC_SOFTWARE_PANIC
 void panic_set_reason(uint32_t reason, uint32_t info, uint8_t exception)
 {
-	struct panic_data * const pdata = get_panic_data_write();
+	struct panic_data *const pdata = get_panic_data_write();
 
 	/* Setup panic data structure */
 	memset(pdata, 0, CONFIG_PANIC_DATA_SIZE);
@@ -157,7 +180,7 @@ void panic_set_reason(uint32_t reason, uint32_t info, uint8_t exception)
 
 void panic_get_reason(uint32_t *reason, uint32_t *info, uint8_t *exception)
 {
-	struct panic_data * const pdata = panic_get_data();
+	struct panic_data *const pdata = panic_get_data();
 
 	if (pdata && pdata->struct_version == 2) {
 		*exception = PANIC_REG_EXCEPTION(pdata);

@@ -1,4 +1,4 @@
-/* Copyright 2022 The Chromium OS Authors. All rights reserved.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,25 +7,30 @@
 
 #include <ap_power/ap_power.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/pinctrl.h>
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
+#include "cros_board_info.h"
 #include "driver/tcpm/tcpci.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
 #include "usb_charge.h"
 #include "usb_pd.h"
+#include "usbc/usb_muxes.h"
 #include "task.h"
 
 #include "nissa_common.h"
+#include "nissa_hdmi.h"
 
 LOG_MODULE_DECLARE(nissa, CONFIG_NISSA_LOG_LEVEL);
 
+#if NISSA_BOARD_HAS_HDMI_SUPPORT
 static void hdmi_power_handler(struct ap_power_ev_callback *cb,
 			       struct ap_power_ev_data data)
 {
-	/* Enable rails for S3 */
+	/* Enable VCC on the HDMI port. */
 	const struct gpio_dt_spec *s3_rail =
 		GPIO_DT_FROM_ALIAS(gpio_hdmi_en_odl);
 	/* Connect AP's DDC to sub-board (default is USB-C aux) */
@@ -65,8 +70,54 @@ static void hdmi_hpd_interrupt(const struct device *device,
 	LOG_DBG("HDMI HPD changed state to %d", state);
 }
 
+void nissa_configure_hdmi_rails(void)
+{
+#if DT_NODE_EXISTS(GPIO_DT_FROM_ALIAS(gpio_en_rails_odl))
+	gpio_pin_configure_dt(GPIO_DT_FROM_ALIAS(gpio_en_rails_odl),
+			      GPIO_OUTPUT_INACTIVE | GPIO_OPEN_DRAIN |
+				      GPIO_PULL_UP | GPIO_ACTIVE_LOW);
+#endif
+}
+
+void nissa_configure_hdmi_vcc(void)
+{
+	gpio_pin_configure_dt(GPIO_DT_FROM_ALIAS(gpio_hdmi_en_odl),
+			      GPIO_OUTPUT_INACTIVE | GPIO_OPEN_DRAIN |
+				      GPIO_ACTIVE_LOW);
+}
+
+__overridable void nissa_configure_hdmi_power_gpios(void)
+{
+	nissa_configure_hdmi_rails();
+}
+
+#ifdef CONFIG_SOC_IT8XXX2
+/*
+ * On it8xxx2, the below condition will break the EC to enter deep doze mode
+ * (b:237717730):
+ * Enhance i2c (GPE0/E7, GPH1/GPH2 or GPA4/GPA5) is enabled and its clock and
+ * data pins aren't both at high level.
+ *
+ * Since HDMI+type A SKU doesn't use i2c4, disable it for better power number.
+ */
+#define I2C4_NODE DT_NODELABEL(i2c4)
+#if DT_NODE_EXISTS(I2C4_NODE)
+PINCTRL_DT_DEFINE(I2C4_NODE);
+
+/* disable i2c4 alternate function  */
+static void soc_it8xxx2_disable_i2c4_alt(void)
+{
+	const struct pinctrl_dev_config *pcfg =
+		PINCTRL_DT_DEV_CONFIG_GET(I2C4_NODE);
+
+	pinctrl_apply_state(pcfg, PINCTRL_STATE_SLEEP);
+}
+#endif /* DT_NODE_EXISTS(I2C4_NODE) */
+#endif /* CONFIG_SOC_IT8XXX2 */
+#endif /* NISSA_BOARD_HAS_HDMI_SUPPORT */
+
 static void lte_power_handler(struct ap_power_ev_callback *cb,
-			       struct ap_power_ev_data data)
+			      struct ap_power_ev_data data)
 {
 	/* Enable rails for S5 */
 	const struct gpio_dt_spec *s5_rail =
@@ -76,7 +127,7 @@ static void lte_power_handler(struct ap_power_ev_callback *cb,
 		LOG_DBG("Enabling LTE sub-board power rails");
 		gpio_pin_set_dt(s5_rail, 1);
 		break;
-	case AP_POWER_SHUTDOWN:
+	case AP_POWER_HARD_OFF:
 		LOG_DBG("Disabling LTE sub-board power rails");
 		gpio_pin_set_dt(s5_rail, 0);
 		break;
@@ -105,38 +156,37 @@ static void nereid_subboard_config(void)
 	 */
 	if (sb == NISSA_SB_C_A || sb == NISSA_SB_HDMI_A) {
 		/* Configure VBUS enable, default off */
-		gpio_pin_configure_dt(
-			GPIO_DT_FROM_ALIAS(gpio_en_usb_a1_vbus),
-			GPIO_OUTPUT_LOW);
+		gpio_pin_configure_dt(GPIO_DT_FROM_ALIAS(gpio_en_usb_a1_vbus),
+				      GPIO_OUTPUT_LOW);
 	} else {
 		/* Turn off unused pins */
 		gpio_pin_configure_dt(
 			GPIO_DT_FROM_NODELABEL(gpio_sub_usb_a1_ilimit_sdp),
 			GPIO_DISCONNECTED);
-		gpio_pin_configure_dt(
-			GPIO_DT_FROM_ALIAS(gpio_en_usb_a1_vbus),
-			GPIO_DISCONNECTED);
+		gpio_pin_configure_dt(GPIO_DT_FROM_ALIAS(gpio_en_usb_a1_vbus),
+				      GPIO_DISCONNECTED);
 		/* Disable second USB-A port enable GPIO */
 		__ASSERT(USB_PORT_ENABLE_COUNT == 2,
-		       "USB A port count != 2 (%d)", USB_PORT_ENABLE_COUNT);
+			 "USB A port count != 2 (%d)", USB_PORT_ENABLE_COUNT);
 		usb_port_enable[1] = -1;
 	}
 	/*
 	 * USB-C port: the default configuration has I2C on the I2C pins,
 	 * but the interrupt line needs to be configured.
 	 */
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	if (sb == NISSA_SB_C_A || sb == NISSA_SB_C_LTE) {
 		/* Configure interrupt input */
-		gpio_pin_configure_dt(
-			GPIO_DT_FROM_ALIAS(gpio_usb_c1_int_odl),
-			GPIO_INPUT | GPIO_PULL_UP);
+		gpio_pin_configure_dt(GPIO_DT_FROM_ALIAS(gpio_usb_c1_int_odl),
+				      GPIO_INPUT | GPIO_PULL_UP);
 	} else {
-		/* Disable the port 1 charger task */
-		task_disable_task(TASK_ID_USB_CHG_P1);
-		usb_muxes[1].next_mux = NULL;
+		/* Port doesn't exist, doesn't need muxing */
+		USB_MUX_ENABLE_ALTERNATIVE(usb_mux_chain_1_no_mux);
 	}
+#endif
 
 	switch (sb) {
+#if NISSA_BOARD_HAS_HDMI_SUPPORT
 	case NISSA_SB_HDMI_A: {
 		/*
 		 * HDMI: two outputs control power which must be configured to
@@ -148,14 +198,18 @@ static void nereid_subboard_config(void)
 		static struct gpio_callback hdmi_hpd_cb;
 		int rv, irq_key;
 
-		/* HDMI power enable outputs */
-		gpio_pin_configure_dt(GPIO_DT_FROM_ALIAS(gpio_en_rails_odl),
-				      GPIO_OUTPUT_INACTIVE | GPIO_OPEN_DRAIN |
-					      GPIO_PULL_UP | GPIO_ACTIVE_LOW);
-		gpio_pin_configure_dt(GPIO_DT_FROM_ALIAS(gpio_hdmi_en_odl),
-				      GPIO_OUTPUT_INACTIVE | GPIO_OPEN_DRAIN |
-					      GPIO_ACTIVE_LOW);
-		/* Control HDMI power in concert with AP */
+		nissa_configure_hdmi_power_gpios();
+
+#if CONFIG_SOC_IT8XXX2 && DT_NODE_EXISTS(I2C4_NODE)
+		/* disable i2c4 alternate function for better power number */
+		soc_it8xxx2_disable_i2c4_alt();
+#endif
+
+		/*
+		 * Control HDMI power according to AP power state. Some events
+		 * won't do anything if the corresponding pin isn't configured,
+		 * but that's okay.
+		 */
 		ap_power_ev_init_callback(
 			&power_cb, hdmi_power_handler,
 			AP_POWER_PRE_INIT | AP_POWER_HARD_OFF |
@@ -187,6 +241,7 @@ static void nereid_subboard_config(void)
 		irq_unlock(irq_key);
 		break;
 	}
+#endif
 	case NISSA_SB_C_LTE:
 		/*
 		 * LTE: Set up callbacks for enabling/disabling
@@ -197,9 +252,9 @@ static void nereid_subboard_config(void)
 		/* Control LTE power when CPU entering or
 		 * exiting S5 state.
 		 */
-		ap_power_ev_init_callback(
-			&power_cb, lte_power_handler,
-			AP_POWER_SHUTDOWN | AP_POWER_PRE_INIT);
+		ap_power_ev_init_callback(&power_cb, lte_power_handler,
+					  AP_POWER_HARD_OFF |
+						  AP_POWER_PRE_INIT);
 		ap_power_ev_add_callback(&power_cb);
 		break;
 
@@ -218,8 +273,10 @@ static void board_init(void)
 	 * Enable USB-C interrupts.
 	 */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0));
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	if (board_get_usb_pd_port_count() == 2)
 		gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1));
+#endif
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 

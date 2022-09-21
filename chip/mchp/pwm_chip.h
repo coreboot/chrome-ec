@@ -1,4 +1,4 @@
-/* Copyright 2017 The Chromium OS Authors. All rights reserved.
+/* Copyright 2017 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -48,4 +48,4 @@ extern const struct pwm_t pwm_channels[];
 
 void pwm_keep_awake(void);
 
-#endif  /* __CROS_EC_PWM_CHIP_H */
+#endif /* __CROS_EC_PWM_CHIP_H */

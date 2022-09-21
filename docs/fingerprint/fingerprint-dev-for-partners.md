@@ -315,6 +315,11 @@ You can get a summary of the power over `N` seconds with:
 (chroot) $ dut-control -t N pp3300_dx_mcu_mv pp3300_dx_fp_mv pp1800_dx_fp_mv pp3300_dx_mcu_mw pp3300_dx_fp_mw pp1800_dx_fp_mw
 ```
 
+When measuring the power, make sure that any debuggers are disconnected. The
+most reliable way to make sure it is disconnected is to physically disconnect
+the debugger and servo_micro from the board. Then re-attach servo_micro and
+restart `servod`.
+
 <!-- mdformat off(b/139308852) -->
 *** note
 The `_mv` suffix denotes millivolt and `_mw` suffix denotes milliwatt.
@@ -485,6 +490,8 @@ From the DUT, flash the firmware you copied:
 
 ![CQ Prototype Environment]
 
+![FPMCU devboard environment v2 with satlab]
+
 ## Troubleshooting
 
 ### Dragonclaw Rev 0.2 Rework {#dragonclaw-rev-0.2-rework}
@@ -526,7 +533,7 @@ supply.
 (chroot) $ lsusb
 
 Bus 002 Device 003: ID 0897:0004 Lauterbach  # ← This is my Lauterbach (debugger)
-Bus 001 Device 013: ID 18d1:5002 Google Inc. # ← This is servo
+Bus 001 Device 013: ID 18d1:5002 Google LLC # ← This is servo
 ```
 
 ### "No servos found" when running servod
@@ -601,3 +608,7 @@ Make sure that this interface is disabled:
 <!-- https://docs.google.com/drawings/d/1w2qbb4AsSxY-KTK2vXZ6TKeWHveWvS3Dkgh61ocu0wc -->
 
 [CQ Prototype Environment]: ../images/CQ_Prototype_Environment.jpg
+
+<!-- https://docs.google.com/drawings/d/13hsnPBa1aeMVU7CjrK1nz-aeYSQcdLxrylOEJNOiEA0 -->
+
+[FPMCU devboard environment v2 with satlab]: ../images/FPMCU_devboard_environment_v2_with_Satlab.jpg

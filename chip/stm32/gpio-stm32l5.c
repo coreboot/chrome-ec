@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -45,7 +45,6 @@ static void gpio_init(void)
 	task_enable_irq(STM32_IRQ_EXTI13);
 	task_enable_irq(STM32_IRQ_EXTI14);
 	task_enable_irq(STM32_IRQ_EXTI15);
-
 }
 DECLARE_HOOK(HOOK_INIT, gpio_init, HOOK_PRIO_DEFAULT);
 

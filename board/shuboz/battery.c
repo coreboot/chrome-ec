@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -133,7 +133,7 @@ int charger_profile_override(struct charge_state_data *curr)
 		return 0;
 
 	if (current_level != 0) {
-		if (curr->requested_current > current_table[current_level-1])
+		if (curr->requested_current > current_table[current_level - 1])
 			curr->requested_current =
 				current_table[current_level - 1];
 	}

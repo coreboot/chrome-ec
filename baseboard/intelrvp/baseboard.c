@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -86,14 +86,12 @@ const static struct ec_thermal_config thermal_a = {
 };
 
 struct ec_thermal_config thermal_params[] = {
-	[TEMP_SNS_AMBIENT] = thermal_a,
-	[TEMP_SNS_BATTERY] = thermal_a,
+	[TEMP_SNS_AMBIENT] = thermal_a, [TEMP_SNS_BATTERY] = thermal_a,
 	[TEMP_SNS_DDR] = thermal_a,
 #ifdef CONFIG_PECI
 	[TEMP_SNS_PECI] = thermal_a,
 #endif
-	[TEMP_SNS_SKIN] = thermal_a,
-	[TEMP_SNS_VR] = thermal_a,
+	[TEMP_SNS_SKIN] = thermal_a,	[TEMP_SNS_VR] = thermal_a,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
 #endif /* CONFIG_TEMP_SENSOR */
@@ -144,12 +142,12 @@ int ioexpander_read_intelrvp_version(int *port0, int *port1)
 
 	for (i = 0; i < RVP_VERSION_READ_RETRY_CNT; i++) {
 		rv = pca9555_read(I2C_PORT_PCA9555_BOARD_ID_GPIO,
-			I2C_ADDR_PCA9555_BOARD_ID_GPIO,
-			PCA9555_CMD_INPUT_PORT_0, port0);
+				  I2C_ADDR_PCA9555_BOARD_ID_GPIO,
+				  PCA9555_CMD_INPUT_PORT_0, port0);
 
 		if (!rv && !pca9555_read(I2C_PORT_PCA9555_BOARD_ID_GPIO,
-			I2C_ADDR_PCA9555_BOARD_ID_GPIO,
-			PCA9555_CMD_INPUT_PORT_1, port1))
+					 I2C_ADDR_PCA9555_BOARD_ID_GPIO,
+					 PCA9555_CMD_INPUT_PORT_1, port1))
 			return 0;
 
 		msleep(1);

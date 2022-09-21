@@ -1,10 +1,10 @@
-# Copyright 2021 The Chromium OS Authors. All rights reserved.
+# Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 cmake_minimum_required(VERSION 3.13.1)
 
-find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+find_package(Zephyr REQUIRED HINTS "${ZEPHYR_BASE}")
 
 zephyr_include_directories(include)
 zephyr_library_sources("src/common.c")
@@ -14,38 +14,71 @@ zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ "src/board_power.c")
 if(DEFINED CONFIG_BOARD_NIVVIKS)
 	project(nivviks)
 	zephyr_library_sources(
-			"src/led.c"
-			"src/nivviks/form_factor.c"
-			"src/nivviks/keyboard.c"
+			"nivviks/src/led.c"
+			"nivviks/src/form_factor.c"
+			"nivviks/src/keyboard.c"
 	)
-	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "src/nivviks/fan.c")
-	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "src/nivviks/usbc.c")
-	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "src/nivviks/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "nivviks/src/fan.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "nivviks/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "nivviks/src/charger.c")
 endif()
 if(DEFINED CONFIG_BOARD_NEREID)
 	project(nereid)
 	zephyr_library_sources(
 			"src/led.c"
-			"src/nereid/keyboard.c"
+			"nereid/src/keyboard.c"
+			"nereid/src/hdmi.c"
 	)
-	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "src/nereid/usbc.c")
-	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "src/nereid/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "nereid/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "nereid/src/charger.c")
 endif()
 if(DEFINED CONFIG_BOARD_CRAASK)
 	zephyr_library_sources(
-			"src/craask/led.c"
+			"craask/src/form_factor.c"
+			"craask/src/keyboard.c"
+			"craask/src/led.c"
 	)
 	project(craask)
-	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "src/craask/usbc.c")
-	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "src/craask/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "craask/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "craask/src/charger.c")
 endif()
 if(DEFINED CONFIG_BOARD_PUJJO)
 	project(pujjo)
 	zephyr_library_sources(
-			"src/led.c"
-			"src/pujjo/keyboard.c"
+			"pujjo/src/led.c"
+			"pujjo/src/keyboard.c"
+			"pujjo/src/hdmi.c"
+			"pujjo/src/form_factor.c"
 	)
-	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "src/pujjo/fan.c")
-	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "src/pujjo/usbc.c")
-	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "src/pujjo/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "pujjo/src/fan.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "pujjo/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "pujjo/src/charger.c")
+endif()
+if(DEFINED CONFIG_BOARD_XIVU)
+	project(xivu)
+	zephyr_library_sources(
+			"xivu/src/keyboard.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "xivu/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "xivu/src/charger.c")
+endif()
+if(DEFINED CONFIG_BOARD_JOXER)
+	project(joxer)
+	zephyr_library_sources(
+			"joxer/src/led.c"
+			"joxer/src/keyboard.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "joxer/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "joxer/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "joxer/src/fan.c")
+endif()
+if(DEFINED CONFIG_BOARD_YAVIKS)
+	project(yaviks)
+	zephyr_library_sources(
+			"yaviks/src/led.c"
+			"yaviks/src/keyboard.c"
+			"yaviks/src/hdmi.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "yaviks/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "yaviks/src/charger.c")
 endif()

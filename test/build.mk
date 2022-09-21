@@ -1,10 +1,18 @@
 # -*- makefile -*-
-# Copyright 2013 The Chromium OS Authors. All rights reserved.
+# Copyright 2013 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 # Device test binaries
-test-list-y ?= flash_write_protect pingpong timer_calib timer_dos timer_jump mutex utils utils_str
+test-list-y ?= flash_write_protect \
+	pingpong \
+	stdlib \
+	timer_calib \
+	timer_dos \
+	timer_jump \
+	mutex \
+	utils \
+	utils_str
 #disable: powerdemo
 
 # Emulator tests
@@ -25,6 +33,7 @@ test-list-host += cec
 test-list-host += charge_manager
 test-list-host += charge_manager_drp_charging
 test-list-host += charge_ramp
+test-list-host += chipset
 test-list-host += compile_time_macros
 test-list-host += console_edit
 test-list-host += crc
@@ -66,6 +75,7 @@ test-list-host += motion_lid
 test-list-host += motion_sense_fifo
 test-list-host += mutex
 test-list-host += newton_fit
+test-list-host += nvidia_gpu
 test-list-host += online_calibration
 test-list-host += online_calibration_spoof
 test-list-host += pingpong
@@ -82,6 +92,10 @@ test-list-host += sha256_unrolled
 test-list-host += shmalloc
 test-list-host += static_if
 test-list-host += static_if_error
+# TODO(b/237823627): When building for the host, we're linking against the
+# toolchain's C standard library, so these tests are actually testing the
+# toolchain's C standard library.
+test-list-host += stdlib
 test-list-host += system
 test-list-host += thermal
 test-list-host += timer_dos
@@ -157,10 +171,12 @@ cec-y=cec.o
 charge_manager-y=charge_manager.o fake_usbc.o
 charge_manager_drp_charging-y=charge_manager.o fake_usbc.o
 charge_ramp-y+=charge_ramp.o
+chipset-y+=chipset.o
 compile_time_macros-y=compile_time_macros.o
 console_edit-y=console_edit.o
 cortexm_fpu-y=cortexm_fpu.o
 crc-y=crc.o
+debug-y=debug.o
 entropy-y=entropy.o
 extpwr_gpio-y=extpwr_gpio.o
 fan-y=fan.o
@@ -191,6 +207,7 @@ motion_angle-y=motion_angle.o motion_angle_data_literals.o motion_common.o
 motion_angle_tablet-y=motion_angle_tablet.o motion_angle_data_literals_tablet.o motion_common.o
 motion_lid-y=motion_lid.o
 motion_sense_fifo-y=motion_sense_fifo.o
+nvidia_gpu-y=nvidia_gpu.o
 online_calibration-y=online_calibration.o
 online_calibration_spoof-y=online_calibration_spoof.o gyro_cal_init_for_test.o
 rgb_keyboard-y=rgb_keyboard.o
@@ -216,6 +233,7 @@ sha256-y=sha256.o
 sha256_unrolled-y=sha256.o
 shmalloc-y=shmalloc.o
 static_if-y=static_if.o
+stdlib-y=stdlib.o
 stm32f_rtc-y=stm32f_rtc.o
 stress-y=stress.o
 system-y=system.o

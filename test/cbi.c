@@ -1,4 +1,4 @@
-/* Copyright 2020 The Chromium OS Authors. All rights reserved.
+/* Copyright 2020 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -129,7 +129,7 @@ DECLARE_EC_TEST(test_not_found)
 
 DECLARE_EC_TEST(test_too_large)
 {
-	uint8_t buf[CBI_IMAGE_SIZE-1];
+	uint8_t buf[CBI_IMAGE_SIZE - 1];
 	const int tag = 0xff;
 
 	/* Data too large */
@@ -162,12 +162,12 @@ DECLARE_EC_TEST(test_all_tags)
 	zassert_equal(cbi_set_board_info(CBI_TAG_SKU_ID, &d8, sizeof(d8)),
 		      EC_SUCCESS, NULL);
 	count++;
-	zassert_equal(cbi_set_board_info(CBI_TAG_DRAM_PART_NUM,
-					 string, sizeof(string)),
+	zassert_equal(cbi_set_board_info(CBI_TAG_DRAM_PART_NUM, string,
+					 sizeof(string)),
 		      EC_SUCCESS, NULL);
 	count++;
-	zassert_equal(cbi_set_board_info(CBI_TAG_OEM_NAME,
-					 string, sizeof(string)),
+	zassert_equal(cbi_set_board_info(CBI_TAG_OEM_NAME, string,
+					 sizeof(string)),
 		      EC_SUCCESS, NULL);
 	count++;
 	zassert_equal(cbi_set_board_info(CBI_TAG_MODEL_ID, &d8, sizeof(d8)),
@@ -176,14 +176,17 @@ DECLARE_EC_TEST(test_all_tags)
 	zassert_equal(cbi_set_board_info(CBI_TAG_FW_CONFIG, &d8, sizeof(d8)),
 		      EC_SUCCESS, NULL);
 	count++;
-	zassert_equal(cbi_set_board_info(CBI_TAG_PCB_SUPPLIER, &d8,
-					 sizeof(d8)),
+	zassert_equal(cbi_set_board_info(CBI_TAG_PCB_SUPPLIER, &d8, sizeof(d8)),
 		      EC_SUCCESS, NULL);
 	count++;
 	zassert_equal(cbi_set_board_info(CBI_TAG_SSFC, &d8, sizeof(d8)),
 		      EC_SUCCESS, NULL);
 	count++;
 	zassert_equal(cbi_set_board_info(CBI_TAG_REWORK_ID, &d8, sizeof(d8)),
+		      EC_SUCCESS, NULL);
+	count++;
+	zassert_equal(cbi_set_board_info(CBI_TAG_FACTORY_CALIBRATION_DATA, &d8,
+					 sizeof(d8)),
 		      EC_SUCCESS, NULL);
 	count++;
 
@@ -220,6 +223,8 @@ DECLARE_EC_TEST(test_all_tags)
 	zassert_equal(d32, d8, "0x%x, 0x%x", d32, d8);
 	zassert_equal(cbi_get_ssfc(&d32), EC_SUCCESS, NULL);
 	zassert_equal(d32, d8, "0x%x, 0x%x", d32, d8);
+	zassert_equal(cbi_get_factory_calibration_data(&d32), EC_SUCCESS, NULL);
+	zassert_equal(d32, d8, "0x%x, 0x%x", d32, d8);
 	zassert_equal(cbi_get_rework_id(&d64), EC_SUCCESS, NULL);
 	/* This should be zassert_equal, but for EC test fmt is always "0x%x"
 	 * which will generate compilation error.
@@ -250,7 +255,7 @@ DECLARE_EC_TEST(test_bad_crc)
 	zassert_equal(cbi_set_board_info(tag, &d8, sizeof(d8)), EC_SUCCESS,
 		      NULL);
 	i2c_read8(I2C_PORT_EEPROM, I2C_ADDR_EEPROM_FLAGS,
-		   offsetof(struct cbi_header, crc), &crc);
+		  offsetof(struct cbi_header, crc), &crc);
 	i2c_write8(I2C_PORT_EEPROM, I2C_ADDR_EEPROM_FLAGS,
 		   offsetof(struct cbi_header, crc), ++crc);
 	cbi_invalidate_cache();
@@ -263,24 +268,21 @@ DECLARE_EC_TEST(test_bad_crc)
 
 TEST_SUITE(test_suite_cbi)
 {
-	ztest_test_suite(test_cbi,
-			 ztest_unit_test_setup_teardown(test_uint8, test_setup,
-							test_teardown),
-			 ztest_unit_test_setup_teardown(test_uint32, test_setup,
-							test_teardown),
-			 ztest_unit_test_setup_teardown(test_string, test_setup,
-							test_teardown),
-			 ztest_unit_test_setup_teardown(test_not_found,
-							test_setup,
-							test_teardown),
-			 ztest_unit_test_setup_teardown(test_too_large,
-							test_setup,
-							test_teardown),
-			 ztest_unit_test_setup_teardown(test_all_tags,
-							test_setup,
-							test_teardown),
-			 ztest_unit_test_setup_teardown(test_bad_crc,
-							test_setup,
-							test_teardown));
+	ztest_test_suite(
+		test_cbi,
+		ztest_unit_test_setup_teardown(test_uint8, test_setup,
+					       test_teardown),
+		ztest_unit_test_setup_teardown(test_uint32, test_setup,
+					       test_teardown),
+		ztest_unit_test_setup_teardown(test_string, test_setup,
+					       test_teardown),
+		ztest_unit_test_setup_teardown(test_not_found, test_setup,
+					       test_teardown),
+		ztest_unit_test_setup_teardown(test_too_large, test_setup,
+					       test_teardown),
+		ztest_unit_test_setup_teardown(test_all_tags, test_setup,
+					       test_teardown),
+		ztest_unit_test_setup_teardown(test_bad_crc, test_setup,
+					       test_teardown));
 	ztest_run_test_suite(test_cbi);
 }

@@ -1,5 +1,5 @@
 # -*- makefile -*-
-# Copyright 2013 The Chromium OS Authors. All rights reserved.
+# Copyright 2013 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -9,7 +9,6 @@
 power-$(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540)+=alderlake_slg4bd44540.o
 power-$(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540)+=intel_x86.o
 power-$(CONFIG_CHIPSET_APL_GLK)+=apollolake.o intel_x86.o
-power-$(CONFIG_CHIPSET_BRASWELL)+=braswell.o
 power-$(CONFIG_CHIPSET_CANNONLAKE)+=cannonlake.o intel_x86.o
 power-$(CONFIG_CHIPSET_COMETLAKE)+=cometlake.o intel_x86.o
 power-$(CONFIG_CHIPSET_COMETLAKE_DISCRETE)+=cometlake-discrete.o intel_x86.o

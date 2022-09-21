@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium OS Authors. All rights reserved.
+# Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -56,7 +56,7 @@ class LogWriter:
         """Reset this module to its starting state (useful for tests)"""
         LogWriter._logging_map.clear()
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(
         self,
         logger,
         log_level,
@@ -202,7 +202,7 @@ class LogWriter:
                 LogWriter._log_fd(file)
 
     @classmethod
-    def log_output(  # pylint: disable=too-many-arguments
+    def log_output(
         cls,
         logger,
         log_level,
@@ -297,7 +297,9 @@ class Executor:
              exception.
         """
         with self.lock:
-            thread = threading.Thread(target=lambda: self._run_fn(func), daemon=True)
+            thread = threading.Thread(
+                target=lambda: self._run_fn(func), daemon=True
+            )
             thread.start()
             self.threads.append(thread)
 

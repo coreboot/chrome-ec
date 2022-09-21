@@ -1,5 +1,5 @@
 # -*- makefile -*-
-# Copyright 2012 The Chromium OS Authors. All rights reserved.
+# Copyright 2012 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -23,8 +23,25 @@ ifneq ($(TEST_FUZZ)$(TEST_ASAN)$(TEST_MSAN)$(TEST_UBSAN),)
 CC=clang
 endif
 
+# When set to 1, use the subset of the C standard library implemented in EC
+# (the "builtin" directory).
+# When set to 0, link against the toolchain's implementation of the C standard
+# library.
+USE_BUILTIN_STDLIB:=1
+
+# Set the prefix for the compiler if specified (e.g., "x86_64-pc-linux-gnu-").
+ifeq ($(origin BUILDCC_PREFIX),undefined)
+# If building with Portage use the environment variable it provides.
+# https://wiki.gentoo.org/wiki/Embedded_Handbook/General/Introduction#Environment_variables
+ifneq ($(CBUILD),)
+BUILDCC_PREFIX:=$(CBUILD)-
+else
+BUILDCC_PREFIX:=x86_64-pc-linux-gnu-
+endif
+endif
+
 # Extract cc-name
-cc-name:=$(shell $(CC) -v 2>&1 | grep -q "clang version" && echo clang || echo gcc)
+cc-name:=$(shell $(BUILDCC_PREFIX)$(CC) -v 2>&1 | grep -q "clang version" && echo clang || echo gcc)
 
 # Assume we want to use same compiler for both C and C++
 ifeq ($(cc-name),gcc)
@@ -36,7 +53,13 @@ endif
 # Try not to assume too much about optional tools and prefixes
 CCACHE:=$(shell which ccache 2>/dev/null)
 ifeq ($(origin HOST_CROSS_COMPILE),undefined)
+# If building with Portage use the environment variable it provides.
+# https://wiki.gentoo.org/wiki/Embedded_Handbook/General/Introduction#Environment_variables
+ifneq ($(CHOST),)
+HOST_CROSS_COMPILE:=$(CHOST)-
+else
 HOST_CROSS_COMPILE:=$(if $(shell which x86_64-pc-linux-gnu-$(cc-name) 2>/dev/null),x86_64-pc-linux-gnu-,)
+endif
 endif
 
 AR=$(CROSS_COMPILE)ar
@@ -49,13 +72,17 @@ OBJCOPY=$(CROSS_COMPILE)objcopy
 OBJDUMP=$(CROSS_COMPILE)objdump
 ADDR2LINE=$(CROSS_COMPILE)addr2line
 PKG_CONFIG?=pkg-config
-BUILDCC?=$(CCACHE) $(cc-name)
+BUILDCC?=$(CCACHE) $(BUILDCC_PREFIX)$(cc-name)
 HOSTCC?=$(CCACHE) $(HOST_CROSS_COMPILE)$(cc-name)
 HOSTCXX?=$(CCACHE) $(HOST_CROSS_COMPILE)clang++
 HOST_PKG_CONFIG?=$(HOST_CROSS_COMPILE)pkg-config
 PROTOC?=protoc
 GCOV=$(CROSS_COMPILE)gcov
+ifeq ($(cc-name),gcc)
+HOSTGCOV=$(HOST_CROSS_COMPILE)gcov
+else
 HOSTGCOV=$(CURDIR)/util/llvm-gcov.sh
+endif
 
 C_WARN = -Wstrict-prototypes -Wdeclaration-after-statement -Wno-pointer-sign
 COMMON_WARN = -Wall -Wundef -Werror-implicit-function-declaration \
@@ -89,7 +116,7 @@ CFLAGS_WARN = $(COMMON_WARN) $(C_WARN)
 CXXFLAGS_WARN = $(COMMON_WARN)
 CFLAGS_DEBUG= -g
 CFLAGS_DEBUG+=$(CFLAGS_DEBUG_CHIP)
-CFLAGS_INCLUDE=$(foreach i,$(includes),-I$(i) ) -I.
+CFLAGS_INCLUDE=$(foreach i,$(filter-out builtin, $(includes)),-I$(i) ) -I.
 CFLAGS_TEST=$(if $(TEST_BUILD),-DTEST_BUILD=$(EMPTY) \
                                -DTEST_TASKFILE=$(PROJECT).tasklist,) \
             $(if $(CTS_MODULE), $(CFLAGS_CTS)) \
@@ -98,7 +125,8 @@ CFLAGS_TEST=$(if $(TEST_BUILD),-DTEST_BUILD=$(EMPTY) \
             $(if $(TEST_ASAN),-fsanitize=address) \
             $(if $(TEST_MSAN),-fsanitize=memory) \
             $(if $(TEST_UBSAN),$(UBSAN_FLAGS)) \
-            $(if $(TEST_FUZZ),-fsanitize=fuzzer-no-link -DTEST_FUZZ=$(EMPTY))
+            $(if $(TEST_FUZZ),-fsanitize=fuzzer-no-link -fno-PIE \
+		-DTEST_FUZZ=$(EMPTY))
 CFLAGS_COVERAGE=$(if $(TEST_COVERAGE),--coverage \
 				      -DTEST_COVERAGE=$(EMPTY),)
 CFLAGS_HOSTTEST=$(if $(TEST_HOSTTEST),-DTEST_HOSTTEST=$(EMPTY),) -Iinclude/driver
@@ -123,8 +151,11 @@ HOST_CPPFLAGS=$(CFLAGS_DEFINE) $(CFLAGS_INCLUDE) $(CFLAGS_TEST) \
 	 $(EXTRA_CFLAGS) $(CFLAGS_COVERAGE) $(CFLAGS_HOSTTEST) $(LATE_CFLAGS_DEFINE) \
 	 -DSECTION_IS_$(BLD)=$(EMPTY) -DSECTION=$(BLD) $(CPPFLAGS_$(BLD))
 ifneq ($(BOARD),host)
+CPPFLAGS+=-fno-PIC
+ifeq ($(USE_BUILTIN_STDLIB), 1)
 CPPFLAGS+=-ffreestanding -fno-builtin -nostdinc -nostdlib
 CPPFLAGS+=-Ibuiltin/
+endif
 else
 CPPFLAGS+=-Og
 endif
@@ -132,11 +163,15 @@ CPPFLAGS+= -DCHROMIUM_EC=$(EMPTY)
 CFLAGS=$(CPPFLAGS) $(CFLAGS_CPU) $(CFLAGS_DEBUG) $(COMMON_WARN) $(CFLAGS_y)
 CFLAGS+= -ffunction-sections -fshort-wchar
 CFLAGS+= -fno-delete-null-pointer-checks
+CFLAGS+= -fno-PIC
 ifneq ($(cc-name),clang)
 CFLAGS+= -ffat-lto-objects
 CFLAGS+= -fconserve-stack
 endif
 CXXFLAGS+=-DPROTOBUF_INLINE_NOT_IN_HEADERS=0
+ifeq ($(USE_BUILTIN_STDLIB), 1)
+CPPFLAGS+=-DUSE_BUILTIN_STDLIB
+endif
 
 ifeq ($(LIBFTDI_NAME),)
 FTDIVERSION:=$(shell $(PKG_CONFIG) --modversion libftdi1 2>/dev/null)
@@ -171,16 +206,24 @@ HOST_CXXFLAGS=$(HOST_CFLAGS)
 ifneq (${SYSROOT},)
   LDFLAGS_EXTRA+=--sysroot=${SYSROOT}
 endif
-LDFLAGS=-nostdlib -g -Wl,-X -Wl,--gc-sections -Wl,--build-id=none \
+LDFLAGS=-g -no-pie -Wl,-X -Wl,--gc-sections -Wl,--build-id=none \
 	$(LDFLAGS_EXTRA) $(CFLAGS_CPU)
+ifeq ($(USE_BUILTIN_STDLIB), 1)
+LDFLAGS+=-nostdlib
+else
+LDFLAGS+=-lnosys
+endif
 MEMSIZE_FLAGS=
 ifeq ($(cc-name),gcc)
 MEMSIZE_FLAGS+=-Wl,--print-memory-usage
 endif
 BUILD_LDFLAGS=$(LIBFTDIUSB_LDLIBS)
 HOST_LDFLAGS=$(LIBFTDIUSB_LDLIBS)
+ifneq (${HOST_SYSROOT},)
+  HOST_LDFLAGS+=--sysroot=${HOST_SYSROOT}
+endif
 HOST_TEST_LDFLAGS=-Wl,-T core/host/host_exe.lds -lrt -pthread -rdynamic -lm\
-		  -fuse-ld=bfd \
+		  -fuse-ld=bfd -no-pie \
 		  $(if $(TEST_COVERAGE), --coverage,) \
 		  $(if $(TEST_ASAN), -fsanitize=address) \
 		  $(if $(TEST_MSAN), -fsanitize=memory) \

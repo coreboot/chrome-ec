@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -18,9 +18,7 @@
 #ifndef ULPOSC2_CLOCK_MHZ
 #define ULPOSC2_CLOCK_MHZ 330
 #endif
-#ifdef CHIP_VARIANT_MT8183
 void scp_enable_clock(void);
-#endif
 
 enum scp_clock_source {
 	SCP_CLK_26M = CLK_SEL_SYS_26M,

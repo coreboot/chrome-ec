@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -74,8 +74,8 @@ int gpio_config_unused_pins(void) __attribute__((weak));
  */
 #define UNUSED_GPIO_CONFIG_BY_IDX(i, _)                                       \
 	{                                                                     \
-		.dev_name = DT_GPIO_LABEL_BY_IDX(UNUSED_PINS_LIST,            \
-						 unused_gpios, i),            \
+		.dev_name = DEVICE_DT_NAME(DT_GPIO_CTLR_BY_IDX(               \
+			UNUSED_PINS_LIST, unused_gpios, i)),                  \
 		.pin = DT_GPIO_PIN_BY_IDX(UNUSED_PINS_LIST, unused_gpios, i), \
 		.flags = DT_GPIO_FLAGS_BY_IDX(UNUSED_PINS_LIST, unused_gpios, \
 					      i),                             \

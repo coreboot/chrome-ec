@@ -1,4 +1,4 @@
-/* Copyright 2019 The Chromium OS Authors. All rights reserved.
+/* Copyright 2019 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -18,7 +18,7 @@
 #include "usb_pd.h"
 #include "util.h"
 
-#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
 
 enum pi3usb9201_client_sts {
 	CHG_OTHER = 0,
@@ -45,21 +45,21 @@ static enum charge_supplier bc12_supplier[CONFIG_USB_PD_PORT_MAX_COUNT];
  * will continue to allow those.
  */
 static const struct bc12_status bc12_chg_limits[] = {
-	[CHG_OTHER] = {CHARGE_SUPPLIER_OTHER, 500},
-	[CHG_2_4A] = {CHARGE_SUPPLIER_PROPRIETARY, USB_CHARGER_MAX_CURR_MA},
-	[CHG_2_0A] = {CHARGE_SUPPLIER_PROPRIETARY, USB_CHARGER_MAX_CURR_MA},
-	[CHG_1_0A] = {CHARGE_SUPPLIER_PROPRIETARY, 1000},
-	[CHG_RESERVED] = {CHARGE_SUPPLIER_NONE, 0},
-	[CHG_CDP] = {CHARGE_SUPPLIER_BC12_CDP, USB_CHARGER_MAX_CURR_MA},
-	[CHG_SDP] = {CHARGE_SUPPLIER_BC12_SDP, 500},
-	[CHG_DCP] = {CHARGE_SUPPLIER_BC12_DCP, USB_CHARGER_MAX_CURR_MA},
+	[CHG_OTHER] = { CHARGE_SUPPLIER_OTHER, 500 },
+	[CHG_2_4A] = { CHARGE_SUPPLIER_PROPRIETARY, USB_CHARGER_MAX_CURR_MA },
+	[CHG_2_0A] = { CHARGE_SUPPLIER_PROPRIETARY, USB_CHARGER_MAX_CURR_MA },
+	[CHG_1_0A] = { CHARGE_SUPPLIER_PROPRIETARY, 1000 },
+	[CHG_RESERVED] = { CHARGE_SUPPLIER_NONE, 0 },
+	[CHG_CDP] = { CHARGE_SUPPLIER_BC12_CDP, USB_CHARGER_MAX_CURR_MA },
+	[CHG_SDP] = { CHARGE_SUPPLIER_BC12_SDP, 500 },
+	[CHG_DCP] = { CHARGE_SUPPLIER_BC12_DCP, USB_CHARGER_MAX_CURR_MA },
 };
 
 static inline int raw_read8(int port, int offset, int *value)
 {
 	return i2c_read8(pi3usb9201_bc12_chips[port].i2c_port,
-			 pi3usb9201_bc12_chips[port].i2c_addr_flags,
-			 offset, value);
+			 pi3usb9201_bc12_chips[port].i2c_addr_flags, offset,
+			 value);
 }
 
 static int pi3usb9201_raw(int port, int reg, int mask, int val)
@@ -73,8 +73,7 @@ static int pi3usb9201_raw(int port, int reg, int mask, int val)
 static int pi3usb9201_interrupt_mask(int port, int enable)
 {
 	return pi3usb9201_raw(port, PI3USB9201_REG_CTRL_1,
-			  PI3USB9201_REG_CTRL_1_INT_MASK,
-			  enable);
+			      PI3USB9201_REG_CTRL_1_INT_MASK, enable);
 }
 
 static int pi3usb9201_bc12_detect_ctrl(int port, int enable)
@@ -91,7 +90,7 @@ static int pi3usb9201_set_mode(int port, int desired_mode)
 			      desired_mode << PI3USB9201_REG_CTRL_1_MODE_SHIFT);
 }
 
-static int pi3usb9201_get_mode(int port, int *mode)
+static __maybe_unused int pi3usb9201_get_mode(int port, int *mode)
 {
 	int rv;
 
@@ -121,7 +120,7 @@ static int pi3usb9201_get_status(int port, int *client, int *host)
 }
 
 static void bc12_update_supplier(enum charge_supplier supplier, int port,
-			  struct charge_port_info *new_chg)
+				 struct charge_port_info *new_chg)
 {
 	/*
 	 * If most recent supplier type is not CHARGE_SUPPLIER_NONE, then the
@@ -155,8 +154,8 @@ static void bc12_update_charge_manager(int port, int client_status)
 	new_chg.current = bc12_chg_limits[bit_pos].current_limit;
 	supplier = bc12_chg_limits[bit_pos].supplier;
 
-	CPRINTS("pi3usb9201[p%d]: sts = 0x%x, lim = %d mA, supplier = %d",
-		port, client_status, new_chg.current, supplier);
+	CPRINTS("pi3usb9201[p%d]: sts = 0x%x, lim = %d mA, supplier = %d", port,
+		client_status, new_chg.current, supplier);
 	/* bc1.2 is complete and start bit does not auto clear */
 	pi3usb9201_bc12_detect_ctrl(port, 0);
 	/* Inform charge manager of new supplier type and current limit */
@@ -257,6 +256,9 @@ static void pi3usb9201_usb_charger_task_event(const int port, uint32_t evt)
 			 */
 			bc12_update_charge_manager(port, client);
 		if (!rv && host) {
+#ifdef CONFIG_BC12_CLIENT_MODE_ONLY_PI3USB9201
+			pi3usb9201_set_mode(port, PI3USB9201_USB_PATH_ON);
+#else
 			/*
 			 * Switch to SDP after device is plugged in to avoid
 			 * noise (pulse on D-) causing USB disconnect
@@ -272,6 +274,7 @@ static void pi3usb9201_usb_charger_task_event(const int port, uint32_t evt)
 			if (host & PI3USB9201_REG_HOST_STS_DEV_UNPLUG)
 				pi3usb9201_set_mode(port,
 						    PI3USB9201_CDP_HOST_MODE);
+#endif
 		}
 		/*
 		 * TODO(b/124061702): Use host status to allocate power more
@@ -281,8 +284,7 @@ static void pi3usb9201_usb_charger_task_event(const int port, uint32_t evt)
 
 	if (!IS_ENABLED(CONFIG_USB_PD_VBUS_DETECT_TCPC) &&
 	    (evt & USB_CHG_EVENT_VBUS))
-		CPRINTS("VBUS p%d %d", port,
-			pd_snk_is_vbus_provided(port));
+		CPRINTS("VBUS p%d %d", port, pd_snk_is_vbus_provided(port));
 
 	if (evt & USB_CHG_EVENT_DR_UFP) {
 		bc12_power_up(port);
@@ -298,14 +300,17 @@ static void pi3usb9201_usb_charger_task_event(const int port, uint32_t evt)
 			new_chg.voltage = USB_CHARGER_VOLTAGE_MV;
 			new_chg.current = USB_CHARGER_MIN_CURR_MA;
 			/* Save supplier type and notify chg manager */
-			bc12_update_supplier(CHARGE_SUPPLIER_OTHER,
-					     port, &new_chg);
+			bc12_update_supplier(CHARGE_SUPPLIER_OTHER, port,
+					     &new_chg);
 			CPRINTS("pi3usb9201[p%d]: bc1.2 failed use defaults",
 				port);
 		}
 	}
 
 	if (evt & USB_CHG_EVENT_DR_DFP) {
+#ifdef CONFIG_BC12_CLIENT_MODE_ONLY_PI3USB9201
+		pi3usb9201_set_mode(port, PI3USB9201_USB_PATH_ON);
+#else
 		int mode;
 		int rv;
 
@@ -335,6 +340,7 @@ static void pi3usb9201_usb_charger_task_event(const int port, uint32_t evt)
 			 */
 			pi3usb9201_interrupt_mask(port, 0);
 		}
+#endif
 	}
 
 	if (evt & USB_CHG_EVENT_CC_OPEN)
@@ -383,9 +389,8 @@ const struct bc12_drv pi3usb9201_drv = {
 
 #ifdef CONFIG_BC12_SINGLE_DRIVER
 /* provide a default bc12_ports[] for backward compatibility */
-struct bc12_config bc12_ports[CHARGE_PORT_COUNT] = {
-	[0 ... (CHARGE_PORT_COUNT - 1)] = {
-		.drv = &pi3usb9201_drv,
-	}
-};
+struct bc12_config
+	bc12_ports[CHARGE_PORT_COUNT] = { [0 ...(CHARGE_PORT_COUNT - 1)] = {
+						  .drv = &pi3usb9201_drv,
+					  } };
 #endif /* CONFIG_BC12_SINGLE_DRIVER */

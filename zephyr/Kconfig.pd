@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium OS Authors. All rights reserved.
+# Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -75,6 +75,16 @@ config PLATFORM_EC_USB_PD_DEBUG_LEVEL
 	  debugging output is available from the USB Power Delivery stack.
 	  The meaning of each level depends on the module in question, but
 	  the maximum available level is 3.
+
+config PLATFORM_EC_USB_PD_INITIAL_DEBUG_LEVEL
+	int "Initial debug level to use"
+	default 1
+	help
+	  Sets the initial value of the debug level to use, while
+	  still allowing the debug level to be changed using 'pd dump'.
+	  A value of 0 will initially disable debug logging, and values 1
+	  through to 3 will increase the level of debug logging.
+	  If this config is not set, the default level will be set to 1.
 
 config PLATFORM_EC_USB_PD_5V_EN_CUSTOM
 	bool "Custom method of detecting VBUS"
@@ -342,6 +352,27 @@ config PLATFORM_EC_USB_PD_TEMP_SENSOR
 	 Temperature related fields in USB PD messages assume a device only has
 	 one temperature. But, Chromebooks can have multiple temperature sensors.
 	 This option selects which temperature sensor is used for USB PD.
+
+config PLATFORM_EC_USB_PD_SHORT_PRESS_MAX_MS
+	int "Time limit in ms for short presses with a USB PD power button"
+	default 4000
+	help
+	 USB PD supports power buttons over USB-C using button press and button
+	 release alerts. How a chromeOS device responds depends on whether the button
+	 press is considered short or long. This config is used to set the short press
+	 time limit in ms. Any press shorter will be a short press and any press
+	 longer will either be a long press or invalid.
+
+config PLATFORM_EC_USB_PD_LONG_PRESS_MAX_MS
+	int "Time limit in ms for valid presses with a USB PD power button"
+	default 8000
+	help
+	 USB PD supports power buttons over USB-C using button press and button
+	 release alerts. If a USB PD partner sends a press but never a release alert,
+	 the EC should time out while waiting for the release and return to an idle
+	 state. This value sets how long the EC waits for a release alert from the
+	 partner in ms. Any press longer than this will not be considered a valid USB
+	 PD button press.
 
 endif  # PLATFORM_EC_USB_POWER_DELIVERY
 

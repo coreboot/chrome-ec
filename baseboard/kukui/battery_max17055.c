@@ -1,4 +1,4 @@
-/* Copyright 2018 The Chromium OS Authors. All rights reserved.
+/* Copyright 2018 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
@@ -6,6 +6,7 @@
  */
 
 #include "battery.h"
+#include "builtin/assert.h"
 #include "charge_state.h"
 #include "charger_mt6370.h"
 #include "console.h"
@@ -20,12 +21,9 @@
 #define BATTERY_SIMPLO_CHARGE_MIN_TEMP 0
 #define BATTERY_SIMPLO_CHARGE_MAX_TEMP 60
 
-#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
 
-enum battery_type {
-	BATTERY_SIMPLO = 0,
-	BATTERY_COUNT
-};
+enum battery_type { BATTERY_SIMPLO = 0, BATTERY_COUNT };
 
 static const struct battery_info info[] = {
 	[BATTERY_SIMPLO] = {
@@ -132,7 +130,7 @@ int charger_profile_override(struct charge_state_data *curr)
 	else {
 		for (temp_zone = 0; temp_zone < TEMP_ZONE_COUNT; temp_zone++) {
 			if (bat_temp_c <
-				temp_zones[BATT_ID][temp_zone].temp_max)
+			    temp_zones[BATT_ID][temp_zone].temp_max)
 				break;
 		}
 	}
@@ -178,7 +176,7 @@ enum ec_status charger_profile_override_set_param(uint32_t param,
 
 int get_battery_manufacturer_name(char *dest, int size)
 {
-	static const char * const name[] = {
+	static const char *const name[] = {
 		[BATTERY_SIMPLO] = "SIMPLO",
 	};
 	ASSERT(dest);

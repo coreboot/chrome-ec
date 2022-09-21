@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -17,7 +17,7 @@ BUILD_ASSERT(sizeof(usb_pd_flags) == sizeof(uint32_t));
 enum usb_pd_vbus_detect get_usb_pd_vbus_detect(void)
 {
 	if (IS_ENABLED(CONFIG_USB_PD_RUNTIME_FLAGS))
-		return (enum usb_pd_vbus_detect) usb_pd_flags.vbus_detect;
+		return (enum usb_pd_vbus_detect)usb_pd_flags.vbus_detect;
 	else if (IS_ENABLED(CONFIG_USB_PD_VBUS_DETECT_TCPC))
 		return (enum usb_pd_vbus_detect)USB_PD_VBUS_DETECT_TCPC;
 	else if (IS_ENABLED(CONFIG_USD_PD_VBUS_DETECT_GPIO))

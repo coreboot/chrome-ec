@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium OS Authors. All rights reserved.
+/* Copyright 2021 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -32,7 +32,6 @@ BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 static void board_pwm_init(void)
 {
-
 	pwm_enable(PWM_CH_KBLIGHT, 1);
 	pwm_set_duty(PWM_CH_KBLIGHT, 50);
 }
