@@ -41,7 +41,7 @@
 			enum-name = "GPIO_AC_PRESENT";
 		};
 		gpio_ccd_mode_odl: ccd_mode_odl {
-			gpios = <&gpioe 5 GPIO_ODR_LOW>;
+			gpios = <&gpioe 5 GPIO_ODR_HIGH>;
 			enum-name = "GPIO_CCD_MODE_ODL";
 		};
 		gpio_cpu_c10_gate_l: cpu_c10_gate_l {
@@ -65,7 +65,7 @@
 			enum-name = "GPIO_ENABLE_BACKLIGHT";
 		};
 		gpio_ec_gsc_packet_mode: ec_gsc_packet_mode {
-			gpios = <&gpio7 5 GPIO_ODR_HIGH>;
+			gpios = <&gpio7 5 GPIO_OUTPUT>;
 			enum-name = "GPIO_PACKET_MODE_EN";
 		};
 		gpio_ec_imu_int_r_l: ec_imu_int_r_l {

@@ -9,6 +9,12 @@
 	aliases {
 		gpio-cbi-wp = &gpio_ec_cbi_wp;
 		gpio-wp = &ec_flash_wp_odl;
+		gpio-en-hdmi-pwr = &gpio_ec_x_gpio1;
+		gpio-usb-c1-frs-en = &gpio_ec_x_gpio1;
+		gpio-usb-c1-ppc-int-odl = &gpio_x_ec_gpio2;
+		gpio-ps185-ec-dp-hpd = &gpio_x_ec_gpio2;
+		gpio-usb-c1-dp-in-hpd = &gpio_ec_x_gpio3;
+		gpio-ps185-pwrdn-odl = &gpio_ec_x_gpio3;
 	};
 
 	named-gpios {
@@ -70,8 +76,13 @@
 		gpio_x_ec_gpio2: x_ec_gpio2 {
 			gpios = <&gpiob 2 GPIO_INPUT>;
 		};
-		usb_c0_ppc_bc12_int_odl: usb_c0_ppc_bc12_int_odl {
+		usb_c0_ppc_int_odl: usb_c0_ppc_int_odl {
 			gpios = <&gpiod 1 GPIO_INPUT>;
+			enum-name = "GPIO_USB_C0_PPC_INT_ODL";
+		};
+		usb_c0_bc12_int_odl: usb_c0_bc12_int_odl {
+			gpios = <&gpiof 1 GPIO_INPUT>;
+			enum-name = "GPIO_USB_C0_BC12_INT_ODL";
 		};
 		usb_c1_bc12_charger_int_odl: usb_c1_bc12_charger_int_odl {
 			gpios = <&gpioj 4 GPIO_INPUT>;
@@ -116,8 +127,9 @@
 		en_pp5000_usb_a0_vbus: en_pp5000_usb_a0_vbus {
 			gpios = <&gpiob 7 GPIO_OUTPUT_LOW>;
 		};
-		usb_c0_ppc_frsinfo: usb_c0_ppc_frsinfo {
-			gpios = <&gpiof 0 GPIO_INPUT>;
+		usb_c0_frs_en: usb_c0_frs_en {
+			gpios = <&gpiof 0 GPIO_OUTPUT_LOW>;
+			enum-name = "GPIO_USB_C0_FRS_EN";
 		};
 		ec_batt_pres_odl: ec_batt_pres_odl {
 			gpios = <&gpioc 0 GPIO_INPUT>;
@@ -149,22 +161,10 @@
 			gpios = <&gpiod 4 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_PACKET_MODE_EN";
 		};
-		ccd_mode_odl {
+		gpio_ccd_mode_odl: ccd_mode_odl {
 			gpios = <&gpioc 4 GPIO_INPUT>;
 			enum-name = "GPIO_CCD_MODE_ODL";
 		};
-	};
-
-	/*
-	 * aliases for sub-board GPIOs
-	 */
-	aliases {
-		gpio-en-hdmi-pwr = &gpio_ec_x_gpio1;
-		gpio-usb-c1-frs-en = &gpio_ec_x_gpio1;
-		gpio-usb-c1-ppc-int-odl = &gpio_x_ec_gpio2;
-		gpio-ps185-ec-dp-hpd = &gpio_x_ec_gpio2;
-		gpio-usb-c1-dp-in-hpd = &gpio_ec_x_gpio3;
-		gpio-ps185-pwrdn-odl = &gpio_ec_x_gpio3;
 	};
 
 	hibernate-wake-pins {
@@ -188,7 +188,6 @@
 			<&gpioa 3 GPIO_INPUT_PULL_DOWN>,
 			<&gpioa 6 GPIO_INPUT_PULL_DOWN>,
 			<&gpioa 7 GPIO_INPUT_PULL_DOWN>,
-			<&gpiof 1 GPIO_INPUT_PULL_DOWN>,
 			/* reserved for b:241345809 */
 			<&gpiod 7 GPIO_OUTPUT_LOW>,
 			<&gpiog 2 GPIO_INPUT_PULL_DOWN>,

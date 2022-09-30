@@ -26,6 +26,10 @@
 #undef CONFIG_USB_PD_LOGGING
 #endif
 
+#ifdef TEST_ALWAYS_MEMSET
+#define CONFIG_LIBCRYPTOC
+#endif
+
 #if defined(TEST_AES) || defined(TEST_CRYPTO_BENCHMARK)
 #define CONFIG_AES
 #define CONFIG_AES_GCM
@@ -110,6 +114,15 @@
 #define CONFIG_AES_GCM
 #define CONFIG_ROLLBACK_SECRET_SIZE 32
 #define CONFIG_SHA256
+#endif
+
+#ifdef TEST_ROLLBACK_SECRET
+#define CONFIG_ROLLBACK
+#define CONFIG_ROLLBACK_SECRET_SIZE 32
+#define CONFIG_ROLLBACK_OFF 1
+#define CONFIG_ROLLBACK_SIZE 2
+#undef CONFIG_ROLLBACK_UPDATE
+#define FP_CONTEXT_TPM_BYTES 32
 #endif
 
 #ifdef TEST_MOTION_SENSE_FIFO
@@ -622,6 +635,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #ifdef TEST_CHARGE_RAMP
 #define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
+#undef CONFIG_USB_PD_HOST_CMD
 #endif
 
 #ifdef TEST_RTC
