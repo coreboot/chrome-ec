@@ -7,8 +7,6 @@
 
 #include "test/drivers/test_mocks.h"
 
-DEFINE_FFF_GLOBALS;
-
 /* Mocks for common/init_rom.c */
 DEFINE_FAKE_VALUE_FUNC(const void *, init_rom_map, const void *, int);
 DEFINE_FAKE_VOID_FUNC(init_rom_unmap, const void *, int);
@@ -37,6 +35,7 @@ static void fff_reset_rule_before(const struct ztest_unit_test *test,
 	RESET_FAKE(init_rom_unmap);
 	RESET_FAKE(init_rom_copy);
 	RESET_FAKE(system_jumped_late);
+	RESET_FAKE(system_is_locked);
 	RESET_FAKE(system_reset);
 	RESET_FAKE(software_panic);
 	RESET_FAKE(assert_post_action);

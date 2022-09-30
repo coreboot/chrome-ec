@@ -73,7 +73,6 @@ target_sources(app PRIVATE
     src/ps8xxx.c
     src/smart.c
     src/stm_mems_common.c
-    src/system.c
     src/tablet_mode.c
     src/tcpci.c
     src/tcpci_test_common.c
@@ -82,7 +81,6 @@ target_sources(app PRIVATE
     src/thermistor.c
     src/uart_hostcmd.c
     src/usb_mux.c
-    src/usb_pd_host_cmd.c
     src/vboot_hash.c
     src/virtual_battery.c
     src/vstore.c

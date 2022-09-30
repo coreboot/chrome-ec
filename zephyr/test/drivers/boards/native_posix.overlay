@@ -28,6 +28,11 @@
 		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
 	};
 
+	ec-console {
+		compatible = "ec-console";
+		disabled = "events", "lpc", "hostcmd";
+	};
+
 	usbc {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -37,12 +42,14 @@
 			reg = <0>;
 			chg = <&isl923x_emul>;
 			tcpc = <&tcpci_emul>;
+			ppc = <&sn5s330_emul>;
 		};
 
 		port1@1 {
 			compatible = "named-usbc-port";
 			reg = <1>;
 			tcpc = <&ps8xxx_emul>;
+			ppc = <&syv682x_emul>;
 		};
 	};
 
@@ -201,12 +208,12 @@
 			gpios = <&gpio1 4 GPIO_INPUT_PULL_UP>;
 			enum-name = "GPIO_VOLUME_UP_L";
 		};
-		gpio_ec_pg_pin_temp: ec_pg_pin_temp {
-			gpios = <&gpio0 4 GPIO_INPUT>;
-		};
 		gpio_en_pp5000_usba_r: en_pp5000_usba_r {
 			gpios = <&gpio1 5 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_EN_PP5000_USBA_R";
+		};
+		gpio_ec_pg_pin_temp: ec_pg_pin_temp {
+			gpios = <&gpio1 6 GPIO_INPUT>;
 		};
 	};
 
@@ -220,7 +227,7 @@
 		low-level;
 		gpio-controller;
 		#gpio-cells = <2>;
-		ngpios = <6>;
+		ngpios = <7>;
 	};
 
 	gpio-interrupts {
