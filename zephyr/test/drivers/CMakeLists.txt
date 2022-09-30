@@ -7,6 +7,7 @@ find_package(Zephyr REQUIRED HINTS "${ZEPHYR_BASE}")
 project(drivers)
 
 add_subdirectory(common)
+add_subdirectory(${PLATFORM_EC}/zephyr/test/test_utils test_utils)
 
 get_target_property(TEST_SOURCES app SOURCES)
 
@@ -47,9 +48,12 @@ add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_DEFAULT default)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_AP_MUX_CONTROL ap_mux_control)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_CHARGESPLASH chargesplash)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_ISL923X isl923x)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_I2C_CONTROLLER i2c_controller)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_KEYBOARD_SCAN keyboard_scan)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_LED_DRIVER led_driver)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_MKBP mkbp)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_RT9490 rt9490)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_TIMER timer)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USB_MALFUNCTION_SINK usb_malfunction_sink)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USB_PD_DPS dps)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USB_PORT_POWER_DUMB usb_port_power_dumb)
@@ -57,7 +61,9 @@ add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USB_RETIMER_FW_UPDATE usb_retimer_
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USBC_ALT_MODE usbc_alt_mode)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USBC_TBT_MODE usbc_tbt_mode)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USBC_OCP usbc_ocp)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USBC_PPC usbc_ppc)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_HOST_COMMANDS host_cmd)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_SYSTEM system)
 
 get_target_property(TEST_SOURCES_NEW app SOURCES)
 

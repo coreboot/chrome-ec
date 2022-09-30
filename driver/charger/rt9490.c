@@ -214,9 +214,9 @@ enum ec_error_list rt9490_set_otg_current_voltage(int chgnum,
 	if (!IN_RANGE(output_voltage, RT9490_VOTG_MIN, RT9490_VOTG_MAX))
 		return EC_ERROR_PARAM3;
 
-	reg_cur = (output_current - RT9490_IOTG_MIN) / RT9490_IOTG_STEP;
+	reg_cur = (output_current - RT9490_IOTG_MIN) / RT9490_IOTG_STEP + 3;
 	reg_vol = (output_voltage - RT9490_VOTG_MIN) / RT9490_VOTG_STEP;
-	RETURN_ERROR(rt9490_write16(chgnum, RT9490_REG_IOTG_REGU, reg_cur));
+	RETURN_ERROR(rt9490_write8(chgnum, RT9490_REG_IOTG_REGU, reg_cur));
 
 	return rt9490_write16(chgnum, RT9490_REG_VOTG_REGU, reg_vol);
 }
@@ -444,8 +444,10 @@ static enum ec_error_list rt9490_get_vbus_voltage(int chgnum, int port,
 static enum ec_error_list rt9490_set_input_current_limit(int chgnum,
 							 int input_current)
 {
-	uint16_t reg_val = input_current / RT9490_AICR_STEP;
+	uint16_t reg_val;
 
+	input_current = CLAMP(input_current, RT9490_AICR_MIN, RT9490_AICR_MAX);
+	reg_val = input_current / RT9490_AICR_STEP;
 	return rt9490_write16(chgnum, RT9490_REG_AICR_CTRL, reg_val);
 }
 
@@ -518,6 +520,19 @@ static int rt9490_ramp_get_current_limit(int chgnum)
 }
 #endif
 
+static enum ec_error_list rt9490_get_option(int chgnum, int *option)
+{
+	/* Ignored: does not exist */
+	*option = 0;
+	return EC_SUCCESS;
+}
+
+static enum ec_error_list rt9490_set_option(int chgnum, int option)
+{
+	/* Ignored: does not exist */
+	return EC_SUCCESS;
+}
+
 #ifdef CONFIG_CMD_CHARGER_DUMP
 static void dump_range(int chgnum, int from, int to)
 {
@@ -570,6 +585,8 @@ const struct charger_drv rt9490_drv = {
 	.set_input_current_limit = &rt9490_set_input_current_limit,
 	.get_input_current_limit = &rt9490_get_input_current_limit,
 	.get_input_current = &rt9490_get_input_current,
+	.get_option = &rt9490_get_option,
+	.set_option = &rt9490_set_option,
 	.device_id = &rt9490_device_id,
 #ifdef CONFIG_CHARGE_RAMP_HW
 	.set_hw_ramp = &rt9490_set_hw_ramp,

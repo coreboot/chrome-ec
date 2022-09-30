@@ -13,12 +13,14 @@
 #include "emul/emul_isl923x.h"
 #include "emul/tcpc/emul_ps8xxx.h"
 #include "emul/tcpc/emul_tcpci.h"
+#include "emul/tcpc/emul_tcpci_partner_common.h"
 #include "emul/tcpc/emul_tcpci_partner_snk.h"
 #include "host_command.h"
 #include "test/drivers/stubs.h"
 #include "tcpm/tcpci.h"
 #include "test/drivers/utils.h"
 #include "test/drivers/test_state.h"
+#include "test_usbc_alt_mode.h"
 
 #define TEST_PORT 0
 
@@ -28,49 +30,32 @@
 
 BUILD_ASSERT(TEST_PORT == USBC_PORT_C0);
 
-struct usbc_alt_mode_fixture {
-	const struct emul *tcpci_emul;
-	const struct emul *charger_emul;
-	struct tcpci_partner_data partner;
-	struct tcpci_snk_emul_data snk_ext;
-};
-
-struct usbc_alt_mode_dp_unsupported_fixture {
-	const struct emul *tcpci_emul;
-	const struct emul *charger_emul;
-	struct tcpci_partner_data partner;
-	struct tcpci_snk_emul_data snk_ext;
-};
-
-static void connect_partner_to_port(struct usbc_alt_mode_fixture *fixture)
+static void connect_partner_to_port(const struct emul *tcpc_emul,
+				    const struct emul *charger_emul,
+				    struct tcpci_partner_data *partner_emul,
+				    const struct tcpci_src_emul_data *src_ext)
 {
-	const struct emul *tcpc_emul = fixture->tcpci_emul;
-	struct tcpci_partner_data *partner_emul = &fixture->partner;
-
 	/*
 	 * TODO(b/221439302) Updating the TCPCI emulator registers, updating the
 	 *   vbus, as well as alerting should all be a part of the connect
 	 *   function.
 	 */
-	/* Set VBUS to vSafe0V initially. */
-	isl923x_emul_set_adc_vbus(fixture->charger_emul, 0);
-	tcpci_emul_set_reg(fixture->tcpci_emul, TCPC_REG_POWER_STATUS,
-			   TCPC_REG_POWER_STATUS_VBUS_DET);
-	tcpci_emul_set_reg(fixture->tcpci_emul, TCPC_REG_EXT_STATUS,
-			   TCPC_REG_EXT_STATUS_SAFE0V);
-	tcpci_tcpc_alert(0);
-	k_sleep(K_SECONDS(1));
+	set_ac_enabled(true);
 	zassume_ok(tcpci_partner_connect_to_tcpci(partner_emul, tcpc_emul),
 		   NULL);
+
+	isl923x_emul_set_adc_vbus(charger_emul,
+				  PDO_FIXED_GET_VOLT(src_ext->pdo[0]));
 
 	/* Wait for PD negotiation and current ramp. */
 	k_sleep(K_SECONDS(10));
 }
 
-static void disconnect_partner_from_port(struct usbc_alt_mode_fixture *fixture)
+static void disconnect_partner_from_port(const struct emul *tcpc_emul,
+					 const struct emul *charger_emul)
 {
-	zassume_ok(tcpci_emul_disconnect_partner(fixture->tcpci_emul), NULL);
-	isl923x_emul_set_adc_vbus(fixture->charger_emul, 0);
+	zassume_ok(tcpci_emul_disconnect_partner(tcpc_emul), NULL);
+	isl923x_emul_set_adc_vbus(charger_emul, 0);
 	k_sleep(K_SECONDS(1));
 }
 
@@ -148,10 +133,10 @@ static void *usbc_alt_mode_setup(void)
 {
 	static struct usbc_alt_mode_fixture fixture;
 	struct tcpci_partner_data *partner = &fixture.partner;
-	struct tcpci_snk_emul_data *snk_ext = &fixture.snk_ext;
+	struct tcpci_src_emul_data *src_ext = &fixture.src_ext;
 
 	tcpci_partner_init(partner, PD_REV20);
-	partner->extensions = tcpci_snk_emul_init(snk_ext, partner, NULL);
+	partner->extensions = tcpci_src_emul_init(src_ext, partner, NULL);
 
 	/* Get references for the emulators */
 	fixture.tcpci_emul = EMUL_GET_USBC_BINDING(TEST_PORT, tcpc);
@@ -159,37 +144,6 @@ static void *usbc_alt_mode_setup(void)
 
 	add_discovery_responses(partner);
 	add_displayport_mode_responses(partner);
-
-	/* Sink 5V 3A. */
-	snk_ext->pdo[1] = PDO_FIXED(5000, 3000, PDO_FIXED_UNCONSTRAINED);
-
-	return &fixture;
-}
-
-static void *usbc_alt_mode_dp_unsupported_setup(void)
-{
-	static struct usbc_alt_mode_fixture fixture;
-	struct tcpci_partner_data *partner = &fixture.partner;
-	struct tcpci_snk_emul_data *snk_ext = &fixture.snk_ext;
-
-	tcpci_partner_init(partner, PD_REV20);
-	partner->extensions = tcpci_snk_emul_init(snk_ext, partner, NULL);
-
-	/* Get references for the emulators */
-	fixture.tcpci_emul = EMUL_GET_USBC_BINDING(TEST_PORT, tcpc);
-	/* The configured TCPCI rev must match the emulator's supported rev. */
-	tcpc_config[TEST_PORT].flags |= TCPC_FLAGS_TCPCI_REV2_0;
-	tcpci_emul_set_rev(fixture.tcpci_emul, TCPCI_EMUL_REV2_0_VER1_1);
-	fixture.charger_emul = EMUL_GET_USBC_BINDING(TEST_PORT, chg);
-
-	/*
-	 * Respond to discovery REQs to indicate DisplayPort support, but do not
-	 * respond to DisplayPort alt mode VDMs, including Enter Mode.
-	 */
-	add_discovery_responses(partner);
-
-	/* Sink 5V 3A. */
-	snk_ext->pdo[1] = PDO_FIXED(5000, 3000, PDO_FIXED_UNCONSTRAINED);
 
 	return &fixture;
 }
@@ -202,12 +156,18 @@ static void usbc_alt_mode_before(void *data)
 	/* TODO(b/214401892): Check why need to give time TCPM to spin */
 	k_sleep(K_SECONDS(1));
 
-	connect_partner_to_port((struct usbc_alt_mode_fixture *)data);
+	struct usbc_alt_mode_fixture *fixture = data;
+
+	connect_partner_to_port(fixture->tcpci_emul, fixture->charger_emul,
+				&fixture->partner, &fixture->src_ext);
 }
 
 static void usbc_alt_mode_after(void *data)
 {
-	disconnect_partner_from_port((struct usbc_alt_mode_fixture *)data);
+	struct usbc_alt_mode_fixture *fixture = data;
+
+	disconnect_partner_from_port(fixture->tcpci_emul,
+				     fixture->charger_emul);
 }
 
 ZTEST_F(usbc_alt_mode, verify_discovery)
@@ -298,40 +258,6 @@ ZTEST_F(usbc_alt_mode, verify_displayport_mode_entry)
 		      USB_PD_MUX_HPD_IRQ, "Failed to set HPD IRQin mux");
 }
 
-ZTEST_F(usbc_alt_mode, verify_displayport_mode_reentry)
-{
-	if (!IS_ENABLED(CONFIG_PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY)) {
-		ztest_test_skip();
-	}
-
-	host_cmd_typec_control_enter_mode(TEST_PORT, TYPEC_MODE_DP);
-	k_sleep(K_SECONDS(1));
-
-	/* DPM configures the partner on DP mode entry */
-	/* Verify port partner thinks its configured for DisplayPort */
-	zassert_true(fixture->partner.displayport_configured, NULL);
-
-	host_cmd_typec_control_exit_modes(TEST_PORT);
-	k_sleep(K_SECONDS(1));
-	zassert_false(fixture->partner.displayport_configured, NULL);
-
-	host_cmd_typec_control_enter_mode(TEST_PORT, TYPEC_MODE_DP);
-	k_sleep(K_SECONDS(1));
-	zassert_true(fixture->partner.displayport_configured, NULL);
-
-	/* Verify that DisplayPort is the active alternate mode. */
-	struct ec_params_usb_pd_get_mode_response response;
-	int response_size;
-
-	host_cmd_usb_pd_get_amode(TEST_PORT, 0, &response, &response_size);
-
-	/* Response should be populated with a DisplayPort VDO */
-	zassert_equal(response_size, sizeof(response), NULL);
-	zassert_equal(response.svid, USB_SID_DISPLAYPORT, NULL);
-	zassert_equal(response.vdo[0],
-		      fixture->partner.modes_vdm[response.opos], NULL);
-}
-
 ZTEST_F(usbc_alt_mode, verify_discovery_via_pd_host_cmd)
 {
 	struct ec_params_usb_pd_info_request params = { .port = TEST_PORT };
@@ -347,41 +273,52 @@ ZTEST_F(usbc_alt_mode, verify_discovery_via_pd_host_cmd)
 	zassert_equal(response.pid, PARTNER_PRODUCT_ID);
 }
 
-ZTEST_F(usbc_alt_mode, verify_mode_entry_via_pd_host_cmd)
-{
-	if (!IS_ENABLED(CONFIG_PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY)) {
-		ztest_test_skip();
-	}
-
-	/* Verify entering mode */
-	struct ec_params_usb_pd_set_mode_request set_mode_params = {
-		.cmd = PD_ENTER_MODE,
-		.port = TEST_PORT,
-		.opos = 1, /* Second VDO (after Discovery Responses) */
-		.svid = USB_SID_DISPLAYPORT,
-	};
-
-	struct host_cmd_handler_args set_mode_args = BUILD_HOST_COMMAND_PARAMS(
-		EC_CMD_USB_PD_SET_AMODE, 0, set_mode_params);
-
-	zassert_ok(host_command_process(&set_mode_args));
-
-	/* Verify that DisplayPort is the active alternate mode. */
-	struct ec_params_usb_pd_get_mode_response get_mode_response;
-	int response_size;
-
-	host_cmd_usb_pd_get_amode(TEST_PORT, 0, &get_mode_response,
-				  &response_size);
-
-	/* Response should be populated with a DisplayPort VDO */
-	zassert_equal(response_size, sizeof(get_mode_response), NULL);
-	zassert_equal(get_mode_response.svid, USB_SID_DISPLAYPORT, NULL);
-	zassert_equal(get_mode_response.vdo[0],
-		      fixture->partner.modes_vdm[get_mode_response.opos], NULL);
-}
-
 ZTEST_SUITE(usbc_alt_mode, drivers_predicate_post_main, usbc_alt_mode_setup,
 	    usbc_alt_mode_before, usbc_alt_mode_after, NULL);
+
+static void *usbc_alt_mode_dp_unsupported_setup(void)
+{
+	static struct usbc_alt_mode_dp_unsupported_fixture fixture;
+	struct tcpci_partner_data *partner = &fixture.partner;
+	struct tcpci_src_emul_data *src_ext = &fixture.src_ext;
+
+	tcpci_partner_init(partner, PD_REV20);
+	partner->extensions = tcpci_src_emul_init(src_ext, partner, NULL);
+
+	/* Get references for the emulators */
+	fixture.tcpci_emul = EMUL_GET_USBC_BINDING(TEST_PORT, tcpc);
+	fixture.charger_emul = EMUL_GET_USBC_BINDING(TEST_PORT, chg);
+
+	/*
+	 * Respond to discovery REQs to indicate DisplayPort support, but do not
+	 * respond to DisplayPort alt mode VDMs, including Enter Mode.
+	 */
+	add_discovery_responses(partner);
+
+	return &fixture;
+}
+
+static void usbc_alt_mode_dp_unsupported_before(void *data)
+{
+	/* Set chipset to ON, this will set TCPM to DRP */
+	test_set_chipset_to_s0();
+
+	/* TODO(b/214401892): Check why need to give time TCPM to spin */
+	k_sleep(K_SECONDS(1));
+
+	struct usbc_alt_mode_dp_unsupported_fixture *fixture = data;
+
+	connect_partner_to_port(fixture->tcpci_emul, fixture->charger_emul,
+				&fixture->partner, &fixture->src_ext);
+}
+
+static void usbc_alt_mode_dp_unsupported_after(void *data)
+{
+	struct usbc_alt_mode_dp_unsupported_fixture *fixture = data;
+
+	disconnect_partner_from_port(fixture->tcpci_emul,
+				     fixture->charger_emul);
+}
 
 /*
  * When the partner advertises DP mode support but refuses to enter, discovery
@@ -441,5 +378,6 @@ ZTEST_F(usbc_alt_mode_dp_unsupported, verify_displayport_mode_nonentry)
 }
 
 ZTEST_SUITE(usbc_alt_mode_dp_unsupported, drivers_predicate_post_main,
-	    usbc_alt_mode_dp_unsupported_setup, usbc_alt_mode_before,
-	    usbc_alt_mode_after, NULL);
+	    usbc_alt_mode_dp_unsupported_setup,
+	    usbc_alt_mode_dp_unsupported_before,
+	    usbc_alt_mode_dp_unsupported_after, NULL);

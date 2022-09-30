@@ -369,7 +369,8 @@ int system_add_jump_tag(uint16_t tag, int version, int size, const void *data)
 	return EC_SUCCESS;
 }
 
-const uint8_t *system_get_jump_tag(uint16_t tag, int *version, int *size)
+test_mockable const uint8_t *system_get_jump_tag(uint16_t tag, int *version,
+						 int *size)
 {
 	const struct jump_tag *t;
 	int used = 0;
@@ -398,7 +399,7 @@ const uint8_t *system_get_jump_tag(uint16_t tag, int *version, int *size)
 	return NULL;
 }
 
-void system_disable_jump(void)
+test_mockable void system_disable_jump(void)
 {
 	disable_jump = 1;
 
@@ -557,7 +558,7 @@ __overridable void board_pulse_entering_rw(void)
  *
  * @param init_addr	Init address of target image
  */
-static void jump_to_image(uintptr_t init_addr)
+test_mockable_static void jump_to_image(uintptr_t init_addr)
 {
 	void (*resetvec)(void);
 
@@ -629,8 +630,8 @@ int system_is_in_rw(void)
 	return is_rw_image(system_get_image_copy());
 }
 
-static int system_run_image_copy_with_flags(enum ec_image copy,
-					    uint32_t add_reset_flags)
+test_mockable_static int
+system_run_image_copy_with_flags(enum ec_image copy, uint32_t add_reset_flags)
 {
 	uintptr_t base;
 	uintptr_t init_addr;
