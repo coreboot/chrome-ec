@@ -7137,6 +7137,10 @@ enum ec_pchg_update_cmd {
 	EC_PCHG_UPDATE_CMD_WRITE,
 	/* Close update session. */
 	EC_PCHG_UPDATE_CMD_CLOSE,
+	/* Reset chip (without mode change). */
+	EC_PCHG_UPDATE_CMD_RESET,
+	/* Enable pass-through mode. */
+	EC_PCHG_UPDATE_CMD_ENABLE_PASSTHRU,
 	/* End of commands */
 	EC_PCHG_UPDATE_CMD_COUNT,
 };
