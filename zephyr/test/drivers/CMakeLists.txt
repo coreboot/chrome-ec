@@ -45,6 +45,7 @@ endif()
 
 # Add linked suites here
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_DEFAULT default)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_ANX7447 anx7447)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_AP_MUX_CONTROL ap_mux_control)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_CHARGESPLASH chargesplash)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_ISL923X isl923x)
@@ -53,6 +54,7 @@ add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_KEYBOARD_SCAN keyboard_scan)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_LED_DRIVER led_driver)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_MKBP mkbp)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_RT9490 rt9490)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_SHIM_RTC shim_rtc)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_TIMER timer)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USB_MALFUNCTION_SINK usb_malfunction_sink)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USB_PD_DPS dps)
@@ -64,6 +66,7 @@ add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USBC_OCP usbc_ocp)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_USBC_PPC usbc_ppc)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_HOST_COMMANDS host_cmd)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_SYSTEM system)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_LOCATE_CHIP_ALTS locate_chip)
 
 get_target_property(TEST_SOURCES_NEW app SOURCES)
 

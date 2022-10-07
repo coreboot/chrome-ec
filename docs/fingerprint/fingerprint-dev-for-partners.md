@@ -27,7 +27,14 @@ The Fingerprint MCU (FPMCU) board has the MCU that handles all
 fingerprint-related functionality (matching, encryption, etc). The fingerprint
 sensor itself connects to the FPMCU board.
 
-This FPMCU board is the Dragonclaw Rev 0.2. |
+<!-- mdformat off(b/139308852) -->
+*** note
+Older revisions of these boards are not supported. If you have an older version
+of the board, please request a replacement.
+***
+<!-- mdformat on -->
+
+This FPMCU board is the Dragonclaw Rev 0.3. |
 ------------------------------------------- |
 ![Dragonclaw board]                         |
 
@@ -38,12 +45,6 @@ Download the [Dragonclaw schematics, layout, and BOM][dragonclaw schematics].
 **Googlers**: You can pick up a Dragonclaw development board at Chromestop.
 
 **Partners**: You can request a Dragonclaw development board from Google.
-***
-
-*** note
-Dragonclaw Rev 0.2 needs a [rework](#dragonclaw-rev-0.2-rework) for the FPC
-sensor to work while being powered through Servo. All of the boards at Chromestop
-have already been reworked.
 ***
 <!-- mdformat on -->
 
@@ -57,16 +58,6 @@ This FPMCU board is Icetower Rev 0.1. |
 
 **Partners**: You can request an Icetower development board from Google.
 ***
-
-*** note
-The instructions below to flash the FPMCU using the [Servo Micro] and `flash_ec`
-do not work at the moment with the Icetower board.
-See details in this
-[bug report](https://issuetracker.google.com/177331210).
-
-The recommended workaround is to
-[use J-Link to flash the FPMCU](./fingerprint-debugging.md#flash).
-***
 <!-- mdformat on -->
 
 ### Servo
@@ -78,7 +69,7 @@ debug a running program.
 
 There are several variants of Servo and the fingerprint team uses the
 [Servo Micro](#servo-micro) for its simplicity. It lacks builtin JTAG/SWD
-support for single step debugging, but Dragonclaw v0.2 and Icetower v0.1 have an
+support for single step debugging, but Dragonclaw v0.3 and Icetower v0.1 have an
 [SWD connector](#servo-micro-swd) that can be used.
 
 [Servo Micro](#servo-micro) |
@@ -494,34 +485,6 @@ From the DUT, flash the firmware you copied:
 
 ## Troubleshooting
 
-### Dragonclaw Rev 0.2 Rework {#dragonclaw-rev-0.2-rework}
-
-<!-- mdformat off(b/139308852) -->
-*** note
-**NOTE**: All Dragonclaw v0.2 boards have been reworked, so it is not necessary
-to perform the rework yourself.
-***
-<!-- mdformat on -->
-
-Dragonclaw **Rev 0.2** has two load switches (`U4` and `U6`) that enable the
-1.8V power rail from the servo connector or motherboard connector. However, this
-switch is not compatible with 1.8V, so will always output 0V.
-
-The [rework document][Dragonclaw Rev 0.2 1.8V Rework] describes replacing these
-two switches with ones compatible with 1.8V.
-
-### Dragonclaw Rev 0.1 Servo Fix
-
-Dragonclaw **Rev 0.1** has a known issue with UART and JTAG. Most notably, this
-issue causes servo micro to fail to program the FPMCU over UART.
-
-This issue can be fixed with the following rework steps:
-
-*   Connect servo header pin 13 to pin 18
-*   Connect servo header pin 13 to pin 29
-
-![Dragonclaw servo fix diagram]
-
 ### Verify that servo and debugger are connected to USB {#servo-connected}
 
 Check whether servo is enumerating on USB. If you are using a debugger
@@ -594,7 +557,7 @@ Make sure that this interface is disabled:
 
 [Servo Micro]: ../images/servo_micro.jpg
 [Servo Micro with Dragonclaw]: ../images/servomicro_dragonclaw.jpg
-[Dragonclaw board]: ../images/dragonclaw_rev_0.2.jpg
+[Dragonclaw board]: ../images/dragonclaw_v0.3.jpg
 [Dragonclaw servo fix diagram]: ../images/dragonclaw_servo_fix.jpg
 [Icetower board]: ../images/icetower_v0.1.jpg
 

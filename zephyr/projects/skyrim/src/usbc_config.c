@@ -193,6 +193,8 @@ int board_set_active_charge_port(int port)
 void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 			    int charge_mv)
 {
+	charge_ma = (charge_ma * CONFIG_BOARD_INPUT_CURRENT_SCALE_FACTOR) / 100;
+
 	charge_set_input_current_limit(
 		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }
@@ -227,6 +229,7 @@ void usb_pd_soc_interrupt(enum gpio_signal signal)
 	CPRINTSUSB("SOC PD Interrupt");
 }
 
+#ifdef CONFIG_CHARGER_ISL9241
 /* Round up 3250 max current to multiple of 128mA for ISL9241 AC prochot. */
 #define SKYRIM_AC_PROCHOT_CURRENT_MA 3328
 static void set_ac_prochot(void)
@@ -234,6 +237,7 @@ static void set_ac_prochot(void)
 	isl9241_set_ac_prochot(CHARGER_SOLO, SKYRIM_AC_PROCHOT_CURRENT_MA);
 }
 DECLARE_HOOK(HOOK_INIT, set_ac_prochot, HOOK_PRIO_DEFAULT);
+#endif /* CONFIG_CHARGER_ISL9241 */
 
 void tcpc_alert_event(enum gpio_signal signal)
 {
