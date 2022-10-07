@@ -8,8 +8,10 @@
 #include "baseboard_usbc_config.h"
 #include "console.h"
 #include "cros_board_info.h"
+#include "driver/usb_mux/ps8743.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
+#include "usb_mux.h"
 #include "usbc/ppc.h"
 #include "variant_db_detection.h"
 
@@ -52,6 +54,13 @@ void bc12_interrupt(enum gpio_signal signal)
 	usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 }
 
+/* USB Mux C1 : board_init of PS8743 */
+int ps8743_eq_c1_setting(void)
+{
+	ps8743_write(usb_muxes[1].mux, PS8743_REG_USB_EQ_RX, 0x90);
+	return EC_SUCCESS;
+}
+
 static void board_usbc_init(void)
 {
 	if (board_has_syv_ppc()) {
@@ -72,13 +81,9 @@ DECLARE_HOOK(HOOK_INIT, board_usbc_init, HOOK_PRIO_POST_DEFAULT);
 void ppc_interrupt(enum gpio_signal signal)
 {
 	if (signal == GPIO_SIGNAL(DT_NODELABEL(usb_c0_ppc_int_odl))) {
-		if (board_has_syv_ppc()) {
-			syv682x_interrupt(0);
-		} else {
-			rt1739_interrupt(0);
-		}
+		ppc_chips[0].drv->interrupt(0);
 	}
 	if (signal == GPIO_SIGNAL(DT_ALIAS(gpio_usb_c1_ppc_int_odl))) {
-		syv682x_interrupt(1);
+		ppc_chips[1].drv->interrupt(1);
 	}
 }
