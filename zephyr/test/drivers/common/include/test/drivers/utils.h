@@ -432,6 +432,36 @@ int host_cmd_motion_sense_spoof(uint8_t sensor_num, uint8_t enable,
 				struct ec_response_motion_sense *response);
 
 /**
+ * @brief Call the keyboard wake angle motion_sense subcommand
+ *
+ * @param data Angle to set
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_kb_wake_angle(
+	int16_t data, struct ec_response_motion_sense *response);
+
+/**
+ * @brief Call the lid angle motion_sense subcommand
+ *
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_lid_angle(struct ec_response_motion_sense *response);
+
+/**
+ * @brief Call the tablet mode lid angle threshold motion_sense subcommand
+ *
+ * @param lid_angle Lid angle for transitioning to tablet mode
+ * @param hys_degree Hysteresis or above transition
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_tablet_mode_lid_angle(
+	int16_t lid_angle, int16_t hys_degree,
+	struct ec_response_motion_sense *response);
+
+/**
  * Run the host command to get the PD discovery responses.
  *
  * @param port          The USB-C port number
@@ -491,6 +521,15 @@ void host_cmd_typec_control_usb_mux_set(int port,
  *			definitions for options)
  */
 void host_cmd_typec_control_clear_events(int port, uint32_t events);
+
+/**
+ * Run the host command to control PD port behavior, with the sub-command of
+ * TYPEC_CONTROL_COMMAND_BIST_SHARE_MODE
+ *
+ * @param port		The USB-C port number
+ * @param enable	enable bist share mode or not
+ */
+void host_cmd_typec_control_bist_share_mode(int port, int enable);
 
 struct host_events_ctx {
 	host_event_t lpc_host_events;

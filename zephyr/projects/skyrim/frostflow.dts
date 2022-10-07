@@ -30,81 +30,6 @@
 		};
 	};
 
-	/*
-	 * Note this is expected to vary per-board, so we keep it in the board
-	 * dts files.
-	 */
-	frostflow-fw-config {
-		compatible = "cros-ec,cbi-fw-config";
-
-		form-factor {
-			enum-name = "FW_FORM_FACTOR";
-			start = <0>;
-			size = <1>;
-
-			ff-clamshell {
-				compatible = "cros-ec,cbi-fw-config-value";
-				enum-name = "FW_FF_CLAMSHELL";
-				value = <0>;
-			};
-			ff-convertible {
-				compatible = "cros-ec,cbi-fw-config-value";
-				enum-name = "FW_FF_CONVERTIBLE";
-				value = <1>;
-				default;
-			};
-		};
-		io-db {
-			enum-name = "FW_IO_DB";
-			start = <6>;
-			size = <2>;
-
-			io-db-ps8811-ps8818 {
-				compatible = "cros-ec,cbi-fw-config-value";
-				enum-name = "FW_IO_DB_PS8811_PS8818";
-				value = <0>;
-			};
-		};
-
-		/*
-		 * FW_CONFIG field to enable fan or not.
-		 */
-		fan {
-			enum-name = "FW_FAN";
-			start = <10>;
-			size = <1>;
-
-			no-fan {
-				compatible = "cros-ec,cbi-fw-config-value";
-				enum-name = "FW_FAN_NOT_PRESENT";
-				value = <0>;
-			};
-			fan-present {
-				compatible = "cros-ec,cbi-fw-config-value";
-				enum-name = "FW_FAN_PRESENT";
-				value = <1>;
-				/*
-				 * Set as default so that unprovisioned
-				 * configs will run the fan regardless.
-				 */
-				default;
-			};
-		};
-
-		charger-option {
-			enum-name = "FW_CHARGER";
-			start = <11>;
-			size = <2>;
-
-			charger-option-isl9241 {
-				compatible = "cros-ec,cbi-fw-config-value";
-				enum-name = "FW_CHARGER_ISL9241";
-				value = <0>;
-				default;
-			};
-		};
-	};
-
 	/* Rotation matrices for motion sensors. */
 	motionsense-rotation-ref {
 		compatible = "cros-ec,motionsense-rotation-ref";
@@ -155,15 +80,14 @@
 };
 
 &i2c4_1 {
-	alt_charger: isl9538@9 {
-		compatible = "intersil,isl923x";
+	charger: isl9241@9 {
+		compatible = "intersil,isl9241";
 		status = "okay";
 		reg = <0x9>;
 	};
 };
 
 &usbc_port0 {
-	chg_alt = <&alt_charger>;
 	ppc = <&ppc_port0>;
 	usb-mux-chain-0 {
 		compatible = "cros-ec,usb-mux-chain";
@@ -182,4 +106,31 @@
 		usb-muxes = <&amd_fp6_port1 &ps8818_port1>;
 		alternative-chain;
 	};
+};
+
+&cros_kb_raw {
+	pinctrl-0 = <
+		&ksi0_gp31
+		&ksi1_gp30
+		&ksi2_gp27
+		&ksi3_gp26
+		&ksi4_gp25
+		&ksi5_gp24
+		&ksi6_gp23
+		&ksi7_gp22
+		&kso00_gp21
+		&kso01_gp20
+		&kso03_gp16
+		&kso04_gp15
+		&kso05_gp14
+		&kso06_gp13
+		&kso07_gp12
+		&kso08_gp11
+		&kso09_gp10
+		&kso10_gp07
+		&kso11_gp06
+		&kso12_gp05
+		&kso13_gp04
+		&kso14_gp82
+	>;
 };

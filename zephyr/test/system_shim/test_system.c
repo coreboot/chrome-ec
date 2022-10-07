@@ -3,9 +3,12 @@
  * found in the LICENSE file.
  */
 
+#include <setjmp.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/bbram.h>
+#include <zephyr/fff.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/shell/shell_dummy.h>
 #include <zephyr/ztest_assert.h>
 #include <zephyr/ztest_test_new.h>
 
@@ -21,7 +24,24 @@ LOG_MODULE_REGISTER(test);
 static char mock_data[64] =
 	"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@";
 
-ZTEST_SUITE(system, NULL, NULL, NULL, NULL, NULL);
+FAKE_VALUE_FUNC(uint64_t, cros_system_native_posix_deep_sleep_ticks,
+		const struct device *);
+FAKE_VALUE_FUNC(int, cros_system_native_posix_hibernate, const struct device *,
+		uint32_t, uint32_t);
+FAKE_VALUE_FUNC(const char *, cros_system_native_posix_get_chip_vendor,
+		const struct device *);
+FAKE_VALUE_FUNC(const char *, cros_system_native_posix_get_chip_name,
+		const struct device *);
+FAKE_VALUE_FUNC(const char *, cros_system_native_posix_get_chip_revision,
+		const struct device *);
+
+static void system_before_after(void *test_data)
+{
+	RESET_FAKE(cros_system_native_posix_deep_sleep_ticks);
+	RESET_FAKE(cros_system_native_posix_hibernate);
+}
+
+ZTEST_SUITE(system, NULL, NULL, system_before_after, system_before_after, NULL);
 
 ZTEST(system, test_bbram_get)
 {
@@ -73,4 +93,120 @@ ZTEST(system, test_system_set_get_scratchpad)
 	system_set_scratchpad(scratch_set);
 	system_get_scratchpad(&scratch_read);
 	zassert_equal(scratch_read, scratch_set);
+}
+
+static jmp_buf jmp_hibernate;
+
+static int _test_cros_system_native_posix_hibernate(const struct device *dev,
+						    uint32_t seconds,
+						    uint32_t microseconds)
+{
+	longjmp(jmp_hibernate, 1);
+
+	return 0;
+}
+
+ZTEST(system, test_system_hibernate)
+{
+	/*
+	 * Due to setjmp usage, this test provides no coverage, but does
+	 * actually cover the code. This is due to a bug in LCOV.
+	 */
+	const struct device *sys_dev = device_get_binding("CROS_SYSTEM");
+	int ret = setjmp(jmp_hibernate);
+	/* Validate 0th and last bit preserved*/
+	uint32_t secs = BIT(31) + 1;
+	uint32_t msecs = BIT(31) + 3;
+
+	zassert_not_null(sys_dev);
+
+	cros_system_native_posix_hibernate_fake.custom_fake =
+		_test_cros_system_native_posix_hibernate;
+
+	if (ret == 0) {
+		system_hibernate(secs, msecs);
+	}
+
+	zassert_not_equal(ret, 0);
+
+	zassert_equal(cros_system_native_posix_hibernate_fake.call_count, 1);
+	zassert_equal(cros_system_native_posix_hibernate_fake.arg0_val,
+		      sys_dev);
+	zassert_equal(cros_system_native_posix_hibernate_fake.arg1_val, secs);
+	zassert_equal(cros_system_native_posix_hibernate_fake.arg2_val, msecs);
+}
+
+ZTEST(system, test_system_hibernate__failure)
+{
+	const struct device *sys_dev = device_get_binding("CROS_SYSTEM");
+	/* Validate 0th and last bit preserved*/
+	uint32_t secs = BIT(31) + 1;
+	uint32_t msecs = BIT(31) + 3;
+
+	zassert_not_null(sys_dev);
+
+	cros_system_native_posix_hibernate_fake.return_val = -1;
+
+	system_hibernate(secs, msecs);
+
+	zassert_equal(cros_system_native_posix_hibernate_fake.call_count, 1);
+	zassert_equal(cros_system_native_posix_hibernate_fake.arg0_val,
+		      sys_dev);
+	zassert_equal(cros_system_native_posix_hibernate_fake.arg1_val, secs);
+	zassert_equal(cros_system_native_posix_hibernate_fake.arg2_val, msecs);
+}
+
+ZTEST(system, test_system_get_chip_values)
+{
+	const struct device *sys_dev = device_get_binding("CROS_SYSTEM");
+
+	zassert_not_null(sys_dev);
+
+	/* Vendor */
+	cros_system_native_posix_get_chip_vendor_fake.return_val = "a";
+	zassert_mem_equal(system_get_chip_vendor(), "a", sizeof("a"));
+	zassert_equal(cros_system_native_posix_get_chip_vendor_fake.call_count,
+		      1);
+	zassert_equal(cros_system_native_posix_get_chip_vendor_fake.arg0_val,
+		      sys_dev);
+
+	/* Name */
+	cros_system_native_posix_get_chip_name_fake.return_val = "b";
+	zassert_mem_equal(system_get_chip_name(), "b", sizeof("b"));
+	zassert_equal(cros_system_native_posix_get_chip_name_fake.call_count,
+		      1);
+	zassert_equal(cros_system_native_posix_get_chip_name_fake.arg0_val,
+		      sys_dev);
+
+	/* Revision */
+	cros_system_native_posix_get_chip_revision_fake.return_val = "c";
+	zassert_mem_equal(system_get_chip_revision(), "c", sizeof("c"));
+	zassert_equal(
+		cros_system_native_posix_get_chip_revision_fake.call_count, 1);
+	zassert_equal(cros_system_native_posix_get_chip_revision_fake.arg0_val,
+		      sys_dev);
+}
+
+ZTEST_USER(system, test_system_console_cmd__idlestats)
+{
+	const struct device *sys_dev = device_get_binding("CROS_SYSTEM");
+	const struct shell *shell_zephyr = get_ec_shell();
+	const char *outbuffer;
+	size_t buffer_size;
+
+	zassert_not_null(sys_dev);
+
+	shell_backend_dummy_clear_output(shell_zephyr);
+
+	k_sleep(K_SECONDS(1));
+	zassert_ok(shell_execute_cmd(shell_zephyr, "idlestats"), NULL);
+
+	/* Weakly verify contents */
+	outbuffer = shell_backend_dummy_get_output(shell_zephyr, &buffer_size);
+	zassert_not_equal(buffer_size, 0);
+	zassert_not_null(strstr(outbuffer, "Time spent in deep-sleep:"));
+	zassert_not_null(strstr(outbuffer, "Total time on:"));
+
+	zassert_equal(cros_system_native_posix_deep_sleep_ticks_fake.call_count,
+		      1);
 }
