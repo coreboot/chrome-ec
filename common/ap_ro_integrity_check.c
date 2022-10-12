@@ -46,7 +46,7 @@
  * to the number of ranges, so it's easier to debug and to make people consider
  * why they would need more than 32 ranges.
  */
-#define APRO_MAX_NUM_RANGES 32
+#define AP_RO_MAX_NUM_RANGES 32
 /* Values used for validity check of the flash_range structure fields. */
 #define MAX_SUPPORTED_FLASH_SIZE (32 * 1024 * 1024)
 #define MAX_SUPPORTED_RANGE_SIZE (4 * 1024 * 1024)
@@ -66,11 +66,6 @@ struct ro_range {
 	uint32_t range_size;
 };
 
-/* Maximum number of RO ranges this implementation supports. */
-struct ro_ranges {
-	struct ro_range ranges[APRO_MAX_NUM_RANGES];
-};
-
 /*
  * Payload of the vendor command communicating a variable number of flash
  * ranges to be checked and the total sha256.
@@ -79,7 +74,8 @@ struct ro_ranges {
  */
 struct ap_ro_check_payload {
 	uint8_t digest[SHA256_DIGEST_SIZE];
-	struct ro_range ranges[0];
+	/* Maximum number of RO ranges this implementation supports. */
+	struct ro_range ranges[AP_RO_MAX_NUM_RANGES];
 } __packed;
 
 /*
@@ -101,7 +97,7 @@ struct ap_ro_check_header {
  */
 BUILD_ASSERT(AP_RO_DATA_SPACE_SIZE >=
 	sizeof(struct ap_ro_check_header) + SHA256_DIGEST_SIZE +
-	APRO_MAX_NUM_RANGES * sizeof(struct ro_range));
+	AP_RO_MAX_NUM_RANGES * sizeof(struct ro_range));
 /* Format of the AP RO check information saved in the H1 flash page. */
 struct ap_ro_check {
 	struct ap_ro_check_header header;
@@ -387,7 +383,7 @@ static enum vendor_cmd_rc vc_seed_ap_ro_check(enum vendor_cmd_cc code,
 	vc_num_of_ranges =
 		(input_size - SHA256_DIGEST_SIZE) / sizeof(struct ro_range);
 
-	if (vc_num_of_ranges > APRO_MAX_NUM_RANGES) {
+	if (vc_num_of_ranges > AP_RO_MAX_NUM_RANGES) {
 		*response = ARCVE_TOO_MANY_RANGES;
 		return VENDOR_RC_BOGUS_ARGS;
 	}
@@ -431,8 +427,8 @@ static int verify_ap_ro_check_space(void)
 		return EC_ERROR_CRC;
 
 	data_size = p_chk->header.num_ranges * sizeof(struct ro_range) +
-		    sizeof(struct ap_ro_check_payload);
-	if (data_size > CONFIG_FLASH_BANK_SIZE) {
+		    offsetof(struct ap_ro_check_payload, ranges);
+	if (p_chk->header.num_ranges > AP_RO_MAX_NUM_RANGES) {
 		CPRINTS("%s: bogus number of ranges %d", __func__,
 			p_chk->header.num_ranges);
 		return EC_ERROR_CRC;
