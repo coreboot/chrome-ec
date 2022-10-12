@@ -23,6 +23,7 @@ target_sources(app PRIVATE
     src/console_cmd/button.c
     src/console_cmd/crash.c
     src/console_cmd/cutoff.c
+    src/console_cmd/ec_features.c
     src/console_cmd/gpio.c
     src/console_cmd/i2c_portmap.c
     src/console_cmd/md.c
@@ -35,6 +36,7 @@ target_sources(app PRIVATE
     src/console_cmd/power_button.c
     src/console_cmd/rtc.c
     src/console_cmd/rw.c
+    src/console_cmd/shared_mem.c
     src/console_cmd/sleepmask.c
     src/console_cmd/sleeptimeout.c
     src/console_cmd/sysinfo.c
