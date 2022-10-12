@@ -27,6 +27,8 @@
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ##args)
 
+/* Prevent releasing EC_RST_L for 60 seconds after AP RO verification fails */
+#define DELAY_EC_RST_RELEASE (60 * SECOND)
 /* FMAP must be aligned at 4K or larger power of 2 boundary. */
 #define LOWEST_FMAP_ALIGNMENT  (4 * 1024)
 #define FMAP_SIGNATURE	       "__FMAP__"
@@ -1078,11 +1080,18 @@ static void release_ec_reset_override(void)
 	enable_sleep(SLEEP_MASK_AP_RO_VERIFICATION);
 }
 
+/* The time in the future at which sleeping will be allowed. */
+static uint32_t ap_ro_failed_time;
+
 /* Only call this through a key combo. */
 void ap_ro_clear_ec_rst_override(void)
 {
 	if (!ec_rst_override())
 		return;
+	if ((get_time().le.lo - ap_ro_failed_time) < DELAY_EC_RST_RELEASE) {
+		CPRINTS("%s: too soon", __func__);
+		return;
+	}
 	apro_fail_status_cleared = 1;
 	release_ec_reset_override();
 	ap_ro_add_flash_event(APROF_FAIL_CLEARED);
@@ -1105,6 +1114,7 @@ static uint8_t ap_ro_failed_verification(enum ap_ro_verification_ev event)
 	apro_result = AP_RO_FAIL;
 	ap_ro_add_flash_event(event);
 	keep_ec_in_reset();
+	ap_ro_failed_time = get_time().le.lo;
 	/*
 	 * Map failures into EC_ERROR_CRC, this will make sure that in case this
 	 * was invoked by the operator keypress, the device will not continue
