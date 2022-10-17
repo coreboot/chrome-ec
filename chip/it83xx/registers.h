@@ -1337,6 +1337,8 @@ enum usbpd_port {
 #define IT83XX_ESPI_VWCTRL1    REG8(IT83XX_ESPI_VW_BASE+0x91)
 #define IT83XX_ESPI_VWCTRL2    REG8(IT83XX_ESPI_VW_BASE+0x92)
 #define IT83XX_ESPI_VWCTRL3    REG8(IT83XX_ESPI_VW_BASE+0x93)
+/* 1b: Refers to espi_reset# for pltrst */
+#define ESPI_PLTRST_ESPI_RESET BIT(4)
 
 /* eSPI Queue 0 */
 #define IT83XX_ESPI_QUEUE_BASE  0x00F03300
