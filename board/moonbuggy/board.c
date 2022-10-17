@@ -511,3 +511,15 @@ static void power_monitor(void)
 	}
 	hook_call_deferred(&power_monitor_data, delay);
 }
+
+static void deassert_reset(void)
+{
+	gpio_set_level(GPIO_SYS_RST_ODL, 1);
+}
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, deassert_reset, HOOK_PRIO_DEFAULT);
+
+static void assert_reset(void)
+{
+	gpio_set_level(GPIO_SYS_RST_ODL, 0);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN_COMPLETE, assert_reset, HOOK_PRIO_DEFAULT);
