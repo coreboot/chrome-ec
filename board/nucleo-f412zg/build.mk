@@ -10,11 +10,13 @@ board-y=board.o
 
 # Enable on device tests
 test-list-y=\
+       abort \
        aes \
        cec \
        compile_time_macros \
        crc \
        debug \
+       exception \
        flash_physical \
        flash_write_protect \
        mpu \

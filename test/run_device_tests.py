@@ -193,11 +193,13 @@ class AllTests:
     def get_public_tests(board_config: BoardConfig) -> List[TestConfig]:
         """Return public test configs for the specified board."""
         tests = [
+            TestConfig(test_name="abort"),
             TestConfig(test_name="aes"),
             TestConfig(test_name="always_memset"),
             TestConfig(test_name="cec"),
             TestConfig(test_name="cortexm_fpu"),
             TestConfig(test_name="crc"),
+            TestConfig(test_name="exception"),
             TestConfig(
                 test_name="flash_physical",
                 image_to_use=ImageType.RO,
@@ -244,6 +246,7 @@ class AllTests:
                 finish_regexes=[board_config.mpu_regex],
             ),
             TestConfig(test_name="mutex"),
+            TestConfig(test_name="panic"),
             TestConfig(test_name="pingpong"),
             TestConfig(test_name="printf"),
             TestConfig(test_name="queue"),

@@ -35,11 +35,9 @@ static struct panic_data *const pdata_ptr = PANIC_DATA_PTR;
 
 /* Common SW Panic reasons strings */
 const char *const panic_sw_reasons[] = {
-#ifdef CONFIG_SOFTWARE_PANIC
 	"PANIC_SW_DIV_ZERO",   "PANIC_SW_STACK_OVERFLOW", "PANIC_SW_PD_CRASH",
 	"PANIC_SW_ASSERT",     "PANIC_SW_WATCHDOG",	  "PANIC_SW_RNG",
 	"PANIC_SW_PMIC_FAULT",
-#endif
 };
 
 /**
@@ -49,7 +47,7 @@ const char *const panic_sw_reasons[] = {
  */
 int panic_sw_reason_is_valid(uint32_t reason)
 {
-	return (IS_ENABLED(CONFIG_SOFTWARE_PANIC) && reason >= PANIC_SW_BASE &&
+	return (reason >= PANIC_SW_BASE &&
 		(reason - PANIC_SW_BASE) < ARRAY_SIZE(panic_sw_reasons));
 }
 
@@ -128,10 +126,7 @@ test_mockable_static
 	void
 	complete_panic(int linenum)
 {
-	if (IS_ENABLED(CONFIG_SOFTWARE_PANIC))
-		software_panic(PANIC_SW_ASSERT, linenum);
-	else
-		panic_reboot();
+	software_panic(PANIC_SW_ASSERT, linenum);
 }
 
 #ifdef CONFIG_DEBUG_ASSERT_BRIEF
@@ -309,14 +304,10 @@ DECLARE_HOOK(HOOK_CHIPSET_RESET, panic_init, HOOK_PRIO_LAST);
  * Disable infinite recursion warning, since we're intentionally doing that
  * here.
  */
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Winfinite-recursion"
-#endif /* __clang__ */
+DISABLE_CLANG_WARNING("-Winfinite-recursion")
 #if __GNUC__ >= 12
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Winfinite-recursion"
-#endif /* __GNUC__ >= 12 */
+DISABLE_GCC_WARNING("-Winfinite-recursion")
+#endif
 static void stack_overflow_recurse(int n)
 {
 	ccprintf("+%d", n);
@@ -335,12 +326,10 @@ static void stack_overflow_recurse(int n)
 	 */
 	ccprintf("-%d", n);
 }
+ENABLE_CLANG_WARNING("-Winfinite-recursion")
 #if __GNUC__ >= 12
-#pragma GCC diagnostic pop
-#endif /* __GNUC__ >= 12 */
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif /* __clang__ */
+ENABLE_GCC_WARNING("-Winfinite-recursion")
+#endif
 #endif /* CONFIG_CMD_STACKOVERFLOW */
 
 /*****************************************************************************/
