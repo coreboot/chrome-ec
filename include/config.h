@@ -1670,12 +1670,6 @@
 #define CONFIG_COMMON_PANIC_OUTPUT
 
 /*
- * Store a panic log and halt the system for a software-related reasons, such as
- * stack overflow or assertion failure.
- */
-#undef CONFIG_SOFTWARE_PANIC
-
-/*
  * Certain platforms(e.g. eve, poppy) cannot retain panic info in data ram since
  * VCC is powered down on EC reset. On such platforms, panic data needs to be
  * saved/restored to persistent storage by using chip specific
@@ -4495,6 +4489,9 @@
  * direct the EC to enter a mode. This requires AP software support.
  */
 #undef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
+
+/* Allow the AP to compose VDMs for us to send */
+#undef CONFIG_USB_PD_VDM_AP_CONTROL
 
 /* Supports DP as UFP-D and requires HPD to DP_ATTEN converter */
 #undef CONFIG_USB_PD_ALT_MODE_UFP_DP

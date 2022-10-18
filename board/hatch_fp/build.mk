@@ -26,6 +26,7 @@ endif
 # Do not build rsa test because this board uses RSA exponent 3 and the rsa test
 # will fail on device.
 test-list-y=\
+       abort \
        aes \
        always_memset \
        cec \
@@ -33,12 +34,14 @@ test-list-y=\
        cortexm_fpu \
        crc \
        debug \
+       exception \
        flash_physical \
        flash_write_protect \
        fpsensor \
        fpsensor_hw \
        mpu \
        mutex \
+       panic \
        panic_data \
        pingpong \
        printf \
