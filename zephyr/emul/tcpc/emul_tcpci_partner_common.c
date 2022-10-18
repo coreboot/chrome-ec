@@ -30,6 +30,8 @@ void tcpci_partner_common_hard_reset_as_role(struct tcpci_partner_data *data,
 	data->power_role = power_role;
 	data->data_role = power_role == PD_ROLE_SOURCE ? PD_ROLE_DFP :
 							 PD_ROLE_UFP;
+	data->vconn_role = power_role == PD_ROLE_SOURCE ? PD_ROLE_VCONN_SRC :
+							  PD_ROLE_VCONN_OFF;
 	data->displayport_configured = false;
 	data->entered_svid = 0;
 	atomic_clear(&data->mode_enter_attempts);
@@ -502,7 +504,6 @@ static void tcpci_partner_common_reset(struct tcpci_partner_data *data)
 	data->sop_recv_msg_id = -1;
 	data->sop_prime_recv_msg_id = -1;
 	data->in_soft_reset = false;
-	data->vconn_role = PD_ROLE_VCONN_OFF;
 	tcpci_partner_stop_sender_response_timer(data);
 	tcpci_partner_common_clear_ams_ctrl_msg(data);
 }
@@ -874,6 +875,12 @@ static enum tcpci_partner_handler_res
 tcpci_partner_common_vconn_swap_handler(struct tcpci_partner_data *data)
 {
 	tcpci_partner_common_set_ams_ctrl_msg(data, PD_CTRL_VCONN_SWAP);
+
+	if (!data->vconn_supported) {
+		tcpci_partner_send_control_msg(data, PD_CTRL_NOT_SUPPORTED, 0);
+		tcpci_partner_common_clear_ams_ctrl_msg(data);
+		return TCPCI_PARTNER_COMMON_MSG_HANDLED;
+	}
 
 	tcpci_partner_send_control_msg(data, PD_CTRL_ACCEPT, 0);
 
@@ -1520,6 +1527,7 @@ void tcpci_partner_init(struct tcpci_partner_data *data, enum pd_rev_type rev)
 	data->send_goodcrc = true;
 
 	data->rev = rev;
+	data->vconn_supported = true;
 
 	data->ops.transmit = tcpci_partner_transmit_op;
 	data->ops.rx_consumed = tcpci_partner_rx_consumed_op;
@@ -1534,4 +1542,10 @@ void tcpci_partner_init(struct tcpci_partner_data *data, enum pd_rev_type rev)
 	tcpci_partner_reset_battery_capability_state(data);
 
 	data->cable = NULL;
+}
+
+void tcpci_partner_set_vconn_support(struct tcpci_partner_data *data,
+				     bool vconn_supported)
+{
+	data->vconn_supported = vconn_supported;
 }
