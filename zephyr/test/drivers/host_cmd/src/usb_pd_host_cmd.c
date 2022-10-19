@@ -138,5 +138,43 @@ ZTEST_USER(usb_pd_host_cmd, test_typec_discovery_invalid_args)
 	zassert_equal(host_command_process(&args), EC_RES_INVALID_PARAM);
 }
 
+ZTEST_USER(usb_pd_host_cmd, test_typec_control_invalid_args)
+{
+	struct ec_params_typec_control params = {
+		.port = 0,
+		.command = TYPEC_CONTROL_COMMAND_TBT_UFP_REPLY,
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_CONTROL, 0, params);
+
+	/* Setting the TBT UFP responses is not supported by default. */
+	zassert_equal(host_command_process(&args), EC_RES_UNAVAILABLE);
+
+	/* Neither is mux setting. */
+	params.command = TYPEC_CONTROL_COMMAND_USB_MUX_SET;
+	zassert_equal(host_command_process(&args), EC_RES_INVALID_PARAM);
+
+	/* This is not a valid enum value but should be representable. */
+	params.command = 0xff;
+	zassert_equal(host_command_process(&args), EC_RES_INVALID_PARAM);
+}
+
+ZTEST_USER(usb_pd_host_cmd, test_typec_status_invalid_args)
+{
+	struct ec_params_typec_status params = {
+		.port = 100,
+	};
+	struct ec_response_typec_status response;
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND(EC_CMD_TYPEC_STATUS, 0, response, params);
+
+	/* An invalid port should result in an error. */
+	zassert_equal(host_command_process(&args), EC_RES_INVALID_PARAM);
+
+	params.port = 0;
+	args.response_max = sizeof(struct ec_response_typec_status) - 1;
+	zassert_equal(host_command_process(&args), EC_RES_RESPONSE_TOO_BIG);
+}
+
 ZTEST_SUITE(usb_pd_host_cmd, drivers_predicate_post_main, NULL, NULL, NULL,
 	    NULL);
