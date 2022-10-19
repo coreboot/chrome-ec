@@ -324,6 +324,39 @@ static void sha_final_into_block_digest(union sha_ctx *ctx, void *block_digest,
 					size_t size);
 
 /*
+ * Current AP RO verification config setting version
+ */
+#define ARV_CONFIG_SETTING_CURRENT_VERSION 0x01
+
+/*
+ * AP RO verification config setting command choices
+ */
+enum arv_config_setting_command_e {
+	arv_config_setting_command_spi_addressing_mode = 0,
+	arv_config_setting_command_write_protect_descriptors = 1,
+};
+
+/*
+ * AP RO verification config setting state
+ */
+enum arv_config_setting_state_e {
+	arv_config_setting_state_present = 0,
+	arv_config_setting_state_not_present = 1,
+	arv_config_setting_state_corrupted = 2,
+	arv_config_setting_state_invalid = 3,
+};
+
+/*
+ * AP RO verification SPI read/write addressing mode configuration choices
+ */
+enum arv_config_spi_addr_mode_choice_e {
+	arv_config_spi_addr_mode_choice_none = 0,
+	arv_config_spi_addr_mode_choice_get = 1,
+	arv_config_spi_addr_mode_choice_set_3byte = 2,
+	arv_config_spi_addr_mode_choice_set_4byte = 3,
+};
+
+/*
  * This by far exceeds the largest vendor command response size we ever
  * expect.
  */
@@ -382,6 +415,8 @@ static const struct option_container cmd_line_options[] = {
 	{{"binvers", no_argument, NULL, 'b'},
 	 "Report versions of Cr50 image's "
 	 "RW and RO headers, do not update"},
+	{{"apro_config_spi_mode", optional_argument, NULL, 'C'},
+	 "Get/set the ap ro verify spi mode either to `3byte` or `4byte`"},
 	{{"corrupt", no_argument, NULL, 'c'},
 	 "Corrupt the inactive rw"},
 	{{"dauntless", no_argument, NULL, 'D'},
@@ -2635,6 +2670,99 @@ static int process_get_apro_boot_status(struct transfer_descriptor *td)
 	return 0;
 }
 
+static int process_arv_config_spi_addr_mode(struct transfer_descriptor *td,
+					int arv_config_spi_addr_mode)
+{
+	enum ap_ro_config_spi_mode_e {
+		ap_ro_spi_config_3byte = 0,
+		ap_ro_spi_config_4byte = 1,
+	};
+
+	struct __attribute__((__packed__)) ap_ro_config_spi_mode_msg {
+		uint8_t version;
+		uint8_t command;
+		uint8_t state;
+		uint8_t mode;
+	};
+
+	struct ap_ro_config_spi_mode_msg msg = {
+		.version = ARV_CONFIG_SETTING_CURRENT_VERSION,
+		.command = arv_config_setting_command_spi_addressing_mode,
+		.state = arv_config_setting_state_present,
+		.mode = ap_ro_spi_config_4byte
+	};
+	size_t response_size = sizeof(msg);
+	int rv = 0;
+
+	switch (arv_config_spi_addr_mode) {
+	case arv_config_spi_addr_mode_choice_get:
+		rv = send_vendor_command(td, VENDOR_CC_GET_AP_RO_VERIFY_SETTING,
+			&msg, sizeof(msg), &msg, &response_size);
+		if (rv != VENDOR_RC_SUCCESS) {
+			fprintf(stderr,
+				"Error %d getting ap ro spi addr mode\n",
+				rv);
+			return update_error;
+		}
+
+		if (response_size != sizeof(msg)) {
+			fprintf(stderr,
+				"Error getting ap ro spi addr mode response\n");
+			return update_error;
+		}
+
+		if (msg.state != arv_config_setting_state_present) {
+			switch (msg.state) {
+			case arv_config_setting_state_not_present:
+				fprintf(stderr, "not provisioned\n");
+				break;
+			case arv_config_setting_state_corrupted:
+				fprintf(stderr, "corrupted\n");
+				break;
+			case arv_config_setting_state_invalid:
+				fprintf(stderr, "invalid\n");
+				break;
+			default:
+				fprintf(stderr,
+					"unexpected message response state\n");
+				return update_error;
+			}
+			return 0;
+		}
+
+		switch (msg.mode) {
+		case ap_ro_spi_config_3byte:
+			fprintf(stderr, "3byte\n");
+			break;
+		case ap_ro_spi_config_4byte:
+			fprintf(stderr, "4byte\n");
+			break;
+		default:
+			fprintf(stderr, "unknown spi mode\n");
+			return update_error;
+		}
+
+		break;
+	case arv_config_spi_addr_mode_choice_set_3byte:
+		msg.mode = ap_ro_spi_config_3byte;
+		/* Fallthrough */
+	case arv_config_spi_addr_mode_choice_set_4byte:
+		/* The default is 4byte addressing */
+		rv = send_vendor_command(td, VENDOR_CC_SET_AP_RO_VERIFY_SETTING,
+			&msg, sizeof(msg), &msg, &response_size);
+		if (rv != VENDOR_RC_SUCCESS) {
+			fprintf(stderr,
+				"Error %d setting ap ro spi addr mode\n", rv);
+			return update_error;
+		}
+		break;
+	default:
+		return update_error;
+	}
+
+	return 0;
+}
+
 static int process_get_boot_mode(struct transfer_descriptor *td)
 {
 	size_t response_size;
@@ -3404,6 +3532,8 @@ int main(int argc, char *argv[])
 	bool show_machine_output = false;
 	int tstamp = 0;
 	const char *tstamp_arg = NULL;
+	enum arv_config_spi_addr_mode_choice_e arv_config_spi_addr_mode =
+		arv_config_spi_addr_mode_choice_none;
 
 	const char *exclusive_opt_error =
 		"Options -a, -s and -t are mutually exclusive\n";
@@ -3485,6 +3615,18 @@ int main(int argc, char *argv[])
 				start_apro_verify = 1;
 			else
 				get_apro_boot_status = 1;
+			break;
+		case 'C':
+			if (optarg && !strncmp(optarg, "3byte", strlen(optarg)))
+				arv_config_spi_addr_mode =
+				arv_config_spi_addr_mode_choice_set_3byte;
+			else if (optarg && !strncmp(optarg, "4byte",
+					strlen(optarg)))
+				arv_config_spi_addr_mode =
+				arv_config_spi_addr_mode_choice_set_4byte;
+			else
+				arv_config_spi_addr_mode =
+				arv_config_spi_addr_mode_choice_get;
 			break;
 		case 'd':
 			if (!parse_vidpid(optarg, &vid, &pid)) {
@@ -3627,6 +3769,8 @@ int main(int argc, char *argv[])
 	image_magic = is_dauntless ? MAGIC_DAUNTLESS : MAGIC_HAVEN;
 
 	if ((bid_action == bid_none) &&
+		(arv_config_spi_addr_mode ==
+			arv_config_spi_addr_mode_choice_none) &&
 	    !ccd_info &&
 	    !ccd_lock &&
 	    !ccd_open &&
@@ -3770,6 +3914,10 @@ int main(int argc, char *argv[])
 
 	if (erase_ap_ro_hash)
 		process_erase_ap_ro_hash(&td);
+
+	if (arv_config_spi_addr_mode)
+		exit(process_arv_config_spi_addr_mode(&td,
+			arv_config_spi_addr_mode));
 
 	if (data || show_fw_ver) {
 
