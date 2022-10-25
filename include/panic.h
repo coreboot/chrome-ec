@@ -81,6 +81,8 @@ enum panic_arch {
 #define PANIC_DATA_FLAG_OLD_HOSTCMD    (1 << 2)
 /* Already reported via host event */
 #define PANIC_DATA_FLAG_OLD_HOSTEVENT  (1 << 3)
+/* The data was truncated to fit panic info host cmd */
+#define PANIC_DATA_FLAG_TRUNCATED      (1 << 4)
 
 /**
  * Write a string to the panic reporting device
