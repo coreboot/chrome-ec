@@ -229,10 +229,18 @@ DECLARE_CONSOLE_COMMAND(panicinfo, command_panicinfo,
 
 int host_command_panic_info(struct host_cmd_handler_args *args)
 {
+	uint32_t pdata_size = pdata_ptr->struct_size;
+
 	if (pdata_ptr->magic == PANIC_DATA_MAGIC) {
-		ASSERT(pdata_ptr->struct_size <= args->response_max);
-		memcpy(args->response, pdata_ptr, pdata_ptr->struct_size);
-		args->response_size = pdata_ptr->struct_size;
+		if (pdata_size > args->response_max) {
+			panic_printf("Panic data size %d is too "
+				     "large, truncating to %d\n",
+				     pdata_size, args->response_max);
+			pdata_size = args->response_max;
+			pdata_ptr->flags |= PANIC_DATA_FLAG_TRUNCATED;
+		}
+		memcpy(args->response, pdata_ptr, pdata_size);
+		args->response_size = pdata_size;
 
 		/* Data has now been returned */
 		pdata_ptr->flags |= PANIC_DATA_FLAG_OLD_HOSTCMD;
