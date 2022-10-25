@@ -53,6 +53,9 @@ config LINK_TEST_SUITE_POWER_HOST_SLEEP
 config LINK_TEST_SUITE_RT9490
 	bool "Link and test the rt9490 tests"
 
+config LINK_TEST_SUITE_SHIM_GPIO_ID
+	bool "Link and run the gpio tests"
+
 config LINK_TEST_SUITE_SHIM_PWM_HC
 	bool "Link and run the shim pwm_hc tests"
 
@@ -79,6 +82,9 @@ config LINK_TEST_SUITE_USB_RETIMER_FW_UPDATE
 
 config LINK_TEST_SUITE_USBC_ALT_MODE
 	bool "Link and test the usbc_alt_mode tests"
+
+config LINK_TEST_SUITE_USBC_CONSOLE_PD
+	bool"Link and test the usbc_console_pd tests"
 
 config LINK_TEST_SUITE_USBC_OCP
 	bool "Link tests for common USBC OCP code"
