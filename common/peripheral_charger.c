@@ -26,46 +26,48 @@ static struct queue const host_events =
 	QUEUE_NULL(PCHG_EVENT_QUEUE_SIZE, uint32_t);
 struct mutex host_event_mtx;
 
-static void pchg_queue_event(struct pchg *ctx, enum pchg_event event)
+/*
+ * Events and errors to be reported to the host in each chipset state.
+ *
+ * Off:     None
+ * Suspend: Device attach or detach (for wake-up)
+ * On:      SoC change and all other events and new errors except FW update.
+ *          FW update events are separately reported.
+ *
+ * TODO:Allow the host to update the masks.
+ */
+struct pchg_policy_t pchg_policy_on = {
+	.evt_mask =
+		BIT(PCHG_EVENT_IRQ) | BIT(PCHG_EVENT_RESET) |
+		BIT(PCHG_EVENT_INITIALIZED) | BIT(PCHG_EVENT_ENABLED) |
+		BIT(PCHG_EVENT_DISABLED) | BIT(PCHG_EVENT_DEVICE_DETECTED) |
+		BIT(PCHG_EVENT_DEVICE_CONNECTED) | BIT(PCHG_EVENT_DEVICE_LOST) |
+		BIT(PCHG_EVENT_CHARGE_STARTED) | BIT(PCHG_EVENT_CHARGE_UPDATE) |
+		BIT(PCHG_EVENT_CHARGE_ENDED) | BIT(PCHG_EVENT_CHARGE_STOPPED) |
+		BIT(PCHG_EVENT_ERROR) | BIT(PCHG_EVENT_IN_NORMAL) |
+		BIT(PCHG_EVENT_ENABLE) | BIT(PCHG_EVENT_DISABLE),
+	.err_mask = GENMASK(0, PCHG_ERROR_COUNT - 1),
+};
+
+struct pchg_policy_t pchg_policy_suspend = {
+	.evt_mask = BIT(PCHG_EVENT_DEVICE_DETECTED) |
+		    BIT(PCHG_EVENT_DEVICE_LOST),
+	.err_mask = 0,
+};
+
+static const char *_text_mode(enum pchg_mode mode)
 {
-	mutex_lock(&ctx->mtx);
-	if (queue_add_unit(&ctx->events, &event) == 0) {
-		ctx->dropped_event_count++;
-		CPRINTS("ERR: Queue is full");
-	}
-	mutex_unlock(&ctx->mtx);
-}
+	static const char *const mode_names[] = {
+		[PCHG_MODE_NORMAL] = "NORMAL",
+		[PCHG_MODE_DOWNLOAD] = "DOWNLOAD",
+		[PCHG_MODE_PASSTHRU] = "PASSTHRU",
+	};
+	BUILD_ASSERT(ARRAY_SIZE(mode_names) == PCHG_MODE_COUNT);
 
-static void pchg_queue_host_event(struct pchg *ctx, uint32_t event)
-{
-	size_t len;
-
-	event |= EC_MKBP_PCHG_PORT_TO_EVENT(PCHG_CTX_TO_PORT(ctx));
-
-	mutex_lock(&host_event_mtx);
-	len = queue_add_unit(&host_events, &event);
-	mutex_unlock(&host_event_mtx);
-	if (len == 0) {
-		ctx->dropped_host_event_count++;
-		CPRINTS("ERR: Host event queue is full");
-		/* Send a reminder. */
-		mkbp_send_event(EC_MKBP_EVENT_PCHG);
-		return;
-	}
-
-	mkbp_send_event(EC_MKBP_EVENT_PCHG);
-}
-
-static const char *_text_state(enum pchg_state state)
-{
-	/* TODO: Use "S%d" for normal build. */
-	static const char *const state_names[] = EC_PCHG_STATE_TEXT;
-	BUILD_ASSERT(ARRAY_SIZE(state_names) == PCHG_STATE_COUNT);
-
-	if (state >= sizeof(state_names))
+	if (mode < 0 || mode >= PCHG_MODE_COUNT)
 		return "UNDEF";
 
-	return state_names[state];
+	return mode_names[mode];
 }
 
 static const char *_text_event(enum pchg_event event)
@@ -89,14 +91,13 @@ static const char *_text_event(enum pchg_event event)
 		[PCHG_EVENT_UPDATE_CLOSED] = "UPDATE_CLOSED",
 		[PCHG_EVENT_UPDATE_WRITTEN] = "UPDATE_WRITTEN",
 		[PCHG_EVENT_IN_NORMAL] = "IN_NORMAL",
-		[PCHG_EVENT_CHARGE_ERROR] = "CHARGE_ERROR",
-		[PCHG_EVENT_UPDATE_ERROR] = "UPDATE_ERROR",
-		[PCHG_EVENT_OTHER_ERROR] = "OTHER_ERROR",
+		[PCHG_EVENT_ERROR] = "ERROR",
 		[PCHG_EVENT_ENABLE] = "ENABLE",
 		[PCHG_EVENT_DISABLE] = "DISABLE",
 		[PCHG_EVENT_UPDATE_OPEN] = "UPDATE_OPEN",
 		[PCHG_EVENT_UPDATE_WRITE] = "UPDATE_WRITE",
 		[PCHG_EVENT_UPDATE_CLOSE] = "UPDATE_CLOSE",
+		[PCHG_EVENT_UPDATE_ERROR] = "UPDATE_ERROR",
 	};
 	BUILD_ASSERT(ARRAY_SIZE(event_names) == PCHG_EVENT_COUNT);
 
@@ -104,6 +105,84 @@ static const char *_text_event(enum pchg_event event)
 		return "UNDEF";
 
 	return event_names[event];
+}
+
+static const char *_text_error(uint32_t error)
+{
+	static const char *const error_names[] = {
+		[PCHG_ERROR_COMMUNICATION] = "COMMUNICATION",
+		[PCHG_ERROR_OVER_TEMPERATURE] = "OVER_TEMPERATURE",
+		[PCHG_ERROR_OVER_CURRENT] = "OVER_CURRENT",
+		[PCHG_ERROR_FOREIGN_OBJECT] = "FOREIGN_OBJECT",
+		[PCHG_ERROR_RESPONSE] = "RESPONSE",
+		[PCHG_ERROR_FW_VERSION] = "FW_VERSION",
+		[PCHG_ERROR_INVALID_FW] = "INVALID_FW",
+		[PCHG_ERROR_WRITE_FLASH] = "WRITE_FLASH",
+		[PCHG_ERROR_OTHER] = "OTHER",
+	};
+	BUILD_ASSERT(ARRAY_SIZE(error_names) == PCHG_ERROR_COUNT);
+	int ffs = __builtin_ffs(error) - 1;
+
+	if (0 <= ffs && ffs < PCHG_ERROR_COUNT)
+		return error_names[ffs];
+
+	return "UNDEF";
+}
+
+static void pchg_queue_event(struct pchg *ctx, enum pchg_event event)
+{
+	mutex_lock(&ctx->mtx);
+	if (queue_add_unit(&ctx->events, &event) == 0) {
+		ctx->dropped_event_count++;
+		CPRINTS("WARN: Queue is full.");
+	}
+	mutex_unlock(&ctx->mtx);
+}
+
+static void pchg_queue_host_event(struct pchg *ctx, uint32_t event)
+{
+	int len;
+	size_t i;
+	uint32_t last_event;
+
+	event |= EC_MKBP_PCHG_PORT_TO_EVENT(PCHG_CTX_TO_PORT(ctx));
+
+	mutex_lock(&host_event_mtx);
+	i = queue_count(&host_events);
+	if (i > 0) {
+		queue_peek_units(&host_events, &last_event, i - 1, 1);
+		if (last_event != event)
+			/* New event */
+			len = queue_add_unit(&host_events, &event);
+		else
+			/* Same event already in a queue. */
+			len = -1;
+	} else {
+		len = queue_add_unit(&host_events, &event);
+	}
+	mutex_unlock(&host_event_mtx);
+
+	if (len < 0) {
+		CPRINTS("INFO: Skipped back-to-back host event");
+	} else if (len == 0) {
+		ctx->dropped_host_event_count++;
+		CPRINTS("WARN: Host event queue is full");
+	}
+
+	mkbp_send_event(EC_MKBP_EVENT_PCHG);
+}
+
+static const char *_text_state(enum pchg_state state)
+{
+	/* TODO: Use "S%d" for normal build. */
+	static const char *const state_names[] = EC_PCHG_STATE_TEXT;
+
+	BUILD_ASSERT(ARRAY_SIZE(state_names) == PCHG_STATE_COUNT);
+
+	if (state >= sizeof(state_names))
+		return "UNDEF";
+
+	return state_names[state];
 }
 
 static void _clear_port(struct pchg *ctx)
@@ -138,12 +217,14 @@ static enum pchg_state pchg_reset(struct pchg *ctx)
 			state = PCHG_STATE_INITIALIZED;
 			pchg_queue_event(ctx, PCHG_EVENT_ENABLE);
 		} else if (rv != EC_SUCCESS_IN_PROGRESS) {
+			ctx->event = PCHG_EVENT_ERROR;
+			ctx->error |= PCHG_ERROR_MASK(PCHG_ERROR_COMMUNICATION);
 			CPRINTS("ERR: Failed to reset to normal mode");
 		}
-	} else {
+	} else if (ctx->mode == PCHG_MODE_DOWNLOAD) {
 		state = PCHG_STATE_DOWNLOAD;
 		pchg_queue_event(ctx, PCHG_EVENT_UPDATE_OPEN);
-	}
+	} /* No-op for passthru mode */
 
 	return state;
 }
@@ -167,13 +248,6 @@ static void pchg_state_initialized(struct pchg *ctx)
 {
 	int rv;
 
-	if (ctx->event == PCHG_EVENT_ENABLE)
-		ctx->error &= ~PCHG_ERROR_HOST;
-
-	/* Spin in INITIALIZED until error condition is cleared. */
-	if (ctx->error)
-		return;
-
 	switch (ctx->event) {
 	case PCHG_EVENT_RESET:
 		ctx->state = pchg_reset(ctx);
@@ -182,8 +256,11 @@ static void pchg_state_initialized(struct pchg *ctx)
 		rv = ctx->cfg->drv->enable(ctx, true);
 		if (rv == EC_SUCCESS)
 			ctx->state = PCHG_STATE_ENABLED;
-		else if (rv != EC_SUCCESS_IN_PROGRESS)
+		else if (rv != EC_SUCCESS_IN_PROGRESS) {
+			ctx->event = PCHG_EVENT_ERROR;
+			ctx->error |= PCHG_ERROR_MASK(PCHG_ERROR_COMMUNICATION);
 			CPRINTS("ERR: Failed to enable");
+		}
 		break;
 	case PCHG_EVENT_ENABLED:
 		ctx->state = PCHG_STATE_ENABLED;
@@ -202,12 +279,14 @@ static void pchg_state_enabled(struct pchg *ctx)
 		ctx->state = pchg_reset(ctx);
 		break;
 	case PCHG_EVENT_DISABLE:
-		ctx->error |= PCHG_ERROR_HOST;
 		rv = ctx->cfg->drv->enable(ctx, false);
 		if (rv == EC_SUCCESS)
 			ctx->state = PCHG_STATE_INITIALIZED;
-		else if (rv != EC_SUCCESS_IN_PROGRESS)
+		else if (rv != EC_SUCCESS_IN_PROGRESS) {
+			ctx->event = PCHG_EVENT_ERROR;
+			ctx->error |= PCHG_ERROR_MASK(PCHG_ERROR_COMMUNICATION);
 			CPRINTS("ERR: Failed to disable");
+		}
 		break;
 	case PCHG_EVENT_DISABLED:
 		ctx->state = PCHG_STATE_INITIALIZED;
@@ -237,12 +316,14 @@ static void pchg_state_detected(struct pchg *ctx)
 		ctx->state = pchg_reset(ctx);
 		break;
 	case PCHG_EVENT_DISABLE:
-		ctx->error |= PCHG_ERROR_HOST;
 		rv = ctx->cfg->drv->enable(ctx, false);
 		if (rv == EC_SUCCESS)
 			ctx->state = PCHG_STATE_INITIALIZED;
-		else if (rv != EC_SUCCESS_IN_PROGRESS)
+		else if (rv != EC_SUCCESS_IN_PROGRESS) {
+			ctx->event = PCHG_EVENT_ERROR;
+			ctx->error |= PCHG_ERROR_MASK(PCHG_ERROR_COMMUNICATION);
 			CPRINTS("ERR: Failed to disable");
+		}
 		break;
 	case PCHG_EVENT_DISABLED:
 		ctx->state = PCHG_STATE_INITIALIZED;
@@ -273,12 +354,14 @@ static void pchg_state_connected(struct pchg *ctx)
 		ctx->state = pchg_reset(ctx);
 		break;
 	case PCHG_EVENT_DISABLE:
-		ctx->error |= PCHG_ERROR_HOST;
 		rv = ctx->cfg->drv->enable(ctx, false);
 		if (rv == EC_SUCCESS)
 			ctx->state = PCHG_STATE_INITIALIZED;
-		else if (rv != EC_SUCCESS_IN_PROGRESS)
+		else if (rv != EC_SUCCESS_IN_PROGRESS) {
+			ctx->event = PCHG_EVENT_ERROR;
+			ctx->error |= PCHG_ERROR_MASK(PCHG_ERROR_COMMUNICATION);
 			CPRINTS("ERR: Failed to disable");
+		}
 		break;
 	case PCHG_EVENT_DISABLED:
 		ctx->state = PCHG_STATE_INITIALIZED;
@@ -289,9 +372,6 @@ static void pchg_state_connected(struct pchg *ctx)
 	case PCHG_EVENT_DEVICE_LOST:
 		ctx->battery_percent = 0;
 		ctx->state = PCHG_STATE_ENABLED;
-		break;
-	case PCHG_EVENT_CHARGE_ERROR:
-		ctx->state = PCHG_STATE_INITIALIZED;
 		break;
 	default:
 		break;
@@ -307,12 +387,14 @@ static void pchg_state_charging(struct pchg *ctx)
 		ctx->state = pchg_reset(ctx);
 		break;
 	case PCHG_EVENT_DISABLE:
-		ctx->error |= PCHG_ERROR_HOST;
 		rv = ctx->cfg->drv->enable(ctx, false);
 		if (rv == EC_SUCCESS)
 			ctx->state = PCHG_STATE_INITIALIZED;
-		else if (rv != EC_SUCCESS_IN_PROGRESS)
+		else if (rv != EC_SUCCESS_IN_PROGRESS) {
+			ctx->event = PCHG_EVENT_ERROR;
+			ctx->error |= PCHG_ERROR_MASK(PCHG_ERROR_COMMUNICATION);
 			CPRINTS("ERR: Failed to disable");
+		}
 		break;
 	case PCHG_EVENT_DISABLED:
 		ctx->state = PCHG_STATE_INITIALIZED;
@@ -322,9 +404,6 @@ static void pchg_state_charging(struct pchg *ctx)
 	case PCHG_EVENT_DEVICE_LOST:
 		ctx->battery_percent = 0;
 		ctx->state = PCHG_STATE_ENABLED;
-		break;
-	case PCHG_EVENT_CHARGE_ERROR:
-		ctx->state = PCHG_STATE_INITIALIZED;
 		break;
 	case PCHG_EVENT_CHARGE_ENDED:
 	case PCHG_EVENT_CHARGE_STOPPED:
@@ -407,6 +486,25 @@ static void pchg_state_downloading(struct pchg *ctx)
 	}
 }
 
+static int pchg_should_notify(struct pchg *ctx, enum pchg_chipset_state state,
+			      uint32_t prev_error, uint8_t prev_battery)
+{
+	if (ctx->event == PCHG_EVENT_ERROR) {
+		uint32_t err = ctx->error & ctx->policy[state]->err_mask;
+		/* Report only 0->1. */
+		return ((err ^ prev_error) & err) ? 1 : 0;
+	}
+
+	if (BIT(ctx->event) & ctx->policy[state]->evt_mask) {
+		if (ctx->event == PCHG_EVENT_CHARGE_UPDATE)
+			/* Report only new SoC. */
+			return ctx->battery_percent != prev_battery;
+		return 1;
+	}
+
+	return 0;
+}
+
 /**
  * Process an event.
  *
@@ -428,6 +526,7 @@ static int pchg_run(struct pchg *ctx)
 {
 	enum pchg_state previous_state = ctx->state;
 	uint8_t previous_battery = ctx->battery_percent;
+	uint32_t previous_error = ctx->error;
 	int port = PCHG_CTX_TO_PORT(ctx);
 	int rv;
 
@@ -442,11 +541,17 @@ static int pchg_run(struct pchg *ctx)
 	CPRINTS("P%d Run in STATE_%s for EVENT_%s", port,
 		_text_state(ctx->state), _text_event(ctx->event));
 
+	/*
+	 * IRQ event is further translated to an actual event unless we're
+	 * in passthru mode, where IRQ events will be passed to the host.
+	 */
 	if (ctx->event == PCHG_EVENT_IRQ) {
-		rv = ctx->cfg->drv->get_event(ctx);
-		if (rv) {
-			CPRINTS("ERR: Failed to get event (%d)", rv);
-			return 0;
+		if (ctx->mode != PCHG_MODE_PASSTHRU) {
+			rv = ctx->cfg->drv->get_event(ctx);
+			if (rv) {
+				CPRINTS("ERR: Failed to get event (%d)", rv);
+				return 0;
+			}
 		}
 		CPRINTS("  EVENT_%s", _text_event(ctx->event));
 	}
@@ -490,38 +595,29 @@ static int pchg_run(struct pchg *ctx)
 	if (ctx->battery_percent != previous_battery)
 		CPRINTS("Battery %u%%", ctx->battery_percent);
 
-	/*
-	 * Notify the host of
-	 * - [S0] Charge update with SoC change and all other events except
-	 *   FW update events.
-	 * - [S3/S0IX] Device attach or detach (for wake-up)
-	 * - [S5/G3] No events.
-	 */
-	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
-		return 0;
+	if (ctx->event == PCHG_EVENT_ERROR) {
+		/* Print (only one) new error. */
+		uint32_t err = (ctx->error ^ previous_error) & ctx->error;
 
-	if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND)) {
+		if (err)
+			CPRINTS("ERROR_%s", _text_error(err));
+	}
+
+	if (chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		/* Chipset off */
+		return 0;
+	else if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND)) {
+		/* Chipset in suspend */
 		if (IS_ENABLED(CONFIG_LID_SWITCH) && !lid_is_open())
 			/* Don't wake up if the lid is closed. */
 			return 0;
-		return (ctx->event == PCHG_EVENT_DEVICE_DETECTED ||
-			ctx->event == PCHG_EVENT_DEVICE_LOST);
+		return pchg_should_notify(ctx, PCHG_CHIPSET_STATE_SUSPEND,
+					  previous_error, previous_battery);
+	} else {
+		/* Chipset on */
+		return pchg_should_notify(ctx, PCHG_CHIPSET_STATE_ON,
+					  previous_error, previous_battery);
 	}
-
-	if (ctx->event == PCHG_EVENT_CHARGE_UPDATE)
-		return ctx->battery_percent != previous_battery;
-
-	/* Don't report FW update events because they're separately reported. */
-	if (ctx->event == PCHG_EVENT_UPDATE_OPENED ||
-	    ctx->event == PCHG_EVENT_UPDATE_CLOSED ||
-	    ctx->event == PCHG_EVENT_UPDATE_WRITTEN ||
-	    ctx->event == PCHG_EVENT_UPDATE_ERROR ||
-	    ctx->event == PCHG_EVENT_UPDATE_OPEN ||
-	    ctx->event == PCHG_EVENT_UPDATE_WRITE ||
-	    ctx->event == PCHG_EVENT_UPDATE_CLOSE)
-		return 0;
-
-	return ctx->event != PCHG_EVENT_NONE;
 }
 
 void pchg_irq(enum gpio_signal signal)
@@ -629,7 +725,7 @@ DECLARE_HOST_COMMAND(EC_CMD_PCHG_COUNT, hc_pchg_count, EC_VER_MASK(0));
 
 static enum ec_status hc_pchg(struct host_cmd_handler_args *args)
 {
-	const struct ec_params_pchg *p = args->params;
+	const struct ec_params_pchg_v3 *p = args->params;
 	struct ec_response_pchg_v2 *r = args->response;
 	int port = p->port;
 	struct pchg *ctx;
@@ -642,6 +738,7 @@ static enum ec_status hc_pchg(struct host_cmd_handler_args *args)
 		return EC_RES_INVALID_PARAM;
 
 	ctx = &pchgs[port];
+	mutex_lock(&ctx->mtx);
 
 	if (ctx->state == PCHG_STATE_CONNECTED &&
 	    ctx->battery_percent >= ctx->cfg->full_percent)
@@ -655,13 +752,21 @@ static enum ec_status hc_pchg(struct host_cmd_handler_args *args)
 	r->dropped_event_count = ctx->dropped_event_count;
 	r->dropped_host_event_count = ctx->dropped_host_event_count;
 
+	/* Clear error flags acked by the host. */
+	if (args->version > 2)
+		ctx->error &= ~p->error;
+
+	/* v2 and v3 have the same response struct. */
 	args->response_size = args->version == 1 ?
 				      sizeof(struct ec_response_pchg) :
 				      sizeof(*r);
 
+	mutex_unlock(&ctx->mtx);
+
 	return EC_RES_SUCCESS;
 }
-DECLARE_HOST_COMMAND(EC_CMD_PCHG, hc_pchg, EC_VER_MASK(1) | EC_VER_MASK(2));
+DECLARE_HOST_COMMAND(EC_CMD_PCHG, hc_pchg,
+		     EC_VER_MASK(1) | EC_VER_MASK(2) | EC_VER_MASK(3));
 
 int pchg_get_next_event(uint8_t *out)
 {
@@ -747,6 +852,23 @@ static enum ec_status hc_pchg_update(struct host_cmd_handler_args *args)
 		ctx->update.crc32 = p->crc32;
 		pchg_queue_event(ctx, PCHG_EVENT_UPDATE_CLOSE);
 		break;
+
+	case EC_PCHG_UPDATE_CMD_RESET:
+		HCPRINTS("Resetting");
+
+		gpio_disable_interrupt(ctx->cfg->irq_pin);
+		_clear_port(ctx);
+		ctx->cfg->drv->reset(ctx);
+		gpio_enable_interrupt(ctx->cfg->irq_pin);
+		break;
+
+	case EC_PCHG_UPDATE_CMD_ENABLE_PASSTHRU:
+		HCPRINTS("Enabling passthru mode");
+		mutex_lock(&ctx->mtx);
+		ctx->mode = PCHG_MODE_PASSTHRU;
+		mutex_unlock(&ctx->mtx);
+		break;
+
 	default:
 		return EC_RES_INVALID_PARAM;
 	}
@@ -775,6 +897,7 @@ static int cc_pchg(int argc, const char **argv)
 		ccprintf("P%d STATE_%s EVENT_%s SOC=%d%%\n", port,
 			 _text_state(ctx->state), _text_event(ctx->event),
 			 ctx->battery_percent);
+		ccprintf("mode=%s\n", _text_mode(ctx->mode));
 		ccprintf("error=0x%x dropped=%u fw_version=0x%x\n", ctx->error,
 			 ctx->dropped_event_count, ctx->fw_version);
 		return EC_SUCCESS;

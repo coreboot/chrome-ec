@@ -23,6 +23,9 @@ config LINK_TEST_SUITE_BUTTON
 config LINK_TEST_SUITE_CHARGESPLASH
 	bool "Link and test the chargesplash tests"
 
+config LINK_TEST_SUITE_COMMON_CHARGER
+	bool "Link and execute the common/charger.c tests"
+
 config LINK_TEST_SUITE_HOST_COMMANDS
 	bool "Link and test the host command tests"
 
@@ -74,6 +77,9 @@ config LINK_TEST_SUITE_USB_MALFUNCTION_SINK
 config LINK_TEST_SUITE_USB_PD_DPS
 	bool "Link and test the dps tests"
 
+config LINK_TEST_SUITE_USB_PD_FLAGS
+	bool "Link and test USB PD flags"
+
 config LINK_TEST_SUITE_USB_PORT_POWER_DUMB
 	bool "Link and test the usb_port_power_dumb tests"
 
@@ -102,5 +108,9 @@ config LINK_TEST_SUITE_USBC_VCONN_SWAP
 	bool "Link and test the usbc_vconn_swap tests"
 	help
 	  Include the test suite exercising VCONN Swap behaviors in the binary.
+
+config LINK_TEST_SUITE_CONSOLE
+	bool "Link and test the console tests"
+	select UART_INTERRUPT_DRIVEN
 
 source "Kconfig.zephyr"

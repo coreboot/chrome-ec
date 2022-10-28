@@ -1461,6 +1461,9 @@ enum cable_outlet {
 /* Voltage threshold to detect connection when presenting Rd */
 #define PD_SNK_VA_MV 250
 
+/* Maximum power consumption while in Sink Standby */
+#define PD_SNK_STDBY_MW 2500
+
 /* --- Policy layer functions --- */
 
 /** Schedules the interrupt handler for the TCPC on a high priority task. */
@@ -2903,18 +2906,19 @@ void pd_notify_event(int port, uint32_t event_mask);
 void pd_clear_events(int port, uint32_t clear_mask);
 
 /*
- * Requests a VDM Attention message be sent. Attention is the only SVDM message
- * that does not result in a response from the port partner. In addition, if
- * it's a DP Attention message, then it will be requested from outside of the
- * port's PD task.
+ * Requests a VDM REQ message be sent. It is assumed that this message may be
+ * coming from a task outside the PD task.
  *
  * @param port USB-C port number
  * @param *data pointer to the VDM Attention message
  * @param vdo_count number of VDOs (must be 1 or 2)
+ * @param tx_type partner type to transmit
  * @return EC_RES_SUCCESS if a VDM message is scheduled.
+ *         EC_RES_BUSY if a message is already pending
+ *         EC_RES_INVALID_PARAM if the parameters given are invalid
  */
-enum ec_status pd_request_vdm_attention(int port, const uint32_t *data,
-					int vdo_count);
+enum ec_status pd_request_vdm(int port, const uint32_t *data, int vdo_count,
+			      enum tcpci_msg_type tx_type);
 
 /*
  * Requests that the port enter the specified mode. A successful result just
