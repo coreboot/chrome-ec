@@ -3030,9 +3030,7 @@ static void pe_src_hard_reset_entry(int port)
 	pd_timer_enable(port, PE_TIMER_PS_HARD_RESET, PD_T_PS_HARD_RESET);
 
 	/* Clear error flags */
-	PE_CLR_MASK(port, BIT(PE_FLAGS_VDM_REQUEST_NAKED_FN) |
-				  BIT(PE_FLAGS_PROTOCOL_ERROR_FN) |
-				  BIT(PE_FLAGS_VDM_REQUEST_BUSY_FN));
+	PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
 }
 
 static void pe_src_hard_reset_run(int port)
@@ -3352,6 +3350,26 @@ static void pe_snk_select_capability_entry(int port)
 	tc_pd_connection(port, 1);
 }
 
+static void pe_snk_apply_psnkstdby(int port)
+{
+	uint32_t mv = pd_get_requested_voltage(port);
+	uint32_t high;
+
+	/*
+	 * Apply 2.5W ceiling during transition. We need choose the larger of
+	 * the current input voltage and the new PDO voltage because during a
+	 * transition, both voltages can be applied to the device. If the
+	 * current source isn't PD, we don't need to care about drawing more
+	 * than pSnkStdby. Thus, it's not considered (in the else clause).
+	 */
+	if (charge_manager_get_supplier() == CHARGE_SUPPLIER_PD)
+		high = MAX(charge_manager_get_charger_voltage(), mv);
+	else
+		high = mv;
+	charge_manager_force_ceil(
+		port, high > 0 ? PD_SNK_STDBY_MW * 1000 / high : PD_MIN_MA);
+}
+
 static void pe_snk_select_capability_run(int port)
 {
 	uint8_t type;
@@ -3415,6 +3433,9 @@ static void pe_snk_select_capability_run(int port)
 			if (type == PD_CTRL_ACCEPT) {
 				/* explicit contract is now in place */
 				pe_set_explicit_contract(port);
+
+				if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
+					pe_snk_apply_psnkstdby(port);
 
 				set_state_pe(port, PE_SNK_TRANSITION_SINK);
 
@@ -3860,9 +3881,7 @@ static void pe_snk_hard_reset_entry(int port)
 #endif
 
 	PE_CLR_MASK(port, BIT(PE_FLAGS_SNK_WAIT_CAP_TIMEOUT_FN) |
-				  BIT(PE_FLAGS_VDM_REQUEST_NAKED_FN) |
-				  BIT(PE_FLAGS_PROTOCOL_ERROR_FN) |
-				  BIT(PE_FLAGS_VDM_REQUEST_BUSY_FN));
+				  BIT(PE_FLAGS_PROTOCOL_ERROR_FN));
 
 	/* Request the generation of Hard Reset Signaling by the PHY Layer */
 	prl_execute_hard_reset(port);
@@ -6053,13 +6072,6 @@ static void pe_vdm_request_dpm_entry(int port)
 		tx_emsg[port].len = pe[port].vdm_cnt * 4;
 	}
 
-	/*
-	 * Clear the VDM nak'ed flag so that each request is
-	 * treated separately (NAKs are handled by the
-	 * DPM layer). Otherwise previous NAKs received will
-	 * cause the state to exit early.
-	 */
-	PE_CLR_FLAG(port, PE_FLAGS_VDM_REQUEST_NAKED);
 	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
 
 	/*
