@@ -6,6 +6,14 @@
 #ifndef __CROS_EC_CONFIG_CHIP_H
 #define __CROS_EC_CONFIG_CHIP_H
 
+/*
+ * I don't know why but gcc's preprocessor doesn't like the autoconf.h file,
+ * sometimes. It seems to happen to brya RO. Adding a #line directive anywhere
+ * in this file seems to fix the problem. #line marks the *next* line, so it is
+ * off by one.
+ */
+#line 16
+
 #include <zephyr/devicetree.h>
 #include <autoconf.h>
 
@@ -340,6 +348,11 @@
 #define CONFIG_CHARGER_ISL9238C
 #endif
 
+#undef CONFIG_ISL9238C_DISABLE_CMOUT_LATCH
+#ifdef CONFIG_PLATFORM_EC_ISL9238C_DISABLE_CMOUT_LATCH
+#define CONFIG_ISL9238C_DISABLE_CMOUT_LATCH
+#endif
+
 #undef CONFIG_CHARGER_RAA489000
 #ifdef CONFIG_PLATFORM_EC_CHARGER_RAA489000
 #define CONFIG_CHARGER_RAA489000
@@ -358,6 +371,12 @@
 #undef CONFIG_CHARGER_TRICKLE
 #ifdef CONFIG_PLATFORM_EC_CHARGER_TRICKLE
 #define CONFIG_TRICKLE_CHARGING
+#endif
+
+#ifdef CONFIG_PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT
+#undef CONFIG_RAA489000_TRICKLE_CHARGE_CURRENT
+#define CONFIG_RAA489000_TRICKLE_CHARGE_CURRENT \
+	CONFIG_PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT
 #endif
 
 #undef CONFIG_CHARGER_NARROW_VDC
@@ -900,6 +919,9 @@ extern char mock_jump_data[sizeof(struct jump_data) + 256];
 	CONFIG_PLATFORM_EC_POWER_BUTTON_INIT_TIMEOUT
 #endif
 
+#undef CONFIG_BUTTON_DEBOUNCE
+#define CONFIG_BUTTON_DEBOUNCE CONFIG_PLATFORM_EC_BUTTON_DEBOUNCE
+
 #undef CONFIG_POWERSEQ_FAKE_CONTROL
 #ifdef CONFIG_PLATFORM_EC_POWERSEQ_FAKE_CONTROL
 #define CONFIG_POWERSEQ_FAKE_CONTROL
@@ -1209,7 +1231,8 @@ extern char mock_jump_data[sizeof(struct jump_data) + 256];
 #endif
 
 #undef CONFIG_USB_PD_DISCHARGE
-#ifdef CONFIG_PLATFORM_EC_USB_PD_DISCHARGE
+#if defined(CONFIG_PLATFORM_EC_USB_PD_DISCHARGE) || \
+	defined(CONFIG_TEST_ENABLE_USB_PD_DISCHARGE)
 #define CONFIG_USB_PD_DISCHARGE
 #endif
 
@@ -1244,7 +1267,8 @@ extern char mock_jump_data[sizeof(struct jump_data) + 256];
 #endif
 
 #undef CONFIG_USB_PD_HOST_CMD
-#ifdef CONFIG_PLATFORM_EC_USB_PD_HOST_CMD
+#if defined(CONFIG_PLATFORM_EC_USB_PD_HOST_CMD) || \
+	defined(CONFIG_TEST_ENABLE_USB_PD_HOST_CMD)
 #define CONFIG_USB_PD_HOST_CMD
 #endif
 
@@ -1761,6 +1785,16 @@ extern char mock_jump_data[sizeof(struct jump_data) + 256];
 	CONFIG_PLATFORM_EC_USB_PD_INITIAL_DEBUG_LEVEL
 #endif
 
+#undef CONFIG_USB_PD_FLAGS
+#ifdef CONFIG_PLATFORM_EC_USB_PD_FLAGS
+#define CONFIG_USB_PD_FLAGS
+#endif
+
+#undef CONFIG_USB_PD_RUNTIME_FLAGS
+#ifdef CONFIG_PLATFORM_EC_USB_PD_RUNTIME_FLAGS
+#define CONFIG_USB_PD_RUNTIME_FLAGS
+#endif
+
 #undef CONFIG_USB_PD_STARTUP_DELAY_MS
 #ifdef CONFIG_PLATFORM_EC_USB_PD_STARTUP_DELAY_MS
 #define CONFIG_USB_PD_STARTUP_DELAY_MS \
@@ -2171,6 +2205,11 @@ extern char mock_jump_data[sizeof(struct jump_data) + 256];
 #undef CONFIG_SHA256_HW_ACCELERATE
 #ifdef CONFIG_PLATFORM_EC_SHA256_HW_ACCELERATE
 #define CONFIG_SHA256_HW_ACCELERATE
+#endif
+
+#undef CONFIG_SHA256_UNROLLED
+#ifdef CONFIG_PLATFORM_EC_SHA256_UNROLLED
+#define CONFIG_SHA256_UNROLLED
 #endif
 
 #undef CONFIG_RO_HDR_MEM_OFF

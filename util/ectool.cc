@@ -956,6 +956,7 @@ static const char *const ec_feature_names[] = {
 		"AP ack for Type-C mux configuration",
 	[EC_FEATURE_S4_RESIDENCY] = "S4 residency",
 	[EC_FEATURE_TYPEC_AP_MUX_SET] = "AP directed mux sets",
+	[EC_FEATURE_TYPEC_AP_VDM_SEND] = "AP directed VDM Request messages",
 };
 
 int cmd_inventory(int argc, char *argv[])
@@ -5901,7 +5902,7 @@ static int cmd_motionsense(int argc, char **argv)
 		       resp->perform_calib.offset[0],
 		       resp->perform_calib.offset[1],
 		       resp->perform_calib.offset[2]);
-		if ((uint16_t)resp->perform_calib.temp ==
+		if (resp->perform_calib.temp ==
 		    EC_MOTION_SENSE_INVALID_CALIB_TEMP)
 			printf("Temperature at calibration unknown\n");
 		else
@@ -5963,7 +5964,7 @@ static int cmd_motionsense(int argc, char **argv)
 		       resp->sensor_offset.offset[0],
 		       resp->sensor_offset.offset[1],
 		       resp->sensor_offset.offset[2]);
-		if ((uint16_t)resp->sensor_offset.temp ==
+		if (resp->sensor_offset.temp ==
 		    EC_MOTION_SENSE_INVALID_CALIB_TEMP)
 			printf("temperature at calibration unknown\n");
 		else
@@ -9550,12 +9551,15 @@ static void cmd_pchg_help(char *cmd)
 		"  Usage2: %s <port>\n"
 		"          Print the status of <port>.\n"
 		"\n"
-		"  Usage3: %s <port> reset\n"
-		"          Reset <port>.\n"
+		"  Usage3: %s <port> reset [mode]\n"
+		"          Reset <port> to [mode]. [mode]: 'normal'.\n"
 		"\n"
 		"  Usage4: %s <port> update <version> <addr1> <file1> <addr2> <file2> ...\n"
-		"          Update firmware of <port>.\n",
-		cmd, cmd, cmd, cmd);
+		"          Update firmware of <port>.\n"
+		"\n"
+		"  Usage5: %s <port> passthru <on/off> ...\n"
+		"          Enable passthru mode for <port>.\n",
+		cmd, cmd, cmd, cmd, cmd);
 }
 
 static int cmd_pchg_info(const struct ec_response_pchg *res)
@@ -9785,13 +9789,22 @@ static int cmd_pchg(int argc, char *argv[])
 	if (argc == 2) {
 		/* Usage.2 */
 		return cmd_pchg_info(&r);
-	} else if (argc == 3 && !strcmp(argv[2], "reset")) {
+	} else if (argc >= 3 && !strcmp(argv[2], "reset")) {
 		/* Usage.3 */
-		struct ec_params_pchg_update *u =
-			(struct ec_params_pchg_update *)(ec_outbuf);
+		struct ec_params_pchg_update u;
 
-		u->cmd = EC_PCHG_UPDATE_CMD_RESET_TO_NORMAL;
-		rv = ec_command(EC_CMD_PCHG_UPDATE, 0, u, sizeof(*u), NULL, 0);
+		u.port = port;
+
+		if (argc == 3) {
+			u.cmd = EC_PCHG_UPDATE_CMD_RESET;
+		} else if (argc == 4 && !strcmp(argv[3], "normal")) {
+			u.cmd = EC_PCHG_UPDATE_CMD_RESET_TO_NORMAL;
+		} else {
+			fprintf(stderr, "\nInvalid mode: '%s'\n", argv[3]);
+			return -1;
+		}
+
+		rv = ec_command(EC_CMD_PCHG_UPDATE, 0, &u, sizeof(u), NULL, 0);
 		if (rv < 0) {
 			fprintf(stderr, "\nFailed to reset port %d: %d\n", port,
 				rv);
@@ -9859,6 +9872,31 @@ static int cmd_pchg(int argc, char *argv[])
 			return -1;
 		}
 
+		return 0;
+	} else if (argc >= 4 && !strcmp(argv[2], "passthru")) {
+		/*
+		 * Usage 5
+		 */
+		struct ec_params_pchg_update u;
+		int onoff;
+
+		if (!parse_bool(argv[3], &onoff)) {
+			fprintf(stderr, "\nInvalid arg: '%s'\n", argv[3]);
+			return -1;
+		}
+
+		u.port = port;
+		u.cmd = EC_PCHG_UPDATE_CMD_ENABLE_PASSTHRU;
+
+		rv = ec_command(EC_CMD_PCHG_UPDATE, 0, &u, sizeof(u), NULL, 0);
+		if (rv < 0) {
+			fprintf(stderr, "\nFailed to enable pass-through: %d\n",
+				rv);
+			return rv;
+		}
+
+		printf("Pass-through is %s for port %d\n",
+		       onoff ? "enabled" : "disabled", port);
 		return 0;
 	}
 

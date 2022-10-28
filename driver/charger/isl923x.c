@@ -699,6 +699,10 @@ static void isl923x_init(int chgnum)
 
 		reg |= ISL9238C_C6_SLEW_RATE_CONTROL;
 
+		if (IS_ENABLED(CONFIG_ISL9238C_DISABLE_CMOUT_LATCH)) {
+			reg |= ISL9238C_C6_CMOUT_LATCH;
+		}
+
 		if (raw_write16(chgnum, ISL9238C_REG_CONTROL6, reg))
 			goto init_fail;
 	}
@@ -712,6 +716,17 @@ static void isl923x_init(int chgnum)
 			goto init_fail;
 		reg &= ~RAA489000_C1_BGATE_FORCE_OFF;
 		if (raw_write16(chgnum, ISL923X_REG_CONTROL1, reg))
+			goto init_fail;
+	}
+
+	if (IS_ENABLED(CONFIG_CHARGER_RAA489000)) {
+		if (raw_read16(chgnum, ISL923X_REG_CONTROL2, &reg))
+			goto init_fail;
+		/* Set trickle charge current bits. */
+		reg &= ~GENMASK(13, 15);
+		reg |= ((CONFIG_RAA489000_TRICKLE_CHARGE_CURRENT - 32) / 32)
+		       << 13;
+		if (raw_write16(chgnum, ISL923X_REG_CONTROL2, reg))
 			goto init_fail;
 	}
 
@@ -1002,7 +1017,7 @@ enum ec_error_list isl9238c_resume(int chgnum)
 /* Hardware current ramping */
 
 #ifdef CONFIG_CHARGE_RAMP_HW
-static int isl923x_ramp_is_stable(int chgnum)
+test_mockable_static int isl923x_ramp_is_stable(int chgnum)
 {
 	/*
 	 * Since ISL cannot read the current limit that the ramp has settled
@@ -1012,7 +1027,7 @@ static int isl923x_ramp_is_stable(int chgnum)
 	return 0;
 }
 
-static int isl923x_ramp_is_detected(int chgnum)
+test_mockable_static int isl923x_ramp_is_detected(int chgnum)
 {
 	return 1;
 }

@@ -124,6 +124,14 @@ enum pd_rx_errors {
 	(PDO_BATT_MIN_VOLT(min_mv) | PDO_BATT_MAX_VOLT(max_mv) | \
 	 PDO_BATT_OP_POWER(op_mw) | PDO_TYPE_BATTERY)
 
+#define PDO_AUG_MAX_VOLT(mv) ((((mv) / 100) & 0xFF) << 17)
+#define PDO_AUG_MIN_VOLT(mv) ((((mv) / 100) & 0xFF) << 8)
+#define PDO_AUG_MAX_CURR(ma) ((((ma) / 50) & 0x7F) << 0)
+
+#define PDO_AUG(min_mv, max_mv, max_ma)                        \
+	(PDO_AUG_MIN_VOLT(min_mv) | PDO_AUG_MAX_VOLT(max_mv) | \
+	 PDO_AUG_MAX_CURR(max_ma) | PDO_TYPE_AUGMENTED)
+
 /* RDO : Request Data Object */
 #define RDO_OBJ_POS(n) (((n)&0x7) << 28)
 #define RDO_POS(rdo) (((rdo) >> 28) & 0x7)
@@ -1452,6 +1460,9 @@ enum cable_outlet {
 
 /* Voltage threshold to detect connection when presenting Rd */
 #define PD_SNK_VA_MV 250
+
+/* Maximum power consumption while in Sink Standby */
+#define PD_SNK_STDBY_MW 2500
 
 /* --- Policy layer functions --- */
 
@@ -2895,18 +2906,19 @@ void pd_notify_event(int port, uint32_t event_mask);
 void pd_clear_events(int port, uint32_t clear_mask);
 
 /*
- * Requests a VDM Attention message be sent. Attention is the only SVDM message
- * that does not result in a response from the port partner. In addition, if
- * it's a DP Attention message, then it will be requested from outside of the
- * port's PD task.
+ * Requests a VDM REQ message be sent. It is assumed that this message may be
+ * coming from a task outside the PD task.
  *
  * @param port USB-C port number
  * @param *data pointer to the VDM Attention message
  * @param vdo_count number of VDOs (must be 1 or 2)
+ * @param tx_type partner type to transmit
  * @return EC_RES_SUCCESS if a VDM message is scheduled.
+ *         EC_RES_BUSY if a message is already pending
+ *         EC_RES_INVALID_PARAM if the parameters given are invalid
  */
-enum ec_status pd_request_vdm_attention(int port, const uint32_t *data,
-					int vdo_count);
+enum ec_status pd_request_vdm(int port, const uint32_t *data, int vdo_count,
+			      enum tcpci_msg_type tx_type);
 
 /*
  * Requests that the port enter the specified mode. A successful result just
