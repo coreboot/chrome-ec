@@ -2568,12 +2568,14 @@ static int process_get_apro_boot_status(struct transfer_descriptor *td)
 		printf("not run\n");
 		break;
 	case AP_RO_PASS:
+	case AP_RO_V2_SUCCESS:
 		printf("pass\n");
 		break;
 	case AP_RO_PASS_UNVERIFIED_GBB:
 		printf("pass - unverified gbb!\n");
 		break;
 	case AP_RO_FAIL:
+	case AP_RO_V2_FAILED_VERIFICATION:
 		printf("FAIL\n");
 		break;
 	case AP_RO_UNSUPPORTED_TRIGGERED:
@@ -2588,7 +2590,44 @@ static int process_get_apro_boot_status(struct transfer_descriptor *td)
 	case AP_RO_IN_PROGRESS:
 		printf("in progress.");
 		break;
+	case AP_RO_V2_INCONSISTENT_GSCVD:
+		printf("inconsistent gscvd\n");
+		break;
+	case AP_RO_V2_INCONSISTENT_KEYBLOCK:
+		printf("inconsistent keyblock\n");
+		break;
+	case AP_RO_V2_INCONSISTENT_KEY:
+		printf("inconsistent key\n");
+		break;
+	case AP_RO_V2_SPI_READ:
+		printf("spi read failure\n");
+		break;
+	case AP_RO_V2_UNSUPPORTED_CRYPTO_ALGORITHM:
+		printf("unsupported crypto algo\n");
+		break;
+	case AP_RO_V2_VERSION_MISMATCH:
+		printf("header version mismatch\n");
+		break;
+	case AP_RO_V2_OUT_OF_MEMORY:
+		printf("out of memory\n");
+		break;
+	case AP_RO_V2_INTERNAL:
+		printf("internal\n");
+		break;
+	case AP_RO_V2_TOO_BIG:
+		printf("too many areas\n");
+		break;
+	case AP_RO_V2_MISSING_GSCVD:
+		printf("missing gscvd\n");
+		break;
+	case AP_RO_V2_BOARD_ID_MISMATCH:
+		printf("board id mismatch\n");
+		break;
+	case AP_RO_V2_SETTING_NOT_PROVISIONED:
+		printf("setting not provisioned\n");
+		break;
 	default:
+		printf("unknown\n");
 		fprintf(stderr, "unknown status\n");
 		return update_error;
 	}
