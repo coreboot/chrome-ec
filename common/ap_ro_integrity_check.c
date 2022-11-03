@@ -58,8 +58,8 @@
 
 /* Verification scheme V1. */
 #define AP_RO_HASH_TYPE_FACTORY 0
-/* Verification scheme V2. */
-#define AP_RO_HASH_TYPE_GSCVD	1
+/* Verification scheme V2 - disabled in cr50 */
+/* #define AP_RO_HASH_TYPE_GSCVD 1 */
 /* Use the factory gbb flags to generate the V1 hash */
 #define AP_RO_HASH_TYPE_GBBD	2
 
