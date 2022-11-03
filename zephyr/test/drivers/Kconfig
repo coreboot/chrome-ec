@@ -20,8 +20,17 @@ config LINK_TEST_SUITE_AP_VDM_CONTROL
 config LINK_TEST_SUITE_BUTTON
 	bool "Link tests for common/button.c"
 
+config LINK_TEST_SUITE_BUTTON_CONFIG
+	bool "Link tests for common/button_config"
+
 config LINK_TEST_SUITE_CHARGESPLASH
 	bool "Link and test the chargesplash tests"
+
+config LINK_TEST_SUITE_COMMON_CBI
+	bool "Link and execute the common/cbi.c tests"
+
+config LINK_TEST_SUITE_COMMON_CBI_GPIO
+	bool "Link and execute the common/cbi_gpio.c tests"
 
 config LINK_TEST_SUITE_COMMON_CHARGER
 	bool "Link and execute the common/charger.c tests"
@@ -71,14 +80,14 @@ config LINK_TEST_SUITE_SYSTEM
 config LINK_TEST_SUITE_TIMER
 	bool "Link and test the timer tests"
 
+config LINK_TEST_SUITE_USB_COMMON
+	bool "Link and test USB common code tests"
+
 config LINK_TEST_SUITE_USB_MALFUNCTION_SINK
 	bool "Link and test the usb_malfunction_sink tests"
 
 config LINK_TEST_SUITE_USB_PD_DPS
 	bool "Link and test the dps tests"
-
-config LINK_TEST_SUITE_USB_PD_FLAGS
-	bool "Link and test USB PD flags"
 
 config LINK_TEST_SUITE_USB_PORT_POWER_DUMB
 	bool "Link and test the usb_port_power_dumb tests"

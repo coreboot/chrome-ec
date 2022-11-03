@@ -6,6 +6,14 @@
 #ifndef __CROS_EC_CONFIG_CHIP_H
 #define __CROS_EC_CONFIG_CHIP_H
 
+/*
+ * I don't know why but gcc's preprocessor doesn't like the autoconf.h file,
+ * sometimes. It seems to happen to brya RO. Adding a #line directive anywhere
+ * in this file seems to fix the problem. #line marks the *next* line, so it is
+ * off by one.
+ */
+#line 16
+
 #include <zephyr/devicetree.h>
 #include <autoconf.h>
 
@@ -985,6 +993,9 @@ extern char mock_jump_data[sizeof(struct jump_data) + 256];
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY \
 	CONFIG_PLATFORM_EC_PD_POWER_SUPPLY_TURN_OFF_DELAY
 #endif
+
+#undef CONFIG_EXTPOWER_DEBOUNCE_MS
+#define CONFIG_EXTPOWER_DEBOUNCE_MS CONFIG_PLATFORM_EC_EXTPOWER_DEBOUNCE_MS
 
 #undef CONFIG_CMD_PPC_DUMP
 #ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_PPC_DUMP
@@ -2391,6 +2402,15 @@ extern char mock_jump_data[sizeof(struct jump_data) + 256];
 #undef CONFIG_HIBERNATE_PSL
 #ifdef CONFIG_PLATFORM_EC_HIBERNATE_PSL
 #define CONFIG_HIBERNATE_PSL
+#endif
+
+#undef CONFIG_HIBERNATE
+#ifdef CONFIG_PLATFORM_EC_HIBERNATE
+#define CONFIG_HIBERNATE
+#ifdef CONFIG_PLATFORM_EC_HIBERNATE_DELAY_SEC
+#undef CONFIG_HIBERNATE_DELAY_SEC
+#define CONFIG_HIBERNATE_DELAY_SEC CONFIG_PLATFORM_EC_HIBERNATE_DELAY_SEC
+#endif
 #endif
 
 #undef CONFIG_BATTERY_DEVICE_CHEMISTRY
