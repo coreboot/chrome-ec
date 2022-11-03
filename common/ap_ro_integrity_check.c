@@ -1094,6 +1094,29 @@ int ec_rst_override(void)
 	return !apro_fail_status_cleared && apro_result == AP_RO_FAIL;
 }
 
+/*
+ * AP RO verification failed. Log the event type, disable spi, and hold the
+ * device in reset.
+ */
+static uint8_t ap_ro_failed_verification(enum ap_ro_verification_ev event)
+{
+	disable_ap_spi_hash_shortcut();
+	CPRINTS("AP RO FAILED! evt(%d)", event);
+	apro_result = AP_RO_FAIL;
+	ap_ro_add_flash_event(event);
+	keep_ec_in_reset();
+	/*
+	 * Map failures into EC_ERROR_CRC, this will make sure that in case this
+	 * was invoked by the operator keypress, the device will not continue
+	 * booting.
+	 *
+	 * Both explicit failure to verify OR any error if cached descriptor was
+	 * found should block the booting.
+	 */
+	return EC_ERROR_CRC;
+
+}
+
 static uint8_t do_ap_ro_check(void)
 {
 	enum ap_ro_check_result rv;
@@ -1101,11 +1124,25 @@ static uint8_t do_ap_ro_check(void)
 
 	apro_result = AP_RO_IN_PROGRESS;
 	apro_fail_status_cleared = 0;
-	if (ap_ro_check_unsupported(true) != ARCVE_OK ||
-	    p_chk->header.type != AP_RO_HASH_TYPE_FACTORY) {
+
+	switch (ap_ro_check_unsupported(true)) {
+	case ARCVE_OK:
+		CPRINTS("%s: found v1 data", __func__);
+		break;
+	case ARCVE_NOT_PROGRAMMED:
+	case ARCVE_BOARD_ID_BLOCKED:
+		CPRINTS("%s: unsupported", __func__);
 		apro_result = AP_RO_UNSUPPORTED_TRIGGERED;
 		ap_ro_add_flash_event(APROF_CHECK_UNSUPPORTED);
 		return EC_ERROR_UNIMPLEMENTED;
+	default:
+		/*
+		 * If reading the V1 data failed. Fail verification immediately.
+		 * The hash data is corrupted or the wrong version, so it can't
+		 * be used to verify the AP RO flash.
+		 */
+		CPRINTS("%s: bad v1 data", __func__);
+		return ap_ro_failed_verification(APROF_FAIL_CORRUPTED_V1_DATA);
 	}
 
 	enable_ap_spi_hash_shortcut();
@@ -1157,35 +1194,20 @@ static uint8_t do_ap_ro_check(void)
 				ap_ro_add_flash_event(APROF_SAVED_GBBD);
 			} else {
 				CPRINTS("%s: save gbbd failed", __func__);
-				ap_ro_add_flash_event(
-					APROF_FAILED_TO_SAVE_GBBD);
+				ap_ro_add_flash_event(APROF_FAIL_TO_SAVE_GBBD);
 			}
 		}
 		break;
 	default:
-		CPRINTS("%s: FAIL corrupted GBBD", __func__);
-		break;
+		CPRINTS("%s: bad gbbd", __func__);
+		return ap_ro_failed_verification(APROF_FAIL_CORRUPTED_GBBD);
 	}
 
 	disable_ap_spi_hash_shortcut();
 
-	/* Failure reason has already been reported. */
-	if (rv != ROV_SUCCEEDED) {
-		CPRINTS("AP RO FAILED!");
-		apro_result = AP_RO_FAIL;
-		ap_ro_add_flash_event(APROF_CHECK_FAILED);
-		keep_ec_in_reset();
-		/*
-		 * Map failures into EC_ERROR_CRC, this will make sure
-		 * that in case this was invoked by the operator
-		 * keypress, the device will not continue booting.
-		 *
-		 * Both explicit failure to verify OR any error if
-		 * cached descriptor was found should block the
-		 * booting.
-		 */
-		return EC_ERROR_CRC;
-	}
+	/* AP RO failed to match the hash. */
+	if (rv != ROV_SUCCEEDED)
+		return ap_ro_failed_verification(APROF_CHECK_FAILED);
 
 	apro_result = AP_RO_PASS;
 	ap_ro_add_flash_event(APROF_CHECK_SUCCEEDED);
@@ -1332,6 +1354,7 @@ static enum vendor_cmd_rc vc_get_ap_ro_status(enum vendor_cmd_cc code,
 {
 	uint8_t rv = apro_result;
 	uint8_t *response = buf;
+	enum ap_ro_check_vc_errors v1_check;
 
 	CPRINTS("Check AP RO status");
 
@@ -1339,9 +1362,12 @@ static enum vendor_cmd_rc vc_get_ap_ro_status(enum vendor_cmd_cc code,
 	if (input_size)
 		return VENDOR_RC_BOGUS_ARGS;
 
-	if ((apro_result != AP_RO_UNSUPPORTED_TRIGGERED) &&
-	    (ap_ro_check_unsupported(false) != ARCVE_OK))
-		rv = AP_RO_UNSUPPORTED_NOT_TRIGGERED;
+	if (apro_result != AP_RO_UNSUPPORTED_TRIGGERED) {
+		v1_check = ap_ro_check_unsupported(false);
+		if (v1_check == ARCVE_NOT_PROGRAMMED ||
+		    v1_check == ARCVE_BOARD_ID_BLOCKED)
+			rv = AP_RO_UNSUPPORTED_NOT_TRIGGERED;
+	}
 
 	*response_size = 1;
 	response[0] = rv;
