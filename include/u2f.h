@@ -48,7 +48,7 @@ extern "C" {
 #define U2F_MESSAGE_DIGEST_SIZE SHA256_DIGEST_SIZE
 
 #define CORP_CHAL_SIZE 16
-#define CORP_SALT_SIZE 16
+#define CORP_SALT_SIZE 65
 
 #define ENC_SIZE(x) ((x + 7) & 0xfff8)
 
@@ -179,7 +179,7 @@ struct u2f_generate_req {
 	 * If generating versioned KH, derive an hmac from it and append to
 	 * the key handle. Otherwise unused.
 	 */
-	uint8_t authTimeSecretHash[U2F_AUTH_TIME_SECRET_SIZE];
+	uint8_t authTimeSecretHash[SHA256_DIGEST_SIZE];
 };
 
 struct u2f_generate_resp {
@@ -268,7 +268,7 @@ struct g2f_register_msg_v0 {
 struct corp_attest_data {
 	uint8_t challenge[CORP_CHAL_SIZE];
 	struct u2f_ec_point public_key;
-	uint8_t salt[65];
+	uint8_t salt[CORP_SALT_SIZE];
 };
 
 struct corp_register_msg_v0 {
