@@ -1014,14 +1014,11 @@ static void board_init(void)
 
 	/*
 	 * Enable interrupt handler for RBOX key combo so it can be used to
-	 * store the recovery request and reset ec_efs.
+	 * store the recovery request, reset ec_efs, and clear ap ro
+	 * verification failures.
 	 */
-	if (board_uses_closed_source_set1() ||
-	    board_has_ec_cr50_comm_support()) {
-		/* Enable interrupt handler for reset button combo */
-		task_enable_irq(GC_IRQNUM_RBOX0_INTR_BUTTON_COMBO0_RDY_INT);
-		GWRITE_FIELD(RBOX, INT_ENABLE, INTR_BUTTON_COMBO0_RDY, 1);
-	}
+	task_enable_irq(GC_IRQNUM_RBOX0_INTR_BUTTON_COMBO0_RDY_INT);
+	GWRITE_FIELD(RBOX, INT_ENABLE, INTR_BUTTON_COMBO0_RDY, 1);
 
 	/*
 	 * Note that the AP, EC, and servo state machines do not have explicit
