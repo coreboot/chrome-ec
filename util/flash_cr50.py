@@ -219,6 +219,8 @@ class Cr50Reset(object):
     # A list of requirements for the setup. The requirement strings must match
     # something in the REQUIRED_CONTROLS dictionary.
     REQUIRED_SETUP = ()
+    CCD = 'ccd'
+    CCD_WATCHDOG_RE = r'(ccd.*):'
 
     def __init__(self, servo, name):
         """Make sure the setup supports the given reset_type.
@@ -228,10 +230,12 @@ class Cr50Reset(object):
             name: The reset type.
         """
         self._servo = servo
+        self._servo_type = self._servo.dut_control('servo_type')[1]
+        match = re.search(self.CCD_WATCHDOG_RE, self._servo.dut_control('watchdog')[1])
+        self._ccd_device = match.group(1) if match else ''
         self._reset_name = name
         self.verify_setup()
         self._original_watchdog_state = self.ccd_watchdog_enabled()
-        self._servo_type = self._servo.dut_control('servo_type')[1]
 
     def verify_setup(self):
         """Verify the setup has all required controls to flash cr50.
@@ -304,11 +308,12 @@ class Cr50Reset(object):
 
     def ccd_watchdog_enabled(self):
         """Return True if servod is monitoring ccd"""
-        if 'ccd_cr50' not in self._servo_type:
+        if not self._ccd_device:
             return False
         watchdog_state = self._servo.dut_control('watchdog')[1]
         logging.debug(watchdog_state)
-        return not re.search('ccd:.*disconnect ok', watchdog_state)
+        return not re.search(self._ccd_device + ':.*disconnect ok',
+                             watchdog_state)
 
     def enable_ccd_watchdog(self, enable):
         """Control the CCD watchdog.
@@ -321,14 +326,14 @@ class Cr50Reset(object):
         Args:
             enable: If True, enable the CCD watchdog. Otherwise disable it.
         """
-        if 'ccd_cr50' not in self._servo_type:
+        if not self._ccd_device:
             logging.debug('Servo is not watching ccd device.')
             return
 
         if enable:
-            self._servo.dut_control('watchdog_add:ccd')
+            self._servo.dut_control('watchdog_add:' + self._ccd_device)
         else:
-            self._servo.dut_control('watchdog_remove:ccd')
+            self._servo.dut_control('watchdog_remove:' + self._ccd_device)
 
         if self.ccd_watchdog_enabled() != enable:
             raise Error('Could not %sable ccd watchdog' %
