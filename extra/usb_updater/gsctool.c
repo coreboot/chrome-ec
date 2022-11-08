@@ -3436,8 +3436,7 @@ static int get_longindex(int short_opt, const struct option *long_opts)
 	 * We could never come here as the short options list is compiled
 	 * based on long options table.
 	 */
-	fprintf(stderr, "could not find long opt table index for %d\n",
-		short_opt);
+	fprintf(stderr, "Command line error, parameter argument missing\n");
 	exit(1);
 
 	return -1; /* Not reached. */
