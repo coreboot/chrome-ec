@@ -1731,6 +1731,9 @@ struct ec_params_flash_read {
  * struct ec_params_flash_write - Parameters for the flash write command.
  * @offset: Byte offset to write.
  * @size: Size to write in bytes.
+ * @data: Data to write.
+ * @data.words32: uint32_t data to write.
+ * @data.bytes: uint8_t data to write.
  */
 struct ec_params_flash_write {
 	uint32_t offset;
@@ -3300,6 +3303,22 @@ struct ec_params_usb_charge_set_mode {
 	uint8_t usb_port_id;
 	uint8_t mode : 7; /* enum usb_charge_mode */
 	uint8_t inhibit_charge : 1; /* enum usb_suspend_charge */
+} __ec_align1;
+
+/*****************************************************************************/
+/* Tablet mode commands */
+
+/* Set tablet mode */
+#define EC_CMD_SET_TABLET_MODE 0x0031
+
+enum tablet_mode_override {
+	TABLET_MODE_DEFAULT,
+	TABLET_MODE_FORCE_TABLET,
+	TABLET_MODE_FORCE_CLAMSHELL,
+};
+
+struct ec_params_set_tablet_mode {
+	uint8_t tablet_mode; /* enum tablet_mode_override */
 } __ec_align1;
 
 /*****************************************************************************/

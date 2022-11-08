@@ -1333,6 +1333,9 @@
  */
 #undef CONFIG_OCPC_DEF_RBATT_MOHMS
 
+/* Set a default OCPC drive limit for legacy boards */
+#define CONFIG_OCPC_DEF_DRIVELIMIT_MILLIVOLTS 10
+
 /* Enable trickle charging */
 #undef CONFIG_TRICKLE_CHARGING
 
@@ -4474,10 +4477,12 @@
  * TYPEC_SM - Type-C deals with CC lines voltage level connections
  * PRL_SM - Protocol handles flow and chunking TX and RX messages
  * PE - Policy Engine handles PD communication flow
+ * DPM - Device Policy Manager layer is used to determine port policy
  */
 #define CONFIG_USB_TYPEC_SM
 #define CONFIG_USB_PRL_SM
 #define CONFIG_USB_PE_SM
+#define CONFIG_USB_DPM_SM
 
 /* Enables PD Console commands */
 #define CONFIG_USB_PD_CONSOLE_CMD

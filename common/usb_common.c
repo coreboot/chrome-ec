@@ -27,7 +27,7 @@
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
-#include "usb_pd_dpm.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_flags.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pe_sm.h"
@@ -196,18 +196,6 @@ enum pd_cc_states pd_get_cc_state(enum tcpc_cc_voltage_status cc1,
 	 * 2) Only an e-marked cabled without a partner on the other side
 	 */
 	return PD_CC_NONE;
-}
-
-/**
- * This function checks the current CC status of the port partner
- * and returns true if the attached partner is debug accessory.
- */
-bool pd_is_debug_acc(int port)
-{
-	enum pd_cc_states cc_state = pd_get_task_cc_state(port);
-
-	return cc_state == PD_CC_UFP_DEBUG_ACC ||
-	       cc_state == PD_CC_DFP_DEBUG_ACC;
 }
 
 __overridable int pd_board_check_request(uint32_t rdo, int pdo_cnt)
