@@ -219,7 +219,8 @@ enum ccd_vendor_subcommands {
 	CCDV_LOCK = 3,
 	CCDV_PP_POLL_UNLOCK = 4,
 	CCDV_PP_POLL_OPEN = 5,
-	CCDV_GET_INFO = 6
+	CCDV_GET_INFO = 6,
+	CCDV_PP_POLL_SET_CAPABILITY = 7,
 };
 
 enum ccd_pp_state {
