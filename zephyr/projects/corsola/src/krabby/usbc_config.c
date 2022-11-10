@@ -15,8 +15,6 @@
 #include "usb_pd.h"
 #include "usbc_ppc.h"
 
-#include "variant_db_detection.h"
-
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ##args)
@@ -73,9 +71,7 @@ void board_reset_pd_mcu(void)
 int board_set_active_charge_port(int port)
 {
 	int i;
-	int is_valid_port =
-		(port >= 0 && port < board_get_adjusted_usb_pd_port_count());
-	/* adjust the actual port count when not the type-c db connected. */
+	int is_valid_port = (port >= 0 && port < board_get_usb_pd_port_count());
 
 	if (!is_valid_port && port != CHARGE_PORT_NONE) {
 		return EC_ERROR_INVAL;
@@ -85,7 +81,7 @@ int board_set_active_charge_port(int port)
 		CPRINTS("Disabling all charger ports");
 
 		/* Disable all ports. */
-		for (i = 0; i < board_get_adjusted_usb_pd_port_count(); i++) {
+		for (i = 0; i < ppc_cnt; i++) {
 			/*
 			 * Do not return early if one fails otherwise we can
 			 * get into a boot loop assertion failure.
@@ -110,7 +106,7 @@ int board_set_active_charge_port(int port)
 	 * Turn off the other ports' sink path FETs, before enabling the
 	 * requested charge port.
 	 */
-	for (i = 0; i < board_get_adjusted_usb_pd_port_count(); i++) {
+	for (i = 0; i < ppc_cnt; i++) {
 		if (i == port) {
 			continue;
 		}
