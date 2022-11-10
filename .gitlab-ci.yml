@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-image: jbettis/ubuntu-07sep22
+image: jbettis/ubuntu-07nov22
 
 # You can update that image using this repo:
 #   https://gitlab.com/zephyr-ec/gitlab-ci-runner/-/tree/main
@@ -78,16 +78,11 @@ before_script:
   # Install Python and packages
   - python3 -V  # Print out python version for debugging
   - python3 -m pip install "${EC_DIR}/zephyr/zmake[tests]" --user
-  - python3 -m pip install pyyaml packaging ply psutil 'pyelftools>=0.28'
   - export PATH="$PATH:$HOME/.local/bin"
   - export PYTHONIOENCODING=utf-8
   # Build directory
   - export BUILD_DIR=${EC_DIR}/build
   - export TWISTER_OUT_DIR=${EC_DIR}/twister-out
-  # Set up Twister to use the "host" toolchain, as defined in upstream Zephyr
-  # repo, ultimately including ${ZEPHYR_BASE}/cmake/toolchain/host/generic.cmake
-  - export TOOLCHAIN_ROOT=${ZEPHYR_BASE}
-  - export ZEPHYR_TOOLCHAIN_VARIANT=host
 
 # Users of this template must set:
 # $PROJECT to the project to build. E.g., "lazor"
@@ -159,7 +154,7 @@ before_script:
       "${MODULES_DIR}/**"
       "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
       "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
-      "${EC_DIR}/zephyr/projects/**" "/usr/include/**"
+      "${EC_DIR}/zephyr/program/**" "/usr/include/**"
       "${EC_DIR}/build/**" "${EC_DIR}/twister-out*/**"
       "${EC_DIR}/test/**"
       "${EC_DIR}/zephyr/shim/chip/npcx/npcx_monitor/**"
@@ -174,7 +169,7 @@ before_script:
       "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
       "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
       "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
-      "${EC_DIR}/zephyr/projects/**" "/usr/include/**"
+      "${EC_DIR}/zephyr/program/**" "/usr/include/**"
       "${EC_DIR}/build/**" "${EC_DIR}/twister-out*/**"
       "${EC_DIR}/zephyr/shim/chip/npcx/npcx_monitor/**"
       "${EC_DIR}/test/**"
@@ -275,6 +270,16 @@ skyrim_coverage:
     PROJECT: "skyrim"
   <<: *coverage_template
 
+rex:
+  variables:
+    PROJECT: "rex"
+  <<: *build_template
+
+rex_coverage:
+  variables:
+    PROJECT: "rex"
+  <<: *coverage_template
+
 ec_coverage:
   stage: test
   needs: []
@@ -296,7 +301,7 @@ zephyr_coverage:
   needs: []
   script:
     - python3 ${EC_DIR}/twister --coverage --outdir "${TWISTER_OUT_DIR}"
-      -v -i --gcov-tool gcov -x=ALLOW_WARNINGS=ON
+      -v -i -x=ALLOW_WARNINGS=ON
   artifacts:
     paths:
       - ec_dir/twister-out/coverage.info

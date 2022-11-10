@@ -27,7 +27,7 @@
 #include "usb_dp_alt_mode.h"
 #include "usb_mode.h"
 #include "usb_mux.h"
-#include "usb_pd_dpm.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_policy.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
@@ -2927,9 +2927,15 @@ static void pe_src_ready_run(int port)
 		if (pe_attempt_port_discovery(port))
 			return;
 
-		/* No DPM requests; attempt mode entry/exit if needed */
-		dpm_run(port);
+		/* Inform DPM state machine that PE is set for messages */
+		dpm_set_pe_ready(port, true);
 	}
+}
+
+static void pe_src_ready_exit(int port)
+{
+	/* Inform DPM state machine that PE is in ready state */
+	dpm_set_pe_ready(port, false);
 }
 
 /**
@@ -3030,9 +3036,7 @@ static void pe_src_hard_reset_entry(int port)
 	pd_timer_enable(port, PE_TIMER_PS_HARD_RESET, PD_T_PS_HARD_RESET);
 
 	/* Clear error flags */
-	PE_CLR_MASK(port, BIT(PE_FLAGS_VDM_REQUEST_NAKED_FN) |
-				  BIT(PE_FLAGS_PROTOCOL_ERROR_FN) |
-				  BIT(PE_FLAGS_VDM_REQUEST_BUSY_FN));
+	PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
 }
 
 static void pe_src_hard_reset_run(int port)
@@ -3805,9 +3809,15 @@ static void pe_snk_ready_run(int port)
 		if (pe_attempt_port_discovery(port))
 			return;
 
-		/* No DPM requests; attempt mode entry/exit if needed */
-		dpm_run(port);
+		/* Inform DPM state machine that PE is set for messages */
+		dpm_set_pe_ready(port, true);
 	}
+}
+
+static void pe_snk_ready_exit(int port)
+{
+	/* Inform DPM state machine that PE is in ready state */
+	dpm_set_pe_ready(port, false);
 }
 
 /**
@@ -3883,9 +3893,7 @@ static void pe_snk_hard_reset_entry(int port)
 #endif
 
 	PE_CLR_MASK(port, BIT(PE_FLAGS_SNK_WAIT_CAP_TIMEOUT_FN) |
-				  BIT(PE_FLAGS_VDM_REQUEST_NAKED_FN) |
-				  BIT(PE_FLAGS_PROTOCOL_ERROR_FN) |
-				  BIT(PE_FLAGS_VDM_REQUEST_BUSY_FN));
+				  BIT(PE_FLAGS_PROTOCOL_ERROR_FN));
 
 	/* Request the generation of Hard Reset Signaling by the PHY Layer */
 	prl_execute_hard_reset(port);
@@ -6076,13 +6084,6 @@ static void pe_vdm_request_dpm_entry(int port)
 		tx_emsg[port].len = pe[port].vdm_cnt * 4;
 	}
 
-	/*
-	 * Clear the VDM nak'ed flag so that each request is
-	 * treated separately (NAKs are handled by the
-	 * DPM layer). Otherwise previous NAKs received will
-	 * cause the state to exit early.
-	 */
-	PE_CLR_FLAG(port, PE_FLAGS_VDM_REQUEST_NAKED);
 	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
 
 	/*
@@ -7913,6 +7914,7 @@ static __const_data const struct usb_state pe_states[] = {
 	[PE_SRC_READY] = {
 		.entry = pe_src_ready_entry,
 		.run   = pe_src_ready_run,
+		.exit   = pe_src_ready_exit,
 	},
 	[PE_SRC_DISABLED] = {
 		.entry = pe_src_disabled_entry,
@@ -7959,6 +7961,7 @@ static __const_data const struct usb_state pe_states[] = {
 	[PE_SNK_READY] = {
 		.entry = pe_snk_ready_entry,
 		.run   = pe_snk_ready_run,
+		.exit   = pe_snk_ready_exit,
 	},
 	[PE_SNK_HARD_RESET] = {
 		.entry = pe_snk_hard_reset_entry,
