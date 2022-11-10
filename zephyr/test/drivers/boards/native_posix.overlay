@@ -8,6 +8,7 @@
 #include <cros/thermistor/thermistor.dtsi>
 #include <dt-bindings/gpio_defines.h>
 #include <dt-bindings/pwm/pwm.h>
+#include <dt-bindings/wake_mask_event_defines.h>
 #include <freq.h>
 
 / {
@@ -26,12 +27,27 @@
 		bmi160-int = &ms_bmi160_accel;
 		tcs3400-int = &tcs3400_clear;
 		gpio-wp = &gpio_wp_l;
+		gpio-cbi-wp = &gpio_ec_cbi_wp;
 		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
+		int-wp = &int_wp_l;
 	};
 
 	ec-console {
 		compatible = "ec-console";
 		disabled = "events", "lpc", "hostcmd";
+	};
+
+	ec-mkbp-host-event-wakeup-mask {
+		compatible = "ec-wake-mask-event";
+		wakeup-mask = <(
+			HOST_EVENT_LID_OPEN |
+			HOST_EVENT_POWER_BUTTON |
+			HOST_EVENT_AC_CONNECTED |
+			HOST_EVENT_AC_DISCONNECTED |
+			HOST_EVENT_HANG_DETECT |
+			HOST_EVENT_RTC |
+			HOST_EVENT_MODE_CHANGE |
+			HOST_EVENT_DEVICE)>;
 	};
 
 	usbc {
@@ -162,7 +178,7 @@
 			/* GPIO_PULL_UP will cause this start asserted,
 			 * i.e. not pressed.
 			 */
-			gpios = <&gpio0 25 (GPIO_INPUT | GPIO_PULL_UP)>;
+			gpios = <&gpio0 25 (GPIO_INPUT_PULL_UP)>;
 			enum-name = "GPIO_POWER_BUTTON_L";
 		};
 		gpio_src_vph_pwr_pg: src_vph_pwr_pg {
@@ -222,6 +238,9 @@
 		gpio_brd_id0: brd_id0 {
 			gpios = <&gpio1 8 GPIO_INPUT>;
 		};
+		gpio_ec_cbi_wp: ec_cbi_wp {
+			gpios = <&gpio1 9 GPIO_OUTPUT>;
+		};
 	};
 
 	gpio1: gpio@101 {
@@ -234,7 +253,7 @@
 		low-level;
 		gpio-controller;
 		#gpio-cells = <2>;
-		ngpios = <9>;
+		ngpios = <10>;
 	};
 
 	gpio-interrupts {
@@ -285,6 +304,16 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "power_signal_interrupt";
 		};
+		int_power_button: power_button {
+			irq-pin = <&gpio_ec_pwr_btn_odl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "power_button_interrupt";
+		};
+		int_wp_l: wp_l {
+			irq-pin = <&gpio_wp_l>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "switch_interrupt";
+		};
 	};
 
 	named-i2c-ports {
@@ -322,18 +351,18 @@
 	};
 
 	cbi-ssfc {
-		compatible = "named-cbi-ssfc";
+		compatible = "cros-ec,cbi-ssfc";
 		cbi_ssfc_base_sensor: base_sensor {
 			enum-name = "BASE_SENSOR";
 			size = <2>;
 			base_sensor_0: base0 {
-				compatible = "named-cbi-ssfc-value";
+				compatible = "cros-ec,cbi-ssfc-value";
 				status = "okay";
 				value = <1>;
 				default;
 			};
 			base_sensor_1: base1 {
-				compatible = "named-cbi-ssfc-value";
+				compatible = "cros-ec,cbi-ssfc-value";
 				status = "okay";
 				value = <2>;
 			};
@@ -956,8 +985,28 @@
 	   reg = <0x55556666 0x1000>;
 	   status = "okay";
 	   buffer-size = <200>;
-   };
+	};
 
+	button-cfg {
+		compatible = "cros-ec,button-cfg";
+
+		btn_power_button_cfg: power_button_cfg {
+			button_name = "POWER_BUTTON";
+			button_type = <0>;
+			spec = <&gpio_ec_pwr_btn_odl>;
+			gpio_int = <&int_power_button>;
+			debounce_us = <30000>;
+			flags = <0>;
+		};
+		btn_test_button_cfg: test_button_cfg {
+			button_name = "TEST_BUTTON";
+			button_type = <0>;
+			spec = <&gpio_test>;
+			gpio_int = <&int_gpio_test>;
+			debounce_us = <30000>;
+			flags = <0>;
+		};
+	};
 };
 
 &espi0 {

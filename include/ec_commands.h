@@ -1731,6 +1731,9 @@ struct ec_params_flash_read {
  * struct ec_params_flash_write - Parameters for the flash write command.
  * @offset: Byte offset to write.
  * @size: Size to write in bytes.
+ * @data: Data to write.
+ * @data.words32: uint32_t data to write.
+ * @data.bytes: uint8_t data to write.
  */
 struct ec_params_flash_write {
 	uint32_t offset;
@@ -2861,7 +2864,7 @@ struct ec_motion_sense_activity {
  */
 #define EC_MOTION_SENSE_NO_VALUE -1
 
-#define EC_MOTION_SENSE_INVALID_CALIB_TEMP 0x8000
+#define EC_MOTION_SENSE_INVALID_CALIB_TEMP INT16_MIN
 
 /* MOTIONSENSE_CMD_SENSOR_OFFSET subcommand flag */
 /* Set Calibration information */
@@ -3300,6 +3303,22 @@ struct ec_params_usb_charge_set_mode {
 	uint8_t usb_port_id;
 	uint8_t mode : 7; /* enum usb_charge_mode */
 	uint8_t inhibit_charge : 1; /* enum usb_suspend_charge */
+} __ec_align1;
+
+/*****************************************************************************/
+/* Tablet mode commands */
+
+/* Set tablet mode */
+#define EC_CMD_SET_TABLET_MODE 0x0031
+
+enum tablet_mode_override {
+	TABLET_MODE_DEFAULT,
+	TABLET_MODE_FORCE_TABLET,
+	TABLET_MODE_FORCE_CLAMSHELL,
+};
+
+struct ec_params_set_tablet_mode {
+	uint8_t tablet_mode; /* enum tablet_mode_override */
 } __ec_align1;
 
 /*****************************************************************************/
@@ -6716,6 +6735,7 @@ struct ec_response_regulator_get_voltage {
 enum typec_partner_type {
 	TYPEC_PARTNER_SOP = 0,
 	TYPEC_PARTNER_SOP_PRIME = 1,
+	TYPEC_PARTNER_SOP_PRIME_PRIME = 2,
 };
 
 struct ec_params_typec_discovery {
@@ -6747,6 +6767,7 @@ enum typec_control_command {
 	TYPEC_CONTROL_COMMAND_TBT_UFP_REPLY,
 	TYPEC_CONTROL_COMMAND_USB_MUX_SET,
 	TYPEC_CONTROL_COMMAND_BIST_SHARE_MODE,
+	TYPEC_CONTROL_COMMAND_SEND_VDM_REQ,
 };
 
 /* Modes (USB or alternate) that a type-C port may enter. */
@@ -6772,6 +6793,17 @@ struct typec_usb_mux_set {
 	uint8_t mux_flags;
 } __ec_align1;
 
+#define VDO_MAX_SIZE 7
+
+struct typec_vdm_req {
+	/* VDM data, including VDM header */
+	uint32_t vdm_data[VDO_MAX_SIZE];
+	/* Number of 32-bit fields filled in */
+	uint8_t vdm_data_objects;
+	/* Partner to address - see enum typec_partner_type */
+	uint8_t partner_type;
+} __ec_align1;
+
 struct ec_params_typec_control {
 	uint8_t port;
 	uint8_t command; /* enum typec_control_command */
@@ -6793,6 +6825,8 @@ struct ec_params_typec_control {
 		struct typec_usb_mux_set mux_params;
 		/* Used for BIST_SHARE_MODE */
 		uint8_t bist_share_mode;
+		/* Used for VMD_REQ */
+		struct typec_vdm_req vdm_req_params;
 		uint8_t placeholder[128];
 	};
 } __ec_align1;

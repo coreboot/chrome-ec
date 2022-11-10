@@ -370,6 +370,7 @@
 #undef CONFIG_ACCELGYRO_BMI3XX_INT_EVENT
 #undef CONFIG_ACCELGYRO_ICM426XX_INT_EVENT
 #undef CONFIG_ACCELGYRO_ICM42607_INT_EVENT
+#undef CONFIG_ACCEL_BMA4XX_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSM_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSO_INT_EVENT
 #undef CONFIG_ACCEL_LIS2DS_INT_EVENT
@@ -871,6 +872,9 @@
  */
 #undef CONFIG_SIMULATED_BUTTON
 
+/* Set the default button debounce time in us */
+#define CONFIG_BUTTON_DEBOUNCE (30 * MSEC)
+
 /*
  * Capsense chip has buttons, too.
  */
@@ -1328,6 +1332,9 @@
  * the series sense resistor.
  */
 #undef CONFIG_OCPC_DEF_RBATT_MOHMS
+
+/* Set a default OCPC drive limit for legacy boards */
+#define CONFIG_OCPC_DEF_DRIVELIMIT_MILLIVOLTS 10
 
 /* Enable trickle charging */
 #undef CONFIG_TRICKLE_CHARGING
@@ -3424,6 +3431,11 @@
  */
 #undef CONFIG_ISL9241_SWITCHING_FREQ
 
+/*
+ * ISL9238C disable the CMOUT latch function.
+ */
+#undef CONFIG_ISL9238C_DISABLE_CMOUT_LATCH
+
 /* Support MKBP event */
 #undef CONFIG_MKBP_EVENT
 
@@ -4465,10 +4477,12 @@
  * TYPEC_SM - Type-C deals with CC lines voltage level connections
  * PRL_SM - Protocol handles flow and chunking TX and RX messages
  * PE - Policy Engine handles PD communication flow
+ * DPM - Device Policy Manager layer is used to determine port policy
  */
 #define CONFIG_USB_TYPEC_SM
 #define CONFIG_USB_PRL_SM
 #define CONFIG_USB_PE_SM
+#define CONFIG_USB_DPM_SM
 
 /* Enables PD Console commands */
 #define CONFIG_USB_PD_CONSOLE_CMD
@@ -6693,6 +6707,7 @@
  * and CONFIG_USB_PD_PORT_MAX_COUNT, CONFIG_USB_PD_DISCHARGE_TCPC, or
  * CONFIG_USB_PD_DISCHARGE_PPC is defined.
  */
+#ifndef CONFIG_TEST_ENABLE_USB_PD_DISCHARGE
 #ifdef CONFIG_USB_PD_DISCHARGE
 #ifdef CONFIG_USB_PD_DISCHARGE_GPIO
 #if !defined(CONFIG_USB_PD_PORT_MAX_COUNT)
@@ -6705,6 +6720,7 @@
 #endif
 #endif /* CONFIG_USB_PD_DISCHARGE_GPIO */
 #endif /* CONFIG_USB_PD_DISCHARGE */
+#endif /* CONFIG_TEST_ENABLE_USB_PD_DISCHARGE */
 
 /* Chargesplash defaults */
 #ifdef CONFIG_CHARGESPLASH

@@ -10,6 +10,20 @@
 #include <zephyr/devicetree.h>
 
 /*
+ * dt_flags is a uint8_t type.  However, for platform/ec
+ * the GPIO flags in the devicetree are expanded past 8 bits
+ * to support the INPUT/OUTPUT and PULLUP/PULLDOWN properties.
+ * Cast back to a gpio_dt_flags to compile, discarding the bits
+ * that are not supported by the Zephyr GPIO API.
+ */
+#define CROS_EC_GPIO_DT_SPEC_GET(node_id, prop)                            \
+	{                                                                  \
+		.port = DEVICE_DT_GET(DT_GPIO_CTLR(node_id, prop)),        \
+		.pin = DT_GPIO_PIN(node_id, prop),                         \
+		.dt_flags = (gpio_dt_flags_t)DT_GPIO_FLAGS(node_id, prop), \
+	}
+
+/*
  * Validate interrupt flags are valid for the Zephyr GPIO driver.
  */
 #define IS_GPIO_INTERRUPT_FLAG(flag, mask) ((flag & mask) == mask)
@@ -47,6 +61,23 @@ struct unused_pin_config {
  * @retval -EIO I/O error when accessing an external GPIO chip.
  */
 int gpio_config_unused_pins(void) __attribute__((weak));
+
+/**
+ * @brief Set configuration by port and pin of gpio
+ *
+ * @param port GPIO device index
+ * @param pin Pin number.
+ * @param flags Flags for pin configuration: 'GPIO input/output configuration
+ *        flags', 'GPIO pin drive flags', 'GPIO pin bias flags'.
+ *
+ * @return 0 If successful.
+ * @retval -ENOTSUP if any of the configuration options is not supported
+ *                  (unless otherwise directed by flag documentation).
+ * @retval -EINVAL Invalid argument.
+ * @retval -EIO I/O error when accessing an external GPIO chip.
+ * @retval -EWOULDBLOCK if operation would block.
+ */
+int gpio_configure_port_pin(int port, int id, int flags) __attribute__((weak));
 
 #if DT_NODE_EXISTS(DT_PATH(unused_pins))
 /**
@@ -107,4 +138,5 @@ int gpio_config_unused_pins(void) __attribute__((weak));
 #else
 #define UNUSED_GPIO_CONFIG_LIST /* Nothing if no 'unused-pins' node */
 #endif /* unused_pins */
+
 #endif /* ZEPHYR_SHIM_INCLUDE_GPIO_GPIO_H_ */

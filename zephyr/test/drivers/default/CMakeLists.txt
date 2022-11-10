@@ -7,6 +7,7 @@ target_sources(app PRIVATE
     src/bmi160.c
     src/bmi260.c
     src/charge_manager.c
+    src/charge_state_prevent_power_on.c
     src/console.c
     src/console_cmd/adc.c
     src/console_cmd/battery.c
@@ -36,11 +37,13 @@ target_sources(app PRIVATE
     src/console_cmd/port80.c
     src/console_cmd/powerindebug.c
     src/console_cmd/power_button.c
+    src/console_cmd/pwr_avg.c
     src/console_cmd/rtc.c
     src/console_cmd/rw.c
     src/console_cmd/shared_mem.c
     src/console_cmd/sleepmask.c
     src/console_cmd/sleeptimeout.c
+    src/console_cmd/switch.c
     src/console_cmd/sysinfo.c
     src/console_cmd/tcpci_dump.c
     src/console_cmd/usb_pd_console.c

@@ -15,7 +15,7 @@
 #include "test/drivers/test_mocks.h"
 #include "test/drivers/test_state.h"
 
-/* Tested wrt isl923x */
+/* Tested wrt isl923x without RAA489000 */
 
 /* Only single charger-chip configured for the drivers overlay */
 #define CHG_NUM get_charger_num(&isl923x_drv)
@@ -53,6 +53,30 @@ ZTEST(common_charger, test_chg_ramp_get_current_limit)
 		      CONFIG_CHARGER_INPUT_CURRENT);
 }
 
+ZTEST(common_charger, test_charger_get_min_bat_pct_for_power_on)
+{
+	zassert_equal(charger_get_min_bat_pct_for_power_on(),
+		      CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON);
+}
+
+ZTEST(common_charger, test_charger_set_vsys_compensation__bad_arg)
+{
+	/* Not supported without RAA489000 */
+	struct ocpc_data unused = { 0 };
+	/* All arguments but 0th are unused. */
+	zassert_equal(charger_set_vsys_compensation(INT_MAX, &unused, 0, 0),
+		      EC_ERROR_INVAL);
+}
+
+ZTEST(common_charger, test_charger_set_vsys_compensation__unsupported)
+{
+	/* Not supported without RAA489000 */
+	struct ocpc_data unused = { 0 };
+	/* All arguments but 0th are unused. */
+	zassert_equal(charger_set_vsys_compensation(CHG_NUM, &unused, 0, 0),
+		      EC_ERROR_UNIMPLEMENTED);
+}
+
 ZTEST(common_charger, test_charger_is_icl_reached__bad_arg)
 {
 	bool unused = false;
@@ -67,6 +91,42 @@ ZTEST(common_charger, test_charger_is_icl_reached__unsupported)
 	bool unused;
 
 	zassert_equal(charger_is_icl_reached(CHG_NUM, &unused),
+		      EC_ERROR_UNIMPLEMENTED);
+}
+
+ZTEST(common_charger, test_charger_enable_linear_charge__bad_arg)
+{
+	/* Not supported without RAA489000 */
+	/* All arguments but 0th are unused. */
+	zassert_equal(charger_enable_linear_charge(INT_MAX, false),
+		      EC_ERROR_INVAL);
+}
+
+ZTEST(common_charger, test_charger_enable_linear_charge__unsupported)
+{
+	/* Not supported without RAA489000 */
+	/* All arguments but 0th are unused. */
+	zassert_equal(charger_enable_linear_charge(CHG_NUM, false),
+		      EC_ERROR_UNIMPLEMENTED);
+}
+
+ZTEST(common_charger, test_charger_get_battery_cells__bad_arg)
+{
+	/* Not supported by isl923x */
+	/* All arguments but 0th are unused. */
+	int unused;
+
+	zassert_equal(charger_get_battery_cells(INT_MAX, &unused),
+		      EC_ERROR_INVAL);
+}
+
+ZTEST(common_charger, test_charger_get_battery_cells__unsupported)
+{
+	/* Not supported by isl923x */
+	/* All arguments but 0th are unused. */
+	int unused;
+
+	zassert_equal(charger_get_battery_cells(CHG_NUM, &unused),
 		      EC_ERROR_UNIMPLEMENTED);
 }
 
