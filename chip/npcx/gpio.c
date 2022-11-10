@@ -354,12 +354,10 @@ int gpio_get_flags_by_mask(uint32_t port, uint32_t mask)
 	else
 		flags |= GPIO_INPUT;
 
-	if (flags & GPIO_OUTPUT) {
-		if (NPCX_PDOUT(port) & mask)
-			flags |= GPIO_HIGH;
-		else
-			flags |= GPIO_LOW;
-	}
+	if (NPCX_PDIN(port) & mask)
+		flags |= GPIO_HIGH;
+	else
+		flags |= GPIO_LOW;
 
 	if (NPCX_PTYPE(port) & mask)
 		flags |= GPIO_OPEN_DRAIN;
