@@ -67,6 +67,4 @@ struct ppc_config_t ppc_chips[] = {};
 
 unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
 
-#ifdef CONFIG_MUX_INIT_ADC
 const struct adc_t adc_channels[] = {};
-#endif
