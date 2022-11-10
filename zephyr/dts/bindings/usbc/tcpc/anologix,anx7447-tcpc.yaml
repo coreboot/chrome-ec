@@ -1,6 +1,6 @@
-description: Analogix ANX7447 USBC TCPC binding
+description: Anologix ANX7447 USBC TCPC binding
 
-compatible: "analogix,anx7447-tcpc"
+compatible: "anologix,anx7447-tcpc"
 
 include: i2c-device.yaml
 
