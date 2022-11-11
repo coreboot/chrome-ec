@@ -23,7 +23,7 @@ static void ap_mux_control_before(void *data)
 	k_sleep(K_SECONDS(1));
 
 	/* And test the assumption that setting NONE worked */
-	zassume_equal(usb_mux_get(USBC_PORT_C0), USB_PD_MUX_NONE,
+	zassert_equal(usb_mux_get(USBC_PORT_C0), USB_PD_MUX_NONE,
 		      "Failed to set mux to initial state");
 }
 
@@ -39,6 +39,15 @@ static void ap_mux_control_after(void *data)
 
 ZTEST_SUITE(ap_mux_control, drivers_predicate_post_main, NULL,
 	    ap_mux_control_before, ap_mux_control_after, NULL);
+
+ZTEST(ap_mux_control, test_feature_present)
+{
+	struct ec_response_get_features feat = host_cmd_get_features();
+
+	zassert_true(feat.flags[1] &
+			     EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_AP_MUX_SET),
+		     "Failed to see feature present");
+}
 
 ZTEST(ap_mux_control, test_set_muxes)
 {

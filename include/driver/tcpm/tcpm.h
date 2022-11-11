@@ -286,18 +286,30 @@ static inline int tcpm_set_snk_ctrl(int port, int enable)
 		return EC_ERROR_UNIMPLEMENTED;
 }
 
-static inline bool tcpm_get_src_ctrl(int port)
+test_mockable_static_inline bool tcpm_get_src_ctrl(int port)
 {
 	return tcpc_config[port].drv->get_src_ctrl ?
 		       tcpc_config[port].drv->get_src_ctrl(port) :
 		       false;
 }
+
 static inline int tcpm_set_src_ctrl(int port, int enable)
 {
 	if (tcpc_config[port].drv->set_src_ctrl != NULL)
 		return tcpc_config[port].drv->set_src_ctrl(port, enable);
 	else
 		return EC_ERROR_UNIMPLEMENTED;
+}
+
+static inline int tcpc_get_vbus_voltage(int port)
+{
+	int vbus;
+
+	if (tcpc_config[port].drv->get_vbus_voltage != NULL)
+		tcpc_config[port].drv->get_vbus_voltage(port, &vbus);
+	else
+		return 0;
+	return vbus;
 }
 
 static inline void tcpc_alert(int port)

@@ -206,13 +206,17 @@ enum sensor_id {
 	SENSOR_COUNT,
 };
 
+#if defined(TEST_MOTION_ANGLE) || defined(TEST_MOTION_ANGLE_TABLET) || \
+	defined(TEST_MOTION_LID)
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE
 #define CONFIG_LID_ANGLE_SENSOR_LID LID
 #define CONFIG_TABLET_MODE
+#endif /* LID ANGLE needed */
+
 #define CONFIG_MOTION_FILL_LPC_SENSE_DATA
 
-#endif
+#endif /* sensor_id needed */
 
 #if defined(TEST_MOTION_ANGLE)
 #define CONFIG_ACCEL_FORCE_MODE_MASK           \
@@ -399,6 +403,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
 #undef CONFIG_USB_PD_HOST_CMD
+#undef CONFIG_USB_DPM_SM
 #define CONFIG_USB_PRL_SM
 #define CONFIG_USB_PD_TCPC
 #define CONFIG_USB_PD_TCPM_STUB
@@ -419,6 +424,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_EXTENDED_MESSAGES
 #define CONFIG_USB_PD_TCPMV2
 #undef CONFIG_USB_PE_SM
+#undef CONFIG_USB_DPM_SM
 #undef CONFIG_USB_TYPEC_SM
 #undef CONFIG_USB_PD_HOST_CMD
 #define CONFIG_USB_PRL_SM
@@ -527,6 +533,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_POWER_DELIVERY
 #undef CONFIG_USB_PRL_SM
 #undef CONFIG_USB_PE_SM
+#undef CONFIG_USB_DPM_SM
 #undef CONFIG_USB_PD_HOST_CMD
 #endif
 
@@ -611,6 +618,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_CMD_PD_TIMER
 #undef CONFIG_USB_PD_HOST_CMD
 #undef CONFIG_USB_PRL_SM
+#undef CONFIG_USB_DPM_SM
 #endif
 
 #if defined(TEST_CHARGE_MANAGER) || defined(TEST_CHARGE_MANAGER_DRP_CHARGING)
@@ -670,6 +678,10 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_I2C_CONTROLLER
 #define CONFIG_I2C_BITBANG
 #define I2C_BITBANG_PORT_COUNT 1
+#endif
+
+#ifdef TEST_PANIC
+#undef CONFIG_PANIC_STRIP_GPR
 #endif
 
 #endif /* TEST_BUILD */

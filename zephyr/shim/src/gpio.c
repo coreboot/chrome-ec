@@ -95,30 +95,6 @@ int gpio_get_level(enum gpio_signal signal)
 	if (!gpio_is_implemented(signal))
 		return 0;
 
-	/*
-	 * If an output GPIO, get the configured value of the output
-	 * rather than the raw value of the pin.
-	 */
-	if (IS_ENABLED(CONFIG_GPIO_GET_CONFIG) &&
-	    configs[signal].init_flags & GPIO_OUTPUT) {
-		int rv;
-		gpio_flags_t flags;
-
-		rv = gpio_pin_get_config_dt(&configs[signal].spec, &flags);
-		if (rv == 0) {
-			return (flags & GPIO_OUTPUT_INIT_HIGH) ? 1 : 0;
-		}
-		/*
-		 * -ENOSYS is returned when this API call is not supported,
-		 *  so drop into the default method of returning the pin value.
-		 */
-		if (rv != -ENOSYS) {
-			LOG_ERR("Cannot get config for %s (%d)",
-				configs[signal].name, rv);
-			return 0;
-		}
-	}
-
 	const int l = gpio_pin_get_raw(configs[signal].spec.port,
 				       configs[signal].spec.pin);
 
@@ -354,6 +330,16 @@ void gpio_set_flags(enum gpio_signal signal, int flags)
 
 	gpio_pin_configure_dt(&configs[signal].spec,
 			      convert_to_zephyr_flags(flags));
+}
+
+void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
+{
+	int pin;
+
+	for (pin = 0; pin < 8; pin++)
+		if (mask & BIT(pin))
+			gpio_configure_port_pin(port, pin,
+						convert_to_zephyr_flags(flags));
 }
 
 int signal_is_gpio(int signal)

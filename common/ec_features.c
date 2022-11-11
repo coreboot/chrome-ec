@@ -5,11 +5,12 @@
 
 /* Present Chrome EC device features to the outside world */
 
+#include "board_config.h"
 #include "common.h"
 #include "config.h"
 #include "console.h"
 #include "ec_commands.h"
-#include "board_config.h"
+#include "motion_sense.h"
 
 uint32_t get_feature_flags0(void)
 {
@@ -128,7 +129,10 @@ uint32_t get_feature_flags1(void)
 		| EC_FEATURE_MASK_1(EC_FEATURE_MOTION_SENSE_TIGHT_TIMESTAMPS)
 #endif
 #if defined(CONFIG_LID_ANGLE) && defined(CONFIG_TABLET_MODE)
-		| EC_FEATURE_MASK_1(EC_FEATURE_REFINED_TABLET_MODE_HYSTERESIS)
+		| (sensor_board_is_lid_angle_available() ?
+			   EC_FEATURE_MASK_1(
+				   EC_FEATURE_REFINED_TABLET_MODE_HYSTERESIS) :
+			   0)
 #endif
 #ifdef CONFIG_VBOOT_EFS2
 		| EC_FEATURE_MASK_1(EC_FEATURE_EFS2)
@@ -153,6 +157,9 @@ uint32_t get_feature_flags1(void)
 #endif
 #ifdef CONFIG_USB_MUX_AP_CONTROL
 		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_AP_MUX_SET)
+#endif
+#ifdef CONFIG_USB_PD_VDM_AP_CONTROL
+		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_AP_VDM_SEND)
 #endif
 		;
 	return board_override_feature_flags1(result);

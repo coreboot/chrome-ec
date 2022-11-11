@@ -72,6 +72,10 @@ struct pchg pchgs[] = {
 			.full_percent = 96,
 			.block_size = 128,
 		},
+		.policy = {
+			[PCHG_CHIPSET_STATE_ON] = &pchg_policy_on,
+			[PCHG_CHIPSET_STATE_SUSPEND] = &pchg_policy_suspend,
+		},
 		.events = QUEUE_NULL(PCHG_EVENT_QUEUE_SIZE, enum pchg_event),
 	},
 };
@@ -509,6 +513,7 @@ void board_tcpc_init(void)
 
 	/* Enable PPC interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_SWCTL_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_SWCTL_INT_ODL);
 
 	/* Enable TCPC interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
