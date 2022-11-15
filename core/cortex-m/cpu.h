@@ -71,4 +71,9 @@ void cpu_invalidate_dcache(void);
 /* Clean and Invalidate the D-cache to the Point of Coherency */
 void cpu_clean_invalidate_dcache(void);
 
+/* Return to specified function from exception handler using main stack. */
+void cpu_return_from_exception_msp(void (*func)(void));
+/* Return to specified function from exception handler using process stack. */
+void cpu_return_from_exception_psp(void (*func)(void));
+
 #endif /* __CROS_EC_CPU_H */
