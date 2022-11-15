@@ -20,9 +20,6 @@ config LINK_TEST_SUITE_AP_VDM_CONTROL
 config LINK_TEST_SUITE_BUTTON
 	bool "Link tests for common/button.c"
 
-config LINK_TEST_SUITE_BUTTON_CONFIG
-	bool "Link tests for common/button_config"
-
 config LINK_TEST_SUITE_CHARGESPLASH
 	bool "Link and test the chargesplash tests"
 
@@ -122,5 +119,11 @@ config LINK_TEST_SUITE_USBC_VCONN_SWAP
 config LINK_TEST_SUITE_CONSOLE
 	bool "Link and test the console tests"
 	select UART_INTERRUPT_DRIVEN
+
+config LINK_TEST_SUITE_HOST_CMD_THREAD
+	bool "Link and test the host command thread override tests"
+
+config LINK_TEST_SUITE_PI3USB9201
+	bool "Link and test the pi3usb9201 tests"
 
 source "Kconfig.zephyr"

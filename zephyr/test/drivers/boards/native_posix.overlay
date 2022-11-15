@@ -57,16 +57,41 @@
 		port0@0 {
 			compatible = "named-usbc-port";
 			reg = <0>;
+			bc12 = <&pi3usb9201_emul0>;
 			chg = <&isl923x_emul>;
 			tcpc = <&tcpci_emul>;
 			ppc = <&sn5s330_emul>;
+			usb-mux-chain-0 {
+				compatible = "cros-ec,usb-mux-chain";
+				usb-muxes = <&tcpci_mux_c0
+					     &virtual_mux_c0>;
+			};
+		};
+		port0-muxes {
+			tcpci_mux_c0: tcpci-mux-c0 {
+				compatible = "cros-ec,usbc-mux-tcpci";
+			};
+			virtual_mux_c0: virtual-mux-c0 {
+				compatible = "cros-ec,usbc-mux-virtual";
+			};
 		};
 
 		port1@1 {
 			compatible = "named-usbc-port";
 			reg = <1>;
+			bc12 = <&pi3usb9201_emul1>;
 			tcpc = <&ps8xxx_emul>;
 			ppc = <&syv682x_emul>;
+			usb-mux-chain-1 {
+				compatible = "cros-ec,usb-mux-chain";
+				usb-muxes = <&usb_c1_bb_retimer_emul
+					     &virtual_mux_c1>;
+			};
+		};
+		port1-muxes {
+			virtual_mux_c1: virtual-mux-c1 {
+				compatible = "cros-ec,usbc-mux-virtual";
+			};
 		};
 	};
 
@@ -178,7 +203,7 @@
 			/* GPIO_PULL_UP will cause this start asserted,
 			 * i.e. not pressed.
 			 */
-			gpios = <&gpio0 25 (GPIO_INPUT_PULL_UP)>;
+			gpios = <&gpio0 25 (GPIO_INPUT | GPIO_PULL_UP)>;
 			enum-name = "GPIO_POWER_BUTTON_L";
 		};
 		gpio_src_vph_pwr_pg: src_vph_pwr_pg {
@@ -187,6 +212,7 @@
 		};
 		gpio_test: test {
 			gpios = <&gpio0 27 (GPIO_INPUT | GPIO_OUTPUT)>;
+			enum-name = "GPIO_TEST";
 		};
 		ec_batt_pres_odl {
 			gpios = <&gpio0 28 GPIO_INPUT>;
@@ -241,6 +267,12 @@
 		gpio_ec_cbi_wp: ec_cbi_wp {
 			gpios = <&gpio1 9 GPIO_OUTPUT>;
 		};
+		gpio_usb_c0_bc12_int_l: usb_c0_bc12_int_l {
+			gpios = <&gpio1 10 GPIO_INPUT>;
+		};
+		gpio_usb_c1_bc12_int_l: usb_c1_bc12_int_l {
+			gpios = <&gpio1 11 GPIO_INPUT>;
+		};
 	};
 
 	gpio1: gpio@101 {
@@ -253,7 +285,7 @@
 		low-level;
 		gpio-controller;
 		#gpio-cells = <2>;
-		ngpios = <10>;
+		ngpios = <12>;
 	};
 
 	gpio-interrupts {
@@ -304,15 +336,20 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "power_signal_interrupt";
 		};
-		int_power_button: power_button {
-			irq-pin = <&gpio_ec_pwr_btn_odl>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "power_button_interrupt";
-		};
 		int_wp_l: wp_l {
 			irq-pin = <&gpio_wp_l>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "switch_interrupt";
+		};
+		int_usb_c0_bc12: usb_c0_bc12 {
+			irq-pin = <&gpio_usb_c0_bc12_int_l>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "usb0_evt";
+		};
+		int_usb_c1_bc12: usb_c1_bc12 {
+			irq-pin = <&gpio_usb_c1_bc12_int_l>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "usb1_evt";
 		};
 	};
 
@@ -501,6 +538,11 @@
 			temp_host_release_high = <65>;
 			power-good-pin = <&gpio_ec_pg_pin_temp>;
 			sensor = <&temp_fan>;
+		};
+		named_pct2075: soc {
+			status = "okay";
+			power-good-pin = <&gpio_ec_pg_pin_temp>;
+			sensor = <&pct2075_emul>;
 		};
 	};
 
@@ -782,9 +824,10 @@
 		#size-cells = <0>;
 		reg = <0x500 4>;
 
-		pi3usb9201_emul: pi3usb9201@5f {
-			compatible = "zephyr,pi3usb9201-emul";
+		pi3usb9201_emul0: pi3usb9201@5f {
+			compatible = "pericom,pi3usb9201";
 			reg = <0x5f>;
+			irq = <&int_usb_c0_bc12>;
 		};
 
 		sn5s330_emul: sn5s330@40 {
@@ -809,6 +852,12 @@
 		#size-cells = <0>;
 		reg = <0x600 4>;
 
+		pi3usb9201_emul1: pi3usb9201@5d {
+			compatible = "pericom,pi3usb9201";
+			reg = <0x5d>;
+			irq = <&int_usb_c1_bc12>;
+		};
+
 		syv682x_emul: syv682x@41 {
 			compatible = "zephyr,syv682x-emul";
 			reg = <0x41>;
@@ -817,11 +866,10 @@
 		};
 
 		usb_c1_bb_retimer_emul: bbretimer@42 {
-			compatible = "cros,bb-retimer-emul";
+			compatible = "intel,jhl8040r";
 			reg = <0x42>;
-			vendor = "BB_RETIMER_VENDOR_ID_1";
-			error-on-ro-write;
-			error-on-reserved-bit-write;
+			reset-pin = <&usb_c1_rt_rst_odl>;
+			ls-en-pin = <&usb_c1_ls_en>;
 		};
 
 		ps8xxx_emul: ps8xxx_emul@b {
@@ -831,6 +879,11 @@
 			p0-i2c-addr = <0x8>;
 			p1-i2c-addr = <0x9>;
 			gpio-i2c-addr = <0x1a>;
+		};
+
+		pct2075_emul: pct2075@48 {
+			compatible = "nxp,pct2075";
+			reg = <0x48>;
 		};
 	};
 
@@ -987,26 +1040,6 @@
 	   buffer-size = <200>;
 	};
 
-	button-cfg {
-		compatible = "cros-ec,button-cfg";
-
-		btn_power_button_cfg: power_button_cfg {
-			button_name = "POWER_BUTTON";
-			button_type = <0>;
-			spec = <&gpio_ec_pwr_btn_odl>;
-			gpio_int = <&int_power_button>;
-			debounce_us = <30000>;
-			flags = <0>;
-		};
-		btn_test_button_cfg: test_button_cfg {
-			button_name = "TEST_BUTTON";
-			button_type = <0>;
-			spec = <&gpio_test>;
-			gpio_int = <&int_gpio_test>;
-			debounce_us = <30000>;
-			flags = <0>;
-		};
-	};
 };
 
 &espi0 {
