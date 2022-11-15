@@ -14,6 +14,7 @@
 #include "lpc.h"
 #include "shared_mem.h"
 #include "system.h"
+#include "system_safe_mode.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
@@ -370,6 +371,10 @@ host_packet_bad:
  */
 static const struct host_command *find_host_command(int command)
 {
+	if (IS_ENABLED(CONFIG_SYSTEM_SAFE_MODE) && system_is_in_safe_mode()) {
+		if (!command_is_allowed_in_safe_mode(command))
+			return NULL;
+	}
 	if (IS_ENABLED(CONFIG_ZEPHYR)) {
 		return zephyr_find_host_command(command);
 	} else if (IS_ENABLED(CONFIG_HOSTCMD_SECTION_SORTED)) {

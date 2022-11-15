@@ -410,3 +410,5 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VSTORE
                                                 "${PLATFORM_EC}/common/vstore.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SYSTEM_SAFE_MODE
+                                                "${PLATFORM_EC}/common/system_safe_mode.c")
