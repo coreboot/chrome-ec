@@ -3,19 +3,19 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/drivers/emul.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
-#include <zephyr/kernel.h>
-#include <zephyr/shell/shell_dummy.h>
-#include <zephyr/ztest.h>
-
 #include "ec_commands.h"
 #include "emul/emul_flash.h"
 #include "flash.h"
 #include "host_command.h"
 #include "system.h"
 #include "test/drivers/test_state.h"
+
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/shell/shell_dummy.h>
+#include <zephyr/ztest.h>
 
 #define WP_L_GPIO_PATH DT_PATH(named_gpios, wp_l)
 
@@ -309,12 +309,15 @@ ZTEST_USER(flash, test_console_cmd_flash_info)
 	sprintf(format_buffer, "Protect: %4d B", CONFIG_FLASH_BANK_SIZE);
 	zassert_not_null(strstr(outbuffer, format_buffer));
 
-	zassert_not_null(strstr(outbuffer, "wp_gpio_asserted"));
+	zassert_not_null(strstr(outbuffer, "wp_gpio_asserted: ON"));
+	zassert_not_null(strstr(outbuffer, "ro_at_boot: OFF"));
+	zassert_not_null(strstr(outbuffer, "all_at_boot: OFF"));
+	zassert_not_null(strstr(outbuffer, "ro_now: OFF"));
+	zassert_not_null(strstr(outbuffer, "all_now: OFF"));
+	zassert_not_null(strstr(outbuffer, "STUCK: OFF"));
+	zassert_not_null(strstr(outbuffer, "INCONSISTENT: OFF"));
+	zassert_not_null(strstr(outbuffer, "UNKNOWN_ERROR: OFF"));
 	zassert_not_null(strstr(outbuffer, "Protected now"));
-	/*
-	 * TODO(b/254926324): Fake crec_flash_get_protect() to get more
-	 * flag messages.
-	 */
 }
 
 ZTEST_USER(flash, test_console_cmd_flashwp__invalid)

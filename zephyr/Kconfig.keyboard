@@ -19,6 +19,15 @@ menuconfig PLATFORM_EC_KEYBOARD
 
 if PLATFORM_EC_KEYBOARD
 
+config CROS_EC_KEYSCAN
+	bool "Devicetree based keyscan map"
+	default y
+	depends on DT_HAS_CROS_EC_KEYSCAN_ENABLED
+	help
+	  Define a keyscan_config data structure based on a the keyscan
+	  configuration found in devicetree. Requires a cros-ec,keyscan node to
+	  be defined.
+
 choice PLATFORM_EC_KEYBOARD_PROTOCOL_MODE
 	prompt "Select the keyboard protocol to use"
 	help
@@ -50,6 +59,8 @@ endchoice # PLATFORM_EC_KEYBOARD_PROTOCOL_MODE
 
 config PLATFORM_EC_KEYBOARD_DISCRETE
 	bool "Support discrete Keyboard"
+	default y
+	depends on $(dt_nodelabel_enabled,kb_discrete)
 	help
 	  Enable support for a discrete Keyboard if the platform needs one
 	  or the raw Keyboard support is not built-in in the EC.
@@ -92,17 +103,17 @@ config PLATFORM_EC_KEYBOARD_VIVALDI
 config PLATFORM_EC_KEYBOARD_CUSTOMIZATION
 	bool "Support keyboard customization"
 	help
-		Enable support for customization keyboard, some boards need to custom matrix
-		because those board keyboard layout doesn't follow a common matrix.
+	  Enable support for customization keyboard, some boards need to custom matrix
+	  because those board keyboard layout doesn't follow a common matrix.
 
-		If define, the board layer
-		needs to implement:
-		1. the scancode_set2 and keycap_label array
-		2. keyboard_customization.h which is similar to keyboard_config.h
+	  If define, the board layer
+	  needs to implement:
+	  1. the scancode_set2 and keycap_label array
+	  2. keyboard_customization.h which is similar to keyboard_config.h
 
-		Note that if your board has the standard chromeos keyboard layout other
-		than the top row, and you are looking only for top row customization,
-		then you should be looking at overriding board_vivaldi_keybd_config() instead.
+	  Note that if your board has the standard chromeos keyboard layout other
+	  than the top row, and you are looking only for top row customization,
+	  then you should be looking at overriding board_vivaldi_keybd_config() instead.
 
 choice PLATFORM_EC_KEYBOARD_PWRBTN_MODE
 	prompt "Select the impact of pressing the power button"

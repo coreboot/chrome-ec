@@ -1,4 +1,4 @@
-/* Copyright 2022 The ChromiumOS Authors.
+/* Copyright 2022 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -10,14 +10,14 @@
  *   Do not add tests to this binary. This test messes with the main thread and
  *   can only run a single test function.
  */
+#include "host_command.h"
+#include "task.h"
+#include "test/drivers/test_state.h"
+
 #include <string.h>
 
 #include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
-
-#include "host_command.h"
-#include "task.h"
-#include "test/drivers/test_state.h"
 
 #define CUSTOM_COMMAND_ID 0x0088
 

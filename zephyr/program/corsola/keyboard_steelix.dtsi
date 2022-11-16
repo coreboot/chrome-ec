@@ -5,9 +5,10 @@
 
 / {
 	cros-keyscan {
-		compatible = "cros-keyscan";
+		compatible = "cros-ec,keyscan";
 
-		scan-period = <10000>;
+		debounce-down = <15000>;
+		debounce-up = <15000>;
 
 		actual-key-mask = <
 			0x1c	/* C0 */
