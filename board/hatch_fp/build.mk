@@ -40,6 +40,7 @@ test-list-y=\
        flash_write_protect \
        fpsensor \
        fpsensor_hw \
+       ftrapv \
        libc_printf \
        mpu \
        mutex \
@@ -48,6 +49,7 @@ test-list-y=\
        pingpong \
        printf \
        queue \
+       rng_benchmark \
        rollback \
        rollback_entropy \
        rsa3 \

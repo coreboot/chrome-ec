@@ -7,6 +7,8 @@ target_sources(app PRIVATE
     src/bmi160.c
     src/bmi260.c
     src/charge_manager.c
+    src/charge_state_prevent_power_on.c
+    src/chipset.c
     src/console.c
     src/console_cmd/adc.c
     src/console_cmd/battery.c
@@ -81,6 +83,7 @@ target_sources(app PRIVATE
     src/smart.c
     src/stm_mems_common.c
     src/tablet_mode.c
+    src/task.c
     src/tcpci.c
     src/tcpci_test_common.c
     src/tcs3400.c

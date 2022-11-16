@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+#define CONFIG_LTO
+
 /*
  * By default, enable all console messages excepted HC, ACPI and event:
  * The sensor stack is generating a lot of activity.
@@ -31,6 +33,7 @@
 #define CONFIG_ADC
 #define CONFIG_BACKLIGHT_LID
 #define CONFIG_HOST_INTERFACE_ESPI
+#define CONFIG_FPU
 #define CONFIG_I2C
 #define CONFIG_I2C_BUS_MAY_BE_UNPOWERED
 #define CONFIG_I2C_CONTROLLER

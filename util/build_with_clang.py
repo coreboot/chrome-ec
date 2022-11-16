@@ -61,12 +61,14 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "minimuffin",
     "moonball",
     "nucleo-f072rb",
+    "oak",
     "pdeval-stm32f072",
     "plankton",
     "prism",
     "rainier",
     "scarlet",
     "servo_micro",
+    "servo_v4",
     "servo_v4p1",
     "staff",
     "star",
@@ -77,6 +79,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "zinger",
     # Boards that use CHIP:=mchp
     # git grep --name-only 'CHIP:=mchp' | sed 's#board/\(.*\)/build.mk#"\1",#'
+    "adlrvpp_mchp1521",
     "adlrvpp_mchp1727",
     "mchpevb1",
     "reef_mchp",
@@ -132,6 +135,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "fleex",
     "foob",
     "gaelin",
+    "gelarshie",
     "genesis",
     "gimble",
     "grunt",
@@ -171,6 +175,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "nautilus",
     "nightfury",
     "nipperkin",
+    "nocturne",
     "npcx7_evb",
     "npcx9_evb",
     "npcx_evb",
@@ -207,6 +212,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "voxel",
     "voxel_ecmodeentry",
     "voxel_npcx797fc",
+    "waddledoo",
     "waddledoo2",
     "whiskers",
     "woomax",
@@ -232,6 +238,7 @@ NDS32_BOARDS = [
     "beetley",
     "blipper",
     "boten",
+    "dibbi",
     "drawcia",
     "galtic",
     "gooey",
@@ -285,21 +292,13 @@ BOARDS_THAT_FAIL_WITH_CLANG = [
     "krane",  # overflows flash
     "kukui",  # overflows flash
     "makomo",  # overflows flash
-    "oak",  # overflows flash
-    "servo_v4",  # overflows flash
     "stern",  # overflows flash
     "willow",  # overflows flash
-    # Boards that use CHIP:=mchp
-    # git grep --name-only 'CHIP:=mchp' | sed 's#board/\(.*\)/build.mk#"\1",#'
-    "adlrvpp_mchp1521",  # overflows flash
     # Boards that use CHIP:=npcx
     "garg",  # overflows flash
-    "gelarshie",  # overflows flash
     "mushu",  # overflows flash
-    "nocturne",  # overflows flash
     "terrador",  # overflows flash
     "volteer",  # overflows flash
-    "waddledoo",  # overflows flash
 ]
 
 # TODO(b/201311714): NDS32 is not supported by LLVM.

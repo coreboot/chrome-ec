@@ -236,6 +236,7 @@ class AllTests:
                 test_name="fpsensor",
                 test_args=["uart"],
             ),
+            TestConfig(test_name="ftrapv"),
             TestConfig(
                 test_name="libc_printf",
                 finish_regexes=[PRINTF_CALLED_REGEX],
@@ -256,6 +257,7 @@ class AllTests:
             TestConfig(test_name="pingpong"),
             TestConfig(test_name="printf"),
             TestConfig(test_name="queue"),
+            TestConfig(test_name="rng_benchmark"),
             TestConfig(
                 config_name="rollback_region0",
                 test_name="rollback",

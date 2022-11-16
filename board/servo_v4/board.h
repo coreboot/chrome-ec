@@ -35,7 +35,6 @@
 #define CONFIG_CMD_USART_INFO
 
 /* Optional features */
-#define CONFIG_STM_HWTIMER32
 #define CONFIG_HW_CRC
 #define CONFIG_PVD
 /* See 'Programmable voltage detector characteristics' in the STM32F072x8
@@ -97,6 +96,8 @@
 #undef CONFIG_CMD_FLASHINFO
 #undef CONFIG_CMD_FLASH_WP
 #undef CONFIG_CMD_GETTIME
+#undef CONFIG_CMD_I2C_SCAN
+#undef CONFIG_CMD_I2C_XFER
 #undef CONFIG_CMD_MEM
 #undef CONFIG_CMD_SHMEM
 #undef CONFIG_CMD_SYSLOCK

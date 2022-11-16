@@ -3,15 +3,15 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
-
 #include "charge_state.h"
 #include "charge_state_v2.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
 
 ZTEST_USER(console_cmd_charge_state, test_idle_too_few_args)
 {
@@ -159,6 +159,16 @@ ZTEST_USER(console_cmd_charge_state, test_sustain_invalid_params)
 	zassert_equal(shell_execute_cmd(get_ec_shell(),
 					"chgstate sustain 50 101"),
 		      EC_ERROR_INVAL, NULL);
+
+	/* Verify invalid lower bound (not a number) */
+	zassert_equal(shell_execute_cmd(get_ec_shell(),
+					"chgstate sustain a 50"),
+		      EC_ERROR_PARAM2);
+
+	/* Verify invalid uppoer bound (not a number) */
+	zassert_equal(shell_execute_cmd(get_ec_shell(),
+					"chgstate sustain 30 a"),
+		      EC_ERROR_PARAM3);
 }
 
 struct console_cmd_charge_state_fixture {

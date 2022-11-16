@@ -10,7 +10,6 @@ This is the entry point for the custom firmware builder workflow recipe.
 
 import argparse
 import multiprocessing
-import os
 import pathlib
 import re
 import shlex
@@ -25,7 +24,7 @@ DEFAULT_BUNDLE_DIRECTORY = "/tmp/artifact_bundles"
 DEFAULT_BUNDLE_METADATA_FILE = "/tmp/artifact_bundle_metadata"
 
 # Boards that we want to track the coverage of our own files specifically.
-SPECIAL_BOARDS = ["herobrine", "krabby", "nivviks", "skyrim", "kingler"]
+SPECIAL_BOARDS = ["herobrine", "krabby", "nivviks", "skyrim", "kingler", "rex"]
 
 
 def log_cmd(cmd, env=None):
@@ -48,34 +47,21 @@ def run_twister(
     Returns the path to the twister-out dir.
     """
 
-    third_party_zephyr = platform_ec.parent.parent / "third_party/zephyr/main"
     if use_gcc:
-        c_compiler = "/usr/bin/x86_64-pc-linux-gnu-gcc"
-        cxx_compiler = "/usr/bin/x86_64-pc-linux-gnu-g++"
         outdir = "twister-out-gcc"
-        env = {
-            "ZEPHYR_TOOLCHAIN_VARIANT": "host",
-            "TOOLCHAIN_ROOT": third_party_zephyr,
-        }
+        toolchain = "host"
     else:
-        c_compiler = "/usr/bin/x86_64-pc-linux-gnu-clang"
-        cxx_compiler = "/usr/bin/x86_64-pc-linux-gnu-clang++"
         outdir = "twister-out-llvm"
-        env = {}
-
+        toolchain = "llvm"
     cmd = [
         platform_ec / "twister",
         "--outdir",
         platform_ec / outdir,
         "-v",
         "-i",
-        "-p",
-        "native_posix",
-        "-p",
-        "unit_testing",
         "--no-upload-cros-rdb",
-        "-x=CMAKE_C_COMPILER=" + c_compiler,
-        "-x=CMAKE_CXX_COMPILER=" + cxx_compiler,
+        "--toolchain",
+        toolchain,
     ]
 
     if extra_args:
@@ -89,16 +75,13 @@ def run_twister(
                 "--coverage",
             ]
         )
-    log_cmd(cmd, env=env)
-    my_env = os.environ.copy()
-    my_env.update(env)
+    log_cmd(cmd)
 
     subprocess.run(
         cmd,
         check=True,
         cwd=platform_ec,
         stdin=subprocess.DEVNULL,
-        env=my_env,
     )
     return platform_ec / outdir
 
@@ -117,7 +100,7 @@ def build(opts):
     )
 
     # Start with a clean build environment
-    cmd = ["make", "clobber", "V=1"]
+    cmd = ["make", "clobber"]
     log_cmd(cmd)
     subprocess.run(cmd, cwd=platform_ec, check=True, stdin=subprocess.DEVNULL)
 
@@ -324,7 +307,7 @@ def test(opts):
         ).stdout
         _extract_lcov_summary("EC_ZEPHYR_TESTS_GCC", metrics, output)
 
-        cmd = ["make", "test-coverage", f"-j{opts.cpus}", "V=1"]
+        cmd = ["make", "test-coverage", f"-j{opts.cpus}"]
         log_cmd(cmd)
         subprocess.run(
             cmd, cwd=platform_ec, check=True, stdin=subprocess.DEVNULL
@@ -407,6 +390,7 @@ def test(opts):
             zephyr_dir / "emul/**",
             zephyr_dir / "mock/**",
             third_party / "zephyr/main/subsys/emul/**",
+            third_party / "zephyr/main/arch/posix/**",
             # Exclude all files ending in _test.[ch] or _emul.[ch]
             "**/*_test.c",
             "**/*_test.h",

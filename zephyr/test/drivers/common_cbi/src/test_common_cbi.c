@@ -3,14 +3,14 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/drivers/eeprom.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
-#include <zephyr/ztest.h>
-
 #include "cros_board_info.h"
 #include "host_command.h"
 #include "test/drivers/test_mocks.h"
 #include "test/drivers/test_state.h"
+
+#include <zephyr/drivers/eeprom.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/ztest.h>
 
 #define WP_L_GPIO_PATH DT_PATH(named_gpios, wp_l)
 #define CBI_EEPROM_DEV DEVICE_DT_GET(DT_NODELABEL(cbi_eeprom))
@@ -32,6 +32,17 @@ static int __test_eeprom_load_default_impl(uint8_t offset, uint8_t *data,
 	int ret = eeprom_read(CBI_EEPROM_DEV, offset, data, len);
 
 	return ret;
+}
+
+ZTEST(common_cbi, test_cbi_latch_eeprom_wp)
+{
+	const struct gpio_dt_spec *wp = GPIO_DT_FROM_ALIAS(gpio_cbi_wp);
+
+	zassert_equal(gpio_emul_output_get(wp->port, wp->pin), 0);
+
+	cbi_latch_eeprom_wp();
+
+	zassert_equal(gpio_emul_output_get(wp->port, wp->pin), 1);
 }
 
 ZTEST(common_cbi, test_do_cbi_read__cant_load_head)
