@@ -15,6 +15,8 @@
 #line 16
 
 #include <zephyr/devicetree.h>
+#include <zephyr/toolchain.h>
+
 #include <autoconf.h>
 
 #define SENSOR_NODE DT_PATH(motionsense_sensor)
@@ -2106,7 +2108,10 @@ extern char mock_jump_data[sizeof(struct jump_data) + 256];
 #undef CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY
 #ifdef CONFIG_PLATFORM_EC_MAX695X_SEVEN_SEGMENT_DISPLAY
 #define CONFIG_MAX695X_SEVEN_SEGMENT_DISPLAY
-#define PORT80_I2C_ADDR DT_REG_ADDR(DT_NODELABEL(seven_seg_display))
+#define PORT80_I2C_ADDR \
+	DT_REG_ADDR(DT_COMPAT_GET_ANY_STATUS_OKAY(maxim_max695x))
+BUILD_ASSERT((DT_NUM_INST_STATUS_OKAY(maxim_max695x)) == 1,
+	     "Only one instance of maxim,max695x should be defined");
 #endif
 
 #undef CONFIG_CMD_SEVEN_SEG_DISPLAY
@@ -2580,7 +2585,10 @@ extern char mock_jump_data[sizeof(struct jump_data) + 256];
 #undef CONFIG_MP2964
 #ifdef CONFIG_PLATFORM_EC_MP2964
 #define CONFIG_MP2964
-#define I2C_ADDR_MP2964_FLAGS DT_REG_ADDR(DT_NODELABEL(pmic_mp2964))
+#define I2C_ADDR_MP2964_FLAGS \
+	DT_REG_ADDR(DT_COMPAT_GET_ANY_STATUS_OKAY(mps_mp2964))
+BUILD_ASSERT((DT_NUM_INST_STATUS_OKAY(mps_mp2964)) == 1,
+	     "Only one instance of mps,mp2964 should be defined");
 #endif
 
 #undef CONFIG_ACCELGYRO_ICM_COMM_SPI
