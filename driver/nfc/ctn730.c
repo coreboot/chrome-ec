@@ -66,6 +66,8 @@ static const char *_text_instruction(uint8_t instruction)
 		return "CHARGING_STATE";
 	case WLC_CHG_CTRL_CHARGING_INFO:
 		return "CHARGING_INFO";
+	case WLC_CHG_CTRL_OPTIONAL_NDEF:
+		return "OPTIONAL_NDEF";
 	default:
 		return "UNDEF";
 	}
@@ -205,9 +207,9 @@ static int ctn730_init(struct pchg *ctx)
 	cmd->message_type = CTN730_MESSAGE_TYPE_COMMAND;
 	cmd->instruction = WLC_HOST_CTRL_RESET;
 	cmd->length = WLC_HOST_CTRL_RESET_CMD_SIZE;
-	cmd->payload[0] = ctx->mode == PCHG_MODE_NORMAL ?
-				  WLC_HOST_CTRL_RESET_CMD_MODE_NORMAL :
-				  WLC_HOST_CTRL_RESET_CMD_MODE_DOWNLOAD;
+	cmd->payload[0] = ctx->mode == PCHG_MODE_DOWNLOAD ?
+				  WLC_HOST_CTRL_RESET_CMD_MODE_DOWNLOAD :
+				  WLC_HOST_CTRL_RESET_CMD_MODE_NORMAL;
 
 	/* TODO: Run 1 sec timeout timer. */
 	rv = _send_command(ctx, cmd);
@@ -276,8 +278,10 @@ static int _process_payload_response(struct pchg *ctx, struct ctn730_msg *res)
 	case WLC_HOST_CTRL_RESET:
 		if (len != WLC_HOST_CTRL_RESET_RSP_SIZE)
 			return EC_ERROR_UNKNOWN;
-		if (buf[0] != WLC_HOST_STATUS_OK)
-			ctx->event = PCHG_EVENT_OTHER_ERROR;
+		if (buf[0] != WLC_HOST_STATUS_OK) {
+			ctx->event = PCHG_EVENT_ERROR;
+			ctx->error |= PCHG_ERROR_MASK(PCHG_ERROR_RESPONSE);
+		}
 		break;
 	case WLC_HOST_CTRL_DL_OPEN_SESSION:
 		if (len != WLC_HOST_CTRL_DL_OPEN_SESSION_RSP_SIZE)
@@ -318,28 +322,34 @@ static int _process_payload_response(struct pchg *ctx, struct ctn730_msg *res)
 	case WLC_CHG_CTRL_ENABLE:
 		if (len != WLC_CHG_CTRL_ENABLE_RSP_SIZE)
 			return EC_ERROR_UNKNOWN;
-		if (buf[0] != WLC_HOST_STATUS_OK)
-			ctx->event = PCHG_EVENT_OTHER_ERROR;
-		else
+		if (buf[0] != WLC_HOST_STATUS_OK) {
+			ctx->event = PCHG_EVENT_ERROR;
+			ctx->error |= PCHG_ERROR_MASK(PCHG_ERROR_RESPONSE);
+		} else
 			ctx->event = PCHG_EVENT_ENABLED;
 		break;
 	case WLC_CHG_CTRL_DISABLE:
 		if (len != WLC_CHG_CTRL_DISABLE_RSP_SIZE)
 			return EC_ERROR_UNKNOWN;
-		if (buf[0] != WLC_HOST_STATUS_OK)
-			ctx->event = PCHG_EVENT_OTHER_ERROR;
-		else
+		if (buf[0] != WLC_HOST_STATUS_OK) {
+			ctx->event = PCHG_EVENT_ERROR;
+			ctx->error |= PCHG_ERROR_MASK(PCHG_ERROR_RESPONSE);
+		} else
 			ctx->event = PCHG_EVENT_DISABLED;
 		break;
 	case WLC_CHG_CTRL_CHARGING_INFO:
 		if (len != WLC_CHG_CTRL_CHARGING_INFO_RSP_SIZE)
 			return EC_ERROR_UNKNOWN;
 		if (buf[0] != WLC_HOST_STATUS_OK) {
-			ctx->event = PCHG_EVENT_OTHER_ERROR;
+			ctx->event = PCHG_EVENT_ERROR;
+			ctx->error |= PCHG_ERROR_MASK(PCHG_ERROR_RESPONSE);
 		} else {
 			ctx->battery_percent = buf[1];
 			ctx->event = PCHG_EVENT_CHARGE_UPDATE;
 		}
+		break;
+	case WLC_HOST_CTRL_BIST:
+		CPRINTS("Received BIST response");
 		break;
 	default:
 		CPRINTS("Received unknown response (%d)", res->instruction);
@@ -441,6 +451,13 @@ static int _process_payload_event(struct pchg *ctx, struct ctn730_msg *res)
 				return EC_ERROR_INVAL;
 			ctx->event = PCHG_EVENT_DEVICE_LOST;
 			break;
+		case WLC_CHG_CTRL_DEVICE_STATE_DEVICE_FO_PRESENT:
+			if (len != WLC_CHG_CTRL_DEVICE_STATE_EVT_SIZE)
+				return EC_ERROR_INVAL;
+			ctx->event = PCHG_EVENT_ERROR;
+			ctx->error |=
+				PCHG_ERROR_MASK(PCHG_ERROR_FOREIGN_OBJECT);
+			break;
 		default:
 			return EC_ERROR_INVAL;
 		}
@@ -468,6 +485,10 @@ static int _process_payload_event(struct pchg *ctx, struct ctn730_msg *res)
 			return EC_ERROR_INVAL;
 		ctx->event = PCHG_EVENT_CHARGE_UPDATE;
 		ctx->battery_percent = buf[0];
+		break;
+	case WLC_CHG_CTRL_OPTIONAL_NDEF:
+		if (len == 0)
+			return EC_ERROR_INVAL;
 		break;
 	default:
 		CPRINTS("Received unknown event (%d)", res->instruction);
@@ -590,6 +611,13 @@ static int ctn730_update_close(struct pchg *ctx)
 	return EC_SUCCESS_IN_PROGRESS;
 }
 
+static int ctn730_passthru(struct pchg *ctx, bool enable)
+{
+	ctx->mode = enable ? PCHG_MODE_PASSTHRU : PCHG_MODE_NORMAL;
+
+	return EC_SUCCESS;
+}
+
 /**
  * Send command in blocking loop
  *
@@ -661,6 +689,7 @@ const struct pchg_drv ctn730_drv = {
 	.update_open = ctn730_update_open,
 	.update_write = ctn730_update_write,
 	.update_close = ctn730_update_close,
+	.passthru = ctn730_passthru,
 };
 
 static int cc_ctn730(int argc, const char **argv)
@@ -700,12 +729,12 @@ static int cc_ctn730(int argc, const char **argv)
 		cmd->payload[0] = id;
 
 		switch (id) {
-		case 0x01:
-			/* Switch on RF field. Tx driver conf not implemented */
+		case WLC_BIST_CMD_RF_SWITCH_ON:
+		case WLC_BIST_CMD_RF_SWITCH_OFF:
+			/* Tx driver configuration is not implemented. */
 			cmd->length = 1;
 			break;
-		case 0x04:
-			/* WLC device activation test */
+		case WLC_BIST_CMD_DEVICE_ACTIVATION_TEST:
 			cmd->length = 1;
 			break;
 		default:

@@ -370,6 +370,7 @@
 #undef CONFIG_ACCELGYRO_BMI3XX_INT_EVENT
 #undef CONFIG_ACCELGYRO_ICM426XX_INT_EVENT
 #undef CONFIG_ACCELGYRO_ICM42607_INT_EVENT
+#undef CONFIG_ACCEL_BMA4XX_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSM_INT_EVENT
 #undef CONFIG_ACCEL_LSM6DSO_INT_EVENT
 #undef CONFIG_ACCEL_LIS2DS_INT_EVENT
@@ -871,6 +872,9 @@
  */
 #undef CONFIG_SIMULATED_BUTTON
 
+/* Set the default button debounce time in us */
+#define CONFIG_BUTTON_DEBOUNCE (30 * MSEC)
+
 /*
  * Capsense chip has buttons, too.
  */
@@ -1329,8 +1333,14 @@
  */
 #undef CONFIG_OCPC_DEF_RBATT_MOHMS
 
+/* Set a default OCPC drive limit for legacy boards */
+#define CONFIG_OCPC_DEF_DRIVELIMIT_MILLIVOLTS 10
+
 /* Enable trickle charging */
 #undef CONFIG_TRICKLE_CHARGING
+
+/* Set trickle charge current by taking integer value */
+#define CONFIG_RAA489000_TRICKLE_CHARGE_CURRENT 128
 
 /* Wireless chargers */
 #undef CONFIG_CPS8100
@@ -3421,6 +3431,11 @@
  */
 #undef CONFIG_ISL9241_SWITCHING_FREQ
 
+/*
+ * ISL9238C disable the CMOUT latch function.
+ */
+#undef CONFIG_ISL9238C_DISABLE_CMOUT_LATCH
+
 /* Support MKBP event */
 #undef CONFIG_MKBP_EVENT
 
@@ -3986,9 +4001,6 @@
 /* Default stack size to use for tasks, in bytes */
 #undef CONFIG_STACK_SIZE
 
-/* Use 32-bit timer for clock source on stm32. */
-#undef CONFIG_STM_HWTIMER32
-
 /* Compile charger detect for STM32 */
 #undef CONFIG_STM32_CHARGER_DETECT
 
@@ -4462,10 +4474,12 @@
  * TYPEC_SM - Type-C deals with CC lines voltage level connections
  * PRL_SM - Protocol handles flow and chunking TX and RX messages
  * PE - Policy Engine handles PD communication flow
+ * DPM - Device Policy Manager layer is used to determine port policy
  */
 #define CONFIG_USB_TYPEC_SM
 #define CONFIG_USB_PRL_SM
 #define CONFIG_USB_PE_SM
+#define CONFIG_USB_DPM_SM
 
 /* Enables PD Console commands */
 #define CONFIG_USB_PD_CONSOLE_CMD
@@ -4489,6 +4503,9 @@
  * direct the EC to enter a mode. This requires AP software support.
  */
 #undef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
+
+/* Allow the AP to compose VDMs for us to send */
+#undef CONFIG_USB_PD_VDM_AP_CONTROL
 
 /* Supports DP as UFP-D and requires HPD to DP_ATTEN converter */
 #undef CONFIG_USB_PD_ALT_MODE_UFP_DP
@@ -6687,6 +6704,7 @@
  * and CONFIG_USB_PD_PORT_MAX_COUNT, CONFIG_USB_PD_DISCHARGE_TCPC, or
  * CONFIG_USB_PD_DISCHARGE_PPC is defined.
  */
+#ifndef CONFIG_TEST_ENABLE_USB_PD_DISCHARGE
 #ifdef CONFIG_USB_PD_DISCHARGE
 #ifdef CONFIG_USB_PD_DISCHARGE_GPIO
 #if !defined(CONFIG_USB_PD_PORT_MAX_COUNT)
@@ -6699,6 +6717,7 @@
 #endif
 #endif /* CONFIG_USB_PD_DISCHARGE_GPIO */
 #endif /* CONFIG_USB_PD_DISCHARGE */
+#endif /* CONFIG_TEST_ENABLE_USB_PD_DISCHARGE */
 
 /* Chargesplash defaults */
 #ifdef CONFIG_CHARGESPLASH

@@ -10,6 +10,25 @@ if(BOARD STREQUAL unit_testing)
 else()
   zephyr_library_named(spi_flash_reg)
   target_link_libraries(spi_flash_reg PRIVATE cros_ec_interface)
+  # When LTO is enabled, enable only for the "app" library, which compiles
+  # and links all Chromium OS sources.
+  # TODO: Enable LTO for all sources when Zephyr supports it.
+  # See https://github.com/zephyrproject-rtos/zephyr/issues/2112
+  if (DEFINED CONFIG_LTO)
+    # The Zephyr toolchain generates linker errors if both CONFIG_LTO and
+    # CONFIG_FPU are used. See b/184302085.
+    if(("${ZEPHYR_TOOLCHAIN_VARIANT}" STREQUAL "zephyr") AND
+     (DEFINED CONFIG_FPU))
+      message(STATUS "Zephyr toolchain and CONFIG_FPU detected: disabling LTO")
+    else()
+      set_property(
+        TARGET
+          spi_flash_reg
+        PROPERTY
+          INTERPROCEDURAL_OPTIMIZATION True
+      )
+    endif()
+  endif()
 endif()
 
 # Add the sources
@@ -42,6 +61,10 @@ if(BOARD STREQUAL unit_testing)
   # Zephyr's unittest also generates a test_interface which we need in the
   # library (not just in the test binary)
   target_link_libraries(spi_flash_reg PRIVATE test_interface)
+  string(TOLOWER "${CMAKE_C_COMPILER_ID}" lowercase_compiler_id)
+  if("${lowercase_compiler_id}" STREQUAL "clang")
+    target_link_options(testbinary PRIVATE -fprofile-instr-generate)
+  endif()
 
   # W25Q64 has 0x400000 bytes as the first section, setting
   # CONFIG_FLASH_SIZE_BYTES to that allows us to test every branch of

@@ -27,7 +27,7 @@
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
-#include "usb_pd_dpm.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_flags.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pe_sm.h"
@@ -196,18 +196,6 @@ enum pd_cc_states pd_get_cc_state(enum tcpc_cc_voltage_status cc1,
 	 * 2) Only an e-marked cabled without a partner on the other side
 	 */
 	return PD_CC_NONE;
-}
-
-/**
- * This function checks the current CC status of the port partner
- * and returns true if the attached partner is debug accessory.
- */
-bool pd_is_debug_acc(int port)
-{
-	enum pd_cc_states cc_state = pd_get_task_cc_state(port);
-
-	return cc_state == PD_CC_UFP_DEBUG_ACC ||
-	       cc_state == PD_CC_DFP_DEBUG_ACC;
 }
 
 __overridable int pd_board_check_request(uint32_t rdo, int pdo_cnt)
@@ -634,15 +622,17 @@ void pd_set_vbus_discharge(int port, int enable)
 	static mutex_t discharge_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
 #ifdef CONFIG_ZEPHYR
 	static bool inited[CONFIG_USB_PD_PORT_MAX_COUNT];
+#endif
 
+	if (port >= board_get_usb_pd_port_count())
+		return;
+
+#ifdef CONFIG_ZEPHYR
 	if (!inited[port]) {
 		(void)k_mutex_init(&discharge_lock[port]);
 		inited[port] = true;
 	}
 #endif
-	if (port >= board_get_usb_pd_port_count())
-		return;
-
 	mutex_lock(&discharge_lock[port]);
 	enable &= !board_vbus_source_enabled(port);
 
@@ -800,7 +790,7 @@ void pd_srccaps_dump(int port)
 #else
 		const uint32_t pdo = srccaps[i];
 		const uint32_t pdo_mask = pdo & PDO_TYPE_MASK;
-		const char *pdo_type;
+		const char *pdo_type = "?";
 		bool range_flag = true;
 
 		pd_extract_pdo_power(pdo, &max_ma, &max_mv, &min_mv);
@@ -822,9 +812,6 @@ void pd_srccaps_dump(int port)
 				pdo_type = "Aug3.0";
 				range_flag = false;
 			}
-			break;
-		default:
-			pdo_type = "?";
 			break;
 		}
 

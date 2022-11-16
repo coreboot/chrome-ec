@@ -8,6 +8,7 @@
 #include <cros/thermistor/thermistor.dtsi>
 #include <dt-bindings/gpio_defines.h>
 #include <dt-bindings/pwm/pwm.h>
+#include <dt-bindings/wake_mask_event_defines.h>
 #include <freq.h>
 
 / {
@@ -18,6 +19,7 @@
 		cros-ec,flash = &flash0;
 		cros-ec,flash-controller = &cros_flash;
 		cros,rtc = &cros_rtc;
+		zephyr,shell-uart = &test_uart;
 	};
 
 	aliases {
@@ -25,12 +27,27 @@
 		bmi160-int = &ms_bmi160_accel;
 		tcs3400-int = &tcs3400_clear;
 		gpio-wp = &gpio_wp_l;
+		gpio-cbi-wp = &gpio_ec_cbi_wp;
 		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
+		int-wp = &int_wp_l;
 	};
 
 	ec-console {
 		compatible = "ec-console";
 		disabled = "events", "lpc", "hostcmd";
+	};
+
+	ec-mkbp-host-event-wakeup-mask {
+		compatible = "ec-wake-mask-event";
+		wakeup-mask = <(
+			HOST_EVENT_LID_OPEN |
+			HOST_EVENT_POWER_BUTTON |
+			HOST_EVENT_AC_CONNECTED |
+			HOST_EVENT_AC_DISCONNECTED |
+			HOST_EVENT_HANG_DETECT |
+			HOST_EVENT_RTC |
+			HOST_EVENT_MODE_CHANGE |
+			HOST_EVENT_DEVICE)>;
 	};
 
 	usbc {
@@ -209,11 +226,20 @@
 			enum-name = "GPIO_VOLUME_UP_L";
 		};
 		gpio_en_pp5000_usba_r: en_pp5000_usba_r {
-			gpios = <&gpio1 5 GPIO_OUTPUT_LOW>;
+			gpios = <&gpio1 5 (GPIO_INPUT | GPIO_OUTPUT_LOW)>;
 			enum-name = "GPIO_EN_PP5000_USBA_R";
 		};
 		gpio_ec_pg_pin_temp: ec_pg_pin_temp {
 			gpios = <&gpio1 6 GPIO_INPUT>;
+		};
+		gpio_sku_id0: sku_id0 {
+			gpios = <&gpio1 7 GPIO_INPUT>;
+		};
+		gpio_brd_id0: brd_id0 {
+			gpios = <&gpio1 8 GPIO_INPUT>;
+		};
+		gpio_ec_cbi_wp: ec_cbi_wp {
+			gpios = <&gpio1 9 GPIO_OUTPUT>;
 		};
 	};
 
@@ -227,7 +253,7 @@
 		low-level;
 		gpio-controller;
 		#gpio-cells = <2>;
-		ngpios = <7>;
+		ngpios = <10>;
 	};
 
 	gpio-interrupts {
@@ -278,6 +304,11 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "power_signal_interrupt";
 		};
+		int_wp_l: wp_l {
+			irq-pin = <&gpio_wp_l>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "switch_interrupt";
+		};
 	};
 
 	named-i2c-ports {
@@ -315,18 +346,18 @@
 	};
 
 	cbi-ssfc {
-		compatible = "named-cbi-ssfc";
+		compatible = "cros-ec,cbi-ssfc";
 		cbi_ssfc_base_sensor: base_sensor {
 			enum-name = "BASE_SENSOR";
 			size = <2>;
 			base_sensor_0: base0 {
-				compatible = "named-cbi-ssfc-value";
+				compatible = "cros-ec,cbi-ssfc-value";
 				status = "okay";
 				value = <1>;
 				default;
 			};
 			base_sensor_1: base1 {
-				compatible = "named-cbi-ssfc-value";
+				compatible = "cros-ec,cbi-ssfc-value";
 				status = "okay";
 				value = <2>;
 			};
@@ -944,6 +975,13 @@
 		pwms = <&pwm_kblight 0 PWM_KHZ(10) PWM_POLARITY_NORMAL>;
 		generic-pwm-channel = <1>;
 	};
+	test_uart: uart@55556666 {
+	   compatible = "vnd,serial";
+	   reg = <0x55556666 0x1000>;
+	   status = "okay";
+	   buffer-size = <200>;
+	};
+
 };
 
 &espi0 {

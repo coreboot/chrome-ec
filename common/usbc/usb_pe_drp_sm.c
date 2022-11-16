@@ -27,7 +27,7 @@
 #include "usb_dp_alt_mode.h"
 #include "usb_mode.h"
 #include "usb_mux.h"
-#include "usb_pd_dpm.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_policy.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
@@ -202,91 +202,91 @@ typedef int (*svdm_rsp_func)(int port, uint32_t *payload);
 /* List of all Policy Engine level states */
 enum usb_pe_state {
 	/* Super States */
-	PE_PRS_FRS_SHARED,
-	PE_VDM_SEND_REQUEST,
+	PE_PRS_FRS_SHARED, /* pe-st0 */
+	PE_VDM_SEND_REQUEST, /* pe-st1 */
 
 	/* Normal States */
-	PE_SRC_STARTUP,
-	PE_SRC_DISCOVERY,
-	PE_SRC_SEND_CAPABILITIES,
-	PE_SRC_NEGOTIATE_CAPABILITY,
-	PE_SRC_TRANSITION_SUPPLY,
-	PE_SRC_READY,
-	PE_SRC_DISABLED,
-	PE_SRC_CAPABILITY_RESPONSE,
-	PE_SRC_HARD_RESET,
-	PE_SRC_HARD_RESET_RECEIVED,
-	PE_SRC_TRANSITION_TO_DEFAULT,
-	PE_SNK_STARTUP,
-	PE_SNK_DISCOVERY,
-	PE_SNK_WAIT_FOR_CAPABILITIES,
-	PE_SNK_EVALUATE_CAPABILITY,
-	PE_SNK_SELECT_CAPABILITY,
-	PE_SNK_READY,
-	PE_SNK_HARD_RESET,
-	PE_SNK_TRANSITION_TO_DEFAULT,
-	PE_SNK_GIVE_SINK_CAP,
-	PE_SNK_GET_SOURCE_CAP,
-	PE_SNK_TRANSITION_SINK,
-	PE_SEND_SOFT_RESET,
-	PE_SOFT_RESET,
-	PE_SEND_NOT_SUPPORTED,
-	PE_SRC_PING,
-	PE_DRS_EVALUATE_SWAP,
-	PE_DRS_CHANGE,
-	PE_DRS_SEND_SWAP,
-	PE_PRS_SRC_SNK_EVALUATE_SWAP,
-	PE_PRS_SRC_SNK_TRANSITION_TO_OFF,
-	PE_PRS_SRC_SNK_ASSERT_RD,
-	PE_PRS_SRC_SNK_WAIT_SOURCE_ON,
-	PE_PRS_SRC_SNK_SEND_SWAP,
-	PE_PRS_SNK_SRC_EVALUATE_SWAP,
-	PE_PRS_SNK_SRC_TRANSITION_TO_OFF,
-	PE_PRS_SNK_SRC_ASSERT_RP,
-	PE_PRS_SNK_SRC_SOURCE_ON,
-	PE_PRS_SNK_SRC_SEND_SWAP,
-	PE_VCS_EVALUATE_SWAP,
-	PE_VCS_SEND_SWAP,
-	PE_VCS_WAIT_FOR_VCONN_SWAP,
-	PE_VCS_TURN_ON_VCONN_SWAP,
-	PE_VCS_TURN_OFF_VCONN_SWAP,
-	PE_VCS_SEND_PS_RDY_SWAP,
-	PE_VCS_CBL_SEND_SOFT_RESET,
-	PE_VDM_IDENTITY_REQUEST_CBL,
-	PE_INIT_PORT_VDM_IDENTITY_REQUEST,
-	PE_INIT_VDM_SVIDS_REQUEST,
-	PE_INIT_VDM_MODES_REQUEST,
-	PE_VDM_REQUEST_DPM,
-	PE_VDM_RESPONSE,
-	PE_WAIT_FOR_ERROR_RECOVERY,
-	PE_BIST_TX,
-	PE_DEU_SEND_ENTER_USB,
-	PE_DR_GET_SINK_CAP,
-	PE_DR_SNK_GIVE_SOURCE_CAP,
-	PE_DR_SRC_GET_SOURCE_CAP,
+	PE_SRC_STARTUP, /* pe-st2 */
+	PE_SRC_DISCOVERY, /* pe-st3 */
+	PE_SRC_SEND_CAPABILITIES, /* pe-st4 */
+	PE_SRC_NEGOTIATE_CAPABILITY, /* pe-st5 */
+	PE_SRC_TRANSITION_SUPPLY, /* pe-st6 */
+	PE_SRC_READY, /* pe-st7 */
+	PE_SRC_DISABLED, /* pe-st8 */
+	PE_SRC_CAPABILITY_RESPONSE, /* pe-st9 */
+	PE_SRC_HARD_RESET, /* pe-st10 */
+	PE_SRC_HARD_RESET_RECEIVED, /* pe-st11 */
+	PE_SRC_TRANSITION_TO_DEFAULT, /* pe-st12 */
+	PE_SNK_STARTUP, /* pe-st13 */
+	PE_SNK_DISCOVERY, /* pe-st14 */
+	PE_SNK_WAIT_FOR_CAPABILITIES, /* pe-st15 */
+	PE_SNK_EVALUATE_CAPABILITY, /* pe-st16 */
+	PE_SNK_SELECT_CAPABILITY, /* pe-st17 */
+	PE_SNK_READY, /* pe-st18 */
+	PE_SNK_HARD_RESET, /* pe-st19 */
+	PE_SNK_TRANSITION_TO_DEFAULT, /* pe-st20 */
+	PE_SNK_GIVE_SINK_CAP, /* pe-st21 */
+	PE_SNK_GET_SOURCE_CAP, /* pe-st22 */
+	PE_SNK_TRANSITION_SINK, /* pe-st23 */
+	PE_SEND_SOFT_RESET, /* pe-st24 */
+	PE_SOFT_RESET, /* pe-st25 */
+	PE_SEND_NOT_SUPPORTED, /* pe-st26 */
+	PE_SRC_PING, /* pe-st27 */
+	PE_DRS_EVALUATE_SWAP, /* pe-st28 */
+	PE_DRS_CHANGE, /* pe-st29 */
+	PE_DRS_SEND_SWAP, /* pe-st30 */
+	PE_PRS_SRC_SNK_EVALUATE_SWAP, /* pe-st31 */
+	PE_PRS_SRC_SNK_TRANSITION_TO_OFF, /* pe-st32 */
+	PE_PRS_SRC_SNK_ASSERT_RD, /* pe-st33 */
+	PE_PRS_SRC_SNK_WAIT_SOURCE_ON, /* pe-st34 */
+	PE_PRS_SRC_SNK_SEND_SWAP, /* pe-st35 */
+	PE_PRS_SNK_SRC_EVALUATE_SWAP, /* pe-st36 */
+	PE_PRS_SNK_SRC_TRANSITION_TO_OFF, /* pe-st37 */
+	PE_PRS_SNK_SRC_ASSERT_RP, /* pe-st38 */
+	PE_PRS_SNK_SRC_SOURCE_ON, /* pe-st39 */
+	PE_PRS_SNK_SRC_SEND_SWAP, /* pe-st40 */
+	PE_VCS_EVALUATE_SWAP, /* pe-st41 */
+	PE_VCS_SEND_SWAP, /* pe-st42 */
+	PE_VCS_WAIT_FOR_VCONN_SWAP, /* pe-st43 */
+	PE_VCS_TURN_ON_VCONN_SWAP, /* pe-st44 */
+	PE_VCS_TURN_OFF_VCONN_SWAP, /* pe-st45 */
+	PE_VCS_SEND_PS_RDY_SWAP, /* pe-st46 */
+	PE_VCS_CBL_SEND_SOFT_RESET, /* pe-st47 */
+	PE_VDM_IDENTITY_REQUEST_CBL, /* pe-st48 */
+	PE_INIT_PORT_VDM_IDENTITY_REQUEST, /* pe-st49 */
+	PE_INIT_VDM_SVIDS_REQUEST, /* pe-st50 */
+	PE_INIT_VDM_MODES_REQUEST, /* pe-st51 */
+	PE_VDM_REQUEST_DPM, /* pe-st52 */
+	PE_VDM_RESPONSE, /* pe-st53 */
+	PE_WAIT_FOR_ERROR_RECOVERY, /* pe-st54 */
+	PE_BIST_TX, /* pe-st55 */
+	PE_DEU_SEND_ENTER_USB, /* pe-st56 */
+	PE_DR_GET_SINK_CAP, /* pe-st57 */
+	PE_DR_SNK_GIVE_SOURCE_CAP, /* pe-st58 */
+	PE_DR_SRC_GET_SOURCE_CAP, /* pe-st59 */
 
 	/* PD3.0 only states below here*/
 	/* UFP Data Reset States */
-	PE_UDR_SEND_DATA_RESET,
-	PE_UDR_DATA_RESET_RECEIVED,
-	PE_UDR_TURN_OFF_VCONN,
-	PE_UDR_SEND_PS_RDY,
-	PE_UDR_WAIT_FOR_DATA_RESET_COMPLETE,
+	PE_UDR_SEND_DATA_RESET, /* pe-st60 */
+	PE_UDR_DATA_RESET_RECEIVED, /* pe-st61 */
+	PE_UDR_TURN_OFF_VCONN, /* pe-st62 */
+	PE_UDR_SEND_PS_RDY, /* pe-st63 */
+	PE_UDR_WAIT_FOR_DATA_RESET_COMPLETE, /* pe-st64 */
 	/* DFP Data Reset States */
-	PE_DDR_SEND_DATA_RESET,
-	PE_DDR_DATA_RESET_RECEIVED,
-	PE_DDR_WAIT_FOR_VCONN_OFF,
-	PE_DDR_PERFORM_DATA_RESET,
-	PE_FRS_SNK_SRC_START_AMS,
-	PE_GIVE_BATTERY_CAP,
-	PE_GIVE_BATTERY_STATUS,
-	PE_GIVE_STATUS,
-	PE_SEND_ALERT,
-	PE_ALERT_RECEIVED,
-	PE_SRC_CHUNK_RECEIVED,
-	PE_SNK_CHUNK_RECEIVED,
-	PE_VCS_FORCE_VCONN,
-	PE_GET_REVISION,
+	PE_DDR_SEND_DATA_RESET, /* pe-st65 */
+	PE_DDR_DATA_RESET_RECEIVED, /* pe-st66 */
+	PE_DDR_WAIT_FOR_VCONN_OFF, /* pe-st67 */
+	PE_DDR_PERFORM_DATA_RESET, /* pe-st68 */
+	PE_FRS_SNK_SRC_START_AMS, /* pe-st69 */
+	PE_GIVE_BATTERY_CAP, /* pe-st70 */
+	PE_GIVE_BATTERY_STATUS, /* pe-st71 */
+	PE_GIVE_STATUS, /* pe-st72 */
+	PE_SEND_ALERT, /* pe-st73 */
+	PE_ALERT_RECEIVED, /* pe-st74 */
+	PE_SRC_CHUNK_RECEIVED, /* pe-st75 */
+	PE_SNK_CHUNK_RECEIVED, /* pe-st76 */
+	PE_VCS_FORCE_VCONN, /* pe-st77 */
+	PE_GET_REVISION, /* pe-st78 */
 };
 
 /*
@@ -817,11 +817,11 @@ void pe_run(int port, int evt, int en)
 	case SM_PAUSED:
 		if (!en)
 			break;
-		/* fall through */
+		__fallthrough;
 	case SM_INIT:
 		pe_init(port);
 		local_state[port] = SM_RUN;
-		/* fall through */
+		__fallthrough;
 	case SM_RUN:
 		if (!en) {
 			local_state[port] = SM_PAUSED;
@@ -2927,9 +2927,15 @@ static void pe_src_ready_run(int port)
 		if (pe_attempt_port_discovery(port))
 			return;
 
-		/* No DPM requests; attempt mode entry/exit if needed */
-		dpm_run(port);
+		/* Inform DPM state machine that PE is set for messages */
+		dpm_set_pe_ready(port, true);
 	}
+}
+
+static void pe_src_ready_exit(int port)
+{
+	/* Inform DPM state machine that PE is in ready state */
+	dpm_set_pe_ready(port, false);
 }
 
 /**
@@ -3030,9 +3036,7 @@ static void pe_src_hard_reset_entry(int port)
 	pd_timer_enable(port, PE_TIMER_PS_HARD_RESET, PD_T_PS_HARD_RESET);
 
 	/* Clear error flags */
-	PE_CLR_MASK(port, BIT(PE_FLAGS_VDM_REQUEST_NAKED_FN) |
-				  BIT(PE_FLAGS_PROTOCOL_ERROR_FN) |
-				  BIT(PE_FLAGS_VDM_REQUEST_BUSY_FN));
+	PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
 }
 
 static void pe_src_hard_reset_run(int port)
@@ -3352,6 +3356,26 @@ static void pe_snk_select_capability_entry(int port)
 	tc_pd_connection(port, 1);
 }
 
+static void pe_snk_apply_psnkstdby(int port)
+{
+	uint32_t mv = pd_get_requested_voltage(port);
+	uint32_t high;
+
+	/*
+	 * Apply 2.5W ceiling during transition. We need choose the larger of
+	 * the current input voltage and the new PDO voltage because during a
+	 * transition, both voltages can be applied to the device. If the
+	 * current source isn't PD, we don't need to care about drawing more
+	 * than pSnkStdby. Thus, it's not considered (in the else clause).
+	 */
+	if (charge_manager_get_supplier() == CHARGE_SUPPLIER_PD)
+		high = MAX(charge_manager_get_charger_voltage(), mv);
+	else
+		high = mv;
+	charge_manager_force_ceil(
+		port, high > 0 ? PD_SNK_STDBY_MW * 1000 / high : PD_MIN_MA);
+}
+
 static void pe_snk_select_capability_run(int port)
 {
 	uint8_t type;
@@ -3415,6 +3439,9 @@ static void pe_snk_select_capability_run(int port)
 			if (type == PD_CTRL_ACCEPT) {
 				/* explicit contract is now in place */
 				pe_set_explicit_contract(port);
+
+				if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
+					pe_snk_apply_psnkstdby(port);
 
 				set_state_pe(port, PE_SNK_TRANSITION_SINK);
 
@@ -3782,9 +3809,15 @@ static void pe_snk_ready_run(int port)
 		if (pe_attempt_port_discovery(port))
 			return;
 
-		/* No DPM requests; attempt mode entry/exit if needed */
-		dpm_run(port);
+		/* Inform DPM state machine that PE is set for messages */
+		dpm_set_pe_ready(port, true);
 	}
+}
+
+static void pe_snk_ready_exit(int port)
+{
+	/* Inform DPM state machine that PE is in ready state */
+	dpm_set_pe_ready(port, false);
 }
 
 /**
@@ -3860,9 +3893,7 @@ static void pe_snk_hard_reset_entry(int port)
 #endif
 
 	PE_CLR_MASK(port, BIT(PE_FLAGS_SNK_WAIT_CAP_TIMEOUT_FN) |
-				  BIT(PE_FLAGS_VDM_REQUEST_NAKED_FN) |
-				  BIT(PE_FLAGS_PROTOCOL_ERROR_FN) |
-				  BIT(PE_FLAGS_VDM_REQUEST_BUSY_FN));
+				  BIT(PE_FLAGS_PROTOCOL_ERROR_FN));
 
 	/* Request the generation of Hard Reset Signaling by the PHY Layer */
 	prl_execute_hard_reset(port);
@@ -5997,8 +6028,8 @@ static void pe_init_vdm_modes_request_run(int port)
 			dfp_consume_modes(port, sop, cnt, payload);
 			break;
 		}
+		__fallthrough;
 	}
-		/* Fall Through */
 	case VDM_RESULT_NAK:
 		/* PE_INIT_VDM_Modes_NAKed embedded here */
 		pd_set_modes_discovery(port, pe[port].tx_type, requested_svid,
@@ -6053,13 +6084,6 @@ static void pe_vdm_request_dpm_entry(int port)
 		tx_emsg[port].len = pe[port].vdm_cnt * 4;
 	}
 
-	/*
-	 * Clear the VDM nak'ed flag so that each request is
-	 * treated separately (NAKs are handled by the
-	 * DPM layer). Otherwise previous NAKs received will
-	 * cause the state to exit early.
-	 */
-	PE_CLR_FLAG(port, PE_FLAGS_VDM_REQUEST_NAKED);
 	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
 
 	/*
@@ -7890,6 +7914,7 @@ static __const_data const struct usb_state pe_states[] = {
 	[PE_SRC_READY] = {
 		.entry = pe_src_ready_entry,
 		.run   = pe_src_ready_run,
+		.exit   = pe_src_ready_exit,
 	},
 	[PE_SRC_DISABLED] = {
 		.entry = pe_src_disabled_entry,
@@ -7936,6 +7961,7 @@ static __const_data const struct usb_state pe_states[] = {
 	[PE_SNK_READY] = {
 		.entry = pe_snk_ready_entry,
 		.run   = pe_snk_ready_run,
+		.exit   = pe_snk_ready_exit,
 	},
 	[PE_SNK_HARD_RESET] = {
 		.entry = pe_snk_hard_reset_entry,

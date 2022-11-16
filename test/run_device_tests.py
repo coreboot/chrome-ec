@@ -91,6 +91,7 @@ DATA_ACCESS_VIOLATION_20000000_REGEX = re.compile(
 DATA_ACCESS_VIOLATION_24000000_REGEX = re.compile(
     r"Data access violation, mfar = 24000000\r\n"
 )
+PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
 
 BLOONCHIPPER = "bloonchipper"
 DARTMONKEY = "dartmonkey"
@@ -196,6 +197,7 @@ class AllTests:
             TestConfig(test_name="abort"),
             TestConfig(test_name="aes"),
             TestConfig(test_name="always_memset"),
+            TestConfig(test_name="benchmark"),
             TestConfig(test_name="cec"),
             TestConfig(test_name="cortexm_fpu"),
             TestConfig(test_name="crc"),
@@ -234,6 +236,11 @@ class AllTests:
                 test_name="fpsensor",
                 test_args=["uart"],
             ),
+            TestConfig(test_name="ftrapv"),
+            TestConfig(
+                test_name="libc_printf",
+                finish_regexes=[PRINTF_CALLED_REGEX],
+            ),
             TestConfig(
                 config_name="mpu_ro",
                 test_name="mpu",
@@ -246,6 +253,7 @@ class AllTests:
                 finish_regexes=[board_config.mpu_regex],
             ),
             TestConfig(test_name="mutex"),
+            TestConfig(test_name="panic"),
             TestConfig(test_name="pingpong"),
             TestConfig(test_name="printf"),
             TestConfig(test_name="queue"),
@@ -267,6 +275,7 @@ class AllTests:
             TestConfig(test_name="sha256_unrolled"),
             TestConfig(test_name="static_if"),
             TestConfig(test_name="stdlib"),
+            TestConfig(test_name="std_vector"),
             TestConfig(
                 config_name="system_is_locked_wp_on",
                 test_name="system_is_locked",

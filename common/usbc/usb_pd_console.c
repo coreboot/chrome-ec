@@ -6,7 +6,7 @@
 #include "common.h"
 #include "console.h"
 #include "usb_common.h"
-#include "usb_pd_dpm.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_timer.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
@@ -146,8 +146,8 @@ static
 				case PD_DRP_FORCE_SOURCE:
 					ccprintf("force source\n");
 					break;
-					cflush();
 				}
+				cflush();
 			} else {
 				if (!strcasecmp(argv[3], "on"))
 					pd_set_dual_role(port,

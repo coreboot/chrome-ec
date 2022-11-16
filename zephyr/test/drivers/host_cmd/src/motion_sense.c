@@ -72,7 +72,7 @@ static void host_cmd_motion_sense_before(void *fixture)
 	RESET_FAKE(mock_perform_calib);
 	FFF_RESET_HISTORY();
 
-	zassume_ok(shell_execute_cmd(get_ec_shell(), "accelinit 0"));
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinit 0"));
 
 	atomic_clear(&motion_sensors[0].flush_pending);
 	motion_sensors[0].config[SENSOR_CONFIG_AP].odr = 0;
@@ -281,8 +281,8 @@ ZTEST_USER(host_cmd_motion_sense, test_set_ec_rate)
 	zassert_ok(host_cmd_motion_sense_ec_rate(
 			   /*sensor_num=*/0, /*data_rate_ms=*/2000, &response),
 		   NULL);
-	/* The command should return the previous rate */
-	zassert_equal(response.ec_rate.ret, 1000, "Expected 1000, but got %d",
+	/* The command should return the new rate */
+	zassert_equal(response.ec_rate.ret, 2000, "Expected 2000, but got %d",
 		      response.ec_rate.ret);
 	/* The sensor's AP config value should be updated */
 	zassert_equal(motion_sensors[0].config[SENSOR_CONFIG_AP].ec_rate,
@@ -305,7 +305,7 @@ ZTEST_USER(host_cmd_motion_sense, test_odr_get)
 {
 	struct ec_response_motion_sense response;
 
-	zassume_ok(motion_sensors[0].drv->set_data_rate(&motion_sensors[0],
+	zassert_ok(motion_sensors[0].drv->set_data_rate(&motion_sensors[0],
 							1000000, false),
 		   NULL);
 	zassert_ok(host_cmd_motion_sense_odr(/*sensor_num=*/0,
@@ -322,7 +322,7 @@ ZTEST_USER(host_cmd_motion_sense, test_odr_set)
 {
 	struct ec_response_motion_sense response;
 
-	zassume_ok(motion_sensors[0].drv->set_data_rate(&motion_sensors[0], 0,
+	zassert_ok(motion_sensors[0].drv->set_data_rate(&motion_sensors[0], 0,
 							false),
 		   NULL);
 	zassert_ok(host_cmd_motion_sense_odr(/*sensor_num=*/0,
@@ -774,7 +774,7 @@ ZTEST(host_cmd_motion_sense, test_int_enable)
 		      host_cmd_motion_sense_int_enable(2, &response), NULL);
 
 	/* Make sure we start off disabled */
-	zassume_ok(host_cmd_motion_sense_int_enable(0, &response));
+	zassert_ok(host_cmd_motion_sense_int_enable(0, &response));
 
 	/* Test enable */
 	zassert_ok(host_cmd_motion_sense_int_enable(1, &response));

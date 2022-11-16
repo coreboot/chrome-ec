@@ -3,20 +3,29 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/shell/shell_dummy.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/slist.h>
 #include <zephyr/ztest.h>
 
+#include "battery.h"
 #include "battery_smart.h"
+#include "dps.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
 #include "system.h"
+#include "task.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
 #include "usb_pd.h"
 
 #define BATTERY_NODE DT_NODELABEL(battery)
+
+#define GPIO_BATT_PRES_ODL_PATH DT_PATH(named_gpios, ec_batt_pres_odl)
+#define GPIO_BATT_PRES_ODL_PORT DT_GPIO_PIN(GPIO_BATT_PRES_ODL_PATH, gpios)
+
+#define TEST_PORT 0
 
 struct usb_attach_5v_3a_pd_source_fixture {
 	struct tcpci_partner_data source_5v_3a;
@@ -30,8 +39,8 @@ static void *usb_attach_5v_3a_pd_source_setup(void)
 	static struct usb_attach_5v_3a_pd_source_fixture test_fixture;
 
 	/* Get references for the emulators */
-	test_fixture.tcpci_emul = EMUL_GET_USBC_BINDING(0, tcpc);
-	test_fixture.charger_emul = EMUL_GET_USBC_BINDING(0, chg);
+	test_fixture.tcpci_emul = EMUL_GET_USBC_BINDING(TEST_PORT, tcpc);
+	test_fixture.charger_emul = EMUL_GET_USBC_BINDING(TEST_PORT, chg);
 
 	/* Initialized the charger to supply 5V and 3A */
 	tcpci_partner_init(&test_fixture.source_5v_3a, PD_REV20);
@@ -58,6 +67,15 @@ static void usb_attach_5v_3a_pd_source_after(void *data)
 	disconnect_source_from_port(fixture->tcpci_emul, fixture->charger_emul);
 }
 
+static void control_battery_present(bool present)
+{
+	const struct device *dev =
+		DEVICE_DT_GET(DT_GPIO_CTLR(GPIO_BATT_PRES_ODL_PATH, gpios));
+
+	/* 0 means battery present */
+	zassert_ok(gpio_emul_input_set(dev, GPIO_BATT_PRES_ODL_PORT, !present));
+}
+
 ZTEST_SUITE(usb_attach_5v_3a_pd_source, drivers_predicate_post_main,
 	    usb_attach_5v_3a_pd_source_setup, usb_attach_5v_3a_pd_source_before,
 	    usb_attach_5v_3a_pd_source_after, NULL);
@@ -67,16 +85,16 @@ ZTEST(usb_attach_5v_3a_pd_source, test_battery_is_charging)
 	const struct emul *emul = EMUL_DT_GET(BATTERY_NODE);
 	uint16_t battery_status;
 
-	zassume_ok(sbat_emul_get_word_val(emul, SB_BATTERY_STATUS,
-					  &battery_status),
-		   NULL);
+	zassert_ok(sbat_emul_get_word_val(emul, SB_BATTERY_STATUS,
+					  &battery_status));
 	zassert_equal(battery_status & STATUS_DISCHARGING, 0,
 		      "Battery is discharging: %d", battery_status);
 }
 
 ZTEST(usb_attach_5v_3a_pd_source, test_charge_state)
 {
-	struct ec_response_charge_state state = host_cmd_charge_state(0);
+	struct ec_response_charge_state state =
+		host_cmd_charge_state(TEST_PORT);
 
 	zassert_true(state.get_state.ac, "AC_OK not triggered");
 	zassert_true(state.get_state.chg_voltage > 0,
@@ -137,8 +155,7 @@ ZTEST_F(usb_attach_5v_3a_pd_source, test_disconnect_battery_not_charging)
 
 	disconnect_source_from_port(fixture->tcpci_emul, fixture->charger_emul);
 	zassert_ok(sbat_emul_get_word_val(emul, SB_BATTERY_STATUS,
-					  &battery_status),
-		   NULL);
+					  &battery_status));
 	zassert_equal(battery_status & STATUS_DISCHARGING, STATUS_DISCHARGING,
 		      "Battery is not discharging: %d", battery_status);
 }
@@ -148,7 +165,7 @@ ZTEST_F(usb_attach_5v_3a_pd_source, test_disconnect_charge_state)
 	struct ec_response_charge_state charge_state;
 
 	disconnect_source_from_port(fixture->tcpci_emul, fixture->charger_emul);
-	charge_state = host_cmd_charge_state(0);
+	charge_state = host_cmd_charge_state(TEST_PORT);
 
 	zassert_false(charge_state.get_state.ac, "AC_OK not triggered");
 	zassert_equal(charge_state.get_state.chg_current, 0,
@@ -225,7 +242,7 @@ ZTEST(usb_attach_5v_3a_pd_source,
 			  batt_data->design_cap / 100) -
 			 1;
 
-	zassert_true(system_can_boot_ap(), NULL);
+	zassert_true(system_can_boot_ap());
 }
 
 ZTEST_F(usb_attach_5v_3a_pd_source,
@@ -246,7 +263,7 @@ ZTEST_F(usb_attach_5v_3a_pd_source,
 
 	disconnect_source_from_port(fixture->tcpci_emul, fixture->charger_emul);
 
-	zassert_false(system_can_boot_ap(), NULL);
+	zassert_false(system_can_boot_ap());
 }
 
 ZTEST_F(usb_attach_5v_3a_pd_source, test_uvdm_ignored)
@@ -281,4 +298,66 @@ ZTEST_F(usb_attach_5v_3a_pd_source, test_uvdm_ignored)
 
 	zassert_false(tcpm_response,
 		      "Sent unstructured VDM to TCPM; TCPM did not ignore");
+}
+
+ZTEST_F(usb_attach_5v_3a_pd_source, test_dps_battery_absent)
+{
+	control_battery_present(false);
+	zassert_false(battery_is_present(), "dps battery is present");
+	task_wake(TASK_ID_DPS);
+	/* wait dps_config.t_check*/
+	k_sleep(K_MSEC(5000));
+	zassert_true(dps_get_flag() & DPS_FLAG_NO_BATTERY,
+		     "DPS_FLAG_NO_BATTERY is set");
+	control_battery_present(true);
+	zassert_true(battery_is_present(), "dps battery is not present");
+}
+
+ZTEST_F(usb_attach_5v_3a_pd_source, test_dps_enable)
+{
+	dps_enable(false);
+	zassert_false(dps_is_enabled());
+	task_wake(TASK_ID_DPS);
+	/* wait dps_config.t_check*/
+	k_sleep(K_MSEC(5000));
+	zassert_true(dps_get_flag() & DPS_FLAG_DISABLED,
+		     "DPS_FLAG_DISABLED is set");
+	dps_enable(true);
+	zassert_true(dps_is_enabled());
+}
+
+ZTEST_F(usb_attach_5v_3a_pd_source, test_dps_info)
+{
+	const struct shell *shell_zephyr = get_ec_shell();
+
+	const char *outbuffer;
+	uint32_t buffer_size;
+	/* Arbitrary array size for sprintf should not need this amount */
+	char format_buffer[100];
+
+	shell_backend_dummy_clear_output(shell_zephyr);
+
+	/* Print current status to console */
+	zassert_ok(shell_execute_cmd(shell_zephyr, "dps"), NULL);
+	outbuffer = shell_backend_dummy_get_output(shell_zephyr, &buffer_size);
+
+	/* Should include extra information about the charging port */
+	/* Charging Port */
+	sprintf(format_buffer, "C%d", TEST_PORT);
+	zassert_not_null(strstr(outbuffer, format_buffer));
+	/* We are a sink to a 5v3a source, so check requested mv/ma */
+	sprintf(format_buffer, "Requested: %dmV/%dmA", 5000, 3000);
+	zassert_not_null(strstr(outbuffer, format_buffer));
+	/*
+	 * Measured input power is shown (values vary so not asserting on
+	 * numbers)
+	 */
+	zassert_not_null(strstr(outbuffer, "Measured:"));
+	/* Efficient Voltage - Value varies based on battery*/
+	zassert_not_null(strstr(outbuffer, "Efficient:"));
+	/* Battery Design Voltage (varies based on battery) */
+	zassert_not_null(strstr(outbuffer, "Batt:"));
+	/* PDMaxMV */
+	sprintf(format_buffer, "PDMaxMV:   %dmV", pd_get_max_voltage());
+	zassert_not_null(strstr(outbuffer, format_buffer));
 }
