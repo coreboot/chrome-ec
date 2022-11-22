@@ -3,19 +3,19 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/logging/log.h>
-
 #include "charge_state_v2.h"
 #include "chipset.h"
-#include "hooks.h"
-#include "usb_mux.h"
-#include "system.h"
 #include "driver/charger/isl923x_public.h"
 #include "driver/retimer/anx7483_public.h"
-#include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/raa489000.h"
-#include "temp_sensor/temp_sensor.h"
+#include "driver/tcpm/tcpci.h"
+#include "hooks.h"
 #include "nissa_common.h"
+#include "system.h"
+#include "temp_sensor/temp_sensor.h"
+#include "usb_mux.h"
+
+#include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(nissa, CONFIG_NISSA_LOG_LEVEL);
 
@@ -163,12 +163,26 @@ void pd_power_supply_reset(int port)
 	pd_send_host_event(PD_EVENT_POWER_CHANGE);
 }
 
+/* VBUS_CURRENT_TARGET */
+#define RAA489000_VBUS_CURRENT_TARGET_3_3A 0x68 /* 3.3A */
+
 __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
 {
+	int rv;
+
 	if (port < 0 || port >= CONFIG_USB_PD_PORT_MAX_COUNT)
 		return;
 
-	raa489000_set_output_current(port, rp);
+	int selected_cur = rp == TYPEC_RP_3A0 ?
+				   RAA489000_VBUS_CURRENT_TARGET_3_3A :
+				   RAA489000_VBUS_CURRENT_TARGET_1_5A;
+
+	rv = tcpc_write16(port, RAA489000_VBUS_CURRENT_TARGET, selected_cur);
+
+	if (rv != EC_SUCCESS) {
+		LOG_WRN("Failed to set source ilimit on port %d to %d: %d",
+			port, selected_cur, rv);
+	}
 }
 
 int pd_set_power_supply_ready(int port)
@@ -274,14 +288,6 @@ void usb_interrupt(enum gpio_signal signal)
 	usbc_interrupt_trigger(port);
 	/* Check for lost interrupts in a bit */
 	hook_call_deferred(ud, USBC_INT_POLL_DELAY_US);
-}
-
-__override void board_set_charge_limit(int port, int supplier, int charge_ma,
-				       int max_ma, int charge_mv)
-{
-	charge_ma = (charge_ma * 90) / 100;
-	charge_set_input_current_limit(
-		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }
 
 struct chg_curr_step {

@@ -7,23 +7,23 @@
 
 #include "battery_fuel_gauge.h"
 #include "bc12/pi3usb9201_public.h"
-#include "charger.h"
-#include "charger/isl923x_public.h"
 #include "charge_manager.h"
 #include "charge_state.h"
+#include "charger.h"
+#include "charger/isl923x_public.h"
 #include "common.h"
 #include "config.h"
 #include "driver/ln9310.h"
-#include "gpio_signal.h"
 #include "gpio/gpio_int.h"
+#include "gpio_signal.h"
 #include "hooks.h"
 #include "ppc/sn5s330_public.h"
 #include "system.h"
 #include "tcpm/ps8xxx_public.h"
 #include "tcpm/tcpci.h"
 #include "timer.h"
-#include "usb_pd.h"
 #include "usb_mux.h"
+#include "usb_pd.h"
 #include "usbc_ocp.h"
 #include "usbc_ppc.h"
 
@@ -197,7 +197,7 @@ void board_tcpc_init(void)
 
 	/* Enable TCPC interrupts */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_tcpc));
-	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_tcpc));
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1_tcpc));
 
 	/*
 	 * Initialize HPD to low; after sysjump SOC needs to see
@@ -326,7 +326,7 @@ uint16_t tcpc_get_alert_status(void)
 		if (gpio_pin_get_dt(
 			    GPIO_DT_FROM_NODELABEL(gpio_usb_c0_pd_rst_l)))
 			status |= PD_STATUS_TCPC_ALERT_0;
-	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c0_pd_int_odl)))
+	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c1_pd_int_odl)))
 		if (gpio_pin_get_dt(
 			    GPIO_DT_FROM_NODELABEL(gpio_usb_c1_pd_rst_l)))
 			status |= PD_STATUS_TCPC_ALERT_1;

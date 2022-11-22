@@ -34,9 +34,6 @@
 		gpio_usb_c1_bc12_int_l: usb_c1_bc12_int_l {
 			gpios = <&gpio8 2 GPIO_INPUT_PULL_UP>;
 		};
-		gpio_usb_a0_oc_odl: usb_a0_oc_odl {
-			gpios = <&gpiof 4 GPIO_INPUT_PULL_UP>;
-		};
 		gpio_chg_acok_od: chg_acok_od {
 			gpios = <&gpiod 2 GPIO_INPUT>;
 			enum-name = "GPIO_AC_PRESENT";
@@ -159,13 +156,6 @@
 		gpio_dp_hot_plug_det_r: dp_hot_plug_det_r {
 			gpios = <&gpio9 5 GPIO_OUTPUT_LOW>;
 		};
-		gpio_en_usb_a_5v: en_usb_a_5v {
-			gpios = <&gpiof 0 GPIO_OUTPUT_LOW>;
-			enum-name = "GPIO_EN_USB_A_5V";
-		};
-		usb_a_cdp_ilim_en_l {
-			gpios = <&gpio7 5 GPIO_OUTPUT_HIGH>;
-		};
 		gpio_usb_c0_frs_en: usb_c0_frs_en {
 			gpios = <&gpioc 5 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_USB_C0_FRS_EN";
@@ -175,19 +165,15 @@
 			enum-name = "GPIO_USB_C1_FRS_EN";
 		};
 		gpio_ec_chg_led_y_c0: ec_chg_led_y_c0 {
-			#led-pin-cells = <1>;
 			gpios = <&gpio6 0 GPIO_OUTPUT_LOW>;
 		};
 		gpio_ec_chg_led_w_c0: ec_chg_led_w_c0 {
-			#led-pin-cells = <1>;
 			gpios = <&gpioc 0 GPIO_OUTPUT_LOW>;
 		};
 		gpio_ec_chg_led_w_c1: ec_chg_led_w_c1 {
-			#led-pin-cells = <1>;
 			gpios = <&gpioc 3 GPIO_OUTPUT_LOW>;
 		};
 		gpio_ec_chg_led_r_c0: ec_chg_led_r_c0 {
-			#led-pin-cells = <1>;
 			gpios = <&gpioc 4 GPIO_OUTPUT_LOW>;
 		};
 		ap_ec_spi_mosi {
@@ -238,11 +224,6 @@
 		};
 	};
 
-	usba-port-enable-list {
-		compatible = "cros-ec,usba-port-enable-pins";
-		enable-pins = <&gpio_en_usb_a_5v>;
-	};
-
 	gpio_id_sku: sku {
 		compatible = "cros-ec,gpio-id";
 		bits  = <
@@ -288,6 +269,9 @@
 			<&gpioa 7 0>,
 			<&gpio5 0 0>,
 			<&gpio8 1 0>,
+			<&gpiof 0 0>,
+			<&gpio7 5 0>,
+			<&gpiof 4 0>,
 			<&gpiob 7 0>;
 	};
 };

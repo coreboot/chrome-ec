@@ -5,14 +5,11 @@
 
 /* Corsola baseboard-specific USB-C configuration */
 
-#include <zephyr/drivers/gpio.h>
-#include <ap_power/ap_power.h>
-
 #include "adc.h"
 #include "baseboard_usbc_config.h"
 #include "button.h"
-#include "charger.h"
 #include "charge_state_v2.h"
+#include "charger.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "extpower.h"
@@ -20,13 +17,13 @@
 #include "hooks.h"
 #include "i2c.h"
 #include "lid_switch.h"
-#include "task.h"
-#include "ppc/syv682x_public.h"
 #include "power.h"
 #include "power_button.h"
+#include "ppc/syv682x_public.h"
 #include "spi.h"
 #include "switch.h"
 #include "tablet_mode.h"
+#include "task.h"
 #include "uart.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
@@ -34,8 +31,11 @@
 #include "usb_tc_sm.h"
 #include "usbc/usb_muxes.h"
 #include "usbc_ppc.h"
-
 #include "variant_db_detection.h"
+
+#include <zephyr/drivers/gpio.h>
+
+#include <ap_power/ap_power.h>
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ##args)
@@ -129,12 +129,7 @@ __override enum pd_dual_role_states pd_get_drp_state_in_s0(void)
 __override void board_set_charge_limit(int port, int supplier, int charge_ma,
 				       int max_ma, int charge_mv)
 {
-	int icl = charge_ma * 97 / 100;
-	/*
-	 * b:257167723: Adapter output current exceeds the spec on heavy-load.
-	 * Preserve a margin in case of charger overdraw.
-	 */
-	charge_set_input_current_limit(icl, charge_mv);
+	charge_set_input_current_limit(charge_ma, charge_mv);
 }
 
 void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)

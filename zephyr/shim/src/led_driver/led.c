@@ -5,8 +5,6 @@
  * Power and battery LED control.
  */
 
-#include <zephyr/drivers/gpio.h>
-
 #include "battery.h"
 #include "charge_manager.h"
 #include "charge_state.h"
@@ -21,6 +19,7 @@
 #include "util.h"
 
 #include <zephyr/devicetree.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(led, LOG_LEVEL_ERR);
 
@@ -33,9 +32,9 @@ struct led_color_node_t {
 
 #define DECLARE_PINS_NODE(id) extern struct led_pins_node_t PINS_NODE(id);
 
-#if DT_HAS_COMPAT_STATUS_OKAY(COMPAT_PWM_LED)
+#if CONFIG_PLATFORM_EC_LED_DT_PWM
 DT_FOREACH_CHILD(PWM_LED_PINS_NODE, DECLARE_PINS_NODE)
-#elif DT_HAS_COMPAT_STATUS_OKAY(COMPAT_GPIO_LED)
+#elif CONFIG_PLATFORM_EC_LED_DT_GPIO
 DT_FOREACH_CHILD(GPIO_LED_PINS_NODE, DECLARE_PINS_NODE)
 #endif
 

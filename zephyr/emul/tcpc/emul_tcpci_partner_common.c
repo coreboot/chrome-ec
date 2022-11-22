@@ -3,19 +3,20 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(tcpci_partner, CONFIG_TCPCI_EMUL_LOG_LEVEL);
-
-#include <stdlib.h>
-#include <zephyr/sys/byteorder.h>
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-
 #include "common.h"
-#include "emul/tcpc/emul_tcpci_partner_common.h"
 #include "emul/tcpc/emul_tcpci.h"
+#include "emul/tcpc/emul_tcpci_partner_common.h"
 #include "usb_pd.h"
 #include "util.h"
+
+#include <stdlib.h>
+
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/byteorder.h>
+#include <zephyr/ztest.h>
+
+LOG_MODULE_REGISTER(tcpci_partner, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 
 /** Length of PDO, RDO and BIST request object in SOP message in bytes */
 #define TCPCI_MSG_DO_LEN 4

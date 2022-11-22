@@ -5,16 +5,14 @@
 
 /* Skyrim family-specific USB-C configuration */
 
-#include <zephyr/drivers/gpio.h>
-
-#include "cros_board_info.h"
-#include "cros_cbi.h"
 #include "battery_fuel_gauge.h"
 #include "charge_manager.h"
 #include "charge_ramp.h"
-#include "charge_state_v2.h"
 #include "charge_state.h"
+#include "charge_state_v2.h"
 #include "charger.h"
+#include "cros_board_info.h"
+#include "cros_cbi.h"
 #include "driver/bc12/pi3usb9201.h"
 #include "driver/charger/isl9241.h"
 #include "driver/ppc/nx20p348x.h"
@@ -29,8 +27,10 @@
 #include "power.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
-#include "usbc_ppc.h"
 #include "usbc/usb_muxes.h"
+#include "usbc_ppc.h"
+
+#include <zephyr/drivers/gpio.h>
 
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ##args)
@@ -193,8 +193,6 @@ int board_set_active_charge_port(int port)
 void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 			    int charge_mv)
 {
-	charge_ma = (charge_ma * CONFIG_BOARD_INPUT_CURRENT_SCALE_FACTOR) / 100;
-
 	charge_set_input_current_limit(
 		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }

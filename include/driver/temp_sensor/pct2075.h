@@ -21,6 +21,7 @@
 #define PCT2075_REG_CONF 0x01
 #define PCT2075_REG_THYST 0x02
 #define PCT2075_REG_TOS 0x03
+#define PCT2075_REG_TIDLE 0x04
 
 /*
  * I2C port and address information for all the board PCT2075 sensors should be
@@ -66,5 +67,9 @@ int pct2075_get_val_mk(int idx, int *temp_mk_ptr);
  * states.
  */
 void pct2075_init(void);
+
+#ifdef CONFIG_ZEPHYR
+void pct2075_update_temperature(int idx);
+#endif /* CONFIG_ZEPHYR */
 
 #endif /* __CROS_EC_PCT2075_H */

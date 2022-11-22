@@ -5,13 +5,13 @@
 
 #define DT_DRV_COMPAT cros_ec_kblight_pwm
 
-#include <zephyr/devicetree.h>
-#include <zephyr/drivers/pwm.h>
-#include <zephyr/logging/log.h>
-
 #include "common.h"
 #include "keyboard_backlight.h"
 #include "util.h"
+
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/pwm.h>
+#include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(kblight, LOG_LEVEL_ERR);
 
@@ -56,11 +56,6 @@ static int kblight_pwm_set(int percent)
 	return EC_SUCCESS;
 }
 
-static int kblight_pwm_get(void)
-{
-	return kblight_percent;
-}
-
 static int kblight_pwm_enable(int enable)
 {
 	kblight_enabled = enable;
@@ -88,7 +83,6 @@ static int kblight_pwm_init(void)
 const struct kblight_drv kblight_pwm = {
 	.init = kblight_pwm_init,
 	.set = kblight_pwm_set,
-	.get = kblight_pwm_get,
 	.enable = kblight_pwm_enable,
 	.get_enabled = kblight_pwm_get_enabled,
 };

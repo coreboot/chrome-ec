@@ -3,19 +3,19 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/device.h>
-#include <zephyr/init.h>
-#include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
-
 #ifdef __REQUIRE_ZEPHYR_GPIOS__
 #undef __REQUIRE_ZEPHYR_GPIOS__
 #endif
+#include "cros_version.h"
 #include "gpio.h"
 #include "gpio/gpio.h"
 #include "ioexpander.h"
 #include "system.h"
-#include "cros_version.h"
+
+#include <zephyr/device.h>
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(gpio_shim, LOG_LEVEL_ERR);
 
@@ -166,6 +166,11 @@ int gpio_or_ioex_get_level(int signal, int *value)
 	return EC_SUCCESS;
 }
 
+/* Don't define any 1.8V bit if not supported. */
+#ifndef GPIO_VOLTAGE_1P8
+#define GPIO_VOLTAGE_1P8 0
+#endif
+
 /* GPIO flags which are the same in Zephyr and this codebase */
 #define GPIO_CONVERSION_SAME_BITS                                             \
 	(GPIO_OPEN_DRAIN | GPIO_PULL_UP | GPIO_PULL_DOWN | GPIO_VOLTAGE_1P8 | \
@@ -250,7 +255,10 @@ const struct gpio_dt_spec *gpio_get_dt_spec(enum gpio_signal signal)
 	return &configs[signal].spec;
 }
 
-static int init_gpios(const struct device *unused)
+/* Allow access to this function in tests so we can run it multiple times
+ * without having to create a new binary for each run.
+ */
+test_export_static int init_gpios(const struct device *unused)
 {
 	gpio_flags_t flags;
 	bool is_sys_jumped = system_jumped_to_this_image();
@@ -317,9 +325,10 @@ void gpio_reset(enum gpio_signal signal)
 void gpio_reset_port(const struct device *port)
 {
 	for (size_t i = 0; i < ARRAY_SIZE(configs); ++i) {
-		if (port == configs[i].spec.port)
+		if (port == configs[i].spec.port) {
 			gpio_pin_configure_dt(&configs[i].spec,
 					      configs[i].init_flags);
+		}
 	}
 }
 
@@ -334,12 +343,17 @@ void gpio_set_flags(enum gpio_signal signal, int flags)
 
 void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
 {
-	int pin;
+	const gpio_flags_t zephyr_flags = convert_to_zephyr_flags(flags);
 
-	for (pin = 0; pin < 8; pin++)
-		if (mask & BIT(pin))
-			gpio_configure_port_pin(port, pin,
-						convert_to_zephyr_flags(flags));
+	/* Using __builtin_ctz here will guarantee that this loop is as
+	 * performant as the underlying architecture allows it to be.
+	 */
+	while (mask != 0) {
+		int pin = __builtin_ctz(mask);
+
+		gpio_configure_port_pin(port, pin, zephyr_flags);
+		mask &= ~BIT(pin);
+	}
 }
 
 int signal_is_gpio(int signal)

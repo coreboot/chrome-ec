@@ -3,21 +3,20 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/device.h>
-#include <ap_power/ap_power.h>
-
 #include "battery.h"
-#include "charger.h"
 #include "charge_state_v2.h"
+#include "charger.h"
 #include "chipset.h"
 #include "cros_cbi.h"
 #include "hooks.h"
-#include "usb_mux.h"
-#include "system.h"
-
 #include "nissa_common.h"
+#include "system.h"
+#include "usb_mux.h"
 
+#include <zephyr/device.h>
 #include <zephyr/logging/log.h>
+
+#include <ap_power/ap_power.h>
 LOG_MODULE_REGISTER(nissa, CONFIG_NISSA_LOG_LEVEL);
 
 static uint8_t cached_usb_pd_port_count;
@@ -85,13 +84,6 @@ __overridable void board_set_charge_limit(int port, int supplier, int charge_ma,
 					  int max_ma, int charge_mv)
 {
 	int icl = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
-
-	/*
-	 * Assume charger overdraws by about 4%, keeping the actual draw
-	 * within spec. This adjustment can be changed with characterization
-	 * of actual hardware.
-	 */
-	icl = icl * 96 / 100;
 	charge_set_input_current_limit(icl, charge_mv);
 }
 

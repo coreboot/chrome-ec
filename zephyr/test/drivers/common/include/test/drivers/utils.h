@@ -6,19 +6,20 @@
 #ifndef ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_
 #define ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_
 
-#include <zephyr/drivers/emul.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
-#include <zephyr/ztest.h>
-#include <stddef.h>
-#include <string.h>
-
 #include "charger.h"
-#include "lpc.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
 #include "extpower.h"
 #include "host_command.h"
+#include "lpc.h"
 #include "power.h"
 #include "usbc/utils.h"
+
+#include <stddef.h>
+#include <string.h>
+
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/ztest.h>
 
 /**
  * @brief Helper macro for EMUL_GET_USBC_BINDING. If @p usbc_id has the same
@@ -592,7 +593,11 @@ static inline void set_ac_enabled(bool enabled)
 
 	zassert_ok(gpio_emul_input_set(acok_dev, GPIO_ACOK_OD_PIN, enabled),
 		   NULL);
-	k_sleep(K_MSEC(CONFIG_EXTPOWER_DEBOUNCE_MS + 1));
+	/*
+	 * b/253284635 - Sleep for a full second past the debounce time
+	 * to ensure the power button debounce logic runs.
+	 */
+	k_sleep(K_MSEC(CONFIG_EXTPOWER_DEBOUNCE_MS + 1000));
 	zassert_equal(enabled, extpower_is_present(), NULL);
 }
 

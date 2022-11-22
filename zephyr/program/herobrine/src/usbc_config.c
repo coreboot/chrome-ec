@@ -5,12 +5,10 @@
 
 /* Herobrine board-specific USB-C configuration */
 
-#include <zephyr/drivers/gpio.h>
-
-#include "charger.h"
-#include "charger/isl923x_public.h"
 #include "charge_manager.h"
 #include "charge_state.h"
+#include "charger.h"
+#include "charger/isl923x_public.h"
 #include "common.h"
 #include "config.h"
 #include "cros_board_info.h"
@@ -22,11 +20,13 @@
 #include "tcpm/ps8xxx_public.h"
 #include "tcpm/tcpci.h"
 #include "timer.h"
-#include "usb_pd.h"
 #include "usb_mux.h"
+#include "usb_pd.h"
+#include "usbc/ppc.h"
 #include "usbc_ocp.h"
 #include "usbc_ppc.h"
-#include "usbc/ppc.h"
+
+#include <zephyr/drivers/gpio.h>
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
@@ -50,6 +50,7 @@ void tcpc_alert_event(enum gpio_signal signal)
 	schedule_deferred_pd_interrupt(port);
 }
 
+#ifdef CONFIG_PLATFORM_EC_USBA
 static void usba_oc_deferred(void)
 {
 	/* Use next number after all USB-C ports to indicate the USB-A port */
@@ -63,6 +64,7 @@ void usba_oc_interrupt(enum gpio_signal signal)
 {
 	hook_call_deferred(&usba_oc_deferred_data, 0);
 }
+#endif
 
 void ppc_interrupt(enum gpio_signal signal)
 {
@@ -118,6 +120,7 @@ enum ec_status charger_profile_override_set_param(uint32_t param,
 	return EC_RES_INVALID_PARAM;
 }
 
+#ifdef CONFIG_PLATFORM_EC_USBA
 /* Initialize board USC-C things */
 static void board_init_usbc(void)
 {
@@ -125,6 +128,7 @@ static void board_init_usbc(void)
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_a0_oc));
 }
 DECLARE_HOOK(HOOK_INIT, board_init_usbc, HOOK_PRIO_DEFAULT);
+#endif
 
 void board_tcpc_init(void)
 {

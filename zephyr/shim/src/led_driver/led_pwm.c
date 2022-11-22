@@ -5,6 +5,8 @@
  * PWM LED control.
  */
 
+#define DT_DRV_COMPAT cros_ec_pwm_led_pins
+
 #include "ec_commands.h"
 #include "led.h"
 #include "util.h"
@@ -12,8 +14,6 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/logging/log.h>
-
-#if DT_HAS_COMPAT_STATUS_OKAY(COMPAT_PWM_LED)
 
 LOG_MODULE_REGISTER(pwm_led, LOG_LEVEL_ERR);
 
@@ -33,12 +33,12 @@ LOG_MODULE_REGISTER(pwm_led, LOG_LEVEL_ERR);
 		.pwm = PWM_DT_SPEC_GET(DT_PHANDLE_BY_IDX(node_id, prop, i)),  \
 		.pulse_ns = DIV_ROUND_NEAREST(                                \
 			DT_PWMS_PERIOD(DT_PHANDLE_BY_IDX(node_id, prop, i)) * \
-				DT_PHA_BY_IDX(node_id, prop, i, value),       \
+				DT_PROP_BY_IDX(node_id, led_values, i),       \
 			100),                                                 \
 	},
 
 #define SET_PWM_PIN(node_id) \
-	{ DT_FOREACH_PROP_ELEM(node_id, led_pins, SET_PIN) };
+	{ DT_FOREACH_PROP_ELEM(node_id, led_pwms, SET_PIN) };
 
 #define GEN_PINS_ARRAY(id) struct pwm_pin_t PINS_ARRAY(id)[] = SET_PWM_PIN(id)
 
@@ -49,7 +49,7 @@ DT_FOREACH_CHILD(PWM_LED_PINS_NODE, GEN_PINS_ARRAY)
 	  .led_id = GET_PROP(node_id, led_id),         \
 	  .br_color = GET_PROP_NVE(node_id, br_color), \
 	  .pwm_pins = PINS_ARRAY(node_id),             \
-	  .pins_count = DT_PROP_LEN(node_id, led_pins) };
+	  .pins_count = DT_PROP_LEN(node_id, led_pwms) };
 
 /*
  * Initialize led_pins_node_t struct for each pin node defined
@@ -147,4 +147,3 @@ __override int led_is_supported(enum ec_led_id led_id)
 
 	return ((1 << (int)led_id) & supported_leds);
 }
-#endif /* DT_HAS_COMPAT_STATUS_OKAY(COMPAT_PWM_LED) */

@@ -5,6 +5,8 @@
  * GPIO LED control.
  */
 
+#define DT_DRV_COMPAT cros_ec_gpio_led_pins
+
 #include "ec_commands.h"
 #include "led.h"
 #include "util.h"
@@ -13,13 +15,11 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
-#if DT_HAS_COMPAT_STATUS_OKAY(COMPAT_GPIO_LED)
-
 LOG_MODULE_REGISTER(gpio_led, LOG_LEVEL_ERR);
 
 #define SET_PIN(node_id, prop, i)                                     \
 	{ .signal = GPIO_SIGNAL(DT_PHANDLE_BY_IDX(node_id, prop, i)), \
-	  .val = DT_PHA_BY_IDX(node_id, prop, i, value) },
+	  .val = DT_PROP_BY_IDX(node_id, led_values, i) },
 
 #define SET_GPIO_PIN(node_id) \
 	{ DT_FOREACH_PROP_ELEM(node_id, led_pins, SET_PIN) };
@@ -138,5 +138,3 @@ const struct led_pins_node_t *led_get_node(enum led_color color,
 	return pin_node;
 }
 #endif /* TEST_BUILD */
-
-#endif /* DT_HAS_COMPAT_STATUS_OKAY(COMPAT_GPIO_LED) */

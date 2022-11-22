@@ -42,7 +42,7 @@ if (NOT DEFINED CONFIG_PLATFORM_EC_KEYBOARD_DISCRETE)
   zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
                                                             keyboard_raw.c)
 endif()
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD    keyscan.c)
+zephyr_library_sources_ifdef(CONFIG_CROS_EC_KEYSCAN         keyscan.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LOG_BACKEND_CONSOLE_BUFFER
                              log_backend_console_buffer.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MKBP_EVENT  mkbp_event.c)
@@ -55,9 +55,9 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM_HC      pwm_hc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_PWM     pwm_led.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RTC         rtc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCHCAP_GPIO
-															switchcap_gpio.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCHCAP_LN9310
-															switchcap_ln9310.c)
+							    switchcap_gpio.c)
+zephyr_library_sources_ifdef(CONFIG_CROS_EC_SWITCHCAP_LN9310
+							    switchcap_ln9310.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TEMP_SENSOR temp_sensors.c
                                                             thermal.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TIMER       hwtimer.c)
