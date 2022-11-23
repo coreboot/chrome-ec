@@ -1,7 +1,6 @@
 target_sources(app PRIVATE
     src/battery.c
     src/bb_retimer.c
-    src/bc12.c
     src/bma2x2.c
     src/bmi_common.c
     src/bmi160.c
@@ -86,6 +85,7 @@ target_sources(app PRIVATE
     src/task.c
     src/tcpci.c
     src/tcpci_test_common.c
+    src/tcpm_header.c
     src/tcs3400.c
     src/temp_sensor.c
     src/thermistor.c

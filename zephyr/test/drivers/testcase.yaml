@@ -11,6 +11,17 @@ tests:
       - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
       - CONFIG_PLATFORM_EC_LID_ANGLE_UPDATE=y
       - CONFIG_PLATFORM_EC_USB_PD_DPS=y
+  drivers.default.bring_up:
+    timeout: 240
+    extra_args: CONF_FILE="prj.conf;default/prj.conf"
+                DTC_OVERLAY_FILE="default/boards/native_posix.overlay"
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_DEFAULT=y
+      - CONFIG_LINK_TEST_SUITE_USB_MALFUNCTION_SINK=y
+      - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
+      - CONFIG_PLATFORM_EC_BRINGUP=y
+      - CONFIG_PLATFORM_EC_LID_ANGLE_UPDATE=y
+      - CONFIG_PLATFORM_EC_USB_PD_DPS=y
   drivers.default.mock_power:
     timeout: 240
     extra_args: CONF_FILE="prj.conf;default/prj.conf"
@@ -51,6 +62,8 @@ tests:
       - CONFIG_PLATFORM_EC_CBI_GPIO=y
   drivers.common_charger:
     extra_configs:
+      - CONFIG_PLATFORM_EC_CHARGER_INPUT_CURRENT_DERATE_PCT=5
+      - CONFIG_PLATFORM_EC_CHARGER_MIN_INPUT_CURRENT_LIMIT=100
       - CONFIG_LINK_TEST_SUITE_COMMON_CHARGER=y
       # Set to focus testing for Herobrine
       # Config is y only in nissa
@@ -97,6 +110,10 @@ tests:
     extra_args: CONF_FILE="prj.conf;led_driver/prj.conf" DTC_OVERLAY_FILE="./boards/native_posix.overlay;./led_driver/led_pins.dts;./led_driver/led_policy.dts"
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_LED_DRIVER=y
+  drivers.led_common:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_LED_COMMON=y
+      - CONFIG_PLATFORM_EC_LED_DT=n
   drivers.locate_chip:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_LOCATE_CHIP_ALTS=y
@@ -215,3 +232,6 @@ tests:
   drivers.pi3usb9201:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_PI3USB9201=y
+  drivers.memmap:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_MEMMAP=y

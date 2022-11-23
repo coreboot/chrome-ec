@@ -5,12 +5,10 @@
 
 /* Herobrine board-specific USB-C configuration */
 
-#include <zephyr/drivers/gpio.h>
-
-#include "charger.h"
-#include "charger/isl923x_public.h"
 #include "charge_manager.h"
 #include "charge_state.h"
+#include "charger.h"
+#include "charger/isl923x_public.h"
 #include "common.h"
 #include "config.h"
 #include "cros_board_info.h"
@@ -22,11 +20,13 @@
 #include "tcpm/ps8xxx_public.h"
 #include "tcpm/tcpci.h"
 #include "timer.h"
-#include "usb_pd.h"
 #include "usb_mux.h"
+#include "usb_pd.h"
+#include "usbc/ppc.h"
 #include "usbc_ocp.h"
 #include "usbc_ppc.h"
-#include "usbc/ppc.h"
+
+#include <zephyr/drivers/gpio.h>
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
@@ -262,8 +262,7 @@ void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 		charge_ma = max_ma;
 	}
 
-	charge_set_input_current_limit(
-		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
+	charge_set_input_current_limit(charge_ma, charge_mv);
 }
 
 uint16_t tcpc_get_alert_status(void)

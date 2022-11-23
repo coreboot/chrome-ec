@@ -2330,6 +2330,18 @@ int charge_set_input_current_limit(int ma, int mv)
 {
 	__maybe_unused int chgnum = 0;
 
+#ifdef CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT
+	if (CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT != 0) {
+		ma = (ma * (100 - CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT)) /
+		     100;
+	}
+#endif
+#ifdef CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT
+	if (CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT > 0) {
+		ma = MAX(ma, CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT);
+	}
+#endif
+
 	if (IS_ENABLED(CONFIG_OCPC))
 		chgnum = charge_get_active_chg_chip();
 #ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
