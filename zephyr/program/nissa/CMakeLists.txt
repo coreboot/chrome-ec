@@ -34,8 +34,10 @@ if(DEFINED CONFIG_BOARD_NEREID)
 endif()
 if(DEFINED CONFIG_BOARD_CRAASK)
 	zephyr_library_sources(
+			"craask/src/fan.c"
 			"craask/src/form_factor.c"
 			"craask/src/keyboard.c"
+			"craask/src/kb_backlight.c"
 			"craask/src/led.c"
 	)
 	project(craask)
@@ -83,4 +85,15 @@ if(DEFINED CONFIG_BOARD_YAVIKS)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "yaviks/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "yaviks/src/charger.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "yaviks/src/fan.c")
+endif()
+if(DEFINED CONFIG_BOARD_XIVUR)
+	project(xivur)
+	zephyr_library_sources(
+			"xivur/src/led.c"
+			"xivur/src/form_factor.c"
+			"xivur/src/keyboard.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "xivur/src/fan.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "xivur/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "xivur/src/charger.c")
 endif()

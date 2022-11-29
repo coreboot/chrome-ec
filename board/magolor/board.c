@@ -415,6 +415,8 @@ void board_hibernate(void)
 	if (board_get_charger_chip_count() > 1)
 		raa489000_hibernate(1, true);
 	raa489000_hibernate(0, true);
+
+	msleep(1000); /* Wait for charger to enter low power mode */
 }
 
 void board_reset_pd_mcu(void)
@@ -591,12 +593,6 @@ int board_set_active_charge_port(int port)
 	charger_discharge_on_ac(0);
 
 	return EC_SUCCESS;
-}
-
-void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
-			    int charge_mv)
-{
-	charge_set_input_current_limit(charge_ma, charge_mv);
 }
 
 __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)

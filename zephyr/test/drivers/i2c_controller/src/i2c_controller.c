@@ -61,6 +61,29 @@ ZTEST_F(i2c_controller, write_read32_be)
 		      expected);
 }
 
+ZTEST_F(i2c_controller, write_read16_be)
+{
+	uint16_t expected = 0x1122;
+	int actual;
+
+	zassert_ok(i2c_write16(fixture->port,
+			       fixture->addr | I2C_FLAG_BIG_ENDIAN, 0,
+			       expected));
+
+	/* Get the first two bytes of the register space as a uint16_t */
+	actual = __bswap_16(*((uint16_t *)&fixture->emul_data->regs[0]));
+
+	zassert_equal(expected, actual, "got %04x, expected %08x", actual,
+		      expected);
+
+	/* Now read back through I2C API */
+	zassert_ok(i2c_read16(fixture->port,
+			      fixture->addr | I2C_FLAG_BIG_ENDIAN, 0, &actual));
+
+	zassert_equal(expected, actual, "got %04x, expected %04x",
+		      (uint16_t)actual, expected);
+}
+
 ZTEST_F(i2c_controller, read32_fail)
 {
 	int ret;
@@ -98,6 +121,14 @@ ZTEST_F(i2c_controller, field_update16)
 
 	zassert_equal(set_value, actual, "got %04x, expected %04x", actual,
 		      set_value);
+
+	/* Force a failure */
+	set_value = 0x0001;
+	mask = 0x0001;
+	i2c_common_emul_set_read_fail_reg(&fixture->emul_data->common, 0);
+	zassert_equal(i2c_field_update16(fixture->port, fixture->addr, 0, mask,
+					 set_value),
+		      EC_ERROR_INVAL);
 }
 
 ZTEST_F(i2c_controller, read_offset16__one_byte)
@@ -271,6 +302,48 @@ ZTEST_F(i2c_controller, write_offset16_block)
 
 	zassert_equal(expected, actual, "got %08x, expected %08x", actual,
 		      expected);
+}
+
+ZTEST_F(i2c_controller, pec_disabled)
+{
+	uint16_t addr_flags;
+	uint8_t write_data[] = {
+		0xAA,
+		0xBB,
+		0xCC,
+		0xDD,
+	};
+	int write_data32 = 0x11223344;
+	uint8_t read_data[4];
+	int actual_read_len;
+	uint16_t reg = 0x01;
+
+	/*
+	 * Verify I2C reads and writes through the various APIs fail when
+	 * CONFIG_PLATFORM_EC_SMBUS_PEC=n
+	 */
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_SMBUS_PEC)) {
+		ztest_test_skip();
+		return;
+	}
+
+	addr_flags = fixture->addr | I2C_FLAG_PEC;
+
+	zassert_equal(i2c_read32(fixture->port, addr_flags, reg,
+				 (int *)read_data),
+		      EC_ERROR_UNIMPLEMENTED);
+	zassert_equal(i2c_write32(fixture->port, addr_flags, reg, write_data32),
+		      EC_ERROR_UNIMPLEMENTED);
+	zassert_equal(i2c_read_sized_block(fixture->port, addr_flags, reg,
+					   read_data, sizeof(read_data),
+					   &actual_read_len),
+		      EC_ERROR_UNIMPLEMENTED);
+	zassert_equal(i2c_read_sized_block(fixture->port, addr_flags, reg,
+					   read_data, 0, &actual_read_len),
+		      EC_ERROR_INVAL);
+	zassert_equal(i2c_write_block(fixture->port, addr_flags, reg,
+				      write_data, sizeof(write_data)),
+		      EC_ERROR_UNIMPLEMENTED);
 }
 
 ZTEST_F(i2c_controller, i2c_xfer_unlocked__error_paths)

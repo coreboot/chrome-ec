@@ -20,17 +20,17 @@
 #include "lightbar.h"
 #include "math_util.h"
 #include "mkbp_event.h"
-#include "motion_sense.h"
-#include "motion_sense_fifo.h"
 #include "motion_lid.h"
 #include "motion_orientation.h"
+#include "motion_sense.h"
+#include "motion_sense_fifo.h"
 #include "online_calibration.h"
-#include "printf.h"
 #include "power.h"
+#include "printf.h"
 #include "queue.h"
 #include "tablet_mode.h"
-#include "timer.h"
 #include "task.h"
+#include "timer.h"
 #include "util.h"
 
 /* Console output macros */
@@ -118,7 +118,8 @@ motion_sensor_time_to_read(const timestamp_t *ts,
 			  sensor->next_collection - motion_min_interval);
 }
 
-static enum sensor_config motion_sense_get_ec_config(void)
+STATIC_IF_NOT(CONFIG_ZTEST)
+enum sensor_config motion_sense_get_ec_config(void)
 {
 	switch (sensor_active) {
 	case SENSOR_ACTIVE_S0:
@@ -130,7 +131,7 @@ static enum sensor_config motion_sense_get_ec_config(void)
 	default:
 		CPRINTS("get_ec_config: Invalid active state: %x",
 			sensor_active);
-		return SENSOR_CONFIG_MAX;
+		return SENSOR_CONFIG_EC_S5;
 	}
 }
 /* motion_sense_set_data_rate

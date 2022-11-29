@@ -21,25 +21,25 @@
 #include "system.h"
 #include "task.h"
 #include "tcpm/tcpm.h"
-#include "util.h"
 #include "usb_charge.h"
 #include "usb_common.h"
 #include "usb_dp_alt_mode.h"
+#include "usb_emsg.h"
 #include "usb_mode.h"
 #include "usb_mux.h"
+#include "usb_pd.h"
 #include "usb_pd_dpm_sm.h"
 #include "usb_pd_policy.h"
-#include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pd_timer.h"
 #include "usb_pe_private.h"
 #include "usb_pe_sm.h"
-#include "usb_tbt_alt_mode.h"
 #include "usb_prl_sm.h"
-#include "usb_tc_sm.h"
-#include "usb_emsg.h"
 #include "usb_sm.h"
+#include "usb_tbt_alt_mode.h"
+#include "usb_tc_sm.h"
 #include "usbc_ppc.h"
+#include "util.h"
 
 /*
  * USB Policy Engine Sink / Source module
@@ -6514,7 +6514,7 @@ static void pe_vcs_evaluate_swap_entry(int port)
 	 */
 
 	/* DPM rejects a VCONN Swap and port is not a VCONN source*/
-	if (!tc_check_vconn_swap(port) && tc_is_vconn_src(port) < 1) {
+	if (!tc_check_vconn_swap(port) || tc_is_vconn_src(port) < 1) {
 		/* NOTE: PE_VCS_Reject_Swap State embedded here */
 		send_ctrl_msg(port, TCPCI_MSG_SOP, PD_CTRL_REJECT);
 	}
@@ -7686,8 +7686,7 @@ static void pe_ddr_perform_data_reset_run(int port)
 		 * interpretations are mutually exclusive. Resolve that
 		 * ambiguity and update this implementation.
 		 */
-		usb_mux_set(port, USB_PD_MUX_NONE, USB_SWITCH_DISCONNECT,
-			    polarity_rm_dts(pd_get_polarity(port)));
+		set_usb_mux_with_current_data_role(port);
 	} else if (IS_ENABLED(CONFIG_USBC_VCONN) &&
 		   PE_CHK_FLAG(port, PE_FLAGS_VCONN_SWAP_COMPLETE) &&
 		   tc_is_vconn_src(port)) {

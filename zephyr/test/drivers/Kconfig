@@ -36,6 +36,9 @@ config LINK_TEST_SUITE_HOST_COMMANDS
 	select PLATFORM_EC_CHARGE_STATE_DEBUG
 	bool "Link and test the host command tests"
 
+config LINK_TEST_SUITE_HOST_COMMAND_READ_MEMMAP
+	bool "Link and test the host command read memmap tests"
+
 config LINK_TEST_SUITE_ISL923X
 	bool "Link and test the isl923x tests"
 
@@ -101,6 +104,11 @@ config LINK_TEST_SUITE_USBC_ALT_MODE
 config LINK_TEST_SUITE_USBC_CONSOLE_PD
 	bool"Link and test the usbc_console_pd tests"
 
+config LINK_TEST_SUITE_USBC_CTVPD
+	bool "Link tests for charge-through VCONN-powered device support"
+	select EMUL_TCPCI_PARTNER_VPD
+	select LOG
+
 config LINK_TEST_SUITE_USBC_OCP
 	bool "Link tests for common USBC OCP code"
 
@@ -112,6 +120,11 @@ config LINK_TEST_SUITE_USBC_SVDM_DFP_ONLY
 
 config LINK_TEST_SUITE_USBC_TBT_MODE
 	bool "Link and test the usbc_tbt_mode tests"
+
+config LINK_TEST_SUITE_USBC_USB4_MODE
+	bool "Link and test the usbc_usb4_mode tests"
+	help
+	  Include the usbc_usb4 test suite in the binary.
 
 config LINK_TEST_SUITE_USBC_VCONN_SWAP
 	bool "Link and test the usbc_vconn_swap tests"
