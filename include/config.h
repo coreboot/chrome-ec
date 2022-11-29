@@ -1041,7 +1041,23 @@
  * this should be set to 512 mA in order to not brown-out low-current USB
  * charge ports in accordance with USB-PD r3.0 Sec. 7.3
  */
-#undef CONFIG_CHARGER_INPUT_CURRENT
+#undef CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT
+
+/*
+ * Minimum current limit that will ever be set for chargers, even if a lower
+ * limit is requested. This will allow the charger to draw more power than
+ * the requested limit.
+ *
+ * If set, this should usually be set to no more than 2.5W divided by the
+ * maximum supported input voltage in order to satisfy USB-PD pSnkStdby
+ * requirements. Higher values may help devices stay alive under low-battery
+ * conditions at the cost of violating standby power limits.
+ *
+ * Many boards set this to large values, since historically this number was
+ * usually equal to CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT. New boards should
+ * avoid doing so if possible.
+ */
+#undef CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT
 
 /*
  * Percentage derating factor applied to charger input current limits.

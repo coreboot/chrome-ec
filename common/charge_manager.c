@@ -835,8 +835,12 @@ static void charge_manager_refresh(void)
 		override_port = OVERRIDE_OFF;
 
 	if (new_supplier == CHARGE_SUPPLIER_NONE) {
+#ifdef CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT
+		new_charge_current = CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT;
+#else
 		new_charge_current = 0;
-		new_charge_current_uncapped = 0;
+#endif
+		new_charge_current_uncapped = new_charge_current;
 		new_charge_voltage = 0;
 	} else {
 		new_charge_current_uncapped =
@@ -1706,4 +1710,12 @@ board_fill_source_power_info(int port, struct ec_response_usb_pd_power_info *r)
 	r->meas.current_max = 0;
 	r->meas.current_lim = 0;
 	r->max_power = 0;
+}
+
+__overridable void board_set_charge_limit(int port, int supplier, int charge_ma,
+					  int max_ma, int charge_mv)
+{
+#if defined(CONFIG_CHARGER) && defined(CONFIG_BATTERY)
+	charge_set_input_current_limit(charge_ma, charge_mv);
+#endif
 }

@@ -98,13 +98,6 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	return 0;
 }
 
-void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
-			    int charge_mv)
-{
-	charge_set_input_current_limit(
-		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
-}
-
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 static uint16_t ps8xxx_product_id = PS8805_PRODUCT_ID;
