@@ -158,6 +158,13 @@ int start_system_safe_mode(void)
 
 	schedule_system_safe_mode_timeout();
 
+	/*
+	 * Schedule a deferred function to run immediately
+	 * after returning from fault handler. Defer operations that
+	 * must not run in an ISR to this function.
+	 */
+	hook_call_deferred(&system_safe_mode_start_data, 0);
+
 	in_safe_mode = true;
 
 	panic_printf("\nStarting system safe mode\n");
