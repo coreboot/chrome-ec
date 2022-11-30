@@ -3,15 +3,15 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
-
 #include "battery.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "hooks.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
 
 static void console_cmd_cutoff_after(void *unused)
 {
@@ -58,7 +58,7 @@ ZTEST_USER(console_cmd_cutoff, test_clear_pending_shutdown)
 {
 	int rv = shell_execute_cmd(get_ec_shell(), "cutoff at-shutdown");
 
-	zassume_true(extpower_is_present(), NULL);
+	zassert_true(extpower_is_present(), NULL);
 	zassert_equal(EC_RES_SUCCESS, rv, "Expected %d, but got %d",
 		      EC_RES_SUCCESS, rv);
 

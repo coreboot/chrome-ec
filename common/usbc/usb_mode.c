@@ -9,8 +9,6 @@
  * USB Power Delivery Specification Revision 3.0, Version 2.0 Section 6.4.8
  */
 
-#include <stdbool.h>
-#include <stdint.h>
 #include "compile_time_macros.h"
 #include "console.h"
 #include "tcpm/tcpm.h"
@@ -19,11 +17,14 @@
 #include "usb_mode.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
-#include "usb_pd_dpm.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pe_sm.h"
 #include "usb_tbt_alt_mode.h"
 #include "usbc_ppc.h"
+
+#include <stdbool.h>
+#include <stdint.h>
 
 #ifdef CONFIG_COMMON_RUNTIME
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)

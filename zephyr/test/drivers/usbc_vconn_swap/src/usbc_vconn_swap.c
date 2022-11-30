@@ -3,11 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <stdint.h>
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
-
 #include "ec_commands.h"
 #include "ec_tasks.h"
 #include "emul/emul_isl923x.h"
@@ -17,10 +12,16 @@
 #include "emul/tcpc/emul_tcpci_partner_drp.h"
 #include "emul/tcpc/emul_tcpci_partner_snk.h"
 #include "host_command.h"
-#include "test/drivers/stubs.h"
 #include "tcpm/tcpci.h"
-#include "test/drivers/utils.h"
+#include "test/drivers/stubs.h"
 #include "test/drivers/test_state.h"
+#include "test/drivers/utils.h"
+
+#include <stdint.h>
+
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
 
 #define TEST_PORT 0
 
@@ -52,7 +53,7 @@ static void connect_partner_to_port(const struct emul *tcpc_emul,
 	 * function.
 	 */
 	set_ac_enabled(true);
-	zassume_ok(tcpci_partner_connect_to_tcpci(partner_emul, tcpc_emul),
+	zassert_ok(tcpci_partner_connect_to_tcpci(partner_emul, tcpc_emul),
 		   NULL);
 
 	isl923x_emul_set_adc_vbus(charger_emul,
@@ -65,7 +66,7 @@ static void connect_partner_to_port(const struct emul *tcpc_emul,
 static void disconnect_partner_from_port(const struct emul *tcpc_emul,
 					 const struct emul *charger_emul)
 {
-	zassume_ok(tcpci_emul_disconnect_partner(tcpc_emul), NULL);
+	zassert_ok(tcpci_emul_disconnect_partner(tcpc_emul), NULL);
 	isl923x_emul_set_adc_vbus(charger_emul, 0);
 	k_sleep(K_SECONDS(1));
 }
@@ -166,7 +167,7 @@ ZTEST_F(usbc_vconn_swap, vconn_swap_via_host_command)
 	struct ec_response_typec_status status =
 		host_cmd_typec_status(TEST_PORT);
 
-	zassume_equal(status.vconn_role, PD_ROLE_VCONN_SRC,
+	zassert_equal(status.vconn_role, PD_ROLE_VCONN_SRC,
 		      "TCPM did not initiate VCONN Swap after attach");
 
 	host_cmd_usb_pd_control(TEST_PORT, USB_PD_CTRL_SWAP_VCONN);

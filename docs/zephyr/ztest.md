@@ -120,24 +120,39 @@ For most use cases these are the things to remember:
 
 ## Running twister
 
-Run all tests under a specific directory:
+### Run all tests under a specific directory
 
 ```shell
 platform/ec$ ./twister -T path/to/my/tests
 ```
 
-Run a specific test:
+### Run a specific test
 ```shell
-platform/ec$ ./twister -s path/to/my/tests/my.test.case
+platform/ec$ ./twister -s external/platform/ec/zephyr/test/<test dir>/<my.test.case>
 ```
 
-Run all tests with coverage (get more info on code coverage at
-[Zephyr ztest code coverage](../code_coverage.md#Zephyr_ztest_code_coverage):
+For example:
+```shell
+platform/ec$ ./twister -s external/platform/ec/zephyr/test/drivers/drivers.default
+```
+
+Explanation of this string: `external/` is not a path component, but rather a
+label that indicates we are running tests from outside of the Zephyr tree;
+`platform/ec/zephyr/test/` is the location of our tests relative to the first
+common parent of `ZEPHYR_BASE` and `platform/ec`; `drivers` is the directory for
+our driver tests, and `drivers.default` is a specific test scenario defined in
+that directory's `testcase.yaml` file.
+
+### Run all tests with coverage
+
+You can find more info on code coverage at
+[Zephyr ztest code coverage](../code_coverage.md#Zephyr_ztest_code_coverage).
+
 ```shell
 platform/ec$ ./twister -p native_posix -p unit_testing --coverage
 ```
 
-Get more info on twister:
+### Get more info on twister
 ```shell
 platform/ec$ ./twister --help
 ```
@@ -151,38 +166,11 @@ Other useful flags:
 
 ## Using assumptions
 
-The `zassume_*` API is used to minimize failures while allowing us to find out
-exactly what's going wrong. When writing a test, only assert on code you're
-testing. Any dependencies should use the `zassume_*` API. If the assumption
-fails, your test will be marked as skipped and Twister will report an error.
-Generally speaking, if an assumption fails, either the test wasn't set up
-correctly, or there should be another test that's testing the dependency.
-
-### Example: when to use an assumption
-
-In a given project layout we might have several components (A, B, C, and D). In
-this scenario, components B, C, and D all depend on A to function. In each test
-for B, C, and D we'll include the following:
-
-```c
-static void test_suite_before(void *f)
-{
-  struct my_suite_fixture *fixture = f;
-
-  zassume_ok(f->a->init(), "Failed to initialize A, see test suite 'a_init'");
-}
-```
-
-The above will call A's init function and assume that it returned 0 (status OK).
-If this assumption fails, then B, C, and D will all be marked as skipped along
-with a log message telling us to look at the test suite 'a_init'.
-
-Key takeaways:
-1. If it's code that you depend on (module/library/logic), use assume. It's not
-   what you're testing, you shouldn't raise false failures.
-2. Document why/where you believe that the logic should have been tested. If we
-   end up skipping this test, we should know where the tests that should have
-   caught the error belong.
+The `zassume*` API is used to skip tests when certain preconditions are not
+met. Please don't use it. In our tests we shouldn't ever need to skip tests
+since we control all dependencies. If for some reason you actually need to skip
+a test use `ztest_test_skip()` since that will indicate that you intended to
+skip and didn't use assume by mistake when you meant to use assert.
 
 ## Debugging
 

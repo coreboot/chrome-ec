@@ -3,11 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <stdint.h>
-#include <zephyr/kernel.h>
-#include <zephyr/sys/byteorder.h>
-#include <zephyr/ztest.h>
-
 #include "ec_commands.h"
 #include "ec_tasks.h"
 #include "emul/emul_isl923x.h"
@@ -15,11 +10,17 @@
 #include "emul/tcpc/emul_tcpci.h"
 #include "emul/tcpc/emul_tcpci_partner_snk.h"
 #include "host_command.h"
-#include "test/drivers/stubs.h"
 #include "tcpm/tcpci.h"
-#include "test/drivers/utils.h"
+#include "test/drivers/stubs.h"
 #include "test/drivers/test_state.h"
+#include "test/drivers/utils.h"
 #include "usb_pd_vdo.h"
+
+#include <stdint.h>
+
+#include <zephyr/kernel.h>
+#include <zephyr/sys/byteorder.h>
+#include <zephyr/ztest.h>
 
 #define TEST_PORT USBC_PORT_C0
 /* Remove polarity for any mux checks */
@@ -255,7 +256,7 @@ ZTEST_F(usbc_tbt_mode, verify_tbt_entry_fail)
 			     fixture->charger_emul);
 
 	status = host_cmd_typec_status(TEST_PORT);
-	zassume_equal((status.mux_state & USB_MUX_CHECK_MASK),
+	zassert_equal((status.mux_state & USB_MUX_CHECK_MASK),
 		      USB_PD_MUX_USB_ENABLED, "Unexpected starting mux: 0x%02x",
 		      status.mux_state);
 
@@ -295,7 +296,7 @@ ZTEST_F(usbc_tbt_mode, verify_tbt_passive_entry_exit)
 	verify_cable_found(fixture->partner.cable);
 
 	status = host_cmd_typec_status(TEST_PORT);
-	zassume_equal((status.mux_state & USB_MUX_CHECK_MASK),
+	zassert_equal((status.mux_state & USB_MUX_CHECK_MASK),
 		      USB_PD_MUX_USB_ENABLED, "Unexpected starting mux: 0x%02x",
 		      status.mux_state);
 

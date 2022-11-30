@@ -5,18 +5,19 @@
 
 #define DT_DRV_COMPAT nxp_rtc_pcf85063a
 
+#include "nxp_rtc_pcf85063a.h"
+
 #include <assert.h>
+
 #include <zephyr/device.h>
-#include <drivers/cros_rtc.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+
+#include <drivers/cros_rtc.h>
 #include <rtc.h>
 #include <soc.h>
-
-#include "nxp_rtc_pcf85063a.h"
-
-#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(cros_rtc, LOG_LEVEL_ERR);
 
 /* Driver config */
@@ -361,6 +362,16 @@ static int nxp_rtc_pcf85063a_init(const struct device *dev)
 			return ret;
 		}
 	}
+
+#ifdef CONFIG_PLATFORM_EC_PCF85063A_CAP_SEL
+	ret = pcf85063a_write_reg(dev, REG_CONTROL_1,
+				  (CONTROL_1_DEFAULT_VALUE | CAP_SEL));
+
+	if (ret < 0) {
+		LOG_ERR("PCF85063A set CAP_SEL Fail!");
+		return ret;
+	}
+#endif
 
 	/*
 	 * Read Seconds register and check if oscillator is stopped.

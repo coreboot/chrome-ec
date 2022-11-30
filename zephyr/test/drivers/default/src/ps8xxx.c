@@ -3,22 +3,21 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-
 #include "common.h"
-#include "emul/emul_common_i2c.h"
-#include "emul/tcpc/emul_tcpci.h"
-#include "emul/tcpc/emul_ps8xxx.h"
-#include "timer.h"
-#include "i2c.h"
-#include "test/drivers/stubs.h"
-#include "test/drivers/tcpci_test_common.h"
-
-#include "tcpm/tcpci.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/ps8xxx_public.h"
+#include "emul/emul_common_i2c.h"
+#include "emul/tcpc/emul_ps8xxx.h"
+#include "emul/tcpc/emul_tcpci.h"
+#include "i2c.h"
+#include "tcpm/tcpci.h"
+#include "test/drivers/stubs.h"
+#include "test/drivers/tcpci_test_common.h"
 #include "test/drivers/test_state.h"
+#include "timer.h"
+
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
 
 #define PS8XXX_EMUL_NODE DT_NODELABEL(ps8xxx_emul)
 
@@ -1411,7 +1410,7 @@ static void ps8805_before(void *state)
 	board_set_ps8xxx_product_id(PS8805_PRODUCT_ID);
 	ps8xxx_emul_set_product_id(ps8xxx_emul, PS8805_PRODUCT_ID);
 	setup_no_fail_all();
-	zassume_equal(EC_SUCCESS, ps8xxx_tcpm_drv.init(USBC_PORT_C1));
+	zassert_equal(EC_SUCCESS, ps8xxx_tcpm_drv.init(USBC_PORT_C1));
 }
 
 static void ps8805_after(void *state)
@@ -1436,7 +1435,7 @@ static void ps8815_before(void *state)
 	ps8xxx_emul_set_reg_id(ps8xxx_emul, PS8815_REG_ID);
 	ps8xxx_emul_set_product_id(ps8xxx_emul, PS8815_PRODUCT_ID);
 	setup_no_fail_all();
-	zassume_equal(EC_SUCCESS, ps8xxx_tcpm_drv.init(USBC_PORT_C1));
+	zassert_equal(EC_SUCCESS, ps8xxx_tcpm_drv.init(USBC_PORT_C1));
 }
 
 static void ps8815_after(void *state)
@@ -1461,7 +1460,7 @@ static void ps8745_before(void *state)
 	ps8xxx_emul_set_product_id(ps8xxx_emul, PS8815_PRODUCT_ID);
 	ps8xxx_emul_set_reg_id(ps8xxx_emul, PS8745_REG_ID);
 	setup_no_fail_all();
-	zassume_equal(EC_SUCCESS, ps8xxx_tcpm_drv.init(USBC_PORT_C1), NULL);
+	zassert_equal(EC_SUCCESS, ps8xxx_tcpm_drv.init(USBC_PORT_C1), NULL);
 }
 
 static void ps8745_after(void *state)

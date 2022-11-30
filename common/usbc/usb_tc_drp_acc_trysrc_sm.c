@@ -17,7 +17,7 @@
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
-#include "usb_pd_dpm.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pd_timer.h"
 #include "usb_pe_sm.h"
@@ -3749,6 +3749,13 @@ __maybe_unused static void tc_ct_attached_snk_entry(int port)
 
 	/* The port shall reject a VCONN swap request. */
 	TC_SET_FLAG(port, TC_FLAGS_REJECT_VCONN_SWAP);
+
+	/*
+	 * Type-C r 2.2: The Host shall not advertise dual-role data or
+	 * dual-role power in its SourceCapability or SinkCapability messages -
+	 * Host changes its advertised capabilities to UFP role/sink only role.
+	 */
+	tc_set_data_role(port, PD_ROLE_UFP);
 }
 
 __maybe_unused static void tc_ct_attached_snk_run(int port)

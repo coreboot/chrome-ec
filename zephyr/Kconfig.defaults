@@ -13,9 +13,6 @@ config LOG
 	default y
 	imply LOG_DEFAULT_MINIMAL
 
-config GPIO_EMUL
-	default y if ARCH_POSIX
-
 config GPIO
 	default y if ARCH_POSIX
 
@@ -25,6 +22,9 @@ config THREAD_MAX_NAME_LEN
 config SHELL_PROMPT_UART
 	default "ec:~$ "
 
+config SHELL_VT100_COLORS
+	default n
+
 config SHELL_THREAD_PRIORITY_OVERRIDE
 	default y
 
@@ -33,5 +33,11 @@ config SHELL_THREAD_PRIORITY
 
 config EXTRA_EXCEPTION_INFO
 	default y if ARCH_HAS_EXTRA_EXCEPTION_INFO
+
+config EEPROM_SHELL
+	default n
+
+config PWM_SHELL
+	default n
 
 orsource "Kconfig.defaults-$(ARCH)"
