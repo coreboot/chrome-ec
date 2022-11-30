@@ -52,7 +52,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional
+from typing import BinaryIO, Dict, List, Optional, Tuple
 
 # pylint: disable=import-error
 import colorama  # type: ignore[import]
@@ -91,6 +91,7 @@ DATA_ACCESS_VIOLATION_20000000_REGEX = re.compile(
 DATA_ACCESS_VIOLATION_24000000_REGEX = re.compile(
     r"Data access violation, mfar = 24000000\r\n"
 )
+PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
 
 BLOONCHIPPER = "bloonchipper"
 DARTMONKEY = "dartmonkey"
@@ -196,6 +197,7 @@ class AllTests:
             TestConfig(test_name="abort"),
             TestConfig(test_name="aes"),
             TestConfig(test_name="always_memset"),
+            TestConfig(test_name="benchmark"),
             TestConfig(test_name="cec"),
             TestConfig(test_name="cortexm_fpu"),
             TestConfig(test_name="crc"),
@@ -234,6 +236,11 @@ class AllTests:
                 test_name="fpsensor",
                 test_args=["uart"],
             ),
+            TestConfig(test_name="ftrapv"),
+            TestConfig(
+                test_name="libc_printf",
+                finish_regexes=[PRINTF_CALLED_REGEX],
+            ),
             TestConfig(
                 config_name="mpu_ro",
                 test_name="mpu",
@@ -250,6 +257,7 @@ class AllTests:
             TestConfig(test_name="pingpong"),
             TestConfig(test_name="printf"),
             TestConfig(test_name="queue"),
+            TestConfig(test_name="rng_benchmark"),
             TestConfig(
                 config_name="rollback_region0",
                 test_name="rollback",
@@ -389,7 +397,7 @@ def read_file_gsutil(path: str) -> bytes:
     return gsutil.stdout
 
 
-def find_section_offset_size(section: str, image: bytes) -> (int, int):
+def find_section_offset_size(section: str, image: bytes) -> Tuple[int, int]:
     """Get offset and size of the section in image"""
     areas = fmap.fmap_decode(image)["areas"]
     area = next(area for area in areas if area["name"] == section)

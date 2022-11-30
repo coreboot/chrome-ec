@@ -3,15 +3,14 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-
 #include "common.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/tcpc/emul_tcpci.h"
+#include "tcpm/tcpci.h"
 #include "test/drivers/tcpci_test_common.h"
 
-#include "tcpm/tcpci.h"
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
 
 /** Check TCPC register value */
 void check_tcpci_reg_f(const struct emul *emul, int reg, uint16_t exp_val,
@@ -1020,7 +1019,7 @@ void test_tcpci_hard_reset_reinit(const struct emul *emul,
 	uint16_t power_status_mask;
 	uint16_t alert_mask;
 
-	zassume_equal(EC_SUCCESS, drv->init(port), NULL);
+	zassert_equal(EC_SUCCESS, drv->init(port), NULL);
 	tcpci_emul_get_reg(emul, TCPC_REG_POWER_STATUS_MASK,
 			   &power_status_mask);
 	tcpci_emul_get_reg(emul, TCPC_REG_ALERT_MASK, &alert_mask);

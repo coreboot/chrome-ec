@@ -24,28 +24,44 @@ DEFAULT_BUNDLE_DIRECTORY = "/tmp/artifact_bundles"
 DEFAULT_BUNDLE_METADATA_FILE = "/tmp/artifact_bundle_metadata"
 
 # Boards that we want to track the coverage of our own files specifically.
-SPECIAL_BOARDS = ["herobrine", "krabby", "nivviks", "skyrim", "kingler"]
+SPECIAL_BOARDS = ["herobrine", "krabby", "nivviks", "skyrim", "kingler", "rex"]
 
 
-def log_cmd(cmd):
+def log_cmd(cmd, env=None):
     """Log subprocess command."""
+    if env is not None:
+        print("env", end=" ")
+        [  # pylint:disable=expression-not-assigned
+            print(key + "=" + shlex.quote(str(value)), end=" ")
+            for key, value in env.items()
+        ]
     print(" ".join(shlex.quote(str(x)) for x in cmd))
     sys.stdout.flush()
 
 
-def run_twister(platform_ec, code_coverage=False, extra_args=None):
-    """Build the tests using twister."""
+def run_twister(
+    platform_ec, code_coverage=False, extra_args=None, use_gcc=False
+):
+    """Build the tests using twister.
+
+    Returns the path to the twister-out dir.
+    """
+
+    if use_gcc:
+        outdir = "twister-out-gcc"
+        toolchain = "host"
+    else:
+        outdir = "twister-out-llvm"
+        toolchain = "llvm"
     cmd = [
         platform_ec / "twister",
         "--outdir",
-        platform_ec / "twister-out",
+        platform_ec / outdir,
         "-v",
         "-i",
-        "-p",
-        "native_posix",
-        "-p",
-        "unit_testing",
         "--no-upload-cros-rdb",
+        "--toolchain",
+        toolchain,
     ]
 
     if extra_args:
@@ -60,7 +76,14 @@ def run_twister(platform_ec, code_coverage=False, extra_args=None):
             ]
         )
     log_cmd(cmd)
-    subprocess.run(cmd, check=True, cwd=platform_ec, stdin=subprocess.DEVNULL)
+
+    subprocess.run(
+        cmd,
+        check=True,
+        cwd=platform_ec,
+        stdin=subprocess.DEVNULL,
+    )
+    return platform_ec / outdir
 
 
 def build(opts):
@@ -75,6 +98,11 @@ def build(opts):
         cwd=platform_ec,
         stdin=subprocess.DEVNULL,
     )
+
+    # Start with a clean build environment
+    cmd = ["make", "clobber"]
+    log_cmd(cmd)
+    subprocess.run(cmd, cwd=platform_ec, check=True, stdin=subprocess.DEVNULL)
 
     cmd = ["zmake", "-D", "build", "-a"]
     if opts.code_coverage:
@@ -243,7 +271,10 @@ def test(opts):
     # Twister-based tests
     platform_ec = zephyr_dir.parent
     third_party = platform_ec.parent.parent / "third_party"
-    run_twister(platform_ec, opts.code_coverage)
+    twister_out_dir = run_twister(platform_ec, opts.code_coverage)
+    twister_out_dir_gcc = run_twister(
+        platform_ec, opts.code_coverage, use_gcc=True
+    )
 
     if opts.code_coverage:
         build_dir = platform_ec / "build" / "zephyr"
@@ -252,7 +283,7 @@ def test(opts):
             [
                 "/usr/bin/lcov",
                 "--summary",
-                platform_ec / "twister-out" / "coverage.info",
+                twister_out_dir / "coverage.info",
             ],
             cwd=zephyr_dir,
             check=True,
@@ -261,6 +292,20 @@ def test(opts):
             stdin=subprocess.DEVNULL,
         ).stdout
         _extract_lcov_summary("EC_ZEPHYR_TESTS", metrics, output)
+
+        output = subprocess.run(
+            [
+                "/usr/bin/lcov",
+                "--summary",
+                twister_out_dir_gcc / "coverage.info",
+            ],
+            cwd=zephyr_dir,
+            check=True,
+            stdout=subprocess.PIPE,
+            universal_newlines=True,
+            stdin=subprocess.DEVNULL,
+        ).stdout
+        _extract_lcov_summary("EC_ZEPHYR_TESTS_GCC", metrics, output)
 
         cmd = ["make", "test-coverage", f"-j{opts.cpus}"]
         log_cmd(cmd)
@@ -291,7 +336,9 @@ def test(opts):
             "-a",
             platform_ec / "build/coverage/lcov.info",
             "-a",
-            platform_ec / "twister-out" / "coverage.info",
+            twister_out_dir / "coverage.info",
+            "-a",
+            twister_out_dir_gcc / "coverage.info",
         ]
         log_cmd(cmd)
         output = subprocess.run(
@@ -343,6 +390,7 @@ def test(opts):
             zephyr_dir / "emul/**",
             zephyr_dir / "mock/**",
             third_party / "zephyr/main/subsys/emul/**",
+            third_party / "zephyr/main/arch/posix/**",
             # Exclude all files ending in _test.[ch] or _emul.[ch]
             "**/*_test.c",
             "**/*_test.h",
@@ -470,7 +518,7 @@ def test(opts):
                     # These are questionable, but they are essentially untestable
                     zephyr_dir / "drivers/**",
                     zephyr_dir / "include/drivers/**",
-                    zephyr_dir / "projects/**",
+                    zephyr_dir / "program/**",
                     zephyr_dir / "shim/chip/**",
                     zephyr_dir / "shim/chip/npcx/npcx_monitor/**",
                     zephyr_dir / "shim/core/**",

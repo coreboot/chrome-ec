@@ -8,6 +8,7 @@ rsource "emul/Kconfig"
 rsource "fake/Kconfig"
 rsource "mock/Kconfig"
 rsource "subsys/Kconfig"
+rsource "subsys/emul/Kconfig"
 
 if ZTEST
 
@@ -332,6 +333,14 @@ config PLATFORM_EC_EXTPOWER_GPIO
 	  project should define a GPIO pin named GPIO_AC_PRESENT, with
 	  extpower_interrupt configured as the handler.
 
+config PLATFORM_EC_EXTPOWER_DEBOUNCE_MS
+	int "Debounce time for external power signal"
+	default 30
+	help
+	  Enable external power signal debounce time. Extend the
+	  debounce time to ensure that the external power signal can
+	  supply stable power.
+
 config PLATFORM_EC_FLASH_CROS
 	bool
 	help
@@ -339,16 +348,6 @@ config PLATFORM_EC_FLASH_CROS
 	  this is it possible for the EC to update its flash while running,
 	  e.g. to support auto-update. Various write-protection features are
 	  also provided.
-
-config PLATFORM_EC_FPU
-	bool "Support floating point"
-	depends on FPU && (CPU_CORTEX_M || RISCV) && !NEWLIB_LIBC
-	default y
-	help
-	  This enables support for floating point. This is generally already
-	  provided in Zephyr, but the EC side expects a few functions to be
-	  available which are not available with Zephyr's minimal lib: sqrtf()
-	  and fabsf(). Enabling this options defines them.
 
 config PLATFORM_EC_HOOKS
 	bool "Hooks and deferred compatibility shim"
@@ -456,6 +455,14 @@ config PLATFORM_EC_POWER_COMMON
 	help
 	  Compile common code for AP power state machine.
 
+config CROS_EC_POWER_SIGNAL_LIST
+	bool "Define the power signal list from the devicetree"
+	default y
+	depends on $(dt_nodelabel_enabled,power_signal_list)
+	help
+	  Define the global power_signal_list[] from the devicetree. Requires a
+	  node with nodelabel power_signal_list.
+
 config PLATFORM_EC_MKBP_EVENT
     bool "MKBP event"
     help
@@ -544,6 +551,7 @@ config PLATFORM_EC_PWM_DISPLIGHT
 	bool "PWM display backlight"
 	default y
 	depends on DT_HAS_CROS_EC_DISPLIGHT_ENABLED
+	select PWM
 	select PLATFORM_EC_PWM_HC
 	help
 	  Enables display backlight controlled by a PWM signal connected
@@ -591,7 +599,7 @@ endchoice # PLATFORM_EC_SHA256_MODE
 
 config PLATFORM_EC_SHA256_UNROLLED
 	bool "Manually unroll sha256 transform"
-	depends on PLATFORM_EC_SHA25_SW
+	depends on PLATFORM_EC_SHA256_SW
 	default n
 	help
 	  Enable loop unroll to improve the performance of sha256 software
@@ -614,25 +622,17 @@ config PLATFORM_EC_SWITCH
           This also enables the "mmapinfo" console command to report the current
           state of all switches.
 
-choice PLATFORM_EC_SWITCHCAP_TYPE
-	prompt "Enable switchcap support"
-	optional
-	help
-	  Enable support for switchcap used to power on the AP.
-	  If enabled, type of switchcap must be selected and node in device
-	  tree must be added that describes the driver and pins used to control
-	  the switchcap.
-
 config PLATFORM_EC_SWITCHCAP_GPIO
 	bool "GPIO controlled switchcap"
+	default y
+	depends on DT_HAS_CROS_EC_SWITCHCAP_GPIO_ENABLED
 	help
 	  Enable support for the GPIO controlled switchcap.
 	  Pins used for controlling the switchcap must be defined in board's
 	  device tree.
 
 config PLATFORM_EC_SWITCHCAP_LN9310
-	bool "LN9310 switchcap driver"
-	depends on PLATFORM_EC_I2C
+	bool "LN9310 switchcap common code"
 	help
 	  Enable support for the LION Semiconductor LN9310 switched
 	  capacitor converter.  This will export definitions for
@@ -640,7 +640,14 @@ config PLATFORM_EC_SWITCHCAP_LN9310
 	  project-specific code should call appropriately if there's
 	  no switchcap node in device tree.
 
-endchoice
+config CROS_EC_SWITCHCAP_LN9310
+	bool "LN9310 switchcap generic driver"
+	default y
+	depends on DT_HAS_LION_LN9310_ENABLED
+	help
+	  Enable support for the generic driver for the LION Semiconductor
+	  LN9310 switched capacitor converter. This requires a lion,ln9310 node
+	  to be defined.
 
 config PLATFORM_EC_SYSTEM_UNLOCKED
 	bool "System unlocked: allow dangerous commands while in development"
@@ -799,5 +806,15 @@ config PLATFORM_EC_MATH_UTIL
 	help
 	  Math utilities including bitmask manipulation, division rounding,
 	  trigonometric function, etc.
+
+config PLATFORM_EC_GPIO_ID
+        bool "Enable GPIO ID handling for board and sku ids"
+	default y
+	depends on DT_HAS_CROS_EC_GPIO_ID_ENABLED
+	help
+	  Enable setting board and sku IDs using GPIOs. Defines the
+	  board_get_sku_id and board_get_version functions based on the
+	  devicetree node using the known nodelabels gpio_id_sku and
+	  gpio_id_board.
 
 endif # PLATFORM_EC

@@ -3,15 +3,15 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/init.h>
-#include <zephyr/sys/atomic.h>
-#include <zephyr/shell/shell.h>
-
 #include "common.h"
 #include "host_command.h"
-#include "timer.h"
 #include "task.h"
+#include "timer.h"
+
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/sys/atomic.h>
 
 /* Ensure that the idle task is at lower priority than lowest priority task. */
 BUILD_ASSERT(EC_TASK_PRIORITY(EC_TASK_PRIO_LOWEST) < K_IDLE_PRIO,
@@ -105,7 +105,7 @@ atomic_t *task_get_event_bitmap(task_id_t cros_task_id)
 
 	data = task_get_base_data(cros_task_id);
 
-	return &data->event_mask;
+	return data == NULL ? NULL : &data->event_mask;
 }
 
 void task_set_event(task_id_t cros_task_id, uint32_t event)
@@ -114,8 +114,10 @@ void task_set_event(task_id_t cros_task_id, uint32_t event)
 
 	data = task_get_base_data(cros_task_id);
 
-	atomic_or(&data->event_mask, event);
-	k_poll_signal_raise(&data->new_event, 0);
+	if (data != NULL) {
+		atomic_or(&data->event_mask, event);
+		k_poll_signal_raise(&data->new_event, 0);
+	}
 }
 
 uint32_t task_wait_event(int timeout_us)
@@ -123,6 +125,8 @@ uint32_t task_wait_event(int timeout_us)
 	struct task_ctx_base_data *data;
 
 	data = task_get_base_data(task_get_current());
+
+	__ASSERT_NO_MSG(data != NULL);
 
 	const k_timeout_t timeout = (timeout_us == -1) ? K_FOREVER :
 							 K_USEC(timeout_us);
@@ -152,12 +156,12 @@ uint32_t task_wait_event(int timeout_us)
 	if (events == 0) {
 		const int64_t ticks_left = tick_deadline - k_uptime_ticks();
 
+		events |= TASK_EVENT_TIMER;
+
 		if (ticks_left > 0) {
 			return task_wait_event(
 				k_ticks_to_us_near64(ticks_left));
 		}
-
-		events |= TASK_EVENT_TIMER;
 	}
 
 	return events;
@@ -309,18 +313,26 @@ int task_start_called(void)
 {
 	return tasks_started;
 }
-
+/*
+ * TODO(b/190203712): Implement this
+ * LCOV_EXCL_START
+ */
 void task_disable_task(task_id_t tskid)
 {
-	/* TODO(b/190203712): Implement this */
 }
+/* LCOV_EXCL_STOP */
 
+/*
+ * This function cannot be tested since it is architecture specific.
+ * LCOV_EXCL_START
+ */
 void task_clear_pending_irq(int irq)
 {
 #if CONFIG_ITE_IT8XXX2_INTC
 	ite_intc_isr_clear(irq);
 #endif
 }
+/* LCOV_EXCL_STOP */
 
 void task_enable_irq(int irq)
 {
@@ -339,11 +351,3 @@ inline bool in_deferred_context(void)
 	 */
 	return (k_current_get() == &k_sys_work_q.thread);
 }
-
-#if IS_ENABLED(CONFIG_KERNEL_SHELL) && IS_ENABLED(CONFIG_THREAD_MONITOR)
-static int taskinfo(const struct shell *shell, size_t argc, char **argv)
-{
-	return shell_execute_cmd(shell, "kernel threads");
-}
-SHELL_CMD_REGISTER(taskinfo, NULL, "Threads statistics", taskinfo);
-#endif

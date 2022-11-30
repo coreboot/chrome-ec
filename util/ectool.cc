@@ -33,7 +33,10 @@
 #include "lock/gec_lock.h"
 #include "misc_util.h"
 #include "panic.h"
+#include "tablet_mode.h"
 #include "usb_pd.h"
+
+#include <libec/add_entropy_command.h>
 
 /* Maximum flash size (16 MB, conservative) */
 #define MAX_FLASH_SIZE 0x1000000
@@ -313,6 +316,8 @@ const char help_str[] =
 	"      Display system info.\n"
 	"  switches\n"
 	"      Prints current EC switch positions\n"
+	"  tabletmode [on | off | reset]\n"
+	"      Manually force tablet mode to on, off or reset.\n"
 	"  temps <sensorid>\n"
 	"      Print temperature and temperature ratio between fan_off and\n"
 	"      fan_max values, which could be a fan speed if it's controlled\n"
@@ -564,39 +569,24 @@ int cmd_adc_read(int argc, char *argv[])
 
 int cmd_add_entropy(int argc, char *argv[])
 {
-	struct ec_params_rollback_add_entropy p;
-	int rv;
-	int tries = 100; /* Wait for 10 seconds at most */
-
+	bool reset = false;
 	if (argc >= 2 && !strcmp(argv[1], "reset"))
-		p.action = ADD_ENTROPY_RESET_ASYNC;
-	else
-		p.action = ADD_ENTROPY_ASYNC;
+		reset = true;
 
-	rv = ec_command(EC_CMD_ADD_ENTROPY, 0, &p, sizeof(p), NULL, 0);
-
-	if (rv != EC_RES_SUCCESS)
-		goto out;
-
-	while (tries--) {
-		usleep(100000);
-
-		p.action = ADD_ENTROPY_GET_RESULT;
-		rv = ec_command(EC_CMD_ADD_ENTROPY, 0, &p, sizeof(p), NULL, 0);
-
-		if (rv == EC_RES_SUCCESS) {
-			printf("Entropy added successfully\n");
-			return EC_RES_SUCCESS;
-		}
-
-		/* Abort if EC returns an error other than EC_RES_BUSY. */
-		if (rv <= -EECRESULT && rv != -EECRESULT - EC_RES_BUSY)
-			goto out;
+	ec::AddEntropyCommand add_entropy_command(reset);
+	if (!add_entropy_command.Run(comm_get_fd())) {
+		fprintf(stderr, "Failed to run addentropy command\n");
+		return -1;
 	}
 
-	rv = -EECRESULT - EC_RES_TIMEOUT;
-out:
-	fprintf(stderr, "Failed to add entropy: %d\n", rv);
+	int rv = add_entropy_command.Result();
+	if (rv != EC_RES_SUCCESS) {
+		rv = -EECRESULT - add_entropy_command.Result();
+		fprintf(stderr, "Failed to add entropy: %d\n", rv);
+		return rv;
+	}
+
+	printf("Entropy added successfully\n");
 	return rv;
 }
 
@@ -884,7 +874,7 @@ int cmd_test(int argc, char *argv[])
 int cmd_s5(int argc, char *argv[])
 {
 	struct ec_params_get_set_value p;
-	struct ec_params_get_set_value r;
+	struct ec_response_get_set_value r;
 	int rv, param;
 
 	p.flags = 0;
@@ -7271,6 +7261,37 @@ int cmd_switches(int argc, char *argv[])
 	return 0;
 }
 
+int cmd_tabletmode(int argc, char *argv[])
+{
+	struct ec_params_set_tablet_mode p;
+
+	if (argc != 2)
+		return EC_ERROR_PARAM_COUNT;
+
+	memset(&p, 0, sizeof(p));
+	if (argv[1][0] == 'o' && argv[1][1] == 'n') {
+		p.tablet_mode = TABLET_MODE_FORCE_TABLET;
+	} else if (argv[1][0] == 'o' && argv[1][1] == 'f') {
+		p.tablet_mode = TABLET_MODE_FORCE_CLAMSHELL;
+	} else if (argv[1][0] == 'r') {
+		// Match tablet mode to the current HW orientation.
+		p.tablet_mode = TABLET_MODE_DEFAULT;
+	} else {
+		return EC_ERROR_PARAM1;
+	}
+
+	int rv = ec_command(EC_CMD_SET_TABLET_MODE, 0, &p, sizeof(p), NULL, 0);
+	rv = (rv < 0 ? rv : 0);
+
+	if (rv < 0) {
+		fprintf(stderr, "Failed to set tablet mode, rv=%d\n", rv);
+	} else {
+		printf("\n");
+		printf("SUCCESS. The tablet mode has been set.\n");
+	}
+	return rv;
+}
+
 int cmd_wireless(int argc, char *argv[])
 {
 	char *e;
@@ -10149,7 +10170,10 @@ int cmd_typec_control(int argc, char *argv[])
 			"        <mux_mode> is one of: dp, dock, usb, tbt,\n"
 			"                              usb4, none, safe\n"
 			"    5: Enable bist share mode\n"
-			"        args: <0: DISABLE, 1: ENABLE>\n",
+			"        args: <0: DISABLE, 1: ENABLE>\n"
+			"    6: Send VDM REQ\n"
+			"        args: <tx_type vdm_hdr [vdo...]>\n"
+			"        <tx_type> is 0 - SOP, 1 - SOP', 2 - SOP''\n",
 			argv[0]);
 		return -1;
 	}
@@ -10253,6 +10277,35 @@ int cmd_typec_control(int argc, char *argv[])
 		}
 		p.bist_share_mode = conversion_result;
 		break;
+	case TYPEC_CONTROL_COMMAND_SEND_VDM_REQ:
+		if (argc < 5) {
+			fprintf(stderr, "Missing VDM header and type\n");
+			return -1;
+		}
+		if (argc > 4 + VDO_MAX_SIZE) {
+			fprintf(stderr, "Too many VDOs\n");
+			return -1;
+		}
+
+		conversion_result = strtol(argv[3], &endptr, 0);
+		if ((endptr && *endptr) || conversion_result > UINT8_MAX ||
+		    conversion_result < 0) {
+			fprintf(stderr, "Bad SOP* type\n");
+			return -1;
+		}
+		p.vdm_req_params.partner_type = conversion_result;
+
+		int vdm_index;
+		for (vdm_index = 0; vdm_index < argc - 4; vdm_index++) {
+			uint32_t vdm_entry =
+				strtoul(argv[vdm_index + 4], &endptr, 0);
+			if (endptr && *endptr) {
+				fprintf(stderr, "Bad VDO\n");
+				return -1;
+			}
+			p.vdm_req_params.vdm_data[vdm_index] = vdm_entry;
+		}
+		p.vdm_req_params.vdm_data_objects = vdm_index;
 	}
 
 	rv = ec_command(EC_CMD_TYPEC_CONTROL, 0, &p, sizeof(p), ec_inbuf,
@@ -10991,6 +11044,7 @@ const struct command commands[] = {
 	{ "sysinfo", cmd_sysinfo },
 	{ "port80flood", cmd_port_80_flood },
 	{ "switches", cmd_switches },
+	{ "tabletmode", cmd_tabletmode },
 	{ "temps", cmd_temperature },
 	{ "tempsinfo", cmd_temp_sensor_info },
 	{ "test", cmd_test },

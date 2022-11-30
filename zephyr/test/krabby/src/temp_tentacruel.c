@@ -3,25 +3,24 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-#include <zephyr/drivers/adc.h>
-#include <zephyr/drivers/adc/adc_emul.h>
-
-#include "charger.h"
 #include "charge_state.h"
+#include "charger.h"
 #include "charger_profile_override.h"
 #include "common.h"
 #include "config.h"
 #include "hooks.h"
-#include "util.h"
 #include "temp_sensor.h"
 #include "temp_sensor/temp_sensor.h"
+#include "util.h"
+
+#include <zephyr/drivers/adc.h>
+#include <zephyr/drivers/adc/adc_emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
 
 #define ADC_DEVICE_NODE DT_NODELABEL(adc0)
 #define CHARGER_TEMP TEMP_SENSOR_ID(DT_NODELABEL(temp_charger))
 #define ORIGINAL_CURRENT 5000
-#define TEMP_THRESHOLD 55
 
 struct charge_state_data curr;
 static int fake_voltage;
@@ -34,16 +33,17 @@ static uint16_t current_table[] = {
 	3600,
 	3000,
 	2400,
-	1800,
+	1600,
 };
 
 int setup_faketemp(int fake_voltage)
 {
 	const struct device *adc_dev = DEVICE_DT_GET(ADC_DEVICE_NODE);
+	const uint8_t channel_id =
+		DT_IO_CHANNELS_INPUT(DT_NODELABEL(adc_charger));
 	int emul_temp;
 
-	emul_temp = adc_emul_const_value_set(
-		adc_dev, temp_sensors[CHARGER_TEMP].idx, fake_voltage);
+	emul_temp = adc_emul_const_value_set(adc_dev, channel_id, fake_voltage);
 	return emul_temp;
 }
 
@@ -56,7 +56,7 @@ static void ignore_first_minute(void)
 
 ZTEST(temp_tentacruel, test_decrease_current)
 {
-	fake_voltage = 376;
+	fake_voltage = 411;
 	curr.batt.flags |= BATT_FLAG_RESPONSIVE;
 	count = 0;
 
@@ -80,7 +80,7 @@ ZTEST(temp_tentacruel, test_decrease_current)
 
 ZTEST(temp_tentacruel, test_increase_current)
 {
-	fake_voltage = 380;
+	fake_voltage = 446;
 	curr.batt.flags |= BATT_FLAG_RESPONSIVE;
 	count = 3;
 

@@ -28,6 +28,12 @@ static uint32_t tablet_mode;
  */
 static bool tablet_mode_forced;
 
+/*
+ * Console command can force the value of tablet_mode. If tablet_mode_force is
+ * false, use stored tablet mode value before it was (possibly) overridden.
+ */
+static uint32_t tablet_mode_store;
+
 /* True if GMR sensor is reporting 360 degrees. */
 static bool gmr_sensor_at_360;
 
@@ -62,27 +68,51 @@ static void notify_tablet_mode_change(void)
 
 void tablet_set_mode(int mode, uint32_t trigger)
 {
-	uint32_t old_mode = tablet_mode;
-
-	/* If tablet_mode is forced via a console command, ignore set. */
-	if (tablet_mode_forced)
-		return;
+	uint32_t new_mode = tablet_mode_forced ? tablet_mode_store :
+						 tablet_mode;
+	uint32_t old_mode = 0;
 
 	if (disabled) {
-		CPRINTS("Tablet mode set while disabled (ignoring)!");
+		/*
+		 * If tablet mode is being forced by the user, then this logging
+		 * would be misleading since the mode wouldn't change anyway, so
+		 * skip it.
+		 */
+		if (!tablet_mode_forced)
+			CPRINTS("Tablet mode set while disabled (ignoring)!");
 		return;
 	}
 
 	if (gmr_sensor_at_360 && !mode) {
-		CPRINTS("Ignoring tablet mode exit while gmr sensor "
-			"reports 360-degree tablet mode.");
+		/*
+		 * If tablet mode is being forced by the user, then this logging
+		 * would be misleading since the mode wouldn't change anyway, so
+		 * skip it.
+		 */
+		if (!tablet_mode_forced)
+			CPRINTS("Ignoring tablet mode exit while gmr sensor "
+				"reports 360-degree tablet mode.");
 		return;
 	}
 
 	if (mode)
-		tablet_mode |= trigger;
+		new_mode |= trigger;
 	else
-		tablet_mode &= ~trigger;
+		new_mode &= ~trigger;
+
+	if (tablet_mode_forced) {
+		/*
+		 * Save the current mode based on the HW orientation, so we
+		 * apply the correct mode if tablet mode no longer forced in the
+		 * future. Don't notify of the tablet mode change yet, since
+		 * that will be done as part of handling 'tabletmode reset'.
+		 */
+		tablet_mode_store = new_mode;
+		return;
+	}
+
+	old_mode = tablet_mode;
+	tablet_mode = new_mode;
 
 	/* Boolean comparison */
 	if (!tablet_mode == !old_mode)
@@ -173,11 +203,42 @@ void gmr_tablet_switch_disable(void)
 }
 #endif
 
+static enum ec_status tablet_mode_command(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_set_tablet_mode *p = args->params;
+
+	if (tablet_mode_forced == false)
+		tablet_mode_store = tablet_mode;
+
+	switch (p->tablet_mode) {
+	case TABLET_MODE_DEFAULT:
+		tablet_mode = tablet_mode_store;
+		tablet_mode_forced = false;
+		break;
+	case TABLET_MODE_FORCE_TABLET:
+		tablet_mode = TABLET_TRIGGER_LID;
+		tablet_mode_forced = true;
+		break;
+	case TABLET_MODE_FORCE_CLAMSHELL:
+		tablet_mode = 0;
+		tablet_mode_forced = true;
+		break;
+	default:
+		CPRINTS("Invalid EC_CMD_SET_TABLET_MODE parameter: %d",
+			p->tablet_mode);
+		return EC_RES_INVALID_PARAM;
+	}
+
+	notify_tablet_mode_change();
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_SET_TABLET_MODE, tablet_mode_command,
+		     EC_VER_MASK(0) | EC_VER_MASK(1));
+
 #ifdef CONFIG_TABLET_MODE
 static int command_settabletmode(int argc, const char **argv)
 {
-	static uint32_t tablet_mode_store;
-
 	if (argc == 1) {
 		print_tablet_mode();
 		return EC_SUCCESS;

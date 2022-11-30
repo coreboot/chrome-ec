@@ -3,25 +3,24 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
-
+#include "chipset.h"
 #include "common.h"
+#include "driver/retimer/bb_retimer.h"
 #include "ec_tasks.h"
 #include "emul/emul_bb_retimer.h"
 #include "emul/emul_common_i2c.h"
 #include "hooks.h"
 #include "i2c.h"
 #include "test/drivers/stubs.h"
-#include "usb_prl_sm.h"
-#include "usb_tc_sm.h"
-#include "chipset.h"
-
-#include "driver/retimer/bb_retimer.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+#include "usb_prl_sm.h"
+#include "usb_tc_sm.h"
+
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
 
 #define GPIO_USB_C1_LS_EN_PATH DT_PATH(named_gpios, usb_c1_ls_en)
 #define GPIO_USB_C1_LS_EN_PORT DT_GPIO_PIN(GPIO_USB_C1_LS_EN_PATH, gpios)
@@ -66,7 +65,7 @@ ZTEST_USER(bb_retimer_no_tasks, test_bb_set_state)
 
 	/* Set UFP role for whole test */
 	tc_set_data_role(USBC_PORT_C1, PD_ROLE_UFP);
-	zassume_equal(PD_ROLE_UFP, pd_get_data_role(USBC_PORT_C1));
+	zassert_equal(PD_ROLE_UFP, pd_get_data_role(USBC_PORT_C1));
 
 	/* Test none mode */
 	bb_emul_set_reg(emul, BB_RETIMER_REG_CONNECTION_STATE, 0x12144678);
@@ -162,7 +161,8 @@ ZTEST_USER(bb_retimer_no_tasks, test_bb_set_state)
 	zassert_false(ack_required, "ACK is never required for BB retimer");
 	conn = bb_emul_get_reg(emul, BB_RETIMER_REG_CONNECTION_STATE);
 	exp_conn = BB_RETIMER_USB_DATA_ROLE |
-		   BB_RETIMER_DATA_CONNECTION_PRESENT;
+		   BB_RETIMER_DATA_CONNECTION_PRESENT |
+		   BB_RETIMER_DP_CONNECTION;
 	zassert_equal(exp_conn, conn, "Expected state 0x%lx, got 0x%lx",
 		      exp_conn, conn);
 
@@ -175,7 +175,8 @@ ZTEST_USER(bb_retimer_no_tasks, test_bb_set_state)
 	zassert_false(ack_required, "ACK is never required for BB retimer");
 	conn = bb_emul_get_reg(emul, BB_RETIMER_REG_CONNECTION_STATE);
 	exp_conn = BB_RETIMER_USB_DATA_ROLE |
-		   BB_RETIMER_DATA_CONNECTION_PRESENT | BB_RETIMER_IRQ_HPD;
+		   BB_RETIMER_DATA_CONNECTION_PRESENT |
+		   BB_RETIMER_DP_CONNECTION | BB_RETIMER_IRQ_HPD;
 	zassert_equal(exp_conn, conn, "Expected state 0x%lx, got 0x%lx",
 		      exp_conn, conn);
 
@@ -188,7 +189,8 @@ ZTEST_USER(bb_retimer_no_tasks, test_bb_set_state)
 	zassert_false(ack_required, "ACK is never required for BB retimer");
 	conn = bb_emul_get_reg(emul, BB_RETIMER_REG_CONNECTION_STATE);
 	exp_conn = BB_RETIMER_USB_DATA_ROLE |
-		   BB_RETIMER_DATA_CONNECTION_PRESENT | BB_RETIMER_HPD_LVL;
+		   BB_RETIMER_DATA_CONNECTION_PRESENT |
+		   BB_RETIMER_DP_CONNECTION | BB_RETIMER_HPD_LVL;
 	zassert_equal(exp_conn, conn, "Expected state 0x%lx, got 0x%lx",
 		      exp_conn, conn);
 }
@@ -251,7 +253,7 @@ ZTEST_USER(bb_retimer_no_tasks, test_bb_set_dfp_state)
 	set_test_runner_tid();
 
 	tc_set_data_role(USBC_PORT_C1, PD_ROLE_DFP);
-	zassume_equal(PD_ROLE_DFP, pd_get_data_role(USBC_PORT_C1));
+	zassert_equal(PD_ROLE_DFP, pd_get_data_role(USBC_PORT_C1));
 
 	/* Test PD mux none mode with DFP should clear all bits in state */
 	bb_emul_set_reg(emul, BB_RETIMER_REG_CONNECTION_STATE, 0x12144678);

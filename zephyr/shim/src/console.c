@@ -3,20 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/device.h>
-#include <zephyr/drivers/uart.h>
-#include <zephyr/shell/shell.h>
-#ifdef CONFIG_SHELL_BACKEND_DUMMY /* nocheck */
-#include <zephyr/shell/shell_dummy.h> /* nocheck */
-#endif
-#include <zephyr/shell/shell_uart.h>
-#include <stdbool.h>
-#include <string.h>
-#include <zephyr/sys/printk.h>
-#include <zephyr/sys/ring_buffer.h>
-#include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
-
 /*
  * TODO(b/238433667): Include EC printf functions
  * (crec_vsnprintf/crec_snprintf) until we switch to the standard
@@ -29,6 +15,21 @@
 #include "uart.h"
 #include "usb_console.h"
 #include "zephyr_console_shim.h"
+
+#include <stdbool.h>
+#include <string.h>
+
+#include <zephyr/device.h>
+#include <zephyr/drivers/uart.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/shell/shell.h>
+#ifdef CONFIG_SHELL_BACKEND_DUMMY /* nocheck */
+#include <zephyr/shell/shell_dummy.h> /* nocheck */
+#endif
+#include <zephyr/shell/shell_uart.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/sys/ring_buffer.h>
 
 #if !defined(CONFIG_SHELL_BACKEND_SERIAL) && \
 	!defined(CONFIG_SHELL_BACKEND_DUMMY) /* nocheck */
@@ -321,7 +322,7 @@ void uart_write_char(char c)
 {
 	uart_poll_out(uart_shell_dev, c);
 
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE))
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE) && !k_is_in_isr())
 		console_buf_notify_chars(&c, 1);
 }
 

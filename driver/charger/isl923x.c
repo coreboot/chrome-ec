@@ -11,9 +11,9 @@
 #include "builtin/assert.h"
 #include "charge_state_v2.h"
 #include "charger.h"
+#include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
-#include "common.h"
 #include "hooks.h"
 #include "i2c.h"
 #include "isl923x.h"
@@ -772,7 +772,7 @@ static void isl923x_init(int chgnum)
 		 * Initialize the input current limit to the board's default.
 		 */
 		if (isl923x_set_input_current_limit(
-			    chgnum, CONFIG_CHARGER_INPUT_CURRENT))
+			    chgnum, CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT))
 			goto init_fail;
 	}
 
@@ -865,7 +865,7 @@ enum ec_error_list raa489000_is_acok(int chgnum, bool *acok)
 {
 	int regval, rv;
 
-	if ((chgnum < 0) || (chgnum > board_get_charger_chip_count())) {
+	if ((chgnum < 0) || (chgnum >= board_get_charger_chip_count())) {
 		CPRINTS("%s: Invalid chgnum! (%d)", __func__, chgnum);
 		return EC_ERROR_INVAL;
 	}
@@ -890,7 +890,7 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 {
 	int rv, regval;
 
-	if ((chgnum < 0) || (chgnum > board_get_charger_chip_count())) {
+	if ((chgnum < 0) || (chgnum >= board_get_charger_chip_count())) {
 		CPRINTS("%s: Invalid chgnum! (%d)", __func__, chgnum);
 		return;
 	}

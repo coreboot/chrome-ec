@@ -6,15 +6,16 @@
  */
 
 #include "battery_smart.h"
+#include "builtin/assert.h"
 #include "charge_state_v2.h"
 #include "charger.h"
 #include "common.h"
 #include "console.h"
 #include "dptf.h"
+#include "hooks.h"
 #include "host_command.h"
 #include "printf.h"
 #include "util.h"
-#include "hooks.h"
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_CHARGER, outstr)
@@ -96,8 +97,12 @@ void charger_get_params(struct charger_params *chg)
 {
 	int chgnum = 0;
 
-	if (IS_ENABLED(CONFIG_OCPC))
+	if (IS_ENABLED(CONFIG_OCPC)) {
 		chgnum = charge_get_active_chg_chip();
+		/* set to CHARGE_PORT_NONE when no charger connected */
+		if (chgnum < 0)
+			chgnum = 0;
+	}
 
 	memset(chg, 0, sizeof(*chg));
 
@@ -495,8 +500,10 @@ enum ec_error_list charger_discharge_on_ac(int enable)
 	return rv;
 }
 
-enum ec_error_list charger_enable_bypass_mode(int chgnum, int enable)
+enum ec_error_list charger_enable_bypass_mode(int chgnum, bool enable)
 {
+	ASSERT(chgnum >= 0 && chgnum < board_get_charger_chip_count());
+
 	if (!chg_chips[chgnum].drv->enable_bypass_mode)
 		return EC_ERROR_UNIMPLEMENTED;
 	return chg_chips[chgnum].drv->enable_bypass_mode(chgnum, enable);

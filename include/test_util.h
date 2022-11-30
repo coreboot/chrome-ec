@@ -19,8 +19,9 @@ extern "C" {
 #include "stack_trace.h"
 
 #ifdef CONFIG_ZTEST
-#include <zephyr/ztest.h>
 #include "ec_tasks.h"
+
+#include <zephyr/ztest.h>
 #endif /* CONFIG_ZTEST */
 
 /* This allows tests to be easily commented out in run_test for debugging */
@@ -124,6 +125,7 @@ enum test_state_t {
 	TEST_STATE_STEP_7,
 	TEST_STATE_STEP_8,
 	TEST_STATE_STEP_9,
+	TEST_STATE_STEP_10,
 	TEST_STATE_PASSED,
 	TEST_STATE_FAILED,
 };

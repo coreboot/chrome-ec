@@ -20,17 +20,17 @@
 #include "lightbar.h"
 #include "math_util.h"
 #include "mkbp_event.h"
-#include "motion_sense.h"
-#include "motion_sense_fifo.h"
 #include "motion_lid.h"
 #include "motion_orientation.h"
+#include "motion_sense.h"
+#include "motion_sense_fifo.h"
 #include "online_calibration.h"
-#include "printf.h"
 #include "power.h"
+#include "printf.h"
 #include "queue.h"
 #include "tablet_mode.h"
-#include "timer.h"
 #include "task.h"
+#include "timer.h"
 #include "util.h"
 
 /* Console output macros */
@@ -81,6 +81,13 @@ static int init_sensor_mutex(const struct device *dev)
 SYS_INIT(init_sensor_mutex, POST_KERNEL, 50);
 #endif /* CONFIG_ZEPHYR */
 
+#ifdef CONFIG_LID_ANGLE
+__attribute__((weak)) int sensor_board_is_lid_angle_available(void)
+{
+	return 1;
+}
+#endif
+
 static inline int
 motion_sensor_in_forced_mode(const struct motion_sensor_t *sensor)
 {
@@ -111,7 +118,8 @@ motion_sensor_time_to_read(const timestamp_t *ts,
 			  sensor->next_collection - motion_min_interval);
 }
 
-static enum sensor_config motion_sense_get_ec_config(void)
+STATIC_IF_NOT(CONFIG_ZTEST)
+enum sensor_config motion_sense_get_ec_config(void)
 {
 	switch (sensor_active) {
 	case SENSOR_ACTIVE_S0:
@@ -123,7 +131,7 @@ static enum sensor_config motion_sense_get_ec_config(void)
 	default:
 		CPRINTS("get_ec_config: Invalid active state: %x",
 			sensor_active);
-		return SENSOR_CONFIG_MAX;
+		return SENSOR_CONFIG_EC_S5;
 	}
 }
 /* motion_sense_set_data_rate
@@ -321,7 +329,12 @@ static void motion_sense_switch_sensor_rate(void)
 			body_detect_set_enable(false);
 			break;
 		case SENSOR_ACTIVE_S0:
-			body_detect_set_enable(was_enabled);
+			/* force to enable the body detection in S0 */
+			if (IS_ENABLED(
+				    CONFIG_BODY_DETECTION_ALWAYS_ENABLE_IN_S0))
+				body_detect_set_enable(true);
+			else
+				body_detect_set_enable(was_enabled);
 			break;
 		default:
 			break;
@@ -1422,7 +1435,8 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 	default:
 		/* Call other users of the motion task */
 		if (IS_ENABLED(CONFIG_LID_ANGLE) &&
-		    (ret == EC_RES_INVALID_PARAM))
+		    (ret == EC_RES_INVALID_PARAM) &&
+		    sensor_board_is_lid_angle_available())
 			ret = host_cmd_motion_lid(args);
 		return ret;
 	}

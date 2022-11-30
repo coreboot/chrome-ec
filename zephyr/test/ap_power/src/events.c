@@ -8,19 +8,17 @@
  * @brief Unit Tests for AP power events
  */
 
-#include <zephyr/device.h>
-
-#include <zephyr/drivers/espi.h>
-#include <zephyr/drivers/espi_emul.h>
-#include <zephyr/logging/log.h>
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-
 #include "ap_power/ap_power.h"
 #include "ap_power/ap_power_events.h"
-
 #include "hooks.h"
 #include "test_state.h"
+
+#include <zephyr/device.h>
+#include <zephyr/drivers/espi.h>
+#include <zephyr/drivers/espi_emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/ztest.h>
 
 /*
  * Structure passed to event listeners.
@@ -173,6 +171,7 @@ DECLARE_HOOK(HOOK_CHIPSET_STARTUP, hook_startup, HOOK_PRIO_DEFAULT);
  */
 ZTEST(events, test_hooks)
 {
+	count_hook_startup = count_hook_shutdown = 0;
 	ap_power_ev_send_callbacks(AP_POWER_STARTUP);
 	zassert_equal(0, count_hook_shutdown, "shutdown hook called");
 	zassert_equal(1, count_hook_startup, "startup hook not called");
