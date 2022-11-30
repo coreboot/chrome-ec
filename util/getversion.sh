@@ -101,6 +101,11 @@ main() {
     (*_fp)
       dir_list+=( ./private )
       ;;
+    (*_scp)
+      if [[ -d ./private-mt-scp ]]; then
+        dir_list+=( ./private-mt-scp )
+      fi
+      ;;
   esac
 
   # Create a combined version string for all component directories.
