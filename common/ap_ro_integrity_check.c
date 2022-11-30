@@ -541,12 +541,16 @@ static bool is_in_range(const struct ro_range part_range,
  * @param ctx pointer to the sha256 context to update
  * @param full_range range to include in hash calculation
  * @param gbbd the descriptor with the gbb flag information.
+ *
+ * @return EC_SUCCESS if updating the hash succeeded or the error if reading
+ *                     the ap ro flash failed.
  */
-static void update_sha_with_gbb_range(struct sha256_ctx *ctx,
-				      const struct ro_range full_range,
-				      const struct gbb_descriptor *gbbd)
+static int update_sha_with_gbb_range(struct sha256_ctx *ctx,
+				     const struct ro_range full_range,
+				     const struct gbb_descriptor *gbbd)
 {
 	struct ro_range range;
+	int rv;
 
 	/* Use the factory flags to calculate the hash. */
 	CPRINTS("Using %x for GBB flags.", gbbd->injected_flags);
@@ -554,9 +558,13 @@ static void update_sha_with_gbb_range(struct sha256_ctx *ctx,
 	range.flash_offset = full_range.flash_offset;
 	range.range_size = gbbd->gbb_flags.flash_offset -
 		full_range.flash_offset;
-	if (range.range_size > 0)
-		usb_spi_sha256_update(ctx, range.flash_offset,
-				      range.range_size, 1);
+	if (range.range_size > 0) {
+		rv = usb_spi_sha256_update(ctx, range.flash_offset,
+					   range.range_size, 1);
+		if (rv != EC_SUCCESS)
+			return rv;
+
+	}
 
 	/* Update hash with the injected gbb flags */
 	SHA256_update(ctx, &gbbd->injected_flags,
@@ -568,8 +576,9 @@ static void update_sha_with_gbb_range(struct sha256_ctx *ctx,
 	range.range_size = full_range.flash_offset +
 		full_range.range_size - range.flash_offset;
 	if (range.range_size > 0)
-		usb_spi_sha256_update(ctx, range.flash_offset,
-				      range.range_size, 1);
+		return usb_spi_sha256_update(ctx, range.flash_offset,
+					     range.range_size, 1);
+	return EC_SUCCESS;
 }
 
 /**
@@ -610,11 +619,15 @@ enum ap_ro_check_result validate_ranges_sha(const struct ro_range *ranges,
 		 */
 		if (gbbd->status & GS_INJECT_FLAGS &&
 		    is_in_range(gbbd->gbb_flags, ranges[i])) {
-			update_sha_with_gbb_range(&ctx, ranges[i], gbbd);
+			if (update_sha_with_gbb_range(&ctx, ranges[i], gbbd) !=
+			    EC_SUCCESS)
+				return ROV_FAILED;
 			continue;
 		}
-		usb_spi_sha256_update(&ctx, ranges[i].flash_offset,
-				      ranges[i].range_size, true);
+		if (usb_spi_sha256_update(&ctx, ranges[i].flash_offset,
+					  ranges[i].range_size, true) !=
+					  EC_SUCCESS)
+			return ROV_FAILED;
 	}
 
 	usb_spi_sha256_final(&ctx, digest, sizeof(digest));

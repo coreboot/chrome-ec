@@ -709,6 +709,10 @@ int usb_spi_sha256_update(struct sha256_ctx *ctx, uint32_t offset,
 {
 	uint8_t data[SPI_HASH_CHUNK_SIZE];
 
+	if (get_spi_bus_user() != SPI_BUS_USER_HASH) {
+		CPRINTS("%s: disabled", __func__);
+		return VENDOR_RC_NOT_ALLOWED;
+	}
 	if (print_range) {
 		CPRINTS("%s: %x:%x", __func__, offset, size);
 		/* Make sure the message gets out before verification starts. */
