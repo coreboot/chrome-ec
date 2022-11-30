@@ -8,14 +8,14 @@
 #ifndef __CROS_EC_SYSTEM_H
 #define __CROS_EC_SYSTEM_H
 
-#include <stdnoreturn.h>
-
 #include "atomic.h"
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "timer.h"
+
+#include <stdnoreturn.h>
 
 #ifdef CONFIG_ZEPHYR
 #ifdef CONFIG_CPU_CORTEX_M
@@ -214,7 +214,7 @@ int system_jumped_late(void);
  * This may ONLY be called from within a HOOK_SYSJUMP handler.
  *
  * @param tag		Data type
- * @param size          Size of data; must be less than 255 bytes.
+ * @param size          Size of data; must be less than JUMP_TAG_MAX_SIZE bytes.
  * @param version       Data version, so that tag data can evolve as firmware
  *			is updated.
  * @param data		Pointer to data to save

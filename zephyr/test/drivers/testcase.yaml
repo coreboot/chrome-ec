@@ -11,6 +11,20 @@ tests:
       - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
       - CONFIG_PLATFORM_EC_LID_ANGLE_UPDATE=y
       - CONFIG_PLATFORM_EC_USB_PD_DPS=y
+      - CONFIG_PLATFORM_EC_I2C_PASSTHRU_RESTRICTED=y
+      - CONFIG_PLATFORM_EC_CONSOLE_CMD_TCPC_DUMP=y
+  drivers.default.bring_up:
+    timeout: 240
+    extra_args: CONF_FILE="prj.conf;default/prj.conf"
+                DTC_OVERLAY_FILE="default/boards/native_posix.overlay"
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_DEFAULT=y
+      - CONFIG_LINK_TEST_SUITE_USB_MALFUNCTION_SINK=y
+      - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
+      - CONFIG_PLATFORM_EC_BRINGUP=y
+      - CONFIG_PLATFORM_EC_LID_ANGLE_UPDATE=y
+      - CONFIG_PLATFORM_EC_USB_PD_DPS=y
+      - CONFIG_PLATFORM_EC_I2C_PASSTHRU_RESTRICTED=y
   drivers.default.mock_power:
     timeout: 240
     extra_args: CONF_FILE="prj.conf;default/prj.conf"
@@ -22,6 +36,7 @@ tests:
       - CONFIG_PLATFORM_EC_LID_ANGLE_UPDATE=y
       - CONFIG_POWER_SEQUENCE_MOCK=y
       - CONFIG_PLATFORM_EC_USB_PD_DPS=y
+      - CONFIG_PLATFORM_EC_I2C_PASSTHRU_RESTRICTED=y
   drivers.anx7447:
     extra_args: CONF_FILE="prj.conf;anx7447/prj.conf" DTC_OVERLAY_FILE="./boards/native_posix.overlay;./anx7447/tcpc_policy.dts"
     extra_configs:
@@ -51,6 +66,8 @@ tests:
       - CONFIG_PLATFORM_EC_CBI_GPIO=y
   drivers.common_charger:
     extra_configs:
+      - CONFIG_PLATFORM_EC_CHARGER_INPUT_CURRENT_DERATE_PCT=5
+      - CONFIG_PLATFORM_EC_CHARGER_MIN_INPUT_CURRENT_LIMIT=100
       - CONFIG_LINK_TEST_SUITE_COMMON_CHARGER=y
       # Set to focus testing for Herobrine
       # Config is y only in nissa
@@ -79,6 +96,19 @@ tests:
       - CONFIG_PLATFORM_EC_USB_PD_LOGGING=y
       - CONFIG_PLATFORM_EC_LID_ANGLE_UPDATE=y
       - CONFIG_PLATFORM_EC_HOST_COMMAND_STATUS=y
+  drivers.host_cmd_read_memmap:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_HOST_COMMAND_READ_MEMMAP=y
+      - CONFIG_PLATFORM_EC_HOST_COMMAND_STATUS=y
+      - CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI=n
+      - CONFIG_PLATFORM_EC_HOST_INTERFACE_SHI=y
+  drivers.host_cmd_read_memmap.no_switches:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_HOST_COMMAND_READ_MEMMAP=y
+      - CONFIG_PLATFORM_EC_HOST_COMMAND_STATUS=y
+      - CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI=n
+      - CONFIG_PLATFORM_EC_HOST_INTERFACE_SHI=y
+      - CONFIG_PLATFORM_EC_SWITCH=n
   drivers.isl923x:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_ISL923X=y
@@ -97,6 +127,10 @@ tests:
     extra_args: CONF_FILE="prj.conf;led_driver/prj.conf" DTC_OVERLAY_FILE="./boards/native_posix.overlay;./led_driver/led_pins.dts;./led_driver/led_policy.dts"
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_LED_DRIVER=y
+  drivers.led_common:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_LED_COMMON=y
+      - CONFIG_PLATFORM_EC_LED_DT=n
   drivers.locate_chip:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_LOCATE_CHIP_ALTS=y
@@ -137,7 +171,6 @@ tests:
       - CONFIG_PLATFORM_EC_RTC=y
       - CONFIG_PLATFORM_EC_HOSTCMD=y
       - CONFIG_PLATFORM_EC_HOSTCMD_RTC=y
-      - CONFIG_EMUL_RTC=y
   drivers.system:
     tags:
       common
@@ -192,6 +225,9 @@ tests:
   drivers.usbc_console_pd:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USBC_CONSOLE_PD=y
+  drivers.usbc_ctvpd:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_USBC_CTVPD=y
   drivers.usbc_ocp:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USBC_OCP=y
@@ -206,6 +242,10 @@ tests:
   drivers.usbc_tbt_mode:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USBC_TBT_MODE=y
+  drivers.usbc_usb4_mode:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_USBC_USB4_MODE=y
+      - CONFIG_PLATFORM_EC_USB_PD_DATA_RESET_MSG=y
   drivers.usbc_vconn_swap:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USBC_VCONN_SWAP=y
@@ -215,3 +255,6 @@ tests:
   drivers.pi3usb9201:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_PI3USB9201=y
+  drivers.memmap:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_MEMMAP=y

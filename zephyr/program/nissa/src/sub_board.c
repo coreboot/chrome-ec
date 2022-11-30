@@ -5,24 +5,24 @@
 
 /* Nissa sub-board hardware configuration */
 
-#include <ap_power/ap_power.h>
+#include "cros_board_info.h"
+#include "driver/tcpm/tcpci.h"
+#include "gpio/gpio_int.h"
+#include "hooks.h"
+#include "nissa_common.h"
+#include "nissa_hdmi.h"
+#include "task.h"
+#include "usb_charge.h"
+#include "usb_pd.h"
+#include "usbc/usb_muxes.h"
+
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
-#include "cros_board_info.h"
-#include "driver/tcpm/tcpci.h"
-#include "gpio/gpio_int.h"
-#include "hooks.h"
-#include "usb_charge.h"
-#include "usb_pd.h"
-#include "usbc/usb_muxes.h"
-#include "task.h"
-
-#include "nissa_common.h"
-#include "nissa_hdmi.h"
+#include <ap_power/ap_power.h>
 
 LOG_MODULE_DECLARE(nissa, CONFIG_NISSA_LOG_LEVEL);
 
@@ -286,13 +286,3 @@ static void board_init(void)
 #endif
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
-
-/* Trigger shutdown by enabling the Z-sleep circuit */
-__override void board_hibernate_late(void)
-{
-	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_en_slp_z), 1);
-	/*
-	 * The system should hibernate, but there may be
-	 * a small delay, so return.
-	 */
-}

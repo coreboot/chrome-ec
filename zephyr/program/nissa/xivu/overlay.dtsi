@@ -4,6 +4,8 @@
  */
 
 #include <cros/thermistor/thermistor.dtsi>
+#include <dt-bindings/usbc_mux.h>
+#include <dt-bindings/usb_pd_tcpm.h>
 
 / {
 	aliases {
@@ -58,7 +60,12 @@
 		int_imu: ec_imu {
 			irq-pin = <&gpio_imu_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "lsm6dso_interrupt";
+			handler = "motion_interrupt";
+		};
+		int_lid_accel: ec_lid_accel {
+			irq-pin = <&gpio_acc_int_l>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "lid_accel_interrupt";
 		};
 		int_vol_down: vol_down {
 			irq-pin = <&gpio_voldn_btn_odl>;
@@ -209,6 +216,7 @@
 			reg = <0>;
 			bc12 = <&bc12_port0>;
 			chg = <&chg_port0>;
+			tcpc = <&tcpc_port0>;
 			usb-mux-chain-0 {
 				compatible = "cros-ec,usb-mux-chain";
 				usb-muxes = <&virtual_mux_0>;
@@ -228,6 +236,7 @@
 			reg = <1>;
 			bc12 = <&bc12_port1>;
 			chg = <&chg_port1>;
+			tcpc = <&tcpc_port1>;
 			usb-mux-chain-1 {
 				compatible = "cros-ec,usb-mux-chain";
 				usb-muxes = <&virtual_mux_1 &anx7483_mux_1>;
@@ -313,6 +322,14 @@
 		status = "okay";
 		reg = <0x9>;
 	};
+
+	tcpc_port0: raa489000@22 {
+		compatible = "renesas,raa489000";
+		reg = <0x22>;
+		tcpc-flags = <(
+			TCPC_FLAGS_TCPCI_REV2_0 |
+			TCPC_FLAGS_VBUS_MONITOR)>;
+	};
 };
 
 &i2c5_1 {
@@ -331,10 +348,19 @@
 		reg = <0x9>;
 	};
 
+	tcpc_port1: raa489000@22 {
+		compatible = "renesas,raa489000";
+		reg = <0x22>;
+		tcpc-flags = <(
+			TCPC_FLAGS_TCPCI_REV2_0 |
+			TCPC_FLAGS_VBUS_MONITOR)>;
+	};
+
 	anx7483_mux_1: anx7483-mux-1@3e {
 		compatible = "analogix,anx7483";
 		reg = <0x3e>;
 		board-set = "anx7483_set_default_tuning";
+		flags = <USB_MUX_FLAG_RESETS_IN_G3>;
 	};
 };
 

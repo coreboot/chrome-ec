@@ -37,6 +37,10 @@ parameters that may be used, please consult the Twister documentation.
 #   version: "version:5.8.0.chromium.3"
 # >
 # wheel: <
+#   name: "infra/python/wheels/pyelftools-py2_py3"
+#   version: "version:0.29"
+# >
+# wheel: <
 #   name: "infra/python/wheels/pykwalify-py2_py3"
 #   version: "version:1.8.0"
 # >
@@ -185,6 +189,7 @@ def upload_results(ec_base, outdir):
                 "-realm",
                 "chromium:public",
                 "--",
+                "vpython3",
                 str(ec_base / "util/zephyr_to_resultdb.py"),
                 "--result=" + str(json_path),
                 "--upload=True",
@@ -318,9 +323,12 @@ def main():
         for arg in intercepted_args.testsuite_root:
             twister_cli.extend(["-T", arg])
     else:
-        # Use EC base dir when no -T args specified. This will cause all
-        # Twister-compatible EC tests to run.
-        twister_cli.extend(["-T", str(ec_base)])
+        # Use this set of test suite roots when no -T args are present. This
+        # should encompass all current Zephyr EC tests. The paths are meant to
+        # be as specific as possible to limit Twister's search scope. This saves
+        # significant time when starting Twister.
+        twister_cli.extend(["-T", str(ec_base / "common")])
+        twister_cli.extend(["-T", str(ec_base / "zephyr/test")])
         twister_cli.extend(["-T", str(zephyr_base / "tests/subsys/shell")])
 
     if intercepted_args.platform:
@@ -346,26 +354,8 @@ def main():
     }
     gcov_tool = None
     if intercepted_args.toolchain == "host":
-        append_cmake_compiler(
-            twister_cli, "CMAKE_C_COMPILER", ["x86_64-pc-linux-gnu-gcc", "gcc"]
-        )
-        append_cmake_compiler(
-            twister_cli,
-            "CMAKE_CXX_COMPILER",
-            ["x86_64-pc-linux-gnu-g++", "g++"],
-        )
         gcov_tool = "gcov"
     elif intercepted_args.toolchain == "llvm":
-        append_cmake_compiler(
-            twister_cli,
-            "CMAKE_C_COMPILER",
-            ["x86_64-pc-linux-gnu-clang", "clang"],
-        )
-        append_cmake_compiler(
-            twister_cli,
-            "CMAKE_CXX_COMPILER",
-            ["x86_64-pc-linux-gnu-clang++", "clang++"],
-        )
         gcov_tool = str(ec_base / "util" / "llvm-gcov.sh")
     else:
         print("Unknown toolchain specified:", intercepted_args.toolchain)

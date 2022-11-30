@@ -3,21 +3,20 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/device.h>
-#include <ap_power/ap_power.h>
-
 #include "battery.h"
-#include "charger.h"
 #include "charge_state_v2.h"
+#include "charger.h"
 #include "chipset.h"
 #include "cros_cbi.h"
 #include "hooks.h"
-#include "usb_mux.h"
-#include "system.h"
-
 #include "nissa_common.h"
+#include "system.h"
+#include "usb_mux.h"
 
+#include <zephyr/device.h>
 #include <zephyr/logging/log.h>
+
+#include <ap_power/ap_power.h>
 LOG_MODULE_REGISTER(nissa, CONFIG_NISSA_LOG_LEVEL);
 
 static uint8_t cached_usb_pd_port_count;
@@ -80,20 +79,6 @@ static void board_setup_init(void)
  * Make sure setup is done after EEPROM is readable.
  */
 DECLARE_HOOK(HOOK_INIT, board_setup_init, HOOK_PRIO_INIT_I2C);
-
-__overridable void board_set_charge_limit(int port, int supplier, int charge_ma,
-					  int max_ma, int charge_mv)
-{
-	int icl = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
-
-	/*
-	 * Assume charger overdraws by about 4%, keeping the actual draw
-	 * within spec. This adjustment can be changed with characterization
-	 * of actual hardware.
-	 */
-	icl = icl * 96 / 100;
-	charge_set_input_current_limit(icl, charge_mv);
-}
 
 int pd_check_vconn_swap(int port)
 {
@@ -162,4 +147,53 @@ __override void ocpc_get_pid_constants(int *kp, int *kp_div, int *ki,
 	*ki_div = 1;
 	*kd = 0;
 	*kd_div = 1;
+}
+
+#ifdef CONFIG_PLATFORM_EC_CHARGER_SM5803
+/*
+ * Called by USB-PD code to determine whether a given input voltage is
+ * acceptable.
+ */
+__override int pd_is_valid_input_voltage(int mv)
+{
+	int battery_voltage, rv;
+
+	rv = battery_design_voltage(&battery_voltage);
+	if (rv) {
+		LOG_ERR("Unable to get battery design voltage: %d", rv);
+		return true;
+	}
+
+	/*
+	 * SM5803 is extremely inefficient in buck-boost mode, when
+	 * VBUS ~= VSYS: very high temperatures on the chip and associated
+	 * inductor have been observed when sinking normal charge current in
+	 * buck-boost mode (but not in buck or boost mode) so we choose to
+	 * completely exclude some voltages that are likely to be problematic.
+	 *
+	 * Nissa devices use either 2S or 3S batteries, for which VBUS will
+	 * usually only be near VSYS with a 3S battery and 12V input (picked
+	 * from among common supported PD voltages)- 2S can get close to
+	 * 9V, but we expect charge current to be low when a 2S battery is
+	 * charged to that voltage (because it will be nearly full).
+	 *
+	 * We assume that any battery with a design voltage above 9V is 3S, and
+	 * that other problematic PD voltages (near to, but not exactly 12V)
+	 * will rarely occur.
+	 */
+	if (battery_voltage > 9000 && mv == 12000) {
+		return false;
+	}
+	return true;
+}
+#endif
+
+/* Trigger shutdown by enabling the Z-sleep circuit */
+__override void board_hibernate_late(void)
+{
+	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_en_slp_z), 1);
+	/*
+	 * The system should hibernate, but there may be
+	 * a small delay, so return.
+	 */
 }

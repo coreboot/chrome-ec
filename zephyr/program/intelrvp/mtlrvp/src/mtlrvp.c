@@ -17,8 +17,8 @@
 #include "gpio/gpio_int.h"
 #include "hooks.h"
 #include "i2c.h"
-#include "intelrvp.h"
 #include "intel_rvp_board_id.h"
+#include "intelrvp.h"
 #include "ioexpander.h"
 #include "isl9241.h"
 #include "keyboard_raw.h"
@@ -275,6 +275,9 @@ static void board_int_init(void)
 
 	/* Enable CCD Mode interrupt */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_ccd_mode));
+
+	/* Enable DC jack interrupt */
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_dc_jack_present));
 }
 
 static int board_pre_task_peripheral_init(const struct device *unused)

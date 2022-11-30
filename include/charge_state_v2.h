@@ -3,8 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <stdbool.h>
-
 #include "battery.h"
 #include "battery_smart.h"
 #include "charger.h"
@@ -12,6 +10,8 @@
 #include "ec_ec_comm_client.h"
 #include "ocpc.h"
 #include "timer.h"
+
+#include <stdbool.h>
 
 #ifndef __CROS_EC_CHARGE_STATE_V2_H
 #define __CROS_EC_CHARGE_STATE_V2_H
@@ -70,6 +70,10 @@ int charge_set_output_current_limit(int chgnum, int ma, int mv);
 /**
  * Set the charge input current limit. This value is stored and sent every
  * time AC is applied.
+ *
+ * The input current limit is automatically derated by
+ * CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT (if configured), and is clamped to
+ * no less than CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT mA (if configured).
  *
  * @param ma New input current limit in mA
  * @param mv Negotiated charge voltage in mV.

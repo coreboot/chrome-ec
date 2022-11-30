@@ -9,9 +9,9 @@
 #include "battery_smart.h"
 #include "builtin/assert.h"
 #include "charge_manager.h"
-#include "charger_profile_override.h"
 #include "charge_state.h"
 #include "charger.h"
+#include "charger_profile_override.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
@@ -1507,9 +1507,9 @@ static int get_desired_input_current(enum battery_present batt_present,
 		int ilim = charge_manager_get_charger_current();
 		return ilim == CHARGE_CURRENT_UNINITIALIZED ?
 			       CHARGE_CURRENT_UNINITIALIZED :
-			       MAX(CONFIG_CHARGER_INPUT_CURRENT, ilim);
+			       MAX(CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT, ilim);
 #else
-		return CONFIG_CHARGER_INPUT_CURRENT;
+		return CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT;
 #endif
 	} else {
 #ifdef CONFIG_USB_POWER_DELIVERY
@@ -2329,6 +2329,18 @@ int charge_set_output_current_limit(int chgnum, int ma, int mv)
 int charge_set_input_current_limit(int ma, int mv)
 {
 	__maybe_unused int chgnum = 0;
+
+#ifdef CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT
+	if (CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT != 0) {
+		ma = (ma * (100 - CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT)) /
+		     100;
+	}
+#endif
+#ifdef CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT
+	if (CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT > 0) {
+		ma = MAX(ma, CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT);
+	}
+#endif
 
 	if (IS_ENABLED(CONFIG_OCPC))
 		chgnum = charge_get_active_chg_chip();

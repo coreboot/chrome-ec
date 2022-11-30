@@ -475,17 +475,3 @@ static void board_chipset_suspend(void)
 	gpio_set_level(GPIO_EC_KB_BL_EN, 0);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
-
-/******************************************************************************/
-/* Set the charge limit based upon desired maximum. */
-void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
-			    int charge_mv)
-{
-	/*
-	 * Limit the input current to 98% negotiated limit,
-	 * to account for the charger chip margin.
-	 */
-	charge_ma = charge_ma * 98 / 100;
-	charge_set_input_current_limit(
-		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
-}

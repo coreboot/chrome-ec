@@ -1,14 +1,12 @@
 target_sources(app PRIVATE
     src/battery.c
     src/bb_retimer.c
-    src/bc12.c
     src/bma2x2.c
     src/bmi_common.c
     src/bmi160.c
     src/bmi260.c
     src/charge_manager.c
     src/charge_state_prevent_power_on.c
-    src/chipset.c
     src/console.c
     src/console_cmd/adc.c
     src/console_cmd/battery.c
@@ -86,6 +84,7 @@ target_sources(app PRIVATE
     src/task.c
     src/tcpci.c
     src/tcpci_test_common.c
+    src/tcpm_header.c
     src/tcs3400.c
     src/temp_sensor.c
     src/thermistor.c
@@ -97,3 +96,7 @@ target_sources(app PRIVATE
     src/vstore.c
     src/watchdog.c
 )
+
+# This test does not work when power functions are mocked, so only run it for
+# the plain `drivers.default` test case.
+zephyr_library_sources_ifndef(CONFIG_POWER_SEQUENCE_MOCK src/chipset.c)

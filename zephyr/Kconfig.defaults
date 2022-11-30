@@ -13,9 +13,6 @@ config LOG
 	default y
 	imply LOG_DEFAULT_MINIMAL
 
-config GPIO_EMUL
-	default y if ARCH_POSIX
-
 config GPIO
 	default y if ARCH_POSIX
 
@@ -38,6 +35,9 @@ config EXTRA_EXCEPTION_INFO
 	default y if ARCH_HAS_EXTRA_EXCEPTION_INFO
 
 config EEPROM_SHELL
+	default n
+
+config PWM_SHELL
 	default n
 
 orsource "Kconfig.defaults-$(ARCH)"

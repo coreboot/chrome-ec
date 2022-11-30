@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#define DT_DRV_COMPAT richtek_rt9490_bc12
+#define DT_DRV_COMPAT richtek_rt9490
 
 #include "driver/charger/rt9490.h"
 #include "gpio/gpio_int.h"
@@ -11,8 +11,6 @@
 #include "usbc/utils.h"
 
 #include <zephyr/devicetree.h>
-
-#if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
 static void rt9490_bc12_enable_irqs(void)
 {
@@ -43,5 +41,3 @@ void rt9490_bc12_dt_interrupt(enum gpio_signal signal)
 		break;
 	}
 }
-
-#endif /* DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT) */
