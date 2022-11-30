@@ -37,7 +37,7 @@
 #define SPI_HASH_CHUNK_SIZE 64
 
 /* Timeout for auto-disabling SPI hash device, in microseconds */
-#define SPI_HASH_TIMEOUT_US (60 * SECOND)
+#define SPI_HASH_TIMEOUT_US (600 * SECOND)
 
 /* Current device for SPI hashing */
 static uint8_t spi_hash_device = USB_SPI_DISABLE;
