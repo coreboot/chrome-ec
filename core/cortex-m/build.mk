@@ -10,7 +10,8 @@
 $(call set-option,CROSS_COMPILE,\
 	$(CROSS_COMPILE_arm),\
 	/opt/coreboot-sdk/bin/arm-eabi-)
-
+# Force gcc compiler
+cc-name:=gcc
 # FPU compilation flags
 CFLAGS_FPU-$(CONFIG_FPU)=-mfpu=fpv4-sp-d16 -mfloat-abi=hard
 
@@ -24,8 +25,9 @@ CFLAGS_CPU+=-flto
 LDFLAGS_EXTRA+=-flto
 endif
 
-# TODO: remove this workaround once migration to gcc 11.2 completed.
-GCC_VERSION := $(shell $(CROSS_COMPILE)gcc -dumpversion)
+# gcc 11.2 had a known issue which doesn't affect Cr50 build anymore
+# but we can't remove -fno-ipa-modref as it changes FIPS module digest
+GCC_VERSION := $(shell $(CROSS_COMPILE)$(cc-name) -dumpversion)
 ifeq ("$(GCC_VERSION)","11.2.0")
 # IPA modref pass crashes gcc 11.2 when LTO is used with partial linking
 CFLAGS_CPU += -fno-ipa-modref
