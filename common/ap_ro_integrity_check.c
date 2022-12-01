@@ -1037,6 +1037,7 @@ static enum ap_ro_check_result find_gbb_with_fmap(struct gbb_descriptor *gbbd)
 		return ROV_SUCCEEDED;
 	}
 
+	CPRINTS("%s: FAILED", __func__);
 	return ROV_FAILED;
 }
 /*
