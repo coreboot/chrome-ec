@@ -196,13 +196,13 @@ static uint32_t get_panic_data_size(void)
  * should be used when we are sure that we don't need it.
  */
 #ifdef CONFIG_BOARD_NATIVE_POSIX
-struct panic_data *get_panic_data_write(void)
+struct panic_data *test_get_panic_data_pointer(void)
 {
 	return pdata_ptr;
 }
-#else
-/* LCOV_EXCL_START - Can't cover non posix lines (yet) */
-struct panic_data *get_panic_data_write(void)
+#endif
+
+test_mockable struct panic_data *get_panic_data_write(void)
 {
 	/*
 	 * Pointer to panic_data structure. It may not point to
@@ -256,16 +256,13 @@ struct panic_data *get_panic_data_write(void)
 		return pdata_ptr;
 	}
 
+	move_size = 0;
 	if (jdata_ptr->version == 1)
 		move_size = JUMP_DATA_SIZE_V1;
 	else if (jdata_ptr->version == 2)
 		move_size = JUMP_DATA_SIZE_V2 + jdata_ptr->jump_tag_total;
 	else if (jdata_ptr->version == 3)
 		move_size = jdata_ptr->struct_size + jdata_ptr->jump_tag_total;
-	else {
-		/* Unknown jump data version - set move size to 0 */
-		move_size = 0;
-	}
 
 	/* Check if there's enough space for jump tags after move */
 	if (data_begin - move_size < JUMP_DATA_MIN_ADDRESS) {
@@ -273,8 +270,12 @@ struct panic_data *get_panic_data_write(void)
 		 * TODO(b/251190975): This failure should be reported
 		 * in the panic data structure for more visibility.
 		 */
+		/* LCOV_EXCL_START - JUMP_DATA_MIN_ADDRESS is 0 in test builds
+		 * and we cannot go negative by subtracting unsigned ints.
+		 */
 		move_size -= jdata_ptr->jump_tag_total;
 		jdata_ptr->jump_tag_total = 0;
+		/* LCOV_EXCL_STOP */
 	}
 
 	data_begin -= move_size;
@@ -295,8 +296,6 @@ struct panic_data *get_panic_data_write(void)
 
 	return pdata_ptr;
 }
-/* LCOV_EXCL_STOP */
-#endif /* CONFIG_BOARD_NATIVE_POSIX */
 
 static void panic_init(void)
 {
@@ -375,13 +374,21 @@ static int command_crash(int argc, const char **argv)
 		cflush();
 		ccprintf("%08x", *(volatile int *)unaligned_ptr);
 	} else if (!strcasecmp(argv[1], "watchdog")) {
-		while (1)
-			;
+		while (1) {
+/* Yield on native posix to avoid locking up the simulated sys clock */
+#ifdef CONFIG_ARCH_POSIX
+			k_cpu_idle();
+#endif
+		}
 	} else if (!strcasecmp(argv[1], "hang")) {
 		uint32_t lock_key = irq_lock();
 
-		while (1)
-			;
+		while (1) {
+/* Yield on native posix to avoid locking up the simulated sys clock */
+#ifdef CONFIG_ARCH_POSIX
+			k_cpu_idle();
+#endif
+		}
 
 		/* Unreachable, but included for consistency */
 		irq_unlock(lock_key);
@@ -392,6 +399,7 @@ static int command_crash(int argc, const char **argv)
 	/* Everything crashes, so shouldn't get back here */
 	return EC_ERROR_UNKNOWN;
 }
+
 DECLARE_CONSOLE_COMMAND(crash, command_crash,
 			"[assert | divzero | udivzero"
 #ifdef CONFIG_CMD_STACKOVERFLOW
@@ -399,6 +407,13 @@ DECLARE_CONSOLE_COMMAND(crash, command_crash,
 #endif
 			" | unaligned | watchdog | hang]",
 			"Crash the system (for testing)");
+
+#ifdef TEST_BUILD
+int test_command_crash(int argc, const char **argv)
+{
+	return command_crash(argc, argv);
+}
+#endif /* TEST_BUILD*/
 #endif /* CONFIG_CMD_CRASH */
 
 static int command_panicinfo(int argc, const char **argv)
