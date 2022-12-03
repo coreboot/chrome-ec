@@ -24,12 +24,6 @@ child-binding:
       type: int
       description:
         Maximum fan speed (in RPM)
-    rpm_deviation:
-      required: false
-      default: 7
-      type: int
-      description:
-        Percentage of fan rpm deviation
     pwms:
       type: phandle-array
       required: true

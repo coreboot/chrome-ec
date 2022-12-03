@@ -3,12 +3,11 @@
  * found in the LICENSE file.
  */
 
+#include <stdbool.h>
+#include <zephyr/ztest.h>
+
 #include "ap_power/ap_power.h"
 #include "hooks.h"
-
-#include <stdbool.h>
-
-#include <zephyr/ztest.h>
 
 static bool h1_called;
 static bool h2_called;

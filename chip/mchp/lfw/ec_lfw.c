@@ -6,23 +6,23 @@
  *
  */
 
-#include "clock.h"
+#include <stdint.h>
+
 #include "config.h"
-#include "cpu.h"
 #include "cros_version.h"
-#include "dma.h"
 #include "gpio.h"
-#include "gpio_list.h"
-#include "hwtimer.h"
-#include "registers.h"
 #include "spi.h"
 #include "spi_flash.h"
-#include "system.h"
-#include "tfdp_chip.h"
-#include "timer.h"
 #include "util.h"
-
-#include <stdint.h>
+#include "timer.h"
+#include "dma.h"
+#include "registers.h"
+#include "cpu.h"
+#include "clock.h"
+#include "system.h"
+#include "hwtimer.h"
+#include "gpio_list.h"
+#include "tfdp_chip.h"
 
 #ifdef CONFIG_MCHP_LFW_DEBUG
 #include "dma_chip.h"
@@ -305,7 +305,7 @@ void uart_init(void)
 }
 #endif /* #ifdef CONFIG_UART_CONSOLE */
 
-noreturn void watchdog_reset(void)
+void fault_handler(void)
 {
 	uart_puts("EXCEPTION!\nTriggering watchdog reset\n");
 	/* trigger reset in 1 ms */
@@ -313,11 +313,6 @@ noreturn void watchdog_reset(void)
 	MCHP_PCR_SYS_RST = MCHP_PCR_SYS_SOFT_RESET;
 	while (1)
 		;
-}
-
-void fault_handler(void)
-{
-	asm("b watchdog_reset");
 }
 
 void jump_to_image(uintptr_t init_addr)

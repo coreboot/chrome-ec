@@ -5,7 +5,6 @@
 
 #include "gyro_cal.h"
 #include "string.h"
-
 #include <stdbool.h>
 
 /*

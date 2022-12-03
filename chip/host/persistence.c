@@ -18,14 +18,13 @@
  * this homegrown implementation of something similar-yet-different.
  */
 
-#include "builtin/assert.h"
-#include "util.h"
-
+#include <linux/limits.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 
-#include <linux/limits.h>
-#include <unistd.h>
+#include "builtin/assert.h"
+#include "util.h"
 
 /* The longest path in a chroot seems to be about 280 characters (as of
  * April 2021) so define a cut-off instead of just hoping for the best:

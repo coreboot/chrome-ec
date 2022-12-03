@@ -3,37 +3,26 @@
  * found in the LICENSE file.
  */
 
-#include "common.h"
-#include "i2c.h"
-#include "i2c/i2c.h"
-
 #include <zephyr/devicetree.h>
 #include <zephyr/ztest.h>
+
+#include "common.h"
+#include "i2c/i2c.h"
+#include "i2c.h"
 
 /* Unused: required for shimming i2c. */
 void watchdog_reload(void)
 {
 }
 
-ZTEST_USER(i2c, test_i2c_port_count)
+static void test_i2c_port_count(void)
 {
 	zassert_equal(I2C_PORT_COUNT, 2,
 		      "I2C_PORT_COUNT expected to be 2 but was %d",
 		      I2C_PORT_COUNT);
 }
 
-ZTEST_USER(i2c, test_i2c_lock_invalid_port)
-{
-	i2c_lock(-1, 1);
-	zassert_equal(i2c_port_is_locked(-1), 0,
-		      "Negative I2C port locked, but should have failed");
-
-	i2c_lock(INT_MAX, 1);
-	zassert_equal(i2c_port_is_locked(INT_MAX), 0,
-		      "MAX_INT I2C port locked, but should have failed");
-}
-
-ZTEST_USER(i2c, test_i2c_lock)
+static void test_i2c_lock(void)
 {
 	i2c_lock(I2C_PORT_ACCEL, 1);
 	zassert_equal(i2c_port_is_locked(I2C_PORT_EEPROM), 1,
@@ -65,4 +54,10 @@ ZTEST_USER(i2c, test_i2c_lock)
 	i2c_lock(I2C_PORT_EEPROM, 0);
 }
 
-ZTEST_SUITE(i2c, NULL, NULL, NULL, NULL, NULL);
+/* Test case main entry. */
+void test_main(void)
+{
+	ztest_test_suite(test_i2c, ztest_user_unit_test(test_i2c_port_count),
+			 ztest_user_unit_test(test_i2c_lock));
+	ztest_run_test_suite(test_i2c);
+}

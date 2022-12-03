@@ -5,6 +5,8 @@
  * Objects which can be shared between RO and RW for 8042 keyboard protocol.
  */
 
+#include <stddef.h>
+
 #include "builtin/assert.h"
 #include "button.h"
 #include "keyboard_8042_sharedlib.h"
@@ -12,8 +14,6 @@
 #include "keyboard_protocol.h"
 #include "libsharedobjs.h"
 #include "util.h"
-
-#include <stddef.h>
 
 #ifndef CONFIG_KEYBOARD_CUSTOMIZATION
 /* The standard Chrome OS keyboard matrix table in scan code set 2. */

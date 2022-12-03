@@ -8,9 +8,9 @@
 #ifndef __CROS_EC_FPSENSOR_CRYPTO_H
 #define __CROS_EC_FPSENSOR_CRYPTO_H
 
-#include "sha256.h"
-
 #include <stddef.h>
+
+#include "sha256.h"
 
 #define HKDF_MAX_INFO_SIZE 128
 #define HKDF_SHA256_MAX_BLOCK_COUNT 255

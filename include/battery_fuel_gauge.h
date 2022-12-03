@@ -9,7 +9,6 @@
 #define __CROS_EC_BATTERY_FUEL_GAUGE_H
 
 #include "battery.h"
-
 #include <stdbool.h>
 
 /* Number of writes needed to invoke battery cutoff command */

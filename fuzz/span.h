@@ -5,8 +5,9 @@
 #ifndef __FUZZ_SPAN_H
 #define __FUZZ_SPAN_H
 
-#include <algorithm>
 #include <unistd.h>
+
+#include <algorithm>
 
 namespace fuzz
 {

@@ -5,8 +5,8 @@
  * Tests for rtc time conversions
  */
 
-#include "common.h"
 #include "console.h"
+#include "common.h"
 #include "rtc.h"
 #include "test_util.h"
 #include "util.h"

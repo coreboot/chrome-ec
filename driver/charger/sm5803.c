@@ -14,8 +14,8 @@
 #include "hooks.h"
 #include "i2c.h"
 #include "sm5803.h"
-#include "stdbool.h"
 #include "system.h"
+#include "stdbool.h"
 #include "throttle_ap.h"
 #include "timer.h"
 #include "usb_charge.h"
@@ -712,7 +712,7 @@ static void sm5803_init(int chgnum)
 	rv |= chg_write8(chgnum, SM5803_REG_DPM_VL_SET_LSB, (reg & 0x7));
 
 	/* Set default input current */
-	reg = SM5803_CURRENT_TO_REG(CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT) &
+	reg = SM5803_CURRENT_TO_REG(CONFIG_CHARGER_INPUT_CURRENT) &
 	      SM5803_CHG_ILIM_RAW;
 	rv |= chg_write8(chgnum, SM5803_REG_CHG_ILIM, reg);
 

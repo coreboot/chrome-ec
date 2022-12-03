@@ -9,6 +9,7 @@
 #define __CROS_EC_KTU1125_H
 
 #include "common.h"
+
 #include "driver/ppc/ktu1125_public.h"
 
 #define KTU1125_ID 0x0

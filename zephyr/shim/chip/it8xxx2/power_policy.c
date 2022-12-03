@@ -3,13 +3,12 @@
  * found in the LICENSE file.
  */
 
-#include "system.h"
-
-#include <zephyr/kernel.h>
 #include <zephyr/pm/pm.h>
 #include <zephyr/pm/policy.h>
-
 #include <soc.h>
+#include <zephyr/kernel.h>
+
+#include "system.h"
 
 static const struct pm_state_info pm_states[] =
 	PM_STATE_INFO_LIST_FROM_DT_CPU(DT_NODELABEL(cpu0));

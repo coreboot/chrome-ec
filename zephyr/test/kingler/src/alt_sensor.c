@@ -1,18 +1,18 @@
-/* Copyright 2022 The ChromiumOS Authors
+/* Copyright 2022 The ChromiumOS Authors.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+
+#include "zephyr/kernel.h"
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/ztest.h>
 
 #include "cros_board_info.h"
 #include "cros_cbi.h"
 #include "gpio_signal.h"
 #include "hooks.h"
-#include "zephyr/kernel.h"
 
-#include <zephyr/drivers/gpio/gpio_emul.h>
-#include <zephyr/ztest.h>
-
-/* SSFC field defined in zephyr/program/corsola/cbi_steelix.dts */
+/* SSFC field defined in zephyr/projects/corsola/cbi_steelix.dts */
 #define SSFC_BASE_MAIN_SENSOR (0x1)
 #define SSFC_BASE_ALT_SENSOR (0x1 << 1)
 

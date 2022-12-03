@@ -8,8 +8,8 @@
 #ifndef __CROS_EC_HOST_COMMAND_H
 #define __CROS_EC_HOST_COMMAND_H
 
-#include "common.h"
 #include "compiler.h"
+#include "common.h"
 #include "ec_commands.h"
 
 #ifdef __cplusplus

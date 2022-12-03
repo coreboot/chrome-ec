@@ -5,8 +5,6 @@
  * PWM LED control.
  */
 
-#define DT_DRV_COMPAT cros_ec_pwm_led_pins
-
 #include "ec_commands.h"
 #include "led.h"
 #include "util.h"
@@ -15,10 +13,9 @@
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(pwm_led, LOG_LEVEL_ERR);
+#if DT_HAS_COMPAT_STATUS_OKAY(COMPAT_PWM_LED)
 
-BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
-	     "Exactly one instance of cros-ec,pwm-led-pins should be defined.");
+LOG_MODULE_REGISTER(pwm_led, LOG_LEVEL_ERR);
 
 /*
  * Period in ns from frequency(Hz) defined in pins node
@@ -36,23 +33,23 @@ BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
 		.pwm = PWM_DT_SPEC_GET(DT_PHANDLE_BY_IDX(node_id, prop, i)),  \
 		.pulse_ns = DIV_ROUND_NEAREST(                                \
 			DT_PWMS_PERIOD(DT_PHANDLE_BY_IDX(node_id, prop, i)) * \
-				DT_PROP_BY_IDX(node_id, led_values, i),       \
+				DT_PHA_BY_IDX(node_id, prop, i, value),       \
 			100),                                                 \
 	},
 
 #define SET_PWM_PIN(node_id) \
-	{ DT_FOREACH_PROP_ELEM(node_id, led_pwms, SET_PIN) };
+	{ DT_FOREACH_PROP_ELEM(node_id, led_pins, SET_PIN) };
 
 #define GEN_PINS_ARRAY(id) struct pwm_pin_t PINS_ARRAY(id)[] = SET_PWM_PIN(id)
 
-DT_INST_FOREACH_CHILD(0, GEN_PINS_ARRAY)
+DT_FOREACH_CHILD(PWM_LED_PINS_NODE, GEN_PINS_ARRAY)
 
 #define SET_PIN_NODE(node_id)                          \
 	{ .led_color = GET_PROP(node_id, led_color),   \
 	  .led_id = GET_PROP(node_id, led_id),         \
 	  .br_color = GET_PROP_NVE(node_id, br_color), \
 	  .pwm_pins = PINS_ARRAY(node_id),             \
-	  .pins_count = DT_PROP_LEN(node_id, led_pwms) };
+	  .pins_count = DT_PROP_LEN(node_id, led_pins) };
 
 /*
  * Initialize led_pins_node_t struct for each pin node defined
@@ -60,14 +57,14 @@ DT_INST_FOREACH_CHILD(0, GEN_PINS_ARRAY)
 #define GEN_PINS_NODES(id) \
 	const struct led_pins_node_t PINS_NODE(id) = SET_PIN_NODE(id)
 
-DT_INST_FOREACH_CHILD(0, GEN_PINS_NODES)
+DT_FOREACH_CHILD(PWM_LED_PINS_NODE, GEN_PINS_NODES)
 
 /*
  * Array of pointers to each pin node
  */
 #define PINS_NODE_PTR(id) &PINS_NODE(id),
-const struct led_pins_node_t *pins_node[] = { DT_INST_FOREACH_CHILD(
-	0, PINS_NODE_PTR) };
+const struct led_pins_node_t *pins_node[] = { DT_FOREACH_CHILD(
+	PWM_LED_PINS_NODE, PINS_NODE_PTR) };
 
 /*
  * Set all the PWM channels defined in the node to the defined value,
@@ -150,3 +147,4 @@ __override int led_is_supported(enum ec_led_id led_id)
 
 	return ((1 << (int)led_id) & supported_leds);
 }
+#endif /* DT_HAS_COMPAT_STATUS_OKAY(COMPAT_PWM_LED) */

@@ -6,14 +6,15 @@
 #include "common.h"
 #include "console.h"
 #include "task.h"
-#include "usb_emsg.h"
+#include "util.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
-#include "usb_sm.h"
+#include "usb_pd_tcpm.h"
 #include "usb_tc_sm.h"
-#include "util.h"
+#include "usb_emsg.h"
+#include "usb_sm.h"
 
 /* USB Policy Engine Charge-Through VCONN Powered Device module */
 

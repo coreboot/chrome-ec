@@ -5,16 +5,15 @@
  * Test motion_sense_fifo.
  */
 
-#include "accelgyro.h"
 #include "ec_commands.h"
-#include "hwtimer.h"
-#include "motion_sense_fifo.h"
 #include "stdio.h"
-#include "task.h"
+#include "motion_sense_fifo.h"
 #include "test_util.h"
-#include "timer.h"
 #include "util.h"
-
+#include "hwtimer.h"
+#include "task.h"
+#include "timer.h"
+#include "accelgyro.h"
 #include <sys/types.h>
 
 mutex_t g_sensor_mutex;

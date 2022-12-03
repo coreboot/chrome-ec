@@ -3,12 +3,11 @@
  * found in the LICENSE file.
  */
 
+#include <inttypes.h>
+#include <zephyr/ztest.h>
+
 #include "math.h"
 #include "math_util.h"
-
-#include <inttypes.h>
-
-#include <zephyr/ztest.h>
 
 ZTEST_USER(math, bitmask_uint64)
 {

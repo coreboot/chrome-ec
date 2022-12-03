@@ -5,13 +5,12 @@
  * USB endpoints/interfaces callbacks declaration
  */
 
-#include "common.h"
+#include <stdint.h>
+#include <stddef.h>
 #include "compiler.h"
 #include "config.h"
+#include "common.h"
 #include "usb_hw.h"
-
-#include <stddef.h>
-#include <stdint.h>
 
 typedef void (*xfer_func)(void);
 typedef void (*evt_func)(enum usb_ep_event evt);

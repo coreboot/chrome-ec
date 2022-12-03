@@ -2,6 +2,8 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#include <stdbool.h>
+
 #include "atomic.h"
 #include "common.h"
 #include "console.h"
@@ -15,8 +17,6 @@
 #include "task.h"
 #include "timer.h"
 #include "util.h"
-
-#include <stdbool.h>
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_RGBKBD, outstr)
@@ -476,6 +476,7 @@ static void rgbkbd_reset(void)
 const struct kblight_drv kblight_rgbkbd = {
 	.init = rgbkbd_init,
 	.set = rgbkbd_kblight_set,
+	.get = NULL,
 	.enable = rgbkbd_enable,
 	.get_enabled = rgbkbd_get_enabled,
 };

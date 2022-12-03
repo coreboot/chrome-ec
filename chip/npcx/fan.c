@@ -7,19 +7,20 @@
 
 #include "clock.h"
 #include "clock_chip.h"
-#include "console.h"
 #include "fan.h"
 #include "fan_chip.h"
 #include "gpio.h"
 #include "hooks.h"
-#include "math_util.h"
+#include "registers.h"
+#include "util.h"
 #include "pwm.h"
 #include "pwm_chip.h"
-#include "registers.h"
-#include "system.h"
-#include "task.h"
+#include "console.h"
 #include "timer.h"
-#include "util.h"
+#include "task.h"
+#include "hooks.h"
+#include "system.h"
+#include "math_util.h"
 
 #if !(DEBUG_FAN)
 #define CPRINTS(...)

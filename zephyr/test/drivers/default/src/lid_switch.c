@@ -3,19 +3,18 @@
  * found in the LICENSE file.
  */
 
-#include "ec_commands.h"
-#include "host_command.h"
-#include "test/drivers/test_state.h"
-#include "test/drivers/utils.h"
-
+#include <zephyr/ztest.h>
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/gpio/gpio_emul.h>
-#include <zephyr/shell/shell_dummy.h>
-#include <zephyr/ztest.h>
-
-#include <console.h>
 #include <lid_switch.h>
+#include <zephyr/shell/shell_dummy.h>
+#include <console.h>
+
+#include "test/drivers/test_state.h"
+#include "test/drivers/utils.h"
+#include "ec_commands.h"
+#include "host_command.h"
 
 #define LID_GPIO_PATH DT_PATH(named_gpios, lid_open_ec)
 #define LID_GPIO_PIN DT_GPIO_PIN(LID_GPIO_PATH, gpios)
@@ -50,8 +49,8 @@ static void *lid_switch_setup(void)
 static void lid_switch_before(void *unused)
 {
 	/* Make sure that interrupt fire at the next lid open/close */
-	zassert_ok(emul_lid_close());
-	zassert_ok(emul_lid_open());
+	zassume_ok(emul_lid_close());
+	zassume_ok(emul_lid_open());
 	k_sleep(K_MSEC(100));
 }
 

@@ -3,6 +3,10 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
+#include <zephyr/ztest_assert.h>
+
 #include "ec_commands.h"
 #include "hooks.h"
 #include "host_command.h"
@@ -10,10 +14,6 @@
 #include "test/drivers/test_mocks.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-#include <zephyr/ztest_assert.h>
 
 #define ARBITRARY_SLEEP_TRANSITIONS 1
 

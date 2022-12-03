@@ -3,6 +3,9 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/drivers/emul.h>
+#include <zephyr/ztest.h>
+
 #include "battery.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_smart_battery.h"
@@ -10,9 +13,6 @@
 #include "host_command.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-
-#include <zephyr/drivers/emul.h>
-#include <zephyr/ztest.h>
 
 struct host_cmd_battery_cut_off_fixture {
 	const struct emul *emul;

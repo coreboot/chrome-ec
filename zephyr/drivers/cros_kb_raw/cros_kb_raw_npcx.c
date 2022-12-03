@@ -5,22 +5,21 @@
 
 #define DT_DRV_COMPAT nuvoton_npcx_cros_kb_raw
 
+#include <assert.h>
+#include <zephyr/dt-bindings/clock/npcx_clock.h>
+#include <drivers/cros_kb_raw.h>
+#include <zephyr/drivers/clock_control.h>
+#include <zephyr/drivers/pinctrl.h>
+#include <zephyr/kernel.h>
+#include <soc.h>
+#include <soc/nuvoton_npcx/reg_def_cros.h>
+
 #include "ec_tasks.h"
 #include "keyboard_raw.h"
 #include "soc_miwu.h"
 #include "task.h"
 
-#include <assert.h>
-
-#include <zephyr/drivers/clock_control.h>
-#include <zephyr/drivers/pinctrl.h>
-#include <zephyr/dt-bindings/clock/npcx_clock.h>
-#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-
-#include <drivers/cros_kb_raw.h>
-#include <soc.h>
-#include <soc/nuvoton_npcx/reg_def_cros.h>
 LOG_MODULE_REGISTER(cros_kb_raw, LOG_LEVEL_ERR);
 
 #ifdef CONFIG_PLATFORM_EC_KEYBOARD_COL2_INVERTED
@@ -219,24 +218,11 @@ static int cros_kb_raw_npcx_init(const struct device *dev)
 	return 0;
 }
 
-#ifdef CONFIG_PLATFORM_EC_KEYBOARD_FACTORY_TEST
-static int cros_kb_raw_npcx_config_alt(const struct device *dev, bool enable)
-{
-	const struct cros_kb_raw_npcx_config *const config = DRV_CONFIG(dev);
-	uint8_t id = enable ? PINCTRL_STATE_DEFAULT : PINCTRL_STATE_SLEEP;
-
-	return pinctrl_apply_state(config->pcfg, id);
-}
-#endif
-
 static const struct cros_kb_raw_driver_api cros_kb_raw_npcx_driver_api = {
 	.init = cros_kb_raw_npcx_init,
 	.drive_colum = cros_kb_raw_npcx_drive_column,
 	.read_rows = cros_kb_raw_npcx_read_row,
 	.enable_interrupt = cros_kb_raw_npcx_enable_interrupt,
-#ifdef CONFIG_PLATFORM_EC_KEYBOARD_FACTORY_TEST
-	.config_alt = cros_kb_raw_npcx_config_alt,
-#endif
 };
 
 PINCTRL_DT_INST_DEFINE(0);

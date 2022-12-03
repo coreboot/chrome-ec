@@ -3,11 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include "ec_app_main.h"
-#include "test_state.h"
-
 #include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
+#include "ec_app_main.h"
+#include "test_state.h"
 
 bool ap_power_predicate_pre_main(const void *state)
 {

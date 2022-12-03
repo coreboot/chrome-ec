@@ -5,14 +5,16 @@
  * Dynamic PDO Selection.
  */
 
+#include <stdint.h>
+
+#include "dps.h"
 #include "atomic.h"
 #include "battery.h"
-#include "charge_manager.h"
-#include "charge_state.h"
-#include "charger.h"
 #include "common.h"
 #include "console.h"
-#include "dps.h"
+#include "charger.h"
+#include "charge_manager.h"
+#include "charge_state.h"
 #include "ec_commands.h"
 #include "hooks.h"
 #include "math_util.h"
@@ -21,8 +23,6 @@
 #include "usb_common.h"
 #include "usb_pd.h"
 #include "util.h"
-
-#include <stdint.h>
 
 #define K_MORE_PWR 96
 #define K_LESS_PWR 93
@@ -231,7 +231,7 @@ static int get_battery_target_voltage(int *target_mv)
  *
  * @return 0 if error occurs, else battery efficient voltage in mV
  */
-static int get_efficient_voltage(void)
+int get_efficient_voltage(void)
 {
 	int eff_mv = 0;
 	int batt_mv;

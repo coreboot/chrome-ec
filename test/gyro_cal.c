@@ -5,15 +5,14 @@
 
 #include "common.h"
 #include "gyro_cal.h"
-#include "gyro_cal_init_for_test.h"
 #include "gyro_still_det.h"
+#include "gyro_cal_init_for_test.h"
 #include "motion_sense.h"
 #include "test_util.h"
-
+#include <string.h>
+#include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 float kToleranceGyroRps = 1e-6f;
 float kDefaultGravityMps2 = 9.81f;

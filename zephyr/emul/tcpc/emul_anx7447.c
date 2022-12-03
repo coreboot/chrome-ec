@@ -3,21 +3,22 @@
  * found in the LICENSE file.
  */
 
-#include "emul/emul_common_i2c.h"
-#include "emul/emul_stub_device.h"
-#include "emul/tcpc/emul_tcpci.h"
-#include "tcpm/tcpci.h"
+#define DT_DRV_COMPAT cros_anx7447_emul
+
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(anx7447_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
-#include <zephyr/logging/log.h>
 #include <zephyr/ztest.h>
 
-#define DT_DRV_COMPAT cros_anx7447_tcpc_emul
+#include "tcpm/tcpci.h"
+#include "emul/emul_stub_device.h"
 
-LOG_MODULE_REGISTER(anx7447_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
+#include "emul/emul_common_i2c.h"
+#include "emul/tcpc/emul_tcpci.h"
 
 /**
  * @brief Function called for each byte of read message from anx7447 emulator

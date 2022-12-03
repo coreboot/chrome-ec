@@ -3,9 +3,8 @@
  * found in the LICENSE file.
  */
 
-#include "tcpm/rt1718s_public.h"
-
 #include <zephyr/devicetree.h>
+#include "tcpm/rt1718s_public.h"
 
 #define RT1718S_TCPC_COMPAT richtek_rt1718s_tcpc
 

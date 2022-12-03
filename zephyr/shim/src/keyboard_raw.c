@@ -5,14 +5,13 @@
 
 /* Functions needed by keyboard scanner module for Chrome EC */
 
+#include <zephyr/device.h>
+#include <zephyr/logging/log.h>
+#include <soc.h>
+#include <zephyr/kernel.h>
+
 #include "drivers/cros_kb_raw.h"
 #include "keyboard_raw.h"
-
-#include <zephyr/device.h>
-#include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
-
-#include <soc.h>
 
 LOG_MODULE_REGISTER(shim_cros_kb_raw, LOG_LEVEL_ERR);
 
@@ -63,12 +62,4 @@ test_mockable int keyboard_raw_read_rows(void)
 void keyboard_raw_enable_interrupt(int enable)
 {
 	cros_kb_raw_enable_interrupt(cros_kb_raw_dev, enable);
-}
-
-/**
- * Enable or disable keyboard alternative function.
- */
-void keybaord_raw_config_alt(bool enable)
-{
-	cros_kb_raw_config_alt(cros_kb_raw_dev, enable);
 }

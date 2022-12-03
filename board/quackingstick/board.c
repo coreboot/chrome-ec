@@ -612,8 +612,8 @@ int board_set_active_charge_port(int port)
 	return EC_SUCCESS;
 }
 
-__override void board_set_charge_limit(int port, int supplier, int charge_ma,
-				       int max_ma, int charge_mv)
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
 {
 	/*
 	 * Ignore lower charge ceiling on PD transition if our battery is
@@ -625,7 +625,9 @@ __override void board_set_charge_limit(int port, int supplier, int charge_ma,
 		charge_ma = max_ma;
 	}
 
-	charge_set_input_current_limit(charge_ma, charge_mv);
+	charge_ma = charge_ma * 95 / 100;
+	charge_set_input_current_limit(
+		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }
 
 /**

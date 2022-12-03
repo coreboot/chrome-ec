@@ -4,9 +4,8 @@
  */
 
 #include "common.h"
-#include "gyro_cal_init_for_test.h"
 #include "timer.h"
-
+#include "gyro_cal_init_for_test.h"
 #include <string.h>
 
 #define NANO_PI (3.14159265359f)

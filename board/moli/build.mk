@@ -20,4 +20,3 @@ board-y+=pwm.o
 board-y+=sensors.o
 board-y+=thermal.o
 board-y+=usbc_config.o
-board-y+=fw_config.o

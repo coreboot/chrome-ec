@@ -6,7 +6,6 @@
 #include "common.h"
 #include "mag_cal.h"
 #include "test_util.h"
-
 #include <stdio.h>
 
 /**

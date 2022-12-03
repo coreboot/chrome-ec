@@ -10,7 +10,6 @@
 #define __UTIL_UUT_COM_PORT_H
 
 #include <stdbool.h>
-
 #include <termios.h>
 
 #ifdef __cplusplus

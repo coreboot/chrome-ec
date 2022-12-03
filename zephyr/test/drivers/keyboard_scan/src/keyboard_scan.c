@@ -2,23 +2,21 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#include <string.h>
+#include <zephyr/shell/shell_dummy.h>
+#include <zephyr/ztest.h>
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/fff.h>
+#include <emul/emul_kb_raw.h>
+
 #include "console.h"
 #include "host_command.h"
 #include "keyboard_scan.h"
 #include "keyboard_test_utils.h"
 #include "test/drivers/test_mocks.h"
 #include "test/drivers/test_state.h"
-
-#include <string.h>
-
-#include <zephyr/drivers/emul.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
-#include <zephyr/fff.h>
-#include <zephyr/shell/shell_dummy.h>
-#include <zephyr/ztest.h>
-
-#include <emul/emul_kb_raw.h>
 
 ZTEST(keyboard_scan, test_boot_key)
 {
@@ -132,7 +130,7 @@ ZTEST(keyboard_scan, console_command_ksstate__force)
 	 */
 
 	keyboard_scan_enable(false, -1);
-	zassert_false(keyboard_scan_is_enabled());
+	zassume_false(keyboard_scan_is_enabled());
 
 	zassert_ok(shell_execute_cmd(get_ec_shell(), "ksstate force"));
 
@@ -144,7 +142,7 @@ ZTEST(keyboard_scan, console_command_ksstate__on_off)
 {
 	/* This command turns state change printing on/off */
 
-	zassert_false(keyboard_scan_get_print_state_changes());
+	zassume_false(keyboard_scan_get_print_state_changes());
 
 	zassert_ok(shell_execute_cmd(get_ec_shell(), "ksstate on"));
 	zassert_true(keyboard_scan_get_print_state_changes());
@@ -237,7 +235,7 @@ ZTEST(keyboard_scan, host_command_simulate_key__locked)
 {
 	uint16_t ret;
 
-	zassert_true(system_is_locked(), "Expecting locked system.");
+	zassume_true(system_is_locked(), "Expecting locked system.");
 
 	struct ec_response_keyboard_factory_test response;
 	struct ec_params_mkbp_simulate_key params;
@@ -253,7 +251,7 @@ ZTEST(keyboard_scan, host_command_simulate_key__bad_params)
 	uint16_t ret;
 
 	system_is_locked_fake.return_val = 0;
-	zassert_false(system_is_locked(), "Expecting unlocked system.");
+	zassume_false(system_is_locked(), "Expecting unlocked system.");
 
 	struct ec_response_keyboard_factory_test response;
 	struct ec_params_mkbp_simulate_key params = {
@@ -295,7 +293,7 @@ ZTEST(keyboard_scan, host_command_simulate__key_press)
 	uint16_t ret;
 
 	system_is_locked_fake.return_val = 0;
-	zassert_false(system_is_locked(), "Expecting unlocked system.");
+	zassume_false(system_is_locked(), "Expecting unlocked system.");
 
 	ret = send_keypress_host_command(1, 2, 1);
 	zassert_equal(EC_RES_SUCCESS, ret, "Command returned %u", ret);
@@ -325,7 +323,7 @@ FAKE_VOID_FUNC(chipset_reset, int);
 ZTEST(keyboard_scan, special_key_combos)
 {
 	system_is_locked_fake.return_val = 0;
-	zassert_false(system_is_locked(), "Expecting unlocked system.");
+	zassume_false(system_is_locked(), "Expecting unlocked system.");
 
 	/* Set the volume up key coordinates to something arbitrary */
 	int vol_up_col = 1;
@@ -334,7 +332,7 @@ ZTEST(keyboard_scan, special_key_combos)
 	set_vol_up_key(vol_up_row, vol_up_col);
 
 	/* Vol up and the alt keys must be in different columns */
-	zassert_false(vol_up_col == KEYBOARD_COL_LEFT_ALT, NULL);
+	zassume_false(vol_up_col == KEYBOARD_COL_LEFT_ALT, NULL);
 
 	/* Hold down volume up, left alt (either alt key works), and R */
 	zassert_ok(send_keypress_host_command(vol_up_col, vol_up_row, 1));

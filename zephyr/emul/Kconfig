@@ -13,16 +13,12 @@ config EMUL_COMMON_I2C
 
 config EMUL_SMART_BATTERY
 	bool "Smart Battery emulator"
-	default y
-	depends on DT_HAS_ZEPHYR_SMART_BATTERY_EMUL_ENABLED
 	select EMUL_COMMON_I2C
 	help
 	  Enable the Smart Battery emulator. This driver use emulated I2C bus.
 
 config EMUL_BMA255
 	bool "BMA255 emulator"
-	default y
-	depends on DT_HAS_ZEPHYR_BMA255_EMUL_ENABLED
 	select EMUL_COMMON_I2C
 	help
 	  Enable the BMA255 emulator. This driver use emulated I2C bus.
@@ -31,8 +27,6 @@ config EMUL_BMA255
 
 config EMUL_BC12_DETECT_PI3USB9201
 	bool "PI3USB9201 emulator"
-	default y
-	depends on ZTEST && DT_HAS_PERICOM_PI3USB9201_ENABLED
 	help
 	  Enable the PI3USB9201 emulator. PI3USB9201 is a BC1.2 charger
 	  detector/advertiser. The emulator supports reading and writing the
@@ -40,8 +34,6 @@ config EMUL_BC12_DETECT_PI3USB9201
 
 config EMUL_PPC_SYV682X
 	bool "Silergy SYV682x PPC emulator"
-	default y
-	depends on DT_HAS_ZEPHYR_SYV682X_EMUL_ENABLED
 	select PLATFORM_EC_USBC_PPC_SYV682X
 	help
 	  Enable the SYV682x emulator. SYV682 is a USB Type-C PPC. This driver
@@ -49,8 +41,6 @@ config EMUL_PPC_SYV682X
 
 config EMUL_BMI
 	bool "BMI emulator"
-	default y
-	depends on DT_HAS_ZEPHYR_BMI_EMUL_ENABLED
 	select EMUL_COMMON_I2C
 	help
 	  Enable the BMI emulator. This driver use emulated I2C bus.
@@ -59,8 +49,6 @@ config EMUL_BMI
 
 config EMUL_TCS3400
 	bool "TCS3400 emulator"
-	default y
-	depends on DT_HAS_ZEPHYR_TCS3400_EMUL_ENABLED
 	select EMUL_COMMON_I2C
 	help
 	  Enable the TCS3400 light sensor. This driver use emulated I2C bus.
@@ -74,8 +62,6 @@ config EMUL_TCS3400
 
 config EMUL_TUSB1064
 	bool "TCS3400 emulator"
-	default y
-	depends on DT_HAS_ZEPHYR_TUSB1064_EMUL_ENABLED
 	select EMUL_COMMON_I2C
 	help
 	  Enable the TUSB1064 usb mux. This driver use emulated I2C bus.
@@ -83,8 +69,6 @@ config EMUL_TUSB1064
 
 config EMUL_BB_RETIMER
 	bool "BB retimer emulator"
-	default y
-	depends on ZTEST && DT_HAS_INTEL_JHL8040R_ENABLED
 	select EMUL_COMMON_I2C
 	help
 	  Enable the BB (Burnside Bridge) retimer emulator. This driver use
@@ -94,15 +78,11 @@ config EMUL_BB_RETIMER
 
 config EMUL_KB_RAW
 	bool "Raw keyboard emulator"
-	default y
-	depends on DT_HAS_CROS_EC_KB_RAW_EMUL_ENABLED
 	help
 	  Enable the raw keyboard emulator.
 
 config EMUL_CROS_FLASH
 	bool "Emulated flash driver for the Zephyr shim"
-	default y
-	depends on DT_HAS_CROS_EC_FLASH_EMUL_ENABLED
 	select PLATFORM_EC_FLASH_CROS
 	imply SYSTEM_FAKE
 	help
@@ -110,15 +90,11 @@ config EMUL_CROS_FLASH
 
 config EMUL_RTC
 	bool "Emulated RTC driver for Zephyr shim"
-	default y
-	depends on DT_HAS_CROS_EC_RTC_EMUL_ENABLED
 	help
 	  This options enables the RTC emulator for testing.
 
 config EMUL_RT9490
 	bool "Rt9490 charger emulator"
-	default y
-	depends on DT_HAS_ZEPHYR_RT9490_EMUL_ENABLED
 	select EMUL_COMMON_I2C
 	help
 	  Enable the RT9490 light sensor emulator. This driver use emulated I2C
@@ -126,20 +102,9 @@ config EMUL_RT9490
 
 config PWM_MOCK
 	bool "Mock implementation of an PWM device"
-	default y
-	depends on DT_HAS_CROS_PWM_MOCK_ENABLED
 	help
 	  Enable the PWM mock. This driver is a pure mock and does nothing by
 	  default.
-
-config EMUL_PCT2075
-	bool "PCT2075 emulator"
-	default y
-	depends on ZTEST && DT_HAS_NXP_PCT2075_ENABLED
-	select EMUL_COMMON_I2C
-	help
-	  Enable the PCT2075 temperature sensor emulator. It uses emulated I2C bus.
-	  Emulator API is available in zephyr/include/emul/emul_pct2075.h.
 
 rsource "Kconfig.ln9310"
 rsource "Kconfig.lis2dw12"

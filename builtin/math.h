@@ -6,9 +6,8 @@
 #ifndef __CROS_EC_MATH_H__
 #define __CROS_EC_MATH_H__
 
-#include "fpu.h"
-
 #include <stdbool.h>
+#include "fpu.h"
 
 static inline bool isnan(float a)
 {

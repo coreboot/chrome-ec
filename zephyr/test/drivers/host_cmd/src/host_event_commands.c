@@ -3,11 +3,10 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/ztest.h>
 #include "include/lpc.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-
-#include <zephyr/ztest.h>
 
 struct host_cmd_host_event_commands_fixture {
 	struct host_events_ctx ctx;

@@ -3,14 +3,14 @@
  * found in the LICENSE file.
  */
 
-#include "pwm_mock.h"
+#define DT_DRV_COMPAT cros_pwm_mock
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/drivers/pwm.h>
 #include <zephyr/kernel.h>
+#include <zephyr/drivers/pwm.h>
 
-#define DT_DRV_COMPAT cros_pwm_mock
+#include "pwm_mock.h"
 
 #define CYCLES_PER_SEC 1000000
 

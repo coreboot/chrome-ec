@@ -3,9 +3,8 @@
  * found in the LICENSE file.
  */
 
-#include "console.h"
-
 #include <zephyr/arch/arm/aarch32/cortex_m/cmsis.h>
+#include "console.h"
 
 /* IRQ counters */
 int irq_count[CONFIG_NUM_IRQS];

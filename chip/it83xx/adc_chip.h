@@ -8,9 +8,9 @@
 #ifndef __CROS_EC_ADC_CHIP_H
 #define __CROS_EC_ADC_CHIP_H
 
-#include "common.h"
-
 #include <stdint.h>
+
+#include "common.h"
 
 /*
  * Maximum time we allow for an ADC conversion.

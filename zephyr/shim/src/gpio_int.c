@@ -3,18 +3,18 @@
  * found in the LICENSE file.
  */
 
-#ifdef __REQUIRE_ZEPHYR_GPIOS__
-#undef __REQUIRE_ZEPHYR_GPIOS__
-#endif
-#include "cros_version.h"
-#include "gpio.h"
-#include "gpio/gpio.h"
-#include "gpio/gpio_int.h"
-
 #include <zephyr/device.h>
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+
+#ifdef __REQUIRE_ZEPHYR_GPIOS__
+#undef __REQUIRE_ZEPHYR_GPIOS__
+#endif
+#include "gpio.h"
+#include "gpio/gpio.h"
+#include "gpio/gpio_int.h"
+#include "cros_version.h"
 
 LOG_MODULE_REGISTER(gpio_int, LOG_LEVEL_ERR);
 

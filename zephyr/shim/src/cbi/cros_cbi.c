@@ -3,8 +3,9 @@
  * found in the LICENSE file.
  */
 
-#include "cros_board_info.h"
 #include "cros_cbi.h"
+
+#include "cros_board_info.h"
 #include "hooks.h"
 
 static void cros_cbi_ec_init(void)

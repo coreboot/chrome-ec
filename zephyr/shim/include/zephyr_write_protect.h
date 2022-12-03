@@ -8,7 +8,6 @@
 
 #include "gpio/gpio_int.h"
 #include "gpio_signal.h"
-
 #include <zephyr/drivers/gpio.h>
 
 /**

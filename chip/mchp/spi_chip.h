@@ -13,8 +13,8 @@
 #ifndef _SPI_CHIP_H
 #define _SPI_CHIP_H
 
-#include <stddef.h>
 #include <stdint.h>
+#include <stddef.h>
 
 /* struct spi_device_t */
 #include "spi.h"

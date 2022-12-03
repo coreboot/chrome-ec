@@ -6,9 +6,8 @@
 #ifndef __CROS_EC_TUSB1064_H
 #define __CROS_EC_TUSB1064_H
 
-#include "usb_mux.h"
-
 #include <stdint.h>
+#include "usb_mux.h"
 
 /*
  * TUSB1064 Has 16 possible device addresses which are selected by A1|A0 lines

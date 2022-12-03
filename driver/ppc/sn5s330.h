@@ -9,6 +9,7 @@
 #define __CROS_EC_SN5S330_H
 
 #include "common.h"
+
 #include "driver/ppc/sn5s330_public.h"
 
 struct sn5s330_config {

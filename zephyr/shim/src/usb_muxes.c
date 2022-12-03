@@ -3,11 +3,16 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/devicetree.h>
+#include <zephyr/sys/util_macro.h>
 #include "usb_mux.h"
 #include "usbc/usb_muxes.h"
 
-#include <zephyr/devicetree.h>
-#include <zephyr/sys/util_macro.h>
+/**
+ * This prevents creating struct usb_mux usb_muxes[] for platforms that didn't
+ * migrate USB mux configuration to DTS yet.
+ */
+#if DT_HAS_COMPAT_STATUS_OKAY(cros_ec_usb_mux_chain)
 
 /**
  * @brief Check if @p mux_id is not part of @p chain_id or if @p chain_id USBC
@@ -90,3 +95,5 @@ BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == CONFIG_USB_PD_PORT_MAX_COUNT);
  * MAYBE_CONST struct usb_mux USB_MUX_NODE_<node_id> = { ... };
  */
 USB_MUX_FOREACH_MUX(USB_MUX_DEFINE)
+
+#endif /* #if DT_HAS_COMPAT_STATUS_OKAY(cros_ec_usb_mux_chain) */

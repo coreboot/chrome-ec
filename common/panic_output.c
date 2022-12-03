@@ -175,10 +175,8 @@ uintptr_t get_panic_data_start(void)
 	if (IS_ENABLED(CONFIG_BOARD_NATIVE_POSIX))
 		return (uintptr_t)pdata_ptr;
 
-	/* LCOV_EXCL_START - Can't cover non posix lines (yet) */
 	return ((uintptr_t)CONFIG_PANIC_DATA_BASE + CONFIG_PANIC_DATA_SIZE -
 		pdata_ptr->struct_size);
-	/* LCOV_EXCL_STOP */
 }
 
 static uint32_t get_panic_data_size(void)
@@ -201,7 +199,6 @@ struct panic_data *get_panic_data_write(void)
 	return pdata_ptr;
 }
 #else
-/* LCOV_EXCL_START - Can't cover non posix lines (yet) */
 struct panic_data *get_panic_data_write(void)
 {
 	/*
@@ -211,7 +208,7 @@ struct panic_data *get_panic_data_write(void)
 	 * end of RAM.
 	 */
 	struct panic_data *const pdata_ptr = PANIC_DATA_PTR;
-	struct jump_data *jdata_ptr;
+	const struct jump_data *jdata_ptr;
 	uintptr_t data_begin;
 	size_t move_size;
 	int delta;
@@ -267,16 +264,6 @@ struct panic_data *get_panic_data_write(void)
 		move_size = 0;
 	}
 
-	/* Check if there's enough space for jump tags after move */
-	if (data_begin - move_size < JUMP_DATA_MIN_ADDRESS) {
-		/* Not enough room for jump tags, clear tags.
-		 * TODO(b/251190975): This failure should be reported
-		 * in the panic data structure for more visibility.
-		 */
-		move_size -= jdata_ptr->jump_tag_total;
-		jdata_ptr->jump_tag_total = 0;
-	}
-
 	data_begin -= move_size;
 
 	if (move_size != 0) {
@@ -295,7 +282,6 @@ struct panic_data *get_panic_data_write(void)
 
 	return pdata_ptr;
 }
-/* LCOV_EXCL_STOP */
 #endif /* CONFIG_BOARD_NATIVE_POSIX */
 
 static void panic_init(void)

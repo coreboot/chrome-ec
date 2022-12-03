@@ -8,9 +8,9 @@
 #include "common.h"
 #include "console.h"
 #include "ec_commands.h"
-#include "memory.h"
-#include "mock/usb_tc_sm_mock.h"
 #include "usb_tc_sm.h"
+#include "mock/usb_tc_sm_mock.h"
+#include "memory.h"
 
 #ifndef CONFIG_COMMON_RUNTIME
 #define cprints(format, args...)

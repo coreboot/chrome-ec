@@ -79,15 +79,7 @@ SECTIONS
         FILL(0xFF);
         . = ORIGIN(SRAM) + LENGTH(SRAM) - 1;
         BYTE(0xFF);   /* emit at least a byte to make linker happy */
-    } >SRAM
+    }
 
     __image_size = LOADADDR(.text) + SIZEOF(.text) - ORIGIN(VECTOR);
-
-    /*
-     * Discard C++ exception index table and exception table. These are
-     * described in more detail in "Exception Handling ABI for ARM
-     * Architecture":
-     * https://github.com/ARM-software/abi-aa/blob/60a8eb8c55e999d74dac5e368fc9d7e36e38dda4/ehabi32/ehabi32.rst#54the-object-producer-interface
-     */
-    /DISCARD/ : { *(.ARM.*) }
 }

@@ -8,14 +8,13 @@
 #ifndef __CROS_EC_USB_PD_H
 #define __CROS_EC_USB_PD_H
 
+#include <stdbool.h>
+#include <stdint.h>
 #include "common.h"
 #include "ec_commands.h"
 #include "usb_pd_tbt.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pd_vdo.h"
-
-#include <stdbool.h>
-#include <stdint.h>
 
 /* PD Host command timeout */
 #define PD_HOST_COMMAND_TIMEOUT_US SECOND
@@ -477,6 +476,7 @@ struct partner_active_modes {
  * VDM object is minimum of VDM header + 6 additional data objects.
  */
 #define VDO_HDR_SIZE 1
+#define VDO_MAX_SIZE 7
 
 #define VDM_VER10 0
 #define VDM_VER20 1
@@ -3188,6 +3188,13 @@ __override_proto void board_process_pd_alert(int port);
  * tasks are present.
  */
 void board_reset_pd_mcu(void);
+
+/**
+ * Return true if specified PD port is debug accessory.
+ *
+ * @param port USB-C port number
+ */
+bool pd_is_debug_acc(int port);
 
 /*
  * Notify the AP that we have entered into DisplayPort Alternate Mode.  This

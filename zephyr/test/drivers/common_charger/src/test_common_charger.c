@@ -3,6 +3,10 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
+#include <zephyr/ztest_assert.h>
+
 #include "charge_ramp.h"
 #include "driver/charger/isl923x_public.h"
 #include "ec_commands.h"
@@ -10,10 +14,6 @@
 #include "test/drivers/charger_utils.h"
 #include "test/drivers/test_mocks.h"
 #include "test/drivers/test_state.h"
-
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-#include <zephyr/ztest_assert.h>
 
 /* Tested wrt isl923x without RAA489000 */
 
@@ -50,7 +50,7 @@ ZTEST(common_charger, test_chg_ramp_is_detected)
 ZTEST(common_charger, test_chg_ramp_get_current_limit)
 {
 	zassert_equal(chg_ramp_get_current_limit(),
-		      CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT);
+		      CONFIG_CHARGER_INPUT_CURRENT);
 }
 
 ZTEST(common_charger, test_charger_get_min_bat_pct_for_power_on)

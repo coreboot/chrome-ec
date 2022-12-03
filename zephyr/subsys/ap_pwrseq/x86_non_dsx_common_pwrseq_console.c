@@ -3,10 +3,8 @@
  * found in the LICENSE file.
  */
 
-#include <stdlib.h>
-
 #include <zephyr/shell/shell.h>
-
+#include <stdlib.h>
 #include <x86_non_dsx_common_pwrseq_sm_handler.h>
 
 LOG_MODULE_DECLARE(ap_pwrseq, CONFIG_AP_PWRSEQ_LOG_LEVEL);

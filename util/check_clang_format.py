@@ -12,7 +12,6 @@ the pre-upload checks.
 
 import logging
 import pathlib
-import shlex
 import subprocess
 import sys
 from typing import List
@@ -28,11 +27,6 @@ def main(argv=None):
         action="store_true",
         help="Fix any formatting errors automatically.",
     )
-    parser.add_argument(
-        "file",
-        nargs="*",
-        help="File or directory to clang-format.",
-    )
     opts = parser.parse_args(argv)
 
     logging.info("Validating all code is formatted with clang-format.")
@@ -40,7 +34,7 @@ def main(argv=None):
     all_files = [
         ec_dir / path
         for path in subprocess.run(
-            ["git", "ls-files", "-z"] + opts.file,
+            ["git", "ls-files", "-z"],
             check=True,
             cwd=ec_dir,
             stdout=subprocess.PIPE,
@@ -62,14 +56,12 @@ def main(argv=None):
         if path.name.endswith(".c") or path.name.endswith(".h"):
             cmd.append(path)
 
-    logging.debug("Running %s", " ".join(shlex.quote(str(x)) for x in cmd))
     result = subprocess.run(
         cmd,
         check=False,
         cwd=ec_dir,
         stderr=subprocess.PIPE,
         encoding="utf-8",
-        stdin=subprocess.DEVNULL,
     )
     if result.stderr:
         logging.error("All C source must be formatted with clang-format!")

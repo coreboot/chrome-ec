@@ -77,8 +77,7 @@ int board_cut_off_battery(void)
 static void board_set_charge_limit_throttle(int charge_ma, int charge_mv)
 {
 	charge_set_input_current_limit(
-		MIN(throttled_ma,
-		    MAX(charge_ma, CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT)),
+		MIN(throttled_ma, MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT)),
 		charge_mv);
 }
 
@@ -356,8 +355,8 @@ DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, board_charge_termination,
 	     HOOK_PRIO_DEFAULT);
 #endif
 
-__override void board_set_charge_limit(int port, int supplier, int charge_ma,
-				       int max_ma, int charge_mv)
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
 {
 	prev_charge_limit = charge_ma;
 	prev_charge_mv = charge_mv;

@@ -5,16 +5,20 @@
 
 / {
 	/* Required to compile board_get_sku_id() from shim/gpio_id.c */
-	gpio_id_sku: sku {
+	sku {
 		compatible = "cros-ec,gpio-id";
+
 		bits  = <&gpio_sku_id0>;
+
 		system = "ternary";
 	};
 
 	/* Required to compile board_get_version() from shim/gpio_id.c */
-	gpio_id_board: board {
+	board {
 		compatible = "cros-ec,gpio-id";
+
 		bits  = <&gpio_brd_id0>;
+
 		system = "ternary";
 	};
 };

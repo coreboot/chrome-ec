@@ -5,10 +5,7 @@
 #ifndef BIOD_BIO_ALGORITHM_H_
 #define BIOD_BIO_ALGORITHM_H_
 
-#include <stddef.h>
 #include <stdint.h>
-
-#include <sys/types.h>
 
 enum bio_algorithm_type {
 	BIO_ALGORITHM_FINGERPRINT,

@@ -4,16 +4,17 @@
  */
 
 /* UART module for ISH */
-#include "atomic.h"
 #include "common.h"
-#include "console.h"
-#include "interrupts.h"
 #include "math_util.h"
-#include "registers.h"
-#include "system.h"
+#include "console.h"
+#include "uart_defs.h"
+#include "atomic.h"
 #include "task.h"
+#include "registers.h"
 #include "uart.h"
 #include "uart_defs.h"
+#include "interrupts.h"
+#include "system.h"
 
 #define CPUTS(outstr) cputs(CC_LPC, outstr)
 #define CPRINTS(format, args...) cprints(CC_LPC, format, ##args)

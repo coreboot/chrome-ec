@@ -5,6 +5,9 @@
  * Test motion sense code, when in tablet mode.
  */
 
+#include <math.h>
+#include <stdio.h>
+
 #include "accelgyro.h"
 #include "common.h"
 #include "gpio.h"
@@ -15,9 +18,6 @@
 #include "tablet_mode.h"
 #include "test_util.h"
 #include "util.h"
-
-#include <math.h>
-#include <stdio.h>
 
 /*****************************************************************************/
 /* Test utilities */

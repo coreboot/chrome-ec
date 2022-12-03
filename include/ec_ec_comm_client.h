@@ -8,9 +8,8 @@
 #ifndef EC_EC_COMM_CLIENT_H_
 #define EC_EC_COMM_CLIENT_H_
 
-#include "config.h"
-
 #include <stdint.h>
+#include "config.h"
 
 /**
  * Sends EC_CMD_BATTERY_GET_DYNAMIC command to server, and writes the

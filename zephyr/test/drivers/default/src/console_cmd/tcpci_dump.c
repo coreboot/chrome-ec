@@ -3,13 +3,13 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
+
 #include "console.h"
 #include "ec_commands.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
 
 ZTEST_USER(console_cmd_tcpci_dump, test_no_params)
 {
@@ -38,7 +38,7 @@ static void console_cmd_tcpci_dump_begin(void *data)
 	ARG_UNUSED(data);
 
 	/* Assume we have at least one TCPC */
-	zassert_true(board_get_charger_chip_count() > 0,
+	zassume_true(board_get_charger_chip_count() > 0,
 		     "Insufficient TCPCs found");
 }
 

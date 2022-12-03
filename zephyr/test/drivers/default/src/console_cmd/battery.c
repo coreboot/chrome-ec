@@ -3,6 +3,10 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/drivers/emul.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
+
 #include "battery_smart.h"
 #include "console.h"
 #include "ec_commands.h"
@@ -10,10 +14,6 @@
 #include "emul/emul_smart_battery.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-
-#include <zephyr/drivers/emul.h>
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
 
 struct console_cmd_battery_fixture {
 	const struct emul *emul;

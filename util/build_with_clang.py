@@ -10,7 +10,6 @@ import concurrent
 import logging
 import multiprocessing
 import os
-import shutil
 import subprocess
 import sys
 import typing
@@ -28,12 +27,10 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     # Boards that use CHIP:=stm32 and *not* CHIP_FAMILY:=stm32f0
     # git grep  --name-only 'CHIP:=stm32' | xargs grep -L 'CHIP_FAMILY:=stm32f0' | sed 's#board/\(.*\)/build.mk#"\1",#'
     "baklava",
-    "bellis",
     "discovery",
     "gingerbread",
     "hatch_fp",
     "hyperdebug",
-    "munna",
     "nocturne_fp",
     "nucleo-f411re",
     "nucleo-g431rb",
@@ -46,11 +43,8 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     # Boards that use CHIP:=stm32 *and* CHIP_FAMILY:=stm32f0
     # git grep  --name-only 'CHIP:=stm32' | xargs grep -L 'CHIP_FAMILY:=stm32f0' | sed 's#board/\(.*\)/build.mk#"\1",#'
     "bland",
-    "burnet",
     "c2d2",
-    "cerise",
     "coffeecake",
-    "damu",
     "dingdong",
     "discovery-stm32f072",
     "don",
@@ -62,11 +56,6 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "gelatin",
     "hammer",
     "hoho",
-    "kakadu",
-    "kappa",
-    "katsu",
-    "krane",
-    "kukui",
     "magnemite",
     "masterball",
     "minimuffin",
@@ -78,23 +67,14 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "rainier",
     "scarlet",
     "servo_micro",
-    "servo_v4",
     "servo_v4p1",
     "staff",
     "star",
-    "stern",
     "tigertail",
     "twinkie",
     "wand",
-    "willow",
     "zed",
     "zinger",
-    # Boards that use CHIP:=mchp
-    # git grep --name-only 'CHIP:=mchp' | sed 's#board/\(.*\)/build.mk#"\1",#'
-    "adlrvpp_mchp1521",
-    "adlrvpp_mchp1727",
-    "mchpevb1",
-    "reef_mchp",
     # Boards that use CHIP:=max32660
     # git grep --name-only 'CHIP:=max32660' | sed 's#board/\(.*\)/build.mk#"\1",#'
     "max32660-eval",
@@ -110,6 +90,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "banshee",
     "berknip",
     "bloog",
+    "bobba",
     "boldar",
     "brask",
     "brya",
@@ -118,10 +99,12 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "careena",
     "casta",
     "chronicler",
+    "coachz",
     "collis",
     "copano",
     "coral",
     "corori",
+    "corori2",
     "cret",
     "crota",
     "dalboz",
@@ -144,7 +127,6 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "fleex",
     "foob",
     "gaelin",
-    "gelarshie",
     "genesis",
     "gimble",
     "grunt",
@@ -171,7 +153,6 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "lux",
     "madoo",
     "magolor",
-    "marasov",
     "marzipan",
     "meep",
     "metaknight",
@@ -184,7 +165,6 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "nautilus",
     "nightfury",
     "nipperkin",
-    "nocturne",
     "npcx7_evb",
     "npcx9_evb",
     "npcx_evb",
@@ -246,7 +226,6 @@ NDS32_BOARDS = [
     "beetley",
     "blipper",
     "boten",
-    "dibbi",
     "drawcia",
     "galtic",
     "gooey",
@@ -282,20 +261,39 @@ RISCV_BOARDS = [
 ]
 
 BOARDS_THAT_FAIL_WITH_CLANG = [
+    # Boards that use CHIP:=stm32 and *not* CHIP_FAMILY:=stm32f0
+    "bellis",  # overflows flash
+    "munna",  # overflows flash
     # Boards that use CHIP:=stm32 *and* CHIP_FAMILY:=stm32f0
+    "burnet",  # overflows flash
+    "cerise",  # overflows flash
     "chocodile_vpdmcu",  # compilation error: b/254710459
+    "damu",  # overflows flash
     "fennel",  # overflows flash
     "jacuzzi",  # overflows flash
     "juniper",  # overflows flash
+    "kakadu",  # overflows flash
+    "kappa",  # overflows flash
+    "katsu",  # overflows flash
     "kodama",  # overflows flash
+    "krane",  # overflows flash
+    "kukui",  # overflows flash
     "makomo",  # overflows flash
     "oak",  # overflows flash
+    "servo_v4",  # overflows flash
+    "stern",  # overflows flash
+    "willow",  # overflows flash
+    # Boards that use CHIP:=mchp
+    # git grep --name-only 'CHIP:=mchp' | sed 's#board/\(.*\)/build.mk#"\1",#'
+    "adlrvpp_mchp1521",  # compilation errors
+    "adlrvpp_mchp1727",  # compilation errors
+    "mchpevb1",  # compilation errors
+    "reef_mchp",  # compilation errors
     # Boards that use CHIP:=npcx
-    "bobba",  # overflows flash
-    "coachz",  # overflows flash
-    "corori2",  # overflows flash
     "garg",  # overflows flash
+    "gelarshie",  # overflows flash
     "mushu",  # overflows flash
+    "nocturne",  # overflows flash
     "terrador",  # overflows flash
     "volteer",  # overflows flash
     "waddledoo",  # overflows flash
@@ -362,26 +360,8 @@ def main() -> int:
         "--num_threads", "-j", type=int, default=multiprocessing.cpu_count()
     )
 
-    group = parser.add_mutually_exclusive_group(required=False)
-    group.add_argument(
-        "--clean",
-        action="store_true",
-        help="Remove build directory before compiling",
-    )
-    group.add_argument(
-        "--no-clean",
-        dest="clean",
-        action="store_false",
-        help="Do not remove build directory before compiling",
-    )
-    parser.set_defaults(clean=True)
-
     args = parser.parse_args()
     logging.basicConfig(level=args.log_level)
-
-    if args.clean:
-        logging.debug("Removing build directory")
-        shutil.rmtree("./build", ignore_errors=True)
 
     check_boards()
 

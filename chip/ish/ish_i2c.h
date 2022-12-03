@@ -6,9 +6,8 @@
 #ifndef __CROS_EC_ISH_I2C_H
 #define __CROS_EC_ISH_I2C_H
 
-#include "task.h"
-
 #include <stdint.h>
+#include "task.h"
 
 #define I2C_TSC_TIMEOUT 2000000
 #define I2C_CALIB_ADDRESS 0x3

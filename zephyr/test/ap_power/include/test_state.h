@@ -6,8 +6,6 @@
 #ifndef ZEPHYR_TEST_AP_POWER_INCLUDE_TEST_STATE_H_
 #define ZEPHYR_TEST_AP_POWER_INCLUDE_TEST_STATE_H_
 
-#include <stdbool.h>
-
 struct test_state {
 	bool ec_app_main_run;
 };

@@ -6,8 +6,8 @@
 #include "common.h"
 #include "console.h"
 #include "i2c.h"
-#include "stdbool.h"
 #include "stddef.h"
+#include "stdbool.h"
 #include "util.h"
 
 #define CPUTS(outstr) cputs(CC_I2C, outstr)
@@ -67,7 +67,7 @@ static int command_i2ctrace_list(void)
 			i2c_port = get_i2c_port(trace_entries[i].port);
 			ccprintf("%-2zd %d %-8s 0x%X", i, trace_entries[i].port,
 #ifndef CONFIG_ZEPHYR
-				 i2c_port ? i2c_port->name : "invalid",
+				 i2c_port->name,
 #else
 				 "",
 #endif /* CONFIG_ZEPHYR */

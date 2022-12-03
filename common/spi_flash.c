@@ -9,8 +9,6 @@
 #include "builtin/assert.h"
 #include "common.h"
 #include "console.h"
-#include "ec_commands.h"
-#include "flash.h"
 #include "host_command.h"
 #include "shared_mem.h"
 #include "spi.h"
@@ -19,6 +17,8 @@
 #include "timer.h"
 #include "util.h"
 #include "watchdog.h"
+#include "ec_commands.h"
+#include "flash.h"
 
 /*
  * Time to sleep when chip is busy

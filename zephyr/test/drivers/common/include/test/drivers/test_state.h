@@ -6,8 +6,6 @@
 #ifndef ZEPHYR_TEST_DRIVERS_INCLUDE_TEST_STATE_H_
 #define ZEPHYR_TEST_DRIVERS_INCLUDE_TEST_STATE_H_
 
-#include <stdbool.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif

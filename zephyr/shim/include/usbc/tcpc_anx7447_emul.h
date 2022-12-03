@@ -3,11 +3,10 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/devicetree.h>
 #include "driver/tcpm/anx7447_public.h"
 
-#include <zephyr/devicetree.h>
-
-#define ANX7447_EMUL_COMPAT cros_anx7447_tcpc_emul
+#define ANX7447_EMUL_COMPAT cros_anx7447_emul
 
 #define TCPC_CONFIG_ANX7447_EMUL(id) \
 	{                                              \

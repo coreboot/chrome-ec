@@ -2,8 +2,9 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include "driver/tcpm/ps8xxx_public.h"
 #include "usb_mux.h"
+
+#include "driver/tcpm/ps8xxx_public.h"
 
 /* Parade Tech Type-C port controller */
 

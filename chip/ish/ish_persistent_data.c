@@ -4,11 +4,11 @@
  */
 
 #include "common.h"
-#include "config.h"
 #include "ec_commands.h"
+#include "config.h"
 #include "hooks.h"
-#include "ish_persistent_data.h"
 #include "system.h"
+#include "ish_persistent_data.h"
 
 #define PERSISTENT_DATA_MAGIC 0x49534864 /* "ISHd" */
 

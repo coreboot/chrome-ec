@@ -5,22 +5,21 @@
 
 /* Common flash memory module for STM32F and STM32F0 */
 
+#include <stdbool.h>
 #include "battery.h"
 #include "builtin/assert.h"
-#include "clock.h"
 #include "console.h"
-#include "flash-f.h"
+#include "clock.h"
 #include "flash.h"
+#include "flash-f.h"
 #include "hooks.h"
-#include "panic.h"
 #include "registers.h"
+#include "panic.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
 #include "watchdog.h"
-
-#include <stdbool.h>
 
 #define CPRINTF(format, args...) cprintf(CC_SYSTEM, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)

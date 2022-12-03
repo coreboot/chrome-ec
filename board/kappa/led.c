@@ -129,7 +129,6 @@ static void led_set_battery(void)
 	case PWR_STATE_FORCED_IDLE:
 		led_set_color_battery((battery_ticks & 0x2) ? LED_AMBER :
 							      LED_OFF);
-		break;
 	default:
 		/* Other states don't alter LED behavior */
 		break;

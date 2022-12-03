@@ -3,16 +3,15 @@
  * found in the LICENSE file.
  */
 
-#include "clock_chip.h"
-#include "module_id.h"
-
 #include <zephyr/device.h>
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/dt-bindings/clock/mchp_xec_pcr.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-
 #include <soc.h>
+
+#include "clock_chip.h"
+#include "module_id.h"
 
 LOG_MODULE_REGISTER(shim_clock, LOG_LEVEL_ERR);
 

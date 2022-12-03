@@ -3,15 +3,15 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/fff.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
+
 #include "console.h"
 #include "ec_commands.h"
 #include "test/drivers/stubs.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-
-#include <zephyr/fff.h>
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
 
 #define TEST_PORT USBC_PORT_C0
 #define BAD_PORT 82
@@ -23,7 +23,7 @@ ZTEST_USER(host_cmd_pd_control, test_bad_index)
 	struct host_cmd_handler_args args =
 		BUILD_HOST_COMMAND_PARAMS(EC_CMD_PD_CONTROL, 0, params);
 
-	zassert_true(board_get_usb_pd_port_count() < BAD_PORT,
+	zassume_true(board_get_usb_pd_port_count() < BAD_PORT,
 		     "Intended bad port exists");
 	zassert_equal(host_command_process(&args), EC_RES_INVALID_PARAM,
 		      "Failed to fail pd_control for port %d", params.chip);
@@ -47,7 +47,7 @@ ZTEST_USER(host_cmd_pd_control, test_pd_reset_resume)
 	 * the only HC return which would cover this is a state string, which
 	 * could be brittle.
 	 */
-	zassert_true(pd_is_port_enabled(TEST_PORT), "Port not up at beginning");
+	zassume_true(pd_is_port_enabled(TEST_PORT), "Port not up at beginning");
 
 	host_cmd_pd_control(TEST_PORT, PD_RESET);
 
@@ -76,7 +76,7 @@ ZTEST_USER(host_cmd_pd_control, test_suspend_resume)
 	 * the only HC return which would cover this is a state string, which
 	 * could be brittle.
 	 */
-	zassert_true(pd_is_port_enabled(TEST_PORT), "Port not up at beginning");
+	zassume_true(pd_is_port_enabled(TEST_PORT), "Port not up at beginning");
 
 	host_cmd_pd_control(TEST_PORT, PD_SUSPEND);
 
@@ -91,20 +91,6 @@ ZTEST_USER(host_cmd_pd_control, test_suspend_resume)
 	k_sleep(K_SECONDS(1));
 
 	zassert_true(pd_is_port_enabled(TEST_PORT), "Port failed to resume");
-}
-
-ZTEST_USER(host_cmd_pd_control, test_suspend_low_battery)
-{
-	struct ec_params_pd_control params = { .chip = TEST_PORT,
-					       .subcmd = PD_SUSPEND };
-	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND_PARAMS(EC_CMD_PD_CONTROL, 0, params);
-
-	/* Suspending the port for firmware update should fail at critical low
-	 * battery.
-	 */
-	test_set_battery_level(1);
-	zassert_equal(host_command_process(&args), EC_RES_BUSY);
 }
 
 ZTEST_USER(host_cmd_pd_control, test_control_disable)
@@ -131,7 +117,7 @@ static void host_cmd_pd_control_begin(void *data)
 	ARG_UNUSED(data);
 
 	/* Assume we have at least one USB-C port */
-	zassert_true(board_get_usb_pd_port_count() > 0,
+	zassume_true(board_get_usb_pd_port_count() > 0,
 		     "Insufficient TCPCs found");
 
 	/* Set the system into S0, since the AP would drive these commands */

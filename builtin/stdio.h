@@ -6,10 +6,10 @@
 #ifndef __CROS_EC_STDIO_H__
 #define __CROS_EC_STDIO_H__
 
-#include "common.h"
-
-#include <stdarg.h>
 #include <stddef.h>
+#include <stdarg.h>
+
+#include "common.h"
 
 /**
  * Print formatted outut to a string.

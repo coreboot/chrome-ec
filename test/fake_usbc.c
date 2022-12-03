@@ -5,9 +5,9 @@
  * Test USB Type-C module.
  */
 #include "common.h"
+#include "usb_tc_sm.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
-#include "usb_tc_sm.h"
 
 __overridable int pd_is_vbus_present(int port)
 {
@@ -304,7 +304,7 @@ void dpm_set_mode_exit_request(int port)
 {
 }
 
-void dpm_run(int port, int evt, int enable)
+void dpm_run(int port)
 {
 }
 
@@ -348,10 +348,6 @@ int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len)
 }
 
 void dpm_handle_alert(int port, uint32_t ado)
-{
-}
-
-void dpm_set_pe_ready(int port, bool enable)
 {
 }
 

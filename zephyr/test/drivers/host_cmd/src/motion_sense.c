@@ -3,6 +3,10 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/fff.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
+
 #include "atomic.h"
 #include "console.h"
 #include "driver/accel_bma2x2.h"
@@ -12,10 +16,6 @@
 #include "motion_sense_fifo.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-
-#include <zephyr/fff.h>
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
 
 FAKE_VALUE_FUNC(int, mock_set_range, struct motion_sensor_t *, int, int);
 FAKE_VALUE_FUNC(int, mock_set_offset, const struct motion_sensor_t *,
@@ -72,7 +72,7 @@ static void host_cmd_motion_sense_before(void *fixture)
 	RESET_FAKE(mock_perform_calib);
 	FFF_RESET_HISTORY();
 
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinit 0"));
+	zassume_ok(shell_execute_cmd(get_ec_shell(), "accelinit 0"));
 
 	atomic_clear(&motion_sensors[0].flush_pending);
 	motion_sensors[0].config[SENSOR_CONFIG_AP].odr = 0;
@@ -305,7 +305,7 @@ ZTEST_USER(host_cmd_motion_sense, test_odr_get)
 {
 	struct ec_response_motion_sense response;
 
-	zassert_ok(motion_sensors[0].drv->set_data_rate(&motion_sensors[0],
+	zassume_ok(motion_sensors[0].drv->set_data_rate(&motion_sensors[0],
 							1000000, false),
 		   NULL);
 	zassert_ok(host_cmd_motion_sense_odr(/*sensor_num=*/0,
@@ -322,7 +322,7 @@ ZTEST_USER(host_cmd_motion_sense, test_odr_set)
 {
 	struct ec_response_motion_sense response;
 
-	zassert_ok(motion_sensors[0].drv->set_data_rate(&motion_sensors[0], 0,
+	zassume_ok(motion_sensors[0].drv->set_data_rate(&motion_sensors[0], 0,
 							false),
 		   NULL);
 	zassert_ok(host_cmd_motion_sense_odr(/*sensor_num=*/0,
@@ -774,7 +774,7 @@ ZTEST(host_cmd_motion_sense, test_int_enable)
 		      host_cmd_motion_sense_int_enable(2, &response), NULL);
 
 	/* Make sure we start off disabled */
-	zassert_ok(host_cmd_motion_sense_int_enable(0, &response));
+	zassume_ok(host_cmd_motion_sense_int_enable(0, &response));
 
 	/* Test enable */
 	zassert_ok(host_cmd_motion_sense_int_enable(1, &response));

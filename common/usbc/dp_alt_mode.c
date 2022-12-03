@@ -9,6 +9,8 @@
  * section 5.2
  */
 
+#include <stdbool.h>
+#include <stdint.h>
 #include "atomic.h"
 #include "builtin/assert.h"
 #include "console.h"
@@ -16,9 +18,6 @@
 #include "usb_dp_alt_mode.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
-
-#include <stdbool.h>
-#include <stdint.h>
 
 #ifdef CONFIG_COMMON_RUNTIME
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
@@ -307,13 +306,13 @@ enum dpm_msg_setup_status dp_setup_next_vdm(int port, int *vdo_count,
 		 * this doesn't set up the VDM, it clears state.
 		 * TODO(b/159856063): Clean up the API to the fx functions.
 		 */
+		if (!(modep && modep->opos))
+			return MSG_SETUP_ERROR;
+
 		usb_mux_set_safe_mode_exit(port);
 		dp_state[port] = DP_PREPARE_EXIT;
 		return MSG_SETUP_MUX_WAIT;
 	case DP_PREPARE_EXIT:
-		if (!(modep && modep->opos))
-			return MSG_SETUP_ERROR;
-
 		/* DPM should call setup only after safe state is set */
 		vdm[0] = VDO(USB_SID_DISPLAYPORT, 1, /* structured */
 			     CMD_EXIT_MODE);

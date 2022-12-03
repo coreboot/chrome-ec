@@ -14,8 +14,8 @@
 #include "usb_mux.h"
 #include "usbc_ppc.h"
 #include "vboot.h"
-#include "zephyr/devicetree.h"
 
+#include "zephyr/devicetree.h"
 #include <stdint.h>
 
 #include <zephyr/drivers/gpio/gpio_emul.h>
@@ -372,8 +372,8 @@ int board_set_active_charge_port(int port)
 	return EC_ERROR_INVAL;
 }
 
-__override void board_set_charge_limit(int port, int supplier, int charge_ma,
-				       int max_ma, int charge_mv)
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
 {
 }
 
@@ -392,6 +392,25 @@ int pd_set_power_supply_ready(int port)
 }
 
 enum usbc_port { USBC_PORT_C0 = 0, USBC_PORT_COUNT };
+
+/* BC1.2 charger detect configuration */
+const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
+	[USBC_PORT_C0] = {
+		.i2c_port = I2C_PORT_USB_C0,
+		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
+	},
+};
+
+struct usb_mux_chain usb_muxes[] = {
+	[USBC_PORT_C0] = {
+		.mux = &(struct usb_mux) {
+			.usb_port = USBC_PORT_C0,
+			.driver = &tcpci_tcpm_usb_mux_driver,
+			.i2c_port = I2C_PORT_USB_C0,
+			.i2c_addr_flags = DT_REG_ADDR(DT_NODELABEL(tcpci_emul)),
+		},
+	},
+};
 
 /* USBC PPC configuration */
 struct ppc_config_t ppc_chips[] = {

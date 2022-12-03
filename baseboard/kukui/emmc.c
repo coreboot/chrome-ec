@@ -28,7 +28,6 @@
  * case we interrupt the transfer, and the BootROM will try again.
  */
 
-#include "bootblock_data.h"
 #include "chipset.h"
 #include "clock.h"
 #include "console.h"
@@ -41,6 +40,8 @@
 #include "task.h"
 #include "timer.h"
 #include "util.h"
+
+#include "bootblock_data.h"
 
 #define CPRINTS(format, args...) cprints(CC_SPI, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_SPI, format, ##args)

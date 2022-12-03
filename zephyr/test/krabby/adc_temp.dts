@@ -6,11 +6,28 @@
 #include <cros/thermistor/thermistor.dtsi>
 
 / {
-	name_temp_charger: charger {
-		compatible = "cros-ec,temp-sensor-thermistor";
+	adc0: adc {
+		compatible = "zephyr,adc-emul";
+		nchannels = <1>;
+		ref-internal-mv = <3300>;
+		#io-channel-cells = <1>;
+		status = "okay";
+	};
 
-		thermistor = <&thermistor_rt9490>;
-		adc = <&adc_charger>;
+	named-adc-channels {
+		compatible = "named-adc-channels";
+
+		adc_charger: charger {
+		enum-name = "ADC_TEMP_SENSOR_CHARGER";
+		io-channels = <&adc0 0>;
+		};
+	};
+
+	name_temp_charger: charger {
+	compatible = "cros-ec,temp-sensor-thermistor";
+
+	thermistor = <&thermistor_rt9490>;
+	adc = <&adc_charger>;
 	};
 
 	named-temp-sensors {

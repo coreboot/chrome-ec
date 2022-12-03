@@ -5,9 +5,11 @@
 
 /* System module for Chrome EC : MCHP hardware specific implementation */
 
+#include <stdnoreturn.h>
+
+#include "common.h" /* includes config.h and board.h */
 #include "clock.h"
 #include "clock_chip.h"
-#include "common.h" /* includes config.h and board.h */
 #include "console.h"
 #include "cpu.h"
 #include "gpio.h"
@@ -22,8 +24,6 @@
 #include "tfdp_chip.h"
 #include "timer.h"
 #include "util.h"
-
-#include <stdnoreturn.h>
 
 #define CPUTS(outstr) cputs(CC_LPC, outstr)
 #define CPRINTS(format, args...) cprints(CC_LPC, format, ##args)

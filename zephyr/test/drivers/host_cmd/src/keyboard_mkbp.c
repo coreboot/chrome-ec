@@ -3,11 +3,10 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/ztest.h>
 #include "include/keyboard_mkbp.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-
-#include <zephyr/ztest.h>
 
 struct keyboard_mkbp_commands_fixture {
 	struct ec_mkbp_config config;

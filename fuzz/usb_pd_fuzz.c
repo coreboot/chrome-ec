@@ -13,10 +13,9 @@
 #include "usb_pd_tcpm.h"
 #include "util.h"
 
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <pthread.h>
 
 #define TASK_EVENT_FUZZ TASK_EVENT_CUSTOM_BIT(0)
 
@@ -225,9 +224,7 @@ void run_test(int argc, const char **argv)
 			task_wait_event(50 * MSEC);
 		}
 
-		pthread_mutex_lock(&lock);
 		pthread_cond_signal(&done_cond);
-		pthread_mutex_unlock(&lock);
 	}
 }
 
@@ -269,17 +266,8 @@ int test_fuzz_one_input(const uint8_t *data, unsigned int size)
 		return 0;
 	}
 
-	pthread_mutex_init(&lock, NULL);
-	pthread_cond_init(&done_cond, NULL);
-
 	task_set_event(TASK_ID_TEST_RUNNER, TASK_EVENT_FUZZ);
-
-	pthread_mutex_lock(&lock);
 	pthread_cond_wait(&done_cond, &lock);
-	pthread_mutex_unlock(&lock);
-
-	pthread_cond_destroy(&done_cond);
-	pthread_mutex_destroy(&lock);
 
 	return 0;
 }

@@ -7,7 +7,6 @@
 #include "battery.h"
 #include "common.h"
 #include "gpio.h"
-#include "mock/usb_prl_mock.h"
 #include "task.h"
 #include "test_util.h"
 #include "timer.h"
@@ -20,6 +19,7 @@
 #include "usb_prl_sm.h"
 #include "usb_sm_checks.h"
 #include "usb_tc_sm.h"
+#include "mock/usb_prl_mock.h"
 
 #define pe_set_flag(_p, name) pe_set_fn((_p), (name##_FN))
 #define pe_clr_flag(_p, name) pe_clr_fn((_p), (name##_FN))

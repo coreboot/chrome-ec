@@ -3,19 +3,19 @@
  * found in the LICENSE file.
  */
 
-#include "drivers/cros_flash.h"
-#include "ec_commands.h"
-#include "flash.h"
+#define DT_DRV_COMPAT cros_ec_flash_emul
+
+#include <zephyr/drivers/flash.h>
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(emul_flash);
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
-#include <zephyr/drivers/flash.h>
-#include <zephyr/logging/log.h>
+#include <ec_commands.h>
+#include <drivers/cros_flash.h>
 #include <zephyr/sys/__assert.h>
 
-#define DT_DRV_COMPAT cros_ec_flash_emul
-
-LOG_MODULE_REGISTER(emul_flash);
+#include "flash.h"
 
 struct flash_emul_data {
 	const struct device *flash_dev;

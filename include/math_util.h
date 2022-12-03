@@ -8,10 +8,8 @@
 #ifndef __CROS_EC_MATH_UTIL_H
 #define __CROS_EC_MATH_UTIL_H
 
-#include "config.h"
-#include "limits.h"
-
 #include <stdint.h>
+#include "limits.h"
 
 #ifdef CONFIG_FPU
 typedef float fp_t;

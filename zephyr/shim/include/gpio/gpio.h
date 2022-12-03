@@ -8,7 +8,6 @@
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/drivers/gpio.h>
 
 /*
  * Validate interrupt flags are valid for the Zephyr GPIO driver.

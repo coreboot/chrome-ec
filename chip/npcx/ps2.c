@@ -8,11 +8,11 @@
 #include "atomic.h"
 #include "clock.h"
 #include "console.h"
-#include "gpio.h"
 #include "hooks.h"
+#include "gpio.h"
 #include "ps2_chip.h"
-#include "registers.h"
 #include "task.h"
+#include "registers.h"
 #include "timer.h"
 #include "util.h"
 
