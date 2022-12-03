@@ -3,11 +3,14 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/shell/shell_uart.h>
+
 #include "ap_power/ap_pwrseq.h"
 #include "button.h"
 #include "chipset.h"
 #include "cros_board_info.h"
-#include "ec_app_main.h"
 #include "ec_tasks.h"
 #include "hooks.h"
 #include "keyboard_scan.h"
@@ -16,10 +19,7 @@
 #include "vboot.h"
 #include "watchdog.h"
 #include "zephyr_espi_shim.h"
-
-#include <zephyr/kernel.h>
-#include <zephyr/shell/shell_uart.h>
-#include <zephyr/sys/printk.h>
+#include "ec_app_main.h"
 
 /* For testing purposes this is not named main. See main_shim.c for the real
  * main() function.

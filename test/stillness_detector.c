@@ -3,11 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include "motion_sense.h"
 #include "stillness_detector.h"
+#include "motion_sense.h"
 #include "test_util.h"
 #include "timer.h"
-
 #include <stdio.h>
 
 /*****************************************************************************/

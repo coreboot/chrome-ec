@@ -3,11 +3,12 @@
  * found in the LICENSE file.
  */
 
+#include "test_util.h"
+
 #include "builtin/assert.h"
 #include "panic.h"
 #include "system.h"
 #include "task.h"
-#include "test_util.h"
 
 static int get_assert_line(void)
 {

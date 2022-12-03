@@ -63,21 +63,6 @@ config PLATFORM_EC_CHARGE_MANAGER
 	  source is available on the hardware, so cannot be built without
 	  PLATFORM_EC_USBC.
 
-config PLATFORM_EC_CHARGE_STATE_DEBUG
-	bool "Debug information about the charge state"
-	depends on PLATFORM_EC_CHARGE_MANAGER
-	help
-	  Enables debug information regarding the current charge state. Enabling
-	  this config will allow the EC_CMD_CHARGE_STATE host command to use the
-	  CHARGE_STATE_CMD_GET_PARAM command to query the current charge state.
-
-config PLATFORM_EC_CMD_PWR_AVG
-	bool "Enable the console command to print power average"
-	depends on PLATFORM_EC_CHARGE_MANAGER
-	help
-	  Enables the console command which prints out the current (past 1
-	  minute) power average.
-
 config PLATFORM_EC_CHARGESPLASH
 	bool "Charging splashscreen support"
 	help
@@ -186,8 +171,6 @@ config PLATFORM_EC_CHARGER_RAA489000
 
 config PLATFORM_EC_CHARGER_RT9490
 	bool "Use the RT9490 charger"
-	default y
-	depends on DT_HAS_RICHTEK_RT9490_ENABLED || DT_HAS_ZEPHYR_RT9490_EMUL_ENABLED
 	depends on PLATFORM_EC_I2C
 	select PLATFORM_EC_CHARGER_OTG_SUPPORTED
 	help
@@ -204,12 +187,6 @@ config PLATFORM_EC_CHARGER_SM5803
 	  Enables the driver for the SM5803.
 	  The SM5803 is the Silicon Mitus SM5803 Buck-Boost Charger.
 
-	  This charger is known to be very inefficient when operating in buck-boost
-	  mode (when input voltage is close to output voltage), such that permanent
-	  damage may be done to the charger. Users should exercise caution around
-	  choice of supported configurations: see b:260271871, b:258754576, and
-	  b:230712704 for more information.
-
 
 if PLATFORM_EC_OCPC
 
@@ -221,13 +198,6 @@ config PLATFORM_EC_OCPC_DEF_RBATT_MOHMS
 	  charger IC and the battery.
 	  This should be at a minimum the Rds(on) resistance of the BFET plus
 	  the series sense resistor.
-
-config PLATFORM_EC_OCPC_DEF_DRIVELIMIT_MILLIVOLTS
-	int "Drive Limit for the OCPC PID control loop"
-	default 10
-	help
-	  Sets how agressively the OCPC PID control loop can adjust VSYS to drive
-	  the battery with the correct current.
 
 endif  # PLATFORM_EC_OCPC
 

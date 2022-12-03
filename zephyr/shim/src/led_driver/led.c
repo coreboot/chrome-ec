@@ -5,7 +5,7 @@
  * Power and battery LED control.
  */
 
-#define DT_DRV_COMPAT cros_ec_led_policy
+#include <zephyr/drivers/gpio.h>
 
 #include "battery.h"
 #include "charge_manager.h"
@@ -21,12 +21,10 @@
 #include "util.h"
 
 #include <zephyr/devicetree.h>
-#include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(led, LOG_LEVEL_ERR);
 
-BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
-	     "Exactly one instance of cros-ec,led-policy should be defined.");
+#define LED_COLOR_NODE DT_PATH(led_colors)
 
 struct led_color_node_t {
 	struct led_pins_node_t *pins_node;
@@ -35,12 +33,10 @@ struct led_color_node_t {
 
 #define DECLARE_PINS_NODE(id) extern struct led_pins_node_t PINS_NODE(id);
 
-#if CONFIG_PLATFORM_EC_LED_DT_PWM
-DT_FOREACH_CHILD(DT_COMPAT_GET_ANY_STATUS_OKAY(cros_ec_pwm_led_pins),
-		 DECLARE_PINS_NODE)
-#elif CONFIG_PLATFORM_EC_LED_DT_GPIO
-DT_FOREACH_CHILD(DT_COMPAT_GET_ANY_STATUS_OKAY(cros_ec_gpio_led_pins),
-		 DECLARE_PINS_NODE)
+#if DT_HAS_COMPAT_STATUS_OKAY(COMPAT_PWM_LED)
+DT_FOREACH_CHILD(PWM_LED_PINS_NODE, DECLARE_PINS_NODE)
+#elif DT_HAS_COMPAT_STATUS_OKAY(COMPAT_GPIO_LED)
+DT_FOREACH_CHILD(GPIO_LED_PINS_NODE, DECLARE_PINS_NODE)
 #endif
 
 /*
@@ -117,8 +113,8 @@ struct node_prop_t {
 		  LED_COLOR_INIT(3, 4, state_id),                             \
 	  } },
 
-static const struct node_prop_t node_array[] = { DT_INST_FOREACH_CHILD(
-	0, SET_LED_VALUES) };
+static const struct node_prop_t node_array[] = { DT_FOREACH_CHILD(
+	LED_COLOR_NODE, SET_LED_VALUES) };
 
 test_export_static enum power_state get_chipset_state(void)
 {

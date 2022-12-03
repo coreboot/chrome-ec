@@ -4,12 +4,12 @@
  */
 /* Flash memory module for STM32L4 family */
 
-#include "clock.h"
 #include "common.h"
+#include "clock.h"
 #include "flash.h"
 #include "hooks.h"
-#include "panic.h"
 #include "registers.h"
+#include "panic.h"
 #include "system.h"
 #include "task.h"
 #include "timer.h"

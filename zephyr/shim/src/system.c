@@ -3,17 +3,16 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/device.h>
+#include <zephyr/drivers/bbram.h>
+#include <drivers/cros_system.h>
+#include <zephyr/logging/log.h>
+
 #include "common.h"
 #include "console.h"
 #include "cros_version.h"
 #include "system.h"
 #include "watchdog.h"
-
-#include <zephyr/device.h>
-#include <zephyr/drivers/bbram.h>
-#include <zephyr/logging/log.h>
-
-#include <drivers/cros_system.h>
 
 #define BBRAM_REGION_PD0 DT_PATH(named_bbram_regions, pd0)
 #define BBRAM_REGION_PD1 DT_PATH(named_bbram_regions, pd1)
@@ -343,7 +342,7 @@ static int check_reset_cause(void)
 	return 0;
 }
 
-test_export_static int system_preinitialize(const struct device *unused)
+static int system_preinitialize(const struct device *unused)
 {
 	ARG_UNUSED(unused);
 

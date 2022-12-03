@@ -7,7 +7,6 @@
  */
 
 #include <stdint.h>
-
 #include <stdnoreturn.h>
 
 /* Why naked?  This is dangerous except for

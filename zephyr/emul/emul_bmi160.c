@@ -3,20 +3,21 @@
  * found in the LICENSE file.
  */
 
-#include "driver/accelgyro_bmi160.h"
-#include "driver/accelgyro_bmi_common.h"
-#include "emul/emul_bmi.h"
+#define DT_DRV_COMPAT zephyr_bmi
+
+#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(emul_bmi160);
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
-#include <zephyr/logging/log.h>
 
-#define DT_DRV_COMPAT zephyr_bmi_emul
+#include "emul/emul_bmi.h"
 
-#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
-LOG_MODULE_REGISTER(emul_bmi160);
+#include "driver/accelgyro_bmi160.h"
+#include "driver/accelgyro_bmi_common.h"
 
 /** Mask reserved bits in each register of BMI160 */
 static const uint8_t bmi_emul_160_rsvd_mask[] = {

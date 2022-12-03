@@ -5,6 +5,7 @@
 
 /* Embed firmware version number in the binary */
 
+#include <stdint.h>
 #include "common.h"
 #include "compile_time_macros.h"
 #include "cros_version.h"
@@ -12,8 +13,6 @@
 #include "ec_version.h"
 #include "stddef.h"
 #include "system.h"
-
-#include <stdint.h>
 
 BUILD_ASSERT(CONFIG_ROLLBACK_VERSION >= 0);
 BUILD_ASSERT(CONFIG_ROLLBACK_VERSION <= INT32_MAX);

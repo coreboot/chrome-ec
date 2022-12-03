@@ -3,6 +3,12 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(tcpci_drp_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
+
+#include <zephyr/sys/byteorder.h>
+#include <zephyr/kernel.h>
+
 #include "common.h"
 #include "emul/tcpc/emul_tcpci.h"
 #include "emul/tcpc/emul_tcpci_partner_common.h"
@@ -11,12 +17,6 @@
 #include "emul/tcpc/emul_tcpci_partner_src.h"
 #include "tcpm/tcpci.h"
 #include "usb_pd.h"
-
-#include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
-#include <zephyr/sys/byteorder.h>
-
-LOG_MODULE_REGISTER(tcpci_drp_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 
 /**
  * @brief Handle SOP messages as TCPCI dual role device

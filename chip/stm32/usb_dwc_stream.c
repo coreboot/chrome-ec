@@ -3,11 +3,12 @@
  * found in the LICENSE file.
  */
 
-#include "console.h"
 #include "registers.h"
 #include "timer.h"
 #include "usb_dwc_stream.h"
 #include "util.h"
+
+#include "console.h"
 #define CPRINTF(format, args...) cprintf(CC_USB, format, ##args)
 
 /*

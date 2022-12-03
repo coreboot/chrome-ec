@@ -3,22 +3,23 @@
  * found in the LICENSE file.
  */
 
-#include "driver/als_tcs3400.h"
-#include "emul/emul_common_i2c.h"
-#include "emul/emul_stub_device.h"
-#include "emul/emul_tcs3400.h"
+#define DT_DRV_COMPAT zephyr_tcs3400
+
+#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(emul_tcs);
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
-#include <zephyr/logging/log.h>
 #include <zephyr/ztest.h>
 
-#define DT_DRV_COMPAT zephyr_tcs3400_emul
+#include "emul/emul_common_i2c.h"
+#include "emul/emul_tcs3400.h"
+#include "emul/emul_stub_device.h"
 
-#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
-LOG_MODULE_REGISTER(emul_tcs);
+#include "driver/als_tcs3400.h"
 
 /** Run-time data used by the emulator */
 struct tcs_emul_data {

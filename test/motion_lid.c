@@ -5,6 +5,9 @@
  * Test motion sense code.
  */
 
+#include <math.h>
+#include <stdio.h>
+
 #include "accelgyro.h"
 #include "common.h"
 #include "gpio.h"
@@ -16,9 +19,6 @@
 #include "test_util.h"
 #include "timer.h"
 #include "util.h"
-
-#include <math.h>
-#include <stdio.h>
 
 extern enum chipset_state_mask sensor_active;
 extern int wait_us;

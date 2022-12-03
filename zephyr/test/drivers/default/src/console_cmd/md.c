@@ -3,11 +3,11 @@
  * found in the LICENSE file.
  */
 
-#include "console.h"
-#include "test/drivers/test_state.h"
-
 #include <zephyr/shell/shell.h>
 #include <zephyr/ztest.h>
+
+#include "console.h"
+#include "test/drivers/test_state.h"
 
 ZTEST_SUITE(console_cmd_md, drivers_predicate_post_main, NULL, NULL, NULL,
 	    NULL);
@@ -36,7 +36,7 @@ ZTEST_USER(console_cmd_md, test_default_count)
 	uint8_t memory[] = { 0x01, 0x02, 0x03, 0x04 };
 	char cmd[128] = { 0 };
 
-	zassert_true(sprintf(cmd, "md %" PRIuPTR, (uintptr_t)memory) != 0,
+	zassume_true(sprintf(cmd, "md %" PRIuPTR, (uintptr_t)memory) != 0,
 		     NULL);
 	zassert_ok(shell_execute_cmd(get_ec_shell(), cmd), NULL);
 }
@@ -46,7 +46,7 @@ ZTEST_USER(console_cmd_md, test_count_arg)
 	uint8_t memory[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
 	char cmd[128] = { 0 };
 
-	zassert_true(sprintf(cmd, "md %" PRIuPTR " 2", (uintptr_t)memory) != 0,
+	zassume_true(sprintf(cmd, "md %" PRIuPTR " 2", (uintptr_t)memory) != 0,
 		     NULL);
 	zassert_ok(shell_execute_cmd(get_ec_shell(), cmd), NULL);
 }
@@ -56,7 +56,7 @@ ZTEST_USER(console_cmd_md, test_byte_format)
 	uint8_t memory[] = { 0x01, 0x02, 0x03, 0x04 };
 	char cmd[128] = { 0 };
 
-	zassert_true(sprintf(cmd, "md .b %" PRIuPTR, (uintptr_t)memory) != 0,
+	zassume_true(sprintf(cmd, "md .b %" PRIuPTR, (uintptr_t)memory) != 0,
 		     NULL);
 	zassert_ok(shell_execute_cmd(get_ec_shell(), cmd), NULL);
 }
@@ -66,7 +66,7 @@ ZTEST_USER(console_cmd_md, test_half_format)
 	uint8_t memory[] = { 0x01, 0x02, 0x03, 0x04 };
 	char cmd[128] = { 0 };
 
-	zassert_true(sprintf(cmd, "md .h %" PRIuPTR, (uintptr_t)memory) != 0,
+	zassume_true(sprintf(cmd, "md .h %" PRIuPTR, (uintptr_t)memory) != 0,
 		     NULL);
 	zassert_ok(shell_execute_cmd(get_ec_shell(), cmd), NULL);
 }
@@ -76,7 +76,7 @@ ZTEST_USER(console_cmd_md, test_string_format)
 	char memory[] = "hello world";
 	char cmd[128] = { 0 };
 
-	zassert_true(sprintf(cmd, "md .s %" PRIuPTR " 12", (uintptr_t)memory) !=
+	zassume_true(sprintf(cmd, "md .s %" PRIuPTR " 12", (uintptr_t)memory) !=
 			     0,
 		     NULL);
 	zassert_ok(shell_execute_cmd(get_ec_shell(), cmd), NULL);

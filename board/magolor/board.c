@@ -415,8 +415,6 @@ void board_hibernate(void)
 	if (board_get_charger_chip_count() > 1)
 		raa489000_hibernate(1, true);
 	raa489000_hibernate(0, true);
-
-	msleep(1000); /* Wait for charger to enter low power mode */
 }
 
 void board_reset_pd_mcu(void)
@@ -593,6 +591,19 @@ int board_set_active_charge_port(int port)
 	charger_discharge_on_ac(0);
 
 	return EC_SUCCESS;
+}
+
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
+{
+	int icl = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
+
+	/*
+	 * b/147463641: The charger IC seems to overdraw ~4%, therefore we
+	 * reduce our target accordingly.
+	 */
+	icl = icl * 96 / 100;
+	charge_set_input_current_limit(icl, charge_mv);
 }
 
 __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)

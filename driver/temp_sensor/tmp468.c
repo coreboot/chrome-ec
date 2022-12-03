@@ -7,12 +7,13 @@
 
 #include "common.h"
 #include "console.h"
-#include "gpio.h"
-#include "hooks.h"
-#include "i2c.h"
 #include "tmp432.h"
-#include "tmp468.h"
+#include "gpio.h"
+#include "i2c.h"
+#include "hooks.h"
 #include "util.h"
+
+#include "tmp468.h"
 
 static int fake_temp[TMP468_CHANNEL_COUNT] = { -1, -1, -1, -1, -1,
 					       -1, -1, -1, -1 };

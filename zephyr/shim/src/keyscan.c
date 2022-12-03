@@ -3,18 +3,15 @@
  * found in the LICENSE file.
  */
 
-#define DT_DRV_COMPAT cros_ec_keyscan
+#define DT_DRV_COMPAT cros_keyscan
+
+#include <assert.h>
+#include <zephyr/kernel.h>
+#include <soc.h>
 
 #include "keyboard_scan.h"
 
-#include <assert.h>
-
-#include <zephyr/kernel.h>
-
-#include <soc.h>
-
-BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
-	     "Exactly one instance of cros-ec,keyscan should be defined.");
+#if DT_NODE_EXISTS(DT_INST(0, cros_keyscan))
 
 /* The keyboard matrix should have at least enough columns for the
  * standard keyboard with no keypad.
@@ -34,3 +31,4 @@ __override struct keyboard_scan_config keyscan_config = {
 	.poll_timeout_us = DT_INST_PROP(0, poll_timeout),
 	.actual_key_mask = DT_INST_PROP(0, actual_key_mask),
 };
+#endif

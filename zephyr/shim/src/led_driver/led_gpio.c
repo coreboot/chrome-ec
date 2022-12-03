@@ -5,8 +5,6 @@
  * GPIO LED control.
  */
 
-#define DT_DRV_COMPAT cros_ec_gpio_led_pins
-
 #include "ec_commands.h"
 #include "led.h"
 #include "util.h"
@@ -15,21 +13,20 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(gpio_led, LOG_LEVEL_ERR);
+#if DT_HAS_COMPAT_STATUS_OKAY(COMPAT_GPIO_LED)
 
-BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
-	     "Exactly one instance of cros-ec,gpio-led-pins should be defined.");
+LOG_MODULE_REGISTER(gpio_led, LOG_LEVEL_ERR);
 
 #define SET_PIN(node_id, prop, i)                                     \
 	{ .signal = GPIO_SIGNAL(DT_PHANDLE_BY_IDX(node_id, prop, i)), \
-	  .val = DT_PROP_BY_IDX(node_id, led_values, i) },
+	  .val = DT_PHA_BY_IDX(node_id, prop, i, value) },
 
 #define SET_GPIO_PIN(node_id) \
 	{ DT_FOREACH_PROP_ELEM(node_id, led_pins, SET_PIN) };
 
 #define GEN_PINS_ARRAY(id) struct gpio_pin_t PINS_ARRAY(id)[] = SET_GPIO_PIN(id)
 
-DT_INST_FOREACH_CHILD(0, GEN_PINS_ARRAY)
+DT_FOREACH_CHILD(GPIO_LED_PINS_NODE, GEN_PINS_ARRAY)
 
 #define SET_PIN_NODE(node_id)                          \
 	{ .led_color = GET_PROP(node_id, led_color),   \
@@ -44,14 +41,14 @@ DT_INST_FOREACH_CHILD(0, GEN_PINS_ARRAY)
 #define GEN_PINS_NODES(id) \
 	const struct led_pins_node_t PINS_NODE(id) = SET_PIN_NODE(id)
 
-DT_INST_FOREACH_CHILD(0, GEN_PINS_NODES)
+DT_FOREACH_CHILD(GPIO_LED_PINS_NODE, GEN_PINS_NODES)
 
 /*
  * Array of pointers to each pin node
  */
 #define PINS_NODE_PTR(id) &PINS_NODE(id),
-const struct led_pins_node_t *pins_node[] = { DT_INST_FOREACH_CHILD(
-	0, PINS_NODE_PTR) };
+const struct led_pins_node_t *pins_node[] = { DT_FOREACH_CHILD(
+	GPIO_LED_PINS_NODE, PINS_NODE_PTR) };
 
 /*
  * Set all the GPIO pins defined in the node to the defined value,
@@ -141,3 +138,5 @@ const struct led_pins_node_t *led_get_node(enum led_color color,
 	return pin_node;
 }
 #endif /* TEST_BUILD */
+
+#endif /* DT_HAS_COMPAT_STATUS_OKAY(COMPAT_GPIO_LED) */

@@ -43,8 +43,7 @@ class LogWriter:
 
     # A local pipe use to signal the look that a new file descriptor was added and
     # should be included in the select statement.
-    _logging_interrupt_pipe = []
-
+    _logging_interrupt_pipe = os.pipe()
     # A condition variable used to synchronize logging operations.
     _logging_cv = threading.Condition()
     # A map of file descriptors to their LogWriter
@@ -55,14 +54,7 @@ class LogWriter:
     @classmethod
     def reset(cls):
         """Reset this module to its starting state (useful for tests)"""
-        with LogWriter._logging_cv:
-            LogWriter._logging_map.clear()
-            if len(LogWriter._logging_interrupt_pipe) > 1:
-                os.write(LogWriter._logging_interrupt_pipe[1], b"x")
-            else:
-                cls._logging_interrupt_pipe = os.pipe()
-            LogWriter._logging_thread = None
-            LogWriter._logging_cv.notify_all()
+        LogWriter._logging_map.clear()
 
     def __init__(
         self,
@@ -143,21 +135,20 @@ class LogWriter:
         removed from the map as it is no longer valid.
         """
         with LogWriter._logging_cv:
-            if file_descriptor in LogWriter._logging_map:
-                writer = LogWriter._logging_map[file_descriptor]
-                if file_descriptor.closed:
-                    del LogWriter._logging_map[file_descriptor]
-                    LogWriter._logging_cv.notify_all()
-                    return
-                line = file_descriptor.readline()
-                if not line:
-                    # EOF
-                    del LogWriter._logging_map[file_descriptor]
-                    LogWriter._logging_cv.notify_all()
-                    return
-                line = line.rstrip("\n")
-                if line:
-                    writer.log_line(line)
+            writer = LogWriter._logging_map[file_descriptor]
+            if file_descriptor.closed:
+                del LogWriter._logging_map[file_descriptor]
+                LogWriter._logging_cv.notify_all()
+                return
+            line = file_descriptor.readline()
+            if not line:
+                # EOF
+                del LogWriter._logging_map[file_descriptor]
+                LogWriter._logging_cv.notify_all()
+                return
+            line = line.rstrip("\n")
+            if line:
+                writer.log_line(line)
 
     @classmethod
     def _prune_logging_fds(cls):
@@ -304,9 +295,6 @@ class Executor:
         Args:
             func: A function which returns an int result code or throws an
              exception.
-
-        Returns:
-            A join function which will wait until this task is finished.
         """
         with self.lock:
             thread = threading.Thread(
@@ -314,7 +302,6 @@ class Executor:
             )
             thread.start()
             self.threads.append(thread)
-            return thread.join
 
     def wait(self):
         """Wait for a result to be available.

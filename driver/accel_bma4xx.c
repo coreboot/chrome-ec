@@ -9,18 +9,17 @@
  * Supported: BMA422
  */
 
-#include "accel_bma422.h"
 #include "accelgyro.h"
+#include "accel_bma422.h"
 #include "builtin/assert.h"
 #include "common.h"
 #include "console.h"
-#include "hwtimer.h"
 #include "i2c.h"
+#include "hwtimer.h"
 #include "math_util.h"
 #include "spi.h"
 #include "task.h"
 #include "util.h"
-
 #include <motion_sense_fifo.h>
 
 #ifdef CONFIG_ACCEL_BMA4XX_INT_EVENT

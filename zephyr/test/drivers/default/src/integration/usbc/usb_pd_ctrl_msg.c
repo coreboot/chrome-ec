@@ -3,6 +3,9 @@
  * found in the LICENSE file.
  */
 
+#include <stdint.h>
+#include <zephyr/ztest.h>
+
 #include "common.h"
 #include "ec_tasks.h"
 #include "emul/emul_isl923x.h"
@@ -13,10 +16,6 @@
 #include "test/drivers/utils.h"
 #include "test/usb_pe.h"
 #include "usb_pd.h"
-
-#include <stdint.h>
-
-#include <zephyr/ztest.h>
 
 #define TEST_USB_PORT 0
 BUILD_ASSERT(TEST_USB_PORT == USBC_PORT_C0);
@@ -60,13 +59,13 @@ tcpci_drp_emul_connect_partner(struct tcpci_partner_data *partner_emul,
 
 	tcpci_tcpc_alert(TEST_USB_PORT);
 
-	zassert_ok(tcpci_partner_connect_to_tcpci(partner_emul, tcpci_emul),
+	zassume_ok(tcpci_partner_connect_to_tcpci(partner_emul, tcpci_emul),
 		   NULL);
 }
 
 static void disconnect_partner(struct usb_pd_ctrl_msg_test_fixture *fixture)
 {
-	zassert_ok(tcpci_emul_disconnect_partner(fixture->tcpci_emul));
+	zassume_ok(tcpci_emul_disconnect_partner(fixture->tcpci_emul));
 	k_sleep(K_SECONDS(1));
 }
 

@@ -13,8 +13,8 @@
 #ifndef _DMA_CHIP_H
 #define _DMA_CHIP_H
 
-#include <stddef.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {

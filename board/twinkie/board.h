@@ -79,7 +79,8 @@ void trace_packets(void);
 void set_trace_mode(int mode);
 
 /* Timer selection */
-#define TIM_CLOCK32 2
+#define TIM_CLOCK_MSB 3
+#define TIM_CLOCK_LSB 15
 #define TIM_ADC 16
 
 #include "gpio_signal.h"

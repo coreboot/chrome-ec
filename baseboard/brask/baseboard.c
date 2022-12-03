@@ -5,6 +5,7 @@
 
 #include "common.h"
 #include "compile_time_macros.h"
+
 #include "gpio_signal.h"
 
 /* Wake up pins */

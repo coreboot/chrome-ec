@@ -5,6 +5,8 @@
  * Host commands for USB-PD module.
  */
 
+#include <string.h>
+
 #include "atomic.h"
 #include "battery.h"
 #include "charge_manager.h"
@@ -15,10 +17,8 @@
 #include "tcpm/tcpm.h"
 #include "usb_common.h"
 #include "usb_mux.h"
-#include "usb_pd.h"
 #include "usb_pd_tcpm.h"
-
-#include <string.h>
+#include "usb_pd.h"
 #ifdef CONFIG_COMMON_RUNTIME
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)

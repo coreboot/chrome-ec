@@ -38,6 +38,7 @@
 #define USB_EP_COUNT 2
 
 /* Optional features */
+#define CONFIG_STM_HWTIMER32
 
 #define CONFIG_ADC
 #define CONFIG_I2C

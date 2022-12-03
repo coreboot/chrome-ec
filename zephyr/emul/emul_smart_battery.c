@@ -3,23 +3,24 @@
  * found in the LICENSE file.
  */
 
-#include "battery_smart.h"
-#include "crc8.h"
-#include "emul/emul_common_i2c.h"
-#include "emul/emul_smart_battery.h"
-#include "emul/emul_stub_device.h"
+#define DT_DRV_COMPAT zephyr_smart_battery
+
+#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(smart_battery);
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
-#include <zephyr/logging/log.h>
 #include <zephyr/ztest.h>
 
-#define DT_DRV_COMPAT zephyr_smart_battery_emul
+#include "emul/emul_common_i2c.h"
+#include "emul/emul_smart_battery.h"
 
-#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
-LOG_MODULE_REGISTER(smart_battery);
+#include "crc8.h"
+#include "battery_smart.h"
+#include "emul/emul_stub_device.h"
 
 /** Run-time data used by the emulator */
 struct sbat_emul_data {
@@ -787,10 +788,8 @@ static int sbat_emul_access_reg(const struct emul *emul, int reg, int bytes,
 static int sbat_emul_init(const struct emul *emul, const struct device *parent)
 {
 	struct sbat_emul_data *data = emul->data;
-	const struct i2c_common_emul_cfg *cfg = emul->cfg;
 
 	data->common.i2c = parent;
-	data->common.cfg = cfg;
 
 	i2c_common_emul_init(&data->common);
 
@@ -902,14 +901,14 @@ static void emul_smart_battery_reset_capacity(const struct emul *emul)
 }
 
 #define SBAT_EMUL_RESET_RULE_AFTER(n) \
-	emul_smart_battery_reset_capacity(EMUL_DT_GET(DT_DRV_INST(n)));
+	emul_smart_battery_reset_capacity(EMUL_DT_GET(DT_DRV_INST(n)))
 
 static void emul_sbat_reset(const struct ztest_unit_test *test, void *data)
 {
 	ARG_UNUSED(test);
 	ARG_UNUSED(data);
 
-	DT_INST_FOREACH_STATUS_OKAY(SBAT_EMUL_RESET_RULE_AFTER)
+	DT_INST_FOREACH_STATUS_OKAY(SBAT_EMUL_RESET_RULE_AFTER);
 }
 
 ZTEST_RULE(emul_smart_battery_reset, NULL, emul_sbat_reset);

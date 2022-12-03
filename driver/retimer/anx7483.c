@@ -6,11 +6,11 @@
  */
 
 #include "anx7483.h"
+#include "retimer/anx7483_public.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
 #include "i2c.h"
-#include "retimer/anx7483_public.h"
 #include "timer.h"
 #include "usb_mux.h"
 #include "util.h"
@@ -342,34 +342,6 @@ enum ec_error_list anx7483_set_eq(const struct usb_mux *me,
 	RETURN_ERROR(anx7483_read(me, reg, &value));
 	value &= ~ANX7483_CFG0_EQ_MASK;
 	value |= eq << ANX7483_CFG0_EQ_SHIFT;
-
-	return anx7483_write(me, reg, value);
-}
-
-enum ec_error_list anx7483_set_fg(const struct usb_mux *me,
-				  enum anx7483_tune_pin pin,
-				  enum anx7483_fg_setting fg)
-{
-	int reg, value;
-
-	if (pin == ANX7483_PIN_UTX1)
-		reg = ANX7483_UTX1_PORT_CFG2_REG;
-	else if (pin == ANX7483_PIN_UTX2)
-		reg = ANX7483_UTX2_PORT_CFG2_REG;
-	else if (pin == ANX7483_PIN_URX1)
-		reg = ANX7483_URX1_PORT_CFG2_REG;
-	else if (pin == ANX7483_PIN_URX2)
-		reg = ANX7483_URX2_PORT_CFG2_REG;
-	else if (pin == ANX7483_PIN_DRX1)
-		reg = ANX7483_DRX1_PORT_CFG2_REG;
-	else if (pin == ANX7483_PIN_DRX2)
-		reg = ANX7483_DRX2_PORT_CFG2_REG;
-	else
-		return EC_ERROR_INVAL;
-
-	RETURN_ERROR(anx7483_read(me, reg, &value));
-	value &= ~ANX7483_CFG2_FG_MASK;
-	value |= fg << ANX7483_CFG2_FG_SHIFT;
 
 	return anx7483_write(me, reg, value);
 }

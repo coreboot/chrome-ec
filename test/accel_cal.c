@@ -3,11 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include "accel_cal.h"
 #include "common.h"
-#include "motion_sense.h"
+#include "accel_cal.h"
 #include "test_util.h"
-
+#include "motion_sense.h"
 #include <math.h>
 
 struct motion_sensor_t motion_sensors[] = {};

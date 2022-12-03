@@ -3,11 +3,11 @@
  * found in the LICENSE file.
  */
 
-#include "console.h"
-#include "test/drivers/test_state.h"
-
 #include <zephyr/shell/shell.h>
 #include <zephyr/ztest.h>
+
+#include "console.h"
+#include "test/drivers/test_state.h"
 
 ZTEST_SUITE(console_cmd_rw, drivers_predicate_post_main, NULL, NULL, NULL,
 	    NULL);
@@ -43,15 +43,15 @@ ZTEST_USER(console_cmd_rw, test_read)
 	uint8_t memory[] = { 0x01, 0x02, 0x03, 0x04 };
 	char cmd[128] = { 0 };
 
-	zassert_true(sprintf(cmd, "rw .b %" PRIuPTR, (uintptr_t)memory) != 0,
+	zassume_true(sprintf(cmd, "rw .b %" PRIuPTR, (uintptr_t)memory) != 0,
 		     NULL);
 	zassert_ok(shell_execute_cmd(get_ec_shell(), cmd), NULL);
 
-	zassert_true(sprintf(cmd, "rw .h %" PRIuPTR, (uintptr_t)memory) != 0,
+	zassume_true(sprintf(cmd, "rw .h %" PRIuPTR, (uintptr_t)memory) != 0,
 		     NULL);
 	zassert_ok(shell_execute_cmd(get_ec_shell(), cmd), NULL);
 
-	zassert_true(sprintf(cmd, "rw %" PRIuPTR, (uintptr_t)memory) != 0,
+	zassume_true(sprintf(cmd, "rw %" PRIuPTR, (uintptr_t)memory) != 0,
 		     NULL);
 	zassert_ok(shell_execute_cmd(get_ec_shell(), cmd), NULL);
 }
@@ -71,7 +71,7 @@ ZTEST_USER(console_cmd_rw, test_write)
 	uint8_t memory[4] = { 0 };
 	char cmd[128] = { 0 };
 
-	zassert_true(sprintf(cmd, "rw .b %" PRIuPTR " 1", (uintptr_t)memory) !=
+	zassume_true(sprintf(cmd, "rw .b %" PRIuPTR " 1", (uintptr_t)memory) !=
 			     0,
 		     NULL);
 	zassert_ok(shell_execute_cmd(get_ec_shell(), cmd), NULL);
@@ -81,7 +81,7 @@ ZTEST_USER(console_cmd_rw, test_write)
 	zassert_equal(0, memory[3], "memory[3] was %u", memory[3]);
 
 	memset(memory, 0, 4);
-	zassert_true(sprintf(cmd, "rw .h %" PRIuPTR " 258",
+	zassume_true(sprintf(cmd, "rw .h %" PRIuPTR " 258",
 			     (uintptr_t)memory) != 0,
 		     NULL);
 	zassert_ok(shell_execute_cmd(get_ec_shell(), cmd), NULL);
@@ -91,7 +91,7 @@ ZTEST_USER(console_cmd_rw, test_write)
 	zassert_equal(0, memory[3], "memory[3] was %u", memory[3]);
 
 	memset(memory, 0, 4);
-	zassert_true(sprintf(cmd, "rw %" PRIuPTR " 16909060",
+	zassume_true(sprintf(cmd, "rw %" PRIuPTR " 16909060",
 			     (uintptr_t)memory) != 0,
 		     NULL);
 	zassert_ok(shell_execute_cmd(get_ec_shell(), cmd), NULL);

@@ -6,9 +6,9 @@
 #ifndef ZEPHYR_FAKE_SYSTEM_FAKE_H
 #define ZEPHYR_FAKE_SYSTEM_FAKE_H
 
-#include "ec_commands.h"
-
 #include <setjmp.h>
+
+#include "ec_commands.h"
 
 /**
  * @brief Set the current image copy.

@@ -7,8 +7,8 @@ set(LINKER lld)
 set(BINTOOLS llvm)
 
 # Mapping of Zephyr architecture -> toolchain triple
-set(CROSS_COMPILE_TARGET_posix        x86_64-pc-linux-gnu)
-set(CROSS_COMPILE_TARGET_unit_testing x86_64-pc-linux-gnu)
+# Note only "posix" is supported at the moment.
+set(CROSS_COMPILE_TARGET_posix    x86_64-pc-linux-gnu)
 
 set(CROSS_COMPILE_TARGET          ${CROSS_COMPILE_TARGET_${ARCH}})
 

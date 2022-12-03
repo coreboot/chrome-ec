@@ -3,11 +3,11 @@
  * found in the LICENSE file.
  */
 
-#include "test/drivers/utils.h"
-#include "test_usbc_alt_mode.h"
-
 #include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
+
+#include "test/drivers/utils.h"
+#include "test_usbc_alt_mode.h"
 
 /* Tests that require CONFIG_PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY enabled */
 
@@ -97,9 +97,9 @@ ZTEST_F(usbc_alt_mode, verify_mode_exit_via_pd_host_cmd)
 	 * entering an alternate most (DisplayPort specifically) has already
 	 * been verified in another test
 	 */
-	zassert_equal(response_size, sizeof(get_mode_response));
-	zassert_equal(get_mode_response.svid, USB_SID_DISPLAYPORT);
-	zassert_equal(get_mode_response.vdo[0],
+	zassume_equal(response_size, sizeof(get_mode_response));
+	zassume_equal(get_mode_response.svid, USB_SID_DISPLAYPORT);
+	zassume_equal(get_mode_response.vdo[0],
 		      fixture->partner.modes_vdm[get_mode_response.opos]);
 
 	struct ec_params_usb_pd_set_mode_request set_mode_params = {

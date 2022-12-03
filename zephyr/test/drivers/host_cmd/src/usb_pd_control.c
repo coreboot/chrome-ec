@@ -3,6 +3,9 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
+
 #include "console.h"
 #include "ec_commands.h"
 #include "emul/emul_isl923x.h"
@@ -12,9 +15,6 @@
 #include "test/drivers/stubs.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
 
 #define TEST_PORT USBC_PORT_C0
 #define BAD_PORT 42
@@ -99,7 +99,7 @@ ZTEST_USER(host_cmd_usb_pd_control, test_bad_index)
 {
 	struct ec_response_usb_pd_control_v2 response;
 
-	zassert_true(board_get_usb_pd_port_count() < BAD_PORT,
+	zassume_true(board_get_usb_pd_port_count() < BAD_PORT,
 		     "Intended bad port exists");
 	zassert_equal(run_usb_pd_control(BAD_PORT, &response),
 		      EC_RES_INVALID_PARAM,
@@ -130,7 +130,7 @@ static void host_cmd_usb_pd_control_before(void *data)
 	ARG_UNUSED(data);
 
 	/* Assume we have at least one USB-C port */
-	zassert_true(board_get_usb_pd_port_count() > 0,
+	zassume_true(board_get_usb_pd_port_count() > 0,
 		     "Insufficient TCPCs found");
 
 	/* Set the system into S0, since the AP would drive these commands */

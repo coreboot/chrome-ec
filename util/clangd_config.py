@@ -32,7 +32,7 @@ def ec_fetch_boards(ec_root: Path) -> Optional[List[str]]:
 def zephyr_fetch_projects(ec_root: Path) -> Optional[List[str]]:
     """Return a list of Zephyr projects seen."""
 
-    base = str(ec_root) + "/zephyr/program/"
+    base = str(ec_root) + "/zephyr/projects/"
 
     boards = glob.glob(base + "*")
     if boards is None:

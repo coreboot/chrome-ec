@@ -6,16 +6,15 @@
 #ifndef __EXTRA_SIMULATION_H
 #define __EXTRA_SIMULATION_H
 
-#include "lb_common.h"
-#include "lightbar.h"
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-
 #include <unistd.h>
+
+#include "lb_common.h"
+#include "lightbar.h"
 
 /* Functions specific to our simulation environment */
 void *entry_windows(void *);

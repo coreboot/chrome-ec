@@ -18,7 +18,6 @@
 #define __CROS_EC_SHARED_MEM_H
 
 #include "common.h"
-
 #include <stddef.h>
 
 /**

@@ -10,11 +10,12 @@
  * If optimization is disabled, the test_optimization_working test will fail.
  */
 
+#include <string.h>
+
 #include "common.h"
-#include "cryptoc/util.h"
 #include "test_util.h"
 
-#include <string.h>
+#include "cryptoc/util.h"
 
 /* 256 bytes of stack is only safe enough for a memcpy. */
 #define EXTRA_STACK_SIZE 256

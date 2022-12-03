@@ -21,12 +21,7 @@ extern "C" {
 #ifdef CONFIG_DEBUG_ASSERT_REBOOTS
 
 #ifdef CONFIG_DEBUG_ASSERT_BRIEF
-#if defined(__cplusplus) && !defined(__clang__)
-[[noreturn]]
-#else
-noreturn
-#endif
-void panic_assert_fail(const char *fname, int linenum);
+noreturn void panic_assert_fail(const char *fname, int linenum);
 #define ASSERT(cond)                                           \
 	do {                                                   \
 		if (!(cond))                                   \
@@ -35,12 +30,7 @@ void panic_assert_fail(const char *fname, int linenum);
 
 #else /* !CONFIG_DEBUG_ASSERT_BRIEF */
 
-#if defined(__cplusplus) && !defined(__clang__)
-[[noreturn]]
-#else
-noreturn
-#endif
-void panic_assert_fail(const char *msg, const char *func,
+noreturn void panic_assert_fail(const char *msg, const char *func,
 				const char *fname, int linenum);
 #define ASSERT(cond)                                                 \
 	do {                                                         \

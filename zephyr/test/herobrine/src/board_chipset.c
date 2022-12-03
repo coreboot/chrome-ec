@@ -1,13 +1,13 @@
-/* Copyright 2022 The ChromiumOS Authors
+/* Copyright 2022 The ChromiumOS Authors.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-#include "board_chipset.h"
-#include "hooks.h"
-
 #include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
+
+#include "hooks.h"
+#include "board_chipset.h"
 
 static int battery_soc_abs_value = 50;
 

@@ -3,26 +3,24 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
+
 #include "common.h"
 #include "ec_tasks.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/tcpc/emul_tcpci.h"
 #include "hooks.h"
 #include "i2c.h"
-#include "tcpm/tcpci.h"
 #include "test/drivers/stubs.h"
 #include "test/drivers/tcpci_test_common.h"
+
+#include "tcpm/tcpci.h"
 #include "test/drivers/test_state.h"
 
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-
 #define TCPCI_EMUL_NODE DT_NODELABEL(tcpci_emul)
-
-/* Convenience pointer directly to the TCPCI mux under test */
-static struct usb_mux *tcpci_usb_mux;
 
 /** Test TCPCI init and vbus level */
 ZTEST(tcpci, test_generic_tcpci_init)
@@ -290,13 +288,13 @@ ZTEST(tcpci, test_generic_tcpci_debug_accessory)
 /* Setup TCPCI usb mux to behave as it is used only for usb mux */
 static void set_usb_mux_not_tcpc(void)
 {
-	tcpci_usb_mux->flags = USB_MUX_FLAG_NOT_TCPC;
+	usbc0_mux0.flags = USB_MUX_FLAG_NOT_TCPC;
 }
 
 /* Setup TCPCI usb mux to behave as it is used for usb mux and TCPC */
 static void set_usb_mux_tcpc(void)
 {
-	tcpci_usb_mux->flags = 0;
+	usbc0_mux0.flags = 0;
 }
 
 /** Test TCPCI mux init */
@@ -533,6 +531,7 @@ void validate_mux_read_write16(const struct usb_mux *tcpci_usb_mux)
 /** Test usb_mux read/write APIs */
 ZTEST(tcpci, test_usb_mux_read_write)
 {
+	struct usb_mux *tcpci_usb_mux = &usbc0_mux0;
 	const int flags_restore = tcpci_usb_mux->flags;
 
 	/* Configure mux read/writes for TCPC APIs */
@@ -552,8 +551,6 @@ static void *tcpci_setup(void)
 	__ASSERT(usb_muxes[USBC_PORT_C0].mux->driver ==
 			 &tcpci_tcpm_usb_mux_driver,
 		 "Invalid config of usb_muxes in test/drivers/src/stubs.c");
-
-	tcpci_usb_mux = (struct usb_mux *)usb_muxes[USBC_PORT_C0].mux;
 
 	return NULL;
 }

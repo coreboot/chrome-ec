@@ -3,15 +3,14 @@
  * found in the LICENSE file.
  */
 
-#include "host_task.h"
-#include "host_test.h"
-#include "timer.h"
-
+#include <execinfo.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <execinfo.h>
+#include "host_task.h"
+#include "host_test.h"
+#include "timer.h"
 
 #define SIGNAL_TRACE_DUMP SIGTERM
 #define MAX_TRACE 30
@@ -41,11 +40,6 @@ static void __attribute__((noinline)) _task_dump_trace_impl(int offset)
 	int i, nb;
 
 	sz = backtrace(trace, MAX_TRACE);
-	if (sz < offset) {
-		fprintf(stderr, "Can't print backtrace: %ld < %d\n", sz,
-			offset);
-		return;
-	}
 	messages = backtrace_symbols(trace + offset, sz - offset);
 
 	for (i = 0; i < sz - offset; ++i) {

@@ -3,9 +3,8 @@
  * found in the LICENSE file.
  */
 
-#include "driver/tcpm/ccgxxf.h"
-
 #include <zephyr/devicetree.h>
+#include "driver/tcpm/ccgxxf.h"
 
 #define CCGXXF_TCPC_COMPAT cypress_ccgxxf
 

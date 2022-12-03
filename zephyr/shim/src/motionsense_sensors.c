@@ -3,14 +3,13 @@
  * found in the LICENSE file.
  */
 
-#include "accelgyro.h"
-#include "common.h"
-#include "cros_cbi.h"
-#include "gpio/gpio_int.h"
-#include "hooks.h"
-#include "motionsense_sensors.h"
-
 #include <zephyr/logging/log.h>
+#include "common.h"
+#include "accelgyro.h"
+#include "cros_cbi.h"
+#include "hooks.h"
+#include "gpio/gpio_int.h"
+#include "motionsense_sensors.h"
 
 LOG_MODULE_REGISTER(shim_cros_motionsense_sensors);
 

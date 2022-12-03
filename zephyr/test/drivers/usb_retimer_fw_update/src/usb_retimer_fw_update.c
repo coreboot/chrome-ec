@@ -3,13 +3,13 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/ztest.h>
+
 #include "test/drivers/stubs.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
 #include "usb_common.h"
 #include "usb_pd.h"
-
-#include <zephyr/ztest.h>
 
 #define BB_RETIMER_NODE DT_NODELABEL(usb_c1_bb_retimer_emul)
 #define TEST_PORT USBC_PORT_C1
@@ -40,7 +40,7 @@ static void usb_retimer_fw_update_suspend_port(void)
 	/* Give PD task time to suspend port */
 	k_sleep(K_SECONDS(1));
 
-	zassert_true(acpi_read_and_verify() == 0,
+	zassume_true(acpi_read_and_verify() == 0,
 		     "Failed to see successful suspend");
 }
 
@@ -50,7 +50,7 @@ static void usb_retimer_fw_update_before(void *data)
 	ARG_UNUSED(data);
 
 	/* Assume our common setup of a BB retimer on C1 */
-	zassert_true(EMUL_DT_GET(BB_RETIMER_NODE) != NULL,
+	zassume_true(EMUL_DT_GET(BB_RETIMER_NODE) != NULL,
 		     "No BB retimer found on C1");
 
 	/* Set chipset to ON, since AP would drive this process */

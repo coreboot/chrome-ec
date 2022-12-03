@@ -10,7 +10,6 @@
 #include "online_calibration.h"
 #include "test_util.h"
 #include "timer.h"
-
 #include <stdio.h>
 
 int mkbp_send_event(uint8_t event_type)

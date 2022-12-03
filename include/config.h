@@ -221,12 +221,6 @@
 /* The threshold duration to change to off_body */
 #undef CONFIG_BODY_DETECTION_STATIONARY_DURATION
 
-/* Send the SCI event to notify host when body status change */
-#undef CONFIG_BODY_DETECTION_NOTIFY_MODE_CHANGE
-
-/* Always enable the body detection function in S0 */
-#undef CONFIG_BODY_DETECTION_ALWAYS_ENABLE_IN_S0
-
 /*
  * Use the old standard reference frame for accelerometers. The old
  * reference frame is:
@@ -1041,38 +1035,7 @@
  * this should be set to 512 mA in order to not brown-out low-current USB
  * charge ports in accordance with USB-PD r3.0 Sec. 7.3
  */
-#undef CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT
-
-/*
- * Minimum current limit that will ever be set for chargers, even if a lower
- * limit is requested. This will allow the charger to draw more power than
- * the requested limit.
- *
- * If set, this should usually be set to no more than 2.5W divided by the
- * maximum supported input voltage in order to satisfy USB-PD pSnkStdby
- * requirements. Higher values may help devices stay alive under low-battery
- * conditions at the cost of violating standby power limits.
- *
- * Many boards set this to large values, since historically this number was
- * usually equal to CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT. New boards should
- * avoid doing so if possible.
- */
-#undef CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT
-
-/*
- * Percentage derating factor applied to charger input current limits.
- *
- * Desired charger current is reduced by this many percent when programming
- * chargers via the charge manager, which is usually used to account for
- * chargers that draw slightly more current than the programmed limit or to
- * provide some margin for accuracy. For example, if this value is set to 4
- * and input current is limited to 1000 mA, the charger will be given a limit
- * of 960 mA.
- *
- * Boards requiring more complex control over input current should leave this
- * undefined and override board_set_charge_limit instead.
- */
-#undef CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT
+#undef CONFIG_CHARGER_INPUT_CURRENT
 
 /*
  * This config option is used to enable IDCHG trigger for prochot. This macro
@@ -1369,9 +1332,6 @@
  * the series sense resistor.
  */
 #undef CONFIG_OCPC_DEF_RBATT_MOHMS
-
-/* Set a default OCPC drive limit for legacy boards */
-#define CONFIG_OCPC_DEF_DRIVELIMIT_MILLIVOLTS 10
 
 /* Enable trickle charging */
 #undef CONFIG_TRICKLE_CHARGING
@@ -4038,6 +3998,9 @@
 /* Default stack size to use for tasks, in bytes */
 #undef CONFIG_STACK_SIZE
 
+/* Use 32-bit timer for clock source on stm32. */
+#undef CONFIG_STM_HWTIMER32
+
 /* Compile charger detect for STM32 */
 #undef CONFIG_STM32_CHARGER_DETECT
 
@@ -4511,12 +4474,10 @@
  * TYPEC_SM - Type-C deals with CC lines voltage level connections
  * PRL_SM - Protocol handles flow and chunking TX and RX messages
  * PE - Policy Engine handles PD communication flow
- * DPM - Device Policy Manager layer is used to determine port policy
  */
 #define CONFIG_USB_TYPEC_SM
 #define CONFIG_USB_PRL_SM
 #define CONFIG_USB_PE_SM
-#define CONFIG_USB_DPM_SM
 
 /* Enables PD Console commands */
 #define CONFIG_USB_PD_CONSOLE_CMD
@@ -6964,11 +6925,6 @@
 /* HAS_GPU_DRIVER enables D-Notify and throttling. */
 #if defined(CONFIG_GPU_NVIDIA)
 #define HAS_GPU_DRIVER
-#endif
-
-/* Default to 1024 for end of ram data (panic and jump data) */
-#ifndef CONFIG_PRESERVED_END_OF_RAM_SIZE
-#define CONFIG_PRESERVED_END_OF_RAM_SIZE 1024
 #endif
 
 #endif /* __CROS_EC_CONFIG_H */

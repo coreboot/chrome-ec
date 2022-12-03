@@ -3,9 +3,8 @@
  * found in the LICENSE file.
  */
 
-#include "gpio_signal.h"
-
 #include <zephyr/fff.h>
+#include "gpio_signal.h"
 
 FAKE_VOID_FUNC(power_button_interrupt, enum gpio_signal);
 FAKE_VOID_FUNC(button_interrupt, enum gpio_signal);

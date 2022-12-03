@@ -3,23 +3,22 @@
  * found in the LICENSE file.
  */
 
+#include <stdint.h>
+#include <zephyr/sys/byteorder.h>
+#include <zephyr/ztest.h>
+
 #include "battery_smart.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
 #include "emul/tcpc/emul_tcpci_partner_faulty_ext.h"
 #include "emul/tcpc/emul_tcpci_partner_snk.h"
 #include "tcpm/tcpci.h"
-#include "test/drivers/stubs.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-#include "timer.h"
+#include "test/drivers/stubs.h"
 #include "usb_pd.h"
 #include "usb_tc_sm.h"
-
-#include <stdint.h>
-
-#include <zephyr/sys/byteorder.h>
-#include <zephyr/ztest.h>
+#include "timer.h"
 
 /* USB-C port used to connect port partner in this testsuite */
 #define TEST_PORT 0

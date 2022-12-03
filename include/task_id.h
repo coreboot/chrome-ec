@@ -16,8 +16,6 @@
 #include "config.h"
 #include "task_filter.h"
 
-#include <stdint.h>
-
 /* define the name of the header containing the list of tasks */
 #define STRINGIFY0(name) #name
 #define STRINGIFY(name) STRINGIFY0(name)

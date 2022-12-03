@@ -3,6 +3,10 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/shell/shell.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/ztest.h>
+
 #include "console.h"
 #include "driver/accel_bma2x2.h"
 #include "ec_commands.h"
@@ -11,10 +15,6 @@
 #include "i2c.h"
 #include "motion_sense.h"
 #include "test/drivers/test_state.h"
-
-#include <zephyr/devicetree.h>
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
 
 #define EMUL_NODE DT_NODELABEL(bma_emul)
 

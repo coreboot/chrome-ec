@@ -3,13 +3,12 @@
  * found in the LICENSE file.
  */
 
-#include "console.h"
-#include "timer.h"
-
 #include <stdio.h>
-
 #include <zephyr/shell/shell.h>
 #include <zephyr/ztest.h>
+
+#include "console.h"
+#include "timer.h"
 
 static void test_int(int ms)
 {

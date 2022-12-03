@@ -29,6 +29,7 @@
 #define CONFIG_UART_CONSOLE 2
 
 /* Optional features */
+#define CONFIG_STM_HWTIMER32
 #define CONFIG_HW_CRC
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER

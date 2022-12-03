@@ -8,15 +8,16 @@
 #ifndef __CROS_EC_FPSENSOR_STATE_H
 #define __CROS_EC_FPSENSOR_STATE_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "atomic.h"
 #include "common.h"
-#include "driver/fingerprint/fpsensor.h"
 #include "ec_commands.h"
 #include "link_defs.h"
 #include "timer.h"
 
-#include <stdbool.h>
-#include <stdint.h>
+#include "driver/fingerprint/fpsensor.h"
 
 /* if no special memory regions are defined, fallback on regular SRAM */
 #ifndef FP_FRAME_SECTION

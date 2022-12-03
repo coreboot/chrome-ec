@@ -416,7 +416,6 @@ extern "C" {
 /*
  * Report device orientation
  *  Bits       Definition
- *  4          Off Body/On Body status: 0 = Off Body.
  *  3:1        Device DPTF Profile Number (DDPN)
  *               0   = Reserved for backward compatibility (indicates no valid
  *                     profile number. Host should fall back to using TBMD).
@@ -429,8 +428,6 @@ extern "C" {
 #define EC_ACPI_MEM_TBMD_MASK 0x1
 #define EC_ACPI_MEM_DDPN_SHIFT 1
 #define EC_ACPI_MEM_DDPN_MASK 0x7
-#define EC_ACPI_MEM_STTB_SHIFT 4
-#define EC_ACPI_MEM_STTB_MASK 0x1
 
 /*
  * Report device features. Uses the same format as the host command, except:
@@ -755,7 +752,6 @@ enum host_event_code {
 	 *
 	 * - TABLET/LAPTOP mode
 	 * - detachable base attach/detach event
-	 * - on body/off body transition event
 	 */
 	EC_HOST_EVENT_MODE_CHANGE = 29,
 
@@ -1735,9 +1731,6 @@ struct ec_params_flash_read {
  * struct ec_params_flash_write - Parameters for the flash write command.
  * @offset: Byte offset to write.
  * @size: Size to write in bytes.
- * @data: Data to write.
- * @data.words32: uint32_t data to write.
- * @data.bytes: uint8_t data to write.
  */
 struct ec_params_flash_write {
 	uint32_t offset;
@@ -2840,8 +2833,8 @@ struct ec_motion_sense_activity {
 	uint8_t activity; /* one of enum motionsensor_activity */
 	uint8_t enable; /* 1: enable, 0: disable */
 	uint8_t reserved;
-	uint16_t parameters[4]; /* activity dependent parameters */
-} __ec_todo_packed;
+	uint16_t parameters[3]; /* activity dependent parameters */
+} __ec_todo_unpacked;
 
 /* Module flag masks used for the dump sub-command. */
 #define MOTIONSENSE_MODULE_FLAG_ACTIVE BIT(0)
@@ -3307,22 +3300,6 @@ struct ec_params_usb_charge_set_mode {
 	uint8_t usb_port_id;
 	uint8_t mode : 7; /* enum usb_charge_mode */
 	uint8_t inhibit_charge : 1; /* enum usb_suspend_charge */
-} __ec_align1;
-
-/*****************************************************************************/
-/* Tablet mode commands */
-
-/* Set tablet mode */
-#define EC_CMD_SET_TABLET_MODE 0x0031
-
-enum tablet_mode_override {
-	TABLET_MODE_DEFAULT,
-	TABLET_MODE_FORCE_TABLET,
-	TABLET_MODE_FORCE_CLAMSHELL,
-};
-
-struct ec_params_set_tablet_mode {
-	uint8_t tablet_mode; /* enum tablet_mode_override */
 } __ec_align1;
 
 /*****************************************************************************/
@@ -6739,7 +6716,6 @@ struct ec_response_regulator_get_voltage {
 enum typec_partner_type {
 	TYPEC_PARTNER_SOP = 0,
 	TYPEC_PARTNER_SOP_PRIME = 1,
-	TYPEC_PARTNER_SOP_PRIME_PRIME = 2,
 };
 
 struct ec_params_typec_discovery {
@@ -6771,7 +6747,6 @@ enum typec_control_command {
 	TYPEC_CONTROL_COMMAND_TBT_UFP_REPLY,
 	TYPEC_CONTROL_COMMAND_USB_MUX_SET,
 	TYPEC_CONTROL_COMMAND_BIST_SHARE_MODE,
-	TYPEC_CONTROL_COMMAND_SEND_VDM_REQ,
 };
 
 /* Modes (USB or alternate) that a type-C port may enter. */
@@ -6797,17 +6772,6 @@ struct typec_usb_mux_set {
 	uint8_t mux_flags;
 } __ec_align1;
 
-#define VDO_MAX_SIZE 7
-
-struct typec_vdm_req {
-	/* VDM data, including VDM header */
-	uint32_t vdm_data[VDO_MAX_SIZE];
-	/* Number of 32-bit fields filled in */
-	uint8_t vdm_data_objects;
-	/* Partner to address - see enum typec_partner_type */
-	uint8_t partner_type;
-} __ec_align1;
-
 struct ec_params_typec_control {
 	uint8_t port;
 	uint8_t command; /* enum typec_control_command */
@@ -6829,8 +6793,6 @@ struct ec_params_typec_control {
 		struct typec_usb_mux_set mux_params;
 		/* Used for BIST_SHARE_MODE */
 		uint8_t bist_share_mode;
-		/* Used for VMD_REQ */
-		struct typec_vdm_req vdm_req_params;
 		uint8_t placeholder[128];
 	};
 } __ec_align1;

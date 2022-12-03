@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/ztest.h>
 #include "ec_commands.h"
 #include "gpio.h"
 #include "include/power.h"
@@ -10,8 +11,6 @@
 #include "led_common.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-
-#include <zephyr/ztest.h>
 
 #define VERIFY_LED_COLOR(color, led_id)                                    \
 	{                                                                  \

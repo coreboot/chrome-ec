@@ -5,6 +5,9 @@
  * Fuzz host command.
  */
 
+#include <pthread.h>
+#include <sys/time.h>
+
 #include "builtin/assert.h"
 #include "common.h"
 #include "console.h"
@@ -15,9 +18,6 @@
 #include "test_util.h"
 #include "timer.h"
 #include "util.h"
-
-#include <pthread.h>
-#include <sys/time.h>
 
 /* Only test requests with valid size and checksum (makes fuzzing faster) */
 #define VALID_REQUEST_ONLY

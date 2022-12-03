@@ -342,6 +342,18 @@ uint16_t tcpc_get_alert_status(void)
 	return status;
 }
 
+void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
+			    int charge_mv)
+{
+	int icl = MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT);
+
+	/*
+	 * TODO(b/151955431): Characterize the input current limit in case a
+	 * scaling needs to be applied here
+	 */
+	charge_set_input_current_limit(icl, charge_mv);
+}
+
 int board_set_active_charge_port(int port)
 {
 	int is_valid_port = (port >= 0 && port < board_get_usb_pd_port_count());

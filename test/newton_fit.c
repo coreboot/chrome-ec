@@ -4,10 +4,9 @@
  */
 
 #include "common.h"
-#include "motion_sense.h"
 #include "newton_fit.h"
+#include "motion_sense.h"
 #include "test_util.h"
-
 #include <stdio.h>
 
 /*

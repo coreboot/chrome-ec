@@ -3,8 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include "usb_pd.h"
+#include <zephyr/devicetree.h>
+#include <zephyr/sys/util.h>
 #include "usb_pd_tcpm.h"
+#include "usb_pd.h"
 #include "usbc/tcpc_anx7447.h"
 #include "usbc/tcpc_anx7447_emul.h"
 #include "usbc/tcpc_ccgxxf.h"
@@ -14,13 +16,9 @@
 #include "usbc/tcpc_nct38xx.h"
 #include "usbc/tcpc_ps8xxx.h"
 #include "usbc/tcpc_ps8xxx_emul.h"
-#include "usbc/tcpc_raa489000.h"
 #include "usbc/tcpc_rt1718s.h"
 #include "usbc/tcpci.h"
 #include "usbc/utils.h"
-
-#include <zephyr/devicetree.h>
-#include <zephyr/sys/util.h>
 
 #define HAS_TCPC_PROP(usbc_id) \
 	COND_CODE_1(DT_NODE_HAS_PROP(usbc_id, tcpc), (|| 1), ())
@@ -59,8 +57,6 @@
 	CHECK_COMPAT(PS8XXX_COMPAT, usbc_id, tcpc_id, TCPC_CONFIG_PS8XXX)      \
 	CHECK_COMPAT(NCT38XX_TCPC_COMPAT, usbc_id, tcpc_id,                    \
 		     TCPC_CONFIG_NCT38XX)                                      \
-	CHECK_COMPAT(RAA489000_TCPC_COMPAT, usbc_id, tcpc_id,                  \
-		     TCPC_CONFIG_RAA489000)                                    \
 	CHECK_COMPAT(RT1718S_TCPC_COMPAT, usbc_id, tcpc_id,                    \
 		     TCPC_CONFIG_RT1718S)                                      \
 	CHECK_COMPAT(TCPCI_COMPAT, usbc_id, tcpc_id, TCPC_CONFIG_TCPCI)        \

@@ -11,10 +11,10 @@
 #include "host_command.h"
 #include "host_command_heci.h"
 #include "hwtimer.h"
+#include "timer.h"
 #include "link_defs.h"
 #include "mkbp_event.h"
 #include "power.h"
-#include "timer.h"
 #include "util.h"
 
 #define CPUTS(outstr) cputs(CC_COMMAND, outstr)
@@ -586,12 +586,5 @@ void mkbp_event_clear_all(void)
 
 	/* Reset the interrupt line */
 	mkbp_set_host_active(0, NULL);
-#ifdef CONFIG_MKBP_EVENT_WAKEUP_MASK
-	mkbp_event_wake_mask = CONFIG_MKBP_EVENT_WAKEUP_MASK;
-#endif /* CONFIG_MKBP_EVENT_WAKEUP_MASK */
-
-#ifdef CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK
-	mkbp_host_event_wake_mask = CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK;
-#endif /* CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK */
 }
 #endif

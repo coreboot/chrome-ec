@@ -6,14 +6,6 @@
 # Cortex-M0 core OS files build
 #
 
-# When set to 1, exclusively use builtins from compiler-rt.
-# When set to 0, use EC's builtins.
-USE_LLVM_COMPILER_RT:=0
-
-ifeq ($(USE_LLVM_COMPILER_RT),1)
-CFLAGS_CPU+=-DUSE_LLVM_COMPILER_RT
-endif
-
 # CPU specific compilation flags
 CFLAGS_CPU+=-mthumb
 ifeq ($(cc-name),clang)
@@ -32,12 +24,14 @@ LDFLAGS_EXTRA+=-flto
 endif
 
 core-y=cpu.o debug.o init.o thumb_case.o mula.o
-ifeq ($(USE_LLVM_COMPILER_RT),0)
+# When using clang, we get these as builtins from compiler-rt.
+ifneq ($(cc-name),clang)
 core-y+=div.o lmul.o ldivmod.o uldivmod.o
 endif
 
 core-y+=vecttable.o
-ifeq ($(USE_LLVM_COMPILER_RT),0)
+# When using clang, we get these as builtins from compiler-rt.
+ifneq ($(cc-name),clang)
 core-y+=__builtin.o
 endif
 core-$(CONFIG_COMMON_PANIC_OUTPUT)+=panic.o

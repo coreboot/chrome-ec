@@ -7,7 +7,6 @@
 
 #include "battery_fuel_gauge.h"
 #include "battery_smart.h"
-#include "builtin/assert.h"
 #include "console.h"
 #include "hooks.h"
 #include "i2c.h"
@@ -23,8 +22,7 @@
  * a device name has been specified in the board_battery_info table,
  * then both the manufacturer and device name must match.
  */
-test_export_static bool authenticate_battery_type(int index,
-						  const char *manuf_name)
+static bool authenticate_battery_type(int index, char *manuf_name)
 {
 	char device_name[32];
 
@@ -86,22 +84,12 @@ void battery_set_fixed_battery_type(int type)
 }
 #endif /* CONFIG_BATTERY_TYPE_NO_AUTO_DETECT */
 
-/**
- * Allows us to override the battery in order to select the battery which has
- * the right configuration for the test.
- */
-test_export_static int battery_fuel_gauge_type_override = -1;
-
 /* Get type of the battery connected on the board */
 static int get_battery_type(void)
 {
 	char manuf_name[32];
 	int i;
 	static enum battery_type battery_type = BATTERY_TYPE_COUNT;
-
-	if (IS_ENABLED(TEST_BUILD) && battery_fuel_gauge_type_override >= 0) {
-		return battery_fuel_gauge_type_override;
-	}
 
 	/*
 	 * If battery_type is not the default value, then can return here
@@ -249,12 +237,17 @@ enum ec_error_list battery_sleep_fuel_gauge(void)
 	return sb_write(sleep_command->reg_addr, sleep_command->reg_data);
 }
 
-static enum ec_error_list battery_get_fet_status_regval(int type, int *regval)
+static enum ec_error_list battery_get_fet_status_regval(int *regval)
 {
 	int rv;
 	uint8_t data[6];
+	int type = get_battery_type();
 
-	ASSERT(type < BATTERY_TYPE_COUNT);
+	/* If battery type is not known, can't check CHG/DCHG FETs */
+	if (type == BATTERY_TYPE_COUNT) {
+		/* Still don't know, so return here */
+		return EC_ERROR_BUSY;
+	}
 
 	/* Read the status of charge/discharge FETs */
 	if (board_battery_info[type].fuel_gauge.fet.mfgacc_support == 1) {
@@ -277,7 +270,7 @@ int battery_is_charge_fet_disabled(void)
 	int type = get_battery_type();
 
 	/* If battery type is not known, can't check CHG/DCHG FETs */
-	if (type >= BATTERY_TYPE_COUNT) {
+	if (type == BATTERY_TYPE_COUNT) {
 		/* Still don't know, so return here */
 		return -1;
 	}
@@ -288,7 +281,7 @@ int battery_is_charge_fet_disabled(void)
 	if (!board_battery_info[type].fuel_gauge.fet.cfet_mask)
 		return 0;
 
-	rv = battery_get_fet_status_regval(type, &reg);
+	rv = battery_get_fet_status_regval(&reg);
 	if (rv)
 		return -1;
 
@@ -314,12 +307,12 @@ enum battery_disconnect_state battery_get_disconnect_state(void)
 	int type = get_battery_type();
 
 	/* If battery type is not known, can't check CHG/DCHG FETs */
-	if (type >= BATTERY_TYPE_COUNT) {
+	if (type == BATTERY_TYPE_COUNT) {
 		/* Still don't know, so return here */
 		return BATTERY_DISCONNECT_ERROR;
 	}
 
-	if (battery_get_fet_status_regval(type, &reg))
+	if (battery_get_fet_status_regval(&reg))
 		return BATTERY_DISCONNECT_ERROR;
 
 	if ((reg & board_battery_info[type].fuel_gauge.fet.reg_mask) ==

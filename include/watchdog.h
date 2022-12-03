@@ -8,9 +8,9 @@
 #ifndef __CROS_EC_WATCHDOG_H
 #define __CROS_EC_WATCHDOG_H
 
-#include "config.h"
-
 #include <stdint.h>
+
+#include "config.h"
 
 /**
  * Initialize the watchdog.

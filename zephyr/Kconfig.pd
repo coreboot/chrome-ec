@@ -161,15 +161,11 @@ menuconfig PLATFORM_EC_USB_PD_DPS
 	default n
 	select HAS_TASK_DPS
 	help
-	  Enable this to permit dynamic PDO selection (DPS). DPS can select different
-	  USB PDOs depending on system load and battery configuration to select input
-	  characteristics (particularly voltage) that allow the system to operate more
-	  efficiently.
-
-	  This should not be enabled without evaluating charger efficiency against
-	  input voltage and overriding `dps_config` as necessary to accurately reflect
-	  actual platform behavior: untuned behavior is likely to be worse than
-	  leaving DPS disabled.
+	  Enable this if the board needs dynamic PDO selection.
+	  DPS picks a power efficient PDO regarding to the underlying battery
+	  configuration and the system loading.
+	  Default configuration can be overridden by `dps_config` to adapt
+	  to each board's need.
 
 config PLATFORM_EC_USB_PD_DUAL_ROLE_AUTO_TOGGLE
 	bool "Board can use TCPC-controlled DRP toggle"
@@ -307,15 +303,6 @@ config PLATFORM_EC_USB_PE_SM
 	  deals with the actually PD messages that are exchanged with attached
 	  USB devices. You should normally define this unless you want to
 	  override it in your board code, which is not recommended.
-
-config PLATFORM_EC_USB_DPM_SM
-	bool "Device Policy Manager (DPM) state machine"
-	default y
-	help
-	  This enables the device policy manager portion of the power-delivery
-	  (PD), protocol which is used to define port policy decision.  You
-	  should normally define this unless you want to override it in your
-	  board code, which is not recommended.
 
 config PLATFORM_EC_USB_PD_DECODE_SOP
 	def_bool y  # Required for TCPMV2

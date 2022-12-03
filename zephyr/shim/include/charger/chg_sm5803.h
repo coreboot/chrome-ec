@@ -3,9 +3,8 @@
  * found in the LICENSE file.
  */
 
-#include "driver/charger/sm5803.h"
-
 #include <zephyr/devicetree.h>
+#include "driver/charger/sm5803.h"
 
 #define SM5803_CHG_COMPAT siliconmitus_sm5803
 

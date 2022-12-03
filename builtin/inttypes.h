@@ -6,8 +6,6 @@
 #ifndef __CROS_EC_INTTYPES_H__
 #define __CROS_EC_INTTYPES_H__
 
-#include <stdint.h>
-
 #define PRIx64 "llx"
 #define PRId64 "lld"
 

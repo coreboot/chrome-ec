@@ -9,9 +9,9 @@
 #include "battery_smart.h"
 #include "builtin/assert.h"
 #include "charge_manager.h"
+#include "charger_profile_override.h"
 #include "charge_state.h"
 #include "charger.h"
-#include "charger_profile_override.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
@@ -1382,7 +1382,7 @@ struct charge_state_data *charge_get_status(void)
 }
 
 /* Determine if the battery is outside of allowable temperature range */
-int battery_outside_charging_temperature(void)
+static int battery_outside_charging_temperature(void)
 {
 	const struct battery_info *batt_info = battery_get_info();
 	int batt_temp_c = DECI_KELVIN_TO_CELSIUS(curr.batt.temperature);
@@ -1507,9 +1507,9 @@ static int get_desired_input_current(enum battery_present batt_present,
 		int ilim = charge_manager_get_charger_current();
 		return ilim == CHARGE_CURRENT_UNINITIALIZED ?
 			       CHARGE_CURRENT_UNINITIALIZED :
-			       MAX(CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT, ilim);
+			       MAX(CONFIG_CHARGER_INPUT_CURRENT, ilim);
 #else
-		return CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT;
+		return CONFIG_CHARGER_INPUT_CURRENT;
 #endif
 	} else {
 #ifdef CONFIG_USB_POWER_DELIVERY
@@ -2082,15 +2082,14 @@ int charge_want_shutdown(void)
 	       (curr.batt.state_of_charge < battery_level_shutdown);
 }
 
-#ifdef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
-test_export_static int charge_prevent_power_on_automatic_power_on = 1;
-#endif
-
-bool charge_prevent_power_on(bool power_button_pressed)
+int charge_prevent_power_on(int power_button_pressed)
 {
 	int prevent_power_on = 0;
 	struct batt_params params;
 	struct batt_params *current_batt_params = &curr.batt;
+#ifdef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
+	static int automatic_power_on = 1;
+#endif
 
 	/* If battery params seem uninitialized then retrieve them */
 	if (current_batt_params->is_present == BP_NOT_SURE) {
@@ -2105,7 +2104,7 @@ bool charge_prevent_power_on(bool power_button_pressed)
 	 * power-ups are user-requested and non-automatic.
 	 */
 	if (power_button_pressed)
-		charge_prevent_power_on_automatic_power_on = 0;
+		automatic_power_on = 0;
 	/*
 	 * Require a minimum battery level to power on and ensure that the
 	 * battery can provide power to the system.
@@ -2151,13 +2150,12 @@ bool charge_prevent_power_on(bool power_button_pressed)
 	 * except when auto-power-on at EC startup and the battery
 	 * is physically present.
 	 */
-	prevent_power_on &= (system_is_locked() ||
-			     (charge_prevent_power_on_automatic_power_on
+	prevent_power_on &=
+		(system_is_locked() || (automatic_power_on
 #ifdef CONFIG_BATTERY_HW_PRESENT_CUSTOM
-
-			      && battery_hw_present() == BP_YES
+					&& battery_hw_present() == BP_YES
 #endif
-			      ));
+					));
 #endif /* CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON */
 
 #ifdef CONFIG_CHARGE_MANAGER
@@ -2191,7 +2189,7 @@ bool charge_prevent_power_on(bool power_button_pressed)
 		prevent_power_on = 1;
 #endif /* CONFIG_SYSTEM_UNLOCKED */
 
-	return prevent_power_on != 0;
+	return prevent_power_on;
 }
 
 static int battery_near_full(void)
@@ -2329,18 +2327,6 @@ int charge_set_output_current_limit(int chgnum, int ma, int mv)
 int charge_set_input_current_limit(int ma, int mv)
 {
 	__maybe_unused int chgnum = 0;
-
-#ifdef CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT
-	if (CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT != 0) {
-		ma = (ma * (100 - CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT)) /
-		     100;
-	}
-#endif
-#ifdef CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT
-	if (CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT > 0) {
-		ma = MAX(ma, CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT);
-	}
-#endif
 
 	if (IS_ENABLED(CONFIG_OCPC))
 		chgnum = charge_get_active_chg_chip();

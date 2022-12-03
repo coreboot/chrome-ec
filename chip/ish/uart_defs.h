@@ -8,10 +8,9 @@
 #ifndef __CROS_EC_UART_DEFS_H_
 #define __CROS_EC_UART_DEFS_H_
 
-#include "atomic.h"
-
-#include <stddef.h>
 #include <stdint.h>
+#include <stddef.h>
+#include "atomic.h"
 
 #define UART_ERROR -1
 #define UART_BUSY -2

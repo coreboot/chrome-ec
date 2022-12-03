@@ -3,6 +3,11 @@
  * found in the LICENSE file.
  */
 
+#include <string.h>
+#include <zephyr/fff.h>
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
+
 #include "ec_commands.h"
 #include "gpio.h"
 #include "host_command.h"
@@ -10,12 +15,6 @@
 #include "test/drivers/test_mocks.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
-
-#include <string.h>
-
-#include <zephyr/fff.h>
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
 
 #define PORT 0
 
@@ -215,7 +214,7 @@ ZTEST_USER(espi, test_host_command_gpio_set)
 		BUILD_HOST_COMMAND_PARAMS(EC_CMD_GPIO_SET, 0, p);
 
 	/* Force value to 1 to see change */
-	zassert_ok(gpio_pin_set_dt(gp, 1), NULL);
+	zassume_ok(gpio_pin_set_dt(gp, 1), NULL);
 
 	zassert_ok(host_command_process(&args), NULL);
 	zassert_equal(gpio_pin_get_dt(gp), p.val, NULL);

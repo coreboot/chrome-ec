@@ -5,9 +5,10 @@
 
 /* Chipset interface APIs */
 
+#include "common.h"
+
 #include "ap_power/ap_power_interface.h"
 #include "chipset_state_check.h"
-#include "common.h"
 
 int chipset_in_state(int state_mask)
 {

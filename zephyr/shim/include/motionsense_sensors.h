@@ -6,9 +6,8 @@
 #ifndef __CROS_EC_MOTIONSENSE_SENSORS_H
 #define __CROS_EC_MOTIONSENSE_SENSORS_H
 
-#include "motion_sense.h"
-
 #include <zephyr/devicetree.h>
+#include "motion_sense.h"
 
 extern struct motion_sensor_t motion_sensors_alt[];
 

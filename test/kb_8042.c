@@ -5,6 +5,7 @@
  * Tests for keyboard MKBP protocol
  */
 
+#include <stdbool.h>
 #include "atkbd_protocol.h"
 #include "common.h"
 #include "console.h"
@@ -22,8 +23,6 @@
 #include "test_util.h"
 #include "timer.h"
 #include "util.h"
-
-#include <stdbool.h>
 
 static const char *action[2] = { "release", "press" };
 
@@ -262,7 +261,6 @@ static int _read_cmd_byte(uint8_t *cmd)
 void before_test(void)
 {
 	/* Make sure all tests start with the controller in the same state */
-	keyboard_clear_buffer();
 	_write_cmd_byte(I8042_XLATE | I8042_AUX_DIS | I8042_KBD_DIS);
 }
 
@@ -276,7 +274,7 @@ void after_test(void)
 	}
 }
 
-test_static int test_8042_aux_loopback(void)
+static int test_8042_aux_loopback(void)
 {
 	/* Disable all IRQs */
 	WRITE_CMD_BYTE(0);
@@ -295,7 +293,7 @@ test_static int test_8042_aux_loopback(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_8042_aux_two_way_communication(void)
+static int test_8042_aux_two_way_communication(void)
 {
 	/* Enable AUX IRQ */
 	WRITE_CMD_BYTE(I8042_ENIRQ12);
@@ -313,7 +311,7 @@ test_static int test_8042_aux_two_way_communication(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_8042_aux_inhibit(void)
+static int test_8042_aux_inhibit(void)
 {
 	/* Enable AUX IRQ, but inhibit the AUX device from sending data. */
 	WRITE_CMD_BYTE(I8042_ENIRQ12 | I8042_AUX_DIS);
@@ -341,7 +339,7 @@ test_static int test_8042_aux_inhibit(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_8042_aux_controller_commands(void)
+static int test_8042_aux_controller_commands(void)
 {
 	uint8_t ctrl;
 
@@ -361,7 +359,7 @@ test_static int test_8042_aux_controller_commands(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_8042_aux_test_command(void)
+static int test_8042_aux_test_command(void)
 {
 	i8042_write_cmd(I8042_TEST_MOUSE);
 
@@ -370,7 +368,7 @@ test_static int test_8042_aux_test_command(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_8042_self_test(void)
+static int test_8042_self_test(void)
 {
 	i8042_write_cmd(I8042_RESET_SELF_TEST);
 	VERIFY_LPC_CHAR("\x55");
@@ -378,7 +376,7 @@ test_static int test_8042_self_test(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_8042_keyboard_test_command(void)
+static int test_8042_keyboard_test_command(void)
 {
 	i8042_write_cmd(I8042_TEST_KB_PORT);
 	VERIFY_LPC_CHAR("\x00"); /* Data and Clock are not stuck */
@@ -386,7 +384,7 @@ test_static int test_8042_keyboard_test_command(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_8042_keyboard_controller_commands(void)
+static int test_8042_keyboard_controller_commands(void)
 {
 	uint8_t ctrl;
 
@@ -406,7 +404,7 @@ test_static int test_8042_keyboard_controller_commands(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_8042_keyboard_key_pressed_while_inhibited(void)
+static int test_8042_keyboard_key_pressed_while_inhibited(void)
 {
 	ENABLE_KEYSTROKE(1);
 
@@ -442,8 +440,7 @@ test_static int test_8042_keyboard_key_pressed_while_inhibited(void)
 	return EC_SUCCESS;
 }
 
-test_static int
-test_8042_keyboard_key_pressed_before_inhibit_using_cmd_byte(void)
+static int test_8042_keyboard_key_pressed_before_inhibit_using_cmd_byte(void)
 {
 	ENABLE_KEYSTROKE(1);
 	/* Simulate a keypress on the keyboard */
@@ -475,7 +472,7 @@ test_8042_keyboard_key_pressed_before_inhibit_using_cmd_byte(void)
 	return EC_SUCCESS;
 }
 
-test_static int
+static int
 test_8042_keyboard_key_pressed_before_inhibit_using_cmd_byte_with_read(void)
 {
 	uint8_t cmd;
@@ -527,7 +524,7 @@ test_8042_keyboard_key_pressed_before_inhibit_using_cmd_byte_with_read(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_8042_keyboard_key_pressed_before_inhibit_using_cmd(void)
+static int test_8042_keyboard_key_pressed_before_inhibit_using_cmd(void)
 {
 	ENABLE_KEYSTROKE(1);
 	/* Simulate a keypress on the keyboard */
@@ -559,7 +556,7 @@ test_static int test_8042_keyboard_key_pressed_before_inhibit_using_cmd(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_single_key_press(void)
+static int test_single_key_press(void)
 {
 	ENABLE_KEYSTROKE(1);
 	press_key(1, 1, 1);
@@ -575,7 +572,7 @@ test_static int test_single_key_press(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_disable_keystroke(void)
+static int test_disable_keystroke(void)
 {
 	ENABLE_KEYSTROKE(0);
 	press_key(1, 1, 1);
@@ -586,7 +583,7 @@ test_static int test_disable_keystroke(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_typematic(void)
+static int test_typematic(void)
 {
 	ENABLE_KEYSTROKE(1);
 
@@ -613,7 +610,7 @@ test_static int test_typematic(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_atkbd_get_scancode(void)
+static int test_atkbd_get_scancode(void)
 {
 	SET_SCANCODE(1);
 
@@ -638,7 +635,7 @@ test_static int test_atkbd_get_scancode(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_atkbd_set_scancode_with_keystroke_disabled(void)
+static int test_atkbd_set_scancode_with_keystroke_disabled(void)
 {
 	ENABLE_KEYSTROKE(0);
 
@@ -650,7 +647,7 @@ test_static int test_atkbd_set_scancode_with_keystroke_disabled(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_atkbd_set_scancode_with_key_press_before_set(void)
+static int test_atkbd_set_scancode_with_key_press_before_set(void)
 {
 	ENABLE_KEYSTROKE(0);
 	ENABLE_KEYSTROKE(1);
@@ -663,17 +660,26 @@ test_static int test_atkbd_set_scancode_with_key_press_before_set(void)
 	 * ATKBD_CMD_SSCANSET should cause the keyboard to stop scanning, flush
 	 * the keyboards output queue, and reset the typematic key.
 	 */
-	i8042_write_data(ATKBD_CMD_SSCANSET);
-	VERIFY_ATKBD_ACK();
+	keyboard_host_write(ATKBD_CMD_SSCANSET, 0);
+	/* Read out the scan code that got pushed into the output buffer before
+	 * the command was sent.
+	 */
+	VERIFY_LPC_CHAR("\x01");
 
 	/*
 	 * FIXME: This is wrong. The keyboard's output queue should have been
 	 * flushed when it received the `ATKBD_CMD_SSCANSET` command.
 	 */
-	VERIFY_LPC_CHAR("\x01\x81");
+	VERIFY_LPC_CHAR("\x81");
+
+	/* This is the ACK for `ATKBD_CMD_SSCANSET`. */
+	VERIFY_ATKBD_ACK();
+
+	/* The keyboard has flushed the buffer so no more keys. */
+	VERIFY_NO_CHAR();
 
 	/* Finish setting scan code 1 */
-	i8042_write_data(1);
+	keyboard_host_write(1, 0);
 	VERIFY_ATKBD_ACK();
 
 	/* Key scanning should be restored. */
@@ -684,7 +690,7 @@ test_static int test_atkbd_set_scancode_with_key_press_before_set(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_atkbd_set_scancode_with_key_press_during_set(void)
+static int test_atkbd_set_scancode_with_key_press_during_set(void)
 {
 	ENABLE_KEYSTROKE(1);
 
@@ -692,7 +698,7 @@ test_static int test_atkbd_set_scancode_with_key_press_during_set(void)
 	 * ATKBD_CMD_SSCANSET should cause the keyboard to stop scanning, flush
 	 * the keyboards output queue, and reset the typematic key.
 	 */
-	i8042_write_data(ATKBD_CMD_SSCANSET);
+	keyboard_host_write(ATKBD_CMD_SSCANSET, 0);
 	VERIFY_ATKBD_ACK();
 
 	/* These keypresses should be dropped. */
@@ -705,7 +711,7 @@ test_static int test_atkbd_set_scancode_with_key_press_during_set(void)
 	VERIFY_LPC_CHAR("\x01\x81");
 
 	/* Finish setting scan code 1 */
-	i8042_write_data(1);
+	keyboard_host_write(1, 0);
 	VERIFY_ATKBD_ACK();
 
 	/* Key scanning should be restored. */
@@ -716,7 +722,7 @@ test_static int test_atkbd_set_scancode_with_key_press_during_set(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_atkbd_echo(void)
+static int test_atkbd_echo(void)
 {
 	i8042_write_data(ATKBD_CMD_DIAG_ECHO);
 	VERIFY_ATKBD_ACK();
@@ -726,7 +732,7 @@ test_static int test_atkbd_echo(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_atkbd_get_id(void)
+static int test_atkbd_get_id(void)
 {
 	i8042_write_data(ATKBD_CMD_GETID);
 	VERIFY_ATKBD_ACK();
@@ -741,10 +747,8 @@ test_static int test_atkbd_get_id(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_atkbd_set_leds_keypress_during(void)
+static int test_atkbd_set_leds_keypress_during(void)
 {
-	ENABLE_KEYSTROKE(1);
-
 	/* This should pause scanning. */
 	i8042_write_data(ATKBD_CMD_SETLEDS);
 	VERIFY_ATKBD_ACK();
@@ -752,20 +756,16 @@ test_static int test_atkbd_set_leds_keypress_during(void)
 	/* Simulate keypress while keyboard is waiting for option byte */
 	press_key(1, 1, 1);
 	press_key(1, 1, 0);
-
-	/* Scancode is kept in queue during SETLEDS. */
-	VERIFY_NO_CHAR();
+	/* FIXME: This is wrong, we shouldn't have any key strokes */
+	VERIFY_LPC_CHAR("\x01\x81");
 
 	i8042_write_data(0x01);
 	VERIFY_ATKBD_ACK();
 
-	/* Scancode previously queued should be sent now. */
-	VERIFY_LPC_CHAR("\x01\x81");
-
 	return EC_SUCCESS;
 }
 
-test_static int test_atkbd_set_leds_abort_set(void)
+static int test_atkbd_set_leds_abort_set(void)
 {
 	i8042_write_data(ATKBD_CMD_SETLEDS);
 	VERIFY_ATKBD_ACK();
@@ -785,7 +785,7 @@ test_static int test_atkbd_set_leds_abort_set(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_atkbd_set_ex_leds(void)
+static int test_atkbd_set_ex_leds(void)
 {
 	i8042_write_data(ATKBD_CMD_EX_SETLEDS);
 	VERIFY_ATKBD_ACK();
@@ -801,10 +801,9 @@ test_static int test_atkbd_set_ex_leds(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_scancode_set2(void)
+static int test_scancode_set2(void)
 {
 	SET_SCANCODE(2);
-	ENABLE_KEYSTROKE(1);
 
 	WRITE_CMD_BYTE(READ_CMD_BYTE() | I8042_XLATE);
 	press_key(1, 1, 1);
@@ -821,7 +820,7 @@ test_static int test_scancode_set2(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_power_button(void)
+static int test_power_button(void)
 {
 	ENABLE_KEYSTROKE(0);
 
@@ -858,7 +857,7 @@ test_static int test_power_button(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_sysjump(void)
+static int test_sysjump(void)
 {
 	SET_SCANCODE(2);
 	ENABLE_KEYSTROKE(1);
@@ -869,17 +868,15 @@ test_static int test_sysjump(void)
 	return EC_ERROR_UNKNOWN;
 }
 
-test_static int test_sysjump_cont(void)
+static int test_sysjump_cont(void)
 {
 	WRITE_CMD_BYTE(READ_CMD_BYTE() | I8042_XLATE);
-
 	press_key(1, 1, 1);
 	VERIFY_LPC_CHAR("\x01");
 	press_key(1, 1, 0);
 	VERIFY_LPC_CHAR("\x81");
 
 	WRITE_CMD_BYTE(READ_CMD_BYTE() & ~I8042_XLATE);
-
 	press_key(1, 1, 1);
 	VERIFY_LPC_CHAR("\x76");
 	press_key(1, 1, 0);
@@ -888,7 +885,7 @@ test_static int test_sysjump_cont(void)
 	return EC_SUCCESS;
 }
 
-test_static const struct ec_response_keybd_config keybd_config = {
+static const struct ec_response_keybd_config keybd_config = {
 	.num_top_row_keys = 13,
 	.action_keys = {
 		TK_BACK,		/* T1 */
@@ -913,7 +910,7 @@ board_vivaldi_keybd_config(void)
 	return &keybd_config;
 }
 
-test_static int test_ec_cmd_get_keybd_config(void)
+static int test_ec_cmd_get_keybd_config(void)
 {
 	struct ec_response_keybd_config resp;
 	int rv;
@@ -934,25 +931,22 @@ test_static int test_ec_cmd_get_keybd_config(void)
 	return EC_SUCCESS;
 }
 
-test_static int test_vivaldi_top_keys(void)
+static int test_vivaldi_top_keys(void)
 {
 	SET_SCANCODE(2);
 
 	/* Test REFRESH key */
 	WRITE_CMD_BYTE(READ_CMD_BYTE() | I8042_XLATE);
-
 	press_key(2, 3, 1); /* Press T2 */
 	VERIFY_LPC_CHAR("\xe0\x67"); /* Check REFRESH scancode in set-1 */
 
 	/* Test SNAPSHOT key */
 	WRITE_CMD_BYTE(READ_CMD_BYTE() | I8042_XLATE);
-
 	press_key(4, 3, 1); /* Press T2 */
 	VERIFY_LPC_CHAR("\xe0\x13"); /* Check SNAPSHOT scancode in set-1 */
 
 	/* Test VOL_UP key */
 	WRITE_CMD_BYTE(READ_CMD_BYTE() | I8042_XLATE);
-
 	press_key(5, 3, 1); /* Press T2 */
 	VERIFY_LPC_CHAR("\xe0\x30"); /* Check VOL_UP scancode in set-1 */
 

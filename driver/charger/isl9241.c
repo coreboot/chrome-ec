@@ -11,11 +11,11 @@
 #endif
 #include "battery.h"
 #include "battery_smart.h"
+#include "charger.h"
 #include "charge_manager.h"
 #include "charge_state.h"
-#include "charger.h"
-#include "common.h"
 #include "console.h"
+#include "common.h"
 #include "hooks.h"
 #include "i2c.h"
 #include "isl9241.h"
@@ -893,8 +893,8 @@ static void isl9241_init(int chgnum)
 		return;
 
 	/* Initialize the input current limit to the board's default. */
-	if (isl9241_set_input_current_limit(
-		    chgnum, CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT))
+	if (isl9241_set_input_current_limit(chgnum,
+					    CONFIG_CHARGER_INPUT_CURRENT))
 		goto init_fail;
 
 	return;

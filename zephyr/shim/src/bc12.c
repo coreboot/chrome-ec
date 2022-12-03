@@ -3,15 +3,14 @@
  * found in the LICENSE file.
  */
 
-#include "usb_charge.h"
+#include <zephyr/devicetree.h>
 #include "usbc/bc12_pi3usb9201.h"
 #include "usbc/bc12_rt1718s.h"
 #include "usbc/bc12_rt1739.h"
 #include "usbc/bc12_rt9490.h"
 #include "usbc/tcpc_rt1718s.h"
 #include "usbc/utils.h"
-
-#include <zephyr/devicetree.h>
+#include "usb_charge.h"
 
 #if DT_HAS_COMPAT_STATUS_OKAY(RT1718S_BC12_COMPAT) ||    \
 	DT_HAS_COMPAT_STATUS_OKAY(RT1739_BC12_COMPAT) || \

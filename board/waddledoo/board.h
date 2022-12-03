@@ -18,12 +18,10 @@
 #define CONFIG_SYSTEM_UNLOCKED
 
 /* Save some flash space */
-#undef CONFIG_ACCEL_SPOOF_MODE
 #define CONFIG_CHIP_INIT_ROM_REGION
 #undef CONFIG_CONSOLE_CMDHELP
-#undef CONFIG_CONSOLE_HISTORY
 #define CONFIG_DEBUG_ASSERT_BRIEF
-#define CONFIG_USB_PD_DEBUG_LEVEL 0
+#define CONFIG_USB_PD_DEBUG_LEVEL 2
 
 /* EC console commands */
 #define CONFIG_CMD_CHARGER_DUMP
@@ -43,11 +41,6 @@
 #define CONFIG_OCPC_DEF_RBATT_MOHMS               \
 	22 /* R_DS(on) 11.6mOhm + 10mOhm sns rstr \
 	    */
-/*
- * b/147463641: The charger IC seems to overdraw ~4%, therefore we
- * reduce our target accordingly.
- */
-#define CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT 4
 #define CONFIG_OCPC
 #undef CONFIG_CHARGER_SINGLE_CHIP
 #undef CONFIG_USB_PD_TCPC_LPM_EXIT_DEBOUNCE

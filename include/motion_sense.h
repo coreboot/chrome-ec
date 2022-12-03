@@ -283,12 +283,6 @@ int sensor_init_done(struct motion_sensor_t *sensor);
 void sensor_board_proc_double_tap(void);
 
 /**
- * Board specific function to double check lid angle calculation is possible.
- *
- */
-int sensor_board_is_lid_angle_available(void);
-
-/**
  * Commit the data in a sensor's raw_xyz vector. This operation might have
  * different meanings depending on the CONFIG_ACCEL_FIFO flag.
  *
@@ -359,9 +353,5 @@ ec_motion_sensor_fill_values(struct ec_response_motion_sensor_data *dst,
 	dst->data[1] = v[1];
 	dst->data[2] = v[2];
 }
-
-#ifdef CONFIG_ZTEST
-enum sensor_config motion_sense_get_ec_config(void);
-#endif
 
 #endif /* __CROS_EC_MOTION_SENSE_H */

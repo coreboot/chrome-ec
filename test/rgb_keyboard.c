@@ -4,6 +4,8 @@
  *
  * Tests for RGB keyboard.
  */
+#include <stdio.h>
+
 #include "common.h"
 #include "console.h"
 #include "keyboard_backlight.h"
@@ -12,8 +14,6 @@
 #include "test_util.h"
 #include "timer.h"
 #include "util.h"
-
-#include <stdio.h>
 
 #define RGB_GRID0_COL 11
 #define RGB_GRID0_ROW 6

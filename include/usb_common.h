@@ -6,7 +6,6 @@
 #define __CROS_EC_USB_COMMON_H
 
 /* Functions that are shared between old and new PD stacks */
-#include "ec_commands.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 

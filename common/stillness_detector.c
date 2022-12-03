@@ -6,7 +6,6 @@
 #include "common.h"
 #include "stillness_detector.h"
 #include "timer.h"
-
 #include <string.h>
 
 static void still_det_reset(struct still_det *still_det)

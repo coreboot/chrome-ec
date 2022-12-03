@@ -5,16 +5,20 @@
 
 #define DT_DRV_COMPAT pericom_pi3usb9201
 
+#include <zephyr/devicetree.h>
 #include "bc12/pi3usb9201_public.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
-#include "i2c/i2c.h"
 #include "task.h"
 #include "usb_charge.h"
 #include "usb_pd.h"
 #include "usbc/utils.h"
+#include "i2c/i2c.h"
 
-#include <zephyr/devicetree.h>
+#if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
+
+BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) > 0,
+	     "No compatible BC1.2 instance found");
 
 #define USBC_PORT_BC12(usbc_id, bc12_id)                \
 	[USBC_PORT_NEW(usbc_id)] = {                    \
@@ -52,3 +56,5 @@ void usb1_evt(enum gpio_signal signal)
 	usb_charger_task_set_event(1, USB_CHG_EVENT_BC12);
 }
 #endif
+
+#endif /* DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT) */

@@ -3,19 +3,18 @@
  * found in the LICENSE file.
  */
 
+#include <stdint.h>
+#include <string.h>
+#include <zephyr/kernel.h>
+#include <zephyr/shell/shell_dummy.h>
+#include <zephyr/ztest_assert.h>
+#include <zephyr/ztest.h>
+
 #include "console.h"
 #include "gpio.h"
 #include "host_command.h"
 #include "test/drivers/test_state.h"
 #include "usb_charge.h"
-
-#include <stdint.h>
-#include <string.h>
-
-#include <zephyr/kernel.h>
-#include <zephyr/shell/shell_dummy.h>
-#include <zephyr/ztest.h>
-#include <zephyr/ztest_assert.h>
 
 /* Expecting at least one port */
 BUILD_ASSERT(ARRAY_SIZE(usb_port_enable) >= 1);
@@ -142,7 +141,7 @@ static void reset(void *data)
 	ARG_UNUSED(data);
 
 	/* Turn the port off */
-	zassert_ok(usb_charge_set_mode(PORT_ID, USB_CHARGE_MODE_DISABLED,
+	zassume_ok(usb_charge_set_mode(PORT_ID, USB_CHARGE_MODE_DISABLED,
 				       USB_DISALLOW_SUSPEND_CHARGE),
 		   NULL);
 }

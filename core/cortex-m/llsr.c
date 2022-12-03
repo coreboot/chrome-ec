@@ -5,10 +5,9 @@
 
 /* Enable the use of right shift for uint64_t. */
 
-#include <stdint.h>
-
-#include <compile_time_macros.h>
 #include <console.h>
+#include <compile_time_macros.h>
+#include <stdint.h>
 
 union words {
 	uint64_t u64;

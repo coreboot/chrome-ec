@@ -5,8 +5,8 @@
  * Tests SHA256 implementation.
  */
 
-#include "common.h"
 #include "console.h"
+#include "common.h"
 #include "sha256.h"
 #include "test_util.h"
 #include "util.h"

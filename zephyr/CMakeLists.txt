@@ -182,8 +182,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_LSM6DSM
                                                 "${PLATFORM_EC}/driver/accelgyro_lsm6dsm.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_FIFO
                                                 "${PLATFORM_EC}/common/motion_sense_fifo.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BODY_DETECTION
-                                                "${PLATFORM_EC}/common/body_detection.c")
 zephyr_library_sources_ifdef(CONFIG_ADC
                                                 "${PLATFORM_EC}/common/adc.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_TCS3400
@@ -246,9 +244,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CPS8100
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_OCPC
                                                 "${PLATFORM_EC}/common/ocpc.c")
 
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_EEPROM
                                                 "${PLATFORM_EC}/common/cbi.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_GPIO
+                                                "${PLATFORM_EC}/common/cbi.c"
                                                 "${PLATFORM_EC}/common/cbi_gpio.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_MEM
                                                 "${PLATFORM_EC}/common/memory_commands.c")
@@ -363,9 +362,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7180
                                                 "${PLATFORM_EC}/power/qcom.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7280
                                                 "${PLATFORM_EC}/power/qcom.c")
-if (CONFIG_PLATFORM_EC_HIBERNATE AND CONFIG_AP_PWRSEQ)
-	zephyr_library_sources(			"${PLATFORM_EC}/power/hibernate.c")
-endif ()
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PANIC
                                                 "${PLATFORM_EC}/common/panic_output.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SHA256_SW
