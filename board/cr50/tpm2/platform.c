@@ -8,7 +8,7 @@
 
 #include "ccd_config.h"
 #include "console.h"
-#include "pinweaver.h"
+#include "pinweaver_cr50.h"
 #include "tpm_nvmem.h"
 #include "tpm_nvmem_ops.h"
 #include "dcrypto.h"

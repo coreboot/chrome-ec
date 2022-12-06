@@ -15,8 +15,8 @@
 #include "fuzz/pinweaver_fuzz.pb.h"
 #include "fuzz/mem_hash_tree.h"
 #include "fuzz/span.h"
-#include "include/pinweaver.h"
-#include "include/pinweaver_types.h"
+#include "include/pinweaver_cr50.h"
+#include "include/pinweaver_cr50_types.h"
 
 // Provides enough state tracking to send valid PinWeaver requests. This is
 // necessary because of the authentication dependent fields used by the Merkle
