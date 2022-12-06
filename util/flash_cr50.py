@@ -29,8 +29,8 @@ import time
 
 import serial
 
-from chromite.lib import cros_build_lib
-
+# No GSC updaters take anywhere close to 2 minutes to run.
+CMD_TIMEOUT = 120
 CR50_FIRMWARE_BASE = '/opt/google/cr50/firmware/cr50.bin.'
 UPDATERS = [ 'gsctool', 'cr50-rescue', 'brescue' ]
 RELEASE_PATHS = {
@@ -88,22 +88,15 @@ def run_command(cmd, check_error=True):
     Raises:
         The command error if the command fails and check_error is True.
     """
-    try:
-        result = cros_build_lib.run(cmd,
-                                    check=check_error,
-                                    print_cmd=True,
-                                    capture_output=True,
-                                    encoding='utf-8',
-                                    stderr=subprocess.STDOUT,
-                                    debug_level=logging.DEBUG,
-                                    log_output=True)
-    except cros_build_lib.RunCommandError as cmd_error:
-        if check_error:
-            raise
-        # OSErrors are handled differently. They're raised even if check is
-        # False. Return the errno and message for OS errors.
-        return cmd_error.exception.errno, cmd_error.msg
-    return result.returncode, result.stdout.strip()
+    result = subprocess.run(cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            encoding='utf-8',
+                            timeout=CMD_TIMEOUT,
+                            check=check_error)
+    msg = result.stdout or ''
+    logging.debug('%r result %d:\n%s', ' '.join(cmd), result.returncode, msg)
+    return result.returncode, msg.strip()
 
 
 class Cr50Image(object):
@@ -639,7 +632,7 @@ class Cr50RescueUpdater(FlashCr50):
     PACKAGE = 'cr50-utils'
     DEFAULT_UPDATER = '/usr/bin/cr50-rescue'
 
-    WAIT_FOR_UPDATE = 120
+    WAIT_FOR_UPDATE = CMD_TIMEOUT
     RESCUE_RESET_DELAY = 5
 
     def __init__(self, cmd, port, reset_type):
@@ -711,8 +704,7 @@ class Cr50RescueUpdater(FlashCr50):
         pty = self._servo.get_raw_cr50_pty()
 
         rescue_cmd = self._get_rescue_cmd(pty)
-        logging.info('Starting cr50-rescue: %s',
-                     cros_build_lib.CmdToStr(rescue_cmd))
+        logging.info('Starting cr50-rescue: %s', ' '.join(rescue_cmd))
 
         self._rescue_process = subprocess.Popen(rescue_cmd)
         self._rescue_process.communicate()
