@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include <pinweaver.h>
+#include <pinweaver_cr50.h>
 
 #include <dcrypto.h>
 #include <nvmem_vars.h>
@@ -11,7 +11,7 @@
 #include <string.h>
 #include <timer.h>
 #include <util.h>
-#include <pinweaver_types.h>
+#include <pinweaver_cr50_types.h>
 
 #include "test_util.h"
 

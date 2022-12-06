@@ -11,7 +11,7 @@
  * of src/platform/ec.
  */
 #include <common.h>
-#include <pinweaver_types.h>
+#include <pinweaver_cr50_types.h>
 
 #ifdef __cplusplus
 extern "C" {

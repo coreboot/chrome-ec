@@ -23,7 +23,7 @@
 #include "fuzz/span.h"
 #include "include/nvmem.h"
 #include "include/nvmem_vars.h"
-#include "include/pinweaver.h"
+#include "include/pinweaver_cr50.h"
 
 using protobuf_mutator::libfuzzer::LoadProtoInput;
 

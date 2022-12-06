@@ -10,9 +10,9 @@
 #include <extension.h>
 #include <hooks.h>
 #include <nvmem_vars.h>
-#include <pinweaver.h>
+#include <pinweaver_cr50.h>
 #include <pinweaver_tpm_imports.h>
-#include <pinweaver_types.h>
+#include <pinweaver_cr50_types.h>
 #include <timer.h>
 #include <tpm_vendor_cmds.h>
 #include <tpm_registers.h>
