@@ -219,6 +219,21 @@ $(out)/rma_key_from_blob.h: board/$(BOARD)/$(BLOB_FILE) util/bin2h.sh
 
 endif
 
+# Build platform/pinweaver.
+ifeq ($(CONFIG_PLATFORM_PINWEAVER),y)
+PINWEAVERLIB := $(realpath ../pinweaver)
+CPPFLAGS += -I$(PINWEAVERLIB) -I$(PINWEAVERLIB)/eal/cr50
+CPPFLAGS += -D BIOMETRICS_DEV=false
+
+common-y += pinweaver.o
+common-y += pinweaver_eal.o
+
+$(out)/RW/common/pinweaver_eal.o: $(PINWEAVERLIB)/eal/cr50/pinweaver_eal.c
+	$(call quiet,c_to_o,CC     )
+$(out)/RW/common/pinweaver.o: $(PINWEAVERLIB)/pinweaver.c
+	$(call quiet,c_to_o,CC     )
+endif
+
 # Build and link against libcryptoc.
 ifeq ($(CONFIG_LIBCRYPTOC),y)
 CRYPTOCLIB := $(realpath ../../third_party/cryptoc)

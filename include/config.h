@@ -2635,7 +2635,10 @@
  * A feature which exchanges a low entropy secret with rate limits for a high
  * entropy secret. This enables a set of vendor specific commands for Cr50.
  */
+/* Use Cr50 pinweaver */
 #undef CONFIG_PINWEAVER
+/* Use platform/pinweaver */
+#undef CONFIG_PLATFORM_PINWEAVER
 
 /*****************************************************************************/
 /* PMU config */
