@@ -32,6 +32,7 @@ import serial
 from chromite.lib import cros_build_lib
 
 CR50_FIRMWARE_BASE = '/opt/google/cr50/firmware/cr50.bin.'
+UPDATERS = [ 'gsctool', 'cr50-rescue', 'brescue' ]
 RELEASE_PATHS = {
     'prepvt': CR50_FIRMWARE_BASE + 'prepvt',
     'prod': CR50_FIRMWARE_BASE + 'prod',
@@ -660,6 +661,7 @@ class Cr50RescueUpdater(FlashCr50):
         self._rescue_thread = None
         self._rescue_process = None
         self._cr50_reset = self.get_cr50_reset(reset_type)
+        self._image = ''
 
     def get_cr50_reset(self, reset_type):
         """Get the cr50 reset object for the given reset_type.
@@ -682,23 +684,33 @@ class Cr50RescueUpdater(FlashCr50):
             return PCHDisableReset(self._servo, reset_type)
         return ManualReset(self._servo, reset_type)
 
+    def _set_updater_image(self, image):
+        """Returns the rw hex image"""
+        if run_command(['grep', '-q', 'cr50', image.get_bin()], False)[0]:
+            raise Error("%r unsupported 'brescue' to update ti50" % self.NAME)
+        self._image = image.get_rw_hex()
+
+    def _get_rescue_cmd(self, pty):
+        """Return the cr50-rescue command."""
+        return [self._updater, '-v', '-i', self._image, '-d', pty]
+
     def update(self, image):
         """Use cr50-rescue to update cr50 then cleanup.
 
         Args:
             image: Cr50Image object.
         """
-        update_file = image.get_rw_hex()
+        self._set_updater_image(image)
         try:
-            self.run_update(update_file)
+            self._run_update()
         finally:
-            self.restore_state()
+            self._restore_state()
 
-    def start_rescue_process(self, update_file):
+    def start_rescue_process(self):
         """Run cr50-rescue in a process, so it can be killed it if it hangs."""
         pty = self._servo.get_raw_cr50_pty()
 
-        rescue_cmd = [self._updater, '-v', '-i', update_file, '-d', pty]
+        rescue_cmd = self._get_rescue_cmd(pty)
         logging.info('Starting cr50-rescue: %s',
                      cros_build_lib.CmdToStr(rescue_cmd))
 
@@ -706,19 +718,18 @@ class Cr50RescueUpdater(FlashCr50):
         self._rescue_process.communicate()
         logging.info('Rescue Finished')
 
-    def start_rescue_thread(self, update_file):
+    def _start_rescue_thread(self):
         """Start cr50-rescue."""
-        self._rescue_thread = threading.Thread(target=self.start_rescue_process,
-                                               args=[update_file])
+        self._rescue_thread = threading.Thread(target=self.start_rescue_process)
         self._rescue_thread.start()
 
-    def run_update(self, update_file):
+    def _run_update(self):
         """Run the Update"""
         # Enter reset before starting rescue, so any extra cr50 messages won't
         # interfere with cr50-rescue.
         self._cr50_reset.enter_reset()
 
-        self.start_rescue_thread(update_file)
+        self._start_rescue_thread()
 
         time.sleep(self.RESCUE_RESET_DELAY)
         # Resume from cr50 reset.
@@ -728,14 +739,14 @@ class Cr50RescueUpdater(FlashCr50):
 
         logging.info('cr50_version:%s', self._servo.get_cr50_version())
 
-    def restore_state(self):
+    def _restore_state(self):
         """Try to get the device out of reset and restore all controls"""
         try:
             self._cr50_reset.cleanup()
         finally:
-            self.cleanup_rescue_thread()
+            self._cleanup_rescue_thread()
 
-    def cleanup_rescue_thread(self):
+    def _cleanup_rescue_thread(self):
         """Cleanup the rescue process and handle any errors."""
         if not self._rescue_thread:
             return
@@ -752,6 +763,40 @@ class Cr50RescueUpdater(FlashCr50):
             logging.info('returncode: %s', self._rescue_process.returncode)
             raise Error('cr50-rescue failed (%d)' %
                         self._rescue_process.returncode)
+
+
+class BrescueUpdater(Cr50RescueUpdater):
+    """Use brescue.sh to update gsc over uart."""
+
+    NAME = 'brescue'
+    BRESCUE_SCRIPT = 'brescue.sh'
+
+    def __init__(self, cmd, port, reset_type):
+        """Initialize brescue updater.
+
+        Args:
+            cmd: The cr50-rescue command.
+            port: The servo port of the device being updated.
+            reset_type: A string (one of SUPPORTED_RESETS) that describes how
+                        to reset Cr50 during cr50-rescue.
+        """
+        # Make sure cr50-rescue exists, since brescue relies on it.
+        super(BrescueUpdater, self).__init__('cr50-rescue', port, reset_type)
+        if cmd != self.NAME:
+            self._updater = cmd
+        else:
+            script_dir = os.path.dirname(os.path.realpath(__file__))
+            self._updater = os.path.join(script_dir, self.BRESCUE_SCRIPT)
+        if not os.path.exists(self._updater):
+            raise Error('%s does not exist' % self._updater)
+
+    def _set_updater_image(self, image):
+        """brescue converts the image into a hex file."""
+        self._image = image.get_bin()
+
+    def _get_rescue_cmd(self, pty):
+        """Return the brescue command."""
+        return [self._updater, self._image, pty]
 
 
 def parse_args(argv):
@@ -774,9 +819,8 @@ def parse_args(argv):
                         choices=RELEASE_PATHS.keys(),
                         help='Type of cr50 release. Use instead of the image '
                         'arg.')
-    parser.add_argument('-c', '--updater-cmd', type=str, default='gsctool',
-                        help='Tool to update cr50. Either gsctool or '
-                        'cr50-rescue')
+    parser.add_argument('-c', '--updater-cmd', type=str, default=UPDATERS[0],
+                        help='Tool to update cr50. Supply a %r path' % UPDATERS)
     parser.add_argument('-s', '--serial', type=str, default='',
                         help='serial number to pass to gsctool.')
     parser.add_argument('-p', '--port', type=str, default='',
@@ -795,6 +839,8 @@ def parse_args(argv):
 
 def get_updater(opts):
     """Get the updater object."""
+    if 'brescue' in opts.updater_cmd:
+        return BrescueUpdater(opts.updater_cmd, opts.port, opts.reset_type)
     if 'cr50-rescue' in opts.updater_cmd:
         return Cr50RescueUpdater(opts.updater_cmd, opts.port, opts.reset_type)
     if 'gsctool' in opts.updater_cmd:
