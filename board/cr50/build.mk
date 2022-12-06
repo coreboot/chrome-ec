@@ -185,6 +185,7 @@ board-y += tpm2/virtual_nvmem.o
 board-y += tpm_nvmem_ops.o
 board-y += wp.o
 board-$(CONFIG_PINWEAVER)+=pinweaver_tpm_imports.o
+board-$(CONFIG_PLATFORM_PINWEAVER)+=pinweaver_tpm_imports.o
 
 TPM2_MODULE := linkedtpm2.cp.o
 board-y += $(TPM2_MODULE)
