@@ -8,17 +8,18 @@
 #ifndef __CROS_EC_BENCHMARK_H
 #define __CROS_EC_BENCHMARK_H
 
-#include <array>
-#include <optional>
-#include <functional>
 #include <stdint.h>
+
+#include <array>
+#include <functional>
+#include <optional>
 #include <string_view>
 
 extern "C" {
+#include "clock.h"
 #include "console.h"
 #include "timer.h"
 #include "util.h"
-#include "clock.h"
 #include "watchdog.h"
 }
 
@@ -115,7 +116,7 @@ template <int MAX_NUM_RESULTS = 5> class Benchmark {
 		return result;
 	}
 
-	void print_results()
+	void print_results() const
 	{
 		print_header();
 		for (int i = 0; i < num_results_; ++i)
@@ -128,7 +129,7 @@ template <int MAX_NUM_RESULTS = 5> class Benchmark {
 	int num_results_ = 0;
 
 	/* Print table header with column names */
-	void print_header()
+	void print_header() const
 	{
 		constexpr char kSeparator[] = "--------------------------";
 
@@ -142,7 +143,7 @@ template <int MAX_NUM_RESULTS = 5> class Benchmark {
 	}
 
 	/* Print a single benchmark result */
-	int print_result(const BenchmarkResult &result)
+	int print_result(const BenchmarkResult &result) const
 	{
 		ccprintf("%16s | %15u | %13u | %13u | %13u | %13u\n",
 			 result.name.data(), options_.num_iterations,

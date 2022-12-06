@@ -26,6 +26,39 @@
 
 LOG_MODULE_DECLARE(nissa, CONFIG_NISSA_LOG_LEVEL);
 
+static uint8_t cached_usb_pd_port_count;
+
+__override uint8_t board_get_usb_pd_port_count(void)
+{
+	__ASSERT(cached_usb_pd_port_count != 0,
+		 "sub-board detection did not run before a port count request");
+	if (cached_usb_pd_port_count == 0)
+		LOG_WRN("USB PD Port count not initialized!");
+	return cached_usb_pd_port_count;
+}
+
+/*
+ * Initialise the USB PD port count, which
+ * depends on which sub-board is attached.
+ */
+static void board_usb_pd_count_init(void)
+{
+	switch (nissa_get_sb_type()) {
+	default:
+		cached_usb_pd_port_count = 1;
+		break;
+
+	case NISSA_SB_C_A:
+	case NISSA_SB_C_LTE:
+		cached_usb_pd_port_count = 2;
+		break;
+	}
+}
+/*
+ * Make sure setup is done after EEPROM is readable.
+ */
+DECLARE_HOOK(HOOK_INIT, board_usb_pd_count_init, HOOK_PRIO_INIT_I2C);
+
 #if NISSA_BOARD_HAS_HDMI_SUPPORT
 static void hdmi_power_handler(struct ap_power_ev_callback *cb,
 			       struct ap_power_ev_data data)
@@ -286,13 +319,3 @@ static void board_init(void)
 #endif
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
-
-/* Trigger shutdown by enabling the Z-sleep circuit */
-__override void board_hibernate_late(void)
-{
-	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_en_slp_z), 1);
-	/*
-	 * The system should hibernate, but there may be
-	 * a small delay, so return.
-	 */
-}

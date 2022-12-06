@@ -5,16 +5,75 @@
 
 /* Corsola program common DTS includes */
 
+#include <cros/thermistor/thermistor.dtsi>
 #include "../common.dtsi"
 #include "../power_signal.dtsi"
 #include "../usba.dtsi"
-#include "../adc_magikarp.dtsi"
+#include "../ite_adc.dtsi"
 #include "../battery_magikarp.dtsi"
 #include "../cbi_magikarp.dtsi"
 #include "../gpio_magikarp.dtsi"
 #include "../ite_keyboard.dtsi"
 #include "../i2c_magikarp.dtsi"
-#include "../interrupts_magikarp.dtsi"
+#include "../ite_interrupts.dtsi"
 #include "../led_magikarp.dtsi"
 #include "../motionsense_magikarp.dtsi"
 #include "../usbc_magikarp.dtsi"
+
+/ {
+	gpio-interrupts {
+		int_base_imu: base_imu {
+			handler = "motion_interrupt";
+		};
+
+		/delete-node/ usb_c0_ppc_bc12;
+
+		int_usb_c0_ppc: usb_c0_ppc {
+			irq-pin = <&usb_c0_ppc_int_odl>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "ppc_interrupt";
+		};
+
+		int_usb_c0_bc12: usb_c0_bc12 {
+			irq-pin = <&usb_c0_bc12_int_odl>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "bc12_interrupt";
+		};
+	};
+
+	named-adc-channels {
+		compatible = "named-adc-channels";
+		adc_ambient: ambient {
+			enum-name = "ADC_TEMP_SENSOR_2_AMBIENT";
+			io-channels = <&adc0 5>;
+		};
+	};
+
+
+	temp_ambient: ambient {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_3V3_30K9_47K_NCP15WB>;
+		adc = <&adc_ambient>;
+	};
+
+	named-temp-sensors {
+		compatible = "cros-ec,temp-sensors";
+		ambient {
+			sensor = <&temp_ambient>;
+		};
+	};
+};
+
+&adc0 {
+	status = "okay";
+	pinctrl-0 = <&adc0_ch0_gpi0_default
+		     &adc0_ch1_gpi1_default
+		     &adc0_ch2_gpi2_default
+		     &adc0_ch5_gpi5_default
+		     &adc0_ch7_gpi7_default>;
+	pinctrl-names = "default";
+};
+
+&thermistor_3V3_30K9_47K_NCP15WB {
+	status = "okay";
+};

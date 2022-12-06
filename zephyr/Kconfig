@@ -349,16 +349,6 @@ config PLATFORM_EC_FLASH_CROS
 	  e.g. to support auto-update. Various write-protection features are
 	  also provided.
 
-config PLATFORM_EC_FPU
-	bool "Support floating point"
-	depends on FPU && (CPU_CORTEX_M || RISCV) && !NEWLIB_LIBC
-	default y
-	help
-	  This enables support for floating point. This is generally already
-	  provided in Zephyr, but the EC side expects a few functions to be
-	  available which are not available with Zephyr's minimal lib: sqrtf()
-	  and fabsf(). Enabling this options defines them.
-
 config PLATFORM_EC_HOOKS
 	bool "Hooks and deferred compatibility shim"
 	default y
@@ -740,23 +730,6 @@ config PLATFORM_EC_VSTORE_SLOT_COUNT
 	  number required depends on the AP firmware. Typically the vstore is
 	  used only for recording a hash of the read-write AP firmware for
 	  checking on resume. For this, one slot is enough.
-
-menuconfig PLATFORM_EC_WATCHDOG
-	bool "Watchdog"
-	depends on WATCHDOG
-	default y
-	help
-	  Enable the watchdog functionality. The watchdog timer will reboot the
-	  system if the hook task (which is the lowest-priority task on the
-	  system) gets starved for CPU time and isn't able to fire its
-	  HOOK_TICK event.
-
-	  Chromium EC system uses an auxiliary timer to handle the system
-	  warning event. This leaves some time to the system for preparing &
-	  printing the debug information. The interval between reloads of the
-	  watchdog timer should be less than half of the auxiliary timer
-	  (PLATFORM_EC_WATCHDOG_PERIOD_MS -
-	  PLATFORM_EC_WATCHDOG_WARNING_LEADING_TIME_MS).
 
 config PLATFORM_EC_WORKAROUND_FLASH_DOWNLOAD_API
 	bool "Workaround needed for npcx9 ES1 chip"
