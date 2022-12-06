@@ -29,6 +29,7 @@ import time
 
 import serial
 
+
 # No GSC updaters take anywhere close to 2 minutes to run.
 CMD_TIMEOUT = 120
 CR50_FIRMWARE_BASE = '/opt/google/cr50/firmware/cr50.bin.'
@@ -99,7 +100,7 @@ def run_command(cmd, check_error=True):
     return result.returncode, msg.strip()
 
 
-class Cr50Image(object):
+class Cr50Image():
     """Class to handle cr50 image conversions."""
 
     SUFFIX_LEN = 6
@@ -157,7 +158,7 @@ class Cr50Image(object):
         return os.path.basename(self._original_image)
 
 
-class Servo(object):
+class Servo():
     """Class to interact with servo."""
 
     # Wait 3 seconds for device to settle after running the dut control command.
@@ -207,7 +208,7 @@ class Servo(object):
         return self.dut_control('cr50_version')[1]
 
 
-class Cr50Reset(object):
+class Cr50Reset():
     """Class to enter and exit cr50 reset."""
 
     # A list of requirements for the setup. The requirement strings must match
@@ -386,16 +387,17 @@ class Cr50ResetODLReset(Cr50Reset):
     def __init__(self, servo, name):
         # Make sure the reset signal exists in the servo setup.
         self.REQUIRED_SETUP.append(self.SIGNAL)
-        super(Cr50ResetODLReset, self).__init__(servo, name)
+        super().__init__(servo, name)
 
     def cleanup(self):
         """Use the Cr50 reset signal to hold Cr50 in reset."""
         try:
             self.restore_control(self.SIGNAL)
         finally:
-            super(Cr50ResetODLReset, self).cleanup()
+            super().cleanup()
 
     def set_signal(self, signal):
+        """Set the dut control."""
         logging.info("Setting %s", signal)
         self._servo.dut_control(signal)
 
@@ -445,9 +447,8 @@ class BatteryCutoffReset(Cr50Reset):
             if self._servo.dut_control('ec_board', check_error=False)[0]:
                 logging.info('Device is cutoff')
                 return
-            logging.info('EC still responsive')
-        else:
-            raise Error('EC still responsive after cutoff')
+            logging.info('%d: EC still responsive', i)
+        raise Error('EC still responsive after cutoff')
 
     def recover_from_reset(self):
         """Connect power using servo v4 to recover from cutoff."""
@@ -496,7 +497,6 @@ class ConsoleReboot(Cr50Reset):
 
     def run_reset(self):
         """Nothing to do."""
-        pass
 
     def recover_from_reset(self):
         """Run reboot on the cr50 console."""
@@ -507,7 +507,7 @@ class ConsoleReboot(Cr50Reset):
             ser.write(self.REBOOT_CMD.encode('utf-8'))
 
 
-class FlashCr50(object):
+class FlashCr50():
     """Class for updating cr50."""
 
     NAME = 'FlashCr50'
@@ -523,14 +523,14 @@ class FlashCr50(object):
         Raises:
             Error if no valid updater command was found.
         """
-        updater = self.get_updater(cmd)
+        updater = self.get_update_cmd(cmd)
         if not updater:
             emerge_msg = (('Try emerging ' + self.PACKAGE) if self.PACKAGE
                           else '')
             raise Error('Could not find %s command.%s' % (self, emerge_msg))
         self._updater = updater
 
-    def get_updater(self, cmd):
+    def get_update_cmd(self, cmd):
         """Find a valid updater command.
 
         Args:
@@ -541,11 +541,11 @@ class FlashCr50(object):
             The command string will be the one supplied or the DEFAULT_UPDATER
             command.
         """
-        if not self.updater_works(cmd):
+        if self.is_valid_update_cmd(cmd):
             return cmd
 
         use_default = (self.DEFAULT_UPDATER and
-                       not self.updater_works(self.DEFAULT_UPDATER))
+                       self.is_valid_update_cmd(self.DEFAULT_UPDATER))
         if use_default:
             logging.debug('%r failed using %r to update.', cmd,
                           self.DEFAULT_UPDATER)
@@ -553,19 +553,19 @@ class FlashCr50(object):
         return None
 
     @staticmethod
-    def updater_works(cmd):
+    def is_valid_update_cmd(cmd):
         """Verify the updater command.
 
         Returns:
-          non-zero status if the command failed.
+            returns True if the command worked. False if it didn't.
         """
         logging.debug('Testing update command %r.', cmd)
         exit_status, output = run_command([cmd, '-h'], check_error=False)
         if 'Usage' in output:
-            return 0
+            return True
         if exit_status:
             logging.debug('Could not run %r (%s): %s', cmd, exit_status, output)
-        return exit_status
+        return False
 
     def update(self, image):
         """Try to update cr50 to the given image."""
@@ -599,7 +599,7 @@ class GsctoolUpdater(FlashCr50):
             cmd: gsctool updater command.
             usb_ser: The usb_ser number of the CCD device being updated.
         """
-        super(GsctoolUpdater, self).__init__(cmd)
+        super().__init__(cmd)
         self._gsctool_cmd = [self._updater]
         if usb_ser:
             self._gsctool_cmd.extend(['-n', usb_ser])
@@ -649,7 +649,7 @@ class Cr50RescueUpdater(FlashCr50):
             reset_type: A string (one of SUPPORTED_RESETS) that describes how
                         to reset Cr50 during cr50-rescue.
         """
-        super(Cr50RescueUpdater, self).__init__(cmd)
+        super().__init__(cmd)
         self._servo = Servo(port)
         self._rescue_thread = None
         self._rescue_process = None
@@ -666,14 +666,13 @@ class Cr50RescueUpdater(FlashCr50):
         Returns:
             The Cr50Reset object for the given reset_type.
         """
-        assert reset_type in SUPPORTED_RESETS, '%s is unsupported.' % reset_type
         if reset_type == 'battery_cutoff':
             return BatteryCutoffReset(self._servo, reset_type)
-        elif reset_type == 'console_reboot':
+        if reset_type == 'console_reboot':
             return ConsoleReboot(self._servo, reset_type)
-        elif reset_type == 'cr50_reset_odl':
+        if reset_type == 'cr50_reset_odl':
             return Cr50ResetODLReset(self._servo, reset_type)
-        elif reset_type == 'pch_disable':
+        if reset_type == 'pch_disable':
             return PCHDisableReset(self._servo, reset_type)
         return ManualReset(self._servo, reset_type)
 
@@ -773,7 +772,7 @@ class BrescueUpdater(Cr50RescueUpdater):
                         to reset Cr50 during cr50-rescue.
         """
         # Make sure cr50-rescue exists, since brescue relies on it.
-        super(BrescueUpdater, self).__init__('cr50-rescue', port, reset_type)
+        super().__init__('cr50-rescue', port, reset_type)
         if cmd != self.NAME:
             self._updater = cmd
         else:
