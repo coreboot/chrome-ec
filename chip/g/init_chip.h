@@ -26,6 +26,7 @@
  *	SCRATCH20 - Preserving EC-EFS context
  *	SCRATCH21 - Preserving TPM_BOARD_CFG register
  *	SCRATCH22 - Preserve FIPS power-up test status on Cr50
+ *	SCRATCH23 - Preserve time since cold boot
  *
  * PWRDN_SCRATCH 28 - 31 - Reserved for boot rom
  */

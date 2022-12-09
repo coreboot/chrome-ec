@@ -117,6 +117,11 @@ static inline void sleep(unsigned sec)
 timestamp_t get_time(void);
 
 /**
+ * Get the time in seconds since cold boot.
+ */
+uint32_t get_seconds_since_cold_boot(void);
+
+/**
  * Force the current value of the system timer.
  *
  * This function is for the power management implementation which wants to fix
