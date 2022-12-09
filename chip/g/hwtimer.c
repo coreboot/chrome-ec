@@ -4,10 +4,12 @@
  */
 
 #include "common.h"
+#include "ec_commands.h"
 #include "hooks.h"
 #include "hwtimer.h"
 #include "init_chip.h"
 #include "registers.h"
+#include "system.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
@@ -33,6 +35,11 @@
  */
 #define MAX_TIME_USEC 0xffffffff
 #define TIMELS_MAX (usecs_to_ticks(MAX_TIME_USEC))
+/*
+ * Seconds to add when the timer wraps. Round up to ensure cr50 doesn't lose
+ * time during the wrap around.
+ */
+#define OVERFLOW_TIME_S ((MAX_TIME_USEC + SECOND - 1) / SECOND)
 
 /*
  * The below calculation is lightweight and can be implemented using
@@ -60,6 +67,19 @@ uint32_t __hw_clock_event_get(void)
 	/* At what time will the next event fire? */
 	return __hw_clock_source_read() +
 		ticks_to_usecs(GREG32(TIMELS, EVENT(VALUE)));
+}
+
+uint32_t get_seconds_since_cold_boot(void)
+{
+	uint32_t overflow_s = GREAD_FIELD(TIMELS, SOURCE(STATUS), WRAPPED) ?
+			      OVERFLOW_TIME_S : 0;
+	return (GREG32(PMU, PWRDN_SCRATCH23) + overflow_s +
+		(__hw_clock_source_read() / SECOND));
+}
+
+static void save_seconds_since_cold_boot(void)
+{
+	GREG32(PMU, PWRDN_SCRATCH23) = get_seconds_since_cold_boot();
 }
 
 void __hw_clock_event_clear(void)
@@ -125,6 +145,8 @@ void __hw_clock_source_irq(void)
 	GWRITE(TIMELS, SOURCE(WAKEUP_ACK), 1);
 	GWRITE(TIMELS, SOURCE(IAR), 1);
 
+	save_seconds_since_cold_boot();
+
 	/* Reset the load value */
 	GREG32(TIMELS, SOURCE(LOAD)) = TIMELS_MAX;
 
@@ -150,6 +172,11 @@ int __hw_clock_source_init(uint32_t start_t)
 	GWRITE_FIELD(TIMELS, EVENT(CONTROL), WRAP, 1);
 	GWRITE_FIELD(TIMELS, EVENT(CONTROL), RELOAD, 0);
 	GWRITE_FIELD(TIMELS, EVENT(CONTROL), ENABLE, 0);
+
+
+	/* Save time since deep sleep before resetting the SOURCE timer. */
+	if (system_get_reset_flags() & EC_RESET_FLAG_HIBERNATE)
+		save_seconds_since_cold_boot();
 
 	/* Configure timer0 */
 	GREG32(TIMELS, SOURCE(RELOADVAL)) = TIMELS_MAX;
