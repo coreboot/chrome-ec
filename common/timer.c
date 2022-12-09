@@ -323,7 +323,7 @@ static int command_get_time(int argc, char **argv)
 {
 	timestamp_t ts = get_time();
 	ccprintf("Time: 0x%016llx = %.6lld s\n", ts.val, ts.val);
-
+	ccprintf("since cold_reset: %u s\n", get_seconds_since_cold_boot());
 	return EC_SUCCESS;
 }
 DECLARE_SAFE_CONSOLE_COMMAND(gettime, command_get_time,
