@@ -241,6 +241,7 @@ class AllTests:
                 test_name="libc_printf",
                 finish_regexes=[PRINTF_CALLED_REGEX],
             ),
+            TestConfig(test_name="global_initialization"),
             TestConfig(
                 config_name="mpu_ro",
                 test_name="mpu",
@@ -291,6 +292,7 @@ class AllTests:
                 toggle_power=True,
                 enable_hw_write_protect=False,
             ),
+            TestConfig(test_name="timer"),
             TestConfig(test_name="timer_dos"),
             TestConfig(test_name="utils", timeout_secs=20),
             TestConfig(test_name="utils_str"),

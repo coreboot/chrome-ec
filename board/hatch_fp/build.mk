@@ -41,6 +41,7 @@ test-list-y=\
        fpsensor \
        fpsensor_hw \
        ftrapv \
+       global_initialization \
        libc_printf \
        mpu \
        mutex \
@@ -62,6 +63,7 @@ test-list-y=\
        std_vector \
        stm32f_rtc \
        system_is_locked \
+       timer \
        timer_dos \
        utils \
        utils_str \

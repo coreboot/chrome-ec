@@ -1742,6 +1742,13 @@
 #undef CONFIG_RO_PANIC_DATA_SIZE
 
 /*
+ * When defined, it enables system safe mode. System safe mode allows the AP to
+ * capture the EC state after a panic.
+ */
+#undef CONFIG_SYSTEM_SAFE_MODE
+#define CONFIG_SYSTEM_SAFE_MODE_TIMEOUT_MSEC 2000
+
+/*
  * Provide the default GPIO abstraction layer.
  * You want this unless you are doing a really tiny firmware.
  */
@@ -4712,6 +4719,17 @@
 /* Record main PD events in a circular buffer */
 #undef CONFIG_USB_PD_LOGGING
 
+/*
+ * Record PRL state transitions in a ring buffer, readable via the `prllog`
+ * console command.
+ */
+#undef CONFIG_USB_PD_PRL_EVENT_LOG
+/*
+ * Number of events that can be stored in the PRL log (after this many, the
+ * oldest entries will be replaced with new ones).
+ */
+#define CONFIG_USB_PD_PRL_EVENT_LOG_CAPACITY 128
+
 /* The size in bytes of the FIFO used for event logging */
 #define CONFIG_EVENT_LOG_SIZE 512
 
@@ -5777,6 +5795,9 @@
  * GPIO_CCD_MODE_ODL should be configured with GPIO_ODR_HIGH flag
  */
 #undef CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
+
+/* Define this to enable system boot time logging */
+#undef CONFIG_SYSTEM_BOOT_TIME_LOGGING
 
 /*
  * The USB port used for CCD. Defaults to 0/C0.

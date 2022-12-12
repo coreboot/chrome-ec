@@ -9,11 +9,19 @@
 #include "../power_signal.dtsi"
 #include "../usba.dtsi"
 #include "../ite_adc.dtsi"
-#include "../battery_krabby.dtsi"
 #include "../ite_gpio.dtsi"
 #include "../ite_keyboard.dtsi"
-#include "../i2c_krabby.dtsi"
+#include "../ite_i2c.dtsi"
 #include "../ite_interrupts.dtsi"
-#include "../led_krabby.dtsi"
+#include "../ite_led.dtsi"
 #include "../ite_motionsense.dtsi"
 #include "../ite_usbc.dtsi"
+
+
+/ {
+	batteries {
+		default_battery: c235 {
+			compatible = "celxpert,c235-41", "battery-smart";
+		};
+	};
+};
