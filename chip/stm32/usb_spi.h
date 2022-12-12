@@ -280,6 +280,16 @@
 
 #define USB_SPI_MIN_PACKET_SIZE (2)
 
+/*
+ * Values used in spi_device_t.usb_flags
+ */
+
+/* Is the USB host allowed to operate on SPI device. */
+#define USB_SPI_ENABLED (BIT(0))
+
+/* Use board specific SPI driver when forwarding to this device. */
+#define USB_SPI_CUSTOM_SPI_DEVICE (BIT(1))
+
 enum packet_id_type {
 	/* Request USB SPI configuration data from device. */
 	USB_SPI_PKT_ID_CMD_GET_USB_SPI_CONFIG = 0,
@@ -457,8 +467,8 @@ struct usb_spi_state {
 	 * control endpoint.  The enabled_device flag is set by calling
 	 * usb_spi_enable.
 	 */
-	int enabled_host;
-	int enabled_device;
+	uint8_t enabled_host;
+	uint8_t enabled_device;
 
 	/*
 	 * The current enabled state.  This is only updated in the deferred
@@ -470,7 +480,13 @@ struct usb_spi_state {
 	 * specific state update routines are only called from the deferred
 	 * callback.
 	 */
-	int enabled;
+	uint8_t enabled;
+
+	/*
+	 * The index of the SPI port currently receiving forwarded transactions,
+	 * default is zero.
+	 */
+	uint8_t current_spi_device_idx;
 
 	/* Mark the current operating mode. */
 	enum usb_spi_mode mode;
@@ -554,6 +570,7 @@ struct usb_spi_config {
 		.enabled_host = 0,                                          \
 		.enabled_device = 0,                                        \
 		.enabled = 0,                                               \
+		.current_spi_device_idx = 0,                                \
 		.spi_write_ctx.buffer = (uint8_t *)CONCAT2(NAME, _buffer_), \
 		.spi_read_ctx.buffer = (uint8_t *)CONCAT2(NAME, _buffer_),  \
 	};                                                                  \
@@ -649,5 +666,16 @@ int usb_spi_interface(struct usb_spi_config const *config, usb_uint *rx_buf,
  */
 void usb_spi_board_enable(struct usb_spi_config const *config);
 void usb_spi_board_disable(struct usb_spi_config const *config);
+
+/*
+ * In order to facilitate odd cases of e.g. a SPI bus sitting behind a second
+ * microcontroller, or otherwise needing a non-standard driver, setting the
+ * USB_SPI_CUSTOM_SPI_DEVICE_MASK bit of spi_device->port will cause the
+ * USB->SPI forwarding logic to invoke this method rather than the standard
+ * spi_transaction().
+ */
+int usb_spi_board_transaction(const struct spi_device_t *spi_device,
+			      const uint8_t *txdata, int txlen, uint8_t *rxdata,
+			      int rxlen);
 
 #endif /* __CROS_EC_USB_SPI_H */

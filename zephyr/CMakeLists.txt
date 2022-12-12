@@ -146,6 +146,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC
                                                 "${PLATFORM_EC}/common/queue.c"
                                                 "${PLATFORM_EC}/common/shared_mem.c"
                                                 "${PLATFORM_EC}/common/system.c"
+                                                "${PLATFORM_EC}/common/system_boot_time.c"
                                                 "${PLATFORM_EC}/common/uart_printf.c"
                                                 "${PLATFORM_EC}/common/util.c"
                                                 "${PLATFORM_EC}/common/version.c")
@@ -550,6 +551,9 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MAX695X_SEVEN_SEGMENT_DISPLAY
 						"${PLATFORM_EC}/driver/led/max695x.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_DRIVER_TLC59116F
                                                 "${PLATFORM_EC}/driver/led/tlc59116f.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SYSTEM_SAFE_MODE
+                                                "${PLATFORM_EC}/common/system_safe_mode.c")
+
 # Switch to ec_shim library for all Zephyr sources
 set(ZEPHYR_CURRENT_LIBRARY ec_shim)
 

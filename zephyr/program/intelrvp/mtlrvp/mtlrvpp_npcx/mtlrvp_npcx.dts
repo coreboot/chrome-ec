@@ -16,6 +16,9 @@
 			&int_ac_present
 			&int_lid_open
 			&int_power_button
+			&int_usb_c0_c1_tcpc
+			&int_usb_c2_tcpc
+			&int_usb_c3_tcpc
 		>;
 	};
 
@@ -152,6 +155,7 @@
 		tcpc-flags = <(
 			TCPC_FLAGS_TCPCI_REV2_0 |
 			TCPC_FLAGS_NO_DEBUG_ACC_CONTROL)>;
+		int-pin = <&usbc_tcpc_alrt_p0>;
 	};
 
 	nct38xx_c0: nct38xx_c0@73 {
@@ -178,6 +182,7 @@
 		reg = <0x77>;
 		gpio-dev = <&nct38xx_c1>;
 		tcpc-flags = <(TCPC_FLAGS_TCPCI_REV2_0)>;
+		int-pin = <&usbc_tcpc_alrt_p0>;
 	};
 
 	nct38xx_c1: nct38xx_c1@77 {
@@ -236,11 +241,13 @@
 	tcpc_port2: ccgxxf@b {
 		compatible = "cypress,ccgxxf";
 		reg = <0xb>;
+		int-pin = <&usbc_tcpc_alrt_p2>;
 	};
 
 	tcpc_port3: ccgxxf@1b {
 		compatible = "cypress,ccgxxf";
 		reg = <0x1b>;
+		int-pin = <&usbc_tcpc_alrt_p3>;
 	};
 
 	usb_c2_hb_retimer: jhl8040r-c2@58 {
