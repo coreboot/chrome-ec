@@ -155,6 +155,10 @@ enum panic_arch {
 #define PANIC_DATA_FLAG_OLD_HOSTEVENT BIT(3)
 /* The data was truncated to fit panic info host cmd */
 #define PANIC_DATA_FLAG_TRUNCATED BIT(4)
+/* System safe mode was started after a panic */
+#define PANIC_DATA_FLAG_SAFE_MODE_STARTED BIT(5)
+/* System safe mode failed to start */
+#define PANIC_DATA_FLAG_SAFE_MODE_FAIL_PRECONDITIONS BIT(6)
 
 /**
  * Write a string to the panic reporting device
@@ -292,6 +296,15 @@ struct panic_data *panic_get_data(void);
  */
 uintptr_t get_panic_data_start(void);
 
+#ifdef CONFIG_BOARD_NATIVE_POSIX
+/**
+ * @brief Test-only function for accessing the pdata_ptr object.
+ *
+ * @return struct panic_data* pdata_ptr
+ */
+struct panic_data *test_get_panic_data_pointer(void);
+#endif
+
 /*
  * Return a pointer to panic_data structure that can be safely written.
  * Please note that this function can move jump data and jump tags.
@@ -315,5 +328,21 @@ void chip_panic_data_backup(void);
 #ifdef __cplusplus
 }
 #endif
+
+#ifdef TEST_BUILD
+/**
+ * @brief Wrapper for accessing the command_crash() console command
+ * implementation directly in unit tests. It cannot be called normally through
+ * the shell interface because it upsets the shell's internal state when the
+ * command doesn't return after a crash. command_crash() cannot be marked
+ * test_export_static directly due to an implementation detail in
+ * DECLARE_CONSOLE_COMMAND().
+ *
+ * @param argc Number of CLI args in `argv`
+ * @param argv CLI arguments
+ * @return int Return value
+ */
+int test_command_crash(int argc, const char **argv);
+#endif /* TEST_BUILD*/
 
 #endif /* __CROS_EC_PANIC_H */

@@ -3,12 +3,9 @@
  * found in the LICENSE file.
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-
 #include "cbi.h"
-#include "charger.h"
 #include "charge_ramp.h"
+#include "charger.h"
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
@@ -29,12 +26,15 @@
 #include "task.h"
 #include "task_id.h"
 #include "timer.h"
-#include "usbc_config.h"
-#include "usbc_ppc.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
+#include "usbc_config.h"
+#include "usbc_ppc.h"
+
+#include <stdbool.h>
+#include <stdint.h>
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
@@ -429,6 +429,7 @@ int ppc_get_alert_status(int port)
 	return 0;
 }
 
+#ifndef CONFIG_ZEPHYR
 void tcpc_alert_event(enum gpio_signal signal)
 {
 	switch (signal) {
@@ -444,6 +445,7 @@ void tcpc_alert_event(enum gpio_signal signal)
 		break;
 	}
 }
+#endif
 
 void bc12_interrupt(enum gpio_signal signal)
 {

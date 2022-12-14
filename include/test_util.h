@@ -16,6 +16,7 @@ extern "C" {
 
 #include "common.h"
 #include "console.h"
+#include "math_util.h"
 #include "stack_trace.h"
 
 #ifdef CONFIG_ZTEST
@@ -55,6 +56,17 @@ extern "C" {
 #define __auto_type auto
 #endif
 
+/* Tests comparing complex types that cannot be easily formatted for printing
+ * may define TEST_OPERATOR_INHIBIT_PRINT_EVAL to inhibit printing of the
+ * compared values on failure.
+ */
+#ifdef TEST_OPERATOR_INHIBIT_PRINT_EVAL
+#define TEST_OPERATOR_PRINT_EVAL(fmt, op, _a, _b)
+#else
+#define TEST_OPERATOR_PRINT_EVAL(fmt, op, _a, _b) \
+	ccprintf("\t\tEVAL: " fmt " " #op " " fmt "\n", _a, _b)
+#endif
+
 #define TEST_OPERATOR(a, b, op, fmt)                                         \
 	do {                                                                 \
 		__auto_type _a = (a);                                        \
@@ -62,8 +74,7 @@ extern "C" {
 		if (!(_a op _b)) {                                           \
 			ccprintf("%s:%d: ASSERTION failed: %s " #op " %s\n", \
 				 __FILE__, __LINE__, #a, #b);                \
-			ccprintf("\t\tEVAL: " fmt " " #op " " fmt "\n", _a,  \
-				 _b);                                        \
+			TEST_OPERATOR_PRINT_EVAL(fmt, op, _a, _b);           \
 			task_dump_trace();                                   \
 			return EC_ERROR_UNKNOWN;                             \
 		} else {                                                     \
@@ -82,9 +93,7 @@ extern "C" {
 #define TEST_NEAR(a, b, epsilon, fmt) \
 	TEST_OPERATOR(ABS((a) - (b)), epsilon, <, fmt)
 
-#define __ABS(n) ((n) > 0 ? (n) : -(n))
-
-#define TEST_ASSERT_ABS_LESS(n, t) TEST_OPERATOR(__ABS(n), t, <, "%d")
+#define TEST_ASSERT_ABS_LESS(n, t) TEST_OPERATOR(ABS(n), t, <, "%d")
 
 #define TEST_ASSERT_ARRAY_EQ(s, d, n)                                        \
 	do {                                                                 \

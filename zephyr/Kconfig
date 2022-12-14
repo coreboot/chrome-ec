@@ -448,6 +448,11 @@ config PLATFORM_EC_LOW_POWER_IDLE
 	  enabled when the Zephyr power management options are enabled with the
 	  PM option.
 
+config PLATFORM_EC_LOW_POWER_S0
+	bool "Enable deep sleep during S0"
+	help
+	  Enable deep sleep during S0 (ignores SLEEP_MASK_AP_RUN).
+
 config PLATFORM_EC_POWER_COMMON
 	bool
 	default y
@@ -666,12 +671,31 @@ config PLATFORM_EC_SYSTEM_UNLOCKED
 
 config PLATFORM_EC_THROTTLE_AP
 	bool "CPU throttling"
-	depends on PLATFORM_EC_TEMP_SENSOR
 	help
-	  Enable throttling the CPU based on the temperature sensors. When they
-	  detect that the CPU is getting too hot, the CPU is throttled to
-	  a lower speed. This reduce the CPU's power output and eventually
-	  results in a lower temperature.
+	  Enable throttling the CPU. When triggered this reduces the CPU's
+	  power output and eventually results in a lower temperature.
+
+if PLATFORM_EC_THROTTLE_AP
+
+config PLATFORM_EC_THROTTLE_AP_SINGLE_PIN
+	bool "CPU throttling and interrupt detection on a single pin"
+	help
+	  Enable detection of throttling interrupts on the same pin used to
+	  trigger throttling. The GPIO should be configured as an output by
+	  default. throttle_ap_config_prochot will configure the GPIO as
+	  an interrupt. Chipset specific functions are responsible for
+	  handling any subsequent changes.
+
+config PLATFORM_EC_THROTTLE_AP_NO_FAN
+	bool "No automatic fan control for AP throttling"
+	help
+	  Disable automatic fan control when an AP throttling interrupt occurs
+
+config PLATFORM_EC_CONSOLE_CMD_APTHROTTLE
+	bool "Enable apthrottle command to disable throttling state"
+	default n
+
+endif #PLATFORM_EC_THROTTLE_AP
 
 menuconfig PLATFORM_EC_TIMER
 	bool "Timer module"
@@ -730,23 +754,6 @@ config PLATFORM_EC_VSTORE_SLOT_COUNT
 	  number required depends on the AP firmware. Typically the vstore is
 	  used only for recording a hash of the read-write AP firmware for
 	  checking on resume. For this, one slot is enough.
-
-menuconfig PLATFORM_EC_WATCHDOG
-	bool "Watchdog"
-	depends on WATCHDOG
-	default y
-	help
-	  Enable the watchdog functionality. The watchdog timer will reboot the
-	  system if the hook task (which is the lowest-priority task on the
-	  system) gets starved for CPU time and isn't able to fire its
-	  HOOK_TICK event.
-
-	  Chromium EC system uses an auxiliary timer to handle the system
-	  warning event. This leaves some time to the system for preparing &
-	  printing the debug information. The interval between reloads of the
-	  watchdog timer should be less than half of the auxiliary timer
-	  (PLATFORM_EC_WATCHDOG_PERIOD_MS -
-	  PLATFORM_EC_WATCHDOG_WARNING_LEADING_TIME_MS).
 
 config PLATFORM_EC_WORKAROUND_FLASH_DOWNLOAD_API
 	bool "Workaround needed for npcx9 ES1 chip"
@@ -816,5 +823,11 @@ config PLATFORM_EC_GPIO_ID
 	  board_get_sku_id and board_get_version functions based on the
 	  devicetree node using the known nodelabels gpio_id_sku and
 	  gpio_id_board.
+
+config SYSTEM_BOOT_TIME_LOGGING
+	bool "boot time logging"
+	help
+	  This config enables boot time logging functionality in EC which
+	  is used for calculating system boot time.
 
 endif # PLATFORM_EC

@@ -35,8 +35,8 @@
 #include "tablet_mode.h"
 #include "task.h"
 #include "temp_sensor.h"
-#include "thermal.h"
 #include "temp_sensor/thermistor.h"
+#include "thermal.h"
 #include "uart.h"
 #include "usb_charge.h"
 #include "usb_pd.h"
@@ -124,7 +124,8 @@ static void bc12_interrupt(enum gpio_signal signal)
 	}
 }
 
-#include "gpio_list.h" /* Must come after other header files. */
+/* Must come after other header files and interrupt handler declarations */
+#include "gpio_list.h"
 
 /******************************************************************************/
 /* SPI devices */
@@ -422,26 +423,6 @@ static void board_update_sensor_config_from_sku(void)
 	}
 }
 
-static void anx7447_set_aux_switch(void)
-{
-	const int port = USB_PD_PORT_TCPC_0;
-
-	/* Debounce */
-	if (gpio_get_level(GPIO_CCD_MODE_ODL))
-		return;
-
-	CPRINTS("C%d: AUX_SW_SEL=0x%x", port, 0xc);
-	if (tcpc_write(port, ANX7447_REG_TCPC_AUX_SWITCH, 0xc))
-		CPRINTS("C%d: Setting AUX_SW_SEL failed", port);
-}
-DECLARE_DEFERRED(anx7447_set_aux_switch);
-
-void ccd_mode_isr(enum gpio_signal signal)
-{
-	/* Wait 2 seconds until all mux setting is done by PD task */
-	hook_call_deferred(&anx7447_set_aux_switch_data, 2 * SECOND);
-}
-
 static void board_init(void)
 {
 	/* Initialize Fans */
@@ -455,10 +436,6 @@ static void board_init(void)
 
 	/* Enable HDMI HPD interrupt. */
 	gpio_enable_interrupt(GPIO_HDMI_CONN_HPD);
-
-	/* Trigger once to set mux in case CCD cable is already connected. */
-	ccd_mode_isr(GPIO_CCD_MODE_ODL);
-	gpio_enable_interrupt(GPIO_CCD_MODE_ODL);
 
 	board_update_sensor_config_from_sku();
 }

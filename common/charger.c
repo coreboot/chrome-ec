@@ -97,8 +97,12 @@ void charger_get_params(struct charger_params *chg)
 {
 	int chgnum = 0;
 
-	if (IS_ENABLED(CONFIG_OCPC))
+	if (IS_ENABLED(CONFIG_OCPC)) {
 		chgnum = charge_get_active_chg_chip();
+		/* set to CHARGE_PORT_NONE when no charger connected */
+		if (chgnum < 0)
+			chgnum = 0;
+	}
 
 	memset(chg, 0, sizeof(*chg));
 
@@ -183,6 +187,15 @@ void print_charger_debug(int chgnum)
 		ccprintf("%5d\n", dptf_limit_ma);
 	else
 		ccputs("disabled\n");
+}
+
+void print_charger_prochot(int chgnum)
+{
+	if ((chgnum < 0) || (chgnum >= board_get_charger_chip_count()))
+		return;
+
+	if (chg_chips[chgnum].drv->dump_prochot)
+		chg_chips[chgnum].drv->dump_prochot(chgnum);
 }
 
 static int command_charger(int argc, const char **argv)

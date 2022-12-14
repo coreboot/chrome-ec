@@ -275,6 +275,12 @@ SECTIONS
 		KEEP(*(.rodata.HOOK_TABLET_MODE_CHANGE))
 		__hooks_tablet_mode_change_end = .;
 
+#ifdef CONFIG_BODY_DETECTION
+		__hooks_body_detect_change = .;
+		KEEP(*(.rodata.HOOK_BODY_DETECT_CHANGE))
+		__hooks_body_detect_change_end = .;
+#endif
+
 		__hooks_base_attached_change = .;
 		KEEP(*(.rodata.HOOK_BASE_ATTACHED_CHANGE))
 		__hooks_base_attached_change_end = .;
@@ -352,7 +358,9 @@ SECTIONS
 		 * https://developer.arm.com/documentation/dui0475/c/the-arm-c-and-c---libraries/c---initialization--construction-and-destruction
 		 */
 		. = ALIGN(4);
+		__init_array_start = .;
 		*(.init_array*)
+		__init_array_end = .;
 
 		/*
 		 * Empty C++ exception index table. The exception index

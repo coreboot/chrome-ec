@@ -145,6 +145,11 @@ tests:
     tags:
       common
       mkbp
+  drivers.panic_output:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_PANIC_OUTPUT=y
+      - CONFIG_PLATFORM_EC_CONSOLE_CMD_CRASH=y
+      - CONFIG_ZTEST_THREAD_PRIORITY=1
   drivers.power_host_sleep:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_POWER_HOST_SLEEP=y
@@ -209,6 +214,7 @@ tests:
       - CONFIG_PLATFORM_EC_USB_PD_FLAGS=y
       - CONFIG_PLATFORM_EC_USB_PD_RUNTIME_FLAGS=y
   drivers.usb_retimer_fw_update:
+    timeout: 120
     extra_args: CONF_FILE="prj.conf;usb_retimer_fw_update/prj.conf"
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USB_RETIMER_FW_UPDATE=y
@@ -228,6 +234,10 @@ tests:
   drivers.usbc_ctvpd:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USBC_CTVPD=y
+  drivers.usbc_frs:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_USBC_FRS=y
+      - CONFIG_PLATFORM_EC_USB_PD_FRS_TCPC=y
   drivers.usbc_ocp:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USBC_OCP=y

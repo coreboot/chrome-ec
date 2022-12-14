@@ -31,25 +31,6 @@
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
-/* GPIO Interrupt Handlers */
-void tcpc_alert_event(enum gpio_signal signal)
-{
-	int port = -1;
-
-	switch (signal) {
-	case GPIO_USB_C0_PD_INT_ODL:
-		port = 0;
-		break;
-	case GPIO_USB_C1_PD_INT_ODL:
-		port = 1;
-		break;
-	default:
-		return;
-	}
-
-	schedule_deferred_pd_interrupt(port);
-}
-
 #ifdef CONFIG_PLATFORM_EC_USBA
 static void usba_oc_deferred(void)
 {
@@ -82,6 +63,11 @@ void ppc_interrupt(enum gpio_signal signal)
 	}
 }
 
+__overridable int board_charger_profile_override(struct charge_state_data *curr)
+{
+	return EC_SUCCESS;
+}
+
 int charger_profile_override(struct charge_state_data *curr)
 {
 	int usb_mv;
@@ -104,6 +90,8 @@ int charger_profile_override(struct charge_state_data *curr)
 		for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++)
 			pd_set_external_voltage_limit(port, usb_mv);
 	}
+
+	board_charger_profile_override(curr);
 
 	return 0;
 }

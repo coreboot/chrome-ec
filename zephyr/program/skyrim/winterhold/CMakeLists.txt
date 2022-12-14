@@ -9,4 +9,6 @@ zephyr_library_sources(
 	"src/keyboard.c"
 	"src/sensor.c"
 	"src/battery_present.c"
+	"src/alt_charger.c"
+	"src/thermal.c"
 )

@@ -63,7 +63,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TEMP_SENSOR temp_sensors.c
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TIMER       hwtimer.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C         i2c.c)
 zephyr_library_sources_ifdef(CONFIG_SHIMMED_TASKS           tasks.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_WATCHDOG    watchdog.c)
+zephyr_library_sources_ifdef(CONFIG_WATCHDOG                watchdog.c)
 zephyr_library_sources_ifndef(CONFIG_PLATFORM_EC_BC12_SINGLE_DRIVER
                                                             bc12.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
@@ -81,3 +81,4 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
                                                             bb_retimer_usb_mux.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_HB
                                                             bb_retimer_usb_mux.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SYSTEM_SAFE_MODE system_safe_mode.c)

@@ -17,10 +17,8 @@
 
 LOG_MODULE_DECLARE(ap_pwrseq, CONFIG_AP_PWRSEQ_LOG_LEVEL);
 
-#if DT_HAS_COMPAT_STATUS_OKAY(intel_ap_pwrseq)
 BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(intel_ap_pwrseq) == 1,
 	     "Only one node for intel_ap_pwrseq is allowed");
-#endif
 
 BUILD_ASSERT(POWER_SIGNAL_COUNT <= 32, "Too many power signals");
 
@@ -166,22 +164,22 @@ int power_signal_get(enum power_signal signal)
 	default:
 		return -EINVAL; /* should never happen */
 
-#if HAS_GPIO_SIGNALS
+#if CONFIG_AP_PWRSEQ_SIGNAL_GPIO
 	case PWR_SIG_SRC_GPIO:
 		return power_signal_gpio_get(cp->src_enum);
 #endif
 
-#if HAS_VW_SIGNALS
+#if CONFIG_AP_PWRSEQ_SIGNAL_VW
 	case PWR_SIG_SRC_VW:
 		return power_signal_vw_get(cp->src_enum);
 #endif
 
-#if HAS_EXT_SIGNALS
+#if CONFIG_AP_PWRSEQ_SIGNAL_EXTERNAL
 	case PWR_SIG_SRC_EXT:
 		return board_power_signal_get(signal);
 #endif
 
-#if HAS_ADC_SIGNALS
+#if CONFIG_AP_PWRSEQ_SIGNAL_ADC
 	case PWR_SIG_SRC_ADC:
 		return power_signal_adc_get(cp->src_enum);
 #endif
@@ -202,13 +200,13 @@ int power_signal_set(enum power_signal signal, int value)
 	default:
 		return -EINVAL;
 
-#if HAS_GPIO_SIGNALS
+#if CONFIG_AP_PWRSEQ_SIGNAL_GPIO
 	case PWR_SIG_SRC_GPIO:
 		ret = power_signal_gpio_set(cp->src_enum, value);
 		break;
 #endif
 
-#if HAS_EXT_SIGNALS
+#if CONFIG_AP_PWRSEQ_SIGNAL_EXTERNAL
 	case PWR_SIG_SRC_EXT:
 		ret = board_power_signal_set(signal, value);
 		break;
@@ -240,11 +238,11 @@ int power_signal_enable(enum power_signal signal)
 		 */
 		return -EINVAL;
 
-#if HAS_GPIO_SIGNALS
+#if CONFIG_AP_PWRSEQ_SIGNAL_GPIO
 	case PWR_SIG_SRC_GPIO:
 		return power_signal_gpio_enable(cp->src_enum);
 #endif
-#if HAS_ADC_SIGNALS
+#if CONFIG_AP_PWRSEQ_SIGNAL_ADC
 	case PWR_SIG_SRC_ADC:
 		return power_signal_adc_enable(cp->src_enum);
 #endif
@@ -263,11 +261,11 @@ int power_signal_disable(enum power_signal signal)
 	default:
 		return -EINVAL;
 
-#if HAS_GPIO_SIGNALS
+#if CONFIG_AP_PWRSEQ_SIGNAL_GPIO
 	case PWR_SIG_SRC_GPIO:
 		return power_signal_gpio_disable(cp->src_enum);
 #endif
-#if HAS_ADC_SIGNALS
+#if CONFIG_AP_PWRSEQ_SIGNAL_ADC
 	case PWR_SIG_SRC_ADC:
 		return power_signal_adc_disable(cp->src_enum);
 #endif
@@ -284,13 +282,13 @@ const char *power_signal_name(enum power_signal signal)
 
 void power_signal_init(void)
 {
-	if (IS_ENABLED(HAS_GPIO_SIGNALS)) {
+	if (IS_ENABLED(CONFIG_AP_PWRSEQ_SIGNAL_GPIO)) {
 		power_signal_gpio_init();
 	}
-	if (IS_ENABLED(HAS_VW_SIGNALS)) {
+	if (IS_ENABLED(CONFIG_AP_PWRSEQ_SIGNAL_VW)) {
 		power_signal_vw_init();
 	}
-	if (IS_ENABLED(HAS_ADC_SIGNALS)) {
+	if (IS_ENABLED(CONFIG_AP_PWRSEQ_SIGNAL_ADC)) {
 		power_signal_adc_init();
 	}
 	/*
