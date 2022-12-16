@@ -3,10 +3,6 @@
  * found in the LICENSE file.
  */
 
-/ {
-	batteries {
-		default_battery: dynapack_c140254 {
-			compatible = "dynapack,c140254", "battery-smart";
-		};
-	};
-};
+#ifdef TEST_BUILD
+#define CONFIG_TEST_MOCK_LIST MOCK(TIMER)
+#endif /* TEST_BUILD */

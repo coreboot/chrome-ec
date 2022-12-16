@@ -3,10 +3,7 @@
  * found in the LICENSE file.
  */
 
-/ {
-	batteries {
-		default_battery: c235 {
-			compatible = "celxpert,c235-41", "battery-smart";
-		};
-	};
-};
+/**
+ * See CONFIG_TASK_LIST in config.h for details.
+ */
+#define CONFIG_TEST_TASK_LIST
