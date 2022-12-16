@@ -519,7 +519,10 @@ static const struct option_container cmd_line_options[] = {
 	{{"version", no_argument, NULL, 'v'},
 	 "Report this utility version"},
 	{{"wp", optional_argument, NULL, 'w'},
-	 "[enable] Get the current WP setting or enable WP"}
+	 "[enable] Get the current WP setting or enable WP"},
+	{{"reboot", optional_argument, NULL, 'z'},
+	 "Tell the GSC to reboot with an optional reset timeout parameter "
+	 "in milliseconds"}
 };
 
 /* Helper to print debug messages when verbose flag is specified. */
@@ -3717,6 +3720,27 @@ static int process_tstamp(struct transfer_descriptor *td,
 	return 0;
 }
 
+static int process_reboot_gsc(struct transfer_descriptor *td,
+			size_t timeout_ms)
+{
+	/* Reboot timeout in milliseconds.
+	 * Maximum value is 1000ms on Ti50.
+	 */
+	uint16_t msg = htobe16((uint16_t) timeout_ms);
+	int rv = 0;
+
+	rv = send_vendor_command(td, VENDOR_CC_IMMEDIATE_RESET, &msg,
+				sizeof(msg), NULL, 0);
+	if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr,
+			"Error %d sending immediate reset command\n",
+			rv);
+		return update_error;
+	}
+
+	return 0;
+}
+
 /*
  * Search the passed in zero terminated array of options_map structures for
  * option 'option'.
@@ -3897,6 +3921,8 @@ int main(int argc, char *argv[])
 	int is_dauntless = 0;
 	int set_capability = 0;
 	const char *capability_parameter = "";
+	bool reboot_gsc = false;
+	size_t reboot_gsc_timeout = 0;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4124,6 +4150,15 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Illegal wp option \"%s\"\n", optarg);
 			errorcnt++;
 			break;
+		case 'z':
+			reboot_gsc = true;
+			/* Set a 1ms default reboot time to avoid libusb errors
+			 * when the GSC resets too quickly.
+			 */
+			reboot_gsc_timeout = 1;
+			if (optarg)
+				reboot_gsc_timeout = strtoul(optarg, NULL, 0);
+			break;
 		case 0:				/* auto-handled option */
 			break;
 		case '?':
@@ -4175,6 +4210,7 @@ int main(int argc, char *argv[])
 	    !factory_mode &&
 	    !erase_ap_ro_hash &&
 	    !password &&
+	    !reboot_gsc &&
 	    !rma &&
 	    !set_capability &&
 	    !show_fw_ver &&
@@ -4318,6 +4354,9 @@ int main(int argc, char *argv[])
 		exit(process_arv_config_wpds(&td,
 			arv_config_wpsr_choice,
 			&arv_config_wpds));
+
+	if (reboot_gsc)
+		exit(process_reboot_gsc(&td, reboot_gsc_timeout));
 
 	if (data || show_fw_ver) {
 
