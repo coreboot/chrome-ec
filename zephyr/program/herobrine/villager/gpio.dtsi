@@ -126,7 +126,7 @@
 			enum-name = "GPIO_SWITCHCAP_ON";
 		};
 		gpio_en_pp5000_s5: en_pp5000_s5 {
-			gpios = <&gpio7 3 GPIO_OUTPUT_HIGH>;
+			gpios = <&gpio7 3 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_EN_PP5000";
 		};
 		ec_bl_disable_l {
@@ -225,6 +225,7 @@
 		};
 		gpio_ec_kso_02_inv: ec_kso_02_inv {
 			gpios = <&gpio1 7 (GPIO_OUTPUT_LOW | GPIO_ACTIVE_LOW)>;
+			enum-name = "GPIO_KBD_KSO2";
 		};
 	};
 

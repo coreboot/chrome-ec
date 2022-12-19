@@ -561,7 +561,13 @@ extern char mock_jump_data[CONFIG_PLATFORM_EC_PRESERVED_END_OF_RAM_SIZE];
 #undef CONFIG_MAPPED_STORAGE
 #undef CONFIG_FLASH_PSTATE
 #ifdef CONFIG_PLATFORM_EC_FLASH_CROS
+
+#ifdef CONFIG_BOARD_NATIVE_POSIX
+#include "flash_chip_native_posix.h"
+#else
 #include "flash_chip.h"
+#endif
+
 #define CONFIG_FLASH_CROS
 
 /* Internal, don't use outside this header */
@@ -2712,6 +2718,11 @@ BUILD_ASSERT((DT_NUM_INST_STATUS_OKAY(mps_mp2964)) == 1,
 #undef CONFIG_LOW_POWER_IDLE
 #ifdef CONFIG_PLATFORM_EC_LOW_POWER_IDLE
 #define CONFIG_LOW_POWER_IDLE
+#endif
+
+#undef CONFIG_LOW_POWER_S0
+#ifdef CONFIG_PLATFORM_EC_LOW_POWER_S0
+#define CONFIG_LOW_POWER_S0
 #endif
 
 #undef CONFIG_POWER_COMMON

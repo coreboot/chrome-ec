@@ -5,26 +5,13 @@
 
 /* Corsola baseboard-specific USB-C configuration */
 
-#include "adc.h"
 #include "baseboard_usbc_config.h"
-#include "button.h"
 #include "charge_state_v2.h"
-#include "charger.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "extpower.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
-#include "i2c.h"
-#include "lid_switch.h"
-#include "power.h"
-#include "power_button.h"
-#include "ppc/syv682x_public.h"
-#include "spi.h"
-#include "switch.h"
-#include "tablet_mode.h"
-#include "task.h"
-#include "uart.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
@@ -228,8 +215,11 @@ static void baseboard_x_ec_gpio2_init(void)
 	 * After C1 port tasks finished, we intentionally increase the port
 	 * count by 1 for usb_mux to access the C1 virtual mux for notifying
 	 * mainlink direction.
+	 * The current delay is set to 1 second. cros-ec-typec module will
+	 * not be getting the fake type-c port count if the deferred call is
+	 * later than the kernel upstarts.
 	 */
-	hook_call_deferred(&tasks_init_deferred_data, 2 * SECOND);
+	hook_call_deferred(&tasks_init_deferred_data, SECOND);
 }
 DECLARE_HOOK(HOOK_INIT, baseboard_x_ec_gpio2_init, HOOK_PRIO_DEFAULT);
 
