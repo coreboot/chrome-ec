@@ -7,12 +7,11 @@
 #
 
 # See Makefile for description.
-host-util-bin-y += ectool lbplay stm32mon ec_sb_firmware_update lbcc \
+host-util-bin-y += lbplay stm32mon ec_sb_firmware_update lbcc \
 	ec_parse_panicinfo cbi-util iteflash
 build-util-art-y += util/export_taskinfo.so
 
 build-util-bin-$(CHIP_NPCX) += ecst
-build-util-bin-$(BOARD_NOCTURNE_FP) += ectool_servo
 
 host-util-bin-y += uartupdatetool
 uartupdatetool-objs=uut/main.o uut/cmd.o uut/opr.o uut/l_com_port.o \
@@ -30,15 +29,11 @@ comm-objs=$(util-lock-objs:%=lock/%) comm-host.o comm-dev.o
 comm-objs+=comm-lpc.o comm-i2c.o misc_util.o comm-usb.o
 
 iteflash-objs = iteflash.o usb_if.o
-ectool-objs=ectool.o ectool_keyscan.o ec_flash.o ec_panicinfo.o $(comm-objs)
-ectool-objs+=ectool_i2c.o
-ectool-objs+=../common/crc.o
-ectool_servo-objs=$(ectool-objs) comm-servo-spi.o
 ec_sb_firmware_update-objs=ec_sb_firmware_update.o $(comm-objs) misc_util.o
 ec_sb_firmware_update-objs+=powerd_lock.o
 lbplay-objs=lbplay.o $(comm-objs)
 
-util/ectool.c: $(out)/ec_version.h
+util/stm32mon.c: $(out)/ec_version.h
 
 ec_parse_panicinfo-objs=ec_parse_panicinfo.o ec_panicinfo.o
 
