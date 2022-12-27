@@ -1339,12 +1339,14 @@ __test_only enum charge_state_v2 charge_get_state_v2(void)
 
 static void deep_charge_battery(int *need_static)
 {
-	if (curr.state == ST_IDLE) {
+	if ((curr.state == ST_IDLE) &&
+	    (curr.batt.flags & BATT_FLAG_DEEP_CHARGE)) {
 		/* Deep charge time out , do nothing */
 		curr.requested_voltage = 0;
 		curr.requested_current = 0;
-	} else if (curr.state == ST_PRECHARGE
-			&& (get_time().val > precharge_start_time.val +
+	} else if (curr.state == ST_PRECHARGE &&
+		   (get_time().val >
+		    precharge_start_time.val +
 			CONFIG_BATTERY_LOW_VOLTAGE_TIMEOUT)) {
 		/* We've tried long enough, give up */
 		CPRINTS("Precharge for low voltage timed out");
@@ -1361,6 +1363,7 @@ static void deep_charge_battery(int *need_static)
 		set_charge_state(ST_PRECHARGE);
 		curr.requested_voltage = batt_info->voltage_max;
 		curr.requested_current = batt_info->precharge_current;
+		curr.batt.flags |= BATT_FLAG_DEEP_CHARGE;
 	}
 }
 
@@ -1579,13 +1582,6 @@ void charger_task(void *u)
 			goto wait_for_it;
 		}
 
-		if (IS_ENABLED(CONFIG_BATTERY_LOW_VOLTAGE_PROTECTION)
-			&& !(curr.batt.flags & BATT_FLAG_BAD_VOLTAGE)
-			&& (curr.batt.voltage <= batt_info->voltage_min)) {
-			deep_charge_battery(&need_static);
-			goto wait_for_it;
-		}
-
 		/* If the battery is not responsive, try to wake it up. */
 		if (!(curr.batt.flags & BATT_FLAG_RESPONSIVE)) {
 			if (battery_seems_to_be_dead || battery_is_cut_off()) {
@@ -1618,6 +1614,27 @@ void charger_task(void *u)
 			goto wait_for_it;
 		} else {
 			/* The battery is responding. Yay. Try to use it. */
+			/*
+			 * When the battery voltage is lower than voltage_min,precharge
+			 * first to protect the battery
+			 */
+			if (IS_ENABLED(CONFIG_BATTERY_LOW_VOLTAGE_PROTECTION)) {
+				if (!(curr.batt.flags & BATT_FLAG_BAD_VOLTAGE) &&
+				    (curr.batt.voltage <= batt_info->voltage_min)) {
+					deep_charge_battery(&need_static);
+					goto wait_for_it;
+				}
+
+				/*
+				 * Finished deep charge before timeout. Clear the flag
+				 * so that we can do deep charge again (when it's deeply
+				 * discharged again).
+				 */
+				if ((curr.batt.flags & BATT_FLAG_DEEP_CHARGE)) {
+					curr.batt.flags &= ~BATT_FLAG_DEEP_CHARGE;
+				}
+			}
+
 #ifdef CONFIG_BATTERY_REQUESTS_NIL_WHEN_DEAD
 			/*
 			 * TODO (crosbug.com/p/29467): remove this workaround
