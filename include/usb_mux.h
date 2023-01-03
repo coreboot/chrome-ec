@@ -90,6 +90,15 @@ struct usb_mux {
 	int (*board_init)(const struct usb_mux *mux);
 
 	/*
+	 * USB mux/retimer board specific set mux_state.
+	 *
+	 * @param me usb_mux
+	 * @param mux_state State to set mode to.
+	 * @return EC_SUCCESS on success, non-zero error code on failure.
+	 */
+	int (*board_set)(int port, mux_state_t mux_state);
+
+	/*
 	 * USB Type-C DP alt mode support. Notify Type-C controller
 	 * there is DP dongle hot-plug.
 	 * TODO: Move this function to usb_mux_driver struct.

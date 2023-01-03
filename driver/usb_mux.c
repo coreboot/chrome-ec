@@ -59,6 +59,10 @@ void usb_mux_set(int port, enum typec_mux mux_mode,
 		CPRINTS(
 		     "usb/dp mux: port(%d) typec_mux(%d) usb2(%d) polarity(%d)",
 		     port, mux_mode, usb_mode, polarity);
+
+	/* Apply board specific setting */
+	if (mux->board_set)
+		mux->board_set(port, mux_state);
 }
 
 int usb_mux_get(int port, const char **dp_str, const char **usb_str)
