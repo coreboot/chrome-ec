@@ -59,8 +59,8 @@ struct gpio_config {
 	COND_CODE_1(DT_NODE_HAS_PROP(id, gpios), (GPIO_CONFIG(id)), ())
 
 static const struct gpio_config configs[] = {
-#if DT_NODE_EXISTS(DT_PATH(named_gpios))
-	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_IMPL_CONFIG)
+#if DT_NODE_EXISTS(NAMED_GPIOS_NODE)
+	DT_FOREACH_CHILD(NAMED_GPIOS_NODE, GPIO_IMPL_CONFIG)
 #endif
 };
 
@@ -81,8 +81,8 @@ static const struct gpio_config configs[] = {
 	const struct gpio_dt_spec *const GPIO_DT_NAME(GPIO_SIGNAL(id)) = \
 		&configs[GPIO_SIGNAL(id)].spec;
 
-#if DT_NODE_EXISTS(DT_PATH(named_gpios))
-DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_PTRS)
+#if DT_NODE_EXISTS(NAMED_GPIOS_NODE)
+DT_FOREACH_CHILD(NAMED_GPIOS_NODE, GPIO_PTRS)
 #endif
 
 int gpio_is_implemented(enum gpio_signal signal)
@@ -320,6 +320,46 @@ void gpio_reset(enum gpio_signal signal)
 
 	gpio_pin_configure_dt(&configs[signal].spec,
 			      configs[signal].init_flags);
+}
+
+int gpio_save_port_config(const struct device *port, gpio_flags_t *flags,
+			  int buff_size)
+{
+	int state_offset = 0;
+
+	for (size_t i = 0; i < ARRAY_SIZE(configs); ++i) {
+		if (state_offset >= buff_size) {
+			LOG_ERR("%s buffer is too small", __func__);
+			return EC_ERROR_UNKNOWN;
+		}
+
+		if (port == configs[i].spec.port) {
+			gpio_pin_get_config_dt(&configs[i].spec,
+					       &flags[state_offset++]);
+		}
+	}
+
+	return EC_SUCCESS;
+}
+
+int gpio_restore_port_config(const struct device *port, gpio_flags_t *flags,
+			     int buff_size)
+{
+	int state_offset = 0;
+
+	for (size_t i = 0; i < ARRAY_SIZE(configs); ++i) {
+		if (state_offset >= buff_size) {
+			LOG_ERR("%s buffer is too small", __func__);
+			return EC_ERROR_UNKNOWN;
+		}
+
+		if (port == configs[i].spec.port) {
+			gpio_pin_configure_dt(&configs[i].spec,
+					      flags[state_offset++]);
+		}
+	}
+
+	return EC_SUCCESS;
 }
 
 void gpio_reset_port(const struct device *port)
