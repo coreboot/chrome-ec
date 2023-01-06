@@ -60,6 +60,11 @@ def build(opts):
     subprocess.run(cmd,
                    cwd=os.path.dirname(__file__),
                    check=True)
+    cmd = ['make', '-j{}'.format(opts.cpus)]
+    print(f'# Running {" ".join(cmd)}.')
+    subprocess.run(cmd,
+                   cwd=os.path.join(os.path.dirname(__file__), 'extra', 'usb_updater'),
+                   check=True)
 
 def bundle(opts):
     if opts.code_coverage:
