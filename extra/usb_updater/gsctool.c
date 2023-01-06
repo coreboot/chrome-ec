@@ -3549,6 +3549,7 @@ struct parsed_flog_entry {
 	uint64_t raw_timestamp;
 	time_t timestamp;
 	uint32_t event_type;
+	bool timestamp_reliable;
 };
 
 static int pop_flog_dt(struct transfer_descriptor *td,
@@ -3573,7 +3574,10 @@ static int pop_flog_dt(struct transfer_descriptor *td,
 	memcpy(parsed_entry->payload, entry.evt.payload,
 	       parsed_entry->payload_size);
 	parsed_entry->raw_timestamp = entry.evt.time;
-	parsed_entry->timestamp = parsed_entry->raw_timestamp / 1000;
+	parsed_entry->timestamp =
+	    (parsed_entry->raw_timestamp & ~(1ULL << 63)) / 1000;
+	parsed_entry->timestamp_reliable =
+	    (parsed_entry->raw_timestamp >> 63) == 0;
 	return rv;
 
 }
@@ -3600,6 +3604,7 @@ static int pop_flog(struct transfer_descriptor *td,
 	       parsed_entry->payload_size);
 	parsed_entry->raw_timestamp = entry.r.timestamp;
 	parsed_entry->timestamp = entry.r.timestamp;
+	parsed_entry->timestamp_reliable = true;
 	return rv;
 
 }
@@ -3664,6 +3669,8 @@ static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
 		}
 		for (i = 0; i < entry.payload_size; i++)
 			printf(" %02x", entry.payload[i]);
+		if (entry.timestamp_reliable == false)
+			printf(" -- TIMESTAMP UNRELIABLE!");
 		printf("\n");
 		retries = max_retries;
 	}
