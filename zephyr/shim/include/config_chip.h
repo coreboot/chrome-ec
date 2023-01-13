@@ -615,6 +615,11 @@ extern char mock_jump_data[CONFIG_PLATFORM_EC_PRESERVED_END_OF_RAM_SIZE];
 #define CONFIG_CMD_FLASH_WP
 #endif
 
+#undef CONFIG_FLASH_MULTIPLE_REGION
+#ifdef CONFIG_PLATFORM_EC_USE_ZEPHYR_FLASH_PAGE_LAYOUT
+#define CONFIG_FLASH_MULTIPLE_REGION
+#endif
+
 #endif /* CONFIG_PLATFORM_EC_FLASH_CROS */
 
 #undef CONFIG_MAPPED_STORAGE_BASE
@@ -730,16 +735,19 @@ extern char mock_jump_data[CONFIG_PLATFORM_EC_PRESERVED_END_OF_RAM_SIZE];
 
 #undef CONFIG_MKBP_EVENT_WAKEUP_MASK
 #if defined(CONFIG_PLATFORM_EC_MKBP_EVENT_WAKEUP_MASK) && \
-	DT_NODE_EXISTS(DT_PATH(ec_mkbp_event_wakeup_mask))
-#define CONFIG_MKBP_EVENT_WAKEUP_MASK \
-	DT_PROP(DT_PATH(ec_mkbp_event_wakeup_mask), wakeup_mask)
+	CONFIG_PLATFORM_EC_MKBP_EVENT_WAKEUP_MASK
+#define CONFIG_MKBP_EVENT_WAKEUP_MASK                                          \
+	DT_PROP(DT_COMPAT_GET_ANY_STATUS_OKAY(cros_ec_mkbp_event_wakeup_mask), \
+		wakeup_mask)
 #endif
 
 #undef CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK
 #if defined(CONFIG_PLATFORM_EC_MKBP_HOST_EVENT_WAKEUP_MASK) && \
-	DT_NODE_EXISTS(DT_PATH(ec_mkbp_host_event_wakeup_mask))
-#define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK \
-	DT_PROP(DT_PATH(ec_mkbp_host_event_wakeup_mask), wakeup_mask)
+	CONFIG_PLATFORM_EC_MKBP_HOST_EVENT_WAKEUP_MASK
+#define CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK                    \
+	DT_PROP(DT_COMPAT_GET_ANY_STATUS_OKAY(                \
+			cros_ec_mkbp_host_event_wakeup_mask), \
+		wakeup_mask)
 #endif
 
 #undef CONFIG_CMD_KEYBOARD

@@ -8,7 +8,9 @@ project(krabby)
 
 add_subdirectory(${PLATFORM_EC}/zephyr/test/test_utils test_utils)
 
-zephyr_include_directories("${PLATFORM_EC_PROGRAM_DIR}/corsola/include")
+zephyr_include_directories(
+	"${PLATFORM_EC_PROGRAM_DIR}/corsola/include"
+	include)
 
 target_sources(app PRIVATE
 	src/stubs.c
@@ -18,6 +20,8 @@ target_sources(app PRIVATE
 target_sources_ifdef(CONFIG_TEST_KRABBY
 	app PRIVATE
 	src/charger_workaround.c
+	src/main.c
+	src/power_seq.c
 	src/usb_mux_init.c
 	src/usbc_config.c
 	${PLATFORM_EC_PROGRAM_DIR}/corsola/src/ite_charger_workaround.c)
@@ -25,7 +29,9 @@ target_sources_ifdef(CONFIG_TEST_KRABBY
 target_sources_ifdef(CONFIG_TEST_TENTACRUEL
 	app PRIVATE
 	src/fake.c
+	src/ppc_tentacruel.c
 	src/temp_tentacruel.c
 	src/fwconfig_tentacruel.c
+	${PLATFORM_EC_PROGRAM_DIR}/corsola/tentacruel/src/ppc.c
 	${PLATFORM_EC_PROGRAM_DIR}/corsola/tentacruel/src/temp.c
 	${PLATFORM_EC_PROGRAM_DIR}/corsola/tentacruel/src/sensor.c)

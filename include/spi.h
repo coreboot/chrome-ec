@@ -52,10 +52,13 @@ struct spi_device_t {
 	 */
 	uint8_t usb_flags;
 #endif
+
+	/* Port name */
+	const char *name;
 };
 
 extern
-#ifndef CONFIG_FINGERPRINT_MCU
+#ifndef CONFIG_SPI_MUTABLE_DEVICE_LIST
 	const
 #endif
 	struct spi_device_t spi_devices[];

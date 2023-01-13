@@ -5480,14 +5480,20 @@ enum ec_reboot_cmd {
 	EC_REBOOT_COLD = 4, /* Cold-reboot */
 	EC_REBOOT_DISABLE_JUMP = 5, /* Disable jump until next reboot */
 	EC_REBOOT_HIBERNATE = 6, /* Hibernate EC */
-	EC_REBOOT_HIBERNATE_CLEAR_AP_OFF = 7, /* and clears AP_IDLE flag */
+	/*
+	 * DEPRECATED: Hibernate EC and clears AP_IDLE flag.
+	 * Use EC_REBOOT_HIBERNATE and EC_REBOOT_FLAG_CLEAR_AP_IDLE, instead.
+	 */
+	EC_REBOOT_HIBERNATE_CLEAR_AP_OFF = 7,
 	EC_REBOOT_COLD_AP_OFF = 8, /* Cold-reboot and don't boot AP */
+	EC_REBOOT_NO_OP = 9, /* Do nothing but apply the flags. */
 };
 
 /* Flags for ec_params_reboot_ec.reboot_flags */
 #define EC_REBOOT_FLAG_RESERVED0 BIT(0) /* Was recovery request */
 #define EC_REBOOT_FLAG_ON_AP_SHUTDOWN BIT(1) /* Reboot after AP shutdown */
 #define EC_REBOOT_FLAG_SWITCH_RW_SLOT BIT(2) /* Switch RW slot */
+#define EC_REBOOT_FLAG_CLEAR_AP_IDLE BIT(3) /* Clear AP_IDLE flag */
 
 struct ec_params_reboot_ec {
 	uint8_t cmd; /* enum ec_reboot_cmd */
@@ -7727,6 +7733,32 @@ struct ec_response_battery_static_info_v1 {
 	char model_ext[12];
 	char serial_ext[12];
 	char type_ext[12];
+} __ec_align4;
+
+/**
+ * struct ec_response_battery_static_info_v2 - hostcmd v2 battery static info
+ *
+ * Equivalent to struct ec_response_battery_static_info, but with strings
+ * further lengthened (relative to v1) to accommodate the maximum string length
+ * permitted by the Smart Battery Data Specification revision 1.1 and fields
+ * renamed to better match that specification.
+ *
+ * @design_capacity: battery design capacity (in mAh)
+ * @design_voltage: battery design voltage (in mV)
+ * @cycle_count: battery cycle count
+ * @manufacturer: battery manufacturer string
+ * @device_name: battery model string
+ * @serial: battery serial number string
+ * @chemistry: battery type string
+ */
+struct ec_response_battery_static_info_v2 {
+	uint16_t design_capacity;
+	uint16_t design_voltage;
+	uint32_t cycle_count;
+	char manufacturer[32];
+	char device_name[32];
+	char serial[32];
+	char chemistry[32];
 } __ec_align4;
 
 /*

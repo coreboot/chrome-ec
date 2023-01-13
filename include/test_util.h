@@ -198,7 +198,7 @@ void task_trigger_test_interrupt(void (*isr)(void));
  * to udelay() from interrupt generator are delegated to this function
  * automatically.
  */
-void interrupt_generator_udelay(unsigned us);
+void interrupt_generator_udelay(unsigned int us);
 
 #ifdef EMU_BUILD
 void wait_for_task_started(void);
@@ -425,7 +425,7 @@ struct unit_test {
  */
 #define ztest_unit_test_setup_teardown(fn, setup, teardown) \
 	{                                                   \
-#fn, fn, setup, teardown                    \
+		#fn, fn, setup, teardown                    \
 	}
 
 /**
