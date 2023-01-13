@@ -125,6 +125,9 @@ const uint32_t pstate_data __attribute__((section(".rodata.pstate"))) =
 #endif /* !CONFIG_FLASH_PSTATE_BANK */
 #endif /* CONFIG_FLASH_PSTATE */
 
+/* Shim layer provides implementation of these functions based on Zephyr API */
+#if !defined(CONFIG_ZEPHYR) || \
+	!defined(CONFIG_PLATFORM_EC_USE_ZEPHYR_FLASH_PAGE_LAYOUT)
 #ifdef CONFIG_FLASH_MULTIPLE_REGION
 const struct ec_flash_bank *flash_bank_info(int bank)
 {
@@ -218,12 +221,51 @@ int crec_flash_bank_start_offset(int bank)
 	return offset;
 }
 
+int crec_flash_response_fill_banks(struct ec_response_flash_info_2 *r,
+				   int num_banks)
+{
+	const struct ec_flash_bank *banks = flash_bank_array;
+	int banks_to_copy = MIN(ARRAY_SIZE(flash_bank_array), num_banks);
+
+	if (num_banks < 1)
+		return EC_RES_INVALID_PARAM;
+
+	memcpy(r->banks, banks, banks_to_copy * sizeof(struct ec_flash_bank));
+	r->num_banks_desc = banks_to_copy;
+	r->num_banks_total = ARRAY_SIZE(flash_bank_array);
+
+	return EC_RES_SUCCESS;
+}
+#else /* CONFIG_FLASH_MULTIPLE_REGION */
+#if CONFIG_FLASH_BANK_SIZE < CONFIG_FLASH_ERASE_SIZE
+#error "Flash: Bank size expected bigger or equal to erase size."
+#endif
+int crec_flash_response_fill_banks(struct ec_response_flash_info_2 *r,
+				   int num_banks)
+{
+	if (num_banks < 1)
+		return EC_RES_INVALID_PARAM;
+
+	r->banks[0].count = crec_flash_total_banks();
+	r->banks[0].size_exp = __fls(CONFIG_FLASH_BANK_SIZE);
+	r->banks[0].write_size_exp = __fls(CONFIG_FLASH_WRITE_SIZE);
+	r->banks[0].erase_size_exp = __fls(CONFIG_FLASH_ERASE_SIZE);
+	r->banks[0].protect_size_exp = __fls(CONFIG_FLASH_BANK_SIZE);
+
+	r->num_banks_desc = 1;
+	r->num_banks_total = 1;
+
+	return EC_RES_SUCCESS;
+}
 #endif /* CONFIG_FLASH_MULTIPLE_REGION */
 
 int crec_flash_total_banks(void)
 {
 	return PHYSICAL_BANKS;
 }
+#endif /* !defined(CONFIG_ZEPHYR) ||                                \
+	* !defined(CONFIG_PLATFORM_EC_USE_ZEPHYR_FLASH_PAGE_LAYOUT) \
+	*/
 
 static int flash_range_ok(int offset, int size_req, int align)
 {
@@ -989,6 +1031,8 @@ static void flash_erase_deferred(void)
 DECLARE_DEFERRED(flash_erase_deferred);
 #endif
 
+#if !defined(CONFIG_ZEPHYR) || \
+	!defined(CONFIG_PLATFORM_EC_USE_ZEPHYR_FLASH_PAGE_LAYOUT)
 void crec_flash_print_region_info(void)
 {
 #ifdef CONFIG_FLASH_MULTIPLE_REGION
@@ -1010,6 +1054,7 @@ void crec_flash_print_region_info(void)
 	ccprintf("Protect: %4d B\n", CONFIG_FLASH_BANK_SIZE);
 #endif
 }
+#endif
 
 /*****************************************************************************/
 /* Console commands */
@@ -1253,32 +1298,16 @@ static enum ec_status flash_command_get_info(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_flash_info_2 *p_2 = args->params;
 	struct ec_response_flash_info_2 *r_2 = args->response;
-#ifdef CONFIG_FLASH_MULTIPLE_REGION
-	int banks_size = ARRAY_SIZE(flash_bank_array);
-	const struct ec_flash_bank *banks = flash_bank_array;
-#else
+#ifndef CONFIG_FLASH_MULTIPLE_REGION
 	struct ec_response_flash_info_1 *r_1 = args->response;
-#if CONFIG_FLASH_BANK_SIZE < CONFIG_FLASH_ERASE_SIZE
-#error "Flash: Bank size expected bigger or equal to erase size."
 #endif
-	struct ec_flash_bank single_bank = {
-		.count = CONFIG_FLASH_SIZE_BYTES / CONFIG_FLASH_BANK_SIZE,
-		.size_exp = __fls(CONFIG_FLASH_BANK_SIZE),
-		.write_size_exp = __fls(CONFIG_FLASH_WRITE_SIZE),
-		.erase_size_exp = __fls(CONFIG_FLASH_ERASE_SIZE),
-		.protect_size_exp = __fls(CONFIG_FLASH_BANK_SIZE),
-	};
-	int banks_size = 1;
-	const struct ec_flash_bank *banks = &single_bank;
-#endif
-	int banks_len;
-	int ideal_size;
+	int res;
 
 	/*
 	 * Compute the ideal amount of data for the host to send us,
 	 * based on the maximum response size and the ideal write size.
 	 */
-	ideal_size =
+	int ideal_size =
 		(args->response_max - sizeof(struct ec_params_flash_write)) &
 		~(CONFIG_FLASH_WRITE_IDEAL_SIZE - 1);
 	/*
@@ -1303,11 +1332,16 @@ static enum ec_status flash_command_get_info(struct host_cmd_handler_args *args)
 		r_2->flags |= EC_FLASH_INFO_SELECT_REQUIRED;
 #endif
 		r_2->write_ideal_size = ideal_size;
-		r_2->num_banks_total = banks_size;
-		r_2->num_banks_desc = MIN(banks_size, p_2->num_banks_desc);
-		banks_len = r_2->num_banks_desc * sizeof(struct ec_flash_bank);
-		memcpy(r_2->banks, banks, banks_len);
-		args->response_size += banks_len;
+		/*
+		 * Fill r_2->num_banks_desc, r_2->num_banks_total and
+		 * r_2->banks.
+		 */
+		res = crec_flash_response_fill_banks(r_2, p_2->num_banks_desc);
+		if (res != EC_RES_SUCCESS)
+			return res;
+
+		args->response_size +=
+			r_2->num_banks_desc * sizeof(struct ec_flash_bank);
 		return EC_RES_SUCCESS;
 	}
 #ifdef CONFIG_FLASH_MULTIPLE_REGION
