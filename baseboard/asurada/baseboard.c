@@ -95,12 +95,15 @@ __override void board_hibernate_late(void)
 	if (IS_ENABLED(BOARD_ASURADA) && board_get_version() <= 1)
 		return;
 
-	isl9238c_hibernate(CHARGER_SOLO);
-
 	gpio_set_level(GPIO_EN_SLP_Z, 1);
 
 	/* should not reach here */
 	__builtin_unreachable();
+}
+
+void board_hibernate(void)
+{
+	isl9238c_hibernate(CHARGER_SOLO);
 }
 
 /* power signal list.  Must match order of enum power_signal. */
