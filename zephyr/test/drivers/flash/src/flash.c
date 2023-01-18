@@ -269,26 +269,66 @@ ZTEST_USER(flash, test_hostcmd_flash_info_1)
 	struct host_cmd_handler_args args =
 		BUILD_HOST_COMMAND_RESPONSE(EC_CMD_FLASH_INFO, 1, response);
 
+	if (!IS_ENABLED(CONFIG_PLATFORM_EC_USE_ZEPHYR_FLASH_PAGE_LAYOUT)) {
+		/* Get the flash info. */
+		zassert_ok(host_command_process(&args), NULL);
+		zassert_equal(response.flash_size,
+			      CONFIG_FLASH_SIZE_BYTES - EC_FLASH_REGION_START,
+			      "response.flash_size = %d", response.flash_size);
+		zassert_equal(response.flags, 0, "response.flags = %d",
+			      response.flags);
+		zassert_equal(response.write_block_size,
+			      CONFIG_FLASH_WRITE_SIZE,
+			      "response.write_block_size = %d",
+			      response.write_block_size);
+		zassert_equal(response.erase_block_size,
+			      CONFIG_FLASH_ERASE_SIZE,
+			      "response.erase_block_size = %d",
+			      response.erase_block_size);
+		zassert_equal(response.protect_block_size,
+			      CONFIG_FLASH_BANK_SIZE,
+			      "response.protect_block_size = %d",
+			      response.protect_block_size);
+		zassert_equal(response.write_ideal_size,
+			      (args.response_max -
+			       sizeof(struct ec_params_flash_write)) &
+				      ~(CONFIG_FLASH_WRITE_SIZE - 1),
+			      "response.write_ideal_size = %d",
+			      response.write_ideal_size);
+	} else {
+		/*
+		 * Flash sector description not supported in FLASH_INFO
+		 * version 1 command
+		 */
+		zassert_equal(host_command_process(&args),
+			      EC_RES_INVALID_VERSION, NULL);
+	}
+}
+
+ZTEST_USER(flash, test_hostcmd_flash_info_2_zero_bank)
+{
+	struct ec_response_flash_info_2 response = {};
+	struct ec_params_flash_info_2 params = {
+		.num_banks_desc = 0,
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND(EC_CMD_FLASH_INFO, 2, response, params);
+
 	/* Get the flash info. */
 	zassert_ok(host_command_process(&args), NULL);
 	zassert_equal(response.flash_size,
-		      CONFIG_FLASH_SIZE_BYTES - EC_FLASH_REGION_START,
-		      "response.flash_size = %d", response.flash_size);
-	zassert_equal(response.flags, 0, "response.flags = %d", response.flags);
-	zassert_equal(response.write_block_size, CONFIG_FLASH_WRITE_SIZE,
-		      "response.write_block_size = %d",
-		      response.write_block_size);
-	zassert_equal(response.erase_block_size, CONFIG_FLASH_ERASE_SIZE,
-		      "response.erase_block_size = %d",
-		      response.erase_block_size);
-	zassert_equal(response.protect_block_size, CONFIG_FLASH_BANK_SIZE,
-		      "response.protect_block_size = %d",
-		      response.protect_block_size);
+		      CONFIG_FLASH_SIZE_BYTES - EC_FLASH_REGION_START, "got %d",
+		      response.flash_size);
+	zassert_equal(response.flags, 0, "got %d", response.flags);
 	zassert_equal(
 		response.write_ideal_size,
 		(args.response_max - sizeof(struct ec_params_flash_write)) &
 			~(CONFIG_FLASH_WRITE_SIZE - 1),
-		"response.write_ideal_size = %d", response.write_ideal_size);
+		"got %d", response.write_ideal_size);
+	zassert_equal(response.num_banks_total, 1, "got %d",
+		      response.num_banks_total);
+	zassert_equal(response.num_banks_desc, 0, "got %d",
+		      response.num_banks_desc);
 }
 
 ZTEST_USER(flash, test_hostcmd_flash_info_2)
@@ -357,6 +397,11 @@ ZTEST_USER(flash, test_console_cmd_flash_info)
 	sprintf(format_buffer, "Write:   %4d B (ideal %d B)",
 		CONFIG_FLASH_WRITE_SIZE, CONFIG_FLASH_WRITE_IDEAL_SIZE);
 	zassert_not_null(strstr(outbuffer, format_buffer));
+
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_USE_ZEPHYR_FLASH_PAGE_LAYOUT)) {
+		sprintf(format_buffer, "%d regions", crec_flash_total_banks());
+		zassert_not_null(strstr(outbuffer, format_buffer));
+	}
 
 	sprintf(format_buffer, "Erase:   %4d B", CONFIG_FLASH_ERASE_SIZE);
 	zassert_not_null(strstr(outbuffer, format_buffer));
