@@ -2670,8 +2670,8 @@ int cmd_pd_device_info(int argc, char *argv[])
 
 	p->port = port;
 	r1 = (struct ec_params_usb_pd_discovery_entry *)ec_inbuf;
-	rv = ec_command(EC_CMD_USB_PD_DISCOVERY, 0, p, sizeof(*p), ec_inbuf,
-			ec_max_insize);
+	rv = ec_command(EC_CMD_USB_PD_DISCOVERY, 0, p, sizeof(*p), r1,
+			sizeof(*r1));
 	if (rv < 0)
 		return rv;
 
@@ -2688,8 +2688,8 @@ int cmd_pd_device_info(int argc, char *argv[])
 	}
 
 	p->port = port;
-	rv = ec_command(EC_CMD_USB_PD_DEV_INFO, 0, p, sizeof(*p), ec_inbuf,
-			ec_max_insize);
+	rv = ec_command(EC_CMD_USB_PD_DEV_INFO, 0, p, sizeof(*p), r0,
+			sizeof(*r0));
 	if (rv < 0)
 		return rv;
 
@@ -3011,7 +3011,7 @@ int cmd_smart_discharge(int argc, char *argv[])
 	}
 
 	rv = ec_command(EC_CMD_SMART_DISCHARGE, 0, p, sizeof(*p), r,
-			ec_max_insize);
+			sizeof(*r));
 	if (rv < 0) {
 		perror("ERROR: EC_CMD_SMART_DISCHARGE failed");
 		return rv;

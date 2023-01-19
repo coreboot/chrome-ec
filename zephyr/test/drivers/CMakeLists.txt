@@ -13,6 +13,7 @@ get_target_property(TEST_SOURCES app SOURCES)
 
 # Add linked suites here
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_DEFAULT default)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS default/src/console_cmd)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_ANX7447 anx7447)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_AP_MUX_CONTROL ap_mux_control)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_AP_VDM_CONTROL ap_vdm_control)
@@ -60,6 +61,7 @@ add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_HOST_CMD_THREAD host_command_threa
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_PI3USB9201 bc12_pi3usb9201)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_MEMMAP memmap)
 add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_LED_COMMON led_common)
+add_subdirectory_ifdef(CONFIG_LINK_TEST_SUITE_PS8XXX ps8xxx)
 
 get_target_property(TEST_SOURCES_NEW app SOURCES)
 
