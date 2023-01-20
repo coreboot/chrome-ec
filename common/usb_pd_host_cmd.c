@@ -136,18 +136,18 @@ DECLARE_HOST_COMMAND(EC_CMD_USB_PD_SET_AMODE, hc_remote_pd_set_amode,
 
 static enum ec_status hc_remote_pd_discovery(struct host_cmd_handler_args *args)
 {
-	const uint8_t *port = args->params;
+	const struct ec_params_usb_pd_info_request *p = args->params;
 	struct ec_params_usb_pd_discovery_entry *r = args->response;
 
-	if (*port >= board_get_usb_pd_port_count())
+	if (p->port >= board_get_usb_pd_port_count())
 		return EC_RES_INVALID_PARAM;
 
-	r->vid = pd_get_identity_vid(*port);
-	r->ptype = pd_get_product_type(*port);
+	r->vid = pd_get_identity_vid(p->port);
+	r->ptype = pd_get_product_type(p->port);
 
 	/* pid only included if vid is assigned */
 	if (r->vid)
-		r->pid = pd_get_identity_pid(*port);
+		r->pid = pd_get_identity_pid(p->port);
 
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;
@@ -192,15 +192,15 @@ DECLARE_HOST_COMMAND(EC_CMD_USB_PD_GET_AMODE, hc_remote_pd_get_amode,
 #ifdef CONFIG_COMMON_RUNTIME
 static enum ec_status hc_remote_pd_dev_info(struct host_cmd_handler_args *args)
 {
-	const uint8_t *port = args->params;
+	const struct ec_params_usb_pd_info_request *p = args->params;
 	struct ec_params_usb_pd_rw_hash_entry *r = args->response;
 	uint16_t dev_id;
 	uint32_t current_image;
 
-	if (*port >= board_get_usb_pd_port_count())
+	if (p->port >= board_get_usb_pd_port_count())
 		return EC_RES_INVALID_PARAM;
 
-	pd_dev_get_rw_hash(*port, &dev_id, r->dev_rw_hash, &current_image);
+	pd_dev_get_rw_hash(p->port, &dev_id, r->dev_rw_hash, &current_image);
 
 	r->dev_id = dev_id;
 	r->current_image = current_image;
