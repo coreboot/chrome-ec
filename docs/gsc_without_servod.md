@@ -171,7 +171,12 @@ Then to rescue the GSC chip, do the following:
  - disconnect terminal from the GSC console TTY device
  - invoke `brescue.sh <path to the firmware image> <GSC console TTY device>`
  - generate GSC reset pulse using instructions based on the adapter used to
- connect to the GSC ([Servo Micro](#reset-gsc-using-servo-micro) or [C2D2](#reset-gsc-using-c2d2))
+ connect to the GSC ([Servo Micro](#reset-gsc-using-servo-micro) or
+ [C2D2](#reset-gsc-using-c2d2)). Another way to reset the GSC is to
+ disconnect/reconnect the battery.
+
+**Note that resetting Dauntless using the key combo will not trigger a rescue
+ attempt.**
 
 Here is an example of a Ti50 rescue session:
 ```
