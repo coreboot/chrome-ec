@@ -8399,7 +8399,7 @@ int cmd_board_version(int argc, char *argv[])
 
 int cmd_boottime(int argc, char *argv[])
 {
-	struct ap_boot_time_data response;
+	struct ec_response_get_boot_time response;
 	int rv;
 
 	rv = ec_command(EC_CMD_GET_BOOT_TIME, 0, NULL, 0, &response,
@@ -10719,13 +10719,25 @@ int cmd_typec_vdm_response(int argc, char *argv[])
 	if (rv < 0)
 		return -1;
 
-	if (r->vdm_data_objects > 0) {
+	if (r->vdm_data_objects > 0 && r->vdm_response_err == EC_RES_SUCCESS) {
 		printf("VDM response from partner: %d", r->partner_type);
 		for (i = 0; i < r->vdm_data_objects; i++)
 			printf("\n  0x%08x", r->vdm_response[i]);
 		printf("\n");
 	} else {
-		printf("No VDM response found\n");
+		printf("No VDM response found (err: %d)\n",
+		       r->vdm_response_err);
+	}
+
+	if (r->vdm_attention_objects > 0) {
+		printf("VDM Attention:");
+		for (i = 0; i < r->vdm_attention_objects; i++)
+			printf("\n  0x%08x", r->vdm_attention[i]);
+		printf("\n");
+		printf("%d Attention messages remaining\n",
+		       r->vdm_attention_left);
+	} else {
+		printf("No VDM Attention found");
 	}
 
 	return 0;
