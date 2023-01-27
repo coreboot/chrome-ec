@@ -143,7 +143,7 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 	 * the derivation tree is distinct from RSA key derivation. */
 	if (DCRYPTO_hw_hmac_sha256_init(&hmac, seed->buffer, seed->size) !=
 	    DCRYPTO_OK)
-		return CRYPT_FAIL;
+		return CRYPT_NO_RESULT;
 
 	HMAC_SHA256_update(&hmac, "ECC", 4);
 	memcpy(local_seed.t.buffer, HMAC_SHA256_final(&hmac),
@@ -194,10 +194,12 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 	always_memset(local_seed.t.buffer, 0, local_seed.t.size);
 	always_memset(key_bytes, 0, sizeof(key_bytes));
 
-	if (count == 0)
-		FAIL(FATAL_ERROR_INTERNAL);
 	if (counter != NULL)
 		*counter = count;
+	if (count == 0) {
+		FAIL(FATAL_ERROR_CRYPTO);
+		return CRYPT_HW_FAILURE; /* Produce TPM_RC_FAILURE */
+	}
 
 	return CRYPT_SUCCESS;
 }
