@@ -399,7 +399,7 @@ CRYPT_RESULT _cpri__GenerateKeyRSA(
 
 		if (DCRYPTO_hw_hmac_sha256_init(&hmac, seed->buffer,
 						seed->size) != DCRYPTO_OK)
-			return CRYPT_FAIL;
+			return CRYPT_NO_RESULT;
 		HMAC_SHA256_update(&hmac, "RSA", 4);
 		memcpy(local_seed.t.buffer, HMAC_SHA256_final(&hmac),
 		       local_seed.t.size);
