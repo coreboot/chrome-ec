@@ -23,6 +23,12 @@ else:
         EC_BASE.resolve().parent.parent / "third_party" / "zephyr" / "main"
     )
 
+if not os.path.exists(ZEPHYR_BASE):
+    raise Exception(
+        f"ZEPHYR_BASE path does not exist!\nZEPHYR_BASE={ZEPHYR_BASE}"
+    )
+
+
 site.addsitedir(ZEPHYR_BASE / "scripts")
 site.addsitedir(ZEPHYR_BASE / "scripts" / "kconfig")
 # pylint:disable=import-error,wrong-import-position
@@ -96,7 +102,7 @@ class KconfigCheck:
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             modules = zephyr_module.parse_modules(
-                ZEPHYR_BASE, extra_modules=[EC_BASE]
+                ZEPHYR_BASE, modules=[EC_BASE]
             )
 
             kconfig = ""
