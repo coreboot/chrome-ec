@@ -7,6 +7,7 @@
 #define __CROS_EC_SYSTEM_SAFE_MODE_H
 
 #include "stdbool.h"
+#include "task.h"
 
 /**
  * Checks if running in system safe mode
