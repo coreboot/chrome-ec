@@ -711,6 +711,10 @@ static void isl923x_init(int chgnum)
 				goto init_fail;
 
 			reg |= ISL923X_C0_ENABLE_BUCK;
+			/* Adjusts phase comparator threshold offset */
+			reg &= ~ISL923X_C0_BUCK_PHASE_MASK;
+			reg |= CONFIG_ISL9238C_BUCK_PHASE_VOLTAGE
+			       << ISL923X_C0_BUCK_PHASE_SHIFT;
 
 			if (raw_write16(chgnum, ISL923X_REG_CONTROL0, reg))
 				goto init_fail;
@@ -1457,6 +1461,71 @@ static enum ec_error_list raa489000_set_vsys_compensation(int chgnum,
 	return EC_ERROR_UNIMPLEMENTED;
 }
 #endif /* CONFIG_CHARGER_RAA489000 && CONFIG_OCPC */
+
+#ifdef CONFIG_PLATFORM_EC_RAA489000_AC_PRESENT_CONTROL
+/*
+ * If the device is in OTG mode, flip the comparator output
+ * so that the AC_PRESENT signal does not get asserted incorrectly
+ * (the comparator still operates in OTG mode).
+ * The main use case for this is in the factory where battery cut-off
+ * is performed, and the expectation is that the power will be supplied
+ * on port 0 (the primary charger port).
+ * This does not fully support the case where power is supplied
+ * by port 1, and a device on port 0 undergoes a role swap.
+ */
+void raa489000_check_ac_delayed(void)
+{
+	static bool current_val;
+	bool new_val;
+	int rv, regval;
+	int chgnum =
+#ifdef CONFIG_OCPC
+		CHARGER_PRIMARY;
+#else
+		0;
+#endif
+
+	rv = raw_read16(chgnum, ISL9238_REG_INFO2, &regval);
+	if (rv == EC_SUCCESS) {
+		new_val = (((regval >> RAA489000_INFO2_STATE_SHIFT) &
+			    RAA489000_INFO2_STATE_MASK) ==
+			   RAA489000_INFO2_STATE_OTG);
+		if (new_val != current_val) {
+			/*
+			 * If the mode has changed to/from OTG mode,
+			 * set the comparator output to be inverted (OTG mode)
+			 * or non-inverted.
+			 * In OTG mode, ACOK is always on, and AC_PRESENT should
+			 * be low.
+			 */
+			current_val = new_val;
+			isl923x_set_comparator_inversion(chgnum, new_val);
+		}
+	}
+}
+DECLARE_DEFERRED(raa489000_check_ac_delayed);
+
+void raa489000_check_ac_present(void)
+{
+	/*
+	 * The check is deferred for a short time since
+	 * the chip state machine status does not
+	 * update immediately.
+	 */
+	hook_call_deferred(&raa489000_check_ac_delayed_data, 1 * SECOND);
+}
+
+/*
+ * Several hooks are required to ensure the check is done
+ * for the relevant cases.
+ */
+DECLARE_HOOK(HOOK_USB_PD_DISCONNECT, raa489000_check_ac_present,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_USB_PD_CONNECT, raa489000_check_ac_present,
+	     HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_POWER_SUPPLY_CHANGE, raa489000_check_ac_present,
+	     HOOK_PRIO_DEFAULT);
+#endif /* CONFIG_PLATFORM_EC_RAA489000_AC_PRESENT_CONTROL */
 
 const struct charger_drv isl923x_drv = {
 	.init = &isl923x_init,
