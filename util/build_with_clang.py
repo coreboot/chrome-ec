@@ -101,6 +101,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "chronicler",
     "coachz",
     "collis",
+    "constitution",
     "copano",
     "coral",
     "corori",
