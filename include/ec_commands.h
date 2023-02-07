@@ -248,7 +248,11 @@ extern "C" {
 
 #define EC_FAN_SPEED_ENTRIES 4 /* Number of fans at EC_MEMMAP_FAN */
 #define EC_FAN_SPEED_NOT_PRESENT 0xffff /* Entry not present */
-#define EC_FAN_SPEED_STALLED 0xfffe /* Fan stalled */
+
+/* Report 0 for fan stalled so userspace applications can take
+ * an appropriate action based on this value to control the fan.
+ */
+#define EC_FAN_SPEED_STALLED 0x0 /* Fan stalled */
 
 /* Battery bit flags at EC_MEMMAP_BATT_FLAG. */
 #define EC_BATT_FLAG_AC_PRESENT 0x01
@@ -2471,6 +2475,7 @@ enum ec_led_id {
 #define EC_LED_FLAGS_AUTO BIT(1) /* Switch LED back to automatic control */
 
 enum ec_led_colors {
+	EC_LED_COLOR_INVALID = -1,
 	EC_LED_COLOR_RED = 0,
 	EC_LED_COLOR_GREEN,
 	EC_LED_COLOR_BLUE,
@@ -6928,6 +6933,7 @@ enum tcpc_cc_polarity {
 #define PD_STATUS_EVENT_MUX_1_SET_DONE BIT(5)
 #define PD_STATUS_EVENT_VDM_REQ_REPLY BIT(6)
 #define PD_STATUS_EVENT_VDM_REQ_FAILED BIT(7)
+#define PD_STATUS_EVENT_VDM_ATTENTION BIT(8)
 
 /*
  * Encode and decode for BCD revision response
@@ -6939,6 +6945,18 @@ enum tcpc_cc_polarity {
 #define PD_STATUS_REV_SET_MAJOR(r) ((r + 1) << 12)
 #define PD_STATUS_REV_GET_MAJOR(r) ((r >> 12) & 0xF)
 #define PD_STATUS_REV_GET_MINOR(r) ((r >> 8) & 0xF)
+
+/*
+ * Encode revision from partner RMDO
+ *
+ * Unlike the specification revision given in the PD header, specification and
+ * version information returned in the revision message data object (RMDO) is
+ * not offset.
+ */
+#define PD_STATUS_RMDO_REV_SET_MAJOR(r) (r << 12)
+#define PD_STATUS_RMDO_REV_SET_MINOR(r) (r << 8)
+#define PD_STATUS_RMDO_VER_SET_MAJOR(r) (r << 4)
+#define PD_STATUS_RMDO_VER_SET_MINOR(r) (r)
 
 /*
  * Decode helpers for Source and Sink Capability PDOs
@@ -7044,12 +7062,13 @@ struct ec_response_typec_status {
 	/*
 	 * BCD PD revisions for partners
 	 *
-	 * The format has the PD major reversion in the upper nibble, and PD
-	 * minor version in the next nibble.  Following two nibbles are
-	 * currently 0.
-	 * ex. PD 3.2 would map to 0x3200
+	 * The format has the PD major revision in the upper nibble, and the PD
+	 * minor revision in the next nibble. The following two nibbles hold the
+	 * major and minor specification version. If a partner does not support
+	 * the Revision message, only the major revision will be given.
+	 * ex. PD Revision 3.2 Version 1.9 would map to 0x3219
 	 *
-	 * PD major/minor will be 0 if no PD device is connected.
+	 * PD revision/version will be 0 if no PD device is connected.
 	 */
 	uint16_t sop_revision;
 	uint16_t sop_prime_revision;
@@ -7348,7 +7367,8 @@ struct ec_params_rgbkbd_set_color {
 } __ec_align1;
 
 /*
- * Gather the response to the most recent VDM REQ from the AP
+ * Gather the response to the most recent VDM REQ from the AP, as well
+ * as popping the oldest VDM:Attention from the DPM queue
  */
 #define EC_CMD_TYPEC_VDM_RESPONSE 0x013C
 
@@ -7361,10 +7381,18 @@ struct ec_response_typec_vdm_response {
 	uint8_t vdm_data_objects;
 	/* Partner to address - see enum typec_partner_type */
 	uint8_t partner_type;
-	/* Reserved */
-	uint16_t reserved;
+	/* enum ec_status describing VDM response */
+	uint16_t vdm_response_err;
 	/* VDM data, including VDM header */
 	uint32_t vdm_response[VDO_MAX_SIZE];
+	/* Number of 32-bit Attention fields filled in */
+	uint8_t vdm_attention_objects;
+	/* Number of remaining messages to consume */
+	uint8_t vdm_attention_left;
+	/* Reserved */
+	uint16_t reserved1;
+	/* VDM:Attention contents */
+	uint32_t vdm_attention[2];
 } __ec_align1;
 
 /*****************************************************************************/
@@ -7836,7 +7864,7 @@ enum boot_time_param {
 	RESET_CNT,
 };
 
-struct ap_boot_time_data {
+struct ec_response_get_boot_time {
 	uint64_t timestamp[RESET_CNT];
 	uint16_t cnt;
 } __ec_align4;

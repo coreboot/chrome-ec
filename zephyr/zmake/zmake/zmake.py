@@ -25,6 +25,7 @@ import zmake.project
 import zmake.util as util
 import zmake.version
 
+
 ninja_warnings = re.compile(r"^(\S*: )?warning:.*")
 ninja_errors = re.compile(r"error:.*")
 
@@ -191,6 +192,7 @@ class Zmake:
 
         self.executor = zmake.multiproc.Executor()
         self._sequential = self.jobserver.is_sequential() and not goma
+        self.cmp_failed_projects = {}
         self.failed_projects = []
 
     @property
@@ -342,6 +344,9 @@ class Zmake:
         extra_cflags=None,
         keep_temps=False,
         cmake_defs=None,
+        compare_configs=False,
+        compare_binaries_disable=False,
+        compare_devicetrees=False,
     ):
         """Compare EC builds at two commits."""
         temp_dir = tempfile.mkdtemp(prefix="zcompare-")
@@ -403,9 +408,20 @@ class Zmake:
                     checkout.ref,
                 )
                 return result
+        if not compare_binaries_disable:
+            failed_projects = cmp_builds.check_binaries(projects)
+            self.cmp_failed_projects["binary"] = failed_projects
+            self.failed_projects.extend(failed_projects)
+        if compare_configs:
+            failed_projects = cmp_builds.check_configs(projects)
+            self.cmp_failed_projects["config"] = failed_projects
+            self.failed_projects.extend(failed_projects)
+        if compare_devicetrees:
+            failed_projects = cmp_builds.check_devicetrees(projects)
+            self.cmp_failed_projects["devicetree"] = failed_projects
+            self.failed_projects.extend(failed_projects)
 
-        self.failed_projects = cmp_builds.check_binaries(projects)
-
+        self.failed_projects = list(set(self.failed_projects))
         if len(self.failed_projects) == 0:
             self.logger.info("Zephyr compare builds successful:")
             for checkout in cmp_builds.checkouts:
@@ -761,7 +777,11 @@ class Zmake:
         """Builds one sub-dir of a configured project (build-ro, etc)."""
 
         with self.jobserver.get_job():
-            cmd = ["/usr/bin/ninja", "-C", dirs[build_name].as_posix()]
+            cmd = [
+                util.get_tool_path("ninja"),
+                "-C",
+                dirs[build_name].as_posix(),
+            ]
             if self.goma:
                 # Go nuts ninja, goma does the heavy lifting!
                 cmd.append("-j1024")
@@ -827,7 +847,7 @@ class Zmake:
         else:
             self.logger.info("Running lcov on %s.", build_dir)
         cmd = [
-            "/usr/bin/lcov",
+            util.get_tool_path("lcov"),
             "--gcov-tool",
             gcov,
             "-q",
@@ -879,7 +899,7 @@ class Zmake:
         # Merge info files into a single lcov.info
         self.logger.info("Merging coverage data into %s.", output_file)
         cmd = [
-            "/usr/bin/lcov",
+            util.get_tool_path("lcov"),
             "-o",
             output_file,
             "--rc",

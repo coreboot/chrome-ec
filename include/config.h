@@ -2097,6 +2097,9 @@
 /* Base address of program memory (physical address of AP) */
 #undef CONFIG_PROGRAM_MEMORY_BASE_LOAD
 
+/* ec.bin image will be padded to match flash size. */
+#define CONFIG_IMAGE_PADDING
+
 /*
  * EC code can reside on internal or external storage. Only one of these
  * CONFIGs should be defined. CONFIG_INTERNAL_STORAGE implies XIP
@@ -3501,6 +3504,9 @@
  * ISL9238C enable Force Buck mode.
  */
 #undef CONFIG_ISL9238C_ENABLE_BUCK_MODE
+
+/* ISL9238C adjusts phase comparator threshold offset */
+#define CONFIG_ISL9238C_BUCK_PHASE_VOLTAGE 0
 
 /* Support MKBP event */
 #undef CONFIG_MKBP_EVENT

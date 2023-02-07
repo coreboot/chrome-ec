@@ -7,6 +7,7 @@
 """Build firmware with clang instead of gcc."""
 import argparse
 import concurrent
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import multiprocessing
 import os
@@ -14,7 +15,7 @@ import shutil
 import subprocess
 import sys
 import typing
-from concurrent.futures import ThreadPoolExecutor
+
 
 # Add to this list as compilation errors are fixed for boards.
 BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
@@ -117,6 +118,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "casta",
     "chronicler",
     "collis",
+    "constitution",
     "copano",
     "coral",
     "corori",

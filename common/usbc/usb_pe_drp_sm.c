@@ -1432,6 +1432,7 @@ static void pe_clear_port_data(int port)
 
 	dpm_remove_sink(port);
 	dpm_remove_source(port);
+	dpm_init(port);
 
 	/* Exit BIST Test mode, in case the TCPC entered it. */
 	tcpc_set_bist_test_mode(port, false);
@@ -1459,7 +1460,7 @@ void pe_clear_ado(int port)
 	mutex_unlock(&pe[port].ado_lock);
 }
 
-struct rmdo pe_get_partner_rmdo(int port)
+struct rmdo pd_get_partner_rmdo(int port)
 {
 	return pe[port].partner_rmdo;
 }
@@ -1786,7 +1787,7 @@ static void print_current_state(const int port)
 		CPRINTS_L1("C%d: %s%s", port,
 			   pe_state_names[get_state_pe(port)], mode);
 	else
-		CPRINTS("C%d: pe-st%d", port, get_state_pe(port));
+		CPRINTS_L1("C%d: pe-st%d", port, get_state_pe(port));
 }
 
 static void send_source_cap(int port)
@@ -6308,7 +6309,8 @@ static void pe_vdm_response_entry(int port)
 		 * attention is only SVDM with no response
 		 * (just goodCRC) return zero here.
 		 */
-		dfp_consume_attention(port, rx_payload);
+		dpm_notify_attention(port, PD_HEADER_CNT(rx_emsg[port].header),
+				     rx_payload);
 		pe_set_ready_state(port);
 		return;
 #endif

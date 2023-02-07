@@ -210,10 +210,23 @@ static enum ec_status hc_typec_status(struct host_cmd_handler_args *args)
 
 	r->events = pd_get_events(p->port);
 
-	r->sop_revision = r->sop_connected ?
-				  PD_STATUS_REV_SET_MAJOR(
-					  pd_get_rev(p->port, TCPCI_MSG_SOP)) :
-				  0;
+	if (pd_get_partner_rmdo(p->port).major_rev != 0) {
+		r->sop_revision =
+			PD_STATUS_RMDO_REV_SET_MAJOR(
+				pd_get_partner_rmdo(p->port).major_rev) |
+			PD_STATUS_RMDO_REV_SET_MINOR(
+				pd_get_partner_rmdo(p->port).minor_rev) |
+			PD_STATUS_RMDO_VER_SET_MAJOR(
+				pd_get_partner_rmdo(p->port).major_ver) |
+			PD_STATUS_RMDO_VER_SET_MINOR(
+				pd_get_partner_rmdo(p->port).minor_ver);
+	} else if (r->sop_connected) {
+		r->sop_revision = PD_STATUS_REV_SET_MAJOR(
+			pd_get_rev(p->port, TCPCI_MSG_SOP));
+	} else {
+		r->sop_revision = 0;
+	}
+
 	r->sop_prime_revision =
 		pd_get_identity_discovery(p->port, TCPCI_MSG_SOP_PRIME) ==
 				PD_DISC_COMPLETE ?
@@ -239,7 +252,6 @@ static enum ec_status hc_typec_vdm_response(struct host_cmd_handler_args *args)
 	const struct ec_params_typec_vdm_response *p = args->params;
 	struct ec_response_typec_vdm_response *r = args->response;
 	uint32_t data[VDO_MAX_SIZE];
-	enum ec_status rv;
 
 	if (p->port >= board_get_usb_pd_port_count())
 		return EC_RES_INVALID_PARAM;
@@ -249,14 +261,20 @@ static enum ec_status hc_typec_vdm_response(struct host_cmd_handler_args *args)
 
 	args->response_size = sizeof(*r);
 
-	rv = dpm_copy_vdm_reply(p->port, &r->partner_type, &r->vdm_data_objects,
-				data);
+	r->vdm_response_err = dpm_copy_vdm_reply(p->port, &r->partner_type,
+						 &r->vdm_data_objects, data);
 
 	if (r->vdm_data_objects > 0)
 		memcpy(r->vdm_response, data,
 		       r->vdm_data_objects * sizeof(uint32_t));
 
-	return rv;
+	r->vdm_attention_objects =
+		dpm_vdm_attention_pop(p->port, data, &r->vdm_attention_left);
+	if (r->vdm_attention_objects > 0)
+		memcpy(r->vdm_attention, data,
+		       r->vdm_attention_objects * sizeof(uint32_t));
+
+	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_TYPEC_VDM_RESPONSE, hc_typec_vdm_response,
 		     EC_VER_MASK(0));

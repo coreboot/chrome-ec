@@ -13,6 +13,7 @@ import unittest
 import check_zephyr_project_config
 import mock  # pylint:disable=import-error
 
+
 # pylint:disable=protected-access
 
 
@@ -52,18 +53,19 @@ class TestKconfigCheck(unittest.TestCase):
 
         parse_modules_mock.assert_called_once_with(
             check_zephyr_project_config.ZEPHYR_BASE,
-            extra_modules=[check_zephyr_project_config.EC_BASE],
+            modules=[check_zephyr_project_config.EC_BASE],
         )
         process_kconfig_mock.assert_called_once_with("project", "meta")
         kconfig_mock.assert_called_once_with(
-            check_zephyr_project_config.ZEPHYR_BASE + "/Kconfig"
+            str(check_zephyr_project_config.ZEPHYR_BASE / "Kconfig")
         )
 
         self.assertEqual(
-            os.environ["ZEPHYR_BASE"], check_zephyr_project_config.ZEPHYR_BASE
+            os.environ["ZEPHYR_BASE"],
+            str(check_zephyr_project_config.ZEPHYR_BASE),
         )
         self.assertEqual(
-            os.environ["srctree"], check_zephyr_project_config.ZEPHYR_BASE
+            os.environ["srctree"], str(check_zephyr_project_config.ZEPHYR_BASE)
         )
         self.assertEqual(os.environ["ARCH_DIR"], "arch")
         self.assertEqual(os.environ["ARCH"], "*")
@@ -82,9 +84,7 @@ class TestKconfigCheck(unittest.TestCase):
 
         kconfig_mock.assert_called_once_with(kconfig_path)
         self.assertEqual(process_kconfig_mock.call_count, 0)
-        parse_modules_mock.assert_called_once_with(
-            mock.ANY, extra_modules=mock.ANY
-        )
+        parse_modules_mock.assert_called_once_with(mock.ANY, modules=mock.ANY)
 
     @mock.patch("pathlib.Path.is_file")
     @mock.patch("check_zephyr_project_config.KconfigCheck._init_kconfig")

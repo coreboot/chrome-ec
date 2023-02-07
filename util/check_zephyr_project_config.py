@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env vpython3
 
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
@@ -10,25 +10,32 @@ import argparse
 import logging
 import os
 import pathlib
+import site
 import sys
 import tempfile
 
+
 EC_BASE = pathlib.Path(__file__).parent.parent
 
-ZEPHYR_BASE = os.environ.get("ZEPHYR_BASE")
-if not ZEPHYR_BASE:
-    ZEPHYR_BASE = os.path.join(
-        EC_BASE.resolve().parent.parent,
-        "third_party",
-        "zephyr",
-        "main",
+if "ZEPHYR_BASE" in os.environ:
+    ZEPHYR_BASE = pathlib.Path(os.environ.get("ZEPHYR_BASE"))
+else:
+    ZEPHYR_BASE = pathlib.Path(
+        EC_BASE.resolve().parent.parent / "third_party" / "zephyr" / "main"
     )
 
-sys.path.insert(0, os.path.join(ZEPHYR_BASE, "scripts"))
-sys.path.insert(0, os.path.join(ZEPHYR_BASE, "scripts", "kconfig"))
+if not os.path.exists(ZEPHYR_BASE):
+    raise Exception(
+        f"ZEPHYR_BASE path does not exist!\nZEPHYR_BASE={ZEPHYR_BASE}"
+    )
+
+
+site.addsitedir(ZEPHYR_BASE / "scripts")
+site.addsitedir(ZEPHYR_BASE / "scripts" / "kconfig")
 # pylint:disable=import-error,wrong-import-position
 import kconfiglib
 import zephyr_module
+
 
 # pylint:enable=import-error,wrong-import-position
 
@@ -97,7 +104,7 @@ class KconfigCheck:
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             modules = zephyr_module.parse_modules(
-                ZEPHYR_BASE, extra_modules=[EC_BASE]
+                ZEPHYR_BASE, modules=[EC_BASE]
             )
 
             kconfig = ""
@@ -114,8 +121,8 @@ class KconfigCheck:
             with open(pathlib.Path(temp_dir) / "Kconfig.dts", "w") as file:
                 file.write("")
 
-            os.environ["ZEPHYR_BASE"] = ZEPHYR_BASE
-            os.environ["srctree"] = ZEPHYR_BASE
+            os.environ["ZEPHYR_BASE"] = str(ZEPHYR_BASE)
+            os.environ["srctree"] = str(ZEPHYR_BASE)
             os.environ["KCONFIG_BINARY_DIR"] = temp_dir
             os.environ["ARCH_DIR"] = "arch"
             os.environ["ARCH"] = "*"

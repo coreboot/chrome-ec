@@ -200,6 +200,17 @@ void raa489000_emul_set_acok_pin(const struct emul *emulator, uint16_t value)
 		data->info_2_reg &= ~RAA489000_INFO2_ACOK;
 }
 
+void raa489000_emul_set_state_machine_state(const struct emul *emulator,
+					    uint16_t value)
+{
+	struct isl923x_emul_data *data = emulator->data;
+
+	data->info_2_reg &=
+		~(RAA489000_INFO2_STATE_MASK << RAA489000_INFO2_STATE_SHIFT);
+	data->info_2_reg |= (value & RAA489000_INFO2_STATE_MASK)
+			    << RAA489000_INFO2_STATE_SHIFT;
+}
+
 /** Convenience macro for reading 16-bit registers */
 #define READ_REG_16(REG, BYTES, OUT)                             \
 	do {                                                     \
@@ -435,7 +446,7 @@ static int emul_isl923x_init(const struct emul *emul,
 		},                                                             \
 	}; \
 	EMUL_DT_INST_DEFINE(n, emul_isl923x_init, &isl923x_emul_data_##n,        \
-			    &isl923x_emul_cfg_##n, &i2c_common_emul_api)
+			    &isl923x_emul_cfg_##n, &i2c_common_emul_api, NULL)
 
 DT_INST_FOREACH_STATUS_OKAY(INIT_ISL923X)
 

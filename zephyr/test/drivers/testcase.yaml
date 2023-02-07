@@ -25,6 +25,21 @@ tests:
       - CONFIG_PLATFORM_EC_LID_ANGLE_UPDATE=y
       - CONFIG_PLATFORM_EC_USB_PD_DPS=y
       - CONFIG_PLATFORM_EC_I2C_PASSTHRU_RESTRICTED=y
+  drivers.default.console_cmds:
+    timeout: 360
+    extra_args: CONF_FILE="prj.conf;default/prj.conf"
+                DTC_OVERLAY_FILE="default/boards/native_posix.overlay"
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS=y
+      - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
+  drivers.default.console_cmds.gpio_keys:
+    timeout: 360
+    extra_args: CONF_FILE="prj.conf;default/prj.conf"
+                DTC_OVERLAY_FILE="default/boards/native_posix.overlay;default/boards/power_button.dtsi"
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS=y
+      - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
+      - CONFIG_PLATFORM_EC_POWER_BUTTON=n
   drivers.default.mock_power:
     timeout: 360
     extra_args: CONF_FILE="prj.conf;default/prj.conf"
@@ -38,7 +53,8 @@ tests:
       - CONFIG_PLATFORM_EC_USB_PD_DPS=y
       - CONFIG_PLATFORM_EC_I2C_PASSTHRU_RESTRICTED=y
   drivers.anx7447:
-    extra_args: CONF_FILE="prj.conf;anx7447/prj.conf" DTC_OVERLAY_FILE="./boards/native_posix.overlay;./anx7447/tcpc_policy.dts"
+    extra_args: CONF_FILE="prj.conf;anx7447/prj.conf"
+      DTC_OVERLAY_FILE="./boards/native_posix.overlay;./anx7447/tcpc_policy.dts"
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_ANX7447=y
   drivers.ap_mux_control:
@@ -136,7 +152,8 @@ tests:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_KEYBOARD_SCAN=y
   drivers.led_driver:
-    extra_args: CONF_FILE="prj.conf;led_driver/prj.conf" DTC_OVERLAY_FILE="./boards/native_posix.overlay;./led_driver/led_pins.dts;./led_driver/led_policy.dts"
+    extra_args: CONF_FILE="prj.conf;led_driver/prj.conf"
+      DTC_OVERLAY_FILE="./boards/native_posix.overlay;./led_driver/led_pins.dts;./led_driver/led_policy.dts"
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_LED_DRIVER=y
   drivers.led_common:
@@ -162,9 +179,6 @@ tests:
       - CONFIG_LINK_TEST_SUITE_PANIC_OUTPUT=y
       - CONFIG_PLATFORM_EC_CONSOLE_CMD_CRASH=y
       - CONFIG_ZTEST_THREAD_PRIORITY=1
-  drivers.panic_event:
-    extra_configs:
-      - CONFIG_LINK_TEST_SUITE_PANIC_EVENT=y
   drivers.power_host_sleep:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_POWER_HOST_SLEEP=y
@@ -174,12 +188,18 @@ tests:
 
       - CONFIG_POWER_SEQUENCE_MOCK=y
       - CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP=y
+  drivers.ps8xxx:
+    extra_args: CONF_FILE="prj.conf;ps8xxx/prj.conf" DTC_OVERLAY_FILE="./boards/native_posix.overlay;./ps8xxx/usbc.dts"
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_PS8XXX=y
   drivers.rt9490:
-    extra_args: CONF_FILE="prj.conf;rt9490/prj.conf" DTC_OVERLAY_FILE="./boards/native_posix.overlay;./rt9490/charger.dts"
+    extra_args: CONF_FILE="prj.conf;rt9490/prj.conf"
+      DTC_OVERLAY_FILE="./boards/native_posix.overlay;./rt9490/charger.dts"
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_RT9490=y
   drivers.shim_gpio_id:
-    extra_args: CONF_FILE="prj.conf" DTC_OVERLAY_FILE="boards/native_posix.overlay;shim_gpio_id/gpio_id.dts"
+    extra_args: CONF_FILE="prj.conf"
+      DTC_OVERLAY_FILE="boards/native_posix.overlay;shim_gpio_id/gpio_id.dts"
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_SHIM_GPIO_ID=y
   drivers.shim_pwm_hc:
@@ -240,9 +260,9 @@ tests:
   drivers.usbc_alt_mode_ec_entry:
     timeout: 120
     extra_configs:
-     - CONFIG_PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY=n
-     - CONFIG_LINK_TEST_SUITE_USBC_ALT_MODE=y
-     - CONFIG_POWER_SEQUENCE_MOCK=y
+      - CONFIG_PLATFORM_EC_USB_PD_REQUIRE_AP_MODE_ENTRY=n
+      - CONFIG_LINK_TEST_SUITE_USBC_ALT_MODE=y
+      - CONFIG_POWER_SEQUENCE_MOCK=y
   drivers.usbc_console_pd:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USBC_CONSOLE_PD=y
@@ -253,6 +273,9 @@ tests:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USBC_FRS=y
       - CONFIG_PLATFORM_EC_USB_PD_FRS_TCPC=y
+  drivers.usbc_legacy:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_USBC_LEGACY=y
   drivers.usbc_ocp:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USBC_OCP=y
