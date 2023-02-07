@@ -13,6 +13,7 @@ properties:
     enum:
       - "aec,5477109"
       - "atl,cfd72"
+      - "bms-gf,cr50"
       - "byd,l22b3pg0"
       - "byd,wv3k8"
       - "cdt,c340152"
@@ -54,6 +55,7 @@ properties:
       - "smp,l20m3pg0"
       - "smp,l20m3pg1"
       - "smp,l20m3pg2"
+      - "smp,l21m4pg0"
       - "smp,l22m3pg0"
       - "smp,l22m3pg1"
       - "smp,pc-vp-bp153"
