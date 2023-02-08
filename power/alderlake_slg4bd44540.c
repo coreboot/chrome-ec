@@ -16,6 +16,7 @@
 #include "power.h"
 #include "power/alderlake_slg4bd44540.h"
 #include "power/intel_x86.h"
+#include "system_boot_time.h"
 #include "timer.h"
 
 /*
@@ -48,8 +49,11 @@
 /* The wait time is ~150 msec, allow for safety margin. */
 #define IN_PCH_SLP_SUS_WAIT_TIME_USEC (250 * MSEC)
 
+#ifndef CONFIG_POWER_SIGNAL_RUNTIME_CONFIG
+const
+#endif /* !CONFIG_POWER_SIGNAL_RUNTIME_CONFIG */
 /* Power signals list. Must match order of enum power_signal. */
-const struct power_signal_info power_signal_list[] = {
+struct power_signal_info power_signal_list[] = {
 	[X86_SLP_S0_DEASSERTED] = {
 		.gpio = GPIO_PCH_SLP_S0_L,
 		.flags = POWER_SIGNAL_ACTIVE_HIGH |
@@ -92,6 +96,7 @@ const struct power_signal_info power_signal_list[] = {
 		.name = "ALL_SYS_PWRGD",
 	},
 };
+
 BUILD_ASSERT(ARRAY_SIZE(power_signal_list) == POWER_SIGNAL_COUNT);
 
 __overridable int intel_x86_get_pg_ec_dsw_pwrok(void)
@@ -192,7 +197,7 @@ static void all_sys_pwrgd_pass_thru(void)
 	int pch_pok;
 	int sys_pok;
 
-	sys_pg = gpio_get_level(GPIO_PG_EC_ALL_SYS_PWRGD);
+	sys_pg = intel_x86_get_pg_ec_all_sys_pwrgd();
 
 	if (IS_ENABLED(CONFIG_BRINGUP))
 		CPRINTS("PG_EC_ALL_SYS_PWRGD is %d", sys_pg);
@@ -230,7 +235,7 @@ static void all_sys_pwrgd_pass_thru(void)
 	if (sys_pok == 0) {
 		msleep(SYS_PWROK_DELAY_MS);
 		/* Check if we lost power while waiting. */
-		sys_pg = gpio_get_level(GPIO_PG_EC_ALL_SYS_PWRGD);
+		sys_pg = intel_x86_get_pg_ec_all_sys_pwrgd();
 		if (sys_pg == 0) {
 			CPRINTS("PG_EC_ALL_SYS_PWRGD deasserted, "
 				"shutting AP off!");
@@ -251,6 +256,8 @@ enum power_state power_handle_state(enum power_state state)
 	switch (state) {
 	case POWER_G3S5:
 		GPIO_SET_LEVEL(GPIO_EN_S5_RAILS, 1);
+
+		update_ap_boot_time(ARAIL);
 
 		if (power_wait_signals(IN_PGOOD_ALL_CORE))
 			break;

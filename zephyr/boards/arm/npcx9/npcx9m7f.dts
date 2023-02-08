@@ -8,3 +8,35 @@
 #include <cros/nuvoton/npcx9.dtsi>
 #include <nuvoton/npcx9m7f.dtsi>
 #include "npcx9.dtsi"
+
+/ {
+	/*
+	 * The NPCX9m7F includes 640 kB of code RAM, and 1 MB flash. Padding
+	 * is added to make the image the same size as the internal flash. This
+	 * is required to support the flashrom tool which requires an image that
+	 * matches the full internal flash size.
+	 */
+	binman {
+		wp-ro {
+			offset = <0x0>;
+			size = <0x50000>;
+		};
+		ec-rw {
+			offset = <0x50000>;
+			size = <0x50000>;
+			rw-fw {
+				rw-fwid {
+					/* Fix the lcoation of the FWID to the
+					 * last 32 bytes of the flash. This
+					 * ensures the RW entries in the FMAP
+					 * stored in the RO section of flash
+					 * are always correct.
+					 */
+					offset = <(0x50000 - 32)>;
+				};
+			};
+		};
+		pad-byte = <0xff>;
+		pad-after = <0x60000>;
+	};
+};

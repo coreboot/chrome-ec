@@ -8,13 +8,14 @@
 #ifndef __CROS_EC_USB_PD_H
 #define __CROS_EC_USB_PD_H
 
-#include <stdbool.h>
-#include <stdint.h>
 #include "common.h"
 #include "ec_commands.h"
 #include "usb_pd_tbt.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pd_vdo.h"
+
+#include <stdbool.h>
+#include <stdint.h>
 
 /* PD Host command timeout */
 #define PD_HOST_COMMAND_TIMEOUT_US SECOND
@@ -123,6 +124,14 @@ enum pd_rx_errors {
 #define PDO_BATT(min_mv, max_mv, op_mw)                          \
 	(PDO_BATT_MIN_VOLT(min_mv) | PDO_BATT_MAX_VOLT(max_mv) | \
 	 PDO_BATT_OP_POWER(op_mw) | PDO_TYPE_BATTERY)
+
+#define PDO_AUG_MAX_VOLT(mv) ((((mv) / 100) & 0xFF) << 17)
+#define PDO_AUG_MIN_VOLT(mv) ((((mv) / 100) & 0xFF) << 8)
+#define PDO_AUG_MAX_CURR(ma) ((((ma) / 50) & 0x7F) << 0)
+
+#define PDO_AUG(min_mv, max_mv, max_ma)                        \
+	(PDO_AUG_MIN_VOLT(min_mv) | PDO_AUG_MAX_VOLT(max_mv) | \
+	 PDO_AUG_MAX_CURR(max_ma) | PDO_TYPE_AUGMENTED)
 
 /* RDO : Request Data Object */
 #define RDO_OBJ_POS(n) (((n)&0x7) << 28)
@@ -362,6 +371,7 @@ extern const struct svdm_amode_fx supported_modes[];
 extern const int supported_modes_cnt;
 
 /* 4 entry rw_hash table of type-C devices that AP has firmware updates for. */
+/* This is *NOT* a hash-table, it's a table (ring-buffer) of hashes */
 #ifdef CONFIG_COMMON_RUNTIME
 #define RW_HASH_ENTRIES 4
 extern struct ec_params_usb_pd_rw_hash_entry rw_hash_table[RW_HASH_ENTRIES];
@@ -467,7 +477,6 @@ struct partner_active_modes {
  * VDM object is minimum of VDM header + 6 additional data objects.
  */
 #define VDO_HDR_SIZE 1
-#define VDO_MAX_SIZE 7
 
 #define VDM_VER10 0
 #define VDM_VER20 1
@@ -846,6 +855,10 @@ struct pd_cable {
 
 #define USB_VID_INTEL 0x8087
 
+#define USB_VID_FRAMEWORK 0X32ac
+#define USB_PID_FRAMEWORK_HDMI_CARD 0X2
+#define USB_PID_FRAMEWORK_DP_CARD 0X3
+
 /* Timeout for message receive in microseconds */
 #define USB_PD_RX_TMOUT_US 1800
 
@@ -894,7 +907,6 @@ enum pd_states {
 	PD_STATE_BIST_RX, /* C36 */
 	PD_STATE_BIST_TX, /* C37 */
 	PD_STATE_DRP_AUTO_TOGGLE, /* C38 */
-	PD_STATE_ENTER_USB, /* C39 */
 	/* Number of states. Not an actual state. */
 	PD_STATE_COUNT,
 };
@@ -1453,6 +1465,9 @@ enum cable_outlet {
 /* Voltage threshold to detect connection when presenting Rd */
 #define PD_SNK_VA_MV 250
 
+/* Maximum power consumption while in Sink Standby */
+#define PD_SNK_STDBY_MW 2500
+
 /* --- Policy layer functions --- */
 
 /** Schedules the interrupt handler for the TCPC on a high priority task. */
@@ -1550,13 +1565,13 @@ void pd_snk_give_back(int port, uint32_t *const ma, uint32_t *const mv);
  * Put a cap on the max voltage requested as a sink.
  * @param mv maximum voltage in millivolts.
  */
-void pd_set_max_voltage(unsigned mv);
+void pd_set_max_voltage(unsigned int mv);
 
 /**
  * Get the max voltage that can be requested as set by pd_set_max_voltage().
  * @return max voltage
  */
-unsigned pd_get_max_voltage(void);
+unsigned int pd_get_max_voltage(void);
 
 /**
  * Check if this board supports the given input voltage.
@@ -1929,68 +1944,6 @@ void dfp_consume_modes(int port, enum tcpci_msg_type type, int cnt,
  * @return      TRUE if Charge Through is supported, else FALSE
  */
 bool is_vpd_ct_supported(int port);
-
-/**
- * Returns CTVPD ground impedance
- *
- * @param port     USB-C port number
- * @return         Ground impedance through the VPD in 1 mOhm increments, else
- *                 0 if Charge Through isn't supported
- */
-uint8_t get_vpd_ct_gnd_impedance(int port);
-
-/**
- * Returns CTVPD VBUS impedance
- *
- * @param port     USB-C port number
- * @return         VBUS impedance through the VPD in 2 mOhm increments, else
- *                 0 if Charge Through isn't supported
- */
-uint8_t get_vpd_ct_vbus_impedance(int port);
-
-/**
- * Returns CTVPD Current support
- *
- * @param port     USB-C port number
- * @return         0 - 3A capable or
- *                 1 - 5A capable
- */
-uint8_t get_vpd_ct_current_support(int port);
-
-/**
- * Returns CTVPD Maximum VBUS Voltage
- *
- * @param port     USB-C port number
- * @return         0 - 20V
- *                 1 - 30V
- *                 2 - 40V
- *                 3 - 50V
- */
-uint8_t get_vpd_ct_max_vbus_voltage(int port);
-
-/**
- * Returns VPD VDO Version
- *
- * @param port     USB-C port number
- * @return         0 for Version 1.0
- */
-uint8_t get_vpd_ct_vdo_version(int port);
-
-/**
- * Returns VPD Firmware Version
- *
- * @param port     USB-C port number
- * @return         Firmware version assigned by the VID owner
- */
-uint8_t get_vpd_ct_firmware_verion(int port);
-
-/**
- * Returns HW Firmware Version
- *
- * @param port     USB-C port number
- * @return         HW version assigned by the VID owner
- */
-uint8_t get_vpd_ct_hw_version(int port);
 
 /**
  * Initialize alternate mode discovery info for DFP
@@ -2628,7 +2581,7 @@ void pd_control_port_enable(int port);
  *
  * @param mask host event mask.
  */
-#if defined(HAS_TASK_HOSTCMD) && !defined(TEST_BUILD)
+#if defined(CONFIG_USB_PD_HOST_CMD) && !defined(CONFIG_USB_PD_TCPM_STUB)
 void pd_send_host_event(int mask);
 #else
 static inline void pd_send_host_event(int mask)
@@ -2957,18 +2910,19 @@ void pd_notify_event(int port, uint32_t event_mask);
 void pd_clear_events(int port, uint32_t clear_mask);
 
 /*
- * Requests a VDM Attention message be sent. Attention is the only SVDM message
- * that does not result in a response from the port partner. In addition, if
- * it's a DP Attention message, then it will be requested from outside of the
- * port's PD task.
+ * Requests a VDM REQ message be sent. It is assumed that this message may be
+ * coming from a task outside the PD task.
  *
  * @param port USB-C port number
  * @param *data pointer to the VDM Attention message
  * @param vdo_count number of VDOs (must be 1 or 2)
+ * @param tx_type partner type to transmit
  * @return EC_RES_SUCCESS if a VDM message is scheduled.
+ *         EC_RES_BUSY if a message is already pending
+ *         EC_RES_INVALID_PARAM if the parameters given are invalid
  */
-enum ec_status pd_request_vdm_attention(int port, const uint32_t *data,
-					int vdo_count);
+enum ec_status pd_request_vdm(int port, const uint32_t *data, int vdo_count,
+			      enum tcpci_msg_type tx_type);
 
 /*
  * Requests that the port enter the specified mode. A successful result just
@@ -3139,6 +3093,14 @@ uint32_t pd_get_requested_current(int port);
 bool pd_get_partner_usb_comm_capable(int port);
 
 /**
+ * Gets the port partner's RMDO from the PE state.
+ *
+ * @param port USB-C port number
+ * @return port partner's Revision Message Data Object (RMDO).
+ */
+struct rmdo pd_get_partner_rmdo(int port);
+
+/**
  * Return true if PD is in disconnect state
  *
  * @param port USB-C port number
@@ -3188,6 +3150,7 @@ __override_proto int board_pd_set_frs_enable(int port, int enable);
  */
 __overridable void board_frs_handler(int port);
 
+#ifdef CONFIG_USB_PD_DP_MODE
 /**
  * Get current DisplayPort pin mode on the specified port.
  *
@@ -3195,6 +3158,12 @@ __overridable void board_frs_handler(int port);
  * @return MODE_DP_PIN_[A-E] if used else 0
  */
 __override_proto uint8_t get_dp_pin_mode(int port);
+#else
+static inline uint8_t get_dp_pin_mode(int port)
+{
+	return 0;
+}
+#endif /* CONFIG_USB_PD_DP_MODE */
 
 /**
  * Get board specific usb pd port count
@@ -3238,13 +3207,6 @@ __override_proto void board_process_pd_alert(int port);
  * tasks are present.
  */
 void board_reset_pd_mcu(void);
-
-/**
- * Return true if specified PD port is debug accessory.
- *
- * @param port USB-C port number
- */
-bool pd_is_debug_acc(int port);
 
 /*
  * Notify the AP that we have entered into DisplayPort Alternate Mode.  This

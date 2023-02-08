@@ -5,15 +5,16 @@
  * Host commands for TCPMv2 USB PD module
  */
 
-#include <string.h>
-
 #include "console.h"
 #include "ec_commands.h"
 #include "host_command.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_tcpm.h"
 #include "util.h"
+
+#include <string.h>
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
@@ -111,6 +112,8 @@ static enum ec_status hc_typec_control(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_typec_control *p = args->params;
 	mux_state_t mode;
+	uint32_t data[VDO_MAX_SIZE];
+	enum tcpci_msg_type tx_type;
 
 	if (p->port >= board_get_usb_pd_port_count())
 		return EC_RES_INVALID_PARAM;
@@ -137,6 +140,36 @@ static enum ec_status hc_typec_control(struct host_cmd_handler_args *args)
 				   USB_SWITCH_CONNECT,
 				   polarity_rm_dts(pd_get_polarity(p->port)));
 		return EC_RES_SUCCESS;
+	case TYPEC_CONTROL_COMMAND_BIST_SHARE_MODE:
+		return pd_set_bist_share_mode(p->bist_share_mode);
+	case TYPEC_CONTROL_COMMAND_SEND_VDM_REQ:
+		if (!IS_ENABLED(CONFIG_USB_PD_VDM_AP_CONTROL))
+			return EC_RES_INVALID_PARAM;
+
+		if (p->vdm_req_params.vdm_data_objects <= 0 ||
+		    p->vdm_req_params.vdm_data_objects > VDO_MAX_SIZE)
+			return EC_RES_INVALID_PARAM;
+
+		memcpy(data, p->vdm_req_params.vdm_data,
+		       sizeof(uint32_t) * p->vdm_req_params.vdm_data_objects);
+
+		switch (p->vdm_req_params.partner_type) {
+		case TYPEC_PARTNER_SOP:
+			tx_type = TCPCI_MSG_SOP;
+			break;
+		case TYPEC_PARTNER_SOP_PRIME:
+			tx_type = TCPCI_MSG_SOP_PRIME;
+			break;
+		case TYPEC_PARTNER_SOP_PRIME_PRIME:
+			tx_type = TCPCI_MSG_SOP_PRIME_PRIME;
+			break;
+		default:
+			return EC_RES_INVALID_PARAM;
+		}
+
+		return pd_request_vdm(p->port, data,
+				      p->vdm_req_params.vdm_data_objects,
+				      tx_type);
 	default:
 		return EC_RES_INVALID_PARAM;
 	}
@@ -177,10 +210,23 @@ static enum ec_status hc_typec_status(struct host_cmd_handler_args *args)
 
 	r->events = pd_get_events(p->port);
 
-	r->sop_revision = r->sop_connected ?
-				  PD_STATUS_REV_SET_MAJOR(
-					  pd_get_rev(p->port, TCPCI_MSG_SOP)) :
-				  0;
+	if (pd_get_partner_rmdo(p->port).major_rev != 0) {
+		r->sop_revision =
+			PD_STATUS_RMDO_REV_SET_MAJOR(
+				pd_get_partner_rmdo(p->port).major_rev) |
+			PD_STATUS_RMDO_REV_SET_MINOR(
+				pd_get_partner_rmdo(p->port).minor_rev) |
+			PD_STATUS_RMDO_VER_SET_MAJOR(
+				pd_get_partner_rmdo(p->port).major_ver) |
+			PD_STATUS_RMDO_VER_SET_MINOR(
+				pd_get_partner_rmdo(p->port).minor_ver);
+	} else if (r->sop_connected) {
+		r->sop_revision = PD_STATUS_REV_SET_MAJOR(
+			pd_get_rev(p->port, TCPCI_MSG_SOP));
+	} else {
+		r->sop_revision = 0;
+	}
+
 	r->sop_prime_revision =
 		pd_get_identity_discovery(p->port, TCPCI_MSG_SOP_PRIME) ==
 				PD_DISC_COMPLETE ?
@@ -199,3 +245,37 @@ static enum ec_status hc_typec_status(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_TYPEC_STATUS, hc_typec_status, EC_VER_MASK(0));
+
+#ifdef CONFIG_USB_PD_VDM_AP_CONTROL
+static enum ec_status hc_typec_vdm_response(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_typec_vdm_response *p = args->params;
+	struct ec_response_typec_vdm_response *r = args->response;
+	uint32_t data[VDO_MAX_SIZE];
+
+	if (p->port >= board_get_usb_pd_port_count())
+		return EC_RES_INVALID_PARAM;
+
+	if (args->response_max < sizeof(*r))
+		return EC_RES_RESPONSE_TOO_BIG;
+
+	args->response_size = sizeof(*r);
+
+	r->vdm_response_err = dpm_copy_vdm_reply(p->port, &r->partner_type,
+						 &r->vdm_data_objects, data);
+
+	if (r->vdm_data_objects > 0)
+		memcpy(r->vdm_response, data,
+		       r->vdm_data_objects * sizeof(uint32_t));
+
+	r->vdm_attention_objects =
+		dpm_vdm_attention_pop(p->port, data, &r->vdm_attention_left);
+	if (r->vdm_attention_objects > 0)
+		memcpy(r->vdm_attention, data,
+		       r->vdm_attention_objects * sizeof(uint32_t));
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_TYPEC_VDM_RESPONSE, hc_typec_vdm_response,
+		     EC_VER_MASK(0));
+#endif /* CONFIG_USB_PD_VDM_AP_CONTROL */

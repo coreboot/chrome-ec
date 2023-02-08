@@ -6,32 +6,38 @@
 #ifndef ZEPHYR_CHROME_USBC_USB_MUXES_H
 #define ZEPHYR_CHROME_USBC_USB_MUXES_H
 
-#include <zephyr/devicetree.h>
-#include <zephyr/sys/util_macro.h>
 #include "usb_mux.h"
+#include "usbc/amd_fp6_usb_mux.h"
 #include "usbc/anx7447_usb_mux.h"
 #include "usbc/anx7483_usb_mux.h"
 #include "usbc/bb_retimer_usb_mux.h"
 #include "usbc/it5205_usb_mux.h"
 #include "usbc/ps8743_usb_mux.h"
+#include "usbc/ps8818_usb_mux.h"
 #include "usbc/tcpci_usb_mux.h"
 #include "usbc/tusb1064_usb_mux.h"
 #include "usbc/utils.h"
 #include "usbc/virtual_usb_mux.h"
+
+#include <zephyr/devicetree.h>
+#include <zephyr/sys/util_macro.h>
 
 /**
  * @brief List of USB mux drivers compatibles and their configurations. Each
  *        element of list has to have (compatible, config) format.
  */
 #define USB_MUX_DRIVERS                                                 \
-	(ANX7447_USB_MUX_COMPAT, USB_MUX_CONFIG_ANX7447),               \
+	(AMD_FP6_USB_MUX_COMPAT, USB_MUX_CONFIG_AMD_FP6),               \
+		(ANX7447_USB_MUX_COMPAT, USB_MUX_CONFIG_ANX7447),       \
 		(ANX7483_USB_MUX_COMPAT, USB_MUX_CONFIG_ANX7483),       \
 		(BB_RETIMER_USB_MUX_COMPAT, USB_MUX_CONFIG_BB_RETIMER), \
 		(IT5205_USB_MUX_COMPAT, USB_MUX_CONFIG_IT5205),         \
 		(PS8743_USB_MUX_COMPAT, USB_MUX_CONFIG_PS8743),         \
+		(PS8818_USB_MUX_COMPAT, USB_MUX_CONFIG_PS8818),         \
 		(PS8XXX_USB_MUX_COMPAT, USB_MUX_CONFIG_TCPCI_TCPM),     \
 		(TCPCI_TCPM_USB_MUX_COMPAT, USB_MUX_CONFIG_TCPCI_TCPM), \
 		(TUSB1064_USB_MUX_COMPAT, USB_MUX_CONFIG_TUSB1064),     \
+		(TUSB1064_EMUL_COMPAT, USB_MUX_CONFIG_TUSB1064),        \
 		(VIRTUAL_USB_MUX_COMPAT, USB_MUX_CONFIG_VIRTUAL)
 
 /**
@@ -172,14 +178,14 @@
  * @brief Set struct usb_mux fields common for all USB muxes and alter flags
  *
  * @param mux_id USB mux node ID
- * @param flags_mask Mask for bits that should be igonred in flags property
+ * @param flags_mask Mask for bits that should be ignored in flags property
  * @param flags_val Value that should be used instead for masked bits
  */
 #define USB_MUX_COMMON_FIELDS_WITH_FLAGS(mux_id, flags_mask, flags_val) \
 	.usb_port = USB_MUX_PORT(mux_id),                               \
 	.board_init = USB_MUX_CALLBACK_OR_NULL(mux_id, board_init),     \
 	.board_set = USB_MUX_CALLBACK_OR_NULL(mux_id, board_set),       \
-	.flags = (DT_PROP(mux_id, flags) & ~(flags_mask)) | (flags_val)
+	.flags = (DT_PROP_OR(mux_id, flags, 0) & ~(flags_mask)) | (flags_val)
 
 /**
  * @brief Set struct usb_mux fields common for all USB muxes

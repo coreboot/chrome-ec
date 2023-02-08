@@ -3,24 +3,21 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/device.h>
-#include <zephyr/devicetree.h>
-#include <zephyr/drivers/pwm.h>
-#include <zephyr/logging/log.h>
-
 #include "common.h"
 #include "console.h"
 #include "drivers/cros_displight.h"
 #include "ec_commands.h"
 #include "host_command.h"
-#include "pwm.h"
 #include "keyboard_backlight.h"
+#include "pwm.h"
 #include "util.h"
 
-LOG_MODULE_REGISTER(pwm_shim, LOG_LEVEL_ERR);
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/pwm.h>
+#include <zephyr/logging/log.h>
 
-#define PWM_RAW_TO_PERCENT(v) DIV_ROUND_NEAREST((uint32_t)(v)*100, UINT16_MAX)
-#define PWM_PERCENT_TO_RAW(v) ((uint32_t)(v)*UINT16_MAX / 100)
+LOG_MODULE_REGISTER(pwm_shim, LOG_LEVEL_ERR);
 
 #define HAS_PWM_GENERIC_CHANNEL(compat)                         \
 	DT_NODE_HAS_PROP(DT_COMPAT_GET_ANY_STATUS_OKAY(compat), \

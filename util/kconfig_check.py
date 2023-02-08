@@ -27,6 +27,7 @@ import re
 import sys
 import traceback
 
+
 # Try to use kconfiglib if available, but fall back to a simple recursive grep.
 # This is used by U-Boot in some situations so we keep it to avoid forking this
 # script.
@@ -259,8 +260,8 @@ class KconfigCheck:
                 dirs.remove("Kconfig")
             if "boards" in dirs:
                 dirs.remove("boards")
-            if "projects" in dirs:
-                dirs.remove("projects")
+            if "program" in dirs:
+                dirs.remove("program")
             if "test" in dirs:
                 dirs.remove("test")
             if "chip" in dirs:

@@ -275,6 +275,12 @@ SECTIONS
 		KEEP(*(.rodata.HOOK_TABLET_MODE_CHANGE))
 		__hooks_tablet_mode_change_end = .;
 
+#ifdef CONFIG_BODY_DETECTION
+		__hooks_body_detect_change = .;
+		KEEP(*(.rodata.HOOK_BODY_DETECT_CHANGE))
+		__hooks_body_detect_change_end = .;
+#endif
+
 		__hooks_base_attached_change = .;
 		KEEP(*(.rodata.HOOK_BASE_ATTACHED_CHANGE))
 		__hooks_base_attached_change_end = .;
@@ -348,6 +354,23 @@ SECTIONS
 		KEEP(*(.google))
 #endif
 
+		/*
+		 * https://developer.arm.com/documentation/dui0475/c/the-arm-c-and-c---libraries/c---initialization--construction-and-destruction
+		 */
+		. = ALIGN(4);
+		__init_array_start = .;
+		*(.init_array*)
+		__init_array_end = .;
+
+		/*
+		 * Empty C++ exception index table. The exception index
+		 * table is described in more detail in "Exception Handling
+		 * ABI for ARM Architecture":
+		 * https://github.com/ARM-software/abi-aa/blob/60a8eb8c55e999d74dac5e368fc9d7e36e38dda4/ehabi32/ehabi32.rst#54the-object-producer-interface
+		 */
+		__exidx_start = 0;
+		__exidx_end = 0;
+
 		. = ALIGN(4);
 	} > EC_IMAGE_VMA_MEM_REGION AT > EC_IMAGE_LMA_MEM_REGION
 
@@ -365,6 +388,22 @@ SECTIONS
 #endif
 	#define INIT_ROM_LMA	ORIGIN(ROM_RESIDENT_VMA)
 #endif
+
+	/*
+	 * This SRAM section is not used by common/ or chip/stm32/, but
+	 * available if particular boards want to move the vector table
+	 * into SRAM for performance or mutability.
+	 */
+	.vtable : {
+		/*
+		 * Vector table must be at the base of SRAM. The vector
+		 * table section contains a RAM copy of the vector table used on
+		 * STM chips for relocating the vector table.
+		 */
+		. = ALIGN(8);
+		*(.bss.vector_table)
+		. = ALIGN(8);
+	} > IRAM
 
 #ifdef CONFIG_PRESERVE_LOGS
 	.preserve_logs(NOLOAD) : {

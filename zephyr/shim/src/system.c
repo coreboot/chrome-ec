@@ -3,25 +3,18 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/device.h>
-#include <zephyr/drivers/bbram.h>
-#include <drivers/cros_system.h>
-#include <zephyr/logging/log.h>
-
+#include "bbram.h"
 #include "common.h"
 #include "console.h"
 #include "cros_version.h"
 #include "system.h"
 #include "watchdog.h"
 
-#define BBRAM_REGION_PD0 DT_PATH(named_bbram_regions, pd0)
-#define BBRAM_REGION_PD1 DT_PATH(named_bbram_regions, pd1)
-#define BBRAM_REGION_PD2 DT_PATH(named_bbram_regions, pd2)
-#define BBRAM_REGION_TRY_SLOT DT_PATH(named_bbram_regions, try_slot)
+#include <zephyr/device.h>
+#include <zephyr/drivers/bbram.h>
+#include <zephyr/logging/log.h>
 
-#define GET_BBRAM_OFFSET(node) \
-	DT_PROP(DT_PATH(named_bbram_regions, node), offset)
-#define GET_BBRAM_SIZE(node) DT_PROP(DT_PATH(named_bbram_regions, node), size)
+#include <drivers/cros_system.h>
 
 /* 2 second delay for waiting the H1 reset */
 #define WAIT_RESET_TIME                                     \
@@ -40,22 +33,30 @@ static int bbram_lookup(enum system_bbram_idx idx, int *offset_out,
 			int *size_out)
 {
 	switch (idx) {
+#if BBRAM_HAS_REGION(pd0)
 	case SYSTEM_BBRAM_IDX_PD0:
-		*offset_out = DT_PROP(BBRAM_REGION_PD0, offset);
-		*size_out = DT_PROP(BBRAM_REGION_PD0, size);
+		*offset_out = BBRAM_REGION_OFFSET(pd0);
+		*size_out = BBRAM_REGION_SIZE(pd0);
 		break;
+#endif
+#if BBRAM_HAS_REGION(pd1)
 	case SYSTEM_BBRAM_IDX_PD1:
-		*offset_out = DT_PROP(BBRAM_REGION_PD1, offset);
-		*size_out = DT_PROP(BBRAM_REGION_PD1, size);
+		*offset_out = BBRAM_REGION_OFFSET(pd1);
+		*size_out = BBRAM_REGION_SIZE(pd1);
 		break;
+#endif
+#if BBRAM_HAS_REGION(pd2)
 	case SYSTEM_BBRAM_IDX_PD2:
-		*offset_out = DT_PROP(BBRAM_REGION_PD2, offset);
-		*size_out = DT_PROP(BBRAM_REGION_PD2, size);
+		*offset_out = BBRAM_REGION_OFFSET(pd2);
+		*size_out = BBRAM_REGION_SIZE(pd2);
 		break;
+#endif
+#if BBRAM_HAS_REGION(try_slot)
 	case SYSTEM_BBRAM_IDX_TRY_SLOT:
-		*offset_out = DT_PROP(BBRAM_REGION_TRY_SLOT, offset);
-		*size_out = DT_PROP(BBRAM_REGION_TRY_SLOT, size);
+		*offset_out = BBRAM_REGION_OFFSET(try_slot);
+		*size_out = BBRAM_REGION_SIZE(try_slot);
 		break;
+#endif
 	default:
 		return EC_ERROR_INVAL;
 	}
@@ -85,8 +86,8 @@ void chip_save_reset_flags(uint32_t flags)
 		return;
 	}
 
-	bbram_write(bbram_dev, GET_BBRAM_OFFSET(saved_reset_flags),
-		    GET_BBRAM_SIZE(saved_reset_flags), (uint8_t *)&flags);
+	bbram_write(bbram_dev, BBRAM_REGION_OFFSET(saved_reset_flags),
+		    BBRAM_REGION_SIZE(saved_reset_flags), (uint8_t *)&flags);
 }
 
 uint32_t chip_read_reset_flags(void)
@@ -98,8 +99,8 @@ uint32_t chip_read_reset_flags(void)
 		return 0;
 	}
 
-	bbram_read(bbram_dev, GET_BBRAM_OFFSET(saved_reset_flags),
-		   GET_BBRAM_SIZE(saved_reset_flags), (uint8_t *)&flags);
+	bbram_read(bbram_dev, BBRAM_REGION_OFFSET(saved_reset_flags),
+		   BBRAM_REGION_SIZE(saved_reset_flags), (uint8_t *)&flags);
 
 	return flags;
 }
@@ -111,8 +112,8 @@ int system_set_scratchpad(uint32_t value)
 		return -EC_ERROR_INVAL;
 	}
 
-	return bbram_write(bbram_dev, GET_BBRAM_OFFSET(scratchpad),
-			   GET_BBRAM_SIZE(scratchpad), (uint8_t *)&value);
+	return bbram_write(bbram_dev, BBRAM_REGION_OFFSET(scratchpad),
+			   BBRAM_REGION_SIZE(scratchpad), (uint8_t *)&value);
 }
 
 int system_get_scratchpad(uint32_t *value)
@@ -122,15 +123,15 @@ int system_get_scratchpad(uint32_t *value)
 		return -EC_ERROR_INVAL;
 	}
 
-	if (bbram_read(bbram_dev, GET_BBRAM_OFFSET(scratchpad),
-		       GET_BBRAM_SIZE(scratchpad), (uint8_t *)value)) {
+	if (bbram_read(bbram_dev, BBRAM_REGION_OFFSET(scratchpad),
+		       BBRAM_REGION_SIZE(scratchpad), (uint8_t *)value)) {
 		return -EC_ERROR_INVAL;
 	}
 
 	return 0;
 }
 
-void system_hibernate(uint32_t seconds, uint32_t microseconds)
+test_mockable void system_hibernate(uint32_t seconds, uint32_t microseconds)
 {
 	const struct device *sys_dev = device_get_binding("CROS_SYSTEM");
 	int err;
@@ -151,9 +152,15 @@ void system_hibernate(uint32_t seconds, uint32_t microseconds)
 		return;
 	}
 
+	/*
+	 * Ignore infinite loop for coverage as the test would fail via timeout
+	 * and not report regardless of executing code.
+	 */
+	/* LCOV_EXCL_START */
 	/* should never reach this point */
 	while (1)
 		continue;
+	/* LCOV_EXCL_STOP */
 }
 
 #ifdef CONFIG_PM
@@ -230,9 +237,15 @@ test_mockable void system_reset(int flags)
 	if (err < 0)
 		LOG_ERR("soc reset failed");
 
+	/*
+	 * Ignore infinite loop for coverage as the test would fail via timeout
+	 * and not report regardless of executing code.
+	 */
+	/* LCOV_EXCL_START */
 	/* should never return */
 	while (1)
 		continue;
+	/* LCOV_EXCL_STOP */
 }
 
 static int check_reset_cause(void)
@@ -322,7 +335,7 @@ static int check_reset_cause(void)
 	return 0;
 }
 
-static int system_preinitialize(const struct device *unused)
+test_export_static int system_preinitialize(const struct device *unused)
 {
 	ARG_UNUSED(unused);
 

@@ -19,14 +19,15 @@
 #include "timer.h"
 #include "update_fw.h"
 #include "usart-stm32f0.h"
-#include "usart_tx_dma.h"
 #include "usart_rx_dma.h"
+#include "usart_tx_dma.h"
+#include "usb-stream.h"
 #include "usb_hw.h"
 #include "usb_i2c.h"
 #include "usb_spi.h"
-#include "usb-stream.h"
 #include "util.h"
 
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 void board_config_pre_init(void)
@@ -275,7 +276,7 @@ DECLARE_CONSOLE_COMMAND(hold_usart_low, command_hold_usart_low,
  */
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("Servo Micro"),
 	[USB_STR_SERIALNO] = 0,
 	[USB_STR_VERSION] = USB_STRING_DESC(CROS_EC_VERSION32),
@@ -297,7 +298,7 @@ BUILD_ASSERT(ARRAY_SIZE(usb_strings) == USB_STR_COUNT);
 
 /* SPI devices */
 const struct spi_device_t spi_devices[] = {
-	{ CONFIG_SPI_FLASH_PORT, 1, GPIO_SPI_CS },
+	{ CONFIG_SPI_FLASH_PORT, 1, GPIO_SPI_CS, USB_SPI_ENABLED },
 };
 const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 

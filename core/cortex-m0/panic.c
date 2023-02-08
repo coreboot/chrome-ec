@@ -7,8 +7,8 @@
 #include "console.h"
 #include "cpu.h"
 #include "host_command.h"
-#include "panic.h"
 #include "panic-internal.h"
+#include "panic.h"
 #include "printf.h"
 #include "system.h"
 #include "task.h"
@@ -21,9 +21,6 @@ static int bus_fault_ignored;
 
 /* Panic data goes at the end of RAM. */
 static struct panic_data *const pdata_ptr = PANIC_DATA_PTR;
-
-/* Preceded by stack, rounded down to nearest 64-bit-aligned boundary */
-static const uint32_t pstack_addr = ((uint32_t)pdata_ptr) & ~7;
 
 /**
  * Print the name and value of a register
@@ -140,46 +137,6 @@ void __keep report_panic(void)
 	panic_reboot();
 }
 
-/**
- * Default exception handler, which reports a panic.
- *
- * Declare this as a naked call so we can extract raw LR and IPSR values.
- */
-void exception_panic(void)
-{
-	/* Save registers and branch directly to panic handler */
-	asm volatile(
-		"mrs r1, psp\n"
-		"mrs r2, ipsr\n"
-		"mov r3, sp\n"
-		"stmia %[pregs]!, {r1-r7}\n"
-		"mov r1, r8\n"
-		"mov r2, r9\n"
-		"mov r3, r10\n"
-		"mov r4, r11\n"
-		"mov r5, lr\n"
-		"stmia %[pregs]!, {r1-r5}\n"
-		"mov sp, %[pstack]\n"
-		"bl report_panic\n"
-		:
-		: [pregs] "r"(pdata_ptr->cm.regs), [pstack] "r"(pstack_addr)
-		:
-		/* Constraints protecting these from being clobbered.
-		 * Gcc should be using r0 & r12 for pregs and pstack. */
-		"r1", "r2", "r3", "r4", "r5", "r6",
-	/* clang warns that we're clobbering a reserved register:
-	 * inline asm clobber list contains reserved registers: R7
-	 * [-Werror,-Winline-asm]. The intent of the clobber list is
-	 * to force pregs and pstack to be in R0 and R12, which
-	 * still holds.
-	 */
-#ifndef __clang__
-		"r7",
-#endif
-		"r8", "r9", "r10", "r11", "cc", "memory");
-}
-
-#ifdef CONFIG_SOFTWARE_PANIC
 void software_panic(uint32_t reason, uint32_t info)
 {
 	__asm__("mov " STRINGIFY(
@@ -226,7 +183,6 @@ void panic_get_reason(uint32_t *reason, uint32_t *info, uint8_t *exception)
 		*exception = *reason = *info = 0;
 	}
 }
-#endif
 
 void bus_fault_handler(void)
 {

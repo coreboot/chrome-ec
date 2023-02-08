@@ -3,21 +3,25 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
+#include "../driver/temp_sensor/thermistor.h"
+#include "common.h"
+#include "temp_sensor/temp_sensor.h"
+#include "test/drivers/test_state.h"
+
 #include <zephyr/drivers/adc.h>
 #include <zephyr/drivers/adc/adc_emul.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
+
 #include <temp_sensor.h>
 
-#include "common.h"
-#include "../driver/temp_sensor/thermistor.h"
-#include "temp_sensor/temp_sensor.h"
-#include "test/drivers/test_state.h"
-
-#define GPIO_PG_EC_DSW_PWROK_PATH DT_PATH(named_gpios, pg_ec_dsw_pwrok)
+#define GPIO_PG_EC_DSW_PWROK_PATH NAMED_GPIOS_GPIO_NODE(pg_ec_dsw_pwrok)
 #define GPIO_PG_EC_DSW_PWROK_PORT DT_GPIO_PIN(GPIO_PG_EC_DSW_PWROK_PATH, gpios)
+
+#define GPIO_EC_PG_PIN_TEMP_PATH NAMED_GPIOS_GPIO_NODE(ec_pg_pin_temp)
+#define GPIO_EC_PG_PIN_TEMP_PORT DT_GPIO_PIN(GPIO_EC_PG_PIN_TEMP_PATH, gpios)
 
 #define ADC_DEVICE_NODE DT_NODELABEL(adc0)
 
@@ -25,11 +29,10 @@
  * https://github.com/zephyrproject-rtos/zephyr/issues/38715 lands
  */
 #define _ACCUMULATOR(x) 1 +
-#define NAMED_TEMP_SENSORS_SIZE                                     \
-	DT_FOREACH_CHILD(DT_PATH(named_temp_sensors), _ACCUMULATOR) \
-	0
-#define TEMP_SENSORS_ENABLED_SIZE \
-	DT_FOREACH_STATUS_OKAY(cros_ec_temp_sensor, _ACCUMULATOR) 0
+#define NAMED_TEMP_SENSORS_SIZE \
+	DT_FOREACH_CHILD(TEMP_SENSORS_NODEID, _ACCUMULATOR) 0
+
+#define TEMP_SENSORS_ENABLED_SIZE FOREACH_TEMP_SENSOR(_ACCUMULATOR) 0
 
 /* Conversion of temperature doesn't need to be 100% accurate */
 #define TEMP_EPS 2
@@ -56,6 +59,10 @@ ZTEST_USER(thermistor, test_thermistor_power_pin)
 	     sensor_idx++) {
 		const struct temp_sensor_t *sensor = &temp_sensors[sensor_idx];
 
+		/* Skip for sensors that are not thermistors */
+		if (sensor->zephyr_info->thermistor == NULL)
+			continue;
+
 		zassert_ok(adc_emul_const_value_set(adc_dev, sensor->idx,
 						    A_VALID_VOLTAGE),
 			   "adc_emul_value_func_set() failed on %s",
@@ -70,6 +77,10 @@ ZTEST_USER(thermistor, test_thermistor_power_pin)
 	     sensor_idx++) {
 		const struct temp_sensor_t *sensor = &temp_sensors[sensor_idx];
 
+		/* Skip for sensors that are not thermistors */
+		if (sensor->zephyr_info->thermistor == NULL)
+			continue;
+
 		zassert_equal(EC_ERROR_NOT_POWERED,
 			      sensor->zephyr_info->read(sensor, &temp),
 			      "%s failed", sensor->name);
@@ -82,6 +93,10 @@ ZTEST_USER(thermistor, test_thermistor_power_pin)
 	for (sensor_idx = 0; sensor_idx < NAMED_TEMP_SENSORS_SIZE;
 	     sensor_idx++) {
 		const struct temp_sensor_t *sensor = &temp_sensors[sensor_idx];
+
+		/* Skip for sensors that are not thermistors */
+		if (sensor->zephyr_info->thermistor == NULL)
+			continue;
 
 		zassert_equal(EC_SUCCESS,
 			      sensor->zephyr_info->read(sensor, &temp),
@@ -111,6 +126,10 @@ ZTEST_USER(thermistor, test_thermistor_adc_read_error)
 	     sensor_idx++) {
 		const struct temp_sensor_t *sensor = &temp_sensors[sensor_idx];
 
+		/* Skip for sensors that are not thermistors */
+		if (sensor->zephyr_info->thermistor == NULL)
+			continue;
+
 		zassert_ok(adc_emul_value_func_set(adc_dev, sensor->idx,
 						   adc_error_func, NULL),
 			   "adc_emul_value_func_set() failed on %s",
@@ -120,6 +139,10 @@ ZTEST_USER(thermistor, test_thermistor_adc_read_error)
 	for (sensor_idx = 0; sensor_idx < NAMED_TEMP_SENSORS_SIZE;
 	     sensor_idx++) {
 		const struct temp_sensor_t *sensor = &temp_sensors[sensor_idx];
+
+		/* Skip for sensors that are not thermistors */
+		if (sensor->zephyr_info->thermistor == NULL)
+			continue;
 
 		zassert_equal(EC_ERROR_UNKNOWN,
 			      sensor->zephyr_info->read(sensor, &temp),
@@ -246,12 +269,12 @@ static void do_thermistor_test(const struct temp_sensor_t *temp_sensor,
 		      temp_sensor->name);
 }
 
-#define GET_THERMISTOR_REF_MV(node_id)             \
-	[ZSHIM_TEMP_SENSOR_ID(node_id)] = DT_PROP( \
+#define GET_THERMISTOR_REF_MV(node_id)              \
+	[TEMP_SENSOR_ID_BY_DEV(node_id)] = DT_PROP( \
 		DT_PHANDLE(node_id, thermistor), steinhart_reference_mv),
 
-#define GET_THERMISTOR_REF_RES(node_id)            \
-	[ZSHIM_TEMP_SENSOR_ID(node_id)] = DT_PROP( \
+#define GET_THERMISTOR_REF_RES(node_id)             \
+	[TEMP_SENSOR_ID_BY_DEV(node_id)] = DT_PROP( \
 		DT_PHANDLE(node_id, thermistor), steinhart_reference_res),
 
 ZTEST_USER(thermistor, test_thermistors_adc_temperature_conversion)
@@ -259,14 +282,20 @@ ZTEST_USER(thermistor, test_thermistors_adc_temperature_conversion)
 	int sensor_idx;
 
 	const static int reference_mv_arr[] = { DT_FOREACH_STATUS_OKAY(
-		cros_ec_temp_sensor, GET_THERMISTOR_REF_MV) };
+		THERMISTOR_COMPAT, GET_THERMISTOR_REF_MV) };
 	const static int reference_res_arr[] = { DT_FOREACH_STATUS_OKAY(
-		cros_ec_temp_sensor, GET_THERMISTOR_REF_RES) };
+		THERMISTOR_COMPAT, GET_THERMISTOR_REF_RES) };
 
-	for (sensor_idx = 0; sensor_idx < NAMED_TEMP_SENSORS_SIZE; sensor_idx++)
+	for (sensor_idx = 0; sensor_idx < NAMED_TEMP_SENSORS_SIZE;
+	     sensor_idx++) {
+		/* Skip for sensors that are not thermistors */
+		if (temp_sensors[sensor_idx].zephyr_info->thermistor == NULL)
+			continue;
+
 		do_thermistor_test(&temp_sensors[sensor_idx],
 				   reference_mv_arr[sensor_idx],
 				   reference_res_arr[sensor_idx]);
+	}
 }
 
 ZTEST_USER(thermistor, test_device_nodes_enabled)
@@ -282,10 +311,14 @@ static void *thermistor_setup(void)
 {
 	const struct device *dev =
 		DEVICE_DT_GET(DT_GPIO_CTLR(GPIO_PG_EC_DSW_PWROK_PATH, gpios));
+	const struct device *dev_pin =
+		DEVICE_DT_GET(DT_GPIO_CTLR(GPIO_EC_PG_PIN_TEMP_PATH, gpios));
 
 	zassert_not_null(dev, NULL);
-	/* Before tests make sure that power pin is set. */
+	/* Before tests make sure that power pins are set. */
 	zassert_ok(gpio_emul_input_set(dev, GPIO_PG_EC_DSW_PWROK_PORT, 1),
+		   NULL);
+	zassert_ok(gpio_emul_input_set(dev_pin, GPIO_EC_PG_PIN_TEMP_PORT, 1),
 		   NULL);
 
 	return NULL;
@@ -297,15 +330,19 @@ static void thermistor_cleanup(void *state)
 	const struct device *adc_dev = DEVICE_DT_GET(ADC_DEVICE_NODE);
 
 	const static int reference_mv_arr[] = { DT_FOREACH_STATUS_OKAY(
-		cros_ec_temp_sensor, GET_THERMISTOR_REF_MV) };
+		THERMISTOR_COMPAT, GET_THERMISTOR_REF_MV) };
 	const static int reference_res_arr[] = { DT_FOREACH_STATUS_OKAY(
-		cros_ec_temp_sensor, GET_THERMISTOR_REF_RES) };
+		THERMISTOR_COMPAT, GET_THERMISTOR_REF_RES) };
 
 	if (adc_dev == NULL)
 		TC_ERROR("Cannot get ADC device");
 
 	for (sensor_idx = 0; sensor_idx < NAMED_TEMP_SENSORS_SIZE;
 	     sensor_idx++) {
+		/* Skip for sensors that are not thermistors */
+		if (temp_sensors[sensor_idx].zephyr_info->thermistor == NULL)
+			continue;
+
 		/* Setup ADC to return 27*C (300K) which is reasonable value */
 		adc_emul_const_value_set(
 			adc_dev, temp_sensors[sensor_idx].idx,

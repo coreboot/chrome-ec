@@ -63,6 +63,21 @@ config PLATFORM_EC_CHARGE_MANAGER
 	  source is available on the hardware, so cannot be built without
 	  PLATFORM_EC_USBC.
 
+config PLATFORM_EC_CHARGE_STATE_DEBUG
+	bool "Debug information about the charge state"
+	depends on PLATFORM_EC_CHARGE_MANAGER
+	help
+	  Enables debug information regarding the current charge state. Enabling
+	  this config will allow the EC_CMD_CHARGE_STATE host command to use the
+	  CHARGE_STATE_CMD_GET_PARAM command to query the current charge state.
+
+config PLATFORM_EC_CMD_PWR_AVG
+	bool "Enable the console command to print power average"
+	depends on PLATFORM_EC_CHARGE_MANAGER
+	help
+	  Enables the console command which prints out the current (past 1
+	  minute) power average.
+
 config PLATFORM_EC_CHARGESPLASH
 	bool "Charging splashscreen support"
 	help
@@ -169,8 +184,22 @@ config PLATFORM_EC_CHARGER_RAA489000
 	  Enables the driver for the Renesas RAA489000 battery charger
 	  with integrated USB-C TCPC.
 
+config PLATFORM_EC_RAA489000_AC_PRESENT_CONTROL
+	bool "Invert the AC_PRESENT signal when in OTG mode"
+	depends on PLATFORM_EC_CHARGER_RAA489000 && !PLATFORM_EC_EXTPOWER_GPIO
+	help
+	  Enables the RAA489000 chip to invert the AC_PRESENT signal
+	  when the charger is in OTG (sourcing) mode.
+	  This is required when the internal comparator is used to
+	  generate the AC_PRESENT signal from the ACOK signal.
+	  In OTG mode the ACOK signal is high, but the AC_PRESENT
+	  should be set low, so the comparator output must be inverted.
+	  The GPIO_AC_PRESENT gpio signal must not be configured.
+
 config PLATFORM_EC_CHARGER_RT9490
 	bool "Use the RT9490 charger"
+	default y
+	depends on DT_HAS_RICHTEK_RT9490_ENABLED || DT_HAS_ZEPHYR_RT9490_EMUL_ENABLED
 	depends on PLATFORM_EC_I2C
 	select PLATFORM_EC_CHARGER_OTG_SUPPORTED
 	help
@@ -187,6 +216,12 @@ config PLATFORM_EC_CHARGER_SM5803
 	  Enables the driver for the SM5803.
 	  The SM5803 is the Silicon Mitus SM5803 Buck-Boost Charger.
 
+	  This charger is known to be very inefficient when operating in buck-boost
+	  mode (when input voltage is close to output voltage), such that permanent
+	  damage may be done to the charger. Users should exercise caution around
+	  choice of supported configurations: see b:260271871, b:258754576, and
+	  b:230712704 for more information.
+
 
 if PLATFORM_EC_OCPC
 
@@ -198,6 +233,13 @@ config PLATFORM_EC_OCPC_DEF_RBATT_MOHMS
 	  charger IC and the battery.
 	  This should be at a minimum the Rds(on) resistance of the BFET plus
 	  the series sense resistor.
+
+config PLATFORM_EC_OCPC_DEF_DRIVELIMIT_MILLIVOLTS
+	int "Drive Limit for the OCPC PID control loop"
+	default 10
+	help
+	  Sets how agressively the OCPC PID control loop can adjust VSYS to drive
+	  the battery with the correct current.
 
 endif  # PLATFORM_EC_OCPC
 
@@ -672,5 +714,101 @@ config PLATFORM_EC_DEDICATED_CHARGE_PORT
 	bool "Dedicated charging port"
 	help
 	  Enable if there is a dedicated charging port on the system.
+
+if PLATFORM_EC_CHARGER_RAA489000
+
+choice
+	prompt "RAA489000 trickle charge current"
+	default PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_128MA
+	help
+	  Set the current limit when trickle-charging.
+
+config PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_64MA
+	bool "64 mA"
+	help
+	  Set the trickle charge current to 64 mA.
+
+config PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_96MA
+	bool "96 mA"
+	help
+	  Set the trickle charge current to 96 mA.
+
+config PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_128MA
+	bool "128 mA"
+	help
+	  Set the trickle charge current to 128 mA.
+
+config PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_160MA
+	bool "160 mA"
+	help
+	  Set the trickle charge current to 160 mA.
+
+config PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_192MA
+	bool "192 mA"
+	help
+	  Set the trickle charge current to 192 mA.
+
+config PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_224MA
+	bool "224 mA"
+	help
+	  Set the trickle charge current to 224 mA.
+
+config PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_256MA
+	bool "256 mA"
+	help
+	  Set the trickle charge current to 256 mA.
+
+endchoice
+
+config PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT
+	int
+	default 64 if PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_64MA
+	default 96 if PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_96MA
+	default 128 if PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_128MA
+	default 160 if PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_160MA
+	default 192 if PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_192MA
+	default 224 if PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_224MA
+	default 256 if PLATFORM_EC_RAA489000_TRICKLE_CHARGE_CURRENT_256MA
+
+endif # PLATFORM_EC_CHARGER_RAA489000
+
+config PLATFORM_EC_ISL9238C_DISABLE_CMOUT_LATCH
+	bool "Disable the CMOUT latch function"
+	depends on PLATFORM_EC_CHARGER_ISL9238C
+	help
+	  Disable the CMOUT latch function for ISL9238C.
+
+config PLATFORM_EC_ISL9238C_ENABLE_BUCK_MODE
+	bool "Enable Force Buck mode"
+	default n
+	depends on PLATFORM_EC_CHARGER_ISL9238C
+	help
+	  Enable Force Buck mode for ISL9238C.
+	  If the Force Buck mode is enabled, the Buck-Boost window narrows.
+
+config PLATFORM_EC_ISL9238C_BUCK_PHASE_VOLTAGE
+	int "Value of phase comparator threshold offset"
+	default 0
+	help
+	  Adjusts the phase comparator threshold offset for forward buck
+	  and buck-boost.
+
+config PLATFORM_EC_AC_PROCHOT_CURRENT_MA
+	int "Value of the prochot threshold current in mA"
+	default 3328
+	help
+	  To set the PROCHOT# assertion threshold for adapter overcurrent
+	  conditions.
+
+config PLATFORM_EC_DC_PROCHOT_CURRENT_MA
+	int "Value of the prochot threshold current in mA"
+	default 6570
+	help
+	  To set the PROCHOT# signal assertion threshold for battery over
+	  discharging current conditions.
+
+config PLATFORM_EC_CHARGER_DUMP_PROCHOT
+	bool "Enable support for prochot status dumping functions"
+	default n
 
 endif # PLATFORM_EC_CHARGER

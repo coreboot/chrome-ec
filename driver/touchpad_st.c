@@ -8,14 +8,14 @@
 #include "common.h"
 #include "console.h"
 #include "gpio.h"
-#include "hwtimer.h"
 #include "hooks.h"
+#include "hwtimer.h"
 #include "i2c.h"
 #include "printf.h"
 #include "registers.h"
 #include "spi.h"
-#include "task.h"
 #include "tablet_mode.h"
+#include "task.h"
 #include "timer.h"
 #include "touchpad.h"
 #include "touchpad_st.h"
@@ -113,7 +113,7 @@ static struct {
 		struct st_tp_host_data_header_t data_header;
 		struct st_tp_event_t events[32];
 		uint32_t dump_info[32];
-	} /* anonymous */;
+	} __packed /* anonymous */;
 } __packed rx_buf;
 
 #ifdef CONFIG_USB_ISOCHRONOUS

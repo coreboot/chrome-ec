@@ -3,18 +3,22 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/devicetree.h>
 #include "tcpm/anx7447_public.h"
 
-#define ANX7447_TCPC_COMPAT anologix_anx7447_tcpc
+#include <zephyr/devicetree.h>
+
+#define ANX7447_TCPC_COMPAT analogix_anx7447_tcpc
 
 #define TCPC_CONFIG_ANX7447(id) \
-	{                                              \
-		.bus_type = EC_BUS_TYPE_I2C,           \
-		.i2c_info = {                          \
-			.port = I2C_PORT_BY_DEV(id),   \
-			.addr_flags = DT_REG_ADDR(id), \
-		},                                     \
-		.drv = &anx7447_tcpm_drv,              \
-		.flags = DT_PROP(id, tcpc_flags),      \
+	{                                                                      \
+		.bus_type = EC_BUS_TYPE_I2C,                                   \
+		.i2c_info = {                                                  \
+			.port = I2C_PORT_BY_DEV(id),                           \
+			.addr_flags = DT_REG_ADDR(id),                         \
+		},                                                             \
+		.drv = &anx7447_tcpm_drv,                                      \
+		.flags = DT_PROP(id, tcpc_flags),                              \
+		.alert_signal = COND_CODE_1(DT_NODE_HAS_PROP(id, int_pin),     \
+			(GPIO_SIGNAL(DT_PHANDLE(id, int_pin))),                \
+			(GPIO_LIMIT)),                                         \
 	},

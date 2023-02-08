@@ -3,32 +3,32 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/drivers/gpio/gpio_emul.h>
-#include <zephyr/shell/shell.h>
-#include <zephyr/shell/shell_dummy.h> /* nocheck */
-#include <zephyr/shell/shell_uart.h>
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-
 #include "acpi.h"
 #include "battery.h"
 #include "battery_smart.h"
 #include "charge_state.h"
 #include "chipset.h"
-#include "lpc.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
 #include "emul/emul_stub_device.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
 #include "hooks.h"
+#include "lpc.h"
 #include "power.h"
 #include "task.h"
 #include "tcpm/tcpci.h"
 #include "test/drivers/stubs.h"
 #include "test/drivers/utils.h"
 
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/shell/shell_dummy.h>
+#include <zephyr/shell/shell_uart.h>
+#include <zephyr/ztest.h>
+
 #define BATTERY_NODE DT_NODELABEL(battery)
-#define GPIO_BATT_PRES_ODL_PATH DT_PATH(named_gpios, ec_batt_pres_odl)
+#define GPIO_BATT_PRES_ODL_PATH NAMED_GPIOS_GPIO_NODE(ec_batt_pres_odl)
 #define GPIO_BATT_PRES_ODL_PORT DT_GPIO_PIN(GPIO_BATT_PRES_ODL_PATH, gpios)
 
 void test_set_battery_level(int percentage)
@@ -130,7 +130,7 @@ void connect_source_to_port(struct tcpci_partner_data *partner,
 			    const struct emul *charger_emul)
 {
 	set_ac_enabled(true);
-	zassume_ok(tcpci_partner_connect_to_tcpci(partner, tcpci_emul), NULL);
+	zassert_ok(tcpci_partner_connect_to_tcpci(partner, tcpci_emul));
 
 	isl923x_emul_set_adc_vbus(charger_emul,
 				  PDO_FIXED_GET_VOLT(src->pdo[pdo_index]));
@@ -142,7 +142,7 @@ void disconnect_source_from_port(const struct emul *tcpci_emul,
 				 const struct emul *charger_emul)
 {
 	set_ac_enabled(false);
-	zassume_ok(tcpci_emul_disconnect_partner(tcpci_emul), NULL);
+	zassert_ok(tcpci_emul_disconnect_partner(tcpci_emul));
 	isl923x_emul_set_adc_vbus(charger_emul, 0);
 	k_sleep(K_SECONDS(1));
 }
@@ -168,7 +168,7 @@ void connect_sink_to_port(struct tcpci_partner_data *partner,
 	tcpci_tcpc_alert(0);
 	k_sleep(K_SECONDS(1));
 
-	zassume_ok(tcpci_partner_connect_to_tcpci(partner, tcpci_emul), NULL);
+	zassert_ok(tcpci_partner_connect_to_tcpci(partner, tcpci_emul));
 
 	/* Wait for PD negotiation and current ramp.
 	 * TODO(b/213906889): Check message timing and contents.
@@ -178,7 +178,7 @@ void connect_sink_to_port(struct tcpci_partner_data *partner,
 
 void disconnect_sink_from_port(const struct emul *tcpci_emul)
 {
-	zassume_ok(tcpci_emul_disconnect_partner(tcpci_emul), NULL);
+	zassert_ok(tcpci_emul_disconnect_partner(tcpci_emul));
 	k_sleep(K_SECONDS(1));
 }
 
@@ -189,11 +189,11 @@ uint8_t acpi_read(uint8_t acpi_addr)
 	 * See ec_commands.h for details on the required process
 	 * First, send the read command, which should populate no data
 	 */
-	zassume_ok(acpi_ap_to_ec(true, EC_CMD_ACPI_READ, &readval),
+	zassert_ok(acpi_ap_to_ec(true, EC_CMD_ACPI_READ, &readval),
 		   "Failed to send read command");
 
 	/* Next, time for the address which should populate our result */
-	zassume_equal(acpi_ap_to_ec(false, acpi_addr, &readval), 1,
+	zassert_equal(acpi_ap_to_ec(false, acpi_addr, &readval), 1,
 		      "Failed to read value");
 	return readval;
 }
@@ -205,15 +205,15 @@ void acpi_write(uint8_t acpi_addr, uint8_t write_byte)
 	 * See ec_commands.h for details on the required process
 	 * First, send the read command, which should populate no data
 	 */
-	zassume_ok(acpi_ap_to_ec(true, EC_CMD_ACPI_WRITE, &readval),
+	zassert_ok(acpi_ap_to_ec(true, EC_CMD_ACPI_WRITE, &readval),
 		   "Failed to send read command");
 
 	/* Next, time for the address we want to write */
-	zassume_ok(acpi_ap_to_ec(false, acpi_addr, &readval),
+	zassert_ok(acpi_ap_to_ec(false, acpi_addr, &readval),
 		   "Failed to write address");
 
 	/* Finally, time to write the data */
-	zassume_ok(acpi_ap_to_ec(false, write_byte, &readval),
+	zassert_ok(acpi_ap_to_ec(false, write_byte, &readval),
 		   "Failed to write value");
 }
 
@@ -247,7 +247,7 @@ void host_cmd_motion_sense_dump(int max_sensor_count,
 	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
 		EC_CMD_MOTION_SENSE_CMD, 4, *response, params);
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(host_command_process(&args),
 		   "Failed to get motion_sense dump");
 }
 
@@ -463,6 +463,48 @@ int host_cmd_motion_sense_spoof(uint8_t sensor_num, uint8_t enable,
 	return host_command_process(&args);
 }
 
+int host_cmd_motion_sense_kb_wake_angle(
+	int16_t data, struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_KB_WAKE_ANGLE,
+		.kb_wake_angle = {
+			.data = data,
+		},
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_lid_angle(struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense params = {
+		.cmd = MOTIONSENSE_CMD_LID_ANGLE,
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
+int host_cmd_motion_sense_tablet_mode_lid_angle(
+	int16_t lid_angle, int16_t hys_degree,
+	struct ec_response_motion_sense *response)
+{
+	struct ec_params_motion_sense
+		params = { .cmd = MOTIONSENSE_CMD_TABLET_MODE_LID_ANGLE,
+			   .tablet_mode_threshold = {
+				   .lid_angle = lid_angle,
+				   .hys_degree = hys_degree,
+			   } };
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_MOTION_SENSE_CMD, 1, *response, params);
+
+	return host_command_process(&args);
+}
+
 void host_cmd_typec_discovery(int port, enum typec_partner_type partner_type,
 			      void *response, size_t response_size)
 {
@@ -477,7 +519,7 @@ void host_cmd_typec_discovery(int port, enum typec_partner_type partner_type,
 	args.response = response;
 	args.response_max = response_size;
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(host_command_process(&args),
 		   "Failed to get Type-C state for port %d", port);
 }
 
@@ -491,7 +533,7 @@ void host_cmd_typec_control_enter_mode(int port, enum typec_mode mode)
 	struct host_cmd_handler_args args =
 		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_CONTROL, 0, params);
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(host_command_process(&args),
 		   "Failed to send Type-C control for port %d", port);
 }
 
@@ -503,7 +545,7 @@ void host_cmd_typec_control_exit_modes(int port)
 	struct host_cmd_handler_args args =
 		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_CONTROL, 0, params);
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(host_command_process(&args),
 		   "Failed to send Type-C control for port %d", port);
 }
 
@@ -518,7 +560,7 @@ void host_cmd_typec_control_usb_mux_set(int port,
 	struct host_cmd_handler_args args =
 		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_CONTROL, 0, params);
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(host_command_process(&args),
 		   "Failed to send Type-C control for port %d", port);
 }
 
@@ -532,25 +574,60 @@ void host_cmd_typec_control_clear_events(int port, uint32_t events)
 	struct host_cmd_handler_args args =
 		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_CONTROL, 0, params);
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(host_command_process(&args),
 		   "Failed to send Type-C control for port %d", port);
 }
 
-void host_cmd_usb_pd_get_amode(
-	uint8_t port, uint16_t svid_idx,
-	struct ec_params_usb_pd_get_mode_response *response, int *response_size)
+void host_cmd_typec_control_bist_share_mode(int port, int enable)
 {
-	struct ec_params_usb_pd_get_mode_request params = {
+	struct ec_params_typec_control params = {
 		.port = port,
-		.svid_idx = svid_idx,
+		.command = TYPEC_CONTROL_COMMAND_BIST_SHARE_MODE,
+		.bist_share_mode = enable
 	};
 	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND_PARAMS(EC_CMD_USB_PD_GET_AMODE, 0, params);
-	args.response = response;
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_CONTROL, 0, params);
 
-	zassume_ok(host_command_process(&args),
-		   "Failed to get alternate-mode info for port %d", port);
-	*response_size = args.response_size;
+	zassert_ok(host_command_process(&args),
+		   "Failed to send Type-C control for port %d", port);
+}
+
+void host_cmd_typec_control_vdm_req(int port, struct typec_vdm_req vdm_req)
+{
+	struct ec_params_typec_control params = {
+		.port = port,
+		.command = TYPEC_CONTROL_COMMAND_SEND_VDM_REQ,
+		.vdm_req_params = vdm_req,
+	};
+	struct host_cmd_handler_args args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_TYPEC_CONTROL, 0, params);
+
+	zassert_ok(host_command_process(&args),
+		   "Failed to send Type-C control for port %d", port);
+}
+
+struct ec_response_typec_vdm_response host_cmd_typec_vdm_response(int port)
+{
+	struct ec_params_typec_vdm_response params = { .port = port };
+	struct ec_response_typec_vdm_response response;
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_TYPEC_VDM_RESPONSE, 0, response, params);
+
+	zassert_ok(host_command_process(&args),
+		   "Failed to get Type-C state for port %d", port);
+	return response;
+}
+
+int host_cmd_usb_pd_dev_info(uint8_t port,
+			     struct ec_params_usb_pd_rw_hash_entry *response)
+{
+	struct ec_params_usb_pd_info_request params = {
+		.port = port,
+	};
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_USB_PD_DEV_INFO, 0, *response, params);
+
+	return host_command_process(&args);
 }
 
 void host_events_save(struct host_events_ctx *host_events_ctx)

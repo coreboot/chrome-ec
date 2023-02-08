@@ -7,9 +7,9 @@
 
 #include "atomic.h"
 #include "builtin/assert.h"
+#include "chipset.h"
 #include "common.h"
 #include "console.h"
-#include "chipset.h"
 #include "ec_commands.h"
 #include "hooks.h"
 #include "host_command.h"
@@ -59,6 +59,8 @@ enum mux_config_type {
 	USB_MUX_LOW_POWER,
 	USB_MUX_SET_MODE,
 	USB_MUX_GET_MODE,
+	USB_MUX_CHIPSET_IDLE,
+	USB_MUX_CHIPSET_ACTIVE,
 	USB_MUX_CHIPSET_RESET,
 	USB_MUX_HPD_UPDATE,
 };
@@ -273,7 +275,7 @@ static int configure_mux(int port, int index, enum mux_config_type config,
 	 * to make sure they are all updated appropriately.
 	 */
 	for (mux_chain = &usb_muxes[port];
-	     rv == EC_SUCCESS && mux_chain != NULL;
+	     rv == EC_SUCCESS && mux_chain != NULL && mux_chain->mux != NULL;
 	     mux_chain = mux_chain->next, chip++) {
 		mux_state_t lcl_state;
 		const struct usb_mux *mux_ptr = mux_chain->mux;
@@ -303,6 +305,20 @@ static int configure_mux(int port, int index, enum mux_config_type config,
 		case USB_MUX_LOW_POWER:
 			if (drv && drv->enter_low_power_mode)
 				rv = drv->enter_low_power_mode(mux_ptr);
+
+			break;
+
+		case USB_MUX_CHIPSET_IDLE:
+			if ((mux_ptr->flags & USB_MUX_FLAG_CAN_IDLE) && drv &&
+			    drv->set_idle_mode)
+				rv = drv->set_idle_mode(mux_ptr, true);
+
+			break;
+
+		case USB_MUX_CHIPSET_ACTIVE:
+			if ((mux_ptr->flags & USB_MUX_FLAG_CAN_IDLE) && drv &&
+			    drv->set_idle_mode)
+				rv = drv->set_idle_mode(mux_ptr, false);
 
 			break;
 
@@ -499,7 +515,8 @@ static void perform_mux_set(int port, int index, mux_state_t mux_mode,
 		return;
 
 	/* Configure superspeed lanes */
-	mux_state = ((mux_mode != USB_PD_MUX_NONE) && polarity) ?
+	mux_state = ((mux_mode != USB_PD_MUX_NONE) &&
+		     (mux_mode != USB_PD_MUX_SAFE_MODE) && polarity) ?
 			    mux_mode | USB_PD_MUX_POLARITY_INVERTED :
 			    mux_mode;
 
@@ -667,7 +684,7 @@ int usb_mux_retimer_fw_update_port_info(void)
 
 	for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 		mux_chain = &usb_muxes[i];
-		while (mux_chain) {
+		while (mux_chain && mux_chain->mux) {
 			mux_ptr = mux_chain->mux;
 			if (mux_ptr->driver &&
 			    mux_ptr->driver->is_retimer_fw_update_capable &&
@@ -689,6 +706,34 @@ static void mux_chipset_reset(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESET, mux_chipset_reset, HOOK_PRIO_DEFAULT);
 
+static void mux_chipset_suspend(void)
+{
+	int port;
+
+	for (port = 0; port < board_get_usb_pd_port_count(); ++port) {
+		if (flags[port] & USB_MUX_FLAG_IN_LPM)
+			continue;
+
+		configure_mux(port, TYPEC_USB_MUX_SET_ALL_CHIPS,
+			      USB_MUX_CHIPSET_IDLE, NULL);
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, mux_chipset_suspend, HOOK_PRIO_DEFAULT);
+
+static void mux_chipset_resume(void)
+{
+	int port;
+
+	for (port = 0; port < board_get_usb_pd_port_count(); ++port) {
+		if (flags[port] & USB_MUX_FLAG_IN_LPM)
+			continue;
+
+		configure_mux(port, TYPEC_USB_MUX_SET_ALL_CHIPS,
+			      USB_MUX_CHIPSET_ACTIVE, NULL);
+	}
+}
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, mux_chipset_resume, HOOK_PRIO_DEFAULT);
+
 /*
  * For muxes which have powered off in G3, clear any cached INIT and LPM flags
  * since the chip will need reset.
@@ -702,7 +747,7 @@ static void usb_mux_reset_in_g3(void)
 	for (port = 0; port < board_get_usb_pd_port_count(); port++) {
 		mux_chain = &usb_muxes[port];
 
-		while (mux_chain) {
+		while (mux_chain && mux_chain->mux) {
 			mux_ptr = mux_chain->mux;
 			if (mux_ptr->flags & USB_MUX_FLAG_RESETS_IN_G3) {
 				atomic_clear_bits(&flags[port],

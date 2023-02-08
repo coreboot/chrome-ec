@@ -3,22 +3,21 @@
  * found in the LICENSE file.
  */
 
-#define DT_DRV_COMPAT cros_bb_retimer_emul
-
-#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
-#include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(emul_bb_retimer);
+#include "driver/retimer/bb_retimer.h"
+#include "emul/emul_bb_retimer.h"
+#include "emul/emul_common_i2c.h"
+#include "emul/emul_stub_device.h"
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
+#include <zephyr/logging/log.h>
 
-#include "emul/emul_common_i2c.h"
-#include "emul/emul_bb_retimer.h"
-#include "emul/emul_stub_device.h"
+#define DT_DRV_COMPAT intel_jhl8040r
 
-#include "driver/retimer/bb_retimer.h"
+#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
+LOG_MODULE_REGISTER(emul_bb_retimer);
 
 /** Run-time data used by the emulator */
 struct bb_emul_data {
@@ -309,10 +308,9 @@ static int bb_emul_init(const struct emul *emul, const struct device *parent)
 
 #define BB_RETIMER_EMUL(n)                                          \
 	static struct bb_emul_data bb_emul_data_##n = {			\
-		.vendor_id = DT_STRING_TOKEN(DT_DRV_INST(n), vendor),	\
-		.error_on_ro_write = DT_INST_PROP(n, error_on_ro_write),\
-		.error_on_rsvd_write = DT_INST_PROP(n,			\
-					error_on_reserved_bit_write),	\
+		.vendor_id = BB_RETIMER_VENDOR_ID_1,	\
+		.error_on_ro_write = true, \
+		.error_on_rsvd_write = true,	\
 		.common = {						\
 			.start_write = NULL,				\
 			.write_byte = bb_emul_write_byte,		\
@@ -330,7 +328,7 @@ static int bb_emul_init(const struct emul *emul, const struct device *parent)
 		.addr = DT_INST_REG_ADDR(n),                        \
 	};                                                          \
 	EMUL_DT_INST_DEFINE(n, bb_emul_init, &bb_emul_data_##n,     \
-			    &bb_emul_cfg_##n, &i2c_common_emul_api)
+			    &bb_emul_cfg_##n, &i2c_common_emul_api, NULL)
 
 DT_INST_FOREACH_STATUS_OKAY(BB_RETIMER_EMUL)
 

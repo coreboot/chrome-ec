@@ -19,15 +19,16 @@
 #include "task.h"
 #include "timer.h"
 #include "update_fw.h"
+#include "usart-stm32f0.h"
 #include "usart_rx_dma.h"
 #include "usart_tx_dma.h"
-#include "usart-stm32f0.h"
+#include "usb-stream.h"
 #include "usb_hw.h"
 #include "usb_i2c.h"
 #include "usb_spi.h"
-#include "usb-stream.h"
 #include "util.h"
 
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
@@ -145,7 +146,7 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
  */
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("C2D2"),
 	[USB_STR_SERIALNO] = 0,
 	[USB_STR_VERSION] = USB_STRING_DESC(CROS_EC_VERSION32),
@@ -292,7 +293,7 @@ USB_STREAM_CONFIG_USART_IFACE(usart4_usb, USB_IFACE_USART4_STREAM,
 
 /* SPI devices */
 const struct spi_device_t spi_devices[] = {
-	{ CONFIG_SPI_FLASH_PORT, 1, GPIO_SPI_CSN },
+	{ CONFIG_SPI_FLASH_PORT, 1, GPIO_SPI_CSN, USB_SPI_ENABLED },
 };
 const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 

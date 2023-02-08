@@ -1,4 +1,8 @@
 common:
   platform_allow: native_posix
+  tags:
+    system
 tests:
-  system_shim.default: {}
+  system_shim.default:
+    extra_args: DTC_OVERLAY_FILE="./default.overlay"
+  system_shim.no_chosen: {}

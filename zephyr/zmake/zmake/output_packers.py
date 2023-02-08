@@ -3,9 +3,9 @@
 # found in the LICENSE file.
 """Types which provide many builds and composite them into a single binary."""
 import logging
+from pathlib import Path
 import shutil
 import subprocess
-from pathlib import Path
 from typing import Dict, Optional
 
 import zmake.build_config as build_config
@@ -172,7 +172,7 @@ class BinmanPacker(BasePacker):
 
         proc = jobclient.popen(
             [
-                "binman",
+                util.get_tool_path("binman"),
                 "-v",
                 "5",
                 "build",

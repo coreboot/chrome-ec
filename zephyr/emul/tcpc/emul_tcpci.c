@@ -3,21 +3,20 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(tcpci_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
+#include "emul/emul_common_i2c.h"
+#include "emul/tcpc/emul_tcpci.h"
+#include "tcpm/tcpci.h"
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/ztest.h>
 
-#include "tcpm/tcpci.h"
-
-#include "emul/emul_common_i2c.h"
-#include "emul/tcpc/emul_tcpci.h"
+LOG_MODULE_REGISTER(tcpci_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 
 /**
  * @brief Returns number of bytes in specific register
@@ -1211,7 +1210,7 @@ static int tcpci_emul_handle_transmit(const struct emul *emul)
 	case TCPCI_MSG_TX_HARD_RESET:
 		tcpci_emul_disable_pd_msg_delivery(emul);
 		tcpci_emul_reset_mask_regs(ctx);
-		/* fallthrough */
+		__fallthrough;
 	case TCPCI_MSG_CABLE_RESET:
 		/*
 		 * Cable and Hard reset are special and set success and fail
@@ -1259,13 +1258,13 @@ int tcpci_emul_handle_write(const struct emul *emul, int reg, int msg_len)
 				ctx->write_data &= ~TCPC_REG_ALERT_RX_STATUS;
 			}
 		}
-	/* fallthrough */
+		__fallthrough;
 	case TCPC_REG_FAULT_STATUS:
 	case TCPC_REG_ALERT_EXT:
 		/* Clear bits where TCPM set 1 */
 		get_reg(ctx, reg, &alert_val);
 		ctx->write_data = alert_val & (~ctx->write_data);
-	/* fallthrough */
+		__fallthrough;
 	case TCPC_REG_ALERT_MASK:
 	case TCPC_REG_POWER_STATUS_MASK:
 	case TCPC_REG_FAULT_STATUS_MASK:
@@ -1344,6 +1343,7 @@ int tcpci_emul_handle_write(const struct emul *emul, int reg, int msg_len)
 	switch (reg_bytes) {
 	case 2:
 		rsvd_mask = tcpci_emul_rsvd_mask[reg + 1];
+		__fallthrough;
 	case 1:
 		rsvd_mask <<= 8;
 		rsvd_mask |= tcpci_emul_rsvd_mask[reg];

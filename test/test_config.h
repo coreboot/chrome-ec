@@ -26,6 +26,10 @@
 #undef CONFIG_USB_PD_LOGGING
 #endif
 
+#ifdef TEST_ALWAYS_MEMSET
+#define CONFIG_LIBCRYPTOC
+#endif
+
 #if defined(TEST_AES) || defined(TEST_CRYPTO_BENCHMARK)
 #define CONFIG_AES
 #define CONFIG_AES_GCM
@@ -112,6 +116,15 @@
 #define CONFIG_SHA256
 #endif
 
+#ifdef TEST_ROLLBACK_SECRET
+#define CONFIG_ROLLBACK
+#define CONFIG_ROLLBACK_SECRET_SIZE 32
+#define CONFIG_ROLLBACK_OFF 1
+#define CONFIG_ROLLBACK_SIZE 2
+#undef CONFIG_ROLLBACK_UPDATE
+#define FP_CONTEXT_TPM_BYTES 32
+#endif
+
 #ifdef TEST_MOTION_SENSE_FIFO
 #define CONFIG_ACCEL_FIFO
 #define CONFIG_ACCEL_FIFO_SIZE 256
@@ -193,13 +206,17 @@ enum sensor_id {
 	SENSOR_COUNT,
 };
 
+#if defined(TEST_MOTION_ANGLE) || defined(TEST_MOTION_ANGLE_TABLET) || \
+	defined(TEST_MOTION_LID)
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE
 #define CONFIG_LID_ANGLE_SENSOR_LID LID
 #define CONFIG_TABLET_MODE
+#endif /* LID ANGLE needed */
+
 #define CONFIG_MOTION_FILL_LPC_SENSE_DATA
 
-#endif
+#endif /* sensor_id needed */
 
 #if defined(TEST_MOTION_ANGLE)
 #define CONFIG_ACCEL_FORCE_MODE_MASK           \
@@ -288,7 +305,7 @@ enum sensor_id {
 #define CONFIG_BATTERY_SMART
 #define CONFIG_CHARGER
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
-#define CONFIG_CHARGER_INPUT_CURRENT 4032
+#define CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT 4032
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_DISCHARGE_ON_AC_CUSTOM
 #define CONFIG_I2C
@@ -329,7 +346,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #ifdef TEST_BATTERY_GET_PARAMS_SMART
 #define CONFIG_BATTERY_MOCK
 #define CONFIG_BATTERY_SMART
-#define CONFIG_CHARGER_INPUT_CURRENT 4032
+#define CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT 4032
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER
 #define I2C_PORT_MASTER 0
@@ -386,6 +403,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
 #undef CONFIG_USB_PD_HOST_CMD
+#undef CONFIG_USB_DPM_SM
 #define CONFIG_USB_PRL_SM
 #define CONFIG_USB_PD_TCPC
 #define CONFIG_USB_PD_TCPM_STUB
@@ -406,6 +424,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_EXTENDED_MESSAGES
 #define CONFIG_USB_PD_TCPMV2
 #undef CONFIG_USB_PE_SM
+#undef CONFIG_USB_DPM_SM
 #undef CONFIG_USB_TYPEC_SM
 #undef CONFIG_USB_PD_HOST_CMD
 #define CONFIG_USB_PRL_SM
@@ -432,6 +451,8 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_DISCHARGE_GPIO
 #undef CONFIG_USB_PD_HOST_CMD
 #define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_DP_MODE
+#define CONFIG_USB_PD_DISCOVERY
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USB_PD_3A_PORTS 0 /* Host does not define a 3.0 A PDO */
 #endif
@@ -456,6 +477,8 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_DISCHARGE_GPIO
 #undef CONFIG_USB_PD_HOST_CMD
 #define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_DP_MODE
+#define CONFIG_USB_PD_DISCOVERY
 #define CONFIG_USBC_SS_MUX
 #define I2C_PORT_HOST_TCPC 0
 #define CONFIG_CHARGE_MANAGER
@@ -514,6 +537,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_POWER_DELIVERY
 #undef CONFIG_USB_PRL_SM
 #undef CONFIG_USB_PE_SM
+#undef CONFIG_USB_DPM_SM
 #undef CONFIG_USB_PD_HOST_CMD
 #endif
 
@@ -531,6 +555,8 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_TEST_USB_PE_SM
 #define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_DP_MODE
+#define CONFIG_USB_PD_DISCOVERY
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
 #define CONFIG_USB_PID 0x5036
@@ -598,6 +624,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_CMD_PD_TIMER
 #undef CONFIG_USB_PD_HOST_CMD
 #undef CONFIG_USB_PRL_SM
+#undef CONFIG_USB_DPM_SM
 #endif
 
 #if defined(TEST_CHARGE_MANAGER) || defined(TEST_CHARGE_MANAGER_DRP_CHARGING)
@@ -622,6 +649,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #ifdef TEST_CHARGE_RAMP
 #define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
+#undef CONFIG_USB_PD_HOST_CMD
 #endif
 
 #ifdef TEST_RTC
@@ -656,6 +684,10 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_I2C_CONTROLLER
 #define CONFIG_I2C_BITBANG
 #define I2C_BITBANG_PORT_COUNT 1
+#endif
+
+#ifdef TEST_PANIC
+#undef CONFIG_PANIC_STRIP_GPR
 #endif
 
 #endif /* TEST_BUILD */

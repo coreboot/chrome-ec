@@ -14,8 +14,8 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "led_common.h"
-#include "util.h"
 #include "system.h"
+#include "util.h"
 
 #define BAT_LED_ON 0
 #define BAT_LED_OFF 1
@@ -110,7 +110,7 @@ static void led_set_battery(void)
 			led_set_color_battery(LED_WHITE);
 			break;
 		}
-		/* Intentional fall-through */
+		__fallthrough;
 	case PWR_STATE_DISCHARGE:
 		/*
 		 * Blink white light (1 sec on, 1 sec off)

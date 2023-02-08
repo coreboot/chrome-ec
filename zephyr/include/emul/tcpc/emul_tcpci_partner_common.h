@@ -12,15 +12,16 @@
 #ifndef __EMUL_TCPCI_PARTNER_COMMON_H
 #define __EMUL_TCPCI_PARTNER_COMMON_H
 
-#include <zephyr/drivers/emul.h>
-#include <zephyr/kernel.h>
-#include <zephyr/sys/atomic.h>
-#include <stdbool.h>
-#include <stdint.h>
-
 #include "ec_commands.h"
 #include "emul/tcpc/emul_tcpci.h"
 #include "usb_pd.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include <zephyr/drivers/emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/sys/atomic.h>
 
 /**
  * @brief Common code used by TCPCI partner device emulators
@@ -75,10 +76,15 @@ struct tcpci_partner_data {
 	enum pd_power_role power_role;
 	/** Data role (used in message header) */
 	enum pd_data_role data_role;
-	/** VConn role (used in message header) */
+	/** VCONN role */
 	enum pd_vconn_role vconn_role;
 	/** Revision (used in message header) */
 	enum pd_rev_type rev;
+	/**
+	 * Whether this partner can supply VCONN. If false, the partner will
+	 * respond to VCONN_Swap with Not_Supported.
+	 */
+	bool vconn_supported;
 	/** Resistor set at the CC1 line of partner emulator */
 	enum tcpc_cc_voltage_status cc1;
 	/** Resistor set at the CC2 line of partner emulator */
@@ -142,6 +148,9 @@ struct tcpci_partner_data {
 	/* SVID of entered mode (0 if no mode is entered) */
 	uint16_t entered_svid;
 
+	enum tcpc_cc_voltage_status tcpm_cc1;
+	enum tcpc_cc_voltage_status tcpm_cc2;
+
 	/* VDMs with which the partner responds to discovery REQs. The VDM
 	 * buffers include the VDM header, and the VDO counts include 1 for the
 	 * VDM header. This structure has space for the mode response for a
@@ -178,6 +187,10 @@ struct tcpci_partner_data {
 		 */
 		bool have_response[PD_BATT_MAX];
 	} battery_capabilities;
+	/* RMDO returned by partner in response to a Get_Revision message */
+	uint32_t rmdo;
+	/* Used to control accept/reject for partner port of Enter_USB msg */
+	bool enter_usb_accept;
 
 	/*
 	 * Cable which is "plugged in" to this port partner
@@ -306,6 +319,9 @@ struct tcpci_partner_extension_ops {
 	void (*soft_reset)(struct tcpci_partner_extension *ext,
 			   struct tcpci_partner_data *common_data);
 
+	void (*control_change)(struct tcpci_partner_extension *ext,
+			       struct tcpci_partner_data *common_data);
+
 	/**
 	 * @brief Function called when partner emulator is disconnected from
 	 *        TCPM
@@ -338,6 +354,22 @@ struct tcpci_partner_extension_ops {
  * @param rev PD revision of the emulator
  */
 void tcpci_partner_init(struct tcpci_partner_data *data, enum pd_rev_type rev);
+
+/**
+ * @brief Set the partner emulator to support or not support sourcing VCONN. If
+ * the partner supports VCONN, it should respond to VCONN Swap with Accept,
+ * Reject, or Wait. If it does not support VCONN, it should respond with
+ * Not_Supported.
+ *
+ * A compliant partner should not change this while attached. However, there are
+ * real devices that pretend to stop supporting VCONN after completing a VCONN
+ * Swap.
+ *
+ * @param data Pointer to USB-C partner emulator
+ * @param vconn_support true to support sourcing VCONN, false to not support it.
+ */
+void tcpci_partner_set_vconn_support(struct tcpci_partner_data *data,
+				     bool support_vconn);
 
 /**
  * @brief Free message's memory

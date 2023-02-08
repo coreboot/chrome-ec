@@ -9,9 +9,9 @@
 #include "battery_smart.h"
 #include "builtin/assert.h"
 #include "charge_manager.h"
-#include "charger_profile_override.h"
 #include "charge_state.h"
 #include "charger.h"
+#include "charger_profile_override.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
@@ -1266,6 +1266,29 @@ static int shutdown_on_critical_battery(void)
 	return 1;
 }
 
+int battery_is_below_threshold(enum batt_threshold_type type, bool transitioned)
+{
+	int threshold;
+
+	/* We can't tell what the current charge is. Assume it's okay. */
+	if (curr.batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE)
+		return 0;
+
+	switch (type) {
+	case BATT_THRESHOLD_TYPE_LOW:
+		threshold = BATTERY_LEVEL_LOW;
+		break;
+	case BATT_THRESHOLD_TYPE_SHUTDOWN:
+		threshold = CONFIG_BATT_HOST_SHUTDOWN_PERCENTAGE;
+		break;
+	default:
+		return 0;
+	}
+
+	return curr.batt.state_of_charge <= threshold &&
+	       (!transitioned || prev_charge > threshold);
+}
+
 /*
  * Send host events as the battery charge drops below certain thresholds.
  * We handle forced shutdown and other actions elsewhere; this is just for the
@@ -1274,17 +1297,11 @@ static int shutdown_on_critical_battery(void)
  */
 static void notify_host_of_low_battery_charge(void)
 {
-	/* We can't tell what the current charge is. Assume it's okay. */
-	if (curr.batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE)
-		return;
-
 #ifdef CONFIG_HOSTCMD_EVENTS
-	if (curr.batt.state_of_charge <= BATTERY_LEVEL_LOW &&
-	    prev_charge > BATTERY_LEVEL_LOW)
+	if (battery_is_below_threshold(BATT_THRESHOLD_TYPE_LOW, true))
 		host_set_single_event(EC_HOST_EVENT_BATTERY_LOW);
 
-	if (curr.batt.state_of_charge <= BATTERY_LEVEL_CRITICAL &&
-	    prev_charge > BATTERY_LEVEL_CRITICAL)
+	if (battery_is_below_threshold(BATT_THRESHOLD_TYPE_SHUTDOWN, true))
 		host_set_single_event(EC_HOST_EVENT_BATTERY_CRITICAL);
 #endif
 }
@@ -1365,7 +1382,7 @@ struct charge_state_data *charge_get_status(void)
 }
 
 /* Determine if the battery is outside of allowable temperature range */
-static int battery_outside_charging_temperature(void)
+int battery_outside_charging_temperature(void)
 {
 	const struct battery_info *batt_info = battery_get_info();
 	int batt_temp_c = DECI_KELVIN_TO_CELSIUS(curr.batt.temperature);
@@ -1490,9 +1507,9 @@ static int get_desired_input_current(enum battery_present batt_present,
 		int ilim = charge_manager_get_charger_current();
 		return ilim == CHARGE_CURRENT_UNINITIALIZED ?
 			       CHARGE_CURRENT_UNINITIALIZED :
-			       MAX(CONFIG_CHARGER_INPUT_CURRENT, ilim);
+			       MAX(CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT, ilim);
 #else
-		return CONFIG_CHARGER_INPUT_CURRENT;
+		return CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT;
 #endif
 	} else {
 #ifdef CONFIG_USB_POWER_DELIVERY
@@ -1539,7 +1556,8 @@ __test_only enum charge_state_v2 charge_get_state_v2(void)
 
 static void deep_charge_battery(int *need_static)
 {
-	if (curr.state == ST_IDLE) {
+	if ((curr.state == ST_IDLE) &&
+	    (curr.batt.flags & BATT_FLAG_DEEP_CHARGE)) {
 		/* Deep charge time out , do nothing */
 		curr.requested_voltage = 0;
 		curr.requested_current = 0;
@@ -1562,6 +1580,7 @@ static void deep_charge_battery(int *need_static)
 		set_charge_state(ST_PRECHARGE);
 		curr.requested_voltage = batt_info->voltage_max;
 		curr.requested_current = batt_info->precharge_current;
+		curr.batt.flags |= BATT_FLAG_DEEP_CHARGE;
 	}
 }
 
@@ -1814,13 +1833,26 @@ void charger_task(void *u)
 			goto wait_for_it;
 		}
 
-		if (IS_ENABLED(CONFIG_BATTERY_LOW_VOLTAGE_PROTECTION) &&
-		    !(curr.batt.flags & BATT_FLAG_BAD_VOLTAGE) &&
-		    (curr.batt.voltage <= batt_info->voltage_min)) {
-			deep_charge_battery(&need_static);
-			goto wait_for_it;
-		}
+		/*
+		 * When the battery voltage is lower than voltage_min,precharge
+		 * first to protect the battery
+		 */
+		if (IS_ENABLED(CONFIG_BATTERY_LOW_VOLTAGE_PROTECTION)) {
+			if (!(curr.batt.flags & BATT_FLAG_BAD_VOLTAGE) &&
+			    (curr.batt.voltage <= batt_info->voltage_min)) {
+				deep_charge_battery(&need_static);
+				goto wait_for_it;
+			}
 
+			/*
+			 * Finished deep charge before timeout. Clear the flag
+			 * so that we can do deep charge again (when it's deeply
+			 * discharged again).
+			 */
+			if ((curr.batt.flags & BATT_FLAG_DEEP_CHARGE)) {
+				curr.batt.flags &= ~BATT_FLAG_DEEP_CHARGE;
+			}
+		}
 		/* The battery is responding. Yay. Try to use it. */
 
 		/*
@@ -2065,14 +2097,15 @@ int charge_want_shutdown(void)
 	       (curr.batt.state_of_charge < battery_level_shutdown);
 }
 
-int charge_prevent_power_on(int power_button_pressed)
+#ifdef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
+test_export_static int charge_prevent_power_on_automatic_power_on = 1;
+#endif
+
+bool charge_prevent_power_on(bool power_button_pressed)
 {
 	int prevent_power_on = 0;
 	struct batt_params params;
 	struct batt_params *current_batt_params = &curr.batt;
-#ifdef CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
-	static int automatic_power_on = 1;
-#endif
 
 	/* If battery params seem uninitialized then retrieve them */
 	if (current_batt_params->is_present == BP_NOT_SURE) {
@@ -2087,7 +2120,7 @@ int charge_prevent_power_on(int power_button_pressed)
 	 * power-ups are user-requested and non-automatic.
 	 */
 	if (power_button_pressed)
-		automatic_power_on = 0;
+		charge_prevent_power_on_automatic_power_on = 0;
 	/*
 	 * Require a minimum battery level to power on and ensure that the
 	 * battery can provide power to the system.
@@ -2133,12 +2166,13 @@ int charge_prevent_power_on(int power_button_pressed)
 	 * except when auto-power-on at EC startup and the battery
 	 * is physically present.
 	 */
-	prevent_power_on &=
-		(system_is_locked() || (automatic_power_on
+	prevent_power_on &= (system_is_locked() ||
+			     (charge_prevent_power_on_automatic_power_on
 #ifdef CONFIG_BATTERY_HW_PRESENT_CUSTOM
-					&& battery_hw_present() == BP_YES
+
+			      && battery_hw_present() == BP_YES
 #endif
-					));
+			      ));
 #endif /* CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON */
 
 #ifdef CONFIG_CHARGE_MANAGER
@@ -2172,7 +2206,7 @@ int charge_prevent_power_on(int power_button_pressed)
 		prevent_power_on = 1;
 #endif /* CONFIG_SYSTEM_UNLOCKED */
 
-	return prevent_power_on;
+	return prevent_power_on != 0;
 }
 
 static int battery_near_full(void)
@@ -2310,6 +2344,18 @@ int charge_set_output_current_limit(int chgnum, int ma, int mv)
 int charge_set_input_current_limit(int ma, int mv)
 {
 	__maybe_unused int chgnum = 0;
+
+#ifdef CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT
+	if (CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT != 0) {
+		ma = (ma * (100 - CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT)) /
+		     100;
+	}
+#endif
+#ifdef CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT
+	if (CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT > 0) {
+		ma = MAX(ma, CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT);
+	}
+#endif
 
 	if (IS_ENABLED(CONFIG_OCPC))
 		chgnum = charge_get_active_chg_chip();

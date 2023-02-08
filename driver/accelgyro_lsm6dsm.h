@@ -8,10 +8,10 @@
 #ifndef __CROS_EC_ACCELGYRO_LSM6DSM_H
 #define __CROS_EC_ACCELGYRO_LSM6DSM_H
 
-#include "stm_mems_common.h"
-#include "mag_cal.h"
 #include "mag_bmm150.h"
+#include "mag_cal.h"
 #include "mag_lis2mdl.h"
+#include "stm_mems_common.h"
 
 /*
  * 7-bit address is 110101xb. Where 'x' is determined
@@ -385,5 +385,22 @@ struct lsm6dsm_data {
 #endif
 
 int lsm6dsm_set_data_rate(const struct motion_sensor_t *s, int rate, int rnd);
+
+#if defined(CONFIG_ZEPHYR)
+/* Get the motion sensor ID of the LSM6DSM sensor that generates the
+ * interrupt. The interrupt is converted to the event and transferred to
+ * motion sense task that actually handles the interrupt.
+ *
+ * Here we use an alias (lsm6dsm_int) to get the motion sensor ID. This alias
+ * MUST be defined for this driver to work.
+ * aliases {
+ *   lsm6dsm-int = &lid_accel;
+ * };
+ */
+#if DT_NODE_EXISTS(DT_ALIAS(lsm6dsm_int))
+#define CONFIG_ACCEL_LSM6DSM_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(SENSOR_ID(DT_ALIAS(lsm6dsm_int)))
+#endif
+#endif
 
 #endif /* __CROS_EC_ACCELGYRO_LSM6DSM_H */

@@ -3,10 +3,11 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/ztest.h>
 #include "include/lpc.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+
+#include <zephyr/ztest.h>
 
 struct host_cmd_host_event_commands_fixture {
 	struct host_events_ctx ctx;
@@ -160,8 +161,8 @@ ZTEST_USER(host_cmd_host_event_commands, test_host_event_clear_cmd)
 	}
 }
 
-enum ec_status host_event_mask_cmd_helper(uint32_t command, uint32_t mask,
-					  struct ec_response_host_event_mask *r)
+static enum ec_status host_event_mask_cmd_helper(uint32_t command,
+						 uint32_t mask)
 {
 	enum ec_status ret_val;
 
@@ -169,7 +170,7 @@ enum ec_status host_event_mask_cmd_helper(uint32_t command, uint32_t mask,
 		.mask = mask,
 	};
 	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND(command, 0, *r, params);
+		BUILD_HOST_COMMAND_PARAMS(command, 0, params);
 
 	ret_val = host_command_process(&args);
 
@@ -185,7 +186,6 @@ ZTEST_USER(host_cmd_host_event_commands, test_host_event_clear__cmd)
 	host_event_t events;
 	host_event_t mask = EC_HOST_EVENT_MASK(EC_HOST_EVENT_KEYBOARD_RECOVERY);
 	host_event_t lpc_event_mask;
-	struct ec_response_host_event_mask response = { 0 };
 
 	lpc_event_mask = lpc_get_host_event_mask(LPC_HOST_EVENT_SMI);
 	lpc_set_host_event_mask(LPC_HOST_EVENT_SMI, lpc_event_mask | mask);
@@ -195,8 +195,7 @@ ZTEST_USER(host_cmd_host_event_commands, test_host_event_clear__cmd)
 
 	zassert_true(events & mask, "events=0x%X", events);
 
-	ret_val = host_event_mask_cmd_helper(EC_CMD_HOST_EVENT_CLEAR, mask,
-					     &response);
+	ret_val = host_event_mask_cmd_helper(EC_CMD_HOST_EVENT_CLEAR, mask);
 
 	zassert_equal(ret_val, EC_RES_SUCCESS, "Expected %d, returned %d",
 		      EC_RES_SUCCESS, ret_val);
@@ -214,7 +213,6 @@ ZTEST_USER(host_cmd_host_event_commands, test_host_event_clear_b_cmd)
 	host_event_t events_b;
 	host_event_t mask = EC_HOST_EVENT_MASK(EC_HOST_EVENT_KEYBOARD_RECOVERY);
 	host_event_t lpc_event_mask;
-	struct ec_response_host_event_mask response = { 0 };
 	struct ec_response_host_event result = { 0 };
 
 	lpc_event_mask = lpc_get_host_event_mask(LPC_HOST_EVENT_SMI);
@@ -226,8 +224,7 @@ ZTEST_USER(host_cmd_host_event_commands, test_host_event_clear_b_cmd)
 	events_b = result.value;
 	zassert_true(events_b & mask, "events_b=0x%X", events_b);
 
-	ret_val = host_event_mask_cmd_helper(EC_CMD_HOST_EVENT_CLEAR_B, mask,
-					     &response);
+	ret_val = host_event_mask_cmd_helper(EC_CMD_HOST_EVENT_CLEAR_B, mask);
 
 	zassert_equal(ret_val, EC_RES_SUCCESS, "Expected %d, returned %d",
 		      EC_RES_SUCCESS, ret_val);

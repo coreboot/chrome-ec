@@ -3,14 +3,15 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/arch/cpu.h>
-#include <zephyr/fatal.h>
-#include <zephyr/logging/log.h>
-#include <zephyr/logging/log_ctrl.h>
-#include <zephyr/kernel.h>
-
 #include "common.h"
 #include "panic.h"
+#include "system_safe_mode.h"
+
+#include <zephyr/arch/cpu.h>
+#include <zephyr/fatal.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/logging/log_ctrl.h>
 
 /*
  * Arch-specific configuration
@@ -27,15 +28,37 @@
 
 #if defined(CONFIG_ARM)
 #define PANIC_ARCH PANIC_ARCH_CORTEX_M
-#define PANIC_REG_LIST(M)             \
-	M(basic.r0, cm.frame[0], a1)  \
-	M(basic.r1, cm.frame[1], a2)  \
-	M(basic.r2, cm.frame[2], a3)  \
-	M(basic.r3, cm.frame[3], a4)  \
-	M(basic.r12, cm.frame[4], ip) \
-	M(basic.lr, cm.frame[5], lr)  \
-	M(basic.pc, cm.frame[6], pc)  \
-	M(basic.xpsr, cm.frame[7], xpsr)
+#if defined(CONFIG_EXTRA_EXCEPTION_INFO)
+#define EXTRA_PANIC_REG_LIST(M)                                              \
+	M(extra_info.callee->v1, cm.regs[CORTEX_PANIC_REGISTER_R4], v1)      \
+	M(extra_info.callee->v2, cm.regs[CORTEX_PANIC_REGISTER_R5], v2)      \
+	M(extra_info.callee->v3, cm.regs[CORTEX_PANIC_REGISTER_R6], v3)      \
+	M(extra_info.callee->v4, cm.regs[CORTEX_PANIC_REGISTER_R7], v4)      \
+	M(extra_info.callee->v5, cm.regs[CORTEX_PANIC_REGISTER_R8], v5)      \
+	M(extra_info.callee->v6, cm.regs[CORTEX_PANIC_REGISTER_R9], v6)      \
+	M(extra_info.callee->v7, cm.regs[CORTEX_PANIC_REGISTER_R10], v7)     \
+	M(extra_info.callee->v8, cm.regs[CORTEX_PANIC_REGISTER_R11], v8)     \
+	M(extra_info.callee->psp, cm.regs[CORTEX_PANIC_REGISTER_PSP], psp)   \
+	M(extra_info.exc_return, cm.regs[CORTEX_PANIC_REGISTER_LR], exc_rtn) \
+	M(extra_info.msp, cm.regs[CORTEX_PANIC_REGISTER_MSP], msp)
+/*
+ * IPSR is not copied. IPSR is a subset of xPSR, which is already
+ * captured in PANIC_REG_LIST.
+ */
+#else
+#define EXTRA_PANIC_REG_LIST(M)
+#endif
+/* TODO(b/245423691): Copy other status registers (e.g. CFSR) when available. */
+#define PANIC_REG_LIST(M)                \
+	M(basic.r0, cm.frame[0], a1)     \
+	M(basic.r1, cm.frame[1], a2)     \
+	M(basic.r2, cm.frame[2], a3)     \
+	M(basic.r3, cm.frame[3], a4)     \
+	M(basic.r12, cm.frame[4], ip)    \
+	M(basic.lr, cm.frame[5], lr)     \
+	M(basic.pc, cm.frame[6], pc)     \
+	M(basic.xpsr, cm.frame[7], xpsr) \
+	EXTRA_PANIC_REG_LIST(M)
 #define PANIC_REG_EXCEPTION(pdata) pdata->cm.regs[1]
 #define PANIC_REG_REASON(pdata) pdata->cm.regs[3]
 #define PANIC_REG_INFO(pdata) pdata->cm.regs[4]
@@ -73,14 +96,12 @@
 /* Not implemented for this arch */
 #define PANIC_ARCH 0
 #define PANIC_REG_LIST(M)
-#ifdef CONFIG_PLATFORM_EC_SOFTWARE_PANIC
 static uint8_t placeholder_exception_reg;
 static uint32_t placeholder_reason_reg;
 static uint32_t placeholder_info_reg;
 #define PANIC_REG_EXCEPTION(unused) placeholder_exception_reg
 #define PANIC_REG_REASON(unused) placeholder_reason_reg
 #define PANIC_REG_INFO(unused) placeholder_info_reg
-#endif /* CONFIG_PLATFORM_EC_SOFTWARE_PANIC */
 #endif
 
 /* Macros to be applied to PANIC_REG_LIST as M */
@@ -111,6 +132,7 @@ static void copy_esf_to_panic_data(const z_arch_esf_t *esf,
 
 void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
 {
+	struct panic_data *pdata = get_panic_data_write();
 	/*
 	 * If CONFIG_LOG is on, the exception details
 	 * have already been logged to the console.
@@ -120,22 +142,38 @@ void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
 	}
 
 	if (PANIC_ARCH && esf) {
-		copy_esf_to_panic_data(esf, get_panic_data_write());
+		copy_esf_to_panic_data(esf, pdata);
 		if (!IS_ENABLED(CONFIG_LOG)) {
 			panic_data_print(panic_get_data());
 		}
 	}
 
 	LOG_PANIC();
+
+	/* Start system safe mode if possible */
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_SYSTEM_SAFE_MODE)) {
+		if (reason != K_ERR_KERNEL_PANIC &&
+		    start_system_safe_mode() == EC_SUCCESS) {
+			/* Returning from k_sys_fatal_error_handler will cause
+			 * the faulting thread to be aborted and resume the
+			 * kernel
+			 */
+			pdata->flags |= PANIC_DATA_FLAG_SAFE_MODE_STARTED;
+			return;
+		}
+		pdata->flags |= PANIC_DATA_FLAG_SAFE_MODE_FAIL_PRECONDITIONS;
+	}
+
 	/*
 	 * Reboot immediately, don't wait for watchdog, otherwise
 	 * the watchdog will overwrite this panic.
 	 */
 	panic_reboot();
+#ifndef TEST_BUILD
 	CODE_UNREACHABLE;
+#endif
 }
 
-#ifdef CONFIG_PLATFORM_EC_SOFTWARE_PANIC
 void panic_set_reason(uint32_t reason, uint32_t info, uint8_t exception)
 {
 	struct panic_data *const pdata = get_panic_data_write();
@@ -174,4 +212,3 @@ __overridable void arch_panic_set_reason(uint32_t reason, uint32_t info,
 {
 	/* Default implementation, do nothing. */
 }
-#endif /* CONFIG_PLATFORM_EC_SOFTWARE_PANIC */

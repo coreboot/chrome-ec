@@ -3,9 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <stdint.h>
-#include <zephyr/ztest.h>
-
 #include "common.h"
 #include "ec_tasks.h"
 #include "emul/emul_isl923x.h"
@@ -16,6 +13,10 @@
 #include "test/drivers/utils.h"
 #include "test/usb_pe.h"
 #include "usb_pd.h"
+
+#include <stdint.h>
+
+#include <zephyr/ztest.h>
 
 #define TEST_USB_PORT 0
 BUILD_ASSERT(TEST_USB_PORT == USBC_PORT_C0);
@@ -59,13 +60,13 @@ tcpci_drp_emul_connect_partner(struct tcpci_partner_data *partner_emul,
 
 	tcpci_tcpc_alert(TEST_USB_PORT);
 
-	zassume_ok(tcpci_partner_connect_to_tcpci(partner_emul, tcpci_emul),
+	zassert_ok(tcpci_partner_connect_to_tcpci(partner_emul, tcpci_emul),
 		   NULL);
 }
 
 static void disconnect_partner(struct usb_pd_ctrl_msg_test_fixture *fixture)
 {
-	zassume_ok(tcpci_emul_disconnect_partner(fixture->tcpci_emul), NULL);
+	zassert_ok(tcpci_emul_disconnect_partner(fixture->tcpci_emul));
 	k_sleep(K_SECONDS(1));
 }
 
@@ -212,6 +213,9 @@ ZTEST_F(usb_pd_ctrl_msg_test_sink, verify_pr_swap)
 	snk_resp = host_cmd_typec_status(TEST_USB_PORT);
 	zassert_equal(PD_ROLE_SOURCE, snk_resp.power_role,
 		      "SNK Returned power_role=%u", snk_resp.power_role);
+
+	tcpci_partner_common_handler_mask_msg(&super_fixture->partner_emul,
+					      PD_CTRL_ACCEPT, false);
 }
 
 /**
@@ -315,8 +319,8 @@ ZTEST(usb_pd_ctrl_msg_test_source, verify_dpm_get_sink_cap)
 
 	typec_status = host_cmd_typec_status(TEST_USB_PORT);
 
-	zassert_true(typec_status.sink_cap_count > 1, NULL);
-	zassert_equal(typec_status.sink_cap_pdos[1], TEST_ADDED_PDO, NULL);
+	zassert_true(typec_status.sink_cap_count > 1);
+	zassert_equal(typec_status.sink_cap_pdos[1], TEST_ADDED_PDO);
 }
 
 /**
@@ -336,8 +340,8 @@ ZTEST(usb_pd_ctrl_msg_test_sink, verify_get_sink_cap)
 
 	typec_status = host_cmd_typec_status(TEST_USB_PORT);
 
-	zassert_true(typec_status.sink_cap_count > 1, NULL);
-	zassert_equal(typec_status.sink_cap_pdos[1], TEST_ADDED_PDO, NULL);
+	zassert_true(typec_status.sink_cap_count > 1);
+	zassert_equal(typec_status.sink_cap_pdos[1], TEST_ADDED_PDO);
 }
 
 /**
@@ -360,10 +364,10 @@ ZTEST_F(usb_pd_ctrl_msg_test_source, verify_bist_tx_mode2)
 
 	pd_dpm_request(TEST_USB_PORT, DPM_REQUEST_BIST_TX);
 	k_sleep(K_MSEC(10));
-	zassert_equal(get_state_pe(TEST_USB_PORT), PE_BIST_TX, NULL);
+	zassert_equal(get_state_pe(TEST_USB_PORT), PE_BIST_TX);
 
 	k_sleep(K_SECONDS(5));
-	zassert_equal(get_state_pe(TEST_USB_PORT), PE_SNK_READY, NULL);
+	zassert_equal(get_state_pe(TEST_USB_PORT), PE_SNK_READY);
 }
 
 /**
@@ -387,9 +391,9 @@ ZTEST_F(usb_pd_ctrl_msg_test_source, verify_bist_tx_test_data)
 
 	pd_dpm_request(TEST_USB_PORT, DPM_REQUEST_BIST_TX);
 	k_sleep(K_SECONDS(5));
-	zassert_equal(get_state_pe(TEST_USB_PORT), PE_BIST_TX, NULL);
+	zassert_equal(get_state_pe(TEST_USB_PORT), PE_BIST_TX);
 
 	tcpci_partner_common_send_hard_reset(&super_fixture->partner_emul);
 	k_sleep(K_SECONDS(1));
-	zassert_equal(get_state_pe(TEST_USB_PORT), PE_SNK_READY, NULL);
+	zassert_equal(get_state_pe(TEST_USB_PORT), PE_SNK_READY);
 }

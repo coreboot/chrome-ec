@@ -4,8 +4,6 @@
  */
 
 #include <cros/binman.dtsi>
-#include <ite/it8xxx2.dtsi>
-#include <ite/it8xxx2-pinctrl-map.dtsi>
 
 / {
 	chosen {
@@ -51,27 +49,16 @@
 	};
 
 	soc {
-		bbram: bb-ram@f02200 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "ite,it8xxx2-cros-bbram";
-			status = "okay";
-			reg = <0x00f02200 0xbf>;
-			reg-names = "memory";
-			label = "BBRAM";
-		};
-
+		/* TODO(b/265198571): Migrate Zephyr EC builds to upstream SHI
+		 * drivers.
+		 */
+		/delete-node/ shi@f03a00;
 		shi: shi@f03a00 {
 			compatible = "ite,it8xxx2-cros-shi";
 			reg = <0x00f03a00 0x30>;
-			label = "SHI";
 			interrupts = <171 0>;
 			interrupt-parent = <&intc>;
-			pinctrl-0 = <&shi_mosi_gpm0_default
-				     &shi_miso_gpm1_default
-				     &shi_clk_gpm4_default
-				     &shi_cs_gpm5_default>;
-			pinctrl-names = "default";
+			status = "disabled";
 		};
 
 		fiu0: cros-flash@80000000 {
@@ -105,6 +92,17 @@
 		ec-rw {
 			offset = <0x60000>;
 			size = <0x60000>;
+			rw-fw {
+				rw-fwid {
+					/* Fix the lcoation of the FWID to the
+					 * last 32 bytes of the flash. This
+					 * ensures the RW entries in the FMAP
+					 * stored in the RO section of flash
+					 * are always correct.
+					 */
+					offset = <(0x60000 - 32)>;
+				};
+			};
 		};
 		pad-byte = <0xff>;
 		pad-after = <0x40000>;

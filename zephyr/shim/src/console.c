@@ -3,20 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/device.h>
-#include <zephyr/drivers/uart.h>
-#include <zephyr/shell/shell.h>
-#ifdef CONFIG_SHELL_BACKEND_DUMMY /* nocheck */
-#include <zephyr/shell/shell_dummy.h> /* nocheck */
-#endif
-#include <zephyr/shell/shell_uart.h>
-#include <stdbool.h>
-#include <string.h>
-#include <zephyr/sys/printk.h>
-#include <zephyr/sys/ring_buffer.h>
-#include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
-
 /*
  * TODO(b/238433667): Include EC printf functions
  * (crec_vsnprintf/crec_snprintf) until we switch to the standard
@@ -30,6 +16,21 @@
 #include "usb_console.h"
 #include "zephyr_console_shim.h"
 
+#include <stdbool.h>
+#include <string.h>
+
+#include <zephyr/device.h>
+#include <zephyr/drivers/uart.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/shell/shell.h>
+#ifdef CONFIG_SHELL_BACKEND_DUMMY /* nocheck */
+#include <zephyr/shell/shell_dummy.h> /* nocheck */
+#endif
+#include <zephyr/shell/shell_uart.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/sys/ring_buffer.h>
+
 #if !defined(CONFIG_SHELL_BACKEND_SERIAL) && \
 	!defined(CONFIG_SHELL_BACKEND_DUMMY) /* nocheck */
 #error Must select either CONFIG_SHELL_BACKEND_SERIAL or \
@@ -39,9 +40,6 @@
 	defined(CONFIG_SHELL_BACKEND_DUMMY) /* nocheck */
 #error Must select only one shell backend
 #endif
-
-BUILD_ASSERT(EC_TASK_PRIORITY(EC_SHELL_PRIO) == CONFIG_SHELL_THREAD_PRIORITY,
-	     "EC_SHELL_PRIO does not match CONFIG_SHELL_THREAD_PRIORITY.");
 
 LOG_MODULE_REGISTER(shim_console, LOG_LEVEL_ERR);
 
@@ -56,9 +54,10 @@ static struct k_poll_signal shell_init_signal;
  * (which requires locking the shell).
  */
 static bool shell_stopped;
+static bool rx_bypass_enabled;
+RING_BUF_DECLARE(rx_buffer, CONFIG_UART_RX_BUF_SIZE);
 
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN)
-RING_BUF_DECLARE(rx_buffer, CONFIG_UART_RX_BUF_SIZE);
 
 static void uart_rx_handle(const struct device *dev)
 {
@@ -85,7 +84,8 @@ static void uart_rx_handle(const struct device *dev)
 	} while (rd_len != 0 && rd_len == len);
 }
 
-static void uart_callback(const struct device *dev, void *user_data)
+test_mockable_static void uart_callback(const struct device *dev,
+					void *user_data)
 {
 	uart_irq_update(dev);
 
@@ -115,6 +115,19 @@ static void shell_uninit_callback(const struct shell *shell, int res)
 
 	/* Notify the uninit signal that we finished */
 	k_poll_signal_raise(&shell_uninit_signal, res);
+}
+
+void bypass_cb(const struct shell *shell, uint8_t *data, size_t len)
+{
+	if (!ring_buf_put(&rx_buffer, data, len)) {
+		printk("Failed to write to uart ring buf\n");
+	}
+}
+
+void uart_shell_rx_bypass(bool enable)
+{
+	shell_set_bypass(shell_zephyr, enable ? bypass_cb : NULL);
+	rx_bypass_enabled = enable;
 }
 
 int uart_shell_stop(void)
@@ -168,13 +181,6 @@ static void shell_init_from_work(struct k_work *work)
 	/* Initialize the shell and re-enable both RX and TX */
 	shell_init(shell_zephyr, uart_shell_dev, shell_cfg_flags, log_backend,
 		   level);
-
-	/*
-	 * shell_init() always resets the priority back to the default.
-	 * Update the priority as setup by the shimmed task code.
-	 */
-	k_thread_priority_set(shell_zephyr->ctx->tid,
-			      EC_TASK_PRIORITY(EC_SHELL_PRIO));
 
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN)
 	uart_irq_rx_enable(uart_shell_dev);
@@ -262,11 +268,16 @@ int zshim_run_ec_console_command(const struct zephyr_console_command *command,
 	return ret;
 }
 
-#if defined(CONFIG_CONSOLE_CHANNEL) && DT_NODE_EXISTS(DT_PATH(ec_console))
-#define EC_CONSOLE DT_PATH(ec_console)
+BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(ec_console) <= 1,
+	     "at most one ec-console compatible node may be present");
 
-static const char *const disabled_channels[] = DT_PROP(EC_CONSOLE, disabled);
-static const size_t disabled_channel_count = DT_PROP_LEN(EC_CONSOLE, disabled);
+#define EC_CONSOLE_NODE DT_COMPAT_GET_ANY_STATUS_OKAY(ec_console)
+#if DT_NODE_EXISTS(EC_CONSOLE_NODE)
+
+static const char *const disabled_channels[] =
+	DT_PROP(EC_CONSOLE_NODE, disabled);
+static const size_t disabled_channel_count =
+	DT_PROP_LEN(EC_CONSOLE_NODE, disabled);
 static int init_ec_console(const struct device *unused)
 {
 	for (size_t i = 0; i < disabled_channel_count; i++)
@@ -275,7 +286,7 @@ static int init_ec_console(const struct device *unused)
 	return 0;
 }
 SYS_INIT(init_ec_console, PRE_KERNEL_1, 50);
-#endif /* CONFIG_CONSOLE_CHANNEL && DT_NODE_EXISTS(DT_PATH(ec_console)) */
+#endif /* CONFIG_PLATFORM_EC_CONSOLE_CHANNEL */
 
 static int init_ec_shell(const struct device *unused)
 {
@@ -316,7 +327,7 @@ void uart_write_char(char c)
 {
 	uart_poll_out(uart_shell_dev, c);
 
-	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE))
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE) && !k_is_in_isr())
 		console_buf_notify_chars(&c, 1);
 }
 
@@ -335,23 +346,29 @@ void uart_tx_flush(void)
 
 int uart_getc(void)
 {
-#if defined(CONFIG_UART_INTERRUPT_DRIVEN)
 	uint8_t c;
+	int rv = -1;
 
-	if (ring_buf_get(&rx_buffer, &c, 1)) {
-		return c;
+	/*
+	 * Don't try to read from the uart when the console
+	 * owns it.
+	 */
+	if (!shell_stopped && !rx_bypass_enabled) {
+		LOG_ERR("Shell must be stopped or rx bypass enabled");
+		return -1;
 	}
-	return -1;
-#else
-	uint8_t c;
-	int rv;
 
-	rv = uart_poll_in(uart_shell_dev, &c);
-	if (rv) {
-		return rv;
+	if (IS_ENABLED(CONFIG_UART_INTERRUPT_DRIVEN) || rx_bypass_enabled) {
+		if (ring_buf_get(&rx_buffer, &c, 1)) {
+			rv = c;
+		}
+	} else {
+		rv = uart_poll_in(uart_shell_dev, &c);
+		if (!rv) {
+			rv = c;
+		}
 	}
-	return c;
-#endif
+	return rv;
 }
 
 void uart_clear_input(void)
@@ -375,15 +392,21 @@ static void handle_sprintf_rv(int rv, size_t *len)
 static void zephyr_print(const char *buff, size_t size)
 {
 	/*
-	 * shell_* functions can not be used in ISRs so use printk instead.
+	 * shell_* functions can not be used in ISRs so optionally use
+	 * printk instead.
 	 * If the shell is about to be (or is) stopped, use printk, since the
 	 * output may be stalled and the shell mutex held.
 	 * Also, console_buf_notify_chars uses a mutex, which may not be
 	 * locked in ISRs.
 	 */
-	if (k_is_in_isr() || shell_stopped ||
+	bool in_isr = k_is_in_isr();
+
+	if (in_isr || shell_stopped ||
 	    shell_zephyr->ctx->state != SHELL_STATE_ACTIVE) {
-		printk("%s", buff);
+		if (IS_ENABLED(CONFIG_PLATFORM_EC_ISR_CONSOLE_OUTPUT) ||
+		    !in_isr) {
+			printk("!%s", buff);
+		}
 	} else {
 		shell_fprintf(shell_zephyr, SHELL_NORMAL, "%s", buff);
 		if (IS_ENABLED(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE))

@@ -6,9 +6,11 @@
 #ifndef __MOCK_FPSENSOR_STATE_MOCK_H
 #define __MOCK_FPSENSOR_STATE_MOCK_H
 
+#include "driver/fingerprint/fpsensor.h"
+#include "ec_commands.h"
+
 #include <stdbool.h>
 #include <stdint.h>
-#include "ec_commands.h"
 
 extern const uint8_t default_fake_tpm_seed[FP_CONTEXT_TPM_BYTES];
 extern const uint8_t

@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_BASEBOARD_H
 #define __CROS_EC_BASEBOARD_H
 
+#define CONFIG_LTO
+
 /*
  * By default, enable all console messages excepted event and HC:
  * The sensor stack is generating a lot of activity.
@@ -90,7 +92,8 @@
 #define CONFIG_CHARGER_PSYS_READ
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 
-#define CONFIG_CHARGER_INPUT_CURRENT 512
+#define CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT 512
+#define CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT 512
 #define CONFIG_CHARGER_MIN_POWER_MW_FOR_POWER_ON 10000
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 20

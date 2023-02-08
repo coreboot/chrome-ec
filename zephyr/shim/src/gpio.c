@@ -3,19 +3,19 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/device.h>
-#include <zephyr/init.h>
-#include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
-
 #ifdef __REQUIRE_ZEPHYR_GPIOS__
 #undef __REQUIRE_ZEPHYR_GPIOS__
 #endif
+#include "cros_version.h"
 #include "gpio.h"
 #include "gpio/gpio.h"
 #include "ioexpander.h"
 #include "system.h"
-#include "cros_version.h"
+
+#include <zephyr/device.h>
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(gpio_shim, LOG_LEVEL_ERR);
 
@@ -59,8 +59,8 @@ struct gpio_config {
 	COND_CODE_1(DT_NODE_HAS_PROP(id, gpios), (GPIO_CONFIG(id)), ())
 
 static const struct gpio_config configs[] = {
-#if DT_NODE_EXISTS(DT_PATH(named_gpios))
-	DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_IMPL_CONFIG)
+#if DT_NODE_EXISTS(NAMED_GPIOS_NODE)
+	DT_FOREACH_CHILD(NAMED_GPIOS_NODE, GPIO_IMPL_CONFIG)
 #endif
 };
 
@@ -81,8 +81,8 @@ static const struct gpio_config configs[] = {
 	const struct gpio_dt_spec *const GPIO_DT_NAME(GPIO_SIGNAL(id)) = \
 		&configs[GPIO_SIGNAL(id)].spec;
 
-#if DT_NODE_EXISTS(DT_PATH(named_gpios))
-DT_FOREACH_CHILD(DT_PATH(named_gpios), GPIO_PTRS)
+#if DT_NODE_EXISTS(NAMED_GPIOS_NODE)
+DT_FOREACH_CHILD(NAMED_GPIOS_NODE, GPIO_PTRS)
 #endif
 
 int gpio_is_implemented(enum gpio_signal signal)
@@ -94,30 +94,6 @@ int gpio_get_level(enum gpio_signal signal)
 {
 	if (!gpio_is_implemented(signal))
 		return 0;
-
-	/*
-	 * If an output GPIO, get the configured value of the output
-	 * rather than the raw value of the pin.
-	 */
-	if (IS_ENABLED(CONFIG_GPIO_GET_CONFIG) &&
-	    configs[signal].init_flags & GPIO_OUTPUT) {
-		int rv;
-		gpio_flags_t flags;
-
-		rv = gpio_pin_get_config_dt(&configs[signal].spec, &flags);
-		if (rv == 0) {
-			return (flags & GPIO_OUTPUT_INIT_HIGH) ? 1 : 0;
-		}
-		/*
-		 * -ENOSYS is returned when this API call is not supported,
-		 *  so drop into the default method of returning the pin value.
-		 */
-		if (rv != -ENOSYS) {
-			LOG_ERR("Cannot get config for %s (%d)",
-				configs[signal].name, rv);
-			return 0;
-		}
-	}
 
 	const int l = gpio_pin_get_raw(configs[signal].spec.port,
 				       configs[signal].spec.pin);
@@ -189,6 +165,11 @@ int gpio_or_ioex_get_level(int signal, int *value)
 	*value = gpio_get_level(signal);
 	return EC_SUCCESS;
 }
+
+/* Don't define any 1.8V bit if not supported. */
+#ifndef GPIO_VOLTAGE_1P8
+#define GPIO_VOLTAGE_1P8 0
+#endif
 
 /* GPIO flags which are the same in Zephyr and this codebase */
 #define GPIO_CONVERSION_SAME_BITS                                             \
@@ -274,7 +255,10 @@ const struct gpio_dt_spec *gpio_get_dt_spec(enum gpio_signal signal)
 	return &configs[signal].spec;
 }
 
-static int init_gpios(const struct device *unused)
+/* Allow access to this function in tests so we can run it multiple times
+ * without having to create a new binary for each run.
+ */
+test_export_static int init_gpios(const struct device *unused)
 {
 	gpio_flags_t flags;
 	bool is_sys_jumped = system_jumped_to_this_image();
@@ -338,12 +322,53 @@ void gpio_reset(enum gpio_signal signal)
 			      configs[signal].init_flags);
 }
 
+int gpio_save_port_config(const struct device *port, gpio_flags_t *flags,
+			  int buff_size)
+{
+	int state_offset = 0;
+
+	for (size_t i = 0; i < ARRAY_SIZE(configs); ++i) {
+		if (state_offset >= buff_size) {
+			LOG_ERR("%s buffer is too small", __func__);
+			return EC_ERROR_UNKNOWN;
+		}
+
+		if (port == configs[i].spec.port) {
+			gpio_pin_get_config_dt(&configs[i].spec,
+					       &flags[state_offset++]);
+		}
+	}
+
+	return EC_SUCCESS;
+}
+
+int gpio_restore_port_config(const struct device *port, gpio_flags_t *flags,
+			     int buff_size)
+{
+	int state_offset = 0;
+
+	for (size_t i = 0; i < ARRAY_SIZE(configs); ++i) {
+		if (state_offset >= buff_size) {
+			LOG_ERR("%s buffer is too small", __func__);
+			return EC_ERROR_UNKNOWN;
+		}
+
+		if (port == configs[i].spec.port) {
+			gpio_pin_configure_dt(&configs[i].spec,
+					      flags[state_offset++]);
+		}
+	}
+
+	return EC_SUCCESS;
+}
+
 void gpio_reset_port(const struct device *port)
 {
 	for (size_t i = 0; i < ARRAY_SIZE(configs); ++i) {
-		if (port == configs[i].spec.port)
+		if (port == configs[i].spec.port) {
 			gpio_pin_configure_dt(&configs[i].spec,
 					      configs[i].init_flags);
+		}
 	}
 }
 
@@ -354,6 +379,21 @@ void gpio_set_flags(enum gpio_signal signal, int flags)
 
 	gpio_pin_configure_dt(&configs[signal].spec,
 			      convert_to_zephyr_flags(flags));
+}
+
+void gpio_set_flags_by_mask(uint32_t port, uint32_t mask, uint32_t flags)
+{
+	const gpio_flags_t zephyr_flags = convert_to_zephyr_flags(flags);
+
+	/* Using __builtin_ctz here will guarantee that this loop is as
+	 * performant as the underlying architecture allows it to be.
+	 */
+	while (mask != 0) {
+		int pin = __builtin_ctz(mask);
+
+		gpio_configure_port_pin(port, pin, zephyr_flags);
+		mask &= ~BIT(pin);
+	}
 }
 
 int signal_is_gpio(int signal)

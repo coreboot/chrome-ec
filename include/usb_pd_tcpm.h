@@ -8,11 +8,19 @@
 #ifndef __CROS_EC_USB_PD_TCPM_H
 #define __CROS_EC_USB_PD_TCPM_H
 
-#include <stdbool.h>
+/*
+ * I don't know why but gcc's preprocessor doesn't like this file,
+ * sometimes. Adding a #line directive anywhere in this file seems to fix the
+ * problem. #line marks the *next* line, so it is off by one.
+ */
+#line 17
+
 #include "common.h"
 #include "compiler.h"
 #include "ec_commands.h"
 #include "i2c.h"
+
+#include <stdbool.h>
 
 /* Time to wait for TCPC to complete transmit */
 #define PD_T_TCPC_TX_TIMEOUT (100 * MSEC)
@@ -643,15 +651,6 @@ int board_tcpc_post_init(int port) __attribute__((weak));
  *
  */
 void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled);
-
-/**
- * Get the VBUS voltage from TCPC
- *
- * @param port Type-C port number
- *
- * @return VBUS voltage in mV.
- */
-int tcpc_get_vbus_voltage(int port);
 
 #ifdef CONFIG_CMD_TCPC_DUMP
 struct tcpc_reg_dump_map {

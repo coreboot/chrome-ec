@@ -5,12 +5,12 @@
  * PI3DPX1207 retimer.
  */
 
-#include "pi3dpx1207.h"
 #include "common.h"
 #include "console.h"
 #include "gpio.h"
 #include "i2c.h"
 #include "ioexpander.h"
+#include "pi3dpx1207.h"
 #include "usb_mux.h"
 
 #define I2C_MAX_RETRIES 2
@@ -100,6 +100,10 @@ static int pi3dpx1207_set_mux(const struct usb_mux *me, mux_state_t mux_state,
 
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
+
+	/* This driver treats safe mode as none */
+	if (mux_state == USB_PD_MUX_SAFE_MODE)
+		mux_state = USB_PD_MUX_NONE;
 
 	/* USB */
 	if (mux_state & USB_PD_MUX_USB_ENABLED) {

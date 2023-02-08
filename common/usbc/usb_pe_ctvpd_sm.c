@@ -6,15 +6,14 @@
 #include "common.h"
 #include "console.h"
 #include "task.h"
-#include "util.h"
+#include "usb_emsg.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
-#include "usb_pd_tcpm.h"
-#include "usb_tc_sm.h"
-#include "usb_emsg.h"
 #include "usb_sm.h"
+#include "usb_tc_sm.h"
+#include "util.h"
 
 /* USB Policy Engine Charge-Through VCONN Powered Device module */
 
@@ -74,11 +73,11 @@ void pe_run(int port, int evt, int en)
 	case SM_PAUSED:
 		if (!en)
 			break;
-		/* fall through */
+		__fallthrough;
 	case SM_INIT:
 		pe_init(port);
 		local_state[port] = SM_RUN;
-		/* fall through */
+		__fallthrough;
 	case SM_RUN:
 		if (en)
 			run_state(port, &pe[port].ctx);

@@ -17,11 +17,11 @@
 #include "task.h"
 #include "timer.h"
 #include "usart-stm32f0.h"
-#include "usart_tx_dma.h"
 #include "usart_rx_dma.h"
-#include "usb_gpio.h"
+#include "usart_tx_dma.h"
 #include "usb-stream.h"
 #include "usb_common.h"
+#include "usb_gpio.h"
 #include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
@@ -155,6 +155,7 @@ void button_down_event(enum gpio_signal signal)
 /******************************************************************************
  * Build GPIO tables and expose a subset of the GPIOs over USB.
  */
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 static enum gpio_signal const usb_gpio_list[] = {
@@ -217,7 +218,7 @@ USB_STREAM_CONFIG(forward_usb, USB_IFACE_STREAM, USB_STR_STREAM_NAME,
  */
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("fusb307bgevb"),
 	[USB_STR_VERSION] = USB_STRING_DESC(CROS_EC_VERSION32),
 	[USB_STR_STREAM_NAME] = USB_STRING_DESC("Forward"),

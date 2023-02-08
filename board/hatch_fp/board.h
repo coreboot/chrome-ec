@@ -235,7 +235,6 @@
 #define CONFIG_SHA256
 #define CONFIG_SHA256_UNROLLED
 #define CONFIG_SPI
-#define CONFIG_STM_HWTIMER32
 #define CONFIG_WP_ACTIVE_HIGH
 #define CONFIG_PANIC_STRIP_GPR
 
@@ -255,8 +254,8 @@
 #define TIM_CLOCK32 2
 #define TIM_WATCHDOG 9
 
-#include "gpio_signal.h"
 #include "board_rw.h"
+#include "gpio_signal.h"
 
 void slp_event(enum gpio_signal signal);
 

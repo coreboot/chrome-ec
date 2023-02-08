@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -u
 # -*- coding: utf-8 -*-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
@@ -13,13 +13,15 @@ import argparse
 import multiprocessing
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 
-from chromite.api.gen_sdk.chromite.api import firmware_pb2
-
 # pylint: disable=import-error
 from google.protobuf import json_format
+
+from chromite.api.gen_sdk.chromite.api import firmware_pb2
+
 
 DEFAULT_BUNDLE_DIRECTORY = "/tmp/artifact_bundles"
 DEFAULT_BUNDLE_METADATA_FILE = "/tmp/artifact_bundle_metadata"
@@ -30,6 +32,22 @@ DEFAULT_BUNDLE_METADATA_FILE = "/tmp/artifact_bundle_metadata"
 BOARDS_UNIT_TEST = [
     "bloonchipper",
     "dartmonkey",
+]
+
+# Interesting regions to show in gerrit
+BINARY_SIZE_REGIONS = ["RW_FLASH", "RW_IRAM"]
+
+# The most recently edited boards that should show binary size changes in
+# gerrit
+BINARY_SIZE_BOARDS = [
+    "dibbi",
+    "gaelin",
+    "gladios",
+    "lisbon",
+    "marasov",
+    "moli",
+    "prism",
+    "shotzo",
 ]
 
 
@@ -44,20 +62,24 @@ def build(opts):
     message.
     """
     metric_list = firmware_pb2.FwBuildMetricList()
+    ec_dir = pathlib.Path(__file__).parent
 
     # Run formatting checks on all python files.
+    cmd = ["black", "--check", "."]
+    print(f"# Running {' '.join(cmd)}.")
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
+    chromite_dir = ec_dir.resolve().parent.parent.parent / "chromite"
+    cmd = [
+        "isort",
+        f"--settings-file={chromite_dir / '.isort.cfg'}",
+        "--check",
+        "--gitignore",
+        "--dont-follow-links",
+        ".",
+    ]
+    print(f"# Running {' '.join(cmd)}.")
     subprocess.run(
-        ["black", "--check", "."], cwd=os.path.dirname(__file__), check=True
-    )
-    subprocess.run(
-        [
-            "isort",
-            "--settings-file=.isort.cfg",
-            "--check",
-            "--gitignore",
-            "--dont-follow-links",
-            ".",
-        ],
+        cmd,
         cwd=os.path.dirname(__file__),
         check=True,
     )
@@ -71,18 +93,48 @@ def build(opts):
             file.write(json_format.MessageToJson(metric_list))
         return
 
-    ec_dir = pathlib.Path(__file__).parent
     subprocess.run([ec_dir / "util" / "check_clang_format.py"], check=True)
+
+    cmd = ["make", "clobber"]
+    print(f"# Running {' '.join(cmd)}.")
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
     cmd = ["make", "buildall_only", f"-j{opts.cpus}"]
     print(f"# Running {' '.join(cmd)}.")
     subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
+
+    # extra/rma_reset is used in chromeos-base/ec-utils-test
+    cmd = ["make", "-C", "extra/rma_reset", "clean"]
+    print(f"# Running {' '.join(cmd)}.")
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
+
+    cmd = ["make", "-C", "extra/rma_reset", f"-j{opts.cpus}"]
+    print(f"# Running {' '.join(cmd)}.")
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
+
+    cmd = ["make", "print-all-baseboards", f"-j{opts.cpus}"]
+    print(f"# Running {' '.join(cmd)}.")
+    baseboards = {}
+    for line in subprocess.run(
+        cmd,
+        cwd=os.path.dirname(__file__),
+        check=True,
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+    ).stdout.splitlines():
+        parts = line.split("=")
+        if len(parts) > 1:
+            baseboards[parts[0]] = parts[1]
+
     ec_dir = os.path.dirname(__file__)
     build_dir = os.path.join(ec_dir, "build")
     for build_target in sorted(os.listdir(build_dir)):
         metric = metric_list.value.add()
         metric.target_name = build_target
-        metric.platform_name = "ec"
+        metric.platform_name = build_target
+        if build_target in baseboards and baseboards[build_target]:
+            metric.platform_name = baseboards[build_target]
+
         for variant in ["RO", "RW"]:
             memsize_file = (
                 pathlib.Path(build_dir)
@@ -91,7 +143,12 @@ def build(opts):
                 / f"ec.{variant}.elf.memsize.txt"
             )
             if memsize_file.exists():
-                parse_memsize(memsize_file, metric, variant)
+                parse_memsize(
+                    memsize_file,
+                    metric,
+                    variant,
+                    build_target in BINARY_SIZE_BOARDS,
+                )
     with open(opts.metrics, "w") as file:
         file.write(json_format.MessageToJson(metric_list))
 
@@ -110,7 +167,7 @@ UNITS = {
 }
 
 
-def parse_memsize(filename, metric, variant):
+def parse_memsize(filename, metric, variant, track_on_gerrit):
     """Parse the output of the build to extract the image size."""
     with open(filename, "r") as infile:
         # Skip header line
@@ -121,7 +178,10 @@ def parse_memsize(filename, metric, variant):
             fw_section.region = variant + "_" + parts[0][:-1]
             fw_section.used = int(parts[1]) * UNITS[parts[2]]
             fw_section.total = int(parts[3]) * UNITS[parts[4]]
-            fw_section.track_on_gerrit = False
+            if track_on_gerrit and fw_section.region in BINARY_SIZE_REGIONS:
+                fw_section.track_on_gerrit = True
+            else:
+                fw_section.track_on_gerrit = False
 
 
 def bundle(opts):
@@ -181,13 +241,15 @@ def bundle_firmware(opts):
     bundle_dir = get_bundle_dir(opts)
     ec_dir = os.path.dirname(__file__)
     for build_target in sorted(os.listdir(os.path.join(ec_dir, "build"))):
+        if build_target in ["host"]:
+            continue
         tarball_name = "".join([build_target, ".firmware.tbz2"])
         tarball_path = os.path.join(bundle_dir, tarball_name)
         cmd = [
             "tar",
             "cvfj",
             tarball_path,
-            "--exclude=*.o.d",
+            "--exclude=*.d",
             "--exclude=*.o",
             ".",
         ]
@@ -248,6 +310,12 @@ def test(opts):
         subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
         # Verify the tests pass with ASan also
+        ec_dir = os.path.dirname(__file__)
+        build_dir = os.path.join(ec_dir, "build")
+        host_dir = os.path.join(build_dir, "host")
+        print(f"# Deleting {host_dir}")
+        shutil.rmtree(host_dir)
+
         cmd = ["make", "TEST_ASAN=y", target, f"-j{opts.cpus}"]
         print(f"# Running {' '.join(cmd)}.")
         subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)

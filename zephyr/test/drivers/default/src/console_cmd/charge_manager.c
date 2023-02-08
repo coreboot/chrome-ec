@@ -3,9 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
-
 #include "charge_manager.h"
 #include "console.h"
 #include "emul/emul_isl923x.h"
@@ -14,6 +11,9 @@
 #include "tcpm/tcpci.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
 
 struct console_cmd_charge_manager_fixture {
 	struct tcpci_partner_data sink_5v_3a;
@@ -59,7 +59,7 @@ ZTEST_SUITE(console_cmd_charge_manager, drivers_predicate_post_main,
  */
 ZTEST_USER(console_cmd_charge_manager, test_chgsup)
 {
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgsup"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgsup"));
 }
 
 /**
@@ -68,26 +68,26 @@ ZTEST_USER(console_cmd_charge_manager, test_chgsup)
  */
 ZTEST_USER(console_cmd_charge_manager, test_chgoverride_missing_port)
 {
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgoverride"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgoverride"));
 }
 
 ZTEST_USER(console_cmd_charge_manager, test_chgoverride_off_from_off)
 {
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgoverride -1"), NULL);
-	zassert_equal(charge_manager_get_override(), OVERRIDE_OFF, NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgoverride -1"));
+	zassert_equal(charge_manager_get_override(), OVERRIDE_OFF);
 }
 
 ZTEST_USER(console_cmd_charge_manager, test_chgoverride_disable_from_off)
 {
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgoverride -2"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgoverride -2"));
 	zassert_equal(charge_manager_get_override(), OVERRIDE_DONT_CHARGE,
 		      NULL);
 }
 
 ZTEST_USER(console_cmd_charge_manager, test_chgoverride_0_from_off)
 {
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgoverride 0"), NULL);
-	zassert_equal(charge_manager_get_override(), 0, NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgoverride 0"));
+	zassert_equal(charge_manager_get_override(), 0);
 }
 
 ZTEST_USER_F(console_cmd_charge_manager, test_chgoverride_0_from_sink)
@@ -111,7 +111,7 @@ ZTEST_USER(console_cmd_charge_manager, test_chgoverride_invalid_port)
 {
 	char cmd[256];
 
-	zassume_true(sprintf(cmd, "chgoverride %d", CHARGE_PORT_COUNT) > 0,
+	zassert_true(sprintf(cmd, "chgoverride %d", CHARGE_PORT_COUNT) > 0,
 		     NULL);
 	zassert_equal(shell_execute_cmd(get_ec_shell(), cmd), EC_ERROR_PARAM1,
 		      NULL);

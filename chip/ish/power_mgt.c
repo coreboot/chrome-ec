@@ -3,8 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <stdnoreturn.h>
-
 #include "aontaskfw/ish_aon_share.h"
 #include "console.h"
 #include "hwtimer.h"
@@ -16,6 +14,8 @@
 #include "task.h"
 #include "util.h"
 #include "watchdog.h"
+
+#include <stdnoreturn.h>
 
 #define CPUTS(outstr) cputs(CC_SYSTEM, outstr)
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
@@ -612,8 +612,18 @@ void ish_pm_init(void)
 	/* clear reset history register in CCU */
 	CCU_RST_HST = CCU_RST_HST;
 
+#if defined(CHIP_VARIANT_ISH5P4)
+	if (IS_ENABLED(CONFIG_ISH_NEW_PM))
+		PMU_D3_STATUS_1 = 0xffffffff;
+#endif
+
 	/* disable TCG and disable BCG */
-	CCU_TCG_EN = 0;
+	CCU_TCG_ENABLE = 0;
+	CCU_BCG_ENABLE = 0;
+
+	/* Disable power gate of CACHE and ROM */
+	PMU_RF_ROM_PWR_CTRL = 0;
+
 	reset_bcg();
 
 	if (IS_ENABLED(CONFIG_ISH_PM_AONTASK))
@@ -624,8 +634,15 @@ void ish_pm_init(void)
 		PMU_GPIO_WAKE_MASK1 = 0;
 	}
 
-	/* unmask all wake up events */
+	/* Unmask all wake up events in event1 */
 	PMU_MASK_EVENT = ~PMU_MASK_EVENT_BIT_ALL;
+	/* Mask events in event2 */
+	PMU_MASK_EVENT2 = PMU_MASK2_ALL_EVENTS;
+
+#if defined(CHIP_VARIANT_ISH5P4)
+	SBEP_REG_CLK_GATE_ENABLE =
+		(SB_CLK_GATE_EN_LOCAL_CLK_GATE | SB_CLK_GATE_EN_TRUNK_CLK_GATE);
+#endif
 
 	if (IS_ENABLED(CONFIG_ISH_NEW_PM)) {
 		PMU_ISH_FABRIC_CNT = (PMU_ISH_FABRIC_CNT & 0xffff0000) |
@@ -648,6 +665,15 @@ void ish_pm_init(void)
 		    (PMU_D3_STATUS & PMU_BME_BIT_SET))
 			PMU_D3_STATUS = PMU_D3_STATUS;
 
+#if defined(CHIP_VARIANT_ISH5P4)
+		if (IS_ENABLED(CONFIG_ISH_NEW_PM)) {
+			/* Mask all function1 */
+			PMU_REG_MASK_D3_RISE = 0x2;
+			PMU_REG_MASK_D3_FALL = 0x2;
+			PMU_REG_MASK_BME_RISE = 0x2;
+			PMU_REG_MASK_BME_FALL = 0x2;
+		}
+#endif
 		enable_d3bme_irqs();
 	}
 }

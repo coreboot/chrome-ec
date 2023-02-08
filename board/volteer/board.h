@@ -23,7 +23,7 @@
 #define CONFIG_SYSTEM_UNLOCKED /* Allow dangerous commands while in dev. */
 
 /* Remove PRL state names to free flash space */
-#define CONFIG_USB_PD_DEBUG_LEVEL 1
+#define CONFIG_USB_PD_DEBUG_LEVEL 0
 
 #define CONFIG_VBOOT_EFS2
 
@@ -188,7 +188,6 @@
 
 #include "gpio_signal.h"
 #include "registers.h"
-
 #include "usbc_config.h"
 
 enum battery_type {

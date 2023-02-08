@@ -27,12 +27,25 @@ config NUM_PREEMPT_PRIORITIES
 	default 26
 
 #
+# Override the LOG_PRINTK to be no as it currently makes multiple
+# tests timeout and a few others fail in console assertions
+# TODO(b/http://b/260772137) Fix LOG_PRINTK issue and remove override
+#
+config LOG_PRINTK
+       default n
+
+#
 # In Zephyr, the default system workqueue thread priority level is the lowest
 # cooperative priority. Override its priority to the second lowest preempt
 # priority. (i.e. NUM_PREEMPT_PRIORITIES - 1)
 #
 config SYSTEM_WORKQUEUE_PRIORITY
 	default 24
+
+# eSPI is chatty, so default to Error only
+choice ESPI_LOG_LEVEL_CHOICE
+	default ESPI_LOG_LEVEL_ERR
+endchoice
 
 config LTO
 	bool "Link Time Optimization (LTO)"
@@ -149,4 +162,22 @@ config SHIMMED_TASKS
 	  build. The CROS_EC_TASK_LIST defines a list of CROS_EC_TASK that
 	  should be shimmed in.
 
+#
+# These shell options are turned off by MINIMAL_SHELL, but are important to us;
+# override Zephyr's default to keep them on.
+#
+config SHELL_HISTORY
+  default y
+
+config SHELL_TAB
+  default y
+
+config SHELL_TAB_AUTOCOMPLETION
+  default y if SHELL_TAB
+
+config SHELL_HELP
+  default y
+
+config KERNEL_SHELL
+  default y
 endif # CROS_EC

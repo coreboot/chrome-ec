@@ -3,8 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/ztest.h>
-
 #include "battery_smart.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
@@ -12,6 +10,8 @@
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
 #include "usb_pd.h"
+
+#include <zephyr/ztest.h>
 
 #define BATTERY_NODE DT_NODELABEL(battery)
 
@@ -26,7 +26,7 @@ static inline void
 connect_charger_to_port(struct usb_attach_20v_3a_pd_charger_fixture *fixture)
 {
 	set_ac_enabled(true);
-	zassume_ok(tcpci_partner_connect_to_tcpci(&fixture->charger_20v,
+	zassert_ok(tcpci_partner_connect_to_tcpci(&fixture->charger_20v,
 						  fixture->tcpci_emul),
 		   NULL);
 
@@ -43,7 +43,7 @@ static inline void disconnect_charger_from_port(
 	struct usb_attach_20v_3a_pd_charger_fixture *fixture)
 {
 	set_ac_enabled(false);
-	zassume_ok(tcpci_emul_disconnect_partner(fixture->tcpci_emul), NULL);
+	zassert_ok(tcpci_emul_disconnect_partner(fixture->tcpci_emul));
 	isl923x_emul_set_adc_vbus(fixture->charger_emul, 0);
 	k_sleep(K_SECONDS(1));
 }
@@ -88,7 +88,7 @@ ZTEST(usb_attach_20v_3a_pd_charger, test_battery_is_charging)
 	const struct emul *emul = EMUL_DT_GET(BATTERY_NODE);
 	uint16_t battery_status;
 
-	zassume_ok(sbat_emul_get_word_val(emul, SB_BATTERY_STATUS,
+	zassert_ok(sbat_emul_get_word_val(emul, SB_BATTERY_STATUS,
 					  &battery_status),
 		   NULL);
 	zassert_equal(battery_status & STATUS_DISCHARGING, 0,
@@ -176,9 +176,9 @@ ZTEST_F(usb_attach_20v_3a_pd_charger, test_disconnect_charge_state)
 		      "Max charge current expected 0mA, but was %dmA",
 		      charge_state.get_state.chg_current);
 	zassert_equal(charge_state.get_state.chg_input_current,
-		      CONFIG_PLATFORM_EC_CHARGER_INPUT_CURRENT,
+		      CONFIG_PLATFORM_EC_CHARGER_DEFAULT_CURRENT_LIMIT,
 		      "Charge input current limit expected %dmA, but was %dmA",
-		      CONFIG_PLATFORM_EC_CHARGER_INPUT_CURRENT,
+		      CONFIG_PLATFORM_EC_CHARGER_DEFAULT_CURRENT_LIMIT,
 		      charge_state.get_state.chg_input_current);
 }
 
@@ -189,9 +189,9 @@ ZTEST_F(usb_attach_20v_3a_pd_charger, test_disconnect_typec_status)
 	disconnect_charger_from_port(fixture);
 	typec_status = host_cmd_typec_status(0);
 
-	zassert_false(typec_status.pd_enabled, NULL);
-	zassert_false(typec_status.dev_connected, NULL);
-	zassert_false(typec_status.sop_connected, NULL);
+	zassert_false(typec_status.pd_enabled);
+	zassert_false(typec_status.dev_connected);
+	zassert_false(typec_status.sop_connected);
 	zassert_equal(typec_status.source_cap_count, 0,
 		      "Expected 0 source caps, but got %d",
 		      typec_status.source_cap_count);

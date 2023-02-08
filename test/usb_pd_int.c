@@ -4,11 +4,11 @@
  *
  * Test USB-PD interrupt task.
  */
-#include "task.h"
-#include "test_util.h"
 #include "mock/tcpc_mock.h"
 #include "mock/timer_mock.h"
 #include "mock/usb_mux_mock.h"
+#include "task.h"
+#include "test_util.h"
 
 #define PORT0 0
 
@@ -58,7 +58,7 @@ test_static int test_storm_not_triggered(void)
 
 test_static int test_storm_triggered(void)
 {
-	num_events = 1000;
+	num_events = 2000;
 	deferred_resume_called = 0;
 	schedule_deferred_pd_interrupt(PORT0);
 	task_wait_event(SECOND);

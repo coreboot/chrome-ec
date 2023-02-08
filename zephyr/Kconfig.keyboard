@@ -2,11 +2,13 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+CHOSEN_CROS_EC_RAW_KB := cros-ec,raw-kb
+
 menuconfig PLATFORM_EC_KEYBOARD
 	bool "Keyboard support"
-	select HAS_TASK_KEYSCAN
-	default n if ARCH_POSIX
 	default y
+	depends on DT_HAS_CROS_KEYSCAN_ENABLED || $(dt_chosen_enabled,$(CHOSEN_CROS_EC_RAW_KB))
+	select HAS_TASK_KEYSCAN
 	help
 	  Enable compilation of support for scanning a keyboard and providing
 	  the resulting input to the AP over the host interface. This consists
@@ -18,6 +20,15 @@ menuconfig PLATFORM_EC_KEYBOARD
 	  scanning must run in its own task.
 
 if PLATFORM_EC_KEYBOARD
+
+config CROS_EC_KEYSCAN
+	bool "Devicetree based keyscan map"
+	default y
+	depends on DT_HAS_CROS_EC_KEYSCAN_ENABLED
+	help
+	  Define a keyscan_config data structure based on a the keyscan
+	  configuration found in devicetree. Requires a cros-ec,keyscan node to
+	  be defined.
 
 choice PLATFORM_EC_KEYBOARD_PROTOCOL_MODE
 	prompt "Select the keyboard protocol to use"
@@ -50,6 +61,8 @@ endchoice # PLATFORM_EC_KEYBOARD_PROTOCOL_MODE
 
 config PLATFORM_EC_KEYBOARD_DISCRETE
 	bool "Support discrete Keyboard"
+	default y
+	depends on $(dt_nodelabel_enabled,kb_discrete)
 	help
 	  Enable support for a discrete Keyboard if the platform needs one
 	  or the raw Keyboard support is not built-in in the EC.
@@ -61,6 +74,13 @@ config PLATFORM_EC_KEYBOARD_DEBUG
 	  Enable keyboard debug prints to show up in early bringup, for example
 	  if the board is currently headless and keyboard functionality is being
 	  checked.
+
+config PLATFORM_EC_KEYBOARD_FACTORY_TEST
+	bool "Support keyboard factory test"
+	help
+	  Enable support "ectool kbfactorytest" command.
+	  Need to map keyboard connector pins to EC GPIO pins in
+	  keyboard_factory_scan_pins table.
 
 config PLATFORM_EC_KEYBOARD_KEYPAD
 	bool "Support a numeric keypad"
@@ -82,6 +102,21 @@ config PLATFORM_EC_KEYBOARD_VIVALDI
 	  - A response to EC_CMD_GET_KEYBD_CONFIG command.
 	  - Boards can specify their custom layout for top keys.
 
+config PLATFORM_EC_KEYBOARD_CUSTOMIZATION
+	bool "Support keyboard customization"
+	help
+	  Enable support for customization keyboard, some boards need to custom matrix
+	  because those board keyboard layout doesn't follow a common matrix.
+
+	  If define, the board layer
+	  needs to implement:
+	  1. the scancode_set2 and keycap_label array
+	  2. keyboard_customization.h which is similar to keyboard_config.h
+
+	  Note that if your board has the standard chromeos keyboard layout other
+	  than the top row, and you are looking only for top row customization,
+	  then you should be looking at overriding board_vivaldi_keybd_config() instead.
+
 choice PLATFORM_EC_KEYBOARD_PWRBTN_MODE
 	prompt "Select the impact of pressing the power button"
 	help
@@ -99,15 +134,15 @@ config PLATFORM_EC_KEYBOARD_PWRBTN_ASSERTS_KSI2
 	bool "Forces KSI2 to be asserted"
 	help
 	  Enable this if KSI2 is stuck 'asserted' for all scan columns if the
-	  power button is held. We must be aware of this case in order to
-	  correctly handle recovery-mode key combinations.
+	  power button is held. This applies if the refresh key is on KSI2.
+	  The GSC will assert this row for all columns during a recovery boot.
 
 config PLATFORM_EC_KEYBOARD_PWRBTN_ASSERTS_KSI3
 	bool "Forces KSI3 to be asserted"
 	help
 	  Enable this if KSI3 is stuck 'asserted' for all scan columns if the
-	  power button is held. We must be aware of this case in order to
-	  correctly handle recovery-mode key combinations.
+	  power button is held. This applies if the refresh key is on KSI3.
+	  The GSC will assert this row for all columns during a recovery boot.
 
 endchoice # PLATFORM_EC_KEYBOARD_PWRBTN_MODE
 
@@ -184,6 +219,7 @@ config PLATFORM_EC_PWM_KBLIGHT
 	bool "PWM keyboard backlight"
 	default y
 	depends on DT_HAS_CROS_EC_KBLIGHT_PWM_ENABLED
+	select PWM
 	select PLATFORM_EC_PWM_HC
 	help
 	  Enables a PWM-controlled keyboard backlight controlled by a PWM signal

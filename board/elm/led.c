@@ -12,8 +12,8 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "led_common.h"
-#include "util.h"
 #include "system.h"
+#include "util.h"
 
 #define CRITICAL_LOW_BATTERY_PERMILLAGE 71
 #define LOW_BATTERY_PERMILLAGE 137
@@ -91,7 +91,7 @@ int led_set_brightness(enum ec_led_id led_id, const uint8_t *brightness)
 	}
 }
 
-static unsigned blink_second;
+static unsigned int blink_second;
 
 static void elm_led_set_power(void)
 {

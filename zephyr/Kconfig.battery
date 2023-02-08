@@ -4,6 +4,8 @@
 
 menuconfig PLATFORM_EC_BATTERY
 	bool "Battery support"
+	default y
+	depends on DT_HAS_BATTERY_SMART_ENABLED
 	help
 	  Enables battery support on the board. Requires selection of a battery
 	  and a charger IC.
@@ -16,13 +18,14 @@ if PLATFORM_EC_BATTERY
 
 choice PLATFORM_EC_BATTERY_SELECT
 	prompt "Select the battery to use"
+	default PLATFORM_EC_BATTERY_SMART if DT_HAS_BATTERY_SMART_ENABLED
 	help
 	  Select the battery used on the board. If you are ensure, select the
 	  smart battery option.
 
 config PLATFORM_EC_BATTERY_SMART
 	bool "Support a smart battery"
-	depends on PLATFORM_EC_I2C
+	select PLATFORM_EC_I2C
 	help
 	  Many batteries support the Smart Battery Specification and therefore
 	  have common registers which can be accessed to control and monitor
@@ -34,6 +37,7 @@ endchoice # PLATFORM_EC_BATTERY_SELECT
 
 choice PLATFORM_EC_BATTERY_PRESENT_MODE
 	prompt "Method to use to detect the battery"
+	default PLATFORM_EC_BATTERY_PRESENT_GPIO if $(dt_path_enabled,/named-gpios/ec_batt_pres_odl)
 	help
 	  This selects the method to use to detect the presence of a battery.
 
@@ -254,5 +258,12 @@ config PLATFORM_EC_SMART_BATTERY_OPTIONAL_MFG_FUNC
 	  Only make sense when PLATFORM_EC_I2C_VIRTUAL_BATTERY.
 
 endif # PLATFORM_EC_I2C_VIRTUAL_BATTERY
+
+config PLATFORM_EC_BATT_HOST_FULL_FACTOR
+	int "This value is used by the host to calculate the ETA for full charge"
+	default 97
+	help
+	  Today, EC's PLATFORM_EC_BATT_HOST_FULL_FACTOR is the source of truth.
+	  Powerd gets the value from the EC over EC_CMD_DISPLAY_SOC.
 
 endif # PLATFORM_EC_BATTERY

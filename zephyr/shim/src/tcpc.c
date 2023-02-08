@@ -3,11 +3,10 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/devicetree.h>
-#include <zephyr/sys/util.h>
-#include "usb_pd_tcpm.h"
 #include "usb_pd.h"
+#include "usb_pd_tcpm.h"
 #include "usbc/tcpc_anx7447.h"
+#include "usbc/tcpc_anx7447_emul.h"
 #include "usbc/tcpc_ccgxxf.h"
 #include "usbc/tcpc_fusb302.h"
 #include "usbc/tcpc_generic_emul.h"
@@ -15,9 +14,13 @@
 #include "usbc/tcpc_nct38xx.h"
 #include "usbc/tcpc_ps8xxx.h"
 #include "usbc/tcpc_ps8xxx_emul.h"
+#include "usbc/tcpc_raa489000.h"
 #include "usbc/tcpc_rt1718s.h"
 #include "usbc/tcpci.h"
 #include "usbc/utils.h"
+
+#include <zephyr/devicetree.h>
+#include <zephyr/sys/util.h>
 
 #define HAS_TCPC_PROP(usbc_id) \
 	COND_CODE_1(DT_NODE_HAS_PROP(usbc_id, tcpc), (|| 1), ())
@@ -34,11 +37,13 @@
 		    (TCPC_CHIP_ENTRY(usbc_id, tcpc_id, config_fn)), ())
 
 #ifdef TEST_BUILD
-#define TCPC_CHIP_FIND_EMUL(usbc_id, tcpc_id)              \
-	CHECK_COMPAT(TCPCI_EMUL_COMPAT, usbc_id, tcpc_id,  \
-		     TCPC_CONFIG_TCPCI_EMUL)               \
-	CHECK_COMPAT(PS8XXX_EMUL_COMPAT, usbc_id, tcpc_id, \
-		     TCPC_CONFIG_PS8XXX_EMUL)
+#define TCPC_CHIP_FIND_EMUL(usbc_id, tcpc_id)               \
+	CHECK_COMPAT(TCPCI_EMUL_COMPAT, usbc_id, tcpc_id,   \
+		     TCPC_CONFIG_TCPCI_EMUL)                \
+	CHECK_COMPAT(PS8XXX_EMUL_COMPAT, usbc_id, tcpc_id,  \
+		     TCPC_CONFIG_PS8XXX_EMUL)               \
+	CHECK_COMPAT(ANX7447_EMUL_COMPAT, usbc_id, tcpc_id, \
+		     TCPC_CONFIG_ANX7447_EMUL)
 #else
 #define TCPC_CHIP_FIND_EMUL(...)
 #endif /* TEST_BUILD */
@@ -54,6 +59,8 @@
 	CHECK_COMPAT(PS8XXX_COMPAT, usbc_id, tcpc_id, TCPC_CONFIG_PS8XXX)      \
 	CHECK_COMPAT(NCT38XX_TCPC_COMPAT, usbc_id, tcpc_id,                    \
 		     TCPC_CONFIG_NCT38XX)                                      \
+	CHECK_COMPAT(RAA489000_TCPC_COMPAT, usbc_id, tcpc_id,                  \
+		     TCPC_CONFIG_RAA489000)                                    \
 	CHECK_COMPAT(RT1718S_TCPC_COMPAT, usbc_id, tcpc_id,                    \
 		     TCPC_CONFIG_RT1718S)                                      \
 	CHECK_COMPAT(TCPCI_COMPAT, usbc_id, tcpc_id, TCPC_CONFIG_TCPCI)        \
@@ -69,5 +76,23 @@
 /* Type C Port Controllers */
 MAYBE_CONST struct tcpc_config_t tcpc_config[] = { DT_FOREACH_STATUS_OKAY(
 	named_usbc_port, TCPC_CHIP) };
+
+/* TCPC GPIO Interrupt Handlers */
+void tcpc_alert_event(enum gpio_signal signal)
+{
+	for (int i = 0; i < ARRAY_SIZE(tcpc_config); i++) {
+		/* No alerts for embedded TCPC */
+		/* No alerts if the alert pin is not set in the devicetree */
+		if (tcpc_config[i].bus_type == EC_BUS_TYPE_EMBEDDED ||
+		    tcpc_config[i].alert_signal == GPIO_LIMIT) {
+			continue;
+		}
+
+		if (signal == tcpc_config[i].alert_signal) {
+			schedule_deferred_pd_interrupt(i);
+			break;
+		}
+	}
+}
 
 #endif /* DT_HAS_COMPAT_STATUS_OKAY */

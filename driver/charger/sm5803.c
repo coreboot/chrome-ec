@@ -14,8 +14,8 @@
 #include "hooks.h"
 #include "i2c.h"
 #include "sm5803.h"
-#include "system.h"
 #include "stdbool.h"
+#include "system.h"
 #include "throttle_ap.h"
 #include "timer.h"
 #include "usb_charge.h"
@@ -398,6 +398,17 @@ enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable)
 		/* Last but not least, enable sinking */
 		rv |= sm5803_flow1_update(chgnum, CHARGER_MODE_SINK, MASK_SET);
 	} else {
+		/*
+		 * Disable sink mode, unless currently sourcing out.
+		 *
+		 * Writes to the FLOW2_AUTO_ENABLED bits below have no effect if
+		 * flow1 is set to an active state, so disable sink mode first
+		 * before making other config changes.
+		 */
+		if (!sm5803_is_sourcing_otg_power(chgnum, chgnum))
+			rv |= sm5803_flow1_update(chgnum, CHARGER_MODE_SINK,
+						  MASK_CLR);
+
 		if (chgnum == CHARGER_PRIMARY)
 			rv |= sm5803_flow2_update(
 				chgnum, SM5803_FLOW2_AUTO_ENABLED, MASK_CLR);
@@ -415,11 +426,6 @@ enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable)
 					 regval);
 		}
 #endif
-
-		/* Disable sink mode, unless currently sourcing out */
-		if (!sm5803_is_sourcing_otg_power(chgnum, chgnum))
-			rv |= sm5803_flow1_update(chgnum, CHARGER_MODE_SINK,
-						  MASK_CLR);
 	}
 
 	return rv;
@@ -706,7 +712,7 @@ static void sm5803_init(int chgnum)
 	rv |= chg_write8(chgnum, SM5803_REG_DPM_VL_SET_LSB, (reg & 0x7));
 
 	/* Set default input current */
-	reg = SM5803_CURRENT_TO_REG(CONFIG_CHARGER_INPUT_CURRENT) &
+	reg = SM5803_CURRENT_TO_REG(CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT) &
 	      SM5803_CHG_ILIM_RAW;
 	rv |= chg_write8(chgnum, SM5803_REG_CHG_ILIM, reg);
 
@@ -2038,6 +2044,29 @@ static void command_sm5803_dump(int chgnum)
 }
 #endif /* CONFIG_CMD_CHARGER_DUMP */
 
+static enum ec_error_list sm5803_get_battery_cells(int chgnum, int *cells)
+{
+	enum ec_error_list rv;
+	uint32_t platform_id;
+
+	rv = main_read8(chgnum, SM5803_REG_PLATFORM, &platform_id);
+	if (rv)
+		return rv;
+
+	platform_id &= SM5803_PLATFORM_ID;
+	if (is_platform_id_2s(platform_id))
+		*cells = 2;
+	else if (is_platform_id_3s(platform_id))
+		*cells = 3;
+	else {
+		*cells = -1;
+
+		return EC_ERROR_UNKNOWN;
+	}
+
+	return EC_SUCCESS;
+}
+
 const struct charger_drv sm5803_drv = {
 	.init = &sm5803_init,
 	.post_init = &sm5803_post_init,
@@ -2075,4 +2104,5 @@ const struct charger_drv sm5803_drv = {
 #ifdef CONFIG_CMD_CHARGER_DUMP
 	.dump_registers = &command_sm5803_dump,
 #endif
+	.get_battery_cells = &sm5803_get_battery_cells,
 };

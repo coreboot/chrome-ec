@@ -9,24 +9,13 @@
 #ifndef __CROS_EC_PANIC_H
 #define __CROS_EC_PANIC_H
 
-#include <stdarg.h>
-#include <stdint.h>
-#include <stdnoreturn.h>
-
+#include "common.h"
 #include "software_panic.h"
 
-/*
- * Define these helpers if needed. While normally they would be derived from
- * common.h, we cannot include that header here because this file is also used
- * in the ectool and the build breaks.
- */
-#ifndef test_mockable_noreturn
-#if defined(TEST_BUILD) || defined(CONFIG_ZTEST)
-#define test_mockable_noreturn __attribute__((weak))
-#else
-#define test_mockable_noreturn noreturn
-#endif
-#endif /* test_mockable_noreturn */
+#include <stdarg.h>
+#include <stdint.h>
+
+#include <stdnoreturn.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -164,6 +153,12 @@ enum panic_arch {
 #define PANIC_DATA_FLAG_OLD_HOSTCMD BIT(2)
 /* Already reported via host event */
 #define PANIC_DATA_FLAG_OLD_HOSTEVENT BIT(3)
+/* The data was truncated to fit panic info host cmd */
+#define PANIC_DATA_FLAG_TRUNCATED BIT(4)
+/* System safe mode was started after a panic */
+#define PANIC_DATA_FLAG_SAFE_MODE_STARTED BIT(5)
+/* System safe mode failed to start */
+#define PANIC_DATA_FLAG_SAFE_MODE_FAIL_PRECONDITIONS BIT(6)
 
 /**
  * Write a string to the panic reporting device
@@ -210,10 +205,18 @@ void panic_data_ccprint(const struct panic_data *pdata);
  * @param linenum	Line number where assertion happened
  */
 #ifdef CONFIG_DEBUG_ASSERT_BRIEF
-test_mockable_noreturn void panic_assert_fail(const char *fname, int linenum);
+#if !(defined(TEST_FUZZ) || defined(CONFIG_ZTEST))
+noreturn
+#endif
+	void
+	panic_assert_fail(const char *fname, int linenum);
 #else
-test_mockable_noreturn void panic_assert_fail(const char *msg, const char *func,
-					      const char *fname, int linenum);
+#if !(defined(TEST_FUZZ) || defined(CONFIG_ZTEST))
+noreturn
+#endif
+	void
+	panic_assert_fail(const char *msg, const char *func, const char *fname,
+			  int linenum);
 #endif
 
 /**
@@ -236,12 +239,15 @@ noreturn
 	void
 	panic_reboot(void);
 
-#ifdef CONFIG_SOFTWARE_PANIC
 /**
  * Store a panic log and halt the system for a software-related reason, such as
  * stack overflow or assertion failure.
  */
-test_mockable_noreturn void software_panic(uint32_t reason, uint32_t info);
+#if !(defined(TEST_FUZZ) || defined(CONFIG_ZTEST))
+noreturn
+#endif
+	void
+	software_panic(uint32_t reason, uint32_t info);
 
 /**
  * Log a panic in the panic log, but don't halt the system. Normally
@@ -262,7 +268,6 @@ void panic_get_reason(uint32_t *reason, uint32_t *info, uint8_t *exception);
 __override_proto void arch_panic_set_reason(uint32_t reason, uint32_t info,
 					    uint8_t exception);
 #endif /* CONFIG_ZEPHYR */
-#endif /* CONFIG_SOFTWARE_PANIC */
 
 /**
  * Enable/disable bus fault handler
@@ -291,6 +296,15 @@ struct panic_data *panic_get_data(void);
  */
 uintptr_t get_panic_data_start(void);
 
+#ifdef CONFIG_BOARD_NATIVE_POSIX
+/**
+ * @brief Test-only function for accessing the pdata_ptr object.
+ *
+ * @return struct panic_data* pdata_ptr
+ */
+struct panic_data *test_get_panic_data_pointer(void);
+#endif
+
 /*
  * Return a pointer to panic_data structure that can be safely written.
  * Please note that this function can move jump data and jump tags.
@@ -314,5 +328,21 @@ void chip_panic_data_backup(void);
 #ifdef __cplusplus
 }
 #endif
+
+#ifdef TEST_BUILD
+/**
+ * @brief Wrapper for accessing the command_crash() console command
+ * implementation directly in unit tests. It cannot be called normally through
+ * the shell interface because it upsets the shell's internal state when the
+ * command doesn't return after a crash. command_crash() cannot be marked
+ * test_export_static directly due to an implementation detail in
+ * DECLARE_CONSOLE_COMMAND().
+ *
+ * @param argc Number of CLI args in `argv`
+ * @param argv CLI arguments
+ * @return int Return value
+ */
+int test_command_crash(int argc, const char **argv);
+#endif /* TEST_BUILD*/
 
 #endif /* __CROS_EC_PANIC_H */

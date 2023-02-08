@@ -19,12 +19,13 @@
 #include "timer.h"
 #include "update_fw.h"
 #include "usart-stm32f0.h"
-#include "usart_tx_dma.h"
 #include "usart_rx_dma.h"
-#include "usb_i2c.h"
+#include "usart_tx_dma.h"
 #include "usb-stream.h"
+#include "usb_i2c.h"
 #include "util.h"
 
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
@@ -61,7 +62,7 @@ USB_STREAM_CONFIG(usart1_usb, USB_IFACE_USART1_STREAM,
  */
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("Tigertail"),
 	[USB_STR_SERIALNO] = 0,
 	[USB_STR_VERSION] = USB_STRING_DESC(CROS_EC_VERSION32),

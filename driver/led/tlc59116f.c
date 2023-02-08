@@ -2,14 +2,14 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include <string.h>
-
 #include "common.h"
 #include "console.h"
 #include "i2c.h"
 #include "rgb_keyboard.h"
 #include "stddef.h"
 #include "tlc59116f.h"
+
+#include <string.h>
 
 #define CPRINTF(fmt, args...) cprintf(CC_RGBKBD, "TLC59116F: " fmt, ##args)
 #define CPRINTS(fmt, args...) cprints(CC_RGBKBD, "TLC59116F: " fmt, ##args)
@@ -68,6 +68,15 @@ static int tlc59116f_enable(struct rgbkbd *ctx, bool enable)
 	if (rv) {
 		CPRINTS("Failed to enable TLC59116F");
 		return rv;
+	}
+
+	if (!enable) {
+		for (int i = TLC59116F_LEDOUT0; i <= TLC59116F_LEDOUT3; i++) {
+			rv = tlc59116f_write(ctx, i, TLC59116_LEDOUT_OFF);
+			if (rv) {
+				return rv;
+			}
+		}
 	}
 
 	WRITE_BIT(cfg, TLC59116_MODE_BIT_SLEEP, !enable);

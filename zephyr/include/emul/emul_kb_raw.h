@@ -3,6 +3,8 @@
  * found in the LICENSE file.
  */
 
+#include <stdint.h>
+
 /**
  * @file
  *

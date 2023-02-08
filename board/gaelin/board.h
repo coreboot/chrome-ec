@@ -16,7 +16,7 @@
 #define CONFIG_MP2964
 
 /* Barrel Jack */
-#define DEDICATED_CHARGE_PORT 3
+#define DEDICATED_CHARGE_PORT 2
 
 /* HDMI CEC */
 #define CONFIG_CEC
@@ -27,23 +27,14 @@
 /* USB Type A Features */
 #define USB_PORT_COUNT 4
 #define CONFIG_USB_PORT_POWER_DUMB
+#define CONFIG_USBC_RETIMER_PS8811
 
 /* USB Type C and USB PD defines */
 #define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
-#define CONFIG_IO_EXPANDER
-#define CONFIG_IO_EXPANDER_NCT38XX
-#define CONFIG_IO_EXPANDER_PORT_COUNT 2
-
 #define CONFIG_USB_PD_PPC
-#define CONFIG_USB_PD_TCPM_RT1715
-#define CONFIG_USBC_RETIMER_INTEL_BB
-
-#define CONFIG_USBC_RETIMER_KB800X
-#define CONFIG_KB800X_CUSTOM_XBAR
-#define CONFIG_USBC_PPC_SYV682X
-#undef CONFIG_SYV682X_HV_ILIM
-#define CONFIG_SYV682X_HV_ILIM SYV682X_HV_ILIM_5_50
+#define CONFIG_USB_PD_TCPM_PS8815
+#define CONFIG_USBC_PPC_NX20P3483 /* Compatible with Silicon Mitus SM5360A */
 
 /* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY 30000 /* us */
@@ -92,22 +83,19 @@
 #define GPIO_RECOVERY_L_2 GPIO_GSC_EC_RECOVERY_BTN_OD
 
 /* I2C Bus Configuration */
+#define I2C_PORT_SCALER NPCX_I2C_PORT5_0
 
-#define I2C_PORT_DP_REDRIVER NPCX_I2C_PORT0_0
-
-#define I2C_PORT_USB_C0_C2_TCPC NPCX_I2C_PORT1_0
+#define I2C_PORT_USB_C0_TCPC NPCX_I2C_PORT1_0
 #define I2C_PORT_USB_C1_TCPC NPCX_I2C_PORT4_1
 
-#define I2C_PORT_USB_C0_C2_PPC NPCX_I2C_PORT2_0
-#define I2C_PORT_USB_C1_PPC NPCX_I2C_PORT6_1
+#define I2C_PORT_USB_C0_PPC NPCX_I2C_PORT2_0
+#define I2C_PORT_USB_C1_PPC NPCX_I2C_PORT3_0
 
-#define I2C_PORT_USB_C0_C2_BC12 NPCX_I2C_PORT2_0
-#define I2C_PORT_USB_C1_BC12 NPCX_I2C_PORT6_1
+#define I2C_PORT_USB_C0_BC12 NPCX_I2C_PORT2_0
+#define I2C_PORT_USB_C1_BC12 NPCX_I2C_PORT3_0
 
-#define I2C_PORT_USB_C0_C2_MUX NPCX_I2C_PORT3_0
-#define I2C_PORT_USB_C1_MUX NPCX_I2C_PORT6_1
+#define I2C_PORT_USB_A0_A1_MIX NPCX_I2C_PORT6_1
 
-#define I2C_PORT_QI NPCX_I2C_PORT5_0
 #define I2C_PORT_EEPROM NPCX_I2C_PORT7_0
 #define I2C_PORT_MP2964 NPCX_I2C_PORT7_0
 
@@ -115,17 +103,7 @@
 
 #define I2C_ADDR_MP2964_FLAGS 0x20
 
-#define USBC_PORT_C0_BB_RETIMER_I2C_ADDR 0x58
-#define USBC_PORT_C2_BB_RETIMER_I2C_ADDR 0x59
-
-/* Enabling Thunderbolt-compatible mode */
-#define CONFIG_USB_PD_TBT_COMPAT_MODE
-
-/* Enabling USB4 mode */
-#define CONFIG_USB_PD_USB4
-
-/* Retimer */
-#define CONFIG_USBC_RETIMER_FW_UPDATE
+#define I2C_ADDR_SCALER_FLAGS 0x58
 
 /* Thermal features */
 #define CONFIG_THERMISTOR
@@ -136,20 +114,13 @@
 /* ADC */
 #define CONFIG_ADC
 
-/*
- * TODO(b/197478860): Enable the fan control. We need
- * to check the sensor value and adjust the fan speed.
- */
+/* Fan */
 #define CONFIG_FANS FAN_CH_COUNT
+#define RPM_DEVIATION 1
+#define CONFIG_CUSTOM_FAN_CONTROL
 
 /* Include math_util for bitmask_uint64 used in pd_timers */
 #define CONFIG_MATH_UTIL
-
-/* WPC/Qi charger */
-#ifdef SECTION_IS_RW
-#define CONFIG_PERIPHERAL_CHARGER
-#define CONFIG_CPS8100
-#endif
 
 #ifndef __ASSEMBLER__
 
@@ -160,7 +131,6 @@
 enum charge_port {
 	CHARGE_PORT_TYPEC0,
 	CHARGE_PORT_TYPEC1,
-	CHARGE_PORT_TYPEC2,
 	CHARGE_PORT_BARRELJACK,
 	CHARGE_PORT_ENUM_COUNT
 };
@@ -183,8 +153,6 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
-enum ioex_port { IOEX_C0_NCT38XX = 0, IOEX_C2_NCT38XX, IOEX_PORT_COUNT };
-
 enum pwm_channel {
 	PWM_CH_LED_GREEN, /* PWM0 */
 	PWM_CH_FAN, /* PWM5 */
@@ -195,6 +163,8 @@ enum pwm_channel {
 enum fan_channel { FAN_CH_0 = 0, FAN_CH_COUNT };
 
 enum mft_channel { MFT_CH_0 = 0, MFT_CH_COUNT };
+
+enum usba_port { USBA_PORT_A0 = 0, USBA_PORT_A1, USBA_PORT_COUNT };
 
 extern void adp_connect_interrupt(enum gpio_signal signal);
 

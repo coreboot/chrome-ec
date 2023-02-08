@@ -8,9 +8,9 @@
  * Refer to USB PD 3.0 spec, version 2.0, sections 8.2 and 8.3
  */
 
-#include "usb_pd.h"
-#include "mock/usb_pd_dpm_mock.h"
 #include "memory.h"
+#include "mock/usb_pd_dpm_mock.h"
+#include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
 #ifndef TEST_BUILD
@@ -41,7 +41,11 @@ void dpm_vdm_acked(int port, enum tcpci_msg_type type, int vdo_count,
 }
 
 void dpm_vdm_naked(int port, enum tcpci_msg_type type, uint16_t svid,
-		   uint8_t vdm_cmd)
+		   uint8_t vdm_cmd, uint32_t vdm_header)
+{
+}
+
+void dpm_notify_attention(int port, size_t vdo_objects, uint32_t *buf)
 {
 }
 
@@ -49,7 +53,7 @@ void dpm_set_mode_exit_request(int port)
 {
 }
 
-void dpm_run(int port)
+void dpm_run(int port, int evt, int en)
 {
 }
 
@@ -93,5 +97,9 @@ int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len)
 }
 
 void dpm_handle_alert(int port, uint32_t ado)
+{
+}
+
+void dpm_set_pe_ready(int port, bool enable)
 {
 }

@@ -117,7 +117,7 @@ static const struct {
 /* Contexts for all tasks */
 static task_ tasks[TASK_ID_COUNT];
 /* Validity checks about static task invariants */
-BUILD_ASSERT(TASK_ID_COUNT <= sizeof(unsigned) * 8);
+BUILD_ASSERT(TASK_ID_COUNT <= sizeof(unsigned int) * 8);
 BUILD_ASSERT(TASK_ID_COUNT < (1 << (sizeof(task_id_t) * 8)));
 
 /* Stacks for all tasks */
@@ -311,9 +311,7 @@ task_ *next_sched_task(void)
 		int i = task_get_current();
 
 		panic_printf("\n\nStack overflow in %s task!\n", task_names[i]);
-#ifdef CONFIG_SOFTWARE_PANIC
 		software_panic(PANIC_SW_STACK_OVERFLOW, i);
-#endif
 	}
 #endif
 

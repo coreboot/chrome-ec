@@ -32,12 +32,6 @@ struct kblight_drv {
 	int (*set)(int percent);
 
 	/**
-	 * Get the current brightness
-	 * @return Brightness in percentage
-	 */
-	int (*get)(void);
-
-	/**
 	 * Enable or disable keyboard backlight
 	 * @param enable: 1=Enable, 0=Disable.
 	 * @return EC_SUCCESS or EC_ERROR_*
@@ -93,5 +87,17 @@ int kblight_enable(int enable);
 int kblight_register(const struct kblight_drv *drv);
 
 extern const struct kblight_drv kblight_pwm;
+
+#ifdef TEST_BUILD
+/**
+ * @brief Get internal backlight enabled state. The value reported by
+ *        kblight_get_enabled() can be outdated due to a deferred function call
+ *        being required to update it. Using this function in tests improves
+ *        reliability and reduces the need to sleep.
+ *
+ * @return uint8_t 0 if disabled, 1 otherwise.
+ */
+uint8_t kblight_get_current_enable(void);
+#endif /* TEST_BUILD */
 
 #endif /* __CROS_EC_KEYBOARD_BACKLIGHT_H */

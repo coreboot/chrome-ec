@@ -3,27 +3,24 @@
  * found in the LICENSE file.
  */
 
-#define DT_DRV_COMPAT cros_ps8xxx_emul
-
-#include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(ps8xxx_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
+#include "driver/tcpm/ps8xxx.h"
+#include "emul/emul_common_i2c.h"
+#include "emul/emul_stub_device.h"
+#include "emul/tcpc/emul_ps8xxx.h"
+#include "emul/tcpc/emul_tcpci.h"
+#include "tcpm/tcpci.h"
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/ztest.h>
 
-#include "tcpm/tcpci.h"
-
-#include "emul/emul_common_i2c.h"
-#include "emul/tcpc/emul_ps8xxx.h"
-#include "emul/tcpc/emul_tcpci.h"
-#include "emul/emul_stub_device.h"
-
-#include "driver/tcpm/ps8xxx.h"
-
+#define DT_DRV_COMPAT cros_ps8xxx_emul
 #define PS8XXX_REG_MUX_IN_HPD_ASSERTION MUX_IN_HPD_ASSERTION_REG
+
+LOG_MODULE_REGISTER(ps8xxx_emul, CONFIG_TCPCI_EMUL_LOG_LEVEL);
 
 /** Run-time data used by the emulator */
 struct ps8xxx_emul_data {
@@ -43,6 +40,12 @@ struct ps8xxx_emul_data {
 	uint8_t gpio_ctrl;
 	/** HW revision used by PS8815 */
 	uint16_t hw_rev;
+	/**
+	 * Register ID to distinguish between the PS8815-A2 and PS8745-A2
+	 * 0: Indicates this is an 8815-A2 chip
+	 * 1: Indicates this is an 8745-A2 chip
+	 */
+	uint8_t reg_id;
 };
 
 /** Constant configuration of the emulator */
@@ -60,6 +63,15 @@ void ps8xxx_emul_set_chip_rev(const struct emul *emul, uint8_t chip_rev)
 	struct ps8xxx_emul_data *data = tcpc_data->chip_data;
 
 	data->chip_rev = chip_rev;
+}
+
+/** Check description in emul_ps8xxx.h */
+void ps8xxx_emul_set_reg_id(const struct emul *emul, enum ps8xxx_regid reg_id)
+{
+	struct tcpc_emul_data *tcpc_data = emul->data;
+	struct ps8xxx_emul_data *data = tcpc_data->chip_data;
+
+	data->reg_id = reg_id;
 }
 
 /** Check description in emul_ps8xxx.h */
@@ -220,6 +232,7 @@ static int ps8xxx_emul_tcpc_write_byte(const struct emul *emul, int reg,
 		if (prod_id != PS8815_PRODUCT_ID) {
 			break;
 		}
+		__fallthrough;
 	case PS8XXX_REG_I2C_DEBUGGING_ENABLE:
 	case PS8XXX_REG_MUX_IN_HPD_ASSERTION:
 	case PS8XXX_REG_BIST_CONT_MODE_BYTE0:
@@ -267,6 +280,7 @@ static int ps8xxx_emul_tcpc_finish_write(const struct emul *emul, int reg,
 		if (prod_id != PS8815_PRODUCT_ID) {
 			break;
 		}
+		__fallthrough;
 	case PS8XXX_REG_I2C_DEBUGGING_ENABLE:
 	case PS8XXX_REG_MUX_IN_HPD_ASSERTION:
 	case PS8XXX_REG_BIST_CONT_MODE_BYTE0:
@@ -371,6 +385,11 @@ static int ps8xxx_emul_read_byte_workhorse(const struct emul *emul, int reg,
 			*val = data->chip_rev;
 			return 0;
 		}
+		if (data->prod_id == PS8815_PRODUCT_ID &&
+		    reg == PS8815_P0_REG_ID) {
+			*val = data->chip_rev;
+			return 0;
+		}
 		break;
 	case PS8XXX_EMUL_PORT_1:
 		/* DCI CFG is no available on PS8815 */
@@ -379,11 +398,13 @@ static int ps8xxx_emul_read_byte_workhorse(const struct emul *emul, int reg,
 			*val = data->dci_cfg;
 			return 0;
 		}
+		__fallthrough;
 	case PS8XXX_EMUL_PORT_GPIO:
 		if (reg == PS8805_REG_GPIO_CONTROL) {
 			*val = data->gpio_ctrl;
 			return 0;
 		}
+		__fallthrough;
 	case PS8XXX_EMUL_PORT_INVAL:
 		LOG_ERR("Invalid I2C address");
 		return -EIO;
@@ -461,11 +482,13 @@ static int ps8xxx_emul_write_byte_workhorse(const struct emul *emul, int reg,
 			data->dci_cfg = val;
 			return 0;
 		}
+		__fallthrough;
 	case PS8XXX_EMUL_PORT_GPIO:
 		if (reg == PS8805_REG_GPIO_CONTROL) {
 			data->gpio_ctrl = val;
 			return 0;
 		}
+		__fallthrough;
 	case PS8XXX_EMUL_PORT_INVAL:
 		LOG_ERR("Invalid I2C address");
 		return -EIO;
@@ -610,6 +633,7 @@ static int ps8xxx_emul_init(const struct emul *emul,
 
 	ret |= ps8xxx_emul_tcpc_reset(emul);
 
+	tcpci_emul_set_reg(emul, TCPC_REG_VENDOR_ID, PS8XXX_VENDOR_ID);
 	tcpci_emul_set_reg(emul, TCPC_REG_PRODUCT_ID, data->prod_id);
 	/* FW rev is never 0 in a working device. Set arbitrary FW rev. */
 	tcpci_emul_set_reg(emul, PS8XXX_REG_FW_REV, 0x31);
@@ -652,7 +676,7 @@ static int ps8xxx_emul_init(const struct emul *emul,
 		},							\
 	}; \
 	TCPCI_EMUL_DEFINE(n, ps8xxx_emul_init, &ps8xxx_emul_cfg_##n,  \
-			  &ps8xxx_emul_data_##n, &i2c_ps8xxx_emul_api)
+			  &ps8xxx_emul_data_##n, &i2c_ps8xxx_emul_api, NULL)
 
 DT_INST_FOREACH_STATUS_OKAY(PS8XXX_EMUL)
 

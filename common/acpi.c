@@ -5,6 +5,7 @@
 
 #include "acpi.h"
 #include "battery.h"
+#include "body_detection.h"
 #include "common.h"
 #include "console.h"
 #include "dptf.h"
@@ -17,8 +18,8 @@
 #include "lpc.h"
 #include "printf.h"
 #include "pwm.h"
-#include "timer.h"
 #include "tablet_mode.h"
+#include "timer.h"
 #include "usb_charge.h"
 #include "usb_common.h"
 #include "util.h"
@@ -134,19 +135,14 @@ static int acpi_read(uint8_t addr)
 	uint8_t *memmap_addr = (uint8_t *)(lpc_get_memmap_range() + addr -
 					   EC_ACPI_MEM_MAPPED_BEGIN);
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wtautological-constant-out-of-range-compare"
-#endif /* __clang__ */
+	DISABLE_CLANG_WARNING("-Wtautological-constant-out-of-range-compare");
 	/* Check for out-of-range read. */
 	if (addr < EC_ACPI_MEM_MAPPED_BEGIN ||
 	    addr >= EC_ACPI_MEM_MAPPED_BEGIN + EC_ACPI_MEM_MAPPED_SIZE) {
 		CPRINTS("ACPI read 0x%02x (ignored)", acpi_addr);
 		return 0xff;
 	}
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif /* __clang__ */
+	ENABLE_CLANG_WARNING("-Wtautological-constant-out-of-range-compare");
 
 	/* Read from cache if enabled (burst mode). */
 	if (acpi_read_cache.enabled) {
@@ -239,6 +235,11 @@ int acpi_ap_to_ec(int is_cmd, uint8_t value, uint8_t *resultptr)
 			result |= (acpi_dptf_get_profile_num() &
 				   EC_ACPI_MEM_DDPN_MASK)
 				  << EC_ACPI_MEM_DDPN_SHIFT;
+#endif
+
+#ifdef CONFIG_BODY_DETECTION_NOTIFY_MODE_CHANGE
+			if (body_detect_get_state() == BODY_DETECTION_ON_BODY)
+				result |= BIT(EC_ACPI_MEM_STTB_SHIFT);
 #endif
 			break;
 

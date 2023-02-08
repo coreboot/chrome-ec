@@ -6,11 +6,11 @@
  */
 
 #include "anx7483.h"
-#include "retimer/anx7483_public.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
 #include "i2c.h"
+#include "retimer/anx7483_public.h"
 #include "timer.h"
 #include "usb_mux.h"
 #include "util.h"
@@ -31,7 +31,7 @@ struct anx7483_tuning_set {
 	uint8_t value;
 };
 
-static struct anx7483_tuning_set anx7483_usb_enabled[] = {
+const static struct anx7483_tuning_set anx7483_usb_enabled[] = {
 	{ ANX7483_URX1_PORT_CFG2_REG, ANX7483_CFG2_DEF },
 	{ ANX7483_URX2_PORT_CFG2_REG, ANX7483_CFG2_DEF },
 	{ ANX7483_DRX1_PORT_CFG2_REG, ANX7483_CFG2_DEF },
@@ -226,9 +226,14 @@ static int anx7483_set(const struct usb_mux *me, mux_state_t mux_state,
 		       bool *ack_required)
 {
 	int reg;
+	int val;
 
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
+
+	/* This driver treats safe mode as none */
+	if (mux_state == USB_PD_MUX_SAFE_MODE)
+		mux_state = USB_PD_MUX_NONE;
 
 	/*
 	 * Mux is not powered in Z1
@@ -239,7 +244,16 @@ static int anx7483_set(const struct usb_mux *me, mux_state_t mux_state,
 	/*
 	 * Always ensure i2c control is set and state machine is enabled
 	 * (setting ANX7483_CTRL_REG_BYPASS_EN disables state machine)
+	 * Not recommend because it turns off whole low power function
 	 */
+	/*
+	 * Modify LFPS_TIMER to prevent going USB SLUMBER state too early
+	 */
+	RETURN_ERROR(anx7483_read(me, ANX7483_LFPS_TIMER_REG, &val));
+	val &= ~ANX7483_LFPS_TIMER_MASK;
+	val |= ANX7483_LFPS_TIMER_SLUMBER_TIME_H << ANX7483_LFPS_TIMER_SHIFT;
+	RETURN_ERROR(anx7483_write(me, ANX7483_LFPS_TIMER_REG, val));
+
 	reg = ANX7483_CTRL_REG_EN;
 	if (mux_state & USB_PD_MUX_USB_ENABLED)
 		reg |= ANX7483_CTRL_USB_EN;
@@ -273,9 +287,9 @@ static int anx7483_get(const struct usb_mux *me, mux_state_t *mux_state)
 }
 
 /* Helper to apply entire array of tuning registers, returning on first error */
-static enum ec_error_list anx7483_apply_tuning(const struct usb_mux *me,
-					       struct anx7483_tuning_set *reg,
-					       int num)
+static enum ec_error_list
+anx7483_apply_tuning(const struct usb_mux *me,
+		     const struct anx7483_tuning_set *reg, int num)
 {
 	int i;
 
@@ -338,6 +352,34 @@ enum ec_error_list anx7483_set_eq(const struct usb_mux *me,
 	RETURN_ERROR(anx7483_read(me, reg, &value));
 	value &= ~ANX7483_CFG0_EQ_MASK;
 	value |= eq << ANX7483_CFG0_EQ_SHIFT;
+
+	return anx7483_write(me, reg, value);
+}
+
+enum ec_error_list anx7483_set_fg(const struct usb_mux *me,
+				  enum anx7483_tune_pin pin,
+				  enum anx7483_fg_setting fg)
+{
+	int reg, value;
+
+	if (pin == ANX7483_PIN_UTX1)
+		reg = ANX7483_UTX1_PORT_CFG2_REG;
+	else if (pin == ANX7483_PIN_UTX2)
+		reg = ANX7483_UTX2_PORT_CFG2_REG;
+	else if (pin == ANX7483_PIN_URX1)
+		reg = ANX7483_URX1_PORT_CFG2_REG;
+	else if (pin == ANX7483_PIN_URX2)
+		reg = ANX7483_URX2_PORT_CFG2_REG;
+	else if (pin == ANX7483_PIN_DRX1)
+		reg = ANX7483_DRX1_PORT_CFG2_REG;
+	else if (pin == ANX7483_PIN_DRX2)
+		reg = ANX7483_DRX2_PORT_CFG2_REG;
+	else
+		return EC_ERROR_INVAL;
+
+	RETURN_ERROR(anx7483_read(me, reg, &value));
+	value &= ~ANX7483_CFG2_FG_MASK;
+	value |= fg << ANX7483_CFG2_FG_SHIFT;
 
 	return anx7483_write(me, reg, value);
 }

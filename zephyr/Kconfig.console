@@ -35,6 +35,18 @@ config SHELL_BACKEND_SERIAL_TX_RING_BUFFER_SIZE
 config SHELL_BACKEND_SERIAL_RX_RING_BUFFER_SIZE
 	default 192
 
+config PLATFORM_EC_ISR_CONSOLE_OUTPUT
+	bool "Log in ISRs"
+	depends on CONSOLE
+	default y
+	help
+	  If enabled, allowing console output when in interrupt service routines
+	  via printk. If disabled, silently drop these messages.
+
+	  Console output via printk is unbuffered, so console output when in ISRs
+	  should be avoided if possible - larger amounts of output will prevent
+	  the EC from timely interrupt servicing.
+
 menuconfig PLATFORM_EC_HOSTCMD_CONSOLE
 	bool "Console Host Command"
 	depends on PLATFORM_EC_HOSTCMD
@@ -66,3 +78,25 @@ menuconfig PLATFORM_EC_CONSOLE_DEBUG
 	  Write all zephyr_print() messages to printk() also. Not recommended
 	  outside of tests.
 
+
+config PLATFORM_EC_LOG_BACKEND_CONSOLE_BUFFER
+	bool "Logging backend for the console buffer"
+	depends on PLATFORM_EC_HOSTCMD_CONSOLE
+	select LOG_OUTPUT
+	help
+	  Enable the logging backend for the console buffer.
+
+	  This will copy messages sent to the zephyr logging subsystem
+	  to the EC console buffer. This allows the AP to access the
+	  log messages with the console host command.
+
+config PLATFORM_EC_LOG_BACKEND_CONSOLE_BUFFER_TMP_BUF_SIZE
+	int "Size of temporary buffer used by console buffer logging backend"
+	default 128 if LOG_MODE_DEFERRED
+	default 1
+	depends on PLATFORM_EC_LOG_BACKEND_CONSOLE_BUFFER
+	help
+	  The size of the temporary buffer used by the console buffer backend.
+	  The logging subsystem will buffer up to this many bytes before calling
+	  the backend in deferred logging mode. Ideally this will be large
+	  enough to fit an entire log line.

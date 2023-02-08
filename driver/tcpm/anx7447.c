@@ -5,9 +5,9 @@
 
 /* ANX7447 port manager */
 
+#include "anx7447.h"
 #include "builtin/assert.h"
 #include "common.h"
-#include "anx7447.h"
 #include "console.h"
 #include "hooks.h"
 #include "tcpm/tcpci.h"
@@ -728,6 +728,10 @@ static int anx7447_mux_set(const struct usb_mux *me, mux_state_t mux_state,
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
 
+	/* This driver treats safe mode as none */
+	if (mux_state == USB_PD_MUX_SAFE_MODE)
+		mux_state = USB_PD_MUX_NONE;
+
 	cc_direction = mux_state & USB_PD_MUX_POLARITY_INVERTED;
 	mux_type = mux_state & USB_PD_MUX_DOCK;
 	CPRINTS("C%d mux_state = 0x%x, mux_type = 0x%x", port, mux_state,
@@ -963,6 +967,9 @@ static int anx7447_get_chip_info(int port, int live,
 	int main_version = 0x0, build_version = 0x0;
 
 	RETURN_ERROR(tcpci_get_chip_info(port, live, chip_info));
+
+	if (chip_info == NULL)
+		return EC_SUCCESS;
 
 	if (chip_info->fw_version_number == -1 || live) {
 		/*

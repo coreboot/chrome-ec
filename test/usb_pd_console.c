@@ -10,11 +10,11 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "usb_pe_sm.h"
+#include "test_util.h"
 #include "usb_pd.h"
+#include "usb_pe_sm.h"
 #include "usb_tc_sm.h"
 #include "util.h"
-#include "test_util.h"
 
 /* Defined in implementation */
 int command_pd(int argc, const char **argv);
@@ -42,6 +42,8 @@ static int test_port;
 static enum pd_dpm_request request;
 static int max_volt;
 static int comm_enable;
+static int pd_suspended;
+static int pd_bistsharemode;
 static int dev_info;
 static int vdm_cmd;
 static int vdm_count;
@@ -179,6 +181,18 @@ void pd_comm_enable(int port, int enable)
 	comm_enable = enable;
 }
 
+void pd_set_suspend(int port, int enable)
+{
+	test_port = port;
+	pd_suspended = enable;
+}
+
+enum ec_status pd_set_bist_share_mode(uint8_t enable)
+{
+	pd_bistsharemode = enable;
+	return EC_RES_SUCCESS;
+}
+
 void tc_print_dev_info(int port)
 {
 	test_port = port;
@@ -299,6 +313,30 @@ static int test_command_pd_version(void)
 	const char *argv[] = { "pd", "version", 0, 0, 0 };
 
 	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+
+	return EC_SUCCESS;
+}
+
+static int test_command_pd_bistsharemode_enable(void)
+{
+	int argc = 3;
+	static const char *argv[10] = { "pd", "bistsharemode", "enable" };
+
+	pd_bistsharemode = -1;
+	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+	TEST_ASSERT(pd_bistsharemode == 1);
+
+	return EC_SUCCESS;
+}
+
+static int test_command_pd_bistsharemode_disable(void)
+{
+	int argc = 3;
+	static const char *argv[10] = { "pd", "bistsharemode", "disable" };
+
+	pd_bistsharemode = -1;
+	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+	TEST_ASSERT(pd_bistsharemode == 0);
 
 	return EC_SUCCESS;
 }
@@ -430,6 +468,38 @@ static int test_command_pd_soft(void)
 	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
 	TEST_ASSERT(test_port == 0);
 	TEST_ASSERT(request == DPM_REQUEST_SOFT_RESET_SEND);
+
+	return EC_SUCCESS;
+}
+
+static int test_command_pd_suspend(void)
+{
+	int argc = 3;
+	static const char *argv[] = { "pd", "0", "suspend" };
+
+	test_port = -1;
+	comm_enable = -1;
+	pd_suspended = -1;
+	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+	TEST_ASSERT(test_port == 0);
+	TEST_ASSERT(comm_enable == 0);
+	TEST_ASSERT(pd_suspended == 1);
+
+	return EC_SUCCESS;
+}
+
+static int test_command_pd_resume(void)
+{
+	int argc = 3;
+	static const char *argv[] = { "pd", "1", "resume" };
+
+	test_port = -1;
+	comm_enable = -1;
+	pd_suspended = -1;
+	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+	TEST_ASSERT(test_port == 1);
+	TEST_ASSERT(comm_enable == 1);
+	TEST_ASSERT(pd_suspended == 0);
 
 	return EC_SUCCESS;
 }
@@ -638,6 +708,10 @@ void run_test(int argc, const char **argv)
 	RUN_TEST(test_command_pd_enable);
 	RUN_TEST(test_command_pd_hard);
 	RUN_TEST(test_command_pd_soft);
+	RUN_TEST(test_command_pd_suspend);
+	RUN_TEST(test_command_pd_resume);
+	RUN_TEST(test_command_pd_bistsharemode_enable);
+	RUN_TEST(test_command_pd_bistsharemode_disable);
 	RUN_TEST(test_command_pd_swap1);
 	RUN_TEST(test_command_pd_swap2);
 	RUN_TEST(test_command_pd_swap3);

@@ -3,11 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <string.h>
-#include <zephyr/fff.h>
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-
 #include "ec_commands.h"
 #include "gpio.h"
 #include "host_command.h"
@@ -15,6 +10,12 @@
 #include "test/drivers/test_mocks.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+
+#include <string.h>
+
+#include <zephyr/fff.h>
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
 
 #define PORT 0
 
@@ -38,15 +39,15 @@ ZTEST_USER(espi, test_host_command_get_protocol_info)
 	struct host_cmd_handler_args args = BUILD_HOST_COMMAND_RESPONSE(
 		EC_CMD_GET_PROTOCOL_INFO, 0, response);
 
-	zassert_ok(host_command_process(&args), NULL);
-	zassert_ok(args.result, NULL);
-	zassert_equal(args.response_size, sizeof(response), NULL);
-	zassert_equal(response.protocol_versions, BIT(3), NULL);
+	zassert_ok(host_command_process(&args));
+	zassert_ok(args.result);
+	zassert_equal(args.response_size, sizeof(response));
+	zassert_equal(response.protocol_versions, BIT(3));
 	zassert_equal(response.max_request_packet_size, EC_LPC_HOST_PACKET_SIZE,
 		      NULL);
 	zassert_equal(response.max_response_packet_size,
 		      EC_LPC_HOST_PACKET_SIZE, NULL);
-	zassert_equal(response.flags, 0, NULL);
+	zassert_equal(response.flags, 0);
 }
 
 ZTEST_USER(espi, test_host_command_usb_pd_power_info)
@@ -58,9 +59,9 @@ ZTEST_USER(espi, test_host_command_usb_pd_power_info)
 		EC_CMD_USB_PD_POWER_INFO, 0, response, params);
 
 	args.params = &params;
-	zassert_ok(host_command_process(&args), NULL);
-	zassert_ok(args.result, NULL);
-	zassert_equal(args.response_size, sizeof(response), NULL);
+	zassert_ok(host_command_process(&args));
+	zassert_ok(args.result);
+	zassert_equal(args.response_size, sizeof(response));
 }
 
 ZTEST_USER(espi, test_host_command_typec_status)
@@ -71,28 +72,9 @@ ZTEST_USER(espi, test_host_command_typec_status)
 	struct host_cmd_handler_args args =
 		BUILD_HOST_COMMAND(EC_CMD_TYPEC_STATUS, 0, response, params);
 
-	zassert_ok(host_command_process(&args), NULL);
-	zassert_ok(args.result, NULL);
-	zassert_equal(args.response_size, sizeof(response), NULL);
-}
-
-ZTEST_USER(espi, test_host_command_usb_pd_get_amode)
-{
-	/* Only test we've enabled the command */
-	struct ec_params_usb_pd_get_mode_request params = {
-		.port = PORT,
-		.svid_idx = 0,
-	};
-	struct ec_params_usb_pd_get_mode_response response;
-	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
-		EC_CMD_USB_PD_GET_AMODE, 0, response, params);
-
-	zassert_ok(host_command_process(&args), NULL);
-	zassert_ok(args.result, NULL);
-	/* Note: with no SVIDs the response size is the size of the svid field.
-	 * See the usb alt mode test for verifying larger struct sizes
-	 */
-	zassert_equal(args.response_size, sizeof(response.svid), NULL);
+	zassert_ok(host_command_process(&args));
+	zassert_ok(args.result);
+	zassert_equal(args.response_size, sizeof(response));
 }
 
 ZTEST_USER(espi, test_host_command_gpio_get_v0)
@@ -108,17 +90,17 @@ ZTEST_USER(espi, test_host_command_gpio_get_v0)
 
 	set_ac_enabled(true);
 
-	zassert_ok(host_command_process(&args), NULL);
-	zassert_ok(args.result, NULL);
-	zassert_equal(args.response_size, sizeof(response), NULL);
-	zassert_true(response.val, NULL);
+	zassert_ok(host_command_process(&args));
+	zassert_ok(args.result);
+	zassert_equal(args.response_size, sizeof(response));
+	zassert_true(response.val);
 
 	set_ac_enabled(false);
 
-	zassert_ok(host_command_process(&args), NULL);
-	zassert_ok(args.result, NULL);
-	zassert_equal(args.response_size, sizeof(response), NULL);
-	zassert_false(response.val, NULL);
+	zassert_ok(host_command_process(&args));
+	zassert_ok(args.result);
+	zassert_equal(args.response_size, sizeof(response));
+	zassert_false(response.val);
 }
 
 ZTEST_USER(espi, test_host_command_gpio_get_v1_get_by_name)
@@ -137,19 +119,19 @@ ZTEST_USER(espi, test_host_command_gpio_get_v1_get_by_name)
 
 	set_ac_enabled(true);
 
-	zassert_ok(host_command_process(&args), NULL);
-	zassert_ok(args.result, NULL);
+	zassert_ok(host_command_process(&args));
+	zassert_ok(args.result);
 	zassert_equal(args.response_size, sizeof(response.get_value_by_name),
 		      NULL);
-	zassert_true(response.get_info.val, NULL);
+	zassert_true(response.get_info.val);
 
 	set_ac_enabled(false);
 
-	zassert_ok(host_command_process(&args), NULL);
-	zassert_ok(args.result, NULL);
+	zassert_ok(host_command_process(&args));
+	zassert_ok(args.result);
 	zassert_equal(args.response_size, sizeof(response.get_value_by_name),
 		      NULL);
-	zassert_false(response.get_info.val, NULL);
+	zassert_false(response.get_info.val);
 }
 
 ZTEST_USER(espi, test_host_command_gpio_get_v1_get_count)
@@ -214,7 +196,7 @@ ZTEST_USER(espi, test_host_command_gpio_set)
 		BUILD_HOST_COMMAND_PARAMS(EC_CMD_GPIO_SET, 0, p);
 
 	/* Force value to 1 to see change */
-	zassume_ok(gpio_pin_set_dt(gp, 1), NULL);
+	zassert_ok(gpio_pin_set_dt(gp, 1), NULL);
 
 	zassert_ok(host_command_process(&args), NULL);
 	zassert_equal(gpio_pin_get_dt(gp), p.val, NULL);

@@ -3,25 +3,26 @@
  * found in the LICENSE file.
  */
 
-#define DT_DRV_COMPAT cros_isl923x_emul
-
-#include <zephyr/device.h>
-#include <zephyr/drivers/i2c.h>
-#include <zephyr/drivers/i2c_emul.h>
-#include <zephyr/drivers/emul.h>
-#include <errno.h>
-#include <zephyr/sys/__assert.h>
-#include <zephyr/ztest.h>
-
 #include "driver/charger/isl923x.h"
 #include "driver/charger/isl923x_public.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
-#include "i2c.h"
 #include "emul/emul_stub_device.h"
+#include "i2c.h"
 
+#include <errno.h>
+
+#include <zephyr/device.h>
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/i2c_emul.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/__assert.h>
+#include <zephyr/ztest.h>
+
+#define DT_DRV_COMPAT cros_isl923x_emul
+
 LOG_MODULE_REGISTER(isl923x_emul, CONFIG_ISL923X_EMUL_LOG_LEVEL);
 
 /** Mask used for the charge current register */
@@ -197,6 +198,17 @@ void raa489000_emul_set_acok_pin(const struct emul *emulator, uint16_t value)
 		data->info_2_reg |= RAA489000_INFO2_ACOK;
 	else
 		data->info_2_reg &= ~RAA489000_INFO2_ACOK;
+}
+
+void raa489000_emul_set_state_machine_state(const struct emul *emulator,
+					    uint16_t value)
+{
+	struct isl923x_emul_data *data = emulator->data;
+
+	data->info_2_reg &=
+		~(RAA489000_INFO2_STATE_MASK << RAA489000_INFO2_STATE_SHIFT);
+	data->info_2_reg |= (value & RAA489000_INFO2_STATE_MASK)
+			    << RAA489000_INFO2_STATE_SHIFT;
 }
 
 /** Convenience macro for reading 16-bit registers */
@@ -434,7 +446,7 @@ static int emul_isl923x_init(const struct emul *emul,
 		},                                                             \
 	}; \
 	EMUL_DT_INST_DEFINE(n, emul_isl923x_init, &isl923x_emul_data_##n,        \
-			    &isl923x_emul_cfg_##n, &i2c_common_emul_api)
+			    &isl923x_emul_cfg_##n, &i2c_common_emul_api, NULL)
 
 DT_INST_FOREACH_STATUS_OKAY(INIT_ISL923X)
 

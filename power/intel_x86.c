@@ -17,6 +17,7 @@
 #include "power/intel_x86.h"
 #include "power_button.h"
 #include "system.h"
+#include "system_boot_time.h"
 #include "task.h"
 #include "util.h"
 #include "vboot.h"
@@ -381,7 +382,7 @@ enum power_state common_intel_x86_power_handle_state(enum power_state state)
 		return POWER_S4; /* Power down to the next state */
 
 	case POWER_S5S3:
-		/* fallthrough */
+		__fallthrough;
 	case POWER_S4S3:
 		if (!power_has_signals(IN_PGOOD_ALL_CORE)) {
 			/* Required rail went away */
@@ -582,6 +583,8 @@ void common_intel_x86_handle_rsmrst(enum power_state state)
 		msleep(10);
 
 	gpio_set_level(GPIO_PCH_RSMRST_L, rsmrst_in);
+
+	update_ap_boot_time(RSMRST);
 
 	CPRINTS("Pass through GPIO_PG_EC_RSMRST_ODL: %d", rsmrst_in);
 

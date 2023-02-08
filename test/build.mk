@@ -21,8 +21,10 @@ test-list-host=$(TEST_LIST_HOST)
 else
 test-list-host = accel_cal
 test-list-host += aes
+test-list-host += always_memset
 test-list-host += base32
 test-list-host += battery_get_params_smart
+test-list-host += benchmark
 test-list-host += bklight_lid
 test-list-host += bklight_passthru
 test-list-host += body_detection
@@ -46,6 +48,7 @@ test-list-host += fp
 test-list-host += fpsensor
 test-list-host += fpsensor_crypto
 test-list-host += fpsensor_state
+test-list-host += gettimeofday
 test-list-host += gyro_cal
 test-list-host += hooks
 test-list-host += host_command
@@ -83,6 +86,7 @@ test-list-host += power_button
 test-list-host += printf
 test-list-host += queue
 test-list-host += rgb_keyboard
+test-list-host += rollback_secret
 test-list-host += rsa
 test-list-host += rsa3
 test-list-host += rtc
@@ -96,8 +100,10 @@ test-list-host += static_if_error
 # toolchain's C standard library, so these tests are actually testing the
 # toolchain's C standard library.
 test-list-host += stdlib
+test-list-host += std_vector
 test-list-host += system
 test-list-host += thermal
+test-list-host += timer
 test-list-host += timer_dos
 test-list-host += uptime
 test-list-host += usb_common
@@ -157,10 +163,16 @@ cov-dont-test += rsa
 
 cov-test-list-host = $(filter-out $(cov-dont-test), $(test-list-host))
 
+abort-y=abort.o
 accel_cal-y=accel_cal.o
 aes-y=aes.o
+# The purpose of the always_memset test is to ensure the functionality of
+# always_memset during high levels of optimization.
+%/test/always_memset.o: CFLAGS += -O3
+always_memset-y=always_memset.o
 base32-y=base32.o
 battery_get_params_smart-y=battery_get_params_smart.o
+benchmark-y=benchmark.o
 bklight_lid-y=bklight_lid.o
 bklight_passthru-y=bklight_passthru.o
 body_detection-y=body_detection.o body_detection_data_literals.o motion_common.o
@@ -178,6 +190,7 @@ cortexm_fpu-y=cortexm_fpu.o
 crc-y=crc.o
 debug-y=debug.o
 entropy-y=entropy.o
+exception-y=exception.o
 extpwr_gpio-y=extpwr_gpio.o
 fan-y=fan.o
 flash-y=flash.o
@@ -187,6 +200,9 @@ fpsensor-y=fpsensor.o
 fpsensor_crypto-y=fpsensor_crypto.o
 fpsensor_hw-y=fpsensor_hw.o
 fpsensor_state-y=fpsensor_state.o
+ftrapv-y=ftrapv.o
+gettimeofday-y=gettimeofday.o
+global_initialization-y=global_initialization.o
 gyro_cal-y=gyro_cal.o gyro_cal_init_for_test.o
 hooks-y=hooks.o
 host_command-y=host_command.o
@@ -212,17 +228,24 @@ online_calibration-y=online_calibration.o
 online_calibration_spoof-y=online_calibration_spoof.o gyro_cal_init_for_test.o
 rgb_keyboard-y=rgb_keyboard.o
 kasa-y=kasa.o
+ifeq ($(USE_BUILTIN_STDLIB), 0)
+libc_printf-y=libc_printf.o
+endif
+libcxx-y=libcxx.o
 mpu-y=mpu.o
 mutex-y=mutex.o
 newton_fit-y=newton_fit.o
+panic-y=panic.o
 panic_data-y=panic_data.o
 pingpong-y=pingpong.o
 power_button-y=power_button.o
 powerdemo-y=powerdemo.o
 printf-y=printf.o
 queue-y=queue.o
+rng_benchmark-y=rng_benchmark.o
 rollback-y=rollback.o
 rollback_entropy-y=rollback_entropy.o
+rollback_secret-y=rollback_secret.o
 rsa-y=rsa.o
 rsa3-y=rsa.o
 rtc-y=rtc.o
@@ -234,6 +257,7 @@ sha256_unrolled-y=sha256.o
 shmalloc-y=shmalloc.o
 static_if-y=static_if.o
 stdlib-y=stdlib.o
+std_vector-y=std_vector.o
 stm32f_rtc-y=stm32f_rtc.o
 stress-y=stress.o
 system-y=system.o
@@ -241,6 +265,8 @@ system_is_locked-y=system_is_locked.o
 thermal-y=thermal.o
 timer_calib-y=timer_calib.o
 timer_dos-y=timer_dos.o
+timer-y=timer.o
+tpm_seed_clear-y=tpm_seed_clear.o
 uptime-y=uptime.o
 usb_common-y=usb_common_test.o fake_battery.o
 usb_pd_int-y=usb_pd_int.o
@@ -300,3 +326,7 @@ static_if_error-y=static_if_error.o.cmd
 run-genvif_test:
 	@echo "  TEST    genvif_test"
 	@test/genvif/genvif.sh
+
+# This test requires C++ exceptions to be enabled.
+$(out)/RW/test/exception.o: CXXFLAGS+=-fexceptions
+$(out)/RO/test/exception.o: CXXFLAGS+=-fexceptions

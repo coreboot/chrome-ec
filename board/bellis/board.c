@@ -28,8 +28,8 @@
 #include "i2c.h"
 #include "i2c_bitbang.h"
 #include "it8801.h"
-#include "keyboard_scan.h"
 #include "keyboard_backlight.h"
+#include "keyboard_scan.h"
 #include "lid_switch.h"
 #include "panic.h"
 #include "power.h"
@@ -53,6 +53,7 @@ static void tcpc_alert_event(enum gpio_signal signal)
 	schedule_deferred_pd_interrupt(0 /* port */);
 }
 
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 /******************************************************************************/
@@ -234,14 +235,6 @@ int board_set_active_charge_port(int charge_port)
 	}
 
 	return EC_SUCCESS;
-}
-
-void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
-			    int charge_mv)
-{
-	charge_ma = (charge_ma * 95) / 100;
-	charge_set_input_current_limit(
-		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
 }
 
 int board_discharge_on_ac(int enable)

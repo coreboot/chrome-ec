@@ -3,20 +3,22 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/ztest.h>
-#include <zephyr/drivers/emul.h>
-#include <zephyr/kernel.h>
-#include <zephyr/ztest_assert.h>
-#include <zephyr/drivers/i2c_emul.h>
-
 #include "keyboard_config.h"
 #include "mkbp_fifo.h"
 #include "test/drivers/test_state.h"
+
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/i2c_emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
+#include <zephyr/ztest_assert.h>
 
 /* Tests for Matrix Keyboard Protocol (MKBP) */
 
 /* Largest event size that we support */
 #define KEY_MATRIX_EVENT_DATA_SIZE KEYBOARD_COLS_MAX
+
+#define KEY_HOST_EVENT64_DATA_SIZE sizeof(uint64_t)
 
 #define MAX_EVENT_DATA_SIZE KEY_MATRIX_EVENT_DATA_SIZE
 
@@ -74,6 +76,46 @@ ZTEST_F(mkbp_fifo, test_fifo_add_keyboard_key_matrix_event)
 	zassert_mem_equal(fixture->input_event_data, out,
 			  KEY_MATRIX_EVENT_DATA_SIZE, NULL);
 	zassert_equal(out[KEY_MATRIX_EVENT_DATA_SIZE], 0, NULL);
+}
+
+ZTEST_F(mkbp_fifo, test_fifo_add_unknown_event)
+{
+	uint8_t out[KEY_MATRIX_EVENT_DATA_SIZE + 1];
+
+	memset(out, 0, sizeof(out));
+
+	fill_array_with_incrementing_numbers(fixture->input_event_data,
+					     KEY_MATRIX_EVENT_DATA_SIZE);
+
+	/* Keyboard Key Matrix Event */
+	zassert_ok(mkbp_fifo_add(EC_MKBP_EVENT_COUNT,
+				 fixture->input_event_data),
+		   NULL);
+
+	zassert_equal(mkbp_fifo_get_next_event(out, EC_MKBP_EVENT_COUNT),
+		      -EC_ERROR_UNKNOWN);
+}
+
+ZTEST_F(mkbp_fifo, test_fifo_add_keyboard_host_event64)
+{
+	uint8_t out[KEY_MATRIX_EVENT_DATA_SIZE + 1];
+
+	memset(out, 0, sizeof(out));
+
+	fill_array_with_incrementing_numbers(fixture->input_event_data,
+					     KEY_HOST_EVENT64_DATA_SIZE);
+
+	zassert_ok(mkbp_fifo_add(EC_MKBP_EVENT_HOST_EVENT64,
+				 fixture->input_event_data),
+		   NULL);
+
+	int dequeued_data_size =
+		mkbp_fifo_get_next_event(out, EC_MKBP_EVENT_HOST_EVENT64);
+
+	zassert_equal(dequeued_data_size, KEY_HOST_EVENT64_DATA_SIZE, NULL);
+	zassert_mem_equal(fixture->input_event_data, out,
+			  KEY_HOST_EVENT64_DATA_SIZE, NULL);
+	zassert_equal(out[KEY_HOST_EVENT64_DATA_SIZE], 0, NULL);
 }
 
 ZTEST_F(mkbp_fifo, test_fifo_depth_update)

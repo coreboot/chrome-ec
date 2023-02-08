@@ -55,6 +55,9 @@
 /* Full-capacity change reqd for host event */
 #define LFCC_EVENT_THRESH 5
 
+/* Max string size in the SB spec is 31. */
+#define SB_MAX_STR_SIZE 31
+
 /* Battery index, only used with CONFIG_BATTERY_V2. */
 enum battery_index {
 	BATT_IDX_INVALID = -1,
@@ -73,8 +76,14 @@ FORWARD_DECLARE_ENUM(battery_present){
 	BP_NOT_SURE,
 };
 
+/*
+ * BATTERY_CUTOFF_STATE_IN_PROGRESS: Battery cutoff has begun but not completed.
+ * BATTERY_CUTOFF_STATE_PENDING: Battery cutoff is requested by the
+ * AP but hasn't started.
+ */
 enum battery_cutoff_states {
 	BATTERY_CUTOFF_STATE_NORMAL = 0,
+	BATTERY_CUTOFF_STATE_IN_PROGRESS,
 	BATTERY_CUTOFF_STATE_CUT_OFF,
 	BATTERY_CUTOFF_STATE_PENDING,
 };
@@ -96,13 +105,12 @@ struct battery_static_info {
 	 * char device_name[32];
 	 * char chemistry[32];
 	 */
-	/* Max string size in the SB spec is 31. */
-	char manufacturer_ext[32]; /* SB_MANUFACTURER_NAME */
-	char model_ext[32]; /* SB_DEVICE_NAME */
-	char serial_ext[32]; /* SB_SERIAL_NUMBER */
-	char type_ext[32]; /* SB_DEVICE_CHEMISTRY */
+	char manufacturer_ext[SB_MAX_STR_SIZE + 1]; /* SB_MANUFACTURER_NAME */
+	char model_ext[SB_MAX_STR_SIZE + 1]; /* SB_DEVICE_NAME */
+	char serial_ext[SB_MAX_STR_SIZE + 1]; /* SB_SERIAL_NUMBER */
+	char type_ext[SB_MAX_STR_SIZE + 1]; /* SB_DEVICE_CHEMISTRY */
 #ifdef CONFIG_BATTERY_VENDOR_PARAM
-	uint8_t vendor_param[32];
+	uint8_t vendor_param[SB_MAX_STR_SIZE + 1];
 #endif
 };
 
@@ -157,6 +165,13 @@ int battery_get_avg_voltage(void); /* in mV */
 #define BATT_FLAG_BAD_AVERAGE_CURRENT 0x00001000
 /* All of the above BATT_FLAG_BAD_* bits */
 #define BATT_FLAG_BAD_ANY 0x000017fc
+/* Flags which are set or unset on every access (via battery_get_params) */
+#define BATT_FLAG_VOLATILE                                                  \
+	(BATT_FLAG_BAD_ANY | BATT_FLAG_WANT_CHARGE | BATT_FLAG_RESPONSIVE | \
+	 BATT_FLAG_IMBALANCED_CELL)
+
+/* The flag of prechare when the battery voltage is lower than voltage_min */
+#define BATT_FLAG_DEEP_CHARGE 0x00010000
 
 /* Battery constants */
 struct battery_info {
@@ -218,7 +233,7 @@ enum battery_present battery_is_present(void);
  * If battery support is not enabled and the board does not specifically
  * provide its own implementation, assume a battery is never present.
  */
-static inline enum battery_present battery_is_present(void)
+test_mockable_static_inline enum battery_present battery_is_present(void)
 {
 	return BP_NO;
 }
@@ -435,6 +450,11 @@ int battery_imbalance_mv(void);
  * @return EC_RES_INVALID_COMMAND if the battery doesn't support.
  */
 int board_cut_off_battery(void);
+
+/**
+ * Return if the battery start cut off.
+ */
+int battery_cutoff_in_progress(void);
 
 /**
  * Return if the battery has been cut off.

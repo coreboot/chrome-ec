@@ -5,7 +5,6 @@
 
 #include "common.h"
 #include "compile_time_macros.h"
-
 #include "i2c.h"
 
 /* I2C port map configuration */
@@ -68,7 +67,7 @@ const struct i2c_port_t i2c_ports[] = {
 	},
 	{
 		/* I2C7 */
-		.name = "eeprom",
+		.name = "charger,eeprom,wlc",
 		.port = I2C_PORT_EEPROM,
 		.kbps = 400,
 		.scl = GPIO_EC_I2C_MISC_SCL_R,

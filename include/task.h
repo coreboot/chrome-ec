@@ -8,11 +8,16 @@
 #ifndef __CROS_EC_TASK_H
 #define __CROS_EC_TASK_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "atomic_t.h"
 #include "common.h"
 #include "compile_time_macros.h"
-#include <stdbool.h>
 #include "task_id.h"
+
+#include <stdbool.h>
 
 /* Task event bitmasks */
 /* Tasks may use the bits in TASK_EVENT_CUSTOM_BIT for their own events */
@@ -466,5 +471,9 @@ struct irq_def {
 #endif /* !defined(CONFIG_DFU_BOOTMANAGER_MAIN) */
 #endif /* CONFIG_COMMON_RUNTIME */
 #endif /* !CONFIG_ZEPHYR */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __CROS_EC_TASK_H */

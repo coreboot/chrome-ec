@@ -3,6 +3,11 @@
  * found in the LICENSE file.
  */
 
+#ifndef __TEST_DRIVERS_TEST_MOCKS_H
+#define __TEST_DRIVERS_TEST_MOCKS_H
+
+#include <stdint.h>
+
 #include <zephyr/fff.h>
 
 /*
@@ -112,3 +117,9 @@ DECLARE_FAKE_VOID_FUNC(assert_post_action, const char *, unsigned int);
 
 /* Mocks for common/lid_angle.c */
 DECLARE_FAKE_VOID_FUNC(lid_angle_peripheral_enable, int);
+
+/* Mocks for gpio.h */
+DECLARE_FAKE_VALUE_FUNC(int, gpio_config_unused_pins);
+DECLARE_FAKE_VALUE_FUNC(int, gpio_configure_port_pin, int, int, int);
+
+#endif /* __TEST_DRIVERS_TEST_MOCKS_H */

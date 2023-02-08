@@ -2,26 +2,109 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+config BUG_249829957
+	bool "Tracking b/249829957"
+
 config LINK_TEST_SUITE_DEFAULT
 	bool "Link and test the default test suite"
+
+config LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS
+	bool "Link and test the default console commands test suite"
+
+config LINK_TEST_SUITE_ANX7447
+	bool "Link and test the anx7447 tests"
 
 config LINK_TEST_SUITE_AP_MUX_CONTROL
 	bool "Link and test the ap_mux_control tests"
 
+config LINK_TEST_SUITE_AP_VDM_CONTROL
+	bool "Link and test the ap_vdm_control tests"
+
+config LINK_TEST_SUITE_BUTTON
+	bool "Link tests for common/button.c"
+
 config LINK_TEST_SUITE_CHARGESPLASH
 	bool "Link and test the chargesplash tests"
+
+config LINK_TEST_SUITE_COMMON_CBI
+	bool "Link and execute the common/cbi.c tests"
+
+config LINK_TEST_SUITE_COMMON_CBI_GPIO
+	bool "Link and execute the common/cbi_gpio.c tests"
+
+config LINK_TEST_SUITE_COMMON_CHARGER
+	bool "Link and execute the common/charger.c tests"
+
+config LINK_TEST_SUITE_FLASH
+	bool "Link and execute the common/flash.c tests"
+	help
+	  Include the test suite exercising flash-related code in the binary.
+
+config LINK_TEST_SUITE_HOST_COMMANDS
+	select PLATFORM_EC_CHARGE_STATE_DEBUG
+	bool "Link and test the host command tests"
+
+config LINK_TEST_SUITE_HOST_COMMAND_READ_MEMMAP
+	bool "Link and test the host command read memmap tests"
 
 config LINK_TEST_SUITE_ISL923X
 	bool "Link and test the isl923x tests"
 
+config LINK_TEST_SUITE_I2C_CONTROLLER
+	bool "Link and test the i2c_controller tests"
+
+config LINK_TEST_SUITE_IT8XXX2_HW_SHA256
+	bool "Link and test the it8xxx2_hw_sha256 tests"
+	help
+	  Include the it8xxx2_hw_sha256 test suite
+	  in the binary.
+
 config LINK_TEST_SUITE_KEYBOARD_SCAN
 	bool "Link and test the keyboard_scan tests"
+	select PLATFORM_EC_MKBP_EVENT_WAKEUP_MASK
+	select PLATFORM_EC_MKBP_HOST_EVENT_WAKEUP_MASK
 
 config LINK_TEST_SUITE_LED_DRIVER
 	bool "Link and test the led_driver tests"
 
+config LINK_TEST_SUITE_LOCATE_CHIP_ALTS
+	bool "Link tests for alternate operations of the locate chip host cmd"
+	help
+	  Compile a binary that allows the non herobrine paths of the locate
+	  chip command to execute
+
 config LINK_TEST_SUITE_MKBP
 	bool "Link and test the mkbp tests"
+
+config LINK_TEST_SUITE_PANIC_OUTPUT
+	bool "Link and test the panic_output tests"
+
+config LINK_TEST_SUITE_POWER_HOST_SLEEP
+	bool "Link and run the power/host_sleep.c specific tests"
+
+config LINK_TEST_SUITE_PS8XXX
+	bool "Link and test the ps8xxx tests"
+
+config LINK_TEST_SUITE_RT9490
+	bool "Link and test the rt9490 tests"
+
+config LINK_TEST_SUITE_SHIM_GPIO_ID
+	bool "Link and run the gpio tests"
+
+config LINK_TEST_SUITE_SHIM_PWM_HC
+	bool "Link and run the shim pwm_hc tests"
+
+config LINK_TEST_SUITE_SHIM_RTC
+	bool "Link and run the shim rtc tests"
+
+config LINK_TEST_SUITE_SYSTEM
+	bool "Link tests for common system code"
+
+config LINK_TEST_SUITE_TIMER
+	bool "Link and test the timer tests"
+
+config LINK_TEST_SUITE_USB_COMMON
+	bool "Link and test USB common code tests"
 
 config LINK_TEST_SUITE_USB_MALFUNCTION_SINK
 	bool "Link and test the usb_malfunction_sink tests"
@@ -29,16 +112,73 @@ config LINK_TEST_SUITE_USB_MALFUNCTION_SINK
 config LINK_TEST_SUITE_USB_PD_DPS
 	bool "Link and test the dps tests"
 
+config LINK_TEST_SUITE_USB_PORT_POWER_DUMB
+	bool "Link and test the usb_port_power_dumb tests"
+
 config LINK_TEST_SUITE_USB_RETIMER_FW_UPDATE
 	bool "Link and test the usb_retimer_fw_update tests"
 
 config LINK_TEST_SUITE_USBC_ALT_MODE
 	bool "Link and test the usbc_alt_mode tests"
 
+config LINK_TEST_SUITE_USBC_CONSOLE_PD
+	bool"Link and test the usbc_console_pd tests"
+
+config LINK_TEST_SUITE_USBC_CTVPD
+	bool "Link tests for charge-through VCONN-powered device support"
+	select EMUL_TCPCI_PARTNER_VPD
+	select LOG
+
+config LINK_TEST_SUITE_USBC_FRS
+	bool "Link tests for fast role swap support"
+	select LOG
+	select PLATFORM_EC_USB_PD_FRS
+
+config LINK_TEST_SUITE_USBC_LEGACY
+	bool "Link tests for common USBC legacy code"
+	help
+	  Include test coverage for legacy USB-C code. This is typically
+	  for obsolete functionality or unsupported hardware.
+
+config LINK_TEST_SUITE_USBC_OCP
+	bool "Link tests for common USBC OCP code"
+
+config LINK_TEST_SUITE_USBC_PPC
+	bool "Link tests for common USBC PPC code"
+
+config LINK_TEST_SUITE_USBC_SVDM_DFP_ONLY
+	bool "Link and test the usbc_svdm_dfp_only tests"
+
 config LINK_TEST_SUITE_USBC_TBT_MODE
 	bool "Link and test the usbc_tbt_mode tests"
 
-config LINK_TEST_SUITE_HOST_COMMANDS
-	bool "Link and test the host command tests"
+config LINK_TEST_SUITE_USBC_USB4_MODE
+	bool "Link and test the usbc_usb4_mode tests"
+	help
+	  Include the usbc_usb4 test suite in the binary.
+
+config LINK_TEST_SUITE_USBC_VCONN_SWAP
+	bool "Link and test the usbc_vconn_swap tests"
+	help
+	  Include the test suite exercising VCONN Swap behaviors in the binary.
+
+config LINK_TEST_SUITE_CONSOLE
+	bool "Link and test the console tests"
+	select UART_INTERRUPT_DRIVEN
+
+config LINK_TEST_SUITE_HOST_CMD_THREAD
+	bool "Link and test the host command thread override tests"
+
+config LINK_TEST_SUITE_PI3USB9201
+	bool "Link and test the pi3usb9201 tests"
+
+config LINK_TEST_SUITE_MEMMAP
+	bool "Link and test memory mapped tests for common/flash.c"
+	select PLATFORM_EC_MAPPED_STORAGE
+
+config LINK_TEST_SUITE_LED_COMMON
+	bool "Link and test the led_common.c file"
+	depends on !PLATFORM_EC_LED_DT
+	select PLATFORM_EC_LED_COMMON
 
 source "Kconfig.zephyr"

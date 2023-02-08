@@ -13,6 +13,9 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+/* Disable console commands to help save space */
+#undef CONFIG_CMD_POWERINDEBUG
+
 #define CONFIG_MP2964
 
 /* Barrel Jack */
@@ -175,7 +178,7 @@ enum temp_sensor_id {
 };
 
 enum pwm_channel {
-	PWM_CH_LED_GREEN, /* PWM0 */
+	PWM_CH_LED_WHITE, /* PWM0 */
 	PWM_CH_FAN, /* PWM5 */
 	PWM_CH_LED_RED, /* PWM2 */
 	PWM_CH_COUNT

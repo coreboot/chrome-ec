@@ -8,13 +8,21 @@
 #ifndef __CROS_EC_COMMON_H
 #define __CROS_EC_COMMON_H
 
-#include <stdint.h>
-#include <inttypes.h>
+/*
+ * I don't know why but gcc's preprocessor doesn't like the autoconf.h file,
+ * sometimes. Adding a #line directive anywhere in this file seems to fix the
+ * problem. #line marks the *next* line, so it is off by one.
+ */
+#line 17
 
 #include "compile_time_macros.h"
 
+#include <inttypes.h>
+#include <stdint.h>
+
 #ifdef CONFIG_ZEPHYR
-#include <fpu.h>
+#include "fpu.h"
+
 #include <zephyr/sys/util.h>
 #include <zephyr/toolchain.h>
 #ifdef CONFIG_ZTEST
@@ -192,6 +200,17 @@
  */
 #define __warn_unused_result __attribute__((warn_unused_result))
 
+/**
+ * @brief Attribute used to annotate intentional fallthrough between switch
+ * labels.
+ *
+ * See https://clang.llvm.org/docs/AttributeReference.html#fallthrough and
+ * https://gcc.gnu.org/onlinedocs/gcc/Statement-Attributes.html.
+ */
+#ifndef __fallthrough
+#define __fallthrough __attribute__((fallthrough))
+#endif
+
 /*
  * Macros for combining bytes into larger integers. _LE and _BE signify little
  * and big endian versions respectively.
@@ -246,14 +265,24 @@
 
 /*
  * Define test_mockable and test_mockable_static for mocking
- * functions.
+ * functions. Don't use test_mockable in .h files.
  */
 #ifdef TEST_BUILD
 #define test_mockable __attribute__((weak))
 #define test_mockable_static __attribute__((weak))
 #define test_mockable_static_inline __attribute__((weak))
+/*
+ * Tests implemented with ztest add mock implementations that actually return,
+ * so they should not be marked "noreturn". See
+ * test/drivers/default/src/panic_output.c.
+ */
+#ifdef CONFIG_ZTEST
 #define test_mockable_noreturn __attribute__((weak))
 #define test_mockable_static_noreturn __attribute__((weak))
+#else
+#define test_mockable_noreturn noreturn __attribute__((weak))
+#define test_mockable_static_noreturn noreturn __attribute__((weak))
+#endif
 #define test_export_static
 #else
 #define test_mockable

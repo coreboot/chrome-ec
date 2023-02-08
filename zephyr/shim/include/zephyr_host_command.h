@@ -10,8 +10,9 @@
 #endif
 #define __CROS_EC_ZEPHYR_HOST_COMMAND_H
 
-#include <zephyr/init.h>
 #include <stdbool.h>
+
+#include <zephyr/init.h>
 
 /* Initializes and runs the host command handler loop.  */
 void host_command_task(void *u);
@@ -27,11 +28,12 @@ bool in_host_command_main(void);
 /**
  * See include/host_command.h for documentation.
  */
-#define DECLARE_HOST_COMMAND(_command, _routine, _version_mask)          \
-	STRUCT_SECTION_ITERABLE(host_command, _cros_hcmd_##_command) = { \
-		.command = _command,                                     \
-		.handler = _routine,                                     \
-		.version_mask = _version_mask,                           \
+#define DECLARE_HOST_COMMAND(_command, _routine, _version_mask)         \
+	static const STRUCT_SECTION_ITERABLE(host_command,              \
+					     _cros_hcmd_##_command) = { \
+		.command = _command,                                    \
+		.handler = _routine,                                    \
+		.version_mask = _version_mask,                          \
 	}
 #else /* !CONFIG_PLATFORM_EC_HOSTCMD */
 

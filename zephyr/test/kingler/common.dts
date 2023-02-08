@@ -7,6 +7,37 @@
 #include <npcx_emul.dts>
 
 / {
+	usbc {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port0@0 {
+			compatible = "named-usbc-port";
+			reg = <0>;
+			usb-mux-chain-0 {
+				compatible = "cros-ec,usb-mux-chain";
+				usb-muxes = <&virtual_mux_0>;
+			};
+		};
+		port1@1 {
+			compatible = "named-usbc-port";
+			reg = <1>;
+			usb-mux-chain-1 {
+				compatible = "cros-ec,usb-mux-chain";
+				usb-muxes = <&virtual_mux_1>;
+			};
+		};
+		port0-muxes {
+			virtual_mux_0: virtual-mux-0 {
+				compatible = "cros-ec,usbc-mux-virtual";
+			};
+		};
+		port1-muxes {
+			virtual_mux_1: virtual-mux-1 {
+				compatible = "cros-ec,usbc-mux-virtual";
+			};
+		};
+	};
+
 	/* These are temporary just to get the test to build.
 	 * Should be replaced with the correct accel drivers,
 	 * but we're not testing that code right now anyway.
@@ -52,11 +83,11 @@
 	};
 	named-i2c-ports {
 		compatible = "named-i2c-ports";
-		i2c_sensor: sensor {
+		i2c_sensor: i2c-sensor {
 			i2c-port = <&i2c0_0>;
 			enum-names = "I2C_PORT_SENSOR";
 		};
-		i2c_eeprom: sensor {
+		i2c_eeprom: i2c-eeprom {
 			i2c-port = <&i2c3_0>;
 			enum-names = "I2C_PORT_EEPROM";
 		};

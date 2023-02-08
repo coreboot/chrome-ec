@@ -18,15 +18,49 @@ config PLATFORM_EC_CONSOLE_CMD_SYSINFO
 	  Enable the sysinfo console command, which shows statistics
 	  about the current image copy running, reset flags, etc.
 
+config PLATFORM_EC_HIBERNATE
+	bool
+	help
+	  Enable system hibernation.
+	  The type of hibernation supported must be selected.
+
+choice PLATFORM_EC_HIBERNATE_TYPE
+	prompt "Choose a hibernate type"
+	default PLATFORM_EC_HIBERNATE_PSL if DT_HAS_NUVOTON_NPCX_POWER_PSL_ENABLED && SOC_FAMILY_NPCX
+	default PLATFORM_EC_HIBERNATE_WAKE_PINS if !DT_HAS_NUVOTON_NPCX_POWER_PSL_ENABLED || !SOC_FAMILY_NPCX
+	help
+	  Select the type of hibernation supported. Either
+	  PLATFORM_EC_HIBERNATE_PSL (for power switch logic support) or
+	  PLATFORM_EC_HIBERNATE_WAKE_PINS (using wake pins) are
+	  supported.
+
 config PLATFORM_EC_HIBERNATE_PSL
 	bool "System hibernating with PSL (Power Switch Logic) mechanism"
-	default y
 	depends on DT_HAS_NUVOTON_NPCX_POWER_PSL_ENABLED
 	depends on SOC_FAMILY_NPCX
+	select PLATFORM_EC_HIBERNATE
 	help
 	  Use PSL (Power Switch Logic) for hibernating. It turns off VCC power
 	  rail for ultra-low power consumption and uses PSL inputs rely on VSBY
 	  power rail to wake up ec and the whole system.
+
+config PLATFORM_EC_HIBERNATE_WAKE_PINS
+	bool "System hibernating with wake-source pins"
+	select PLATFORM_EC_HIBERNATE
+	help
+	  Use wake source pins for hibernating. It turns off VCC power
+	  rail for ultra-low power consumption and uses a low power
+	  power rail. Changes on wake source pins will wake up the EC.
+
+endchoice # PLATFORM_EC_HIBERNATE_TYPE
+
+config PLATFORM_EC_HIBERNATE_DELAY_SEC
+	int "Delay in seconds from AP power off to hibernate"
+	depends on PLATFORM_EC_HIBERNATE
+	default 3600
+	help
+	  This value is the delay in seconds from when the AP enters G3
+	  to when the system is hibernated.
 
 config PLATFORM_EC_SYSTEM_PRE_INIT_PRIORITY
 	int "System pre-initialization priority"
@@ -47,5 +81,21 @@ config PLATFORM_EC_FW_RESET_VECTOR
 	  retrieving the firmware reset vector. The function that
 	  needs to be provided is system_get_fw_reset_vector that
 	  will return the address of the reset vector.
+
+config PLATFORM_EC_SYSTEM_SAFE_MODE
+	bool "Enable System Safe Mode"
+	default n
+	depends on (CPU_CORTEX_M || ARCH_POSIX) && !TASK_HOSTCMD_THREAD_MAIN
+	help
+	  This enables system safe mode for retrieving system state after
+	  a panic occurs. System safe mode only runs briefly after a panic.
+
+config PLATFORM_EC_SYSTEM_SAFE_MODE_TIMEOUT_MSEC
+	int "System safe mode timeout"
+	default 2000
+	depends on PLATFORM_EC_SYSTEM_SAFE_MODE
+	help
+	  Safe mode will force a system reset after this timeout. The system may
+	  reset sooner if all safe mode tasks are completed before the timeout.
 
 endif # PLATFORM_EC

@@ -8,14 +8,14 @@
 #ifndef __CROS_EC_SYSTEM_H
 #define __CROS_EC_SYSTEM_H
 
-#include <stdnoreturn.h>
-
 #include "atomic.h"
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "timer.h"
+
+#include <stdnoreturn.h>
 
 #ifdef CONFIG_ZEPHYR
 #ifdef CONFIG_CPU_CORTEX_M
@@ -214,7 +214,7 @@ int system_jumped_late(void);
  * This may ONLY be called from within a HOOK_SYSJUMP handler.
  *
  * @param tag		Data type
- * @param size          Size of data; must be less than 255 bytes.
+ * @param size          Size of data; must be less than JUMP_TAG_MAX_SIZE bytes.
  * @param version       Data version, so that tag data can evolve as firmware
  *			is updated.
  * @param data		Pointer to data to save
@@ -372,13 +372,14 @@ const char *system_get_build_info(void);
  *
  * @param flags		Reset flags; see SYSTEM_RESET_* above.
  */
-#if (defined(TEST_FUZZ) || defined(CONFIG_ZTEST))
-test_mockable
+#if !(defined(TEST_FUZZ) || defined(CONFIG_ZTEST))
+#if defined(__cplusplus) && !defined(__clang__)
+[[noreturn]]
 #else
 noreturn
 #endif
-	void
-	system_reset(int flags);
+#endif
+	void system_reset(int flags);
 
 /**
  * Set a scratchpad register to the specified value.
@@ -656,6 +657,13 @@ void delay_sleep_by(uint32_t us);
  */
 void disable_deep_sleep(void);
 void enable_deep_sleep(void);
+
+/**
+ * This function is made visible for tests only, it allows overriding the RTC.
+ *
+ * @param seconds
+ */
+void system_set_rtc(uint32_t seconds);
 
 /**
  * Use hibernate module to set up an RTC interrupt at a given

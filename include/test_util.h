@@ -16,11 +16,13 @@ extern "C" {
 
 #include "common.h"
 #include "console.h"
+#include "math_util.h"
 #include "stack_trace.h"
 
 #ifdef CONFIG_ZTEST
-#include <zephyr/ztest.h>
 #include "ec_tasks.h"
+
+#include <zephyr/ztest.h>
 #endif /* CONFIG_ZTEST */
 
 /* This allows tests to be easily commented out in run_test for debugging */
@@ -54,6 +56,17 @@ extern "C" {
 #define __auto_type auto
 #endif
 
+/* Tests comparing complex types that cannot be easily formatted for printing
+ * may define TEST_OPERATOR_INHIBIT_PRINT_EVAL to inhibit printing of the
+ * compared values on failure.
+ */
+#ifdef TEST_OPERATOR_INHIBIT_PRINT_EVAL
+#define TEST_OPERATOR_PRINT_EVAL(fmt, op, _a, _b)
+#else
+#define TEST_OPERATOR_PRINT_EVAL(fmt, op, _a, _b) \
+	ccprintf("\t\tEVAL: " fmt " " #op " " fmt "\n", _a, _b)
+#endif
+
 #define TEST_OPERATOR(a, b, op, fmt)                                         \
 	do {                                                                 \
 		__auto_type _a = (a);                                        \
@@ -61,8 +74,7 @@ extern "C" {
 		if (!(_a op _b)) {                                           \
 			ccprintf("%s:%d: ASSERTION failed: %s " #op " %s\n", \
 				 __FILE__, __LINE__, #a, #b);                \
-			ccprintf("\t\tEVAL: " fmt " " #op " " fmt "\n", _a,  \
-				 _b);                                        \
+			TEST_OPERATOR_PRINT_EVAL(fmt, op, _a, _b);           \
 			task_dump_trace();                                   \
 			return EC_ERROR_UNKNOWN;                             \
 		} else {                                                     \
@@ -81,9 +93,7 @@ extern "C" {
 #define TEST_NEAR(a, b, epsilon, fmt) \
 	TEST_OPERATOR(ABS((a) - (b)), epsilon, <, fmt)
 
-#define __ABS(n) ((n) > 0 ? (n) : -(n))
-
-#define TEST_ASSERT_ABS_LESS(n, t) TEST_OPERATOR(__ABS(n), t, <, "%d")
+#define TEST_ASSERT_ABS_LESS(n, t) TEST_OPERATOR(ABS(n), t, <, "%d")
 
 #define TEST_ASSERT_ARRAY_EQ(s, d, n)                                        \
 	do {                                                                 \
@@ -124,6 +134,7 @@ enum test_state_t {
 	TEST_STATE_STEP_7,
 	TEST_STATE_STEP_8,
 	TEST_STATE_STEP_9,
+	TEST_STATE_STEP_10,
 	TEST_STATE_PASSED,
 	TEST_STATE_FAILED,
 };
@@ -187,7 +198,7 @@ void task_trigger_test_interrupt(void (*isr)(void));
  * to udelay() from interrupt generator are delegated to this function
  * automatically.
  */
-void interrupt_generator_udelay(unsigned us);
+void interrupt_generator_udelay(unsigned int us);
 
 #ifdef EMU_BUILD
 void wait_for_task_started(void);
@@ -414,7 +425,7 @@ struct unit_test {
  */
 #define ztest_unit_test_setup_teardown(fn, setup, teardown) \
 	{                                                   \
-#fn, fn, setup, teardown                    \
+		#fn, fn, setup, teardown                    \
 	}
 
 /**
@@ -474,19 +485,18 @@ void z_ztest_run_test_suite(const char *name, struct unit_test *suite);
  * can add the correct format (the zassert_equal_ptr), but others we just
  * don't know, so I'll just dump out the value in hex.
  */
-#define zassert(cond, msg, ...) TEST_ASSERT(cond)
-#define zassert_unreachable(msg, ...) TEST_ASSERT(0)
-#define zassert_true(cond, msg, ...) TEST_ASSERT(cond)
-#define zassert_false(cond, msg, ...) TEST_ASSERT(!(cond))
-#define zassert_ok(cond, msg, ...) TEST_ASSERT(!(cond))
-#define zassert_is_null(ptr, msg, ...) TEST_ASSERT((ptr) == NULL)
-#define zassert_not_null(ptr, msg, ...) TEST_ASSERT((ptr) != NULL)
-#define zassert_equal(a, b, msg, ...) TEST_EQ((a), (b), "0x%x")
-#define zassert_not_equal(a, b, msg, ...) TEST_NE((a), (b), "0x%x")
-#define zassert_equal_ptr(a, b, msg, ...) \
-	TEST_EQ((void *)(a), (void *)(b), "0x%x")
-#define zassert_within(a, b, d, msg, ...) TEST_NEAR((a), (b), (d), msg)
-#define zassert_mem_equal(buf, exp, size, msg, ...) \
+#define zassert(cond, ...) TEST_ASSERT(cond)
+#define zassert_unreachable(...) TEST_ASSERT(0)
+#define zassert_true(cond, ...) TEST_ASSERT(cond)
+#define zassert_false(cond, ...) TEST_ASSERT(!(cond))
+#define zassert_ok(cond, ...) TEST_ASSERT(!(cond))
+#define zassert_is_null(ptr, ...) TEST_ASSERT((ptr) == NULL)
+#define zassert_not_null(ptr, ...) TEST_ASSERT((ptr) != NULL)
+#define zassert_equal(a, b, ...) TEST_EQ((a), (b), "0x%x")
+#define zassert_not_equal(a, b, ...) TEST_NE((a), (b), "0x%x")
+#define zassert_equal_ptr(a, b, ...) TEST_EQ((void *)(a), (void *)(b), "0x%x")
+#define zassert_within(a, b, d, ...) TEST_NEAR((a), (b), (d), "%f")
+#define zassert_mem_equal(buf, exp, size, ...) \
 	TEST_ASSERT_ARRAY_EQ(buf, exp, size)
 #endif /* CONFIG_ZEPHYR */
 

@@ -90,7 +90,7 @@ test_static EC_TEST_RETURN test_my_function(void)
     bool condition = some_function();
 
     /* Check that the expected condition is correct. */
-    zassert_true(condition, NULL);
+    zassert_true(condition);
 
     return EC_SUCCESS;
 }
@@ -113,7 +113,7 @@ test_static EC_TEST_RETURN test_my_function(void)
 ```
 
 The only difference between those two versions of `test/my_test.c` is the
-assertion: `c zassert_true(condition, NULL);` versus `c TEST_EQ(condition, true,
+assertion: `c zassert_true(condition);` versus `c TEST_EQ(condition, true,
 "%d");`
 
 ### Specify the test cases to run
@@ -185,6 +185,17 @@ Make sure you test shows up in the "host" tests:
 (chroot) $ make print-host-tests | grep my_test
 host-my_test
 run-my_test
+```
+### Test Config File
+
+Add any test-specific configurations to the [test_config.h](https://source.chromium.org/chromiumos/chromiumos/codesearch/+/HEAD:src/platform/ec/test/test_config.h) file:
+
+```c
+#ifdef TEST_<my_test>
+/*
+ * Add test-specific configurations here.
+ */
+#endif
 ```
 
 ### Build and Run

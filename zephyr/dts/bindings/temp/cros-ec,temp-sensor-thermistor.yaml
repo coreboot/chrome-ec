@@ -5,16 +5,14 @@
 description: >
   Properties for a thermistor temperature sensor
 
-include: cros-ec,temp-sensor.yaml
-
 compatible: "cros-ec,temp-sensor-thermistor"
 
 properties:
-    adc:
-      required: true
-      type: phandle
-      description: The named adc channel
+  adc:
+    required: true
+    type: phandle
+    description: The named adc channel
 
-    thermistor:
-      type: phandle
-      description: Underlying thermistor device
+  thermistor:
+    type: phandle
+    description: Underlying thermistor device

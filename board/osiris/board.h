@@ -65,6 +65,9 @@
 #define PD_MAX_CURRENT_MA 3000
 #define PD_MAX_VOLTAGE_MV 20000
 
+#define CONFIG_CHARGER_PROFILE_OVERRIDE
+#define CONFIG_PWR_STATE_DISCHARGE_FULL
+
 /*
  * Macros for GPIO signals used in common code that don't match the
  * schematic names. Signal names in gpio.inc match the schematic and are
@@ -152,6 +155,8 @@
 #define RGB_GRID0_COL 12
 #define RGB_GRID0_ROW 1
 #define I2C_PORT_KBMCU I2C_PORT_RGBKB
+
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 #define CONFIG_KEYBOARD_FACTORY_TEST
 

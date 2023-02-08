@@ -6,17 +6,16 @@
 #ifndef __CROS_EC_CROS_CBI_H
 #define __CROS_EC_CROS_CBI_H
 
-#include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/kernel.h>
 
 /*
  * Macros are _INST_ types, so require DT_DRV_COMPAT to be defined.
  */
-#define DT_DRV_COMPAT named_cbi_ssfc_value
-#define CROS_CBI_LABEL "cros_cbi"
+#define DT_DRV_COMPAT cros_ec_cbi_ssfc_value
 
-#define CBI_SSFC_VALUE_COMPAT named_cbi_ssfc_value
+#define CBI_SSFC_VALUE_COMPAT DT_DRV_COMPAT
 #define CBI_SSFC_VALUE_ID(id) DT_CAT(CBI_SSFC_VALUE_, id)
 #define CBI_SSFC_VALUE_ID_WITH_COMMA(id) CBI_SSFC_VALUE_ID(id),
 #define CBI_SSFC_VALUE_INST_ENUM(inst, _) \

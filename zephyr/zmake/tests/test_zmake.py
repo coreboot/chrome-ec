@@ -11,21 +11,20 @@ import re
 import unittest.mock
 
 import pytest  # pylint:disable=import-error
+from testfixtures import LogCapture  # pylint:disable=import-error
 import zmake.build_config
 import zmake.jobserver
 import zmake.multiproc as multiproc
 import zmake.output_packers
 import zmake.project
 import zmake.toolchains
-from testfixtures import LogCapture  # pylint:disable=import-error
+
 
 OUR_PATH = os.path.dirname(os.path.realpath(__file__))
 
 
 class FakeProject:
     """A fake project which requests two builds and does no packing"""
-
-    # pylint: disable=too-few-public-methods
 
     def __init__(self):
         self.packer = unittest.mock.Mock()

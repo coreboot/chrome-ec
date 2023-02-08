@@ -86,6 +86,45 @@
  *              UPDATE_WRITE
  */
 
+/*
+ * BIST Mode
+ *
+ * BIST mode is implemented as follows. Note == means comparison (i.e. mode
+ * check) and = means assignment (i.e. mode change).
+ *
+ *
+ *                  +---------------+
+ *   +------------->|     RESET     |<-----------------------+
+ *   |              +-------+-------+                        |
+ *   |                      |                                |
+ *   |                      | INITIALIZED                    |
+ *   |                      v                                |
+ *   |              +---------------+  mode==BIST            |
+ *   |              |  INITIALIZED  |---------------+        |
+ *   |              +-------+-------+               |        |
+ *   |                      |                       |        |
+ *   |                      | mode==NORMAL          |        | mode=NORMAL
+ *   |                      |                       |        | bist_cmd=NONE
+ *   | DEVICE_DETECTED      |                       |        |
+ *   | && bist_cmd!=NONE    V                       V        |
+ *   | mode=BIST    +---------------+         +-----------+  |
+ *   +--------------|   ENABLED(*1) |         |    BIST   |--+
+ *   +------------->+------+--------+         +-----------+
+ *   |                     |
+ *   |                     | DEVICE_DETECTED
+ *   |                     |
+ *   | DEVICE_LOST         |
+ *   | bist_cmd=RF_CHARGE  V
+ *   | (*2)          +----------+
+ *   +---------------+ DETECTED |
+ *                   +----------+
+ *
+ * *1 BIST mode is entered on device detection when a BIST command is already
+ *    requested (bist_cmd!=NONE).
+ * *2 Whenever a device is lost, we reset bist_cmd to RF_CHARGE. This makes next
+ *    device detection trigger BIST mode.
+ */
+
 /* Size of event queue. Use it to initialize struct pchg.events. */
 #define PCHG_EVENT_QUEUE_SIZE 8
 
@@ -114,33 +153,43 @@ enum pchg_event {
 	PCHG_EVENT_IN_NORMAL,
 
 	/* Errors */
-	PCHG_EVENT_CHARGE_ERROR,
-	PCHG_EVENT_UPDATE_ERROR,
-	PCHG_EVENT_OTHER_ERROR,
+	PCHG_EVENT_ERROR,
 
 	/* Internal (a.k.a. Host) Events */
 	PCHG_EVENT_ENABLE,
 	PCHG_EVENT_DISABLE,
+	PCHG_EVENT_BIST_RUN,
+	PCHG_EVENT_BIST_DONE,
 	PCHG_EVENT_UPDATE_OPEN,
 	PCHG_EVENT_UPDATE_WRITE,
 	PCHG_EVENT_UPDATE_CLOSE,
+	PCHG_EVENT_UPDATE_ERROR,
 
 	/* Counter. Add new entry above. */
-	PCHG_EVENT_COUNT,
+	PCHG_EVENT_COUNT
 };
+BUILD_ASSERT(PCHG_EVENT_COUNT <= sizeof(uint32_t) * 8);
 
 enum pchg_error {
-	/* Errors reported by host. */
-	PCHG_ERROR_HOST,
+	/* Communication error in link layer (i2c, spi, etc.). */
+	PCHG_ERROR_COMMUNICATION,
+
 	PCHG_ERROR_OVER_TEMPERATURE,
 	PCHG_ERROR_OVER_CURRENT,
 	PCHG_ERROR_FOREIGN_OBJECT,
-	/* Errors reported by chip. */
+
+	/* Protocol error (e.g. NACK returned from a chip). */
+	PCHG_ERROR_RESPONSE,
+	/* Other errors reported by a chip. */
 	PCHG_ERROR_FW_VERSION,
 	PCHG_ERROR_INVALID_FW,
 	PCHG_ERROR_WRITE_FLASH,
+
 	/* All other errors */
 	PCHG_ERROR_OTHER,
+
+	/* Add no entries below here. */
+	PCHG_ERROR_COUNT
 };
 
 #define PCHG_ERROR_MASK(e) BIT(e)
@@ -148,8 +197,26 @@ enum pchg_error {
 enum pchg_mode {
 	PCHG_MODE_NORMAL = 0,
 	PCHG_MODE_DOWNLOAD,
+	PCHG_MODE_PASSTHRU,
+	PCHG_MODE_BIST,
 	/* Add no more entries below here. */
-	PCHG_MODE_COUNT,
+	PCHG_MODE_COUNT
+};
+
+enum pchg_bist_cmd {
+	PCHG_BIST_CMD_ANTENNA = 0x00,
+	PCHG_BIST_CMD_RF_CHARGE_ON = 0x01,
+	PCHG_BIST_CMD_RF_CHARGE_OFF = 0x02,
+
+	/* Add no more entries below here. */
+	PCHG_BIST_CMD_NONE = 0xff
+};
+
+enum pchg_chipset_state {
+	PCHG_CHIPSET_STATE_ON = 0,
+	PCHG_CHIPSET_STATE_SUSPEND,
+	/* No more new entries below here */
+	PCHG_CHIPSET_STATE_COUNT
 };
 
 /**
@@ -157,15 +224,17 @@ enum pchg_mode {
  */
 struct pchg_config {
 	/* Charger driver */
-	const struct pchg_drv *drv;
+	struct pchg_drv *drv;
 	/* I2C port number */
-	const int i2c_port;
+	int i2c_port;
 	/* GPIO pin used for IRQ */
-	const enum gpio_signal irq_pin;
+	enum gpio_signal irq_pin;
 	/* Full battery percentage */
-	const uint8_t full_percent;
+	uint8_t full_percent;
 	/* Update block size */
-	const uint32_t block_size;
+	uint32_t block_size;
+	/* RF charge duration in msec. Set it to 0 to disable RF charge. */
+	uint16_t rf_charge_msec;
 };
 
 struct pchg_update {
@@ -183,6 +252,14 @@ struct pchg_update {
 	uint8_t data[128];
 };
 
+struct pchg_policy_t {
+	uint32_t evt_mask;
+	uint32_t err_mask;
+};
+
+extern struct pchg_policy_t pchg_policy_on;
+extern struct pchg_policy_t pchg_policy_suspend;
+
 /**
  * Data struct describing the status of a peripheral charging port. It provides
  * the state machine and a charger driver with a context to work on.
@@ -190,6 +267,8 @@ struct pchg_update {
 struct pchg {
 	/* Static configuration */
 	const struct pchg_config *const cfg;
+	/* Event & error report policy. */
+	struct pchg_policy_t *policy[PCHG_CHIPSET_STATE_COUNT];
 	/* Current state of the port */
 	enum pchg_state state;
 	/* Event queue */
@@ -210,6 +289,8 @@ struct pchg {
 	uint32_t dropped_host_event_count;
 	/* enum pchg_mode */
 	uint8_t mode;
+	/* enum pchg_bist_cmd */
+	uint8_t bist_cmd;
 	/* FW version */
 	uint32_t fw_version;
 	/* Context related to FW update */
@@ -218,14 +299,29 @@ struct pchg {
 
 /**
  * Peripheral charger driver
+ *
+ * These functions shall return only communication errors (e.g. i2c error). If
+ * the error is internal to PCHG, they should return EC_SUCCESS and set
+ * ctx->event to PCHG_EVENT_ERROR and set a flag in ctx->error.
  */
 struct pchg_drv {
-	/* Reset charger chip. */
+	/*
+	 * Reset charger chip. External reset (e.g by GPIO). No
+	 * communication or data access is expected (e.g. no I2C access).
+	 */
 	int (*reset)(struct pchg *ctx);
-	/* Initialize the charger. */
+	/*
+	 * Initialize the charger. Run setup needed only once per reset
+	 * (e.g. enable I2C, unlock I2C).
+	 */
 	int (*init)(struct pchg *ctx);
 	/* Enable/disable the charger. */
 	int (*enable)(struct pchg *ctx, bool enable);
+	/*
+	 * Get chip info, identify chip and setup function pointers
+	 * (e.g. I2C read function). It needs to work without IRQ.
+	 */
+	int (*get_chip_info)(struct pchg *ctx);
 	/* Get event info. */
 	int (*get_event)(struct pchg *ctx);
 	/* Get battery level. */
@@ -236,6 +332,10 @@ struct pchg_drv {
 	int (*update_write)(struct pchg *ctx);
 	/* close update session */
 	int (*update_close)(struct pchg *ctx);
+	/* Toggle pass-through mode. */
+	int (*passthru)(struct pchg *ctx, bool enable);
+	/* Control BIST commands. */
+	int (*bist)(struct pchg *ctx, uint8_t test_id);
 };
 
 /**

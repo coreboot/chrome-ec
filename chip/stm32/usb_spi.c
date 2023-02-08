@@ -346,13 +346,15 @@ static void usb_spi_process_rx_packet(struct usb_spi_config const *config,
 		 * asserted or deasserted.
 		 */
 		uint16_t flags = packet->cmd_cs.flags;
+		const struct spi_device_t *current_device =
+			&spi_devices[config->state->current_spi_device_idx];
 
 		if (flags & USB_SPI_CHIP_SELECT) {
 			/* Set chip select low (asserted). */
-			gpio_set_level(SPI_FLASH_DEVICE->gpio_cs, 0);
+			gpio_set_level(current_device->gpio_cs, 0);
 		} else {
 			/* Set chip select high (adesserted). */
-			gpio_set_level(SPI_FLASH_DEVICE->gpio_cs, 1);
+			gpio_set_level(current_device->gpio_cs, 1);
 		}
 		config->state->mode = USB_SPI_MODE_SEND_CHIP_SELECT_RESPONSE;
 		break;
@@ -422,6 +424,10 @@ void usb_spi_deferred(struct usb_spi_config const *config)
 
 	/* Start a new SPI transfer. */
 	if (config->state->mode == USB_SPI_MODE_START_SPI) {
+		const struct spi_device_t *current_device =
+			&spi_devices[config->state->current_spi_device_idx];
+		bool custom_board_driver = current_device->usb_flags &
+					   USB_SPI_CUSTOM_SPI_DEVICE;
 		uint16_t status_code;
 		int read_count = config->state->spi_read_ctx.transfer_size;
 #ifndef CONFIG_SPI_HALFDUPLEX
@@ -435,8 +441,10 @@ void usb_spi_deferred(struct usb_spi_config const *config)
 			read_count = SPI_READBACK_ALL;
 		}
 #endif
-		status_code = spi_transaction(
-			SPI_FLASH_DEVICE, config->state->spi_write_ctx.buffer,
+
+		status_code = (custom_board_driver ? usb_spi_board_transaction :
+						     spi_transaction)(
+			current_device, config->state->spi_write_ctx.buffer,
 			config->state->spi_write_ctx.transfer_size,
 			config->state->spi_read_ctx.buffer, read_count);
 
@@ -624,9 +632,13 @@ int usb_spi_interface(struct usb_spi_config const *config, usb_uint *rx_buf,
 	    (USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE))
 		return 1;
 
-	if (setup.wValue != 0 || setup.wIndex != config->interface ||
-	    setup.wLength != 0)
+	if (setup.wValue >= spi_devices_used ||
+	    !(spi_devices[setup.wValue].usb_flags & USB_SPI_ENABLED) ||
+	    setup.wIndex != config->interface || setup.wLength != 0)
 		return 1;
+
+	/* Record which SPI device the host wished to manipulate. */
+	config->state->current_spi_device_idx = setup.wValue;
 
 	switch (setup.bRequest) {
 	case USB_SPI_REQ_ENABLE:
@@ -653,4 +665,12 @@ int usb_spi_interface(struct usb_spi_config const *config, usb_uint *rx_buf,
 	btable_ep[0].tx_count = 0;
 	STM32_TOGGLE_EP(0, EP_TX_RX_MASK, EP_TX_RX_VALID, EP_STATUS_OUT);
 	return 0;
+}
+
+__overridable int
+usb_spi_board_transaction(const struct spi_device_t *spi_device,
+			  const uint8_t *txdata, int txlen, uint8_t *rxdata,
+			  int rxlen)
+{
+	return EC_ERROR_UNIMPLEMENTED;
 }

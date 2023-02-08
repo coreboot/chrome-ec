@@ -212,16 +212,6 @@ static void power_reset_host_sleep_state(void)
 	power_chipset_handle_host_sleep_event(HOST_SLEEP_EVENT_DEFAULT_RESET,
 					      NULL);
 }
-
-static void handle_chipset_reset(void)
-{
-	if (chipset_in_state(CHIPSET_STATE_SUSPEND)) {
-		CPRINTS("Chipset reset: exit s3");
-		power_reset_host_sleep_state();
-		task_wake(TASK_ID_CHIPSET);
-	}
-}
-DECLARE_HOOK(HOOK_CHIPSET_RESET, handle_chipset_reset, HOOK_PRIO_FIRST);
 #endif /* CONFIG_POWER_TRACK_HOST_SLEEP_STATE */
 
 /*
@@ -290,6 +280,14 @@ enum power_state power_chipset_init(void)
 		 * the only way is to ask GPIO_AC_PRESENT directly.
 		 */
 		exit_hard_off = 0;
+	} else if (system_get_reset_flags() & EC_RESET_FLAG_AP_IDLE) {
+		if (init_state == POWER_S0) {
+			gpio_enable_interrupt(GPIO_AP_EC_WDTRST_L);
+			gpio_enable_interrupt(GPIO_AP_EC_WARM_RST_REQ);
+			disable_sleep(SLEEP_MASK_AP_RUN);
+		}
+
+		return init_state;
 	}
 
 	if (battery_is_present() == BP_YES)

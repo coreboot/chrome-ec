@@ -12,12 +12,13 @@
 #ifndef __EMUL_SMART_BATTERY_H
 #define __EMUL_SMART_BATTERY_H
 
+#include "emul/emul_common_i2c.h"
+
+#include <stdint.h>
+
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
-#include <stdint.h>
-
-#include "emul/emul_common_i2c.h"
 
 /**
  * @brief Smart Battery emulator backend API
@@ -67,6 +68,8 @@ struct sbat_emul_bat_data {
 	uint16_t error_code;
 	/** Design battery voltage in mV */
 	uint16_t design_mv;
+	/** Default Design battery voltage in mV */
+	const uint16_t default_design_mv;
 	/** Battery temperature at the moment in Kelvins */
 	uint16_t temp;
 	/** Battery voltage at the moment in mV */
@@ -117,6 +120,10 @@ struct sbat_emul_bat_data {
 	uint8_t mf_data[MAX_BLOCK_SIZE];
 	/** Manufacturer data length */
 	int mf_data_len;
+	/** Manufacture info */
+	uint8_t mf_info[MAX_BLOCK_SIZE];
+	/** Manufacture info length */
+	int mf_info_len;
 };
 
 /**

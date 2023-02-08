@@ -3,18 +3,17 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-
 #include "common.h"
-#include "i2c.h"
-#include "emul/emul_tcs3400.h"
+#include "driver/als_tcs3400.h"
 #include "emul/emul_common_i2c.h"
-
+#include "emul/emul_tcs3400.h"
+#include "i2c.h"
 #include "motion_sense.h"
 #include "motion_sense_fifo.h"
-#include "driver/als_tcs3400.h"
 #include "test/drivers/test_state.h"
+
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
 
 #define TCS_NODE DT_NODELABEL(tcs_emul)
 #define TCS_CLR_SENSOR_ID SENSOR_ID(DT_NODELABEL(tcs3400_clear))
@@ -37,24 +36,24 @@ ZTEST_USER(tcs3400, test_tcs_init)
 	ms_rgb = &motion_sensors[TCS_RGB_SENSOR_ID];
 
 	/* RGB sensor initialization is always successful */
-	zassert_equal(EC_SUCCESS, ms_rgb->drv->init(ms_rgb), NULL);
+	zassert_equal(EC_SUCCESS, ms_rgb->drv->init(ms_rgb));
 
 	/* Fail init on communication errors */
 	i2c_common_emul_set_read_fail_reg(common_data,
 					  I2C_COMMON_EMUL_FAIL_ALL_REG);
-	zassert_equal(EC_ERROR_INVAL, ms->drv->init(ms), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->init(ms));
 	i2c_common_emul_set_read_fail_reg(common_data,
 					  I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Fail on bad ID */
 	tcs_emul_set_reg(emul, TCS_I2C_ID, 0);
-	zassert_equal(EC_ERROR_ACCESS_DENIED, ms->drv->init(ms), NULL);
+	zassert_equal(EC_ERROR_ACCESS_DENIED, ms->drv->init(ms));
 	/* Restore ID */
 	tcs_emul_set_reg(emul, TCS_I2C_ID,
 			 DT_STRING_TOKEN(DT_NODELABEL(tcs_emul), device_id));
 
 	/* Test successful init. ATIME and AGAIN should be changed on init */
-	zassert_equal(EC_SUCCESS, ms->drv->init(ms), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->init(ms));
 	zassert_equal(TCS_DEFAULT_ATIME, tcs_emul_get_reg(emul, TCS_I2C_ATIME),
 		      NULL);
 	zassert_equal(TCS_DEFAULT_AGAIN,
@@ -75,11 +74,11 @@ ZTEST_USER(tcs3400, test_tcs_read)
 
 	/* Test error on writing registers */
 	i2c_common_emul_set_write_fail_reg(common_data, TCS_I2C_ATIME);
-	zassert_equal(EC_ERROR_INVAL, ms->drv->read(ms, v), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->read(ms, v));
 	i2c_common_emul_set_write_fail_reg(common_data, TCS_I2C_CONTROL);
-	zassert_equal(EC_ERROR_INVAL, ms->drv->read(ms, v), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->read(ms, v));
 	i2c_common_emul_set_write_fail_reg(common_data, TCS_I2C_ENABLE);
-	zassert_equal(EC_ERROR_INVAL, ms->drv->read(ms, v), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->read(ms, v));
 	i2c_common_emul_set_write_fail_reg(common_data,
 					   I2C_COMMON_EMUL_NO_FAIL_REG);
 
@@ -87,27 +86,73 @@ ZTEST_USER(tcs3400, test_tcs_read)
 	tcs_emul_set_reg(emul, TCS_I2C_ATIME, 0);
 	tcs_emul_set_reg(emul, TCS_I2C_CONTROL, 0);
 	tcs_emul_set_reg(emul, TCS_I2C_ENABLE, 0);
-	zassert_equal(EC_SUCCESS, ms->drv->perform_calib(ms, 1), NULL);
-	zassert_equal(EC_RES_IN_PROGRESS, ms->drv->read(ms, v), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->perform_calib(ms, 1));
+	zassert_equal(EC_RES_IN_PROGRESS, ms->drv->read(ms, v));
 	zassert_equal(TCS_CALIBRATION_ATIME,
 		      tcs_emul_get_reg(emul, TCS_I2C_ATIME), NULL);
 	zassert_equal(TCS_CALIBRATION_AGAIN,
 		      tcs_emul_get_reg(emul, TCS_I2C_CONTROL), NULL);
 	enable = tcs_emul_get_reg(emul, TCS_I2C_ENABLE);
-	zassert_true(enable & TCS_I2C_ENABLE_POWER_ON, NULL);
-	zassert_true(enable & TCS_I2C_ENABLE_ADC_ENABLE, NULL);
-	zassert_true(enable & TCS_I2C_ENABLE_INT_ENABLE, NULL);
+	zassert_true(enable & TCS_I2C_ENABLE_POWER_ON);
+	zassert_true(enable & TCS_I2C_ENABLE_ADC_ENABLE);
+	zassert_true(enable & TCS_I2C_ENABLE_INT_ENABLE);
 
 	/* Test starting read without calibration */
 	tcs_emul_set_reg(emul, TCS_I2C_ATIME, 0);
 	tcs_emul_set_reg(emul, TCS_I2C_CONTROL, 0);
 	tcs_emul_set_reg(emul, TCS_I2C_ENABLE, 0);
-	zassert_equal(EC_SUCCESS, ms->drv->perform_calib(ms, 0), NULL);
-	zassert_equal(EC_RES_IN_PROGRESS, ms->drv->read(ms, v), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->perform_calib(ms, 0));
+	zassert_equal(EC_RES_IN_PROGRESS, ms->drv->read(ms, v));
 	enable = tcs_emul_get_reg(emul, TCS_I2C_ENABLE);
-	zassert_true(enable & TCS_I2C_ENABLE_POWER_ON, NULL);
-	zassert_true(enable & TCS_I2C_ENABLE_ADC_ENABLE, NULL);
-	zassert_true(enable & TCS_I2C_ENABLE_INT_ENABLE, NULL);
+	zassert_true(enable & TCS_I2C_ENABLE_POWER_ON);
+	zassert_true(enable & TCS_I2C_ENABLE_ADC_ENABLE);
+	zassert_true(enable & TCS_I2C_ENABLE_INT_ENABLE);
+
+	ms = &motion_sensors[TCS_RGB_SENSOR_ID];
+
+	zassert_ok(ms->drv->read(ms, NULL));
+}
+
+ZTEST_USER(tcs3400, test_tcs_get_set_offset)
+{
+	struct motion_sensor_t *ms;
+	int16_t offset[3] = { 0, 5, 10 };
+	int16_t new_offset[3] = { 5, -1, 17 };
+	int16_t temperature = 0;
+
+	ms = &motion_sensors[TCS_CLR_SENSOR_ID];
+	zassert_ok(ms->drv->get_offset(ms, offset, &temperature));
+	zassert_equal(TCS3400_DRV_DATA(ms)->als_cal.offset, offset[0]);
+	zassert_equal(0, offset[1]);
+	zassert_equal(0, offset[2]);
+	zassert_equal(EC_MOTION_SENSE_INVALID_CALIB_TEMP, temperature);
+
+	/* Try to change the offset and make sure it doesn't change
+	 * (tcs3400's offset cannot be configured at runtime)
+	 */
+	zassert_ok(ms->drv->set_offset(ms, new_offset, 20));
+	zassert_ok(ms->drv->get_offset(ms, new_offset, &temperature));
+	zassert_mem_equal(offset, new_offset, sizeof(offset));
+	zassert_equal(EC_MOTION_SENSE_INVALID_CALIB_TEMP, temperature);
+
+	ms = &motion_sensors[TCS_RGB_SENSOR_ID];
+	zassert_ok(ms->drv->get_offset(ms, offset, &temperature));
+	zassert_equal(TCS3400_RGB_DRV_DATA(ms)->calibration.rgb_cal[0].offset,
+		      offset[0]);
+	zassert_equal(TCS3400_RGB_DRV_DATA(ms)->calibration.rgb_cal[1].offset,
+		      offset[1]);
+	zassert_equal(TCS3400_RGB_DRV_DATA(ms)->calibration.rgb_cal[2].offset,
+		      offset[2]);
+	zassert_equal(EC_MOTION_SENSE_INVALID_CALIB_TEMP, temperature);
+
+	/* Try to change the offset and make sure it didn't change */
+	new_offset[0] = 5;
+	new_offset[1] = -1;
+	new_offset[2] = 17;
+	zassert_ok(ms->drv->set_offset(ms, new_offset, 20));
+	zassert_ok(ms->drv->get_offset(ms, new_offset, &temperature));
+	zassert_mem_equal(offset, new_offset, sizeof(offset));
+	zassert_equal(EC_MOTION_SENSE_INVALID_CALIB_TEMP, temperature);
 }
 
 /** Check if FIFO for RGB and clear sensor is empty */
@@ -163,21 +208,21 @@ ZTEST_USER(tcs3400, test_tcs_irq_handler_fail)
 	event = TCS_INT_EVENT;
 	/* Test error on reading status */
 	i2c_common_emul_set_read_fail_reg(common_data, TCS_I2C_STATUS);
-	zassert_equal(EC_ERROR_INVAL, ms->drv->irq_handler(ms, &event), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->irq_handler(ms, &event));
 	i2c_common_emul_set_read_fail_reg(common_data,
 					  I2C_COMMON_EMUL_NO_FAIL_REG);
 	check_fifo_empty(ms, ms_rgb);
 
 	/* Test fail on changing device power state */
 	i2c_common_emul_set_write_fail_reg(common_data, TCS_I2C_ENABLE);
-	zassert_equal(EC_ERROR_INVAL, ms->drv->irq_handler(ms, &event), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->irq_handler(ms, &event));
 	i2c_common_emul_set_write_fail_reg(common_data,
 					   I2C_COMMON_EMUL_NO_FAIL_REG);
 	check_fifo_empty(ms, ms_rgb);
 
 	/* Test that no data is committed when status is 0 */
 	tcs_emul_set_reg(emul, TCS_I2C_STATUS, 0);
-	zassert_equal(EC_SUCCESS, ms->drv->irq_handler(ms, &event), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->irq_handler(ms, &event));
 	check_fifo_empty(ms, ms_rgb);
 }
 
@@ -251,9 +296,9 @@ ZTEST_USER(tcs3400, test_tcs_read_calibration)
 	ms->oversampling_ratio = 1;
 	ms_rgb->oversampling_ratio = 1;
 	/* Enable calibration mode */
-	zassert_equal(EC_SUCCESS, ms->drv->perform_calib(ms, 1), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->perform_calib(ms, 1));
 	/* Setup AGAIN and ATIME for calibration */
-	zassert_equal(EC_RES_IN_PROGRESS, ms->drv->read(ms, v), NULL);
+	zassert_equal(EC_RES_IN_PROGRESS, ms->drv->read(ms, v));
 
 	/* Test data that are in calibration range */
 	exp_v[0] = 12;
@@ -275,7 +320,7 @@ ZTEST_USER(tcs3400, test_tcs_read_calibration)
 	/* Set status to show valid data */
 	tcs_emul_set_reg(emul, TCS_I2C_STATUS, TCS_I2C_STATUS_RGBC_VALID);
 
-	zassert_equal(EC_SUCCESS, ms->drv->irq_handler(ms, &event), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->irq_handler(ms, &event));
 	/* In calibration mode check for exact match */
 	check_fifo(ms, ms_rgb, exp_v, 1);
 
@@ -299,7 +344,7 @@ ZTEST_USER(tcs3400, test_tcs_read_calibration)
 	/* Set status to show valid data */
 	tcs_emul_set_reg(emul, TCS_I2C_STATUS, TCS_I2C_STATUS_RGBC_VALID);
 
-	zassert_equal(EC_SUCCESS, ms->drv->irq_handler(ms, &event), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->irq_handler(ms, &event));
 	/* In calibration mode check for exact match */
 	check_fifo(ms, ms_rgb, exp_v, 1);
 }
@@ -374,9 +419,9 @@ ZTEST_USER(tcs3400, test_tcs_read_xyz)
 	ms->oversampling_ratio = 1;
 	ms_rgb->oversampling_ratio = 1;
 	/* Disable calibration mode */
-	zassert_equal(EC_SUCCESS, ms->drv->perform_calib(ms, 0), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->perform_calib(ms, 0));
 	/* Setup AGAIN and ATIME for normal mode */
-	zassert_equal(EC_RES_IN_PROGRESS, ms->drv->read(ms, v), NULL);
+	zassert_equal(EC_RES_IN_PROGRESS, ms->drv->read(ms, v));
 
 	/* Test different data in supported range */
 	for (test = 0; test < ARRAY_SIZE(exp_v); test++) {
@@ -463,9 +508,9 @@ ZTEST_USER(tcs3400, test_tcs_scale)
 	ms->oversampling_ratio = 1;
 	ms_rgb->oversampling_ratio = 1;
 	/* Disable calibration mode */
-	zassert_equal(EC_SUCCESS, ms->drv->perform_calib(ms, 0), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->perform_calib(ms, 0));
 	/* Setup AGAIN and ATIME for normal mode */
-	zassert_equal(EC_RES_IN_PROGRESS, ms->drv->read(ms, v), NULL);
+	zassert_equal(EC_RES_IN_PROGRESS, ms->drv->read(ms, v));
 
 	/* Test different data in supported range */
 	for (test = 0; test < ARRAY_SIZE(exp_v); test++) {
@@ -509,7 +554,7 @@ ZTEST_USER(tcs3400, test_tcs_scale)
 	scale[0] = 0;
 	scale[1] = MOTION_SENSE_DEFAULT_SCALE;
 	scale[2] = MOTION_SENSE_DEFAULT_SCALE;
-	zassert_equal(EC_ERROR_INVAL, ms->drv->set_scale(ms, scale, 0), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->set_scale(ms, scale, 0));
 
 	zassert_equal(EC_ERROR_INVAL, ms_rgb->drv->set_scale(ms_rgb, scale, 0),
 		      NULL);
@@ -540,52 +585,52 @@ ZTEST_USER(tcs3400, test_tcs_data_rate)
 
 	/* Test fail on reading device power state */
 	i2c_common_emul_set_read_fail_reg(common_data, TCS_I2C_ENABLE);
-	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 0, 0), NULL);
-	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 0, 1), NULL);
-	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 100, 0), NULL);
-	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 100, 1), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 0, 0));
+	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 0, 1));
+	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 100, 0));
+	zassert_equal(EC_ERROR_INVAL, ms->drv->set_data_rate(ms, 100, 1));
 	i2c_common_emul_set_read_fail_reg(common_data,
 					  I2C_COMMON_EMUL_NO_FAIL_REG);
 
 	/* Test setting 0 rate disables device */
-	zassert_equal(EC_SUCCESS, ms->drv->set_data_rate(ms, 0, 0), NULL);
-	zassert_equal(0, tcs_emul_get_reg(emul, TCS_I2C_ENABLE), NULL);
-	zassert_equal(0, ms->drv->get_data_rate(ms), NULL);
-	zassert_equal(0, ms_rgb->drv->get_data_rate(ms_rgb), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->set_data_rate(ms, 0, 0));
+	zassert_equal(0, tcs_emul_get_reg(emul, TCS_I2C_ENABLE));
+	zassert_equal(0, ms->drv->get_data_rate(ms));
+	zassert_equal(0, ms_rgb->drv->get_data_rate(ms_rgb));
 
-	zassert_equal(EC_SUCCESS, ms->drv->set_data_rate(ms, 0, 1), NULL);
-	zassert_equal(0, tcs_emul_get_reg(emul, TCS_I2C_ENABLE), NULL);
-	zassert_equal(0, tcs_emul_get_reg(emul, TCS_I2C_ENABLE), NULL);
-	zassert_equal(0, ms->drv->get_data_rate(ms), NULL);
-	zassert_equal(0, ms_rgb->drv->get_data_rate(ms_rgb), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->set_data_rate(ms, 0, 1));
+	zassert_equal(0, tcs_emul_get_reg(emul, TCS_I2C_ENABLE));
+	zassert_equal(0, tcs_emul_get_reg(emul, TCS_I2C_ENABLE));
+	zassert_equal(0, ms->drv->get_data_rate(ms));
+	zassert_equal(0, ms_rgb->drv->get_data_rate(ms_rgb));
 
 	/* Test setting non-zero rate enables device */
-	zassert_equal(EC_SUCCESS, ms->drv->set_data_rate(ms, 100, 0), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->set_data_rate(ms, 100, 0));
 	enable = tcs_emul_get_reg(emul, TCS_I2C_ENABLE);
-	zassert_true(enable & TCS_I2C_ENABLE_POWER_ON, NULL);
-	zassert_true(enable & TCS_I2C_ENABLE_ADC_ENABLE, NULL);
-	zassert_true(enable & TCS_I2C_ENABLE_INT_ENABLE, NULL);
-	zassert_equal(100, ms->drv->get_data_rate(ms), NULL);
-	zassert_equal(100, ms_rgb->drv->get_data_rate(ms_rgb), NULL);
+	zassert_true(enable & TCS_I2C_ENABLE_POWER_ON);
+	zassert_true(enable & TCS_I2C_ENABLE_ADC_ENABLE);
+	zassert_true(enable & TCS_I2C_ENABLE_INT_ENABLE);
+	zassert_equal(100, ms->drv->get_data_rate(ms));
+	zassert_equal(100, ms_rgb->drv->get_data_rate(ms_rgb));
 
-	zassert_equal(EC_SUCCESS, ms->drv->set_data_rate(ms, 100, 1), NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->set_data_rate(ms, 100, 1));
 	enable = tcs_emul_get_reg(emul, TCS_I2C_ENABLE);
-	zassert_true(enable & TCS_I2C_ENABLE_POWER_ON, NULL);
-	zassert_true(enable & TCS_I2C_ENABLE_ADC_ENABLE, NULL);
-	zassert_true(enable & TCS_I2C_ENABLE_INT_ENABLE, NULL);
-	zassert_equal(100, ms->drv->get_data_rate(ms), NULL);
-	zassert_equal(100, ms_rgb->drv->get_data_rate(ms_rgb), NULL);
+	zassert_true(enable & TCS_I2C_ENABLE_POWER_ON);
+	zassert_true(enable & TCS_I2C_ENABLE_ADC_ENABLE);
+	zassert_true(enable & TCS_I2C_ENABLE_INT_ENABLE);
+	zassert_equal(100, ms->drv->get_data_rate(ms));
+	zassert_equal(100, ms_rgb->drv->get_data_rate(ms_rgb));
 
 	/* Test RGB sensor doesn't change data rate */
 	zassert_equal(EC_SUCCESS, ms_rgb->drv->set_data_rate(ms_rgb, 300, 0),
 		      NULL);
-	zassert_equal(100, ms->drv->get_data_rate(ms), NULL);
-	zassert_equal(100, ms_rgb->drv->get_data_rate(ms_rgb), NULL);
+	zassert_equal(100, ms->drv->get_data_rate(ms));
+	zassert_equal(100, ms_rgb->drv->get_data_rate(ms_rgb));
 
 	zassert_equal(EC_SUCCESS, ms_rgb->drv->set_data_rate(ms_rgb, 300, 1),
 		      NULL);
-	zassert_equal(100, ms->drv->get_data_rate(ms), NULL);
-	zassert_equal(100, ms_rgb->drv->get_data_rate(ms_rgb), NULL);
+	zassert_equal(100, ms->drv->get_data_rate(ms));
+	zassert_equal(100, ms_rgb->drv->get_data_rate(ms_rgb));
 }
 
 /** Test set range function of clear and RGB sensors */
@@ -597,14 +642,14 @@ ZTEST_USER(tcs3400, test_tcs_set_range)
 	ms_rgb = &motion_sensors[TCS_RGB_SENSOR_ID];
 
 	/* RGB sensor doesn't set anything */
-	zassert_equal(EC_SUCCESS, ms_rgb->drv->set_range(ms_rgb, 1, 0), NULL);
+	zassert_equal(EC_SUCCESS, ms_rgb->drv->set_range(ms_rgb, 1, 0));
 
 	/* Clear sensor doesn't change anything on device to set range */
-	zassert_equal(EC_SUCCESS, ms->drv->set_range(ms, 0x12300, 1), NULL);
-	zassert_equal(0x12300, ms->current_range, NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->set_range(ms, 0x12300, 1));
+	zassert_equal(0x12300, ms->current_range);
 
-	zassert_equal(EC_SUCCESS, ms->drv->set_range(ms, 0x10000, 0), NULL);
-	zassert_equal(0x10000, ms->current_range, NULL);
+	zassert_equal(EC_SUCCESS, ms->drv->set_range(ms, 0x10000, 0));
+	zassert_equal(0x10000, ms->current_range);
 }
 
 struct tcs3400_test_fixture {

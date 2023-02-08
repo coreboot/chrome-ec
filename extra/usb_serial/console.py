@@ -18,6 +18,7 @@ import threading
 import time
 import tty
 
+
 try:
     import usb  # pylint:disable=import-error
 except ModuleNotFoundError:
@@ -97,11 +98,7 @@ class Susb:
         dev = None
         if serialname:
             for d in dev_list:
-                dev_serial = "PyUSB doesn't have a stable interface"
-                try:
-                    dev_serial = usb.util.get_string(d, 256, d.iSerialNumber)
-                except:
-                    dev_serial = usb.util.get_string(d, d.iSerialNumber)
+                dev_serial = usb.util.get_string(d, d.iSerialNumber)
                 if dev_serial == serialname:
                     dev = d
                     break
@@ -110,7 +107,7 @@ class Susb:
         else:
             try:
                 dev = dev_list[0]
-            except:
+            except IndexError:
                 raise SusbError(
                     "USB device %04x:%04x not found" % (vendor, product)
                 )
@@ -250,7 +247,10 @@ class Suart:
   Ctrl-C exits.
 """
 
-parser = argparse.ArgumentParser(description="Open a console to a USB device")
+parser = argparse.ArgumentParser(
+    description="Open a console to a USB device",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
 parser.add_argument(
     "-d",
     "--device",

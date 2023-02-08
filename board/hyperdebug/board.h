@@ -10,35 +10,77 @@
 
 #define CONFIG_LTO
 
-/* 48 MHz SYSCLK clock frequency */
-#define CPU_CLOCK 48000000
+/* Configure the flash */
+#undef CONFIG_RO_SIZE
+#undef CONFIG_FW_PSTATE_OFF
+#undef CONFIG_FW_PSTATE_SIZE
+#undef CONFIG_RW_MEM_OFF
+#undef CONFIG_RW_SIZE
+
+#define CONFIG_RO_SIZE (4 * 1024)
+#define CONFIG_RW_MEM_OFF (CONFIG_RO_MEM_OFF + CONFIG_RO_SIZE)
+#define CONFIG_RW_SIZE (CONFIG_FLASH_SIZE_BYTES - CONFIG_RW_MEM_OFF)
+#undef CONFIG_IMAGE_PADDING
+
+#ifdef SECTION_IS_RO
+
+/* Configure the Boot Manager. */
+#define CONFIG_MALLOC
+#define CONFIG_DFU_BOOTMANAGER_MAIN
+#define CONFIG_DFU_BOOTMANAGER_SHARED
+#undef CONFIG_COMMON_RUNTIME
+#undef CONFIG_COMMON_PANIC_OUTPUT
+#undef CONFIG_COMMON_GPIO
+#undef CONFIG_COMMON_TIMER
+#undef CONFIG_WATCHDOG
+
+#else /* !SECTION_IS_RO */
+
+/*
+ * PLL configuration. Freq = STM32_HSE_CLOCK or HSI (16MHz) * N / M / R.
+ *
+ * In our case, 16MHz * 13 / 1 / 2 = 104MHz.
+ */
+
+#undef STM32_PLLM
+#undef STM32_PLLN
+#undef STM32_PLLR
+#define STM32_PLLM 1
+#define STM32_PLLN 13
+#define STM32_PLLR 2
+
+#define STM32_USE_PLL
 
 #define CONFIG_BOARD_PRE_INIT
 
 #define CONFIG_ROM_BASE 0x0
 #define CONFIG_ROM_SIZE (CONFIG_RAM_BASE - CONFIG_ROM_BASE)
 
-/* Enable USB forwarding on UART 1, 2, 4 and the LPUART (UART9) */
+/* DFU Firmware Update */
+#define CONFIG_DFU_RUNTIME
+#define CONFIG_DFU_BOOTMANAGER_SHARED
+
+/* Enable USB forwarding on UART 2, 3, 4, and 5. */
 #define CONFIG_STREAM_USART
-#define CONFIG_STREAM_USART1
+#undef CONFIG_STREAM_USART1
 #define CONFIG_STREAM_USART2
-#undef CONFIG_STREAM_USART3
+#define CONFIG_STREAM_USART3
 #define CONFIG_STREAM_USART4
-#undef CONFIG_STREAM_USART5
-#define CONFIG_STREAM_USART9
+#define CONFIG_STREAM_USART5
+#undef CONFIG_STREAM_USART9
 #define CONFIG_STREAM_USB
 #define CONFIG_CMD_USART_INFO
 
-/* The UART console is on UART3 */
+/* The UART console is on LPUART (UART9), connected to st-link debugger. */
 #undef CONFIG_UART_CONSOLE
-#define CONFIG_UART_CONSOLE 3
+#define CONFIG_UART_CONSOLE 9
 #undef CONFIG_UART_TX_DMA
 #undef CONFIG_UART_RX_DMA
 
 /* Optional features */
-#define CONFIG_STM_HWTIMER32
 #define CONFIG_HW_CRC
 #undef CONFIG_PVD
+
 /*
  * See 'Programmable voltage detector characteristics' in the
  * STM32F072x8 Datasheet.  PVD Threshold 1 corresponds to a falling
@@ -69,21 +111,22 @@
 #define USB_IFACE_CONSOLE 0
 #define USB_IFACE_SPI 1
 #define USB_IFACE_I2C 2
-#define USB_IFACE_USART1_STREAM 3
-#define USB_IFACE_USART2_STREAM 4
+#define USB_IFACE_USART2_STREAM 3
+#define USB_IFACE_USART3_STREAM 4
 #define USB_IFACE_USART4_STREAM 5
-#define USB_IFACE_USART9_STREAM 6
-#define USB_IFACE_COUNT 7
+#define USB_IFACE_USART5_STREAM 6
+#define USB_IFACE_DFU 7
+#define USB_IFACE_COUNT 8
 
 /* USB endpoint indexes (use define rather than enum to expand them) */
 #define USB_EP_CONTROL 0
 #define USB_EP_CONSOLE 1
 #define USB_EP_SPI 2
 #define USB_EP_I2C 3
-#define USB_EP_USART1_STREAM 4
-#define USB_EP_USART2_STREAM 5
+#define USB_EP_USART2_STREAM 4
+#define USB_EP_USART3_STREAM 5
 #define USB_EP_USART4_STREAM 6
-#define USB_EP_USART9_STREAM 7
+#define USB_EP_USART5_STREAM 7
 #define USB_EP_COUNT 8
 
 /*
@@ -98,13 +141,14 @@
 #define CONFIG_USB_SPI
 #define CONFIG_USB_SPI_BUFFER_SIZE 2048
 #define CONFIG_SPI_CONTROLLER
+#define CONFIG_STM32_SPI1_CONTROLLER
+#define CONFIG_SPI_MUTABLE_DEVICE_LIST
 
 /* Enable control of I2C over USB */
 #define CONFIG_USB_I2C
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER
 #define I2C_PORT_CONTROLLER 0
-#define CONFIG_STM32_SPI1_CONTROLLER
 
 /* See i2c_ite_flash_support.c for more information about these values */
 /*#define CONFIG_ITE_FLASH_SUPPORT */
@@ -114,9 +158,12 @@
 #define CONFIG_USB_I2C_MAX_WRITE_COUNT ((1 << 9) - 4)
 #define CONFIG_USB_I2C_MAX_READ_COUNT ((1 << 9) - 6)
 
+#endif /* SECTION_IS_RO */
+
 /* This is not actually an EC so disable some features. */
 #undef CONFIG_WATCHDOG_HELP
 #undef CONFIG_LID_SWITCH
+#undef CONFIG_FLASH_PSTATE
 
 /*
  * Allow dangerous commands all the time, since we don't have a write protect
@@ -141,13 +188,27 @@ enum usb_strings {
 	USB_STR_CONSOLE_NAME,
 	USB_STR_SPI_NAME,
 	USB_STR_I2C_NAME,
-	USB_STR_USART1_STREAM_NAME,
 	USB_STR_USART2_STREAM_NAME,
+	USB_STR_USART3_STREAM_NAME,
 	USB_STR_USART4_STREAM_NAME,
-	USB_STR_USART9_STREAM_NAME,
+	USB_STR_USART5_STREAM_NAME,
+	USB_STR_DFU_NAME,
 
 	USB_STR_COUNT
 };
+
+/* Timeout for initializing the OctoSPI controller. */
+#define OCTOSPI_INIT_TIMEOUT_US (100 * MSEC)
+
+/*
+ * Timeout for a complete SPI transaction.  Users can potentially set the clock
+ * down to 62.5 kHz and transfer up to 2048 bytes, which would take 262ms
+ * assuming no FIFO stalls.
+ */
+#define OCTOSPI_TRANSACTION_TIMEOUT_US (500 * MSEC)
+
+/* Interrupt handler, called by common/gpio.c. */
+void gpio_edge(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

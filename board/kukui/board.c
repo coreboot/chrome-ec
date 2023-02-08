@@ -61,6 +61,7 @@ static void gauge_interrupt(enum gpio_signal signal)
 static void motion_interrupt(enum gpio_signal signal);
 #endif /* SECTION_IS_RW */
 
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 /******************************************************************************/
@@ -518,7 +519,10 @@ struct motion_sensor_t motion_sensors[] = {
 	 .default_range = BIT(11), /* 16LSB / uT, fixed */
 	 .rot_standard_ref = &mag_standard_ref,
 	 .min_frequency = BMM150_MAG_MIN_FREQ,
+/* TODO(b/253292373): Remove when clang is fixed. */
+DISABLE_CLANG_WARNING("-Wshift-count-negative")
 	 .max_frequency = BMM150_MAG_MAX_FREQ(SPECIAL),
+ENABLE_CLANG_WARNING("-Wshift-count-negative")
 	},
 #endif /* CONFIG_MAG_BMI_BMM150 */
 	[CLEAR_ALS] = {

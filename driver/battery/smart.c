@@ -50,6 +50,13 @@ test_mockable int sb_read(int cmd, int *param)
 
 #ifdef CONFIG_BATTERY_CUT_OFF
 	/*
+	 * Ship mode command need to set continuously, can't be interfered
+	 * by another command.
+	 */
+	if (battery_cutoff_in_progress())
+		return EC_ERROR_ACCESS_DENIED;
+
+	/*
 	 * Some batteries would wake up after cut-off if we talk to it.
 	 */
 	if (battery_is_cut_off())
@@ -84,6 +91,13 @@ int sb_read_string(int offset, uint8_t *data, int len)
 
 #ifdef CONFIG_BATTERY_CUT_OFF
 	/*
+	 * Ship mode command need to set continuously, can't be interfered
+	 * by another command.
+	 */
+	if (battery_cutoff_in_progress())
+		return EC_ERROR_ACCESS_DENIED;
+
+	/*
 	 * Some batteries would wake up after cut-off if we talk to it.
 	 */
 	if (battery_is_cut_off())
@@ -101,6 +115,13 @@ int sb_read_sized_block(int offset, uint8_t *data, int len)
 	int read_len = 0;
 
 	if (IS_ENABLED(CONFIG_BATTERY_CUT_OFF)) {
+		/*
+		 * Ship mode command need to set continuously, can't be
+		 * interfered by another command.
+		 */
+		if (battery_cutoff_in_progress())
+			return EC_ERROR_ACCESS_DENIED;
+
 		/*
 		 * Some batteries would wake up after cut-off if we talk to it.
 		 */
@@ -128,6 +149,42 @@ int sb_read_mfgacc(int cmd, int block, uint8_t *data, int len)
 
 	/* Send manufacturer access command */
 	rv = sb_write(SB_MANUFACTURER_ACCESS, cmd);
+	if (rv)
+		return rv;
+
+	/*
+	 * Read data on the register block.
+	 * First two bytes returned are command sent,
+	 * rest are actual data LSB to MSB.
+	 */
+	rv = sb_read_sized_block(block, data, len);
+	if (rv)
+		return rv;
+	if ((data[0] | data[1] << 8) != cmd)
+		return EC_ERROR_UNKNOWN;
+
+	return EC_SUCCESS;
+}
+
+int sb_read_mfgacc_block(int cmd, int block, uint8_t *data, int len)
+{
+	int rv;
+
+	uint8_t operation_status[3] = {
+		0x02,
+		cmd & 0xFF,
+		cmd >> 8,
+	};
+
+	/*
+	 * First two bytes returned from read are command sent hence read
+	 * doesn't yield anything if the length is less than 3 bytes.
+	 */
+	if (len < 3)
+		return EC_ERROR_INVAL;
+
+	/* Send manufacturer access command by the SMB block protocol */
+	rv = sb_write_block(block, operation_status, sizeof(operation_status));
 	if (rv)
 		return rv;
 
@@ -394,6 +451,34 @@ static void apply_fake_state_of_charge(struct batt_params *batt)
 	batt->flags &= ~BATT_FLAG_BAD_REMAINING_CAPACITY;
 }
 
+static bool battery_want_charge(struct batt_params *batt)
+{
+	if (batt->flags &
+	    (BATT_FLAG_BAD_DESIRED_VOLTAGE | BATT_FLAG_BAD_DESIRED_CURRENT |
+	     BATT_FLAG_BAD_STATE_OF_CHARGE))
+		return false;
+
+	/*
+	 * Charging allowed if both desired voltage and current are nonzero
+	 * and battery isn't full (and we read them all correctly).
+	 */
+	if (batt->desired_voltage && batt->desired_current &&
+	    batt->state_of_charge < BATTERY_LEVEL_FULL)
+		return true;
+
+	/*
+	 * TODO (crosbug.com/p/29467): remove this workaround for dead battery
+	 * that requests no voltage/current
+	 */
+	if (IS_ENABLED(CONFIG_BATTERY_REQUESTS_NIL_WHEN_DEAD)) {
+		if (batt->desired_voltage == 0 && batt->desired_current == 0 &&
+		    batt->state_of_charge == 0)
+			return true;
+	}
+
+	return false;
+}
+
 void battery_get_params(struct batt_params *batt)
 {
 	struct batt_params batt_new;
@@ -405,7 +490,7 @@ void battery_get_params(struct batt_params *batt)
 	 * will be preserved.
 	 */
 	memcpy(&batt_new, batt, sizeof(*batt));
-	batt_new.flags = 0;
+	batt_new.flags &= ~BATT_FLAG_VOLATILE;
 
 	if (sb_read(SB_TEMPERATURE, &batt_new.temperature) &&
 	    fake_temperature < 0)
@@ -430,6 +515,7 @@ void battery_get_params(struct batt_params *batt)
 
 	if (sb_read(SB_AVERAGE_CURRENT, &v))
 		batt_new.flags |= BATT_FLAG_BAD_AVERAGE_CURRENT;
+
 	if (sb_read(SB_CHARGING_VOLTAGE, &batt_new.desired_voltage))
 		batt_new.flags |= BATT_FLAG_BAD_DESIRED_VOLTAGE;
 
@@ -466,26 +552,7 @@ void battery_get_params(struct batt_params *batt)
 		batt_new.is_present = BP_NOT_SURE;
 #endif
 
-	/*
-	 * Charging allowed if both desired voltage and current are nonzero
-	 * and battery isn't full (and we read them all correctly).
-	 */
-	if (!(batt_new.flags &
-	      (BATT_FLAG_BAD_DESIRED_VOLTAGE | BATT_FLAG_BAD_DESIRED_CURRENT |
-	       BATT_FLAG_BAD_STATE_OF_CHARGE)) &&
-#ifdef CONFIG_BATTERY_REQUESTS_NIL_WHEN_DEAD
-	    /*
-	     * TODO (crosbug.com/p/29467): remove this workaround
-	     * for dead battery that requests no voltage/current
-	     */
-	    ((batt_new.desired_voltage && batt_new.desired_current &&
-	      batt_new.state_of_charge < BATTERY_LEVEL_FULL) ||
-	     (batt_new.desired_voltage == 0 && batt_new.desired_current == 0 &&
-	      batt_new.state_of_charge == 0)))
-#else
-	    batt_new.desired_voltage && batt_new.desired_current &&
-	    batt_new.state_of_charge < BATTERY_LEVEL_FULL)
-#endif
+	if (battery_want_charge(&batt_new))
 		batt_new.flags |= BATT_FLAG_WANT_CHARGE;
 	else
 		/* Force both to zero */
@@ -633,7 +700,10 @@ host_command_sb_read_word(struct host_cmd_handler_args *args)
 		return EC_RES_INVALID_PARAM;
 	rv = sb_read(p->reg, &val);
 	if (rv)
-		return EC_RES_ERROR;
+		if (rv == EC_ERROR_ACCESS_DENIED)
+			return EC_RES_ACCESS_DENIED;
+		else
+			return EC_RES_ERROR;
 
 	r->value = val;
 	args->response_size = sizeof(struct ec_response_sb_rd_word);
@@ -653,7 +723,10 @@ host_command_sb_write_word(struct host_cmd_handler_args *args)
 		return EC_RES_INVALID_PARAM;
 	rv = sb_write(p->reg, p->value);
 	if (rv)
-		return EC_RES_ERROR;
+		if (rv == EC_ERROR_ACCESS_DENIED)
+			return EC_RES_ACCESS_DENIED;
+		else
+			return EC_RES_ERROR;
 
 	return EC_RES_SUCCESS;
 }
@@ -672,7 +745,10 @@ host_command_sb_read_block(struct host_cmd_handler_args *args)
 		return EC_RES_INVALID_PARAM;
 	rv = sb_read_string(p->reg, r->data, 32);
 	if (rv)
-		return EC_RES_ERROR;
+		if (rv == EC_ERROR_ACCESS_DENIED)
+			return EC_RES_ACCESS_DENIED;
+		else
+			return EC_RES_ERROR;
 
 	args->response_size = sizeof(struct ec_response_sb_rd_block);
 

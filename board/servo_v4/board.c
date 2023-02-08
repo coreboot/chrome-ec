@@ -23,14 +23,14 @@
 #include "timer.h"
 #include "update_fw.h"
 #include "usart-stm32f0.h"
-#include "usart_tx_dma.h"
 #include "usart_rx_dma.h"
+#include "usart_tx_dma.h"
+#include "usb-stream.h"
 #include "usb_gpio.h"
 #include "usb_i2c.h"
 #include "usb_pd.h"
 #include "usb_pd_config.h"
 #include "usb_spi.h"
-#include "usb-stream.h"
 #include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
@@ -131,6 +131,7 @@ void hpd_evt(enum gpio_signal signal)
 	hpd_prev_level = level;
 }
 
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 /******************************************************************************
@@ -256,7 +257,7 @@ const struct usb_interface_descriptor USB_IFACE_DESC(USB_IFACE_EMPTY) = {
 
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("Servo V4"),
 	[USB_STR_SERIALNO] = USB_STRING_DESC("1234-a"),
 	[USB_STR_VERSION] = USB_STRING_DESC(CROS_EC_VERSION32),

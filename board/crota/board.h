@@ -53,6 +53,7 @@
 #define CONFIG_GESTURE_DETECTION_MASK BIT(CONFIG_BODY_DETECTION_SENSOR)
 #define CONFIG_GESTURE_HOST_DETECTION
 
+#define CONFIG_GMR_TABLET_MODE_CUSTOM
 /* Sensor console commands */
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
@@ -92,6 +93,8 @@
 #define PD_MAX_POWER_MW 60000
 #define PD_MAX_CURRENT_MA 3000
 #define PD_MAX_VOLTAGE_MV 20000
+
+#undef CONFIG_CMD_POWERINDEBUG
 
 /*
  * Macros for GPIO signals used in common code that don't match the
@@ -260,8 +263,8 @@ enum pwm_channel {
 enum fan_channel { FAN_CH_0 = 0, FAN_CH_COUNT };
 
 enum fan_rpm_table {
-	RPM_TABLE_CPU0,
-	RPM_TABLE_CPU1,
+	RPM_TABLE_CPU,
+	RPM_TABLE_CPU_TABLET,
 	RPM_TABLE_DDR,
 	RPM_TABLE_CHARGER,
 	RPM_TABLE_AMBIENT,
@@ -270,7 +273,22 @@ enum fan_rpm_table {
 
 enum mft_channel { MFT_CH_0 = 0, MFT_CH_COUNT };
 
+struct thermal_policy_config {
+	uint8_t fan_off_slop1;
+	uint8_t fan_max_slop1;
+	uint8_t fan_off_slop2;
+	uint8_t fan_max_slop2;
+	uint8_t fan_slop_threshold;
+	uint8_t ddr_fan_turn_on;
+	uint8_t ddr_fan_turn_off;
+	uint8_t rpm_table_cpu;
+};
+
+enum thermal_cfg_table { LAPTOP_MODE, TABLET_MODE, THERMAL_CFG_TABLE_COUNT };
+
 void motion_interrupt(enum gpio_signal signal);
+
+bool board_is_convertible(void);
 
 #endif /* !__ASSEMBLER__ */
 

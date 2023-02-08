@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-image: jbettis/ubuntu-07sep22
+image: jbettis/ubuntu-07nov22
 
 # You can update that image using this repo:
 #   https://gitlab.com/zephyr-ec/gitlab-ci-runner/-/tree/main
@@ -12,31 +12,9 @@ workflow:
   rules:
     - if: ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "coverage")
 
-# Change pip's cache directory to be inside the project directory since we can
-# only cache local items.
-variables:
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-
-# Pip's cache doesn't store the python packages
-# https://pip.pypa.io/en/stable/reference/pip_install/#caching
-#
-# If you want to also cache the installed packages, you have to install
-# them in a virtualenv and cache it as well.
-cache:
-  key: ${CI_COMMIT_SHA}
-  policy: pull
-  paths:
-    - .cache/pip
-    - venv/
-    - modules/
-    - zephyr/
-
-
 # The directory structure is:
 #
 # ${CI_PROJECT_DIR}
-#    |_ .cache/
-#        |_ pip/          - PIP Cache
 #    |_ ec_dir/           - EC repo (${EC_DIR})
 #        |_ build/        - make and zmake artifacts (${BUILD_DIR})
 #        |_ twister-out/  - Twister artifacts (${TWISTER_OUT_DIR})
@@ -58,55 +36,59 @@ before_script:
   - mkdir -p ec_dir
   - find . -mindepth 1 -maxdepth 1 -name ec_dir -o -print0 | xargs -0 -I {} mv {} ec_dir
   - export EC_DIR="${CI_PROJECT_DIR}/ec_dir"
-  # Remove old zephyr and module checkouts (unwanted cache artifact)
   - export MODULES_DIR="$CI_PROJECT_DIR/modules"
   - export ZEPHYR_BASE="${CI_PROJECT_DIR}/zephyr/main"
-  - mkdir -p "${CI_PROJECT_DIR}/zephyr"
-  - test -d ${EC_DIR}/zephyr/main && mv -T ${EC_DIR}/zephyr/main ${ZEPHYR_BASE}
-  - test -d ${EC_DIR}/modules && mv -T ${EC_DIR}/modules ${MODULES_DIR}
+  - git config --global --add safe.directory '*'
   # Get Zephyr repo and modules
-  - mkdir -p "${MODULES_DIR}"
-  - mkdir -p "${ZEPHYR_BASE}"
-  - test -d "${ZEPHYR_BASE}/.git" || git clone --depth 1 -b main https://chromium.googlesource.com/chromiumos/third_party/zephyr "${ZEPHYR_BASE}"
-  - test -d "${MODULES_DIR}/cmsis" || git clone --depth 1 -b chromeos-main https://chromium.googlesource.com/chromiumos/third_party/zephyr/cmsis "${MODULES_DIR}/cmsis"
-  - test -d "${MODULES_DIR}/hal_stm32" || git clone --depth 1 -b chromeos-main https://chromium.googlesource.com/chromiumos/third_party/zephyr/hal_stm32 "${MODULES_DIR}/hal_stm32"
-  - test -d "${MODULES_DIR}/nanopb" || git clone --depth 1 -b main https://chromium.googlesource.com/chromiumos/third_party/zephyr/nanopb "${MODULES_DIR}/nanopb"
-  - test -d "${MODULES_DIR}/cryptoc" || git clone --depth 1 -b main https://chromium.googlesource.com/chromiumos/third_party/cryptoc "${MODULES_DIR}/cryptoc"
+  - checkout_at_date() {
+            local url="$1" ;
+            local branch="$2" ;
+            local path="$3" ;
+            local date="$4" ;
+            local retries=5 ;
+
+            while [ ${retries} -gt 0 ] ; do
+              rm -rf "${path}" ;
+              mkdir -p "${path}" ;
+              if git clone --depth 1 -b "${branch}" "${url}" "${path}"; then
+                break ;
+              else
+                echo "git clone failed will retry ${retries} times";
+              fi ;
+              retries="$(( ${retries} - 1 ))" ;
+            done ;
+            cd "${path}" ;
+            rev="$(git rev-list -n 1 --before="${date}" "${branch}")" ;
+            depth=1 ;
+            while [ -z "${rev}" ] ; do
+              depth="$(( ${depth} + 100 ))" ;
+              git fetch --depth="${depth}" ;
+              rev="$(git rev-list -n 1 --before="${date}" "${branch}")" ;
+            done ;
+            git checkout -d "${rev}" ;
+    }
+  - ec_commit_date="$(cd ${EC_DIR} ; git log -1 HEAD --format=%cd --date=iso)"
+  - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/zephyr" "main" "${ZEPHYR_BASE}" "${ec_commit_date}"
+  - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/zephyr/cmsis" "chromeos-main" "${MODULES_DIR}/cmsis" "${ec_commit_date}"
+  - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/zephyr/hal_stm32" "chromeos-main" "${MODULES_DIR}/hal_stm32" "${ec_commit_date}"
+  - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/zephyr/nanopb" "main" "${MODULES_DIR}/nanopb" "${ec_commit_date}"
+  - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/cryptoc" "main" "${MODULES_DIR}/cryptoc" "${ec_commit_date}"
   # Add a symlink so the ec appears in modules directory (hack to make zmake work)
   - ln -s "${EC_DIR}" "${MODULES_DIR}/ec"
   # Install Python and packages
   - python3 -V  # Print out python version for debugging
   - python3 -m pip install "${EC_DIR}/zephyr/zmake[tests]" --user
-  - python3 -m pip install pyyaml packaging ply psutil 'pyelftools>=0.28'
   - export PATH="$PATH:$HOME/.local/bin"
   - export PYTHONIOENCODING=utf-8
   # Build directory
   - export BUILD_DIR=${EC_DIR}/build
   - export TWISTER_OUT_DIR=${EC_DIR}/twister-out
-  # Set up Twister to use the "host" toolchain, as defined in upstream Zephyr
-  # repo, ultimately including ${ZEPHYR_BASE}/cmake/toolchain/host/generic.cmake
-  - export TOOLCHAIN_ROOT=${ZEPHYR_BASE}
-  - export ZEPHYR_TOOLCHAIN_VARIANT=host
-
-seed_cache:
-  stage: build
-  needs: []
-  cache:
-    key: ${CI_COMMIT_SHA}
-    paths:
-      - .cache/pip
-      - venv/
-      - modules/
-      - zephyr/
-    policy: push
-  script:
-    - ls "${MODULES_DIR}" "${ZEPHYR_BASE}"
 
 # Users of this template must set:
 # $PROJECT to the project to build. E.g., "lazor"
 .build_template: &build_template
   stage: build
-  needs: ["seed_cache"]
+  needs: []
   script:
     - zmake --zephyr-base "${ZEPHYR_BASE}"
       --modules-dir "${MODULES_DIR}" -l DEBUG build
@@ -140,49 +122,79 @@ seed_cache:
 # merged_coverage
 .coverage_template: &coverage_template
   stage: test
-  needs: ["merged_coverage", "zephyr_coverage", "twister_coverage"]
+  needs:
+    - "merged_coverage"
+    - "zephyr_coverage"
+    # - "twister_coverage"
   script:
     - cd ${EC_DIR}
     - zmake --zephyr-base "${ZEPHYR_BASE}"
       --modules-dir "${MODULES_DIR}" -l DEBUG build --coverage
       -B "${BUILD_DIR}" -t ${TOOLCHAIN:-zephyr}
       "${PROJECT}"
-    - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/${PROJECT}/output/merged_twister.info" -a "${BUILD_DIR}/${PROJECT}/output/zephyr.info" -a "${BUILD_DIR}/zephyr_codecov/fixed.info"
-    - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/${PROJECT}/output/merged_twister_no_ec.info" -e "${BUILD_DIR}/${PROJECT}/output/merged_twister.info" "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
-    - grep "SF:" "${BUILD_DIR}/${PROJECT}/output/zephyr.info" | sort -u |
-      sed -e 's|^SF:||' | xargs lcov --rc lcov_branch_coverage=1
-      -o "${BUILD_DIR}/${PROJECT}/output/filtered_twister.info"
-      -e "${BUILD_DIR}/${PROJECT}/output/merged_twister_no_ec.info"
-    - /usr/bin/genhtml --branch-coverage -q
-      -o "${BUILD_DIR}/${PROJECT}/output/filtered_twister_rpt"
-      -t "${PROJECT} coverage of twister tests"
-      -s "${BUILD_DIR}/${PROJECT}/output/filtered_twister.info"
+    # - lcov --rc lcov_branch_coverage=1
+    #   -o "${BUILD_DIR}/${PROJECT}/output/merged_twister.info"
+    #   -a "${BUILD_DIR}/${PROJECT}/output/zephyr.info"
+    #   -a "${BUILD_DIR}/zephyr_codecov/fixed.info"
+    # - lcov --rc lcov_branch_coverage=1
+    #   -o "${BUILD_DIR}/${PROJECT}/output/merged_twister_no_ec.info"
+    #   -e "${BUILD_DIR}/${PROJECT}/output/merged_twister.info"
+    #   "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
+    # - grep "SF:" "${BUILD_DIR}/${PROJECT}/output/zephyr.info" | sort -u |
+    #   sed -e 's|^SF:||' | xargs lcov --rc lcov_branch_coverage=1
+    #   -o "${BUILD_DIR}/${PROJECT}/output/filtered_twister.info"
+    #   -e "${BUILD_DIR}/${PROJECT}/output/merged_twister_no_ec.info"
+    # - /usr/bin/genhtml --branch-coverage -q
+    #   -o "${BUILD_DIR}/${PROJECT}/output/filtered_twister_rpt"
+    #   -t "${PROJECT} coverage of twister tests"
+    #   -s "${BUILD_DIR}/${PROJECT}/output/filtered_twister.info"
     - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/${PROJECT}/output/merged.info"
-      -a "${BUILD_DIR}/${PROJECT}/output/zephyr.info" -a build/merged.info
-    - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/${PROJECT}/output/no_zephyr.info"
+      -a "${BUILD_DIR}/${PROJECT}/output/zephyr.info"
+      -a "${BUILD_DIR}/merged.info"
+    - lcov --rc lcov_branch_coverage=1
+      -o "${BUILD_DIR}/${PROJECT}/output/no_zephyr.info"
       -r "${BUILD_DIR}/${PROJECT}/output/zephyr.info" "${ZEPHYR_BASE}/**"
-      "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
+      "${MODULES_DIR}/**"
       "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
       "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
-      "${EC_DIR}/zephyr/projects/**" "/usr/include/x86_64-linux-gnu/**"
-      "${EC_DIR}/build/*/build-*/zephyr/*/generated/**" "${EC_DIR}/test/**"
+      "${EC_DIR}/zephyr/program/**" "/usr/include/**"
+      "${EC_DIR}/build/**" "${EC_DIR}/twister-out*/**"
+      "${EC_DIR}/test/**"
       "${EC_DIR}/zephyr/shim/chip/npcx/npcx_monitor/**"
       "${EC_DIR}/zephyr/emul/**" "${EC_DIR}/zephyr/test/**"
       "**/testsuite/**" "**/subsys/emul/**"
-    - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/${PROJECT}/output/merged_no_zephyr.info"
-      -r "${BUILD_DIR}/${PROJECT}/output/merged.info"
-      "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
-      "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
-      "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
-      "${EC_DIR}/zephyr/projects/**" "/usr/include/x86_64-linux-gnu/**"
-      "${EC_DIR}/build/*/build-*/zephyr/*/generated/**" "${EC_DIR}/test/**"
-      "${EC_DIR}/zephyr/shim/chip/npcx/npcx_monitor/**"
-      "${EC_DIR}/zephyr/emul/**" "${EC_DIR}/zephyr/test/**"
-      "**/testsuite/**" "**/subsys/emul/**"
-    - grep "SF:" "${BUILD_DIR}/${PROJECT}/output/no_zephyr.info" | sort -u |
-      sed -e 's|^SF:||' | xargs lcov --rc lcov_branch_coverage=1
+    - util/lcov_stencil.py -o "${BUILD_DIR}/${PROJECT}/output/prefiltered.info"
+      "${BUILD_DIR}/${PROJECT}/output/no_zephyr.info"
+      "${BUILD_DIR}/${PROJECT}/output/merged.info"
+    - lcov --rc lcov_branch_coverage=1
       -o "${BUILD_DIR}/${PROJECT}/output/filtered_no_zephyr.info"
-      -e "${BUILD_DIR}/${PROJECT}/output/merged_no_zephyr.info"
+      -r "${BUILD_DIR}/${PROJECT}/output/prefiltered.info"
+      "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
+      "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
+      "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
+      "${EC_DIR}/zephyr/program/**" "/usr/include/**"
+      "${EC_DIR}/build/**" "${EC_DIR}/twister-out*/**"
+      "${EC_DIR}/zephyr/shim/chip/npcx/npcx_monitor/**"
+      "${EC_DIR}/test/**"
+      "${EC_DIR}/include/tests/**"
+      "${EC_DIR}/private/test/**"
+      "${EC_DIR}/private/fingerprint/*/mcutest/**"
+      "${EC_DIR}/zephyr/test/**"
+      "${EC_DIR}/include/mock/**"
+      "${EC_DIR}/common/mock/**"
+      "${EC_DIR}/board/host/**"
+      "${EC_DIR}/chip/host/**"
+      "${EC_DIR}/core/host/**"
+      "${EC_DIR}/zephyr/emul/**"
+      "${EC_DIR}/zephyr/mock/**"
+      "**/*_test.c"
+      "**/*_test.h"
+      "**/*_emul.c"
+      "**/*_emul.h"
+      "${EC_DIR}/include/test_util.h"
+      "${EC_DIR}/common/test_util.c"
+      "${EC_DIR}/zephyr/shim/src/test_util.c"
+      "${EC_DIR}/zephyr/shim/src/ztest_system.c"
     - /usr/bin/genhtml --branch-coverage -q
       -o "${BUILD_DIR}/${PROJECT}/output/filtered_no_zephyr_rpt"
       -t "${PROJECT} coverage w/o zephyr"
@@ -204,6 +216,11 @@ herobrine:
 herobrine_coverage:
   variables:
     PROJECT: "herobrine"
+  <<: *coverage_template
+
+nivviks_coverage:
+  variables:
+    PROJECT: "nivviks"
   <<: *coverage_template
 
 it8xxx2_evb:
@@ -256,13 +273,24 @@ skyrim_coverage:
     PROJECT: "skyrim"
   <<: *coverage_template
 
+rex:
+  variables:
+    PROJECT: "rex"
+  <<: *build_template
+
+rex_coverage:
+  variables:
+    PROJECT: "rex"
+  <<: *coverage_template
+
 ec_coverage:
   stage: test
-  needs: ["seed_cache"]
+  needs: []
   script:
     - cd ${EC_DIR}
-    - make -j8 CRYPTOC_DIR="${MODULES_DIR}/cryptoc"
+    - make -j$(nproc) CRYPTOC_DIR="${MODULES_DIR}/cryptoc"
       CROSS_COMPILE_arm=/opt/zephyr-sdk/arm-zephyr-eabi/bin/arm-zephyr-eabi-
+      CROSS_COMPILE_host=/usr/bin/
       test-coverage
   artifacts:
     paths:
@@ -273,10 +301,10 @@ ec_coverage:
 
 zephyr_coverage:
   stage: test
-  needs: ["seed_cache"]
+  needs: []
   script:
     - python3 ${EC_DIR}/twister --coverage --outdir "${TWISTER_OUT_DIR}"
-      -v -i --gcov-tool gcov -x=ALLOW_WARNINGS=ON
+      -v -i -x=ALLOW_WARNINGS=ON
   artifacts:
     paths:
       - ec_dir/twister-out/coverage.info
@@ -285,15 +313,20 @@ zephyr_coverage:
 
 zephyr_boards_coverage:
   stage: build
-  needs: ["seed_cache"]
+  needs: []
+  parallel: 5
   script:
     - cd ${EC_DIR}
+    - projects=( $(zmake --zephyr-base "${ZEPHYR_BASE}"
+      --modules-dir "${MODULES_DIR}" list-projects |
+      split -n r/"${CI_NODE_INDEX}"/"${CI_NODE_TOTAL}") )
     - zmake --zephyr-base "${ZEPHYR_BASE}"
       --modules-dir "${MODULES_DIR}" -l DEBUG build
-      --coverage --boards-only --delete-intermediates
+      --coverage --delete-intermediates "${projects[@]}"
+    - mv build/zephyr/all_builds.info "build/zephyr/all_builds${CI_NODE_INDEX}.info"
   artifacts:
     paths:
-      - ec_dir/build/zephyr/all_builds.info
+      - ec_dir/build/zephyr/all_builds*.info
     expire_in: 1 week
   coverage: '/lines\.*: \d+\.\d+%/'
 
@@ -303,37 +336,42 @@ merged_coverage:
   stage: test
   needs: ["ec_coverage", "zephyr_coverage", "zephyr_boards_coverage"]
   script:
-    - lcov --rc lcov_branch_coverage=1 -o ${BUILD_DIR}/merged.info
-      -a ${BUILD_DIR}/coverage/lcov.info -a "${TWISTER_OUT_DIR}/coverage.info"
-    - lcov --rc lcov_branch_coverage=1 -o ${BUILD_DIR}/merged_no_zephyr.info
-      -r ${BUILD_DIR}/merged.info
-      "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
-      "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
-      "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
-      "${EC_DIR}/zephyr/projects/**" "/usr/include/x86_64-linux-gnu/**"
-      "${EC_DIR}/build/*/build-*/zephyr/*/generated/**" "${EC_DIR}/test/**"
-      "${EC_DIR}/zephyr/shim/chip/npcx/npcx_monitor/**"
-      "${EC_DIR}/zephyr/emul/**" "${EC_DIR}/zephyr/test/**"
-      "**/testsuite/**" "**/subsys/emul/**"
-    - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/all_builds_merged.info"
-      -a "${BUILD_DIR}/zephyr/all_builds.info" -a ${BUILD_DIR}/merged.info
-    - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/all_builds_no_zephyr.info"
-      -r "${BUILD_DIR}/all_builds_merged.info" "${ZEPHYR_BASE}/**"
-      "${ZEPHYR_BASE}/**" "${MODULES_DIR}/**"
-      "${EC_DIR}/zephyr/drivers/**" "${EC_DIR}/zephyr/include/drivers/**"
-      "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
-      "${EC_DIR}/zephyr/projects/**" "/usr/include/x86_64-linux-gnu/**"
-      "${EC_DIR}/build/*/build-*/zephyr/*/generated/**" "${EC_DIR}/test/**"
-      "${EC_DIR}/zephyr/shim/chip/npcx/npcx_monitor/**"
-      "${EC_DIR}/zephyr/emul/**" "${EC_DIR}/zephyr/test/**"
-      "**/testsuite/**" "**/subsys/emul/**"
-    - grep "SF:" "${BUILD_DIR}/zephyr/all_builds.info" | sort -u |
-      sed -e 's|^SF:||' | xargs lcov --rc lcov_branch_coverage=1
+    # build_dir / "all_tests.info" -> "${BUILD_DIR}/merged.info"
+    - lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/merged.info"
+      -a "${BUILD_DIR}/coverage/lcov.info" -a "${TWISTER_OUT_DIR}/coverage.info"
+    - printf ' -a %s' ${BUILD_DIR}/zephyr/all_builds[0-9]*.info | xargs -x
+      lcov --rc lcov_branch_coverage=1 -o "${BUILD_DIR}/zephyr/zephyr_merged.info"
+      -a "${BUILD_DIR}/merged.info"
+    - lcov --rc lcov_branch_coverage=1
       -o "${BUILD_DIR}/all_builds_filtered.info"
-      -e "${BUILD_DIR}/all_builds_no_zephyr.info"
+      -r "${BUILD_DIR}/zephyr/zephyr_merged.info"
+      "${EC_DIR}/build/**" "${EC_DIR}/twister-out*/**" "/usr/include/**"
+      "/usr/lib/**"
+      "${EC_DIR}/test/**"
+      "${EC_DIR}/include/tests/**"
+      "${EC_DIR}/private/test/**"
+      "${EC_DIR}/private/fingerprint/*/mcutest/**"
+      "${EC_DIR}/zephyr/test/**"
+      "${ZEPHYR_BASE}/main/subsys/testsuite/**"
+      "${EC_DIR}/include/mock/**"
+      "${EC_DIR}/common/mock/**"
+      "${EC_DIR}/board/host/**"
+      "${EC_DIR}/chip/host/**"
+      "${EC_DIR}/core/host/**"
+      "${EC_DIR}/zephyr/emul/**"
+      "${EC_DIR}/zephyr/mock/**"
+      "${ZEPHYR_BASE}/main/subsys/emul/**"
+      "**/*_test.c"
+      "**/*_test.h"
+      "**/*_emul.c"
+      "**/*_emul.h"
+      "${EC_DIR}/include/test_util.h"
+      "${EC_DIR}/common/test_util.c"
+      "${EC_DIR}/zephyr/shim/src/test_util.c"
+      "${EC_DIR}/zephyr/shim/src/ztest_system.c"
     - /usr/bin/genhtml --branch-coverage -q
       -o "${BUILD_DIR}/all_builds_filtered_rpt"
-      -t "All boards coverage w/o zephyr"
+      -t "All boards and tests merged"
       -p ${EC_DIR}
       -s "${BUILD_DIR}/all_builds_filtered.info"
   artifacts:
@@ -345,41 +383,42 @@ merged_coverage:
 
 testall:
   stage: test
-  needs: ["seed_cache"]
+  needs: []
   script:
     - python3 ${EC_DIR}/twister --outdir "${TWISTER_OUT_DIR}" -v -i
       -x=ALLOW_WARNINGS=ON
 
-twister_coverage:
-  stage: test
-  needs: ["seed_cache"]
-  script:
-    - mkdir -p ${BUILD_DIR}/zephyr_codecov
-    - for commitid in $(cd "${ZEPHYR_BASE}" ; git fetch --depth=100 ; git log | awk '/GitOrigin-RevId:/ {print $2}') ; do
-        echo "COMMITID = ${commitid?}" ;
-        if wget -O /tmp/coverage.html "https://codecov.io/gh/zephyrproject-rtos/zephyr/commit/${commitid?}/build" ; then
-          downloadurl=$(sed -e '/download\/build/!d' -e 's|^.*href="|https://codecov.io|' -e 's|".*$||' /tmp/coverage.html | head -1) ;
-          echo "DOWNLOADURL = ${downloadurl?}" ;
-          wget -O ${BUILD_DIR}/zephyr_codecov/merged.info.raw "${downloadurl?}" ;
-          sed <${BUILD_DIR}/zephyr_codecov/merged.info.raw >${BUILD_DIR}/zephyr_codecov/merged.info
-            -e '1,/<<<<<< network/d' -e '/<<<<<< EOF/,$d' ;
-          sed <${BUILD_DIR}/zephyr_codecov/merged.info >${BUILD_DIR}/zephyr_codecov/fixed.info
-            -e "s|/__w/zephyr/zephyr|${ZEPHYR_BASE}|"
-            -e "s|/__w/zephyr/modules/hal/cmsis|${MODULES_DIR}/cmsis|"
-            -e "s|/__w/zephyr/modules|${MODULES_DIR}|" ;
-          break ;
-        fi ;
-      done
-    - lcov --rc lcov_branch_coverage=1 --summary ${BUILD_DIR}/zephyr_codecov/fixed.info
-  artifacts:
-    paths:
-      - ec_dir/build/zephyr_codecov/fixed.info
-    expire_in: 1 week
-  coverage: '/lines\.*: \d+\.\d+%/'
+# The download url changed. Disable until we can figure it out.
+# twister_coverage:
+#   stage: test
+#   needs: []
+#   script:
+#     - mkdir -p ${BUILD_DIR}/zephyr_codecov
+#     - for commitid in $(cd "${ZEPHYR_BASE}" ; git fetch --depth=100 ; git log | awk '/GitOrigin-RevId:/ {print $2}') ; do
+#         echo "COMMITID = ${commitid?}" ;
+#         if wget -O /tmp/coverage.html "https://app.codecov.io/gh/zephyrproject-rtos/zephyr/commit/${commitid?}" ; then
+#           downloadurl=$(sed -e '/download\/build/!d' -e 's|^.*href="|https://codecov.io|' -e 's|".*$||' /tmp/coverage.html | head -1) ;
+#           echo "DOWNLOADURL = ${downloadurl?}" ;
+#           wget -O ${BUILD_DIR}/zephyr_codecov/merged.info.raw "${downloadurl?}" ;
+#           sed <${BUILD_DIR}/zephyr_codecov/merged.info.raw >${BUILD_DIR}/zephyr_codecov/merged.info
+#             -e '1,/<<<<<< network/d' -e '/<<<<<< EOF/,$d' ;
+#           sed <${BUILD_DIR}/zephyr_codecov/merged.info >${BUILD_DIR}/zephyr_codecov/fixed.info
+#             -e "s|/__w/zephyr/zephyr|${ZEPHYR_BASE}|"
+#             -e "s|/__w/zephyr/modules/hal/cmsis|${MODULES_DIR}/cmsis|"
+#             -e "s|/__w/zephyr/modules|${MODULES_DIR}|" ;
+#           break ;
+#         fi ;
+#       done
+#     - lcov --rc lcov_branch_coverage=1 --summary ${BUILD_DIR}/zephyr_codecov/fixed.info
+#   artifacts:
+#     paths:
+#       - ec_dir/build/zephyr_codecov/fixed.info
+#     expire_in: 1 week
+#   coverage: '/lines\.*: \d+\.\d+%/'
 
 zmake_coverage:
   stage: test
-  needs: ["seed_cache"]
+  needs: []
   script:
     - cd ${EC_DIR}/zephyr/zmake
     - coverage run --source=zmake -m pytest .

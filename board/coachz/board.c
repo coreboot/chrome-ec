@@ -10,13 +10,13 @@
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "common.h"
-#include "extpower.h"
 #include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi_common.h"
 #include "driver/accelgyro_bmi260.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
+#include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "lid_switch.h"
@@ -29,9 +29,9 @@
 #include "pwm.h"
 #include "pwm_chip.h"
 #include "queue.h"
-#include "system.h"
 #include "shi_chip.h"
 #include "switch.h"
+#include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
 #include "usbc_ppc.h"
@@ -49,6 +49,7 @@ static void ppc_interrupt(enum gpio_signal signal);
 static void board_connect_c0_sbu(enum gpio_signal s);
 static void ks_interrupt(enum gpio_signal s);
 
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 /*
@@ -71,6 +72,10 @@ struct pchg pchgs[] = {
 			.irq_pin = GPIO_PCHG_P0,
 			.full_percent = 96,
 			.block_size = 128,
+		},
+		.policy = {
+			[PCHG_CHIPSET_STATE_ON] = &pchg_policy_on,
+			[PCHG_CHIPSET_STATE_SUSPEND] = &pchg_policy_suspend,
 		},
 		.events = QUEUE_NULL(PCHG_EVENT_QUEUE_SIZE, enum pchg_event),
 	},
@@ -509,6 +514,7 @@ void board_tcpc_init(void)
 
 	/* Enable PPC interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_SWCTL_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_SWCTL_INT_ODL);
 
 	/* Enable TCPC interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
@@ -679,8 +685,8 @@ int board_set_active_charge_port(int port)
 	return EC_SUCCESS;
 }
 
-void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
-			    int charge_mv)
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+				       int max_ma, int charge_mv)
 {
 	/*
 	 * Ignore lower charge ceiling on PD transition if our battery is
@@ -692,9 +698,7 @@ void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 		charge_ma = max_ma;
 	}
 
-	charge_ma = charge_ma * 95 / 100;
-	charge_set_input_current_limit(
-		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
+	charge_set_input_current_limit(charge_ma, charge_mv);
 }
 
 uint16_t tcpc_get_alert_status(void)

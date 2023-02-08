@@ -16,14 +16,14 @@
 #include "builtin/assert.h"
 #include "common.h"
 #include "console.h"
+#include "hpet.h"
+#include "interrupts.h"
 #include "link_defs.h"
 #include "panic.h"
 #include "task.h"
+#include "task_defs.h"
 #include "timer.h"
 #include "util.h"
-#include "task_defs.h"
-#include "interrupts.h"
-#include "hpet.h"
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_SYSTEM, outstr)
@@ -116,7 +116,7 @@ static const struct {
 /* Contexts for all tasks */
 static task_ tasks[TASK_ID_COUNT];
 /* Validity checks about static task invariants */
-BUILD_ASSERT(TASK_ID_COUNT <= sizeof(unsigned) * 8);
+BUILD_ASSERT(TASK_ID_COUNT <= sizeof(unsigned int) * 8);
 BUILD_ASSERT(TASK_ID_COUNT < (1 << (sizeof(task_id_t) * 8)));
 
 /* Stacks for all tasks */
@@ -225,9 +225,7 @@ uint32_t switch_handler(int desched, task_id_t resched)
 		panic_printf("\n\nStack overflow in %s task!\n",
 			     task_get_name(current - tasks));
 
-		if (IS_ENABLED(CONFIG_SOFTWARE_PANIC))
-			software_panic(PANIC_SW_STACK_OVERFLOW,
-				       current - tasks);
+		software_panic(PANIC_SW_STACK_OVERFLOW, current - tasks);
 	}
 
 	if (desched && !current->events) {

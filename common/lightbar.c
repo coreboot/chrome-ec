@@ -17,8 +17,8 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "lb_common.h"
-#include "lightbar.h"
 #include "lid_switch.h"
+#include "lightbar.h"
 #include "motion_sense.h"
 #include "pwm.h"
 #include "system.h"
@@ -1560,7 +1560,7 @@ struct lightbar_cmd_t {
 
 #define LBMSG(state)                     \
 	{                                \
-#state, sequence_##state \
+		#state, sequence_##state \
 	}
 #include "lightbar_msg_list.h"
 static struct lightbar_cmd_t lightbar_cmds[] = { LIGHTBAR_MSG_LIST };
@@ -1611,6 +1611,7 @@ void lightbar_task(void)
 			case LIGHTBAR_TAP:
 			case LIGHTBAR_PROGRAM:
 				st.cur_seq = st.prev_seq;
+				break;
 			default:
 				break;
 			}

@@ -86,7 +86,7 @@ cmd_elf_to_hex = $(OBJCOPY) -O ihex $< $@
 cmd_bin_to_hex = $(OBJCOPY) -I binary -O ihex \
 	--change-addresses $(_program_memory_base) $^ $@
 cmd_smap = $(NM) $< | sort > $@
-cmd_elf = $(CC) $(objs) $(libsharedobjs_elf-y) $(LDFLAGS) \
+cmd_elf = $(COMPILER) $(objs) $(libsharedobjs_elf-y) $(LDFLAGS) \
 	-o $@ -Wl,-T,$< -Wl,-Map,$(patsubst %.elf,%.map,$@)
 ifeq ($(cc-name),gcc)
 cmd_elf+= -flto-partition=one
@@ -98,8 +98,10 @@ endif
 cmd_fuzz_exe = $(CXX) $^ $(HOST_TEST_LDFLAGS) $(LDFLAGS_EXTRA) -o $@
 cmd_run_fuzz = build/host/$*/$*.exe -seed=1 -runs=1 $(silent) \
 	$(silent_err) || (echo "Test $* failed!" && false)
-cmd_exe = $(CC) $(ro-objs) $(HOST_TEST_LDFLAGS) $(LDFLAGS_EXTRA) -o $@
+cmd_exe = $(CXX) $(ro-objs) $(HOST_TEST_LDFLAGS) $(LDFLAGS_EXTRA) -o $@
 cmd_c_to_o = $(CC) -std=gnu11 $(C_WARN) $(CFLAGS) -MMD -MP -MF $@.d -c $< \
+		-MT $(@D)/$(@F) -o $(@D)/$(@F)
+cmd_c_to_s = $(CC) -S $(C_WARN) $(CFLAGS) -fno-lto -MMD -MP -MF $@.d -c $< \
 		-MT $(@D)/$(@F) -o $(@D)/$(@F)
 cmd_cxx_to_o = $(CXX) -std=gnu++17 $(CFLAGS) $(CXXFLAGS) -MMD -MP -MF $@.d -c $< \
 		      -MT $(@D)/$(@F) -o $(@D)/$(@F)
@@ -116,7 +118,7 @@ cmd_cxx_to_host = $(HOSTCXX) -std=gnu++17 $(HOST_CXXFLAGS) \
 		$(sort $(foreach c,$($(*F)-objs),util/$(c:%.o=%.cc)) $(wildcard $*.cc)) $(HOST_LDFLAGS)
 cmd_o_to_a = $(AR) rcs $@ $^
 cmd_host_test = $(MAKE) BOARD=host PROJECT=$* \
-	V=$(V) out=build/host/$* TEST_BUILD=y EMU_BUILD=y CROSS_COMPILE= \
+	V=$(V) out=build/host/$* TEST_BUILD=y EMU_BUILD=y \
 	$(if $(TEST_SCRIPT),TEST_SCRIPT=$(TEST_SCRIPT)) $(TEST_FLAG) \
 	build/host/$*/$*.exe
 cmd_coverage_test = $(subst build/host,build/coverage,$(cmd_host_test))
@@ -131,7 +133,7 @@ cmd_mv_from_tmp = mv $(out)/$*.bin.tmp $(out)/$*.bin
 cmd_extractrw-y = dd if=$(out)/$(PROJECT).bin.tmp of=$(out)/$(PROJECT).RW.bin \
 	       bs=1 count=$(_rw_size) skip=$(_rw_off) $(silent_err)
 cmd_copyrw-y = cd $(out) && cp RW/$(PROJECT).RW.flat RW/$(PROJECT).RW.bin
-cmd_sharedlib_elf = $(CC) $(libsharedobjs_deps) \
+cmd_sharedlib_elf = $(COMPILER) $(libsharedobjs_deps) \
 	-Wl,-T,common/ec.$(SHOBJLIB).ld $(LDFLAGS) \
 	-o $(out)/$(SHOBJLIB)/$(SHOBJLIB).elf \
 	-Wl,-Map,$(out)/$(SHOBJLIB)/$(SHOBJLIB).map
@@ -307,13 +309,21 @@ hex: $(hex-y)
 utils-art: $(build-art)
 
 .PHONY: utils-host
-utils-host: $(host-utils)
+ifeq ($(BOARD),host)
+utils-host: $(host-utils) $(host-utils-cxx)
+else
+utils-host:
+	$(error Building utils-host not supported when BOARD is not "host")
+endif
 
 .PHONY: utils-build
 utils-build: $(build-utils)
 
 .PHONY: utils
-utils: utils-host utils-build utils-art
+utils: utils-build utils-art
+ifeq ($(BOARD),host)
+utils: utils-host
+endif
 
 # On board test binaries
 test-targets=$(foreach t,$(test-list-y),test-$(t))
@@ -610,6 +620,11 @@ $(out)/RO/%.o:%.c
 $(out)/RW/%.o:%.c
 	$(call quiet,c_to_o,CC     )
 
+$(out)/RO/%.s:%.c
+	$(call quiet,c_to_s,CC     )
+$(out)/RW/%.s:%.c
+	$(call quiet,c_to_s,CC     )
+
 $(out)/RO/%.o:%.cc
 	$(call quiet,cxx_to_o,CXX    )
 $(out)/RW/%.o:%.cc
@@ -672,6 +687,9 @@ $(build-utils): $(out)/%:$(build-srcs)
 $(host-utils): $(out)/%:$(host-srcs)
 	$(call quiet,c_to_host,HOSTCC )
 
+$(host-utils-cxx): $(out)/%:$(host-srcs-cxx)
+	$(call quiet,cxx_to_host,HOSTCXX )
+
 $(out)/cscope.files: $(out)/$(PROJECT).bin
 	$(call quiet,deps_to_list,SH     )
 
@@ -731,6 +749,14 @@ flash_ec: $(out)/ec.bin
 .PHONY: flash_dfu
 flash_dfu: $(out)/ec.bin
 	sudo ./$(BDIR)/dfu $(out)/ec.bin
+
+.PHONY: print-all-baseboards
+print-all-baseboards: $(foreach b, $(BOARDS), print-baseboard-$(b))
+print-baseboard-%:
+	@$(MAKE) BOARD=$* V=$(V) print-one-baseboard
+.PHONY: print-one-baseboard
+print-one-baseboard:
+	@echo "${BOARD}=${BASEBOARD}"
 
 # Deprecated, use print-make-vars instead
 .PHONY: print-baseboard
@@ -829,6 +855,8 @@ help:
 	@echo "  V=1                  - Show make output"
 	@echo "  BOARD=               - Set the board name to build (Default is $(BOARD))"
 	@echo "  STATIC_VERSION=1     - Force a constant version string for reproducable builds"
+	@echo "  BUILDCC_PREFIX=      - Set the compiler prefix for the system doing "
+	@echo "     the build (defaults to 'x86_64-pc-linux-gnu-')."
 	@echo "  CROSS_COMPILE=       - Set the compiler for the board"
 	@echo "  CROSS_COMPILE_arch=  - Set the compiler for arch"
 	@echo "     The board picks its CROSS_COMPILE_arch if CROSS_COMPILE is not set."

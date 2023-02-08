@@ -8,9 +8,9 @@
 #ifndef __CROS_EC_WATCHDOG_H
 #define __CROS_EC_WATCHDOG_H
 
-#include <stdint.h>
-
 #include "config.h"
+
+#include <stdint.h>
 
 /**
  * Initialize the watchdog.
@@ -49,7 +49,7 @@ void watchdog_stop_and_unlock(void);
 #ifdef CONFIG_WATCHDOG
 void watchdog_reload(void);
 #else
-static inline void watchdog_reload(void)
+test_mockable_static_inline void watchdog_reload(void)
 {
 }
 #endif

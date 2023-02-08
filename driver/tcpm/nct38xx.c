@@ -15,9 +15,10 @@
 #include "usb_common.h"
 
 #ifdef CONFIG_ZEPHYR
+#include "usbc/tcpc_nct38xx.h"
+
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio/gpio_nct38xx.h>
-#include "usbc/tcpc_nct38xx.h"
 #endif
 
 #if defined(CONFIG_ZEPHYR) && defined(CONFIG_IO_EXPANDER_NCT38XX)
@@ -358,6 +359,7 @@ const struct tcpm_drv nct38xx_tcpm_drv = {
 #ifdef CONFIG_USB_PD_VBUS_DETECT_TCPC
 	.check_vbus_level = &tcpci_tcpm_check_vbus_level,
 #endif
+	.get_vbus_voltage = &tcpci_get_vbus_voltage,
 	.select_rp_value = &tcpci_tcpm_select_rp_value,
 	.set_cc = &nct38xx_tcpm_set_cc,
 	.set_polarity = &tcpci_tcpm_set_polarity,

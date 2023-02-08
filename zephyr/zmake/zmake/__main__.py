@@ -10,6 +10,7 @@ import os
 import pathlib
 import sys
 
+import zmake.jobserver as jobserver
 import zmake.multiproc as multiproc
 import zmake.zmake as zm
 
@@ -63,7 +64,7 @@ def maybe_reexec(argv):
     os.execve(sys.executable, [sys.executable, "-m", "zmake", *argv], env)
 
 
-def call_with_namespace(func, namespace):
+def call_with_namespace(func, namespace, **kwds):
     """Call a function with arguments applied from a Namespace.
 
     Args:
@@ -73,7 +74,6 @@ def call_with_namespace(func, namespace):
     Returns:
         The result of calling the callable.
     """
-    kwds = {}
     sig = inspect.signature(func)
     names = [p.name for p in sig.parameters.values()]
     for name, value in vars(namespace).items():
@@ -177,12 +177,53 @@ def get_argparser():
         help="Set up a build directory to be built later by the build subcommand",
     )
     add_common_configure_args(configure)
+    add_common_build_args(configure)
 
     build = sub.add_parser(
         "build",
         help="Configure and build projects",
     )
     add_common_configure_args(build)
+    add_common_build_args(build)
+
+    compare_builds = sub.add_parser(
+        "compare-builds", help="Compare output binaries from two commits"
+    )
+    compare_builds.add_argument(
+        "--ref1",
+        default="HEAD",
+        help="1st git reference (commit, branch, etc), default=HEAD",
+    )
+    compare_builds.add_argument(
+        "--ref2",
+        default="HEAD~",
+        help="2nd git reference (commit, branch, etc), default=HEAD~",
+    )
+    compare_builds.add_argument(
+        "-k",
+        "--keep-temps",
+        action="store_true",
+        help="Keep temporary build directories on exit",
+    )
+    compare_builds.add_argument(
+        "-n",
+        "--compare-configs",
+        action="store_true",
+        help="Compare configs of build outputs",
+    )
+    compare_builds.add_argument(
+        "-b",
+        "--compare-binaries-disable",
+        action="store_true",
+        help="Don't compare binaries of build outputs",
+    )
+    compare_builds.add_argument(
+        "-d",
+        "--compare-devicetrees",
+        action="store_true",
+        help="Compare devicetrees of build outputs",
+    )
+    add_common_build_args(compare_builds)
 
     list_projects = sub.add_parser(
         "list-projects",
@@ -216,6 +257,7 @@ def get_argparser():
         help="Do not configure or build before running tests.",
     )
     add_common_configure_args(test)
+    add_common_build_args(test)
 
     testall = sub.add_parser(
         "testall",
@@ -259,11 +301,34 @@ def get_argparser():
     return parser, sub
 
 
-def add_common_configure_args(sub_parser: argparse.ArgumentParser):
-    """Adds common arguments used by configure-like subcommands."""
+def add_common_build_args(sub_parser: argparse.ArgumentParser):
+    """Adds common arguments used by build-like subcommands"""
     sub_parser.add_argument(
         "-t", "--toolchain", help="Name of toolchain to use"
     )
+    sub_parser.add_argument(
+        "--extra-cflags",
+        help="Additional CFLAGS to use for target builds",
+    )
+    group = sub_parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        dest="all_projects",
+        help="Select all projects",
+    )
+    group.add_argument(
+        "project_names",
+        nargs="*",
+        metavar="project_name",
+        help="Name(s) of the project(s) to build",
+        default=[],
+    )
+
+
+def add_common_configure_args(sub_parser: argparse.ArgumentParser):
+    """Adds common arguments used by configure-like subcommands."""
     sub_parser.add_argument(
         "--bringup",
         action="store_true",
@@ -309,41 +374,16 @@ def add_common_configure_args(sub_parser: argparse.ArgumentParser):
         help="Enable CONFIG_COVERAGE Kconfig.",
     )
     sub_parser.add_argument(
-        "--extra-cflags",
-        help="Additional CFLAGS to use for target builds",
-    )
-    sub_parser.add_argument(
         "--delete-intermediates",
         action="store_true",
         dest="delete_intermediates",
         help="Delete intermediate files to save disk space",
     )
-    group = sub_parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        dest="all_projects",
-        help="Select all projects",
-    )
-    group.add_argument(
-        "--host-tests-only",
-        action="store_true",
-        dest="host_tests_only",
-        help="Select all test projects",
-    )
-    group.add_argument(
-        "--boards-only",
-        action="store_true",
-        dest="boards_only",
-        help="Select all board projects (not tests)",
-    )
-    group.add_argument(
-        "project_names",
-        nargs="*",
-        metavar="project_name",
-        help="Name(s) of the project(s) to build",
-        default=[],
+    sub_parser.add_argument(
+        "-D",
+        "--cmake-define",
+        action="append",
+        dest="cmake_defs",
     )
 
 
@@ -376,8 +416,11 @@ def main(argv=None):
         multiproc.LOG_JOB_NAMES = False
 
     logging.basicConfig(format=log_format, level=opts.log_level)
+    # Create the jobserver client BEFORE any pipes get opened in LogWriter
+    jobserver_client = jobserver.GNUMakeJobClient.from_environ(jobs=opts.jobs)
+    multiproc.LogWriter.reset()
 
-    zmake = call_with_namespace(zm.Zmake, opts)
+    zmake = call_with_namespace(zm.Zmake, opts, jobserver=jobserver_client)
     try:
         subcommand_method = getattr(zmake, opts.subcommand.replace("-", "_"))
         result = call_with_namespace(subcommand_method, opts)
@@ -385,8 +428,15 @@ def main(argv=None):
         return result or wait_rv
     finally:
         multiproc.LogWriter.wait_for_log_end()
+        for file, failed_projects in zmake.cmp_failed_projects.items():
+            if failed_projects:
+                logging.error(
+                    "Failed projects by diff in %s: %s",
+                    file,
+                    ", ".join(failed_projects),
+                )
         if zmake.failed_projects:
-            logging.error("Failed projects: %s", zmake.failed_projects)
+            logging.error("All failed projects: %s", zmake.failed_projects)
 
 
 if __name__ == "__main__":

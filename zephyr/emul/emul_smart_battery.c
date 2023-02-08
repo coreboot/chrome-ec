@@ -3,24 +3,23 @@
  * found in the LICENSE file.
  */
 
-#define DT_DRV_COMPAT zephyr_smart_battery
-
-#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
-#include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(smart_battery);
+#include "battery_smart.h"
+#include "crc8.h"
+#include "emul/emul_common_i2c.h"
+#include "emul/emul_smart_battery.h"
+#include "emul/emul_stub_device.h"
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/ztest.h>
 
-#include "emul/emul_common_i2c.h"
-#include "emul/emul_smart_battery.h"
+#define DT_DRV_COMPAT zephyr_smart_battery_emul
 
-#include "crc8.h"
-#include "battery_smart.h"
-#include "emul/emul_stub_device.h"
+#define LOG_LEVEL CONFIG_I2C_LOG_LEVEL
+LOG_MODULE_REGISTER(smart_battery);
 
 /** Run-time data used by the emulator */
 struct sbat_emul_data {
@@ -486,6 +485,10 @@ int sbat_emul_get_block_data(const struct emul *emul, int cmd, uint8_t **blk,
 		*blk = bat->mf_data;
 		*len = bat->mf_data_len;
 		return 0;
+	case SB_MANUFACTURE_INFO:
+		*blk = bat->mf_info;
+		*len = bat->mf_info_len;
+		return 0;
 	default:
 		/* Unknown command or return value is not word */
 		return 1;
@@ -784,13 +787,23 @@ static int sbat_emul_access_reg(const struct emul *emul, int reg, int bytes,
 static int sbat_emul_init(const struct emul *emul, const struct device *parent)
 {
 	struct sbat_emul_data *data = emul->data;
+	const struct i2c_common_emul_cfg *cfg = emul->cfg;
 
 	data->common.i2c = parent;
+	data->common.cfg = cfg;
 
 	i2c_common_emul_init(&data->common);
 
 	return 0;
 }
+
+#define SMART_BATTERY_VALIDATE_STRING_PROPS_SIZE(n)                            \
+	BUILD_ASSERT(sizeof(DT_INST_PROP(n, dev_chem)) - 1 <= MAX_BLOCK_SIZE); \
+	BUILD_ASSERT(sizeof(DT_INST_PROP(n, mf_data)) - 1 <= MAX_BLOCK_SIZE);  \
+	BUILD_ASSERT(sizeof(DT_INST_PROP(n, mf_info)) - 1 <= MAX_BLOCK_SIZE);  \
+	BUILD_ASSERT(sizeof(DT_INST_PROP(n, mf_name)) - 1 <= MAX_BLOCK_SIZE);
+
+DT_INST_FOREACH_STATUS_OKAY(SMART_BATTERY_VALIDATE_STRING_PROPS_SIZE)
 
 #define SMART_BATTERY_EMUL(n)                                         \
 	static struct sbat_emul_data sbat_emul_data_##n = {		\
@@ -815,6 +828,7 @@ static int sbat_emul_init(const struct emul *emul, const struct device *parent)
 				(DT_INST_PROP(n, primary_battery) *	\
 				 MODE_PRIMARY_BATTERY_SUPPORT),		\
 			.design_mv = DT_INST_PROP(n, design_mv),	\
+			.default_design_mv = DT_INST_PROP(n, design_mv),\
 			.design_cap = DT_INST_PROP(n, design_cap),	\
 			.temp = DT_INST_PROP(n, temperature),		\
 			.volt = DT_INST_PROP(n, volt),			\
@@ -843,6 +857,9 @@ static int sbat_emul_init(const struct emul *emul, const struct device *parent)
 			.dev_chem = DT_INST_PROP(n, dev_chem),		\
 			.dev_chem_len = sizeof(				\
 					DT_INST_PROP(n, dev_chem)) - 1,	\
+			.mf_info = DT_INST_PROP(n, mf_info),		\
+			.mf_info_len = sizeof(				\
+					DT_INST_PROP(n, mf_info)) - 1,	\
 			.mf_date = 0,					\
 			.cap_alarm = 0,					\
 			.time_alarm = 0,				\
@@ -868,7 +885,7 @@ static int sbat_emul_init(const struct emul *emul, const struct device *parent)
 		.addr = DT_INST_REG_ADDR(n),                          \
 	};                                                            \
 	EMUL_DT_INST_DEFINE(n, sbat_emul_init, &sbat_emul_data_##n,   \
-			    &sbat_emul_cfg_##n, &i2c_common_emul_api)
+			    &sbat_emul_cfg_##n, &i2c_common_emul_api, NULL)
 
 DT_INST_FOREACH_STATUS_OKAY(SMART_BATTERY_EMUL)
 
@@ -881,17 +898,18 @@ static void emul_smart_battery_reset_capacity(const struct emul *emul)
 	struct sbat_emul_data *bat_data = emul->data;
 	bat_data->bat.cap = bat_data->bat.default_cap;
 	bat_data->bat.full_cap = bat_data->bat.default_full_cap;
+	bat_data->bat.design_mv = bat_data->bat.default_design_mv;
 }
 
 #define SBAT_EMUL_RESET_RULE_AFTER(n) \
-	emul_smart_battery_reset_capacity(EMUL_DT_GET(DT_DRV_INST(n)))
+	emul_smart_battery_reset_capacity(EMUL_DT_GET(DT_DRV_INST(n)));
 
 static void emul_sbat_reset(const struct ztest_unit_test *test, void *data)
 {
 	ARG_UNUSED(test);
 	ARG_UNUSED(data);
 
-	DT_INST_FOREACH_STATUS_OKAY(SBAT_EMUL_RESET_RULE_AFTER);
+	DT_INST_FOREACH_STATUS_OKAY(SBAT_EMUL_RESET_RULE_AFTER)
 }
 
 ZTEST_RULE(emul_smart_battery_reset, NULL, emul_sbat_reset);

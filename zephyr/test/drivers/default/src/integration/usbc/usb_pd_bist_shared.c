@@ -3,8 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/ztest.h>
-
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
 #include "emul/tcpc/emul_tcpci_partner_snk.h"
@@ -14,6 +12,8 @@
 #include "usb_common.h"
 #include "usb_pd.h"
 #include "util.h"
+
+#include <zephyr/ztest.h>
 
 struct usb_pd_bist_shared_fixture {
 	struct tcpci_partner_data sink_5v_500ma;
@@ -73,6 +73,7 @@ static void usb_pd_bist_shared_after(void *data)
 	disconnect_sink_from_port(test_fixture->tcpci_emul);
 	disconnect_source_from_port(test_fixture->tcpci_ps8xxx_emul,
 				    test_fixture->charger_emul);
+	host_cmd_typec_control_bist_share_mode(USBC_PORT_C0, 0);
 }
 
 ZTEST_SUITE(usb_pd_bist_shared, drivers_predicate_post_main,
@@ -98,7 +99,7 @@ ZTEST_F(usb_pd_bist_shared, verify_bist_shared_mode)
 
 	/* Start up BIST shared test mode */
 	bist_data = BDO(BDO_MODE_SHARED_ENTER, 0);
-	zassume_ok(tcpci_partner_send_data_msg(&fixture->sink_5v_500ma,
+	zassert_ok(tcpci_partner_send_data_msg(&fixture->sink_5v_500ma,
 					       PD_DATA_BIST, &bist_data, 1, 0),
 		   "Failed to send BIST enter message");
 
@@ -115,7 +116,7 @@ ZTEST_F(usb_pd_bist_shared, verify_bist_shared_mode)
 
 	/* Leave BIST shared test mode */
 	bist_data = BDO(BDO_MODE_SHARED_EXIT, 0);
-	zassume_ok(tcpci_partner_send_data_msg(&fixture->sink_5v_500ma,
+	zassert_ok(tcpci_partner_send_data_msg(&fixture->sink_5v_500ma,
 					       PD_DATA_BIST, &bist_data, 1, 0),
 		   "Failed to send BIST exit message");
 
@@ -151,7 +152,7 @@ ZTEST_F(usb_pd_bist_shared, verify_bist_shared_no_snk_entry)
 
 	/* Have the source send the BIST Enter Mode */
 	bist_data = BDO(BDO_MODE_SHARED_ENTER, 0);
-	zassume_ok(tcpci_partner_send_data_msg(&fixture->src, PD_DATA_BIST,
+	zassert_ok(tcpci_partner_send_data_msg(&fixture->src, PD_DATA_BIST,
 					       &bist_data, 1, 0),
 		   "Failed to send BIST enter message");
 
@@ -180,7 +181,7 @@ ZTEST_F(usb_pd_bist_shared, verify_bist_shared_exit_no_action)
 	tcpci_snk_emul_clear_last_5v_cap(&fixture->snk_ext_500ma);
 
 	bist_data = BDO(BDO_MODE_SHARED_EXIT, 0);
-	zassume_ok(tcpci_partner_send_data_msg(&fixture->sink_5v_500ma,
+	zassert_ok(tcpci_partner_send_data_msg(&fixture->sink_5v_500ma,
 					       PD_DATA_BIST, &bist_data, 1, 0),
 		   "Failed to send BIST exit message");
 
@@ -190,4 +191,31 @@ ZTEST_F(usb_pd_bist_shared, verify_bist_shared_exit_no_action)
 	/* Verify we didn't receive any new source caps due to the mode exit */
 	f5v_cap = fixture->snk_ext_500ma.last_5v_source_cap;
 	zassert_equal(f5v_cap, 0, "Received unexpected source cap");
+}
+
+ZTEST_F(usb_pd_bist_shared, verify_control_bist_shared_mode)
+{
+	uint32_t f5v_cap;
+
+	host_cmd_typec_control_bist_share_mode(USBC_PORT_C0, 1);
+	zassert_ok(tcpci_partner_send_control_msg(&fixture->sink_5v_500ma,
+						  PD_CTRL_GET_SOURCE_CAP, 0),
+		   "Failed to send get src cap");
+	/* wait tSenderResponse (26 ms) */
+	k_sleep(K_MSEC(26));
+	/*
+	 * Verify we were offered the 3A source cap because of
+	 * bist share mode be enabled.
+	 */
+	f5v_cap = fixture->snk_ext_500ma.last_5v_source_cap;
+	/* Capability should be 5V fixed, 3 A */
+	zassert_equal((f5v_cap & PDO_TYPE_MASK), PDO_TYPE_FIXED,
+		      "PDO type wrong");
+	zassert_equal(PDO_FIXED_VOLTAGE(f5v_cap), 5000, "PDO voltage wrong");
+	zassert_equal(PDO_FIXED_CURRENT(f5v_cap), 3000,
+		      "PDO initial current wrong");
+	zassert_equal(typec_get_default_current_limit_rp(USBC_PORT_C0),
+		      TYPEC_RP_3A0, "Default rp not 3A");
+
+	host_cmd_typec_control_bist_share_mode(USBC_PORT_C0, 0);
 }

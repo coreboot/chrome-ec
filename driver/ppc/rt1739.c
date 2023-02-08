@@ -89,19 +89,26 @@ static int rt1739_vbus_sink_enable(int port, int enable)
 #ifdef CONFIG_CMD_PPC_DUMP
 static int rt1739_dump(int port)
 {
+	ccprintf("    ");
+	for (int i = 0; i < 16; i++) {
+		ccprintf("%2X ", i);
+	}
+	ccprintf("\n");
+
 	for (int i = 0; i <= 0x61; i++) {
 		int val = 0;
 		int rt = read_reg(port, i, &val);
 
 		if (i % 16 == 0)
-			CPRINTF("%02X: ", i);
+			ccprintf("%02X: ", i);
 		if (rt)
-			CPRINTF("-- ");
+			ccprintf("-- ");
 		else
-			CPRINTF("%02X ", val);
+			ccprintf("%02X ", val);
 		if (i % 16 == 15)
-			CPRINTF("\n");
+			ccprintf("\n");
 	}
+	ccprintf("\n");
 
 	return EC_SUCCESS;
 }
@@ -435,6 +442,7 @@ const struct ppc_drv rt1739_ppc_drv = {
 #ifdef CONFIG_USB_PD_FRS_PPC
 	.set_frs_enable = &rt1739_set_frs_enable,
 #endif
+	.interrupt = &rt1739_interrupt,
 };
 
 const struct bc12_drv rt1739_bc12_drv = {

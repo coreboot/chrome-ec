@@ -3,15 +3,15 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/fff.h>
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
-
 #include "accelgyro.h"
 #include "console.h"
 #include "motion_sense.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+
+#include <zephyr/fff.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
 
 FAKE_VALUE_FUNC(int, mock_init, struct motion_sensor_t *);
 
@@ -71,7 +71,7 @@ ZTEST_USER(console_cmd_accelinit, test_state_was_set)
 {
 	motion_sensors[0].state = SENSOR_INIT_ERROR;
 
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinit 0"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinit 0"));
 	zassert_equal(SENSOR_INITIALIZED, motion_sensors[0].state,
 		      "Expected %d, but got %d", SENSOR_INITIALIZED,
 		      motion_sensors[0].state);
@@ -83,7 +83,7 @@ ZTEST_USER_F(console_cmd_accelinit, test_fail_3_times)
 	motion_sensors[0].drv = &fixture->mock_drv;
 	motion_sensors[0].state = SENSOR_INITIALIZED;
 
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinit 0"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinit 0"));
 	zassert_equal(3, mock_init_fake.call_count,
 		      "Expected 3 calls, but got %d",
 		      mock_init_fake.call_count);

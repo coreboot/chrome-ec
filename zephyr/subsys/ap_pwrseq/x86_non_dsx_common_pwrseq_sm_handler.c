@@ -3,9 +3,11 @@
  * found in the LICENSE file.
  */
 
-#include <atomic.h>
+#include "zephyr_console_shim.h"
+
 #include <zephyr/init.h>
 
+#include <atomic.h>
 #include <x86_non_dsx_common_pwrseq_sm_handler.h>
 
 static K_KERNEL_STACK_DEFINE(pwrseq_thread_stack, CONFIG_AP_PWRSEQ_STACK_SIZE);
@@ -29,6 +31,10 @@ enum {
 static ATOMIC_DEFINE(flags, FLAGS_MAX);
 /* Delay in ms when starting from G3 */
 static uint32_t start_from_g3_delay_ms;
+
+#ifdef CONFIG_AP_PWRSEQ_DEBUG_MODE_COMMAND
+static bool in_debug_mode;
+#endif
 
 LOG_MODULE_REGISTER(ap_pwrseq, CONFIG_AP_PWRSEQ_LOG_LEVEL);
 
@@ -144,6 +150,13 @@ void request_start_from_g3(void)
 
 void ap_power_force_shutdown(enum ap_power_shutdown_reason reason)
 {
+#ifdef CONFIG_AP_PWRSEQ_DEBUG_MODE_COMMAND
+	/* This prevents force shutdown if debug mode is enabled */
+	if (in_debug_mode) {
+		LOG_WRN("debug_mode is enabled, preventing force shutdown");
+		return;
+	}
+#endif /* CONFIG_AP_PWRSEQ_DEBUG_MODE_COMMAND */
 	board_ap_power_force_shutdown();
 }
 
@@ -243,6 +256,11 @@ static int common_pwr_sm_run(int state)
 			k_msleep(start_from_g3_delay_ms);
 			start_from_g3_delay_ms = 0;
 
+			if (!board_ap_power_is_startup_ok()) {
+				LOG_INF("Start from G3 inhibited"
+					" by !is_startup_ok");
+				break;
+			}
 			return SYS_POWER_STATE_G3S5;
 		}
 
@@ -374,6 +392,10 @@ static int common_pwr_sm_run(int state)
 
 		/* All the power rails must be stable */
 		if (power_signal_get(PWR_ALL_SYS_PWRGD)) {
+			/*
+			 * Disable idle task deep sleep when in S0.
+			 */
+			disable_sleep(SLEEP_MASK_AP_RUN);
 #if CONFIG_PLATFORM_EC_CHIPSET_RESUME_INIT_HOOK
 			/* Notify power event before resume */
 			ap_power_ev_send_callbacks(AP_POWER_RESUME_INIT);
@@ -642,3 +664,29 @@ static int pwrseq_init(const struct device *dev)
  * the signals depend upon, such as GPIO, ADC etc.
  */
 SYS_INIT(pwrseq_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
+
+#ifdef CONFIG_AP_PWRSEQ_DEBUG_MODE_COMMAND
+/*
+ * Intel debugger puts SOC in boot halt mode for step debugging,
+ * during this time EC may lose Sx lines, Adding this console
+ * command to avoid force shutdown.
+ */
+static int disable_force_shutdown(int argc, const char **argv)
+{
+	if (argc > 1) {
+		if (!strcmp(argv[1], "enable")) {
+			in_debug_mode = true;
+		} else if (!strcmp(argv[1], "disable")) {
+			in_debug_mode = false;
+		} else {
+			return EC_ERROR_PARAM1;
+		}
+	}
+	LOG_INF("debug_mode = %s", (in_debug_mode ? "enabled" : "disabled"));
+
+	return EC_SUCCESS;
+}
+
+DECLARE_CONSOLE_COMMAND(debug_mode, disable_force_shutdown, "[enable|disable]",
+			"Prevents force shutdown if enabled");
+#endif /* CONFIG_AP_PWRSEQ_DEBUG_MODE_COMMAND */

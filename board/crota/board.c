@@ -10,33 +10,28 @@
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
-#include "gpio.h"
-#include "gpio_signal.h"
-#include "hooks.h"
 #include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_bmi260.h"
 #include "driver/accelgyro_lsm6dso.h"
 #include "fw_config.h"
+#include "gpio.h"
+#include "gpio_signal.h"
 #include "hooks.h"
 #include "lid_switch.h"
-#include "power_button.h"
 #include "power.h"
+#include "power_button.h"
 #include "registers.h"
 #include "switch.h"
 #include "tablet_mode.h"
 #include "throttle_ap.h"
 #include "usbc_config.h"
 
-#include "gpio_list.h" /* Must come after other header files. */
+/* Must come after other header files and interrupt handler declarations */
+#include "gpio_list.h"
 
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
-
-__override void board_cbi_init(void)
-{
-	config_usb_db_type();
-}
 
 /* Called on AP S3 -> S0 transition */
 static void board_chipset_resume(void)
@@ -55,3 +50,20 @@ static void board_chipset_suspend(void)
 	gpio_set_level(GPIO_EC_KB_BL_EN_L, 1);
 }
 DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, board_chipset_suspend, HOOK_PRIO_DEFAULT);
+
+bool board_is_convertible(void)
+{
+	/*
+	 * convertible = 0
+	 * clamshell = 1
+	 */
+	return !get_fw_config().form_factor;
+}
+
+int board_sensor_at_360(void)
+{
+	if (board_is_convertible())
+		return !gpio_get_level(GPIO_TABLET_MODE_L);
+
+	return 0;
+}

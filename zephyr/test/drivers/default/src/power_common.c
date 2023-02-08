@@ -3,31 +3,30 @@
  * found in the LICENSE file.
  */
 
+#include "battery.h"
+#include "battery_smart.h"
+#include "chipset.h"
+#include "common.h"
+#include "ec_tasks.h"
+#include "emul/emul_common_i2c.h"
+#include "emul/emul_smart_battery.h"
+#include "extpower.h"
+#include "hooks.h"
+#include "host_command.h"
+#include "power.h"
+#include "task.h"
+#include "test/drivers/stubs.h"
+#include "test/drivers/test_state.h"
+#include "test/drivers/utils.h"
+
 #include <string.h>
-#include <zephyr/ztest.h>
+
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/gpio/gpio_emul.h>
 #include <zephyr/shell/shell.h>
 #include <zephyr/shell/shell_dummy.h>
 #include <zephyr/shell/shell_uart.h>
-
-#include "chipset.h"
-#include "common.h"
-#include "extpower.h"
-#include "hooks.h"
-#include "host_command.h"
-#include "power.h"
-#include "test/drivers/stubs.h"
-#include "task.h"
-#include "ec_tasks.h"
-#include "test/drivers/test_state.h"
-
-#include "emul/emul_common_i2c.h"
-#include "emul/emul_smart_battery.h"
-
-#include "battery.h"
-#include "battery_smart.h"
-#include "test/drivers/utils.h"
+#include <zephyr/ztest.h>
 
 #define BATTERY_NODE DT_NODELABEL(battery)
 
@@ -191,57 +190,57 @@ ZTEST(power_common_no_tasks, test_power_exit_hard_off)
 	/* Force initial state */
 	power_set_state(POWER_G3);
 	test_power_common_state();
-	zassert_equal(POWER_G3, power_get_state(), NULL);
+	zassert_equal(POWER_G3, power_get_state());
 
 	/* Test after exit hard off, we reach G3S5 */
 	chipset_exit_hard_off();
 	test_power_common_state();
-	zassert_equal(POWER_G3S5, power_get_state(), NULL);
+	zassert_equal(POWER_G3S5, power_get_state());
 
 	/* Go back to G3 and check we stay there */
 	power_set_state(POWER_G3);
 	test_power_common_state();
-	zassert_equal(POWER_G3, power_get_state(), NULL);
+	zassert_equal(POWER_G3, power_get_state());
 
 	/* Exit G3 again */
 	chipset_exit_hard_off();
 	test_power_common_state();
-	zassert_equal(POWER_G3S5, power_get_state(), NULL);
+	zassert_equal(POWER_G3S5, power_get_state());
 
 	/* Go to S5G3 */
 	power_set_state(POWER_S5G3);
 	test_power_common_state();
-	zassert_equal(POWER_S5G3, power_get_state(), NULL);
+	zassert_equal(POWER_S5G3, power_get_state());
 
 	/* Test exit hard off in S5G3 -- should set want_g3_exit */
 	chipset_exit_hard_off();
 	/* Go back to G3 and check we exit it to G3S5 */
 	power_set_state(POWER_G3);
 	test_power_common_state();
-	zassert_equal(POWER_G3S5, power_get_state(), NULL);
+	zassert_equal(POWER_G3S5, power_get_state());
 
 	/* Test exit hard off is cleared on entering S5 */
 	chipset_exit_hard_off();
 	power_set_state(POWER_S5);
 	test_power_common_state();
-	zassert_equal(POWER_S5, power_get_state(), NULL);
+	zassert_equal(POWER_S5, power_get_state());
 
 	/* Go back to G3 and check we stay in G3 */
 	power_set_state(POWER_G3);
 	test_power_common_state();
-	zassert_equal(POWER_G3, power_get_state(), NULL);
+	zassert_equal(POWER_G3, power_get_state());
 
 	/* Test exit hard off doesn't work on other states */
 	power_set_state(POWER_S5S3);
 	test_power_common_state();
-	zassert_equal(POWER_S5S3, power_get_state(), NULL);
+	zassert_equal(POWER_S5S3, power_get_state());
 	chipset_exit_hard_off();
 	test_power_common_state();
 
 	/* Go back to G3 and check we stay in G3 */
 	power_set_state(POWER_G3);
 	test_power_common_state();
-	zassert_equal(POWER_G3, power_get_state(), NULL);
+	zassert_equal(POWER_G3, power_get_state());
 }
 
 /* Test reboot ap on g3 host command is triggering reboot */
@@ -267,28 +266,28 @@ ZTEST(power_common_no_tasks, test_power_reboot_ap_at_g3)
 	/* Force initial state S0 */
 	power_set_state(POWER_S0);
 	test_power_common_state();
-	zassert_equal(POWER_S0, power_get_state(), NULL);
+	zassert_equal(POWER_S0, power_get_state());
 
 	/* Test version 0 (no delay argument) */
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
 
 	/* Go to G3 and check if reboot is triggered */
 	power_set_state(POWER_G3);
 	test_power_common_state();
-	zassert_equal(POWER_G3S5, power_get_state(), NULL);
+	zassert_equal(POWER_G3S5, power_get_state());
 
 	/* Test version 1 (with delay argument) */
 	args.version = 1;
 	delay_ms = 3000;
 	params.reboot_ap_at_g3_delay = delay_ms / 1000; /* in seconds */
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
 
 	/* Go to G3 and check if reboot is triggered after delay */
 	power_set_state(POWER_G3);
 	before_time = k_uptime_get();
 	test_power_common_state();
-	zassert_true(k_uptime_delta(&before_time) >= 3000, NULL);
-	zassert_equal(POWER_G3S5, power_get_state(), NULL);
+	zassert_true(k_uptime_delta(&before_time) >= 3000);
+	zassert_equal(POWER_G3S5, power_get_state());
 }
 
 /** Test setting cutoff and stay-up battery levels through host command */
@@ -312,7 +311,7 @@ ZTEST(power_common, test_power_hc_smart_discharge)
 
 	/* Test fail when battery capacity is not available */
 	i2c_common_emul_set_read_fail_reg(common_data, SB_FULL_CHARGE_CAPACITY);
-	zassert_equal(EC_RES_UNAVAILABLE, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_UNAVAILABLE, host_command_process(&args));
 	i2c_common_emul_set_read_fail_reg(common_data,
 					  I2C_COMMON_EMUL_NO_FAIL_REG);
 
@@ -320,13 +319,13 @@ ZTEST(power_common, test_power_hc_smart_discharge)
 	params.drate.hibern = 10;
 	params.drate.cutoff = 100;
 	/* Test fail on higher discahrge in hibernation than cutoff */
-	zassert_equal(EC_RES_INVALID_PARAM, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_INVALID_PARAM, host_command_process(&args));
 
 	/* Setup discharge rates */
 	params.drate.hibern = 10;
 	params.drate.cutoff = 0;
 	/* Test fail on only one discharge rate set to 0 */
-	zassert_equal(EC_RES_INVALID_PARAM, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_INVALID_PARAM, host_command_process(&args));
 
 	/* Setup correct parameters */
 	hours_to_zero = 1000;
@@ -342,12 +341,12 @@ ZTEST(power_common, test_power_hc_smart_discharge)
 	params.hours_to_zero = hours_to_zero;
 
 	/* Test if correct values are set */
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
-	zassert_equal(hibern_drate, response.drate.hibern, NULL);
-	zassert_equal(cutoff_drate, response.drate.cutoff, NULL);
-	zassert_equal(hours_to_zero, response.hours_to_zero, NULL);
-	zassert_equal(stayup_cap, response.dzone.stayup, NULL);
-	zassert_equal(cutoff_cap, response.dzone.cutoff, NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
+	zassert_equal(hibern_drate, response.drate.hibern);
+	zassert_equal(cutoff_drate, response.drate.cutoff);
+	zassert_equal(hours_to_zero, response.hours_to_zero);
+	zassert_equal(stayup_cap, response.dzone.stayup);
+	zassert_equal(cutoff_cap, response.dzone.cutoff);
 
 	/* Setup discharge rate to 0 */
 	params.drate.hibern = 0;
@@ -361,12 +360,12 @@ ZTEST(power_common, test_power_hc_smart_discharge)
 	cutoff_cap = cutoff_drate * hours_to_zero / 1000;
 
 	/* Test that command doesn't change drate but apply new hours to zero */
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
-	zassert_equal(hibern_drate, response.drate.hibern, NULL);
-	zassert_equal(cutoff_drate, response.drate.cutoff, NULL);
-	zassert_equal(hours_to_zero, response.hours_to_zero, NULL);
-	zassert_equal(stayup_cap, response.dzone.stayup, NULL);
-	zassert_equal(cutoff_cap, response.dzone.cutoff, NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
+	zassert_equal(hibern_drate, response.drate.hibern);
+	zassert_equal(cutoff_drate, response.drate.cutoff);
+	zassert_equal(hours_to_zero, response.hours_to_zero);
+	zassert_equal(stayup_cap, response.dzone.stayup);
+	zassert_equal(cutoff_cap, response.dzone.cutoff);
 
 	/* Setup any parameters != 0 */
 	params.drate.hibern = 1000;
@@ -375,12 +374,12 @@ ZTEST(power_common, test_power_hc_smart_discharge)
 	params.flags = 0;
 
 	/* Test that command doesn't change drate and dzone */
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
-	zassert_equal(hibern_drate, response.drate.hibern, NULL);
-	zassert_equal(cutoff_drate, response.drate.cutoff, NULL);
-	zassert_equal(hours_to_zero, response.hours_to_zero, NULL);
-	zassert_equal(stayup_cap, response.dzone.stayup, NULL);
-	zassert_equal(cutoff_cap, response.dzone.cutoff, NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
+	zassert_equal(hibern_drate, response.drate.hibern);
+	zassert_equal(cutoff_drate, response.drate.cutoff);
+	zassert_equal(hours_to_zero, response.hours_to_zero);
+	zassert_equal(stayup_cap, response.dzone.stayup);
+	zassert_equal(cutoff_cap, response.dzone.cutoff);
 }
 
 /**
@@ -409,7 +408,7 @@ ZTEST(power_common, test_power_board_system_is_idle)
 	params.hours_to_zero = 1000; /* h */
 	params.flags = EC_SMART_DISCHARGE_FLAGS_SET;
 	/* Set stay-up and cutoff zones */
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
 
 	/* Test shutdown ignore is send when target time is in future */
 	target = 1125;
@@ -488,6 +487,19 @@ ZTEST(power_common, power_console_cmd)
 }
 
 /**
+ * Test powerinfo console command
+ */
+ZTEST_USER(power_common, powerinfo_console_cmd)
+{
+	char expected_buffer[32];
+
+	snprintf(expected_buffer, sizeof(expected_buffer), "power state %d",
+		 power_get_state());
+
+	CHECK_CONSOLE_CMD("powerinfo", expected_buffer, EC_SUCCESS);
+}
+
+/**
  * Common setup for hibernation delay tests. Smart discharge zone is setup,
  * battery is set in safe zone (which trigger hibernation), power state is
  * set to G3 and AC is disabled. system_hibernate mock is reset.
@@ -509,7 +521,7 @@ static void setup_hibernation_delay(void *state)
 	params.drate.cutoff = 10; /* uA */
 	params.hours_to_zero = 10000; /* h */
 	params.flags = EC_SMART_DISCHARGE_FLAGS_SET;
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
 	/*
 	 * Make sure that battery is in safe zone in good condition to
 	 * not trigger hibernate in charge_state_v2.c
@@ -537,7 +549,7 @@ ZTEST(power_common_hibernation, test_power_hc_hibernation_delay)
 	int sleep_time;
 
 	/* Ensure the lid is closed so AC connect does not boot system */
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "lidclose"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "lidclose"));
 
 	zassert_equal(power_get_state(), POWER_G3,
 		      "Power state is %d, expected G3", power_get_state());
@@ -547,7 +559,7 @@ ZTEST(power_common_hibernation, test_power_hc_hibernation_delay)
 	/* Set hibernate delay */
 	h_delay = 9;
 	params.seconds = h_delay;
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
 
 	zassert_equal(0, response.time_g3, "Time from last G3 enter %d != 0",
 		      response.time_g3);
@@ -566,7 +578,7 @@ ZTEST(power_common_hibernation, test_power_hc_hibernation_delay)
 
 	/* Get hibernate delay */
 	params.seconds = 0;
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
 
 	zassert_equal(sleep_time, response.time_g3,
 		      "Time from last G3 enter %d != %d", response.time_g3,
@@ -585,7 +597,7 @@ ZTEST(power_common_hibernation, test_power_hc_hibernation_delay)
 
 	/* Get hibernate delay */
 	params.seconds = 0;
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
 
 	zassert_equal(h_delay, response.time_g3,
 		      "Time from last G3 enter %d != %d", response.time_g3,
@@ -604,7 +616,7 @@ ZTEST(power_common_hibernation, test_power_hc_hibernation_delay)
 
 	/* Get hibernate delay */
 	params.seconds = 0;
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
 
 	/* After hibernation, remaining time shouldn't be negative */
 	zassert_equal(0, response.time_remaining, "Time to hibernation %d != 0",
@@ -621,7 +633,7 @@ ZTEST(power_common_hibernation, test_power_hc_hibernation_delay)
 
 	/* Get hibernate delay */
 	params.seconds = 0;
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
 
 	zassert_equal(0, response.time_g3,
 		      "Time from last G3 enter %d should be 0 on AC",
@@ -634,11 +646,11 @@ ZTEST(power_common_hibernation, test_power_hc_hibernation_delay)
 
 	/* Go to different state */
 	power_set_state(POWER_G3S5);
-	zassert_equal(POWER_G3S5, power_get_state(), NULL);
+	zassert_equal(POWER_G3S5, power_get_state());
 
 	/* Get hibernate delay */
 	params.seconds = 0;
-	zassert_equal(EC_RES_SUCCESS, host_command_process(&args), NULL);
+	zassert_equal(EC_RES_SUCCESS, host_command_process(&args));
 
 	zassert_equal(0, response.time_g3,
 		      "Time from last G3 enter %d should be 0 on state != G3",

@@ -6,11 +6,12 @@
 #include "common.h"
 #include "console.h"
 #include "usb_common.h"
+#include "usb_pd.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_timer.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
 #include "usb_tc_sm.h"
-#include "usb_pd.h"
 #include "util.h"
 
 #ifndef TEST_USB_PD_CONSOLE
@@ -21,6 +22,7 @@ static
 {
 	int port;
 	char *e;
+	int rv = EC_SUCCESS;
 
 	if (argc < 2)
 		return EC_ERROR_PARAM_COUNT;
@@ -63,6 +65,14 @@ static
 	} else if (!strcasecmp(argv[1], "version")) {
 		ccprintf("%d\n", PD_STACK_VERSION);
 		return EC_SUCCESS;
+	} else if (!strcasecmp(argv[1], "bistsharemode")) {
+		if (!strcasecmp(argv[2], "disable"))
+			rv = pd_set_bist_share_mode(0);
+		else if (!strcasecmp(argv[2], "enable"))
+			rv = pd_set_bist_share_mode(1);
+		else
+			rv = EC_ERROR_PARAM2;
+		return rv;
 	}
 
 	/* command: pd <port> <subcmd> [args] */
@@ -136,8 +146,8 @@ static
 				case PD_DRP_FORCE_SOURCE:
 					ccprintf("force source\n");
 					break;
-					cflush();
 				}
+				cflush();
 			} else {
 				if (!strcasecmp(argv[3], "on"))
 					pd_set_dual_role(port,
@@ -157,6 +167,12 @@ static
 					return EC_ERROR_PARAM4;
 			}
 			return EC_SUCCESS;
+		} else if (!strcasecmp(argv[2], "suspend")) {
+			pd_comm_enable(port, 0);
+			pd_set_suspend(port, 1);
+		} else if (!strcasecmp(argv[2], "resume")) {
+			pd_comm_enable(port, 1);
+			pd_set_suspend(port, 0);
 		}
 	}
 
@@ -202,6 +218,7 @@ DECLARE_CONSOLE_COMMAND(pd, command_pd,
 #ifdef CONFIG_USB_PD_TRY_SRC
 			"\ntrysrc [0|1|2]"
 #endif
+			"\nbistsharemode [disable|enable]"
 			"\n\t<port> state"
 			"\n\t<port> srccaps"
 			"\n\t<port> cc"
@@ -211,6 +228,7 @@ DECLARE_CONSOLE_COMMAND(pd, command_pd,
 #ifdef CONFIG_USB_PD_DUAL_ROLE
 			"|tx|charger|dev"
 			"\n\t<port> disable|enable|soft|hard"
+			"\n\t<port> suspend|resume"
 			"\n\t<port> dualrole [on|off|freeze|sink|source]"
 			"\n\t<port> swap [power|data|vconn]"
 #endif /* CONFIG_USB_PD_DUAL_ROLE */

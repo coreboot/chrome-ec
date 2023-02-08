@@ -31,18 +31,64 @@ rsource "Kconfig.usb_charger"
 
 if PLATFORM_EC_USBC
 
-config PLATFORM_EC_CHARGER_INPUT_CURRENT
+config PLATFORM_EC_CHARGER_DEFAULT_CURRENT_LIMIT
 	int "Charger input current in mA"
 	depends on PLATFORM_EC_CHARGE_MANAGER
 	default 512
 	help
-	  This is the default input current for the board in mA.  Many boards
-	  also use this as the least maximum input current during transients.
+	  Default input current limit for the board in mA.
 
 	  This value should depend on external power adapter, designed charging
 	  voltage, and the maximum power of the running system. For type-C
-	  chargers, this should be set to 512 mA in order to not brown-out
-	  low-current USB charge ports in accordance with USB-PD r3.0 Sec. 7.3
+	  chargers, this should be set to no more than 512 mA in order to not
+	  brown-out low-current USB charge ports in accordance with USB-PD r3.0
+	  Sec. 7.3.
+
+config PLATFORM_EC_CHARGER_MIN_INPUT_CURRENT_LIMIT
+	int "Minimum charger input current limit in mA"
+	default 0
+	depends on PLATFORM_EC_CHARGE_MANAGER
+	help
+	  Minimum current limit in mA that will ever be set for chargers, even if a
+	  lower limit is requested.
+
+	  If set, this should usually be set to no more than 2.5W divided by the
+	  maximum supported input voltage in order to satisfy USB-PD pSnkStdby
+	  requirements. Higher values may help devices stay alive under low-battery
+	  conditions at the cost of violating standby power limits.
+
+	  Many boards set this to large values, since historically this number was
+	  usually equal to the default current limit. New boards should avoid doing
+	  so if possible, and usually leave this unset: customization of
+	  board_set_charge_limit() should be considered instead if a device sometimes
+	  requires amounts of power in violation of specs, to limit those violations
+	  only to situations where they are necessary.
+
+config PLATFORM_EC_CHARGER_INPUT_CURRENT_DERATE_PCT
+	int "Charger input current derating percentage"
+	default 5
+	depends on PLATFORM_EC_CHARGE_MANAGER
+	help
+	  Setting this to a nonzero value causes actual charger current limits
+	  to be adjusted by the given percentage. For example, setting this to
+	  4 and requesting a current limit of 1000 mA causes the charge manager
+	  to program an actual current limit of 960 mA.
+
+	  This is useful if a charger consistently draws more current than the
+	  programmed limit, or if it is desired to derate for other
+	  safety-related reasons. If a more complex (non-linear) adjustment is
+	  required, boards should override the board_set_charge_limit()
+	  function instead of configuring this option.
+
+	  The default value is set to prevent most overcurrent conditions during
+	  load transients, because power supplies vary in their tolerance to
+	  such short-lived overcurrent conditions and many chargers respond
+	  slowly to those transients.
+
+	  Projects SHOULD characterize system behavior to tune for system
+	  behavior and charger response in order to optimize this (allowing the
+	  derating to be reduced) and ensure transients do not exceed the range
+	  of acceptable current (which might require greater derating).
 
 config PLATFORM_EC_USBC_OCP
 	bool
@@ -122,6 +168,29 @@ config PLATFORM_EC_USB_PD_TCPC_VCONN
 	  Controller (TCPC), and also the Power Path Controller (PPC) if
 	  present. Some TCPC/PPC can't handle 5V on its host-side CC pins, so
           disable this config in those cases.
+
+config PLATFORM_EC_USB_PD_CLEAR_HARD_RESET_STATUS
+	bool "Clear PD hard reset status when PD setup completes"
+	default y if SOC_SERIES_RISCV32_IT8XXX2
+	help
+	  Enabling this config will clear the Hard Reset event status
+	  after the PD connection is finished initialization,
+	  to avoid the AP getting a stale event notification.
+
+	  The detection of a PD Hard Reset sets an status flag that
+	  is then read by the AP in order to reset the USB muxes.
+	  However by the time this is read, the connection may
+	  have been re-initialized and is ready, but the AP may
+	  process the hard reset as if it were still current,
+	  causing the USB port to be incorrectly disabled.
+	  The hard reset of the PD connection can be triggered
+	  when the EC is detected as being initially powered on
+	  (as opposed to being reset), to force clearing the connection.
+
+	  This config is set by default for the IT8XXX2 EC, which
+	  cannot distinguish between a reset and power-on, so a power-on
+	  is assumed, which leads to the PD hard reset when the EC
+	  undergoes a reset (such as when entering recovery mode).
 
 config PLATFORM_EC_CONSOLE_CMD_PPC_DUMP
 	bool "Console command: ppc_dump"

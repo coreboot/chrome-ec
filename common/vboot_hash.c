@@ -48,7 +48,11 @@ static int in_progress;
 #define VBOOT_HASH_DEFERRED true
 #define VBOOT_HASH_BLOCKING false
 
-static struct sha256_ctx ctx;
+static
+#ifdef CONFIG_SOC_IT8XXX2_SHA256_HW_ACCELERATE
+	__attribute__((section(".__sha256_ram_block")))
+#endif
+	struct sha256_ctx ctx;
 
 int vboot_hash_in_progress(void)
 {
@@ -306,9 +310,18 @@ static void vboot_hash_init(void)
 	      EC_HOST_EVENT_MASK(EC_HOST_EVENT_KEYBOARD_RECOVERY)))
 #endif
 	{
-		/* Start computing the hash of RW firmware */
-		vboot_hash_start(flash_get_rw_offset(system_get_active_copy()),
-				 get_rw_size(), NULL, 0, VBOOT_HASH_DEFERRED);
+		/*
+		 * At this point, it's likely that EFS2 vboot_main() already
+		 * requested the RW hash calculation once.
+		 *
+		 * Start computing the hash of RW firmware only if we haven't
+		 * done it before.
+		 */
+		if (!hash) {
+			vboot_hash_start(
+				flash_get_rw_offset(system_get_active_copy()),
+				get_rw_size(), NULL, 0, VBOOT_HASH_DEFERRED);
+		}
 	}
 }
 DECLARE_HOOK(HOOK_INIT, vboot_hash_init, HOOK_PRIO_INIT_VBOOT_HASH);
@@ -317,6 +330,16 @@ int vboot_get_rw_hash(const uint8_t **dst)
 {
 	int rv = vboot_hash_start(flash_get_rw_offset(system_get_active_copy()),
 				  get_rw_size(), NULL, 0, VBOOT_HASH_BLOCKING);
+	*dst = hash;
+	return rv;
+}
+
+int vboot_get_ro_hash(const uint8_t **dst)
+{
+	int rv = vboot_hash_start(CONFIG_EC_PROTECTED_STORAGE_OFF +
+					  CONFIG_RO_STORAGE_OFF,
+				  system_get_image_used(EC_IMAGE_RO), NULL, 0,
+				  VBOOT_HASH_BLOCKING);
 	*dst = hash;
 	return rv;
 }

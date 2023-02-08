@@ -20,17 +20,17 @@
 #include "lightbar.h"
 #include "math_util.h"
 #include "mkbp_event.h"
-#include "motion_sense.h"
-#include "motion_sense_fifo.h"
 #include "motion_lid.h"
 #include "motion_orientation.h"
+#include "motion_sense.h"
+#include "motion_sense_fifo.h"
 #include "online_calibration.h"
-#include "printf.h"
 #include "power.h"
+#include "printf.h"
 #include "queue.h"
 #include "tablet_mode.h"
-#include "timer.h"
 #include "task.h"
+#include "timer.h"
 #include "util.h"
 
 /* Console output macros */
@@ -38,21 +38,11 @@
 #define CPRINTS(format, args...) cprints(CC_MOTION_SENSE, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_MOTION_SENSE, format, ##args)
 
-/* Delay between FIFO interruption. */
-static unsigned int ap_event_interval;
-
 /* Minimum time in between running motion sense task loop. */
 unsigned int motion_min_interval = CONFIG_MOTION_MIN_SENSE_WAIT_TIME * MSEC;
 STATIC_IF(CONFIG_CMD_ACCEL_INFO) int accel_disp;
 
 #define SENSOR_ACTIVE(_sensor) (sensor_active & (_sensor)->active_mask)
-
-/*
- * Adjustment in us to ec rate when calculating interrupt interval:
- * To be sure the EC will send an interrupt even if it finishes processing
- * events slightly earlier than the previous period.
- */
-#define MOTION_SENSOR_INT_ADJUSTMENT_US 10
 
 mutex_t g_sensor_mutex;
 
@@ -91,6 +81,13 @@ static int init_sensor_mutex(const struct device *dev)
 SYS_INIT(init_sensor_mutex, POST_KERNEL, 50);
 #endif /* CONFIG_ZEPHYR */
 
+#ifdef CONFIG_LID_ANGLE
+__attribute__((weak)) int sensor_board_is_lid_angle_available(void)
+{
+	return 1;
+}
+#endif
+
 static inline int
 motion_sensor_in_forced_mode(const struct motion_sensor_t *sensor)
 {
@@ -121,7 +118,8 @@ motion_sensor_time_to_read(const timestamp_t *ts,
 			  sensor->next_collection - motion_min_interval);
 }
 
-static enum sensor_config motion_sense_get_ec_config(void)
+STATIC_IF_NOT(CONFIG_ZTEST)
+enum sensor_config motion_sense_get_ec_config(void)
 {
 	switch (sensor_active) {
 	case SENSOR_ACTIVE_S0:
@@ -133,7 +131,7 @@ static enum sensor_config motion_sense_get_ec_config(void)
 	default:
 		CPRINTS("get_ec_config: Invalid active state: %x",
 			sensor_active);
-		return SENSOR_CONFIG_MAX;
+		return SENSOR_CONFIG_EC_S5;
 	}
 }
 /* motion_sense_set_data_rate
@@ -207,126 +205,6 @@ int motion_sense_set_data_rate(struct motion_sensor_t *sensor)
 		body_detect_reset();
 
 	return 0;
-}
-
-static int
-motion_sense_set_ec_rate_from_ap(const struct motion_sensor_t *sensor,
-				 unsigned int new_rate_us)
-{
-	int odr_mhz = sensor->drv->get_data_rate(sensor);
-
-	if (new_rate_us == 0)
-		return 0;
-
-	if (odr_mhz == 0)
-		/*
-		 * No event (interrupt or forced mode) are generated,
-		 * any ec rate works.
-		 */
-		goto end_set_ec_rate_from_ap;
-
-	/*
-	 * If the EC collection rate is close to the sensor data rate,
-	 * given variation from the EC scheduler, we want to be sure the EC is
-	 * ready to send an event to the AP when either the interrupt arrives,
-	 * or the EC is actively probing the sensor.
-	 * Decrease the EC period by 5% to be sure to get at least one
-	 * measurement at every collection time.
-	 * We will apply that correction only if the ec rate is within 10% of
-	 * the data rate.
-	 * It is possible for sensors at the same ODR to not be in phase.
-	 * One will have a delay guarantee to be less than its ODR.
-	 */
-	if (SECOND * 1100 / odr_mhz > new_rate_us)
-		new_rate_us = new_rate_us * 95 / 100;
-
-end_set_ec_rate_from_ap:
-	return MAX(new_rate_us, motion_min_interval);
-}
-
-/*
- * motion_sense_select_ec_rate
- *
- * Calculate the ec_rate for a given sensor.
- * - sensor: sensor to use
- * - config_id: determine the requester (AP or EC).
- * - interrupt:
- * If interrupt is set: return the sampling rate requested by AP or EC.
- * If interrupt is not set and the sensor is in forced mode,
- * we return the rate needed to probe the sensor at the right ODR.
- * otherwise return the sampling rate requested by AP or EC.
- *
- * return rate in us.
- */
-static int motion_sense_select_ec_rate(const struct motion_sensor_t *sensor,
-				       enum sensor_config config_id,
-				       int interrupt)
-{
-	if (interrupt == 0 && motion_sensor_in_forced_mode(sensor)) {
-		int rate_mhz = BASE_ODR(sensor->config[config_id].odr);
-		/* we have to run ec at the sensor frequency rate.*/
-		if (rate_mhz > 0)
-			return SECOND * 1000 / rate_mhz;
-		else
-			return 0;
-	} else {
-		return sensor->config[config_id].ec_rate;
-	}
-}
-
-/* motion_sense_ec_rate
- *
- * Calculate the sensor ec rate. It will be use to set the motion task polling
- * rate.
- *
- * Return the EC rate, in us.
- */
-static int motion_sense_ec_rate(struct motion_sensor_t *sensor)
-{
-	int ec_rate = 0, ec_rate_from_cfg;
-
-	/* Check the AP setting first. */
-	if (sensor_active != SENSOR_ACTIVE_S5)
-		ec_rate = motion_sense_select_ec_rate(sensor, SENSOR_CONFIG_AP,
-						      0);
-
-	ec_rate_from_cfg = motion_sense_select_ec_rate(
-		sensor, motion_sense_get_ec_config(), 0);
-
-	if (ec_rate_from_cfg != 0)
-		if (ec_rate == 0 || ec_rate_from_cfg < ec_rate)
-			ec_rate = ec_rate_from_cfg;
-	return ec_rate;
-}
-
-/*
- * motion_sense_set_motion_intervals
- *
- * Set the wake up interval for the motion sense thread.
- * It is set to the highest frequency one of the sensors need to be polled at.
- */
-static void motion_sense_set_motion_intervals(void)
-{
-	int i, sensor_ec_rate, ec_int_rate = 0;
-	struct motion_sensor_t *sensor;
-	for (i = 0; i < motion_sensor_count; ++i) {
-		sensor = &motion_sensors[i];
-		/*
-		 * If the sensor is sleeping, no need to check it periodically.
-		 */
-		if ((sensor->state != SENSOR_INITIALIZED) ||
-		    (sensor->drv->get_data_rate(sensor) == 0))
-			continue;
-
-		sensor_ec_rate = motion_sense_select_ec_rate(
-			sensor, SENSOR_CONFIG_AP, 1);
-		if (ec_int_rate == 0 ||
-		    (sensor_ec_rate && sensor_ec_rate < ec_int_rate))
-			ec_int_rate = sensor_ec_rate;
-	}
-
-	ap_event_interval =
-		MAX(0, ec_int_rate - MOTION_SENSOR_INT_ADJUSTMENT_US);
 }
 
 /* Note: Always run on HOOK task, trigger by events from CHIPSET task. */
@@ -439,9 +317,6 @@ static void motion_sense_switch_sensor_rate(void)
 		atomic_or(&odr_event_required, sensor_setup_mask);
 		task_set_event(TASK_ID_MOTIONSENSE,
 			       TASK_EVENT_MOTION_ODR_CHANGE);
-	} else {
-		/* No sensor activated, reset host interval interval to 0. */
-		ap_event_interval = 0;
 	}
 
 	/* disable the body detection since AP is suspended */
@@ -454,7 +329,12 @@ static void motion_sense_switch_sensor_rate(void)
 			body_detect_set_enable(false);
 			break;
 		case SENSOR_ACTIVE_S0:
-			body_detect_set_enable(was_enabled);
+			/* force to enable the body detection in S0 */
+			if (IS_ENABLED(
+				    CONFIG_BODY_DETECTION_ALWAYS_ENABLE_IN_S0))
+				body_detect_set_enable(true);
+			else
+				body_detect_set_enable(was_enabled);
 			break;
 		default:
 			break;
@@ -765,7 +645,6 @@ static int motion_sense_process(struct motion_sensor_t *sensor, uint32_t *event,
 	/* ODR change was requested. */
 	if (is_odr_pending) {
 		motion_sense_set_data_rate(sensor);
-		motion_sense_set_motion_intervals();
 		if (IS_ENABLED(CONFIG_ACCEL_FIFO))
 			motion_sense_fifo_insert_async_event(sensor,
 							     ASYNC_EVENT_ODR);
@@ -891,8 +770,6 @@ void motion_sense_task(void *u)
 	struct motion_sensor_t *sensor;
 	uint8_t *lpc_status;
 
-	timestamp_t ts_last_int;
-
 	if (IS_ENABLED(CONFIG_MOTION_FILL_LPC_SENSE_DATA)) {
 		lpc_status = host_get_memmap(EC_MEMMAP_ACC_STATUS);
 		set_present(lpc_status);
@@ -900,7 +777,6 @@ void motion_sense_task(void *u)
 
 	if (IS_ENABLED(CONFIG_ACCEL_FIFO)) {
 		motion_sense_fifo_init();
-		ts_last_int = get_time();
 	}
 
 	while (1) {
@@ -964,17 +840,14 @@ void motion_sense_task(void *u)
 		 */
 		if (IS_ENABLED(CONFIG_ACCEL_FIFO) &&
 		    (motion_sense_fifo_bypass_needed() ||
+		     motion_sense_fifo_interrupt_needed() ||
 		     event & (TASK_EVENT_MOTION_ODR_CHANGE |
 			      TASK_EVENT_MOTION_FLUSH_PENDING) ||
-		     motion_sense_fifo_over_thres() ||
-		     (ap_event_interval > 0 &&
-		      time_after(ts_begin_task.le.lo,
-				 ts_last_int.le.lo + ap_event_interval)))) {
+		     motion_sense_fifo_over_thres())) {
 			if ((event & TASK_EVENT_MOTION_FLUSH_PENDING) == 0) {
 				motion_sense_fifo_add_timestamp(
 					__hw_clock_source_read());
 			}
-			ts_last_int = ts_begin_task;
 			/*
 			 * Send an event if we know we are in S0 and the kernel
 			 * driver is listening, or the AP needs to be waken up.
@@ -987,9 +860,7 @@ void motion_sense_task(void *u)
 			      motion_sense_fifo_wake_up_needed()))) {
 				mkbp_send_event(EC_MKBP_EVENT_SENSOR_FIFO);
 			}
-			if (motion_sense_fifo_bypass_needed())
-				/* wakeup flag is a subset of bypass flag. */
-				motion_sense_fifo_reset_needed_flags();
+			motion_sense_fifo_reset_needed_flags();
 		}
 
 		ts_end_task = get_time();
@@ -1158,18 +1029,20 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 		 * has a value.
 		 */
 		if (in->ec_rate.data != EC_MOTION_SENSE_NO_VALUE) {
-			sensor->config[SENSOR_CONFIG_AP].ec_rate =
-				motion_sense_set_ec_rate_from_ap(
-					sensor, in->ec_rate.data * MSEC);
-			/* Bound the new sampling rate. */
-			motion_sense_set_motion_intervals();
+			int new_ec_rate = in->ec_rate.data * MSEC;
+
+			if (new_ec_rate > 0)
+				new_ec_rate =
+					MAX(new_ec_rate, motion_min_interval);
+			sensor->config[SENSOR_CONFIG_AP].ec_rate = new_ec_rate;
 
 			/* Force a collection to purge old events.  */
 			task_set_event(TASK_ID_MOTIONSENSE,
 				       TASK_EVENT_MOTION_ODR_CHANGE);
 		}
 
-		out->ec_rate.ret = motion_sense_ec_rate(sensor) / MSEC;
+		out->ec_rate.ret =
+			sensor->config[SENSOR_CONFIG_AP].ec_rate / MSEC;
 
 		args->response_size = sizeof(out->ec_rate);
 		break;
@@ -1309,8 +1182,12 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 		break;
 
 	case MOTIONSENSE_CMD_FIFO_FLUSH:
-		if (!IS_ENABLED(CONFIG_ACCEL_FIFO))
-			return EC_RES_INVALID_PARAM;
+/* TODO (http://b/255967867) Can't use the IS_ENABLED macro here because
+ *   __fallthrough fails in clang as unreachable code.
+ */
+#ifndef CONFIG_ACCEL_FIFO
+		return EC_RES_INVALID_PARAM;
+#else
 		sensor = host_sensor_id_to_real_sensor(
 			in->sensor_odr.sensor_num);
 		if (sensor == NULL)
@@ -1320,7 +1197,8 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 
 		task_set_event(TASK_ID_MOTIONSENSE,
 			       TASK_EVENT_MOTION_FLUSH_PENDING);
-		/* pass-through */
+		__fallthrough;
+#endif
 	case MOTIONSENSE_CMD_FIFO_INFO:
 		if (!IS_ENABLED(CONFIG_ACCEL_FIFO)) {
 			/*
@@ -1352,7 +1230,7 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 		case 0:
 		case 1:
 			fifo_int_enabled = in->fifo_int_enable.enable;
-			/* fallthrough */
+			__fallthrough;
 		case EC_MOTION_SENSE_NO_VALUE:
 			out->fifo_int_enable.ret = fifo_int_enabled;
 			args->response_size = sizeof(out->fifo_int_enable);
@@ -1557,7 +1435,8 @@ static enum ec_status host_cmd_motion_sense(struct host_cmd_handler_args *args)
 	default:
 		/* Call other users of the motion task */
 		if (IS_ENABLED(CONFIG_LID_ANGLE) &&
-		    (ret == EC_RES_INVALID_PARAM))
+		    (ret == EC_RES_INVALID_PARAM) &&
+		    sensor_board_is_lid_angle_available())
 			ret = host_cmd_motion_lid(args);
 		return ret;
 	}
@@ -1712,8 +1591,7 @@ static int command_accel_data_rate(int argc, const char **argv)
 		ccprintf("Data rate for sensor %d: %d\n", id,
 			 sensor->drv->get_data_rate(sensor));
 		ccprintf("EC rate for sensor %d: %d\n", id,
-			 motion_sense_ec_rate(sensor));
-		ccprintf("Current Interrupt rate: %d\n", ap_event_interval);
+			 sensor->config[SENSOR_CONFIG_AP].ec_rate);
 	}
 
 	return EC_SUCCESS;

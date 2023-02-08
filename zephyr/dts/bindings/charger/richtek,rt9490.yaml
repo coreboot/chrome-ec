@@ -7,3 +7,13 @@ description: Richtek RT9490 Charger
 compatible: "richtek,rt9490"
 
 include: chg-chip.yaml
+
+properties:
+  irq:
+    type: phandles
+    description: |
+        GPIO interrupt from BC1.2
+
+  thermistor:
+    type: phandle
+    description: Underlying thermistor device to measure temperature

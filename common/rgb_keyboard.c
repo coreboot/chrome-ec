@@ -2,8 +2,6 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include <stdbool.h>
-
 #include "atomic.h"
 #include "common.h"
 #include "console.h"
@@ -17,6 +15,8 @@
 #include "task.h"
 #include "timer.h"
 #include "util.h"
+
+#include <stdbool.h>
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_RGBKBD, outstr)
@@ -42,7 +42,7 @@ static enum rgbkbd_state rgbkbd_state;
 const struct rgbkbd_init rgbkbd_init_default = {
 	.gcc = RGBKBD_MAX_GCC_LEVEL / 2,
 	.scale = { RGBKBD_MAX_SCALE, RGBKBD_MAX_SCALE, RGBKBD_MAX_SCALE },
-	.color = { .r = 0xff, .g = 0xff, .b = 0xff }, /* white */
+	.color = { .r = 0x0, .g = 0x0, .b = 0x0 },
 };
 
 const struct rgbkbd_init *rgbkbd_init_setting = &rgbkbd_init_default;
@@ -476,7 +476,6 @@ static void rgbkbd_reset(void)
 const struct kblight_drv kblight_rgbkbd = {
 	.init = rgbkbd_init,
 	.set = rgbkbd_kblight_set,
-	.get = NULL,
 	.enable = rgbkbd_enable,
 	.get_enabled = rgbkbd_get_enabled,
 };

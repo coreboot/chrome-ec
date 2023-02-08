@@ -119,9 +119,7 @@ include chip/$(CHIP)/build.mk
 # (CC, CPP, CXX, etc.) so that the correct toolchain is used. The CORE variable
 # is set in the CHIP build file, so this include must come after including the
 # CHIP build file.
-ifneq ($(BOARD), host)
 include core/$(CORE)/toolchain.mk
-endif
 
 # Create uppercase config variants, to avoid mixed case constants.
 # Also translate '-' to '_', so 'cortex-m' turns into 'CORTEX_M'.  This must
@@ -270,8 +268,11 @@ include $(BDIR)/build.mk
 endif
 ifeq ($(USE_BUILTIN_STDLIB), 1)
 include builtin/build.mk
+else
+include libc/build.mk
 endif
 include chip/$(CHIP)/build.mk
+include core/build.mk
 include core/$(CORE)/build.mk
 include common/build.mk
 include driver/build.mk
@@ -312,6 +313,8 @@ endif
 all-obj-$(1)+=$(call objs_from_dir_p,common,common,$(1))
 ifeq ($(USE_BUILTIN_STDLIB), 1)
 all-obj-$(1)+=$(call objs_from_dir_p,builtin,builtin,$(1))
+else
+all-obj-$(1)+=$(call objs_from_dir_p,libc,libc,$(1))
 endif
 all-obj-$(1)+=$(call objs_from_dir_p,driver,driver,$(1))
 all-obj-$(1)+=$(call objs_from_dir_p,power,power,$(1))
@@ -346,13 +349,18 @@ $(eval $(call get_sources,ro))
 #
 # See commit bc4c1b4 for more context.
 build-utils := $(call objs_from_dir,$(out)/util,build-util-bin)
+ifeq ($(BOARD),host)
 host-utils := $(call objs_from_dir,$(out)/util,host-util-bin)
+host-utils-cxx := $(call objs_from_dir,$(out)/util,host-util-bin-cxx)
+endif
 build-art := $(call objs_from_dir,$(out),build-util-art)
 # Use the util_name with an added .c AND the special <util_name>-objs variable.
 build-srcs := $(foreach u,$(build-util-bin-y),$(sort $($(u)-objs:%.o=util/%.c) \
                 $(wildcard util/$(u).c)))
 host-srcs := $(foreach u,$(host-util-bin-y),$(sort $($(u)-objs:%.o=util/%.c) \
                $(wildcard util/$(u).c)))
+host-srcs-cxx := $(foreach u,$(host-util-bin-cxx-y), \
+	$(sort $($(u)-objs:%.o=util/%.cc) $(wildcard util/$(u).cc)))
 
 dirs=core/$(CORE) chip/$(CHIP) $(BASEDIR) $(BDIR) common fuzz power test \
 	cts/common cts/$(CTS_MODULE) $(out)/gen
@@ -361,6 +369,8 @@ dirs+=$(shell find common -type d)
 dirs+=$(shell find driver -type d)
 ifeq ($(USE_BUILTIN_STDLIB), 1)
 dirs+=builtin
+else
+dirs+=libc
 endif
 common_dirs=util
 

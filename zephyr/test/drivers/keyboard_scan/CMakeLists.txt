@@ -3,6 +3,13 @@
 # found in the LICENSE file.
 
 target_sources(app PRIVATE
+  src/keyboard_backlight.c
   src/keyboard_scan.c
+  src/keyboard_test_utils.c
   src/mkbp_event.c
+  src/mkbp_info.c
+)
+
+target_include_directories(app PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )

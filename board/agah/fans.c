@@ -8,8 +8,8 @@
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
-#include "fan_chip.h"
 #include "fan.h"
+#include "fan_chip.h"
 #include "hooks.h"
 #include "pwm.h"
 
@@ -39,7 +39,7 @@ static const struct fan_conf fan_conf_1 = {
 	.flags = FAN_USE_RPM_MODE,
 	.ch = MFT_CH_1, /* Use MFT id to control fan */
 	.pgood_gpio = -1,
-	.enable_gpio = GPIO_EN_PP5000_FAN,
+	.enable_gpio = GPIO_EN_PP5000_FAN2,
 };
 
 static const struct fan_rpm fan_rpm_0 = {

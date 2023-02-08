@@ -10,10 +10,11 @@
 #include "board_config.h"
 #include "button.h"
 #include "charge_manager.h"
-#include "charge_state.h"
 #include "charge_ramp.h"
+#include "charge_state.h"
 #include "charger.h"
 #include "chipset.h"
+#include "compiler.h"
 #include "console.h"
 #include "device_event.h"
 #include "driver/accel_kionix.h"
@@ -25,14 +26,15 @@
 #include "driver/tcpm/tcpci.h"
 #include "driver/tcpm/tcpm.h"
 #include "driver/temp_sensor/bd99992gw.h"
+#include "espi.h"
 #include "extpower.h"
 #include "gesture.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "host_command.h"
 #include "i2c.h"
-#include "keyboard_scan.h"
 #include "keyboard_8042_sharedlib.h"
+#include "keyboard_scan.h"
 #include "lid_angle.h"
 #include "lid_switch.h"
 #include "math_util.h"
@@ -56,7 +58,6 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 #include "util.h"
-#include "espi.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ##args)
@@ -154,6 +155,7 @@ void anx74xx_cable_det_interrupt(enum gpio_signal signal)
 }
 #endif
 
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 /* Keyboard scan. Increase output_settle_us to 80us from default 50us. */
@@ -633,8 +635,8 @@ int board_set_active_charge_port(int charge_port)
  * @param charge_ma     Desired charge limit (mA).
  * @param charge_mv     Negotiated charge voltage (mV).
  */
-void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
-			    int charge_mv)
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+				       int max_ma, int charge_mv)
 {
 	/* Enable charging trigger by BC1.2 detection */
 	int bc12_enable = (supplier == CHARGE_SUPPLIER_BC12_CDP ||
@@ -645,9 +647,7 @@ void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 	if (bd9995x_bc12_enable_charging(port, bc12_enable))
 		return;
 
-	charge_ma = (charge_ma * 95) / 100;
-	charge_set_input_current_limit(
-		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
+	charge_set_input_current_limit(charge_ma, charge_mv);
 }
 
 /**
@@ -966,7 +966,10 @@ struct motion_sensor_t motion_sensors[] = {
 	 .default_range = BIT(11), /* 16LSB / uT, fixed */
 	 .rot_standard_ref = &mag_standard_ref,
 	 .min_frequency = BMM150_MAG_MIN_FREQ,
+/* TODO(b/253292373): Remove when clang is fixed. */
+DISABLE_CLANG_WARNING("-Wshift-count-negative")
 	 .max_frequency = BMM150_MAG_MAX_FREQ(SPECIAL),
+ENABLE_CLANG_WARNING("-Wshift-count-negative")
 	},
 
 	[LID_LIGHT] = {

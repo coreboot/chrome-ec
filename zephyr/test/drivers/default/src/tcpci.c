@@ -3,24 +3,26 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
-
 #include "common.h"
 #include "ec_tasks.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/tcpc/emul_tcpci.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "tcpm/tcpci.h"
 #include "test/drivers/stubs.h"
 #include "test/drivers/tcpci_test_common.h"
-
-#include "tcpm/tcpci.h"
 #include "test/drivers/test_state.h"
 
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
+
 #define TCPCI_EMUL_NODE DT_NODELABEL(tcpci_emul)
+
+/* Convenience pointer directly to the TCPCI mux under test */
+static struct usb_mux *tcpci_usb_mux;
 
 /** Test TCPCI init and vbus level */
 ZTEST(tcpci, test_generic_tcpci_init)
@@ -198,6 +200,11 @@ ZTEST(tcpci, test_generic_tcpci_get_chip_info)
 		emul_tcpci_generic_get_i2c_common_data(emul);
 
 	test_tcpci_get_chip_info(emul, common_data, USBC_PORT_C0);
+
+	zassert_equal(EC_ERROR_INVAL,
+		      tcpci_get_chip_info(board_get_usb_pd_port_count(), false,
+					  NULL),
+		      "get_chip_info should return INVAL for an invalid port");
 }
 
 /** Test TCPCI enter low power mode */
@@ -288,13 +295,13 @@ ZTEST(tcpci, test_generic_tcpci_debug_accessory)
 /* Setup TCPCI usb mux to behave as it is used only for usb mux */
 static void set_usb_mux_not_tcpc(void)
 {
-	usbc0_mux0.flags = USB_MUX_FLAG_NOT_TCPC;
+	tcpci_usb_mux->flags = USB_MUX_FLAG_NOT_TCPC;
 }
 
 /* Setup TCPCI usb mux to behave as it is used for usb mux and TCPC */
 static void set_usb_mux_tcpc(void)
 {
-	usbc0_mux0.flags = 0;
+	tcpci_usb_mux->flags = 0;
 }
 
 /** Test TCPCI mux init */
@@ -311,14 +318,14 @@ ZTEST(tcpci, test_generic_tcpci_mux_init)
 	/* Make sure that TCPC is not accessed */
 	i2c_common_emul_set_read_fail_reg(common_data,
 					  I2C_COMMON_EMUL_FAIL_ALL_REG);
-	zassert_equal(EC_SUCCESS, tcpci_tcpm_mux_init(tcpci_usb_mux), NULL);
+	zassert_equal(EC_SUCCESS, tcpci_tcpm_mux_init(tcpci_usb_mux));
 
 	/* Set as only usb mux without TCPC for rest of the test */
 	set_usb_mux_not_tcpc();
 
 	/* Test fail on power status read */
 	i2c_common_emul_set_read_fail_reg(common_data, TCPC_REG_POWER_STATUS);
-	zassert_equal(EC_ERROR_INVAL, tcpci_tcpm_mux_init(tcpci_usb_mux), NULL);
+	zassert_equal(EC_ERROR_INVAL, tcpci_tcpm_mux_init(tcpci_usb_mux));
 	i2c_common_emul_set_read_fail_reg(common_data,
 					  I2C_COMMON_EMUL_NO_FAIL_REG);
 
@@ -349,7 +356,7 @@ ZTEST(tcpci, test_generic_tcpci_mux_init)
 	tcpci_emul_set_reg(emul, TCPC_REG_ALERT_MASK, 0xffff);
 
 	/* Test success init */
-	zassert_equal(EC_SUCCESS, tcpci_tcpm_mux_init(tcpci_usb_mux), NULL);
+	zassert_equal(EC_SUCCESS, tcpci_tcpm_mux_init(tcpci_usb_mux));
 	check_tcpci_reg(emul, TCPC_REG_ALERT_MASK, 0);
 	check_tcpci_reg(emul, TCPC_REG_ALERT, 0);
 }
@@ -505,12 +512,53 @@ ZTEST(tcpci, test_generic_tcpci_hard_reset_reinit)
 	test_tcpci_hard_reset_reinit(emul, common_data, USBC_PORT_C0);
 }
 
+void validate_mux_read_write16(const struct usb_mux *tcpci_usb_mux)
+{
+	const int reg = TCPC_REG_ALERT;
+	const int expected = 65261;
+	int restore = 0;
+	int temp = 0;
+
+	zassert_ok(mux_read16(tcpci_usb_mux, reg, &restore),
+		   "Failed to read mux");
+
+	if (IS_ENABLED(CONFIG_BUG_249829957)) {
+		zassert_ok(mux_write16(tcpci_usb_mux, reg, expected),
+			   "Failed to write mux");
+		zassert_ok(mux_read16(tcpci_usb_mux, reg, &temp),
+			   "Failed to read mux");
+		zassert_equal(expected, temp, "expected=0x%X, read=0x%X",
+			      expected, temp);
+	}
+
+	zassert_ok(mux_write16(tcpci_usb_mux, reg, restore),
+		   "Failed to write mux");
+}
+
+/** Test usb_mux read/write APIs */
+ZTEST(tcpci, test_usb_mux_read_write)
+{
+	const int flags_restore = tcpci_usb_mux->flags;
+
+	/* Configure mux read/writes for TCPC APIs */
+	tcpci_usb_mux->flags &= ~USB_MUX_FLAG_NOT_TCPC;
+	validate_mux_read_write16(tcpci_usb_mux);
+
+	/* Configure mux read/writes for I2C APIs */
+	tcpci_usb_mux->flags |= USB_MUX_FLAG_NOT_TCPC;
+	validate_mux_read_write16(tcpci_usb_mux);
+
+	tcpci_usb_mux->flags = flags_restore;
+}
+
 static void *tcpci_setup(void)
 {
 	/* This test suite assumes that first usb mux for port C0 is TCPCI */
 	__ASSERT(usb_muxes[USBC_PORT_C0].mux->driver ==
 			 &tcpci_tcpm_usb_mux_driver,
 		 "Invalid config of usb_muxes in test/drivers/src/stubs.c");
+
+	tcpci_usb_mux = (struct usb_mux *)usb_muxes[USBC_PORT_C0].mux;
 
 	return NULL;
 }

@@ -3,25 +3,26 @@
  * found in the LICENSE file.
  */
 
-#define DT_DRV_COMPAT cros_sn5s330_emul
-
-#include <zephyr/device.h>
-#include <zephyr/drivers/i2c.h>
-#include <zephyr/drivers/i2c_emul.h>
-#include <zephyr/drivers/emul.h>
-#include <errno.h>
-#include <zephyr/sys/__assert.h>
-#include <zephyr/devicetree/gpio.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
-
 #include "driver/ppc/sn5s330.h"
 #include "driver/ppc/sn5s330_public.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_sn5s330.h"
-#include "i2c.h"
 #include "emul/emul_stub_device.h"
+#include "i2c.h"
 
+#include <errno.h>
+
+#include <zephyr/device.h>
+#include <zephyr/devicetree/gpio.h>
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/i2c_emul.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/__assert.h>
+
+#define DT_DRV_COMPAT cros_sn5s330_emul
+
 LOG_MODULE_REGISTER(sn5s330_emul, CONFIG_SN5S330_EMUL_LOG_LEVEL);
 
 struct sn5s330_emul_data {
@@ -227,15 +228,15 @@ static int sn5s330_emul_write_byte(const struct emul *emul, int reg,
 	/* Specially check for read-only reg */
 	switch (reg) {
 	case SN5S330_INT_TRIP_RISE_REG1:
-		/* fallthrough */
+		__fallthrough;
 	case SN5S330_INT_TRIP_RISE_REG2:
-		/* fallthrough */
+		__fallthrough;
 	case SN5S330_INT_TRIP_RISE_REG3:
-		/* fallthrough */
+		__fallthrough;
 	case SN5S330_INT_TRIP_FALL_REG1:
-		/* fallthrough */
+		__fallthrough;
 	case SN5S330_INT_TRIP_FALL_REG2:
-		/* fallthrough */
+		__fallthrough;
 	case SN5S330_INT_TRIP_FALL_REG3:
 		reg_to_write = sn5s330_emul_get_reg_ptr(data, reg);
 		/* Clearing any bit deasserts /INT interrupt signal */
@@ -245,15 +246,15 @@ static int sn5s330_emul_write_byte(const struct emul *emul, int reg,
 		*reg_to_write = val;
 		break;
 	case SN5S330_INT_STATUS_REG1:
-		/* fallthrough */
+		__fallthrough;
 	case SN5S330_INT_STATUS_REG2:
-		/* fallthrough */
+		__fallthrough;
 	case SN5S330_INT_STATUS_REG3:
 		__ASSERT(false,
 			 "Write to an unverified-as-safe read-only register on "
 			 "0x%x",
 			 reg);
-		/* fallthrough for checkpath */
+		__fallthrough;
 	default:
 		reg_to_write = sn5s330_emul_get_reg_ptr(data, reg);
 		*reg_to_write = val;
@@ -347,7 +348,7 @@ static int emul_sn5s330_init(const struct emul *emul,
 		},                                                             \
 	}; \
 	EMUL_DT_INST_DEFINE(n, emul_sn5s330_init, &sn5s330_emul_data_##n,        \
-			    &sn5s330_emul_cfg_##n, &i2c_common_emul_api)
+			    &sn5s330_emul_cfg_##n, &i2c_common_emul_api, NULL)
 
 DT_INST_FOREACH_STATUS_OKAY(INIT_SN5S330)
 DT_INST_FOREACH_STATUS_OKAY(EMUL_STUB_DEVICE);

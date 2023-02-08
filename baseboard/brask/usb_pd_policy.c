@@ -5,9 +5,6 @@
 
 /* Shared USB-C policy for Brask boards */
 
-#include <stddef.h>
-#include <stdint.h>
-
 #include "charge_manager.h"
 #include "chipset.h"
 #include "common.h"
@@ -16,14 +13,16 @@
 #include "ec_commands.h"
 #include "gpio.h"
 #include "timer.h"
-#include "usbc_ppc.h"
 #include "usb_mux.h"
-#include "usb_pd.h"
 #include "usb_pd.h"
 #include "usb_pd_tbt.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pd_vdo.h"
+#include "usbc_ppc.h"
 #include "util.h"
+
+#include <stddef.h>
+#include <stdint.h>
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
@@ -81,6 +80,7 @@ int board_vbus_source_enabled(int port)
 	return ppc_is_sourcing_vbus(port);
 }
 
+#ifdef CONFIG_USB_PD_TBT_COMPAT_MODE
 /* ----------------- Vendor Defined Messages ------------------ */
 /* Responses specifically for the enablement of TBT mode in the role of UFP */
 
@@ -225,3 +225,4 @@ const struct svdm_response svdm_rsp = {
 	.amode = NULL,
 	.exit_mode = NULL,
 };
+#endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */

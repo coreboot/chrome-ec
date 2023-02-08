@@ -8,24 +8,26 @@
 #include "dma.h"
 #include "ec_version.h"
 #include "gpio.h"
-#include "gpio_list.h"
 #include "hooks.h"
 #include "registers.h"
 #include "stm32-dma.h"
 #include "task.h"
 #include "update_fw.h"
 #include "usb_descriptor.h"
-#include "util.h"
 #include "usb_dwc_console.h"
 #include "usb_dwc_update.h"
 #include "usb_hw.h"
+#include "util.h"
+
+/* Must come after other header files and interrupt handler declarations */
+#include "gpio_list.h"
 
 /******************************************************************************
  * Define the strings used in our USB descriptors.
  */
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("Polyberry"),
 	[USB_STR_SERIALNO] = USB_STRING_DESC("1234-a"),
 	[USB_STR_VERSION] = USB_STRING_DESC(CROS_EC_VERSION32),

@@ -3,28 +3,20 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/init.h>
-#include <zephyr/sys/atomic.h>
-#include <zephyr/shell/shell.h>
-
 #include "common.h"
 #include "host_command.h"
-#include "timer.h"
 #include "task.h"
+#include "timer.h"
+
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/sys/atomic.h>
 
 /* Ensure that the idle task is at lower priority than lowest priority task. */
 BUILD_ASSERT(EC_TASK_PRIORITY(EC_TASK_PRIO_LOWEST) < K_IDLE_PRIO,
 	     "CONFIG_NUM_PREEMPT_PRIORITIES too small, some tasks would run at "
 	     "idle priority");
-
-/* Declare all task stacks here */
-#define CROS_EC_TASK(name, e, p, size, pr) \
-	K_THREAD_STACK_DEFINE(name##_STACK, size);
-#define TASK_TEST(name, e, p, size) CROS_EC_TASK(name, e, p, size)
-CROS_EC_TASK_LIST
-#undef CROS_EC_TASK
-#undef TASK_TEST
 
 /* Forward declare all task entry point functions */
 #define CROS_EC_TASK(name, entry, ...) void entry(void *p);
@@ -33,23 +25,14 @@ CROS_EC_TASK_LIST
 #undef CROS_EC_TASK
 #undef TASK_TEST
 
-/** Context for each CROS EC task that is run in its own zephyr thread */
-struct task_ctx_cfg {
-#ifdef CONFIG_THREAD_NAME
-	/** Name of thread (for debugging) */
-	const char *name;
-#endif
-	/** Address of Zephyr thread's stack */
-	k_thread_stack_t *stack;
-	/** Usabled size in bytes of above thread stack */
-	size_t stack_size;
-	/** Task (platform/ec) entry point */
-	void (*entry)(void *p);
-	/** The parameter that is passed into the task entry point */
-	intptr_t parameter;
-	/** The task priority */
-	int priority;
-};
+/* Statically declare all threads here */
+#define CROS_EC_TASK(name, entry, parameter, stack_size, priority)      \
+	K_THREAD_DEFINE(name, stack_size, entry, parameter, NULL, NULL, \
+			EC_TASK_PRIORITY(priority), 0, -1);
+#define TASK_TEST(name, e, p, size) CROS_EC_TASK(name, e, p, size)
+CROS_EC_TASK_LIST
+#undef CROS_EC_TASK
+#undef TASK_TEST
 
 struct task_ctx_base_data {
 	/** A wait-able event that is raised when a new task event is posted */
@@ -58,32 +41,20 @@ struct task_ctx_base_data {
 	atomic_t event_mask;
 };
 
-struct task_ctx_data {
-	/** Zephyr thread structure that hosts EC tasks */
-	struct k_thread zephyr_thread;
-	/** Zephyr thread id for above thread */
-	k_tid_t zephyr_tid;
-	/** Base context data */
-	struct task_ctx_base_data base;
-};
-
-#define CROS_EC_TASK(_name, _entry, _parameter, _size, _prio) \
-	{ .entry = _entry,                                    \
-	  .parameter = _parameter,                            \
-	  .stack = _name##_STACK,                             \
-	  .stack_size = _size,                                \
-	  .priority = EC_TASK_PRIORITY(_prio),                \
-	  COND_CODE_1(CONFIG_THREAD_NAME, (.name = #_name, ), ()) },
-#define TASK_TEST(_name, _entry, _parameter, _size) \
-	CROS_EC_TASK(_name, _entry, _parameter, _size)
-const static struct task_ctx_cfg shimmed_tasks_cfg[TASK_ID_COUNT] = {
-	CROS_EC_TASK_LIST
+/*
+ * Create a mapping from the cros-ec task ID to the Zephyr thread.
+ */
+#undef CROS_EC_TASK
+#define CROS_EC_TASK(_name, _entry, _parameter, _size, _prio) _name,
 #ifdef TEST_BUILD
-		[TASK_ID_TEST_RUNNER] = {},
+static k_tid_t task_to_k_tid[TASK_ID_COUNT] = {
+#else
+const static k_tid_t task_to_k_tid[TASK_ID_COUNT] = {
 #endif
+	CROS_EC_TASK_LIST
 };
 
-static struct task_ctx_data shimmed_tasks_data[TASK_ID_COUNT];
+static struct task_ctx_base_data shimmed_tasks_data[TASK_ID_COUNT];
 static struct task_ctx_base_data extra_tasks_data[EXTRA_TASK_COUNT];
 /* Task timer structures. Keep separate from the context ones to avoid memory
  * holes due to int64_t fields in struct _timeout.
@@ -104,7 +75,7 @@ static struct task_ctx_base_data *task_get_base_data(task_id_t cros_task_id)
 		return &extra_tasks_data[cros_task_id - TASK_ID_COUNT];
 	}
 
-	return &shimmed_tasks_data[cros_task_id].base;
+	return &shimmed_tasks_data[cros_task_id];
 }
 
 task_id_t task_get_current(void)
@@ -120,7 +91,7 @@ task_id_t task_get_current(void)
 #endif
 
 	for (size_t i = 0; i < TASK_ID_COUNT; ++i) {
-		if (shimmed_tasks_data[i].zephyr_tid == k_current_get())
+		if (task_to_k_tid[i] == k_current_get())
 			return i;
 	}
 
@@ -134,7 +105,7 @@ atomic_t *task_get_event_bitmap(task_id_t cros_task_id)
 
 	data = task_get_base_data(cros_task_id);
 
-	return &data->event_mask;
+	return data == NULL ? NULL : &data->event_mask;
 }
 
 void task_set_event(task_id_t cros_task_id, uint32_t event)
@@ -143,8 +114,10 @@ void task_set_event(task_id_t cros_task_id, uint32_t event)
 
 	data = task_get_base_data(cros_task_id);
 
-	atomic_or(&data->event_mask, event);
-	k_poll_signal_raise(&data->new_event, 0);
+	if (data != NULL) {
+		atomic_or(&data->event_mask, event);
+		k_poll_signal_raise(&data->new_event, 0);
+	}
 }
 
 uint32_t task_wait_event(int timeout_us)
@@ -152,6 +125,8 @@ uint32_t task_wait_event(int timeout_us)
 	struct task_ctx_base_data *data;
 
 	data = task_get_base_data(task_get_current());
+
+	__ASSERT_NO_MSG(data != NULL);
 
 	const k_timeout_t timeout = (timeout_us == -1) ? K_FOREVER :
 							 K_USEC(timeout_us);
@@ -181,12 +156,12 @@ uint32_t task_wait_event(int timeout_us)
 	if (events == 0) {
 		const int64_t ticks_left = tick_deadline - k_uptime_ticks();
 
+		events |= TASK_EVENT_TIMER;
+
 		if (ticks_left > 0) {
 			return task_wait_event(
 				k_ticks_to_us_near64(ticks_left));
 		}
-
-		events |= TASK_EVENT_TIMER;
 	}
 
 	return events;
@@ -235,18 +210,6 @@ uint32_t task_wait_event_mask(uint32_t event_mask, int timeout_us)
 	return events & event_mask;
 }
 
-static void task_entry(void *task_context_cfg, void *task_context_data,
-		       void *unused1)
-{
-	ARG_UNUSED(task_context_data);
-	ARG_UNUSED(unused1);
-
-	struct task_ctx_cfg *const cfg = task_context_cfg;
-
-	/* Call into task entry point */
-	cfg->entry((void *)cfg->parameter);
-}
-
 /*
  * Callback function to use with k_timer_start to set the
  * TASK_EVENT_TIMER event on a task.
@@ -291,7 +254,7 @@ void timer_cancel(task_id_t cros_ec_task_id)
 #ifdef TEST_BUILD
 void set_test_runner_tid(void)
 {
-	shimmed_tasks_data[TASK_ID_TEST_RUNNER].zephyr_tid = k_current_get();
+	task_to_k_tid[TASK_ID_TEST_RUNNER] = k_current_get();
 }
 
 #ifdef CONFIG_TASKS_SET_TEST_RUNNER_TID_RULE
@@ -315,32 +278,13 @@ void start_ec_tasks(void)
 	}
 
 	for (size_t i = 0; i < TASK_ID_COUNT; ++i) {
-		struct task_ctx_data *const data = &shimmed_tasks_data[i];
-		const struct task_ctx_cfg *const cfg = &shimmed_tasks_cfg[i];
-
 #ifdef TEST_BUILD
-		/* Do not create thread for test runner; it will be set later */
+		/* The test runner thread is automatically started. */
 		if (i == TASK_ID_TEST_RUNNER) {
-			data->zephyr_tid = NULL;
 			continue;
 		}
 #endif
-
-		/*
-		 * TODO(b/172361873): Add K_FP_REGS for FPU tasks. See
-		 * comment in config.h for CONFIG_TASK_LIST for existing flags
-		 * implementation.
-		 */
-		data->zephyr_tid = k_thread_create(&data->zephyr_thread,
-						   cfg->stack, cfg->stack_size,
-						   task_entry, (void *)cfg,
-						   data, NULL, cfg->priority, 0,
-						   K_NO_WAIT);
-
-#ifdef CONFIG_THREAD_NAME
-		/* Name thread for debugging */
-		k_thread_name_set(data->zephyr_tid, cfg->name);
-#endif
+		k_thread_start(task_to_k_tid[i]);
 	}
 
 	tasks_started = 1;
@@ -369,18 +313,26 @@ int task_start_called(void)
 {
 	return tasks_started;
 }
-
+/*
+ * TODO(b/190203712): Implement this
+ * LCOV_EXCL_START
+ */
 void task_disable_task(task_id_t tskid)
 {
-	/* TODO(b/190203712): Implement this */
 }
+/* LCOV_EXCL_STOP */
 
+/*
+ * This function cannot be tested since it is architecture specific.
+ * LCOV_EXCL_START
+ */
 void task_clear_pending_irq(int irq)
 {
 #if CONFIG_ITE_IT8XXX2_INTC
 	ite_intc_isr_clear(irq);
 #endif
 }
+/* LCOV_EXCL_STOP */
 
 void task_enable_irq(int irq)
 {
@@ -399,11 +351,3 @@ inline bool in_deferred_context(void)
 	 */
 	return (k_current_get() == &k_sys_work_q.thread);
 }
-
-#if IS_ENABLED(CONFIG_KERNEL_SHELL) && IS_ENABLED(CONFIG_THREAD_MONITOR)
-static int taskinfo(const struct shell *shell, size_t argc, char **argv)
-{
-	return shell_execute_cmd(shell, "kernel threads");
-}
-SHELL_CMD_REGISTER(taskinfo, NULL, "Threads statistics", taskinfo);
-#endif

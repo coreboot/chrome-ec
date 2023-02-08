@@ -9,6 +9,7 @@
 #define __CROS_EC_BATTERY_FUEL_GAUGE_H
 
 #include "battery.h"
+
 #include <stdbool.h>
 
 /* Number of writes needed to invoke battery cutoff command */
@@ -37,6 +38,7 @@ struct sleep_mode_info {
 
 struct fet_info {
 	const int mfgacc_support;
+	const int mfgacc_smb_block;
 	const uint8_t reg_addr;
 	const uint16_t reg_mask;
 	const uint16_t disconnect_val;
@@ -101,22 +103,6 @@ __override_proto int board_get_default_battery_type(void);
  * If the CFET mask is not defined, it will return 0.
  */
 int battery_is_charge_fet_disabled(void);
-
-/**
- * Battery cut off command via SMBus write block.
- *
- * @param ship_mode		Battery ship mode information
- * @return non-zero if error
- */
-int cut_off_battery_block_write(const struct ship_mode_info *ship_mode);
-
-/**
- * Battery cut off command via SMBus write word.
- *
- * @param ship_mode		Battery ship mode information
- * @return non-zero if error
- */
-int cut_off_battery_sb_write(const struct ship_mode_info *ship_mode);
 
 /**
  * Send the fuel gauge sleep command through SMBus.

@@ -9,8 +9,8 @@
 #include "common.h"
 #include "driver/charger/isl923x.h"
 #include "driver/led/lm3630a.h"
-#include "ec_version.h"
 #include "ec_ec_comm_server.h"
+#include "ec_version.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "hwtimer.h"
@@ -28,18 +28,19 @@
 #include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
-#include "touchpad.h"
 #include "timer.h"
+#include "touchpad.h"
 #include "update_fw.h"
 #include "usart-stm32f0.h"
-#include "usart_tx_dma.h"
 #include "usart_rx_dma.h"
+#include "usart_tx_dma.h"
 #include "usb_api.h"
 #include "usb_descriptor.h"
 #include "usb_i2c.h"
 #include "usb_spi.h"
 #include "util.h"
 
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 #ifdef SECTION_IS_RW
@@ -55,7 +56,7 @@
  */
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("Hammer"),
 	[USB_STR_SERIALNO] = 0,
 	[USB_STR_VERSION] =
@@ -78,7 +79,8 @@ BUILD_ASSERT(ARRAY_SIZE(usb_strings) == USB_STR_COUNT);
 #ifdef HAS_SPI_TOUCHPAD
 /* SPI devices */
 const struct spi_device_t spi_devices[] = {
-	[SPI_ST_TP_DEVICE_ID] = { CONFIG_SPI_TOUCHPAD_PORT, 2, GPIO_SPI1_NSS },
+	[SPI_ST_TP_DEVICE_ID] = { CONFIG_SPI_TOUCHPAD_PORT, 2, GPIO_SPI1_NSS,
+				  USB_SPI_ENABLED },
 };
 const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
 

@@ -5,8 +5,6 @@
 
 /* High-priority interrupt tasks implementations */
 
-#include <stdint.h>
-
 #include "builtin/assert.h"
 #include "common.h"
 #include "compile_time_macros.h"
@@ -18,6 +16,8 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
+#include <stdint.h>
+
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
@@ -25,11 +25,11 @@
 #define PD_PROCESS_INTERRUPT BIT(0)
 
 /*
- * Theoretically, we may need to support up to 480 USB-PD packets per second for
- * intensive operations such as FW update over PD. This value has tested well
- * preventing watchdog resets with a single bad port partner plugged in.
+ * Theoretically, we may need to support up to 1800 USB-PD packets per second
+ * for intensive operations such as BIST compliance tests. This value has tested
+ * well preventing watchdog resets with a single bad port partner plugged in.
  */
-#define ALERT_STORM_MAX_COUNT 480
+#define ALERT_STORM_MAX_COUNT 1800
 #define ALERT_STORM_INTERVAL SECOND
 
 static uint8_t pd_int_task_id[CONFIG_USB_PD_PORT_MAX_COUNT];
@@ -143,6 +143,7 @@ BUILD_ASSERT(PD_STATUS_TCPC_ALERT_3 == (PD_STATUS_TCPC_ALERT_0 << 3));
  * is not.
  */
 
+#if !defined(CONFIG_ZEPHYR) || defined(CONFIG_HAS_TASK_PD_INT_SHARED)
 void pd_shared_alert_task(void *p)
 {
 	const int sources_mask = (int)((intptr_t)p);
@@ -209,3 +210,4 @@ void pd_shared_alert_task(void *p)
 		} while (have_alerts != 0);
 	}
 }
+#endif /* !CONFIG_ZEPHYR || CONFIG_HAS_TASK_PD_INT_SHARED */

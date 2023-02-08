@@ -3,12 +3,13 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/ztest.h>
-#include <zephyr/drivers/emul.h>
 #include "driver/accel_lis2dw12.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_lis2dw12.h"
 #include "test/drivers/test_state.h"
+
+#include <zephyr/drivers/emul.h>
+#include <zephyr/ztest.h>
 
 #define LIS2DW12_NODELABEL DT_NODELABEL(ms_lis2dw12_accel)
 #define LIS2DW12_SENSOR_ID SENSOR_ID(LIS2DW12_NODELABEL)
@@ -67,7 +68,7 @@ ZTEST(lis2dw12, test_lis2dw12_init__fail_read_who_am_i)
 
 	i2c_common_emul_set_read_fail_reg(common_data, LIS2DW12_WHO_AM_I_REG);
 	rv = ms->drv->init(ms);
-	zassert_equal(EC_ERROR_INVAL, rv, NULL);
+	zassert_equal(EC_ERROR_INVAL, rv);
 }
 
 ZTEST(lis2dw12, test_lis2dw12_init__fail_who_am_i)
@@ -95,7 +96,7 @@ ZTEST(lis2dw12, test_lis2dw12_init__fail_write_soft_reset)
 	i2c_common_emul_set_write_fail_reg(common_data,
 					   LIS2DW12_SOFT_RESET_ADDR);
 	rv = ms->drv->init(ms);
-	zassert_equal(EC_ERROR_INVAL, rv, NULL);
+	zassert_equal(EC_ERROR_INVAL, rv);
 }
 
 ZTEST(lis2dw12, test_lis2dw12_init__timeout_read_soft_reset)

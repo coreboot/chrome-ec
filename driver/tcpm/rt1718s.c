@@ -33,6 +33,7 @@
 #define FLAG_FRS_RX_SIGNALLED BIT(1)
 #define FLAG_FRS_VBUS_VALID_FALL BIT(2)
 static atomic_t frs_flag[CONFIG_USB_PD_PORT_MAX_COUNT];
+K_MUTEX_DEFINE(adc_lock);
 
 /* i2c_write function which won't wake TCPC from low power mode. */
 static int rt1718s_write(int port, int reg, int val, int len)
@@ -196,7 +197,7 @@ static int rt1718s_workaround(int port)
 		RETURN_ERROR(rt1718s_update_bits8(
 			port, RT1718S_VCONN_CONTROL_3,
 			RT1718S_VCONN_CONTROL_3_VCONN_OVP_DEG, 0xFF));
-		/* fallthrough */
+		__fallthrough;
 	case RT1718S_DEVICE_ID_ES2:
 		RETURN_ERROR(rt1718s_update_bits8(
 			port, TCPC_REG_FAULT_CTRL,
@@ -585,7 +586,6 @@ static int rt1718s_enter_low_power_mode(int port)
 
 int rt1718s_get_adc(int port, enum rt1718s_adc_channel channel, int *adc_val)
 {
-	static mutex_t adc_lock;
 	int rv;
 	const int max_wait_times = 30;
 

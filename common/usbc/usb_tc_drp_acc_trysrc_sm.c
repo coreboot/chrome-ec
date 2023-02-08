@@ -17,7 +17,7 @@
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
-#include "usb_pd_dpm.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pd_timer.h"
 #include "usb_pe_sm.h"
@@ -1284,7 +1284,12 @@ void typec_select_src_current_limit_rp(int port, enum tcpc_rp_value rp)
 }
 __overridable int typec_get_default_current_limit_rp(int port)
 {
-	return CONFIG_USB_PD_PULLUP;
+	int rp = CONFIG_USB_PD_PULLUP;
+
+	if (pd_get_bist_share_mode())
+		rp = TYPEC_RP_3A0;
+
+	return rp;
 }
 void typec_select_src_collision_rp(int port, enum tcpc_rp_value rp)
 {
@@ -1556,6 +1561,9 @@ void tc_state_init(int port)
 {
 	enum usb_tc_state first_state;
 
+	if (port >= CONFIG_USB_PD_PORT_MAX_COUNT)
+		return;
+
 	/* For test builds, replicate static initialization */
 	if (IS_ENABLED(TEST_BUILD)) {
 		memset(&tc[port], 0, sizeof(tc[port]));
@@ -1721,7 +1729,7 @@ static void print_current_state(const int port)
 	if (IS_ENABLED(USB_PD_DEBUG_LABELS))
 		CPRINTS_L1("C%d: %s", port, tc_state_names[get_state_tc(port)]);
 	else
-		CPRINTS("C%d: tc-st%d", port, get_state_tc(port));
+		CPRINTS_L1("C%d: tc-st%d", port, get_state_tc(port));
 }
 
 static void handle_device_access(int port)
@@ -1760,12 +1768,10 @@ void tc_event_check(int port, int evt)
 			pd_dpm_request(port, DPM_REQUEST_HARD_RESET_SEND);
 	}
 
-#ifdef CONFIG_POWER_COMMON
-	if (IS_ENABLED(CONFIG_POWER_COMMON)) {
+	if (IS_ENABLED(CONFIG_AP_POWER_CONTROL)) {
 		if (evt & PD_EVENT_POWER_STATE_CHANGE)
 			handle_new_power_state(port);
 	}
-#endif /* CONFIG_POWER_COMMON */
 
 	if (IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP)) {
 		int i;
@@ -1884,10 +1890,11 @@ static void pd_update_dual_role_config(int port)
 
 __maybe_unused static void handle_new_power_state(int port)
 {
-	if (!IS_ENABLED(CONFIG_POWER_COMMON))
+	if (!IS_ENABLED(CONFIG_AP_POWER_CONTROL))
 		assert(0);
 
-	if (IS_ENABLED(CONFIG_POWER_COMMON) && IS_ENABLED(CONFIG_USB_PE_SM)) {
+	if (IS_ENABLED(CONFIG_AP_POWER_CONTROL) &&
+	    IS_ENABLED(CONFIG_USB_PE_SM)) {
 		if (chipset_in_or_transitioning_to_state(
 			    CHIPSET_STATE_ANY_OFF)) {
 			/*
@@ -3744,6 +3751,13 @@ __maybe_unused static void tc_ct_attached_snk_entry(int port)
 
 	/* The port shall reject a VCONN swap request. */
 	TC_SET_FLAG(port, TC_FLAGS_REJECT_VCONN_SWAP);
+
+	/*
+	 * Type-C r 2.2: The Host shall not advertise dual-role data or
+	 * dual-role power in its SourceCapability or SinkCapability messages -
+	 * Host changes its advertised capabilities to UFP role/sink only role.
+	 */
+	tc_set_data_role(port, PD_ROLE_UFP);
 }
 
 __maybe_unused static void tc_ct_attached_snk_run(int port)

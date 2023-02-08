@@ -7,8 +7,8 @@
 
 /* Type-C port manager for Analogix's anx74xx chips */
 
-#include "console.h"
 #include "anx74xx.h"
+#include "console.h"
 #include "task.h"
 #include "tcpm/tcpci.h"
 #include "tcpm/tcpm.h"
@@ -398,6 +398,10 @@ static int anx74xx_tcpm_mux_set(const struct usb_mux *me, mux_state_t mux_state,
 
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
+
+	/* This driver treats safe mode as none */
+	if (mux_state == USB_PD_MUX_SAFE_MODE)
+		mux_state = USB_PD_MUX_NONE;
 
 	if (!(mux_state & ~USB_PD_MUX_POLARITY_INVERTED)) {
 		anx[port].mux_state = mux_state;

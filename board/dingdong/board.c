@@ -10,17 +10,18 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "registers.h"
+#include "task.h"
+#include "timer.h"
 #include "usb_bb.h"
 #include "usb_descriptor.h"
 #include "usb_pd.h"
-#include "task.h"
-#include "timer.h"
 #include "util.h"
 
 static volatile uint64_t hpd_prev_ts;
 static volatile int hpd_prev_level;
 
 void hpd_event(enum gpio_signal signal);
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 /**
@@ -120,7 +121,7 @@ const struct adc_t adc_channels[] = {
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("Dingdong"),
 	[USB_STR_VERSION] = USB_STRING_DESC(CROS_EC_VERSION32),
 	[USB_STR_BB_URL] = USB_STRING_DESC(USB_GOOGLE_TYPEC_URL),

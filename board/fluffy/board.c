@@ -11,12 +11,13 @@
 #include "ec_version.h"
 #include "hooks.h"
 #include "i2c.h"
-#include "usb_descriptor.h"
 #include "registers.h"
 #include "timer.h"
+#include "usb_descriptor.h"
 #include "usb_pd.h"
 #include "util.h"
 
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
@@ -28,7 +29,7 @@
 
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
-	[USB_STR_VENDOR] = USB_STRING_DESC("Google Inc."),
+	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
 	[USB_STR_PRODUCT] = USB_STRING_DESC("Fluffy"),
 	/* This gets filled in at runtime. */
 	[USB_STR_SERIALNO] = USB_STRING_DESC(""),

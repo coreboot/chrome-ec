@@ -113,8 +113,17 @@ enum ap_power_sleep_type sleep_state = AP_POWER_SLEEP_NONE;
  */
 static void power_s0ix_suspend_clear_masks(void)
 {
-	backup_sci_mask = lpc_get_host_event_mask(LPC_HOST_EVENT_SCI);
-	backup_smi_mask = lpc_get_host_event_mask(LPC_HOST_EVENT_SMI);
+	host_event_t sci_mask, smi_mask;
+
+	sci_mask = lpc_get_host_event_mask(LPC_HOST_EVENT_SCI);
+	smi_mask = lpc_get_host_event_mask(LPC_HOST_EVENT_SMI);
+
+	/* Do not backup already-cleared SCI/SMI masks. */
+	if (!sci_mask && !smi_mask)
+		return;
+
+	backup_sci_mask = sci_mask;
+	backup_smi_mask = smi_mask;
 	lpc_set_host_event_mask(LPC_HOST_EVENT_SCI, 0);
 	lpc_set_host_event_mask(LPC_HOST_EVENT_SMI, 0);
 }
@@ -174,10 +183,11 @@ void ap_power_sleep_notify_transition(enum ap_power_sleep_type check_state)
 		ap_power_ev_send_callbacks(AP_POWER_SUSPEND);
 	} else if (check_state == AP_POWER_SLEEP_RESUME) {
 		ap_power_ev_send_callbacks(AP_POWER_RESUME);
+		/*
+		 * Transition is done; reset sleep state after resume.
+		 */
+		ap_power_sleep_set_notify(AP_POWER_SLEEP_NONE);
 	}
-
-	/* Transition is done; reset sleep state. */
-	ap_power_sleep_set_notify(AP_POWER_SLEEP_NONE);
 }
 #endif /* CONFIG_AP_PWRSEQ_S0IX */
 

@@ -1,0 +1,16 @@
+description: Analogix ANX7447 USBC TCPC binding
+
+compatible: "analogix,anx7447-tcpc"
+
+include: i2c-device.yaml
+
+properties:
+  tcpc-flags:
+    type: int
+    default: 0
+    description: |
+      TCPC configuration flags
+  int-pin:
+    type: phandle
+    required: false
+    description: Interrupt from TCPC
