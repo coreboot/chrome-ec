@@ -2795,6 +2795,9 @@ static int process_get_apro_boot_status(struct transfer_descriptor *td)
 	case AP_RO_PASS_UNVERIFIED_GBB:
 		printf("pass - unverified gbb!\n");
 		break;
+	case AP_RO_V2_NON_ZERO_GBB_FLAGS:
+		printf("pass - except non-zero gbb flags!\n");
+		break;
 	case AP_RO_FAIL:
 	case AP_RO_V2_FAILED_VERIFICATION:
 		printf("FAIL\n");
@@ -2846,6 +2849,9 @@ static int process_get_apro_boot_status(struct transfer_descriptor *td)
 		break;
 	case AP_RO_V2_SETTING_NOT_PROVISIONED:
 		printf("setting not provisioned\n");
+		break;
+	case AP_RO_V2_WRONG_ROOT_KEY:
+		printf("key is recognized but disallowed (e.g. preMP key)\n");
 		break;
 	default:
 		printf("unknown\n");
