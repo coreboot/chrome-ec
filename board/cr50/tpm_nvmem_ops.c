@@ -14,6 +14,7 @@
 #include "Global.h"
 #include "Implementation.h"
 #include "NV_fp.h"
+#include "PCR_fp.h"
 #include "tpm_types.h"
 
 #define CPRINTF(format, args...) cprintf(CC_TASK, format, ## args)
@@ -119,4 +120,9 @@ void tpm_orderly_state_capture(char copy[TPM_ORDERLY_STATE_SIZE])
 void tpm_orderly_state_restore(const char copy[TPM_ORDERLY_STATE_SIZE])
 {
 	NvStateRestore(copy);
+}
+
+bool get_tpm_pcr_value(uint32_t pcr_num, uint8_t value[SHA256_DIGEST_SIZE])
+{
+	return PCRGetValue(TPM_ALG_SHA256, pcr_num, SHA256_DIGEST_SIZE, value);
 }
