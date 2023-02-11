@@ -104,3 +104,8 @@ void _plat__OwnerClearCallback(void)
 	if (rv != EC_SUCCESS)
 		CPRINTF("%s: failed (%d)\n", __func__, rv);
 }
+
+BOOL _plat__NvUpdateAllowed(uint32_t handle)
+{
+	return TRUE;
+}
