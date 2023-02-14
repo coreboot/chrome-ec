@@ -18,7 +18,7 @@ machine against a board connected to a local machine. For example:
 Start servod and JLink locally:
 
 (local chroot) $ sudo servod --board dragonclaw
-(local chroot) $ JLinkRemoteServerCLExe -select USB
+(local chroot) $ sudo JLinkRemoteServerCLExe -select USB
 
 Forward the FPMCU console on a TCP port:
 
@@ -37,6 +37,8 @@ Run the script on the remote machine:
                 --jlink_port 19020 --console_port 10000
 """
 # pylint: enable=line-too-long
+# TODO(b/267800058): refactor into multiple modules
+# pylint: disable=too-many-lines
 
 import argparse
 import concurrent
@@ -72,6 +74,8 @@ ALL_TESTS_FAILED_REGEX = re.compile(r"Fail! \(\d+ tests\)\r\n")
 
 SINGLE_CHECK_PASSED_REGEX = re.compile(r"Pass: .*")
 SINGLE_CHECK_FAILED_REGEX = re.compile(r".*failed:.*")
+
+RW_IMAGE_BOOTED_REGEX = re.compile(r"^\[Image: RW.*")
 
 ASSERTION_FAILURE_REGEX = re.compile(r"ASSERTION FAILURE.*")
 
@@ -133,6 +137,15 @@ class ImageType(Enum):
     RW = 2
 
 
+class ApplicationType(Enum):
+    """
+    Select the application type to use (test or production)
+    """
+
+    TEST = 1
+    PRODUCTION = 2
+
+
 @dataclass
 class BoardConfig:
     """Board-specific configuration."""
@@ -152,7 +165,8 @@ class TestConfig:
 
     # pylint: disable=too-many-instance-attributes
     test_name: str
-    image_to_use: ImageType = ImageType.RW
+    imagetype_to_use: ImageType = ImageType.RW
+    apptype_to_use: ApplicationType = ApplicationType.TEST
     finish_regexes: List = None
     fail_regexes: List = None
     toggle_power: bool = False
@@ -206,6 +220,12 @@ class AllTests:
     def get_public_tests(board_config: BoardConfig) -> List[TestConfig]:
         """Return public test configs for the specified board."""
         tests = [
+            TestConfig(
+                test_name="production_app_test",
+                finish_regexes=[RW_IMAGE_BOOTED_REGEX],
+                imagetype_to_use=ImageType.RW,
+                apptype_to_use=ApplicationType.PRODUCTION,
+            ),
             TestConfig(test_name="abort"),
             TestConfig(test_name="aes"),
             TestConfig(test_name="always_memset"),
@@ -216,12 +236,12 @@ class AllTests:
             TestConfig(test_name="exception"),
             TestConfig(
                 test_name="flash_physical",
-                image_to_use=ImageType.RO,
+                imagetype_to_use=ImageType.RO,
                 toggle_power=True,
             ),
             TestConfig(
                 test_name="flash_write_protect",
-                image_to_use=ImageType.RO,
+                imagetype_to_use=ImageType.RO,
                 toggle_power=True,
                 enable_hw_write_protect=True,
             ),
@@ -229,7 +249,7 @@ class AllTests:
             TestConfig(
                 config_name="fpsensor_spi_ro",
                 test_name="fpsensor",
-                image_to_use=ImageType.RO,
+                imagetype_to_use=ImageType.RO,
                 test_args=["spi"],
             ),
             TestConfig(
@@ -240,7 +260,7 @@ class AllTests:
             TestConfig(
                 config_name="fpsensor_uart_ro",
                 test_name="fpsensor",
-                image_to_use=ImageType.RO,
+                imagetype_to_use=ImageType.RO,
                 test_args=["uart"],
             ),
             TestConfig(
@@ -258,7 +278,7 @@ class AllTests:
             TestConfig(
                 config_name="mpu_ro",
                 test_name="mpu",
-                image_to_use=ImageType.RO,
+                imagetype_to_use=ImageType.RO,
                 finish_regexes=[board_config.mpu_regex],
             ),
             TestConfig(
@@ -284,7 +304,9 @@ class AllTests:
                 finish_regexes=[board_config.rollback_region1_regex],
                 test_args=["region1"],
             ),
-            TestConfig(test_name="rollback_entropy", image_to_use=ImageType.RO),
+            TestConfig(
+                test_name="rollback_entropy", imagetype_to_use=ImageType.RO
+            ),
             TestConfig(test_name="rtc"),
             TestConfig(test_name="sha256"),
             TestConfig(test_name="sha256_unrolled"),
@@ -307,6 +329,7 @@ class AllTests:
             ),
             TestConfig(test_name="timer"),
             TestConfig(test_name="timer_dos"),
+            TestConfig(test_name="tpm_seed_clear"),
             TestConfig(test_name="utils", timeout_secs=20),
             TestConfig(test_name="utils_str"),
         ]
@@ -503,6 +526,14 @@ def power(board_config: BoardConfig, power_on: bool) -> None:
     subprocess.run(cmd, check=False).check_returncode()
 
 
+def power_cycle(board_config: BoardConfig) -> None:
+    """power_cycle the boards."""
+    logging.debug("power_cycling board")
+    power(board_config, power_on=False)
+    time.sleep(1)
+    power(board_config, power_on=True)
+
+
 def hw_write_protect(enable: bool) -> None:
     """Enable/disable hardware write protect."""
     if enable:
@@ -518,7 +549,9 @@ def hw_write_protect(enable: bool) -> None:
     subprocess.run(cmd, check=False).check_returncode()
 
 
-def build(test_name: str, board_name: str, compiler: str) -> None:
+def build(
+    test_name: str, board_name: str, compiler: str, app_type: ApplicationType
+) -> None:
     """Build specified test for specified board."""
     cmd = ["make"]
 
@@ -527,9 +560,14 @@ def build(test_name: str, board_name: str, compiler: str) -> None:
 
     cmd = cmd + [
         "BOARD=" + board_name,
-        "test-" + test_name,
         "-j",
     ]
+
+    # If the image type is a test image, then apply test- prefix to the target name
+    if app_type == ApplicationType.TEST:
+        cmd = cmd + [
+            "test-" + test_name,
+        ]
 
     logging.debug('Running command: "%s"', " ".join(cmd))
     subprocess.run(cmd, check=False).check_returncode()
@@ -628,12 +666,14 @@ def run_test(
     # Wait for boot to finish
     time.sleep(1)
     console.write("\n".encode())
-    if test.image_to_use == ImageType.RO:
+    if test.imagetype_to_use == ImageType.RO:
         console.write("reboot ro\n".encode())
         time.sleep(1)
 
-    test_cmd = "runtest " + " ".join(test.test_args) + "\n"
-    console.write(test_cmd.encode())
+    # Skip runtest if using standard app type
+    if test.apptype_to_use != ApplicationType.PRODUCTION:
+        test_cmd = "runtest " + " ".join(test.test_args) + "\n"
+        console.write(test_cmd.encode())
 
     while True:
         console.flush()
@@ -708,11 +748,19 @@ def flash_and_run_test(
         build_board = test.build_board
 
     # build test binary
-    build(test.test_name, build_board, args.compiler)
+    build(test.test_name, build_board, args.compiler, test.apptype_to_use)
 
-    image_path = os.path.join(
-        EC_DIR, "build", build_board, test.test_name, test.test_name + ".bin"
-    )
+    if test.apptype_to_use == ApplicationType.PRODUCTION:
+        image_path = os.path.join(EC_DIR, "build", build_board, "ec.bin")
+    else:
+        image_path = os.path.join(
+            EC_DIR,
+            "build",
+            build_board,
+            test.test_name,
+            test.test_name + ".bin",
+        )
+    logging.debug("image_path: %s", image_path)
 
     if test.ro_image is not None:
         try:
@@ -743,9 +791,7 @@ def flash_and_run_test(
         return False
 
     if test.toggle_power:
-        power(board_config, power_on=False)
-        time.sleep(1)
-        power(board_config, power_on=True)
+        power_cycle(board_config)
 
     hw_write_protect(test.enable_hw_write_protect)
 

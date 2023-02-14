@@ -101,6 +101,13 @@ tests:
   drivers.console:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_CONSOLE=y
+  drivers.console_cmd_crash:
+    extra_args: CONF_FILE="prj.conf;default/prj.conf"
+                DTC_OVERLAY_FILE="default/boards/native_posix.overlay"
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_CONSOLE_CMD_CRASH=y
+      - CONFIG_PLATFORM_EC_CONSOLE_CMD_CRASH=y
+      - CONFIG_ASSERT_TEST=y
   drivers.dps:
     extra_args: CONF_FILE="prj.conf;dps/prj.conf"
     extra_configs:
@@ -113,6 +120,10 @@ tests:
       - CONFIG_LINK_TEST_SUITE_FLASH=y
       - CONFIG_SHELL_BACKEND_DUMMY_BUF_SIZE=500
       - CONFIG_PLATFORM_EC_USE_ZEPHYR_FLASH_PAGE_LAYOUT=y
+  drivers.gpio_unhook:
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_GPIO_UNHOOK=y
+      - CONFIG_GPIO_GET_CONFIG=y
   drivers.host_cmd:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_HOST_COMMANDS=y
@@ -266,6 +277,11 @@ tests:
   drivers.usbc_console_pd:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USBC_CONSOLE_PD=y
+  drivers.usbc_console_pd_legacy:
+    extra_args: DTC_OVERLAY_FILE="default/boards/native_posix.overlay;./usbc_console_pd/usbc_legacy.dts"
+    extra_configs:
+      - CONFIG_LINK_TEST_SUITE_USBC_CONSOLE_PD=y
+      - CONFIG_PLATFORM_EC_TCPC_INTERRUPT=n
   drivers.usbc_ctvpd:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_USBC_CTVPD=y
@@ -300,6 +316,7 @@ tests:
   drivers.host_cmd_thread:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_HOST_CMD_THREAD=y
+      - CONFIG_TASK_HOSTCMD_THREAD_MAIN=y
   drivers.pi3usb9201:
     extra_configs:
       - CONFIG_LINK_TEST_SUITE_PI3USB9201=y
