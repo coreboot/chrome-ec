@@ -358,6 +358,9 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8186
                                                 "${PLATFORM_EC}/power/mt8186.c")
+# Re-use mt8186.c code
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8188
+                                                "${PLATFORM_EC}/power/mt8186.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8192
                                                 "${PLATFORM_EC}/power/mt8192.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7180
@@ -470,6 +473,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_OCP
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_DFP
                                                 "${PLATFORM_EC}/common/usb_pd_alt_mode_dfp.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DISCOVERY
+                                                "${PLATFORM_EC}/common/usb_pd_discovery.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_UFP
                                                 "${PLATFORM_EC}/common/usb_pd_alt_mode_ufp.c")
 
@@ -489,7 +494,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_DRP_ACC_TRYSRC
                                                 "${PLATFORM_EC}/common/usbc/usb_tc_drp_acc_trysrc_sm.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_pe_drp_sm.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_pd_dpm.c"
-						"${PLATFORM_EC}/common/usbc/usbc_pd_policy.c"
+						"${PLATFORM_EC}/common/usbc/usbc_pd_policy.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DP_MODE
                                                 "${PLATFORM_EC}/common/usbc/dp_alt_mode.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PRL_SM

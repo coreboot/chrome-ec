@@ -199,17 +199,15 @@ DECLARE_DEFERRED(poll_c0_int);
 static void poll_c1_int(void);
 DECLARE_DEFERRED(poll_c1_int);
 
-static void usbc_interrupt_trigger(int port)
-{
-	schedule_deferred_pd_interrupt(port);
-	usb_charger_task_set_event(port, USB_CHG_EVENT_BC12);
-}
-
 static inline void poll_usb_gpio(int port, const struct gpio_dt_spec *gpio,
 				 const struct deferred_data *ud)
 {
+	/*
+	 * TODO(b/267537103): Migrate named-gpios to Zephyr's GPIO hogs. Verify
+	 * the active high/active low setting once GPIO hogs are used.
+	 */
 	if (!gpio_pin_get_dt(gpio)) {
-		usbc_interrupt_trigger(port);
+		usb_charger_task_set_event(port, USB_CHG_EVENT_BC12);
 		hook_call_deferred(ud, USBC_INT_POLL_DELAY_US);
 	}
 }
@@ -243,8 +241,8 @@ void usb_interrupt(enum gpio_signal signal)
 	 * no lost IRQ right now. Cancel any pending check.
 	 */
 	hook_call_deferred(ud, -1);
-	/* Trigger polling of TCPC and BC1.2 in respective tasks */
-	usbc_interrupt_trigger(port);
+	/* Trigger polling of BC1.2 */
+	usb_charger_task_set_event(port, USB_CHG_EVENT_BC12);
 	/* Check for lost interrupts in a bit */
 	hook_call_deferred(ud, USBC_INT_POLL_DELAY_US);
 }

@@ -96,11 +96,11 @@
 #define PD_VCONN_SWAP_DELAY 5000 /* us */
 
 /*
- * Passive USB-C cables only support up to 60W.
+ * Passive USB-C cables only support up to 65W.
  */
 #define PD_OPERATING_POWER_MW 15000
-#define PD_MAX_POWER_MW 60000
-#define PD_MAX_CURRENT_MA 3000
+#define PD_MAX_POWER_MW 65000
+#define PD_MAX_CURRENT_MA 3250
 #define PD_MAX_VOLTAGE_MV 20000
 
 /*
@@ -191,6 +191,11 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
 #undef CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT
 #define CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT 10
+
+/* KEYBOARD */
+#define CONFIG_KEYBOARD_CUSTOMIZATION
+#define CONFIG_KEYBOARD_VIVALDI
+#define CONFIG_KEYBOARD_REFRESH_ROW3
 
 /*
  * Older boards have a different ADC assignment.

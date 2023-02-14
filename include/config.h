@@ -4566,14 +4566,17 @@
 #define CONFIG_USB_PD_HOST_CMD
 #endif
 
-/* Support for USB PD alternate mode */
+/* Support for USB PD alternate mode entry */
 #undef CONFIG_USB_PD_ALT_MODE
 
-/* Support for USB PD alternate mode of Downward Facing Port */
+/* Support for USB PD alternate mode entry by a Downward Facing Port */
 #undef CONFIG_USB_PD_ALT_MODE_DFP
 
-/* Support for USB PD alternate mode of Upward Facing Port */
+/* Support for USB PD alternate mode entry from an Upward Facing Port */
 #undef CONFIG_USB_PD_ALT_MODE_UFP
+
+/* Support for automatic USB PD Discovery VDM probing and storage */
+#undef CONFIG_USB_PD_DISCOVERY
 
 /*
  * Do not enter USB PD alternate modes or USB4 automatically. Wait for the AP to
@@ -4804,6 +4807,9 @@
 
 /* Enable the encoding of msg SOP* in bits 31-28 of 32-bit msg header type */
 #undef CONFIG_USB_PD_DECODE_SOP
+
+/* Enable to support DisplayPort mode from the EC */
+#undef CONFIG_USB_PD_DP_MODE
 
 /*
  * The USB4 specification defines compatibility support for USB4 products to
@@ -5921,6 +5927,17 @@
 #if !defined(CONFIG_USB_PD_ALT_MODE_DFP)
 #error CONFIG_USB_PD_ALT_MODE_DFP must be enabled for USB4 mode support
 #endif
+#endif
+
+/******************************************************************************/
+/*
+ * If CONFIG_USB_PD_ALT_MODE_DFP is set and this isn't a zephyr build (which
+ * already did its preprocessing earlier), then enable DP Mode by default and
+ * also enable discovery by default.
+ */
+#if defined(CONFIG_USB_PD_ALT_MODE_DFP) && !defined(CONFIG_ZEPHYR)
+#define CONFIG_USB_PD_DP_MODE
+#define CONFIG_USB_PD_DISCOVERY
 #endif
 
 /******************************************************************************/
