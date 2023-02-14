@@ -384,10 +384,9 @@ struct __attribute__((__packed__)) arv_config_wpds {
 };
 
 /*
- * This by far exceeds the largest vendor command response size we ever
- * expect.
+ * This matches the largest vendor command response size we ever expect.
  */
-#define MAX_RX_BUF_SIZE	500
+#define MAX_RX_BUF_SIZE	2048
 
 /*
  * Maximum update payload block size plus packet header size.
@@ -520,6 +519,8 @@ static const struct option_container cmd_line_options[] = {
 	 "Report this utility version"},
 	{{"wp", optional_argument, NULL, 'w'},
 	 "[enable] Get the current WP setting or enable WP"},
+	{{"clog", required_argument, NULL, 'x'},
+	 "[id]%Retrieve contents of the crash log with id <id>"},
 	{{"reboot", optional_argument, NULL, 'z'},
 	 "Tell the GSC to reboot with an optional reset timeout parameter "
 	 "in milliseconds"}
@@ -598,7 +599,8 @@ static int ts_read(void *buf, size_t max_rx_size)
 	int i;
 	int pclose_rv;
 	int rv;
-	char response[max_rx_size * 2];
+	/* +1 to account for '\n' added by trunks_send. */
+	char response[max_rx_size * 2 + 1];
 
 	if (!tpm_output) {
 		fprintf(stderr, "Error: attempt to read empty output\n");
@@ -671,13 +673,15 @@ static int tpm_send_pkt(struct transfer_descriptor *td, unsigned int digest,
 {
 	/* Used by transfer to /dev/tpm0 */
 	static uint8_t outbuf[MAX_TX_BUF_SIZE];
+	static uint8_t raw_response[MAX_RX_BUF_SIZE +
+		sizeof(struct upgrade_pkt)];
 	struct upgrade_pkt *out = (struct upgrade_pkt *)outbuf;
 	int len, done;
 	int response_offset = offsetof(struct upgrade_pkt, command.data);
 	void *payload;
 	size_t header_size;
 	uint32_t rv;
-	const size_t rx_size = sizeof(outbuf);
+	const size_t rx_size = sizeof(raw_response);
 
 	debug("%s: sending to %#x %d bytes\n", __func__, addr, size);
 
@@ -741,7 +745,7 @@ static int tpm_send_pkt(struct transfer_descriptor *td, unsigned int digest,
 
 		len = 0;
 		do {
-			uint8_t *rx_buf = outbuf + len;
+			uint8_t *rx_buf = raw_response + len;
 			size_t rx_to_go = rx_size - len;
 
 			read_count = read(td->tpm_fd, rx_buf, rx_to_go);
@@ -751,7 +755,7 @@ static int tpm_send_pkt(struct transfer_descriptor *td, unsigned int digest,
 		break;
 	}
 	case ts_xfer:
-		len = ts_read(outbuf, rx_size);
+		len = ts_read(raw_response, rx_size);
 		break;
 	default:
 		/*
@@ -767,7 +771,7 @@ static int tpm_send_pkt(struct transfer_descriptor *td, unsigned int digest,
 		int i;
 
 		for (i = 0; i < len; i++)
-			debug("%2.2x ", outbuf[i]);
+			debug("%2.2x ", raw_response[i]);
 		debug("\n");
 	}
 	len = len - response_offset;
@@ -779,12 +783,12 @@ static int tpm_send_pkt(struct transfer_descriptor *td, unsigned int digest,
 
 	if (response && response_size) {
 		len = MIN(len, *response_size);
-		memcpy(response, outbuf + response_offset, len);
+		memcpy(response, raw_response + response_offset, len);
 		*response_size = len;
 	}
 
 	/* Return the actual return code from the TPM response header. */
-	memcpy(&rv, &((struct upgrade_pkt *)outbuf)->ordinal, sizeof(rv));
+	memcpy(&rv, &((struct upgrade_pkt *)raw_response)->ordinal, sizeof(rv));
 	rv = be32toh(rv);
 
 	/* Clear out vendor command return value offset.*/
@@ -3875,6 +3879,29 @@ static int getopt_all(int argc, char *argv[])
 	return i;
 }
 
+static int get_crashlog(struct transfer_descriptor *td, uint32_t id)
+{
+	uint32_t id_be = htobe32(id);
+	uint32_t rv;
+	uint8_t response[2048] = {0};
+	size_t response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_CRASHLOG, &id_be,
+				 sizeof(id_be), response, &response_size);
+	if (rv != VENDOR_RC_SUCCESS) {
+		printf("Get crash log failed. (%X)\n", rv);
+		return 1;
+	}
+
+	for (size_t i = 0; i < response_size; i++) {
+		if (i % 64 == 0 && i > 0)
+			printf("\n");
+		printf("%02x", response[i]);
+	}
+	printf("\n");
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	struct transfer_descriptor td;
@@ -3936,6 +3963,8 @@ int main(int argc, char *argv[])
 	const char *capability_parameter = "";
 	bool reboot_gsc = false;
 	size_t reboot_gsc_timeout = 0;
+	int get_clog = 0;
+	uint32_t clog_id = 0;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4163,6 +4192,10 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Illegal wp option \"%s\"\n", optarg);
 			errorcnt++;
 			break;
+		case 'x':
+			get_clog = 1;
+			clog_id = strtoul(optarg, NULL, 0);
+			break;
 		case 'z':
 			reboot_gsc = true;
 			/* Set a 1ms default reboot time to avoid libusb errors
@@ -4218,6 +4251,7 @@ int main(int argc, char *argv[])
 	    !get_apro_hash &&
 	    !get_apro_boot_status &&
 	    !get_boot_mode &&
+	    !get_clog &&
 	    !get_flog &&
 	    !get_endorsement_seed &&
 	    !factory_mode &&
@@ -4271,10 +4305,10 @@ int main(int argc, char *argv[])
 	     !!ccd_unlock + !!ccd_lock + !!ccd_info + !!get_flog +
 	     !!get_boot_mode + !!openbox_desc_file + !!factory_mode +
 	     (wp != WP_NONE) + !!get_endorsement_seed +
-	     !!erase_ap_ro_hash + !!set_capability) > 1) {
+	     !!erase_ap_ro_hash + !!set_capability + !!get_clog) > 1) {
 		fprintf(stderr,
 			"ERROR: options "
-			"-e, -F, -g, -H, -I, -i, -k, -L, -O, -o, -P, -r, -U"
+			"-e, -F, -g, -H, -I, -i, -k, -L, -O, -o, -P, -r, -U, -x"
 			" and -w are mutually exclusive\n");
 		exit(update_error);
 	}
@@ -4370,6 +4404,9 @@ int main(int argc, char *argv[])
 
 	if (reboot_gsc)
 		exit(process_reboot_gsc(&td, reboot_gsc_timeout));
+
+	if (get_clog)
+		exit(get_crashlog(&td, clog_id));
 
 	if (data || show_fw_ver) {
 
