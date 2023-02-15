@@ -58,7 +58,6 @@ struct pchg pchgs[] = {
 		.events = QUEUE_NULL(PCHG_EVENT_QUEUE_SIZE, enum pchg_event),
 	},
 };
-const int pchg_count = ARRAY_SIZE(pchgs);
 
 __override void board_pchg_power_on(int port, bool on)
 {
@@ -66,6 +65,15 @@ __override void board_pchg_power_on(int port, bool on)
 		gpio_set_level(GPIO_EC_QI_PWR, on);
 	else
 		CPRINTS("%s: Invalid port=%d", __func__, port);
+}
+
+int board_get_pchg_count(void)
+{
+	if (ec_cfg_has_peripheral_charger()) {
+		return ARRAY_SIZE(pchgs);
+	} else {
+		return 0;
+	}
 }
 
 /******************************************************************************/

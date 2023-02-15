@@ -52,11 +52,13 @@
 
 /* USB Mux and Retimer */
 #define CONFIG_USB_MUX_IT5205 /* C0: ITE Mux */
+#undef I2C_PORT_USB_C0
+#define I2C_PORT_USB_C0 IT83XX_I2C_CH_C
 #define I2C_PORT_USB_MUX I2C_PORT_USB_C0 /* Required for ITE Mux */
 
 /* USB Type A Features */
 #define CONFIG_USB_PORT_POWER_DUMB
-#define USB_PORT_COUNT 3 /* Type A ports */
+#define USB_PORT_COUNT 4 /* Type A ports */
 
 /* No battery */
 #undef CONFIG_BATTERY_CUT_OFF
