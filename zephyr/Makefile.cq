@@ -39,9 +39,12 @@ TEST_PATTERNS='$(PLATFORM_EC)/test/**' \
 	'$(PLATFORM_EC)/zephyr/mock/**' \
 	'$(THIRD_PARTY)/zephyr/main/subsys/emul/**' \
 	'$(THIRD_PARTY)/zephyr/main/arch/posix/**' \
+	'**/*_benchmark.cc' \
 	'**/*_test.c' \
+	'**/*_test.cc' \
 	'**/*_test.h' \
 	'**/*_emul.c' \
+	'**/*_emul.cc' \
 	'**/*_emul.h' \
 	'$(PLATFORM_EC)/include/test_util.h' \
 	'$(PLATFORM_EC)/common/test_util.c' \
@@ -119,7 +122,6 @@ $(BUILD)/zephyr/%_final.info: $(BUILD)/zephyr/%_stenciled.info
 	'$(THIRD_PARTY)/**' \
 	'$(PLATFORM_EC)/zephyr/drivers/**' \
 	'$(PLATFORM_EC)/zephyr/include/drivers/**' \
-	'$(PLATFORM_EC)/zephyr/program/**' \
 	'$(PLATFORM_EC)/zephyr/shim/chip/**' \
 	'$(PLATFORM_EC)/zephyr/shim/chip/npcx/npcx_monitor/**' \
 	'$(PLATFORM_EC)/zephyr/shim/core/**' \

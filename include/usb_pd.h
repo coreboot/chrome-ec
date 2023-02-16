@@ -1960,6 +1960,13 @@ void pd_dfp_discovery_init(int port);
 void pd_dfp_mode_init(int port);
 
 /**
+ * Mark all discovery types as failed to prevent any further discovery attempts
+ * until a connection change or DPM request triggers discovery again.
+ * @param port USB-C port number
+ */
+void pd_disable_discovery(int port);
+
+/**
  * Set identity discovery state for this type and port
  *
  * @param port  USB-C port number
@@ -3150,6 +3157,7 @@ __override_proto int board_pd_set_frs_enable(int port, int enable);
  */
 __overridable void board_frs_handler(int port);
 
+#ifdef CONFIG_USB_PD_DP_MODE
 /**
  * Get current DisplayPort pin mode on the specified port.
  *
@@ -3157,6 +3165,12 @@ __overridable void board_frs_handler(int port);
  * @return MODE_DP_PIN_[A-E] if used else 0
  */
 __override_proto uint8_t get_dp_pin_mode(int port);
+#else
+static inline uint8_t get_dp_pin_mode(int port)
+{
+	return 0;
+}
+#endif /* CONFIG_USB_PD_DP_MODE */
 
 /**
  * Get board specific usb pd port count

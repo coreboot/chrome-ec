@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.8
 # -*- coding: utf-8 -*-
 # Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
@@ -16,15 +16,25 @@ import shlex
 import subprocess
 import sys
 
-import zmake.project
-from chromite.api.gen_sdk.chromite.api import firmware_pb2
 from google.protobuf import json_format  # pylint: disable=import-error
+import zmake.project
+
+from chromite.api.gen_sdk.chromite.api import firmware_pb2
+
 
 DEFAULT_BUNDLE_DIRECTORY = "/tmp/artifact_bundles"
 DEFAULT_BUNDLE_METADATA_FILE = "/tmp/artifact_bundle_metadata"
 
 # Boards that we want to track the coverage of our own files specifically.
-SPECIAL_BOARDS = ["herobrine", "krabby", "nivviks", "skyrim", "kingler", "rex"]
+SPECIAL_BOARDS = [
+    "herobrine",
+    "krabby",
+    "nivviks",
+    "skyrim",
+    "kingler",
+    "rex",
+    "geralt",
+]
 
 BINARY_SIZE_REGIONS = [
     "RO_FLASH",

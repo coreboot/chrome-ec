@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env vpython3
 
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
@@ -13,6 +13,7 @@ import pathlib
 import site
 import sys
 import tempfile
+
 
 EC_BASE = pathlib.Path(__file__).parent.parent
 
@@ -34,6 +35,7 @@ site.addsitedir(ZEPHYR_BASE / "scripts" / "kconfig")
 # pylint:disable=import-error,wrong-import-position
 import kconfiglib
 import zephyr_module
+
 
 # pylint:enable=import-error,wrong-import-position
 

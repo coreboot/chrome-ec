@@ -51,11 +51,6 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "extpower_interrupt";
 		};
-		int_usb_c1_bc12_charger: usb-c1-bc12-charger {
-			irq-pin = <&usb_c1_bc12_charger_int_odl>;
-			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "rt9490_bc12_dt_interrupt";
-		};
 		int_lid_open: lid-open {
 			irq-pin = <&lid_open>;
 			flags = <GPIO_INT_EDGE_BOTH>;
@@ -65,6 +60,11 @@
 			irq-pin = <&power_button_l>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "power_button_interrupt";
+		};
+		int_pg_pp4200_s5: pg-pp4200-s5 {
+			irq-pin = <&pg_pp4200_s5_od>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "power_signal_interrupt";
 		};
 		int_warm_rst: warm-rst {
 			irq-pin = <&ap_ec_warm_rst_req>;
@@ -95,6 +95,11 @@
 			irq-pin = <&gpio_ccd_mode_odl>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "ccd_interrupt";
+		};
+		int_ap_xhci_init_done: ap-xhci-init-done {
+			irq-pin = <&ap_xhci_init_done>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "xhci_interrupt";
 		};
 	};
 };

@@ -911,6 +911,15 @@ void pe_got_hard_reset(int port)
 	assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
 
 	/*
+	 * If we're in the middle of an FRS, any error should cause us to follow
+	 * the ErrorRecovery path
+	 */
+	if (pe_in_frs_mode(port)) {
+		set_state_pe(port, PE_WAIT_FOR_ERROR_RECOVERY);
+		return;
+	}
+
+	/*
 	 * Transition from any state to the PE_SRC_Hard_Reset_Received or
 	 *  PE_SNK_Transition_to_default state when:
 	 *  1) Hard Reset Signaling is detected.
@@ -1263,8 +1272,12 @@ void pe_got_soft_reset(int port)
 	/*
 	 * The PE_SRC_Soft_Reset state Shall be entered from any state when a
 	 * Soft_Reset Message is received from the Protocol Layer.
+	 *
+	 * However, if we're in the middle of an FRS sequence, we need to go to
+	 * ErrorRecovery instead.
 	 */
-	set_state_pe(port, PE_SOFT_RESET);
+	set_state_pe(port, pe_in_frs_mode(port) ? PE_WAIT_FOR_ERROR_RECOVERY :
+						  PE_SOFT_RESET);
 }
 
 __overridable bool pd_can_charge_from_device(int port, const int pdo_cnt,
@@ -1927,13 +1940,6 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 	if (!IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
 		assert(0);
 
-	/*
-	 * DONE set once modal entry is successful, discovery completes, or
-	 * discovery results in a NAK
-	 */
-	if (PE_CHK_FLAG(port, PE_FLAGS_VDM_SETUP_DONE))
-		return false;
-
 	/* Apply Port Discovery DR Swap Policy */
 	if (port_discovery_dr_swap_policy(
 		    port, pe[port].data_role,
@@ -1951,12 +1957,9 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 	 */
 	if (pe[port].data_role == PD_ROLE_UFP &&
 	    prl_get_rev(port, TCPCI_MSG_SOP) == PD_REV20) {
-		pd_set_identity_discovery(port, TCPCI_MSG_SOP, PD_DISC_FAIL);
-		pd_set_identity_discovery(port, TCPCI_MSG_SOP_PRIME,
-					  PD_DISC_FAIL);
+		pd_disable_discovery(port);
 		pd_notify_event(port, PD_STATUS_EVENT_SOP_DISC_DONE);
 		pd_notify_event(port, PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
-		PE_SET_FLAG(port, PE_FLAGS_VDM_SETUP_DONE);
 		return false;
 	}
 
@@ -1968,12 +1971,6 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 		PE_CLR_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON);
 		set_state_pe(port, PE_VCS_SEND_SWAP);
 		return true;
-	}
-
-	/* If mode entry was successful, disable the timer */
-	if (PE_CHK_FLAG(port, PE_FLAGS_VDM_SETUP_DONE)) {
-		pd_timer_disable(port, PE_TIMER_DISCOVER_IDENTITY);
-		return false;
 	}
 
 	/*
@@ -2014,6 +2011,9 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 			pe[port].tx_type = TCPCI_MSG_SOP_PRIME;
 			set_state_pe(port, PE_INIT_VDM_MODES_REQUEST);
 			return true;
+		} else {
+			pd_timer_disable(port, PE_TIMER_DISCOVER_IDENTITY);
+			return false;
 		}
 	}
 
@@ -5164,10 +5164,9 @@ static void pe_prs_snk_src_send_swap_run(int port)
 	 * Handle discarded message
 	 */
 	if (msg_check & PE_MSG_DISCARDED) {
-		if (pe_in_frs_mode(port))
-			pe_set_hard_reset(port);
-		else
-			set_state_pe(port, PE_SNK_READY);
+		set_state_pe(port, pe_in_frs_mode(port) ?
+					   PE_WAIT_FOR_ERROR_RECOVERY :
+					   PE_SNK_READY);
 		return;
 	}
 
@@ -6144,19 +6143,12 @@ static void pe_vdm_request_dpm_run(int port)
 		uint32_t *payload = (uint32_t *)rx_emsg[port].buf;
 		int sop = PD_HEADER_GET_SOP(rx_emsg[port].header);
 		uint8_t cnt = PD_HEADER_CNT(rx_emsg[port].header);
-		uint16_t svid = PD_VDO_VID(payload[0]);
-		uint8_t vdm_cmd = PD_VDO_CMD(payload[0]);
 
 		/*
 		 * PE initiator VDM-ACKed state for requested VDM, like
 		 * PE_INIT_VDM_FOO_ACKed, embedded here.
 		 */
 		dpm_vdm_acked(port, sop, cnt, payload);
-
-		if (sop == TCPCI_MSG_SOP && svid == USB_SID_DISPLAYPORT &&
-		    vdm_cmd == CMD_DP_CONFIG) {
-			PE_SET_FLAG(port, PE_FLAGS_VDM_SETUP_DONE);
-		}
 		break;
 	}
 	case VDM_RESULT_NAK: {
@@ -6166,7 +6158,6 @@ static void pe_vdm_request_dpm_run(int port)
 		 * PE initiator VDM-NAKed state for requested VDM, like
 		 * PE_INIT_VDM_FOO_NAKed, embedded here.
 		 */
-		PE_SET_FLAG(port, PE_FLAGS_VDM_SETUP_DONE);
 
 		/*
 		 * Because Not Supported messages or response timeouts are
@@ -6194,7 +6185,6 @@ static void pe_vdm_request_dpm_exit(int port)
 {
 	if (PE_CHK_FLAG(port, PE_FLAGS_VDM_REQUEST_TIMEOUT)) {
 		PE_CLR_FLAG(port, PE_FLAGS_VDM_REQUEST_TIMEOUT);
-		PE_SET_FLAG(port, PE_FLAGS_VDM_SETUP_DONE);
 
 		/*
 		 * Mark failure to respond as discovery failure.
@@ -7797,12 +7787,7 @@ void pd_dfp_discovery_init(int port)
 
 void pd_dfp_mode_init(int port)
 {
-	/*
-	 * Clear the VDM Setup Done and Modal Operation flags so we will
-	 * have a fresh discovery
-	 */
-	PE_CLR_MASK(port, BIT(PE_FLAGS_VDM_SETUP_DONE_FN) |
-				  BIT(PE_FLAGS_MODAL_OPERATION_FN));
+	PE_CLR_FLAG(port, PE_FLAGS_MODAL_OPERATION);
 
 	memset(pe[port].partner_amodes, 0, sizeof(pe[port].partner_amodes));
 

@@ -21,11 +21,8 @@
 / {
 	/* battery overrides */
 	batteries {
-		default_battery: aec_5477109 {
-			compatible = "aec,5477109", "battery-smart";
-		};
-		smp_l20m3pg1 {
-			compatible = "smp,l20m3pg1", "battery-smart";
+		default_battery: bms-gf_cr50 {
+			compatible = "bms-gf,cr50", "battery-smart";
 		};
 	};
 
@@ -168,4 +165,14 @@
 /* i2c overrides */
 &i2c0_0 {
 	/delete-node/ nx20p348x@71;
+	/delete-node/ anx7483@3e;
+};
+&amd_fp6_port0 {
+	board-set = "board_c0_amd_fp6_mux_set";
+};
+/* usbc overrides */
+&usbc_port0 {
+	usb-mux-chain-0 {
+		usb-muxes = <&amd_fp6_port0>;
+	};
 };

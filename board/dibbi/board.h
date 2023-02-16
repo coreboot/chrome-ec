@@ -17,6 +17,14 @@
 
 #define CONFIG_CMD_CHARGER_DUMP
 
+/* I2C Bus Configuration */
+#define I2C_PORT_HDMI2_EDID IT83XX_I2C_CH_B
+#undef I2C_PORT_USB_C0
+#define I2C_PORT_USB_C0 IT83XX_I2C_CH_C
+#define I2C_PORT_HDMI2_SRC_DDC IT83XX_I2C_CH_D
+#define I2C_PORT_HDMI1_EDID IT83XX_I2C_CH_E
+#define I2C_PORT_HDMI1_SRC_DDC IT83XX_I2C_CH_F
+
 /* Power */
 #undef CONFIG_CHARGER
 #undef CONFIG_CHARGER_DISCHARGE_ON_AC
@@ -44,13 +52,19 @@
 #define CONFIG_USB_PD_TCPM_ITE_ON_CHIP /* C0: ITE EC TCPC */
 #define CONFIG_USB_PD_ITE_ACTIVE_PORT_COUNT 1
 
+/* PPC */
+#define CONFIG_USB_PD_DISCHARGE_PPC
+#define CONFIG_USB_PD_VBUS_DETECT_PPC
+#define CONFIG_USBC_PPC
+#define CONFIG_USBC_PPC_SYV682X
+
 /* USB Mux and Retimer */
 #define CONFIG_USB_MUX_IT5205 /* C0: ITE Mux */
 #define I2C_PORT_USB_MUX I2C_PORT_USB_C0 /* Required for ITE Mux */
 
 /* USB Type A Features */
 #define CONFIG_USB_PORT_POWER_DUMB
-#define USB_PORT_COUNT 3 /* Type A ports */
+#define USB_PORT_COUNT 4 /* Type A ports */
 
 /* No battery */
 #undef CONFIG_BATTERY_CUT_OFF
@@ -120,6 +134,8 @@ enum charge_port {
 	CHARGE_PORT_TYPEC0,
 	CHARGE_PORT_BARRELJACK,
 };
+
+enum usbc_port { USBC_PORT_C0 = 0, USBC_PORT_COUNT };
 
 enum pwm_channel {
 	PWM_CH_LED_RED,
