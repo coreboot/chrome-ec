@@ -478,6 +478,9 @@ static const struct option_container cmd_line_options[] = {
 	{{"flog", optional_argument, NULL, 'L'},
 	 "[prev entry]%Retrieve contents of the flash log"
 	 " (newer than <prev entry> if specified)"},
+	{{"console", no_argument, NULL, 'l'},
+	 "Get console logs. This may need to be run multiple times to collect "
+	 "all available logs."},
 	{{"machine", no_argument, NULL, 'M'},
 	 "Output in a machine-friendly way. "
 	 "Effective with -b, -f, -i, and -O."},
@@ -523,7 +526,7 @@ static const struct option_container cmd_line_options[] = {
 	 "[id]%Retrieve contents of the crash log with id <id>"},
 	{{"reboot", optional_argument, NULL, 'z'},
 	 "Tell the GSC to reboot with an optional reset timeout parameter "
-	 "in milliseconds"}
+	 "in milliseconds"},
 };
 
 /* Helper to print debug messages when verbose flag is specified. */
@@ -3926,6 +3929,25 @@ static int get_crashlog(struct transfer_descriptor *td, uint32_t id)
 	return 0;
 }
 
+static int get_console_logs(struct transfer_descriptor *td)
+{
+	uint32_t rv;
+	uint8_t response[2048] = {0};
+	size_t response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_CONSOLE_LOGS, NULL,
+				 0, response, &response_size);
+	if (rv != VENDOR_RC_SUCCESS) {
+		printf("Get console logs failed. (%X)\n", rv);
+		return 1;
+	}
+
+	printf("%s", response);
+	printf("\n");
+	return 0;
+}
+
+
 int main(int argc, char *argv[])
 {
 	struct transfer_descriptor td;
@@ -3989,6 +4011,7 @@ int main(int argc, char *argv[])
 	size_t reboot_gsc_timeout = 0;
 	int get_clog = 0;
 	uint32_t clog_id = 0;
+	int get_console = 0;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4141,6 +4164,9 @@ int main(int argc, char *argv[])
 			if (optarg)
 				prev_log_entry = strtoul(optarg, NULL, 0);
 			break;
+		case 'l':
+			get_console = 1;
+			break;
 		case 'M':
 			show_machine_output = true;
 			break;
@@ -4276,6 +4302,7 @@ int main(int argc, char *argv[])
 	    !get_apro_boot_status &&
 	    !get_boot_mode &&
 	    !get_clog &&
+	    !get_console &&
 	    !get_flog &&
 	    !get_endorsement_seed &&
 	    !factory_mode &&
@@ -4330,11 +4357,12 @@ int main(int argc, char *argv[])
 	     !!ccd_unlock + !!ccd_lock + !!ccd_info + !!get_flog +
 	     !!get_boot_mode + !!openbox_desc_file + !!factory_mode +
 	     (wp != WP_NONE) + !!get_endorsement_seed +
-	     !!erase_ap_ro_hash + !!set_capability + !!get_clog) > 1) {
+	     !!erase_ap_ro_hash + !!set_capability + !!get_clog +
+	     !!get_console) > 1) {
 		fprintf(stderr,
 			"ERROR: options "
-			"-e, -F, -g, -H, -I, -i, -k, -L, -O, -o, -P, -r, -U, -x"
-			" and -w are mutually exclusive\n");
+			"-e, -F, -g, -H, -I, -i, -k, -L, -l, -O, -o, -P, -r,"
+			"-U, -x and -w are mutually exclusive\n");
 		exit(update_error);
 	}
 
@@ -4432,6 +4460,9 @@ int main(int argc, char *argv[])
 
 	if (get_clog)
 		exit(get_crashlog(&td, clog_id));
+
+	if (get_console)
+		exit(get_console_logs(&td));
 
 	if (data || show_fw_ver) {
 
