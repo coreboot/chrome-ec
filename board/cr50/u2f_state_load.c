@@ -172,12 +172,14 @@ enum ec_error_list u2f_gen_kek_seed(void)
 }
 
 /* Can't include TPM2 headers, so just define constant locally. */
-#define HR_NV_INDEX (1U << 24)
+#define TPM_HT_HIDDEN ((uint8_t)0xfe)
+#define HR_SHIFT      24
+#define HR_HIDDEN     (TPM_HT_HIDDEN << HR_SHIFT)
 
 enum ec_error_list u2f_zeroize_keys(void)
 {
-	const uint32_t u2fobjs[] = { TPM_HIDDEN_U2F_KEK | HR_NV_INDEX,
-				     TPM_HIDDEN_U2F_KH_SALT | HR_NV_INDEX, 0 };
+	const uint32_t u2fobjs[] = { TPM_HIDDEN_U2F_KEK | HR_HIDDEN,
+				     TPM_HIDDEN_U2F_KH_SALT | HR_HIDDEN, 0 };
 
 	enum ec_error_list result1, result2;
 
