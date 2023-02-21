@@ -16,6 +16,7 @@
 #include <zephyr/drivers/gpio/gpio_emul.h>
 #include <zephyr/kernel.h>
 #include <zephyr/shell/shell_dummy.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/ztest.h>
 
 #define WP_L_GPIO_PATH NAMED_GPIOS_GPIO_NODE(wp_l)
@@ -36,13 +37,11 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_asserted)
 		.mask = 0,
 		.flags = 0,
 	};
-	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND(EC_CMD_FLASH_PROTECT, 0, response, params);
 	/* The original flags not 0 as GPIO WP_L asserted */
 	uint32_t expected_flags = EC_FLASH_PROTECT_GPIO_ASSERTED;
 
 	/* Get the flash protect */
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
@@ -50,14 +49,14 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_asserted)
 	params.mask = EC_FLASH_PROTECT_RO_AT_BOOT;
 	params.flags = EC_FLASH_PROTECT_RO_AT_BOOT;
 	expected_flags |= EC_FLASH_PROTECT_RO_AT_BOOT | EC_FLASH_PROTECT_RO_NOW;
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
 	/* Disable RO_AT_BOOT; should change nothing as GPIO WP_L is asserted */
 	params.mask = EC_FLASH_PROTECT_RO_AT_BOOT;
 	params.flags = 0;
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
@@ -65,21 +64,21 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_asserted)
 	params.mask = EC_FLASH_PROTECT_ALL_NOW;
 	params.flags = EC_FLASH_PROTECT_ALL_NOW;
 	expected_flags |= EC_FLASH_PROTECT_ALL_NOW;
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
 	/* Disable ALL_NOW; should change nothing as GPIO WP_L is asserted */
 	params.mask = EC_FLASH_PROTECT_ALL_NOW;
 	params.flags = 0;
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
 	/* Disable RO_AT_BOOT; should change nothing as GPIO WP_L is asserted */
 	params.mask = EC_FLASH_PROTECT_RO_AT_BOOT;
 	params.flags = 0;
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 }
@@ -91,15 +90,13 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_deasserted)
 		.mask = 0,
 		.flags = 0,
 	};
-	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND(EC_CMD_FLASH_PROTECT, 0, response, params);
 	/* The original flags 0 as GPIO WP_L deasserted */
 	uint32_t expected_flags = 0;
 
 	zassert_ok(gpio_wp_l_set(1), NULL);
 
 	/* Get the flash protect */
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
@@ -107,7 +104,7 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_deasserted)
 	params.mask = EC_FLASH_PROTECT_RO_AT_BOOT;
 	params.flags = EC_FLASH_PROTECT_RO_AT_BOOT;
 	expected_flags |= EC_FLASH_PROTECT_RO_AT_BOOT | EC_FLASH_PROTECT_RO_NOW;
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
@@ -116,7 +113,7 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_deasserted)
 	params.flags = 0;
 	expected_flags &=
 		~(EC_FLASH_PROTECT_RO_AT_BOOT | EC_FLASH_PROTECT_RO_NOW);
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
@@ -124,14 +121,14 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_deasserted)
 	params.mask = EC_FLASH_PROTECT_RO_AT_BOOT;
 	params.flags = EC_FLASH_PROTECT_RO_AT_BOOT;
 	expected_flags |= EC_FLASH_PROTECT_RO_AT_BOOT | EC_FLASH_PROTECT_RO_NOW;
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
 	/* Enable ALL_NOW; should change nothing as GPIO WP_L is deasserted */
 	params.mask = EC_FLASH_PROTECT_ALL_NOW;
 	params.flags = EC_FLASH_PROTECT_ALL_NOW;
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 }
@@ -165,8 +162,6 @@ ZTEST_USER(flash, test_hostcmd_flash_write_and_erase)
 		.offset = 0x10000,
 		.size = 0x10000,
 	};
-	struct host_cmd_handler_args erase_args =
-		BUILD_HOST_COMMAND_PARAMS(EC_CMD_FLASH_ERASE, 0, erase_params);
 
 	/* The write host command structs need to be filled run-time */
 	struct ec_params_flash_write *write_params =
@@ -192,7 +187,7 @@ ZTEST_USER(flash, test_hostcmd_flash_write_and_erase)
 		      "readback data not expected: 0x%x", in_buf[0]);
 
 	/* Flash erase */
-	zassert_ok(host_command_process(&erase_args), NULL);
+	zassert_ok(ec_cmd_flash_erase(NULL, &erase_params), NULL);
 
 	/* Flash read and compare the readback data */
 	zassert_ok(host_command_process(&read_args), NULL);
@@ -212,10 +207,8 @@ static void test_region_info(uint32_t region, uint32_t expected_offset,
 	struct ec_params_flash_region_info params = {
 		.region = region,
 	};
-	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
-		EC_CMD_FLASH_REGION_INFO, 1, response, params);
 
-	zassert_ok(host_command_process(&args), NULL);
+	zassert_ok(ec_cmd_flash_region_info_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.offset, expected_offset, NULL);
 	zassert_equal(response.size, expected_size, NULL);
 }
@@ -258,10 +251,9 @@ ZTEST_USER(flash, test_hostcmd_flash_region_info_active_invalid)
 		/* Get an invalid region */
 		.region = 10,
 	};
-	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
-		EC_CMD_FLASH_REGION_INFO, 1, response, params);
 
-	zassert_equal(host_command_process(&args), EC_RES_INVALID_PARAM, NULL);
+	zassert_equal(ec_cmd_flash_region_info_v1(NULL, &params, &response),
+		      EC_RES_INVALID_PARAM, NULL);
 }
 
 ZTEST_USER(flash, test_hostcmd_flash_info_1)
@@ -301,7 +293,7 @@ ZTEST_USER(flash, test_hostcmd_flash_info_1)
 		 * Flash sector description not supported in FLASH_INFO
 		 * version 1 command
 		 */
-		zassert_equal(host_command_process(&args),
+		zassert_equal(ec_cmd_flash_info_v1(NULL, &response),
 			      EC_RES_INVALID_VERSION, NULL);
 	}
 }
@@ -598,6 +590,94 @@ ZTEST_USER(flash, test_console_cmd_flash_erase__happy)
 	zassert_equal(output, 0xFFFFFFFF, "Got %08x", output);
 }
 
+ZTEST_USER(flash, test_console_cmd_flash_write__flash_locked)
+{
+	/* Force write protection on */
+	zassert_ok(crec_flash_physical_protect_now(1));
+
+	CHECK_CONSOLE_CMD("flashwrite 0x1000 0x1000", NULL,
+			  EC_ERROR_ACCESS_DENIED);
+}
+
+ZTEST_USER(flash, test_console_cmd_flash_write__bad_args)
+{
+	/* No args*/
+	CHECK_CONSOLE_CMD("flashwrite", NULL, EC_ERROR_PARAM_COUNT);
+
+	/* Check for 1 of 2 required args */
+	CHECK_CONSOLE_CMD("flashwrite 0x1000", NULL, EC_ERROR_PARAM_COUNT);
+
+	/* Check for alpha arg instead of number*/
+	CHECK_CONSOLE_CMD("flashwrite xyz 100", NULL, EC_ERROR_PARAM1);
+	CHECK_CONSOLE_CMD("flashwrite 100 xyz", NULL, EC_ERROR_PARAM2);
+}
+
+ZTEST_USER(flash, test_console_cmd_flash_write__too_big)
+{
+	CHECK_CONSOLE_CMD("flashwrite 0x10000 " STRINGIFY(INT_MAX), NULL,
+			  EC_ERROR_INVAL);
+}
+
+ZTEST_USER(flash, test_console_cmd_flash_write__happy)
+{
+	/* Write 4 bytes. The bytes written are autogenerated and just the
+	 * pattern 00 01 02 03.
+	 */
+	CHECK_CONSOLE_CMD("flashwrite 0x10000 4", NULL, EC_SUCCESS);
+
+	uint32_t output;
+	static const uint8_t expected[] = { 0x00, 0x01, 0x02, 0x03 };
+
+	/* Check for pattern */
+	zassert_ok(read_flash_helper32(0x10000, &output));
+	zassert_mem_equal(&output, &expected, sizeof(expected));
+
+	/* Check the space after to ensure it is still erased. */
+	zassert_ok(read_flash_helper32(0x10000 + 4, &output));
+	zassert_equal(output, 0xFFFFFFFF, "Got %08x", output);
+}
+
+ZTEST_USER(flash, test_console_cmd_flash_read__bad_args)
+{
+	/* No args*/
+	CHECK_CONSOLE_CMD("flashread", NULL, EC_ERROR_PARAM_COUNT);
+
+	/* Check for alpha arg instead of number*/
+	CHECK_CONSOLE_CMD("flashread xyz 100", NULL, EC_ERROR_PARAM1);
+	CHECK_CONSOLE_CMD("flashread 100 xyz", NULL, EC_ERROR_PARAM2);
+}
+
+ZTEST_USER(flash, test_console_cmd_flash_read__too_big)
+{
+	CHECK_CONSOLE_CMD("flashread 0x10000 " STRINGIFY(INT_MAX), NULL,
+			  EC_ERROR_INVAL);
+}
+
+ZTEST_USER(flash, test_console_cmd_flash_read__happy_4_bytes)
+{
+	/* Write some bytes to read */
+	zassert_ok(write_flash_helper32(0x10000, sys_cpu_to_be32(0xA1B2C3D4)));
+
+	static const char *expected = "\r\n\r\n"
+				      "00010000: a1 b2 c3 d4\r\n";
+	CHECK_CONSOLE_CMD("flashread 0x10000 4", expected, EC_SUCCESS);
+}
+
+ZTEST_USER(flash, test_console_cmd_flash_read__happy_17_bytes)
+{
+	/* Test 16-byte column wrapping behavior */
+
+	/* Write some bytes to read */
+	zassert_ok(write_flash_helper32(0x10000, sys_cpu_to_be32(0xA1B2C3D4)));
+
+	static const char *expected =
+		"\r\n\r\n"
+		"00010000: a1 b2 c3 d4 ff ff ff ff ff ff ff ff ff ff ff ff\r\n"
+		"00010010: ff\r\n";
+
+	CHECK_CONSOLE_CMD("flashread 0x10000 17", expected, EC_SUCCESS);
+}
+
 /**
  * @brief Prepare a region of flash for the test_crec_flash_is_erased* tests
  *
@@ -613,11 +693,9 @@ static void setup_flash_region_helper(uint32_t offset, uint32_t size,
 		.offset = offset,
 		.size = size,
 	};
-	struct host_cmd_handler_args erase_args =
-		BUILD_HOST_COMMAND_PARAMS(EC_CMD_FLASH_ERASE, 0, erase_params);
 	int rv;
 
-	rv = host_command_process(&erase_args);
+	rv = ec_cmd_flash_erase(NULL, &erase_params);
 	zassert_ok(rv, "Got %d", rv);
 
 	if (make_write) {

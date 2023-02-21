@@ -846,6 +846,10 @@
 #undef CONFIG_DEDICATED_RECOVERY_BUTTON
 #undef CONFIG_DEDICATED_RECOVERY_BUTTON_2
 
+/* Configure recovery button. e.g. BUTTON_FLAG_ACTIVE_HIGH */
+#undef CONFIG_DEDICATED_RECOVERY_BUTTON_FLAGS
+#undef CONFIG_DEDICATED_RECOVERY_BUTTON_2_FLAGS
+
 /*
  * RISC-V core specific panic data is bigger than Cortex-M core specific panic
  * data. Including this into union in panic_data structure causes whole
@@ -2483,11 +2487,7 @@
 #undef CONFIG_HOST_COMMAND_STATUS
 
 /* clear bit(s) to mask reporting of an EC_HOST_EVENT_XXX event(s) */
-#ifdef CONFIG_HOST_EVENT64
 #define CONFIG_HOST_EVENT_REPORT_MASK 0xffffffffffffffffULL
-#else
-#define CONFIG_HOST_EVENT_REPORT_MASK 0xffffffff
-#endif
 
 /* Config option to support 64-bit hostevents and wake-masks. */
 #define CONFIG_HOST_EVENT64
