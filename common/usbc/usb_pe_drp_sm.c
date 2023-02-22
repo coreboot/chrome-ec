@@ -911,6 +911,15 @@ void pe_got_hard_reset(int port)
 	assert(port == TASK_ID_TO_PD_PORT(task_get_current()));
 
 	/*
+	 * If we're in the middle of an FRS, any error should cause us to follow
+	 * the ErrorRecovery path
+	 */
+	if (pe_in_frs_mode(port)) {
+		set_state_pe(port, PE_WAIT_FOR_ERROR_RECOVERY);
+		return;
+	}
+
+	/*
 	 * Transition from any state to the PE_SRC_Hard_Reset_Received or
 	 *  PE_SNK_Transition_to_default state when:
 	 *  1) Hard Reset Signaling is detected.
@@ -1263,8 +1272,12 @@ void pe_got_soft_reset(int port)
 	/*
 	 * The PE_SRC_Soft_Reset state Shall be entered from any state when a
 	 * Soft_Reset Message is received from the Protocol Layer.
+	 *
+	 * However, if we're in the middle of an FRS sequence, we need to go to
+	 * ErrorRecovery instead.
 	 */
-	set_state_pe(port, PE_SOFT_RESET);
+	set_state_pe(port, pe_in_frs_mode(port) ? PE_WAIT_FOR_ERROR_RECOVERY :
+						  PE_SOFT_RESET);
 }
 
 __overridable bool pd_can_charge_from_device(int port, const int pdo_cnt,
@@ -2025,9 +2038,6 @@ int pd_dev_store_rw_hash(int port, uint16_t dev_id, uint32_t *rw_hash,
 {
 	pe[port].dev_id = dev_id;
 	memcpy(pe[port].dev_rw_hash, rw_hash, PD_RW_HASH_SIZE);
-#ifdef CONFIG_CMD_PD_DEV_DUMP_INFO
-	pd_dev_dump_info(dev_id, rw_hash);
-#endif
 	pe[port].current_image = current_image;
 
 	if (IS_ENABLED(CONFIG_USB_PD_HOST_CMD)) {
@@ -5151,10 +5161,9 @@ static void pe_prs_snk_src_send_swap_run(int port)
 	 * Handle discarded message
 	 */
 	if (msg_check & PE_MSG_DISCARDED) {
-		if (pe_in_frs_mode(port))
-			pe_set_hard_reset(port);
-		else
-			set_state_pe(port, PE_SNK_READY);
+		set_state_pe(port, pe_in_frs_mode(port) ?
+					   PE_WAIT_FOR_ERROR_RECOVERY :
+					   PE_SNK_READY);
 		return;
 	}
 

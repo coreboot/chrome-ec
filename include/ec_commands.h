@@ -252,7 +252,9 @@ extern "C" {
 /* Report 0 for fan stalled so userspace applications can take
  * an appropriate action based on this value to control the fan.
  */
-#define EC_FAN_SPEED_STALLED 0x0 /* Fan stalled */
+#define EC_FAN_SPEED_STALLED 0x0
+/* This should be used only for ectool to support old ECs. */
+#define EC_FAN_SPEED_STALLED_DEPRECATED 0xfffe
 
 /* Battery bit flags at EC_MEMMAP_BATT_FLAG. */
 #define EC_BATT_FLAG_AC_PRESENT 0x01
@@ -4772,9 +4774,18 @@ struct ec_response_charge_state {
  * Set maximum battery charging current.
  */
 #define EC_CMD_CHARGE_CURRENT_LIMIT 0x00A1
+#define EC_VER_CHARGE_CURRENT_LIMIT 1
 
 struct ec_params_current_limit {
 	uint32_t limit; /* in mA */
+
+	/* Added in v1 */
+	/*
+	 * Battery state of charge is the minimum charge percentage at which
+	 * the battery charge current limit will apply.
+	 * When not set, the limit will apply regardless of state of charge.
+	 */
+	uint8_t battery_soc; /* battery state of charge, 0-100 */
 } __ec_align4;
 
 /*
