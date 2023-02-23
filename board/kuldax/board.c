@@ -12,6 +12,7 @@
 #include "console.h"
 #include "cros_board_info.h"
 #include "driver/tcpm/tcpci.h"
+#include "driver/wpc/cps8100.h"
 #include "fw_config.h"
 #include "gpio.h"
 #include "gpio_signal.h"
@@ -41,7 +42,6 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(usb_port_enable) == USB_PORT_COUNT);
 
-extern struct pchg_drv cps8100_drv;
 struct pchg pchgs[] = {
 	[0] = {
 		.cfg = &(const struct pchg_config) {
@@ -58,7 +58,6 @@ struct pchg pchgs[] = {
 		.events = QUEUE_NULL(PCHG_EVENT_QUEUE_SIZE, enum pchg_event),
 	},
 };
-const int pchg_count = ARRAY_SIZE(pchgs);
 
 __override void board_pchg_power_on(int port, bool on)
 {
@@ -66,6 +65,15 @@ __override void board_pchg_power_on(int port, bool on)
 		gpio_set_level(GPIO_EC_QI_PWR, on);
 	else
 		CPRINTS("%s: Invalid port=%d", __func__, port);
+}
+
+int board_get_pchg_count(void)
+{
+	if (ec_cfg_has_peripheral_charger()) {
+		return ARRAY_SIZE(pchgs);
+	} else {
+		return 0;
+	}
 }
 
 /******************************************************************************/

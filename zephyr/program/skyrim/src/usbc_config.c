@@ -51,10 +51,6 @@ static void usbc_interrupt_init(void)
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_ppc));
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1_ppc));
 
-	/* Enable TCPC interrupts. */
-	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_tcpc));
-	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1_tcpc));
-
 #ifdef CONFIG_PLATFORM_EC_USB_CHARGER
 	/* Enable BC 1.2 interrupts */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_bc12));
@@ -201,17 +197,25 @@ void sbu_fault_interrupt(enum gpio_signal signal)
 	pd_handle_overcurrent(port);
 }
 
-void usb_fault_interrupt(enum gpio_signal signal)
+static void usb_fault_alert(void)
 {
 	int out;
 
-	CPRINTSUSB("USB fault(%d), alerting the SoC", signal);
 	out = gpio_pin_get_dt(
 		      GPIO_DT_FROM_NODELABEL(gpio_usb_hub_fault_q_odl)) &&
 	      gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(ioex_usb_a0_fault_odl)) &&
 	      gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(ioex_usb_a1_fault_db_odl));
 
 	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_fault_odl), out);
+
+	if (out == 0)
+		CPRINTSUSB("USB fault, alerting the SoC");
+}
+DECLARE_DEFERRED(usb_fault_alert);
+
+void usb_fault_interrupt(enum gpio_signal signal)
+{
+	hook_call_deferred(&usb_fault_alert_data, 0);
 }
 
 void usb_pd_soc_interrupt(enum gpio_signal signal)
@@ -245,6 +249,7 @@ static void reset_nct38xx_port(int port)
 {
 	const struct gpio_dt_spec *reset_gpio_l;
 	const struct device *ioex_port0, *ioex_port1;
+	int rv;
 
 	/* The maximum pin numbers of the NCT38xx IO expander port is 8 */
 	gpio_flags_t saved_port0_flags[8] = { 0 };
@@ -279,6 +284,18 @@ static void reset_nct38xx_port(int port)
 				 ARRAY_SIZE(saved_port0_flags));
 	gpio_restore_port_config(ioex_port1, saved_port1_flags,
 				 ARRAY_SIZE(saved_port1_flags));
+
+	if (power_get_state() == POWER_S0) {
+		/* If we transitioned to S0 during the reset then the restore
+		 * may set the vbus enable pin low. Ensure the A port is
+		 * always powered in S0.
+		 */
+		rv = usb_charge_set_mode(port, USB_CHARGE_MODE_ENABLED,
+					 USB_ALLOW_SUSPEND_CHARGE);
+		if (rv)
+			CPRINTSUSB("S0 TCPC enable failure on port %d(%d)",
+				   port, rv);
+	}
 }
 
 void board_reset_pd_mcu(void)

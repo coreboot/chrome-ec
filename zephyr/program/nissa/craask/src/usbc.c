@@ -208,6 +208,10 @@ static void usbc_interrupt_trigger(int port)
 static inline void poll_usb_gpio(int port, const struct gpio_dt_spec *gpio,
 				 const struct deferred_data *ud)
 {
+	/*
+	 * TODO(b/267537103): Migrate named-gpios to Zephyr's GPIO hogs. Verify
+	 * the active high/active low setting once GPIO hogs are used.
+	 */
 	if (!gpio_pin_get_dt(gpio)) {
 		usbc_interrupt_trigger(port);
 		hook_call_deferred(ud, USBC_INT_POLL_DELAY_US);

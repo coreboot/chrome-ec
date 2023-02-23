@@ -6,6 +6,7 @@
 /* Dibbi board-specific configuration */
 
 #include "adc_chip.h"
+#include "board.h"
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state_v2.h"
@@ -53,6 +54,11 @@ const struct adc_t adc_channels[] = {
 				.factor_div = ADC_READ_MAX + 1,
 				.shift = 0,
 				.channel = CHIP_ADC_CH3 },
+	[ADC_TEMP_SENSOR_3] = { .name = "TEMP_SENSOR3",
+				.factor_mul = ADC_MAX_MVOLT,
+				.factor_div = ADC_READ_MAX + 1,
+				.shift = 0,
+				.channel = CHIP_ADC_CH13 },
 	[ADC_PPVAR_PWR_IN_IMON] = { .name = "ADC_PPVAR_PWR_IN_IMON",
 				    .factor_mul = ADC_MAX_MVOLT,
 				    .factor_div = ADC_READ_MAX + 1,
@@ -105,6 +111,7 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A0_VBUS,
 	GPIO_EN_USB_A1_VBUS,
 	GPIO_EN_USB_A2_VBUS,
+	GPIO_EN_USB_A3_VBUS,
 };
 
 /* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
@@ -136,26 +143,23 @@ const struct temp_sensor_t temp_sensors[] = {
 			    .type = TEMP_SENSOR_TYPE_BOARD,
 			    .read = get_temp_3v3_51k1_47k_4050b,
 			    .idx = ADC_TEMP_SENSOR_1 },
-	[TEMP_SENSOR_2] = { .name = "Ambient",
+	[TEMP_SENSOR_2] = { .name = "SoC power",
 			    .type = TEMP_SENSOR_TYPE_BOARD,
 			    .read = get_temp_3v3_51k1_47k_4050b,
 			    .idx = ADC_TEMP_SENSOR_2 },
+	[TEMP_SENSOR_3] = { .name = "Ambient",
+			    .type = TEMP_SENSOR_TYPE_BOARD,
+			    .read = get_temp_3v3_51k1_47k_4050b,
+			    .idx = ADC_TEMP_SENSOR_3 },
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 void board_init(void)
 {
-	int on;
-
-	gpio_enable_interrupt(GPIO_BJ_ADP_PRESENT_L);
+	gpio_enable_interrupt(GPIO_BJ_ADP_PRESENT);
 
 	/* Enable PPC interrupt */
 	gpio_enable_interrupt(GPIO_USB_C0_FAULT_L);
-
-	/* Turn on 5V if the system is on, otherwise turn it off */
-	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
-			      CHIPSET_STATE_SOFT_OFF);
-	board_power_5v_enable(on);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -169,10 +173,8 @@ void board_reset_pd_mcu(void)
 __override void board_power_5v_enable(int enable)
 {
 	/*
-	 * Mainboard 5V regulator activated by GPIO.
-	 * USB-A ports are activated by usb_port_power_dumb.
+	 * Nothing to do. 5V should always be enabled while in Z1 or above.
 	 */
-	gpio_set_level(GPIO_EN_PP5000, !!enable);
 }
 
 void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
@@ -190,20 +192,17 @@ int board_vbus_source_enabled(int port)
 	if (port != CHARGE_PORT_TYPEC0)
 		return 0;
 
-	return ppc_is_vbus_present(port);
+	return ppc_is_sourcing_vbus(port);
 }
 
 /* Vconn control for integrated ITE TCPC */
 void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
 {
-	/* Vconn control is only for port 0 */
-	if (port)
-		return;
-
-	if (cc_pin == USBPD_CC_PIN_1)
-		gpio_set_level(GPIO_EN_USB_C0_CC1_VCONN, !!enabled);
-	else
-		gpio_set_level(GPIO_EN_USB_C0_CC2_VCONN, !!enabled);
+	/*
+	 * We ignore the cc_pin and PPC vconn because polarity and PPC vconn
+	 * should already be set correctly in the PPC driver via the pd
+	 * state machine.
+	 */
 }
 
 __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
@@ -250,7 +249,7 @@ static int8_t bj_adp_connected = -1;
 static void adp_connect_deferred(void)
 {
 	const struct charge_port_info *pi;
-	int connected = !gpio_get_level(GPIO_BJ_ADP_PRESENT_L);
+	int connected = gpio_get_level(GPIO_BJ_ADP_PRESENT);
 
 	/* Debounce */
 	if (connected == bj_adp_connected)
@@ -314,16 +313,14 @@ int board_set_active_charge_port(int port)
 	switch (port) {
 	case CHARGE_PORT_TYPEC0:
 		ppc_vbus_sink_enable(USBC_PORT_C0, 1);
-		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_OD, 1);
-		gpio_enable_interrupt(GPIO_BJ_ADP_PRESENT_L);
+		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_OD, 0);
 		break;
 	case CHARGE_PORT_BARRELJACK:
 		/* Make sure BJ adapter is sourcing power */
-		if (gpio_get_level(GPIO_BJ_ADP_PRESENT_L))
+		if (!gpio_get_level(GPIO_BJ_ADP_PRESENT))
 			return EC_ERROR_INVAL;
-		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_OD, 0);
+		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_OD, 1);
 		ppc_vbus_sink_enable(USBC_PORT_C0, 1);
-		gpio_disable_interrupt(GPIO_BJ_ADP_PRESENT_L);
 		break;
 	default:
 		return EC_ERROR_INVAL;
@@ -345,8 +342,8 @@ static void board_charge_manager_init(void)
 			charge_manager_update_charge(j, i, NULL);
 	}
 
-	port = gpio_get_level(GPIO_BJ_ADP_PRESENT_L) ? CHARGE_PORT_TYPEC0 :
-						       CHARGE_PORT_BARRELJACK;
+	port = gpio_get_level(GPIO_BJ_ADP_PRESENT) ? CHARGE_PORT_BARRELJACK :
+						     CHARGE_PORT_TYPEC0;
 	CPRINTUSB("Power source is p%d (%s)", port,
 		  port == CHARGE_PORT_TYPEC0 ? "USB-C" : "BJ");
 
@@ -382,5 +379,45 @@ void ppc_interrupt(enum gpio_signal signal)
 		syv682x_interrupt(USBC_PORT_C0);
 }
 
+/* I2C Ports */
+const struct i2c_port_t i2c_ports[] = {
+	{ .name = "eeprom",
+	  .port = I2C_PORT_EEPROM,
+	  .kbps = 400,
+	  .scl = GPIO_EC_I2C_EEPROM_SCL,
+	  .sda = GPIO_EC_I2C_EEPROM_SDA },
+
+	{ .name = "hdmi2_edid",
+	  .port = I2C_PORT_HDMI2_EDID,
+	  .kbps = 100,
+	  .scl = GPIO_EC_I2C_HDMI2_EDID_SCL,
+	  .sda = GPIO_EC_I2C_HDMI2_EDID_SDA },
+
+	{ .name = "usbc0",
+	  .port = I2C_PORT_USB_C0,
+	  .kbps = 1000,
+	  .scl = GPIO_EC_I2C_USB_C0_SCL,
+	  .sda = GPIO_EC_I2C_USB_C0_SDA },
+
+	{ .name = "hdmi2_src_ddc",
+	  .port = I2C_PORT_HDMI2_SRC_DDC,
+	  .kbps = 100,
+	  .scl = GPIO_EC_I2C_HDMI2_SRC_DDC_SCL,
+	  .sda = GPIO_EC_I2C_HDMI2_SRC_DDC_SDA },
+
+	{ .name = "hdmi1_edid",
+	  .port = I2C_PORT_HDMI1_EDID,
+	  .kbps = 100,
+	  .scl = GPIO_EC_I2C_HDMI1_EDID_SCL,
+	  .sda = GPIO_EC_I2C_HDMI1_EDID_SDA },
+
+	{ .name = "hdmi1_src_ddc",
+	  .port = I2C_PORT_HDMI1_SRC_DDC,
+	  .kbps = 100,
+	  .scl = GPIO_EC_I2C_HDMI1_SRC_DDC_SCL,
+	  .sda = GPIO_EC_I2C_HDMI1_SRC_DDC_SDA },
+};
+
+const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
 /* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"

@@ -5,6 +5,7 @@
 
 /* Richtek RT1739 USB-C Power Path Controller */
 #include "atomic.h"
+#include "battery.h"
 #include "common.h"
 #include "config.h"
 #include "console.h"
@@ -247,12 +248,42 @@ static int rt1739_set_frs_enable(int port, int enable)
 
 static int rt1739_init(int port)
 {
-	int device_id, oc_setting;
+	int device_id, oc_setting, sys_ctrl, vbus_switch_ctrl;
+	bool batt_connected = false;
 
 	atomic_clear(&flags[port]);
 
-	RETURN_ERROR(write_reg(port, RT1739_REG_SW_RESET, RT1739_SW_RESET));
-	usleep(1 * MSEC);
+	RETURN_ERROR(read_reg(port, RT1739_REG_SYS_CTRL, &sys_ctrl));
+	RETURN_ERROR(
+		read_reg(port, RT1739_REG_VBUS_SWITCH_CTRL, &vbus_switch_ctrl));
+
+	if (IS_ENABLED(CONFIG_BATTERY_FUEL_GAUGE)) {
+		batt_connected = (battery_get_disconnect_state() ==
+				  BATTERY_NOT_DISCONNECTED);
+	}
+
+	if (sys_ctrl & RT1739_DEAD_BATTERY) {
+		/*
+		 * Dead battery boot, see b/267412033#comment6 for the init
+		 * sequence.
+		 */
+		RETURN_ERROR(
+			write_reg(port, RT1739_REG_SYS_CTRL,
+				  RT1739_DEAD_BATTERY | RT1739_SHUTDOWN_OFF));
+		rt1739_vbus_sink_enable(port, true);
+		RETURN_ERROR(write_reg(port, RT1739_REG_SYS_CTRL,
+				       RT1739_OT_EN | RT1739_SHUTDOWN_OFF));
+	} else if (batt_connected || !(vbus_switch_ctrl & RT1739_HV_SNK_EN)) {
+		/*
+		 * If rt1739 is not sinking, or there's a working battery,
+		 * we can reset its registers safely.
+		 *
+		 * Otherwise, don't touch the VBUS_SWITCH_CTRL reg.
+		 */
+		RETURN_ERROR(
+			write_reg(port, RT1739_REG_SW_RESET, RT1739_SW_RESET));
+		usleep(1 * MSEC);
+	}
 	RETURN_ERROR(write_reg(port, RT1739_REG_SYS_CTRL,
 			       RT1739_OT_EN | RT1739_SHUTDOWN_OFF));
 
@@ -285,6 +316,7 @@ static int rt1739_init(int port)
 	return EC_SUCCESS;
 }
 
+#ifdef CONFIG_USB_CHARGER
 static int rt1739_get_bc12_ilim(int charge_supplier)
 {
 	switch (charge_supplier) {
@@ -382,6 +414,7 @@ static void rt1739_usb_charger_task_event(const int port, uint32_t evt)
 		rt1739_enable_bc12_detection(port, false);
 	}
 }
+#endif /* CONFIG_USB_CHARGER */
 
 static atomic_t pending_events;
 
@@ -403,8 +436,10 @@ void rt1739_deferred_interrupt(void)
 		if (read_reg(port, RT1739_REG_INT_EVENT5, &event5))
 			continue;
 
+#ifdef CONFIG_USB_CHARGER
 		if (event5 & RT1739_BC12_SNK_DONE_INT)
 			usb_charger_task_set_event(port, USB_CHG_EVENT_BC12);
+#endif /* CONFIG_USB_CHARGER */
 
 		/* write to clear EVENT4 since FRS interrupt has been handled */
 		write_reg(port, RT1739_REG_INT_EVENT4, event4);
@@ -445,6 +480,7 @@ const struct ppc_drv rt1739_ppc_drv = {
 	.interrupt = &rt1739_interrupt,
 };
 
+#ifdef CONFIG_USB_CHARGER
 const struct bc12_drv rt1739_bc12_drv = {
 	.usb_charger_task_init = rt1739_usb_charger_task_init,
 	.usb_charger_task_event = rt1739_usb_charger_task_event,
@@ -458,3 +494,4 @@ struct bc12_config bc12_ports[CHARGE_PORT_COUNT] = {
 	},
 };
 #endif /* CONFIG_BC12_SINGLE_DRIVER */
+#endif /* CONFIG_USB_CHARGER */

@@ -96,7 +96,8 @@ const char help_str[] =
 	"  cbi\n"
 	"      Get/Set/Remove Cros Board Info\n"
 	"  chargecurrentlimit\n"
-	"      Set the maximum battery charging current\n"
+	"    Set the maximum battery charging current and the minimum battery\n"
+	"    SoC at which it will apply.\n"
 	"  chargecontrol\n"
 	"      Force the battery to stop charging or discharge\n"
 	"  chargeoverride\n"
@@ -3231,8 +3232,8 @@ static int cmd_temperature_print(int id, int mtemp)
 	int temp = mtemp + EC_TEMP_SENSOR_OFFSET;
 
 	temp_p.id = id;
-	rc = ec_command(EC_CMD_TEMP_SENSOR_GET_INFO, 0, &temp_p,
-			sizeof(temp_p), &temp_r, sizeof(temp_r));
+	rc = ec_command(EC_CMD_TEMP_SENSOR_GET_INFO, 0, &temp_p, sizeof(temp_p),
+			&temp_r, sizeof(temp_r));
 	if (rc < 0)
 		return rc;
 
@@ -3253,7 +3254,8 @@ static int cmd_temperature_print(int id, int mtemp)
 		else
 			printf("  %10d%% (%d K and %d K)",
 			       get_temp_ratio(temp, r.temp_fan_off,
-			       r.temp_fan_max), r.temp_fan_off, r.temp_fan_max);
+					      r.temp_fan_max),
+			       r.temp_fan_off, r.temp_fan_max);
 	else
 		printf("%20s(rc=%d)", "error", rc);
 
@@ -3647,8 +3649,8 @@ static int print_fan(int idx)
 	switch (rv) {
 	case EC_FAN_SPEED_NOT_PRESENT:
 		return -1;
-	case EC_FAN_SPEED_STALLED:
-		printf("Fan %d stalled!\n", idx);
+	case EC_FAN_SPEED_STALLED_DEPRECATED:
+		printf("Fan %d stalled (RPM: %d)\n", idx, rv);
 		break;
 	default:
 		printf("Fan %d RPM: %d\n", idx, rv);
@@ -7532,24 +7534,61 @@ int cmd_ext_power_limit(int argc, char *argv[])
 			  0);
 }
 
+static void cmd_charge_current_limit_help(const char *cmd)
+{
+	fprintf(stderr,
+		"\n"
+		"  Usage: %s <max_current_mA>\n"
+		"    Set the maximum battery charging current.\n"
+		"  Usage: %s <max_current_mA> [battery_SoC]\n"
+		"    Set the maximum battery charging current and the minimum battery\n"
+		"    SoC at which it will apply. Setting [battery_SoC] is only \n"
+		"    supported in v1.\n"
+		"\n",
+		cmd, cmd);
+}
+
 int cmd_charge_current_limit(int argc, char *argv[])
 {
 	struct ec_params_current_limit p;
+	int version = 1;
 	int rv;
 	char *e;
 
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s <max_current_mA>\n", argv[0]);
+	if (!ec_cmd_version_supported(EC_CMD_CHARGE_CURRENT_LIMIT, 1))
+		version = 0;
+
+	if (version < 1) {
+		if (argc != 2) {
+			cmd_charge_current_limit_help(argv[0]);
+			return -1;
+		}
+	} else if (argc < 2 || argc > 3) {
+		cmd_charge_current_limit_help(argv[0]);
 		return -1;
 	}
 
 	p.limit = strtol(argv[1], &e, 0);
 	if (e && *e) {
-		fprintf(stderr, "Bad value.\n");
+		fprintf(stderr, "ERROR: Bad limit value: %s\n", argv[1]);
 		return -1;
 	}
 
-	rv = ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 0, &p, sizeof(p), NULL, 0);
+	if (argc == 3) {
+		p.battery_soc = strtol(argv[2], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "ERROR: Bad battery SoC value: %s\n",
+				argv[2]);
+			return -1;
+		}
+	}
+
+	rv = ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, version, &p, sizeof(p),
+			NULL, 0);
+	if (rv < 0) {
+		fprintf(stderr, "ERROR: Battery SoC is out of range.\n");
+	}
+
 	return rv;
 }
 
@@ -10835,7 +10874,12 @@ int cmd_wait_event(int argc, char *argv[])
 	char *e;
 
 	BUILD_ASSERT(ARRAY_SIZE(mkbp_event_text) == EC_MKBP_EVENT_COUNT);
-	BUILD_ASSERT(ARRAY_SIZE(host_event_text) == 33); /* events start at 1 */
+	/*
+	 * Only 64 host events are supported. The enum |host_event_code| uses
+	 * 1-based counting so it can skip 0 (NONE). The last legal host event
+	 * number is 64, so ARRAY_SIZE(host_event_text) <= 64+1.
+	 */
+	BUILD_ASSERT(ARRAY_SIZE(host_event_text) <= 65);
 
 	if (!ec_pollevent) {
 		fprintf(stderr, "Polling for MKBP event not supported\n");
@@ -10883,7 +10927,7 @@ int cmd_wait_event(int argc, char *argv[])
 	switch (event_type) {
 	case EC_MKBP_EVENT_HOST_EVENT:
 		printf("Host events:");
-		for (int evt = 1; evt <= 32; evt++) {
+		for (int evt = 1; evt < ARRAY_SIZE(host_event_text); evt++) {
 			if (buffer.data.host_event & EC_HOST_EVENT_MASK(evt)) {
 				const char *name = host_event_text[evt];
 

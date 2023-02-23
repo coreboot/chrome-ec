@@ -212,25 +212,31 @@ enum {
  */
 #define CROS_EC_TASK(name, ...) TASK_ID_##name,
 #define TASK_TEST(name, ...) CROS_EC_TASK(name)
+/* clang-format off */
 enum {
-	TASK_ID_IDLE = -1, /* We don't shim the idle task */
 	CROS_EC_TASK_LIST
 #ifdef TEST_BUILD
-		TASK_ID_TEST_RUNNER,
+	TASK_ID_TEST_RUNNER,
 #endif
 	TASK_ID_COUNT,
 	TASK_ID_INVALID = 0xff, /* Unable to find the task */
 };
+/* clang-format on */
 #undef CROS_EC_TASK
 #undef TASK_TEST
 
 /*
  * Additional task IDs for features that runs on non shimmed threads,
- * task_get_current() needs to be updated to identify these ones.
+ * thread_id_to_task_id() and task_id_to_thread_id() need to be updated
+ * to identify these tasks.
  */
+/* clang-format off */
 #define CROS_EC_EXTRA_TASKS(fn)                                         \
-	COND_CODE_1(CONFIG_TASK_HOSTCMD_THREAD_MAIN, (fn(HOSTCMD)), ()) \
-	fn(SYSWORKQ)
+	COND_CODE_1(CONFIG_TASK_HOSTCMD_THREAD_MAIN, (fn(HOSTCMD)),     \
+		(fn(MAIN)))                                             \
+	fn(SYSWORKQ)                                                    \
+	fn(IDLE)
+/* clang-format on */
 
 #define EXTRA_TASK_INTERNAL_ID(name) EXTRA_TASK_##name,
 enum {

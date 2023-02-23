@@ -48,28 +48,37 @@ config TEST_BOARD_NAME
 	default "skyrim" if TEST_BOARD_SKYRIM
 	default "winterhold" if TEST_BOARD_WINTERHOLD
 
+config TEST_BOARD_ALT_CHARGER
+	bool "Enable alt charger specific tests"
+
+config TEST_BOARD_ALT_CHARGER_CUSTOM
+	bool "ENable alt charger tests with a variant-specific test file"
+	select TEST_BOARD_ALT_CHARGER
+
+config TEST_BOARD_FAN
+	bool "Enable fan tests"
+
+config TEST_BOARD_FAN_CUSTOM
+	bool "ENable fan tests with a variant-specific test file"
+	select TEST_BOARD_FAN
+
 config TEST_BOARD_USB_PD_POLICY
 	bool "Enable USB PD policy specific tests"
 	select TEST_ENABLE_USB_PD_HOST_CMD
-	default n
 
 config TEST_BOARD_PPC_CONFIG
 	bool "Enable PPC config tests"
-	default n
 
-config TEST_BOARD_PPC_CONFIG_SRC
-	string "Source file to use for this test"
-	default "common/ppc_config.c"
-	depends on TEST_BOARD_PPC
+config TEST_BOARD_PPC_CONFIG_CUSTOM
+	bool "ENable PPC config tests with a variant-specific test file"
+	select TEST_BOARD_PPC_CONFIG
 
 config TEST_BOARD_USB_MUX_CONFIG
 	bool "Enable USB mux config tests"
-	default n
 
-config TEST_BOARD_USB_MUX_CONFIG_SRC
-	string "Source file to use for this test"
-	default "common/usb_mux_config.c"
-	depends on TEST_BOARD_USB_MUX_CONFIG
+config TEST_BOARD_USB_MUX_CONFIG_CUSTOM
+	bool "Enable USB mux config tests with a variant-specific test file"
+	select TEST_BOARD_USB_MUX_CONFIG
 
 config SKYRIM_LOG_LEVEL
 	int "Fake config to allow building"
@@ -77,10 +86,8 @@ config SKYRIM_LOG_LEVEL
 
 config TEST_ENABLE_USB_PD_HOST_CMD
 	bool "Fake config to enable this feature"
-	default n
 
 config USB_PD_DISCHARGE
 	bool "Fake config to enable this feature"
-	default n
 
 source "Kconfig.zephyr"
