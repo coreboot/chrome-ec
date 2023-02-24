@@ -19,10 +19,10 @@
 #define CPRINTF(format, args...) cprintf(CC_EXTENSION, format, ## args)
 
 /*
- * PCR0 values for the states when FWMP updates are allowed.
+ * PCR0 values for the states when FWMP/antirollback updates are allowed.
  * For the source of the specific values see b/140958855#comment25.
  */
-static const uint8_t allowed_states_for_fwmp[][SHA256_DIGEST_SIZE] = {
+static const uint8_t pcr_boot_policy_update_allowed[][SHA256_DIGEST_SIZE] = {
 	/* normal mode (rec=0, dev=0) */
 	{
 		0x89, 0xEA, 0xF3, 0x51, 0x34, 0xB4, 0xB3, 0xC6,
@@ -141,8 +141,10 @@ void _plat__OwnerClearCallback(void)
 		CPRINTF("%s: failed (%d)\n", __func__, rv);
 }
 
-/* Returns TRUE if FWMP is allowed to be updated in the current state */
-static BOOL fwmp_update_allowed(void)
+/* Returns TRUE if FWMP/antirollback is allowed to be updated
+ * with the current PCR state.
+ */
+static BOOL pcr_allows_boot_policy_update(void)
 {
 	uint8_t pcr0_value[SHA256_DIGEST_SIZE];
 	int i;
@@ -150,9 +152,9 @@ static BOOL fwmp_update_allowed(void)
 	if (!get_tpm_pcr_value(0, pcr0_value))
 		return FALSE;  /* something went wrong, let's be strict */
 
-	for (i = 0; i < ARRAY_SIZE(allowed_states_for_fwmp); ++i) {
+	for (i = 0; i < ARRAY_SIZE(pcr_boot_policy_update_allowed); ++i) {
 		if (memcmp(pcr0_value,
-				allowed_states_for_fwmp[i],
+				pcr_boot_policy_update_allowed[i],
 				SHA256_DIGEST_SIZE) == 0)
 			return TRUE;
 	}
@@ -162,8 +164,14 @@ static BOOL fwmp_update_allowed(void)
 
 BOOL _plat__NvUpdateAllowed(uint32_t handle)
 {
-	if (handle == HR_NV_INDEX + FWMP_NV_INDEX)
-		return fwmp_update_allowed();
+	switch (handle) {
+	case HR_NV_INDEX + FWMP_NV_INDEX:
+		return pcr_allows_boot_policy_update();
+	case HR_NV_INDEX + FIRMWARE_NV_INDEX:
+	case HR_NV_INDEX + KERNEL_NV_INDEX:
+		return pcr_allows_boot_policy_update()
+			|| board_fwmp_allows_boot_policy_update();
+	}
 
 	return TRUE;
 }
