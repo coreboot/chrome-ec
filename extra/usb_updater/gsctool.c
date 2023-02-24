@@ -3892,7 +3892,7 @@ int main(int argc, char *argv[])
 	int rma = 0;
 	const char *rma_auth_code = "";
 	int get_endorsement_seed = 0;
-	const char *endorsement_seed_str;
+	const char *endorsement_seed_str = "";
 	int corrupt_inactive_rw = 0;
 	struct board_id bid;
 	enum board_id_action bid_action;
@@ -3923,7 +3923,7 @@ int main(int argc, char *argv[])
 		"Options -a, -s and -t are mutually exclusive\n";
 	const char *openbox_desc_file = NULL;
 	int factory_mode = 0;
-	char *factory_mode_arg;
+	char *factory_mode_arg = "";
 	char *tpm_mode_arg = NULL;
 	char *serial = NULL;
 	int sn_bits = 0;
