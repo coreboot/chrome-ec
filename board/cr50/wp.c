@@ -23,6 +23,11 @@
 #define CPRINTS(format, args...) cprints(CC_RBOX, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_RBOX, format, ## args)
 
+enum fwmp_controlled_action_t {
+	CCD_UNLOCK,
+	BOOT_POLICY_UPDATE,
+};
+
 uint8_t bp_connect;
 uint8_t bp_forced;
 /**
@@ -386,6 +391,7 @@ int board_wipe_tpm(int reset_required)
  */
 #define FWMP_HASH_SIZE		    32
 #define FWMP_DEV_DISABLE_CCD_UNLOCK BIT(6)
+#define FWMP_DEV_DISABLE_BOOT       BIT(0)
 #define FIRMWARE_FLAG_DEV_MODE      0x02
 
 struct RollbackSpaceFirmware {
@@ -418,7 +424,8 @@ struct RollbackSpaceFwmp {
 } __packed;
 
 #ifndef CR50_DEV
-static int lock_enforced(const struct RollbackSpaceFwmp *fwmp)
+static int lock_enforced(const struct RollbackSpaceFwmp *fwmp,
+			 enum fwmp_controlled_action_t action)
 {
 	uint8_t crc;
 
@@ -436,39 +443,57 @@ static int lock_enforced(const struct RollbackSpaceFwmp *fwmp)
 		return 1;
 	}
 
-	return !!(fwmp->flags & FWMP_DEV_DISABLE_CCD_UNLOCK);
+	switch (action) {
+	case CCD_UNLOCK:
+		return !!(fwmp->flags & FWMP_DEV_DISABLE_CCD_UNLOCK);
+	case BOOT_POLICY_UPDATE:
+		return !!(fwmp->flags & FWMP_DEV_DISABLE_BOOT);
+	}
+	return 0;
 }
 #endif
 
-int board_fwmp_allows_unlock(void)
+static int fwmp_allows(enum fwmp_controlled_action_t action)
 {
 #ifdef CR50_DEV
 	return 1;
 #else
-	/* Let's see if FWMP disables console activation. */
+	/* Let's see if FWMP allows the requested action. */
 	struct RollbackSpaceFwmp fwmp;
-	int allows_unlock;
+	int allows;
 
 	switch (read_tpm_nvmem(FWMP_NV_INDEX,
 			       sizeof(struct RollbackSpaceFwmp), &fwmp)) {
 	default:
-		/* Something is messed up, let's not allow console unlock. */
-		allows_unlock = 0;
+		/* Something is messed up, let's not allow. */
+		allows = 0;
 		break;
 
 	case TPM_READ_NOT_FOUND:
-		allows_unlock = 1;
+		allows = 1;
 		break;
 
 	case TPM_READ_SUCCESS:
-		allows_unlock = !lock_enforced(&fwmp);
+		allows = !lock_enforced(&fwmp, action);
 		break;
 	}
 
-	CPRINTS("Console unlock %sallowed", allows_unlock ? "" : "not ");
-
-	return allows_unlock;
+	return allows;
 #endif
+}
+
+int board_fwmp_allows_unlock(void)
+{
+	int allows_unlock = fwmp_allows(CCD_UNLOCK);
+#ifndef CR50_DEV
+	CPRINTS("Console unlock %sallowed", allows_unlock ? "" : "not ");
+#endif
+	return allows_unlock;
+}
+
+int board_fwmp_allows_boot_policy_update(void)
+{
+	return fwmp_allows(BOOT_POLICY_UPDATE);
 }
 
 int board_vboot_dev_mode_enabled(void)
