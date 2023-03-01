@@ -591,8 +591,6 @@ static struct policy_engine {
 	int32_t vpd_vdo;
 	/* Alternate mode discovery results */
 	struct pd_discovery discovery[DISCOVERY_TYPE_COUNT];
-	/* Active alternate modes */
-	struct partner_active_modes partner_amodes[AMODE_TYPE_COUNT];
 
 	/* Partner type to send */
 	enum tcpci_msg_type tx_type;
@@ -659,11 +657,6 @@ static struct policy_engine {
 
 	/* Last received Revision Message Data Object (RMDO) from the partner */
 	struct rmdo partner_rmdo;
-
-	/* Attached ChromeOS device id, RW hash, and current RO / RW image */
-	uint16_t dev_id;
-	uint32_t dev_rw_hash[PD_RW_HASH_SIZE / 4];
-	enum ec_image current_image;
 } pe[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 test_export_static enum usb_pe_state get_state_pe(const int port);
@@ -2031,39 +2024,6 @@ bool pd_setup_vdm_request(int port, enum tcpci_msg_type tx_type, uint32_t *vdm,
 	pe[port].vdm_cnt = vdo_cnt;
 
 	return true;
-}
-
-int pd_dev_store_rw_hash(int port, uint16_t dev_id, uint32_t *rw_hash,
-			 uint32_t current_image)
-{
-	pe[port].dev_id = dev_id;
-	memcpy(pe[port].dev_rw_hash, rw_hash, PD_RW_HASH_SIZE);
-#ifdef CONFIG_CMD_PD_DEV_DUMP_INFO
-	pd_dev_dump_info(dev_id, rw_hash);
-#endif
-	pe[port].current_image = current_image;
-
-	if (IS_ENABLED(CONFIG_USB_PD_HOST_CMD)) {
-		int i;
-
-		/* Search table for matching device / hash */
-		for (i = 0; i < RW_HASH_ENTRIES; i++)
-			if (dev_id == rw_hash_table[i].dev_id)
-				return !memcmp(rw_hash,
-					       rw_hash_table[i].dev_rw_hash,
-					       PD_RW_HASH_SIZE);
-	}
-
-	return 0;
-}
-
-void pd_dev_get_rw_hash(int port, uint16_t *dev_id, uint8_t *rw_hash,
-			uint32_t *current_image)
-{
-	*dev_id = pe[port].dev_id;
-	*current_image = pe[port].current_image;
-	if (*dev_id)
-		memcpy(rw_hash, pe[port].dev_rw_hash, PD_RW_HASH_SIZE);
 }
 
 /*
@@ -7789,8 +7749,6 @@ void pd_dfp_mode_init(int port)
 {
 	PE_CLR_FLAG(port, PE_FLAGS_MODAL_OPERATION);
 
-	memset(pe[port].partner_amodes, 0, sizeof(pe[port].partner_amodes));
-
 	/* Reset the DPM and DP modules to enable alternate mode entry. */
 	dpm_mode_exit_complete(port);
 	dp_init(port);
@@ -7838,15 +7796,6 @@ pd_get_am_discovery(int port, enum tcpci_msg_type type)
 	ASSERT(type < DISCOVERY_TYPE_COUNT);
 
 	return &pe[port].discovery[type];
-}
-
-__maybe_unused struct partner_active_modes *
-pd_get_partner_active_modes(int port, enum tcpci_msg_type type)
-{
-	if (!IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
-		assert(0);
-	ASSERT(type < AMODE_TYPE_COUNT);
-	return &pe[port].partner_amodes[type];
 }
 
 __maybe_unused void pd_set_dfp_enter_mode_flag(int port, bool set)

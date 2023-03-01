@@ -183,6 +183,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_LSM6DSM
                                                 "${PLATFORM_EC}/driver/accelgyro_lsm6dsm.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_FIFO
                                                 "${PLATFORM_EC}/common/motion_sense_fifo.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AMD_STB_DUMP
+                                                "${PLATFORM_EC}/driver/amd_stb.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BODY_DETECTION
                                                 "${PLATFORM_EC}/common/body_detection.c")
 zephyr_library_sources_ifdef(CONFIG_NAMED_ADC_CHANNELS
@@ -471,8 +473,6 @@ zephyr_library_sources_ifdef(CONFIG_SVDM_RSP_DFP_ONLY
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_OCP
                                                 "${PLATFORM_EC}/common/usbc_ocp.c")
 
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_DFP
-                                                "${PLATFORM_EC}/common/usb_pd_alt_mode_dfp.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DISCOVERY
                                                 "${PLATFORM_EC}/common/usb_pd_discovery.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_UFP
