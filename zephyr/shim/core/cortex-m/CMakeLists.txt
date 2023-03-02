@@ -3,3 +3,4 @@
 # found in the LICENSE file.
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MPU mpu.c)
+zephyr_library_sources(panic.c)
