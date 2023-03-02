@@ -148,6 +148,12 @@ static uint32_t get_panic_data_size(void)
 	return pdata_ptr->struct_size;
 }
 
+__overridable uint32_t get_panic_stack_pointer(const struct panic_data *pdata)
+{
+	/* Not Implemented */
+	return 0;
+}
+
 /*
  * Returns pointer to panic_data structure that can be safely written.
  * Please note that this function can move jump data and jump tags.
