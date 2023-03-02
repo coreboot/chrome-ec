@@ -141,6 +141,14 @@ void panic_get_reason(uint32_t *reason, uint32_t *info, uint8_t *exception)
 }
 #endif /* CONFIG_SOFTWARE_PANIC */
 
+/**
+ * Returns the SP register
+ */
+uint32_t get_panic_stack_pointer(const struct panic_data *pdata)
+{
+	return pdata->nds_n8.regs[15];
+}
+
 static void print_panic_information(uint32_t *regs, uint32_t itype,
 					uint32_t ipc, uint32_t ipsw)
 {
