@@ -559,7 +559,7 @@ enum nvmem_users {
 #define CONFIG_ENABLE_H1_ALERTS
 
 /* Enable hardware backed brute force resistance feature */
-#define CONFIG_PINWEAVER
+#define CONFIG_PLATFORM_PINWEAVER
 
 /*
  * Disabling p256 will result in RMA Auth falling back to the x25519 curve
