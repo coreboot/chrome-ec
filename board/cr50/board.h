@@ -127,6 +127,12 @@
 #define CONFIG_CCD_OPEN_PREPVT
 
 #ifdef CR50_DEV
+/* Remove console commands to save space. */
+#undef CONFIG_CMD_SLEEPMASK
+#undef CONFIG_CMD_TIMERINFO
+#undef CONFIG_CONSOLE_HISTORY
+#undef CONFIG_CMD_I2C_SCAN
+#undef CONFIG_CMD_I2C_XFER
 /* Enable unsafe dev features for CCD in dev builds */
 #define CONFIG_CASE_CLOSED_DEBUG_V1_UNSAFE
 #define CONFIG_CMD_FLASH_LOG
