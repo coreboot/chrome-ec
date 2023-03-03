@@ -54,6 +54,11 @@ const struct adc_t adc_channels[] = {
 				.factor_div = ADC_READ_MAX + 1,
 				.shift = 0,
 				.channel = CHIP_ADC_CH3 },
+	[ADC_TEMP_SENSOR_3] = { .name = "TEMP_SENSOR3",
+				.factor_mul = ADC_MAX_MVOLT,
+				.factor_div = ADC_READ_MAX + 1,
+				.shift = 0,
+				.channel = CHIP_ADC_CH13 },
 	[ADC_PPVAR_PWR_IN_IMON] = { .name = "ADC_PPVAR_PWR_IN_IMON",
 				    .factor_mul = ADC_MAX_MVOLT,
 				    .factor_div = ADC_READ_MAX + 1,
@@ -138,26 +143,23 @@ const struct temp_sensor_t temp_sensors[] = {
 			    .type = TEMP_SENSOR_TYPE_BOARD,
 			    .read = get_temp_3v3_51k1_47k_4050b,
 			    .idx = ADC_TEMP_SENSOR_1 },
-	[TEMP_SENSOR_2] = { .name = "Ambient",
+	[TEMP_SENSOR_2] = { .name = "SoC power",
 			    .type = TEMP_SENSOR_TYPE_BOARD,
 			    .read = get_temp_3v3_51k1_47k_4050b,
 			    .idx = ADC_TEMP_SENSOR_2 },
+	[TEMP_SENSOR_3] = { .name = "Ambient",
+			    .type = TEMP_SENSOR_TYPE_BOARD,
+			    .read = get_temp_3v3_51k1_47k_4050b,
+			    .idx = ADC_TEMP_SENSOR_3 },
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 void board_init(void)
 {
-	int on;
-
 	gpio_enable_interrupt(GPIO_BJ_ADP_PRESENT);
 
 	/* Enable PPC interrupt */
 	gpio_enable_interrupt(GPIO_USB_C0_FAULT_L);
-
-	/* Turn on 5V if the system is on, otherwise turn it off */
-	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
-			      CHIPSET_STATE_SOFT_OFF);
-	board_power_5v_enable(on);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -171,10 +173,8 @@ void board_reset_pd_mcu(void)
 __override void board_power_5v_enable(int enable)
 {
 	/*
-	 * Mainboard 5V regulator activated by GPIO.
-	 * USB-A ports are activated by usb_port_power_dumb.
+	 * Nothing to do. 5V should always be enabled while in Z1 or above.
 	 */
-	gpio_set_level(GPIO_EN_PP5000, !!enable);
 }
 
 void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
@@ -203,19 +203,6 @@ void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
 	 * should already be set correctly in the PPC driver via the pd
 	 * state machine.
 	 */
-}
-
-__override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
-{
-	int ilim3A;
-
-	if (port < 0 || port > CONFIG_USB_PD_PORT_MAX_COUNT)
-		return;
-
-	/* Switch between 1.5A and 3A ILIM values */
-	ilim3A = (rp == TYPEC_RP_3A0);
-
-	tcpm_select_rp_value(0, ilim3A);
 }
 
 /******************************************************************************/

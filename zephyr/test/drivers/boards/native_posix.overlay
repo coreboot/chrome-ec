@@ -116,6 +116,16 @@
 			enum-name = "GPIO_AC_PRESENT";
 		};
 
+		/*
+		 * TODO(b/270601972):
+		 * Important note on testing emulated output GPIOs: Using
+		 * gpio_set_level() won't be observable from a gpio_get_level()
+		 * unless the output gpio is also configured as an input gpio.
+		 *
+		 * One may also configure the gpio as an input in the test
+                 * itself instead of device tree.
+		 * /
+
 		/* <&gpio0 1 x> is reserved as 'entering-rw' in
 		 * src/platform/ec/zephyr/dts/board-overlays/native_posix.dts
 		 */
@@ -277,6 +287,14 @@
 		gpio_usb_c1_bc12_int_l: usb_c1_bc12_int_l {
 			gpios = <&gpio1 11 GPIO_INPUT>;
 		};
+                gpio_usb_c0_hpd: usb_c0_hpd {
+                        gpios = <&gpio1 12 GPIO_OUTPUT_LOW>;
+                        enum-name = "GPIO_USB_C0_DP_HPD";
+                };
+                gpio_usb_c1_hpd: usb_c1_hpd {
+                        gpios = <&gpio1 13 GPIO_OUTPUT_LOW>;
+                        enum-name = "GPIO_USB_C1_DP_HPD";
+                };
 	};
 
 	gpio1: gpio@101 {
@@ -289,7 +307,7 @@
 		low-level;
 		gpio-controller;
 		#gpio-cells = <2>;
-		ngpios = <12>;
+		ngpios = <14>;
 	};
 
 	gpio-interrupts {
