@@ -629,10 +629,10 @@ test_mockable_static void jump_to_image(uintptr_t init_addr)
 	/* Disable interrupts before jump */
 	interrupt_disable_all();
 
-#ifdef CONFIG_DMA
+#ifdef CONFIG_DMA_CROS
 	/* Disable all DMA channels to avoid memory corruption */
 	dma_disable_all();
-#endif /* CONFIG_DMA */
+#endif /* CONFIG_DMA_CROS */
 
 	/* Jump to the reset vector */
 	resetvec = (void (*)(void))init_addr;
@@ -1601,6 +1601,9 @@ host_command_get_version(struct host_cmd_handler_args *args)
 	 * to zero uninitialized fields here.
 	 */
 	if (args->version > 0 && IS_ENABLED(CONFIG_CROS_FWID_VERSION)) {
+		if (args->response_max < sizeof(*r))
+			return EC_RES_RESPONSE_TOO_BIG;
+
 		strzcpy(r->cros_fwid_ro, system_get_cros_fwid(EC_IMAGE_RO),
 			sizeof(r->cros_fwid_ro));
 		strzcpy(r->cros_fwid_rw, system_get_cros_fwid(EC_IMAGE_RW),

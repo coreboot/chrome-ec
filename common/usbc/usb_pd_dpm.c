@@ -38,6 +38,14 @@
 #include "temp_sensor/temp_sensor.h"
 #endif
 
+#ifdef CONFIG_USB_PD_DEBUG_LEVEL
+static const enum debug_level dpm_debug_level = CONFIG_USB_PD_DEBUG_LEVEL;
+#elif defined(CONFIG_USB_PD_INITIAL_DEBUG_LEVEL)
+static enum debug_level dpm_debug_level = CONFIG_USB_PD_INITIAL_DEBUG_LEVEL;
+#else
+static enum debug_level dpm_debug_level = DEBUG_LEVEL_1;
+#endif
+
 #ifdef CONFIG_COMMON_RUNTIME
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
@@ -83,6 +91,15 @@ static struct {
 #endif
 } dpm[CONFIG_USB_PD_PORT_MAX_COUNT];
 
+__overridable const struct svdm_response svdm_rsp = {
+	.identity = NULL,
+	.svids = NULL,
+	.modes = NULL,
+};
+
+/* Tracker for which task is waiting on sysjump prep to finish */
+static volatile task_id_t sysjump_task_waiting = TASK_ID_INVALID;
+
 #define DPM_SET_FLAG(port, flag) atomic_or(&dpm[(port)].flags, (flag))
 #define DPM_CLR_FLAG(port, flag) atomic_clear_bits(&dpm[(port)].flags, (flag))
 #define DPM_CHK_FLAG(port, flag) (dpm[(port)].flags & (flag))
@@ -123,6 +140,13 @@ __maybe_unused static __const_data const char *const dpm_state_names[] = {
 };
 
 static enum sm_local_state local_state[CONFIG_USB_PD_PORT_MAX_COUNT];
+
+void dpm_set_debug_level(enum debug_level debug_level)
+{
+#ifndef CONFIG_USB_PD_DEBUG_LEVEL
+	dpm_debug_level = debug_level;
+#endif
+}
 
 /* Set the DPM state machine to a new state. */
 static void set_state_dpm(const int port, const enum usb_dpm_state new_state)
@@ -181,6 +205,91 @@ static void init_attention_queue_structs(void)
 }
 DECLARE_HOOK(HOOK_INIT, init_attention_queue_structs, HOOK_PRIO_FIRST);
 #endif
+
+void pd_prepare_sysjump(void)
+{
+#ifndef CONFIG_ZEPHYR
+	int i;
+
+	/* Exit modes before sysjump so we can cleanly enter again later */
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
+		/*
+		 * If the port is not capable of alternate mode, then there's no
+		 * need to send the event.
+		 */
+		if (!pd_alt_mode_capable(i))
+			continue;
+
+		sysjump_task_waiting = task_get_current();
+		task_set_event(PD_PORT_TO_TASK_ID(i), PD_EVENT_SYSJUMP);
+		task_wait_event_mask(TASK_EVENT_SYSJUMP_READY, -1);
+		sysjump_task_waiting = TASK_ID_INVALID;
+	}
+#endif /* CONFIG_ZEPHYR */
+}
+
+void notify_sysjump_ready(void)
+{
+	/*
+	 * If event was set from pd_prepare_sysjump, wake the
+	 * task waiting on us to complete.
+	 */
+	if (sysjump_task_waiting != TASK_ID_INVALID)
+		task_set_event(sysjump_task_waiting, TASK_EVENT_SYSJUMP_READY);
+}
+
+/*
+ * TODO(b/270409939): Refactor this function
+ */
+int pd_dfp_exit_mode(int port, enum tcpci_msg_type type, uint16_t svid,
+		     int opos)
+{
+	/*
+	 * Empty svid signals we should reset DFP VDM state by exiting all
+	 * entered modes then clearing state.  This occurs when we've
+	 * disconnected or for hard reset.
+	 */
+	if (!svid) {
+		if (IS_ENABLED(CONFIG_USB_PD_DP_MODE) && dp_is_active(port))
+			svdm_exit_dp_mode(port);
+		pd_dfp_mode_init(port);
+	}
+
+	/*
+	 * Return 0 indicating no message is needed.  All modules should be
+	 * handling their SVID-specific cases themselves.
+	 */
+	return 0;
+}
+
+/*
+ * Note: this interface is used in board code, but should be obsoleted
+ * TODO(b/267545470): Fold board DP code into the DP module
+ */
+int pd_alt_mode(int port, enum tcpci_msg_type type, uint16_t svid)
+{
+	if (svid == USB_SID_DISPLAYPORT && !dp_is_idle(port))
+		return 1;
+	else if (IS_ENABLED(CONFIG_USB_PD_TBT_COMPAT_MODE) &&
+		 svid == USB_VID_INTEL && tbt_is_active(port))
+		return 1;
+
+	return -1;
+}
+
+void dfp_consume_attention(int port, uint32_t *payload)
+{
+	uint16_t svid = PD_VDO_VID(payload[0]);
+
+	if (IS_ENABLED(CONFIG_USB_PD_DP_MODE) && svid == USB_SID_DISPLAYPORT) {
+		/*
+		 * Attention is only valid after EnterMode, so drop if this is
+		 * out of sequence
+		 */
+		if (!dp_is_idle(port))
+			svdm_dp_attention(port, payload);
+	}
+}
 
 static void vdm_attention_enqueue(int port, int length, uint32_t *buf)
 {
@@ -1416,7 +1525,9 @@ void dpm_run(int port, int evt, int en)
 static void dpm_waiting_entry(const int port)
 {
 	DPM_CLR_FLAG(port, DPM_FLAG_PE_READY);
-	print_current_state(port);
+	if (dpm_debug_level >= DEBUG_LEVEL_2) {
+		print_current_state(port);
+	}
 }
 
 static void dpm_waiting_run(const int port)
@@ -1437,7 +1548,9 @@ static void dpm_waiting_run(const int port)
  */
 static void dpm_dfp_ready_entry(const int port)
 {
-	print_current_state(port);
+	if (dpm_debug_level >= DEBUG_LEVEL_2) {
+		print_current_state(port);
+	}
 }
 
 static void dpm_dfp_ready_run(const int port)
@@ -1480,7 +1593,9 @@ static void dpm_dfp_ready_run(const int port)
  */
 static void dpm_ufp_ready_entry(const int port)
 {
-	print_current_state(port);
+	if (dpm_debug_level >= DEBUG_LEVEL_2) {
+		print_current_state(port);
+	}
 }
 
 static void dpm_ufp_ready_run(const int port)

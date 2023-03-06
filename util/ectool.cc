@@ -37,6 +37,7 @@
 #include "usb_pd.h"
 
 #include <libec/add_entropy_command.h>
+#include <libec/flash_protect_command.h>
 
 /* Maximum flash size (16 MB, conservative) */
 #define MAX_FLASH_SIZE 0x1000000
@@ -1744,83 +1745,62 @@ int cmd_flash_erase(int argc, char *argv[])
 	return 0;
 }
 
-static void print_flash_protect_flags(const char *desc, uint32_t flags)
-{
-	printf("%s 0x%08x", desc, flags);
-	if (flags & EC_FLASH_PROTECT_GPIO_ASSERTED)
-		printf(" wp_gpio_asserted");
-	if (flags & EC_FLASH_PROTECT_RO_AT_BOOT)
-		printf(" ro_at_boot");
-	if (flags & EC_FLASH_PROTECT_RW_AT_BOOT)
-		printf(" rw_at_boot");
-	if (flags & EC_FLASH_PROTECT_ROLLBACK_AT_BOOT)
-		printf(" rollback_at_boot");
-	if (flags & EC_FLASH_PROTECT_ALL_AT_BOOT)
-		printf(" all_at_boot");
-	if (flags & EC_FLASH_PROTECT_RO_NOW)
-		printf(" ro_now");
-	if (flags & EC_FLASH_PROTECT_RW_NOW)
-		printf(" rw_now");
-	if (flags & EC_FLASH_PROTECT_ROLLBACK_NOW)
-		printf(" rollback_now");
-	if (flags & EC_FLASH_PROTECT_ALL_NOW)
-		printf(" all_now");
-	if (flags & EC_FLASH_PROTECT_ERROR_STUCK)
-		printf(" STUCK");
-	if (flags & EC_FLASH_PROTECT_ERROR_INCONSISTENT)
-		printf(" INCONSISTENT");
-	if (flags & EC_FLASH_PROTECT_ERROR_UNKNOWN)
-		printf(" UNKNOWN_ERROR");
-	printf("\n");
-}
-
 int cmd_flash_protect(int argc, char *argv[])
 {
-	struct ec_params_flash_protect p;
-	struct ec_response_flash_protect r;
-	int rv, i;
-
 	/*
-	 * Set up requested flags.  If no flags were specified, p.mask will
-	 * be 0 and nothing will change.
+	 * Set up requested flags.  If no flags were specified, mask will
+	 * be flash_protect::Flags::kNone and nothing will change.
 	 */
-	p.mask = p.flags = 0;
-	for (i = 1; i < argc; i++) {
+	ec::flash_protect::Flags flags = ec::flash_protect::Flags::kNone;
+	ec::flash_protect::Flags mask = ec::flash_protect::Flags::kNone;
+
+	for (int i = 1; i < argc; i++) {
 		if (!strcasecmp(argv[i], "now")) {
-			p.mask |= EC_FLASH_PROTECT_ALL_NOW;
-			p.flags |= EC_FLASH_PROTECT_ALL_NOW;
+			mask |= ec::flash_protect::Flags::kAllNow;
+			flags |= ec::flash_protect::Flags::kAllNow;
 		} else if (!strcasecmp(argv[i], "enable")) {
-			p.mask |= EC_FLASH_PROTECT_RO_AT_BOOT;
-			p.flags |= EC_FLASH_PROTECT_RO_AT_BOOT;
+			mask |= ec::flash_protect::Flags::kRoAtBoot;
+			flags |= ec::flash_protect::Flags::kRoAtBoot;
 		} else if (!strcasecmp(argv[i], "disable"))
-			p.mask |= EC_FLASH_PROTECT_RO_AT_BOOT;
+			mask |= ec::flash_protect::Flags::kRoAtBoot;
 	}
 
-	rv = ec_command(EC_CMD_FLASH_PROTECT, EC_VER_FLASH_PROTECT, &p,
-			sizeof(p), &r, sizeof(r));
-	if (rv < 0)
+	ec::FlashProtectCommand flash_protect_command(flags, mask);
+	if (!flash_protect_command.Run(comm_get_fd())) {
+		int rv = -EECRESULT - flash_protect_command.Result();
+		fprintf(stderr, "Flash protect returned with errors: %d\n", rv);
 		return rv;
-	if (rv < sizeof(r)) {
-		fprintf(stderr, "Too little data returned.\n");
-		return -1;
 	}
 
 	/* Print returned flags */
-	print_flash_protect_flags("Flash protect flags:", r.flags);
-	print_flash_protect_flags("Valid flags:        ", r.valid_flags);
-	print_flash_protect_flags("Writable flags:     ", r.writable_flags);
+	printf("Flash protect flags: 0x%08x %s\n",
+	       flash_protect_command.GetFlags(),
+	       (ec::FlashProtectCommand::ParseFlags(
+			flash_protect_command.GetFlags()))
+		       .c_str());
+	printf("Valid flags:         0x%08x %s\n",
+	       flash_protect_command.GetValidFlags(),
+	       (ec::FlashProtectCommand::ParseFlags(
+			flash_protect_command.GetValidFlags()))
+		       .c_str());
+	printf("Writable flags:      0x%08x %s\n",
+	       flash_protect_command.GetWritableFlags(),
+	       (ec::FlashProtectCommand::ParseFlags(
+			flash_protect_command.GetWritableFlags()))
+		       .c_str());
 
 	/* Check if we got all the flags we asked for */
-	if ((r.flags & p.mask) != (p.flags & p.mask)) {
+	if ((flash_protect_command.GetFlags() & mask) != (flags & mask)) {
 		fprintf(stderr,
 			"Unable to set requested flags "
 			"(wanted mask 0x%08x flags 0x%08x)\n",
-			p.mask, p.flags);
-		if (p.mask & ~r.writable_flags)
+			mask, flags);
+		if ((mask & ~flash_protect_command.GetWritableFlags()) !=
+		    ec::flash_protect::Flags::kNone)
 			fprintf(stderr,
 				"Which is expected, because writable "
 				"mask is 0x%08x.\n",
-				r.writable_flags);
+				flash_protect_command.GetWritableFlags());
 
 		return -1;
 	}
@@ -2603,7 +2583,7 @@ static int in_gfu_mode(int *opos, int port)
 	}
 
 	*opos = 0; /* invalid ... must be 1 thru 6 */
-	for (i = 0; i < PDO_MODES; i++) {
+	for (i = 0; i < VDO_MAX_OBJECTS; i++) {
 		if (r->vdo[i] == MODE_GOOGLE_FU) {
 			*opos = i + 1;
 			break;
@@ -2906,7 +2886,7 @@ int cmd_pd_get_amode(int argc, char *argv[])
 		if (!r->svid)
 			break;
 		printf("%cSVID:0x%04x ", (r->opos) ? '*' : ' ', r->svid);
-		for (i = 0; i < PDO_MODES; i++) {
+		for (i = 0; i < VDO_MAX_OBJECTS; i++) {
 			printf("%c0x%08x ",
 			       (r->opos && (r->opos == i + 1)) ? '*' : ' ',
 			       r->vdo[i]);
@@ -7550,46 +7530,54 @@ static void cmd_charge_current_limit_help(const char *cmd)
 
 int cmd_charge_current_limit(int argc, char *argv[])
 {
-	struct ec_params_current_limit p;
-	int version = 1;
-	int rv;
+	struct ec_params_current_limit_v1 p1;
+	uint32_t limit;
+	uint8_t battery_soc;
 	char *e;
 
-	if (!ec_cmd_version_supported(EC_CMD_CHARGE_CURRENT_LIMIT, 1))
-		version = 0;
-
-	if (version < 1) {
+	/*
+	 * v0: max_current_ma (argc == 2)
+	 * v1: max_current_ma [battery_soc] (argc == 2 or 3)
+	 */
+	if (!ec_cmd_version_supported(EC_CMD_CHARGE_CURRENT_LIMIT, 1)) {
 		if (argc != 2) {
 			cmd_charge_current_limit_help(argv[0]);
 			return -1;
 		}
-	} else if (argc < 2 || argc > 3) {
-		cmd_charge_current_limit_help(argv[0]);
-		return -1;
+	} else {
+		if (argc < 2 || argc > 3) {
+			cmd_charge_current_limit_help(argv[0]);
+			return -1;
+		}
 	}
 
-	p.limit = strtol(argv[1], &e, 0);
+	/* max_current_ma */
+	limit = strtoull(argv[1], &e, 0);
 	if (e && *e) {
 		fprintf(stderr, "ERROR: Bad limit value: %s\n", argv[1]);
 		return -1;
 	}
 
-	if (argc == 3) {
-		p.battery_soc = strtol(argv[2], &e, 0);
-		if (e && *e) {
-			fprintf(stderr, "ERROR: Bad battery SoC value: %s\n",
-				argv[2]);
-			return -1;
-		}
+	if (argc == 2) {
+		struct ec_params_current_limit p0;
+
+		p0.limit = limit;
+		return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 0,
+				  &p0, sizeof(p0), NULL, 0);
 	}
 
-	rv = ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, version, &p, sizeof(p),
-			NULL, 0);
-	if (rv < 0) {
-		fprintf(stderr, "ERROR: Battery SoC is out of range.\n");
+	/* argc==3 for battery_soc */
+	battery_soc = strtol(argv[2], &e, 0);
+	if (e && *e) {
+		fprintf(stderr, "ERROR: Bad battery SoC value: %s\n",
+			argv[2]);
+		return -1;
 	}
 
-	return rv;
+	p1.limit = limit;
+	p1.battery_soc = battery_soc;
+	return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 1,
+			  &p1, sizeof(p1), NULL, 0);
 }
 
 static void cmd_charge_control_help(const char *cmd, const char *msg)
@@ -10874,7 +10862,12 @@ int cmd_wait_event(int argc, char *argv[])
 	char *e;
 
 	BUILD_ASSERT(ARRAY_SIZE(mkbp_event_text) == EC_MKBP_EVENT_COUNT);
-	BUILD_ASSERT(ARRAY_SIZE(host_event_text) == 33); /* events start at 1 */
+	/*
+	 * Only 64 host events are supported. The enum |host_event_code| uses
+	 * 1-based counting so it can skip 0 (NONE). The last legal host event
+	 * number is 64, so ARRAY_SIZE(host_event_text) <= 64+1.
+	 */
+	BUILD_ASSERT(ARRAY_SIZE(host_event_text) <= 65);
 
 	if (!ec_pollevent) {
 		fprintf(stderr, "Polling for MKBP event not supported\n");
@@ -10922,7 +10915,7 @@ int cmd_wait_event(int argc, char *argv[])
 	switch (event_type) {
 	case EC_MKBP_EVENT_HOST_EVENT:
 		printf("Host events:");
-		for (int evt = 1; evt <= 32; evt++) {
+		for (int evt = 1; evt < ARRAY_SIZE(host_event_text); evt++) {
 			if (buffer.data.host_event & EC_HOST_EVENT_MASK(evt)) {
 				const char *name = host_event_text[evt];
 

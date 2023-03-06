@@ -421,6 +421,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
                                                 "${PLATFORM_EC}/common/usbc/usb_sm.c"
                                                 "${PLATFORM_EC}/common/usbc_intr_task.c"
                                                 "${PLATFORM_EC}/common/usb_pd_flags.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TOUCHPAD_ELAN
+                                                "${PLATFORM_EC}/driver/touchpad_elan.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_CHARGEN
                                                 "${PLATFORM_EC}/common/chargen.c")
@@ -473,8 +475,6 @@ zephyr_library_sources_ifdef(CONFIG_SVDM_RSP_DFP_ONLY
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_OCP
                                                 "${PLATFORM_EC}/common/usbc_ocp.c")
 
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_DFP
-                                                "${PLATFORM_EC}/common/usb_pd_alt_mode_dfp.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DISCOVERY
                                                 "${PLATFORM_EC}/common/usb_pd_discovery.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_UFP
