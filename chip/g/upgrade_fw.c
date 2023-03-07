@@ -500,6 +500,12 @@ void fw_upgrade_command_handler(void *body,
 		struct SignedHeader *header;
 
 		header = (struct SignedHeader *) upgrade_data;
+		if (header->image_size < CONFIG_FLASH_BANK_SIZE) {
+			*error_code = UPGRADE_TRUNCATED_HEADER_ERROR;
+			CPRINTF("%s:%d image at %x too small\n",
+				__func__, __LINE__, block_offset);
+			return;
+		}
 
 		/*
 		 * Set the top bit of the size field. It will be impossible to
