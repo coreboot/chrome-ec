@@ -1161,6 +1161,9 @@ static bool valid_header(const struct SignedHeader *const h, const size_t size)
 	if (h->image_size > size)
 		return false;
 
+	if (h->image_size < CONFIG_FLASH_BANK_SIZE)
+		return false;
+
 	/* Only H1 and D2 are currently supported. */
 	if (h->magic != MAGIC_HAVEN && h->magic != MAGIC_DAUNTLESS)
 		return false;
@@ -1286,9 +1289,9 @@ static bool locate_headers(const void *image, const uint32_t size)
 
 /*
  * Scan the new image and retrieve versions of all four sections, two RO and
- * two RW.
+ * two RW, verifying that image size is not too short along the way.
  */
-static void fetch_header_versions(const void *image)
+static bool fetch_header_versions(const void *image)
 {
 	size_t i;
 
@@ -1297,11 +1300,20 @@ static void fetch_header_versions(const void *image)
 
 		h = (const struct SignedHeader *)((uintptr_t)image +
 						  sections[i].offset);
+
+		if (h->image_size < CONFIG_FLASH_BANK_SIZE) {
+			fprintf(stderr,
+				"Image at offset %#5x too short (%d bytes)\n",
+				sections[i].offset,
+				h->image_size);
+			return false;
+		}
 		sections[i].shv.epoch = h->epoch_;
 		sections[i].shv.major = h->major_;
 		sections[i].shv.minor = h->minor_;
 		sections[i].keyid = h->keyid;
 	}
+	return true;
 }
 
 
@@ -4282,7 +4294,8 @@ int main(int argc, char *argv[])
 		if (!locate_headers(data, data_len))
 			exit(update_error);
 
-		fetch_header_versions(data);
+		if (!fetch_header_versions(data))
+			exit(update_error);
 
 		if (binary_vers)
 			exit(show_headers_versions(data, show_machine_output));
