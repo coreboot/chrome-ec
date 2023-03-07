@@ -9,6 +9,7 @@
 #include "driver/fingerprint/fpc/fpc_sensor.h"
 #include "fpc_sensor_spi.h"
 #include "fpsensor.h"
+#include "fpsensor_utils.h"
 #include "gpio.h"
 #include "spi.h"
 #include "util.h"
@@ -16,10 +17,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
-/* Console output macros */
-#define CPRINTF(format, args...) cprintf(CC_FP, format, ##args)
-#define CPRINTS(format, args...) cprints(CC_FP, format, ##args)
 
 #define SPI_BUF_SIZE (1024)
 
@@ -33,7 +30,7 @@ int __unused fpc_sensor_spi_write_read(uint8_t *write, uint8_t *read,
 {
 	int rc = 0;
 
-	if (size == FP_SENSOR_REAL_IMAGE_SIZE) {
+	if (size == FP_SENSOR_REAL_IMAGE_SIZE_FPC) {
 		rc |= spi_transaction(SPI_FP_DEVICE, write, size, read,
 				      SPI_READBACK_ALL);
 		spi_transaction_flush(SPI_FP_DEVICE);

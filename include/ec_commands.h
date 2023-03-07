@@ -4788,8 +4788,10 @@ struct ec_response_charge_state {
 
 struct ec_params_current_limit {
 	uint32_t limit; /* in mA */
+} __ec_align4;
 
-	/* Added in v1 */
+struct ec_params_current_limit_v1 {
+	uint32_t limit; /* in mA */
 	/*
 	 * Battery state of charge is the minimum charge percentage at which
 	 * the battery charge current limit will apply.
@@ -5574,6 +5576,54 @@ struct ec_params_reboot_ec {
  */
 #define EC_CMD_VERSION0 0x00DC
 
+/*
+ * Memory Dump Commands
+ *
+ * Since the HOSTCMD response size is limited, depending on the
+ * protocol, retrieving a memory dump is split into 3 commands.
+ *
+ * 1. EC_CMD_MEMORY_DUMP_GET_METADATA returns the number of memory dump entries,
+ *    and the total dump size.
+ * 2. EC_CMD_MEMORY_DUMP_GET_ENTRY_INFO returns the address and size for a given
+ *    memory dump entry index.
+ * 3. EC_CMD_MEMORY_DUMP_READ_MEMORY returns the actual memory at a given
+ *    address. The address and size must be within the bounds of the given
+ *    memory dump entry index. Each response is limited to the max response size
+ *    of the host protocol, so this may need to be called repeatedly to retrieve
+ *    the entire memory dump entry.
+ *
+ * Memory entries may overlap and may be out of order.
+ * The host should check for overlaps to optimize transfer rate.
+ */
+#define EC_CMD_MEMORY_DUMP_GET_METADATA 0x00DD
+struct ec_response_memory_dump_get_metadata {
+	uint16_t memory_dump_entry_count;
+	uint32_t memory_dump_total_size;
+} __ec_align4;
+
+#define EC_CMD_MEMORY_DUMP_GET_ENTRY_INFO 0x00DE
+struct ec_params_memory_dump_get_entry_info {
+	uint16_t memory_dump_entry_index;
+} __ec_align4;
+
+struct ec_response_memory_dump_get_entry_info {
+	uint32_t address;
+	uint32_t size;
+} __ec_align4;
+
+#define EC_CMD_MEMORY_DUMP_READ_MEMORY 0x00DF
+
+struct ec_params_memory_dump_read_memory {
+	uint16_t memory_dump_entry_index;
+	uint32_t address;
+	uint32_t size;
+} __ec_align4;
+
+/*
+ * EC_CMD_MEMORY_DUMP_READ_MEMORY response buffer is written directly into
+ * host_cmd_handler_args.response and host_cmd_handler_args.response_size.
+ */
+
 /*****************************************************************************/
 /*
  * PD commands
@@ -5995,10 +6045,14 @@ struct ec_params_usb_pd_get_mode_request {
 	uint8_t port; /* port */
 } __ec_align_size1;
 
+#define VDO_MAX_SIZE 7
+/* Max number of VDM data objects without VDM header */
+#define VDO_MAX_OBJECTS (VDO_MAX_SIZE - 1)
+
 struct ec_params_usb_pd_get_mode_response {
 	uint16_t svid; /* SVID */
 	uint16_t opos; /* Object Position */
-	uint32_t vdo[6]; /* Mode VDOs */
+	uint32_t vdo[VDO_MAX_OBJECTS]; /* Mode VDOs */
 } __ec_align4;
 
 #define EC_CMD_USB_PD_SET_AMODE 0x0117
@@ -6782,14 +6836,14 @@ struct ec_params_typec_discovery {
 struct svid_mode_info {
 	uint16_t svid;
 	uint16_t mode_count; /* Number of modes partner sent */
-	uint32_t mode_vdo[6]; /* Max VDOs allowed after VDM header is 6 */
+	uint32_t mode_vdo[VDO_MAX_OBJECTS];
 };
 
 struct ec_response_typec_discovery {
 	uint8_t identity_count; /* Number of identity VDOs partner sent */
 	uint8_t svid_count; /* Number of SVIDs partner sent */
 	uint16_t reserved;
-	uint32_t discovery_vdo[6]; /* Max VDOs allowed after VDM header is 6 */
+	uint32_t discovery_vdo[VDO_MAX_OBJECTS];
 	struct svid_mode_info svids[0];
 } __ec_align1;
 
@@ -6828,8 +6882,6 @@ struct typec_usb_mux_set {
 	/* USB_PD_MUX_*-encoded USB mux state to set */
 	uint8_t mux_flags;
 } __ec_align1;
-
-#define VDO_MAX_SIZE 7
 
 struct typec_vdm_req {
 	/* VDM data, including VDM header */

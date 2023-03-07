@@ -37,6 +37,7 @@
 #include "usb_pd.h"
 
 #include <libec/add_entropy_command.h>
+#include <libec/flash_protect_command.h>
 
 /* Maximum flash size (16 MB, conservative) */
 #define MAX_FLASH_SIZE 0x1000000
@@ -221,6 +222,8 @@ const char help_str[] =
 	"      Various lightbar control commands\n"
 	"  locatechip <type> <index>\n"
 	"      Get the addresses and ports of i2c connected and embedded chips\n"
+	"  memory_dump [<address> [<size>]]\n"
+	"      Outputs the memory dump in hexdump canonical format.\n"
 	"  mkbpget <buttons|switches>\n"
 	"      Get MKBP buttons/switches supported mask and current state\n"
 	"  mkbpwakemask <get|set> <event|hostevent> [mask]\n"
@@ -1744,83 +1747,62 @@ int cmd_flash_erase(int argc, char *argv[])
 	return 0;
 }
 
-static void print_flash_protect_flags(const char *desc, uint32_t flags)
-{
-	printf("%s 0x%08x", desc, flags);
-	if (flags & EC_FLASH_PROTECT_GPIO_ASSERTED)
-		printf(" wp_gpio_asserted");
-	if (flags & EC_FLASH_PROTECT_RO_AT_BOOT)
-		printf(" ro_at_boot");
-	if (flags & EC_FLASH_PROTECT_RW_AT_BOOT)
-		printf(" rw_at_boot");
-	if (flags & EC_FLASH_PROTECT_ROLLBACK_AT_BOOT)
-		printf(" rollback_at_boot");
-	if (flags & EC_FLASH_PROTECT_ALL_AT_BOOT)
-		printf(" all_at_boot");
-	if (flags & EC_FLASH_PROTECT_RO_NOW)
-		printf(" ro_now");
-	if (flags & EC_FLASH_PROTECT_RW_NOW)
-		printf(" rw_now");
-	if (flags & EC_FLASH_PROTECT_ROLLBACK_NOW)
-		printf(" rollback_now");
-	if (flags & EC_FLASH_PROTECT_ALL_NOW)
-		printf(" all_now");
-	if (flags & EC_FLASH_PROTECT_ERROR_STUCK)
-		printf(" STUCK");
-	if (flags & EC_FLASH_PROTECT_ERROR_INCONSISTENT)
-		printf(" INCONSISTENT");
-	if (flags & EC_FLASH_PROTECT_ERROR_UNKNOWN)
-		printf(" UNKNOWN_ERROR");
-	printf("\n");
-}
-
 int cmd_flash_protect(int argc, char *argv[])
 {
-	struct ec_params_flash_protect p;
-	struct ec_response_flash_protect r;
-	int rv, i;
-
 	/*
-	 * Set up requested flags.  If no flags were specified, p.mask will
-	 * be 0 and nothing will change.
+	 * Set up requested flags.  If no flags were specified, mask will
+	 * be flash_protect::Flags::kNone and nothing will change.
 	 */
-	p.mask = p.flags = 0;
-	for (i = 1; i < argc; i++) {
+	ec::flash_protect::Flags flags = ec::flash_protect::Flags::kNone;
+	ec::flash_protect::Flags mask = ec::flash_protect::Flags::kNone;
+
+	for (int i = 1; i < argc; i++) {
 		if (!strcasecmp(argv[i], "now")) {
-			p.mask |= EC_FLASH_PROTECT_ALL_NOW;
-			p.flags |= EC_FLASH_PROTECT_ALL_NOW;
+			mask |= ec::flash_protect::Flags::kAllNow;
+			flags |= ec::flash_protect::Flags::kAllNow;
 		} else if (!strcasecmp(argv[i], "enable")) {
-			p.mask |= EC_FLASH_PROTECT_RO_AT_BOOT;
-			p.flags |= EC_FLASH_PROTECT_RO_AT_BOOT;
+			mask |= ec::flash_protect::Flags::kRoAtBoot;
+			flags |= ec::flash_protect::Flags::kRoAtBoot;
 		} else if (!strcasecmp(argv[i], "disable"))
-			p.mask |= EC_FLASH_PROTECT_RO_AT_BOOT;
+			mask |= ec::flash_protect::Flags::kRoAtBoot;
 	}
 
-	rv = ec_command(EC_CMD_FLASH_PROTECT, EC_VER_FLASH_PROTECT, &p,
-			sizeof(p), &r, sizeof(r));
-	if (rv < 0)
+	ec::FlashProtectCommand flash_protect_command(flags, mask);
+	if (!flash_protect_command.Run(comm_get_fd())) {
+		int rv = -EECRESULT - flash_protect_command.Result();
+		fprintf(stderr, "Flash protect returned with errors: %d\n", rv);
 		return rv;
-	if (rv < sizeof(r)) {
-		fprintf(stderr, "Too little data returned.\n");
-		return -1;
 	}
 
 	/* Print returned flags */
-	print_flash_protect_flags("Flash protect flags:", r.flags);
-	print_flash_protect_flags("Valid flags:        ", r.valid_flags);
-	print_flash_protect_flags("Writable flags:     ", r.writable_flags);
+	printf("Flash protect flags: 0x%08x %s\n",
+	       flash_protect_command.GetFlags(),
+	       (ec::FlashProtectCommand::ParseFlags(
+			flash_protect_command.GetFlags()))
+		       .c_str());
+	printf("Valid flags:         0x%08x %s\n",
+	       flash_protect_command.GetValidFlags(),
+	       (ec::FlashProtectCommand::ParseFlags(
+			flash_protect_command.GetValidFlags()))
+		       .c_str());
+	printf("Writable flags:      0x%08x %s\n",
+	       flash_protect_command.GetWritableFlags(),
+	       (ec::FlashProtectCommand::ParseFlags(
+			flash_protect_command.GetWritableFlags()))
+		       .c_str());
 
 	/* Check if we got all the flags we asked for */
-	if ((r.flags & p.mask) != (p.flags & p.mask)) {
+	if ((flash_protect_command.GetFlags() & mask) != (flags & mask)) {
 		fprintf(stderr,
 			"Unable to set requested flags "
 			"(wanted mask 0x%08x flags 0x%08x)\n",
-			p.mask, p.flags);
-		if (p.mask & ~r.writable_flags)
+			mask, flags);
+		if ((mask & ~flash_protect_command.GetWritableFlags()) !=
+		    ec::flash_protect::Flags::kNone)
 			fprintf(stderr,
 				"Which is expected, because writable "
 				"mask is 0x%08x.\n",
-				r.writable_flags);
+				flash_protect_command.GetWritableFlags());
 
 		return -1;
 	}
@@ -2603,7 +2585,7 @@ static int in_gfu_mode(int *opos, int port)
 	}
 
 	*opos = 0; /* invalid ... must be 1 thru 6 */
-	for (i = 0; i < PDO_MODES; i++) {
+	for (i = 0; i < VDO_MAX_OBJECTS; i++) {
 		if (r->vdo[i] == MODE_GOOGLE_FU) {
 			*opos = i + 1;
 			break;
@@ -2906,7 +2888,7 @@ int cmd_pd_get_amode(int argc, char *argv[])
 		if (!r->svid)
 			break;
 		printf("%cSVID:0x%04x ", (r->opos) ? '*' : ' ', r->svid);
-		for (i = 0; i < PDO_MODES; i++) {
+		for (i = 0; i < VDO_MAX_OBJECTS; i++) {
 			printf("%c0x%08x ",
 			       (r->opos && (r->opos == i + 1)) ? '*' : ' ',
 			       r->vdo[i]);
@@ -7550,46 +7532,54 @@ static void cmd_charge_current_limit_help(const char *cmd)
 
 int cmd_charge_current_limit(int argc, char *argv[])
 {
-	struct ec_params_current_limit p;
-	int version = 1;
-	int rv;
+	struct ec_params_current_limit_v1 p1;
+	uint32_t limit;
+	uint8_t battery_soc;
 	char *e;
 
-	if (!ec_cmd_version_supported(EC_CMD_CHARGE_CURRENT_LIMIT, 1))
-		version = 0;
-
-	if (version < 1) {
+	/*
+	 * v0: max_current_ma (argc == 2)
+	 * v1: max_current_ma [battery_soc] (argc == 2 or 3)
+	 */
+	if (!ec_cmd_version_supported(EC_CMD_CHARGE_CURRENT_LIMIT, 1)) {
 		if (argc != 2) {
 			cmd_charge_current_limit_help(argv[0]);
 			return -1;
 		}
-	} else if (argc < 2 || argc > 3) {
-		cmd_charge_current_limit_help(argv[0]);
-		return -1;
+	} else {
+		if (argc < 2 || argc > 3) {
+			cmd_charge_current_limit_help(argv[0]);
+			return -1;
+		}
 	}
 
-	p.limit = strtol(argv[1], &e, 0);
+	/* max_current_ma */
+	limit = strtoull(argv[1], &e, 0);
 	if (e && *e) {
 		fprintf(stderr, "ERROR: Bad limit value: %s\n", argv[1]);
 		return -1;
 	}
 
-	if (argc == 3) {
-		p.battery_soc = strtol(argv[2], &e, 0);
-		if (e && *e) {
-			fprintf(stderr, "ERROR: Bad battery SoC value: %s\n",
-				argv[2]);
-			return -1;
-		}
+	if (argc == 2) {
+		struct ec_params_current_limit p0;
+
+		p0.limit = limit;
+		return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 0,
+				  &p0, sizeof(p0), NULL, 0);
 	}
 
-	rv = ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, version, &p, sizeof(p),
-			NULL, 0);
-	if (rv < 0) {
-		fprintf(stderr, "ERROR: Battery SoC is out of range.\n");
+	/* argc==3 for battery_soc */
+	battery_soc = strtol(argv[2], &e, 0);
+	if (e && *e) {
+		fprintf(stderr, "ERROR: Bad battery SoC value: %s\n",
+			argv[2]);
+		return -1;
 	}
 
-	return rv;
+	p1.limit = limit;
+	p1.battery_soc = battery_soc;
+	return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 1,
+			  &p1, sizeof(p1), NULL, 0);
 }
 
 static void cmd_charge_control_help(const char *cmd, const char *msg)
@@ -9163,6 +9153,257 @@ static int cmd_keyconfig(int argc, char *argv[])
 	}
 
 	return 0;
+}
+
+static void cmd_memory_dump_usage(const char *command_name)
+{
+	fprintf(stderr,
+		"Usage: %s [<address> [<size>]]\n"
+		"  Prints the memory available for dumping in hexdump cononical format.\n"
+		"  <address> is a 32-bit address offset. Defaults to 0x0.\n"
+		"  <size> is the number of bytes to print after <address>."
+		" Defaults to end of RAM.\n"
+		"Usage: %s info\n"
+		"  Prints metadata about the memory available for dumping\n",
+		command_name, command_name);
+}
+
+static int cmd_memory_dump(int argc, char *argv[])
+{
+	int rv;
+	char *e;
+	bool just_info;
+	int response_max;
+	const char *command_name = argv[0];
+	void *read_mem_response = NULL;
+	uint32_t requested_address_start = 0;
+	uint32_t requested_address_end = UINT32_MAX;
+	/* Simple local structs for storing a memory dump */
+	struct mem_segment {
+		uint32_t addr_start;
+		uint32_t addr_end;
+		uint32_t size;
+		uint8_t *mem;
+		struct mem_segment *next;
+	};
+	uint16_t entry_count;
+	struct mem_segment *segments = NULL;
+	/* The real root is root.next, all other root fields are unused */
+	struct mem_segment root;
+	struct mem_segment *seg;
+	struct ec_response_memory_dump_get_metadata metadata_response;
+	struct ec_response_get_protocol_info protocol_info_response;
+
+	if (argc > 3 || (argc == 2 && strcmp(argv[1], "help") == 0)) {
+		cmd_memory_dump_usage(command_name);
+		return -1;
+	}
+	if (argc == 2 && strcmp(argv[1], "info") == 0) {
+		just_info = true;
+	}
+	if (argc >= 2 && !just_info) {
+		/* Parse requested address argument */
+		requested_address_start = strtoul(argv[1], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad argument '%s'\n", argv[1]);
+			cmd_memory_dump_usage(command_name);
+			return -1;
+		}
+	}
+	if (argc == 3 && !just_info) {
+		/* Parse requested size argument */
+		uint32_t requested_size = strtoul(argv[2], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad argument '%s'\n", argv[2]);
+			cmd_memory_dump_usage(command_name);
+			return -1;
+		}
+		/* Cap max address at UINT32_MAX */
+		requested_address_end =
+			MIN((uint64_t)requested_address_start + requested_size,
+			    (uint64_t)UINT32_MAX);
+	}
+
+	rv = ec_command(EC_CMD_GET_PROTOCOL_INFO, 0, NULL, 0,
+			&protocol_info_response,
+			sizeof(protocol_info_response));
+	if (rv < 0) {
+		fprintf(stderr, "Protocol info unavailable.\n");
+		goto cmd_memory_dump_cleanup;
+	}
+	response_max = protocol_info_response.max_response_packet_size;
+	read_mem_response = malloc(response_max);
+
+	/* Fetch memory dump metadata */
+	rv = ec_command(EC_CMD_MEMORY_DUMP_GET_METADATA, 0, NULL, 0,
+			&metadata_response, sizeof(metadata_response));
+	if (rv < 0) {
+		fprintf(stderr, "Failed to get memory dump metadata.\n");
+		goto cmd_memory_dump_cleanup;
+	}
+	entry_count = metadata_response.memory_dump_entry_count;
+	if (entry_count == 0) {
+		fprintf(stderr, "Memory dump is empty.\n");
+		rv = -1;
+		goto cmd_memory_dump_cleanup;
+	}
+	segments = (struct mem_segment *)malloc(sizeof(struct mem_segment) *
+						entry_count);
+	if (segments == NULL) {
+		fprintf(stderr, "malloc failed\n");
+		rv = -1;
+		goto cmd_memory_dump_cleanup;
+	}
+
+	/* Fetch all memory segments */
+	for (uint16_t entry_index = 0; entry_index < entry_count;
+	     entry_index++) {
+		seg = &segments[entry_index];
+		struct ec_params_memory_dump_get_entry_info entry_info_params = {
+			.memory_dump_entry_index = entry_index
+		};
+		struct ec_response_memory_dump_get_entry_info
+			entry_info_response;
+
+		rv = ec_command(EC_CMD_MEMORY_DUMP_GET_ENTRY_INFO, 0,
+				&entry_info_params, sizeof(entry_info_params),
+				&entry_info_response,
+				sizeof(entry_info_response));
+		if (rv < 0) {
+			fprintf(stderr,
+				"Failed to get memory dump info for entry %d.\n",
+				entry_index);
+			goto cmd_memory_dump_cleanup;
+		}
+
+		uint32_t entry_address_end =
+			entry_info_response.address + entry_info_response.size;
+
+		/* Check if entry is even in bounds of the requested range */
+		if (entry_info_response.address >= requested_address_end ||
+		    entry_address_end <= requested_address_start)
+			continue;
+
+		/* Clip memory segment boundaries based on requested range */
+		seg->addr_start = MAX(entry_info_response.address,
+				      requested_address_start);
+		seg->addr_end = MIN(entry_address_end, requested_address_end);
+		if (seg->addr_end - seg->addr_start <= 0)
+			continue;
+		seg->size = seg->addr_end - seg->addr_start;
+
+		if (just_info) {
+			printf("%-3d: %x-%x (%d bytes)\n", entry_index,
+			       seg->addr_start, seg->addr_end, seg->size);
+			continue;
+		}
+
+		seg->mem = (uint8_t *)malloc(seg->size);
+		if (seg->mem == NULL) {
+			fprintf(stderr, "malloc failed\n");
+			rv = -1;
+			goto cmd_memory_dump_cleanup;
+		}
+
+		/* Keep fetching until entire segment is copied */
+		uint32_t offset = 0;
+		while (offset < seg->size) {
+			struct ec_params_memory_dump_read_memory
+				read_mem_params = {
+					.memory_dump_entry_index = entry_index,
+					.address = seg->addr_start + offset,
+					.size = seg->size - offset,
+				};
+
+			rv = ec_command(EC_CMD_MEMORY_DUMP_READ_MEMORY, 0,
+					&read_mem_params,
+					sizeof(read_mem_params),
+					read_mem_response, response_max);
+			if (rv <= 0) {
+				fprintf(stderr,
+					"Failed to read memory at %x.\n",
+					read_mem_params.address);
+				rv = -1;
+				goto cmd_memory_dump_cleanup;
+			}
+
+			if (!memcpy(seg->mem + offset, read_mem_response, rv)) {
+				fprintf(stderr, "memcpy failed\n");
+				rv = -1;
+				goto cmd_memory_dump_cleanup;
+			}
+
+			offset += rv;
+		};
+
+		/* Sort segments in ascending order of starting address */
+		struct mem_segment *current = &root;
+		for (int i = 0; current->next && i < entry_count; i++) {
+			if (seg->addr_start < current->next->addr_start) {
+				/* Insert segment before current->next */
+				seg->next = current->next;
+				current->next = seg;
+				break;
+			}
+			current = current->next;
+		}
+		current->next = seg;
+	}
+
+	if (just_info) {
+		rv = 0;
+		goto cmd_memory_dump_cleanup;
+	}
+
+	/* Merge overlapping or touching segments */
+	seg = root.next;
+	for (int i = 0; seg && seg->next && i < entry_count; i++) {
+		if (seg->addr_end < seg->next->addr_start) {
+			/* No overlap */
+			seg = seg->next;
+			continue;
+		}
+		uint32_t overlap = seg->addr_end - seg->next->addr_start;
+		uint32_t new_size = seg->size + seg->next->size - overlap;
+		if (new_size != seg->next->addr_end - seg->addr_start) {
+			fprintf(stderr, "Segment size is not aligned\n");
+			rv = -1;
+			goto cmd_memory_dump_cleanup;
+		}
+		seg->mem = (uint8_t *)realloc(seg->mem, new_size);
+		if (seg->mem == NULL) {
+			fprintf(stderr, "realloc failed\n");
+			rv = -1;
+			goto cmd_memory_dump_cleanup;
+		}
+		if (!memcpy(seg->mem + seg->size, seg->next->mem + overlap,
+			    seg->next->size - overlap)) {
+			fprintf(stderr, "Merging segments failed\n");
+			rv = -1;
+			goto cmd_memory_dump_cleanup;
+		}
+		seg->addr_end = seg->next->addr_end;
+		seg->size = new_size;
+		seg->next = seg->next->next;
+	}
+
+	/* Print dump in hexdump cononical format */
+	seg = root.next;
+	for (int i = 0; seg && i < entry_count; i++) {
+		hexdump_canonical(seg->mem, seg->size, seg->addr_start);
+		/* Extra newline to delinate segments */
+		printf("\n");
+		seg = seg->next;
+	}
+	rv = 0;
+cmd_memory_dump_cleanup:
+	free(read_mem_response);
+	if (segments) {
+		for (int i = 0; i < entry_count; i++)
+			free(segments[i].mem);
+		free(segments);
+	}
+	return rv;
 }
 
 static const char *const mkbp_button_strings[] = {
@@ -11207,6 +11448,7 @@ const struct command commands[] = {
 	{ "kbpress", cmd_kbpress },
 	{ "keyconfig", cmd_keyconfig },
 	{ "keyscan", cmd_keyscan },
+	{ "memory_dump", cmd_memory_dump },
 	{ "mkbpget", cmd_mkbp_get },
 	{ "mkbpwakemask", cmd_mkbp_wake_mask },
 	{ "motionsense", cmd_motionsense },
