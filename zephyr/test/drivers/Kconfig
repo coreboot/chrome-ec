@@ -29,6 +29,12 @@ config LINK_TEST_SUITE_AP_VDM_CONTROL
 config LINK_TEST_SUITE_BUTTON
 	bool "Link tests for common/button.c"
 
+config LINK_TEST_SUITE_CBI_FLASH
+	bool "Link and execute the zephyr/shim/src/cbi/cbi_flash.c tests"
+	help
+	  Include the CBI Flash storage driver test suite
+	  in the binary.
+
 config LINK_TEST_SUITE_CHARGESPLASH
 	bool "Link and test the chargesplash tests"
 
@@ -183,5 +189,8 @@ config LINK_TEST_SUITE_LED_COMMON
 	bool "Link and test the led_common.c file"
 	depends on !PLATFORM_EC_LED_DT
 	select PLATFORM_EC_LED_COMMON
+
+config LINK_TEST_SUITE_HOST_COMMAND_MEMORY_DUMP
+	bool "Link and test memory dump host commands tests"
 
 source "Kconfig.zephyr"

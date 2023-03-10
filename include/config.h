@@ -1987,7 +1987,7 @@
 #undef CONFIG_DEVICE_STATE
 
 /* Support DMA transfers inside the EC */
-#undef CONFIG_DMA
+#undef CONFIG_DMA_CROS
 
 /* Use the common interrupt handlers for DMA IRQs */
 #define CONFIG_DMA_DEFAULT_HANDLERS
@@ -5128,6 +5128,11 @@
 #undef CONFIG_USB_PD_FRS_TCPC
 #undef CONFIG_USB_PD_FRS_PPC
 #undef CONFIG_USB_PD_FRS
+
+/*
+ * Enable USB-PD extended power range.
+ */
+#undef CONFIG_USB_PD_EPR
 
 /*
  * USB Product ID. Each platform (e.g. baseboard set) should have a single

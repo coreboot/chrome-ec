@@ -76,8 +76,11 @@ enum pd_rx_errors {
 	 PD_EVENT_POWER_STATE_CHANGE | PD_EVENT_TCPC_RESET)
 
 /* --- PD data message helpers --- */
+#ifdef CONFIG_USB_PD_EPR
+#define PDO_MAX_OBJECTS 11
+#else
 #define PDO_MAX_OBJECTS 7
-#define PDO_MODES (PDO_MAX_OBJECTS - 1)
+#endif
 
 /* PDO : Power Data Object */
 /*
@@ -100,6 +103,7 @@ enum pd_rx_errors {
 #define PDO_FIXED_FRS_CURR_DFLT_USB_POWER (1 << 23)
 #define PDO_FIXED_FRS_CURR_1A5_AT_5V (2 << 23)
 #define PDO_FIXED_FRS_CURR_3A0_AT_5V (3 << 23)
+#define PDO_FIXED_EPR_MODE_CAPABLE BIT(23)
 #define PDO_FIXED_PEAK_CURR () /* [21..20] Peak current */
 #define PDO_FIXED_VOLT(mv) (((mv) / 50) << 10) /* Voltage in 50mV units */
 #define PDO_FIXED_CURR(ma) (((ma) / 10) << 0) /* Max current in 10mA units */
@@ -140,6 +144,7 @@ enum pd_rx_errors {
 #define RDO_CAP_MISMATCH BIT(26)
 #define RDO_COMM_CAP BIT(25)
 #define RDO_NO_SUSPEND BIT(24)
+#define RDO_EPR_MODE_CAPABLE BIT(22)
 #define RDO_FIXED_VAR_OP_CURR(ma) ((((ma) / 10) & 0x3FF) << 10)
 #define RDO_FIXED_VAR_MAX_CURR(ma) ((((ma) / 10) & 0x3FF) << 0)
 
@@ -200,6 +205,7 @@ enum pd_rx_errors {
 #define PD_T_SINK_WAIT_CAP (575 * MSEC) /* between 310ms and 620ms */
 #define PD_T_SINK_TRANSITION (35 * MSEC) /* between 20ms and 35ms */
 #define PD_T_SOURCE_ACTIVITY (45 * MSEC) /* between 40ms and 50ms */
+#define PD_T_ENTER_EPR (500 * MSEC) /* between 450ms and 550ms */
 /*
  * Adjusting for TCPMv2 PD2 Compliance. In tests like TD.PD.SRC.E5 this
  * value is the duration before the Hard Reset can be sent. Setting the
@@ -262,6 +268,7 @@ enum pd_rx_errors {
 #define PD_T_DATA_RESET_FAIL (300 * MSEC) /* 300ms */
 #define PD_T_VCONN_REAPPLIED (10 * MSEC) /* between 10ms and 20ms */
 #define PD_T_VCONN_DISCHARGE (240 * MSEC) /* between 160ms and 240ms */
+#define PD_T_SINK_EPR_KEEP_ALIVE (375 * MSEC) /* between 250ms and 500ms */
 
 /*
  * Non-spec timer to prevent going Unattached if Vbus drops before a partner FRS
@@ -299,8 +306,14 @@ enum pd_rx_errors {
 #define PD_V_SINK_DISCONNECT_MAX 3670
 /* TODO(b/149530538): Add equation for vSinkDisconnectPD */
 
-/* Maximum voltage in mV offered by PD 3.0 Version 2.0 Spec */
+/* Maximum SPR voltage in mV offered by PD 3.0 Version 2.0 Spec */
 #define PD_REV3_MAX_VOLTAGE 20000
+
+/* Maximum SPR voltage in mV */
+#define PD_MAX_SPR_VOLTAGE 20000
+
+/* Maximum EPR voltage in mV */
+#define PD_MAX_EPR_VOLTAGE 48000
 
 /* Power in mW at which we will automatically charge from a DRP partner */
 #define PD_DRP_CHARGE_POWER_MIN 27000
@@ -348,7 +361,7 @@ struct svid_mode_data {
 	/* The number of modes discovered for this SVID */
 	int mode_cnt;
 	/* The discovered mode VDOs */
-	uint32_t mode_vdo[PDO_MODES];
+	uint32_t mode_vdo[VDO_MAX_OBJECTS];
 	/* State of mode discovery for this SVID */
 	enum pd_discovery_state discovery;
 };
@@ -417,10 +430,10 @@ union disc_ident_ack {
 		uint32_t product_t3;
 	};
 
-	uint32_t raw_value[PDO_MAX_OBJECTS - 1];
+	uint32_t raw_value[VDO_MAX_OBJECTS];
 };
 BUILD_ASSERT(sizeof(union disc_ident_ack) ==
-	     sizeof(uint32_t) * (PDO_MAX_OBJECTS - 1));
+	     sizeof(uint32_t) * (VDO_MAX_OBJECTS));
 
 /* Discover Identity data - ACK plus discovery state */
 struct identity_data {
@@ -596,6 +609,60 @@ struct partner_active_modes {
 
 #define VDO_PRODUCT(pid, bcd) (((pid)&0xffff) << 16 | ((bcd)&0xffff))
 #define PD_PRODUCT_PID(vdo) (((vdo) >> 16) & 0xffff)
+
+/* Max Attention length is header + 1 VDO */
+#define PD_ATTENTION_MAX_VDO 2
+
+/*
+ * 6.4.10 EPR_Mode Message (PD Rev 3.1)
+ */
+
+enum pd_eprmdo_action {
+	/* 0x00: Reserved */
+	PD_EPRMDO_ACTION_ENTER = 0x01,
+	PD_EPRMDO_ACTION_ENTER_ACK = 0x02,
+	PD_EPRMDO_ACTION_ENTER_SUCCESS = 0x03,
+	PD_EPRMDO_ACTION_ENTER_FAILED = 0x04,
+	PD_EPRMDO_ACTION_EXIT = 0x05,
+	/* 0x06 ... 0xFF: Reserved */
+} __packed;
+BUILD_ASSERT(sizeof(enum pd_eprmdo_action) == 1);
+
+enum pd_eprmdo_enter_failed_data {
+	PD_EPRMDO_ENTER_FAILED_DATA_UNKNOWN = 0x00,
+	PD_EPRMDO_ENTER_FAILED_DATA_CABLE = 0x01,
+	PD_EPRMDO_ENTER_FAILED_DATA_VCONN = 0x02,
+	PD_EPRMDO_ENTER_FAILED_DATA_RDO = 0x03,
+	PD_EPRMDO_ENTER_FAILED_DATA_UNABLE = 0x04,
+	PD_EPRMDO_ENTER_FAILED_DATA_PDO = 0x05,
+} __packed;
+BUILD_ASSERT(sizeof(enum pd_eprmdo_enter_failed_data) == 1);
+
+struct eprmdo {
+	uint16_t reserved;
+	enum pd_eprmdo_enter_failed_data data;
+	enum pd_eprmdo_action action;
+};
+BUILD_ASSERT(sizeof(struct eprmdo) == 4);
+
+/*
+ * 6.5.14 Extended Control Message
+ */
+enum pd_ext_ctrl_msg_type {
+	/* 0: Reserved */
+	PD_EXT_CTRL_EPR_GET_SOURCE_CAP = 1,
+	PD_EXT_CTRL_EPR_GET_SINK_CAP = 2,
+	PD_EXT_CTRL_EPR_KEEPALIVE = 3,
+	PD_EXT_CTRL_EPR_KEEPALIVE_ACK = 4,
+	/* 5-255: Reserved */
+} __packed;
+BUILD_ASSERT(sizeof(enum pd_ext_ctrl_msg_type) == 1);
+
+/* Extended Control Data Block (ECDB) */
+struct pd_ecdb {
+	uint8_t type;
+	uint8_t data;
+} __packed;
 
 /* PD Rev 3.1 Revision Message Data Object (RMDO) */
 struct rmdo {
@@ -1042,6 +1109,8 @@ enum pd_dpm_request {
 	DPM_REQUEST_FRS_DET_DISABLE = BIT(22),
 	DPM_REQUEST_DATA_RESET = BIT(23),
 	DPM_REQUEST_GET_REVISION = BIT(24),
+	DPM_REQUEST_EPR_MODE_ENTRY = BIT(25),
+	DPM_REQUEST_EPR_MODE_EXIT = BIT(26),
 };
 
 /**
@@ -2041,7 +2110,7 @@ enum pd_discovery_state pd_get_modes_discovery(int port,
  * @param type     Transmit type (SOP, SOP') for VDM
  * @param svid     SVID to get
  * @param vdo_out  Discover Mode VDO response to set
- *                 Note: It must be able to fit wihin PDO_MODES VDOs.
+ *                 Note: It must be able to fit within PDO_MAX_OBJECTS VDOs.
  * @return         Mode VDO cnt of specified SVID if is discovered,
  *                 0 otherwise
  */
