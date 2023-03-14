@@ -161,7 +161,9 @@
 			gpios = <&gpiob 5 (GPIO_ODR_LOW | GPIO_VOLTAGE_1P8)>;
 		};
 		pmic_ec_resetb: pmic-ec-resetb {
-			gpios = <&gpioj 6 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
+			gpios = <&gpioj 6 (GPIO_INPUT | GPIO_VOLTAGE_1P8 |
+					   GPIO_ACTIVE_LOW)>;
+			enum-name = "GPIO_PMIC_EC_RESETB";
 		};
 
 		/*
@@ -193,8 +195,8 @@
 			<&gpioa 6 GPIO_INPUT_PULL_DOWN>,
 			<&gpioa 7 GPIO_INPUT_PULL_DOWN>,
 			/* h5,h6: uart base tx/rx */
-			<&gpioh 5 GPIO_INPUT_PULL_DOWN>,
-			<&gpioh 6 GPIO_INPUT_PULL_DOWN>,
+			<&gpioh 5 GPIO_INPUT>,
+			<&gpioh 6 GPIO_INPUT>,
 			<&gpioi 6 GPIO_INPUT_PULL_DOWN>,
 			<&gpiom 6 (GPIO_INPUT_PULL_DOWN | GPIO_VOLTAGE_1P8)>,
 			/* spi_clk_gpg6 */

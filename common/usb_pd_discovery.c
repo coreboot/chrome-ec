@@ -145,6 +145,8 @@ void dfp_consume_modes(int port, enum tcpci_msg_type type, int cnt,
 	struct pd_discovery *disc =
 		pd_get_am_discovery_and_notify_access(port, type);
 	uint16_t response_svid = (uint16_t)PD_VDO_VID(payload[0]);
+	const struct svid_mode_data *requested_mode_data =
+		pd_get_next_mode(port, type);
 
 	for (svid_idx = 0; svid_idx < disc->svid_cnt; ++svid_idx) {
 		uint16_t svid = disc->svids[svid_idx].svid;
@@ -154,10 +156,8 @@ void dfp_consume_modes(int port, enum tcpci_msg_type type, int cnt,
 			break;
 		}
 	}
-	if (!mode_discovery) {
-		const struct svid_mode_data *requested_mode_data =
-			pd_get_next_mode(port, type);
-		CPRINTF("C%d: Mode response for undiscovered SVID %x, but TCPM "
+	if (!mode_discovery || (requested_mode_data->svid != response_svid)) {
+		CPRINTF("C%d: Unexpected mode repsonse for SVID %x, but TCPM "
 			"requested SVID %x\n",
 			port, response_svid, requested_mode_data->svid);
 		/*
@@ -366,14 +366,6 @@ const struct svid_mode_data *pd_get_next_mode(int port,
 	return NULL;
 }
 
-const uint32_t *pd_get_mode_vdo(int port, uint16_t svid_idx,
-				enum tcpci_msg_type type)
-{
-	const struct pd_discovery *disc = pd_get_am_discovery(port, type);
-
-	return disc->svids[svid_idx].mode_vdo;
-}
-
 bool pd_is_mode_discovered_for_svid(int port, enum tcpci_msg_type type,
 				    uint16_t svid)
 {
@@ -424,17 +416,6 @@ enum idh_ptype get_usb_pd_cable_type(int port)
 		pd_get_am_discovery(port, TCPCI_MSG_SOP_PRIME);
 
 	return disc->identity.idh.product_type;
-}
-
-bool is_usb2_cable_support(int port)
-{
-	const struct pd_discovery *disc =
-		pd_get_am_discovery(port, TCPCI_MSG_SOP_PRIME);
-
-	return disc->identity.idh.product_type == IDH_PTYPE_PCABLE ||
-	       pd_get_vdo_ver(port, TCPCI_MSG_SOP_PRIME) < VDM_VER20 ||
-	       disc->identity.product_t2.a2_rev30.usb_20_support ==
-		       USB2_SUPPORTED;
 }
 
 bool is_cable_speed_gen2_capable(int port)
