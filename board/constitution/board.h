@@ -107,7 +107,6 @@
 #define I2C_PORT_USB_C0_C2_MUX NPCX_I2C_PORT3_0
 #define I2C_PORT_USB_C1_MUX NPCX_I2C_PORT6_1
 
-#define I2C_PORT_QI NPCX_I2C_PORT5_0
 #define I2C_PORT_EEPROM NPCX_I2C_PORT7_0
 #define I2C_PORT_MP2964 NPCX_I2C_PORT7_0
 
@@ -146,12 +145,6 @@
 /* Include math_util for bitmask_uint64 used in pd_timers */
 #define CONFIG_MATH_UTIL
 
-/* WPC/Qi charger */
-#ifdef SECTION_IS_RW
-#define CONFIG_PERIPHERAL_CHARGER
-#define CONFIG_CPS8100
-#endif
-
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h" /* needed by registers.h */
@@ -187,7 +180,7 @@ enum temp_sensor_id {
 enum ioex_port { IOEX_C0_NCT38XX = 0, IOEX_C2_NCT38XX, IOEX_PORT_COUNT };
 
 enum pwm_channel {
-	PWM_CH_LED_GREEN, /* PWM0 */
+	PWM_CH_LED_WHITE, /* PWM0 */
 	PWM_CH_FAN, /* PWM5 */
 	PWM_CH_LED_RED, /* PWM2 */
 	PWM_CH_COUNT

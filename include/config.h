@@ -4898,6 +4898,7 @@
 #undef CONFIG_USB_PD_TCPM_FUSB302
 #undef CONFIG_USB_PD_TCPM_ITE_ON_CHIP
 #undef CONFIG_USB_PD_TCPM_ANX3429
+#undef CONFIG_USB_PD_TCPM_ANX7406
 #undef CONFIG_USB_PD_TCPM_ANX740X
 #undef CONFIG_USB_PD_TCPM_ANX741X
 #undef CONFIG_USB_PD_TCPM_ANX7447
@@ -5128,6 +5129,11 @@
 #undef CONFIG_USB_PD_FRS_TCPC
 #undef CONFIG_USB_PD_FRS_PPC
 #undef CONFIG_USB_PD_FRS
+
+/*
+ * Enable USB-PD extended power range.
+ */
+#undef CONFIG_USB_PD_EPR
 
 /*
  * USB Product ID. Each platform (e.g. baseboard set) should have a single

@@ -1250,12 +1250,6 @@ extern char mock_jump_data[CONFIG_PLATFORM_EC_PRESERVED_END_OF_RAM_SIZE];
 #define CONFIG_USB_CHARGER
 #endif
 
-#define USB_PORT_COUNT                                                         \
-	COND_CODE_1(DT_NODE_EXISTS(DT_INST(0, cros_ec_usba_port_enable_pins)), \
-		    (DT_PROP_LEN(DT_INST(0, cros_ec_usba_port_enable_pins),    \
-				 enable_pins)),                                \
-		    (0))
-
 #undef CONFIG_USB_PORT_ENABLE_DYNAMIC
 #ifdef CONFIG_PLATFORM_EC_USB_PORT_ENABLE_DYNAMIC
 #define CONFIG_USB_PORT_ENABLE_DYNAMIC
@@ -1264,6 +1258,12 @@ extern char mock_jump_data[CONFIG_PLATFORM_EC_PRESERVED_END_OF_RAM_SIZE];
 #undef CONFIG_USB_PORT_POWER_DUMB
 #ifdef CONFIG_PLATFORM_EC_USB_PORT_POWER_DUMB
 #define CONFIG_USB_PORT_POWER_DUMB
+/* usb_charge.h sets USB_PORT_ENABLE_COUNT from this for POWER_DUMB */
+#define USB_PORT_COUNT                                                         \
+	COND_CODE_1(DT_NODE_EXISTS(DT_INST(0, cros_ec_usba_port_enable_pins)), \
+		    (DT_PROP_LEN(DT_INST(0, cros_ec_usba_port_enable_pins),    \
+				 enable_pins)),                                \
+		    (0))
 #endif
 
 #undef CONFIG_USB_PORT_POWER_DUMB_CUSTOM_HOOK
@@ -1274,6 +1274,13 @@ extern char mock_jump_data[CONFIG_PLATFORM_EC_PRESERVED_END_OF_RAM_SIZE];
 #undef CONFIG_USB_PORT_POWER_SMART
 #ifdef CONFIG_PLATFORM_EC_USB_PORT_POWER_SMART
 #define CONFIG_USB_PORT_POWER_SMART
+#undef CONFIG_USB_PORT_POWER_SMART_PORT_COUNT /* override config.h default */
+/* usb_charge.h sets USB_PORT_ENABLE_COUNT from this for POWER_SMART */
+#define CONFIG_USB_PORT_POWER_SMART_PORT_COUNT                                 \
+	COND_CODE_1(DT_NODE_EXISTS(DT_INST(0, cros_ec_usba_port_enable_pins)), \
+		    (DT_PROP_LEN(DT_INST(0, cros_ec_usba_port_enable_pins),    \
+				 enable_pins)),                                \
+		    (0))
 #endif
 
 #undef CONFIG_USB_PORT_POWER_SMART_CDP_SDP_ONLY
@@ -2387,6 +2394,11 @@ BUILD_ASSERT((DT_NUM_INST_STATUS_OKAY(maxim_max695x)) == 1,
 #define CONFIG_CBI_GPIO
 #endif
 
+#undef CONFIG_CBI_FLASH
+#ifdef CONFIG_PLATFORM_EC_CBI_FLASH
+#define CONFIG_CBI_FLASH
+#endif
+
 #undef CONFIG_VBOOT_HASH
 #ifdef CONFIG_PLATFORM_EC_VBOOT_HASH
 #define CONFIG_VBOOT_HASH
@@ -2926,6 +2938,22 @@ BUILD_ASSERT((DT_NUM_INST_STATUS_OKAY(mps_mp2964)) == 1,
 #undef CONFIG_BATT_HOST_FULL_FACTOR
 #ifdef CONFIG_PLATFORM_EC_BATT_HOST_FULL_FACTOR
 #define CONFIG_BATT_HOST_FULL_FACTOR CONFIG_PLATFORM_EC_BATT_HOST_FULL_FACTOR
+#endif
+
+#undef CONFIG_TOUCHPAD
+#ifdef CONFIG_PLATFORM_EC_TOUCHPAD
+#define CONFIG_TOUCHPAD
+#endif
+
+#undef CONFIG_DETACHABLE_BASE
+#ifdef CONFIG_PLATFORM_EC_DETACHABLE_BASE
+#define CONFIG_DETACHABLE_BASE
+#define CONFIG_BASE_ATTACHED_SWITCH
+#endif
+
+#undef CONFIG_BASE_ATTACHED_SWITCH
+#ifdef CONFIG_PLATFORM_EC_BASE_ATTACHED_SWITCH
+#define CONFIG_BASE_ATTACHED_SWITCH
 #endif
 
 #endif /* __CROS_EC_CONFIG_CHIP_H */

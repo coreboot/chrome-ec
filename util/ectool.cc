@@ -37,7 +37,6 @@
 #include "usb_pd.h"
 
 #include <libec/add_entropy_command.h>
-#include <libec/flash_protect_command.h>
 
 /* Maximum flash size (16 MB, conservative) */
 #define MAX_FLASH_SIZE 0x1000000
@@ -222,6 +221,8 @@ const char help_str[] =
 	"      Various lightbar control commands\n"
 	"  locatechip <type> <index>\n"
 	"      Get the addresses and ports of i2c connected and embedded chips\n"
+	"  memory_dump [<address> [<size>]]\n"
+	"      Outputs the memory dump in hexdump canonical format.\n"
 	"  mkbpget <buttons|switches>\n"
 	"      Get MKBP buttons/switches supported mask and current state\n"
 	"  mkbpwakemask <get|set> <event|hostevent> [mask]\n"
@@ -1745,62 +1746,83 @@ int cmd_flash_erase(int argc, char *argv[])
 	return 0;
 }
 
+static void print_flash_protect_flags(const char *desc, uint32_t flags)
+{
+	printf("%s 0x%08x", desc, flags);
+	if (flags & EC_FLASH_PROTECT_GPIO_ASSERTED)
+		printf(" wp_gpio_asserted");
+	if (flags & EC_FLASH_PROTECT_RO_AT_BOOT)
+		printf(" ro_at_boot");
+	if (flags & EC_FLASH_PROTECT_RW_AT_BOOT)
+		printf(" rw_at_boot");
+	if (flags & EC_FLASH_PROTECT_ROLLBACK_AT_BOOT)
+		printf(" rollback_at_boot");
+	if (flags & EC_FLASH_PROTECT_ALL_AT_BOOT)
+		printf(" all_at_boot");
+	if (flags & EC_FLASH_PROTECT_RO_NOW)
+		printf(" ro_now");
+	if (flags & EC_FLASH_PROTECT_RW_NOW)
+		printf(" rw_now");
+	if (flags & EC_FLASH_PROTECT_ROLLBACK_NOW)
+		printf(" rollback_now");
+	if (flags & EC_FLASH_PROTECT_ALL_NOW)
+		printf(" all_now");
+	if (flags & EC_FLASH_PROTECT_ERROR_STUCK)
+		printf(" STUCK");
+	if (flags & EC_FLASH_PROTECT_ERROR_INCONSISTENT)
+		printf(" INCONSISTENT");
+	if (flags & EC_FLASH_PROTECT_ERROR_UNKNOWN)
+		printf(" UNKNOWN_ERROR");
+	printf("\n");
+}
+
 int cmd_flash_protect(int argc, char *argv[])
 {
-	/*
-	 * Set up requested flags.  If no flags were specified, mask will
-	 * be flash_protect::Flags::kNone and nothing will change.
-	 */
-	ec::flash_protect::Flags flags = ec::flash_protect::Flags::kNone;
-	ec::flash_protect::Flags mask = ec::flash_protect::Flags::kNone;
+	struct ec_params_flash_protect p;
+	struct ec_response_flash_protect r;
+	int rv, i;
 
-	for (int i = 1; i < argc; i++) {
+	/*
+	 * Set up requested flags.  If no flags were specified, p.mask will
+	 * be 0 and nothing will change.
+	 */
+	p.mask = p.flags = 0;
+	for (i = 1; i < argc; i++) {
 		if (!strcasecmp(argv[i], "now")) {
-			mask |= ec::flash_protect::Flags::kAllNow;
-			flags |= ec::flash_protect::Flags::kAllNow;
+			p.mask |= EC_FLASH_PROTECT_ALL_NOW;
+			p.flags |= EC_FLASH_PROTECT_ALL_NOW;
 		} else if (!strcasecmp(argv[i], "enable")) {
-			mask |= ec::flash_protect::Flags::kRoAtBoot;
-			flags |= ec::flash_protect::Flags::kRoAtBoot;
+			p.mask |= EC_FLASH_PROTECT_RO_AT_BOOT;
+			p.flags |= EC_FLASH_PROTECT_RO_AT_BOOT;
 		} else if (!strcasecmp(argv[i], "disable"))
-			mask |= ec::flash_protect::Flags::kRoAtBoot;
+			p.mask |= EC_FLASH_PROTECT_RO_AT_BOOT;
 	}
 
-	ec::FlashProtectCommand flash_protect_command(flags, mask);
-	if (!flash_protect_command.Run(comm_get_fd())) {
-		int rv = -EECRESULT - flash_protect_command.Result();
-		fprintf(stderr, "Flash protect returned with errors: %d\n", rv);
+	rv = ec_command(EC_CMD_FLASH_PROTECT, EC_VER_FLASH_PROTECT, &p,
+			sizeof(p), &r, sizeof(r));
+	if (rv < 0)
 		return rv;
+	if (rv < sizeof(r)) {
+		fprintf(stderr, "Too little data returned.\n");
+		return -1;
 	}
 
 	/* Print returned flags */
-	printf("Flash protect flags: 0x%08x %s\n",
-	       flash_protect_command.GetFlags(),
-	       (ec::FlashProtectCommand::ParseFlags(
-			flash_protect_command.GetFlags()))
-		       .c_str());
-	printf("Valid flags:         0x%08x %s\n",
-	       flash_protect_command.GetValidFlags(),
-	       (ec::FlashProtectCommand::ParseFlags(
-			flash_protect_command.GetValidFlags()))
-		       .c_str());
-	printf("Writable flags:      0x%08x %s\n",
-	       flash_protect_command.GetWritableFlags(),
-	       (ec::FlashProtectCommand::ParseFlags(
-			flash_protect_command.GetWritableFlags()))
-		       .c_str());
+	print_flash_protect_flags("Flash protect flags:", r.flags);
+	print_flash_protect_flags("Valid flags:        ", r.valid_flags);
+	print_flash_protect_flags("Writable flags:     ", r.writable_flags);
 
 	/* Check if we got all the flags we asked for */
-	if ((flash_protect_command.GetFlags() & mask) != (flags & mask)) {
+	if ((r.flags & p.mask) != (p.flags & p.mask)) {
 		fprintf(stderr,
 			"Unable to set requested flags "
 			"(wanted mask 0x%08x flags 0x%08x)\n",
-			mask, flags);
-		if ((mask & ~flash_protect_command.GetWritableFlags()) !=
-		    ec::flash_protect::Flags::kNone)
+			p.mask, p.flags);
+		if (p.mask & ~r.writable_flags)
 			fprintf(stderr,
 				"Which is expected, because writable "
 				"mask is 0x%08x.\n",
-				flash_protect_command.GetWritableFlags());
+				r.writable_flags);
 
 		return -1;
 	}
@@ -5281,7 +5303,7 @@ static int ms_help(const char *cmd)
 	printf("  %s                              - dump all motion data\n",
 	       cmd);
 	printf("  %s active                       - print active flag\n", cmd);
-	printf("  %s info NUM                     - print sensor info\n", cmd);
+	printf("  %s info [NUM]                   - print sensor info\n", cmd);
 	printf("  %s ec_rate NUM [RATE_MS]        - set/get sample rate\n",
 	       cmd);
 	printf("  %s odr NUM [ODR [ROUNDUP]]      - set/get sensor ODR\n", cmd);
@@ -5398,179 +5420,221 @@ static int cmd_motionsense(int argc, char **argv)
 		}
 	}
 
-	if (argc == 3 && !strcasecmp(argv[1], "info")) {
+	if ((argc == 2 || argc == 3) && !strcasecmp(argv[1], "info")) {
 		int version = 0;
+		int loop_start;
+		int loop_end;
+		int i;
 
 		rv = get_latest_cmd_version(EC_CMD_MOTION_SENSE_CMD, &version);
 		if (rv < 0)
 			return rv;
 
+		if (argc == 2) {
+			param.cmd = MOTIONSENSE_CMD_DUMP;
+			param.dump.max_sensor_count = ECTOOL_MAX_SENSOR;
+			rv = ec_command(EC_CMD_MOTION_SENSE_CMD, 1, &param,
+					ms_command_sizes[param.cmd].outsize,
+					resp,
+					ms_command_sizes[param.cmd].insize);
+			if (rv < 0)
+				return rv;
+			if (resp->dump.sensor_count > ECTOOL_MAX_SENSOR)
+				return -1;
+
+			loop_start = 0;
+			loop_end = resp->dump.sensor_count;
+		} else {
+			loop_start = strtol(argv[2], &e, 0);
+			if (e && *e) {
+				fprintf(stderr, "Bad %s arg.\n", argv[2]);
+				return -1;
+			}
+			loop_end = loop_start + 1;
+		}
 		param.cmd = MOTIONSENSE_CMD_INFO;
-		param.sensor_odr.sensor_num = strtol(argv[2], &e, 0);
-		if (e && *e) {
-			fprintf(stderr, "Bad %s arg.\n", argv[2]);
-			return -1;
+
+		for (i = loop_start; i < loop_end; i++) {
+			param.sensor_odr.sensor_num = i;
+
+			if (argc == 2) {
+				if (i != loop_start)
+					printf("\n");
+				printf("Index:    %d\n", i);
+			}
+
+			rv = ec_command(EC_CMD_MOTION_SENSE_CMD, version,
+					&param,
+					ms_command_sizes[param.cmd].outsize,
+					resp,
+					ms_command_sizes[param.cmd].insize);
+			if (rv < 0) {
+				/*
+				 * Return the error code to a higher level if
+				 * we're querying about a specific sensor; else
+				 * just print the error.
+				 */
+				if (argc == 3)
+					return rv;
+
+				printf("Error: %d\n", rv);
+				continue;
+			}
+			printf("Type:     ");
+			switch (resp->info.type) {
+			case MOTIONSENSE_TYPE_ACCEL:
+				printf("accel\n");
+				break;
+			case MOTIONSENSE_TYPE_GYRO:
+				printf("gyro\n");
+				break;
+			case MOTIONSENSE_TYPE_MAG:
+				printf("magnetometer\n");
+				break;
+			case MOTIONSENSE_TYPE_LIGHT:
+				printf("light\n");
+				break;
+			case MOTIONSENSE_TYPE_LIGHT_RGB:
+				printf("rgb light\n");
+				break;
+			case MOTIONSENSE_TYPE_PROX:
+				printf("proximity\n");
+				break;
+			case MOTIONSENSE_TYPE_ACTIVITY:
+				printf("activity\n");
+				break;
+			case MOTIONSENSE_TYPE_BARO:
+				printf("barometer\n");
+				break;
+			case MOTIONSENSE_TYPE_SYNC:
+				printf("sync\n");
+				break;
+			default:
+				printf("unknown\n");
+			}
+
+			printf("Location: ");
+			switch (resp->info.location) {
+			case MOTIONSENSE_LOC_BASE:
+				printf("base\n");
+				break;
+			case MOTIONSENSE_LOC_LID:
+				printf("lid\n");
+				break;
+			case MOTIONSENSE_LOC_CAMERA:
+				printf("camera\n");
+				break;
+			default:
+				printf("unknown\n");
+			}
+
+			printf("Chip:     ");
+			switch (resp->info.chip) {
+			case MOTIONSENSE_CHIP_KXCJ9:
+				printf("kxcj9\n");
+				break;
+			case MOTIONSENSE_CHIP_LSM6DS0:
+				printf("lsm6ds0\n");
+				break;
+			case MOTIONSENSE_CHIP_BMI160:
+				printf("bmi160\n");
+				break;
+			case MOTIONSENSE_CHIP_SI1141:
+				printf("si1141\n");
+				break;
+			case MOTIONSENSE_CHIP_KX022:
+				printf("kx022\n");
+				break;
+			case MOTIONSENSE_CHIP_L3GD20H:
+				printf("l3gd20h\n");
+				break;
+			case MOTIONSENSE_CHIP_BMA255:
+				printf("bma255\n");
+				break;
+			case MOTIONSENSE_CHIP_BMP280:
+				printf("bmp280\n");
+				break;
+			case MOTIONSENSE_CHIP_OPT3001:
+				printf("opt3001\n");
+				break;
+			case MOTIONSENSE_CHIP_CM32183:
+				printf("cm32183\n");
+				break;
+			case MOTIONSENSE_CHIP_BH1730:
+				printf("bh1730\n");
+				break;
+			case MOTIONSENSE_CHIP_GPIO:
+				printf("gpio\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2DH:
+				printf("lis2dh\n");
+				break;
+			case MOTIONSENSE_CHIP_LSM6DSM:
+				printf("lsm6dsm\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2DE:
+				printf("lis2de\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2MDL:
+				printf("lis2mdl\n");
+				break;
+			case MOTIONSENSE_CHIP_LSM6DS3:
+				printf("lsm6ds3\n");
+				break;
+			case MOTIONSENSE_CHIP_LSM6DSO:
+				printf("lsm6dso\n");
+				break;
+			case MOTIONSENSE_CHIP_LNG2DM:
+				printf("lng2dm\n");
+				break;
+			case MOTIONSENSE_CHIP_TCS3400:
+				printf("tcs3400\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2DW12:
+				printf("lis2dw12\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2DWL:
+				printf("lis2dwl\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2DS:
+				printf("lis2ds\n");
+				break;
+			case MOTIONSENSE_CHIP_BMI260:
+				printf("bmi260\n");
+				break;
+			case MOTIONSENSE_CHIP_ICM426XX:
+				printf("icm426xx\n");
+				break;
+			case MOTIONSENSE_CHIP_ICM42607:
+				printf("icm42607\n");
+				break;
+			case MOTIONSENSE_CHIP_BMI323:
+				printf("bmi323\n");
+				break;
+			case MOTIONSENSE_CHIP_BMA422:
+				printf("bma422\n");
+				break;
+			case MOTIONSENSE_CHIP_BMI220:
+				printf("bmi220\n");
+				break;
+			default:
+				printf("unknown\n");
+			}
+
+			if (version >= 3) {
+				printf("Min Frequency:              %d mHz\n",
+				       resp->info_3.min_frequency);
+				printf("Max Frequency:              %d mHz\n",
+				       resp->info_3.max_frequency);
+				printf("FIFO Max Event Count:       %d\n",
+				       resp->info_3.fifo_max_event_count);
+			}
+			if (version >= 4) {
+				printf("Flags:                      %d\n",
+				       resp->info_4.flags);
+			}
 		}
 
-		rv = ec_command(EC_CMD_MOTION_SENSE_CMD, version, &param,
-				ms_command_sizes[param.cmd].outsize, resp,
-				ms_command_sizes[param.cmd].insize);
-		if (rv < 0)
-			return rv;
-
-		printf("Type:     ");
-		switch (resp->info.type) {
-		case MOTIONSENSE_TYPE_ACCEL:
-			printf("accel\n");
-			break;
-		case MOTIONSENSE_TYPE_GYRO:
-			printf("gyro\n");
-			break;
-		case MOTIONSENSE_TYPE_MAG:
-			printf("magnetometer\n");
-			break;
-		case MOTIONSENSE_TYPE_LIGHT:
-			printf("light\n");
-			break;
-		case MOTIONSENSE_TYPE_LIGHT_RGB:
-			printf("rgb light\n");
-			break;
-		case MOTIONSENSE_TYPE_PROX:
-			printf("proximity\n");
-			break;
-		case MOTIONSENSE_TYPE_ACTIVITY:
-			printf("activity\n");
-			break;
-		case MOTIONSENSE_TYPE_BARO:
-			printf("barometer\n");
-			break;
-		case MOTIONSENSE_TYPE_SYNC:
-			printf("sync\n");
-			break;
-		default:
-			printf("unknown\n");
-		}
-
-		printf("Location: ");
-		switch (resp->info.location) {
-		case MOTIONSENSE_LOC_BASE:
-			printf("base\n");
-			break;
-		case MOTIONSENSE_LOC_LID:
-			printf("lid\n");
-			break;
-		case MOTIONSENSE_LOC_CAMERA:
-			printf("camera\n");
-			break;
-		default:
-			printf("unknown\n");
-		}
-
-		printf("Chip:     ");
-		switch (resp->info.chip) {
-		case MOTIONSENSE_CHIP_KXCJ9:
-			printf("kxcj9\n");
-			break;
-		case MOTIONSENSE_CHIP_LSM6DS0:
-			printf("lsm6ds0\n");
-			break;
-		case MOTIONSENSE_CHIP_BMI160:
-			printf("bmi160\n");
-			break;
-		case MOTIONSENSE_CHIP_SI1141:
-			printf("si1141\n");
-			break;
-		case MOTIONSENSE_CHIP_KX022:
-			printf("kx022\n");
-			break;
-		case MOTIONSENSE_CHIP_L3GD20H:
-			printf("l3gd20h\n");
-			break;
-		case MOTIONSENSE_CHIP_BMA255:
-			printf("bma255\n");
-			break;
-		case MOTIONSENSE_CHIP_BMP280:
-			printf("bmp280\n");
-			break;
-		case MOTIONSENSE_CHIP_OPT3001:
-			printf("opt3001\n");
-			break;
-		case MOTIONSENSE_CHIP_CM32183:
-			printf("cm32183\n");
-			break;
-		case MOTIONSENSE_CHIP_BH1730:
-			printf("bh1730\n");
-			break;
-		case MOTIONSENSE_CHIP_GPIO:
-			printf("gpio\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2DH:
-			printf("lis2dh\n");
-			break;
-		case MOTIONSENSE_CHIP_LSM6DSM:
-			printf("lsm6dsm\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2DE:
-			printf("lis2de\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2MDL:
-			printf("lis2mdl\n");
-			break;
-		case MOTIONSENSE_CHIP_LSM6DS3:
-			printf("lsm6ds3\n");
-			break;
-		case MOTIONSENSE_CHIP_LSM6DSO:
-			printf("lsm6dso\n");
-			break;
-		case MOTIONSENSE_CHIP_LNG2DM:
-			printf("lng2dm\n");
-			break;
-		case MOTIONSENSE_CHIP_TCS3400:
-			printf("tcs3400\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2DW12:
-			printf("lis2dw12\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2DWL:
-			printf("lis2dwl\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2DS:
-			printf("lis2ds\n");
-			break;
-		case MOTIONSENSE_CHIP_BMI260:
-			printf("bmi260\n");
-			break;
-		case MOTIONSENSE_CHIP_ICM426XX:
-			printf("icm426xx\n");
-			break;
-		case MOTIONSENSE_CHIP_ICM42607:
-			printf("icm42607\n");
-			break;
-		case MOTIONSENSE_CHIP_BMI323:
-			printf("bmi323\n");
-			break;
-		case MOTIONSENSE_CHIP_BMA422:
-			printf("bma422\n");
-			break;
-		case MOTIONSENSE_CHIP_BMI220:
-			printf("bmi220\n");
-			break;
-		default:
-			printf("unknown\n");
-		}
-
-		if (version >= 3) {
-			printf("Min Frequency:              %d mHz\n",
-			       resp->info_3.min_frequency);
-			printf("Max Frequency:              %d mHz\n",
-			       resp->info_3.max_frequency);
-			printf("FIFO Max Event Count:       %d\n",
-			       resp->info_3.fifo_max_event_count);
-		}
-		if (version >= 4) {
-			printf("Flags:                      %d\n",
-			       resp->info_4.flags);
-		}
 		return 0;
 	}
 
@@ -7533,7 +7597,6 @@ int cmd_charge_current_limit(int argc, char *argv[])
 	struct ec_params_current_limit_v1 p1;
 	uint32_t limit;
 	uint8_t battery_soc;
-	int rv;
 	char *e;
 
 	/*
@@ -9152,6 +9215,257 @@ static int cmd_keyconfig(int argc, char *argv[])
 	}
 
 	return 0;
+}
+
+static void cmd_memory_dump_usage(const char *command_name)
+{
+	fprintf(stderr,
+		"Usage: %s [<address> [<size>]]\n"
+		"  Prints the memory available for dumping in hexdump cononical format.\n"
+		"  <address> is a 32-bit address offset. Defaults to 0x0.\n"
+		"  <size> is the number of bytes to print after <address>."
+		" Defaults to end of RAM.\n"
+		"Usage: %s info\n"
+		"  Prints metadata about the memory available for dumping\n",
+		command_name, command_name);
+}
+
+static int cmd_memory_dump(int argc, char *argv[])
+{
+	int rv;
+	char *e;
+	bool just_info;
+	int response_max;
+	const char *command_name = argv[0];
+	void *read_mem_response = NULL;
+	uint32_t requested_address_start = 0;
+	uint32_t requested_address_end = UINT32_MAX;
+	/* Simple local structs for storing a memory dump */
+	struct mem_segment {
+		uint32_t addr_start;
+		uint32_t addr_end;
+		uint32_t size;
+		uint8_t *mem;
+		struct mem_segment *next;
+	};
+	uint16_t entry_count;
+	struct mem_segment *segments = NULL;
+	/* The real root is root.next, all other root fields are unused */
+	struct mem_segment root;
+	struct mem_segment *seg;
+	struct ec_response_memory_dump_get_metadata metadata_response;
+	struct ec_response_get_protocol_info protocol_info_response;
+
+	if (argc > 3 || (argc == 2 && strcmp(argv[1], "help") == 0)) {
+		cmd_memory_dump_usage(command_name);
+		return -1;
+	}
+	if (argc == 2 && strcmp(argv[1], "info") == 0) {
+		just_info = true;
+	}
+	if (argc >= 2 && !just_info) {
+		/* Parse requested address argument */
+		requested_address_start = strtoul(argv[1], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad argument '%s'\n", argv[1]);
+			cmd_memory_dump_usage(command_name);
+			return -1;
+		}
+	}
+	if (argc == 3 && !just_info) {
+		/* Parse requested size argument */
+		uint32_t requested_size = strtoul(argv[2], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad argument '%s'\n", argv[2]);
+			cmd_memory_dump_usage(command_name);
+			return -1;
+		}
+		/* Cap max address at UINT32_MAX */
+		requested_address_end =
+			MIN((uint64_t)requested_address_start + requested_size,
+			    (uint64_t)UINT32_MAX);
+	}
+
+	rv = ec_command(EC_CMD_GET_PROTOCOL_INFO, 0, NULL, 0,
+			&protocol_info_response,
+			sizeof(protocol_info_response));
+	if (rv < 0) {
+		fprintf(stderr, "Protocol info unavailable.\n");
+		goto cmd_memory_dump_cleanup;
+	}
+	response_max = protocol_info_response.max_response_packet_size;
+	read_mem_response = malloc(response_max);
+
+	/* Fetch memory dump metadata */
+	rv = ec_command(EC_CMD_MEMORY_DUMP_GET_METADATA, 0, NULL, 0,
+			&metadata_response, sizeof(metadata_response));
+	if (rv < 0) {
+		fprintf(stderr, "Failed to get memory dump metadata.\n");
+		goto cmd_memory_dump_cleanup;
+	}
+	entry_count = metadata_response.memory_dump_entry_count;
+	if (entry_count == 0) {
+		fprintf(stderr, "Memory dump is empty.\n");
+		rv = -1;
+		goto cmd_memory_dump_cleanup;
+	}
+	segments = (struct mem_segment *)malloc(sizeof(struct mem_segment) *
+						entry_count);
+	if (segments == NULL) {
+		fprintf(stderr, "malloc failed\n");
+		rv = -1;
+		goto cmd_memory_dump_cleanup;
+	}
+
+	/* Fetch all memory segments */
+	for (uint16_t entry_index = 0; entry_index < entry_count;
+	     entry_index++) {
+		seg = &segments[entry_index];
+		struct ec_params_memory_dump_get_entry_info entry_info_params = {
+			.memory_dump_entry_index = entry_index
+		};
+		struct ec_response_memory_dump_get_entry_info
+			entry_info_response;
+
+		rv = ec_command(EC_CMD_MEMORY_DUMP_GET_ENTRY_INFO, 0,
+				&entry_info_params, sizeof(entry_info_params),
+				&entry_info_response,
+				sizeof(entry_info_response));
+		if (rv < 0) {
+			fprintf(stderr,
+				"Failed to get memory dump info for entry %d.\n",
+				entry_index);
+			goto cmd_memory_dump_cleanup;
+		}
+
+		uint32_t entry_address_end =
+			entry_info_response.address + entry_info_response.size;
+
+		/* Check if entry is even in bounds of the requested range */
+		if (entry_info_response.address >= requested_address_end ||
+		    entry_address_end <= requested_address_start)
+			continue;
+
+		/* Clip memory segment boundaries based on requested range */
+		seg->addr_start = MAX(entry_info_response.address,
+				      requested_address_start);
+		seg->addr_end = MIN(entry_address_end, requested_address_end);
+		if (seg->addr_end - seg->addr_start <= 0)
+			continue;
+		seg->size = seg->addr_end - seg->addr_start;
+
+		if (just_info) {
+			printf("%-3d: %x-%x (%d bytes)\n", entry_index,
+			       seg->addr_start, seg->addr_end, seg->size);
+			continue;
+		}
+
+		seg->mem = (uint8_t *)malloc(seg->size);
+		if (seg->mem == NULL) {
+			fprintf(stderr, "malloc failed\n");
+			rv = -1;
+			goto cmd_memory_dump_cleanup;
+		}
+
+		/* Keep fetching until entire segment is copied */
+		uint32_t offset = 0;
+		while (offset < seg->size) {
+			struct ec_params_memory_dump_read_memory
+				read_mem_params = {
+					.memory_dump_entry_index = entry_index,
+					.address = seg->addr_start + offset,
+					.size = seg->size - offset,
+				};
+
+			rv = ec_command(EC_CMD_MEMORY_DUMP_READ_MEMORY, 0,
+					&read_mem_params,
+					sizeof(read_mem_params),
+					read_mem_response, response_max);
+			if (rv <= 0) {
+				fprintf(stderr,
+					"Failed to read memory at %x.\n",
+					read_mem_params.address);
+				rv = -1;
+				goto cmd_memory_dump_cleanup;
+			}
+
+			if (!memcpy(seg->mem + offset, read_mem_response, rv)) {
+				fprintf(stderr, "memcpy failed\n");
+				rv = -1;
+				goto cmd_memory_dump_cleanup;
+			}
+
+			offset += rv;
+		};
+
+		/* Sort segments in ascending order of starting address */
+		struct mem_segment *current = &root;
+		for (int i = 0; current->next && i < entry_count; i++) {
+			if (seg->addr_start < current->next->addr_start) {
+				/* Insert segment before current->next */
+				seg->next = current->next;
+				current->next = seg;
+				break;
+			}
+			current = current->next;
+		}
+		current->next = seg;
+	}
+
+	if (just_info) {
+		rv = 0;
+		goto cmd_memory_dump_cleanup;
+	}
+
+	/* Merge overlapping or touching segments */
+	seg = root.next;
+	for (int i = 0; seg && seg->next && i < entry_count; i++) {
+		if (seg->addr_end < seg->next->addr_start) {
+			/* No overlap */
+			seg = seg->next;
+			continue;
+		}
+		uint32_t overlap = seg->addr_end - seg->next->addr_start;
+		uint32_t new_size = seg->size + seg->next->size - overlap;
+		if (new_size != seg->next->addr_end - seg->addr_start) {
+			fprintf(stderr, "Segment size is not aligned\n");
+			rv = -1;
+			goto cmd_memory_dump_cleanup;
+		}
+		seg->mem = (uint8_t *)realloc(seg->mem, new_size);
+		if (seg->mem == NULL) {
+			fprintf(stderr, "realloc failed\n");
+			rv = -1;
+			goto cmd_memory_dump_cleanup;
+		}
+		if (!memcpy(seg->mem + seg->size, seg->next->mem + overlap,
+			    seg->next->size - overlap)) {
+			fprintf(stderr, "Merging segments failed\n");
+			rv = -1;
+			goto cmd_memory_dump_cleanup;
+		}
+		seg->addr_end = seg->next->addr_end;
+		seg->size = new_size;
+		seg->next = seg->next->next;
+	}
+
+	/* Print dump in hexdump cononical format */
+	seg = root.next;
+	for (int i = 0; seg && i < entry_count; i++) {
+		hexdump_canonical(seg->mem, seg->size, seg->addr_start);
+		/* Extra newline to delinate segments */
+		printf("\n");
+		seg = seg->next;
+	}
+	rv = 0;
+cmd_memory_dump_cleanup:
+	free(read_mem_response);
+	if (segments) {
+		for (int i = 0; i < entry_count; i++)
+			free(segments[i].mem);
+		free(segments);
+	}
+	return rv;
 }
 
 static const char *const mkbp_button_strings[] = {
@@ -11196,6 +11510,7 @@ const struct command commands[] = {
 	{ "kbpress", cmd_kbpress },
 	{ "keyconfig", cmd_keyconfig },
 	{ "keyscan", cmd_keyscan },
+	{ "memory_dump", cmd_memory_dump },
 	{ "mkbpget", cmd_mkbp_get },
 	{ "mkbpwakemask", cmd_mkbp_wake_mask },
 	{ "motionsense", cmd_motionsense },
