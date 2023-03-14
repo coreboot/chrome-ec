@@ -9,6 +9,7 @@
 #include "panic.h"
 #include "printf.h"
 #include "system.h"
+#include "system_safe_mode.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
@@ -198,6 +199,20 @@ void report_panic(uint32_t *regs, uint32_t itype)
 	pdata->nds_n8.ipsw = regs[17];
 
 	print_panic_information(regs, itype, regs[16], regs[17]);
+
+	if (IS_ENABLED(CONFIG_SYSTEM_SAFE_MODE)) {
+		if (start_system_safe_mode() == EC_SUCCESS) {
+			pdata->flags |= PANIC_DATA_FLAG_SAFE_MODE_STARTED;
+			/* Current task has been disabled.
+			 * Returning from the exception here should cause the
+			 * highest priority task that wasn't disabled to run.
+			 */
+			asm("iret");
+			__builtin_unreachable();
+		}
+		pdata->flags |= PANIC_DATA_FLAG_SAFE_MODE_FAIL_PRECONDITIONS;
+	}
+
 	panic_reboot();
 }
 
