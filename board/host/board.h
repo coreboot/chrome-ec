@@ -94,4 +94,6 @@ void fps_event(enum gpio_signal signal);
 #define I2C_PORT_EEPROM		0
 #define I2C_ADDR_EEPROM_FLAGS	0x50
 
+#define GMR_TABLET_MODE_GPIO_L GPIO_TABLET_MODE_L
+
 #endif /* __CROS_EC_BOARD_H */
