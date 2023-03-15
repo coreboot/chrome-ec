@@ -14,6 +14,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <vector>
 #include <signal.h>
 #include <stdbool.h>
 
@@ -24,7 +25,6 @@
 #include "compile_time_macros.h"
 #include "crc.h"
 #include "cros_ec_dev.h"
-#include "ec_panicinfo.h"
 #include "ec_flash.h"
 #include "ec_version.h"
 #include "ectool.h"
@@ -37,6 +37,9 @@
 #include "usb_pd.h"
 
 #include <libec/add_entropy_command.h>
+#include <libec/ec_panicinfo.h>
+#include <libec/fingerprint/fp_encryption_status_command.h>
+#include <libec/rand_num_command.h>
 
 /* Maximum flash size (16 MB, conservative) */
 #define MAX_FLASH_SIZE 0x1000000
@@ -1552,9 +1555,6 @@ int cmd_flash_info(int argc, char *argv[])
 
 int cmd_rand(int argc, char *argv[])
 {
-	struct ec_params_rand_num p;
-	struct ec_response_rand_num *r;
-	size_t r_size;
 	int64_t num_bytes;
 	int64_t i;
 	char *e;
@@ -1571,24 +1571,23 @@ int cmd_rand(int argc, char *argv[])
 		return -1;
 	}
 
-	r = (struct ec_response_rand_num *)(ec_inbuf);
-
 	for (i = 0; i < num_bytes; i += ec_max_insize) {
-		p.num_rand_bytes = ec_max_insize;
-		if (num_bytes - i < p.num_rand_bytes)
-			p.num_rand_bytes = num_bytes - i;
+		uint16_t num_rand_bytes = ec_max_insize;
+		if (num_bytes - i < num_rand_bytes)
+			num_rand_bytes = num_bytes - i;
 
-		r_size = p.num_rand_bytes;
-
-		rv = ec_command(EC_CMD_RAND_NUM, EC_VER_RAND_NUM, &p, sizeof(p),
-				r, r_size);
-		if (rv < 0) {
-			fprintf(stderr, "Random number command failed\n");
-			return -1;
+		ec::RandNumCommand rand_num_command(num_rand_bytes);
+		if (!rand_num_command.Run(comm_get_fd())) {
+			int rv = -EECRESULT - rand_num_command.Result();
+			fprintf(stderr, "Rand Num returned with errors: %d\n",
+				rv);
+			return rv;
 		}
 
-		rv = write(STDOUT_FILENO, r->rand, r_size);
-		if (rv != r_size) {
+		rv = write(STDOUT_FILENO,
+			   rand_num_command.GetRandNumData().data(),
+			   num_rand_bytes);
+		if (rv != num_rand_bytes) {
 			fprintf(stderr, "Failed to write stdout\n");
 			return -1;
 		}
@@ -2462,17 +2461,21 @@ out:
 int cmd_fp_enc_status(int argc, char *argv[])
 {
 	int rv;
-	struct ec_response_fp_encryption_status resp = { 0 };
 
-	rv = ec_command(EC_CMD_FP_ENC_STATUS, 0, NULL, 0, &resp, sizeof(resp));
-	if (rv < 0) {
-		printf("Get FP sensor encryption status failed.\n");
-	} else {
-		print_fp_enc_flags("FPMCU encryption status:", resp.status);
-		print_fp_enc_flags("Valid flags:            ",
-				   resp.valid_flags);
-		rv = 0;
+	ec::FpEncryptionStatusCommand fp_encryptionstatus_command;
+
+	if (!fp_encryptionstatus_command.Run(comm_get_fd())) {
+		int rv = -EECRESULT - fp_encryptionstatus_command.Result();
+		fprintf(stderr,
+			"FP Encryption Status returned with errors: %d\n", rv);
+		return rv;
 	}
+	print_fp_enc_flags("FPMCU encryption status:",
+			   fp_encryptionstatus_command.GetStatus());
+	print_fp_enc_flags("Valid flags:            ",
+			   fp_encryptionstatus_command.GetValidFlags());
+	rv = 0;
+
 	return rv;
 }
 
@@ -6880,7 +6883,17 @@ int cmd_panic_info(int argc, char *argv[])
 		return 0;
 	}
 
-	return parse_panic_info((char *)(ec_inbuf), rv);
+	std::vector<uint8_t> data(static_cast<uint8_t *>(ec_inbuf),
+				  static_cast<uint8_t *>(ec_inbuf) + rv);
+	auto result = ec::ParsePanicInfo(data);
+
+	if (!result.has_value()) {
+		fprintf(stderr, "%s", result.error().c_str());
+		return 1;
+	}
+	printf("%s", result.value().c_str());
+
+	return 0;
 }
 
 int cmd_power_info(int argc, char *argv[])
