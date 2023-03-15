@@ -1302,11 +1302,23 @@ static bool fetch_header_versions(const void *image)
 						  sections[i].offset);
 
 		if (h->image_size < CONFIG_FLASH_BANK_SIZE) {
-			fprintf(stderr,
-				"Image at offset %#5x too short (%d bytes)\n",
-				sections[i].offset,
-				h->image_size);
-			return false;
+			/*
+			 * Return an error for incorrectly signed images. If
+			 * it's a RO image with 0 as its size, ignore the error.
+			 *
+			 * TODO(b/273510573): revisit after dbg versioning is
+			 * figured out.
+			 */
+			if (h->image_size || sections[i].offset) {
+				fprintf(stderr,
+					"Image at offset %#5x too short "
+					"(%d bytes)\n",
+					sections[i].offset,
+					h->image_size);
+				return false;
+			}
+
+			printf("warning: invalid RO_A (size 0)\n");
 		}
 		sections[i].shv.epoch = h->epoch_;
 		sections[i].shv.major = h->major_;
