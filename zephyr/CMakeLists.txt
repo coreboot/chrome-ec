@@ -201,6 +201,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AMD_STT
 						"${PLATFORM_EC}/driver/amd_stt.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BACKLIGHT_LID
                                                 "${PLATFORM_EC}/common/backlight_lid.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_DETACHABLE_BASE
+                                                "${PLATFORM_EC}/common/base_state.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
                                                 "${PLATFORM_EC}/common/battery.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_V1
@@ -499,6 +501,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_DRP_ACC_TRYSRC
 						"${PLATFORM_EC}/common/usbc/usbc_pd_policy.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DP_MODE
                                                 "${PLATFORM_EC}/common/usbc/dp_alt_mode.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DP_HPD_GPIO
+                                                "${PLATFORM_EC}/common/usbc/dp_hpd_gpio.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_VDM_AP_CONTROL
+                                                "${PLATFORM_EC}/common/usbc/ap_vdm_control.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PRL_SM
                                                 "${PLATFORM_EC}/common/usbc/usb_prl_sm.c")
