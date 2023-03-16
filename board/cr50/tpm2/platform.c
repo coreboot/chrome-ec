@@ -8,7 +8,9 @@
 
 #include "ccd_config.h"
 #include "console.h"
-#include "pinweaver_cr50.h"
+#include "nvmem_vars.h"
+#include "pinweaver.h"
+#include "pinweaver_eal.h"
 #include "tpm_nvmem.h"
 #include "tpm_nvmem_ops.h"
 #include "dcrypto.h"
@@ -133,8 +135,13 @@ BOOL _plat__ShallSurviveOwnerClear(uint32_t  index)
 
 void _plat__OwnerClearCallback(void)
 {
+	int result;
 	enum ec_error_list rv;
 
+	/* Invalidate existing biometrics pairing secrets. */
+	result = setvar(PW_FP_PK, sizeof(PW_FP_PK) - 1, NULL, 0);
+	if (result)
+		CPRINTF("%s: failed (%d)\n", __func__, result);
 	/* Invalidate existing u2f registrations. */
 	rv = u2f_gen_kek_seed();
 	if (rv != EC_SUCCESS)
