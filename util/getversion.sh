@@ -99,7 +99,6 @@ main() {
     case "${BOARD}" in
       (cr50)
         dir_list+=( ../../third_party/tpm2 )
-        dir_list+=( ../pinweaver )
         ;;
       (*_fp)
         dir_list+=( ./private )
