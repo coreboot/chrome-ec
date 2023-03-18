@@ -2425,15 +2425,7 @@ static enum ec_error_list update_pcr(const struct access_tracker *at,
 				     struct nn_container *ch, uint8_t index,
 				     uint8_t *cached)
 {
-	uint8_t preserved;
-
-	cached--;
-	preserved = cached[0];
-	cached[0] = index;
-	update_object(at, ch, cached, ch->size);
-	cached[0] = preserved;
-
-	return EC_SUCCESS;
+	return update_object(at, ch, cached, ch->size);
 }
 
 static enum ec_error_list save_pcr(struct nn_container *ch,
