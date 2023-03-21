@@ -3748,6 +3748,9 @@
 /* Support PS/2 interface */
 #undef CONFIG_PS2
 
+/* Support Power Sourcing Equipment */
+#undef CONFIG_PSE_LTC4291
+
 /*
  * Define this option to enable programmable voltage detector which will
  * trigger an interrupt when the voltage drops below a threshold specified
@@ -5844,6 +5847,11 @@
  * some chipsets may require different widths.
  */
 #define CONFIG_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US 65
+
+/*
+ * Build and link *test* images with googletest.
+ */
+#undef CONFIG_GOOGLETEST
 
 /*****************************************************************************/
 /*

@@ -144,6 +144,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "fleex",
     "foob",
     "gaelin",
+    "garg",
     "genesis",
     "gimble",
     "gladios",
@@ -180,6 +181,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "moonbuggy",
     "morphius",
     "mrbland",
+    "mushu",
     "nami",
     "nautilus",
     "nightfury",
@@ -210,6 +212,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "stryke",
     "taeko",
     "taniks",
+    "terrador",
     "treeya",
     "trembyle",
     "trogdor",
@@ -222,6 +225,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "voxel",
     "voxel_ecmodeentry",
     "voxel_npcx797fc",
+    "waddledoo",
     "waddledoo2",
     "whiskers",
     "woomax",
@@ -297,13 +301,9 @@ BOARDS_THAT_FAIL_WITH_CLANG = [
     "bobba",  # overflows flash
     "coachz",  # overflows flash
     "corori2",  # overflows flash
-    "garg",  # overflows flash
     "gelarshie",  # overflows flash
     "lazor",  # overflows flash
-    "mushu",  # overflows flash
-    "terrador",  # overflows flash
     "volteer",  # overflows flash
-    "waddledoo",  # overflows flash
 ]
 
 # TODO(b/201311714): NDS32 is not supported by LLVM.
