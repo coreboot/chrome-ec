@@ -51,6 +51,9 @@ struct info1_board_space {
 	 * to be enforced.
 	 */
 	uint32_t aprv_not_needed;
+	/* Pad so that aprv_not_needed occupies it's full 'protect' size */
+	uint8_t aprv_padding[4];
+	uint64_t factory_cfg;
 };
 
 /*
@@ -83,6 +86,9 @@ BUILD_ASSERT(sizeof(struct info1_layout) == FLASH_INFO_SIZE);
 #define INFO_APRV_DATA_SIZE		sizeof(uint32_t)
 #define INFO_APRV_DATA_OFFSET		INFO_SPACE_OFFSET(aprv_not_needed)
 
+#define INFO_FACTORY_CFG_SIZE		sizeof(uint64_t)
+#define INFO_FACTORY_CFG_OFFSET		INFO_SPACE_OFFSET(factory_cfg)
+
 /*
  * Write protection for the INFO1 space allows windows with sizes that are
  * powers of 2 to be protected. Given the different write restrictions on
@@ -103,5 +109,8 @@ BUILD_ASSERT(INFO_SN_DATA_SIZE <= INFO_SN_DATA_PROTECT_SIZE);
 
 BUILD_ASSERT((INFO_APRV_DATA_SIZE & 3) == 0);
 BUILD_ASSERT((INFO_APRV_DATA_OFFSET & 3) == 0);
+
+BUILD_ASSERT((INFO_FACTORY_CFG_SIZE & 7) == 0);
+BUILD_ASSERT((INFO_FACTORY_CFG_OFFSET & 7) == 0);
 
 #endif  /* ! __EC_CHIP_G_BOARD_SPACE_H */
