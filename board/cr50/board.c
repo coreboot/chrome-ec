@@ -14,6 +14,7 @@
 #include "ec_version.h"
 #include "endian.h"
 #include "extension.h"
+#include "factory_config.h"
 #include "fips_rand.h"
 #include "fips.h"
 #include "flash.h"
@@ -1900,6 +1901,7 @@ static int command_board_properties(int argc, char **argv)
 	 */
 	ccprintf("properties = 0x%x\n", GREG32(PMU, LONG_LIFE_SCRATCH1));
 	ccprintf("tpm board cfg = 0x%x\n", board_cfg_reg_read());
+	print_factory_config();
 	return EC_SUCCESS;
 }
 DECLARE_SAFE_CONSOLE_COMMAND(brdprop, command_board_properties,
