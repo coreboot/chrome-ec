@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+
 #include "battery.h"
 #include "chipset.h"
 #include "comm-host.h"
@@ -10,6 +11,7 @@
 #include "compile_time_macros.h"
 #include "crc.h"
 #include "cros_ec_dev.h"
+#include "ec_panicinfo.h"
 #include "ec_flash.h"
 #include "ec_version.h"
 #include "ectool.h"
@@ -40,7 +42,6 @@
 #include <libec/flash_protect_command.h>
 #include <libec/rand_num_command.h>
 #include <unistd.h>
-#include <vector>
 
 /* Maximum flash size (16 MB, conservative) */
 #define MAX_FLASH_SIZE 0x1000000
@@ -6864,17 +6865,7 @@ int cmd_panic_info(int argc, char *argv[])
 		return 0;
 	}
 
-	std::vector<uint8_t> data(static_cast<uint8_t *>(ec_inbuf),
-				  static_cast<uint8_t *>(ec_inbuf) + rv);
-	auto result = ec::ParsePanicInfo(data);
-
-	if (!result.has_value()) {
-		fprintf(stderr, "%s", result.error().c_str());
-		return 1;
-	}
-	printf("%s", result.value().c_str());
-
-	return 0;
+	return parse_panic_info((char *)(ec_inbuf), rv);
 }
 
 int cmd_power_info(int argc, char *argv[])
