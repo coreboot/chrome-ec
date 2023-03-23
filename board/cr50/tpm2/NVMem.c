@@ -17,6 +17,7 @@
 #include "TPM_Types.h"
 #include "TpmError.h"
 #include "assert.h"
+#include "ccd_config.h"
 #include "ec_comm.h"
 #include "nvmem.h"
 #include "tpm_nvmem.h"
@@ -194,6 +195,8 @@ void _plat__ClearNvAvail(void)
 
 void _plat__NvInformIndexDataChanged(unsigned int handle)
 {
+	if (handle == (HR_NV_INDEX + FWMP_NV_INDEX))
+		board_fwmp_update_policies();
 	if (handle == (HR_NV_INDEX + KERNEL_NV_INDEX))
 		ec_efs_refresh();
 }
