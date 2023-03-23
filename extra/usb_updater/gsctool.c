@@ -2729,10 +2729,12 @@ static void process_wp(struct transfer_descriptor *td, enum wp_options wp)
 	}
 
 	printf("WP: %08x\n", response);
-	printf("Flash WP: %s%s\n",
+	printf("Flash WP: %s%s%s\n",
+		response & WPV_FWMP_FORCE_WP_EN ? "fwmp " : "",
 		response & WPV_FORCE ? "forced " : "",
 		response & WPV_ENABLE ? "enabled" : "disabled");
 	printf(" at boot: %s\n",
+		response & WPV_FWMP_FORCE_WP_EN ? "fwmp enabled" :
 		!(response & WPV_ATBOOT_SET) ? "follow_batt_pres" :
 		response & WPV_ATBOOT_ENABLE ? "forced enabled" :
 		"forced disabled");
