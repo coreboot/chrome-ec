@@ -40,6 +40,14 @@ int board_battery_is_present(void)
 }
 
 /**
+ * Return non-zero if the FWMP is enabling write protect.
+ */
+static int board_fwmp_force_wp_en(void)
+{
+	return !!(GREG32(PMU, LONG_LIFE_SCRATCH1) & BOARD_FWMP_FORCE_WP_EN);
+}
+
+/**
  * Return non-zero if the wp state is being overridden.
  */
 static int board_forcing_wp(void)
@@ -54,6 +62,11 @@ static int board_forcing_wp(void)
  */
 static void set_wp_state(int asserted)
 {
+	/* This shouldn't be possible. Ensure nothing can disable wp. */
+	if (board_fwmp_force_wp_en() && !asserted) {
+		CPRINTS("FWMP: WP ovrd");
+		asserted = 1;
+	}
 	/* Enable writing to the long life register */
 	GWRITE_FIELD(PMU, LONG_LIFE_SCRATCH_WR_EN, REG1, 1);
 
@@ -85,7 +98,7 @@ static void check_wp_battery_presence(void)
 	int bp = board_battery_is_present();
 
 	/* If we're forcing WP, ignore battery detect */
-	if (board_forcing_wp())
+	if (board_fwmp_force_wp_en() || board_forcing_wp())
 		return;
 
 	/* Otherwise, mirror battery */
@@ -148,6 +161,17 @@ static enum vendor_cmd_rc vc_set_wp(enum vendor_cmd_cc code,
 	}
 
 	/* Get current wp settings */
+	if (board_fwmp_force_wp_en()) {
+		response |= WPV_FWMP_FORCE_WP_EN;
+		/*
+		 * Setting WPV_ATBOOT_SET and WPV_ATBOOT_ENABLE isn't completely
+		 * necessary. It just makes cr50 more compatible with old
+		 * gsctool versions. These flags show WP is enabled at boot
+		 * which is essentially what the FWMP override does.
+		 */
+		response |= WPV_ATBOOT_SET;
+		response |= WPV_ATBOOT_ENABLE;
+	}
 	if (board_forcing_wp())
 		response |= WPV_FORCE;
 	if (wp_is_asserted())
@@ -220,6 +244,11 @@ static int command_wp(int argc, char **argv)
 		if (!ccd_is_cap_enabled(CCD_CAP_OVERRIDE_WP))
 			return EC_ERROR_ACCESS_DENIED;
 
+		/* It's not possible to change WP when the FWMP enables it. */
+		if (board_fwmp_force_wp_en()) {
+			ccprintf("FWMP enabled WP\n");
+			return EC_ERROR_ACCESS_DENIED;
+		}
 		/* Update WP */
 		if (!strncasecmp(argv[1], "follow", 6))
 			forced = 0;
@@ -237,10 +266,14 @@ static int command_wp(int argc, char **argv)
 		}
 	}
 
-	ccprintf("Flash WP: %s%sabled\n", board_forcing_wp() ? "forced " : "",
-		 wp_is_asserted() ? "en" : "dis");
+	ccprintf("Flash WP: %s%s%sabled\n",
+		board_fwmp_force_wp_en() ? "fwmp " : "",
+		board_forcing_wp() ? "forced " : "",
+		wp_is_asserted() ? "en" : "dis");
 	ccprintf(" at boot: ");
-	if (ccd_get_flag(CCD_FLAG_OVERRIDE_WP_AT_BOOT))
+	if (board_fwmp_force_wp_en())
+		ccprintf("fwmp enabled\n");
+	else if (ccd_get_flag(CCD_FLAG_OVERRIDE_WP_AT_BOOT))
 		ccprintf("forced %sabled\n",
 			 ccd_get_flag(CCD_FLAG_OVERRIDE_WP_STATE_ENABLED)
 			 ? "en" : "dis");
@@ -267,7 +300,9 @@ void set_bp_follow_ccd_config(void)
 
 static void set_wp_follow_ccd_config(void)
 {
-	if (ccd_get_flag(CCD_FLAG_OVERRIDE_WP_AT_BOOT)) {
+	if (board_fwmp_force_wp_en()) {
+		force_write_protect(1, 1);
+	} else if (ccd_get_flag(CCD_FLAG_OVERRIDE_WP_AT_BOOT)) {
 		/* Reset to at-boot state specified by CCD */
 		force_write_protect(1, ccd_get_flag
 				    (CCD_FLAG_OVERRIDE_WP_STATE_ENABLED));
@@ -289,6 +324,24 @@ void board_wp_follow_ccd_config(void)
 	set_wp_follow_ccd_config();
 }
 
+static int board_fwmp_check_wp_policy(void)
+{
+	int fwmp_force_wp = !board_fwmp_allows_unlock();
+	int update_brdprop = fwmp_force_wp != board_fwmp_force_wp_en();
+
+	if (update_brdprop) {
+		CPRINTS("%s", __func__);
+		board_write_prop(BOARD_FWMP_FORCE_WP_EN, fwmp_force_wp);
+	}
+
+	if (fwmp_force_wp && (!wp_is_asserted() || update_brdprop)) {
+		CPRINTS("%s: force en", __func__);
+		force_write_protect(1, 1);
+		return 0;
+	}
+	return update_brdprop;
+}
+
 void init_wp_state(void)
 {
 	/*
@@ -296,6 +349,16 @@ void init_wp_state(void)
 	 * configuring write protect.
 	 */
 	set_bp_follow_ccd_config();
+
+	/*
+	 * If the FWMP is forcing WP, enable write protect. It overrides other
+	 * configs.
+	 */
+	board_fwmp_check_wp_policy();
+	if (board_fwmp_force_wp_en()) {
+		set_wp_state(1);
+		return;
+	}
 
 	/* Check system reset flags after CCD config is initially loaded */
 	if ((system_get_reset_flags() & EC_RESET_FLAG_HIBERNATE) &&
@@ -498,9 +561,8 @@ int board_fwmp_allows_boot_policy_update(void)
 
 void board_fwmp_update_policies(void)
 {
-#ifdef CR50_DEV
-	CPRINTS("Update fwmp policies.");
-#endif
+	if (board_fwmp_check_wp_policy())
+		set_wp_follow_ccd_config();
 }
 
 int board_vboot_dev_mode_enabled(void)
