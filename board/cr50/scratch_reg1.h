@@ -105,6 +105,11 @@
 #define BOARD_USE_DIOM4                   BIT(24)
 
 /*
+ * The FWMP settings force WP enable.
+ */
+#define BOARD_FWMP_FORCE_WP_EN            BIT(25)
+
+/*
  * Indicates successful completion of FIPS power up
  * tests earlier. Reduces wake up time after sleep.
  * Stored in PWRDN_SCRATCH22 and use multiple bits to harden against

@@ -346,5 +346,6 @@ struct vendor_cc_spi_hash_request {
 #define WPV_FORCE		BIT(2)
 #define WPV_ATBOOT_SET		BIT(3)
 #define WPV_ATBOOT_ENABLE	BIT(4)
+#define WPV_FWMP_FORCE_WP_EN	BIT(5)
 
 #endif /* __INCLUDE_TPM_VENDOR_CMDS_H */
