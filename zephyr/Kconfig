@@ -548,7 +548,7 @@ config PLATFORM_EC_PORT80
 
 config PLATFORM_EC_POWER_BUTTON
 	bool "Power-button support"
-	depends on PLATFORM_EC_HOSTCMD && !GPIO_KEYS_ZEPHYR
+	depends on PLATFORM_EC_HOSTCMD && !INPUT_GPIO_KEYS
 	help
 	  Enable shimming the power button implementation and related
 	  commands in platform/ec.  This is used to implement the Chromium OS
@@ -561,6 +561,13 @@ config PLATFORM_EC_BUTTON_DEBOUNCE
 	default 30000
 	help
 	  Configure the button debounce time in us per project requirement.
+
+config PLATFORM_EC_PSE_LTC4291
+	bool "power sourcing equipment (PSE)  support"
+	help
+	  Enable the power sourcing equipment (PSE) driver support for
+	  Analog Device power over ethernet (PoE) power sourcing equipment (PSE)
+	  controller.
 
 config PLATFORM_EC_PWM_HC
 	bool

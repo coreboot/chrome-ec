@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+add_subdirectory("retimer")
 add_subdirectory("tcpc")
 
 cros_ec_library_include_directories(include)
@@ -9,6 +10,7 @@ cros_ec_library_include_directories(include)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BB_RETIMER	emul_bb_retimer.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BC12_DETECT_PI3USB9201	emul_pi3usb9201.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BMA255		emul_bma255.c)
+zephyr_library_sources_ifdef(CONFIG_EMUL_BMA4XX		emul_bma4xx.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BMI		emul_bmi.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BMI		emul_bmi160.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BMI		emul_bmi260.c)
@@ -21,6 +23,7 @@ zephyr_library_sources_ifdef(CONFIG_EMUL_LIS2DW12	emul_lis2dw12.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_LN9310		emul_ln9310.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_PCT2075	emul_pct2075.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_PPC_SYV682X	emul_syv682x.c)
+zephyr_library_sources_ifdef(CONFIG_EMUL_PS8743		emul_ps8743.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_RT9490		emul_rt9490.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_RTC		emul_rtc.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_SMART_BATTERY	emul_smart_battery.c)

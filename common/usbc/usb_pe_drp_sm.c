@@ -2063,6 +2063,12 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 	if (!IS_ENABLED(CONFIG_USB_PD_ALT_MODE_DFP))
 		assert(0);
 
+	/* TODO(b/272827504): Gate discovery via a DPM request and remove this
+	 * flag.
+	 */
+	if (PE_CHK_FLAG(port, PE_FLAGS_DISCOVERY_DISABLED))
+		return false;
+
 	/* Apply Port Discovery DR Swap Policy */
 	if (port_discovery_dr_swap_policy(
 		    port, pe[port].data_role,
@@ -2080,6 +2086,12 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 	 */
 	if (pe[port].data_role == PD_ROLE_UFP &&
 	    prl_get_rev(port, TCPCI_MSG_SOP) == PD_REV20) {
+		/* Although, logically, "pd_disable_discovery" should set
+		 * "PE_FLAGS_DISCOVERY_DISABLED," set it here to make its
+		 * limited purpose obvious: When discovery is impossible, send
+		 * discovery-done events exactly once.
+		 */
+		PE_SET_FLAG(port, PE_FLAGS_DISCOVERY_DISABLED);
 		pd_disable_discovery(port);
 		pd_notify_event(port, PD_STATUS_EVENT_SOP_DISC_DONE);
 		pd_notify_event(port, PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
@@ -4654,6 +4666,14 @@ static void pe_drs_evaluate_swap_entry(int port)
 		 * PE_DRS_DFP_UFP_Accept_Swap states embedded here.
 		 */
 		send_ctrl_msg(port, TCPCI_MSG_SOP, PD_CTRL_ACCEPT);
+		/*
+		 * The PD spec implies that the PE transitions through
+		 * PE_DRS_*_Accept_Swap and PE_DRS_Change and updates the data
+		 * role instantaneously, but this PE doesn't. During the
+		 * transition, do not validate the data role of incoming
+		 * messages, in case the port partner transitioned faster.
+		 */
+		prl_set_data_role_check(port, false);
 	} else {
 		/*
 		 * PE_DRS_UFP_DFP_Reject_Swap and PE_DRS_DFP_UFP_Reject_Swap
@@ -4705,6 +4725,7 @@ static void pe_drs_change_run(int port)
 
 	/* Update the data role */
 	pe[port].data_role = pd_get_data_role(port);
+	prl_set_data_role_check(port, true);
 
 	if (pe[port].data_role == PD_ROLE_DFP)
 		PE_CLR_FLAG(port, PE_FLAGS_DR_SWAP_TO_DFP);
@@ -6160,21 +6181,14 @@ static void pe_init_vdm_modes_request_run(int port)
 		uint32_t *payload = (uint32_t *)rx_emsg[port].buf;
 		int sop = PD_HEADER_GET_SOP(rx_emsg[port].header);
 		uint8_t cnt = PD_HEADER_CNT(rx_emsg[port].header);
-		uint16_t response_svid = (uint16_t)PD_VDO_VID(payload[0]);
 
 		/*
 		 * Accept ACK if the request and response SVIDs are equal;
 		 * otherwise, treat this as a NAK of the request SVID.
-		 *
-		 * TODO(b:169242812): support valid mode checking in
-		 * dfp_consume_modes.
 		 */
-		if (requested_svid == response_svid) {
-			/* PE_INIT_VDM_Modes_ACKed embedded here */
-			dfp_consume_modes(port, sop, cnt, payload);
-			break;
-		}
-		__fallthrough;
+		/* PE_INIT_VDM_Modes_ACKed embedded here */
+		dfp_consume_modes(port, sop, cnt, payload);
+		break;
 	}
 	case VDM_RESULT_NAK:
 		/* PE_INIT_VDM_Modes_NAKed embedded here */
@@ -8158,7 +8172,14 @@ const uint32_t *const pd_get_src_caps(int port)
 
 void pd_set_src_caps(int port, int cnt, uint32_t *src_caps)
 {
+	const int limit = ARRAY_SIZE(pe[port].src_caps);
 	int i;
+
+	if (cnt > limit) {
+		CPRINTS("C%d: Trim PDOs (%d) exceeding limit (%d)", port, cnt,
+			limit);
+		cnt = limit;
+	}
 
 	pe[port].src_cap_cnt = cnt;
 

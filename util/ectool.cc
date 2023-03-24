@@ -3,28 +3,13 @@
  * found in the LICENSE file.
  */
 
-#include <assert.h>
-#include <ctype.h>
-#include <errno.h>
-#include <getopt.h>
-#include <inttypes.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <unistd.h>
-#include <signal.h>
-#include <stdbool.h>
-
 #include "battery.h"
+#include "chipset.h"
 #include "comm-host.h"
 #include "comm-usb.h"
-#include "chipset.h"
 #include "compile_time_macros.h"
 #include "crc.h"
 #include "cros_ec_dev.h"
-#include "ec_panicinfo.h"
 #include "ec_flash.h"
 #include "ec_version.h"
 #include "ectool.h"
@@ -36,8 +21,26 @@
 #include "tablet_mode.h"
 #include "usb_pd.h"
 
+#include <assert.h>
+#include <ctype.h>
+#include <errno.h>
+#include <inttypes.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#include <getopt.h>
 #include <libec/add_entropy_command.h>
+#include <libec/ec_panicinfo.h>
+#include <libec/fingerprint/fp_encryption_status_command.h>
 #include <libec/flash_protect_command.h>
+#include <libec/rand_num_command.h>
+#include <unistd.h>
+#include <vector>
 
 /* Maximum flash size (16 MB, conservative) */
 #define MAX_FLASH_SIZE 0x1000000
@@ -1553,9 +1556,6 @@ int cmd_flash_info(int argc, char *argv[])
 
 int cmd_rand(int argc, char *argv[])
 {
-	struct ec_params_rand_num p;
-	struct ec_response_rand_num *r;
-	size_t r_size;
 	int64_t num_bytes;
 	int64_t i;
 	char *e;
@@ -1572,24 +1572,23 @@ int cmd_rand(int argc, char *argv[])
 		return -1;
 	}
 
-	r = (struct ec_response_rand_num *)(ec_inbuf);
-
 	for (i = 0; i < num_bytes; i += ec_max_insize) {
-		p.num_rand_bytes = ec_max_insize;
-		if (num_bytes - i < p.num_rand_bytes)
-			p.num_rand_bytes = num_bytes - i;
+		uint16_t num_rand_bytes = ec_max_insize;
+		if (num_bytes - i < num_rand_bytes)
+			num_rand_bytes = num_bytes - i;
 
-		r_size = p.num_rand_bytes;
-
-		rv = ec_command(EC_CMD_RAND_NUM, EC_VER_RAND_NUM, &p, sizeof(p),
-				r, r_size);
-		if (rv < 0) {
-			fprintf(stderr, "Random number command failed\n");
-			return -1;
+		ec::RandNumCommand rand_num_command(num_rand_bytes);
+		if (!rand_num_command.Run(comm_get_fd())) {
+			int rv = -EECRESULT - rand_num_command.Result();
+			fprintf(stderr, "Rand Num returned with errors: %d\n",
+				rv);
+			return rv;
 		}
 
-		rv = write(STDOUT_FILENO, r->rand, r_size);
-		if (rv != r_size) {
+		rv = write(STDOUT_FILENO,
+			   rand_num_command.GetRandNumData().data(),
+			   num_rand_bytes);
+		if (rv != num_rand_bytes) {
 			fprintf(stderr, "Failed to write stdout\n");
 			return -1;
 		}
@@ -1775,18 +1774,19 @@ int cmd_flash_protect(int argc, char *argv[])
 	}
 
 	/* Print returned flags */
-	printf("Flash protect flags: 0x%08x %s\n",
+	printf("Flash protect flags: 0x%08x%s\n",
 	       flash_protect_command.GetFlags(),
 	       (ec::FlashProtectCommand::ParseFlags(
 			flash_protect_command.GetFlags()))
 		       .c_str());
-	printf("Valid flags:         0x%08x %s\n",
+	printf("Valid flags:         0x%08x%s\n",
 	       flash_protect_command.GetValidFlags(),
 	       (ec::FlashProtectCommand::ParseFlags(
 			flash_protect_command.GetValidFlags()))
 		       .c_str());
-	printf("Writable flags:      0x%08x %s\n",
+	printf("Writable flags:      0x%08x%s\n",
 	       flash_protect_command.GetWritableFlags(),
+
 	       (ec::FlashProtectCommand::ParseFlags(
 			flash_protect_command.GetWritableFlags()))
 		       .c_str());
@@ -2442,17 +2442,21 @@ out:
 int cmd_fp_enc_status(int argc, char *argv[])
 {
 	int rv;
-	struct ec_response_fp_encryption_status resp = { 0 };
 
-	rv = ec_command(EC_CMD_FP_ENC_STATUS, 0, NULL, 0, &resp, sizeof(resp));
-	if (rv < 0) {
-		printf("Get FP sensor encryption status failed.\n");
-	} else {
-		print_fp_enc_flags("FPMCU encryption status:", resp.status);
-		print_fp_enc_flags("Valid flags:            ",
-				   resp.valid_flags);
-		rv = 0;
+	ec::FpEncryptionStatusCommand fp_encryptionstatus_command;
+
+	if (!fp_encryptionstatus_command.Run(comm_get_fd())) {
+		int rv = -EECRESULT - fp_encryptionstatus_command.Result();
+		fprintf(stderr,
+			"FP Encryption Status returned with errors: %d\n", rv);
+		return rv;
 	}
+	print_fp_enc_flags("FPMCU encryption status:",
+			   fp_encryptionstatus_command.GetStatus());
+	print_fp_enc_flags("Valid flags:            ",
+			   fp_encryptionstatus_command.GetValidFlags());
+	rv = 0;
+
 	return rv;
 }
 
@@ -3225,7 +3229,7 @@ static int cmd_temperature_print(int id, int mtemp)
 
 	printf("%-20s  %d K (= %d C)", temp_r.sensor_name, temp, K_TO_C(temp));
 
-	if(rc >= 0)
+	if (rc >= 0)
 		/*
 		 * Check for fan_off == fan_max when their
 		 * values are either zero or non-zero
@@ -5283,7 +5287,7 @@ static int ms_help(const char *cmd)
 	printf("  %s                              - dump all motion data\n",
 	       cmd);
 	printf("  %s active                       - print active flag\n", cmd);
-	printf("  %s info NUM                     - print sensor info\n", cmd);
+	printf("  %s info [NUM]                   - print sensor info\n", cmd);
 	printf("  %s ec_rate NUM [RATE_MS]        - set/get sample rate\n",
 	       cmd);
 	printf("  %s odr NUM [ODR [ROUNDUP]]      - set/get sensor ODR\n", cmd);
@@ -5400,179 +5404,221 @@ static int cmd_motionsense(int argc, char **argv)
 		}
 	}
 
-	if (argc == 3 && !strcasecmp(argv[1], "info")) {
+	if ((argc == 2 || argc == 3) && !strcasecmp(argv[1], "info")) {
 		int version = 0;
+		int loop_start;
+		int loop_end;
+		int i;
 
 		rv = get_latest_cmd_version(EC_CMD_MOTION_SENSE_CMD, &version);
 		if (rv < 0)
 			return rv;
 
+		if (argc == 2) {
+			param.cmd = MOTIONSENSE_CMD_DUMP;
+			param.dump.max_sensor_count = ECTOOL_MAX_SENSOR;
+			rv = ec_command(EC_CMD_MOTION_SENSE_CMD, 1, &param,
+					ms_command_sizes[param.cmd].outsize,
+					resp,
+					ms_command_sizes[param.cmd].insize);
+			if (rv < 0)
+				return rv;
+			if (resp->dump.sensor_count > ECTOOL_MAX_SENSOR)
+				return -1;
+
+			loop_start = 0;
+			loop_end = resp->dump.sensor_count;
+		} else {
+			loop_start = strtol(argv[2], &e, 0);
+			if (e && *e) {
+				fprintf(stderr, "Bad %s arg.\n", argv[2]);
+				return -1;
+			}
+			loop_end = loop_start + 1;
+		}
 		param.cmd = MOTIONSENSE_CMD_INFO;
-		param.sensor_odr.sensor_num = strtol(argv[2], &e, 0);
-		if (e && *e) {
-			fprintf(stderr, "Bad %s arg.\n", argv[2]);
-			return -1;
+
+		for (i = loop_start; i < loop_end; i++) {
+			param.sensor_odr.sensor_num = i;
+
+			if (argc == 2) {
+				if (i != loop_start)
+					printf("\n");
+				printf("Index:    %d\n", i);
+			}
+
+			rv = ec_command(EC_CMD_MOTION_SENSE_CMD, version,
+					&param,
+					ms_command_sizes[param.cmd].outsize,
+					resp,
+					ms_command_sizes[param.cmd].insize);
+			if (rv < 0) {
+				/*
+				 * Return the error code to a higher level if
+				 * we're querying about a specific sensor; else
+				 * just print the error.
+				 */
+				if (argc == 3)
+					return rv;
+
+				printf("Error: %d\n", rv);
+				continue;
+			}
+			printf("Type:     ");
+			switch (resp->info.type) {
+			case MOTIONSENSE_TYPE_ACCEL:
+				printf("accel\n");
+				break;
+			case MOTIONSENSE_TYPE_GYRO:
+				printf("gyro\n");
+				break;
+			case MOTIONSENSE_TYPE_MAG:
+				printf("magnetometer\n");
+				break;
+			case MOTIONSENSE_TYPE_LIGHT:
+				printf("light\n");
+				break;
+			case MOTIONSENSE_TYPE_LIGHT_RGB:
+				printf("rgb light\n");
+				break;
+			case MOTIONSENSE_TYPE_PROX:
+				printf("proximity\n");
+				break;
+			case MOTIONSENSE_TYPE_ACTIVITY:
+				printf("activity\n");
+				break;
+			case MOTIONSENSE_TYPE_BARO:
+				printf("barometer\n");
+				break;
+			case MOTIONSENSE_TYPE_SYNC:
+				printf("sync\n");
+				break;
+			default:
+				printf("unknown\n");
+			}
+
+			printf("Location: ");
+			switch (resp->info.location) {
+			case MOTIONSENSE_LOC_BASE:
+				printf("base\n");
+				break;
+			case MOTIONSENSE_LOC_LID:
+				printf("lid\n");
+				break;
+			case MOTIONSENSE_LOC_CAMERA:
+				printf("camera\n");
+				break;
+			default:
+				printf("unknown\n");
+			}
+
+			printf("Chip:     ");
+			switch (resp->info.chip) {
+			case MOTIONSENSE_CHIP_KXCJ9:
+				printf("kxcj9\n");
+				break;
+			case MOTIONSENSE_CHIP_LSM6DS0:
+				printf("lsm6ds0\n");
+				break;
+			case MOTIONSENSE_CHIP_BMI160:
+				printf("bmi160\n");
+				break;
+			case MOTIONSENSE_CHIP_SI1141:
+				printf("si1141\n");
+				break;
+			case MOTIONSENSE_CHIP_KX022:
+				printf("kx022\n");
+				break;
+			case MOTIONSENSE_CHIP_L3GD20H:
+				printf("l3gd20h\n");
+				break;
+			case MOTIONSENSE_CHIP_BMA255:
+				printf("bma255\n");
+				break;
+			case MOTIONSENSE_CHIP_BMP280:
+				printf("bmp280\n");
+				break;
+			case MOTIONSENSE_CHIP_OPT3001:
+				printf("opt3001\n");
+				break;
+			case MOTIONSENSE_CHIP_CM32183:
+				printf("cm32183\n");
+				break;
+			case MOTIONSENSE_CHIP_BH1730:
+				printf("bh1730\n");
+				break;
+			case MOTIONSENSE_CHIP_GPIO:
+				printf("gpio\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2DH:
+				printf("lis2dh\n");
+				break;
+			case MOTIONSENSE_CHIP_LSM6DSM:
+				printf("lsm6dsm\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2DE:
+				printf("lis2de\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2MDL:
+				printf("lis2mdl\n");
+				break;
+			case MOTIONSENSE_CHIP_LSM6DS3:
+				printf("lsm6ds3\n");
+				break;
+			case MOTIONSENSE_CHIP_LSM6DSO:
+				printf("lsm6dso\n");
+				break;
+			case MOTIONSENSE_CHIP_LNG2DM:
+				printf("lng2dm\n");
+				break;
+			case MOTIONSENSE_CHIP_TCS3400:
+				printf("tcs3400\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2DW12:
+				printf("lis2dw12\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2DWL:
+				printf("lis2dwl\n");
+				break;
+			case MOTIONSENSE_CHIP_LIS2DS:
+				printf("lis2ds\n");
+				break;
+			case MOTIONSENSE_CHIP_BMI260:
+				printf("bmi260\n");
+				break;
+			case MOTIONSENSE_CHIP_ICM426XX:
+				printf("icm426xx\n");
+				break;
+			case MOTIONSENSE_CHIP_ICM42607:
+				printf("icm42607\n");
+				break;
+			case MOTIONSENSE_CHIP_BMI323:
+				printf("bmi323\n");
+				break;
+			case MOTIONSENSE_CHIP_BMA422:
+				printf("bma422\n");
+				break;
+			case MOTIONSENSE_CHIP_BMI220:
+				printf("bmi220\n");
+				break;
+			default:
+				printf("unknown\n");
+			}
+
+			if (version >= 3) {
+				printf("Min Frequency:              %d mHz\n",
+				       resp->info_3.min_frequency);
+				printf("Max Frequency:              %d mHz\n",
+				       resp->info_3.max_frequency);
+				printf("FIFO Max Event Count:       %d\n",
+				       resp->info_3.fifo_max_event_count);
+			}
+			if (version >= 4) {
+				printf("Flags:                      %d\n",
+				       resp->info_4.flags);
+			}
 		}
 
-		rv = ec_command(EC_CMD_MOTION_SENSE_CMD, version, &param,
-				ms_command_sizes[param.cmd].outsize, resp,
-				ms_command_sizes[param.cmd].insize);
-		if (rv < 0)
-			return rv;
-
-		printf("Type:     ");
-		switch (resp->info.type) {
-		case MOTIONSENSE_TYPE_ACCEL:
-			printf("accel\n");
-			break;
-		case MOTIONSENSE_TYPE_GYRO:
-			printf("gyro\n");
-			break;
-		case MOTIONSENSE_TYPE_MAG:
-			printf("magnetometer\n");
-			break;
-		case MOTIONSENSE_TYPE_LIGHT:
-			printf("light\n");
-			break;
-		case MOTIONSENSE_TYPE_LIGHT_RGB:
-			printf("rgb light\n");
-			break;
-		case MOTIONSENSE_TYPE_PROX:
-			printf("proximity\n");
-			break;
-		case MOTIONSENSE_TYPE_ACTIVITY:
-			printf("activity\n");
-			break;
-		case MOTIONSENSE_TYPE_BARO:
-			printf("barometer\n");
-			break;
-		case MOTIONSENSE_TYPE_SYNC:
-			printf("sync\n");
-			break;
-		default:
-			printf("unknown\n");
-		}
-
-		printf("Location: ");
-		switch (resp->info.location) {
-		case MOTIONSENSE_LOC_BASE:
-			printf("base\n");
-			break;
-		case MOTIONSENSE_LOC_LID:
-			printf("lid\n");
-			break;
-		case MOTIONSENSE_LOC_CAMERA:
-			printf("camera\n");
-			break;
-		default:
-			printf("unknown\n");
-		}
-
-		printf("Chip:     ");
-		switch (resp->info.chip) {
-		case MOTIONSENSE_CHIP_KXCJ9:
-			printf("kxcj9\n");
-			break;
-		case MOTIONSENSE_CHIP_LSM6DS0:
-			printf("lsm6ds0\n");
-			break;
-		case MOTIONSENSE_CHIP_BMI160:
-			printf("bmi160\n");
-			break;
-		case MOTIONSENSE_CHIP_SI1141:
-			printf("si1141\n");
-			break;
-		case MOTIONSENSE_CHIP_KX022:
-			printf("kx022\n");
-			break;
-		case MOTIONSENSE_CHIP_L3GD20H:
-			printf("l3gd20h\n");
-			break;
-		case MOTIONSENSE_CHIP_BMA255:
-			printf("bma255\n");
-			break;
-		case MOTIONSENSE_CHIP_BMP280:
-			printf("bmp280\n");
-			break;
-		case MOTIONSENSE_CHIP_OPT3001:
-			printf("opt3001\n");
-			break;
-		case MOTIONSENSE_CHIP_CM32183:
-			printf("cm32183\n");
-			break;
-		case MOTIONSENSE_CHIP_BH1730:
-			printf("bh1730\n");
-			break;
-		case MOTIONSENSE_CHIP_GPIO:
-			printf("gpio\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2DH:
-			printf("lis2dh\n");
-			break;
-		case MOTIONSENSE_CHIP_LSM6DSM:
-			printf("lsm6dsm\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2DE:
-			printf("lis2de\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2MDL:
-			printf("lis2mdl\n");
-			break;
-		case MOTIONSENSE_CHIP_LSM6DS3:
-			printf("lsm6ds3\n");
-			break;
-		case MOTIONSENSE_CHIP_LSM6DSO:
-			printf("lsm6dso\n");
-			break;
-		case MOTIONSENSE_CHIP_LNG2DM:
-			printf("lng2dm\n");
-			break;
-		case MOTIONSENSE_CHIP_TCS3400:
-			printf("tcs3400\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2DW12:
-			printf("lis2dw12\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2DWL:
-			printf("lis2dwl\n");
-			break;
-		case MOTIONSENSE_CHIP_LIS2DS:
-			printf("lis2ds\n");
-			break;
-		case MOTIONSENSE_CHIP_BMI260:
-			printf("bmi260\n");
-			break;
-		case MOTIONSENSE_CHIP_ICM426XX:
-			printf("icm426xx\n");
-			break;
-		case MOTIONSENSE_CHIP_ICM42607:
-			printf("icm42607\n");
-			break;
-		case MOTIONSENSE_CHIP_BMI323:
-			printf("bmi323\n");
-			break;
-		case MOTIONSENSE_CHIP_BMA422:
-			printf("bma422\n");
-			break;
-		case MOTIONSENSE_CHIP_BMI220:
-			printf("bmi220\n");
-			break;
-		default:
-			printf("unknown\n");
-		}
-
-		if (version >= 3) {
-			printf("Min Frequency:              %d mHz\n",
-			       resp->info_3.min_frequency);
-			printf("Max Frequency:              %d mHz\n",
-			       resp->info_3.max_frequency);
-			printf("FIFO Max Event Count:       %d\n",
-			       resp->info_3.fifo_max_event_count);
-		}
-		if (version >= 4) {
-			printf("Flags:                      %d\n",
-			       resp->info_4.flags);
-		}
 		return 0;
 	}
 
@@ -6818,7 +6864,17 @@ int cmd_panic_info(int argc, char *argv[])
 		return 0;
 	}
 
-	return parse_panic_info((char *)(ec_inbuf), rv);
+	std::vector<uint8_t> data(static_cast<uint8_t *>(ec_inbuf),
+				  static_cast<uint8_t *>(ec_inbuf) + rv);
+	auto result = ec::ParsePanicInfo(data);
+
+	if (!result.has_value()) {
+		fprintf(stderr, "%s", result.error().c_str());
+		return 1;
+	}
+	printf("%s", result.value().c_str());
+
+	return 0;
 }
 
 int cmd_power_info(int argc, char *argv[])
@@ -7564,22 +7620,21 @@ int cmd_charge_current_limit(int argc, char *argv[])
 		struct ec_params_current_limit p0;
 
 		p0.limit = limit;
-		return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 0,
-				  &p0, sizeof(p0), NULL, 0);
+		return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 0, &p0,
+				  sizeof(p0), NULL, 0);
 	}
 
 	/* argc==3 for battery_soc */
 	battery_soc = strtol(argv[2], &e, 0);
 	if (e && *e) {
-		fprintf(stderr, "ERROR: Bad battery SoC value: %s\n",
-			argv[2]);
+		fprintf(stderr, "ERROR: Bad battery SoC value: %s\n", argv[2]);
 		return -1;
 	}
 
 	p1.limit = limit;
 	p1.battery_soc = battery_soc;
-	return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 1,
-			  &p1, sizeof(p1), NULL, 0);
+	return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 1, &p1, sizeof(p1), NULL,
+			  0);
 }
 
 static void cmd_charge_control_help(const char *cmd, const char *msg)

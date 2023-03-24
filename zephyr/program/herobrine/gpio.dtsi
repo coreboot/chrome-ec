@@ -131,11 +131,12 @@
 		};
 		ec_bl_disable_l {
 			/* The PMIC controls backlight enable and this pin must
-			 * be HiZ for normal operation. But the backlight can
-			 * be enabled by setting this pin low and configuring it
-			 * as an output.
+			 * be HiZ for normal operation. The EC is allowed to
+			 * drive low to abruptly removes power from the eDP
+			 * panel in cases like lid close. So the signal is open
+			 * drain (allowed to drive low, never drive high).
 			 */
-			gpios = <&gpiob 6 GPIO_INPUT>;
+			gpios = <&gpiob 6 GPIO_ODR_HIGH>;
 			enum-name = "GPIO_ENABLE_BACKLIGHT";
 		};
 		lid_accel_int_l {
@@ -145,10 +146,10 @@
 			gpios = <&gpio7 4 GPIO_OUTPUT_LOW>;
 		};
 		gpio_usb_c0_pd_rst_l: usb_c0_pd_rst_l {
-			gpios = <&gpiof 1 GPIO_OUTPUT_HIGH>;
+			gpios = <&gpiof 1 (GPIO_OUTPUT_HIGH | GPIO_ACTIVE_LOW)>;
 		};
 		gpio_usb_c1_pd_rst_l: usb_c1_pd_rst_l {
-			gpios = <&gpioe 4 GPIO_OUTPUT_HIGH>;
+			gpios = <&gpioe 4 (GPIO_OUTPUT_HIGH | GPIO_ACTIVE_LOW)>;
 		};
 		gpio_dp_mux_oe_l: dp_mux_oe_l {
 			gpios = <&gpiob 1 GPIO_ODR_HIGH>;

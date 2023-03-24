@@ -124,6 +124,9 @@ driver-$(CONFIG_GPU_NVIDIA)+=nvidia_gpu.o
 # Voltage regulators
 driver-$(CONFIG_REGULATOR_IR357X)+=regulator_ir357x.o
 
+# Power Sourcing Equipment
+driver-$(CONFIG_PSE_LTC4291)+=pse_ltc4291.o
+
 # Temperature sensors
 driver-$(CONFIG_TEMP_SENSOR_ADT7481)+=temp_sensor/adt7481.o
 driver-$(CONFIG_TEMP_SENSOR_BD99992GW)+=temp_sensor/bd99992gw.o
@@ -162,6 +165,7 @@ driver-y +=tcpm/ite_pd_intc.o
 driver-$(CONFIG_USB_PD_TCPM_DRIVER_IT83XX)+=tcpm/it83xx.o
 driver-$(CONFIG_USB_PD_TCPM_DRIVER_IT8XXX2)+=tcpm/it8xxx2.o
 endif
+driver-$(CONFIG_USB_PD_TCPM_ANX7406)+=tcpm/anx7406.o
 driver-$(CONFIG_USB_PD_TCPM_ANX74XX)+=tcpm/anx74xx.o
 driver-$(CONFIG_USB_PD_TCPM_ANX7688)+=tcpm/anx7688.o
 driver-$(CONFIG_USB_PD_TCPM_ANX7447)+=tcpm/anx7447.o

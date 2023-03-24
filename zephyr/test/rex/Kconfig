@@ -19,10 +19,24 @@ config TEST_ENABLE_USB_PD_HOST_CMD
 	  This is used to define CONFIG_USB_PD_HOST_CMD for testing purposes
 	  directly.
 
-config TEST_FAN
-	bool "Run the tests intended for fan"
+config TEST_BOARD_POWER
+	bool "Run the tests intended for board_power"
 	help
-	  Include fan.c into the binary and test their functions.
+	  Include board_power.c into the binary and test
+	  their functions.
+
+config TEST_X86_NON_DSX_PWRSEQ_MTL
+	bool "Replace CONFIG_X86_NON_DSX_PWRSEQ_MTL for testing"
+	help
+	  This is used to replace CONFIG_X86_NON_DSX_PWRSEQ_MTL for testing
+	  purposes directly.
+
+config TEST_DISABLE_AP_PWRSEQ
+	bool "Disable CONFIG_AP_PWRSEQ"
+	default n
+	help
+	  This is used to disable CONFIG_AP_PWRSEQ for testing purposes
+	  directly.
 
 module = REX
 module-str = Rex board-specific code

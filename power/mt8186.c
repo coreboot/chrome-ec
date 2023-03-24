@@ -82,11 +82,13 @@
 static bool is_resetting;
 /* indicate MT8186 is processing a AP forcing shutdown. */
 static bool is_shutdown;
+/* indicate MT8186 has been dropped to S5G3 from the last IN_AP_RST state . */
+static bool is_s5g3_passed;
 /*
  * indicate exiting off state, and don't respect the power signals until chipset
  * on.
  */
-static bool is_exiting_off = true;
+static bool is_exiting_off;
 
 /* Turn on the PMIC power source to AP, this also boots AP. */
 static void set_pmic_pwron(void)
@@ -157,7 +159,13 @@ void chipset_watchdog_interrupt(enum gpio_signal signal)
 
 void chipset_force_shutdown(enum chipset_shutdown_reason reason)
 {
-	CPRINTS("%s: 0x%x", __func__, reason);
+	bool chipset_off = chipset_in_state(CHIPSET_STATE_ANY_OFF);
+
+	CPRINTS("%s: 0x%x%s", __func__, reason, chipset_off ? "(skipped)" : "");
+
+	if (chipset_off)
+		return;
+
 	report_ap_reset(reason);
 
 	is_shutdown = true;
@@ -213,15 +221,18 @@ static void power_reset_host_sleep_state(void)
 /*
  * Power state is determined from the following table:
  *
- *     | IN_AP_RST | IN_SUSPEND_ASSERTED |
- * ----------------------------------------------
- *  S0 |         0 |                   0 |
- *  S3 |         0 |                   1 |
- *  G3 |         1 |                   x |
+ *     | IN_AP_RST | IN_SUSPEND_ASSERTED | is_s5g3_passed |
+ * --------------------------------------------------------
+ *  S0 |         0 |                   0 |               x|
+ *  S3 |         0 |                   1 |               x|
+ *  S5 |         1 |                   x |               0|
+ *  G3 |         1 |                   x |               1|
  *
- * S5 is only used when exit from G3 in power_common_state().
+ * S5 is a temp stage, which will be put into G3 after s5_inactivity_timeout.
  * is_resetting flag indicate it's resetting chipset, and it's always S0.
  * is_shutdown flag indicates it's shutting down the AP, it goes for S5.
+ * is_s5g3_passed flag indicates it has shutdown from S5 to G3 since last
+ * shutdown.
  */
 static enum power_state power_get_signal_state(void)
 {
@@ -235,8 +246,12 @@ static enum power_state power_get_signal_state(void)
 		return POWER_S0;
 	if (is_shutdown)
 		return POWER_S5;
-	if (power_get_signals() & IN_AP_RST)
-		return POWER_G3;
+	if (power_get_signals() & IN_AP_RST) {
+		/* If it has been put to G3 from S5 idle, then stay at G3.*/
+		if (is_s5g3_passed)
+			return POWER_G3;
+		return POWER_S5;
+	}
 	if (power_get_signals() & IN_SUSPEND_ASSERTED)
 		return POWER_S3;
 	return POWER_S0;
@@ -272,6 +287,14 @@ enum power_state power_chipset_init(void)
 		return init_state;
 	}
 
+	/* If the init signal state is at S5, assigns it to G3 to match the
+	 * default GPIO and PP4200_S5 rail states.
+	 */
+	if (init_state == POWER_S5) {
+		init_state = POWER_G3;
+		is_s5g3_passed = true;
+	}
+
 	if (battery_is_present() == BP_YES)
 		/*
 		 * (crosbug.com/p/28289): Wait battery stable.
@@ -280,14 +303,9 @@ enum power_state power_chipset_init(void)
 		 */
 		battery_wait_for_stable();
 
-	if (exit_hard_off) {
-		if (init_state == POWER_S5 || init_state == POWER_G3) {
-			/* Auto-power on */
-			mt8186_exit_off();
-		} else {
-			is_exiting_off = false;
-		}
-	}
+	if (exit_hard_off && init_state == POWER_G3)
+		/* Auto-power on */
+		mt8186_exit_off();
 
 	if (init_state != POWER_G3 && !exit_hard_off)
 		/* Force shutdown from S5 if the PMIC is already up. */
@@ -311,6 +329,8 @@ enum power_state power_handle_state(enum power_state state)
 			return POWER_S5S3;
 		else if (next_state == POWER_G3)
 			return POWER_S5G3;
+		else if (next_state == POWER_S5)
+			return POWER_S5;
 		else
 			return POWER_S5S3;
 
@@ -342,6 +362,7 @@ enum power_state power_handle_state(enum power_state state)
 	case POWER_S5S3:
 		/* Off state exited. */
 		is_exiting_off = false;
+		is_s5g3_passed = false;
 		hook_notify(HOOK_CHIPSET_PRE_INIT);
 
 		power_signal_enable_interrupt(GPIO_AP_IN_SLEEP_L);
@@ -412,10 +433,22 @@ enum power_state power_handle_state(enum power_state state)
 		return POWER_S3;
 
 	case POWER_S3S5:
+		/* Stop the power key shutdown deferred in case the power key
+		 * is still pressed.
+		 */
+		hook_call_deferred(&chipset_force_shutdown_button_data, -1);
+
 		power_signal_disable_interrupt(GPIO_AP_IN_SLEEP_L);
 		power_signal_disable_interrupt(GPIO_AP_EC_WDTRST_L);
 		power_signal_disable_interrupt(GPIO_AP_EC_WARM_RST_REQ);
-		GPIO_SET_LEVEL(GPIO_SYS_RST_ODL, 0);
+
+		/* Only actively reset AP with hard shutdown.
+		 * For AP initiated shutdown, the AP has been reset by PMIC.
+		 * For servo, gsc initiaed warm reset, EC doesn't need to hold
+		 * it.
+		 */
+		if (is_shutdown)
+			GPIO_SET_LEVEL(GPIO_SYS_RST_ODL, 0);
 
 		/* Call hooks before we remove power rails */
 		hook_notify(HOOK_CHIPSET_SHUTDOWN);
@@ -432,6 +465,7 @@ enum power_state power_handle_state(enum power_state state)
 		return POWER_S5;
 
 	case POWER_S5G3:
+		is_s5g3_passed = true;
 #if DT_NODE_EXISTS(DT_NODELABEL(en_pp4200_s5))
 		if (power_wait_mask_signals_timeout(IN_PMIC_AP_RST,
 						    IN_PMIC_AP_RST,

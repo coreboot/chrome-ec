@@ -20,21 +20,19 @@
 static bool in_safe_mode;
 
 static const int safe_mode_allowed_hostcmds[] = {
-	EC_CMD_SYSINFO,	       EC_CMD_GET_PROTOCOL_INFO,
-	EC_CMD_GET_VERSION,    EC_CMD_CONSOLE_SNAPSHOT,
-	EC_CMD_CONSOLE_READ,   EC_CMD_GET_NEXT_EVENT,
-	EC_CMD_GET_UPTIME_INFO
+	EC_CMD_SYSINFO,		EC_CMD_GET_PROTOCOL_INFO,
+	EC_CMD_GET_VERSION,	EC_CMD_CONSOLE_SNAPSHOT,
+	EC_CMD_CONSOLE_READ,	EC_CMD_GET_NEXT_EVENT,
+	EC_CMD_GET_UPTIME_INFO, EC_CMD_GET_PANIC_INFO
 };
 
 bool is_task_safe_mode_critical(task_id_t task_id)
 {
 	const task_id_t safe_mode_critical_tasks[] = {
-#ifdef HAS_TASK_HOOK
+#ifdef HAS_TASK_HOOKS
 		TASK_ID_HOOKS,
 #endif
-#ifdef HAS_TASK_IDLE
 		TASK_ID_IDLE,
-#endif
 #ifdef HAS_TASK_HOSTCMD
 		TASK_ID_HOSTCMD,
 #endif
