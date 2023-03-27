@@ -12,7 +12,8 @@
 
 #define NCT38XX_TCPC_COMPAT nuvoton_nct38xx
 
-#define TCPC_CONFIG_NCT38XX(id) \
+/* clang-format off */
+#define TCPC_CONFIG_NCT38XX(id)                                                \
 	{                                                                      \
 		.bus_type = EC_BUS_TYPE_I2C,                                   \
 		.i2c_info = {                                                  \
@@ -22,12 +23,14 @@
 		.drv = &nct38xx_tcpm_drv,                                      \
 		.flags = DT_PROP(id, tcpc_flags),                              \
 		COND_CODE_1(CONFIG_PLATFORM_EC_TCPC_INTERRUPT,                 \
-			(.irq_gpio = GPIO_DT_SPEC_GET_OR(id, irq_gpios, {})),  \
+			(.irq_gpio = GPIO_DT_SPEC_GET_OR(id, irq_gpios, {}),   \
+			 .rst_gpio = GPIO_DT_SPEC_GET_OR(id, rst_gpios, {})),  \
 			(.alert_signal = COND_CODE_1(                          \
 				DT_NODE_HAS_PROP(id, int_pin),                 \
 				(GPIO_SIGNAL(DT_PHANDLE(id, int_pin))),        \
 				(GPIO_LIMIT)))),                               \
-	},
+	}
+/* clang-format on */
 
 /**
  * @brief Get the NCT38XX GPIO device from the TCPC port enumeration
