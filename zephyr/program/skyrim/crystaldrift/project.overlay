@@ -24,6 +24,9 @@
 		default_battery: bms-gf_cr50 {
 			compatible = "bms-gf,cr50", "battery-smart";
 		};
+		gfl_mfp-549358 {
+			compatible = "gfl,mfp-549358", "battery-smart";
+		};
 	};
 
 	named-gpios {
