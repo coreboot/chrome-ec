@@ -51,8 +51,8 @@ static inline int bma4_read8(const struct motion_sensor_t *s, const int reg,
 	return i2c_read8(s->port, s->i2c_spi_addr_flags, reg, data_ptr);
 }
 
-static inline int bma4_read16(const struct motion_sensor_t *s, const int reg,
-			      int *data_ptr)
+__maybe_unused static inline int bma4_read16(const struct motion_sensor_t *s,
+					     const int reg, int *data_ptr)
 {
 	return i2c_read16(s->port, s->i2c_spi_addr_flags, reg, data_ptr);
 }
@@ -605,7 +605,7 @@ static void process_fifo_data(struct motion_sensor_t *s, uint8_t *data,
 	ASSERT(data_bytes % 6 == 0);
 
 	for (int i = 0; i < data_bytes; i += 6) {
-		intv3_t v;
+		int *v = s->raw_xyz;
 
 		if (data[i + 1] == 0x80 && data[i] == 0) {
 			/* 0x8000 means read overrun; out of data */
@@ -613,6 +613,9 @@ static void process_fifo_data(struct motion_sensor_t *s, uint8_t *data,
 		}
 		swizzle_sample_data(s, &data[i], v);
 
+		if (IS_ENABLED(CONFIG_ACCEL_SPOOF_MODE) &&
+		    s->flags & MOTIONSENSE_FLAG_IN_SPOOF_MODE)
+			v = s->spoof_xyz;
 		if (IS_ENABLED(CONFIG_ACCEL_FIFO)) {
 			struct ec_response_motion_sensor_data response = {
 				.sensor_num = s - motion_sensors,
@@ -639,7 +642,7 @@ static int irq_handler(struct motion_sensor_t *s, uint32_t *event)
 	int interrupt_status_reg, fifo_depth;
 
 	/* Read interrupt status, also clears pending IRQs */
-	RETURN_ERROR(bma4_read16(s, BMA4_INT_STATUS_1, &interrupt_status_reg));
+	RETURN_ERROR(bma4_read8(s, BMA4_INT_STATUS_1, &interrupt_status_reg));
 	if ((interrupt_status_reg &
 	     (BMA4_FFULL_INT | BMA4_FWM_INT | BMA4_ACC_DRDY_INT)) == 0) {
 		return EC_ERROR_NOT_HANDLED;

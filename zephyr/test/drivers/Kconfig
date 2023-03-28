@@ -161,6 +161,23 @@ config LINK_TEST_SUITE_USBC_PPC
 config LINK_TEST_SUITE_USBC_SVDM_DFP_ONLY
 	bool "Link and test the usbc_svdm_dfp_only tests"
 
+config LINK_TEST_SUITE_USBC_RETIMER
+	bool "Link the USBC retimer tests"
+
+config LINK_TEST_SUITE_USBC_RETIMER_ANX7483
+	bool "Link and test the ANX7484 tests"
+	select LINK_TEST_SUITE_USBC_RETIMER
+	select PLATFORM_EC_USBC_RETIMER_ANX7483
+	help
+	  Include the ANX7483 test suite in the binary.
+
+config LINK_TEST_SUITE_USBC_RETIMER_PS8811
+	bool "Link and test the PS8811 tests"
+	select LINK_TEST_SUITE_USBC_RETIMER
+	select PLATFORM_EC_USBC_RETIMER_PS8811
+	help
+	  Include the PS8811 test suite in the binary.
+
 config LINK_TEST_SUITE_USBC_TBT_MODE
 	bool "Link and test the usbc_tbt_mode tests"
 

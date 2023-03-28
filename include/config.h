@@ -231,6 +231,9 @@
 /* Send the SCI event to notify host when body status change */
 #undef CONFIG_BODY_DETECTION_NOTIFY_MODE_CHANGE
 
+/* Send the MKBP event to notify host when body status change */
+#undef CONFIG_BODY_DETECTION_NOTIFY_MKBP
+
 /* Always enable the body detection function in S0 */
 #undef CONFIG_BODY_DETECTION_ALWAYS_ENABLE_IN_S0
 
@@ -3748,6 +3751,9 @@
 /* Support PS/2 interface */
 #undef CONFIG_PS2
 
+/* Support Power Sourcing Equipment */
+#undef CONFIG_PSE_LTC4291
+
 /*
  * Define this option to enable programmable voltage detector which will
  * trigger an interrupt when the voltage drops below a threshold specified
@@ -5845,6 +5851,11 @@
  */
 #define CONFIG_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US 65
 
+/*
+ * Build and link *test* images with googletest.
+ */
+#undef CONFIG_GOOGLETEST
+
 /*****************************************************************************/
 /*
  * Include board and core configs, since those hold the CONFIG_ constants for a
@@ -6964,10 +6975,19 @@
 #define CONFIG_GESTURE_SIGMO_SENSOR 0
 #endif /* CONFIG_GESTURE_SIGMO */
 
-#ifndef CONFIG_LID_ANGLE
+#ifdef CONFIG_LID_ANGLE
+#if !defined(CONFIG_LID_ANGLE_SENSOR_BASE) || \
+	!defined(CONFIG_LID_ANGLE_SENSOR_LID)
+#error "Sensors must be identified for calculating lid angle."
+#endif
+#else /* CONFIG_LID_ANGLE */
 #define CONFIG_LID_ANGLE_SENSOR_BASE 0
 #define CONFIG_LID_ANGLE_SENSOR_LID 0
 #endif /* CONFIG_LID_ANGLE */
+
+#if defined(CONFIG_LID_ANGLE_UPDATE) && !defined(CONFIG_LID_ANGLE)
+#error "CONFIG_LID_ANGLE is needed for CONFIG_LID_ANGLE_UPDATE."
+#endif
 
 #ifndef CONFIG_ALS
 #define ALS_COUNT 0

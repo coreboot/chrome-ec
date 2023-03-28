@@ -4,7 +4,7 @@
 
 """Define zmake projects for nissa."""
 
-# Nivviks and Craask, Pujjo, Xivu, Xivur has NPCX993F, Nereid and Joxer, Yaviks has ITE81302
+# Nivviks and Craask, Pujjo, Xivu, Xivur, Uldren has NPCX993F, Nereid and Joxer, Yaviks has ITE81302
 
 
 def register_nissa_project(
@@ -27,6 +27,26 @@ def register_nissa_project(
             here / f"{chip_kconfig}_program.conf",
             here / project_name / "project.conf",
         ],
+    )
+
+
+def register_nivviks_project(
+    project_name,
+):
+    """Wrapper function for registering a variant of nivviks."""
+    return register_nissa_project(
+        project_name=project_name,
+        chip="npcx9m3f",
+    )
+
+
+def register_nereid_project(
+    project_name,
+):
+    """Wrapper function for registering a variant of nereid."""
+    return register_nissa_project(
+        project_name=project_name,
+        chip="it81302bx",
     )
 
 
@@ -80,4 +100,9 @@ joxer = register_nissa_project(
 yaviks = register_nissa_project(
     project_name="yaviks",
     chip="it81302bx",
+)
+
+uldren = register_nissa_project(
+    project_name="uldren",
+    chip="npcx9m3f",
 )

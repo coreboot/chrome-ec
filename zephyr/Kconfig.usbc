@@ -14,6 +14,13 @@ menuconfig PLATFORM_EC_USBC
 	  of attached USB-C partners and enabling alternate operational modes,
 	  including Display Port, Thunderbolt, and USB4.
 
+config TEST_DISABLE_PLATFORM_EC_USBC
+	bool "Test disable USB type-C"
+	depends on ZTEST && !PLATFORM_EC_USBC
+	help
+	  Use this config to allow tests for code that doesn't actually rely on
+	  USBC.
+
 rsource "Kconfig.retimer"
 rsource "Kconfig.pd_int_shared"
 rsource "Kconfig.pd_meas_vbus"
@@ -237,6 +244,14 @@ config PLATFORM_EC_USB_PD_TCPM_DRIVER_IT8XXX2
 	  Enable a driver for the ITE IT8XXX2 on-chip UBB Type-C Port Manager.
 	  This supports up to two USB Type-C ports with Dual Role function
 	  (provider and consumer) and Fast Role Swap detection.
+
+config PLATFORM_EC_IT83XX_TUNE_CC_PHY
+	bool "Enable tune cc physical parameters"
+	depends on PLATFORM_EC_USB_PD_TCPM_ITE_ON_CHIP
+	help
+	  Enable board to tune cc physical parameters (ex.rising, falling time).
+	  Board must define board_get_cc_tuning_parameter(enum usbpd_port port)
+	  function.
 
 config PLATFORM_EC_USB_PD_PULLUP
 	int "Default source Rp value"

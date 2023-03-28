@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+rsource "retimer/Kconfig"
 rsource "tcpc/Kconfig"
 
 config EMUL_COMMON_I2C
@@ -28,6 +29,16 @@ config EMUL_BMA255
 	  Enable the BMA255 emulator. This driver use emulated I2C bus.
 	  It is used to test bma2x2 driver. Emulators API is available in
 	  zephyr/include/emul/emul_bma255.h
+
+config EMUL_BMA4XX
+	bool "BMA4xx emulator"
+	default y
+	depends on DT_HAS_CROS_BMA4XX_EMUL_ENABLED
+	select EMUL_COMMON_I2C
+	help
+	  Enable the BMA4xx emulator, used to test the bma4xx driver on an
+	  emulated I2C bus; emulator API is in
+	  zephyr/include/emul/emul_bma4xx.h.
 
 config EMUL_BC12_DETECT_PI3USB9201
 	bool "PI3USB9201 emulator"
@@ -80,6 +91,16 @@ config EMUL_TUSB1064
 	help
 	  Enable the TUSB1064 usb mux. This driver use emulated I2C bus.
 	  Emulator API is available in zephyr/include/emul/emul_tusb1064.h.
+
+config EMUL_USB_MUX_AMD_FP6
+	bool "AMD FP6 USB mux emulator"
+	default y
+	depends on ZTEST && DT_HAS_AMD_USBC_MUX_AMD_FP6_ENABLED
+	select EMUL_COMMON_I2C
+	help
+	  Enable emulator for the AMD FP6 USB mux target.  This is a mux
+	  which, while it resides on the SoC, presents itself to the EC as a
+	  I2C target device
 
 config EMUL_BB_RETIMER
 	bool "BB retimer emulator"
