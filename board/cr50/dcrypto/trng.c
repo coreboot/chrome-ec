@@ -34,16 +34,15 @@ static volatile struct trng_reg *reg_trng = (void *)(GC_TRNG_BASE_ADDR);
 
 /**
  * Attempts to read TRNG_EMPTY before reporting a stall. Practically data should
- * be available in less than 0x7ff cycles under normal conditions. 0x7ff was
- * chosen to match the hardware TRNG TIMEOUT_COUNTER. Test on boards with slow
- * TRNG before reducing this number.
+ * be available in less than 0xfff cycles under normal conditions.
+ * Test on boards with slow TRNG before reducing this number.
  */
-#define TRNG_EMPTY_COUNT 0x7ff
+#define TRNG_EMPTY_COUNT 0xfff
 
 /**
  * Number of attempts to reset TRNG after stall is detected.
  */
-#define TRNG_RESET_COUNT 16
+#define TRNG_RESET_COUNT 32
 
 void fips_init_trng(void)
 {
@@ -101,7 +100,7 @@ void fips_init_trng(void)
 	 */
 	reg_trng->allowed_values = 0x26;
 
-	reg_trng->timeout_counter = 0x7ff;
+	reg_trng->timeout_counter = TRNG_EMPTY_COUNT;
 	reg_trng->timeout_max_try = 4;
 	reg_trng->power_down_b = 1;
 	reg_trng->go_event = 1;
@@ -110,7 +109,7 @@ void fips_init_trng(void)
 uint64_t read_rand(void)
 {
 	uint32_t empty_count = 0;
-	uint32_t reset_count = 0;
+	uint8_t reset_count = 0;
 
 #ifdef CRYPTO_TEST_SETUP
 	/* Do we need to simulate error? */
@@ -130,19 +129,15 @@ uint64_t read_rand(void)
 			empty_count = 0;
 			reset_count++;
 			reg_trng->go_event = 1;
-#ifdef CONFIG_FLASH_LOG
-			/**
-			 * Log stall only first time. Placing it after TRNG
-			 * go_event increase a chance to get random in case
-			 * of slow TRNG.
-			 */
-			if (reset_count == 1)
-				fips_vtable->flash_log_add_event(
-					FE_LOG_TRNG_STALL, 0, NULL);
-#endif
 		}
 		empty_count++;
 	}
+#ifdef CONFIG_FLASH_LOG
+	/* Log stall count if happened .*/
+	if (reset_count > 0)
+		fips_vtable->flash_log_add_event(
+			FE_LOG_TRNG_STALL, sizeof(reset_count), &reset_count);
+#endif
 	/**
 	 * High 32-bits set to zero in case of error;
 	 * otherwise value >> 32 == 1
