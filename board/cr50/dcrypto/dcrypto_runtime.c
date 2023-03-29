@@ -86,7 +86,7 @@ void dcrypto_unlock(void)
 }
 
 #ifndef DCRYPTO_CALL_TIMEOUT_US
-#define DCRYPTO_CALL_TIMEOUT_US  (700 * 1000)
+#define DCRYPTO_CALL_TIMEOUT_US  (1000 * 1000)
 #endif
 /*
  * When running on Cr50 this event belongs in the TPM task event space. Make
@@ -108,6 +108,7 @@ uint32_t dcrypto_call(uint32_t adr)
 
 	event = fips_vtable->task_wait_event_mask(TASK_EVENT_DCRYPTO_DONE,
 				     DCRYPTO_CALL_TIMEOUT_US);
+	state = GREG32(CRYPTO, INT_STATE);
 	/* TODO(ngm): switch return value to an enum. */
 	switch (event) {
 	case TASK_EVENT_DCRYPTO_DONE:
@@ -117,7 +118,6 @@ uint32_t dcrypto_call(uint32_t adr)
 		 * all other bits are indicative of error.
 		 * Except for MOD_OPERAND_OUT_OF_RANGE, which is noise.
 		 */
-		state = GREG32(CRYPTO, INT_STATE);
 		if ((state &
 		     ~(GC_CRYPTO_INT_STATE_MOD_OPERAND_OUT_OF_RANGE_MASK |
 		       GC_CRYPTO_INT_STATE_HOST_CMD_RECV_MASK)) == 0)
@@ -126,9 +126,13 @@ uint32_t dcrypto_call(uint32_t adr)
 	default:
 		dcrypto_reset_and_wipe();
 #ifdef CONFIG_FLASH_LOG
+		/* dcrypto status is only 12 bits, but for analysis we
+		 * add dcrypto function address in top 16 bits.
+		 */
+		state |= (adr << 16);
 		/* State value of zero indicates event timeout. */
 		fips_vtable->flash_log_add_event(FE_LOG_DCRYPTO_FAILURE,
-				    sizeof(state), &state);
+						 sizeof(state), &state);
 #endif
 		return 1;
 	}
