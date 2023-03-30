@@ -3,10 +3,24 @@
  * found in the LICENSE file.
  */
 
+#include <assert.h>
+#include <ctype.h>
+#include <errno.h>
+#include <getopt.h>
+#include <inttypes.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <signal.h>
+#include <stdbool.h>
+
 #include "battery.h"
-#include "chipset.h"
 #include "comm-host.h"
 #include "comm-usb.h"
+#include "chipset.h"
 #include "compile_time_macros.h"
 #include "crc.h"
 #include "cros_ec_dev.h"
@@ -22,26 +36,7 @@
 #include "tablet_mode.h"
 #include "usb_pd.h"
 
-#include <assert.h>
-#include <ctype.h>
-#include <errno.h>
-#include <inttypes.h>
-#include <signal.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-
-#include <getopt.h>
 #include <libec/add_entropy_command.h>
-#include <libec/ec_panicinfo.h>
-#include <libec/fingerprint/fp_encryption_status_command.h>
-#include <libec/flash_protect_command.h>
-#include <libec/rand_num_command.h>
-#include <unistd.h>
-#include <vector>
 
 /* Maximum flash size (16 MB, conservative) */
 #define MAX_FLASH_SIZE 0x1000000
@@ -1751,63 +1746,83 @@ int cmd_flash_erase(int argc, char *argv[])
 	return 0;
 }
 
+static void print_flash_protect_flags(const char *desc, uint32_t flags)
+{
+	printf("%s 0x%08x", desc, flags);
+	if (flags & EC_FLASH_PROTECT_GPIO_ASSERTED)
+		printf(" wp_gpio_asserted");
+	if (flags & EC_FLASH_PROTECT_RO_AT_BOOT)
+		printf(" ro_at_boot");
+	if (flags & EC_FLASH_PROTECT_RW_AT_BOOT)
+		printf(" rw_at_boot");
+	if (flags & EC_FLASH_PROTECT_ROLLBACK_AT_BOOT)
+		printf(" rollback_at_boot");
+	if (flags & EC_FLASH_PROTECT_ALL_AT_BOOT)
+		printf(" all_at_boot");
+	if (flags & EC_FLASH_PROTECT_RO_NOW)
+		printf(" ro_now");
+	if (flags & EC_FLASH_PROTECT_RW_NOW)
+		printf(" rw_now");
+	if (flags & EC_FLASH_PROTECT_ROLLBACK_NOW)
+		printf(" rollback_now");
+	if (flags & EC_FLASH_PROTECT_ALL_NOW)
+		printf(" all_now");
+	if (flags & EC_FLASH_PROTECT_ERROR_STUCK)
+		printf(" STUCK");
+	if (flags & EC_FLASH_PROTECT_ERROR_INCONSISTENT)
+		printf(" INCONSISTENT");
+	if (flags & EC_FLASH_PROTECT_ERROR_UNKNOWN)
+		printf(" UNKNOWN_ERROR");
+	printf("\n");
+}
+
 int cmd_flash_protect(int argc, char *argv[])
 {
-	/*
-	 * Set up requested flags.  If no flags were specified, mask will
-	 * be flash_protect::Flags::kNone and nothing will change.
-	 */
-	ec::flash_protect::Flags flags = ec::flash_protect::Flags::kNone;
-	ec::flash_protect::Flags mask = ec::flash_protect::Flags::kNone;
+	struct ec_params_flash_protect p;
+	struct ec_response_flash_protect r;
+	int rv, i;
 
-	for (int i = 1; i < argc; i++) {
+	/*
+	 * Set up requested flags.  If no flags were specified, p.mask will
+	 * be 0 and nothing will change.
+	 */
+	p.mask = p.flags = 0;
+	for (i = 1; i < argc; i++) {
 		if (!strcasecmp(argv[i], "now")) {
-			mask |= ec::flash_protect::Flags::kAllNow;
-			flags |= ec::flash_protect::Flags::kAllNow;
+			p.mask |= EC_FLASH_PROTECT_ALL_NOW;
+			p.flags |= EC_FLASH_PROTECT_ALL_NOW;
 		} else if (!strcasecmp(argv[i], "enable")) {
-			mask |= ec::flash_protect::Flags::kRoAtBoot;
-			flags |= ec::flash_protect::Flags::kRoAtBoot;
+			p.mask |= EC_FLASH_PROTECT_RO_AT_BOOT;
+			p.flags |= EC_FLASH_PROTECT_RO_AT_BOOT;
 		} else if (!strcasecmp(argv[i], "disable"))
-			mask |= ec::flash_protect::Flags::kRoAtBoot;
+			p.mask |= EC_FLASH_PROTECT_RO_AT_BOOT;
 	}
 
-	ec::FlashProtectCommand flash_protect_command(flags, mask);
-	if (!flash_protect_command.Run(comm_get_fd())) {
-		int rv = -EECRESULT - flash_protect_command.Result();
-		fprintf(stderr, "Flash protect returned with errors: %d\n", rv);
+	rv = ec_command(EC_CMD_FLASH_PROTECT, EC_VER_FLASH_PROTECT, &p,
+			sizeof(p), &r, sizeof(r));
+	if (rv < 0)
 		return rv;
+	if (rv < sizeof(r)) {
+		fprintf(stderr, "Too little data returned.\n");
+		return -1;
 	}
 
 	/* Print returned flags */
-	printf("Flash protect flags: 0x%08x%s\n",
-	       flash_protect_command.GetFlags(),
-	       (ec::FlashProtectCommand::ParseFlags(
-			flash_protect_command.GetFlags()))
-		       .c_str());
-	printf("Valid flags:         0x%08x%s\n",
-	       flash_protect_command.GetValidFlags(),
-	       (ec::FlashProtectCommand::ParseFlags(
-			flash_protect_command.GetValidFlags()))
-		       .c_str());
-	printf("Writable flags:      0x%08x%s\n",
-	       flash_protect_command.GetWritableFlags(),
-
-	       (ec::FlashProtectCommand::ParseFlags(
-			flash_protect_command.GetWritableFlags()))
-		       .c_str());
+	print_flash_protect_flags("Flash protect flags:", r.flags);
+	print_flash_protect_flags("Valid flags:        ", r.valid_flags);
+	print_flash_protect_flags("Writable flags:     ", r.writable_flags);
 
 	/* Check if we got all the flags we asked for */
-	if ((flash_protect_command.GetFlags() & mask) != (flags & mask)) {
+	if ((r.flags & p.mask) != (p.flags & p.mask)) {
 		fprintf(stderr,
 			"Unable to set requested flags "
 			"(wanted mask 0x%08x flags 0x%08x)\n",
-			mask, flags);
-		if ((mask & ~flash_protect_command.GetWritableFlags()) !=
-		    ec::flash_protect::Flags::kNone)
+			p.mask, p.flags);
+		if (p.mask & ~r.writable_flags)
 			fprintf(stderr,
 				"Which is expected, because writable "
 				"mask is 0x%08x.\n",
-				flash_protect_command.GetWritableFlags());
+				r.writable_flags);
 
 		return -1;
 	}
@@ -2384,6 +2399,14 @@ int cmd_fp_info(int argc, char *argv[])
 	return 0;
 }
 
+static void print_fp_enc_flags(const char *desc, uint32_t flags)
+{
+	printf("%s 0x%08x", desc, flags);
+	if (flags & FP_ENC_STATUS_SEED_SET)
+		printf(" FPTPM_seed_set");
+	printf("\n");
+}
+
 static int cmd_fp_context(int argc, char *argv[])
 {
 	struct ec_params_fp_context_v1 p;
@@ -2450,19 +2473,6 @@ int cmd_fp_enc_status(int argc, char *argv[])
 				   resp.valid_flags);
 		rv = 0;
 	}
-	printf("FPMCU encryption status: 0x%08x%s",
-	       fp_encryptionstatus_command.GetStatus(),
-	       (ec::FpEncryptionStatusCommand::ParseFlags(
-			fp_encryptionstatus_command.GetStatus()))
-		       .c_str());
-	printf("Valid flags:             0x%08x%s",
-	       fp_encryptionstatus_command.GetValidFlags(),
-	       (ec::FpEncryptionStatusCommand::ParseFlags(
-			fp_encryptionstatus_command.GetValidFlags()))
-		       .c_str());
-
-	rv = 0;
-
 	return rv;
 }
 
@@ -3235,7 +3245,7 @@ static int cmd_temperature_print(int id, int mtemp)
 
 	printf("%-20s  %d K (= %d C)", temp_r.sensor_name, temp, K_TO_C(temp));
 
-	if (rc >= 0)
+	if(rc >= 0)
 		/*
 		 * Check for fan_off == fan_max when their
 		 * values are either zero or non-zero
@@ -7616,21 +7626,22 @@ int cmd_charge_current_limit(int argc, char *argv[])
 		struct ec_params_current_limit p0;
 
 		p0.limit = limit;
-		return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 0, &p0,
-				  sizeof(p0), NULL, 0);
+		return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 0,
+				  &p0, sizeof(p0), NULL, 0);
 	}
 
 	/* argc==3 for battery_soc */
 	battery_soc = strtol(argv[2], &e, 0);
 	if (e && *e) {
-		fprintf(stderr, "ERROR: Bad battery SoC value: %s\n", argv[2]);
+		fprintf(stderr, "ERROR: Bad battery SoC value: %s\n",
+			argv[2]);
 		return -1;
 	}
 
 	p1.limit = limit;
 	p1.battery_soc = battery_soc;
-	return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 1, &p1, sizeof(p1), NULL,
-			  0);
+	return ec_command(EC_CMD_CHARGE_CURRENT_LIMIT, 1,
+			  &p1, sizeof(p1), NULL, 0);
 }
 
 static void cmd_charge_control_help(const char *cmd, const char *msg)

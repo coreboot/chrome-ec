@@ -5,12 +5,10 @@
  * Standalone utility to parse EC panicinfo.
  */
 
-#include "compile_time_macros.h"
-
 #include <stdint.h>
 #include <stdio.h>
-
-#include <libec/ec_panicinfo.h>
+#include "compile_time_macros.h"
+#include "ec_panicinfo.h"
 
 int main(int argc, char *argv[])
 {
