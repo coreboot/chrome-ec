@@ -17,6 +17,9 @@ config LINK_TEST_SUITE_CONSOLE_CMD_CRASH
 config LINK_TEST_SUITE_CONSOLE_CMD_MFALLOW
 	bool "Link and test the console command mfallow test suite"
 
+config LINK_TEST_SUITE_AMD_FP6_USB_MUX
+	bool "Link and test the AMD FP6 USB mux tests"
+
 config LINK_TEST_SUITE_ANX7447
 	bool "Link and test the anx7447 tests"
 
@@ -100,6 +103,12 @@ config LINK_TEST_SUITE_POWER_HOST_SLEEP
 config LINK_TEST_SUITE_PS8XXX
 	bool "Link and test the ps8xxx tests"
 
+config LINK_TEST_SUITE_RT1718S
+	bool "Link and test the rt1718s tests"
+	help
+	  Link tests rt1718s test suite for the TCPM driver related function
+	  tests.
+
 config LINK_TEST_SUITE_RT9490
 	bool "Link and test the rt9490 tests"
 
@@ -158,8 +167,31 @@ config LINK_TEST_SUITE_USBC_OCP
 config LINK_TEST_SUITE_USBC_PPC
 	bool "Link tests for common USBC PPC code"
 
+config LINK_TEST_SUITE_USBC_TCPC
+	bool "Link tests for common USBC TCPC code"
+	help
+	  Include the USBC TCPC test suite in the
+	  binary.
+
 config LINK_TEST_SUITE_USBC_SVDM_DFP_ONLY
 	bool "Link and test the usbc_svdm_dfp_only tests"
+
+config LINK_TEST_SUITE_USBC_RETIMER
+	bool "Link the USBC retimer tests"
+
+config LINK_TEST_SUITE_USBC_RETIMER_ANX7483
+	bool "Link and test the ANX7484 tests"
+	select LINK_TEST_SUITE_USBC_RETIMER
+	select PLATFORM_EC_USBC_RETIMER_ANX7483
+	help
+	  Include the ANX7483 test suite in the binary.
+
+config LINK_TEST_SUITE_USBC_RETIMER_PS8811
+	bool "Link and test the PS8811 tests"
+	select LINK_TEST_SUITE_USBC_RETIMER
+	select PLATFORM_EC_USBC_RETIMER_PS8811
+	help
+	  Include the PS8811 test suite in the binary.
 
 config LINK_TEST_SUITE_USBC_TBT_MODE
 	bool "Link and test the usbc_tbt_mode tests"

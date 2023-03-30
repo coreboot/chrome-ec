@@ -30,11 +30,13 @@ DEFAULT_BUNDLE_METADATA_FILE = "/tmp/artifact_bundle_metadata"
 SPECIAL_BOARDS = [
     "herobrine",
     "krabby",
-    "nivviks",
     "skyrim",
     "kingler",
     "rex",
     "geralt",
+    # Nissa variants
+    "nereid",
+    "nivviks",
     # Skyrim variants
     "winterhold",
     "frostflow",
@@ -89,8 +91,6 @@ def build(opts):
     subprocess.run(cmd, cwd=zephyr_dir, check=True, stdin=subprocess.DEVNULL)
     if not opts.code_coverage:
         for project in zmake.project.find_projects(zephyr_dir).values():
-            if project.config.is_test:
-                continue
             build_dir = (
                 platform_ec / "build" / "zephyr" / project.config.project_name
             )
@@ -215,8 +215,6 @@ def bundle_firmware(opts):
     zephyr_dir = pathlib.Path(__file__).parent.resolve()
     platform_ec = zephyr_dir.parent
     for project in zmake.project.find_projects(zephyr_dir).values():
-        if project.config.is_test:
-            continue
         build_dir = (
             platform_ec / "build" / "zephyr" / project.config.project_name
         )

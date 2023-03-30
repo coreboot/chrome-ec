@@ -9,6 +9,8 @@
 #define __CROS_EC_TIMER_H
 
 #ifndef CONFIG_ZEPHYR
+#include <time.h>
+
 #include <sys/types.h>
 #else
 /* Data type for POSIX style clock() implementation */
@@ -24,6 +26,10 @@ typedef long clock_t;
 #define SEC_UL 1000000ul
 #define MINUTE 60000000
 #define HOUR 3600000000ull /* Too big to fit in a signed int */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Microsecond timestamp. */
 typedef union {
@@ -193,5 +199,9 @@ static inline int time_after(uint32_t a, uint32_t b)
 #ifdef CONFIG_ZTEST
 extern timestamp_t *get_time_mock;
 #endif /* CONFIG_ZTEST */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __CROS_EC_TIMER_H */

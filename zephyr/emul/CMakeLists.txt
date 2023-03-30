@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+add_subdirectory("retimer")
 add_subdirectory("tcpc")
 
 cros_ec_library_include_directories(include)
@@ -9,6 +10,7 @@ cros_ec_library_include_directories(include)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BB_RETIMER	emul_bb_retimer.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BC12_DETECT_PI3USB9201	emul_pi3usb9201.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BMA255		emul_bma255.c)
+zephyr_library_sources_ifdef(CONFIG_EMUL_BMA4XX		emul_bma4xx.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BMI		emul_bmi.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BMI		emul_bmi160.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_BMI		emul_bmi260.c)
@@ -28,6 +30,7 @@ zephyr_library_sources_ifdef(CONFIG_EMUL_SMART_BATTERY	emul_smart_battery.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_SN5S330	emul_sn5s330.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_TCS3400	emul_tcs3400.c)
 zephyr_library_sources_ifdef(CONFIG_EMUL_TUSB1064	emul_tusb1064.c)
+zephyr_library_sources_ifdef(CONFIG_EMUL_USB_MUX_AMD_FP6 emul_amd_fp6.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_MOCK		i2c_mock.c)
 zephyr_library_sources_ifdef(CONFIG_PWM_MOCK            pwm_mock.c)
 zephyr_library_sources_ifdef(CONFIG_VCMP_MOCK           vcmp_mock.c)

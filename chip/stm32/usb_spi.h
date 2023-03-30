@@ -285,10 +285,15 @@
  */
 
 /* Is the USB host allowed to operate on SPI device. */
-#define USB_SPI_ENABLED (BIT(0))
-
+#define USB_SPI_ENABLED BIT(0)
 /* Use board specific SPI driver when forwarding to this device. */
-#define USB_SPI_CUSTOM_SPI_DEVICE (BIT(1))
+#define USB_SPI_CUSTOM_SPI_DEVICE BIT(1)
+/* This SPI device supports dual lane mode. */
+#define USB_SPI_FLASH_DUAL_SUPPORT BIT(2)
+/* This SPI device supports four lane mode. */
+#define USB_SPI_FLASH_QUAD_SUPPORT BIT(3)
+/* This SPI device supports eight lane mode. */
+#define USB_SPI_FLASH_OCTO_SUPPORT BIT(4)
 
 enum packet_id_type {
 	/* Request USB SPI configuration data from device. */
@@ -516,9 +521,6 @@ struct usb_spi_state {
  * together all information required to operate a USB gpio.
  */
 struct usb_spi_config {
-	/* In RAM state of the USB SPI bridge. */
-	struct usb_spi_state *state;
-
 	/* Interface and endpoint indices. */
 	int interface;
 	int endpoint;
@@ -529,59 +531,43 @@ struct usb_spi_config {
 	/* Pointers to USB endpoint buffers. */
 	usb_uint *ep_rx_ram;
 	usb_uint *ep_tx_ram;
-
-	/* Flags. See USB_SPI_CONFIG_FLAGS_* for definitions */
-	uint32_t flags;
 };
 
-/*
- * Use when you want the SPI subsystem to be enabled even when the USB SPI
- * endpoint is not enabled by the host. This means that when this firmware
- * enables SPI, then the HW SPI module is enabled (i.e. SPE bit is set) until
- * this firmware disables the SPI module; it ignores the host's enables state.
- */
-#define USB_SPI_CONFIG_FLAGS_IGNORE_HOST_SIDE_ENABLE BIT(0)
+/* Storage of configuration and state of USB->SPI bridge. */
+extern struct usb_spi_state usb_spi_state;
+extern struct usb_spi_config const usb_spi;
 
 /*
  * Convenience macro for defining a USB SPI bridge driver.
- *
- * NAME is used to construct the names of the trampoline functions and the
- * usb_spi_config struct, the latter is just called NAME.
  *
  * INTERFACE is the index of the USB interface to associate with this
  * SPI driver.
  *
  * ENDPOINT is the index of the USB bulk endpoint used for receiving and
  * transmitting bytes.
- *
- * FLAGS encodes different run-time control parameters. See
- * USB_SPI_CONFIG_FLAGS_* for definitions.
  */
-#define USB_SPI_CONFIG(NAME, INTERFACE, ENDPOINT, FLAGS)                    \
-	static uint16_t CONCAT2(NAME,                                       \
-				_buffer_)[(USB_SPI_BUFFER_SIZE + 1) / 2];   \
-	static usb_uint CONCAT2(                                            \
-		NAME, _ep_rx_buffer_)[USB_MAX_PACKET_SIZE / 2] __usb_ram;   \
-	static usb_uint CONCAT2(                                            \
-		NAME, _ep_tx_buffer_)[USB_MAX_PACKET_SIZE / 2] __usb_ram;   \
-	static void CONCAT2(NAME, _deferred_)(void);                        \
-	DECLARE_DEFERRED(CONCAT2(NAME, _deferred_));                        \
-	struct usb_spi_state CONCAT2(NAME, _state_) = {                     \
+#define USB_SPI_CONFIG(INTERFACE, ENDPOINT)                                 \
+	static uint16_t usb_spi_buffer_[(USB_SPI_BUFFER_SIZE + 1) / 2];     \
+	static usb_uint                                                     \
+		usb_spi_ep_rx_buffer_[USB_MAX_PACKET_SIZE / 2] __usb_ram;   \
+	static usb_uint                                                     \
+		usb_spi_ep_tx_buffer_[USB_MAX_PACKET_SIZE / 2] __usb_ram;   \
+	static void usb_spi_deferred_(void);                                \
+	DECLARE_DEFERRED(usb_spi_deferred_);                                \
+	struct usb_spi_state usb_spi_state = {                              \
 		.enabled_host = 0,                                          \
 		.enabled_device = 0,                                        \
 		.enabled = 0,                                               \
 		.current_spi_device_idx = 0,                                \
-		.spi_write_ctx.buffer = (uint8_t *)CONCAT2(NAME, _buffer_), \
-		.spi_read_ctx.buffer = (uint8_t *)CONCAT2(NAME, _buffer_),  \
+		.spi_write_ctx.buffer = (uint8_t *)usb_spi_buffer_,         \
+		.spi_read_ctx.buffer = (uint8_t *)usb_spi_buffer_,          \
 	};                                                                  \
-	struct usb_spi_config const NAME = {                                \
-		.state = &CONCAT2(NAME, _state_),                           \
+	struct usb_spi_config const usb_spi = {                             \
 		.interface = INTERFACE,                                     \
 		.endpoint = ENDPOINT,                                       \
-		.deferred = &CONCAT2(NAME, _deferred__data),                \
-		.ep_rx_ram = CONCAT2(NAME, _ep_rx_buffer_),                 \
-		.ep_tx_ram = CONCAT2(NAME, _ep_tx_buffer_),                 \
-		.flags = FLAGS,                                             \
+		.deferred = &usb_spi_deferred__data,                        \
+		.ep_rx_ram = usb_spi_ep_rx_buffer_,                         \
+		.ep_tx_ram = usb_spi_ep_tx_buffer_,                         \
 	};                                                                  \
 	const struct usb_interface_descriptor USB_IFACE_DESC(INTERFACE) = { \
 		.bLength = USB_DT_INTERFACE_SIZE,                           \
@@ -610,35 +596,34 @@ struct usb_spi_config {
 		.wMaxPacketSize = USB_MAX_PACKET_SIZE,                      \
 		.bInterval = 0,                                             \
 	};                                                                  \
-	static void CONCAT2(NAME, _ep_tx_)(void)                            \
+	static void usb_spi_ep_tx_(void)                                    \
 	{                                                                   \
-		usb_spi_tx(&NAME);                                          \
+		usb_spi_tx();                                               \
 	}                                                                   \
-	static void CONCAT2(NAME, _ep_rx_)(void)                            \
+	static void usb_spi_ep_rx_(void)                                    \
 	{                                                                   \
-		usb_spi_rx(&NAME);                                          \
+		usb_spi_rx();                                               \
 	}                                                                   \
-	static void CONCAT2(NAME, _ep_event_)(enum usb_ep_event evt)        \
+	static void usb_spi_ep_event_(enum usb_ep_event evt)                \
 	{                                                                   \
-		usb_spi_event(&NAME, evt);                                  \
+		usb_spi_event(evt);                                         \
 	}                                                                   \
-	USB_DECLARE_EP(ENDPOINT, CONCAT2(NAME, _ep_tx_),                    \
-		       CONCAT2(NAME, _ep_rx_), CONCAT2(NAME, _ep_event_));  \
-	static int CONCAT2(NAME, _interface_)(usb_uint * rx_buf,            \
-					      usb_uint * tx_buf)            \
+	USB_DECLARE_EP(ENDPOINT, usb_spi_ep_tx_, usb_spi_ep_rx_,            \
+		       usb_spi_ep_event_);                                  \
+	static int usb_spi_interface_(usb_uint *rx_buf, usb_uint *tx_buf)   \
 	{                                                                   \
-		return usb_spi_interface(&NAME, rx_buf, tx_buf);            \
+		return usb_spi_interface(rx_buf, tx_buf);                   \
 	}                                                                   \
-	USB_DECLARE_IFACE(INTERFACE, CONCAT2(NAME, _interface_));           \
-	static void CONCAT2(NAME, _deferred_)(void)                         \
+	USB_DECLARE_IFACE(INTERFACE, usb_spi_interface_);                   \
+	static void usb_spi_deferred_(void)                                 \
 	{                                                                   \
-		usb_spi_deferred(&NAME);                                    \
+		usb_spi_deferred();                                         \
 	}
 
 /*
  * Handle SPI request in a deferred callback.
  */
-void usb_spi_deferred(struct usb_spi_config const *config);
+void usb_spi_deferred(void);
 
 /*
  * Set the enable state for the USB-SPI bridge.
@@ -648,34 +633,117 @@ void usb_spi_deferred(struct usb_spi_config const *config);
  * available for host tools to use without forcing the device to
  * disconnect or disable whatever else might be using the SPI bus.
  */
-void usb_spi_enable(struct usb_spi_config const *config, int enabled);
+void usb_spi_enable(int enabled);
 
 /*
  * These functions are used by the trampoline functions defined above to
  * connect USB endpoint events with the generic USB GPIO driver.
  */
-void usb_spi_tx(struct usb_spi_config const *config);
-void usb_spi_rx(struct usb_spi_config const *config);
-void usb_spi_event(struct usb_spi_config const *config, enum usb_ep_event evt);
-int usb_spi_interface(struct usb_spi_config const *config, usb_uint *rx_buf,
-		      usb_uint *tx_buf);
+void usb_spi_tx(void);
+void usb_spi_rx(void);
+void usb_spi_event(enum usb_ep_event evt);
+int usb_spi_interface(usb_uint *rx_buf, usb_uint *tx_buf);
 
 /*
  * These functions should be implemented by the board to provide any board
  * specific operations required to enable or disable access to the SPI device.
  */
-void usb_spi_board_enable(struct usb_spi_config const *config);
-void usb_spi_board_disable(struct usb_spi_config const *config);
+void usb_spi_board_enable(void);
+void usb_spi_board_disable(void);
 
 /*
- * In order to facilitate odd cases of e.g. a SPI bus sitting behind a second
- * microcontroller, or otherwise needing a non-standard driver, setting the
- * USB_SPI_CUSTOM_SPI_DEVICE_MASK bit of spi_device->port will cause the
- * USB->SPI forwarding logic to invoke this method rather than the standard
- * spi_transaction().
+ * In order to facilitate special SPI busses not covered by standard EC
+ * drivers, setting the USB_SPI_CUSTOM_SPI_DEVICE_MASK bit of spi_device->port
+ * will cause the USB to SPI forwarding logic to invoke this method rather
+ * than the standard spi_transaction_async().
  */
 int usb_spi_board_transaction(const struct spi_device_t *spi_device,
-			      const uint8_t *txdata, int txlen, uint8_t *rxdata,
-			      int rxlen);
+			      uint32_t flash_flags, const uint8_t *txdata,
+			      int txlen, uint8_t *rxdata, int rxlen);
+
+/*
+ * Flags to use in usb_spi_board_transaction_async() for advanced serial flash
+ * communication, when supported.
+ */
+
+/* Data width during the opcode stage. */
+#define FLASH_FLAG_OPCODE_WIDTH_POS 0
+#define FLASH_FLAG_OPCODE_WIDTH_MSK (0x3U << FLASH_FLAG_OPCODE_WIDTH_POS)
+#define FLASH_FLAG_OPCODE_WIDTH_1WIRE (0x0U << FLASH_FLAG_OPCODE_WIDTH_POS)
+#define FLASH_FLAG_OPCODE_WIDTH_2WIRE (0x1U << FLASH_FLAG_OPCODE_WIDTH_POS)
+#define FLASH_FLAG_OPCODE_WIDTH_4WIRE (0x2U << FLASH_FLAG_OPCODE_WIDTH_POS)
+#define FLASH_FLAG_OPCODE_WIDTH_8WIRE (0x3U << FLASH_FLAG_OPCODE_WIDTH_POS)
+
+/* Transmit opcode bits at both rising and falling clock edges. */
+#define FLASH_FLAG_OPCODE_DTR_POS 2
+#define FLASH_FLAG_OPCODE_DTR (0x1U << FLASH_FLAG_OPCODE_DTR_POS)
+
+/* Number of bytes of opcode (0-4). */
+#define FLASH_FLAG_OPCODE_LEN_POS 3
+#define FLASH_FLAG_OPCODE_LEN_MSK (0x7U << FLASH_FLAG_OPCODE_LEN_POS)
+
+/* Data width during the address stage. */
+#define FLASH_FLAG_ADDR_WIDTH_POS 6
+#define FLASH_FLAG_ADDR_WIDTH_MSK (0x3U << FLASH_FLAG_ADDR_WIDTH_POS)
+#define FLASH_FLAG_ADDR_WIDTH_1WIRE (0x0U << FLASH_FLAG_ADDR_WIDTH_POS)
+#define FLASH_FLAG_ADDR_WIDTH_2WIRE (0x1U << FLASH_FLAG_ADDR_WIDTH_POS)
+#define FLASH_FLAG_ADDR_WIDTH_4WIRE (0x2U << FLASH_FLAG_ADDR_WIDTH_POS)
+#define FLASH_FLAG_ADDR_WIDTH_8WIRE (0x3U << FLASH_FLAG_ADDR_WIDTH_POS)
+
+/* Transmit address bits at both rising and falling clock edges. */
+#define FLASH_FLAG_ADDR_DTR_POS 8
+#define FLASH_FLAG_ADDR_DTR (0x1U << FLASH_FLAG_ADDR_DTR_POS)
+
+/* Number of bytes of address (0-4). */
+#define FLASH_FLAG_ADDR_LEN_POS 9
+#define FLASH_FLAG_ADDR_LEN_MSK (0x7U << FLASH_FLAG_ADDR_LEN_POS)
+
+/* Data width during the "alternate bytes" stage. */
+#define FLASH_FLAG_ALT_WIDTH_POS 12
+#define FLASH_FLAG_ALT_WIDTH_MSK (0x3U << FLASH_FLAG_ALT_WIDTH_POS)
+#define FLASH_FLAG_ALT_WIDTH_1WIRE (0x0U << FLASH_FLAG_ALT_WIDTH_POS)
+#define FLASH_FLAG_ALT_WIDTH_2WIRE (0x1U << FLASH_FLAG_ALT_WIDTH_POS)
+#define FLASH_FLAG_ALT_WIDTH_4WIRE (0x2U << FLASH_FLAG_ALT_WIDTH_POS)
+#define FLASH_FLAG_ALT_WIDTH_8WIRE (0x3U << FLASH_FLAG_ALT_WIDTH_POS)
+
+/* Transmit alternate bits at both rising and falling clock edges. */
+#define FLASH_FLAG_ALT_DTR_POS 14
+#define FLASH_FLAG_ALT_DTR (0x1U << FLASH_FLAG_ALT_DTR_POS)
+
+/* Number of bytes of alternate data (0-4). */
+#define FLASH_FLAG_ALT_LEN_POS 15
+#define FLASH_FLAG_ALT_LEN_MSK (0x7U << FLASH_FLAG_ALT_LEN_POS)
+
+/* Number of dummy clock cycles (0-31). */
+#define FLASH_FLAG_DUMMY_CYCLES_POS 18
+#define FLASH_FLAG_DUMMY_CYCLES_MSK (0x1FU << FLASH_FLAG_DUMMY_CYCLES_POS)
+
+/* Data width during the data stage. */
+#define FLASH_FLAG_DATA_WIDTH_POS 23
+#define FLASH_FLAG_DATA_WIDTH_MSK (0x3U << FLASH_FLAG_DATA_WIDTH_POS)
+#define FLASH_FLAG_DATA_WIDTH_1WIRE (0x0U << FLASH_FLAG_DATA_WIDTH_POS)
+#define FLASH_FLAG_DATA_WIDTH_2WIRE (0x1U << FLASH_FLAG_DATA_WIDTH_POS)
+#define FLASH_FLAG_DATA_WIDTH_4WIRE (0x2U << FLASH_FLAG_DATA_WIDTH_POS)
+#define FLASH_FLAG_DATA_WIDTH_8WIRE (0x3U << FLASH_FLAG_DATA_WIDTH_POS)
+
+/* Transmit data bits at both rising and falling clock edges. */
+#define FLASH_FLAG_DATA_DTR_POS 25
+#define FLASH_FLAG_DATA_DTR (0x1U << FLASH_FLAG_DATA_DTR_POS)
+
+/*
+ * Mask of the flags that cannot be ignored.  This is basically any flags
+ * which call for wires to switch direction, or data being clocked on both
+ * rising and falling edges.  As long as none of these are present, then the
+ * remaining flags specifying the length of opcode/address can be ignored, as
+ * the entire data buffer can be transmitted as a sequence of bytes, without
+ * the controller knowing which parts are to be interpreted as
+ * opcode/address/data.
+ */
+#define FLASH_FLAGS_REQUIRING_SUPPORT                              \
+	(FLASH_FLAG_OPCODE_WIDTH_MSK | FLASH_FLAG_OPCODE_DTR |     \
+	 FLASH_FLAG_ADDR_WIDTH_MSK | FLASH_FLAG_ADDR_DTR |         \
+	 FLASH_FLAG_ALT_WIDTH_MSK | FLASH_FLAG_ALT_DTR |           \
+	 FLASH_FLAG_DUMMY_CYCLES_MSK | FLASH_FLAG_DATA_WIDTH_MSK | \
+	 FLASH_FLAG_DATA_DTR)
 
 #endif /* __CROS_EC_USB_SPI_H */

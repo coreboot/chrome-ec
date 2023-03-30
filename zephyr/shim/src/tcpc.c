@@ -16,7 +16,9 @@
 #include "usbc/tcpc_ps8xxx.h"
 #include "usbc/tcpc_ps8xxx_emul.h"
 #include "usbc/tcpc_raa489000.h"
+#include "usbc/tcpc_rt1715.h"
 #include "usbc/tcpc_rt1718s.h"
+#include "usbc/tcpc_rt1718s_emul.h"
 #include "usbc/tcpci.h"
 #include "usbc/utils.h"
 
@@ -34,7 +36,7 @@ LOG_MODULE_REGISTER(tcpc, CONFIG_GPIO_LOG_LEVEL);
 #if DT_HAS_TCPC
 
 #define TCPC_CHIP_ENTRY(usbc_id, tcpc_id, config_fn) \
-	[USBC_PORT_NEW(usbc_id)] = config_fn(tcpc_id)
+	[USBC_PORT_NEW(usbc_id)] = config_fn(tcpc_id),
 
 #define CHECK_COMPAT(compat, usbc_id, tcpc_id, config_fn) \
 	COND_CODE_1(DT_NODE_HAS_COMPAT(tcpc_id, compat),  \
@@ -47,7 +49,9 @@ LOG_MODULE_REGISTER(tcpc, CONFIG_GPIO_LOG_LEVEL);
 	CHECK_COMPAT(PS8XXX_EMUL_COMPAT, usbc_id, tcpc_id,  \
 		     TCPC_CONFIG_PS8XXX_EMUL)               \
 	CHECK_COMPAT(ANX7447_EMUL_COMPAT, usbc_id, tcpc_id, \
-		     TCPC_CONFIG_ANX7447_EMUL)
+		     TCPC_CONFIG_ANX7447_EMUL)              \
+	CHECK_COMPAT(RT1718S_EMUL_COMPAT, usbc_id, tcpc_id, \
+		     TCPC_CONFIG_RT1718S_EMUL)
 #else
 #define TCPC_CHIP_FIND_EMUL(...)
 #endif /* TEST_BUILD */
@@ -67,6 +71,7 @@ LOG_MODULE_REGISTER(tcpc, CONFIG_GPIO_LOG_LEVEL);
 		     TCPC_CONFIG_RAA489000)                                    \
 	CHECK_COMPAT(RT1718S_TCPC_COMPAT, usbc_id, tcpc_id,                    \
 		     TCPC_CONFIG_RT1718S)                                      \
+	CHECK_COMPAT(RT1715_TCPC_COMPAT, usbc_id, tcpc_id, TCPC_CONFIG_RT1715) \
 	CHECK_COMPAT(TCPCI_COMPAT, usbc_id, tcpc_id, TCPC_CONFIG_TCPCI)        \
 	TCPC_CHIP_FIND_EMUL(usbc_id, tcpc_id)
 
@@ -81,9 +86,54 @@ LOG_MODULE_REGISTER(tcpc, CONFIG_GPIO_LOG_LEVEL);
 MAYBE_CONST struct tcpc_config_t tcpc_config[] = { DT_FOREACH_STATUS_OKAY(
 	named_usbc_port, TCPC_CHIP) };
 
+#define TCPC_ALT_DEFINITION(node_id, config_fn)                 \
+	const struct tcpc_config_t TCPC_ALT_NAME_GET(node_id) = \
+		config_fn(node_id)
+
+#define TCPC_ALT_DEFINE(node_id, config_fn)         \
+	COND_CODE_1(DT_PROP_OR(node_id, is_alt, 0), \
+		    (TCPC_ALT_DEFINITION(node_id, config_fn);), ())
+
+/*
+ * Define a struct tcpc_config_t for every TCPC node in the tree with the
+ * "is-alt" property set.
+ */
+DT_FOREACH_STATUS_OKAY_VARGS(RT1715_TCPC_COMPAT, TCPC_ALT_DEFINE,
+			     TCPC_CONFIG_RT1715)
+
 #ifdef CONFIG_PLATFORM_EC_TCPC_INTERRUPT
 
 BUILD_ASSERT(ARRAY_SIZE(tcpc_config) == CONFIG_USB_PD_PORT_MAX_COUNT);
+
+uint16_t tcpc_get_alert_status(void)
+{
+	uint16_t status = 0;
+	uint16_t alert_mask[] = { PD_STATUS_TCPC_ALERT_0,
+				  PD_STATUS_TCPC_ALERT_1,
+				  PD_STATUS_TCPC_ALERT_2,
+				  PD_STATUS_TCPC_ALERT_3 };
+
+	/*
+	 * Check which port has the ALERT line set and ignore if that TCPC has
+	 * its reset line active.
+	 */
+	for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+		/*
+		 * if the interrupt port exists and the interrupt is active
+		 */
+		if (tcpc_config[i].irq_gpio.port &&
+		    gpio_pin_get_dt(&tcpc_config[i].irq_gpio))
+			/*
+			 * if the reset line does not exist or exists but is
+			 * not active.
+			 */
+			if (!tcpc_config[i].rst_gpio.port ||
+			    !gpio_pin_get_dt(&tcpc_config[i].rst_gpio))
+				status |= alert_mask[i];
+	}
+
+	return status;
+}
 
 struct gpio_callback int_gpio_cb[CONFIG_USB_PD_PORT_MAX_COUNT];
 
@@ -107,8 +157,6 @@ static void tcpc_int_gpio_callback(const struct device *dev,
  */
 void tcpc_enable_interrupt(void)
 {
-	gpio_flags_t flags;
-
 	for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 		/*
 		 * Check whether the interrupt pin has been configured
@@ -139,12 +187,9 @@ void tcpc_enable_interrupt(void)
 			gpio_add_callback(tcpc_config[i].irq_gpio.port,
 					  &int_gpio_cb[i]);
 		}
-		flags = tcpc_config[i].flags & TCPC_FLAGS_ALERT_ACTIVE_HIGH ?
-				GPIO_INT_EDGE_RISING :
-				GPIO_INT_EDGE_FALLING;
-		flags = (flags | GPIO_INT_ENABLE) & ~GPIO_INT_DISABLE;
+
 		gpio_pin_interrupt_configure_dt(&tcpc_config[i].irq_gpio,
-						flags);
+						GPIO_INT_EDGE_TO_ACTIVE);
 	}
 }
 /*
