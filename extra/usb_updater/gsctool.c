@@ -524,9 +524,6 @@ static const struct option_container cmd_line_options[] = {
 	 "[enable] Get the current WP setting or enable WP"},
 	{{"clog", required_argument, NULL, 'x'},
 	 "[id]%Retrieve contents of the crash log with id <id>"},
-	{{"factory_config", optional_argument, NULL, 'y'},
-	 "[value]%Sets the factory config bits in INFO. value should be 64 "
-	 "bit hex."},
 	{{"reboot", optional_argument, NULL, 'z'},
 	 "Tell the GSC to reboot with an optional reset timeout parameter "
 	 "in milliseconds"},
@@ -3950,46 +3947,6 @@ static int get_console_logs(struct transfer_descriptor *td)
 	return 0;
 }
 
-static int process_get_factory_config(struct transfer_descriptor *td)
-{
-	uint32_t rv;
-	uint8_t response[8] = {0};
-	size_t response_size = sizeof(response);
-
-	rv = send_vendor_command(td, VENDOR_CC_GET_FACTORY_CONFIG, NULL,
-				 0, response, &response_size);
-	if (rv != VENDOR_RC_SUCCESS) {
-		printf("Set factory config failed. (%X)\n", rv);
-		return 1;
-	}
-
-	if (response_size < sizeof(uint64_t)) {
-		printf("Unexpected response size. (%zu)", response_size);
-		return 2;
-	}
-
-	uint64_t out = be64toh(*(uint64_t *) response);
-
-	printf("%lX\n", out);
-	return 0;
-}
-
-static int process_set_factory_config(struct transfer_descriptor *td,
-				      uint64_t val)
-{
-	uint64_t val_be = htobe64(val);
-	uint32_t rv;
-
-	rv = send_vendor_command(td, VENDOR_CC_SET_FACTORY_CONFIG, &val_be,
-				 sizeof(val_be), NULL, NULL);
-	if (rv != VENDOR_RC_SUCCESS) {
-		printf("Factory config failed. (%X)\n", rv);
-		return 1;
-	}
-
-	return 0;
-}
-
 
 int main(int argc, char *argv[])
 {
@@ -4055,9 +4012,6 @@ int main(int argc, char *argv[])
 	int get_clog = 0;
 	uint32_t clog_id = 0;
 	int get_console = 0;
-	int factory_config = 0;
-	int set_factory_config = 0;
-	uint64_t factory_config_arg = 0;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4292,13 +4246,6 @@ int main(int argc, char *argv[])
 			get_clog = 1;
 			clog_id = strtoul(optarg, NULL, 0);
 			break;
-		case 'y':
-			factory_config = 1;
-			if (optarg) {
-				set_factory_config = 1;
-				factory_config_arg = strtoull(optarg, NULL, 16);
-			}
-			break;
 		case 'z':
 			reboot_gsc = true;
 			/* Set a 1ms default reboot time to avoid libusb errors
@@ -4358,7 +4305,6 @@ int main(int argc, char *argv[])
 	    !get_console &&
 	    !get_flog &&
 	    !get_endorsement_seed &&
-	    !factory_config &&
 	    !factory_mode &&
 	    !erase_ap_ro_hash &&
 	    !password &&
@@ -4517,14 +4463,6 @@ int main(int argc, char *argv[])
 
 	if (get_console)
 		exit(get_console_logs(&td));
-
-	if (factory_config) {
-		if (set_factory_config)
-			exit(process_set_factory_config(&td,
-							factory_config_arg));
-		else
-			exit(process_get_factory_config(&td));
-	}
 
 	if (data || show_fw_ver) {
 
