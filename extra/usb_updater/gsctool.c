@@ -522,8 +522,8 @@ static const struct option_container cmd_line_options[] = {
 	 "Report this utility version"},
 	{{"wp", optional_argument, NULL, 'w'},
 	 "[enable] Get the current WP setting or enable WP"},
-	{{"clog", required_argument, NULL, 'x'},
-	 "[id]%Retrieve contents of the crash log with id <id>"},
+	{{"clog", no_argument, NULL, 'x'},
+	 "Retrieve contents of the most recent crash log."},
 	{{"reboot", optional_argument, NULL, 'z'},
 	 "Tell the GSC to reboot with an optional reset timeout parameter "
 	 "in milliseconds"},
@@ -3906,15 +3906,14 @@ static int getopt_all(int argc, char *argv[])
 	return i;
 }
 
-static int get_crashlog(struct transfer_descriptor *td, uint32_t id)
+static int get_crashlog(struct transfer_descriptor *td)
 {
-	uint32_t id_be = htobe32(id);
 	uint32_t rv;
 	uint8_t response[2048] = {0};
 	size_t response_size = sizeof(response);
 
-	rv = send_vendor_command(td, VENDOR_CC_GET_CRASHLOG, &id_be,
-				 sizeof(id_be), response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_GET_CRASHLOG, NULL, 0, response,
+				 &response_size);
 	if (rv != VENDOR_RC_SUCCESS) {
 		printf("Get crash log failed. (%X)\n", rv);
 		return 1;
@@ -4010,7 +4009,6 @@ int main(int argc, char *argv[])
 	bool reboot_gsc = false;
 	size_t reboot_gsc_timeout = 0;
 	int get_clog = 0;
-	uint32_t clog_id = 0;
 	int get_console = 0;
 
 	/*
@@ -4244,7 +4242,6 @@ int main(int argc, char *argv[])
 			break;
 		case 'x':
 			get_clog = 1;
-			clog_id = strtoul(optarg, NULL, 0);
 			break;
 		case 'z':
 			reboot_gsc = true;
@@ -4459,7 +4456,7 @@ int main(int argc, char *argv[])
 		exit(process_reboot_gsc(&td, reboot_gsc_timeout));
 
 	if (get_clog)
-		exit(get_crashlog(&td, clog_id));
+		exit(get_crashlog(&td));
 
 	if (get_console)
 		exit(get_console_logs(&td));
