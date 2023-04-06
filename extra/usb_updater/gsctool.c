@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <libusb.h>
+#include <openssl/evp.h>
 #include <openssl/sha.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -312,15 +313,9 @@ struct option_container {
 	const char *help_text;
 };
 
-/* SHA context used with our local sha_* abstraction functions */
-union sha_ctx {
-	SHA_CTX sha1;
-	SHA256_CTX sha256;
-};
-
-static void sha_init(union sha_ctx *ctx);
-static void sha_update(union sha_ctx *ctx, const void *data, size_t len);
-static void sha_final_into_block_digest(union sha_ctx *ctx, void *block_digest,
+static void sha_init(EVP_MD_CTX *ctx);
+static void sha_update(EVP_MD_CTX *ctx, const void *data, size_t len);
+static void sha_final_into_block_digest(EVP_MD_CTX *ctx, void *block_digest,
 					size_t size);
 
 /*
@@ -1019,7 +1014,7 @@ static void transfer_section(struct transfer_descriptor *td,
 	printf("sending 0x%zx bytes to %#x\n", data_len, section_addr);
 	while (data_len) {
 		size_t payload_size;
-		union sha_ctx ctx;
+		EVP_MD_CTX* ctx;
 		int max_retries;
 		struct update_pdu updu;
 
@@ -1031,12 +1026,14 @@ static void transfer_section(struct transfer_descriptor *td,
 		updu.cmd.block_base = htobe32(section_addr);
 
 		/* Calculate the digest. */
-		sha_init(&ctx);
-		sha_update(&ctx, &updu.cmd.block_base,
+		ctx = EVP_MD_CTX_new();
+		sha_init(ctx);
+		sha_update(ctx, &updu.cmd.block_base,
 			   sizeof(updu.cmd.block_base));
-		sha_update(&ctx, data_ptr, payload_size);
-		sha_final_into_block_digest(&ctx, &updu.cmd.block_digest,
+		sha_update(ctx, data_ptr, payload_size);
+		sha_final_into_block_digest(ctx, &updu.cmd.block_digest,
 					    sizeof(updu.cmd.block_digest));
+		EVP_MD_CTX_free(ctx);
 
 		if (td->ep_type == usb_xfer) {
 			for (max_retries = 10; max_retries; max_retries--)
@@ -1538,7 +1535,7 @@ static int ext_cmd_over_usb(struct usb_endpoint *uep, uint16_t subcommand,
 	struct update_frame_header *ufh;
 	uint16_t *frame_ptr;
 	size_t usb_msg_size;
-	union sha_ctx ctx;
+	EVP_MD_CTX* ctx;
 
 	usb_msg_size = sizeof(struct update_frame_header) +
 		sizeof(subcommand) + body_size;
@@ -1559,12 +1556,14 @@ static int ext_cmd_over_usb(struct usb_endpoint *uep, uint16_t subcommand,
 		memcpy(frame_ptr + 1, cmd_body, body_size);
 
 	/* Calculate the digest. */
-	sha_init(&ctx);
-	sha_update(&ctx, &ufh->cmd.block_base,
+	ctx = EVP_MD_CTX_new();
+	sha_init(ctx);
+	sha_update(ctx, &ufh->cmd.block_base,
 		   usb_msg_size -
 		   offsetof(struct update_frame_header, cmd.block_base));
-	sha_final_into_block_digest(&ctx, &ufh->cmd.block_digest,
+	sha_final_into_block_digest(ctx, &ufh->cmd.block_digest,
 				    sizeof(ufh->cmd.block_digest));
+	EVP_MD_CTX_free(ctx);
 
 	do_xfer(uep, ufh, usb_msg_size, resp,
 		resp_size ? *resp_size : 0, 1, resp_size);
@@ -2007,34 +2006,27 @@ static void generate_reset_request(struct transfer_descriptor *td)
 }
 
 /* Forward to correct SHA implementation based on image type */
-static void sha_init(union sha_ctx *ctx)
+static void sha_init(EVP_MD_CTX *ctx)
 {
 	if (image_magic == MAGIC_HAVEN)
-		SHA1_Init(&ctx->sha1);
+		EVP_DigestInit_ex(ctx, EVP_sha1(), NULL);
 	else if (image_magic == MAGIC_DAUNTLESS)
-		SHA256_Init(&ctx->sha256);
+		EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
 }
 
 /* Forward to correct SHA implementation based on image type */
-static void sha_update(union sha_ctx *ctx, const void *data, size_t len)
+static void sha_update(EVP_MD_CTX *ctx, const void *data, size_t len)
 {
-	if (image_magic == MAGIC_HAVEN)
-		SHA1_Update(&ctx->sha1, data, len);
-	else if (image_magic == MAGIC_DAUNTLESS)
-		SHA256_Update(&ctx->sha256, data, len);
+	EVP_DigestUpdate(ctx, data, len);
 }
 
 /* Forward to correct SHA implementation based on image type */
-static void sha_final_into_block_digest(union sha_ctx *ctx, void *block_digest,
+static void sha_final_into_block_digest(EVP_MD_CTX *ctx, void *block_digest,
 					size_t size)
 {
 	/* Big enough for either hash algo */
 	uint8_t full_digest[SHA256_DIGEST_LENGTH];
-
-	if (image_magic == MAGIC_HAVEN)
-		SHA1_Final(full_digest, &ctx->sha1);
-	else if (image_magic == MAGIC_DAUNTLESS)
-		SHA256_Final(full_digest, &ctx->sha256);
+	EVP_DigestFinal(ctx, full_digest, NULL);
 
 	/* Don't try to copy out more than the smallest (SHA1) digest */
 	memcpy(block_digest, full_digest, MIN(size, SHA_DIGEST_LENGTH));
