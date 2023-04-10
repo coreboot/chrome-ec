@@ -1273,7 +1273,7 @@ struct ec_response_get_version_v1 {
 	char cros_fwid_rw[32]; /* Added in version 1 */
 } __ec_align4;
 
-/* Read test - DEPRECATED */
+/* Read test - OBSOLETE */
 #define EC_CMD_READ_TEST 0x0003
 
 /*
@@ -3725,17 +3725,6 @@ struct ec_params_mkbp_simulate_key {
 	uint8_t pressed;
 } __ec_align1;
 
-#define EC_CMD_GET_KEYBOARD_ID 0x0063
-
-struct ec_response_keyboard_id {
-	uint32_t keyboard_id;
-} __ec_align4;
-
-enum keyboard_id {
-	KEYBOARD_ID_UNSUPPORTED = 0,
-	KEYBOARD_ID_UNREADABLE = 0xffffffff,
-};
-
 /* Configure keyboard scanning */
 #define EC_CMD_MKBP_SET_CONFIG 0x0064
 #define EC_CMD_MKBP_GET_CONFIG 0x0065
@@ -4997,37 +4986,15 @@ struct ec_response_device_event {
 /*****************************************************************************/
 /* Smart battery pass-through */
 
-/* Get / Set 16-bit smart battery registers */
+/* Get / Set 16-bit smart battery registers  - OBSOLETE */
 #define EC_CMD_SB_READ_WORD 0x00B0
 #define EC_CMD_SB_WRITE_WORD 0x00B1
 
 /* Get / Set string smart battery parameters
- * formatted as SMBUS "block".
+ * formatted as SMBUS "block". - OBSOLETE
  */
 #define EC_CMD_SB_READ_BLOCK 0x00B2
 #define EC_CMD_SB_WRITE_BLOCK 0x00B3
-
-struct ec_params_sb_rd {
-	uint8_t reg;
-} __ec_align1;
-
-struct ec_response_sb_rd_word {
-	uint16_t value;
-} __ec_align2;
-
-struct ec_params_sb_wr_word {
-	uint8_t reg;
-	uint16_t value;
-} __ec_align1;
-
-struct ec_response_sb_rd_block {
-	uint8_t data[32];
-} __ec_align1;
-
-struct ec_params_sb_wr_block {
-	uint8_t reg;
-	uint16_t data[32];
-} __ec_align1;
 
 /*****************************************************************************/
 /* Battery vendor parameters

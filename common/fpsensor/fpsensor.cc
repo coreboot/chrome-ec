@@ -41,11 +41,6 @@ extern "C" {
 /* Ready to encrypt a template. */
 static timestamp_t encryption_deadline;
 
-/* raw image offset inside the acquired frame */
-#ifndef FP_SENSOR_IMAGE_OFFSET
-#define FP_SENSOR_IMAGE_OFFSET 0
-#endif
-
 #define FP_MODE_ANY_CAPTURE \
 	(FP_MODE_CAPTURE | FP_MODE_ENROLL_IMAGE | FP_MODE_MATCH)
 #define FP_MODE_ANY_DETECT_FINGER \
@@ -240,7 +235,7 @@ extern "C" void fp_task(void)
 	int timeout_us = -1;
 
 	CPRINTS("FP_SENSOR_SEL: %s",
-		fp_sensor_type_to_str(get_fp_sensor_type()));
+		fp_sensor_type_to_str(fpsensor_detect_get_type()));
 
 #ifdef HAVE_FP_PRIVATE_DRIVER
 	/* Reset and initialize the sensor IC */
@@ -340,9 +335,9 @@ extern "C" void fp_task(void)
 
 static enum ec_status fp_command_passthru(struct host_cmd_handler_args *args)
 {
-	const struct ec_params_fp_passthru *params =
+	const auto *params =
 		static_cast<const ec_params_fp_passthru *>(args->params);
-	uint8_t *out = static_cast<uint8_t *>(args->response);
+	auto *out = static_cast<uint8_t *>(args->response);
 	int rc;
 	enum ec_status ret = EC_RES_SUCCESS;
 
@@ -374,8 +369,7 @@ DECLARE_HOST_COMMAND(EC_CMD_FP_PASSTHRU, fp_command_passthru, EC_VER_MASK(0));
 
 static enum ec_status fp_command_info(struct host_cmd_handler_args *args)
 {
-	struct ec_response_fp_info *r =
-		static_cast<ec_response_fp_info *>(args->response);
+	auto *r = static_cast<ec_response_fp_info *>(args->response);
 
 #ifdef HAVE_FP_PRIVATE_DRIVER
 	if (fp_sensor_get_info(r) < 0)
@@ -415,7 +409,7 @@ int validate_fp_buffer_offset(const uint32_t buffer_size, const uint32_t offset,
 
 static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 {
-	const struct ec_params_fp_frame *params =
+	const auto *params =
 		static_cast<const struct ec_params_fp_frame *>(args->params);
 	void *out = args->response;
 	uint32_t idx = FP_FRAME_GET_BUFFER_INDEX(params->offset);
@@ -480,8 +474,9 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 		 * The beginning of the buffer contains nonce, encryption_salt
 		 * and tag.
 		 */
-		enc_info = (struct ec_fp_template_encryption_metadata
-				    *)(fp_enc_buffer);
+		enc_info = reinterpret_cast<
+			struct ec_fp_template_encryption_metadata *>(
+			fp_enc_buffer);
 		enc_info->struct_version = FP_TEMPLATE_FORMAT_VERSION;
 		trng_init();
 		trng_rand_bytes(enc_info->nonce, FP_CONTEXT_NONCE_BYTES);
@@ -538,8 +533,7 @@ DECLARE_HOST_COMMAND(EC_CMD_FP_FRAME, fp_command_frame, EC_VER_MASK(0));
 
 static enum ec_status fp_command_stats(struct host_cmd_handler_args *args)
 {
-	struct ec_response_fp_stats *r =
-		static_cast<struct ec_response_fp_stats *>(args->response);
+	auto *r = static_cast<struct ec_response_fp_stats *>(args->response);
 
 	r->capture_time_us = capture_time_us;
 	r->matching_time_us = matching_time_us;
@@ -580,10 +574,10 @@ validate_template_format(struct ec_fp_template_encryption_metadata *enc_info)
 
 static enum ec_status fp_command_template(struct host_cmd_handler_args *args)
 {
-	const struct ec_params_fp_template *params =
+	const auto *params =
 		static_cast<const struct ec_params_fp_template *>(args->params);
 	uint32_t size = params->size & ~FP_TEMPLATE_COMMIT;
-	int xfer_complete = params->size & FP_TEMPLATE_COMMIT;
+	bool xfer_complete = params->size & FP_TEMPLATE_COMMIT;
 	uint32_t offset = params->offset;
 	uint32_t idx = templ_valid;
 	uint8_t key[SBP_ENC_KEY_LEN];

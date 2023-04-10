@@ -10,12 +10,6 @@
  * all main chipsets (x86, gaia, etc.).
  */
 
-/*
- * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
- * #line marks the *next* line, so it is off by one.
- */
-#line 18
-
 #ifndef __CROS_EC_CHIPSET_H
 #define __CROS_EC_CHIPSET_H
 
@@ -227,7 +221,7 @@ void chipset_ap_rst_interrupt(enum gpio_signal signal);
 /**
  * GPIO interrupt handler of warm reset signal from servo or H1.
  *
- * It is used in Qualcomm chipset power sequence.
+ * It is used in Qualcomm/MediaTek chipset power sequence.
  */
 void chipset_warm_reset_interrupt(enum gpio_signal signal);
 
