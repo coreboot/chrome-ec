@@ -16,7 +16,9 @@
 #include "usbc/tcpc_ps8xxx.h"
 #include "usbc/tcpc_ps8xxx_emul.h"
 #include "usbc/tcpc_raa489000.h"
+#include "usbc/tcpc_rt1715.h"
 #include "usbc/tcpc_rt1718s.h"
+#include "usbc/tcpc_rt1718s_emul.h"
 #include "usbc/tcpci.h"
 #include "usbc/utils.h"
 
@@ -47,7 +49,9 @@ LOG_MODULE_REGISTER(tcpc, CONFIG_GPIO_LOG_LEVEL);
 	CHECK_COMPAT(PS8XXX_EMUL_COMPAT, usbc_id, tcpc_id,  \
 		     TCPC_CONFIG_PS8XXX_EMUL)               \
 	CHECK_COMPAT(ANX7447_EMUL_COMPAT, usbc_id, tcpc_id, \
-		     TCPC_CONFIG_ANX7447_EMUL)
+		     TCPC_CONFIG_ANX7447_EMUL)              \
+	CHECK_COMPAT(RT1718S_EMUL_COMPAT, usbc_id, tcpc_id, \
+		     TCPC_CONFIG_RT1718S_EMUL)
 #else
 #define TCPC_CHIP_FIND_EMUL(...)
 #endif /* TEST_BUILD */
@@ -67,6 +71,7 @@ LOG_MODULE_REGISTER(tcpc, CONFIG_GPIO_LOG_LEVEL);
 		     TCPC_CONFIG_RAA489000)                                    \
 	CHECK_COMPAT(RT1718S_TCPC_COMPAT, usbc_id, tcpc_id,                    \
 		     TCPC_CONFIG_RT1718S)                                      \
+	CHECK_COMPAT(RT1715_TCPC_COMPAT, usbc_id, tcpc_id, TCPC_CONFIG_RT1715) \
 	CHECK_COMPAT(TCPCI_COMPAT, usbc_id, tcpc_id, TCPC_CONFIG_TCPCI)        \
 	TCPC_CHIP_FIND_EMUL(usbc_id, tcpc_id)
 
@@ -80,6 +85,21 @@ LOG_MODULE_REGISTER(tcpc, CONFIG_GPIO_LOG_LEVEL);
 /* Type C Port Controllers */
 MAYBE_CONST struct tcpc_config_t tcpc_config[] = { DT_FOREACH_STATUS_OKAY(
 	named_usbc_port, TCPC_CHIP) };
+
+#define TCPC_ALT_DEFINITION(node_id, config_fn)                 \
+	const struct tcpc_config_t TCPC_ALT_NAME_GET(node_id) = \
+		config_fn(node_id)
+
+#define TCPC_ALT_DEFINE(node_id, config_fn)         \
+	COND_CODE_1(DT_PROP_OR(node_id, is_alt, 0), \
+		    (TCPC_ALT_DEFINITION(node_id, config_fn);), ())
+
+/*
+ * Define a struct tcpc_config_t for every TCPC node in the tree with the
+ * "is-alt" property set.
+ */
+DT_FOREACH_STATUS_OKAY_VARGS(RT1715_TCPC_COMPAT, TCPC_ALT_DEFINE,
+			     TCPC_CONFIG_RT1715)
 
 #ifdef CONFIG_PLATFORM_EC_TCPC_INTERRUPT
 

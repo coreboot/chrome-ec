@@ -1,32 +1,38 @@
-description: "Gfl NB0280-549358"
-compatible: "gfl,nb0280-549358"
+# Copyright 2023 The ChromiumOS Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+description: "SMP-ATL3.61 DELL 26JGK"
+compatible: "smp,atl26jgk"
 
 include: battery-smart.yaml
 
 properties:
   enum-name:
     type: string
-    default: "gfl,nb0280-549358"
+    default: "smp,atl26jgk"
 
   # Fuel gauge
   manuf_name:
-    default: "GFL"
+    default: "SMP-ATL3.61"
   device_name:
-    default: "NB0280-549358"
+    default: "DELL 26JGK"
   ship_mode_reg_addr:
-    default: 0x00
+    default: 0x44
   ship_mode_reg_data:
     default: [0x0010, 0x0010]
   fet_mfgacc_support:
-    default: 0
+    default: 1
+  fet_mfgacc_smb_block:
+    default: 1
   fet_reg_addr:
-    default: 0x43
+    default: 0x0054
   fet_reg_mask:
-    default: 0x0001
+    default: 0x0006
   fet_disconnect_val:
     default: 0x0000
   fet_cfet_mask:
-    default: 0x0002
+    default: 0x0004
   fet_cfet_off_val:
     default: 0x0000
 
@@ -34,20 +40,20 @@ properties:
   voltage_max:
     default: 13200
   voltage_normal:
-    default: 11550
+    default: 11400
   voltage_min:
     default: 9000
   precharge_current:
-    default: 100
+    default: 256
   start_charging_min_c:
-    default: 0
+    default: -3
   start_charging_max_c:
     default: 50
   charging_min_c:
-    default: 0
+    default: -3
   charging_max_c:
     default: 60
   discharging_min_c:
-    default: -20
+    default: -5
   discharging_max_c:
-    default: 60
+    default: 70

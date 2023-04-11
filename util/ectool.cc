@@ -2379,14 +2379,6 @@ int cmd_fp_info(int argc, char *argv[])
 	return 0;
 }
 
-static void print_fp_enc_flags(const char *desc, uint32_t flags)
-{
-	printf("%s 0x%08x", desc, flags);
-	if (flags & FP_ENC_STATUS_SEED_SET)
-		printf(" FPTPM_seed_set");
-	printf("\n");
-}
-
 static int cmd_fp_context(int argc, char *argv[])
 {
 	struct ec_params_fp_context_v1 p;
@@ -2451,10 +2443,17 @@ int cmd_fp_enc_status(int argc, char *argv[])
 			"FP Encryption Status returned with errors: %d\n", rv);
 		return rv;
 	}
-	print_fp_enc_flags("FPMCU encryption status:",
-			   fp_encryptionstatus_command.GetStatus());
-	print_fp_enc_flags("Valid flags:            ",
-			   fp_encryptionstatus_command.GetValidFlags());
+	printf("FPMCU encryption status: 0x%08x%s",
+	       fp_encryptionstatus_command.GetStatus(),
+	       (ec::FpEncryptionStatusCommand::ParseFlags(
+			fp_encryptionstatus_command.GetStatus()))
+		       .c_str());
+	printf("Valid flags:             0x%08x%s",
+	       fp_encryptionstatus_command.GetValidFlags(),
+	       (ec::FpEncryptionStatusCommand::ParseFlags(
+			fp_encryptionstatus_command.GetValidFlags()))
+		       .c_str());
+
 	rv = 0;
 
 	return rv;
@@ -9132,37 +9131,6 @@ static int cmd_kbinfo(int argc, char *argv[])
 	return 0;
 }
 
-static int cmd_kbid(int argc, char *argv[])
-{
-	struct ec_response_keyboard_id response;
-	int rv;
-
-	if (argc > 1) {
-		fprintf(stderr, "Too many args\n");
-		return -1;
-	}
-
-	rv = ec_command(EC_CMD_GET_KEYBOARD_ID, 0, NULL, 0, &response,
-			sizeof(response));
-	if (rv < 0)
-		return rv;
-	switch (response.keyboard_id) {
-	case KEYBOARD_ID_UNSUPPORTED:
-		/* Keyboard ID was not supported */
-		printf("Keyboard doesn't support ID\n");
-		break;
-	case KEYBOARD_ID_UNREADABLE:
-		/* Ghosting ID was detected */
-		printf("Reboot and keep hands off the keyboard during"
-		       " next boot-up\n");
-		break;
-	default:
-		/* Valid keyboard ID value was reported*/
-		printf("%x\n", response.keyboard_id);
-	}
-	return rv;
-}
-
 static int cmd_keyconfig(int argc, char *argv[])
 {
 	struct ec_params_mkbp_set_config req;
@@ -11498,7 +11466,6 @@ const struct command commands[] = {
 	{ "led", cmd_led },
 	{ "lightbar", cmd_lightbar },
 	{ "kbfactorytest", cmd_keyboard_factory_test },
-	{ "kbid", cmd_kbid },
 	{ "kbinfo", cmd_kbinfo },
 	{ "kbpress", cmd_kbpress },
 	{ "keyconfig", cmd_keyconfig },

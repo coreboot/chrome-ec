@@ -275,6 +275,7 @@ class AllTests:
             ),
             TestConfig(test_name="global_initialization"),
             TestConfig(test_name="libcxx"),
+            TestConfig(test_name="malloc", imagetype_to_use=ImageType.RO),
             TestConfig(
                 config_name="mpu_ro",
                 test_name="mpu",
@@ -308,6 +309,7 @@ class AllTests:
                 test_name="rollback_entropy", imagetype_to_use=ImageType.RO
             ),
             TestConfig(test_name="rtc"),
+            TestConfig(test_name="sbrk", imagetype_to_use=ImageType.RO),
             TestConfig(test_name="sha256"),
             TestConfig(test_name="sha256_unrolled"),
             TestConfig(test_name="static_if"),
