@@ -25,7 +25,7 @@ static int factory_config_is_blank(uint64_t fc)
  * @return EC_SUCCESS or an error code in cases of various failures to read the
  *		      flash space.
  */
-static int read_factory_config(uint64_t *fc)
+int read_factory_config(uint64_t *fc)
 {
 	uint32_t *fc_p;
 	int i;
