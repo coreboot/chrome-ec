@@ -1,7 +1,7 @@
 # Google Security Chip (GSC) Case Closed Debugging (CCD)
 
-Cr50 is the firmware that runs on the Google Security Chip (GSC), which has
-support for [Case Closed Debugging](CCD).
+Cr50 or Ti50 is the firmware that runs on the Google Security Chip (GSC), which
+has support for [Case Closed Debugging](CCD).
 
 This document explains how to setup CCD, so you can access all of the necessary
 features to develop firmware on your Chrome OS device, access
@@ -11,15 +11,15 @@ features to develop firmware on your Chrome OS device, access
 
 ## Overview
 
-Cr50 CCD was designed to restrict CCD access to device owners and is implemented
+GSC CCD was designed to restrict CCD access to device owners and is implemented
 through **CCD privilege levels** ([`Open`], [`Unlocked`], [`Locked`]) that can
 be used to enable access to different **[CCD capabilities][cap]**. Capability
 settings can be modified to require certain privilege levels to access each
 capability. Device owners can use these settings to customize CCD so that it is
 as open or restricted as they want.
 
-Cr50 CCD exposes [3 debug consoles][consoles]: AP, EC, and Cr50 as well as
-control over [Hardware Write Protect][hw-wp]. Cr50 CCD also allows
+GSC CCD exposes [3 debug consoles][consoles]: AP, EC, and GSC as well as control
+over [Hardware Write Protect][hw-wp]. GSC CCD also allows
 [flashing the AP firmware] or [flashing the EC firmware].
 
 ### Capability and Privilege Levels {#cap-priv}
@@ -32,9 +32,9 @@ Privilege Levels |
 
 Capability Setting | Definition
 ------------------ | ----------
-`IfOpened`         | Specified capability is allowed if Cr50 Privilege Level is `Open`.
-`UnlessLocked`     | Specified capability is allowed unless Cr50 Privilege Level is `Locked`.
-`Always`           | Specified capability is always allowed, regardless of Cr50 Privilege Level.
+`IfOpened`         | Specified capability is allowed if GSC Privilege Level is `Open`.
+`UnlessLocked`     | Specified capability is allowed unless GSC Privilege Level is `Locked`.
+`Always`           | Specified capability is always allowed, regardless of GSC Privilege Level.
 
 Capability Setting | Privilege Level Required
 ------------------ | ----------------------------------------
@@ -44,7 +44,7 @@ Capability Setting | Privilege Level Required
 
 ## CCD Capabilities {#cap}
 
-The default Cr50 privilege level is [`Locked`] with the following capability
+The default GSC privilege level is [`Locked`] with the following capability
 settings:
 
 Capability        | Default    | Function
@@ -56,28 +56,28 @@ Capability        | Default    | Function
 [`FlashAP`]       | `IfOpened` | Allows flashing the AP
 [`FlashEC`]       | `IfOpened` | Allows flashing the EC
 [`OverrideWP`]    | `IfOpened` | Override hardware write protect
-`RebootECAP`      | `IfOpened` | Allow rebooting the EC/AP from the Cr50 console
-`GscFullConsole`  | `IfOpened` | Allow access to restricted Cr50 console commands
-`UnlockNoReboot`  | `Always`   | Allow unlocking Cr50 without rebooting the AP
-`UnlockNoShortPP` | `Always`   | Allow unlocking Cr50 without physical presence
-`OpenNoTPMWipe`   | `IfOpened` | Allow opening Cr50 without wiping the TPM
-`OpenNoLongPP`    | `IfOpened` | Allow opening Cr50 without physical presence
-`BatteryBypassPP` | `Always`   | Allow opening Cr50 without physical presence and developer mode if the battery is removed
+`RebootECAP`      | `IfOpened` | Allow rebooting the EC/AP from the GSC console
+`GscFullConsole`  | `IfOpened` | Allow access to restricted GSC console commands
+`UnlockNoReboot`  | `Always`   | Allow unlocking GSC without rebooting the AP
+`UnlockNoShortPP` | `Always`   | Allow unlocking GSC without physical presence
+`OpenNoTPMWipe`   | `IfOpened` | Allow opening GSC without wiping the TPM
+`OpenNoLongPP`    | `IfOpened` | Allow opening GSC without physical presence
+`BatteryBypassPP` | `Always`   | Allow opening GSC without physical presence and developer mode if the battery is removed
 `Unused`          | `Always`   | Doesn't do anything
 `I2C`             | `IfOpened` | Allow access to the I2C controller (used for measuring power)
 `FlashRead`       | `Always`   | Allow dumping a hash of the AP or EC flash
-`OpenNoDevMode`   | `IfOpened` | Allow opening Cr50 without developer mode
-`OpenFromUSB`     | `IfOpened` | Allow opening Cr50 from USB
+`OpenNoDevMode`   | `IfOpened` | Allow opening GSC without developer mode
+`OpenFromUSB`     | `IfOpened` | Allow opening GSC from USB
 
 ## Consoles {#consoles}
 
-Cr50 presents 3 consoles through CCD: AP, EC, and Cr50, each of which show up on
+GSC presents 3 consoles through CCD: AP, EC, and GSC, each of which show up on
 your host machine as a `/dev/ttyUSBX` device when a debug cable ([Suzy-Q] or
 [Type-C Servo v4]) is plugged in to the DUT.
 
 Console | Default access                              | Capability Name
 ------- | ------------------------------------------- | ---------------
-Cr50    | always read/write, but commands are limited | `GscFullConsole` enables the full set of Cr50 console commands
+GSC     | always read/write, but commands are limited | `GscFullConsole` enables the full set of GSC console commands
 AP      | read/write                                  | `UartGscRxAPTx` / `UartGscTxAPRx`
 EC      | read-only                                   | `UartGscRxECTx` / `UartGscTxECRx`
 
@@ -86,8 +86,8 @@ EC      | read-only                                   | `UartGscRxECTx` / `UartG
 When a debug cable ([Suzy-Q] or [Type-C Servo v4]) is plugged in to the DUT, the
 3 consoles will show up as `/dev/ttyUSBX` devices. You can connect to them with
 your favorite terminal program (e.g., `minicom`, `screen`, etc). You can also
-use the [`usb_console`] command to connect to Cr50 (`18d1:5014`) and specify the
-interface to choose between the consoles.
+use the [`usb_console`] command to connect to Cr50 (`18d1:5014`) or Ti50
+(`18d1:504a`) and specify the interface to choose between the consoles.
 
 ```bash
 # Install `usb_console`
@@ -95,18 +95,24 @@ interface to choose between the consoles.
 ```
 
 ```bash
-# Connect to Cr50 console
-(chroot) $ usb_console -d 18d1:5014
+# Connect to Cr50 (GSC) console
+(chroot) $ sudo usb_console -d 18d1:5014
+# Connect to Ti50 (GSC) console
+(chroot) $ sudo usb_console -d 18d1:504a
 ```
 
 ```bash
-# Connect to AP console
-(chroot) $ usb_console -d 18d1:5014 -i 1
+# Connect to AP console (on Cr50-based device)
+(chroot) $ sudo usb_console -d 18d1:5014 -i 1
+# Connect to AP console (on Ti50-based device)
+(chroot) $ sudo usb_console -d 18d1:504a -i 1
 ```
 
 ```bash
-# Connect to EC console
-(chroot) $ usb_console -d 18d1:5014 -i 2
+# Connect to EC console (on Cr50-based device)
+(chroot) $ sudo usb_console -d 18d1:5014 -i 2
+# Connect to EC console (on Ti50-based device)
+(chroot) $ sudo usb_console -d 18d1:504a -i 2
 ```
 
 #### Using "servod" to access the console
@@ -125,7 +131,7 @@ Next, start [`servod`]:
 Then use `dut-control` to display the console devices:
 
 ```bash
-(chroot) $ dut-control cr50_uart_pty ec_uart_pty cpu_uart_pty
+(chroot) $ dut-control gsc_uart_pty ec_uart_pty cpu_uart_pty
 ```
 
 Connect to the console devices with your favorite terminal program (e.g.,
@@ -134,29 +140,32 @@ Connect to the console devices with your favorite terminal program (e.g.,
 ## CCD Open {#ccd-open}
 
 Some basic CCD functionality is accessible by default: read-only access to the
-EC console, read-write access to the AP console, and a few basic Cr50 console
-commands. Note that while Cr50 has read-write access to the AP console by
+EC console, read-write access to the AP console, and a few basic GSC console
+commands. Note that while GSC has read-write access to the AP console by
 default, the AP console itself is disabled for production devices.
 
-In order to access all CCD functionality or to modify capability settings, Cr50
+In order to access all CCD functionality or to modify capability settings, GSC
 CCD needs to be [`Open`].
 
-1.  Connect to the Cr50 console by connecting a [Suzy-Q] or [Type-C Servo v4] to
-    the DUT and running the following command:
+1.  Connect to the GSC console by connecting a [Suzy-Q] or [Type-C Servo v4] to
+    the DUT and running one of the following commands:
 
     ```bash
-    (chroot) $ usb_console -d 18d1:5014
+    # Connect to Cr50 (GSC) console
+    (chroot) $ sudo usb_console -d 18d1:5014
+    # Connect to Ti50 (GSC) console
+    (chroot) $ sudo usb_console -d 18d1:504a
     ```
 
     *** note
-    **NOTE**: If another program is already connected to the Cr50 console,
+    **NOTE**: If another program is already connected to the GSC console,
     you'll see `tx [Errno 16] Resource Busy`. For example, this will happen if
     [`servod`] is running.
     ***
 
-1.  At the Cr50 console, use the `version` command to make sure you have a
-    recent enough version to use CCD. The relevant version is either `RW_A` or
-    `RW_B`, whichever has the asterisk next to it:
+1.  At the GSC console, use the `version` command to make sure you have a recent
+    enough version to use CCD. The relevant version is either `RW_A` or `RW_B`,
+    whichever has the asterisk next to it:
 
     ```
     cr50 > version
@@ -178,8 +187,14 @@ CCD needs to be [`Open`].
 1.  Production (`MP`) versions of Cr50 firmware use a [minor version][semver] of
     `3`: `0.3.x`. Production firmware versions `0.3.9` or newer support CCD.
 
-    Development (`PrePVT`) versions of Cr50 firmware use a minor version of
-    `4`: `0.4.x`. Development firmware versions `0.4.9` or newer support CCD.
+    Production (`MP`) versions of Ti50 firmware use a [minor version][semver] of
+    `23`: `0.23.x`.
+
+    Development (`PrePVT`) versions of Cr50 firmware use a minor version of `4`:
+    `0.4.x`. Development firmware versions `0.4.9` or newer support CCD.
+
+    Development (`PrePVT`) versions of Ti50 firmware use a minor version of
+    `24`: `0.24.x`.
 
     Your device likely supports CCD if it was manufactured in the last few
     years. If you have an older version, follow the [Updating Cr50] instructions
@@ -195,11 +210,11 @@ CCD needs to be [`Open`].
     If you can't put your device into [Developer Mode] because it doesn't boot,
     follow the [CCD Open Without Booting the Device] instructions.
 
-1.  Verify Cr50 knows the device is in [Developer Mode] by finding `TPM:
-    dev_mode` in the Cr50 console `ccd` command output:
+1.  Verify GSC knows the device is in [Developer Mode] by finding `TPM:
+    dev_mode` in the GSC console `ccd` command output:
 
     ```
-    cr50 > ccd
+    (gsc) > ccd
           ...
           TPM: dev_mode                     <==== This is the important part
           ...
@@ -215,25 +230,25 @@ CCD needs to be [`Open`].
     multiple times. After the last power button press the device will reboot.
 
     *** note
-    **WARNING**: Opening CCD causes Cr50 to forget that it is in
+    **WARNING**: Opening CCD causes GSC to forget that it is in
     [Developer Mode], so when the device reboots, it will either say that
     the OS image is invalid or it will enter a bootloop. Use the key
     combinations to enter [Recovery Mode] and re-enable [Developer Mode].
     See [this bug] for details.
     ***
 
-1.  Use the `ccd` command on the Cr50 console to verify the state is [`Open`]:
+1.  Use the `ccd` command on the GSC console to verify the state is [`Open`]:
 
     ```
-    cr50 > ccd
+    (gsc) > ccd
 
     State: Opened
     ...
     ```
 
-1.  **The [`Open`] state is lost if Cr50 reboots, the device loses power (e.g.,
+1.  **The [`Open`] state is lost if GSC reboots, the device loses power (e.g.,
     battery runs out and AC is not plugged in), or the battery is removed. Note
-    that Cr50 does not reboot when the system reboots; it only reboots if it is
+    that GSC does not reboot when the system reboots; it only reboots if it is
     updated, the devices loses power, the battery runs out, or it crashes**. If
     you plan on [flashing the AP firmware] or [flashing the EC firmware], it is
     recommended you modify the capability settings or set a CCD password, so you
@@ -242,23 +257,23 @@ CCD needs to be [`Open`].
     enable testlab mode:
 
     ```
-    cr50 > ccd reset factory
+    (gsc) > ccd reset factory
     ```
 
     ```
-    cr50 > ccd testlab enable
+    (gsc) > ccd testlab enable
     ```
 
     For full details, see the section on [CCD Open Without Booting the Device].
 
 ## Configuring CCD Capability Settings
 
-Cr50 capabilities allow you to configure CCD to restrict or open the device as
-much as you want. You can use the `ccd` command on the Cr50 console to check and
+CCD capabilities allow you to configure CCD to restrict or open the device as
+much as you want. You can use the `ccd` command on the GSC console to check and
 modify the capabilities, but CCD has to be [`Open`] to change the capabilities.
 
 Setting capabilities you want to use to [`Always`] will make them accessible
-even if CCD loses the [`Open`] state, which happens when Cr50 reboots or the
+even if CCD loses the [`Open`] state, which happens when GSC reboots or the
 device loses power.
 
 Basic CCD functionality is covered by `UartGscTxECRx`, `UartGscRxECTx`,
@@ -266,7 +281,7 @@ Basic CCD functionality is covered by `UartGscTxECRx`, `UartGscRxECTx`,
 `GscFullConsole`.
 
 ```
-cr50 > ccd set $CAPABILITY $REQUIREMENT
+(gsc) > ccd set $CAPABILITY $REQUIREMENT
 ```
 
 ### Examples
@@ -277,7 +292,7 @@ If the EC console needs to be read-write even when CCD is [`Locked`] set the
 capability to [`Always`]:
 
 ```
-cr50 > ccd set UartGscTxECRx Always
+(gsc) > ccd set UartGscTxECRx Always
 ```
 
 #### Restrict Consoles
@@ -289,15 +304,15 @@ If you want to restrict capabilities more than [`Always`], you can set them to
 ##### Restrict EC
 
 ```
-cr50 > ccd set UartGscTxECRx IfOpened
-cr50 > ccd set UartGscRxECTx IfOpened
+(gsc) > ccd set UartGscTxECRx IfOpened
+(gsc) > ccd set UartGscRxECTx IfOpened
 ```
 
 ##### Restrict AP
 
 ```
-cr50 > ccd set UartGscTxAPRx IfOpened
-cr50 > ccd set UartGscRxAPTx IfOpened
+(gsc) > ccd set UartGscTxAPRx IfOpened
+(gsc) > ccd set UartGscRxAPTx IfOpened
 ```
 
 #### Most Accessible
@@ -306,19 +321,19 @@ If you want things as accessible as possible and want all capabilities to be
 [`Always`], you can run
 
 ```
-cr50 > ccd reset factory
+(gsc) > ccd reset factory
 ```
 
 This will also permanently disable write protect. To reset write protect run
 
 ```
-cr50 > wp follow_batt_pres atboot
+(gsc) > wp follow_batt_pres atboot
 ```
 
 To reset capabilities to Default run
 
 ```
-cr50 > ccd reset
+(gsc) > ccd reset
 ```
 
 ## Flashing EC {#flashec}
@@ -350,11 +365,14 @@ Flashing the AP is restricted by the `FlashAP` capability.
 This default flashing command takes a very long time to complete, there are ways
 to [speed up the flashing process] by cutting some corners.
 
-If you have many CCD devices connected, you may want to use the Cr50 serial
+If you have many CCD devices connected, you may want to use the GSC serial
 number:
 
 ```bash
+# For Cr50-based device
 (chroot) $ lsusb -vd 18d1:5014 | grep iSerial
+# For Tir50-based device
+(chroot) $ lsusb -vd 18d1:504a | grep iSerial
 ```
 
 You can then add the serial number to the [`flashrom`] command:
@@ -363,13 +381,13 @@ You can then add the serial number to the [`flashrom`] command:
 (chroot) $ sudo flashrom -p raiden_debug_spi:target=AP,serial=$SERIAL -w $IMAGE
 ```
 
-**If you don't see Cr50 print any messages when you're running the [`flashrom`]
-command and you have more than one Cr50 device connected to your workstation,
-you probably need to use the serial number.**
+**If you don't see GSC print any messages when you're running the [`flashrom`]
+command and you have more than one GSC device connected to your workstation, you
+probably need to use the serial number.**
 
 ### Special Cases {#flashap-special-cases}
 
-Cr50 puts the device in reset to flash the AP. Due to hardware limitations Cr50
+GSC puts the device in reset to flash the AP. Due to hardware limitations GSC
 may not be able to disable hardware write protect while the device is in reset.
 If you want to reflash the AP RO firmware using CCD and your board has issues
 disabling hardware write protect, you may need to also disable software write
@@ -377,10 +395,10 @@ protect.
 
 To determine if the board you are using has this issue:
 
-1.  Disable write protect using the Cr50 console command:
+1.  Disable write protect using the GSC console command:
 
     ```
-    cr50 > wp disable
+    (gsc) > wp disable
     ```
 
 1.  Check if hardware write protect disabled when the AP is off:
@@ -400,7 +418,7 @@ To determine if the board you are using has this issue:
 
 Control of hardware write protect is restricted by the `OverrideWP` capability.
 When the capability is allowed, the hardware write protect setting can be
-controlled with the `wp` command in the Cr50 console. Otherwise, the hardware
+controlled with the `wp` command in the GSC console. Otherwise, the hardware
 write protect is determined based on the presence of the battery.
 
 Hardware Write Protect Setting | Battery State                  | Hardware Write Protect State
@@ -414,26 +432,26 @@ Hardware Write Protect Setting | Battery State                  | Hardware Write
 ### Write Protect Commands
 
 ```
-cr50 > wp [enable|disable|follow_batt_pres]
+(gsc) > wp [enable|disable|follow_batt_pres]
 ```
 
 There are two write protect settings: the current setting and the `atboot`
 setting.
 
 The `wp` command adjusts the current write protect setting that will last until
-Cr50 reboots or loses power. Note that Cr50 does not reboot when the rest of the
+GSC reboots or loses power. Note that GSC does not reboot when the rest of the
 system reboots. It will only reboot in the cases where the firmware is being
 updated, it crashes, the battery completely drains, the battery is removed, or
 power is otherwise lost.
 
-The `atboot` setting is the state of the write protect when Cr50 boots; it
+The `atboot` setting is the state of the write protect when GSC boots; it
 defaults to `follow_batt_pres`.
 
 To change the `atboot` setting, add the `atboot` arg to the end of the `wp`
 command:
 
 ```
-cr50 > wp [enable|disable|follow_batt_pres] atboot
+(gsc) > wp [enable|disable|follow_batt_pres] atboot
 ```
 
 You can query the write protect state with `gsctool`:
@@ -457,7 +475,7 @@ Flash WP: forced disabled  <-- Current hardware write protect state
 ### Special Case Devices
 
 Bob devices have a write protect screw in addition to battery presence. The
-write protect screw will force enable write protect until it's removed. If Cr50
+write protect screw will force enable write protect until it's removed. If GSC
 is set to `follow_batt_pres`, you need to remove the write protect screw and
 disconnect the battery to disable write protect. If you run `wp disable`, you
 will also need to remove the screw.
@@ -469,14 +487,14 @@ section for additional steps you may have to take to disable write protection.
 
 ### Overview
 
-UART Rescue Mode is a feature of the Cr50 RO firmware that supports programming
+UART Rescue Mode is a feature of the GSC RO firmware that supports programming
 the RW firmware using only the UART interface. This is used to recover a bad RW
 firmware update (which should be rare).
 
-This is also useful when bringing up new designs, as this allows to update Cr50
+This is also useful when bringing up new designs, as this allows to update GSC
 image even before USB CCD or TPM interfaces are operational.
 
-UART rescue works on all existing devices, all it requires is that Cr50 console
+UART rescue works on all existing devices, all it requires is that GSC console
 is mapped to a `/dev/xxx` device on the workstation (the same device used to
 attach a terminal to the console).
 
@@ -491,7 +509,7 @@ RW image in hex format.
 
 ### Install the cr50-rescue utility
 
-The `cr50-rescue` utility is used to flash a given firmware to Cr50 using rescue
+The `cr50-rescue` utility is used to flash a given firmware to GSC using rescue
 mode. This tool must be installed inside the chroot.
 
 ```bash
@@ -501,19 +519,21 @@ mode. This tool must be installed inside the chroot.
 ### Preparing an RW image
 
 To prepare the signed hex RW image, fetch a released image from Google storage,
-which can be found by running:
+which can be found by running either of the following commands:
 
 ```bash
 (chroot) $ gsutil ls gs://chromeos-localmirror/distfiles/cr50*
+(chroot) $ gsutil ls gs://chromeos-localmirror/distfiles/ti50*
 ```
 
 (depending on your setup you might have to do this inside chroot). Copy the
 image you want to use for rescue to your workstation and extract cr50.bin.prod
-from the tarball.
+or ti50.bin.prod from the tarball.
 
-The latest Cr50 images can be found in the [chromeos-cr50 ebuild]. Generally,
-you should always use the PROD_IMAGE indicated in that file. Once rescued, the
-user can update to the PREPVT image later if needed.
+The latest GSC images can be found in the [chromeos-cr50 ebuild] or the
+[chromeos-ti50 ebuild]. Generally, you should always use the PROD_IMAGE
+indicated in that file. Once rescued, the user can update to the PREPVT image
+later if needed.
 
 Once the binary image is ready, use the following commands to carve out the RW A
 section out of it and convert it into hex format:
@@ -527,35 +547,35 @@ then you can use `cr50.rw.hex` as the image passed to `cr50-rescue`.
 
 ### Programming the RW image with rescue mode
 
-With servo_micro (or servo_v2 reworked for connecting to Cr50 console), run
+With servo_micro (or servo_v2 reworked for connecting to GSC console), run
 [`servod`] and disable Cr50 ec3po and UART timestamp:
 
 ```bash
-(chroot) $ dut-control cr50_uart_timestamp:off dut-control cr50_ec3po_interp_connect:off
+(chroot) $ dut-control gsc_uart_timestamp:off dut-control gsc_ec3po_interp_connect:off
 ```
 
 Get a raw Cr50 UART device path and use it for `cr50-rescue` argument `-d`
 below.
 
 ```bash
-(chroot) $ dut-control raw_cr50_uart_pty
+(chroot) $ dut-control raw_gsc_uart_pty
 ```
 
-Prior to running `cr50-rescue`, the terminal from the Cr50 console UART must be
-disconnected, and Cr50 must be unpowered-- the system needs to have AC power and
+Prior to running `cr50-rescue`, the terminal from the GSC console UART must be
+disconnected, and GSC must be unpowered-- the system needs to have AC power and
 battery disconnected.
 
 After ensuring those steps, the rescue command may be run as follows:
 
 ```bash
-(chroot) $ cr50-rescue -v -i <path to the signed hex RW image> -d <cr50 console UART tty>
+(chroot) $ cr50-rescue -v -i <path to the signed hex RW image> -d <gsc console UART tty>
 ```
 
 After starting the command, provide power to the board and rescue mode will
-start automatically. After flashing successfully (see sample output below), Cr50
+start automatically. After flashing successfully (see sample output below), GSC
 must be unpowered again, by disconnecting AC power and battery.
 
-Note that `<cr50 console UART tty>` above has to be a direct FTDI interface,
+Note that `<gsc console UART tty>` above has to be a direct FTDI interface,
 `pty` devices created by [`servod`] do not work for this purpose. Use either
 servo-micro or a USB/UART cable. Note that multifunctional *SPI-UART/FTDI/USB
 cables might not work*, as they impose a significant delay in the UART stream,
@@ -599,33 +619,33 @@ oops?|0.1.2.3.4.5.6.7.8.9.10.11.12.13.14.15.16.17.18.19.20.21.22.23.24.25.26.27.
 
 If you can’t boot your device, you won’t be able to enable [Developer Mode] to
 send the open command from the AP. If you have enabled CCD on the device before,
-Cr50 may be configured in a way that you can still open Cr50.
+GSC may be configured in a way that you can still open GSC.
 
 ### Option 1: Remove the battery
 
 If you can remove the battery, you can bypass the [Developer Mode] requirements.
-`ccd open` is allowed from the Cr50 console if the Chrome OS Firmware Management
+`ccd open` is allowed from the GSC console if the Chrome OS Firmware Management
 Parameters (`FWMP`) do not disable CCD and the battery is disconnected. This is
 the most universal method and will work even if you haven’t enabled CCD before.
 
 1.  Disconnect the battery
 
-1.  Send `ccd open` from the Cr50 console.
+1.  Send `ccd open` from the GSC console.
 
 ### Option 2: "OpenNoDevMode" and "OpenFromUSB" are set to Always
 
 If "OpenNoDevMode" and "OpenFromUSB" are set to Always, you will be able to open
-Cr50 from the Cr50 console without enabling [Developer Mode]:
+GSC from the GSC console without enabling [Developer Mode]:
 
 ```
-cr50 > ccd open
+(gsc) > ccd open
 ```
 
 You will still need physical presence (i.e., press the power button) unless
 `testlab` mode is also enabled:
 
 ```
-cr50 > ccd testlab
+(gsc) > ccd testlab
        CCD test lab mode enabled
 ```
 
@@ -634,18 +654,18 @@ cr50 > ccd testlab
 If CCD is [`Open`], you can enable these settings with:
 
 ```
-cr50 > ccd set OpenFromUSB Always
-cr50 > ccd set OpenNoDevMode Always
+(gsc) > ccd set OpenFromUSB Always
+(gsc) > ccd set OpenNoDevMode Always
 ```
 
 ### Option 3: CCD Password is Set
 
-If the CCD password is set, you can open from the Cr50 console without
+If the CCD password is set, you can open from the GSC console without
 [Developer Mode].
 
 ```
-cr50 > ccd open $PASSWORD
-cr50 > ccd unlock $PASSWORD
+(gsc) > ccd open $PASSWORD
+(gsc) > ccd unlock $PASSWORD
 ```
 
 Alternatively, you can use `gsctool`, entering the password when prompted:
@@ -664,10 +684,10 @@ prompted.
 (chroot) $ gsctool -a -P
 ```
 
-You can use the CCD command on the Cr50 console to check if the password is set.
+You can use the CCD command on the GSC console to check if the password is set.
 
 ```
-cr50 > ccd
+(gsc) > ccd
        ...
        Password: [none|set]
        ...
@@ -681,28 +701,28 @@ When CCD is [`Open`], you can use `gsctool` to clear the password:
 (dut) $ gsctool -a -P clear:$PASSWORD
 ```
 
-Alternatively, you can use the Cr50 console to clear the password and reset CCD
+Alternatively, you can use the GSC console to clear the password and reset CCD
 capabilities to their default values:
 
 ```
-cr50 > ccd reset
+(gsc) > ccd reset
 ```
 
 ## Troubleshooting
 
 ### rddkeepalive
 
-Cr50 only enables CCD when it detects a debug accessory is connected (e.g.,
+GSC only enables CCD when it detects a debug accessory is connected (e.g.,
 [Suzy-Q] or [Type-C Servo v4]). It detects the cable based on the voltages on
 the CC lines. If you are flashing the EC and AP or working with unstable
 hardware, these CC voltages may become unreliable for detecting a debug
 accessory.
 
-To work around this, you can force Cr50 to always assume that a debug cable is
+To work around this, you can force GSC to always assume that a debug cable is
 detected:
 
 ```
-cr50 > rddkeepalive enable
+(gsc) > rddkeepalive enable
 ```
 
 *** note
@@ -712,16 +732,22 @@ cr50 > rddkeepalive enable
 To disable:
 
 ```
-cr50 > rddkeepalive disable
+(gsc) > rddkeepalive disable
 ```
 
-### Updating Cr50 {#updating-cr50}
+### Updating GSC {#updating-cr50}
 
 Production (`MP`) versions of Cr50 firmware use a [minor version][semver] of
 `3`: `0.3.x`. Production firmware versions `0.3.9` or newer support CCD.
 
+Production (`MP`) versions of Ti50 firmware use a [minor version][semver] of
+`23`: `0.23.x`.
+
 Development (`PrePVT`) versions of Cr50 firmware use a minor version of `4`:
 `0.4.x`. Development firmware versions `0.4.9` or newer support CCD.
+
+Development (`PrePVT`) versions of Ti50 firmware use a minor version of `24`:
+`0.24.x`.
 
 There aren't many differences between the MP and PrePVT versions of images, but
 it is a little easier to CCD [`Open`] PrePVT images. You can't run PrePVT images
@@ -733,7 +759,7 @@ the MP image.
 1.  Enable [Developer Mode] and connect a debug cable ([`Suzy-Q`] or [`Type-C
     Servo v4`]).
 
-1.  Check the running Cr50 version with `gsctool`:
+1.  Check the running GSC version with `gsctool`:
 
 ```bash
 (dut) $ sudo gsctool -a -f
@@ -742,27 +768,30 @@ the MP image.
 RW 0.4.26  <-- The "RW" version is the one to check
 ```
 
-1.  Update Cr50 using the firmware in the OS image:
+1.  Update GSC using the firmware in the OS image:
 
 *Production (MP) image*:
 
 ```bash
 (dut) $ sudo gsctool -a /opt/google/cr50/firmware/cr50.bin.prod
+(dut) $ sudo gsctool -a /opt/google/ti50/firmware/ti50.bin.prod
 ```
 
 *Development (PrePVT) image*:
 
 ```bash
 (dut) $ sudo gsctool -a /opt/google/cr50/firmware/cr50.bin.prepvt
+(dut) $ sudo gsctool -a /opt/google/ti50/firmware/ti50.bin.prepvt
 ```
 
-1.  Check the Cr50 version again to make sure it's either `0.3.X` or `0.4.X`.
+1.  Check the GSC version again to make sure it's either `0.3.X` or `0.4.X`, or
+    check the Ti50 version again to make sure it's either `0.23.X` or `0.24.X`.
 
 ### Speed up Flashing the AP {#speed-up-ap-flash}
 
 In the [default AP flashing steps][flashap] [`flashrom`] reads the entire flash
 contents and only erases and programs the pages that have to be modified.
-However, when Cr50 controls the SPI bus, it can only run at 1.5 MHz, versus the
+However, when GSC controls the SPI bus, it can only run at 1.5 MHz, versus the
 50 MHz that the AP normally runs it at.
 
 We can take advantage of the fact that Chrome OS device AP firmware is split
@@ -801,6 +830,7 @@ by running [`flashrom`] or `futility` from the device bash prompt.
 
 [Case Closed Debugging]: ./case_closed_debugging.md
 [chromeos-cr50 ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-cr50/chromeos-cr50-0.0.1.ebuild
+[chromeos-ti50 ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [Developer Mode]: https://chromium.googlesource.com/chromiumos/docs/+/main/developer_mode.md#dev-mode
 [Recovery Mode]: https://chromium.googlesource.com/chromiumos/docs/+/main/debug_buttons.md
 [Servo]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/servo.md
