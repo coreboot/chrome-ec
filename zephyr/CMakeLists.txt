@@ -2,6 +2,22 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+if(DEFINED CONFIG_PLATFORM_EC AND EXISTS "${EDT_PICKLE}")
+  message(STATUS "Performing EC specific devicetree checks")
+
+  # Zephyr's gen_defines.py creates an EDT object of the final devicetree,
+  # saving it as pickle file in the build directory.
+  set(NAMED_GPIOS_SCRIPT ${PLATFORM_EC}/zephyr/scripts/named_gpios.py)
+  set(CMD_NAMED_GPIOS ${PYTHON_EXECUTABLE} ${NAMED_GPIOS_SCRIPT}
+    --zephyr-base ${ZEPHYR_BASE}
+    --edt-pickle ${EDT_PICKLE}
+  )
+  execute_process(COMMAND ${CMD_NAMED_GPIOS} RESULT_VARIABLE ret)
+  if(NOT "${ret}" STREQUAL "0")
+    message(FATAL_ERROR "named_gpios.py failed with return code: ${ret}")
+  endif()
+endif()
+
 if(DEFINED ZMAKE_INCLUDE_DIR)
   zephyr_include_directories("${ZMAKE_INCLUDE_DIR}")
 endif()
@@ -438,6 +454,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_FW_UPDATE
                                                 "${PLATFORM_EC}/common/usbc/usb_retimer_fw_update.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7483
                                                 "${PLATFORM_EC}/driver/retimer/anx7483.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7452
+                                                "${PLATFORM_EC}/driver/retimer/anx7452.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
                                                 "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_HB
@@ -544,6 +562,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_AOZ1380
                                                 "${PLATFORM_EC}/driver/ppc/aoz1380.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_KTU1125
                                                 "${PLATFORM_EC}/driver/ppc/ktu1125.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_NX20P3481
+                                                "${PLATFORM_EC}/driver/ppc/nx20p348x.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_NX20P3483
                                                 "${PLATFORM_EC}/driver/ppc/nx20p348x.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_RT1739

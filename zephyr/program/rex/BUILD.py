@@ -5,7 +5,7 @@
 """Define zmake projects for Rex."""
 
 
-def register_variant(
+def register_rex_project(
     project_name,
     kconfig_files=None,
 ):
@@ -25,14 +25,15 @@ def register_variant(
             here / project_name / "project.overlay",
         ],
         kconfig_files=kconfig_files,
+        inherited_from=["rex"],
     )
 
 
-register_variant(
+register_rex_project(
     project_name="rex",
 )
 
-register_variant(
+register_rex_project(
     project_name="rex-sans-sensors",
     kconfig_files=[
         # Common to all projects.

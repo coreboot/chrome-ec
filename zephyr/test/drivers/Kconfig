@@ -17,6 +17,9 @@ config LINK_TEST_SUITE_CONSOLE_CMD_CRASH
 config LINK_TEST_SUITE_CONSOLE_CMD_MFALLOW
 	bool "Link and test the console command mfallow test suite"
 
+config LINK_TEST_SUITE_AMD_FP6_USB_MUX
+	bool "Link and test the AMD FP6 USB mux tests"
+
 config LINK_TEST_SUITE_ANX7447
 	bool "Link and test the anx7447 tests"
 
@@ -65,6 +68,9 @@ config LINK_TEST_SUITE_HOST_COMMAND_READ_MEMMAP
 config LINK_TEST_SUITE_ISL923X
 	bool "Link and test the isl923x tests"
 
+config LINK_TEST_SUITE_ISL9241
+	bool "Link and test the isl9241 tests"
+
 config LINK_TEST_SUITE_I2C_CONTROLLER
 	bool "Link and test the i2c_controller tests"
 
@@ -91,6 +97,11 @@ config LINK_TEST_SUITE_LOCATE_CHIP_ALTS
 config LINK_TEST_SUITE_MKBP
 	bool "Link and test the mkbp tests"
 
+config LINK_TEST_SUITE_NX20P348X
+	bool "Link and test the nx20p348x tests"
+	select PLATFORM_EC_CONSOLE_CMD_PPC_DUMP
+	select PLATFORM_EC_USB_PD_LOGGING
+
 config LINK_TEST_SUITE_PANIC_OUTPUT
 	bool "Link and test the panic_output tests"
 
@@ -99,6 +110,12 @@ config LINK_TEST_SUITE_POWER_HOST_SLEEP
 
 config LINK_TEST_SUITE_PS8XXX
 	bool "Link and test the ps8xxx tests"
+
+config LINK_TEST_SUITE_RT1718S
+	bool "Link and test the rt1718s tests"
+	help
+	  Link tests rt1718s test suite for the TCPM driver related function
+	  tests.
 
 config LINK_TEST_SUITE_RT9490
 	bool "Link and test the rt9490 tests"
@@ -158,6 +175,12 @@ config LINK_TEST_SUITE_USBC_OCP
 config LINK_TEST_SUITE_USBC_PPC
 	bool "Link tests for common USBC PPC code"
 
+config LINK_TEST_SUITE_USBC_TCPC
+	bool "Link tests for common USBC TCPC code"
+	help
+	  Include the USBC TCPC test suite in the
+	  binary.
+
 config LINK_TEST_SUITE_USBC_SVDM_DFP_ONLY
 	bool "Link and test the usbc_svdm_dfp_only tests"
 
@@ -212,5 +235,11 @@ config LINK_TEST_SUITE_LED_COMMON
 
 config LINK_TEST_SUITE_HOST_COMMAND_MEMORY_DUMP
 	bool "Link and test memory dump host commands tests"
+
+config LINK_TEST_SUITE_ANX7452
+	bool "Link and test the anx7452 tests"
+	help
+	  Include the test suite of ANX7452 retimer in the binary. The tests
+	  use I2C emulation.
 
 source "Kconfig.zephyr"

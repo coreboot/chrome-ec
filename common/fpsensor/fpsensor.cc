@@ -2,7 +2,6 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "compile_time_macros.h"
 
 extern "C" {
@@ -41,11 +40,6 @@ extern "C" {
 
 /* Ready to encrypt a template. */
 static timestamp_t encryption_deadline;
-
-/* raw image offset inside the acquired frame */
-#ifndef FP_SENSOR_IMAGE_OFFSET
-#define FP_SENSOR_IMAGE_OFFSET 0
-#endif
 
 #define FP_MODE_ANY_CAPTURE \
 	(FP_MODE_CAPTURE | FP_MODE_ENROLL_IMAGE | FP_MODE_MATCH)
@@ -241,7 +235,7 @@ extern "C" void fp_task(void)
 	int timeout_us = -1;
 
 	CPRINTS("FP_SENSOR_SEL: %s",
-		fp_sensor_type_to_str(get_fp_sensor_type()));
+		fp_sensor_type_to_str(fpsensor_detect_get_type()));
 
 #ifdef HAVE_FP_PRIVATE_DRIVER
 	/* Reset and initialize the sensor IC */
@@ -341,9 +335,9 @@ extern "C" void fp_task(void)
 
 static enum ec_status fp_command_passthru(struct host_cmd_handler_args *args)
 {
-	const struct ec_params_fp_passthru *params =
+	const auto *params =
 		static_cast<const ec_params_fp_passthru *>(args->params);
-	uint8_t *out = static_cast<uint8_t *>(args->response);
+	auto *out = static_cast<uint8_t *>(args->response);
 	int rc;
 	enum ec_status ret = EC_RES_SUCCESS;
 
@@ -375,8 +369,7 @@ DECLARE_HOST_COMMAND(EC_CMD_FP_PASSTHRU, fp_command_passthru, EC_VER_MASK(0));
 
 static enum ec_status fp_command_info(struct host_cmd_handler_args *args)
 {
-	struct ec_response_fp_info *r =
-		static_cast<ec_response_fp_info *>(args->response);
+	auto *r = static_cast<ec_response_fp_info *>(args->response);
 
 #ifdef HAVE_FP_PRIVATE_DRIVER
 	if (fp_sensor_get_info(r) < 0)
@@ -416,13 +409,13 @@ int validate_fp_buffer_offset(const uint32_t buffer_size, const uint32_t offset,
 
 static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 {
-	const struct ec_params_fp_frame *params =
+	const auto *params =
 		static_cast<const struct ec_params_fp_frame *>(args->params);
 	void *out = args->response;
 	uint32_t idx = FP_FRAME_GET_BUFFER_INDEX(params->offset);
 	uint32_t offset = params->offset & FP_FRAME_OFFSET_MASK;
 	uint32_t size = params->size;
-	uint32_t fgr;
+	uint16_t fgr;
 	uint8_t key[SBP_ENC_KEY_LEN];
 	struct ec_fp_template_encryption_metadata *enc_info;
 	int ret;
@@ -481,8 +474,9 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 		 * The beginning of the buffer contains nonce, encryption_salt
 		 * and tag.
 		 */
-		enc_info = (struct ec_fp_template_encryption_metadata
-				    *)(fp_enc_buffer);
+		enc_info = reinterpret_cast<
+			struct ec_fp_template_encryption_metadata *>(
+			fp_enc_buffer);
 		enc_info->struct_version = FP_TEMPLATE_FORMAT_VERSION;
 		trng_init();
 		trng_rand_bytes(enc_info->nonce, FP_CONTEXT_NONCE_BYTES);
@@ -490,11 +484,7 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 				FP_CONTEXT_ENCRYPTION_SALT_BYTES);
 		trng_exit();
 
-		/*
-		 * TODO(http://b/244781166): Use consistent types so cast is
-		 * not needed.
-		 */
-		if (fgr == (uint32_t)template_newly_enrolled) {
+		if (fgr == template_newly_enrolled) {
 			/*
 			 * Newly enrolled templates need new positive match
 			 * salt, new positive match secret and new validation
@@ -543,8 +533,7 @@ DECLARE_HOST_COMMAND(EC_CMD_FP_FRAME, fp_command_frame, EC_VER_MASK(0));
 
 static enum ec_status fp_command_stats(struct host_cmd_handler_args *args)
 {
-	struct ec_response_fp_stats *r =
-		static_cast<struct ec_response_fp_stats *>(args->response);
+	auto *r = static_cast<struct ec_response_fp_stats *>(args->response);
 
 	r->capture_time_us = capture_time_us;
 	r->matching_time_us = matching_time_us;
@@ -585,10 +574,10 @@ validate_template_format(struct ec_fp_template_encryption_metadata *enc_info)
 
 static enum ec_status fp_command_template(struct host_cmd_handler_args *args)
 {
-	const struct ec_params_fp_template *params =
+	const auto *params =
 		static_cast<const struct ec_params_fp_template *>(args->params);
 	uint32_t size = params->size & ~FP_TEMPLATE_COMMIT;
-	int xfer_complete = params->size & FP_TEMPLATE_COMMIT;
+	bool xfer_complete = params->size & FP_TEMPLATE_COMMIT;
 	uint32_t offset = params->offset;
 	uint32_t idx = templ_valid;
 	uint8_t key[SBP_ENC_KEY_LEN];
@@ -809,6 +798,64 @@ static int command_fpcapture(int argc, const char **argv)
 DECLARE_CONSOLE_COMMAND_FLAGS(fpcapture, command_fpcapture, NULL,
 			      "Capture fingerprint in PGM format",
 			      CMD_FLAG_RESTRICTED);
+
+/* Transfer a chunk of the image from the host to the FPMCU
+ *
+ * Command format:
+ *  fpupload <offset> <hex encoded pixel string>
+ *
+ * To limit the size of the commands, only a chunk of the image is sent for
+ * each command invocation.
+ */
+static int command_fpupload(int argc, const char **argv)
+{
+	const char *pixels_str;
+	uint8_t *dest;
+	int offset;
+
+	if (argc != 3)
+		return EC_ERROR_PARAM1;
+	if (system_is_locked())
+		return EC_ERROR_ACCESS_DENIED;
+	offset = atoi(argv[1]);
+	if (offset < 0)
+		return EC_ERROR_PARAM1;
+	dest = fp_buffer + FP_SENSOR_IMAGE_OFFSET + offset;
+
+	pixels_str = argv[2];
+	while (*pixels_str) {
+		if (dest >= fp_buffer + FP_SENSOR_IMAGE_SIZE)
+			return EC_ERROR_PARAM1;
+		char hex_str[] = { pixels_str[0], pixels_str[1], '\0' };
+		*dest = static_cast<uint8_t>(strtol(hex_str, NULL, 16));
+		pixels_str += 2;
+		++dest;
+	}
+
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(fpupload, command_fpupload, NULL,
+			"Copy fp image onto fpmcu fpsensor buffer");
+
+/* Transfer an image from the FPMCU to the host
+ *
+ * Command format:
+ *  fpdownload
+ *
+ * This is useful to verify the data was transferred correctly. Note that it
+ * requires the terminal to be configured as explained in the comment above
+ * upload_pgm_image().
+ */
+static int command_fpdownload(int argc, const char **argv)
+{
+	if (system_is_locked())
+		return EC_ERROR_ACCESS_DENIED;
+
+	upload_pgm_image(fp_buffer + FP_SENSOR_IMAGE_OFFSET);
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(fpdownload, command_fpdownload, NULL,
+			"Copy fp image from fpmcu fpsensor buffer");
 
 static int command_fpenroll(int argc, const char **argv)
 {
