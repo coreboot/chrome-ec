@@ -139,6 +139,7 @@
 #undef CONFIG_CONSOLE_HISTORY
 #undef CONFIG_CMD_I2C_SCAN
 #undef CONFIG_CMD_I2C_XFER
+#undef CONFIG_FLASH
 /* Enable unsafe dev features for CCD in dev builds */
 #define CONFIG_CASE_CLOSED_DEBUG_V1_UNSAFE
 #define CONFIG_CMD_FLASH_LOG
