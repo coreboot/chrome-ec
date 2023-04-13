@@ -10,6 +10,7 @@
 #include "board_id.h"
 #include "console.h"
 #include "dcrypto.h"
+#include "factory_config.h"
 #include "link_defs.h"
 #include "rma_auth.h"
 #include "sn_bits.h"
@@ -320,6 +321,18 @@ static void GetRSUDevID(BYTE *to, size_t offset, size_t size)
 }
 BUILD_ASSERT(VIRTUAL_NV_INDEX_RSU_DEV_ID_SIZE == SHA256_DIGEST_SIZE);
 
+static void GetFactoryCfg(BYTE *to, size_t offset, size_t size)
+{
+	uint64_t fc;
+
+	if (read_factory_config(&fc) != EC_SUCCESS) {
+		memset(to, 0, size);
+		return;
+	}
+	memcpy(to, ((BYTE *)&fc) + offset, size);
+}
+BUILD_ASSERT(VIRTUAL_NV_INDEX_FACTORY_CONFIG_SIZE == INFO_FACTORY_CFG_SIZE);
+
 /*
  * Registration of current virtual indexes.
  *
@@ -344,6 +357,12 @@ static const struct virtual_nv_index_cfg index_config[] = {
 	REGISTER_CONFIG(VIRTUAL_NV_INDEX_RSU_DEV_ID,
 			VIRTUAL_NV_INDEX_RSU_DEV_ID_SIZE,
 			GetRSUDevID)
+	/* TODO(b/278118981): implement get RMA BYTES and WV UDS */
+	REGISTER_DEPRECATED_CONFIG(VIRTUAL_NV_INDEX_RMA_BYTES_UNIMPLEMENTED)
+	REGISTER_DEPRECATED_CONFIG(VIRTUAL_NV_INDEX_WV_UDS_BYTES_UNIMPLEMENTED)
+	REGISTER_CONFIG(VIRTUAL_NV_INDEX_FACTORY_CONFIG,
+			VIRTUAL_NV_INDEX_FACTORY_CONFIG_SIZE,
+			GetFactoryCfg)
 };
 
 /* Check validity check of above config. */
