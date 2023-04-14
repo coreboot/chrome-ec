@@ -37,7 +37,7 @@ export CFLAGS_LTO_PARTIAL_LINK := -flinker-output=nolto-rel
 # -ffat-lto-objects is a workaround for b/134623681
 # Disable assembler warnings
 # TODO (b/238039591) Remove `-Wa,W` when binutils is fixed.
-CFLAGS_CPU += -Wa,-W -ffat-lto-objects -fconserve-stack
+CFLAGS_CPU += -Wa,-W -ffat-lto-objects
 endif
 
 core-y=cpu.o init.o ldivmod.o llsr.o uldivmod.o vecttable.o
