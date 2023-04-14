@@ -3958,7 +3958,7 @@ static int process_get_factory_config(struct transfer_descriptor *td)
 	rv = send_vendor_command(td, VENDOR_CC_GET_FACTORY_CONFIG, NULL,
 				 0, (uint8_t *) &response, &response_size);
 	if (rv != VENDOR_RC_SUCCESS) {
-		printf("Set factory config failed. (%X)\n", rv);
+		printf("Get factory config failed. (%X)\n", rv);
 		return 1;
 	}
 
