@@ -201,7 +201,7 @@ FIPS_MODULE=dcrypto/fips_module.o
 FIPS_LD_SCRIPT=$(BDIR)/dcrypto/fips_module.ld
 RW_FIPS_OBJS=$(patsubst %.o, $(RW_BD_OUT)/%.o, $(fips-y))
 $(RW_FIPS_OBJS): CFLAGS += -frandom-seed=0 -fno-fat-lto-objects -Wswitch\
-			   -Wsign-compare -Wuninitialized
+			   -Wsign-compare -Wuninitialized -fconserve-stack
 
 $(RW_FIPS_OBJS): | $(out)/ec_version.h $(out)/env_config.h
 rw_board_deps := $(addsuffix .d, $(RW_FIPS_OBJS))
