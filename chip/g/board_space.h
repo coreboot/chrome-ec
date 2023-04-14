@@ -77,16 +77,19 @@ BUILD_ASSERT(sizeof(struct info1_layout) == FLASH_INFO_SIZE);
 
 #define INFO_SPACE_OFFSET(field) (INFO_BOARD_SPACE_OFFSET +		\
 				  offsetof(struct info1_board_space, field))
-#define INFO_BOARD_ID_SIZE		sizeof(struct board_id)
+#define INFO_SPACE_SIZE(field)   \
+		(sizeof(((struct info1_board_space *)0)->field))
+
+#define INFO_BOARD_ID_SIZE		INFO_SPACE_SIZE(bid)
 #define INFO_BOARD_ID_OFFSET		INFO_SPACE_OFFSET(bid)
 
-#define INFO_SN_DATA_SIZE		sizeof(struct sn_data)
+#define INFO_SN_DATA_SIZE		INFO_SPACE_SIZE(sn)
 #define INFO_SN_DATA_OFFSET		INFO_SPACE_OFFSET(sn)
 
-#define INFO_APRV_DATA_SIZE		sizeof(uint32_t)
+#define INFO_APRV_DATA_SIZE		INFO_SPACE_SIZE(aprv_not_needed)
 #define INFO_APRV_DATA_OFFSET		INFO_SPACE_OFFSET(aprv_not_needed)
 
-#define INFO_FACTORY_CFG_SIZE		sizeof(uint64_t)
+#define INFO_FACTORY_CFG_SIZE		INFO_SPACE_SIZE(factory_cfg)
 #define INFO_FACTORY_CFG_OFFSET		INFO_SPACE_OFFSET(factory_cfg)
 
 /*
