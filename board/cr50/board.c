@@ -1147,8 +1147,6 @@ static void deferred_tpm_rst_isr(void)
 		 * then.
 		 */
 		if (!reboot_request_posted || other_rw_is_inactive()) {
-			/* Update fwmp policies each boot. */
-			board_fwmp_update_policies();
 			/* Reset TPM, no need to wait for completion. */
 			tpm_reset_request(0, 0);
 			return;
