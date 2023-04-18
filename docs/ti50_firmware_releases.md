@@ -308,6 +308,64 @@ Build:   ti50_common:v0.0.2802-000016bf
          @chromeos-ci-firmware-us-east1-d-x32-0-v1rm 2023-03-07 10:44:14
 ```
 
+### 0.23.21 Released on 4/18/2023 in M114
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/4442649)
+
+Builder:
+[16](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15224.B-branch/16/overview)
+
+Artifacts:
+[15224.13.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.13.0)
+
+Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15224.13.0.xml
+
+**New Features**
+
+*   New additional metrics, including boot time and a detailed error code for AP
+    RO verification. Now available through the `GetTi50Metrics` vendor command
+    with value 0x41. [b/262608026](https://b.corp.google.com/issues/262608026),
+    [b/263298180](https://b.corp.google.com/issues/263298180)
+*   New vendor commands 0x42 and 0x43 to get crash and console logs.
+    [b/268396021](https://b.corp.google.com/issues/268396021),
+    [b/265310865](https://b.corp.google.com/issues/265310865)
+*   Support pinweaver v2.
+    [b/248209280](https://b.corp.google.com/issues/248209280)
+*   Add Widevine UDS to virtual NV
+    [b/248610274](https://b.corp.google.com/issues/248610274)
+*   Add GetRSUDevID command to TPM for RMA.
+    [b/265309995](https://b.corp.google.com/issues/265309995)
+
+**Bug Fixes**
+
+*   Fix CCD open failure with the battery disconnected.
+    [b/270712314](https://b.corp.google.com/issues/270712314)
+*   Fix rejection of RO and RW header updates with invalid fields.
+    [b/272057805](https://b.corp.google.com/issues/272057805)
+*   Fix `wp follow_batt_pres` command in GSC console.
+    [b/269218898](https://b.corp.google.com/issues/269218898)
+*   Fix FIDO errors, reporting an invalid P-256 public key.
+    [b/271795015](https://b.corp.google.com/issues/271795015)
+*   Restrict the `recbtnforce` command to the GscFullConsole CCD capability
+    [b/268219945](https://b.corp.google.com/issues/268219945)
+*   Fix pinweaver key import/export to be compatible with v2.
+    [b/267729980](https://b.corp.google.com/issues/267729980)
+*   Fix AP/EC comms broken by EC then AP flash resulting in detached I2C lines.
+    [b/264817647](https://b.corp.google.com/issues/264817647)
+*   Stabilize console output line order.
+    [b/276491121](https://b.corp.google.com/issues/276491121)
+*   Fix `\r\r\n` console output.
+    [b/242980684](https://b.corp.google.com/issues/242980684)
+
+```
+Build:   ti50_common:v0.0.2949-4ee72fd9
+         libtock-rs:v0.0.915-d883b40
+         tock:v0.0.9629-77d147129
+         ms-tpm-20-ref:v0.0.312-affdc53
+         @chromeos-ci-firmware-us-central1-b-x32-0-j9et 2023-04-11 06:54:23
+```
+
 ## PrePVT images
 
 ### 0.22.0 Released 06/21/22
@@ -829,9 +887,9 @@ Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15086.35.0.xml
 
 **New Features**
 
-*   New additional metrics, including boot time and a detailed error code for AP RO verification.
-    Now available through the `GetTi50Metrics` vendor command with value 0x41.
-    [b/262608026](https://b.corp.google.com/issues/262608026),
+*   New additional metrics, including boot time and a detailed error code for AP
+    RO verification. Now available through the `GetTi50Metrics` vendor command
+    with value 0x41. [b/262608026](https://b.corp.google.com/issues/262608026),
     [b/263298180](https://b.corp.google.com/issues/263298180)
 *   New vendor commands 0x42 and 0x43 to get crash and console logs.
     [b/268396021](https://b.corp.google.com/issues/268396021),
@@ -863,8 +921,6 @@ Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15086.35.0.xml
     [b/276491121](https://b.corp.google.com/issues/276491121)
 *   Fix `\r\r\n` console output.
     [b/242980684](https://b.corp.google.com/issues/242980684)
-
-
 
 ```
 Build:   ti50_common:v0.0.2939-57543958
