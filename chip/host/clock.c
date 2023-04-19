@@ -11,3 +11,7 @@ int clock_get_freq(void)
 {
 	return 16000000;
 }
+
+void clock_enable_module(enum module_id module, int enable)
+{
+}

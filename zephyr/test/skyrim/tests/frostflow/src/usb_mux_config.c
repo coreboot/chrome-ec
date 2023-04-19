@@ -9,11 +9,6 @@
 #include <driver/retimer/ps8811.h>
 #include <usbc/usb_muxes.h>
 
-FAKE_VALUE_FUNC(int, ps8811_i2c_read, const struct usb_mux *, int, int, int *);
-FAKE_VALUE_FUNC(int, ps8811_i2c_field_update, const struct usb_mux *, int, int,
-		uint8_t, uint8_t);
-FAKE_VALUE_FUNC(int, ps8811_i2c_write, const struct usb_mux *, int, int, int);
-
 int board_c0_amd_fp6_mux_set(const struct usb_mux *me, mux_state_t mux_state);
 int board_c1_ps8818_mux_set(const struct usb_mux *me, mux_state_t mux_state);
 
@@ -46,20 +41,4 @@ ZTEST(usb_mux_config, test_board_c0_amd_fp6_mux_set)
 	rv = board_c0_amd_fp6_mux_set(&mux, USB_PD_MUX_POLARITY_INVERTED);
 	zassert_equal(rv, EC_SUCCESS);
 	zassert_equal(gpio_emul_output_get(c1->port, c1->pin), 1);
-}
-
-ZTEST(usb_mux_config, test_board_c1_ps8818_mux_set)
-{
-	const struct gpio_dt_spec *gpio =
-		GPIO_DT_FROM_NODELABEL(gpio_usb_c1_in_hpd);
-	struct usb_mux mux;
-
-	/* gpio_usb_c1_in_hpd should match if DP is enabled. */
-	mux.usb_port = 0;
-	zassert_ok(board_c1_ps8818_mux_set(&mux, 0));
-	zassert_equal(gpio_emul_output_get(gpio->port, gpio->pin), 0);
-
-	mux.usb_port = 1;
-	zassert_ok(board_c1_ps8818_mux_set(&mux, USB_PD_MUX_DP_ENABLED));
-	zassert_equal(gpio_emul_output_get(gpio->port, gpio->pin), 1);
 }

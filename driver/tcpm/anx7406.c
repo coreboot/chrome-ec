@@ -6,6 +6,7 @@
 /* ANX7406 port manager */
 
 #include "anx7406.h"
+#include "assert.h"
 #include "common.h"
 #include "console.h"
 #include "hooks.h"
@@ -15,7 +16,7 @@
 #include "usb_pd.h"
 #include "util.h"
 
-#define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_USBPD, "ANX7406: " format, ##args)
 
 const struct anx7406_i2c_addr anx7406_i2c_addrs_flags[] = {
 	{ ANX7406_TCPC0_I2C_ADDR_FLAGS, ANX7406_TOP0_I2C_ADDR_FLAGS },
@@ -29,6 +30,21 @@ const struct anx7406_i2c_addr anx7406_i2c_addrs_flags[] = {
 };
 
 static struct anx7406_i2c_addr i2c_peripheral[CONFIG_USB_PD_PORT_MAX_COUNT];
+
+enum ec_error_list anx7406_set_gpio(int port, uint8_t gpio, bool value)
+{
+	if (gpio != 0) {
+		CPRINTS("C%d: Setting GPIO%d not supported", port, gpio);
+		return EC_ERROR_INVAL;
+	}
+
+	CPRINTS("C%d: Setting GPIO%u %s", port, gpio, value ? "high" : "low");
+
+	return i2c_write8(tcpc_config[port].i2c_info.port,
+			  i2c_peripheral[port].top_addr_flags,
+			  ANX7406_REG_GPIO0,
+			  value ? GPIO0_OUTPUT_HIGH : GPIO0_OUTPUT_LOW);
+}
 
 static int anx7406_set_hpd(int port, int hpd_lvl)
 {
@@ -114,7 +130,7 @@ static int anx7406_init(int port)
 {
 	int rv, i;
 
-	CPRINTS("C%d: %s", port, __func__);
+	CPRINTS("C%d: init", port);
 	/*
 	 * find corresponding anx7406 TOP address according to
 	 * specified TCPC address
@@ -131,7 +147,7 @@ static int anx7406_init(int port)
 		}
 	}
 	if (!I2C_STRIP_FLAGS(i2c_peripheral[port].top_addr_flags)) {
-		CPRINTS("C%d: 0x%x is invalid for anx7406", port,
+		CPRINTS("C%d: 0x%x is invalid", port,
 			i2c_peripheral[port].top_addr_flags);
 		return EC_ERROR_UNKNOWN;
 	}
@@ -191,7 +207,7 @@ static int anx7406_init(int port)
 
 	rv = anx7406_hpd_reset(port);
 
-	CPRINTS("C%d: TCPC anx7406 initial success", port);
+	CPRINTS("C%d: init success", port);
 	return rv;
 }
 
