@@ -71,6 +71,15 @@ Released with RW 0.23.20 and 0.24.20
 
 *   Fix issue signed images headers
 
+## 0.0.46 released on 04/17/2023
+
+*   Cryptolib 1.3.8 with following improvements:
+    * Enabled P384, TDES, CMAC support
+    * Hardened ECDSA error checking in cryptolib
+    * Code size optimizations
+    * AES, GCM, CMAC, RSA security hardening
+*   RO code size optimizations, updated internal layout
+
 # RW revisions
 
 Previously released RW images can be downloaded from
@@ -864,7 +873,35 @@ Build:   ti50_common:v0.0.2939-57543958
          ms-tpm-20-ref:v0.0.310-953df73
          @chromeos-ci-firmware-us-central1-b-x32-0-pnrp 2023-04-03 09:47:17
 ```
+### 0.24.30 Released on 4/21/2023
 
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/4460051)
+
+Builder
+[37](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15086.B-branch/37/overview)
+
+Artifacts:
+[15086.37.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.37.0)
+
+Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15086.37.0.xml
+
+**Bug Fixes**
+
+*   Add PCR-based policy to update fwmp and antirollback spaces
+    [b/274977008](https://b.corp.google.com/issues/274977008)
+*   Remove crash id parameter from GetCrashLog command
+    [b/265310865](https://b.corp.google.com/issues/265310865)
+*   AP RO verification returns detailed results
+    [b/263298180](https://b.corp.google.com/issues/263298180)
+
+```
+Build:   ti50_common_prepvt-15086.B:v0.0.239-60fad06f
+         libtock-rs:v0.0.918-d13e197
+         tock:v0.0.9630-0fa93d584
+         ms-tpm-20-ref:v0.0.314-b366a8a
+         @chromeos-ci-firmware-us-central2-d-x32-0-zjfs 2023-04-18 10:59:06
+```
 <!-- Links -->
 
 [105 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R105-14989.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
