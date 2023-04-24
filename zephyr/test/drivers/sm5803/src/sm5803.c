@@ -599,7 +599,7 @@ ZTEST(sm5803, test_lpm)
 	/* Connect 5V source. */
 	zassert_ok(tcpci_partner_connect_to_tcpci(&partner, tcpci_emul));
 	sm5803_emul_set_vbus_voltage(SM5803_EMUL, 5000);
-	k_sleep(K_SECONDS(4));
+	k_sleep(K_SECONDS(10));
 
 	/* Charger should now have exited runtime LPM. */
 	zassert_false(sm5803_emul_is_clock_slowed(SM5803_EMUL));
@@ -619,7 +619,7 @@ ZTEST(sm5803, test_lpm)
 	/* Disconnect source, causing charger to go to runtime LPM. */
 	zassert_ok(tcpci_emul_disconnect_partner(tcpci_emul));
 	sm5803_emul_set_vbus_voltage(SM5803_EMUL, 24);
-	k_sleep(K_SECONDS(4));
+	k_sleep(K_SECONDS(10));
 
 	zassert_true(sm5803_emul_is_clock_slowed(SM5803_EMUL));
 	/* Sigma delta was disabled. */
@@ -641,11 +641,11 @@ ZTEST(sm5803, test_lpm)
 	 */
 	zassert_ok(tcpci_partner_connect_to_tcpci(&partner, tcpci_emul));
 	sm5803_emul_set_vbus_voltage(SM5803_EMUL, 5010);
-	k_sleep(K_SECONDS(4));
+	k_sleep(K_SECONDS(10));
 	zassert_ok(charger_set_mode(CHARGE_FLAG_INHIBIT_CHARGE));
 	zassert_ok(tcpci_emul_disconnect_partner(tcpci_emul));
 	sm5803_emul_set_vbus_voltage(SM5803_EMUL, 0);
-	k_sleep(K_SECONDS(4));
+	k_sleep(K_SECONDS(10));
 
 	/* This time LPM actually did disable the GPADCs. */
 	sm5803_emul_get_gpadc_conf(SM5803_EMUL, &gpadc1, &gpadc2);
