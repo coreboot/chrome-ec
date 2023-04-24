@@ -22,7 +22,7 @@ is why any **problems communicating with the TPM during the boot up process**
 result in the Chrome OS device falling into **recovery mode**.
 
 Another important function of the H1 in the system is CCD ([closed case
-debugging](https://chromium.googlesource.com/chromiumos/platform/ec/+/fe6ca90e/docs/case_closed_debugging_cr50.md#))
+debugging](https://chromium.googlesource.com/chromiumos/platform/ec/+/fe6ca90e/docs/case_closed_debugging_gsc.md#))
 
 ## H1 power states and CCD
 

@@ -10,7 +10,7 @@
 ## Case Closed Debugging (CCD)
 
 *   [Case Closed Debugging Overview](./case_closed_debugging.md)
-*   [Google Security Chip Case Closed Debugging](./case_closed_debugging_cr50.md)
+*   [Google Security Chip Case Closed Debugging](./case_closed_debugging_gsc.md)
 *   [Tutorials](./ccd_howtos.md)
 
 ## Updaters
