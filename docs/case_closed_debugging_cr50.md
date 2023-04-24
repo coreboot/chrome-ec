@@ -791,7 +791,7 @@ sudo flashrom -p raiden_debug_spi:target=AP -w image-atlas.bin -i FMAP -i WP_RO 
 
 # This command will restore the previously preserved VPD sections of the
 # flash, provided it was saved in the first step above.
-sudo flashrom -p raiden_debug_spi:target=AP -w /tmp/bios.essential.bin -i RO_VPD -i RW_VPD --noverify
+sudo flashrom -p raiden_debug_spi:target=AP -w /tmp/bios.essentials.bin -i RO_VPD -i RW_VPD --noverify
 ```
 
 Once flash is programmed, the device can be booted in recovery mode and start
