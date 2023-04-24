@@ -3,7 +3,7 @@ This doc contains tutorials for using CCD. These tutorials only cover using GSC
 CCD. Some use cases will be very similar to using CCD from ryu, servo micro, or
 servo v4, but these guides are not guaranteed to work for them. More detailed
 instructions on how to use different parts of CCD are in the
-[GSC CCD doc](case_closed_debugging_cr50.md).
+[GSC CCD doc](case_closed_debugging_gsc.md).
 
 [TOC]
 
@@ -152,7 +152,7 @@ is not a clamshell, check out the [full dev mode instructions].
 9.  **Open CCD.** Here's the most generic way to open ccd. For the full open
     options see [Setup CCD].
 
-    *   **[Enter dev mode](case_closed_debugging_cr50.md#enter-dev-mode).**
+    *   **[Enter dev mode](case_closed_debugging_gsc.md#enter-dev-mode).**
         These are clamshell instructions for other types of chromeOS devices
         refer to the full setup doc.
 
@@ -313,7 +313,7 @@ It goes into a lot more detail.
 1.  **Open CCD.** Here's the most generic way to open ccd. For the full open
     options see [Setup CCD].
 
-    *   **[Enter dev mode](case_closed_debugging_cr50.md#enter-dev-mode).**
+    *   **[Enter dev mode](case_closed_debugging_gsc.md#enter-dev-mode).**
         These are clamshell instructions for other types of chromeOS devices
         refer to the full setup doc.
 
@@ -374,11 +374,11 @@ It goes into a lot more detail.
 
                 AP > flashrom -p host --wp-disable
 
-[Disable SW WP]: ./case_closed_debugging_cr50.md#AP-Off
-[enter dev mode]: ./case_closed_debugging_cr50.md#enter-dev-mode
+[Disable SW WP]: ./case_closed_debugging_gsc.md#AP-Off
+[enter dev mode]: ./case_closed_debugging_gsc.md#enter-dev-mode
 [sparkfun]: https://www.sparkfun.com/products/14746
-[Setup CCD]: ./case_closed_debugging_cr50.md#CCD-Setup
+[Setup CCD]: ./case_closed_debugging_gsc.md#CCD-Setup
 [SuzyQ]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/refs/heads/main/docs/ccd.md#suzyq-suzyqable
 [Type-C Servo V4]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/refs/heads/main/docs/servo_v4.md
-[wp console command]: ./case_closed_debugging_cr50.md#WP-control
+[wp console command]: ./case_closed_debugging_gsc.md#WP-control
 
