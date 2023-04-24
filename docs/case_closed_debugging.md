@@ -221,6 +221,6 @@ See the [`SERVO_PID_DEFAULTS`] in the servo code for all values.
 [`servo_v4`]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/servo_v4.md
 [`servo_v2`]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/servo_v2.md
 [`servo_micro`]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/servo_micro.md
-[Cr50 CCD]: ./case_closed_debugging_cr50.md
+[Cr50 CCD]: ./case_closed_debugging_gsc.md
 [Suzy-Q]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/ccd.md#suzyq-suzyqable
 [`SERVO_PID_DEFAULTS`]: https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/ff8e96686ef3d9ad2e26125ca8268cb7f7666f6c/servo/interface/ftdi_common.py#28
