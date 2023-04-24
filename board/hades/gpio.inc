@@ -9,7 +9,7 @@
 
 /* INTERRUPT GPIOs: */
 GPIO_INT(ACOK_OD,                        PIN(0, 0), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH, extpower_interrupt)
-GPIO_INT(EC_PROCHOT_IN_L,                PIN(F, 0), GPIO_INT_BOTH, throttle_ap_prochot_input_interrupt)
+GPIO_INT(EC_PROCHOT_IN_L,                PIN(A, 0), GPIO_INT_BOTH, throttle_ap_prochot_input_interrupt)
 GPIO_INT(EC_WP_ODL,                      PIN(A, 1), GPIO_INT_BOTH, switch_interrupt)
 GPIO_INT(GSC_EC_PWR_BTN_ODL,             PIN(0, 1), GPIO_INT_BOTH | GPIO_HIB_WAKE_LOW, power_button_interrupt)
 GPIO_INT(LID_OPEN,                       PIN(D, 2), GPIO_INT_BOTH | GPIO_HIB_WAKE_HIGH, lid_interrupt)
@@ -23,9 +23,9 @@ GPIO_INT(USB_C0_BC12_INT_ODL,            PIN(C, 6), GPIO_INT_FALLING, bc12_inter
 GPIO_INT(USB_C0_TCPC_INT_ODL,            PIN(E, 0), GPIO_INT_FALLING, tcpc_alert_event)
 GPIO_INT(USB_C0_PPC_INT_ODL,             PIN(6, 2), GPIO_INT_FALLING, ppc_interrupt)
 GPIO_INT(PG_PP3300_S5_OD,                PIN(B, 4), GPIO_INT_BOTH | GPIO_PULL_UP, board_power_interrupt)
-GPIO_INT(USB_C2_BC12_INT_ODL,            PIN(8, 3), GPIO_INT_FALLING, bc12_interrupt)
-GPIO_INT(USB_C2_TCPC_INT_ODL,            PIN(A, 7), GPIO_INT_FALLING, tcpc_alert_event)
-GPIO_INT(USB_C2_PPC_INT_ODL,             PIN(7, 0), GPIO_INT_FALLING, ppc_interrupt)
+GPIO_INT(USB_C1_BC12_INT_ODL,            PIN(8, 3), GPIO_INT_FALLING, bc12_interrupt)
+GPIO_INT(USB_C1_TCPC_INT_ODL,            PIN(A, 7), GPIO_INT_FALLING, tcpc_alert_event)
+GPIO_INT(USB_C1_PPC_INT_ODL,             PIN(7, 0), GPIO_INT_FALLING, ppc_interrupt)
 GPIO_INT(BJ_ADP_PRESENT_ODL,             PIN(9, 5), GPIO_INT_BOTH | GPIO_PULL_UP, bj_present_interrupt)
 GPIO_INT(GPU_OVERT_ODL,                  PIN(5, 0), GPIO_INT_BOTH, gpu_overt_interrupt)
 
@@ -40,8 +40,8 @@ GPIO(EC_I2C_BAT_SCL,                 PIN(3, 3), GPIO_INPUT)
 GPIO(EC_I2C_BAT_SDA,                 PIN(3, 6), GPIO_INPUT)
 GPIO(EC_I2C_MISC_SCL_R,              PIN(B, 3), GPIO_INPUT)
 GPIO(EC_I2C_MISC_SDA_R,              PIN(B, 2), GPIO_INPUT)
-GPIO(EC_I2C_USB_C2_SCL,              PIN(9, 2), GPIO_INPUT)
-GPIO(EC_I2C_USB_C2_SDA,              PIN(9, 1), GPIO_INPUT)
+GPIO(EC_I2C_USB_C1_SCL,              PIN(9, 2), GPIO_INPUT)
+GPIO(EC_I2C_USB_C1_SDA,              PIN(9, 1), GPIO_INPUT)
 GPIO(EC_I2C_USB_C0_SCL,              PIN(9, 0), GPIO_INPUT)
 GPIO(EC_I2C_USB_C0_SDA,              PIN(8, 7), GPIO_INPUT)
 GPIO(EC_I2C_USBA_RT_SCL,             PIN(E, 4), GPIO_INPUT)
@@ -64,12 +64,13 @@ GPIO(PCH_PWROK,                      PIN(7, 2), GPIO_OUT_LOW)
 GPIO(SYS_RST_ODL,                    PIN(C, 5), GPIO_ODR_HIGH)
 GPIO(EC_USB_PCH_C0_OC_ODL,           PIN(9, 4), GPIO_ODR_HIGH)
 GPIO(EC_USB_PCH_C2_OC_ODL,           PIN(9, 7), GPIO_ODR_HIGH)
-GPIO(USB_C0_FRS_EN,                  PIN(A, 0), GPIO_OUT_LOW)
 GPIO(VCCST_PWRGD_OD,                 PIN(A, 4), GPIO_ODR_LOW)
 GPIO(EN_USB_A_LOW_POWER,             PIN(9, 3), GPIO_OUT_LOW)
 GPIO(PG_PP3300_S5_EC_SEQ_OD,         PIN(B, 5), GPIO_OUT_LOW)
-GPIO(USB_C2_FRS_EN,                  PIN(D, 4), GPIO_OUT_LOW)
+GPIO(USB_C1_FRS_EN,                  PIN(D, 4), GPIO_OUT_LOW)
 GPIO(NVIDIA_GPU_ACOFF_ODL,           PIN(5, 6), GPIO_ODR_HIGH)
+GPIO(LED_4_L,                        PIN(6, 0), GPIO_OUT_LOW)
+GPIO(LED_3_L,                        PIN(C, 2), GPIO_OUT_LOW)
 GPIO(LED_2_L,                        PIN(C, 3), GPIO_OUT_LOW)
 GPIO(LED_1_L,                        PIN(C, 4), GPIO_OUT_LOW)
 
@@ -108,6 +109,7 @@ ALTERNATE(PIN_MASK(B, 0xC0), 0, MODULE_PWM, 0)               /* GPIOB7/PWM5, GPI
 /* ADC alternate functions */
 ALTERNATE(PIN_MASK(3, 0x10), 0, MODULE_ADC, 0)               /* GPIO34/PS2_DAT2/ADC6 */
 ALTERNATE(PIN_MASK(4, 0x36), 0, MODULE_ADC, 0)               /* GPIO42/ADC3/RI_L, GPIO45/ADC0, GPIO44/ADC1, GPIO41/ADC4 */
+/* TODO: GPIOF0/ADC9 for USB_C1_VBUSM */
 
 /* KB alternate functions */
 ALTERNATE(PIN_MASK(0, 0xf0), 0, MODULE_KB, GPIO_ODR_HIGH)    /* KSO10&P80_CLK/GPIO07, KSO11&P80_DAT/GPIO06, KSO12/GPIO05, KSO13/GPIO04 */
@@ -130,6 +132,4 @@ UNUSED(PIN(0, 2))       /* GPIO02 */
 UNUSED(PIN(6, 6))       /* GPIO66 */
 UNUSED(PIN(5, 7))       /* GPIO57/SER_IRQ/ESPI_ALERT_L */
 UNUSED(PIN(8, 1))       /* GPIO81 */
-UNUSED(PIN(6, 0))       /* GPIO60 */
-UNUSED(PIN(C, 2))       /* GPIOC2 */
 UNUSED(PIN(E, 1))       /* GPIOE1 */

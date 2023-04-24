@@ -61,6 +61,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "gelatin",
     "hammer",
     "hoho",
+    "jewel",
     "kakadu",
     "kappa",
     "katsu",
@@ -264,6 +265,7 @@ NDS32_BOARDS = [
     "sasukette",
     "shotzo",
     "storo",
+    "taranza",
     "waddledee",
     "wheelie",
 ]

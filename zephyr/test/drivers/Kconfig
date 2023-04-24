@@ -120,6 +120,11 @@ config LINK_TEST_SUITE_RT1718S
 config LINK_TEST_SUITE_RT9490
 	bool "Link and test the rt9490 tests"
 
+config LINK_TEST_SUITE_RANDOM
+	bool "Link and run random (trng) tests"
+	help
+	  Include the test suite exercising RNG code in the binary.
+
 config LINK_TEST_SUITE_SHIM_GPIO_ID
 	bool "Link and run the gpio tests"
 
@@ -241,5 +246,8 @@ config LINK_TEST_SUITE_ANX7452
 	help
 	  Include the test suite of ANX7452 retimer in the binary. The tests
 	  use I2C emulation.
+
+config LINK_TEST_SUITE_SM5803
+	bool "Link and test the SM5803 charger tests"
 
 source "Kconfig.zephyr"

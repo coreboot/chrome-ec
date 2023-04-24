@@ -5,6 +5,12 @@
 
 /* Host communication command constants for Chrome EC */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #ifndef __CROS_EC_EC_COMMANDS_H
 #define __CROS_EC_EC_COMMANDS_H
 
@@ -4981,6 +4987,23 @@ struct ec_params_device_event {
 
 struct ec_response_device_event {
 	uint32_t event_mask;
+} __ec_align4;
+
+/*****************************************************************************/
+/* Get s0ix counter */
+#define EC_CMD_GET_S0IX_COUNTER 0x00AB
+
+/* Flag use to reset the counter */
+#define EC_S0IX_COUNTER_RESET 0x1
+
+struct ec_params_s0ix_cnt {
+	/* If EC_S0IX_COUNTER_RESET then reset otherwise get the counter */
+	uint32_t flags;
+} __ec_align4;
+
+struct ec_response_s0ix_cnt {
+	/* Value of the s0ix_counter */
+	uint32_t s0ix_counter;
 } __ec_align4;
 
 /*****************************************************************************/
