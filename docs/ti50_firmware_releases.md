@@ -74,10 +74,10 @@ Released with RW 0.23.20 and 0.24.20
 ## 0.0.46 released on 04/17/2023
 
 *   Cryptolib 1.3.8 with following improvements:
-    * Enabled P384, TDES, CMAC support
-    * Hardened ECDSA error checking in cryptolib
-    * Code size optimizations
-    * AES, GCM, CMAC, RSA security hardening
+    *   Enabled P384, TDES, CMAC support
+    *   Hardened ECDSA error checking in cryptolib
+    *   Code size optimizations
+    *   AES, GCM, CMAC, RSA security hardening
 *   RO code size optimizations, updated internal layout
 
 # RW revisions
@@ -357,6 +357,8 @@ Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15224.13.0.xml
     [b/276491121](https://b.corp.google.com/issues/276491121)
 *   Fix `\r\r\n` console output.
     [b/242980684](https://b.corp.google.com/issues/242980684)
+*   Fix issue where EC not put in reset on recovery key combo when GSC in deep
+    sleep. [b/248161678](https://b.corp.google.com/issues/248161678)
 
 ```
 Build:   ti50_common:v0.0.2949-4ee72fd9
@@ -921,6 +923,8 @@ Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15086.35.0.xml
     [b/276491121](https://b.corp.google.com/issues/276491121)
 *   Fix `\r\r\n` console output.
     [b/242980684](https://b.corp.google.com/issues/242980684)
+*   Fix issue where EC not put in reset on recovery key combo when GSC in deep
+    sleep. [b/248161678](https://b.corp.google.com/issues/248161678)
 
 ```
 Build:   ti50_common:v0.0.2939-57543958
@@ -929,6 +933,7 @@ Build:   ti50_common:v0.0.2939-57543958
          ms-tpm-20-ref:v0.0.310-953df73
          @chromeos-ci-firmware-us-central1-b-x32-0-pnrp 2023-04-03 09:47:17
 ```
+
 ### 0.24.30 Released on 4/21/2023
 
 Release
@@ -958,6 +963,7 @@ Build:   ti50_common_prepvt-15086.B:v0.0.239-60fad06f
          ms-tpm-20-ref:v0.0.314-b366a8a
          @chromeos-ci-firmware-us-central2-d-x32-0-zjfs 2023-04-18 10:59:06
 ```
+
 <!-- Links -->
 
 [105 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R105-14989.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
