@@ -456,6 +456,8 @@ static const struct option_container cmd_line_options[] = {
 	 "[enable|disable]%Control factory mode"},
 	{{"fwver", no_argument, NULL, 'f'},
 	 "Report running Cr50 firmware versions"},
+	{{"get_time", no_argument, NULL, 'G'},
+	 "Get time since last cold reset"},
 	{{"getbootmode", no_argument, NULL, 'g'},
 	 "Get the system boot mode"},
 	{{"help", no_argument, NULL, 'h'},
@@ -3984,6 +3986,29 @@ static int process_set_factory_config(struct transfer_descriptor *td,
 	return 0;
 }
 
+static int process_get_time(struct transfer_descriptor *td)
+{
+	uint32_t rv;
+	uint64_t response = 0;
+	size_t response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_TIME, NULL,
+				 0, (uint8_t *) &response, &response_size);
+	if (rv != VENDOR_RC_SUCCESS) {
+		printf("Get time failed. (%X)\n", rv);
+		return 1;
+	}
+
+	if (response_size < sizeof(uint64_t)) {
+		printf("Unexpected response size. (%zu)", response_size);
+		return 2;
+	}
+
+	uint64_t out = be64toh(response);
+
+	printf("%"PRIu64"\n", out);
+	return 0;
+}
 
 int main(int argc, char *argv[])
 {
@@ -4051,6 +4076,7 @@ int main(int argc, char *argv[])
 	int factory_config = 0;
 	int set_factory_config = 0;
 	uint64_t factory_config_arg = 0;
+	int get_time = 0;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4176,6 +4202,9 @@ int main(int argc, char *argv[])
 		case 'F':
 			factory_mode = 1;
 			factory_mode_arg = optarg;
+			break;
+		case 'G':
+			get_time = 1;
 			break;
 		case 'h':
 			usage(errorcnt);
@@ -4350,6 +4379,7 @@ int main(int argc, char *argv[])
 	    !get_console &&
 	    !get_flog &&
 	    !get_endorsement_seed &&
+	    !get_time &&
 	    !factory_config &&
 	    !factory_mode &&
 	    !erase_ap_ro_hash &&
@@ -4516,6 +4546,10 @@ int main(int argc, char *argv[])
 							factory_config_arg));
 		else
 			exit(process_get_factory_config(&td));
+	}
+
+	if (get_time) {
+		exit(process_get_time(&td));
 	}
 
 	if (data || show_fw_ver) {
