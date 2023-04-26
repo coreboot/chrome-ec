@@ -305,6 +305,9 @@
 /* Depends on how fast the AP boots and typical ODRs */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO / 3)
 
+/* System safe mode for improved panic debugging */
+#define CONFIG_SYSTEM_SAFE_MODE
+
 /*
  * Sensor stack in EC/Kernel depends on a hardware interrupt pin from EC->AP, so
  * do not define CONFIG_MKBP_USE_HOST_EVENT since all octopus boards use
