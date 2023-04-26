@@ -31,7 +31,8 @@
  * equivalent of approximately 0xffffffff usecs. Note that we lose 3us on
  * timer wrap due to loss of precision during division.
  */
-#define TIMELS_MAX (usecs_to_ticks(0xffffffff))
+#define MAX_TIME_USEC 0xffffffff
+#define TIMELS_MAX (usecs_to_ticks(MAX_TIME_USEC))
 
 /*
  * The below calculation is lightweight and can be implemented using
@@ -114,7 +115,7 @@ uint32_t __hw_clock_source_read(void)
 
 void __hw_clock_source_set(uint32_t ts)
 {
-	GREG32(TIMELS, SOURCE(LOAD)) = usecs_to_ticks(0xffffffff - ts);
+	GREG32(TIMELS, SOURCE(LOAD)) = usecs_to_ticks(MAX_TIME_USEC - ts);
 }
 
 /* This handles rollover in the HW timer */
