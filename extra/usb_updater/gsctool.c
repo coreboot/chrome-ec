@@ -1022,7 +1022,7 @@ static void transfer_section(struct transfer_descriptor *td,
 	printf("sending 0x%zx bytes to %#x\n", data_len, section_addr);
 	while (data_len) {
 		size_t payload_size;
-		EVP_MD_CTX* ctx;
+		EVP_MD_CTX *ctx;
 		int max_retries;
 		struct update_pdu updu;
 
@@ -1543,7 +1543,7 @@ static int ext_cmd_over_usb(struct usb_endpoint *uep, uint16_t subcommand,
 	struct update_frame_header *ufh;
 	uint16_t *frame_ptr;
 	size_t usb_msg_size;
-	EVP_MD_CTX* ctx;
+	EVP_MD_CTX *ctx;
 
 	usb_msg_size = sizeof(struct update_frame_header) +
 		sizeof(subcommand) + body_size;
@@ -2035,6 +2035,7 @@ static void sha_final_into_block_digest(EVP_MD_CTX *ctx, void *block_digest,
 	/* Big enough for either hash algo */
 	uint8_t full_digest[SHA256_DIGEST_LENGTH];
 	unsigned int length;
+
 	EVP_DigestFinal(ctx, full_digest, &length);
 
 	/* Copy out the smaller of the 2 byte counts. */
