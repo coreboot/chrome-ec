@@ -38,6 +38,16 @@ enum tpm_read_rv read_tpm_nvmem(uint16_t obj_index,
 	NvReadIndexInfo(object_handle, handle_addr, &nvIndex);
 
 	/*
+	 * Check that the index was written to. Otherwise, behave as if the
+	 * index doesn't exist.
+	 */
+	if (nvIndex.publicArea.attributes.TPMA_NV_WRITTEN == 0) {
+		CPRINTF("%s: object at 0x%x not written\n",
+				__func__, obj_index);
+		return TPM_READ_NOT_FOUND;
+	}
+
+	/*
 	 * We presume it is readable and are not checking the access
 	 * limitations.
 	 */
