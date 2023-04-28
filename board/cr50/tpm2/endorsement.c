@@ -489,6 +489,7 @@ static int store_eps(const uint8_t eps[PRIMARY_SEED_SIZE])
 {
 	/* gp is a TPM global state structure, declared in Global.h. */
 	memcpy(gp.EPSeed.t.buffer, eps, PRIMARY_SEED_SIZE);
+	gp.EPSeed.t.size = PRIMARY_SEED_SIZE;
 
 	/* Persist the seed to flash. */
 	NvWriteReserved(NV_EP_SEED, &gp.EPSeed);
