@@ -80,6 +80,9 @@ Released with RW 0.23.20 and 0.24.20
     *   Code size optimizations
     *   AES, GCM, CMAC, RSA security hardening
 *   RO code size optimizations, updated internal layout
+*   Removed additional protection of the RW INFO rollback space, EFI images will
+    be able to erase both Board ID and RW Rollback information stored in INFO
+    pages.
 
 # RW revisions
 
