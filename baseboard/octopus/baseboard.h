@@ -307,6 +307,9 @@
  */
 #define CONFIG_MKBP_EVENT
 
+/* Free up more flash. */
+#undef CONFIG_CMD_ACCELSPOOF
+
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
