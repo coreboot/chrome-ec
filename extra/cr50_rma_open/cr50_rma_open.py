@@ -66,6 +66,8 @@ DEV_MODE_OPEN_PREPVT = '0.4.7'
 TESTLAB_PROD = '0.3.10'
 CR50_USB = '18d1:5014'
 CR50_LSUSB_CMD = ['lsusb', '-vd', CR50_USB]
+TI50_USB = '18d1:504a'
+TI50_LSUSB_CMD = ['lsusb', '-vd', TI50_USB]
 ERASED_BID = 'ffffffff'
 
 DEBUG_MISSING_USB = """
@@ -136,6 +138,7 @@ class RMAOpen(object):
     def __init__(self, device=None, usb_serial=None, servo_port=None, ip=None):
         self.servo_port = servo_port if servo_port else '9999'
         self.ip = ip
+        self.chip = ''
         if device:
             self.set_cr50_device(device)
         elif servo_port:
@@ -212,7 +215,7 @@ class RMAOpen(object):
             return False
         # Check if the servod is running with ccd. This requires the script
         # is run in the chroot, so run it last.
-        if 'ccd_cr50' not in self._dut_control('servo_type'):
+        if 'ccd' not in self._dut_control('servo_type'):
             return False
         logging.info('running through servod ccd')
         return True
@@ -450,7 +453,12 @@ class RMAOpen(object):
         if not output.strip():
             logging.warning(DEBUG_DEVICE, self.device)
             raise ValueError('Could not communicate with %s' % self.device)
+        if 'ti50' in output:
+            logging.info('Ti50 supports rma open')
+            self.chip = 'ti50'
+            return
 
+        self.chip = 'cr50'
         version = re.search(r'RW.*\* ([\d\.]+)/', output).group(1)
         logging.info('Running Cr50 Version: %s', version)
         self.running_ver_fields = [int(field) for field in version.split('.')]
@@ -532,6 +540,7 @@ class RMAOpen(object):
 
     def print_platform_info(self):
         """Print the cr50 BID RLZ code"""
+        logging.info('CHIP: %s', self.chip)
         bid_output = self.send_cmd_get_output('bid')
         bid = re.search(r'Board ID: (\S+?)[:,]', bid_output).group(1)
         if bid == ERASED_BID:
@@ -546,6 +555,7 @@ class RMAOpen(object):
         """Make sure the Cr50 USB device exists"""
         try:
             output = subprocess.check_output(CR50_LSUSB_CMD, encoding='utf-8')
+            output += subprocess.check_output(TI50_LSUSB_CMD, encoding='utf-8')
         except:
             logging.warning(DEBUG_MISSING_USB)
             raise ValueError('Could not find Cr50 USB device')
