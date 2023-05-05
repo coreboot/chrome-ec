@@ -327,12 +327,6 @@
 #define CONFIG_ADC_PROFILE_SINGLE
 #undef CONFIG_ADC_PROFILE_FAST_CONTINUOUS
 
-/* Support AES symmetric-key algorithm */
-#undef CONFIG_AES
-
-/* Support AES-GCM */
-#undef CONFIG_AES_GCM
-
 /*
  * Some ALS modules may be connected to the EC. We need the command, and
  * specific drivers for each module.
@@ -1816,6 +1810,9 @@
  */
 #define CONFIG_COMMON_RUNTIME
 
+/* Allow deferred (async) flash protect*/
+#define CONFIG_FLASH_PROTECT_DEFERRED
+
 /* Provide common core code to handle the operating system timers. */
 #define CONFIG_COMMON_TIMER
 
@@ -2863,10 +2860,15 @@
  * Only one of these may be defined (if any).
  */
 #ifndef CONFIG_ZEPHYR
+/*
+ * These symbols also exist as Kconfigs in Zephyr. Zephyr based boards
+ * need to use the upstream driver, or these symbols need to be changed
+ * downstream to not conflict.
+ */
 #undef CONFIG_INA219
+#undef CONFIG_INA3221
 #endif /* CONFIG_ZEPHYR */
 #undef CONFIG_INA231
-#undef CONFIG_INA3221
 
 /*****************************************************************************/
 /* Inductive charging */
@@ -5204,6 +5206,7 @@
 #undef CONFIG_USBC_PPC_SN5S330
 #undef CONFIG_USBC_PPC_SYV682C
 #undef CONFIG_USBC_PPC_SYV682X
+#undef CONFIG_USBC_PPC_TCPCI
 
 /*
  * NX20P348x 5V SRC RCP trigger level at 10mV. Define to enable 5V SRC RCP
@@ -6242,13 +6245,13 @@
 /*****************************************************************************/
 /* Define CONFIG_USBC_PPC if board has a USB Type-C Power Path Controller. */
 #if defined(CONFIG_USBC_PPC_AOZ1380) || defined(CONFIG_USBC_PPC_NX20P3483) || \
-	defined(CONFIG_USBC_PPC_SN5S330)
+	defined(CONFIG_USBC_PPC_SN5S330) || defined(CONFIG_USBC_PPC_TCPCI)
 #define CONFIG_USBC_PPC
 #endif /* "has a PPC" */
 
 /* Following chips use Power Path Control information from TCPC chip */
 #if defined(CONFIG_USBC_PPC_AOZ1380) || defined(CONFIG_USBC_PPC_NX20P3481) || \
-	defined(CONFIG_USBC_PPC_NX20P3483)
+	defined(CONFIG_USBC_PPC_NX20P3483) || defined(CONFIG_USBC_PPC_TCPCI)
 #define CONFIG_USB_PD_PPC
 #endif
 
@@ -6300,7 +6303,8 @@
 	defined(CONFIG_USBC_PPC_NX20P3483) ||                                 \
 	defined(CONFIG_USBC_PPC_SN5S330) ||                                   \
 	defined(CONFIG_USBC_PPC_SYV682X) || defined(CONFIG_CHARGER_SM5803) || \
-	defined(CONFIG_USB_PD_TCPM_TCPCI)
+	defined(CONFIG_USB_PD_TCPM_TCPCI) ||                                  \
+	defined(CONFIG_USB_PD_TCPM_ANX7406)
 #define CONFIG_USBC_OCP
 #endif
 
@@ -6805,8 +6809,9 @@
 #error "Flash readout protection and PSTATE may not work as intended."
 #endif
 
-#if !defined(CHIP_FAMILY_STM32H7) && !defined(CHIP_FAMILY_STM32F4)
-#error "Flash readout protection only implemented on STM32H7 and STM32F4."
+#if !defined(CHIP_FAMILY_STM32H7) && !defined(CHIP_FAMILY_STM32F4) && \
+	!defined(CHIP_FAMILY_NPCX9)
+#error "Flash readout protection only implemented on STM32H7, STM32F4 and NPCX9"
 #endif
 #endif /* CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE */
 

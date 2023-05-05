@@ -3,21 +3,25 @@
  * found in the LICENSE file.
  */
 
+#include "compile_time_macros.h"
+#include "fpsensor_crypto.h"
+#include "fpsensor_state.h"
+
+extern "C" {
 #include "builtin/assert.h"
 #include "common.h"
 #include "ec_commands.h"
-#include "fpsensor_crypto.h"
-#include "fpsensor_state.h"
 #include "mock/fpsensor_crypto_mock.h"
 #include "mock/fpsensor_state_mock.h"
 #include "mock/rollback_mock.h"
 #include "mock/timer_mock.h"
 #include "test_util.h"
 #include "util.h"
-
-#include <stdbool.h>
+}
 
 extern int get_ikm(uint8_t *ikm);
+
+#include <stdbool.h>
 
 static const uint8_t fake_positive_match_salt[] = {
 	0x04, 0x1f, 0x5a, 0xac, 0x5f, 0x79, 0x10, 0xaf,
@@ -292,7 +296,7 @@ static int test_derive_encryption_key_raw(const uint32_t *user_id_,
 					  const uint8_t *expected_key)
 {
 	uint8_t key[SBP_ENC_KEY_LEN];
-	int rv;
+	enum ec_error_list rv;
 
 	/*
 	 * |user_id| is a global variable used as "info" in HKDF expand
@@ -624,7 +628,7 @@ test_static int test_disable_positive_match_secret(void)
 
 test_static int test_command_read_match_secret(void)
 {
-	int rv;
+	enum ec_status rv;
 	struct ec_params_fp_read_match_secret params;
 	struct ec_response_fp_read_match_secret resp;
 	timestamp_t now = get_time();
@@ -687,7 +691,7 @@ test_static int test_command_read_match_secret(void)
 
 test_static int test_command_read_match_secret_wrong_finger(void)
 {
-	int rv;
+	enum ec_status rv;
 	struct ec_params_fp_read_match_secret params;
 
 	/* GIVEN that the finger is not the matched or enrolled finger. */
@@ -708,7 +712,7 @@ test_static int test_command_read_match_secret_wrong_finger(void)
 
 test_static int test_command_read_match_secret_timeout(void)
 {
-	int rv;
+	enum ec_status rv;
 	struct ec_params_fp_read_match_secret params;
 
 	params.fgr = 0;
@@ -729,7 +733,7 @@ test_static int test_command_read_match_secret_timeout(void)
 
 test_static int test_command_read_match_secret_unreadable(void)
 {
-	int rv;
+	enum ec_status rv;
 	struct ec_params_fp_read_match_secret params;
 
 	params.fgr = 0;
