@@ -9139,37 +9139,6 @@ static int cmd_kbinfo(int argc, char *argv[])
 	return 0;
 }
 
-static int cmd_kbid(int argc, char *argv[])
-{
-	struct ec_response_keyboard_id response;
-	int rv;
-
-	if (argc > 1) {
-		fprintf(stderr, "Too many args\n");
-		return -1;
-	}
-
-	rv = ec_command(EC_CMD_GET_KEYBOARD_ID, 0, NULL, 0, &response,
-			sizeof(response));
-	if (rv < 0)
-		return rv;
-	switch (response.keyboard_id) {
-	case KEYBOARD_ID_UNSUPPORTED:
-		/* Keyboard ID was not supported */
-		printf("Keyboard doesn't support ID\n");
-		break;
-	case KEYBOARD_ID_UNREADABLE:
-		/* Ghosting ID was detected */
-		printf("Reboot and keep hands off the keyboard during"
-		       " next boot-up\n");
-		break;
-	default:
-		/* Valid keyboard ID value was reported*/
-		printf("%x\n", response.keyboard_id);
-	}
-	return rv;
-}
-
 static int cmd_keyconfig(int argc, char *argv[])
 {
 	struct ec_params_mkbp_set_config req;
@@ -11433,6 +11402,46 @@ int cmd_cec(int argc, char *argv[])
 	return -1;
 }
 
+static void cmd_s0ix_counter_help(char *cmd)
+{
+	fprintf(stderr,
+		"  Usage: %s get - to get the value of s0ix counter\n"
+		"         %s reset - to reset s0ix counter \n",
+		cmd, cmd);
+}
+
+static int cmd_s0ix_counter(int argc, char *argv[])
+{
+	struct ec_params_s0ix_cnt p;
+	struct ec_response_s0ix_cnt r;
+	int rv;
+
+	if (argc != 2) {
+		fprintf(stderr, "Invalid number of params\n");
+		cmd_s0ix_counter_help(argv[0]);
+		return -1;
+	}
+
+	if (!strcasecmp(argv[1], "get")) {
+		p.flags = 0;
+	} else if (!strcasecmp(argv[1], "reset")) {
+		p.flags = EC_S0IX_COUNTER_RESET;
+	} else {
+		fprintf(stderr, "Bad subcommand: %s\n", argv[1]);
+		return -1;
+	}
+
+	rv = ec_command(EC_CMD_GET_S0IX_COUNTER, 0, &p, sizeof(p), &r,
+			sizeof(r));
+	if (rv < 0) {
+		return rv;
+	}
+
+	printf("s0ix_counter: %u\n", r.s0ix_counter);
+
+	return 0;
+}
+
 /* NULL-terminated list of commands */
 const struct command commands[] = {
 	{ "adcread", cmd_adc_read },
@@ -11505,7 +11514,6 @@ const struct command commands[] = {
 	{ "led", cmd_led },
 	{ "lightbar", cmd_lightbar },
 	{ "kbfactorytest", cmd_keyboard_factory_test },
-	{ "kbid", cmd_kbid },
 	{ "kbinfo", cmd_kbinfo },
 	{ "kbpress", cmd_kbpress },
 	{ "keyconfig", cmd_keyconfig },
@@ -11551,6 +11559,7 @@ const struct command commands[] = {
 	{ "rwsigaction", cmd_rwsig_action_legacy },
 	{ "rwsigstatus", cmd_rwsig_status },
 	{ "sertest", cmd_serial_test },
+	{ "s0ix_counter", cmd_s0ix_counter },
 	{ "smartdischarge", cmd_smart_discharge },
 	{ "stress", cmd_stress_test },
 	{ "sysinfo", cmd_sysinfo },

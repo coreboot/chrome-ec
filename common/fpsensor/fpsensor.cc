@@ -4,12 +4,14 @@
  */
 #include "compile_time_macros.h"
 
+/* Boringssl headers need to be included before extern "C" section. */
+#include "openssl/mem.h"
+
 extern "C" {
 #include "atomic.h"
 #include "clock.h"
 #include "common.h"
 #include "console.h"
-#include "cryptoc/util.h"
 #include "ec_commands.h"
 #include "gpio.h"
 #include "host_command.h"
@@ -29,6 +31,7 @@ extern "C" {
 #include "fpsensor_detect.h"
 #include "fpsensor_state.h"
 #include "fpsensor_utils.h"
+#include "scoped_fast_cpu.h"
 
 #if !defined(CONFIG_RNG)
 #error "fpsensor requires RNG"
@@ -40,11 +43,6 @@ extern "C" {
 
 /* Ready to encrypt a template. */
 static timestamp_t encryption_deadline;
-
-/* raw image offset inside the acquired frame */
-#ifndef FP_SENSOR_IMAGE_OFFSET
-#define FP_SENSOR_IMAGE_OFFSET 0
-#endif
 
 #define FP_MODE_ANY_CAPTURE \
 	(FP_MODE_CAPTURE | FP_MODE_ENROLL_IMAGE | FP_MODE_MATCH)
@@ -215,8 +213,9 @@ static void fp_process_finger(void)
 		res = spi_transaction_flush(&spi_devices[0]);
 		if (res)
 			CPRINTS("Failed to flush SPI: 0x%x", res);
+
 		/* we need CPU power to do the computations */
-		clock_enable_module(MODULE_FAST_CPU, 1);
+		ScopedFastCpu fast_cpu;
 
 		if (sensor_mode & FP_MODE_ENROLL_IMAGE)
 			evt = fp_process_enroll();
@@ -226,9 +225,6 @@ static void fp_process_finger(void)
 		sensor_mode &= ~FP_MODE_ANY_CAPTURE;
 		overall_time_us = time_since32(overall_t0);
 		send_mkbp_event(evt);
-
-		/* go back to lower power mode */
-		clock_enable_module(MODULE_FAST_CPU, 0);
 	} else {
 		timestamps_invalid |= FPSTATS_CAPTURE_INV;
 	}
@@ -240,7 +236,7 @@ extern "C" void fp_task(void)
 	int timeout_us = -1;
 
 	CPRINTS("FP_SENSOR_SEL: %s",
-		fp_sensor_type_to_str(get_fp_sensor_type()));
+		fp_sensor_type_to_str(fpsensor_detect_get_type()));
 
 #ifdef HAVE_FP_PRIVATE_DRIVER
 	/* Reset and initialize the sensor IC */
@@ -340,9 +336,9 @@ extern "C" void fp_task(void)
 
 static enum ec_status fp_command_passthru(struct host_cmd_handler_args *args)
 {
-	const struct ec_params_fp_passthru *params =
+	const auto *params =
 		static_cast<const ec_params_fp_passthru *>(args->params);
-	uint8_t *out = static_cast<uint8_t *>(args->response);
+	auto *out = static_cast<uint8_t *>(args->response);
 	int rc;
 	enum ec_status ret = EC_RES_SUCCESS;
 
@@ -374,8 +370,7 @@ DECLARE_HOST_COMMAND(EC_CMD_FP_PASSTHRU, fp_command_passthru, EC_VER_MASK(0));
 
 static enum ec_status fp_command_info(struct host_cmd_handler_args *args)
 {
-	struct ec_response_fp_info *r =
-		static_cast<ec_response_fp_info *>(args->response);
+	auto *r = static_cast<ec_response_fp_info *>(args->response);
 
 #ifdef HAVE_FP_PRIVATE_DRIVER
 	if (fp_sensor_get_info(r) < 0)
@@ -399,8 +394,9 @@ DECLARE_HOST_COMMAND(EC_CMD_FP_INFO, fp_command_info,
 
 BUILD_ASSERT(FP_CONTEXT_NONCE_BYTES == 12);
 
-int validate_fp_buffer_offset(const uint32_t buffer_size, const uint32_t offset,
-			      const uint32_t size)
+enum ec_error_list validate_fp_buffer_offset(const uint32_t buffer_size,
+					     const uint32_t offset,
+					     const uint32_t size)
 {
 	uint32_t bytes_requested;
 
@@ -415,16 +411,16 @@ int validate_fp_buffer_offset(const uint32_t buffer_size, const uint32_t offset,
 
 static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 {
-	const struct ec_params_fp_frame *params =
+	const auto *params =
 		static_cast<const struct ec_params_fp_frame *>(args->params);
 	void *out = args->response;
-	uint32_t idx = FP_FRAME_GET_BUFFER_INDEX(params->offset);
+	uint16_t idx = FP_FRAME_GET_BUFFER_INDEX(params->offset);
 	uint32_t offset = params->offset & FP_FRAME_OFFSET_MASK;
 	uint32_t size = params->size;
 	uint16_t fgr;
 	uint8_t key[SBP_ENC_KEY_LEN];
 	struct ec_fp_template_encryption_metadata *enc_info;
-	int ret;
+	enum ec_error_list ret;
 
 	if (size > args->response_max)
 		return EC_RES_INVALID_PARAM;
@@ -460,6 +456,8 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 		return EC_RES_INVALID_PARAM;
 
 	if (!offset) {
+		ScopedFastCpu fast_cpu;
+
 		/* Host has requested the first chunk, do the encryption. */
 		timestamp_t now = get_time();
 		/* Encrypted template is after the metadata. */
@@ -480,8 +478,9 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 		 * The beginning of the buffer contains nonce, encryption_salt
 		 * and tag.
 		 */
-		enc_info = (struct ec_fp_template_encryption_metadata
-				    *)(fp_enc_buffer);
+		enc_info = reinterpret_cast<
+			struct ec_fp_template_encryption_metadata *>(
+			fp_enc_buffer);
 		enc_info->struct_version = FP_TEMPLATE_FORMAT_VERSION;
 		trng_init();
 		trng_rand_bytes(enc_info->nonce, FP_CONTEXT_NONCE_BYTES);
@@ -522,7 +521,7 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 				      encrypted_template, encrypted_blob_size,
 				      enc_info->nonce, FP_CONTEXT_NONCE_BYTES,
 				      enc_info->tag, FP_CONTEXT_TAG_BYTES);
-		always_memset(key, 0, sizeof(key));
+		OPENSSL_cleanse(key, sizeof(key));
 		if (ret != EC_SUCCESS) {
 			CPRINTS("fgr%d: Failed to encrypt template", fgr);
 			return EC_RES_UNAVAILABLE;
@@ -538,8 +537,7 @@ DECLARE_HOST_COMMAND(EC_CMD_FP_FRAME, fp_command_frame, EC_VER_MASK(0));
 
 static enum ec_status fp_command_stats(struct host_cmd_handler_args *args)
 {
-	struct ec_response_fp_stats *r =
-		static_cast<struct ec_response_fp_stats *>(args->response);
+	auto *r = static_cast<struct ec_response_fp_stats *>(args->response);
 
 	r->capture_time_us = capture_time_us;
 	r->matching_time_us = matching_time_us;
@@ -564,7 +562,7 @@ static bool template_needs_validation_value(
 	return enc_info->struct_version == 3 && FP_TEMPLATE_FORMAT_VERSION == 4;
 }
 
-static int
+static enum ec_status
 validate_template_format(struct ec_fp_template_encryption_metadata *enc_info)
 {
 	if (template_needs_validation_value(enc_info))
@@ -580,15 +578,14 @@ validate_template_format(struct ec_fp_template_encryption_metadata *enc_info)
 
 static enum ec_status fp_command_template(struct host_cmd_handler_args *args)
 {
-	const struct ec_params_fp_template *params =
+	const auto *params =
 		static_cast<const struct ec_params_fp_template *>(args->params);
 	uint32_t size = params->size & ~FP_TEMPLATE_COMMIT;
-	int xfer_complete = params->size & FP_TEMPLATE_COMMIT;
+	bool xfer_complete = params->size & FP_TEMPLATE_COMMIT;
 	uint32_t offset = params->offset;
-	uint32_t idx = templ_valid;
+	uint16_t idx = templ_valid;
 	uint8_t key[SBP_ENC_KEY_LEN];
 	struct ec_fp_template_encryption_metadata *enc_info;
-	int ret;
 
 	/* Can we store one more template ? */
 	if (idx >= FP_MAX_FINGER_COUNT)
@@ -597,13 +594,16 @@ static enum ec_status fp_command_template(struct host_cmd_handler_args *args)
 	if (args->params_size !=
 	    size + offsetof(struct ec_params_fp_template, data))
 		return EC_RES_INVALID_PARAM;
-	ret = validate_fp_buffer_offset(sizeof(fp_enc_buffer), offset, size);
+	enum ec_error_list ret =
+		validate_fp_buffer_offset(sizeof(fp_enc_buffer), offset, size);
 	if (ret != EC_SUCCESS)
 		return EC_RES_INVALID_PARAM;
 
 	memcpy(&fp_enc_buffer[offset], params->data, size);
 
 	if (xfer_complete) {
+		ScopedFastCpu fast_cpu;
+
 		/* Encrypted template is after the metadata. */
 		uint8_t *encrypted_template = fp_enc_buffer + sizeof(*enc_info);
 		/* Positive match salt is after the template. */
@@ -622,8 +622,8 @@ static enum ec_status fp_command_template(struct host_cmd_handler_args *args)
 		 */
 		enc_info = (struct ec_fp_template_encryption_metadata *)
 			fp_enc_buffer;
-		ret = validate_template_format(enc_info);
-		if (ret != EC_RES_SUCCESS) {
+		enum ec_status res = validate_template_format(enc_info);
+		if (res != EC_RES_SUCCESS) {
 			CPRINTS("fgr%d: Template format not supported", idx);
 			return EC_RES_INVALID_PARAM;
 		}
@@ -646,7 +646,7 @@ static enum ec_status fp_command_template(struct host_cmd_handler_args *args)
 				      encrypted_template, encrypted_blob_size,
 				      enc_info->nonce, FP_CONTEXT_NONCE_BYTES,
 				      enc_info->tag, FP_CONTEXT_TAG_BYTES);
-		always_memset(key, 0, sizeof(key));
+		OPENSSL_cleanse(key, sizeof(key));
 		if (ret != EC_SUCCESS) {
 			CPRINTS("fgr%d: Failed to decipher template", idx);
 			/* Don't leave bad data in the template buffer */
@@ -665,8 +665,8 @@ static enum ec_status fp_command_template(struct host_cmd_handler_args *args)
 		if (bytes_are_trivial(positive_match_salt,
 				      sizeof(fp_positive_match_salt[0]))) {
 			CPRINTS("fgr%d: Trivial positive match salt.", idx);
-			always_memset(fp_template[idx], 0,
-				      sizeof(fp_template[0]));
+			OPENSSL_cleanse(fp_template[idx],
+					sizeof(fp_template[0]));
 			return EC_RES_INVALID_PARAM;
 		}
 		memcpy(fp_positive_match_salt[idx], positive_match_salt,

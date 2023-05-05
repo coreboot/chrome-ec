@@ -202,6 +202,12 @@ struct panic_data *test_get_panic_data_pointer(void)
 }
 #endif
 
+__overridable uint32_t get_panic_stack_pointer(const struct panic_data *pdata)
+{
+	/* Not Implemented */
+	return 0;
+}
+
 test_mockable struct panic_data *get_panic_data_write(void)
 {
 	/*
@@ -421,10 +427,10 @@ static int command_panicinfo(int argc, const char **argv)
 	struct panic_data *const pdata_ptr = panic_get_data();
 
 	if (pdata_ptr) {
-		ccprintf("Saved panic data:%s\n",
+		ccprintf("Saved panic data: 0x%02X %s\n", pdata_ptr->flags,
 			 (pdata_ptr->flags & PANIC_DATA_FLAG_OLD_CONSOLE ?
 				  "" :
-				  " (NEW)"));
+				  "(NEW)"));
 
 		panic_data_print(pdata_ptr);
 

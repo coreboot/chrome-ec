@@ -36,11 +36,13 @@ struct led_color_node_t {
 #define DECLARE_PINS_NODE(id) extern struct led_pins_node_t PINS_NODE(id);
 
 #if CONFIG_PLATFORM_EC_LED_DT_PWM
-DT_FOREACH_CHILD(DT_COMPAT_GET_ANY_STATUS_OKAY(cros_ec_pwm_led_pins),
-		 DECLARE_PINS_NODE)
+DT_FOREACH_CHILD_STATUS_OKAY_VARGS(
+	DT_COMPAT_GET_ANY_STATUS_OKAY(cros_ec_pwm_led_pins), DT_FOREACH_CHILD,
+	DECLARE_PINS_NODE)
 #elif CONFIG_PLATFORM_EC_LED_DT_GPIO
-DT_FOREACH_CHILD(DT_COMPAT_GET_ANY_STATUS_OKAY(cros_ec_gpio_led_pins),
-		 DECLARE_PINS_NODE)
+DT_FOREACH_CHILD_STATUS_OKAY_VARGS(
+	DT_COMPAT_GET_ANY_STATUS_OKAY(cros_ec_gpio_led_pins), DT_FOREACH_CHILD,
+	DECLARE_PINS_NODE)
 #endif
 
 /*
@@ -235,7 +237,8 @@ static int match_node(int node_idx)
 
 	/* Check if this node depends on battery level */
 	if (node_array[node_idx].batt_lvl[0] != -1) {
-		int curr_batt_lvl = charge_get_percent();
+		int curr_batt_lvl =
+			DIV_ROUND_NEAREST(charge_get_display_charge(), 10);
 
 		if ((curr_batt_lvl < node_array[node_idx].batt_lvl[0]) ||
 		    (curr_batt_lvl > node_array[node_idx].batt_lvl[1]))

@@ -10,6 +10,7 @@
 #include "queue_policies.h"
 #include "registers.h"
 #include "spi.h"
+#include "stm32-dma.h"
 #include "timer.h"
 #include "usart-stm32l5.h"
 #include "usb-stream.h"
@@ -116,13 +117,6 @@ USB_STREAM_CONFIG(usart5_usb, USB_IFACE_USART5_STREAM,
 		  USB_STR_USART5_STREAM_NAME, USB_EP_USART5_STREAM,
 		  USB_STREAM_RX_SIZE, USB_STREAM_TX_SIZE, usb_to_usart5,
 		  usart5_to_usb)
-
-/******************************************************************************
- * Support SPI bridging over USB, this requires usb_spi_board_enable and
- * usb_spi_board_disable to be defined to enable and disable the SPI bridge.
- */
-
-USB_SPI_CONFIG(USB_IFACE_SPI, USB_EP_SPI);
 
 /******************************************************************************
  * Define the strings used in our USB descriptors.
@@ -266,8 +260,9 @@ static void board_init(void)
 			     STM32_OCTOSPI_DCR1_DEVSIZE_MSK;
 	/* Clock prescaler (max value 255) */
 	STM32_OCTOSPI_DCR2 = spi_devices[1].div;
-	/* Zero dummy cycles */
-	STM32_OCTOSPI_TCR = 0;
+
+	/* Select DMA channel */
+	dma_select_channel(STM32_DMAC_CH13, DMAMUX_REQ_OCTOSPI1);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 

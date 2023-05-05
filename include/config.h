@@ -19,13 +19,6 @@
 #define __CROS_EC_CONFIG_H
 
 /*
- * I don't know why but gcc's preprocessor doesn't like the autoconf.h file,
- * sometimes. Adding a #line directive anywhere in this file seems to fix the
- * problem. #line marks the *next* line, so it is off by one.
- */
-#line 27
-
-/*
  * When building for Zephyr tests, a shimmed_tasks.h header is defined
  * to create all the HAS_TASK_* definitions.  Since those are used in
  * config.h, we need to include that header first.
@@ -303,11 +296,10 @@
  */
 #undef CONFIG_SYNC_INT_EVENT
 
+#ifndef CONFIG_ZEPHYR
 /* Compile chip support for digital-to-analog converter */
 #undef CONFIG_DAC
-
-/* Compile chip support for analog-to-digital convertor */
-#undef CONFIG_ADC
+#endif /* CONFIG_ZEPHYR */
 
 /*
  * Allow runtime configuration of the adc_channels[] array
@@ -334,12 +326,6 @@
  */
 #define CONFIG_ADC_PROFILE_SINGLE
 #undef CONFIG_ADC_PROFILE_FAST_CONTINUOUS
-
-/* Support AES symmetric-key algorithm */
-#undef CONFIG_AES
-
-/* Support AES-GCM */
-#undef CONFIG_AES_GCM
 
 /*
  * Some ALS modules may be connected to the EC. We need the command, and
@@ -435,8 +421,10 @@
  */
 #undef CONFIG_ASSEMBLY_MULA32
 
+#ifndef CONFIG_ZEPHYR
 /* Support audio codec. */
 #undef CONFIG_AUDIO_CODEC
+#endif /* CONFIG_ZEPHYR */
 /* Audio codec caps. */
 #undef CONFIG_AUDIO_CODEC_CAP_WOV_AUDIO_SHM
 #undef CONFIG_AUDIO_CODEC_CAP_WOV_LANG_SHM
@@ -723,11 +711,6 @@
 #define CONFIG_BATT_HOST_FULL_FACTOR 97
 
 /*
- * Smart battery pass-through host commands.
- */
-#undef CONFIG_SB_PASSTHROUGH
-
-/*
  * Expose some data when it is needed.
  * For example, battery disconnect state
  */
@@ -961,6 +944,7 @@
 #undef CONFIG_CHARGER_ISL9241
 #undef CONFIG_CHARGER_MT6370
 #undef CONFIG_CHARGER_RAA489000
+#undef CONFIG_CHARGER_RAA489110
 #undef CONFIG_CHARGER_RT9466
 #undef CONFIG_CHARGER_RT9467
 #undef CONFIG_CHARGER_RT9490
@@ -1313,6 +1297,13 @@
  */
 #undef CONFIG_BATTERY_MAX_IMBALANCE_MV
 
+/*
+ * Select this option if the charger will be used in a bypass mode in
+ * order to pass the input current from AC directly to the system
+ * power rail for efficiency.
+ */
+#undef CONFIG_CHARGER_BYPASS_MODE
+
 /* Set this option when using a Narrow VDC (NVDC) charger, such as ISL9237/8. */
 #undef CONFIG_CHARGER_NARROW_VDC
 
@@ -1464,10 +1455,12 @@
 
 /* AP chipset support; pick at most one */
 #undef CONFIG_CHIPSET_ALDERLAKE /* Intel Alderlake (x86) */
+#ifndef CONFIG_ZEPHYR
 #undef CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540 /* Intel Alderlake (x86) \
 					     * with power sequencer  \
 					     * chip                  \
 					     */
+#endif /* CONFIG_ZEPHYR */
 #undef CONFIG_CHIPSET_APOLLOLAKE /* Intel Apollolake (x86) */
 #undef CONFIG_CHIPSET_CANNONLAKE /* Intel Cannonlake (x86) */
 #undef CONFIG_CHIPSET_COMETLAKE /* Intel Cometlake (x86) */
@@ -1705,7 +1698,7 @@
 #undef CONFIG_CMD_RAND
 #define CONFIG_CMD_REGULATOR
 #undef CONFIG_CMD_RESET_FLAGS
-#define CONFIG_CMD_RETIMER
+#undef CONFIG_CMD_RETIMER
 #undef CONFIG_CMD_RTC
 #undef CONFIG_CMD_RTC_ALARM
 #define CONFIG_CMD_RW
@@ -1764,6 +1757,11 @@
  */
 #undef CONFIG_SYSTEM_SAFE_MODE
 #define CONFIG_SYSTEM_SAFE_MODE_TIMEOUT_MSEC 2000
+/*
+ * Prints the stack of the faulting task to the console buffer in system safe
+ * mode.
+ */
+#define CONFIG_SYSTEM_SAFE_MODE_PRINT_STACK
 
 /*
  * Provide the default GPIO abstraction layer.
@@ -1811,6 +1809,9 @@
  * You want this unless you are doing a really tiny firmware.
  */
 #define CONFIG_COMMON_RUNTIME
+
+/* Allow deferred (async) flash protect*/
+#define CONFIG_FLASH_PROTECT_DEFERRED
 
 /* Provide common core code to handle the operating system timers. */
 #define CONFIG_COMMON_TIMER
@@ -2019,8 +2020,10 @@
 /* Maximal EC sampling rate */
 #undef CONFIG_EC_MAX_SENSOR_FREQ_MILLIHZ
 
+#ifndef CONFIG_ZEPHYR
 /* Support EC chip internal data EEPROM */
 #undef CONFIG_EEPROM
+#endif /* CONFIG_ZEPHYR */
 
 /*
  * Support for sending emulated sysrq events to AP (on designs with a keyboard,
@@ -2230,8 +2233,10 @@
 /* Allow EC serial console input to wake up the EC from STOP mode */
 #undef CONFIG_FORCE_CONSOLE_RESUME
 
+#ifndef CONFIG_ZEPHYR
 /* Enable support for floating point unit */
 #undef CONFIG_FPU
+#endif /* CONFIG_ZEPHYR */
 
 /* Enable warnings on FPU exceptions */
 #undef CONFIG_FPU_WARNINGS
@@ -2700,7 +2705,9 @@
 /*****************************************************************************/
 /* I2C configuration */
 
+#ifndef CONFIG_ZEPHYR
 #undef CONFIG_I2C
+#endif /* CONFIG_ZEPHYR */
 #undef CONFIG_I2C_DEBUG
 #undef CONFIG_I2C_DEBUG_PASSTHRU
 #undef CONFIG_I2C_PASSTHRU_RESTRICTED
@@ -2782,6 +2789,7 @@
  */
 #undef CONFIG_I2C_MULTI_PORT_CONTROLLER
 
+#ifndef CONFIG_ZEPHYR
 /*
  * Enable I2C bitbang driver.
  *
@@ -2793,6 +2801,7 @@
  * {"battery", 2, 100, GPIO_I2C3_SCL, GPIO_I2C3_SDA, .drv = &bitbang_drv},
  */
 #undef CONFIG_I2C_BITBANG
+#endif /* CONFIG_ZEPHYR */
 
 /*
  * If defined, reduce I2C traffic from update functions (i2c_update8/16
@@ -2850,9 +2859,16 @@
  * Compile driver for INA219 or INA231 or INA3221.
  * Only one of these may be defined (if any).
  */
+#ifndef CONFIG_ZEPHYR
+/*
+ * These symbols also exist as Kconfigs in Zephyr. Zephyr based boards
+ * need to use the upstream driver, or these symbols need to be changed
+ * downstream to not conflict.
+ */
 #undef CONFIG_INA219
-#undef CONFIG_INA231
 #undef CONFIG_INA3221
+#endif /* CONFIG_ZEPHYR */
+#undef CONFIG_INA231
 
 /*****************************************************************************/
 /* Inductive charging */
@@ -3098,13 +3114,6 @@
 #undef CONFIG_KEYBOARD_SCANCODE_CALLBACK
 
 /*
- * Call board-supplied keyboard_suppress_noise() function when the debounced
- * keyboard state changes.  Some boards use this to send a signal to the audio
- * codec to suppress typing noise picked up by the microphone.
- */
-#undef CONFIG_KEYBOARD_SUPPRESS_NOISE
-
-/*
  * Enable keyboard testing functionality. This enables a message which receives
  * a list of keyscan events from the AP and processes them.  This will cause
  * keypresses to appear on the AP through the same mechanism as a normal
@@ -3122,11 +3131,6 @@
  * low-to-high transition time.
  */
 #undef CONFIG_KEYBOARD_KSO_HIGH_DRIVE
-
-/*
- * Add support for keyboards with language ID pins
- */
-#undef CONFIG_KEYBOARD_LANGUAGE_ID
 
 /*
  * Enable keypad (a palm-sized keyboard section usually placed on the far right)
@@ -3171,11 +3175,13 @@
  */
 #undef CONFIG_LED_POLICY_STD
 
+#ifndef CONFIG_ZEPHYR
 /*
  * Support common PWM-controlled LEDs that conform to the Chrome OS LED
  * behaviour specification.
  */
 #undef CONFIG_LED_PWM
+#endif /* CONFIG_ZEPHYR */
 
 /*
  * Support common PWM-controlled LEDs that do not conform to the Chrom OS LED
@@ -3411,8 +3417,10 @@
 /* Size of low power RAM. */
 #undef CONFIG_LPRAM_SIZE
 
+#ifndef CONFIG_ZEPHYR
 /* Use Link-Time Optimizations to try to reduce the firmware code size */
 #undef CONFIG_LTO
+#endif /* CONFIG_ZEPHYR */
 
 /* Provide rudimentary malloc/free like services for shared memory. */
 #undef CONFIG_MALLOC
@@ -3565,8 +3573,10 @@
  */
 #undef CONFIG_MKBP_INPUT_DEVICES
 
+#ifndef CONFIG_ZEPHYR
 /* Support memory protection unit (MPU) */
 #undef CONFIG_MPU
+#endif /* CONFIG_ZEPHYR */
 
 /* Do not try hold I/O pins at frozen level during deep sleep */
 #undef CONFIG_NO_PINHOLD
@@ -3584,8 +3594,10 @@
 #undef CONFIG_PANIC_DATA_BASE
 #undef CONFIG_PANIC_DATA_SIZE
 
+#ifndef CONFIG_ZEPHYR
 /* Support PECI interface to x86 processor */
 #undef CONFIG_PECI
+#endif /* CONFIG_ZEPHYR */
 
 /* Common code for PECI interface to x86 processor */
 #undef CONFIG_PECI_COMMON
@@ -3748,8 +3760,10 @@
  */
 #undef CONFIG_CPU_PROCHOT_GATE_ON_C10
 
+#ifndef CONFIG_ZEPHYR
 /* Support PS/2 interface */
 #undef CONFIG_PS2
+#endif /* CONFIG_ZEPHYR */
 
 /* Support Power Sourcing Equipment */
 #undef CONFIG_PSE_LTC4291
@@ -3763,8 +3777,10 @@
 #undef CONFIG_PVD
 
 /*****************************************************************************/
+#ifndef CONFIG_ZEPHYR
 /* Support PWM control */
 #undef CONFIG_PWM
+#endif /* CONFIG_ZEPHYR */
 
 /* Define clock input to PWM module. */
 #undef CONFIG_PWM_INPUT_LFCLK
@@ -3817,8 +3833,10 @@
 #undef CONFIG_RGBKBD_DEMO_FLOW
 #undef CONFIG_RGBKBD_DEMO_DOT
 
+#ifndef CONFIG_ZEPHYR
 /* Support Real-Time Clock (RTC) */
 #undef CONFIG_RTC
+#endif /* CONFIG_ZEPHYR */
 
 /* Size of each RAM bank in chip, default is CONFIG_RAM_SIZE */
 #undef CONFIG_RAM_BANK_SIZE
@@ -3989,8 +4007,10 @@
  */
 /* #undef CONFIG_SMBUS */
 
+#ifndef CONFIG_ZEPHYR
 /* Support SPI interfaces */
 #undef CONFIG_SPI
+#endif /* CONFIG_ZEPHYR */
 
 /* Support deprecated SPI protocol version 2. */
 #undef CONFIG_SPI_PROTOCOL_V2
@@ -4022,8 +4042,10 @@
 /* Define the SPI port to use to access the fingerprint sensor */
 #undef CONFIG_SPI_FP_PORT
 
+#ifndef CONFIG_ZEPHYR
 /* Support JEDEC SFDP based Serial NOR flash */
 #undef CONFIG_SPI_NOR
+#endif /* CONFIG_ZEPHYR */
 
 /* Enable SPI_NOR debugging providing additional console output while
  * initializing Serial NOR Flash devices including SFDP discovery. */
@@ -4415,8 +4437,10 @@
 /* Baud rate for UARTs */
 #define CONFIG_UART_BAUD_RATE 115200
 
+#ifndef CONFIG_ZEPHYR
 /* UART index (number) for EC console */
 #undef CONFIG_UART_CONSOLE
+#endif /* CONFIG_ZEPHYR */
 
 /* UART index (number) for host UART, if present */
 #undef CONFIG_UART_HOST
@@ -4960,6 +4984,7 @@
  * Type-C retimer drivers to be used.
  */
 #undef CONFIG_USBC_RETIMER_ANX7483
+#undef CONFIG_USBC_RETIMER_ANX7452
 #undef CONFIG_USBC_RETIMER_INTEL_BB
 #undef CONFIG_USBC_RETIMER_KB800X
 #undef CONFIG_USBC_RETIMER_NB7V904M
@@ -5181,6 +5206,7 @@
 #undef CONFIG_USBC_PPC_SN5S330
 #undef CONFIG_USBC_PPC_SYV682C
 #undef CONFIG_USBC_PPC_SYV682X
+#undef CONFIG_USBC_PPC_TCPCI
 
 /*
  * NX20P348x 5V SRC RCP trigger level at 10mV. Define to enable 5V SRC RCP
@@ -5413,8 +5439,10 @@
 /* Support reporting of configuration bMaxPower in mA */
 #define CONFIG_USB_MAXPOWER_MA 500
 
+#ifndef CONFIG_ZEPHYR
 /* Support reporting as self powered in USB configuration. */
 #undef CONFIG_USB_SELF_POWERED
+#endif /* CONFIG_ZEPHYR */
 
 /* Support correct handling of USB suspend (host-initiated). */
 #undef CONFIG_USB_SUSPEND
@@ -5845,8 +5873,10 @@
  */
 #undef CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
 
+#ifndef CONFIG_ZEPHYR
 /* Define this to enable system boot time logging */
 #undef CONFIG_SYSTEM_BOOT_TIME_LOGGING
+#endif /* CONFIG_ZEPHYR */
 
 /*
  * The USB port used for CCD. Defaults to 0/C0.
@@ -6215,13 +6245,13 @@
 /*****************************************************************************/
 /* Define CONFIG_USBC_PPC if board has a USB Type-C Power Path Controller. */
 #if defined(CONFIG_USBC_PPC_AOZ1380) || defined(CONFIG_USBC_PPC_NX20P3483) || \
-	defined(CONFIG_USBC_PPC_SN5S330)
+	defined(CONFIG_USBC_PPC_SN5S330) || defined(CONFIG_USBC_PPC_TCPCI)
 #define CONFIG_USBC_PPC
 #endif /* "has a PPC" */
 
 /* Following chips use Power Path Control information from TCPC chip */
 #if defined(CONFIG_USBC_PPC_AOZ1380) || defined(CONFIG_USBC_PPC_NX20P3481) || \
-	defined(CONFIG_USBC_PPC_NX20P3483)
+	defined(CONFIG_USBC_PPC_NX20P3483) || defined(CONFIG_USBC_PPC_TCPCI)
 #define CONFIG_USB_PD_PPC
 #endif
 
@@ -6273,7 +6303,8 @@
 	defined(CONFIG_USBC_PPC_NX20P3483) ||                                 \
 	defined(CONFIG_USBC_PPC_SN5S330) ||                                   \
 	defined(CONFIG_USBC_PPC_SYV682X) || defined(CONFIG_CHARGER_SM5803) || \
-	defined(CONFIG_USB_PD_TCPM_TCPCI)
+	defined(CONFIG_USB_PD_TCPM_TCPCI) ||                                  \
+	defined(CONFIG_USB_PD_TCPM_ANX7406)
 #define CONFIG_USBC_OCP
 #endif
 
@@ -6282,10 +6313,11 @@
  * Define CONFIG_USB_PD_VBUS_MEASURE_CHARGER if the charger on the board
  * supports VBUS measurement.
  */
-#if defined(CONFIG_CHARGER_BD9995X) || defined(CONFIG_CHARGER_RT9466) ||     \
-	defined(CONFIG_CHARGER_RT9467) || defined(CONFIG_CHARGER_RT9490) ||  \
-	defined(CONFIG_CHARGER_MT6370) || defined(CONFIG_CHARGER_BQ25710) || \
-	defined(CONFIG_CHARGER_BQ25720) || defined(CONFIG_CHARGER_ISL9241)
+#if defined(CONFIG_CHARGER_BD9995X) || defined(CONFIG_CHARGER_RT9466) ||      \
+	defined(CONFIG_CHARGER_RT9467) || defined(CONFIG_CHARGER_RT9490) ||   \
+	defined(CONFIG_CHARGER_MT6370) || defined(CONFIG_CHARGER_BQ25710) ||  \
+	defined(CONFIG_CHARGER_BQ25720) || defined(CONFIG_CHARGER_ISL9241) || \
+	defined(CONFIG_CHARGER_RAA489110)
 #define CONFIG_USB_PD_VBUS_MEASURE_CHARGER
 
 #ifdef CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
@@ -6327,7 +6359,8 @@
 #if defined(CONFIG_CHARGER_ISL9237) || defined(CONFIG_CHARGER_ISL9238) ||      \
 	defined(CONFIG_CHARGER_ISL9238C) || defined(CONFIG_CHARGER_ISL9241) || \
 	defined(CONFIG_CHARGER_RAA489000) || defined(CONFIG_CHARGER_SM5803) || \
-	defined(CONFIG_CHARGER_BQ25710) || defined(CONFIG_CHARGER_BQ25720)
+	defined(CONFIG_CHARGER_BQ25710) || defined(CONFIG_CHARGER_BQ25720) ||  \
+	defined(CONFIG_CHARGER_RAA489110)
 #define CONFIG_CHARGER_NARROW_VDC
 #endif
 
@@ -6340,9 +6373,11 @@
 #define CONFIG_BUTTON_TRIGGERED_RECOVERY
 #endif /* defined(CONFIG_DEDICATED_RECOVERY_BUTTON) */
 
+#ifndef CONFIG_ZEPHYR
 #ifdef CONFIG_LED_PWM_COUNT
 #define CONFIG_LED_PWM
 #endif /* defined(CONFIG_LED_PWM_COUNT) */
+#endif /* CONFIG_ZEPHYR */
 
 #ifdef CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY
 #define CONFIG_LED_PWM_CHARGE_STATE_ONLY
@@ -6418,7 +6453,9 @@
 #ifndef HAS_TASK_CHIPSET
 #undef CONFIG_AP_HANG_DETECT
 #undef CONFIG_CHIPSET_ALDERLAKE
+#ifndef CONFIG_ZEPHYR
 #undef CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540
+#endif /* CONFIG_ZEPHYR */
 #undef CONFIG_CHIPSET_APOLLOLAKE
 #undef CONFIG_CHIPSET_CANNONLAKE
 #undef CONFIG_CHIPSET_COMETLAKE
@@ -6444,11 +6481,13 @@
  * for. In Zephyr this can be implied by multiple options, so we provide the
  * same symbol here instead of making code examine HAS_TASK_CHIPSET.
  */
+#ifndef CONFIG_ZEPHYR
 #ifndef CONFIG_AP_POWER_CONTROL
 #ifdef HAS_TASK_CHIPSET
 #define CONFIG_AP_POWER_CONTROL
 #endif /* HAS_TASK_CHIPSET */
 #endif /* CONFIG_AP_POWER_CONTROL */
+#endif /* CONFIG_ZEPHYR */
 
 /*
  * If a board has a chipset task, set the minimum charger power required for
@@ -6679,6 +6718,12 @@
 #define CONFIG_USB_MUX_AP_ACK_REQUEST
 #endif /* CONFIG_USBC_RETIMER_INTEL_BB || CONFIG_USBC_RETIMER_INTEL_HB */
 
+/* Enable retimer console command */
+#if (defined(CONFIG_USBC_RETIMER_INTEL_BB) || \
+     defined(CONFIG_USBC_RETIMER_KB800X))
+#define CONFIG_CMD_RETIMER
+#endif
+
 /*****************************************************************************/
 
 /*
@@ -6764,8 +6809,9 @@
 #error "Flash readout protection and PSTATE may not work as intended."
 #endif
 
-#if !defined(CHIP_FAMILY_STM32H7) && !defined(CHIP_FAMILY_STM32F4)
-#error "Flash readout protection only implemented on STM32H7 and STM32F4."
+#if !defined(CHIP_FAMILY_STM32H7) && !defined(CHIP_FAMILY_STM32F4) && \
+	!defined(CHIP_FAMILY_NPCX9)
+#error "Flash readout protection only implemented on STM32H7, STM32F4 and NPCX9"
 #endif
 #endif /* CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE */
 

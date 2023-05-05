@@ -96,11 +96,10 @@ static int ktu1125_dump(int port)
 /* helper */
 static int ktu1125_power_path_control(int port, int enable)
 {
-	int status = enable ? set_flags(port, KTU1125_CTRL_SW_CFG,
-					KTU1125_SW_AB_EN) :
-			      clr_flags(port, KTU1125_CTRL_SW_CFG,
-					KTU1125_SW_AB_EN | KTU1125_CC1S_VCONN |
-						KTU1125_CC2S_VCONN);
+	int status =
+		enable ?
+			set_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_SW_AB_EN) :
+			clr_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_SW_AB_EN);
 
 	if (status) {
 		CPRINTS("ppc p%d: Failed to %s power path", port,
@@ -260,7 +259,7 @@ static int ktu1125_is_vbus_present(int port)
 		return 0;
 	}
 
-	return regval & KTU1125_SYSA_OK;
+	return !!(regval & KTU1125_SYSA_OK);
 }
 #endif /* defined(CONFIG_USB_PD_VBUS_DETECT_PPC) */
 
@@ -275,21 +274,18 @@ static int ktu1125_is_sourcing_vbus(int port)
 		return 0;
 	}
 
-	return regval & KTU1125_VBUS_OK;
+	return !!(regval & KTU1125_VBUS_OK);
 }
 
 #ifdef CONFIG_USBC_PPC_POLARITY
 static int ktu1125_set_polarity(int port, int polarity)
 {
-	if (polarity) {
-		/* CC2 active. */
-		clr_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_CC2S_VCONN);
-		return set_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_CC1S_VCONN);
-	}
-
-	/* else CC1 active. */
-	clr_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_CC1S_VCONN);
-	return set_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_CC2S_VCONN);
+	/*
+	 * KTU1125 doesn't need to be informed about polarity.
+	 * Polarity is queried via pd_get_polarity when applying VCONN.
+	 */
+	ppc_prints("KTU1125 sets polarity only when applying VCONN", port);
+	return EC_SUCCESS;
 }
 #endif
 
@@ -345,11 +341,19 @@ static int ktu1125_discharge_vbus(int port, int enable)
 #ifdef CONFIG_USBC_PPC_VCONN
 static int ktu1125_set_vconn(int port, int enable)
 {
-	int status = enable ? set_flags(port, KTU1125_CTRL_SW_CFG,
-					KTU1125_VCONN_EN) :
-			      clr_flags(port, KTU1125_CTRL_SW_CFG,
-					KTU1125_VCONN_EN | KTU1125_CC1S_VCONN |
-						KTU1125_CC2S_VCONN);
+	int polarity;
+	int status;
+	int flags = KTU1125_VCONN_EN;
+
+	polarity = polarity_rm_dts(pd_get_polarity(port));
+
+	if (enable) {
+		flags |= polarity ? KTU1125_CC2S_VCONN : KTU1125_CC1S_VCONN;
+		status = set_flags(port, KTU1125_SET_SW_CFG, flags);
+	} else {
+		flags |= KTU1125_CC1S_VCONN | KTU1125_CC2S_VCONN;
+		status = clr_flags(port, KTU1125_SET_SW_CFG, flags);
+	}
 
 	return status;
 }
@@ -378,6 +382,12 @@ static int ktu1125_set_frs_enable(int port, int enable)
 
 static int ktu1125_vbus_sink_enable(int port, int enable)
 {
+#ifdef CONFIG_USB_PD_VBUS_DETECT_PPC
+	/* Skip if VBUS SNK is already enabled/disabled */
+	if (ktu1125_is_vbus_present(port) == enable)
+		return EC_SUCCESS;
+#endif
+
 	/* Select active sink */
 	int rv = clr_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_POW_MODE);
 
@@ -391,6 +401,10 @@ static int ktu1125_vbus_sink_enable(int port, int enable)
 
 static int ktu1125_vbus_source_enable(int port, int enable)
 {
+	/* Skip if VBUS SRC is already enabled/disabled */
+	if (ktu1125_is_sourcing_vbus(port) == enable)
+		return EC_SUCCESS;
+
 	/* Select active source */
 	int rv = set_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_POW_MODE);
 

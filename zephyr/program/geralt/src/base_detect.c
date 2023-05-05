@@ -87,9 +87,11 @@ static void base_startup_hook(struct ap_power_ev_callback *cb,
 	}
 }
 
-static int base_init(const struct device *unused)
+static int base_init(void)
 {
 	static struct ap_power_ev_callback cb;
+
+	base_update(false);
 
 	ap_power_ev_init_callback(&cb, base_startup_hook,
 				  AP_POWER_STARTUP | AP_POWER_SHUTDOWN);

@@ -903,9 +903,17 @@ void system_common_pre_init(void)
 		uint32_t reason;
 		uint32_t info;
 		uint8_t exception;
+		struct panic_data *pdata;
 
 		panic_get_reason(&reason, &info, &exception);
-		if (reason != PANIC_SW_WATCHDOG)
+		pdata = panic_get_data();
+		/* The watchdog panic info may have already been initialized by
+		 * the watchdog handler, so only set it here if the panic reason
+		 * is not a watchdog or the panic info has already been read,
+		 * i.e. an old watchdog panic.
+		 */
+		if (reason != PANIC_SW_WATCHDOG || !pdata ||
+		    pdata->flags & PANIC_DATA_FLAG_OLD_HOSTCMD)
 			panic_set_reason(PANIC_SW_WATCHDOG, 0, 0);
 	}
 
@@ -1658,21 +1666,6 @@ DECLARE_HOST_COMMAND(EC_CMD_SET_SKU_ID, host_command_set_sku_id,
 		     EC_VER_MASK(0));
 #endif
 
-#ifdef CONFIG_KEYBOARD_LANGUAGE_ID
-static enum ec_status
-host_command_get_keyboard_id(struct host_cmd_handler_args *args)
-{
-	struct ec_response_keyboard_id *r = args->response;
-
-	r->keyboard_id = keyboard_get_keyboard_id();
-	args->response_size = sizeof(*r);
-
-	return EC_RES_SUCCESS;
-}
-DECLARE_HOST_COMMAND(EC_CMD_GET_KEYBOARD_ID, host_command_get_keyboard_id,
-		     EC_VER_MASK(0));
-#endif
-
 static enum ec_status
 host_command_build_info(struct host_cmd_handler_args *args)
 {
@@ -1849,15 +1842,6 @@ __overridable int board_write_mac_addr(const char *mac_addr)
 		return EC_ERROR_UNIMPLEMENTED;
 }
 #endif /* CONFIG_MAC_ADDR_LEN */
-
-__attribute__((weak)) void clock_enable_module(enum module_id module,
-					       int enable)
-{
-	/*
-	 * Default weak implementation - for chips that don't support this
-	 * function.
-	 */
-}
 
 __test_only void system_common_reset_state(void)
 {

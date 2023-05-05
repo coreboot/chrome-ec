@@ -1159,6 +1159,11 @@ bool pe_snk_in_epr_mode(int port)
 	return PE_CHK_FLAG(port, PE_FLAGS_IN_EPR);
 }
 
+void pe_snk_epr_explicit_exit(int port)
+{
+	PE_SET_FLAG(port, PE_FLAGS_EPR_EXPLICIT_EXIT);
+}
+
 bool pe_snk_can_enter_epr_mode(int port)
 {
 	/*
@@ -3749,9 +3754,12 @@ static void pe_snk_ready_entry(int port)
 	 */
 	pe_update_wait_and_add_jitter_timer(port);
 
-	if (IS_ENABLED(CONFIG_USB_PD_EPR) && pe_snk_in_epr_mode(port)) {
-		pd_timer_enable(port, PE_TIMER_SINK_EPR_KEEP_ALIVE,
-				PD_T_SINK_EPR_KEEP_ALIVE);
+	if (IS_ENABLED(CONFIG_USB_PD_EPR)) {
+		if (pe_snk_in_epr_mode(port))
+			pd_timer_enable(port, PE_TIMER_SINK_EPR_KEEP_ALIVE,
+					PD_T_SINK_EPR_KEEP_ALIVE);
+		else if (!PE_CHK_FLAG(port, PE_FLAGS_EPR_EXPLICIT_EXIT))
+			pd_dpm_request(port, DPM_REQUEST_EPR_MODE_ENTRY);
 	}
 }
 
@@ -4136,6 +4144,9 @@ static void pe_snk_get_source_cap_run(int port)
 static void pe_send_soft_reset_entry(int port)
 {
 	print_current_state(port);
+
+	PE_CLR_FLAG(port, PE_FLAGS_ENTERING_EPR);
+	PE_CLR_FLAG(port, PE_FLAGS_EPR_EXPLICIT_EXIT);
 
 	/* Reset Protocol Layer (softly) */
 	prl_reset_soft(port);
@@ -6965,7 +6976,11 @@ static void pe_vcs_turn_off_vconn_swap_run(int port)
 		pe[port].discover_identity_counter = 0;
 		pe[port].dr_swap_attempt_counter = 0;
 
-		pe_set_ready_state(port);
+		if (PE_CHK_FLAG(port, PE_FLAGS_ENTERING_EPR))
+			set_state_pe(port,
+				     PE_SNK_EPR_MODE_ENTRY_WAIT_FOR_RESPONSE);
+		else
+			pe_set_ready_state(port);
 		return;
 	}
 }
@@ -7906,6 +7921,8 @@ static void pe_ddr_perform_data_reset_exit(int port)
 #ifdef CONFIG_USB_PD_EPR
 static void pe_enter_epr_mode(int port)
 {
+	PE_CLR_FLAG(port, PE_FLAGS_ENTERING_EPR);
+	PE_CLR_FLAG(port, PE_FLAGS_EPR_EXPLICIT_EXIT);
 	PE_SET_FLAG(port, PE_FLAGS_IN_EPR);
 	CPRINTS("C%d: Entered EPR", port);
 }
@@ -7984,6 +8001,8 @@ static void pe_snk_send_epr_mode_entry_entry(int port)
 
 	print_current_state(port);
 
+	PE_SET_FLAG(port, PE_FLAGS_ENTERING_EPR);
+
 	/* Send EPR mode entry message */
 	eprmdo->action = PD_EPRMDO_ACTION_ENTER;
 	eprmdo->data = 0; /* EPR Sink Operational PDP */
@@ -8004,6 +8023,7 @@ static void pe_snk_send_epr_mode_entry_run(int port)
 	msg_check = pe_sender_response_msg_run(port);
 
 	if (msg_check & PE_MSG_DISCARDED) {
+		PE_CLR_FLAG(port, PE_FLAGS_ENTERING_EPR);
 		set_state_pe(port, PE_SNK_READY);
 		return;
 	}
@@ -8072,11 +8092,16 @@ static void pe_snk_epr_mode_entry_wait_for_response_run(int port)
 				return;
 			} else if (eprmdo->action ==
 				   PD_EPRMDO_ACTION_ENTER_FAILED) {
+				PE_CLR_FLAG(port, PE_FLAGS_ENTERING_EPR);
 				/* Table 6-50 EPR Mode Data Object */
 				CPRINTS("C%d: Failed to enter EPR for 0x%x",
 					port, eprmdo->data);
 			}
 			/* Fall through to soft reset. */
+		} else if ((ext == 0) && (cnt == 0) &&
+			   (type == PD_CTRL_VCONN_SWAP)) {
+			set_state_pe(port, PE_VCS_EVALUATE_SWAP);
+			return;
 		}
 		/*
 		 * 6.4.10.1 Process to enter EPR Mode

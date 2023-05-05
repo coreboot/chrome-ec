@@ -23,14 +23,14 @@
 			/* GPIO_PULL_UP will cause this start asserted,
 			 * i.e. not pressed.
 			 */
-			gpios = <&gpio0 1 (GPIO_INPUT | GPIO_PULL_UP)>;
+			gpios = <&gpio0 3 (GPIO_INPUT | GPIO_PULL_UP)>;
 			enum-name = "GPIO_POWER_BUTTON_L";
 		};
 		gpio_wp_l: wp_l {
-			gpios = <&gpio0 3 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
+			gpios = <&gpio0 4 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 		};
 		entering-rw {
-			gpios = <&gpio0 1 GPIO_OUTPUT_LOW>;
+			gpios = <&gpio0 5 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_ENTERING_RW";
 		};
 	};
@@ -124,5 +124,12 @@
 		enum-name = "PWR_SYS_RST";
 		gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
 		output;
+	};
+	pwr-all-sys-pwrgd {
+		compatible = "intel,ap-pwrseq-gpio";
+		dbg-label = "all power good";
+		enum-name = "PWR_ALL_SYS_PWRGD";
+		gpios = <&gpio0 23 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
+		interrupt-flags = <GPIO_INT_EDGE_BOTH>;
 	};
 };

@@ -43,11 +43,31 @@ config EMUL_BMA4XX
 config EMUL_BC12_DETECT_PI3USB9201
 	bool "PI3USB9201 emulator"
 	default y
-	depends on ZTEST && DT_HAS_PERICOM_PI3USB9201_ENABLED
+	depends on DT_HAS_PERICOM_PI3USB9201_ENABLED
 	help
 	  Enable the PI3USB9201 emulator. PI3USB9201 is a BC1.2 charger
 	  detector/advertiser. The emulator supports reading and writing the
 	  4 I2C registers of the PI3USB9201 using the emulated I2C bus.
+
+config EMUL_CHARGER_ISL9241
+	bool "Renesas buck-boost battery charger emulator"
+	default y
+	depends on ZTEST && DT_HAS_INTERSIL_ISL9241_ENABLED
+	select EMUL_COMMON_I2C
+	help
+	  Enable the ISL9241 emulator.  This chip is a configurable buck-boost
+	  battery charger which can communicate over I2C, and utilizes the
+	  emulated I2C bus.
+
+config EMUL_PPC_NX20P348X
+	bool "NXP PPC emulator"
+	default y
+	depends on ZTEST && DT_HAS_NXP_NX20P348X_ENABLED
+	select EMUL_COMMON_I2C
+	help
+	  Enable the NX20P348X emulator, which covers both the NX20P3481 and
+	  NX20P3483.  It is also register compatible with the SM5360A.  This
+	  emulator makes use of the emulated I2C bus.
 
 config EMUL_PPC_SYV682X
 	bool "Silergy SYV682x PPC emulator"
@@ -170,6 +190,17 @@ config EMUL_PCT2075
 	  Enable the PCT2075 temperature sensor emulator. It uses emulated I2C bus.
 	  Emulator API is available in zephyr/include/emul/emul_pct2075.h.
 
+config EMUL_ANX7452
+	bool "ANX7452 retimer emulator"
+	default y
+	depends on ZTEST && DT_HAS_ANALOGIX_ANX7452_ENABLED
+	select EMUL_COMMON_I2C
+	help
+	  Enable the ANX7452(Analogix) retimer emulator. This driver use
+	  emulated I2C bus. It is used to test anx7452 driver. It supports
+	  reads and writes to all emulator registers. Emulators API is
+	  available in zephyr/include/emul/emul_anx7452.h
+
 config EMUL_PS8743
 	bool "PS8743 emulator"
 	default y
@@ -184,4 +215,5 @@ rsource "Kconfig.lis2dw12"
 rsource "Kconfig.i2c_mock"
 rsource "Kconfig.isl923x"
 rsource "Kconfig.clock_control"
+rsource "Kconfig.sm5803"
 rsource "Kconfig.sn5s330"

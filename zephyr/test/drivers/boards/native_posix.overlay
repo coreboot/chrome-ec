@@ -31,6 +31,13 @@
 		gpio-cbi-wp = &gpio_ec_cbi_wp;
 		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
 		int-wp = &int_wp_l;
+		/*
+		 * Use LIS2DW12 accelerometer for on-body sensor.
+		 * The base_accel is currently using bma255. However, that
+		 * sensor driver (accel_bma2x2.c) does not support body
+		 * detection, since it's missing get_rms_noise().
+		 */
+		on-body-sensor = &ms_lis2dw12_accel;
 	};
 
 	ec-console {
@@ -127,10 +134,6 @@
 		 * itself instead of device tree.
 		 */
 
-		/* <&gpio0 1 x> is reserved as 'entering-rw' in
-		 * src/platform/ec/zephyr/dts/board-overlays/native_posix.dts
-		 */
-
 		/* In test WP is output because CBI use it, but it is also
 		 * input, because test_all_tags set it to enable write
 		 * protection.
@@ -176,7 +179,7 @@
 			gpios = <&gpio0 13 GPIO_INPUT>;
 		};
 		gpio_usb_c0_ppc_int: usb_c0_ppc_int {
-			gpios = <&gpio0 14 GPIO_INPUT>;
+			gpios = <&gpio0 14 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 		};
 		gpio_switchcap_pg_int_l: switchcap_pg_int_l {
 			gpios = <&gpio0 15 (GPIO_OUTPUT | GPIO_INPUT)>;
@@ -1037,45 +1040,44 @@
 	pwm-led-pins {
 		compatible = "cros-ec,pwm-led-pins";
 
-		color-off-left {
-			led-color = "LED_OFF";
+		left-led {
 			led-id = "EC_LED_ID_LEFT_LED";
 			led-pwms = <&pwmled_blue_left &pwmled_white_left>;
-			led-values = <0 0>;
+
+			color-off {
+				led-color = "LED_OFF";
+				led-values = <0 0>;
+			};
+			color-blue {
+				led-color = "LED_BLUE";
+				br-color = "EC_LED_COLOR_BLUE";
+				led-values = <100 0>;
+			};
+			color-white {
+				led-color = "LED_WHITE";
+				br-color = "EC_LED_COLOR_WHITE";
+				led-values = <0 100>;
+			};
 		};
-		color-off-right {
-			led-color = "LED_OFF";
+
+		right-led {
 			led-id = "EC_LED_ID_RIGHT_LED";
 			led-pwms = <&pwmled_amber_right &pwmled_white_right>;
-			led-values = <0 0>;
-		};
-		color-blue-left {
-			led-color = "LED_BLUE";
-			led-id = "EC_LED_ID_LEFT_LED";
-			br-color = "EC_LED_COLOR_BLUE";
-			led-pwms = <&pwmled_blue_left &pwmled_white_left>;
-			led-values = <100 0>;
-		};
-		color-amber-right {
-			led-color = "LED_AMBER";
-			led-id = "EC_LED_ID_RIGHT_LED";
-			br-color = "EC_LED_COLOR_AMBER";
-			led-pwms = <&pwmled_amber_right &pwmled_white_right>;
-			led-values = <100 0>;
-		};
-		color-white-left {
-			led-color = "LED_WHITE";
-			led-id = "EC_LED_ID_LEFT_LED";
-			br-color = "EC_LED_COLOR_WHITE";
-			led-pwms = <&pwmled_blue_left &pwmled_white_left>;
-			led-values = <0 100>;
-		};
-		color-white-right {
-			led-color = "LED_WHITE";
-			led-id = "EC_LED_ID_RIGHT_LED";
-			br-color = "EC_LED_COLOR_WHITE";
-			led-pwms = <&pwmled_amber_right &pwmled_white_right>;
-			led-values = <0 100>;
+
+			color-off {
+				led-color = "LED_OFF";
+				led-values = <0 0>;
+			};
+			color-amber {
+				led-color = "LED_AMBER";
+				br-color = "EC_LED_COLOR_AMBER";
+				led-values = <100 0>;
+			};
+			color-white {
+				led-color = "LED_WHITE";
+				br-color = "EC_LED_COLOR_WHITE";
+				led-values = <0 100>;
+			};
 		};
 	};
 

@@ -44,6 +44,7 @@ test-list-y=\
        global_initialization \
        libc_printf \
        libcxx \
+       malloc \
        mpu \
        mutex \
        panic \
@@ -56,6 +57,7 @@ test-list-y=\
        rollback_entropy \
        rsa3 \
        rtc \
+       sbrk \
        scratchpad \
        sha256 \
        sha256_unrolled \

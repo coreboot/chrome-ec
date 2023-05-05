@@ -27,6 +27,7 @@ def register_corsola_project(
             here / f"{chip_kconfig}_program.conf",
             here / project_name / "project.conf",
         ],
+        inherited_from=["corsola"],
     )
 
 
@@ -41,6 +42,8 @@ register_corsola_project(
     project_name="steelix",
     chip="npcx9m3f",
 )
+
+register_corsola_project("starmie")
 
 register_corsola_project("tentacruel")
 

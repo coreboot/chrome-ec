@@ -44,7 +44,7 @@
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
 
 #define UNKNOWN_DEV_ID -1
-static int dev_id = UNKNOWN_DEV_ID;
+test_export_static int dev_id = UNKNOWN_DEV_ID;
 
 static const struct charger_info sm5803_charger_info = {
 	.name = CHARGER_NAME,
@@ -435,7 +435,7 @@ enum ec_error_list sm5803_vbus_sink_enable(int chgnum, int enable)
  * Track and store whether we've initialized the charger chips already on this
  * boot.  This should prevent us from re-running inits after sysjumps.
  */
-static bool chip_inited[CHARGER_NUM];
+test_export_static bool chip_inited[CHARGER_NUM];
 #define SM5803_SYSJUMP_TAG 0x534D /* SM */
 #define SM5803_HOOK_VERSION 1
 
@@ -734,14 +734,12 @@ static void sm5803_init(int chgnum)
 			  SM5803_TINT_MIN_LEVEL);
 
 	/*
-	 * Configure VBAT_SNSP high interrupt to fire after thresholds are set.
+	 * Configure VBAT_SNSP high and TINT interrupts to fire after
+	 * thresholds are set.
 	 */
 	rv |= main_read8(chgnum, SM5803_REG_INT2_EN, &reg);
-	reg |= SM5803_INT2_VBATSNSP;
+	reg |= SM5803_INT2_VBATSNSP | SM5803_INT2_TINT;
 	rv |= main_write8(chgnum, SM5803_REG_INT2_EN, reg);
-
-	/* Configure TINT interrupts to fire after thresholds are set */
-	rv |= main_write8(chgnum, SM5803_REG_INT2_EN, SM5803_INT2_TINT);
 
 	/*
 	 * Configure CHG_ENABLE to only be set through I2C by setting
@@ -1815,7 +1813,7 @@ static enum ec_error_list sm5803_set_otg_current_voltage(int chgnum,
 		   SM5803_DISCH_CONF5_CLS_LIMIT);
 	rv |= chg_write8(chgnum, SM5803_REG_DISCH_CONF5, reg);
 
-	reg = SM5803_VOLTAGE_TO_REG(output_voltage);
+	reg = MAX(SM5803_VOLTAGE_TO_REG(output_voltage), 0);
 	rv = chg_write8(chgnum, SM5803_REG_VPWR_MSB, (reg >> 3));
 	rv |= chg_write8(chgnum, SM5803_REG_DISCH_CONF2,
 			 reg & SM5803_DISCH_CONF5_VPWR_LSB);
@@ -1943,7 +1941,7 @@ static enum ec_error_list sm5803_set_vsys_compensation(int chgnum,
 	/* Set IR drop compensation */
 	r = ocpc->combined_rsys_rbatt_mo * 100 / 167; /* 1.67mOhm steps */
 	r = MAX(0, r);
-	rv = chg_write8(chgnum, SM5803_REG_IR_COMP2, r & 0x7F);
+	rv = chg_write8(chgnum, SM5803_REG_IR_COMP2, r & 0xFF);
 	rv |= chg_read8(chgnum, SM5803_REG_IR_COMP1, &regval);
 	regval &= ~SM5803_IR_COMP_RES_SET_MSB;
 	r = r >> 8; /* Bits 9:8 */

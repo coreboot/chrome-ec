@@ -5,15 +5,14 @@
 
 /* common.h - Common includes for Chrome EC */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #ifndef __CROS_EC_COMMON_H
 #define __CROS_EC_COMMON_H
-
-/*
- * I don't know why but gcc's preprocessor doesn't like the autoconf.h file,
- * sometimes. Adding a #line directive anywhere in this file seems to fix the
- * problem. #line marks the *next* line, so it is off by one.
- */
-#line 17
 
 #include "compile_time_macros.h"
 

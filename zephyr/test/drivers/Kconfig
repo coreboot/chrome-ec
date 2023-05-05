@@ -68,6 +68,9 @@ config LINK_TEST_SUITE_HOST_COMMAND_READ_MEMMAP
 config LINK_TEST_SUITE_ISL923X
 	bool "Link and test the isl923x tests"
 
+config LINK_TEST_SUITE_ISL9241
+	bool "Link and test the isl9241 tests"
+
 config LINK_TEST_SUITE_I2C_CONTROLLER
 	bool "Link and test the i2c_controller tests"
 
@@ -94,6 +97,11 @@ config LINK_TEST_SUITE_LOCATE_CHIP_ALTS
 config LINK_TEST_SUITE_MKBP
 	bool "Link and test the mkbp tests"
 
+config LINK_TEST_SUITE_NX20P348X
+	bool "Link and test the nx20p348x tests"
+	select PLATFORM_EC_CONSOLE_CMD_PPC_DUMP
+	select PLATFORM_EC_USB_PD_LOGGING
+
 config LINK_TEST_SUITE_PANIC_OUTPUT
 	bool "Link and test the panic_output tests"
 
@@ -111,6 +119,11 @@ config LINK_TEST_SUITE_RT1718S
 
 config LINK_TEST_SUITE_RT9490
 	bool "Link and test the rt9490 tests"
+
+config LINK_TEST_SUITE_RANDOM
+	bool "Link and run random (trng) tests"
+	help
+	  Include the test suite exercising RNG code in the binary.
 
 config LINK_TEST_SUITE_SHIM_GPIO_ID
 	bool "Link and run the gpio tests"
@@ -227,5 +240,19 @@ config LINK_TEST_SUITE_LED_COMMON
 
 config LINK_TEST_SUITE_HOST_COMMAND_MEMORY_DUMP
 	bool "Link and test memory dump host commands tests"
+
+config LINK_TEST_SUITE_ANX7452
+	bool "Link and test the anx7452 tests"
+	help
+	  Include the test suite of ANX7452 retimer in the binary. The tests
+	  use I2C emulation.
+
+config LINK_TEST_SUITE_SM5803
+	bool "Link and test the SM5803 charger tests"
+
+config LINK_TEST_SUITE_BODY_DETECTION
+	bool "Link and test the body detection tests"
+	help
+	  Include the test suite exercising body detection behaviors in the binary.
 
 source "Kconfig.zephyr"

@@ -84,8 +84,19 @@ enum {
 	PE_FLAGS_DATA_RESET_COMPLETE_FN,
 	/* Waiting for SRC to SNK settle time */
 	PE_FLAGS_SRC_SNK_SETTLE_FN,
+	/*
+	 * Indicates the port is in the process of entering EPR mode. For a
+	 * sink, the SM is in and after PE_SNK_EPR_Mode_Entry. For a source,
+	 * the SM is in and after PE_SRC_EPR_Mode_Entery_ACK.
+	 */
+	PE_FLAGS_ENTERING_EPR_FN,
 	/* In EPR mode */
 	PE_FLAGS_IN_EPR_FN,
+	/*
+	 * Indicate the port exited EPR mode explicitly. If this is set, the
+	 * port wouldn't enter EPR mode automatically.
+	 */
+	PE_FLAGS_EPR_EXPLICIT_EXIT_FN,
 	/* Discovery disabled due to UFP/PD 2.0 constraint. */
 	PE_FLAGS_DISCOVERY_DISABLED_FN,
 	/* Last element */

@@ -76,6 +76,7 @@ driver-$(CONFIG_CHARGER_ISL9238C)+=charger/isl923x.o
 driver-$(CONFIG_CHARGER_ISL9241)+=charger/isl9241.o
 driver-$(CONFIG_CHARGER_MT6370)+=charger/rt946x.o
 driver-$(CONFIG_CHARGER_RAA489000)+=charger/isl923x.o
+driver-$(CONFIG_CHARGER_RAA489110)+=charger/isl9241.o
 driver-$(CONFIG_CHARGER_RT9466)+=charger/rt946x.o
 driver-$(CONFIG_CHARGER_RT9467)+=charger/rt946x.o
 driver-$(CONFIG_CHARGER_RT9490)+=charger/rt9490.o
@@ -185,6 +186,7 @@ driver-$(CONFIG_USB_PD_TCPM_STM32GX)+=tcpm/stm32gx.o
 
 # Type-C Retimer drivers
 driver-$(CONFIG_USBC_RETIMER_ANX7483)+=retimer/anx7483.o
+driver-$(CONFIG_USBC_RETIMER_ANX7452)+=retimer/anx7452.o
 driver-$(CONFIG_USBC_RETIMER_INTEL_BB)+=retimer/bb_retimer.o
 driver-$(CONFIG_USBC_RETIMER_KB800X)+=retimer/kb800x.o
 driver-$(CONFIG_USBC_RETIMER_NB7V904M)+=retimer/nb7v904m.o
@@ -230,6 +232,7 @@ endif
 driver-$(CONFIG_USBC_PPC_SYV682X)+=ppc/syv682x.o
 driver-$(CONFIG_USBC_PPC_NX20P3483)+=ppc/nx20p348x.o
 driver-$(CONFIG_USBC_PPC_KTU1125)+=ppc/ktu1125.o
+driver-$(CONFIG_USBC_PPC_TCPCI)+=ppc/tcpci_ppc.o
 
 # Switchcap
 driver-$(CONFIG_LN9310)+=ln9310.o

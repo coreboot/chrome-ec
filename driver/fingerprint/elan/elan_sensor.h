@@ -7,6 +7,7 @@
 #define CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SENSOR_H
 #include "common.h"
 #include "ec_commands.h"
+#include "fpsensor_types.h"
 
 /* Sensor pixel resolution */
 #if defined(CONFIG_FP_SENSOR_ELAN80)
@@ -31,6 +32,7 @@
 #define FP_MAX_FINGER_COUNT_ELAN 3
 #endif
 
+#define FP_SENSOR_IMAGE_OFFSET_ELAN (0)
 #define FP_SENSOR_RES_BPP_ELAN (8)
 
 /**

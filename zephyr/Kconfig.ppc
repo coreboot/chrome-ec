@@ -60,6 +60,15 @@ config PLATFORM_EC_USBC_PPC_AOZ1380
 	  provide all the functionality and protection needed for sourcing
 	  and sinking current through a USB Type-C port with PD capability.
 
+config PLATFORM_EC_USBC_PPC_TCPCI
+	bool "USB-C TCPCI PD Sink and Source Protection Switch"
+	select PLATFORM_EC_USBC_OCP
+	help
+	  A TCPC which supports TCPCI integrates two power switches and control
+	  circuitry to provide the functionality and protection needed for
+	  sourcing and sinking current through a USB Type-C port with PD
+	  capability.
+
 config PLATFORM_EC_USBC_PPC_RT1718S
 	bool "Richtek RT1718S TCPC/PPC"
 	select PLATFORM_EC_USB_PD_TCPM_RT1718S
@@ -80,11 +89,23 @@ config PLATFORM_EC_USBC_PPC_RT1718S
 
 config PLATFORM_EC_USBC_PPC_KTU1125
 	bool "Kinetic KTU1125 Power Path Controller"
+	default y
+	depends on DT_HAS_KINETIC_KTU1125_ENABLED
 	select PLATFORM_EC_USBC_OCP
+	select PLATFORM_EC_USBC_PPC_SBU
+	select PLATFORM_EC_USBC_PPC_VCONN if PLATFORM_EC_USBC_VCONN
 	help
 	  KTU1125 integrates power switches to provide a compact protection
 	  solution to USB Type-C applications by eliminating the dependence
 	  on external components.
+
+config PLATFORM_EC_USBC_PPC_NX20P3481
+	bool "NX20P3481 High Voltage Sink/Source Combo Switch"
+	depends on DT_HAS_NXP_NX20P348X_ENABLED
+	select PLATFORM_EC_USBC_OCP
+	help
+	  The NX20P3481 is a product with combined multiple power switches
+	  and a LDO for USB PD application.
 
 config PLATFORM_EC_USBC_PPC_NX20P3483
 	bool "NX20P3483 High Voltage Sink/Source Combo Switch"

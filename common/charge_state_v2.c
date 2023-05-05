@@ -201,7 +201,7 @@ void reset_prev_disp_charge(void)
 static int battery_sustainer_set(int8_t lower, int8_t upper)
 {
 	if (lower == -1 || upper == -1) {
-		CPRINTS("Sustain mode disabled");
+		CPRINTS("Sustainer disabled");
 		sustain_soc.lower = -1;
 		sustain_soc.upper = -1;
 		return EC_SUCCESS;
@@ -213,6 +213,7 @@ static int battery_sustainer_set(int8_t lower, int8_t upper)
 			return EC_RES_UNAVAILABLE;
 		sustain_soc.lower = lower;
 		sustain_soc.upper = upper;
+		CPRINTS("Sustainer set: %d%% ~ %d%%", lower, upper);
 		return EC_SUCCESS;
 	}
 
@@ -1431,11 +1432,12 @@ static void sustain_battery_soc(void)
 	 */
 	switch (mode) {
 	case CHARGE_CONTROL_NORMAL:
-		/* Going up */
-		if (sustain_soc.upper < soc)
-			mode = sustain_soc.upper == sustain_soc.lower ?
-				       CHARGE_CONTROL_IDLE :
-				       CHARGE_CONTROL_DISCHARGE;
+		/* Going up. Always DISCHARGE if the soc is above upper. */
+		if (sustain_soc.lower == soc && soc == sustain_soc.upper) {
+			mode = CHARGE_CONTROL_IDLE;
+		} else if (sustain_soc.upper < soc) {
+			mode = CHARGE_CONTROL_DISCHARGE;
+		}
 		break;
 	case CHARGE_CONTROL_IDLE:
 		/* Discharging naturally */
@@ -1444,8 +1446,11 @@ static void sustain_battery_soc(void)
 		break;
 	case CHARGE_CONTROL_DISCHARGE:
 		/* Discharging actively. */
-		if (soc < sustain_soc.lower)
+		if (sustain_soc.lower == soc && soc == sustain_soc.upper) {
+			mode = CHARGE_CONTROL_IDLE;
+		} else if (soc < sustain_soc.lower) {
 			mode = CHARGE_CONTROL_NORMAL;
+		}
 		break;
 	default:
 		return;
@@ -1809,6 +1814,17 @@ void charger_task(void *u)
 		}
 
 		/*
+		 * Always check the disconnect state if the battery is present.
+		 * This is because the battery disconnect state is one of the
+		 * items used to decide whether or not to leave safe mode.
+		 *
+		 * Note: For our purposes, an unresponsive battery is
+		 * considered to be disconnected
+		 */
+		battery_seems_disconnected = battery_get_disconnect_state() !=
+					     BATTERY_NOT_DISCONNECTED;
+
+		/*
 		 * If we had trouble talking to the battery or the charger, we
 		 * should probably do nothing for a bit, and if it doesn't get
 		 * better then flag it as an error.
@@ -1867,14 +1883,6 @@ void charger_task(void *u)
 			}
 		}
 		/* The battery is responding. Yay. Try to use it. */
-
-		/*
-		 * Always check the disconnect state.  This is because
-		 * the battery disconnect state is one of the items used
-		 * to decide whether or not to leave safe mode.
-		 */
-		battery_seems_disconnected = battery_get_disconnect_state() ==
-					     BATTERY_DISCONNECTED;
 
 		revive_battery(&need_static);
 

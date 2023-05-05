@@ -5,6 +5,12 @@
 
 /* Host communication command constants for Chrome EC */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #ifndef __CROS_EC_EC_COMMANDS_H
 #define __CROS_EC_EC_COMMANDS_H
 
@@ -1273,7 +1279,7 @@ struct ec_response_get_version_v1 {
 	char cros_fwid_rw[32]; /* Added in version 1 */
 } __ec_align4;
 
-/* Read test - DEPRECATED */
+/* Read test - OBSOLETE */
 #define EC_CMD_READ_TEST 0x0003
 
 /*
@@ -1870,6 +1876,19 @@ struct ec_params_flash_erase_v1 {
  * @flags: New flags to apply.
  */
 struct ec_params_flash_protect {
+	uint32_t mask;
+	uint32_t flags;
+} __ec_align4;
+
+enum flash_protect_action {
+	FLASH_PROTECT_ASYNC = 0,
+	FLASH_PROTECT_GET_RESULT = 1,
+};
+
+/* Version 2 of the command is "asynchronous". */
+struct ec_params_flash_protect_v2 {
+	uint8_t action; /**< enum flash_protect_action */
+	uint8_t reserved[3]; /**< padding for alignment */
 	uint32_t mask;
 	uint32_t flags;
 } __ec_align4;
@@ -3725,17 +3744,6 @@ struct ec_params_mkbp_simulate_key {
 	uint8_t pressed;
 } __ec_align1;
 
-#define EC_CMD_GET_KEYBOARD_ID 0x0063
-
-struct ec_response_keyboard_id {
-	uint32_t keyboard_id;
-} __ec_align4;
-
-enum keyboard_id {
-	KEYBOARD_ID_UNSUPPORTED = 0,
-	KEYBOARD_ID_UNREADABLE = 0xffffffff,
-};
-
 /* Configure keyboard scanning */
 #define EC_CMD_MKBP_SET_CONFIG 0x0064
 #define EC_CMD_MKBP_GET_CONFIG 0x0065
@@ -4995,39 +5003,34 @@ struct ec_response_device_event {
 } __ec_align4;
 
 /*****************************************************************************/
+/* Get s0ix counter */
+#define EC_CMD_GET_S0IX_COUNTER 0x00AB
+
+/* Flag use to reset the counter */
+#define EC_S0IX_COUNTER_RESET 0x1
+
+struct ec_params_s0ix_cnt {
+	/* If EC_S0IX_COUNTER_RESET then reset otherwise get the counter */
+	uint32_t flags;
+} __ec_align4;
+
+struct ec_response_s0ix_cnt {
+	/* Value of the s0ix_counter */
+	uint32_t s0ix_counter;
+} __ec_align4;
+
+/*****************************************************************************/
 /* Smart battery pass-through */
 
-/* Get / Set 16-bit smart battery registers */
+/* Get / Set 16-bit smart battery registers  - OBSOLETE */
 #define EC_CMD_SB_READ_WORD 0x00B0
 #define EC_CMD_SB_WRITE_WORD 0x00B1
 
 /* Get / Set string smart battery parameters
- * formatted as SMBUS "block".
+ * formatted as SMBUS "block". - OBSOLETE
  */
 #define EC_CMD_SB_READ_BLOCK 0x00B2
 #define EC_CMD_SB_WRITE_BLOCK 0x00B3
-
-struct ec_params_sb_rd {
-	uint8_t reg;
-} __ec_align1;
-
-struct ec_response_sb_rd_word {
-	uint16_t value;
-} __ec_align2;
-
-struct ec_params_sb_wr_word {
-	uint8_t reg;
-	uint16_t value;
-} __ec_align1;
-
-struct ec_response_sb_rd_block {
-	uint8_t data[32];
-} __ec_align1;
-
-struct ec_params_sb_wr_block {
-	uint8_t reg;
-	uint16_t data[32];
-} __ec_align1;
 
 /*****************************************************************************/
 /* Battery vendor parameters
@@ -5057,61 +5060,9 @@ struct ec_response_battery_vendor_param {
 
 /*****************************************************************************/
 /*
- * Smart Battery Firmware Update Commands
+ * Smart Battery Firmware Update Command - OBSOLETE
  */
 #define EC_CMD_SB_FW_UPDATE 0x00B5
-
-enum ec_sb_fw_update_subcmd {
-	EC_SB_FW_UPDATE_PREPARE = 0x0,
-	EC_SB_FW_UPDATE_INFO = 0x1, /*query sb info */
-	EC_SB_FW_UPDATE_BEGIN = 0x2, /*check if protected */
-	EC_SB_FW_UPDATE_WRITE = 0x3, /*check if protected */
-	EC_SB_FW_UPDATE_END = 0x4,
-	EC_SB_FW_UPDATE_STATUS = 0x5,
-	EC_SB_FW_UPDATE_PROTECT = 0x6,
-	EC_SB_FW_UPDATE_MAX = 0x7,
-};
-
-#define SB_FW_UPDATE_CMD_WRITE_BLOCK_SIZE 32
-#define SB_FW_UPDATE_CMD_STATUS_SIZE 2
-#define SB_FW_UPDATE_CMD_INFO_SIZE 8
-
-struct ec_sb_fw_update_header {
-	uint16_t subcmd; /* enum ec_sb_fw_update_subcmd */
-	uint16_t fw_id; /* firmware id */
-} __ec_align4;
-
-struct ec_params_sb_fw_update {
-	struct ec_sb_fw_update_header hdr;
-	union {
-		/* EC_SB_FW_UPDATE_PREPARE  = 0x0 */
-		/* EC_SB_FW_UPDATE_INFO     = 0x1 */
-		/* EC_SB_FW_UPDATE_BEGIN    = 0x2 */
-		/* EC_SB_FW_UPDATE_END      = 0x4 */
-		/* EC_SB_FW_UPDATE_STATUS   = 0x5 */
-		/* EC_SB_FW_UPDATE_PROTECT  = 0x6 */
-		/* Those have no args */
-
-		/* EC_SB_FW_UPDATE_WRITE    = 0x3 */
-		struct __ec_align4 {
-			uint8_t data[SB_FW_UPDATE_CMD_WRITE_BLOCK_SIZE];
-		} write;
-	};
-} __ec_align4;
-
-struct ec_response_sb_fw_update {
-	union {
-		/* EC_SB_FW_UPDATE_INFO     = 0x1 */
-		struct __ec_align1 {
-			uint8_t data[SB_FW_UPDATE_CMD_INFO_SIZE];
-		} info;
-
-		/* EC_SB_FW_UPDATE_STATUS   = 0x5 */
-		struct __ec_align1 {
-			uint8_t data[SB_FW_UPDATE_CMD_STATUS_SIZE];
-		} status;
-	};
-} __ec_align1;
 
 /*
  * Entering Verified Boot Mode Command
@@ -7114,7 +7065,12 @@ struct ec_params_typec_status {
 	uint8_t port;
 } __ec_align1;
 
-struct ec_response_typec_status {
+/*
+ * ec_response_typec_status is deprecated. Use ec_response_typec_status_v1.
+ * If you need to support old ECs who speak only v0, use
+ * ec_response_typec_status_v0 instead. They're binary-compatible.
+ */
+struct ec_response_typec_status /* DEPRECATED */ {
 	uint8_t pd_enabled; /* PD communication enabled - bool */
 	uint8_t dev_connected; /* Device connected - bool */
 	uint8_t sop_connected; /* Device is SOP PD capable - bool */
@@ -7151,6 +7107,53 @@ struct ec_response_typec_status {
 	uint32_t source_cap_pdos[7]; /* Max 7 PDOs can be present */
 
 	uint32_t sink_cap_pdos[7]; /* Max 7 PDOs can be present */
+} __ec_align1;
+
+struct cros_ec_typec_status {
+	uint8_t pd_enabled; /* PD communication enabled - bool */
+	uint8_t dev_connected; /* Device connected - bool */
+	uint8_t sop_connected; /* Device is SOP PD capable - bool */
+	uint8_t source_cap_count; /* Number of Source Cap PDOs */
+
+	uint8_t power_role; /* enum pd_power_role */
+	uint8_t data_role; /* enum pd_data_role */
+	uint8_t vconn_role; /* enum pd_vconn_role */
+	uint8_t sink_cap_count; /* Number of Sink Cap PDOs */
+
+	uint8_t polarity; /* enum tcpc_cc_polarity */
+	uint8_t cc_state; /* enum pd_cc_states */
+	uint8_t dp_pin; /* DP pin mode (MODE_DP_IN_[A-E]) */
+	uint8_t mux_state; /* USB_PD_MUX* - encoded mux state */
+
+	char tc_state[32]; /* TC state name */
+
+	uint32_t events; /* PD_STATUS_EVENT bitmask */
+
+	/*
+	 * BCD PD revisions for partners
+	 *
+	 * The format has the PD major revision in the upper nibble, and the PD
+	 * minor revision in the next nibble. The following two nibbles hold the
+	 * major and minor specification version. If a partner does not support
+	 * the Revision message, only the major revision will be given.
+	 * ex. PD Revision 3.2 Version 1.9 would map to 0x3219
+	 *
+	 * PD revision/version will be 0 if no PD device is connected.
+	 */
+	uint16_t sop_revision;
+	uint16_t sop_prime_revision;
+} __ec_align1;
+
+struct ec_response_typec_status_v0 {
+	struct cros_ec_typec_status typec_status;
+	uint32_t source_cap_pdos[7]; /* Max 7 PDOs can be present */
+	uint32_t sink_cap_pdos[7]; /* Max 7 PDOs can be present */
+} __ec_align1;
+
+struct ec_response_typec_status_v1 {
+	struct cros_ec_typec_status typec_status;
+	uint32_t source_cap_pdos[11]; /* Max 11 PDOs can be present */
+	uint32_t sink_cap_pdos[11]; /* Max 11 PDOs can be present */
 } __ec_align1;
 
 /**

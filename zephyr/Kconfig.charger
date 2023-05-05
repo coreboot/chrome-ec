@@ -137,6 +137,16 @@ config PLATFORM_EC_CHARGER_ISL9241
 	  control. It supports an input voltage range of 3.9-23.4V and output
 	  of 3.9-18.3V. It provides an I2C interface for configuration.
 
+config PLATFORM_EC_CHARGER_RAA489110
+	bool "Use the RAA489110 charger"
+	depends on PLATFORM_EC_I2C
+	# Hardware based charge ramp is broken in the ISL9241 (b/169350714)
+	# Probably also broken for RAA489110.
+	select PLATFORM_EC_CHARGER_CHGRAMP_BROKEN
+	help
+	  Enables a driver for the RAA489110 VCD Battery Charger. This is a
+	  EPR capable version of ISL9241.
+
 if PLATFORM_EC_CHARGER_ISL9241
 
 config PLATFORM_EC_ISL9241_SWITCHING_FREQ
@@ -543,6 +553,13 @@ config PLATFORM_EC_CHARGER_MAINTAIN_VBAT
 	  Leave the charger VBAT configured to battery-requested voltage under
 	  all conditions, even when AC is not present. This may be necessary to
 	  work around quirks of certain charger chips, such as the BD9995X.
+
+config PLATFORM_EC_CHARGER_BYPASS_MODE
+	bool
+	help
+	  Select this option if the charger will be used in a bypass mode in
+	  order to pass the input current from AC directly to the system
+	  power rail for efficiency.
 
 config PLATFORM_EC_CHARGER_NARROW_VDC
 	bool

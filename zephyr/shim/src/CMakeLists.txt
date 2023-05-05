@@ -19,6 +19,7 @@ endif()
 
 zephyr_library_sources_ifdef(no_libgcc                  libgcc_${ARCH}.S)
 
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7452 anx7452_usb_mux.c)
 zephyr_library_sources_ifdef(CONFIG_NAMED_ADC_CHANNELS      adc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
                                                             battery.c)
@@ -54,6 +55,7 @@ zephyr_library_sources_ifdef(CONFIG_CROS_EC_POWER_SIGNAL_LIST
 							    power.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM_HC      pwm_hc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_PWM     pwm_led.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RANDOM      random.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RTC         rtc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCHCAP_GPIO
 							    switchcap_gpio.c)
