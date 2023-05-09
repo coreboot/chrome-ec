@@ -393,7 +393,7 @@ If you want to reflash the AP RO firmware using CCD and your board has issues
 disabling hardware write protect, you may need to also disable software write
 protect.
 
-To determine if the board you are using has this issue:
+If you suspect the board you are using has this issue, you can try this:
 
 1.  Disable write protect using the GSC console command:
 
@@ -401,17 +401,10 @@ To determine if the board you are using has this issue:
     (gsc) > wp disable
     ```
 
-1.  Check if hardware write protect disabled when the AP is off:
+2.  Disable software write protect via CCD:
 
     ```bash
-    (chroot) $ sudo flashrom -p raiden_debug_spi:target=AP --wp-status
-    ```
-
-1.  If the last command shows that hardware write protect is still enabled when
-    the AP is off, then you need to disable software write protect:
-
-    ```bash
-    (chroot) $ flashrom -p host --wp-disable
+    (chroot) $ sudo futility flash --wp-disable --servo
     ```
 
 ## Control Hardware Write Protect {#hw-wp}
