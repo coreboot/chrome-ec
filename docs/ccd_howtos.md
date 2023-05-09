@@ -235,17 +235,17 @@ is not a clamshell, check out the [full dev mode instructions].
 
                 chroot > dut-control  ec_board
 ---
-## I Just Want to Disable Write Protect
-Cr50 has a couple of ways to remove write protect. The biggest difference in the
-process is whether or not you want to open the case and whether or not you need
-write protect disable to be permanent.
+## I Just Want to Disable HW Write Protect
+Cr50 has a couple of ways to remove HW write protect. The biggest difference in
+the process is whether or not you want to open the case and whether or not you
+need write protect disable to be permanent.
 
 **Opening CCD might require the AP can boot. If you're relying on CCD to recover
 a bricked machine, you may want to do the optional CCD setup steps before
 flashing RO firmware.**
 
 ### Process if You're Okay Opening Case
-Cr50 will disable write protect if you remove the battery.
+Cr50 will disable HW write protect if you remove the battery.
 
 #### Steps
 
@@ -260,13 +260,13 @@ Cr50 will disable write protect if you remove the battery.
 
 4.  (optional) Check write protect is disabled from the AP.
 
-                AP > flashrom --wp-status
+                AP > crossystem wpsw_cur
 
 5.  (optional) Reconnecting the battery will reenable write protect. You can
     disable SW write protect if you want to be able to rewrite RO firmware
     without needing to keep the battery disconnected.
 
-                AP > flashrom -p host --wp-disable
+                AP > futility flash --wp-disable
 
 6.  **(recommended) Run some basic commands to setup CCD.** It's really easy to
     open cr50 with the battery removed. You might want to setup CCD while you
@@ -343,17 +343,13 @@ It goes into a lot more detail.
                 cr50 > wp disable atboot
 
 
-4.  (optional) Check write protect is disabled. ccd open takes the AP out of dev
-    mode, so you can reenter dev mode and check the wp status from the AP or you
-    can use ccd to check.
+4.  (optional) Check HW WP is disabled. ccd open takes the AP out of dev
+    mode, so you can reenter dev mode and check the HW WP status from the AP.
 
     From AP (after reentering dev mode):
 
-                AP > flashrom --wp-status
+                AP > crossystem wpsw_cur
 
-    Using CCD:
-
-                from chroot > flashrom -p raiden_debug_spi:target=AP --wp-status
 
 5.  **(recommended) Setup capabilities**, so you can flash the device or open
     ccd without being able to boot the AP.
@@ -372,7 +368,7 @@ It goes into a lot more detail.
 6.  **(recommended) [Disable SW WP]** to flash RO firmware if your board has
     issues disabling HW WP with the AP off.
 
-                AP > flashrom -p host --wp-disable
+                AP > futility flash --wp-disable
 
 [Disable SW WP]: ./case_closed_debugging_gsc.md#AP-Off
 [enter dev mode]: ./case_closed_debugging_gsc.md#enter-dev-mode
