@@ -11,13 +11,12 @@
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "charger.h"
+#include "charger_base.h"
 #include "charger_profile_override.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
 #include "ec_commands.h"
-#include "ec_ec_comm_client.h"
-#include "ec_ec_comm_server.h"
 #include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
@@ -73,8 +72,6 @@
 static timestamp_t uvp_throttle_start_time;
 #endif /* CONFIG_THROTTLE_AP_ON_BAT_OLTAGE */
 
-static int charge_request(int voltage, int current);
-
 static uint8_t battery_level_shutdown;
 
 /*
@@ -84,9 +81,8 @@ static uint8_t battery_level_shutdown;
 static const struct battery_info *batt_info;
 static struct charge_state_data curr;
 static enum charge_state_v2 prev_state;
-static int prev_ac, prev_charge, prev_full, prev_disp_charge;
+static int prev_ac, prev_charge, prev_disp_charge;
 static enum battery_present prev_bp;
-static int is_full; /* battery not accepting current */
 static enum ec_charge_control_mode chg_ctl_mode;
 static int manual_voltage; /* Manual voltage override (-1 = no override) */
 static int manual_current; /* Manual current override (-1 = no override) */
@@ -99,6 +95,11 @@ static struct current_limit {
 	uint32_t value; /* Charge limit to apply, in mA */
 	int soc; /* Minimum battery SoC at which the limit will be applied. */
 } current_limit = { -1U, 0 };
+
+/* State which is reported out from the charger */
+struct state {
+	bool is_full; /* battery is full, i.e. not accepting current */
+} local_state;
 
 /*
  * The timestamp when the battery charging current becomes stable.
@@ -119,31 +120,6 @@ STATIC_IF(CONFIG_USB_PD_PREFER_MV) int stable_current;
 STATIC_IF(CONFIG_USB_PD_PREFER_MV) int desired_mw;
 STATIC_IF_NOT(CONFIG_USB_PD_PREFER_MV) struct pd_pref_config_t pd_pref_config;
 
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-static int base_connected;
-/* Base has responded to one of our commands already. */
-static int base_responsive;
-static int charge_base;
-static int prev_charge_base;
-static int prev_current_base;
-static int prev_allow_charge_base;
-static int prev_current_lid;
-
-/*
- * In debugging mode, with AC, input current to allocate to base. Negative
- * value disables manual mode.
- */
-static int manual_ac_current_base = -1;
-/*
- * In debugging mode, when discharging, current to transfer from lid to base
- * (negative to transfer from base to lid). Only valid when enabled is true.
- */
-static int manual_noac_enabled;
-static int manual_noac_current_base;
-#else
-static const int base_connected;
-#endif
-
 /* Is battery connected but unresponsive after precharge? */
 static int battery_seems_dead;
 
@@ -158,7 +134,6 @@ static int battery_seems_disconnected;
 static int battery_was_removed;
 
 static int problems_exist;
-static int debugging;
 
 static const char *const prob_text[] = {
 	"static update",     "set voltage",	 "set current", "set mode",
@@ -166,6 +141,26 @@ static const char *const prob_text[] = {
 	"custom profile",    "cfg secondary chg"
 };
 BUILD_ASSERT(ARRAY_SIZE(prob_text) == NUM_PROBLEM_TYPES);
+
+#ifdef CONFIG_CHARGE_DEBUG
+static bool is_debugging;
+#endif
+
+void set_debugging(bool val)
+{
+#ifdef CONFIG_CHARGE_DEBUG
+	is_debugging = val;
+#endif
+}
+
+static bool debugging(void)
+{
+#ifdef CONFIG_CHARGE_DEBUG
+	return is_debugging;
+#else
+	return false;
+#endif
+}
 
 /*
  * TODO(crosbug.com/p/27639): When do we decide a problem is real and not
@@ -230,538 +225,6 @@ static bool battery_sustainer_enabled(void)
 {
 	return sustain_soc.lower != -1 && sustain_soc.upper != -1;
 }
-
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-/*
- * Parameters for dual-battery policy.
- * TODO(b:71881017): This should be made configurable by AP in the future.
- */
-struct dual_battery_policy {
-	/*** Policies when AC is not connected. ***/
-	/* Voltage to use when using OTG mode between lid and base (mV) */
-	uint16_t otg_voltage;
-	/* Maximum current to apply from base to lid (mA) */
-	uint16_t max_base_to_lid_current;
-	/*
-	 * Margin to apply between provided OTG output current and input current
-	 * limit, to make sure that input charger does not overcurrent output
-	 * charger. input_current = (1-margin) * output_current. (/128)
-	 */
-	uint8_t margin_otg_current;
-
-	/* Only do base to lid OTG when base battery above this value (%) */
-	uint8_t min_charge_base_otg;
-
-	/*
-	 * When base/lid battery percentage is below this value, do
-	 * battery-to-battery charging. (%)
-	 */
-	uint8_t max_charge_base_batt_to_batt;
-	uint8_t max_charge_lid_batt_to_batt;
-
-	/*** Policies when AC is connected. ***/
-	/* Minimum power to allocate to base (mW), includes some margin to allow
-	 * base to charge when critically low.
-	 */
-	uint16_t min_base_system_power;
-
-	/* Smoothing factor for lid power (/128) */
-	uint8_t lid_system_power_smooth;
-	/*
-	 * Smoothing factor for base/lid battery power, when the battery power
-	 * is decreasing only: we try to estimate the maximum power that the
-	 * battery is willing to take and always reset it when it draws more
-	 * than the estimate. (/128)
-	 */
-	uint8_t battery_power_smooth;
-
-	/*
-	 * Margin to add to requested base/lid battery power, to figure out how
-	 * much current to allocate. allocation = (1+margin) * request. (/128)
-	 */
-	uint8_t margin_base_battery_power;
-	uint8_t margin_lid_battery_power;
-
-	/* Maximum current to apply from lid to base (mA) */
-	uint16_t max_lid_to_base_current;
-};
-
-static const struct dual_battery_policy db_policy = {
-	.otg_voltage = 12000, /* mV */
-	.max_base_to_lid_current = 1800, /* mA, about 2000mA with margin. */
-	.margin_otg_current = 13, /* /128 = 10.1% */
-	.min_charge_base_otg = 5, /* % */
-	.max_charge_base_batt_to_batt = 4, /* % */
-	.max_charge_lid_batt_to_batt = 10, /* % */
-	.min_base_system_power = 1300, /* mW */
-	.lid_system_power_smooth = 32, /* 32/128 = 0.25 */
-	.battery_power_smooth = 1, /* 1/128 = 0.008 */
-	.margin_base_battery_power = 32, /* 32/128 = 0.25 */
-	.margin_lid_battery_power = 32, /* 32/128 = 0.25 */
-	.max_lid_to_base_current = 2000, /* mA */
-};
-
-/* Add at most "value" to power_var, subtracting from total_power budget. */
-#define CHG_ALLOCATE(power_var, total_power, value)       \
-	do {                                              \
-		int val_capped = MIN(value, total_power); \
-		(power_var) += val_capped;                \
-		(total_power) -= val_capped;              \
-	} while (0)
-
-/* Update base battery information */
-static void update_base_battery_info(void)
-{
-	struct ec_response_battery_dynamic_info *const bd =
-		&battery_dynamic[BATT_IDX_BASE];
-
-	base_connected = board_is_base_connected();
-
-	if (!base_connected) {
-		const int invalid_flags = EC_BATT_FLAG_INVALID_DATA;
-		/* Invalidate static/dynamic information */
-		if (bd->flags != invalid_flags) {
-			bd->flags = invalid_flags;
-
-			host_set_single_event(EC_HOST_EVENT_BATTERY);
-			host_set_single_event(EC_HOST_EVENT_BATTERY_STATUS);
-		}
-		charge_base = -1;
-		base_responsive = 0;
-		prev_current_base = 0;
-		prev_allow_charge_base = 0;
-	} else if (base_responsive) {
-		int old_flags = bd->flags;
-		int flags_changed;
-		int old_full_capacity = bd->full_capacity;
-
-		ec_ec_client_base_get_dynamic_info();
-		flags_changed = (old_flags != bd->flags);
-		/* Fetch static information when flags change. */
-		if (flags_changed)
-			ec_ec_client_base_get_static_info();
-
-		battery_memmap_refresh(BATT_IDX_BASE);
-
-		/* Newly connected battery, or change in capacity. */
-		if (old_flags & EC_BATT_FLAG_INVALID_DATA ||
-		    ((old_flags & EC_BATT_FLAG_BATT_PRESENT) !=
-		     (bd->flags & EC_BATT_FLAG_BATT_PRESENT)) ||
-		    old_full_capacity != bd->full_capacity)
-			host_set_single_event(EC_HOST_EVENT_BATTERY);
-
-		if (flags_changed)
-			host_set_single_event(EC_HOST_EVENT_BATTERY_STATUS);
-
-		/* Update charge_base */
-		if (bd->flags & (BATT_FLAG_BAD_FULL_CAPACITY |
-				 BATT_FLAG_BAD_REMAINING_CAPACITY))
-			charge_base = -1;
-		else if (bd->full_capacity > 0)
-			charge_base = 100 * bd->remaining_capacity /
-				      bd->full_capacity;
-		else
-			charge_base = 0;
-	}
-}
-
-/**
- * Setup current settings for base, and record previous values, if the base
- * is responsive.
- *
- * @param current_base Current to be drawn by base (negative to provide power)
- * @param allow_charge_base Whether base battery should be charged (only makes
- *                          sense with positive current)
- */
-static int set_base_current(int current_base, int allow_charge_base)
-{
-	/* "OTG" voltage from base to lid. */
-	const int otg_voltage = db_policy.otg_voltage;
-	int ret;
-
-	ret = ec_ec_client_base_charge_control(current_base, otg_voltage,
-					       allow_charge_base);
-	if (ret) {
-		/* Ignore errors until the base is responsive. */
-		if (base_responsive)
-			return ret;
-	} else {
-		base_responsive = 1;
-		prev_current_base = current_base;
-		prev_allow_charge_base = allow_charge_base;
-	}
-
-	return EC_RES_SUCCESS;
-}
-
-/**
- * Setup current settings for lid and base, in a safe way.
- *
- * @param current_base Current to be drawn by base (negative to provide power)
- * @param allow_charge_base Whether base battery should be charged (only makes
- *                          sense with positive current)
- * @param current_lid Current to be drawn by lid (negative to provide power)
- * @param allow_charge_lid Whether lid battery should be charged
- */
-static void set_base_lid_current(int current_base, int allow_charge_base,
-				 int current_lid, int allow_charge_lid)
-{
-	/* "OTG" voltage from lid to base. */
-	const int otg_voltage = db_policy.otg_voltage;
-
-	int lid_first;
-	int ret;
-	int chgnum = 0;
-
-	/* TODO(b:71881017): This is still quite verbose during charging. */
-	if (prev_current_base != current_base ||
-	    prev_allow_charge_base != allow_charge_base ||
-	    prev_current_lid != current_lid) {
-		CPRINTS("Base/Lid: %d%s/%d%s mA", current_base,
-			allow_charge_base ? "+" : "", current_lid,
-			allow_charge_lid ? "+" : "");
-	}
-
-	/*
-	 * To decide whether to first control the lid or the base, we first
-	 * control the side that _reduces_ current that would be drawn, then
-	 * setup one that would start providing power, then increase current.
-	 */
-	if (current_lid >= 0 && current_lid < prev_current_lid)
-		lid_first = 1; /* Lid decreases current */
-	else if (current_base >= 0 && current_base < prev_current_base)
-		lid_first = 0; /* Base decreases current */
-	else if (current_lid < 0)
-		lid_first = 1; /* Lid provide power */
-	else
-		lid_first = 0; /* All other cases: control the base first */
-
-	if (!lid_first && base_connected) {
-		ret = set_base_current(current_base, allow_charge_base);
-		if (ret)
-			return;
-	}
-
-	if (current_lid >= 0) {
-		ret = charge_set_output_current_limit(CHARGER_SOLO, 0, 0);
-		if (ret)
-			return;
-		ret = charger_set_input_current_limit(chgnum, current_lid);
-		if (ret)
-			return;
-		if (allow_charge_lid)
-			ret = charge_request(curr.requested_voltage,
-					     curr.requested_current);
-		else
-			ret = charge_request(0, 0);
-	} else {
-		ret = charge_set_output_current_limit(
-			CHARGER_SOLO, -current_lid, otg_voltage);
-	}
-
-	if (ret)
-		return;
-
-	prev_current_lid = current_lid;
-
-	if (lid_first && base_connected) {
-		ret = set_base_current(current_base, allow_charge_base);
-		if (ret)
-			return;
-	}
-
-	/*
-	 * Make sure cross-power is enabled (it might not be enabled right after
-	 * plugging the base, or when an adapter just got connected).
-	 */
-	if (base_connected && current_base != 0)
-		board_enable_base_power(1);
-}
-
-/**
- * Smooth power value, covering some edge cases.
- * Compute s*curr+(1-s)*prev, where s is in 1/128 unit.
- */
-static int smooth_value(int prev, int curr, int s)
-{
-	if (curr < 0)
-		curr = 0;
-	if (prev < 0)
-		return curr;
-
-	return prev + s * (curr - prev) / 128;
-}
-
-/**
- * Add margin m to value. Compute (1+m)*value, where m is in 1/128 unit.
- */
-static int add_margin(int value, int m)
-{
-	return value + m * value / 128;
-}
-
-static void charge_allocate_input_current_limit(void)
-{
-	/*
-	 * All the power numbers are in mW.
-	 *
-	 * Since we work with current and voltage in mA and mV, multiplying them
-	 * gives numbers in uW, which are dangerously close to overflowing when
-	 * doing intermediate computations (60W * 100 overflows a 32-bit int,
-	 * for example). We therefore divide the product by 1000 and re-multiply
-	 * the power numbers by 1000 when converting them back to current.
-	 */
-	int total_power = 0;
-
-	static int prev_base_battery_power = -1;
-	int base_battery_power = 0;
-	int base_battery_power_max = 0;
-
-	static int prev_lid_system_power = -1;
-	int lid_system_power;
-
-	static int prev_lid_battery_power = -1;
-	int lid_battery_power = 0;
-	int lid_battery_power_max = 0;
-
-	int power_base = 0;
-	int power_lid = 0;
-
-	int current_base = 0;
-	int current_lid = 0;
-
-	int charge_lid = charge_get_percent();
-
-	const struct ec_response_battery_dynamic_info *const base_bd =
-		&battery_dynamic[BATT_IDX_BASE];
-
-	if (!base_connected) {
-		set_base_lid_current(0, 0, curr.desired_input_current, 1);
-		prev_base_battery_power = -1;
-		return;
-	}
-
-	/* Charging */
-	if (curr.desired_input_current > 0 && curr.input_voltage > 0)
-		total_power =
-			curr.desired_input_current * curr.input_voltage / 1000;
-
-	/*
-	 * TODO(b:71723024): We should be able to replace this test by curr.ac,
-	 * but the value is currently wrong, especially during transitions.
-	 */
-	if (total_power <= 0) {
-		int base_critical =
-			charge_base >= 0 &&
-			charge_base < db_policy.max_charge_base_batt_to_batt;
-
-		/* Discharging */
-		prev_base_battery_power = -1;
-		prev_lid_system_power = -1;
-		prev_lid_battery_power = -1;
-
-		/* Manual control */
-		if (manual_noac_enabled) {
-			int lid_current, base_current;
-
-			if (manual_noac_current_base > 0) {
-				base_current = -manual_noac_current_base;
-				lid_current = add_margin(
-					manual_noac_current_base,
-					db_policy.margin_otg_current);
-			} else {
-				lid_current = manual_noac_current_base;
-				base_current = add_margin(
-					-manual_noac_current_base,
-					db_policy.margin_otg_current);
-			}
-
-			set_base_lid_current(base_current, 0, lid_current, 0);
-			return;
-		}
-
-		/*
-		 * System is off, cut power to the base. We'll reset the base
-		 * when system restarts, or when AC is plugged.
-		 */
-		if (chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
-			set_base_lid_current(0, 0, 0, 0);
-			if (base_responsive) {
-				/* Base still responsive, put it to sleep. */
-				CPRINTF("Hibernating base\n");
-				ec_ec_client_hibernate();
-				base_responsive = 0;
-				board_enable_base_power(0);
-			}
-			return;
-		}
-
-		/*
-		 * System is suspended, let the lid and base run on their
-		 * own power. However, if the base battery is critically low, we
-		 * still want to provide power to the base, to make sure it
-		 * stays alive to be able to wake the system on keyboard or
-		 * touchpad events.
-		 */
-		if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND) &&
-		    !base_critical) {
-			set_base_lid_current(0, 0, 0, 0);
-			return;
-		}
-
-		if (charge_base > db_policy.min_charge_base_otg) {
-			int lid_current = db_policy.max_base_to_lid_current;
-			int base_current = add_margin(
-				lid_current, db_policy.margin_otg_current);
-			/* Draw current from base to lid */
-			set_base_lid_current(
-				-base_current, 0, lid_current,
-				charge_lid <
-					db_policy.max_charge_lid_batt_to_batt);
-		} else {
-			/*
-			 * Base battery is too low, apply power to it, and allow
-			 * it to charge if it is critically low.
-			 *
-			 * TODO(b:71881017): When suspended, this will make the
-			 * battery charge oscillate between 3 and 4 percent,
-			 * which might not be great for battery life. We need
-			 * some hysteresis.
-			 */
-			/*
-			 * TODO(b:71881017): Precompute (ideally, at build time)
-			 * the base_current, so we do not need to do a division
-			 * here.
-			 */
-			int base_current =
-				(db_policy.min_base_system_power * 1000) /
-				db_policy.otg_voltage;
-			int lid_current = add_margin(
-				base_current, db_policy.margin_otg_current);
-
-			set_base_lid_current(base_current, base_critical,
-					     -lid_current, 0);
-		}
-
-		return;
-	}
-
-	/* Manual control */
-	if (manual_ac_current_base >= 0) {
-		int current_base = manual_ac_current_base;
-		int current_lid =
-			curr.desired_input_current - manual_ac_current_base;
-
-		if (current_lid < 0) {
-			current_base = curr.desired_input_current;
-			current_lid = 0;
-		}
-
-		set_base_lid_current(current_base, 1, current_lid, 1);
-		return;
-	}
-
-	/* Estimate system power. */
-	lid_system_power = charger_get_system_power() / 1000;
-
-	/* Smooth system power, as it is very spiky */
-	lid_system_power = smooth_value(prev_lid_system_power, lid_system_power,
-					db_policy.lid_system_power_smooth);
-	prev_lid_system_power = lid_system_power;
-
-	/*
-	 * TODO(b:71881017): Smoothing the battery power isn't necessarily a
-	 * good idea: if the system takes up too much power, we may reduce the
-	 * estimate power too quickly, leading to oscillations when the system
-	 * power goes down. Instead, we should probably estimate the current
-	 * based on remaining capacity.
-	 */
-	/* Estimate lid battery power. */
-	if (!(curr.batt.flags &
-	      (BATT_FLAG_BAD_VOLTAGE | BATT_FLAG_BAD_CURRENT)))
-		lid_battery_power =
-			curr.batt.current * curr.batt.voltage / 1000;
-	if (lid_battery_power < prev_lid_battery_power)
-		lid_battery_power =
-			smooth_value(prev_lid_battery_power, lid_battery_power,
-				     db_policy.battery_power_smooth);
-	if (!(curr.batt.flags &
-	      (BATT_FLAG_BAD_DESIRED_VOLTAGE | BATT_FLAG_BAD_DESIRED_CURRENT)))
-		lid_battery_power_max = curr.batt.desired_current *
-					curr.batt.desired_voltage / 1000;
-
-	lid_battery_power = MIN(lid_battery_power, lid_battery_power_max);
-
-	/* Estimate base battery power. */
-	if (!(base_bd->flags & EC_BATT_FLAG_INVALID_DATA)) {
-		base_battery_power = base_bd->actual_current *
-				     base_bd->actual_voltage / 1000;
-		base_battery_power_max = base_bd->desired_current *
-					 base_bd->desired_voltage / 1000;
-	}
-	if (base_battery_power < prev_base_battery_power)
-		base_battery_power = smooth_value(
-			prev_base_battery_power, base_battery_power,
-			db_policy.battery_power_smooth);
-	base_battery_power = MIN(base_battery_power, base_battery_power_max);
-
-	if (debugging) {
-		CPRINTF("%s:\n", __func__);
-		CPRINTF("total power: %d\n", total_power);
-		CPRINTF("base battery power: %d (%d)\n", base_battery_power,
-			base_battery_power_max);
-		CPRINTF("lid system power: %d\n", lid_system_power);
-		CPRINTF("lid battery power: %d\n", lid_battery_power);
-		CPRINTF("percent base/lid: %d%% %d%%\n", charge_base,
-			charge_lid);
-	}
-
-	prev_lid_battery_power = lid_battery_power;
-	prev_base_battery_power = base_battery_power;
-
-	if (total_power > 0) { /* Charging */
-		/* Allocate system power */
-		CHG_ALLOCATE(power_base, total_power,
-			     db_policy.min_base_system_power);
-		CHG_ALLOCATE(power_lid, total_power, lid_system_power);
-
-		/* Allocate lid, then base battery power */
-		lid_battery_power = add_margin(
-			lid_battery_power, db_policy.margin_lid_battery_power);
-		CHG_ALLOCATE(power_lid, total_power, lid_battery_power);
-
-		base_battery_power =
-			add_margin(base_battery_power,
-				   db_policy.margin_base_battery_power);
-		CHG_ALLOCATE(power_base, total_power, base_battery_power);
-
-		/* Give everything else to the lid. */
-		CHG_ALLOCATE(power_lid, total_power, total_power);
-		if (debugging)
-			CPRINTF("power: base %d mW / lid %d mW\n", power_base,
-				power_lid);
-
-		current_base = 1000 * power_base / curr.input_voltage;
-		current_lid = 1000 * power_lid / curr.input_voltage;
-
-		if (current_base > db_policy.max_lid_to_base_current) {
-			current_lid += (current_base -
-					db_policy.max_lid_to_base_current);
-			current_base = db_policy.max_lid_to_base_current;
-		}
-
-		if (debugging)
-			CPRINTF("current: base %d mA / lid %d mA\n",
-				current_base, current_lid);
-
-		set_base_lid_current(current_base, 1, current_lid, 1);
-	} else { /* Discharging */
-	}
-
-	if (debugging)
-		CPRINTF("====\n");
-}
-#endif /* CONFIG_EC_EC_COMM_BATTERY_CLIENT */
 
 static const char *const state_list[] = { "idle", "discharge", "charge",
 					  "precharge" };
@@ -835,9 +298,10 @@ static void dump_charge_state(void)
 #ifdef CONFIG_CHARGER_OTG
 	DUMP(output_current, "%dmA");
 #endif
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-	DUMP(input_voltage, "%dmV");
-#endif
+	if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT)) {
+		ccprintf("input_voltage = %dmV\n",
+			 charger_base_get_input_voltage(&curr));
+	}
 	ccprintf("chg_ctl_mode = %s (%d)\n",
 		 cmode < CHARGE_CONTROL_COUNT ? mode_text[cmode] : "UNDEF",
 		 cmode);
@@ -848,7 +312,7 @@ static void dump_charge_state(void)
 	ccprintf("battery_seems_disconnected = %d\n",
 		 battery_seems_disconnected);
 	ccprintf("battery_was_removed = %d\n", battery_was_removed);
-	ccprintf("debug output = %s\n", debugging ? "on" : "off");
+	ccprintf("debug output = %s\n", debugging() ? "on" : "off");
 	ccprintf("Battery sustainer = %s (%d%% ~ %d%%)\n",
 		 battery_sustainer_enabled() ? "on" : "off", sustain_soc.lower,
 		 sustain_soc.upper);
@@ -863,7 +327,8 @@ bool charging_progress_displayed(void)
 	return rv;
 }
 
-static void show_charging_progress(void)
+/* Output to the console so progress is visible */
+static void show_charging_progress(bool is_full)
 {
 	int rv = 0, minutes, to_full, chgnum = 0;
 	int dsoc;
@@ -915,11 +380,10 @@ static void show_charging_progress(void)
 			to_full ? "to full" : "to empty",
 			is_full ? ", not accepting current" : "");
 
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-	CPRINTS("Base battery %d%%", charge_base);
-#endif
+	if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT))
+		charger_base_show_charge();
 
-	if (debugging) {
+	if (debugging()) {
 		ccprintf("battery:\n");
 		print_battery_debug();
 		ccprintf("charger:\n");
@@ -956,16 +420,17 @@ __overridable int board_should_charger_bypass(void)
 	return false;
 }
 
-/*
- * Ask the charger for some voltage and current. If either value is 0,
- * charging is disabled; otherwise it's enabled. Negative values are ignored.
- */
-static int charge_request(int voltage, int current)
+int charge_request(bool use_curr, bool is_full)
 {
 	int r1 = EC_SUCCESS, r2 = EC_SUCCESS, r3 = EC_SUCCESS, r4 = EC_SUCCESS;
 	static int prev_volt, prev_curr;
 	bool should_bypass;
+	int voltage = 0, current = 0;
 
+	if (use_curr) {
+		voltage = curr.requested_voltage;
+		current = curr.requested_current;
+	}
 	if (!voltage || !current) {
 #ifdef CONFIG_CHARGER_NARROW_VDC
 		current = 0;
@@ -1494,19 +959,13 @@ void charger_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, charger_init, HOOK_PRIO_DEFAULT);
 
-/* Wake up the task when something important happens */
-static void charge_wakeup(void)
+void charge_wakeup(void)
 {
 	task_wake(TASK_ID_CHARGER);
 }
 DECLARE_HOOK(HOOK_CHIPSET_RESUME, charge_wakeup, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_AC_CHANGE, charge_wakeup, HOOK_PRIO_DEFAULT);
 DECLARE_HOOK(HOOK_POWER_SUPPLY_CHANGE, charge_wakeup, HOOK_PRIO_DEFAULT);
-
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-/* Reset the base on S5->S0 transition. */
-DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_base_reset, HOOK_PRIO_DEFAULT);
-#endif
 
 #ifdef CONFIG_THROTTLE_AP_ON_BAT_VOLTAGE
 static void bat_low_voltage_throttle_reset(void)
@@ -1520,7 +979,7 @@ DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, bat_low_voltage_throttle_reset,
 static int get_desired_input_current(enum battery_present batt_present,
 				     const struct charger_info *const info)
 {
-	if (batt_present == BP_YES || system_is_locked() || base_connected) {
+	if (batt_present == BP_YES || system_is_locked() || base_connected()) {
 #ifdef CONFIG_CHARGE_MANAGER
 		int ilim = charge_manager_get_charger_current();
 		return ilim == CHARGE_CURRENT_UNINITIALIZED ?
@@ -1635,16 +1094,9 @@ static void revive_battery(int *need_static)
 	battery_seems_dead = battery_was_removed = 0;
 }
 
-/* Main loop */
-void charger_task(void *u)
+/* Set up the initial state of the charger task */
+static void charger_setup(const struct charger_info *info)
 {
-	int sleep_usec;
-	int battery_critical;
-	int need_static = 1;
-	const struct charger_info *const info = charger_get_info();
-	int prev_plt_and_desired_mw;
-	int chgnum = 0;
-
 	/* Get the battery-specific values */
 	batt_info = battery_get_info();
 
@@ -1652,12 +1104,11 @@ void charger_task(void *u)
 	chg_ctl_mode = CHARGE_CONTROL_NORMAL;
 	shutdown_target_time.val = 0UL;
 	battery_seems_dead = 0;
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-	base_responsive = 0;
-	curr.input_voltage = CHARGE_VOLTAGE_UNINITIALIZED;
-	battery_dynamic[BATT_IDX_BASE].flags = EC_BATT_FLAG_INVALID_DATA;
-	charge_base = -1;
-#endif
+	if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT)) {
+		charger_base_setup();
+		charger_base_set_input_voltage(&curr,
+					       CHARGE_VOLTAGE_UNINITIALIZED);
+	}
 #ifdef CONFIG_OCPC
 	ocpc_init(&curr.ocpc);
 	charge_set_active_chg_chip(CHARGE_PORT_NONE);
@@ -1685,6 +1136,416 @@ void charger_task(void *u)
 	}
 
 	battery_level_shutdown = board_set_battery_level_shutdown();
+}
+
+/* check for and handle any state-of-charge change with the battery */
+void check_battery_change_soc(bool is_full, bool prev_full)
+{
+	if ((!(curr.batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE) &&
+	     curr.batt.state_of_charge != prev_charge) ||
+	    (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT) &&
+	     charger_base_charge_changed()) ||
+	    is_full != prev_full || (curr.state != prev_state) ||
+	    (charge_get_display_charge() != prev_disp_charge)) {
+		show_charging_progress(is_full);
+		prev_charge = curr.batt.state_of_charge;
+		prev_disp_charge = charge_get_display_charge();
+		if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT))
+			charger_base_charge_update();
+		hook_notify(HOOK_BATTERY_SOC_CHANGE);
+	}
+}
+
+/* We've noticed a change in AC presence, let the board know */
+static void process_ac_change(const int chgnum)
+{
+	board_check_extpower();
+	if (curr.ac) {
+		/*
+		 * Some chargers are unpowered when the AC is off, so we'll
+		 * reinitialize it when AC comes back and set the input current
+		 * limit. Try again if it fails.
+		 */
+		int rv = charger_post_init();
+
+		if (rv != EC_SUCCESS) {
+			charge_problem(PR_POST_INIT, rv);
+		} else if (curr.desired_input_current !=
+			   CHARGE_CURRENT_UNINITIALIZED) {
+			rv = charger_set_input_current_limit(
+				chgnum, curr.desired_input_current);
+			if (rv != EC_SUCCESS)
+				charge_problem(PR_SET_INPUT_CURR, rv);
+		}
+
+		if (rv == EC_SUCCESS)
+			prev_ac = curr.ac;
+	} else {
+		/* Some things are only meaningful on AC */
+		set_chg_ctrl_mode(CHARGE_CONTROL_NORMAL);
+		battery_seems_dead = 0;
+		prev_ac = curr.ac;
+
+		/*
+		 * b/187967523, we should clear charge current, otherwise it
+		 * will affect typeC output. This should be ok for all chargers.
+		 */
+		charger_set_current(chgnum, 0);
+	}
+}
+
+/* Handle a change in the battery-present state */
+static void process_battery_present_change(const struct charger_info *info,
+					   int chgnum)
+{
+	prev_bp = curr.batt.is_present;
+
+	/* Update battery info due to change of battery */
+	batt_info = battery_get_info();
+
+	curr.desired_input_current = get_desired_input_current(prev_bp, info);
+	if (curr.desired_input_current != CHARGE_CURRENT_UNINITIALIZED)
+		charger_set_input_current_limit(chgnum,
+						curr.desired_input_current);
+	hook_notify(HOOK_BATTERY_SOC_CHANGE);
+}
+
+/* Decide on the charge state we are in */
+static void decide_charge_state(int *need_staticp, int *battery_criticalp)
+{
+	/* battery current stable now, so save the current. */
+	if (IS_ENABLED(CONFIG_USB_PD_PREFER_MV) &&
+	    get_time().val > stable_ts.val && curr.batt.current >= 0)
+		stable_current = curr.batt.current;
+
+	/*
+	 * Now decide what we want to do about it. We'll normally just pass
+	 * along whatever the battery wants to the charger. Note that if
+	 * battery_get_params() can't get valid values from the battery it uses
+	 * (0, 0), which is probably safer than blindly applying power to a
+	 * battery we can't talk to.
+	 */
+	if (curr.batt.flags &
+	    (BATT_FLAG_BAD_DESIRED_VOLTAGE | BATT_FLAG_BAD_DESIRED_CURRENT)) {
+		curr.requested_voltage = 0;
+		curr.requested_current = 0;
+	} else {
+		curr.requested_voltage = curr.batt.desired_voltage;
+		curr.requested_current = curr.batt.desired_current;
+	}
+
+	/* If we *know* there's no battery, wait for one to appear. */
+	if (curr.batt.is_present == BP_NO) {
+		if (!curr.ac)
+			CPRINTS("running with no battery and no AC");
+		set_charge_state(ST_IDLE);
+		curr.batt_is_charging = 0;
+		battery_was_removed = 1;
+		return;
+	}
+
+	/*
+	 * Always check the disconnect state if the battery is present. This is
+	 * because the battery disconnect state is one of the items used to
+	 * decide whether or not to leave safe mode.
+	 *
+	 * Note: For our purposes, an unresponsive battery is considered to be
+	 * disconnected
+	 */
+	battery_seems_disconnected = battery_get_disconnect_state() !=
+				     BATTERY_NOT_DISCONNECTED;
+
+	/*
+	 * If we had trouble talking to the battery or the charger, we should
+	 * probably do nothing for a bit, and if it doesn't get better then flag
+	 * it as an error.
+	 */
+	if (curr.chg.flags & CHG_FLAG_BAD_ANY)
+		charge_problem(PR_CHG_FLAGS, curr.chg.flags);
+	if (curr.batt.flags & BATT_FLAG_BAD_ANY)
+		charge_problem(PR_BATT_FLAGS, curr.batt.flags);
+
+	/*
+	 * If AC is present, check if input current is sufficient to actually
+	 * charge battery.
+	 */
+	curr.batt_is_charging = curr.ac && (curr.batt.current >= 0);
+
+	/* Don't let the battery hurt itself. */
+	*battery_criticalp = shutdown_on_critical_battery();
+
+	if (!curr.ac) {
+		set_charge_state(ST_DISCHARGE);
+		return;
+	}
+
+	/* Okay, we're on AC and we should have a battery. */
+
+	/* Used for factory tests. */
+	if (get_chg_ctrl_mode() != CHARGE_CONTROL_NORMAL) {
+		set_charge_state(ST_IDLE);
+		return;
+	}
+
+	/* If the battery is not responsive, try to wake it up. */
+	if (!(curr.batt.flags & BATT_FLAG_RESPONSIVE)) {
+		wakeup_battery(need_staticp);
+		return;
+	}
+
+	/*
+	 * When the battery voltage is lower than voltage_min,precharge first to
+	 * protect the battery
+	 */
+	if (IS_ENABLED(CONFIG_BATTERY_LOW_VOLTAGE_PROTECTION)) {
+		if (!(curr.batt.flags & BATT_FLAG_BAD_VOLTAGE) &&
+		    curr.batt.voltage <= batt_info->voltage_min) {
+			deep_charge_battery(need_staticp);
+			return;
+		}
+
+		/*
+		 * Finished deep charge before timeout. Clear the flag so that
+		 * we can do deep charge again (when it's deeply discharged
+		 * again).
+		 */
+		if ((curr.batt.flags & BATT_FLAG_DEEP_CHARGE))
+			curr.batt.flags &= ~BATT_FLAG_DEEP_CHARGE;
+	}
+	/* The battery is responding. Yay. Try to use it. */
+
+	revive_battery(need_staticp);
+
+	set_charge_state(ST_CHARGE);
+}
+
+/* Determine voltage/current to request and make it so */
+static void adjust_requested_vi(const struct charger_info *const info,
+				bool is_full)
+{
+	/* Turn charger off if it's not needed */
+	if (!IS_ENABLED(CONFIG_CHARGER_MAINTAIN_VBAT) &&
+	    (curr.state == ST_IDLE || curr.state == ST_DISCHARGE)) {
+		curr.requested_voltage = 0;
+		curr.requested_current = 0;
+	}
+
+	/* Apply external limits */
+	if (curr.requested_current > user_current_limit)
+		curr.requested_current = user_current_limit;
+
+	/* Round to valid values */
+	curr.requested_voltage =
+		charger_closest_voltage(curr.requested_voltage);
+	curr.requested_current =
+		charger_closest_current(curr.requested_current);
+
+	/* Charger only accepts request when AC is on. */
+	if (curr.ac) {
+		/*
+		 * Some batteries would wake up after cut-off if we keep
+		 * charging it. Thus, we only charge when AC is on and battery
+		 * is not cut off yet.
+		 */
+		if (battery_is_cut_off()) {
+			curr.requested_voltage = 0;
+			curr.requested_current = 0;
+		}
+		/*
+		 * As a safety feature, some chargers will stop charging if we
+		 * don't communicate with it frequently enough. In manual mode,
+		 * we'll just tell it what it knows.
+		 */
+		else {
+			if (manual_voltage != -1)
+				curr.requested_voltage = manual_voltage;
+			if (manual_current != -1)
+				curr.requested_current = manual_current;
+		}
+	} else if (!IS_ENABLED(CONFIG_CHARGER_MAINTAIN_VBAT)) {
+		curr.requested_voltage = charger_closest_voltage(
+			curr.batt.voltage + info->voltage_step);
+		curr.requested_current = -1;
+		/*
+		 * On EC-EC server, do not charge if curr.ac is 0: there might
+		 * still be some external power available but we do not want to
+		 * use it for charging.
+		 */
+		if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_SERVER))
+			curr.requested_current = 0;
+	}
+
+	if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT)) {
+		base_charge_allocate_input_current_limit(&curr, is_full,
+							 debugging());
+	} else {
+		charge_request(true, is_full);
+	}
+}
+
+/* Handle selection of the preferred voltage */
+static void process_preferred_voltage(void)
+{
+	int is_pd_supply;
+	int port;
+	int bat_spec_desired_mw;
+	int prev_plt_and_desired_mw;
+
+	/* sjg@: Attempt to get code coverage on this function b/281109948 */
+	if (!IS_ENABLED(CONFIG_USB_PD_PREFER_MV))
+		return;
+
+	is_pd_supply = charge_manager_get_supplier() == CHARGE_SUPPLIER_PD;
+	port = charge_manager_get_active_charge_port();
+	bat_spec_desired_mw =
+		curr.batt.desired_current * curr.batt.desired_voltage / 1000;
+
+	/* save previous plt_and_desired_mw, since it will be updated below */
+	prev_plt_and_desired_mw = charge_get_plt_plus_bat_desired_mw();
+
+	/*
+	 * Update desired power by the following rules:
+	 * 1. If the battery is not charging with PD, we reset the desired_mw to
+	 * the battery spec. The actual desired_mw will be evaluated when it
+	 * starts charging with PD again.
+	 * 2. If the battery SoC under battery's constant voltage percent (this
+	 * is a rough value that can be applied to most batteries), the battery
+	 * can fully sink the power, the desired power should be the same as the
+	 * battery spec, and we don't need to use evaluated value
+	 * stable_current.
+	 * 3. If the battery SoC is above battery's constant voltage percent,
+	 * the real battery desired charging power will decrease slowly and so
+	 * does the charging current. We can evaluate the battery desired power
+	 * by the product of stable_current and battery voltage.
+	 */
+	if (!is_pd_supply)
+		desired_mw = bat_spec_desired_mw;
+	else if (curr.batt.state_of_charge < pd_pref_config.cv)
+		desired_mw = bat_spec_desired_mw;
+	else if (stable_current != CHARGE_CURRENT_UNINITIALIZED)
+		desired_mw = curr.batt.voltage * stable_current / 1000;
+
+	/* if the plt_and_desired_mw changes, re-evaluate PDO */
+	if (is_pd_supply &&
+	    prev_plt_and_desired_mw != charge_get_plt_plus_bat_desired_mw())
+		pd_set_new_power_request(port);
+}
+
+/* Calculate the sleep duration, before we run around the task loop again */
+int calculate_sleep_dur(int battery_critical, int sleep_usec)
+{
+	/* How long to sleep? */
+	if (problems_exist) {
+		/* If there are errors, don't wait very long. */
+		sleep_usec = CHARGE_POLL_PERIOD_SHORT;
+	} else if (sleep_usec <= 0) {
+		/* default values depend on the state */
+		if (!curr.ac &&
+		    (curr.state == ST_IDLE || curr.state == ST_DISCHARGE)) {
+#ifdef CONFIG_CHARGER_OTG
+			int output_current = curr.output_current;
+#else
+			int output_current = 0;
+#endif
+			/*
+			 * If AP is off and we do not provide power, we can
+			 * sleep a long time.
+			 */
+			if (chipset_in_state(CHIPSET_STATE_ANY_OFF |
+					     CHIPSET_STATE_ANY_SUSPEND) &&
+			    output_current == 0)
+				sleep_usec = CHARGE_POLL_PERIOD_VERY_LONG;
+			else
+				/* Discharging, not too urgent */
+				sleep_usec = CHARGE_POLL_PERIOD_LONG;
+		} else {
+			/* AC present, so pay closer attention */
+			sleep_usec = CHARGE_POLL_PERIOD_CHARGE;
+		}
+	}
+
+	/* Adjust for time spent in the charge loop */
+	sleep_usec -= (int)(get_time().val - curr.ts.val);
+	if (sleep_usec < CHARGE_MIN_SLEEP_USEC)
+		sleep_usec = CHARGE_MIN_SLEEP_USEC;
+	else if (sleep_usec > CHARGE_MAX_SLEEP_USEC)
+		sleep_usec = CHARGE_MAX_SLEEP_USEC;
+
+	/*
+	 * If battery is critical, ensure that the sleep time is not very long
+	 * since we might want to hibernate or cut-off battery sooner.
+	 */
+	if (battery_critical &&
+	    (sleep_usec > CRITICAL_BATTERY_SHUTDOWN_TIMEOUT_US))
+		sleep_usec = CRITICAL_BATTERY_SHUTDOWN_TIMEOUT_US;
+
+	return sleep_usec;
+}
+
+/* check external power and handle any changes */
+static void check_extpower(int chgnum)
+{
+	curr.ac = extpower_is_present();
+	if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT)) {
+		if (base_check_extpower(curr.ac, prev_ac))
+			curr.ac = 0;
+	}
+
+	if (curr.ac != prev_ac)
+		process_ac_change(chgnum);
+}
+
+/* processing for new charge state, returning updated sleep_usec */
+static int process_charge_state(int *need_staticp, int sleep_usec)
+{
+	if (IS_ENABLED(CONFIG_CHARGER_PROFILE_OVERRIDE) &&
+	    get_chg_ctrl_mode() == CHARGE_CONTROL_NORMAL) {
+		sleep_usec = charger_profile_override(&curr);
+		if (sleep_usec < 0)
+			charge_problem(PR_CUSTOM, sleep_usec);
+	}
+
+	if (IS_ENABLED(CONFIG_BATTERY_CHECK_CHARGE_TEMP_LIMITS) &&
+	    battery_outside_charging_temperature()) {
+		curr.requested_current = 0;
+		curr.requested_voltage = 0;
+		curr.batt.flags &= ~BATT_FLAG_WANT_CHARGE;
+		if (curr.state != ST_DISCHARGE)
+			curr.state = ST_IDLE;
+	}
+
+	if (IS_ENABLED(CONFIG_CHARGE_MANAGER) &&
+	    curr.batt.state_of_charge >=
+		    CONFIG_CHARGE_MANAGER_BAT_PCT_SAFE_MODE_EXIT &&
+	    !battery_seems_disconnected)
+		charge_manager_leave_safe_mode();
+
+	/* Keep the AP informed */
+	if (*need_staticp)
+		*need_staticp = update_static_battery_info();
+
+	/* Wait on the dynamic info until the static info is good. */
+	if (!*need_staticp)
+		update_dynamic_battery_info();
+	notify_host_of_low_battery_charge();
+	notify_host_of_low_battery_voltage();
+
+	return sleep_usec;
+}
+
+/* Main loop */
+void charger_task(void *u)
+{
+	int sleep_usec;
+	int battery_critical;
+	int need_static = 1;
+	const struct charger_info *const info = charger_get_info();
+	int chgnum = 0;
+	bool is_full = false; /* battery not accepting current */
+	bool prev_full = false;
+
+	/* Set up the task - note that charger_init() has already run. */
+	charger_setup(info);
 
 	while (1) {
 		/* Let's see what's going on... */
@@ -1692,68 +1553,11 @@ void charger_task(void *u)
 		sleep_usec = 0;
 		problems_exist = 0;
 		battery_critical = 0;
-		curr.ac = extpower_is_present();
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-		/*
-		 * When base is powering the system, make sure curr.ac stays 0.
-		 * TODO(b:71723024): Fix extpower_is_present() in hardware
-		 * instead.
-		 */
-		if (base_responsive && prev_current_base < 0)
-			curr.ac = 0;
 
-		/* System is off: if AC gets connected, reset the base. */
-		if (chipset_in_state(CHIPSET_STATE_ANY_OFF) && !prev_ac &&
-		    curr.ac)
-			board_base_reset();
-#endif
-		if (curr.ac != prev_ac) {
-			/*
-			 * We've noticed a change in AC presence, let the board
-			 * know.
-			 */
-			board_check_extpower();
-			if (curr.ac) {
-				/*
-				 * Some chargers are unpowered when the AC is
-				 * off, so we'll reinitialize it when AC
-				 * comes back and set the input current limit.
-				 * Try again if it fails.
-				 */
-				int rv = charger_post_init();
+		check_extpower(chgnum);
 
-				if (rv != EC_SUCCESS) {
-					charge_problem(PR_POST_INIT, rv);
-				} else if (curr.desired_input_current !=
-					   CHARGE_CURRENT_UNINITIALIZED) {
-					rv = charger_set_input_current_limit(
-						chgnum,
-						curr.desired_input_current);
-					if (rv != EC_SUCCESS)
-						charge_problem(
-							PR_SET_INPUT_CURR, rv);
-				}
-
-				if (rv == EC_SUCCESS)
-					prev_ac = curr.ac;
-			} else {
-				/* Some things are only meaningful on AC */
-				set_chg_ctrl_mode(CHARGE_CONTROL_NORMAL);
-				battery_seems_dead = 0;
-				prev_ac = curr.ac;
-
-				/*
-				 * b/187967523, we should clear charge current,
-				 * otherwise it will effect typeC output.this
-				 * should be ok for all chargers.
-				 */
-				charger_set_current(chgnum, 0);
-			}
-		}
-
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-		update_base_battery_info();
-#endif
+		if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT))
+			base_update_battery_info();
 
 		charger_get_params(&curr.chg);
 		battery_get_params(&curr.batt);
@@ -1763,164 +1567,16 @@ void charger_task(void *u)
 #endif /* CONFIG_OCPC */
 
 		if (prev_bp != curr.batt.is_present) {
-			prev_bp = curr.batt.is_present;
-
-			/* Update battery info due to change of battery */
-			batt_info = battery_get_info();
+			process_battery_present_change(info, chgnum);
 			need_static = 1;
-
-			curr.desired_input_current =
-				get_desired_input_current(prev_bp, info);
-			if (curr.desired_input_current !=
-			    CHARGE_CURRENT_UNINITIALIZED)
-				charger_set_input_current_limit(
-					chgnum, curr.desired_input_current);
-			hook_notify(HOOK_BATTERY_SOC_CHANGE);
 		}
 
 		battery_validate_params(&curr.batt);
 
 		notify_host_of_over_current(&curr.batt);
 
-		/* battery current stable now, saves the current. */
-		if (IS_ENABLED(CONFIG_USB_PD_PREFER_MV) &&
-		    get_time().val > stable_ts.val && curr.batt.current >= 0)
-			stable_current = curr.batt.current;
-
-		/*
-		 * Now decide what we want to do about it. We'll normally just
-		 * pass along whatever the battery wants to the charger. Note
-		 * that if battery_get_params() can't get valid values from the
-		 * battery it uses (0, 0), which is probably safer than blindly
-		 * applying power to a battery we can't talk to.
-		 */
-		if (curr.batt.flags & (BATT_FLAG_BAD_DESIRED_VOLTAGE |
-				       BATT_FLAG_BAD_DESIRED_CURRENT)) {
-			curr.requested_voltage = 0;
-			curr.requested_current = 0;
-		} else {
-			curr.requested_voltage = curr.batt.desired_voltage;
-			curr.requested_current = curr.batt.desired_current;
-		}
-
-		/* If we *know* there's no battery, wait for one to appear. */
-		if (curr.batt.is_present == BP_NO) {
-			if (!curr.ac)
-				CPRINTS("running with no battery and no AC");
-			set_charge_state(ST_IDLE);
-			curr.batt_is_charging = 0;
-			battery_was_removed = 1;
-			goto wait_for_it;
-		}
-
-		/*
-		 * Always check the disconnect state if the battery is present.
-		 * This is because the battery disconnect state is one of the
-		 * items used to decide whether or not to leave safe mode.
-		 *
-		 * Note: For our purposes, an unresponsive battery is
-		 * considered to be disconnected
-		 */
-		battery_seems_disconnected = battery_get_disconnect_state() !=
-					     BATTERY_NOT_DISCONNECTED;
-
-		/*
-		 * If we had trouble talking to the battery or the charger, we
-		 * should probably do nothing for a bit, and if it doesn't get
-		 * better then flag it as an error.
-		 */
-		if (curr.chg.flags & CHG_FLAG_BAD_ANY)
-			charge_problem(PR_CHG_FLAGS, curr.chg.flags);
-		if (curr.batt.flags & BATT_FLAG_BAD_ANY)
-			charge_problem(PR_BATT_FLAGS, curr.batt.flags);
-
-		/*
-		 * If AC is present, check if input current is sufficient to
-		 * actually charge battery.
-		 */
-		curr.batt_is_charging = curr.ac && (curr.batt.current >= 0);
-
-		/* Don't let the battery hurt itself. */
-		battery_critical = shutdown_on_critical_battery();
-
-		if (!curr.ac) {
-			set_charge_state(ST_DISCHARGE);
-			goto wait_for_it;
-		}
-
-		/* Okay, we're on AC and we should have a battery. */
-
-		/* Used for factory tests. */
-		if (get_chg_ctrl_mode() != CHARGE_CONTROL_NORMAL) {
-			set_charge_state(ST_IDLE);
-			goto wait_for_it;
-		}
-
-		/* If the battery is not responsive, try to wake it up. */
-		if (!(curr.batt.flags & BATT_FLAG_RESPONSIVE)) {
-			wakeup_battery(&need_static);
-			goto wait_for_it;
-		}
-
-		/*
-		 * When the battery voltage is lower than voltage_min,precharge
-		 * first to protect the battery
-		 */
-		if (IS_ENABLED(CONFIG_BATTERY_LOW_VOLTAGE_PROTECTION)) {
-			if (!(curr.batt.flags & BATT_FLAG_BAD_VOLTAGE) &&
-			    (curr.batt.voltage <= batt_info->voltage_min)) {
-				deep_charge_battery(&need_static);
-				goto wait_for_it;
-			}
-
-			/*
-			 * Finished deep charge before timeout. Clear the flag
-			 * so that we can do deep charge again (when it's deeply
-			 * discharged again).
-			 */
-			if ((curr.batt.flags & BATT_FLAG_DEEP_CHARGE)) {
-				curr.batt.flags &= ~BATT_FLAG_DEEP_CHARGE;
-			}
-		}
-		/* The battery is responding. Yay. Try to use it. */
-
-		revive_battery(&need_static);
-
-		set_charge_state(ST_CHARGE);
-
-	wait_for_it:
-		if (IS_ENABLED(CONFIG_CHARGER_PROFILE_OVERRIDE) &&
-		    get_chg_ctrl_mode() == CHARGE_CONTROL_NORMAL) {
-			sleep_usec = charger_profile_override(&curr);
-			if (sleep_usec < 0)
-				charge_problem(PR_CUSTOM, sleep_usec);
-		}
-
-		if (IS_ENABLED(CONFIG_BATTERY_CHECK_CHARGE_TEMP_LIMITS) &&
-		    battery_outside_charging_temperature()) {
-			curr.requested_current = 0;
-			curr.requested_voltage = 0;
-			curr.batt.flags &= ~BATT_FLAG_WANT_CHARGE;
-			if (curr.state != ST_DISCHARGE)
-				curr.state = ST_IDLE;
-		}
-
-#ifdef CONFIG_CHARGE_MANAGER
-		if (curr.batt.state_of_charge >=
-			    CONFIG_CHARGE_MANAGER_BAT_PCT_SAFE_MODE_EXIT &&
-		    !battery_seems_disconnected) {
-			charge_manager_leave_safe_mode();
-		}
-#endif
-
-		/* Keep the AP informed */
-		if (need_static)
-			need_static = update_static_battery_info();
-		/* Wait on the dynamic info until the static info is good. */
-		if (!need_static)
-			update_dynamic_battery_info();
-		notify_host_of_low_battery_charge();
-		notify_host_of_low_battery_voltage();
+		decide_charge_state(&need_static, &battery_critical);
+		sleep_usec = process_charge_state(&need_static, sleep_usec);
 
 		/* And the EC console */
 		is_full = calc_is_full();
@@ -1931,182 +1587,18 @@ void charger_task(void *u)
 		/* Run battery soc check for setting the current limit. */
 		current_limit_battery_soc();
 
-		if ((!(curr.batt.flags & BATT_FLAG_BAD_STATE_OF_CHARGE) &&
-		     curr.batt.state_of_charge != prev_charge) ||
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-		    (charge_base != prev_charge_base) ||
-#endif
-		    (is_full != prev_full) || (curr.state != prev_state) ||
-		    (charge_get_display_charge() != prev_disp_charge)) {
-			show_charging_progress();
-			prev_charge = curr.batt.state_of_charge;
-			prev_disp_charge = charge_get_display_charge();
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-			prev_charge_base = charge_base;
-#endif
-			hook_notify(HOOK_BATTERY_SOC_CHANGE);
-		}
+		check_battery_change_soc(is_full, prev_full);
+
 		prev_full = is_full;
 
-#ifndef CONFIG_CHARGER_MAINTAIN_VBAT
-		/* Turn charger off if it's not needed */
-		if (curr.state == ST_IDLE || curr.state == ST_DISCHARGE) {
-			curr.requested_voltage = 0;
-			curr.requested_current = 0;
-		}
-#endif
+		adjust_requested_vi(info, is_full);
 
-		/* Apply external limits */
-		if (curr.requested_current > user_current_limit)
-			curr.requested_current = user_current_limit;
+		process_preferred_voltage();
 
-		/* Round to valid values */
-		curr.requested_voltage =
-			charger_closest_voltage(curr.requested_voltage);
-		curr.requested_current =
-			charger_closest_current(curr.requested_current);
+		/* Report our state */
+		local_state.is_full = is_full;
 
-		/* Charger only accpets request when AC is on. */
-		if (curr.ac) {
-			/*
-			 * Some batteries would wake up after cut-off if we keep
-			 * charging it. Thus, we only charge when AC is on and
-			 * battery is not cut off yet.
-			 */
-			if (battery_is_cut_off()) {
-				curr.requested_voltage = 0;
-				curr.requested_current = 0;
-			}
-			/*
-			 * As a safety feature, some chargers will stop
-			 * charging if we don't communicate with it frequently
-			 * enough. In manual mode, we'll just tell it what it
-			 * knows.
-			 */
-			else {
-				if (manual_voltage != -1)
-					curr.requested_voltage = manual_voltage;
-				if (manual_current != -1)
-					curr.requested_current = manual_current;
-			}
-		} else {
-#ifndef CONFIG_CHARGER_MAINTAIN_VBAT
-			curr.requested_voltage = charger_closest_voltage(
-				curr.batt.voltage + info->voltage_step);
-			curr.requested_current = -1;
-#endif
-#ifdef CONFIG_EC_EC_COMM_BATTERY_SERVER
-			/*
-			 * On EC-EC server, do not charge if curr.ac is 0: there
-			 * might still be some external power available but we
-			 * do not want to use it for charging.
-			 */
-			curr.requested_current = 0;
-#endif
-		}
-
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-		charge_allocate_input_current_limit();
-#else
-		charge_request(curr.requested_voltage, curr.requested_current);
-#endif
-
-		/* How long to sleep? */
-		if (problems_exist)
-			/* If there are errors, don't wait very long. */
-			sleep_usec = CHARGE_POLL_PERIOD_SHORT;
-		else if (sleep_usec <= 0) {
-			/* default values depend on the state */
-			if (!curr.ac && (curr.state == ST_IDLE ||
-					 curr.state == ST_DISCHARGE)) {
-#ifdef CONFIG_CHARGER_OTG
-				int output_current = curr.output_current;
-#else
-				int output_current = 0;
-#endif
-				/*
-				 * If AP is off and we do not provide power, we
-				 * can sleep a long time.
-				 */
-				if (chipset_in_state(
-					    CHIPSET_STATE_ANY_OFF |
-					    CHIPSET_STATE_ANY_SUSPEND) &&
-				    output_current == 0)
-					sleep_usec =
-						CHARGE_POLL_PERIOD_VERY_LONG;
-				else
-					/* Discharging, not too urgent */
-					sleep_usec = CHARGE_POLL_PERIOD_LONG;
-			} else {
-				/* AC present, so pay closer attention */
-				sleep_usec = CHARGE_POLL_PERIOD_CHARGE;
-			}
-		}
-
-		if (IS_ENABLED(CONFIG_USB_PD_PREFER_MV)) {
-			int is_pd_supply = charge_manager_get_supplier() ==
-					   CHARGE_SUPPLIER_PD;
-			int port = charge_manager_get_active_charge_port();
-			int bat_spec_desired_mw = curr.batt.desired_current *
-						  curr.batt.desired_voltage /
-						  1000;
-
-			/*
-			 * save the previous plt_and_desired_mw, since it
-			 * will be updated below
-			 */
-			prev_plt_and_desired_mw =
-				charge_get_plt_plus_bat_desired_mw();
-
-			/*
-			 * Update desired power by the following rules:
-			 * 1. If the battery is not charging with PD, we reset
-			 * the desired_mw to the battery spec. The actual
-			 * desired_mw will be evaluated when it starts charging
-			 * with PD again.
-			 * 2. If the battery SoC under battery's constant
-			 * voltage percent (this is a rough value that can be
-			 * applied to most batteries), the battery can fully
-			 * sink the power, the desired power should be the
-			 * same as the battery spec, and we don't need to use
-			 * evaluated value stable_current.
-			 * 3. If the battery SoC is above battery's constant
-			 * voltage percent, the real battery desired charging
-			 * power will decrease slowly and so does the charging
-			 * current. We can evaluate the battery desired power
-			 * by the product of stable_current and battery voltage.
-			 */
-			if (!is_pd_supply)
-				desired_mw = bat_spec_desired_mw;
-			else if (curr.batt.state_of_charge < pd_pref_config.cv)
-				desired_mw = bat_spec_desired_mw;
-			else if (stable_current != CHARGE_CURRENT_UNINITIALIZED)
-				desired_mw = curr.batt.voltage *
-					     stable_current / 1000;
-
-			/* if the plt_and_desired_mw changes, re-evaluate PDO */
-			if (is_pd_supply &&
-			    prev_plt_and_desired_mw !=
-				    charge_get_plt_plus_bat_desired_mw())
-				pd_set_new_power_request(port);
-		}
-
-		/* Adjust for time spent in this loop */
-		sleep_usec -= (int)(get_time().val - curr.ts.val);
-		if (sleep_usec < CHARGE_MIN_SLEEP_USEC)
-			sleep_usec = CHARGE_MIN_SLEEP_USEC;
-		else if (sleep_usec > CHARGE_MAX_SLEEP_USEC)
-			sleep_usec = CHARGE_MAX_SLEEP_USEC;
-
-		/*
-		 * If battery is critical, ensure that the sleep time is not
-		 * very long since we might want to hibernate or cut-off
-		 * battery sooner.
-		 */
-		if (battery_critical &&
-		    (sleep_usec > CRITICAL_BATTERY_SHUTDOWN_TIMEOUT_US))
-			sleep_usec = CRITICAL_BATTERY_SHUTDOWN_TIMEOUT_US;
-
+		sleep_usec = calculate_sleep_dur(battery_critical, sleep_usec);
 		task_wait_event(sleep_usec);
 	}
 }
@@ -2235,18 +1727,17 @@ bool charge_prevent_power_on(bool power_button_pressed)
 
 static int battery_near_full(void)
 {
-	if (charge_get_percent() < BATTERY_LEVEL_NEAR_FULL)
+	if (charge_get_display_charge() < 1000)
 		return 0;
 
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-	if (charge_base > -1 && charge_base < BATTERY_LEVEL_NEAR_FULL)
+	if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT) &&
+	    !charger_base_charge_near_full())
 		return 0;
-#endif
 
 	return 1;
 }
 
-enum charge_state charge_get_state(void)
+enum led_pwr_state led_pwr_get_state(void)
 {
 	uint32_t chflags;
 
@@ -2313,7 +1804,7 @@ int charge_get_percent(void)
 	 * to the battery, that'll be zero, which is probably as good as
 	 * anything.
 	 */
-	return is_full ? 100 : curr.batt.state_of_charge;
+	return local_state.is_full ? 100 : curr.batt.state_of_charge;
 }
 
 test_mockable int charge_get_display_charge(void)
@@ -2383,9 +1874,8 @@ int charge_set_input_current_limit(int ma, int mv)
 
 	if (IS_ENABLED(CONFIG_OCPC))
 		chgnum = charge_get_active_chg_chip();
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-	curr.input_voltage = mv;
-#endif
+	if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT))
+		charger_base_set_input_voltage(&curr, mv);
 	/*
 	 * If battery is not present, we are not locked, and base is not
 	 * connected then allow system to pull as much input current as needed.
@@ -2393,7 +1883,7 @@ int charge_set_input_current_limit(int ma, int mv)
 	 * browning out due to insufficient input current.
 	 */
 	if (curr.batt.is_present != BP_YES && !system_is_locked() &&
-	    !base_connected) {
+	    !base_connected()) {
 		int prev_input = 0;
 
 		charger_get_input_current_limit(chgnum, &prev_input);
@@ -2447,13 +1937,16 @@ int charge_set_input_current_limit(int ma, int mv)
 	}
 
 	curr.desired_input_current = ma;
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-	/* Wake up charger task to allocate current between lid and base. */
-	charge_wakeup();
-	return EC_SUCCESS;
-#else
-	return charger_set_input_current_limit(chgnum, ma);
-#endif
+	if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT)) {
+		/*
+		 * Wake up charger task to allocate current between lid and
+		 * base.
+		 */
+		charge_wakeup();
+		return EC_SUCCESS;
+	} else {
+		return charger_set_input_current_limit(chgnum, ma);
+	}
 }
 
 #ifdef CONFIG_OCPC
@@ -2819,11 +2312,15 @@ static int command_chgstate(int argc, const char **argv)
 						     CHARGE_CONTROL_NORMAL);
 			if (rv)
 				return rv;
-		} else if (!strcasecmp(argv[1], "debug")) {
+		} else if (IS_ENABLED(CONFIG_CHARGE_DEBUG) &&
+			   !strcasecmp(argv[1], "debug")) {
+			int val;
+
 			if (argc <= 2)
 				return EC_ERROR_PARAM_COUNT;
-			if (!parse_bool(argv[2], &debugging))
+			if (!parse_bool(argv[2], &val))
 				return EC_ERROR_PARAM2;
+			set_debugging(val);
 		} else if (!strcasecmp(argv[1], "sustain")) {
 			int lower, upper;
 
@@ -2846,57 +2343,12 @@ static int command_chgstate(int argc, const char **argv)
 	dump_charge_state();
 	return EC_SUCCESS;
 }
+#ifdef CONFIG_CHARGE_DEBUG
+#define CHGSTATE_DEBUG_HELP "|debug on|off"
+#else
+#define CHGSTATE_DEBUG_HELP ""
+#endif
 DECLARE_CONSOLE_COMMAND(chgstate, command_chgstate,
-			"[idle|discharge|debug on|off]"
+			"[idle|discharge" CHGSTATE_DEBUG_HELP "]"
 			"\n[sustain <lower> <upper>]",
 			"Get/set charge state machine status");
-
-#ifdef CONFIG_EC_EC_COMM_BATTERY_CLIENT
-static int command_chgdualdebug(int argc, const char **argv)
-{
-	int val;
-	char *e;
-
-	if (argc > 1) {
-		if (argv[1][0] == 'c') {
-			if (argc <= 2)
-				return EC_ERROR_PARAM_COUNT;
-
-			if (!strcasecmp(argv[2], "auto")) {
-				val = -1;
-			} else {
-				val = strtoi(argv[2], &e, 0);
-				if (*e || val < 0)
-					return EC_ERROR_PARAM2;
-			}
-
-			manual_ac_current_base = val;
-			charge_wakeup();
-		} else if (argv[1][0] == 'd') {
-			if (argc <= 2)
-				return EC_ERROR_PARAM_COUNT;
-
-			if (!strcasecmp(argv[2], "auto")) {
-				manual_noac_enabled = 0;
-			} else {
-				val = strtoi(argv[2], &e, 0);
-				if (*e)
-					return EC_ERROR_PARAM2;
-				manual_noac_current_base = val;
-				manual_noac_enabled = 1;
-			}
-			charge_wakeup();
-		} else {
-			return EC_ERROR_PARAM1;
-		}
-	} else {
-		ccprintf("Base/Lid: %d%s/%d mA\n", prev_current_base,
-			 prev_allow_charge_base ? "+" : "", prev_current_lid);
-	}
-
-	return EC_SUCCESS;
-}
-DECLARE_CONSOLE_COMMAND(chgdualdebug, command_chgdualdebug,
-			"[charge (auto|<current>)|discharge (auto|<current>)]",
-			"Manually control dual-battery charging algorithm.");
-#endif

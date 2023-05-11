@@ -9,7 +9,6 @@
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
-#include "charge_state_v2.h"
 #include "charger.h"
 #include "chipset.h"
 #include "common.h"
@@ -313,10 +312,10 @@ __override int board_rt1718s_init(int port)
 
 	/* gpio 1/2 output high when receiving frx signal */
 	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_GPIO1_VBUS_CTRL,
-					  RT1718S_GPIO1_VBUS_CTRL_FRS_RX_VBUS,
+					  RT1718S_GPIO_VBUS_CTRL_FRS_RX_VBUS,
 					  0xFF));
 	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_GPIO2_VBUS_CTRL,
-					  RT1718S_GPIO2_VBUS_CTRL_FRS_RX_VBUS,
+					  RT1718S_GPIO_VBUS_CTRL_FRS_RX_VBUS,
 					  0xFF));
 
 	/* Turn on SBU switch */
