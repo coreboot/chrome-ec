@@ -147,8 +147,8 @@ BITBANG_RATE="57600"  # Could be overwritten by a command line option.
 
 # Flags
 DEFINE_integer bitbang_rate "${BITBANG_RATE}" \
-	"UART baud rate to use when bit bang programming, "\
-"standard UART rates from 9600 to 57600 are supported."
+	"UART baud rate to use when bit bang programming, " \
+	"standard UART rates from 9600 to 57600 are supported."
 DEFINE_string board "" \
 	"The board to run debugger on."
 DEFINE_string chip "" \
@@ -794,7 +794,7 @@ function servo_save_add() {
 			# Don't save the control with the prefix, because
 			# dut_control will add the prefix again when we restore
 			# the settings.
-			save=( "${CTRL_RESULT#${DUT_CTRL_PREFIX}}" "${save[@]}" )
+			save=( "${CTRL_RESULT#"${DUT_CTRL_PREFIX}"}" "${save[@]}" )
 		   fi
 		   ;;
 		2) save=( "$1:$2" "${save[@]}" )
@@ -850,6 +850,7 @@ function claim_pty() {
 
 	# reverse order to SIGSTOP parents before children
 	for pid in $(echo "${pids}" | tac -s " "); do
+		# shellcheck disable=SC2009
 		if ps -o cmd= "${pid}" | grep -qE "(servod|/sbin/init)"; then
 			info "Skip stopping servod or init: process ${pid}."
 		else

@@ -68,6 +68,9 @@ common-$(CONFIG_CHARGER)+=charger.o
 ifneq ($(CONFIG_CHARGER),)
 common-$(CONFIG_BATTERY)+=charge_state_v2.o
 endif
+ifneq ($(CONFIG_EC_EC_COMM_BATTERY_CLIENT),)
+common-$(CONFIG_BATTERY)+=charger_base.o
+endif
 common-$(CONFIG_CHARGER_PROFILE_OVERRIDE_COMMON)+=charger_profile_override.o
 common-$(CONFIG_CMD_I2CWEDGE)+=i2c_wedge.o
 common-$(CONFIG_COMMON_GPIO)+=gpio.o gpio_commands.o
@@ -138,8 +141,9 @@ common-$(CONFIG_PWM)+=pwm.o
 common-$(CONFIG_PWM_KBLIGHT)+=pwm_kblight.o
 common-$(CONFIG_KEYBOARD_BACKLIGHT)+=keyboard_backlight.o
 common-$(CONFIG_RGB_KEYBOARD)+=rgb_keyboard.o
-common-$(CONFIG_RSA)+=rsa.o
+common-$(CONFIG_RNG)+=trng.o
 common-$(CONFIG_ROLLBACK)+=rollback.o
+common-$(CONFIG_RSA)+=rsa.o
 common-$(CONFIG_RWSIG)+=rwsig.o vboot/common.o
 common-$(CONFIG_RWSIG_TYPE_RWSIG)+=vboot/vb21_lib.o
 common-$(CONFIG_MATH_UTIL)+=math_util.o

@@ -65,6 +65,9 @@ config LINK_TEST_SUITE_HOST_COMMANDS
 config LINK_TEST_SUITE_HOST_COMMAND_READ_MEMMAP
 	bool "Link and test the host command read memmap tests"
 
+config LINK_TEST_SUITE_ICM42607
+	bool "Link and test the icm42607 tests"
+
 config LINK_TEST_SUITE_ISL923X
 	bool "Link and test the isl923x tests"
 
@@ -79,6 +82,9 @@ config LINK_TEST_SUITE_IT8XXX2_HW_SHA256
 	help
 	  Include the it8xxx2_hw_sha256 test suite
 	  in the binary.
+
+config LINK_TEST_SUITE_KEYBOARD_8042
+	bool "Link and test the keyboard_8042 tests"
 
 config LINK_TEST_SUITE_KEYBOARD_SCAN
 	bool "Link and test the keyboard_scan tests"

@@ -7,6 +7,7 @@
  * RT1718S TCPC Driver
  */
 
+#include "battery.h"
 #include "console.h"
 #include "driver/tcpm/rt1718s.h"
 #include "driver/tcpm/tcpci.h"
@@ -260,6 +261,11 @@ static int rt1718s_set_vconn(int port, int enable)
 static int rt1718s_init(int port)
 {
 	static bool need_sw_reset = true;
+
+	/* Do not reset the TCPC when device is no battery connected, otherwise
+	 * the SINK GPIO to the PPC may be reset, and cause a brown-out.
+	 */
+	need_sw_reset &= battery_is_present() == BP_YES;
 
 	if (!system_jumped_late() && need_sw_reset) {
 		RETURN_ERROR(rt1718s_sw_reset(port));
@@ -545,15 +551,37 @@ __overridable int board_rt1718s_set_snk_enable(int port, int enable)
 	return EC_SUCCESS;
 }
 
+__overridable int board_rt1718s_set_src_enable(int port, int enable)
+{
+	return EC_SUCCESS;
+}
+
 static int rt1718s_tcpm_set_snk_ctrl(int port, int enable)
 {
 	int rv;
 
-	rv = board_rt1718s_set_snk_enable(port, enable);
+	/* The order matters. Board hook should run after the tcpm call to
+	 * prevent the GPIO config auto-reload overwriting a wrong value.
+	 */
+	rv = tcpci_tcpm_set_snk_ctrl(port, enable);
 	if (rv)
 		return rv;
 
-	return tcpci_tcpm_set_snk_ctrl(port, enable);
+	return board_rt1718s_set_snk_enable(port, enable);
+}
+
+static int rt1718s_tcpm_set_src_ctrl(int port, int enable)
+{
+	int rv;
+
+	/* The order matters. Board hook should run after the tcpm call to
+	 * prevent the GPIO config auto-reload overwriting a wrong value.
+	 */
+	rv = tcpci_tcpm_set_src_ctrl(port, enable);
+	if (rv)
+		return rv;
+
+	return board_rt1718s_set_src_enable(port, enable);
 }
 
 static void rt1718s_alert(int port)
@@ -800,7 +828,7 @@ const struct tcpm_drv rt1718s_tcpm_drv = {
 #endif
 	.get_chip_info = &tcpci_get_chip_info,
 	.set_snk_ctrl = &rt1718s_tcpm_set_snk_ctrl,
-	.set_src_ctrl = &tcpci_tcpm_set_src_ctrl,
+	.set_src_ctrl = &rt1718s_tcpm_set_src_ctrl,
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode = &rt1718s_enter_low_power_mode,
 #endif

@@ -124,10 +124,10 @@ enum ec_status charger_profile_override_set_param(uint32_t param,
 
 test_static int wait_charging_state(void)
 {
-	enum charge_state state;
+	enum led_pwr_state state;
 	task_wake(TASK_ID_CHARGER);
 	msleep(WAIT_CHARGER_TASK);
-	state = charge_get_state();
+	state = led_pwr_get_state();
 	ccprintf("[CHARGING TEST] state = %d\n", state);
 	return state;
 }
@@ -206,7 +206,7 @@ test_static void ev_clear(int event)
 
 test_static int test_charge_state(void)
 {
-	enum charge_state state;
+	enum led_pwr_state state;
 	uint32_t flags;
 
 	/* On AC */
@@ -504,7 +504,7 @@ test_static int test_external_funcs(void)
 	TEST_ASSERT(!(flags & CHARGE_FLAG_FORCE_IDLE));
 
 	/* and the rest */
-	TEST_ASSERT(charge_get_state() == PWR_STATE_CHARGE);
+	TEST_ASSERT(led_pwr_get_state() == PWR_STATE_CHARGE);
 	TEST_ASSERT(!charge_want_shutdown());
 	TEST_ASSERT(charge_get_percent() == 50);
 	temp = 0;
@@ -519,7 +519,7 @@ test_static int test_external_funcs(void)
 #define CHG_OPT2 0x4000
 test_static int test_hc_charge_state(void)
 {
-	enum charge_state state;
+	enum led_pwr_state state;
 	int i, rv, tmp;
 	struct ec_params_charge_state params;
 	struct ec_response_charge_state resp;
@@ -964,7 +964,7 @@ test_static int test_battery_sustainer_discharge_idle(void)
 	/* (lower =) upper < SoC */
 	display_soc = 810;
 	wait_charging_state();
-	TEST_ASSERT(get_chg_ctrl_mode() == CHARGE_CONTROL_IDLE);
+	TEST_ASSERT(get_chg_ctrl_mode() == CHARGE_CONTROL_DISCHARGE);
 
 	/* Unplug AC. Sustainer gets deactivated. */
 	gpio_set_level(GPIO_AC_PRESENT, 0);
@@ -974,7 +974,7 @@ test_static int test_battery_sustainer_discharge_idle(void)
 	/* Replug AC. Sustainer gets re-activated. */
 	gpio_set_level(GPIO_AC_PRESENT, 1);
 	wait_charging_state();
-	TEST_ASSERT(get_chg_ctrl_mode() == CHARGE_CONTROL_IDLE);
+	TEST_ASSERT(get_chg_ctrl_mode() == CHARGE_CONTROL_DISCHARGE);
 
 	/* lower = SoC = upper */
 	display_soc = 800;

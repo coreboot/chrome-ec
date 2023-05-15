@@ -7,7 +7,7 @@
 
 #include "battery_smart.h"
 #include "builtin/assert.h"
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "charger.h"
 #include "common.h"
 #include "console.h"
@@ -767,9 +767,9 @@ int chg_ramp_get_current_limit(void)
 }
 #endif
 
-enum ec_error_list charger_set_vsys_compensation(int chgnum,
-						 struct ocpc_data *ocpc,
-						 int current_ma, int voltage_mv)
+test_mockable enum ec_error_list
+charger_set_vsys_compensation(int chgnum, struct ocpc_data *ocpc,
+			      int current_ma, int voltage_mv)
 {
 	if ((chgnum < 0) || (chgnum >= board_get_charger_chip_count())) {
 		CPRINTS("%s(%d) Invalid charger!", __func__, chgnum);
