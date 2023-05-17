@@ -43,6 +43,11 @@
 			handler = "power_signal_interrupt";
 		};
 
+		pogo_prsnt_int: pogo-prsnt-int {
+			irq-pin = <&pogo_prsnt_int_l>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "base_detect_interrupt";
+		};
 		/delete-node/ lid_imu;
 	};
 
@@ -71,8 +76,8 @@
 		};
 
 		// POGO_PRSNT_INT_L  GPI5
-		pogo_prsnt_int_l: pogo_prsnt_int_l{
-			gpios = <&gpioi 5 GPIO_INPUT_PULL_DOWN>;
+		pogo_prsnt_int_l: pogo_prsnt_int_l {
+			gpios = <&gpioi 5 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 		};
 
 		pg_pp4200_s5_od: pg-pp4200-s5-od {
@@ -131,8 +136,8 @@
 	motionsense-rotation-ref {
 		compatible = "cros-ec,motionsense-rotation-ref";
 		lid_rot_ref_bmi: lid-rotation-ref-bmi {
-			mat33 = <1 0 0
-				 0 1 0
+			mat33 = <(-1) 0 0
+				 0 (-1) 0
 				 0 0 1>;
 		};
 	};
@@ -217,6 +222,39 @@
 			power-gpio-pin = <&pmic_ec_resetb>;
 		};
 	};
+
+	named-adc-channels {
+        adc_temp_sensor_1: adc-temp-sensor-1 {
+			enum-name = "ADC_TEMP_SENSOR_1";
+			io-channels = <&adc0 6>;
+		};
+		adc_temp_sensor_2: adc-temp-sensor-2 {
+			enum-name = "ADC_TEMP_SENSOR_2";
+			io-channels = <&adc0 7>;
+		};
+    };
+
+	temp_sensor_1_thermistor: sensor-1-thermistor {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_1V8_100K_100K_4250B>;
+		adc = <&adc_temp_sensor_1>;
+	};
+
+	temp_sensor_2_thermistor: sensor-2-thermistor {
+		compatible = "cros-ec,temp-sensor-thermistor";
+		thermistor = <&thermistor_1V8_100K_100K_4250B>;
+		adc = <&adc_temp_sensor_2>;
+	};
+
+    named-temp-sensors {
+		compatible = "cros-ec,temp-sensors";
+		temp_sensor_1 {
+			sensor = <&temp_sensor_1_thermistor>;
+		};
+		temp_sensor_2 {
+			sensor = <&temp_sensor_2_thermistor>;
+		};
+	};
 };
 
 &i2c0{
@@ -230,4 +268,14 @@
 		compatible = "parade,ps8743";
 		reg = <0x10>;
 	};
+};
+
+&adc0{
+	status = "okay";
+	pinctrl-0 = <&adc0_ch6_gpi6_default>;
+	pinctrl-names = "default";
+};
+
+&thermistor_1V8_100K_100K_4250B{
+    status = "okay";
 };
