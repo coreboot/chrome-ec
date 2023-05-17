@@ -438,11 +438,6 @@ static const struct option_container cmd_line_options[] = {
 	 "RW and RO headers, do not update"},
 	{{"apro_config_spi_mode", optional_argument, NULL, 'C'},
 	 "Get/set the ap ro verify spi mode either to `3byte` or `4byte`"},
-	{{"apro_config_write_protect", optional_argument, NULL,
-	 'E'},
-	 "Get/set the ap ro verify write protect descriptors with hex "
-	 "bytes (ex: 0x01, 0x1, 01 or 1) in the following format: "
-	 "[sr1 mask1 [sr2 mask2] [sr3 mask3]]"},
 	{{"corrupt", no_argument, NULL, 'c'},
 	 "Corrupt the inactive rw"},
 	{{"dauntless", no_argument, NULL, 'D'},
@@ -450,6 +445,11 @@ static const struct option_container cmd_line_options[] = {
 	 " --image flag values"},
 	{{"device", required_argument, NULL, 'd'},
 	 "VID:PID%USB device (default 18d1:5014 or 18d1:504a based on image)"},
+	{{"apro_config_write_protect", optional_argument, NULL,
+	 'E'},
+	 "Get/set the ap ro verify write protect descriptors with hex "
+	 "bytes (ex: 0x01, 0x1, 01 or 1) in the following format: "
+	 "[sr1 mask1 [sr2 mask2] [sr3 mask3]]"},
 	{{"endorsement_seed", optional_argument, NULL, 'e'},
 	 "[state]%get/set the endorsement key seed"},
 	{{"factory", required_argument, NULL, 'F'},
@@ -460,10 +460,10 @@ static const struct option_container cmd_line_options[] = {
 	 "Get time since last cold reset"},
 	{{"getbootmode", no_argument, NULL, 'g'},
 	 "Get the system boot mode"},
-	{{"help", no_argument, NULL, 'h'},
-	 "Show this message"},
 	{{"erase_ap_ro_hash", no_argument, NULL, 'H'},
 	 "Erase AP RO hash (possible only if Board ID is not set)"},
+	{{"help", no_argument, NULL, 'h'},
+	 "Show this message"},
 	{{"ccd_info", optional_argument, NULL, 'I'},
 	 "[capability:value]%Get information about CCD state or set capability"
 	 " value if allowed"},
