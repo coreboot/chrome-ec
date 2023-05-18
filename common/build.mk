@@ -223,7 +223,6 @@ endif
 ifeq ($(CONFIG_PLATFORM_PINWEAVER),y)
 PINWEAVERLIB := $(realpath ../pinweaver)
 CPPFLAGS += -I$(PINWEAVERLIB) -I$(PINWEAVERLIB)/eal/cr50
-CPPFLAGS += -D BIOMETRICS_DEV=true
 
 common-y += pinweaver.o
 common-y += pinweaver_eal.o
