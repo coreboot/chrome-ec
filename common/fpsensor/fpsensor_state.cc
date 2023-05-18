@@ -4,12 +4,13 @@
  */
 
 #include "compile_time_macros.h"
-#include "fpsensor_utils.h"
+
+/* Boringssl headers need to be included before extern "C" section. */
+#include "openssl/mem.h"
 
 extern "C" {
 #include "atomic.h"
 #include "common.h"
-#include "cryptoc/util.h"
 #include "ec_commands.h"
 #include "host_command.h"
 #include "system.h"
@@ -20,6 +21,7 @@ extern "C" {
 #include "fpsensor.h"
 #include "fpsensor_crypto.h"
 #include "fpsensor_state.h"
+#include "fpsensor_utils.h"
 
 /* Last acquired frame (aligned as it is used by arbitrary binary libraries) */
 uint8_t fp_buffer[FP_SENSOR_IMAGE_SIZE] FP_FRAME_SECTION __aligned(4);
@@ -69,11 +71,11 @@ void fp_task_simulate(void)
 		task_wait_event(timeout_us);
 }
 
-void fp_clear_finger_context(int idx)
+void fp_clear_finger_context(uint16_t idx)
 {
-	always_memset(fp_template[idx], 0, sizeof(fp_template[0]));
-	always_memset(fp_positive_match_salt[idx], 0,
-		      sizeof(fp_positive_match_salt[0]));
+	OPENSSL_cleanse(fp_template[idx], sizeof(fp_template[0]));
+	OPENSSL_cleanse(fp_positive_match_salt[idx],
+			sizeof(fp_positive_match_salt[0]));
 }
 
 /**
@@ -83,15 +85,13 @@ void fp_clear_finger_context(int idx)
  */
 static void _fp_clear_context(void)
 {
-	int idx;
-
 	templ_valid = 0;
 	templ_dirty = 0;
-	always_memset(fp_buffer, 0, sizeof(fp_buffer));
-	always_memset(fp_enc_buffer, 0, sizeof(fp_enc_buffer));
-	always_memset(user_id, 0, sizeof(user_id));
+	OPENSSL_cleanse(fp_buffer, sizeof(fp_buffer));
+	OPENSSL_cleanse(fp_enc_buffer, sizeof(fp_enc_buffer));
+	OPENSSL_cleanse(user_id, sizeof(user_id));
 	fp_disable_positive_match_secret(&positive_match_secret_state);
-	for (idx = 0; idx < FP_MAX_FINGER_COUNT; idx++)
+	for (uint16_t idx = 0; idx < FP_MAX_FINGER_COUNT; idx++)
 		fp_clear_finger_context(idx);
 }
 
@@ -277,15 +277,10 @@ void fp_disable_positive_match_secret(struct positive_match_secret_state *state)
 	state->deadline.val = 0;
 }
 
-static enum ec_status
-fp_command_read_match_secret(struct host_cmd_handler_args *args)
+enum ec_status fp_read_match_secret(
+	int8_t fgr,
+	uint8_t positive_match_secret[FP_POSITIVE_MATCH_SECRET_BYTES])
 {
-	const auto *params =
-		static_cast<const ec_params_fp_read_match_secret *>(
-			args->params);
-	auto *response =
-		static_cast<ec_response_fp_read_match_secret *>(args->response);
-	int8_t fgr = params->fgr;
 	timestamp_t now = get_time();
 	struct positive_match_secret_state state_copy =
 		positive_match_secret_state;
@@ -308,7 +303,7 @@ fp_command_read_match_secret(struct host_cmd_handler_args *args)
 		return EC_RES_ACCESS_DENIED;
 	}
 
-	if (derive_positive_match_secret(response->positive_match_secret,
+	if (derive_positive_match_secret(positive_match_secret,
 					 fp_positive_match_salt[fgr]) !=
 	    EC_SUCCESS) {
 		CPRINTS("Failed to derive positive match secret for finger %d",
@@ -317,6 +312,27 @@ fp_command_read_match_secret(struct host_cmd_handler_args *args)
 		return EC_RES_ERROR;
 	}
 	CPRINTS("Derived positive match secret for finger %d", fgr);
+
+	return EC_RES_SUCCESS;
+}
+
+static enum ec_status
+fp_command_read_match_secret(struct host_cmd_handler_args *args)
+{
+	const auto *params =
+		static_cast<const ec_params_fp_read_match_secret *>(
+			args->params);
+	auto *response =
+		static_cast<ec_response_fp_read_match_secret *>(args->response);
+	int8_t fgr = params->fgr;
+
+	ec_status ret =
+		fp_read_match_secret(fgr, response->positive_match_secret);
+
+	if (ret != EC_RES_SUCCESS) {
+		return ret;
+	}
+
 	args->response_size = sizeof(*response);
 
 	return EC_RES_SUCCESS;

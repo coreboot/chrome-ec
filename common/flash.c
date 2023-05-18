@@ -6,6 +6,9 @@
 /* Flash memory module for Chrome EC - common functions */
 
 #include "builtin/assert.h"
+#ifdef CONFIG_ZEPHYR
+#include "cbi_flash.h"
+#endif /* CONFIG_ZEPHYR */
 #include "common.h"
 #include "console.h"
 #include "cros_board_info.h"
@@ -666,7 +669,45 @@ int crec_flash_is_erased(uint32_t offset, int size)
 	return 1;
 }
 
-test_mockable int crec_flash_read(int offset, int size, char *data)
+#if defined(CONFIG_ZEPHYR) && defined(CONFIG_PLATFORM_EC_CBI_FLASH)
+/**
+ * Check if the passed section overlaps with CBI section on EC flash.
+ *
+ * @param offset	Flash offset.
+ * @param size		Length of section in bytes.
+ * @return true if there is overlap, or false if there is no overlap.
+ */
+static bool check_cbi_section_overlap(int offset, int size)
+{
+	int cbi_start = CBI_FLASH_OFFSET;
+	int cbi_end = CBI_FLASH_OFFSET + CBI_IMAGE_SIZE;
+	int sec_start = offset;
+	int sec_end = offset + size;
+
+	return !((sec_end <= cbi_start) || (sec_start >= cbi_end));
+}
+
+/**
+ * Hide the information related to CBI(EC flash) if data contains any.
+ *
+ * @param offset	Flash offset.
+ * @param size		Length of section in bytes.
+ * @param data		Flash data.  Must be 32-bit aligned.
+ */
+static void protect_cbi_overlapped_section(int offset, int size, char *data)
+{
+	if (check_cbi_section_overlap(offset, size)) {
+		int cbi_end = CBI_FLASH_OFFSET + CBI_IMAGE_SIZE;
+		int sec_end = offset + size;
+		int cbi_fill_start = MAX(CBI_FLASH_OFFSET, offset);
+		int cbi_fill_size = MIN(cbi_end, sec_end) - cbi_fill_start;
+
+		memset(data + (cbi_fill_start - offset), 0xff, cbi_fill_size);
+	}
+}
+#endif
+
+test_mockable int crec_flash_unprotected_read(int offset, int size, char *data)
 {
 #ifdef CONFIG_MAPPED_STORAGE
 	const char *src;
@@ -681,6 +722,15 @@ test_mockable int crec_flash_read(int offset, int size, char *data)
 #else
 	return crec_flash_physical_read(offset, size, data);
 #endif
+}
+
+int crec_flash_read(int offset, int size, char *data)
+{
+	RETURN_ERROR(crec_flash_unprotected_read(offset, size, data));
+#if defined(CONFIG_ZEPHYR) && defined(CONFIG_PLATFORM_EC_CBI_FLASH)
+	protect_cbi_overlapped_section(offset, size, data);
+#endif
+	return EC_SUCCESS;
 }
 
 static void flash_abort_or_invalidate_hash(int offset, int size)
@@ -728,6 +778,23 @@ int crec_flash_write(int offset, int size, const char *data)
 
 	flash_abort_or_invalidate_hash(offset, size);
 
+#if defined(CONFIG_ZEPHYR) && defined(CONFIG_PLATFORM_EC_CBI_FLASH)
+	if (check_cbi_section_overlap(offset, size)) {
+		int cbi_end = CBI_FLASH_OFFSET + CBI_IMAGE_SIZE;
+		int sec_end = offset + size;
+
+		if (offset < CBI_FLASH_OFFSET) {
+			RETURN_ERROR(crec_flash_physical_write(
+				offset, CBI_FLASH_OFFSET - offset, data));
+		}
+		if (sec_end > cbi_end) {
+			RETURN_ERROR(crec_flash_physical_write(
+				cbi_end, sec_end - cbi_end,
+				data + cbi_end - offset));
+		}
+		return EC_SUCCESS;
+	}
+#endif
 	return crec_flash_physical_write(offset, size, data);
 }
 
@@ -740,6 +807,22 @@ int crec_flash_erase(int offset, int size)
 
 	flash_abort_or_invalidate_hash(offset, size);
 
+#if defined(CONFIG_ZEPHYR) && defined(CONFIG_PLATFORM_EC_CBI_FLASH)
+	if (check_cbi_section_overlap(offset, size)) {
+		int cbi_end = CBI_FLASH_OFFSET + CBI_IMAGE_SIZE;
+		int sec_end = offset + size;
+
+		if (offset < CBI_FLASH_OFFSET) {
+			RETURN_ERROR(crec_flash_physical_erase(
+				offset, CBI_FLASH_OFFSET - offset));
+		}
+		if (sec_end > cbi_end) {
+			RETURN_ERROR(crec_flash_physical_erase(
+				cbi_end, sec_end - cbi_end));
+		}
+		return EC_SUCCESS;
+	}
+#endif
 	return crec_flash_physical_erase(offset, size);
 }
 
@@ -1505,8 +1588,108 @@ DECLARE_HOST_COMMAND(EC_CMD_FLASH_ERASE, flash_command_erase,
 #endif
 );
 
+#ifdef CONFIG_FLASH_PROTECT_DEFERRED
+struct flash_protect_async {
+	uint32_t mask;
+	uint32_t flags;
+
+	volatile enum ec_status rc;
+} __ec_align4;
+
+static struct flash_protect_async flash_protect_async_data = {
+	.rc = EC_RES_SUCCESS
+};
+
+static void crec_flash_set_protect_deferred(void)
+{
+	if (crec_flash_set_protect(flash_protect_async_data.mask,
+				   flash_protect_async_data.flags))
+		flash_protect_async_data.rc = EC_RES_ERROR;
+	else
+		flash_protect_async_data.rc = EC_RES_SUCCESS;
+}
+DECLARE_DEFERRED(crec_flash_set_protect_deferred);
+
+static enum ec_status
+flash_command_protect_v2(struct host_cmd_handler_args *args)
+{
+	const struct ec_params_flash_protect_v2 *p = args->params;
+	struct ec_response_flash_protect *r = args->response;
+	int rc = EC_RES_SUCCESS;
+
+	flash_protect_async_data.mask = p->mask;
+	flash_protect_async_data.flags = p->flags;
+
+	/*
+	 * Handle requesting new flags.  Note that we ignore the return code
+	 * from flash_set_protect(), since errors will be visible to the caller
+	 * via the flags in the response.  (If we returned error, the caller
+	 * wouldn't get the response.)
+	 */
+
+	switch (p->action) {
+	case FLASH_PROTECT_ASYNC:
+		if (p->mask) {
+			rc = flash_protect_async_data.rc;
+			if (rc != EC_RES_SUCCESS) {
+				rc = EC_RES_BUSY;
+				break;
+			}
+			hook_call_deferred(
+				&crec_flash_set_protect_deferred_data,
+				100 * MSEC);
+			/* Not our job to return the result of
+			 * the previous command.
+			 */
+			flash_protect_async_data.rc = EC_RES_BUSY;
+		}
+		return EC_RES_SUCCESS;
+
+	case FLASH_PROTECT_GET_RESULT:
+		/*
+		 * Retrieve the current flags.  The caller can use this
+		 * to determine which of the requested flags could be
+		 * set.  This is cleaner than simply returning error,
+		 * because it provides information to the caller about
+		 * the actual result.
+		 */
+		rc = flash_protect_async_data.rc;
+		if (rc == EC_RES_BUSY || rc == EC_RES_ERROR)
+			break;
+
+		r->flags = crec_flash_get_protect();
+
+		/* Indicate which flags are valid on this platform */
+		r->valid_flags = EC_FLASH_PROTECT_GPIO_ASSERTED |
+				 EC_FLASH_PROTECT_ERROR_STUCK |
+				 EC_FLASH_PROTECT_ERROR_INCONSISTENT |
+				 EC_FLASH_PROTECT_ERROR_UNKNOWN |
+				 crec_flash_physical_get_valid_flags();
+		r->writable_flags =
+			crec_flash_physical_get_writable_flags(r->flags);
+
+		args->response_size = sizeof(*r);
+
+		/* Ready for another command */
+		flash_protect_async_data.rc = EC_RES_SUCCESS;
+		break;
+
+	default:
+		rc = EC_RES_INVALID_PARAM;
+	}
+
+	return rc;
+}
+#endif
+
 static enum ec_status flash_command_protect(struct host_cmd_handler_args *args)
 {
+#if defined(CONFIG_FLASH_PROTECT_DEFERRED)
+	if (args->version == 2) {
+		return flash_command_protect_v2(args);
+	}
+#endif
+
 	const struct ec_params_flash_protect *p = args->params;
 	struct ec_response_flash_protect *r = args->response;
 
@@ -1546,7 +1729,11 @@ static enum ec_status flash_command_protect(struct host_cmd_handler_args *args)
  * EC_VER_MASK(0) once cros_ec driver can send the correct version.
  */
 DECLARE_HOST_COMMAND(EC_CMD_FLASH_PROTECT, flash_command_protect,
-		     EC_VER_MASK(0) | EC_VER_MASK(1));
+		     EC_VER_MASK(0) | EC_VER_MASK(1)
+#ifdef CONFIG_FLASH_PROTECT_DEFERRED
+			     | EC_VER_MASK(2)
+#endif
+);
 
 static enum ec_status
 flash_command_region_info(struct host_cmd_handler_args *args)

@@ -33,10 +33,6 @@ common-$(CONFIG_ACCEL_KX022)+=math_util.o
 common-$(CONFIG_BODY_DETECTION)+=math_util.o
 common-$(CONFIG_TEMP_SENSOR_TMP112)+=math_util.o
 common-$(CONFIG_TEMP_SENSOR_PCT2075)+=math_util.o
-ifneq ($(CORE),cortex-m)
-common-$(CONFIG_AES)+=aes.o
-endif
-common-$(CONFIG_AES_GCM)+=aes-gcm.o
 common-$(CONFIG_CMD_ADC)+=adc.o
 common-$(HAS_TASK_ALS)+=als.o
 common-$(CONFIG_AP_HANG_DETECT)+=ap_hang_detect.o
@@ -71,6 +67,9 @@ common-$(CONFIG_CMD_CHARGEN) += chargen.o
 common-$(CONFIG_CHARGER)+=charger.o
 ifneq ($(CONFIG_CHARGER),)
 common-$(CONFIG_BATTERY)+=charge_state_v2.o
+endif
+ifneq ($(CONFIG_EC_EC_COMM_BATTERY_CLIENT),)
+common-$(CONFIG_BATTERY)+=charger_base.o
 endif
 common-$(CONFIG_CHARGER_PROFILE_OVERRIDE_COMMON)+=charger_profile_override.o
 common-$(CONFIG_CMD_I2CWEDGE)+=i2c_wedge.o
@@ -142,8 +141,9 @@ common-$(CONFIG_PWM)+=pwm.o
 common-$(CONFIG_PWM_KBLIGHT)+=pwm_kblight.o
 common-$(CONFIG_KEYBOARD_BACKLIGHT)+=keyboard_backlight.o
 common-$(CONFIG_RGB_KEYBOARD)+=rgb_keyboard.o
-common-$(CONFIG_RSA)+=rsa.o
+common-$(CONFIG_RNG)+=trng.o
 common-$(CONFIG_ROLLBACK)+=rollback.o
+common-$(CONFIG_RSA)+=rsa.o
 common-$(CONFIG_RWSIG)+=rwsig.o vboot/common.o
 common-$(CONFIG_RWSIG_TYPE_RWSIG)+=vboot/vb21_lib.o
 common-$(CONFIG_MATH_UTIL)+=math_util.o

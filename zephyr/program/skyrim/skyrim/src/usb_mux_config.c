@@ -13,15 +13,9 @@
 #include "ioexpander.h"
 #include "usb_mux.h"
 #include "usbc/usb_muxes.h"
+#include "ztest/usb_mux_config.h"
 
 #include <zephyr/drivers/gpio.h>
-
-#ifdef CONFIG_ZTEST
-
-#undef USB_MUX_ENABLE_ALTERNATIVE
-#define USB_MUX_ENABLE_ALTERNATIVE(x)
-
-#endif /* CONFIG_ZTEST */
 
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ##args)
@@ -30,7 +24,7 @@
  * USB C0 (general) and C1 (just ANX DB) use IOEX pins to
  * indicate flipped polarity to a protection switch.
  */
-static int ioex_set_flip(int port, mux_state_t mux_state)
+test_export_static int ioex_set_flip(int port, mux_state_t mux_state)
 {
 	if (port == 0) {
 		if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
@@ -129,7 +123,7 @@ int board_c1_ps8818_mux_set(const struct usb_mux *me, mux_state_t mux_state)
 	return 0;
 }
 
-static void setup_mux(void)
+test_export_static void setup_mux(void)
 {
 	uint32_t val;
 

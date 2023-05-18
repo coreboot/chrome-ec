@@ -664,7 +664,7 @@ static int anx7447_mux_set(const struct usb_mux *me, mux_state_t mux_state,
 	*ack_required = false;
 
 	/* This driver treats safe mode as none */
-	if (mux_state == USB_PD_MUX_SAFE_MODE)
+	if (mux_state & USB_PD_MUX_SAFE_MODE)
 		mux_state = USB_PD_MUX_NONE;
 
 	cc_direction = mux_state & USB_PD_MUX_POLARITY_INVERTED;
@@ -996,6 +996,8 @@ const struct tcpm_drv anx7447_tcpm_drv = {
 	.get_chip_info = &anx7447_get_chip_info,
 	.set_snk_ctrl = &tcpci_tcpm_set_snk_ctrl,
 	.set_src_ctrl = &tcpci_tcpm_set_src_ctrl,
+	.get_snk_ctrl = &tcpci_tcpm_get_snk_ctrl,
+	.get_src_ctrl = &tcpci_tcpm_get_src_ctrl,
 #ifdef CONFIG_USB_PD_TCPC_LOW_POWER
 	.enter_low_power_mode = &anx7447_tcpc_enter_low_power_mode,
 #endif

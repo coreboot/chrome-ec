@@ -35,6 +35,12 @@
 #include "usb_tbt_alt_mode.h"
 #include "usb_tc_sm.h"
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 43
+
 #ifdef CONFIG_ZEPHYR
 #include "temp_sensor/temp_sensor.h"
 #endif
@@ -142,11 +148,9 @@ static void print_current_state(const int port)
 }
 
 #ifdef CONFIG_ZEPHYR
-static int init_dpm_mutexes(const struct device *dev)
+static int init_dpm_mutexes(void)
 {
 	int port;
-
-	ARG_UNUSED(dev);
 
 	for (port = 0; port < CONFIG_USB_PD_PORT_MAX_COUNT; port++) {
 		k_mutex_init(&dpm[port].vdm_req_mutex);

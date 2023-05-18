@@ -127,6 +127,10 @@ struct charger_drv {
 	/*
 	 * Some chargers can perform VSYS output compensation.  Configure the
 	 * charger IC with the right parameters.
+	 *
+	 * Returns EC_ERROR_UNIMPLEMENTED if further action is required from the
+	 * OCPC control loop (which is typical), EC_SUCCESS if no further action
+	 * is required, or any other status on error.
 	 */
 	enum ec_error_list (*set_vsys_compensation)(int chgnum,
 						    struct ocpc_data *o,
@@ -430,5 +434,18 @@ void print_charger_prochot(int chgnum);
  * Get the value of CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
  */
 int charger_get_min_bat_pct_for_power_on(void);
+
+/* Wake up the task when something important happens */
+void charge_wakeup(void);
+
+/*
+ * Ask the charger for some voltage and current. If either value is 0,
+ * charging is disabled; otherwise it's enabled. Negative values are ignored.
+ *
+ * @param use_curr Use values from requested voltage and current (otherwise use
+ * 0 for both)
+ * @param is_full Battery is full
+ */
+int charge_request(bool use_curr, bool is_full);
 
 #endif /* __CROS_EC_CHARGER_H */

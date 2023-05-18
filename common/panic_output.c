@@ -329,7 +329,7 @@ DISABLE_GCC_WARNING("-Winfinite-recursion")
 #endif
 static void stack_overflow_recurse(int n)
 {
-	ccprintf("+%d", n);
+	panic_printf("+%d", n);
 
 	/*
 	 * Force task context switch, since that's where we do stack overflow
@@ -343,7 +343,7 @@ static void stack_overflow_recurse(int n)
 	 * Do work after the recursion, or else the compiler uses tail-chaining
 	 * and we don't actually consume additional stack.
 	 */
-	ccprintf("-%d", n);
+	panic_printf("-%d", n);
 }
 ENABLE_CLANG_WARNING("-Winfinite-recursion")
 #if __GNUC__ >= 12
@@ -427,10 +427,10 @@ static int command_panicinfo(int argc, const char **argv)
 	struct panic_data *const pdata_ptr = panic_get_data();
 
 	if (pdata_ptr) {
-		ccprintf("Saved panic data:%s\n",
+		ccprintf("Saved panic data: 0x%02X %s\n", pdata_ptr->flags,
 			 (pdata_ptr->flags & PANIC_DATA_FLAG_OLD_CONSOLE ?
 				  "" :
-				  " (NEW)"));
+				  "(NEW)"));
 
 		panic_data_print(pdata_ptr);
 

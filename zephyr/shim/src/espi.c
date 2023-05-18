@@ -599,7 +599,7 @@ int lpc_keyboard_has_char(void)
 	return status;
 }
 
-void lpc_keyboard_put_char(uint8_t chr, int send_irq)
+test_mockable void lpc_keyboard_put_char(uint8_t chr, int send_irq)
 {
 	uint32_t kb_char = chr;
 	int rv;
@@ -692,7 +692,7 @@ static void espi_peripheral_handler(const struct device *dev,
 	}
 }
 
-static int zephyr_shim_setup_espi(const struct device *unused)
+static int zephyr_shim_setup_espi(void)
 {
 	uint32_t enable = 1;
 	static const struct {

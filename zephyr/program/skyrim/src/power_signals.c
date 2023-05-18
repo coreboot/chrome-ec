@@ -3,6 +3,10 @@
  * found in the LICENSE file.
  */
 
+#ifdef CONFIG_ZTEST
+#define CHARGER_SOLO 0
+#endif
+
 #include "ap_power/ap_power.h"
 #include "charger.h"
 #include "chipset.h"
@@ -52,17 +56,22 @@ const struct prochot_cfg prochot_cfg = {
 };
 
 /* Chipset hooks */
-static void baseboard_suspend_change(struct ap_power_ev_callback *cb,
-				     struct ap_power_ev_data data)
+test_export_static void
+baseboard_suspend_change(struct ap_power_ev_callback *cb,
+			 struct ap_power_ev_data data)
 {
 	switch (data.event) {
 	default:
 		return;
 
 	case AP_POWER_SUSPEND:
-		/* Disable display backlight and retimer */
+		/* Disable display backlight */
 		gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_ec_disable_disp_bl),
 				1);
+		break;
+
+	case AP_POWER_SHUTDOWN:
+		/* Retimer disable */
 		ioex_set_level(IOEX_USB_A1_RETIMER_EN, 0);
 		break;
 
@@ -70,6 +79,9 @@ static void baseboard_suspend_change(struct ap_power_ev_callback *cb,
 		/* Enable retimer and display backlight */
 		gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_ec_disable_disp_bl),
 				0);
+		break;
+
+	case AP_POWER_STARTUP:
 		ioex_set_level(IOEX_USB_A1_RETIMER_EN, 1);
 		/* Any retimer tuning can be done after the retimer turns on */
 		break;
@@ -91,7 +103,7 @@ static void handle_prochot(bool asserted, void *data)
 		ccprints("Charger prochot deasserted externally");
 }
 
-static void baseboard_init(void)
+test_export_static void baseboard_init(void)
 {
 	static struct ap_power_ev_callback cb;
 	const struct gpio_dt_spec *gpio_ec_sfh_int_h =
@@ -101,7 +113,8 @@ static void baseboard_init(void)
 
 	/* Setup a suspend/resume callback */
 	ap_power_ev_init_callback(&cb, baseboard_suspend_change,
-				  AP_POWER_RESUME | AP_POWER_SUSPEND);
+				  AP_POWER_STARTUP | AP_POWER_SHUTDOWN |
+					  AP_POWER_RESUME | AP_POWER_SUSPEND);
 	ap_power_ev_add_callback(&cb);
 	/* Enable Power Group interrupts. */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_pg_groupc_s0));

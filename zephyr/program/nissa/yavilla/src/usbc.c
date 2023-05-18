@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "chipset.h"
 #include "driver/charger/sm5803.h"
 #include "driver/tcpm/it83xx_pd.h"
@@ -12,6 +12,7 @@
 #include "hooks.h"
 #include "system.h"
 #include "usb_mux.h"
+#include "watchdog.h"
 
 #include <zephyr/logging/log.h>
 
@@ -76,7 +77,7 @@ static void board_chargers_suspend(struct ap_power_ev_callback *const cb,
 		fn(CHARGER_SECONDARY);
 }
 
-static int board_chargers_suspend_init(const struct device *unused)
+static int board_chargers_suspend_init(void)
 {
 	static struct ap_power_ev_callback cb = {
 		.handler = board_chargers_suspend,
@@ -234,6 +235,25 @@ __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
 	}
 }
 
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+				       int max_ma, int charge_mv)
+{
+	/*
+	 * b:213937755: Yavilla C1 port is OCPC (One Charger IC Per Type-C)
+	 * architecture, The charging current is controlled by increasing Vsys.
+	 * However, the charger SM5803 is not limit current while Vsys
+	 * increasing, we can see the current overshoot to ~3.6A to cause
+	 * C1 port brownout with low power charger (5V). To avoid C1 port
+	 * brownout at low power charger connected. Limit charge current to 2A.
+	 */
+	if (charge_mv <= 5000 && port == 1)
+		charge_ma = MIN(charge_ma, 2000);
+	else
+		charge_ma = charge_ma * 96 / 100;
+
+	charge_set_input_current_limit(charge_ma, charge_mv);
+}
+
 void board_reset_pd_mcu(void)
 {
 	/*
@@ -316,6 +336,15 @@ void board_process_pd_alert(int port)
 	 */
 	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c1_int_odl)))
 		schedule_deferred_pd_interrupt(port);
+
+	/*
+	 * b:273208597: There are some peripheral display docks will
+	 * issue HPDs in the short time. TCPM must wake up pd_task
+	 * continually to service the events. They may cause the
+	 * watchdog to reset. This patch placates watchdog after
+	 * receiving dp_attention.
+	 */
+	watchdog_reload();
 }
 
 int pd_snk_is_vbus_provided(int port)

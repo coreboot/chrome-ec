@@ -83,9 +83,8 @@
 		/* Voltorb LED bat charge */
 		bat-power-state-charge {
 			charge-state = "PWR_STATE_CHARGE";
-			/* Battery percent range (>= Empty, <= 96%) */
-			batt-lvl = <BATTERY_LEVEL_EMPTY
-					(BATTERY_LEVEL_NEAR_FULL - 1)>;
+			/* Battery display percent range (>= Empty, <= 99%) */
+			batt-lvl = <BATTERY_LEVEL_EMPTY 99>;
 
 			color-0 {
 				led-color = <&color_amber>;
@@ -185,27 +184,26 @@
 	pwm-led-pins {
 		compatible = "cros-ec,pwm-led-pins";
 
-		color_off: color-off {
-			led-color = "LED_OFF";
+		battery_led: battery-led {
 			led-id = "EC_LED_ID_BATTERY_LED";
 			led-pwms = <&led_amber &led_blue>;
-			led-values = <0 0>;
-		};
 
-		color_amber: color-amber {
-			led-color = "LED_AMBER";
-			led-id = "EC_LED_ID_BATTERY_LED";
-			br-color = "EC_LED_COLOR_AMBER";
-			led-pwms = <&led_amber &led_blue>;
-			led-values = <100 0>;
-		};
+			color_off: color-off {
+				led-color = "LED_OFF";
+				led-values = <0 0>;
+			};
 
-		color_blue: color_blue {
-			led-color = "LED_BLUE";
-			led-id = "EC_LED_ID_BATTERY_LED";
-			br-color = "EC_LED_COLOR_BLUE";
-			led-pwms = <&led_amber &led_blue>;
-			led-values = <0 100>;
+			color_amber: color-amber {
+				led-color = "LED_AMBER";
+				br-color = "EC_LED_COLOR_AMBER";
+				led-values = <100 0>;
+			};
+
+			color_blue: color_blue {
+				led-color = "LED_BLUE";
+				br-color = "EC_LED_COLOR_BLUE";
+				led-values = <0 100>;
+			};
 		};
 	};
 
@@ -287,4 +285,3 @@
 		     &adc0_chan3_gp42
 		     &adc0_chan8_gpf1>;
 };
-

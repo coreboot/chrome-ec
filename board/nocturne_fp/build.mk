@@ -30,6 +30,7 @@ test-list-y=\
        aes \
        always_memset \
        benchmark \
+       boringssl_crypto \
        cec \
        compile_time_macros \
        cortexm_fpu \
@@ -68,6 +69,7 @@ test-list-y=\
        timer \
        timer_dos \
        tpm_seed_clear \
+       unaligned_access \
        utils \
        utils_str \
 

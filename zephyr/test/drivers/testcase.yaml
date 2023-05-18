@@ -90,6 +90,7 @@ tests:
     - prj.conf
     - ap_mux_control/prj.conf
   drivers.ap_vdm_control:
+    timeout: 360
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_AP_VDM_CONTROL=y
     extra_conf_files:
@@ -202,6 +203,15 @@ tests:
     - CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI=n
     - CONFIG_PLATFORM_EC_HOST_INTERFACE_SHI=y
     - CONFIG_PLATFORM_EC_SWITCH=n
+  drivers.icm42607:
+    extra_configs:
+    - CONFIG_PLATFORM_EC_ACCELGYRO_BMI160=n
+    - CONFIG_LINK_TEST_SUITE_ICM42607=y
+    - CONFIG_PLATFORM_EC_ACCELGYRO_ICM42607=y
+    - CONFIG_PLATFORM_EC_ACCELGYRO_ICM_COMM_I2C=y
+    extra_dtc_overlay_files:
+    - ./boards/native_posix.overlay
+    - ./icm42607/sensor.dts
   drivers.isl923x:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_ISL923X=y
@@ -227,6 +237,11 @@ tests:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_IT8XXX2_HW_SHA256=y
     - CONFIG_PLATFORM_EC_SHA256_HW_ACCELERATE=y
+  drivers.keyboard_8042:
+    extra_configs:
+    - CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_MKBP=n
+    - CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_8042=y
+    - CONFIG_LINK_TEST_SUITE_KEYBOARD_8042=y
   drivers.keyboard_scan:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_KEYBOARD_SCAN=y
@@ -285,6 +300,7 @@ tests:
     - CONFIG_PLATFORM_EC_POWERSEQ_SC7280=n
     - CONFIG_POWER_SEQUENCE_MOCK=y
     - CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP=y
+    - CONFIG_PLATFORM_EC_POWERSEQ_S0IX=y
   drivers.ps8xxx:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_PS8XXX=y
@@ -312,6 +328,14 @@ tests:
     extra_dtc_overlay_files:
     - ./boards/native_posix.overlay
     - ./rt9490/charger.dts
+  drivers.random:
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_RANDOM=y
+    - CONFIG_PLATFORM_EC_RANDOM=y
+    - CONFIG_PLATFORM_EC_HOSTCMD_RAND=y
+    - CONFIG_PLATFORM_EC_CONSOLE_CMD_RAND=y
+    extra_dtc_overlay_files:
+    - ./boards/native_posix.overlay
   drivers.shim_gpio_id:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_SHIM_GPIO_ID=y
@@ -329,6 +353,15 @@ tests:
     - CONFIG_PLATFORM_EC_RTC=y
     - CONFIG_PLATFORM_EC_HOSTCMD=y
     - CONFIG_PLATFORM_EC_HOSTCMD_RTC=y
+  drivers.sm5803:
+    extra_conf_files:
+    - prj.conf
+    - sm5803/prj.conf
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_SM5803=y
+    extra_dtc_overlay_files:
+    - boards/native_posix.overlay
+    - sm5803/sm5803.dts
   drivers.system:
     tags: common system
     extra_configs:
@@ -423,6 +456,8 @@ tests:
     - usbc_tcpc/tcpc_alts.dts
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_USBC_TCPC=y
+    - CONFIG_PLATFORM_EC_USB_PD_DUAL_ROLE_AUTO_TOGGLE=n
+    - CONFIG_PLATFORM_EC_USB_PD_DISCHARGE_TCPC=n
   drivers.usbc_retimer.anx7483:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_USBC_RETIMER_ANX7483=y
@@ -471,3 +506,19 @@ tests:
     - anx7452/usbc.dts
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_ANX7452=y
+  drivers.flash_cbi:
+    extra_dtc_overlay_files:
+    - boards/native_posix.overlay
+    - cbi_flash/binman.dts
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_FLASH=y
+    - CONFIG_PLATFORM_EC_CONSOLE_CMD_FLASH=y
+    - CONFIG_PLATFORM_EC_FLASH_SIZE_BYTES=0x80000
+    - CONFIG_PLATFORM_EC_CBI_FLASH=y
+  drivers.body_detection:
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_BODY_DETECTION=y
+    - CONFIG_PLATFORM_EC_BODY_DETECTION=y
+    - CONFIG_PLATFORM_EC_BODY_DETECTION_ALWAYS_ENABLE_IN_S0=y
+    - CONFIG_PLATFORM_EC_BODY_DETECTION_NOTIFY_MODE_CHANGE=y
+    - CONFIG_PLATFORM_EC_GESTURE_HOST_DETECTION=y

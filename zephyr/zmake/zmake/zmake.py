@@ -12,6 +12,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from typing import Dict, Optional, Set, Union
 
@@ -178,6 +179,7 @@ class Zmake:
             self.zephyr_base = (
                 self.checkout / "src" / "third_party" / "zephyr" / "main"
             )
+        self.zephyr_base = self.zephyr_base.resolve()
 
         if modules_dir:
             self.module_paths = zmake.modules.locate_from_directory(modules_dir)
@@ -383,6 +385,7 @@ class Zmake:
                 transformed_module = {module_name: new_path}
                 self.module_paths.update(transformed_module)
 
+            self.projects_dir = checkout.projects_dir
             self.zephyr_base = checkout.zephyr_dir
 
             self.logger.info("Building projects at %s", checkout.ref)
@@ -478,6 +481,7 @@ class Zmake:
                         ),
                         "ZEPHYR_BASE": str(self.zephyr_base),
                         "ZMAKE_INCLUDE_DIR": str(generated_include_dir),
+                        "PYTHON_PREFER": sys.executable,
                         **(
                             {"EXTRA_EC_VERSION_FLAGS": "--static"}
                             if static_version
@@ -520,9 +524,9 @@ class Zmake:
                     base_config |= zmake.build_config.BuildConfig(
                         kconfig_defs={"CONFIG_COMPILER_SAVE_TEMPS": "y"}
                     )
-                if allow_warnings:
+                if not allow_warnings:
                     base_config |= zmake.build_config.BuildConfig(
-                        cmake_defs={"ALLOW_WARNINGS": "ON"}
+                        kconfig_defs={"CONFIG_COMPILER_WARNINGS_AS_ERRORS": "y"}
                     )
                 if extra_cflags:
                     base_config |= zmake.build_config.BuildConfig(

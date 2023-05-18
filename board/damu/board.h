@@ -8,6 +8,9 @@
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
 
+/* Save some flash space */
+#undef CONFIG_CHARGE_DEBUG
+
 #define VARIANT_KUKUI_JACUZZI
 #define VARIANT_KUKUI_BATTERY_SMART
 #define VARIANT_KUKUI_CHARGER_ISL9238
@@ -18,6 +21,9 @@
 #endif /* SECTION_IS_RW */
 
 #include "baseboard.h"
+
+/* Disable deferred (async) flash protect*/
+#undef CONFIG_FLASH_PROTECT_DEFERRED
 
 #undef CONFIG_CHIPSET_POWER_SEQ_VERSION
 #define CONFIG_CHIPSET_POWER_SEQ_VERSION 1

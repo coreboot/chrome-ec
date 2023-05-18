@@ -41,23 +41,31 @@ enum led_color {
 
 static void led_set_color_battery(enum led_color color)
 {
-	enum gpio_signal amber_led, white_led;
+	enum gpio_signal amber_led1, white_led1, amber_led2, white_led2;
 
-	amber_led = GPIO_LED_1_L;
-	white_led = GPIO_LED_2_L;
+	amber_led1 = GPIO_LED_1_L;
+	white_led1 = GPIO_LED_2_L;
+	amber_led2 = GPIO_LED_3_L;
+	white_led2 = GPIO_LED_4_L;
 
 	switch (color) {
 	case LED_WHITE:
-		gpio_set_level(white_led, BAT_LED_ON);
-		gpio_set_level(amber_led, BAT_LED_OFF);
+		gpio_set_level(white_led1, BAT_LED_ON);
+		gpio_set_level(amber_led1, BAT_LED_OFF);
+		gpio_set_level(white_led2, BAT_LED_ON);
+		gpio_set_level(amber_led2, BAT_LED_OFF);
 		break;
 	case LED_AMBER:
-		gpio_set_level(white_led, BAT_LED_OFF);
-		gpio_set_level(amber_led, BAT_LED_ON);
+		gpio_set_level(white_led1, BAT_LED_OFF);
+		gpio_set_level(amber_led1, BAT_LED_ON);
+		gpio_set_level(white_led2, BAT_LED_OFF);
+		gpio_set_level(amber_led2, BAT_LED_ON);
 		break;
 	case LED_OFF:
-		gpio_set_level(white_led, BAT_LED_OFF);
-		gpio_set_level(amber_led, BAT_LED_OFF);
+		gpio_set_level(white_led1, BAT_LED_OFF);
+		gpio_set_level(amber_led1, BAT_LED_OFF);
+		gpio_set_level(white_led2, BAT_LED_OFF);
+		gpio_set_level(amber_led2, BAT_LED_OFF);
 		break;
 	default:
 		break;
@@ -112,7 +120,7 @@ static void led_set_battery(void)
 	battery_ticks++;
 
 	if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND) &&
-	    charge_get_state() != PWR_STATE_CHARGE) {
+	    led_pwr_get_state() != PWR_STATE_CHARGE) {
 		suspend_ticks++;
 
 		led_set_color_battery(
@@ -123,7 +131,7 @@ static void led_set_battery(void)
 		return;
 	}
 
-	switch (charge_get_state()) {
+	switch (led_pwr_get_state()) {
 	case PWR_STATE_CHARGE:
 		/* Always indicate when charging, even in suspend. */
 		set_active_port_color(LED_AMBER);

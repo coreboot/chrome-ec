@@ -91,7 +91,7 @@ void fp_task_simulate(void);
  *
  * @param idx the index of the template to clear.
  */
-void fp_clear_finger_context(int idx);
+void fp_clear_finger_context(uint16_t idx);
 
 /**
  * Clear all fingerprint templates associated with the current user id and
@@ -138,6 +138,16 @@ int fp_enable_positive_match_secret(uint16_t fgr,
  * @param state the state of positive match secret, e.g. readable or not.
  */
 void fp_disable_positive_match_secret(struct positive_match_secret_state *state);
+
+/**
+ * Read the match secret from the positive match salt.
+ *
+ * @param fgr the index of positive match salt.
+ * @param positive_match_secret the match secret that derived from the salt.
+ */
+enum ec_status fp_read_match_secret(
+	int8_t fgr,
+	uint8_t positive_match_secret[FP_POSITIVE_MATCH_SECRET_BYTES]);
 
 #ifdef __cplusplus
 }

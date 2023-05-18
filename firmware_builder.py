@@ -49,6 +49,7 @@ BINARY_SIZE_BOARDS = [
     "moli",
     "prism",
     "shotzo",
+    "taranza",
 ]
 
 
@@ -327,6 +328,18 @@ def test(opts):
         shutil.rmtree(host_dir)
 
         cmd = ["make", "TEST_ASAN=y", target, f"-j{opts.cpus}"]
+        print(f"# Running {' '.join(cmd)}.")
+        subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
+
+        # Use the x86_64-cros-linux-gnu- compiler also
+        cmd = [
+            "make",
+            "clean",
+            "HOST_CROSS_COMPILE=x86_64-cros-linux-gnu-",
+            "TEST_ASAN=y",
+            target,
+            f"-j{opts.cpus}",
+        ]
         print(f"# Running {' '.join(cmd)}.")
         subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 

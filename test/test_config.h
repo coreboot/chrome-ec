@@ -31,8 +31,7 @@
 #endif
 
 #if defined(TEST_AES) || defined(TEST_CRYPTO_BENCHMARK)
-#define CONFIG_AES
-#define CONFIG_AES_GCM
+#define CONFIG_BORINGSSL_CRYPTO
 #endif
 
 #ifdef TEST_BASE32
@@ -110,10 +109,13 @@
 
 #if defined(TEST_FPSENSOR) || defined(TEST_FPSENSOR_STATE) || \
 	defined(TEST_FPSENSOR_CRYPTO)
-#define CONFIG_AES
-#define CONFIG_AES_GCM
+#define CONFIG_BORINGSSL_CRYPTO
 #define CONFIG_ROLLBACK_SECRET_SIZE 32
 #define CONFIG_SHA256
+#endif
+
+#if defined(TEST_BORINGSSL_CRYPTO)
+#define CONFIG_BORINGSSL_CRYPTO
 #endif
 
 #ifdef TEST_ROLLBACK_SECRET
@@ -609,6 +611,10 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_GIVE_BACK
 #endif
 #endif /* TEST_USB_PD || TEST_USB_PD_GIVEBACK || TEST_USB_PD_REV30 */
+
+#ifdef TEST_USB_PD_CONSOLE
+#define CONFIG_USB_PD_EPR
+#endif
 
 #ifdef TEST_USB_PPC
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1

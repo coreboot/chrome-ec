@@ -44,30 +44,25 @@
 			gpios = <&gpiod 0 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
 
-		/*
-		 * The pinmap utility does not currently support ACTIVE_LOW
-		 * flag. So it is set here.
-		 */
-		/delete-node/ usb_c0_tcpc_int_odl;
-		/delete-node/ usb_c1_tcpc_int_odl;
-		gpio_usb_c0_tcpc_int_odl: usb_c0_tcpc_int_odl {
-			gpios = <&gpioe 0 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
-			enum-name = "GPIO_USB_C0_TCPC_INT_ODL";
+		/* Overrides for generated.dtsi */
+		ec_edp_bl_en {
+			gpios = <&gpiod 3 GPIO_OUTPUT_LOW>;
 		};
-		gpio_usb_c1_tcpc_int_odl: usb_c1_tcpc_int_odl {
-			gpios = <&gpio3 4 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
-			enum-name = "GPIO_USB_C1_TCPC_INT_ODL";
+		en_pp5000_fan {
+			gpios = <&gpio6 1 GPIO_OUTPUT_LOW>;
 		};
-		/delete-node/ usb_c0_tcpc_rst_odl;
-		/delete-node/ usb_c1_rt_rst_r_odl;
-		gpio_usb_c0_tcpc_rst_odl: usb_c0_tcpc_rst_odl {
+		usb_c0_tcpc_rst_odl {
 			gpios = <&gpio6 7 (GPIO_ODR_HIGH | GPIO_ACTIVE_LOW)>;
 		};
-		gpio_usb_c1_rt_rst_r_odl: usb_c1_rt_rst_r_odl {
+		usb_c1_rt_rst_r_odl {
 			gpios = <&gpio7 4 (GPIO_ODR_HIGH | GPIO_ACTIVE_LOW)>;
 		};
-		ec_wp_l {
-			gpios = <&gpioa 1 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
+	};
+
+	/* Special I2C port attribute */
+	named-i2c-ports {
+		ec_i2c_usb_c1_tcp {
+			dynamic-speed;
 		};
 	};
 
@@ -254,9 +249,11 @@
 		rst-gpios = <&gpio7 4 (GPIO_OPEN_DRAIN | GPIO_ACTIVE_LOW)>;
 	};
 
-	rt1716_tcpc_port1: rt1716@4e {
+	tcpc_rt1716_port1: rt1716@4e {
 		compatible = "richtek,rt1715-tcpc";
 		reg = <0x4e>;
+		tcpc-flags = <(TCPC_FLAGS_TCPCI_REV2_0 |
+			TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V)>;
 		/* a duplicate of the <&gpio_usb_c1_tcpc_int_odl> node in
 		 * "named-gpios". This is the Zephyr preferred style,
 		 * the "named-gpios" node will be dealt with at a later date.
@@ -288,24 +285,25 @@
 		irq = <&int_usb_c1_bc12>;
 	};
 
+	ppc_ktu1125_port1: ktu1125@38 {
+		compatible = "kinetic,ktu1125";
+		status = "okay";
+		reg = <0x38>;
+		is-alt;
+	};
+
 	ppc_port1_nxp: nx20p348x@72 {
 		compatible = "nxp,nx20p348x";
 		status = "okay";
 		reg = <0x72>;
 	};
 
-	ppc_port1_syv: ppc_syv@40 {
+	ppc_syv_port1: ppc_syv@40 {
 		compatible = "silergy,syv682x";
 		status = "okay";
 		reg = <0x40>;
 		frs_en_gpio = <&gpio_usb_c1_frs_en>;
 		is-alt;
-	};
-
-	usb_c1_anx7452_retimer: usb-c1-anx7452-retimer@10{
-		compatible = "analogix,anx7452";
-		reg = <0x10>;
-		usb-en-pin = <&gpio_usb_c1_rt_rst_r_odl>;
 	};
 };
 

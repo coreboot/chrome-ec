@@ -10,6 +10,9 @@
 
 #define CONFIG_LTO
 
+/* Disable deferred (async) flash protect*/
+#undef CONFIG_FLASH_PROTECT_DEFERRED
+
 /* Configure the flash */
 #undef CONFIG_RO_SIZE
 #undef CONFIG_FW_PSTATE_OFF
@@ -144,6 +147,7 @@
 /* Enable control of SPI over USB */
 #define CONFIG_USB_SPI
 #define CONFIG_USB_SPI_BUFFER_SIZE 2048
+#define CONFIG_USB_SPI_FLASH_EXTENSIONS
 #define CONFIG_SPI_CONTROLLER
 #define CONFIG_STM32_SPI1_CONTROLLER
 #define CONFIG_SPI_MUTABLE_DEVICE_LIST

@@ -8,9 +8,6 @@
 #include "builtin/assert.h"
 #include "common.h"
 #include "console.h"
-#ifdef CONFIG_LIBCRYPTOC
-#include "cryptoc/util.h"
-#endif
 #include "flash.h"
 #include "hooks.h"
 #include "host_command.h"
@@ -24,6 +21,18 @@
 #include "task.h"
 #include "trng.h"
 #include "util.h"
+
+#ifdef CONFIG_ROLLBACK_SECRET_SIZE
+#ifdef CONFIG_BORINGSSL_CRYPTO
+#include "openssl/mem.h"
+#define secure_clear(buffer, size) OPENSSL_cleanse(buffer, size)
+#elif defined(CONFIG_LIBCRYPTOC)
+#include "cryptoc/util.h"
+#define secure_clear(buffer, size) always_memset(buffer, 0, size)
+#else
+#error One of CONFIG_BORINGSSL_CRYPTO or CONFIG_LIBCRYPTOC should be defined
+#endif
+#endif
 
 /* Console output macros */
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
@@ -73,7 +82,7 @@ static uint32_t unlock_rollback(void)
 static void clear_rollback(struct rollback_data *data)
 {
 #ifdef CONFIG_ROLLBACK_SECRET_SIZE
-	always_memset(data->secret, 0, sizeof(data->secret));
+	secure_clear(data->secret, sizeof(data->secret));
 #endif
 }
 
@@ -153,9 +162,9 @@ failed:
 }
 
 #ifdef CONFIG_ROLLBACK_SECRET_SIZE
-test_mockable int rollback_get_secret(uint8_t *secret)
+test_mockable enum ec_error_list rollback_get_secret(uint8_t *secret)
 {
-	int ret = EC_ERROR_UNKNOWN;
+	enum ec_error_list ret = EC_ERROR_UNKNOWN;
 	struct rollback_data data;
 
 	if (get_latest_rollback(&data) < 0)
@@ -222,7 +231,7 @@ static int add_entropy(uint8_t *dst, const uint8_t *src, const uint8_t *add,
 #ifdef CONFIG_ROLLBACK_SECRET_LOCAL_ENTROPY_SIZE
 failed:
 #endif
-	always_memset(&ctx, 0, sizeof(ctx));
+	secure_clear(&ctx, sizeof(ctx));
 	return ret;
 }
 #else
@@ -373,16 +382,28 @@ DECLARE_CONSOLE_COMMAND(rollbackupdate, command_rollback_update, "min_version",
 #ifdef CONFIG_ROLLBACK_SECRET_SIZE
 static int command_rollback_add_entropy(int argc, const char **argv)
 {
+	uint8_t rand[CONFIG_ROLLBACK_SECRET_SIZE];
+	const uint8_t *data;
 	int len;
 
-	if (argc < 2)
-		return EC_ERROR_PARAM_COUNT;
+	if (argc < 2) {
+		if (!IS_ENABLED(CONFIG_RNG))
+			return EC_ERROR_PARAM_COUNT;
 
-	len = strlen(argv[1]);
+		trng_init();
+		trng_rand_bytes(rand, sizeof(rand));
+		trng_exit();
 
-	return rollback_add_entropy(argv[1], len);
+		data = rand;
+		len = sizeof(rand);
+	} else {
+		data = argv[1];
+		len = strlen(argv[1]);
+	}
+
+	return rollback_add_entropy(data, len);
 }
-DECLARE_CONSOLE_COMMAND(rollbackaddent, command_rollback_add_entropy, "data",
+DECLARE_CONSOLE_COMMAND(rollbackaddent, command_rollback_add_entropy, "[data]",
 			"Add entropy to rollback block");
 
 #ifdef CONFIG_RNG

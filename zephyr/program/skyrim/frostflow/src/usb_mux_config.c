@@ -5,24 +5,19 @@
 
 /* Frostflow board-specific USB-C mux configuration */
 
+#include "ap_power/ap_power.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
 #include "driver/retimer/ps8811.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "i2c/i2c.h"
 #include "ioexpander.h"
 #include "timer.h"
 #include "usb_mux.h"
 #include "usbc/usb_muxes.h"
 #include "util.h"
-
-#ifdef CONFIG_ZTEST
-/* Verify this is still needed for b/247151116. */
-#undef I2C_PORT_NODELABEL
-#define I2C_PORT_NODELABEL(x) 0
-
-#endif /* CONFIG_ZTEST */
 
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ##args)
@@ -36,7 +31,7 @@ struct ps8811_reg_val {
  * USB C0 (general) and C1 (just ps8815 DB) use IOEX pins to
  * indicate flipped polarity to a protection switch.
  */
-static int ioex_set_flip(int port, mux_state_t mux_state)
+test_export_static int ioex_set_flip(int port, mux_state_t mux_state)
 {
 	if (port == 0) {
 		if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
@@ -181,8 +176,26 @@ void baseboard_a1_retimer_setup(void)
 }
 DECLARE_DEFERRED(baseboard_a1_retimer_setup);
 
-void board_chipset_startup(void)
+test_export_static void board_resume_change(struct ap_power_ev_callback *cb,
+					    struct ap_power_ev_data data)
 {
-	hook_call_deferred(&baseboard_a1_retimer_setup_data, 500 * MSEC);
+	switch (data.event) {
+	default:
+		return;
+
+	case AP_POWER_STARTUP:
+		/* Any retimer tuning can be done after the retimer turns on */
+		hook_call_deferred(&baseboard_a1_retimer_setup_data, 20 * MSEC);
+		break;
+	}
 }
-DECLARE_HOOK(HOOK_INIT, board_chipset_startup, HOOK_PRIO_DEFAULT);
+
+void board_callback_init(void)
+{
+	static struct ap_power_ev_callback cb;
+
+	/* Setup a resume callback */
+	ap_power_ev_init_callback(&cb, board_resume_change, AP_POWER_STARTUP);
+	ap_power_ev_add_callback(&cb);
+}
+DECLARE_HOOK(HOOK_INIT, board_callback_init, HOOK_PRIO_DEFAULT);

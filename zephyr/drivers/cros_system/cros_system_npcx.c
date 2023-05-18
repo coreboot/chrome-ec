@@ -10,6 +10,7 @@
 #include "soc_gpio.h"
 #include "soc_miwu.h"
 #include "system.h"
+#include "util.h"
 
 #include <zephyr/arch/arm/aarch32/cortex_m/cmsis.h>
 #include <zephyr/drivers/gpio.h>
@@ -280,9 +281,9 @@ system_npcx_hibernate_by_lfw_in_last_ram(const struct device *dev,
 static inline int system_npcx_get_ram_blk_by_lfw_addr(char *address)
 {
 	return NPCX_RAM_BLOCK_COUNT -
-	       ceiling_fraction((uint32_t)address -
-					CONFIG_CROS_EC_PROGRAM_MEMORY_BASE,
-				NPCX_RAM_BLOCK_SIZE);
+	       DIV_ROUND_UP((uint32_t)address -
+				    CONFIG_CROS_EC_PROGRAM_MEMORY_BASE,
+			    NPCX_RAM_BLOCK_SIZE);
 }
 
 static void system_npcx_hibernate_by_disable_ram(const struct device *dev,
@@ -631,9 +632,8 @@ DEVICE_DEFINE(cros_system_npcx_0, "CROS_SYSTEM", cros_system_npcx_init, NULL,
 
 PINCTRL_DT_DEFINE(DBG_NODE);
 
-static int jtag_init(const struct device *dev)
+static int jtag_init(void)
 {
-	ARG_UNUSED(dev);
 	struct dbg_reg *const dbg_reg_base = HAL_DBG_REG_BASE_ADDR;
 	const struct pinctrl_dev_config *pcfg =
 		PINCTRL_DT_DEV_CONFIG_GET(DBG_NODE);

@@ -10,12 +10,27 @@
 
 #include <common.h>
 
+#ifdef CONFIG_ZEPHYR
+/*
+ * Zephyr driver is responsible for initializing, enabling and disabling
+ * hardware. In this case, trng_init() and trng_exit() does nothing.
+ */
+#define trng_init()
+#define trng_exit()
+#else
 /**
  * Initialize the true random number generator.
  *
  * Not supported by all platforms.
  **/
 void trng_init(void);
+
+/**
+ * Generate true random number.
+ *
+ * Not supported by all platforms.
+ **/
+uint32_t trng_rand(void);
 
 /**
  * Shutdown the true random number generator.
@@ -26,13 +41,7 @@ void trng_init(void);
  * Not supported by all platforms.
  **/
 void trng_exit(void);
-
-/**
- * Retrieve a 32 bit random value.
- *
- * Not supported on all platforms.
- **/
-uint32_t trng_rand(void);
+#endif /* CONFIG_ZEPHYR */
 
 /**
  * Output len random bytes into buffer.

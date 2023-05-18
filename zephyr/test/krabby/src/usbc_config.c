@@ -4,12 +4,14 @@
  */
 
 #include "adc.h"
+#include "baseboard_usbc_config.h"
 #include "charge_manager.h"
 #include "driver/ppc/syv682x.h"
 #include "driver/ppc/syv682x_public.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_syv682x.h"
 #include "i2c/i2c.h"
+#include "test_state.h"
 #include "usb_pd.h"
 #include "usbc_ppc.h"
 
@@ -17,7 +19,7 @@
 #include <zephyr/drivers/emul.h>
 #include <zephyr/ztest.h>
 
-bool ppc_sink_enabled(int port)
+static bool ppc_sink_enabled(int port)
 {
 	const struct emul *emul = (port == 0) ?
 					  EMUL_DT_GET(DT_NODELABEL(ppc0_emul)) :
@@ -59,7 +61,7 @@ ZTEST(usbc_config, test_set_active_charge_port)
 	zassert_false(ppc_sink_enabled(0), NULL);
 	zassert_true(ppc_sink_enabled(1), NULL);
 
-	/* turn of sourcing, sinking port 0 */
+	/* turn off sourcing, sinking port 0 */
 	pd_power_supply_reset(0);
 	zassert_ok(board_set_active_charge_port(0), NULL);
 	zassert_true(ppc_sink_enabled(0), NULL);
@@ -128,4 +130,5 @@ static void reset_ppc_state(void *fixture)
 	board_set_active_charge_port(CHARGE_PORT_NONE);
 }
 
-ZTEST_SUITE(usbc_config, NULL, NULL, reset_ppc_state, NULL, NULL);
+ZTEST_SUITE(usbc_config, krabby_predicate_post_main, NULL, reset_ppc_state,
+	    NULL, NULL);

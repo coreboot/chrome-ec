@@ -903,9 +903,17 @@ void system_common_pre_init(void)
 		uint32_t reason;
 		uint32_t info;
 		uint8_t exception;
+		struct panic_data *pdata;
 
 		panic_get_reason(&reason, &info, &exception);
-		if (reason != PANIC_SW_WATCHDOG)
+		pdata = panic_get_data();
+		/* The watchdog panic info may have already been initialized by
+		 * the watchdog handler, so only set it here if the panic reason
+		 * is not a watchdog or the panic info has already been read,
+		 * i.e. an old watchdog panic.
+		 */
+		if (reason != PANIC_SW_WATCHDOG || !pdata ||
+		    pdata->flags & PANIC_DATA_FLAG_OLD_HOSTCMD)
 			panic_set_reason(PANIC_SW_WATCHDOG, 0, 0);
 	}
 
@@ -1834,15 +1842,6 @@ __overridable int board_write_mac_addr(const char *mac_addr)
 		return EC_ERROR_UNIMPLEMENTED;
 }
 #endif /* CONFIG_MAC_ADDR_LEN */
-
-__attribute__((weak)) void clock_enable_module(enum module_id module,
-					       int enable)
-{
-	/*
-	 * Default weak implementation - for chips that don't support this
-	 * function.
-	 */
-}
 
 __test_only void system_common_reset_state(void)
 {

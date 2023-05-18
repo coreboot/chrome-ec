@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "chipset.h"
 #include "driver/charger/sm5803.h"
 #include "driver/tcpm/it83xx_pd.h"
@@ -76,7 +76,7 @@ static void board_chargers_suspend(struct ap_power_ev_callback *const cb,
 		fn(CHARGER_SECONDARY);
 }
 
-static int board_chargers_suspend_init(const struct device *unused)
+static int board_chargers_suspend_init(void)
 {
 	static struct ap_power_ev_callback cb = {
 		.handler = board_chargers_suspend,

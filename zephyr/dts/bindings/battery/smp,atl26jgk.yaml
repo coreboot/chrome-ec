@@ -14,9 +14,11 @@ properties:
 
   # Fuel gauge
   manuf_name:
-    default: "SMP-ATL3.61"
+    default: "SMP-ATL-3.61"
   device_name:
     default: "DELL 26JGK"
+  ship_mode_wb_support:
+    default: 1
   ship_mode_reg_addr:
     default: 0x44
   ship_mode_reg_data:

@@ -11,6 +11,7 @@
 #endif
 
 #include "baseboard_usbc_config.h"
+#include "battery.h"
 #include "console.h"
 #include "driver/ppc/nx20p348x.h"
 #include "driver/tcpm/anx7447.h"
@@ -53,16 +54,20 @@ DECLARE_HOOK(HOOK_INIT, board_usb_mux_init, HOOK_PRIO_INIT_I2C + 1);
 
 void board_tcpc_init(void)
 {
-	/* Only reset TCPC if not sysjump */
-	if (!system_jumped_late()) {
+	/* Reset TCPC if we only we have a battery connected, or the SINK
+	 * gpio to the PPC might be reset and cause brown-out.
+	 */
+	if (!system_jumped_late() && battery_is_present() == BP_YES) {
 		/* TODO(crosbug.com/p/61098): How long do we need to wait? */
 		board_reset_pd_mcu();
 	}
 
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	/* Do not enable TCPC interrupt on port 1 if not type-c */
 	if (corsola_get_db_type() != CORSOLA_DB_TYPEC) {
 		tcpc_config[USBC_PORT_C1].irq_gpio.port = NULL;
 	}
+#endif /* CONFIG_USB_PD_PORT_MAX_COUNT > 1 */
 
 	/* Enable BC1.2 interrupts. */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_bc12));
@@ -82,7 +87,13 @@ __override int board_rt1718s_init(int port)
 {
 	static bool gpio_initialized;
 
-	if (!system_jumped_late() && !gpio_initialized) {
+	/* Reset TCPC sink/source control when it's a power-on reset or has a
+	 * battery. Do not alter the carried GPIO status or this might stop PPC
+	 * sinking and brown-out the system when battery disconnected.
+	 */
+	if (!system_jumped_late() && !gpio_initialized &&
+	    (battery_is_present() == BP_YES ||
+	     (system_get_reset_flags() & EC_RESET_FLAG_POWER_ON))) {
 		/* set GPIO 1~3 as push pull, as output, output low. */
 		rt1718s_gpio_set_flags(port, RT1718S_GPIO1, GPIO_OUT_LOW);
 		rt1718s_gpio_set_flags(port, RT1718S_GPIO2, GPIO_OUT_LOW);
@@ -92,11 +103,18 @@ __override int board_rt1718s_init(int port)
 
 	/* gpio1 low, gpio2 output high when receiving frs signal */
 	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_GPIO1_VBUS_CTRL,
-					  RT1718S_GPIO1_VBUS_CTRL_FRS_RX_VBUS,
+					  RT1718S_GPIO_VBUS_CTRL_FRS_RX_VBUS,
 					  0));
-	RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_GPIO2_VBUS_CTRL,
-					  RT1718S_GPIO2_VBUS_CTRL_FRS_RX_VBUS,
-					  0xFF));
+	/* GPIO1 EN_SNK high when received TCPCI SNK enabled command */
+	RETURN_ERROR(rt1718s_update_bits8(
+		port, RT1718S_GPIO1_VBUS_CTRL,
+		RT1718S_GPIO_VBUS_CTRL_ENA_SNK_VBUS_GPIO, 0xFF));
+	/* GPIO2 EN_SRC high when received TCPCI SRC enabled command */
+	RETURN_ERROR(rt1718s_update_bits8(
+		port, RT1718S_GPIO2_VBUS_CTRL,
+		RT1718S_GPIO_VBUS_CTRL_FRS_RX_VBUS |
+			RT1718S_GPIO_VBUS_CTRL_ENA_SRC_VBUS_GPIO,
+		0xFF));
 
 	/* Trigger GPIO 1/2 change when FRS signal received */
 	RETURN_ERROR(rt1718s_update_bits8(
@@ -118,6 +136,7 @@ __override int board_rt1718s_init(int port)
 	return EC_SUCCESS;
 }
 
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 __override int board_rt1718s_set_frs_enable(int port, int enable)
 {
 	if (port == USBC_PORT_C1)
@@ -130,6 +149,7 @@ __override int board_rt1718s_set_frs_enable(int port, int enable)
 				       enable ? GPIO_OUT_HIGH : GPIO_OUT_LOW);
 	return EC_SUCCESS;
 }
+#endif /* CONFIG_USB_PD_PORT_MAX_COUNT > 1 */
 
 void board_reset_pd_mcu(void)
 {
@@ -144,8 +164,10 @@ void board_reset_pd_mcu(void)
 	 */
 	msleep(2);
 
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	/* reset C1 RT1718s */
 	rt1718s_sw_reset(USBC_PORT_C1);
+#endif /* CONFIG_USB_PD_PORT_MAX_COUNT > 1 */
 }
 
 /* Used by Vbus discharge common code with CONFIG_USB_PD_DISCHARGE */
@@ -154,14 +176,20 @@ int board_vbus_source_enabled(int port)
 	return ppc_is_sourcing_vbus(port);
 }
 
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 __override int board_rt1718s_set_snk_enable(int port, int enable)
 {
-	if (port == USBC_PORT_C1) {
-		rt1718s_gpio_set_level(port, GPIO_EN_USB_C1_SINK, enable);
-	}
+	rt1718s_gpio_set_level(port, GPIO_EN_USB_C1_SINK, enable);
 
 	return EC_SUCCESS;
 }
+__override int board_rt1718s_set_src_enable(int port, int enable)
+{
+	rt1718s_gpio_set_level(port, GPIO_EN_USB_C1_SOURCE, enable);
+
+	return EC_SUCCESS;
+}
+#endif /* CONFIG_USB_PD_PORT_MAX_COUNT > 1 */
 
 int board_set_active_charge_port(int port)
 {
@@ -253,9 +281,11 @@ __override int board_get_vbus_voltage(int port)
 		if (rv)
 			return 0;
 		break;
+#if CONFIG_USB_PD_PORT_MAX_COUNT > 1
 	case USBC_PORT_C1:
 		rt1718s_get_adc(port, RT1718S_ADC_VBUS1, &voltage);
 		break;
+#endif /* CONFIG_USB_PD_PORT_MAX_COUNT > 1 */
 	default:
 		return 0;
 	}

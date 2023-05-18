@@ -65,6 +65,9 @@ config LINK_TEST_SUITE_HOST_COMMANDS
 config LINK_TEST_SUITE_HOST_COMMAND_READ_MEMMAP
 	bool "Link and test the host command read memmap tests"
 
+config LINK_TEST_SUITE_ICM42607
+	bool "Link and test the icm42607 tests"
+
 config LINK_TEST_SUITE_ISL923X
 	bool "Link and test the isl923x tests"
 
@@ -79,6 +82,9 @@ config LINK_TEST_SUITE_IT8XXX2_HW_SHA256
 	help
 	  Include the it8xxx2_hw_sha256 test suite
 	  in the binary.
+
+config LINK_TEST_SUITE_KEYBOARD_8042
+	bool "Link and test the keyboard_8042 tests"
 
 config LINK_TEST_SUITE_KEYBOARD_SCAN
 	bool "Link and test the keyboard_scan tests"
@@ -119,6 +125,11 @@ config LINK_TEST_SUITE_RT1718S
 
 config LINK_TEST_SUITE_RT9490
 	bool "Link and test the rt9490 tests"
+
+config LINK_TEST_SUITE_RANDOM
+	bool "Link and run random (trng) tests"
+	help
+	  Include the test suite exercising RNG code in the binary.
 
 config LINK_TEST_SUITE_SHIM_GPIO_ID
 	bool "Link and run the gpio tests"
@@ -241,5 +252,13 @@ config LINK_TEST_SUITE_ANX7452
 	help
 	  Include the test suite of ANX7452 retimer in the binary. The tests
 	  use I2C emulation.
+
+config LINK_TEST_SUITE_SM5803
+	bool "Link and test the SM5803 charger tests"
+
+config LINK_TEST_SUITE_BODY_DETECTION
+	bool "Link and test the body detection tests"
+	help
+	  Include the test suite exercising body detection behaviors in the binary.
 
 source "Kconfig.zephyr"
