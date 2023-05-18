@@ -2955,10 +2955,10 @@ static int process_arv_config_spi_addr_mode(struct transfer_descriptor *td,
 
 		switch (msg.mode) {
 		case ap_ro_spi_config_3byte:
-			fprintf(stderr, "3byte\n");
+			printf("3byte\n");
 			break;
 		case ap_ro_spi_config_4byte:
-			fprintf(stderr, "4byte\n");
+			printf("4byte\n");
 			break;
 		default:
 			fprintf(stderr, "unknown spi mode\n");
