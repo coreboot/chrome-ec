@@ -203,6 +203,8 @@ enum vendor_cmd_cc {
 
 	VENDOR_CC_GET_TIME = 70,
 
+	VENDOR_CC_GET_BOOT_TRACE = 71,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 
