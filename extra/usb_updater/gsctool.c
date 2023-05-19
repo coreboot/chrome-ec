@@ -470,6 +470,9 @@ static const struct option_container cmd_line_options[] = {
 	{{"board_id", optional_argument, NULL, 'i'},
 	 "[ID[:FLAGS]]%Get or set Info1 board ID fields. ID could be 32 bit "
 	 "hex or 4 character string."},
+	{{"boot_trace", optional_argument, NULL, 'J'},
+	 "[erase]%Retrieve boot trace from the chip, optionally erasing "
+	 "the trace buffer"},
 	{{"ccd_lock", no_argument, NULL, 'k'},
 	 "Lock CCD"},
 	{{"flog", optional_argument, NULL, 'L'},
@@ -480,7 +483,7 @@ static const struct option_container cmd_line_options[] = {
 	 "all available logs."},
 	{{"machine", no_argument, NULL, 'M'},
 	 "Output in a machine-friendly way. "
-	 "Effective with -b, -f, -i, -r, and -O."},
+	 "Effective with -b, -f, -i, -J, -r, and -O."},
 	{{"tpm_mode", optional_argument, NULL, 'm'},
 	 "[enable|disable]%Change or query tpm_mode"},
 	{{"serial", required_argument, NULL, 'n'},
@@ -4021,6 +4024,78 @@ static int process_get_time(struct transfer_descriptor *td)
 	return 0;
 }
 
+/*
+ * The below variables and array must be held in sync with the appropriate
+ * counterparts in defined in ti50:common/{hil,capsules}/src/boot_tracer.rs.
+ */
+#define MAX_BOOT_TRACE_SIZE 54
+#define TIMESPAN_EVENT 0
+#define TIME_SHIFT 11
+#define MAX_TIME_MS  (1 << TIME_SHIFT)
+static const char * const boot_tracer_stages[] = {
+	"Timespan", /* This one will not be displayed separately. */
+	"ProjectStart",
+	"EcRstAsserted",
+	"EcRstDeasserted",
+	"TpmRstAsserted",
+	"TmRstDeasserted"
+};
+
+static int process_get_boot_trace(struct transfer_descriptor *td,
+				  bool erase,
+				  bool show_machine_output)
+{
+	/* zero means no erase, 1 means erase. */
+	uint32_t payload = htobe32(erase);
+	uint16_t boot_trace[MAX_BOOT_TRACE_SIZE/sizeof(uint16_t)];
+	size_t response_size = sizeof(boot_trace);
+	uint32_t rv;
+	uint64_t timespan = 0;
+	size_t i;
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_BOOT_TRACE, &payload,
+				 sizeof(payload), &boot_trace, &response_size);
+
+	if (rv != VENDOR_RC_SUCCESS) {
+		printf("Get boot trace failed. (%X)\n", rv);
+		return 1;
+	}
+
+	if (response_size == 0)
+		return 0; /* Trace is empty. */
+
+	if (!show_machine_output)
+		printf("    got %zd bytes back:\n", response_size);
+	if (response_size > 0) {
+		for (i = 0; i < response_size/sizeof(uint16_t); i++) {
+			uint16_t entry = boot_trace[i];
+			uint16_t event_id = entry >> TIME_SHIFT;
+			uint16_t delta_time = entry & ((1 << TIME_SHIFT) - 1);
+
+			if (show_machine_output) {
+				printf(" %04x", entry);
+				continue;
+			}
+
+			if (event_id >= ARRAY_SIZE(boot_tracer_stages)) {
+				printf("Unknown event %d\n", event_id);
+				continue;
+			}
+
+			if (event_id == TIMESPAN_EVENT) {
+				timespan += (uint64_t)delta_time * MAX_TIME_MS;
+				continue;
+			}
+			printf(" %20s: %4" PRId64 " ms\n",
+			       boot_tracer_stages[event_id],
+			       timespan + delta_time);
+			timespan = 0;
+		}
+		printf("\n");
+	}
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	struct transfer_descriptor td;
@@ -4088,6 +4163,8 @@ int main(int argc, char *argv[])
 	int set_factory_config = 0;
 	uint64_t factory_config_arg = 0;
 	int get_time = 0;
+	bool get_boot_trace = false;
+	bool erase_boot_trace = false;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4238,6 +4315,17 @@ int main(int argc, char *argv[])
 				errorcnt++;
 			}
 			break;
+		case 'J':
+			get_boot_trace = true;
+			if (!optarg)
+				break;
+			if (strncasecmp(optarg, "erase", strlen(optarg))) {
+				fprintf(stderr, "Invalid boot trace argument: "
+					"\"%s\"\n", optarg);
+				errorcnt++;
+			}
+			erase_boot_trace = true;
+			break;
 		case 'L':
 			get_flog = 1;
 			if (optarg)
@@ -4386,6 +4474,7 @@ int main(int argc, char *argv[])
 	    !get_apro_hash &&
 	    !get_apro_boot_status &&
 	    !get_boot_mode &&
+	    !get_boot_trace &&
 	    !get_clog &&
 	    !get_console &&
 	    !get_flog &&
@@ -4562,6 +4651,11 @@ int main(int argc, char *argv[])
 	if (get_time) {
 		exit(process_get_time(&td));
 	}
+
+	if (get_boot_trace)
+		exit(process_get_boot_trace(&td,
+					    erase_boot_trace,
+					    show_machine_output));
 
 	if (data || show_fw_ver) {
 
