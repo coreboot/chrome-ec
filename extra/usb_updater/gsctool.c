@@ -480,7 +480,7 @@ static const struct option_container cmd_line_options[] = {
 	 "all available logs."},
 	{{"machine", no_argument, NULL, 'M'},
 	 "Output in a machine-friendly way. "
-	 "Effective with -b, -f, -i, and -O."},
+	 "Effective with -b, -f, -i, -r, and -O."},
 	{{"tpm_mode", optional_argument, NULL, 'm'},
 	 "[enable|disable]%Change or query tpm_mode"},
 	{{"serial", required_argument, NULL, 'n'},
@@ -3406,9 +3406,11 @@ static int process_endorsement_seed(struct transfer_descriptor *td,
  * Retrieve the RMA authentication challenge from the Cr50, print out the
  * challenge on the console, then prompt the user for the authentication code,
  * and send the code back to Cr50. The Cr50 would report if the code matched
- * its expectations or not.
+ * its expectations or not. Output in a machine-friendly format if
+ * show_machine_output is true.
  */
-static void process_rma(struct transfer_descriptor *td, const char *authcode)
+static void process_rma(struct transfer_descriptor *td, const char *authcode,
+			bool show_machine_output)
 {
 	char rma_response[81];
 	size_t response_size = sizeof(rma_response);
@@ -3416,8 +3418,8 @@ static void process_rma(struct transfer_descriptor *td, const char *authcode)
 	size_t auth_size = 0;
 
 	if (!authcode) {
-		send_vendor_command(td, VENDOR_CC_RMA_CHALLENGE_RESPONSE,
-				    NULL, 0, rma_response, &response_size);
+		send_vendor_command(td, VENDOR_CC_RMA_CHALLENGE_RESPONSE, NULL,
+				    0, rma_response, &response_size);
 
 		if (response_size == 1) {
 			fprintf(stderr, "error %d\n", rma_response[0]);
@@ -3426,16 +3428,21 @@ static void process_rma(struct transfer_descriptor *td, const char *authcode)
 			exit(update_error);
 		}
 
-		printf("Challenge:");
-		for (i = 0; i < response_size; i++) {
-			if (!(i % 5)) {
-				if (!(i % 40))
-					printf("\n");
-				printf(" ");
+		if (show_machine_output) {
+			rma_response[response_size] = '\0';
+			print_machine_output("CHALLENGE", "%s", rma_response);
+		} else {
+			printf("Challenge:");
+			for (i = 0; i < response_size; i++) {
+				if (!(i % 5)) {
+					if (!(i % 40))
+						printf("\n");
+					printf(" ");
+				}
+				printf("%c", rma_response[i]);
 			}
-			printf("%c", rma_response[i]);
+			printf("\n");
 		}
-		printf("\n");
 		return;
 	}
 
@@ -4482,7 +4489,7 @@ int main(int argc, char *argv[])
 		exit(process_endorsement_seed(&td, endorsement_seed_str));
 
 	if (rma)
-		process_rma(&td, rma_auth_code);
+		process_rma(&td, rma_auth_code, show_machine_output);
 
 	if (factory_mode)
 		process_factory_mode(&td, factory_mode_arg);
