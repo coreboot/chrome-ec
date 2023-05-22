@@ -123,7 +123,7 @@ static void rammus_led_set_power(void)
 
 static void rammus_led_set_battery(void)
 {
-	enum charge_state chg_state = charge_get_state();
+	enum led_pwr_state chg_state = led_pwr_get_state();
 	int charge_percent = charge_get_percent();
 	static unsigned int charge_ticks;
 
@@ -131,7 +131,7 @@ static void rammus_led_set_battery(void)
 	switch (chg_state) {
 	case PWR_STATE_DISCHARGE:
 		if ((charge_get_flags() & CHARGE_FLAG_EXTERNAL_POWER) &&
-		    charge_percent >= BATTERY_LEVEL_NEAR_FULL)
+		    charge_percent >= CONFIG_BATT_HOST_FULL_FACTOR)
 			config_battery_led(LED_STATE_FULL);
 		else
 			config_battery_led(LED_STATE_DISCHARGE);

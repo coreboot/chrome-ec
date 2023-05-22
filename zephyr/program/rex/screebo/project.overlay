@@ -13,6 +13,8 @@
 #include "../usbc.dtsi"
 
 /* Screebo project DTS includes */
+#include "led_pins.dtsi"
+#include "led_policy.dtsi"
 #include "temp_sensors.dtsi"
 
 / {
@@ -89,8 +91,8 @@
 	};
 
 	batteries {
-		default_battery: cdt_c340152 {
-			compatible = "cdt,c340152", "battery-smart";
+		default_battery: celxpert_c340152 {
+			compatible = "celxpert,c340152", "battery-smart";
 		};
 	};
 };
@@ -114,9 +116,9 @@
 };
 
 &i2c3_0 {
-	usb_c1_hb_retimer: jhl9040r-c0@58 {
+	usb_c1_hb_retimer: jhl9040r-c1@54 {
 		compatible = "intel,jhl9040r";
-		reg = <0x58>;
+		reg = <0x54>;
 		ls-en-pin = <&gpio_usb_c1_rt_3p3_sx_en>;
 		int-pin = <&gpio_usb_c1_rt_int_odl>;
 		reset-pin = <&ioex_usb_c1_rt_rst_ls_l>;

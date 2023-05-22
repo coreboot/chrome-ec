@@ -16,8 +16,10 @@ extern "C" {
 
 #include "common.h"
 #include "console.h"
+#include "ec_commands.h"
 #include "math_util.h"
 #include "stack_trace.h"
+#include "string.h"
 
 #ifdef CONFIG_ZTEST
 #include "ec_tasks.h"
@@ -114,6 +116,19 @@ extern "C" {
 			}                                                    \
 	} while (0)
 
+#define TEST_ASSERT_ARRAY_NE(s, d, n)                                         \
+	do {                                                                  \
+		if (n < 0)                                                    \
+			return EC_ERROR_UNKNOWN;                              \
+                                                                              \
+		if (memcmp(&s[0], &d[0], n) == 0) {                           \
+			ccprintf("%s:%d: ASSERT_ARRAY_NE failed\n", __FILE__, \
+				 __LINE__);                                   \
+			task_dump_trace();                                    \
+			return EC_ERROR_UNKNOWN;                              \
+		}                                                             \
+	} while (0)
+
 #define TEST_ASSERT_MEMSET(d, c, n)                                        \
 	do {                                                               \
 		if (n < 0)                                                 \
@@ -191,8 +206,9 @@ void test_print_result(void);
 int test_get_error_count(void);
 
 /* Simulates host command sent from the host */
-int test_send_host_command(int command, int version, const void *params,
-			   int params_size, void *resp, int resp_size);
+enum ec_status test_send_host_command(int command, int version,
+				      const void *params, int params_size,
+				      void *resp, int resp_size);
 
 /* Optionally defined interrupt generator entry point */
 void interrupt_generator(void);

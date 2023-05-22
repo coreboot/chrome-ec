@@ -9,11 +9,12 @@
 #include "charge_manager.h"
 #include "charge_ramp.h"
 #include "charge_state.h"
-#include "charge_state_v2.h"
 #include "charger.h"
 #include "cros_board_info.h"
 #include "cros_cbi.h"
 #include "driver/charger/isl9241.h"
+#include "driver/ppc/ktu1125_public.h"
+#include "driver/ppc/nx20p348x.h"
 #include "driver/tcpm/rt1718s.h"
 #include "driver/usb_mux/amd_fp6.h"
 #include "gpio/gpio_int.h"
@@ -22,6 +23,7 @@
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
 #include "usbc/usb_muxes.h"
+#include "usbc_config.h"
 #include "usbc_ppc.h"
 
 #include <zephyr/drivers/gpio.h>
@@ -29,22 +31,11 @@
 #define CPRINTSUSB(format, args...) cprints(CC_USBCHARGE, format, ##args)
 #define CPRINTFUSB(format, args...) cprintf(CC_USBCHARGE, format, ##args)
 
-/* USB-A ports */
-enum usba_port { USBA_PORT_A0 = 0, USBA_PORT_A1, USBA_PORT_COUNT };
-
-/* USB-C ports */
-enum usbc_port { USBC_PORT_C0 = 0, USBC_PORT_C1, USBC_PORT_COUNT };
-BUILD_ASSERT(USBC_PORT_COUNT == CONFIG_USB_PD_PORT_MAX_COUNT);
-
 static void usbc_interrupt_init(void)
 {
 	/* Enable PPC interrupts. */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_ppc));
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1_ppc));
-
-	/* Enable SBU fault interrupts */
-	gpio_enable_dt_interrupt(
-		GPIO_INT_FROM_NODELABEL(int_usb_c0_c1_sbu_fault));
 }
 DECLARE_HOOK(HOOK_INIT, usbc_interrupt_init, HOOK_PRIO_POST_I2C);
 
@@ -57,7 +48,7 @@ int board_set_active_charge_port(int port)
 		CPRINTSUSB("Disabling all charger ports");
 
 		/* Disable all ports. */
-		for (i = 0; i < ppc_cnt; i++) {
+		for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 			/*
 			 * Do not return early if one fails otherwise we can
 			 * get into a boot loop assertion failure.
@@ -83,7 +74,7 @@ int board_set_active_charge_port(int port)
 	 * Turn off the other ports' sink path FETs, before enabling the
 	 * requested charge port.
 	 */
-	for (i = 0; i < ppc_cnt; i++) {
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 		if (i == port)
 			continue;
 
@@ -98,18 +89,6 @@ int board_set_active_charge_port(int port)
 	}
 
 	return EC_SUCCESS;
-}
-
-void sbu_fault_interrupt(enum gpio_signal signal)
-{
-	/*
-	 * TODO: b/275609315
-	 * Determine if the fault happened on C0 or C1
-	 */
-	int port = 0;
-
-	CPRINTSUSB("C%d: SBU fault", port);
-	pd_handle_overcurrent(port);
 }
 
 void usb_pd_soc_interrupt(enum gpio_signal signal)

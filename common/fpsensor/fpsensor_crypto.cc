@@ -3,18 +3,22 @@
  * found in the LICENSE file.
  */
 
+#include "aes_gcm_helpers.h"
 #include "fpsensor_crypto.h"
 #include "fpsensor_state.h"
 #include "fpsensor_utils.h"
+#include "openssl/aes.h"
+#include "openssl/mem.h"
+
+/* These must be included after the "openssl/aes.h" */
+#include "crypto/fipsmodule/aes/internal.h"
+#include "crypto/fipsmodule/modes/internal.h"
 
 extern "C" {
-#include "aes-gcm.h"
-#include "aes.h"
-#include "cryptoc/util.h"
 #include "rollback.h"
 #include "sha256.h"
+#include "util.h"
 
-test_export_static int get_ikm(uint8_t *ikm);
 test_mockable void compute_hmac_sha256(uint8_t *output, const uint8_t *key,
 				       const int key_len,
 				       const uint8_t *message,
@@ -22,14 +26,14 @@ test_mockable void compute_hmac_sha256(uint8_t *output, const uint8_t *key,
 }
 
 #include <stdbool.h>
-#if !defined(CONFIG_AES) || !defined(CONFIG_AES_GCM) || \
-	!defined(CONFIG_ROLLBACK_SECRET_SIZE)
-#error "fpsensor requires AES, AES_GCM and ROLLBACK_SECRET_SIZE"
+
+#if !defined(CONFIG_BORINGSSL_CRYPTO) || !defined(CONFIG_ROLLBACK_SECRET_SIZE)
+#error "fpsensor requires CONFIG_BORINGSSL_CRYPTO and ROLLBACK_SECRET_SIZE"
 #endif
 
-test_export_static int get_ikm(uint8_t *ikm)
+test_export_static enum ec_error_list get_ikm(uint8_t *ikm)
 {
-	int ret;
+	enum ec_error_list ret;
 
 	if (!fp_tpm_seed_is_set()) {
 		CPRINTS("Seed hasn't been set.");
@@ -72,9 +76,10 @@ static void hkdf_extract(uint8_t *prk, const uint8_t *salt, size_t salt_size,
 	compute_hmac_sha256(prk, salt, salt_size, ikm, ikm_size);
 }
 
-static int hkdf_expand_one_step(uint8_t *out_key, size_t out_key_size,
-				uint8_t *prk, size_t prk_size, uint8_t *info,
-				size_t info_size)
+static enum ec_error_list hkdf_expand_one_step(uint8_t *out_key,
+					       size_t out_key_size,
+					       uint8_t *prk, size_t prk_size,
+					       uint8_t *info, size_t info_size)
 {
 	uint8_t key_buf[SHA256_DIGEST_SIZE];
 	uint8_t message_buf[SHA256_DIGEST_SIZE + 1];
@@ -96,13 +101,14 @@ static int hkdf_expand_one_step(uint8_t *out_key, size_t out_key_size,
 	compute_hmac_sha256(key_buf, prk, prk_size, message_buf, info_size + 1);
 
 	memcpy(out_key, key_buf, out_key_size);
-	always_memset(key_buf, 0, sizeof(key_buf));
+	OPENSSL_cleanse(key_buf, sizeof(key_buf));
 
 	return EC_SUCCESS;
 }
 
-int hkdf_expand(uint8_t *out_key, size_t L, const uint8_t *prk, size_t prk_size,
-		const uint8_t *info, size_t info_size)
+enum ec_error_list hkdf_expand(uint8_t *out_key, size_t L, const uint8_t *prk,
+			       size_t prk_size, const uint8_t *info,
+			       size_t info_size)
 {
 	/*
 	 * "Expand" step of HKDF.
@@ -151,16 +157,17 @@ int hkdf_expand(uint8_t *out_key, size_t L, const uint8_t *prk, size_t prk_size,
 		out_key += block_size;
 		L -= block_size;
 	}
-	always_memset(T_buffer, 0, sizeof(T_buffer));
-	always_memset(info_buffer, 0, sizeof(info_buffer));
+	OPENSSL_cleanse(T_buffer, sizeof(T_buffer));
+	OPENSSL_cleanse(info_buffer, sizeof(info_buffer));
 	return EC_SUCCESS;
 #undef HASH_LEN
 }
 
-int derive_positive_match_secret(uint8_t *output,
-				 const uint8_t *input_positive_match_salt)
+enum ec_error_list
+derive_positive_match_secret(uint8_t *output,
+			     const uint8_t *input_positive_match_salt)
 {
-	int ret;
+	enum ec_error_list ret;
 	uint8_t ikm[CONFIG_ROLLBACK_SECRET_SIZE + sizeof(tpm_seed)];
 	uint8_t prk[SHA256_DIGEST_SIZE];
 	static const char info_prefix[] = "positive_match_secret for user ";
@@ -182,7 +189,7 @@ int derive_positive_match_secret(uint8_t *output,
 	/* "Extract" step of HKDF. */
 	hkdf_extract(prk, input_positive_match_salt,
 		     FP_POSITIVE_MATCH_SALT_BYTES, ikm, sizeof(ikm));
-	always_memset(ikm, 0, sizeof(ikm));
+	OPENSSL_cleanse(ikm, sizeof(ikm));
 
 	memcpy(info, info_prefix, strlen(info_prefix));
 	memcpy(info + strlen(info_prefix), user_id, sizeof(user_id));
@@ -190,7 +197,7 @@ int derive_positive_match_secret(uint8_t *output,
 	/* "Expand" step of HKDF. */
 	ret = hkdf_expand(output, FP_POSITIVE_MATCH_SECRET_BYTES, prk,
 			  sizeof(prk), info, sizeof(info));
-	always_memset(prk, 0, sizeof(prk));
+	OPENSSL_cleanse(prk, sizeof(prk));
 
 	/* Check that secret is not full of 0x00 or 0xff. */
 	if (bytes_are_trivial(output, FP_POSITIVE_MATCH_SECRET_BYTES)) {
@@ -201,9 +208,9 @@ int derive_positive_match_secret(uint8_t *output,
 	return ret;
 }
 
-int derive_encryption_key(uint8_t *out_key, const uint8_t *salt)
+enum ec_error_list derive_encryption_key(uint8_t *out_key, const uint8_t *salt)
 {
-	int ret;
+	enum ec_error_list ret;
 	uint8_t ikm[CONFIG_ROLLBACK_SECRET_SIZE + sizeof(tpm_seed)];
 	uint8_t prk[SHA256_DIGEST_SIZE];
 
@@ -217,10 +224,11 @@ int derive_encryption_key(uint8_t *out_key, const uint8_t *salt)
 		return ret;
 	}
 
+	/* TODO (b/276344630): Replace with boringssl version. */
 	/* "Extract step of HKDF. */
 	hkdf_extract(prk, salt, FP_CONTEXT_ENCRYPTION_SALT_BYTES, ikm,
 		     sizeof(ikm));
-	always_memset(ikm, 0, sizeof(ikm));
+	OPENSSL_cleanse(ikm, sizeof(ikm));
 
 	/*
 	 * Only 1 "expand" step of HKDF since the size of the "info" context
@@ -229,14 +237,16 @@ int derive_encryption_key(uint8_t *out_key, const uint8_t *salt)
 	 */
 	ret = hkdf_expand_one_step(out_key, SBP_ENC_KEY_LEN, prk, sizeof(prk),
 				   (uint8_t *)user_id, sizeof(user_id));
-	always_memset(prk, 0, sizeof(prk));
+	OPENSSL_cleanse(prk, sizeof(prk));
 
 	return ret;
 }
 
-int aes_gcm_encrypt(const uint8_t *key, int key_size, const uint8_t *plaintext,
-		    uint8_t *ciphertext, int text_size, const uint8_t *nonce,
-		    int nonce_size, uint8_t *tag, int tag_size)
+enum ec_error_list aes_gcm_encrypt(const uint8_t *key, int key_size,
+				   const uint8_t *plaintext,
+				   uint8_t *ciphertext, int text_size,
+				   const uint8_t *nonce, int nonce_size,
+				   uint8_t *tag, int tag_size)
 {
 	int res;
 	AES_KEY aes_key;
@@ -247,6 +257,7 @@ int aes_gcm_encrypt(const uint8_t *key, int key_size, const uint8_t *plaintext,
 		return EC_ERROR_INVAL;
 	}
 
+	/* TODO(b/279950931): Use public boringssl API. */
 	res = AES_set_encrypt_key(key, 8 * key_size, &aes_key);
 	if (res) {
 		CPRINTS("Failed to set encryption key: %d", res);
@@ -265,10 +276,11 @@ int aes_gcm_encrypt(const uint8_t *key, int key_size, const uint8_t *plaintext,
 	return EC_SUCCESS;
 }
 
-int aes_gcm_decrypt(const uint8_t *key, int key_size, uint8_t *plaintext,
-		    const uint8_t *ciphertext, int text_size,
-		    const uint8_t *nonce, int nonce_size, const uint8_t *tag,
-		    int tag_size)
+enum ec_error_list aes_gcm_decrypt(const uint8_t *key, int key_size,
+				   uint8_t *plaintext,
+				   const uint8_t *ciphertext, int text_size,
+				   const uint8_t *nonce, int nonce_size,
+				   const uint8_t *tag, int tag_size)
 {
 	int res;
 	AES_KEY aes_key;
@@ -279,6 +291,7 @@ int aes_gcm_decrypt(const uint8_t *key, int key_size, uint8_t *plaintext,
 		return EC_ERROR_INVAL;
 	}
 
+	/* TODO(b/279950931): Use public boringssl API. */
 	res = AES_set_encrypt_key(key, 8 * key_size, &aes_key);
 	if (res) {
 		CPRINTS("Failed to set decryption key: %d", res);

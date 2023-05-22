@@ -9,7 +9,7 @@
 #include "board.h"
 #include "button.h"
 #include "charge_manager.h"
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "charger.h"
 #include "driver/ppc/syv682x_public.h"
 #include "driver/tcpm/it83xx_pd.h"
@@ -54,6 +54,11 @@ const struct adc_t adc_channels[] = {
 				.factor_div = ADC_READ_MAX + 1,
 				.shift = 0,
 				.channel = CHIP_ADC_CH3 },
+	[ADC_VBUS] = { .name = "VBUS", /* 113/1113 voltage divider */
+		       .factor_mul = ADC_MAX_MVOLT * 1113,
+		       .factor_div = (ADC_READ_MAX + 1) * 113,
+		       .shift = 0,
+		       .channel = CHIP_ADC_CH4 },
 	[ADC_TEMP_SENSOR_3] = { .name = "TEMP_SENSOR3",
 				.factor_mul = ADC_MAX_MVOLT,
 				.factor_div = ADC_READ_MAX + 1,
@@ -85,7 +90,6 @@ struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		.i2c_port = I2C_PORT_USB_C0,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
-		.frs_en = GPIO_EC_USB_C0_FRS_EN,
 		.drv = &syv682x_drv,
 	},
 };
@@ -110,8 +114,6 @@ const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A0_VBUS,
 	GPIO_EN_USB_A1_VBUS,
-	GPIO_EN_USB_A2_VBUS,
-	GPIO_EN_USB_A3_VBUS,
 };
 
 /* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
@@ -156,8 +158,6 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 void board_init(void)
 {
-	gpio_enable_interrupt(GPIO_BJ_ADP_PRESENT);
-
 	/* Enable PPC interrupt */
 	gpio_enable_interrupt(GPIO_USB_C0_FAULT_L);
 }
@@ -217,50 +217,6 @@ void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
  * - CHARGE_PORT_NONE will never be selected.
  */
 
-/* List of BJ adapters */
-enum bj_adapter {
-	BJ_NONE,
-	BJ_65W_19V,
-};
-
-/* Barrel-jack power adapter ratings. */
-static const struct charge_port_info bj_adapters[] = {
-	[BJ_NONE] = { .current = 0, .voltage = 0 },
-	[BJ_65W_19V] = { .current = 3420, .voltage = 19000 },
-};
-#define BJ_ADP_RATING_DEFAULT BJ_65W_19V /* BJ power ratings default */
-#define ADP_DEBOUNCE_MS 1000 /* Debounce time for BJ plug/unplug */
-
-/* Debounced connection state of the barrel jack */
-static int8_t bj_adp_connected = -1;
-static void adp_connect_deferred(void)
-{
-	const struct charge_port_info *pi;
-	int connected = gpio_get_level(GPIO_BJ_ADP_PRESENT);
-
-	/* Debounce */
-	if (connected == bj_adp_connected)
-		return;
-
-	if (connected) {
-		pi = &bj_adapters[BJ_ADP_RATING_DEFAULT];
-	} else {
-		/* No barrel-jack, zero out this power supply */
-		pi = &bj_adapters[BJ_NONE];
-	}
-	/* This will result in a call to board_set_active_charge_port */
-	charge_manager_update_charge(CHARGE_SUPPLIER_DEDICATED,
-				     DEDICATED_CHARGE_PORT, pi);
-	bj_adp_connected = connected;
-}
-DECLARE_DEFERRED(adp_connect_deferred);
-
-/* IRQ for BJ plug/unplug. It shouldn't be called if BJ is the power source. */
-void adp_connect_interrupt(enum gpio_signal signal)
-{
-	hook_call_deferred(&adp_connect_deferred_data, ADP_DEBOUNCE_MS * MSEC);
-}
-
 int board_set_active_charge_port(int port)
 {
 	const int active_port = charge_manager_get_active_charge_port();
@@ -278,8 +234,6 @@ int board_set_active_charge_port(int port)
 		return EC_ERROR_INVAL;
 
 	if (!chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
-		int bj_requested;
-
 		if (charge_manager_get_active_charge_port() != CHARGE_PORT_NONE)
 			/* Change is only permitted while the system is off */
 			return EC_ERROR_INVAL;
@@ -290,23 +244,14 @@ int board_set_active_charge_port(int port)
 		 * reinitializing after sysjump). Reject requests that aren't
 		 * in sync with our outputs.
 		 */
-		bj_requested = port == CHARGE_PORT_BARRELJACK;
-		if (bj_adp_connected != bj_requested)
-			return EC_ERROR_INVAL;
+
+		/* TODO: add this part after two type-c function is finished. */
 	}
 
 	CPRINTUSB("New charger p%d", port);
 
 	switch (port) {
 	case CHARGE_PORT_TYPEC0:
-		ppc_vbus_sink_enable(USBC_PORT_C0, 1);
-		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_OD, 0);
-		break;
-	case CHARGE_PORT_BARRELJACK:
-		/* Make sure BJ adapter is sourcing power */
-		if (!gpio_get_level(GPIO_BJ_ADP_PRESENT))
-			return EC_ERROR_INVAL;
-		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_OD, 1);
 		ppc_vbus_sink_enable(USBC_PORT_C0, 1);
 		break;
 	default:
@@ -329,25 +274,15 @@ static void board_charge_manager_init(void)
 			charge_manager_update_charge(j, i, NULL);
 	}
 
-	port = gpio_get_level(GPIO_BJ_ADP_PRESENT) ? CHARGE_PORT_BARRELJACK :
-						     CHARGE_PORT_TYPEC0;
-	CPRINTUSB("Power source is p%d (%s)", port,
-		  port == CHARGE_PORT_TYPEC0 ? "USB-C" : "BJ");
+	port = CHARGE_PORT_TYPEC0;
+	CPRINTUSB("Power source is p%d (USB-C)", port);
 
 	/* Initialize the power source supplier */
 	switch (port) {
 	case CHARGE_PORT_TYPEC0:
 		typec_set_input_current_limit(port, 3000, 5000);
 		break;
-	case CHARGE_PORT_BARRELJACK:
-		charge_manager_update_charge(
-			CHARGE_SUPPLIER_DEDICATED, DEDICATED_CHARGE_PORT,
-			&bj_adapters[BJ_ADP_RATING_DEFAULT]);
-		break;
 	}
-
-	/* Report charge state from the barrel jack. */
-	adp_connect_deferred();
 }
 DECLARE_HOOK(HOOK_INIT, board_charge_manager_init,
 	     HOOK_PRIO_INIT_CHARGE_MANAGER + 1);
@@ -374,23 +309,11 @@ const struct i2c_port_t i2c_ports[] = {
 	  .scl = GPIO_EC_I2C_EEPROM_SCL,
 	  .sda = GPIO_EC_I2C_EEPROM_SDA },
 
-	{ .name = "hdmi2_edid",
-	  .port = I2C_PORT_HDMI2_EDID,
-	  .kbps = 100,
-	  .scl = GPIO_EC_I2C_HDMI2_EDID_SCL,
-	  .sda = GPIO_EC_I2C_HDMI2_EDID_SDA },
-
 	{ .name = "usbc0",
 	  .port = I2C_PORT_USB_C0,
 	  .kbps = 1000,
 	  .scl = GPIO_EC_I2C_USB_C0_SCL,
 	  .sda = GPIO_EC_I2C_USB_C0_SDA },
-
-	{ .name = "hdmi2_src_ddc",
-	  .port = I2C_PORT_HDMI2_SRC_DDC,
-	  .kbps = 100,
-	  .scl = GPIO_EC_I2C_HDMI2_SRC_DDC_SCL,
-	  .sda = GPIO_EC_I2C_HDMI2_SRC_DDC_SDA },
 
 	{ .name = "hdmi1_edid",
 	  .port = I2C_PORT_HDMI1_EDID,

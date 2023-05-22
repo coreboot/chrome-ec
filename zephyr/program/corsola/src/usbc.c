@@ -6,7 +6,7 @@
 /* Corsola baseboard-specific USB-C configuration */
 
 #include "baseboard_usbc_config.h"
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "extpower.h"
@@ -33,9 +33,8 @@ static bool tasks_inited;
 /* Baseboard */
 static void baseboard_init(void)
 {
-#ifdef CONFIG_VARIANT_CORSOLA_USBA
-	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usba));
-#endif
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_xhci));
+
 	/* If CCD mode has enabled before init, force the ccd_interrupt. */
 	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_ccd_mode_odl))) {
 		ccd_interrupt(GPIO_CCD_MODE_ODL);
@@ -46,7 +45,7 @@ DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_PRE_DEFAULT);
 
 __override uint8_t board_get_usb_pd_port_count(void)
 {
-	/* This function returns the PORT_COUNT+1 when HDMI db is connected.
+	/* This function returns the PORT_COUNT when HDMI db is connected.
 	 * This is a trick to ensure the usb_mux_set being set properley.
 	 * HDMI display functions using the USB virtual mux to * communicate
 	 * with the DP bridge.
@@ -66,7 +65,9 @@ __override uint8_t board_get_usb_pd_port_count(void)
 
 uint8_t board_get_adjusted_usb_pd_port_count(void)
 {
-	if (corsola_get_db_type() == CORSOLA_DB_TYPEC) {
+	const enum corsola_db_type db = corsola_get_db_type();
+
+	if (db == CORSOLA_DB_TYPEC || db == CORSOLA_DB_NO_DETECTION) {
 		return CONFIG_USB_PD_PORT_MAX_COUNT;
 	} else {
 		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
@@ -74,18 +75,20 @@ uint8_t board_get_adjusted_usb_pd_port_count(void)
 }
 
 /* USB-A */
-void usb_a0_interrupt(enum gpio_signal signal)
+void xhci_interrupt(enum gpio_signal signal)
 {
+	const int xhci_stat = gpio_get_level(signal);
+
+#ifdef USB_PORT_ENABLE_COUNT
 	enum usb_charge_mode mode = gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(
 					    gpio_ap_xhci_init_done)) ?
 					    USB_CHARGE_MODE_ENABLED :
 					    USB_CHARGE_MODE_DISABLED;
 
-	const int xhci_stat = gpio_get_level(signal);
-
 	for (int i = 0; i < USB_PORT_COUNT; i++) {
 		usb_charge_set_mode(i, mode, USB_ALLOW_SUSPEND_CHARGE);
 	}
+#endif /* USB_PORT_ENABLE_COUNT */
 
 	for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 		/*
@@ -137,6 +140,7 @@ void x_ec_interrupt(enum gpio_signal signal)
 	}
 }
 
+#ifdef CONFIG_VARIANT_CORSOLA_DB_DETECTION
 static void board_hdmi_handler(struct ap_power_ev_callback *cb,
 			       struct ap_power_ev_data data)
 {
@@ -157,6 +161,7 @@ static void board_hdmi_handler(struct ap_power_ev_callback *cb,
 	gpio_pin_set_dt(GPIO_DT_FROM_ALIAS(gpio_en_hdmi_pwr), value);
 	gpio_pin_set_dt(GPIO_DT_FROM_ALIAS(gpio_ps185_pwrdn_odl), value);
 }
+#endif /* CONFIG_VARIANT_CORSOLA_DB_DETECTION */
 
 static void tasks_init_deferred(void)
 {
@@ -171,6 +176,7 @@ static void tasks_init_deferred(void)
 }
 DECLARE_DEFERRED(tasks_init_deferred);
 
+#ifdef CONFIG_VARIANT_CORSOLA_DB_DETECTION
 static void baseboard_x_ec_gpio2_init(void)
 {
 	static struct ppc_drv virtual_ppc_drv = { 0 };
@@ -235,3 +241,4 @@ __override uint8_t get_dp_pin_mode(int port)
 
 	return pd_dfp_dp_get_pin_mode(port, dp_status[port]);
 }
+#endif /* CONFIG_VARIANT_CORSOLA_DB_DETECTION */

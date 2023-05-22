@@ -2,7 +2,7 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
- * Test charge_state_v2 behavior
+ * Test charge_state behavior
  */
 
 #include "battery_smart.h"
@@ -124,10 +124,10 @@ enum ec_status charger_profile_override_set_param(uint32_t param,
 
 test_static int wait_charging_state(void)
 {
-	enum charge_state state;
+	enum led_pwr_state state;
 	task_wake(TASK_ID_CHARGER);
 	msleep(WAIT_CHARGER_TASK);
-	state = charge_get_state();
+	state = led_pwr_get_state();
 	ccprintf("[CHARGING TEST] state = %d\n", state);
 	return state;
 }
@@ -206,7 +206,7 @@ test_static void ev_clear(int event)
 
 test_static int test_charge_state(void)
 {
-	enum charge_state state;
+	enum led_pwr_state state;
 	uint32_t flags;
 
 	/* On AC */
@@ -367,7 +367,7 @@ test_static int test_low_battery(void)
 
 test_static int test_deep_charge_battery(void)
 {
-	enum charge_state_v2 state_v2;
+	enum charge_state state;
 	const struct battery_info *bat_info = battery_get_info();
 
 	test_setup(1);
@@ -375,22 +375,22 @@ test_static int test_deep_charge_battery(void)
 	/* battery pack voltage bellow voltage_min */
 	sb_write(SB_VOLTAGE, (bat_info->voltage_min - 200));
 	wait_charging_state();
-	state_v2 = charge_get_state_v2();
-	TEST_ASSERT(state_v2 == ST_PRECHARGE);
+	state = charge_get_state();
+	TEST_ASSERT(state == ST_PRECHARGE);
 
 	/*
 	 * Battery voltage keep bellow voltage_min,
 	 * precharge over time CONFIG_BATTERY_LOW_VOLTAGE_TIMEOUT
 	 */
 	usleep(CONFIG_BATTERY_LOW_VOLTAGE_TIMEOUT);
-	state_v2 = charge_get_state_v2();
-	TEST_ASSERT(state_v2 == ST_IDLE);
+	state = charge_get_state();
+	TEST_ASSERT(state == ST_IDLE);
 
 	/* recovery from a low voltage. */
 	sb_write(SB_VOLTAGE, (bat_info->voltage_normal));
 	wait_charging_state();
-	state_v2 = charge_get_state_v2();
-	TEST_ASSERT(state_v2 == ST_CHARGE);
+	state = charge_get_state();
+	TEST_ASSERT(state == ST_CHARGE);
 
 	return EC_SUCCESS;
 }
@@ -504,7 +504,7 @@ test_static int test_external_funcs(void)
 	TEST_ASSERT(!(flags & CHARGE_FLAG_FORCE_IDLE));
 
 	/* and the rest */
-	TEST_ASSERT(charge_get_state() == PWR_STATE_CHARGE);
+	TEST_ASSERT(led_pwr_get_state() == PWR_STATE_CHARGE);
 	TEST_ASSERT(!charge_want_shutdown());
 	TEST_ASSERT(charge_get_percent() == 50);
 	temp = 0;
@@ -519,7 +519,7 @@ test_static int test_external_funcs(void)
 #define CHG_OPT2 0x4000
 test_static int test_hc_charge_state(void)
 {
-	enum charge_state state;
+	enum led_pwr_state state;
 	int i, rv, tmp;
 	struct ec_params_charge_state params;
 	struct ec_response_charge_state resp;
@@ -964,7 +964,7 @@ test_static int test_battery_sustainer_discharge_idle(void)
 	/* (lower =) upper < SoC */
 	display_soc = 810;
 	wait_charging_state();
-	TEST_ASSERT(get_chg_ctrl_mode() == CHARGE_CONTROL_IDLE);
+	TEST_ASSERT(get_chg_ctrl_mode() == CHARGE_CONTROL_DISCHARGE);
 
 	/* Unplug AC. Sustainer gets deactivated. */
 	gpio_set_level(GPIO_AC_PRESENT, 0);
@@ -974,7 +974,7 @@ test_static int test_battery_sustainer_discharge_idle(void)
 	/* Replug AC. Sustainer gets re-activated. */
 	gpio_set_level(GPIO_AC_PRESENT, 1);
 	wait_charging_state();
-	TEST_ASSERT(get_chg_ctrl_mode() == CHARGE_CONTROL_IDLE);
+	TEST_ASSERT(get_chg_ctrl_mode() == CHARGE_CONTROL_DISCHARGE);
 
 	/* lower = SoC = upper */
 	display_soc = 800;

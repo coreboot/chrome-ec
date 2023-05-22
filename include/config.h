@@ -327,12 +327,6 @@
 #define CONFIG_ADC_PROFILE_SINGLE
 #undef CONFIG_ADC_PROFILE_FAST_CONTINUOUS
 
-/* Support AES symmetric-key algorithm */
-#undef CONFIG_AES
-
-/* Support AES-GCM */
-#undef CONFIG_AES_GCM
-
 /*
  * Some ALS modules may be connected to the EC. We need the command, and
  * specific drivers for each module.
@@ -637,12 +631,6 @@
 #define CONFIG_BATTERY_LOW_VOLTAGE_TIMEOUT (30 * 60 * SECOND)
 
 /*
- * Specify the battery percentage at which the host is told it is full.
- * If this value is not specified the default is 97% set in battery.h.
- */
-#undef CONFIG_BATTERY_LEVEL_NEAR_FULL
-
-/*
  * Use memory mapped region to store battery information. It supports only
  * single battery systems. V2 should be used unless there is a reason not to.
  */
@@ -675,6 +663,12 @@
  * is in S5/G3. This should be defined to integer value in mV.
  */
 #undef CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV
+
+/*
+ * Check the specific battery status to judge whether the battery is
+ * initialized and stable when the battery wakes up from ship mode.
+ */
+#undef CONFIG_BATTERY_STBL_STAT
 
 /*
  * Some batteries don't update full capacity timely or don't update it at all.
@@ -1642,6 +1636,10 @@
 #undef CONFIG_CMD_CHARGEN
 #endif
 #define CONFIG_CMD_CHARGER
+
+/* Extra debugging info for the charger */
+#define CONFIG_CHARGE_DEBUG
+
 #undef CONFIG_CMD_CHARGER_ADC_AMON_BMON
 #undef CONFIG_CMD_CHARGER_DUMP
 #undef CONFIG_CMD_CHARGER_PROFILE_OVERRIDE
@@ -1815,6 +1813,9 @@
  * You want this unless you are doing a really tiny firmware.
  */
 #define CONFIG_COMMON_RUNTIME
+
+/* Allow deferred (async) flash protect*/
+#define CONFIG_FLASH_PROTECT_DEFERRED
 
 /* Provide common core code to handle the operating system timers. */
 #define CONFIG_COMMON_TIMER
@@ -2863,10 +2864,15 @@
  * Only one of these may be defined (if any).
  */
 #ifndef CONFIG_ZEPHYR
+/*
+ * These symbols also exist as Kconfigs in Zephyr. Zephyr based boards
+ * need to use the upstream driver, or these symbols need to be changed
+ * downstream to not conflict.
+ */
 #undef CONFIG_INA219
+#undef CONFIG_INA3221
 #endif /* CONFIG_ZEPHYR */
 #undef CONFIG_INA231
-#undef CONFIG_INA3221
 
 /*****************************************************************************/
 /* Inductive charging */
@@ -5204,6 +5210,7 @@
 #undef CONFIG_USBC_PPC_SN5S330
 #undef CONFIG_USBC_PPC_SYV682C
 #undef CONFIG_USBC_PPC_SYV682X
+#undef CONFIG_USBC_PPC_TCPCI
 
 /*
  * NX20P348x 5V SRC RCP trigger level at 10mV. Define to enable 5V SRC RCP
@@ -5310,6 +5317,7 @@
 #undef CONFIG_BC12_DETECT_MT6360
 #undef CONFIG_BC12_DETECT_PI3USB9201
 #undef CONFIG_BC12_DETECT_PI3USB9281
+#undef CONFIG_BC12_DETECT_RT1718S
 /* Number of Pericom PI3USB9281 chips present in system */
 #undef CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT
 /* The delay in ms from power off to power on for MAX14637 */
@@ -6242,13 +6250,13 @@
 /*****************************************************************************/
 /* Define CONFIG_USBC_PPC if board has a USB Type-C Power Path Controller. */
 #if defined(CONFIG_USBC_PPC_AOZ1380) || defined(CONFIG_USBC_PPC_NX20P3483) || \
-	defined(CONFIG_USBC_PPC_SN5S330)
+	defined(CONFIG_USBC_PPC_SN5S330) || defined(CONFIG_USBC_PPC_TCPCI)
 #define CONFIG_USBC_PPC
 #endif /* "has a PPC" */
 
 /* Following chips use Power Path Control information from TCPC chip */
 #if defined(CONFIG_USBC_PPC_AOZ1380) || defined(CONFIG_USBC_PPC_NX20P3481) || \
-	defined(CONFIG_USBC_PPC_NX20P3483)
+	defined(CONFIG_USBC_PPC_NX20P3483) || defined(CONFIG_USBC_PPC_TCPCI)
 #define CONFIG_USB_PD_PPC
 #endif
 
@@ -6300,10 +6308,12 @@
 	defined(CONFIG_USBC_PPC_NX20P3483) ||                                 \
 	defined(CONFIG_USBC_PPC_SN5S330) ||                                   \
 	defined(CONFIG_USBC_PPC_SYV682X) || defined(CONFIG_CHARGER_SM5803) || \
-	defined(CONFIG_USB_PD_TCPM_TCPCI)
+	defined(CONFIG_USB_PD_TCPM_TCPCI) ||                                  \
+	defined(CONFIG_USB_PD_TCPM_ANX7406)
 #define CONFIG_USBC_OCP
 #endif
 
+#ifndef CONFIG_ZEPHYR
 /*****************************************************************************/
 /*
  * Define CONFIG_USB_PD_VBUS_MEASURE_CHARGER if the charger on the board
@@ -6314,19 +6324,24 @@
 	defined(CONFIG_CHARGER_MT6370) || defined(CONFIG_CHARGER_BQ25710) ||  \
 	defined(CONFIG_CHARGER_BQ25720) || defined(CONFIG_CHARGER_ISL9241) || \
 	defined(CONFIG_CHARGER_RAA489110)
+#if !defined(CONFIG_USB_PD_VBUS_MEASURE_TCPC) &&              \
+	!defined(CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT) && \
+	!defined(CONFIG_USB_PD_VBUS_MEASURE_BY_BOARD)
 #define CONFIG_USB_PD_VBUS_MEASURE_CHARGER
+#endif /* VBUS_MEASURE options */
 
 #ifdef CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT
 #error CONFIG_USB_PD_VBUS_MEASURE_NOT_PRESENT defined, but charger can measure
-#endif
-#endif
-
+#endif /* VBUS_NOT_PRESENT */
+#endif /* Charger chips */
+#endif /* CONFIG_ZEPHYR */
 /*****************************************************************************/
 /*
  * Define CONFIG_USB_PD_VBUS_MEASURE_TCPC if the tcpc on the board supports
  * VBUS measurement.
  */
-#if defined(CONFIG_USB_PD_TCPM_FUSB302)
+#if defined(CONFIG_USB_PD_TCPM_FUSB302) && \
+	!defined(CONFIG_USB_PD_VBUS_MEASURE_CHARGER)
 #define CONFIG_USB_PD_VBUS_MEASURE_TCPC
 #endif
 
@@ -6403,6 +6418,33 @@
 #define CONFIG_BATTERY_V1
 #endif
 
+/*
+ * Check the specific battery status to judge whether the battery is
+ * initialized and stable when the battery wakes up from ship mode.
+ * Use two MASKs to provide logical AND and logical OR options for different
+ * status. For example:
+ *
+ * Logical OR -- just check one of TCA/TDA mask:
+ *   #define CONFIG_BATT_ALARM_MASK1 \
+ *       (STATUS_TERMINATE_CHARGE_ALARM | STATUS_TERMINATE_DISCHARGE_ALARM)
+ *   #define CONFIG_BATT_ALARM_MASK2 0xFFFF
+ *
+ * Logical AND -- check both TCA/TDA mask:
+ *   #define CONFIG_BATT_ALARM_MASK1 STATUS_TERMINATE_CHARGE_ALARM
+ *   #define CONFIG_BATT_ALARM_MASK2 STATUS_TERMINATE_DISCHARGE_ALARM
+ *
+ * The default configuration is logical OR.
+ */
+#ifdef CONFIG_BATTERY_STBL_STAT
+#ifndef CONFIG_BATT_ALARM_MASK1
+#define CONFIG_BATT_ALARM_MASK1 \
+	(STATUS_TERMINATE_CHARGE_ALARM | STATUS_TERMINATE_DISCHARGE_ALARM)
+#endif
+#ifndef CONFIG_BATT_ALARM_MASK2
+#define CONFIG_BATT_ALARM_MASK2 0xFFFF
+#endif
+#endif
+
 /*****************************************************************************/
 /* Define derived USB PD Discharge common path */
 #if defined(CONFIG_USB_PD_DISCHARGE_GPIO) ||     \
@@ -6431,14 +6473,6 @@
 #endif
 
 /*****************************************************************************/
-/*
- * Define CONFIG_LIBCRYPTOC if a board needs to read secret data from the
- * anti-rollback block.
- */
-#ifdef CONFIG_ROLLBACK_SECRET_SIZE
-#define CONFIG_LIBCRYPTOC
-#endif
-
 /*
  * Handle task-dependent configs.
  *
@@ -6805,8 +6839,9 @@
 #error "Flash readout protection and PSTATE may not work as intended."
 #endif
 
-#if !defined(CHIP_FAMILY_STM32H7) && !defined(CHIP_FAMILY_STM32F4)
-#error "Flash readout protection only implemented on STM32H7 and STM32F4."
+#if !defined(CHIP_FAMILY_STM32H7) && !defined(CHIP_FAMILY_STM32F4) && \
+	!defined(CHIP_FAMILY_NPCX9)
+#error "Flash readout protection only implemented on STM32H7, STM32F4 and NPCX9"
 #endif
 #endif /* CONFIG_FLASH_READOUT_PROTECTION_AS_PSTATE */
 

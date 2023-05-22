@@ -9,7 +9,7 @@
 #include "board.h"
 #include "button.h"
 #include "charge_manager.h"
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "charger.h"
 #include "driver/ppc/syv682x_public.h"
 #include "driver/tcpm/it83xx_pd.h"
@@ -20,8 +20,6 @@
 #include "intc.h"
 #include "power.h"
 #include "power_button.h"
-#include "pwm.h"
-#include "pwm_chip.h"
 #include "switch.h"
 #include "system.h"
 #include "tablet_mode.h"
@@ -108,34 +106,9 @@ const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 
 /* USB-A ports */
 const int usb_port_enable[USB_PORT_COUNT] = {
-	GPIO_EN_USB_A0_VBUS,
-	GPIO_EN_USB_A1_VBUS,
-	GPIO_EN_USB_A2_VBUS,
-	GPIO_EN_USB_A3_VBUS,
+	GPIO_EN_USB_A0_VBUS, GPIO_EN_USB_A1_VBUS, GPIO_EN_USB_A2_VBUS,
+	GPIO_EN_USB_A3_VBUS, GPIO_EN_USB_A4_VBUS,
 };
-
-/* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
-const struct pwm_t pwm_channels[] = {
-	[PWM_CH_LED_RED] = {
-		.channel = 1,
-		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
-		.freq_hz = 2400,
-	},
-
-	[PWM_CH_LED_GREEN] = {
-		.channel = 2,
-		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
-		.freq_hz = 2400,
-	},
-
-	[PWM_CH_LED_BLUE] = {
-		.channel = 3,
-		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
-		.freq_hz = 2400,
-	}
-
-};
-BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
 
 /* Thermistors */
 const struct temp_sensor_t temp_sensors[] = {

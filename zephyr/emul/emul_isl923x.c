@@ -19,7 +19,10 @@
 #include <zephyr/drivers/i2c_emul.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/__assert.h>
+
+#ifdef CONFIG_ZTEST
 #include <zephyr/ztest.h>
+#endif
 
 #define DT_DRV_COMPAT cros_isl923x_emul
 
@@ -111,6 +114,12 @@ struct isl923x_emul_data {
 	uint16_t ac_prochot_reg;
 	/** Emulated DC PROCHOT register */
 	uint16_t dc_prochot_reg;
+	/* Emulated RAA489000_REG_ADC_INPUT_CURRENT */
+	uint16_t adc_input_current_reg;
+	/* Emulated RAA489000_REG_ADC_CHARGE_CURRENT */
+	uint16_t adc_charge_current_reg;
+	/* Emulated RAA489000_REG_ADC_VSYS */
+	uint16_t adc_vsys_reg;
 	/** Emulated ADC vbus register */
 	uint16_t adc_vbus_reg;
 	/** Emulated input voltage register */
@@ -137,11 +146,13 @@ isl923x_emul_get_cfg(const struct emul *emulator)
 	return emulator->cfg;
 }
 
+#ifdef CONFIG_ZTEST
 static void isl923x_emul_reset(struct isl923x_emul_data *data)
 {
 	data->common.write_fail_reg = I2C_COMMON_EMUL_NO_FAIL_REG;
 	data->common.read_fail_reg = I2C_COMMON_EMUL_NO_FAIL_REG;
 }
+#endif
 
 void isl923x_emul_reset_registers(const struct emul *emulator)
 {
@@ -284,6 +295,15 @@ static int isl923x_emul_read_byte(const struct emul *emul, int reg,
 	case ISL923X_REG_PROCHOT_DC:
 		READ_REG_16(data->dc_prochot_reg, bytes, val);
 		break;
+	case RAA489000_REG_ADC_INPUT_CURRENT:
+		READ_REG_16(data->adc_input_current_reg, bytes, val);
+		break;
+	case RAA489000_REG_ADC_CHARGE_CURRENT:
+		READ_REG_16(data->adc_charge_current_reg, bytes, val);
+		break;
+	case RAA489000_REG_ADC_VSYS:
+		READ_REG_16(data->adc_vsys_reg, bytes, val);
+		break;
 	case RAA489000_REG_ADC_VBUS:
 		READ_REG_16(data->adc_vbus_reg, bytes, val);
 		break;
@@ -371,6 +391,24 @@ static int isl923x_emul_write_byte(const struct emul *emul, int reg,
 	case RAA489000_REG_CONTROL10:
 		WRITE_REG_16(data->control_10_reg, bytes, val,
 			     REG_CONTROL10_MASK);
+		break;
+	case RAA489000_REG_ADC_INPUT_CURRENT:
+		__ASSERT(
+			false,
+			"Write to read-only reg RAA489000_REG_ADC_INPUT_CURRENT");
+		break;
+	case RAA489000_REG_ADC_CHARGE_CURRENT:
+		__ASSERT(
+			false,
+			"Write to read-only reg RAA489000_REG_ADC_CHARGE_CURRENT");
+		break;
+	case RAA489000_REG_ADC_VSYS:
+		__ASSERT(false,
+			 "Write to read-only reg RAA489000_REG_ADC_VSYS");
+		break;
+	case RAA489000_REG_ADC_VBUS:
+		__ASSERT(false,
+			 "Write to read-only reg RAA489000_REG_ADC_VBUS");
 		break;
 	case ISL9238_REG_INFO2:
 		__ASSERT(false, "Write to read-only reg ISL9238_REG_INFO2");

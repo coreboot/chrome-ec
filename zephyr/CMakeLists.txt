@@ -45,12 +45,6 @@ if(DEFINED CONFIG_PLATFORM_EC)
   # with Zephyr builds only.
   zephyr_compile_definitions("CONFIG_ZEPHYR")
 
-  # Force compiler warnings to generate errors
-  option(ALLOW_WARNINGS "Do not treat warnings as errors")
-  if (NOT ALLOW_WARNINGS)
-    zephyr_compile_options(-Werror)
-  endif()
-
   include(fpu.cmake)
 
   # When LTO is enabled, enable only for the "app" library, which compiles
@@ -71,7 +65,6 @@ endif()
 
 # Set extra compiler flags.
 zephyr_cc_option(-mno-unaligned-access)
-zephyr_cc_option(-fno-PIC)
 zephyr_cc_option(-Wimplicit-fallthrough)
 
 if (DEFINED CONFIG_RISCV)
@@ -229,6 +222,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_FUEL_GAUGE
                                                 "${PLATFORM_EC}/common/battery_fuel_gauge.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_SMART
                                                 "${PLATFORM_EC}/driver/battery/smart.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_RT1718S
+                                                "${PLATFORM_EC}/driver/bc12/rt1718s.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
                                                 "${PLATFORM_EC}/driver/bc12/pi3usb9201.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_MT6360

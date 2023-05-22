@@ -12,7 +12,6 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "registers.h"
-#include "shared_mem.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
@@ -27,6 +26,34 @@ const struct dac_t dac_channels[GPIO_COUNT] = {
 	[GPIO_CN7_9] = { STM32_DAC_CR_EN1, &STM32_DAC_DHR12R1 },
 	[GPIO_CN7_10] = { STM32_DAC_CR_EN2, &STM32_DAC_DHR12R2 },
 };
+
+/*
+ * GPIO structure for keeping extra flags such as GPIO_OPEN_DRAIN, to be applied
+ * whenever the pin is switched into "alternate" mode.
+ */
+struct gpio_alt_flags {
+	/* Port base address */
+	uint32_t port;
+
+	/* Bitmask on that port (multiple bits allowed) */
+	uint32_t mask;
+
+	/* Flags (GPIO_*; see above). */
+	uint32_t flags;
+};
+
+/*
+ * Construct the gpio_alt_flags array, this really is just a subset of the
+ * columns in the gpio_alt_funcs array in common/gpio.c (which is not accessible
+ * from here).  This array is used by extra_alternate_flags().
+ */
+#define ALTERNATE(pinmask, function, module, flagz) \
+	{ GPIO_##pinmask, .flags = (flagz) },
+
+static __const_data const struct gpio_alt_flags gpio_alt_flags[] = {
+#include "gpio.wrap"
+};
+#undef ALTERNATE
 
 /*
  * A cyclic buffer is used to record events (edges) of one or more GPIO
@@ -99,6 +126,36 @@ struct monitoring_slot_t {
 	uint8_t tail_level;
 };
 struct monitoring_slot_t monitoring_slots[16];
+
+/*
+ * Memory area used for allocation of cyclic buffers.  (Currently the
+ * implementation supports only a single allocation.)
+ */
+uint8_t buffer_area[sizeof(struct cyclic_buffer_header_t) + 8192];
+bool buffer_area_in_use = false;
+
+static struct cyclic_buffer_header_t *allocate_cyclic_buffer(size_t size)
+{
+	struct cyclic_buffer_header_t *res =
+		(struct cyclic_buffer_header_t *)buffer_area;
+	if (buffer_area_in_use) {
+		/* No support for multiple smaller allocations, yet. */
+		return 0;
+	}
+	if (sizeof(struct cyclic_buffer_header_t) + size >
+	    sizeof(buffer_area)) {
+		/* Requested size exceeds the capacity of the area. */
+		return 0;
+	}
+	buffer_area_in_use = true;
+	res->size = size;
+	return res;
+}
+
+static void free_cyclic_buffer(struct cyclic_buffer_header_t *buf)
+{
+	buffer_area_in_use = false;
+}
 
 /*
  * Counts unacknowledged buffer overflows.  Whenever non-zero, the red LED
@@ -251,8 +308,32 @@ static void stop_all_gpio_monitoring(void)
 		num_cur_monitoring--;
 		if (buffer_header->overflow)
 			atomic_sub(&num_cur_error_conditions, 1);
-		shared_mem_release((char *)buffer_header);
+		free_cyclic_buffer(buffer_header);
 	}
+}
+
+/*
+ * Return GPIO_OPEN_DRAIN or any other special flags to apply when the given
+ * signal is in "alternate" mode.
+ */
+static uint32_t extra_alternate_flags(enum gpio_signal signal)
+{
+	const struct gpio_info *g = gpio_list + signal;
+	const struct gpio_alt_flags *af;
+
+	/* Find the first ALTERNATE() declaration for the given pin. */
+	for (af = gpio_alt_flags;
+	     af < gpio_alt_flags + ARRAY_SIZE(gpio_alt_flags); af++) {
+		if (af->port != g->port)
+			continue;
+
+		if (af->mask & g->mask) {
+			return af->flags;
+		}
+	}
+
+	/* No ALTERNATE() declaration mention the given pin. */
+	return 0;
 }
 
 /**
@@ -315,7 +396,7 @@ static int command_gpio_mode(int argc, const char **argv)
 		/* Disable digital output, when DAC is overriding. */
 		flags |= GPIO_INPUT;
 	} else if (strcasecmp(argv[2], "alternate") == 0)
-		flags |= GPIO_ALTERNATE;
+		flags |= GPIO_ALTERNATE | extra_alternate_flags(gpio);
 	else
 		return EC_ERROR_PARAM2;
 
@@ -455,7 +536,7 @@ static int command_gpio_multiset(int argc, const char **argv)
 			/* Disable digital output, when DAC is overriding. */
 			flags |= GPIO_INPUT;
 		} else if (strcasecmp(argv[4], "alternate") == 0)
-			flags |= GPIO_ALTERNATE;
+			flags |= GPIO_ALTERNATE | extra_alternate_flags(gpio);
 		else
 			return EC_ERROR_PARAM4;
 	}
@@ -521,14 +602,13 @@ static int command_gpio_monitoring_start(int argc, const char **argv)
 	 * All the requested signals were available for monitoring, and their
 	 * slots have been marked as reserved for the respective signal.
 	 */
-	rv = shared_mem_acquire(sizeof(struct cyclic_buffer_header_t) +
-					cyclic_buffer_size,
-				(char **)&buf);
-	if (rv != EC_SUCCESS)
+	buf = allocate_cyclic_buffer(cyclic_buffer_size);
+	if (!buf) {
+		rv = EC_ERROR_BUSY;
 		goto out_cleanup;
+	}
 
 	buf->head = buf->tail = 0;
-	buf->size = cyclic_buffer_size;
 	buf->overflow = 0;
 	buf->num_signals = gpio_num;
 	buf->signal_bits = 0;
@@ -658,6 +738,11 @@ static int command_gpio_monitoring_read(int argc, const char **argv)
 				 gpio_list[gpios[i]].name);
 			return EC_ERROR_PARAM3 + i;
 		}
+		if (slot->signal_no != i) {
+			ccprintf("Error: Inconsistent order at %s\n",
+				 gpio_list[gpios[i]].name);
+			return EC_ERROR_PARAM3 + i;
+		}
 		if (buf == NULL) {
 			buf = slot->buffer;
 		} else if (buf != slot->buffer) {
@@ -724,6 +809,8 @@ static int command_gpio_monitoring_read(int argc, const char **argv)
 		/* To conserve bandwidth, timestamps are relative to `now`. */
 		ccprintf("  %d %lld %s\n", signal_no, tail_time.val - now.val,
 			 slot->tail_level ? "F" : "R");
+		/* Flush console to avoid truncating output */
+		cflush();
 		slot->tail_level = !slot->tail_level;
 	}
 	buf->tail = tail;
@@ -790,7 +877,7 @@ static int command_gpio_monitoring_stop(int argc, const char **argv)
 	if (buf->overflow)
 		atomic_sub(&num_cur_error_conditions, 1);
 
-	shared_mem_release((char *)buf);
+	free_cyclic_buffer(buf);
 	return EC_SUCCESS;
 }
 
@@ -841,6 +928,9 @@ static int command_reinit(int argc, const char **argv)
 
 		if (flags & GPIO_DEFAULT)
 			continue;
+
+		if (flags & GPIO_ALTERNATE)
+			flags |= extra_alternate_flags(i);
 
 		/* Set up GPIO based on flags */
 		gpio_set_flags_by_mask(g->port, g->mask, flags);

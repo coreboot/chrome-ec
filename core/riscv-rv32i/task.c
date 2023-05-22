@@ -289,9 +289,11 @@ task_ *__ram_code next_sched_task(void)
 #ifdef CONFIG_DEBUG_STACK_OVERFLOW
 	if (*current_task->stack != STACK_UNUSED_VALUE) {
 		int i = task_get_current();
-
-		panic_printf("\n\nStack overflow in %s task!\n", task_names[i]);
-		software_panic(PANIC_SW_STACK_OVERFLOW, i);
+		if (task_enabled(i)) {
+			panic_printf("\n\nStack overflow in %s task!\n",
+				     task_names[i]);
+			software_panic(PANIC_SW_STACK_OVERFLOW, i);
+		}
 	}
 #endif
 
@@ -480,6 +482,11 @@ void task_enable_all_tasks(void)
 void task_enable_task(task_id_t tskid)
 {
 	atomic_or(&tasks_enabled, BIT(tskid));
+}
+
+bool task_enabled(task_id_t tskid)
+{
+	return tasks_enabled & BIT(tskid);
 }
 
 void task_disable_task(task_id_t tskid)

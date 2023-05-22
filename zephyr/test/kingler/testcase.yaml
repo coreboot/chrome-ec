@@ -1,6 +1,14 @@
 common:
   platform_allow: native_posix
 tests:
+  kingler.usbc:
+    extra_configs:
+    - CONFIG_TEST_KINGLER_USBC=y
+    extra_conf_files:
+    - prj.conf
+    - kingler.usbc.conf
+    extra_dtc_overlay_files:
+    - kingler.usbc.overlay
   kingler.steelix:
     extra_configs:
     - CONFIG_TEST_STEELIX_RUSTY=y
@@ -48,5 +56,10 @@ tests:
     extra_configs:
     - CONFIG_TEST_VOLTORB=y
     - CONFIG_TEST_USB_PD_POLICY=y
+    extra_dtc_overlay_files:
+    - kingler.default.overlay
+  kingler.usb_port_count:
+    extra_configs:
+    - CONFIG_TEST_DB_DETECTION_USB_COUNT=y
     extra_dtc_overlay_files:
     - kingler.default.overlay

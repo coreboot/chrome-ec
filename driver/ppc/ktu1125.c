@@ -280,15 +280,12 @@ static int ktu1125_is_sourcing_vbus(int port)
 #ifdef CONFIG_USBC_PPC_POLARITY
 static int ktu1125_set_polarity(int port, int polarity)
 {
-	if (polarity) {
-		/* CC2 active. */
-		clr_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_CC2S_VCONN);
-		return set_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_CC1S_VCONN);
-	}
-
-	/* else CC1 active. */
-	clr_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_CC1S_VCONN);
-	return set_flags(port, KTU1125_CTRL_SW_CFG, KTU1125_CC2S_VCONN);
+	/*
+	 * KTU1125 doesn't need to be informed about polarity.
+	 * Polarity is queried via pd_get_polarity when applying VCONN.
+	 */
+	ppc_prints("KTU1125 sets polarity only when applying VCONN", port);
+	return EC_SUCCESS;
 }
 #endif
 
@@ -351,11 +348,15 @@ static int ktu1125_set_vconn(int port, int enable)
 	polarity = polarity_rm_dts(pd_get_polarity(port));
 
 	if (enable) {
-		flags |= polarity ? KTU1125_CC2S_VCONN : KTU1125_CC1S_VCONN;
-		status = set_flags(port, KTU1125_SET_SW_CFG, flags);
+		/*
+		 * If polarity is CC1, then apply VCONN on CC2.
+		 * else if polarity is CC2, then apply VCONN on CC1
+		 */
+		flags |= polarity ? KTU1125_CC1S_VCONN : KTU1125_CC2S_VCONN;
+		status = set_flags(port, KTU1125_CTRL_SW_CFG, flags);
 	} else {
 		flags |= KTU1125_CC1S_VCONN | KTU1125_CC2S_VCONN;
-		status = clr_flags(port, KTU1125_SET_SW_CFG, flags);
+		status = clr_flags(port, KTU1125_CTRL_SW_CFG, flags);
 	}
 
 	return status;

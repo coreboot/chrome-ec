@@ -2,6 +2,11 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+config TEST_KINGLER_USBC
+	bool "Run the tests intended for kingler"
+	help
+	  Include USB-C tests into the binary.
+
 config TEST_STEELIX_RUSTY
 	bool "Run the tests intended for steelix and rusty"
 	help
@@ -65,5 +70,11 @@ config TEST_USB_PD_POLICY
 	help
 	  Include voltorb_usbc.c into the binary to test the type-c output
 	  current limit function.
+
+config TEST_DB_DETECTION_USB_COUNT
+	bool "Run the tests intended for db detection"
+	help
+	  Include USB-C tests into the binary for testing the reported port
+	  count with db detection.
 
 source "Kconfig.zephyr"

@@ -20,28 +20,16 @@
 
 	batteries {
 		default_battery: cosmx {
-			compatible = "cosmx,gh02047xl", "battery-smart";
+			compatible = "cosmx,gg02047xl", "battery-smart";
 		};
-		dynapack_atl_gh02047xl {
-			compatible = "dynapack,atl_gh02047xl", "battery-smart";
+		dynapack_byd_gg02047xl {
+			compatible = "dynapack,byd_gg02047xl", "battery-smart";
 		};
-		dynapack_cosmx_gh02047xl {
-			compatible = "dynapack,cosmx_gh02047xl", "battery-smart";
+		dynapack_hpp_gg02047xl {
+			compatible = "dynapack,hpp_gg02047xl", "battery-smart";
 		};
-		smp_coslight_gh02047xl {
-			compatible = "smp,coslight_gh02047xl", "battery-smart";
-		};
-		smp_highpower_gh02047xl {
-			compatible = "smp,highpower_gh02047xl", "battery-smart";
-		};
-		default_battery_3s:cosmx_si03058xl {
-			compatible = "cosmx,si03058xl", "battery-smart";
-		};
-		smp_highpower_si03058xl {
-			compatible = "smp,highpower_si03058xl", "battery-smart";
-		};
-		smp_si03054xl {
-			compatible = "smp,si03054xl", "battery-smart";
+		atl_gb-s20-4473a9 {
+			compatible = "atl,gb-s20-4473a9", "battery-smart";
 		};
 	};
 
@@ -61,6 +49,16 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "power_button_interrupt";
 		};
+		int_vol_down: vol_down {
+			irq-pin = <&gpio_voldn_btn_odl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "button_interrupt";
+		};
+		int_vol_up: vol_up {
+			irq-pin = <&gpio_volup_btn_odl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "button_interrupt";
+		};
 		int_wp_l: wp_l {
 			irq-pin = <&gpio_ec_wp_odl>;
 			flags = <GPIO_INT_EDGE_BOTH>;
@@ -70,6 +68,21 @@
 			irq-pin = <&gpio_lid_open>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "lid_interrupt";
+		};
+		int_tablet_mode: tablet_mode {
+			irq-pin = <&gpio_tablet_mode_l>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "gmr_tablet_switch_isr";
+		};
+		int_acc: lid_imu {
+		  irq-pin = <&gpio_acc_int_l>;
+		  flags = <GPIO_INT_EDGE_FALLING>;
+		  handler = "bma4xx_interrupt";
+		};
+		int_imu: ec_imu {
+		  irq-pin = <&gpio_imu_int_l>;
+		  flags = <GPIO_INT_EDGE_FALLING>;
+		  handler = "bmi3xx_interrupt";
 		};
 		int_usb_c0: usb_c0 {
 			irq-pin = <&gpio_usb_c0_int_odl>;
@@ -85,14 +98,9 @@
 
 	unused-pins {
 		compatible = "unused-gpios";
-		unused-gpios = <&gpioa 7 0>,
-			       <&gpioc 0 0>,
-			       <&gpioc 6 0>,
+		unused-gpios = <&gpioc 6 0>,
 			       <&gpiod 7 0>,
 			       <&gpioh 2 0>,
-			       <&gpioi 6 0>,
-			       <&gpioi 7 0>,
-			       <&gpioj 0 0>,
 			       <&gpioj 3 0>,
 			       <&gpiok 7 GPIO_OUTPUT>;
 	};
@@ -217,7 +225,7 @@
 
 &binman {
 	ec-rw {
-		size = <0x50000>;
+		size = <0x58000>;
 		rw-fw {
 			rw-fwid {
 				/* Fix the lcoation of the FWID to the
@@ -226,11 +234,11 @@
 				 * stored in the RO section of flash
 				 * are always correct.
 				 */
-				offset = <(0x50000 - 32)>;
+				offset = <(0x58000 - 32)>;
 			};
 		};
 	};
-	pad-after = <0x50000>;
+	pad-after = <0x48000>;
 };
 
 &thermistor_3V3_51K1_47K_4050B {
@@ -304,7 +312,7 @@
 
 &i2c2 {
 	label = "I2C_SENSOR";
-	clock-frequency = <I2C_BITRATE_FAST>;
+	clock-frequency = <I2C_BITRATE_STANDARD>;
 	pinctrl-0 = <&i2c2_clk_gpf6_default
 		     &i2c2_data_gpf7_default>;
 	pinctrl-names = "default";

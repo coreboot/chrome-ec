@@ -231,7 +231,8 @@ task_ __attribute__((noinline)) * __svc_handler(int desched, task_id_t resched)
 	current = current_task;
 
 #ifdef CONFIG_DEBUG_STACK_OVERFLOW
-	if (*current->stack != STACK_UNUSED_VALUE) {
+	if (*current->stack != STACK_UNUSED_VALUE &&
+	    task_enabled(current - tasks)) {
 		panic_printf("\n\nStack overflow in %s task!\n",
 			     task_names[current - tasks]);
 		software_panic(PANIC_SW_STACK_OVERFLOW, current - tasks);
@@ -443,6 +444,11 @@ void task_enable_all_tasks(void)
 void task_enable_task(task_id_t tskid)
 {
 	atomic_or(&tasks_enabled, BIT(tskid));
+}
+
+bool task_enabled(task_id_t tskid)
+{
+	return tasks_enabled & BIT(tskid);
 }
 
 void task_disable_task(task_id_t tskid)
