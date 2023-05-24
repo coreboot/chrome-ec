@@ -355,15 +355,6 @@
 #undef CONFIG_ALS_TCS3400
 
 /*
- * Define to use atime tables in anti-saturation algos in the tcs3400 driver.
- * Defining this for a board makes the anti-saturation algorithm much more
- * efficient, but requires the board to have it's lens cover scale and k_channel
- * scales to be determined.  Define this for a board once it's added its
- * cover_scale and k_channel scale factors.
- */
-#undef CONFIG_TCS_USE_LUX_TABLE
-
-/*
  * Define the event to raise when a sensor interrupt triggers.
  * Must be within TASK_EVENT_MOTION_INTERRUPT_MASK.
  */
@@ -3203,6 +3194,10 @@
 #define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_GREEN
 #define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_GREEN
 #define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
+
+/* By default, 500 ms period, 50% duty cycle. */
+#define LED_CHARGER_ERROR_ON_TIME 1
+#define LED_CHARGER_ERROR_PERIOD 2
 
 /*
  * By default the PWM LED behaviour is reflected on both LEDs and includes the

@@ -126,8 +126,6 @@
 };
 
 &i2c4_1 {
-	/delete-node/ ps8xxx@b;
-
 	tcpc_port1: nct38xx@73 {
 		compatible = "nuvoton,nct38xx";
 		gpio-dev = <&nct3807_C1>;
@@ -187,6 +185,7 @@
 
 &usbc_port1 {
 	ppc = <&ppc_port1_syv>;
+	tcpc = <&tcpc_port1>;
 	usb-mux-chain-1 {
 		usb-muxes = <&usb_c1_hb_retimer &virtual_mux_c1>;
 	};
