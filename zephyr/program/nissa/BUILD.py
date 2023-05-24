@@ -113,3 +113,7 @@ uldren = register_nissa_project(
     project_name="uldren",
     chip="npcx9m3f",
 )
+gothrax = register_nissa_project(
+    project_name="gothrax",
+    chip="it81302bx",
+)
