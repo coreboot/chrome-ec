@@ -14,15 +14,6 @@
 
 #include <zephyr/devicetree.h>
 
-#if DT_HAS_COMPAT_STATUS_OKAY(AOZ1380_COMPAT) ||          \
-	DT_HAS_COMPAT_STATUS_OKAY(KTU1125_COMPAT) ||      \
-	DT_HAS_COMPAT_STATUS_OKAY(NX20P348X_COMPAT) ||    \
-	DT_HAS_COMPAT_STATUS_OKAY(RT1739_PPC_COMPAT) ||   \
-	DT_HAS_COMPAT_STATUS_OKAY(SN5S330_COMPAT) ||      \
-	DT_HAS_COMPAT_STATUS_OKAY(SN5S330_EMUL_COMPAT) || \
-	DT_HAS_COMPAT_STATUS_OKAY(SYV682X_COMPAT) ||      \
-	DT_HAS_COMPAT_STATUS_OKAY(SYV682X_EMUL_COMPAT)
-
 #define PPC_CHIP_ENTRY(usbc_id, ppc_id, config_fn) \
 	[USBC_PORT_NEW(usbc_id)] = config_fn(ppc_id),
 
@@ -30,15 +21,39 @@
 	COND_CODE_1(DT_NODE_HAS_COMPAT(ppc_id, compat),  \
 		    (PPC_CHIP_ENTRY(usbc_id, ppc_id, config_fn)), ())
 
-#define PPC_CHIP_FIND(usbc_id, ppc_id)                                       \
-	CHECK_COMPAT(AOZ1380_COMPAT, usbc_id, ppc_id, PPC_CHIP_AOZ1380)      \
-	CHECK_COMPAT(KTU1125_COMPAT, usbc_id, ppc_id, PPC_CHIP_KTU1125)      \
-	CHECK_COMPAT(NX20P348X_COMPAT, usbc_id, ppc_id, PPC_CHIP_NX20P348X)  \
-	CHECK_COMPAT(RT1739_PPC_COMPAT, usbc_id, ppc_id, PPC_CHIP_RT1739)    \
-	CHECK_COMPAT(SN5S330_COMPAT, usbc_id, ppc_id, PPC_CHIP_SN5S330)      \
-	CHECK_COMPAT(SN5S330_EMUL_COMPAT, usbc_id, ppc_id, PPC_CHIP_SN5S330) \
-	CHECK_COMPAT(SYV682X_COMPAT, usbc_id, ppc_id, PPC_CHIP_SYV682X)      \
-	CHECK_COMPAT(SYV682X_EMUL_COMPAT, usbc_id, ppc_id, PPC_CHIP_SYV682X)
+/**
+ * @param driver Tuple containing the PPC (compatible, config) pair.
+ * @param nodes Tuple containing the (usbc_node_id, ppc_node_id) pair
+ */
+#define CHECK_COMPAT_HELPER(driver, nodes)                                     \
+	CHECK_COMPAT(USBC_DRIVER_GET_COMPAT(driver), NODES_GET_USBC_ID(nodes), \
+		     NODES_GET_PROP_ID(nodes), USBC_DRIVER_GET_CONFIG(driver))
+
+#define PPC_CHIP_FIND(usbc_id, ppc_id)                                 \
+	FOR_EACH_FIXED_ARG(CHECK_COMPAT_HELPER, (), (usbc_id, ppc_id), \
+			   PPC_DRIVERS)
+
+/*
+ * This macro gets invoked for every driver in the PPC_DRIVERS list.
+ * If the passed in ppc node contains the specified compat string, then
+ * this macro returns 1.  Otherwise the macro returns nothing (EMPTY).
+ */
+#define PPC_HAS_COMPAT(compat, ppc) \
+	IF_ENABLED(DT_NODE_HAS_COMPAT(ppc, compat), 1)
+
+/*
+ * Verify the compatible property of a PPC node is valid.
+ *
+ * Call PPC_HAS_COMPAT() for all PPC compatible strings listed in the
+ * PPC_DRIVERS list.  If the resulting list is empty, then there was no
+ * matching PPC driver found and this macro generates a build error.
+ */
+#define PPC_PROP_COMPATIBLE_VERIFY(ppc)                                        \
+	IF_ENABLED(                                                            \
+		IS_EMPTY(FOR_EACH_FIXED_ARG(PPC_HAS_COMPAT, (), ppc,           \
+					    PPC_DRIVER_COMPATS)),              \
+		(BUILD_ASSERT(0, "Invalid PPC compatible on node: " STRINGIFY( \
+					 ppc));))
 
 /* clang-format off */
 #define PPC_CHIP_STUB(usbc_id) \
@@ -50,10 +65,21 @@
 		    (PPC_CHIP_FIND(usbc_id, DT_PHANDLE(usbc_id, ppc))), \
 		    (PPC_CHIP_STUB(usbc_id)))
 
+#define PPC_CHIP_VERIFY(usbc_id)                   \
+	IF_ENABLED(DT_NODE_HAS_PROP(usbc_id, ppc), \
+		   (PPC_PROP_COMPATIBLE_VERIFY(DT_PHANDLE(usbc_id, ppc))))
+
 #define PPC_CHIP_ALT(usbc_id)                                               \
 	COND_CODE_1(DT_NODE_HAS_PROP(usbc_id, ppc_alt),                     \
 		    (PPC_CHIP_FIND(usbc_id, DT_PHANDLE(usbc_id, ppc_alt))), \
 		    ())
+
+/*
+ * The PPC_CHIP_VERIFY macro expands to nothing when the PPC driver
+ * compatible string is found in the PPC_DRIVER_COMPATS list.  Otherwise the
+ * macro expands to a BUILD_ASSERT error.
+ */
+DT_FOREACH_STATUS_OKAY(named_usbc_port, PPC_CHIP_VERIFY)
 
 struct ppc_config_t ppc_chips[] = { DT_FOREACH_STATUS_OKAY(named_usbc_port,
 							   PPC_CHIP) };
@@ -74,16 +100,4 @@ struct ppc_config_t ppc_chips_alt[] = { DT_FOREACH_STATUS_OKAY(named_usbc_port,
  * Define a global struct ppc_config_t for every PPC node in the tree with the
  * "is-alt" property set.
  */
-DT_FOREACH_STATUS_OKAY_VARGS(AOZ1380_COMPAT, PPC_ALT_DEFINE, PPC_CHIP_AOZ1380)
-DT_FOREACH_STATUS_OKAY_VARGS(KTU1125_COMPAT, PPC_ALT_DEFINE, PPC_CHIP_KTU1125)
-DT_FOREACH_STATUS_OKAY_VARGS(NX20P348X_COMPAT, PPC_ALT_DEFINE,
-			     PPC_CHIP_NX20P348X)
-DT_FOREACH_STATUS_OKAY_VARGS(RT1739_PPC_COMPAT, PPC_ALT_DEFINE, PPC_CHIP_RT1739)
-DT_FOREACH_STATUS_OKAY_VARGS(SN5S330_COMPAT, PPC_ALT_DEFINE, PPC_CHIP_SN5S330)
-DT_FOREACH_STATUS_OKAY_VARGS(SN5S330_EMUL_COMPAT, PPC_ALT_DEFINE,
-			     PPC_CHIP_SN5S330)
-DT_FOREACH_STATUS_OKAY_VARGS(SYV682X_COMPAT, PPC_ALT_DEFINE, PPC_CHIP_SYV682X)
-DT_FOREACH_STATUS_OKAY_VARGS(SYV682X_EMUL_COMPAT, PPC_ALT_DEFINE,
-			     PPC_CHIP_SYV682X)
-
-#endif /* #if DT_HAS_COMPAT_STATUS_OKAY */
+DT_FOREACH_USBC_DRIVER_STATUS_OK_VARGS(PPC_ALT_DEFINE, PPC_DRIVERS)
