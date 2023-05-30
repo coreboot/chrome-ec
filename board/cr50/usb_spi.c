@@ -234,9 +234,9 @@ static void enable_spi_pinmux(void)
 
 	/*
 	 * Need to provide enough time for the SPI bus to stabilize
-	 * (b/154966209).
+	 * (b/154966209,b/277842785).
 	 */
-	msleep(2);
+	msleep(12);
 }
 
 /**
