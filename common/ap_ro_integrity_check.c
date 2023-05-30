@@ -29,6 +29,8 @@
 
 /* Prevent releasing EC_RST_L for 60 seconds after AP RO verification fails */
 #define DELAY_EC_RST_RELEASE (60 * SECOND)
+/* Don't clear the UNSUPPORTED_TRIGGERED status for 10 seconds */
+#define UNSUPPORTED_DEVICE_RST_WINDOW (10 * SECOND)
 /* FMAP must be aligned at 4K or larger power of 2 boundary. */
 #define LOWEST_FMAP_ALIGNMENT  (4 * 1024)
 #define FMAP_SIGNATURE	       "__FMAP__"
@@ -262,6 +264,15 @@ static const struct ap_ro_check *p_chk =
  */
 static enum ap_ro_status apro_result = AP_RO_NOT_RUN;
 static uint8_t apro_fail_status_cleared;
+static timestamp_t ignore_device_rst_deadline;
+
+void update_device_rst_deadline(uint32_t delay)
+{
+	timestamp_t tmp = get_time();
+
+	tmp.val += delay;
+	ignore_device_rst_deadline = tmp;
+}
 
 /* Clear validate_ap_ro_boot state. */
 void ap_ro_device_reset(void)
@@ -269,6 +280,15 @@ void ap_ro_device_reset(void)
 	if (apro_result == AP_RO_NOT_RUN || apro_result == AP_RO_IN_PROGRESS ||
 	    ec_rst_override())
 		return;
+	/*
+	 * Don't clear the AP RO state on device reset until the device reset
+	 * window has passed.
+	 */
+	if (ignore_device_rst_deadline.val &&
+	    !timestamp_expired(ignore_device_rst_deadline, 0)) {
+		CPRINTS("%s: ignored", __func__);
+		return;
+	}
 	CPRINTS("%s: clear apro result", __func__);
 	apro_fail_status_cleared = 0;
 	apro_result = AP_RO_NOT_RUN;
@@ -1148,6 +1168,7 @@ static uint8_t do_ap_ro_check(void)
 
 	apro_result = AP_RO_IN_PROGRESS;
 	apro_fail_status_cleared = 0;
+	ignore_device_rst_deadline.val = 0;
 
 	switch (ap_ro_check_unsupported(true)) {
 	case ARCVE_OK:
@@ -1156,6 +1177,7 @@ static uint8_t do_ap_ro_check(void)
 	case ARCVE_NOT_PROGRAMMED:
 	case ARCVE_BOARD_ID_BLOCKED:
 		CPRINTS("%s: unsupported", __func__);
+		update_device_rst_deadline(UNSUPPORTED_DEVICE_RST_WINDOW);
 		apro_result = AP_RO_UNSUPPORTED_TRIGGERED;
 		ap_ro_add_flash_event(APROF_CHECK_UNSUPPORTED);
 		return EC_ERROR_UNIMPLEMENTED;
