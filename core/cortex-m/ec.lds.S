@@ -383,7 +383,7 @@ SECTIONS
  */
 #ifdef __clang__
 #if defined(SECTION_IS_RO) && defined(NPCX_RO_HEADER)
-	__data_lma_start = .;
+	__data_lma_start = LOADADDR(.data) - SIZEOF(.header);
 #else
 	__data_lma_start = LOADADDR(.data);
 #endif
@@ -518,6 +518,17 @@ SECTIONS
 
 	__ram_free = (CONFIG_RAM_BASE + CONFIG_RAM_SIZE) -
 		     (__shared_mem_buf + CONFIG_SHAREDMEM_MINIMUM_SIZE);
+
+	/*
+	 * Relocations are not supported, so make sure that there is no GOT
+	 * section. See http://issuetracker.google.com/234507656#comment15.
+	 */
+	.got (NOLOAD) :
+	{
+		KEEP(*(.got*));
+	}
+	ASSERT(SIZEOF(.got) == 0, "GOT section found, but not supported.\
+ Make sure that all code is compiled without -fPIC.")
 
 #ifdef CONFIG_CHIP_DATA_IN_INIT_ROM
 	/*

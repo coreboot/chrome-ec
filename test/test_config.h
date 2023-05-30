@@ -38,6 +38,10 @@
 #define CONFIG_BASE32
 #endif
 
+#ifdef TEST_BATTERY_CONFIG
+#define CONFIG_BATTERY_CONFIG_IN_CBI
+#endif
+
 #ifdef TEST_BKLIGHT_LID
 #define CONFIG_BACKLIGHT_LID
 #endif
@@ -306,7 +310,7 @@ enum sensor_id {
 #define CONFIG_MALLOC
 #endif
 
-#ifdef TEST_SBS_CHARGING_V2
+#ifdef TEST_SBS_CHARGING
 #define CONFIG_BATTERY
 #define CONFIG_BATTERY_V2
 #define CONFIG_BATTERY_COUNT 1
