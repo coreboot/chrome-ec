@@ -2,6 +2,7 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#include "ap_ro_board_id_blocklist.h"
 #include "ap_ro_integrity_check.h"
 #include "board_id.h"
 #include "ccd_config.h"
@@ -769,28 +770,6 @@ static void  check_board_id_mismatch(void)
 }
 
 /*****************************************************************************/
-/*
- * Certain boards need to skip AP RO verification even when the hash is saved.
- * Block AP RO verification based on the board id type.
- */
-#define BLOCKED_BID_COUNT 7
-/*
- * This contains the ap ro verification board id blocklist. Skip AP RO
- * verification if the board id is found in the blocklist.
- */
-const uint32_t ap_ro_board_id_blocklist[] = {
-	/* b/185783841 block verification on unsupported devices. */
-	0x54514155, /* TQAU */
-	0x524c4745, /* RLGE */
-	0x56595243, /* VYRC */
-	0x44554b49, /* DUKI */
-	0x4346554c, /* CFUL */
-	0x5248444e, /* RHDN */
-	0x454b574c  /* EKWL */
-};
-BUILD_ASSERT(ARRAY_SIZE(ap_ro_board_id_blocklist) == BLOCKED_BID_COUNT);
-
-
 #define AP_RO_ALLOW_BID 1
 #define AP_RO_BLOCK_BID 2
 
