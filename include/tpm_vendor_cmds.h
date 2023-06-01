@@ -328,6 +328,7 @@ enum ap_ro_check_vc_errors {
 	ARCVE_NOT_PROGRAMMED = 10,
 	ARCVE_FLASH_READ_FAILED = 11,
 	ARCVE_BOARD_ID_BLOCKED = 12,
+	ARCVE_UNSUPPORTED_ADDRESS_TYPE = 13,
 };
 
 /* Structure for VENDOR_CC_SPI_HASH request which follows tpm_header */
