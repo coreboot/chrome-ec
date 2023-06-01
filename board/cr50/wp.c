@@ -430,6 +430,8 @@ int board_wipe_tpm(int reset_required)
 	/* Tell the TPM task to re-enable NvMem commits. */
 	tpm_reinstate_nvmem_commits();
 
+	/* Update the WP policies after the tpm is wiped. */
+	board_fwmp_update_policies();
 	/*
 	 * Use board_reboot_ec to ensure the system resets instead of
 	 * deassert_ec_reset. Some boards don't reset immediately when EC_RST_L
