@@ -55,6 +55,16 @@
 #define MAX_SUPPORTED_FLASH_SIZE (32 * 1024 * 1024)
 #define MAX_SUPPORTED_RANGE_SIZE (4 * 1024 * 1024)
 
+/* TODO(b/285387879): support 4byte addressing */
+/*
+ * Only 3byte addressing is supported. That supports up to 16MB flash chips.
+ * MAX_SUPPORTED_FLASH_SIZE is different than SUPPORTED_ADDRESSING_SIZE, so
+ * cr50 can save ranges for flash chips that use 4byte addressing. After
+ * AP RO verification starts supporting 4byte addressing, then it can start
+ * running verification on those boards.
+ */
+#define SUPPORTED_ADDRESSING_SIZE (16 * 1024 * 1024)
+
 /* Version of the AP RO check information saved in the H1 flash page. */
 #define AP_RO_HASH_LAYOUT_VERSION_0 0
 #define AP_RO_HASH_LAYOUT_VERSION_1 1
@@ -474,6 +484,26 @@ static enum vendor_cmd_rc vc_seed_ap_ro_check(enum vendor_cmd_cc code,
 }
 DECLARE_VENDOR_COMMAND(VENDOR_CC_SEED_AP_RO_CHECK, vc_seed_ap_ro_check);
 
+/*
+ * Check if any range is outside of 16MB.
+ *
+ * Returns:
+ *   EC_SUCCESS if if the range is in one of the AP RO ranges.
+ *   EC_ERROR_INVAL if any p_check range is outside of the max supported
+ *		    address.
+ */
+static int verify_ap_ro_addressing(void)
+{
+	int i;
+
+	for (i = 0; i < p_chk->header.num_ranges; i++) {
+		if ((p_chk->payload.ranges[i].flash_offset +
+			p_chk->payload.ranges[i].range_size) >
+			SUPPORTED_ADDRESSING_SIZE)
+			return EC_ERROR_INVAL;
+	}
+	return EC_SUCCESS;
+}
 static int verify_ap_ro_check_space(void)
 {
 	uint32_t checksum;
@@ -533,6 +563,10 @@ static enum ap_ro_check_vc_errors ap_ro_check_unsupported(int add_flash_event)
 		if (add_flash_event)
 			ap_ro_add_flash_event(APROF_SPACE_INVALID);
 		return ARCVE_FLASH_READ_FAILED; /* No verification possible. */
+	}
+	if (verify_ap_ro_addressing() != EC_SUCCESS) {
+		CPRINTS("%s: need 4byte addressing", __func__);
+		return ARCVE_UNSUPPORTED_ADDRESS_TYPE;
 	}
 	return ARCVE_OK;
 }
@@ -1176,6 +1210,7 @@ static uint8_t do_ap_ro_check(void)
 		break;
 	case ARCVE_NOT_PROGRAMMED:
 	case ARCVE_BOARD_ID_BLOCKED:
+	case ARCVE_UNSUPPORTED_ADDRESS_TYPE:
 		CPRINTS("%s: unsupported", __func__);
 		update_device_rst_deadline(UNSUPPORTED_DEVICE_RST_WINDOW);
 		apro_result = AP_RO_UNSUPPORTED_TRIGGERED;
@@ -1411,7 +1446,8 @@ static enum vendor_cmd_rc vc_get_ap_ro_status(enum vendor_cmd_cc code,
 	if (apro_result != AP_RO_UNSUPPORTED_TRIGGERED) {
 		v1_check = ap_ro_check_unsupported(false);
 		if (v1_check == ARCVE_NOT_PROGRAMMED ||
-		    v1_check == ARCVE_BOARD_ID_BLOCKED)
+		    v1_check == ARCVE_BOARD_ID_BLOCKED ||
+		    v1_check == ARCVE_UNSUPPORTED_ADDRESS_TYPE)
 			rv = AP_RO_UNSUPPORTED_NOT_TRIGGERED;
 	}
 
