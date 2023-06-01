@@ -51,7 +51,6 @@
 /* Optional console commands */
 #define CONFIG_CMD_FLASH
 #define CONFIG_CMD_SCRATCHPAD
-#define CONFIG_CMD_STACKOVERFLOW
 
 /* Debug */
 #undef CONFIG_CMD_FORCETIME
