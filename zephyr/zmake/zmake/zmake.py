@@ -448,7 +448,9 @@ class Zmake:
 
         self.logger.info("Compare zephyr builds")
 
-        cmp_builds = zmake.compare_builds.CompareBuilds(temp_dir, ref1, ref2)
+        cmp_builds = zmake.compare_builds.CompareBuilds(
+            temp_dir, ref1, ref2, self.executor, self._sequential
+        )
 
         for checkout in cmp_builds.checkouts:
             self.logger.info(
