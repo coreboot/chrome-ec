@@ -45,32 +45,27 @@
 	(CONFIG_BATTERY_CRITICAL_SHUTDOWN_TIMEOUT * SECOND)
 #define PRECHARGE_TIMEOUT_US (PRECHARGE_TIMEOUT * SECOND)
 
-#ifdef CONFIG_THROTTLE_AP_ON_BAT_DISCHG_CURRENT
+#if defined(CONFIG_THROTTLE_AP_ON_BAT_DISCHG_CURRENT) || \
+	defined(CONFIG_THROTTLE_AP_ON_BAT_VOLTAGE)
 #ifndef CONFIG_HOSTCMD_EVENTS
-#error "CONFIG_THROTTLE_AP_ON_BAT_DISCHG_CURRENT needs CONFIG_HOSTCMD_EVENTS"
+#error "Must define CONFIG_HOSTCMD_EVENTS"
 #endif /* CONFIG_HOSTCMD_EVENTS */
+#endif
+
+#define BAT_MAX_DISCHG_CURRENT 5000 /* mA */
+#define BAT_LOW_VOLTAGE_THRESH 3200 /* mV */
+
 #define BAT_OCP_TIMEOUT_US (60 * SECOND)
-/* BAT_OCP_HYSTERESIS_PCT can be optionally overridden in board.h. */
-#ifndef BAT_OCP_HYSTERESIS_PCT
 #define BAT_OCP_HYSTERESIS_PCT 10
-#endif /* BAT_OCP_HYSTERESIS_PCT */
 #define BAT_OCP_HYSTERESIS \
 	(BAT_MAX_DISCHG_CURRENT * BAT_OCP_HYSTERESIS_PCT / 100) /* mA */
-#endif /* CONFIG_THROTTLE_AP_ON_BAT_DISCHG_CURRENT */
 
-#ifdef CONFIG_THROTTLE_AP_ON_BAT_VOLTAGE
-#ifndef CONFIG_HOSTCMD_EVENTS
-#error "CONFIG_THROTTLE_AP_ON_BAT_VOLTAGE needs CONFIG_HOSTCMD_EVENTS"
-#endif /* CONFIG_HOSTCMD_EVENTS */
 #define BAT_UVP_TIMEOUT_US (60 * SECOND)
-/* BAT_UVP_HYSTERESIS_PCT can be optionally overridden in board.h. */
-#ifndef BAT_UVP_HYSTERESIS_PCT
 #define BAT_UVP_HYSTERESIS_PCT 3
-#endif /* BAT_UVP_HYSTERESIS_PCT */
 #define BAT_UVP_HYSTERESIS \
 	(BAT_LOW_VOLTAGE_THRESH * BAT_UVP_HYSTERESIS_PCT / 100) /* mV */
+
 static timestamp_t uvp_throttle_start_time;
-#endif /* CONFIG_THROTTLE_AP_ON_BAT_OLTAGE */
 
 static uint8_t battery_level_shutdown;
 
@@ -83,12 +78,8 @@ static struct charge_state_data curr;
 static enum charge_state prev_state;
 static int prev_ac, prev_charge, prev_disp_charge;
 static enum battery_present prev_bp;
-static enum ec_charge_control_mode chg_ctl_mode;
-static int manual_voltage; /* Manual voltage override (-1 = no override) */
-static int manual_current; /* Manual current override (-1 = no override) */
 static unsigned int user_current_limit = -1U;
 test_export_static timestamp_t shutdown_target_time;
-static bool is_charging_progress_displayed;
 static timestamp_t precharge_start_time;
 static struct sustain_soc sustain_soc;
 static struct current_limit {
@@ -96,9 +87,32 @@ static struct current_limit {
 	int soc; /* Minimum battery SoC at which the limit will be applied. */
 } current_limit = { -1U, 0 };
 
-/* State which is reported out from the charger */
+/* State which is reported out from the charger or updated externally */
 struct state {
-	bool is_full; /* battery is full, i.e. not accepting current */
+	/*
+	 * battery is full, i.e. not accepting current.
+	 * Accessed externally via charge_get_percent()
+	 */
+	bool is_full;
+	/* exported by get_chg_ctrl_mode() */
+	enum ec_charge_control_mode chg_ctl_mode;
+	/**
+	 * Manual voltage override (-1 = no override)
+	 * Accessed externally via chgstate_set_manual_voltage() and
+	 * charge_get_charge_state_debug()
+	 */
+	int manual_voltage;
+	/*
+	 * Manual current override (-1 = no override)
+	 * Accessed externally via chgstate_set_manual_current() and
+	 * charge_get_charge_state_debug()
+	 */
+	int manual_current;
+	/*
+	 * Accessed externally via charging_progress_displayed() and
+	 * show_charging_progress() (the latter for testing only)
+	 */
+	bool is_charging_progress_displayed;
 } local_state;
 
 /*
@@ -185,7 +199,7 @@ void charge_problem(enum problem_type p, int v)
 
 enum ec_charge_control_mode get_chg_ctrl_mode(void)
 {
-	return chg_ctl_mode;
+	return local_state.chg_ctl_mode;
 }
 
 void reset_prev_disp_charge(void)
@@ -305,8 +319,8 @@ static void dump_charge_state(void)
 	ccprintf("chg_ctl_mode = %s (%d)\n",
 		 cmode < CHARGE_CONTROL_COUNT ? mode_text[cmode] : "UNDEF",
 		 cmode);
-	ccprintf("manual_voltage = %d\n", manual_voltage);
-	ccprintf("manual_current = %d\n", manual_current);
+	ccprintf("manual_voltage = %d\n", local_state.manual_voltage);
+	ccprintf("manual_current = %d\n", local_state.manual_current);
 	ccprintf("user_current_limit = %dmA\n", user_current_limit);
 	ccprintf("battery_seems_dead = %d\n", battery_seems_dead);
 	ccprintf("battery_seems_disconnected = %d\n",
@@ -321,9 +335,9 @@ static void dump_charge_state(void)
 
 bool charging_progress_displayed(void)
 {
-	bool rv = is_charging_progress_displayed;
+	bool rv = local_state.is_charging_progress_displayed;
 
-	is_charging_progress_displayed = false;
+	local_state.is_charging_progress_displayed = false;
 	return rv;
 }
 
@@ -334,7 +348,7 @@ static void show_charging_progress(bool is_full)
 	int dsoc;
 
 	if (IS_ENABLED(TEST_BUILD))
-		is_charging_progress_displayed = true;
+		local_state.is_charging_progress_displayed = true;
 #ifdef CONFIG_BATTERY_SMART
 	/*
 	 * Predicted remaining battery capacity based on AverageCurrent().
@@ -544,14 +558,14 @@ int charge_request(bool use_curr, bool is_full)
 void chgstate_set_manual_current(int curr_ma)
 {
 	if (curr_ma < 0)
-		manual_current = -1;
+		local_state.manual_current = -1;
 	else
-		manual_current = charger_closest_current(curr_ma);
+		local_state.manual_current = charger_closest_current(curr_ma);
 }
 
 void chgstate_set_manual_voltage(int volt_mv)
 {
-	manual_voltage = charger_closest_voltage(volt_mv);
+	local_state.manual_voltage = charger_closest_voltage(volt_mv);
 }
 
 /* Force charging off before the battery is full. */
@@ -561,8 +575,8 @@ static int set_chg_ctrl_mode(enum ec_charge_control_mode mode)
 	int current, voltage;
 	int rv;
 
-	current = manual_current;
-	voltage = manual_voltage;
+	current = local_state.manual_current;
+	voltage = local_state.manual_voltage;
 
 	if (mode >= CHARGE_CONTROL_COUNT)
 		return EC_ERROR_INVAL;
@@ -592,9 +606,9 @@ static int set_chg_ctrl_mode(enum ec_charge_control_mode mode)
 	}
 
 	/* Commit all atomically */
-	chg_ctl_mode = mode;
-	manual_current = current;
-	manual_voltage = voltage;
+	local_state.chg_ctl_mode = mode;
+	local_state.manual_current = current;
+	local_state.manual_voltage = voltage;
 
 	return EC_SUCCESS;
 }
@@ -685,10 +699,9 @@ static int shutdown_on_critical_battery(void)
 		CPRINTS("Start shutdown due to critical battery");
 		shutdown_target_time.val =
 			get_time().val + CRITICAL_BATTERY_SHUTDOWN_TIMEOUT_US;
-#ifdef CONFIG_HOSTCMD_EVENTS
-		if (!chipset_in_state(CHIPSET_STATE_ANY_OFF))
+		if (IS_ENABLED(CONFIG_HOSTCMD_EVENTS) &&
+		    !chipset_in_state(CHIPSET_STATE_ANY_OFF))
 			host_set_single_event(EC_HOST_EVENT_BATTERY_SHUTDOWN);
-#endif
 		return 1;
 	}
 
@@ -767,13 +780,14 @@ int battery_is_below_threshold(enum batt_threshold_type type, bool transitioned)
  */
 static void notify_host_of_low_battery_charge(void)
 {
-#ifdef CONFIG_HOSTCMD_EVENTS
-	if (battery_is_below_threshold(BATT_THRESHOLD_TYPE_LOW, true))
-		host_set_single_event(EC_HOST_EVENT_BATTERY_LOW);
+	if (IS_ENABLED(CONFIG_HOSTCMD_EVENTS)) {
+		if (battery_is_below_threshold(BATT_THRESHOLD_TYPE_LOW, true))
+			host_set_single_event(EC_HOST_EVENT_BATTERY_LOW);
 
-	if (battery_is_below_threshold(BATT_THRESHOLD_TYPE_SHUTDOWN, true))
-		host_set_single_event(EC_HOST_EVENT_BATTERY_CRITICAL);
-#endif
+		if (battery_is_below_threshold(BATT_THRESHOLD_TYPE_SHUTDOWN,
+					       true))
+			host_set_single_event(EC_HOST_EVENT_BATTERY_CRITICAL);
+	}
 }
 
 static void set_charge_state(enum charge_state state)
@@ -784,7 +798,9 @@ static void set_charge_state(enum charge_state state)
 
 static void notify_host_of_low_battery_voltage(void)
 {
-#ifdef CONFIG_THROTTLE_AP_ON_BAT_VOLTAGE
+	if (!IS_ENABLED(CONFIG_THROTTLE_AP_ON_BAT_VOLTAGE))
+		return;
+
 	if ((curr.batt.flags & BATT_FLAG_BAD_VOLTAGE) ||
 	    chipset_in_state(CHIPSET_STATE_ANY_OFF))
 		return;
@@ -809,15 +825,14 @@ static void notify_host_of_low_battery_voltage(void)
 			    THROTTLE_SRC_BAT_VOLTAGE);
 		uvp_throttle_start_time.val = 0;
 	}
-#endif
 }
 
 static void notify_host_of_over_current(struct batt_params *batt)
 {
-#ifdef CONFIG_THROTTLE_AP_ON_BAT_DISCHG_CURRENT
 	static timestamp_t ocp_throttle_start_time;
 
-	if (batt->flags & BATT_FLAG_BAD_CURRENT)
+	if (!IS_ENABLED(CONFIG_THROTTLE_AP_ON_BAT_DISCHG_CURRENT) ||
+	    (batt->flags & BATT_FLAG_BAD_CURRENT))
 		return;
 
 	if ((!ocp_throttle_start_time.val &&
@@ -838,7 +853,6 @@ static void notify_host_of_over_current(struct batt_params *batt)
 		throttle_ap(THROTTLE_OFF, THROTTLE_SOFT,
 			    THROTTLE_SRC_BAT_DISCHG_CURRENT);
 	}
-#endif
 }
 
 const struct batt_params *charger_current_battery_params(void)
@@ -947,8 +961,8 @@ void charger_init(void)
 	memset(&curr, 0, sizeof(curr));
 	curr.batt.is_present = BP_NOT_SURE;
 	/* Manual voltage/current set to off */
-	manual_voltage = -1;
-	manual_current = -1;
+	local_state.manual_voltage = -1;
+	local_state.manual_current = -1;
 	/*
 	 * Other tasks read the params like state_of_charge at the beginning of
 	 * their tasks. Make them ready first.
@@ -1101,7 +1115,7 @@ static void charger_setup(const struct charger_info *info)
 	batt_info = battery_get_info();
 
 	prev_ac = prev_charge = prev_disp_charge = -1;
-	chg_ctl_mode = CHARGE_CONTROL_NORMAL;
+	local_state.chg_ctl_mode = CHARGE_CONTROL_NORMAL;
 	shutdown_target_time.val = 0UL;
 	battery_seems_dead = 0;
 	if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT)) {
@@ -1357,10 +1371,12 @@ static void adjust_requested_vi(const struct charger_info *const info,
 		 * we'll just tell it what it knows.
 		 */
 		else {
-			if (manual_voltage != -1)
-				curr.requested_voltage = manual_voltage;
-			if (manual_current != -1)
-				curr.requested_current = manual_current;
+			if (local_state.manual_voltage != -1)
+				curr.requested_voltage =
+					local_state.manual_voltage;
+			if (local_state.manual_current != -1)
+				curr.requested_current =
+					local_state.manual_current;
 		}
 	} else if (!IS_ENABLED(CONFIG_CHARGER_MAINTAIN_VBAT)) {
 		curr.requested_voltage = charger_closest_voltage(
@@ -1482,7 +1498,7 @@ int calculate_sleep_dur(int battery_critical, int sleep_usec)
 	return sleep_usec;
 }
 
-/* check external power and handle any changes */
+/* check external power and set curr.ac */
 static void check_extpower(int chgnum)
 {
 	curr.ac = extpower_is_present();
@@ -1490,9 +1506,6 @@ static void check_extpower(int chgnum)
 		if (base_check_extpower(curr.ac, prev_ac))
 			curr.ac = 0;
 	}
-
-	if (curr.ac != prev_ac)
-		process_ac_change(chgnum);
 }
 
 /* processing for new charge state, returning updated sleep_usec */
@@ -1555,6 +1568,8 @@ void charger_task(void *u)
 		battery_critical = 0;
 
 		check_extpower(chgnum);
+		if (curr.ac != prev_ac)
+			process_ac_change(chgnum);
 
 		if (IS_ENABLED(CONFIG_EC_EC_COMM_BATTERY_CLIENT))
 			base_update_battery_info();
@@ -1746,39 +1761,39 @@ enum led_pwr_state led_pwr_get_state(void)
 		chflags = charge_get_flags();
 
 		if (battery_seems_dead || curr.batt.is_present == BP_NO)
-			return PWR_STATE_ERROR;
+			return LED_PWRS_ERROR;
 
 		if (chflags & CHARGE_FLAG_FORCE_IDLE)
-			return PWR_STATE_FORCED_IDLE;
+			return LED_PWRS_FORCED_IDLE;
 		else
-			return PWR_STATE_IDLE;
+			return LED_PWRS_IDLE;
 	case ST_DISCHARGE:
 #ifdef CONFIG_PWR_STATE_DISCHARGE_FULL
 		if (battery_near_full())
-			return PWR_STATE_DISCHARGE_FULL;
+			return LED_PWRS_DISCHARGE_FULL;
 		else
 #endif
-			return PWR_STATE_DISCHARGE;
+			return LED_PWRS_DISCHARGE;
 	case ST_CHARGE:
 		/* The only difference here is what the LEDs display. */
 		if (IS_ENABLED(CONFIG_CHARGE_MANAGER) &&
 		    charge_manager_get_active_charge_port() == CHARGE_PORT_NONE)
-			return PWR_STATE_DISCHARGE;
+			return LED_PWRS_DISCHARGE;
 		else if (battery_near_full())
-			return PWR_STATE_CHARGE_NEAR_FULL;
+			return LED_PWRS_CHARGE_NEAR_FULL;
 		else
-			return PWR_STATE_CHARGE;
+			return LED_PWRS_CHARGE;
 	case ST_PRECHARGE:
 		chflags = charge_get_flags();
 
 		/* we're in battery discovery mode */
 		if (chflags & CHARGE_FLAG_FORCE_IDLE)
-			return PWR_STATE_FORCED_IDLE;
+			return LED_PWRS_FORCED_IDLE;
 		else
-			return PWR_STATE_IDLE;
+			return LED_PWRS_IDLE;
 	default:
 		/* Anything else can be considered an error for LED purposes */
-		return PWR_STATE_ERROR;
+		return LED_PWRS_ERROR;
 	}
 }
 
@@ -2104,10 +2119,10 @@ static int charge_get_charge_state_debug(int param, uint32_t *value)
 		*value = get_chg_ctrl_mode();
 		break;
 	case CS_PARAM_DEBUG_MANUAL_CURRENT:
-		*value = manual_current;
+		*value = local_state.manual_current;
 		break;
 	case CS_PARAM_DEBUG_MANUAL_VOLTAGE:
-		*value = manual_voltage;
+		*value = local_state.manual_voltage;
 		break;
 	case CS_PARAM_DEBUG_SEEMS_DEAD:
 		*value = battery_seems_dead;
