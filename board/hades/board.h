@@ -13,6 +13,9 @@
 /* Baseboard features */
 #include "baseboard.h"
 
+#define CONFIG_BRINGUP
+#define CONFIG_SYSTEM_UNLOCKED
+
 /*
  * Nvidia GPU
  */
@@ -125,9 +128,10 @@
 /* 5: Battery */
 #define I2C_PORT_BATTERY NPCX_I2C_PORT5_0
 /* 6: Unused */
-/* 7: Charger, EEPROM, IMVP9 VR, MONITOR */
+/* 7: Charger, EEPROM, IMVP9 VR, MONITOR, Power sequencer */
 #define I2C_PORT_CHARGER NPCX_I2C_PORT7_0
 #define I2C_PORT_EEPROM NPCX_I2C_PORT7_0
+#define I2C_PORT_MISC NPCX_I2C_PORT7_0
 
 #define I2C_ADDR_EEPROM_FLAGS 0x50
 
@@ -144,7 +148,7 @@
 #define CONFIG_CHARGER_BYPASS_MODE
 #define CONFIG_CHARGER_RAA489110
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
-#define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
+#define CONFIG_CHARGER_SENSE_RESISTOR_AC 20
 /* Round down 7700 max current to multiple of 128mA for ISL9241 AC prochot. */
 #define HADES_AC_PROCHOT_CURRENT_MA 7680
 

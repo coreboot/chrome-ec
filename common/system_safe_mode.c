@@ -70,9 +70,14 @@ bool is_current_task_safe_mode_critical(void)
 int disable_non_safe_mode_critical_tasks(void)
 {
 	for (task_id_t task_id = 0; task_id < TASK_ID_COUNT; task_id++) {
-		if (!is_task_safe_mode_critical(task_id)) {
+		/* Do not disable current task,
+		 * that is the responsibility of the panic handler.
+		 * If the current task is disabled while outside an interrupt
+		 * context, execution will halt.
+		 */
+		if (!is_task_safe_mode_critical(task_id) &&
+		    task_id != task_get_current())
 			task_disable_task(task_id);
-		}
 	}
 	return EC_SUCCESS;
 }
@@ -154,8 +159,6 @@ int start_system_safe_mode(void)
 		return EC_ERROR_INVAL;
 	}
 
-	disable_non_safe_mode_critical_tasks();
-
 	hook_call_deferred(&handle_system_safe_mode_timeout_data,
 			   CONFIG_SYSTEM_SAFE_MODE_TIMEOUT_MSEC * MSEC);
 
@@ -165,6 +168,8 @@ int start_system_safe_mode(void)
 	 * must not run in an ISR to this function.
 	 */
 	hook_call_deferred(&system_safe_mode_start_data, 0);
+
+	disable_non_safe_mode_critical_tasks();
 
 	in_safe_mode = true;
 

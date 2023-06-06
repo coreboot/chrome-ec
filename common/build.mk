@@ -45,6 +45,7 @@ common-$(CONFIG_BASE32)+=base32.o
 common-$(CONFIG_BLINK)+=blink.o
 common-$(CONFIG_DETACHABLE_BASE)+=base_state.o
 common-$(CONFIG_BATTERY)+=battery.o math_util.o
+common-$(CONFIG_BATTERY_CONFIG_IN_CBI)+=battery_config.o
 common-$(CONFIG_BATTERY_V1)+=battery_v1.o
 common-$(CONFIG_BATTERY_V2)+=battery_v2.o
 common-$(CONFIG_BATTERY_FUEL_GAUGE)+=battery_fuel_gauge.o
@@ -66,7 +67,7 @@ common-$(CONFIG_CHIP_INIT_ROM_REGION)+=init_rom.o
 common-$(CONFIG_CMD_CHARGEN) += chargen.o
 common-$(CONFIG_CHARGER)+=charger.o
 ifneq ($(CONFIG_CHARGER),)
-common-$(CONFIG_BATTERY)+=charge_state_v2.o
+common-$(CONFIG_BATTERY)+=charge_state.o
 endif
 ifneq ($(CONFIG_EC_EC_COMM_BATTERY_CLIENT),)
 common-$(CONFIG_BATTERY)+=charger_base.o

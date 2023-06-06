@@ -46,20 +46,6 @@
 /* clang-format on */
 
 /**
- * @brief Get compatible from @p driver
- *
- * @param driver USB mux driver description in format (compatible, config)
- */
-#define USB_MUX_DRIVER_GET_COMPAT(driver) GET_ARG_N(1, __DEBRACKET driver)
-
-/**
- * @brief Get configuration from @p driver
- *
- * @param driver USB mux driver description in format (compatible, config)
- */
-#define USB_MUX_DRIVER_GET_CONFIG(driver) GET_ARG_N(2, __DEBRACKET driver)
-
-/**
  * @brief Name of USB mux chain structure for given port and place in chain.
  *        Note, that root of chain is not referred by this name, but
  *        usb_muxes[@p port_id].
@@ -248,17 +234,6 @@
 				    USB_MUX_CB_BOARD_INIT_DECLARE)
 
 /**
- * @brief Call @p op operation for each node that is compatible with @p driver
- *
- * @param driver USB mux driver description in format (compatible, config)
- * @param op Operation to perform on each USB mux. Should accept mux node ID and
- *           driver config as arguments.
- */
-#define USB_MUX_DRIVER_CONFIG(driver, op)                                   \
-	DT_FOREACH_STATUS_OKAY_VARGS(USB_MUX_DRIVER_GET_COMPAT(driver), op, \
-				     USB_MUX_DRIVER_GET_CONFIG(driver))
-
-/**
  * @brief Call @p op operation for each USB mux node that is compatible with
  *        any driver from the USB_MUX_DRIVERS list.
  *        DT_FOREACH_STATUS_OKAY_VARGS() macro can not be used in @p op
@@ -267,7 +242,7 @@
  *           driver config as arguments.
  */
 #define USB_MUX_FOREACH_MUX_DT_VARGS(op) \
-	FOR_EACH_FIXED_ARG(USB_MUX_DRIVER_CONFIG, (), op, USB_MUX_DRIVERS)
+	DT_FOREACH_USBC_DRIVER_STATUS_OK_VARGS(op, USB_MUX_DRIVERS)
 
 /**
  * @brief Convert @p mux_id and @p conf pair into USB_MUX_LIST entry

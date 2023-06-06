@@ -7314,11 +7314,12 @@ int cmd_tabletmode(int argc, char *argv[])
 		return EC_ERROR_PARAM_COUNT;
 
 	memset(&p, 0, sizeof(p));
-	if (argv[1][0] == 'o' && argv[1][1] == 'n') {
+	/* |+1| to also make sure the strings the same length. */
+	if (strncmp(argv[1], "on", strlen("on") + 1) == 0) {
 		p.tablet_mode = TABLET_MODE_FORCE_TABLET;
-	} else if (argv[1][0] == 'o' && argv[1][1] == 'f') {
+	} else if (strncmp(argv[1], "off", strlen("off") + 1) == 0) {
 		p.tablet_mode = TABLET_MODE_FORCE_CLAMSHELL;
-	} else if (argv[1][0] == 'r') {
+	} else if (strncmp(argv[1], "reset", strlen("reset") + 1) == 0) {
 		// Match tablet mode to the current HW orientation.
 		p.tablet_mode = TABLET_MODE_DEFAULT;
 	} else {
@@ -8531,7 +8532,9 @@ static void cmd_cbi_help(char *cmd)
 
 static int cmd_cbi_is_string_field(enum cbi_data_tag tag)
 {
-	return tag == CBI_TAG_DRAM_PART_NUM || tag == CBI_TAG_OEM_NAME;
+	return tag == CBI_TAG_DRAM_PART_NUM || tag == CBI_TAG_OEM_NAME ||
+	       tag == CBI_TAG_FUEL_GAUGE_MANUF_NAME ||
+	       tag == CBI_TAG_FUEL_GAUGE_DEVICE_NAME;
 }
 
 /*

@@ -398,6 +398,10 @@ static int command_crash(int argc, const char **argv)
 
 		/* Unreachable, but included for consistency */
 		irq_unlock(lock_key);
+	} else if (!strcasecmp(argv[1], "null")) {
+		volatile uintptr_t null_ptr = 0x0;
+		cflush();
+		ccprintf("%08x\n", *(volatile unsigned int *)null_ptr);
 	} else {
 		return EC_ERROR_PARAM1;
 	}
@@ -411,7 +415,7 @@ DECLARE_CONSOLE_COMMAND(crash, command_crash,
 #ifdef CONFIG_CMD_STACKOVERFLOW
 			" | stack"
 #endif
-			" | unaligned | watchdog | hang]",
+			" | unaligned | watchdog | hang | null]",
 			"Crash the system (for testing)");
 
 #ifdef TEST_BUILD
@@ -425,6 +429,18 @@ int test_command_crash(int argc, const char **argv)
 static int command_panicinfo(int argc, const char **argv)
 {
 	struct panic_data *const pdata_ptr = panic_get_data();
+
+	if (argc == 2) {
+		if (!strcasecmp(argv[1], "clear")) {
+			memset(get_panic_data_write(), 0,
+			       CONFIG_PANIC_DATA_SIZE);
+			ccprintf("Panic info cleared\n");
+			return EC_SUCCESS;
+		} else {
+			return EC_ERROR_PARAM1;
+		}
+	} else if (argc != 1)
+		return EC_ERROR_PARAM_COUNT;
 
 	if (pdata_ptr) {
 		ccprintf("Saved panic data: 0x%02X %s\n", pdata_ptr->flags,
@@ -442,7 +458,7 @@ static int command_panicinfo(int argc, const char **argv)
 	}
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(panicinfo, command_panicinfo, NULL,
+DECLARE_CONSOLE_COMMAND(panicinfo, command_panicinfo, "[clear]",
 			"Print info from a previous panic");
 
 /*****************************************************************************/

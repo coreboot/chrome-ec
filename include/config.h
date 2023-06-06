@@ -355,15 +355,6 @@
 #undef CONFIG_ALS_TCS3400
 
 /*
- * Define to use atime tables in anti-saturation algos in the tcs3400 driver.
- * Defining this for a board makes the anti-saturation algorithm much more
- * efficient, but requires the board to have it's lens cover scale and k_channel
- * scales to be determined.  Define this for a board once it's added its
- * cover_scale and k_channel scale factors.
- */
-#undef CONFIG_TCS_USE_LUX_TABLE
-
-/*
  * Define the event to raise when a sensor interrupt triggers.
  * Must be within TASK_EVENT_MOTION_INTERRUPT_MASK.
  */
@@ -478,6 +469,11 @@
  * have or support a battery.
  */
 #undef CONFIG_BATTERY
+
+/**
+ * Enable Battery-config-in-CBI. It makes a board read battery info from CBI.
+ */
+#undef CONFIG_BATTERY_CONFIG_IN_CBI
 
 /*
  * Config to indicate the battery type that cannot be auto detected.
@@ -1620,6 +1616,7 @@
 #undef CONFIG_CMD_BATDEBUG
 #define CONFIG_CMD_BATTFAKE
 #undef CONFIG_CMD_BATT_MFG_ACCESS
+#undef CONFIG_CMD_BATTERY_CONFIG
 #undef CONFIG_CMD_BUTTON
 #define CONFIG_CMD_CBI
 #undef CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE
@@ -3204,6 +3201,10 @@
 #define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_GREEN
 #define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
 
+/* By default, 500 ms period, 50% duty cycle. */
+#define LED_CHARGER_ERROR_ON_TIME 1
+#define LED_CHARGER_ERROR_PERIOD 2
+
 /*
  * By default the PWM LED behaviour is reflected on both LEDs and includes the
  * chipset state, battery state, as well as the charging state.  Enable
@@ -3947,9 +3948,11 @@
  * override those defaults with these.
  */
 #undef CONFIG_RO_PUBKEY_ADDR
+#undef CONFIG_RO_PUBKEY_READ_ADDR
 #undef CONFIG_RO_PUBKEY_SIZE
 #undef CONFIG_RW_SIG_ADDR
 #undef CONFIG_RW_SIG_SIZE
+#undef CONFIG_RWSIG_READ_ADDR
 
 /* Size of the serial number if needed */
 #undef CONFIG_SERIALNO_LEN
@@ -5317,6 +5320,7 @@
 #undef CONFIG_BC12_DETECT_MT6360
 #undef CONFIG_BC12_DETECT_PI3USB9201
 #undef CONFIG_BC12_DETECT_PI3USB9281
+#undef CONFIG_BC12_DETECT_RT1718S
 /* Number of Pericom PI3USB9281 chips present in system */
 #undef CONFIG_BC12_DETECT_PI3USB9281_CHIP_COUNT
 /* The delay in ms from power off to power on for MAX14637 */
