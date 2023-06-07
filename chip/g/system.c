@@ -304,16 +304,6 @@ enum system_image_copy_t system_get_ro_image_copy(void)
 	return SYSTEM_IMAGE_UNKNOWN;
 }
 
-/*
- * TODO(crbug.com/698882): Remove support for version_struct_deprecated once
- * we no longer care about supporting legacy RO.
- */
-struct version_struct_deprecated {
-	uint32_t cookie1;
-	char version[32];
-	uint32_t cookie2;
-};
-
 #define CROS_EC_IMAGE_DATA_COOKIE1_DEPRECATED 0xce112233
 #define CROS_EC_IMAGE_DATA_COOKIE2_DEPRECATED 0xce445566
 
@@ -327,7 +317,6 @@ static char vers_str[MAX_RO_VER_LEN];
 const char *system_get_version(enum system_image_copy_t copy)
 {
 	const struct image_data *data;
-	const struct version_struct_deprecated *data_deprecated;
 	const char *version;
 
 	const struct SignedHeader *h;
@@ -382,8 +371,6 @@ const char *system_get_version(enum system_image_copy_t copy)
 
 		vaddr += delta;
 		data = (const struct image_data *)vaddr;
-		data_deprecated = (const struct version_struct_deprecated *)
-				  vaddr;
 
 		/*
 		 * Make sure the version struct cookies match before returning
@@ -392,12 +379,6 @@ const char *system_get_version(enum system_image_copy_t copy)
 		if (data->cookie1 == current_image_data.cookie1 &&
 		    data->cookie2 == current_image_data.cookie2)
 			version = data->version;
-		/* Check for old / deprecated structure. */
-		else if (data_deprecated->cookie1 ==
-			 CROS_EC_IMAGE_DATA_COOKIE1_DEPRECATED &&
-			 data_deprecated->cookie2 ==
-			 CROS_EC_IMAGE_DATA_COOKIE2_DEPRECATED)
-			version = data_deprecated->version;
 		else
 			break;
 
