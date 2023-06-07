@@ -8,7 +8,7 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.30        | 0.23.30
+[ToT][ToT ebuild]   | 0.24.40        | 0.23.30
 [M115][115 release] | 0.24.30        | 0.23.30
 [M114][114 release] | 0.24.30        | 0.23.30
 [M113][113 release] | 0.24.13        | 0.23.14
@@ -1007,6 +1007,39 @@ Build:   ti50_common_prepvt-15086.B:v0.0.239-60fad06f
          tock:v0.0.9630-0fa93d584
          ms-tpm-20-ref:v0.0.314-b366a8a
          @chromeos-ci-firmware-us-central2-d-x32-0-zjfs 2023-04-18 10:59:06
+```
+
+### 0.24.40 Released on 6/07/2023 in M116
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/4598064)
+
+Builder
+[43](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15086.B-branch/43/overview)
+
+Artifacts:
+[15086.38.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.38.0)
+
+Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15086.38.0.xml
+
+**Features**
+
+*   Add support for overwriting AP RO verification settings of `0 0` in field
+    for OS scipts [b/260721505](https://b.corp.google.com/issues/260721505)
+*   Add Shimless RMA keycombo support for verification failure case
+    [b/260721505](https://b.corp.google.com/issues/260721505)
+
+**Bug Fixes**
+
+*   Include improvement/fix for 0x63 boot issues
+    [b/273189926](https://b.corp.google.com/issues/273189926)
+
+```
+Build:   ti50_common_prepvt-15086.B:v0.0.355-15c69d7f
+         libtock-rs:v0.0.918-d13e197
+         tock:v0.0.9643-c973271b1
+         ms-tpm-20-ref:v0.0.316-a7bd523
+         @chromeos-ci-firmware-us-central2-d-x32-0-5zc7 2023-06-05 07:51:35
 ```
 
 <!-- Links -->
