@@ -9,6 +9,7 @@ This document captures major feature differences between Ti50 firmware releases
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
 [ToT][ToT ebuild]   | 0.24.30        | 0.23.30
+[M115][115 release] | 0.24.30        | 0.23.30
 [M114][114 release] | 0.24.30        | 0.23.30
 [M113][113 release] | 0.24.13        | 0.23.14
 [M112][112 release] | 0.24.13        | 0.23.3
@@ -384,6 +385,11 @@ Artifacts:
 [15224.14.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.14.0)
 
 Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15224.14.0.xml
+
+**Features**
+
+*   Add ConfigX support
+    [b/275356839](https://b.corp.google.com/issues/275356839)
 
 **Bug Fixes**
 
@@ -981,6 +987,11 @@ Artifacts:
 
 Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15086.37.0.xml
 
+**Features**
+
+*   Add factory config support
+    [b/275356839](https://b.corp.google.com/issues/275356839)
+
 **Bug Fixes**
 
 *   Add PCR-based policy to update fwmp and antirollback spaces
@@ -1010,4 +1021,5 @@ Build:   ti50_common_prepvt-15086.B:v0.0.239-60fad06f
 [112 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R112-15359.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [113 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R113-15393.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [114 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R114-15437.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[115 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R115-15474.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [ToT ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
