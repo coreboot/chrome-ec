@@ -388,7 +388,7 @@ Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15224.14.0.xml
 
 **Features**
 
-*   Add ConfigX support
+*   Add factory config support
     [b/275356839](https://b.corp.google.com/issues/275356839)
 
 **Bug Fixes**
