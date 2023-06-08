@@ -134,6 +134,9 @@ uint32_t get_feature_flags1(void)
 #ifdef CONFIG_SYSTEM_SAFE_MODE
 		| EC_FEATURE_MASK_1(EC_FEATURE_SYSTEM_SAFE_MODE)
 #endif
+#ifdef CONFIG_DEBUG_ASSERT_REBOOTS
+		| EC_FEATURE_MASK_1(EC_FEATURE_ASSERT_REBOOTS)
+#endif
 		;
 #ifdef CONFIG_EC_FEATURE_BOARD_OVERRIDE
 	result = board_override_feature_flags1(result);
