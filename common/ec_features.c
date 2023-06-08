@@ -147,6 +147,9 @@ uint32_t get_feature_flags1(void)
 #ifdef CONFIG_USB_MUX_AP_ACK_REQUEST
 		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_MUX_REQUIRE_AP_ACK)
 #endif
+#ifdef CONFIG_SYSTEM_SAFE_MODE
+		| EC_FEATURE_MASK_1(EC_FEATURE_SYSTEM_SAFE_MODE)
+#endif
 		;
 	return board_override_feature_flags1(result);
 }
