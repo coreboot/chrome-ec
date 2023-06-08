@@ -339,6 +339,34 @@ struct vendor_cc_spi_hash_request {
 	uint32_t size;		/* Size in bytes to hash/read */
 } __packed;
 
+struct ti50_stats {
+	/* filesystem initialization time in ms */
+	uint32_t fs_init_time;
+	/* filesustem usage in bytes */
+	uint32_t fs_usage;
+	/* AP RO verification time in ms */
+	uint32_t aprov_time;
+	/* combination of AP RO verification result and failure reason, used by
+	 * UMA
+	 */
+	uint32_t expanded_aprov_status;
+	/* [31:27] - bits used
+	 * [27: 4] - unused
+	 * [ 3: 3] - CCD_MODE
+	 * [ 2: 2] - rdd keep alive at boot
+	 * [ 1: 0] - rdd keep alive state
+	 */
+	uint32_t misc_status;
+};
+
+#define METRICSV_BITS_USED_SHIFT 27
+#define METRICSV_RDD_KEEP_ALIVE_MASK 3
+#define METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT 2
+#define METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK (1 << \
+		METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT)
+#define METRICSV_CCD_MODE_SHIFT 3
+#define METRICSV_CCD_MODE_MASK (1 << METRICSV_CCD_MODE_SHIFT)
+
 /* Maximum size of a response = SHA-256 hash or 1-32 bytes of data */
 #define SPI_HASH_MAX_RESPONSE_BYTES 32
 

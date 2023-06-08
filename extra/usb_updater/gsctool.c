@@ -520,6 +520,8 @@ static const struct option_container cmd_line_options[] = {
 	 "Enable debug messages"},
 	{{"version", no_argument, NULL, 'v'},
 	 "Report this utility version"},
+	{{"metrics", no_argument, NULL, 'W'},
+	 "Get Ti50 metrics"},
 	{{"wp", optional_argument, NULL, 'w'},
 	 "[enable] Get the current WP setting or enable WP"},
 	{{"clog", no_argument, NULL, 'x'},
@@ -4121,6 +4123,68 @@ static int process_get_time(struct transfer_descriptor *td)
 	return 0;
 }
 
+static int process_get_metrics(struct transfer_descriptor *td,
+		bool show_machine_output)
+{
+	uint32_t rv;
+	/* Allocate extra space in case future versions add more data. */
+	struct ti50_stats response[4] = {0};
+	size_t response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_TI50_STATS, NULL,
+				 0, (uint8_t *) &response, &response_size);
+	if (rv != VENDOR_RC_SUCCESS) {
+		printf("Get stats failed. (%X)\n", rv);
+		return 1;
+	}
+
+	if (response_size < sizeof(struct ti50_stats)) {
+		printf("Unexpected response size. (%zu)\n", response_size);
+		return 2;
+	}
+
+	if (show_machine_output) {
+		uint8_t *raw_response = (uint8_t *) response;
+
+		for (size_t i = 0; i < response_size; i++)
+			printf("%02X", raw_response[i]);
+	} else {
+		struct ti50_stats stats = *response;
+
+		stats.fs_init_time = be32toh(stats.fs_init_time);
+		stats.fs_usage = be32toh(stats.fs_usage);
+		stats.aprov_time = be32toh(stats.aprov_time);
+		stats.expanded_aprov_status =
+			be32toh(stats.expanded_aprov_status);
+		stats.misc_status = be32toh(stats.misc_status);
+		uint32_t bits_used = stats.misc_status >>
+			METRICSV_BITS_USED_SHIFT;
+
+		printf("fs_init_time:          %d\n",
+				stats.fs_init_time);
+		printf("fs_usage:              %d\n",
+				stats.fs_usage);
+		printf("aprov_time:            %d\n",
+				stats.aprov_time);
+		printf("expanded_aprov_status: %X\n",
+				stats.expanded_aprov_status);
+
+		if (bits_used >= 4) {
+			printf("rdd_keepalive:         %d\n",
+				stats.misc_status &
+				METRICSV_RDD_KEEP_ALIVE_MASK);
+			printf("rdd_keepalive_at_boot: %d\n",
+				(stats.misc_status &
+				METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK)
+				>> METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT);
+			printf("ccd_mode:              %d\n",
+				(stats.misc_status & METRICSV_CCD_MODE_MASK)
+				>> METRICSV_CCD_MODE_SHIFT);
+		}
+	}
+	return 0;
+}
+
 /*
  * The below variables and array must be held in sync with the appropriate
  * counterparts in defined in ti50:common/{hil,capsules}/src/boot_tracer.rs.
@@ -4265,6 +4329,7 @@ int main(int argc, char *argv[])
 	int get_time = 0;
 	bool get_boot_trace = false;
 	bool erase_boot_trace = false;
+	bool get_metrics = false;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4497,6 +4562,9 @@ int main(int argc, char *argv[])
 		case 'v':
 			report_version();  /* This will call exit(). */
 			break;
+		case 'W':
+			get_metrics = true;
+			break;
 		case 'w':
 			if (!optarg) {
 				wp = WP_CHECK;
@@ -4579,6 +4647,7 @@ int main(int argc, char *argv[])
 	    !get_console &&
 	    !get_flog &&
 	    !get_endorsement_seed &&
+	    !get_metrics &&
 	    !get_time &&
 	    !factory_config &&
 	    !factory_mode &&
@@ -4756,6 +4825,9 @@ int main(int argc, char *argv[])
 		exit(process_get_boot_trace(&td,
 					    erase_boot_trace,
 					    show_machine_output));
+
+	if (get_metrics)
+		exit(process_get_metrics(&td, show_machine_output));
 
 	if (data || show_fw_ver) {
 
