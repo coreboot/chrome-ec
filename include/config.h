@@ -3530,6 +3530,9 @@
 /* MKBP events are sent by using GPIO */
 #undef CONFIG_MKBP_USE_GPIO
 
+/* MKBP events GPIO is active high */
+#undef CONFIG_MKBP_USE_GPIO_ACTIVE_HIGH
+
 /*
  * MKBP events are notified by using both a GPIO and a host event.
  *
@@ -4994,6 +4997,7 @@
 #undef CONFIG_USBC_RETIMER_ANX7452
 #undef CONFIG_USBC_RETIMER_INTEL_BB
 #undef CONFIG_USBC_RETIMER_KB800X
+#undef CONFIG_USBC_RETIMER_KB8010
 #undef CONFIG_USBC_RETIMER_NB7V904M
 #undef CONFIG_USBC_RETIMER_PI3DPX1207
 #undef CONFIG_USBC_RETIMER_PI3HDX1204

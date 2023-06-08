@@ -24,7 +24,8 @@ zephyr_library_sources_ifdef(CONFIG_NAMED_ADC_CHANNELS      adc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
                                                             battery.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_RT9490
-                                                            bc12_rt9490.c)
+                                                            bc12_rt9490.c
+                                                            chg_rt9490.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER     charger.c)
 zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ               chipset_api.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI
@@ -40,6 +41,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_CROS_DRV
                                                             ioex.c
                                                             ioex_drv.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_KB8010 kb8010_usb_mux.c)
 if (NOT DEFINED CONFIG_PLATFORM_EC_KEYBOARD_DISCRETE)
   zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
                                                             keyboard_raw.c)
@@ -76,8 +78,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC    ppc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_NCT38XX
                                                             tcpc_nct38xx.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_TCPCI
-                                                            tcpc.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC        tcpc.c)
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBA        usba.c)
 zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ power_host_sleep_api.c)
