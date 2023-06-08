@@ -34,29 +34,29 @@
 /* Power states */
 enum led_pwr_state {
 	/* Meta-state; unchanged from previous time through task loop */
-	PWR_STATE_UNCHANGE = 0,
+	LED_PWRS_UNCHANGE = 0,
 	/* Initializing charge state machine at boot */
-	PWR_STATE_INIT,
+	LED_PWRS_INIT,
 	/* Re-initializing charge state machine */
-	PWR_STATE_REINIT,
+	LED_PWRS_REINIT,
 	/* Just transitioned from init to idle */
-	PWR_STATE_IDLE0,
+	LED_PWRS_IDLE0,
 	/* Idle; AC present */
-	PWR_STATE_IDLE,
+	LED_PWRS_IDLE,
 	/* Forced Idle */
-	PWR_STATE_FORCED_IDLE,
+	LED_PWRS_FORCED_IDLE,
 	/* Discharging */
-	PWR_STATE_DISCHARGE,
+	LED_PWRS_DISCHARGE,
 	/* Discharging and fully charged */
-	PWR_STATE_DISCHARGE_FULL,
+	LED_PWRS_DISCHARGE_FULL,
 	/* Charging */
-	PWR_STATE_CHARGE,
+	LED_PWRS_CHARGE,
 	/* Charging, almost fully charged */
-	PWR_STATE_CHARGE_NEAR_FULL,
+	LED_PWRS_CHARGE_NEAR_FULL,
 	/* Charging state machine error */
-	PWR_STATE_ERROR,
+	LED_PWRS_ERROR,
 	/*  Count of total states */
-	PWR_STATE_COUNT
+	LED_PWRS_COUNT
 };
 
 /* Charge state flags */
@@ -117,6 +117,9 @@ struct sustain_soc {
 	int8_t lower;
 	int8_t upper;
 };
+
+#define BAT_MAX_DISCHG_CURRENT 5000 /* mA */
+#define BAT_LOW_VOLTAGE_THRESH 3200 /* mV */
 
 /**
  * Return current charge state.
@@ -296,7 +299,7 @@ void board_base_reset(void);
 /**
  * Callback with which boards determine action on critical low battery
  *
- * The default implementation is provided in charge_state_v2.c. Overwrite it
+ * The default implementation is provided in charge_state.c. Overwrite it
  * to customize it.
  *
  * @param curr Pointer to struct charge_state_data

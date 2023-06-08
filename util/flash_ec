@@ -116,6 +116,7 @@ BOARDS_NPCX_7M7X_JTAG=(
 )
 
 BOARDS_NPCX_SPI=(
+	helipilot
 )
 
 BOARDS_NPCX_INT_SPI=(
@@ -142,6 +143,9 @@ BOARDS_RAIDEN=(
 	soraka
 )
 
+BOARDS_MCHP_INT_SPI=(
+	mtlrvpp_mchp
+)
 DEFAULT_PORT="${SERVOD_PORT:-9999}"
 BITBANG_RATE="57600"  # Could be overwritten by a command line option.
 
@@ -157,6 +161,8 @@ DEFINE_boolean dry_run "${FLAGS_FALSE}" \
 	"Print the commands to be run instead of actually running them."
 DEFINE_string image "" \
 	"Full pathname of the EC firmware image to flash."
+DEFINE_string mchp_loader "" \
+	"Full pathname of the Microchip loader firmware image to SRAM."
 DEFINE_string logfile "" \
 	"Stm32 only: pathname of the file to store communications log."
 DEFINE_string offset "0" \
@@ -322,6 +328,10 @@ if in_array "${BOARDS_IT83XX_SPI_PROGRAMMING[@]}" "${BOARD}"; then
 	SUPPORTED_CHIPS+=("ite_spi")
 fi
 
+if in_array "${BOARDS_MCHP_INT_SPI[@]}" "${BOARD}"; then
+	SUPPORTED_CHIPS+=("mchp_int_spi")
+fi
+
 if [[ ${#SUPPORTED_CHIPS[@]} -eq 0 && -n "${FLAGS_chip}" ]]; then
 	SUPPORTED_CHIPS+=("${FLAGS_chip}")
 fi
@@ -372,14 +382,14 @@ case "${BOARD}" in
 	chocodile_bec ) MCU="usbpd" ;;
 	oak_pd|strago_pd ) MCU="usbpd" ;;
 	chell_pd|glados_pd ) MCU="usbpd" ;;
-	bloonchipper|dartmonkey|hatch_fp|nami_fp|nocturne_fp ) MCU="fpmcu" ;;
+	bloonchipper|dartmonkey|hatch_fp|helipilot|nami_fp|nocturne_fp ) MCU="fpmcu" ;;
 	dingdong|hoho|twinkie ) DUT_CONTROL_CMD=( "true" ); MCU="ec" ;;
 	*) MCU="ec" ;;
 esac
 
 case "${CHIP}" in
 	"stm32"|"npcx_spi"|"npcx_int_spi"|"it83xx"|"npcx_uut"|"ite_spi"| \
-			"ite_spi_ccd_i2c"|"it8xxx2")
+			"ite_spi_ccd_i2c"|"it8xxx2"|"mchp_int_spi")
 		;;
 	*)
 		if [[ -n "${FLAGS_read}" ]]; then
@@ -750,6 +760,29 @@ function ec_image() {
 	die "no EC image found : build one or specify one."
 }
 
+# Find the Loader image to use
+function mchp_loader_image() {
+	# If no image specified on the command line, try default ones
+	if [[ -n "${FLAGS_mchp_loader}" ]] ; then
+		if [ -e "${FLAGS_mchp_loader}" ] || \
+		   [ "${FLAGS_mchp_loader}" == "-" ]; then
+			echo "${FLAGS_mchp_loader}"
+			return
+		fi
+		die "Invalid image path: ${FLAGS_mchp_loader}"
+	else
+		if [ -f "${LOCAL_BUILD}" ]; then
+			echo "${LOCAL_BUILD}"
+			return
+		fi
+		if [ -f "${EMERGE_BUILD}" ]; then
+			echo "${EMERGE_BUILD}"
+			return
+		fi
+	fi
+	die "No loader image found: build one or specify one"
+}
+
 # Get the correct UART for flashing. The resulting string is concatenated with
 # the various UART control suffixes, such as "_pty", "_en", "_parity", etc.
 function servo_ec_uart_prefix() {
@@ -989,6 +1022,14 @@ function flash_flashrom() {
 
 			# Set GP_SEL# as low then start ec
 			dut_control fw_up:on
+			sleep 0.2
+			dut_control cold_reset:off
+		# Gang programmer mode for npcx_spi requires using dev_mode
+		# rather than fw_up
+		elif [[ "${CHIP}" == "npcx_spi" ]]; then
+			servo_save_add "dev_mode" "off"
+
+			dut_control dev_mode:on
 			sleep 0.2
 			dut_control cold_reset:off
 		fi
@@ -1432,9 +1473,16 @@ function flash_npcx_jtag() {
 function flash_npcx_uut() {
 	local NPCX_UUT
 	local EC_UART
+	local TEMP_SUFFIX
+	local TEMP_DIR
+	local CUR_IMG
+	local PRESERVE_STATUS
 	local TOOL_PATH="${EC_DIR}/build/${BOARD}/util:${PATH}"
 	NPCX_UUT=$(PATH="${TOOL_PATH}" which uartupdatetool)
 	EC_UART="$(servo_ec_uart)"
+	TEMP_SUFFIX=".$(basename "${SCRIPT}").${CHIP}.$$"
+	TEMP_DIR="$(mktemp -d --suffix="${TEMP_SUFFIX}")"
+	DELETE_LIST+=("${TEMP_DIR}")
 
 	# Look for npcx_monitor.bin in multiple directories, starting with
 	# the same path as the EC binary.
@@ -1539,6 +1587,19 @@ function flash_npcx_uut() {
 			die "Failed to load monitor binary."
 		fi
 
+		PRESERVE_STATUS=0
+		is_preservation_needed "${IMG}" "${TEMP_DIR}" || PRESERVE_STATUS=$?
+		if [[ "${PRESERVE_STATUS}" -eq 0 ]]; then
+			info "Reading current EC firmware image."
+			CUR_IMG="${TEMP_DIR}/ec.cur.bin"
+			local UUT_CUR_RD=( "${NPCX_UUT}" "${UUT_ARGS[@]}"   \
+						"--read-flash" "--file=${CUR_IMG}" )
+			echo "${UUT_CUR_RD[*]}"
+			print_or_run timeout -k 10 -s 9 "${FLAGS_timeout}" \
+				"${UUT_CUR_RD[@]}" || die "${MSG_READ_FAIL}"
+
+			preserve_sections "${CUR_IMG}" "${IMG}" "${TEMP_DIR}"
+		fi
 
 		info "Programming EC firmware image."
 		local UUT_WR=( "${NPCX_UUT}" "${UUT_ARGS[@]}"      \
@@ -1553,13 +1614,7 @@ function flash_npcx_uut() {
 		# If it is a program-verify request, then make a temporary
 		# directory to store the image.
 		if [[ "${FLAGS_verify}" == "${FLAGS_TRUE}" ]]; then
-			local TEMP_SUFFIX
-			local TEMP_DIR
-			TEMP_SUFFIX=".$(basename "${SCRIPT}").${CHIP}.$$"
-			TEMP_DIR="$(mktemp -d --suffix="${TEMP_SUFFIX}")"
-
 			IMG_READ="${TEMP_DIR}/ec.read.bin"
-			DELETE_LIST+=( "${TEMP_DIR}" )
 		fi
 	fi
 
@@ -1615,8 +1670,37 @@ function flash_npcx_int_spi() {
 	flash_flashrom
 }
 
-function flash_mec1322() {
-	flash_flashrom
+function flash_mchp_int_spi() {
+	EC_UART="$(servo_ec_uart)"
+	EC_UART_PREFIX="$(servo_ec_uart_prefix)"
+
+	# Use of --value_only argument helps to get only baudrate value.
+	current_baudrate="$(dut_control_get "${EC_UART_PREFIX}"_baudrate)"
+
+	# On script exit, serial port will be configured back with saved
+	# baudrate by servo_restore thru cleanup method
+	servo_save_add "${EC_UART_PREFIX}_baudrate" "${current_baudrate}"
+
+	# Reset chip in firmware update mode
+	dut_control cold_reset:on fw_up:on cold_reset:off
+
+	# Set 9600 baudrate to program Second loader image
+	sec_load_baudrate=9600
+	if [ "${current_baudrate}" != "${sec_load_baudrate}" ] ; then
+	   dut_control "${EC_UART_PREFIX}"_baudrate:"${sec_load_baudrate}"
+	fi
+	# Load Second loader image into SRAM
+	mchp/crisis_rcvry_util.py -s "$(mchp_loader_image)" -p "${EC_UART}"
+
+	# Set 57600 baudrate to program EC image
+	image_load_baudrate=57600
+	dut_control "${EC_UART_PREFIX}"_baudrate:"${image_load_baudrate}"
+
+	# Flash EC image into the internal flash
+	mchp/crisis_rcvry_util.py -e "$(ec_image)" -p "${EC_UART}"
+
+	# Reset chip in firmware execution mode
+	dut_control cold_reset:on fw_up:off cold_reset:off
 }
 
 info "Using ${SERVO_TYPE}."
@@ -1631,6 +1715,44 @@ fi
 if [ "${NEED_SERVO}" != "no" ] ; then
 	servo_save
 fi
+
+function is_preservation_needed() {
+	local NEW_IMG
+	local TEMP_DIR
+
+	NEW_IMG=${1:?"missing arg 1: EC image path"}
+	NEW_IMG=$(readlink -f "${NEW_IMG}")
+	TEMP_DIR=${2:?"missing arg 2: Temp directory path"}
+
+	(
+		cd "${TEMP_DIR}"
+		dump_fmap "${NEW_IMG}" -e | grep -q ' preserve'
+	)
+}
+
+function preserve_sections() {
+	local CUR_IMG
+	local NEW_IMG
+	local TEMP_DIR
+
+	CUR_IMG=${1:?"missing arg 1: Cur EC image path"}
+	NEW_IMG=${2:?"missing arg 2: New EC image path"}
+	NEW_IMG=$(readlink -f "${NEW_IMG}")
+	TEMP_DIR=${3:?"missing arg 3: Temp directory path"}
+	(
+		cd "${TEMP_DIR}"
+		dump_fmap "${NEW_IMG}" -e | grep ' preserve' | cut \
+			-f1 -d' ' |
+		while read -r line
+		do
+			info "Preserving ${line} section on EC chip"
+			local SEC_IMG="${TEMP_DIR}/ec.cur.${line}.bin"
+
+			cbfstool "${CUR_IMG}" read -r "${line}" -f "${SEC_IMG}"
+			cbfstool "${NEW_IMG}" write -r "${line}" -f "${SEC_IMG}"
+		done
+	)
+}
 
 info "Flashing chip ${CHIP}."
 flash_"${CHIP}"

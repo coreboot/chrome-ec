@@ -470,6 +470,11 @@
  */
 #undef CONFIG_BATTERY
 
+/**
+ * Enable Battery-config-in-CBI. It makes a board read battery info from CBI.
+ */
+#undef CONFIG_BATTERY_CONFIG_IN_CBI
+
 /*
  * Config to indicate the battery type that cannot be auto detected.
  */
@@ -1611,6 +1616,7 @@
 #undef CONFIG_CMD_BATDEBUG
 #define CONFIG_CMD_BATTFAKE
 #undef CONFIG_CMD_BATT_MFG_ACCESS
+#undef CONFIG_CMD_BATTERY_CONFIG
 #undef CONFIG_CMD_BUTTON
 #define CONFIG_CMD_CBI
 #undef CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE
@@ -3524,6 +3530,9 @@
 /* MKBP events are sent by using GPIO */
 #undef CONFIG_MKBP_USE_GPIO
 
+/* MKBP events GPIO is active high */
+#undef CONFIG_MKBP_USE_GPIO_ACTIVE_HIGH
+
 /*
  * MKBP events are notified by using both a GPIO and a host event.
  *
@@ -3942,9 +3951,11 @@
  * override those defaults with these.
  */
 #undef CONFIG_RO_PUBKEY_ADDR
+#undef CONFIG_RO_PUBKEY_READ_ADDR
 #undef CONFIG_RO_PUBKEY_SIZE
 #undef CONFIG_RW_SIG_ADDR
 #undef CONFIG_RW_SIG_SIZE
+#undef CONFIG_RWSIG_READ_ADDR
 
 /* Size of the serial number if needed */
 #undef CONFIG_SERIALNO_LEN
@@ -4986,6 +4997,7 @@
 #undef CONFIG_USBC_RETIMER_ANX7452
 #undef CONFIG_USBC_RETIMER_INTEL_BB
 #undef CONFIG_USBC_RETIMER_KB800X
+#undef CONFIG_USBC_RETIMER_KB8010
 #undef CONFIG_USBC_RETIMER_NB7V904M
 #undef CONFIG_USBC_RETIMER_PI3DPX1207
 #undef CONFIG_USBC_RETIMER_PI3HDX1204

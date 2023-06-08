@@ -86,6 +86,12 @@ void reset_nct38xx_port(int port)
 		reset_gpio_l = &tcpc_config[0].rst_gpio;
 		ioex_port0 = DEVICE_DT_GET(DT_NODELABEL(ioex_c0_port0));
 		ioex_port1 = DEVICE_DT_GET(DT_NODELABEL(ioex_c0_port1));
+#if DT_NODE_EXISTS(DT_NODELABEL(nct3807_C1))
+	} else if (port == USBC_PORT_C1) {
+		reset_gpio_l = &tcpc_config[1].rst_gpio;
+		ioex_port0 = DEVICE_DT_GET(DT_NODELABEL(ioex_c1_port0));
+		ioex_port1 = DEVICE_DT_GET(DT_NODELABEL(ioex_c1_port1));
+#endif
 	} else {
 		/* Invalid port: do nothing */
 		return;
@@ -125,7 +131,7 @@ static void board_disable_charger_ports(void)
 	CPRINTSUSB("Disabling all charger ports");
 
 	/* Disable all ports. */
-	for (i = 0; i < ppc_cnt; i++) {
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 		/*
 		 * If this port had booted in dead battery mode, go
 		 * ahead and reset it so EN_SNK responds properly.
@@ -193,7 +199,7 @@ int board_set_active_charge_port(int port)
 	 * Turn off the other ports' sink path FETs, before enabling the
 	 * requested charge port.
 	 */
-	for (i = 0; i < ppc_cnt; i++) {
+	for (i = 0; i < board_get_usb_pd_port_count(); i++) {
 		if (i == port) {
 			continue;
 		}
@@ -209,12 +215,4 @@ int board_set_active_charge_port(int port)
 	}
 
 	return EC_SUCCESS;
-}
-
-__override bool board_is_tbt_usb4_port(int port)
-{
-	if (port == USBC_PORT_C0)
-		return true;
-
-	return false;
 }

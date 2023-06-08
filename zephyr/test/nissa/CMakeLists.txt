@@ -24,3 +24,23 @@ target_sources_ifdef(
         app PRIVATE
         src/common.c
         ${PLATFORM_EC_PROGRAM_DIR}/nissa/src/common.c)
+
+target_sources_ifdef(
+        CONFIG_TEST_NISSA_NIVVIKS
+        app PRIVATE
+        src/nivviks.c
+        ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/fan.c
+        ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/form_factor.c
+        ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/keyboard.c
+        ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/led.c
+)
+
+if(CONFIG_TEST_NISSA_NIVVIKS_CHARGER)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    target_sources(
+            app PRIVATE
+            src/nivviks_charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/usbc.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/charger.c
+    )
+endif()

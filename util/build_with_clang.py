@@ -21,6 +21,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     # Fingerprint boards
     "dartmonkey",
     "bloonchipper",
+    "helipilot",
     "nami_fp",
     "nucleo-dartmonkey",
     "nucleo-f412zg",
@@ -118,6 +119,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "banshee",
     "berknip",
     "bloog",
+    "bobba",
     "boldar",
     "brask",
     "brya",
@@ -126,6 +128,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "careena",
     "casta",
     "chronicler",
+    "coachz",
     "collis",
     "constitution",
     "copano",
@@ -176,6 +179,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "kohaku",
     "kuldax",
     "lalala",
+    "lazor",
     "liara",
     "lick",
     "lindar",
@@ -303,10 +307,6 @@ RISCV_BOARDS = [
 BOARDS_THAT_FAIL_WITH_CLANG = [
     # Boards that use CHIP:=stm32 *and* CHIP_FAMILY:=stm32f0
     "chocodile_vpdmcu",  # compilation error: b/254710459
-    # Boards that use CHIP:=npcx
-    "bobba",  # overflows flash
-    "coachz",  # overflows flash
-    "lazor",  # overflows flash
 ]
 
 # TODO(b/201311714): NDS32 is not supported by LLVM.

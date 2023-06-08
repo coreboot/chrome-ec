@@ -6162,6 +6162,40 @@ enum cbi_data_tag {
 	CBI_TAG_SSFC = 8, /* uint32_t bit field */
 	CBI_TAG_REWORK_ID = 9, /* uint64_t or smaller */
 	CBI_TAG_FACTORY_CALIBRATION_DATA = 10, /* uint32_t bit field */
+	/*
+	 * Battery info
+	 */
+	/* struct fuel_gauge_info */
+	CBI_TAG_FUEL_GAUGE_MANUF_NAME,
+	CBI_TAG_FUEL_GAUGE_DEVICE_NAME,
+	CBI_TAG_FUEL_GAUGE_FLAGS,
+	/* struct ship_mod_info */
+	CBI_TAG_BATT_SHIP_MODE_REG_ADDR,
+	CBI_TAG_BATT_SHIP_MODE_REG_DATA,
+	CBI_TAG_BATT_SHIP_MODE_FLAGS, /* enum ship_mode_flag */
+	/* struct sleep_mode_info */
+	CBI_TAG_BATT_SLEEP_MODE_REG_ADDR,
+	CBI_TAG_BATT_SLEEP_MODE_REG_DATA,
+	CBI_TAG_BATT_SLEEP_MODE_FLAGS, /* enum sleep_mode_flag */
+	/* struct fet_info */
+	CBI_TAG_BATT_FET_REG_ADDR,
+	CBI_TAG_BATT_FET_REG_MASK,
+	CBI_TAG_BATT_FET_DISCONNECT_VAL,
+	CBI_TAG_BATT_FET_CFET_MASK,
+	CBI_TAG_BATT_FET_CFET_OFF_VAL,
+	CBI_TAG_BATT_FET_FLAGS, /* enum batt_fet_flag */
+	/* struct battery_info */
+	CBI_TAG_BATT_VOLTAGE_MAX,
+	CBI_TAG_BATT_VOLTAGE_NORMAL,
+	CBI_TAG_BATT_VOLTAGE_MIN,
+	CBI_TAG_BATT_PRECHARGE_VOLTAGE,
+	CBI_TAG_BATT_PRECHARGE_CURRENT,
+	CBI_TAG_BATT_START_CHARGING_MIN_C,
+	CBI_TAG_BATT_START_CHARGING_MAX_C,
+	CBI_TAG_BATT_CHARGING_MIN_C,
+	CBI_TAG_BATT_CHARGING_MAX_C,
+	CBI_TAG_BATT_DISCHARGING_MIN_C,
+	CBI_TAG_BATT_DISCHARGING_MAX_C,
 	CBI_TAG_COUNT,
 };
 
@@ -7751,6 +7785,39 @@ struct ec_params_fp_read_match_secret {
 #define FP_POSITIVE_MATCH_SECRET_BYTES 32
 struct ec_response_fp_read_match_secret {
 	uint8_t positive_match_secret[FP_POSITIVE_MATCH_SECRET_BYTES];
+} __ec_align4;
+
+#define FP_ELLIPTIC_CURVE_PUBLIC_KEY_POINT_LEN 32
+
+struct fp_elliptic_curve_public_key {
+	uint8_t x[FP_ELLIPTIC_CURVE_PUBLIC_KEY_POINT_LEN];
+	uint8_t y[FP_ELLIPTIC_CURVE_PUBLIC_KEY_POINT_LEN];
+} __ec_align4;
+
+#define FP_AES_KEY_ENC_METADATA_VERSION 1
+#define FP_AES_KEY_NONCE_BYTES 12
+#define FP_AES_KEY_ENCRYPTION_SALT_BYTES 16
+#define FP_AES_KEY_TAG_BYTES 16
+
+struct fp_auth_command_encryption_metadata {
+	/* Version of the structure format */
+	uint16_t struct_version;
+	/* Reserved bytes, set to 0. */
+	uint16_t reserved;
+	/*
+	 * The salt is *only* ever used for key derivation. The nonce is unique,
+	 * a different one is used for every message.
+	 */
+	uint8_t nonce[FP_AES_KEY_NONCE_BYTES];
+	uint8_t encryption_salt[FP_AES_KEY_ENCRYPTION_SALT_BYTES];
+	uint8_t tag[FP_AES_KEY_TAG_BYTES];
+} __ec_align4;
+
+#define FP_ELLIPTIC_CURVE_PRIVATE_KEY_LEN 32
+
+struct fp_encrypted_private_key {
+	struct fp_auth_command_encryption_metadata info;
+	uint8_t data[FP_ELLIPTIC_CURVE_PRIVATE_KEY_LEN];
 } __ec_align4;
 
 /*****************************************************************************/
