@@ -891,6 +891,7 @@ static const char * const ec_feature_names[] = {
 	[EC_FEATURE_TYPEC_MUX_REQUIRE_AP_ACK] =
 		"AP ack for Type-C mux configuration",
 	[EC_FEATURE_SYSTEM_SAFE_MODE] = "System Safe Mode support",
+	[EC_FEATURE_ASSERT_REBOOTS] = "Assert reboots",
 };
 
 int cmd_inventory(int argc, char *argv[])
