@@ -67,15 +67,86 @@ struct cros_perso_certificate_response_v0 {
 BUILD_ASSERT(sizeof(struct cros_perso_response_component_info_v0) == 8);
 BUILD_ASSERT(sizeof(struct cros_perso_certificate_response_v0) == 8);
 
+static int store_cert(enum cros_perso_component_type component_type,
+		const uint8_t *cert, size_t cert_len)
+{
+	const uint32_t rsa_ek_nv_index = EK_CERT_NV_START_INDEX;
+	const uint32_t ecc_ek_nv_index = EK_CERT_NV_START_INDEX + 1;
+	uint32_t nv_index;
+	NV_DefineSpace_In define_space;
+	TPMA_NV space_attributes;
+	NV_Write_In in;
 
-/*
- * Uncomment the #define below to enable fallback certificate installatin
- * capability.
+	/* Clear up structures potentially used only partially. */
+	memset(&define_space, 0, sizeof(define_space));
+	memset(&space_attributes, 0, sizeof(space_attributes));
+	memset(&in, 0, sizeof(in));
+
+	/* Indicate that a system reset has occurred, and currently
+	 * running with Platform auth.
+	 */
+	HierarchyStartup(SU_RESET);
+
+	if (component_type == CROS_PERSO_COMPONENT_TYPE_RSA_CERT)
+		nv_index = rsa_ek_nv_index;
+	else   /* P256 certificate. */
+		nv_index = ecc_ek_nv_index;
+
+	/* EK Credential attributes specified in the "TCG PC Client
+	 * Platform, TPM Profile (PTP) Specification" document.
+	 */
+	/* REQUIRED: Writeable under platform auth. */
+	space_attributes.TPMA_NV_PPWRITE = 1;
+	/* OPTIONAL: Write-once; space must be deleted to be re-written. */
+	space_attributes.TPMA_NV_WRITEDEFINE = 1;
+	/* REQUIRED: Space created with platform auth. */
+	space_attributes.TPMA_NV_PLATFORMCREATE = 1;
+	/* REQUIRED: Readable under empty password? */
+	space_attributes.TPMA_NV_AUTHREAD = 1;
+	/* REQUIRED: Disable dictionary attack protection. */
+	space_attributes.TPMA_NV_NO_DA = 1;
+
+	define_space.authHandle = TPM_RH_PLATFORM;
+	define_space.auth.t.size = 0;
+	define_space.publicInfo.t.size = sizeof(
+		define_space.publicInfo.t.nvPublic);
+	define_space.publicInfo.t.nvPublic.nvIndex = nv_index;
+	define_space.publicInfo.t.nvPublic.nameAlg = TPM_ALG_SHA256;
+	define_space.publicInfo.t.nvPublic.attributes = space_attributes;
+	define_space.publicInfo.t.nvPublic.authPolicy.t.size = 0;
+	define_space.publicInfo.t.nvPublic.dataSize = cert_len;
+
+	/* Define the required space first. */
+	if (TPM2_NV_DefineSpace(&define_space) != TPM_RC_SUCCESS)
+		return 0;
+
+	/* TODO(ngm): call TPM2_NV_WriteLock(nvIndex) on tpm_init();
+	 * this prevents delete?
+	 */
+
+	in.nvIndex = nv_index;
+	in.authHandle = TPM_RH_PLATFORM;
+	in.data.t.size = cert_len;
+	memcpy(in.data.t.buffer, cert, cert_len);
+	in.offset = 0;
+
+	if (TPM2_NV_Write(&in) != TPM_RC_SUCCESS)
+		return 0;
+	if (NvCommit())
+		return 1;
+	return 0;
+}
+
+/**
+ * CR50_USE_FIXED_CERT installs fixed EPS and associated certificates instead
+ * of looking for EPS and certificates installed during manufacturing.
  *
-#define CR50_INCLUDE_FALLBACK_CERT
+ * This is particularly useful on H1 Red Board where spiflash destroys
+ * certificates and in development environment where installation of
+ * certificates will fail. Earlier implemented `fallback` bloats code
+ * size and limits other features.
  */
-
-#ifdef CR50_INCLUDE_FALLBACK_CERT
+#ifdef CR50_USE_FIXED_CERT
 
 /* This is a fixed seed (and corresponding certificates) for use in a
  * developer environment.  Use of this fixed seed will be triggered if
@@ -278,7 +349,7 @@ static int install_fixed_certs(void)
 	return 1;
 }
 
-#endif
+#else /* below for the case `not CR50_USE_FIXED_CERT` */
 
 /* Test endorsement CA root. */
 static const uint32_t TEST_ENDORSEMENT_CA_RSA_N[64] = {
@@ -372,75 +443,6 @@ static int validate_cert(
 		DCRYPTO_OK);
 }
 
-static int store_cert(enum cros_perso_component_type component_type,
-		const uint8_t *cert, size_t cert_len)
-{
-	const uint32_t rsa_ek_nv_index = EK_CERT_NV_START_INDEX;
-	const uint32_t ecc_ek_nv_index = EK_CERT_NV_START_INDEX + 1;
-	uint32_t nv_index;
-	NV_DefineSpace_In define_space;
-	TPMA_NV space_attributes;
-	NV_Write_In in;
-
-	/* Clear up structures potentially uszed only partially. */
-	memset(&define_space, 0, sizeof(define_space));
-	memset(&space_attributes, 0, sizeof(space_attributes));
-	memset(&in, 0, sizeof(in));
-
-	/* Indicate that a system reset has occurred, and currently
-	 * running with Platform auth.
-	 */
-	HierarchyStartup(SU_RESET);
-
-	if (component_type == CROS_PERSO_COMPONENT_TYPE_RSA_CERT)
-		nv_index = rsa_ek_nv_index;
-	else   /* P256 certificate. */
-		nv_index = ecc_ek_nv_index;
-
-	/* EK Credential attributes specified in the "TCG PC Client
-	 * Platform, TPM Profile (PTP) Specification" document.
-	 */
-	/* REQUIRED: Writeable under platform auth. */
-	space_attributes.TPMA_NV_PPWRITE = 1;
-	/* OPTIONAL: Write-once; space must be deleted to be re-written. */
-	space_attributes.TPMA_NV_WRITEDEFINE = 1;
-	/* REQUIRED: Space created with platform auth. */
-	space_attributes.TPMA_NV_PLATFORMCREATE = 1;
-	/* REQUIRED: Readable under empty password? */
-	space_attributes.TPMA_NV_AUTHREAD = 1;
-	/* REQUIRED: Disable dictionary attack protection. */
-	space_attributes.TPMA_NV_NO_DA = 1;
-
-	define_space.authHandle = TPM_RH_PLATFORM;
-	define_space.auth.t.size = 0;
-	define_space.publicInfo.t.size = sizeof(
-		define_space.publicInfo.t.nvPublic);
-	define_space.publicInfo.t.nvPublic.nvIndex = nv_index;
-	define_space.publicInfo.t.nvPublic.nameAlg = TPM_ALG_SHA256;
-	define_space.publicInfo.t.nvPublic.attributes = space_attributes;
-	define_space.publicInfo.t.nvPublic.authPolicy.t.size = 0;
-	define_space.publicInfo.t.nvPublic.dataSize = cert_len;
-
-	/* Define the required space first. */
-	if (TPM2_NV_DefineSpace(&define_space) != TPM_RC_SUCCESS)
-		return 0;
-
-	/* TODO(ngm): call TPM2_NV_WriteLock(nvIndex) on tpm_init();
-	 * this prevents delete?
-	 */
-
-	in.nvIndex = nv_index;
-	in.authHandle = TPM_RH_PLATFORM;
-	in.data.t.size = cert_len;
-	memcpy(in.data.t.buffer, cert, cert_len);
-	in.offset = 0;
-
-	if (TPM2_NV_Write(&in) != TPM_RC_SUCCESS)
-		return 0;
-	if (NvCommit())
-		return 1;
-	return 0;
-}
 
 static void flash_cert_region_enable(void)
 {
@@ -485,22 +487,6 @@ static int get_decrypted_eps(uint8_t eps[PRIMARY_SEED_SIZE])
 	return 1;
 }
 
-static int store_eps(const uint8_t eps[PRIMARY_SEED_SIZE])
-{
-	/* gp is a TPM global state structure, declared in Global.h. */
-	memcpy(gp.EPSeed.t.buffer, eps, PRIMARY_SEED_SIZE);
-	gp.EPSeed.t.size = PRIMARY_SEED_SIZE;
-
-	/* Persist the seed to flash. */
-	NvWriteReserved(NV_EP_SEED, &gp.EPSeed);
-	return NvCommit();
-}
-
-static void endorsement_complete(void)
-{
-	CPRINTF("%s(): SUCCESS\n", __func__);
-}
-
 static int handle_cert(
 	const struct cros_perso_response_component_info_v0 *cert_info,
 	const struct cros_perso_certificate_response_v0 *cert,
@@ -521,9 +507,28 @@ static int handle_cert(
 
 	return 1;
 }
+#endif /* above for the case `not CR50_USE_FIXED_CERT` */
+
+static int store_eps(const uint8_t eps[PRIMARY_SEED_SIZE])
+{
+	/* gp is a TPM global state structure, declared in Global.h. */
+	memcpy(gp.EPSeed.t.buffer, eps, PRIMARY_SEED_SIZE);
+	gp.EPSeed.t.size = PRIMARY_SEED_SIZE;
+
+	/* Persist the seed to flash. */
+	NvWriteReserved(NV_EP_SEED, &gp.EPSeed);
+	return NvCommit();
+}
+
+static void endorsement_complete(void)
+{
+	CPRINTF("%s(): SUCCESS\n", __func__);
+}
 
 enum manufacturing_status tpm_endorse(void)
 {
+	enum manufacturing_status result;
+#ifndef CR50_USE_FIXED_CERT
 	struct ro_cert_response {
 		uint8_t key_id[4];
 		uint32_t cert_len;
@@ -546,7 +551,6 @@ enum manufacturing_status tpm_endorse(void)
 	const uint32_t *c = (const uint32_t *) RO_CERTS_START_ADDR;
 	const struct ro_cert *rsa_cert;
 	const struct ro_cert *ecc_cert;
-	enum manufacturing_status result;
 	uint8_t eps[PRIMARY_SEED_SIZE];
 
 	struct hmac_sha256_ctx hmac;
@@ -605,24 +609,7 @@ enum manufacturing_status tpm_endorse(void)
 				   HMAC_SHA256_final(&hmac),
 				   32) != DCRYPTO_OK) {
 			CPRINTF("%s: bad cert region hmac;", __func__);
-#ifdef CR50_INCLUDE_FALLBACK_CERT
-			/* HMAC verification failure indicates either
-			 * a manufacture fault, or mis-match in
-			 * production mode and currently running
-			 * firmware (e.g. PRODUCTION mode chip, now
-			 * flashed with DEV mode firmware.
-			 *
-			 * In either case, fall back to a fixed
-			 * endorsement seed, which will not be trusted
-			 * by production infrastructure.
-			 */
-			if (!install_fixed_certs()) {
-				CPRINTF(" failed to install fixed "
-					"endorsement certs;");
-				result = mnf_hmac_mismatch;
-				break;
-			}
-#else
+
 			if (board_in_prod_mode()) {
 
 				/* TODO(ngm): is this state considered
@@ -645,8 +632,7 @@ enum manufacturing_status tpm_endorse(void)
 			 * problems when TPM identity is required.
 			 */
 			result = mnf_unverified_cert;
-			CPRINTF("instaling UNVERIFIED certs\n");
-#endif
+			CPRINTF("installing UNVERIFIED certs\n");
 		}
 
 		if (!handle_cert(
@@ -684,5 +670,18 @@ enum manufacturing_status tpm_endorse(void)
 	} while (0);
 
 	always_memset(eps, 0, sizeof(eps));
+#else  /*  CR50_USE_FIXED_CERT vvvv defined    ^^^^^ not defined */
+	if (!install_fixed_certs()) {
+		CPRINTF(" failed to install fixed "
+			"endorsement certs;");
+		result = mnf_hmac_mismatch;
+	} else {
+		/* Mark as endorsed. */
+		endorsement_complete();
+
+		/* Chip has been marked as manufactured. */
+		result = mnf_success;
+	}
+#endif
 	return result;
 }
