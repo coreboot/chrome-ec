@@ -4,7 +4,7 @@ This write up describes an alternative method of controlling GSC and Chrome
 OS devices using Servo Micro or C2D2 called `adapters` below.
 
 The version you are looking at might be not the latest and greatest, [this
-link](https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/cr50_stab/docs/gsc_without_servod.md)
+link](https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/gsc_utils/docs/gsc_without_servod.md)
 points to the most updated copy.
 
 In a typical setup these `adapters` are controlled by the `servod` utility.
@@ -43,7 +43,7 @@ tree as follows:
 ```
 $ git clone https://chromium.googlesource.com/chromiumos/platform/ec
 $ cd ec
-$ git checkout -b cr50 origin/cr50_stab
+$ git checkout -b gsc origin/gsc_utils
 $ ls util/{maptty,brescue}.sh
 util/brescue.sh*  util/maptty.sh*
 ```
