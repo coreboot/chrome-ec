@@ -4038,7 +4038,10 @@ static const char * const boot_tracer_stages[] = {
 	"EcRstAsserted",
 	"EcRstDeasserted",
 	"TpmRstAsserted",
-	"TmRstDeasserted"
+	"TmRstDeasserted",
+	"FirstApComms",
+	"PcrExtension",
+	"TpmAppReady"
 };
 
 static int process_get_boot_trace(struct transfer_descriptor *td,
