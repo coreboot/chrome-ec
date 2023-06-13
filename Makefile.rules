@@ -187,6 +187,8 @@ build_boards: | $(FAILED_BOARDS_DIR)
 build_cr50_extras: build_boards
 	$(MAKE) proj-cr50 CRYPTO_TEST=1 out=build/cr50_ct
 	$(MAKE) proj-cr50 CRYPTO_TEST=1 H1_RED_BOARD=1 out=build/cr50_ct_rb
+	$(MAKE) proj-cr50 H1_RED_BOARD=1 CR50_USE_FIXED_CERT=1 \
+		out=build/cr50_rb_cert
 	$(MAKE) proj-cr50 CR50_DEV=1 out=build/cr50_dbg
 
 .PHONY: buildall
