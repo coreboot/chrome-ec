@@ -28,6 +28,10 @@ ENV_VARS := CR50_DEV CRYPTO_TEST CMAC_TEST DCRYPTO_TEST DRBG_TEST ECDSA_TEST\
 
 ifneq ($(H1_RED_BOARD),)
 CPPFLAGS += -DH1_RED_BOARD=$(EMPTY)
+# Enable deep sleep by default on H1 red board
+ifneq ($(H1_RED_BOARD_DEEP_SLEEP),)
+CPPFLAGS += -DH1_RED_BOARD_DEEP_SLEEP=1
+endif
 endif
 
 ifneq ($(CRYPTO_TEST),)

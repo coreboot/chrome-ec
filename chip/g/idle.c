@@ -213,7 +213,11 @@ static void idle_init(void)
 		CPRINTS("bus obfuscation enabled disabling sleep");
 		idle_default = IDLE_WFI;
 	} else {
+#ifdef H1_RED_BOARD_DEEP_SLEEP
+		idle_default = IDLE_DEEP_SLEEP;
+#else
 		idle_default = IDLE_SLEEP;
+#endif
 	}
 }
 DECLARE_HOOK(HOOK_INIT, idle_init, HOOK_PRIO_DEFAULT - 1);
