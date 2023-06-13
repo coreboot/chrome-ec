@@ -90,9 +90,22 @@ if [[ ${device} != /dev/*  || ! -e ${device} ]]; then
   usage
 fi
 
-if [[ -n $(lsof "${device}" 2>/dev/null) ]]; then
-  echo "${device} is in use, make sure it is available" >&2
-  exit 1
+pid="$(lsof "${device}" | awk -v v="${device}" '/v/ {print $2}')"
+if [[ -n ${pid} ]]; then
+  echo -n "${device} is in use, will try to kill process ${pid} "
+  deadline=$(( $(date '+%s') + 5 ))
+  kill -HUP "${pid}"
+  while [[ $(date '+%s') -le ${deadline} ]]; do
+    echo -n '.'
+    if [[ -z $(lsof "${device}") ]]; then
+      break
+    fi
+  done
+  if [[ -n $(lsof "${device}") ]]; then
+    printf "\nFailed to kill process using %s\n"  "${device}" >&2
+    exit 1
+  fi
+  echo " succeeded"
 fi
 
 # Use Cr50 or Ti50 options base on the file size.
