@@ -640,9 +640,10 @@ static void tpm_init(void)
 		_plat__SetNvAvail();
 		endorse_result = tpm_endorse();
 
-		ccprints("Endorsement %s",
+		ccprints("Endorsement %s (%d)",
 			 (endorse_result == mnf_success) ?
-			 "succeeded" : "failed");
+			 "succeeded" : "failed", endorse_result);
+		cflush();
 	} else {
 		_plat__SetNvAvail();
 	}
