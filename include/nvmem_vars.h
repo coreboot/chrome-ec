@@ -103,14 +103,8 @@ const uint8_t *tuple_val(const struct tuple *);
  *
  * Could block as it acquires the flash protection mutex before proceeding.
  */
-int setvar(const uint8_t *key, uint8_t key_len,
+enum ec_error_list setvar(const uint8_t *key, uint8_t key_len,
 	   const uint8_t *val, uint8_t val_len);
-
-/*
- * Commit any changes made with setvar() to persistent memory, and invalidate
- * the RAM buffer. Return EC_SUCCESS or error code on failure.
- */
-int writevars(void);
 
 /*
  * A fully contained function which does not use any available nvmem_vars
@@ -119,7 +113,7 @@ int writevars(void);
  */
 const struct tuple *legacy_getnextvar(const struct tuple *prev_var);
 
-int set_local_copy(void);
+enum ec_error_list set_local_copy(void);
 
 #ifdef __cplusplus
 }

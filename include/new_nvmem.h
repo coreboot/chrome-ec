@@ -145,10 +145,10 @@ enum ec_error_list new_nvmem_save(void);
  * objects, then compact the flash storage. This will ensure that the NVMEM
  * does not contain erased instances of deleted objects.
  */
-int nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase);
+enum ec_error_list nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase);
 
 /* Erase all TMP NVMEM objects. */
-static inline int nvmem_erase_tpm_data(void)
+static inline enum ec_error_list nvmem_erase_tpm_data(void)
 {
 	return nvmem_erase_tpm_data_selective(NULL);
 }
@@ -159,7 +159,7 @@ enum ec_error_list browse_flash_contents(int);
 enum ec_error_list compact_nvmem(void);
 extern struct access_tracker controller_at;
 extern uint16_t total_var_space;
-int is_uninitialized(const void *p, size_t size);
+bool is_uninitialized(const void *p, size_t size);
 size_t init_object_offsets(uint16_t *offsets, size_t count);
 struct nn_page_header *list_element_to_ph(size_t el);
 void *evictable_offs_to_addr(uint16_t offset);
@@ -167,6 +167,5 @@ enum ec_error_list get_next_object(struct access_tracker *at,
 				   struct nn_container *ch,
 				   int include_deleted);
 #endif
-
 
 #endif /* ! __TPM2_NVMEM_TEST_NEW_NVMEM_H */
