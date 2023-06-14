@@ -408,6 +408,39 @@ Build:   ti50_common_mp-15224.B:v0.0.186-6bcd2134
          @chromeos-ci-firmware-us-east1-d-x32-0-1zci 2023-04-18 13:30:17
 ```
 
+### 0.23.40 Released on 6/14/2023 in M116
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/4615051)
+
+Builder:
+[18](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15224.B-branch/18/overview)
+
+Artifacts:
+[15224.15.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.15.0)
+
+Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15224.15.0.xml
+
+**Features**
+
+*   Add support for overwriting AP RO verification settings of `0 0` in field
+    for OS scipts [b/260721505](https://b.corp.google.com/issues/260721505)
+*   Add Shimless RMA keycombo support for verification failure case
+    [b/260721505](https://b.corp.google.com/issues/260721505)
+
+**Bug Fixes**
+
+*   Include improvement/fix for 0x63 boot issues
+    [b/273189926](https://b.corp.google.com/issues/273189926)
+
+```
+Build:   ti50_common_mp-15224.B:v0.0.302-2afc1adc
+         libtock-rs:v0.0.918-4fc5bc9
+         tock:v0.0.9644-adf05c6cf
+         ms-tpm-20-ref:v0.0.318-945d2e4
+         @chromeos-ci-firmware-us-central1-b-x32-0-n85q 2023-06-07 21:19:14
+```
+
 ## PrePVT images
 
 ### 0.22.0 Released 06/21/22
