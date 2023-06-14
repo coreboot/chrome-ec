@@ -17,7 +17,7 @@
 
 test_mockable_static uint8_t *rbuf;
 
-int set_local_copy(void)
+enum ec_error_list set_local_copy(void)
 {
 	if (rbuf)
 		return EC_ERROR_UNKNOWN;
