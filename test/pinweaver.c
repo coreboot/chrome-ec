@@ -843,8 +843,8 @@ const uint8_t *tuple_val(const struct tuple *tpl)
 	return tpl->data_ + tpl->key_len;
 }
 
-int setvar(const uint8_t *key, uint8_t key_len, const uint8_t *val,
-	   uint8_t val_len)
+enum ec_error_list setvar(const uint8_t *key, uint8_t key_len,
+			  const uint8_t *val, uint8_t val_len)
 {
 	if (MOCK_setvar_ret != EC_SUCCESS)
 		return MOCK_setvar_ret;

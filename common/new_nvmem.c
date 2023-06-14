@@ -705,7 +705,7 @@ static enum ec_error_list set_first_page_header(void)
  * Verify that the passed in container is valid, specifically that its hash
  * matches its contents.
  */
-static int container_is_valid(struct nn_container *ch)
+static bool container_is_valid(struct nn_container *ch)
 {
 	struct nn_container placeholder_c;
 	uint32_t hash;
@@ -1087,28 +1087,28 @@ static enum ec_error_list save_object(const struct nn_container *cont)
  * cases would be considered an uninitialized value. This is used when
  * marshaling certaing structures and PCRs.
  */
-static int is_all_value(const uint8_t *p, size_t size, uint8_t value)
+static bool is_all_value(const uint8_t *p, size_t size, uint8_t value)
 {
 	size_t i;
 
 	for (i = 0; i < size; i++)
 		if (p[i] != value)
-			return 0;
+			return false;
 
-	return 1;
+	return true;
 }
 
-test_export_static int is_uninitialized(const void *p, size_t size)
+test_export_static bool is_uninitialized(const void *p, size_t size)
 {
 	return is_all_value(p, size, 0xff);
 }
 
-static int is_all_zero(const void *p, size_t size)
+static bool is_all_zero(const void *p, size_t size)
 {
 	return is_all_value(p, size, 0);
 }
 
-static int is_empty(const void *pcr_base, size_t pcr_size)
+static bool is_empty(const void *pcr_base, size_t pcr_size)
 {
 	return is_uninitialized(pcr_base, pcr_size) ||
 	       is_all_zero(pcr_base, pcr_size);
@@ -2852,8 +2852,8 @@ static enum ec_error_list save_container(struct nn_container *nc)
 	return save_object(nc);
 }
 
-static int setvar_(const uint8_t *key, uint8_t key_len, const uint8_t *val,
-		   uint8_t val_len)
+static enum ec_error_list setvar_(const uint8_t *key, uint8_t key_len,
+				  const uint8_t *val, uint8_t val_len)
 {
 	enum ec_error_list rv;
 	int erase_request;
@@ -2957,10 +2957,10 @@ static int setvar_(const uint8_t *key, uint8_t key_len, const uint8_t *val,
 	return rv;
 }
 
-int setvar(const uint8_t *key, uint8_t key_len, const uint8_t *val,
-	   uint8_t val_len)
+enum ec_error_list setvar(const uint8_t *key, uint8_t key_len,
+			  const uint8_t *val, uint8_t val_len)
 {
-	int rv;
+	enum ec_error_list rv;
 
 	if (!crypto_enabled())
 		return EC_ERROR_INVAL;
@@ -2988,11 +2988,11 @@ static void dump_contents(const struct nn_container *ch)
 	ccprintf("\n");
 }
 
-int nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
+enum ec_error_list nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 {
 	const uint8_t *key;
 	const uint8_t *val;
-	int rv;
+	enum ec_error_list rv;
 	struct nn_container *ch;
 	struct access_tracker at = {};
 	uint8_t saved_list_index;
