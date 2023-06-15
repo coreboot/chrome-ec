@@ -2636,6 +2636,10 @@ static void print_ccd_info(void *response, size_t response_size)
 	printf("CCD caps bitmap: %#x\n", caps_bitmap);
 	printf("Capabilities are %s.\n", (ccd_info.ccd_indicator_bitmap &
 		 CCD_INDICATOR_BIT_ALL_CAPS_DEFAULT) ? "default" : "modified");
+	if (ccd_info.ccd_indicator_bitmap &
+	    CCD_INDICATOR_BIT_INITIAL_FACTORY_MODE) {
+		printf("Chip factory mode.");
+	}
 }
 
 static void process_ccd_state(struct transfer_descriptor *td, int ccd_unlock,
