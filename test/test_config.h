@@ -246,6 +246,10 @@ enum sensor_id {
 #define CONFIG_GMR_TABLET_MODE
 #endif
 
+#ifdef TEST_TABLET_BROKEN_SENSOR
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
+#endif
+
 #if defined(TEST_BODY_DETECTION)
 #define CONFIG_BODY_DETECTION
 #define CONFIG_BODY_DETECTION_SENSOR BASE
@@ -371,6 +375,11 @@ int ncp15wb_calculate_temp(uint16_t adc);
 
 #ifdef TEST_CEC
 #define CONFIG_CEC
+#define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_USE_GPIO
+#define CEC_GPIO_OUT 0
+#define CEC_GPIO_IN 0
+#define CEC_GPIO_PULL_UP 0
 #endif
 
 #ifdef TEST_LIGHTBAR

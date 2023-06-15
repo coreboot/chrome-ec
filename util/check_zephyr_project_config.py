@@ -1,5 +1,4 @@
 #!/usr/bin/env vpython3
-
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -114,11 +113,17 @@ class KconfigCheck:
                 )
 
             # generate Kconfig.modules file
-            with open(pathlib.Path(temp_dir) / "Kconfig.modules", "w") as file:
+            with open(
+                pathlib.Path(temp_dir) / "Kconfig.modules",
+                "w",
+                encoding="utf-8",
+            ) as file:
                 file.write(kconfig)
 
             # generate empty Kconfig.dts file
-            with open(pathlib.Path(temp_dir) / "Kconfig.dts", "w") as file:
+            with open(
+                pathlib.Path(temp_dir) / "Kconfig.dts", "w", encoding="utf-8"
+            ) as file:
                 file.write("")
 
             os.environ["ZEPHYR_BASE"] = str(ZEPHYR_BASE)
@@ -126,7 +131,7 @@ class KconfigCheck:
             os.environ["KCONFIG_BINARY_DIR"] = temp_dir
             os.environ["ARCH_DIR"] = "arch"
             os.environ["ARCH"] = "*"
-            os.environ["BOARD_DIR"] = "boards/*/*"
+            os.environ["BOARD_DIR"] = "boards/posix/native_posix"
 
             if not filename:
                 filename = os.path.join(ZEPHYR_BASE, "Kconfig")
@@ -215,12 +220,11 @@ class KconfigCheck:
 
         self.log.info("Checking %s", file_name)
 
-        with open(file_name, "r") as file:
+        with open(file_name, "r", encoding="utf-8") as file:
             for line_num, line in enumerate(file.readlines(), start=1):
-                for name in symbols:
+                for name, dep in symbols.items():
                     match = f"CONFIG_{name}=y"
                     if line.startswith(match):
-                        dep = symbols[name]
                         self._fail(
                             "%s:%d: unnecessary config option %s (depends on %s)",
                             file_name,

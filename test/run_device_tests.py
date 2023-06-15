@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 # pylint: disable=line-too-long
+
 """Runs unit tests on device and displays the results.
 
 This script assumes you have a ~/.servodrc config file with a line that
@@ -97,10 +97,18 @@ DATA_ACCESS_VIOLATION_20000000_REGEX = re.compile(
 DATA_ACCESS_VIOLATION_24000000_REGEX = re.compile(
     r"Data access violation, mfar = 24000000\r\n"
 )
+DATA_ACCESS_VIOLATION_64020000_REGEX = re.compile(
+    r"Data access violation, mfar = 64020000\r\n"
+)
+DATA_ACCESS_VIOLATION_64040000_REGEX = re.compile(
+    r"Data access violation, mfar = 64040000\r\n"
+)
+
 PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
 
 BLOONCHIPPER = "bloonchipper"
 DARTMONKEY = "dartmonkey"
+HELIPILOT = "helipilot"
 
 JTRACE = "jtrace"
 SERVO_MICRO = "servo_micro"
@@ -177,6 +185,7 @@ class TestConfig:
     ro_image: str = None
     build_board: str = None
     config_name: str = None
+    exclude_boards: List = field(default_factory=list)
     logs: List = field(init=False, default_factory=list)
     passed: bool = field(init=False, default=False)
     num_passes: int = field(init=False, default=0)
@@ -214,7 +223,13 @@ class AllTests:
             [] if with_private == PRIVATE_NO else AllTests.get_private_tests()
         )
 
-        return public_tests + private_tests
+        all_tests = public_tests + private_tests
+        board_tests = list(
+            filter(
+                lambda e: (board_config.name not in e.exclude_boards), all_tests
+            )
+        )
+        return board_tests
 
     @staticmethod
     def get_public_tests(board_config: BoardConfig) -> List[TestConfig]:
@@ -231,7 +246,6 @@ class AllTests:
             TestConfig(test_name="always_memset"),
             TestConfig(test_name="benchmark"),
             TestConfig(test_name="boringssl_crypto"),
-            TestConfig(test_name="cec"),
             TestConfig(test_name="cortexm_fpu"),
             TestConfig(test_name="crc"),
             TestConfig(test_name="exception"),
@@ -317,6 +331,7 @@ class AllTests:
             TestConfig(test_name="static_if"),
             TestConfig(test_name="stdlib"),
             TestConfig(test_name="std_vector"),
+            TestConfig(test_name="stm32f_rtc", exclude_boards=[DARTMONKEY]),
             TestConfig(
                 config_name="system_is_locked_wp_on",
                 test_name="system_is_locked",
@@ -338,9 +353,6 @@ class AllTests:
             TestConfig(test_name="utils", timeout_secs=20),
             TestConfig(test_name="utils_str"),
         ]
-
-        if board_config.name == BLOONCHIPPER:
-            tests.append(TestConfig(test_name="stm32f_rtc"))
 
         # Run panic data tests for all boards and RO versions.
         for variant_name, variant_info in board_config.variants.items():
@@ -423,9 +435,21 @@ DARTMONKEY_CONFIG = BoardConfig(
     },
 )
 
+HELIPILOT_CONFIG = BoardConfig(
+    name=HELIPILOT,
+    servo_uart_name="raw_fpmcu_console_uart_pty",
+    servo_power_enable="fpmcu_pp3300",
+    # TODO(b/286537264): Double check these values and ensure rollback tests pass
+    rollback_region0_regex=DATA_ACCESS_VIOLATION_64020000_REGEX,
+    rollback_region1_regex=DATA_ACCESS_VIOLATION_64040000_REGEX,
+    mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
+    variants={},
+)
+
 BOARD_CONFIGS = {
     "bloonchipper": BLOONCHIPPER_CONFIG,
     "dartmonkey": DARTMONKEY_CONFIG,
+    "helipilot": HELIPILOT_CONFIG,
 }
 
 
@@ -732,7 +756,11 @@ def get_test_list(
             if test_regex.fullmatch(test.config_name)
         ]
         if not tests:
-            logging.error('Unable to find test config for "%s"', test)
+            logging.error(
+                'Test "%s" is either not configured or not supported on board "%s"',
+                test,
+                config.name,
+            )
             sys.exit(1)
         test_list += tests
 
@@ -752,8 +780,12 @@ def flash_and_run_test(
     if test.build_board is not None:
         build_board = test.build_board
 
-    # build test binary
-    build(test.test_name, build_board, args.compiler, test.apptype_to_use)
+    # attempt to build test binary, reporting a test failure on error
+    try:
+        build(test.test_name, build_board, args.compiler, test.apptype_to_use)
+    except Exception as exception:  # pylint: disable=broad-except
+        logging.error("failed to build %s: %s", test.test_name, exception)
+        return False
 
     if test.apptype_to_use == ApplicationType.PRODUCTION:
         image_path = os.path.join(EC_DIR, "build", build_board, "ec.bin")
@@ -811,9 +843,9 @@ def flash_and_run_test(
                 console_socket.makefile(mode="rwb", buffering=0)
             )
         else:
-            console = stack.enter_context(
-                open(get_console(board_config), "wb+", buffering=0)
-            )
+            # pylint: disable-next=consider-using-with
+            console_file = open(get_console(board_config), "wb+", buffering=0)
+            console = stack.enter_context(console_file)
 
         return run_test(test, console, executor=executor)
 
