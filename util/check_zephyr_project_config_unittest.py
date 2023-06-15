@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -69,7 +68,7 @@ class TestKconfigCheck(unittest.TestCase):
         )
         self.assertEqual(os.environ["ARCH_DIR"], "arch")
         self.assertEqual(os.environ["ARCH"], "*")
-        self.assertEqual(os.environ["BOARD_DIR"], "boards/*/*")
+        self.assertEqual(os.environ["BOARD_DIR"], "boards/posix/native_posix")
 
     @mock.patch("zephyr_module.parse_modules")
     @mock.patch("zephyr_module.process_kconfig")
