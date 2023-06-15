@@ -28,7 +28,7 @@ test-list-y=\
        aes \
        always_memset \
        benchmark \
-       cec \
+       boringssl_crypto \
        compile_time_macros \
        cortexm_fpu \
        crc \
@@ -37,6 +37,8 @@ test-list-y=\
        flash_physical \
        flash_write_protect \
        fpsensor \
+       fpsensor_auth_crypto_stateful \
+       fpsensor_auth_crypto_stateless \
        fpsensor_hw \
        ftrapv \
        global_initialization \
@@ -67,6 +69,7 @@ test-list-y=\
        timer \
        timer_dos \
        tpm_seed_clear \
+       unaligned_access \
        utils \
        utils_str \
 

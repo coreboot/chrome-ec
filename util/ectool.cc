@@ -956,6 +956,8 @@ static const char *const ec_feature_names[] = {
 	[EC_FEATURE_S4_RESIDENCY] = "S4 residency",
 	[EC_FEATURE_TYPEC_AP_MUX_SET] = "AP directed mux sets",
 	[EC_FEATURE_TYPEC_AP_VDM_SEND] = "AP directed VDM Request messages",
+	[EC_FEATURE_SYSTEM_SAFE_MODE] = "System Safe Mode support",
+	[EC_FEATURE_ASSERT_REBOOTS] = "Assert reboots",
 };
 
 int cmd_inventory(int argc, char *argv[])
@@ -1766,7 +1768,7 @@ int cmd_flash_protect(int argc, char *argv[])
 			mask |= ec::flash_protect::Flags::kRoAtBoot;
 	}
 
-	ec::FlashProtectCommand flash_protect_command(flags, mask);
+	ec::FlashProtectCommand_v1 flash_protect_command(flags, mask);
 	if (!flash_protect_command.Run(comm_get_fd())) {
 		int rv = -EECRESULT - flash_protect_command.Result();
 		fprintf(stderr, "Flash protect returned with errors: %d\n", rv);
@@ -1776,18 +1778,18 @@ int cmd_flash_protect(int argc, char *argv[])
 	/* Print returned flags */
 	printf("Flash protect flags: 0x%08x%s\n",
 	       flash_protect_command.GetFlags(),
-	       (ec::FlashProtectCommand::ParseFlags(
+	       (ec::FlashProtectCommand_v1::ParseFlags(
 			flash_protect_command.GetFlags()))
 		       .c_str());
 	printf("Valid flags:         0x%08x%s\n",
 	       flash_protect_command.GetValidFlags(),
-	       (ec::FlashProtectCommand::ParseFlags(
+	       (ec::FlashProtectCommand_v1::ParseFlags(
 			flash_protect_command.GetValidFlags()))
 		       .c_str());
 	printf("Writable flags:      0x%08x%s\n",
 	       flash_protect_command.GetWritableFlags(),
 
-	       (ec::FlashProtectCommand::ParseFlags(
+	       (ec::FlashProtectCommand_v1::ParseFlags(
 			flash_protect_command.GetWritableFlags()))
 		       .c_str());
 
