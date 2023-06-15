@@ -1591,6 +1591,14 @@ enum ec_feature_code {
 	 * The EC supports the AP composing VDMs for us to send.
 	 */
 	EC_FEATURE_TYPEC_AP_VDM_SEND = 46,
+	/*
+	 * The EC supports system safe mode panic recovery.
+	 */
+	EC_FEATURE_SYSTEM_SAFE_MODE = 47,
+	/*
+	 * The EC will reboot on runtime assertion failures.
+	 */
+	EC_FEATURE_ASSERT_REBOOTS = 48,
 };
 
 #define EC_FEATURE_MASK_0(event_code) BIT(event_code % 32)
@@ -7792,6 +7800,33 @@ struct ec_response_fp_read_match_secret {
 struct fp_elliptic_curve_public_key {
 	uint8_t x[FP_ELLIPTIC_CURVE_PUBLIC_KEY_POINT_LEN];
 	uint8_t y[FP_ELLIPTIC_CURVE_PUBLIC_KEY_POINT_LEN];
+} __ec_align4;
+
+#define FP_AES_KEY_ENC_METADATA_VERSION 1
+#define FP_AES_KEY_NONCE_BYTES 12
+#define FP_AES_KEY_ENCRYPTION_SALT_BYTES 16
+#define FP_AES_KEY_TAG_BYTES 16
+
+struct fp_auth_command_encryption_metadata {
+	/* Version of the structure format */
+	uint16_t struct_version;
+	/* Reserved bytes, set to 0. */
+	uint16_t reserved;
+	/*
+	 * The salt is *only* ever used for key derivation. The nonce is unique,
+	 * a different one is used for every message.
+	 */
+	uint8_t nonce[FP_AES_KEY_NONCE_BYTES];
+	uint8_t encryption_salt[FP_AES_KEY_ENCRYPTION_SALT_BYTES];
+	uint8_t tag[FP_AES_KEY_TAG_BYTES];
+} __ec_align4;
+
+#define FP_ELLIPTIC_CURVE_PRIVATE_KEY_LEN 32
+#define FP_ELLIPTIC_CURVE_PUBLIC_KEY_IV_LEN 16
+
+struct fp_encrypted_private_key {
+	struct fp_auth_command_encryption_metadata info;
+	uint8_t data[FP_ELLIPTIC_CURVE_PRIVATE_KEY_LEN];
 } __ec_align4;
 
 /*****************************************************************************/

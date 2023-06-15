@@ -135,6 +135,9 @@
 #define CONFIG_CONSOLE_UART 0 /* 0:UART1 1:UART2 */
 #define NPCX_UART_MODULE2 1 /* 1:GPIO64/65 as UART1 */
 
+#undef CONSOLE_TASK_STACK_SIZE
+#define CONSOLE_TASK_STACK_SIZE 4096
+
 /*-------------------------------------------------------------------------*
  * Disable Features
  *-------------------------------------------------------------------------*
@@ -161,6 +164,7 @@
 #define CONFIG_HOST_INTERFACE_SHI
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
+#define CONFIG_PRINTF_LONG_IS_32BITS
 #define CONFIG_RNG
 #define CONFIG_SHA256
 #define CONFIG_SHA256_UNROLLED

@@ -4,9 +4,11 @@
  */
 
 #include "console.h"
+#include "driver/amd_stb.h"
 #include "ec_app_main.h"
 #include "emul/emul_stub_device.h"
 #include "gpio.h"
+#include "gpio/gpio_int.h"
 #include "gpio_signal.h"
 #include "hooks.h"
 #include "host_command.h"
@@ -30,6 +32,8 @@
 
 #include <dt-bindings/buttons.h>
 
+void set_initial_pwrbtn_state(void);
+
 /* All emulated GPIOS are on one device */
 #define GPIO_DEVICE \
 	DEVICE_DT_GET(DT_GPIO_CTLR(NAMED_GPIOS_GPIO_NODE(s0_pgood), gpios))
@@ -43,6 +47,7 @@
 	DT_GPIO_PIN(NAMED_GPIOS_GPIO_NODE(ec_soc_pwr_btn_l), gpios)
 #define PROCHOT_PIN DT_GPIO_PIN(NAMED_GPIOS_GPIO_NODE(prochot_odl), gpios)
 #define LID_PIN DT_GPIO_PIN(NAMED_GPIOS_GPIO_NODE(lid_open_ec), gpios)
+#define STB_OUT_PIN DT_GPIO_PIN(NAMED_GPIOS_GPIO_NODE(ec_sfh_int_h), gpios)
 
 /*
  * Provide standard array of power signals for the module based on our DTS enum
@@ -120,6 +125,76 @@ int battery_is_present(void)
 	return 1;
 }
 
+/**
+ * @brief FFF fakes that will be registered as a callback to monitor SYS reset
+ * and watch the power button output
+ * Implements `gpio_callback_handler_t`.
+ */
+FAKE_VOID_FUNC(interrupt_sys_reset_monitor, const struct device *,
+	       struct gpio_callback *, gpio_port_pins_t);
+FAKE_VOID_FUNC(interrupt_pwr_btn_monitor, const struct device *,
+	       struct gpio_callback *, gpio_port_pins_t);
+
+/**
+ * @brief Fixture to hold state while the suite is running.
+ */
+struct amd_power_fixture {
+	/** Configuration for the interrupt pin change callback */
+	struct gpio_callback callback_sys_reset;
+	struct gpio_callback callback_pwr_btn;
+
+	const struct gpio_dt_spec *sys_reset_pin;
+	const struct gpio_dt_spec *pwr_btn_pin;
+};
+
+static struct amd_power_fixture fixture;
+
+static void *amd_power_setup(void)
+{
+	/* STB dump GPIOs */
+	const struct gpio_dt_spec *gpio_ec_sfh_int_h =
+		GPIO_DT_FROM_NODELABEL(gpio_ec_sfh_int_h);
+	const struct gpio_dt_spec *gpio_sfh_ec_int_h =
+		GPIO_DT_FROM_NODELABEL(gpio_sfh_ec_int_h);
+
+	/* Add a callback for SYS reset so we can log edges */
+	fixture.sys_reset_pin = GPIO_DT_FROM_NODELABEL(gpio_sys_rst_l);
+	fixture.callback_sys_reset = (struct gpio_callback){
+		.pin_mask = BIT(fixture.sys_reset_pin->pin),
+		.handler = interrupt_sys_reset_monitor,
+	};
+
+	zassert_ok(gpio_add_callback(fixture.sys_reset_pin->port,
+				     &fixture.callback_sys_reset),
+		   "Could not configure GPIO callback.");
+
+	/* Add a power button edge callback */
+	fixture.pwr_btn_pin = GPIO_DT_FROM_NODELABEL(gpio_ec_soc_pwr_btn_l);
+	fixture.callback_pwr_btn = (struct gpio_callback){
+		.pin_mask = BIT(fixture.pwr_btn_pin->pin),
+		.handler = interrupt_pwr_btn_monitor,
+	};
+
+	zassert_ok(gpio_add_callback(fixture.pwr_btn_pin->port,
+				     &fixture.callback_pwr_btn),
+		   "Could not configure GPIO callback.");
+
+	/* Configure and enable STB dump */
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_stb_dump));
+	amd_stb_dump_init(gpio_ec_sfh_int_h, gpio_sfh_ec_int_h);
+
+	return &fixture;
+}
+
+static void amd_power_teardown(void *data)
+{
+	/* Cleanup the GPIO callback on the interrupt pin */
+	struct amd_power_fixture *f = (struct amd_power_fixture *)data;
+
+	gpio_remove_callback(f->sys_reset_pin->port, &f->callback_sys_reset);
+	gpio_remove_callback(f->pwr_btn_pin->port, &f->callback_pwr_btn);
+}
+
 void amd_power_before(void *fixture)
 {
 	static const struct device *gpio_dev = GPIO_DEVICE;
@@ -128,6 +203,8 @@ void amd_power_before(void *fixture)
 	system_can_boot_ap_fake.return_val = 1;
 	RESET_FAKE(system_jumped_to_this_image);
 	system_jumped_to_this_image_fake.return_val = 0;
+	RESET_FAKE(interrupt_sys_reset_monitor);
+	RESET_FAKE(interrupt_pwr_btn_monitor);
 
 	memset(&hook_counts, 0, sizeof(hook_counts));
 
@@ -147,12 +224,20 @@ void amd_power_before(void *fixture)
 
 void amd_power_after(void *fixture)
 {
+	static const struct device *gpio_dev = GPIO_DEVICE;
+
 	host_clear_events(EC_HOST_EVENT_MASK(EC_HOST_EVENT_HANG_DETECT));
 	init_reset_log();
-	system_clear_reset_flags(EC_RESET_FLAG_AP_OFF);
+	system_clear_reset_flags(EC_RESET_FLAG_AP_OFF | EC_RESET_FLAG_AP_IDLE);
+	chipset_throttle_cpu(0);
+
+	/* Ensure we let go of the power button */
+	zassert_ok(gpio_emul_input_set(gpio_dev, PWRBTN_IN_PIN, 1));
+	k_sleep(K_MSEC(500));
 }
 
-ZTEST_SUITE(amd_power, NULL, NULL, amd_power_before, amd_power_after, NULL);
+ZTEST_SUITE(amd_power, NULL, amd_power_setup, amd_power_before, amd_power_after,
+	    amd_power_teardown);
 
 ZTEST(amd_power, test_power_chipset_init_ap_off)
 {
@@ -407,6 +492,34 @@ ZTEST(amd_power, test_power_suspend_hang)
 	zassert_true(strstr(buffer, "Detected sleep hang!") != NULL);
 }
 
+ZTEST(amd_power, test_power_stb_dump_interrupt)
+{
+	struct ec_params_host_sleep_event_v1 host_sleep_ev_p = {
+		.sleep_event = HOST_SLEEP_EVENT_S0IX_SUSPEND,
+		.suspend_params = { EC_HOST_SLEEP_TIMEOUT_DEFAULT },
+	};
+	struct ec_response_host_sleep_event_v1 host_sleep_ev_r;
+	struct host_cmd_handler_args host_sleep_ev_args = BUILD_HOST_COMMAND(
+		EC_CMD_HOST_SLEEP_EVENT, 1, host_sleep_ev_r, host_sleep_ev_p);
+	static const struct device *gpio_dev = GPIO_DEVICE;
+
+	amd_power_s0_on();
+
+	/* Send sleep event, but fail to actually transition the signal */
+	zassert_ok(host_command_process(&host_sleep_ev_args));
+	k_sleep(K_MSEC(CONFIG_SLEEP_TIMEOUT_MS * 2));
+
+	zassert_equal(power_get_state(), POWER_S0);
+	/* Watch for our STB dump to trigger */
+	zassert_equal(gpio_emul_output_get(gpio_dev, STB_OUT_PIN), 1);
+
+	/* But a reset came in before we finished the STB dump */
+	chipset_reset(CHIPSET_RESET_HANG_REBOOT);
+
+	/* Observe we're not longer asserting the OUT pin */
+	zassert_equal(gpio_emul_output_get(gpio_dev, STB_OUT_PIN), 0);
+}
+
 ZTEST(amd_power, test_power_forced_shutdown)
 {
 	static const struct device *gpio_dev = GPIO_DEVICE;
@@ -463,8 +576,11 @@ ZTEST(amd_power, test_power_chipset_reset_s0)
 	chipset_reset(CHIPSET_RESET_KB_SYSRESET);
 	k_sleep(K_MSEC(500));
 
-	/* Verify our reporting */
+	/* Verify our reporting and SYS_RESET toggles */
 	zassert_equal(chipset_get_shutdown_reason(), CHIPSET_RESET_KB_SYSRESET);
+	zassert_equal(2, interrupt_sys_reset_monitor_fake.call_count,
+		      "Interrupt pin asserted only %d times.",
+		      interrupt_sys_reset_monitor_fake.call_count);
 }
 
 ZTEST(amd_power, test_power_chipset_reset_g3)
@@ -475,6 +591,7 @@ ZTEST(amd_power, test_power_chipset_reset_g3)
 
 	/* Verify we didn't report the reset attempt */
 	zassert_equal(chipset_get_shutdown_reason(), CHIPSET_RESET_UNKNOWN);
+	zassert_equal(0, interrupt_sys_reset_monitor_fake.call_count);
 }
 
 ZTEST(amd_power, test_power_chipset_throttle_s0)
@@ -531,6 +648,7 @@ ZTEST(amd_power, test_sysjump_g3)
 	zassert_equal(power_chipset_init(), POWER_G3);
 }
 
+/* power_button_x86 tests */
 ZTEST(amd_power, test_lid_open_power_on)
 {
 	static const struct device *gpio_dev = GPIO_DEVICE;
@@ -546,6 +664,193 @@ ZTEST(amd_power, test_lid_open_power_on)
 	k_sleep(K_MSEC(500));
 	zassert_equal(power_get_state(), POWER_G3S5, "power_state=%d",
 		      power_get_state());
+}
+
+ZTEST(amd_power, test_power_long_button_press)
+{
+	struct ec_params_config_power_button pwr_btn_p = {
+		.flags = EC_POWER_BUTTON_ENABLE_PULSE,
+	};
+	struct host_cmd_handler_args pwr_btn_hc_args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_CONFIG_POWER_BUTTON, 0,
+					  pwr_btn_p);
+	static const struct device *gpio_dev = GPIO_DEVICE;
+
+	amd_power_s0_on();
+
+	/* Clear our counts */
+	RESET_FAKE(interrupt_pwr_btn_monitor);
+
+	/* Tell the EC we do want toggles */
+	zassert_ok(host_command_process(&pwr_btn_hc_args));
+
+	/* "press" the power button */
+	zassert_ok(gpio_emul_input_set(gpio_dev, PWRBTN_IN_PIN, 0));
+
+	/* Hold it long enough to trigger our toggle */
+	k_sleep(K_SECONDS(10));
+
+	/* Now release */
+	zassert_ok(gpio_emul_input_set(gpio_dev, PWRBTN_IN_PIN, 1));
+	k_sleep(K_MSEC(500));
+	zassert_equal(gpio_emul_output_get(gpio_dev, PWRBTN_OUT_PIN), 1);
+
+	/* Look for our edges */
+	zassert_equal(4, interrupt_pwr_btn_monitor_fake.call_count,
+		      "Interrupt pin asserted only %d times.",
+		      interrupt_pwr_btn_monitor_fake.call_count);
+}
+
+ZTEST(amd_power, test_power_long_button_press_toggle_disabled)
+{
+	struct ec_params_config_power_button pwr_btn_p = {
+		.flags = 0,
+	};
+	struct host_cmd_handler_args pwr_btn_hc_args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_CONFIG_POWER_BUTTON, 0,
+					  pwr_btn_p);
+	static const struct device *gpio_dev = GPIO_DEVICE;
+
+	amd_power_s0_on();
+
+	/* Clear our counts */
+	RESET_FAKE(interrupt_pwr_btn_monitor);
+
+	/* Tell the EC we no longer want toggles */
+	zassert_ok(host_command_process(&pwr_btn_hc_args));
+
+	/* "press" the power button */
+	zassert_ok(gpio_emul_input_set(gpio_dev, PWRBTN_IN_PIN, 0));
+
+	/* Hold it long enough to trigger our toggle */
+	k_sleep(K_SECONDS(10));
+
+	/* Now release */
+	zassert_ok(gpio_emul_input_set(gpio_dev, PWRBTN_IN_PIN, 1));
+	k_sleep(K_MSEC(500));
+	zassert_equal(gpio_emul_output_get(gpio_dev, PWRBTN_OUT_PIN), 1);
+
+	/* Look for our edges */
+	zassert_equal(2, interrupt_pwr_btn_monitor_fake.call_count,
+		      "Interrupt pin asserted only %d times.",
+		      interrupt_pwr_btn_monitor_fake.call_count);
+}
+
+ZTEST(amd_power, test_power_button_eat_release)
+{
+	static const struct device *gpio_dev = GPIO_DEVICE;
+
+	/* "press" the power button */
+	zassert_ok(gpio_emul_input_set(gpio_dev, PWRBTN_IN_PIN, 0));
+	k_sleep(K_MSEC(500));
+	zassert_equal(gpio_emul_output_get(gpio_dev, PWRBTN_OUT_PIN), 0);
+
+	/* Trigger some internal condition that causes us to force release */
+	power_button_pch_release();
+	k_sleep(K_MSEC(500));
+	zassert_equal(gpio_emul_output_get(gpio_dev, PWRBTN_OUT_PIN), 1);
+
+	/* AP should see assert and release */
+	zassert_equal(2, interrupt_pwr_btn_monitor_fake.call_count,
+		      "Interrupt pin asserted only %d times.",
+		      interrupt_pwr_btn_monitor_fake.call_count);
+
+	/* Now really release */
+	zassert_ok(gpio_emul_input_set(gpio_dev, PWRBTN_IN_PIN, 1));
+	k_sleep(K_MSEC(500));
+
+	/* Output should have remained the same */
+	zassert_equal(2, interrupt_pwr_btn_monitor_fake.call_count,
+		      "Interrupt pin asserted only %d times.",
+		      interrupt_pwr_btn_monitor_fake.call_count);
+}
+
+ZTEST(amd_power, test_power_button_init_ap_off)
+{
+	static const struct device *gpio_dev = GPIO_DEVICE;
+
+	/* Clear our counts */
+	RESET_FAKE(interrupt_pwr_btn_monitor);
+
+	system_set_reset_flags(EC_RESET_FLAG_AP_OFF);
+
+	set_initial_pwrbtn_state();
+	k_sleep(K_MSEC(500));
+
+	/* Power button is forced high (off) */
+	zassert_equal(gpio_emul_output_get(gpio_dev, PWRBTN_OUT_PIN), 1);
+	zassert_equal(1, interrupt_pwr_btn_monitor_fake.call_count,
+		      "Interrupt pin asserted only %d times.",
+		      interrupt_pwr_btn_monitor_fake.call_count);
+}
+
+ZTEST(amd_power, test_power_button_init_ap_idle)
+{
+	/* Clear our counts */
+	RESET_FAKE(interrupt_pwr_btn_monitor);
+
+	system_set_reset_flags(EC_RESET_FLAG_AP_IDLE);
+
+	set_initial_pwrbtn_state();
+	k_sleep(K_MSEC(500));
+
+	/* Power button should do nothing */
+	zassert_equal(0, interrupt_pwr_btn_monitor_fake.call_count,
+		      "Interrupt pin asserted only %d times.",
+		      interrupt_pwr_btn_monitor_fake.call_count);
+}
+
+ZTEST(amd_power, test_power_button_sysjump_init_pressed)
+{
+	struct ec_params_config_power_button pwr_btn_p = {
+		.flags = EC_POWER_BUTTON_ENABLE_PULSE,
+	};
+	struct host_cmd_handler_args pwr_btn_hc_args =
+		BUILD_HOST_COMMAND_PARAMS(EC_CMD_CONFIG_POWER_BUTTON, 0,
+					  pwr_btn_p);
+	static const struct device *gpio_dev = GPIO_DEVICE;
+
+	/* Simulate a "sysjump" in S0 */
+	amd_power_s0_on();
+
+	/* Tell the EC we do want toggles */
+	zassert_ok(host_command_process(&pwr_btn_hc_args));
+
+	RESET_FAKE(system_jumped_to_this_image);
+	system_jumped_to_this_image_fake.return_val = 1;
+	RESET_FAKE(interrupt_pwr_btn_monitor);
+
+	/* Power button pressed as we jump */
+	zassert_ok(gpio_emul_input_set(gpio_dev, PWRBTN_IN_PIN, 0));
+	k_sleep(K_MSEC(500));
+
+	set_initial_pwrbtn_state();
+
+	/* Power button is forced asserted with a toggle in there */
+	zassert_equal(gpio_emul_output_get(gpio_dev, PWRBTN_OUT_PIN), 0);
+	zassert_equal(3, interrupt_pwr_btn_monitor_fake.call_count,
+		      "Interrupt pin asserted only %d times.",
+		      interrupt_pwr_btn_monitor_fake.call_count);
+}
+
+ZTEST(amd_power, test_power_button_sysjump_init_no_press)
+{
+	static const struct device *gpio_dev = GPIO_DEVICE;
+
+	/* Simulate a "sysjump" in S0 */
+	amd_power_s0_on();
+
+	RESET_FAKE(system_jumped_to_this_image);
+	system_jumped_to_this_image_fake.return_val = 1;
+	RESET_FAKE(interrupt_pwr_btn_monitor);
+
+	set_initial_pwrbtn_state();
+
+	/* Power button did nothing */
+	zassert_equal(gpio_emul_output_get(gpio_dev, PWRBTN_OUT_PIN), 1);
+	zassert_equal(0, interrupt_pwr_btn_monitor_fake.call_count,
+		      "Interrupt pin asserted only %d times.",
+		      interrupt_pwr_btn_monitor_fake.call_count);
 }
 
 void test_main(void)
