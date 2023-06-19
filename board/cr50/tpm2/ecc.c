@@ -9,6 +9,7 @@
 #include "CryptoEngine.h"
 #include "TPMB.h"
 
+#include "console.h"
 #include "fips_rand.h"
 #include "util.h"
 #include "dcrypto.h"
@@ -131,8 +132,13 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 		return CRYPT_PARAMETER;
 
 	/* extra may be empty, but seed must be specified. */
-	if (seed == NULL || seed->size < PRIMARY_SEED_SIZE)
+	if (seed == NULL || seed->size < PRIMARY_SEED_SIZE) {
+		/* TODO(b/262324344). Remove when zero sized EPS fixed. */
+		cprintf(CC_EXTENSION, "%s: seed size %u invalid", __func__,
+			(seed) ? seed->size : 0);
+		cflush();
 		return CRYPT_PARAMETER;
+	}
 
 	if (counter != NULL)
 		count = *counter;
