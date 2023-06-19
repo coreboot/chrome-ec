@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "Global.h"
 #include "Platform.h"
 #include "TPM_Types.h"
 
@@ -55,7 +56,7 @@ static const uint8_t pcr_boot_policy_update_allowed[][SHA256_DIGEST_SIZE] = {
 	}
 };
 
-uint16_t _cpri__GenerateRandom(size_t random_size,
+uint16_t _cpri__GenerateRandom(int32_t random_size,
 			uint8_t *buffer)
 {
 	if (!fips_rand_bytes(buffer, random_size))
@@ -126,6 +127,12 @@ void _plat__StartupCallback(void)
 	 * so we don't yet need to tell CCD that a real TPM startup has
 	 * occurred.
 	 */
+
+	/* TODO(b/262324344). Remove when zero sized EPS fixed. */
+	if (gp.EPSeed.t.size == 0) {
+		CPRINTF("%s: EPS seed length is zero!\n", __func__);
+		cflush();
+	}
 }
 
 BOOL _plat__ShallSurviveOwnerClear(uint32_t  index)
