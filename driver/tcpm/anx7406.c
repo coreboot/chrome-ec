@@ -152,8 +152,24 @@ static int anx7406_init(int port)
 		return EC_ERROR_UNKNOWN;
 	}
 
-	/* Set VBUS OCP */
+	/*
+	 * Set VBUS OCP
+	 *
+	 * This is retried in case the TCPC just woke up from LPM. If you add
+	 * I2C above, you need to retry that instead.
+	 */
 	rv = tcpc_write(port, ANX7406_REG_VBUS_OCP, OCP_THRESHOLD);
+	if (rv) {
+		/* Failed but this is expected if the chip is in LPM. */
+		CPRINTS("C%d: Retrying to set OCP", port);
+		msleep(5);
+		rv = tcpc_write(port, ANX7406_REG_VBUS_OCP, OCP_THRESHOLD);
+		if (rv)
+			return rv;
+	}
+
+	rv = tcpc_update8(port, TCPC_REG_TCPC_CTRL,
+			  TCPC_REG_TCPC_CTRL_DEBUG_ACC_CONTROL, MASK_SET);
 	if (rv)
 		return rv;
 
@@ -179,15 +195,20 @@ static int anx7406_init(int port)
 	if (rv)
 		return rv;
 
+	rv = board_anx7406_init(port);
+	if (rv)
+		return rv;
+
 	/* Let sink_ctrl & source_ctrl GPIO pin controlled by TCPC */
 	tcpc_write(port, ANX7406_REG_VBUS_SOURCE_CTRL, SOURCE_GPIO_OEN);
 	tcpc_write(port, ANX7406_REG_VBUS_SINK_CTRL, SINK_GPIO_OEN);
 
-	/* Clear CABLE DETECT signale */
-	rv = tcpc_update8(port, ANX7406_REG_ANALOG_SETTING,
-			  ANX7406_REG_CABLE_DET_DIG, MASK_CLR);
-	if (rv)
-		return rv;
+	if (IS_ENABLED(CONFIG_USB_PD_DUAL_ROLE_AUTO_TOGGLE)) {
+		rv = tcpc_update8(port, TCPC_REG_ROLE_CTRL,
+				  TCPC_REG_ROLE_CTRL_DRP_MASK, MASK_SET);
+		if (rv)
+			return rv;
+	}
 
 	/*
 	 * Specifically disable voltage alarms, as VBUS_VOLTAGE_ALARM_HI may
