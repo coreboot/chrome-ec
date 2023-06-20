@@ -1692,7 +1692,8 @@ static void init_page_list(void)
  * from flash. This function unmarshals it and places in the NVMEM cache where
  * it belongs. Note that PCRs were not marshaled.
  */
-static void unmarshal_state_clear(uint8_t *pad, int size, uint32_t offset)
+static enum ec_error_list unmarshal_state_clear(uint8_t *pad, int size,
+						uint32_t offset)
 {
 	STATE_CLEAR_DATA *real_scd;
 	STATE_CLEAR_DATA *scd;
@@ -1705,7 +1706,7 @@ static void unmarshal_state_clear(uint8_t *pad, int size, uint32_t offset)
 
 	memset(real_scd, 0, sizeof(*real_scd));
 	if (!size)
-		return;
+		return EC_SUCCESS;
 
 	memcpy(&preserved, real_scd + 1, sizeof(preserved));
 
@@ -1722,19 +1723,27 @@ static void unmarshal_state_clear(uint8_t *pad, int size, uint32_t offset)
 	pad += sizeof(scd->platformAlg);
 	size -= sizeof(scd->platformAlg);
 
-	TPM2B_DIGEST_Unmarshal(&scd->platformPolicy, &pad, &size);
-	TPM2B_AUTH_Unmarshal(&scd->platformAuth, &pad, &size);
+	if (TPM2B_DIGEST_Unmarshal(&scd->platformPolicy, &pad, &size) !=
+	    TPM_RC_SUCCESS)
+		return EC_ERROR_UNKNOWN;
+	if (TPM2B_AUTH_Unmarshal(&scd->platformAuth, &pad, &size) !=
+	    TPM_RC_SUCCESS)
+		return EC_ERROR_UNKNOWN;
 
+	if (size < sizeof(scd->pcrSave.pcrCounter))
+		return EC_ERROR_UNKNOWN;
 	memcpy(&scd->pcrSave.pcrCounter, pad, sizeof(scd->pcrSave.pcrCounter));
 	pad += sizeof(scd->pcrSave.pcrCounter);
 	size -= sizeof(scd->pcrSave.pcrCounter);
 
 	for (i = 0; i < ARRAY_SIZE(scd->pcrAuthValues.auth); i++)
-		TPM2B_DIGEST_Unmarshal(scd->pcrAuthValues.auth + i, &pad,
-				       &size);
+		if (TPM2B_DIGEST_Unmarshal(scd->pcrAuthValues.auth + i, &pad,
+					   &size) != TPM_RC_SUCCESS)
+			return EC_ERROR_UNKNOWN;
 
 	memmove(real_scd, scd, sizeof(*scd));
 	memcpy(real_scd + 1, &preserved, sizeof(preserved));
+	return EC_SUCCESS;
 }
 
 /*
@@ -1742,7 +1751,8 @@ static void unmarshal_state_clear(uint8_t *pad, int size, uint32_t offset)
  * from flash. This function unmarshals it and places in the NVMEM cache where
  * it belongs.
  */
-static void unmarshal_state_reset(uint8_t *pad, int size, uint32_t offset)
+static enum ec_error_list unmarshal_state_reset(uint8_t *pad, int size,
+						uint32_t offset)
 {
 	STATE_RESET_DATA *real_srd;
 	STATE_RESET_DATA *srd;
@@ -1752,72 +1762,92 @@ static void unmarshal_state_reset(uint8_t *pad, int size, uint32_t offset)
 					offset);
 
 	memset(real_srd, 0, sizeof(*real_srd));
+	/* Zero size means no object present, so it will be recreated. */
 	if (!size)
-		return;
+		return EC_SUCCESS;
 
 	memcpy(&preserved, real_srd + 1, sizeof(preserved));
 
 	srd = (void *)(((uintptr_t)real_srd + 3) & ~3);
 
-	TPM2B_AUTH_Unmarshal(&srd->nullProof, &pad, &size);
-	TPM2B_DIGEST_Unmarshal((TPM2B_DIGEST *)(&srd->nullSeed), &pad, &size);
+	if (TPM2B_AUTH_Unmarshal(&srd->nullProof, &pad, &size) !=
+	    TPM_RC_SUCCESS)
+		return EC_ERROR_UNKNOWN;
+	if (TPM2B_DIGEST_Unmarshal((TPM2B_DIGEST *)(&srd->nullSeed), &pad,
+				   &size) != TPM_RC_SUCCESS)
+		return EC_ERROR_UNKNOWN;
 	UINT32_Unmarshal(&srd->clearCount, &pad, &size);
 	UINT64_Unmarshal(&srd->objectContextID, &pad, &size);
 
+	if (size < sizeof(srd->contextArray))
+		return EC_ERROR_UNKNOWN;
 	memcpy(srd->contextArray, pad, sizeof(srd->contextArray));
 	size -= sizeof(srd->contextArray);
 	pad += sizeof(srd->contextArray);
 
+	if (size < sizeof(srd->contextCounter))
+		return EC_ERROR_UNKNOWN;
 	memcpy(&srd->contextCounter, pad, sizeof(srd->contextCounter));
 	size -= sizeof(srd->contextCounter);
 	pad += sizeof(srd->contextCounter);
 
-	TPM2B_DIGEST_Unmarshal(&srd->commandAuditDigest, &pad, &size);
+	if (TPM2B_DIGEST_Unmarshal(&srd->commandAuditDigest, &pad, &size) !=
+	    TPM_RC_SUCCESS)
+		return EC_ERROR_UNKNOWN;
 	UINT32_Unmarshal(&srd->restartCount, &pad, &size);
 	UINT32_Unmarshal(&srd->pcrCounter, &pad, &size);
 
 #ifdef TPM_ALG_ECC
 	UINT64_Unmarshal(&srd->commitCounter, &pad, &size);
-	TPM2B_NONCE_Unmarshal(&srd->commitNonce, &pad, &size);
+	if (TPM2B_NONCE_Unmarshal(&srd->commitNonce, &pad, &size) !=
+	    TPM_RC_SUCCESS)
+		return EC_ERROR_UNKNOWN;
 
+	if (size < sizeof(srd->commitArray))
+		return EC_ERROR_UNKNOWN;
 	memcpy(srd->commitArray, pad, sizeof(srd->commitArray));
 	size -= sizeof(srd->commitArray);
 #endif
 
 	memmove(real_srd, srd, sizeof(*srd));
 	memcpy(real_srd + 1, &preserved, sizeof(preserved));
+	return EC_SUCCESS;
 }
 
 /*
  * Based on the passed in index, find the location of the PCR in the NVMEM
  * cache and copy it there.
  */
-static void restore_pcr(size_t pcr_index, uint8_t *pad, size_t size)
+static enum ec_error_list restore_pcr(size_t pcr_index, uint8_t *pad,
+				      size_t size)
 {
 	const STATE_CLEAR_DATA *scd;
 	const struct pcr_descriptor *pcrd;
 	void *cached; /* This PCR's position in the NVMEM cache. */
 
 	if (pcr_index > NUM_OF_PCRS)
-		return; /* This is an error. */
+		return EC_ERROR_UNKNOWN; /* This is an error. */
 
 	pcrd = pcr_arrays + pcr_index / NUM_STATIC_PCR;
 	if (pcrd->pcr_size != size)
-		return; /* This is an error. */
+		return EC_ERROR_UNKNOWN; /* This is an error. */
 
 	scd = get_scd();
 	cached = (uint8_t *)&scd->pcrSave + pcrd->pcr_array_offset +
 		 pcrd->pcr_size * (pcr_index % NUM_STATIC_PCR);
 
 	memcpy(cached, pad, size);
+	return EC_SUCCESS;
 }
 
 /* Restore a reserved object found in flash on initialization. */
-static void restore_reserved(void *pad, size_t size, uint8_t *bitmap)
+static enum ec_error_list restore_reserved(void *pad, size_t size,
+					   uint8_t *bitmap)
 {
 	NV_RESERVED_ITEM ri;
-	uint16_t type;
+	NV_RESERVE type;
 	void *cached;
+	enum ec_error_list rv = EC_SUCCESS;
 
 	/*
 	 * Index is saved as a single byte, update pad to point at the
@@ -1829,15 +1859,13 @@ static void restore_reserved(void *pad, size_t size, uint8_t *bitmap)
 	if (type < NV_VIRTUAL_RESERVE_LAST) {
 		NvGetReserved(type, &ri);
 
-		bitmap_bit_set(bitmap, type);
-
 		switch (type) {
 		case NV_STATE_CLEAR:
-			unmarshal_state_clear(pad, size, ri.offset);
+			rv = unmarshal_state_clear(pad, size, ri.offset);
 			break;
 
 		case NV_STATE_RESET:
-			unmarshal_state_reset(pad, size, ri.offset);
+			rv = unmarshal_state_reset(pad, size, ri.offset);
 			break;
 
 		default:
@@ -1846,10 +1874,13 @@ static void restore_reserved(void *pad, size_t size, uint8_t *bitmap)
 			memcpy(cached, pad, size);
 			break;
 		}
-		return;
+		/* Only mark as loaded if successfully copied. */
+		if (rv == EC_SUCCESS)
+			bitmap_bit_set(bitmap, type);
+		return rv;
 	}
 
-	restore_pcr(type - NV_VIRTUAL_RESERVE_LAST, pad, size);
+	return restore_pcr(type - NV_VIRTUAL_RESERVE_LAST, pad, size);
 }
 
 /* Restore an evictable object found in flash on initialization. */
@@ -2294,6 +2325,11 @@ static enum ec_error_list retrieve_nvmem_contents(void)
 						   vc->t_header.val_len;
 				break; /* Keep tuples in flash. */
 			case NN_OBJ_TPM_RESERVED:
+				/**
+				 * Don't check error as it is already reflected
+				 * in `res_bitmap`. Invalid object will be
+				 * recreated later.
+				 */
 				restore_reserved(nc + 1, nc->size, res_bitmap);
 				break;
 
