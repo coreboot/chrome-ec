@@ -2489,7 +2489,50 @@ static void print_aligned(const char *name, size_t field_size)
 	}
 }
 
-static void print_ccd_info(void *response, size_t response_size)
+/*
+ * Translates "AnExampleTPMString" into "AN_EXAMPLE_TPM_STRING". Note that
+ * output must be large enough to contain a 150%-sized string of input.
+ */
+static void to_upper_underscore(const char *input, char *output)
+{
+	bool first_char = true;
+	bool needs_underscore = false;
+
+	while (*input != '\0') {
+		*output = toupper(*input);
+		/*
+		 * If we encounter an upper case char in the input, we may need
+		 * to add an underscore in the output before (re)writing the
+		 * output char
+		 */
+		if (*output == *input) {
+			/*
+			 * See if the next input letter is lower case, that
+			 * means this uppercase letter needs a '_' before it.
+			 */
+			if (islower(*(input + 1)) && !first_char)
+				needs_underscore = true;
+			if (needs_underscore) {
+				needs_underscore = false;
+				*output++ = '_';
+				*output = *input;
+			}
+		} else {
+			/*
+			 * We encountered a lower case, so the next upper case
+			 * should have a '_' before it
+			 */
+			needs_underscore = true;
+		}
+		first_char = false;
+		input++;
+		output++;
+	}
+	*output = '\0';
+}
+
+static void print_ccd_info(void *response, size_t response_size,
+			   bool show_machine_output)
 {
 	struct ccd_info_response_header ccd_info_header;
 	struct ccd_info_response ccd_info;
@@ -2575,12 +2618,31 @@ static void print_ccd_info(void *response, size_t response_size)
 	}
 
 	/* Now report CCD state on the console. */
-	printf("State: %s\n", ccd_info.ccd_state > ARRAY_SIZE(state_names) ?
-	       "Error" : state_names[ccd_info.ccd_state]);
-	printf("Password: %s\n", (ccd_info.ccd_indicator_bitmap &
-		      CCD_INDICATOR_BIT_HAS_PASSWORD) ? "Set" : "None");
-	printf("Flags: %#06x\n", ccd_info.ccd_flags);
-	printf("Capabilities, current and default:\n");
+	const char *const state = ccd_info.ccd_state > ARRAY_SIZE(state_names) ?
+					  "Error" :
+					  state_names[ccd_info.ccd_state];
+	const char *const password = (ccd_info.ccd_indicator_bitmap &
+				      CCD_INDICATOR_BIT_HAS_PASSWORD) ?
+					     "Set" :
+					     "None";
+	if (show_machine_output) {
+		print_machine_output("STATE", "%s", state);
+		print_machine_output("PASSWORD", "%s", password);
+		print_machine_output("CCD_FLAGS", "%#06x", ccd_info.ccd_flags);
+		print_machine_output(
+			"CCD_FLAG_TESTLAB_MODE", "%c",
+			(ccd_info.ccd_flags & CCD_FLAG_TEST_LAB) ? 'Y' : 'N');
+		print_machine_output("CCD_FLAG_FACTORY_MODE", "%c",
+				     (ccd_info.ccd_flags &
+				      CCD_FLAG_FACTORY_MODE_ENABLED) ?
+					     'Y' :
+					     'N');
+	} else {
+		printf("State: %s\n", state);
+		printf("Password: %s\n", password);
+		printf("Flags: %#06x\n", ccd_info.ccd_flags);
+		printf("Capabilities, current and default:\n");
+	}
 
 	gsc_cap_count = version_to_ccd[ccd_info_version].cap_count;
 	gsc_capability_info = version_to_ccd[ccd_info_version].info_table;
@@ -2619,31 +2681,58 @@ static void print_ccd_info(void *response, size_t response_size)
 			}
 		}
 
-		printf("  ");
-		print_aligned(gsc_capability_info[i].name, name_column_width);
-		printf("%c %s",
-		       is_enabled ? 'Y' : '-',
-		       cap_state_names[cap_current]);
+		if (show_machine_output) {
+			char upper[80];
 
-		if (cap_current != cap_default)
-			printf("  (%s)", cap_state_names[cap_default]);
+			to_upper_underscore(gsc_capability_info[i].name, upper);
+			print_machine_output(upper, "%c",
+					     is_enabled ? 'Y' : 'N');
+		} else {
+			printf("  ");
+			print_aligned(gsc_capability_info[i].name,
+				      name_column_width);
+			printf("%c %s", is_enabled ? 'Y' : '-',
+			       cap_state_names[cap_current]);
 
-		printf("\n");
+			if (cap_current != cap_default)
+				printf("  (%s)", cap_state_names[cap_default]);
+
+			printf("\n");
+		}
 
 		if (is_enabled)
 			caps_bitmap |= (1 << i);
 	}
-	printf("CCD caps bitmap: %#x\n", caps_bitmap);
-	printf("Capabilities are %s.\n", (ccd_info.ccd_indicator_bitmap &
-		 CCD_INDICATOR_BIT_ALL_CAPS_DEFAULT) ? "default" : "modified");
-	if (ccd_info.ccd_indicator_bitmap &
-	    CCD_INDICATOR_BIT_INITIAL_FACTORY_MODE) {
-		printf("Chip factory mode.");
+	if (show_machine_output) {
+		print_machine_output("CCD_CAPS_BITMAP", "%#x", caps_bitmap);
+		print_machine_output("CAPABILITY_MODIFIED", "%c",
+				     (ccd_info.ccd_indicator_bitmap &
+				      CCD_INDICATOR_BIT_ALL_CAPS_DEFAULT) ?
+					     'N' :
+					     'Y');
+		print_machine_output("INITIAL_FACTORY_MODE", "%c",
+				     (ccd_info.ccd_indicator_bitmap &
+				      CCD_INDICATOR_BIT_INITIAL_FACTORY_MODE) ?
+					     'Y' :
+					     'N');
+
+	} else {
+		printf("CCD caps bitmap: %#x\n", caps_bitmap);
+		printf("Capabilities are %s.\n",
+		       (ccd_info.ccd_indicator_bitmap &
+			CCD_INDICATOR_BIT_ALL_CAPS_DEFAULT) ?
+			       "default" :
+			       "modified");
+		if (ccd_info.ccd_indicator_bitmap &
+		    CCD_INDICATOR_BIT_INITIAL_FACTORY_MODE) {
+			printf("Chip factory mode.");
+		}
 	}
 }
 
 static void process_ccd_state(struct transfer_descriptor *td, int ccd_unlock,
-			      int ccd_open, int ccd_lock, int ccd_info)
+			      int ccd_open, int ccd_lock, int ccd_info,
+			      bool show_machine_output)
 {
 	uint8_t payload;
 	 /* Max possible response size is when ccd_info is requested. */
@@ -2674,7 +2763,8 @@ static void process_ccd_state(struct transfer_descriptor *td, int ccd_unlock,
 
 	if (rv == VENDOR_RC_SUCCESS) {
 		if (ccd_info)
-			print_ccd_info(response, response_size);
+			print_ccd_info(response, response_size,
+				       show_machine_output);
 		return;
 	}
 
@@ -4572,7 +4662,7 @@ int main(int argc, char *argv[])
 
 	if (ccd_unlock || ccd_open || ccd_lock || ccd_info)
 		process_ccd_state(&td, ccd_unlock, ccd_open,
-				  ccd_lock, ccd_info);
+				  ccd_lock, ccd_info, show_machine_output);
 
 	if (set_capability)
 		exit(process_set_capabililty(&td, capability_parameter));
