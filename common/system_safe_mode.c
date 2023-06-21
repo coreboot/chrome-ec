@@ -33,6 +33,7 @@ static const int safe_mode_allowed_hostcmds[] = {
 
 bool is_task_safe_mode_critical(task_id_t task_id)
 {
+	int i;
 	const task_id_t safe_mode_critical_tasks[] = {
 #ifdef HAS_TASK_HOOKS
 		TASK_ID_HOOKS,
@@ -48,7 +49,7 @@ bool is_task_safe_mode_critical(task_id_t task_id)
 		TASK_ID_SYSWORKQ,
 #endif
 	};
-	for (int i = 0; i < ARRAY_SIZE(safe_mode_critical_tasks); i++)
+	for (i = 0; i < ARRAY_SIZE(safe_mode_critical_tasks); i++)
 		if (safe_mode_critical_tasks[i] == task_id)
 			return true;
 	return false;
@@ -63,7 +64,8 @@ bool is_current_task_safe_mode_critical(void)
 
 int disable_non_safe_mode_critical_tasks(void)
 {
-	for (task_id_t task_id = 0; task_id < TASK_ID_COUNT; task_id++) {
+	task_id_t task_id;
+	for (task_id = 0; task_id < TASK_ID_COUNT; task_id++) {
 		/* Do not disable current task,
 		 * that is the responsibility of the panic handler.
 		 * If the current task is disabled while outside an interrupt
@@ -96,11 +98,12 @@ bool system_is_in_safe_mode(void)
 static void print_panic_stack(void)
 {
 	uint32_t sp;
+	int i;
 	const struct panic_data *pdata = panic_get_data();
 
 	ccprintf("\nStack Contents");
 	sp = get_panic_stack_pointer(pdata);
-	for (int i = 0; i < STACK_PRINT_SIZE_WORDS; i++) {
+	for (i = 0; i < STACK_PRINT_SIZE_WORDS; i++) {
 		if (sp == 0 ||
 		    sp + sizeof(uint32_t) > CONFIG_RAM_BASE + CONFIG_RAM_SIZE) {
 			ccprintf("\nSP(%x) out of range", sp);
@@ -118,7 +121,8 @@ static void print_panic_stack(void)
 
 bool command_is_allowed_in_safe_mode(int command)
 {
-	for (int i = 0; i < ARRAY_SIZE(safe_mode_allowed_hostcmds); i++)
+	int i;
+	for (i = 0; i < ARRAY_SIZE(safe_mode_allowed_hostcmds); i++)
 		if (command == safe_mode_allowed_hostcmds[i])
 			return true;
 	return false;
