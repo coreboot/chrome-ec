@@ -1810,22 +1810,9 @@ int cmd_flash_protect(int argc, char *argv[])
 	}
 
 	/* Print returned flags */
-	printf("Flash protect flags: 0x%08x%s\n",
-	       flash_protect_command.GetFlags(),
-	       (ec::FlashProtectCommand::ParseFlags(
-			flash_protect_command.GetFlags()))
-		       .c_str());
-	printf("Valid flags:         0x%08x%s\n",
-	       flash_protect_command.GetValidFlags(),
-	       (ec::FlashProtectCommand::ParseFlags(
-			flash_protect_command.GetValidFlags()))
-		       .c_str());
-	printf("Writable flags:      0x%08x%s\n",
-	       flash_protect_command.GetWritableFlags(),
-
-	       (ec::FlashProtectCommand::ParseFlags(
-			flash_protect_command.GetWritableFlags()))
-		       .c_str());
+	print_flash_protect_flags("Flash protect flags:", r.flags);
+	print_flash_protect_flags("Valid flags:        ", r.valid_flags);
+	print_flash_protect_flags("Writable flags:     ", r.writable_flags);
 
 	/* Check if we got all the flags we asked for */
 	if ((r.flags & p.mask) != (p.flags & p.mask)) {
