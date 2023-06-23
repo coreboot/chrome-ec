@@ -86,7 +86,7 @@ cmd_elf_to_hex = $(OBJCOPY) -O ihex $< $@
 cmd_bin_to_hex = $(OBJCOPY) -I binary -O ihex \
 	--change-addresses $(_program_memory_base) $^ $@
 cmd_smap = $(NM) $< | sort > $@
-cmd_elf = $(CC) $(objs) $(libsharedobjs_elf-y) $(LDFLAGS) \
+cmd_elf = $(COMPILER) $(objs) $(libsharedobjs_elf-y) $(LDFLAGS) \
 	-o $@ -Wl,-T,$< -Wl,-Map,$(patsubst %.elf,%.map,$@)
 ifeq ($(cc-name),gcc)
 cmd_elf+= -flto-partition=one
@@ -98,8 +98,10 @@ endif
 cmd_fuzz_exe = $(CXX) $^ $(HOST_TEST_LDFLAGS) $(LDFLAGS_EXTRA) -o $@
 cmd_run_fuzz = build/host/$*/$*.exe -seed=1 -runs=1 $(silent) \
 	$(silent_err) || (echo "Test $* failed!" && false)
-cmd_exe = $(CC) $(ro-objs) $(HOST_TEST_LDFLAGS) $(LDFLAGS_EXTRA) -o $@
+cmd_exe = $(CXX) $(ro-objs) $(HOST_TEST_LDFLAGS) $(LDFLAGS_EXTRA) -o $@
 cmd_c_to_o = $(CC) -std=gnu11 $(C_WARN) $(CFLAGS) -MMD -MP -MF $@.d -c $< \
+		-MT $(@D)/$(@F) -o $(@D)/$(@F)
+cmd_c_to_s = $(CC) -S $(C_WARN) $(CFLAGS) -fno-lto -MMD -MP -MF $@.d -c $< \
 		-MT $(@D)/$(@F) -o $(@D)/$(@F)
 cmd_cxx_to_o = $(CXX) -std=gnu++17 $(CFLAGS) $(CXXFLAGS) -MMD -MP -MF $@.d -c $< \
 		      -MT $(@D)/$(@F) -o $(@D)/$(@F)
@@ -131,7 +133,7 @@ cmd_mv_from_tmp = mv $(out)/$*.bin.tmp $(out)/$*.bin
 cmd_extractrw-y = dd if=$(out)/$(PROJECT).bin.tmp of=$(out)/$(PROJECT).RW.bin \
 	       bs=1 count=$(_rw_size) skip=$(_rw_off) $(silent_err)
 cmd_copyrw-y = cd $(out) && cp RW/$(PROJECT).RW.flat RW/$(PROJECT).RW.bin
-cmd_sharedlib_elf = $(CC) $(libsharedobjs_deps) \
+cmd_sharedlib_elf = $(COMPILER) $(libsharedobjs_deps) \
 	-Wl,-T,common/ec.$(SHOBJLIB).ld $(LDFLAGS) \
 	-o $(out)/$(SHOBJLIB)/$(SHOBJLIB).elf \
 	-Wl,-Map,$(out)/$(SHOBJLIB)/$(SHOBJLIB).map
@@ -166,7 +168,7 @@ cmd_rsasign_rwsig = futility sign --type rwsig \
 
 # commands to build optional xref files
 cmd_deps_to_list = cat $(deps) | tr -d ':\\' | tr ' ' '\012' \
-	| egrep '\.[chS]$$' | sort | uniq > $@
+	| grep -E '\.[chS]$$' | sort | uniq > $@
 cmd_etags = etags -o $@ $(shell cat $<)
 cmd_ctags = ctags -o $@ $(shell cat $<)
 targ_if_prog = $(if $(shell which $(1) 2>/dev/null),$(2),)
@@ -201,8 +203,13 @@ build_boards: | $(FAILED_BOARDS_DIR)
 	@rm -f $(FAILED_BOARDS_DIR)/*
 	$(MAKE) try_build_boards
 
+.PHONY: check_undef
+check_undef:
+	$(call quiet,check_undef)
+
 .PHONY: buildall_only
-buildall_only: build_boards build_cros_ec_commands
+buildall_only: build_boards build_cros_ec_commands check_undef
+	$(MAKE) BOARD=host utils
 	$(MAKE) build_cts
 	$(MAKE) buildfuzztests
 
@@ -258,17 +265,22 @@ conflicting_options := \
 	MPU \
 	PECI \
 	PS2 \
+	SMBUS \
 	SPI \
 	UART_CONSOLE
 
 cmd_check_allowed = ./util/kconfig_check.py -c ${config} \
-	 -a util/config_allowed.txt -p PLATFORM_EC_ -s zephyr/ \
+	 -a util/config_allowed.txt -p PLATFORM_EC_ -s "" \
 	 -I "${ZEPHYR_BASE}" \
 	 $(foreach opt,$(conflicting_options),-i $(opt)) check
+cmd_check_undef = ./util/kconfig_check.py -s "" -I "${ZEPHYR_BASE}" \
+	check_undef
 else
 cmd_check_allowed = true
+cmd_check_undef = true
 endif
 quiet_cmd_check_allowed = CHECK_ALLOWED ${config}
+quiet_cmd_check_undef = CHECK_UNDEF
 
 # Print any important notices at the end of the build.
 .PHONY: notice
@@ -307,13 +319,21 @@ hex: $(hex-y)
 utils-art: $(build-art)
 
 .PHONY: utils-host
-utils-host: $(host-utils)
+ifeq ($(BOARD),host)
+utils-host: $(host-utils) $(host-utils-cxx)
+else
+utils-host:
+	$(error Building utils-host not supported when BOARD is not "host")
+endif
 
 .PHONY: utils-build
 utils-build: $(build-utils)
 
 .PHONY: utils
-utils: utils-host utils-build utils-art
+utils: utils-build utils-art
+ifeq ($(BOARD),host)
+utils: utils-host
+endif
 
 # On board test binaries
 test-targets=$(foreach t,$(test-list-y),test-$(t))
@@ -610,6 +630,11 @@ $(out)/RO/%.o:%.c
 $(out)/RW/%.o:%.c
 	$(call quiet,c_to_o,CC     )
 
+$(out)/RO/%.s:%.c
+	$(call quiet,c_to_s,CC     )
+$(out)/RW/%.s:%.c
+	$(call quiet,c_to_s,CC     )
+
 $(out)/RO/%.o:%.cc
 	$(call quiet,cxx_to_o,CXX    )
 $(out)/RW/%.o:%.cc
@@ -672,6 +697,9 @@ $(build-utils): $(out)/%:$(build-srcs)
 $(host-utils): $(out)/%:$(host-srcs)
 	$(call quiet,c_to_host,HOSTCC )
 
+$(host-utils-cxx): $(out)/%:$(host-srcs-cxx)
+	$(call quiet,cxx_to_host,HOSTCXX )
+
 $(out)/cscope.files: $(out)/$(PROJECT).bin
 	$(call quiet,deps_to_list,SH     )
 
@@ -731,6 +759,14 @@ flash_ec: $(out)/ec.bin
 .PHONY: flash_dfu
 flash_dfu: $(out)/ec.bin
 	sudo ./$(BDIR)/dfu $(out)/ec.bin
+
+.PHONY: print-all-baseboards
+print-all-baseboards: $(foreach b, $(BOARDS), print-baseboard-$(b))
+print-baseboard-%:
+	@$(MAKE) BOARD=$* V=$(V) print-one-baseboard
+.PHONY: print-one-baseboard
+print-one-baseboard:
+	@echo "${BOARD}=${BASEBOARD}"
 
 # Deprecated, use print-make-vars instead
 .PHONY: print-baseboard

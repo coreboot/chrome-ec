@@ -9,14 +9,14 @@
 #include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
-#include "extpower.h"
-#include "driver/accel_kionix.h"
 #include "driver/accel_bma2x2.h"
-#include "driver/accelgyro_bmi_common.h"
+#include "driver/accel_kionix.h"
 #include "driver/accelgyro_bmi323.h"
+#include "driver/accelgyro_bmi_common.h"
 #include "driver/ppc/sn5s330.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
+#include "extpower.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "keyboard_scan.h"
@@ -27,9 +27,9 @@
 #include "power_button.h"
 #include "pwm.h"
 #include "pwm_chip.h"
-#include "system.h"
 #include "shi_chip.h"
 #include "switch.h"
+#include "system.h"
 #include "tablet_mode.h"
 #include "task.h"
 #include "usbc_ocp.h"
@@ -46,6 +46,7 @@ static void usba_oc_interrupt(enum gpio_signal signal);
 static void ppc_interrupt(enum gpio_signal signal);
 static void board_connect_c0_sbu(enum gpio_signal s);
 
+/* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
 /* GPIO Interrupt Handlers */
@@ -305,6 +306,7 @@ void board_tcpc_init(void)
 
 	/* Enable PPC interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_SWCTL_INT_ODL);
+	gpio_enable_interrupt(GPIO_USB_C1_SWCTL_INT_ODL);
 
 	/* Enable TCPC interrupts */
 	gpio_enable_interrupt(GPIO_USB_C0_PD_INT_ODL);
@@ -533,8 +535,8 @@ int board_set_active_charge_port(int port)
 	return EC_SUCCESS;
 }
 
-void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
-			    int charge_mv)
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+				       int max_ma, int charge_mv)
 {
 	/*
 	 * Ignore lower charge ceiling on PD transition if our battery is
@@ -546,8 +548,7 @@ void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 		charge_ma = max_ma;
 	}
 
-	charge_set_input_current_limit(
-		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
+	charge_set_input_current_limit(charge_ma, charge_mv);
 }
 
 uint16_t tcpc_get_alert_status(void)
@@ -569,15 +570,15 @@ static struct mutex g_base_mutex;
 static struct mutex g_lid_mutex;
 
 /* Matrix to rotate accelerometer into standard reference frame */
-const mat33_fp_t base_standard_ref = { { FLOAT_TO_FP(1), 0, 0 },
-				       { 0, FLOAT_TO_FP(-1), 0 },
+const mat33_fp_t base_standard_ref = { { FLOAT_TO_FP(-1), 0, 0 },
+				       { 0, FLOAT_TO_FP(1), 0 },
 				       { 0, 0, FLOAT_TO_FP(-1) } };
 
 static struct kionix_accel_data g_kx022_data;
 
 static const mat33_fp_t lid_standard_ref_kx022 = { { FLOAT_TO_FP(1), 0, 0 },
 						   { 0, FLOAT_TO_FP(1), 0 },
-						   { 0, 0, FLOAT_TO_FP(-1) } };
+						   { 0, 0, FLOAT_TO_FP(1) } };
 
 static struct bmi_drv_data_t g_bmi_data;
 struct motion_sensor_t motion_sensors[] = {

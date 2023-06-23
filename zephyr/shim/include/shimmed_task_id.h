@@ -26,6 +26,8 @@ typedef uint8_t task_id_t;
 enum {
 	EC_TASK_PRIO_LOWEST = 0,
 	EC_SYSWORKQ_PRIO = EC_TASK_PRIO_LOWEST,
+	EC_TASK_RWSIG_PRIO,
+	EC_TASK_TOUCHPAD_PRIO,
 	EC_TASK_CHG_RAMP_PRIO,
 	EC_TASK_USB_CHG_PRIO,
 	EC_TASK_DPS_PRIO,
@@ -158,6 +160,16 @@ enum {
 		    (CROS_EC_TASK(PD_INT_C3, pd_interrupt_handler_task, 3, \
 				  CONFIG_TASK_PD_INT_STACK_SIZE,           \
 				  EC_TASK_PD_INT_C3_PRIO)),                \
+		    ())                                                    \
+	COND_CODE_1(HAS_TASK_TOUCHPAD,                                     \
+		    (CROS_EC_TASK(TOUCHPAD, touchpad_task, 0,              \
+				  CONFIG_TASK_TOUCHPAD_STACK_SIZE,         \
+				  EC_TASK_TOUCHPAD_PRIO)),                 \
+		    ())                                                    \
+	COND_CODE_1(HAS_TASK_RWSIG,                                        \
+		    (CROS_EC_TASK(RWSIG, rwsig_task, 0,                    \
+				  CONFIG_TASK_RWSIG_STACK_SIZE,            \
+				  EC_TASK_RWSIG_PRIO)),                    \
 		    ())
 #elif defined(CONFIG_HAS_TEST_TASKS)
 #include "shimmed_test_tasks.h"
@@ -171,7 +183,36 @@ enum {
 #if defined(CONFIG_TEST_TASK_LIST) && !defined(CROS_EC_TASK_LIST)
 #define CROS_EC_TASK_LIST CONFIG_TEST_TASK_LIST
 #endif /* CONFIG_TEST_TASK_LIST && !CROS_EC_TASK_LIST */
-#endif /* !CONFIG_ZTEST */
+
+/*
+ * Tests often must link in files that reference task IDs, even when the
+ * shimmed tasks are not created.  Define stub tasks to satisfy the final link.
+ */
+#else /* !CONFIG_SHIMMED_TASKS && !CONFIG_HAS_TEST_TASKS */
+#define CROS_EC_TASK_LIST                                                   \
+	CROS_EC_TASK(CHG_RAMP, NULL, 0, 0, EC_TASK_CHG_RAMP_PRIO)           \
+	CROS_EC_TASK(USB_CHG, NULL, 0, 0, EC_TASK_USB_CHG_PRIO)             \
+	CROS_EC_TASK(DPS, NULL, 0, 0, EC_TASK_DPS_PRIO)                     \
+	CROS_EC_TASK(CHARGER, NULL, 0, 0, EC_TASK_CHARGER_PRIO)             \
+	CROS_EC_TASK(CHIPSET, NULL, 0, 0, EC_TASK_CHIPSET_PRIO)             \
+	CROS_EC_TASK(MOTIONSENSE, NULL, 0, 0, EC_TASK_MOTIONSENSE_PRIO)     \
+	CROS_EC_TASK(USB_MUX, NULL, 0, 0, EC_TASK_USB_MUX_PRIO)             \
+	CROS_EC_TASK(HOSTCMD, NULL, 0, 0, EC_TASK_HOSTCMD_PRIO)             \
+	CROS_EC_TASK(KEYPROTO, NULL, 0, 0, EC_TASK_KEYPROTO_PRIO)           \
+	CROS_EC_TASK(POWERBTN, NULL, 0, 0, EC_TASK_POWERBTN_PRIO)           \
+	CROS_EC_TASK(KEYSCAN, NULL, 0, 0, EC_TASK_KEYSCAN_PRIO)             \
+	CROS_EC_TASK(PD_C0, NULL, 0, 0, EC_TASK_PD_C0_PRIO)                 \
+	CROS_EC_TASK(PD_C1, NULL, 0, 0, EC_TASK_PD_C1_PRIO)                 \
+	CROS_EC_TASK(PD_C2, NULL, 0, 0, EC_TASK_PD_C2_PRIO)                 \
+	CROS_EC_TASK(PD_C3, NULL, 0, 0, EC_TASK_PD_C3_PRIO)                 \
+	CROS_EC_TASK(PD_INT_SHARED, NULL, 0, 0, EC_TASK_PD_INT_SHARED_PRIO) \
+	CROS_EC_TASK(PD_INT_C0, NULL, 0, 0, EC_TASK_PD_INT_C0_PRIO)         \
+	CROS_EC_TASK(PD_INT_C1, NULL, 1, 0, EC_TASK_PD_INT_C1_PRIO)         \
+	CROS_EC_TASK(PD_INT_C2, NULL, 2, 0, EC_TASK_PD_INT_C2_PRIO)         \
+	CROS_EC_TASK(PD_INT_C3, NULL, 3, 0, EC_TASK_PD_INT_C3_PRIO)         \
+	CROS_EC_TASK(TOUCHPAD, NULL, 0, 0, EC_TASK_TOUCHPAD_PRIO)
+
+#endif /* CONFIG_SHIMMED_TASKS */
 
 #ifndef CROS_EC_TASK_LIST
 #define CROS_EC_TASK_LIST
@@ -184,25 +225,34 @@ enum {
  */
 #define CROS_EC_TASK(name, ...) TASK_ID_##name,
 #define TASK_TEST(name, ...) CROS_EC_TASK(name)
+/* clang-format off */
 enum {
-	TASK_ID_IDLE = -1, /* We don't shim the idle task */
 	CROS_EC_TASK_LIST
 #ifdef TEST_BUILD
-		TASK_ID_TEST_RUNNER,
+	TASK_ID_TEST_RUNNER,
 #endif
 	TASK_ID_COUNT,
 	TASK_ID_INVALID = 0xff, /* Unable to find the task */
 };
+/* clang-format on */
 #undef CROS_EC_TASK
 #undef TASK_TEST
 
 /*
  * Additional task IDs for features that runs on non shimmed threads,
- * task_get_current() needs to be updated to identify these ones.
+ * thread_id_to_task_id() and task_id_to_thread_id() need to be updated
+ * to identify these tasks.
  */
+/* clang-format off */
 #define CROS_EC_EXTRA_TASKS(fn)                                         \
-	COND_CODE_1(CONFIG_TASK_HOSTCMD_THREAD_MAIN, (fn(HOSTCMD)), ()) \
-	fn(SYSWORKQ)
+	COND_CODE_1(CONFIG_TASK_HOSTCMD_THREAD_MAIN, (fn(HOSTCMD)),     \
+		(fn(MAIN)))                                             \
+	COND_CODE_1(CONFIG_SHELL_BACKEND_SERIAL, (fn(SHELL)),           \
+		(COND_CODE_1(CONFIG_SHELL_BACKEND_DUMMY, (fn(SHELL)),   \
+		())))							\
+	fn(SYSWORKQ)                                                    \
+	fn(IDLE)
+/* clang-format on */
 
 #define EXTRA_TASK_INTERNAL_ID(name) EXTRA_TASK_##name,
 enum {

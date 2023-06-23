@@ -5,18 +5,18 @@
 
 #define DT_DRV_COMPAT cros_ec_fans
 
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/drivers/pwm.h>
-#include <zephyr/drivers/sensor.h>
-#include <zephyr/logging/log.h>
-#include <zephyr/sys/util_macro.h>
-
 #include "fan.h"
 #include "gpio_signal.h"
 #include "hooks.h"
 #include "math_util.h"
 #include "system.h"
 #include "util.h"
+
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/pwm.h>
+#include <zephyr/drivers/sensor.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/util_macro.h>
 
 LOG_MODULE_REGISTER(fan_shim, LOG_LEVEL_ERR);
 
@@ -43,6 +43,7 @@ BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
 		.rpm_min = DT_PROP(node_id, rpm_min),                          \
 		.rpm_start = DT_PROP(node_id, rpm_start),                      \
 		.rpm_max = DT_PROP(node_id, rpm_max),                          \
+		.rpm_deviation = DT_PROP(node_id, rpm_deviation),              \
 	};
 
 #define FAN_INST(node_id)                \
@@ -61,42 +62,6 @@ DT_INST_FOREACH_CHILD(0, FAN_CONFIGS)
 
 const struct fan_t fans[FAN_CH_COUNT] = { DT_INST_FOREACH_CHILD(0, FAN_INST) };
 
-/* Rpm deviation (Unit:percent) */
-#ifndef RPM_DEVIATION
-#define RPM_DEVIATION 7
-#endif
-
-/* Margin of target rpm */
-#define RPM_MARGIN(rpm_target) (((rpm_target)*RPM_DEVIATION) / 100)
-
-/* Fan mode */
-enum fan_mode {
-	/* FAN rpm mode */
-	FAN_RPM = 0,
-	/* FAN duty mode */
-	FAN_DUTY,
-};
-
-/* Fan status data structure */
-struct fan_data {
-	/* Fan mode */
-	enum fan_mode current_fan_mode;
-	/* Actual rpm */
-	int rpm_actual;
-	/* Previous rpm */
-	int rpm_pre;
-	/* Target rpm */
-	int rpm_target;
-	/* Fan config flags */
-	unsigned int flags;
-	/* Automatic fan status */
-	enum fan_status auto_status;
-	/* Current PWM duty cycle percentage */
-	int pwm_percent;
-	/* Whether the PWM channel is enabled */
-	bool pwm_enabled;
-};
-
 /* Data structure to define PWM and tachometer. */
 struct fan_config {
 	struct pwm_dt_spec pwm;
@@ -104,7 +69,7 @@ struct fan_config {
 	const struct device *tach;
 };
 
-static struct fan_data fan_data[FAN_CH_COUNT];
+struct fan_data fan_data[FAN_CH_COUNT];
 static const struct fan_config fan_config[FAN_CH_COUNT] = {
 	DT_INST_FOREACH_CHILD(0, FAN_CONTROL_INST)
 };
@@ -132,9 +97,9 @@ static void fan_pwm_update(int ch)
 	LOG_DBG("FAN PWM %s set percent (%d), pulse %d", pwm_dev->name,
 		data->pwm_percent, pulse_ns);
 
-	ret = pwm_set_dt(&cfg->pwm, cfg->pwm.period, pulse_ns);
+	ret = pwm_set_pulse_dt(&cfg->pwm, pulse_ns);
 	if (ret) {
-		LOG_ERR("pwm_set() failed %s (%d)", pwm_dev->name, ret);
+		LOG_ERR("pwm_set_pulse_dt failed %s (%d)", pwm_dev->name, ret);
 	}
 }
 
@@ -226,9 +191,10 @@ enum fan_status fan_smart_control(int ch)
 	int duty, rpm_diff;
 	int rpm_actual = data->rpm_actual;
 	int rpm_target = data->rpm_target;
+	int deviation = fans[ch].rpm->rpm_deviation;
 
 	/* wait rpm is stable */
-	if (ABS(rpm_actual - data->rpm_pre) > RPM_MARGIN(rpm_actual)) {
+	if (ABS(rpm_actual - data->rpm_pre) > (rpm_target * deviation / 100)) {
 		data->rpm_pre = rpm_actual;
 		return FAN_STATUS_CHANGING;
 	}
@@ -243,7 +209,7 @@ enum fan_status fan_smart_control(int ch)
 		return FAN_STATUS_STOPPED;
 	}
 
-	if (rpm_diff > RPM_MARGIN(rpm_target)) {
+	if (rpm_diff > (rpm_target * deviation / 100)) {
 		/* Increase PWM duty */
 		if (duty == 100) {
 			return FAN_STATUS_FRUSTRATED;
@@ -251,7 +217,7 @@ enum fan_status fan_smart_control(int ch)
 
 		fan_adjust_duty(ch, rpm_diff, duty);
 		return FAN_STATUS_CHANGING;
-	} else if (rpm_diff < -RPM_MARGIN(rpm_target)) {
+	} else if (rpm_diff < -(rpm_target * deviation / 100)) {
 		/* Decrease PWM duty */
 		if (duty == 1 && rpm_target != 0) {
 			return FAN_STATUS_FRUSTRATED;
@@ -274,8 +240,13 @@ static void fan_tick_func_rpm(int ch)
 	/* Get actual rpm */
 	data->rpm_actual = fan_rpm(ch);
 
+	/* TODO: b/279132492 */
+#ifdef CONFIG_PLATFORM_EC_CUSTOM_FAN_DUTY_CONTROL
+	data->auto_status = board_override_fan_control_duty(ch);
+#else
 	/* Do smart fan stuff */
 	data->auto_status = fan_smart_control(ch);
+#endif
 }
 
 static void fan_tick_func_duty(int ch)

@@ -5,7 +5,6 @@
 
 #include "battery.h"
 #include "battery_smart.h"
-#include "board.h"
 #include "builtin/assert.h"
 #include "charge_manager.h"
 #include "charge_state.h"
@@ -20,19 +19,19 @@
 #include "registers.h"
 #include "system.h"
 #include "task.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
-#include "util.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_timer.h"
-#include "usb_prl_sm.h"
-#include "tcpm/tcpm.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
 #include "usb_sm.h"
 #include "usb_tc_sm.h"
 #include "usbc_ppc.h"
+#include "util.h"
 
 #define USBC_EVENT_TIMEOUT (5 * MSEC)
 #define USBC_MIN_EVENT_TIMEOUT (1 * MSEC)
@@ -141,6 +140,10 @@ static bool pd_task_loop(int port)
 	 */
 	if (IS_ENABLED(CONFIG_USB_PD_TCPC))
 		tcpc_run(port, evt);
+
+	/* Run Device Policy Manager */
+	if (IS_ENABLED(CONFIG_USB_DPM_SM))
+		dpm_run(port, evt, tc_get_pd_enabled(port));
 
 	/* Run policy engine state machine */
 	if (IS_ENABLED(CONFIG_USB_PE_SM))

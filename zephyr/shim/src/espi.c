@@ -3,17 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <atomic.h>
-#include <zephyr/device.h>
-#include <zephyr/drivers/espi.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/logging/log.h>
-#include <zephyr/kernel.h>
-#include <stdint.h>
-
-#include <ap_power/ap_power.h>
-#include <ap_power/ap_power_events.h>
-#include <ap_power/ap_power_espi.h>
 #include "acpi.h"
 #include "chipset.h"
 #include "common.h"
@@ -24,9 +13,23 @@
 #include "lpc.h"
 #include "port80.h"
 #include "power.h"
+#include "system_boot_time.h"
 #include "task.h"
 #include "timer.h"
 #include "zephyr_espi_shim.h"
+
+#include <stdint.h>
+
+#include <zephyr/device.h>
+#include <zephyr/drivers/espi.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+
+#include <ap_power/ap_power.h>
+#include <ap_power/ap_power_espi.h>
+#include <ap_power/ap_power_events.h>
+#include <atomic.h>
 
 #define VWIRE_PULSE_TRIGGER_TIME \
 	CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI_DEFAULT_VW_WIDTH_US
@@ -160,6 +163,8 @@ static void espi_chipset_reset(void)
 	} else {
 		hook_notify(HOOK_CHIPSET_RESET);
 	}
+
+	update_ap_boot_time(ESPIRST);
 }
 DECLARE_DEFERRED(espi_chipset_reset);
 #endif /* CONFIG_PLATFORM_EC_CHIPSET_RESET_HOOK */
@@ -187,6 +192,10 @@ static void espi_vwire_handler(const struct device *dev,
 	if (event.evt_details == ESPI_VWIRE_SIGNAL_PLTRST &&
 	    event.evt_data == 0) {
 		hook_call_deferred(&espi_chipset_reset_data, MSEC);
+		update_ap_boot_time(PLTRST_LOW);
+	} else if (event.evt_details == ESPI_VWIRE_SIGNAL_PLTRST &&
+		   event.evt_data == 1) {
+		update_ap_boot_time(PLTRST_HIGH);
 	}
 #endif
 }
@@ -402,7 +411,7 @@ void lpc_update_host_event_status(void)
 		lpc_generate_sci();
 }
 
-static void host_command_init(void)
+static void lpc_host_command_init(void)
 {
 	/* We support LPC args and version 3 protocol */
 	*(lpc_get_memmap_range() + EC_MEMMAP_HOST_CMD_FLAGS) =
@@ -415,7 +424,7 @@ static void host_command_init(void)
 	lpc_update_host_event_status();
 }
 
-DECLARE_HOOK(HOOK_INIT, host_command_init, HOOK_PRIO_INIT_LPC);
+DECLARE_HOOK(HOOK_INIT, lpc_host_command_init, HOOK_PRIO_INIT_LPC);
 
 static void handle_acpi_write(uint32_t data)
 {
@@ -590,7 +599,7 @@ int lpc_keyboard_has_char(void)
 	return status;
 }
 
-void lpc_keyboard_put_char(uint8_t chr, int send_irq)
+test_mockable void lpc_keyboard_put_char(uint8_t chr, int send_irq)
 {
 	uint32_t kb_char = chr;
 	int rv;
@@ -683,8 +692,9 @@ static void espi_peripheral_handler(const struct device *dev,
 	}
 }
 
-static int zephyr_shim_setup_espi(const struct device *unused)
+static int zephyr_shim_setup_espi(void)
 {
+	uint32_t enable = 1;
 	static const struct {
 		espi_callback_handler_t handler;
 		enum espi_bus_event event_type;
@@ -732,6 +742,9 @@ static int zephyr_shim_setup_espi(const struct device *unused)
 		return -1;
 	}
 
+	/* Enable host interface interrupts */
+	espi_write_lpc_request(espi_dev, ECUSTOM_HOST_SUBS_INTERRUPT_EN,
+			       &enable);
 	return 0;
 }
 
@@ -779,3 +792,13 @@ uint32_t get_8042_data(uint32_t data)
 
 	return kbc->data;
 }
+
+static void espi_sysjump(void)
+{
+	uint32_t enable = 0;
+
+	/* Disable host interface interrupts during the sysjump */
+	espi_write_lpc_request(espi_dev, ECUSTOM_HOST_SUBS_INTERRUPT_EN,
+			       &enable);
+}
+DECLARE_HOOK(HOOK_SYSJUMP, espi_sysjump, HOOK_PRIO_DEFAULT);

@@ -6,11 +6,12 @@
 #include "common.h"
 #include "console.h"
 #include "usb_common.h"
+#include "usb_pd.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_timer.h"
 #include "usb_pe_sm.h"
 #include "usb_prl_sm.h"
 #include "usb_tc_sm.h"
-#include "usb_pd.h"
 #include "util.h"
 
 #ifndef TEST_USB_PD_CONSOLE
@@ -21,6 +22,7 @@ static
 {
 	int port;
 	char *e;
+	int rv = EC_SUCCESS;
 
 	if (argc < 2)
 		return EC_ERROR_PARAM_COUNT;
@@ -37,6 +39,7 @@ static
 			else if (level > DEBUG_LEVEL_MAX)
 				level = DEBUG_LEVEL_MAX;
 
+			dpm_set_debug_level(level);
 			prl_set_debug_level(level);
 			pe_set_debug_level(level);
 			tc_set_debug_level(level);
@@ -63,6 +66,14 @@ static
 	} else if (!strcasecmp(argv[1], "version")) {
 		ccprintf("%d\n", PD_STACK_VERSION);
 		return EC_SUCCESS;
+	} else if (!strcasecmp(argv[1], "bistsharemode")) {
+		if (!strcasecmp(argv[2], "disable"))
+			rv = pd_set_bist_share_mode(0);
+		else if (!strcasecmp(argv[2], "enable"))
+			rv = pd_set_bist_share_mode(1);
+		else
+			rv = EC_ERROR_PARAM2;
+		return rv;
 	}
 
 	/* command: pd <port> <subcmd> [args] */
@@ -136,8 +147,8 @@ static
 				case PD_DRP_FORCE_SOURCE:
 					ccprintf("force source\n");
 					break;
-					cflush();
 				}
+				cflush();
 			} else {
 				if (!strcasecmp(argv[3], "on"))
 					pd_set_dual_role(port,
@@ -181,18 +192,49 @@ static
 		ccprintf("TC State: %s, Flags: 0x%04x",
 			 tc_get_current_state(port), tc_get_flags(port));
 
-		if (IS_ENABLED(CONFIG_USB_PE_SM))
-			ccprintf(" PE State: %s, Flags: 0x%04x\n",
+		if (IS_ENABLED(CONFIG_USB_PE_SM)) {
+			ccprintf(" PE State: %s, Flags: 0x%04x",
 				 pe_get_current_state(port),
 				 pe_get_flags(port));
-		else
-			ccprintf("\n");
+			if (pe_is_explicit_contract(port)) {
+				if (pe_snk_in_epr_mode(port))
+					ccprintf(" EPR");
+				else
+					ccprintf(" SPR");
+			}
+		}
+		ccprintf("\n");
 
 		cflush();
 	} else if (!strcasecmp(argv[2], "srccaps")) {
 		pd_srccaps_dump(port);
 	} else if (!strcasecmp(argv[2], "cc")) {
 		ccprintf("Port C%d CC%d\n", port, pd_get_task_cc_state(port));
+#ifdef CONFIG_USB_PD_EPR
+	} else if (!strcasecmp(argv[2], "epr")) {
+		enum pd_dpm_request req;
+
+		if (argc < 4) {
+			return EC_ERROR_PARAM_COUNT;
+		}
+		if (pd_get_power_role(port) != PD_ROLE_SINK) {
+			ccprintf("EPR is currently supported only for sink\n");
+			/* Suppress (long) help message */
+			return EC_SUCCESS;
+		}
+		if (!strcasecmp(argv[3], "enter")) {
+			req = DPM_REQUEST_EPR_MODE_ENTRY;
+		} else if (!strcasecmp(argv[3], "exit")) {
+			req = DPM_REQUEST_EPR_MODE_EXIT;
+			/* Prevent snk_ready from repeatedly entering EPR. */
+			pe_snk_epr_explicit_exit(port);
+		} else {
+			return EC_ERROR_PARAM3;
+		}
+		pd_dpm_request(port, req);
+		ccprintf("EPR %s requested\n", argv[3]);
+		return EC_SUCCESS;
+#endif
 	}
 
 	if (IS_ENABLED(CONFIG_CMD_PD_TIMER) && !strcasecmp(argv[2], "timer")) {
@@ -208,6 +250,7 @@ DECLARE_CONSOLE_COMMAND(pd, command_pd,
 #ifdef CONFIG_USB_PD_TRY_SRC
 			"\ntrysrc [0|1|2]"
 #endif
+			"\nbistsharemode [disable|enable]"
 			"\n\t<port> state"
 			"\n\t<port> srccaps"
 			"\n\t<port> cc"
@@ -220,6 +263,9 @@ DECLARE_CONSOLE_COMMAND(pd, command_pd,
 			"\n\t<port> suspend|resume"
 			"\n\t<port> dualrole [on|off|freeze|sink|source]"
 			"\n\t<port> swap [power|data|vconn]"
+#ifdef CONFIG_USB_PD_EPR
+			"\n\t<port> epr [enter|exit]"
+#endif
 #endif /* CONFIG_USB_PD_DUAL_ROLE */
 			,
 			"USB PD");

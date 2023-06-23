@@ -35,11 +35,9 @@ static struct panic_data *const pdata_ptr = PANIC_DATA_PTR;
 
 /* Common SW Panic reasons strings */
 const char *const panic_sw_reasons[] = {
-#ifdef CONFIG_SOFTWARE_PANIC
 	"PANIC_SW_DIV_ZERO",   "PANIC_SW_STACK_OVERFLOW", "PANIC_SW_PD_CRASH",
 	"PANIC_SW_ASSERT",     "PANIC_SW_WATCHDOG",	  "PANIC_SW_RNG",
 	"PANIC_SW_PMIC_FAULT",
-#endif
 };
 
 /**
@@ -49,7 +47,7 @@ const char *const panic_sw_reasons[] = {
  */
 int panic_sw_reason_is_valid(uint32_t reason)
 {
-	return (IS_ENABLED(CONFIG_SOFTWARE_PANIC) && reason >= PANIC_SW_BASE &&
+	return (reason >= PANIC_SW_BASE &&
 		(reason - PANIC_SW_BASE) < ARRAY_SIZE(panic_sw_reasons));
 }
 
@@ -121,12 +119,14 @@ void panic_reboot(void)
 }
 
 /* Complete the processing of a panic, after the initial message is shown */
-test_mockable_static_noreturn void complete_panic(int linenum)
+test_mockable_static
+#if !(defined(TEST_FUZZ) || defined(CONFIG_ZTEST))
+	noreturn
+#endif
+	void
+	complete_panic(int linenum)
 {
-	if (IS_ENABLED(CONFIG_SOFTWARE_PANIC))
-		software_panic(PANIC_SW_ASSERT, linenum);
-	else
-		panic_reboot();
+	software_panic(PANIC_SW_ASSERT, linenum);
 }
 
 #ifdef CONFIG_DEBUG_ASSERT_BRIEF
@@ -175,8 +175,10 @@ uintptr_t get_panic_data_start(void)
 	if (IS_ENABLED(CONFIG_BOARD_NATIVE_POSIX))
 		return (uintptr_t)pdata_ptr;
 
+	/* LCOV_EXCL_START - Can't cover non posix lines (yet) */
 	return ((uintptr_t)CONFIG_PANIC_DATA_BASE + CONFIG_PANIC_DATA_SIZE -
 		pdata_ptr->struct_size);
+	/* LCOV_EXCL_STOP */
 }
 
 static uint32_t get_panic_data_size(void)
@@ -194,12 +196,19 @@ static uint32_t get_panic_data_size(void)
  * should be used when we are sure that we don't need it.
  */
 #ifdef CONFIG_BOARD_NATIVE_POSIX
-struct panic_data *get_panic_data_write(void)
+struct panic_data *test_get_panic_data_pointer(void)
 {
 	return pdata_ptr;
 }
-#else
-struct panic_data *get_panic_data_write(void)
+#endif
+
+__overridable uint32_t get_panic_stack_pointer(const struct panic_data *pdata)
+{
+	/* Not Implemented */
+	return 0;
+}
+
+test_mockable struct panic_data *get_panic_data_write(void)
 {
 	/*
 	 * Pointer to panic_data structure. It may not point to
@@ -208,7 +217,7 @@ struct panic_data *get_panic_data_write(void)
 	 * end of RAM.
 	 */
 	struct panic_data *const pdata_ptr = PANIC_DATA_PTR;
-	const struct jump_data *jdata_ptr;
+	struct jump_data *jdata_ptr;
 	uintptr_t data_begin;
 	size_t move_size;
 	int delta;
@@ -253,15 +262,26 @@ struct panic_data *get_panic_data_write(void)
 		return pdata_ptr;
 	}
 
+	move_size = 0;
 	if (jdata_ptr->version == 1)
 		move_size = JUMP_DATA_SIZE_V1;
 	else if (jdata_ptr->version == 2)
 		move_size = JUMP_DATA_SIZE_V2 + jdata_ptr->jump_tag_total;
 	else if (jdata_ptr->version == 3)
 		move_size = jdata_ptr->struct_size + jdata_ptr->jump_tag_total;
-	else {
-		/* Unknown jump data version - set move size to 0 */
-		move_size = 0;
+
+	/* Check if there's enough space for jump tags after move */
+	if (data_begin - move_size < JUMP_DATA_MIN_ADDRESS) {
+		/* Not enough room for jump tags, clear tags.
+		 * TODO(b/251190975): This failure should be reported
+		 * in the panic data structure for more visibility.
+		 */
+		/* LCOV_EXCL_START - JUMP_DATA_MIN_ADDRESS is 0 in test builds
+		 * and we cannot go negative by subtracting unsigned ints.
+		 */
+		move_size -= jdata_ptr->jump_tag_total;
+		jdata_ptr->jump_tag_total = 0;
+		/* LCOV_EXCL_STOP */
 	}
 
 	data_begin -= move_size;
@@ -282,7 +302,6 @@ struct panic_data *get_panic_data_write(void)
 
 	return pdata_ptr;
 }
-#endif /* CONFIG_BOARD_NATIVE_POSIX */
 
 static void panic_init(void)
 {
@@ -299,22 +318,18 @@ static void panic_init(void)
 DECLARE_HOOK(HOOK_INIT, panic_init, HOOK_PRIO_LAST);
 DECLARE_HOOK(HOOK_CHIPSET_RESET, panic_init, HOOK_PRIO_LAST);
 
-#ifdef CONFIG_CMD_STACKOVERFLOW
+#ifdef CONFIG_CMD_CRASH
 /*
  * Disable infinite recursion warning, since we're intentionally doing that
  * here.
  */
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Winfinite-recursion"
-#endif /* __clang__ */
+DISABLE_CLANG_WARNING("-Winfinite-recursion")
 #if __GNUC__ >= 12
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Winfinite-recursion"
-#endif /* __GNUC__ >= 12 */
+DISABLE_GCC_WARNING("-Winfinite-recursion")
+#endif
 static void stack_overflow_recurse(int n)
 {
-	ccprintf("+%d", n);
+	panic_printf("+%d", n);
 
 	/*
 	 * Force task context switch, since that's where we do stack overflow
@@ -328,19 +343,15 @@ static void stack_overflow_recurse(int n)
 	 * Do work after the recursion, or else the compiler uses tail-chaining
 	 * and we don't actually consume additional stack.
 	 */
-	ccprintf("-%d", n);
+	panic_printf("-%d", n);
 }
+ENABLE_CLANG_WARNING("-Winfinite-recursion")
 #if __GNUC__ >= 12
-#pragma GCC diagnostic pop
-#endif /* __GNUC__ >= 12 */
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif /* __clang__ */
-#endif /* CONFIG_CMD_STACKOVERFLOW */
+ENABLE_GCC_WARNING("-Winfinite-recursion")
+#endif
 
 /*****************************************************************************/
 /* Console commands */
-#ifdef CONFIG_CMD_CRASH
 static int command_crash(int argc, const char **argv)
 {
 	if (argc < 2)
@@ -358,25 +369,35 @@ static int command_crash(int argc, const char **argv)
 
 		cflush();
 		ccprintf("%08x", 1U / zero);
-#ifdef CONFIG_CMD_STACKOVERFLOW
 	} else if (!strcasecmp(argv[1], "stack")) {
 		stack_overflow_recurse(1);
-#endif
 	} else if (!strcasecmp(argv[1], "unaligned")) {
 		volatile intptr_t unaligned_ptr = 0xcdef;
 		cflush();
 		ccprintf("%08x", *(volatile int *)unaligned_ptr);
 	} else if (!strcasecmp(argv[1], "watchdog")) {
-		while (1)
-			;
+		while (1) {
+/* Yield on native posix to avoid locking up the simulated sys clock */
+#ifdef CONFIG_ARCH_POSIX
+			k_cpu_idle();
+#endif
+		}
 	} else if (!strcasecmp(argv[1], "hang")) {
 		uint32_t lock_key = irq_lock();
 
-		while (1)
-			;
+		while (1) {
+/* Yield on native posix to avoid locking up the simulated sys clock */
+#ifdef CONFIG_ARCH_POSIX
+			k_cpu_idle();
+#endif
+		}
 
 		/* Unreachable, but included for consistency */
 		irq_unlock(lock_key);
+	} else if (!strcasecmp(argv[1], "null")) {
+		volatile uintptr_t null_ptr = 0x0;
+		cflush();
+		ccprintf("%08x\n", *(volatile unsigned int *)null_ptr);
 	} else {
 		return EC_ERROR_PARAM1;
 	}
@@ -384,24 +405,41 @@ static int command_crash(int argc, const char **argv)
 	/* Everything crashes, so shouldn't get back here */
 	return EC_ERROR_UNKNOWN;
 }
+
 DECLARE_CONSOLE_COMMAND(crash, command_crash,
-			"[assert | divzero | udivzero"
-#ifdef CONFIG_CMD_STACKOVERFLOW
-			" | stack"
-#endif
-			" | unaligned | watchdog | hang]",
+			"[assert | divzero | udivzero | stack"
+			" | unaligned | watchdog | hang | null]",
 			"Crash the system (for testing)");
+
+#ifdef TEST_BUILD
+int test_command_crash(int argc, const char **argv)
+{
+	return command_crash(argc, argv);
+}
+#endif /* TEST_BUILD*/
 #endif /* CONFIG_CMD_CRASH */
 
 static int command_panicinfo(int argc, const char **argv)
 {
 	struct panic_data *const pdata_ptr = panic_get_data();
 
+	if (argc == 2) {
+		if (!strcasecmp(argv[1], "clear")) {
+			memset(get_panic_data_write(), 0,
+			       CONFIG_PANIC_DATA_SIZE);
+			ccprintf("Panic info cleared\n");
+			return EC_SUCCESS;
+		} else {
+			return EC_ERROR_PARAM1;
+		}
+	} else if (argc != 1)
+		return EC_ERROR_PARAM_COUNT;
+
 	if (pdata_ptr) {
-		ccprintf("Saved panic data:%s\n",
+		ccprintf("Saved panic data: 0x%02X %s\n", pdata_ptr->flags,
 			 (pdata_ptr->flags & PANIC_DATA_FLAG_OLD_CONSOLE ?
 				  "" :
-				  " (NEW)"));
+				  "(NEW)"));
 
 		panic_data_print(pdata_ptr);
 
@@ -413,7 +451,7 @@ static int command_panicinfo(int argc, const char **argv)
 	}
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(panicinfo, command_panicinfo, NULL,
+DECLARE_CONSOLE_COMMAND(panicinfo, command_panicinfo, "[clear]",
 			"Print info from a previous panic");
 
 /*****************************************************************************/
@@ -424,14 +462,21 @@ host_command_panic_info(struct host_cmd_handler_args *args)
 {
 	uint32_t pdata_size = get_panic_data_size();
 	uintptr_t pdata_start = get_panic_data_start();
-	struct panic_data *pdata;
+	struct panic_data *pdata = panic_get_data();
 
 	if (pdata_start && pdata_size > 0) {
-		ASSERT(pdata_size <= args->response_max);
+		if (pdata_size > args->response_max) {
+			panic_printf("Panic data size %d is too "
+				     "large, truncating to %d\n",
+				     pdata_size, args->response_max);
+			pdata_size = args->response_max;
+			if (pdata) {
+				pdata->flags |= PANIC_DATA_FLAG_TRUNCATED;
+			}
+		}
 		memcpy(args->response, (void *)pdata_start, pdata_size);
 		args->response_size = pdata_size;
 
-		pdata = panic_get_data();
 		if (pdata) {
 			/* Data has now been returned */
 			pdata->flags |= PANIC_DATA_FLAG_OLD_HOSTCMD;

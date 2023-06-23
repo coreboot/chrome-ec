@@ -102,12 +102,15 @@
 #undef CONFIG_UART_CONSOLE
 #define CONFIG_UART_CONSOLE 1
 
+#undef CONFIG_UART_TX_BUF_SIZE
+/* Has to be power of two */
+#define CONFIG_UART_TX_BUF_SIZE 4096
+
 /* Optional features */
 #define CONFIG_LOW_POWER_IDLE
 #define CONFIG_LTO
 #define CONFIG_FORCE_CONSOLE_RESUME
 #define CONFIG_MATH_UTIL
-#define CONFIG_STM_HWTIMER32
 
 /* USB Configuration */
 #define CONFIG_USB
@@ -127,13 +130,9 @@
 /* USB interface indexes (use define rather than enum to expand them) */
 #undef CONFIG_HOSTCMD_EVENTS
 #define USB_IFACE_UPDATE 0
-#ifdef SECTION_IS_RW
 #define CONFIG_HOST_INTERFACE_USB
 #define USB_IFACE_HOSTCMD 1
 #define USB_IFACE_COUNT 2
-#else
-#define USB_IFACE_COUNT 1
-#endif
 
 /* USB endpoint indexes (use define rather than enum to expand them) */
 #define USB_EP_CONTROL 0
@@ -158,13 +157,13 @@
 
 #undef CONFIG_LID_SWITCH
 
+#define CONFIG_USB_CONSOLE_READ
+
 #ifdef SECTION_IS_RW
 
 #define CONFIG_CURVE25519
 
 #define CONFIG_USB_PAIRING
-
-#define CONFIG_USB_CONSOLE_READ
 
 #else /* SECTION_IS_RO */
 /* Sign and switch to RW partition on boot. */
@@ -185,6 +184,7 @@
 /*
  * Add rollback protection, and independent RW region protection.
  */
+#define CONFIG_LIBCRYPTOC
 #define CONFIG_ROLLBACK
 #define CONFIG_ROLLBACK_SECRET_SIZE 32
 #define CONFIG_ROLLBACK_SECRET_LOCAL_ENTROPY_SIZE 32

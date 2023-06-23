@@ -7,6 +7,8 @@
 
 #include "i2c.h"
 
+#include <stdbool.h>
+
 extern const struct i2c_drv bitbang_drv;
 
 extern const struct i2c_port_t i2c_bitbang_ports[];

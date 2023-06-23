@@ -29,8 +29,12 @@
 #define USB_MUX_FLAG_SET_WITHOUT_FLIP BIT(1) /* SET should not flip */
 #define USB_MUX_FLAG_RESETS_IN_G3 BIT(2) /* Mux chip will reset in G3 */
 #define USB_MUX_FLAG_POLARITY_INVERTED BIT(3) /* Mux polarity is inverted */
+#define USB_MUX_FLAG_CAN_IDLE BIT(4) /* MUX supports idle mode */
 
 #endif /* CONFIG_ZEPHYR */
+
+/* usb_mux.hpd_update API only specifies 2 relevant bits in mux_state */
+#define MUX_STATE_HPD_UPDATE_MASK (USB_PD_MUX_HPD_LVL | USB_PD_MUX_HPD_IRQ)
 
 /*
  * USB-C mux state
@@ -101,6 +105,46 @@ struct usb_mux_driver {
 	 * @return EC_SUCCESS on success, non-zero error code on failure.
 	 */
 	int (*chipset_reset)(const struct usb_mux *me);
+
+	/**
+	 * Optional method that is called on HOOK_CHIPSET_{SUSPEND,RESUME}.
+	 *
+	 * Note: This notifies the mux that the rest of the system
+	 * entered (left) a low power state such as S0ix or S3. This
+	 * enables the mux driver to make power optimization decisions
+	 * such as powering down the USB3 retimer when not in use. If
+	 * the associated port is in low power mode, idle mode is not
+	 * used.
+	 *
+	 * @param me usb_mux
+	 * @param idle bool
+	 * @return EC_SUCCESS on success, non-zero error code on failure.
+	 */
+	int (*set_idle_mode)(const struct usb_mux *me, bool idle);
+
+#ifdef CONFIG_CMD_RETIMER
+	/**
+	 * Console command to read the retimer registers
+	 *
+	 * @param me usb_mux
+	 * @param offset Register offset
+	 * @param data Data to be read
+	 * @return EC_SUCCESS on success, non-zero error code on failure.
+	 */
+	int (*retimer_read)(const struct usb_mux *me, const uint32_t offset,
+			    uint32_t *data);
+
+	/**
+	 * Console command to write to the retimer registers
+	 *
+	 * @param me usb_mux
+	 * @param offset Register offset
+	 * @param data Data to be written
+	 * @return EC_SUCCESS on success, non-zero error code on failure.
+	 */
+	int (*retimer_write)(const struct usb_mux *me, const uint32_t offset,
+			     uint32_t data);
+#endif /* CONFIG_CMD_RETIMER */
 };
 
 /* Describes a USB mux present in the system */
@@ -151,11 +195,11 @@ struct usb_mux {
 	 *
 	 * @param[in]  me usb_mux
 	 * @param[in]  mux_state with HPD IRQ and HPD LVL flags set
-	 *	       accordingly
+	 *	       accordingly. Other flags are undefined.
 	 * @param[out] ack_required: indication of whether this function
 	 *	       requires a wait for an AP ACK after
 	 */
-	void (*hpd_update)(const struct usb_mux *me, mux_state_t mux_state,
+	void (*hpd_update)(const struct usb_mux *me, mux_state_t hpd_state,
 			   bool *ack_required);
 };
 
@@ -189,7 +233,7 @@ extern const struct usb_mux_chain usb_muxes[];
 #endif
 
 /* Supported hpd_update functions */
-void virtual_hpd_update(const struct usb_mux *me, mux_state_t mux_state,
+void virtual_hpd_update(const struct usb_mux *me, mux_state_t hpd_state,
 			bool *ack_required);
 
 /*
@@ -283,7 +327,7 @@ void usb_mux_flip(int port);
  * @param port port number.
  * @param mux_state HPD IRQ and LVL mux flags
  */
-void usb_mux_hpd_update(int port, mux_state_t mux_state);
+void usb_mux_hpd_update(int port, mux_state_t hpd_state);
 
 /**
  * Port information about retimer firmware update support.

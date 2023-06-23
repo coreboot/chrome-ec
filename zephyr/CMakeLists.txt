@@ -2,27 +2,20 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-# Note: this cmake system implements only a zephyr module, and is not
-# intended to build a complete EC.  To build projects in platform/ec,
-# you should continue to use the Makefile system.
-#
-# Googlers can find the design doc at go/zephyr-shim.
+if(DEFINED CONFIG_PLATFORM_EC AND EXISTS "${EDT_PICKLE}")
+  message(STATUS "Performing EC specific devicetree checks")
 
-if(NOT DEFINED ZEPHYR_CURRENT_MODULE_DIR)
-  message(FATAL_ERROR "This Cmake system implements only a Zephyr module, and
-          should not be invoked directly.  Please continue to use the Makefile
-          system for non-Zephyr builds.")
-endif()
-
-set(PLATFORM_EC "${ZEPHYR_CURRENT_MODULE_DIR}" CACHE PATH
-    "Path to the platform/ec repo.")
-# Zephyr 2.3 will set ZEPHYR_CURRENT_MODULE_DIR to the directory of the
-# CMakeLists.txt file, whereas 2.4 will set it to the actual module
-# directory.  Try to detect the condition by searching for
-# zephyr/module.yml.
-if(NOT EXISTS "${PLATFORM_EC}/zephyr/module.yml")
-  set(PLATFORM_EC "${PLATFORM_EC}/..")
-  assert_exists("${PLATFORM_EC}/zephyr/module.yml")
+  # Zephyr's gen_defines.py creates an EDT object of the final devicetree,
+  # saving it as pickle file in the build directory.
+  set(NAMED_GPIOS_SCRIPT ${PLATFORM_EC}/zephyr/scripts/named_gpios.py)
+  set(CMD_NAMED_GPIOS ${PYTHON_EXECUTABLE} ${NAMED_GPIOS_SCRIPT}
+    --zephyr-base ${ZEPHYR_BASE}
+    --edt-pickle ${EDT_PICKLE}
+  )
+  execute_process(COMMAND ${CMD_NAMED_GPIOS} RESULT_VARIABLE ret)
+  if(NOT "${ret}" STREQUAL "0")
+    message(FATAL_ERROR "named_gpios.py failed with return code: ${ret}")
+  endif()
 endif()
 
 if(DEFINED ZMAKE_INCLUDE_DIR)
@@ -52,12 +45,6 @@ if(DEFINED CONFIG_PLATFORM_EC)
   # with Zephyr builds only.
   zephyr_compile_definitions("CONFIG_ZEPHYR")
 
-  # Force compiler warnings to generate errors
-  option(ALLOW_WARNINGS "Do not treat warnings as errors")
-  if (NOT ALLOW_WARNINGS)
-    zephyr_compile_options(-Werror)
-  endif()
-
   include(fpu.cmake)
 
   # When LTO is enabled, enable only for the "app" library, which compiles
@@ -77,8 +64,11 @@ if(DEFINED CONFIG_PLATFORM_EC)
 endif()
 
 # Set extra compiler flags.
-zephyr_cc_option(-mno-unaligned-access)
-zephyr_cc_option(-fno-PIC)
+if (DEFINED CONFIG_ARM)
+  # This flag is only used by ARM
+  zephyr_cc_option(-mno-unaligned-access)
+endif()
+zephyr_cc_option(-Wimplicit-fallthrough)
 
 if (DEFINED CONFIG_RISCV)
   zephyr_cc_option(-fsanitize=integer-divide-by-zero)
@@ -98,6 +88,12 @@ get_property(APP_LTO_PROPERTY TARGET app PROPERTY INTERPROCEDURAL_OPTIMIZATION)
 set_property(TARGET ec_shim PROPERTY INTERPROCEDURAL_OPTIMIZATION ${APP_LTO_PROPERTY})
 set_property(TARGET ec_shim APPEND PROPERTY COMPILE_DEFINITIONS __REQUIRE_ZEPHYR_GPIOS__)
 
+# Create an interface library for CrosEC (cros_ec_interface) that can be used
+# as a dependency for individual CrosEC libraries. To use:
+#  zephyr_library_named(my_lib)
+#  target_link_libraries(my_lib PRIVATE cros_ec_interface)
+add_library(cros_ec_interface INTERFACE)
+
 # Switch from the "zephyr" library to the "app" library for all Chromium OS
 # sources.
 set(ZEPHYR_CURRENT_LIBRARY app)
@@ -107,11 +103,13 @@ set(ZEPHYR_CURRENT_LIBRARY app)
 function(cros_ec_library_include_directories)
   target_include_directories(app PUBLIC ${ARGN})
   target_include_directories(ec_shim PRIVATE ${ARGN})
+  target_include_directories(cros_ec_interface INTERFACE ${ARGN})
 endfunction()
 function(cros_ec_library_include_directories_ifdef feature_toggle)
   if(${${feature_toggle}})
     target_include_directories(app PUBLIC ${ARGN})
     target_include_directories(ec_shim PRIVATE ${ARGN})
+    target_include_directories(cros_ec_interface INTERFACE ${ARGN})
   endif()
 endfunction()
 
@@ -160,6 +158,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC
                                                 "${PLATFORM_EC}/common/queue.c"
                                                 "${PLATFORM_EC}/common/shared_mem.c"
                                                 "${PLATFORM_EC}/common/system.c"
+                                                "${PLATFORM_EC}/common/system_boot_time.c"
                                                 "${PLATFORM_EC}/common/uart_printf.c"
                                                 "${PLATFORM_EC}/common/util.c"
                                                 "${PLATFORM_EC}/common/version.c")
@@ -196,7 +195,11 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCELGYRO_LSM6DSM
                                                 "${PLATFORM_EC}/driver/accelgyro_lsm6dsm.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_FIFO
                                                 "${PLATFORM_EC}/common/motion_sense_fifo.c")
-zephyr_library_sources_ifdef(CONFIG_ADC
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AMD_STB_DUMP
+                                                "${PLATFORM_EC}/driver/amd_stb.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BODY_DETECTION
+                                                "${PLATFORM_EC}/common/body_detection.c")
+zephyr_library_sources_ifdef(CONFIG_NAMED_ADC_CHANNELS
                                                 "${PLATFORM_EC}/common/adc.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_TCS3400
                                                 "${PLATFORM_EC}/driver/als_tcs3400.c")
@@ -210,6 +213,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AMD_STT
 						"${PLATFORM_EC}/driver/amd_stt.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BACKLIGHT_LID
                                                 "${PLATFORM_EC}/common/backlight_lid.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_DETACHABLE_BASE
+                                                "${PLATFORM_EC}/common/base_state.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
                                                 "${PLATFORM_EC}/common/battery.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_V1
@@ -220,6 +225,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_FUEL_GAUGE
                                                 "${PLATFORM_EC}/common/battery_fuel_gauge.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_SMART
                                                 "${PLATFORM_EC}/driver/battery/smart.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_RT1718S
+                                                "${PLATFORM_EC}/driver/bc12/rt1718s.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
                                                 "${PLATFORM_EC}/driver/bc12/pi3usb9201.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_MT6360
@@ -247,7 +254,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGESPLASH
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_MANAGER
                                                 "${PLATFORM_EC}/common/charger.c"
                                                 "${PLATFORM_EC}/common/charge_manager.c"
-                                                "${PLATFORM_EC}/common/charge_state_v2.c")
+                                                "${PLATFORM_EC}/common/charge_state.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_HW
                                                 "${PLATFORM_EC}/common/charge_ramp.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_SW
@@ -258,10 +265,9 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CPS8100
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_OCPC
                                                 "${PLATFORM_EC}/common/ocpc.c")
 
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_EEPROM
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI
                                                 "${PLATFORM_EC}/common/cbi.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_GPIO
-                                                "${PLATFORM_EC}/common/cbi.c"
                                                 "${PLATFORM_EC}/common/cbi_gpio.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_MEM
                                                 "${PLATFORM_EC}/common/memory_commands.c")
@@ -370,22 +376,36 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8186
                                                 "${PLATFORM_EC}/power/mt8186.c")
+# Re-use mt8186.c code
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8188
+                                                "${PLATFORM_EC}/power/mt8186.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8192
                                                 "${PLATFORM_EC}/power/mt8192.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7180
                                                 "${PLATFORM_EC}/power/qcom.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7280
                                                 "${PLATFORM_EC}/power/qcom.c")
+if (CONFIG_PLATFORM_EC_HIBERNATE AND CONFIG_AP_PWRSEQ)
+	zephyr_library_sources(			"${PLATFORM_EC}/power/hibernate.c")
+endif ()
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PANIC
                                                 "${PLATFORM_EC}/common/panic_output.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PSE_LTC4291
+                                                "${PLATFORM_EC}/driver/pse_ltc4291.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RSA
+                                                "${PLATFORM_EC}/common/rsa.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RWSIG
+                                                "${PLATFORM_EC}/common/rwsig.c"
+                                                "${PLATFORM_EC}/common/vboot/common.c"
+                                                "${PLATFORM_EC}/common/vboot/vb21_lib.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SHA256_SW
                                                 "${PLATFORM_EC}/common/sha256.c")
+zephyr_library_sources_ifdef(CONFIG_SOC_IT8XXX2_SHA256_HW_ACCELERATE
+                                                "${PLATFORM_EC}/driver/sha256/sha256_it8xxx2.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCH
                                                 "${PLATFORM_EC}/common/switch.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCHCAP_LN9310
                                                 "${PLATFORM_EC}/driver/ln9310.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SPI_FLASH_REGS
-                                                "${PLATFORM_EC}/common/spi_flash_reg.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_STM_MEMS_COMMON
                                                 "${PLATFORM_EC}/driver/stm_mems_common.c")
 
@@ -402,6 +422,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TEMP_SENSOR_SB_TSI
                                                 "${PLATFORM_EC}/driver/temp_sensor/sb_tsi.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TEMP_SENSOR_TMP112
                                                 "${PLATFORM_EC}/driver/temp_sensor/tmp112.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TEMP_SENSOR_F75303
+                                                "${PLATFORM_EC}/driver/temp_sensor/f75303.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_THROTTLE_AP
                                                 "${PLATFORM_EC}/common/throttle_ap.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TIMER
@@ -423,6 +445,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
                                                 "${PLATFORM_EC}/common/usbc/usb_sm.c"
                                                 "${PLATFORM_EC}/common/usbc_intr_task.c"
                                                 "${PLATFORM_EC}/common/usb_pd_flags.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TOUCHPAD_ELAN
+                                                "${PLATFORM_EC}/driver/touchpad_elan.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_CHARGEN
                                                 "${PLATFORM_EC}/common/chargen.c")
@@ -434,12 +458,18 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_FW_UPDATE
                                                 "${PLATFORM_EC}/common/usbc/usb_retimer_fw_update.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7483
                                                 "${PLATFORM_EC}/driver/retimer/anx7483.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7452
+                                                "${PLATFORM_EC}/driver/retimer/anx7452.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
                                                 "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_HB
                                                 "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_KB8010
+                                                "${PLATFORM_EC}/driver/retimer/kb8010.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8818
                                                 "${PLATFORM_EC}/driver/retimer/ps8818.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8811
+                                                "${PLATFORM_EC}/driver/retimer/ps8811.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7451
                                                 "${PLATFORM_EC}/driver/usb_mux/anx7451.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_SS_MUX
@@ -468,11 +498,13 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TBT_COMPAT_MODE
                                                 "${PLATFORM_EC}/common/usbc/tbt_alt_mode.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_USB4
                                                 "${PLATFORM_EC}/common/usbc/usb_mode.c")
+zephyr_library_sources_ifdef(CONFIG_SVDM_RSP_DFP_ONLY
+                                                "${PLATFORM_EC}/common/usbc/svdm_rsp_dfp_only.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_OCP
                                                 "${PLATFORM_EC}/common/usbc_ocp.c")
 
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_DFP
-                                                "${PLATFORM_EC}/common/usb_pd_alt_mode_dfp.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DISCOVERY
+                                                "${PLATFORM_EC}/common/usb_pd_discovery.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_UFP
                                                 "${PLATFORM_EC}/common/usb_pd_alt_mode_ufp.c")
 
@@ -492,8 +524,13 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_DRP_ACC_TRYSRC
                                                 "${PLATFORM_EC}/common/usbc/usb_tc_drp_acc_trysrc_sm.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_pe_drp_sm.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_pd_dpm.c"
-						"${PLATFORM_EC}/common/usbc/usbc_pd_policy.c"
+						"${PLATFORM_EC}/common/usbc/usbc_pd_policy.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DP_MODE
                                                 "${PLATFORM_EC}/common/usbc/dp_alt_mode.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DP_HPD_GPIO
+                                                "${PLATFORM_EC}/common/usbc/dp_hpd_gpio.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_VDM_AP_CONTROL
+                                                "${PLATFORM_EC}/common/usbc/ap_vdm_control.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PRL_SM
                                                 "${PLATFORM_EC}/common/usbc/usb_prl_sm.c")
@@ -531,6 +568,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_AOZ1380
                                                 "${PLATFORM_EC}/driver/ppc/aoz1380.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_KTU1125
                                                 "${PLATFORM_EC}/driver/ppc/ktu1125.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_NX20P3481
+                                                "${PLATFORM_EC}/driver/ppc/nx20p348x.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_NX20P3483
                                                 "${PLATFORM_EC}/driver/ppc/nx20p348x.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_RT1739
@@ -560,6 +599,11 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MAX695X_SEVEN_SEGMENT_DISPLAY
 						"${PLATFORM_EC}/driver/led/max695x.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_DRIVER_TLC59116F
                                                 "${PLATFORM_EC}/driver/led/tlc59116f.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SYSTEM_SAFE_MODE
+                                                "${PLATFORM_EC}/common/system_safe_mode.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_COMMAND_MEMORY_DUMP
+                                                "${PLATFORM_EC}/common/host_command_memory_dump.c")
+
 # Switch to ec_shim library for all Zephyr sources
 set(ZEPHYR_CURRENT_LIBRARY ec_shim)
 
@@ -588,3 +632,24 @@ add_dependencies(app ec_version_header)
 
 # Include the directory containing the generated header.
 zephyr_include_directories("${CMAKE_CURRENT_BINARY_DIR}/include")
+
+# Sign RW firmware if RWSIG enabled
+if (DEFINED CONFIG_CROS_EC_RW AND DEFINED CONFIG_PLATFORM_EC_RWSIG)
+  add_custom_target(key_extract
+    COMMAND futility create
+      "${PLATFORM_EC}/${CONFIG_PLATFORM_EC_RWSIG_KEY_PATH}"
+      "${CMAKE_BINARY_DIR}/key"
+    COMMENT "Extracting signing keys"
+    VERBATIM
+  )
+
+  add_custom_target(sign_rw ALL
+    COMMAND futility sign --type rwsig
+            --prikey "${CMAKE_BINARY_DIR}/key.vbprik2"
+            "${CMAKE_BINARY_DIR}/zephyr/zephyr.bin"
+            "${CMAKE_BINARY_DIR}/ec.sig"
+    COMMENT "Signing EC RW"
+    DEPENDS zephyr_final key_extract
+    VERBATIM
+  )
+endif()

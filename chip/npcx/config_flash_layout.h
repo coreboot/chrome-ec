@@ -47,6 +47,11 @@
 #define CONFIG_EC_PROTECTED_STORAGE_SIZE 0x40000
 #define CONFIG_EC_WRITABLE_STORAGE_OFF 0x40000
 #define CONFIG_EC_WRITABLE_STORAGE_SIZE 0x40000
+#elif defined(CHIP_VARIANT_NPCX9M8S)
+#define CONFIG_EC_PROTECTED_STORAGE_OFF 0
+#define CONFIG_EC_PROTECTED_STORAGE_SIZE 0x80000
+#define CONFIG_EC_WRITABLE_STORAGE_OFF 0x80000
+#define CONFIG_EC_WRITABLE_STORAGE_SIZE 0x80000
 #else
 #error "Unsupported chip variant"
 #endif
@@ -120,7 +125,11 @@
 	"size or add support for CONFIG_FLASH_MULTIPLE_REGION."
 #endif
 
-#define CONFIG_FLASH_BANK_SIZE CONFIG_FLASH_ERASE_SIZE
+/*
+ * The smallest protection bank size is 1/8 of 512 KB or 1/16 of 1M flash,
+ * i.e. 64KB.
+ */
+#define CONFIG_FLASH_BANK_SIZE 0x10000
 #define CONFIG_FLASH_WRITE_SIZE 0x1 /* minimum write size */
 #define CONFIG_FLASH_WRITE_IDEAL_SIZE 256 /* one page size for write */
 

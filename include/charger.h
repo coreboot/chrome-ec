@@ -113,6 +113,7 @@ struct charger_drv {
 
 	enum ec_error_list (*manufacturer_id)(int chgnum, int *id);
 	enum ec_error_list (*device_id)(int chgnum, int *id);
+	enum ec_error_list (*set_frequency)(int chgnum, int freq_khz);
 	enum ec_error_list (*get_option)(int chgnum, int *option);
 	enum ec_error_list (*set_option)(int chgnum, int option);
 
@@ -126,6 +127,10 @@ struct charger_drv {
 	/*
 	 * Some chargers can perform VSYS output compensation.  Configure the
 	 * charger IC with the right parameters.
+	 *
+	 * Returns EC_ERROR_UNIMPLEMENTED if further action is required from the
+	 * OCPC control loop (which is typical), EC_SUCCESS if no further action
+	 * is required, or any other status on error.
 	 */
 	enum ec_error_list (*set_vsys_compensation)(int chgnum,
 						    struct ocpc_data *o,
@@ -146,8 +151,17 @@ struct charger_drv {
 	 */
 	enum ec_error_list (*enable_bypass_mode)(int chgnum, bool enable);
 
+	/*
+	 * Get the number of battery cells from charging mode set by sensing an
+	 * external resistor
+	 */
+	enum ec_error_list (*get_battery_cells)(int chgnum, int *cells);
+
 	/* Dumps charger registers */
 	void (*dump_registers)(int chgnum);
+
+	/* Dumps prochot status information */
+	void (*dump_prochot)(int chgnum);
 };
 
 struct charger_config_t {
@@ -335,6 +349,7 @@ enum ec_error_list charger_get_input_current(int chgnum, int *input_current);
 enum ec_error_list charger_manufacturer_id(int *id);
 enum ec_error_list charger_device_id(int *id);
 enum ec_error_list charger_get_option(int *option);
+enum ec_error_list charger_set_frequency(int freq_khz);
 enum ec_error_list charger_set_option(int option);
 enum ec_error_list charger_set_hw_ramp(int enable);
 
@@ -387,17 +402,50 @@ enum ec_error_list charger_enable_linear_charge(int chgnum, bool enable);
  * @param enable: Whether to enable or disable bypass mode.
  * @return EC_SUCCESS on success, error otherwise.
  */
-enum ec_error_list charger_enable_bypass_mode(int chgnum, int enable);
+enum ec_error_list charger_enable_bypass_mode(int chgnum, bool enable);
 
 /**
+ * Get the charger configuration for the number of battery cells
+ *
+ * The default charging mode is configured by sensing an external
+ * resistor. The number of battery cells can be determined from the
+ * charging mode.
+ *
+ * @param chgnum: Active charge port.
+ * @param cells: The number of battery cells.
+ *
+ * @return EC_SUCCESS on success, an error otherwise.
+ */
+enum ec_error_list charger_get_battery_cells(int chgnum, int *cells);
+
+/*
  * Print all charger info for debugging purposes
  * @param chgnum: charger IC index.
  */
 void print_charger_debug(int chgnum);
 
+/*
+ * Print prochot status for debugging purposes
+ * @param chgnum: charger IC index.
+ */
+void print_charger_prochot(int chgnum);
+
 /**
  * Get the value of CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON
  */
 int charger_get_min_bat_pct_for_power_on(void);
+
+/* Wake up the task when something important happens */
+void charge_wakeup(void);
+
+/*
+ * Ask the charger for some voltage and current. If either value is 0,
+ * charging is disabled; otherwise it's enabled. Negative values are ignored.
+ *
+ * @param use_curr Use values from requested voltage and current (otherwise use
+ * 0 for both)
+ * @param is_full Battery is full
+ */
+int charge_request(bool use_curr, bool is_full);
 
 #endif /* __CROS_EC_CHARGER_H */

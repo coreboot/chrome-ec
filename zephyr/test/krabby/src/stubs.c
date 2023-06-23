@@ -3,27 +3,17 @@
  * found in the LICENSE file.
  */
 
+#include "adc.h"
 #include "charge_ramp.h"
 #include "charge_state.h"
+#include "usbc_ppc.h"
 
-int board_set_active_charge_port(int port)
-{
-	return 0;
-}
-
-int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
-{
-	return 0;
-}
-
-void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
-			    int charge_mv)
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+				       int max_ma, int charge_mv)
 {
 }
 
-const struct batt_params *charger_current_battery_params(void)
+int board_get_adjusted_usb_pd_port_count(int port)
 {
-	static const struct batt_params params = {};
-
-	return &params;
+	return 2;
 }

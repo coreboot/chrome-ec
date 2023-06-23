@@ -3,16 +3,16 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/fff.h>
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
-
 #include "accelgyro.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "motion_sense.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+
+#include <zephyr/fff.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
 
 FAKE_VALUE_FUNC(int, mock_read, const struct motion_sensor_t *, int *);
 FAKE_VALUE_FUNC(int, mock_set_data_rate, const struct motion_sensor_t *, int,
@@ -101,12 +101,12 @@ ZTEST_USER_F(console_cmd_accelread, test_read)
 	mock_get_data_rate_fake.return_val = 100;
 	motion_sensors[0].drv = &fixture->mock_drv;
 
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelread 0"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelread 0"));
 	zassert_equal(1, mock_read_fake.call_count,
 		      "Expected only 1 call to read, but got %d",
 		      mock_read_fake.call_count);
 
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelread 0 2"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelread 0 2"));
 	zassert_equal(3, mock_read_fake.call_count,
 		      "Expected only 3 call to read, but got %d",
 		      mock_read_fake.call_count);
@@ -117,7 +117,7 @@ ZTEST_USER_F(console_cmd_accelread, test_read_fail)
 	mock_read_fake.return_val = 1;
 	motion_sensors[0].drv = &fixture->mock_drv;
 
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelread 0"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelread 0"));
 	zassert_equal(1, mock_read_fake.call_count,
 		      "Expected only 1 call to read, but got %d",
 		      mock_read_fake.call_count);

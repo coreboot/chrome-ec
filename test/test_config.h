@@ -26,13 +26,20 @@
 #undef CONFIG_USB_PD_LOGGING
 #endif
 
+#ifdef TEST_ALWAYS_MEMSET
+#define CONFIG_LIBCRYPTOC
+#endif
+
 #if defined(TEST_AES) || defined(TEST_CRYPTO_BENCHMARK)
-#define CONFIG_AES
-#define CONFIG_AES_GCM
+#define CONFIG_BORINGSSL_CRYPTO
 #endif
 
 #ifdef TEST_BASE32
 #define CONFIG_BASE32
+#endif
+
+#ifdef TEST_BATTERY_CONFIG
+#define CONFIG_BATTERY_CONFIG_IN_CBI
 #endif
 
 #ifdef TEST_BKLIGHT_LID
@@ -105,11 +112,25 @@
 #endif
 
 #if defined(TEST_FPSENSOR) || defined(TEST_FPSENSOR_STATE) || \
-	defined(TEST_FPSENSOR_CRYPTO)
-#define CONFIG_AES
-#define CONFIG_AES_GCM
+	defined(TEST_FPSENSOR_CRYPTO) ||                      \
+	defined(TEST_FPSENSOR_AUTH_CRYPTO_STATELESS) ||       \
+	defined(TEST_FPSENSOR_AUTH_CRYPTO_STATEFUL)
+#define CONFIG_BORINGSSL_CRYPTO
 #define CONFIG_ROLLBACK_SECRET_SIZE 32
 #define CONFIG_SHA256
+#endif
+
+#if defined(TEST_BORINGSSL_CRYPTO)
+#define CONFIG_BORINGSSL_CRYPTO
+#endif
+
+#ifdef TEST_ROLLBACK_SECRET
+#define CONFIG_ROLLBACK
+#define CONFIG_ROLLBACK_SECRET_SIZE 32
+#define CONFIG_ROLLBACK_OFF 1
+#define CONFIG_ROLLBACK_SIZE 2
+#undef CONFIG_ROLLBACK_UPDATE
+#define FP_CONTEXT_TPM_BYTES 32
 #endif
 
 #ifdef TEST_MOTION_SENSE_FIFO
@@ -186,20 +207,25 @@
 
 #if defined(CONFIG_ONLINE_CALIB) || defined(TEST_BODY_DETECTION) ||        \
 	defined(TEST_MOTION_ANGLE) || defined(TEST_MOTION_ANGLE_TABLET) || \
-	defined(TEST_MOTION_LID) || defined(TEST_MOTION_SENSE_FIFO)
+	defined(TEST_MOTION_LID) || defined(TEST_MOTION_SENSE_FIFO) ||     \
+	defined(TEST_TABLET_BROKEN_SENSOR)
 enum sensor_id {
 	BASE,
 	LID,
 	SENSOR_COUNT,
 };
 
+#if defined(TEST_MOTION_ANGLE) || defined(TEST_MOTION_ANGLE_TABLET) || \
+	defined(TEST_MOTION_LID) || defined(TEST_TABLET_BROKEN_SENSOR)
 #define CONFIG_LID_ANGLE
 #define CONFIG_LID_ANGLE_SENSOR_BASE BASE
 #define CONFIG_LID_ANGLE_SENSOR_LID LID
 #define CONFIG_TABLET_MODE
+#endif /* LID ANGLE needed */
+
 #define CONFIG_MOTION_FILL_LPC_SENSE_DATA
 
-#endif
+#endif /* sensor_id needed */
 
 #if defined(TEST_MOTION_ANGLE)
 #define CONFIG_ACCEL_FORCE_MODE_MASK           \
@@ -212,6 +238,16 @@ enum sensor_id {
 #define CONFIG_ACCEL_FORCE_MODE_MASK           \
 	((1 << CONFIG_LID_ANGLE_SENSOR_BASE) | \
 	 (1 << CONFIG_LID_ANGLE_SENSOR_LID))
+#endif
+
+#if defined(TEST_TABLET_BROKEN_SENSOR) || defined(TEST_TABLET_NO_SENSOR) || \
+	defined(TEST_MOTION_LID)
+#define CONFIG_TABLET_MODE
+#define CONFIG_GMR_TABLET_MODE
+#endif
+
+#ifdef TEST_TABLET_BROKEN_SENSOR
+#define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 #endif
 
 #if defined(TEST_BODY_DETECTION)
@@ -280,7 +316,7 @@ enum sensor_id {
 #define CONFIG_MALLOC
 #endif
 
-#ifdef TEST_SBS_CHARGING_V2
+#ifdef TEST_SBS_CHARGING
 #define CONFIG_BATTERY
 #define CONFIG_BATTERY_V2
 #define CONFIG_BATTERY_COUNT 1
@@ -288,7 +324,7 @@ enum sensor_id {
 #define CONFIG_BATTERY_SMART
 #define CONFIG_CHARGER
 #define CONFIG_CHARGER_PROFILE_OVERRIDE
-#define CONFIG_CHARGER_INPUT_CURRENT 4032
+#define CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT 4032
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_DISCHARGE_ON_AC_CUSTOM
 #define CONFIG_I2C
@@ -329,7 +365,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #ifdef TEST_BATTERY_GET_PARAMS_SMART
 #define CONFIG_BATTERY_MOCK
 #define CONFIG_BATTERY_SMART
-#define CONFIG_CHARGER_INPUT_CURRENT 4032
+#define CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT 4032
 #define CONFIG_I2C
 #define CONFIG_I2C_CONTROLLER
 #define I2C_PORT_MASTER 0
@@ -339,6 +375,11 @@ int ncp15wb_calculate_temp(uint16_t adc);
 
 #ifdef TEST_CEC
 #define CONFIG_CEC
+#define CONFIG_MKBP_EVENT
+#define CONFIG_MKBP_USE_GPIO
+#define CEC_GPIO_OUT 0
+#define CEC_GPIO_IN 0
+#define CEC_GPIO_PULL_UP 0
 #endif
 
 #ifdef TEST_LIGHTBAR
@@ -386,6 +427,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #undef CONFIG_USB_PE_SM
 #undef CONFIG_USB_TYPEC_SM
 #undef CONFIG_USB_PD_HOST_CMD
+#undef CONFIG_USB_DPM_SM
 #define CONFIG_USB_PRL_SM
 #define CONFIG_USB_PD_TCPC
 #define CONFIG_USB_PD_TCPM_STUB
@@ -406,6 +448,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_EXTENDED_MESSAGES
 #define CONFIG_USB_PD_TCPMV2
 #undef CONFIG_USB_PE_SM
+#undef CONFIG_USB_DPM_SM
 #undef CONFIG_USB_TYPEC_SM
 #undef CONFIG_USB_PD_HOST_CMD
 #define CONFIG_USB_PRL_SM
@@ -432,6 +475,8 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_DISCHARGE_GPIO
 #undef CONFIG_USB_PD_HOST_CMD
 #define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_DP_MODE
+#define CONFIG_USB_PD_DISCOVERY
 #define CONFIG_USBC_SS_MUX
 #define CONFIG_USB_PD_3A_PORTS 0 /* Host does not define a 3.0 A PDO */
 #endif
@@ -456,6 +501,8 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_PD_DISCHARGE_GPIO
 #undef CONFIG_USB_PD_HOST_CMD
 #define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_DP_MODE
+#define CONFIG_USB_PD_DISCOVERY
 #define CONFIG_USBC_SS_MUX
 #define I2C_PORT_HOST_TCPC 0
 #define CONFIG_CHARGE_MANAGER
@@ -514,6 +561,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_POWER_DELIVERY
 #undef CONFIG_USB_PRL_SM
 #undef CONFIG_USB_PE_SM
+#undef CONFIG_USB_DPM_SM
 #undef CONFIG_USB_PD_HOST_CMD
 #endif
 
@@ -531,6 +579,8 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_USB_POWER_DELIVERY
 #define CONFIG_TEST_USB_PE_SM
 #define CONFIG_USB_PD_ALT_MODE_DFP
+#define CONFIG_USB_PD_DP_MODE
+#define CONFIG_USB_PD_DISCOVERY
 #define CONFIG_USBC_VCONN
 #define CONFIG_USBC_VCONN_SWAP
 #define CONFIG_USB_PID 0x5036
@@ -577,6 +627,10 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #endif
 #endif /* TEST_USB_PD || TEST_USB_PD_GIVEBACK || TEST_USB_PD_REV30 */
 
+#ifdef TEST_USB_PD_CONSOLE
+#define CONFIG_USB_PD_EPR
+#endif
+
 #ifdef TEST_USB_PPC
 #define CONFIG_USB_PD_PORT_MAX_COUNT 1
 #define CONFIG_USB_PD_VBUS_DETECT_PPC
@@ -598,6 +652,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_CMD_PD_TIMER
 #undef CONFIG_USB_PD_HOST_CMD
 #undef CONFIG_USB_PRL_SM
+#undef CONFIG_USB_DPM_SM
 #endif
 
 #if defined(TEST_CHARGE_MANAGER) || defined(TEST_CHARGE_MANAGER_DRP_CHARGING)
@@ -622,6 +677,7 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #ifdef TEST_CHARGE_RAMP
 #define CONFIG_CHARGE_RAMP_SW
 #define CONFIG_USB_PD_PORT_MAX_COUNT 2
+#undef CONFIG_USB_PD_HOST_CMD
 #endif
 
 #ifdef TEST_RTC
@@ -656,6 +712,10 @@ int ncp15wb_calculate_temp(uint16_t adc);
 #define CONFIG_I2C_CONTROLLER
 #define CONFIG_I2C_BITBANG
 #define I2C_BITBANG_PORT_COUNT 1
+#endif
+
+#ifdef TEST_PANIC
+#undef CONFIG_PANIC_STRIP_GPR
 #endif
 
 #endif /* TEST_BUILD */

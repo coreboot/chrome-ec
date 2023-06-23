@@ -3,14 +3,14 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
-
 #include "config.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "test/drivers/test_state.h"
 #include "timer.h"
+
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
 
 static void console_cmd_accelinfo_after(void *fixture)
 {
@@ -31,7 +31,7 @@ ZTEST_USER(console_cmd_accelinfo, test_too_many_args)
 
 ZTEST_USER(console_cmd_accelinfo, test_print_once)
 {
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinfo"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinfo"));
 }
 
 ZTEST_USER(console_cmd_accelinfo, test_invalid_arg)
@@ -48,8 +48,8 @@ ZTEST_USER(console_cmd_accelinfo, test_enable_disable)
 	 * There's no way to verify what is being printed to the console yet, so
 	 * just assert that the command executed and returned 0.
 	 */
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinfo on"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinfo on"));
 	k_msleep(CONFIG_MOTION_MIN_SENSE_WAIT_TIME * MSEC * 2);
 
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinfo off"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelinfo off"));
 }

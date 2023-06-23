@@ -7,23 +7,24 @@
 #include "cbi_fw_config.h"
 #include "cbi_ssfc.h"
 #include "charge_manager.h"
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "common.h"
 #include "console.h"
 #include "cros_board_info.h"
 #include "driver/accel_kionix.h"
 #include "driver/accel_kx022.h"
-#include "driver/accelgyro_icm426xx.h"
-#include "driver/accelgyro_icm42607.h"
-#include "driver/accelgyro_icm_common.h"
-#include "driver/accelgyro_bmi_common_public.h"
 #include "driver/accelgyro_bmi260_public.h"
+#include "driver/accelgyro_bmi_common_public.h"
+#include "driver/accelgyro_icm42607.h"
+#include "driver/accelgyro_icm426xx.h"
+#include "driver/accelgyro_icm_common.h"
 #include "driver/retimer/ps8802.h"
 #include "driver/usb_mux/anx3443.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "keyboard_scan.h"
 #include "motion_sense.h"
+#include "power.h"
 #include "pwm.h"
 #include "pwm_chip.h"
 #include "system.h"
@@ -466,14 +467,31 @@ const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 	},
 };
 
-void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
-			    int charge_mv)
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+				       int max_ma, int charge_mv)
 {
 	/* Limit input current lower than 2944 mA for safety */
 	charge_ma = MIN(charge_ma, 2944);
 
-	charge_set_input_current_limit(
-		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
+	charge_set_input_current_limit(charge_ma, charge_mv);
+}
+
+/* NVME */
+static void nvme_enable(int enable)
+{
+	gpio_set_level(GPIO_EN_PP3300_SSD, enable);
+}
+
+void suspend_resume_power_signal_interrupt(enum gpio_signal signal)
+{
+	/* AP resume */
+	if (gpio_get_level(signal) == GPIO_SIGNAL_RESUME)
+		nvme_enable(1);
+	/* AP suspend */
+	else
+		nvme_enable(0);
+
+	power_signal_interrupt(signal);
 }
 
 /* Initialize board. */
@@ -489,22 +507,16 @@ static void board_init(void)
 	/* Store base sensor to recognize which base sensor we are using */
 	base_sensor = get_cbi_ssfc_base_sensor();
 
+	/* Make sure that nvme can be enabled/disabled when board init */
+	if (gpio_get_level(GPIO_AP_IN_SLEEP_L) == GPIO_SIGNAL_RESUME)
+		nvme_enable(1);
+	else
+		nvme_enable(0);
+
 	board_update_motion_sensor_config();
 	board_update_vol_up_key();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
-
-static void enable_nvme(void)
-{
-	gpio_set_level(GPIO_EN_PP3300_SSD, 1);
-}
-DECLARE_HOOK(HOOK_CHIPSET_RESUME_INIT, enable_nvme, HOOK_PRIO_FIRST);
-
-static void disable_nvme(void)
-{
-	gpio_set_level(GPIO_EN_PP3300_SSD, 0);
-}
-DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, disable_nvme, HOOK_PRIO_DEFAULT);
 
 static void board_do_chipset_resume(void)
 {

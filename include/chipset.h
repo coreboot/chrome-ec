@@ -128,11 +128,19 @@ void init_reset_log(void);
 
 #else /* !CONFIG_AP_POWER_CONTROL */
 
+#ifdef CONFIG_TEST_USB_PD_POLICY
+
+int chipset_in_state(int state_mask);
+
+#else
+
 /* When no chipset is present, assume it is always off. */
 static inline int chipset_in_state(int state_mask)
 {
 	return state_mask & CHIPSET_STATE_ANY_OFF;
 }
+
+#endif
 
 static inline int chipset_in_or_transitioning_to_state(int state_mask)
 {
@@ -213,7 +221,7 @@ void chipset_ap_rst_interrupt(enum gpio_signal signal);
 /**
  * GPIO interrupt handler of warm reset signal from servo or H1.
  *
- * It is used in Qualcomm chipset power sequence.
+ * It is used in Qualcomm/MediaTek chipset power sequence.
  */
 void chipset_warm_reset_interrupt(enum gpio_signal signal);
 
@@ -258,7 +266,7 @@ void report_ap_reset(enum chipset_shutdown_reason reason);
  * @param num_reset_log_entries   Number of items in reset_log_entries.
  * @param resets_since_ec_boot    Number of AP resets since EC boot.
  */
-test_mockable enum ec_error_list
+enum ec_error_list
 get_ap_reset_stats(struct ap_reset_log_entry *reset_log_entries,
 		   size_t num_reset_log_entries,
 		   uint32_t *resets_since_ec_boot);
@@ -290,5 +298,21 @@ static inline enum chipset_shutdown_reason chipset_get_shutdown_reason(void)
 }
 
 #endif /* !CONFIG_CMD_AP_RESET_LOG */
+
+#ifdef TEST_BUILD
+/**
+ * @brief Gets the number of AP resets since the EC booted. Takes the reset log
+ *        mutex for thread safety.
+ *
+ * @return uint32_t AP reset count
+ */
+uint32_t test_chipset_get_ap_resets_since_ec_boot(void);
+
+/**
+ * @brief Corrupts the stored reset log checksum, which forces init_reset_log()
+ *        to wipe the log and fully reset.
+ */
+void test_chipset_corrupt_reset_log_checksum(void);
+#endif /* TEST_BUILD */
 
 #endif /* __CROS_EC_CHIPSET_H */

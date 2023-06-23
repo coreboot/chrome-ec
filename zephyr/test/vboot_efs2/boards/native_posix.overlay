@@ -25,7 +25,7 @@
 			gpios = <&gpio0 3 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 		};
 		usb_c0_tcpc_int_odl: usb_c0_tcpc_int_odl {
-			gpios = <&gpio0 4 GPIO_INPUT>;
+			gpios = <&gpio0 4 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 		};
 		ec_batt_pres_odl {
 			gpios = <&gpio0 5 GPIO_INPUT>;
@@ -59,8 +59,18 @@
 		port0@0 {
 			compatible = "named-usbc-port";
 			reg = <0>;
+			bc12 = <&pi3usb9201_emul>;
 			chg = <&isl923x_emul>;
 			tcpc = <&tcpci_emul>;
+			usb-mux-chain-1 {
+				compatible = "cros-ec,usb-mux-chain";
+				usb-muxes = <&tcpci_mux_c0>;
+			};
+		};
+		port0-muxes {
+			tcpci_mux_c0: tcpci-mux-c0 {
+				compatible = "cros-ec,usbc-mux-tcpci";
+			};
 		};
 	};
 	i2c2: i2c@500 {
@@ -71,11 +81,15 @@
 		#size-cells = <0>;
 		reg = <0x500 4>;
 
+		pi3usb9201_emul: pi3usb9201@5f {
+			compatible = "pericom,pi3usb9201";
+			reg = <0x5f>;
+		};
 		tcpci_emul: tcpci_emul@82 {
 			compatible = "cros,tcpci-generic-emul";
 			status = "okay";
 			reg = <0x82>;
-			alert_gpio = <&usb_c0_tcpc_int_odl>;
+			irq-gpios = <&gpio0 4 GPIO_ACTIVE_LOW>;
 		};
 	};
 	adc0: adc {
@@ -112,7 +126,7 @@
 
 &i2c0 {
 	battery: sb@b {
-		compatible = "zephyr,smart-battery";
+		compatible = "zephyr,smart-battery-emul";
 		reg = <0xb>;
 		cycle-count = <99>;
 		version = "BATTERY_SPEC_VER_1_1_WITH_PEC";

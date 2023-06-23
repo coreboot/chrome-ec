@@ -3,16 +3,15 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/logging/log.h>
-#include <zephyr/ztest.h>
-
 #include "hooks.h"
 #include "lid_switch.h"
+#include "mock/power.h"
 #include "power.h"
 #include "task.h"
 #include "util.h"
 
-#include "mock/power.h"
+#include <zephyr/logging/log.h>
+#include <zephyr/ztest.h>
 
 LOG_MODULE_REGISTER(mock_power);
 
@@ -52,23 +51,17 @@ static void mock_power_rule_before(const struct ztest_unit_test *test,
 
 ZTEST_RULE(mock_power_rule, mock_power_rule_before, NULL);
 
-enum power_request_t {
-	POWER_REQ_NONE,
-	POWER_REQ_OFF,
-	POWER_REQ_ON,
-	POWER_REQ_COUNT,
-};
-
 static const char *power_req_name[POWER_REQ_COUNT] = {
 	"none",
 	"OFF",
 	"ON",
+	"SOFT_OFF",
 };
 
 static enum power_request_t current_power_request = POWER_REQ_NONE;
 static enum power_request_t pending_power_request = POWER_REQ_NONE;
 
-void handle_power_request(enum power_request_t req)
+static void handle_power_request(enum power_request_t req)
 {
 	if (current_power_request == POWER_REQ_NONE) {
 		current_power_request = req;
@@ -78,6 +71,13 @@ void handle_power_request(enum power_request_t req)
 			power_req_name[req]);
 		pending_power_request = req;
 	}
+}
+
+void mock_power_request(enum power_request_t req)
+{
+	handle_power_request(req);
+	task_wake(TASK_ID_CHIPSET);
+	k_sleep(K_SECONDS(1));
 }
 
 void power_request_complete(void)
@@ -176,12 +176,15 @@ enum power_state power_handle_state_custom_fake(enum power_state state)
 			new_state = POWER_S5S3;
 		} else if (current_power_request == POWER_REQ_OFF) {
 			/* S5 timeout should transition to G3 */
+		} else if (current_power_request == POWER_REQ_SOFT_OFF) {
+			power_request_complete();
 		}
 		break;
 	case POWER_S3: /* Suspend; RAM on, processor is asleep */
 		if (current_power_request == POWER_REQ_ON) {
 			new_state = POWER_S3S0;
-		} else if (current_power_request == POWER_REQ_OFF) {
+		} else if (current_power_request == POWER_REQ_OFF ||
+			   current_power_request == POWER_REQ_SOFT_OFF) {
 			new_state = POWER_S3S5;
 		}
 		break;
@@ -192,7 +195,8 @@ enum power_state power_handle_state_custom_fake(enum power_state state)
 
 			sleep_notify_transition(SLEEP_NOTIFY_RESUME,
 						HOOK_CHIPSET_RESUME);
-		} else if (current_power_request == POWER_REQ_OFF) {
+		} else if (current_power_request == POWER_REQ_OFF ||
+			   current_power_request == POWER_REQ_SOFT_OFF) {
 			new_state = POWER_S0S3;
 		}
 		break;

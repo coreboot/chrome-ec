@@ -18,6 +18,7 @@ import select
 import threading
 from typing import Any, ClassVar, Dict, List
 
+
 # Should we log job names or not
 LOG_JOB_NAMES = True
 
@@ -43,7 +44,8 @@ class LogWriter:
 
     # A local pipe use to signal the look that a new file descriptor was added and
     # should be included in the select statement.
-    _logging_interrupt_pipe = os.pipe()
+    _logging_interrupt_pipe = []
+
     # A condition variable used to synchronize logging operations.
     _logging_cv = threading.Condition()
     # A map of file descriptors to their LogWriter
@@ -54,7 +56,14 @@ class LogWriter:
     @classmethod
     def reset(cls):
         """Reset this module to its starting state (useful for tests)"""
-        LogWriter._logging_map.clear()
+        with LogWriter._logging_cv:
+            LogWriter._logging_map.clear()
+            if len(LogWriter._logging_interrupt_pipe) > 1:
+                os.write(LogWriter._logging_interrupt_pipe[1], b"x")
+            else:
+                cls._logging_interrupt_pipe = os.pipe()
+            LogWriter._logging_thread = None
+            LogWriter._logging_cv.notify_all()
 
     def __init__(
         self,
@@ -135,20 +144,21 @@ class LogWriter:
         removed from the map as it is no longer valid.
         """
         with LogWriter._logging_cv:
-            writer = LogWriter._logging_map[file_descriptor]
-            if file_descriptor.closed:
-                del LogWriter._logging_map[file_descriptor]
-                LogWriter._logging_cv.notify_all()
-                return
-            line = file_descriptor.readline()
-            if not line:
-                # EOF
-                del LogWriter._logging_map[file_descriptor]
-                LogWriter._logging_cv.notify_all()
-                return
-            line = line.rstrip("\n")
-            if line:
-                writer.log_line(line)
+            if file_descriptor in LogWriter._logging_map:
+                writer = LogWriter._logging_map[file_descriptor]
+                if file_descriptor.closed:
+                    del LogWriter._logging_map[file_descriptor]
+                    LogWriter._logging_cv.notify_all()
+                    return
+                line = file_descriptor.readline()
+                if not line:
+                    # EOF
+                    del LogWriter._logging_map[file_descriptor]
+                    LogWriter._logging_cv.notify_all()
+                    return
+                line = line.rstrip("\n")
+                if line:
+                    writer.log_line(line)
 
     @classmethod
     def _prune_logging_fds(cls):
@@ -261,6 +271,39 @@ class LogWriter:
             LogWriter._logging_cv.wait_for(lambda: not LogWriter._logging_map)
 
 
+class ThreadWithResult(threading.Thread):
+    """Subclass to create a thread and return the result from the target"""
+
+    def __init__(
+        self,
+        group=None,
+        target=None,
+        name=None,
+        args=(),
+        kwargs=None,
+        *,
+        daemon=None
+    ):
+        threading.Thread.__init__(
+            self,
+            group=group,
+            target=target,
+            name=name,
+            args=args,
+            kwargs=kwargs,
+            daemon=daemon,
+        )
+        self._return = None
+
+    def run(self):
+        if self._target is not None:
+            self._return = self._target(*self._args, **self._kwargs)
+
+    def join(self, timeout=None):
+        threading.Thread.join(self, timeout=timeout)
+        return self._return
+
+
 class Executor:
     """Parallel executor helper class.
 
@@ -295,13 +338,17 @@ class Executor:
         Args:
             func: A function which returns an int result code or throws an
              exception.
+
+        Returns:
+            A join function which will wait until this task is finished.
         """
         with self.lock:
-            thread = threading.Thread(
+            thread = ThreadWithResult(
                 target=lambda: self._run_fn(func), daemon=True
             )
             thread.start()
             self.threads.append(thread)
+            return thread.join
 
     def wait(self):
         """Wait for a result to be available.
@@ -336,6 +383,8 @@ class Executor:
         with self.lock:
             self.results.append(result)
             self.lock.notify_all()
+
+        return result
 
     @property
     def _is_finished(self):

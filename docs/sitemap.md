@@ -36,8 +36,9 @@
 ## Testing
 
 *   [Unit Tests](./unit_tests.md)
-    *   [Porting EC unit tests to Ztest](./zephyr/ztest.md)
+    *   [Zephyr Testing](./zephyr/ztest.md)
 *   [Code Coverage](./code_coverage.md)
+*   [ChromeOS EC Firmware Test Requirements](./chromeos-ec-firmware-test-requirements.md)
 
 ## Updaters
 
@@ -65,7 +66,7 @@
 *   [Initialization Order](./zephyr/zephyr_init.md)
 *   [Proof-of-Concept-Device Bringup](./zephyr/zephyr_poc_device_bringup.md)
 *   [Shimming](./zephyr/zephyr_shim.md)
-*   [Porting EC unit tests to Ztest](./zephyr/ztest.md)
+*   [Zephyr Testing](./zephyr/ztest.md)
 
 ## Miscellaneous
 
@@ -76,6 +77,7 @@
 *   [Code Reviews](./code_reviews.md)
 *   [IDE Support](./ide-support.md)
 *   [Building with Goma (Googlers only)](./goma.md)
+*   [Parallel Uprevs for ebuilds](./pupr.md)
 
 [1]:https://chromium.googlesource.com/chromiumos/platform/ec/+/cr50_stab/docs/case_closed_debugging.md
 [2]:https://chromium.googlesource.com/chromiumos/platform/ec/+/cr50_stab/docs/case_closed_debugging_cr50.md

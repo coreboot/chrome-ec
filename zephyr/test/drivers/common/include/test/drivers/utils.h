@@ -6,19 +6,20 @@
 #ifndef ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_
 #define ZEPHYR_TEST_DRIVERS_INCLUDE_UTILS_H_
 
-#include <zephyr/drivers/emul.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
-#include <zephyr/ztest.h>
-#include <stddef.h>
-#include <string.h>
-
 #include "charger.h"
-#include "lpc.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
 #include "extpower.h"
 #include "host_command.h"
+#include "lpc.h"
 #include "power.h"
 #include "usbc/utils.h"
+
+#include <stddef.h>
+#include <string.h>
+
+#include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/ztest.h>
 
 /**
  * @brief Helper macro for EMUL_GET_USBC_BINDING. If @p usbc_id has the same
@@ -71,21 +72,11 @@ void test_set_chipset_to_power_level(enum power_state new_state);
 /** @brief Set chipset to G3 state. Call all necessary hooks. */
 void test_set_chipset_to_g3(void);
 
-/*
- * TODO(b/217755888): Implement ztest assume API upstream
- */
-
-/**
- * @brief Assume that this function call won't be reached
- * @param msg Optional message to print if the assumption fails
- */
-#define zassume_unreachable(msg, ...) zassert_unreachable(msg, ##__VA_ARGS__)
-
 /**
  * Run an ACPI read to the specified address.
  *
  * This function assumes a successful ACPI read process and will make a
- * call to the zassume_* API. A failure here will skip the calling test.
+ * call to the zassert_* API. A failure here will fail the calling test.
  *
  * @param acpi_addr Address to query
  * @return Byte read
@@ -96,7 +87,7 @@ uint8_t acpi_read(uint8_t acpi_addr);
  * Run an ACPI write to the specified address.
  *
  * This function assumes a successful ACPI write process and will make a
- * call to the zassume_* API. A failure here will skip the calling test.
+ * call to the zassert_* API. A failure here will fail the calling test.
  *
  * @param acpi_addr Address to write
  * @param write_byte Byte to write to address
@@ -104,10 +95,27 @@ uint8_t acpi_read(uint8_t acpi_addr);
 void acpi_write(uint8_t acpi_addr, uint8_t write_byte);
 
 /**
+ * Run the host command to gather our EC feature flags.
+ *
+ * This function assumes a successful host command processing and will make a
+ * call to the zassert_* API.  A failure here will fail the calling test.
+ *
+ * @return The result of the host command
+ */
+static inline struct ec_response_get_features host_cmd_get_features(void)
+{
+	struct ec_response_get_features response;
+
+	zassert_ok(ec_cmd_get_features(NULL, &response),
+		   "Failed to get features");
+	return response;
+}
+
+/**
  * Run the host command to get the charge state for a given charger number.
  *
  * This function assumes a successful host command processing and will make a
- * call to the zassume_* API. A failure here will abort the calling test.
+ * call to the zassert_* API. A failure here will fail the calling test.
  *
  * @param chgnum The charger number to query.
  * @return The result of the query.
@@ -119,10 +127,8 @@ static inline struct ec_response_charge_state host_cmd_charge_state(int chgnum)
 		.cmd = CHARGE_STATE_CMD_GET_STATE,
 	};
 	struct ec_response_charge_state response;
-	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND(EC_CMD_CHARGE_STATE, 0, response, params);
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(ec_cmd_charge_state(NULL, &params, &response),
 		   "Failed to get charge state for chgnum %d", chgnum);
 	return response;
 }
@@ -131,7 +137,7 @@ static inline struct ec_response_charge_state host_cmd_charge_state(int chgnum)
  * Run the host command to get the USB PD power info for a given port.
  *
  * This function assumes a successful host command processing and will make a
- * call to the zassume_* API. A failure here will abort the calling test.
+ * call to the zassert_* API. A failure here will fail the calling test.
  *
  * @param port The USB port to get info from.
  * @return The result of the query.
@@ -140,10 +146,8 @@ static inline struct ec_response_usb_pd_power_info host_cmd_power_info(int port)
 {
 	struct ec_params_usb_pd_power_info params = { .port = port };
 	struct ec_response_usb_pd_power_info response;
-	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
-		EC_CMD_USB_PD_POWER_INFO, 0, response, params);
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(ec_cmd_usb_pd_power_info(NULL, &params, &response),
 		   "Failed to get power info for port %d", port);
 	return response;
 }
@@ -152,7 +156,7 @@ static inline struct ec_response_usb_pd_power_info host_cmd_power_info(int port)
  * Run the host command to get the Type-C status information for a given port.
  *
  * This function assumes a successful host command processing and will make a
- * call to the zassume_* API. A failure here will abort the calling test.
+ * call to the zassert_* API. A failure here will fail the calling test.
  *
  * @param port The USB port to get info from.
  * @return The result of the query.
@@ -161,23 +165,30 @@ static inline struct ec_response_typec_status host_cmd_typec_status(int port)
 {
 	struct ec_params_typec_status params = { .port = port };
 	struct ec_response_typec_status response;
-	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND(EC_CMD_TYPEC_STATUS, 0, response, params);
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(ec_cmd_typec_status(NULL, &params, &response),
 		   "Failed to get Type-C state for port %d", port);
 	return response;
 }
+
+/**
+ * Run the host command to get the most recent VDM response for the AP
+ *
+ * This function asserts a successful host command processing and will make a
+ * call to the zassert_* API. A failure here will fail the calling test.
+ *
+ * @param port The USB port to get info from.
+ * @return The result of the query.
+ */
+struct ec_response_typec_vdm_response host_cmd_typec_vdm_response(int port);
 
 static inline struct ec_response_usb_pd_control
 host_cmd_usb_pd_control(int port, enum usb_pd_control_swap swap)
 {
 	struct ec_params_usb_pd_control params = { .port = port, .swap = swap };
 	struct ec_response_usb_pd_control response;
-	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND(EC_CMD_USB_PD_CONTROL, 0, response, params);
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(ec_cmd_usb_pd_control(NULL, &params, &response),
 		   "Failed to process usb_pd_control_swap for port %d, swap %d",
 		   port, swap);
 	return response;
@@ -187,7 +198,7 @@ host_cmd_usb_pd_control(int port, enum usb_pd_control_swap swap)
  * Run the host command to suspend/resume PD ports
  *
  * This function assumes a successful host command processing and will make a
- * call to the zassume_* API. A failure here will skip the calling test.
+ * call to the zassert_* API. A failure here will fail the calling test.
  *
  * @param port The USB port to operate on
  * @param cmd The sub-command to run
@@ -195,10 +206,8 @@ host_cmd_usb_pd_control(int port, enum usb_pd_control_swap swap)
 static inline void host_cmd_pd_control(int port, enum ec_pd_control_cmd cmd)
 {
 	struct ec_params_pd_control params = { .chip = port, .subcmd = cmd };
-	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND_PARAMS(EC_CMD_PD_CONTROL, 0, params);
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(ec_cmd_pd_control(NULL, &params),
 		   "Failed to process pd_control for port %d, cmd %d", port,
 		   cmd);
 }
@@ -219,10 +228,8 @@ host_cmd_charge_control(enum ec_charge_control_mode mode,
 							   .upper = -1,
 						   } };
 	struct ec_response_charge_control response;
-	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND(EC_CMD_CHARGE_CONTROL, 2, response, params);
 
-	zassume_ok(host_command_process(&args),
+	zassert_ok(ec_cmd_charge_control_v2(NULL, &params, &response),
 		   "Failed to get charge control values");
 
 	return response;
@@ -242,15 +249,17 @@ enum ec_status host_cmd_host_event(enum ec_host_event_action action,
 /**
  * @brief Call the host command MOTION_SENSE with the dump sub-command
  *
- * Note: this function uses the zassume_ API. It will skip the test if the host
+ * Note: this function uses the zassert_ API. It will fail the test if the host
  * command fails.
  *
  * @param max_sensor_count The maximum number of sensor data objects to populate
  *        in the response object.
  * @param response Pointer to the response object to fill.
+ * @param response_size Size of the response buffer.
  */
 void host_cmd_motion_sense_dump(int max_sensor_count,
-				struct ec_response_motion_sense *response);
+				struct ec_response_motion_sense *response,
+				size_t response_size);
 
 /**
  * @brief Call the host command MOTION_SENSE with the data sub-command
@@ -381,18 +390,22 @@ int host_cmd_motion_sense_calib(uint8_t sensor_num, bool enable,
  *
  * @param sensor_num The sensor index in the motion_sensors array to query
  * @param response Pointer to the response data structure to fill on success
+ * @param response_size Size of the response buffer.
  * @return The result code from the host command
  */
 int host_cmd_motion_sense_fifo_flush(uint8_t sensor_num,
-				     struct ec_response_motion_sense *response);
+				     struct ec_response_motion_sense *response,
+				     size_t response_size);
 
 /**
  * @brief Get the current fifo info
  *
  * @param response Pointer to the response data structure to fill on success
+ * @param response_size Size of the response buffer.
  * @return The result code from the host command
  */
-int host_cmd_motion_sense_fifo_info(struct ec_response_motion_sense *response);
+int host_cmd_motion_sense_fifo_info(struct ec_response_motion_sense *response,
+				    size_t response_size);
 
 /**
  * @brief Get the current fifo data
@@ -432,6 +445,36 @@ int host_cmd_motion_sense_spoof(uint8_t sensor_num, uint8_t enable,
 				struct ec_response_motion_sense *response);
 
 /**
+ * @brief Call the keyboard wake angle motion_sense subcommand
+ *
+ * @param data Angle to set
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_kb_wake_angle(
+	int16_t data, struct ec_response_motion_sense *response);
+
+/**
+ * @brief Call the lid angle motion_sense subcommand
+ *
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_lid_angle(struct ec_response_motion_sense *response);
+
+/**
+ * @brief Call the tablet mode lid angle threshold motion_sense subcommand
+ *
+ * @param lid_angle Lid angle for transitioning to tablet mode
+ * @param hys_degree Hysteresis or above transition
+ * @param response Pointer to the response data structure to fill on success
+ * @return The result code from the host command
+ */
+int host_cmd_motion_sense_tablet_mode_lid_angle(
+	int16_t lid_angle, int16_t hys_degree,
+	struct ec_response_motion_sense *response);
+
+/**
  * Run the host command to get the PD discovery responses.
  *
  * @param port          The USB-C port number
@@ -443,17 +486,6 @@ int host_cmd_motion_sense_spoof(uint8_t sensor_num, uint8_t enable,
  */
 void host_cmd_typec_discovery(int port, enum typec_partner_type partner_type,
 			      void *response, size_t response_size);
-/**
- * @brief Run the host command to get the PD alternative mode response.
- *
- * @param port          The USB-C port number
- * @param response      Destination for command response.
- * @param response_size Destination of response size from request params.
- */
-void host_cmd_usb_pd_get_amode(
-	uint8_t port, uint16_t svid_idx,
-	struct ec_params_usb_pd_get_mode_response *response,
-	int *response_size);
 
 /**
  * Run the host command to control PD port behavior, with the sub-command of
@@ -492,6 +524,24 @@ void host_cmd_typec_control_usb_mux_set(int port,
  */
 void host_cmd_typec_control_clear_events(int port, uint32_t events);
 
+/**
+ * Run the host command to control PD port behavior, with the sub-command of
+ * TYPEC_CONTROL_COMMAND_BIST_SHARE_MODE
+ *
+ * @param port		The USB-C port number
+ * @param enable	enable bist share mode or not
+ */
+void host_cmd_typec_control_bist_share_mode(int port, int enable);
+
+/**
+ * Run the host command to control PD port behavior, with the sub-command of
+ * TYPEC_CONTROL_COMMAND_SEND_VDM_REQ
+ *
+ * @param port		The USB-C port number
+ * @param vdm_req	VDM request data
+ */
+void host_cmd_typec_control_vdm_req(int port, struct typec_vdm_req vdm_req);
+
 struct host_events_ctx {
 	host_event_t lpc_host_events;
 	host_event_t lpc_host_event_mask[LPC_HOST_EVENT_COUNT];
@@ -523,7 +573,7 @@ void host_events_restore(struct host_events_ctx *host_events_ctx);
  * If enabled, the device _should_ begin charging.
  *
  * This function assumes a successful gpio emulator call and will make a call
- * to the zassume_* API. A failure here will abort the calling test.
+ * to the zassert_* API. A failure here will fail the calling test.
  *
  * This function sleeps to wait for the GPIO interrupt to take place.
  *
@@ -534,10 +584,14 @@ static inline void set_ac_enabled(bool enabled)
 	const struct device *acok_dev =
 		DEVICE_DT_GET(DT_GPIO_CTLR(GPIO_ACOK_OD_NODE, gpios));
 
-	zassume_ok(gpio_emul_input_set(acok_dev, GPIO_ACOK_OD_PIN, enabled),
+	zassert_ok(gpio_emul_input_set(acok_dev, GPIO_ACOK_OD_PIN, enabled),
 		   NULL);
-	k_sleep(K_MSEC(CONFIG_EXTPOWER_DEBOUNCE_MS + 1));
-	zassume_equal(enabled, extpower_is_present(), NULL);
+	/*
+	 * b/253284635 - Sleep for a full second past the debounce time
+	 * to ensure the power button debounce logic runs.
+	 */
+	k_sleep(K_MSEC(CONFIG_EXTPOWER_DEBOUNCE_MS + 1000));
+	zassert_equal(enabled, extpower_is_present(), NULL);
 }
 
 /**

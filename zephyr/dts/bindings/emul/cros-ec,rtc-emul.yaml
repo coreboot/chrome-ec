@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-description: Emulator for Chromiumos EC flash driver.
+description: Emulator for Chromiumos EC real-time-clock (RTC).
 
 compatible: "cros-ec,rtc-emul"
 

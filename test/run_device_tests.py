@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 # pylint: disable=line-too-long
+
 """Runs unit tests on device and displays the results.
 
 This script assumes you have a ~/.servodrc config file with a line that
@@ -18,7 +18,7 @@ machine against a board connected to a local machine. For example:
 Start servod and JLink locally:
 
 (local chroot) $ sudo servod --board dragonclaw
-(local chroot) $ JLinkRemoteServerCLExe -select USB
+(local chroot) $ sudo JLinkRemoteServerCLExe -select USB
 
 Forward the FPMCU console on a TCP port:
 
@@ -37,27 +37,31 @@ Run the script on the remote machine:
                 --jlink_port 19020 --console_port 10000
 """
 # pylint: enable=line-too-long
+# TODO(b/267800058): refactor into multiple modules
+# pylint: disable=too-many-lines
 
 import argparse
 import concurrent
+from concurrent.futures.thread import ThreadPoolExecutor
+from dataclasses import dataclass
+from dataclasses import field
+from enum import Enum
 import io
 import logging
 import os
+from pathlib import Path
 import re
 import socket
 import subprocess
 import sys
 import time
-from concurrent.futures.thread import ThreadPoolExecutor
-from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional
+from typing import BinaryIO, Dict, List, Optional, Tuple
 
 # pylint: disable=import-error
 import colorama  # type: ignore[import]
-import fmap
 from contextlib2 import ExitStack
+import fmap
+
 
 # pylint: enable=import-error
 
@@ -70,6 +74,8 @@ ALL_TESTS_FAILED_REGEX = re.compile(r"Fail! \(\d+ tests\)\r\n")
 
 SINGLE_CHECK_PASSED_REGEX = re.compile(r"Pass: .*")
 SINGLE_CHECK_FAILED_REGEX = re.compile(r".*failed:.*")
+
+RW_IMAGE_BOOTED_REGEX = re.compile(r"^\[Image: RW.*")
 
 ASSERTION_FAILURE_REGEX = re.compile(r"ASSERTION FAILURE.*")
 
@@ -91,15 +97,28 @@ DATA_ACCESS_VIOLATION_20000000_REGEX = re.compile(
 DATA_ACCESS_VIOLATION_24000000_REGEX = re.compile(
     r"Data access violation, mfar = 24000000\r\n"
 )
+DATA_ACCESS_VIOLATION_64020000_REGEX = re.compile(
+    r"Data access violation, mfar = 64020000\r\n"
+)
+DATA_ACCESS_VIOLATION_64040000_REGEX = re.compile(
+    r"Data access violation, mfar = 64040000\r\n"
+)
+
+PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
 
 BLOONCHIPPER = "bloonchipper"
 DARTMONKEY = "dartmonkey"
+HELIPILOT = "helipilot"
 
 JTRACE = "jtrace"
 SERVO_MICRO = "servo_micro"
 
 GCC = "gcc"
 CLANG = "clang"
+
+PRIVATE_YES = "yes"
+PRIVATE_NO = "no"
+PRIVATE_ONLY = "only"
 
 TEST_ASSETS_BUCKET = "gs://chromiumos-test-assets-public/fpmcu/RO"
 DARTMONKEY_IMAGE_PATH = os.path.join(
@@ -126,6 +145,15 @@ class ImageType(Enum):
     RW = 2
 
 
+class ApplicationType(Enum):
+    """
+    Select the application type to use (test or production)
+    """
+
+    TEST = 1
+    PRODUCTION = 2
+
+
 @dataclass
 class BoardConfig:
     """Board-specific configuration."""
@@ -145,7 +173,8 @@ class TestConfig:
 
     # pylint: disable=too-many-instance-attributes
     test_name: str
-    image_to_use: ImageType = ImageType.RW
+    imagetype_to_use: ImageType = ImageType.RW
+    apptype_to_use: ApplicationType = ApplicationType.TEST
     finish_regexes: List = None
     fail_regexes: List = None
     toggle_power: bool = False
@@ -156,6 +185,7 @@ class TestConfig:
     ro_image: str = None
     build_board: str = None
     config_name: str = None
+    exclude_boards: List = field(default_factory=list)
     logs: List = field(init=False, default_factory=list)
     passed: bool = field(init=False, default=False)
     num_passes: int = field(init=False, default=0)
@@ -182,37 +212,65 @@ class AllTests:
     """All possible tests."""
 
     @staticmethod
-    def get(board_config: BoardConfig) -> List[TestConfig]:
+    def get(board_config: BoardConfig, with_private: str) -> List[TestConfig]:
         """Return public and private test configs for the specified board."""
-        public_tests = AllTests.get_public_tests(board_config)
-        private_tests = AllTests.get_private_tests()
+        public_tests = (
+            []
+            if with_private == PRIVATE_ONLY
+            else AllTests.get_public_tests(board_config)
+        )
+        private_tests = (
+            [] if with_private == PRIVATE_NO else AllTests.get_private_tests()
+        )
 
-        return public_tests + private_tests
+        all_tests = public_tests + private_tests
+        board_tests = list(
+            filter(
+                lambda e: (board_config.name not in e.exclude_boards), all_tests
+            )
+        )
+        return board_tests
 
     @staticmethod
     def get_public_tests(board_config: BoardConfig) -> List[TestConfig]:
         """Return public test configs for the specified board."""
         tests = [
+            TestConfig(
+                test_name="production_app_test",
+                finish_regexes=[RW_IMAGE_BOOTED_REGEX],
+                imagetype_to_use=ImageType.RW,
+                apptype_to_use=ApplicationType.PRODUCTION,
+            ),
+            TestConfig(test_name="abort"),
             TestConfig(test_name="aes"),
-            TestConfig(test_name="cec"),
+            TestConfig(test_name="always_memset"),
+            TestConfig(test_name="benchmark"),
+            TestConfig(test_name="boringssl_crypto"),
             TestConfig(test_name="cortexm_fpu"),
             TestConfig(test_name="crc"),
+            TestConfig(test_name="exception"),
             TestConfig(
                 test_name="flash_physical",
-                image_to_use=ImageType.RO,
+                imagetype_to_use=ImageType.RO,
                 toggle_power=True,
             ),
             TestConfig(
                 test_name="flash_write_protect",
-                image_to_use=ImageType.RO,
+                imagetype_to_use=ImageType.RO,
                 toggle_power=True,
                 enable_hw_write_protect=True,
             ),
+            # TODO(b/274162810): Re-enable test on bloonchipper when LTO is re-enabled.
+            TestConfig(
+                test_name="fpsensor_auth_crypto_stateful",
+                exclude_boards=[BLOONCHIPPER],
+            ),
+            TestConfig(test_name="fpsensor_auth_crypto_stateless"),
             TestConfig(test_name="fpsensor_hw"),
             TestConfig(
                 config_name="fpsensor_spi_ro",
                 test_name="fpsensor",
-                image_to_use=ImageType.RO,
+                imagetype_to_use=ImageType.RO,
                 test_args=["spi"],
             ),
             TestConfig(
@@ -223,7 +281,7 @@ class AllTests:
             TestConfig(
                 config_name="fpsensor_uart_ro",
                 test_name="fpsensor",
-                image_to_use=ImageType.RO,
+                imagetype_to_use=ImageType.RO,
                 test_args=["uart"],
             ),
             TestConfig(
@@ -231,10 +289,18 @@ class AllTests:
                 test_name="fpsensor",
                 test_args=["uart"],
             ),
+            TestConfig(test_name="ftrapv"),
+            TestConfig(
+                test_name="libc_printf",
+                finish_regexes=[PRINTF_CALLED_REGEX],
+            ),
+            TestConfig(test_name="global_initialization"),
+            TestConfig(test_name="libcxx"),
+            TestConfig(test_name="malloc", imagetype_to_use=ImageType.RO),
             TestConfig(
                 config_name="mpu_ro",
                 test_name="mpu",
-                image_to_use=ImageType.RO,
+                imagetype_to_use=ImageType.RO,
                 finish_regexes=[board_config.mpu_regex],
             ),
             TestConfig(
@@ -243,9 +309,11 @@ class AllTests:
                 finish_regexes=[board_config.mpu_regex],
             ),
             TestConfig(test_name="mutex"),
+            TestConfig(test_name="panic"),
             TestConfig(test_name="pingpong"),
             TestConfig(test_name="printf"),
             TestConfig(test_name="queue"),
+            TestConfig(test_name="rng_benchmark"),
             TestConfig(
                 config_name="rollback_region0",
                 test_name="rollback",
@@ -258,12 +326,17 @@ class AllTests:
                 finish_regexes=[board_config.rollback_region1_regex],
                 test_args=["region1"],
             ),
-            TestConfig(test_name="rollback_entropy", image_to_use=ImageType.RO),
+            TestConfig(
+                test_name="rollback_entropy", imagetype_to_use=ImageType.RO
+            ),
             TestConfig(test_name="rtc"),
+            TestConfig(test_name="sbrk", imagetype_to_use=ImageType.RO),
             TestConfig(test_name="sha256"),
             TestConfig(test_name="sha256_unrolled"),
             TestConfig(test_name="static_if"),
             TestConfig(test_name="stdlib"),
+            TestConfig(test_name="std_vector"),
+            TestConfig(test_name="stm32f_rtc", exclude_boards=[DARTMONKEY]),
             TestConfig(
                 config_name="system_is_locked_wp_on",
                 test_name="system_is_locked",
@@ -278,13 +351,12 @@ class AllTests:
                 toggle_power=True,
                 enable_hw_write_protect=False,
             ),
+            TestConfig(test_name="timer"),
             TestConfig(test_name="timer_dos"),
+            TestConfig(test_name="tpm_seed_clear"),
             TestConfig(test_name="utils", timeout_secs=20),
             TestConfig(test_name="utils_str"),
         ]
-
-        if board_config.name == BLOONCHIPPER:
-            tests.append(TestConfig(test_name="stm32f_rtc"))
 
         # Run panic data tests for all boards and RO versions.
         for variant_name, variant_info in board_config.variants.items():
@@ -319,8 +391,10 @@ class AllTests:
             for test_args in private_tests.tests:
                 tests.append(TestConfig(**test_args))
         # Catch all exceptions to avoid disruptions in public repo
-        except BaseException as e:  # pylint: disable=broad-except
-            logging.debug("Failed to get list of private tests: %s", str(e))
+        except BaseException as exception:  # pylint: disable=broad-except
+            logging.debug(
+                "Failed to get list of private tests: %s", str(exception)
+            )
             logging.debug("Ignore error and continue.")
             return []
         return tests
@@ -365,9 +439,21 @@ DARTMONKEY_CONFIG = BoardConfig(
     },
 )
 
+HELIPILOT_CONFIG = BoardConfig(
+    name=HELIPILOT,
+    servo_uart_name="raw_fpmcu_console_uart_pty",
+    servo_power_enable="fpmcu_pp3300",
+    # TODO(b/286537264): Double check these values and ensure rollback tests pass
+    rollback_region0_regex=DATA_ACCESS_VIOLATION_64020000_REGEX,
+    rollback_region1_regex=DATA_ACCESS_VIOLATION_64040000_REGEX,
+    mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
+    variants={},
+)
+
 BOARD_CONFIGS = {
     "bloonchipper": BLOONCHIPPER_CONFIG,
     "dartmonkey": DARTMONKEY_CONFIG,
+    "helipilot": HELIPILOT_CONFIG,
 }
 
 
@@ -382,7 +468,7 @@ def read_file_gsutil(path: str) -> bytes:
     return gsutil.stdout
 
 
-def find_section_offset_size(section: str, image: bytes) -> (int, int):
+def find_section_offset_size(section: str, image: bytes) -> Tuple[int, int]:
     """Get offset and size of the section in image"""
     areas = fmap.fmap_decode(image)["areas"]
     area = next(area for area in areas if area["name"] == section)
@@ -427,14 +513,14 @@ def copy_section(src: bytes, dst: bytearray, section: str):
     dst[dst_start:dst_end] = src[src_start:src_end] + filling
 
 
-def replace_ro(image: bytearray, ro: bytes):
+def replace_ro(image: bytearray, ro_section: bytes):
     """Replace RO in image with provided one"""
     # Backup RO public key since its private part was used to sign RW.
     ro_pubkey = read_section(image, "KEY_RO")
 
     # Copy RO part of the firmware to the image. Please note that RO public key
     # is copied too since EC_RO area includes KEY_RO area.
-    copy_section(ro, image, "EC_RO")
+    copy_section(ro_section, image, "EC_RO")
 
     # Restore RO public key.
     write_section(ro_pubkey, image, "KEY_RO")
@@ -458,9 +544,9 @@ def get_console(board_config: BoardConfig) -> Optional[str]:
     return None
 
 
-def power(board_config: BoardConfig, on: bool) -> None:
+def power(board_config: BoardConfig, power_on: bool) -> None:
     """Turn power to board on/off."""
-    if on:
+    if power_on:
         state = "pp3300"
     else:
         state = "off"
@@ -470,9 +556,15 @@ def power(board_config: BoardConfig, on: bool) -> None:
         board_config.servo_power_enable + ":" + state,
     ]
     logging.debug('Running command: "%s"', " ".join(cmd))
-    subprocess.run(
-        cmd
-    ).check_returncode()  # pylint: disable=subprocess-run-check
+    subprocess.run(cmd, check=False).check_returncode()
+
+
+def power_cycle(board_config: BoardConfig) -> None:
+    """power_cycle the boards."""
+    logging.debug("power_cycling board")
+    power(board_config, power_on=False)
+    time.sleep(1)
+    power(board_config, power_on=True)
 
 
 def hw_write_protect(enable: bool) -> None:
@@ -487,12 +579,12 @@ def hw_write_protect(enable: bool) -> None:
         "fw_wp_state:" + state,
     ]
     logging.debug('Running command: "%s"', " ".join(cmd))
-    subprocess.run(
-        cmd
-    ).check_returncode()  # pylint: disable=subprocess-run-check
+    subprocess.run(cmd, check=False).check_returncode()
 
 
-def build(test_name: str, board_name: str, compiler: str) -> None:
+def build(
+    test_name: str, board_name: str, compiler: str, app_type: ApplicationType
+) -> None:
     """Build specified test for specified board."""
     cmd = ["make"]
 
@@ -501,14 +593,17 @@ def build(test_name: str, board_name: str, compiler: str) -> None:
 
     cmd = cmd + [
         "BOARD=" + board_name,
-        "test-" + test_name,
         "-j",
     ]
 
+    # If the image type is a test image, then apply test- prefix to the target name
+    if app_type == ApplicationType.TEST:
+        cmd = cmd + [
+            "test-" + test_name,
+        ]
+
     logging.debug('Running command: "%s"', " ".join(cmd))
-    subprocess.run(
-        cmd
-    ).check_returncode()  # pylint: disable=subprocess-run-check
+    subprocess.run(cmd, check=False).check_returncode()
 
 
 def flash(
@@ -536,41 +631,39 @@ def flash(
         ]
     )
     logging.debug('Running command: "%s"', " ".join(cmd))
-    completed_process = subprocess.run(
-        cmd
-    )  # pylint: disable=subprocess-run-check
+    completed_process = subprocess.run(cmd, check=False)
     return completed_process.returncode == 0
 
 
 def patch_image(test: TestConfig, image_path: str):
     """Replace RO part of the firmware with provided one."""
-    with open(image_path, "rb+") as f:
-        image = bytearray(f.read())
-        ro = read_file_gsutil(test.ro_image)
-        replace_ro(image, ro)
-        f.seek(0)
-        f.write(image)
-        f.truncate()
+    with open(image_path, "rb+") as image_file:
+        image = bytearray(image_file.read())
+        ro_section = read_file_gsutil(test.ro_image)
+        replace_ro(image, ro_section)
+        image_file.seek(0)
+        image_file.write(image)
+        image_file.truncate()
 
 
 def readline(
-    executor: ThreadPoolExecutor, f: BinaryIO, timeout_secs: int
+    executor: ThreadPoolExecutor, file: BinaryIO, timeout_secs: int
 ) -> Optional[bytes]:
     """Read a line with timeout."""
-    a = executor.submit(f.readline)
+    future = executor.submit(file.readline)
     try:
-        return a.result(timeout_secs)
+        return future.result(timeout_secs)
     except concurrent.futures.TimeoutError:
         return None
 
 
 def readlines_until_timeout(
-    executor, f: BinaryIO, timeout_secs: int
+    executor, file: BinaryIO, timeout_secs: int
 ) -> List[bytes]:
     """Continuously read lines for timeout_secs."""
     lines: List[bytes] = []
     while True:
-        line = readline(executor, f, timeout_secs)
+        line = readline(executor, file, timeout_secs)
         if not line:
             return lines
         lines.append(line)
@@ -606,12 +699,14 @@ def run_test(
     # Wait for boot to finish
     time.sleep(1)
     console.write("\n".encode())
-    if test.image_to_use == ImageType.RO:
+    if test.imagetype_to_use == ImageType.RO:
         console.write("reboot ro\n".encode())
         time.sleep(1)
 
-    test_cmd = "runtest " + " ".join(test.test_args) + "\n"
-    console.write(test_cmd.encode())
+    # Skip runtest if using standard app type
+    if test.apptype_to_use != ApplicationType.PRODUCTION:
+        test_cmd = "runtest " + " ".join(test.test_args) + "\n"
+        console.write(test_cmd.encode())
 
     while True:
         console.flush()
@@ -623,18 +718,20 @@ def run_test(
                 return False
             continue
 
-        logging.debug(line)
         test.logs.append(line)
         # Look for test_print_result() output (success or failure)
         line_str = process_console_output_line(line, test)
         if line_str is None:
             # Sometimes we get non-unicode from the console (e.g., when the
             # board reboots.) Not much we can do in this case, so we'll just
-            # ignore it.
+            # ignore it and print log the line as is.
+            logging.debug(line)
             continue
 
-        for r in test.finish_regexes:
-            if r.match(line_str):
+        logging.debug(line_str.rstrip())
+
+        for finish_re in test.finish_regexes:
+            if finish_re.match(line_str):
                 # flush read the remaining
                 lines = readlines_until_timeout(executor, console, 1)
                 logging.debug(lines)
@@ -646,22 +743,28 @@ def run_test(
                 return test.num_fails == 0
 
 
-def get_test_list(config: BoardConfig, test_args) -> List[TestConfig]:
+def get_test_list(
+    config: BoardConfig, test_args, with_private: str
+) -> List[TestConfig]:
     """Get a list of tests to run."""
     if test_args == "all":
-        return AllTests.get(config)
+        return AllTests.get(config, with_private)
 
     test_list = []
-    for t in test_args:
-        logging.debug("test: %s", t)
-        test_regex = re.compile(t)
+    for test in test_args:
+        logging.debug("test: %s", test)
+        test_regex = re.compile(test)
         tests = [
             test
-            for test in AllTests.get(config)
+            for test in AllTests.get(config, with_private)
             if test_regex.fullmatch(test.config_name)
         ]
         if not tests:
-            logging.error('Unable to find test config for "%s"', t)
+            logging.error(
+                'Test "%s" is either not configured or not supported on board "%s"',
+                test,
+                config.name,
+            )
             sys.exit(1)
         test_list += tests
 
@@ -681,19 +784,31 @@ def flash_and_run_test(
     if test.build_board is not None:
         build_board = test.build_board
 
-    # build test binary
-    build(test.test_name, build_board, args.compiler)
+    # attempt to build test binary, reporting a test failure on error
+    try:
+        build(test.test_name, build_board, args.compiler, test.apptype_to_use)
+    except Exception as exception:  # pylint: disable=broad-except
+        logging.error("failed to build %s: %s", test.test_name, exception)
+        return False
 
-    image_path = os.path.join(
-        EC_DIR, "build", build_board, test.test_name, test.test_name + ".bin"
-    )
+    if test.apptype_to_use == ApplicationType.PRODUCTION:
+        image_path = os.path.join(EC_DIR, "build", build_board, "ec.bin")
+    else:
+        image_path = os.path.join(
+            EC_DIR,
+            "build",
+            build_board,
+            test.test_name,
+            test.test_name + ".bin",
+        )
+    logging.debug("image_path: %s", image_path)
 
     if test.ro_image is not None:
         try:
             patch_image(test, image_path)
         except Exception as exception:  # pylint: disable=broad-except
             logging.warning(
-                "An exception occurred while patching " "image: %s", exception
+                "An exception occurred while patching image: %s", exception
             )
             return False
 
@@ -717,9 +832,7 @@ def flash_and_run_test(
         return False
 
     if test.toggle_power:
-        power(board_config, on=False)
-        time.sleep(1)
-        power(board_config, on=True)
+        power_cycle(board_config)
 
     hw_write_protect(test.enable_hw_write_protect)
 
@@ -728,13 +841,15 @@ def flash_and_run_test(
 
     with ExitStack() as stack:
         if args.remote and args.console_port:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((args.remote, args.console_port))
-            console = stack.enter_context(s.makefile(mode="rwb", buffering=0))
-        else:
+            console_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            console_socket.connect((args.remote, args.console_port))
             console = stack.enter_context(
-                open(get_console(board_config), "wb+", buffering=0)
+                console_socket.makefile(mode="rwb", buffering=0)
             )
+        else:
+            # pylint: disable-next=consider-using-with
+            console_file = open(get_console(board_config), "wb+", buffering=0)
+            console = stack.enter_context(console_file)
 
         return run_test(test, console, executor=executor)
 
@@ -745,8 +860,8 @@ def parse_remote_arg(remote: str) -> str:
         return ""
 
     try:
-        ip = socket.gethostbyname(remote)
-        return ip
+        ip_addr = socket.gethostbyname(remote)
+        return ip_addr
     except socket.gaierror:
         logging.error('Failed to resolve host "%s".', remote)
         sys.exit(1)
@@ -846,17 +961,24 @@ def main():
         help="The port connected to the FPMCU console.",
     )
 
+    with_private_choices = [PRIVATE_YES, PRIVATE_NO, PRIVATE_ONLY]
+    parser.add_argument(
+        "--with_private", choices=with_private_choices, default=PRIVATE_YES
+    )
+
     args = parser.parse_args()
-    logging.basicConfig(level=args.log_level)
+    logging.basicConfig(
+        format="%(levelname)s:%(message)s", level=args.log_level
+    )
     validate_args_combination(args)
 
     board_config = BOARD_CONFIGS[args.board]
-    test_list = get_test_list(board_config, args.tests)
+    test_list = get_test_list(board_config, args.tests, args.with_private)
     logging.debug("Running tests: %s", [test.config_name for test in test_list])
 
-    with ThreadPoolExecutor(max_workers=1) as e:
+    with ThreadPoolExecutor(max_workers=1) as executor:
         for test in test_list:
-            test.passed = flash_and_run_test(test, board_config, args, e)
+            test.passed = flash_and_run_test(test, board_config, args, executor)
 
         colorama.init()
         exit_code = 0

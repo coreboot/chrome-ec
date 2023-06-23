@@ -1,5 +1,5 @@
 build/
-private*/
+/private*/
 # A "local" directory for hiding scripts and artifacts from git.
 local/
 *~
@@ -15,6 +15,9 @@ cscope.*
 # Git commit message template (see https://crbug.com/gerrit/10963)
 .gitmessage
 
+# Clion IDE
+.idea/
+
 # VSCode IDE
 .vscode/*
 !.vscode/README.md
@@ -27,6 +30,8 @@ __pycache__
 *.egg-info
 .hypothesis/
 zephyr/zmake/.coverage
+zephyr/zmake/htmlcov/
+zephyr/zmake/coverage.json
 
 # Clangd language server
 .cache/clangd/index/*

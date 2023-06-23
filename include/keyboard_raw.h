@@ -16,6 +16,8 @@
 #include "gpio_signal.h"
 #include "keyboard_config.h"
 
+#include <stdbool.h>
+
 /* Column values for keyboard_raw_drive_column() */
 enum keyboard_column_index {
 	KEYBOARD_COLUMN_ALL = -2, /* Drive all columns */
@@ -62,6 +64,14 @@ int keyboard_raw_read_rows(void);
  */
 void keyboard_raw_enable_interrupt(int enable);
 
+/**
+ * Enable or disable keyboard alternative function.
+ *
+ * @param enable 1 enable KSI/KSO alternative function,
+ *               0 set all KSI/KSO pins to normal GPIO.
+ */
+void keybaord_raw_config_alt(bool enable);
+
 #ifdef HAS_TASK_KEYSCAN
 
 /**
@@ -98,15 +108,10 @@ static inline int keyboard_raw_get_cols(void)
 
 static inline void keyboard_raw_set_cols(int cols)
 {
-#ifdef CONFIG_KEYBOARD_LANGUAGE_ID
-	/* Keyboard ID is probably encoded right after the last column. Scanner
-	 * would read keyboard ID if the column size is decreased. */
-	assert(cols == KEYBOARD_COLS_MAX);
-#else
 	/* We can only decrease the column size. You have to assume a larger
 	 * grid (and reduce scanning size if the keyboard has no keypad). */
 	assert(cols <= KEYBOARD_COLS_MAX);
-#endif
+
 	keyboard_cols = cols;
 }
 

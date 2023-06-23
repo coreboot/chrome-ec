@@ -3,12 +3,9 @@
  * found in the LICENSE file.
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-
 #include "cbi.h"
-#include "charger.h"
 #include "charge_ramp.h"
+#include "charger.h"
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
@@ -29,12 +26,15 @@
 #include "task.h"
 #include "task_id.h"
 #include "timer.h"
-#include "usbc_config.h"
-#include "usbc_ppc.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
+#include "usbc_config.h"
+#include "usbc_ppc.h"
+
+#include <stdbool.h>
+#include <stdint.h>
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
@@ -222,17 +222,6 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 }
 
 #endif /* CONFIG_CHARGE_RAMP_SW */
-
-void config_usb_db_type(void)
-{
-	enum ec_cfg_usb_db_type db_type = ec_cfg_usb_db_type();
-
-	/*
-	 * TODO(b/180434685): implement multiple DB types
-	 */
-
-	CPRINTS("Configured USB DB type number is %d", db_type);
-}
 
 __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 {

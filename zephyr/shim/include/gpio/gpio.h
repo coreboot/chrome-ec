@@ -8,6 +8,8 @@
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/toolchain.h>
 
 /*
  * Validate interrupt flags are valid for the Zephyr GPIO driver.
@@ -48,22 +50,35 @@ struct unused_pin_config {
  */
 int gpio_config_unused_pins(void) __attribute__((weak));
 
-#if DT_NODE_EXISTS(DT_PATH(unused_pins))
 /**
- * @brief Get a node from path '/unused-pins' which has a prop 'unused-gpios'.
- *        It contains unused GPIOs and chip vendor needs to configure them for
- *        better power consumption in the lowest power state.
+ * @brief Set configuration by port and pin of gpio
  *
- * @return node identifier with that path.
+ * @param port GPIO device index
+ * @param pin Pin number.
+ * @param flags Flags for pin configuration: 'GPIO input/output configuration
+ *        flags', 'GPIO pin drive flags', 'GPIO pin bias flags'.
+ *
+ * @return 0 If successful.
+ * @retval -ENOTSUP if any of the configuration options is not supported
+ *                  (unless otherwise directed by flag documentation).
+ * @retval -EINVAL Invalid argument.
+ * @retval -EIO I/O error when accessing an external GPIO chip.
+ * @retval -EWOULDBLOCK if operation would block.
  */
-#define UNUSED_PINS_LIST DT_PATH(unused_pins)
+int gpio_configure_port_pin(int port, int id, int flags) __attribute__((weak));
 
+BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(unused_gpios) <= 1,
+	     "at most one unused-gpios compatible node may be present");
+
+#define UNUSED_GPIOS_NODE DT_COMPAT_GET_ANY_STATUS_OKAY(unused_gpios)
+
+#if DT_NODE_EXISTS(UNUSED_GPIOS_NODE)
 /**
  * @brief Length of 'unused-gpios' property
  *
  * @return length of 'unused-gpios' prop which type is 'phandle-array'
  */
-#define UNUSED_GPIOS_LIST_LEN DT_PROP_LEN(UNUSED_PINS_LIST, unused_gpios)
+#define UNUSED_GPIOS_LIST_LEN DT_PROP_LEN(UNUSED_GPIOS_NODE, unused_gpios)
 
 /**
  * @brief Construct a unused_pin_config structure from 'unused-gpios' property
@@ -72,13 +87,13 @@ int gpio_config_unused_pins(void) __attribute__((weak));
  * @param i index of 'unused-gpios' prop which type is 'phandles-array'
  * @return unused_pin_config item at index 'i'
  */
-#define UNUSED_GPIO_CONFIG_BY_IDX(i, _)                                       \
-	{                                                                     \
-		.dev_name = DEVICE_DT_NAME(DT_GPIO_CTLR_BY_IDX(               \
-			UNUSED_PINS_LIST, unused_gpios, i)),                  \
-		.pin = DT_GPIO_PIN_BY_IDX(UNUSED_PINS_LIST, unused_gpios, i), \
-		.flags = DT_GPIO_FLAGS_BY_IDX(UNUSED_PINS_LIST, unused_gpios, \
-					      i),                             \
+#define UNUSED_GPIO_CONFIG_BY_IDX(i, _)                                        \
+	{                                                                      \
+		.dev_name = DEVICE_DT_NAME(DT_GPIO_CTLR_BY_IDX(                \
+			UNUSED_GPIOS_NODE, unused_gpios, i)),                  \
+		.pin = DT_GPIO_PIN_BY_IDX(UNUSED_GPIOS_NODE, unused_gpios, i), \
+		.flags = DT_GPIO_FLAGS_BY_IDX(UNUSED_GPIOS_NODE, unused_gpios, \
+					      i),                              \
 	},
 
 /**
@@ -106,5 +121,6 @@ int gpio_config_unused_pins(void) __attribute__((weak));
 
 #else
 #define UNUSED_GPIO_CONFIG_LIST /* Nothing if no 'unused-pins' node */
-#endif /* unused_pins */
+#endif /* DT_NODE_EXISTS(UNUSED_GPIOS_NODE) */
+
 #endif /* ZEPHYR_SHIM_INCLUDE_GPIO_GPIO_H_ */

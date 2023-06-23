@@ -19,14 +19,20 @@
  * the Zephyr kscan API.
  */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 27
+
 #ifndef ZEPHYR_INCLUDE_DRIVERS_CROS_KB_RAW_H_
 #define ZEPHYR_INCLUDE_DRIVERS_CROS_KB_RAW_H_
 
-#include <zephyr/kernel.h>
+#include "gpio_signal.h"
+
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
-
-#include "gpio_signal.h"
+#include <zephyr/kernel.h>
 
 /*
  * When CONFIG_PLATFORM_EC_KEYBOARD_COL2_INVERTED is enabled, the keyboard
@@ -35,7 +41,7 @@
  * GPIO module. Use the presence of the alias node "gpio-kbd-kso2" to determine
  * when this code is needed.
  */
-#define KBD_KS02_NODE DT_ALIAS(gpio_kbd_kso2)
+#define KBD_KSO2_NODE DT_ALIAS(gpio_kbd_kso2)
 
 /**
  * @brief CROS Keyboard Raw Driver APIs
@@ -60,11 +66,17 @@ typedef int (*cros_kb_raw_api_read_rows)(const struct device *dev);
 typedef int (*cros_kb_raw_api_enable_interrupt)(const struct device *dev,
 						int enable);
 
+typedef int (*cros_kb_raw_api_config_alt)(const struct device *dev,
+					  bool enable);
+
 __subsystem struct cros_kb_raw_driver_api {
 	cros_kb_raw_api_init init;
 	cros_kb_raw_api_drive_column drive_colum;
 	cros_kb_raw_api_read_rows read_rows;
 	cros_kb_raw_api_enable_interrupt enable_interrupt;
+#ifdef CONFIG_PLATFORM_EC_KEYBOARD_FACTORY_TEST
+	cros_kb_raw_api_config_alt config_alt;
+#endif
 };
 
 /**
@@ -174,6 +186,36 @@ static inline int z_impl_cros_kb_raw_enable_interrupt(const struct device *dev,
 }
 
 /**
+ * @brief Enable or disable keyboard alternative function.
+ *
+ * Enabling alternative function.
+ *
+ * @param dev Pointer to the device structure for the keyboard driver instance.
+ * @param enable If 1, enable keyboard function. Otherwise, disable it (as
+ * GPIO).
+ *
+ * @return 0 If successful.
+ * @retval -ENOTSUP Not supported api function.
+ */
+
+#ifdef CONFIG_PLATFORM_EC_KEYBOARD_FACTORY_TEST
+__syscall int cros_kb_raw_config_alt(const struct device *dev, bool enable);
+
+static inline int z_impl_cros_kb_raw_config_alt(const struct device *dev,
+						bool enable)
+{
+	const struct cros_kb_raw_driver_api *api =
+		(const struct cros_kb_raw_driver_api *)dev->api;
+
+	if (!api->config_alt) {
+		return -ENOTSUP;
+	}
+
+	return api->config_alt(dev, enable);
+}
+#endif
+
+/**
  * @brief Set the logical level of the keyboard column 2 output.
  *
  * When CONFIG_PLATFORM_EC_KEYBOARD_COL2_INVERTED is enabled, the column 2
@@ -187,9 +229,9 @@ static inline int z_impl_cros_kb_raw_enable_interrupt(const struct device *dev,
 static inline void cros_kb_raw_set_col2(int level)
 {
 #if defined CONFIG_PLATFORM_EC_KEYBOARD_COL2_INVERTED && \
-	DT_NODE_EXISTS(KBD_KS02_NODE)
+	DT_NODE_EXISTS(KBD_KSO2_NODE)
 	const struct gpio_dt_spec *kbd_dt_spec =
-		GPIO_DT_FROM_NODE(KBD_KS02_NODE);
+		GPIO_DT_FROM_NODE(KBD_KSO2_NODE);
 
 	gpio_pin_set(kbd_dt_spec->port, kbd_dt_spec->pin, level);
 #endif

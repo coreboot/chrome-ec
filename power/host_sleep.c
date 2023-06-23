@@ -18,12 +18,15 @@
 /* Track last reported sleep event */
 static enum host_sleep_event host_sleep_state;
 
+/* LCOV_EXCL_START */
+/* Function stub that has no behavior, so ignoring for coverage */
 __overridable void
 power_chipset_handle_host_sleep_event(enum host_sleep_event state,
 				      struct host_sleep_event_context *ctx)
 {
 	/* Default weak implementation -- no action required. */
 }
+/* LCOV_EXCL_STOP */
 
 static enum ec_status
 host_command_host_sleep_event(struct host_cmd_handler_args *args)
@@ -32,6 +35,13 @@ host_command_host_sleep_event(struct host_cmd_handler_args *args)
 	struct ec_response_host_sleep_event_v1 *r = args->response;
 	struct host_sleep_event_context ctx;
 	enum host_sleep_event state = p->sleep_event;
+
+	/*
+	 * Treat a reboot after suspend as a resume for notification purposes
+	 * (see b/273327518 for more details)
+	 */
+	if (host_sleep_state == HOST_SLEEP_EVENT_S0IX_SUSPEND && state == 0)
+		state = HOST_SLEEP_EVENT_S0IX_RESUME;
 
 	host_sleep_state = state;
 	ctx.sleep_transitions = 0;
@@ -85,7 +95,7 @@ void power_set_host_sleep_state(enum host_sleep_event state)
 }
 
 /* Flag to notify listeners about suspend/resume events. */
-enum sleep_notify_type sleep_notify = SLEEP_NOTIFY_NONE;
+static enum sleep_notify_type sleep_notify = SLEEP_NOTIFY_NONE;
 
 /*
  * Note: the following sleep_ functions do not get called in the S3 path on
@@ -96,7 +106,7 @@ void sleep_set_notify(enum sleep_notify_type notify)
 	sleep_notify = notify;
 }
 
-void sleep_notify_transition(int check_state, int hook_id)
+void sleep_notify_transition(enum sleep_notify_type check_state, int hook_id)
 {
 	if (sleep_notify != check_state)
 		return;
@@ -105,9 +115,20 @@ void sleep_notify_transition(int check_state, int hook_id)
 	sleep_set_notify(SLEEP_NOTIFY_NONE);
 }
 
+#ifdef CONFIG_POWERSEQ_S0IX_COUNTER
+atomic_t s0ix_counter;
+
+static void handle_chipset_suspend(void)
+{
+	atomic_inc(&s0ix_counter);
+}
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, handle_chipset_suspend, HOOK_PRIO_LAST);
+#endif /* CONFIG_POWERSEQ_S0IX_COUNTER */
+
 #ifdef CONFIG_POWER_SLEEP_FAILURE_DETECTION
 
 static uint16_t sleep_signal_timeout;
+/* Non-const because it may be set by sleeptimeout console cmd */
 static uint16_t host_sleep_timeout_default = CONFIG_SLEEP_TIMEOUT_MS;
 static uint32_t sleep_signal_transitions;
 static enum sleep_hang_type timeout_hang_type;
@@ -115,16 +136,22 @@ static enum sleep_hang_type timeout_hang_type;
 static void sleep_transition_timeout(void);
 DECLARE_DEFERRED(sleep_transition_timeout);
 
+/* LCOV_EXCL_START */
+/* Function stub that has no behavior, so ignoring for coverage */
 __overridable void power_board_handle_sleep_hang(enum sleep_hang_type hang_type)
 {
 	/* Default empty implementation */
 }
+/* LCOV_EXCL_STOP */
 
+/* LCOV_EXCL_START */
+/* Function stub that has no behavior, so ignoring for coverage */
 __overridable void
 power_chipset_handle_sleep_hang(enum sleep_hang_type hang_type)
 {
 	/* Default empty implementation */
 }
+/* LCOV_EXCL_STOP */
 
 static void sleep_increment_transition(void)
 {
@@ -175,7 +202,7 @@ void sleep_start_suspend(struct host_sleep_event_context *ctx)
 
 	sleep_signal_transitions = 0;
 
-	/* Use zero internally to indicate no timeout. */
+	/* Use default to indicate no timeout given. */
 	if (timeout == EC_HOST_SLEEP_TIMEOUT_DEFAULT) {
 		timeout = host_sleep_timeout_default;
 	}

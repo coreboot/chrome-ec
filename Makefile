@@ -268,8 +268,11 @@ include $(BDIR)/build.mk
 endif
 ifeq ($(USE_BUILTIN_STDLIB), 1)
 include builtin/build.mk
+else
+include libc/build.mk
 endif
 include chip/$(CHIP)/build.mk
+include core/build.mk
 include core/$(CORE)/build.mk
 include common/build.mk
 include driver/build.mk
@@ -286,6 +289,12 @@ endif
 include test/build.mk
 include util/build.mk
 include util/lock/build.mk
+
+
+ifeq ($(CONFIG_BORINGSSL_CRYPTO), y)
+include third_party/boringssl/common/build.mk
+include crypto/build.mk
+endif
 
 includes+=$(includes-y)
 
@@ -310,6 +319,8 @@ endif
 all-obj-$(1)+=$(call objs_from_dir_p,common,common,$(1))
 ifeq ($(USE_BUILTIN_STDLIB), 1)
 all-obj-$(1)+=$(call objs_from_dir_p,builtin,builtin,$(1))
+else
+all-obj-$(1)+=$(call objs_from_dir_p,libc,libc,$(1))
 endif
 all-obj-$(1)+=$(call objs_from_dir_p,driver,driver,$(1))
 all-obj-$(1)+=$(call objs_from_dir_p,power,power,$(1))
@@ -320,6 +331,11 @@ ifeq ($(TEST_FUZZ),y)
 all-obj-$(1)+=$(call objs_from_dir_p,fuzz,$(PROJECT),$(1))
 else
 all-obj-$(1)+=$(call objs_from_dir_p,test,$(PROJECT),$(1))
+endif
+ifeq ($(CONFIG_BORINGSSL_CRYPTO), y)
+all-obj-$(1)+= \
+    $(call objs_from_dir_p,third_party/boringssl/common,boringssl,$(1))
+all-obj-$(1)+= $(call objs_from_dir_p,crypto,crypto,$(1))
 endif
 endef
 
@@ -344,13 +360,18 @@ $(eval $(call get_sources,ro))
 #
 # See commit bc4c1b4 for more context.
 build-utils := $(call objs_from_dir,$(out)/util,build-util-bin)
+ifeq ($(BOARD),host)
 host-utils := $(call objs_from_dir,$(out)/util,host-util-bin)
+host-utils-cxx := $(call objs_from_dir,$(out)/util,host-util-bin-cxx)
+endif
 build-art := $(call objs_from_dir,$(out),build-util-art)
 # Use the util_name with an added .c AND the special <util_name>-objs variable.
 build-srcs := $(foreach u,$(build-util-bin-y),$(sort $($(u)-objs:%.o=util/%.c) \
                 $(wildcard util/$(u).c)))
 host-srcs := $(foreach u,$(host-util-bin-y),$(sort $($(u)-objs:%.o=util/%.c) \
                $(wildcard util/$(u).c)))
+host-srcs-cxx := $(foreach u,$(host-util-bin-cxx-y), \
+	$(sort $($(u)-objs:%.o=util/%.cc) $(wildcard util/$(u).cc)))
 
 dirs=core/$(CORE) chip/$(CHIP) $(BASEDIR) $(BDIR) common fuzz power test \
 	cts/common cts/$(CTS_MODULE) $(out)/gen
@@ -359,6 +380,12 @@ dirs+=$(shell find common -type d)
 dirs+=$(shell find driver -type d)
 ifeq ($(USE_BUILTIN_STDLIB), 1)
 dirs+=builtin
+else
+dirs+=libc
+endif
+ifeq ($(CONFIG_BORINGSSL_CRYPTO), y)
+dirs+=third_party/boringssl/common
+dirs+=crypto
 endif
 common_dirs=util
 

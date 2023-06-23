@@ -6,6 +6,7 @@
 /* Keyboard scanner module for Chrome EC */
 
 #include "adc.h"
+#include "atomic_bit.h"
 #include "chipset.h"
 #include "clock.h"
 #include "common.h"
@@ -108,9 +109,6 @@ static uint8_t debounced_state[KEYBOARD_COLS_MAX];
 static uint8_t debouncing[KEYBOARD_COLS_MAX];
 /* Keys simulated-pressed */
 static uint8_t simulated_key[KEYBOARD_COLS_MAX];
-#ifdef CONFIG_KEYBOARD_LANGUAGE_ID
-static uint8_t keyboard_id[KEYBOARD_IDS];
-#endif
 
 /* Times of last scans */
 static uint32_t scan_time[SCAN_TIME_COUNT];
@@ -146,16 +144,21 @@ test_export_static int keyboard_scan_is_enabled(void)
 
 void keyboard_scan_enable(int enable, enum kb_scan_disable_masks mask)
 {
+	atomic_val_t old;
 	/* Access atomically */
 	if (enable) {
-		atomic_clear_bits((atomic_t *)&disable_scanning_mask, mask);
+		old = atomic_clear_bits((atomic_t *)&disable_scanning_mask,
+					mask);
 	} else {
-		atomic_or((atomic_t *)&disable_scanning_mask, mask);
+		old = atomic_or((atomic_t *)&disable_scanning_mask, mask);
 		clear_typematic_key();
 	}
 
-	/* Let the task figure things out */
-	task_wake(TASK_ID_KEYSCAN);
+	/* Using atomic_get() causes build errors on some archs */
+	if (old != disable_scanning_mask) {
+		/* If the mask has changed, let the task figure things out */
+		task_wake(TASK_ID_KEYSCAN);
+	}
 }
 
 /**
@@ -413,38 +416,6 @@ static int read_matrix(uint8_t *state, bool at_boot)
 	return pressed ? 1 : 0;
 }
 
-#ifdef CONFIG_KEYBOARD_LANGUAGE_ID
-/**
- * Read the raw keyboard IDs state.
- *
- * Used in pre-init, so must not make task-switching-dependent calls; udelay()
- * is ok because it's a spin-loop.
- *
- * @param id		Destination for keyboard id (must be KEYBOARD_IDS long).
- *
- */
-static void read_matrix_id(uint8_t *id)
-{
-	int c;
-
-	for (c = 0; c < KEYBOARD_IDS; c++) {
-		/* Select the ID pin, then wait a bit for it to settle.
-		 * Caveat: If a keyboard maker puts ID pins right after scan
-		 * columns, we can't support variable column size with a single
-		 * image. */
-		keyboard_raw_drive_column(KEYBOARD_COLS_MAX + c);
-		udelay(keyscan_config.output_settle_us);
-
-		/* Read the row state */
-		id[c] = keyboard_raw_read_rows();
-
-		CPRINTS("Keyboard ID%u: 0x%02x", c, id[c]);
-	}
-
-	keyboard_raw_drive_column(KEYBOARD_COLUMN_NONE);
-}
-#endif
-
 #ifdef CONFIG_KEYBOARD_RUNTIME_KEYS
 
 static uint8_t key_vol_up_row = KEYBOARD_DEFAULT_ROW_VOL_UP;
@@ -666,11 +637,6 @@ static int check_keys_changed(uint8_t *state)
 	}
 
 	if (any_change) {
-#ifdef CONFIG_KEYBOARD_SUPPRESS_NOISE
-		/* Suppress keyboard noise */
-		keyboard_suppress_noise();
-#endif
-
 		if (print_state_changes)
 			print_state(state, "state");
 
@@ -869,11 +835,6 @@ void keyboard_scan_init(void)
 	read_adc_boot_keys(debounced_state);
 #endif
 
-#ifdef CONFIG_KEYBOARD_LANGUAGE_ID
-	/* Check keyboard ID state */
-	read_matrix_id(keyboard_id);
-#endif
-
 #ifdef CONFIG_KEYBOARD_BOOT_KEYS
 	/* Check for keys held down at boot */
 	boot_key_value = check_boot_key(debounced_state);
@@ -913,6 +874,7 @@ void keyboard_scan_task(void *u)
 	uint32_t local_disable_scanning = 0;
 
 	print_state(debounced_state, "init state");
+	poll_deadline.val = 0;
 
 	keyboard_raw_task_start();
 
@@ -1078,6 +1040,10 @@ int keyboard_factory_test_scan(void)
 	keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_CLOSED);
 	flags = gpio_get_default_flags(GPIO_KBD_KSO2);
 
+	if (IS_ENABLED(CONFIG_ZEPHYR))
+		/* set all KSI/KSO pins to GPIO_ALT_FUNC_NONE */
+		keybaord_raw_config_alt(0);
+
 	/* Set all of KSO/KSI pins to internal pull-up and input */
 	for (i = 0; i < keyboard_factory_scan_pins_used; i++) {
 		if (keyboard_factory_scan_pins[i][0] < 0)
@@ -1086,7 +1052,9 @@ int keyboard_factory_test_scan(void)
 		port = keyboard_factory_scan_pins[i][0];
 		id = keyboard_factory_scan_pins[i][1];
 
-		gpio_set_alternate_function(port, 1 << id, GPIO_ALT_FUNC_NONE);
+		if (!IS_ENABLED(CONFIG_ZEPHYR))
+			gpio_set_alternate_function(port, 1 << id,
+						    GPIO_ALT_FUNC_NONE);
 		gpio_set_flags_by_mask(port, 1 << id,
 				       GPIO_INPUT | GPIO_PULL_UP);
 	}
@@ -1119,7 +1087,10 @@ int keyboard_factory_test_scan(void)
 				       GPIO_INPUT | GPIO_PULL_UP);
 	}
 done:
-	gpio_config_module(MODULE_KEYBOARD_SCAN, 1);
+	if (IS_ENABLED(CONFIG_ZEPHYR))
+		keybaord_raw_config_alt(1);
+	else
+		gpio_config_module(MODULE_KEYBOARD_SCAN, 1);
 	gpio_set_flags(GPIO_KBD_KSO2, flags);
 	keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_CLOSED);
 
@@ -1146,26 +1117,6 @@ static enum ec_status keyboard_factory_test(struct host_cmd_handler_args *args)
 
 DECLARE_HOST_COMMAND(EC_CMD_KEYBOARD_FACTORY_TEST, keyboard_factory_test,
 		     EC_VER_MASK(0));
-#endif
-
-#ifdef CONFIG_KEYBOARD_LANGUAGE_ID
-int keyboard_get_keyboard_id(void)
-{
-	int c;
-	uint32_t id = 0;
-
-	BUILD_ASSERT(sizeof(id) >= KEYBOARD_IDS);
-
-	for (c = 0; c < KEYBOARD_IDS; c++) {
-		/* Check ID ghosting if more than one bit in any KSIs was set */
-		if (keyboard_id[c] & (keyboard_id[c] - 1))
-			/* ID ghosting is found */
-			return KEYBOARD_ID_UNREADABLE;
-		else
-			id |= keyboard_id[c] << (c * 8);
-	}
-	return id;
-}
 #endif
 
 /*****************************************************************************/
@@ -1247,5 +1198,16 @@ __test_only int keyboard_scan_get_print_state_changes(void)
 __test_only void keyboard_scan_set_print_state_changes(int val)
 {
 	print_state_changes = val;
+}
+
+__test_only void test_keyboard_scan_debounce_reset(void)
+{
+	memset(&debouncing, 0, sizeof(debouncing));
+	memset(&debounced_state, 0, sizeof(debounced_state));
+	memset(&scan_time, 0, sizeof(scan_time));
+	memset(&scan_edge_index, 0, sizeof(scan_edge_index));
+
+	scan_time_index = 0;
+	post_scan_clock_us = 0;
 }
 #endif /* TEST_BUILD */

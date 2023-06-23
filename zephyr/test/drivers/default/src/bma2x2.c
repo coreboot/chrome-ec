@@ -3,18 +3,17 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-
+#include "accelgyro.h"
 #include "common.h"
-#include "i2c.h"
+#include "driver/accel_bma2x2.h"
 #include "emul/emul_bma255.h"
 #include "emul/emul_common_i2c.h"
-
-#include "accelgyro.h"
+#include "i2c.h"
 #include "motion_sense.h"
-#include "driver/accel_bma2x2.h"
 #include "test/drivers/test_state.h"
+
+#include <zephyr/kernel.h>
+#include <zephyr/ztest.h>
 
 /** How accurate comparision of vectors should be. */
 #define V_EPS 8
@@ -190,7 +189,7 @@ ZTEST_USER(bma2x2, test_bma_get_offset)
 	/* Test get offset without rotation */
 	zassert_equal(EC_SUCCESS, ms.drv->get_offset(&ms, ret_offset, &temp),
 		      NULL);
-	zassert_equal(temp, (int16_t)EC_MOTION_SENSE_INVALID_CALIB_TEMP, NULL);
+	zassert_equal(temp, (int16_t)EC_MOTION_SENSE_INVALID_CALIB_TEMP);
 	compare_int3v(exp_offset, ret_offset);
 
 	/* Setup rotation and rotate expected offset */
@@ -200,7 +199,7 @@ ZTEST_USER(bma2x2, test_bma_get_offset)
 	/* Test get offset with rotation */
 	zassert_equal(EC_SUCCESS, ms.drv->get_offset(&ms, ret_offset, &temp),
 		      NULL);
-	zassert_equal(temp, (int16_t)EC_MOTION_SENSE_INVALID_CALIB_TEMP, NULL);
+	zassert_equal(temp, (int16_t)EC_MOTION_SENSE_INVALID_CALIB_TEMP);
 	compare_int3v(exp_offset, ret_offset);
 }
 
@@ -324,12 +323,12 @@ ZTEST_USER(bma2x2, test_bma_set_range)
 					  BMA2x2_RANGE_SELECT_ADDR);
 
 	/* Test fail on read */
-	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 0), NULL);
-	zassert_equal(start_range, ms.current_range, NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 0));
+	zassert_equal(start_range, ms.current_range);
 	zassert_equal(BMA2x2_RANGE_2G,
 		      bma_emul_get_reg(emul, BMA2x2_RANGE_SELECT_ADDR), NULL);
-	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 1), NULL);
-	zassert_equal(start_range, ms.current_range, NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 1));
+	zassert_equal(start_range, ms.current_range);
 	zassert_equal(BMA2x2_RANGE_2G,
 		      bma_emul_get_reg(emul, BMA2x2_RANGE_SELECT_ADDR), NULL);
 
@@ -342,12 +341,12 @@ ZTEST_USER(bma2x2, test_bma_set_range)
 					   BMA2x2_RANGE_SELECT_ADDR);
 
 	/* Test fail on write */
-	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 0), NULL);
-	zassert_equal(start_range, ms.current_range, NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 0));
+	zassert_equal(start_range, ms.current_range);
 	zassert_equal(BMA2x2_RANGE_2G,
 		      bma_emul_get_reg(emul, BMA2x2_RANGE_SELECT_ADDR), NULL);
-	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 1), NULL);
-	zassert_equal(start_range, ms.current_range, NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->set_range(&ms, 12, 1));
+	zassert_equal(start_range, ms.current_range);
 	zassert_equal(BMA2x2_RANGE_2G,
 		      bma_emul_get_reg(emul, BMA2x2_RANGE_SELECT_ADDR), NULL);
 
@@ -396,7 +395,7 @@ ZTEST_USER(bma2x2, test_bma_init)
 	i2c_common_emul_set_read_fail_reg(common_data, BMA2x2_CHIP_ID_ADDR);
 
 	/* Test fail on chip id read */
-	zassert_equal(EC_ERROR_UNKNOWN, ms.drv->init(&ms), NULL);
+	zassert_equal(EC_ERROR_UNKNOWN, ms.drv->init(&ms));
 
 	/* Disable failing on chip id read, but set wrong value */
 	i2c_common_emul_set_read_fail_reg(common_data,
@@ -404,14 +403,14 @@ ZTEST_USER(bma2x2, test_bma_init)
 	bma_emul_set_reg(emul, BMA2x2_CHIP_ID_ADDR, 23);
 
 	/* Test wrong chip id */
-	zassert_equal(EC_ERROR_ACCESS_DENIED, ms.drv->init(&ms), NULL);
+	zassert_equal(EC_ERROR_ACCESS_DENIED, ms.drv->init(&ms));
 
 	/* Set correct chip id, but fail on reset reg read */
 	i2c_common_emul_set_read_fail_reg(common_data, BMA2x2_RST_ADDR);
 	bma_emul_set_reg(emul, BMA2x2_CHIP_ID_ADDR, BMA255_CHIP_ID_MAJOR);
 
 	/* Test fail on reset register read */
-	zassert_equal(EC_ERROR_INVAL, ms.drv->init(&ms), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->init(&ms));
 
 	/* Do not fail on read */
 	i2c_common_emul_set_read_fail_reg(common_data,
@@ -421,7 +420,7 @@ ZTEST_USER(bma2x2, test_bma_init)
 	i2c_common_emul_set_write_fail_reg(common_data, BMA2x2_RST_ADDR);
 
 	/* Test fail on reset register write */
-	zassert_equal(EC_ERROR_INVAL, ms.drv->init(&ms), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->init(&ms));
 
 	/* Do not fail on write */
 	i2c_common_emul_set_write_fail_reg(common_data,
@@ -435,26 +434,26 @@ ZTEST_USER(bma2x2, test_bma_init)
 				      &reset_func_data);
 
 	/* Test fail on too many reset read errors */
-	zassert_equal(EC_ERROR_TIMEOUT, ms.drv->init(&ms), NULL);
+	zassert_equal(EC_ERROR_TIMEOUT, ms.drv->init(&ms));
 
 	/* Test success after reset read errors */
 	reset_func_data.ok_before_fail = 1;
 	reset_func_data.fail_attempts = 3;
-	zassert_equal(EC_RES_SUCCESS, ms.drv->init(&ms), NULL);
+	zassert_equal(EC_RES_SUCCESS, ms.drv->init(&ms));
 
 	/* Test success without read errors */
 	reset_func_data.fail_attempts = 0;
-	zassert_equal(EC_RES_SUCCESS, ms.drv->init(&ms), NULL);
+	zassert_equal(EC_RES_SUCCESS, ms.drv->init(&ms));
 
 	/* Test fail on too many reset read wrong value */
 	reset_func_data.fail_attempts = 0;
 	reset_func_data.reset_value = 100;
-	zassert_equal(EC_ERROR_TIMEOUT, ms.drv->init(&ms), NULL);
+	zassert_equal(EC_ERROR_TIMEOUT, ms.drv->init(&ms));
 
 	/* Test success on few reset read wrong value */
 	reset_func_data.fail_attempts = 0;
 	reset_func_data.reset_value = 4;
-	zassert_equal(EC_RES_SUCCESS, ms.drv->init(&ms), NULL);
+	zassert_equal(EC_RES_SUCCESS, ms.drv->init(&ms));
 
 	/* Remove custom emulator read function */
 	i2c_common_emul_set_read_func(common_data, NULL, NULL);
@@ -596,12 +595,12 @@ ZTEST_USER(bma2x2, test_bma_rate)
 	/* Test fail on read */
 	zassert_equal(EC_ERROR_INVAL, ms.drv->set_data_rate(&ms, 15625, 0),
 		      NULL);
-	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms));
 	zassert_equal(reg_rate, bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR),
 		      NULL);
 	zassert_equal(EC_ERROR_INVAL, ms.drv->set_data_rate(&ms, 15625, 1),
 		      NULL);
-	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms));
 	zassert_equal(reg_rate, bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR),
 		      NULL);
 
@@ -615,12 +614,12 @@ ZTEST_USER(bma2x2, test_bma_rate)
 	/* Test fail on write */
 	zassert_equal(EC_ERROR_INVAL, ms.drv->set_data_rate(&ms, 15625, 0),
 		      NULL);
-	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms));
 	zassert_equal(reg_rate, bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR),
 		      NULL);
 	zassert_equal(EC_ERROR_INVAL, ms.drv->set_data_rate(&ms, 15625, 1),
 		      NULL);
-	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(drv_rate, ms.drv->get_data_rate(&ms));
 	zassert_equal(reg_rate, bma_emul_get_reg(emul, BMA2x2_BW_SELECT_ADDR),
 		      NULL);
 
@@ -646,17 +645,17 @@ ZTEST_USER(bma2x2, test_bma_read)
 
 	/* Test fail on each axis */
 	i2c_common_emul_set_read_fail_reg(common_data, BMA2x2_X_AXIS_LSB_ADDR);
-	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v));
 	i2c_common_emul_set_read_fail_reg(common_data, BMA2x2_X_AXIS_MSB_ADDR);
-	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v));
 	i2c_common_emul_set_read_fail_reg(common_data, BMA2x2_Y_AXIS_LSB_ADDR);
-	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v));
 	i2c_common_emul_set_read_fail_reg(common_data, BMA2x2_Y_AXIS_MSB_ADDR);
-	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v));
 	i2c_common_emul_set_read_fail_reg(common_data, BMA2x2_Z_AXIS_LSB_ADDR);
-	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v));
 	i2c_common_emul_set_read_fail_reg(common_data, BMA2x2_Z_AXIS_MSB_ADDR);
-	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->read(&ms, ret_acc_v));
 
 	/* Do not fail on read */
 	i2c_common_emul_set_read_fail_reg(common_data,
@@ -670,18 +669,18 @@ ZTEST_USER(bma2x2, test_bma_read)
 	/* Disable rotation */
 	ms.rot_standard_ref = NULL;
 	/* Set range to 2G */
-	zassert_equal(EC_SUCCESS, ms.drv->set_range(&ms, 2, 0), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->set_range(&ms, 2, 0));
 
 	/* Test read without rotation */
-	zassert_equal(EC_SUCCESS, ms.drv->read(&ms, ret_acc_v), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->read(&ms, ret_acc_v));
 	drv_acc_to_emul(ret_acc_v, 2, ret_acc);
 	compare_int3v(exp_acc, ret_acc);
 
 	/* Set range to 4G */
-	zassert_equal(EC_SUCCESS, ms.drv->set_range(&ms, 4, 0), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->set_range(&ms, 4, 0));
 
 	/* Test read without rotation */
-	zassert_equal(EC_SUCCESS, ms.drv->read(&ms, ret_acc_v), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->read(&ms, ret_acc_v));
 	drv_acc_to_emul(ret_acc_v, 4, ret_acc);
 	compare_int3v(exp_acc, ret_acc);
 
@@ -689,18 +688,18 @@ ZTEST_USER(bma2x2, test_bma_read)
 	ms.rot_standard_ref = &test_rotation;
 	rotate_int3v_by_test_rotation(exp_acc);
 	/* Set range to 2G */
-	zassert_equal(EC_SUCCESS, ms.drv->set_range(&ms, 2, 0), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->set_range(&ms, 2, 0));
 
 	/* Test read with rotation */
-	zassert_equal(EC_SUCCESS, ms.drv->read(&ms, ret_acc_v), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->read(&ms, ret_acc_v));
 	drv_acc_to_emul(ret_acc_v, 2, ret_acc);
 	compare_int3v(exp_acc, ret_acc);
 
 	/* Set range to 4G */
-	zassert_equal(EC_SUCCESS, ms.drv->set_range(&ms, 4, 0), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->set_range(&ms, 4, 0));
 
 	/* Test read with rotation */
-	zassert_equal(EC_SUCCESS, ms.drv->read(&ms, ret_acc_v), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->read(&ms, ret_acc_v));
 	drv_acc_to_emul(ret_acc_v, 4, ret_acc);
 	compare_int3v(exp_acc, ret_acc);
 }
@@ -790,8 +789,8 @@ ZTEST_USER(bma2x2, test_bma_perform_calib)
 	/* Range and rate cannot change after calibration */
 	range = 4;
 	rate = 125000;
-	zassert_equal(EC_SUCCESS, ms.drv->set_range(&ms, range, 0), NULL);
-	zassert_equal(EC_SUCCESS, ms.drv->set_data_rate(&ms, rate, 0), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->set_range(&ms, range, 0));
+	zassert_equal(EC_SUCCESS, ms.drv->set_data_rate(&ms, rate, 0));
 
 	/* Set offset 0 */
 	start_off[0] = 0;
@@ -825,14 +824,14 @@ ZTEST_USER(bma2x2, test_bma_perform_calib)
 	func_data.time = 1000000;
 
 	/* Test success on disabling calibration */
-	zassert_equal(EC_SUCCESS, ms.drv->perform_calib(&ms, 0), NULL);
-	zassert_equal(range, ms.current_range, NULL);
-	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->perform_calib(&ms, 0));
+	zassert_equal(range, ms.current_range);
+	zassert_equal(rate, ms.drv->get_data_rate(&ms));
 
 	/* Test fail on first access to offset control register */
-	zassert_equal(EC_ERROR_INVAL, ms.drv->perform_calib(&ms, 1), NULL);
-	zassert_equal(range, ms.current_range, NULL);
-	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->perform_calib(&ms, 1));
+	zassert_equal(range, ms.current_range);
+	zassert_equal(rate, ms.drv->get_data_rate(&ms));
 
 	/* Setup emulator to return cal not ready */
 	func_data.calib_start = k_uptime_get_32();
@@ -842,8 +841,8 @@ ZTEST_USER(bma2x2, test_bma_perform_calib)
 	/* Test fail on cal not ready */
 	zassert_equal(EC_ERROR_ACCESS_DENIED, ms.drv->perform_calib(&ms, 1),
 		      NULL);
-	zassert_equal(range, ms.current_range, NULL);
-	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(range, ms.current_range);
+	zassert_equal(rate, ms.drv->get_data_rate(&ms));
 
 	/*
 	 * Setup emulator to fail on access to offset control register after
@@ -854,9 +853,9 @@ ZTEST_USER(bma2x2, test_bma_perform_calib)
 	func_data.time = 160;
 
 	/* Test fail on read during offset compensation */
-	zassert_equal(EC_ERROR_INVAL, ms.drv->perform_calib(&ms, 1), NULL);
-	zassert_equal(range, ms.current_range, NULL);
-	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(EC_ERROR_INVAL, ms.drv->perform_calib(&ms, 1));
+	zassert_equal(range, ms.current_range);
+	zassert_equal(rate, ms.drv->get_data_rate(&ms));
 
 	/*
 	 * Setup emulator to return cal not ready for 1s after triggering
@@ -866,9 +865,9 @@ ZTEST_USER(bma2x2, test_bma_perform_calib)
 	func_data.read_fail = 0;
 	func_data.time = 1000;
 
-	zassert_equal(EC_RES_TIMEOUT, ms.drv->perform_calib(&ms, 1), NULL);
-	zassert_equal(range, ms.current_range, NULL);
-	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(EC_RES_TIMEOUT, ms.drv->perform_calib(&ms, 1));
+	zassert_equal(range, ms.current_range);
+	zassert_equal(rate, ms.drv->get_data_rate(&ms));
 
 	/*
 	 * Setup emulator to return cal not ready for 160ms after triggering
@@ -881,9 +880,9 @@ ZTEST_USER(bma2x2, test_bma_perform_calib)
 	ms.rot_standard_ref = NULL;
 
 	/* Test successful offset compenastion without rotation */
-	zassert_equal(EC_SUCCESS, ms.drv->perform_calib(&ms, 1), NULL);
-	zassert_equal(range, ms.current_range, NULL);
-	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->perform_calib(&ms, 1));
+	zassert_equal(range, ms.current_range);
+	zassert_equal(rate, ms.drv->get_data_rate(&ms));
 	get_emul_offset(emul, ret_off);
 	compare_int3v(exp_off, ret_off);
 
@@ -895,9 +894,9 @@ ZTEST_USER(bma2x2, test_bma_perform_calib)
 		-((int)BMA_EMUL_1G) - bma_emul_get_acc(emul, BMA_EMUL_AXIS_Z);
 
 	/* Test successful offset compenastion with negative Z rotation */
-	zassert_equal(EC_SUCCESS, ms.drv->perform_calib(&ms, 1), NULL);
-	zassert_equal(range, ms.current_range, NULL);
-	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->perform_calib(&ms, 1));
+	zassert_equal(range, ms.current_range);
+	zassert_equal(rate, ms.drv->get_data_rate(&ms));
 	get_emul_offset(emul, ret_off);
 	compare_int3v(exp_off, ret_off);
 
@@ -908,9 +907,9 @@ ZTEST_USER(bma2x2, test_bma_perform_calib)
 	exp_off[2] = BMA_EMUL_1G - bma_emul_get_acc(emul, BMA_EMUL_AXIS_Z);
 
 	/* Test successful offset compenastion with positive Z rotation */
-	zassert_equal(EC_SUCCESS, ms.drv->perform_calib(&ms, 1), NULL);
-	zassert_equal(range, ms.current_range, NULL);
-	zassert_equal(rate, ms.drv->get_data_rate(&ms), NULL);
+	zassert_equal(EC_SUCCESS, ms.drv->perform_calib(&ms, 1));
+	zassert_equal(range, ms.current_range);
+	zassert_equal(rate, ms.drv->get_data_rate(&ms));
 	get_emul_offset(emul, ret_off);
 	compare_int3v(exp_off, ret_off);
 
@@ -923,7 +922,7 @@ ZTEST_USER(bma2x2, test_bma_perform_calib)
 ZTEST_USER(bma2x2, test_bma_get_resolution)
 {
 	/* Resolution should be always 12 bits */
-	zassert_equal(12, ms.drv->get_resolution(&ms), NULL);
+	zassert_equal(12, ms.drv->get_resolution(&ms));
 }
 
 static void *bma2x2_setup(void)

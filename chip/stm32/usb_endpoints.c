@@ -5,11 +5,13 @@
  * USB endpoints/interfaces callbacks declaration
  */
 
-#include <stdint.h>
-#include <stddef.h>
-#include "config.h"
 #include "common.h"
+#include "compiler.h"
+#include "config.h"
 #include "usb_hw.h"
+
+#include <stddef.h>
+#include <stdint.h>
 
 typedef void (*xfer_func)(void);
 typedef void (*evt_func)(enum usb_ep_event evt);
@@ -73,10 +75,7 @@ int iface_undefined(iface_arguments)
  * subobject", since we are explicitly doing this to handle the unused
  * endpoints.
  */
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Winitializer-overrides"
-#endif /* __clang__ */
+DISABLE_CLANG_WARNING("-Winitializer-overrides")
 
 /* align function pointers on a 32-bit boundary */
 #define table(type, name, x)                                                   \
@@ -138,9 +137,7 @@ table(xfer_func, usb_ep_tx,
 #endif
 
 #if PASS == 2
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif /* __clang__ */
+				ENABLE_CLANG_WARNING("-Winitializer-overrides")
 #endif
 
 #if PASS == 1

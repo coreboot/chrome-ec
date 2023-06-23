@@ -3,14 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/kernel.h>
-#include <stdbool.h>
-#include <zephyr/drivers/gpio/gpio_emul.h>
-#include <zephyr/shell/shell.h>
-#include <zephyr/shell/shell_uart.h>
-#include <zephyr/sys/__assert.h>
-#include <zephyr/ztest.h>
-
 #include "chipset.h"
 #include "config.h"
 #include "ec_commands.h"
@@ -18,9 +10,18 @@
 #include "hooks.h"
 #include "host_command.h"
 #include "lid_switch.h"
-#include "timer.h"
 #include "test/drivers/test_state.h"
 #include "test/drivers/utils.h"
+#include "timer.h"
+
+#include <stdbool.h>
+
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/shell/shell_uart.h>
+#include <zephyr/sys/__assert.h>
+#include <zephyr/ztest.h>
 
 /* Do a chargesplash host cmd */
 static enum ec_status
@@ -28,10 +29,8 @@ chargesplash_hostcmd(enum ec_chargesplash_cmd cmd,
 		     struct ec_response_chargesplash *response)
 {
 	struct ec_params_chargesplash params = { .cmd = cmd };
-	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND(EC_CMD_CHARGESPLASH, 0, *response, params);
 
-	return host_command_process(&args);
+	return ec_cmd_chargesplash(NULL, &params, response);
 }
 
 static bool is_chargesplash_requested(void)
@@ -85,7 +84,7 @@ static void set_lid(bool open, bool inhibit_boot)
 			 "inhibit_boot should not be used with a lid close");
 	}
 
-	zassume_ok(gpio_emul_input_set(lid_switch_dev, GPIO_LID_OPEN_EC_PORT,
+	zassert_ok(gpio_emul_input_set(lid_switch_dev, GPIO_LID_OPEN_EC_PORT,
 				       open),
 		   "Failed to set lid switch GPIO");
 
@@ -102,7 +101,7 @@ static void set_lid(bool open, bool inhibit_boot)
 /* Simulate a regular power button press */
 static void pulse_power_button(void)
 {
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "powerbtn"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "powerbtn"));
 }
 
 static void reset_state(void *unused)
@@ -123,7 +122,7 @@ static void reset_state(void *unused)
 		set_ac_enabled(false);
 	}
 
-	zassume_ok(shell_execute_cmd(get_ec_shell(), "chargesplash reset"),
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "chargesplash reset"),
 		   "'chargesplash reset' shell command failed");
 }
 
@@ -290,14 +289,14 @@ ZTEST_USER(chargesplash, test_display_loop)
 
 	set_lid(true, true);
 	set_ac_enabled(true);
-	zassert_true(is_chargesplash_requested(), NULL);
+	zassert_true(is_chargesplash_requested());
 	wait_for_chipset_startup();
 
 	zassert_ok(chargesplash_hostcmd(EC_CHARGESPLASH_DISPLAY_READY,
 					&response),
 		   NULL);
 
-	zassert_true(is_chargesplash_requested(), NULL);
+	zassert_true(is_chargesplash_requested());
 	pulse_power_button();
-	zassert_false(is_chargesplash_requested(), NULL);
+	zassert_false(is_chargesplash_requested());
 }

@@ -3,17 +3,18 @@
  * found in the LICENSE file.
  */
 
+#include "common.h"
+#include "console.h"
+#include "ec_tasks.h"
+#include "hook_types.h"
+#include "hooks.h"
+#include "task.h"
+#include "timer.h"
+
 #include <zephyr/kernel.h>
 
 #include <ap_power/ap_power.h>
 #include <ap_power/ap_power_events.h>
-#include "common.h"
-#include "console.h"
-#include "ec_tasks.h"
-#include "hooks.h"
-#include "hook_types.h"
-#include "task.h"
-#include "timer.h"
 
 /*
  * hook_registry maps each hook_type to the list of handlers for that hook type.
@@ -94,7 +95,7 @@ static void check_hook_task_priority(void)
 }
 DECLARE_HOOK(HOOK_INIT, check_hook_task_priority, HOOK_PRIO_FIRST);
 
-static int zephyr_shim_setup_hooks(const struct device *unused)
+static int zephyr_shim_setup_hooks(void)
 {
 	int rv;
 
@@ -165,17 +166,14 @@ int hook_call_deferred(const struct deferred_data *data, int us)
 		k_work_cancel_delayable(work);
 	} else if (us >= 0) {
 		rv = k_work_reschedule(work, K_USEC(us));
-		if (rv == -EINVAL) {
-			/* Already processing or completed. */
-			return 0;
-		} else if (rv < 0) {
+		if (rv < 0) {
 			work_queue_error(data, rv);
 		}
 	} else {
 		return EC_ERROR_PARAM2;
 	}
 
-	return rv;
+	return rv >= 0 ? EC_SUCCESS : rv;
 }
 
 /*
@@ -219,7 +217,7 @@ static void ev_handler(struct ap_power_ev_callback *cb,
 /*
  * Events are received from the AP power event system and sent to the hooks.
  */
-static int zephyr_shim_ap_power_event(const struct device *unused)
+static int zephyr_shim_ap_power_event(void)
 {
 	static struct ap_power_ev_callback cb;
 

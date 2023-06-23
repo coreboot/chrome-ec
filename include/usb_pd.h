@@ -5,16 +5,23 @@
 
 /* USB Power delivery module */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #ifndef __CROS_EC_USB_PD_H
 #define __CROS_EC_USB_PD_H
 
-#include <stdbool.h>
-#include <stdint.h>
 #include "common.h"
 #include "ec_commands.h"
 #include "usb_pd_tbt.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pd_vdo.h"
+
+#include <stdbool.h>
+#include <stdint.h>
 
 /* PD Host command timeout */
 #define PD_HOST_COMMAND_TIMEOUT_US SECOND
@@ -75,8 +82,11 @@ enum pd_rx_errors {
 	 PD_EVENT_POWER_STATE_CHANGE | PD_EVENT_TCPC_RESET)
 
 /* --- PD data message helpers --- */
+#ifdef CONFIG_USB_PD_EPR
+#define PDO_MAX_OBJECTS 11
+#else
 #define PDO_MAX_OBJECTS 7
-#define PDO_MODES (PDO_MAX_OBJECTS - 1)
+#endif
 
 /* PDO : Power Data Object */
 /*
@@ -99,6 +109,7 @@ enum pd_rx_errors {
 #define PDO_FIXED_FRS_CURR_DFLT_USB_POWER (1 << 23)
 #define PDO_FIXED_FRS_CURR_1A5_AT_5V (2 << 23)
 #define PDO_FIXED_FRS_CURR_3A0_AT_5V (3 << 23)
+#define PDO_FIXED_EPR_MODE_CAPABLE BIT(23)
 #define PDO_FIXED_PEAK_CURR () /* [21..20] Peak current */
 #define PDO_FIXED_VOLT(mv) (((mv) / 50) << 10) /* Voltage in 50mV units */
 #define PDO_FIXED_CURR(ma) (((ma) / 10) << 0) /* Max current in 10mA units */
@@ -124,13 +135,22 @@ enum pd_rx_errors {
 	(PDO_BATT_MIN_VOLT(min_mv) | PDO_BATT_MAX_VOLT(max_mv) | \
 	 PDO_BATT_OP_POWER(op_mw) | PDO_TYPE_BATTERY)
 
+#define PDO_AUG_MAX_VOLT(mv) ((((mv) / 100) & 0xFF) << 17)
+#define PDO_AUG_MIN_VOLT(mv) ((((mv) / 100) & 0xFF) << 8)
+#define PDO_AUG_MAX_CURR(ma) ((((ma) / 50) & 0x7F) << 0)
+
+#define PDO_AUG(min_mv, max_mv, max_ma)                        \
+	(PDO_AUG_MIN_VOLT(min_mv) | PDO_AUG_MAX_VOLT(max_mv) | \
+	 PDO_AUG_MAX_CURR(max_ma) | PDO_TYPE_AUGMENTED)
+
 /* RDO : Request Data Object */
-#define RDO_OBJ_POS(n) (((n)&0x7) << 28)
-#define RDO_POS(rdo) (((rdo) >> 28) & 0x7)
+#define RDO_OBJ_POS(n) (((n)&0xF) << 28)
+#define RDO_POS(rdo) (((rdo) >> 28) & 0xF)
 #define RDO_GIVE_BACK BIT(27)
 #define RDO_CAP_MISMATCH BIT(26)
 #define RDO_COMM_CAP BIT(25)
 #define RDO_NO_SUSPEND BIT(24)
+#define RDO_EPR_MODE_CAPABLE BIT(22)
 #define RDO_FIXED_VAR_OP_CURR(ma) ((((ma) / 10) & 0x3FF) << 10)
 #define RDO_FIXED_VAR_MAX_CURR(ma) ((((ma) / 10) & 0x3FF) << 0)
 
@@ -191,6 +211,7 @@ enum pd_rx_errors {
 #define PD_T_SINK_WAIT_CAP (575 * MSEC) /* between 310ms and 620ms */
 #define PD_T_SINK_TRANSITION (35 * MSEC) /* between 20ms and 35ms */
 #define PD_T_SOURCE_ACTIVITY (45 * MSEC) /* between 40ms and 50ms */
+#define PD_T_ENTER_EPR (500 * MSEC) /* between 450ms and 550ms */
 /*
  * Adjusting for TCPMv2 PD2 Compliance. In tests like TD.PD.SRC.E5 this
  * value is the duration before the Hard Reset can be sent. Setting the
@@ -253,6 +274,7 @@ enum pd_rx_errors {
 #define PD_T_DATA_RESET_FAIL (300 * MSEC) /* 300ms */
 #define PD_T_VCONN_REAPPLIED (10 * MSEC) /* between 10ms and 20ms */
 #define PD_T_VCONN_DISCHARGE (240 * MSEC) /* between 160ms and 240ms */
+#define PD_T_SINK_EPR_KEEP_ALIVE (375 * MSEC) /* between 250ms and 500ms */
 
 /*
  * Non-spec timer to prevent going Unattached if Vbus drops before a partner FRS
@@ -290,8 +312,14 @@ enum pd_rx_errors {
 #define PD_V_SINK_DISCONNECT_MAX 3670
 /* TODO(b/149530538): Add equation for vSinkDisconnectPD */
 
-/* Maximum voltage in mV offered by PD 3.0 Version 2.0 Spec */
+/* Maximum SPR voltage in mV offered by PD 3.0 Version 2.0 Spec */
 #define PD_REV3_MAX_VOLTAGE 20000
+
+/* Maximum SPR voltage in mV */
+#define PD_MAX_SPR_VOLTAGE 20000
+
+/* Maximum EPR voltage in mV */
+#define PD_MAX_EPR_VOLTAGE 48000
 
 /* Power in mW at which we will automatically charge from a DRP partner */
 #define PD_DRP_CHARGE_POWER_MIN 27000
@@ -339,7 +367,7 @@ struct svid_mode_data {
 	/* The number of modes discovered for this SVID */
 	int mode_cnt;
 	/* The discovered mode VDOs */
-	uint32_t mode_vdo[PDO_MODES];
+	uint32_t mode_vdo[VDO_MAX_OBJECTS];
 	/* State of mode discovery for this SVID */
 	enum pd_discovery_state discovery;
 };
@@ -362,6 +390,7 @@ extern const struct svdm_amode_fx supported_modes[];
 extern const int supported_modes_cnt;
 
 /* 4 entry rw_hash table of type-C devices that AP has firmware updates for. */
+/* This is *NOT* a hash-table, it's a table (ring-buffer) of hashes */
 #ifdef CONFIG_COMMON_RUNTIME
 #define RW_HASH_ENTRIES 4
 extern struct ec_params_usb_pd_rw_hash_entry rw_hash_table[RW_HASH_ENTRIES];
@@ -407,10 +436,10 @@ union disc_ident_ack {
 		uint32_t product_t3;
 	};
 
-	uint32_t raw_value[PDO_MAX_OBJECTS - 1];
+	uint32_t raw_value[VDO_MAX_OBJECTS];
 };
 BUILD_ASSERT(sizeof(union disc_ident_ack) ==
-	     sizeof(uint32_t) * (PDO_MAX_OBJECTS - 1));
+	     sizeof(uint32_t) * (VDO_MAX_OBJECTS));
 
 /* Discover Identity data - ACK plus discovery state */
 struct identity_data {
@@ -467,7 +496,6 @@ struct partner_active_modes {
  * VDM object is minimum of VDM header + 6 additional data objects.
  */
 #define VDO_HDR_SIZE 1
-#define VDO_MAX_SIZE 7
 
 #define VDM_VER10 0
 #define VDM_VER20 1
@@ -587,6 +615,60 @@ struct partner_active_modes {
 
 #define VDO_PRODUCT(pid, bcd) (((pid)&0xffff) << 16 | ((bcd)&0xffff))
 #define PD_PRODUCT_PID(vdo) (((vdo) >> 16) & 0xffff)
+
+/* Max Attention length is header + 1 VDO */
+#define PD_ATTENTION_MAX_VDO 2
+
+/*
+ * 6.4.10 EPR_Mode Message (PD Rev 3.1)
+ */
+
+enum pd_eprmdo_action {
+	/* 0x00: Reserved */
+	PD_EPRMDO_ACTION_ENTER = 0x01,
+	PD_EPRMDO_ACTION_ENTER_ACK = 0x02,
+	PD_EPRMDO_ACTION_ENTER_SUCCESS = 0x03,
+	PD_EPRMDO_ACTION_ENTER_FAILED = 0x04,
+	PD_EPRMDO_ACTION_EXIT = 0x05,
+	/* 0x06 ... 0xFF: Reserved */
+} __packed;
+BUILD_ASSERT(sizeof(enum pd_eprmdo_action) == 1);
+
+enum pd_eprmdo_enter_failed_data {
+	PD_EPRMDO_ENTER_FAILED_DATA_UNKNOWN = 0x00,
+	PD_EPRMDO_ENTER_FAILED_DATA_CABLE = 0x01,
+	PD_EPRMDO_ENTER_FAILED_DATA_VCONN = 0x02,
+	PD_EPRMDO_ENTER_FAILED_DATA_RDO = 0x03,
+	PD_EPRMDO_ENTER_FAILED_DATA_UNABLE = 0x04,
+	PD_EPRMDO_ENTER_FAILED_DATA_PDO = 0x05,
+} __packed;
+BUILD_ASSERT(sizeof(enum pd_eprmdo_enter_failed_data) == 1);
+
+struct eprmdo {
+	uint16_t reserved;
+	enum pd_eprmdo_enter_failed_data data;
+	enum pd_eprmdo_action action;
+};
+BUILD_ASSERT(sizeof(struct eprmdo) == 4);
+
+/*
+ * 6.5.14 Extended Control Message
+ */
+enum pd_ext_ctrl_msg_type {
+	/* 0: Reserved */
+	PD_EXT_CTRL_EPR_GET_SOURCE_CAP = 1,
+	PD_EXT_CTRL_EPR_GET_SINK_CAP = 2,
+	PD_EXT_CTRL_EPR_KEEPALIVE = 3,
+	PD_EXT_CTRL_EPR_KEEPALIVE_ACK = 4,
+	/* 5-255: Reserved */
+} __packed;
+BUILD_ASSERT(sizeof(enum pd_ext_ctrl_msg_type) == 1);
+
+/* Extended Control Data Block (ECDB) */
+struct pd_ecdb {
+	uint8_t type;
+	uint8_t data;
+} __packed;
 
 /* PD Rev 3.1 Revision Message Data Object (RMDO) */
 struct rmdo {
@@ -846,6 +928,10 @@ struct pd_cable {
 
 #define USB_VID_INTEL 0x8087
 
+#define USB_VID_FRAMEWORK 0X32ac
+#define USB_PID_FRAMEWORK_HDMI_CARD 0X2
+#define USB_PID_FRAMEWORK_DP_CARD 0X3
+
 /* Timeout for message receive in microseconds */
 #define USB_PD_RX_TMOUT_US 1800
 
@@ -1029,6 +1115,8 @@ enum pd_dpm_request {
 	DPM_REQUEST_FRS_DET_DISABLE = BIT(22),
 	DPM_REQUEST_DATA_RESET = BIT(23),
 	DPM_REQUEST_GET_REVISION = BIT(24),
+	DPM_REQUEST_EPR_MODE_ENTRY = BIT(25),
+	DPM_REQUEST_EPR_MODE_EXIT = BIT(26),
 };
 
 /**
@@ -1452,6 +1540,9 @@ enum cable_outlet {
 /* Voltage threshold to detect connection when presenting Rd */
 #define PD_SNK_VA_MV 250
 
+/* Maximum power consumption while in Sink Standby */
+#define PD_SNK_STDBY_MW 2500
+
 /* --- Policy layer functions --- */
 
 /** Schedules the interrupt handler for the TCPC on a high priority task. */
@@ -1549,13 +1640,13 @@ void pd_snk_give_back(int port, uint32_t *const ma, uint32_t *const mv);
  * Put a cap on the max voltage requested as a sink.
  * @param mv maximum voltage in millivolts.
  */
-void pd_set_max_voltage(unsigned mv);
+void pd_set_max_voltage(unsigned int mv);
 
 /**
  * Get the max voltage that can be requested as set by pd_set_max_voltage().
  * @return max voltage
  */
-unsigned pd_get_max_voltage(void);
+unsigned int pd_get_max_voltage(void);
 
 /**
  * Check if this board supports the given input voltage.
@@ -1944,6 +2035,13 @@ void pd_dfp_discovery_init(int port);
 void pd_dfp_mode_init(int port);
 
 /**
+ * Mark all discovery types as failed to prevent any further discovery attempts
+ * until a connection change or DPM request triggers discovery again.
+ * @param port USB-C port number
+ */
+void pd_disable_discovery(int port);
+
+/**
  * Set identity discovery state for this type and port
  *
  * @param port  USB-C port number
@@ -2018,7 +2116,7 @@ enum pd_discovery_state pd_get_modes_discovery(int port,
  * @param type     Transmit type (SOP, SOP') for VDM
  * @param svid     SVID to get
  * @param vdo_out  Discover Mode VDO response to set
- *                 Note: It must be able to fit wihin PDO_MODES VDOs.
+ *                 Note: It must be able to fit within PDO_MAX_OBJECTS VDOs.
  * @return         Mode VDO cnt of specified SVID if is discovered,
  *                 0 otherwise
  */
@@ -2244,14 +2342,6 @@ int pd_ufp_get_dp_opos(int port);
  * @param port     USB-C port number
  */
 void pd_ufp_enable_hpd_send(int port);
-
-/*
- * Returns True if cable supports USB2 connection
- *
- * @param port  USB-C port number
- * @return      True is usb2_supported, false otherwise
- */
-bool is_usb2_cable_support(int port);
 
 /*
  * Checks if Cable speed is Gen2 or better
@@ -2565,7 +2655,7 @@ void pd_control_port_enable(int port);
  *
  * @param mask host event mask.
  */
-#if defined(HAS_TASK_HOSTCMD) && !defined(TEST_BUILD)
+#if defined(CONFIG_USB_PD_HOST_CMD) && !defined(CONFIG_USB_PD_TCPM_STUB)
 void pd_send_host_event(int mask);
 #else
 static inline void pd_send_host_event(int mask)
@@ -2894,18 +2984,19 @@ void pd_notify_event(int port, uint32_t event_mask);
 void pd_clear_events(int port, uint32_t clear_mask);
 
 /*
- * Requests a VDM Attention message be sent. Attention is the only SVDM message
- * that does not result in a response from the port partner. In addition, if
- * it's a DP Attention message, then it will be requested from outside of the
- * port's PD task.
+ * Requests a VDM REQ message be sent. It is assumed that this message may be
+ * coming from a task outside the PD task.
  *
  * @param port USB-C port number
  * @param *data pointer to the VDM Attention message
  * @param vdo_count number of VDOs (must be 1 or 2)
+ * @param tx_type partner type to transmit
  * @return EC_RES_SUCCESS if a VDM message is scheduled.
+ *         EC_RES_BUSY if a message is already pending
+ *         EC_RES_INVALID_PARAM if the parameters given are invalid
  */
-enum ec_status pd_request_vdm_attention(int port, const uint32_t *data,
-					int vdo_count);
+enum ec_status pd_request_vdm(int port, const uint32_t *data, int vdo_count,
+			      enum tcpci_msg_type tx_type);
 
 /*
  * Requests that the port enter the specified mode. A successful result just
@@ -3076,6 +3167,14 @@ uint32_t pd_get_requested_current(int port);
 bool pd_get_partner_usb_comm_capable(int port);
 
 /**
+ * Gets the port partner's RMDO from the PE state.
+ *
+ * @param port USB-C port number
+ * @return port partner's Revision Message Data Object (RMDO).
+ */
+struct rmdo pd_get_partner_rmdo(int port);
+
+/**
  * Return true if PD is in disconnect state
  *
  * @param port USB-C port number
@@ -3125,6 +3224,7 @@ __override_proto int board_pd_set_frs_enable(int port, int enable);
  */
 __overridable void board_frs_handler(int port);
 
+#ifdef CONFIG_USB_PD_DP_MODE
 /**
  * Get current DisplayPort pin mode on the specified port.
  *
@@ -3132,6 +3232,12 @@ __overridable void board_frs_handler(int port);
  * @return MODE_DP_PIN_[A-E] if used else 0
  */
 __override_proto uint8_t get_dp_pin_mode(int port);
+#else
+static inline uint8_t get_dp_pin_mode(int port)
+{
+	return 0;
+}
+#endif /* CONFIG_USB_PD_DP_MODE */
 
 /**
  * Get board specific usb pd port count
@@ -3175,13 +3281,6 @@ __override_proto void board_process_pd_alert(int port);
  * tasks are present.
  */
 void board_reset_pd_mcu(void);
-
-/**
- * Return true if specified PD port is debug accessory.
- *
- * @param port USB-C port number
- */
-bool pd_is_debug_acc(int port);
 
 /*
  * Notify the AP that we have entered into DisplayPort Alternate Mode.  This
