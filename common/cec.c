@@ -25,23 +25,6 @@
 #define CPRINTS(...)
 #endif
 
-/* Notification from interrupt to CEC task that data has been received */
-#define TASK_EVENT_RECEIVED_DATA TASK_EVENT_CUSTOM_BIT(0)
-#define TASK_EVENT_OKAY TASK_EVENT_CUSTOM_BIT(1)
-#define TASK_EVENT_FAILED TASK_EVENT_CUSTOM_BIT(2)
-
-/* CEC broadcast address. Also the highest possible CEC address */
-#define CEC_BROADCAST_ADDR 15
-
-/* Address to indicate that no logical address has been set */
-#define CEC_UNREGISTERED_ADDR 255
-
-/*
- * The CEC specification requires at least one and a maximum of
- * five resends attempts
- */
-#define CEC_MAX_RESENDS 5
-
 /*
  * Free time timing (us). Our free-time is calculated from the end of
  * the last bit (not from the start). We compensate by having one
@@ -584,7 +567,7 @@ static void enter_state(enum cec_state new_state)
 			addr = cec_rx.transfer.buf[0] & 0x0f;
 			if (addr == cec_addr || addr == CEC_BROADCAST_ADDR) {
 				task_set_event(TASK_ID_CEC,
-					       TASK_EVENT_RECEIVED_DATA);
+					       CEC_TASK_EVENT_RECEIVED_DATA);
 			}
 			timeout = DATA_ZERO_HIGH_TICKS;
 		} else {
@@ -669,7 +652,8 @@ void cec_event_timeout(void)
 				cec_tx.len = 0;
 				cec_tx.resends = 0;
 				enter_state(CEC_STATE_IDLE);
-				task_set_event(TASK_ID_CEC, TASK_EVENT_OKAY);
+				task_set_event(TASK_ID_CEC,
+					       CEC_TASK_EVENT_OKAY);
 			}
 		} else {
 			if (cec_tx.resends < CEC_MAX_RESENDS) {
@@ -681,7 +665,8 @@ void cec_event_timeout(void)
 				cec_tx.len = 0;
 				cec_tx.resends = 0;
 				enter_state(CEC_STATE_IDLE);
-				task_set_event(TASK_ID_CEC, TASK_EVENT_FAILED);
+				task_set_event(TASK_ID_CEC,
+					       CEC_TASK_EVENT_FAILED);
 			}
 		}
 		break;
@@ -855,8 +840,18 @@ void cec_event_tx(void)
 	 * If we have an ongoing receive, this transfer
 	 * will start when transitioning to IDLE
 	 */
-	if (cec_state == CEC_STATE_IDLE)
+	if (cec_state == CEC_STATE_IDLE) {
+		/*
+		 * Only update the interrupt time if it's idle, otherwise it
+		 * will interfere with the timing of the current transfer.
+		 */
+		cec_update_interrupt_time();
 		enter_state(CEC_STATE_INITIATOR_FREE_TIME);
+	}
+}
+
+__overridable void cec_update_interrupt_time(void)
+{
 }
 
 static int cec_send(const uint8_t *msg, uint8_t len)
@@ -1005,7 +1000,9 @@ static void cec_init(void)
 	cec_init_timer();
 
 	/* If RO doesn't set it, RW needs to set it explicitly. */
+#ifdef CEC_GPIO_PULL_UP
 	gpio_set_level(CEC_GPIO_PULL_UP, 1);
+#endif
 
 	/* Ensure the CEC bus is not pulled low by default on startup. */
 	gpio_set_level(CEC_GPIO_OUT, 1);
@@ -1023,7 +1020,7 @@ void cec_task(void *unused)
 
 	while (1) {
 		events = task_wait_event(-1);
-		if (events & TASK_EVENT_RECEIVED_DATA) {
+		if (events & CEC_TASK_EVENT_RECEIVED_DATA) {
 			if (cec_process_offline_message(
 				    &cec_rx_queue, cec_rx.transfer.buf,
 				    cec_rx.transfer.byte) == EC_SUCCESS) {
@@ -1043,10 +1040,10 @@ void cec_task(void *unused)
 			if (rv == EC_SUCCESS)
 				mkbp_send_event(EC_MKBP_EVENT_CEC_MESSAGE);
 		}
-		if (events & TASK_EVENT_OKAY) {
+		if (events & CEC_TASK_EVENT_OKAY) {
 			send_mkbp_event(EC_MKBP_CEC_SEND_OK);
 			CPRINTS("SEND OKAY");
-		} else if (events & TASK_EVENT_FAILED) {
+		} else if (events & CEC_TASK_EVENT_FAILED) {
 			send_mkbp_event(EC_MKBP_CEC_SEND_FAILED);
 			CPRINTS("SEND FAILED");
 		}
