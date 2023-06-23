@@ -5,18 +5,19 @@
 
 /* ESPI module for Chrome EC */
 
-#include "registers.h"
-#include "system.h"
-#include "task.h"
 #include "chipset.h"
 #include "console.h"
+#include "espi.h"
+#include "hooks.h"
+#include "lpc_chip.h"
+#include "power.h"
+#include "registers.h"
+#include "system.h"
+#include "system_boot_time.h"
+#include "task.h"
+#include "timer.h"
 #include "uart.h"
 #include "util.h"
-#include "power.h"
-#include "espi.h"
-#include "lpc_chip.h"
-#include "hooks.h"
-#include "timer.h"
 
 /* Console output macros */
 #if !(DEBUG_ESPI)
@@ -274,6 +275,9 @@ void espi_wait_vw_not_dirty(enum espi_vw_signal signal, unsigned int timeout_us)
 	uint64_t timeout;
 
 	sig_idx = espi_vw_get_signal_index(signal);
+	/* Cannot find signal index */
+	if (sig_idx < 0)
+		return;
 
 	for (offset = 0; offset < ESPI_VWEVSM_NUM; offset++) {
 		uint8_t vw_idx = VWEVSM_IDX_GET(NPCX_VWEVSM(offset));
@@ -456,11 +460,14 @@ void espi_vw_evt_pltrst(void)
 		/* Enable eSPI peripheral channel */
 		SET_BIT(NPCX_ESPICFG, NPCX_ESPICFG_PCHANEN);
 #endif
+		update_ap_boot_time(PLTRST_HIGH);
+
 	} else {
 		/* PLTRST# asserted */
 #ifdef CONFIG_CHIPSET_RESET_HOOK
 		hook_call_deferred(&espi_chipset_reset_data, MSEC);
 #endif
+		update_ap_boot_time(PLTRST_LOW);
 	}
 }
 
@@ -520,6 +527,8 @@ void espi_espirst_handler(void)
 {
 	/* Clear pending bit of WUI */
 	SET_BIT(NPCX_WKPCL(MIWU_TABLE_0, MIWU_GROUP_5), 5);
+
+	update_ap_boot_time(ESPIRST);
 
 	CPRINTS("eSPI RST issued!");
 }

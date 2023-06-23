@@ -3,9 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <stdbool.h>
-#include <stdint.h>
-
 #include "builtin/assert.h"
 #include "compile_time_macros.h"
 #include "console.h"
@@ -14,6 +11,9 @@
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_tc_sm.h"
+
+#include <stdbool.h>
+#include <stdint.h>
 
 #ifdef CONFIG_COMMON_RUNTIME
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
@@ -116,7 +116,7 @@ int usb_retimer_fw_update_get_result(void)
 			result = last_result;
 			break;
 		}
-		/* fall through */
+		__fallthrough;
 	case USB_RETIMER_FW_UPDATE_RESUME_PD:
 		result = pd_is_port_enabled(cur_port);
 		break;

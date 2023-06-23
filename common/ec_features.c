@@ -5,12 +5,14 @@
 
 /* Present Chrome EC device features to the outside world */
 
+#include "board_config.h"
 #include "common.h"
 #include "config.h"
 #include "console.h"
 #include "ec_commands.h"
-#include "board_config.h"
+#include "motion_sense.h"
 
+/* LCOV_EXCL_START */
 uint32_t get_feature_flags0(void)
 {
 	uint32_t result = 0
@@ -110,14 +112,14 @@ uint32_t get_feature_flags0(void)
 		;
 	return board_override_feature_flags0(result);
 }
+/* LCOV_EXCL_STOP */
 
+/* LCOV_EXCL_START */
 uint32_t get_feature_flags1(void)
 {
 	uint32_t result =
-		EC_FEATURE_MASK_1(EC_FEATURE_UNIFIED_WAKE_MASKS)
-#ifdef CONFIG_HOST_EVENT64
-		| EC_FEATURE_MASK_1(EC_FEATURE_HOST_EVENT64)
-#endif
+		EC_FEATURE_MASK_1(EC_FEATURE_UNIFIED_WAKE_MASKS) |
+		EC_FEATURE_MASK_1(EC_FEATURE_HOST_EVENT64)
 #ifdef CONFIG_EXTERNAL_STORAGE
 		| EC_FEATURE_MASK_1(EC_FEATURE_EXEC_IN_RAM)
 #endif
@@ -128,7 +130,10 @@ uint32_t get_feature_flags1(void)
 		| EC_FEATURE_MASK_1(EC_FEATURE_MOTION_SENSE_TIGHT_TIMESTAMPS)
 #endif
 #if defined(CONFIG_LID_ANGLE) && defined(CONFIG_TABLET_MODE)
-		| EC_FEATURE_MASK_1(EC_FEATURE_REFINED_TABLET_MODE_HYSTERESIS)
+		| (sensor_board_is_lid_angle_available() ?
+			   EC_FEATURE_MASK_1(
+				   EC_FEATURE_REFINED_TABLET_MODE_HYSTERESIS) :
+			   0)
 #endif
 #ifdef CONFIG_VBOOT_EFS2
 		| EC_FEATURE_MASK_1(EC_FEATURE_EFS2)
@@ -154,9 +159,19 @@ uint32_t get_feature_flags1(void)
 #ifdef CONFIG_USB_MUX_AP_CONTROL
 		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_AP_MUX_SET)
 #endif
+#ifdef CONFIG_USB_PD_VDM_AP_CONTROL
+		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_AP_VDM_SEND)
+#endif
+#ifdef CONFIG_SYSTEM_SAFE_MODE
+		| EC_FEATURE_MASK_1(EC_FEATURE_SYSTEM_SAFE_MODE)
+#endif
+#ifdef CONFIG_DEBUG_ASSERT_REBOOTS
+		| EC_FEATURE_MASK_1(EC_FEATURE_ASSERT_REBOOTS)
+#endif
 		;
 	return board_override_feature_flags1(result);
 }
+/* LCOV_EXCL_STOP */
 
 __overridable uint32_t board_override_feature_flags0(uint32_t flags0)
 {

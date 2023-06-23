@@ -3,12 +3,9 @@
  * found in the LICENSE file.
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-
 #include "cbi.h"
-#include "charger.h"
 #include "charge_ramp.h"
+#include "charger.h"
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
@@ -29,12 +26,15 @@
 #include "task.h"
 #include "task_id.h"
 #include "timer.h"
-#include "usbc_config.h"
-#include "usbc_ppc.h"
 #include "usb_charge.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
+#include "usbc_config.h"
+#include "usbc_ppc.h"
+
+#include <stdbool.h>
+#include <stdint.h>
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
@@ -156,6 +156,7 @@ const struct usb_mux_chain usb_muxes[] = {
 	[USBC_PORT_C0] = {
 		.mux = &(const struct usb_mux) {
 			.usb_port = USBC_PORT_C0,
+			.flags = USB_MUX_FLAG_CAN_IDLE,
 			.driver = &bb_usb_retimer,
 			.hpd_update = bb_retimer_hpd_update,
 			.i2c_port = I2C_PORT_USB_C0_C2_MUX,
@@ -175,6 +176,7 @@ const struct usb_mux_chain usb_muxes[] = {
 	[USBC_PORT_C2] = {
 		.mux = &(const struct usb_mux) {
 			.usb_port = USBC_PORT_C2,
+			.flags = USB_MUX_FLAG_CAN_IDLE,
 			.driver = &bb_usb_retimer,
 			.hpd_update = bb_retimer_hpd_update,
 			.i2c_port = I2C_PORT_USB_C0_C2_MUX,
@@ -382,10 +384,10 @@ static void board_tcpc_init(void)
 	gpio_enable_interrupt(GPIO_USB_C0_PPC_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C2_PPC_INT_ODL);
 
+#ifndef CONFIG_ZEPHYR
 	/* Enable TCPC interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_C2_TCPC_INT_ODL);
 
-#ifndef CONFIG_ZEPHYR
 	/* Enable BC1.2 interrupts. */
 	gpio_enable_interrupt(GPIO_USB_C0_BC12_INT_ODL);
 	gpio_enable_interrupt(GPIO_USB_C2_BC12_INT_ODL);
@@ -393,14 +395,18 @@ static void board_tcpc_init(void)
 
 	if (ec_cfg_usb_db_type() != DB_USB_ABSENT) {
 		gpio_enable_interrupt(GPIO_USB_C1_PPC_INT_ODL);
-		gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
 #ifndef CONFIG_ZEPHYR
+		gpio_enable_interrupt(GPIO_USB_C1_TCPC_INT_ODL);
 		gpio_enable_interrupt(GPIO_USB_C1_BC12_INT_ODL);
+#else
+	} else {
+		tcpc_config[1].irq_gpio.port = NULL;
 #endif /* !CONFIG_ZEPHYR */
 	}
 }
 DECLARE_HOOK(HOOK_INIT, board_tcpc_init, HOOK_PRIO_INIT_CHIPSET);
 
+#ifndef CONFIG_ZEPHYR
 uint16_t tcpc_get_alert_status(void)
 {
 	uint16_t status = 0;
@@ -414,6 +420,7 @@ uint16_t tcpc_get_alert_status(void)
 
 	return status;
 }
+#endif
 
 int ppc_get_alert_status(int port)
 {
@@ -427,6 +434,7 @@ int ppc_get_alert_status(int port)
 	return 0;
 }
 
+#ifndef CONFIG_ZEPHYR
 void tcpc_alert_event(enum gpio_signal signal)
 {
 	switch (signal) {
@@ -442,6 +450,7 @@ void tcpc_alert_event(enum gpio_signal signal)
 		break;
 	}
 }
+#endif
 
 void bc12_interrupt(enum gpio_signal signal)
 {

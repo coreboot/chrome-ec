@@ -8,11 +8,11 @@
  * @brief Mock charge_manager
  */
 
-#include <stdlib.h>
-
 #include "charge_manager.h"
 #include "common.h"
 #include "mock/charge_manager_mock.h"
+
+#include <stdlib.h>
 
 #ifndef TEST_BUILD
 #error "Mocks should only be in the test build."
@@ -34,6 +34,20 @@ int charge_manager_get_selected_charge_port(void)
 int charge_manager_get_active_charge_port(void)
 {
 	return 0;
+}
+
+int charge_manager_get_charger_voltage(void)
+{
+	return 0;
+}
+
+void charge_manager_force_ceil(int port, int ceil)
+{
+}
+
+enum charge_supplier charge_manager_get_supplier(void)
+{
+	return CHARGE_SUPPLIER_NONE;
 }
 
 int charge_manager_get_vbus_voltage(int port)

@@ -5,7 +5,11 @@
 
 /* High-priority interrupt tasks implementations */
 
-#include <stdint.h>
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
 
 #include "builtin/assert.h"
 #include "common.h"
@@ -18,6 +22,8 @@
 #include "usb_pd.h"
 #include "usb_pd_tcpm.h"
 
+#include <stdint.h>
+
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
@@ -25,11 +31,11 @@
 #define PD_PROCESS_INTERRUPT BIT(0)
 
 /*
- * Theoretically, we may need to support up to 480 USB-PD packets per second for
- * intensive operations such as FW update over PD. This value has tested well
- * preventing watchdog resets with a single bad port partner plugged in.
+ * Theoretically, we may need to support up to 1800 USB-PD packets per second
+ * for intensive operations such as BIST compliance tests. This value has tested
+ * well preventing watchdog resets with a single bad port partner plugged in.
  */
-#define ALERT_STORM_MAX_COUNT 480
+#define ALERT_STORM_MAX_COUNT 1800
 #define ALERT_STORM_INTERVAL SECOND
 
 static uint8_t pd_int_task_id[CONFIG_USB_PD_PORT_MAX_COUNT];

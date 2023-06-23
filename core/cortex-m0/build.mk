@@ -6,10 +6,20 @@
 # Cortex-M0 core OS files build
 #
 
+# When set to 1, exclusively use builtins from compiler-rt.
+# When set to 0, use EC's builtins.
+USE_LLVM_COMPILER_RT:=0
+
+ifeq ($(USE_LLVM_COMPILER_RT),1)
+CFLAGS_CPU+=-DUSE_LLVM_COMPILER_RT
+endif
+
 # CPU specific compilation flags
 CFLAGS_CPU+=-mthumb
 ifeq ($(cc-name),clang)
 CFLAGS_CPU+=-Oz		# Like -Os (and thus -O2), but reduces code size further.
+# b/256193799: Reduce inline threshold to decrease code size.
+CFLAGS_CPU+=-Wl,-mllvm -Wl,-inline-threshold=-10
 # Link compiler-rt when using clang, so clang finds the builtins it provides.
 LDFLAGS_EXTRA+=-lclang_rt.builtins-armv6m
 else
@@ -24,14 +34,12 @@ LDFLAGS_EXTRA+=-flto
 endif
 
 core-y=cpu.o debug.o init.o thumb_case.o mula.o
-# When using clang, we get these as builtins from compiler-rt.
-ifneq ($(cc-name),clang)
+ifeq ($(USE_LLVM_COMPILER_RT),0)
 core-y+=div.o lmul.o ldivmod.o uldivmod.o
 endif
 
 core-y+=vecttable.o
-# When using clang, we get these as builtins from compiler-rt.
-ifneq ($(cc-name),clang)
+ifeq ($(USE_LLVM_COMPILER_RT),0)
 core-y+=__builtin.o
 endif
 core-$(CONFIG_COMMON_PANIC_OUTPUT)+=panic.o
@@ -46,3 +54,11 @@ core-$(CONFIG_CURVE25519)+=curve25519/scalarmult.o
 core-$(CONFIG_CURVE25519)+=curve25519/sqr.o
 
 core-$(CONFIG_WATCHDOG)+=watchdog.o
+
+core-$(CONFIG_COMMON_PANIC_OUTPUT)+=exception_panic.o
+
+$(CORE_RW_OUT)/exception_panic.o: $(CORE_RW_OUT)/asm_offsets.h
+$(CORE_RW_OUT)/exception_panic.o: CFLAGS+=-I$(CORE_RW_OUT)
+
+$(CORE_RO_OUT)/exception_panic.o: $(CORE_RO_OUT)/asm_offsets.h
+$(CORE_RO_OUT)/exception_panic.o: CFLAGS+=-I$(CORE_RO_OUT)

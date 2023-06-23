@@ -10,22 +10,27 @@ board-y=board.o
 
 # Enable on device tests
 test-list-y=\
+       abort \
        aes \
-       cec \
+       boringssl_crypto \
        compile_time_macros \
        crc \
        debug \
+       exception \
        flash_physical \
        flash_write_protect \
+       libc_printf \
        mpu \
        mutex \
        pingpong \
        printf \
        queue \
+       rng_benchmark \
        rollback \
        rollback_entropy \
        rsa3 \
        rtc \
+       sbrk \
        scratchpad \
        sha256 \
        sha256_unrolled \

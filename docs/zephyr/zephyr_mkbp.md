@@ -54,7 +54,7 @@ Possible enums to use in these nodes are specified in file: [MKBP event mask enu
 ```
 / {
 	ec-mkbp-host-event-wakeup-mask {
-		compatible = "ec-wake-mask-event";
+		compatible = "cros-ec,mkbp-host-event-wakeup-mask";
 		wakeup-mask = <(HOST_EVENT_LID_OPEN |
 				HOST_EVENT_POWER_BUTTON |
 				HOST_EVENT_AC_CONNECTED |
@@ -66,7 +66,7 @@ Possible enums to use in these nodes are specified in file: [MKBP event mask enu
 	};
 
 	ec-mkbp-event-wakeup-mask {
-		compatible = "ec-wake-mask-event";
+		compatible = "cros-ec,mkbp-event-wakeup-mask";
 		wakeup-mask = <(MKBP_EVENT_KEY_MATRIX |
 				MKBP_EVENT_HOST_EVENT |
 				MKBP_EVENT_SENSOR_FIFO)>;
@@ -76,7 +76,7 @@ Possible enums to use in these nodes are specified in file: [MKBP event mask enu
 
 ## Examples
 
-[Lazor wake-up masks](https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/projects/trogdor/lazor/gpio.dts?q=ec-mkbp-host-event-wakeup-mask)
+[Lazor wake-up masks](https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/zephyr/program/trogdor/lazor/gpio.dts?q=ec-mkbp-host-event-wakeup-mask)
 
 For detailed descriptions of the MKBP and host event types, please see
 [ec_commands.h](/include/ec_commands.h) header file.

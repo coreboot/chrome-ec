@@ -48,14 +48,8 @@ enum {
 	PE_FLAGS_PS_RESET_COMPLETE_FN,
 	/* VCONN swap operation has completed */
 	PE_FLAGS_VCONN_SWAP_COMPLETE_FN,
-	/* Flag to note no more setup VDMs (discovery, etc.) should be sent */
-	PE_FLAGS_VDM_SETUP_DONE_FN,
 	/* Flag to note PR Swap just completed for Startup entry */
 	PE_FLAGS_PR_SWAP_COMPLETE_FN,
-	/* Flag to note Port Discovery port partner replied with BUSY */
-	PE_FLAGS_VDM_REQUEST_BUSY_FN,
-	/* Flag to note Port Discovery port partner replied with NAK */
-	PE_FLAGS_VDM_REQUEST_NAKED_FN,
 	/* Flag to note FRS/PRS context in shared state machine path */
 	PE_FLAGS_FAST_ROLE_SWAP_PATH_FN,
 	/* Flag to note if FRS listening is enabled */
@@ -90,6 +84,21 @@ enum {
 	PE_FLAGS_DATA_RESET_COMPLETE_FN,
 	/* Waiting for SRC to SNK settle time */
 	PE_FLAGS_SRC_SNK_SETTLE_FN,
+	/*
+	 * Indicates the port is in the process of entering EPR mode. For a
+	 * sink, the SM is in and after PE_SNK_EPR_Mode_Entry. For a source,
+	 * the SM is in and after PE_SRC_EPR_Mode_Entery_ACK.
+	 */
+	PE_FLAGS_ENTERING_EPR_FN,
+	/* In EPR mode */
+	PE_FLAGS_IN_EPR_FN,
+	/*
+	 * Indicate the port exited EPR mode explicitly. If this is set, the
+	 * port wouldn't enter EPR mode automatically.
+	 */
+	PE_FLAGS_EPR_EXPLICIT_EXIT_FN,
+	/* Discovery disabled due to UFP/PD 2.0 constraint. */
+	PE_FLAGS_DISCOVERY_DISABLED_FN,
 	/* Last element */
 	PE_FLAGS_COUNT
 };

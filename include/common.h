@@ -5,16 +5,23 @@
 
 /* common.h - Common includes for Chrome EC */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #ifndef __CROS_EC_COMMON_H
 #define __CROS_EC_COMMON_H
 
-#include <stdint.h>
-#include <inttypes.h>
-
 #include "compile_time_macros.h"
 
+#include <inttypes.h>
+#include <stdint.h>
+
 #ifdef CONFIG_ZEPHYR
-#include <fpu.h>
+#include "fpu.h"
+
 #include <zephyr/sys/util.h>
 #include <zephyr/toolchain.h>
 #ifdef CONFIG_ZTEST
@@ -28,7 +35,7 @@
  * way of ensuring that the given section is in the same relative location in
  * both the RO/RW images.
  */
-#ifdef CONFIG_ZEPHYR
+#if defined(CONFIG_ZEPHYR) && !defined(CONFIG_SOC_FAMILY_INTEL_ISH)
 #define FIXED_SECTION(name) __attribute__((section(".fixed." name)))
 #else
 #define FIXED_SECTION(name) __attribute__((section(".rodata." name)))
@@ -192,6 +199,17 @@
  */
 #define __warn_unused_result __attribute__((warn_unused_result))
 
+/**
+ * @brief Attribute used to annotate intentional fallthrough between switch
+ * labels.
+ *
+ * See https://clang.llvm.org/docs/AttributeReference.html#fallthrough and
+ * https://gcc.gnu.org/onlinedocs/gcc/Statement-Attributes.html.
+ */
+#ifndef __fallthrough
+#define __fallthrough __attribute__((fallthrough))
+#endif
+
 /*
  * Macros for combining bytes into larger integers. _LE and _BE signify little
  * and big endian versions respectively.
@@ -246,14 +264,24 @@
 
 /*
  * Define test_mockable and test_mockable_static for mocking
- * functions.
+ * functions. Don't use test_mockable in .h files.
  */
 #ifdef TEST_BUILD
 #define test_mockable __attribute__((weak))
 #define test_mockable_static __attribute__((weak))
 #define test_mockable_static_inline __attribute__((weak))
+/*
+ * Tests implemented with ztest add mock implementations that actually return,
+ * so they should not be marked "noreturn". See
+ * test/drivers/default/src/panic_output.c.
+ */
+#ifdef CONFIG_ZTEST
 #define test_mockable_noreturn __attribute__((weak))
 #define test_mockable_static_noreturn __attribute__((weak))
+#else
+#define test_mockable_noreturn noreturn __attribute__((weak))
+#define test_mockable_static_noreturn noreturn __attribute__((weak))
+#endif
 #define test_export_static
 #else
 #define test_mockable

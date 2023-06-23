@@ -8,6 +8,26 @@
 #ifndef __CROS_EC_USB_RETIMER_ANX7483_H
 #define __CROS_EC_USB_RETIMER_ANX7483_H
 
+#include "common.h"
+
+/* Tuning defaults */
+struct anx7483_tuning_set {
+	uint8_t addr;
+	uint8_t value;
+};
+
+/*
+ * LFPS_TIMER register
+ *
+ * 7:4 Reserved
+ * 3:0 SLUMBER_TIMER_H (usb when ss and lfps not received min 24ms max 300ms,
+ *                      enter SLUMBER state)
+ */
+#define ANX7483_LFPS_TIMER_REG 0x0F
+#define ANX7483_LFPS_TIMER_SLUMBER_TIME_H 0x04
+#define ANX7483_LFPS_TIMER_SHIFT 0
+#define ANX7483_LFPS_TIMER_MASK GENMASK(3, 0)
+
 /*
  * Analog_Status_CTRL register
  *
@@ -71,6 +91,9 @@
 #define ANX7483_URX2_PORT_CFG2_REG 0x2C
 #define ANX7483_DRX1_PORT_CFG2_REG 0x5E
 #define ANX7483_DRX2_PORT_CFG2_REG 0x22
+
+#define ANX7483_CFG2_FG_SHIFT 4
+#define ANX7483_CFG2_FG_MASK GENMASK(5, 4)
 
 /*
  * Default CFG2 value to apply: 0.3 dB with optimized fine tuning

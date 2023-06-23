@@ -10,15 +10,16 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "usb_pe_sm.h"
+#include "test_util.h"
 #include "usb_pd.h"
+#include "usb_pe_sm.h"
 #include "usb_tc_sm.h"
 #include "util.h"
-#include "test_util.h"
 
 /* Defined in implementation */
 int command_pd(int argc, const char **argv);
 
+static enum debug_level dpm_debug_level;
 static enum debug_level prl_debug_level;
 static enum debug_level pe_debug_level;
 static enum debug_level tc_debug_level;
@@ -32,6 +33,9 @@ static bool tc_get_current_state_called;
 static bool tc_get_flags_called;
 static bool pe_get_current_state_called;
 static bool pe_get_flags_called;
+static bool pe_is_explicit_contract_called;
+static bool pe_snk_in_epr_mode_called;
+static bool pe_snk_epr_explicit_exit_called;
 static bool pd_get_dual_role_called;
 static bool board_get_usb_pd_port_count_called;
 static bool pd_srccaps_dump_called;
@@ -43,12 +47,14 @@ static enum pd_dpm_request request;
 static int max_volt;
 static int comm_enable;
 static int pd_suspended;
+static int pd_bistsharemode;
 static int dev_info;
 static int vdm_cmd;
 static int vdm_count;
 static int vdm_vid;
 static uint32_t vdm_data[10];
 static enum pd_dual_role_states dr_state;
+static enum pd_power_role pd_get_power_role_return = PD_ROLE_SINK;
 
 /* Mock functions */
 int tc_is_vconn_src(int port)
@@ -60,13 +66,30 @@ int tc_is_vconn_src(int port)
 enum pd_power_role pd_get_power_role(int port)
 {
 	pd_get_power_role_called = true;
-	return 0;
+	return pd_get_power_role_return;
 }
 
 uint32_t pe_get_flags(int port)
 {
 	pe_get_flags_called = true;
 	return 0;
+}
+
+int pe_is_explicit_contract(int port)
+{
+	pe_is_explicit_contract_called = true;
+	return 1;
+}
+
+bool pe_snk_in_epr_mode(int port)
+{
+	pe_snk_in_epr_mode_called = true;
+	return true;
+}
+
+void pe_snk_epr_explicit_exit(int port)
+{
+	pe_snk_epr_explicit_exit_called = true;
 }
 
 const char *pe_get_current_state(int port)
@@ -89,6 +112,11 @@ void pd_timer_dump(int port)
 void pd_srccaps_dump(int port)
 {
 	pd_srccaps_dump_called = true;
+}
+
+void dpm_set_debug_level(enum debug_level level)
+{
+	dpm_debug_level = level;
 }
 
 void prl_set_debug_level(enum debug_level level)
@@ -186,6 +214,12 @@ void pd_set_suspend(int port, int enable)
 	pd_suspended = enable;
 }
 
+enum ec_status pd_set_bist_share_mode(uint8_t enable)
+{
+	pd_bistsharemode = enable;
+	return EC_RES_SUCCESS;
+}
+
 void tc_print_dev_info(int port)
 {
 	test_port = port;
@@ -266,6 +300,7 @@ static int test_command_pd_dump(void)
 		sprintf(test, "%d", i);
 		argv[2] = test;
 		TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+		TEST_ASSERT(dpm_debug_level == i);
 		TEST_ASSERT(prl_debug_level == i);
 		TEST_ASSERT(pe_debug_level == i);
 		TEST_ASSERT(tc_debug_level == i);
@@ -273,6 +308,7 @@ static int test_command_pd_dump(void)
 
 	sprintf(test, "%d", DEBUG_LEVEL_MAX + 1);
 	argv[2] = test;
+	TEST_ASSERT(dpm_debug_level == DEBUG_LEVEL_MAX);
 	TEST_ASSERT(prl_debug_level == DEBUG_LEVEL_MAX);
 	TEST_ASSERT(pe_debug_level == DEBUG_LEVEL_MAX);
 	TEST_ASSERT(tc_debug_level == DEBUG_LEVEL_MAX);
@@ -306,6 +342,30 @@ static int test_command_pd_version(void)
 	const char *argv[] = { "pd", "version", 0, 0, 0 };
 
 	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+
+	return EC_SUCCESS;
+}
+
+static int test_command_pd_bistsharemode_enable(void)
+{
+	int argc = 3;
+	static const char *argv[10] = { "pd", "bistsharemode", "enable" };
+
+	pd_bistsharemode = -1;
+	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+	TEST_ASSERT(pd_bistsharemode == 1);
+
+	return EC_SUCCESS;
+}
+
+static int test_command_pd_bistsharemode_disable(void)
+{
+	int argc = 3;
+	static const char *argv[10] = { "pd", "bistsharemode", "disable" };
+
+	pd_bistsharemode = -1;
+	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+	TEST_ASSERT(pd_bistsharemode == 0);
 
 	return EC_SUCCESS;
 }
@@ -621,6 +681,8 @@ static int test_command_pd_state(void)
 	tc_get_flags_called = false;
 	pe_get_current_state_called = false;
 	pe_get_flags_called = false;
+	pe_is_explicit_contract_called = true;
+	pe_snk_in_epr_mode_called = true;
 
 	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
 	TEST_ASSERT(pd_get_polarity_called);
@@ -632,6 +694,8 @@ static int test_command_pd_state(void)
 	TEST_ASSERT(tc_get_flags_called);
 	TEST_ASSERT(pe_get_current_state_called);
 	TEST_ASSERT(pe_get_flags_called);
+	TEST_ASSERT(pe_is_explicit_contract_called);
+	TEST_ASSERT(pe_snk_in_epr_mode_called);
 
 	return EC_SUCCESS;
 }
@@ -644,6 +708,50 @@ static int test_command_pd_srccaps(void)
 	pd_srccaps_dump_called = false;
 	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
 	TEST_ASSERT(pd_srccaps_dump_called);
+
+	return EC_SUCCESS;
+}
+
+static int test_command_pd_epr(void)
+{
+	int argc = 4;
+	const char *argv[] = { "pd", "0", "epr", "enter" };
+
+	/* Return EC_ERROR_PARAM_COUNT if argc < 3. */
+	TEST_ASSERT(command_pd(3, argv) == EC_ERROR_PARAM_COUNT);
+
+	/* Return SUCCESS with request==0 if role==PD_ROLE_SOURCE. */
+	request = 0;
+	pd_get_power_role_called = false;
+	pd_get_power_role_return = PD_ROLE_SOURCE;
+	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+	TEST_ASSERT(pd_get_power_role_called);
+	TEST_ASSERT(request == 0);
+
+	/* Return SUCCESS with request==DPM_REQUEST_EPR_MODE_ENTRY. */
+	request = 0;
+	pd_get_power_role_called = false;
+	pd_get_power_role_return = PD_ROLE_SINK;
+	pe_snk_epr_explicit_exit_called = false;
+	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+	TEST_ASSERT(pd_get_power_role_called);
+	TEST_ASSERT(request == DPM_REQUEST_EPR_MODE_ENTRY);
+	TEST_ASSERT(!pe_snk_epr_explicit_exit_called);
+
+	/* Return SUCCESS with request==DPM_REQUEST_EPR_MODE_EXIT. */
+	argv[3] = "exit";
+	request = 0;
+	pd_get_power_role_called = false;
+	pd_get_power_role_return = PD_ROLE_SINK;
+	pe_snk_epr_explicit_exit_called = false;
+	TEST_ASSERT(command_pd(argc, argv) == EC_SUCCESS);
+	TEST_ASSERT(pd_get_power_role_called);
+	TEST_ASSERT(request == DPM_REQUEST_EPR_MODE_EXIT);
+	TEST_ASSERT(pe_snk_epr_explicit_exit_called);
+
+	/* Return EC_ERROR_PARAM3 for invalid sub-command. */
+	argv[3] = "start";
+	TEST_ASSERT(command_pd(argc, argv) == EC_ERROR_PARAM3);
 
 	return EC_SUCCESS;
 }
@@ -679,6 +787,8 @@ void run_test(int argc, const char **argv)
 	RUN_TEST(test_command_pd_soft);
 	RUN_TEST(test_command_pd_suspend);
 	RUN_TEST(test_command_pd_resume);
+	RUN_TEST(test_command_pd_bistsharemode_enable);
+	RUN_TEST(test_command_pd_bistsharemode_disable);
 	RUN_TEST(test_command_pd_swap1);
 	RUN_TEST(test_command_pd_swap2);
 	RUN_TEST(test_command_pd_swap3);
@@ -690,6 +800,7 @@ void run_test(int argc, const char **argv)
 	RUN_TEST(test_command_pd_dualrole3);
 	RUN_TEST(test_command_pd_dualrole4);
 	RUN_TEST(test_command_pd_dualrole5);
+	RUN_TEST(test_command_pd_epr);
 	RUN_TEST(test_command_pd_state);
 	RUN_TEST(test_command_pd_srccaps);
 	RUN_TEST(test_command_pd_timer);

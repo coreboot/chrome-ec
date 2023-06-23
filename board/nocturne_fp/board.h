@@ -91,7 +91,7 @@
 /* Optional features */
 #undef CONFIG_ADC
 #define CONFIG_CMD_IDLE_STATS
-#define CONFIG_DMA
+#define CONFIG_DMA_CROS
 #define CONFIG_FORCE_CONSOLE_RESUME
 #define CONFIG_FPU
 /*
@@ -110,7 +110,6 @@
 #define CONFIG_SHA256
 #define CONFIG_SHA256_UNROLLED
 #define CONFIG_SPI
-#define CONFIG_STM_HWTIMER32
 #undef CONFIG_TASK_PROFILING
 #define CONFIG_WATCHDOG_HELP
 #define CONFIG_WP_ACTIVE_HIGH
@@ -156,6 +155,7 @@
 /* SPI configuration for the fingerprint sensor */
 #define CONFIG_SPI_CONTROLLER
 #define CONFIG_SPI_FP_PORT 2 /* SPI4: third master config */
+#define CONFIG_SPI_MUTABLE_DEVICE_LIST
 
 #define CONFIG_FINGERPRINT_MCU
 #ifdef SECTION_IS_RW
@@ -202,8 +202,7 @@
 #undef CONFIG_ROLLBACK_UPDATE
 #endif
 
-#define CONFIG_AES
-#define CONFIG_AES_GCM
+#define CONFIG_BORINGSSL_CRYPTO
 
 #define CONFIG_RNG
 
@@ -227,8 +226,8 @@
 #define TIM_CLOCK32 2
 #define TIM_WATCHDOG 16
 
-#include "gpio_signal.h"
 #include "board_rw.h"
+#include "gpio_signal.h"
 
 void slp_event(enum gpio_signal signal);
 

@@ -17,9 +17,9 @@
 #include "ec_commands.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "host_command.h"
 #include "mkbp_event.h"
 #include "stdbool.h"
-#include "host_command.h"
 #include "system.h"
 #include "task.h"
 #include "typec_control.h"
@@ -27,13 +27,19 @@
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
-#include "usb_pd_dpm.h"
+#include "usb_pd_dpm_sm.h"
 #include "usb_pd_flags.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pe_sm.h"
 #include "usbc_ocp.h"
 #include "usbc_ppc.h"
 #include "util.h"
+
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 43
 
 #ifdef CONFIG_COMMON_RUNTIME
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
@@ -51,90 +57,9 @@
  */
 #define MIN_BATTERY_FOR_PD_UPGRADE_PERCENT 10 /* % */
 
-#if defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH)
-int hex8tou32(char *str, uint32_t *val)
-{
-	char *ptr = str;
-	uint32_t tmp = 0;
-
-	while (*ptr) {
-		char c = *ptr++;
-
-		if (c >= '0' && c <= '9')
-			tmp = (tmp << 4) + (c - '0');
-		else if (c >= 'A' && c <= 'F')
-			tmp = (tmp << 4) + (c - 'A' + 10);
-		else if (c >= 'a' && c <= 'f')
-			tmp = (tmp << 4) + (c - 'a' + 10);
-		else
-			return EC_ERROR_INVAL;
-	}
-	if (ptr != str + 8)
-		return EC_ERROR_INVAL;
-	*val = tmp;
-	return EC_SUCCESS;
-}
-
-int remote_flashing(int argc, char **argv)
-{
-	int port, cnt, cmd;
-	uint32_t data[VDO_MAX_SIZE - 1];
-	char *e;
-	static int flash_offset[CONFIG_USB_PD_PORT_MAX_COUNT];
-
-	if (argc < 4 || argc > (VDO_MAX_SIZE + 4 - 1))
-		return EC_ERROR_PARAM_COUNT;
-
-	port = strtoi(argv[1], &e, 10);
-	if (*e || port >= board_get_usb_pd_port_count())
-		return EC_ERROR_PARAM2;
-
-	cnt = 0;
-	if (!strcasecmp(argv[3], "erase")) {
-		cmd = VDO_CMD_FLASH_ERASE;
-		flash_offset[port] = 0;
-		ccprintf("ERASE ...");
-	} else if (!strcasecmp(argv[3], "reboot")) {
-		cmd = VDO_CMD_REBOOT;
-		ccprintf("REBOOT ...");
-	} else if (!strcasecmp(argv[3], "signature")) {
-		cmd = VDO_CMD_ERASE_SIG;
-		ccprintf("ERASE SIG ...");
-	} else if (!strcasecmp(argv[3], "info")) {
-		cmd = VDO_CMD_READ_INFO;
-		ccprintf("INFO...");
-	} else if (!strcasecmp(argv[3], "version")) {
-		cmd = VDO_CMD_VERSION;
-		ccprintf("VERSION...");
-	} else {
-		int i;
-
-		argc -= 3;
-		for (i = 0; i < argc; i++)
-			if (hex8tou32(argv[i + 3], data + i))
-				return EC_ERROR_INVAL;
-		cmd = VDO_CMD_FLASH_WRITE;
-		cnt = argc;
-		ccprintf("WRITE %d @%04x ...", argc * 4, flash_offset[port]);
-		flash_offset[port] += argc * 4;
-	}
-
-	pd_send_vdm(port, USB_VID_GOOGLE, cmd, data, cnt);
-
-	/* Wait until VDM is done */
-	while (pd[port].vdm_state > 0)
-		task_wait_event(100 * MSEC);
-
-	ccprintf("DONE %d\n", pd[port].vdm_state);
-	return EC_SUCCESS;
-}
-#endif /* defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH) */
-
 #ifdef CONFIG_COMMON_RUNTIME
 struct ec_params_usb_pd_rw_hash_entry rw_hash_table[RW_HASH_ENTRIES];
 #endif /* CONFIG_COMMON_RUNTIME */
-
-static __maybe_unused atomic_t pd_host_event_status __aligned(4);
 
 bool pd_firmware_upgrade_check_power_readiness(int port)
 {
@@ -279,18 +204,6 @@ enum pd_cc_states pd_get_cc_state(enum tcpc_cc_voltage_status cc1,
 	return PD_CC_NONE;
 }
 
-/**
- * This function checks the current CC status of the port partner
- * and returns true if the attached partner is debug accessory.
- */
-bool pd_is_debug_acc(int port)
-{
-	enum pd_cc_states cc_state = pd_get_task_cc_state(port);
-
-	return cc_state == PD_CC_UFP_DEBUG_ACC ||
-	       cc_state == PD_CC_DFP_DEBUG_ACC;
-}
-
 __overridable int pd_board_check_request(uint32_t rdo, int pdo_cnt)
 {
 	return EC_SUCCESS;
@@ -389,7 +302,7 @@ enum pd_drp_next_states drp_auto_toggle_next_state(
 		((drp_state == PD_DRP_TOGGLE_ON) && auto_toggle_supported);
 
 	/* Set to appropriate port state */
-	if (cc_is_open(cc1, cc2)) {
+	if (cc_is_open(cc1, cc2) || cc_is_pwred_cbl_without_snk(cc1, cc2)) {
 		/*
 		 * If nothing is attached then use drp_state to determine next
 		 * state. If DRP auto toggle is still on, then remain in the
@@ -478,7 +391,7 @@ mux_state_t get_mux_mode_to_set(int port)
 	 * If the SoC is down, then we disconnect the MUX to save power since
 	 * no one cares about the data lines.
 	 */
-	if (IS_ENABLED(CONFIG_POWER_COMMON) &&
+	if (IS_ENABLED(CONFIG_AP_POWER_CONTROL) &&
 	    chipset_in_or_transitioning_to_state(CHIPSET_STATE_ANY_OFF))
 		return USB_PD_MUX_NONE;
 
@@ -618,6 +531,16 @@ __overridable int pd_check_data_swap(int port, enum pd_data_role data_role)
 
 __overridable int pd_check_power_swap(int port)
 {
+#ifdef CONFIG_CHARGE_MANAGER
+	/*
+	 * If the Type-C port is our active charge port and we don't have a
+	 * battery, don't allow power role swap (to source).
+	 */
+	if (!IS_ENABLED(CONFIG_BATTERY) &&
+	    port == charge_manager_get_active_charge_port())
+		return 0;
+#endif
+
 	/*
 	 * Allow power swap if we are acting as a dual role device.  If we are
 	 * not acting as dual role (ex. suspended), then only allow power swap
@@ -668,75 +591,6 @@ __overridable void pd_transition_voltage(int idx)
 	/* Most devices are fixed 5V output. */
 }
 
-/* ----------------- Vendor Defined Messages ------------------ */
-#if defined(CONFIG_USB_PE_SM) && !defined(CONFIG_USB_VPD) && \
-	!defined(CONFIG_USB_CTVPD)
-__overridable int pd_custom_vdm(int port, int cnt, uint32_t *payload,
-				uint32_t **rpayload)
-{
-	int cmd = PD_VDO_CMD(payload[0]);
-	uint16_t dev_id = 0;
-	int is_rw, is_latest;
-
-	/* make sure we have some payload */
-	if (cnt == 0)
-		return 0;
-
-	/* Only handle custom requests for SVID Google */
-	if (PD_VDO_VID(*payload) != USB_VID_GOOGLE)
-		return 0;
-
-	switch (cmd) {
-	case VDO_CMD_VERSION:
-		/* guarantee last byte of payload is null character */
-		*(payload + cnt - 1) = 0;
-		CPRINTF("version: %s\n", (char *)(payload + 1));
-		break;
-	case VDO_CMD_READ_INFO:
-	case VDO_CMD_SEND_INFO:
-		/* copy hash */
-		if (cnt == 7) {
-			dev_id = VDO_INFO_HW_DEV_ID(payload[6]);
-			is_rw = VDO_INFO_IS_RW(payload[6]);
-
-			is_latest = pd_dev_store_rw_hash(
-				port, dev_id, payload + 1,
-				is_rw ? EC_IMAGE_RW : EC_IMAGE_RO);
-
-			/*
-			 * Send update host event unless our RW hash is
-			 * already known to be the latest update RW.
-			 */
-			if (!is_rw || !is_latest)
-				pd_send_host_event(PD_EVENT_UPDATE_DEVICE);
-
-			CPRINTF("DevId:%d.%d SW:%d RW:%d\n",
-				HW_DEV_ID_MAJ(dev_id), HW_DEV_ID_MIN(dev_id),
-				VDO_INFO_SW_DBG_VER(payload[6]), is_rw);
-		} else if (cnt == 6) {
-			/* really old devices don't have last byte */
-			pd_dev_store_rw_hash(port, dev_id, payload + 1,
-					     EC_IMAGE_UNKNOWN);
-		}
-		break;
-	case VDO_CMD_CURRENT:
-		CPRINTF("Current: %dmA\n", payload[1]);
-		break;
-	case VDO_CMD_FLIP:
-		if (IS_ENABLED(CONFIG_USBC_SS_MUX))
-			usb_mux_flip(port);
-		break;
-#ifdef CONFIG_USB_PD_LOGGING
-	case VDO_CMD_GET_LOG:
-		pd_log_recv_vdm(port, cnt, payload);
-		break;
-#endif /* CONFIG_USB_PD_LOGGING */
-	}
-
-	return 0;
-}
-#endif /* CONFIG_USB_PE_SM && !CONFIG_USB_VPD && !CONFIG_USB_CTVPD */
-
 __overridable bool vboot_allow_usb_pd(void)
 {
 	return false;
@@ -784,15 +638,17 @@ void pd_set_vbus_discharge(int port, int enable)
 	static mutex_t discharge_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
 #ifdef CONFIG_ZEPHYR
 	static bool inited[CONFIG_USB_PD_PORT_MAX_COUNT];
+#endif
 
+	if (port >= board_get_usb_pd_port_count())
+		return;
+
+#ifdef CONFIG_ZEPHYR
 	if (!inited[port]) {
 		(void)k_mutex_init(&discharge_lock[port]);
 		inited[port] = true;
 	}
 #endif
-	if (port >= board_get_usb_pd_port_count())
-		return;
-
 	mutex_lock(&discharge_lock[port]);
 	enable &= !board_vbus_source_enabled(port);
 
@@ -950,7 +806,7 @@ void pd_srccaps_dump(int port)
 #else
 		const uint32_t pdo = srccaps[i];
 		const uint32_t pdo_mask = pdo & PDO_TYPE_MASK;
-		const char *pdo_type;
+		const char *pdo_type = "?";
 		bool range_flag = true;
 
 		pd_extract_pdo_power(pdo, &max_ma, &max_mv, &min_mv);
@@ -972,9 +828,6 @@ void pd_srccaps_dump(int port)
 				pdo_type = "Aug3.0";
 				range_flag = false;
 			}
-			break;
-		default:
-			pdo_type = "?";
 			break;
 		}
 
@@ -1029,7 +882,7 @@ int pd_send_alert_msg(int port, uint32_t ado)
 	 * ADO before sending to a USB PD 3.0 partner and block the
 	 * message if the ADO is empty.
 	 */
-	partner_rmdo = pe_get_partner_rmdo(port);
+	partner_rmdo = pd_get_partner_rmdo(port);
 	if (partner_rmdo.major_rev == 0) {
 		ado &= ~(ADO_EXTENDED_ALERT_EVENT |
 			 ADO_EXTENDED_ALERT_EVENT_TYPE);
@@ -1047,19 +900,6 @@ int pd_send_alert_msg(int port, uint32_t ado)
 	return EC_ERROR_INVALID_CONFIG;
 #endif
 }
-
-#if defined(HAS_TASK_HOSTCMD) && !defined(TEST_BUILD)
-void pd_send_host_event(int mask)
-{
-	/* mask must be set */
-	if (!mask)
-		return;
-
-	atomic_or(&pd_host_event_status, mask);
-	/* interrupt the AP */
-	host_set_single_event(EC_HOST_EVENT_PD_MCU);
-}
-#endif /* defined(HAS_TASK_HOSTCMD) && !defined(TEST_BUILD) */
 
 #ifdef CONFIG_MKBP_EVENT
 static int dp_alt_mode_entry_get_next_event(uint8_t *data)

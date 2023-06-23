@@ -53,15 +53,15 @@ __override_proto int bb_retimer_power_enable(const struct usb_mux *me,
  * @param[out] ack_required	Outputs whether the given change will require
  *				the AP to ACK before proceeding
  */
-void bb_retimer_hpd_update(const struct usb_mux *me, mux_state_t mux_state,
+void bb_retimer_hpd_update(const struct usb_mux *me, mux_state_t hpd_state,
 			   bool *ack_required);
 
 /**
- * Enable/disable the USB3 state of BB retimer
+ * Enable/disable the DP state of BB retimer
  *
  * @param me     Pointer to USB mux
- * @param enable BB retimer USB3 state to be changed
+ * @param enable BB retimer DP state to be changed
  */
-void bb_retimer_set_usb3(const struct usb_mux *me, bool enable);
+int bb_retimer_set_dp_connection(const struct usb_mux *me, bool enable);
 
 #endif /* __CROS_EC_DRIVER_RETIMER_BB_RETIMER_PUBLIC_H */

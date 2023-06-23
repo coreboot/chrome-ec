@@ -3,16 +3,15 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/device.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/kernel.h>
-#include <zephyr/shell/shell.h>
-
-#include <zephyr/logging/log.h>
-
 #include "gpio/gpio.h"
 #include "soc_gpio.h"
 #include "util.h"
+
+#include <zephyr/device.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/shell/shell.h>
 
 LOG_MODULE_REGISTER(shim_cros_gpio, LOG_LEVEL_ERR);
 
@@ -57,6 +56,13 @@ int gpio_config_unused_pins(void)
 	return 0;
 }
 
+int gpio_configure_port_pin(int port, int id, int flags)
+{
+	const struct device *dev = npcx_get_gpio_dev(port);
+
+	return gpio_pin_configure(dev, id, flags);
+}
+
 #ifdef CONFIG_PLATFORM_EC_CONSOLE_CMD_GPIODBG
 /*
  * IO information about each GPIO that is configured in the `named_gpios` and
@@ -97,11 +103,11 @@ struct npcx_io_info {
 	COND_CODE_1(DT_NODE_HAS_PROP(node, gpios), (NAMED_GPIO_INFO(node)), ())
 
 static struct npcx_io_info gpio_info[] = {
-#if DT_NODE_EXISTS(DT_PATH(named_gpios))
-	DT_FOREACH_CHILD(DT_PATH(named_gpios), NAMED_GPIO_INIT)
+#if DT_NODE_EXISTS(NAMED_GPIOS_NODE)
+	DT_FOREACH_CHILD(NAMED_GPIOS_NODE, NAMED_GPIO_INIT)
 #endif
-#if DT_NODE_EXISTS(DT_PATH(unused_pins))
-		DT_FOREACH_PROP_ELEM(DT_PATH(unused_pins), unused_gpios,
+#if DT_NODE_EXISTS(UNUSED_GPIOS_NODE)
+		DT_FOREACH_PROP_ELEM(UNUSED_GPIOS_NODE, unused_gpios,
 				     UNUSED_GPIO_INFO)
 #endif
 };
@@ -194,4 +200,5 @@ SHELL_CMD_ARG_REGISTER(gpiodbg, &sub_gpiodbg,
 		       "Commands for power consumption "
 		       "investigation",
 		       NULL, 2, 0);
+
 #endif /* CONFIG_PLATFORM_EC_CONSOLE_CMD_GPIODBG */

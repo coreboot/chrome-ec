@@ -3,9 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include <stdint.h>
-#include <zephyr/ztest.h>
-
 #include "battery_smart.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
@@ -15,6 +12,10 @@
 #include "test/drivers/utils.h"
 #include "timer.h"
 #include "usb_pd.h"
+
+#include <stdint.h>
+
+#include <zephyr/ztest.h>
 
 struct usb_attach_5v_3a_pd_sink_fixture {
 	struct tcpci_partner_data sink_5v_3a;
@@ -77,7 +78,7 @@ ZTEST_SUITE(usb_attach_5v_3a_pd_sink, drivers_predicate_post_main,
 
 ZTEST_F(usb_attach_5v_3a_pd_sink, test_partner_pd_completed)
 {
-	zassert_true(fixture->snk_ext.pd_completed, NULL);
+	zassert_true(fixture->snk_ext.pd_completed);
 }
 
 ZTEST(usb_attach_5v_3a_pd_sink, test_battery_is_discharging)
@@ -85,9 +86,8 @@ ZTEST(usb_attach_5v_3a_pd_sink, test_battery_is_discharging)
 	const struct emul *emul = EMUL_DT_GET(DT_NODELABEL(battery));
 	uint16_t battery_status;
 
-	zassume_ok(sbat_emul_get_word_val(emul, SB_BATTERY_STATUS,
-					  &battery_status),
-		   NULL);
+	zassert_ok(sbat_emul_get_word_val(emul, SB_BATTERY_STATUS,
+					  &battery_status));
 	zassert_equal(battery_status & STATUS_DISCHARGING, STATUS_DISCHARGING,
 		      "Battery is not discharging: %d", battery_status);
 }
@@ -142,28 +142,27 @@ ZTEST_F(usb_attach_5v_3a_pd_sink, test_disconnect_battery_discharging)
 
 	disconnect_sink_from_port(fixture->tcpci_emul);
 	zassert_ok(sbat_emul_get_word_val(emul, SB_BATTERY_STATUS,
-					  &battery_status),
-		   NULL);
+					  &battery_status));
 	zassert_equal(battery_status & STATUS_DISCHARGING, STATUS_DISCHARGING,
 		      "Battery is not discharging: %d", battery_status);
 }
 
 ZTEST_F(usb_attach_5v_3a_pd_sink, test_disconnect_charge_state)
 {
-	struct ec_response_charge_state charge_state;
+	struct ec_response_charge_state state;
 
 	disconnect_sink_from_port(fixture->tcpci_emul);
-	charge_state = host_cmd_charge_state(0);
+	state = host_cmd_charge_state(0);
 
-	zassert_false(charge_state.get_state.ac, "AC_OK not triggered");
-	zassert_equal(charge_state.get_state.chg_current, 0,
+	zassert_false(state.get_state.ac, "AC_OK not triggered");
+	zassert_equal(state.get_state.chg_current, 0,
 		      "Max charge current expected 0mA, but was %dmA",
-		      charge_state.get_state.chg_current);
-	zassert_equal(charge_state.get_state.chg_input_current,
-		      CONFIG_PLATFORM_EC_CHARGER_INPUT_CURRENT,
+		      state.get_state.chg_current);
+	zassert_equal(state.get_state.chg_input_current,
+		      CONFIG_PLATFORM_EC_CHARGER_DEFAULT_CURRENT_LIMIT,
 		      "Charge input current limit expected %dmA, but was %dmA",
-		      CONFIG_PLATFORM_EC_CHARGER_INPUT_CURRENT,
-		      charge_state.get_state.chg_input_current);
+		      CONFIG_PLATFORM_EC_CHARGER_DEFAULT_CURRENT_LIMIT,
+		      state.get_state.chg_input_current);
 }
 
 ZTEST_F(usb_attach_5v_3a_pd_sink, test_disconnect_typec_status)
@@ -173,9 +172,9 @@ ZTEST_F(usb_attach_5v_3a_pd_sink, test_disconnect_typec_status)
 	disconnect_sink_from_port(fixture->tcpci_emul);
 	typec_status = host_cmd_typec_status(0);
 
-	zassert_false(typec_status.pd_enabled, NULL);
-	zassert_false(typec_status.dev_connected, NULL);
-	zassert_false(typec_status.sop_connected, NULL);
+	zassert_false(typec_status.pd_enabled);
+	zassert_false(typec_status.dev_connected);
+	zassert_false(typec_status.sop_connected);
 	zassert_equal(typec_status.source_cap_count, 0,
 		      "Expected 0 source caps, but got %d",
 		      typec_status.source_cap_count);
@@ -225,12 +224,12 @@ ZTEST_F(usb_attach_5v_3a_pd_sink, test_disconnect_power_info)
  * Expected Results
  *  - Sink completes Goto Min PD negotiation
  */
-ZTEST_F(usb_attach_5v_3a_pd_sink, verify_goto_min)
+ZTEST_F(usb_attach_5v_3a_pd_sink, test_verify_goto_min)
 {
 	pd_dpm_request(0, DPM_REQUEST_GOTO_MIN);
 	k_sleep(K_SECONDS(1));
 
-	zassert_true(fixture->snk_ext.pd_completed, NULL);
+	zassert_true(fixture->snk_ext.pd_completed);
 }
 
 /**
@@ -244,12 +243,12 @@ ZTEST_F(usb_attach_5v_3a_pd_sink, verify_goto_min)
  * Expected Results
  *  - Sink received ping message
  */
-ZTEST_F(usb_attach_5v_3a_pd_sink, verify_ping_msg)
+ZTEST_F(usb_attach_5v_3a_pd_sink, test_verify_ping_msg)
 {
 	tcpci_snk_emul_clear_ping_received(&fixture->snk_ext);
 
 	pd_dpm_request(0, DPM_REQUEST_SEND_PING);
 	k_sleep(K_USEC(PD_T_SOURCE_ACTIVITY));
 
-	zassert_true(fixture->snk_ext.ping_received, NULL);
+	zassert_true(fixture->snk_ext.ping_received);
 }

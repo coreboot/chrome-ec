@@ -3,19 +3,21 @@
  * found in the LICENSE file.
  */
 
-#include "common.h"
-#include "console.h"
 #include "accelgyro.h"
 #include "adc.h"
+#include "common.h"
+#include "console.h"
 #include "driver/accel_lis2dw12.h"
 #include "driver/accelgyro_bmi_common.h"
 #include "driver/accelgyro_lsm6dso.h"
+#include "fw_config.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "motion_sense.h"
+#include "tablet_mode.h"
 #include "temp_sensor.h"
-#include "thermal.h"
 #include "temp_sensor/thermistor.h"
+#include "thermal.h"
 
 /* ADC configuration */
 const struct adc_t adc_channels[] = {
@@ -209,9 +211,28 @@ static void board_update_motion_sensor_config(void)
 	} else {
 		ccprints("BASE IMU is LSM6DSO");
 	}
+
+	if (!board_is_convertible()) {
+		tablet_set_mode(0, TABLET_TRIGGER_LID);
+		gmr_tablet_switch_disable();
+		/* Make sure tablet mode detection is not trigger by mistake. */
+		gpio_set_flags(GPIO_TABLET_MODE_L, GPIO_INPUT | GPIO_PULL_UP);
+		/*
+		 * Make sure we don't even try to initialize the lid accel, it
+		 * is not present.
+		 */
+		motion_sensors[LID_ACCEL].active_mask = 0;
+		gpio_set_flags(GPIO_EC_ACCEL_INT_R_L,
+			       GPIO_INPUT | GPIO_PULL_UP);
+	}
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, board_update_motion_sensor_config,
 	     HOOK_PRIO_INIT_I2C + 1);
+
+__override int sensor_board_is_lid_angle_available(void)
+{
+	return board_is_convertible();
+}
 
 static void baseboard_sensors_init(void)
 {
@@ -260,27 +281,51 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 		.temp_host_release = { \
 			[EC_TEMP_THRESH_HIGH] = C_TO_K(77), \
 		}, \
-		.temp_fan_off = C_TO_K(30), \
-		.temp_fan_max = C_TO_K(47), \
+		.temp_fan_off = C_TO_K(24), \
+		.temp_fan_max = C_TO_K(51), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
 
-#define THERMAL_DDR                                                     \
-	{                                                               \
-		.temp_fan_off = C_TO_K(56), .temp_fan_max = C_TO_K(59), \
+#define THERMAL_DDR              \
+	{                        \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(78), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(75), \
+		}, \
+		.temp_fan_off = C_TO_K(56), \
+		.temp_fan_max = C_TO_K(59), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_ddr = THERMAL_DDR;
 
-#define THERMAL_CHARGER                                                 \
-	{                                                               \
-		.temp_fan_off = C_TO_K(67), .temp_fan_max = C_TO_K(70), \
+#define THERMAL_CHARGER          \
+	{                        \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(86), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(89), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(86), \
+		}, \
+		.temp_fan_off = C_TO_K(67), \
+		.temp_fan_max = C_TO_K(70), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_charger =
 	THERMAL_CHARGER;
 
-#define THERMAL_AMBIENT                                                 \
-	{                                                               \
-		.temp_fan_off = C_TO_K(38), .temp_fan_max = C_TO_K(45), \
+#define THERMAL_AMBIENT          \
+	{                        \
+		.temp_host = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(57), \
+			[EC_TEMP_THRESH_HALT] = C_TO_K(60), \
+		}, \
+		.temp_host_release = { \
+			[EC_TEMP_THRESH_HIGH] = C_TO_K(57), \
+		}, \
+		.temp_fan_off = C_TO_K(38), \
+		.temp_fan_max = C_TO_K(45), \
 	}
 __maybe_unused static const struct ec_thermal_config thermal_ambient =
 	THERMAL_AMBIENT;

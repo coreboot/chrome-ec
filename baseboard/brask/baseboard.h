@@ -96,6 +96,8 @@
 #define CONFIG_POWER_BUTTON_IGNORE_LID
 #define CONFIG_POWER_BUTTON_INIT_IDLE
 #define CONFIG_POWER_BUTTON_X86
+#undef CONFIG_BUTTON_DEBOUNCE
+#define CONFIG_BUTTON_DEBOUNCE (100 * MSEC)
 
 /* Matrix Keyboard Protocol */
 #define CONFIG_MKBP_EVENT
@@ -187,12 +189,12 @@
 
 #ifndef __ASSEMBLER__
 
+#include "baseboard_usbc_config.h"
+#include "common.h"
+#include "extpower.h"
+
 #include <stdbool.h>
 #include <stdint.h>
-
-#include "common.h"
-#include "baseboard_usbc_config.h"
-#include "extpower.h"
 
 /*
  * Configure run-time data structures and operation based on CBI data. This

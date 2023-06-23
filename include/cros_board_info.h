@@ -21,6 +21,8 @@
 #define CBI_IMAGE_SIZE               \
 	(sizeof(struct cbi_header) + \
 	 (2 * (sizeof(struct cbi_data) + sizeof(uint32_t))))
+#elif defined(CONFIG_CBI_FLASH)
+#define CBI_IMAGE_SIZE DT_PROP(DT_NODELABEL(cbi_flash), size)
 #else
 #define CBI_IMAGE_SIZE 256
 #endif
@@ -60,7 +62,8 @@ enum cbi_cache_status {
 
 enum cbi_storage_type {
 	CBI_STORAGE_TYPE_EEPROM = 0,
-	CBI_STORAGE_TYPE_GPIO = 1
+	CBI_STORAGE_TYPE_GPIO = 1,
+	CBI_STORAGE_TYPE_FLASH = 2,
 };
 
 /*
@@ -203,6 +206,20 @@ int cbi_board_override(enum cbi_data_tag tag, uint8_t *buf, uint8_t *size);
  *         EC_ERROR_UNKNOWN to indicate that the write operation failed
  */
 int cbi_set_fw_config(uint32_t fw_config);
+
+/**
+ * Set and update SSFC tag field
+ *
+ * This function is only included when CONFIG_AP_POWER_CONTROL is disabled. It
+ * is intended to be used for projects which want CBI functions, but do not
+ * have an AP and ectool host command access.
+ *
+ * @param ssfc	updated value for SSFC tag
+ * @return EC_SUCCESS to indicate the field was written correctly.
+ *         EC_ERROR_ACCESS_DENIED to indicate WP is active
+ *         EC_ERROR_UNKNOWN to indicate that the write operation failed
+ */
+int cbi_set_ssfc(uint32_t ssfc);
 
 /**
  * Initialize CBI cache

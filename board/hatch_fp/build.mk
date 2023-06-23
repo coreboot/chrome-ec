@@ -26,36 +26,56 @@ endif
 # Do not build rsa test because this board uses RSA exponent 3 and the rsa test
 # will fail on device.
 test-list-y=\
+       abort \
        aes \
-       cec \
+       always_memset \
+       benchmark \
+       boringssl_crypto \
        compile_time_macros \
        cortexm_fpu \
        crc \
        debug \
+       exception \
        flash_physical \
        flash_write_protect \
        fpsensor \
+       fpsensor_auth_crypto_stateless \
        fpsensor_hw \
+       ftrapv \
+       global_initialization \
+       libc_printf \
+       libcxx \
+       malloc \
        mpu \
        mutex \
+       panic \
        panic_data \
        pingpong \
        printf \
        queue \
+       rng_benchmark \
        rollback \
        rollback_entropy \
        rsa3 \
        rtc \
+       sbrk \
        scratchpad \
        sha256 \
        sha256_unrolled \
        static_if \
        stdlib \
+       std_vector \
        stm32f_rtc \
        system_is_locked \
+       timer \
        timer_dos \
+       tpm_seed_clear \
        utils \
        utils_str \
+
+       # TODO(b/274162810): Re-enable test on bloonchipper when LTO is
+       # re-enabled.
+       #fpsensor_auth_crypto_stateful \
 
 # Note that this variable includes the trailing "/"
 _hatch_fp_cur_dir:=$(dir $(lastword $(MAKEFILE_LIST)))

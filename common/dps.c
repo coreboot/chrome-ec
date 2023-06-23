@@ -5,23 +5,24 @@
  * Dynamic PDO Selection.
  */
 
-#include <stdint.h>
-
-#include "dps.h"
 #include "atomic.h"
 #include "battery.h"
-#include "common.h"
-#include "console.h"
-#include "charger.h"
 #include "charge_manager.h"
 #include "charge_state.h"
+#include "charger.h"
+#include "common.h"
+#include "console.h"
+#include "dps.h"
 #include "ec_commands.h"
+#include "hooks.h"
 #include "math_util.h"
 #include "task.h"
 #include "timer.h"
 #include "usb_common.h"
 #include "usb_pd.h"
 #include "util.h"
+
+#include <stdint.h>
 
 #define K_MORE_PWR 96
 #define K_LESS_PWR 93
@@ -30,13 +31,8 @@
 #define T_REQUEST_STABLE_TIME (10 * SECOND)
 #define T_NEXT_CHECK_TIME (5 * SECOND)
 
-#define DPS_FLAG_DISABLED BIT(0)
-#define DPS_FLAG_NO_SRCCAP BIT(1)
-#define DPS_FLAG_WAITING BIT(2)
-#define DPS_FLAG_SAMPLED BIT(3)
-#define DPS_FLAG_NEED_MORE_PWR BIT(4)
-
-#define DPS_FLAG_STOP_EVENTS (DPS_FLAG_DISABLED | DPS_FLAG_NO_SRCCAP)
+#define DPS_FLAG_STOP_EVENTS \
+	(DPS_FLAG_DISABLED | DPS_FLAG_NO_SRCCAP | DPS_FLAG_NO_BATTERY)
 #define DPS_FLAG_ALL GENMASK(31, 0)
 
 #define MAX_MOVING_AVG_WINDOW 5
@@ -44,7 +40,7 @@
 BUILD_ASSERT(K_MORE_PWR > K_LESS_PWR && 100 >= K_MORE_PWR && 100 >= K_LESS_PWR);
 
 /* lock for updating timeout value */
-static mutex_t dps_lock;
+K_MUTEX_DEFINE(dps_lock);
 static timestamp_t timeout;
 static bool is_enabled = true;
 static int debug_level;
@@ -52,7 +48,7 @@ static bool fake_enabled;
 static int fake_mv, fake_ma;
 static int dynamic_mv;
 static int dps_port = CHARGE_PORT_NONE;
-static uint32_t flag;
+static atomic_t flag;
 
 #define CPRINTF(format, args...) cprintf(CC_USBPD, "DPS " format, ##args)
 #define CPRINTS(format, args...) cprints(CC_USBPD, "DPS " format, ##args)
@@ -173,7 +169,7 @@ bool is_more_efficient(int curr_mv, int prev_mv, int batt_mv, int batt_mw,
  *
  * @return input_power of the result of vbus * input_curr in mW
  */
-static int get_desired_input_power(int *vbus, int *input_current)
+test_mockable_static int get_desired_input_power(int *vbus, int *input_current)
 {
 	int active_port;
 	int charger_id;
@@ -201,7 +197,7 @@ static int get_desired_input_power(int *vbus, int *input_current)
 	return (*vbus) * (*input_current) / 1000;
 }
 
-static int get_battery_target_voltage(int *target_mv)
+test_mockable_static int get_battery_target_voltage(int *target_mv)
 {
 	int charger_id = charge_get_active_chg_chip();
 	int error = charger_get_voltage(charger_id, target_mv);
@@ -235,7 +231,7 @@ static int get_battery_target_voltage(int *target_mv)
  *
  * @return 0 if error occurs, else battery efficient voltage in mV
  */
-int get_efficient_voltage(void)
+test_mockable_static int get_efficient_voltage(void)
 {
 	int eff_mv = 0;
 	int batt_mv;
@@ -294,13 +290,20 @@ struct pdo_candidate {
 		return false;         \
 	} while (0)
 
+test_mockable_static int get_batt_charge_power(void)
+{
+	const struct batt_params *batt = charger_current_battery_params();
+
+	return batt->current * batt->voltage / 1000;
+}
+
 /*
  * Evaluate the system power if a new PD power request is needed.
  *
  * @param struct pdo_candidate: The candidate PDO. (Return value)
  * @return true if a new power request, or false otherwise.
  */
-__maybe_unused static bool has_new_power_request(struct pdo_candidate *cand)
+test_mockable_static bool has_new_power_request(struct pdo_candidate *cand)
 {
 	int vbus, input_curr, input_pwr;
 	int input_pwr_avg = 0, input_curr_avg = 0;
@@ -315,7 +318,6 @@ __maybe_unused static bool has_new_power_request(struct pdo_candidate *cand)
 	static int prev_active_port = CHARGE_PORT_NONE;
 	static int prev_req_mv;
 	static int moving_avg_count;
-	const struct batt_params *batt = charger_current_battery_params();
 
 	/* set a default value in case it early returns. */
 	UPDATE_CANDIDATE(CHARGE_PORT_NONE, INT32_MAX, 0);
@@ -339,7 +341,7 @@ __maybe_unused static bool has_new_power_request(struct pdo_candidate *cand)
 	prev_req_mv = req_mv;
 
 	req_pwr = req_mv * req_ma / 1000;
-	batt_pwr = batt->current * batt->voltage / 1000;
+	batt_pwr = get_batt_charge_power();
 	input_pwr = get_desired_input_power(&vbus, &input_curr);
 
 	if (!input_pwr)
@@ -370,18 +372,18 @@ __maybe_unused static bool has_new_power_request(struct pdo_candidate *cand)
 	 */
 	if (is_near_limit(input_pwr_avg, req_pwr) ||
 	    is_near_limit(input_curr_avg, MIN(req_ma, input_curr_limit))) {
-		flag |= DPS_FLAG_NEED_MORE_PWR;
+		atomic_or(&flag, DPS_FLAG_NEED_MORE_PWR);
 		if (!fake_enabled)
 			input_pwr_avg = req_pwr + 1;
 	} else {
-		flag &= ~DPS_FLAG_NEED_MORE_PWR;
+		atomic_clear_bits(&flag, DPS_FLAG_NEED_MORE_PWR);
 	}
 
 	if (debug_level)
 		CPRINTS("C%d 0x%x last (%dmW %dmV) input (%dmW %dmV %dmA) "
 			"avg (%dmW, %dmA)",
-			active_port, flag, req_pwr, req_mv, input_pwr, vbus,
-			input_curr, input_pwr_avg, input_curr_avg);
+			active_port, (int)flag, req_pwr, req_mv, input_pwr,
+			vbus, input_curr, input_pwr_avg, input_curr_avg);
 
 	for (int i = 0; i < board_get_usb_pd_port_count(); ++i) {
 		const uint32_t *const src_caps = pd_get_src_caps(i);
@@ -498,29 +500,34 @@ void dps_task(void *u)
 			dps_reset();
 			task_wait_event(-1);
 			/* clear flags after wake up. */
-			flag = 0;
+			atomic_clear(&flag);
 			update_timeout(dps_config.t_check);
 			continue;
 		} else if (now.val < timeout.val) {
-			flag |= DPS_FLAG_WAITING;
+			atomic_or(&flag, DPS_FLAG_WAITING);
 			task_wait_event(timeout.val - now.val);
-			flag &= ~DPS_FLAG_WAITING;
+			atomic_clear_bits(&flag, DPS_FLAG_WAITING);
 			continue;
 		}
 
 		if (!is_enabled) {
-			flag |= DPS_FLAG_DISABLED;
+			atomic_or(&flag, DPS_FLAG_DISABLED);
 			continue;
 		}
 
 		if (!has_srccap()) {
-			flag |= DPS_FLAG_NO_SRCCAP;
+			atomic_or(&flag, DPS_FLAG_NO_SRCCAP);
+			continue;
+		}
+
+		if (battery_is_present() != BP_YES) {
+			atomic_or(&flag, DPS_FLAG_NO_BATTERY);
 			continue;
 		}
 
 		if (!has_new_power_request(&curr_cand)) {
 			sample_count = 0;
-			flag &= ~DPS_FLAG_SAMPLED;
+			atomic_clear_bits(&flag, DPS_FLAG_SAMPLED);
 		} else {
 			if (last_cand.port == curr_cand.port &&
 			    last_cand.mv == curr_cand.mv &&
@@ -528,7 +535,7 @@ void dps_task(void *u)
 				sample_count++;
 			else
 				sample_count = 1;
-			flag |= DPS_FLAG_SAMPLED;
+			atomic_or(&flag, DPS_FLAG_SAMPLED);
 		}
 
 		if (sample_count == dps_config.k_sample) {
@@ -536,16 +543,27 @@ void dps_task(void *u)
 			dps_port = curr_cand.port;
 			pd_dpm_request(dps_port, DPM_REQUEST_NEW_POWER_LEVEL);
 			sample_count = 0;
-			flag &= ~(DPS_FLAG_SAMPLED | DPS_FLAG_NEED_MORE_PWR);
+			atomic_clear_bits(&flag, (DPS_FLAG_SAMPLED |
+						  DPS_FLAG_NEED_MORE_PWR));
 		}
 
 		last_cand.port = curr_cand.port;
 		last_cand.mv = curr_cand.mv;
 		last_cand.mw = curr_cand.mw;
-
 		update_timeout(dps_config.t_check);
 	}
 }
+
+void check_battery_present(void)
+{
+	const struct batt_params *batt = charger_current_battery_params();
+
+	if (batt->is_present == BP_YES && (flag & DPS_FLAG_NO_BATTERY)) {
+		atomic_clear_bits(&flag, DPS_FLAG_NO_BATTERY);
+		task_wake(TASK_ID_DPS);
+	}
+}
+DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, check_battery_present, HOOK_PRIO_DEFAULT);
 
 static int command_dps(int argc, const char **argv)
 {
@@ -558,8 +576,9 @@ static int command_dps(int argc, const char **argv)
 		int batt_mv;
 
 		ccprintf("flag=0x%x k_more=%d k_less=%d k_sample=%d k_win=%d\n",
-			 flag, dps_config.k_more_pwr, dps_config.k_less_pwr,
-			 dps_config.k_sample, dps_config.k_window);
+			 (int)flag, dps_config.k_more_pwr,
+			 dps_config.k_less_pwr, dps_config.k_sample,
+			 dps_config.k_window);
 		ccprintf("t_stable=%d t_check=%d\n",
 			 dps_config.t_stable / SECOND,
 			 dps_config.t_check / SECOND);
@@ -702,5 +721,9 @@ __test_only int dps_get_fake_ma(void)
 __test_only int *dps_get_debug_level(void)
 {
 	return &debug_level;
+}
+__test_only int dps_get_flag(void)
+{
+	return flag;
 }
 #endif /* TEST_BUILD */

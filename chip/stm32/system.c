@@ -265,15 +265,13 @@ DECLARE_IRQ(STM32_IRQ_PVD, pvd_interrupt, HOOK_PRIO_FIRST);
 
 void system_pre_init(void)
 {
-#ifdef CONFIG_SOFTWARE_PANIC
 	uint16_t reason, info;
 	uint8_t exception, panic_flags;
 	struct panic_data *pdata;
-#endif
 
 	/* enable clock on Power module */
 #ifndef CHIP_FAMILY_STM32H7
-#ifdef CHIP_FAMILY_STM32L4
+#if defined(CHIP_FAMILY_STM32L4) || defined(CHIP_FAMILY_STM32L5)
 	STM32_RCC_APB1ENR1 |= STM32_RCC_PWREN;
 #else
 	STM32_RCC_APB1ENR |= STM32_RCC_PWREN;
@@ -285,7 +283,7 @@ void system_pre_init(void)
 #elif defined(CHIP_FAMILY_STM32H7)
 	/* enable backup registers */
 	STM32_RCC_AHB4ENR |= BIT(28);
-#elif defined(CHIP_FAMILY_STM32L4)
+#elif defined(CHIP_FAMILY_STM32L4) || defined(CHIP_FAMILY_STM32L5)
 	/* enable RTC APB clock */
 	STM32_RCC_APB1ENR1 |= STM32_RCC_APB1ENR1_RTCAPBEN;
 #else
@@ -345,7 +343,6 @@ void system_pre_init(void)
 
 	check_reset_cause();
 
-#ifdef CONFIG_SOFTWARE_PANIC
 	/* Restore then clear saved panic reason */
 	reason = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_REASON);
 	info = bkpdata_read(BKPDATA_INDEX_SAVED_PANIC_INFO);
@@ -370,7 +367,6 @@ void system_pre_init(void)
 		pdata->flags = panic_flags;
 		bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_FLAGS, 0);
 	}
-#endif
 
 #ifdef CONFIG_PVD
 	configure_pvd();
@@ -421,7 +417,6 @@ void system_reset(int flags)
 #endif
 
 	if (flags & SYSTEM_RESET_HARD) {
-#ifdef CONFIG_SOFTWARE_PANIC
 		/* Panic data will be wiped by hard reset, so save it */
 		uint32_t reason, info;
 		uint8_t exception, panic_flags;
@@ -441,7 +436,6 @@ void system_reset(int flags)
 			bkpdata_write(BKPDATA_INDEX_SAVED_PANIC_FLAGS,
 				      panic_flags);
 		}
-#endif
 
 #if defined(CHIP_FAMILY_STM32L) || defined(CHIP_FAMILY_STM32L4)
 		/*

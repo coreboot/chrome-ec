@@ -3,16 +3,16 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/fff.h>
-#include <zephyr/shell/shell.h>
-#include <zephyr/ztest.h>
-
 #include "accelgyro.h"
 #include "console.h"
 #include "driver/accel_bma2x2.h"
 #include "ec_commands.h"
 #include "motion_sense.h"
 #include "test/drivers/test_state.h"
+
+#include <zephyr/fff.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/ztest.h>
 
 FAKE_VALUE_FUNC(int, set_resolution, const struct motion_sensor_t *, int, int);
 
@@ -86,7 +86,7 @@ ZTEST_USER(console_cmd_accelres, test_invalid_sensor_num)
 
 ZTEST_USER(console_cmd_accelres, test_print_res)
 {
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelres 0"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelres 0"));
 }
 
 ZTEST_USER(console_cmd_accelres, test_set_res__invalid_data)
@@ -101,7 +101,7 @@ ZTEST_USER(console_cmd_accelres, test_set_res__no_setter)
 {
 	int resolution;
 
-	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelres 0 4"), NULL);
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "accelres 0 4"));
 	resolution = motion_sensors[0].drv->get_resolution(&motion_sensors[0]);
 	zassert_equal(BMA2x2_RESOLUTION, resolution, "Expected %d, but got %d",
 		      BMA2x2_RESOLUTION, resolution);

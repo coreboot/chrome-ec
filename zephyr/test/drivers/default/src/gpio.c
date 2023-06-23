@@ -8,23 +8,27 @@
  * @brief Unit Tests for GPIO.
  */
 
-#include <zephyr/device.h>
-
-#include <zephyr/drivers/gpio/gpio_emul.h>
-#include <zephyr/logging/log.h>
-#include <zephyr/kernel.h>
-#include <zephyr/ztest.h>
-
 #include "common.h"
 #include "ec_tasks.h"
 #include "gpio.h"
 #include "gpio/gpio.h"
 #include "gpio/gpio_int.h"
 #include "test/drivers/stubs.h"
-#include "util.h"
+#include "test/drivers/test_mocks.h"
 #include "test/drivers/test_state.h"
+#include "util.h"
+
+#include <zephyr/device.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/ztest.h>
 
 extern bool gpio_test_interrupt_triggered;
+
+/* Function signature for shim/src/gpio.c test_export_static */
+int init_gpios(const struct device *unused);
+
 /**
  * @brief TestPurpose: Verify Zephyr to EC GPIO bitmask conversion.
  *
@@ -135,14 +139,22 @@ ZTEST(gpio, test_legacy_gpio_get_set_level)
 {
 	enum gpio_signal signal = GPIO_SIGNAL(DT_NODELABEL(gpio_test));
 	int level;
+
 	/* Test invalid signal */
 	gpio_set_level(GPIO_COUNT, 0);
 	zassert_equal(0, gpio_get_level(GPIO_COUNT), "Expected level==0");
+
 	/* Test valid signal */
 	gpio_set_level(signal, 0);
+	zassert_ok(gpio_or_ioex_get_level(signal, &level));
 	zassert_equal(0, gpio_get_level(signal), "Expected level==0");
+	zassert_equal(0, level);
+
 	gpio_set_level(signal, 1);
+	zassert_ok(gpio_or_ioex_get_level(signal, &level));
 	zassert_equal(1, gpio_get_level(signal), "Expected level==1");
+	zassert_equal(1, level);
+
 	level = gpio_get_ternary(signal);
 	gpio_set_level_verbose(CC_CHIPSET, signal, 0);
 	zassert_equal(0, gpio_get_level(signal), "Expected level==0");
@@ -168,21 +180,21 @@ ZTEST(gpio, test_legacy_gpio_enable_interrupt)
 	/* Test invalid signal */
 	zassert_not_equal(EC_SUCCESS, gpio_disable_interrupt(GPIO_COUNT), NULL);
 	zassert_not_equal(EC_SUCCESS, gpio_enable_interrupt(GPIO_COUNT), NULL);
-	zassert_false(gpio_test_interrupt_triggered, NULL);
+	zassert_false(gpio_test_interrupt_triggered);
 
 	/* Test valid signal */
-	zassert_ok(gpio_disable_interrupt(signal), NULL);
+	zassert_ok(gpio_disable_interrupt(signal));
 	gpio_set_level(signal, 0);
-	zassert_false(gpio_test_interrupt_triggered, NULL);
+	zassert_false(gpio_test_interrupt_triggered);
 	gpio_set_level(signal, 1);
-	zassert_false(gpio_test_interrupt_triggered, NULL);
+	zassert_false(gpio_test_interrupt_triggered);
 
-	zassert_ok(gpio_enable_interrupt(signal), NULL);
+	zassert_ok(gpio_enable_interrupt(signal));
 	gpio_set_level(signal, 0);
-	zassert_true(gpio_test_interrupt_triggered, NULL);
+	zassert_true(gpio_test_interrupt_triggered);
 	gpio_test_interrupt_triggered = false;
 	gpio_set_level(signal, 1);
-	zassert_true(gpio_test_interrupt_triggered, NULL);
+	zassert_true(gpio_test_interrupt_triggered);
 }
 
 /**
@@ -369,6 +381,136 @@ ZTEST(gpio, test_gpio_reset)
 		      flags);
 }
 
+ZTEST(gpio, test_gpio_save_port_config)
+{
+	const struct device *port =
+		DEVICE_DT_GET(DT_GPIO_CTLR(DT_NODELABEL(gpio_test), gpios));
+	const struct gpio_dt_spec *spec;
+	gpio_flags_t flags[32] = { 0 };
+	gpio_flags_t zephyr_flags;
+	gpio_flags_t flags_at_start[GPIO_COUNT];
+	int index = 0;
+
+	/* Snapshot of GPIO flags before testing */
+	for (int i = 0; i < GPIO_COUNT; i++) {
+		flags_at_start[i] = gpio_helper_get_flags(i);
+		gpio_set_flags(i, GPIO_OUTPUT);
+	}
+
+	/* save the current state of the port */
+	gpio_save_port_config(port, flags, sizeof(flags));
+
+	for (int i = 0; i < GPIO_COUNT; i++) {
+		spec = gpio_get_dt_spec(i);
+		if (spec->port == port) {
+			gpio_pin_get_config_dt(spec, &zephyr_flags);
+			zassert_equal(flags[index], zephyr_flags,
+				      "Flags get 0x%x", flags[index]);
+			index++;
+		}
+	}
+
+	for (int i = 0; i < GPIO_COUNT; ++i) {
+		gpio_set_flags(i, flags_at_start[i]);
+	}
+}
+
+ZTEST(gpio, test_gpio_restore_port_config)
+{
+	const struct device *port =
+		DEVICE_DT_GET(DT_GPIO_CTLR(DT_NODELABEL(gpio_test), gpios));
+	const struct gpio_dt_spec *spec;
+	gpio_flags_t flags[32] = { 0 };
+	gpio_flags_t zephyr_flags;
+	gpio_flags_t flags_at_start[GPIO_COUNT];
+	int index = 0;
+
+	/* Snapshot of GPIO flags before testing */
+	for (int i = 0; i < GPIO_COUNT; i++) {
+		flags_at_start[i] = gpio_helper_get_flags(i);
+		gpio_set_flags(i, GPIO_OUTPUT);
+	}
+
+	/* save the current state of the port */
+	gpio_save_port_config(port, flags, sizeof(flags));
+
+	/* reset the port */
+	gpio_reset_port(port);
+
+	/* restore the port config and check */
+	gpio_restore_port_config(port, flags, sizeof(flags));
+
+	for (int i = 0; i < GPIO_COUNT; i++) {
+		spec = gpio_get_dt_spec(i);
+		if (spec->port == port) {
+			gpio_pin_get_config_dt(spec, &zephyr_flags);
+			zassert_equal(flags[index], zephyr_flags,
+				      "Flags get 0x%x", flags[index]);
+			index++;
+		}
+	}
+
+	for (int i = 0; i < GPIO_COUNT; ++i) {
+		gpio_set_flags(i, flags_at_start[i]);
+	}
+}
+
+ZTEST(gpio, test_gpio_reset_port)
+{
+	const struct device *port =
+		DEVICE_DT_GET(DT_GPIO_CTLR(DT_NODELABEL(gpio_test), gpios));
+	enum gpio_signal signal = GPIO_SIGNAL(DT_NODELABEL(gpio_test));
+	gpio_flags_t flags;
+	gpio_flags_t flags_at_start[GPIO_COUNT];
+
+	/* Snapshot of GPIO flags before testing */
+	for (int i = 0; i < GPIO_COUNT; i++)
+		flags_at_start[i] = gpio_helper_get_flags(i);
+
+	/* Test reset on invalid signal */
+	gpio_reset_port(NULL);
+
+	/* Verify flags didn't change */
+	for (int i = 0; i < GPIO_COUNT; i++) {
+		flags = gpio_helper_get_flags(i);
+		zassert_equal(flags_at_start[i], flags,
+			      "%s[%d] flags_at_start=0x%x, flags=0x%x",
+			      gpio_get_name(i), i, flags_at_start[i], flags);
+	}
+
+	/* Test reset on valid signal */
+	gpio_set_flags(signal, GPIO_OUTPUT);
+	flags = gpio_helper_get_flags(signal);
+	zassert_equal(flags, GPIO_OUTPUT, "Flags set 0x%x", flags);
+
+	gpio_reset_port(port);
+
+	flags = gpio_helper_get_flags(signal);
+	zassert_equal(flags, gpio_get_default_flags(signal), "Flags set 0x%x",
+		      flags);
+
+	for (int i = 0; i < GPIO_COUNT; ++i) {
+		gpio_set_flags(i, flags_at_start[i]);
+	}
+}
+
+ZTEST(gpio, test_gpio_set_flags_by_mask)
+{
+	gpio_set_flags_by_mask(0, BIT(27), GPIO_OUTPUT);
+	zassert_equal(gpio_configure_port_pin_fake.call_count, 1);
+	zassert_equal(gpio_configure_port_pin_fake.arg0_val, 0);
+	zassert_equal(gpio_configure_port_pin_fake.arg1_val, 27);
+	zassert_equal(gpio_configure_port_pin_fake.arg2_val,
+		      convert_to_zephyr_flags(GPIO_OUTPUT));
+}
+
+ZTEST(gpio, test_init_gpios_fail_on_unused_pins_custom_func)
+{
+	gpio_config_unused_pins_fake.return_val = -1;
+
+	zassert_equal(-1, init_gpios(NULL));
+}
+
 /**
  * @brief TestPurpose: Verify GPIO enable/disable interrupt.
  *
@@ -387,18 +529,18 @@ ZTEST(gpio, test_gpio_enable_dt_interrupt)
 	gpio_test_interrupt_triggered = false;
 
 	/* Test valid signal */
-	zassert_ok(gpio_disable_dt_interrupt(intr), NULL);
+	zassert_ok(gpio_disable_dt_interrupt(intr));
 	gpio_pin_set_dt(gp, 0);
-	zassert_false(gpio_test_interrupt_triggered, NULL);
+	zassert_false(gpio_test_interrupt_triggered);
 	gpio_pin_set_dt(gp, 1);
-	zassert_false(gpio_test_interrupt_triggered, NULL);
+	zassert_false(gpio_test_interrupt_triggered);
 
-	zassert_ok(gpio_enable_dt_interrupt(intr), NULL);
+	zassert_ok(gpio_enable_dt_interrupt(intr));
 	gpio_pin_set_dt(gp, 0);
-	zassert_true(gpio_test_interrupt_triggered, NULL);
+	zassert_true(gpio_test_interrupt_triggered);
 	gpio_test_interrupt_triggered = false;
 	gpio_pin_set_dt(gp, 1);
-	zassert_true(gpio_test_interrupt_triggered, NULL);
+	zassert_true(gpio_test_interrupt_triggered);
 }
 
 /**
@@ -418,4 +560,4 @@ static void gpio_before(void *state)
 /**
  * @brief Test Suite: Verifies GPIO functionality.
  */
-ZTEST_SUITE(gpio, drivers_predicate_post_main, NULL, gpio_before, NULL, NULL);
+ZTEST_SUITE(gpio, drivers_predicate_pre_main, NULL, gpio_before, NULL, NULL);

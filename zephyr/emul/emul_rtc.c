@@ -3,18 +3,20 @@
  * found in the LICENSE file.
  */
 
-#define DT_DRV_COMPAT cros_ec_rtc_emul
+/* This is not a chip emulator, it's a fake driver. */
 
-#include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(emul_rtc);
+#include "drivers/cros_rtc.h"
+#include "ec_commands.h"
+#include "flash.h"
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
-#include <ec_commands.h>
-#include <drivers/cros_rtc.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/sys/__assert.h>
 
-#include "flash.h"
+#define DT_DRV_COMPAT cros_ec_rtc_emul
+
+LOG_MODULE_REGISTER(emul_rtc);
 
 struct cros_rtc_emul_data {
 	const struct device *rtc_dev;
@@ -60,6 +62,10 @@ static int cros_rtc_emul_set_value(const struct device *dev, uint32_t value)
 	struct cros_rtc_emul_data *data = DRV_DATA(dev);
 
 	data->value = value;
+
+	if (data->value >= data->alarm_time && data->alarm_time) {
+		data->alarm_callback(dev);
+	}
 
 	return EC_SUCCESS;
 }

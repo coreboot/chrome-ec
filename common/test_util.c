@@ -19,6 +19,8 @@
 #include "test_util.h"
 #include "util.h"
 
+#include <assert.h>
+
 struct test_util_tag {
 	uint8_t error_count;
 };
@@ -31,6 +33,15 @@ int __test_error_count;
 /* Weak reference function as an entry point for unit test */
 test_mockable void run_test(int argc, const char **argv)
 {
+	/* This function should always be replaced by a real implementation of
+	 * run_test().
+	 * If this assertion is failing, it means your test was not linked
+	 * correctly. Check the signature of run_test() defined in your test
+	 * matches the one above.
+	 */
+	ccprintf("%s:%d: ASSERTION failed: ran weakly linked fallback test\n",
+		 __FILE__, __LINE__);
+	assert(0);
 }
 
 /* Default mock test init */
@@ -162,8 +173,9 @@ void test_run_multistep(void)
 }
 
 #ifdef HAS_TASK_HOSTCMD
-int test_send_host_command(int command, int version, const void *params,
-			   int params_size, void *resp, int resp_size)
+enum ec_status test_send_host_command(int command, int version,
+				      const void *params, int params_size,
+				      void *resp, int resp_size)
 {
 	struct host_cmd_handler_args args;
 

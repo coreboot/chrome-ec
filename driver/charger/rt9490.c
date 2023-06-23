@@ -9,8 +9,8 @@
 #include "battery_smart.h"
 #include "builtin/assert.h"
 #include "builtin/endian.h"
-#include "charger.h"
 #include "charge_manager.h"
+#include "charger.h"
 #include "common.h"
 #include "config.h"
 #include "console.h"
@@ -18,11 +18,11 @@
 #include "i2c.h"
 #include "rt9490.h"
 #include "task.h"
+#include "temp_sensor/temp_sensor.h"
+#include "temp_sensor/thermistor.h"
 #include "usb_charge.h"
 #include "usb_pd.h"
 #include "util.h"
-#include "temp_sensor/temp_sensor.h"
-#include "temp_sensor/thermistor.h"
 
 /* Console output macros */
 #define CPRINTF(format, args...) cprintf(CC_CHARGER, format, ##args)
@@ -63,12 +63,18 @@ static const struct charger_info rt9490_charger_info = {
 	.input_current_step = INPUT_I_STEP,
 };
 
-static const struct rt9490_init_setting default_init_setting = {
-	.eoc_current = 200,
+#ifndef CONFIG_ZEPHYR
+const struct rt9490_init_setting rt9490_setting = {
+	/* b/230442545#comment28
+	 * With EOC-Force-CCM disabled, the real IEOC would be
+	 * 30~50mA lower than expected, so move eoc_current one step up
+	 */
+	.eoc_current = 240,
 	.mivr = 4000,
 	.boost_voltage = 5050,
 	.boost_current = 1500,
 };
+#endif
 
 static enum ec_error_list rt9490_read8(int chgnum, int reg, int *val)
 {
@@ -214,9 +220,9 @@ enum ec_error_list rt9490_set_otg_current_voltage(int chgnum,
 	if (!IN_RANGE(output_voltage, RT9490_VOTG_MIN, RT9490_VOTG_MAX))
 		return EC_ERROR_PARAM3;
 
-	reg_cur = (output_current - RT9490_IOTG_MIN) / RT9490_IOTG_STEP;
+	reg_cur = (output_current - RT9490_IOTG_MIN) / RT9490_IOTG_STEP + 3;
 	reg_vol = (output_voltage - RT9490_VOTG_MIN) / RT9490_VOTG_STEP;
-	RETURN_ERROR(rt9490_write16(chgnum, RT9490_REG_IOTG_REGU, reg_cur));
+	RETURN_ERROR(rt9490_write8(chgnum, RT9490_REG_IOTG_REGU, reg_cur));
 
 	return rt9490_write16(chgnum, RT9490_REG_VOTG_REGU, reg_vol);
 }
@@ -298,8 +304,8 @@ static int rt9490_init_setting(int chgnum)
 	/*  Disable boost-mode output voltage */
 	RETURN_ERROR(rt9490_enable_otg_power(chgnum, 0));
 	RETURN_ERROR(rt9490_set_otg_current_voltage(
-		chgnum, default_init_setting.boost_current,
-		default_init_setting.boost_voltage));
+		chgnum, rt9490_setting.boost_current,
+		rt9490_setting.boost_voltage));
 #endif
 	/* Disable ILIM_HZ pin current limit */
 	RETURN_ERROR(rt9490_clr_bit(chgnum, RT9490_REG_CHG_CTRL5,
@@ -314,8 +320,8 @@ static int rt9490_init_setting(int chgnum)
 	/* Disable AUTO_AICR / AUTO_MIVR */
 	RETURN_ERROR(rt9490_clr_bit(chgnum, RT9490_REG_ADD_CTRL0,
 				    RT9490_AUTO_AICR | RT9490_AUTO_MIVR));
-	RETURN_ERROR(rt9490_set_mivr(chgnum, default_init_setting.mivr));
-	RETURN_ERROR(rt9490_set_ieoc(chgnum, default_init_setting.eoc_current));
+	RETURN_ERROR(rt9490_set_mivr(chgnum, rt9490_setting.mivr));
+	RETURN_ERROR(rt9490_set_ieoc(chgnum, rt9490_setting.eoc_current));
 	RETURN_ERROR(rt9490_set_iprec(chgnum, batt_info->precharge_current));
 	RETURN_ERROR(rt9490_enable_adc(chgnum, true));
 	RETURN_ERROR(rt9490_enable_jeita(chgnum, false));
@@ -341,6 +347,38 @@ static int rt9490_init_setting(int chgnum)
 	 * for 10% higher current rating b/215294785
 	 */
 	RETURN_ERROR(rt9490_enable_pwm_1mhz(CHARGER_SOLO, true));
+
+	/* b/230442545#comment28
+	 * Disable EOC-Force-CCM which would potentially
+	 * cause Vsys drop problem for all silicon version(ES1~ES4)
+	 */
+	RETURN_ERROR(rt9490_set_bit(chgnum, RT9490_REG_CHG_CTRL2,
+				    RT9490_DIS_EOC_FCCM));
+
+	/* b/253568743#comment14 vsys workaround */
+	RETURN_ERROR(rt9490_enable_hidden_mode(chgnum, true));
+	rt9490_clr_bit(chgnum, RT9490_REG_HD_ADD_CTRL2,
+		       RT9490_EN_FON_PP_BAT_TRACK);
+	RETURN_ERROR(rt9490_enable_hidden_mode(chgnum, false));
+
+	/* Disable non-standard TA detection */
+	RETURN_ERROR(rt9490_clr_bit(chgnum, RT9490_REG_ADD_CTRL2,
+				    RT9490_SPEC_TA_EN));
+
+	return EC_SUCCESS;
+}
+
+int rt9490_enable_hidden_mode(int chgnum, bool en)
+{
+	if (en) {
+		RETURN_ERROR(
+			rt9490_write8(chgnum, RT9490_REG_TM_PAS_CODE1, 0x69));
+		RETURN_ERROR(
+			rt9490_write8(chgnum, RT9490_REG_TM_PAS_CODE2, 0x96));
+	} else {
+		RETURN_ERROR(rt9490_write8(chgnum, RT9490_REG_TM_PAS_CODE1, 0));
+		RETURN_ERROR(rt9490_write8(chgnum, RT9490_REG_TM_PAS_CODE2, 0));
+	}
 
 	return EC_SUCCESS;
 }
@@ -444,8 +482,10 @@ static enum ec_error_list rt9490_get_vbus_voltage(int chgnum, int port,
 static enum ec_error_list rt9490_set_input_current_limit(int chgnum,
 							 int input_current)
 {
-	uint16_t reg_val = input_current / RT9490_AICR_STEP;
+	uint16_t reg_val;
 
+	input_current = CLAMP(input_current, RT9490_AICR_MIN, RT9490_AICR_MAX);
+	reg_val = input_current / RT9490_AICR_STEP;
 	return rt9490_write16(chgnum, RT9490_REG_AICR_CTRL, reg_val);
 }
 
@@ -518,6 +558,19 @@ static int rt9490_ramp_get_current_limit(int chgnum)
 }
 #endif
 
+static enum ec_error_list rt9490_get_option(int chgnum, int *option)
+{
+	/* Ignored: does not exist */
+	*option = 0;
+	return EC_SUCCESS;
+}
+
+static enum ec_error_list rt9490_set_option(int chgnum, int option)
+{
+	/* Ignored: does not exist */
+	return EC_SUCCESS;
+}
+
 #ifdef CONFIG_CMD_CHARGER_DUMP
 static void dump_range(int chgnum, int from, int to)
 {
@@ -570,6 +623,8 @@ const struct charger_drv rt9490_drv = {
 	.set_input_current_limit = &rt9490_set_input_current_limit,
 	.get_input_current_limit = &rt9490_get_input_current_limit,
 	.get_input_current = &rt9490_get_input_current,
+	.get_option = &rt9490_get_option,
+	.set_option = &rt9490_set_option,
 	.device_id = &rt9490_device_id,
 #ifdef CONFIG_CHARGE_RAMP_HW
 	.set_hw_ramp = &rt9490_set_hw_ramp,
@@ -582,6 +637,7 @@ const struct charger_drv rt9490_drv = {
 #endif
 };
 
+#ifdef CONFIG_USB_CHARGER
 /* BC1.2 */
 static int rt9490_get_bc12_ilim(enum charge_supplier supplier)
 {
@@ -737,6 +793,7 @@ struct bc12_config bc12_ports[CHARGE_PORT_COUNT] = {
 	},
 };
 #endif /* CONFIG_BC12_SINGLE_DRIVER */
+#endif /* CONFIG_USB_CHARGER */
 
 int rt9490_get_thermistor_val(const struct temp_sensor_t *sensor, int *temp_ptr)
 {

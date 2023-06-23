@@ -31,13 +31,20 @@ static inline void virtual_mux_update_state(int port, mux_state_t mux_state,
 {
 	mux_state_t previous_mux_state = virtual_mux_state[port];
 
-	virtual_mux_state[port] = mux_state;
-
 	/*
 	 * Initialize ack_required to false to start, and set on necessary
 	 * conditions
 	 */
 	*ack_required = false;
+
+	/*
+	 * If there is no state change, and the mux status is
+	 * clear, do not send a host event.
+	 */
+	if (mux_state == 0 && previous_mux_state == 0)
+		return;
+
+	virtual_mux_state[port] = mux_state;
 
 	if (!IS_ENABLED(CONFIG_HOSTCMD_EVENTS))
 		return;
@@ -107,14 +114,14 @@ static int virtual_get_mux(const struct usb_mux *me, mux_state_t *mux_state)
 	return EC_SUCCESS;
 }
 
-void virtual_hpd_update(const struct usb_mux *me, mux_state_t mux_state,
+void virtual_hpd_update(const struct usb_mux *me, mux_state_t hpd_state,
 			bool *ack_required)
 {
 	int port = me->usb_port;
 
 	/* Current HPD related mux status + existing USB & DP mux status */
 	mux_state_t new_mux_state =
-		mux_state | (virtual_mux_state[port] & USB_PD_MUX_USB_DP_STATE);
+		hpd_state | (virtual_mux_state[port] & USB_PD_MUX_USB_DP_STATE);
 
 	virtual_mux_update_state(port, new_mux_state, ack_required);
 }

@@ -3,13 +3,13 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/device.h>
-
 #include "driver/charger/rt9490.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_rt9490.h"
 #include "emul/emul_stub_device.h"
 #include "util.h"
+
+#include <zephyr/device.h>
 
 #define DT_DRV_COMPAT zephyr_rt9490_emul
 
@@ -21,7 +21,9 @@ struct rt9490_data {
 };
 
 static const uint8_t default_values[RT9490_REG_MAX + 1] = {
+	[RT9490_REG_CHG_CTRL0] = 0xA2,
 	[RT9490_REG_SAFETY_TMR_CTRL] = 0x3D,
+	[RT9490_REG_DEVICE_INFO] = 0x60,
 	[RT9490_REG_ADD_CTRL0] = 0x76,
 };
 
@@ -41,6 +43,19 @@ int rt9490_emul_peek_reg(const struct emul *emul, int reg)
 		return -1;
 	}
 	return regs[reg];
+}
+
+int rt9490_emul_write_reg(const struct emul *emul, int reg, int val)
+{
+	struct rt9490_data *data = emul->data;
+	uint8_t *regs = data->regs;
+
+	if (!IN_RANGE(reg, 0, RT9490_REG_MAX)) {
+		return -1;
+	}
+	regs[reg] = val;
+
+	return 0;
 }
 
 static int rt9490_emul_read(const struct emul *emul, int reg, uint8_t *val,
@@ -100,7 +115,7 @@ static int rt9490_emul_init(const struct emul *emul,
 		.common = { .cfg = &common_cfg_##n }               \
 	};                                                         \
 	EMUL_DT_INST_DEFINE(n, rt9490_emul_init, &rt9490_data_##n, \
-			    &common_cfg_##n, &i2c_common_emul_api)
+			    &common_cfg_##n, &i2c_common_emul_api, NULL)
 
 DT_INST_FOREACH_STATUS_OKAY(INIT_RT9490_EMUL)
 

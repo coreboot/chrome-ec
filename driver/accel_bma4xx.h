@@ -8,6 +8,8 @@
 #ifndef __CROS_EC_ACCEL_BMA4XX_H
 #define __CROS_EC_ACCEL_BMA4XX_H
 
+#include "config.h"
+
 #define BMA4_I2C_ADDR_PRIMARY 0x18
 #define BMA4_I2C_ADDR_SECONDARY 0x19
 #define BMA4_I2C_BMM150_ADDR 0x10
@@ -41,6 +43,11 @@
 #define BMA4_STEP_CNT_OUT_0_ADDR 0x1E
 #define BMA4_HIGH_G_OUT_ADDR 0x1F
 #define BMA4_TEMPERATURE_ADDR 0x22
+
+#define BMA4_INT_STATUS_1 0x1D
+#define BMA4_FFULL_INT BIT(0)
+#define BMA4_FWM_INT BIT(1)
+#define BMA4_ACC_DRDY_INT BIT(7)
 
 #define BMA4_FIFO_LENGTH_0_ADDR 0x24
 #define BMA4_FIFO_DATA_ADDR 0x26
@@ -87,6 +94,31 @@
 #define BMA4_ACCEL_RANGE_4G 1
 #define BMA4_ACCEL_RANGE_8G 2
 #define BMA4_ACCEL_RANGE_16G 3
+
+#define BMA4_FIFO_CONFIG_0_ADDR 0x48
+#define BMA4_FIFO_STOP_ON_FULL BIT(0)
+#define BMA4_FIFO_TIME_EN BIT(1)
+
+#define BMA4_FIFO_CONFIG_1_ADDR 0x49
+#define BMA4_FIFO_TAG_INT2_EN BIT(2)
+#define BMA4_FIFO_TAG_INT1_EN BIT(3)
+#define BMA4_FIFO_HEADER_EN BIT(4)
+#define BMA4_FIFO_AUX_EN BIT(5)
+#define BMA4_FIFO_ACC_EN BIT(6)
+
+#define BMA4_INT1_IO_CTRL_ADDR 0x53
+#define BMA4_INT1_OUTPUT_EN BIT(3)
+
+#define BMA4_INT_LATCH_ADDR 0x55
+#define BMA4_INT_LATCH BIT(0)
+
+#define BMA4_INT_MAP_DATA_ADDR 0x58
+#define BMA4_INT2_DRDY BIT(6)
+#define BMA4_INT2_FWM BIT(5)
+#define BMA4_INT2_FFULL BIT(4)
+#define BMA4_INT1_DRDY BIT(2)
+#define BMA4_INT1_FWM BIT(1)
+#define BMA4_INT1_FFULL BIT(0)
 
 #define BMA4_RESERVED_REG_5B_ADDR 0x5B
 #define BMA4_RESERVED_REG_5C_ADDR 0x5C
@@ -151,16 +183,30 @@
 	((_reg) < BMA4_ACCEL_RANGE_8G ? 2 + (_reg)*2 : \
 					8 + ((_reg)-BMA4_ACCEL_RANGE_8G) * 8)
 
-#define BMA4_ODR_TO_REG(_odr)                                               \
-	((_odr) < 125000 ?                                                  \
-		 BMA4_OUTPUT_DATA_RATE_0_78HZ + __fls(((_odr)*10) / 7800) : \
-		 BMA4_OUTPUT_DATA_RATE_25HZ + __fls((_odr) / 25000))
-
-#define BMA4_REG_TO_ODR(_reg)                                           \
-	((_reg) < BMA4_OUTPUT_DATA_RATE_25HZ ?                          \
-		 (7800 << ((_reg)-BMA4_OUTPUT_DATA_RATE_0_78HZ)) / 10 : \
-		 25000 << ((_reg)-BMA4_OUTPUT_DATA_RATE_25HZ))
-
 extern const struct accelgyro_drv bma4_accel_drv;
+
+#if defined(CONFIG_ZEPHYR)
+#include <zephyr/devicetree.h>
+
+#if DT_NODE_EXISTS(DT_ALIAS(bma4xx_int))
+/*
+ * Get the motion sensor ID of the BMA4xx sensor that generates the interrupt.
+ * The interrupt is converted to the event and transferred to motion
+ * sense task that actually handles the interrupt.
+ *
+ * Here, we use alias to get the motion sensor ID
+ *
+ * e.g) base_accel is the label of a child node in /motionsense-sensors
+ * aliases {
+ *     bma4xx-int = &base_accel;
+ * };
+ */
+#define CONFIG_ACCEL_BMA4XX_INT_EVENT \
+	TASK_EVENT_MOTION_SENSOR_INTERRUPT(SENSOR_ID(DT_ALIAS(bma4xx_int)))
+
+#include "gpio_signal.h"
+void bma4xx_interrupt(enum gpio_signal signal);
+#endif /* DT_NODE_EXISTS */
+#endif /* CONFIG_ZEPHYR */
 
 #endif /* __CROS_EC_ACCEL_BMA4XX_H */

@@ -10,6 +10,7 @@
 #include "printf.h"
 #include "software_panic.h"
 #include "system.h"
+#include "system_safe_mode.h"
 #include "task.h"
 #include "timer.h"
 #include "util.h"
@@ -75,7 +76,6 @@ static const char *const itype_exc_type[16] = {
 };
 #endif /* CONFIG_DEBUG_EXCEPTIONS */
 
-#ifdef CONFIG_SOFTWARE_PANIC
 void software_panic(uint32_t reason, uint32_t info)
 {
 	asm volatile("mov55  $r6, %0" : : "r"(reason));
@@ -133,7 +133,14 @@ void panic_get_reason(uint32_t *reason, uint32_t *info, uint8_t *exception)
 		*exception = *reason = *info = 0;
 	}
 }
-#endif /* CONFIG_SOFTWARE_PANIC */
+
+/**
+ * Returns the SP register
+ */
+uint32_t get_panic_stack_pointer(const struct panic_data *pdata)
+{
+	return pdata->nds_n8.regs[15];
+}
 
 static void print_panic_information(uint32_t *regs, uint32_t itype,
 				    uint32_t ipc, uint32_t ipsw)
@@ -159,13 +166,11 @@ static void print_panic_information(uint32_t *regs, uint32_t itype,
 #ifdef CONFIG_DEBUG_EXCEPTIONS
 	panic_printf("SWID of ITYPE: %x\n", ((itype >> 16) & 0x7fff));
 	if (panic_sw_reason_is_valid(regs[SOFT_PANIC_GPR_REASON])) {
-#ifdef CONFIG_SOFTWARE_PANIC
 		panic_printf("Software panic reason %s\n",
 			     panic_sw_reasons[(regs[SOFT_PANIC_GPR_REASON] -
 					       PANIC_SW_BASE)]);
 		panic_printf("Software panic info 0x%x\n",
 			     regs[SOFT_PANIC_GPR_INFO]);
-#endif
 	} else {
 		panic_printf("Exception type: General exception [%s]\n",
 			     itype_exc_type[(itype & 0xf)]);
@@ -194,6 +199,26 @@ void report_panic(uint32_t *regs, uint32_t itype)
 	pdata->nds_n8.ipsw = regs[17];
 
 	print_panic_information(regs, itype, regs[16], regs[17]);
+
+	if (IS_ENABLED(CONFIG_SYSTEM_SAFE_MODE)) {
+		if (start_system_safe_mode() == EC_SUCCESS) {
+			pdata->flags |= PANIC_DATA_FLAG_SAFE_MODE_STARTED;
+			/* If not in an interrupt context (e.g. software_panic),
+			 * the next highest priority task will immediately
+			 * execute when the current task is disabled on the
+			 * following line.
+			 */
+			task_disable_task(task_get_current());
+			/* Current task has been disabled.
+			 * Returning from the exception here should cause the
+			 * highest priority task that wasn't disabled to run.
+			 */
+			asm("iret");
+			__builtin_unreachable();
+		}
+		pdata->flags |= PANIC_DATA_FLAG_SAFE_MODE_FAIL_PRECONDITIONS;
+	}
+
 	panic_reboot();
 }
 

@@ -7,17 +7,17 @@
 
 #include "battery.h"
 #include "battery_smart.h"
-#include "charger.h"
 #include "charge_manager.h"
+#include "charger.h"
 #include "common.h"
 #include "compile_time_macros.h"
 #include "config.h"
 #include "console.h"
+#include "driver/wpc/p9221.h"
 #include "extpower.h"
 #include "hooks.h"
 #include "i2c.h"
 #include "printf.h"
-#include "driver/wpc/p9221.h"
 #include "rt946x.h"
 #include "task.h"
 #include "tcpm/tcpm.h"
@@ -1233,7 +1233,7 @@ static int rt946x_get_bc12_ilim(int charge_supplier)
 		    IS_ENABLED(CONFIG_CHARGE_RAMP_HW))
 			/* A conservative value to prevent a bad charger. */
 			return RT946X_AICR_TYP2MAX(USB_CHARGER_MAX_CURR_MA);
-		/* fallback */
+		__fallthrough;
 	case CHARGE_SUPPLIER_BC12_CDP:
 		return USB_CHARGER_MAX_CURR_MA;
 	case CHARGE_SUPPLIER_BC12_SDP:

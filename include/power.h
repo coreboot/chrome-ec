@@ -54,7 +54,9 @@ FORWARD_DECLARE_ENUM(power_state){
  * +------------------------------------------------------+
  * |       1         |    Signal interrupt state at boot  |
  * +------------------------------------------------------+
- * |     2 : 32      |            Reserved                |
+ * |       2         |     Do not log the signal change   |
+ * +------------------------------------------------------+
+ * |     3 : 32      |            Reserved                |
  * +-----------------+------------------------------------+
  */
 
@@ -64,6 +66,8 @@ FORWARD_DECLARE_ENUM(power_state){
 
 #define POWER_SIGNAL_INTR_STATE BIT(1)
 #define POWER_SIGNAL_DISABLE_AT_BOOT BIT(1)
+
+#define POWER_SIGNAL_NO_LOG BIT(2)
 
 /* Information on an power signal */
 struct power_signal_info {
@@ -214,6 +218,17 @@ static inline void power_signal_interrupt(enum gpio_signal signal)
 #endif /* !CONFIG_AP_POWER_CONTROL */
 
 /**
+ * Interrupt handler for pwrok signal. This interrupt handler should be used
+ * when there is a requirement to have minimum pass through delay between the
+ * pwrok coming to the EC and the pwrok that goes to the PCH for high->low
+ * transitions. Low->high transitions are still handled from within the chipset
+ * task power state machine.
+ *
+ * @param signal - The gpio signal that triggered the interrupt.
+ */
+void intel_x86_pwrok_signal_interrupt(enum gpio_signal signal);
+
+/**
  * Interrupt handler for rsmrst signal GPIO. This interrupt handler should be
  * used when there is a requirement to have minimum pass through delay between
  * the rsmrst coming to the EC and the rsmrst that goes to the PCH for high->low
@@ -304,12 +319,12 @@ enum sleep_notify_type {
 void sleep_set_notify(enum sleep_notify_type notify);
 
 /**
- * Notify the given hook is the sleep notify is matched.
+ * Notify the given hook if the sleep notify is matched.
  *
  * @param check_state: The sleep notify to check.
  * @param hook_id: The hook to notify.
  */
-void sleep_notify_transition(int check_state, int hook_id);
+void sleep_notify_transition(enum sleep_notify_type check_state, int hook_id);
 
 /**
  * Called during the suspend transition, to increase the transition counter.
@@ -363,6 +378,10 @@ power_board_handle_sleep_hang(enum sleep_hang_type hang_type);
  * power_chipset_handle_sleep_hang() and power_board_handle_sleep_hang() will
  * be called when a sleep hang is detected.
  *
+ * If called with a sleep_timeout_ms of EC_HOST_SLEEP_TIMEOUT_DEFAULT, the
+ * timeout will be picked based on CONFIG_SLEEP_TIMEOUT_MS or whatever is set as
+ * the default timeout by the sleeptimeout console command.
+ *
  * @param ctx Possible sleep parameters and return values, depending on state.
  */
 void sleep_start_suspend(struct host_sleep_event_context *ctx);
@@ -391,6 +410,11 @@ void sleep_reset_tracking(void);
 void power_reset_host_sleep_state(void);
 #endif /* CONFIG_POWER_S0IX */
 #endif /* CONFIG_POWER_TRACK_HOST_SLEEP_STATE */
+
+#if defined(CONFIG_AP_PWRSEQ_S0IX_COUNTER) || \
+	defined(CONFIG_POWERSEQ_S0IX_COUNTER)
+extern atomic_t s0ix_counter;
+#endif
 
 /**
  * Board specific implementation to enable/disable the PP5000 rail.

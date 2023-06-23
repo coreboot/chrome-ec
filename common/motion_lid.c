@@ -5,8 +5,8 @@
 
 /* Motion sense module to read from various motion sensors. */
 
-#include "acpi.h"
 #include "accelgyro.h"
+#include "acpi.h"
 #include "chipset.h"
 #include "common.h"
 #include "console.h"
@@ -20,8 +20,8 @@
 #include "motion_sense.h"
 #include "power.h"
 #include "tablet_mode.h"
-#include "timer.h"
 #include "task.h"
+#include "timer.h"
 #include "util.h"
 
 /* Console output macros */
@@ -499,6 +499,13 @@ void motion_lid_calc(void)
 /*****************************************************************************/
 /* Host commands */
 
+/**
+ * @brief This is a "sub"-host command accessed through EC_CMD_MOTION_SENSE_CMD,
+ *        defined in `common/motion_sense.c`
+ *
+ * @param args Hot command args
+ * @return enum ec_status Exit status
+ */
 enum ec_status host_cmd_motion_lid(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_motion_sense *in = args->params;

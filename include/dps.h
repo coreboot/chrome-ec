@@ -6,9 +6,16 @@
 #ifndef __CROS_EC_DPS__H
 #define __CROS_EC_DPS__H
 
+#include "common.h"
+
 #include <stdbool.h>
 
-#include "common.h"
+#define DPS_FLAG_DISABLED BIT(0)
+#define DPS_FLAG_NO_SRCCAP BIT(1)
+#define DPS_FLAG_WAITING BIT(2)
+#define DPS_FLAG_SAMPLED BIT(3)
+#define DPS_FLAG_NEED_MORE_PWR BIT(4)
+#define DPS_FLAG_NO_BATTERY BIT(5)
 
 /* Dynamic PDO Selection config. */
 struct dps_config_t {
@@ -76,6 +83,8 @@ __test_only bool dps_is_fake_enabled(void);
 __test_only int dps_get_fake_mv(void);
 __test_only int dps_get_fake_ma(void);
 __test_only int *dps_get_debug_level(void);
+__test_only int dps_get_flag(void);
+
 #endif
 
 #endif /* __CROS_EC_DPS__H */

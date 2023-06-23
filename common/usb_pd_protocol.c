@@ -26,16 +26,16 @@
 #include "tcpm/tcpm.h"
 #include "timer.h"
 #include "typec_control.h"
-#include "util.h"
 #include "usb_charge.h"
 #include "usb_common.h"
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_flags.h"
-#include "usb_pd_tcpm.h"
 #include "usb_pd_tcpc.h"
+#include "usb_pd_tcpm.h"
 #include "usbc_ocp.h"
 #include "usbc_ppc.h"
+#include "util.h"
 #include "vboot.h"
 
 /* Flags to clear on a disconnect */
@@ -1267,6 +1267,72 @@ static void queue_vdm(int port, uint32_t *header, const uint32_t *data,
 	pd[port].vdm_state = VDM_STATE_READY;
 }
 
+/* ----------------- Vendor Defined Messages ------------------ */
+__overridable int pd_custom_vdm(int port, int cnt, uint32_t *payload,
+				uint32_t **rpayload)
+{
+	int cmd = PD_VDO_CMD(payload[0]);
+	uint16_t dev_id = 0;
+	int is_rw, is_latest;
+
+	/* make sure we have some payload */
+	if (cnt == 0)
+		return 0;
+
+	/* Only handle custom requests for SVID Google */
+	if (PD_VDO_VID(*payload) != USB_VID_GOOGLE)
+		return 0;
+
+	switch (cmd) {
+	case VDO_CMD_VERSION:
+		/* guarantee last byte of payload is null character */
+		*(payload + cnt - 1) = 0;
+		CPRINTF("version: %s\n", (char *)(payload + 1));
+		break;
+	case VDO_CMD_READ_INFO:
+	case VDO_CMD_SEND_INFO:
+		/* copy hash */
+		if (cnt == 7) {
+			dev_id = VDO_INFO_HW_DEV_ID(payload[6]);
+			is_rw = VDO_INFO_IS_RW(payload[6]);
+
+			is_latest = pd_dev_store_rw_hash(
+				port, dev_id, payload + 1,
+				is_rw ? EC_IMAGE_RW : EC_IMAGE_RO);
+
+			/*
+			 * Send update host event unless our RW hash is
+			 * already known to be the latest update RW.
+			 */
+			if (!is_rw || !is_latest)
+				pd_send_host_event(PD_EVENT_UPDATE_DEVICE);
+
+			CPRINTF("DevId:%d.%d SW:%d RW:%d\n",
+				HW_DEV_ID_MAJ(dev_id), HW_DEV_ID_MIN(dev_id),
+				VDO_INFO_SW_DBG_VER(payload[6]), is_rw);
+		} else if (cnt == 6) {
+			/* really old devices don't have last byte */
+			pd_dev_store_rw_hash(port, dev_id, payload + 1,
+					     EC_IMAGE_UNKNOWN);
+		}
+		break;
+	case VDO_CMD_CURRENT:
+		CPRINTF("Current: %dmA\n", payload[1]);
+		break;
+	case VDO_CMD_FLIP:
+		if (IS_ENABLED(CONFIG_USBC_SS_MUX))
+			usb_mux_flip(port);
+		break;
+#ifdef CONFIG_USB_PD_LOGGING
+	case VDO_CMD_GET_LOG:
+		pd_log_recv_vdm(port, cnt, payload);
+		break;
+#endif /* CONFIG_USB_PD_LOGGING */
+	}
+
+	return 0;
+}
+
 static void handle_vdm_request(int port, int cnt, uint32_t *payload,
 			       uint32_t head)
 {
@@ -2256,7 +2322,7 @@ __maybe_unused static void exit_supported_alt_mode(int port)
 	}
 }
 
-#ifdef CONFIG_POWER_COMMON
+#ifdef CONFIG_AP_POWER_CONTROL
 static void handle_new_power_state(int port)
 {
 	if (chipset_in_or_transitioning_to_state(CHIPSET_STATE_ANY_OFF)) {
@@ -2275,7 +2341,7 @@ static void handle_new_power_state(int port)
 	/* Ensure mux is set properly after chipset transition */
 	set_usb_mux_with_current_data_role(port);
 }
-#endif /* CONFIG_POWER_COMMON */
+#endif /* CONFIG_AP_POWER_CONTROL */
 
 #ifdef CONFIG_USB_PD_DUAL_ROLE
 enum pd_dual_role_states pd_get_dual_role(int port)
@@ -2889,7 +2955,7 @@ void pd_task(void *u)
 		if (evt & PD_EVENT_DEVICE_ACCESSED)
 			handle_device_access(port);
 #endif
-#ifdef CONFIG_POWER_COMMON
+#ifdef CONFIG_AP_POWER_CONTROL
 		if (evt & PD_EVENT_POWER_STATE_CHANGE)
 			handle_new_power_state(port);
 #endif
@@ -4889,6 +4955,98 @@ void pd_update_contract(int port)
 }
 
 #endif /* CONFIG_USB_PD_DUAL_ROLE */
+
+#if defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH)
+int hex8tou32(char *str, uint32_t *val)
+{
+	char *ptr = str;
+	uint32_t tmp = 0;
+
+	while (*ptr) {
+		char c = *ptr++;
+
+		if (c >= '0' && c <= '9')
+			tmp = (tmp << 4) + (c - '0');
+		else if (c >= 'A' && c <= 'F')
+			tmp = (tmp << 4) + (c - 'A' + 10);
+		else if (c >= 'a' && c <= 'f')
+			tmp = (tmp << 4) + (c - 'a' + 10);
+		else
+			return EC_ERROR_INVAL;
+	}
+	if (ptr != str + 8)
+		return EC_ERROR_INVAL;
+	*val = tmp;
+	return EC_SUCCESS;
+}
+
+/*
+ * Flash a USB PD device using the ChromeOS Vendor Defined Command.
+ *
+ * @param argc number arguments in argv. Must be greater than 3.
+ * @param argv [1] is the usb port
+ *             [2] unused
+ *             [3] is the command {"erase", "rebooot", "signature",
+ *                                 "info", "version", "write"}
+ *             [4] if command was "write", then this will be the
+ *                 start of the data that will be written.
+ * @return EC_SUCCESS on success, else EC_ERROR_PARAM_COUNT or EC_ERROR_PARAM2
+ *         on failure.
+ */
+static int remote_flashing(int argc, char **argv)
+{
+	int port, cnt, cmd;
+	uint32_t data[VDO_MAX_SIZE - 1];
+	char *e;
+	static int flash_offset[CONFIG_USB_PD_PORT_MAX_COUNT];
+
+	if (argc < 4 || argc > (VDO_MAX_SIZE + 4 - 1))
+		return EC_ERROR_PARAM_COUNT;
+
+	port = strtoi(argv[1], &e, 10);
+	if (*e || port >= board_get_usb_pd_port_count())
+		return EC_ERROR_PARAM2;
+
+	cnt = 0;
+	if (!strcasecmp(argv[3], "erase")) {
+		cmd = VDO_CMD_FLASH_ERASE;
+		flash_offset[port] = 0;
+		ccprintf("ERASE ...");
+	} else if (!strcasecmp(argv[3], "reboot")) {
+		cmd = VDO_CMD_REBOOT;
+		ccprintf("REBOOT ...");
+	} else if (!strcasecmp(argv[3], "signature")) {
+		cmd = VDO_CMD_ERASE_SIG;
+		ccprintf("ERASE SIG ...");
+	} else if (!strcasecmp(argv[3], "info")) {
+		cmd = VDO_CMD_READ_INFO;
+		ccprintf("INFO...");
+	} else if (!strcasecmp(argv[3], "version")) {
+		cmd = VDO_CMD_VERSION;
+		ccprintf("VERSION...");
+	} else {
+		int i;
+
+		argc -= 3;
+		for (i = 0; i < argc; i++)
+			if (hex8tou32(argv[i + 3], data + i))
+				return EC_ERROR_INVAL;
+		cmd = VDO_CMD_FLASH_WRITE;
+		cnt = argc;
+		ccprintf("WRITE %d @%04x ...", argc * 4, flash_offset[port]);
+		flash_offset[port] += argc * 4;
+	}
+
+	pd_send_vdm(port, USB_VID_GOOGLE, cmd, data, cnt);
+
+	/* Wait until VDM is done */
+	while (pd[port].vdm_state > 0)
+		task_wait_event(100 * MSEC);
+
+	ccprintf("DONE %d\n", pd[port].vdm_state);
+	return EC_SUCCESS;
+}
+#endif /* defined(CONFIG_CMD_PD) && defined(CONFIG_CMD_PD_FLASH) */
 
 static int command_pd(int argc, const char **argv)
 {

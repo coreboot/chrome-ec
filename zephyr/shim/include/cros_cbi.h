@@ -6,17 +6,16 @@
 #ifndef __CROS_EC_CROS_CBI_H
 #define __CROS_EC_CROS_CBI_H
 
-#include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/kernel.h>
 
 /*
  * Macros are _INST_ types, so require DT_DRV_COMPAT to be defined.
  */
-#define DT_DRV_COMPAT named_cbi_ssfc_value
-#define CROS_CBI_LABEL "cros_cbi"
+#define DT_DRV_COMPAT cros_ec_cbi_ssfc_value
 
-#define CBI_SSFC_VALUE_COMPAT named_cbi_ssfc_value
+#define CBI_SSFC_VALUE_COMPAT DT_DRV_COMPAT
 #define CBI_SSFC_VALUE_ID(id) DT_CAT(CBI_SSFC_VALUE_, id)
 #define CBI_SSFC_VALUE_ID_WITH_COMMA(id) CBI_SSFC_VALUE_ID(id),
 #define CBI_SSFC_VALUE_INST_ENUM(inst, _) \
@@ -62,21 +61,24 @@ enum cbi_ssfc_value_id {
 /*
  * Enum list of all fields.
  */
+/* clang-format off */
 enum cbi_fw_config_field_id {
 	DT_FOREACH_STATUS_OKAY(CBI_FW_CONFIG_COMPAT,
 			       CBI_FW_CONFIG_CHILD_ENUM_LIST)
-		CBI_FW_CONFIG_FIELDS_COUNT
+	CBI_FW_CONFIG_FIELDS_COUNT
 };
+/* clang-format on */
 
 /*
  * enum list of all child values.
  */
+/* clang-format off */
 enum cbi_fw_config_value_id {
 	DT_FOREACH_STATUS_OKAY(CBI_FW_CONFIG_VALUE_COMPAT,
 			       CBI_FW_CONFIG_ENUM_WITH_VALUE)
-		CBI_FW_CONFIG_VALUES_LAST /* added to ensure at least one entry
-					   */
+	CBI_FW_CONFIG_VALUES_LAST /* added to ensure at least one entry */
 };
+/* clang-format on */
 
 /**
  * @brief Initialize CBI SSFC

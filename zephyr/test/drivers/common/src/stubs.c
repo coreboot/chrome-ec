@@ -7,11 +7,11 @@
 #include "battery_fuel_gauge.h"
 #include "bc12/pi3usb9201_public.h"
 #include "charge_ramp.h"
+#include "charge_state.h"
 #include "charger.h"
 #include "charger/isl923x_public.h"
 #include "charger/isl9241_public.h"
 #include "config.h"
-#include <zephyr/fff.h>
 #include "gpio/gpio_int.h"
 #include "hooks.h"
 #include "i2c/i2c.h"
@@ -19,14 +19,14 @@
 #include "ppc/sn5s330_public.h"
 #include "ppc/syv682x_public.h"
 #include "retimer/bb_retimer_public.h"
-#include "test/drivers/stubs.h"
 #include "tcpm/ps8xxx_public.h"
 #include "tcpm/tcpci.h"
+#include "test/drivers/stubs.h"
 #include "usb_mux.h"
 #include "usb_pd_tcpm.h"
 #include "usbc_ppc.h"
-#include "charge_state_v2.h"
 
+#include <zephyr/fff.h>
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(stubs);
 
@@ -39,19 +39,6 @@ LOG_MODULE_REGISTER(stubs);
  * in emulators or in the native_posix board-specific code or part of the
  * device tree.
  */
-
-/* BC1.2 charger detect configuration */
-const struct pi3usb9201_config_t pi3usb9201_bc12_chips[] = {
-	[USBC_PORT_C0] = {
-		.i2c_port = I2C_PORT_USB_C0,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_3_FLAGS,
-	},
-	[USBC_PORT_C1] = {
-		.i2c_port = I2C_PORT_USB_C1,
-		.i2c_addr_flags = PI3USB9201_I2C_ADDR_1_FLAGS,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(pi3usb9201_bc12_chips) == USBC_PORT_COUNT);
 
 int board_set_active_charge_port(int port)
 {
@@ -111,24 +98,17 @@ int board_is_vbus_too_low(int port, enum chg_ramp_vbus_state ramp_state)
 	return 0;
 }
 
-void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
-			    int charge_mv)
-{
-	charge_set_input_current_limit(
-		MAX(charge_ma, CONFIG_CHARGER_INPUT_CURRENT), charge_mv);
-}
-
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == USBC_PORT_COUNT);
 
 static uint16_t ps8xxx_product_id = PS8805_PRODUCT_ID;
 
 uint16_t board_get_ps8xxx_product_id(int port)
 {
-	if (port != USBC_PORT_C1) {
-		return 0;
+	if (tcpc_config[port].drv == &ps8xxx_tcpm_drv) {
+		return ps8xxx_product_id;
 	}
 
-	return ps8xxx_product_id;
+	return 0;
 }
 
 void board_set_ps8xxx_product_id(uint16_t product_id)
@@ -148,71 +128,13 @@ int board_is_sourcing_vbus(int port)
 	return ppc_is_sourcing_vbus(port);
 }
 
-/* TODO(b/239457738): Move to dts */
-struct usb_mux_chain usbc0_virtual_usb_mux_chain = {
-	.mux =
-		&(const struct usb_mux){
-			.usb_port = USBC_PORT_C0,
-			.driver = &virtual_usb_mux_driver,
-			.hpd_update = &virtual_hpd_update,
-		},
-};
-
-struct usb_mux usbc1_virtual_usb_mux = {
-	.usb_port = USBC_PORT_C1,
-	.driver = &virtual_usb_mux_driver,
-	.hpd_update = &virtual_hpd_update,
-};
-
-struct usb_mux_chain usbc1_virtual_usb_mux_chain = {
-	.mux = &usbc1_virtual_usb_mux,
-};
-
-struct usb_mux usbc0_mux0 = {
-	.usb_port = USBC_PORT_C0,
-	.driver = &tcpci_tcpm_usb_mux_driver,
-	.i2c_port = I2C_PORT_USB_C0,
-	.i2c_addr_flags = DT_REG_ADDR(DT_NODELABEL(tcpci_emul)),
-};
-
-struct usb_mux_chain usb_muxes[] = {
-	[USBC_PORT_C0] = {
-		.mux = &usbc0_mux0,
-		.next = &usbc0_virtual_usb_mux_chain,
-	},
-	[USBC_PORT_C1] = {
-		.mux = &(const struct usb_mux){
-			.usb_port = USBC_PORT_C1,
-			.driver = &bb_usb_retimer,
-			.hpd_update = bb_retimer_hpd_update,
-			.i2c_port = I2C_PORT_USB_C1,
-			.i2c_addr_flags = DT_REG_ADDR(DT_NODELABEL(
-						usb_c1_bb_retimer_emul)),
-		},
-		.next = &usbc1_virtual_usb_mux_chain,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(usb_muxes) == USBC_PORT_COUNT);
-
-struct bb_usb_control bb_controls[] = {
-	[USBC_PORT_C0] = {
-		/* USB-C port 0 doesn't have a retimer */
-	},
-	[USBC_PORT_C1] = {
-		.usb_ls_en_gpio = GPIO_SIGNAL(DT_NODELABEL(usb_c1_ls_en)),
-		.retimer_rst_gpio =
-			 GPIO_SIGNAL(DT_NODELABEL(usb_c1_rt_rst_odl)),
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(bb_controls) == USBC_PORT_COUNT);
-
 void pd_power_supply_reset(int port)
 {
 }
 
 int pd_check_vconn_swap(int port)
 {
-	return 0;
+	return !chipset_in_state(CHIPSET_STATE_HARD_OFF);
 }
 
 int pd_set_power_supply_ready(int port)
@@ -220,27 +142,11 @@ int pd_set_power_supply_ready(int port)
 	return EC_SUCCESS;
 }
 
-/* USBC PPC configuration */
-struct ppc_config_t ppc_chips[] = {
-	[USBC_PORT_C0] = {
-		.i2c_port = I2C_PORT_USB_C0,
-		.i2c_addr_flags = SN5S330_ADDR0_FLAGS,
-		.drv = &sn5s330_drv,
-	},
-	[USBC_PORT_C1] = {
-		.i2c_port = I2C_PORT_USB_C1,
-		.i2c_addr_flags = SYV682X_ADDR1_FLAGS,
-		.frs_en = GPIO_SIGNAL(DT_NODELABEL(gpio_usb_c1_frs_en)),
-		.drv = &syv682x_drv,
-	},
-};
-BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == USBC_PORT_COUNT);
-unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
-
 DEFINE_FAKE_VOID_FUNC(system_hibernate, uint32_t, uint32_t);
 
 DEFINE_FAKE_VOID_FUNC(board_reset_pd_mcu);
 
+#ifndef CONFIG_PLATFORM_EC_TCPC_INTERRUPT
 uint16_t tcpc_get_alert_status(void)
 {
 	uint16_t status = 0;
@@ -249,38 +155,21 @@ uint16_t tcpc_get_alert_status(void)
 	 * Check which port has the ALERT line set and ignore if that TCPC has
 	 * its reset line active.
 	 */
-	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(usb_c0_tcpc_int_odl))) {
+	if (gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(usb_c0_tcpc_int_odl))) {
 		if (gpio_pin_get_dt(
-			    GPIO_DT_FROM_NODELABEL(usb_c0_tcpc_rst_l)) != 0)
+			    GPIO_DT_FROM_NODELABEL(usb_c0_tcpc_rst_l)) == 0)
 			status |= PD_STATUS_TCPC_ALERT_0;
 	}
 
-	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(usb_c1_tcpc_int_odl))) {
+	if (gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(usb_c1_tcpc_int_odl))) {
 		if (gpio_pin_get_dt(
-			    GPIO_DT_FROM_NODELABEL(usb_c1_tcpc_rst_l)) != 0)
+			    GPIO_DT_FROM_NODELABEL(usb_c1_tcpc_rst_l)) == 0)
 			status |= PD_STATUS_TCPC_ALERT_1;
 	}
 
 	return status;
 }
-
-void tcpc_alert_event(enum gpio_signal signal)
-{
-	int port;
-
-	switch (signal) {
-	case GPIO_SIGNAL(DT_NODELABEL(usb_c0_tcpc_int_odl)):
-		port = 0;
-		break;
-	case GPIO_SIGNAL(DT_NODELABEL(usb_c1_tcpc_int_odl)):
-		port = 1;
-		break;
-	default:
-		return;
-	}
-
-	schedule_deferred_pd_interrupt(port);
-}
+#endif
 
 void ppc_alert(enum gpio_signal signal)
 {
@@ -301,22 +190,24 @@ void ppc_alert(enum gpio_signal signal)
  */
 static void stubs_interrupt_init(void)
 {
-	/* Enable TCPC interrupts. */
-	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0));
-	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1));
-
 	cprints(CC_USB, "Resetting TCPCs...");
 	cflush();
 
+#if !(CONFIG_PLATFORM_EC_TCPC_INTERRUPT)
+	/* Enable TCPC interrupts. */
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0));
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c1));
+#endif
+
 	/* Reset generic TCPCI on port 0. */
-	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(usb_c0_tcpc_rst_l), 0);
-	msleep(1);
 	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(usb_c0_tcpc_rst_l), 1);
+	msleep(1);
+	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(usb_c0_tcpc_rst_l), 0);
 
 	/* Reset PS8XXX on port 1. */
-	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(usb_c1_tcpc_rst_l), 0);
-	msleep(PS8XXX_RESET_DELAY_MS);
 	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(usb_c1_tcpc_rst_l), 1);
+	msleep(PS8XXX_RESET_DELAY_MS);
+	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(usb_c1_tcpc_rst_l), 0);
 
 	/* Enable PPC interrupts. */
 	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_usb_c0_ppc));

@@ -3,7 +3,10 @@
 # found in the LICENSE file.
 
 config PLATFORM_EC_I2C
-	def_bool I2C
+	bool "EC I2C Support"
+	default y
+	depends on DT_HAS_NAMED_I2C_PORTS_ENABLED
+	select I2C
 	help
 	  Enable compilation of the EC i2c module. Once enabled, it will be
 	  possible to make calls using the old platform/ec i2c APIs defined
@@ -73,5 +76,12 @@ config PLATFORM_EC_SMBUS_PEC
 	  Set I2C_FLAG on addr_flags parameter to use this feature.
 
 	  This option also enables error checking function on smart batteries.
+
+config PLATFORM_EC_I2C_NACK_RETRY_COUNT
+	int "I2C operation retry count when transaction error"
+	default 0
+	help
+	  Defines I2C operation retry count when transaction general input/output
+	  error (-EIO) and also when the I2C is busy.
 
 endif # PLATFORM_EC_I2C

@@ -20,7 +20,9 @@ charging configuration found in [Kconfig.usb_charger].
 
 ### Example of enabled configs
 
-In `ec/zephyr/projects/{project}/{board}/prj.conf`, one may add:
+Enable and disable charger configs in either the [`program.conf`] or
+[`project.conf`] file for your project.
+
 
 ```
 # Charger
@@ -281,7 +283,7 @@ The [chargestate] command may also be invoked.
 [Kconfig.tasks]: https://crsrc.org/o/src/platform/ec/zephyr/Kconfig.tasks?q=%22config%20HAS_TASK_CHARGER%22&ss=chromiumos
 [Kconfig.usb_charger]: https://crsrc.org/o/src/platform/ec/zephyr/Kconfig.usb_charger?q=%22config%20PLATFORM_EC_USB_CHARGER%22&ss=chromiumos
 [charger bindings directory]: https://crsrc.org/o/src/platform/ec/zephyr/dts/bindings/charger/
-[charger thread]: https://crsrc.org/o/src/platform/ec/common/charge_state_v2.c?q=%22void%20charger_task%22&ss=chromiumos
+[charger thread]: https://crsrc.org/o/src/platform/ec/common/charge_state.c?q=%22void%20charger_task%22&ss=chromiumos
 [chargestate]: ./zephyr_battery.md#chargestate
 [chgstate]: ./zephyr_battery.md#chgstate
 [chgsup]: #chgsup
@@ -289,3 +291,5 @@ The [chargestate] command may also be invoked.
 [ectool]: ../docs/ap-ec-comm.md
 [mapping legacy I2C port numbers to Zephyr devicetree nodes]: ./zephyr_i2c.md#mapping-legacy-i2c-port-numbers-to-zephyr-devicetree-nodes
 [pwr_avg]: ./zephyr_battery.md#pwr_avg
+[`program.conf`]: ./project_config.md#program_conf
+[`project.conf`]: ./project_config.md#project_conf
