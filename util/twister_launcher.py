@@ -24,6 +24,10 @@ parameters that may be used, please consult the Twister documentation.
 #   version: "version:0.6.2"
 # >
 # wheel: <
+#   name: "infra/python/wheels/natsort-py3"
+#   version: "version:8.3.1"
+# >
+# wheel: <
 #   name: "infra/python/wheels/packaging-py2_py3"
 #   version: "version:16.8"
 # >
@@ -135,7 +139,7 @@ def find_paths():
         ec_base = cros_checkout / "src" / "platform" / "ec"
         try:
             zephyr_base = Path(os.environ["ZEPHYR_BASE"]).resolve()
-        except KeyError as err:
+        except KeyError:
             zephyr_base = (
                 cros_checkout / "src" / "third_party" / "zephyr" / "main"
             )
@@ -240,7 +244,7 @@ def check_for_skipped_tests(outdir):
     found_skipped = False
     json_path = pathlib.Path(outdir) / "twister.json"
     if json_path.exists():
-        with open(json_path) as file:
+        with open(json_path, encoding="utf-8") as file:
             data = json.load(file)
 
             for testsuite in data["testsuites"]:
@@ -287,6 +291,7 @@ def main():
         f"-x=SYSCALL_INCLUDE_DIRS={str(ec_base / 'zephyr' / 'include' / 'drivers')}",
         f"-x=ZEPHYR_BASE={zephyr_base}",
         f"-x=ZEPHYR_MODULES={';'.join([str(p) for p in zephyr_modules])}",
+        f"-x=PYTHON_EXECUTABLE={sys.executable}",
     ]
     is_in_chroot = Path("/etc/cros_chroot_version").is_file()
 
@@ -362,6 +367,11 @@ def main():
 
     twister_cli.extend(["--outdir", intercepted_args.outdir])
 
+    toolchain_root = (
+        str(ec_base / "zephyr") if is_in_chroot else str(zephyr_base)
+    )
+    twister_cli.extend([f"-x=TOOLCHAIN_ROOT={toolchain_root}"])
+
     # Prepare environment variables for export to Twister. Inherit the parent
     # process's environment, but set some default values if not already set.
     twister_env = dict(os.environ)
@@ -371,6 +381,9 @@ def main():
                 "TOOLCHAIN_ROOT",
                 str(ec_base / "zephyr") if is_in_chroot else str(zephyr_base),
             ),
+            # TODO(https://github.com/zephyrproject-rtos/zephyr/issues/59453):
+            # This ought to be passed as a CMake variable but can't due to how
+            # Zephyr calls verify-toolchain.cmake
             "ZEPHYR_TOOLCHAIN_VARIANT": intercepted_args.toolchain,
             "PARSETAB_DIR": parsetab_dir,
         }
