@@ -45,10 +45,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_CROS_DRV
                                                             ioex.c
                                                             ioex_drv.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_KB8010 kb8010_usb_mux.c)
-if (NOT DEFINED CONFIG_PLATFORM_EC_KEYBOARD_DISCRETE)
-  zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CROS_EC_RAW_KB
                                                             keyboard_raw.c)
-endif()
 zephyr_library_sources_ifdef(CONFIG_CROS_EC_KEYSCAN         keyscan.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LOG_BACKEND_CONSOLE_BUFFER
                              log_backend_console_buffer.c)
@@ -95,3 +93,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SHA256_HW_ZEPHYR
 	                                                    sha256_hw.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_COMMAND_MEMORY_DUMP
 	                                                    register_memory_dump.c)
+if (DEFINED CONFIG_HOST_SERVICE)
+zephyr_library_sources_ifdef(CONFIG_HECI
+                                                            host_command_heci.c)
+endif()

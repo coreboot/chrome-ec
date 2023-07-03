@@ -1599,6 +1599,10 @@ enum ec_feature_code {
 	 * The EC will reboot on runtime assertion failures.
 	 */
 	EC_FEATURE_ASSERT_REBOOTS = 48,
+	/*
+	 * The EC image is built with tokenized logging enabled.
+	 */
+	EC_FEATURE_TOKENIZED_LOGGING = 49,
 };
 
 #define EC_FEATURE_MASK_0(event_code) BIT(event_code % 32)
@@ -7852,6 +7856,18 @@ struct ec_params_fp_establish_pairing_key_wrap {
 
 struct ec_response_fp_establish_pairing_key_wrap {
 	struct ec_fp_encrypted_pairing_key encrypted_pairing_key;
+} __ec_align4;
+
+#define EC_CMD_FP_LOAD_PAIRING_KEY 0x0412
+
+typedef struct ec_response_fp_establish_pairing_key_wrap
+	ec_params_fp_load_pairing_key;
+
+#define FP_CK_AUTH_NONCE_LEN 32
+
+#define EC_CMD_FP_GENERATE_NONCE 0x0413
+struct ec_response_fp_generate_nonce {
+	uint8_t nonce[FP_CK_AUTH_NONCE_LEN];
 } __ec_align4;
 
 /*****************************************************************************/
