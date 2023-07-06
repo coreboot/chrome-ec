@@ -17,6 +17,8 @@
 
 #undef CONFIG_SYSTEM_UNLOCKED
 
+#define CONFIG_ALLOW_UNALIGNED_ACCESS
+
 /*-------------------------------------------------------------------------*
  * Flash layout:
  *
@@ -226,6 +228,7 @@
 #define CONFIG_DMA_CROS
 #define CONFIG_FPU
 #define CONFIG_FPU_WARNINGS
+#define CONFIG_GOOGLETEST
 #define CONFIG_HOST_COMMAND_STATUS
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO

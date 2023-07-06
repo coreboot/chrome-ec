@@ -15,6 +15,7 @@
 #include "../ite_led.dtsi"
 #include "../ite_usbc.dtsi"
 #include "../ite_shi.dtsi"
+#include "./thermistor.dtsi"
 #include <cros/thermistor/thermistor.dtsi>
 #include <dt-bindings/motionsense/utils.h>
 
@@ -124,10 +125,6 @@
 		<&gpioh 2 GPIO_INPUT_PULL_DOWN>,
 		<&gpioi 3 GPIO_INPUT_PULL_DOWN>,	//EC_AP_RSVD0_ODL
 		<&gpiom 2 GPIO_INPUT_PULL_DOWN>;
-	};
-
-	named-i2c-ports {
-		/delete-node/ usb-c1;			//unused i2c_usb_c1
 	};
 
 	/delete-node/ cros-keyscan;
@@ -271,6 +268,9 @@
 		};
 		temp_sensor_2 {
 			sensor = <&temp_sensor_2_thermistor>;
+		};
+		temp_charger: charger {
+			sensor = <&charger_bc12_port1>;
 		};
 	};
 	/*
@@ -430,6 +430,7 @@
 &i2c0{
 	charger_bc12_port1: rt9490@53{
 		compatible = "richtek,rt9490";
+		thermistor = <&thermistor_rt9490>;
 	};
 };
 

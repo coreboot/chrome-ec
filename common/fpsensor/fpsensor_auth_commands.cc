@@ -12,15 +12,25 @@
 #include "fpsensor_state.h"
 #include "fpsensor_utils.h"
 #include "openssl/mem.h"
+#include "openssl/rand.h"
 #include "scoped_fast_cpu.h"
 
 #include <algorithm>
 #include <array>
 #include <utility>
 
+/* The GSC pairing key. */
+static std::array<uint8_t, FP_PAIRING_KEY_LEN> pairing_key;
+
+/* The auth nonce for GSC session key. */
+std::array<uint8_t, FP_CK_AUTH_NONCE_LEN> auth_nonce;
+
 enum ec_error_list check_context_cleared()
 {
 	for (uint32_t partial : user_id)
+		if (partial != 0)
+			return EC_ERROR_ACCESS_DENIED;
+	for (uint8_t partial : auth_nonce)
 		if (partial != 0)
 			return EC_ERROR_ACCESS_DENIED;
 	if (templ_valid != 0)
@@ -112,3 +122,50 @@ fp_command_establish_pairing_key_wrap(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_FP_ESTABLISH_PAIRING_KEY_WRAP,
 		     fp_command_establish_pairing_key_wrap, EC_VER_MASK(0));
+
+static enum ec_status
+fp_command_load_pairing_key(struct host_cmd_handler_args *args)
+{
+	const auto *params = static_cast<const ec_params_fp_load_pairing_key *>(
+		args->params);
+
+	ScopedFastCpu fast_cpu;
+
+	/* If the context is not cleared, reject this request to prevent leaking
+	 * the existing template. */
+	enum ec_error_list ret = check_context_cleared();
+	if (ret != EC_SUCCESS) {
+		CPRINTS("load_pairing_key: Context is not clean");
+		return EC_RES_ACCESS_DENIED;
+	}
+
+	ret = decrypt_data(params->encrypted_pairing_key.info,
+			   params->encrypted_pairing_key.data,
+			   sizeof(params->encrypted_pairing_key.data),
+			   pairing_key.data(), pairing_key.size());
+	if (ret != EC_SUCCESS) {
+		CPRINTS("load_pairing_key: Failed to decrypt pairing key");
+		return EC_RES_UNAVAILABLE;
+	}
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_FP_LOAD_PAIRING_KEY, fp_command_load_pairing_key,
+		     EC_VER_MASK(0));
+
+static enum ec_status
+fp_command_generate_nonce(struct host_cmd_handler_args *args)
+{
+	auto *r = static_cast<ec_response_fp_generate_nonce *>(args->response);
+
+	ScopedFastCpu fast_cpu;
+
+	RAND_bytes(auth_nonce.data(), auth_nonce.size());
+
+	std::copy(auth_nonce.begin(), auth_nonce.end(), r->nonce);
+
+	args->response_size = sizeof(*r);
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_FP_GENERATE_NONCE, fp_command_generate_nonce,
+		     EC_VER_MASK(0));
