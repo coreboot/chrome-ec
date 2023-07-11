@@ -84,6 +84,9 @@ driver-$(CONFIG_CHARGER_RT9490)+=charger/rt9490.o
 driver-$(CONFIG_CHARGER_SY21612)+=charger/sy21612.o
 driver-$(CONFIG_CHARGER_SM5803)+=charger/sm5803.o
 
+# CEC drivers
+driver-$(CONFIG_CEC_BITBANG)+=cec/bitbang.o
+
 # DP Redrivers
 driver-$(CONFIG_DP_REDRIVER_TDP142)+=retimer/tdp142.o
 
@@ -190,6 +193,7 @@ driver-$(CONFIG_USBC_RETIMER_ANX7483)+=retimer/anx7483.o
 driver-$(CONFIG_USBC_RETIMER_ANX7452)+=retimer/anx7452.o
 driver-$(CONFIG_USBC_RETIMER_INTEL_BB)+=retimer/bb_retimer.o
 driver-$(CONFIG_USBC_RETIMER_KB800X)+=retimer/kb800x.o
+driver-$(CONFIG_USBC_RETIMER_KB8010)+=retimer/kb8010.o
 driver-$(CONFIG_USBC_RETIMER_NB7V904M)+=retimer/nb7v904m.o
 driver-$(CONFIG_USBC_RETIMER_PI3DPX1207)+=retimer/pi3dpx1207.o
 driver-$(CONFIG_USBC_RETIMER_PI3HDX1204)+=retimer/pi3hdx1204.o

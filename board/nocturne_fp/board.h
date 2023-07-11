@@ -18,7 +18,7 @@
 
 #undef CONFIG_SYSTEM_UNLOCKED
 
-#define CONFIG_LTO
+#define CONFIG_ALLOW_UNALIGNED_ACCESS
 
 /*
  * These allow console commands to be flagged as restricted.
@@ -221,6 +221,8 @@
  */
 #define APPLY_RESET_LOOP_FIX
 #endif
+
+#define CONFIG_GOOGLETEST
 
 #ifndef __ASSEMBLER__
 

@@ -41,7 +41,7 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_asserted)
 	uint32_t expected_flags = EC_FLASH_PROTECT_GPIO_ASSERTED;
 
 	/* Get the flash protect */
-	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
+	zassert_ok(ec_cmd_flash_protect_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
@@ -49,14 +49,14 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_asserted)
 	params.mask = EC_FLASH_PROTECT_RO_AT_BOOT;
 	params.flags = EC_FLASH_PROTECT_RO_AT_BOOT;
 	expected_flags |= EC_FLASH_PROTECT_RO_AT_BOOT | EC_FLASH_PROTECT_RO_NOW;
-	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
+	zassert_ok(ec_cmd_flash_protect_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
 	/* Disable RO_AT_BOOT; should change nothing as GPIO WP_L is asserted */
 	params.mask = EC_FLASH_PROTECT_RO_AT_BOOT;
 	params.flags = 0;
-	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
+	zassert_ok(ec_cmd_flash_protect_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
@@ -64,21 +64,21 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_asserted)
 	params.mask = EC_FLASH_PROTECT_ALL_NOW;
 	params.flags = EC_FLASH_PROTECT_ALL_NOW;
 	expected_flags |= EC_FLASH_PROTECT_ALL_NOW;
-	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
+	zassert_ok(ec_cmd_flash_protect_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
 	/* Disable ALL_NOW; should change nothing as GPIO WP_L is asserted */
 	params.mask = EC_FLASH_PROTECT_ALL_NOW;
 	params.flags = 0;
-	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
+	zassert_ok(ec_cmd_flash_protect_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
 	/* Disable RO_AT_BOOT; should change nothing as GPIO WP_L is asserted */
 	params.mask = EC_FLASH_PROTECT_RO_AT_BOOT;
 	params.flags = 0;
-	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
+	zassert_ok(ec_cmd_flash_protect_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 }
@@ -96,7 +96,7 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_deasserted)
 	zassert_ok(gpio_wp_l_set(1), NULL);
 
 	/* Get the flash protect */
-	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
+	zassert_ok(ec_cmd_flash_protect_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
@@ -104,7 +104,7 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_deasserted)
 	params.mask = EC_FLASH_PROTECT_RO_AT_BOOT;
 	params.flags = EC_FLASH_PROTECT_RO_AT_BOOT;
 	expected_flags |= EC_FLASH_PROTECT_RO_AT_BOOT | EC_FLASH_PROTECT_RO_NOW;
-	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
+	zassert_ok(ec_cmd_flash_protect_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
@@ -113,7 +113,7 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_deasserted)
 	params.flags = 0;
 	expected_flags &=
 		~(EC_FLASH_PROTECT_RO_AT_BOOT | EC_FLASH_PROTECT_RO_NOW);
-	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
+	zassert_ok(ec_cmd_flash_protect_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
@@ -121,14 +121,14 @@ ZTEST_USER(flash, test_hostcmd_flash_protect_wp_deasserted)
 	params.mask = EC_FLASH_PROTECT_RO_AT_BOOT;
 	params.flags = EC_FLASH_PROTECT_RO_AT_BOOT;
 	expected_flags |= EC_FLASH_PROTECT_RO_AT_BOOT | EC_FLASH_PROTECT_RO_NOW;
-	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
+	zassert_ok(ec_cmd_flash_protect_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 
 	/* Enable ALL_NOW; should change nothing as GPIO WP_L is deasserted */
 	params.mask = EC_FLASH_PROTECT_ALL_NOW;
 	params.flags = EC_FLASH_PROTECT_ALL_NOW;
-	zassert_ok(ec_cmd_flash_protect(NULL, &params, &response), NULL);
+	zassert_ok(ec_cmd_flash_protect_v1(NULL, &params, &response), NULL);
 	zassert_equal(response.flags, expected_flags, "response.flags = %d",
 		      response.flags);
 }
@@ -333,8 +333,8 @@ ZTEST_USER(flash, test_hostcmd_flash_info_2)
 	struct ec_params_flash_info_2 params = {
 		.num_banks_desc = 1,
 	};
-	struct host_cmd_handler_args args =
-		BUILD_HOST_COMMAND(EC_CMD_FLASH_INFO, 2, *response, params);
+	struct host_cmd_handler_args args = BUILD_HOST_COMMAND(
+		EC_CMD_FLASH_INFO, 2, response_buffer, params);
 
 	/* Get the flash info. */
 	zassert_ok(host_command_process(&args), NULL);

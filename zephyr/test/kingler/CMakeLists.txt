@@ -9,6 +9,7 @@ project(kingler)
 add_subdirectory(${PLATFORM_EC}/zephyr/test/test_utils test_utils)
 
 zephyr_include_directories("${PLATFORM_EC_PROGRAM_DIR}/corsola/include")
+zephyr_include_directories("${PLATFORM_EC_PROGRAM_DIR}/../test/drivers/common/include")
 
 target_sources(app PRIVATE src/fakes.c)
 
@@ -53,3 +54,10 @@ target_sources_ifdef(
         PRIVATE
         ${PLATFORM_EC_PROGRAM_DIR}/corsola/src/usbc.c
         src/usb_port_count.c)
+
+target_sources_ifdef(
+        CONFIG_TEST_PONYTA
+        app
+        PRIVATE
+        ${PLATFORM_EC_PROGRAM_DIR}/corsola/ponyta/src/board.c
+        src/ponyta_board.c)

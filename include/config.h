@@ -882,6 +882,10 @@
 /*****************************************************************************/
 /* Support CEC */
 #undef CONFIG_CEC
+#undef CONFIG_CEC_DEBUG
+
+/* CEC drivers */
+#undef CONFIG_CEC_BITBANG
 
 /*****************************************************************************/
 
@@ -1713,7 +1717,6 @@
 #undef CONFIG_CMD_SPI_FLASH
 #undef CONFIG_CMD_SPI_NOR
 #undef CONFIG_CMD_SPI_XFER
-#undef CONFIG_CMD_STACKOVERFLOW
 #define CONFIG_CMD_SYSINFO
 #define CONFIG_CMD_SYSJUMP
 #define CONFIG_CMD_SYSLOCK
@@ -1804,6 +1807,9 @@
  * Add flag GPIO_POWER_DOWN and additional API's.
  */
 #undef CONFIG_GPIO_POWER_DOWN
+
+/* Allow unaligned access */
+#undef CONFIG_ALLOW_UNALIGNED_ACCESS
 
 /*
  * Provide common runtime layer code (tasks, hooks ...)
@@ -3530,6 +3536,9 @@
 /* MKBP events are sent by using GPIO */
 #undef CONFIG_MKBP_USE_GPIO
 
+/* MKBP events GPIO is active high */
+#undef CONFIG_MKBP_USE_GPIO_ACTIVE_HIGH
+
 /*
  * MKBP events are notified by using both a GPIO and a host event.
  *
@@ -4463,11 +4472,10 @@
 #undef CONFIG_UART_PAD_SWITCH
 
 /**
- * This will only be used for Kukui. Preserve EC reset logs and console
- * logs on SRAM/FLASH so that the logs will be preserved after EC shutting
- * down or sysjumped. It will keep the contents across EC resets, so we have
- * more information about system states. The contents on SRAM will be cleared
- * when checksum or validity check fails.
+ * Preserve EC reset logs and console logs on SRAM/FLASH so that the logs will
+ * be preserved after EC shutting down or sysjumped. It will keep the contents
+ * across EC resets, so we have more information about system states. The
+ * contents on SRAM will be cleared when checksum or validity check fails.
  */
 #undef CONFIG_PRESERVE_LOGS
 
@@ -4994,6 +5002,7 @@
 #undef CONFIG_USBC_RETIMER_ANX7452
 #undef CONFIG_USBC_RETIMER_INTEL_BB
 #undef CONFIG_USBC_RETIMER_KB800X
+#undef CONFIG_USBC_RETIMER_KB8010
 #undef CONFIG_USBC_RETIMER_NB7V904M
 #undef CONFIG_USBC_RETIMER_PI3DPX1207
 #undef CONFIG_USBC_RETIMER_PI3HDX1204

@@ -30,7 +30,7 @@
 LOG_MODULE_REGISTER(cros_kb_raw, LOG_LEVEL_ERR);
 
 #ifdef CONFIG_PLATFORM_EC_KEYBOARD_COL2_INVERTED
-#if !DT_NODE_EXISTS(KBD_KS02_NODE)
+#if !DT_NODE_EXISTS(KBD_KSO2_NODE)
 #error gpio_kbd_kso2 alias has to point to the keyboard column 2 output pin.
 #endif
 #endif /* CONFIG_PLATFORM_EC_KEYBOARD_COL2_INVERTED */
@@ -261,6 +261,10 @@ BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1);
 DEVICE_DT_INST_DEFINE(0, kb_raw_npcx_init, NULL, NULL, &cros_kb_raw_cfg,
 		      PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
 		      &cros_kb_raw_npcx_driver_api);
+
+BUILD_ASSERT(
+	!IS_ENABLED(CONFIG_INPUT_NPCX_KBD),
+	"cros_kb_raw_npcx can't be enabled at the same time as input_npcx_kbd");
 
 /* KBS register structure check */
 NPCX_REG_SIZE_CHECK(kbs_reg, 0x010);

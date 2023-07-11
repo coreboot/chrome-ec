@@ -680,7 +680,7 @@ int crec_flash_is_erased(uint32_t offset, int size)
 static bool check_cbi_section_overlap(int offset, int size)
 {
 	int cbi_start = CBI_FLASH_OFFSET;
-	int cbi_end = CBI_FLASH_OFFSET + CBI_IMAGE_SIZE;
+	int cbi_end = CBI_FLASH_OFFSET + CBI_FLASH_SIZE;
 	int sec_start = offset;
 	int sec_end = offset + size;
 
@@ -697,7 +697,7 @@ static bool check_cbi_section_overlap(int offset, int size)
 static void protect_cbi_overlapped_section(int offset, int size, char *data)
 {
 	if (check_cbi_section_overlap(offset, size)) {
-		int cbi_end = CBI_FLASH_OFFSET + CBI_IMAGE_SIZE;
+		int cbi_end = CBI_FLASH_OFFSET + CBI_FLASH_SIZE;
 		int sec_end = offset + size;
 		int cbi_fill_start = MAX(CBI_FLASH_OFFSET, offset);
 		int cbi_fill_size = MIN(cbi_end, sec_end) - cbi_fill_start;
@@ -780,7 +780,7 @@ int crec_flash_write(int offset, int size, const char *data)
 
 #if defined(CONFIG_ZEPHYR) && defined(CONFIG_PLATFORM_EC_CBI_FLASH)
 	if (check_cbi_section_overlap(offset, size)) {
-		int cbi_end = CBI_FLASH_OFFSET + CBI_IMAGE_SIZE;
+		int cbi_end = CBI_FLASH_OFFSET + CBI_FLASH_SIZE;
 		int sec_end = offset + size;
 
 		if (offset < CBI_FLASH_OFFSET) {
@@ -809,7 +809,7 @@ int crec_flash_erase(int offset, int size)
 
 #if defined(CONFIG_ZEPHYR) && defined(CONFIG_PLATFORM_EC_CBI_FLASH)
 	if (check_cbi_section_overlap(offset, size)) {
-		int cbi_end = CBI_FLASH_OFFSET + CBI_IMAGE_SIZE;
+		int cbi_end = CBI_FLASH_OFFSET + CBI_FLASH_SIZE;
 		int sec_end = offset + size;
 
 		if (offset < CBI_FLASH_OFFSET) {
@@ -1723,13 +1723,8 @@ static enum ec_status flash_command_protect(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 
-/*
- * TODO(crbug.com/239197) : Adding both versions to the version mask is a
- * temporary workaround for a problem in the cros_ec driver. Drop
- * EC_VER_MASK(0) once cros_ec driver can send the correct version.
- */
 DECLARE_HOST_COMMAND(EC_CMD_FLASH_PROTECT, flash_command_protect,
-		     EC_VER_MASK(0) | EC_VER_MASK(1)
+		     EC_VER_MASK(1)
 #ifdef CONFIG_FLASH_PROTECT_DEFERRED
 			     | EC_VER_MASK(2)
 #endif

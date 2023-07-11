@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 # pylint: disable=line-too-long
+
 """Runs unit tests on device and displays the results.
 
 This script assumes you have a ~/.servodrc config file with a line that
@@ -55,7 +55,7 @@ import socket
 import subprocess
 import sys
 import time
-from typing import BinaryIO, Dict, List, Optional, Tuple
+from typing import BinaryIO, Callable, Dict, List, Optional, Tuple
 
 # pylint: disable=import-error
 import colorama  # type: ignore[import]
@@ -97,10 +97,18 @@ DATA_ACCESS_VIOLATION_20000000_REGEX = re.compile(
 DATA_ACCESS_VIOLATION_24000000_REGEX = re.compile(
     r"Data access violation, mfar = 24000000\r\n"
 )
+DATA_ACCESS_VIOLATION_64020000_REGEX = re.compile(
+    r"Data access violation, mfar = 64020000\r\n"
+)
+DATA_ACCESS_VIOLATION_64040000_REGEX = re.compile(
+    r"Data access violation, mfar = 64040000\r\n"
+)
+
 PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
 
 BLOONCHIPPER = "bloonchipper"
 DARTMONKEY = "dartmonkey"
+HELIPILOT = "helipilot"
 
 JTRACE = "jtrace"
 SERVO_MICRO = "servo_micro"
@@ -147,6 +155,7 @@ class ApplicationType(Enum):
 
 
 @dataclass
+# pylint: disable-next=too-many-instance-attributes
 class BoardConfig:
     """Board-specific configuration."""
 
@@ -156,6 +165,7 @@ class BoardConfig:
     rollback_region0_regex: object
     rollback_region1_regex: object
     mpu_regex: object
+    reboot_timeout: float
     variants: Dict
 
 
@@ -177,10 +187,19 @@ class TestConfig:
     ro_image: str = None
     build_board: str = None
     config_name: str = None
+    exclude_boards: List = field(default_factory=list)
     logs: List = field(init=False, default_factory=list)
     passed: bool = field(init=False, default=False)
     num_passes: int = field(init=False, default=0)
     num_fails: int = field(init=False, default=0)
+
+    # The callbacks below are called before and after a test is executed and
+    # may be used for additional test setup, post test activities, or other tasks
+    # that do not otherwise fit into the test workflow. The default behavior is
+    # to simply return True and if either callback returns False then the test
+    # is reported a failure.
+    pre_test_callback: Callable = field(init=True, default=lambda board: True)
+    post_test_callback: Callable = field(init=True, default=lambda board: True)
 
     def __post_init__(self):
         if self.finish_regexes is None:
@@ -214,7 +233,13 @@ class AllTests:
             [] if with_private == PRIVATE_NO else AllTests.get_private_tests()
         )
 
-        return public_tests + private_tests
+        all_tests = public_tests + private_tests
+        board_tests = list(
+            filter(
+                lambda e: (board_config.name not in e.exclude_boards), all_tests
+            )
+        )
+        return board_tests
 
     @staticmethod
     def get_public_tests(board_config: BoardConfig) -> List[TestConfig]:
@@ -231,7 +256,6 @@ class AllTests:
             TestConfig(test_name="always_memset"),
             TestConfig(test_name="benchmark"),
             TestConfig(test_name="boringssl_crypto"),
-            TestConfig(test_name="cec"),
             TestConfig(test_name="cortexm_fpu"),
             TestConfig(test_name="crc"),
             TestConfig(test_name="exception"),
@@ -246,7 +270,12 @@ class AllTests:
                 toggle_power=True,
                 enable_hw_write_protect=True,
             ),
-            TestConfig(test_name="fpsensor_auth_crypto"),
+            # TODO(b/274162810): Re-enable test on bloonchipper when LTO is re-enabled.
+            TestConfig(
+                test_name="fpsensor_auth_crypto_stateful",
+                exclude_boards=[BLOONCHIPPER],
+            ),
+            TestConfig(test_name="fpsensor_auth_crypto_stateless"),
             TestConfig(test_name="fpsensor_hw"),
             TestConfig(
                 config_name="fpsensor_spi_ro",
@@ -317,6 +346,7 @@ class AllTests:
             TestConfig(test_name="static_if"),
             TestConfig(test_name="stdlib"),
             TestConfig(test_name="std_vector"),
+            TestConfig(test_name="stm32f_rtc", exclude_boards=[DARTMONKEY]),
             TestConfig(
                 config_name="system_is_locked_wp_on",
                 test_name="system_is_locked",
@@ -334,13 +364,9 @@ class AllTests:
             TestConfig(test_name="timer"),
             TestConfig(test_name="timer_dos"),
             TestConfig(test_name="tpm_seed_clear"),
-            TestConfig(test_name="unaligned_access"),
             TestConfig(test_name="utils", timeout_secs=20),
             TestConfig(test_name="utils_str"),
         ]
-
-        if board_config.name == BLOONCHIPPER:
-            tests.append(TestConfig(test_name="stm32f_rtc"))
 
         # Run panic data tests for all boards and RO versions.
         for variant_name, variant_info in board_config.variants.items():
@@ -388,6 +414,7 @@ BLOONCHIPPER_CONFIG = BoardConfig(
     name=BLOONCHIPPER,
     servo_uart_name="raw_fpmcu_console_uart_pty",
     servo_power_enable="fpmcu_pp3300",
+    reboot_timeout=1.0,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_8020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_8040000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
@@ -405,6 +432,7 @@ DARTMONKEY_CONFIG = BoardConfig(
     name=DARTMONKEY,
     servo_uart_name="raw_fpmcu_console_uart_pty",
     servo_power_enable="fpmcu_pp3300",
+    reboot_timeout=1.0,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_80C0000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_80E0000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_24000000_REGEX,
@@ -423,9 +451,21 @@ DARTMONKEY_CONFIG = BoardConfig(
     },
 )
 
+HELIPILOT_CONFIG = BoardConfig(
+    name=HELIPILOT,
+    servo_uart_name="raw_fpmcu_console_uart_pty",
+    servo_power_enable="fpmcu_pp3300",
+    reboot_timeout=1.5,
+    rollback_region0_regex=DATA_ACCESS_VIOLATION_64020000_REGEX,
+    rollback_region1_regex=DATA_ACCESS_VIOLATION_64040000_REGEX,
+    mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
+    variants={},
+)
+
 BOARD_CONFIGS = {
     "bloonchipper": BLOONCHIPPER_CONFIG,
     "dartmonkey": DARTMONKEY_CONFIG,
+    "helipilot": HELIPILOT_CONFIG,
 }
 
 
@@ -535,7 +575,7 @@ def power_cycle(board_config: BoardConfig) -> None:
     """power_cycle the boards."""
     logging.debug("power_cycling board")
     power(board_config, power_on=False)
-    time.sleep(1)
+    time.sleep(board_config.reboot_timeout)
     power(board_config, power_on=True)
 
 
@@ -663,22 +703,31 @@ def process_console_output_line(line: bytes, test: TestConfig):
 
 
 def run_test(
-    test: TestConfig, console: io.FileIO, executor: ThreadPoolExecutor
+    test: TestConfig,
+    build_board: str,
+    console: io.FileIO,
+    reboot_timeout: float,
+    executor: ThreadPoolExecutor,
 ) -> bool:
     """Run specified test."""
     start = time.time()
 
     # Wait for boot to finish
-    time.sleep(1)
+    time.sleep(reboot_timeout)
     console.write("\n".encode())
     if test.imagetype_to_use == ImageType.RO:
         console.write("reboot ro\n".encode())
-        time.sleep(1)
+        time.sleep(reboot_timeout)
 
     # Skip runtest if using standard app type
     if test.apptype_to_use != ApplicationType.PRODUCTION:
         test_cmd = "runtest " + " ".join(test.test_args) + "\n"
         console.write(test_cmd.encode())
+
+    logging.debug("Calling pre-test callback")
+    if not test.pre_test_callback(build_board):
+        logging.error("pre-test callback failed, aborting")
+        return False
 
     while True:
         console.flush()
@@ -712,7 +761,9 @@ def run_test(
                 for line in lines:
                     process_console_output_line(line, test)
 
-                return test.num_fails == 0
+                logging.debug("Calling post-test callback")
+                post_cb_passed = test.post_test_callback(build_board)
+                return test.num_fails == 0 and post_cb_passed
 
 
 def get_test_list(
@@ -732,7 +783,11 @@ def get_test_list(
             if test_regex.fullmatch(test.config_name)
         ]
         if not tests:
-            logging.error('Unable to find test config for "%s"', test)
+            logging.error(
+                'Test "%s" is either not configured or not supported on board "%s"',
+                test,
+                config.name,
+            )
             sys.exit(1)
         test_list += tests
 
@@ -752,8 +807,12 @@ def flash_and_run_test(
     if test.build_board is not None:
         build_board = test.build_board
 
-    # build test binary
-    build(test.test_name, build_board, args.compiler, test.apptype_to_use)
+    # attempt to build test binary, reporting a test failure on error
+    try:
+        build(test.test_name, build_board, args.compiler, test.apptype_to_use)
+    except Exception as exception:  # pylint: disable=broad-except
+        logging.error("failed to build %s: %s", test.test_name, exception)
+        return False
 
     if test.apptype_to_use == ApplicationType.PRODUCTION:
         image_path = os.path.join(EC_DIR, "build", build_board, "ec.bin")
@@ -787,7 +846,7 @@ def flash_and_run_test(
         ):
             flash_succeeded = True
             break
-        time.sleep(1)
+        time.sleep(board_config.reboot_timeout)
 
     if not flash_succeeded:
         logging.debug(
@@ -811,11 +870,17 @@ def flash_and_run_test(
                 console_socket.makefile(mode="rwb", buffering=0)
             )
         else:
-            console = stack.enter_context(
-                open(get_console(board_config), "wb+", buffering=0)
-            )
+            # pylint: disable-next=consider-using-with
+            console_file = open(get_console(board_config), "wb+", buffering=0)
+            console = stack.enter_context(console_file)
 
-        return run_test(test, console, executor=executor)
+        return run_test(
+            test,
+            build_board,
+            console,
+            board_config.reboot_timeout,
+            executor=executor,
+        )
 
 
 def parse_remote_arg(remote: str) -> str:
