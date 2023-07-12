@@ -165,6 +165,16 @@ int hook_call_deferred(const struct deferred_data *data, int us)
 	return EC_SUCCESS;
 }
 
+int hook_call_is_active(const struct deferred_data *data)
+{
+	int i = data - __deferred_funcs;
+
+	if (data < __deferred_funcs || data >= __deferred_funcs_end)
+		return EC_ERROR_INVAL;  /* Routine not registered */
+
+	return  !(__deferred_until[i] == 0);
+}
+
 void hook_task(void *u)
 {
 	/* Periodic hooks will be called first time through the loop */

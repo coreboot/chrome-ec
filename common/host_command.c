@@ -171,7 +171,7 @@ void host_command_received(struct host_cmd_handler_args *args)
 		args->result = EC_RES_ERROR;
 	}
 
-#ifdef CONFIG_AP_HANG_DETECT
+#if  defined(CONFIG_AP_HANG_DETECT) && defined(CONFIG_AP_HANG_DETECT_FOR_EVENT)
 	/* If hang detection is enabled, check stop on host command */
 	hang_detect_stop_on_host_command();
 #endif

@@ -3738,6 +3738,12 @@ struct __ec_align1 ec_response_i2c_passthru {
 /* Stop on end of AP S0->S3 transition (suspending or shutting down) */
 #define EC_HANG_STOP_ON_SUSPEND       (1 << 10)
 
+/* Get last hang status - whether the AP boot was clear or not */
+#define EC_GET_HANG_STATUS            (1 << 11)
+
+/* Clear last hang status when AP is rebooting/shutting down gracefully */
+#define EC_CLEAR_HANG_STATUS          (1 << 12)
+
 /*
  * If this flag is set, all the other fields are ignored, and the hang detect
  * timer is started.  This provides the AP a way to start the hang timer
@@ -3764,6 +3770,10 @@ struct __ec_align4 ec_params_hang_detect {
 	uint16_t warm_reboot_timeout_msec;
 };
 
+struct __ec_align4 ec_params_hang_detect_resp {
+		/* Flags; see EC_HANG_* */
+	uint32_t status;
+};
 /*****************************************************************************/
 /* Commands for battery charging */
 
