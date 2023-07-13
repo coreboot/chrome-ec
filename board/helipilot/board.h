@@ -12,8 +12,6 @@
 
 #undef CONFIG_SYSTEM_UNLOCKED
 
-#define CONFIG_LTO
-
 /*-------------------------------------------------------------------------*
  * Flash layout:
  *
@@ -134,6 +132,9 @@
 #undef CONFIG_CONSOLE_UART
 #define CONFIG_CONSOLE_UART 0 /* 0:UART1 1:UART2 */
 #define NPCX_UART_MODULE2 1 /* 1:GPIO64/65 as UART1 */
+
+#undef CONFIG_UART_TX_BUF_SIZE
+#define CONFIG_UART_TX_BUF_SIZE 2048
 
 #undef CONSOLE_TASK_STACK_SIZE
 #define CONSOLE_TASK_STACK_SIZE 4096
