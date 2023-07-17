@@ -12,7 +12,7 @@
 
 #undef CONFIG_SYSTEM_UNLOCKED
 
-#define CONFIG_LTO
+#define CONFIG_ALLOW_UNALIGNED_ACCESS
 
 /*-------------------------------------------------------------------------*
  * Flash layout:
@@ -118,6 +118,7 @@
 
 #define CONFIG_WP_STORAGE_OFF CONFIG_EC_PROTECTED_STORAGE_OFF
 #define CONFIG_WP_STORAGE_SIZE CONFIG_EC_PROTECTED_STORAGE_SIZE
+#define CONFIG_WP_ACTIVE_HIGH
 
 /*
  * We want to prevent flash readout, and use it as indicator of protection
@@ -134,6 +135,9 @@
 #undef CONFIG_CONSOLE_UART
 #define CONFIG_CONSOLE_UART 0 /* 0:UART1 1:UART2 */
 #define NPCX_UART_MODULE2 1 /* 1:GPIO64/65 as UART1 */
+
+#undef CONFIG_UART_TX_BUF_SIZE
+#define CONFIG_UART_TX_BUF_SIZE 2048
 
 #undef CONSOLE_TASK_STACK_SIZE
 #define CONSOLE_TASK_STACK_SIZE 4096
@@ -173,6 +177,7 @@
 #define CONFIG_CMD_SPI_XFER
 /* TODO(b/130249462): remove for release */
 #define CONFIG_CMD_FPSENSOR_DEBUG
+#define CONFIG_LOW_POWER_IDLE
 #endif
 
 /*-------------------------------------------------------------------------*
@@ -284,7 +289,7 @@
  * then redefined here to so it's more clear which signal is being used for
  * which purpose.
  */
-#define GPIO_WP_L GPIO_HOST_MCU_WP_OD
+#define GPIO_WP GPIO_HOST_MCU_WP_OD
 #define GPIO_SHI_CS_L GPIO_SPI_HOST_CS_MCU_ODL
 #define GPIO_FPS_INT GPIO_FP_MCU_INT_L
 #define GPIO_EC_INT_L GPIO_MCU_PLATFORM_INT_L
