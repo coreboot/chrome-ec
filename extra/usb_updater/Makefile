@@ -56,14 +56,13 @@ gsctool: $(GSCTOOL_OBJS) Makefile
 
 gsctool.o:  generated_version.h
 
-.PHONY: clean
-
 generated_version.h: $(GSCTOOL_SOURCES)
 	# Make sure ${BOARD} not set to anything when invoking getversion.sh,
 	# as even when building with Cr50 enabled, other directories do not
 	# matter for gsctool.
 	@(cd ../../; BOARD= util/getversion.sh) > $@
 
+.PHONY: clean
 clean:
 	rm -rf $(PROGRAMS) *~ *.o *.d dp generated_version.h
 
