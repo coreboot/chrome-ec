@@ -543,8 +543,7 @@ static const struct option_container cmd_line_options[] = {
 	{ { "version", no_argument, NULL, 'v' },
 	  "Report this utility version" },
 	{ { "metrics", no_argument, NULL, 'W' },
-	  "Get Ti50 metrics",
-	  GSC_DEVICE_DT },
+	  "Get GSC metrics"},
 	{ { "wp", optional_argument, NULL, 'w' },
 	  "[enable|disable|follow]%Get or set the write protect setting" },
 	{ { "clog", no_argument, NULL, 'x' },
@@ -4383,8 +4382,8 @@ static int print_ti50_stats(struct ti50_stats_v0 *stats, size_t size)
 	return 0;
 }
 
-static int process_get_metrics(struct transfer_descriptor *td,
-			       bool show_machine_output)
+static int process_ti50_get_metrics(struct transfer_descriptor *td,
+		bool show_machine_output)
 {
 	uint32_t rv;
 	/* Allocate extra space in case future versions add more data. */
@@ -4412,6 +4411,74 @@ static int process_get_metrics(struct transfer_descriptor *td,
 		return print_ti50_stats((struct ti50_stats_v0 *) response,
 					response_size);
 	}
+	return 0;
+}
+
+static int process_cr50_get_metrics(struct transfer_descriptor *td,
+		bool show_machine_output)
+{
+	/* Allocate extra space in case future versions add more data. */
+	struct cr50_stats_response response[4] = {};
+	size_t response_size = sizeof(response);
+	struct cr50_stats_response stats;
+	uint32_t rv;
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_CR50_METRICS, NULL,
+				 0, (uint8_t *) &response, &response_size);
+	if (rv != VENDOR_RC_SUCCESS) {
+		printf("Get stats failed. (%X)\n", rv);
+		return 1;
+	}
+
+	if (response_size != sizeof(stats)) {
+		printf("Unexpected response size. (%zu)\n", response_size);
+		return 2;
+	}
+
+	/* Let's check if this is a newer version response. */
+	memcpy(&stats, response, sizeof(stats));
+
+	stats.version = be32toh(stats.version);
+	stats.reset_src = be32toh(stats.reset_src);
+	stats.brdprop = be32toh(stats.brdprop);
+	stats.reset_time_s =
+		be64toh(stats.reset_time_s);
+	stats.cold_reset_time_s =
+		be32toh(stats.cold_reset_time_s);
+	stats.misc_status = be32toh(stats.misc_status);
+
+	if (stats.version > CR50_METRICSV_STATS_VERSION) {
+		fprintf(stderr, "unsupported ver - %d. supports up to %d\n",
+			stats.version, CR50_METRICSV_STATS_VERSION);
+	}
+	printf("version:           %10u\n",
+			stats.version);
+	printf("reset_src:       0x%010x\n",
+			stats.reset_src);
+	printf("brdprop:         0x%010x\n",
+			stats.brdprop);
+	printf("cold_reset_time_s: %10u\n",
+			stats.cold_reset_time_s);
+	printf("reset_time_s:      %10u\n",
+			stats.reset_time_s);
+	printf("misc_status:     0x%010x\n",
+			stats.misc_status);
+
+	printf("   rdd detected:      %7d\n",
+		(stats.misc_status >> CR50_METRICSV_RDD_IS_DETECTED_SHIFT) & 1);
+	printf("   rddkeeplive en:    %7d\n",
+		(stats.misc_status >>
+		 CR50_METRICSV_RDD_KEEPALIVE_EN_SHIFT) & 1);
+	printf("   rddkeeplive en atboot: %3d\n",
+		(stats.misc_status >>
+		 CR50_METRICSV_RDD_KEEPALIVE_EN_ATBOOT_SHIFT) & 1);
+	printf("   ccd_mode en:       %7d\n",
+		(stats.misc_status >>
+		 CR50_METRICSV_CCD_MODE_EN_SHIFT) & 1);
+	printf("   ambigous straps:   %7d\n",
+		(stats.misc_status >>
+		 CR50_METRICSV_AMBIGUOUS_STRAP_SHIFT) & 1);
+
 	return 0;
 }
 
@@ -5142,8 +5209,14 @@ int main(int argc, char *argv[])
 		exit(process_get_boot_trace(&td, erase_boot_trace,
 					    show_machine_output));
 
-	if (get_metrics)
-		exit(process_get_metrics(&td, show_machine_output));
+	if (get_metrics) {
+		if (gsc_dev == GSC_DEVICE_DT)
+			exit(process_ti50_get_metrics(&td,
+						      show_machine_output));
+		else
+			exit(process_cr50_get_metrics(&td,
+						      show_machine_output));
+	}
 
 	if (fw_image_data || show_fw_ver) {
 		setup_connection(&td);
