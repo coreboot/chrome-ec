@@ -98,6 +98,7 @@ uint32_t nvmem_user_sizes[NVMEM_NUM_USERS] = {
 static uint32_t board_properties; /* Mainly used as a cache for strap config. */
 static uint8_t reboot_request_posted;
 static uint8_t in_prod_mode;
+static uint32_t metrics_status;
 
 /* Which UARTs we'd like to be able to bitbang. */
 struct uart_bitbang_properties bitbang_config = {
@@ -1603,6 +1604,7 @@ static int get_strap_config(uint8_t *config)
 		if ((i2c_prop && spi_prop) || (!spi_prop && !i2c_prop))
 			return EC_ERROR_INVAL;
 		use_spi = spi_prop;
+		metrics_status |= (1 << CR50_METRICSV_AMBIGUOUS_STRAP_SHIFT);
 		CPRINTS("WARN Ambiguous strap cfg. Use %s based on old "
 			"brdprop.", use_spi ? "spi" : "i2c");
 	}
@@ -2012,3 +2014,30 @@ uint32_t board_cfg_reg_read(void)
 {
 	return GREG32(PMU, PWRDN_SCRATCH21);
 }
+
+static enum vendor_cmd_rc vc_get_cr50_metrics(struct vendor_cmd_params *p)
+{
+	struct cr50_stats_response response = {};
+
+	p->out_size = 0;
+	if (p->in_size)
+		return VENDOR_RC_BOGUS_ARGS;
+
+	response.version = htobe32(CR50_METRICSV_STATS_VERSION);
+
+	response.reset_src = htobe32(system_get_reset_flags());
+	response.brdprop = htobe32(board_properties);
+
+	response.misc_status = metrics_status;
+	response.misc_status |= get_rdd_metrics();
+	response.misc_status = htobe32(response.misc_status);
+
+	response.reset_time_s = htobe32(get_time().val / SECOND);
+	response.cold_reset_time_s = htobe32(get_seconds_since_cold_boot());
+
+	p->out_size = sizeof(response);
+	memcpy(p->buffer, &response, sizeof(response));
+
+	return VENDOR_RC_SUCCESS;
+}
+DECLARE_VENDOR_COMMAND_P(VENDOR_CC_GET_CR50_METRICS, vc_get_cr50_metrics);

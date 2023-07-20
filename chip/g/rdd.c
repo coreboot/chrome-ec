@@ -6,6 +6,7 @@
 #include "ccd_config.h"
 #include "clock.h"
 #include "console.h"
+#include "extension.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "rdd.h"
@@ -51,6 +52,21 @@ static uint8_t rdd_is_detected_shadow;
 uint8_t rdd_is_detected(void)
 {
 	return rdd_is_detected_shadow;
+}
+
+uint8_t get_rdd_metrics(void)
+{
+	uint8_t status = 0;
+
+	if (rdd_is_detected())
+		status |= (1 << CR50_METRICSV_RDD_IS_DETECTED_SHIFT);
+	if (force_detected)
+		status |= (1 << CR50_METRICSV_RDD_KEEPALIVE_EN_SHIFT);
+	if (ccd_get_flag(CCD_FLAG_RDDKEEPALIVE_AT_BOOT))
+		status |= (1 << CR50_METRICSV_RDD_KEEPALIVE_EN_ATBOOT_SHIFT);
+	if (!gpio_get_level(GPIO_CCD_MODE_L))
+		status |= (1 << CR50_METRICSV_CCD_MODE_EN_SHIFT);
+	return status;
 }
 
 void print_rdd_state(void)
