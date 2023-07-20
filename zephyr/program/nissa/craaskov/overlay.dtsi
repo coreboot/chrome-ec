@@ -115,10 +115,6 @@
 			gpios = <&gpiof 5 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 			no-auto-init;
 		};
-		gpio_fan_enable: fan-enable {
-			gpios = <&gpio6 3 GPIO_OUTPUT>;
-			no-auto-init;
-		};
 		ec-i2c-sensor-scl {
 			gpios = <&gpio9 0 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
@@ -204,7 +200,6 @@
 		port0@0 {
 			compatible = "named-usbc-port";
 			reg = <0>;
-			bc12 = <&bc12_port0>;
 			chg = <&chg_port0>;
 			tcpc = <&tcpc_port0>;
 			usb-mux-chain-0 {
@@ -224,7 +219,6 @@
 		port1@1 {
 			compatible = "named-usbc-port";
 			reg = <1>;
-			bc12 = <&bc12_port1>;
 			chg = <&chg_port1>;
 			tcpc = <&tcpc_port1>;
 			usb-mux-chain-1 {
@@ -241,19 +235,6 @@
 			virtual_mux_1: virtual-mux-1 {
 				compatible = "cros-ec,usbc-mux-virtual";
 			};
-		};
-	};
-
-	fans {
-		compatible = "cros-ec,fans";
-
-		fan_0 {
-			pwms = <&pwm5 5 PWM_KHZ(1) PWM_POLARITY_NORMAL>;
-			rpm_min = <2200>;
-			rpm_start = <2200>;
-			rpm_max = <4200>;
-			tach = <&tach2>;
-			enable_gpio = <&gpio_fan_enable>;
 		};
 	};
 
@@ -274,10 +255,14 @@
 			<&gpio6 6 0>,
 			<&gpio7 3 0>,
 			<&gpio8 3 0>,
+			<&gpio8 5 0>,
 			<&gpio8 6 0>,
+			<&gpio9 6 0>,
+			<&gpioa 0 0>,
 			<&gpiob 1 0>,
 			<&gpiob 7 0>,
 			<&gpioc 7 0>,
+			<&gpiod 5 0>,
 			<&gpiof 2 0>,
 			<&gpiof 3 0>;
 	 };
@@ -323,17 +308,6 @@
 	label = "I2C_USB_C0_TCPC";
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
 
-	bc12_port0: pi3usb9201@5f {
-		compatible = "pericom,pi3usb9201";
-		status = "okay";
-		reg = <0x5f>;
-		/*
-		 * BC1.2 interrupt is shared with TCPC, so
-		 * IRQ is not specified here and handled by
-		 * usb_c0_interrupt.
-		 */
-	};
-
 	chg_port0: isl923x@9 {
 		compatible = "intersil,isl923x";
 		status = "okay";
@@ -352,12 +326,6 @@
 &i2c5_1 {
 	label = "I2C_SUB_C1_TCPC";
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
-
-	bc12_port1: pi3usb9201@5f {
-		compatible = "pericom,pi3usb9201";
-		status = "okay";
-		reg = <0x5f>;
-	};
 
 	chg_port1: isl923x@9 {
 		compatible = "intersil,isl923x";
@@ -395,16 +363,6 @@
 	clock-bus = "NPCX_CLOCK_BUS_LFCLK";
 	pinctrl-0 = <&pwm5_gpb7>;
 	pinctrl-names = "default";
-};
-
-/* Tachometer for fan speed measurement */
-&tach2 {
-	status = "okay";
-	pinctrl-0 = <&ta2_1_in_gp73>;
-	pinctrl-names = "default";
-	port = <NPCX_TACH_PORT_A>; /* port-A is selected */
-	sample-clk = <NPCX_TACH_FREQ_LFCLK>; /* Use LFCLK as sampling clock */
-	pulses-per-round = <2>; /* number of pulses per round of encoder */
 };
 
 /* host interface */
