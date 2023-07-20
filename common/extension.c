@@ -39,6 +39,7 @@ uint32_t extension_route_command(struct vendor_cmd_params *p)
 		case VENDOR_CC_DS_DIS_TEMP:
 		case VENDOR_CC_USER_PRES:
 		case VENDOR_CC_WP:
+		case VENDOR_CC_GET_CR50_METRICS:
 #endif /* defined(CR50_DEV) */
 		case EXTENSION_POST_RESET: /* Always need to reset. */
 		case VENDOR_CC_CCD:

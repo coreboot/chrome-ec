@@ -23,4 +23,9 @@ void print_rdd_state(void);
  */
 uint8_t rdd_is_detected(void);
 
+/**
+ * Convert rdd state into the correct metrics format.
+ */
+uint8_t get_rdd_metrics(void);
+
 #endif  /* __CROS_RDD_H */
