@@ -296,7 +296,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH_CROS
                                                 "${PLATFORM_EC}/common/flash.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD
-                                                "${PLATFORM_EC}/common/host_command.c")
+                                                "${PLATFORM_EC}/common/host_command.c"
+                                                "${PLATFORM_EC}/common/host_command_task.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD
                                                 "${PLATFORM_EC}/common/host_event_commands.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE
@@ -403,7 +404,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PSE_LTC4291
                                                 "${PLATFORM_EC}/driver/pse_ltc4291.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RSA
                                                 "${PLATFORM_EC}/common/rsa.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RWSIG
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RWSIG_VERIFY
                                                 "${PLATFORM_EC}/common/rwsig.c"
                                                 "${PLATFORM_EC}/common/vboot/common.c"
                                                 "${PLATFORM_EC}/common/vboot/vb21_lib.c")
@@ -477,6 +478,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_KB8010
                                                 "${PLATFORM_EC}/driver/retimer/kb8010.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8818
                                                 "${PLATFORM_EC}/driver/retimer/ps8818.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8828
+                                                "${PLATFORM_EC}/driver/retimer/ps8828.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8833
+                                                "${PLATFORM_EC}/driver/retimer/ps8833.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8811
                                                 "${PLATFORM_EC}/driver/retimer/ps8811.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7451
@@ -644,8 +649,8 @@ add_dependencies(app ec_version_header)
 # Include the directory containing the generated header.
 zephyr_include_directories("${CMAKE_CURRENT_BINARY_DIR}/include")
 
-# Sign RW firmware if RWSIG enabled
-if (DEFINED CONFIG_CROS_EC_RW AND DEFINED CONFIG_PLATFORM_EC_RWSIG)
+# Extract signing keys if RWSIG enabled.
+if (DEFINED CONFIG_PLATFORM_EC_RWSIG)
   add_custom_target(key_extract
     COMMAND futility create
       "${PLATFORM_EC}/${CONFIG_PLATFORM_EC_RWSIG_KEY_PATH}"
@@ -653,7 +658,10 @@ if (DEFINED CONFIG_CROS_EC_RW AND DEFINED CONFIG_PLATFORM_EC_RWSIG)
     COMMENT "Extracting signing keys"
     VERBATIM
   )
+endif()
 
+# Sign RW if PLATFORM_EC_RWSIG_SIGN is set.
+if (DEFINED CONFIG_PLATFORM_EC_RWSIG_SIGN)
   add_custom_target(sign_rw ALL
     COMMAND futility sign --type rwsig
             --prikey "${CMAKE_BINARY_DIR}/key.vbprik2"
