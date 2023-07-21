@@ -9,6 +9,7 @@ cros-ec	The Chromium OS Embedded Controller Project
 cros	The Chromium OS Embedded Controller Project
 intersil	Intersil
 lgc	LG Chem
+lges	Battery vendor
 smp	Battery vendor
 aec	Battery vendor
 powertech	Battery vendor
