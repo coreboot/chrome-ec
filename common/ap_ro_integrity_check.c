@@ -31,6 +31,8 @@
 #define DELAY_EC_RST_RELEASE (60 * SECOND)
 /* Don't clear the UNSUPPORTED_TRIGGERED status for 10 seconds */
 #define UNSUPPORTED_DEVICE_RST_WINDOW (10 * SECOND)
+/* Don't clear the PASS status for 1 second */
+#define AP_RO_PASS_RST_WINDOW (1 * SECOND)
 /* FMAP must be aligned at 4K or larger power of 2 boundary. */
 #define LOWEST_FMAP_ALIGNMENT  (4 * 1024)
 #define FMAP_SIGNATURE	       "__FMAP__"
@@ -1290,6 +1292,7 @@ static uint8_t do_ap_ro_check(void)
 	if (rv != ROV_SUCCEEDED)
 		return ap_ro_failed_verification(APROF_CHECK_FAILED);
 
+	update_device_rst_deadline(AP_RO_PASS_RST_WINDOW);
 	apro_result = AP_RO_PASS;
 	ap_ro_add_flash_event(APROF_CHECK_SUCCEEDED);
 	CPRINTS("AP RO PASS!");
