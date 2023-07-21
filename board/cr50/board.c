@@ -1374,15 +1374,17 @@ static int command_ec_rst(int argc, char **argv)
 	int val;
 
 	if (argc > 1) {
+		if (!strcasecmp("pulse", argv[1])) {
+			ccprintf("Pulsing EC reset\n");
+			board_reboot_ec();
+			return EC_SUCCESS;
+		}
 		if (!ccd_is_cap_enabled(CCD_CAP_REBOOT_EC_AP))
 			return EC_ERROR_ACCESS_DENIED;
 
 		if (!strcasecmp("cl", argv[1])) {
 			/* Assert EC_RST_L until TPM_RST_L is asserted */
 			board_closed_loop_reset();
-		} else if (!strcasecmp("pulse", argv[1])) {
-			ccprintf("Pulsing EC reset\n");
-			board_reboot_ec();
 		} else if (parse_bool(argv[1], &val)) {
 			if (val)
 				assert_ec_rst();
