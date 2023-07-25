@@ -47,7 +47,7 @@ void tpm_register_interface(interface_control_func interface_start,
 int tpm_reset_request(int wait_until_done, int wipe_nvmem_first);
 
 /* Returns True if successive TPM_RST_L pulses are being debounced. */
-int debouncing_tpm_rst(void);
+int tpm_reset_in_progress(void);
 
 /*
  * Tell the TPM task to re-enable nvmem commits.

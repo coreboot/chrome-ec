@@ -218,7 +218,7 @@ void tpm_rst_asserted(enum gpio_signal unused)
 
 #ifdef CONFIG_AP_RO_VERIFICATION
 	/* Clear AP RO verification state since this is a new boot. */
-	if (!debouncing_tpm_rst())
+	if (!tpm_reset_in_progress())
 		ap_ro_device_reset();
 #endif
 	inkernel = 0;
