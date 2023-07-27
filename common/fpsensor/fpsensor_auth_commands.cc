@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "crypto/cleanse_wrapper.h"
 #include "crypto/elliptic_curve_key.h"
 #include "ec_commands.h"
 #include "fpsensor.h"
@@ -17,7 +18,14 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <utility>
+
+/* Store the intermediate encrypted data for transfer & reuse purpose.*/
+/* The data will be copied into fp_enc_buffer after commit. */
+static std::array<std::array<uint8_t, FP_ALGORITHM_ENCRYPTED_TEMPLATE_SIZE>,
+		  FP_MAX_FINGER_COUNT>
+	fp_xfer_buffer;
 
 /* The GSC pairing key. */
 static std::array<uint8_t, FP_PAIRING_KEY_LEN> pairing_key;
@@ -139,6 +147,11 @@ fp_command_load_pairing_key(struct host_cmd_handler_args *args)
 		return EC_RES_ACCESS_DENIED;
 	}
 
+	if (fp_encryption_status & FP_CONTEXT_STATUS_NONCE_CONTEXT_SET) {
+		CPRINTS("load_pairing_key: In an nonce context");
+		return EC_RES_ACCESS_DENIED;
+	}
+
 	ret = decrypt_data(params->encrypted_pairing_key.info,
 			   params->encrypted_pairing_key.data,
 			   sizeof(params->encrypted_pairing_key.data),
@@ -160,12 +173,163 @@ fp_command_generate_nonce(struct host_cmd_handler_args *args)
 
 	ScopedFastCpu fast_cpu;
 
+	if (fp_encryption_status & FP_CONTEXT_STATUS_NONCE_CONTEXT_SET) {
+		/* If the context is not cleared, reject this request to prevent
+		 * leaking the existing template. */
+		enum ec_error_list ret = check_context_cleared();
+		if (ret != EC_SUCCESS) {
+			CPRINTS("load_pairing_key: Context is not clean");
+			return EC_RES_ACCESS_DENIED;
+		}
+	}
+
 	RAND_bytes(auth_nonce.data(), auth_nonce.size());
 
 	std::copy(auth_nonce.begin(), auth_nonce.end(), r->nonce);
+
+	fp_encryption_status |= FP_CONTEXT_AUTH_NONCE_SET;
 
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_FP_GENERATE_NONCE, fp_command_generate_nonce,
+		     EC_VER_MASK(0));
+
+static enum ec_status
+fp_command_nonce_context(struct host_cmd_handler_args *args)
+{
+	const auto *p =
+		static_cast<const ec_params_fp_nonce_context *>(args->params);
+
+	if (!(fp_encryption_status & FP_CONTEXT_AUTH_NONCE_SET)) {
+		CPRINTS("No existing auth nonce");
+		return EC_RES_ACCESS_DENIED;
+	}
+
+	ScopedFastCpu fast_cpu;
+
+	std::array<uint8_t, SHA256_DIGEST_SIZE> gsc_session_key;
+	enum ec_error_list ret = generate_gsc_session_key(
+		auth_nonce.data(), auth_nonce.size(), p->gsc_nonce,
+		sizeof(p->gsc_nonce), pairing_key.data(), pairing_key.size(),
+		gsc_session_key.data(), gsc_session_key.size());
+
+	if (ret != EC_SUCCESS) {
+		return EC_RES_INVALID_PARAM;
+	}
+
+	static_assert(sizeof(user_id) == sizeof(p->enc_user_id));
+	std::array<uint8_t, sizeof(user_id)> raw_user_id;
+	std::copy(std::begin(p->enc_user_id), std::end(p->enc_user_id),
+		  raw_user_id.data());
+
+	ret = decrypt_data_with_gsc_session_key_in_place(
+		gsc_session_key.data(), gsc_session_key.size(),
+		p->enc_user_id_iv, sizeof(p->enc_user_id_iv),
+		raw_user_id.data(), raw_user_id.size());
+
+	if (ret != EC_SUCCESS) {
+		return EC_RES_ERROR;
+	}
+
+	/* Set the user_id. */
+	std::copy(raw_user_id.begin(), raw_user_id.end(),
+		  reinterpret_cast<uint8_t *>(user_id));
+
+	fp_encryption_status &= FP_ENC_STATUS_SEED_SET;
+	fp_encryption_status |= FP_CONTEXT_STATUS_NONCE_CONTEXT_SET;
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_FP_NONCE_CONTEXT, fp_command_nonce_context,
+		     EC_VER_MASK(0));
+
+static enum ec_status
+fp_command_read_match_secret_with_pubkey(struct host_cmd_handler_args *args)
+{
+	const auto *params =
+		static_cast<const ec_params_fp_read_match_secret_with_pubkey *>(
+			args->params);
+	auto *response =
+		static_cast<ec_response_fp_read_match_secret_with_pubkey *>(
+			args->response);
+	int8_t fgr = params->fgr;
+
+	ScopedFastCpu fast_cpu;
+
+	static_assert(sizeof(response->enc_secret) ==
+		      FP_POSITIVE_MATCH_SECRET_BYTES);
+
+	CleanseWrapper<std::array<uint8_t, FP_POSITIVE_MATCH_SECRET_BYTES> >
+		secret;
+
+	enum ec_status status = fp_read_match_secret(fgr, secret.data());
+	if (status != EC_RES_SUCCESS) {
+		return status;
+	}
+
+	enum ec_error_list ret = encrypt_data_with_ecdh_key_in_place(
+		params->pubkey, secret.data(), secret.size(), response->iv,
+		sizeof(response->iv), response->pubkey);
+
+	if (ret != EC_SUCCESS) {
+		return EC_RES_UNAVAILABLE;
+	}
+
+	std::copy(secret.begin(), secret.end(), response->enc_secret);
+
+	args->response_size = sizeof(*response);
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_FP_READ_MATCH_SECRET_WITH_PUBKEY,
+		     fp_command_read_match_secret_with_pubkey, EC_VER_MASK(0));
+
+static enum ec_error_list preload_template(const uint8_t *data, uint32_t size,
+					   uint32_t offset, uint16_t idx,
+					   bool xfer_complete)
+{
+	/* Can we store one more template ? */
+	if (idx >= FP_MAX_FINGER_COUNT)
+		return EC_ERROR_OVERFLOW;
+
+	enum ec_error_list ret = validate_fp_buffer_offset(
+		fp_xfer_buffer[0].size(), offset, size);
+	if (ret != EC_SUCCESS)
+		return ret;
+
+	std::copy(data, data + size, fp_xfer_buffer[idx].data() + offset);
+
+	if (xfer_complete) {
+		std::copy(fp_xfer_buffer[idx].begin(),
+			  fp_xfer_buffer[idx].end(), fp_enc_buffer);
+	}
+
+	return EC_SUCCESS;
+}
+
+static enum ec_status
+fp_command_preload_template(struct host_cmd_handler_args *args)
+{
+	const auto *params = static_cast<const ec_params_fp_preload_template *>(
+		args->params);
+
+	ScopedFastCpu fast_cpu;
+
+	uint32_t size = params->size & ~FP_TEMPLATE_COMMIT;
+	bool xfer_complete = params->size & FP_TEMPLATE_COMMIT;
+
+	if (args->params_size !=
+	    size + offsetof(ec_params_fp_preload_template, data))
+		return EC_RES_REQUEST_TRUNCATED;
+
+	enum ec_error_list ret = preload_template(
+		params->data, size, params->offset, params->fgr, xfer_complete);
+	if (ret == EC_ERROR_OVERFLOW)
+		return EC_RES_OVERFLOW;
+	else if (ret != EC_SUCCESS)
+		return EC_RES_INVALID_PARAM;
+
+	return EC_RES_SUCCESS;
+}
+DECLARE_HOST_COMMAND(EC_CMD_FP_PRELOAD_TEMPLATE, fp_command_preload_template,
 		     EC_VER_MASK(0));
