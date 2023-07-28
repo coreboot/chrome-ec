@@ -79,4 +79,8 @@ int rma_try_authcode(const char *code);
  */
 int get_rma_device_id(uint8_t rma_device_id[RMA_DEVICE_ID_SIZE]);
 
+/**
+ * Returns True if RSU ran this boot.
+ */
+bool rma_auth_succeeded(void);
 #endif

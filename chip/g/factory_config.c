@@ -8,6 +8,7 @@
 #include "endian.h"
 #include "extension.h"
 #include "flash_info.h"
+#include "rma_auth.h"
 #include "system.h"
 #include "util.h"
 
@@ -68,6 +69,9 @@ void print_factory_config(void)
 	ccprintf("\n");
 }
 
+const uint32_t can_update_fc_type = 0x55455254;
+const uint64_t can_update_fc_value = 0x11;
+
 /**
  * Write the factory config into the flash INFO1 space.
  *
@@ -84,8 +88,15 @@ static int write_factory_config(uint64_t *new_fc)
 	struct board_id id;
 
 	/* Fail if Board ID Type is already programmed */
-	if (read_board_id(&id) || !board_id_type_is_blank(&id))
+	if (read_board_id(&id))
 		return EC_ERROR_ACCESS_DENIED;
+	if (!board_id_type_is_blank(&id)) {
+		if ((id.type == can_update_fc_type) && rma_auth_succeeded() &&
+		    (*new_fc == can_update_fc_value))
+			CPRINTS("%s: can update fc after RSU", __func__);
+		else
+			return EC_ERROR_ACCESS_DENIED;
+	}
 #endif
 
 	rv = read_factory_config(&fc);
