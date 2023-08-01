@@ -359,7 +359,6 @@ static enum vendor_cmd_rc get_challenge(uint8_t *buf, size_t *buf_size)
 #endif
 	return VENDOR_RC_SUCCESS;
 }
-static bool ran_rsu;
 /*
  * Compare response sent by the operator with the pre-compiled auth code.
  * Return error code or success depending on the comparison results.
@@ -385,18 +384,12 @@ static enum vendor_cmd_rc process_response(uint8_t *buf,
 		CPRINTF("%s: success!\n", __func__);
 		*response_size = 0;
 		enable_ccd_factory_mode(0);
-		ran_rsu = true;
 		return VENDOR_RC_SUCCESS;
 	}
 
 	CPRINTF("%s: authcode mismatch\n", __func__);
 	buf[0] = VENDOR_RC_INTERNAL_ERROR;
 	return buf[0];
-}
-
-bool rma_auth_succeeded(void)
-{
-	return ran_rsu;
 }
 
 /*
