@@ -10,6 +10,8 @@
 
 #include "config.h"
 #include "hooks.h"
+#include "panic.h"
+#include "task.h"
 #include "watchdog.h"
 
 LOG_MODULE_REGISTER(watchdog_shim, LOG_LEVEL_ERR);
