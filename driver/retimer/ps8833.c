@@ -38,7 +38,9 @@ static int ps8833_set_mux(const struct usb_mux *me, mux_state_t mux_state,
 {
 	int mode;
 	int dp;
+	int tbt3_usb4;
 	int rv;
+	uint8_t dp_pin_mode;
 
 	/* This driver does not use host command ACKs */
 	*ack_required = false;
@@ -59,21 +61,54 @@ static int ps8833_set_mux(const struct usb_mux *me, mux_state_t mux_state,
 		return rv;
 	}
 
+	rv = ps8833_read(me, PS8833_REG_PAGE0, PS8833_REG_TBT3_USB4,
+			 &tbt3_usb4);
+	if (rv) {
+		CPRINTSUSB("C%d: PS8833 TBT3/USB4 read fail %d", me->usb_port,
+			   rv);
+		return rv;
+	}
+
 	mode &= ~(PS8833_REG_MODE_USB_EN | PS8833_REG_MODE_FLIP |
 		  PS8833_REG_MODE_CONN);
+	dp &= ~(PS8833_REG_DP_EN | PS8833_REG_DP_PIN_MASK | PS8833_REG_DP_HPD);
+	tbt3_usb4 &=
+		~(PS8833_REG_TBT3_USB4_TBT3_EN | PS8833_REG_TBT3_USB4_USB4_EN);
 
 	if (pd_is_connected(me->usb_port))
 		mode |= PS8833_REG_MODE_CONN;
 
-	/* TODO(b/288635144): figure out why DP alt mode isn't working. */
-	dp &= ~PS8833_REG_DP_EN;
-
 	if (mux_state & USB_PD_MUX_USB_ENABLED)
 		mode |= PS8833_REG_MODE_USB_EN;
-	if (mux_state & USB_PD_MUX_DP_ENABLED)
-		dp |= PS8833_REG_DP_EN;
 	if (mux_state & USB_PD_MUX_POLARITY_INVERTED)
 		mode |= PS8833_REG_MODE_FLIP;
+
+	if (mux_state & USB_PD_MUX_DP_ENABLED) {
+		dp |= PS8833_REG_DP_EN;
+		dp |= PS8833_REG_DP_HPD;
+
+		dp_pin_mode = get_dp_pin_mode(me->usb_port);
+		if (!dp_pin_mode) {
+			CPRINTSUSB("C%d: DP fail, no pin mode", me->usb_port);
+			return EC_ERROR_INVAL;
+		}
+
+		if (dp_pin_mode & MODE_DP_PIN_E)
+			dp |= PS8833_REG_DP_PIN_E;
+		else if (dp_pin_mode & MODE_DP_PIN_C ||
+			 dp_pin_mode & MODE_DP_PIN_D)
+			dp |= PS8833_REG_DP_PIN_CD;
+		else {
+			CPRINTSUSB("C%d: DP fail, unsupported pin mode %x",
+				   me->usb_port, dp_pin_mode);
+			return EC_ERROR_INVAL;
+		}
+	}
+
+	if (mux_state & USB_PD_MUX_TBT_COMPAT_ENABLED)
+		tbt3_usb4 |= PS8833_REG_TBT3_USB4_TBT3_EN;
+	if (mux_state & USB_PD_MUX_USB4_ENABLED)
+		tbt3_usb4 |= PS8833_REG_TBT3_USB4_USB4_EN;
 
 	rv = ps8833_write(me, PS8833_REG_PAGE0, PS8833_REG_MODE, mode);
 	if (rv) {
@@ -85,6 +120,12 @@ static int ps8833_set_mux(const struct usb_mux *me, mux_state_t mux_state,
 	if (rv)
 		CPRINTSUSB("C%d: PS8833 DP write fail %d", me->usb_port, rv);
 
+	rv = ps8833_write(me, PS8833_REG_PAGE0, PS8833_REG_TBT3_USB4,
+			  tbt3_usb4);
+	if (rv)
+		CPRINTSUSB("C%d: PS8833 TBT3/USB4 write fail %d", me->usb_port,
+			   rv);
+
 	return rv;
 }
 
@@ -93,6 +134,7 @@ static int ps8833_get_mux(const struct usb_mux *me, mux_state_t *mux_state)
 {
 	int mode;
 	int dp;
+	int tbt3_usb4;
 	int rv;
 
 	rv = ps8833_read(me, PS8833_REG_PAGE0, PS8833_REG_MODE, &mode);
@@ -107,13 +149,27 @@ static int ps8833_get_mux(const struct usb_mux *me, mux_state_t *mux_state)
 		return rv;
 	}
 
+	rv = ps8833_read(me, PS8833_REG_PAGE0, PS8833_REG_TBT3_USB4,
+			 &tbt3_usb4);
+	if (rv) {
+		CPRINTSUSB("C%d: PS8833 TBT3/USB4 read fail %d", me->usb_port,
+			   rv);
+		return rv;
+	}
+
 	*mux_state = 0;
 	if (mode & PS8833_REG_MODE_USB_EN)
 		*mux_state |= USB_PD_MUX_USB_ENABLED;
-	if (dp & PS8833_REG_DP_EN)
-		*mux_state |= PS8833_REG_DP_EN;
 	if (mode & PS8833_REG_MODE_FLIP)
 		*mux_state |= USB_PD_MUX_POLARITY_INVERTED;
+
+	if (dp & PS8833_REG_DP_EN)
+		*mux_state |= PS8833_REG_DP_EN;
+
+	if (tbt3_usb4 & PS8833_REG_TBT3_USB4_TBT3_EN)
+		*mux_state |= USB_PD_MUX_TBT_COMPAT_ENABLED;
+	if (tbt3_usb4 & PS8833_REG_TBT3_USB4_USB4_EN)
+		*mux_state |= USB_PD_MUX_USB4_ENABLED;
 
 	return EC_SUCCESS;
 }
