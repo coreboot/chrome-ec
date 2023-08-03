@@ -273,14 +273,6 @@ void pd_build_request(int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma,
 	if (IS_ENABLED(CONFIG_USB_PD_DPS) && dps_is_enabled())
 		max_request_mv = MIN(max_request_mv, dps_get_dynamic_voltage());
 
-#ifdef PD_PORT0_MAX_VOLTAGE_MV
-	if (port == 0)
-		max_request_mv = MIN(max_request_mv, PD_PORT0_MAX_VOLTAGE_MV);
-#endif
-#ifdef PD_PORT1_MAX_VOLTAGE_MV
-	if (port == 1)
-		max_request_mv = MIN(max_request_mv, PD_PORT1_MAX_VOLTAGE_MV);
-#endif
 	/*
 	 * If currently charging on a different port, or we are not allowed to
 	 * request the max voltage, then select vSafe5V
