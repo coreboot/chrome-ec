@@ -69,11 +69,13 @@ rsource "Kconfig.mkbp_event"
 rsource "Kconfig.motionsense"
 rsource "Kconfig.random"
 rsource "Kconfig.rsa"
+rsource "Kconfig.rollback"
 rsource "Kconfig.rtc"
 rsource "Kconfig.stacks"
 rsource "Kconfig.system"
 rsource "Kconfig.tasks"
 rsource "Kconfig.temperature"
+rsource "Kconfig.test"
 rsource "Kconfig.timer"
 rsource "Kconfig.throttle_ap"
 rsource "Kconfig.touchpad"
@@ -485,8 +487,14 @@ config PLATFORM_EC_LID_SWITCH
 
 	  This requires a GPIO named GPIO_LID_OPEN to be defined or aliased.
 
+config MKBP_PROTOCOL
+	bool "MKBP protocol support"
+	help
+	  Enable the MKBP support protocol code.
+
 config PLATFORM_EC_MKBP_INPUT_DEVICES
 	bool "Input devices via MKBP"
+	select MKBP_PROTOCOL
 	help
 	  Enable passing events from various input sources to AP via MKBP.
 	  This include buttons (power, volume); switches (lid, tablet mode)
@@ -792,6 +800,13 @@ menuconfig PLATFORM_EC_TIMER
 
 	  This option is needed by many features in the EC. Disabling it will
 	  likely cause build errors.
+
+
+config PLATFORM_EC_ALLOW_UNALIGNED_ACCESS
+	bool "Allow Unaligned Access"
+	help
+	  Allow unaligned access by removing the unaligned trap. This can allow
+	  enabling this configuration for different boards.
 
 config PLATFORM_EC_VBOOT_EFS2
 	bool "EFS2 verified EC boot"

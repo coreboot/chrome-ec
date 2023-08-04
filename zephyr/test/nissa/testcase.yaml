@@ -10,6 +10,7 @@ tests:
     - "boards/generic_npcx.dts"
     extra_configs:
     - CONFIG_TEST_NISSA_SUB_BOARD=y
+    - CONFIG_NISSA_BOARD_HAS_HDMI_SUPPORT=y
   nissa.common:
     extra_dtc_overlay_files:
     - "boards/generic_npcx.dts"
@@ -46,3 +47,20 @@ tests:
     - CONFIG_PLATFORM_EC_TCPC_INTERRUPT=n
     extra_dtc_overlay_files:
     - "boards/nereid.dts"
+  nissa.gothrax:
+    extra_dtc_overlay_files:
+    - "boards/gothrax.dts"
+    extra_conf_files:
+    - "prj.conf"
+    extra_configs:
+    - CONFIG_TEST_NISSA_GOTHRAX=y
+    - CONFIG_PLATFORM_EC_TCPC_INTERRUPT=n
+  nissa.joxer:
+    extra_configs:
+    - CONFIG_TEST_NISSA_JOXER=y
+    - CONFIG_PLATFORM_EC_TCPC_INTERRUPT=n
+    - CONFIG_PLATFORM_EC_ACCELGYRO_BMI_COMM_I2C=y
+    - CONFIG_PLATFORM_EC_ACCELGYRO_BMI3XX=y
+    - CONFIG_PLATFORM_EC_ACCEL_BMA4XX=y
+    extra_dtc_overlay_files:
+    - "boards/joxer.dts"
