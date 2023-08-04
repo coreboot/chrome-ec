@@ -3,6 +3,12 @@
  * found in the LICENSE file.
  */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 11
+
 #include "atomic.h"
 #include "battery.h"
 #include "battery_smart.h"
@@ -680,14 +686,14 @@ test_export_static void set_state_pe(const int port,
 static void pe_set_dpm_curr_request(const int port, const int request);
 /*
  * The spec. revision is used to index into this array.
- *  PD 1.0 (VDO 1.0) - return VDM_VER10
- *  PD 2.0 (VDO 1.0) - return VDM_VER10
- *  PD 3.0 (VDO 2.0) - return VDM_VER20
+ *  PD 1.0 (VDO 1.0) - return SVDM_VER_1_0
+ *  PD 2.0 (VDO 1.0) - return SVDM_VER_1_0
+ *  PD 3.0 (VDO 2.0) - return SVDM_VER_1_0
  */
 static const uint8_t vdo_ver[] = {
-	[PD_REV10] = VDM_VER10,
-	[PD_REV20] = VDM_VER10,
-	[PD_REV30] = VDM_VER20,
+	[PD_REV10] = SVDM_VER_1_0,
+	[PD_REV20] = SVDM_VER_1_0,
+	[PD_REV30] = SVDM_VER_2_0,
 };
 
 int pd_get_rev(int port, enum tcpci_msg_type type)
@@ -702,7 +708,7 @@ int pd_get_vdo_ver(int port, enum tcpci_msg_type type)
 	if (rev < PD_REV30)
 		return vdo_ver[rev];
 	else
-		return VDM_VER20;
+		return SVDM_VER_2_0;
 }
 
 static void pe_set_ready_state(int port)
@@ -2053,6 +2059,8 @@ static bool port_try_vconn_swap(int port)
 		set_state_pe(port, get_last_state_pe(port));
 		return true;
 	}
+
+	CPRINTS("C%d: VCONN Swap counter exhausted", port);
 	return false;
 }
 
@@ -5695,8 +5703,15 @@ static void pe_vdm_send_request_entry(int port)
 	if ((pe[port].tx_type == TCPCI_MSG_SOP_PRIME ||
 	     pe[port].tx_type == TCPCI_MSG_SOP_PRIME_PRIME) &&
 	    !tc_is_vconn_src(port) &&
-	    port_discovery_vconn_swap_policy(
-		    port, BIT(PE_FLAGS_VCONN_SWAP_TO_ON_FN))) {
+	    /* TODO(b/188578923): Passing true indicates that the PE wants to
+	     * swap to VCONN Source at this time. It would make more sense to
+	     * pass the current value of PE_FLAGS_VCONN_SWAP_TO_ON, but the PE
+	     * does not actually set the flag when it wants to send a message to
+	     * the cable. The existing mechanisms to control the VCONN role are
+	     * clunky and hard to get right. The DPM should centralize logic
+	     * about VCONN role policy.
+	     */
+	    port_discovery_vconn_swap_policy(port, true)) {
 		if (port_try_vconn_swap(port))
 			return;
 	}

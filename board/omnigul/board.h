@@ -107,7 +107,7 @@
 #define PD_OPERATING_POWER_MW 15000
 #define PD_MAX_POWER_MW 65000
 #define PD_MAX_CURRENT_MA 3250
-#define PD_MAX_VOLTAGE_MV 20000
+#define PD_MAX_VOLTAGE_MV 15000
 
 /*
  * Because of b:279526032, modify monitor Vbus from Charger to TCPC.
@@ -236,7 +236,13 @@ enum sensor_id { LID_ACCEL = 0, BASE_ACCEL, BASE_GYRO, SENSOR_COUNT };
 
 enum ioex_port { IOEX_C0_NCT38XX = 0, IOEX_C2_NCT38XX, IOEX_PORT_COUNT };
 
-enum battery_type { BATTERY_AP19B8M, BATTERY_AP20CBL, BATTERY_TYPE_COUNT };
+enum battery_type {
+	BATTERY_AP19B8M,
+	BATTERY_AP20CBL,
+	BATTERY_AP23A8L,
+	BATTERY_AP23A7L,
+	BATTERY_TYPE_COUNT
+};
 
 enum pwm_channel {
 	PWM_CH_LED2 = 0, /* PWM0 (white charger) */

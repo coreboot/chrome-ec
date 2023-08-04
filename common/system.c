@@ -1516,7 +1516,7 @@ static int command_sleepmask(int argc, const char **argv)
 		}
 	}
 #endif
-	ccprintf("sleep mask: %08x\n", (int)sleep_mask);
+	ccprintf("sleep mask: %08x\n", (unsigned int)sleep_mask);
 
 	return EC_SUCCESS;
 }
@@ -1713,7 +1713,8 @@ host_command_get_board_version(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_GET_BOARD_VERSION, host_command_get_board_version,
 		     EC_VER_MASK(0));
 
-static enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
+STATIC_IF_NOT(CONFIG_ZTEST)
+enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
 {
 	struct ec_params_reboot_ec p;
 
@@ -1750,8 +1751,14 @@ static enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
 	    p.cmd == EC_REBOOT_COLD || p.cmd == EC_REBOOT_HIBERNATE ||
 	    p.cmd == EC_REBOOT_COLD_AP_OFF) {
 		/* Clean busy bits on host for commands that won't return */
+#ifndef CONFIG_EC_HOST_CMD
 		args->result = EC_RES_SUCCESS;
 		host_send_response(args);
+#else
+		ec_host_cmd_send_response(
+			EC_HOST_CMD_SUCCESS,
+			(struct ec_host_cmd_handler_args *)args);
+#endif
 	}
 #endif
 

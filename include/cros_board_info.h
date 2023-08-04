@@ -21,8 +21,6 @@
 #define CBI_IMAGE_SIZE               \
 	(sizeof(struct cbi_header) + \
 	 (2 * (sizeof(struct cbi_data) + sizeof(uint32_t))))
-#elif defined(CONFIG_CBI_FLASH)
-#define CBI_IMAGE_SIZE DT_PROP(DT_NODELABEL(cbi_flash), size)
 #else
 #define CBI_IMAGE_SIZE 256
 #endif
@@ -81,10 +79,12 @@ struct cbi_storage_driver {
 	int (*is_protected)(void);
 };
 
-extern const struct cbi_storage_config_t {
+struct cbi_storage_config_t {
 	enum cbi_storage_type storage_type;
 	const struct cbi_storage_driver *drv;
-} cbi_config;
+};
+
+extern const struct cbi_storage_config_t *cbi_config;
 
 /**
  * Board info accessors

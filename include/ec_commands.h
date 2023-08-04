@@ -693,6 +693,49 @@ enum ec_status {
 	EC_RES_MAX = UINT16_MAX, /**< Force enum to be 16 bits */
 } __packed;
 BUILD_ASSERT(sizeof(enum ec_status) == sizeof(uint16_t));
+#ifdef CONFIG_EC_HOST_CMD
+/*
+ * Make sure Zephyre uses the same status codes.
+ */
+#include <zephyr/mgmt/ec_host_cmd/ec_host_cmd.h>
+
+BUILD_ASSERT((uint16_t)EC_RES_SUCCESS == (uint16_t)EC_HOST_CMD_SUCCESS);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_COMMAND ==
+	     (uint16_t)EC_HOST_CMD_INVALID_COMMAND);
+BUILD_ASSERT((uint16_t)EC_RES_ERROR == (uint16_t)EC_HOST_CMD_ERROR);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_PARAM ==
+	     (uint16_t)EC_HOST_CMD_INVALID_PARAM);
+BUILD_ASSERT((uint16_t)EC_RES_ACCESS_DENIED ==
+	     (uint16_t)EC_HOST_CMD_ACCESS_DENIED);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_RESPONSE ==
+	     (uint16_t)EC_HOST_CMD_INVALID_RESPONSE);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_VERSION ==
+	     (uint16_t)EC_HOST_CMD_INVALID_VERSION);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_CHECKSUM ==
+	     (uint16_t)EC_HOST_CMD_INVALID_CHECKSUM);
+BUILD_ASSERT((uint16_t)EC_RES_IN_PROGRESS == (uint16_t)EC_HOST_CMD_IN_PROGRESS);
+BUILD_ASSERT((uint16_t)EC_RES_UNAVAILABLE == (uint16_t)EC_HOST_CMD_UNAVAILABLE);
+BUILD_ASSERT((uint16_t)EC_RES_TIMEOUT == (uint16_t)EC_HOST_CMD_TIMEOUT);
+BUILD_ASSERT((uint16_t)EC_RES_OVERFLOW == (uint16_t)EC_HOST_CMD_OVERFLOW);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_HEADER ==
+	     (uint16_t)EC_HOST_CMD_INVALID_HEADER);
+BUILD_ASSERT((uint16_t)EC_RES_REQUEST_TRUNCATED ==
+	     (uint16_t)EC_HOST_CMD_REQUEST_TRUNCATED);
+BUILD_ASSERT((uint16_t)EC_RES_RESPONSE_TOO_BIG ==
+	     (uint16_t)EC_HOST_CMD_RESPONSE_TOO_BIG);
+BUILD_ASSERT((uint16_t)EC_RES_BUS_ERROR == (uint16_t)EC_HOST_CMD_BUS_ERROR);
+BUILD_ASSERT((uint16_t)EC_RES_BUSY == (uint16_t)EC_HOST_CMD_BUSY);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_HEADER_VERSION ==
+	     (uint16_t)EC_HOST_CMD_INVALID_HEADER_VERSION);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_HEADER_CRC ==
+	     (uint16_t)EC_HOST_CMD_INVALID_HEADER_CRC);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_DATA_CRC ==
+	     (uint16_t)EC_HOST_CMD_INVALID_DATA_CRC);
+BUILD_ASSERT((uint16_t)EC_RES_DUP_UNAVAILABLE ==
+	     (uint16_t)EC_HOST_CMD_DUP_UNAVAILABLE);
+BUILD_ASSERT((uint16_t)EC_RES_MAX == (uint16_t)EC_HOST_CMD_MAX);
+
+#endif
 
 /*
  * Host event codes. ACPI query EC command uses code 0 to mean "no event
@@ -1599,6 +1642,10 @@ enum ec_feature_code {
 	 * The EC will reboot on runtime assertion failures.
 	 */
 	EC_FEATURE_ASSERT_REBOOTS = 48,
+	/*
+	 * The EC image is built with tokenized logging enabled.
+	 */
+	EC_FEATURE_TOKENIZED_LOGGING = 49,
 };
 
 #define EC_FEATURE_MASK_0(event_code) BIT(event_code % 32)
@@ -7776,6 +7823,12 @@ struct ec_params_fp_seed {
 
 /* FP TPM seed has been set or not */
 #define FP_ENC_STATUS_SEED_SET BIT(0)
+/* FP using nonce context or not */
+#define FP_CONTEXT_STATUS_NONCE_CONTEXT_SET BIT(1)
+/* FP match had been processed or not */
+#define FP_CONTEXT_STATUS_MATCH_PROCESSED_SET BIT(2)
+/* FP auth_nonce had been set or not*/
+#define FP_CONTEXT_AUTH_NONCE_SET BIT(3)
 
 struct ec_response_fp_encryption_status {
 	/* Used bits in encryption engine status */
@@ -7827,6 +7880,81 @@ struct fp_auth_command_encryption_metadata {
 struct fp_encrypted_private_key {
 	struct fp_auth_command_encryption_metadata info;
 	uint8_t data[FP_ELLIPTIC_CURVE_PRIVATE_KEY_LEN];
+} __ec_align4;
+
+#define EC_CMD_FP_ESTABLISH_PAIRING_KEY_KEYGEN 0x0410
+
+struct ec_response_fp_establish_pairing_key_keygen {
+	struct fp_elliptic_curve_public_key pubkey;
+	struct fp_encrypted_private_key encrypted_private_key;
+} __ec_align4;
+
+#define FP_PAIRING_KEY_LEN 32
+
+struct ec_fp_encrypted_pairing_key {
+	struct fp_auth_command_encryption_metadata info;
+	uint8_t data[FP_PAIRING_KEY_LEN];
+} __ec_align4;
+
+#define EC_CMD_FP_ESTABLISH_PAIRING_KEY_WRAP 0x0411
+
+struct ec_params_fp_establish_pairing_key_wrap {
+	struct fp_elliptic_curve_public_key peers_pubkey;
+	struct fp_encrypted_private_key encrypted_private_key;
+} __ec_align4;
+
+struct ec_response_fp_establish_pairing_key_wrap {
+	struct ec_fp_encrypted_pairing_key encrypted_pairing_key;
+} __ec_align4;
+
+#define EC_CMD_FP_LOAD_PAIRING_KEY 0x0412
+
+typedef struct ec_response_fp_establish_pairing_key_wrap
+	ec_params_fp_load_pairing_key;
+
+#define FP_CK_AUTH_NONCE_LEN 32
+
+#define EC_CMD_FP_GENERATE_NONCE 0x0413
+struct ec_response_fp_generate_nonce {
+	uint8_t nonce[FP_CK_AUTH_NONCE_LEN];
+} __ec_align4;
+
+#define FP_CONTEXT_USERID_LEN 32
+#define FP_CONTEXT_USERID_IV_LEN 16
+#define FP_CONTEXT_KEY_LEN 32
+
+#define EC_CMD_FP_NONCE_CONTEXT 0x0414
+struct ec_params_fp_nonce_context {
+	uint8_t gsc_nonce[FP_CK_AUTH_NONCE_LEN];
+	uint8_t enc_user_id[FP_CONTEXT_USERID_LEN];
+	uint8_t enc_user_id_iv[FP_CONTEXT_USERID_IV_LEN];
+} __ec_align4;
+
+#define FP_ELLIPTIC_CURVE_PUBLIC_KEY_IV_LEN 16
+
+#define EC_CMD_FP_READ_MATCH_SECRET_WITH_PUBKEY 0x0415
+
+struct ec_params_fp_read_match_secret_with_pubkey {
+	uint16_t fgr;
+	uint16_t reserved;
+	struct fp_elliptic_curve_public_key pubkey;
+} __ec_align4;
+
+struct ec_response_fp_read_match_secret_with_pubkey {
+	struct fp_elliptic_curve_public_key pubkey;
+	uint8_t iv[FP_ELLIPTIC_CURVE_PUBLIC_KEY_IV_LEN];
+	uint8_t enc_secret[FP_POSITIVE_MATCH_SECRET_BYTES];
+} __ec_align4;
+
+/* Preload encrypted template into the MCU buffer */
+#define EC_CMD_FP_PRELOAD_TEMPLATE 0x0416
+
+struct ec_params_fp_preload_template {
+	uint32_t offset;
+	uint32_t size;
+	uint16_t fgr;
+	uint8_t reserved[2];
+	uint8_t data[];
 } __ec_align4;
 
 /*****************************************************************************/

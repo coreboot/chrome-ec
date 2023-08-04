@@ -2,6 +2,11 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+config TEST_PROVIDE_PM_HOOKS
+	bool "Provide PM hooks for test purposes"
+	default y
+	select HAS_PM
+
 config BUG_249829957
 	bool "Tracking b/249829957"
 
@@ -49,6 +54,9 @@ config LINK_TEST_SUITE_COMMON_CBI_GPIO
 
 config LINK_TEST_SUITE_COMMON_CHARGER
 	bool "Link and execute the common/charger.c tests"
+
+config LINK_TEST_SUITE_FAN
+	bool "Link and test the fan tests"
 
 config LINK_TEST_SUITE_CROS_FLASH
 	bool "Link and execute the cros-flash driver tests"
@@ -131,6 +139,12 @@ config LINK_TEST_SUITE_RT1718S
 	  Link tests rt1718s test suite for the TCPM driver related function
 	  tests.
 
+config LINK_TEST_SUITE_RT1739
+	bool "Link and test the rt1739 tests"
+	help
+	  Link tests rt1739s test suite for the PPC driver related function
+	  tests.
+
 config LINK_TEST_SUITE_RT9490
 	bool "Link and test the rt9490 tests"
 
@@ -153,6 +167,9 @@ config LINK_TEST_SUITE_SYSTEM
 
 config LINK_TEST_SUITE_TIMER
 	bool "Link and test the timer tests"
+
+config LINK_TEST_SUITE_UPSTREAM_FUEL_GAUGE
+	bool "Link and test usage of upstream fuel-gauge API"
 
 config LINK_TEST_SUITE_USB_COMMON
 	bool "Link and test USB common code tests"

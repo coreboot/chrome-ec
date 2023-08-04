@@ -55,7 +55,7 @@ import socket
 import subprocess
 import sys
 import time
-from typing import BinaryIO, Dict, List, Optional, Tuple
+from typing import BinaryIO, Callable, Dict, List, Optional, Tuple
 
 # pylint: disable=import-error
 import colorama  # type: ignore[import]
@@ -155,6 +155,7 @@ class ApplicationType(Enum):
 
 
 @dataclass
+# pylint: disable-next=too-many-instance-attributes
 class BoardConfig:
     """Board-specific configuration."""
 
@@ -164,6 +165,7 @@ class BoardConfig:
     rollback_region0_regex: object
     rollback_region1_regex: object
     mpu_regex: object
+    reboot_timeout: float
     variants: Dict
 
 
@@ -190,6 +192,14 @@ class TestConfig:
     passed: bool = field(init=False, default=False)
     num_passes: int = field(init=False, default=0)
     num_fails: int = field(init=False, default=0)
+
+    # The callbacks below are called before and after a test is executed and
+    # may be used for additional test setup, post test activities, or other tasks
+    # that do not otherwise fit into the test workflow. The default behavior is
+    # to simply return True and if either callback returns False then the test
+    # is reported a failure.
+    pre_test_callback: Callable = field(init=True, default=lambda board: True)
+    post_test_callback: Callable = field(init=True, default=lambda board: True)
 
     def __post_init__(self):
         if self.finish_regexes is None:
@@ -354,11 +364,28 @@ class AllTests:
             TestConfig(test_name="timer"),
             TestConfig(test_name="timer_dos"),
             TestConfig(test_name="tpm_seed_clear"),
+            TestConfig(test_name="unaligned_access"),
+            TestConfig(test_name="unaligned_access_benchmark"),
             TestConfig(test_name="utils", timeout_secs=20),
             TestConfig(test_name="utils_str"),
         ]
 
-        # Run panic data tests for all boards and RO versions.
+        # Run unaligned access tests for all boards and RO versions.
+        for variant_name, variant_info in board_config.variants.items():
+            tests.append(
+                TestConfig(
+                    config_name="unaligned_access_" + variant_name,
+                    test_name="unaligned_access",
+                    fail_regexes=[
+                        SINGLE_CHECK_FAILED_REGEX,
+                        ALL_TESTS_FAILED_REGEX,
+                    ],
+                    ro_image=variant_info.get("ro_image_path"),
+                    build_board=variant_info.get("build_board"),
+                )
+            )
+
+        # Run panic data test for all boards and RO versions.
         for variant_name, variant_info in board_config.variants.items():
             tests.append(
                 TestConfig(
@@ -404,6 +431,7 @@ BLOONCHIPPER_CONFIG = BoardConfig(
     name=BLOONCHIPPER,
     servo_uart_name="raw_fpmcu_console_uart_pty",
     servo_power_enable="fpmcu_pp3300",
+    reboot_timeout=1.0,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_8020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_8040000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
@@ -421,6 +449,7 @@ DARTMONKEY_CONFIG = BoardConfig(
     name=DARTMONKEY,
     servo_uart_name="raw_fpmcu_console_uart_pty",
     servo_power_enable="fpmcu_pp3300",
+    reboot_timeout=1.0,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_80C0000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_80E0000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_24000000_REGEX,
@@ -443,7 +472,7 @@ HELIPILOT_CONFIG = BoardConfig(
     name=HELIPILOT,
     servo_uart_name="raw_fpmcu_console_uart_pty",
     servo_power_enable="fpmcu_pp3300",
-    # TODO(b/286537264): Double check these values and ensure rollback tests pass
+    reboot_timeout=1.5,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_64020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_64040000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
@@ -563,7 +592,7 @@ def power_cycle(board_config: BoardConfig) -> None:
     """power_cycle the boards."""
     logging.debug("power_cycling board")
     power(board_config, power_on=False)
-    time.sleep(1)
+    time.sleep(board_config.reboot_timeout)
     power(board_config, power_on=True)
 
 
@@ -691,22 +720,31 @@ def process_console_output_line(line: bytes, test: TestConfig):
 
 
 def run_test(
-    test: TestConfig, console: io.FileIO, executor: ThreadPoolExecutor
+    test: TestConfig,
+    build_board: str,
+    console: io.FileIO,
+    reboot_timeout: float,
+    executor: ThreadPoolExecutor,
 ) -> bool:
     """Run specified test."""
     start = time.time()
 
     # Wait for boot to finish
-    time.sleep(1)
+    time.sleep(reboot_timeout)
     console.write("\n".encode())
     if test.imagetype_to_use == ImageType.RO:
         console.write("reboot ro\n".encode())
-        time.sleep(1)
+        time.sleep(reboot_timeout)
 
     # Skip runtest if using standard app type
     if test.apptype_to_use != ApplicationType.PRODUCTION:
         test_cmd = "runtest " + " ".join(test.test_args) + "\n"
         console.write(test_cmd.encode())
+
+    logging.debug("Calling pre-test callback")
+    if not test.pre_test_callback(build_board):
+        logging.error("pre-test callback failed, aborting")
+        return False
 
     while True:
         console.flush()
@@ -740,7 +778,9 @@ def run_test(
                 for line in lines:
                     process_console_output_line(line, test)
 
-                return test.num_fails == 0
+                logging.debug("Calling post-test callback")
+                post_cb_passed = test.post_test_callback(build_board)
+                return test.num_fails == 0 and post_cb_passed
 
 
 def get_test_list(
@@ -823,7 +863,7 @@ def flash_and_run_test(
         ):
             flash_succeeded = True
             break
-        time.sleep(1)
+        time.sleep(board_config.reboot_timeout)
 
     if not flash_succeeded:
         logging.debug(
@@ -851,7 +891,13 @@ def flash_and_run_test(
             console_file = open(get_console(board_config), "wb+", buffering=0)
             console = stack.enter_context(console_file)
 
-        return run_test(test, console, executor=executor)
+        return run_test(
+            test,
+            build_board,
+            console,
+            board_config.reboot_timeout,
+            executor=executor,
+        )
 
 
 def parse_remote_arg(remote: str) -> str:

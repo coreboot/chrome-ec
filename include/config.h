@@ -884,6 +884,9 @@
 #undef CONFIG_CEC
 #undef CONFIG_CEC_DEBUG
 
+/* CEC drivers */
+#undef CONFIG_CEC_BITBANG
+
 /*****************************************************************************/
 
 /* Compile charge manager */
@@ -1804,6 +1807,9 @@
  * Add flag GPIO_POWER_DOWN and additional API's.
  */
 #undef CONFIG_GPIO_POWER_DOWN
+
+/* Allow unaligned access */
+#undef CONFIG_ALLOW_UNALIGNED_ACCESS
 
 /*
  * Provide common runtime layer code (tasks, hooks ...)
@@ -5796,6 +5802,9 @@
 /* Define this to support Cros Board Info from GPIO. */
 #undef CONFIG_CBI_GPIO
 
+/* Define this to support Cros Board Info from EC flash. */
+#undef CONFIG_CBI_FLASH
+
 /*****************************************************************************/
 /*
  * ISH config defaults
@@ -7108,6 +7117,10 @@
 
 #if defined(CONFIG_CBI_EEPROM) && defined(CONFIG_CBI_GPIO)
 #error "CONFIG_CBI_EEPROM and CONFIG_CBI_GPIO are mutually exclusive."
+#endif
+
+#if defined(CONFIG_CBI_FLASH) && defined(CONFIG_CBI_GPIO)
+#error "CONFIG_CBI_FLASH and CONFIG_CBI_GPIO are mutually exclusive."
 #endif
 
 #if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_ACCELGYRO_ICM_COMM_SPI) && \
