@@ -5,6 +5,9 @@
 
 #include "common.h"
 #include "ec_commands.h"
+#include "fw_config.h"
+#include "hooks.h"
+#include "keyboard_customization.h"
 #include "keyboard_scan.h"
 #include "timer.h"
 
@@ -73,3 +76,12 @@ __override const struct key {
 	{ .row = 0, .col = 11 }, /* T15 */
 };
 BUILD_ASSERT(ARRAY_SIZE(vivaldi_keys) == MAX_TOP_ROW_KEYS);
+
+void kb_init(void)
+{
+	if (ec_cfg_keyboard_layout() == KEYBOARD_ANSI) {
+		set_scancode_set2(4, 0, get_scancode_set2(2, 7));
+		set_scancode_set2(3, 11, get_scancode_set2(4, 10));
+	}
+}
+DECLARE_HOOK(HOOK_INIT, kb_init, HOOK_PRIO_DEFAULT);

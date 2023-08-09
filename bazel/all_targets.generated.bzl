@@ -1671,6 +1671,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "pirrha",
+        board = "pirrha",
+    )
+    ec_target(
         name = "plankton",
         board = "plankton",
         chip = "stm32",
@@ -1794,11 +1798,6 @@ def all_targets():
         name = "rex",
         board = "rex",
         extra_modules = ["cmsis"],
-    )
-    ec_target(
-        name = "rex-ish",
-        board = "rex-ish",
-        extra_modules = ["ish", "cmsis", "hal_intel"],
     )
     ec_target(
         name = "rex-ish-ec",
