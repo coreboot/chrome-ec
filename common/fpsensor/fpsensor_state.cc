@@ -42,13 +42,15 @@ uint8_t fp_enc_buffer[FP_ALGORITHM_ENCRYPTED_TEMPLATE_SIZE] FP_TEMPLATE_SECTION;
 uint8_t fp_positive_match_salt[FP_MAX_FINGER_COUNT]
 			      [FP_POSITIVE_MATCH_SALT_BYTES];
 
-void fp_task_simulate(void)
+/* LCOV_EXCL_START */
+__test_only void fp_task_simulate(void)
 {
 	int timeout_us = -1;
 
 	while (1)
 		task_wait_event(timeout_us);
 }
+/* LCOV_EXCL_STOP */
 
 void fp_clear_finger_context(uint16_t idx)
 {
@@ -66,6 +68,8 @@ static void _fp_clear_context(void)
 {
 	templ_valid = 0;
 	templ_dirty = 0;
+	template_newly_enrolled = FP_NO_SUCH_TEMPLATE;
+	fp_encryption_status &= FP_ENC_STATUS_SEED_SET;
 	OPENSSL_cleanse(fp_buffer, sizeof(fp_buffer));
 	OPENSSL_cleanse(fp_enc_buffer, sizeof(fp_enc_buffer));
 	OPENSSL_cleanse(user_id, sizeof(user_id));
@@ -219,7 +223,14 @@ static enum ec_status fp_command_context(struct host_cmd_handler_args *args)
 		if (sensor_mode & FP_MODE_RESET_SENSOR)
 			return EC_RES_BUSY;
 
+		if (fp_encryption_status &
+		    FP_CONTEXT_STATUS_NONCE_CONTEXT_SET) {
+			/* Reject the request to prevent downgrade attack. */
+			return EC_RES_ACCESS_DENIED;
+		}
+
 		memcpy(user_id, p->userid, sizeof(user_id));
+
 		return EC_RES_SUCCESS;
 	}
 

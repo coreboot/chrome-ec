@@ -97,6 +97,7 @@ import sys
 import tempfile
 import time
 from typing import List
+import uuid
 
 
 # Paths under the EC base dir that contain tests. This is used to define
@@ -348,12 +349,41 @@ twister_test_binary(
     cwd = {str(cwd)!r},
 )"""
     run_hash = hashlib.md5(gen_starlark.encode("utf-8")).hexdigest()
-    twister_bzl_dir = Path(__file__).parent.parent / "build" / "twister-bzl"
+    build_dir = Path(__file__).resolve().parent.parent / "build"
+    twister_bzl_dir = build_dir / "twister-bzl"
     run_dir = twister_bzl_dir / run_hash
 
     if not run_dir.is_dir():
         run_dir.mkdir(parents=True)
         (run_dir / "BUILD.bazel").write_text(gen_starlark, encoding="utf-8")
+
+    # Twister users are used to seeing `twister-out`; symlink it to bazel twister-out
+    bazel_bin = Path(
+        subprocess.run(
+            ["bazel", "info", "bazel-bin"],
+            cwd=Path(__file__).resolve().parent,
+            check=True,
+            stdout=subprocess.PIPE,
+            encoding="utf-8",
+        ).stdout.strip()
+    )
+
+    ec_twister_out = Path("twister-out")
+    bazel_twister_out = (
+        bazel_bin / "platform/ec/build/twister-bzl" / run_hash / ec_twister_out
+    )
+
+    # Atomically symlink to twister out/build directory
+    # Largely taken from chromite.osutils.SafeSymlink()
+    tmp_twister_out = ec_twister_out.with_name(
+        f".tmp-{ec_twister_out.name}-{uuid.uuid4().hex}"
+    )
+    try:
+        tmp_twister_out.symlink_to(bazel_twister_out)
+        tmp_twister_out.rename(ec_twister_out)
+    except OSError:
+        # Clean up temporary symlink if rename failed
+        tmp_twister_out.unlink(missing_ok=True)
 
     bazel_cmd = ["bazel", "build", ":run_twister"]
     if sandbox_debug:
@@ -491,20 +521,18 @@ def main():
 
     twister_cli.extend(["--outdir", intercepted_args.outdir])
 
-    toolchain_root = (
-        str(ec_base / "zephyr") if in_cros_sdk() else str(zephyr_base)
-    )
-    twister_cli.extend([f"-x=TOOLCHAIN_ROOT={toolchain_root}"])
-
     # Prepare environment variables for export to Twister. Inherit the parent
     # process's environment, but set some default values if not already set.
     twister_env = dict(os.environ)
     with tempfile.TemporaryDirectory() as parsetab_dir:
+        toolchain_root = os.environ.get(
+            "TOOLCHAIN_ROOT",
+            str(ec_base / "zephyr") if in_cros_sdk() else str(zephyr_base),
+        )
+
+        twister_cli.extend([f"-x=TOOLCHAIN_ROOT={toolchain_root}"])
         extra_env_vars = {
-            "TOOLCHAIN_ROOT": os.environ.get(
-                "TOOLCHAIN_ROOT",
-                str(ec_base / "zephyr") if in_cros_sdk() else str(zephyr_base),
-            ),
+            "TOOLCHAIN_ROOT": toolchain_root,
             # TODO(https://github.com/zephyrproject-rtos/zephyr/issues/59453):
             # This ought to be passed as a CMake variable but can't due to how
             # Zephyr calls verify-toolchain.cmake

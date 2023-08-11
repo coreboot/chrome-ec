@@ -120,6 +120,7 @@ if(DEFINED CONFIG_BOARD_ULDREN)
 			"uldren/src/form_factor.c"
 			"uldren/src/kb_backlight.c"
 			"uldren/src/sub_board.c"
+			"uldren/src/mp2964_update.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "uldren/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "uldren/src/charger.c")
@@ -132,4 +133,17 @@ if(DEFINED CONFIG_BOARD_GOTHRAX)
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "gothrax/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "gothrax/src/charger.c")
+endif()
+if(DEFINED CONFIG_BOARD_CRAASKOV)
+	project(craaskov)
+	zephyr_include_directories("craaskov/include")
+	zephyr_library_sources(
+			"craaskov/src/keyboard.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "craaskov/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "craaskov/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
+	"craaskov/src/keyboard.c"
+	"craaskov/src/keyboard_customization.c"
+	)
 endif()

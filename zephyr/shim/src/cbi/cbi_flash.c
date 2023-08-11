@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "cbi_config.h"
 #include "cbi_flash.h"
 #include "console.h"
 #include "cros_board_info.h"
@@ -18,8 +19,6 @@ BUILD_ASSERT(DT_NODE_EXISTS(CBI_FLASH_NODE) == 1,
 	     "CBI flash DT node label not found");
 BUILD_ASSERT((CBI_FLASH_OFFSET % CONFIG_FLASH_ERASE_SIZE) == 0,
 	     "CBI flash section offset is not erase-size aligned");
-BUILD_ASSERT((CBI_FLASH_SIZE % CONFIG_FLASH_ERASE_SIZE) == 0,
-	     "CBI flash section size is not erase-size aligned");
 BUILD_ASSERT(CBI_FLASH_SIZE > 0,
 	     "CBI flash section size must be greater than zero");
 BUILD_ASSERT(CBI_FLASH_SIZE >= CBI_IMAGE_SIZE,
@@ -69,7 +68,7 @@ static const struct cbi_storage_driver flash_drv = {
 	.is_protected = flash_is_write_protected,
 };
 
-const struct cbi_storage_config_t cbi_config = {
+const struct cbi_storage_config_t flash_cbi_config = {
 	.storage_type = CBI_STORAGE_TYPE_FLASH,
 	.drv = &flash_drv,
 };

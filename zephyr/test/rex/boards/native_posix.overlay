@@ -7,7 +7,7 @@
 #include <dt-bindings/gpio_defines.h>
 
 / {
-	/* GPIOs shared by all boards */
+	/* GPIOs shared by all projects */
 	named-gpios {
 		compatible = "named-gpios";
 
@@ -26,5 +26,26 @@
 		gpio_en_z1_rails: en_z1_rails {
 			gpios = <&gpio0 5 GPIO_OUTPUT>;
 		};
+		gpio_ec_batt_pres_odl: ec_batt_pres_odl {
+			gpios = <&gpio0 6 GPIO_INPUT>;
+			enum-name = "GPIO_BATT_PRES_ODL";
+		};
+	};
+
+	/*
+	 * This is a 2nd GPIO bank to be used by variants to
+	 * avoid conflicts with common GPIO assignments.
+	 */
+	gpio1: gpio@101 {
+		status = "okay";
+		compatible = "zephyr,gpio-emul";
+		reg = <0x101 0x4>;
+		rising-edge;
+		falling-edge;
+		high-level;
+		low-level;
+		gpio-controller;
+		#gpio-cells = <2>;
+		ngpios = <32>;
 	};
 };

@@ -19,9 +19,12 @@
 #include "driver/usb_mux/it5205.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "hwtimer_chip.h"
 #include "intc.h"
 #include "power.h"
 #include "power_button.h"
+#include "pwm.h"
+#include "pwm_chip.h"
 #include "switch.h"
 #include "system.h"
 #include "tablet_mode.h"
@@ -117,6 +120,22 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 	GPIO_EN_USB_A3_VBUS, GPIO_EN_USB_A4_VBUS,
 };
 
+/* PWM channels. Must be in the exactly same order as in enum pwm_channel. */
+const struct pwm_t pwm_channels[] = {
+	[PWM_CH_LED_GREEN] = {
+		.channel = 2,
+		.flags = PWM_CONFIG_DSLEEP | PWM_CONFIG_ACTIVE_LOW,
+		.freq_hz = 2000,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(pwm_channels) == PWM_CH_COUNT);
+
+static void board_pwm_init(void)
+{
+	pwm_enable(PWM_CH_LED_GREEN, 1);
+}
+DECLARE_HOOK(HOOK_INIT, board_pwm_init, HOOK_PRIO_DEFAULT);
+
 /* Thermistors */
 const struct temp_sensor_t temp_sensors[] = {
 	[TEMP_SENSOR_1] = { .name = "Memory",
@@ -135,9 +154,17 @@ const struct temp_sensor_t temp_sensors[] = {
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 /* CEC ports */
+static const struct bitbang_cec_config bitbang_cec_config = {
+	.gpio_out = GPIO_HDMI2_CEC,
+	.gpio_in = GPIO_HDMI2_CEC_IN,
+	.gpio_pull_up = GPIO_HDMI2_CEC_PULL_UP,
+	.timer = CEC_EXT_TIMER,
+};
+
 const struct cec_config_t cec_config[] = {
 	[CEC_PORT_0] = {
 		.drv = &bitbang_cec_drv,
+		.drv_config = &bitbang_cec_config,
 		.offline_policy = NULL,
 	},
 };
