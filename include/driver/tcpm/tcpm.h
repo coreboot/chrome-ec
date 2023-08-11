@@ -26,6 +26,12 @@
 #error "Please upgrade your board configuration"
 #endif
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 34
+
 #ifndef CONFIG_USB_PD_TCPC
 
 /* I2C wrapper functions - get I2C port / peripheral addr from config struct. */
@@ -166,6 +172,16 @@ static inline int tcpc_read16(int port, int reg, int *val)
 
 static inline void tcpc_lock(int port, int lock)
 {
+#ifdef CONFIG_MFD
+	if (tcpc_config[port].drv->lock) {
+		tcpc_config[port].drv->lock(port, lock);
+	}
+#endif
+
+	/*
+	 * Always acquire the I2C controller lock, even when the TCPC driver
+	 * provides a separate lock.
+	 */
 	i2c_lock(tcpc_config[port].i2c_info.port, lock);
 }
 

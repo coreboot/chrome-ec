@@ -67,14 +67,6 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
-        name = "agah",
-        baseboard = "brya",
-        board = "agah",
-        chip = "npcx",
-        core = "cortex-m",
-        zephyr = False,
-    )
-    ec_target(
         name = "akemi",
         baseboard = "hatch",
         board = "akemi",
@@ -702,11 +694,6 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
-        name = "evoker",
-        board = "evoker",
-        extra_modules = ["cmsis"],
-    )
-    ec_target(
         name = "ezkinil",
         baseboard = "zork",
         board = "ezkinil",
@@ -900,14 +887,6 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
-        name = "hades",
-        baseboard = "brya",
-        board = "hades",
-        chip = "npcx",
-        core = "cortex-m",
-        zephyr = False,
-    )
-    ec_target(
         name = "hammer",
         board = "hammer",
         chip = "stm32",
@@ -952,24 +931,6 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
-    )
-    ec_target(
-        name = "herobrine",
-        baseboard = "herobrine",
-        board = "herobrine",
-        chip = "npcx",
-        core = "cortex-m",
-        zephyr = False,
-    )
-    ec_target(
-        name = "herobrine_zephyr",
-        board = "herobrine",
-        extra_modules = ["cmsis"],
-    )
-    ec_target(
-        name = "hoglin",
-        board = "hoglin",
-        extra_modules = ["cmsis"],
     )
     ec_target(
         name = "hoho",
@@ -1710,6 +1671,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "pirrha",
+        board = "pirrha",
+    )
+    ec_target(
         name = "plankton",
         board = "plankton",
         chip = "stm32",
@@ -1833,11 +1798,6 @@ def all_targets():
         name = "rex",
         board = "rex",
         extra_modules = ["cmsis"],
-    )
-    ec_target(
-        name = "rex-ish",
-        board = "rex-ish",
-        extra_modules = ["ish", "cmsis", "hal_intel"],
     )
     ec_target(
         name = "rex-ish-ec",
@@ -2123,11 +2083,6 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
-        name = "villager",
-        board = "villager",
-        extra_modules = ["cmsis"],
-    )
-    ec_target(
         name = "voema",
         baseboard = "volteer",
         board = "voema",
@@ -2323,14 +2278,4 @@ def all_targets():
         chip = "stm32",
         core = "cortex-m0",
         zephyr = False,
-    )
-    ec_target(
-        name = "zoglin",
-        board = "zoglin",
-        extra_modules = ["cmsis"],
-    )
-    ec_target(
-        name = "zombie",
-        board = "zombie",
-        extra_modules = ["cmsis"],
     )

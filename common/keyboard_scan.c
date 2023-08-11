@@ -418,8 +418,8 @@ static int read_matrix(uint8_t *state, bool at_boot)
 
 #ifdef CONFIG_KEYBOARD_RUNTIME_KEYS
 
-static uint8_t key_vol_up_row = KEYBOARD_DEFAULT_ROW_VOL_UP;
-static uint8_t key_vol_up_col = KEYBOARD_DEFAULT_COL_VOL_UP;
+test_export_static uint8_t key_vol_up_row = KEYBOARD_DEFAULT_ROW_VOL_UP;
+test_export_static uint8_t key_vol_up_col = KEYBOARD_DEFAULT_COL_VOL_UP;
 
 void set_vol_up_key(uint8_t row, uint8_t col)
 {
@@ -975,20 +975,6 @@ void keyboard_scan_task(void *u)
 		}
 	}
 }
-
-#ifdef CONFIG_LID_SWITCH
-
-static void keyboard_lid_change(void)
-{
-	if (lid_is_open())
-		keyboard_scan_enable(1, KB_SCAN_DISABLE_LID_CLOSED);
-	else
-		keyboard_scan_enable(0, KB_SCAN_DISABLE_LID_CLOSED);
-}
-DECLARE_HOOK(HOOK_LID_CHANGE, keyboard_lid_change, HOOK_PRIO_DEFAULT);
-DECLARE_HOOK(HOOK_INIT, keyboard_lid_change, HOOK_PRIO_POST_LID);
-
-#endif
 
 #ifdef CONFIG_USB_SUSPEND
 static void keyboard_usb_pm_change(void)

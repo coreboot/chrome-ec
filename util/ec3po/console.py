@@ -1086,7 +1086,7 @@ def StartLoop(console, command_active, shutdown_pipe=None):
                                     continue_looping = False
                                     break
 
-                    elif fileno is console.cmd_pipe.fileno():
+                    elif fileno == console.cmd_pipe.fileno():
                         try:
                             data = console.cmd_pipe.recv()
                         except EOFError:

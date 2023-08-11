@@ -455,8 +455,16 @@ def StartLoop(interp, shutdown_pipe=None):
                 events = poller.poll()
                 for fileno, event in events:
                     if event & select.EPOLLIN and fileno in input_filenos:
+                        ec_uart_pty_fileno = None
+                        try:
+                            ec_uart_pty_fileno = interp.ec_uart_pty.fileno()
+                        except ValueError:
+                            interp.logger.debug(
+                                "ec3po interpreter error accessing ecuart_pty, probably it is closed."
+                            )
+                            pass
                         # Handle any debug prints from the EC.
-                        if fileno == interp.ec_uart_pty.fileno():
+                        if fileno == ec_uart_pty_fileno:
                             interp.HandleECData()
 
                         # Handle any commands from the user.
@@ -478,7 +486,7 @@ def StartLoop(interp, shutdown_pipe=None):
 
                     if event & select.EPOLLOUT and fileno in output_filenos:
                         # Send a command to the EC.)
-                        if fileno is interp.ec_uart_pty.fileno():
+                        if fileno == ec_uart_pty_fileno:
                             interp.SendCmdToEC()
 
     except KeyboardInterrupt:
