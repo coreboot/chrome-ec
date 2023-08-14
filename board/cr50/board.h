@@ -24,6 +24,7 @@
 #undef CONFIG_FMAP
 #undef CONFIG_HIBERNATE
 #undef CONFIG_LID_SWITCH
+#undef CONFIG_CMD_RW
 #undef CONFIG_CMD_SYSINFO
 #undef CONFIG_CMD_SYSJUMP
 #undef CONFIG_CMD_SYSLOCK
@@ -36,7 +37,6 @@
 /* Disable stuff that should only be in debug builds */
 #undef CONFIG_CMD_CRASH
 #undef CONFIG_CMD_MD
-#undef CONFIG_CMD_RW
 #undef CONFIG_CMD_SLEEPMASK_SET
 #undef CONFIG_CMD_WAITMS
 #undef CONFIG_FLASH
