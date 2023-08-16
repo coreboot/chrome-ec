@@ -54,6 +54,12 @@
 		usb_c0_tcpc_rst_odl {
 			gpios = <&gpio6 7 (GPIO_ODR_HIGH | GPIO_ACTIVE_LOW)>;
 		};
+		usb_c0_ppc_int_odl {
+			gpios = <&gpio6 2 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
+		};
+		usb_c1_ppc_int_odl {
+			gpios = <&gpiof 5 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
+		};
 	};
 
 	named-gpios {
@@ -180,7 +186,7 @@
 	pinctrl-names = "default";
 
 	tcpc_port0: nct38xx@70 {
-		compatible = "nuvoton,nct38xx";
+		compatible = "nuvoton,nct38xx-tcpc";
 		gpio-dev = <&nct3807_C0>;
 		reg = <0x70>;
 		tcpc-flags = <(
@@ -224,13 +230,6 @@
 			ngpios = <8>;
 			pin_mask = <0xff>;
 		};
-	};
-
-	nct3808_alert_0 {
-		compatible = "nuvoton,nct38xx-gpio-alert";
-		irq-gpios = <&gpioe 0 GPIO_ACTIVE_LOW>;
-		nct38xx-dev = <&nct3807_C0>;
-		label = "NCT3807_ALERT_0";
 	};
 };
 

@@ -173,14 +173,14 @@ static bool pd_try_src_enable;
 #ifdef CONFIG_USB_PD_REV30
 /*
  * The spec. revision is used to index into this array.
- *  Rev 0 (VDO 1.0) - return VDM_VER10
- *  Rev 1 (VDO 1.0) - return VDM_VER10
- *  Rev 2 (VDO 2.0) - return VDM_VER20
+ *  Rev 0 (VDO 1.0) - return SVDM_VER_1_0
+ *  Rev 1 (VDO 1.0) - return SVDM_VER_1_0
+ *  Rev 2 (VDO 2.0) - return SVDM_VER_2_0
  */
-static const uint8_t vdo_ver[] = { VDM_VER10, VDM_VER10, VDM_VER20 };
+static const uint8_t vdo_ver[] = { SVDM_VER_1_0, SVDM_VER_1_0, SVDM_VER_2_0 };
 #define VDO_VER(v) vdo_ver[v]
 #else
-#define VDO_VER(v) VDM_VER10
+#define VDO_VER(v) SVDM_VER_1_0
 #endif
 
 static struct pd_protocol {
@@ -378,7 +378,7 @@ int pd_get_vdo_ver(int port, enum tcpci_msg_type type)
 #ifdef CONFIG_USB_PD_REV30
 	return vdo_ver[pd[port].rev];
 #else
-	return VDM_VER10;
+	return SVDM_VER_1_0;
 #endif
 }
 
@@ -2140,7 +2140,7 @@ void pd_send_vdm(int port, uint32_t vid, int cmd, const uint32_t *data,
 					   (PD_VDO_CMD(cmd) <= CMD_ATTENTION),
 				   cmd);
 #ifdef CONFIG_USB_PD_REV30
-	pd[port].vdo_data[0] |= VDO_SVDM_VERS(vdo_ver[pd[port].rev]);
+	pd[port].vdo_data[0] |= VDO_SVDM_VERS_MAJOR(vdo_ver[pd[port].rev]);
 #endif
 	queue_vdm(port, pd[port].vdo_data, data, count, TCPCI_MSG_SOP);
 

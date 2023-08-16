@@ -27,6 +27,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
                                                             battery.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_RT9490
                                                             bc12_rt9490.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC         cec.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_RT9490
                                                             chg_rt9490.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER     charger.c)
@@ -47,6 +48,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_IOEX_CROS_DRV
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_KB8010 kb8010_usb_mux.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CROS_EC_RAW_KB
                                                             keyboard_raw.c)
+zephyr_library_sources_ifdef(CONFIG_CROS_EC_KEYBOARD_INPUT  keyboard_input.c)
 zephyr_library_sources_ifdef(CONFIG_CROS_EC_KEYSCAN         keyscan.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LOG_BACKEND_CONSOLE_BUFFER
                              log_backend_console_buffer.c)

@@ -262,6 +262,7 @@
 		compatible = "unused-gpios";
 		unused-gpios =
 			<&gpio3 2 0>,
+			<&gpio3 3 0>,
 			<&gpio3 5 0>,
 			<&gpio3 6 0>,
 			<&gpio5 7 0>,
@@ -278,6 +279,7 @@
 			<&gpioc 0 0>,
 			<&gpioc 6 0>,
 			<&gpioc 7 0>,
+			<&gpiod 5 0>,
 			<&gpioe 4 0>,
 			<&gpiof 2 0>,
 			<&gpiof 3 0>;
@@ -318,6 +320,12 @@
 &i2c1_0 {
 	label = "I2C_SENSOR";
 	clock-frequency = <I2C_BITRATE_FAST>;
+
+	pmic_mp2964: pmic_mp2964@20 {
+			compatible = "mps,mp2964";
+			reg = <0x20>;
+			label = "I2C_ADDR_MP2964_FLAGS";
+	};
 };
 
 &i2c3_0 {

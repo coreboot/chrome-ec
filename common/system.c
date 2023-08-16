@@ -907,13 +907,20 @@ void system_common_pre_init(void)
 
 		panic_get_reason(&reason, &info, &exception);
 		pdata = panic_get_data();
+
+		/* If the panic reason is a watchdog warning, then change
+		 * the reason to a regular watchdog reason while preserving
+		 * the info and exception from the watchdog warning.
+		 */
+		if (reason == PANIC_SW_WATCHDOG_WARN)
+			panic_set_reason(PANIC_SW_WATCHDOG, info, exception);
 		/* The watchdog panic info may have already been initialized by
 		 * the watchdog handler, so only set it here if the panic reason
 		 * is not a watchdog or the panic info has already been read,
 		 * i.e. an old watchdog panic.
 		 */
-		if (reason != PANIC_SW_WATCHDOG || !pdata ||
-		    pdata->flags & PANIC_DATA_FLAG_OLD_HOSTCMD)
+		else if (reason != PANIC_SW_WATCHDOG || !pdata ||
+			 pdata->flags & PANIC_DATA_FLAG_OLD_HOSTCMD)
 			panic_set_reason(PANIC_SW_WATCHDOG, 0, 0);
 	}
 
@@ -1713,7 +1720,8 @@ host_command_get_board_version(struct host_cmd_handler_args *args)
 DECLARE_HOST_COMMAND(EC_CMD_GET_BOARD_VERSION, host_command_get_board_version,
 		     EC_VER_MASK(0));
 
-static enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
+STATIC_IF_NOT(CONFIG_ZTEST)
+enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
 {
 	struct ec_params_reboot_ec p;
 
@@ -1750,8 +1758,14 @@ static enum ec_status host_command_reboot(struct host_cmd_handler_args *args)
 	    p.cmd == EC_REBOOT_COLD || p.cmd == EC_REBOOT_HIBERNATE ||
 	    p.cmd == EC_REBOOT_COLD_AP_OFF) {
 		/* Clean busy bits on host for commands that won't return */
+#ifndef CONFIG_EC_HOST_CMD
 		args->result = EC_RES_SUCCESS;
 		host_send_response(args);
+#else
+		ec_host_cmd_send_response(
+			EC_HOST_CMD_SUCCESS,
+			(struct ec_host_cmd_handler_args *)args);
+#endif
 	}
 #endif
 

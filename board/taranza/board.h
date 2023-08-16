@@ -75,6 +75,9 @@
 #undef CONFIG_BATTERY_REVIVE_DISCONNECT
 #undef CONFIG_BATTERY_SMART
 
+/* PWM */
+#define CONFIG_PWM
+
 /* Thermistors */
 #define CONFIG_TEMP_SENSOR
 #define CONFIG_THERMISTOR
@@ -86,15 +89,13 @@
 #define CONFIG_DEDICATED_RECOVERY_BUTTON_FLAGS BUTTON_FLAG_ACTIVE_HIGH
 #define CONFIG_POWER_BUTTON
 #define CONFIG_POWER_BUTTON_IGNORE_LID
+#define CONFIG_POWER_BUTTON_INIT_IDLE
 #define CONFIG_POWER_BUTTON_X86
 #define CONFIG_EMULATED_SYSRQ
 
 /* CEC */
 #define CONFIG_CEC
 #define CONFIG_CEC_BITBANG
-#define CEC_GPIO_OUT GPIO_HDMI2_CEC
-#define CEC_GPIO_IN GPIO_HDMI2_CEC_IN
-#undef CEC_GPIO_PULL_UP /* Pull-up to PP3300_Z1 */
 
 /* No Keyboard */
 #undef CONFIG_KEYBOARD_COL2_INVERTED
@@ -135,6 +136,11 @@ enum charge_port {
 };
 
 enum usbc_port { USBC_PORT_C0 = 0, USBC_PORT_COUNT };
+
+enum pwm_channel {
+	PWM_CH_LED_GREEN,
+	PWM_CH_COUNT,
+};
 
 /* ADC channels */
 enum adc_channel {

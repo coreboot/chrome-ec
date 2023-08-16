@@ -80,7 +80,7 @@
 	};
 
 	tcpc_port0: nct38xx@70 {
-		compatible = "nuvoton,nct38xx";
+		compatible = "nuvoton,nct38xx-tcpc";
 		reg = <0x70>;
 		gpio-dev = <&nct3807_C0>;
 		tcpc-flags = <(TCPC_FLAGS_TCPCI_REV2_0)>;
@@ -124,13 +124,6 @@
 		};
 	};
 
-	nct3808_alert_0 {
-		compatible = "nuvoton,nct38xx-gpio-alert";
-		irq-gpios = <&gpioe 0 GPIO_ACTIVE_LOW>;
-		nct38xx-dev = <&nct3807_C0>;
-		label = "NCT3807_ALERT_0";
-	};
-
 	anx7483_port0: anx7483@3e {
 		compatible = "analogix,anx7483";
 		reg = <0x3e>;
@@ -142,6 +135,11 @@
 		compatible = "nxp,nx20p348x";
 		status = "okay";
 		reg = <0x71>;
+		/* a duplicate of the <&gpio_usb_c0_ppc_int_odl> node in
+		 * "named-gpios". This is the Zephyr preferred style,
+		 * the "named-gpios" node will be dealt with at a later date.
+		 */
+		irq-gpios = <&gpio7 5 GPIO_ACTIVE_LOW>;
 	};
 };
 
@@ -164,7 +162,7 @@
 	};
 
 	tcpc_port1: nct38xx@70 {
-		compatible = "nuvoton,nct38xx";
+		compatible = "nuvoton,nct38xx-tcpc";
 		reg = <0x70>;
 		gpio-dev = <&nct3807_C1>;
 		tcpc-flags = <(TCPC_FLAGS_TCPCI_REV2_0)>;
@@ -208,13 +206,6 @@
 		};
 	};
 
-	nct3808_alert_1 {
-		compatible = "nuvoton,nct38xx-gpio-alert";
-		irq-gpios = <&gpioc 7 GPIO_ACTIVE_LOW>;
-		nct38xx-dev = <&nct3807_C1>;
-		label = "NCT3807_ALERT_1";
-	};
-
 	anx7483_port1: anx7483@3e {
 		compatible = "analogix,anx7483";
 		reg = <0x3e>;
@@ -226,6 +217,11 @@
 		compatible = "nxp,nx20p348x";
 		status = "okay";
 		reg = <0x71>;
+		/* a duplicate of the <&gpio_usb_c1_ppc_int_odl> node in
+		 * "named-gpios". This is the Zephyr preferred style,
+		 * the "named-gpios" node will be dealt with at a later date.
+		 */
+		irq-gpios = <&gpiod 4 GPIO_ACTIVE_LOW>;
 	};
 
 	ps8818_port1: ps8818@28 {
