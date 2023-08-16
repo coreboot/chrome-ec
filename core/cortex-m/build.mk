@@ -32,13 +32,23 @@ ifeq ("$(GCC_VERSION)","11.2.0")
 # IPA modref pass crashes gcc 11.2 when LTO is used with partial linking
 CFLAGS_CPU += -fno-ipa-modref
 
-# Set an option to force LTO to generate target machine code
-export CFLAGS_LTO_PARTIAL_LINK := -flinker-output=nolto-rel
 # -ffat-lto-objects is a workaround for b/134623681
-# Disable assembler warnings
+# Disable assembler warnings (gcc 11.2 came with v2.35 binutils with issues)
 # TODO (b/238039591) Remove `-Wa,W` when binutils is fixed.
 CFLAGS_CPU += -Wa,-W -ffat-lto-objects
 endif
+
+ifeq ("$(GCC_VERSION)","11.3.0")
+# IPA modref pass crashes gcc 11.3 when LTO is used with partial linking
+CFLAGS_CPU += -fno-ipa-modref
+
+# -ffat-lto-objects is a workaround for b/134623681
+CFLAGS_CPU += -ffat-lto-objects
+endif
+
+# Set an option to force LTO to generate target machine code.
+# `-flinker-output=nolto-rel` first became available in gcc 9.x
+export CFLAGS_LTO_PARTIAL_LINK := -flinker-output=nolto-rel
 
 core-y=cpu.o init.o ldivmod.o llsr.o uldivmod.o vecttable.o
 core-$(CONFIG_AES)+=aes.o
