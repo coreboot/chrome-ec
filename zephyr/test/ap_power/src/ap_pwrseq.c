@@ -201,9 +201,9 @@ ZTEST(ap_pwrseq, test_ap_pwrseq_2)
 
 	ap_power_exit_hardoff();
 	k_msleep(2000);
-	zassert_equal(2, power_shutdown_count,
+	zassert_equal(1, power_shutdown_count,
 		      "AP_POWER_SHUTDOWN event not generated");
-	zassert_equal(2, power_shutdown_complete_count,
+	zassert_equal(1, power_shutdown_complete_count,
 		      "AP_POWER_SHUTDOWN_COMPLETE event not generated");
 	zassert_equal(1, power_suspend_count,
 		      "AP_POWER_SUSPEND event not generated");
@@ -211,6 +211,7 @@ ZTEST(ap_pwrseq, test_ap_pwrseq_2)
 		      "AP_POWER_HARD_OFF event not generated");
 }
 
+#if defined(CONFIG_AP_X86_INTEL_ADL)
 ZTEST(ap_pwrseq, test_ap_pwrseq_3)
 {
 	zassert_equal(0,
@@ -257,6 +258,30 @@ ZTEST(ap_pwrseq, test_ap_pwrseq_5)
 
 	zassert_equal(0, power_hard_off_count,
 		      "AP_POWER_HARD_OFF event generated");
+	zassert_equal(1, power_shutdown_count,
+		      "AP_POWER_SHUTDOWN event not generated");
+	zassert_equal(1, power_shutdown_complete_count,
+		      "AP_POWER_SHUTDOWN_COMPLETE event not generated");
+}
+#endif /* CONFIG_AP_X86_INTEL_ADL */
+
+ZTEST(ap_pwrseq, test_ap_pwrseq_6)
+{
+	zassert_equal(
+		0,
+		power_signal_emul_load(
+			EMUL_POWER_SIGNAL_TEST_PLATFORM(tp_sys_s3_rsmrst_fail)),
+		"Unable to load test platform `tp_sys_s3_dsw_pwrok_fail`");
+
+	ap_power_exit_hardoff();
+	k_msleep(1500);
+
+#if defined(CONFIG_AP_X86_INTEL_ADL)
+	zassert_equal(1, power_hard_off_count,
+		      "AP_POWER_HARD_OFF event generated");
+#endif /* CONFIG_AP_X86_INTEL_ADL */
+	zassert_equal(1, power_start_up_count,
+		      "AP_POWER_STARTUP event not generated");
 	zassert_equal(1, power_shutdown_count,
 		      "AP_POWER_SHUTDOWN event not generated");
 	zassert_equal(1, power_shutdown_complete_count,

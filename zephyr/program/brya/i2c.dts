@@ -67,7 +67,7 @@
 	pinctrl-names = "default";
 
 	tcpc_port0: nct38xx@70 {
-		compatible = "nuvoton,nct38xx";
+		compatible = "nuvoton,nct38xx-tcpc";
 		reg = <0x70>;
 		gpio-dev = <&nct3808_0_P1>;
 		tcpc-flags = <(
@@ -100,7 +100,7 @@
 	};
 
 	tcpc_port2: nct38xx@74 {
-		compatible = "nuvoton,nct38xx";
+		compatible = "nuvoton,nct38xx-tcpc";
 		reg = <0x74>;
 		gpio-dev = <&nct3808_0_P2>;
 		tcpc-flags = <(TCPC_FLAGS_TCPCI_REV2_0)>;
@@ -128,17 +128,6 @@
 			pin_mask = <0xdc>;
 			pinmux_mask = <0xff>;
 		};
-	};
-
-	nct3808_alert_1 {
-		compatible = "nuvoton,nct38xx-gpio-alert";
-		/* a duplicate of the <&gpio_usb_c0_c2_tcpc_int_odl> node in
-		 * "named-gpios". This is the Zephyr preferred style,
-		 * the "named-gpios" node will be dealt with at a later date.
-		 */
-		irq-gpios = <&gpioe 0 GPIO_ACTIVE_LOW>;
-		nct38xx-dev = <&nct3808_0_P1 &nct3808_0_P2>;
-		label = "NCT3808_ALERT_1";
 	};
 };
 

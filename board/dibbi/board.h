@@ -100,9 +100,7 @@
 /* CEC */
 #define CONFIG_CEC
 #define CONFIG_CEC_BITBANG
-#define CEC_GPIO_OUT GPIO_HDMI2_CEC
-#define CEC_GPIO_IN GPIO_HDMI2_CEC_IN
-#undef CEC_GPIO_PULL_UP /* Pull-up to PP3300_Z1 */
+#define CONFIG_CEC_IT83XX
 
 /* No Keyboard */
 #undef CONFIG_KEYBOARD_COL2_INVERTED
@@ -170,7 +168,7 @@ enum temp_sensor_id {
 	TEMP_SENSOR_COUNT
 };
 
-enum cec_port { CEC_PORT_0, CEC_PORT_COUNT };
+enum cec_port { CEC_PORT_0, CEC_PORT_1, CEC_PORT_COUNT };
 
 #endif /* !__ASSEMBLER__ */
 

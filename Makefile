@@ -89,6 +89,17 @@ all:
 # usage: common-$(call not_cfg,$(CONFIG_FOO))+=bar.o
 not_cfg = $(subst ro rw,y,$(filter-out $(1:y=ro rw),ro rw))
 
+# Run the given shell command and capture the output, but echo the command
+# itself, if V is not 0 or empty.
+# Usage: $(call shell_echo,<shell-command>)
+shell_echo = $(if $(filter-out 0,$(V)),$(info $(1)))$(shell $(1))
+
+# Check if private driver repository is present
+ifneq ($(wildcard private/build.mk),)
+HAVE_PRIVATE:=y
+CPPFLAGS+=-DHAVE_PRIVATE
+endif
+
 # The board makefile sets $CHIP and the chip makefile sets $CORE.
 # Include those now, since they must be defined for _flag_cfg below.
 include $(BDIR)/build.mk
@@ -181,12 +192,12 @@ CFLAGS += -I$(realpath $(out))
 endif
 # Get the CONFIG_ and VARIANT_ options that are defined for this target and make
 # them into variables available to this build script
-_flag_cfg_ro:=$(shell $(CPP) $(CPPFLAGS) -P -dM -Ichip/$(CHIP) \
-	-I$(BASEDIR) -I$(BDIR) -DSECTION_IS_RO=$(EMPTY) include/config.h | \
-	grep -o "\#define \(CONFIG\|VARIANT\)_[A-Z0-9_]*" | cut -c9- | sort)
-_flag_cfg_rw:=$(_tsk_cfg_rw) $(shell $(CPP) $(CPPFLAGS) -P -dM -Ichip/$(CHIP) \
-	-I$(BASEDIR) -I$(BDIR) -DSECTION_IS_RW=$(EMPTY) include/config.h | \
-	grep -o "\#define \(CONFIG\|VARIANT\)_[A-Z0-9_]*" | cut -c9- | sort)
+# Usage: $(shell $(call cmd_get_configs,<RO|RW>))
+cmd_get_configs = $(CPP) $(CPPFLAGS) -P -dM -Ichip/$(CHIP) \
+	-I$(BASEDIR) -I$(BDIR) -DSECTION_IS_$(1)=$(EMPTY) include/config.h | \
+	grep -o "\#define \(CONFIG\|VARIANT\)_[A-Z0-9_]*" | cut -c9- | sort
+_flag_cfg_ro:=$(call shell_echo,$(call cmd_get_configs,RO))
+_flag_cfg_rw:=$(_tsk_cfg_rw) $(call shell_echo,$(call cmd_get_configs,RW))
 
 _flag_cfg:= $(filter $(_flag_cfg_ro), $(_flag_cfg_rw))
 _flag_cfg_ro:= $(filter-out $(_flag_cfg), $(_flag_cfg_ro))

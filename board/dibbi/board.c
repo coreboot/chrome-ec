@@ -13,12 +13,14 @@
 #include "charge_state.h"
 #include "charger.h"
 #include "driver/cec/bitbang.h"
+#include "driver/cec/it83xx.h"
 #include "driver/ppc/syv682x_public.h"
 #include "driver/tcpm/it83xx_pd.h"
 #include "driver/temp_sensor/thermistor.h"
 #include "driver/usb_mux/it5205.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "hwtimer_chip.h"
 #include "intc.h"
 #include "power.h"
 #include "power_button.h"
@@ -162,10 +164,25 @@ const struct temp_sensor_t temp_sensors[] = {
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
 /* CEC ports */
+static const struct bitbang_cec_config bitbang_cec_config = {
+	.gpio_out = GPIO_HDMI2_CEC,
+	.gpio_in = GPIO_HDMI2_CEC_IN,
+	.gpio_pull_up = GPIO_HDMI2_CEC_PULL_UP,
+	.timer = CEC_EXT_TIMER,
+};
+
 const struct cec_config_t cec_config[] = {
+	/* HDMI1 */
 	[CEC_PORT_0] = {
+		.drv = &it83xx_cec_drv,
+		.drv_config = NULL,
+		.offline_policy = cec_default_policy,
+	},
+	/* HDMI2 */
+	[CEC_PORT_1] = {
 		.drv = &bitbang_cec_drv,
-		.offline_policy = NULL,
+		.drv_config = &bitbang_cec_config,
+		.offline_policy = cec_default_policy,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(cec_config) == CEC_PORT_COUNT);
