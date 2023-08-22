@@ -527,13 +527,13 @@ static int read_mapped_string(uint8_t offset, char *buffer, int max_size)
 	return ret;
 }
 
-static int wait_event(long event_type,
-		      struct ec_response_get_next_event_v1 *buffer,
-		      size_t buffer_size, long timeout)
+static int wait_event_mask(unsigned long event_mask,
+			   struct ec_response_get_next_event_v1 *buffer,
+			   size_t buffer_size, long timeout)
 {
 	int rv;
 
-	rv = ec_pollevent(1 << event_type, buffer, buffer_size, timeout);
+	rv = ec_pollevent(event_mask, buffer, buffer_size, timeout);
 	if (rv == 0) {
 		fprintf(stderr, "Timeout waiting for MKBP event\n");
 		return -ETIMEDOUT;
@@ -543,6 +543,13 @@ static int wait_event(long event_type,
 	}
 
 	return rv;
+}
+
+static int wait_event(long event_type,
+		      struct ec_response_get_next_event_v1 *buffer,
+		      size_t buffer_size, long timeout)
+{
+	return wait_event_mask(1 << event_type, buffer, buffer_size, timeout);
 }
 
 int cmd_adc_read(int argc, char *argv[])
@@ -11218,66 +11225,114 @@ int cmd_wait_event(int argc, char *argv[])
 	return 0;
 }
 
-static void cmd_cec_help(const char *cmd)
+static void cmd_cec_help(void)
 {
-	fprintf(stderr,
-		"  Usage: %s write [write bytes...]\n"
-		"    Write message on the CEC bus\n"
-		"  Usage: %s read [timeout]\n"
-		"    [timeout] in seconds\n"
-		"  Usage: %s get <param>\n"
-		"  Usage: %s set <param> <val>\n"
-		"    <param> is one of:\n"
-		"      address: CEC receive address\n"
-		"        <val> is the new CEC address\n"
-		"      enable: Enable or disable CEC\n"
-		"        <val> is 1 to enable, 0 to disable\n",
-		cmd, cmd, cmd, cmd);
+	fprintf(stderr, "  Usage: cec <port> write [write bytes...]\n"
+			"    Write message on the CEC bus\n"
+			"  Usage: cec <port> read [timeout]\n"
+			"    [timeout] in seconds\n"
+			"  Usage: cec <port> get <param>\n"
+			"  Usage: cec <port> set <param> <val>\n"
+			"    <param> is one of:\n"
+			"      address: CEC receive address\n"
+			"        <val> is the new CEC address\n"
+			"      enable: Enable or disable CEC\n"
+			"        <val> is 1 to enable, 0 to disable\n");
 }
 
-static int cmd_cec_write(int argc, char *argv[])
+static long timespec_diff_ms(const struct timespec *t1,
+			     const struct timespec *t2)
+{
+	return ((t1->tv_sec - t2->tv_sec) * 1000 +
+		(t1->tv_nsec - t2->tv_nsec) / 1000000);
+}
+
+static int cmd_cec_write(int port, int argc, char *argv[])
 {
 	char *e;
 	long val;
 	int rv, i, msg_len;
 	struct ec_params_cec_write p;
+	struct ec_params_cec_write_v1 p_v1;
 	struct ec_response_get_next_event_v1 buffer;
+	int version;
+	uint8_t *msg_param;
+	struct timespec start, now;
+	const long timeout_ms = 1000; /* How long to wait for the send result */
+	long elapsed_ms;
+	uint32_t event_port, events;
 
 	if (argc < 3 || argc > 18) {
 		fprintf(stderr, "Invalid number of params\n");
-		cmd_cec_help(argv[0]);
+		cmd_cec_help();
 		return -1;
 	}
 
 	msg_len = argc - 2;
+
+	rv = get_latest_cmd_version(EC_CMD_CEC_WRITE_MSG, &version);
+	if (rv < 0)
+		return rv;
+
+	if (version == 0) {
+		msg_param = p.msg;
+	} else {
+		p_v1.port = port;
+		p_v1.msg_len = msg_len;
+		msg_param = p_v1.msg;
+	}
+
 	for (i = 0; i < msg_len; i++) {
 		val = strtol(argv[i + 2], &e, 16);
 		if (e && *e)
 			return -1;
 		if (val < 0 || val > 0xff)
 			return -1;
-		p.msg[i] = (uint8_t)val;
+		msg_param[i] = (uint8_t)val;
 	}
 
 	printf("Write to CEC: ");
 	for (i = 0; i < msg_len; i++)
-		printf("0x%02x ", p.msg[i]);
+		printf("0x%02x ", msg_param[i]);
 	printf("\n");
 
-	rv = ec_command(EC_CMD_CEC_WRITE_MSG, 0, &p, msg_len, NULL, 0);
+	if (version == 0)
+		rv = ec_command(EC_CMD_CEC_WRITE_MSG, 0, &p, msg_len, NULL, 0);
+	else
+		rv = ec_command(EC_CMD_CEC_WRITE_MSG, version, &p_v1,
+				sizeof(p_v1), NULL, 0);
 	if (rv < 0)
 		return rv;
 
-	rv = wait_event(EC_MKBP_EVENT_CEC_EVENT, &buffer, sizeof(buffer), 1000);
-	if (rv < 0)
-		return rv;
+	/*
+	 * Wait for a send OK or send failed event. Retry multiple times since
+	 * we might receive other events or events for other ports.
+	 */
+	clock_gettime(CLOCK_REALTIME, &start);
+	while (true) {
+		clock_gettime(CLOCK_REALTIME, &now);
+		elapsed_ms = timespec_diff_ms(&now, &start);
+		if (elapsed_ms >= timeout_ms)
+			break;
 
-	if (buffer.data.cec_events & EC_MKBP_CEC_SEND_OK)
-		return 0;
+		rv = wait_event(EC_MKBP_EVENT_CEC_EVENT, &buffer,
+				sizeof(buffer), timeout_ms - elapsed_ms);
+		if (rv < 0)
+			return rv;
 
-	if (buffer.data.cec_events & EC_MKBP_CEC_SEND_FAILED) {
-		fprintf(stderr, "Send failed\n");
-		return -1;
+		event_port = EC_MKBP_EVENT_CEC_GET_PORT(buffer.data.cec_events);
+		events = EC_MKBP_EVENT_CEC_GET_EVENTS(buffer.data.cec_events);
+
+		if (event_port != port)
+			continue;
+
+		if (events & EC_MKBP_CEC_SEND_OK)
+			return 0;
+
+		if (events & EC_MKBP_CEC_SEND_FAILED) {
+			fprintf(stderr, "Send failed\n");
+			return -1;
+		}
 	}
 
 	fprintf(stderr, "No send result received\n");
@@ -11285,12 +11340,58 @@ static int cmd_cec_write(int argc, char *argv[])
 	return -1;
 }
 
-static int cmd_cec_read(int argc, char *argv[])
+static int cec_read_handle_cec_event(int port, uint32_t cec_events,
+				     uint8_t *msg, uint8_t *msg_len)
+{
+	int rv;
+	uint32_t event_port, events;
+	struct ec_params_cec_read p;
+	struct ec_response_cec_read r;
+
+	/* Extract the port and events */
+	event_port = EC_MKBP_EVENT_CEC_GET_PORT(cec_events);
+	events = EC_MKBP_EVENT_CEC_GET_EVENTS(cec_events);
+
+	/* Check if it's the HAVE_DATA event we're waiting for */
+	if (event_port != port || !(events & EC_MKBP_CEC_HAVE_DATA)) {
+		*msg_len = 0;
+		return 0;
+	}
+
+	/* Data is ready, so send the read command */
+	p.port = port;
+	rv = ec_command(EC_CMD_CEC_READ_MSG, 0, &p, sizeof(p), &r, sizeof(r));
+	if (rv < 0) {
+		/*
+		 * When the kernel driver is enabled it may read the data out
+		 * first, so the queue will be empty and the command will
+		 * returns EC_RES_UNAVAILABLE. The ectool read command is still
+		 * useful for testing if the kernel driver is not enabled.
+		 */
+		printf("Note: `cec read` doesn't work if the cros_ec_cec "
+		       "kernel driver is running\n");
+		return rv;
+	}
+
+	/* Message received successfully */
+	memcpy(msg, r.msg, r.msg_len);
+	*msg_len = r.msg_len;
+	return 0;
+}
+
+static int cmd_cec_read(int port, int argc, char *argv[])
 {
 	int i, rv;
 	char *e;
 	struct ec_response_get_next_event_v1 buffer;
-	long timeout = 5000;
+	long timeout_ms = 5000;
+	unsigned long event_mask;
+	struct timespec start, now;
+	long elapsed_ms;
+	int event_size;
+	bool received = false;
+	uint8_t msg[MAX_CEC_MSG_LEN];
+	uint8_t msg_len;
 
 	if (!ec_pollevent) {
 		fprintf(stderr, "Polling for MKBP event not supported\n");
@@ -11298,21 +11399,68 @@ static int cmd_cec_read(int argc, char *argv[])
 	}
 
 	if (argc >= 3) {
-		timeout = strtol(argv[2], &e, 0);
+		timeout_ms = strtol(argv[2], &e, 0);
 		if (e && *e) {
 			fprintf(stderr, "Bad timeout value '%s'.\n", argv[2]);
 			return -1;
 		}
 	}
 
-	rv = wait_event(EC_MKBP_EVENT_CEC_MESSAGE, &buffer, sizeof(buffer),
-			timeout);
-	if (rv < 0)
-		return rv;
+	/*
+	 * There are two ways of receiving CEC messages:
+	 * 1. Old EC firmware which only supports one port sends the data in a
+	 *    cec_message MKBP event.
+	 * 2. New EC firmware which supports multiple ports sends
+	 *    EC_MKBP_CEC_HAVE_DATA to notify that data is ready, then
+	 *    EC_CMD_CEC_READ_MSG is used to read it.
+	 * To make ectool compatible with both, we wait for either
+	 * EC_MKBP_EVENT_CEC_MESSAGE or EC_MKBP_CEC_HAVE_DATA.
+	 */
+	event_mask = BIT(EC_MKBP_EVENT_CEC_EVENT) |
+		     BIT(EC_MKBP_EVENT_CEC_MESSAGE);
+	clock_gettime(CLOCK_REALTIME, &start);
+	while (true) {
+		clock_gettime(CLOCK_REALTIME, &now);
+		elapsed_ms = timespec_diff_ms(&now, &start);
+		if (elapsed_ms >= timeout_ms)
+			break;
+
+		rv = wait_event_mask(event_mask, &buffer, sizeof(buffer),
+				     timeout_ms - elapsed_ms);
+		if (rv < 0)
+			return rv;
+		event_size = rv;
+
+		if (buffer.event_type == EC_MKBP_EVENT_CEC_EVENT) {
+			rv = cec_read_handle_cec_event(
+				port, buffer.data.cec_events, msg, &msg_len);
+			if (rv < 0)
+				return rv;
+
+			/* Message received successfully */
+			if (msg_len) {
+				received = true;
+				break;
+			}
+			/* No message received, continue waiting */
+
+		} else if (buffer.event_type == EC_MKBP_EVENT_CEC_MESSAGE) {
+			/* Message received successfully */
+			received = true;
+			msg_len = event_size - 1;
+			memcpy(msg, buffer.data.cec_message, msg_len);
+			break;
+		}
+	}
+
+	if (!received) {
+		fprintf(stderr, "Timed out waiting for message\n");
+		return -1;
+	}
 
 	printf("CEC data: ");
-	for (i = 0; i < rv - 1; i++)
-		printf("0x%02x ", buffer.data.cec_message[i]);
+	for (i = 0; i < msg_len; i++)
+		printf("0x%02x ", msg[i]);
 	printf("\n");
 
 	return 0;
@@ -11327,7 +11475,7 @@ static int cec_cmd_from_str(const char *str)
 	return -1;
 }
 
-static int cmd_cec_set(int argc, char *argv[])
+static int cmd_cec_set(int port, int argc, char *argv[])
 {
 	char *e;
 	struct ec_params_cec_set p;
@@ -11336,7 +11484,7 @@ static int cmd_cec_set(int argc, char *argv[])
 
 	if (argc != 4) {
 		fprintf(stderr, "Invalid number of params\n");
-		cmd_cec_help(argv[0]);
+		cmd_cec_help();
 		return -1;
 	}
 
@@ -11352,12 +11500,13 @@ static int cmd_cec_set(int argc, char *argv[])
 		return -1;
 	}
 	p.cmd = cmd;
+	p.port = port;
 	p.val = val;
 
 	return ec_command(EC_CMD_CEC_SET, 0, &p, sizeof(p), NULL, 0);
 }
 
-static int cmd_cec_get(int argc, char *argv[])
+static int cmd_cec_get(int port, int argc, char *argv[])
 {
 	int rv, cmd;
 	struct ec_params_cec_get p;
@@ -11365,7 +11514,7 @@ static int cmd_cec_get(int argc, char *argv[])
 
 	if (argc != 3) {
 		fprintf(stderr, "Invalid number of params\n");
-		cmd_cec_help(argv[0]);
+		cmd_cec_help();
 		return -1;
 	}
 
@@ -11375,6 +11524,7 @@ static int cmd_cec_get(int argc, char *argv[])
 		return -1;
 	}
 	p.cmd = cmd;
+	p.port = port;
 
 	rv = ec_command(EC_CMD_CEC_GET, 0, &p, sizeof(p), &r, sizeof(r));
 	if (rv < 0)
@@ -11387,22 +11537,35 @@ static int cmd_cec_get(int argc, char *argv[])
 
 int cmd_cec(int argc, char *argv[])
 {
-	if (argc < 2) {
+	int port;
+	char *e;
+
+	if (argc < 3) {
 		fprintf(stderr, "Invalid number of params\n");
-		cmd_cec_help(argv[0]);
+		cmd_cec_help();
 		return -1;
 	}
+
+	port = strtol(argv[1], &e, 0);
+	if (e && *e) {
+		fprintf(stderr, "Invalid port: %s\n", argv[1]);
+		cmd_cec_help();
+		return -1;
+	}
+	argc--;
+	argv++;
+
 	if (!strcmp(argv[1], "write"))
-		return cmd_cec_write(argc, argv);
+		return cmd_cec_write(port, argc, argv);
 	if (!strcmp(argv[1], "read"))
-		return cmd_cec_read(argc, argv);
+		return cmd_cec_read(port, argc, argv);
 	if (!strcmp(argv[1], "get"))
-		return cmd_cec_get(argc, argv);
+		return cmd_cec_get(port, argc, argv);
 	if (!strcmp(argv[1], "set"))
-		return cmd_cec_set(argc, argv);
+		return cmd_cec_set(port, argc, argv);
 
 	fprintf(stderr, "Invalid sub command: %s\n", argv[1]);
-	cmd_cec_help(argv[0]);
+	cmd_cec_help();
 
 	return -1;
 }

@@ -67,21 +67,10 @@ enum led_pwr_state {
 /* Battery is responsive */
 #define CHARGE_FLAG_BATT_RESPONSIVE BIT(2)
 
-/* Debugging constants, in the same order as enum pwr_state. This string
- * table was moved here to sync with enum above.
- */
-#define CHARGE_STATE_NAME_TABLE                                             \
-	{                                                                   \
-		"unchange", "init", "reinit", "idle0", "idle", "discharge", \
-			"discharge_full", "charge", "charge_near_full",     \
-			"error"                                             \
-	}
-/* End of CHARGE_STATE_NAME_TABLE macro */
-
 /*
- * The values exported by charge_get_state() and charge_get_flags() are used
- * only to control the LEDs (with one not-quite-correct exception). For V2
- * we use a different set of states internally.
+ * Charge task's states
+ *
+ * Use enum led_pwr_state for controlling LEDs.
  */
 enum charge_state {
 	ST_IDLE = 0,
@@ -89,7 +78,7 @@ enum charge_state {
 	ST_CHARGE,
 	ST_PRECHARGE,
 
-	NUM_STATES_V2
+	CHARGE_STATE_COUNT
 };
 
 struct charge_state_data {
@@ -122,12 +111,12 @@ struct sustain_soc {
 #define BAT_LOW_VOLTAGE_THRESH 3200 /* mV */
 
 /**
- * Return current charge state.
+ * Return current charge state for LED control.
  */
 enum led_pwr_state led_pwr_get_state(void);
 
 /**
- * Return current charge v2 state.
+ * Return current charge task state.
  */
 __test_only enum charge_state charge_get_state(void);
 

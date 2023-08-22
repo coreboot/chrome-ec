@@ -84,7 +84,7 @@ if(DEFINED CONFIG_BOARD_YAVIKS)
 	zephyr_library_sources(
 			"yaviks/src/led.c"
 			"yaviks/src/keyboard.c"
-			"yaviks/src/board.c"
+			"yaviks/src/sub_board.c"
 			"yaviks/src/thermal.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "yaviks/src/usbc.c")
@@ -121,6 +121,7 @@ if(DEFINED CONFIG_BOARD_ULDREN)
 			"uldren/src/kb_backlight.c"
 			"uldren/src/sub_board.c"
 			"uldren/src/mp2964_update.c"
+			"uldren/src/sensor.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "uldren/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "uldren/src/charger.c")
@@ -130,6 +131,7 @@ if(DEFINED CONFIG_BOARD_GOTHRAX)
 	zephyr_library_sources(
 			"gothrax/src/keyboard.c"
 			"gothrax/src/hdmi.c"
+			"gothrax/src/usb_mux_config.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "gothrax/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "gothrax/src/charger.c")

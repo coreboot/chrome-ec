@@ -248,7 +248,7 @@ static bool battery_sustainer_enabled(void)
 
 static const char *const state_list[] = { "idle", "discharge", "charge",
 					  "precharge" };
-BUILD_ASSERT(ARRAY_SIZE(state_list) == NUM_STATES_V2);
+BUILD_ASSERT(ARRAY_SIZE(state_list) == CHARGE_STATE_COUNT);
 static const char *const batt_pres[] = {
 	"NO",
 	"YES",
@@ -1530,7 +1530,7 @@ static int process_charge_state(int *need_staticp, int sleep_usec)
 		curr.requested_voltage = 0;
 		curr.batt.flags &= ~BATT_FLAG_WANT_CHARGE;
 		if (curr.state != ST_DISCHARGE)
-			curr.state = ST_IDLE;
+			set_charge_state(ST_IDLE);
 	}
 
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER) &&
@@ -1869,7 +1869,7 @@ int charge_set_output_current_limit(int chgnum, int ma, int mv)
 	/* If we start/stop providing power, wake the charger task. */
 	if ((curr.output_current == 0 && enable) ||
 	    (curr.output_current > 0 && !enable))
-		task_wake(TASK_ID_CHARGER);
+		charge_wakeup();
 
 	curr.output_current = ma;
 
