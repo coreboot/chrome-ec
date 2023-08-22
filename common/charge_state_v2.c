@@ -2413,7 +2413,11 @@ int charge_get_percent(void)
 
 test_mockable int charge_get_display_charge(void)
 {
-	return curr.batt.display_charge;
+	/*
+	 * b:293358575 Batteries in kukui/jacuzzi projects might not support
+	 * this display_charge attribute. Return the charge_get_percent instead.
+	 */
+	return charge_get_percent() * 10;
 }
 
 int charge_get_battery_temp(int idx, int *temp_ptr)
