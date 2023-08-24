@@ -465,6 +465,12 @@ enum pd_alternate_modes {
 #define AMODE_TYPE_COUNT (TCPCI_MSG_SOP + 1)
 #endif
 
+enum usb_pd_svdm_ver {
+	SVDM_VER_1_0,
+	SVDM_VER_2_0,
+	SVDM_VER_2_1,
+};
+
 /* Discovery results for a port partner (SOP) or cable plug (SOP') */
 struct pd_discovery {
 	/* Identity data */
@@ -497,9 +503,6 @@ struct partner_active_modes {
  */
 #define VDO_HDR_SIZE 1
 
-#define VDM_VER10 0
-#define VDM_VER20 1
-
 #define PD_VDO_INVALID -1
 
 /*
@@ -507,8 +510,8 @@ struct partner_active_modes {
  * ----------
  * <31:16>  :: SVID
  * <15>     :: VDM type ( 1b == structured, 0b == unstructured )
- * <14:13>  :: Structured VDM version (00b == Rev 2.0, 01b == Rev 3.0 )
- * <12:11>  :: reserved
+ * <14:13>  :: SVDM version major (00b == <= Vers 2.0, 01b == Vers 2.(minor))
+ * <12:11>  :: SVDM version minor (00b == <= Vers 2.0, 01b == Vers 2.1)
  * <10:8>   :: object position (1-7 valid ... used for enter/exit mode only)
  * <7:6>    :: command type (SVDM only?)
  * <5>      :: reserved (SVDM), command type (UVDM)
@@ -518,7 +521,8 @@ struct partner_active_modes {
 	(((vid) << 16) | ((type) << 15) | ((custom)&0x7FFF))
 
 #define VDO_SVDM_TYPE BIT(15)
-#define VDO_SVDM_VERS(x) (x << 13)
+#define VDO_SVDM_VERS_MAJOR(x) (x << 13)
+#define VDO_SVDM_VERS_MINOR(x) (x << 11)
 #define VDO_OPOS(x) (x << 8)
 #define VDO_CMDT(x) (x << 6)
 #define VDO_OPOS_MASK VDO_OPOS(0x7)
@@ -563,6 +567,8 @@ struct partner_active_modes {
 #define PD_VDO_OPOS(vdo) (((vdo) >> 8) & 0x7)
 #define PD_VDO_CMD(vdo) ((vdo)&0x1f)
 #define PD_VDO_CMDT(vdo) (((vdo) >> 6) & 0x3)
+#define PD_VDO_SVDM_VERS_MAJOR(vdo) (((vdo) >> 13) & 0x3)
+#define PD_VDO_SVDM_VERS_MINOR(vdo) (((vdo) >> 11) & 0x3)
 
 /*
  * SVDM Identity request -> response
@@ -1564,8 +1570,8 @@ int pd_get_rev(int port, enum tcpci_msg_type type);
  *
  * @param port USB-C port number
  * @param type USB-C port partner
- * @return VDM_VER10 for VDM Version 1.0
- *         VDM_VER20 for VDM Version 2.0
+ * @return SVDM_VER_1_0 for VDM Version 1.0
+ *         SVDM_VER_2_0 for VDM Version 2.0
  */
 int pd_get_vdo_ver(int port, enum tcpci_msg_type type);
 

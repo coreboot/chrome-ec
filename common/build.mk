@@ -54,9 +54,9 @@ common-$(CONFIG_BLUETOOTH_LE_STACK)+=btle_hci_controller.o btle_ll.o
 common-$(CONFIG_BODY_DETECTION)+=body_detection.o
 common-$(CONFIG_CAPSENSE)+=capsense.o
 common-$(CONFIG_CEC)+=cec.o
-common-$(CONFIG_CBI_EEPROM)+=cbi.o cbi_eeprom.o
+common-$(CONFIG_CBI_EEPROM)+=cbi.o cbi_config.o cbi_eeprom.o
 common-$(CONFIG_USB_PD_FLAGS)+=usb_pd_flags.o
-common-$(CONFIG_CBI_GPIO)+=cbi.o cbi_gpio.o
+common-$(CONFIG_CBI_GPIO)+=cbi.o cbi_config.o cbi_gpio.o
 ifeq ($(HAS_MOCK_CHARGE_MANAGER),)
 common-$(CONFIG_CHARGE_MANAGER)+=charge_manager.o
 endif
@@ -214,7 +214,7 @@ common-$(HAS_TASK_CHIPSET)+=chipset.o
 common-$(HAS_TASK_CONSOLE)+=console.o console_output.o
 common-$(HAS_TASK_CONSOLE)+=uart_buffering.o uart_hostcmd.o uart_printf.o
 common-$(CONFIG_CMD_MEM)+=memory_commands.o
-common-$(HAS_TASK_HOSTCMD)+=host_command.o ec_features.o
+common-$(HAS_TASK_HOSTCMD)+=host_command_task.o host_command.o ec_features.o
 common-$(HAS_TASK_PDCMD)+=host_command_pd.o
 common-$(HAS_TASK_KEYSCAN)+=keyboard_scan.o
 common-$(HAS_TASK_LIGHTBAR)+=lb_common.o lightbar.o

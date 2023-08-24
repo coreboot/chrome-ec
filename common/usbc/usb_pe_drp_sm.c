@@ -3,6 +3,12 @@
  * found in the LICENSE file.
  */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 11
+
 #include "atomic.h"
 #include "battery.h"
 #include "battery_smart.h"
@@ -680,14 +686,14 @@ test_export_static void set_state_pe(const int port,
 static void pe_set_dpm_curr_request(const int port, const int request);
 /*
  * The spec. revision is used to index into this array.
- *  PD 1.0 (VDO 1.0) - return VDM_VER10
- *  PD 2.0 (VDO 1.0) - return VDM_VER10
- *  PD 3.0 (VDO 2.0) - return VDM_VER20
+ *  PD 1.0 (VDO 1.0) - return SVDM_VER_1_0
+ *  PD 2.0 (VDO 1.0) - return SVDM_VER_1_0
+ *  PD 3.0 (VDO 2.0) - return SVDM_VER_1_0
  */
 static const uint8_t vdo_ver[] = {
-	[PD_REV10] = VDM_VER10,
-	[PD_REV20] = VDM_VER10,
-	[PD_REV30] = VDM_VER20,
+	[PD_REV10] = SVDM_VER_1_0,
+	[PD_REV20] = SVDM_VER_1_0,
+	[PD_REV30] = SVDM_VER_2_0,
 };
 
 int pd_get_rev(int port, enum tcpci_msg_type type)
@@ -702,7 +708,7 @@ int pd_get_vdo_ver(int port, enum tcpci_msg_type type)
 	if (rev < PD_REV30)
 		return vdo_ver[rev];
 	else
-		return VDM_VER20;
+		return SVDM_VER_2_0;
 }
 
 static void pe_set_ready_state(int port)
@@ -1432,12 +1438,12 @@ void pd_send_vdm(int port, uint32_t vid, int cmd, const uint32_t *data,
 		 int count)
 {
 	/* Copy VDM Header */
-	pe[port].vdm_data[0] =
-		VDO(vid,
-		    ((vid & USB_SID_PD) == USB_SID_PD) ?
-			    1 :
-			    (PD_VDO_CMD(cmd) <= CMD_ATTENTION),
-		    VDO_SVDM_VERS(pd_get_vdo_ver(port, TCPCI_MSG_SOP)) | cmd);
+	pe[port].vdm_data[0] = VDO(
+		vid,
+		((vid & USB_SID_PD) == USB_SID_PD) ?
+			1 :
+			(PD_VDO_CMD(cmd) <= CMD_ATTENTION),
+		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, TCPCI_MSG_SOP)) | cmd);
 
 	/*
 	 * Copy VDOs after the VDM Header. Note that the count refers to VDO
@@ -2053,6 +2059,8 @@ static bool port_try_vconn_swap(int port)
 		set_state_pe(port, get_last_state_pe(port));
 		return true;
 	}
+
+	CPRINTS("C%d: VCONN Swap counter exhausted", port);
 	return false;
 }
 
@@ -2080,8 +2088,9 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 		    PE_CHK_FLAG(port, PE_FLAGS_DR_SWAP_TO_DFP))) {
 		PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
 		PE_CLR_FLAG(port, PE_FLAGS_DR_SWAP_TO_DFP);
-		set_state_pe(port, PE_DRS_SEND_SWAP);
-		return true;
+
+		pd_dpm_request(port, DPM_REQUEST_DR_SWAP);
+		return false;
 	}
 
 	/*
@@ -5786,10 +5795,10 @@ static void pe_vdm_identity_request_cbl_entry(int port)
 		set_state_pe(port, get_last_state_pe(port));
 		return;
 	}
-
-	msg[0] = VDO(USB_SID_PD, 1,
-		     VDO_SVDM_VERS(pd_get_vdo_ver(port, pe[port].tx_type)) |
-			     CMD_DISCOVER_IDENT);
+	msg[0] = VDO(
+		USB_SID_PD, 1,
+		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, pe[port].tx_type)) |
+			CMD_DISCOVER_IDENT);
 	tx_emsg[port].len = sizeof(uint32_t);
 
 	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
@@ -5957,10 +5966,10 @@ static void pe_init_port_vdm_identity_request_entry(int port)
 	uint32_t *msg = (uint32_t *)tx_emsg[port].buf;
 
 	print_current_state(port);
-
-	msg[0] = VDO(USB_SID_PD, 1,
-		     VDO_SVDM_VERS(pd_get_vdo_ver(port, pe[port].tx_type)) |
-			     CMD_DISCOVER_IDENT);
+	msg[0] = VDO(
+		USB_SID_PD, 1,
+		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, pe[port].tx_type)) |
+			CMD_DISCOVER_IDENT);
 	tx_emsg[port].len = sizeof(uint32_t);
 
 	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
@@ -6053,10 +6062,10 @@ static void pe_init_vdm_svids_request_entry(int port)
 		set_state_pe(port, get_last_state_pe(port));
 		return;
 	}
-
-	msg[0] = VDO(USB_SID_PD, 1,
-		     VDO_SVDM_VERS(pd_get_vdo_ver(port, pe[port].tx_type)) |
-			     CMD_DISCOVER_SVID);
+	msg[0] = VDO(
+		USB_SID_PD, 1,
+		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, pe[port].tx_type)) |
+			CMD_DISCOVER_SVID);
 	tx_emsg[port].len = sizeof(uint32_t);
 
 	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
@@ -6157,10 +6166,10 @@ static void pe_init_vdm_modes_request_entry(int port)
 		set_state_pe(port, get_last_state_pe(port));
 		return;
 	}
-
-	msg[0] = VDO((uint16_t)svid, 1,
-		     VDO_SVDM_VERS(pd_get_vdo_ver(port, pe[port].tx_type)) |
-			     CMD_DISCOVER_MODES);
+	msg[0] = VDO(
+		(uint16_t)svid, 1,
+		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, pe[port].tx_type)) |
+			CMD_DISCOVER_MODES);
 	tx_emsg[port].len = sizeof(uint32_t);
 
 	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
@@ -6434,10 +6443,11 @@ static void pe_vdm_response_entry(int port)
 	 * result of the svdm response function.
 	 */
 	tx_payload[0] &= ~VDO_CMDT_MASK;
-	tx_payload[0] &= ~VDO_SVDM_VERS(0x3);
+	tx_payload[0] &= ~VDO_SVDM_VERS_MAJOR(0x3);
 
 	/* Add SVDM structured version being used */
-	tx_payload[0] |= VDO_SVDM_VERS(pd_get_vdo_ver(port, TCPCI_MSG_SOP));
+	tx_payload[0] |=
+		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, TCPCI_MSG_SOP));
 
 	/* Use VDM command to select the response handler function */
 	switch (vdo_cmd) {
