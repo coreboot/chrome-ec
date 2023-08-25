@@ -26,6 +26,7 @@ enum flash_event_type {
 				   * tests for FIPS 140-2/3
 				   */
 	FE_LOG_BRDPROP = 11, /* Detected invalid board properties */
+	FE_LOG_FLASH_ERROR = 12, /* Detected flash error */
 	/*
 	 * Fixed padding value makes it easier to parse log space
 	 * snapshots.

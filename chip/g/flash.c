@@ -44,6 +44,7 @@
 #include "extension.h"
 #include "flash.h"
 #include "flash_log.h"
+#include "init_chip.h"
 #include "registers.h"
 #include "shared_mem.h"
 #include "task.h"
@@ -267,10 +268,29 @@ static int do_flash_op(enum flash_op op, int is_info_bank,
 		/* Check error status */
 		errors = GREAD(FLASH, FSH_ERROR);
 
+		/**
+		 * FLASH ERROR CODES (or 0x0 for no error):
+		 * no_err := 0x0;
+		 * prog_not_row_aligned := 0x1;
+		 * out_of_main_range := 0x2;
+		 * out_of_info_range := 0x4;
+		 * prog_failed := 0x8;
+		 * erase_not_page_aligned := 0x10;
+		 * erase_failed := 0x20;
+		 * bulkerase_not_aligned := 0x40;
+		 * bulkerase_failed := 0x80;
+		 * bulkerase_on_info := 0x100;
+		 * info0_locked := 0x200;
+		 * info1_read_locked := 0x400;
+		 * info1_prog_locked := 0x800;
+		 * info1_erase_locked := 0x1000;
+		 * access_invalid_flash0 := 0x2000;
+		 * access_invalid_flash1 := 0x4000;
+		 */
 		if (errors && (errors != prev_error)) {
 			prev_error = errors;
-			CPRINTF("%s:%d errors %x fsh_pe_control %pP\n",
-				__func__, __LINE__, errors, fsh_pe_control);
+			CPRINTF("%s:%d errors %04x fsh_pe_control %pP op %x\n",
+				__func__, __LINE__, errors, fsh_pe_control, op);
 		}
 		/* Error status is self-clearing. Read it until it does
 		 * (we hope).
@@ -308,6 +328,35 @@ static int do_flash_op(enum flash_op op, int is_info_bank,
 	return EC_ERROR_UNKNOWN;
 }
 
+/* Log `do_flash_op` error, increment error counter. Implemented outside
+ * of `do_flash_op` to write after `flash_mtx` lock is released.
+ */
+static void log_do_flash_op_errors(enum flash_op op)
+{
+#ifdef CONFIG_FLASH_LOG
+	uint8_t op_to_save = (uint8_t)op;
+
+	/* Count errors in scratch reg to survive sleep, truncate to 12 bits.
+	 * Upper 20 bits of PWRDN_SCRATCH24 can be used for other needs.
+	 */
+	uint32_t pwrdn_scratch24 = GREG32(PMU, PWRDN_SCRATCH24);
+	uint32_t flash_error_count =
+		((pwrdn_scratch24 & PWRDN_SCRATCH24_FLASH_ERROR_MASK) + 1) &
+		PWRDN_SCRATCH24_FLASH_ERROR_MASK;
+
+	GREG32(PMU, PWRDN_SCRATCH24) =
+		(pwrdn_scratch24 & ~PWRDN_SCRATCH24_FLASH_ERROR_MASK) |
+		flash_error_count;
+
+	/* Don't log every error, just 1st, 65th, etc*/
+	if ((flash_error_count & 63) == 1)
+		flash_log_add_event(FE_LOG_FLASH_ERROR, sizeof(op_to_save),
+				    &op_to_save);
+#else
+	(void)op; /* silence compiler warning */
+#endif
+}
+
 /* Write up to CONFIG_FLASH_WRITE_IDEAL_SIZE bytes at once */
 static int write_batch(int byte_offset, int is_info_bank,
 		       int words, const uint8_t *data)
@@ -338,6 +387,8 @@ static int write_batch(int byte_offset, int is_info_bank,
 	rv = do_flash_op(OP_WRITE_BLOCK, is_info_bank, byte_offset, words);
 
 	mutex_unlock(&flash_mtx);
+	if (rv != EC_SUCCESS)
+		log_do_flash_op_errors(OP_WRITE_BLOCK);
 
 	return rv;
 }
@@ -394,6 +445,8 @@ int flash_physical_info_read_word(int byte_offset, uint32_t *dst)
 		*dst = GREG32(FLASH, FSH_DOUT_VAL1);
 
 	mutex_unlock(&flash_mtx);
+	if (ret != EC_SUCCESS)
+		log_do_flash_op_errors(OP_READ_BLOCK);
 
 	return ret;
 }
@@ -440,6 +493,7 @@ int flash_physical_erase(int byte_offset, int num_bytes)
 		mutex_unlock(&flash_mtx);
 
 		if (ret) {
+			log_do_flash_op_errors(OP_ERASE_BLOCK);
 			CPRINTF("Failed to erase block at %x\n", byte_offset);
 			return ret;
 		}

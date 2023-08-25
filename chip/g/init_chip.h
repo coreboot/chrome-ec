@@ -29,7 +29,7 @@
  * PWRDN_SCRATCH21 - Preserving TPM_BOARD_CFG register
  * PWRDN_SCRATCH22 - Preserve FIPS power-up test status on Cr50
  * PWRDN_SCRATCH23 - Preserve time since cold boot
- * PWRDN_SCRATCH24 - Unused
+ * PWRDN_SCRATCH24 - Preserve count of flash errors in low 12 bits
  * PWRDN_SCRATCH25 - Unused
  * PWRDN_SCRATCH26 - Unused
  * PWRDN_SCRATCH27 - Unused
@@ -37,6 +37,7 @@
  * PWRDN_SCRATCH 28 - 31 - Reserved for boot rom
  */
 
+#define PWRDN_SCRATCH24_FLASH_ERROR_MASK 0xFFFU
 
 enum permission_level {
 	PERMISSION_LOW = 0x00,
