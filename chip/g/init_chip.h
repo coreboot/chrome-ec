@@ -11,22 +11,28 @@
  * types: long life and pwrdn scratch. Long life will persist through any
  * reset other than POR. PWRDN scratch only survives deep sleep.
  *
- * LONG_LIFE_SCRATCH 0 - 2
- *	SCRATCH0 - Rollback counter
- *	SCRATCH1 - Board properties
- *	SCRATCH2
+ * LONG_LIFE_SCRATCH0 - Rollback counter
+ * LONG_LIFE_SCRATCH1 - Board properties as bit mask (see `scratch_reg1.h`)
+ * LONG_LIFE_SCRATCH2 - Unused
+ * LONG_LIFE_SCRATCH3 - Unused
  *
- * PWRDN_SCRATCH  0 - 15 - Locked
  *
- * PWRDN_SCRATCH 16 - 27 - Can be used by RW
- *	SCRATCH16 - Indicator that firmware is running for debug purposes
- *	SCRATCH17 - deep sleep count
- *	SCRATCH18 - Preserving USB_DCFG through deep sleep
- *	SCRATCH19 - Preserving USB data sequencing PID through deep sleep
- *	SCRATCH20 - Preserving EC-EFS context
- *	SCRATCH21 - Preserving TPM_BOARD_CFG register
- *	SCRATCH22 - Preserve FIPS power-up test status on Cr50
- *	SCRATCH23 - Preserve time since cold boot
+ * PWRDN_SCRATCH0 - PWRDN_SCRATCH15 - Can be locked by boot ROM or RO
+ *
+ * PWRDN_SCRATCH 16 - 27 - Can be used by RW:
+ *
+ * PWRDN_SCRATCH16 - Indicator that firmware is running for debug purposes
+ * PWRDN_SCRATCH17 - Deep sleep counter
+ * PWRDN_SCRATCH18 - Preserving USB_DCFG through deep sleep
+ * PWRDN_SCRATCH19 - Preserving USB data sequencing PID through deep sleep
+ * PWRDN_SCRATCH20 - Preserving EC-EFS context
+ * PWRDN_SCRATCH21 - Preserving TPM_BOARD_CFG register
+ * PWRDN_SCRATCH22 - Preserve FIPS power-up test status on Cr50
+ * PWRDN_SCRATCH23 - Preserve time since cold boot
+ * PWRDN_SCRATCH24 - Unused
+ * PWRDN_SCRATCH25 - Unused
+ * PWRDN_SCRATCH26 - Unused
+ * PWRDN_SCRATCH27 - Unused
  *
  * PWRDN_SCRATCH 28 - 31 - Reserved for boot rom
  */
