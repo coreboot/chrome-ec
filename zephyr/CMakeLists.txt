@@ -280,6 +280,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI
                                                 "${PLATFORM_EC}/common/cbi_config.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_GPIO
                                                 "${PLATFORM_EC}/common/cbi_gpio.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC
+                                                "${PLATFORM_EC}/common/cec.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_MEM
                                                 "${PLATFORM_EC}/common/memory_commands.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_DPTF
@@ -654,30 +656,6 @@ add_dependencies(app ec_version_header)
 
 # Include the directory containing the generated header.
 zephyr_include_directories("${CMAKE_CURRENT_BINARY_DIR}/include")
-
-# Extract signing keys if RWSIG enabled.
-if (DEFINED CONFIG_PLATFORM_EC_RWSIG)
-  add_custom_target(key_extract
-    COMMAND futility create
-      "${PLATFORM_EC}/${CONFIG_PLATFORM_EC_RWSIG_KEY_PATH}"
-      "${CMAKE_BINARY_DIR}/key"
-    COMMENT "Extracting signing keys"
-    VERBATIM
-  )
-endif()
-
-# Sign RW if PLATFORM_EC_RWSIG_SIGN is set.
-if (DEFINED CONFIG_PLATFORM_EC_RWSIG_SIGN)
-  add_custom_target(sign_rw ALL
-    COMMAND futility sign --type rwsig
-            --prikey "${CMAKE_BINARY_DIR}/key.vbprik2"
-            "${CMAKE_BINARY_DIR}/zephyr/zephyr.bin"
-            "${CMAKE_BINARY_DIR}/ec.sig"
-    COMMENT "Signing EC RW"
-    DEPENDS zephyr_final key_extract
-    VERBATIM
-  )
-endif()
 
 if (DEFINED CONFIG_PIGWEED_LOG_TOKENIZED)
   set_property(GLOBAL APPEND PROPERTY extra_post_build_commands

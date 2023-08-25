@@ -13,6 +13,7 @@
 #include "charge_state.h"
 #include "charger.h"
 #include "driver/cec/bitbang.h"
+#include "driver/cec/it83xx.h"
 #include "driver/ppc/syv682x_public.h"
 #include "driver/tcpm/it83xx_pd.h"
 #include "driver/temp_sensor/thermistor.h"
@@ -162,10 +163,17 @@ static const struct bitbang_cec_config bitbang_cec_config = {
 };
 
 const struct cec_config_t cec_config[] = {
+	/* HDMI1 */
 	[CEC_PORT_0] = {
+		.drv = &it83xx_cec_drv,
+		.drv_config = NULL,
+		.offline_policy = cec_default_policy,
+	},
+	/* HDMI2 */
+	[CEC_PORT_1] = {
 		.drv = &bitbang_cec_drv,
 		.drv_config = &bitbang_cec_config,
-		.offline_policy = NULL,
+		.offline_policy = cec_default_policy,
 	},
 };
 BUILD_ASSERT(ARRAY_SIZE(cec_config) == CEC_PORT_COUNT);
@@ -315,15 +323,15 @@ int board_set_active_charge_port(int port)
 
 	switch (port) {
 	case CHARGE_PORT_TYPEC0:
-		ppc_vbus_sink_enable(USBC_PORT_C0, 1);
 		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_OD, 0);
+		ppc_vbus_sink_enable(USBC_PORT_C0, 1);
 		break;
 	case CHARGE_PORT_BARRELJACK:
 		/* Make sure BJ adapter is sourcing power */
 		if (!gpio_get_level(GPIO_BJ_ADP_PRESENT))
 			return EC_ERROR_INVAL;
+		ppc_vbus_sink_enable(USBC_PORT_C0, 0);
 		gpio_set_level(GPIO_EN_PPVAR_BJ_ADP_OD, 1);
-		ppc_vbus_sink_enable(USBC_PORT_C0, 1);
 		break;
 	default:
 		return EC_ERROR_INVAL;

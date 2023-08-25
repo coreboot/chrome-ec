@@ -35,9 +35,11 @@ static struct panic_data *const pdata_ptr = PANIC_DATA_PTR;
 
 /* Common SW Panic reasons strings */
 const char *const panic_sw_reasons[] = {
-	"PANIC_SW_DIV_ZERO",   "PANIC_SW_STACK_OVERFLOW", "PANIC_SW_PD_CRASH",
-	"PANIC_SW_ASSERT",     "PANIC_SW_WATCHDOG",	  "PANIC_SW_RNG",
-	"PANIC_SW_PMIC_FAULT",
+	"PANIC_SW_DIV_ZERO",	 "PANIC_SW_STACK_OVERFLOW",
+	"PANIC_SW_PD_CRASH",	 "PANIC_SW_ASSERT",
+	"PANIC_SW_WATCHDOG",	 "PANIC_SW_RNG",
+	"PANIC_SW_PMIC_FAULT",	 "PANIC_SW_EXIT",
+	"PANIC_SW_WATCHDOG_WARN"
 };
 
 /**
@@ -80,8 +82,18 @@ void panic_puts(const char *outstr)
 	uart_flush_output();
 
 	/* Put all characters in the output buffer */
-	while (*outstr)
-		panic_txchar(NULL, *outstr++);
+	while (*outstr) {
+		/* Send the message to the UART console */
+		panic_txchar(NULL, *outstr);
+#if defined(CONFIG_USB_CONSOLE) || defined(CONFIG_USB_CONSOLE_STREAM)
+		/*
+		 * Send the message to the USB console
+		 * on platforms which support it.
+		 */
+		usb_puts(outstr);
+#endif
+		++outstr;
+	}
 
 	/* Flush the transmit FIFO */
 	uart_tx_flush();
