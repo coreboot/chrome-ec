@@ -889,19 +889,25 @@ static enum ec_error_list add_final_delimiter(void)
 }
 
 /* Erase flash page and add it to the pool of empty pages. */
-static void release_flash_page(struct access_tracker *at)
+static enum ec_error_list release_flash_page(struct access_tracker *at)
 {
+	enum ec_error_list rv = EC_SUCCESS;
 	uint8_t page_index = page_list[0];
 	void *flash;
 
 	flash = flash_index_to_ph(page_index);
-	flash_physical_erase((uintptr_t)flash - CONFIG_PROGRAM_MEMORY_BASE,
+	rv = flash_physical_erase((uintptr_t)flash - CONFIG_PROGRAM_MEMORY_BASE,
 			     CONFIG_FLASH_BANK_SIZE);
+
+	/* In case of error don't add it to the pool of empty pages */
+	if (rv)
+		return rv;
 	memmove(page_list, page_list + 1,
 		(ARRAY_SIZE(page_list) - 1) * sizeof(page_list[0]));
 	page_list[ARRAY_SIZE(page_list) - 1] = page_index;
 	at->list_index--;
 	controller_at.list_index--;
+	return rv;
 }
 
 /* Reshuffle flash contents dropping deleted objects. */
@@ -1595,7 +1601,7 @@ enum ec_error_list new_nvmem_migrate(unsigned int act_partition)
 }
 
 /* Check if the passed in flash page is empty, if not - erase it. */
-static void verify_empty_page(void *ph)
+static enum ec_error_list verify_empty_page(void *ph)
 {
 	uint32_t *word_p = ph;
 	size_t i;
@@ -1603,12 +1609,12 @@ static void verify_empty_page(void *ph)
 	for (i = 0; i < (CONFIG_FLASH_BANK_SIZE / sizeof(*word_p)); i++) {
 		if (word_p[i] != (uint32_t)~0) {
 			CPRINTS("%s: corrupted page at %pP!", __func__, word_p);
-			flash_physical_erase((uintptr_t)word_p -
-						     CONFIG_PROGRAM_MEMORY_BASE,
-					     CONFIG_FLASH_BANK_SIZE);
-			break;
+			return flash_physical_erase(
+				(uintptr_t)word_p - CONFIG_PROGRAM_MEMORY_BASE,
+				CONFIG_FLASH_BANK_SIZE);
 		}
 	}
+	return EC_SUCCESS;
 }
 
 /*
@@ -1656,8 +1662,8 @@ static void init_page_list(void)
 			 * this is not a valid page, let's plug it in into the
 			 * tail of the list.
 			 */
-			page_list[--tail_index] = page_index;
-			verify_empty_page(ph);
+			if (verify_empty_page(ph) == EC_SUCCESS)
+				page_list[--tail_index] = page_index;
 			continue;
 		}
 
@@ -2264,15 +2270,17 @@ static enum ec_error_list verify_delimiter(struct nn_container *nc)
 			 * Let's erase the page where the last object spilled
 			 * into.
 			 */
-			flash_physical_erase((uintptr_t)dpt.mt.ph -
+			rv = flash_physical_erase((uintptr_t)dpt.mt.ph -
 						     CONFIG_PROGRAM_MEMORY_BASE,
 					     CONFIG_FLASH_BANK_SIZE);
 			/*
 			 * And move it to the available pages part of the
-			 * pages list.
+			 * pages list if erase successful.
 			 */
-			controller_at.list_index -= 1;
-			controller_at.mt = dpt.ct;
+			if (rv == EC_SUCCESS) {
+				controller_at.list_index -= 1;
+				controller_at.mt = dpt.ct;
+			}
 		}
 
 		remainder_size = CONFIG_FLASH_BANK_SIZE - dpt.ct.data_offset;
