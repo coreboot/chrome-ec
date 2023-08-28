@@ -366,6 +366,16 @@ test_export_static enum ec_error_list browse_flash_contents(int print);
 static enum ec_error_list save_container(struct nn_container *nc);
 static void invalidate_nvmem_flash(void);
 
+/* Log NVMEM problem into flash log. */
+static void log_no_payload_failure(enum nvmem_failure_type type)
+{
+	struct nvmem_failure_payload fp;
+
+	fp.failure_type = type;
+	flash_log_add_event(FE_LOG_NVMEM,
+			    offsetof(struct nvmem_failure_payload, size), &fp);
+}
+
 /* Log NVMEM problem as per passed in payload and size, and reboot. */
 static void report_failure(struct nvmem_failure_payload *payload,
 			   size_t payload_union_size)
@@ -376,6 +386,7 @@ static void report_failure(struct nvmem_failure_payload *payload,
 		 * storage to stop this.
 		 */
 		invalidate_nvmem_flash();
+		log_no_payload_failure(NVMEMF_NVMEM_WIPE);
 	}
 
 	flash_log_add_event(FE_LOG_NVMEM,
@@ -386,16 +397,6 @@ static void report_failure(struct nvmem_failure_payload *payload,
 
 	ccprintf("Logging failure %d, will %sreinit\n", payload->failure_type,
 		 init_in_progress ? "" : "not ");
-
-	if (init_in_progress) {
-		struct nvmem_failure_payload fp;
-
-		fp.failure_type = NVMEMF_NVMEM_WIPE;
-
-		flash_log_add_event(
-			FE_LOG_NVMEM,
-			offsetof(struct nvmem_failure_payload, size), &fp);
-	}
 
 	cflush();
 
@@ -808,8 +809,6 @@ test_export_static enum ec_error_list get_next_object(struct access_tracker *at,
 
 		/* And calculate hash. */
 		if (!container_is_valid(ch)) {
-			struct nvmem_failure_payload fp;
-
 			if (!init_in_progress)
 				report_no_payload_failure(
 					NVMEMF_CONTAINER_HASH_MISMATCH);
@@ -817,11 +816,7 @@ test_export_static enum ec_error_list get_next_object(struct access_tracker *at,
 			 * During init there might be a way to deal with
 			 * this, let's just log this and continue.
 			 */
-			fp.failure_type = NVMEMF_CONTAINER_HASH_MISMATCH;
-			flash_log_add_event(
-				FE_LOG_NVMEM,
-				offsetof(struct nvmem_failure_payload, size),
-				&fp);
+			log_no_payload_failure(NVMEMF_CONTAINER_HASH_MISMATCH);
 
 			return EC_ERROR_INVAL;
 		}
