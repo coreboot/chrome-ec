@@ -17,6 +17,11 @@ choice TEST_PROJECT_TYPE
 		help
 		Enable tests for screebo variant.
 
+	config TEST_PROJECT_KARIS
+		bool "Enable karis-specific tests"
+		help
+		Enable tests for karis variant.
+
 endchoice # TEST_PROJECT_TYPE
 
 config TEST_PROJECT_NAME
@@ -34,6 +39,12 @@ config TEST_PROJECT_USB_CONFIG
 	bool "Run the tests intended for usb_config"
 	help
 	  Include project specific usb_config.c into the binary and test
+	  their functions.
+
+config TEST_PROJECT_KEYBOARD
+	bool "Run the tests intended for keyboard.c"
+	help
+	  Include project specific keyboard.c into the binary and test
 	  their functions.
 
 config TEST_PROGRAM_USB_PD_POLICY

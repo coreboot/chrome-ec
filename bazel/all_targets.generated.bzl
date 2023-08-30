@@ -224,6 +224,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "bloonchipper_zephyr",
+        board = "bloonchipper",
+        extra_modules = ["hal_stm32", "cmsis"],
+    )
+    ec_target(
         name = "bobba",
         baseboard = "octopus",
         board = "bobba",
@@ -1742,6 +1747,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "quandiso",
+        board = "quandiso",
     )
     ec_target(
         name = "quiche",

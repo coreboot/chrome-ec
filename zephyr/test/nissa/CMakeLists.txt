@@ -81,5 +81,15 @@ if(CONFIG_TEST_NISSA_JOXER)
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/joxer/src/form_factor.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/joxer/src/keyboard.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/joxer/src/usbc.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/joxer/src/sub_board.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_CRAASK)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    target_sources(
+	    app PRIVATE
+	    src/craask.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/keyboard.c
     )
 endif()

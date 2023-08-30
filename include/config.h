@@ -2569,7 +2569,16 @@
 #undef CONFIG_HOSTCMD_PD
 
 /* EC supports EC_CMD_PD_CHIP_INFO */
-#define CONFIG_EC_CMD_PD_CHIP_INFO
+#define CONFIG_HOSTCMD_PD_CHIP_INFO
+
+/* EC supports EC_CMD_TYPEC_DISCOVERY */
+#define CONFIG_HOSTCMD_TYPEC_DISCOVERY
+
+/* EC supports EC_CMD_TYPEC_CONTROL */
+#define CONFIG_HOSTCMD_TYPEC_CONTROL
+
+/* EC supports EC_CMD_TYPEC_STATUS */
+#define CONFIG_HOSTCMD_TYPEC_STATUS
 
 /*
  * Use if PD MCU controls charging (selecting charging port and input
@@ -7168,5 +7177,9 @@
 #ifndef CONFIG_PRESERVED_END_OF_RAM_SIZE
 #define CONFIG_PRESERVED_END_OF_RAM_SIZE 1024
 #endif
+
+#ifdef HAVE_PRIVATE
+#include "private_config.h"
+#endif /* HAVE_PRIVATE */
 
 #endif /* __CROS_EC_CONFIG_H */
