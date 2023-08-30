@@ -194,7 +194,8 @@ endif
 # them into variables available to this build script
 # Usage: $(shell $(call cmd_get_configs,<RO|RW>))
 cmd_get_configs = $(CPP) $(foreach BLD,$(1),$(CPPFLAGS)) -P -dM \
-	-Ichip/$(CHIP) -I$(BASEDIR) -I$(BDIR) include/config.h | \
+	-Ichip/$(CHIP) -I$(BASEDIR) -I$(BDIR) $(if $(HAVE_PRIVATE),-Iprivate) \
+	include/config.h | \
 	grep -o "\#define \(CONFIG\|VARIANT\)_[A-Z0-9_]*" | cut -c9- | sort
 _flag_cfg_ro:=$(call shell_echo,$(call cmd_get_configs,RO))
 _flag_cfg_rw:=$(_tsk_cfg_rw) $(call shell_echo,$(call cmd_get_configs,RW))
@@ -233,7 +234,8 @@ $(foreach c,$(_mock_cfg),$(eval $(c)=y))
 ifneq ($(CONFIG_COMMON_RUNTIME),y)
 ifneq ($(CONFIG_DFU_BOOTMANAGER_MAIN),ro)
 	_irq_list:=$(call shell_echo,$(CPP) $(CPPFLAGS) -P -Ichip/$(CHIP) \
-		-I$(BASEDIR) -I$(BDIR) -D"ENABLE_IRQ(x)=EN_IRQ x" \
+		-I$(BASEDIR) -I$(BDIR) $(if $(HAVE_PRIVATE),-Iprivate) \
+		-D"ENABLE_IRQ(x)=EN_IRQ x" \
 		-imacros chip/$(CHIP)/registers.h \
 		- < $(BDIR)/ec.irqlist | grep "EN_IRQ .*" | cut -c8-)
 	CPPFLAGS+=$(foreach irq,$(_irq_list),\
@@ -244,7 +246,8 @@ endif
 # Compute RW firmware size and offset
 # Usage: $(shell $(call cmd_config_eval,<CONFIG_*>))
 cmd_config_eval = echo "$(1)" | $(CPP) $(CPPFLAGS) -P \
-	-Ichip/$(CHIP) -I$(BASEDIR) -I$(BDIR) -imacros include/config.h -
+	-Ichip/$(CHIP) -I$(BASEDIR) -I$(BDIR) $(if $(HAVE_PRIVATE),-Iprivate) \
+	-imacros include/config.h -
 _rw_off_str:=$(call shell_echo,$(call cmd_config_eval,CONFIG_RW_MEM_OFF))
 _rw_off:=$(shell echo "$$(($(_rw_off_str)))")
 _rw_size_str:=$(call shell_echo,$(call cmd_config_eval,CONFIG_RW_SIZE))

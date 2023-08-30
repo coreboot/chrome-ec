@@ -224,6 +224,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "bloonchipper_zephyr",
+        board = "bloonchipper",
+        extra_modules = ["hal_stm32", "cmsis"],
+    )
+    ec_target(
         name = "bobba",
         baseboard = "octopus",
         board = "bobba",
@@ -1497,6 +1502,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "nokris",
+        board = "nokris",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "npcx7",
         board = "npcx7",
         extra_modules = ["cmsis"],
@@ -1744,6 +1754,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "quandiso",
+        board = "quandiso",
+    )
+    ec_target(
         name = "quiche",
         baseboard = "honeybuns",
         board = "quiche",
@@ -1798,6 +1812,11 @@ def all_targets():
         name = "rex",
         board = "rex",
         extra_modules = ["cmsis"],
+    )
+    ec_target(
+        name = "rex-ish",
+        board = "rex-ish",
+        extra_modules = ["ish", "cmsis", "hal_intel_public"],
     )
     ec_target(
         name = "rex-ish-ec",

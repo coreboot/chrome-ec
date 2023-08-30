@@ -481,7 +481,7 @@ class Zmake:
                         ),
                         "ZEPHYR_BASE": str(self.zephyr_base),
                         "ZMAKE_INCLUDE_DIR": str(generated_include_dir),
-                        "PYTHON_PREFER": sys.executable,
+                        "Python3_EXECUTABLE": sys.executable,
                         **(
                             {"EXTRA_EC_VERSION_FLAGS": "--static"}
                             if static_version
@@ -742,11 +742,14 @@ class Zmake:
                     gcov=gcov,
                 )
             else:
-                for output_file, output_name in project.packer.pack_firmware(
+                unsigned_files = project.packer.pack_firmware(
                     packer_work_dir,
                     self.jobserver,
                     dirs,
                     version_string=version_string,
+                )
+                for output_file, output_name in project.signer.sign(
+                    unsigned_files, packer_work_dir, self.jobserver
                 ):
                     shutil.copy2(output_file, output_dir / output_name)
                     self.logger.debug("Output file '%s' created.", output_file)
