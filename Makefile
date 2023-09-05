@@ -194,7 +194,8 @@ endif
 # them into variables available to this build script
 # Usage: $(shell $(call cmd_get_configs,<RO|RW>))
 cmd_get_configs = $(CPP) $(foreach BLD,$(1),$(CPPFLAGS)) -P -dM \
-	-Ichip/$(CHIP) -I$(BASEDIR) -I$(BDIR) include/config.h | \
+	-Ichip/$(CHIP) -I$(BASEDIR) -I$(BDIR) $(if $(HAVE_PRIVATE),-Iprivate) \
+	include/config.h | \
 	grep -o "\#define \(CONFIG\|VARIANT\)_[A-Z0-9_]*" | cut -c9- | sort
 _flag_cfg_ro:=$(call shell_echo,$(call cmd_get_configs,RO))
 _flag_cfg_rw:=$(_tsk_cfg_rw) $(call shell_echo,$(call cmd_get_configs,RW))
@@ -233,7 +234,8 @@ $(foreach c,$(_mock_cfg),$(eval $(c)=y))
 ifneq ($(CONFIG_COMMON_RUNTIME),y)
 ifneq ($(CONFIG_DFU_BOOTMANAGER_MAIN),ro)
 	_irq_list:=$(call shell_echo,$(CPP) $(CPPFLAGS) -P -Ichip/$(CHIP) \
-		-I$(BASEDIR) -I$(BDIR) -D"ENABLE_IRQ(x)=EN_IRQ x" \
+		-I$(BASEDIR) -I$(BDIR) $(if $(HAVE_PRIVATE),-Iprivate) \
+		-D"ENABLE_IRQ(x)=EN_IRQ x" \
 		-imacros chip/$(CHIP)/registers.h \
 		- < $(BDIR)/ec.irqlist | grep "EN_IRQ .*" | cut -c8-)
 	CPPFLAGS+=$(foreach irq,$(_irq_list),\
@@ -244,7 +246,8 @@ endif
 # Compute RW firmware size and offset
 # Usage: $(shell $(call cmd_config_eval,<CONFIG_*>))
 cmd_config_eval = echo "$(1)" | $(CPP) $(CPPFLAGS) -P \
-	-Ichip/$(CHIP) -I$(BASEDIR) -I$(BDIR) -imacros include/config.h -
+	-Ichip/$(CHIP) -I$(BASEDIR) -I$(BDIR) $(if $(HAVE_PRIVATE),-Iprivate) \
+	-imacros include/config.h -
 _rw_off_str:=$(call shell_echo,$(call cmd_config_eval,CONFIG_RW_MEM_OFF))
 _rw_off:=$(shell echo "$$(($(_rw_off_str)))")
 _rw_size_str:=$(call shell_echo,$(call cmd_config_eval,CONFIG_RW_SIZE))
@@ -266,6 +269,31 @@ $(eval CHIP_FAMILY_$(UC_CHIP_FAMILY)=y)
 #   that are set for both RO and RW, "rw" for RW-only configuration options)
 objs_from_dir_p=$(foreach obj, $($(2)-$(3)), $(1)/$(obj))
 objs_from_dir=$(call objs_from_dir_p,$(1),$(2),y)
+
+# Usage: $(call vars_from_dir,<dest-var-prefix>,<path>,<src-var-prefix>)
+# Collect all objects, includes, and dir declarations from sub-directory
+# specific variable names, like private-y.
+#
+# $(1) is the output variable's base name, where values will be deposited.
+# $(2) is path that will be prepended to incoming values.
+# $(3) is the input variable's base name, which contains the incoming values.
+#
+# Example:
+#   $(eval $(call vars_from_dir,private,subdir,subdir))
+#
+#   This would set all private variables private-y/ro/rw, private-incs-y,
+#   and private-dirs-y variables from the subdir-* equivalent variables, while
+#   prefixing all values with "subdir/".
+define vars_from_dir
+# Transfer all objects.
+$(1)-y  += $(addprefix $(2)/,$($(3)-y))
+$(1)-ro += $(addprefix $(2)/,$($(3)-ro))
+$(1)-rw += $(addprefix $(2)/,$($(3)-rw))
+# Transfer all include directories.
+$(1)-incs-y += $(addprefix $(2)/,$($(3)-incs-y))
+# Transfer all output directories.
+$(1)-dirs-y += $(addprefix $(2)/,$($(3)-dirs-y))
+endef
 
 # Get build configuration from sub-directories
 # Note that this re-includes the board and chip makefiles
@@ -306,7 +334,14 @@ include third_party/boringssl/common/build.mk
 include crypto/build.mk
 endif
 
+# Collect all includes.
+includes-y+=$(call objs_from_dir_p,private,private-incs,y)
 includes+=$(includes-y)
+
+# Collect all build object output directories.
+# This is different than the dirs variable, which serves as include path
+# and build output directory creation.
+dirs-y+=$(call objs_from_dir_p,private,private-dirs,y)
 
 # Wrapper for fetching all the sources relevant to this build
 # target.

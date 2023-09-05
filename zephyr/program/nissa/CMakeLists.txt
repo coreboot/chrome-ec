@@ -32,6 +32,18 @@ if(DEFINED CONFIG_BOARD_NEREID OR DEFINED CONFIG_BOARD_NEREID_CX)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "nereid/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "nereid/src/charger.c")
 endif()
+if(DEFINED CONFIG_BOARD_NOKRIS)
+	project(nokris)
+	zephyr_library_sources(
+			"nokris/src/led.c"
+			"nokris/src/form_factor.c"
+			"nokris/src/keyboard.c"
+			"nokris/src/hdmi.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "nokris/src/fan.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "nokris/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "nokris/src/charger.c")
+endif()
 if(DEFINED CONFIG_BOARD_CRAASK)
 	zephyr_library_sources(
 			"craask/src/fan.c"
@@ -72,7 +84,7 @@ if(DEFINED CONFIG_BOARD_JOXER)
 			"joxer/src/led.c"
 			"joxer/src/keyboard.c"
 			"joxer/src/form_factor.c"
-			"joxer/src/board.c"
+			"joxer/src/sub_board.c"
 			"joxer/src/thermal.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "joxer/src/usbc.c")
@@ -148,4 +160,16 @@ if(DEFINED CONFIG_BOARD_CRAASKOV)
 	"craaskov/src/keyboard.c"
 	"craaskov/src/keyboard_customization.c"
 	)
+endif()
+if(DEFINED CONFIG_BOARD_QUANDISO)
+	project(quandiso)
+	zephyr_library_sources(
+			"quandiso/src/board.c"
+			"quandiso/src/keyboard.c"
+			"quandiso/src/led.c"
+			"quandiso/src/thermal.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "quandiso/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "quandiso/src/fan.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "quandiso/src/usbc.c")
 endif()
