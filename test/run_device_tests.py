@@ -594,6 +594,7 @@ def power_cycle(board_config: BoardConfig) -> None:
     power(board_config, power_on=False)
     time.sleep(board_config.reboot_timeout)
     power(board_config, power_on=True)
+    time.sleep(board_config.reboot_timeout)
 
 
 def hw_write_protect(enable: bool) -> None:
@@ -729,6 +730,12 @@ def run_test(
     """Run specified test."""
     start = time.time()
 
+    board_config = BOARD_CONFIGS[build_board]
+    logging.debug("Calling pre-test callback")
+    if not test.pre_test_callback(board_config):
+        logging.error("pre-test callback failed, aborting")
+        return False
+
     # Wait for boot to finish
     time.sleep(reboot_timeout)
     console.write("\n".encode())
@@ -740,11 +747,6 @@ def run_test(
     if test.apptype_to_use != ApplicationType.PRODUCTION:
         test_cmd = "runtest " + " ".join(test.test_args) + "\n"
         console.write(test_cmd.encode())
-
-    logging.debug("Calling pre-test callback")
-    if not test.pre_test_callback(build_board):
-        logging.error("pre-test callback failed, aborting")
-        return False
 
     while True:
         console.flush()
@@ -779,7 +781,7 @@ def run_test(
                     process_console_output_line(line, test)
 
                 logging.debug("Calling post-test callback")
-                post_cb_passed = test.post_test_callback(build_board)
+                post_cb_passed = test.post_test_callback(board_config)
                 return test.num_fails == 0 and post_cb_passed
 
 
