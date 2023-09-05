@@ -248,7 +248,7 @@ static bool battery_sustainer_enabled(void)
 
 static const char *const state_list[] = { "idle", "discharge", "charge",
 					  "precharge" };
-BUILD_ASSERT(ARRAY_SIZE(state_list) == NUM_STATES_V2);
+BUILD_ASSERT(ARRAY_SIZE(state_list) == CHARGE_STATE_COUNT);
 static const char *const batt_pres[] = {
 	"NO",
 	"YES",
@@ -1530,7 +1530,7 @@ static int process_charge_state(int *need_staticp, int sleep_usec)
 		curr.requested_voltage = 0;
 		curr.batt.flags &= ~BATT_FLAG_WANT_CHARGE;
 		if (curr.state != ST_DISCHARGE)
-			curr.state = ST_IDLE;
+			set_charge_state(ST_IDLE);
 	}
 
 	if (IS_ENABLED(CONFIG_CHARGE_MANAGER) &&
@@ -1758,18 +1758,31 @@ static int battery_near_full(void)
 	return 1;
 }
 
+uint32_t charge_get_led_flags(void)
+{
+	uint32_t flags = 0;
+
+	if (get_chg_ctrl_mode() != CHARGE_CONTROL_NORMAL)
+		flags |= CHARGE_LED_FLAG_FORCE_IDLE;
+	if (curr.ac)
+		flags |= CHARGE_LED_FLAG_EXTERNAL_POWER;
+	if (curr.batt.flags & BATT_FLAG_RESPONSIVE)
+		flags |= CHARGE_LED_FLAG_BATT_RESPONSIVE;
+
+	return flags;
+}
+
 enum led_pwr_state led_pwr_get_state(void)
 {
-	uint32_t chflags;
+	uint32_t chflags = charge_get_led_flags();
 
 	switch (curr.state) {
 	case ST_IDLE:
-		chflags = charge_get_flags();
 
 		if (battery_seems_dead || curr.batt.is_present == BP_NO)
 			return LED_PWRS_ERROR;
 
-		if (chflags & CHARGE_FLAG_FORCE_IDLE)
+		if (chflags & CHARGE_LED_FLAG_FORCE_IDLE)
 			return LED_PWRS_FORCED_IDLE;
 		else
 			return LED_PWRS_IDLE;
@@ -1790,10 +1803,8 @@ enum led_pwr_state led_pwr_get_state(void)
 		else
 			return LED_PWRS_CHARGE;
 	case ST_PRECHARGE:
-		chflags = charge_get_flags();
-
 		/* we're in battery discovery mode */
-		if (chflags & CHARGE_FLAG_FORCE_IDLE)
+		if (chflags & CHARGE_LED_FLAG_FORCE_IDLE)
 			return LED_PWRS_FORCED_IDLE;
 		else
 			return LED_PWRS_IDLE;
@@ -1801,20 +1812,6 @@ enum led_pwr_state led_pwr_get_state(void)
 		/* Anything else can be considered an error for LED purposes */
 		return LED_PWRS_ERROR;
 	}
-}
-
-uint32_t charge_get_flags(void)
-{
-	uint32_t flags = 0;
-
-	if (get_chg_ctrl_mode() != CHARGE_CONTROL_NORMAL)
-		flags |= CHARGE_FLAG_FORCE_IDLE;
-	if (curr.ac)
-		flags |= CHARGE_FLAG_EXTERNAL_POWER;
-	if (curr.batt.flags & BATT_FLAG_RESPONSIVE)
-		flags |= CHARGE_FLAG_BATT_RESPONSIVE;
-
-	return flags;
 }
 
 int charge_get_percent(void)
@@ -1869,7 +1866,7 @@ int charge_set_output_current_limit(int chgnum, int ma, int mv)
 	/* If we start/stop providing power, wake the charger task. */
 	if ((curr.output_current == 0 && enable) ||
 	    (curr.output_current > 0 && !enable))
-		task_wake(TASK_ID_CHARGER);
+		charge_wakeup();
 
 	curr.output_current = ma;
 

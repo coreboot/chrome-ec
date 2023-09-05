@@ -84,7 +84,7 @@ if(DEFINED CONFIG_BOARD_YAVIKS)
 	zephyr_library_sources(
 			"yaviks/src/led.c"
 			"yaviks/src/keyboard.c"
-			"yaviks/src/board.c"
+			"yaviks/src/sub_board.c"
 			"yaviks/src/thermal.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "yaviks/src/usbc.c")
@@ -121,6 +121,7 @@ if(DEFINED CONFIG_BOARD_ULDREN)
 			"uldren/src/kb_backlight.c"
 			"uldren/src/sub_board.c"
 			"uldren/src/mp2964_update.c"
+			"uldren/src/sensor.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "uldren/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "uldren/src/charger.c")
@@ -130,6 +131,7 @@ if(DEFINED CONFIG_BOARD_GOTHRAX)
 	zephyr_library_sources(
 			"gothrax/src/keyboard.c"
 			"gothrax/src/hdmi.c"
+			"gothrax/src/usb_mux_config.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "gothrax/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "gothrax/src/charger.c")
@@ -146,4 +148,16 @@ if(DEFINED CONFIG_BOARD_CRAASKOV)
 	"craaskov/src/keyboard.c"
 	"craaskov/src/keyboard_customization.c"
 	)
+endif()
+if(DEFINED CONFIG_BOARD_QUANDISO)
+	project(quandiso)
+	zephyr_library_sources(
+			"quandiso/src/board.c"
+			"quandiso/src/keyboard.c"
+			"quandiso/src/led.c"
+			"quandiso/src/thermal.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "quandiso/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "quandiso/src/fan.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "quandiso/src/usbc.c")
 endif()

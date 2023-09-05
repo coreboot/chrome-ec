@@ -1605,6 +1605,34 @@ test_export_static enum usb_pe_state get_state_pe(const int port)
 }
 
 /*
+ * PD 3.x partners should respond to Data_Reset with either Accept or
+ * Not_Supported. However, some partners simply do not respond, triggering
+ * ErrorRecovery. Try to avoid this by only initiating Data Reset with partners
+ * that seem likely to support it.
+ */
+static bool pe_should_send_data_reset(const int port)
+{
+	const struct pd_discovery *disc =
+		pd_get_am_discovery(port, TCPCI_MSG_SOP);
+	const enum idh_ptype ufp_ptype = pd_get_product_type(port);
+	const union ufp_vdo_rev30 ufp_vdo = {
+		.raw_value = disc->identity.product_t1.raw_value
+	};
+
+	return prl_get_rev(port, TCPCI_MSG_SOP) >= PD_REV30 &&
+	       /*
+		* Data Reset was added to the PD spec around the time that the
+		* AMA product type/VDO was deprecated and the UFP VDO added.
+		* Partners that advertise the AMA product type are thus likely
+		* not to support Data Reset (and perhaps more likely than newer
+		* products to not respond to it at all).
+		*/
+	       (ufp_ptype == IDH_PTYPE_HUB || ufp_ptype == IDH_PTYPE_PERIPH) &&
+	       ((ufp_vdo.device_capability & VDO_UFP1_CAPABILITY_USB4) ||
+		ufp_vdo.alternate_modes);
+}
+
+/*
  * Handle common DPM requests to both source and sink.
  *
  * Note: it is assumed the calling state set PE_FLAGS_LOCALLY_INITIATED_AMS
@@ -1694,7 +1722,7 @@ static bool common_src_snk_dpm_requests(int port)
 		return true;
 	} else if (IS_ENABLED(CONFIG_USB_PD_DATA_RESET_MSG) &&
 		   PE_CHK_DPM_REQUEST(port, DPM_REQUEST_DATA_RESET)) {
-		if (prl_get_rev(port, TCPCI_MSG_SOP) < PD_REV30) {
+		if (!pe_should_send_data_reset(port)) {
 			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_DATA_RESET);
 			dpm_data_reset_complete(port);
 			return false;
@@ -1748,41 +1776,41 @@ static bool source_dpm_requests(int port)
 					 DPM_REQUEST_FRS_DET_ENABLE |
 					 DPM_REQUEST_FRS_DET_DISABLE);
 
-	if (pe[port].dpm_request) {
-		uint32_t dpm_request = pe[port].dpm_request;
+	if (!pe[port].dpm_request)
+		return false;
 
-		PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
+	PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
 
-		if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_PR_SWAP)) {
-			pe_set_dpm_curr_request(port, DPM_REQUEST_PR_SWAP);
-			set_state_pe(port, PE_PRS_SRC_SNK_SEND_SWAP);
-			return true;
-		} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_GOTO_MIN)) {
-			pe_set_dpm_curr_request(port, DPM_REQUEST_GOTO_MIN);
-			set_state_pe(port, PE_SRC_TRANSITION_SUPPLY);
-			return true;
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_SRC_CAP_CHANGE)) {
-			pe_set_dpm_curr_request(port,
-						DPM_REQUEST_SRC_CAP_CHANGE);
-			set_state_pe(port, PE_SRC_SEND_CAPABILITIES);
-			return true;
-		} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_GET_SRC_CAPS)) {
-			pe_set_dpm_curr_request(port, DPM_REQUEST_GET_SRC_CAPS);
-			set_state_pe(port, PE_DR_SRC_GET_SOURCE_CAP);
-			return true;
-		} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_SEND_PING)) {
-			pe_set_dpm_curr_request(port, DPM_REQUEST_SEND_PING);
-			set_state_pe(port, PE_SRC_PING);
-			return true;
-		} else if (common_src_snk_dpm_requests(port)) {
-			return true;
-		}
-
-		CPRINTF("Unhandled DPM Request %x received\n", dpm_request);
-		PE_CLR_DPM_REQUEST(port, dpm_request);
-		PE_CLR_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
+	if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_PR_SWAP)) {
+		pe_set_dpm_curr_request(port, DPM_REQUEST_PR_SWAP);
+		set_state_pe(port, PE_PRS_SRC_SNK_SEND_SWAP);
+		return true;
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_GOTO_MIN)) {
+		pe_set_dpm_curr_request(port, DPM_REQUEST_GOTO_MIN);
+		set_state_pe(port, PE_SRC_TRANSITION_SUPPLY);
+		return true;
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_SRC_CAP_CHANGE)) {
+		pe_set_dpm_curr_request(port, DPM_REQUEST_SRC_CAP_CHANGE);
+		set_state_pe(port, PE_SRC_SEND_CAPABILITIES);
+		return true;
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_GET_SRC_CAPS)) {
+		pe_set_dpm_curr_request(port, DPM_REQUEST_GET_SRC_CAPS);
+		set_state_pe(port, PE_DR_SRC_GET_SOURCE_CAP);
+		return true;
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_SEND_PING)) {
+		pe_set_dpm_curr_request(port, DPM_REQUEST_SEND_PING);
+		set_state_pe(port, PE_SRC_PING);
+		return true;
+	} else if (common_src_snk_dpm_requests(port)) {
+		return true;
 	}
+
+	const uint32_t dpm_request = pe[port].dpm_request;
+
+	CPRINTF("Unhandled DPM Request %x received\n", dpm_request);
+	PE_CLR_DPM_REQUEST(port, dpm_request);
+	PE_CLR_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
+
 	return false;
 }
 
@@ -1803,104 +1831,93 @@ static bool sink_dpm_requests(int port)
 					 DPM_REQUEST_SRC_CAP_CHANGE |
 					 DPM_REQUEST_SEND_PING);
 
-	if (pe[port].dpm_request) {
-		uint32_t dpm_request = pe[port].dpm_request;
+	if (!pe[port].dpm_request)
+		return false;
 
-		PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
+	PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
 
-		if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_PR_SWAP)) {
-			pe_set_dpm_curr_request(port, DPM_REQUEST_PR_SWAP);
-			set_state_pe(port, PE_PRS_SNK_SRC_SEND_SWAP);
-			return true;
-		} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_SOURCE_CAP)) {
-			pe_set_dpm_curr_request(port, DPM_REQUEST_SOURCE_CAP);
-			set_state_pe(port, PE_SNK_GET_SOURCE_CAP);
-			return true;
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_NEW_POWER_LEVEL)) {
-			pe_set_dpm_curr_request(port,
-						DPM_REQUEST_NEW_POWER_LEVEL);
-			set_state_pe(port, PE_SNK_SELECT_CAPABILITY);
-			return true;
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_FRS_DET_ENABLE)) {
-			pe_set_frs_enable(port, 1);
+	if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_PR_SWAP)) {
+		pe_set_dpm_curr_request(port, DPM_REQUEST_PR_SWAP);
+		set_state_pe(port, PE_PRS_SNK_SRC_SEND_SWAP);
+		return true;
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_SOURCE_CAP)) {
+		pe_set_dpm_curr_request(port, DPM_REQUEST_SOURCE_CAP);
+		set_state_pe(port, PE_SNK_GET_SOURCE_CAP);
+		return true;
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_NEW_POWER_LEVEL)) {
+		pe_set_dpm_curr_request(port, DPM_REQUEST_NEW_POWER_LEVEL);
+		set_state_pe(port, PE_SNK_SELECT_CAPABILITY);
+		return true;
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_FRS_DET_ENABLE)) {
+		pe_set_frs_enable(port, 1);
 
-			/* Requires no state change, fall through to false */
-			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_FRS_DET_ENABLE);
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_FRS_DET_DISABLE)) {
-			pe_set_frs_enable(port, 0);
-			/* Restore a default port current limit */
-			typec_select_src_current_limit_rp(port,
-							  CONFIG_USB_PD_PULLUP);
+		/* Requires no state change, fall through to false */
+		PE_CLR_DPM_REQUEST(port, DPM_REQUEST_FRS_DET_ENABLE);
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_FRS_DET_DISABLE)) {
+		pe_set_frs_enable(port, 0);
+		/* Restore a default port current limit */
+		typec_select_src_current_limit_rp(port, CONFIG_USB_PD_PULLUP);
 
-			/* Requires no state change, fall through to false */
-			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_FRS_DET_DISABLE);
-		} else if (common_src_snk_dpm_requests(port)) {
-			return true;
+		/* Requires no state change, fall through to false */
+		PE_CLR_DPM_REQUEST(port, DPM_REQUEST_FRS_DET_DISABLE);
+	} else if (common_src_snk_dpm_requests(port)) {
+		return true;
 #ifdef CONFIG_USB_PD_EPR
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_EPR_MODE_ENTRY)) {
-			if (pe_snk_in_epr_mode(port)) {
-				PE_CLR_DPM_REQUEST(port,
-						   DPM_REQUEST_EPR_MODE_ENTRY);
-				CPRINTS("C%d: Already in EPR mode", port);
-				return false;
-			}
-
-			if (!pe_snk_can_enter_epr_mode(port)) {
-				PE_CLR_DPM_REQUEST(port,
-						   DPM_REQUEST_EPR_MODE_ENTRY);
-				CPRINTS("C%d: Not allowed to enter EPR", port);
-				return false;
-			}
-
-			pe_set_dpm_curr_request(port,
-						DPM_REQUEST_EPR_MODE_ENTRY);
-			pd_set_max_voltage(PD_MAX_VOLTAGE_MV);
-			set_state_pe(port, PE_SNK_SEND_EPR_MODE_ENTRY);
-			return true;
-		} else if (PE_CHK_DPM_REQUEST(port,
-					      DPM_REQUEST_EPR_MODE_EXIT)) {
-			if (!pe_snk_in_epr_mode(port)) {
-				PE_CLR_DPM_REQUEST(port,
-						   DPM_REQUEST_EPR_MODE_EXIT);
-				CPRINTS("C%d: Not in EPR mode", port);
-				return false;
-			}
-
-			/*
-			 * If we're already in an SPR contract, send an exit
-			 * message. Figure 8-217.
-			 */
-			if (pe_in_spr_contract(port)) {
-				pe_set_dpm_curr_request(
-					port, DPM_REQUEST_EPR_MODE_EXIT);
-				set_state_pe(port, PE_SNK_SEND_EPR_MODE_EXIT);
-				return true;
-			}
-
-			/*
-			 * Can't exit yet because we're still in EPR contract.
-			 * Send an SPR RDO to negotiate an SPR contract.
-			 * Keep DPM_REQUEST_EPR_MODE_EXIT so that we can retry.
-			 */
-			CPRINTS("C%d: Request SPR before EPR exit", port);
-			pd_set_max_voltage(PD_MAX_SPR_VOLTAGE);
-			pe_set_dpm_curr_request(port,
-						DPM_REQUEST_NEW_POWER_LEVEL);
-			set_state_pe(port, PE_SNK_SELECT_CAPABILITY);
-			return true;
-#endif /* CONFIG_USB_PD_EPR */
-		} else {
-			CPRINTF("Unhandled DPM Request %x received\n",
-				dpm_request);
-			PE_CLR_DPM_REQUEST(port, dpm_request);
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_EPR_MODE_ENTRY)) {
+		if (pe_snk_in_epr_mode(port)) {
+			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_EPR_MODE_ENTRY);
+			CPRINTS("C%d: Already in EPR mode", port);
+			return false;
 		}
 
-		PE_CLR_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
+		if (!pe_snk_can_enter_epr_mode(port)) {
+			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_EPR_MODE_ENTRY);
+			CPRINTS("C%d: Not allowed to enter EPR", port);
+			return false;
+		}
+
+		pe_set_dpm_curr_request(port, DPM_REQUEST_EPR_MODE_ENTRY);
+		pd_set_max_voltage(PD_MAX_VOLTAGE_MV);
+		set_state_pe(port, PE_SNK_SEND_EPR_MODE_ENTRY);
+		return true;
+	} else if (PE_CHK_DPM_REQUEST(port, DPM_REQUEST_EPR_MODE_EXIT)) {
+		if (!pe_snk_in_epr_mode(port)) {
+			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_EPR_MODE_EXIT);
+			CPRINTS("C%d: Not in EPR mode", port);
+			return false;
+		}
+
+		/*
+		 * If we're already in an SPR contract, send an exit
+		 * message. Figure 8-217.
+		 */
+		if (pe_in_spr_contract(port)) {
+			pe_set_dpm_curr_request(port,
+						DPM_REQUEST_EPR_MODE_EXIT);
+			set_state_pe(port, PE_SNK_SEND_EPR_MODE_EXIT);
+			return true;
+		}
+
+		/*
+		 * Can't exit yet because we're still in EPR contract.
+		 * Send an SPR RDO to negotiate an SPR contract.
+		 * Keep DPM_REQUEST_EPR_MODE_EXIT so that we can retry.
+		 */
+		CPRINTS("C%d: Request SPR before EPR exit", port);
+		pd_set_max_voltage(PD_MAX_SPR_VOLTAGE);
+		pe_set_dpm_curr_request(port, DPM_REQUEST_NEW_POWER_LEVEL);
+		set_state_pe(port, PE_SNK_SELECT_CAPABILITY);
+		return true;
+#endif /* CONFIG_USB_PD_EPR */
+	} else {
+		const uint32_t dpm_request = pe[port].dpm_request;
+
+		CPRINTF("Unhandled DPM Request %x received\n", dpm_request);
+		PE_CLR_DPM_REQUEST(port, dpm_request);
 	}
+
+	PE_CLR_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
+
 	return false;
 }
 

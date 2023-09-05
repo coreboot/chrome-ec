@@ -283,6 +283,7 @@
 #define test_mockable_static_noreturn noreturn __attribute__((weak))
 #endif
 #define test_export_static
+#define test_overridable_const
 #else
 #define test_mockable
 #define test_mockable_static static
@@ -290,6 +291,7 @@
 #define test_mockable_noreturn noreturn
 #define test_mockable_static_noreturn static noreturn
 #define test_export_static static
+#define test_overridable_const const
 #endif
 
 /* Include top-level configuration file */
@@ -365,6 +367,9 @@ enum ec_error_list {
 
 	/* Operation was successful but completion is pending. */
 	EC_SUCCESS_IN_PROGRESS = 27,
+
+	/* No response available */
+	EC_ERROR_UNAVAILABLE = 28,
 
 	/* Verified boot errors */
 	EC_ERROR_VBOOT_SIGNATURE = 0x1000, /* 4096 */
