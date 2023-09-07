@@ -221,6 +221,7 @@ enum ccd_vendor_subcommands {
 	CCDV_PP_POLL_OPEN = 5,
 	CCDV_GET_INFO = 6,
 	CCDV_PP_POLL_SET_CAPABILITY = 7,
+	CCDV_PP_POLL_WP_DISABLE = 8,
 };
 
 enum ccd_pp_state {

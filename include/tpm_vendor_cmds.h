@@ -264,11 +264,16 @@ enum vendor_cmd_rc {
 	VENDOR_RC_ERR = 0x500,
 };
 
-/* VENDOR_CC_WP options, only WP_ENABLE is accepted. */
+/*
+ * VENDOR_CC_WP options, only WP_ENABLE is accepted for cr50. For ti50,
+ * enable, disable, and follow are all supported.
+ */
 enum wp_options {
 	WP_NONE,
 	WP_CHECK,
-	WP_ENABLE
+	WP_ENABLE,
+	WP_DISABLE,
+	WP_FOLLOW,
 };
 
 /*
