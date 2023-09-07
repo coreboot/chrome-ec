@@ -1812,7 +1812,7 @@ static enum exit_values process_set_capabililty(struct transfer_descriptor *td,
 	};
 
 	/*
-	 * Possible responses from Ti50 when trying to modify AlloUnverifiedRo
+	 * Possible responses from Ti50 when trying to modify AllowUnverifiedRo
 	 * capability. The values come from
 	 * common/libs/tpm2/extension/src/lib.rs::TpmvReturnCode.
 	 */
@@ -2534,10 +2534,67 @@ static void to_upper_underscore(const char *input, char *output)
 	*output = '\0';
 }
 
+/*
+ * Ensure that the CCD info response is well formed otherwise exits. Upon return
+ * the ccd_info variable will contain the structured ccd info response and the
+ * return value is the version of ccd info to parse with (e.g. 0 for cr50 and
+ * 1 for ti50).
+ */
+static uint32_t validate_into_ccd_info_response(
+	void *response, size_t response_size,
+	struct ccd_info_response *ccd_info)
+{
+	struct ccd_info_response_header ccd_info_header;
+	size_t i;
+	uint32_t ccd_info_version;
+
+	if (response_size < sizeof(ccd_info_header)) {
+		fprintf(stderr, "CCD info response too short %zd\n",
+			response_size);
+		exit(update_error);
+	}
+
+	/* Let's check if this is a newer version response. */
+	memcpy(&ccd_info_header, response, sizeof(ccd_info_header));
+	if ((ccd_info_header.ccd_magic == CCD_INFO_MAGIC) &&
+	    (ccd_info_header.ccd_size == response_size) &&
+	    /* Verify that payload size matches ccd_info size. */
+	    ((response_size - sizeof(ccd_info_header)) == sizeof(*ccd_info))) {
+		ccd_info_version = ccd_info_header.ccd_version;
+		memcpy(ccd_info,
+		       (uint8_t *)response +
+			       sizeof(struct ccd_info_response_header),
+		       sizeof(*ccd_info));
+		/*
+		 * V1 CCD info structure uses little endian for transmission.
+		 * No need to update to host endianness since it is already LE.
+		 */
+	} else if (response_size == CCD_INFO_V0_SIZE) {
+		ccd_info_version = 0; /* Default, Cr50 case. */
+		memcpy(ccd_info, response, sizeof(*ccd_info));
+		/*
+		 * V0 CCD info structure uses big endian for transmission.
+		 * Update fields to host endianness.
+		 */
+		ccd_info->ccd_flags = be32toh(ccd_info->ccd_flags);
+		for (i = 0; i < ARRAY_SIZE(ccd_info->ccd_caps_current); i++) {
+			ccd_info->ccd_caps_current[i] =
+				be32toh(ccd_info->ccd_caps_current[i]);
+			ccd_info->ccd_caps_defaults[i] =
+				be32toh(ccd_info->ccd_caps_defaults[i]);
+		}
+	} else {
+		fprintf(stderr, "Unexpected CCD info response size %zd\n",
+			response_size);
+		exit(update_error);
+	}
+
+	return ccd_info_version;
+}
+
 static void print_ccd_info(void *response, size_t response_size,
 			   bool show_machine_output)
 {
-	struct ccd_info_response_header ccd_info_header;
 	struct ccd_info_response ccd_info;
 	size_t i;
 	const struct ccd_capability_info cr50_cap_info[] = CAP_INFO_DATA;
@@ -2565,59 +2622,13 @@ static void print_ccd_info(void *response, size_t response_size,
 	const struct ccd_capability_info *gsc_capability_info;
 	size_t name_column_width;
 
-	if (response_size < sizeof(ccd_info_header)) {
-		fprintf(stderr, "CCD info response too short %zd\n",
-			response_size);
-		exit(update_error);
-	}
-
-	/* Let's check if this is a newer version response. */
-	memcpy(&ccd_info_header, response, sizeof(ccd_info_header));
-	if ((ccd_info_header.ccd_magic == CCD_INFO_MAGIC) &&
-	    (ccd_info_header.ccd_size == response_size) &&
-	    /* Verify that payload size matches ccd_info size. */
-	    ((response_size - sizeof(ccd_info_header)) == sizeof(ccd_info))) {
-		ccd_info_version = ccd_info_header.ccd_version;
-		memcpy(&ccd_info,
-		       (uint8_t *)response +
-		       sizeof(struct ccd_info_response_header),
-		       sizeof(ccd_info));
-		/*
-		 * V1 CCD info structure uses little endian for transmission.
-		 * capabilities are represented as a single little endian u64,
-		 * whereas this utility expects it to be two big endian u32s.
-		 * Fix the byte order below by performing in inverse of what
-		 * happens later.
-		 */
-		ccd_info.ccd_flags = htobe32(ccd_info.ccd_flags);
-		for (i = 0; i < ARRAY_SIZE(ccd_info.ccd_caps_current); i++) {
-			ccd_info.ccd_caps_current[i] =
-				htobe32(ccd_info.ccd_caps_current[i]);
-			ccd_info.ccd_caps_defaults[i] =
-				htobe32(ccd_info.ccd_caps_defaults[i]);
-		}
-	} else if (response_size == CCD_INFO_V0_SIZE) {
-		ccd_info_version = 0; /* Default, Cr50 case. */
-		memcpy(&ccd_info, response, sizeof(ccd_info));
-	} else {
-		fprintf(stderr, "Unexpected CCD info response size %zd\n",
-			response_size);
-		exit(update_error);
-	}
+	ccd_info_version = validate_into_ccd_info_response(
+		response, response_size, &ccd_info);
 
 	if (ccd_info_version >= ARRAY_SIZE(version_to_ccd)) {
 		fprintf(stderr, "Unsupported CCD info version number %d\n",
 			ccd_info_version);
 		exit(update_error);
-	}
-
-	/* Convert it back to host endian format. */
-	ccd_info.ccd_flags = be32toh(ccd_info.ccd_flags);
-	for (i = 0; i < ARRAY_SIZE(ccd_info.ccd_caps_current); i++) {
-		ccd_info.ccd_caps_current[i] =
-			be32toh(ccd_info.ccd_caps_current[i]);
-		ccd_info.ccd_caps_defaults[i] =
-			be32toh(ccd_info.ccd_caps_defaults[i]);
 	}
 
 	/* Now report CCD state on the console. */
@@ -2787,42 +2798,132 @@ static void process_ccd_state(struct transfer_descriptor *td, int ccd_unlock,
 		poll_for_pp(td, VENDOR_CC_CCD, CCDV_PP_POLL_OPEN);
 }
 
-static void process_wp(struct transfer_descriptor *td, enum wp_options wp)
+/*
+ * Ensure that the AllowUnverifiedRO capability is set to always. If called for
+ * Cr50 (which does not have this capability), the program will exit instead.
+ */
+static bool is_unverified_ro_allowed(struct transfer_descriptor *td)
+{
+	uint8_t cmd = CCDV_GET_INFO;
+	/* Max possible response size is when ccd_info is requested. */
+	uint8_t response[sizeof(struct ccd_info_response_packet)];
+	size_t response_size = sizeof(response);
+	struct ccd_info_response ccd_info;
+	uint32_t ccd_info_version;
+	int allow_unverified_ro_cap;
+	int rv;
+
+	rv = send_vendor_command(td, VENDOR_CC_CCD, &cmd, sizeof(cmd),
+				 &response, &response_size);
+	if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr, "Error: rv %d, response %d\n", rv,
+			response_size ? response[0] : 0);
+		exit(update_error);
+	}
+	ccd_info_version = validate_into_ccd_info_response(
+		response, response_size, &ccd_info);
+	if (ccd_info_version != 1) {
+		/*
+		 * We also don't know what order future ccd info versions will
+		 * place the AllowUnverifiedRO capability. We need to ensure
+		 * that the array lookup below is still correct for future
+		 * version if/when they become available
+		 */
+		fprintf(stderr,
+			"Error: CCD info version incorrect (%d).\n"
+			"Cr50 does not support this operation.\n",
+			ccd_info_version);
+		exit(update_error);
+	}
+	/*
+	 * Pull out the AllowUnverifiedRo cap from the list.
+	 * See ti50_cap_info for full order of V1 capabilities
+	 */
+	allow_unverified_ro_cap = (ccd_info.ccd_caps_current[1] >> 10) &
+				  CCD_CAP_BITMASK;
+
+	return allow_unverified_ro_cap == CCD_CAP_STATE_ALWAYS;
+}
+
+static enum exit_values process_wp(struct transfer_descriptor *td,
+				   enum wp_options wp)
 {
 	size_t response_size;
 	uint8_t response;
 	int rv = 0;
+	uint8_t command = wp;
 
 	response_size = sizeof(response);
 
-	printf("Getting WP\n");
-
-	if (wp == WP_ENABLE) {
-		uint8_t command = WP_ENABLE;
-
+	/*
+	 * Ti50 supports enable, disable, and follow, but cr50 doesn't and will
+	 * return an error from the chip. gsctool supports the superset.
+	 */
+	switch (wp) {
+	case WP_DISABLE:
+	case WP_FOLLOW:
+		/* Ensure that AllowUnverifiedRo is true then fallthrough */
+		if (!is_unverified_ro_allowed(td)) {
+			fprintf(stderr,
+				"Error: Must set AllowUnverifiedRo cap to "
+				"always first.\n"
+				"Otherwise changes to AP RO may cause system "
+				"to no longer boot.\n"
+				"Use `gsctool -I AllowUnverifiedRo:always`\n");
+			return update_error;
+		}
+	case WP_ENABLE:
+		printf("Setting WP\n");
+		/* Enabling write protect doesn't require any special checks */
 		rv = send_vendor_command(td, VENDOR_CC_WP, &command,
-					 sizeof(command),
-					 &response, &response_size);
-	} else {
-		rv = send_vendor_command(td, VENDOR_CC_WP, NULL, 0,
-					 &response, &response_size);
+					 sizeof(command), &response,
+					 &response_size);
+		break;
+	default:
+		/* Just check the wp status without a parameter */
+		printf("Getting WP\n");
+		rv = send_vendor_command(td, VENDOR_CC_WP, NULL, 0, &response,
+					 &response_size);
+	}
+
+	/*
+	 * If we tried to disable and we got in progress, then prompt the
+	 * user for power button pushes
+	 */
+	if (wp == WP_DISABLE && rv == VENDOR_RC_IN_PROGRESS) {
+		/* Progress physical button request then get the wp again */
+		poll_for_pp(td, VENDOR_CC_CCD, CCDV_PP_POLL_WP_DISABLE);
+		/* Reset expected response size and get WP status again */
+		response_size = sizeof(response);
+		rv = send_vendor_command(td, VENDOR_CC_WP, NULL, 0, &response,
+					 &response_size);
+	}
+	/*
+	 * Give user a more detailed error for not allowed. That means CCD
+	 * must be open before we can process the command
+	 */
+	if (rv == VENDOR_RC_NOT_ALLOWED) {
+		fprintf(stderr, "Error: OverrideWP must be enabled first.\n"
+				"Use `gsctool -I OverrideWP:always`\n");
+		return update_error;
 	}
 
 	if (rv != VENDOR_RC_SUCCESS) {
-		fprintf(stderr, "Error %d %sting write protect\n",
-			rv, (wp == WP_ENABLE) ? "set" : "get");
+		fprintf(stderr, "Error %d %sting write protect\n", rv,
+			(wp == WP_ENABLE) ? "set" : "get");
 		if (wp == WP_ENABLE) {
 			fprintf(stderr,
 				"Early Cr50 versions do not support setting WP"
 				"\n");
 		}
-		exit(update_error);
+		return update_error;
 	}
 	if (response_size != sizeof(response)) {
-		fprintf(stderr, "Unexpected response size %zd while getting "
+		fprintf(stderr,
+			"Unexpected response size %zd while getting "
 			"write protect\n",
 			response_size);
-		exit(update_error);
+		return update_error;
 	}
 
 	printf("WP: %08x\n", response);
@@ -2831,10 +2932,11 @@ static void process_wp(struct transfer_descriptor *td, enum wp_options wp)
 		response & WPV_FORCE ? "forced " : "",
 		response & WPV_ENABLE ? "enabled" : "disabled");
 	printf(" at boot: %s\n",
-		response & WPV_FWMP_FORCE_WP_EN ? "fwmp enabled" :
-		!(response & WPV_ATBOOT_SET) ? "follow_batt_pres" :
-		response & WPV_ATBOOT_ENABLE ? "forced enabled" :
-		"forced disabled");
+	       response & WPV_FWMP_FORCE_WP_EN ? "fwmp enabled" :
+	       !(response & WPV_ATBOOT_SET)    ? "follow_batt_pres" :
+	       response & WPV_ATBOOT_ENABLE    ? "forced enabled" :
+						 "forced disabled");
+	return noop;
 }
 
 static int process_get_apro_hash(struct transfer_descriptor *td)
@@ -4574,6 +4676,18 @@ int main(int argc, char *argv[])
 				wp = WP_ENABLE;
 				break;
 			}
+			if (!strcasecmp(optarg, "disable")) {
+				wp = WP_DISABLE;
+				/* Supported on Dauntless only. */
+				is_dauntless = 1;
+				break;
+			}
+			if (!strcasecmp(optarg, "follow")) {
+				wp = WP_FOLLOW;
+				/* Supported on Dauntless only. */
+				is_dauntless = 1;
+				break;
+			}
 			fprintf(stderr, "Illegal wp option \"%s\"\n", optarg);
 			errorcnt++;
 			break;
@@ -4752,7 +4866,7 @@ int main(int argc, char *argv[])
 	if (factory_mode)
 		process_factory_mode(&td, factory_mode_arg);
 	if (wp != WP_NONE)
-		process_wp(&td, wp);
+		exit(process_wp(&td, wp));
 
 	if (corrupt_inactive_rw)
 		invalidate_inactive_rw(&td);
