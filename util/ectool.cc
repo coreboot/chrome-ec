@@ -965,6 +965,7 @@ static const char *const ec_feature_names[] = {
 	[EC_FEATURE_TYPEC_AP_VDM_SEND] = "AP directed VDM Request messages",
 	[EC_FEATURE_SYSTEM_SAFE_MODE] = "System Safe Mode support",
 	[EC_FEATURE_ASSERT_REBOOTS] = "Assert reboots",
+	[EC_FEATURE_AMD_STB_DUMP] = "AMD STB dump",
 };
 
 int cmd_inventory(int argc, char *argv[])
@@ -7673,15 +7674,14 @@ int cmd_charge_control(int argc, char *argv[])
 	char *e;
 	int rv;
 
-	if (!ec_cmd_version_supported(EC_CMD_CHARGE_CONTROL, 2))
-		version = 1;
+	if (!ec_cmd_version_supported(EC_CMD_CHARGE_CONTROL, 2)) {
+		fprintf(stderr,
+			"EC doesn't support V2+ of charge control command.\n"
+			"Consider firmware update.\n");
+		return -1;
+	}
 
 	if (argc == 1) {
-		if (version < 2) {
-			cmd_charge_control_help(argv[0],
-						"Old EC doesn't support GET.");
-			return -1;
-		}
 		p.cmd = EC_CHARGE_CONTROL_CMD_GET;
 		rv = ec_command(EC_CMD_CHARGE_CONTROL, version, &p, sizeof(p),
 				&r, sizeof(r));
@@ -7710,12 +7710,6 @@ int cmd_charge_control(int argc, char *argv[])
 			p.sustain_soc.lower = -1;
 			p.sustain_soc.upper = -1;
 		} else if (argc == 4) {
-			if (version < 2) {
-				cmd_charge_control_help(
-					argv[0],
-					"Old EC doesn't support sustainer.");
-				return -1;
-			}
 			p.sustain_soc.lower = strtol(argv[2], &e, 0);
 			if (e && *e) {
 				cmd_charge_control_help(
