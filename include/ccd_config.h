@@ -201,7 +201,7 @@ struct ccd_capability_info {
 	}
 
 #define CCD_STATE_NAMES { "Locked", "Unlocked", "Opened" }
-#define CCD_CAP_STATE_NAMES { "Default", "Always", "UnlessLocked", "IfOpened" }
+#define CCD_CAP_STATE_NAMES { "Never", "Always", "UnlessLocked", "IfOpened" }
 
 /* Macros regarding ccd_capabilities */
 #define CCD_CAP_BITS		2
