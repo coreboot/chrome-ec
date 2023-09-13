@@ -52,7 +52,8 @@ gsctool: $(GSCTOOL_OBJS) Makefile
 	$(CC) $(GSCTOOL_OBJS) $(LFLAGS) $(LIBS) $(LIBS_g) -o $@
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(CFLAGS_g) -c -MMD -MF $(basename $@).d -o $@ $<
+	$(CC) $(CFLAGS) $(CFLAGS_g) $(CPPFLAGS) -c \
+		-MMD -MF $(basename $@).d -o $@ $<
 
 gsctool.o:  generated_version.h
 
