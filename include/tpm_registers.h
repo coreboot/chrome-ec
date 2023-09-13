@@ -17,8 +17,8 @@
 #include "common.h"
 
 /* The SPI controller is writing data into a TPM register. */
-void tpm_register_put(uint32_t regaddr,
-		      const uint8_t *data, uint32_t data_size);
+void tpm_register_put(uint32_t regaddr, const uint8_t *data,
+		      uint32_t data_size);
 
 /* The SPI controller is reading data from a TPM register. */
 void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size);
@@ -79,7 +79,7 @@ struct tpm_cmd_header {
 	uint16_t tag;
 	uint32_t size;
 	uint32_t command_code;
-	uint16_t subcommand_code;  /* Not a standard field. */
+	uint16_t subcommand_code; /* Not a standard field. */
 } __packed;
 
 /*
@@ -110,9 +110,9 @@ void tpm_alt_extension(struct tpm_cmd_header *tpmh, size_t buffer_size);
  * The only TPM2 commands we care about on the driver level, see
  * crosbug.com/p/55667 for detals.
  */
-#define TPM2_PCR_Extend		0x00000182
-#define TPM2_PCR_Read		0x0000017e
-#define TPM2_Startup		0x00000144
+#define TPM2_PCR_Extend 0x00000182
+#define TPM2_PCR_Read	0x0000017e
+#define TPM2_Startup	0x00000144
 
 /* TPM mode */
 enum tpm_modes {
@@ -127,4 +127,4 @@ enum tpm_modes {
  */
 enum tpm_modes get_tpm_mode(void);
 
-#endif	/* __CROS_EC_TPM_REGISTERS_H */
+#endif /* __CROS_EC_TPM_REGISTERS_H */

@@ -9,10 +9,10 @@
 #define __CROS_EC_COMPILE_TIME_MACROS_H
 
 /* Test an important condition at compile time, not run time */
-#define _BA1_(cond, line) \
-	extern int __build_assertion_ ## line[1 - 2*!(cond)] \
-	__attribute__ ((unused))
-#define _BA0_(c, x) _BA1_(c, x)
+#define _BA1_(cond, line)                                    \
+	extern int __build_assertion_##line[1 - 2 * !(cond)] \
+		__attribute__((unused))
+#define _BA0_(c, x)	   _BA1_(c, x)
 #define BUILD_ASSERT(cond) _BA0_(cond, __LINE__)
 
 /*
@@ -26,11 +26,11 @@
 
 /* Make for loops that iterate over pointers to array entries more readable */
 #define ARRAY_BEGIN(array) (array)
-#define ARRAY_END(array) ((array) + ARRAY_SIZE(array))
+#define ARRAY_END(array)   ((array) + ARRAY_SIZE(array))
 
 /* Just in case - http://gcc.gnu.org/onlinedocs/gcc/Offsetof.html */
 #ifndef offsetof
-#define offsetof(type, member)  __builtin_offsetof(type, member)
+#define offsetof(type, member) __builtin_offsetof(type, member)
 #endif
 
 #define member_size(type, member) sizeof(((type *)0)->member)
@@ -38,7 +38,7 @@
 /*
  * Bit operation macros.
  */
-#define BIT(nr)			(1U << (nr))
-#define BIT_ULL(nr)		(1ULL << (nr))
+#define BIT(nr)	    (1U << (nr))
+#define BIT_ULL(nr) (1ULL << (nr))
 
 #endif /* __CROS_EC_COMPILE_TIME_MACROS_H */

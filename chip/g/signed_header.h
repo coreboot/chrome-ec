@@ -8,38 +8,38 @@
 #include "compile_time_macros.h"
 #include "stdint.h"
 
-#define FUSE_PADDING 0x55555555  /* baked in hw! */
-#define FUSE_IGNORE 0xa3badaac   /* baked in rom! */
-#define FUSE_MAX 128             /* baked in rom! */
+#define FUSE_PADDING 0x55555555 /* baked in hw! */
+#define FUSE_IGNORE  0xa3badaac /* baked in rom! */
+#define FUSE_MAX     128 /* baked in rom! */
 
-#define INFO_MAX 128             /* baked in rom! */
-#define INFO_IGNORE 0xaa3c55c3   /* baked in rom! */
+#define INFO_MAX    128 /* baked in rom! */
+#define INFO_IGNORE 0xaa3c55c3 /* baked in rom! */
 
-#define MAGIC_HAVEN 0xFFFFFFFF
+#define MAGIC_HAVEN	0xFFFFFFFF
 #define MAGIC_DAUNTLESS 0xFFFFFFFD
 
 /* Default value for _pad[] words */
 #define SIGNED_HEADER_PADDING 0x33333333
 
 struct SignedHeader {
-	uint32_t magic;       /* -1 (thanks, boot_sys!) */
+	uint32_t magic; /* -1 (thanks, boot_sys!) */
 	uint32_t signature[96];
-	uint32_t img_chk_;    /* top 32 bit of expected img_hash */
+	uint32_t img_chk_; /* top 32 bit of expected img_hash */
 	/* --------------------- everything below is part of img_hash */
-	uint32_t tag[7];      /* words 0-6 of RWR/FWR */
-	uint32_t keyid;       /* word 7 of RWR */
-	uint32_t key[96];     /* public key to verify signature with */
+	uint32_t tag[7]; /* words 0-6 of RWR/FWR */
+	uint32_t keyid; /* word 7 of RWR */
+	uint32_t key[96]; /* public key to verify signature with */
 	uint32_t image_size;
-	uint32_t ro_base;     /* readonly region */
+	uint32_t ro_base; /* readonly region */
 	uint32_t ro_max;
-	uint32_t rx_base;     /* executable region */
+	uint32_t rx_base; /* executable region */
 	uint32_t rx_max;
 	uint32_t fusemap[FUSE_MAX / (8 * sizeof(uint32_t))];
 	uint32_t infomap[INFO_MAX / (8 * sizeof(uint32_t))];
-	uint32_t epoch_;      /* word 7 of FWR */
-	uint32_t major_;      /* keyladder count */
+	uint32_t epoch_; /* word 7 of FWR */
+	uint32_t major_; /* keyladder count */
 	uint32_t minor_;
-	uint64_t timestamp_;  /* time of signing */
+	uint64_t timestamp_; /* time of signing */
 	uint32_t p4cl_;
 	/* bits to and with FUSE_FW_DEFINED_BROM_APPLYSEC */
 	uint32_t applysec_;
@@ -75,8 +75,8 @@ struct SignedHeader {
 	/* Padding to bring the total structure size to 1K. */
 	uint32_t _pad[5];
 	struct {
-		unsigned size:12;
-		unsigned offset:20;
+		unsigned size : 12;
+		unsigned offset : 20;
 	} swap_mark;
 
 	/* Field for managing updates between RW product families. */
@@ -85,16 +85,16 @@ struct SignedHeader {
 	uint32_t board_id_type;
 	uint32_t board_id_type_mask;
 	uint32_t board_id_flags;
-	uint32_t dev_id0_;    /* node id, if locked */
+	uint32_t dev_id0_; /* node id, if locked */
 	uint32_t dev_id1_;
-	uint32_t fuses_chk_;  /* top 32 bit of expected fuses hash */
-	uint32_t info_chk_;   /* top 32 bit of expected info hash */
+	uint32_t fuses_chk_; /* top 32 bit of expected fuses hash */
+	uint32_t info_chk_; /* top 32 bit of expected info hash */
 };
 
 BUILD_ASSERT(sizeof(struct SignedHeader) == 1024);
 BUILD_ASSERT(offsetof(struct SignedHeader, info_chk_) == 1020);
-#define TOP_IMAGE_SIZE_BIT (1 <<			\
-	    (sizeof(((struct SignedHeader *)0)->image_size) * 8 - 1))
+#define TOP_IMAGE_SIZE_BIT \
+	(1 << (sizeof(((struct SignedHeader *)0)->image_size) * 8 - 1))
 
 /*
  * It is a mere convention, but all prod keys are required to have key IDs
@@ -104,6 +104,5 @@ BUILD_ASSERT(offsetof(struct SignedHeader, info_chk_) == 1020);
  * This convention is enforced at the key generation time.
  */
 #define G_SIGNED_FOR_PROD(h) ((h)->keyid & BIT(2))
-
 
 #endif /* __CROS_EC_SIGNED_HEADER_H */

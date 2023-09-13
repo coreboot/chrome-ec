@@ -41,7 +41,6 @@
 #include "usb_descriptor.h"
 #include "verify_ro.h"
 
-
 /*
  * This enum must match CcdCap enum in applications/sys_mgr/src/ccd.rs in the
  * Ti50 common git tree.
@@ -73,33 +72,33 @@ enum Ti50CcdCapabilities {
 };
 
 static const struct ccd_capability_info ti50_cap_info[] = {
-	{"UartGscRxAPTx", CCD_CAP_STATE_ALWAYS},
-	{"UartGscTxAPRx", CCD_CAP_STATE_ALWAYS},
-	{"UartGscRxECTx", CCD_CAP_STATE_ALWAYS},
-	{"UartGscTxECRx", CCD_CAP_STATE_IF_OPENED},
-	{"UartGscRxFpmcuTx", CCD_CAP_STATE_ALWAYS},
-	{"UartGscTxFpmcuRx", CCD_CAP_STATE_IF_OPENED},
-	{"FlashAP", CCD_CAP_STATE_IF_OPENED},
-	{"FlashEC", CCD_CAP_STATE_IF_OPENED},
-	{"OverrideWP", CCD_CAP_STATE_IF_OPENED},
-	{"RebootECAP", CCD_CAP_STATE_IF_OPENED},
-	{"GscFullConsole", CCD_CAP_STATE_IF_OPENED},
-	{"UnlockNoReboot", CCD_CAP_STATE_ALWAYS},
-	{"UnlockNoShortPP", CCD_CAP_STATE_ALWAYS},
-	{"OpenNoTPMWipe", CCD_CAP_STATE_IF_OPENED},
-	{"OpenNoLongPP", CCD_CAP_STATE_IF_OPENED},
-	{"RemoveBatteryBypassPP", CCD_CAP_STATE_ALWAYS},
-	{"I2C", CCD_CAP_STATE_IF_OPENED},
-	{"FlashRead", CCD_CAP_STATE_ALWAYS},
+	{ "UartGscRxAPTx", CCD_CAP_STATE_ALWAYS },
+	{ "UartGscTxAPRx", CCD_CAP_STATE_ALWAYS },
+	{ "UartGscRxECTx", CCD_CAP_STATE_ALWAYS },
+	{ "UartGscTxECRx", CCD_CAP_STATE_IF_OPENED },
+	{ "UartGscRxFpmcuTx", CCD_CAP_STATE_ALWAYS },
+	{ "UartGscTxFpmcuRx", CCD_CAP_STATE_IF_OPENED },
+	{ "FlashAP", CCD_CAP_STATE_IF_OPENED },
+	{ "FlashEC", CCD_CAP_STATE_IF_OPENED },
+	{ "OverrideWP", CCD_CAP_STATE_IF_OPENED },
+	{ "RebootECAP", CCD_CAP_STATE_IF_OPENED },
+	{ "GscFullConsole", CCD_CAP_STATE_IF_OPENED },
+	{ "UnlockNoReboot", CCD_CAP_STATE_ALWAYS },
+	{ "UnlockNoShortPP", CCD_CAP_STATE_ALWAYS },
+	{ "OpenNoTPMWipe", CCD_CAP_STATE_IF_OPENED },
+	{ "OpenNoLongPP", CCD_CAP_STATE_IF_OPENED },
+	{ "RemoveBatteryBypassPP", CCD_CAP_STATE_ALWAYS },
+	{ "I2C", CCD_CAP_STATE_IF_OPENED },
+	{ "FlashRead", CCD_CAP_STATE_ALWAYS },
 	/*
 	 * The below two settings do not match ccd.rs value, which is
 	 * controlled at compile time.
 	 */
-	{"OpenNoDevMode", CCD_CAP_STATE_IF_OPENED},
-	{"OpenFromUSB", CCD_CAP_STATE_IF_OPENED},
-	{"OverrideBatt", CCD_CAP_STATE_IF_OPENED},
+	{ "OpenNoDevMode", CCD_CAP_STATE_IF_OPENED },
+	{ "OpenFromUSB", CCD_CAP_STATE_IF_OPENED },
+	{ "OverrideBatt", CCD_CAP_STATE_IF_OPENED },
 	/* The below capability is presently set to 'never' in ccd.rs. */
-	{"AllowUnverifiedRo", CCD_CAP_STATE_IF_OPENED},
+	{ "AllowUnverifiedRo", CCD_CAP_STATE_IF_OPENED },
 };
 
 #define CR50_CCD_CAP_COUNT CCD_CAP_COUNT
@@ -109,7 +108,7 @@ static const struct ccd_capability_info ti50_cap_info[] = {
  * is that the number of words in the capabilities array is the same for all
  * layouts. Let's verify this at compile time.
  */
-BUILD_ASSERT((CR50_CCD_CAP_COUNT/32) == (TI50_CCD_CAP_COUNT/32));
+BUILD_ASSERT((CR50_CCD_CAP_COUNT / 32) == (TI50_CCD_CAP_COUNT / 32));
 
 /*
  * Version 0 CCD info packet does not include the header, the actual packet
@@ -237,8 +236,8 @@ BUILD_ASSERT((CR50_CCD_CAP_COUNT/32) == (TI50_CCD_CAP_COUNT/32));
  */
 
 /* Look for Cr50 FW update interface */
-#define H1_PID 0x5014
-#define D2_PID 0x504A
+#define H1_PID	 0x5014
+#define D2_PID	 0x504A
 #define SUBCLASS USB_SUBCLASS_GOOGLE_CR50
 #define PROTOCOL USB_PROTOCOL_GOOGLE_CR50_NON_HC_FW_UPDATE
 
@@ -255,8 +254,8 @@ BUILD_ASSERT((CR50_CCD_CAP_COUNT/32) == (TI50_CCD_CAP_COUNT/32));
  * distinct first header value and the match of the size field indicates that
  * this is a later version packet.
  */
-#define CCD_INFO_MAGIC 0x49444343  /* This is 'CCDI' in little endian. */
-#define CCD_VERSION             1  /* Ti50 CCD INFO layout. */
+#define CCD_INFO_MAGIC 0x49444343 /* This is 'CCDI' in little endian. */
+#define CCD_VERSION    1 /* Ti50 CCD INFO layout. */
 
 struct ccd_info_response_header {
 	uint32_t ccd_magic;
@@ -274,18 +273,18 @@ struct ccd_info_response_packet {
  * have space to prepare the entire PDU.
  */
 struct upgrade_pkt {
-	__be16	tag;
-	__be32	length;
-	__be32	ordinal;
-	__be16	subcmd;
+	__be16 tag;
+	__be32 length;
+	__be32 ordinal;
+	__be16 subcmd;
 	union {
 		/*
 		 * Upgrade PDUs as opposed to all other vendor and extension
 		 * commands include two additional fields in the header.
 		 */
 		struct {
-			__be32	digest;
-			__be32	address;
+			__be32 digest;
+			__be32 address;
 			char data[0];
 		} upgrade;
 		struct {
@@ -344,11 +343,11 @@ enum arv_config_setting_state_e {
 /*
  * AP RO verification SPI read/write addressing mode configuration choices
  */
-enum arv_config_spi_addr_mode_choice_e {
-	arv_config_spi_addr_mode_choice_none = 0,
-	arv_config_spi_addr_mode_choice_get = 1,
-	arv_config_spi_addr_mode_choice_set_3byte = 2,
-	arv_config_spi_addr_mode_choice_set_4byte = 3,
+enum arv_config_spi_addr_mode_e {
+	arv_config_spi_addr_mode_none = 0,
+	arv_config_spi_addr_mode_get = 1,
+	arv_config_spi_addr_mode_set_3byte = 2,
+	arv_config_spi_addr_mode_set_4byte = 3,
 };
 
 /*
@@ -381,12 +380,12 @@ struct __attribute__((__packed__)) arv_config_wpds {
 /*
  * This matches the largest vendor command response size we ever expect.
  */
-#define MAX_RX_BUF_SIZE	2048
+#define MAX_RX_BUF_SIZE 2048
 
 /*
  * Maximum update payload block size plus packet header size.
  */
-#define MAX_TX_BUF_SIZE	(SIGNED_TRANSFER_SIZE + sizeof(struct upgrade_pkt))
+#define MAX_TX_BUF_SIZE (SIGNED_TRANSFER_SIZE + sizeof(struct upgrade_pkt))
 
 /*
  * Max. length of the board ID string representation.
@@ -399,7 +398,7 @@ struct __attribute__((__packed__)) arv_config_wpds {
 /*
  * Length, in bytes, of the SN Bits serial number bits.
  */
-#define SN_BITS_SIZE  (96 >> 3)
+#define SN_BITS_SIZE (96 >> 3)
 
 /*
  * Max. length of FW version in the format of <epoch>.<major>.<minor>
@@ -426,112 +425,105 @@ static char *progname;
  */
 static const struct option_container cmd_line_options[] = {
 	/* name   has_arg    *flag  val */
-	{{"get_apro_hash", no_argument, NULL, 'A'},
-	 "get the stored ap ro hash"},
-	{{"any", no_argument, NULL, 'a'},
-	 "Try any interfaces to find Cr50"
-	 " (-d, -s, -t are all ignored)"},
-	{{"apro_boot", optional_argument, NULL, 'B'},
-	 "[start] get the stored ap ro boot state or start ap ro verify"},
-	{{"binvers", no_argument, NULL, 'b'},
-	 "Report versions of Cr50 image's "
-	 "RW and RO headers, do not update"},
-	{{"apro_config_spi_mode", optional_argument, NULL, 'C'},
-	 "Get/set the ap ro verify spi mode either to `3byte` or `4byte`"},
-	{{"corrupt", no_argument, NULL, 'c'},
-	 "Corrupt the inactive rw"},
-	{{"dauntless", no_argument, NULL, 'D'},
-	 "Communicate with Dauntless chip. This may be implied or overridden by"
-	 " --image flag values"},
-	{{"device", required_argument, NULL, 'd'},
-	 "VID:PID%USB device (default 18d1:5014 or 18d1:504a based on image)"},
-	{{"apro_config_write_protect", optional_argument, NULL,
-	 'E'},
-	 "Get/set the ap ro verify write protect descriptors with hex "
-	 "bytes (ex: 0x01, 0x1, 01 or 1) in the following format: "
-	 "[sr1 mask1 [sr2 mask2] [sr3 mask3]]"},
-	{{"endorsement_seed", optional_argument, NULL, 'e'},
-	 "[state]%get/set the endorsement key seed"},
-	{{"factory", required_argument, NULL, 'F'},
-	 "[enable|disable]%Control factory mode"},
-	{{"fwver", no_argument, NULL, 'f'},
-	 "Report running Cr50 firmware versions"},
-	{{"get_time", no_argument, NULL, 'G'},
-	 "Get time since last cold reset"},
-	{{"getbootmode", no_argument, NULL, 'g'},
-	 "Get the system boot mode"},
-	{{"erase_ap_ro_hash", no_argument, NULL, 'H'},
-	 "Erase AP RO hash (possible only if Board ID is not set)"},
-	{{"help", no_argument, NULL, 'h'},
-	 "Show this message"},
-	{{"ccd_info", optional_argument, NULL, 'I'},
-	 "[capability:value]%Get information about CCD state or set capability"
-	 " value if allowed"},
-	{{"board_id", optional_argument, NULL, 'i'},
-	 "[ID[:FLAGS]]%Get or set Info1 board ID fields. ID could be 32 bit "
-	 "hex or 4 character string."},
-	{{"boot_trace", optional_argument, NULL, 'J'},
-	 "[erase]%Retrieve boot trace from the chip, optionally erasing "
-	 "the trace buffer"},
-	{{"ccd_lock", no_argument, NULL, 'k'},
-	 "Lock CCD"},
-	{{"flog", optional_argument, NULL, 'L'},
-	 "[prev entry]%Retrieve contents of the flash log"
-	 " (newer than <prev entry> if specified)"},
-	{{"console", no_argument, NULL, 'l'},
-	 "Get console logs. This may need to be run multiple times to collect "
-	 "all available logs."},
-	{{"machine", no_argument, NULL, 'M'},
-	 "Output in a machine-friendly way. "
-	 "Effective with -b, -f, -i, -J, -r, and -O."},
-	{{"tpm_mode", optional_argument, NULL, 'm'},
-	 "[enable|disable]%Change or query tpm_mode"},
-	{{"serial", required_argument, NULL, 'n'},
-	 "Cr50 CCD serial number"},
-	{{"openbox_rma", required_argument, NULL, 'O'},
-	 "<desc_file>%Verify other device's RO integrity using information "
-	 "provided in <desc file>"},
-	{{"ccd_open", no_argument, NULL, 'o'},
-	 "Start CCD open sequence"},
-	{{"password", no_argument, NULL, 'P'},
-	 "Set or clear CCD password. Use 'clear:<cur password>' to clear it"},
-	{{"post_reset", no_argument, NULL, 'p'},
-	 "Request post reset after transfer"},
-	{{"force_ro", no_argument, NULL, 'q'},
-	 "Force inactive RO update"},
-	{{"sn_rma_inc", required_argument, NULL, 'R'},
-	 "RMA_INC%Increment SN RMA count by RMA_INC. RMA_INC should be 0-7."},
-	{{"rma_auth", optional_argument, NULL, 'r'},
-	 "[auth_code]%Request RMA challenge, process "
-	 "RMA authentication code"},
-	{{"sn_bits", required_argument, NULL, 'S'},
-	 "SN_BITS%Set Info1 SN bits fields. SN_BITS should be 96 bit hex."},
-	{{"systemdev", no_argument, NULL, 's'},
-	 "Use /dev/tpm0 (-d is ignored)"},
-	{{"tstamp", optional_argument, NULL, 'T'},
-	 "[<tstamp>]%Get or set flash log timestamp base"},
-	{{"trunks_send", no_argument, NULL, 't'},
-	 "Use `trunks_send --raw' (-d is ignored)"},
-	{{"ccd_unlock", no_argument, NULL, 'U'},
-	 "Start CCD unlock sequence"},
-	{{"upstart", no_argument, NULL, 'u'},
-	 "Upstart mode (strict header checks)"},
-	{{"verbose", no_argument, NULL, 'V'},
-	 "Enable debug messages"},
-	{{"version", no_argument, NULL, 'v'},
-	 "Report this utility version"},
-	{{"metrics", no_argument, NULL, 'W'},
-	 "Get Ti50 metrics"},
-	{{"wp", optional_argument, NULL, 'w'},
-	 "[enable] Get the current WP setting or enable WP"},
-	{{"clog", no_argument, NULL, 'x'},
-	 "Retrieve contents of the most recent crash log."},
-	{{"factory_config", optional_argument, NULL, 'y'},
-	 "[value]%Sets the factory config bits in INFO. value should be 64 "
-	 "bit hex."},
-	{{"reboot", optional_argument, NULL, 'z'},
-	 "Tell the GSC to reboot with an optional reset timeout parameter "
-	 "in milliseconds"},
+	{ { "get_apro_hash", no_argument, NULL, 'A' },
+	  "get the stored ap ro hash" },
+	{ { "any", no_argument, NULL, 'a' },
+	  "Try any interfaces to find Cr50"
+	  " (-d, -s, -t are all ignored)" },
+	{ { "apro_boot", optional_argument, NULL, 'B' },
+	  "[start] get the stored ap ro boot state or start ap ro verify" },
+	{ { "binvers", no_argument, NULL, 'b' },
+	  "Report versions of Cr50 image's "
+	  "RW and RO headers, do not update" },
+	{ { "apro_config_spi_mode", optional_argument, NULL, 'C' },
+	  "Get/set the ap ro verify spi mode either to `3byte` or `4byte`" },
+	{ { "corrupt", no_argument, NULL, 'c' }, "Corrupt the inactive rw" },
+	{ { "dauntless", no_argument, NULL, 'D' },
+	  "Communicate with Dauntless chip. This may be implied or overridden"
+	  " by --image flag values" },
+	{ { "device", required_argument, NULL, 'd' },
+	  "VID:PID%USB device (default 18d1:5014 or 18d1:504a based on"
+	  " image)" },
+	{ { "apro_config_write_protect", optional_argument, NULL, 'E' },
+	  "Get/set the ap ro verify write protect descriptors with hex "
+	  "bytes (ex: 0x01, 0x1, 01 or 1) in the following format: "
+	  "[sr1 mask1 [sr2 mask2] [sr3 mask3]]" },
+	{ { "endorsement_seed", optional_argument, NULL, 'e' },
+	  "[state]%get/set the endorsement key seed" },
+	{ { "factory", required_argument, NULL, 'F' },
+	  "[enable|disable]%Control factory mode" },
+	{ { "fwver", no_argument, NULL, 'f' },
+	  "Report running Cr50 firmware versions" },
+	{ { "get_time", no_argument, NULL, 'G' },
+	  "Get time since last cold reset" },
+	{ { "getbootmode", no_argument, NULL, 'g' },
+	  "Get the system boot mode" },
+	{ { "erase_ap_ro_hash", no_argument, NULL, 'H' },
+	  "Erase AP RO hash (possible only if Board ID is not set)" },
+	{ { "help", no_argument, NULL, 'h' }, "Show this message" },
+	{ { "ccd_info", optional_argument, NULL, 'I' },
+	  "[capability:value]%Get information about CCD state or set capability"
+	  " value if allowed" },
+	{ { "board_id", optional_argument, NULL, 'i' },
+	  "[ID[:FLAGS]]%Get or set Info1 board ID fields. ID could be 32 bit "
+	  "hex or 4 character string." },
+	{ { "boot_trace", optional_argument, NULL, 'J' },
+	  "[erase]%Retrieve boot trace from the chip, optionally erasing "
+	  "the trace buffer" },
+	{ { "ccd_lock", no_argument, NULL, 'k' }, "Lock CCD" },
+	{ { "flog", optional_argument, NULL, 'L' },
+	  "[prev entry]%Retrieve contents of the flash log"
+	  " (newer than <prev entry> if specified)" },
+	{ { "console", no_argument, NULL, 'l' },
+	  "Get console logs. This may need to be run multiple times to collect "
+	  "all available logs." },
+	{ { "machine", no_argument, NULL, 'M' },
+	  "Output in a machine-friendly way. "
+	  "Effective with -b, -f, -i, -J, -r, and -O." },
+	{ { "tpm_mode", optional_argument, NULL, 'm' },
+	  "[enable|disable]%Change or query tpm_mode" },
+	{ { "serial", required_argument, NULL, 'n' },
+	  "Cr50 CCD serial number" },
+	{ { "openbox_rma", required_argument, NULL, 'O' },
+	  "<desc_file>%Verify other device's RO integrity using information "
+	  "provided in <desc file>" },
+	{ { "ccd_open", no_argument, NULL, 'o' }, "Start CCD open sequence" },
+	{ { "password", no_argument, NULL, 'P' },
+	  "Set or clear CCD password. Use 'clear:<cur password>' to clear it" },
+	{ { "post_reset", no_argument, NULL, 'p' },
+	  "Request post reset after transfer" },
+	{ { "force_ro", no_argument, NULL, 'q' }, "Force inactive RO update" },
+	{ { "sn_rma_inc", required_argument, NULL, 'R' },
+	  "RMA_INC%Increment SN RMA count by RMA_INC. RMA_INC should be 0-7." },
+	{ { "rma_auth", optional_argument, NULL, 'r' },
+	  "[auth_code]%Request RMA challenge, process "
+	  "RMA authentication code" },
+	{ { "sn_bits", required_argument, NULL, 'S' },
+	  "SN_BITS%Set Info1 SN bits fields. SN_BITS should be 96 bit hex." },
+	{ { "systemdev", no_argument, NULL, 's' },
+	  "Use /dev/tpm0 (-d is ignored)" },
+	{ { "tstamp", optional_argument, NULL, 'T' },
+	  "[<tstamp>]%Get or set flash log timestamp base" },
+	{ { "trunks_send", no_argument, NULL, 't' },
+	  "Use `trunks_send --raw' (-d is ignored)" },
+	{ { "ccd_unlock", no_argument, NULL, 'U' },
+	  "Start CCD unlock sequence" },
+	{ { "upstart", no_argument, NULL, 'u' },
+	  "Upstart mode (strict header checks)" },
+	{ { "verbose", no_argument, NULL, 'V' }, "Enable debug messages" },
+	{ { "version", no_argument, NULL, 'v' },
+	  "Report this utility version" },
+	{ { "metrics", no_argument, NULL, 'W' }, "Get Ti50 metrics" },
+	{ { "wp", optional_argument, NULL, 'w' },
+	  "[enable] Get the current WP setting or enable WP" },
+	{ { "clog", no_argument, NULL, 'x' },
+	  "Retrieve contents of the most recent crash log." },
+	{ { "factory_config", optional_argument, NULL, 'y' },
+	  "[value]%Sets the factory config bits in INFO. value should be 64 "
+	  "bit hex." },
+	{ { "reboot", optional_argument, NULL, 'z' },
+	  "Tell the GSC to reboot with an optional reset timeout parameter "
+	  "in milliseconds" },
 };
 
 /* Helper to print debug messages when verbose flag is specified. */
@@ -619,14 +611,13 @@ static int ts_read(void *buf, size_t max_rx_size)
 	if (rv > 0)
 		rv -= 1; /* Discard the \n character added by trunks_send. */
 
-	debug("response of size %d, max rx size %zd: %s\n",
-	      rv, max_rx_size, response);
+	debug("response of size %d, max rx size %zd: %s\n", rv, max_rx_size,
+	      response);
 
 	pclose_rv = pclose(tpm_output);
 	if (pclose_rv < 0) {
-		fprintf(stderr,
-			"Error: pclose failed: error %d (%s)\n",
-			errno, strerror(errno));
+		fprintf(stderr, "Error: pclose failed: error %d (%s)\n", errno,
+			strerror(errno));
 		return -1;
 	}
 
@@ -635,11 +626,11 @@ static int ts_read(void *buf, size_t max_rx_size)
 	if (rv & 1) {
 		fprintf(stderr,
 			"Error: trunks_send returned odd number of bytes: %s\n",
-		response);
+			response);
 		return -1;
 	}
 
-	for (i = 0; i < rv/2; i++) {
+	for (i = 0; i < rv / 2; i++) {
 		uint8_t byte;
 		char c;
 		int nibble;
@@ -647,7 +638,8 @@ static int ts_read(void *buf, size_t max_rx_size)
 		c = response[2 * i];
 		nibble = from_hexascii(c);
 		if (nibble < 0) {
-			fprintf(stderr,	"Error: "
+			fprintf(stderr,
+				"Error: "
 				"trunks_send returned non hex character %c\n",
 				c);
 			return -1;
@@ -657,7 +649,8 @@ static int ts_read(void *buf, size_t max_rx_size)
 		c = response[2 * i + 1];
 		nibble = from_hexascii(c);
 		if (nibble < 0) {
-			fprintf(stderr,	"Error: "
+			fprintf(stderr,
+				"Error: "
 				"trunks_send returned non hex character %c\n",
 				c);
 			return -1;
@@ -667,7 +660,7 @@ static int ts_read(void *buf, size_t max_rx_size)
 		((uint8_t *)buf)[i] = byte;
 	}
 
-	return rv/2;
+	return rv / 2;
 }
 
 /*
@@ -676,13 +669,12 @@ static int ts_read(void *buf, size_t max_rx_size)
  */
 static int tpm_send_pkt(struct transfer_descriptor *td, unsigned int digest,
 			unsigned int addr, const void *data, int size,
-			void *response, size_t *response_size,
-			uint16_t subcmd)
+			void *response, size_t *response_size, uint16_t subcmd)
 {
 	/* Used by transfer to /dev/tpm0 */
 	static uint8_t outbuf[MAX_TX_BUF_SIZE];
-	static uint8_t raw_response[MAX_RX_BUF_SIZE +
-		sizeof(struct upgrade_pkt)];
+	static uint8_t
+		raw_response[MAX_RX_BUF_SIZE + sizeof(struct upgrade_pkt)];
 	struct upgrade_pkt *out = (struct upgrade_pkt *)outbuf;
 	int len, done;
 	int response_offset = offsetof(struct upgrade_pkt, command.data);
@@ -928,11 +920,11 @@ static int parse_vidpid(const char *input, uint16_t *vid_ptr, uint16_t *pid_ptr)
 		return 0;
 	*s++ = '\0';
 
-	*vid_ptr = (uint16_t) strtoul(copy, &e, 16);
+	*vid_ptr = (uint16_t)strtoul(copy, &e, 16);
 	if (!*optarg || (e && *e))
 		return 0;
 
-	*pid_ptr = (uint16_t) strtoul(s, &e, 16);
+	*pid_ptr = (uint16_t)strtoul(s, &e, 16);
 	if (!*optarg || (e && *e))
 		return 0;
 
@@ -974,9 +966,8 @@ static int transfer_block(struct usb_endpoint *uep, struct update_pdu *updu,
 	}
 
 	/* Now get the reply. */
-	r = libusb_bulk_transfer(uep->devh, uep->ep_num | 0x80,
-				 (void *) &reply, sizeof(reply),
-				 &actual, 1000);
+	r = libusb_bulk_transfer(uep->devh, uep->ep_num | 0x80, (void *)&reply,
+				 sizeof(reply), &actual, 1000);
 	if (r) {
 		if (r == -7) {
 			fprintf(stderr, "Timeout!\n");
@@ -1003,10 +994,8 @@ static int transfer_block(struct usb_endpoint *uep, struct update_pdu *updu,
  * section_addr - address of the section in the target memory space
  * data_len     - section size
  */
-static void transfer_section(struct transfer_descriptor *td,
-			     uint8_t *data_ptr,
-			     uint32_t section_addr,
-			     size_t data_len)
+static void transfer_section(struct transfer_descriptor *td, uint8_t *data_ptr,
+			     uint32_t section_addr, size_t data_len)
 {
 	/*
 	 * Actually, we can skip trailing chunks of 0xff, as the entire
@@ -1019,7 +1008,7 @@ static void transfer_section(struct transfer_descriptor *td,
 	 * Make sure total size is 4 bytes aligned, this is required for
 	 * successful flashing.
 	 */
-	data_len = (data_len + 3) &  ~3;
+	data_len = (data_len + 3) & ~3;
 
 	printf("sending 0x%zx bytes to %#x\n", data_len, section_addr);
 	while (data_len) {
@@ -1030,8 +1019,8 @@ static void transfer_section(struct transfer_descriptor *td,
 
 		/* prepare the header to prepend to the block. */
 		payload_size = MIN(data_len, SIGNED_TRANSFER_SIZE);
-		updu.block_size = htobe32(payload_size +
-					  sizeof(struct update_pdu));
+		updu.block_size =
+			htobe32(payload_size + sizeof(struct update_pdu));
 
 		updu.cmd.block_base = htobe32(section_addr);
 
@@ -1047,8 +1036,8 @@ static void transfer_section(struct transfer_descriptor *td,
 
 		if (td->ep_type == usb_xfer) {
 			for (max_retries = 10; max_retries; max_retries--)
-				if (!transfer_block(&td->uep, &updu,
-						    data_ptr, payload_size))
+				if (!transfer_block(&td->uep, &updu, data_ptr,
+						    payload_size))
 					break;
 
 			if (!max_retries) {
@@ -1070,11 +1059,8 @@ static void transfer_section(struct transfer_descriptor *td,
 			 * different amount of data is transferred (which
 			 * would indicate a synchronization problem).
 			 */
-			if (tpm_send_pkt(td,
-					 updu.cmd.block_digest,
-					 block_addr,
-					 data_ptr,
-					 payload_size, error_code,
+			if (tpm_send_pkt(td, updu.cmd.block_digest, block_addr,
+					 data_ptr, payload_size, error_code,
 					 &rxed_size,
 					 EXTENSION_FW_UPGRADE) < 0) {
 				fprintf(stderr,
@@ -1107,15 +1093,15 @@ static struct first_response_pdu targ;
  * states.
  */
 enum upgrade_status {
-	not_needed = 0,  /* Version below or equal that on the target. */
-	not_possible,    /*
-			  * RO is newer, but can't be transferred due to
-			  * target RW shortcomings.
-			  */
-	needed            /*
-			   * This section needs to be transferred to the
-			   * target.
-			   */
+	not_needed = 0, /* Version below or equal that on the target. */
+	not_possible, /*
+		       * RO is newer, but can't be transferred due to
+		       * target RW shortcomings.
+		       */
+	needed /*
+		* This section needs to be transferred to the
+		* target.
+		*/
 };
 
 /* Index to refer to a section within sections array */
@@ -1132,17 +1118,15 @@ enum section {
  */
 static struct {
 	const char *name;
-	uint32_t    offset;
-	uint32_t    size;
-	enum upgrade_status  ustatus;
+	uint32_t offset;
+	uint32_t size;
+	enum upgrade_status ustatus;
 	struct signed_header_version shv;
 	uint32_t keyid;
-} sections[] = {
-	[RO_A] = {"RO_A", CONFIG_RO_MEM_OFF, CONFIG_RO_SIZE},
-	[RW_A] = {"RW_A", CONFIG_RW_MEM_OFF, CONFIG_RW_SIZE},
-	[RO_B] = {"RO_B", CHIP_RO_B_MEM_OFF, CONFIG_RO_SIZE},
-	[RW_B] = {"RW_B", CONFIG_RW_B_MEM_OFF, CONFIG_RW_SIZE}
-};
+} sections[] = { [RO_A] = { "RO_A", CONFIG_RO_MEM_OFF, CONFIG_RO_SIZE },
+		 [RW_A] = { "RW_A", CONFIG_RW_MEM_OFF, CONFIG_RW_SIZE },
+		 [RO_B] = { "RO_B", CHIP_RO_B_MEM_OFF, CONFIG_RO_SIZE },
+		 [RW_B] = { "RW_B", CONFIG_RW_B_MEM_OFF, CONFIG_RW_SIZE } };
 
 /*
  * This is set during locate_headers and can be used to fork logic between H1
@@ -1323,8 +1307,7 @@ static bool fetch_header_versions(const void *image)
 				fprintf(stderr,
 					"Image at offset %#5x too short "
 					"(%d bytes)\n",
-					sections[i].offset,
-					h->image_size);
+					sections[i].offset, h->image_size);
 				return false;
 			}
 
@@ -1338,14 +1321,13 @@ static bool fetch_header_versions(const void *image)
 	return true;
 }
 
-
 /* Compare to signer headers and determine which one is newer. */
 static int a_newer_than_b(const struct signed_header_version *a,
 			  const struct signed_header_version *b)
 {
 	uint32_t fields[][3] = {
-		{a->epoch, a->major, a->minor},
-		{b->epoch, b->major, b->minor},
+		{ a->epoch, a->major, a->minor },
+		{ b->epoch, b->major, b->minor },
 	};
 	size_t i;
 
@@ -1370,7 +1352,7 @@ static int a_newer_than_b(const struct signed_header_version *a,
 			return a_value > b_value;
 	}
 
-	return 0;	/* All else being equal A is no newer than B. */
+	return 0; /* All else being equal A is no newer than B. */
 }
 
 /*
@@ -1477,8 +1459,7 @@ static void setup_connection(struct transfer_descriptor *td)
 			sizeof(start_resp), 1, &rxed_size);
 	} else {
 		rxed_size = sizeof(start_resp);
-		if (tpm_send_pkt(td, 0, 0, NULL, 0,
-				 &start_resp, &rxed_size,
+		if (tpm_send_pkt(td, 0, 0, NULL, 0, &start_resp, &rxed_size,
 				 EXTENSION_FW_UPGRADE) < 0) {
 			fprintf(stderr, "Failed to start transfer\n");
 			exit(update_error);
@@ -1526,8 +1507,8 @@ static void setup_connection(struct transfer_descriptor *td)
 		targ.keyid[i] = be32toh(start_resp.rpdu.keyid[i]);
 
 	printf("keyids: RO 0x%08x, RW 0x%08x\n", targ.keyid[0], targ.keyid[1]);
-	printf("offsets: backup RO at %#x, backup RW at %#x\n",
-	       td->ro_offset, td->rw_offset);
+	printf("offsets: backup RO at %#x, backup RW at %#x\n", td->ro_offset,
+	       td->rw_offset);
 
 	pick_sections(td);
 }
@@ -1539,21 +1520,21 @@ static void setup_connection(struct transfer_descriptor *td)
  * if it is - of what maximum size.
  */
 static int ext_cmd_over_usb(struct usb_endpoint *uep, uint16_t subcommand,
-			    const void *cmd_body, size_t body_size,
-			    void *resp, size_t *resp_size)
+			    const void *cmd_body, size_t body_size, void *resp,
+			    size_t *resp_size)
 {
 	struct update_frame_header *ufh;
 	uint16_t *frame_ptr;
 	size_t usb_msg_size;
 	EVP_MD_CTX *ctx;
 
-	usb_msg_size = sizeof(struct update_frame_header) +
-		sizeof(subcommand) + body_size;
+	usb_msg_size = sizeof(struct update_frame_header) + sizeof(subcommand) +
+		       body_size;
 
 	ufh = malloc(usb_msg_size);
 	if (!ufh) {
-		fprintf(stderr, "%s: failed to allocate %zd bytes\n",
-			__func__, usb_msg_size);
+		fprintf(stderr, "%s: failed to allocate %zd bytes\n", __func__,
+			usb_msg_size);
 		return -1;
 	}
 
@@ -1569,14 +1550,14 @@ static int ext_cmd_over_usb(struct usb_endpoint *uep, uint16_t subcommand,
 	ctx = EVP_MD_CTX_new();
 	sha_init(ctx);
 	sha_update(ctx, &ufh->cmd.block_base,
-		   usb_msg_size -
-		   offsetof(struct update_frame_header, cmd.block_base));
+		   usb_msg_size - offsetof(struct update_frame_header,
+					   cmd.block_base));
 	sha_final_into_block_digest(ctx, &ufh->cmd.block_digest,
 				    sizeof(ufh->cmd.block_digest));
 	EVP_MD_CTX_free(ctx);
 
-	do_xfer(uep, ufh, usb_msg_size, resp,
-		resp_size ? *resp_size : 0, 1, resp_size);
+	do_xfer(uep, ufh, usb_msg_size, resp, resp_size ? *resp_size : 0, 1,
+		resp_size);
 
 	free(ufh);
 	return 0;
@@ -1628,8 +1609,8 @@ static int supports_reordered_section_updates(struct signed_header_version *rw)
 }
 
 /* Returns number of successfully transmitted image sections. */
-static int transfer_image(struct transfer_descriptor *td,
-			       uint8_t *data, size_t data_len)
+static int transfer_image(struct transfer_descriptor *td, uint8_t *data,
+			  size_t data_len)
 {
 	size_t i;
 	int num_txed_sections = 0;
@@ -1675,10 +1656,8 @@ static int transfer_image(struct transfer_descriptor *td,
 }
 
 uint32_t send_vendor_command(struct transfer_descriptor *td,
-			     uint16_t subcommand,
-			     const void *command_body,
-			     size_t command_body_size,
-			     void *response,
+			     uint16_t subcommand, const void *command_body,
+			     size_t command_body_size, void *response,
 			     size_t *response_size)
 {
 	int32_t rv;
@@ -1705,9 +1684,9 @@ uint32_t send_vendor_command(struct transfer_descriptor *td,
 			exit(update_error);
 		}
 
-		ext_cmd_over_usb(&td->uep, subcommand,
-				 command_body, command_body_size,
-				 temp_response, &max_response_size);
+		ext_cmd_over_usb(&td->uep, subcommand, command_body,
+				 command_body_size, temp_response,
+				 &max_response_size);
 		if (!max_response_size) {
 			/*
 			 * we must be talking to an older Cr50 firmware, which
@@ -1721,14 +1700,12 @@ uint32_t send_vendor_command(struct transfer_descriptor *td,
 			rv = temp_response[0];
 			if (response_size) {
 				*response_size = max_response_size - 1;
-				memcpy(response,
-				       temp_response + 1, *response_size);
+				memcpy(response, temp_response + 1,
+				       *response_size);
 			}
 		}
 	} else {
-
-		rv = tpm_send_pkt(td, 0, 0,
-				  command_body, command_body_size,
+		rv = tpm_send_pkt(td, 0, 0, command_body, command_body_size,
 				  response, response_size, subcommand);
 
 		if (rv == -1) {
@@ -1751,8 +1728,8 @@ static void invalidate_inactive_rw(struct transfer_descriptor *td)
 	/* Corrupt the rw image that is not running. */
 	uint32_t rv;
 
-	rv = send_vendor_command(td, VENDOR_CC_INVALIDATE_INACTIVE_RW,
-				 NULL, 0, NULL, NULL);
+	rv = send_vendor_command(td, VENDOR_CC_INVALIDATE_INACTIVE_RW, NULL, 0,
+				 NULL, NULL);
 	if (!rv) {
 		printf("Inactive header invalidated\n");
 		return;
@@ -1806,9 +1783,9 @@ static enum exit_values process_set_capabililty(struct transfer_descriptor *td,
 		const char *state_name;
 		enum ccd_capability_state desired_state;
 	} states[] = {
-		{"default", CCD_CAP_STATE_DEFAULT},
-		{"always", CCD_CAP_STATE_ALWAYS},
-		{"if_opened", CCD_CAP_STATE_IF_OPENED},
+		{ "default", CCD_CAP_STATE_DEFAULT },
+		{ "always", CCD_CAP_STATE_ALWAYS },
+		{ "if_opened", CCD_CAP_STATE_IF_OPENED },
 	};
 
 	/*
@@ -1876,8 +1853,8 @@ static enum exit_values process_set_capabililty(struct transfer_descriptor *td,
 
 	i = 0;
 	len = 1;
-	send_vendor_command(td, VENDOR_CC_SET_CAPABILITY,
-			    &command, sizeof(command), &rc, &len);
+	send_vendor_command(td, VENDOR_CC_SET_CAPABILITY, &command,
+			    sizeof(command), &rc, &len);
 
 	if (len != 1) {
 		fprintf(stderr, "Unexpected return message size %zd\n", len);
@@ -1896,13 +1873,13 @@ static enum exit_values process_set_capabililty(struct transfer_descriptor *td,
 	case AUR_SUCCESS:
 		return noop; /* All is well, no need to do anything. */
 	case AUR_BOGUS_ARGS:
-		error_text =  "BogusArgs";
+		error_text = "BogusArgs";
 		break;
 	case AUR_INTERNAL_ERROR:
 		error_text = "InternalError";
 		break;
 	case AUR_NOT_ALLOWED:
-		error_text =  "NotAllowed";
+		error_text = "NotAllowed";
 		break;
 	default:
 		error_text = "Unknown";
@@ -1921,8 +1898,8 @@ static void process_erase_ap_ro_hash(struct transfer_descriptor *td)
 	char error_details[64];
 
 	response_size = sizeof(response);
-	rv = send_vendor_command(td, VENDOR_CC_SEED_AP_RO_CHECK,
-				 NULL, 0, &response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_SEED_AP_RO_CHECK, NULL, 0,
+				 &response, &response_size);
 	if (!rv) {
 		printf("AP RO hash erased\n");
 		exit(0);
@@ -1940,14 +1917,14 @@ static void process_erase_ap_ro_hash(struct transfer_descriptor *td)
 			break;
 		default:
 			snprintf(error_details, sizeof(error_details),
-				 "Unexpected error rc %d, response %d",
-				 rv, response);
+				 "Unexpected error rc %d, response %d", rv,
+				 response);
 			break;
 		}
 	} else {
 		snprintf(error_details, sizeof(error_details),
-			 "misconfigured response, rc=%d, size %zd",
-			 rv, response_size);
+			 "misconfigured response, rc=%d, size %zd", rv,
+			 response_size);
 	}
 
 	fprintf(stderr, "Error: %s\n", error_details);
@@ -2001,7 +1978,7 @@ static void generate_reset_request(struct transfer_descriptor *td)
 		subcommand = VENDOR_CC_TURN_UPDATE_ON;
 		command_body_size = sizeof(command_body);
 		command_body[0] = 0;
-		command_body[1] = 100;  /* Reset in 100 ms. */
+		command_body[1] = 100; /* Reset in 100 ms. */
 		reset_type = "requested";
 	}
 
@@ -2062,8 +2039,8 @@ static void sha_final_into_block_digest(EVP_MD_CTX *ctx, void *block_digest,
  * Any output format change in this function may require similar changes on the
  * programs that are using this gsctool.
  */
-__attribute__((__format__(__printf__, 2, 3)))
-static void print_machine_output(const char *key, const char *format, ...)
+__attribute__((__format__(__printf__, 2, 3))) static void print_machine_output(
+	const char *key, const char *format, ...)
 {
 	va_list args;
 
@@ -2128,8 +2105,8 @@ static int show_headers_versions(const void *image, bool show_machine_output)
 
 	for (i = 0; i < ARRAY_SIZE(sections); i++) {
 		const struct SignedHeader *h =
-			(const struct SignedHeader *)
-				((uintptr_t)image + sections[i].offset);
+			(const struct SignedHeader *)((uintptr_t)image +
+						      sections[i].offset);
 		const size_t slot_idx = i / kNumSectionsPerSlot;
 
 		uint32_t cur_bid;
@@ -2152,8 +2129,8 @@ static int show_headers_versions(const void *image, bool show_machine_output)
 		 * which are stored XORed with a padding value.
 		 */
 		bid[slot_idx].id = h->board_id_type ^ SIGNED_HEADER_PADDING;
-		bid[slot_idx].mask =
-			h->board_id_type_mask ^ SIGNED_HEADER_PADDING;
+		bid[slot_idx].mask = h->board_id_type_mask ^
+				     SIGNED_HEADER_PADDING;
 		bid[slot_idx].flags = h->board_id_flags ^ SIGNED_HEADER_PADDING;
 
 		dev_id0_[slot_idx] = h->dev_id0_;
@@ -2188,12 +2165,10 @@ static int show_headers_versions(const void *image, bool show_machine_output)
 		print_machine_output("IMAGE_BID_MASK", "%08x", bid[0].mask);
 		print_machine_output("IMAGE_BID_FLAGS", "%08x", bid[0].flags);
 	} else {
-		printf("RO_A:%s RW_A:%s[%s:%08x:%08x] ",
-		       ro_fw_ver[0], rw_fw_ver[0],
-		       bid_string[0], bid[0].mask, bid[0].flags);
-		printf("RO_B:%s RW_B:%s[%s:%08x:%08x]\n",
-		       ro_fw_ver[1], rw_fw_ver[1],
-		       bid_string[1], bid[1].mask, bid[1].flags);
+		printf("RO_A:%s RW_A:%s[%s:%08x:%08x] ", ro_fw_ver[0],
+		       rw_fw_ver[0], bid_string[0], bid[0].mask, bid[0].flags);
+		printf("RO_B:%s RW_B:%s[%s:%08x:%08x]\n", ro_fw_ver[1],
+		       rw_fw_ver[1], bid_string[1], bid[1].mask, bid[1].flags);
 
 		if (print_devid) {
 			printf("DEVID: 0x%08x 0x%08x", dev_id0_[0],
@@ -2219,8 +2194,7 @@ static int show_headers_versions(const void *image, bool show_machine_output)
  * generation of a particular board ID.
  */
 #define DEFAULT_BOARD_ID_FLAG 0xff00
-static int parse_bid(const char *opt,
-		     struct board_id *bid,
+static int parse_bid(const char *opt, struct board_id *bid,
 		     enum board_id_action *bid_action)
 {
 	char *e;
@@ -2235,7 +2209,7 @@ static int parse_bid(const char *opt,
 	/* Set it here to make bailing out easier later. */
 	bid->flags = DEFAULT_BOARD_ID_FLAG;
 
-	*bid_action = bid_set;  /* Ignored by caller on errors. */
+	*bid_action = bid_set; /* Ignored by caller on errors. */
 
 	/*
 	 * Pointer to the optional second component of the command line
@@ -2281,9 +2255,10 @@ static int parse_bid(const char *opt,
  * ill-formed, returns 0. Otherwise, |byte| contains the byte value and the
  * return value is non-zero.
  */
-static int read_hex_byte(const char* s, uint8_t* byte) {
+static int read_hex_byte(const char *s, uint8_t *byte)
+{
 	uint8_t b = 0;
-	for (const char* end = s + 2; s < end; ++s) {
+	for (const char *end = s + 2; s < end; ++s) {
 		if (*s >= '0' && *s <= '9')
 			b = b * 16 + *s - '0';
 		else if (*s >= 'A' && *s <= 'F')
@@ -2305,10 +2280,12 @@ static int parse_sn_bits(const char *opt, uint8_t *sn_bits)
 		opt += 2;
 		len -= 2;
 	}
-	if (len != SN_BITS_SIZE * 2) return 0;
+	if (len != SN_BITS_SIZE * 2)
+		return 0;
 
-	for (int i = 0; i < SN_BITS_SIZE; ++i, opt +=2)
-		if (!read_hex_byte(opt, sn_bits++)) return 0;
+	for (int i = 0; i < SN_BITS_SIZE; ++i, opt += 2)
+		if (!read_hex_byte(opt, sn_bits++))
+			return 0;
 
 	return 1;
 }
@@ -2381,12 +2358,11 @@ static uint32_t common_process_password(struct transfer_descriptor *td,
 	 * Ok, we have a password, let's move it in the buffer to overwrite
 	 * the newline and free a byte to prepend the subcommand code.
 	 */
-	memmove(password + 1, password, len  - 1);
+	memmove(password + 1, password, len - 1);
 	password[0] = subcmd;
 	response_size = sizeof(response);
-	rv = send_vendor_command(td, VENDOR_CC_CCD,
-				 password, len,
-				 &response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_CCD, password, len, &response,
+				 &response_size);
 	free(password);
 	free(password_copy);
 
@@ -2405,8 +2381,7 @@ static void process_password(struct transfer_descriptor *td)
 	exit(update_error);
 }
 
-void poll_for_pp(struct transfer_descriptor *td,
-		 uint16_t command,
+void poll_for_pp(struct transfer_descriptor *td, uint16_t command,
 		 uint8_t poll_type)
 {
 	uint8_t response;
@@ -2418,14 +2393,15 @@ void poll_for_pp(struct transfer_descriptor *td,
 
 	while (1) {
 		response_size = sizeof(response);
-		rv = send_vendor_command(td, command,
-					 &poll_type, sizeof(poll_type),
-					 &response, &response_size);
+		rv = send_vendor_command(td, command, &poll_type,
+					 sizeof(poll_type), &response,
+					 &response_size);
 
-		if (((rv != VENDOR_RC_SUCCESS) && (rv != VENDOR_RC_IN_PROGRESS))
-		    || (response_size != 1)) {
-			fprintf(stderr, "Error: rv %d, response %d\n",
-				rv, response_size ? response : 0);
+		if (((rv != VENDOR_RC_SUCCESS) &&
+		     (rv != VENDOR_RC_IN_PROGRESS)) ||
+		    (response_size != 1)) {
+			fprintf(stderr, "Error: rv %d, response %d\n", rv,
+				response_size ? response : 0);
 			exit(update_error);
 		}
 
@@ -2439,7 +2415,6 @@ void poll_for_pp(struct transfer_descriptor *td,
 				"Error: Physical presence check timeout!\n");
 			exit(update_error);
 		}
-
 
 		if (response == CCD_PP_AWAITING_PRESS) {
 			printf("Press PP button now!\n");
@@ -2455,7 +2430,6 @@ void poll_for_pp(struct transfer_descriptor *td,
 
 		usleep(500 * 1000); /* Poll every half a second. */
 	}
-
 }
 
 /* Determine the longest capability name found in the passed in table. */
@@ -2613,8 +2587,8 @@ static void print_ccd_info(void *response, size_t response_size,
 		size_t cap_count;
 		const struct ccd_capability_info *info_table;
 	} version_to_ccd[] = {
-		{CR50_CCD_CAP_COUNT, cr50_cap_info},
-		{TI50_CCD_CAP_COUNT, ti50_cap_info},
+		{ CR50_CCD_CAP_COUNT, cr50_cap_info },
+		{ TI50_CCD_CAP_COUNT, ti50_cap_info },
 	};
 
 	/* Run time determined properties of the CCD info table. */
@@ -2660,8 +2634,8 @@ static void print_ccd_info(void *response, size_t response_size,
 
 	gsc_cap_count = version_to_ccd[ccd_info_version].cap_count;
 	gsc_capability_info = version_to_ccd[ccd_info_version].info_table;
-	name_column_width = longest_cap_name_len(gsc_capability_info,
-						 gsc_cap_count) + 1;
+	name_column_width =
+		longest_cap_name_len(gsc_capability_info, gsc_cap_count) + 1;
 	for (i = 0; i < gsc_cap_count; i++) {
 		int is_enabled;
 		int index;
@@ -2672,10 +2646,10 @@ static void print_ccd_info(void *response, size_t response_size,
 		index = i / (32 / CCD_CAP_BITS);
 		shift = (i % (32 / CCD_CAP_BITS)) * CCD_CAP_BITS;
 
-		cap_current = (ccd_info.ccd_caps_current[index] >> shift)
-							 & CCD_CAP_BITMASK;
-		cap_default = (ccd_info.ccd_caps_defaults[index] >> shift)
-							 & CCD_CAP_BITMASK;
+		cap_current = (ccd_info.ccd_caps_current[index] >> shift) &
+			      CCD_CAP_BITMASK;
+		cap_default = (ccd_info.ccd_caps_defaults[index] >> shift) &
+			      CCD_CAP_BITMASK;
 
 		if (ccd_info.ccd_force_disabled) {
 			is_enabled = 0;
@@ -2749,7 +2723,7 @@ static void process_ccd_state(struct transfer_descriptor *td, int ccd_unlock,
 			      bool show_machine_output)
 {
 	uint8_t payload;
-	 /* Max possible response size is when ccd_info is requested. */
+	/* Max possible response size is when ccd_info is requested. */
 	uint8_t response[sizeof(struct ccd_info_response_packet)];
 	size_t response_size;
 	int rv;
@@ -2764,8 +2738,7 @@ static void process_ccd_state(struct transfer_descriptor *td, int ccd_unlock,
 		payload = CCDV_GET_INFO;
 
 	response_size = sizeof(response);
-	rv = send_vendor_command(td, VENDOR_CC_CCD,
-				 &payload, sizeof(payload),
+	rv = send_vendor_command(td, VENDOR_CC_CCD, &payload, sizeof(payload),
 				 &response, &response_size);
 
 	/*
@@ -2783,8 +2756,8 @@ static void process_ccd_state(struct transfer_descriptor *td, int ccd_unlock,
 	}
 
 	if (rv != VENDOR_RC_IN_PROGRESS) {
-		fprintf(stderr, "Error: rv %d, response %d\n",
-			rv, response_size ? response[0] : 0);
+		fprintf(stderr, "Error: rv %d, response %d\n", rv,
+			response_size ? response[0] : 0);
 		exit(update_error);
 	}
 
@@ -2928,9 +2901,9 @@ static enum exit_values process_wp(struct transfer_descriptor *td,
 
 	printf("WP: %08x\n", response);
 	printf("Flash WP: %s%s%s\n",
-		response & WPV_FWMP_FORCE_WP_EN ? "fwmp " : "",
-		response & WPV_FORCE ? "forced " : "",
-		response & WPV_ENABLE ? "enabled" : "disabled");
+	       response & WPV_FWMP_FORCE_WP_EN ? "fwmp " : "",
+	       response & WPV_FORCE ? "forced " : "",
+	       response & WPV_ENABLE ? "enabled" : "disabled");
 	printf(" at boot: %s\n",
 	       response & WPV_FWMP_FORCE_WP_EN ? "fwmp enabled" :
 	       !(response & WPV_ATBOOT_SET)    ? "follow_batt_pres" :
@@ -2943,7 +2916,7 @@ static int process_get_apro_hash(struct transfer_descriptor *td)
 {
 	size_t response_size;
 	uint8_t response[SHA256_DIGEST_SIZE];
-	const char * const desc = "getting apro hash";
+	const char *const desc = "getting apro hash";
 	int rv = 0;
 	int i;
 
@@ -3000,7 +2973,7 @@ static int process_get_apro_boot_status(struct transfer_descriptor *td)
 {
 	size_t response_size;
 	uint8_t response;
-	const char * const desc = "getting apro status";
+	const char *const desc = "getting apro status";
 	int rv = 0;
 
 	response_size = sizeof(response);
@@ -3098,7 +3071,7 @@ static int process_get_apro_boot_status(struct transfer_descriptor *td)
 }
 
 static int process_arv_config_spi_addr_mode(struct transfer_descriptor *td,
-					int arv_config_spi_addr_mode)
+					    int arv_config_spi_addr_mode)
 {
 	enum ap_ro_config_spi_mode_e {
 		ap_ro_spi_config_3byte = 0,
@@ -3122,13 +3095,13 @@ static int process_arv_config_spi_addr_mode(struct transfer_descriptor *td,
 	int rv = 0;
 
 	switch (arv_config_spi_addr_mode) {
-	case arv_config_spi_addr_mode_choice_get:
+	case arv_config_spi_addr_mode_get:
 		rv = send_vendor_command(td, VENDOR_CC_GET_AP_RO_VERIFY_SETTING,
-			&msg, sizeof(msg), &msg, &response_size);
+					 &msg, sizeof(msg), &msg,
+					 &response_size);
 		if (rv != VENDOR_RC_SUCCESS) {
 			fprintf(stderr,
-				"Error %d getting ap ro spi addr mode\n",
-				rv);
+				"Error %d getting ap ro spi addr mode\n", rv);
 			return update_error;
 		}
 
@@ -3170,13 +3143,14 @@ static int process_arv_config_spi_addr_mode(struct transfer_descriptor *td,
 		}
 
 		break;
-	case arv_config_spi_addr_mode_choice_set_3byte:
+	case arv_config_spi_addr_mode_set_3byte:
 		msg.mode = ap_ro_spi_config_3byte;
 		/* Fallthrough */
-	case arv_config_spi_addr_mode_choice_set_4byte:
+	case arv_config_spi_addr_mode_set_4byte:
 		/* The default is 4byte addressing */
 		rv = send_vendor_command(td, VENDOR_CC_SET_AP_RO_VERIFY_SETTING,
-			&msg, sizeof(msg), &msg, &response_size);
+					 &msg, sizeof(msg), &msg,
+					 &response_size);
 		if (rv != VENDOR_RC_SUCCESS) {
 			fprintf(stderr,
 				"Error %d setting ap ro spi addr mode\n", rv);
@@ -3248,8 +3222,7 @@ static int parse_wpsrs(const char *opt, struct arv_config_wpds *wpds)
 				wpd->expected_value = b;
 			} else {
 				wpd->mask = b;
-				wpd->state =
-					arv_config_setting_state_present;
+				wpd->state = arv_config_setting_state_present;
 			}
 			rv++;
 		} else {
@@ -3264,29 +3237,23 @@ static int parse_wpsrs(const char *opt, struct arv_config_wpds *wpds)
 
 static void print_wpd(size_t i, struct arv_config_wpd *wpd)
 {
-	if (wpd->state ==
-			arv_config_setting_state_not_present) {
+	if (wpd->state == arv_config_setting_state_not_present) {
 		printf("not provisioned");
 		return;
-	} else if (wpd->state ==
-			arv_config_setting_state_corrupted) {
+	} else if (wpd->state == arv_config_setting_state_corrupted) {
 		printf("corrupted");
 		return;
-	} else if (wpd->state ==
-			arv_config_setting_state_invalid) {
+	} else if (wpd->state == arv_config_setting_state_invalid) {
 		printf("invalid");
 		return;
 	}
 
-	printf("%zu: %02x & %02x",
-		i,
-		wpd->expected_value,
-		wpd->mask);
+	printf("%zu: %02x & %02x", i, wpd->expected_value, wpd->mask);
 }
 
 static int process_arv_config_wpds(struct transfer_descriptor *td,
-					enum arv_config_wpsr_choice_e choice,
-					struct arv_config_wpds *wpds)
+				   enum arv_config_wpsr_choice_e choice,
+				   struct arv_config_wpds *wpds)
 {
 	struct __attribute__((__packed__)) arv_config_wpds_message {
 		uint8_t version;
@@ -3304,7 +3271,8 @@ static int process_arv_config_wpds(struct transfer_descriptor *td,
 
 	if (choice == arv_config_wpsr_choice_get) {
 		rv = send_vendor_command(td, VENDOR_CC_GET_AP_RO_VERIFY_SETTING,
-			&msg, sizeof(msg), &msg, &response_size);
+					 &msg, sizeof(msg), &msg,
+					 &response_size);
 		if (rv != VENDOR_RC_SUCCESS) {
 			fprintf(stderr,
 				"Error %d getting ap ro write protect descriptors\n",
@@ -3319,17 +3287,17 @@ static int process_arv_config_wpds(struct transfer_descriptor *td,
 		}
 
 		if (msg.wpds.data[0].state ==
-			arv_config_setting_state_present) {
+		    arv_config_setting_state_present) {
 			printf("expected values: ");
 		}
 		print_wpd(1, &msg.wpds.data[0]);
 		if (msg.wpds.data[1].state !=
-			arv_config_setting_state_not_present) {
+		    arv_config_setting_state_not_present) {
 			printf(", ");
 			print_wpd(2, &msg.wpds.data[1]);
 		}
 		if (msg.wpds.data[2].state !=
-			arv_config_setting_state_not_present) {
+		    arv_config_setting_state_not_present) {
 			printf(", ");
 			print_wpd(3, &msg.wpds.data[2]);
 		}
@@ -3339,7 +3307,8 @@ static int process_arv_config_wpds(struct transfer_descriptor *td,
 		msg.wpds = *wpds;
 
 		rv = send_vendor_command(td, VENDOR_CC_SET_AP_RO_VERIFY_SETTING,
-			&msg, sizeof(msg), &msg, &response_size);
+					 &msg, sizeof(msg), &msg,
+					 &response_size);
 		if (rv != VENDOR_RC_SUCCESS) {
 			fprintf(stderr,
 				"Error %d setting ap ro write protect descriptors\n",
@@ -3355,7 +3324,7 @@ static int process_get_boot_mode(struct transfer_descriptor *td)
 {
 	size_t response_size;
 	uint8_t response;
-	const char * const desc = "Getting boot mode";
+	const char *const desc = "Getting boot mode";
 	int rv = 0;
 
 	response_size = sizeof(response);
@@ -3390,18 +3359,15 @@ static int process_get_boot_mode(struct transfer_descriptor *td)
 }
 
 void process_bid(struct transfer_descriptor *td,
-		 enum board_id_action bid_action,
-		 struct board_id *bid,
+		 enum board_id_action bid_action, struct board_id *bid,
 		 bool show_machine_output)
 {
 	size_t response_size;
 
 	if (bid_action == bid_get) {
-
 		response_size = sizeof(*bid);
-		send_vendor_command(td, VENDOR_CC_GET_BOARD_ID,
-				    bid, sizeof(*bid),
-				    bid, &response_size);
+		send_vendor_command(td, VENDOR_CC_GET_BOARD_ID, bid,
+				    sizeof(*bid), bid, &response_size);
 
 		if (response_size != sizeof(*bid)) {
 			fprintf(stderr,
@@ -3413,33 +3379,30 @@ void process_bid(struct transfer_descriptor *td,
 		}
 
 		if (show_machine_output) {
-			print_machine_output(
-				"BID_TYPE", "%08x", be32toh(bid->type));
-			print_machine_output(
-				"BID_TYPE_INV", "%08x", be32toh(bid->type_inv));
-			print_machine_output(
-				"BID_FLAGS", "%08x", be32toh(bid->flags));
+			print_machine_output("BID_TYPE", "%08x",
+					     be32toh(bid->type));
+			print_machine_output("BID_TYPE_INV", "%08x",
+					     be32toh(bid->type_inv));
+			print_machine_output("BID_FLAGS", "%08x",
+					     be32toh(bid->flags));
 
 			for (int i = 0; i < 4; i++) {
 				if (!isupper(((const char *)bid)[i])) {
-					print_machine_output(
-						"BID_RLZ", "%s", "????");
+					print_machine_output("BID_RLZ", "%s",
+							     "????");
 					return;
 				}
 			}
 
-			print_machine_output(
-				"BID_RLZ", "%c%c%c%c",
-				((const char *)bid)[0],
-				((const char *)bid)[1],
-				((const char *)bid)[2],
-				((const char *)bid)[3]);
+			print_machine_output("BID_RLZ", "%c%c%c%c",
+					     ((const char *)bid)[0],
+					     ((const char *)bid)[1],
+					     ((const char *)bid)[2],
+					     ((const char *)bid)[3]);
 		} else {
 			printf("Board ID space: %08x:%08x:%08x\n",
-			       be32toh(bid->type),
-			       be32toh(bid->type_inv),
+			       be32toh(bid->type), be32toh(bid->type_inv),
 			       be32toh(bid->flags));
-
 		}
 
 		return;
@@ -3454,9 +3417,9 @@ void process_bid(struct transfer_descriptor *td,
 		command_body[1] = htobe32(bid->flags);
 
 		response_size = sizeof(command_body);
-		send_vendor_command(td, VENDOR_CC_SET_BOARD_ID,
-				    command_body, sizeof(command_body),
-				    command_body, &response_size);
+		send_vendor_command(td, VENDOR_CC_SET_BOARD_ID, command_body,
+				    sizeof(command_body), command_body,
+				    &response_size);
 
 		/*
 		 * Speculative assignment: the response is expected to be one
@@ -3471,7 +3434,8 @@ void process_bid(struct transfer_descriptor *td,
 			fprintf(stderr, "Error %d while setting board id\n",
 				response);
 		} else {
-			fprintf(stderr, "Unexpected response size %zd"
+			fprintf(stderr,
+				"Unexpected response size %zd"
 				" while setting board id\n",
 				response_size);
 		}
@@ -3479,16 +3443,14 @@ void process_bid(struct transfer_descriptor *td,
 	}
 }
 
-static void process_sn_bits(struct transfer_descriptor *td,
-			    uint8_t *sn_bits)
+static void process_sn_bits(struct transfer_descriptor *td, uint8_t *sn_bits)
 {
 	int rv;
 	uint8_t response_code;
 	size_t response_size = sizeof(response_code);
 
-	rv = send_vendor_command(td, VENDOR_CC_SN_SET_HASH,
-				 sn_bits, SN_BITS_SIZE,
-				 &response_code, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_SN_SET_HASH, sn_bits,
+				 SN_BITS_SIZE, &response_code, &response_size);
 
 	if (rv) {
 		fprintf(stderr, "Error %d while sending vendor command\n", rv);
@@ -3508,15 +3470,13 @@ static void process_sn_bits(struct transfer_descriptor *td,
 	}
 }
 
-static void process_sn_inc_rma(struct transfer_descriptor *td,
-			       uint8_t arg)
+static void process_sn_inc_rma(struct transfer_descriptor *td, uint8_t arg)
 {
 	int rv;
 	uint8_t response_code;
 	size_t response_size = sizeof(response_code);
 
-	rv = send_vendor_command(td, VENDOR_CC_SN_INC_RMA,
-				 &arg, sizeof(arg),
+	rv = send_vendor_command(td, VENDOR_CC_SN_INC_RMA, &arg, sizeof(arg),
 				 &response_code, &response_size);
 	if (rv) {
 		fprintf(stderr, "Error %d while sending vendor command\n", rv);
@@ -3524,9 +3484,8 @@ static void process_sn_inc_rma(struct transfer_descriptor *td,
 	}
 
 	if (response_size != 1) {
-		fprintf(stderr,
-			"Unexpected response size while "
-			"incrementing sn rma count\n");
+		fprintf(stderr, "Unexpected response size while "
+				"incrementing sn rma count\n");
 		exit(update_error);
 	}
 
@@ -3574,7 +3533,7 @@ static int process_endorsement_seed(struct transfer_descriptor *td,
 		c = endorsement_seed_str[2 * i];
 		nibble = from_hexascii(c);
 		if (nibble < 0) {
-			fprintf(stderr,	"Error: Non hex character in seed %c\n",
+			fprintf(stderr, "Error: Non hex character in seed %c\n",
 				c);
 			return update_error;
 		}
@@ -3583,7 +3542,7 @@ static int process_endorsement_seed(struct transfer_descriptor *td,
 		c = endorsement_seed_str[2 * i + 1];
 		nibble = from_hexascii(c);
 		if (nibble < 0) {
-			fprintf(stderr,	"Error: Non hex character in seed %c\n",
+			fprintf(stderr, "Error: Non hex character in seed %c\n",
 				c);
 			return update_error;
 		}
@@ -3592,8 +3551,8 @@ static int process_endorsement_seed(struct transfer_descriptor *td,
 
 	printf("Setting seed: %s\n", endorsement_seed_str);
 	rv = send_vendor_command(td, VENDOR_CC_ENDORSEMENT_SEED,
-				 endorsement_seed, seed_size,
-				 response_seed, &response_size);
+				 endorsement_seed, seed_size, response_seed,
+				 &response_size);
 	if (rv == VENDOR_RC_NOT_ALLOWED) {
 		fprintf(stderr, "Seed already set\n");
 		return update_error;
@@ -3666,13 +3625,11 @@ static void process_rma(struct transfer_descriptor *td, const char *authcode,
 	auth_size = strlen(authcode);
 	response_size = sizeof(rma_response);
 
-	send_vendor_command(td, VENDOR_CC_RMA_CHALLENGE_RESPONSE,
-			    authcode, auth_size,
-			    rma_response, &response_size);
+	send_vendor_command(td, VENDOR_CC_RMA_CHALLENGE_RESPONSE, authcode,
+			    auth_size, rma_response, &response_size);
 
 	if (response_size == 1) {
-		fprintf(stderr, "\nrma unlock failed, code %d ",
-			*rma_response);
+		fprintf(stderr, "\nrma unlock failed, code %d ", *rma_response);
 		switch (*rma_response) {
 		case VENDOR_RC_BOGUS_ARGS:
 			fprintf(stderr, "(wrong authcode size)\n");
@@ -3718,10 +3675,12 @@ static void process_factory_mode(struct transfer_descriptor *td,
 
 	printf("%sabling factory mode\n", cmd_str);
 	rv = send_vendor_command(td, subcommand, NULL, 0, &rma_response,
-		&response_size);
+				 &response_size);
 	if (rv) {
-		fprintf(stderr, "Failed %sabling factory mode\nvc error "
-			"%d\n", cmd_str, rv);
+		fprintf(stderr,
+			"Failed %sabling factory mode\nvc error "
+			"%d\n",
+			cmd_str, rv);
 		if (response_size == 1)
 			fprintf(stderr, "ec error %d\n", rma_response);
 		exit(update_error);
@@ -3734,16 +3693,15 @@ static void report_version(void)
 	/* Get version from the generated file, ignore the underscore prefix. */
 	const char *v = strchr(VERSION, '_');
 
-	printf("Version: %s, built on %s by %s\n", v ? v + 1 : "?",
-	       DATE, BUILDER);
+	printf("Version: %s, built on %s by %s\n", v ? v + 1 : "?", DATE,
+	       BUILDER);
 	exit(0);
 }
 
 /*
  * Either change or query TPM mode value.
  */
-static int process_tpm_mode(struct transfer_descriptor *td,
-				const char *arg)
+static int process_tpm_mode(struct transfer_descriptor *td, const char *arg)
 {
 	int rv;
 	size_t command_size;
@@ -3756,35 +3714,39 @@ static int process_tpm_mode(struct transfer_descriptor *td,
 		command_size = 0;
 	} else if (!strcasecmp(arg, "disable")) {
 		command_size = sizeof(command_body);
-		command_body = (uint8_t) TPM_MODE_DISABLED;
+		command_body = (uint8_t)TPM_MODE_DISABLED;
 	} else if (!strcasecmp(arg, "enable")) {
 		command_size = sizeof(command_body);
-		command_body = (uint8_t) TPM_MODE_ENABLED;
+		command_body = (uint8_t)TPM_MODE_ENABLED;
 	} else {
 		fprintf(stderr, "Invalid tpm mode arg: %s.\n", arg);
 		return update_error;
 	}
 
-	rv = send_vendor_command(td, VENDOR_CC_TPM_MODE,
-				&command_body, command_size,
-				&response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_TPM_MODE, &command_body,
+				 command_size, &response, &response_size);
 	if (rv) {
 		fprintf(stderr, "Error %d in setting TPM mode.\n", rv);
 		return update_error;
 	}
 	if (response_size != sizeof(response)) {
-		fprintf(stderr, "Error in the size of response,"
-						" %zu.\n", response_size);
+		fprintf(stderr,
+			"Error in the size of response,"
+			" %zu.\n",
+			response_size);
 		return update_error;
 	}
 	if (response >= TPM_MODE_MAX) {
-		fprintf(stderr, "Error in the value of response,"
-						" %d.\n", response);
+		fprintf(stderr,
+			"Error in the value of response,"
+			" %d.\n",
+			response);
 		return update_error;
 	}
 
-	printf("TPM Mode: %s (%d)\n", (response == TPM_MODE_DISABLED) ?
-				"disabled" : "enabled", response);
+	printf("TPM Mode: %s (%d)\n",
+	       (response == TPM_MODE_DISABLED) ? "disabled" : "enabled",
+	       response);
 
 	return rv;
 }
@@ -3816,18 +3778,17 @@ static int pop_flog_dt(struct transfer_descriptor *td,
 		return 0;
 	}
 	parsed_entry->event_type = entry.evt.event_type;
-	parsed_entry->payload_size = MIN(entry.evt.size -
-						sizeof(entry.evt.event_type),
-					 MAX_PAYLOAD_SIZE);
+	parsed_entry->payload_size =
+		MIN(entry.evt.size - sizeof(entry.evt.event_type),
+		    MAX_PAYLOAD_SIZE);
 	memcpy(parsed_entry->payload, entry.evt.payload,
 	       parsed_entry->payload_size);
 	parsed_entry->raw_timestamp = entry.evt.time;
 	parsed_entry->timestamp =
-	    (parsed_entry->raw_timestamp & ~(1ULL << 63)) / 1000;
+		(parsed_entry->raw_timestamp & ~(1ULL << 63)) / 1000;
 	parsed_entry->timestamp_reliable =
-	    (parsed_entry->raw_timestamp >> 63) == 0;
+		(parsed_entry->raw_timestamp >> 63) == 0;
 	return rv;
-
 }
 
 static int pop_flog(struct transfer_descriptor *td,
@@ -3835,10 +3796,9 @@ static int pop_flog(struct transfer_descriptor *td,
 {
 	union entry_u entry;
 	size_t resp_size = sizeof(entry);
-	uint32_t ts = (uint32_t) parsed_entry->raw_timestamp;
-	int rv = send_vendor_command(td, VENDOR_CC_POP_LOG_ENTRY,
-				     &ts, sizeof(ts),
-				     &entry, &resp_size);
+	uint32_t ts = (uint32_t)parsed_entry->raw_timestamp;
+	int rv = send_vendor_command(td, VENDOR_CC_POP_LOG_ENTRY, &ts,
+				     sizeof(ts), &entry, &resp_size);
 	if (rv)
 		return rv;
 	if (resp_size == 0) {
@@ -3846,15 +3806,14 @@ static int pop_flog(struct transfer_descriptor *td,
 		return 0;
 	}
 	parsed_entry->event_type = entry.r.type;
-	parsed_entry->payload_size = MIN(FLASH_LOG_PAYLOAD_SIZE(entry.r.size),
-					 MAX_PAYLOAD_SIZE);
+	parsed_entry->payload_size =
+		MIN(FLASH_LOG_PAYLOAD_SIZE(entry.r.size), MAX_PAYLOAD_SIZE);
 	memcpy(parsed_entry->payload, entry.r.payload,
 	       parsed_entry->payload_size);
 	parsed_entry->raw_timestamp = entry.r.timestamp;
 	parsed_entry->timestamp = entry.r.timestamp;
 	parsed_entry->timestamp_reliable = true;
 	return rv;
-
 }
 
 /*
@@ -3873,7 +3832,7 @@ static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
 	bool time_zone_reported = false;
 
 	while (retries--) {
-		struct parsed_flog_entry entry = {0};
+		struct parsed_flog_entry entry = { 0 };
 		entry.raw_timestamp = prev_stamp;
 		size_t i;
 		struct tm loc_time;
@@ -3898,8 +3857,9 @@ static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
 			return 0;
 
 		prev_stamp = entry.raw_timestamp;
-		if  (show_machine_output) {
-			printf("%10"PRIu64":%02x", prev_stamp, entry.event_type);
+		if (show_machine_output) {
+			printf("%10" PRIu64 ":%02x", prev_stamp,
+			       entry.event_type);
 		} else {
 			localtime_r(&entry.timestamp, &loc_time);
 
@@ -3975,20 +3935,18 @@ static int process_tstamp(struct transfer_descriptor *td,
 	return 0;
 }
 
-static int process_reboot_gsc(struct transfer_descriptor *td,
-			size_t timeout_ms)
+static int process_reboot_gsc(struct transfer_descriptor *td, size_t timeout_ms)
 {
 	/* Reboot timeout in milliseconds.
 	 * Maximum value is 1000ms on Ti50.
 	 */
-	uint16_t msg = htobe16((uint16_t) timeout_ms);
+	uint16_t msg = htobe16((uint16_t)timeout_ms);
 	int rv = 0;
 
 	rv = send_vendor_command(td, VENDOR_CC_IMMEDIATE_RESET, &msg,
-				sizeof(msg), NULL, 0);
+				 sizeof(msg), NULL, 0);
 	if (rv != VENDOR_RC_SUCCESS) {
-		fprintf(stderr,
-			"Error %d sending immediate reset command\n",
+		fprintf(stderr, "Error %d sending immediate reset command\n",
 			rv);
 		return update_error;
 	}
@@ -4092,7 +4050,6 @@ static int getopt_all(int argc, char *argv[])
 
 	i = getopt_long(argc, argv, short_opts, long_opts, &longindex);
 	if (i != -1) {
-
 		if (longindex < 0) {
 			/*
 			 * longindex is not set, this must have been the short
@@ -4120,7 +4077,7 @@ static int getopt_all(int argc, char *argv[])
 static int get_crashlog(struct transfer_descriptor *td)
 {
 	uint32_t rv;
-	uint8_t response[2048] = {0};
+	uint8_t response[2048] = { 0 };
 	size_t response_size = sizeof(response);
 
 	rv = send_vendor_command(td, VENDOR_CC_GET_CRASHLOG, NULL, 0, response,
@@ -4142,11 +4099,11 @@ static int get_crashlog(struct transfer_descriptor *td)
 static int get_console_logs(struct transfer_descriptor *td)
 {
 	uint32_t rv;
-	uint8_t response[2048] = {0};
+	uint8_t response[2048] = { 0 };
 	size_t response_size = sizeof(response);
 
-	rv = send_vendor_command(td, VENDOR_CC_GET_CONSOLE_LOGS, NULL,
-				 0, response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_GET_CONSOLE_LOGS, NULL, 0,
+				 response, &response_size);
 	if (rv != VENDOR_RC_SUCCESS) {
 		printf("Get console logs failed. (%X)\n", rv);
 		return 1;
@@ -4163,8 +4120,8 @@ static int process_get_factory_config(struct transfer_descriptor *td)
 	uint64_t response = 0;
 	size_t response_size = sizeof(response);
 
-	rv = send_vendor_command(td, VENDOR_CC_GET_FACTORY_CONFIG, NULL,
-				 0, (uint8_t *) &response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_GET_FACTORY_CONFIG, NULL, 0,
+				 (uint8_t *)&response, &response_size);
 	if (rv != VENDOR_RC_SUCCESS) {
 		printf("Get factory config failed. (%X)\n", rv);
 		return 1;
@@ -4179,7 +4136,7 @@ static int process_get_factory_config(struct transfer_descriptor *td)
 	bool is_x_branded = (out >> 4) & 1;
 	uint8_t compliance_version = out & 0xF;
 
-	printf("raw value: %016"PRIX64"\n", out);
+	printf("raw value: %016" PRIX64 "\n", out);
 	printf("chassis_x_branded: %s\n", is_x_branded ? "true" : "false");
 	printf("hw_x_compliance_version: %02X\n", compliance_version);
 	return 0;
@@ -4207,8 +4164,8 @@ static int process_get_time(struct transfer_descriptor *td)
 	uint64_t response = 0;
 	size_t response_size = sizeof(response);
 
-	rv = send_vendor_command(td, VENDOR_CC_GET_TIME, NULL,
-				 0, (uint8_t *) &response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_GET_TIME, NULL, 0,
+				 (uint8_t *)&response, &response_size);
 	if (rv != VENDOR_RC_SUCCESS) {
 		printf("Get time failed. (%X)\n", rv);
 		return 1;
@@ -4221,20 +4178,20 @@ static int process_get_time(struct transfer_descriptor *td)
 
 	uint64_t out = be64toh(response);
 
-	printf("%"PRIu64"\n", out);
+	printf("%" PRIu64 "\n", out);
 	return 0;
 }
 
 static int process_get_metrics(struct transfer_descriptor *td,
-		bool show_machine_output)
+			       bool show_machine_output)
 {
 	uint32_t rv;
 	/* Allocate extra space in case future versions add more data. */
-	struct ti50_stats response[4] = {0};
+	struct ti50_stats response[4] = { 0 };
 	size_t response_size = sizeof(response);
 
-	rv = send_vendor_command(td, VENDOR_CC_GET_TI50_STATS, NULL,
-				 0, (uint8_t *) &response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_GET_TI50_STATS, NULL, 0,
+				 (uint8_t *)&response, &response_size);
 	if (rv != VENDOR_RC_SUCCESS) {
 		printf("Get stats failed. (%X)\n", rv);
 		return 1;
@@ -4246,7 +4203,7 @@ static int process_get_metrics(struct transfer_descriptor *td,
 	}
 
 	if (show_machine_output) {
-		uint8_t *raw_response = (uint8_t *) response;
+		uint8_t *raw_response = (uint8_t *)response;
 
 		for (size_t i = 0; i < response_size; i++)
 			printf("%02X", raw_response[i]);
@@ -4260,28 +4217,25 @@ static int process_get_metrics(struct transfer_descriptor *td,
 			be32toh(stats.expanded_aprov_status);
 		stats.misc_status = be32toh(stats.misc_status);
 		uint32_t bits_used = stats.misc_status >>
-			METRICSV_BITS_USED_SHIFT;
+				     METRICSV_BITS_USED_SHIFT;
 
-		printf("fs_init_time:          %d\n",
-				stats.fs_init_time);
-		printf("fs_usage:              %d\n",
-				stats.fs_usage);
-		printf("aprov_time:            %d\n",
-				stats.aprov_time);
+		printf("fs_init_time:          %d\n", stats.fs_init_time);
+		printf("fs_usage:              %d\n", stats.fs_usage);
+		printf("aprov_time:            %d\n", stats.aprov_time);
 		printf("expanded_aprov_status: %X\n",
-				stats.expanded_aprov_status);
+		       stats.expanded_aprov_status);
 
 		if (bits_used >= 4) {
 			printf("rdd_keepalive:         %d\n",
-				stats.misc_status &
-				METRICSV_RDD_KEEP_ALIVE_MASK);
+			       stats.misc_status &
+				       METRICSV_RDD_KEEP_ALIVE_MASK);
 			printf("rdd_keepalive_at_boot: %d\n",
-				(stats.misc_status &
-				METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK)
-				>> METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT);
+			       (stats.misc_status &
+				METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK) >>
+				       METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT);
 			printf("ccd_mode:              %d\n",
-				(stats.misc_status & METRICSV_CCD_MODE_MASK)
-				>> METRICSV_CCD_MODE_SHIFT);
+			       (stats.misc_status & METRICSV_CCD_MODE_MASK) >>
+				       METRICSV_CCD_MODE_SHIFT);
 		}
 	}
 	return 0;
@@ -4292,28 +4246,21 @@ static int process_get_metrics(struct transfer_descriptor *td,
  * counterparts in defined in ti50:common/{hil,capsules}/src/boot_tracer.rs.
  */
 #define MAX_BOOT_TRACE_SIZE 54
-#define TIMESPAN_EVENT 0
-#define TIME_SHIFT 11
-#define MAX_TIME_MS  (1 << TIME_SHIFT)
-static const char * const boot_tracer_stages[] = {
+#define TIMESPAN_EVENT	    0
+#define TIME_SHIFT	    11
+#define MAX_TIME_MS	    (1 << TIME_SHIFT)
+static const char *const boot_tracer_stages[] = {
 	"Timespan", /* This one will not be displayed separately. */
-	"ProjectStart",
-	"EcRstAsserted",
-	"EcRstDeasserted",
-	"TpmRstAsserted",
-	"TmRstDeasserted",
-	"FirstApComms",
-	"PcrExtension",
-	"TpmAppReady"
+	"ProjectStart",	   "EcRstAsserted", "EcRstDeasserted", "TpmRstAsserted",
+	"TmRstDeasserted", "FirstApComms",  "PcrExtension",    "TpmAppReady"
 };
 
-static int process_get_boot_trace(struct transfer_descriptor *td,
-				  bool erase,
+static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 				  bool show_machine_output)
 {
 	/* zero means no erase, 1 means erase. */
 	uint32_t payload = htobe32(erase);
-	uint16_t boot_trace[MAX_BOOT_TRACE_SIZE/sizeof(uint16_t)];
+	uint16_t boot_trace[MAX_BOOT_TRACE_SIZE / sizeof(uint16_t)];
 	size_t response_size = sizeof(boot_trace);
 	uint32_t rv;
 	uint64_t timespan = 0;
@@ -4333,7 +4280,7 @@ static int process_get_boot_trace(struct transfer_descriptor *td,
 	if (!show_machine_output)
 		printf("    got %zd bytes back:\n", response_size);
 	if (response_size > 0) {
-		for (i = 0; i < response_size/sizeof(uint16_t); i++) {
+		for (i = 0; i < response_size / sizeof(uint16_t); i++) {
 			uint16_t entry = boot_trace[i];
 			uint16_t event_id = entry >> TIME_SHIFT;
 			uint16_t delta_time = entry & ((1 << TIME_SHIFT) - 1);
@@ -4400,8 +4347,8 @@ int main(int argc, char *argv[])
 	bool show_machine_output = false;
 	int tstamp = 0;
 	const char *tstamp_arg = NULL;
-	enum arv_config_spi_addr_mode_choice_e arv_config_spi_addr_mode =
-		arv_config_spi_addr_mode_choice_none;
+	enum arv_config_spi_addr_mode_e arv_config_spi_addr_mode =
+		arv_config_spi_addr_mode_none;
 	enum arv_config_wpsr_choice_e arv_config_wpsr_choice =
 		arv_config_wpsr_choice_none;
 	struct arv_config_wpds arv_config_wpds = { 0 };
@@ -4438,20 +4385,13 @@ int main(int argc, char *argv[])
 	 * with addresses of the flags. Terminated by a zeroed entry.
 	 */
 	const struct options_map omap[] = {
-		{ 'b', &binary_vers },
-		{ 'c', &corrupt_inactive_rw },
-		{ 'D', &is_dauntless },
-		{ 'f', &show_fw_ver },
-		{ 'g', &get_boot_mode},
-		{ 'H', &erase_ap_ro_hash},
-		{ 'k', &ccd_lock },
-		{ 'o', &ccd_open },
-		{ 'P', &password },
-		{ 'p', &td.post_reset },
-		{ 'U', &ccd_unlock },
-		{ 'u', &td.upstart_mode },
-		{ 'V', &verbose_mode },
-		{},
+		{ 'b', &binary_vers },	 { 'c', &corrupt_inactive_rw },
+		{ 'D', &is_dauntless },	 { 'f', &show_fw_ver },
+		{ 'g', &get_boot_mode }, { 'H', &erase_ap_ro_hash },
+		{ 'k', &ccd_lock },	 { 'o', &ccd_open },
+		{ 'P', &password },	 { 'p', &td.post_reset },
+		{ 'U', &ccd_unlock },	 { 'u', &td.upstart_mode },
+		{ 'V', &verbose_mode },	 {},
 	};
 
 	/*
@@ -4474,7 +4414,7 @@ int main(int argc, char *argv[])
 
 	bid_action = bid_none;
 	errorcnt = 0;
-	opterr = 0;				/* quiet, you */
+	opterr = 0; /* quiet, you */
 
 	while ((i = getopt_all(argc, argv)) != -1) {
 		if (check_boolean(omap, i))
@@ -4502,14 +4442,14 @@ int main(int argc, char *argv[])
 		case 'C':
 			if (optarg && !strncmp(optarg, "3byte", strlen(optarg)))
 				arv_config_spi_addr_mode =
-				arv_config_spi_addr_mode_choice_set_3byte;
-			else if (optarg && !strncmp(optarg, "4byte",
-					strlen(optarg)))
+					arv_config_spi_addr_mode_set_3byte;
+			else if (optarg &&
+				 !strncmp(optarg, "4byte", strlen(optarg)))
 				arv_config_spi_addr_mode =
-				arv_config_spi_addr_mode_choice_set_4byte;
+					arv_config_spi_addr_mode_set_4byte;
 			else
 				arv_config_spi_addr_mode =
-				arv_config_spi_addr_mode_choice_get;
+					arv_config_spi_addr_mode_get;
 			break;
 		case 'd':
 			if (!parse_vidpid(optarg, &vid, &pid)) {
@@ -4538,7 +4478,7 @@ int main(int argc, char *argv[])
 				rv = parse_wpsrs(optarg, &arv_config_wpds);
 				if (rv == 2 || rv == 4 || rv == 6) {
 					arv_config_wpsr_choice =
-					arv_config_wpsr_choice_set;
+						arv_config_wpsr_choice_set;
 				} else {
 					fprintf(stderr,
 						"Invalid write protect descriptors "
@@ -4587,8 +4527,10 @@ int main(int argc, char *argv[])
 			if (!optarg)
 				break;
 			if (strncasecmp(optarg, "erase", strlen(optarg))) {
-				fprintf(stderr, "Invalid boot trace argument: "
-					"\"%s\"\n", optarg);
+				fprintf(stderr,
+					"Invalid boot trace argument: "
+					"\"%s\"\n",
+					optarg);
 				errorcnt++;
 			}
 			erase_boot_trace = true;
@@ -4662,7 +4604,7 @@ int main(int argc, char *argv[])
 			tstamp_arg = optarg;
 			break;
 		case 'v':
-			report_version();  /* This will call exit(). */
+			report_version(); /* This will call exit(). */
 			break;
 		case 'W':
 			get_metrics = true;
@@ -4710,7 +4652,7 @@ int main(int argc, char *argv[])
 			if (optarg)
 				reboot_gsc_timeout = strtoul(optarg, NULL, 0);
 			break;
-		case 0:				/* auto-handled option */
+		case 0: /* auto-handled option */
 			break;
 		case '?':
 			if (optopt)
@@ -4727,8 +4669,8 @@ int main(int argc, char *argv[])
 			errorcnt++;
 			break;
 		default:
-			fprintf(stderr, "Internal error at %s:%d\n",
-				__FILE__, __LINE__);
+			fprintf(stderr, "Internal error at %s:%d\n", __FILE__,
+				__LINE__);
 			exit(update_error);
 		}
 	}
@@ -4744,40 +4686,16 @@ int main(int argc, char *argv[])
 	image_magic = is_dauntless ? MAGIC_DAUNTLESS : MAGIC_HAVEN;
 
 	if ((bid_action == bid_none) &&
-		(arv_config_spi_addr_mode ==
-			arv_config_spi_addr_mode_choice_none) &&
-		(arv_config_wpsr_choice ==
-			arv_config_wpsr_choice_none) &&
-	    !ccd_info &&
-	    !ccd_lock &&
-	    !ccd_open &&
-	    !ccd_unlock &&
-	    !corrupt_inactive_rw &&
-	    !get_apro_hash &&
-	    !get_apro_boot_status &&
-	    !get_boot_mode &&
-	    !get_boot_trace &&
-	    !get_clog &&
-	    !get_console &&
-	    !get_flog &&
-	    !get_endorsement_seed &&
-	    !get_metrics &&
-	    !get_time &&
-	    !factory_config &&
-	    !factory_mode &&
-	    !erase_ap_ro_hash &&
-	    !password &&
-	    !reboot_gsc &&
-	    !rma &&
-	    !set_capability &&
-	    !show_fw_ver &&
-	    !sn_bits &&
-	    !sn_inc_rma &&
-	    !start_apro_verify &&
-	    !openbox_desc_file &&
-	    !tstamp &&
-	    !tpm_mode &&
-	    (wp == WP_NONE)) {
+	    (arv_config_spi_addr_mode == arv_config_spi_addr_mode_none) &&
+	    (arv_config_wpsr_choice == arv_config_wpsr_choice_none) &&
+	    !ccd_info && !ccd_lock && !ccd_open && !ccd_unlock &&
+	    !corrupt_inactive_rw && !get_apro_hash && !get_apro_boot_status &&
+	    !get_boot_mode && !get_boot_trace && !get_clog && !get_console &&
+	    !get_flog && !get_endorsement_seed && !get_metrics && !get_time &&
+	    !factory_config && !factory_mode && !erase_ap_ro_hash &&
+	    !password && !reboot_gsc && !rma && !set_capability &&
+	    !show_fw_ver && !sn_bits && !sn_inc_rma && !start_apro_verify &&
+	    !openbox_desc_file && !tstamp && !tpm_mode && (wp == WP_NONE)) {
 		if (optind >= argc) {
 			fprintf(stderr,
 				"\nERROR: Missing required <binary image>\n\n");
@@ -4785,8 +4703,8 @@ int main(int argc, char *argv[])
 		}
 
 		data = get_file_or_die(argv[optind], &data_len);
-		printf("read %zd(%#zx) bytes from %s\n",
-		       data_len, data_len, argv[optind]);
+		printf("read %zd(%#zx) bytes from %s\n", data_len, data_len,
+		       argv[optind]);
 
 		/* Validate image size and locate headers within image */
 		if (!locate_headers(data, data_len))
@@ -4815,9 +4733,8 @@ int main(int argc, char *argv[])
 	if (((bid_action != bid_none) + !!rma + !!password + !!ccd_open +
 	     !!ccd_unlock + !!ccd_lock + !!ccd_info + !!get_flog +
 	     !!get_boot_mode + !!openbox_desc_file + !!factory_mode +
-	     (wp != WP_NONE) + !!get_endorsement_seed +
-	     !!erase_ap_ro_hash + !!set_capability + !!get_clog +
-	     !!get_console) > 1) {
+	     (wp != WP_NONE) + !!get_endorsement_seed + !!erase_ap_ro_hash +
+	     !!set_capability + !!get_clog + !!get_console) > 1) {
 		fprintf(stderr,
 			"ERROR: options "
 			"-e, -F, -g, -H, -I, -i, -k, -L, -l, -O, -o, -P, -r,"
@@ -4845,8 +4762,8 @@ int main(int argc, char *argv[])
 		return verify_ro(&td, openbox_desc_file, show_machine_output);
 
 	if (ccd_unlock || ccd_open || ccd_lock || ccd_info)
-		process_ccd_state(&td, ccd_unlock, ccd_open,
-				  ccd_lock, ccd_info, show_machine_output);
+		process_ccd_state(&td, ccd_unlock, ccd_open, ccd_lock, ccd_info,
+				  show_machine_output);
 
 	if (set_capability)
 		exit(process_set_capabililty(&td, capability_parameter));
@@ -4899,20 +4816,19 @@ int main(int argc, char *argv[])
 		exit(process_get_boot_mode(&td));
 
 	if (get_flog)
-		process_get_flog(&td, prev_log_entry,
-				 show_machine_output, is_dauntless);
+		process_get_flog(&td, prev_log_entry, show_machine_output,
+				 is_dauntless);
 
 	if (erase_ap_ro_hash)
 		process_erase_ap_ro_hash(&td);
 
 	if (arv_config_spi_addr_mode)
-		exit(process_arv_config_spi_addr_mode(&td,
-			arv_config_spi_addr_mode));
+		exit(process_arv_config_spi_addr_mode(
+			&td, arv_config_spi_addr_mode));
 
 	if (arv_config_wpsr_choice)
-		exit(process_arv_config_wpds(&td,
-			arv_config_wpsr_choice,
-			&arv_config_wpds));
+		exit(process_arv_config_wpds(&td, arv_config_wpsr_choice,
+					     &arv_config_wpds));
 
 	if (reboot_gsc)
 		exit(process_reboot_gsc(&td, reboot_gsc_timeout));
@@ -4936,20 +4852,18 @@ int main(int argc, char *argv[])
 	}
 
 	if (get_boot_trace)
-		exit(process_get_boot_trace(&td,
-					    erase_boot_trace,
+		exit(process_get_boot_trace(&td, erase_boot_trace,
 					    show_machine_output));
 
 	if (get_metrics)
 		exit(process_get_metrics(&td, show_machine_output));
 
 	if (data || show_fw_ver) {
-
 		setup_connection(&td);
 
 		if (data) {
-			transferred_sections = transfer_image(&td,
-							      data, data_len);
+			transferred_sections =
+				transfer_image(&td, data, data_len);
 			free(data);
 		}
 

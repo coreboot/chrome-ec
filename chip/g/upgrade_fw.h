@@ -8,7 +8,7 @@
 
 #include <stddef.h>
 
-#include "common.h"  /* For __packed. */
+#include "common.h" /* For __packed. */
 
 /*
  * This file contains structures used to facilitate cr50 firmware updates,
@@ -37,10 +37,10 @@
 
 /* This is the format of the update frame header. */
 struct upgrade_command {
-	uint32_t  block_digest;  /* first 4 bytes of sha1 of the rest of the
-				  * frame.
-				  */
-	uint32_t  block_base;    /* Offset of this frame into the flash SPI. */
+	uint32_t block_digest; /* first 4 bytes of sha1 of the rest of the
+				* frame.
+				*/
+	uint32_t block_base; /* Offset of this frame into the flash SPI. */
 	/* The actual payload goes here. */
 } __packed;
 
@@ -55,9 +55,9 @@ struct upgrade_command {
  * cmd field below), and puts its reply into the same buffer the PDU was in.
  */
 struct update_frame_header {
-	uint32_t block_size;    /* Total size of the block, including this
-				 * field.
-				 */
+	uint32_t block_size; /* Total size of the block, including this
+			      * field.
+			      */
 	struct upgrade_command cmd;
 };
 
@@ -101,8 +101,8 @@ struct first_response_pdu {
 	uint32_t protocol_version;
 
 	/* The below fields are present in versions 3 and up. */
-	uint32_t  backup_ro_offset;
-	uint32_t  backup_rw_offset;
+	uint32_t backup_ro_offset;
+	uint32_t backup_rw_offset;
 
 	/* The below fields are present in versions 4 and up. */
 	/* Versions of the currently active RO and RW sections. */
@@ -113,18 +113,16 @@ struct first_response_pdu {
 	uint32_t keyid[2];
 };
 
-#define UPGRADE_DONE          0xB007AB1E
+#define UPGRADE_DONE 0xB007AB1E
 
-void fw_upgrade_command_handler(void *body,
-				size_t cmd_size,
+void fw_upgrade_command_handler(void *body, size_t cmd_size,
 				size_t *response_size);
 
 /* Used to tell fw upgrade the update ran successfully and is finished */
 void fw_upgrade_complete(void);
 
 /* Verify integrity of the PDU received over USB. */
-int usb_pdu_valid(struct upgrade_command *cmd_body,
-		  size_t cmd_size);
+int usb_pdu_valid(struct upgrade_command *cmd_body, size_t cmd_size);
 
 /* Various upgrade command return values. */
 enum return_value {
@@ -151,4 +149,4 @@ enum return_value {
  */
 #define SIGNED_TRANSFER_SIZE 1024
 
-#endif  /* ! __EC_CHIP_G_UPGRADE_FW_H */
+#endif /* ! __EC_CHIP_G_UPGRADE_FW_H */

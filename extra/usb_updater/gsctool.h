@@ -49,9 +49,9 @@ struct transfer_descriptor {
 
 	/* Type of channel used to communicate with Cr50. */
 	enum transfer_type {
-		usb_xfer = 0,  /* usb interface. */
-		dev_xfer = 1,  /* /dev/tpm0 */
-		ts_xfer = 2    /* trunks_send */
+		usb_xfer = 0, /* usb interface. */
+		dev_xfer = 1, /* /dev/tpm0 */
+		ts_xfer = 2 /* trunks_send */
 	} ep_type;
 	union {
 		struct usb_endpoint uep;
@@ -65,24 +65,19 @@ struct transfer_descriptor {
  * image or not).
  */
 enum exit_values {
-	noop = 0,	  /* All up to date, no update needed. */
-	all_updated = 1,  /* Update completed, reboot required. */
-	rw_updated  = 2,  /* RO was not updated, reboot required. */
-	update_error = 3  /* Something went wrong. */
+	noop = 0, /* All up to date, no update needed. */
+	all_updated = 1, /* Update completed, reboot required. */
+	rw_updated = 2, /* RO was not updated, reboot required. */
+	update_error = 3 /* Something went wrong. */
 };
-
 
 struct board_id {
-	uint32_t type;	    /* Board type */
-	uint32_t type_inv;  /* Board type (inverted) */
-	uint32_t flags;	    /* Flags */
+	uint32_t type; /* Board type */
+	uint32_t type_inv; /* Board type (inverted) */
+	uint32_t flags; /* Flags */
 };
 
-enum board_id_action {
-	bid_none,
-	bid_get,
-	bid_set
-};
+enum board_id_action { bid_none, bid_get, bid_set };
 
 /*
  * This function allows to retrieve or set (if not initialized) board ID of
@@ -90,8 +85,7 @@ enum board_id_action {
  * prints out board ID in a machine-friendly format.
  */
 void process_bid(struct transfer_descriptor *td,
-		 enum board_id_action bid_action,
-		 struct board_id *bid,
+		 enum board_id_action bid_action, struct board_id *bid,
 		 bool show_machine_output);
 
 /*
@@ -102,8 +96,7 @@ void process_bid(struct transfer_descriptor *td,
  * Cr50 behavior also differs. The 'command' and 'poll_type' parameters are
  * used by Cr50 to tell what the host is polling for.
  */
-void poll_for_pp(struct transfer_descriptor *td,
-		 uint16_t command,
+void poll_for_pp(struct transfer_descriptor *td, uint16_t command,
 		 uint8_t poll_type);
 
 /*
@@ -112,11 +105,8 @@ void poll_for_pp(struct transfer_descriptor *td,
  * success.
  */
 uint32_t send_vendor_command(struct transfer_descriptor *td,
-			     uint16_t subcommand,
-			     const void *command_body,
-			     size_t command_body_size,
-			     void *response,
+			     uint16_t subcommand, const void *command_body,
+			     size_t command_body_size, void *response,
 			     size_t *response_size);
-
 
 #endif // __EXTRA_USB_UPDATER_GSCTOOL_H

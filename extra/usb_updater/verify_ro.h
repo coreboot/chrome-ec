@@ -17,8 +17,7 @@
  * outputted in a machine-friendly format. Returns 0 on success or a negative
  * value if there is an error.
  */
-int verify_ro(struct transfer_descriptor *td,
-	      const char *desc_file_name,
+int verify_ro(struct transfer_descriptor *td, const char *desc_file_name,
 	      bool show_machine_output);
 
 #endif // __EXTRA_USB_UPDATER_VERIFY_RO_H

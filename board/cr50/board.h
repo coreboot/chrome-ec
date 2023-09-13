@@ -70,28 +70,27 @@
 #define CONFIG_FLASH_NVMEM_OFFSET_A (CFG_TOP_A_OFF)
 #define CONFIG_FLASH_NVMEM_OFFSET_B (CFG_TOP_B_OFF)
 /* Address of start of Nvmem area */
-#define CONFIG_FLASH_NVMEM_BASE_A                                              \
+#define CONFIG_FLASH_NVMEM_BASE_A \
 	(CONFIG_PROGRAM_MEMORY_BASE + CONFIG_FLASH_NVMEM_OFFSET_A)
-#define CONFIG_FLASH_NVMEM_BASE_B                                              \
+#define CONFIG_FLASH_NVMEM_BASE_B \
 	(CONFIG_PROGRAM_MEMORY_BASE + CONFIG_FLASH_NVMEM_OFFSET_B)
-#define CONFIG_FLASH_NEW_NVMEM_BASE_A                                          \
+#define CONFIG_FLASH_NEW_NVMEM_BASE_A \
 	(CONFIG_FLASH_NVMEM_BASE_A + CONFIG_FLASH_BANK_SIZE)
-#define CONFIG_FLASH_NEW_NVMEM_BASE_B                                          \
+#define CONFIG_FLASH_NEW_NVMEM_BASE_B \
 	(CONFIG_FLASH_NVMEM_BASE_B + CONFIG_FLASH_BANK_SIZE)
 
 /* Size partition in NvMem */
-#define NVMEM_PARTITION_SIZE (CFG_TOP_SIZE)
+#define NVMEM_PARTITION_SIZE	 (CFG_TOP_SIZE)
 #define NEW_NVMEM_PARTITION_SIZE (NVMEM_PARTITION_SIZE - CONFIG_FLASH_BANK_SIZE)
-#define NEW_NVMEM_TOTAL_PAGES                                                  \
+#define NEW_NVMEM_TOTAL_PAGES \
 	(2 * NEW_NVMEM_PARTITION_SIZE / CONFIG_FLASH_BANK_SIZE)
 /* Size in bytes of NvMem area */
 #define CONFIG_FLASH_LOG
 #define CONFIG_FLASH_NVMEM_SIZE (NVMEM_PARTITION_SIZE * NVMEM_NUM_PARTITIONS)
 /* Enable <key, value> variable support. */
 #define CONFIG_FLASH_NVMEM_VARS
-#define NVMEM_CR50_SIZE 272
+#define NVMEM_CR50_SIZE			  272
 #define CONFIG_FLASH_NVMEM_VARS_USER_SIZE NVMEM_CR50_SIZE
-
 
 /* Go to sleep when nothing else is happening */
 #define CONFIG_LOW_POWER_IDLE
@@ -114,7 +113,7 @@
 #define CONFIG_USB
 #define CONFIG_USB_CONSOLE_STREAM
 #undef CONFIG_USB_CONSOLE_TX_BUF_SIZE
-#define CONFIG_USB_CONSOLE_TX_BUF_SIZE		4096
+#define CONFIG_USB_CONSOLE_TX_BUF_SIZE 4096
 #define CONFIG_USB_I2C
 #define CONFIG_USB_INHIBIT_INIT
 #define CONFIG_USB_SPI_V2
@@ -169,7 +168,7 @@
 #define CONFIG_RBOX_WAKEUP
 
 /* We don't need to send events to the AP */
-#undef  CONFIG_HOSTCMD_EVENTS
+#undef CONFIG_HOSTCMD_EVENTS
 
 /* Make most commands restricted */
 #define CONFIG_CONSOLE_COMMAND_FLAGS
@@ -500,40 +499,36 @@ unsigned int board_cfg_reg_read(void);
 
 /* USB interface indexes (use define rather than enum to expand them) */
 #define USB_IFACE_CONSOLE 0
-#define USB_IFACE_AP      1
-#define USB_IFACE_EC      2
+#define USB_IFACE_AP	  1
+#define USB_IFACE_EC	  2
 #define USB_IFACE_UPGRADE 3
-#define USB_IFACE_SPI     4
-#define USB_IFACE_I2C     5
-#define USB_IFACE_COUNT   6
+#define USB_IFACE_SPI	  4
+#define USB_IFACE_I2C	  5
+#define USB_IFACE_COUNT	  6
 
 /* USB endpoint indexes (use define rather than enum to expand them) */
-#define USB_EP_CONTROL   0
-#define USB_EP_CONSOLE   1
-#define USB_EP_AP        2
-#define USB_EP_EC        3
-#define USB_EP_UPGRADE   4
-#define USB_EP_SPI       5
-#define USB_EP_I2C       6
-#define USB_EP_COUNT     7
+#define USB_EP_CONTROL 0
+#define USB_EP_CONSOLE 1
+#define USB_EP_AP      2
+#define USB_EP_EC      3
+#define USB_EP_UPGRADE 4
+#define USB_EP_SPI     5
+#define USB_EP_I2C     6
+#define USB_EP_COUNT   7
 
 /* UART indexes (use define rather than enum to expand them) */
-#define UART_CR50	0
-#define UART_AP		1
-#define UART_EC		2
-#define UART_NULL	0xff
+#define UART_CR50 0
+#define UART_AP	  1
+#define UART_EC	  2
+#define UART_NULL 0xff
 
 #define UARTN UART_CR50
 
-#define CC_DEFAULT     (CC_ALL & ~CC_MASK(CC_TPM))
+#define CC_DEFAULT (CC_ALL & ~CC_MASK(CC_TPM))
 
 /* Nv Memory users */
 #ifndef __ASSEMBLER__
-enum nvmem_users {
-	NVMEM_TPM = 0,
-	NVMEM_CR50,
-	NVMEM_NUM_USERS
-};
+enum nvmem_users { NVMEM_TPM = 0, NVMEM_CR50, NVMEM_NUM_USERS };
 #endif
 
 #define CONFIG_FLASH_NVMEM_VARS_USER_NUM NVMEM_CR50
@@ -589,7 +584,7 @@ enum nvmem_users {
 #undef CONFIG_USB_I2C_MAX_WRITE_COUNT
 #undef CONFIG_USB_I2C_MAX_READ_COUNT
 #define CONFIG_USB_I2C_MAX_WRITE_COUNT 508
-#define CONFIG_USB_I2C_MAX_READ_COUNT 506
+#define CONFIG_USB_I2C_MAX_READ_COUNT  506
 
 /* The below time constants are way longer than should be required in practice:
  *

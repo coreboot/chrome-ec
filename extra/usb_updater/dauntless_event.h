@@ -20,5 +20,4 @@ union dt_entry_u {
 	dt_event_t evt;
 };
 
-
 #endif // __EXTRA_USB_UPDATER_DAUNTLESS_EVENT_H

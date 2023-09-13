@@ -36,8 +36,8 @@ static ssize_t matching_variant;
  * If title is nonzero - print out the string it points to before printing
  * out buffer contents.
  */
-static void print_buffer_aligned(const char *title, uint32_t base,
-				 size_t size, const void *data)
+static void print_buffer_aligned(const char *title, uint32_t base, size_t size,
+				 const void *data)
 {
 	const uint8_t *bytes = data;
 	size_t i;
@@ -53,7 +53,7 @@ static void print_buffer_aligned(const char *title, uint32_t base,
 		base &= ~0xf;
 	}
 
-	if  (title)
+	if (title)
 		printf("%s\n", title);
 
 	/* Let's print data space separated 16 bytes per line. */
@@ -70,7 +70,7 @@ static void print_buffer_aligned(const char *title, uint32_t base,
 
 /* Change the DUT spihash range to the new_type value. */
 static int set_new_range(struct transfer_descriptor *td,
-			 enum range_type_t  new_type)
+			 enum range_type_t new_type)
 {
 	uint32_t rv;
 	struct vendor_cc_spi_hash_request req;
@@ -93,8 +93,8 @@ static int set_new_range(struct transfer_descriptor *td,
 		return -EINVAL;
 	}
 
-	rv = send_vendor_command(td, VENDOR_CC_SPI_HASH, &req, sizeof(req),
-				 0, NULL);
+	rv = send_vendor_command(td, VENDOR_CC_SPI_HASH, &req, sizeof(req), 0,
+				 NULL);
 
 	if (!rv)
 		return 0;
@@ -103,8 +103,7 @@ static int set_new_range(struct transfer_descriptor *td,
 		/* This will exit() on error. */
 		poll_for_pp(td, VENDOR_CC_SPI_HASH, SPI_HASH_PP_POLL);
 	} else {
-		fprintf(stderr,
-			"%s: failed setting range type %d, error %d\n",
+		fprintf(stderr, "%s: failed setting range type %d, error %d\n",
 			__func__, new_type, rv);
 		return -EINVAL;
 	}
@@ -131,8 +130,8 @@ static int verify_hash_section(struct transfer_descriptor *td,
 	/* First retrieve hash from the DUT. */
 	response_size = sizeof(response);
 	req->subcmd = SPI_HASH_SUBCMD_SHA256;
-	rv = send_vendor_command(td, VENDOR_CC_SPI_HASH,
-				 req, sizeof(*req), response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_SPI_HASH, req, sizeof(*req),
+				 response, &response_size);
 
 	if (rv) {
 		fprintf(stderr,
@@ -152,8 +151,8 @@ static int verify_hash_section(struct transfer_descriptor *td,
 		struct result_node *variant = range->variants;
 
 		for (i = 0; i < range->variant_count; i++) {
-			if (!memcmp(variant->expected_result,
-				    response, response_size)) {
+			if (!memcmp(variant->expected_result, response,
+				    response_size)) {
 				matching_variant = i;
 				return 0;
 			}
@@ -165,12 +164,12 @@ static int verify_hash_section(struct transfer_descriptor *td,
 		return -EINVAL;
 	}
 
-	if (!memcmp(range->variants[matching_variant].expected_result,
-		    response, response_size))
+	if (!memcmp(range->variants[matching_variant].expected_result, response,
+		    response_size))
 		return 0;
 
-	fprintf(stderr, "hash mismatch for range %x:%x\n",
-		req->offset, req->size);
+	fprintf(stderr, "hash mismatch for range %x:%x\n", req->offset,
+		req->size);
 
 	return -EINVAL;
 }
@@ -190,7 +189,7 @@ static int verify_hash_section(struct transfer_descriptor *td,
 static int dump_range(struct transfer_descriptor *td,
 		      struct vendor_cc_spi_hash_request *req)
 {
-	size_t  remaining_size = req->size;
+	size_t remaining_size = req->size;
 	size_t response_size;
 	/* Max size of a single shot is 32 bytes. */
 	const size_t max_transfer = 32;
@@ -212,8 +211,8 @@ static int dump_range(struct transfer_descriptor *td,
 
 		req->size = shot_size;
 		response_size = shot_size;
-		rv = send_vendor_command(td, VENDOR_CC_SPI_HASH,
-					 req, sizeof(*req), response,
+		rv = send_vendor_command(td, VENDOR_CC_SPI_HASH, req,
+					 sizeof(*req), response,
 					 &response_size);
 		if (rv) {
 			fprintf(stderr,
@@ -257,10 +256,10 @@ static int process_descriptor_sections(struct transfer_descriptor *td)
 		 */
 		rv = parser_get_next_range(&range);
 		if (rv) {
-			 /*
-			  * ENODATA means all board's sections have been
-			  * processed.
-			  */
+			/*
+			 * ENODATA means all board's sections have been
+			 * processed.
+			 */
 			if (rv == -ENODATA)
 				rv = 0;
 			break;
@@ -283,7 +282,7 @@ static int process_descriptor_sections(struct transfer_descriptor *td)
 
 		free(range);
 		range = NULL;
-	}  while (!rv);
+	} while (!rv);
 
 	if (range)
 		free(range);
@@ -291,8 +290,7 @@ static int process_descriptor_sections(struct transfer_descriptor *td)
 	return rv;
 }
 
-int verify_ro(struct transfer_descriptor *td,
-	      const char *desc_file_name,
+int verify_ro(struct transfer_descriptor *td, const char *desc_file_name,
 	      bool show_machine_output)
 {
 	/* First find out board ID of the target. */
@@ -321,7 +319,6 @@ int verify_ro(struct transfer_descriptor *td,
 	rlz_code[sizeof(rlz_code) - 1] = '\0';
 
 	while (!parser_find_board(desc_file_name, rlz_code)) {
-
 		/*
 		 * Each board section might have different index of the
 		 * matching hash variant.
@@ -350,8 +347,7 @@ int verify_ro(struct transfer_descriptor *td,
 		rv = send_vendor_command(td, VENDOR_CC_SPI_HASH, &req,
 					 sizeof(req), 0, NULL);
 		if (rv) {
-			fprintf(stderr,
-				"%s: spi hash disable TPM error %d\n",
+			fprintf(stderr, "%s: spi hash disable TPM error %d\n",
 				__func__, rv);
 			rv = -EINVAL;
 		}

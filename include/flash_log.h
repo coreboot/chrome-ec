@@ -89,7 +89,6 @@ struct nvmem_failure_payload {
 	} __packed;
 } __packed;
 
-
 /* AP RO verification events. */
 enum ap_ro_verification_ev {
 	APROF_REFRESH_PRESSED = 0,
@@ -134,15 +133,15 @@ struct brdprop_payload {
 } __packed;
 
 /* Returned in the "type" field, when there is no entry available */
-#define FLASH_LOG_NO_ENTRY 0xff
-#define MAX_FLASH_LOG_PAYLOAD_SIZE ((1 << 6) - 1)
+#define FLASH_LOG_NO_ENTRY	    0xff
+#define MAX_FLASH_LOG_PAYLOAD_SIZE  ((1 << 6) - 1)
 #define FLASH_LOG_PAYLOAD_SIZE_MASK (MAX_FLASH_LOG_PAYLOAD_SIZE)
 
-#define FLASH_LOG_PAYLOAD_SIZE(size) ((size)&FLASH_LOG_PAYLOAD_SIZE_MASK)
+#define FLASH_LOG_PAYLOAD_SIZE(size) ((size) & FLASH_LOG_PAYLOAD_SIZE_MASK)
 /* Size of log entry for a specific payload size. */
-#define FLASH_LOG_ENTRY_SIZE(payload_sz)                                       \
-	((FLASH_LOG_PAYLOAD_SIZE(payload_sz) +                                 \
-	  sizeof(struct flash_log_entry) + CONFIG_FLASH_WRITE_SIZE - 1) &      \
+#define FLASH_LOG_ENTRY_SIZE(payload_sz)                                  \
+	((FLASH_LOG_PAYLOAD_SIZE(payload_sz) +                            \
+	  sizeof(struct flash_log_entry) + CONFIG_FLASH_WRITE_SIZE - 1) & \
 	 ~(CONFIG_FLASH_WRITE_SIZE - 1))
 
 /*
@@ -160,8 +159,8 @@ union entry_u {
 	struct flash_log_entry r;
 };
 
-#define COMPACTION_SPACE_PRESERVE (CONFIG_FLASH_LOG_SPACE / 4)
-#define STARTUP_LOG_FULL_WATERMARK (CONFIG_FLASH_LOG_SPACE * 3 / 4)
+#define COMPACTION_SPACE_PRESERVE   (CONFIG_FLASH_LOG_SPACE / 4)
+#define STARTUP_LOG_FULL_WATERMARK  (CONFIG_FLASH_LOG_SPACE * 3 / 4)
 #define RUN_TIME_LOG_FULL_WATERMARK (CONFIG_FLASH_LOG_SPACE * 9 / 10)
 
 /*
