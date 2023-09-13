@@ -6,18 +6,17 @@ CC ?= gcc
 PKG_CONFIG ?= pkg-config
 PROGRAMS := gsctool
 LIBS    :=
-LFLAGS  :=
-CFLAGS  := -std=gnu99 \
+CFLAGS  += -std=gnu99 \
 	-g \
-        -Wall \
-        -Werror \
-        -Wpointer-arith \
-        -Wcast-align \
-        -Wcast-qual \
-        -Wundef \
-        -Wsign-compare \
-        -Wredundant-decls \
-        -Wmissing-declarations
+	-Wall \
+	-Werror \
+	-Wpointer-arith \
+	-Wcast-align \
+	-Wcast-qual \
+	-Wundef \
+	-Wsign-compare \
+	-Wredundant-decls \
+	-Wmissing-declarations
 
 ifneq ($(DEBUG),)
 CFLAGS += -O0
@@ -28,8 +27,8 @@ endif
 #
 # Add libusb-1.0 required flags
 #
-LIBS    += $(shell $(PKG_CONFIG) --libs   libusb-1.0)
-CFLAGS  += $(shell $(PKG_CONFIG) --cflags libusb-1.0)
+LIBS_CONFIG := $(shell $(PKG_CONFIG) --libs   libusb-1.0)
+CFLAGS_CONFIG := $(shell $(PKG_CONFIG) --cflags libusb-1.0)
 CFLAGS  += -I../../include -I../../util -I../../fuzz -I../../test
 
 # Enable large file support.
@@ -38,25 +37,26 @@ CPPFLAGS += -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
 VPATH = ../../util
 
 BOARD := cr50
-LIBS_g  = $(shell $(PKG_CONFIG) --libs   libcrypto)
-CFLAGS_g = $(shell $(PKG_CONFIG) --cflags libcrypto)
-CFLAGS_g  += -I../../board/cr50 -I ../../chip/g
 
-LIBS_common  = -lfmap
+LIBS_g  := $(shell $(PKG_CONFIG) --libs libcrypto)
+CFLAGS_g := $(shell $(PKG_CONFIG) --cflags libcrypto)
+
+LIBS    += $(LIBS_CONFIG) $(LIBS_g)
+CFLAGS  += $(CFLAGS_CONFIG) $(CFLAGS_g)
+CPPFLAGS  += -I../../board/cr50 -I ../../chip/g
 
 all: $(PROGRAMS)
 
 GSCTOOL_SOURCES := gsctool.c desc_parser.c usb_if.c verify_ro.c
 GSCTOOL_OBJS := $(patsubst %.c,%.o,$(GSCTOOL_SOURCES))
-DEPS := $(patsubst %.c,%.d,$(GSCTOOL_SOURCES))
+DEPS := $(patsubst %.c,%.d,$(GSCTOOL_SOURCES)) dp.d
 
 # chip/g updater
 gsctool: $(GSCTOOL_OBJS) Makefile
-	$(CC) $(GSCTOOL_OBJS) $(LFLAGS) $(LIBS) $(LIBS_g) -o $@
+	$(CC) $(CFLAGS) $(GSCTOOL_OBJS) $(LDFLAGS) $(LIBS) -o $@
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(CFLAGS_g) $(CPPFLAGS) -c \
-		-MMD -MF $(basename $@).d -o $@ $<
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c -MMD -MF $(basename $@).d -o $@ $<
 
 gsctool.o:  generated_version.h
 
@@ -70,7 +70,9 @@ generated_version.h: $(GSCTOOL_SOURCES)
 clean:
 	rm -rf $(PROGRAMS) *~ *.o *.d dp generated_version.h
 
-parser_debug: desc_parser.c
-	gcc -g -O0  -DTEST_PARSER desc_parser.c -o dp
+dp: CFLAGS += -O0
+dp: desc_parser.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -DTEST_PARSER -MMD -MF $(basename $@).d \
+		desc_parser.c -o $@
 
 -include $(DEPS)

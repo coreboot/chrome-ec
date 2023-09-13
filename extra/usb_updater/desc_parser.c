@@ -344,7 +344,6 @@ void parser_done(void)
 int main(int argc, char **argv)
 {
 	const char *board_name = "QZUX";
-	char next_line[1000]; /* Should be enough for the largest descriptor. */
 	int rv;
 	int count;
 
