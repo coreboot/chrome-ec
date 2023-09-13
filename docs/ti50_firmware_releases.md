@@ -8,7 +8,10 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.40        | 0.23.30
+[ToT][ToT ebuild]   | 0.24.51        | 0.23.30
+[M118][118 release] | 0.24.30        | 0.23.30
+[M117][117 release] | 0.24.30        | 0.23.30
+[M116][116 release] | 0.24.30        | 0.23.30
 [M115][115 release] | 0.24.30        | 0.23.30
 [M114][114 release] | 0.24.30        | 0.23.30
 [M113][113 release] | 0.24.13        | 0.23.14
@@ -84,6 +87,10 @@ Released with RW 0.23.20 and 0.24.20
 *   Removed additional protection of the RW INFO rollback space, EFI images will
     be able to erase both Board ID and RW Rollback information stored in INFO
     pages.
+
+## 0.0.52 released on 09/14/2023
+
+Released with RW 0.24.51
 
 # RW revisions
 
@@ -1073,6 +1080,46 @@ Build:   ti50_common_prepvt-15086.B:v0.0.355-15c69d7f
          tock:v0.0.9643-c973271b1
          ms-tpm-20-ref:v0.0.316-a7bd523
          @chromeos-ci-firmware-us-central2-d-x32-0-5zc7 2023-06-05 07:51:35
+```
+
+### 0.24.51 Released on 9/14/2023 in M119
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/4860496)
+
+Builder
+[53](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15086.B-branch/53/overview)
+
+Artifacts:
+[15086.48.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.48.0)
+
+**Features**
+
+*   `ecrst pulse` command is now safe
+*   Add initial factory mode to `gsctool`'s CCD print out
+*   SPI flash performance for AP twice as fast at Cr50 now
+*   Add `rddkeepalive` state in feedback reports
+*   GSC console improved logging by adding timestamp prefix to each line
+*   Added GSC bootloader stage to boot tracer time monitor
+    [b/275390574](https://b.corp.google.com/issues/275390574)
+
+**Bug Fixes**
+
+*   Improve DT clock stretching behavior for I2C
+    [b/285366491](https://b.corp.google.com/issues/285366491)
+*   Recover after unexpected reads
+    [b/225044349](https://b.corp.google.com/issues/225044349)
+*   Fix race condition with deep sleep resume resetting EC
+    [b/296518779](https://b.corp.google.com/issues/296518779)
+*   Improve flashing EC/AP firmware through CCD when external CCD is unstable
+    [b/295584404](https://b.corp.google.com/issues/295584404)
+
+```
+Build:   ti50_common_prepvt-15086.B:v0.0.674-2ad344ef
+         libtock-rs:v0.0.925-c38b187
+         tock:v0.0.9657-44d75a018
+         ms-tpm-20-ref:v0.0.324-7e7a3da
+         @chromeos-ci-firmware-us-central2-d-x32-0-l4sc 2023-09-05 13:28:14
 ```
 
 <!-- Links -->
