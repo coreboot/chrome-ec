@@ -86,18 +86,13 @@ __overridable struct keyboard_scan_config keyscan_config = {
 
 #ifdef CONFIG_KEYBOARD_BOOT_KEYS
 #ifndef CONFIG_KEYBOARD_MULTIPLE
-static const struct boot_key_entry boot_key_list[] = {
-	{ KEYBOARD_COL_ESC, KEYBOARD_ROW_ESC }, /* Esc */
-	{ KEYBOARD_COL_DOWN, KEYBOARD_ROW_DOWN }, /* Down-arrow */
-	{ KEYBOARD_COL_LEFT_SHIFT, KEYBOARD_ROW_LEFT_SHIFT }, /* Left-Shift */
-};
-#else
-struct boot_key_entry boot_key_list[] = {
-	{ KEYBOARD_COL_ESC, KEYBOARD_ROW_ESC }, /* Esc */
-	{ KEYBOARD_COL_DOWN, KEYBOARD_ROW_DOWN }, /* Down-arrow */
-	{ KEYBOARD_COL_LEFT_SHIFT, KEYBOARD_ROW_LEFT_SHIFT }, /* Left-Shift */
-};
+static const
 #endif
+	struct boot_key_entry boot_key_list[] = {
+		{ KEYBOARD_COL_ESC, KEYBOARD_ROW_ESC },
+		{ KEYBOARD_COL_DOWN, KEYBOARD_ROW_DOWN }, /* Down-arrow */
+		{ KEYBOARD_COL_LEFT_SHIFT, KEYBOARD_ROW_LEFT_SHIFT },
+	};
 static uint32_t boot_key_value = BOOT_KEY_NONE;
 #endif
 
@@ -335,31 +330,6 @@ static int read_matrix(uint8_t *state, bool at_boot)
 		if (IS_ENABLED(CONFIG_KEYBOARD_TEST))
 			state[c] = keyscan_seq_get_scan(c, state[c]);
 	}
-
-#ifdef KEYBOARD_MASK_PWRBTN
-	/*
-	 * 2. Boot key workaround.
-	 *
-	 * Check if KSI2 or KSI3 is asserted for all columns due to power
-	 * button hold, and ignore it if so.
-	 */
-	if (at_boot) {
-		for (c = 0; c < keyboard_cols; c++) {
-			if (!(state[c] & KEYBOARD_MASK_PWRBTN))
-				break;
-		}
-
-		if (c == keyboard_cols) {
-			for (c = 0; c < keyboard_cols; c++)
-				state[c] &= ~KEYBOARD_MASK_PWRBTN;
-#ifndef CONFIG_KEYBOARD_MULTIPLE
-			state[KEYBOARD_COL_REFRESH] |= KEYBOARD_MASK_PWRBTN;
-#else
-			state[key_typ.col_refresh] |= KEYBOARD_MASK_PWRBTN;
-#endif
-		}
-	}
-#endif
 
 #ifdef CONFIG_KEYBOARD_SCAN_ADC
 	/* Account for the refresh key */
@@ -1125,6 +1095,9 @@ static int command_ksstate(int argc, const char **argv)
 	ccprintf("Keyboard scan disable mask: 0x%08x\n", disable_scanning_mask);
 	ccprintf("Keyboard scan state printing %s\n",
 		 print_state_changes ? "on" : "off");
+#ifdef CONFIG_KEYBOARD_BOOT_KEYS
+	ccprintf("boot keys: 0x%08x\n", boot_key_value);
+#endif
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(ksstate, command_ksstate, "ksstate [on | off | force]",

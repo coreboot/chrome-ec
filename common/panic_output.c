@@ -136,16 +136,20 @@ test_mockable_static
 	noreturn
 #endif
 	void
-	complete_panic(int linenum)
+	complete_panic(const char *fname, int linenum)
 {
-	software_panic(PANIC_SW_ASSERT, linenum);
+	/* Top two bytes of info register is first two characters of file name.
+	 * Bottom two bytes of info register is line number.
+	 */
+	software_panic(PANIC_SW_ASSERT, (fname[0] << 24) | (fname[1] << 16) |
+						(linenum & 0xffff));
 }
 
 #ifdef CONFIG_DEBUG_ASSERT_BRIEF
 void panic_assert_fail(const char *fname, int linenum)
 {
 	panic_printf("\nASSERTION FAILURE at %s:%d\n", fname, linenum);
-	complete_panic(linenum);
+	complete_panic(fname, linenum);
 }
 #else
 void panic_assert_fail(const char *msg, const char *func, const char *fname,
@@ -153,7 +157,7 @@ void panic_assert_fail(const char *msg, const char *func, const char *fname,
 {
 	panic_printf("\nASSERTION FAILURE '%s' in %s() at %s:%d\n", msg, func,
 		     fname, linenum);
-	complete_panic(linenum);
+	complete_panic(fname, linenum);
 }
 #endif
 
@@ -474,6 +478,7 @@ DECLARE_CONSOLE_COMMAND(panicinfo, command_panicinfo, "[clear]",
 static enum ec_status
 host_command_panic_info(struct host_cmd_handler_args *args)
 {
+	const struct ec_params_get_panic_info_v1 *p = args->params;
 	uint32_t pdata_size = get_panic_data_size();
 	uintptr_t pdata_start = get_panic_data_start();
 	struct panic_data *pdata = panic_get_data();
@@ -491,7 +496,8 @@ host_command_panic_info(struct host_cmd_handler_args *args)
 		memcpy(args->response, (void *)pdata_start, pdata_size);
 		args->response_size = pdata_size;
 
-		if (pdata) {
+		if (pdata &&
+		    !(args->version > 0 && p->preserve_old_hostcmd_flag)) {
 			/* Data has now been returned */
 			pdata->flags |= PANIC_DATA_FLAG_OLD_HOSTCMD;
 		}
@@ -500,4 +506,4 @@ host_command_panic_info(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_GET_PANIC_INFO, host_command_panic_info,
-		     EC_VER_MASK(0));
+		     EC_VER_MASK(0) | EC_VER_MASK(1));

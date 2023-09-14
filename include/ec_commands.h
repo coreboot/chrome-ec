@@ -1646,6 +1646,10 @@ enum ec_feature_code {
 	 * The EC image is built with tokenized logging enabled.
 	 */
 	EC_FEATURE_TOKENIZED_LOGGING = 49,
+	/*
+	 * The EC supports triggering an STB dump.
+	 */
+	EC_FEATURE_AMD_STB_DUMP = 50,
 };
 
 #define EC_FEATURE_MASK_0(event_code) BIT(event_code % 32)
@@ -4445,7 +4449,7 @@ struct ec_params_i2c_write {
  * discharge the battery.
  */
 #define EC_CMD_CHARGE_CONTROL 0x0096
-#define EC_VER_CHARGE_CONTROL 2
+#define EC_VER_CHARGE_CONTROL 3
 
 enum ec_charge_control_mode {
 	CHARGE_CONTROL_NORMAL = 0,
@@ -4467,12 +4471,16 @@ enum ec_charge_control_cmd {
 	EC_CHARGE_CONTROL_CMD_GET,
 };
 
+enum ec_charge_control_flag {
+	EC_CHARGE_CONTROL_FLAG_NO_IDLE = BIT(0),
+};
+
 struct ec_params_charge_control {
 	uint32_t mode; /* enum charge_control_mode */
 
 	/* Below are the fields added in V2. */
 	uint8_t cmd; /* enum ec_charge_control_cmd. */
-	uint8_t reserved;
+	uint8_t flags; /* enum ec_charge_control_flag (v3+) */
 	/*
 	 * Lower and upper thresholds for battery sustainer. This struct isn't
 	 * named to avoid tainting foreign projects' name spaces.
@@ -4494,7 +4502,8 @@ struct ec_response_charge_control {
 		int8_t lower;
 		int8_t upper;
 	} sustain_soc;
-	uint16_t reserved;
+	uint8_t flags; /* enum ec_charge_control_flag (v3+) */
+	uint8_t reserved;
 } __ec_align4;
 
 /*****************************************************************************/
@@ -5603,6 +5612,11 @@ struct ec_params_reboot_ec {
  * for details.
  */
 #define EC_CMD_GET_PANIC_INFO 0x00D3
+
+struct ec_params_get_panic_info_v1 {
+	/* Do not modify PANIC_DATA_FLAG_OLD_HOSTCMD when reading panic info */
+	uint8_t preserve_old_hostcmd_flag;
+} __ec_align1;
 
 /*****************************************************************************/
 /*
