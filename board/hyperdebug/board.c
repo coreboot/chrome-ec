@@ -125,12 +125,12 @@ USB_STREAM_CONFIG(usart5_usb, USB_IFACE_USART5_STREAM,
 const void *const usb_strings[] = {
 	[USB_STR_DESC] = usb_string_desc,
 	[USB_STR_VENDOR] = USB_STRING_DESC("Google LLC"),
-	[USB_STR_PRODUCT] = USB_STRING_DESC("HyperDebug"),
+	[USB_STR_PRODUCT] = USB_STRING_DESC("HyperDebug CMSIS-DAP"),
 	[USB_STR_SERIALNO] = 0,
 	[USB_STR_VERSION] = USB_STRING_DESC(CROS_EC_VERSION32),
 	[USB_STR_CONSOLE_NAME] = USB_STRING_DESC("HyperDebug Shell"),
 	[USB_STR_SPI_NAME] = USB_STRING_DESC("SPI"),
-	[USB_STR_I2C_NAME] = USB_STRING_DESC("I2C"),
+	[USB_STR_CMSIS_DAP_NAME] = USB_STRING_DESC("I2C CMSIS-DAP"),
 	[USB_STR_USART2_STREAM_NAME] = USB_STRING_DESC("UART2"),
 	[USB_STR_USART3_STREAM_NAME] = USB_STRING_DESC("UART3"),
 	[USB_STR_USART4_STREAM_NAME] = USB_STRING_DESC("UART4"),
@@ -209,6 +209,25 @@ static void board_init(void)
 	/* Configure SPI GPIOs */
 	gpio_config_module(MODULE_SPI, 1);
 
+	/*
+	 * Unlike most SPI, I2C and UARTs, which are configured in their
+	 * alternate mode by default, SPI1 pins are in GPIO input mode on
+	 * HyperDebug power-on, for compatibility with previous firmwares.  In
+	 * the future we may decide to leave even more functions off by default,
+	 * in order for HyperDebug to actively drive as little at possible on
+	 * boot.  It is relatively straightforward to declare pins as "Alternate
+	 * mode" in opentitantool json configuration file, to have them enabled
+	 * by "transport init".
+	 *
+	 * The code below sets up the alternate function "number" for the
+	 * relevant pins, such that when alternate mode is enabled on the pins,
+	 * the result is the particular alternate function that HyperDebug
+	 * firmware has chosen for the pin.
+	 */
+	STM32_GPIO_AFRL(STM32_GPIOA_BASE) |= 0x55000000; /* SPI1: PA6/PA7
+							    HIDO/HODI */
+	STM32_GPIO_AFRL(STM32_GPIOB_BASE) |= 0x00005000; /* SPI1: PB3 SCK */
+
 	/* Enable ADC */
 	STM32_RCC_AHB2ENR |= STM32_RCC_AHB2ENR_ADCEN;
 	/* Initialize the ADC by performing a fake reading */
@@ -216,6 +235,19 @@ static void board_init(void)
 
 	/* Enable DAC */
 	STM32_RCC_APB1ENR |= STM32_RCC_APB1ENR1_DAC1EN;
+
+	/*
+	 * Enable SPI1.
+	 */
+
+	/* Enable clocks to SPI1 module */
+	STM32_RCC_APB2ENR |= STM32_RCC_APB2ENR_SPI1EN;
+
+	/* Reset SPI1 */
+	STM32_RCC_APB2RSTR |= STM32_RCC_APB2RSTR_SPI1RST;
+	STM32_RCC_APB2RSTR &= ~STM32_RCC_APB2RSTR_SPI1RST;
+
+	spi_enable(&spi_devices[2], 1);
 
 	/*
 	 * Enable SPI2.
@@ -265,6 +297,18 @@ static void board_init(void)
 	dma_select_channel(STM32_DMAC_CH13, DMAMUX_REQ_OCTOSPI1);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+static int command_reinit(int argc, const char **argv)
+{
+	/* Let every module know to re-initialize to power-on state. */
+	hook_notify(HOOK_REINIT);
+	return EC_SUCCESS;
+}
+
+DECLARE_CONSOLE_COMMAND_FLAGS(
+	reinit, command_reinit, "",
+	"Stop any ongoing operation, revert to power-on state.",
+	CMD_FLAG_RESTRICTED);
 
 const char *board_read_serial(void)
 {

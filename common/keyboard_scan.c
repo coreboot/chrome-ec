@@ -36,11 +36,11 @@
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_KEYSCAN, outstr)
 #define CPRINTF(format, args...) cprintf(CC_KEYSCAN, format, ##args)
-#define CPRINTS(format, args...) cprints(CC_KEYSCAN, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_KEYSCAN, "KB " format, ##args)
 
 #ifdef CONFIG_KEYBOARD_DEBUG
 #define CPUTS5(outstr) cputs(CC_KEYSCAN, outstr)
-#define CPRINTS5(format, args...) cprints(CC_KEYBOARD, format, ##args)
+#define CPRINTS5(format, args...) cprints(CC_KEYBOARD, "KB " format, ##args)
 #else
 #define CPUTS5(outstr)
 #define CPRINTS5(format, args...)
@@ -86,18 +86,13 @@ __overridable struct keyboard_scan_config keyscan_config = {
 
 #ifdef CONFIG_KEYBOARD_BOOT_KEYS
 #ifndef CONFIG_KEYBOARD_MULTIPLE
-static const struct boot_key_entry boot_key_list[] = {
-	{ KEYBOARD_COL_ESC, KEYBOARD_ROW_ESC }, /* Esc */
-	{ KEYBOARD_COL_DOWN, KEYBOARD_ROW_DOWN }, /* Down-arrow */
-	{ KEYBOARD_COL_LEFT_SHIFT, KEYBOARD_ROW_LEFT_SHIFT }, /* Left-Shift */
-};
-#else
-struct boot_key_entry boot_key_list[] = {
-	{ KEYBOARD_COL_ESC, KEYBOARD_ROW_ESC }, /* Esc */
-	{ KEYBOARD_COL_DOWN, KEYBOARD_ROW_DOWN }, /* Down-arrow */
-	{ KEYBOARD_COL_LEFT_SHIFT, KEYBOARD_ROW_LEFT_SHIFT }, /* Left-Shift */
-};
+static const
 #endif
+	struct boot_key_entry boot_key_list[] = {
+		{ KEYBOARD_COL_ESC, KEYBOARD_ROW_ESC },
+		{ KEYBOARD_COL_DOWN, KEYBOARD_ROW_DOWN }, /* Down-arrow */
+		{ KEYBOARD_COL_LEFT_SHIFT, KEYBOARD_ROW_LEFT_SHIFT },
+	};
 static uint32_t boot_key_value = BOOT_KEY_NONE;
 #endif
 
@@ -336,31 +331,6 @@ static int read_matrix(uint8_t *state, bool at_boot)
 			state[c] = keyscan_seq_get_scan(c, state[c]);
 	}
 
-#ifdef KEYBOARD_MASK_PWRBTN
-	/*
-	 * 2. Boot key workaround.
-	 *
-	 * Check if KSI2 or KSI3 is asserted for all columns due to power
-	 * button hold, and ignore it if so.
-	 */
-	if (at_boot) {
-		for (c = 0; c < keyboard_cols; c++) {
-			if (!(state[c] & KEYBOARD_MASK_PWRBTN))
-				break;
-		}
-
-		if (c == keyboard_cols) {
-			for (c = 0; c < keyboard_cols; c++)
-				state[c] &= ~KEYBOARD_MASK_PWRBTN;
-#ifndef CONFIG_KEYBOARD_MULTIPLE
-			state[KEYBOARD_COL_REFRESH] |= KEYBOARD_MASK_PWRBTN;
-#else
-			state[key_typ.col_refresh] |= KEYBOARD_MASK_PWRBTN;
-#endif
-		}
-	}
-#endif
-
 #ifdef CONFIG_KEYBOARD_SCAN_ADC
 	/* Account for the refresh key */
 	keyboard_read_refresh_key(state);
@@ -475,13 +445,13 @@ static int check_runtime_keys(const uint8_t *state)
 	/* Check individual keys */
 	if (state[KEYBOARD_COL_KEY_R] == KEYBOARD_MASK_KEY_R) {
 		/* R = reboot */
-		CPRINTS("KB warm reboot");
+		CPRINTS("warm reboot");
 		keyboard_clear_buffer();
 		chipset_reset(CHIPSET_RESET_KB_WARM_REBOOT);
 		return 1;
 	} else if (state[KEYBOARD_COL_KEY_H] == KEYBOARD_MASK_KEY_H) {
 		/* H = hibernate */
-		CPRINTS("KB hibernate");
+		CPRINTS("hibernate");
 		system_enter_hibernate(0, 0);
 		return 1;
 	}
@@ -489,13 +459,13 @@ static int check_runtime_keys(const uint8_t *state)
 	/* Check individual keys */
 	if (state[key_typ.col_key_r] == KEYBOARD_MASK_KEY_R) {
 		/* R = reboot */
-		CPRINTS("KB warm reboot");
+		CPRINTS("warm reboot");
 		keyboard_clear_buffer();
 		chipset_reset(CHIPSET_RESET_KB_WARM_REBOOT);
 		return 1;
 	} else if (state[key_typ.col_key_h] == KEYBOARD_MASK_KEY_H) {
 		/* H = hibernate */
-		CPRINTS("KB hibernate");
+		CPRINTS("hibernate");
 		system_enter_hibernate(0, 0);
 		return 1;
 	}
@@ -712,11 +682,14 @@ static uint32_t check_key_list(const uint8_t *state)
 
 	/* If any other key was pressed, ignore all boot keys. */
 	for (c = 0; c < keyboard_cols; c++) {
-		if (curr_state[c])
+		if (curr_state[c]) {
+			CPRINTS("Undefined boot key: state[%d]=0x%02x", c,
+				curr_state[c]);
 			return BOOT_KEY_NONE;
+		}
 	}
 
-	CPRINTS("KB boot key mask %x", boot_key_mask);
+	CPRINTS("boot keys: 0x%x", boot_key_mask);
 	return boot_key_mask;
 }
 
@@ -814,7 +787,7 @@ void keyboard_scan_init(void)
 		 * Strict debouncer is prone to keypress reordering if debounce
 		 * durations for down and up are not equal. crbug.com/547131
 		 */
-		CPRINTS("KB WARN: Debounce durations not equal");
+		CPRINTS("WARN: Debounce durations not equal");
 	}
 
 	/* Configure refresh key matrix */
@@ -883,7 +856,7 @@ void keyboard_scan_task(void *u)
 
 	while (1) {
 		/* Enable all outputs */
-		CPRINTS5("KB wait");
+		CPRINTS5("wait");
 
 		keyboard_raw_enable_interrupt(1);
 
@@ -895,8 +868,7 @@ void keyboard_scan_task(void *u)
 			new_disable_scanning = disable_scanning_mask;
 
 			if (local_disable_scanning != new_disable_scanning)
-				CPRINTS("KB disable_scanning_mask changed: "
-					"0x%08x",
+				CPRINTS("disable_scanning_mask changed: 0x%08x",
 					new_disable_scanning);
 
 			if (!new_disable_scanning) {
@@ -943,7 +915,7 @@ void keyboard_scan_task(void *u)
 		force_poll = 0;
 
 		/* Enter polling mode */
-		CPRINTS5("KB poll");
+		CPRINTS5("poll");
 		keyboard_raw_enable_interrupt(0);
 		keyboard_raw_drive_column(KEYBOARD_COLUMN_NONE);
 
@@ -1125,6 +1097,9 @@ static int command_ksstate(int argc, const char **argv)
 	ccprintf("Keyboard scan disable mask: 0x%08x\n", disable_scanning_mask);
 	ccprintf("Keyboard scan state printing %s\n",
 		 print_state_changes ? "on" : "off");
+#ifdef CONFIG_KEYBOARD_BOOT_KEYS
+	ccprintf("boot keys: 0x%08x\n", boot_key_value);
+#endif
 	return EC_SUCCESS;
 }
 DECLARE_CONSOLE_COMMAND(ksstate, command_ksstate, "ksstate [on | off | force]",

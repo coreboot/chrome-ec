@@ -960,7 +960,7 @@ void pe_got_hard_reset(int port)
  * If the PE is not running, generate an error recovery to turn off
  * Vbus and get the port back into a known state.
  */
-void pd_got_frs_signal(int port)
+test_mockable void pd_got_frs_signal(int port)
 {
 	if (pe_is_running(port))
 		PE_SET_FLAG(port, PE_FLAGS_FAST_ROLE_SWAP_SIGNALED);
@@ -1021,15 +1021,26 @@ void pe_set_explicit_contract(int port)
 		typec_update_cc(port);
 }
 
-void pe_invalidate_explicit_contract(int port)
+/*
+ * Invalidate the explicit contract without disabling FRS.
+ *
+ * @param port USB-C port number
+ */
+static void pe_invalidate_explicit_contract_frs_untouched(int port)
 {
-	pe_set_frs_enable(port, 0);
-
 	PE_CLR_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT);
 
 	/* Set Rp for current limit if still attached */
 	if (IS_ENABLED(CONFIG_USB_PD_REV30) && pd_is_connected(port))
 		typec_update_cc(port);
+}
+
+void pe_invalidate_explicit_contract(int port)
+{
+	/* disable FRS and then invalidate the explicit contract */
+	pe_set_frs_enable(port, 0);
+
+	pe_invalidate_explicit_contract_frs_untouched(port);
 }
 
 void pd_notify_event(int port, uint32_t event_mask)
@@ -4052,6 +4063,23 @@ static void pe_snk_hard_reset_entry(int port)
 		return;
 	}
 
+	/*
+	 * Workaround for power_state:rec with cros_ec_softrec_power on
+	 * chromeboxes. If we're booted in recovery and about to reset our
+	 * active charge port, preserve the ap-off and stay-in-ro flags so that
+	 * the next boot after we brown out will still be recovery.
+	 */
+	if (IS_ENABLED(CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS) &&
+	    port == charge_manager_get_active_charge_port() &&
+	    (system_get_reset_flags() & EC_RESET_FLAG_STAY_IN_RO) &&
+	    system_get_image_copy() == EC_IMAGE_RO) {
+		CPRINTS("C%d: Preserve ap-off and stay-in-ro across PD reset",
+			port);
+		chip_save_reset_flags(chip_read_reset_flags() |
+				      EC_RESET_FLAG_AP_OFF |
+				      EC_RESET_FLAG_STAY_IN_RO);
+	}
+
 #ifdef CONFIG_USB_PD_RESET_MIN_BATT_SOC
 	/*
 	 * If the battery has not met a configured safe level for hard
@@ -5456,7 +5484,17 @@ __maybe_unused static void pe_frs_snk_src_start_ams_entry(int port)
 	 * Invalidate the contract after the FRS flags set so the
 	 * flags can be propagated to this function.
 	 */
-	pe_invalidate_explicit_contract(port);
+	if (port_frs_disable_until_source_on(port)) {
+		/*
+		 * Delay disable FRS until starting sourcing VBUS.
+		 * Some boards need to extend the FRS enablement until the
+		 * vSafe5V hitted (rather than FRS Rx received) then it can turn
+		 * the source on automatically.
+		 */
+		pe_invalidate_explicit_contract_frs_untouched(port);
+	} else {
+		pe_invalidate_explicit_contract(port);
+	}
 
 	set_state_pe(port, PE_PRS_SNK_SRC_SEND_SWAP);
 }

@@ -929,8 +929,10 @@
 /*****************************************************************************/
 /* Charger config */
 
+#ifndef CONFIG_ZEPHYR
 /* Compile common charge state code. */
 #undef CONFIG_CHARGER
+#endif
 
 /* Compile charger-specific code for these chargers (pick at most one) */
 #undef CONFIG_CHARGER_BD9995X
@@ -1397,6 +1399,15 @@
 
 /* Wireless chargers */
 #undef CONFIG_CPS8100
+
+/*
+ * SM5803 PROCHOT configuration
+ * This follow the hardware default value.
+ */
+#define CONFIG_CHARGER_SM5803_PROCHOT_DURATION 2
+#define CONFIG_CHARGER_SM5803_VBUS_MON_SEL 2
+#define CONFIG_CHARGER_SM5803_VSYS_MON_SEL 10
+#define CONFIG_CHARGER_SM5803_IBAT_PHOT_SEL IBAT_SEL_MAX
 
 /*****************************************************************************/
 
@@ -2068,6 +2079,11 @@
  * Fans have non-const configuration.
  */
 #undef CONFIG_FAN_DYNAMIC
+
+/*
+ * Fan config have non-const configuration.
+ */
+#undef CONFIG_FAN_DYNAMIC_CONFIG
 
 /*
  * Replace the default fan_percent_to_rpm() function with a board-specific
@@ -4754,6 +4770,9 @@
  */
 #undef CONFIG_USB_PD_5V_EN_CUSTOM
 
+/* Enable Displayport 2.1 Capability */
+#undef CONFIG_USB_PD_DP21_MODE
+
 /* Dynamic USB PD source capability */
 #undef CONFIG_USB_PD_DYNAMIC_SRC_CAP
 
@@ -5160,6 +5179,22 @@
  * re-start PD negotiation.
  */
 #undef CONFIG_USB_PD_RESET_MIN_BATT_SOC
+
+/*
+ * Workaround for power_state:rec with cros_ec_softrec_power on chromeboxes.
+ * cros_ec_softrec works by running `reboot wait-ext ap-off-in-ro`. If a
+ * chromebox is powered by Type-C only, the EC reset will result in a PD hard
+ * reset and the device will brown out. When it boots again the ap-off and
+ * stay-in-ro flags are lost so recovery fails. To work around this, we preserve
+ * the flags across a PD reset.
+ *
+ * This doesn't affect manual recovery on user devices, since it uses the
+ * recovery signal from the GSC, not the reset flags.
+ *
+ * This should only be enabled on chromeboxes which don't have servo micro and
+ * therefore can't use cros_ec_hardrec_power. See b/293545949 and b/295363809.
+ */
+#undef CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS
 
 /* Alternative configuration keeping only the TX part of PHY */
 #undef CONFIG_USB_PD_TX_PHY_ONLY
@@ -6272,6 +6307,16 @@
 #define CONFIG_BATTERY
 #endif
 
+/******************************************************************************/
+/*
+ * Ensure CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS is only used on
+ * chromeboxes.
+ */
+#if defined(CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS) && \
+	defined(CONFIG_BATTERY)
+#error Only use CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS on chromeboxes.
+#endif
+
 /*****************************************************************************/
 /* Define CONFIG_USBC_PPC if board has a USB Type-C Power Path Controller. */
 #if defined(CONFIG_USBC_PPC_AOZ1380) || defined(CONFIG_USBC_PPC_NX20P3483) || \
@@ -6787,7 +6832,9 @@
  * the system.
  */
 #include "fuzz_config.h"
+#ifdef TEST_BUILD
 #include "test_config.h"
+#endif
 
 /*
  * Validity checks to make sure some of the configs above make sense.
