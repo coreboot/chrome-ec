@@ -20,8 +20,7 @@ uint32_t nvmem_user_sizes[NVMEM_NUM_USERS] = {MOCK_NV_MEMORY_SIZE,
 					      NVMEM_CR50_SIZE};
 #endif
 
-uint32_t s_evictNvStart;
-uint32_t s_evictNvEnd;
+struct GlobalStruct  global_struct;
 
 /* Calculate size of TPM NVMEM. */
 #define MOCK_NV_MEMORY_SIZE                                                    \
