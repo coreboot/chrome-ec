@@ -66,9 +66,6 @@ static void fips_print_status(void)
 	console_enable_output();
 
 	fips_print_test_time();
-	/* Make sure system DRBG is initialized */
-	if (!fips_rand_bytes(NULL, 0))
-		CPRINTS("FIPS DRBG failed");
 	fips_print_mode();
 }
 DECLARE_HOOK(HOOK_INIT, fips_print_status, HOOK_PRIO_INIT_PRINT_FIPS_STATUS);

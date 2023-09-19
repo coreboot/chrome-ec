@@ -12,6 +12,7 @@
 #include "byteorder.h"
 #include "console.h"
 #include "extension.h"
+#include "fips_rand.h"
 #include "link_defs.h"
 #include "new_nvmem.h"
 #include "printf.h"
@@ -986,6 +987,7 @@ void tpm_task(void *u)
 		struct tpm_cmd_header *tpmh;
 		size_t buffer_size;
 		uint8_t alt_if_command;
+		bool drbg_initialized = false;
 
 		/* Process unprocessed events or wait for the next event */
 		if (!evt)
@@ -1041,6 +1043,12 @@ void tpm_task(void *u)
 			__func__, command_code);
 
 		watchdog_reload();
+		/* Make sure system DRBG is initialized */
+		if (!drbg_initialized) {
+			if (!fips_rand_bytes(NULL, 0))
+				CPRINTS("FIPS DRBG failed");
+			drbg_initialized = true;
+		}
 
 #ifdef CONFIG_EXTENSION_COMMAND
 		if (IS_CUSTOM_CODE(command_code)) {
