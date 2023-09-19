@@ -12,8 +12,7 @@
 
 #define NVMEM_CR50_SIZE 272
 
-uint32_t s_evictNvStart;
-uint32_t s_evictNvEnd;
+struct GlobalStruct  global_struct;
 
 /* Calculate size of TPM NVMEM. */
 #define MOCK_NV_MEMORY_SIZE                                                    \
