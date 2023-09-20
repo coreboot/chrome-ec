@@ -6,11 +6,14 @@ cmake_minimum_required(VERSION 3.13.1)
 
 find_package(Zephyr REQUIRED HINTS "${ZEPHYR_BASE}")
 
+zephyr_include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
+
 zephyr_library_sources("src/common.c")
 zephyr_library_sources("src/power_signals.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC
 	"src/usb_pd_policy.c"
+	"src/usb_mux_config.c"
 	"src/usbc_config.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
 	"src/led.c")
