@@ -197,7 +197,6 @@ test_export_static void batt_conf_main(void)
 DECLARE_HOOK(HOOK_INIT, batt_conf_main, HOOK_PRIO_POST_I2C);
 
 #ifdef CONFIG_CMD_BATTERY_CONFIG
-static struct board_batt_params scratch_battery_conf;
 
 static void batt_conf_dump(const struct board_batt_params *info)
 {
@@ -214,7 +213,7 @@ static void batt_conf_dump(const struct board_batt_params *info)
 	ccprintf("%02x:\t.device_name= \"%s\",\n",
 		 CBI_TAG_FUEL_GAUGE_DEVICE_NAME, fg->device_name);
 	ccprintf("%02x:\t.override_nil = %d,\n", CBI_TAG_FUEL_GAUGE_FLAGS,
-		 fg->override_nil & BIT(0));
+		 fg->override_nil & BIT(0) ? 1 : 0);
 
 	ccprintf("   \t.ship_mode = {\n");
 	ccprintf("%02x:\t\t.reg_addr = 0x%02x,\n",
@@ -223,7 +222,7 @@ static void batt_conf_dump(const struct board_batt_params *info)
 		 CBI_TAG_BATT_SHIP_MODE_REG_DATA, ship->reg_data[0],
 		 ship->reg_data[1]);
 	ccprintf("%02x:\t\t.wb_support = %d,\n", CBI_TAG_BATT_SHIP_MODE_FLAGS,
-		 ship->wb_support & BIT(0));
+		 ship->wb_support & BIT(0) ? 1 : 0);
 	ccprintf("   \t},\n");
 
 	ccprintf("   \t.sleep_mode = {\n");
@@ -233,7 +232,7 @@ static void batt_conf_dump(const struct board_batt_params *info)
 		 CBI_TAG_BATT_SLEEP_MODE_REG_DATA, sleep->reg_data);
 	ccprintf("%02x:\t\t.sleep_supported = %d,\n",
 		 CBI_TAG_BATT_SLEEP_MODE_FLAGS,
-		 sleep->sleep_supported & BIT(0));
+		 sleep->sleep_supported & BIT(0) ? 1 : 0);
 	ccprintf("   \t},\n");
 
 	ccprintf("   \t.fet = {\n");
@@ -248,7 +247,7 @@ static void batt_conf_dump(const struct board_batt_params *info)
 	ccprintf("%02x:\t\t.cfet_off_val = 0x%04x,\n",
 		 CBI_TAG_BATT_FET_CFET_OFF_VAL, fet->cfet_off_val);
 	ccprintf("%02x:\t\t.mfgacc_support = %d,\n", CBI_TAG_BATT_FET_FLAGS,
-		 fet->mfgacc_support & BIT(0));
+		 fet->mfgacc_support & BIT(0) ? 1 : 0);
 	ccprintf("   \t},\n");
 
 	ccprintf("   },\n"); /* end of fuel_gauge */
@@ -281,13 +280,15 @@ static void batt_conf_dump(const struct board_batt_params *info)
 
 static int cc_batt_conf(int argc, const char *argv[])
 {
+	static struct board_batt_params scratch_battery_conf;
+
 	if (argc == 1) {
 		batt_conf_dump(&scratch_battery_conf);
 	} else if (argc == 2 && strcasecmp(argv[1], "read") == 0) {
 		batt_conf_read_fuel_gauge_info(&scratch_battery_conf);
 		batt_conf_read_battery_info(&scratch_battery_conf);
 	} else if (argc == 2 && strcasecmp(argv[1], "reset") == 0) {
-		memcpy(&scratch_battery_conf, &default_battery_conf,
+		memcpy(&scratch_battery_conf, get_batt_params(),
 		       sizeof(scratch_battery_conf));
 	} else {
 		return EC_ERROR_PARAM_COUNT;
@@ -297,6 +298,6 @@ static int cc_batt_conf(int argc, const char *argv[])
 DECLARE_CONSOLE_COMMAND(bcfg, cc_batt_conf, "[read | reset]",
 			"\n"
 			"Dump scratch battery config\n"
-			"[reset] Load default config to scratch buffer\n"
+			"[reset] Load effective config to scratch buffer\n"
 			"[read] Load config from CBI to scratch buffer\n");
 #endif /* CONFIG_CMD_BATTERY_CONFIG */

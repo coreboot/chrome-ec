@@ -4,10 +4,9 @@
  */
 
 / {
-	chosen {
-		zephyr,sram = &sram;
-		zephyr,console = &uart0;
-		zephyr,shell-uart = &uart0;
-		zephyr,flash = &sram;
+	named-gpios {
+		pd_p0p1_intr: tp-gpio95 {
+			gpios = <&gpio9 5 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
+		};
 	};
 };

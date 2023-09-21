@@ -1057,22 +1057,14 @@ DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, bat_low_voltage_throttle_reset,
 static int get_desired_input_current(enum battery_present batt_present,
 				     const struct charger_info *const info)
 {
-	if (batt_present == BP_YES || system_is_locked() || base_connected()) {
 #ifdef CONFIG_CHARGE_MANAGER
-		int ilim = charge_manager_get_charger_current();
-		return ilim == CHARGE_CURRENT_UNINITIALIZED ?
-			       CHARGE_CURRENT_UNINITIALIZED :
-			       MAX(CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT, ilim);
+	int ilim = charge_manager_get_charger_current();
+	return ilim == CHARGE_CURRENT_UNINITIALIZED ?
+		       CHARGE_CURRENT_UNINITIALIZED :
+		       MAX(CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT, ilim);
 #else
-		return CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT;
+	return CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT;
 #endif
-	} else {
-#ifdef CONFIG_USB_POWER_DELIVERY
-		return MIN(PD_MAX_CURRENT_MA, info->input_current_max);
-#else
-		return info->input_current_max;
-#endif
-	}
 }
 
 static void wakeup_battery(int *need_static)
@@ -1932,16 +1924,22 @@ int charge_set_output_current_limit(int chgnum, int ma, int mv)
 }
 #endif
 
-int charge_set_input_current_limit(int ma, int mv)
+static int derate_input_current(int ma)
 {
-	__maybe_unused int chgnum = 0;
-
 #ifdef CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT
 	if (CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT != 0) {
 		ma = (ma * (100 - CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT)) /
 		     100;
 	}
 #endif
+	return ma;
+}
+
+int charge_set_input_current_limit(int ma, int mv)
+{
+	int chgnum = 0;
+
+	ma = derate_input_current(ma);
 #ifdef CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT
 	if (CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT > 0) {
 		ma = MAX(ma, CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT);
@@ -1975,8 +1973,10 @@ int charge_set_input_current_limit(int ma, int mv)
 		 */
 
 		if (mv > 0 &&
-		    mv * curr.desired_input_current > PD_MAX_POWER_MW * 1000)
+		    mv * curr.desired_input_current > PD_MAX_POWER_MW * 1000) {
 			ma = (PD_MAX_POWER_MW * 1000) / mv;
+			ma = derate_input_current(ma);
+		}
 		/*
 		 * If the active charger has already been initialized to at
 		 * least this current level, nothing left to do.
