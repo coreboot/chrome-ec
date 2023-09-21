@@ -8,7 +8,7 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.51        | 0.23.30
+[ToT][ToT ebuild]   | 0.24.51        | 0.23.51
 [M118][118 release] | 0.24.30        | 0.23.30
 [M117][117 release] | 0.24.30        | 0.23.30
 [M116][116 release] | 0.24.30        | 0.23.30
@@ -446,6 +446,47 @@ Build:   ti50_common_mp-15224.B:v0.0.302-2afc1adc
          tock:v0.0.9644-adf05c6cf
          ms-tpm-20-ref:v0.0.318-945d2e4
          @chromeos-ci-firmware-us-central1-b-x32-0-n85q 2023-06-07 21:19:14
+```
+
+
+### 0.23.51 Released on 9/27/2023 in M119
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/4895385)
+
+Builder
+[32](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15224.B-branch/32/overview)
+
+Artifacts:
+[15224.29.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.29.0)
+
+**Features**
+
+*   `ecrst pulse` command is now safe
+*   Add initial factory mode to `gsctool`'s CCD print out
+*   SPI flash performance for AP twice as fast at Cr50 now
+*   Add `rddkeepalive` state in feedback reports
+*   GSC console improved logging by adding timestamp prefix to each line
+*   Added GSC bootloader stage to boot tracer time monitor
+    [b/275390574](https://b.corp.google.com/issues/275390574)
+
+**Bug Fixes**
+
+*   Improve DT clock stretching behavior for I2C
+    [b/285366491](https://b.corp.google.com/issues/285366491)
+*   Recover after unexpected reads
+    [b/225044349](https://b.corp.google.com/issues/225044349)
+*   Fix race condition with deep sleep resume resetting EC
+    [b/296518779](https://b.corp.google.com/issues/296518779)
+*   Improve flashing EC/AP firmware through CCD when external CCD is unstable
+    [b/295584404](https://b.corp.google.com/issues/295584404)
+
+```
+Build:   ti50_common_mp-15224.B:v0.0.621-b1796c1e
+        libtock-rs:v0.0.925-7239450
+        tock:v0.0.9658-4c5d1f940
+        ms-tpm-20-ref:v0.0.326-65222ec
+        @chromeos-ci-firmware-us-central2-d-x32-0-ca6m 2023-09-22 07:23:46
 ```
 
 ## PrePVT images
