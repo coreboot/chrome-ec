@@ -511,8 +511,9 @@ static void fifo_reg_read(uint8_t *dest, uint32_t data_size)
 void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size)
 {
 	int i;
-	static uint32_t last_sts;
-	static uint32_t checked_sts;
+	static uint32_t last_sts __attribute__((section(".bss.Tpm2_common")));
+	static uint32_t checked_sts
+		__attribute__((section(".bss.Tpm2_common")));
 
 	reset_in_progress = 0;
 
