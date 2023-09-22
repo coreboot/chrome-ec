@@ -4354,7 +4354,7 @@ int main(int argc, char *argv[])
 	struct transfer_descriptor td;
 	int rv = 0;
 	int errorcnt;
-	uint8_t *data = 0;
+	uint8_t *fw_image_data = 0;
 	size_t data_len = 0;
 	uint16_t vid = 0;
 	uint16_t pid = 0;
@@ -4759,32 +4759,23 @@ int main(int argc, char *argv[])
 			usage(1);
 		}
 
-		data = get_file_or_die(argv[optind], &data_len);
+		fw_image_data = get_file_or_die(argv[optind], &data_len);
 		printf("read %zd(%#zx) bytes from %s\n", data_len, data_len,
 		       argv[optind]);
 
 		/* Validate image size and locate headers within image */
-		if (!locate_headers(data, data_len))
+		if (!locate_headers(fw_image_data, data_len))
 			exit(update_error);
 
-		if (!fetch_header_versions(data))
+		if (!fetch_header_versions(fw_image_data))
 			exit(update_error);
 
 		if (binary_vers)
-			exit(show_headers_versions(data, show_machine_output));
+			exit(show_headers_versions(fw_image_data,
+						   show_machine_output));
 	} else {
 		if (optind < argc)
 			printf("Ignoring binary image %s\n", argv[optind]);
-	}
-
-	/*
-	 * If no usb device information was given, default to the using haven
-	 * or dauntless vendor and product id to find the usb device.
-	 */
-	if (!serial && !vid && !pid) {
-		vid = USB_VID_GOOGLE;
-		/* Set default product id based on image type */
-		pid = (image_magic == MAGIC_DAUNTLESS) ? D2_PID : H1_PID;
 	}
 
 	if (((bid_action != bid_none) + !!rma + !!password + !!ccd_open +
@@ -4800,10 +4791,53 @@ int main(int argc, char *argv[])
 	}
 
 	if (td.ep_type == usb_xfer) {
-		if (usb_findit(serial, vid, pid, USB_SUBCLASS_GOOGLE_CR50,
-			       USB_PROTOCOL_GOOGLE_CR50_NON_HC_FW_UPDATE,
-			       &td.uep))
-			exit(update_error);
+		/* Extra variables only used to prevent 80+ character lines */
+		const uint16_t subclass = USB_SUBCLASS_GOOGLE_CR50;
+		const uint16_t protocol =
+			USB_PROTOCOL_GOOGLE_CR50_NON_HC_FW_UPDATE;
+		/*
+		 * If no usb device information was given, default to the using
+		 * haven or dauntless vendor and product id to find the usb
+		 * device, but then try the other if the first isn't found
+		 */
+		if (!serial && !vid && !pid) {
+			vid = USB_VID_GOOGLE;
+			/*
+			 * Set default product id based on image type. Image
+			 * magic was set based on is_dauntless command line
+			 * option, but image_magic can be updated during
+			 * FW image scanning based on image contents.
+			 */
+			pid = (image_magic == MAGIC_DAUNTLESS) ? D2_PID :
+								 H1_PID;
+			if (usb_findit(serial, vid, pid, subclass, protocol,
+				       &td.uep)) {
+				/*
+				 * If we have a valid FW image, or dauntless was
+				 * specifically requested, do not try an
+				 * alternate pid. Exit immediately.
+				 */
+				if (fw_image_data || is_dauntless)
+					exit(update_error);
+				/*
+				 * Try the other pid, and fail if not present.
+				 * The only way to get here is if we tried H1
+				 * first, since trying dauntless first means it
+				 * was explicitly requested on cmd or it was
+				 * selected based in input fw images. Both of
+				 * those cases just exited above.
+				 */
+				pid = D2_PID;
+				image_magic = MAGIC_DAUNTLESS;
+				if (usb_findit(serial, vid, pid, subclass,
+					       protocol, &td.uep))
+					exit(update_error);
+			}
+		} else {
+			if (usb_findit(serial, vid, pid, subclass, protocol,
+				       &td.uep))
+				exit(update_error);
+		}
 	} else if (td.ep_type == dev_xfer) {
 		td.tpm_fd = open("/dev/tpm0", O_RDWR);
 		if (td.tpm_fd < 0) {
@@ -4918,13 +4952,13 @@ int main(int argc, char *argv[])
 	if (get_metrics)
 		exit(process_get_metrics(&td, show_machine_output));
 
-	if (data || show_fw_ver) {
+	if (fw_image_data || show_fw_ver) {
 		setup_connection(&td);
 
-		if (data) {
+		if (fw_image_data) {
 			transferred_sections =
-				transfer_image(&td, data, data_len);
-			free(data);
+				transfer_image(&td, fw_image_data, data_len);
+			free(fw_image_data);
 		}
 
 		/*
