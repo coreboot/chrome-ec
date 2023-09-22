@@ -473,6 +473,8 @@ static const struct option_container cmd_line_options[] = {
 	{{"board_id", optional_argument, NULL, 'i'},
 	 "[ID[:FLAGS]]%Get or set Info1 board ID fields. ID could be 32 bit "
 	 "hex or 4 character string."},
+	{{"get_value", required_argument, NULL, 'K'},
+	 "Get value of one of [chassis_open]."},
 	{{"ccd_lock", no_argument, NULL, 'k'},
 	 "Lock CCD"},
 	{{"flog", optional_argument, NULL, 'L'},
@@ -2735,6 +2737,44 @@ static void process_wp(struct transfer_descriptor *td, enum wp_options wp)
 		"forced disabled");
 }
 
+static enum exit_values process_get_chassis_open(struct transfer_descriptor *td)
+{
+	struct chassis_open_repsonse {
+		uint8_t version;
+		uint8_t chassis_open;
+	} response;
+	size_t response_size;
+	int rv;
+
+	response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_CHASSIS_OPEN, NULL, 0,
+				 &response, &response_size);
+
+	if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr, "Error %d getting chassis open\n", rv);
+		return update_error;
+	}
+	if (response_size != sizeof(response)) {
+		fprintf(stderr,
+			"Unexpected response size %zd while getting "
+			"chassis open\n",
+			response_size);
+		return update_error;
+	}
+	if (response.version != 1) {
+		fprintf(stderr,
+			"Unexpected response version %d while getting "
+			"chassis open\n",
+			response.version);
+		return update_error;
+	}
+
+	printf("Chassis Open: %s\n",
+	       response.chassis_open & 1 ? "true" : "false");
+	return noop;
+}
+
 static int process_get_apro_hash(struct transfer_descriptor *td)
 {
 	size_t response_size;
@@ -4040,6 +4080,7 @@ int main(int argc, char *argv[])
 	int factory_config = 0;
 	int set_factory_config = 0;
 	uint64_t factory_config_arg = 0;
+	bool get_chassis_open = false;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4186,6 +4227,21 @@ int main(int argc, char *argv[])
 					optarg);
 				errorcnt++;
 			}
+			break;
+		case 'K':
+			/* We only support a single get_value option as of now*/
+			if (strncasecmp(optarg, "chassis_open",
+					strlen(optarg))) {
+				fprintf(stderr,
+					"Invalid get_value argument: "
+					"\"%s\"\n",
+					optarg);
+				errorcnt++;
+				break;
+			}
+			get_chassis_open = true;
+			/* The TPMV command is only support for DT now */
+			is_dauntless = true;
 			break;
 		case 'L':
 			get_flog = 1;
@@ -4350,6 +4406,7 @@ int main(int argc, char *argv[])
 	    !openbox_desc_file &&
 	    !tstamp &&
 	    !tpm_mode &&
+	    !get_chassis_open &&
 	    (wp == WP_NONE)) {
 		if (optind >= argc) {
 			fprintf(stderr,
@@ -4439,6 +4496,9 @@ int main(int argc, char *argv[])
 		process_factory_mode(&td, factory_mode_arg);
 	if (wp != WP_NONE)
 		process_wp(&td, wp);
+
+	if (get_chassis_open)
+		exit(process_get_chassis_open(&td));
 
 	if (corrupt_inactive_rw)
 		invalidate_inactive_rw(&td);
