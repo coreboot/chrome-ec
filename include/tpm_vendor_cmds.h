@@ -205,6 +205,8 @@ enum vendor_cmd_cc {
 
 	VENDOR_CC_GET_BOOT_TRACE = 71,
 
+	VENDOR_CC_GET_CHASSIS_OPEN = 72,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 

@@ -470,6 +470,8 @@ static const struct option_container cmd_line_options[] = {
 	{ { "boot_trace", optional_argument, NULL, 'J' },
 	  "[erase]%Retrieve boot trace from the chip, optionally erasing "
 	  "the trace buffer" },
+	{ { "get_value", required_argument, NULL, 'K' },
+	  "Get value of one of [chassis_open]." },
 	{ { "ccd_lock", no_argument, NULL, 'k' }, "Lock CCD" },
 	{ { "flog", optional_argument, NULL, 'L' },
 	  "[prev entry]%Retrieve contents of the flash log"
@@ -2912,6 +2914,44 @@ static enum exit_values process_wp(struct transfer_descriptor *td,
 	return noop;
 }
 
+static enum exit_values process_get_chassis_open(struct transfer_descriptor *td)
+{
+	struct chassis_open_repsonse {
+		uint8_t version;
+		uint8_t chassis_open;
+	} response;
+	size_t response_size;
+	int rv;
+
+	response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_CHASSIS_OPEN, NULL, 0,
+				 &response, &response_size);
+
+	if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr, "Error %d getting chassis open\n", rv);
+		return update_error;
+	}
+	if (response_size != sizeof(response)) {
+		fprintf(stderr,
+			"Unexpected response size %zd while getting "
+			"chassis open\n",
+			response_size);
+		return update_error;
+	}
+	if (response.version != 1) {
+		fprintf(stderr,
+			"Unexpected response version %d while getting "
+			"chassis open\n",
+			response.version);
+		return update_error;
+	}
+
+	printf("Chassis Open: %s\n",
+	       response.chassis_open & 1 ? "true" : "false");
+	return noop;
+}
+
 static int process_get_apro_hash(struct transfer_descriptor *td)
 {
 	size_t response_size;
@@ -4379,6 +4419,7 @@ int main(int argc, char *argv[])
 	bool get_boot_trace = false;
 	bool erase_boot_trace = false;
 	bool get_metrics = false;
+	bool get_chassis_open = false;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4534,6 +4575,21 @@ int main(int argc, char *argv[])
 				errorcnt++;
 			}
 			erase_boot_trace = true;
+			break;
+		case 'K':
+			/* We only support a single get_value option as of now*/
+			if (strncasecmp(optarg, "chassis_open",
+					strlen(optarg))) {
+				fprintf(stderr,
+					"Invalid get_value argument: "
+					"\"%s\"\n",
+					optarg);
+				errorcnt++;
+				break;
+			}
+			get_chassis_open = true;
+			/* The TPMV command is only support for DT now */
+			is_dauntless = true;
 			break;
 		case 'L':
 			get_flog = 1;
@@ -4695,7 +4751,8 @@ int main(int argc, char *argv[])
 	    !factory_config && !factory_mode && !erase_ap_ro_hash &&
 	    !password && !reboot_gsc && !rma && !set_capability &&
 	    !show_fw_ver && !sn_bits && !sn_inc_rma && !start_apro_verify &&
-	    !openbox_desc_file && !tstamp && !tpm_mode && (wp == WP_NONE)) {
+	    !openbox_desc_file && !tstamp && !tpm_mode && (wp == WP_NONE) &&
+	    !get_chassis_open) {
 		if (optind >= argc) {
 			fprintf(stderr,
 				"\nERROR: Missing required <binary image>\n\n");
@@ -4784,6 +4841,9 @@ int main(int argc, char *argv[])
 		process_factory_mode(&td, factory_mode_arg);
 	if (wp != WP_NONE)
 		exit(process_wp(&td, wp));
+
+	if (get_chassis_open)
+		exit(process_get_chassis_open(&td));
 
 	if (corrupt_inactive_rw)
 		invalidate_inactive_rw(&td);
