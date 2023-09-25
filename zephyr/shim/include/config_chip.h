@@ -65,6 +65,7 @@
 /*
  * ECOS specific options, not used in Zephyr.
  */
+#undef CONFIG_BC12_SINGLE_DRIVER /* Obsolete due to BC1.2 shim driver */
 #undef CONFIG_CONSOLE_UART /* Only used by the Chromium EC chip drivers */
 #undef CONFIG_I2C_MULTI_PORT_CONTROLLER /* Not required by I2C shim */
 #undef CONFIG_IRQ_COUNT /* Only used by Chromium EC core drivers */
@@ -100,11 +101,6 @@
  */
 #undef CONFIG_CHIP_PRE_INIT
 #define CONFIG_CHIP_PRE_INIT
-
-#undef CONFIG_BC12_SINGLE_DRIVER
-#ifdef CONFIG_PLATFORM_EC_BC12_SINGLE_DRIVER
-#define CONFIG_BC12_SINGLE_DRIVER
-#endif
 
 /* EC chipset configuration */
 #define HOOK_TICK_INTERVAL CONFIG_CROS_EC_HOOK_TICK_INTERVAL
@@ -2451,6 +2447,11 @@ extern char mock_jump_data[CONFIG_PLATFORM_EC_PRESERVED_END_OF_RAM_SIZE];
 #undef CONFIG_ACCEL_KX022
 #ifdef CONFIG_PLATFORM_EC_ACCEL_KX022
 #define CONFIG_ACCEL_KX022
+#endif
+
+#undef CONFIG_ACCEL_LIS2DS
+#ifdef CONFIG_PLATFORM_EC_ACCEL_LIS2DS
+#define CONFIG_ACCEL_LIS2DS
 #endif
 
 #undef CONFIG_ALS_TCS3400_EMULATED_IRQ_EVENT

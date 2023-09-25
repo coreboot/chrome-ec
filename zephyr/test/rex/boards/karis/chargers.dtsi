@@ -3,20 +3,14 @@
  * found in the LICENSE file.
  */
 
-/ {
-	aliases {
-		i2c-0 = &i2c0;
-	};
+#include "usbc.dtsi"
+#include "../../../../program/rex/karis/battery.dtsi"
 
+/ {
 	named-i2c-ports {
-		compatible = "named-i2c-ports";
-		i2c_ec_i2c_sensor_scl_r: sensor {
+		i2c_ec_i2c_bat: ec_i2c_bat {
 			i2c-port = <&i2c0>;
-			enum-names = "I2C_PORT_SENSOR";
+			enum-names = "I2C_PORT_BATTERY";
 		};
 	};
-};
-
-&i2c0 {
-	status = "okay";
 };

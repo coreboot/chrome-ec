@@ -20,6 +20,7 @@
 #include "keyboard_scan.h"
 #include "keyboard_test.h"
 #include "lid_switch.h"
+#include "power_button.h"
 #include "printf.h"
 #include "switch.h"
 #include "system.h"
@@ -36,11 +37,11 @@
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_KEYSCAN, outstr)
 #define CPRINTF(format, args...) cprintf(CC_KEYSCAN, format, ##args)
-#define CPRINTS(format, args...) cprints(CC_KEYSCAN, format, ##args)
+#define CPRINTS(format, args...) cprints(CC_KEYSCAN, "KB " format, ##args)
 
 #ifdef CONFIG_KEYBOARD_DEBUG
 #define CPUTS5(outstr) cputs(CC_KEYSCAN, outstr)
-#define CPRINTS5(format, args...) cprints(CC_KEYBOARD, format, ##args)
+#define CPRINTS5(format, args...) cprints(CC_KEYBOARD, "KB " format, ##args)
 #else
 #define CPUTS5(outstr)
 #define CPRINTS5(format, args...)
@@ -89,10 +90,13 @@ __overridable struct keyboard_scan_config keyscan_config = {
 static const
 #endif
 	struct boot_key_entry boot_key_list[] = {
-		{ KEYBOARD_COL_ESC, KEYBOARD_ROW_ESC },
-		{ KEYBOARD_COL_DOWN, KEYBOARD_ROW_DOWN }, /* Down-arrow */
-		{ KEYBOARD_COL_LEFT_SHIFT, KEYBOARD_ROW_LEFT_SHIFT },
+		[BOOT_KEY_ESC] = { KEYBOARD_COL_ESC, KEYBOARD_ROW_ESC },
+		[BOOT_KEY_DOWN_ARROW] = { KEYBOARD_COL_DOWN,
+					  KEYBOARD_ROW_DOWN },
+		[BOOT_KEY_LEFT_SHIFT] = { KEYBOARD_COL_LEFT_SHIFT,
+					  KEYBOARD_ROW_LEFT_SHIFT },
 	};
+BUILD_ASSERT(ARRAY_SIZE(boot_key_list) == BOOT_KEY_COUNT);
 static uint32_t boot_key_value = BOOT_KEY_NONE;
 #endif
 
@@ -445,13 +449,13 @@ static int check_runtime_keys(const uint8_t *state)
 	/* Check individual keys */
 	if (state[KEYBOARD_COL_KEY_R] == KEYBOARD_MASK_KEY_R) {
 		/* R = reboot */
-		CPRINTS("KB warm reboot");
+		CPRINTS("warm reboot");
 		keyboard_clear_buffer();
 		chipset_reset(CHIPSET_RESET_KB_WARM_REBOOT);
 		return 1;
 	} else if (state[KEYBOARD_COL_KEY_H] == KEYBOARD_MASK_KEY_H) {
 		/* H = hibernate */
-		CPRINTS("KB hibernate");
+		CPRINTS("hibernate");
 		system_enter_hibernate(0, 0);
 		return 1;
 	}
@@ -459,13 +463,13 @@ static int check_runtime_keys(const uint8_t *state)
 	/* Check individual keys */
 	if (state[key_typ.col_key_r] == KEYBOARD_MASK_KEY_R) {
 		/* R = reboot */
-		CPRINTS("KB warm reboot");
+		CPRINTS("warm reboot");
 		keyboard_clear_buffer();
 		chipset_reset(CHIPSET_RESET_KB_WARM_REBOOT);
 		return 1;
 	} else if (state[key_typ.col_key_h] == KEYBOARD_MASK_KEY_H) {
 		/* H = hibernate */
-		CPRINTS("KB hibernate");
+		CPRINTS("hibernate");
 		system_enter_hibernate(0, 0);
 		return 1;
 	}
@@ -680,13 +684,19 @@ static uint32_t check_key_list(const uint8_t *state)
 		}
 	}
 
+	if (IS_ENABLED(CONFIG_POWER_BUTTON) && power_button_signal_asserted())
+		boot_key_mask |= BIT(BOOT_KEY_POWER);
+
 	/* If any other key was pressed, ignore all boot keys. */
 	for (c = 0; c < keyboard_cols; c++) {
-		if (curr_state[c])
+		if (curr_state[c]) {
+			CPRINTS("Undefined boot key: state[%d]=0x%02x", c,
+				curr_state[c]);
 			return BOOT_KEY_NONE;
+		}
 	}
 
-	CPRINTS("KB boot key mask %x", boot_key_mask);
+	CPRINTS("boot keys: 0x%x", boot_key_mask);
 	return boot_key_mask;
 }
 
@@ -734,16 +744,16 @@ static uint32_t check_boot_key(const uint8_t *state)
 	if (system_jumped_late())
 		return BOOT_KEY_NONE;
 
-/* If reset was not caused by reset pin, refresh must be held down */
-#ifndef CONFIG_KEYBOARD_MULTIPLE
-	if (!(system_get_reset_flags() & EC_RESET_FLAG_RESET_PIN) &&
-	    !(state[KEYBOARD_COL_REFRESH] & keyboard_mask_refresh))
+	/*
+	 * Boot keys are available only through reset-pin reset, which can be
+	 * issued only by GSC (through refresh+power combo).
+	 *
+	 * If the EC resets differently (e.g. watchdog, power-on, exception),
+	 * we don't want to accidentally enter recovery mode even if a refresh
+	 * key or whatever key is pressed (as previously allowed).
+	 */
+	if (!(system_get_reset_flags() & EC_RESET_FLAG_RESET_PIN))
 		return BOOT_KEY_NONE;
-#else
-	if (!(system_get_reset_flags() & EC_RESET_FLAG_RESET_PIN) &&
-	    !(state[key_typ.col_refresh] & keyboard_mask_refresh))
-		return BOOT_KEY_NONE;
-#endif
 
 	return check_key_list(state);
 }
@@ -784,7 +794,7 @@ void keyboard_scan_init(void)
 		 * Strict debouncer is prone to keypress reordering if debounce
 		 * durations for down and up are not equal. crbug.com/547131
 		 */
-		CPRINTS("KB WARN: Debounce durations not equal");
+		CPRINTS("WARN: Debounce durations not equal");
 	}
 
 	/* Configure refresh key matrix */
@@ -810,14 +820,15 @@ void keyboard_scan_init(void)
 	boot_key_value = check_boot_key(debounced_state);
 
 	/*
-	 * If any key other than Esc or Left_Shift was pressed, do not trigger
-	 * recovery.
+	 * If any key other than Esc, Power, or Left_Shift was pressed, do not
+	 * trigger recovery.
 	 */
-	if (boot_key_value & ~(BOOT_KEY_ESC | BOOT_KEY_LEFT_SHIFT))
+	if (boot_key_value & ~(BIT(BOOT_KEY_ESC) | BIT(BOOT_KEY_LEFT_SHIFT) |
+			       BIT(BOOT_KEY_POWER)))
 		return;
 
 #ifdef CONFIG_HOSTCMD_EVENTS
-	if (boot_key_value & BOOT_KEY_ESC) {
+	if (boot_key_value & BIT(BOOT_KEY_ESC)) {
 		host_set_single_event(EC_HOST_EVENT_KEYBOARD_RECOVERY);
 		/*
 		 * In recovery mode, we should force clamshell mode in order to
@@ -829,7 +840,7 @@ void keyboard_scan_init(void)
 		 */
 		if (IS_ENABLED(CONFIG_TABLET_MODE))
 			tablet_disable();
-		if (boot_key_value & BOOT_KEY_LEFT_SHIFT)
+		if (boot_key_value & BIT(BOOT_KEY_LEFT_SHIFT))
 			host_set_single_event(
 				EC_HOST_EVENT_KEYBOARD_RECOVERY_HW_REINIT);
 	}
@@ -853,7 +864,7 @@ void keyboard_scan_task(void *u)
 
 	while (1) {
 		/* Enable all outputs */
-		CPRINTS5("KB wait");
+		CPRINTS5("wait");
 
 		keyboard_raw_enable_interrupt(1);
 
@@ -865,8 +876,7 @@ void keyboard_scan_task(void *u)
 			new_disable_scanning = disable_scanning_mask;
 
 			if (local_disable_scanning != new_disable_scanning)
-				CPRINTS("KB disable_scanning_mask changed: "
-					"0x%08x",
+				CPRINTS("disable_scanning_mask changed: 0x%08x",
 					new_disable_scanning);
 
 			if (!new_disable_scanning) {
@@ -913,7 +923,7 @@ void keyboard_scan_task(void *u)
 		force_poll = 0;
 
 		/* Enter polling mode */
-		CPRINTS5("KB poll");
+		CPRINTS5("poll");
 		keyboard_raw_enable_interrupt(0);
 		keyboard_raw_drive_column(KEYBOARD_COLUMN_NONE);
 
