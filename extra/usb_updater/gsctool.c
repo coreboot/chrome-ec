@@ -4790,6 +4790,16 @@ int main(int argc, char *argv[])
 		exit(update_error);
 	}
 
+	/*
+	 * Ensure that the the -D (dauntless) command line argument was not
+	 * explicitly passed while we are trying to update a cr50 image.
+	 */
+	if (is_dauntless && image_magic != MAGIC_DAUNTLESS) {
+		fprintf(stderr,
+			"ERROR: Cannot use non-Ti50 image with dauntless.\n");
+		exit(update_error);
+	}
+
 	if (td.ep_type == usb_xfer) {
 		/* Extra variables only used to prevent 80+ character lines */
 		const uint16_t subclass = USB_SUBCLASS_GOOGLE_CR50;
