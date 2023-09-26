@@ -1135,4 +1135,7 @@ Build:   ti50_common_prepvt-15086.B:v0.0.674-2ad344ef
 [113 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R113-15393.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [114 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R114-15437.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [115 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R115-15474.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[116 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R116-15509.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[117 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R117-15572.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[118 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R118-15604.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [ToT ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
