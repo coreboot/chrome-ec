@@ -134,8 +134,8 @@ CRYPT_RESULT _cpri__GenerateKeyEcc(
 	/* extra may be empty, but seed must be specified. */
 	if (seed == NULL || seed->size < PRIMARY_SEED_SIZE) {
 		/* TODO(b/262324344). Remove when zero sized EPS fixed. */
-		cprintf(CC_EXTENSION, "%s: seed size %u invalid", __func__,
-			(seed) ? seed->size : 0);
+		cprintf(CC_EXTENSION, "%s: seed size %d invalid\n", __func__,
+			(seed) ? seed->size : -1);
 		cflush();
 		return CRYPT_PARAMETER;
 	}
