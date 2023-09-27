@@ -166,9 +166,12 @@ DECLARE_HOOK(HOOK_CHIPSET_RESUME, led_resume, HOOK_PRIO_DEFAULT);
 
 static void led_init(void)
 {
-	set_color(EC_LED_ID_POWER_LED, LED_GREEN, 0);
+	if (chipset_in_state(CHIPSET_STATE_ON))
+		set_color(EC_LED_ID_POWER_LED, LED_GREEN, 100);
+	else
+		set_color(EC_LED_ID_POWER_LED, LED_GREEN, 0);
 }
-DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_INIT_PWM);
+DECLARE_HOOK(HOOK_INIT, led_init, HOOK_PRIO_POST_PWM);
 
 void board_led_auto_control(void)
 {

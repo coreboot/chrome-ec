@@ -35,7 +35,7 @@ void watchdog_trace(uint32_t excep_lr, uint32_t excep_sp)
 
 	/* Log PC. If we were in task context, log task id too. */
 	panic_set_reason(PANIC_SW_WATCHDOG, stack[STACK_IDX_REG_PC],
-			 (excep_lr & 0xf) == 1 ? 0xff : task_get_current());
+			 task_get_current());
 
 	panic_printf("### WATCHDOG PC=%08x / LR=%08x / pSP=%08x ",
 		     stack[STACK_IDX_REG_PC], stack[STACK_IDX_REG_LR], psp);
@@ -48,4 +48,7 @@ void watchdog_trace(uint32_t excep_lr, uint32_t excep_sp)
 	 * messages might not appear but they are useless in that situation. */
 	timer_print_info();
 	task_print_list();
+
+	if (IS_ENABLED(CONFIG_PANIC_ON_WATCHDOG_WARNING))
+		software_panic(PANIC_SW_WATCHDOG, task_get_current());
 }

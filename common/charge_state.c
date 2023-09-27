@@ -219,6 +219,7 @@ static int battery_sustainer_set(int8_t lower, int8_t upper)
 		CPRINTS("Sustainer disabled");
 		sustain_soc.lower = -1;
 		sustain_soc.upper = -1;
+		sustain_soc.flags = 0;
 		return EC_SUCCESS;
 	}
 
@@ -241,7 +242,7 @@ static void battery_sustainer_disable(void)
 	battery_sustainer_set(-1, -1);
 }
 
-static bool battery_sustainer_enabled(void)
+test_export_static bool battery_sustainer_enabled(void)
 {
 	return sustain_soc.lower != -1 && sustain_soc.upper != -1;
 }
@@ -896,10 +897,99 @@ int battery_outside_charging_temperature(void)
 	return 0;
 }
 
+static enum ec_charge_control_mode
+sustain_switch_mode(enum ec_charge_control_mode mode)
+{
+	enum ec_charge_control_mode new_mode = mode;
+	int soc = charge_get_display_charge() / 10;
+
+	/*
+	 * The sustain range is defined by 'lower' and 'upper' where the equal
+	 * values are inclusive:
+	 *
+	 * |------------NORMAL------------+--IDLE--+---DISCHARGE---|
+	 * 0%                             ^        ^              100%
+	 *                              lower    upper
+	 *
+	 * The switch statement below allows the sustainer to start with any soc
+	 * (0% ~ 100%) and any previous lower & upper limits. It sets mode to
+	 * NORMAL to charge till the soc hits the upper limit or sets mode to
+	 * DISCHARGE to discharge till the soc hits the upper limit.
+	 *
+	 * Once the soc enters in the sustain range, it'll switch to IDLE. In
+	 * IDLE mode, the system power is supplied from the AC. Thus, the soc
+	 * normally should stay in the sustain range unless there is high load
+	 * on the system or the charger is too weak.
+	 *
+	 * Some boards have a sing capacitor problem with mode == IDLE. For such
+	 * boards, a host can specify EC_CHARGE_CONTROL_FLAG_NO_IDLE, which
+	 * makes the sustainer use DISCHARGE instead of IDLE. This is done by
+	 * setting lower != upper in V2, which doesn't support the flag.
+	 */
+	switch (mode) {
+	case CHARGE_CONTROL_NORMAL:
+		/* Currently charging */
+		if (sustain_soc.upper < soc) {
+			/*
+			 * We come here only if the soc is already above the
+			 * upper limit at the time the sustainer started.
+			 */
+			new_mode = CHARGE_CONTROL_DISCHARGE;
+		} else if (sustain_soc.upper == soc) {
+			/*
+			 * We've been charging and finally reached the upper.
+			 * Let's switch to IDLE to stay.
+			 */
+			if (sustain_soc.flags & EC_CHARGE_CONTROL_FLAG_NO_IDLE)
+				new_mode = CHARGE_CONTROL_DISCHARGE;
+			else
+				new_mode = CHARGE_CONTROL_IDLE;
+		}
+		break;
+	case CHARGE_CONTROL_IDLE:
+		/* Discharging naturally */
+		if (soc < sustain_soc.lower)
+			/*
+			 * Presumably, we stayed in the sustain range for a
+			 * while but finally fell off the range. Let's charge to
+			 * the upper.
+			 */
+			new_mode = CHARGE_CONTROL_NORMAL;
+		else if (sustain_soc.upper < soc)
+			/*
+			 * This can happen only if sustainer is restarted with
+			 * decreased upper limit. Let's discharge to the upper.
+			 */
+			new_mode = CHARGE_CONTROL_DISCHARGE;
+		break;
+	case CHARGE_CONTROL_DISCHARGE:
+		/* Discharging actively. */
+		if (soc <= sustain_soc.upper &&
+		    !(sustain_soc.flags & EC_CHARGE_CONTROL_FLAG_NO_IDLE))
+			/*
+			 * Normal case. We've been discharging and finally
+			 * reached the upper. Let's switch to IDLE to stay.
+			 */
+			new_mode = CHARGE_CONTROL_IDLE;
+		else if (soc < sustain_soc.lower)
+			/*
+			 * This can happen only if sustainer is restarted with
+			 * increase lower limit. Let's charge to the upper (then
+			 * switch to IDLE).
+			 */
+			new_mode = CHARGE_CONTROL_NORMAL;
+		break;
+	default:
+		break;
+	}
+
+	return new_mode;
+}
+
 static void sustain_battery_soc(void)
 {
 	enum ec_charge_control_mode mode = get_chg_ctrl_mode();
-	int soc;
+	enum ec_charge_control_mode new_mode;
 	int rv;
 
 	/* If either AC or battery is not present, nothing to do. */
@@ -907,47 +997,15 @@ static void sustain_battery_soc(void)
 	    !battery_sustainer_enabled())
 		return;
 
-	soc = charge_get_display_charge() / 10;
+	new_mode = sustain_switch_mode(mode);
 
-	/*
-	 * When lower < upper, the sustainer discharges using DISCHARGE. When
-	 * lower == upper, the sustainer discharges using IDLE. The following
-	 * switch statement handle both cases but in reality either DISCHARGE
-	 * or IDLE is used but not both.
-	 */
-	switch (mode) {
-	case CHARGE_CONTROL_NORMAL:
-		/* Going up. Always DISCHARGE if the soc is above upper. */
-		if (sustain_soc.lower == soc && soc == sustain_soc.upper) {
-			mode = CHARGE_CONTROL_IDLE;
-		} else if (sustain_soc.upper < soc) {
-			mode = CHARGE_CONTROL_DISCHARGE;
-		}
-		break;
-	case CHARGE_CONTROL_IDLE:
-		/* Discharging naturally */
-		if (soc < sustain_soc.lower)
-			mode = CHARGE_CONTROL_NORMAL;
-		break;
-	case CHARGE_CONTROL_DISCHARGE:
-		/* Discharging actively. */
-		if (sustain_soc.lower == soc && soc == sustain_soc.upper) {
-			mode = CHARGE_CONTROL_IDLE;
-		} else if (soc < sustain_soc.lower) {
-			mode = CHARGE_CONTROL_NORMAL;
-		}
-		break;
-	default:
-		return;
-	}
-
-	if (mode == get_chg_ctrl_mode())
+	if (new_mode == mode)
 		return;
 
-	rv = set_chg_ctrl_mode(mode);
+	rv = set_chg_ctrl_mode(new_mode);
 	CPRINTS("%s: %s control mode to %s", __func__,
 		rv == EC_SUCCESS ? "Switched" : "Failed to switch",
-		mode_text[mode]);
+		mode_text[new_mode]);
 }
 
 static void current_limit_battery_soc(void)
@@ -999,22 +1057,14 @@ DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, bat_low_voltage_throttle_reset,
 static int get_desired_input_current(enum battery_present batt_present,
 				     const struct charger_info *const info)
 {
-	if (batt_present == BP_YES || system_is_locked() || base_connected()) {
 #ifdef CONFIG_CHARGE_MANAGER
-		int ilim = charge_manager_get_charger_current();
-		return ilim == CHARGE_CURRENT_UNINITIALIZED ?
-			       CHARGE_CURRENT_UNINITIALIZED :
-			       MAX(CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT, ilim);
+	int ilim = charge_manager_get_charger_current();
+	return ilim == CHARGE_CURRENT_UNINITIALIZED ?
+		       CHARGE_CURRENT_UNINITIALIZED :
+		       MAX(CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT, ilim);
 #else
-		return CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT;
+	return CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT;
 #endif
-	} else {
-#ifdef CONFIG_USB_POWER_DELIVERY
-		return MIN(PD_MAX_CURRENT_MA, info->input_current_max);
-#else
-		return info->input_current_max;
-#endif
-	}
 }
 
 static void wakeup_battery(int *need_static)
@@ -1874,16 +1924,22 @@ int charge_set_output_current_limit(int chgnum, int ma, int mv)
 }
 #endif
 
-int charge_set_input_current_limit(int ma, int mv)
+static int derate_input_current(int ma)
 {
-	__maybe_unused int chgnum = 0;
-
 #ifdef CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT
 	if (CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT != 0) {
 		ma = (ma * (100 - CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT)) /
 		     100;
 	}
 #endif
+	return ma;
+}
+
+int charge_set_input_current_limit(int ma, int mv)
+{
+	int chgnum = 0;
+
+	ma = derate_input_current(ma);
 #ifdef CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT
 	if (CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT > 0) {
 		ma = MAX(ma, CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT);
@@ -1917,8 +1973,10 @@ int charge_set_input_current_limit(int ma, int mv)
 		 */
 
 		if (mv > 0 &&
-		    mv * curr.desired_input_current > PD_MAX_POWER_MW * 1000)
+		    mv * curr.desired_input_current > PD_MAX_POWER_MW * 1000) {
 			ma = (PD_MAX_POWER_MW * 1000) / mv;
+			ma = derate_input_current(ma);
+		}
 		/*
 		 * If the active charger has already been initialized to at
 		 * least this current level, nothing left to do.
@@ -2058,6 +2116,18 @@ charge_command_charge_control(struct host_cmd_handler_args *args)
 				return EC_RES_UNAVAILABLE;
 			if (rv)
 				return EC_RES_INVALID_PARAM;
+			if (args->version == 2) {
+				/*
+				 * V2 uses lower == upper to indicate NO_IDLE.
+				 * TODO: Remove this if-branch once all OS-side
+				 * components are updated to v3.
+				 */
+				if (sustain_soc.lower < sustain_soc.upper)
+					sustain_soc.flags =
+						EC_CHARGE_CONTROL_FLAG_NO_IDLE;
+			} else {
+				sustain_soc.flags = p->flags;
+			}
 		} else {
 			battery_sustainer_disable();
 		}
@@ -2065,6 +2135,8 @@ charge_command_charge_control(struct host_cmd_handler_args *args)
 		r->mode = get_chg_ctrl_mode();
 		r->sustain_soc.lower = sustain_soc.lower;
 		r->sustain_soc.upper = sustain_soc.upper;
+		if (args->version > 2)
+			r->flags = sustain_soc.flags;
 		args->response_size = sizeof(*r);
 		return EC_RES_SUCCESS;
 	} else {
@@ -2078,7 +2150,7 @@ charge_command_charge_control(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_CHARGE_CONTROL, charge_command_charge_control,
-		     EC_VER_MASK(2));
+		     EC_VER_MASK(2) | EC_VER_MASK(3));
 
 static enum ec_status
 charge_command_current_limit(struct host_cmd_handler_args *args)

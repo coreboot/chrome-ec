@@ -6,15 +6,16 @@
 
 import dataclasses
 import logging
+import os
 import pathlib
 import typing
 
-import zmake.build_config as build_config
-import zmake.configlib as configlib
+from zmake import build_config
+from zmake import configlib
+from zmake import signers
+from zmake import toolchains
 import zmake.modules
 import zmake.output_packers
-import zmake.signers as signers
-import zmake.toolchains as toolchains
 
 
 def module_dts_overlay_name(modpath, board_name):
@@ -27,13 +28,7 @@ def module_dts_overlay_name(modpath, board_name):
     Returns:
         A pathlib.Path object to the expected overlay path.
     """
-    return (
-        modpath
-        / "zephyr"
-        / "dts"
-        / "board-overlays"
-        / "{}.dts".format(board_name)
-    )
+    return modpath / "zephyr" / "dts" / "board-overlays" / f"{board_name}.dts"
 
 
 @dataclasses.dataclass
@@ -156,8 +151,8 @@ class Project:
                 result[module] = module_paths[module]
             except KeyError as e:
                 raise KeyError(
-                    "The {!r} module is required by the {} project, but is not "
-                    "available.".format(module, self.config.project_dir)
+                    f"The {module!r} module is required by the "
+                    f"{self.config.project_dir} project, but is not available."
                 ) from e
         return result
 
@@ -269,24 +264,26 @@ def load_config_file(path) -> typing.List[Project]:
     return projects
 
 
-def find_projects(root_dir) -> typing.Dict[str, Project]:
+def find_projects(
+    root_dirs: typing.List[typing.Union[str, os.PathLike]]
+) -> typing.Dict[str, Project]:
     """Finds all zmake projects in root_dir.
 
     Args:
-        root_dir: the root dir as a pathlib.Path object
+        root_dirs: an list of dirs as Pathlike objects
 
     Returns:
         A dictionary mapping project names to Project objects.
     """
-    logging.debug("Finding zmake targets under '%s'.", root_dir)
     found_projects = {}
-    for path in pathlib.Path(root_dir).rglob("BUILD.py"):
-        for project in load_config_file(path):
-            if project.config.project_name in found_projects:
-                raise KeyError(
-                    "Duplicate project defined: {} (in {})".format(
-                        project.config.project_name, path
-                    )
-                )
-            found_projects[project.config.project_name] = project
+    for root_dir in root_dirs:
+        if pathlib.Path(root_dir).exists():
+            logging.debug("Finding zmake targets under '%s'.", root_dir)
+            for path in pathlib.Path(root_dir).rglob("BUILD.py"):
+                for project in load_config_file(path):
+                    if project.config.project_name in found_projects:
+                        raise KeyError(
+                            f"Duplicate project defined: {project.config.project_name} (in {path})"
+                        )
+                    found_projects[project.config.project_name] = project
     return found_projects

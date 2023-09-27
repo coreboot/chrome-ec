@@ -18,6 +18,21 @@
 /* When battery type is not initialized */
 #define BATTERY_TYPE_UNINITIALIZED -1
 
+struct battery_voltage_current {
+	uint16_t mv;
+	uint16_t ma;
+} __packed;
+
+struct battery_temperature_range {
+	int8_t min_c;
+	int8_t max_c;
+} __packed;
+
+struct fuel_gauge_reg_addr_data {
+	uint8_t addr;
+	uint16_t data;
+} __packed;
+
 struct ship_mode_info {
 	/*
 	 * Write Block Support. If wb_support is true, then we use a i2c write
@@ -46,10 +61,33 @@ struct fet_info {
 	uint16_t cfet_off_val;
 };
 
+enum fuel_gauge_flags {
+	/*
+	 * Write Block Support. If enabled, we use a i2c write block command
+	 * instead of a 16-bit write. The effective difference is the i2c
+	 * transaction will prefix the length (2).
+	 */
+	FUEL_GAUGE_FLAG_WRITE_BLOCK = BIT(0),
+	/* Sleep command support. fuel_gauge_info.sleep_mode must be defined. */
+	FUEL_GAUGE_FLAG_SLEEP_MODE = BIT(1),
+	/*
+	 * Manufacturer access command support. If enabled, FET status is read
+	 * from the OperationStatus (0x54) register using the
+	 * ManufacturerBlockAccess (0x44).
+	 */
+	FUEL_GAUGE_FLAG_MFGACC = BIT(2),
+	/*
+	 * SMB block protocol support in manufacturer access command. If
+	 * enabled, FET status is read from the OperationStatus (0x54) register
+	 * using the ManufacturerBlockAccess (0x44).
+	 */
+	FUEL_GAUGE_FLAG_MFGACC_SMB_BLOCK = BIT(3),
+};
+
 struct fuel_gauge_info {
 	char *manuf_name;
 	char *device_name;
-	uint8_t override_nil;
+	uint32_t flags;
 	struct ship_mode_info ship_mode;
 	struct sleep_mode_info sleep_mode;
 	struct fet_info fet;

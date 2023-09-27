@@ -559,6 +559,14 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "dochi",
+        baseboard = "brya",
+        board = "dochi",
+        chip = "npcx",
+        core = "cortex-m",
+        zephyr = False,
+    )
+    ec_target(
         name = "dojo",
         baseboard = "cherry",
         board = "dojo",
@@ -1413,6 +1421,11 @@ def all_targets():
     ec_target(
         name = "mtlrvpp_npcx",
         board = "mtlrvpp_npcx",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
+        name = "mtlrvpp_pd",
+        board = "mtlrvpp_pd",
         extra_modules = ["cmsis"],
     )
     ec_target(

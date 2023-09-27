@@ -12,9 +12,6 @@
 #define VARIANT_DEDEDE_EC_IT8320
 #include "baseboard.h"
 
-/* System unlocked in early development */
-#define CONFIG_SYSTEM_UNLOCKED
-
 #define CONFIG_CMD_CHARGER_DUMP
 
 /* I2C Bus Configuration */
@@ -32,6 +29,7 @@
 #define PD_MAX_VOLTAGE_MV 15000
 #define CONFIG_USB_PD_VBUS_DETECT_GPIO
 #define CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT
+#define CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS
 
 /* Override macro for C0 C1 */
 #define PORT_TO_HPD(port) \
@@ -72,6 +70,7 @@
 /* LED */
 #define CONFIG_LED_PWM
 #define CONFIG_LED_PWM_COUNT 1
+#define CONFIG_LED_PWM_TASK_DISABLED
 
 /* PWM */
 #define CONFIG_PWM

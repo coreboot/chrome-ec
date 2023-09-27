@@ -41,7 +41,6 @@ tests:
       - CONFIG_PLATFORM_EC_SWITCH=n
       - CONFIG_PLATFORM_EC_USB_PD_VBUS_MEASURE_NOT_PRESENT=y
       - CONFIG_PLATFORM_EC_VBOOT_HASH=n
-      - CONFIG_PLATFORM_EC_BC12_SINGLE_DRIVER=n
       - CONFIG_PLATFORM_EC_USB_PD_DISCHARGE=n
 
   # Rex project tests
@@ -103,9 +102,27 @@ tests:
       - CONFIG_PLATFORM_EC_USBC_PPC_SYV682C=y
       - CONFIG_PLATFORM_EC_USB_PD_DISCHARGE_PPC=y
       - CONFIG_PLATFORM_EC_USB_PD_TCPC_RUNTIME_CONFIG=y
+      - CONFIG_ESPI=y
   rex.karis.keyboard:
     extra_dtc_overlay_files:
       - boards/karis/karis.dtsi
     extra_configs:
       - CONFIG_TEST_PROJECT_KARIS=y
       - CONFIG_TEST_PROJECT_KEYBOARD=y
+  rex.karis.charger:
+    extra_dtc_overlay_files:
+      - boards/karis/karis.dtsi
+      - boards/karis/chargers.dtsi
+    extra_configs:
+      - CONFIG_TEST_PROJECT_KARIS=y
+      - CONFIG_TEST_PROJECT_CHARGER=y
+      - CONFIG_PLATFORM_EC_BACKLIGHT_LID=n
+      - CONFIG_PLATFORM_EC_BATTERY_FUEL_GAUGE=y
+      - CONFIG_PLATFORM_EC_CHARGER_ISL9241=y
+      - CONFIG_PLATFORM_EC_CHARGER_SENSE_RESISTOR=10
+      - CONFIG_PLATFORM_EC_CHARGER_SENSE_RESISTOR_AC=20
+      - CONFIG_PLATFORM_EC_HOSTCMD=y
+      - CONFIG_PLATFORM_EC_CHARGER=y
+      - CONFIG_PLATFORM_EC_USB_PD_VBUS_MEASURE_NOT_PRESENT=y
+      - CONFIG_PLATFORM_EC_USB_PD_DISCHARGE=n
+      - CONFIG_PLATFORM_EC_VBOOT_HASH=n

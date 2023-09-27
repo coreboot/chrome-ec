@@ -64,14 +64,13 @@ static timestamp_t vconn_oc_timer[CONFIG_USB_PD_PORT_MAX_COUNT];
 /* When FRS is enabled, the VCONN line isn't passed through to the TCPC */
 #if defined(CONFIG_USB_PD_FRS_PPC) && defined(CONFIG_USBC_VCONN) && \
 	!defined(CONFIG_USBC_PPC_VCONN)
-#error "if FRS is enabled on the SYV682X, VCONN must be supplied by the PPC "
-"instead of the TCPC"
+#error "if FRS is enabled on the SYV682X, VCONN must be supplied by the PPC " \
+	"instead of the TCPC"
 #endif
 
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 
-	static int
-	syv682x_vbus_sink_enable(int port, int enable);
+static int syv682x_vbus_sink_enable(int port, int enable);
 
 static int syv682x_init(int port);
 
@@ -763,8 +762,8 @@ static int syv682x_init(int port)
 	if (!syv682x_is_sink(control_1) || (status & SYV682X_STATUS_VSAFE_0V)) {
 		/*
 		 * Disable both power paths,
-		 * set HV_ILIM to 3.3A,
-		 * set 5V_ILIM to 3.3A,
+		 * set HV_ILIM to board default,
+		 * set 5V_ILIM to 1.25A,
 		 * set HV direction to sink,
 		 * select HV channel.
 		 */

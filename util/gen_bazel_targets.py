@@ -40,7 +40,10 @@ from chromite.format import formatters  # pylint: disable=wrong-import-position
 
 def _find_zephyr_ec_projects():
     """Find all Zephyr EC projects."""
-    for project in zmake.project.find_projects(ZEPHYR_DIR).values():
+    modules = zmake.modules.locate_from_checkout(find_checkout())
+    projects_path = zmake.modules.default_projects_dirs(modules)
+
+    for project in zmake.project.find_projects(projects_path).values():
         result = {"board": project.config.project_name}
         extra_modules = [x for x in project.config.modules if x != "ec"]
         if extra_modules:
