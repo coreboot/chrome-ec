@@ -3194,8 +3194,8 @@ test_export_static enum ec_error_list browse_flash_contents(int print)
 				erased = ' ';
 
 			if (ch->container_type_copy == NN_OBJ_TPM_RESERVED) {
-				ccprintf("%cR:%02x.%d       ", erased,
-					 *((uint8_t *)(ch + 1)),
+				ccprintf("%cR:%02x[%03x].%u  ", erased,
+					 *((uint8_t *)(ch + 1)), ch->size - 1,
 					 ch->generation);
 			} else {
 				uint32_t index;
@@ -3263,7 +3263,7 @@ static int command_dump_nvmem(int argc, char **argv)
 	nvmem_disable_commits();
 
 #ifdef CR50_DEV
-	/* Allow dumping ecnrypted NVMEM contents only to DEV builds. */
+	/* Allow dumping encrypted NVMEM contents only to DEV builds. */
 	print += (argc > 1);
 #endif
 	browse_flash_contents(print);
