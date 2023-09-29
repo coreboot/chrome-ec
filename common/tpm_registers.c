@@ -989,6 +989,7 @@ void tpm_task(void *u)
 		size_t buffer_size;
 		uint8_t alt_if_command;
 		bool drbg_initialized = false;
+		bool is_custom_command;
 
 		/* Process unprocessed events or wait for the next event */
 		if (!evt)
@@ -1040,9 +1041,11 @@ void tpm_task(void *u)
 		}
 
 		command_code = be32toh(tpmh->command_code);
-		CPRINTF("%s: received fifo command 0x%04x\n",
-			__func__, command_code);
-
+		is_custom_command = IS_CUSTOM_CODE(command_code);
+		CPRINTF("%s: received fifo %scommand 0x%04x\n", __func__,
+			(is_custom_command) ? "vendor " : "",
+			(is_custom_command) ? be16toh(tpmh->subcommand_code) :
+					      command_code);
 		watchdog_reload();
 		/* Make sure system DRBG is initialized */
 		if (!drbg_initialized) {
@@ -1052,7 +1055,7 @@ void tpm_task(void *u)
 		}
 
 #ifdef CONFIG_EXTENSION_COMMAND
-		if (IS_CUSTOM_CODE(command_code)) {
+		if (is_custom_command) {
 			response_size = buffer_size;
 			call_extension_command(tpmh, &response_size,
 					       alt_if_command ?
@@ -1117,7 +1120,7 @@ void tpm_task(void *u)
 				board_cfg_reg_write_disable();
 
 #ifdef CONFIG_EXTENSION_COMMAND
-			if (!IS_CUSTOM_CODE(command_code))
+			if (!is_custom_command)
 #endif
 			{
 				/*
