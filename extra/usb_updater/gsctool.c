@@ -304,18 +304,38 @@ struct options_map {
 };
 
 /*
+ * Type of the GSC device we're supposed to be connected to. Is determined
+ * based on various inputs, like command line parameters and/or image supplied
+ * for downloading.
+ */
+enum gsc_device {
+	GSC_DEVICE_ANY = 0,
+	GSC_DEVICE_H1,
+	GSC_DEVICE_DT,
+};
+
+/*
  * Structure used to combine option description used by getopt_long() and help
  * text for the option.
  */
 struct option_container {
 	struct option opt;
 	const char *help_text;
+	enum gsc_device opt_device; /* Initted to ANY by default. */
 };
 
 static void sha_init(EVP_MD_CTX *ctx);
 static void sha_update(EVP_MD_CTX *ctx, const void *data, size_t len);
 static void sha_final_into_block_digest(EVP_MD_CTX *ctx, void *block_digest,
 					size_t size);
+
+/* Type of the GSC device we are talking to, determined at run time. */
+static enum gsc_device gsc_dev = GSC_DEVICE_ANY;
+/*
+ * Type of the GSC device the currently processed command line option
+ * requires, set during option scanning along with optarg.
+ */
+static enum gsc_device opt_gsc_dev = GSC_DEVICE_ANY;
 
 /*
  * Current AP RO verification config setting version
@@ -424,30 +444,33 @@ static char *progname;
  * print the rest of the text message at a fixed indentation.
  */
 static const struct option_container cmd_line_options[] = {
-	/* name   has_arg    *flag  val */
+	/* {{name   has_arg    *flag  val} long_desc dev_type} */
 	{ { "get_apro_hash", no_argument, NULL, 'A' },
 	  "get the stored ap ro hash" },
 	{ { "any", no_argument, NULL, 'a' },
 	  "Try any interfaces to find Cr50"
 	  " (-d, -s, -t are all ignored)" },
 	{ { "apro_boot", optional_argument, NULL, 'B' },
-	  "[start] get the stored ap ro boot state or start ap ro verify" },
+	  "[start] get the stored ap ro boot state or start ap ro verify",
+	  GSC_DEVICE_DT },
 	{ { "binvers", no_argument, NULL, 'b' },
 	  "Report versions of Cr50 image's "
 	  "RW and RO headers, do not update" },
 	{ { "apro_config_spi_mode", optional_argument, NULL, 'C' },
-	  "Get/set the ap ro verify spi mode either to `3byte` or `4byte`" },
+	  "Get/set the ap ro verify spi mode either to `3byte` or `4byte`",
+	  GSC_DEVICE_DT },
 	{ { "corrupt", no_argument, NULL, 'c' }, "Corrupt the inactive rw" },
 	{ { "dauntless", no_argument, NULL, 'D' },
-	  "Communicate with Dauntless chip. This may be implied or overridden"
-	  " by --image flag values" },
+	  "Communicate with Dauntless chip. This may also be implied.",
+	  GSC_DEVICE_DT },
 	{ { "device", required_argument, NULL, 'd' },
 	  "VID:PID%USB device (default 18d1:5014 or 18d1:504a based on"
 	  " image)" },
 	{ { "apro_config_write_protect", optional_argument, NULL, 'E' },
 	  "Get/set the ap ro verify write protect descriptors with hex "
 	  "bytes (ex: 0x01, 0x1, 01 or 1) in the following format: "
-	  "[sr1 mask1 [sr2 mask2] [sr3 mask3]]" },
+	  "[sr1 mask1 [sr2 mask2] [sr3 mask3]]",
+	  GSC_DEVICE_DT },
 	{ { "endorsement_seed", optional_argument, NULL, 'e' },
 	  "[state]%get/set the endorsement key seed" },
 	{ { "factory", required_argument, NULL, 'F' },
@@ -459,7 +482,8 @@ static const struct option_container cmd_line_options[] = {
 	{ { "getbootmode", no_argument, NULL, 'g' },
 	  "Get the system boot mode" },
 	{ { "erase_ap_ro_hash", no_argument, NULL, 'H' },
-	  "Erase AP RO hash (possible only if Board ID is not set)" },
+	  "Erase AP RO hash (possible only if Board ID is not set)",
+	  GSC_DEVICE_H1 },
 	{ { "help", no_argument, NULL, 'h' }, "Show this message" },
 	{ { "ccd_info", optional_argument, NULL, 'I' },
 	  "[capability:value]%Get information about CCD state or set capability"
@@ -469,16 +493,19 @@ static const struct option_container cmd_line_options[] = {
 	  "hex or 4 character string." },
 	{ { "boot_trace", optional_argument, NULL, 'J' },
 	  "[erase]%Retrieve boot trace from the chip, optionally erasing "
-	  "the trace buffer" },
+	  "the trace buffer",
+	  GSC_DEVICE_DT },
 	{ { "get_value", required_argument, NULL, 'K' },
-	  "Get value of one of [chassis_open]." },
+	  "Get value of one of [chassis_open].",
+	  GSC_DEVICE_DT },
 	{ { "ccd_lock", no_argument, NULL, 'k' }, "Lock CCD" },
 	{ { "flog", optional_argument, NULL, 'L' },
 	  "[prev entry]%Retrieve contents of the flash log"
 	  " (newer than <prev entry> if specified)" },
 	{ { "console", no_argument, NULL, 'l' },
 	  "Get console logs. This may need to be run multiple times to collect "
-	  "all available logs." },
+	  "all available logs.",
+	  GSC_DEVICE_DT },
 	{ { "machine", no_argument, NULL, 'M' },
 	  "Output in a machine-friendly way. "
 	  "Effective with -b, -f, -i, -J, -r, and -O." },
@@ -515,11 +542,14 @@ static const struct option_container cmd_line_options[] = {
 	{ { "verbose", no_argument, NULL, 'V' }, "Enable debug messages" },
 	{ { "version", no_argument, NULL, 'v' },
 	  "Report this utility version" },
-	{ { "metrics", no_argument, NULL, 'W' }, "Get Ti50 metrics" },
+	{ { "metrics", no_argument, NULL, 'W' },
+	  "Get Ti50 metrics",
+	  GSC_DEVICE_DT },
 	{ { "wp", optional_argument, NULL, 'w' },
 	  "[enable] Get the current WP setting or enable WP" },
 	{ { "clog", no_argument, NULL, 'x' },
-	  "Retrieve contents of the most recent crash log." },
+	  "Retrieve contents of the most recent crash log.",
+	  GSC_DEVICE_DT },
 	{ { "factory_config", optional_argument, NULL, 'y' },
 	  "[value]%Sets the factory config bits in INFO. value should be 64 "
 	  "bit hex." },
@@ -1131,12 +1161,6 @@ static struct {
 		 [RW_B] = { "RW_B", CONFIG_RW_B_MEM_OFF, CONFIG_RW_SIZE } };
 
 /*
- * This is set during locate_headers and can be used to fork logic between H1
- * and D2 if needed.
- */
-static uint32_t image_magic;
-
-/*
  * Remove these definitions so a developer doesn't accidentally use them in
  * the future. All lookups should go through the sections array.
  */
@@ -1224,8 +1248,14 @@ static bool locate_headers(const void *image, const uint32_t size)
 	 * for RW headers.
 	 */
 	if (size == (512 * 1024)) {
-		image_magic = MAGIC_HAVEN;
-		/* Leave defaults in sections array untouched */
+		if (gsc_dev == GSC_DEVICE_ANY) {
+			gsc_dev = GSC_DEVICE_H1;
+			return true;
+		}
+		if (gsc_dev != GSC_DEVICE_H1) {
+			fprintf(stderr, "Error: Cannot use Cr50 image.\n");
+			return false;
+		}
 		return true;
 	}
 
@@ -1245,8 +1275,18 @@ static bool locate_headers(const void *image, const uint32_t size)
 		fprintf(stderr, "\nERROR: RO_A header is invalid\n");
 		return false;
 	}
-	/* Store magic so other logic can fork if needed based on H1/D2 */
-	image_magic = h->magic;
+
+	if (h->magic != MAGIC_DAUNTLESS) {
+		fprintf(stderr,
+			"Error: Cannot use non-Ti50 image with dauntless.\n");
+		return false;
+	}
+
+	if ((gsc_dev != GSC_DEVICE_ANY) && (gsc_dev != GSC_DEVICE_DT))
+		return false;
+
+	gsc_dev = GSC_DEVICE_DT;
+
 	sections[RO_A].offset = 0;
 	sections[RO_A].size = h->image_size;
 
@@ -1374,7 +1414,7 @@ static void check_rw_upgrade(const struct signed_header_version *current_rw,
 	const int current_less_than_15 = a_newer_than_b(&ver15, current_rw);
 	const int to_greater_than_15 = a_newer_than_b(to_rw, &ver15);
 
-	if (image_magic == MAGIC_DAUNTLESS && current_less_than_15 &&
+	if ((gsc_dev == GSC_DEVICE_DT) && current_less_than_15 &&
 	    to_greater_than_15) {
 		printf("Must upgrade to RW 0.0.15 first!\n");
 		/*  Do not continue with any upgrades RW or RO */
@@ -1599,11 +1639,11 @@ static void send_done(struct usb_endpoint *uep)
  */
 static int supports_reordered_section_updates(struct signed_header_version *rw)
 {
-	switch (image_magic) {
-	case MAGIC_HAVEN:
+	switch (gsc_dev) {
+	case GSC_DEVICE_H1:
 		return (rw->epoch || rw->major > 4 ||
 			(rw->major >= 3 && rw->minor >= 20));
-	case MAGIC_DAUNTLESS:
+	case GSC_DEVICE_DT:
 		return true;
 	default:
 		return false;
@@ -1997,10 +2037,14 @@ static void generate_reset_request(struct transfer_descriptor *td)
 /* Forward to correct SHA implementation based on image type */
 static void sha_init(EVP_MD_CTX *ctx)
 {
-	if (image_magic == MAGIC_HAVEN)
+	if (gsc_dev == GSC_DEVICE_H1)
 		EVP_DigestInit_ex(ctx, EVP_sha1(), NULL);
-	else if (image_magic == MAGIC_DAUNTLESS)
+	else if (gsc_dev == GSC_DEVICE_DT)
 		EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
+	else {
+		fprintf(stderr, "Error: unknown GSC device type\n");
+		exit(update_error);
+	}
 }
 
 /* Forward to correct SHA implementation based on image type */
@@ -3864,12 +3908,19 @@ static int pop_flog(struct transfer_descriptor *td,
  * access.
  */
 static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
-			    bool show_machine_output, bool is_dauntless)
+			    bool show_machine_output)
 {
 	int rv;
 	const int max_retries = 3;
 	int retries = max_retries;
 	bool time_zone_reported = false;
+	bool is_dauntless;
+
+	/*
+	 * For backwards compatibility assume DT only if was explicitly
+	 * requested.
+	 */
+	is_dauntless = (gsc_dev == GSC_DEVICE_DT);
 
 	while (retries--) {
 		struct parsed_flog_entry entry = { 0 };
@@ -4098,6 +4149,8 @@ static int getopt_all(int argc, char *argv[])
 			 */
 			longindex = get_longindex(i, long_opts);
 		}
+
+		opt_gsc_dev = cmd_line_options[longindex].opt_device;
 
 		if (long_opts[longindex].has_arg == optional_argument) {
 			/*
@@ -4349,6 +4402,32 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 	return 0;
 }
 
+/*
+ * Try setting the GSC device type.
+ *
+ * dev - type to set to
+ * option - short command line option requiring this device type
+ * error_counter - pointer to the counter to increment in case of error.
+ *
+ * Returns false and increments error counter if gsc_dev is already set to a
+ * different device type.
+ */
+static bool set_device_type(enum gsc_device dev, char option,
+			    int *error_counter)
+{
+	if (gsc_dev == dev)
+		return true;
+
+	if (gsc_dev == GSC_DEVICE_ANY) {
+		gsc_dev = dev;
+		return true;
+	}
+
+	fprintf(stderr, "Inconsistent -%c option\n", option);
+	(*error_counter)++;
+	return false;
+}
+
 int main(int argc, char *argv[])
 {
 	struct transfer_descriptor td;
@@ -4405,7 +4484,6 @@ int main(int argc, char *argv[])
 	int sn_inc_rma = 0;
 	uint8_t sn_inc_rma_arg = 0;
 	int erase_ap_ro_hash = 0;
-	int is_dauntless = 0;
 	int set_capability = 0;
 	const char *capability_parameter = "";
 	bool reboot_gsc = false;
@@ -4426,13 +4504,19 @@ int main(int argc, char *argv[])
 	 * with addresses of the flags. Terminated by a zeroed entry.
 	 */
 	const struct options_map omap[] = {
-		{ 'b', &binary_vers },	 { 'c', &corrupt_inactive_rw },
-		{ 'D', &is_dauntless },	 { 'f', &show_fw_ver },
-		{ 'g', &get_boot_mode }, { 'H', &erase_ap_ro_hash },
-		{ 'k', &ccd_lock },	 { 'o', &ccd_open },
-		{ 'P', &password },	 { 'p', &td.post_reset },
-		{ 'U', &ccd_unlock },	 { 'u', &td.upstart_mode },
-		{ 'V', &verbose_mode },	 {},
+		{ 'b', &binary_vers },
+		{ 'c', &corrupt_inactive_rw },
+		{ 'f', &show_fw_ver },
+		{ 'g', &get_boot_mode },
+		{ 'H', &erase_ap_ro_hash },
+		{ 'k', &ccd_lock },
+		{ 'o', &ccd_open },
+		{ 'P', &password },
+		{ 'p', &td.post_reset },
+		{ 'U', &ccd_unlock },
+		{ 'u', &td.upstart_mode },
+		{ 'V', &verbose_mode },
+		{},
 	};
 
 	/*
@@ -4458,6 +4542,10 @@ int main(int argc, char *argv[])
 	opterr = 0; /* quiet, you */
 
 	while ((i = getopt_all(argc, argv)) != -1) {
+		if (opt_gsc_dev != GSC_DEVICE_ANY) {
+			if (!set_device_type(opt_gsc_dev, i, &errorcnt))
+				continue;
+		}
 		if (check_boolean(omap, i))
 			continue;
 		switch (i) {
@@ -4491,6 +4579,13 @@ int main(int argc, char *argv[])
 			else
 				arv_config_spi_addr_mode =
 					arv_config_spi_addr_mode_get;
+			break;
+		case 'D':
+			/*
+			 * as a result of processing this command line option
+			 * gsc_dev has been set to GSC_DEVICE_DT by
+			 * set_device_type(), no further action is required.
+			 */
 			break;
 		case 'd':
 			if (!parse_vidpid(optarg, &vid, &pid)) {
@@ -4550,7 +4645,7 @@ int main(int argc, char *argv[])
 				set_capability = 1;
 				capability_parameter = optarg;
 				/* Supported on Dauntless only. */
-				is_dauntless = 1;
+				set_device_type(GSC_DEVICE_DT, i, &errorcnt);
 			} else {
 				ccd_info = 1;
 			}
@@ -4588,8 +4683,6 @@ int main(int argc, char *argv[])
 				break;
 			}
 			get_chassis_open = true;
-			/* The TPMV command is only support for DT now */
-			is_dauntless = true;
 			break;
 		case 'L':
 			get_flog = 1;
@@ -4677,13 +4770,13 @@ int main(int argc, char *argv[])
 			if (!strcasecmp(optarg, "disable")) {
 				wp = WP_DISABLE;
 				/* Supported on Dauntless only. */
-				is_dauntless = 1;
+				set_device_type(GSC_DEVICE_DT, i, &errorcnt);
 				break;
 			}
 			if (!strcasecmp(optarg, "follow")) {
 				wp = WP_FOLLOW;
 				/* Supported on Dauntless only. */
-				is_dauntless = 1;
+				set_device_type(GSC_DEVICE_DT, i, &errorcnt);
 				break;
 			}
 			fprintf(stderr, "Illegal wp option \"%s\"\n", optarg);
@@ -4734,13 +4827,6 @@ int main(int argc, char *argv[])
 	if (errorcnt)
 		usage(errorcnt);
 
-	/*
-	 * If dauntless was explicitly asked for, then use it; otherwise default
-	 * to haven. Note this may get overridden if the --image flag specifies
-	 * a dauntless or haven image.
-	 */
-	image_magic = is_dauntless ? MAGIC_DAUNTLESS : MAGIC_HAVEN;
-
 	if ((bid_action == bid_none) &&
 	    (arv_config_spi_addr_mode == arv_config_spi_addr_mode_none) &&
 	    (arv_config_wpsr_choice == arv_config_wpsr_choice_none) &&
@@ -4784,19 +4870,9 @@ int main(int argc, char *argv[])
 	     (wp != WP_NONE) + !!get_endorsement_seed + !!erase_ap_ro_hash +
 	     !!set_capability + !!get_clog + !!get_console) > 1) {
 		fprintf(stderr,
-			"ERROR: options "
+			"Error: options "
 			"-e, -F, -g, -H, -I, -i, -k, -L, -l, -O, -o, -P, -r,"
 			"-U, -x and -w are mutually exclusive\n");
-		exit(update_error);
-	}
-
-	/*
-	 * Ensure that the the -D (dauntless) command line argument was not
-	 * explicitly passed while we are trying to update a cr50 image.
-	 */
-	if (is_dauntless && image_magic != MAGIC_DAUNTLESS) {
-		fprintf(stderr,
-			"ERROR: Cannot use non-Ti50 image with dauntless.\n");
 		exit(update_error);
 	}
 
@@ -4813,40 +4889,50 @@ int main(int argc, char *argv[])
 		if (!serial && !vid && !pid) {
 			vid = USB_VID_GOOGLE;
 			/*
-			 * Set default product id based on image type. Image
-			 * magic was set based on is_dauntless command line
-			 * option, but image_magic can be updated during
-			 * FW image scanning based on image contents.
+			 * Set default product id based on expected device
+			 * type set when processing command line options. If
+			 * device type is not set - start with H1.
 			 */
-			pid = (image_magic == MAGIC_DAUNTLESS) ? D2_PID :
-								 H1_PID;
+			pid = (gsc_dev == GSC_DEVICE_DT) ? D2_PID : H1_PID;
 			if (usb_findit(serial, vid, pid, subclass, protocol,
 				       &td.uep)) {
 				/*
-				 * If we have a valid FW image, or dauntless was
-				 * specifically requested, do not try an
-				 * alternate pid. Exit immediately.
+				 * If a certain device was requested and has
+				 * not been found - exit.
 				 */
-				if (fw_image_data || is_dauntless)
+				if (gsc_dev != GSC_DEVICE_ANY)
 					exit(update_error);
 				/*
-				 * Try the other pid, and fail if not present.
-				 * The only way to get here is if we tried H1
-				 * first, since trying dauntless first means it
-				 * was explicitly requested on cmd or it was
-				 * selected based in input fw images. Both of
-				 * those cases just exited above.
+				 * Try Dauntless, as the only way to get here
+				 * is when a particular device was not
+				 * requested and we tried H1 first.
 				 */
 				pid = D2_PID;
-				image_magic = MAGIC_DAUNTLESS;
 				if (usb_findit(serial, vid, pid, subclass,
 					       protocol, &td.uep))
 					exit(update_error);
+				gsc_dev = GSC_DEVICE_DT;
 			}
 		} else {
 			if (usb_findit(serial, vid, pid, subclass, protocol,
 				       &td.uep))
 				exit(update_error);
+		}
+		/* Make sure device type is set. */
+		if (gsc_dev == GSC_DEVICE_ANY) {
+			switch (pid) {
+			case D2_PID:
+				gsc_dev = GSC_DEVICE_DT;
+				break;
+			case H1_PID:
+				gsc_dev = GSC_DEVICE_H1;
+				break;
+			default:
+				fprintf(stderr,
+					"EROOR: Unsupported USB PID %04x\n",
+					pid);
+				exit(update_error);
+			}
 		}
 	} else if (td.ep_type == dev_xfer) {
 		td.tpm_fd = open("/dev/tpm0", O_RDWR);
@@ -4858,6 +4944,10 @@ int main(int argc, char *argv[])
 			td.ep_type = ts_xfer;
 		}
 	}
+
+	/* If device type still not clear - fall back to H1. */
+	if (gsc_dev == GSC_DEVICE_ANY)
+		gsc_dev = GSC_DEVICE_H1;
 
 	if (openbox_desc_file)
 		return verify_ro(&td, openbox_desc_file, show_machine_output);
@@ -4920,8 +5010,7 @@ int main(int argc, char *argv[])
 		exit(process_get_boot_mode(&td));
 
 	if (get_flog)
-		process_get_flog(&td, prev_log_entry, show_machine_output,
-				 is_dauntless);
+		process_get_flog(&td, prev_log_entry, show_machine_output);
 
 	if (erase_ap_ro_hash)
 		process_erase_ap_ro_hash(&td);
@@ -4972,8 +5061,8 @@ int main(int argc, char *argv[])
 		}
 
 		/*
-		 * Move USB updater sate machine to idle state so that vendor
-		 * commands can be processed later, if any.
+		 * Move USB updater sate machine to idle state so that
+		 * vendor commands can be processed later, if any.
 		 */
 		if (td.ep_type == usb_xfer)
 			send_done(&td.uep);
