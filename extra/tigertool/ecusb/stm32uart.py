@@ -34,7 +34,7 @@ class SuartError(Exception):
         self.value = value
 
 
-class Suart(object):
+class Suart:
     """Provide interface to stm32 serial usb endpoint."""
 
     def __init__(
@@ -165,7 +165,7 @@ class Suart(object):
 
         tty.setraw(self._ptym, termios.TCSADRAIN)
 
-        # Generate a HUP flag on pty slave fd.
+        # Generate a HUP flag on pty secondary fd.
         os.fdopen(s).close()
 
         self._running = True

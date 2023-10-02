@@ -82,8 +82,6 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "pdeval-stm32f072",
     "plankton",
     "prism",
-    "rainier",
-    "scarlet",
     "servo_micro",
     "servo_v4",
     "servo_v4p1",
@@ -232,7 +230,6 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "voxel",
     "voxel_ecmodeentry",
     "voxel_npcx797fc",
-    "waddledoo",
     "waddledoo2",
     "whiskers",
     "woomax",
@@ -299,6 +296,10 @@ BOARDS_THAT_FAIL_WITH_CLANG = [
     "chocodile_vpdmcu",  # compilation error: b/254710459
     # Boards that use CHIP:=npcx
     "garg",
+    # Boards that don't fit in flash with clang
+    "corori2",
+    "cret",
+    "mushu",
     "volteer",
     # Not enough flash space with CONFIG_POWER_SLEEP_FAILURE_DETECTION enabled
     "burnet",
@@ -308,6 +309,7 @@ BOARDS_THAT_FAIL_WITH_CLANG = [
     "drawcia_riscv",
     "krane",
     "mushu",
+    "waddledoo",
 ]
 
 # TODO(b/201311714): NDS32 is not supported by LLVM.
