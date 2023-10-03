@@ -216,6 +216,8 @@ tests:
 
       - CONFIG_POWER_SEQUENCE_MOCK=y
       - CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP=y
+      - CONFIG_PLATFORM_EC_POWERSEQ_S0IX=y
+      - CONFIG_PLATFORM_EC_EMULATED_SYSRQ=y
   drivers.ps8xxx:
     extra_args: >
       CONF_FILE="prj.conf;ps8xxx/prj.conf"

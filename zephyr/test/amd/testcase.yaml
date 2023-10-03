@@ -8,3 +8,5 @@ tests:
   amd.stb_dump:
     extra_configs:
       - CONFIG_TEST_AMD_STB_DUMP=y
+      - CONFIG_PLATFORM_EC_EMULATED_SYSRQ=y
+      - CONFIG_PLATFORM_EC_MKBP_EVENT=y
