@@ -3,6 +3,12 @@
  * found in the LICENSE file.
  */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 11
+
 #include "common.h"
 #include "ec_tasks.h"
 #include "host_command.h"
@@ -27,14 +33,28 @@ CROS_EC_TASK_LIST
 #undef CROS_EC_TASK
 #undef TASK_TEST
 
+#if defined(__llvm__)
+/*
+ * b/303207178 LLVM trigger a harmless division-by-zero on SYS_TIMEOUT_MS, due
+ * to an element of z_tmcvt_64 resulting in a "/ ((1000) / (10000))" in some
+ * specific tick and clock configuration on some platforms.
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdivision-by-zero"
+#endif
+
 /* Statically declare all threads here */
 #define CROS_EC_TASK(name, entry, parameter, stack_size, priority)      \
 	K_THREAD_DEFINE(name, stack_size, entry, parameter, NULL, NULL, \
-			EC_TASK_PRIORITY(priority), 0, -1);
+			EC_TASK_PRIORITY(priority), 0, SYS_FOREVER_MS);
 #define TASK_TEST(name, e, p, size) CROS_EC_TASK(name, e, p, size)
 CROS_EC_TASK_LIST
 #undef CROS_EC_TASK
 #undef TASK_TEST
+
+#if defined(__llvm__)
+#pragma GCC diagnostic pop
+#endif
 
 struct task_ctx_base_data {
 	/** A wait-able event that is raised when a new task event is posted */

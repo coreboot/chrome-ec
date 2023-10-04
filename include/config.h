@@ -590,6 +590,12 @@
 #undef CONFIG_BATTERY_CUTOFF_DELAY_US
 
 /*
+ * After the EC executes battery cutoff, it'll wait for this amount of time in
+ * msec before deciding the cutoff failed.
+ */
+#define CONFIG_BATTERY_CUTOFF_TIMEOUT_MSEC 8000
+
+/*
  * The board-specific battery.c implements get and set functions to read and
  * write arbirary vendor-specific parameters stored in the battery.
  * See include/battery.h for prototypes.
@@ -1489,8 +1495,6 @@
 #undef CONFIG_CHIPSET_MT8183 /* MediaTek MT8183 */
 #undef CONFIG_CHIPSET_MT8192 /* MediaTek MT8192 */
 #undef CONFIG_CHIPSET_CEZANNE /* AMD Cezanne (x86) */
-#undef CONFIG_CHIPSET_RK3288 /* Rockchip rk3288 */
-#undef CONFIG_CHIPSET_RK3399 /* Rockchip rk3399 */
 #undef CONFIG_CHIPSET_SKYLAKE /* Intel Skylake (x86) */
 #undef CONFIG_CHIPSET_SC7180 /* Qualcomm SC7180 */
 #undef CONFIG_CHIPSET_SC7280 /* Qualcomm SC7280 */
@@ -1778,6 +1782,13 @@
  * mode.
  */
 #define CONFIG_SYSTEM_SAFE_MODE_PRINT_STACK
+
+/*
+ * Enables fetching a memory dump using host commands. This is useful when
+ * debugging panics. May not dump all memory, e.g. sensitive memory will
+ * not be dumped.
+ */
+#undef CONFIG_HOST_COMMAND_MEMORY_DUMP
 
 /*
  * Panic on watchdog warning instead of waiting for a regular watchdog.
@@ -5285,6 +5296,11 @@
 #undef CONFIG_USBC_NX20P348X_RCP_5VSRC_MASK_ENABLE
 
 /*
+ * Setting SYV682X OVP to 15v power profile application
+ */
+#undef CONFIG_USBC_PPC_SYV682X_OVP_SET_15V
+
+/*
  * SYV682x PPC high voltage power path current limit.  Default limit is
  * 3.3A.  See the syv682x header file for permissible values.
  */
@@ -6050,7 +6066,7 @@
 #if !defined(CONFIG_USBC_SS_MUX)
 #error CONFIG_USBC_SS_MUX must be enabled for USB4 mode support
 #endif
-#if !defined(CONFIG_USB_PD_ALT_MODE_DFP)
+#if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_USB_PD_ALT_MODE_DFP)
 #error CONFIG_USB_PD_ALT_MODE_DFP must be enabled for USB4 mode support
 #endif
 #endif
@@ -6316,6 +6332,12 @@
 #define CONFIG_BATTERY
 #endif
 
+#if defined(CONFIG_CBI_EEPROM) || defined(CONFIG_CBI_FLASH)
+#if defined(CONFIG_BATTERY) && defined(CONFIG_BATTERY_FUEL_GAUGE)
+#define CONFIG_BATTERY_CONFIG_IN_CBI
+#endif
+#endif
+
 /******************************************************************************/
 /*
  * Ensure CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS is only used on
@@ -6576,8 +6598,6 @@
 #undef CONFIG_CHIPSET_MT8183
 #undef CONFIG_CHIPSET_MT8192
 #undef CONFIG_CHIPSET_CEZANNE
-#undef CONFIG_CHIPSET_RK3399
-#undef CONFIG_CHIPSET_RK3288
 #undef CONFIG_CHIPSET_SDM845
 #undef CONFIG_CHIPSET_SKYLAKE
 #undef CONFIG_CHIPSET_STONEY

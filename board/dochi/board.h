@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* Brya board configuration */
+/* Dochi board configuration */
 
 #ifndef __CROS_EC_BOARD_H
 #define __CROS_EC_BOARD_H
@@ -11,7 +11,7 @@
 #include "compile_time_macros.h"
 
 /*
- * Early brya boards are not set up for vivaldi
+ * Early dochi boards are not set up for vivaldi
  */
 #undef CONFIG_KEYBOARD_VIVALDI
 
@@ -27,16 +27,7 @@
 #define CONFIG_MP2964
 
 /* LED */
-#define CONFIG_LED_PWM
-#define CONFIG_LED_PWM_COUNT 2
-#undef CONFIG_LED_PWM_NEAR_FULL_COLOR
-#undef CONFIG_LED_PWM_SOC_ON_COLOR
-#undef CONFIG_LED_PWM_SOC_SUSPEND_COLOR
-#undef CONFIG_LED_PWM_LOW_BATT_COLOR
-#define CONFIG_LED_PWM_NEAR_FULL_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
+#define CONFIG_LED_ONOFF_STATES
 
 /* Sensors */
 #define CONFIG_ACCELGYRO_LSM6DSO /* Base accel */
@@ -78,17 +69,8 @@
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USB Type C and USB PD defines */
-#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
-
-#define CONFIG_IO_EXPANDER
-#define CONFIG_IO_EXPANDER_NCT38XX
-#define CONFIG_IO_EXPANDER_PORT_COUNT 2
-
+#define CONFIG_USB_PD_TCPM_RT1715 /* TCPC C0/C1 */
 #define CONFIG_USB_PD_FRS_PPC
-
-#define CONFIG_USB_PD_TCPM_PS8815
-#define CONFIG_USB_PD_TCPM_PS8815_FORCE_DID
-#define CONFIG_USBC_RETIMER_INTEL_BB
 
 /* USB CHARGE DISABLE*/
 #undef CONFIG_USB_CHARGER
@@ -101,8 +83,6 @@
 #define CONFIG_HOSTCMD_I2C_CONTROL
 
 #define CONFIG_USBC_PPC_SYV682X
-#define CONFIG_USBC_PPC_NX20P3483
-
 /* TODO: b/177608416 - measure and check these values on brya */
 #define PD_POWER_SUPPLY_TURN_ON_DELAY 30000 /* us */
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 30000 /* us */
@@ -175,22 +155,6 @@
 
 #define I2C_ADDR_MP2964_FLAGS 0x20
 
-/*
- * see b/174768555#comment22
- */
-#define USBC_PORT_C0_BB_RETIMER_I2C_ADDR 0x56
-#define USBC_PORT_C2_BB_RETIMER_I2C_ADDR 0x57
-
-/* Enabling Thunderbolt-compatible mode */
-#define CONFIG_USB_PD_TBT_COMPAT_MODE
-
-/* Enabling USB4 mode */
-#define CONFIG_USB_PD_USB4
-#define CONFIG_USB_PD_DATA_RESET_MSG
-
-/* Retimer */
-#define CONFIG_USBC_RETIMER_FW_UPDATE
-
 /* Thermal features */
 #define CONFIG_THERMISTOR
 #define CONFIG_TEMP_SENSOR
@@ -241,17 +205,11 @@ enum sensor_id {
 	SENSOR_COUNT
 };
 
-enum ioex_port { IOEX_C0_NCT38XX = 0, IOEX_C2_NCT38XX, IOEX_PORT_COUNT };
-
 enum battery_type { BATTERY_POWER_TECH, BATTERY_LGC011, BATTERY_TYPE_COUNT };
 
 enum pwm_channel {
-	PWM_CH_LED2 = 0, /* PWM0 (white charger) */
-	PWM_CH_LED3, /* PWM1 (orange on DB) */
-	PWM_CH_LED1, /* PWM2 (orange charger) */
-	PWM_CH_KBLIGHT, /* PWM3 */
+	PWM_CH_KBLIGHT = 0, /* PWM3 */
 	PWM_CH_FAN, /* PWM5 */
-	PWM_CH_LED4, /* PWM7 (white on DB) */
 	PWM_CH_COUNT
 };
 

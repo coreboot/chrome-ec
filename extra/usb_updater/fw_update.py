@@ -9,13 +9,11 @@
 from __future__ import print_function
 
 import argparse
-import array
 import json
 import os
 from pprint import pprint
 import struct
 import sys
-import time
 
 from ecusb.stm32usb import SusbError
 import usb  # pylint:disable=import-error
@@ -37,7 +35,7 @@ def log(msg):
 """Sends firmware update to CROS EC usb endpoint."""
 
 
-class Supdate(object):
+class Supdate:
     """Class to access firmware update endpoints.
 
     Usage:
@@ -97,7 +95,7 @@ class Supdate(object):
         # Get an endpoint instance.
         try:
             dev.set_configuration()
-        except:
+        except Exception:
             pass
         cfg = dev.get_active_configuration()
 
@@ -186,7 +184,6 @@ class Supdate(object):
                     "Unexpected bytes read: %d, expected: %d"
                     % (len(bytesread), read_count)
                 )
-                pass
 
             debuglog("STATUS: 0x%02x" % int(bytesread[0]))
             if read_count == 1:
@@ -260,7 +257,7 @@ class Supdate(object):
                     try:
                         self.wr_command(data, read_count=0)
                         break
-                    except:
+                    except Exception:
                         log("Timeout fail")
                 todo -= packetsize
             # Done with this packet, move to the next one.
