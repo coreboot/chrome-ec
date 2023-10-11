@@ -7,6 +7,7 @@
 #include "common.h"
 #include "console.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "i2c.h"
 #include "util.h"
 
@@ -29,6 +30,12 @@ const struct i2c_port_t i2c_ports[] = {
 	  .kbps = 100,
 	  .scl = GPIO_CN9_11,
 	  .sda = GPIO_CN9_9,
+	  .flags = I2C_PORT_FLAG_DYNAMIC_SPEED },
+	{ .name = "I2C4",
+	  .port = 3,
+	  .kbps = 100,
+	  .scl = GPIO_CN10_8,
+	  .sda = GPIO_CN10_12,
 	  .flags = I2C_PORT_FLAG_DYNAMIC_SPEED },
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
@@ -147,3 +154,12 @@ DECLARE_CONSOLE_COMMAND_FLAGS(i2c, command_i2c,
 			      "info [PORT]"
 			      "\nset speed PORT BPS",
 			      "I2C bus manipulation", CMD_FLAG_RESTRICTED);
+
+/* Reconfigure I2C ports to power-on default values. */
+static void i2c_reinit(void)
+{
+	for (unsigned int i = 0; i < i2c_ports_used; i++) {
+		i2c_set_freq(i, I2C_FREQ_100KHZ);
+	}
+}
+DECLARE_HOOK(HOOK_REINIT, i2c_reinit, HOOK_PRIO_DEFAULT);

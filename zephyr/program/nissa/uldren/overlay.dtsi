@@ -33,8 +33,8 @@
 		sunwoda_ctgkt {
 			compatible = "sunwoda,ctgkt", "battery-smart";
 		};
-		sunwoda_cos3ctgkt {
-			compatible = "sunwoda,cos3ctgkt", "battery-smart";
+		sunwoda_cosctgkt {
+			compatible = "sunwoda,cosctgkt", "battery-smart";
 		};
 		smp_atl26jgk {
 			compatible = "smp,atl26jgk", "battery-smart";
@@ -84,12 +84,12 @@
 		int_imu: ec_imu {
 			irq-pin = <&gpio_imu_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "bmi3xx_interrupt";
+			handler = "motion_interrupt";
 		};
 		int_lid_imu: lid_imu {
 			irq-pin = <&gpio_acc_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "bma4xx_interrupt";
+			handler = "lid_accel_interrupt";
 		};
 		int_vol_down: vol_down {
 			irq-pin = <&gpio_voldn_btn_odl>;
@@ -138,10 +138,6 @@
 			gpios = <&gpiof 5 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 			no-auto-init;
 		};
-		gpio_fan_enable: fan-enable {
-			gpios = <&gpio6 3 GPIO_OUTPUT>;
-			no-auto-init;
-		};
 		ec-i2c-sensor-scl {
 			gpios = <&gpio9 0 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
@@ -156,19 +152,9 @@
 	aliases {
 		/*
 		 * Input GPIO when used with type-C port 1
-		 * Output when used with HDMI sub-board
 		 */
 		gpio-usb-c1-int-odl = &gpio_sb_1;
 		gpio-en-rails-odl = &gpio_sb_1;
-		/*
-		 * Sub-board with type A USB, enable.
-		 */
-		gpio-en-usb-a1-vbus = &gpio_sb_2;
-		/*
-		 * HPD pins for HDMI sub-board.
-		 */
-		gpio-hdmi-en-odl = &gpio_sb_3;
-		gpio-hpd-odl = &gpio_sb_4;
 		/*
 		 * Enable S5 rails for LTE sub-board
 		 */
@@ -194,29 +180,26 @@
 	named-temp-sensors {
 		compatible = "cros-ec,temp-sensors";
 		memory {
-			temp_fan_off = <35>;
-			temp_fan_max = <60>;
 			temp_host_high = <85>;
-			temp_host_halt = <90>;
+			temp_host_halt = <99>;
 			temp_host_release_high = <80>;
+			temp_host_release_halt = <98>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_memory>;
 		};
 		charger {
-			temp_fan_off = <35>;
-			temp_fan_max = <60>;
 			temp_host_high = <85>;
-			temp_host_halt = <90>;
+			temp_host_halt = <99>;
 			temp_host_release_high = <80>;
+			temp_host_release_halt = <98>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_charger>;
 		};
 		ambient {
-			temp_fan_off = <35>;
-			temp_fan_max = <60>;
 			temp_host_high = <85>;
-			temp_host_halt = <90>;
+			temp_host_halt = <99>;
 			temp_host_release_high = <80>;
+			temp_host_release_halt = <98>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_ambient>;
 		};
@@ -224,16 +207,8 @@
 
 	usba {
 		compatible = "cros-ec,usba-port-enable-pins";
-		/*
-		 * sb_2 is only configured as GPIO when USB-A1 is present,
-		 * but it's still safe to control when disabled.
-		 *
-		 * ILIM_SEL pins are referred to by legacy enum name,
-		 * GPIO_USB*_ILIM_SEL. The one for port A1 is unused on
-		 * sub-boards that don't have USB-A so is safe to control
-		 * regardless of system configuration.
-		 */
-		enable-pins = <&gpio_en_usb_a0_vbus &gpio_sb_2>;
+
+		enable-pins = <&gpio_en_usb_a0_vbus>;
 		status = "okay";
 	};
 
@@ -244,7 +219,6 @@
 		port0@0 {
 			compatible = "named-usbc-port";
 			reg = <0>;
-			bc12 = <&bc12_port0>;
 			chg = <&chg_port0>;
 			tcpc = <&tcpc_port0>;
 			usb-mux-chain-0 {
@@ -264,7 +238,6 @@
 		port1@1 {
 			compatible = "named-usbc-port";
 			reg = <1>;
-			bc12 = <&bc12_port1>;
 			chg = <&chg_port1>;
 			tcpc = <&tcpc_port1>;
 			usb-mux-chain-1 {
@@ -284,19 +257,6 @@
 		};
 	};
 
-	fans {
-		compatible = "cros-ec,fans";
-
-		fan_0 {
-			pwms = <&pwm5 5 PWM_KHZ(1) PWM_POLARITY_NORMAL>;
-			rpm_min = <2200>;
-			rpm_start = <2200>;
-			rpm_max = <4200>;
-			tach = <&tach2>;
-			enable_gpio = <&gpio_fan_enable>;
-		};
-	};
-
 	 /*
 	  * Declare unused GPIOs so that they are shut down
 	  * and use minimal power
@@ -305,11 +265,11 @@
 		compatible = "unused-gpios";
 		unused-gpios =
 			<&gpio3 2 0>,
+			<&gpio3 3 0>,
 			<&gpio3 5 0>,
 			<&gpio3 6 0>,
 			<&gpio5 7 0>,
 			<&gpio6 0 0>,
-			<&gpio6 3 0>,
 			<&gpio6 6 0>,
 			<&gpio7 3 0>,
 			<&gpio8 1 0>,
@@ -319,8 +279,8 @@
 			<&gpiob 1 0>,
 			<&gpiob 7 0>,
 			<&gpioc 0 0>,
-			<&gpioc 6 0>,
 			<&gpioc 7 0>,
+			<&gpiod 5 0>,
 			<&gpioe 4 0>,
 			<&gpiof 2 0>,
 			<&gpiof 3 0>;
@@ -361,22 +321,17 @@
 &i2c1_0 {
 	label = "I2C_SENSOR";
 	clock-frequency = <I2C_BITRATE_FAST>;
+
+	pmic_mp2964: pmic_mp2964@20 {
+			compatible = "mps,mp2964";
+			reg = <0x20>;
+			label = "I2C_ADDR_MP2964_FLAGS";
+	};
 };
 
 &i2c3_0 {
 	label = "I2C_USB_C0_TCPC";
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
-
-	bc12_port0: pi3usb9201@5f {
-		compatible = "pericom,pi3usb9201";
-		status = "okay";
-		reg = <0x5f>;
-		/*
-		 * BC1.2 interrupt is shared with TCPC, so
-		 * IRQ is not specified here and handled by
-		 * usb_c0_interrupt.
-		 */
-	};
 
 	chg_port0: isl923x@9 {
 		compatible = "intersil,isl923x";
@@ -396,12 +351,6 @@
 &i2c5_1 {
 	label = "I2C_SUB_C1_TCPC";
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
-
-	bc12_port1: pi3usb9201@5f {
-		compatible = "pericom,pi3usb9201";
-		status = "okay";
-		reg = <0x5f>;
-	};
 
 	chg_port1: isl923x@9 {
 		compatible = "intersil,isl923x";
@@ -439,16 +388,6 @@
 	clock-bus = "NPCX_CLOCK_BUS_LFCLK";
 	pinctrl-0 = <&pwm5_gpb7>;
 	pinctrl-names = "default";
-};
-
-/* Tachometer for fan speed measurement */
-&tach2 {
-	status = "okay";
-	pinctrl-0 = <&ta2_1_in_gp73>;
-	pinctrl-names = "default";
-	port = <NPCX_TACH_PORT_A>; /* port-A is selected */
-	sample-clk = <NPCX_TACH_FREQ_LFCLK>; /* Use LFCLK as sampling clock */
-	pulses-per-round = <2>; /* number of pulses per round of encoder */
 };
 
 /* host interface */

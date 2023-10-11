@@ -62,8 +62,31 @@
 #define STM32_TIM_REG(n, offset) REG16(STM32_TIM_BASE(n) + (offset))
 #define STM32_TIM_REG32(n, offset) REG32(STM32_TIM_BASE(n) + (offset))
 
+/*
+ * TIM_CR1 bits below verified against reference manuals for STM32L5, STM32L4,
+ * STM32G4, and STM32F0, and assumed to be valid for all STM32 models.
+ */
 #define STM32_TIM_CR1(n) STM32_TIM_REG(n, 0x00)
 #define STM32_TIM_CR1_CEN BIT(0)
+#define STM32_TIM_CR1_UDIS BIT(1)
+#define STM32_TIM_CR1_URS BIT(2)
+#define STM32_TIM_CR1_OPM BIT(3)
+#define STM32_TIM_CR1_DIR_MASK BIT(4)
+#define STM32_TIM_CR1_DIR_UP 0
+#define STM32_TIM_CR1_DIR_DOWN BIT(4)
+#define STM32_TIM_CR1_CMS (((n)&0x3) << 5)
+#define STM32_TIM_CR1_CMS_MASK STM32_TIM_CR1_CMS(~0)
+#define STM32_TIM_CR1_CMS_EDGE STM32_TIM_CR1_CMS(0)
+#define STM32_TIM_CR1_CMS_CENTER1 STM32_TIM_CR1_CMS(1)
+#define STM32_TIM_CR1_CMS_CENTER2 STM32_TIM_CR1_CMS(2)
+#define STM32_TIM_CR1_CMS_CENTER3 STM32_TIM_CR1_CMS(3)
+#define STM32_TIM_CR1_ARPE BIT(7)
+#define STM32_TIM_CR1_CKD (((n)&0x3) << 8)
+#define STM32_TIM_CR1_CKD_MASK STM32_TIM_CR1_CKD(~0)
+#define STM32_TIM_CR1_CKD_DIV1 STM32_TIM_CR1_CKD(0)
+#define STM32_TIM_CR1_CKD_DIV2 STM32_TIM_CR1_CKD(1)
+#define STM32_TIM_CR1_CKD_DIV4 STM32_TIM_CR1_CKD(2)
+#define STM32_TIM_CR1_UIFREMAP BIT(11)
 #define STM32_TIM_CR2(n) STM32_TIM_REG(n, 0x04)
 #define STM32_TIM_SMCR(n) STM32_TIM_REG(n, 0x08)
 #define STM32_TIM_DIER(n) STM32_TIM_REG(n, 0x0C)
@@ -190,8 +213,16 @@ typedef volatile struct timer_ctlr timer_ctlr_t;
 #define STM32_I2C3_PORT 2
 #define STM32_FMPI2C4_PORT 3
 
+#if defined(CHIP_FAMILY_STM32L4) || defined(CHIP_FAMILY_STM32L5)
+#define stm32_i2c_reg(port, offset)                                        \
+	((uint16_t *)(((port) == 3 ? STM32_I2C4_BASE :                     \
+				     (STM32_I2C1_BASE + ((port)*0x400))) + \
+		      (offset)))
+#else
 #define stm32_i2c_reg(port, offset) \
 	((uint16_t *)((STM32_I2C1_BASE + ((port)*0x400)) + (offset)))
+#endif
+
 /* --- Power / Reset / Clocks --- */
 #define STM32_PWR_CR REG32(STM32_PWR_BASE + 0x00)
 #define STM32_PWR_CR_LPSDSR (1 << 0)

@@ -1,0 +1,35 @@
+/* Copyright 2023 The ChromiumOS Authors
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+&binman {
+	wp-ro {
+		ec-ro {
+			key-ro {
+				type = "section";
+				offset = <(0x40000 - 4096 - 1024)>;
+				size = <1024>;
+			};
+		};
+	};
+
+	ec-rw {
+		rw-fw {
+			rw-fwid {
+				offset = <(0x40000 - 1024 - 32)>;
+				size = <32>;
+			};
+
+			sig-rw {
+				type = "section";
+				size = <1024>;
+			};
+
+			/* rwsig assumes the padding bytes between zephyr-rw and
+			 * sig-rw are filled with 0xff.
+			 */
+			pad-byte = <0xff>;
+		};
+	};
+};

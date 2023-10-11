@@ -16,12 +16,6 @@
 /* Optional features */
 #define CONFIG_ASSERT_CCD_MODE_ON_DTS_CONNECT
 #define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
-#define CONFIG_I2C_DEBUG /* Print i2c traces */
-#define CONFIG_CMD_S5_TIMEOUT /* Allow a user-specified timeout to exit S5 */
-
-/* Detect sleep hang after 10s */
-#undef CONFIG_SLEEP_TIMEOUT_MS
-#define CONFIG_SLEEP_TIMEOUT_MS 10000
 
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 4096
@@ -163,7 +157,6 @@
 #define CONFIG_CHARGE_MANAGER
 #define CONFIG_CHARGER_DISCHARGE_ON_AC
 #define CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT 512
-#define CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT 512
 #define CONFIG_CHARGER_ISL9241
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 20

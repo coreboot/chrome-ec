@@ -282,7 +282,8 @@ static void motion_sense_switch_sensor_rate(void)
 			 * Initialize or just back the odr/range previously
 			 * set.
 			 */
-			if (sensor->state == SENSOR_INITIALIZED) {
+			if ((sensor->state == SENSOR_INITIALIZED) ||
+			    (sensor->state == SENSOR_READY)) {
 				sensor->drv->set_range(
 					sensor, sensor->current_range, 1);
 				sensor_setup_mask |= BIT(i);
@@ -306,7 +307,8 @@ static void motion_sense_switch_sensor_rate(void)
 			}
 		} else {
 			/* The sensors are being powered off */
-			if (sensor->state == SENSOR_INITIALIZED) {
+			if ((sensor->state == SENSOR_INITIALIZED) ||
+			    (sensor->state == SENSOR_READY)) {
 				/*
 				 * Use mutex to be sure we are not changing the
 				 * ODR in MOTIONSENSE, in case it is running.
@@ -354,7 +356,8 @@ static void motion_sense_switch_sensor_rate(void)
 		while (mask) {
 			i = get_next_bit(&mask);
 			sensor = &motion_sensors[i];
-			if (sensor->state != SENSOR_INITIALIZED)
+			if ((sensor->state != SENSOR_INITIALIZED) &&
+			    (sensor->state != SENSOR_READY))
 				continue;
 			sensor->drv->list_activities(sensor, &enabled,
 						     &disabled);
@@ -547,7 +550,7 @@ static void update_sense_data(uint8_t *lpc_status, int *psample_id)
 
 static int motion_sense_read(struct motion_sensor_t *sensor)
 {
-	ASSERT(sensor->state == SENSOR_INITIALIZED);
+	ASSERT(sensor->state == SENSOR_READY);
 	ASSERT(sensor->drv->get_data_rate(sensor) != 0);
 
 	/*
@@ -638,12 +641,35 @@ static int motion_sense_process(struct motion_sensor_t *sensor, uint32_t *event,
 		atomic_or(&odr_event_required, odr_pending);
 	}
 
+	/*
+	 * If the sensor is in ready state or
+	 * it has been initialized and we have not set its ODR,
+	 * we can proceed.
+	 * Otherwise, we must bail: we may still be using stale data,
+	 * the sensor is not completely set up.
+	 */
+	if (!((sensor->state == SENSOR_READY) ||
+	      (sensor->state == SENSOR_INITIALIZED && is_odr_pending))) {
+		return EC_ERROR_BUSY;
+	}
+
 	if ((*event & TASK_EVENT_MOTION_INTERRUPT_MASK || is_odr_pending) &&
 	    (sensor->drv->irq_handler != NULL)) {
 		ret = sensor->drv->irq_handler(sensor, event);
 		if (ret == EC_SUCCESS)
 			has_data_read = 1;
 	}
+
+	/*
+	 * ODR change was requested: update the collection data rate,
+	 * we may miss a sample, but we won't use stale collection_rate.
+	 */
+	if (is_odr_pending) {
+		if (sensor->state == SENSOR_INITIALIZED)
+			sensor->state = SENSOR_READY;
+		motion_sense_set_data_rate(sensor);
+	}
+
 	if (motion_sensor_in_forced_mode(sensor)) {
 		if (motion_sensor_time_to_read(ts, sensor)) {
 			/*
@@ -673,9 +699,8 @@ static int motion_sense_process(struct motion_sensor_t *sensor, uint32_t *event,
 		}
 	}
 
-	/* ODR change was requested. */
+	/* ODR change was requested, confirm change to AP, after flush.*/
 	if (is_odr_pending) {
-		motion_sense_set_data_rate(sensor);
 		if (IS_ENABLED(CONFIG_ACCEL_FIFO))
 			motion_sense_fifo_insert_async_event(sensor,
 							     ASYNC_EVENT_ODR);
@@ -698,6 +723,26 @@ static void check_and_queue_gestures(uint32_t *event)
 	if (IS_ENABLED(CONFIG_GESTURE_SENSOR_DOUBLE_TAP) &&
 	    (*event & TASK_EVENT_MOTION_ACTIVITY_INTERRUPT(
 			      MOTIONSENSE_ACTIVITY_DOUBLE_TAP))) {
+		if (IS_ENABLED(CONFIG_GESTURE_HOST_DETECTION)) {
+			struct ec_response_motion_sensor_data vector;
+
+			vector.flags = MOTIONSENSE_SENSOR_FLAG_BYPASS_FIFO;
+			/*
+			 * Send events to the FIFO
+			 * AP is ignoring double tap event, do no wake up and no
+			 * automatic disable.
+			 */
+			if (IS_ENABLED(
+				    CONFIG_GESTURE_SENSOR_DOUBLE_TAP_FOR_HOST))
+				vector.flags |= MOTIONSENSE_SENSOR_FLAG_WAKEUP;
+			vector.activity_data.activity =
+				MOTIONSENSE_ACTIVITY_DOUBLE_TAP;
+			vector.activity_data.state = 1 /* triggered */;
+			vector.sensor_num = MOTION_SENSE_ACTIVITY_SENSOR_ID;
+			motion_sense_fifo_stage_data(&vector, NULL, 0,
+						     __hw_clock_source_read());
+			motion_sense_fifo_commit_data();
+		}
 		/* Call board specific function to process tap */
 		sensor_board_proc_double_tap();
 	}
@@ -705,7 +750,20 @@ static void check_and_queue_gestures(uint32_t *event)
 	    (*event & TASK_EVENT_MOTION_ACTIVITY_INTERRUPT(
 			      MOTIONSENSE_ACTIVITY_SIG_MOTION))) {
 		struct motion_sensor_t *activity_sensor;
+		if (IS_ENABLED(CONFIG_GESTURE_HOST_DETECTION)) {
+			struct ec_response_motion_sensor_data vector;
 
+			/* Send events to the FIFO */
+			vector.flags = MOTIONSENSE_SENSOR_FLAG_WAKEUP |
+				       MOTIONSENSE_SENSOR_FLAG_BYPASS_FIFO;
+			vector.activity_data.activity =
+				MOTIONSENSE_ACTIVITY_SIG_MOTION;
+			vector.activity_data.state = 1 /* triggered */;
+			vector.sensor_num = MOTION_SENSE_ACTIVITY_SENSOR_ID;
+			motion_sense_fifo_stage_data(&vector, NULL, 0,
+						     __hw_clock_source_read());
+			motion_sense_fifo_commit_data();
+		}
 		/* Disable further detection */
 		activity_sensor = &motion_sensors[CONFIG_GESTURE_SIGMO_SENSOR];
 		activity_sensor->drv->manage_activity(
@@ -716,8 +774,7 @@ static void check_and_queue_gestures(uint32_t *event)
 		const struct motion_sensor_t *sensor =
 			&motion_sensors[LID_ACCEL];
 
-		if (SENSOR_ACTIVE(sensor) &&
-		    (sensor->state == SENSOR_INITIALIZED)) {
+		if (SENSOR_ACTIVE(sensor) && (sensor->state == SENSOR_READY)) {
 			struct ec_response_motion_sensor_data vector = {
 				.flags = 0,
 				.activity_data.activity =
@@ -730,6 +787,12 @@ static void check_and_queue_gestures(uint32_t *event)
 			    (*motion_orientation_ptr(sensor) !=
 			     MOTIONSENSE_ORIENTATION_UNKNOWN)) {
 				motion_orientation_update(sensor);
+				vector.activity_data.state =
+					*motion_orientation_ptr(sensor);
+				motion_sense_fifo_stage_data(
+					&vector, NULL, 0,
+					__hw_clock_source_read());
+				motion_sense_fifo_commit_data();
 				if (IS_ENABLED(CONFIG_DEBUG_ORIENTATION)) {
 					static const char *const mode[] = {
 						"Landscape", "Portrait",
@@ -780,10 +843,6 @@ void motion_sense_task(void *u)
 
 			/* if the sensor is active in the current power state */
 			if (SENSOR_ACTIVE(sensor)) {
-				if (sensor->state != SENSOR_INITIALIZED) {
-					continue;
-				}
-
 				ret = motion_sense_process(sensor, &event,
 							   &ts_begin_task);
 				if (ret != EC_SUCCESS)
@@ -905,7 +964,7 @@ static struct motion_sensor_t *host_sensor_id_to_real_sensor(int host_id)
 	sensor = &motion_sensors[host_id];
 
 	/* if sensor is powered and initialized, return match */
-	if (SENSOR_ACTIVE(sensor) && (sensor->state == SENSOR_INITIALIZED))
+	if (SENSOR_ACTIVE(sensor) && (sensor->state == SENSOR_READY))
 		return sensor;
 
 	/* If no match then the EC currently doesn't support ID received. */
@@ -1649,6 +1708,16 @@ static int command_accel_init(int argc, const char **argv)
 
 	sensor = &motion_sensors[id];
 	ret = motion_sense_init(sensor);
+
+	if (ret == EC_SUCCESS) {
+		/*
+		 * We need to reset the ODR information, especially since
+		 * the ODR has been changed.
+		 */
+		atomic_or(&odr_event_required, BIT(id));
+		task_set_event(TASK_ID_MOTIONSENSE,
+			       TASK_EVENT_MOTION_ODR_CHANGE);
+	}
 
 	ccprintf("%s: state %d - %d\n", sensor->name, sensor->state, ret);
 	return EC_SUCCESS;

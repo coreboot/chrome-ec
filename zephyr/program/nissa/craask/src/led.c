@@ -22,7 +22,7 @@ __override struct led_descriptor
 						   LED_INDEFINITE } },
 		[STATE_DISCHARGE_S0] = { { EC_LED_COLOR_BLUE,
 					   LED_INDEFINITE } },
-		[STATE_DISCHARGE_S0_BAT_LOW] = { { EC_LED_COLOR_AMBER,
+		[STATE_DISCHARGE_S0_BAT_LOW] = { { EC_LED_COLOR_BLUE,
 						   LED_INDEFINITE } },
 		[STATE_DISCHARGE_S3] = { { EC_LED_COLOR_AMBER,
 					   1 * LED_ONE_SEC },
@@ -41,16 +41,16 @@ __override void led_set_color_battery(enum ec_led_colors color)
 {
 	switch (color) {
 	case EC_LED_COLOR_RED:
-		set_pwm_led_color(EC_LED_ID_BATTERY_LED, EC_LED_COLOR_RED);
+		set_pwm_led_color(PWM_LED0, EC_LED_COLOR_RED);
 		break;
 	case EC_LED_COLOR_BLUE:
-		set_pwm_led_color(EC_LED_ID_BATTERY_LED, EC_LED_COLOR_BLUE);
+		set_pwm_led_color(PWM_LED0, EC_LED_COLOR_BLUE);
 		break;
 	case EC_LED_COLOR_AMBER:
-		set_pwm_led_color(EC_LED_ID_BATTERY_LED, EC_LED_COLOR_AMBER);
+		set_pwm_led_color(PWM_LED0, EC_LED_COLOR_AMBER);
 		break;
 	default: /* LED_OFF and other unsupported colors */
-		set_pwm_led_color(EC_LED_ID_BATTERY_LED, -1);
+		set_pwm_led_color(PWM_LED0, -1);
 		break;
 	}
 }

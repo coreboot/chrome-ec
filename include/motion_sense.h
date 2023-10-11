@@ -9,6 +9,7 @@
 #define __CROS_EC_MOTION_SENSE_H
 
 #include "atomic.h"
+#include "body_detection.h"
 #include "chipset.h"
 #include "common.h"
 #include "ec_commands.h"
@@ -20,9 +21,23 @@
 #include "util.h"
 
 enum sensor_state {
+	/* Sensor state is unknown, out of reset. Maybe powered down */
 	SENSOR_NOT_INITIALIZED = 0,
+	/*
+	 * Sensor is power on, has been initialized on the HOOK task.
+	 * The MOTION_SENSE task is not aware of it yet.
+	 */
 	SENSOR_INITIALIZED = 1,
-	SENSOR_INIT_ERROR = 2
+	/*
+	 * We try to initialize the sensor, but fails. Will stay
+	 * in this state until power-cycled.
+	 */
+	SENSOR_INIT_ERROR = 2,
+	/*
+	 * The sensor is ready for operation, an Output Data Rate
+	 * has been set up, (even 0Hz).
+	 */
+	SENSOR_READY = 3
 };
 
 enum sensor_config {
@@ -201,6 +216,11 @@ struct motion_sensor_t {
 	 *         | ambient light)|
 	 */
 	struct motion_data_t config[SENSOR_CONFIG_MAX];
+
+#ifdef CONFIG_BODY_DETECTION
+	/* Body detection sensor configuration. */
+	const struct body_detect_params *bd_params;
+#endif
 
 	/* state parameters */
 	enum sensor_state state;

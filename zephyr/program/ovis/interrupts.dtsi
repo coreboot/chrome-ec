@@ -1,0 +1,19 @@
+/* Copyright 2023 The ChromiumOS Authors
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+/ {
+	gpio-interrupts {
+		compatible = "cros-ec,gpio-interrupts";
+
+		int_power_button: power_button {
+			irq-pin = <&gpio_mech_pwr_btn_odl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "power_button_interrupt";
+		};
+	};
+};
+
+/* Required node label that doesn't is named differently on Ovis */
+gpio_ec_pch_wake_odl: &gpio_ec_soc_wake_r_odl {};

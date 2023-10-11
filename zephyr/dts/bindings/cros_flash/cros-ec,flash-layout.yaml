@@ -34,17 +34,24 @@ properties:
       The size of the flash region, in bytes.
   read-only:
     type: boolean
-    required: false
     description: >-
       Set if the section should be read-only.
   preserve:
     type: boolean
-    required: false
     description: >-
       Set if the section should be preserved when updating firmware. This is
       just a signal. Enforcement of this is upto the updater.
   fill-byte:
     type: uint8-array
-    required: false
     description: >-
       Set if the section bytes should be filled with configured byte value.
+  pad-byte:
+    type: int
+    description: >-
+      Set the pad byte to use when padding in the region. It
+      defaults to 0. To use 0xff, you would add 'pad-byte = <0xff>'.
+  image-size:
+    type: int
+    description: >-
+      Set the image size to use when preforming read and write to the region
+      through drivers, in bytes.

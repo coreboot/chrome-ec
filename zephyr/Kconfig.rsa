@@ -1,0 +1,70 @@
+# Copyright 2023 The ChromiumOS Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+config PLATFORM_EC_RSA
+	bool "Support verifying RSA signature"
+	help
+	  Includes a library for verifying RSA signature.
+
+	  The algorithm parameters are pre-defined and configurable using
+	  following config variables.
+
+if PLATFORM_EC_RSA
+
+config PLATFORM_EC_RSA_KEY_SIZE
+	int "RSA key size"
+	default 2048
+	help
+	  This option specifies the key size used by RSA algorithm.
+
+config PLATFORM_EC_RSA_EXPONENT_3
+	bool "Use RSA exponent 3"
+	help
+	  Use public exponent 3 instead of F4(65537). Keys with exponent 3 are
+	  much quicker to verify, can be used on time critical tasks.
+
+endif # PLATFORM_EC_RSA
+
+config PLATFORM_EC_RWSIG
+	bool "Enable RW signature verification subsystem."
+	select PLATFORM_EC_RWSIG_VERIFY if CROS_EC_RO
+	help
+	  For accessories without software sync, enable this option to allow RO
+	  verify the RW firmware using RSA signature.
+
+if PLATFORM_EC_RWSIG
+
+config PLATFORM_EC_RWSIG_VERIFY
+	bool "Verify the RW firmware using the RSA signature."
+	select HAS_TASK_RWSIG
+	select PLATFORM_EC_RSA
+	help
+	  If enabled, the RW part of the firmware will be verified using the
+	  public key stored in the RO part of the firmware and the signature
+	  provided with the RW part.
+
+choice PLATFORM_EC_RWSIG_TYPE
+	bool "futility signature type"
+	default PLATFORM_EC_RWSIG_TYPE_RWSIG
+
+config PLATFORM_EC_RWSIG_TYPE_RWSIG
+	bool "RWSIG"
+	help
+	  Use command `futility sign --type rwsig` to sign the firmware.
+
+	  Requires RO firmware contains a 1kB KEY_RO section that holds the
+	  public key in vboot v2.1 format, and RW firmware contains a 1kB
+	  SIG_RW section that holds the signature.
+
+config PLATFORM_EC_RWSIG_TYPE_USBPD1
+	bool "USBPD1"
+	select DEPRECATED
+	help
+	  Use command `futility sign --type usbpd1` to sign the firmware.
+
+	  [DEPRECATED] use PLATFORM_EC_RWSIG_TYPE_RWSIG instead.
+
+endchoice
+
+endif # PLATFORM_EC_RWSIG

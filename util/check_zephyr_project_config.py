@@ -1,5 +1,4 @@
 #!/usr/bin/env vpython3
-
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -79,6 +78,40 @@ def _init_log(verbose):
     return log
 
 
+def _default_y(defaults):
+    """Return true if the symbol default is 'default y'
+
+    True if the symbol has any 'default y' definition, regardless of other
+    conditions.
+    """
+    for val, _ in defaults:
+        if (
+            isinstance(val, kconfiglib.Symbol)
+            and val.is_constant
+            and val.str_value == "y"
+        ):
+            return True
+    return False
+
+
+def _default_y_if_ztest(defaults):
+    """Return true if the symbol default is 'default y' if ZTEST
+
+
+    True if the symbol has any 'default y if ZTEST' definition.
+    """
+    for val, cond in defaults:
+        if (
+            isinstance(val, kconfiglib.Symbol)
+            and val.is_constant
+            and val.str_value == "y"
+            and isinstance(cond, kconfiglib.Symbol)
+            and cond.name == "ZTEST"
+        ):
+            return True
+    return False
+
+
 class KconfigCheck:
     """Validate Zephyr project configuration files.
 
@@ -114,11 +147,17 @@ class KconfigCheck:
                 )
 
             # generate Kconfig.modules file
-            with open(pathlib.Path(temp_dir) / "Kconfig.modules", "w") as file:
+            with open(
+                pathlib.Path(temp_dir) / "Kconfig.modules",
+                "w",
+                encoding="utf-8",
+            ) as file:
                 file.write(kconfig)
 
             # generate empty Kconfig.dts file
-            with open(pathlib.Path(temp_dir) / "Kconfig.dts", "w") as file:
+            with open(
+                pathlib.Path(temp_dir) / "Kconfig.dts", "w", encoding="utf-8"
+            ) as file:
                 file.write("")
 
             os.environ["ZEPHYR_BASE"] = str(ZEPHYR_BASE)
@@ -126,7 +165,7 @@ class KconfigCheck:
             os.environ["KCONFIG_BINARY_DIR"] = temp_dir
             os.environ["ARCH_DIR"] = "arch"
             os.environ["ARCH"] = "*"
-            os.environ["BOARD_DIR"] = "boards/*/*"
+            os.environ["BOARD_DIR"] = "boards/posix/native_posix"
 
             if not filename:
                 filename = os.path.join(ZEPHYR_BASE, "Kconfig")
@@ -211,16 +250,18 @@ class KconfigCheck:
         for name, val in kconf.syms.items():
             dep = kconfiglib.expr_str(val.direct_dep)
             if "DT_HAS_" in dep:
-                symbols[name] = dep
+                if _default_y(val.orig_defaults) and not _default_y_if_ztest(
+                    val.orig_defaults
+                ):
+                    symbols[name] = dep
 
         self.log.info("Checking %s", file_name)
 
-        with open(file_name, "r") as file:
+        with open(file_name, "r", encoding="utf-8") as file:
             for line_num, line in enumerate(file.readlines(), start=1):
-                for name in symbols:
+                for name, dep in symbols.items():
                     match = f"CONFIG_{name}=y"
                     if line.startswith(match):
-                        dep = symbols[name]
                         self._fail(
                             "%s:%d: unnecessary config option %s (depends on %s)",
                             file_name,

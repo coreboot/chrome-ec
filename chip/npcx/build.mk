@@ -36,10 +36,11 @@ chip-$(CONFIG_HOSTCMD_X86)+=lpc.o
 chip-$(CONFIG_HOST_INTERFACE_ESPI)+=espi.o
 chip-$(CONFIG_PECI)+=peci.o
 chip-$(CONFIG_HOST_INTERFACE_SHI)+=shi.o
-chip-$(CONFIG_CEC)+=cec.o
+chip-$(CONFIG_CEC_BITBANG)+=cec_bitbang.o
 # pwm functions are implemented with the fan functions
 chip-$(CONFIG_PWM)+=pwm.o
 chip-$(CONFIG_SPI)+=spi.o
+chip-$(CONFIG_RNG)+=trng.o
 chip-$(CONFIG_WATCHDOG)+=watchdog.o
 ifndef CONFIG_KEYBOARD_DISCRETE
 chip-$(HAS_TASK_KEYSCAN)+=keyboard_raw.o
@@ -49,9 +50,16 @@ chip-$(CONFIG_PS2)+=ps2.o
 # Only npcx9 or later chip family can support LCT module
 ifneq ($(CHIP_FAMILY),$(filter $(CHIP_FAMILY),npcx5 npcx7))
 chip-y+=lct.o
+chip-y+=uartn_dma.o
 endif
 
 chip-$(CONFIG_SHA256_HW_ACCELERATE)+=sha256_chip.o
+
+chip-$(CONFIG_USART_HOST_COMMAND)+=uart_host_command.o
+
+ifneq (,$(filter y,$(CONFIG_FINGERPRINT_MCU) $(CONFIG_HOST_INTERFACE_SHI)))
+chip-y+=host_command_common.o
+endif
 
 # spi monitor program fw for openocd and UUT(UART Update Tool)
 npcx-monitor-fw=chip/npcx/spiflashfw/npcx_monitor
@@ -91,5 +99,5 @@ cmd_ecst=$(show_esct_cmd)$(call moveflat,$@,$@.tmp);$(call bld_ecst,$@.tmp,$@)
 cmd_org_ec_elf_to_flat = $(OBJCOPY) --set-section-flags .roshared=share \
                          -O binary $(patsubst %.flat,%.elf,$@) $@
 cmd_npcx_ro_elf_to_flat=$(cmd_org_ec_elf_to_flat);$(cmd_ecst)
-cmd_ec_elf_to_flat = $(if $(filter $(out)/RO/ec.RO.flat, $@), \
+cmd_ec_elf_to_flat = $(if $(filter %.RO.flat, $@), \
                      $(cmd_npcx_ro_elf_to_flat), $(cmd_org_ec_elf_to_flat) )

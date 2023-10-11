@@ -4,10 +4,11 @@
  */
 
 #include "battery.h"
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "charger.h"
 #include "chipset.h"
 #include "hooks.h"
+#include "nissa_common.h"
 #include "system.h"
 #include "usb_mux.h"
 
@@ -17,8 +18,8 @@
 #include <ap_power/ap_power.h>
 LOG_MODULE_REGISTER(nissa, CONFIG_NISSA_LOG_LEVEL);
 
-static void board_power_change(struct ap_power_ev_callback *cb,
-			       struct ap_power_ev_data data)
+__overridable void board_power_change(struct ap_power_ev_callback *cb,
+				      struct ap_power_ev_data data)
 {
 	/*
 	 * Enable power to pen garage when system is active (safe even if no
@@ -125,11 +126,13 @@ __override int pd_is_valid_input_voltage(int mv)
 /* Trigger shutdown by enabling the Z-sleep circuit */
 __override void board_hibernate_late(void)
 {
+#ifndef CONFIG_PLATFORM_EC_HIBERNATE_PSL
 	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_en_slp_z), 1);
 	/*
 	 * The system should hibernate, but there may be
 	 * a small delay, so return.
 	 */
+#endif
 }
 
 #ifdef CONFIG_OCPC
@@ -142,3 +145,21 @@ __override void board_ocpc_init(struct ocpc_data *ocpc)
 	}
 }
 #endif
+
+int board_allow_i2c_passthru(const struct i2c_cmd_desc_t *cmd_desc)
+{
+	/*
+	 * AP tunneling to I2C is default-forbidden, but allowed for
+	 * type-C ports because these can be used to update TCPC or retimer
+	 * firmware. AP firmware separately sends a command to block tunneling
+	 * to these ports after it's done updating chips.
+	 */
+	return false
+#if DT_NODE_EXISTS(DT_NODELABEL(tcpc_port0))
+	       || (cmd_desc->port == I2C_PORT_BY_DEV(DT_NODELABEL(tcpc_port0)))
+#endif
+#if DT_NODE_EXISTS(DT_NODELABEL(tcpc_port1))
+	       || (cmd_desc->port == I2C_PORT_BY_DEV(DT_NODELABEL(tcpc_port1)))
+#endif
+		;
+}

@@ -3,6 +3,12 @@
  * found in the LICENSE file.
  */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 11
+
 #define DT_DRV_COMPAT nuvoton_npcx_cros_kb_raw
 
 #include "ec_tasks.h"
@@ -24,7 +30,7 @@
 LOG_MODULE_REGISTER(cros_kb_raw, LOG_LEVEL_ERR);
 
 #ifdef CONFIG_PLATFORM_EC_KEYBOARD_COL2_INVERTED
-#if !DT_NODE_EXISTS(KBD_KS02_NODE)
+#if !DT_NODE_EXISTS(KBD_KSO2_NODE)
 #error gpio_kbd_kso2 alias has to point to the keyboard column 2 output pin.
 #endif
 #endif /* CONFIG_PLATFORM_EC_KEYBOARD_COL2_INVERTED */
@@ -54,10 +60,10 @@ struct cros_kb_raw_npcx_config {
 #define HAL_INSTANCE(dev) (struct kbs_reg *)(DRV_CONFIG(dev)->base)
 
 /* Keyboard Scan local functions */
-static struct miwu_dev_callback ksi_callback[NPCX_MAX_KEY_ROWS];
+static struct miwu_callback ksi_callback[NPCX_MAX_KEY_ROWS];
 
 static void kb_raw_npcx_init_ksi_wui_callback(
-	const struct device *dev, struct miwu_dev_callback *callback,
+	const struct device *dev, struct miwu_callback *callback,
 	const struct npcx_wui *wui, miwu_dev_callback_handler_t handler)
 {
 	/* KSI signal which has no wake-up input source */
@@ -66,7 +72,7 @@ static void kb_raw_npcx_init_ksi_wui_callback(
 
 	/* Install callback function */
 	npcx_miwu_init_dev_callback(callback, wui, handler, dev);
-	npcx_miwu_manage_dev_callback(callback, 1);
+	npcx_miwu_manage_callback(callback, 1);
 
 	/* Configure MIWU setting and enable its interrupt */
 	npcx_miwu_interrupt_configure(wui, NPCX_MIWU_MODE_EDGE,
@@ -255,6 +261,10 @@ BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1);
 DEVICE_DT_INST_DEFINE(0, kb_raw_npcx_init, NULL, NULL, &cros_kb_raw_cfg,
 		      PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
 		      &cros_kb_raw_npcx_driver_api);
+
+BUILD_ASSERT(
+	!IS_ENABLED(CONFIG_INPUT_NPCX_KBD),
+	"cros_kb_raw_npcx can't be enabled at the same time as input_npcx_kbd");
 
 /* KBS register structure check */
 NPCX_REG_SIZE_CHECK(kbs_reg, 0x010);

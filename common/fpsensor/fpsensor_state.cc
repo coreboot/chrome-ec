@@ -5,8 +5,14 @@
 
 #include "compile_time_macros.h"
 
+#include <array>
+
 /* Boringssl headers need to be included before extern "C" section. */
 #include "openssl/mem.h"
+
+#ifdef CONFIG_ZEPHYR
+#include <zephyr/shell/shell.h>
+#endif
 
 extern "C" {
 #include "atomic.h"
@@ -19,6 +25,7 @@ extern "C" {
 }
 
 #include "fpsensor.h"
+#include "fpsensor_auth_commands.h"
 #include "fpsensor_crypto.h"
 #include "fpsensor_state.h"
 #include "fpsensor_utils.h"
@@ -39,37 +46,15 @@ uint8_t fp_enc_buffer[FP_ALGORITHM_ENCRYPTED_TEMPLATE_SIZE] FP_TEMPLATE_SECTION;
 uint8_t fp_positive_match_salt[FP_MAX_FINGER_COUNT]
 			      [FP_POSITIVE_MATCH_SALT_BYTES];
 
-struct positive_match_secret_state
-	positive_match_secret_state = { .template_matched = FP_NO_SUCH_TEMPLATE,
-					.readable = false,
-					.deadline = {
-						.val = 0,
-					} };
-
-/* Index of the last enrolled but not retrieved template. */
-uint16_t template_newly_enrolled = FP_NO_SUCH_TEMPLATE;
-/* Number of used templates */
-uint16_t templ_valid;
-/* Bitmap of the templates with local modifications */
-uint32_t templ_dirty;
-/* Current user ID */
-uint32_t user_id[FP_CONTEXT_USERID_WORDS];
-/* Part of the IKM used to derive encryption keys received from the TPM. */
-uint8_t tpm_seed[FP_CONTEXT_TPM_BYTES];
-/* Status of the FP encryption engine. */
-static uint32_t fp_encryption_status;
-
-atomic_t fp_events;
-
-uint32_t sensor_mode;
-
-void fp_task_simulate(void)
+/* LCOV_EXCL_START */
+__test_only void fp_task_simulate(void)
 {
 	int timeout_us = -1;
 
 	while (1)
 		task_wait_event(timeout_us);
 }
+/* LCOV_EXCL_STOP */
 
 void fp_clear_finger_context(uint16_t idx)
 {
@@ -87,9 +72,12 @@ static void _fp_clear_context(void)
 {
 	templ_valid = 0;
 	templ_dirty = 0;
+	template_newly_enrolled = FP_NO_SUCH_TEMPLATE;
+	fp_encryption_status &= FP_ENC_STATUS_SEED_SET;
 	OPENSSL_cleanse(fp_buffer, sizeof(fp_buffer));
 	OPENSSL_cleanse(fp_enc_buffer, sizeof(fp_enc_buffer));
 	OPENSSL_cleanse(user_id, sizeof(user_id));
+	OPENSSL_cleanse(auth_nonce.data(), auth_nonce.size());
 	fp_disable_positive_match_secret(&positive_match_secret_state);
 	for (uint16_t idx = 0; idx < FP_MAX_FINGER_COUNT; idx++)
 		fp_clear_finger_context(idx);
@@ -134,11 +122,6 @@ static enum ec_status fp_command_tpm_seed(struct host_cmd_handler_args *args)
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_FP_SEED, fp_command_tpm_seed, EC_VER_MASK(0));
-
-int fp_tpm_seed_is_set(void)
-{
-	return fp_encryption_status & FP_ENC_STATUS_SEED_SET;
-}
 
 static enum ec_status
 fp_command_encryption_status(struct host_cmd_handler_args *args)
@@ -244,7 +227,14 @@ static enum ec_status fp_command_context(struct host_cmd_handler_args *args)
 		if (sensor_mode & FP_MODE_RESET_SENSOR)
 			return EC_RES_BUSY;
 
+		if (fp_encryption_status &
+		    FP_CONTEXT_STATUS_NONCE_CONTEXT_SET) {
+			/* Reject the request to prevent downgrade attack. */
+			return EC_RES_ACCESS_DENIED;
+		}
+
 		memcpy(user_id, p->userid, sizeof(user_id));
+
 		return EC_RES_SUCCESS;
 	}
 

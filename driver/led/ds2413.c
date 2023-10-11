@@ -7,6 +7,7 @@
 
 #include "charge_state.h"
 #include "console.h"
+#include "extpower.h"
 #include "hooks.h"
 #include "onewire.h"
 #include "timer.h"
@@ -96,31 +97,30 @@ static void onewire_led_tick(void)
 	static int tick_count;
 
 	enum led_color new_color = LED_OFF;
-	uint32_t chflags = charge_get_flags();
 
 	tick_count++;
 
-	if (!(chflags & CHARGE_FLAG_EXTERNAL_POWER)) {
+	if (!extpower_is_present()) {
 		/* AC isn't present, so the power LED on the AC plug is off */
 		current_color = LED_OFF;
 		return;
 	}
 
 	/* Translate charge state to LED color */
-	switch (charge_get_state()) {
-	case PWR_STATE_IDLE:
+	switch (led_pwr_get_state()) {
+	case LED_PWRS_IDLE:
 		new_color = LED_GREEN;
 		break;
-	case PWR_STATE_FORCED_IDLE:
+	case LED_PWRS_FORCED_IDLE:
 		new_color = (tick_count & 1) ? LED_GREEN : LED_OFF;
 		break;
-	case PWR_STATE_CHARGE:
+	case LED_PWRS_CHARGE:
 		new_color = LED_YELLOW;
 		break;
-	case PWR_STATE_CHARGE_NEAR_FULL:
+	case LED_PWRS_CHARGE_NEAR_FULL:
 		new_color = LED_GREEN;
 		break;
-	case PWR_STATE_ERROR:
+	case LED_PWRS_ERROR:
 		new_color = LED_RED;
 		break;
 	default:

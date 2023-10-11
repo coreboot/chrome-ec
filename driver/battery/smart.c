@@ -441,6 +441,8 @@ int battery_get_avg_voltage(void)
 }
 #endif /* CONFIG_CMD_PWR_AVG */
 
+/* TODO(b/266713897): Remove #ifndef */
+#ifndef CONFIG_FUEL_GAUGE
 static void apply_fake_state_of_charge(struct batt_params *batt)
 {
 	int full;
@@ -579,6 +581,7 @@ void battery_get_params(struct batt_params *batt)
 	/* Update visible battery parameters */
 	memcpy(batt, &batt_new, sizeof(*batt));
 }
+#endif /* !CONFIG_FUEL_GAUGE */
 
 /* Wait until battery is totally stable */
 int battery_wait_for_stable(void)
@@ -590,14 +593,25 @@ int battery_wait_for_stable(void)
 		BATTERY_NO_RESPONSE_TIMEOUT);
 	while (get_time().val < wait_timeout) {
 		/* Starting pinging battery */
-		if (battery_status(&status) == EC_SUCCESS) {
-			/* Battery is stable */
-			CPRINTS("battery responded with status %x", status);
-			return EC_SUCCESS;
+		if (battery_status(&status) != EC_SUCCESS) {
+			msleep(25); /* clock stretching could hold 25ms */
+			continue;
 		}
-		msleep(25); /* clock stretching could hold 25ms */
+
+#ifdef CONFIG_BATTERY_STBL_STAT
+		if (((status & CONFIG_BATT_ALARM_MASK1) ==
+		     CONFIG_BATT_ALARM_MASK1) ||
+		    ((status & CONFIG_BATT_ALARM_MASK2) ==
+		     CONFIG_BATT_ALARM_MASK2)) {
+			msleep(25);
+			continue;
+		}
+#endif
+		/* Battery is stable */
+		CPRINTS("battery responded with status %x", status);
+		return EC_SUCCESS;
 	}
-	CPRINTS("battery not responding");
+	CPRINTS("battery not responding with status %x", status);
 	return EC_ERROR_NOT_POWERED;
 }
 

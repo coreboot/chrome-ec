@@ -10,7 +10,7 @@
 #include "cbi_fw_config.h"
 #include "cbi_ssfc.h"
 #include "charge_manager.h"
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "charger.h"
 #include "cros_board_info.h"
 #include "driver/accel_bma2x2.h"
@@ -393,12 +393,10 @@ struct motion_sensor_t bma422_lid_accel = {
 		/* EC use accel for angle detection */
 		[SENSOR_CONFIG_EC_S0] = {
 			.odr = 12500 | ROUND_UP_FLAG,
-			.ec_rate = 100 * MSEC,
 		},
 		/* Sensor on in S3 */
 		[SENSOR_CONFIG_EC_S3] = {
 			.odr = 12500 | ROUND_UP_FLAG,
-			.ec_rate = 0,
 		},
 	},
 };

@@ -19,11 +19,22 @@
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio/gpio_nct38xx.h>
+#include <zephyr/drivers/mfd/nct38xx.h>
 #endif
 
 #if defined(CONFIG_ZEPHYR) && defined(CONFIG_IO_EXPANDER_NCT38XX)
 #error CONFIG_IO_EXPANDER_NCT38XX cannot be used with Zephyr.
 #error Enable the Zephyr driver CONFIG_GPIO_NCT38XX instead.
+#endif
+
+/*
+ * TODO(b/295587630): nct38xx: upstream gpio_nct38xx_alert.c driver
+ * incompatible with downstream TCPC driver
+ */
+#ifdef CONFIG_GPIO_NCT38XX_ALERT
+#error Zephyr driver CONFIG_GPIO_NCT38XX_ALERT cannot be used with the
+#error downstream CONFIG_PLATFORM_EC_USB_PD_TCPM_NCT38XX driver.
+#error Delete the nuvoton,nct38xx-gpio-alert node from the devicetree.
 #endif
 
 #if !defined(CONFIG_USB_PD_TCPM_TCPCI)
@@ -36,21 +47,34 @@
 
 static enum nct38xx_boot_type boot_type[CONFIG_USB_PD_PORT_MAX_COUNT];
 
-enum nct38xx_boot_type nct38xx_get_boot_type(int port)
+#ifdef CONFIG_MFD_NCT38XX
+static struct k_sem *mfd_lock[CONFIG_USB_PD_PORT_MAX_COUNT];
+#endif
+
+test_mockable enum nct38xx_boot_type nct38xx_get_boot_type(int port)
 {
 	return boot_type[port];
 }
 
-void nct38xx_reset_notify(int port)
+test_mockable void nct38xx_reset_notify(int port)
 {
 	/* A full reset also resets the chip's dead battery boot status */
 	boot_type[port] = NCT38XX_BOOT_UNKNOWN;
 }
 
-static int nct38xx_init(int port)
+int nct38xx_init(int port)
 {
 	int rv;
 	int reg;
+
+#ifdef CONFIG_MFD_NCT38XX
+	if (!device_is_ready(tcpc_config[port].mfd_parent)) {
+		return EC_ERROR_INVALID_CONFIG;
+	}
+
+	mfd_lock[port] =
+		mfd_nct38xx_get_lock_reference(tcpc_config[port].mfd_parent);
+#endif
 
 	/*
 	 * Detect dead battery boot by the default role control value of 0x0A
@@ -81,10 +105,11 @@ static int nct38xx_init(int port)
 			port);
 	else if (tcpc_config[port].flags & TCPC_FLAGS_NO_DEBUG_ACC_CONTROL)
 		CPRINTS("C%d: NO_DEBUG_ACC_CONTROL", port);
-	else
+	else {
 		RETURN_ERROR(tcpc_update8(port, TCPC_REG_TCPC_CTRL,
 					  TCPC_REG_TCPC_CTRL_DEBUG_ACC_CONTROL,
 					  MASK_SET));
+	}
 
 	/*
 	 * Write to the CONTROL_OUT_EN register to enable:
@@ -167,7 +192,7 @@ static int nct38xx_init(int port)
 	return rv;
 }
 
-static int nct38xx_tcpm_init(int port)
+test_export_static int nct38xx_tcpm_init(int port)
 {
 	int rv;
 
@@ -178,7 +203,7 @@ static int nct38xx_tcpm_init(int port)
 	return nct38xx_init(port);
 }
 
-static int nct38xx_tcpm_set_cc(int port, int pull)
+test_export_static int nct38xx_tcpm_set_cc(int port, int pull)
 {
 	/*
 	 * Setting the CC lines to open/open requires that the NCT CTRL_OUT
@@ -216,7 +241,7 @@ static int nct38xx_tcpm_set_cc(int port, int pull)
 	return tcpci_tcpm_set_cc(port, pull);
 }
 
-static int nct38xx_tcpm_set_snk_ctrl(int port, int enable)
+test_export_static int nct38xx_tcpm_set_snk_ctrl(int port, int enable)
 {
 	int rv;
 
@@ -298,7 +323,7 @@ static void nct38xx_tcpc_alert(int port)
 	}
 }
 
-static int nct3807_handle_fault(int port, int fault)
+test_export_static int nct3807_handle_fault(int port, int fault)
 {
 	int rv = EC_SUCCESS;
 
@@ -323,7 +348,8 @@ static int nct3807_handle_fault(int port, int fault)
 	return rv;
 }
 
-__maybe_unused static int nct38xx_set_frs_enable(int port, int enable)
+__maybe_unused test_export_static int nct38xx_set_frs_enable(int port,
+							     int enable)
 {
 	if (!tcpm_tcpc_has_frs_control(port))
 		return EC_SUCCESS;
@@ -346,6 +372,22 @@ __maybe_unused static int nct38xx_set_frs_enable(int port, int enable)
 			    TCPC_REG_POWER_CTRL_FRS_ENABLE,
 			    enable ? MASK_SET : MASK_CLR);
 }
+
+#ifdef CONFIG_MFD_NCT38XX
+/*
+ * The NCT38xx TCPC and NCT38xx GPIO drivers must not access the NC38xx
+ * at the same time.  Use the lock provided by the upstream NCT38xx
+ * multi-funciton device.
+ */
+static void nct38xx_lock(int port, int lock)
+{
+	if (lock) {
+		k_sem_take(mfd_lock[port], K_FOREVER);
+	} else {
+		k_sem_give(mfd_lock[port]);
+	}
+}
+#endif
 
 const struct tcpm_drv nct38xx_tcpm_drv = {
 	.init = &nct38xx_tcpm_init,
@@ -392,4 +434,8 @@ const struct tcpm_drv nct38xx_tcpm_drv = {
 #endif
 	.handle_fault = &nct3807_handle_fault,
 	.hard_reset_reinit = &tcpci_hard_reset_reinit,
+
+#ifdef CONFIG_MFD_NCT38XX
+	.lock = &nct38xx_lock,
+#endif
 };

@@ -5,12 +5,14 @@
 #include "adc.h"
 #include "builtin/assert.h"
 #include "button.h"
+#include "cec.h"
 #include "charge_manager.h"
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
 #include "cros_board_info.h"
+#include "driver/cec/bitbang.h"
 #include "driver/tcpm/tcpci.h"
 #include "driver/wpc/cps8100.h"
 #include "fw_config.h"
@@ -78,6 +80,36 @@ int board_get_pchg_count(void)
 }
 
 /******************************************************************************/
+
+/* Power on Kuldax through CEC */
+struct cec_offline_policy kuldax_cec_policy[] = {
+	{
+		.command = CEC_MSG_REPORT_PHYSICAL_ADDRESS,
+		.action = CEC_ACTION_POWER_BUTTON,
+	},
+	{
+		.command = CEC_MSG_DEVICE_VENDOR_ID,
+		.action = CEC_ACTION_POWER_BUTTON,
+	},
+	/* Terminator */
+	{ 0 },
+};
+
+/* CEC ports */
+static const struct bitbang_cec_config bitbang_cec_config = {
+	.gpio_out = GPIO_HDMI_CEC_OUT,
+	.gpio_in = GPIO_HDMI_CEC_IN,
+	.gpio_pull_up = GPIO_HDMI_CEC_PULL_UP,
+};
+
+const struct cec_config_t cec_config[] = {
+	[CEC_PORT_0] = {
+		.drv = &bitbang_cec_drv,
+		.drv_config = &bitbang_cec_config,
+		.offline_policy = kuldax_cec_policy,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(cec_config) == CEC_PORT_COUNT);
 
 int board_set_active_charge_port(int port)
 {
@@ -290,6 +322,9 @@ static void board_init(void)
 	gpio_enable_interrupt(GPIO_USB_A1_OC_ODL);
 	gpio_enable_interrupt(GPIO_USB_A2_OC_ODL);
 	gpio_enable_interrupt(GPIO_USB_A3_OC_ODL);
+
+	if (get_mb_usbc_type() == MB_TC_USB3)
+		mb_update_usb4_tbt_config();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 

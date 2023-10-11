@@ -544,13 +544,13 @@ static int lid_test(void)
 
 static int test_check_boot_esc(void)
 {
-	TEST_ASSERT(keyboard_scan_get_boot_keys() == BOOT_KEY_ESC);
+	TEST_ASSERT(keyboard_scan_get_boot_keys() == BIT(BOOT_KEY_ESC));
 	return EC_SUCCESS;
 }
 
 static int test_check_boot_down(void)
 {
-	TEST_ASSERT(keyboard_scan_get_boot_keys() == BOOT_KEY_DOWN_ARROW);
+	TEST_ASSERT(keyboard_scan_get_boot_keys() == BIT(BOOT_KEY_DOWN_ARROW));
 	return EC_SUCCESS;
 }
 
@@ -559,6 +559,8 @@ void test_init(void)
 	uint32_t state;
 
 	system_get_scratchpad(&state);
+
+	gpio_set_level(GPIO_POWER_BUTTON_L, 1);
 
 	if (state & TEST_STATE_MASK(TEST_STATE_STEP_2)) {
 		/* Power-F3-ESC */

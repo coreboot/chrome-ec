@@ -31,6 +31,26 @@ def register_corsola_project(
     )
 
 
+def register_kingler_project(
+    project_name,
+):
+    """Wrapper function for registering a variant of kingler."""
+    return register_corsola_project(
+        project_name=project_name,
+        chip="npcx9m3f",
+    )
+
+
+def register_krabby_project(
+    project_name,
+):
+    """Wrapper function for registering a variant of krabby."""
+    return register_corsola_project(
+        project_name=project_name,
+        chip="it81202bx",
+    )
+
+
 register_corsola_project("krabby")
 
 register_corsola_project(
@@ -51,5 +71,10 @@ register_corsola_project("magikarp")
 
 register_corsola_project(
     project_name="voltorb",
+    chip="npcx9m3f",
+)
+
+register_corsola_project(
+    project_name="ponyta",
     chip="npcx9m3f",
 )

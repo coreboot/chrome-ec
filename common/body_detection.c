@@ -19,11 +19,17 @@
 #define CPRINTS(format, args...) cprints(CC_ACCEL, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_ACCEL, format, ##args)
 
-static struct motion_sensor_t *body_sensor =
+const static struct body_detect_params default_body_detect_params = {
+	.var_noise_factor = CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR,
+	.var_threshold = CONFIG_BODY_DETECTION_VAR_THRESHOLD,
+	.confidence_delta = CONFIG_BODY_DETECTION_CONFIDENCE_DELTA,
+};
+
+test_export_static struct motion_sensor_t *body_sensor =
 	&motion_sensors[CONFIG_BODY_DETECTION_SENSOR];
 
 static int window_size = CONFIG_BODY_DETECTION_MAX_WINDOW_SIZE;
-static uint64_t var_threshold_scaled, confidence_delta_scaled;
+test_export_static uint64_t var_threshold_scaled, confidence_delta_scaled;
 static int stationary_timeframe;
 
 static int history_idx;
@@ -102,6 +108,19 @@ void body_detect_change_state(enum body_detect_states state, bool spoof)
 {
 	if (IS_ENABLED(CONFIG_ACCEL_SPOOF_MODE) && spoof_enable && !spoof)
 		return;
+	if (IS_ENABLED(CONFIG_GESTURE_HOST_DETECTION)) {
+		struct ec_response_motion_sensor_data vector = {
+			.flags = MOTIONSENSE_SENSOR_FLAG_BYPASS_FIFO,
+			.activity_data = {
+				.activity = MOTIONSENSE_ACTIVITY_BODY_DETECTION,
+				.state = state,
+			},
+			.sensor_num = MOTION_SENSE_ACTIVITY_SENSOR_ID,
+		};
+		motion_sense_fifo_stage_data(&vector, NULL, 0,
+					     __hw_clock_source_read());
+		motion_sense_fifo_commit_data();
+	}
 	/* change the motion state */
 	motion_state = state;
 	if (state == BODY_DETECTION_ON_BODY) {
@@ -114,9 +133,6 @@ void body_detect_change_state(enum body_detect_states state, bool spoof)
 
 	if (IS_ENABLED(CONFIG_BODY_DETECTION_NOTIFY_MODE_CHANGE))
 		host_set_single_event(EC_HOST_EVENT_BODY_DETECT_CHANGE);
-
-	if (IS_ENABLED(CONFIG_BODY_DETECTION_NOTIFY_MKBP))
-		mkbp_update_switches(EC_MKBP_FRONT_PROXIMITY, motion_state);
 
 	hook_notify(HOOK_BODY_DETECT_CHANGE);
 }
@@ -139,7 +155,9 @@ static void determine_window_size(int odr)
 }
 
 /* Determine variance threshold scale by range. */
-static void determine_threshold_scale(int range, int rms_noise)
+static void determine_threshold_scale(int range, int rms_noise,
+				      int var_noise_factor, int var_threshold,
+				      int confidence_delta)
 {
 	/*
 	 * range:              g
@@ -153,6 +171,7 @@ static void determine_threshold_scale(int range, int rms_noise)
 	const int data_1g = MOTION_SCALING_FACTOR / range;
 	const int multiplier = POW2(data_1g);
 	const int divisor = POW2(9800);
+
 	/*
 	 * We are measuring the var(X) + var(Y), so theoretically, the
 	 * var(noise) should be 2 * rms_noise^2. However, in most case, on a
@@ -160,22 +179,20 @@ static void determine_threshold_scale(int range, int rms_noise)
 	 * rms_noise^2. We can multiply the rms_noise^2 with the
 	 * CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR / 100.
 	 */
-	const int var_noise = POW2((uint64_t)rms_noise) *
-			      CONFIG_BODY_DETECTION_VAR_NOISE_FACTOR *
+	const int var_noise = POW2((uint64_t)rms_noise) * var_noise_factor *
 			      POW2(98) / 100 / POW2(10000);
 
 	var_threshold_scaled =
-		(uint64_t)(CONFIG_BODY_DETECTION_VAR_THRESHOLD + var_noise) *
-		multiplier / divisor;
+		(uint64_t)(var_threshold + var_noise) * multiplier / divisor;
 	confidence_delta_scaled =
-		(uint64_t)CONFIG_BODY_DETECTION_CONFIDENCE_DELTA * multiplier /
-		divisor;
+		(uint64_t)confidence_delta * multiplier / divisor;
 }
 
 void body_detect_reset(void)
 {
 	int odr = body_sensor->drv->get_data_rate(body_sensor);
 	int rms_noise = body_sensor->drv->get_rms_noise(body_sensor);
+	int var_threshold, confidence_delta, var_noise_factor;
 
 	if (motion_state == BODY_DETECTION_ON_BODY)
 		stationary_timeframe = 0;
@@ -187,8 +204,33 @@ void body_detect_reset(void)
 	 */
 	if (odr == 0)
 		return;
+
+	/* If body detection params haven't been set, use the default ones. */
+	if (!body_sensor->bd_params)
+		body_sensor->bd_params = &default_body_detect_params;
+	/*
+	 * In case only some of the parameters have been specified use
+	 * the default values for the rest of them.
+	 */
+	if (body_sensor->bd_params->var_noise_factor != 0)
+		var_noise_factor = body_sensor->bd_params->var_noise_factor;
+	else
+		var_noise_factor = default_body_detect_params.var_noise_factor;
+
+	if (body_sensor->bd_params->var_threshold != 0)
+		var_threshold = body_sensor->bd_params->var_threshold;
+	else
+		var_threshold = default_body_detect_params.var_threshold;
+
+	if (body_sensor->bd_params->confidence_delta != 0)
+		confidence_delta = body_sensor->bd_params->confidence_delta;
+	else
+		confidence_delta = default_body_detect_params.confidence_delta;
+
 	determine_window_size(odr);
-	determine_threshold_scale(body_sensor->current_range, rms_noise);
+	determine_threshold_scale(body_sensor->current_range, rms_noise,
+				  var_noise_factor, var_threshold,
+				  confidence_delta);
 	/* initialize motion data and state */
 	memset(data, 0, sizeof(data));
 	history_idx = 0;

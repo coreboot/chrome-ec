@@ -5,12 +5,14 @@
 
 #include "builtin/assert.h"
 #include "button.h"
+#include "cec.h"
 #include "charge_manager.h"
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
 #include "cros_board_info.h"
+#include "driver/cec/bitbang.h"
 #include "fw_config.h"
 #include "gpio.h"
 #include "gpio_signal.h"
@@ -38,6 +40,22 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 BUILD_ASSERT(ARRAY_SIZE(usb_port_enable) == USB_PORT_COUNT);
 
 /******************************************************************************/
+
+/* CEC ports */
+static const struct bitbang_cec_config bitbang_cec_config = {
+	.gpio_out = GPIO_HDMI_CEC_OUT,
+	.gpio_in = GPIO_HDMI_CEC_IN,
+	.gpio_pull_up = GPIO_HDMI_CEC_PULL_UP,
+};
+
+const struct cec_config_t cec_config[] = {
+	[CEC_PORT_0] = {
+		.drv = &bitbang_cec_drv,
+		.drv_config = &bitbang_cec_config,
+		.offline_policy = NULL,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(cec_config) == CEC_PORT_COUNT);
 
 int board_set_active_charge_port(int port)
 {

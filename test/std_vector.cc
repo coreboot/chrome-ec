@@ -42,6 +42,19 @@ test_static int static_init_elements()
 	return EC_SUCCESS;
 }
 
+std::vector<int32_t> global_vec{ 30, 31, 32, 33, 34 };
+test_static int global_init_elements()
+{
+	TEST_EQ(static_cast<int32_t>(global_vec.size()), 5, "%d");
+	TEST_EQ(global_vec[0], 30, "%d");
+	TEST_EQ(global_vec[1], 31, "%d");
+	TEST_EQ(global_vec[2], 32, "%d");
+	TEST_EQ(global_vec[3], 33, "%d");
+	TEST_EQ(global_vec[4], 34, "%d");
+
+	return EC_SUCCESS;
+}
+
 test_static int push_back_elements()
 {
 	std::vector<int32_t> vec;
@@ -62,8 +75,8 @@ test_static int push_back_elements()
 
 test_static int fill_one_vector()
 {
-	// This test allocates 64kB of memory in total in a single std::vector
-	constexpr int num_elements = 16 * 1024;
+	// This test allocates 8kB of memory in total in a single std::vector
+	constexpr int num_elements = 2 * 1024;
 	std::vector<int32_t> vec;
 
 	for (int i = 0; i < num_elements; ++i)
@@ -82,8 +95,15 @@ test_static int fill_one_vector()
 
 test_static int fill_multiple_vectors()
 {
-	// This test allocates 64kB of memory in total split in 8 std::vectors
+	// This test allocates a large block of memory split in 8 std::vectors.
+	// Since Helipilot has less available RAM, it will allocate 8KB RAM
+	// (8*1KB), while other targets will allocate 16KB (8*2kB).
+#ifdef BOARD_HELIPILOT
+	constexpr int num_elements = 1024;
+#else
 	constexpr int num_elements = 2 * 1024;
+#endif
+
 	std::array<std::vector<int32_t>, 8> vecs;
 
 	for (int i = 0; i < num_elements; ++i)
@@ -102,10 +122,10 @@ test_static int fill_multiple_vectors()
 
 test_static int create_and_destroy_two_vectors()
 {
-	// This allocates 64kB of memory twice.
+	// This allocates 8kB of memory twice.
 	// The first vector is declared in a local scope and the memory is
 	// free'd at the end of the block.
-	constexpr int num_elements = 16 * 1024;
+	constexpr int num_elements = 2 * 1024;
 	{
 		std::vector<int32_t> vec;
 		for (int i = 0; i < num_elements; ++i)
@@ -135,6 +155,7 @@ extern "C" void run_test(int argc, const char **argv)
 
 	RUN_TEST(stack_init_elements);
 	RUN_TEST(static_init_elements);
+	RUN_TEST(global_init_elements);
 	RUN_TEST(push_back_elements);
 	RUN_TEST(fill_one_vector);
 	RUN_TEST(fill_multiple_vectors);

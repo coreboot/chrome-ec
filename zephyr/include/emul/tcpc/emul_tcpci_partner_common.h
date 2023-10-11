@@ -88,11 +88,8 @@ struct tcpci_partner_data {
 	enum pd_vconn_role vconn_role;
 	/** Revision (used in message header) */
 	enum pd_rev_type rev;
-	/**
-	 * Whether this partner can supply VCONN. If false, the partner will
-	 * respond to VCONN_Swap with Not_Supported.
-	 */
-	bool vconn_supported;
+	/** The response message that will be sent in response to VCONN Swap. */
+	enum pd_ctrl_msg_type vcs_response;
 	/** Resistor set at the CC1 line of partner emulator */
 	enum tcpc_cc_voltage_status cc1;
 	/** Resistor set at the CC2 line of partner emulator */
@@ -166,8 +163,10 @@ struct tcpci_partner_data {
 	 */
 	uint32_t identity_vdm[VDO_MAX_SIZE];
 	int identity_vdos;
+	/* Discover SVIDs ACK VDM */
 	uint32_t svids_vdm[VDO_MAX_SIZE];
 	int svids_vdos;
+	/* Discover Modes ACK VDM (implicitly for the first SVID) */
 	uint32_t modes_vdm[VDO_MAX_SIZE];
 	int modes_vdos;
 	/* VDMs sent when responding to a mode entry command */
@@ -217,6 +216,12 @@ struct tcpci_cable_data {
 	 */
 	uint32_t identity_vdm[VDO_MAX_SIZE];
 	int identity_vdos;
+	/* Discover SVIDs ACK VDM */
+	uint32_t svids_vdm[VDO_MAX_SIZE];
+	int svids_vdos;
+	/* Discover Modes ACK VDM (implicitly for the first SVID) */
+	uint32_t modes_vdm[VDO_MAX_SIZE];
+	int modes_vdos;
 };
 
 /** Structure of message used by TCPCI partner emulator */
@@ -375,22 +380,23 @@ void tcpci_partner_init(struct tcpci_partner_data *data, enum pd_rev_type rev);
 void tcpci_partner_set_drs_support(struct tcpci_partner_data *data,
 				   bool drs_to_ufp_supported,
 				   bool drs_to_dfp_supported);
+
 /**
- * @brief Set the partner emulator to support or not support sourcing VCONN. If
- * the partner supports VCONN, it should respond to VCONN Swap with Accept,
- * Reject, or Wait. If it does not support VCONN, it should respond with
- * Not_Supported.
+ * @brief Set the response message for VCONN Swap.
  *
- * A compliant partner should not change this while attached. However, there are
- * real devices that pretend to stop supporting VCONN after completing a VCONN
- * Swap.
+ * A compliant partner should not change the response from Accept/Reject to
+ * Not_Supported or vice versa while attached. However, there are real devices
+ * that pretend to stop supporting VCONN after completing a VCONN Swap.
+ *
+ * The default behavior of the partner is to Accept VCONN Swaps.
  *
  * @param data Pointer to USB-C partner emulator
- * @param vconn_support true to support sourcing VCONN, false to not support it.
+ * @param vcs_response PD_CTRL_ACCEPT to support sourcing VCONN,
+ *        PD_CTRL_NOT_SUPPORTED to not support it, or other message types
+ *        as needed.
  */
-void tcpci_partner_set_vconn_support(struct tcpci_partner_data *data,
-				     bool support_vconn);
-
+void tcpci_partner_set_vcs_response(struct tcpci_partner_data *data,
+				    enum pd_ctrl_msg_type vcs_response);
 /**
  * @brief Free message's memory
  *

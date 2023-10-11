@@ -95,19 +95,12 @@ void panic_set_reason(uint32_t reason, uint32_t info, uint8_t exception)
 	 * once again won't remove any data
 	 */
 	struct panic_data *const pdata = get_panic_data_write();
-	uint32_t warning_ipc;
 	uint32_t *regs;
 
 	regs = pdata->nds_n8.regs;
 
 	/* Setup panic data structure */
-	if (reason != PANIC_SW_WATCHDOG) {
-		memset(pdata, 0, CONFIG_PANIC_DATA_SIZE);
-	} else {
-		warning_ipc = pdata->nds_n8.ipc;
-		memset(pdata, 0, CONFIG_PANIC_DATA_SIZE);
-		pdata->nds_n8.ipc = warning_ipc;
-	}
+	memset(pdata, 0, CONFIG_PANIC_DATA_SIZE);
 	pdata->magic = PANIC_DATA_MAGIC;
 	pdata->struct_size = CONFIG_PANIC_DATA_SIZE;
 	pdata->struct_version = 2;
@@ -203,6 +196,12 @@ void report_panic(uint32_t *regs, uint32_t itype)
 	if (IS_ENABLED(CONFIG_SYSTEM_SAFE_MODE)) {
 		if (start_system_safe_mode() == EC_SUCCESS) {
 			pdata->flags |= PANIC_DATA_FLAG_SAFE_MODE_STARTED;
+			/* If not in an interrupt context (e.g. software_panic),
+			 * the next highest priority task will immediately
+			 * execute when the current task is disabled on the
+			 * following line.
+			 */
+			task_disable_task(task_get_current());
 			/* Current task has been disabled.
 			 * Returning from the exception here should cause the
 			 * highest priority task that wasn't disabled to run.

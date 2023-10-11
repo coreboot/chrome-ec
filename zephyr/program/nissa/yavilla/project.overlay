@@ -9,5 +9,7 @@
 #include "fan.dtsi"
 #include "gpio.dtsi"
 #include "keyboard.dtsi"
+#include "motionsense.dtsi"
 #include "overlay.dtsi"
 #include "power_signals.dtsi"
+#include "pwm_leds.dtsi"

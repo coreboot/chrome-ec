@@ -12,7 +12,7 @@ board-y=board.o
 test-list-y=\
        abort \
        aes \
-       cec \
+       boringssl_crypto \
        compile_time_macros \
        crc \
        debug \

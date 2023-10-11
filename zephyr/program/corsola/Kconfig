@@ -44,6 +44,12 @@ config BOARD_VOLTORB
 	  Build Google Voltorb variant board. Voltorb is a variant of Kingler
 	  and has MediaTek MT8186/MT8186T SoC with NPCX993FA0BX EC.
 
+config BOARD_PONYTA
+	bool "Google Ponyta Board"
+	help
+	  Build Google Ponyta variant board. Ponyta is a variant of Kingler
+	  and has MediaTek MT8186 SoC with NPCX993FA0BX EC.
+
 config VARIANT_CORSOLA_DB_DETECTION
 	bool "Corsola Platform Runtime Daughter Board Detection"
 	depends on PLATFORM_EC_USB_PD_TCPC_RUNTIME_CONFIG
@@ -52,5 +58,11 @@ config VARIANT_CORSOLA_DB_DETECTION
 	  Daughter board detection for Type-C subboard or HDMI subboard. This
           includes pin configuration and driver loading.
 	default y
+
+config CORSOLA_HIBERNATE_PRE_OFF_5V
+	bool "Corsola Platform Hibernate Power Sequence Selection"
+	help
+	  Set PP5000_Z2 to deactivate before executing normal corsola hibernate.
+	default n
 
 source "Kconfig.zephyr"
