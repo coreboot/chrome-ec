@@ -496,7 +496,7 @@ static const struct option_container cmd_line_options[] = {
 	  "the trace buffer",
 	  GSC_DEVICE_DT },
 	{ { "get_value", required_argument, NULL, 'K' },
-	  "Get value of one of [chassis_open].",
+	  "Get value of one of [chassis_open|dev_ids].",
 	  GSC_DEVICE_DT },
 	{ { "ccd_lock", no_argument, NULL, 'k' }, "Lock CCD" },
 	{ { "flog", optional_argument, NULL, 'L' },
@@ -2996,6 +2996,49 @@ static enum exit_values process_get_chassis_open(struct transfer_descriptor *td)
 	return noop;
 }
 
+static enum exit_values process_get_dev_ids(struct transfer_descriptor *td,
+					    bool show_machine_output)
+{
+	struct sys_info_repsonse {
+		uint32_t ro_keyid;
+		uint32_t rw_keyid;
+		uint32_t dev_id0;
+		uint32_t dev_id1;
+	} response;
+	size_t response_size;
+	int rv;
+
+	response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_SYSINFO, NULL, 0,
+				 &response, &response_size);
+
+	if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr, "Error %d getting device ids\n", rv);
+		return update_error;
+	}
+	if (response_size != sizeof(response)) {
+		fprintf(stderr,
+			"Unexpected response size %zd while getting "
+			"device ids\n",
+			response_size);
+		return update_error;
+	}
+
+	/* Convert from BE transimision format */
+	response.dev_id0 = be32toh(response.dev_id0);
+	response.dev_id1 = be32toh(response.dev_id1);
+
+	if (show_machine_output) {
+		print_machine_output("DEV_ID0", "%08x", response.dev_id0);
+		print_machine_output("DEV_ID1", "%08x", response.dev_id1);
+	} else {
+		printf("DEVID: 0x%08x 0x%08x\n", response.dev_id0,
+		       response.dev_id1);
+	}
+	return noop;
+}
+
 static int process_get_apro_hash(struct transfer_descriptor *td)
 {
 	size_t response_size;
@@ -4498,6 +4541,7 @@ int main(int argc, char *argv[])
 	bool erase_boot_trace = false;
 	bool get_metrics = false;
 	bool get_chassis_open = false;
+	bool get_dev_ids = false;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4673,16 +4717,19 @@ int main(int argc, char *argv[])
 			break;
 		case 'K':
 			/* We only support a single get_value option as of now*/
-			if (strncasecmp(optarg, "chassis_open",
-					strlen(optarg))) {
+			if (!strncasecmp(optarg, "chassis_open",
+					 strlen(optarg))) {
+				get_chassis_open = true;
+			} else if (!strncasecmp(optarg, "dev_ids",
+						strlen(optarg))) {
+				get_dev_ids = true;
+			} else {
 				fprintf(stderr,
 					"Invalid get_value argument: "
 					"\"%s\"\n",
 					optarg);
 				errorcnt++;
-				break;
 			}
-			get_chassis_open = true;
 			break;
 		case 'L':
 			get_flog = 1;
@@ -4838,7 +4885,7 @@ int main(int argc, char *argv[])
 	    !password && !reboot_gsc && !rma && !set_capability &&
 	    !show_fw_ver && !sn_bits && !sn_inc_rma && !start_apro_verify &&
 	    !openbox_desc_file && !tstamp && !tpm_mode && (wp == WP_NONE) &&
-	    !get_chassis_open) {
+	    !get_chassis_open && !get_dev_ids) {
 		if (optind >= argc) {
 			fprintf(stderr,
 				"\nERROR: Missing required <binary image>\n\n");
@@ -4978,6 +5025,9 @@ int main(int argc, char *argv[])
 
 	if (get_chassis_open)
 		exit(process_get_chassis_open(&td));
+
+	if (get_dev_ids)
+		exit(process_get_dev_ids(&td, show_machine_output));
 
 	if (corrupt_inactive_rw)
 		invalidate_inactive_rw(&td);
