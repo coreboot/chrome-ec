@@ -5,6 +5,12 @@
 
 /* I2C cross-platform code for Chrome EC */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #include "battery.h"
 #include "builtin/assert.h"
 #include "charge_state.h"
@@ -819,6 +825,7 @@ int i2c_write_block(const int port, const uint16_t addr_flags, int offset,
 		uint8_t addr_8bit = I2C_STRIP_FLAGS(addr_flags) << 1;
 
 		pec = cros_crc8(&addr_8bit, sizeof(uint8_t));
+		pec = cros_crc8_arg(&reg_address, sizeof(uint8_t), pec);
 		pec = cros_crc8_arg(data, len, pec);
 	}
 

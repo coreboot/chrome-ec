@@ -33,6 +33,12 @@
 		cosmx-2 {
 			compatible = "cosmx,ap20cbl-2", "battery-smart";
 		};
+		smp_ap23a7l {
+			compatible = "smp,ap23a7l", "battery-smart";
+		};
+		panasonic_ap23a5l {
+			compatible = "panasonic,ap23a5l", "battery-smart";
+		};
 	};
 
 	hibernate-wake-pins {
@@ -116,11 +122,11 @@
 		 * type-C ports on them.
 		 */
 		gpio_sb_3: sb-3 {
-			gpios = <&gpiof 4 (GPIO_OPEN_DRAIN | GPIO_VOLTAGE_1P8)>;
+			gpios = <&gpiof 5 (GPIO_OPEN_DRAIN | GPIO_VOLTAGE_1P8)>;
 			no-auto-init;
 		};
 		gpio_sb_4: sb-4 {
-			gpios = <&gpiof 5 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
+			gpios = <&gpiof 4 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 			no-auto-init;
 		};
 		gpio_fan_enable: fan-enable {
@@ -271,7 +277,6 @@
 		compatible = "unused-gpios";
 		unused-gpios =
 			<&gpio3 2 0>,
-			<&gpio3 3 0>,
 			<&gpio3 5 0>,
 			<&gpio3 6 0>,
 			<&gpio5 7 0>,

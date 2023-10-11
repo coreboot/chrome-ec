@@ -32,6 +32,18 @@ if(DEFINED CONFIG_BOARD_NEREID OR DEFINED CONFIG_BOARD_NEREID_CX)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "nereid/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "nereid/src/charger.c")
 endif()
+if(DEFINED CONFIG_BOARD_NOKRIS)
+	project(nokris)
+	zephyr_library_sources(
+			"nokris/src/led.c"
+			"nokris/src/form_factor.c"
+			"nokris/src/keyboard.c"
+			"nokris/src/hdmi.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "nokris/src/fan.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "nokris/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "nokris/src/charger.c")
+endif()
 if(DEFINED CONFIG_BOARD_CRAASK)
 	zephyr_library_sources(
 			"craask/src/fan.c"
@@ -71,6 +83,9 @@ if(DEFINED CONFIG_BOARD_JOXER)
 	zephyr_library_sources(
 			"joxer/src/led.c"
 			"joxer/src/keyboard.c"
+			"joxer/src/form_factor.c"
+			"joxer/src/sub_board.c"
+			"joxer/src/thermal.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "joxer/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "joxer/src/charger.c")
@@ -81,7 +96,7 @@ if(DEFINED CONFIG_BOARD_YAVIKS)
 	zephyr_library_sources(
 			"yaviks/src/led.c"
 			"yaviks/src/keyboard.c"
-			"yaviks/src/board.c"
+			"yaviks/src/sub_board.c"
 			"yaviks/src/thermal.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "yaviks/src/usbc.c")
@@ -116,9 +131,45 @@ if(DEFINED CONFIG_BOARD_ULDREN)
 	zephyr_library_sources(
 			"uldren/src/form_factor.c"
 			"uldren/src/kb_backlight.c"
-			"uldren/src/keyboard.c"
+			"uldren/src/sub_board.c"
+			"uldren/src/mp2964_update.c"
+			"uldren/src/sensor.c"
 	)
-	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "uldren/src/fan.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "uldren/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "uldren/src/charger.c")
+endif()
+if(DEFINED CONFIG_BOARD_GOTHRAX)
+	project(gothrax)
+	zephyr_library_sources(
+			"gothrax/src/keyboard.c"
+			"gothrax/src/hdmi.c"
+			"gothrax/src/usb_mux_config.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "gothrax/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "gothrax/src/charger.c")
+endif()
+if(DEFINED CONFIG_BOARD_CRAASKOV)
+	project(craaskov)
+	zephyr_include_directories("craaskov/include")
+	zephyr_library_sources(
+			"craaskov/src/keyboard.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "craaskov/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "craaskov/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
+	"craaskov/src/keyboard.c"
+	"craaskov/src/keyboard_customization.c"
+	)
+endif()
+if(DEFINED CONFIG_BOARD_QUANDISO)
+	project(quandiso)
+	zephyr_library_sources(
+			"quandiso/src/board.c"
+			"quandiso/src/keyboard.c"
+			"quandiso/src/led.c"
+			"quandiso/src/thermal.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "quandiso/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "quandiso/src/fan.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "quandiso/src/usbc.c")
 endif()

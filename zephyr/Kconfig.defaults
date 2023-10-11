@@ -20,7 +20,7 @@ config THREAD_MAX_NAME_LEN
 	default 16
 
 config SHELL_PROMPT_UART
-	default "ec:~$ "
+	default "ec:~> "
 
 config SHELL_VT100_COLORS
 	default n
@@ -43,11 +43,23 @@ config PWM_SHELL
 config SENSOR_SHELL
 	default n
 
+config FLASH_PAGE_LAYOUT
+	default n
+
+config FLASH_SHELL
+	default n
+
+config WDT_SHELL
+	default n
+
 config ESPI_NPCX_PERIPHERAL_DEBUG_PORT_80_MULTI_BYTE
 	default y
 
 choice INPUT_MODE
 	default INPUT_MODE_SYNCHRONOUS
 endchoice
+
+config INPUT_NPCX_KBD
+	default n if PLATFORM_EC_KEYBOARD_CROS_EC_RAW_KB
 
 orsource "Kconfig.defaults-$(ARCH)"

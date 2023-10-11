@@ -20,6 +20,7 @@
 #include "usb_pd_dpm_sm.h"
 #include "usb_pd_tcpm.h"
 #include "usb_pe_sm.h"
+#include "usb_prl_sm.h"
 #include "usb_tbt_alt_mode.h"
 #include "usbc_ppc.h"
 
@@ -169,6 +170,9 @@ bool enter_usb_port_partner_is_capable(int port)
 	if (usb4_state[port] == USB4_INACTIVE)
 		return false;
 
+	if (prl_get_rev(port, TCPCI_MSG_SOP) < PD_REV30)
+		return false;
+
 	if (!PD_PRODUCT_IS_USB4(disc->identity.product_t1.raw_value))
 		return false;
 
@@ -184,7 +188,7 @@ bool enter_usb_cable_is_capable(int port)
 		const struct pd_discovery *disc_sop_prime =
 			pd_get_am_discovery(port, TCPCI_MSG_SOP_PRIME);
 
-		if (pd_get_vdo_ver(port, TCPCI_MSG_SOP_PRIME) >= VDM_VER20 &&
+		if (pd_get_vdo_ver(port, TCPCI_MSG_SOP_PRIME) >= SVDM_VER_2_0 &&
 		    disc_sop_prime->identity.product_t1.a_rev30.vdo_ver >=
 			    VDO_VERSION_1_3) {
 			union active_cable_vdo2_rev30 a2_rev30 =
@@ -282,12 +286,10 @@ uint32_t enter_usb_setup_next_msg(int port, enum tcpci_msg_type *type)
 		 * Ref: Tiger Lake Platform PD Controller Interface Requirements
 		 * for Integrated USBC, section A.2.2: USB4 as DFP.
 		 * Enter safe mode before sending Enter USB SOP/SOP'/SOP''
-		 * TODO (b/156749387): Remove once data reset feature is in
-		 * place.
 		 */
 		usb_mux_set_safe_mode(port);
 
-		if (pd_get_vdo_ver(port, TCPCI_MSG_SOP_PRIME) < VDM_VER20 ||
+		if (pd_get_vdo_ver(port, TCPCI_MSG_SOP_PRIME) < SVDM_VER_2_0 ||
 		    disc_sop_prime->identity.product_t1.a_rev30.vdo_ver <
 			    VDO_VERSION_1_3 ||
 		    get_usb_pd_cable_type(port) == IDH_PTYPE_PCABLE) {

@@ -12,13 +12,13 @@
 #include "system.h"
 #include "util.h"
 
-#include <zephyr/arch/arm/aarch32/cortex_m/cmsis.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/watchdog.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
+#include <cmsis_core.h>
 #include <soc.h>
 #include <soc/nuvoton_npcx/reg_def_cros.h>
 
@@ -378,6 +378,12 @@ static const char *cros_system_npcx_get_chip_name(const struct device *dev)
 #if DT_NODE_EXISTS(SYSTEM_DT_NODE_SOC_ID_CONFIG)
 	if (chip_id == NPCX_CHIP_ID && device_id == NPCX_DEVICE_ID) {
 		return CONFIG_SOC;
+	}
+
+	if (IS_ENABLED(CONFIG_BOARD_HAS_INVALID_CHIP_DEVICE_ID_WORKAROUND)) {
+		if (chip_id == NPCX_CHIP_ID && device_id == 0x2B) {
+			return CONFIG_SOC;
+		}
 	}
 #endif
 

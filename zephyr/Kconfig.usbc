@@ -22,21 +22,49 @@ config TEST_DISABLE_PLATFORM_EC_USBC
 	  USBC.
 
 rsource "Kconfig.retimer"
+
+if PLATFORM_EC_USBC
+
 rsource "Kconfig.pd_int_shared"
 rsource "Kconfig.pd_meas_vbus"
 rsource "Kconfig.pd_frs"
 rsource "Kconfig.pd_discharge"
 rsource "Kconfig.pd_vbus_detection"
 rsource "Kconfig.pd_console_cmd"
+rsource "Kconfig.pd_host_cmd"
 rsource "Kconfig.pd_usbc_device_type"
 rsource "Kconfig.pd"
 rsource "Kconfig.ppc"
 rsource "Kconfig.usb_mux"
 rsource "Kconfig.usbc_ss_mux"
-rsource "Kconfig.tcpm"
+rsource "Kconfig.usbc_common_altmode"
 rsource "Kconfig.usb_charger"
 
-if PLATFORM_EC_USBC
+choice PLATFORM_EC_USBC_STACK
+	prompt "USB-C Power Delivery stack type"
+	default PLATFORM_EC_USB_PD_TCPMV2
+	help
+	   This symbol selects the USB-C power delivery stack implemtation used
+	   on the ChromiumOS EC.
+
+config PLATFORM_EC_USB_PD_TCPMV2
+	bool "USB-C Power Delivery TCPM Version 2"
+	help
+	  Enable USB-C Power Delivery Type-C Port Manager Version 2. It
+	  implements a layered, state-based design which tracks more closely
+	  with the USB Type-C and USB PD specifications.
+
+config PLATFORM_EC_USB_PD_CONTROLLER
+	bool "USB-C Power Delivery Controller"
+	help
+	  Enable USB-C Power Delivery using a discrete controller chip. The PD
+	  controller chip implements the local policy manager (LPM), managing
+	  all PD communication on a single Type-C connector.
+endchoice
+
+if PLATFORM_EC_USB_PD_TCPMV2
+rsource "Kconfig.tcpm"
+endif # PLATFORM_EC_USB_PD_TCPMV2
 
 config PLATFORM_EC_TCPC_INTERRUPT
 	bool "Enables tcpc driver"
@@ -228,30 +256,6 @@ config PLATFORM_EC_USBC_PPC_LOGGING
 	  (ppc_prints and ppc_err_prints). Setting this config adds the
 	  CPRINTS call to both of these function which will enable PPC
 	  related logging but increase EC image size.
-
-config PLATFORM_EC_USB_PD_TCPM_DRIVER_IT83XX
-	bool "Enable IT83XX driver"
-	depends on PLATFORM_EC_USB_PD_TCPM_ITE_ON_CHIP
-	help
-	  Enable a driver for the ITE IT83XX on-chip UBB Type-C Port Manager.
-	  This supports up to two USB Type-C ports with Dual Role function
-	  (provider and consumer) and Fast Role Swap detection.
-
-config PLATFORM_EC_USB_PD_TCPM_DRIVER_IT8XXX2
-	bool "Enable IT8XXX2 driver"
-	depends on PLATFORM_EC_USB_PD_TCPM_ITE_ON_CHIP
-	help
-	  Enable a driver for the ITE IT8XXX2 on-chip UBB Type-C Port Manager.
-	  This supports up to two USB Type-C ports with Dual Role function
-	  (provider and consumer) and Fast Role Swap detection.
-
-config PLATFORM_EC_IT83XX_TUNE_CC_PHY
-	bool "Enable tune cc physical parameters"
-	depends on PLATFORM_EC_USB_PD_TCPM_ITE_ON_CHIP
-	help
-	  Enable board to tune cc physical parameters (ex.rising, falling time).
-	  Board must define board_get_cc_tuning_parameter(enum usbpd_port port)
-	  function.
 
 config PLATFORM_EC_USB_PD_PULLUP
 	int "Default source Rp value"

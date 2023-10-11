@@ -82,6 +82,7 @@ def get_crash_cause(cause: int) -> str:
         0xDEAD6665: "bad-rng",
         0xDEAD6666: "pmic-fault",
         0xDEAD6667: "exit",
+        0xDEAD6668: "watchdog-warning",
     }
 
     if cause in causes:
@@ -126,22 +127,28 @@ def cm0_parse(match) -> dict:
 
     regs["cause"] = get_crash_cause(values[6])  # r4
 
+    # When CONFIG_DEBUG_STACK_OVERFLOW is enabled, the task number for a stack
+    # overflow is saved in R5.
+    if regs["cause"] == "stack-overflow":
+        regs["task"] = values[7]  # r5
+
     # based on crash reports in case of asserrt the PC is in R3
     if regs["cause"] == "assert":
         regs["symbol"] = get_symbol(values[5])  # r3
+        return regs
+
+    # Heuristics: try link register, then PC, then what is believed to be PC.
+    # When analyzing watchdogs, we try to be as close as possible to the caller
+    # function that caused the watchdog.
+    # That's why we prioritize LR (return address) over PC.
+    if regs["lr"] != -1:
+        regs["symbol"] = get_symbol(regs["lr"])
+    elif regs["pc"] != -1:
+        regs["symbol"] = get_symbol(regs["pc"])
     else:
-        # Heuristics: try link register, then PC, then what is believed to be PC.
-        # When analyzing watchdogs, we try to be as close as possible to the caller
-        # function that caused the watchdog.
-        # That's why we prioritize LR (return address) over PC.
-        if regs["lr"] != -1:
-            regs["symbol"] = get_symbol(regs["lr"])
-        elif regs["pc"] != -1:
-            regs["symbol"] = get_symbol(regs["pc"])
-        else:
-            # Otherwise, if both LR and PC are empty, most probably
-            # PC is in R5.
-            regs["symbol"] = get_symbol(values[7])  # r5
+        # Otherwise, if both LR and PC are empty, most probably
+        # PC is in R5.
+        regs["symbol"] = get_symbol(values[7])  # r5
 
     return regs
 
@@ -236,7 +243,7 @@ def process_log_file(file_name: str) -> tuple:
     ec_ver = None
     bios_ver = None
     try:
-        with open(file_name, "r") as log_file:
+        with open(file_name, "r", encoding="ascii") as log_file:
             lines = log_file.readlines()
             for line in lines:
                 # Searching for something like:
@@ -252,6 +259,9 @@ def process_log_file(file_name: str) -> tuple:
                 # Get EC version.
                 # There could be more than one "fw_version". Only the first one
                 # corresponds to the EC version.
+                if line.startswith("RW version") and ec_ver is None:
+                    _, ec_ver = line.split(":")
+                    ec_ver = ec_ver.strip(" \n")
                 if line.startswith("fw_version") and ec_ver is None:
                     _, ec_ver = line.split("|")
                     ec_ver = ec_ver.strip(" \n")
@@ -277,7 +287,7 @@ def process_log_file(file_name: str) -> tuple:
 def process_crash_file(filename: str) -> dict:
     """Process a single crash report, and convert it to a dictionary"""
 
-    with open(filename, "r") as crash_file:
+    with open(filename, "r", encoding="ascii") as crash_file:
         content = crash_file.read()
 
         for key, arch in get_architectures().items():

@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 """Types which provide many builds and composite them into a single binary."""
+
 import logging
 from pathlib import Path
 import shutil
@@ -10,10 +11,10 @@ import subprocess
 import sys
 from typing import Dict, Optional
 
-import zmake.build_config as build_config
+from zmake import build_config
+from zmake import util
 import zmake.jobserver
 import zmake.multiproc
-import zmake.util as util
 
 
 class BasePacker:
@@ -22,8 +23,7 @@ class BasePacker:
     def __init__(self, project):
         self.project = project
 
-    @staticmethod
-    def configs():
+    def configs(self):  # pylint: disable=no-self-use
         """Get all of the build configurations necessary.
 
         Yields:
@@ -59,8 +59,9 @@ class BasePacker:
         """
         raise NotImplementedError("Abstract method not implemented")
 
-    @staticmethod
-    def _get_max_image_bytes(dir_map) -> Optional[int]:
+    def _get_max_image_bytes(  # pylint: disable=no-self-use
+        self, dir_map
+    ) -> Optional[int]:
         """Get the maximum allowed image size (in bytes).
 
         This value will generally be found in CONFIG_FLASH_SIZE but may vary
@@ -87,14 +88,12 @@ class BasePacker:
         Returns:
             The file if it passes the test.
         """
-        max_size = (
-            self._get_max_image_bytes(  # pylint: disable=assignment-from-none
-                dir_map
-            )
+        max_size = (  # pylint: disable=assignment-from-no-return
+            self._get_max_image_bytes(dir_map)
         )
         if max_size is None or file.stat().st_size <= max_size:
             return file
-        raise RuntimeError("Output file ({}) too large".format(file))
+        raise RuntimeError(f"Output file ({file}) too large")
 
 
 class ElfPacker(BasePacker):
@@ -113,6 +112,14 @@ class RawBinPacker(BasePacker):
         yield dir_map["singleimage"] / "zephyr" / "zephyr.bin", "ec.bin"
 
 
+class IshBinPacker(BasePacker):
+    """Raw proxy for ish_fw.bin output of a single build."""
+
+    def pack_firmware(self, work_dir, jobclient, dir_map, version_string=""):
+        del version_string
+        yield dir_map["singleimage"] / "zephyr" / "ish_fw.bin", "ish_fw.bin"
+
+
 class BinmanPacker(BasePacker):
     """Packer for RO/RW image to generate a .bin build using FMAP."""
 
@@ -125,10 +132,12 @@ class BinmanPacker(BasePacker):
 
     def configs(self):
         yield "ro", build_config.BuildConfig(
-            kconfig_defs={"CONFIG_CROS_EC_RO": "y"}
+            kconfig_defs={"CONFIG_CROS_EC_RO": "y"},
+            cmake_defs={"CMAKE_C_FLAGS": "-DSECTION_IS_RO"},
         )
         yield "rw", build_config.BuildConfig(
-            kconfig_defs={"CONFIG_CROS_EC_RW": "y"}
+            kconfig_defs={"CONFIG_CROS_EC_RW": "y"},
+            cmake_defs={"CMAKE_C_FLAGS": "-DSECTION_IS_RW"},
         )
 
     def pack_firmware(
@@ -167,10 +176,11 @@ class BinmanPacker(BasePacker):
             rw_dir / "zephyr" / self.rw_file, work_dir / "zephyr_rw.bin"
         )
 
+        version_file_path = work_dir / "version.txt"
         # Version in FRID/FWID can be at most 31 bytes long (32, minus
         # one for null character).
-        if len(version_string) > 31:
-            version_string = version_string[:31]
+        with open(version_file_path, "w", encoding="utf-8") as version_file:
+            version_file.write(version_string[:31].ljust(32, "\0"))
 
         proc = jobclient.popen(
             [
@@ -179,8 +189,6 @@ class BinmanPacker(BasePacker):
                 "-v",
                 "5",
                 "build",
-                "-a",
-                "version={}".format(version_string),
                 "-d",
                 dts_file_path,
                 "-m",

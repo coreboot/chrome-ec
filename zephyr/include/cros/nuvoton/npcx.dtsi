@@ -5,7 +5,7 @@
  */
 
 #include <cros/binman.dtsi>
-#include <nuvoton/npcx.dtsi>
+#include <nuvoton/npcx/npcx.dtsi>
 
 / {
 	chosen {
@@ -79,6 +79,7 @@
 			clocks = <&pcc NPCX_CLOCK_BUS_APB1 NPCX_PWDWN_CTL1 0>;
 			wui_maps = <&wui_io31 &wui_io30 &wui_io27 &wui_io26
 				    &wui_io25 &wui_io24 &wui_io23 &wui_io22>;
+			status = "disabled";
 		};
 
 		mtc: mtc@400b7000 {
@@ -87,26 +88,10 @@
 			mtc-alarm = <&wui_mtc>;
 		};
 	};
-
-	power-states {
-		suspend_to_idle_instant: suspend_to_idle_instant {
-			compatible = "zephyr,power-state";
-			power-state-name = "suspend-to-idle";
-			substate-id = <0>;
-			min-residency-us = <500>;
-		};
-
-		suspend_to_idle_normal: suspend_to_idle_normal {
-			compatible = "zephyr,power-state";
-			power-state-name = "suspend-to-idle";
-			substate-id = <1>;
-			min-residency-us = <200100>;
-		};
-	};
 };
 
-&cpu0 {
-	cpu-power-states = <&suspend_to_idle_instant &suspend_to_idle_normal>;
+&suspend_to_idle0 {
+	min-residency-us = <500>;
 };
 
 &bbram {

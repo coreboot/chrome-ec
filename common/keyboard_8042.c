@@ -5,6 +5,12 @@
  * 8042 keyboard protocol
  */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #include "atkbd_protocol.h"
 #include "builtin/assert.h"
 #include "button.h"
@@ -430,7 +436,7 @@ static void set_typematic_delays(uint8_t data)
 		((typematic_value_from_host & 0x7) + 8) / 240;
 }
 
-static void reset_rate_and_delay(void)
+test_export_static void reset_rate_and_delay(void)
 {
 	set_typematic_delays(DEFAULT_TYPEMATIC_VALUE);
 }
@@ -451,7 +457,7 @@ static void keyboard_wakeup(void)
 	host_set_single_event(EC_HOST_EVENT_KEY_PRESSED);
 }
 
-static void set_typematic_key(const uint8_t *scan_code, int32_t len)
+test_export_static void set_typematic_key(const uint8_t *scan_code, int32_t len)
 {
 	typematic_deadline.val = get_time().val + typematic_first_delay;
 	memcpy(typematic_scan_code, scan_code, len);
@@ -1006,13 +1012,31 @@ void keyboard_protocol_task(void *u)
 			if (queue_count(&to_host_cmd)) {
 				queue_remove_unit(&to_host_cmd, &entry);
 			} else if (data_port_state == STATE_ATKBD_SETLEDS) {
-				/* to_host_cmd is empty but in SETLEDS */
-				if (!timestamp_expired(setleds_deadline, &t))
-					/* Let's wait for the 2nd byte. */
+				/*
+				 * to_host_cmd == empty and to_host != empty.
+				 * We're in SETLEDS thus expecting the 2nd byte.
+				 * Until timer expires, don't process scancode.
+				 */
+				if (!timestamp_expired(setleds_deadline, &t)) {
+					/*
+					 * Let's wait for the 2nd byte but we
+					 * don't want to wait too long because
+					 * we already have scancode to send.
+					 */
+					if (wait == -1 ||
+					    wait > setleds_deadline.val - t.val)
+						wait = setleds_deadline.val -
+						       t.val;
 					break;
-				/* Didn't receive 2nd byte. Go back to CMD. */
+				}
+				/*
+				 * Didn't receive 2nd byte. Go back to CMD. We
+				 * don't need to cancel the timer because going
+				 * back to CMD state implicitly disables timer.
+				 */
 				CPRINTS("KB SETLEDS timeout");
 				data_port_state = STATE_ATKBD_CMD;
+				queue_remove_unit(&to_host, &entry);
 			} else {
 				/* to_host isn't empty && not in SETLEDS */
 				queue_remove_unit(&to_host, &entry);
@@ -1390,3 +1414,32 @@ DECLARE_HOOK(HOOK_POWER_BUTTON_CHANGE, keyboard_power_button,
 	     HOOK_PRIO_DEFAULT);
 
 #endif /* CONFIG_POWER_BUTTON && !CONFIG_MKBP_INPUT_DEVICES */
+
+#ifdef TEST_BUILD
+void test_keyboard_8042_set_resend_command(const uint8_t *data, int length)
+{
+	length = MIN(length, sizeof(resend_command));
+
+	memcpy(resend_command, data, length);
+	resend_command_len = length;
+}
+
+void test_keyboard_8042_reset(void)
+{
+	/* Initialize controller ram */
+	memset(controller_ram, 0, sizeof(controller_ram));
+	controller_ram[0] = I8042_XLATE | I8042_AUX_DIS | I8042_KBD_DIS;
+
+	/* Typematic state reset */
+	reset_rate_and_delay();
+	clear_typematic_key();
+
+	/* Use default scancode set # 2 */
+	scancode_set = SCANCODE_SET_2;
+
+	/* Keyboard not enabled (matches I8042_KBD_DIS bit being set) */
+	keyboard_enabled = false;
+
+	A20_status = 0;
+}
+#endif /* TEST_BUILD */

@@ -5,15 +5,14 @@
 
 &binman {
 	wp-ro {
-		ec-ro {
-			cbi_flash: cbi {
-				compatible = "cros-ec,flash-layout";
-				type = "fill";
-				offset = <0x40000>;
-				size = <0>;
-				fill-byte = [ff];
-				preserve;
-			};
+		cbi_flash: cbi {
+			compatible = "cros-ec,flash-layout";
+			type = "fill";
+			offset = <0x40000>;
+			size = <0>;
+			fill-byte = [ff];
+			image-size = <256>;
+			preserve;
 		};
 	};
 };

@@ -693,6 +693,49 @@ enum ec_status {
 	EC_RES_MAX = UINT16_MAX, /**< Force enum to be 16 bits */
 } __packed;
 BUILD_ASSERT(sizeof(enum ec_status) == sizeof(uint16_t));
+#ifdef CONFIG_EC_HOST_CMD
+/*
+ * Make sure Zephyre uses the same status codes.
+ */
+#include <zephyr/mgmt/ec_host_cmd/ec_host_cmd.h>
+
+BUILD_ASSERT((uint16_t)EC_RES_SUCCESS == (uint16_t)EC_HOST_CMD_SUCCESS);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_COMMAND ==
+	     (uint16_t)EC_HOST_CMD_INVALID_COMMAND);
+BUILD_ASSERT((uint16_t)EC_RES_ERROR == (uint16_t)EC_HOST_CMD_ERROR);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_PARAM ==
+	     (uint16_t)EC_HOST_CMD_INVALID_PARAM);
+BUILD_ASSERT((uint16_t)EC_RES_ACCESS_DENIED ==
+	     (uint16_t)EC_HOST_CMD_ACCESS_DENIED);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_RESPONSE ==
+	     (uint16_t)EC_HOST_CMD_INVALID_RESPONSE);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_VERSION ==
+	     (uint16_t)EC_HOST_CMD_INVALID_VERSION);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_CHECKSUM ==
+	     (uint16_t)EC_HOST_CMD_INVALID_CHECKSUM);
+BUILD_ASSERT((uint16_t)EC_RES_IN_PROGRESS == (uint16_t)EC_HOST_CMD_IN_PROGRESS);
+BUILD_ASSERT((uint16_t)EC_RES_UNAVAILABLE == (uint16_t)EC_HOST_CMD_UNAVAILABLE);
+BUILD_ASSERT((uint16_t)EC_RES_TIMEOUT == (uint16_t)EC_HOST_CMD_TIMEOUT);
+BUILD_ASSERT((uint16_t)EC_RES_OVERFLOW == (uint16_t)EC_HOST_CMD_OVERFLOW);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_HEADER ==
+	     (uint16_t)EC_HOST_CMD_INVALID_HEADER);
+BUILD_ASSERT((uint16_t)EC_RES_REQUEST_TRUNCATED ==
+	     (uint16_t)EC_HOST_CMD_REQUEST_TRUNCATED);
+BUILD_ASSERT((uint16_t)EC_RES_RESPONSE_TOO_BIG ==
+	     (uint16_t)EC_HOST_CMD_RESPONSE_TOO_BIG);
+BUILD_ASSERT((uint16_t)EC_RES_BUS_ERROR == (uint16_t)EC_HOST_CMD_BUS_ERROR);
+BUILD_ASSERT((uint16_t)EC_RES_BUSY == (uint16_t)EC_HOST_CMD_BUSY);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_HEADER_VERSION ==
+	     (uint16_t)EC_HOST_CMD_INVALID_HEADER_VERSION);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_HEADER_CRC ==
+	     (uint16_t)EC_HOST_CMD_INVALID_HEADER_CRC);
+BUILD_ASSERT((uint16_t)EC_RES_INVALID_DATA_CRC ==
+	     (uint16_t)EC_HOST_CMD_INVALID_DATA_CRC);
+BUILD_ASSERT((uint16_t)EC_RES_DUP_UNAVAILABLE ==
+	     (uint16_t)EC_HOST_CMD_DUP_UNAVAILABLE);
+BUILD_ASSERT((uint16_t)EC_RES_MAX == (uint16_t)EC_HOST_CMD_MAX);
+
+#endif
 
 /*
  * Host event codes. ACPI query EC command uses code 0 to mean "no event
@@ -1591,6 +1634,30 @@ enum ec_feature_code {
 	 * The EC supports the AP composing VDMs for us to send.
 	 */
 	EC_FEATURE_TYPEC_AP_VDM_SEND = 46,
+	/*
+	 * The EC supports system safe mode panic recovery.
+	 */
+	EC_FEATURE_SYSTEM_SAFE_MODE = 47,
+	/*
+	 * The EC will reboot on runtime assertion failures.
+	 */
+	EC_FEATURE_ASSERT_REBOOTS = 48,
+	/*
+	 * The EC image is built with tokenized logging enabled.
+	 */
+	EC_FEATURE_TOKENIZED_LOGGING = 49,
+	/*
+	 * The EC supports triggering an STB dump.
+	 */
+	EC_FEATURE_AMD_STB_DUMP = 50,
+	/*
+	 * The EC supports memory dump commands.
+	 */
+	EC_FEATURE_MEMORY_DUMP = 51,
+	/*
+	 * The EC supports DP2.1 capability
+	 */
+	EC_FEATURE_TYPEC_DP2_1 = 52,
 };
 
 #define EC_FEATURE_MASK_0(event_code) BIT(event_code % 32)
@@ -4390,7 +4457,7 @@ struct ec_params_i2c_write {
  * discharge the battery.
  */
 #define EC_CMD_CHARGE_CONTROL 0x0096
-#define EC_VER_CHARGE_CONTROL 2
+#define EC_VER_CHARGE_CONTROL 3
 
 enum ec_charge_control_mode {
 	CHARGE_CONTROL_NORMAL = 0,
@@ -4412,12 +4479,16 @@ enum ec_charge_control_cmd {
 	EC_CHARGE_CONTROL_CMD_GET,
 };
 
+enum ec_charge_control_flag {
+	EC_CHARGE_CONTROL_FLAG_NO_IDLE = BIT(0),
+};
+
 struct ec_params_charge_control {
 	uint32_t mode; /* enum charge_control_mode */
 
 	/* Below are the fields added in V2. */
 	uint8_t cmd; /* enum ec_charge_control_cmd. */
-	uint8_t reserved;
+	uint8_t flags; /* enum ec_charge_control_flag (v3+) */
 	/*
 	 * Lower and upper thresholds for battery sustainer. This struct isn't
 	 * named to avoid tainting foreign projects' name spaces.
@@ -4439,7 +4510,8 @@ struct ec_response_charge_control {
 		int8_t lower;
 		int8_t upper;
 	} sustain_soc;
-	uint16_t reserved;
+	uint8_t flags; /* enum ec_charge_control_flag (v3+) */
+	uint8_t reserved;
 } __ec_align4;
 
 /*****************************************************************************/
@@ -5111,7 +5183,19 @@ struct ec_response_i2c_passthru_protect {
  * These commands are for sending and receiving message via HDMI CEC
  */
 
+#define EC_CEC_MAX_PORTS 16
+
 #define MAX_CEC_MSG_LEN 16
+
+/*
+ * Helper macros for packing/unpacking cec_events.
+ * bits[27:0] : bitmask of events from enum mkbp_cec_event
+ * bits[31:28]: port number
+ */
+#define EC_MKBP_EVENT_CEC_PACK(events, port) \
+	(((events)&GENMASK(27, 0)) | (((port)&0xf) << 28))
+#define EC_MKBP_EVENT_CEC_GET_EVENTS(event) ((event)&GENMASK(27, 0))
+#define EC_MKBP_EVENT_CEC_GET_PORT(event) (((event) >> 28) & 0xf)
 
 /* CEC message from the AP to be written on the CEC bus */
 #define EC_CMD_CEC_WRITE_MSG 0x00B8
@@ -5124,19 +5208,54 @@ struct ec_params_cec_write {
 	uint8_t msg[MAX_CEC_MSG_LEN];
 } __ec_align1;
 
+/**
+ * struct ec_params_cec_write_v1 - Message to write to the CEC bus
+ * @port: CEC port to write the message on
+ * @msg_len: length of msg in bytes
+ * @msg: message content to write to the CEC bus
+ */
+struct ec_params_cec_write_v1 {
+	uint8_t port;
+	uint8_t msg_len;
+	uint8_t msg[MAX_CEC_MSG_LEN];
+} __ec_align1;
+
+/* CEC message read from a CEC bus reported back to the AP */
+#define EC_CMD_CEC_READ_MSG 0x00B9
+
+/**
+ * struct ec_params_cec_read - Read a message from the CEC bus
+ * @port: CEC port to read a message on
+ */
+struct ec_params_cec_read {
+	uint8_t port;
+} __ec_align1;
+
+/**
+ * struct ec_response_cec_read - Message read from the CEC bus
+ * @msg_len: length of msg in bytes
+ * @msg: message content read from the CEC bus
+ */
+struct ec_response_cec_read {
+	uint8_t msg_len;
+	uint8_t msg[MAX_CEC_MSG_LEN];
+} __ec_align1;
+
 /* Set various CEC parameters */
 #define EC_CMD_CEC_SET 0x00BA
 
 /**
  * struct ec_params_cec_set - CEC parameters set
  * @cmd: parameter type, can be CEC_CMD_ENABLE or CEC_CMD_LOGICAL_ADDRESS
+ * @port: CEC port to set the parameter on
  * @val: in case cmd is CEC_CMD_ENABLE, this field can be 0 to disable CEC
  *	or 1 to enable CEC functionality, in case cmd is
  *	CEC_CMD_LOGICAL_ADDRESS, this field encodes the requested logical
  *	address between 0 and 15 or 0xff to unregister
  */
 struct ec_params_cec_set {
-	uint8_t cmd; /* enum cec_command */
+	uint8_t cmd : 4; /* enum cec_command */
+	uint8_t port : 4;
 	uint8_t val;
 } __ec_align1;
 
@@ -5146,9 +5265,11 @@ struct ec_params_cec_set {
 /**
  * struct ec_params_cec_get - CEC parameters get
  * @cmd: parameter type, can be CEC_CMD_ENABLE or CEC_CMD_LOGICAL_ADDRESS
+ * @port: CEC port to get the parameter on
  */
 struct ec_params_cec_get {
-	uint8_t cmd; /* enum cec_command */
+	uint8_t cmd : 4; /* enum cec_command */
+	uint8_t port : 4;
 } __ec_align1;
 
 /**
@@ -5160,6 +5281,17 @@ struct ec_params_cec_get {
  */
 struct ec_response_cec_get {
 	uint8_t val;
+} __ec_align1;
+
+/* Get the number of CEC ports */
+#define EC_CMD_CEC_PORT_COUNT 0x00C1
+
+/**
+ * struct ec_response_cec_port_count - CEC port count response
+ * @port_count: number of CEC ports
+ */
+struct ec_response_cec_port_count {
+	uint8_t port_count;
 } __ec_align1;
 
 /* CEC parameters command */
@@ -5176,6 +5308,8 @@ enum mkbp_cec_event {
 	EC_MKBP_CEC_SEND_OK = BIT(0),
 	/* Outgoing message was not acknowledged */
 	EC_MKBP_CEC_SEND_FAILED = BIT(1),
+	/* Incoming message can be read out by AP */
+	EC_MKBP_CEC_HAVE_DATA = BIT(2),
 };
 
 /*****************************************************************************/
@@ -5486,6 +5620,11 @@ struct ec_params_reboot_ec {
  * for details.
  */
 #define EC_CMD_GET_PANIC_INFO 0x00D3
+
+struct ec_params_get_panic_info_v1 {
+	/* Do not modify PANIC_DATA_FLAG_OLD_HOSTCMD when reading panic info */
+	uint8_t preserve_old_hostcmd_flag;
+} __ec_align1;
 
 /*****************************************************************************/
 /*
@@ -5890,6 +6029,10 @@ struct ec_params_usb_pd_discovery_entry {
 
 /* Negative port parameters have special meaning */
 enum usb_pd_override_ports {
+	/*
+	 * DONT_CHARGE is for all ports. Thus it's persistent across plug-in
+	 * or plug-out.
+	 */
 	OVERRIDE_DONT_CHARGE = -2,
 	OVERRIDE_OFF = -1,
 	/* [0, CONFIG_USB_PD_PORT_MAX_COUNT): Port# */
@@ -6162,7 +6305,51 @@ enum cbi_data_tag {
 	CBI_TAG_SSFC = 8, /* uint32_t bit field */
 	CBI_TAG_REWORK_ID = 9, /* uint64_t or smaller */
 	CBI_TAG_FACTORY_CALIBRATION_DATA = 10, /* uint32_t bit field */
+
+	/*
+	 * A uint32_t field reserved for controlling common features at runtime.
+	 * It shouldn't be used at board-level. See union ec_common_control for
+	 * the bit definitions.
+	 */
+	CBI_TAG_COMMON_CONTROL = 11,
+
+	/*
+	 * Battery info
+	 */
+	/* struct fuel_gauge_info */
+	CBI_TAG_FUEL_GAUGE_MANUF_NAME = 0x10,
+	CBI_TAG_FUEL_GAUGE_DEVICE_NAME = 0x11,
+	CBI_TAG_FUEL_GAUGE_FLAGS = 0x12,
+	/* struct ship_mod_info */
+	CBI_TAG_BATT_SHIP_MODE_REG_ADDR = 0x13,
+	CBI_TAG_BATT_SHIP_MODE_REG_DATA = 0x14,
+	/* struct sleep_mode_info */
+	CBI_TAG_BATT_SLEEP_MODE = 0x15,
+	/* struct fet_info */
+	CBI_TAG_BATT_FET_REG_ADDR = 0x16,
+	CBI_TAG_BATT_FET_REG_MASK = 0x17,
+	CBI_TAG_BATT_FET_DISCONNECT_VAL = 0x18,
+	CBI_TAG_BATT_FET_CFET_MASK = 0x19,
+	CBI_TAG_BATT_FET_CFET_OFF_VAL = 0x1a,
+	/* struct battery_info */
+	CBI_TAG_BATT_VOLTAGE_MAX = 0x1b,
+	CBI_TAG_BATT_VOLTAGE_NORMAL = 0x1c,
+	CBI_TAG_BATT_VOLTAGE_MIN = 0x1d,
+	CBI_TAG_BATT_PRECHARGE_VOLTAGE_CURRENT = 0x1e,
+	CBI_TAG_BATT_START_CHARGING_MIN_MAX_C = 0x1f,
+	CBI_TAG_BATT_CHARGING_MIN_MAX_C = 0x20,
+	CBI_TAG_BATT_DISCHARGING_MIN_MAX_C = 0x21,
+	/* Reserved for BCIC: 0x22 ~ 0x3f */
+
+	/* Last entry */
 	CBI_TAG_COUNT,
+};
+
+union ec_common_control {
+	struct {
+		uint32_t bcic_enabled : 1;
+	};
+	uint32_t raw_value;
 };
 
 /*
@@ -7734,6 +7921,12 @@ struct ec_params_fp_seed {
 
 /* FP TPM seed has been set or not */
 #define FP_ENC_STATUS_SEED_SET BIT(0)
+/* FP using nonce context or not */
+#define FP_CONTEXT_STATUS_NONCE_CONTEXT_SET BIT(1)
+/* FP match had been processed or not */
+#define FP_CONTEXT_STATUS_MATCH_PROCESSED_SET BIT(2)
+/* FP auth_nonce had been set or not*/
+#define FP_CONTEXT_AUTH_NONCE_SET BIT(3)
 
 struct ec_response_fp_encryption_status {
 	/* Used bits in encryption engine status */
@@ -7751,6 +7944,115 @@ struct ec_params_fp_read_match_secret {
 #define FP_POSITIVE_MATCH_SECRET_BYTES 32
 struct ec_response_fp_read_match_secret {
 	uint8_t positive_match_secret[FP_POSITIVE_MATCH_SECRET_BYTES];
+} __ec_align4;
+
+#define FP_ELLIPTIC_CURVE_PUBLIC_KEY_POINT_LEN 32
+
+struct fp_elliptic_curve_public_key {
+	uint8_t x[FP_ELLIPTIC_CURVE_PUBLIC_KEY_POINT_LEN];
+	uint8_t y[FP_ELLIPTIC_CURVE_PUBLIC_KEY_POINT_LEN];
+} __ec_align4;
+
+#define FP_AES_KEY_ENC_METADATA_VERSION 1
+#define FP_AES_KEY_NONCE_BYTES 12
+#define FP_AES_KEY_ENCRYPTION_SALT_BYTES 16
+#define FP_AES_KEY_TAG_BYTES 16
+
+struct fp_auth_command_encryption_metadata {
+	/* Version of the structure format */
+	uint16_t struct_version;
+	/* Reserved bytes, set to 0. */
+	uint16_t reserved;
+	/*
+	 * The salt is *only* ever used for key derivation. The nonce is unique,
+	 * a different one is used for every message.
+	 */
+	uint8_t nonce[FP_AES_KEY_NONCE_BYTES];
+	uint8_t encryption_salt[FP_AES_KEY_ENCRYPTION_SALT_BYTES];
+	uint8_t tag[FP_AES_KEY_TAG_BYTES];
+} __ec_align4;
+
+#define FP_ELLIPTIC_CURVE_PRIVATE_KEY_LEN 32
+#define FP_ELLIPTIC_CURVE_PUBLIC_KEY_IV_LEN 16
+
+struct fp_encrypted_private_key {
+	struct fp_auth_command_encryption_metadata info;
+	uint8_t data[FP_ELLIPTIC_CURVE_PRIVATE_KEY_LEN];
+} __ec_align4;
+
+#define EC_CMD_FP_ESTABLISH_PAIRING_KEY_KEYGEN 0x0410
+
+struct ec_response_fp_establish_pairing_key_keygen {
+	struct fp_elliptic_curve_public_key pubkey;
+	struct fp_encrypted_private_key encrypted_private_key;
+} __ec_align4;
+
+#define FP_PAIRING_KEY_LEN 32
+
+struct ec_fp_encrypted_pairing_key {
+	struct fp_auth_command_encryption_metadata info;
+	uint8_t data[FP_PAIRING_KEY_LEN];
+} __ec_align4;
+
+#define EC_CMD_FP_ESTABLISH_PAIRING_KEY_WRAP 0x0411
+
+struct ec_params_fp_establish_pairing_key_wrap {
+	struct fp_elliptic_curve_public_key peers_pubkey;
+	struct fp_encrypted_private_key encrypted_private_key;
+} __ec_align4;
+
+struct ec_response_fp_establish_pairing_key_wrap {
+	struct ec_fp_encrypted_pairing_key encrypted_pairing_key;
+} __ec_align4;
+
+#define EC_CMD_FP_LOAD_PAIRING_KEY 0x0412
+
+typedef struct ec_response_fp_establish_pairing_key_wrap
+	ec_params_fp_load_pairing_key;
+
+#define FP_CK_AUTH_NONCE_LEN 32
+
+#define EC_CMD_FP_GENERATE_NONCE 0x0413
+struct ec_response_fp_generate_nonce {
+	uint8_t nonce[FP_CK_AUTH_NONCE_LEN];
+} __ec_align4;
+
+#define FP_CONTEXT_USERID_LEN 32
+#define FP_CONTEXT_USERID_IV_LEN 16
+#define FP_CONTEXT_KEY_LEN 32
+
+#define EC_CMD_FP_NONCE_CONTEXT 0x0414
+struct ec_params_fp_nonce_context {
+	uint8_t gsc_nonce[FP_CK_AUTH_NONCE_LEN];
+	uint8_t enc_user_id[FP_CONTEXT_USERID_LEN];
+	uint8_t enc_user_id_iv[FP_CONTEXT_USERID_IV_LEN];
+} __ec_align4;
+
+#define FP_ELLIPTIC_CURVE_PUBLIC_KEY_IV_LEN 16
+
+#define EC_CMD_FP_READ_MATCH_SECRET_WITH_PUBKEY 0x0415
+
+struct ec_params_fp_read_match_secret_with_pubkey {
+	uint16_t fgr;
+	uint16_t reserved;
+	struct fp_elliptic_curve_public_key pubkey;
+} __ec_align4;
+
+struct ec_response_fp_read_match_secret_with_pubkey {
+	struct fp_elliptic_curve_public_key pubkey;
+	uint8_t iv[FP_ELLIPTIC_CURVE_PUBLIC_KEY_IV_LEN];
+	uint8_t enc_secret[FP_POSITIVE_MATCH_SECRET_BYTES];
+} __ec_align4;
+
+/* Preload encrypted template into the MCU buffer */
+#define EC_CMD_FP_PRELOAD_TEMPLATE 0x0416
+
+struct ec_params_fp_preload_template {
+	uint32_t offset;
+	uint32_t size;
+	uint16_t fgr;
+	uint8_t reserved[2];
+	uint8_t data[];
 } __ec_align4;
 
 /*****************************************************************************/

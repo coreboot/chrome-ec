@@ -18,7 +18,7 @@ void board_reset_pd_mcu(void)
 	reset_nct38xx_port(USBC_PORT_C0);
 
 	/* Reset TCPC1 */
-	if (usb_db_type == FW_USB_DB_USB3) {
+	if (usb_db_type == FW_USB_DB_USB3 && tcpc_config[1].rst_gpio.port) {
 		gpio_pin_set_dt(&tcpc_config[1].rst_gpio, 1);
 		msleep(PS8XXX_RESET_DELAY_MS);
 		gpio_pin_set_dt(&tcpc_config[1].rst_gpio, 0);
@@ -26,24 +26,12 @@ void board_reset_pd_mcu(void)
 	}
 }
 
-void ppc_interrupt(enum gpio_signal signal)
+__override bool board_is_tbt_usb4_port(int port)
 {
-	switch (signal) {
-	case GPIO_USB_C0_PPC_INT_ODL:
-		syv682x_interrupt(USBC_PORT_C0);
-		break;
-	case GPIO_USB_C1_PPC_INT_ODL:
-		if (usb_db_type == FW_USB_DB_USB3) {
-			nx20p348x_interrupt(USBC_PORT_C1);
-		}
-		if (usb_db_type == FW_USB_DB_USB4_ANX7452) {
-			syv682x_interrupt(USBC_PORT_C1);
-		}
-		if (usb_db_type == FW_USB_DB_USB4_KB8010) {
-			ktu1125_interrupt(USBC_PORT_C1);
-		}
-		break;
-	default:
-		break;
-	}
+	if (port == USBC_PORT_C0)
+		return true;
+	if (port == USBC_PORT_C1 && usb_db_type != FW_USB_DB_USB3)
+		return true;
+
+	return false;
 }

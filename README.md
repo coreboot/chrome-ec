@@ -309,6 +309,13 @@ This turns on the following flags:
 *   `GBB_FLAG_DISABLE_FW_ROLLBACK_CHECK`
 *   `GBB_FLAG_DISABLE_EC_SOFTWARE_SYNC`
 
+
+Alternatively, if the OS cannot be accessed, the same flag can be set over a servo with:
+
+```bash
+$ sudo futility gbb -s --flags=0x239 --servo
+```
+
 The `GBB` (Google Binary Block) flags are defined in the
 [vboot_reference source](https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/main/firmware/2lib/include/2struct.h).
 A varying subset of these flags are implemented and/or relevant for any
@@ -504,10 +511,10 @@ Prior to uploading a new change for review, please run the EC unit tests with:
 ```
 
 ```bash
-(chroot) $ make -j tests
+(chroot) $ make -j runtests
 ```
 
-These commands will build and run unit tests in an emulator on your host.
+These commands will build and run unit tests on your host.
 
 Pre-upload checks are run when you try to upload a change-list. If you wish to
 run these checks manually first, commit your change locally then run the

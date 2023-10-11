@@ -69,23 +69,28 @@
 &i2c0_0 {
 	status = "okay";
 	label = "I2C_TCPC0";
-	clock-frequency = <I2C_BITRATE_FAST>;
+	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
 	pinctrl-0 = <&i2c0_0_sda_scl_gpb4_b5>;
 	pinctrl-names = "default";
 
-	tcpc_port0: rt1716@70 {
-		compatible = "richtek,rt1716";
-		reg = <0x70>;
+	tcpc_port0: rt1715@4e {
+		compatible = "richtek,rt1715-tcpc";
+		reg = <0x4e>;
 		tcpc-flags = <(
 			TCPC_FLAGS_TCPCI_REV2_0 |
 			TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V)>;
-		irq-gpios = <&gpioe 0 GPIO_ACTIVE_LOW>;
+		irq-gpios = <&gpio3 7 GPIO_ACTIVE_LOW>;
 	};
 
 	ppc_port0: ktu1125@38 {
 		compatible = "kinetic,ktu1125";
 		status = "okay";
 		reg = <0x38>;
+		/* a duplicate of the <&gpio_usb_c0_ppc_int_odl> node in
+		 * "named-gpios". This is the Zephyr preferred style,
+		 * the "named-gpios" node will be dealt with at a later date.
+		 */
+		irq-gpios = <&gpio6 7 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 	};
 };
 
@@ -96,15 +101,9 @@
 &i2c1_0 {
 	status = "okay";
 	label = "I2C_TCPC1";
-	clock-frequency = <I2C_BITRATE_FAST>;
+	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
 	pinctrl-0 = <&i2c1_0_sda_scl_gp87_90>;
 	pinctrl-names = "default";
-
-	bc12_port1: rt1718s-bc12@40 {
-		compatible = "richtek,rt1718s-bc12";
-		status = "okay";
-		reg = <0x40>;
-	};
 
 	tcpc_rt1718_port1: rt1718s-tcpc@40 {
 		compatible = "richtek,rt1718s-tcpc";
@@ -125,12 +124,23 @@
 		compatible = "nxp,nx20p348x";
 		status = "okay";
 		reg = <0x71>;
+		/* a duplicate of the <&gpio_usb_c1_ppc_int_odl> node in
+		 * "named-gpios". This is the Zephyr preferred style,
+		 * the "named-gpios" node will be dealt with at a later date.
+		 */
+		irq-gpios = <&gpio7 0 GPIO_ACTIVE_LOW>;
 		is-alt;
 	};
 
 	tcpc_ps8815_port1: ps8xxx@b {
 		compatible = "parade,ps8xxx";
 		reg = <0xb>;
+		tcpc-flags = <(
+			TCPC_FLAGS_TCPCI_REV2_0 |
+			TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V |
+			TCPC_FLAGS_CONTROL_VCONN |
+			TCPC_FLAGS_CONTROL_FRS)>;
+		irq-gpios = <&gpiof 5 GPIO_ACTIVE_LOW>;
 		is-alt;
 	};
 
@@ -138,6 +148,11 @@
 		compatible = "kinetic,ktu1125";
 		status = "okay";
 		reg = <0x38>;
+		/* a duplicate of the <&gpio_usb_c1_ppc_int_odl> node in
+		 * "named-gpios". This is the Zephyr preferred style,
+		 * the "named-gpios" node will be dealt with at a later date.
+		 */
+		irq-gpios = <&gpio7 0 GPIO_ACTIVE_LOW>;
 		is-alt;
 	};
 };
@@ -165,15 +180,48 @@
 	pinctrl-0 = <&i2c3_0_sda_scl_gpd0_d1>;
 	pinctrl-names = "default";
 
-	amd_fp6_port0: amd_fp6@5c {
-		compatible = "amd,usbc-mux-amd-fp6";
+	ps8833_port0: ps8833@10 {
+		compatible = "parade,ps8833";
+		status = "okay";
+		reg = <0x08>;
+	};
+
+	ps8828_port0: ps8828@08 {
+		compatible = "parade,ps8828";
+		status = "okay";
+		reg = <0x08>;
+	};
+
+	amd_fp8_port0: amd_fp8@54 {
+		compatible = "amd,usbc-mux-amd-fp8";
+		status = "okay";
+		reg = <0x54>;
+		irq-gpios = <&gpioa 3 GPIO_ACTIVE_HIGH>;
+	};
+
+	ps8833_port1: ps8833@40 {
+		compatible = "parade,ps8833";
+		status = "okay";
+		reg = <0x40>;
+	};
+
+	amd_fp8_port1: amd_fp8@58 {
+		compatible = "amd,usbc-mux-amd-fp8";
+		status = "okay";
+		reg = <0x58>;
+		irq-gpios = <&gpioa 3 GPIO_ACTIVE_HIGH>;
+	};
+
+	/*
+	 * This isn't controlled by the EC, but all muxes might have to be
+	 * checked to clear the interrupt line.
+	 */
+	amd_fp8_internal: amd_fp8@5c {
+		compatible = "amd,usbc-mux-amd-fp8";
 		status = "okay";
 		reg = <0x5c>;
-	};
-	amd_fp6_port1: amd_fp6@52 {
-		compatible = "amd,usbc-mux-amd-fp6";
-		status = "okay";
-		reg = <0x52>;
+		irq-gpios = <&gpioa 3 GPIO_ACTIVE_HIGH>;
+		fixed = <USB_PD_MUX_USB_ENABLED>;
 	};
 };
 
@@ -250,7 +298,7 @@
 	pinctrl-names = "default";
 
 	temp_cpu: cpu@4c {
-		compatible = "amd,sb-tsi";
+		compatible = "cros-ec,temp-sensor-sb-tsi";
 		reg = <0x4c>;
 	};
 };

@@ -8,6 +8,7 @@
 #include "console.h"
 #include "dma.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "registers.h"
 #include "spi.h"
 #include "stm32-dma.h"
@@ -32,8 +33,23 @@ struct spi_device_t spi_devices[] = {
 	  .usb_flags = USB_SPI_ENABLED | USB_SPI_CUSTOM_SPI_DEVICE |
 		       USB_SPI_FLASH_DUAL_SUPPORT | USB_SPI_FLASH_QUAD_SUPPORT |
 		       USB_SPI_FLASH_DTR_SUPPORT },
+	{ .name = "SPI1",
+	  .port = 0,
+	  .div = 7,
+	  .gpio_cs = GPIO_CN7_4,
+	  .usb_flags = USB_SPI_ENABLED },
 };
 const unsigned int spi_devices_used = ARRAY_SIZE(spi_devices);
+
+static int spi_device_default_gpio_cs[ARRAY_SIZE(spi_devices)] = {
+	GPIO_CN9_25,
+	GPIO_CN10_6,
+};
+
+static int spi_device_default_div[ARRAY_SIZE(spi_devices)] = {
+	7,
+	255,
+};
 
 /*
  * Find spi device by name or by number.  Returns an index into spi_devices[],
@@ -156,12 +172,38 @@ static int command_spi_set_speed(int argc, const char **argv)
 	return EC_SUCCESS;
 }
 
+static int command_spi_set_cs(int argc, const char **argv)
+{
+	int index;
+	int desired_gpio_cs;
+	if (argc < 5)
+		return EC_ERROR_PARAM_COUNT;
+
+	index = find_spi_by_name(argv[3]);
+	if (index < 0)
+		return EC_ERROR_PARAM3;
+
+	if (!strcasecmp(argv[4], "default")) {
+		desired_gpio_cs = spi_device_default_gpio_cs[index];
+	} else {
+		desired_gpio_cs = gpio_find_by_name(argv[4]);
+		if (desired_gpio_cs == GPIO_COUNT)
+			return EC_ERROR_PARAM4;
+	}
+
+	spi_devices[index].gpio_cs = desired_gpio_cs;
+
+	return EC_SUCCESS;
+}
+
 static int command_spi_set(int argc, const char **argv)
 {
 	if (argc < 3)
 		return EC_ERROR_PARAM_COUNT;
 	if (!strcasecmp(argv[2], "speed"))
 		return command_spi_set_speed(argc, argv);
+	if (!strcasecmp(argv[2], "cs"))
+		return command_spi_set_cs(argc, argv);
 	return EC_ERROR_PARAM2;
 }
 
@@ -177,7 +219,8 @@ static int command_spi(int argc, const char **argv)
 }
 DECLARE_CONSOLE_COMMAND_FLAGS(spi, command_spi,
 			      "info [PORT]"
-			      "\nset speed PORT BPS",
+			      "\nset speed PORT BPS"
+			      "\nset cs PORT PIN",
 			      "SPI bus manipulation", CMD_FLAG_RESTRICTED);
 
 /******************************************************************************
@@ -267,6 +310,18 @@ int usb_spi_board_transaction_async(const struct spi_device_t *spi_device,
 			 * but as all "data".
 			 */
 			flash_flags |= FLASH_FLAG_READ_WRITE_WRITE;
+		} else if (!txlen) {
+			/*
+			 * Receive-only transaction. Not supported by STM32L552,
+			 * as described in ST document ES0448:
+			 * "STM32L552xx/562xx device errata" in the section
+			 * 2.4.12: "Data not sampled correctly on reads without
+			 * DQS and with less than two cycles before the data
+			 * phase".
+			 */
+			cprints(CC_SPI,
+				"Receive-only transaction not supported by OctoSPI hardware");
+			return EC_ERROR_UNIMPLEMENTED;
 		} else if (txlen <= 12) {
 			/*
 			 * Sending of up to 12 bytes, followed by reading a
@@ -477,3 +532,23 @@ int usb_spi_board_transaction(const struct spi_device_t *spi_device,
 	}
 	return rv;
 }
+
+/* Reconfigure SPI ports to power-on default values. */
+static void spi_reinit(void)
+{
+	for (unsigned int i = 0; i < spi_devices_used; i++) {
+		if (spi_devices[i].usb_flags & USB_SPI_CUSTOM_SPI_DEVICE) {
+			/* Quad SPI controller */
+			spi_devices[i].gpio_cs = spi_device_default_gpio_cs[i];
+			STM32_OCTOSPI_DCR2 = spi_devices[i].div =
+				spi_device_default_div[i];
+		} else {
+			/* "Ordinary" SPI controller */
+			spi_enable(&spi_devices[i], 0);
+			spi_devices[i].gpio_cs = spi_device_default_gpio_cs[i];
+			spi_devices[i].div = spi_device_default_div[i];
+			spi_enable(&spi_devices[i], 1);
+		}
+	}
+}
+DECLARE_HOOK(HOOK_REINIT, spi_reinit, HOOK_PRIO_DEFAULT);

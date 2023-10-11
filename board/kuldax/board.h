@@ -23,15 +23,15 @@
 
 /* HDMI CEC */
 #define CONFIG_CEC
-#define CEC_GPIO_OUT GPIO_HDMI_CEC_OUT
-#define CEC_GPIO_IN GPIO_HDMI_CEC_IN
-#define CEC_GPIO_PULL_UP GPIO_HDMI_CEC_PULL_UP
+#define CONFIG_CEC_BITBANG
 
 /* USB Type A Features */
 #define USB_PORT_COUNT 4
 #define CONFIG_USB_PORT_POWER_DUMB
 
 /* USB Type C and USB PD defines */
+#define CONFIG_USB_MUX_RUNTIME_CONFIG
+
 #define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
 
 #define CONFIG_USB_PD_PPC
@@ -188,6 +188,8 @@ enum pwm_channel {
 enum fan_channel { FAN_CH_0 = 0, FAN_CH_COUNT };
 
 enum mft_channel { MFT_CH_0 = 0, MFT_CH_COUNT };
+
+enum cec_port { CEC_PORT_0, CEC_PORT_COUNT };
 
 extern void adp_connect_interrupt(enum gpio_signal signal);
 

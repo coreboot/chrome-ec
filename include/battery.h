@@ -25,13 +25,6 @@
 /* Stop charge when charging and battery level >= this percentage */
 #define BATTERY_LEVEL_FULL 100
 
-/* Tell host we're charged when battery level >= this percentage */
-#ifdef CONFIG_BATTERY_LEVEL_NEAR_FULL
-#define BATTERY_LEVEL_NEAR_FULL CONFIG_BATTERY_LEVEL_NEAR_FULL
-#else
-#define BATTERY_LEVEL_NEAR_FULL 97
-#endif
-
 /*
  * Send battery-low host event when discharging and battery level <= this level
  */
@@ -76,16 +69,21 @@ FORWARD_DECLARE_ENUM(battery_present){
 	BP_NOT_SURE,
 };
 
-/*
- * BATTERY_CUTOFF_STATE_IN_PROGRESS: Battery cutoff has begun but not completed.
- * BATTERY_CUTOFF_STATE_PENDING: Battery cutoff is requested by the
- * AP but hasn't started.
- */
 enum battery_cutoff_states {
+	/* Cutoff is not started or scheduled. */
 	BATTERY_CUTOFF_STATE_NORMAL = 0,
+	/* Cutoff has begun but not completed. */
 	BATTERY_CUTOFF_STATE_IN_PROGRESS,
+	/*
+	 * Cutoff has been completed. This state is effectively unused if AC is
+	 * unplugged because the EC will brown out when cutoff completes.
+	 */
 	BATTERY_CUTOFF_STATE_CUT_OFF,
-	BATTERY_CUTOFF_STATE_PENDING,
+	/*
+	 * Cutoff is scheduled but hasn't started. Cutoff is deferred or the EC
+	 * is waiting for a shutdown.
+	 */
+	BATTERY_CUTOFF_STATE_SCHEDULED,
 };
 
 enum battery_disconnect_state {

@@ -233,7 +233,7 @@ prj.conf file to disable the console command.
 | | CONFIG_CMD_PD_DEV_DUMP_INFO | | Not supported by TCPMv2 |
 | | CONFIG_CMD_PD_FLASH | `pd flash` | Not supported by TCPMv2 |
 | | CONFIG_CMD_PD_SRCCAPS_REDUCED_SIZE | `pd <port> srccaps` | Defining this reduces the verbosity of this command, saving bytes |
-| | CONFIG_CMD_PECI | `peci` | firmware_ECThermal uses `ectool tempsinfo` |
+| | CONFIG_CMD_PECI | `peci` | |
 | | CONFIG_CMD_PLL | `pll` | only used by lm4 chip |
 | | CONFIG_CMD_POWERINDEBUG | `powerindebug` | |
 | | CONFIG_CMD_POWERLED | `powerled` | |
@@ -258,7 +258,6 @@ prj.conf file to disable the console command.
 | | CONFIG_CMD_SPI_FLASH | `spi_flasherase`<br>`spi_flashwrite`<br>`spi_flashread`<br>`spi_flash_rsr`<br>`spi_flash_wsr`<br>`spi_flash_wsr` | |
 | | CONFIG_CMD_SPI_NOR | `spinorinfo`<br>`spinorerase`<br>`spinorwrite`<br>`spinorread` | |
 | | CONFIG_CMD_SPI_XFER | `spixfer` | |
-| | CONFIG_CMD_STACKOVERFLOW | `crash stack` | Adds option to `crash` command. |
 | x | CONFIG_CMD_SYSINFO | `sysinfo` | Used by firmware_ECSystemLocked |
 | x | CONFIG_CMD_SYSJUMP | `sysjump` | Used by firmware_ECSharedMem |
 | | CONFIG_CMD_SYSLOCK | `syslock` | |

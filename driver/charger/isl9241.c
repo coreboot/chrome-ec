@@ -45,10 +45,10 @@ static const struct charger_info isl9241_charger_info = {
 	.voltage_max = CHARGE_V_MAX,
 	.voltage_min = CHARGE_V_MIN,
 	.voltage_step = CHARGE_V_STEP,
-	.current_max = BC_REG_TO_CURRENT(CHARGE_I_MAX),
+	.current_max = CHARGE_I_MAX,
 	.current_min = BC_REG_TO_CURRENT(CHARGE_I_MIN),
 	.current_step = BC_REG_TO_CURRENT(CHARGE_I_STEP),
-	.input_current_max = AC_REG_TO_CURRENT(INPUT_I_MAX),
+	.input_current_max = INPUT_I_MAX,
 	.input_current_min = AC_REG_TO_CURRENT(INPUT_I_MIN),
 	.input_current_step = AC_REG_TO_CURRENT(INPUT_I_STEP),
 };
@@ -1215,7 +1215,7 @@ static int isl9241_ramp_get_current_limit(int chgnum)
 static void isl9241_restart_charge_voltage_when_full(void)
 {
 	if (!chipset_in_or_transitioning_to_state(CHIPSET_STATE_ON) &&
-	    charge_get_state() == PWR_STATE_CHARGE_NEAR_FULL &&
+	    led_pwr_get_state() == LED_PWRS_CHARGE_NEAR_FULL &&
 	    battery_get_disconnect_state() == BATTERY_NOT_DISCONNECTED) {
 		charger_discharge_on_ac(1);
 		msleep(50);

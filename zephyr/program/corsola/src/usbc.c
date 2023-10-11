@@ -6,7 +6,7 @@
 /* Corsola baseboard-specific USB-C configuration */
 
 #include "baseboard_usbc_config.h"
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "console.h"
 #include "ec_commands.h"
 #include "extpower.h"
@@ -45,7 +45,7 @@ DECLARE_HOOK(HOOK_INIT, baseboard_init, HOOK_PRIO_PRE_DEFAULT);
 
 __override uint8_t board_get_usb_pd_port_count(void)
 {
-	/* This function returns the PORT_COUNT+1 when HDMI db is connected.
+	/* This function returns the PORT_COUNT when HDMI db is connected.
 	 * This is a trick to ensure the usb_mux_set being set properley.
 	 * HDMI display functions using the USB virtual mux to * communicate
 	 * with the DP bridge.
@@ -56,6 +56,8 @@ __override uint8_t board_get_usb_pd_port_count(void)
 		} else {
 			return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
 		}
+	} else if (corsola_get_db_type() == CORSOLA_DB_NONE) {
+		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
 	}
 
 	return CONFIG_USB_PD_PORT_MAX_COUNT;
@@ -65,7 +67,7 @@ uint8_t board_get_adjusted_usb_pd_port_count(void)
 {
 	const enum corsola_db_type db = corsola_get_db_type();
 
-	if (db == CORSOLA_DB_TYPEC || db == CORSOLA_DB_NONE) {
+	if (db == CORSOLA_DB_TYPEC || db == CORSOLA_DB_NO_DETECTION) {
 		return CONFIG_USB_PD_PORT_MAX_COUNT;
 	} else {
 		return CONFIG_USB_PD_PORT_MAX_COUNT - 1;
@@ -179,7 +181,9 @@ static void baseboard_x_ec_gpio2_init(void)
 {
 	static struct ppc_drv virtual_ppc_drv = { 0 };
 	static struct tcpm_drv virtual_tcpc_drv = { 0 };
+#ifdef CONFIG_PLATFORM_EC_USB_CHARGER
 	static struct bc12_drv virtual_bc12_drv = { 0 };
+#endif
 
 	/* no sub board */
 	if (corsola_get_db_type() == CORSOLA_DB_NONE) {
@@ -208,8 +212,10 @@ static void baseboard_x_ec_gpio2_init(void)
 		(const struct ppc_config_t){ .drv = &virtual_ppc_drv };
 	tcpc_config[USBC_PORT_C1] =
 		(const struct tcpc_config_t){ .drv = &virtual_tcpc_drv };
+#ifdef CONFIG_PLATFORM_EC_USB_CHARGER
 	bc12_ports[USBC_PORT_C1] =
 		(const struct bc12_config){ .drv = &virtual_bc12_drv };
+#endif
 	/* Use virtual mux to notify AP the mainlink direction. */
 	USB_MUX_ENABLE_ALTERNATIVE(usb_mux_chain_1_hdmi_db);
 

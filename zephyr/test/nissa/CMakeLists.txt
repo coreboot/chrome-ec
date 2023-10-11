@@ -8,7 +8,9 @@ project(nissa)
 
 add_subdirectory(${PLATFORM_EC}/zephyr/test/test_utils test_utils)
 
-zephyr_include_directories("${PLATFORM_EC_PROGRAM_DIR}/nissa/include")
+zephyr_include_directories(
+        "${PLATFORM_EC_PROGRAM_DIR}/nissa/include"
+        include)
 
 target_sources(app PRIVATE src/stubs.c)
 
@@ -24,3 +26,88 @@ target_sources_ifdef(
         app PRIVATE
         src/common.c
         ${PLATFORM_EC_PROGRAM_DIR}/nissa/src/common.c)
+
+target_sources_ifdef(
+        CONFIG_TEST_NISSA_NIVVIKS
+        app PRIVATE
+        src/nivviks.c
+        ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/fan.c
+        ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/form_factor.c
+        ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/keyboard.c
+        ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/led.c
+)
+
+if(CONFIG_TEST_NISSA_NIVVIKS_CHARGER)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    target_sources(
+            app PRIVATE
+            src/nivviks_charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/usbc.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/charger.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_NEREID)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    target_sources(
+            app PRIVATE
+            src/nereid.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nereid/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nereid/src/hdmi.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nereid/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nereid/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_NOKRIS)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0)
+    target_sources(
+            app PRIVATE
+            src/nokris.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nokris/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nokris/src/hdmi.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nokris/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nokris/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_GOTHRAX)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    target_sources(
+            app PRIVATE
+            src/gothrax.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/hdmi.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_JOXER)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    target_sources(
+            app PRIVATE
+            src/joxer.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/joxer/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/joxer/src/fan.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/joxer/src/form_factor.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/joxer/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/joxer/src/usbc.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/joxer/src/sub_board.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_CRAASK)
+    target_sources(
+	    app PRIVATE
+	    src/craask.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/charger.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/fan.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/form_factor.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/kb_backlight.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/keyboard.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/led.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/thermal.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/usbc.c
+    )
+endif()

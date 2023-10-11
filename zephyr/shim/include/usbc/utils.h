@@ -36,6 +36,41 @@
  */
 #define USBC_PORT_FROM_INST(inst) USBC_PORT(DT_DRV_INST(inst))
 
+/**
+ * @brief Helper macro to check for the NTC38xx TCPC. The NCT38xx TCPC
+ * is configured as a child binding under the nuvoton,nc38xx MFD. Grab
+ * the parent phandle when the NCT38xx TCPC is detected, otherwise return
+ * the current node phandle.
+ */
+#define DEVICE_GET_CHIP_BINDING(chip_phandle)                               \
+	COND_CODE_1(DT_NODE_HAS_COMPAT(chip_phandle, nuvoton_nct38xx_tcpc), \
+		    (DEVICE_DT_GET(DT_PARENT(chip_phandle))),               \
+		    (DEVICE_DT_GET(chip_phandle)))
+
+/**
+ * @brief Helper macro for DEVICE_GET_USBC_BINDING. If @p usbc_id has the same
+ *        port number as @p port, then struct device* for @p chip phandle is
+ *        returned.
+ *
+ * @param usbc_id Named usbc port ID
+ * @param port Port number to match with named usbc port
+ * @param chip Name of chip phandle property
+ */
+#define DEVICE_GET_USBC_BINDING_IF_PORT_MATCH(usbc_id, port, chip) \
+	COND_CODE_1(IS_EQ(USBC_PORT_NEW(usbc_id), port),           \
+		    (DEVICE_GET_CHIP_BINDING(DT_PHANDLE(usbc_id, chip))), ())
+
+/**
+ * @brief Get the struct device for a phandle @p chip property of USBC @p port
+ *
+ * @param port Named usbc port number.  The value has to be an integer literal
+ * @param chip Name of the chip property that contains a phandle of the driver.
+ */
+#define DEVICE_GET_USBC_BINDING(port, chip)                                 \
+	DT_FOREACH_STATUS_OKAY_VARGS(named_usbc_port,                       \
+				     DEVICE_GET_USBC_BINDING_IF_PORT_MATCH, \
+				     port, chip)
+
 /*
  * Check that the TCPC interrupt flag defined in the devicetree is the same as
  * the hardware.
@@ -47,5 +82,54 @@
 		(DT_PROP(id, tcpc_flags) & TCPC_FLAGS_ALERT_ACTIVE_HIGH) == 0, \
 		"TCPC interrupt configuration error for " DT_NODE_FULL_NAME(   \
 			id));
+
+/**
+ * @brief Macros used to process USB-C driver organized as a
+ * (compatible, config) tuple.  Where "compatible" is the devictree compatible
+ * string and "config" is the macro used to initialize the USB-C driver
+ * instance.
+ *
+ * The "config" macro has a single parameter, the devicetree node ID of the
+ * USB-C device driver (not the ID of the named-usbc-port node).
+ */
+#define USBC_DRIVER_GET_COMPAT(driver) GET_ARG_N(1, __DEBRACKET driver)
+#define USBC_DRIVER_GET_COMPAT_COMMA(driver) USBC_DRIVER_GET_COMPAT(driver),
+#define USBC_DRIVER_GET_CONFIG(driver) GET_ARG_N(2, __DEBRACKET driver)
+#define USBC_DRIVER_GET_CONFIG(driver) GET_ARG_N(2, __DEBRACKET driver)
+
+/**
+ * @brief Call @p op operation for each node that is compatible with @p driver
+ *
+ * @param driver USB driver description in format (compatible, config)
+ * @param op Operation to perform on each USB device. Should accept mux node ID
+ *           and driver config as arguments.
+ */
+#define USBC_DRIVER_CONFIG(driver, op)                                   \
+	DT_FOREACH_STATUS_OKAY_VARGS(USBC_DRIVER_GET_COMPAT(driver), op, \
+				     USBC_DRIVER_GET_CONFIG(driver))
+
+/**
+ * @brief Call @p op operation for each USB driver node that found in the
+ *        devicetree that matches a compatible from the caller supplied
+ *        driver list.
+ *
+ * @param op Operation to perform on each USB driver. Should accept node ID and
+ *           driver config as arguments.
+ * @param driver_list USB driver list, each driver in format
+ *                    (compatible, config), separated by commas.
+ */
+#define DT_FOREACH_USBC_DRIVER_STATUS_OK_VARGS(op, driver_list) \
+	FOR_EACH_FIXED_ARG(USBC_DRIVER_CONFIG, (), op, driver_list)
+
+/**
+ * @brief When processing the named-usbc-port, the node ID of the USB-C port
+ * and the node ID of a property (ppc, tcpc, etc), are passed as a tuple
+ * as the fixed argument to FOR_EACH_FIXED_ARG.
+ *
+ * The macros below extract the USB-C node ID and the property node ID
+ * from this tuple.
+ */
+#define NODES_GET_USBC_ID(nodes) GET_ARG_N(1, __DEBRACKET nodes)
+#define NODES_GET_PROP_ID(nodes) GET_ARG_N(2, __DEBRACKET nodes)
 
 #endif /* __CROS_EC_ZEPHYR_SHIM_USBC_UTIL */

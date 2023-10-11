@@ -30,7 +30,7 @@ test-list-y=\
        aes \
        always_memset \
        benchmark \
-       cec \
+       boringssl_crypto \
        compile_time_macros \
        cortexm_fpu \
        crc \
@@ -39,6 +39,7 @@ test-list-y=\
        flash_physical \
        flash_write_protect \
        fpsensor \
+       fpsensor_auth_crypto_stateless \
        fpsensor_hw \
        ftrapv \
        global_initialization \
@@ -69,8 +70,15 @@ test-list-y=\
        timer \
        timer_dos \
        tpm_seed_clear \
+       uart \
+       unaligned_access \
+       unaligned_access_benchmark \
        utils \
        utils_str \
+
+       # TODO(b/274162810): Re-enable test on bloonchipper when LTO is
+       # re-enabled.
+       #fpsensor_auth_crypto_stateful \
 
 # Note that this variable includes the trailing "/"
 _hatch_fp_cur_dir:=$(dir $(lastword $(MAKEFILE_LIST)))

@@ -105,7 +105,7 @@ static void irq_set_orientation(struct motion_sensor_t *s)
  * This is a "top half" interrupt handler, it just asks motion sense ask
  * to schedule the "bottom half", ->irq_handler().
  */
-void bmi3xx_interrupt(enum gpio_signal signal)
+test_mockable void bmi3xx_interrupt(enum gpio_signal signal)
 {
 	last_interrupt_timestamp = __hw_clock_source_read();
 
@@ -695,25 +695,32 @@ static int get_offset(const struct motion_sensor_t *s, int16_t *offset,
 static int set_offset(const struct motion_sensor_t *s, const int16_t *offset,
 		      int16_t temp)
 {
+	int ret;
 	intv3_t v = { offset[X], offset[Y], offset[Z] };
 	(void)temp;
 
 	rotate_inv(v, *s->rot_standard_ref, v);
 
+	/*
+	 * Lock accel resource to prevent I2C racing condition.
+	 */
+	mutex_lock(s->mutex);
+
 	switch (s->type) {
 	case MOTIONSENSE_TYPE_ACCEL:
 		/* Offset should be in units of mg */
-		RETURN_ERROR(set_accel_offset(s, v));
+		ret = set_accel_offset(s, v);
 		break;
 	case MOTIONSENSE_TYPE_GYRO:
 		/* Offset should be in units of mdps */
-		RETURN_ERROR(set_gyro_offset(s, v));
+		ret = set_gyro_offset(s, v);
 		break;
 	default:
-		return EC_RES_INVALID_PARAM;
+		ret = EC_RES_INVALID_PARAM;
 	}
 
-	return EC_SUCCESS;
+	mutex_unlock(s->mutex);
+	return ret;
 }
 
 #ifdef CONFIG_BODY_DETECTION
@@ -892,14 +899,18 @@ static int set_range(struct motion_sensor_t *s, int range, int rnd)
 	}
 
 	for (index = 0; index < sens_size - 1; index++) {
-		if (range <= sensor_range[index][0])
-			break;
-
-		if (range < sensor_range[index + 1][0] && rnd) {
-			index++;
+		if (range >= sensor_range[index][0] &&
+		    range < sensor_range[index + 1][0]) {
+			if (rnd) {
+				index++;
+			}
 			break;
 		}
 	}
+
+	/* cap at index 0 if the range is too low */
+	if (range < sensor_range[0][0])
+		index = 0;
 
 	mutex_lock(s->mutex);
 
@@ -994,7 +1005,7 @@ static int init(struct motion_sensor_t *s)
 
 	/*
 	 * BMI3xx driver only supports MOTIONSENSE_TYPE_ACCEL and
-	 * MOTIONSENSE_TYPE_GYR0
+	 * MOTIONSENSE_TYPE_GYRO
 	 */
 	if (s->type != MOTIONSENSE_TYPE_ACCEL &&
 	    s->type != MOTIONSENSE_TYPE_GYRO)

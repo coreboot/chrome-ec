@@ -2,11 +2,22 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+config TEST_KINGLER_USBC
+	bool "Run the tests intended for kingler"
+	help
+	  Include USB-C tests into the binary.
+
 config TEST_STEELIX_RUSTY
 	bool "Run the tests intended for steelix and rusty"
 	help
 	  Include board_steelix.c into the binary to test the clamshell and
 	  convertible.
+
+config TEST_STEELIX_LED
+	bool "Run the tests intended for steelix and rusty"
+	help
+	  Include steelix_led.c into the binary to test the LED
+	  functions.
 
 config TEST_FORM_FACTOR_CLAMSHELL
 	bool "Run the tests intended for clamshells"
@@ -60,10 +71,29 @@ config TEST_VOLTORB
 	  Include voltorb_usbc.c into the binary to test the type-c output
 	  current limit function.
 
+config TEST_DISABLE_INLINE_CHIPSET_IN_STATE
+	bool "Disable chipset_in_state inline method"
+	help
+	  This is used to not define chipset_in_state method as inline
+	  function.
+
 config TEST_USB_PD_POLICY
 	bool "Run the tests intended for voltorb usb policy"
+	select TEST_DISABLE_INLINE_CHIPSET_IN_STATE
 	help
 	  Include voltorb_usbc.c into the binary to test the type-c output
 	  current limit function.
+
+config TEST_DB_DETECTION_USB_COUNT
+	bool "Run the tests intended for db detection"
+	help
+	  Include USB-C tests into the binary for testing the reported port
+	  count with db detection.
+
+config TEST_PONYTA
+	bool "Run the tests intended for ponyta"
+	help
+	  Include ponyta_boart.c into the binary to test the alt sensor probe via
+	  SSFC and clamshell or convertible.
 
 source "Kconfig.zephyr"

@@ -8,9 +8,11 @@
 #include "adc_chip.h"
 #include "board.h"
 #include "button.h"
+#include "cec.h"
 #include "charge_manager.h"
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "charger.h"
+#include "driver/cec/it83xx.h"
 #include "driver/ppc/syv682x_public.h"
 #include "driver/tcpm/it83xx_pd.h"
 #include "driver/temp_sensor/thermistor.h"
@@ -54,6 +56,16 @@ const struct adc_t adc_channels[] = {
 				.factor_div = ADC_READ_MAX + 1,
 				.shift = 0,
 				.channel = CHIP_ADC_CH3 },
+	[ADC_VBUS_C0] = { .name = "VBUS_C0", /* 113/1113 voltage divider */
+			  .factor_mul = ADC_MAX_MVOLT * 1113,
+			  .factor_div = (ADC_READ_MAX + 1) * 113,
+			  .shift = 0,
+			  .channel = CHIP_ADC_CH4 },
+	[ADC_VBUS_C1] = { .name = "VBUS_C1", /* 113/1113 voltage divider */
+			  .factor_mul = ADC_MAX_MVOLT * 1113,
+			  .factor_div = (ADC_READ_MAX + 1) * 113,
+			  .shift = 0,
+			  .channel = CHIP_ADC_CH6 },
 	[ADC_TEMP_SENSOR_3] = { .name = "TEMP_SENSOR3",
 				.factor_mul = ADC_MAX_MVOLT,
 				.factor_div = ADC_READ_MAX + 1,
@@ -78,12 +90,21 @@ const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 		.bus_type = EC_BUS_TYPE_EMBEDDED,
 		.drv = &it83xx_tcpm_drv,
 	},
+	{
+		.bus_type = EC_BUS_TYPE_EMBEDDED,
+		.drv = &it83xx_tcpm_drv,
+	},
 };
 
 /* PPCs */
 struct ppc_config_t ppc_chips[] = {
 	[USBC_PORT_C0] = {
 		.i2c_port = I2C_PORT_USB_C0,
+		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
+		.drv = &syv682x_drv,
+	},
+	[USBC_PORT_C1] = {
+		.i2c_port = I2C_PORT_USB_C1,
 		.i2c_addr_flags = SYV682X_ADDR0_FLAGS,
 		.drv = &syv682x_drv,
 	},
@@ -99,6 +120,15 @@ const struct usb_mux_chain usb_muxes[CONFIG_USB_PD_PORT_MAX_COUNT] = {
 			&(const struct usb_mux){
 				.usb_port = 0,
 				.i2c_port = I2C_PORT_USB_C0,
+				.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
+				.driver = &it5205_usb_mux_driver,
+			},
+	},
+	{
+		.mux =
+			&(const struct usb_mux){
+				.usb_port = 1,
+				.i2c_port = I2C_PORT_USB_C1,
 				.i2c_addr_flags = IT5205_I2C_ADDR1_FLAGS,
 				.driver = &it5205_usb_mux_driver,
 			},
@@ -151,12 +181,22 @@ const struct temp_sensor_t temp_sensors[] = {
 };
 BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
 
+/* CEC ports */
+const struct cec_config_t cec_config[] = {
+	/* HDMI1 */
+	[CEC_PORT_0] = {
+		.drv = &it83xx_cec_drv,
+		.drv_config = NULL,
+		.offline_policy = cec_default_policy,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(cec_config) == CEC_PORT_COUNT);
+
 void board_init(void)
 {
-	gpio_enable_interrupt(GPIO_BJ_ADP_PRESENT);
-
 	/* Enable PPC interrupt */
 	gpio_enable_interrupt(GPIO_USB_C0_FAULT_L);
+	gpio_enable_interrupt(GPIO_USB_C1_FAULT_L);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -186,10 +226,17 @@ void board_set_charge_limit(int port, int supplier, int charge_ma, int max_ma,
 
 int board_vbus_source_enabled(int port)
 {
-	if (port != CHARGE_PORT_TYPEC0)
-		return 0;
-
 	return ppc_is_sourcing_vbus(port);
+}
+
+enum adc_channel board_get_vbus_adc(int port)
+{
+	if (port == 0)
+		return ADC_VBUS_C0;
+	if (port == 1)
+		return ADC_VBUS_C1;
+	CPRINTUSB("Unknown vbus adc port id: %d", port);
+	return ADC_VBUS_C0;
 }
 
 /* Vconn control for integrated ITE TCPC */
@@ -214,53 +261,10 @@ void board_pd_vconn_ctrl(int port, enum usbpd_cc_pin cc_pin, int enabled)
  * - CHARGE_PORT_NONE will never be selected.
  */
 
-/* List of BJ adapters */
-enum bj_adapter {
-	BJ_NONE,
-	BJ_65W_19V,
-};
-
-/* Barrel-jack power adapter ratings. */
-static const struct charge_port_info bj_adapters[] = {
-	[BJ_NONE] = { .current = 0, .voltage = 0 },
-	[BJ_65W_19V] = { .current = 3420, .voltage = 19000 },
-};
-#define BJ_ADP_RATING_DEFAULT BJ_65W_19V /* BJ power ratings default */
-#define ADP_DEBOUNCE_MS 1000 /* Debounce time for BJ plug/unplug */
-
-/* Debounced connection state of the barrel jack */
-static int8_t bj_adp_connected = -1;
-static void adp_connect_deferred(void)
-{
-	const struct charge_port_info *pi;
-	int connected = gpio_get_level(GPIO_BJ_ADP_PRESENT);
-
-	/* Debounce */
-	if (connected == bj_adp_connected)
-		return;
-
-	if (connected) {
-		pi = &bj_adapters[BJ_ADP_RATING_DEFAULT];
-	} else {
-		/* No barrel-jack, zero out this power supply */
-		pi = &bj_adapters[BJ_NONE];
-	}
-	/* This will result in a call to board_set_active_charge_port */
-	charge_manager_update_charge(CHARGE_SUPPLIER_DEDICATED,
-				     DEDICATED_CHARGE_PORT, pi);
-	bj_adp_connected = connected;
-}
-DECLARE_DEFERRED(adp_connect_deferred);
-
-/* IRQ for BJ plug/unplug. It shouldn't be called if BJ is the power source. */
-void adp_connect_interrupt(enum gpio_signal signal)
-{
-	hook_call_deferred(&adp_connect_deferred_data, ADP_DEBOUNCE_MS * MSEC);
-}
-
 int board_set_active_charge_port(int port)
 {
 	const int active_port = charge_manager_get_active_charge_port();
+	int i;
 
 	CPRINTUSB("Requested charge port change to %d", port);
 
@@ -271,12 +275,12 @@ int board_set_active_charge_port(int port)
 		return EC_SUCCESS;
 
 	/* Don't sink from a source port */
-	if (board_vbus_source_enabled(port))
+	if (board_vbus_source_enabled(port)) {
+		CPRINTUSB("Don't sink from a source port C%d", port);
 		return EC_ERROR_INVAL;
+	}
 
 	if (!chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
-		int bj_requested;
-
 		if (charge_manager_get_active_charge_port() != CHARGE_PORT_NONE)
 			/* Change is only permitted while the system is off */
 			return EC_ERROR_INVAL;
@@ -287,27 +291,39 @@ int board_set_active_charge_port(int port)
 		 * reinitializing after sysjump). Reject requests that aren't
 		 * in sync with our outputs.
 		 */
-		bj_requested = port == CHARGE_PORT_BARRELJACK;
-		if (bj_adp_connected != bj_requested)
-			return EC_ERROR_INVAL;
+
+		/* TODO: add this part after two type-c function is finished. */
 	}
 
 	CPRINTUSB("New charger p%d", port);
 
-	switch (port) {
-	case CHARGE_PORT_TYPEC0:
-		ppc_vbus_sink_enable(USBC_PORT_C0, 1);
-		break;
-	default:
-		return EC_ERROR_INVAL;
+	/*
+	 * Turn off the other ports' sink path FETs, before enabling the
+	 * requested charge port.
+	 */
+	for (i = 0; (i < ppc_cnt) && (i < board_get_usb_pd_port_count()); i++) {
+		if (i == port)
+			continue;
+
+		if (ppc_vbus_sink_enable(i, 0))
+			CPRINTUSB("C%d: sink path disable failed.", i);
+		else
+			CPRINTUSB("C%d: sink path disable.", i);
 	}
+
+	/* Enable requested charge port. */
+	if (ppc_vbus_sink_enable(port, 1)) {
+		CPRINTUSB("C%d: sink path enable failed.", port);
+		return EC_ERROR_UNKNOWN;
+	}
+	CPRINTUSB("C%d: sink path enable.", port);
 
 	return EC_SUCCESS;
 }
 
 static void board_charge_manager_init(void)
 {
-	enum charge_port port;
+	int port;
 
 	/*
 	 * Initialize all charge suppliers to 0. The charge manager waits until
@@ -318,25 +334,13 @@ static void board_charge_manager_init(void)
 			charge_manager_update_charge(j, i, NULL);
 	}
 
-	port = gpio_get_level(GPIO_BJ_ADP_PRESENT) ? CHARGE_PORT_BARRELJACK :
-						     CHARGE_PORT_TYPEC0;
-	CPRINTUSB("Power source is p%d (%s)", port,
-		  port == CHARGE_PORT_TYPEC0 ? "USB-C" : "BJ");
-
 	/* Initialize the power source supplier */
-	switch (port) {
-	case CHARGE_PORT_TYPEC0:
-		typec_set_input_current_limit(port, 3000, 5000);
-		break;
-	case CHARGE_PORT_BARRELJACK:
-		charge_manager_update_charge(
-			CHARGE_SUPPLIER_DEDICATED, DEDICATED_CHARGE_PORT,
-			&bj_adapters[BJ_ADP_RATING_DEFAULT]);
-		break;
-	}
-
-	/* Report charge state from the barrel jack. */
-	adp_connect_deferred();
+	port = pd_snk_is_vbus_provided(CHARGE_PORT_TYPEC0) ?
+		       CHARGE_PORT_TYPEC0 :
+		       CHARGE_PORT_TYPEC1;
+	CPRINTUSB("Power source is p%d (%s)", port,
+		  port == CHARGE_PORT_TYPEC0 ? "USB-C0" : "USB-C1");
+	typec_set_input_current_limit(port, 3000, 5000);
 }
 DECLARE_HOOK(HOOK_INIT, board_charge_manager_init,
 	     HOOK_PRIO_INIT_CHARGE_MANAGER + 1);
@@ -353,6 +357,8 @@ void ppc_interrupt(enum gpio_signal signal)
 {
 	if (signal == GPIO_USB_C0_FAULT_L)
 		syv682x_interrupt(USBC_PORT_C0);
+	if (signal == GPIO_USB_C1_FAULT_L)
+		syv682x_interrupt(USBC_PORT_C1);
 }
 
 /* I2C Ports */
@@ -362,6 +368,12 @@ const struct i2c_port_t i2c_ports[] = {
 	  .kbps = 400,
 	  .scl = GPIO_EC_I2C_EEPROM_SCL,
 	  .sda = GPIO_EC_I2C_EEPROM_SDA },
+
+	{ .name = "usbc1",
+	  .port = I2C_PORT_USB_C1,
+	  .kbps = 1000,
+	  .scl = GPIO_EC_I2C_USB_C1_SCL,
+	  .sda = GPIO_EC_I2C_USB_C1_SDA },
 
 	{ .name = "usbc0",
 	  .port = I2C_PORT_USB_C0,

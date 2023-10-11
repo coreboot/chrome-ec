@@ -1,12 +1,13 @@
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+
 """Definitions of toolchain variables."""
 
 import os
 import pathlib
 
-import zmake.build_config as build_config
+from zmake import build_config
 
 
 class GenericToolchain:
@@ -20,8 +21,7 @@ class GenericToolchain:
         self.name = name
         self.modules = modules or {}
 
-    @staticmethod
-    def probe():
+    def probe(self):  # pylint: disable=no-self-use
         """Probe if the toolchain is available on the system."""
         # Since the toolchain is not known to zmake, we have no way to
         # know if it's installed.  Simply return False to indicate not
@@ -55,7 +55,7 @@ class CorebootSdkToolchain(GenericToolchain):
         """
         path = pathlib.Path(
             os.environ.get("COREBOOT_SDK_ROOT", "/opt/coreboot-sdk")
-        )
+        ).resolve()
         if path.is_dir():
             return path
         return None

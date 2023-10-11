@@ -22,6 +22,7 @@
 
 #include <zephyr/drivers/gpio/gpio_emul.h>
 #include <zephyr/kernel.h>
+#include <zephyr/mgmt/ec_host_cmd/simulator.h>
 #include <zephyr/shell/shell.h>
 #include <zephyr/shell/shell_dummy.h>
 #include <zephyr/shell/shell_uart.h>
@@ -62,7 +63,7 @@ void test_set_chipset_to_s0(void)
 
 	/*
 	 * Make sure that battery is in good condition to
-	 * not trigger hibernate in charge_state_v2.c
+	 * not trigger hibernate in charge_state.c
 	 * Set battery voltage to expected value and capacity to 50%. Battery
 	 * will not be full and accepts charging, but will not trigger
 	 * hibernate. Charge level is set to the default value of an emulator
@@ -161,11 +162,7 @@ void connect_sink_to_port(struct tcpci_partner_data *partner,
 	__ASSERT_NO_MSG(EMUL_DT_GET(DT_NODELABEL(isl923x_emul)) ==
 			charger_emul);
 	isl923x_emul_set_adc_vbus(charger_emul, 0);
-	tcpci_emul_set_reg(tcpci_emul, TCPC_REG_POWER_STATUS,
-			   TCPC_REG_POWER_STATUS_VBUS_DET);
-	tcpci_emul_set_reg(tcpci_emul, TCPC_REG_EXT_STATUS,
-			   TCPC_REG_EXT_STATUS_SAFE0V);
-
+	zassert_ok(tcpci_emul_set_vbus_level(tcpci_emul, VBUS_SAFE0V));
 	tcpci_tcpc_alert(0);
 	k_sleep(K_SECONDS(1));
 
@@ -236,7 +233,8 @@ enum ec_status host_cmd_host_event(enum ec_host_event_action action,
 }
 
 void host_cmd_motion_sense_dump(int max_sensor_count,
-				struct ec_response_motion_sense *response)
+				struct ec_response_motion_sense *response,
+				size_t response_size)
 {
 	struct ec_params_motion_sense params = {
 		.cmd = MOTIONSENSE_CMD_DUMP,
@@ -245,7 +243,18 @@ void host_cmd_motion_sense_dump(int max_sensor_count,
 		},
 	};
 
-	zassert_ok(ec_cmd_motion_sense_cmd_v4(NULL, &params, response),
+	struct host_cmd_handler_args args = {
+		.send_response = stub_send_response_callback,
+		.command = EC_CMD_MOTION_SENSE_CMD,
+		.version = 4,
+		.params = &params,
+		.params_size = sizeof(params),
+		.response = response,
+		.response_max = response_size,
+		.response_size = 0,
+	};
+
+	zassert_ok(host_command_process(&args),
 		   "Failed to get motion_sense dump");
 }
 
@@ -373,7 +382,8 @@ int host_cmd_motion_sense_calib(uint8_t sensor_num, bool enable,
 }
 
 int host_cmd_motion_sense_fifo_flush(uint8_t sensor_num,
-				     struct ec_response_motion_sense *response)
+				     struct ec_response_motion_sense *response,
+				     size_t response_size)
 {
 	struct ec_params_motion_sense params = {
 		.cmd = MOTIONSENSE_CMD_FIFO_FLUSH,
@@ -382,16 +392,39 @@ int host_cmd_motion_sense_fifo_flush(uint8_t sensor_num,
 		},
 	};
 
-	return ec_cmd_motion_sense_cmd_v1(NULL, &params, response);
+	struct host_cmd_handler_args args = {
+		.send_response = stub_send_response_callback,
+		.command = EC_CMD_MOTION_SENSE_CMD,
+		.version = 1,
+		.params = &params,
+		.params_size = sizeof(params),
+		.response = response,
+		.response_max = response_size,
+		.response_size = 0,
+	};
+
+	return host_command_process(&args);
 }
 
-int host_cmd_motion_sense_fifo_info(struct ec_response_motion_sense *response)
+int host_cmd_motion_sense_fifo_info(struct ec_response_motion_sense *response,
+				    size_t response_size)
 {
 	struct ec_params_motion_sense params = {
 		.cmd = MOTIONSENSE_CMD_FIFO_INFO,
 	};
 
-	return ec_cmd_motion_sense_cmd_v1(NULL, &params, response);
+	struct host_cmd_handler_args args = {
+		.send_response = stub_send_response_callback,
+		.command = EC_CMD_MOTION_SENSE_CMD,
+		.version = 1,
+		.params = &params,
+		.params_size = sizeof(params),
+		.response = response,
+		.response_max = response_size,
+		.response_size = 0,
+	};
+
+	return host_command_process(&args);
 }
 
 int host_cmd_motion_sense_fifo_read(uint8_t buffer_length,
@@ -591,6 +624,81 @@ void host_events_restore(struct host_events_ctx *host_events_ctx)
 			i, host_events_ctx->lpc_host_event_mask[i]);
 	}
 }
+
+/* Implement the stub host_command_process function for tests with the upstream
+ * Host Command to pass all needed parameters to the backend simulator.
+ */
+#ifdef CONFIG_EC_HOST_CMD
+#define RX_HEADER_SIZE sizeof(struct ec_host_response)
+#define TX_HEADER_SIZE sizeof(struct ec_host_request)
+K_SEM_DEFINE(send_called, 0, 1);
+static struct ec_host_cmd_tx_buf *tx_buf;
+
+static int host_send(const struct ec_host_cmd_backend *backend)
+{
+	k_sem_give(&send_called);
+
+	return 0;
+}
+
+static uint8_t cal_checksum(const uint8_t *const buffer, const uint16_t size)
+{
+	uint8_t checksum = 0;
+
+	for (size_t i = 0; i < size; ++i) {
+		checksum += buffer[i];
+	}
+	return (uint8_t)(-checksum);
+}
+
+static uint16_t pass_args_to_sim(struct host_cmd_handler_args *args)
+{
+	uint8_t rx_buf[args->params_size + RX_HEADER_SIZE];
+	struct ec_host_request *rx_header = (struct ec_host_request *)rx_buf;
+	struct ec_host_response *tx_header;
+	int rv;
+
+	k_sem_reset(&send_called);
+
+	rx_header->struct_version = 3;
+	rx_header->checksum = 0;
+	rx_header->command = args->command;
+	rx_header->command_version = args->version;
+	rx_header->data_len = args->params_size;
+	rx_header->reserved = 0;
+
+	memcpy(rx_buf + RX_HEADER_SIZE, args->params, args->params_size);
+	rx_header->checksum = cal_checksum(rx_buf, sizeof(rx_buf));
+
+	ec_host_cmd_backend_sim_install_send_cb(host_send, &tx_buf);
+	tx_buf->len_max = args->response_max + TX_HEADER_SIZE;
+
+	/* Pass RX buffer to the backend simulator */
+	ec_host_cmd_backend_sim_data_received(rx_buf, sizeof(rx_buf));
+
+	/* Ensure send was called so we can verify outputs */
+	rv = k_sem_take(&send_called, K_SECONDS(1));
+	zassert_equal(rv, 0, "Send was not called");
+
+	memcpy(args->response, (uint8_t *)tx_buf->buf + TX_HEADER_SIZE,
+	       args->response_max);
+	args->response_size = tx_buf->len - TX_HEADER_SIZE;
+	tx_header = tx_buf->buf;
+
+	return tx_header->result;
+}
+
+uint16_t host_command_process(struct host_cmd_handler_args *args)
+{
+	return pass_args_to_sim(args);
+}
+
+void host_command_received(struct host_cmd_handler_args *args)
+{
+	pass_args_to_sim(args);
+}
+
+#endif
 
 K_HEAP_DEFINE(test_heap, 2048);
 

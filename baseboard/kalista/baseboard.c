@@ -11,9 +11,11 @@
 #include "bd99992gw.h"
 #include "board_config.h"
 #include "button.h"
+#include "cec.h"
 #include "chipset.h"
 #include "console.h"
 #include "cros_board_info.h"
+#include "driver/cec/bitbang.h"
 #include "driver/pmic_tps650x30.h"
 #include "driver/tcpm/ps8xxx.h"
 #include "driver/tcpm/tcpci.h"
@@ -156,6 +158,22 @@ const struct i2c_port_t i2c_ports[] = {
 	  .sda = GPIO_I2C3_SDA },
 };
 const unsigned int i2c_ports_used = ARRAY_SIZE(i2c_ports);
+
+/* CEC ports */
+static const struct bitbang_cec_config bitbang_cec_config = {
+	.gpio_out = GPIO_CEC_OUT,
+	.gpio_in = GPIO_CEC_IN,
+	.gpio_pull_up = GPIO_CEC_PULL_UP,
+};
+
+const struct cec_config_t cec_config[] = {
+	[CEC_PORT_0] = {
+		.drv = &bitbang_cec_drv,
+		.drv_config = &bitbang_cec_config,
+		.offline_policy = NULL,
+	},
+};
+BUILD_ASSERT(ARRAY_SIZE(cec_config) == CEC_PORT_COUNT);
 
 /* TCPC mux configuration */
 const struct tcpc_config_t tcpc_config[CONFIG_USB_PD_PORT_MAX_COUNT] = {

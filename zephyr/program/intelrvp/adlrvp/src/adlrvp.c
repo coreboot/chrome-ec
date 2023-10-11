@@ -33,7 +33,7 @@
 #define CPRINTS(format, args...) cprints(CC_COMMAND, format, ##args)
 
 /* TCPC AIC GPIO Configuration */
-const struct tcpc_aic_gpio_config_t tcpc_aic_gpios[] = {
+const struct mecc_1_0_tcpc_aic_gpio_config_t mecc_1_0_tcpc_aic_gpios[] = {
 	[TYPE_C_PORT_0] = {
 		.tcpc_alert = GPIO_SIGNAL(DT_NODELABEL(usbc_tcpc_alrt_p0)),
 		.ppc_alert = GPIO_SIGNAL(DT_NODELABEL(usbc_tcpc_ppc_alrt_p0)),
@@ -61,39 +61,8 @@ const struct tcpc_aic_gpio_config_t tcpc_aic_gpios[] = {
 	},
 #endif
 };
-BUILD_ASSERT(ARRAY_SIZE(tcpc_aic_gpios) == CONFIG_USB_PD_PORT_MAX_COUNT);
-
-/* USB-C PPC configuration */
-struct ppc_config_t ppc_chips[] = {
-	[TYPE_C_PORT_0] = {
-		.i2c_port = I2C_PORT_TYPEC_0,
-		.i2c_addr_flags = I2C_ADDR_SN5S330_TCPC_AIC_PPC,
-		.drv = &sn5s330_drv,
-	},
-#if defined(HAS_TASK_PD_C1)
-	[TYPE_C_PORT_1] = {
-		.i2c_port = I2C_PORT_TYPEC_1,
-		.i2c_addr_flags = I2C_ADDR_SN5S330_TCPC_AIC_PPC,
-		.drv = &sn5s330_drv
-	},
-#endif
-#if defined(HAS_TASK_PD_C2)
-	[TYPE_C_PORT_2] = {
-		.i2c_port = I2C_PORT_TYPEC_2,
-		.i2c_addr_flags = I2C_ADDR_SN5S330_TCPC_AIC_PPC,
-		.drv = &sn5s330_drv,
-	},
-#endif
-#if defined(HAS_TASK_PD_C3)
-	[TYPE_C_PORT_3] = {
-		.i2c_port = I2C_PORT_TYPEC_3,
-		.i2c_addr_flags = I2C_ADDR_SN5S330_TCPC_AIC_PPC,
-		.drv = &sn5s330_drv,
-	},
-#endif
-};
-BUILD_ASSERT(ARRAY_SIZE(ppc_chips) == CONFIG_USB_PD_PORT_MAX_COUNT);
-unsigned int ppc_cnt = ARRAY_SIZE(ppc_chips);
+BUILD_ASSERT(ARRAY_SIZE(mecc_1_0_tcpc_aic_gpios) ==
+	     CONFIG_USB_PD_PORT_MAX_COUNT);
 
 /* Cache BB retimer power state */
 static bool cache_bb_enable[CONFIG_USB_PD_PORT_MAX_COUNT];

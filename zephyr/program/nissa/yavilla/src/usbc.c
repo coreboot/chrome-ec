@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include "charge_state_v2.h"
+#include "charge_state.h"
 #include "chipset.h"
 #include "driver/charger/sm5803.h"
 #include "driver/tcpm/it83xx_pd.h"
@@ -155,8 +155,8 @@ uint16_t tcpc_get_alert_status(void)
 	/* Is the C1 port IRQ line asserted? */
 	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c1_int_odl))) {
 		/*
-		 * C1 IRQ is shared between BC1.2 and TCPC; poll TCPC to see if
-		 * it asserted the IRQ.
+		 * C1 IRQ is shared between charger and TCPC; poll TCPC to see
+		 * if it asserted the IRQ.
 		 */
 		if (!tcpc_read16(1, TCPC_REG_ALERT, &regval)) {
 			if (regval)
@@ -235,6 +235,25 @@ __override void typec_set_source_current_limit(int port, enum tcpc_rp_value rp)
 	}
 }
 
+__override void board_set_charge_limit(int port, int supplier, int charge_ma,
+				       int max_ma, int charge_mv)
+{
+	/*
+	 * b:213937755: Yavilla C1 port is OCPC (One Charger IC Per Type-C)
+	 * architecture, The charging current is controlled by increasing Vsys.
+	 * However, the charger SM5803 is not limit current while Vsys
+	 * increasing, we can see the current overshoot to ~3.6A to cause
+	 * C1 port brownout with low power charger (5V). To avoid C1 port
+	 * brownout at low power charger connected. Limit charge current to 2A.
+	 */
+	if (charge_mv <= 5000 && port == 1)
+		charge_ma = MIN(charge_ma, 2000);
+	else
+		charge_ma = charge_ma * 96 / 100;
+
+	charge_set_input_current_limit(charge_ma, charge_mv);
+}
+
 void board_reset_pd_mcu(void)
 {
 	/*
@@ -244,49 +263,44 @@ void board_reset_pd_mcu(void)
 	 */
 }
 
-#define INT_RECHECK_US 5000
-
-/* C0 interrupt line shared by BC 1.2 and charger */
-
-static void check_c0_line(void);
-DECLARE_DEFERRED(check_c0_line);
-
-static void notify_c0_chips(void)
+/* C0 interrupt can only be triggered by the charger */
+void usb_c0_interrupt(enum gpio_signal s)
 {
-	usb_charger_task_set_event(0, USB_CHG_EVENT_BC12);
 	sm5803_interrupt(0);
 }
 
-static void check_c0_line(void)
-{
-	/*
-	 * If line is still being held low, see if there's more to process from
-	 * one of the chips
-	 */
-	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c0_int_odl))) {
-		notify_c0_chips();
-		hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
-	}
-}
-
-void usb_c0_interrupt(enum gpio_signal s)
-{
-	/* Cancel any previous calls to check the interrupt line */
-	hook_call_deferred(&check_c0_line_data, -1);
-
-	/* Notify all chips using this line that an interrupt came in */
-	notify_c0_chips();
-
-	/* Check the line again in 5ms */
-	hook_call_deferred(&check_c0_line_data, INT_RECHECK_US);
-}
-
-/* C1 interrupt line shared by BC 1.2, TCPC, and charger */
+/* C1 interrupt line shared by TCPC and charger */
 void usb_c1_interrupt(enum gpio_signal s)
 {
-	/* Charger and BC1.2 are handled in board_process_pd_alert */
+	/* Charger is handled in board_process_pd_alert */
 	schedule_deferred_pd_interrupt(1);
 }
+
+/*
+ * Check state of IRQ lines at startup, ensuring an IRQ that happened before
+ * the EC started up won't get lost (leaving the IRQ line asserted and blocking
+ * any further interrupts on the port).
+ *
+ * Although the PD task will check for pending TCPC interrupts on startup,
+ * the charger sharing the IRQ will not be polled automatically.
+ */
+void board_handle_initial_typec_irq(void)
+{
+	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c0_int_odl))) {
+		/* Only charger IRQ has to be checked on C0 interrupt */
+		sm5803_interrupt(0);
+	}
+
+	/*
+	 * C1 port IRQ already handled by board_process_pd_alert(), we don't
+	 * need check IRQ here at initial.
+	 */
+}
+/*
+ * This must run after sub-board detection (which happens in EC main()),
+ * but isn't depended on by anything else either.
+ */
+DECLARE_HOOK(HOOK_INIT, board_handle_initial_typec_irq, HOOK_PRIO_LAST);
 
 /*
  * Handle charger interrupts in the PD task. Not doing so can lead to a priority
@@ -295,8 +309,8 @@ void usb_c1_interrupt(enum gpio_signal s)
  * (or the IRQ is polled again), which happens in lower-priority tasks: the
  * high-priority type-C handler is thus blocked on the lower-priority one(s).
  *
- * To avoid that, we run charger and BC1.2 interrupts synchronously alongside
- * PD interrupts so they have the same priority.
+ * To avoid that, we run charger interrupt synchronously alongside PD interrupts
+ * so they have the same priority.
  */
 void board_process_pd_alert(int port)
 {
@@ -309,7 +323,6 @@ void board_process_pd_alert(int port)
 
 	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_usb_c1_int_odl))) {
 		sm5803_handle_interrupt(port);
-		usb_charger_task_set_event_sync(1, USB_CHG_EVENT_BC12);
 	}
 	/*
 	 * Immediately schedule another TCPC interrupt if it seems we haven't

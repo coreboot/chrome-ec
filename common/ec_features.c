@@ -12,6 +12,7 @@
 #include "ec_commands.h"
 #include "motion_sense.h"
 
+/* LCOV_EXCL_START */
 uint32_t get_feature_flags0(void)
 {
 	uint32_t result = 0
@@ -111,7 +112,9 @@ uint32_t get_feature_flags0(void)
 		;
 	return board_override_feature_flags0(result);
 }
+/* LCOV_EXCL_STOP */
 
+/* LCOV_EXCL_START */
 uint32_t get_feature_flags1(void)
 {
 	uint32_t result =
@@ -159,9 +162,28 @@ uint32_t get_feature_flags1(void)
 #ifdef CONFIG_USB_PD_VDM_AP_CONTROL
 		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_AP_VDM_SEND)
 #endif
+#ifdef CONFIG_SYSTEM_SAFE_MODE
+		| EC_FEATURE_MASK_1(EC_FEATURE_SYSTEM_SAFE_MODE)
+#endif
+#ifdef CONFIG_DEBUG_ASSERT_REBOOTS
+		| EC_FEATURE_MASK_1(EC_FEATURE_ASSERT_REBOOTS)
+#endif
+#ifdef CONFIG_PIGWEED_LOG_TOKENIZED_LIB
+		| EC_FEATURE_MASK_1(EC_FEATURE_TOKENIZED_LOGGING)
+#endif
+#ifdef CONFIG_PLATFORM_EC_AMD_STB_DUMP
+		| EC_FEATURE_MASK_1(EC_FEATURE_AMD_STB_DUMP)
+#endif
+#ifdef CONFIG_HOST_COMMAND_MEMORY_DUMP
+		| EC_FEATURE_MASK_1(EC_FEATURE_MEMORY_DUMP)
+#endif
+#ifdef CONFIG_USB_PD_DP21_MODE
+		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_DP2_1)
+#endif
 		;
 	return board_override_feature_flags1(result);
 }
+/* LCOV_EXCL_STOP */
 
 __overridable uint32_t board_override_feature_flags0(uint32_t flags0)
 {
