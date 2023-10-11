@@ -4,7 +4,6 @@
 # found in the LICENSE file.
 
 """Build firmware with clang instead of gcc."""
-
 import argparse
 import concurrent
 from concurrent.futures import ThreadPoolExecutor
@@ -22,7 +21,6 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     # Fingerprint boards
     "dartmonkey",
     "bloonchipper",
-    "helipilot",
     "nami_fp",
     "nucleo-dartmonkey",
     "nucleo-f412zg",
@@ -58,27 +56,20 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "duck",
     "eel",
     "elm",
-    "fennel",
     "fluffy",
     "fusb307bgevb",
     "gelatin",
     "hammer",
     "hoho",
-    "jacuzzi",
-    "jewel",
-    "juniper",
     "kakadu",
     "kappa",
     "katsu",
-    "kodama",
     "kukui",
     "magnemite",
-    "makomo",
     "masterball",
     "minimuffin",
     "moonball",
     "nucleo-f072rb",
-    "oak",
     "pdeval-stm32f072",
     "plankton",
     "prism",
@@ -108,6 +99,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     # Boards that use CHIP:=npcx
     # git grep --name-only 'CHIP:=npcx' | sed 's#^board/\(.*\)/build.mk#"\1",#'
     "adlrvpp_npcx",
+    "agah",
     "akemi",
     "aleena",
     "ambassador",
@@ -117,7 +109,6 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "banshee",
     "berknip",
     "bloog",
-    "bobba",
     "boldar",
     "brask",
     "brya",
@@ -131,12 +122,12 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "copano",
     "coral",
     "corori",
+    "cret",
     "crota",
     "dalboz",
     "delbin",
     "dewatt",
     "dirinboz",
-    "dochi",
     "dood",
     "dooly",
     "dratini",
@@ -153,15 +144,17 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "fleex",
     "foob",
     "gaelin",
-    "gelarshie",
+    "garg",
     "genesis",
     "gimble",
     "gladios",
     "grunt",
     "gumboz",
     "guybrush",
+    "hades",
     "hatch",
     "helios",
+    "herobrine",
     "homestar",
     "jinlon",
     "kano",
@@ -172,7 +165,6 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "kohaku",
     "kuldax",
     "lalala",
-    "lazor",
     "liara",
     "lick",
     "lindar",
@@ -189,6 +181,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "moonbuggy",
     "morphius",
     "mrbland",
+    "mushu",
     "nami",
     "nautilus",
     "nightfury",
@@ -258,7 +251,6 @@ NDS32_BOARDS = [
     "beetley",
     "blipper",
     "boten",
-    "boxy",
     "dibbi",
     "drawcia",
     "galtic",
@@ -272,7 +264,6 @@ NDS32_BOARDS = [
     "sasukette",
     "shotzo",
     "storo",
-    "taranza",
     "waddledee",
     "wheelie",
 ]
@@ -284,6 +275,7 @@ RISCV_BOARDS = [
     "cherry_scp",
     "cozmo",
     "dojo",
+    "drawcia_riscv",
     "goroh",
     "hayato",
     "icarus",
@@ -296,18 +288,22 @@ RISCV_BOARDS = [
 
 BOARDS_THAT_FAIL_WITH_CLANG = [
     # Boards that use CHIP:=stm32 *and* CHIP_FAMILY:=stm32f0
+    "burnet",  # overflows flash
     "chocodile_vpdmcu",  # compilation error: b/254710459
+    "fennel",  # overflows flash
+    "jacuzzi",  # overflows flash
+    "juniper",  # overflows flash
+    "kodama",  # overflows flash
+    "krane",  # overflows flash
+    "makomo",  # overflows flash
+    "oak",  # overflows flash
     # Boards that use CHIP:=npcx
-    "garg",
-    "volteer",
-    # Not enough flash space with CONFIG_POWER_SLEEP_FAILURE_DETECTION enabled
-    "burnet",
-    "coachz",
-    "corori2",
-    "cret",
-    "drawcia_riscv",
-    "krane",
-    "mushu",
+    "bobba",  # overflows flash
+    "coachz",  # overflows flash
+    "corori2",  # overflows flash
+    "gelarshie",  # overflows flash
+    "lazor",  # overflows flash
+    "volteer",  # overflows flash
 ]
 
 # TODO(b/201311714): NDS32 is not supported by LLVM.

@@ -19,9 +19,6 @@
 
 #include "baseboard.h"
 
-/* Save some flash space */
-#undef CONFIG_POWER_SLEEP_FAILURE_DETECTION
-
 #undef CONFIG_CHIPSET_POWER_SEQ_VERSION
 #define CONFIG_CHIPSET_POWER_SEQ_VERSION 1
 #undef CONFIG_SYSTEM_UNLOCKED
