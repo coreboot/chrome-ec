@@ -33,6 +33,9 @@ static timestamp_t prev_interrupt_time;
 /* Flag set when a transfer is initiated from the AP */
 static bool transfer_initiated;
 
+/* The capture edge we're waiting for */
+static enum cec_cap_edge expected_cap_edge;
+
 static int port_from_timer(enum ext_timer_sel ext_timer)
 {
 	int port;
@@ -86,27 +89,18 @@ void cec_tmr_cap_start(int port, enum cec_cap_edge edge, int timeout)
 	const struct bitbang_cec_config *drv_config =
 		cec_config[port].drv_config;
 
-	switch (edge) {
-	case CEC_CAP_EDGE_NONE:
-		gpio_disable_interrupt(drv_config->gpio_in);
-		break;
-	case CEC_CAP_EDGE_FALLING:
-		gpio_set_flags(drv_config->gpio_in, GPIO_INT_FALLING);
-		gpio_enable_interrupt(drv_config->gpio_in);
-		break;
-	case CEC_CAP_EDGE_RISING:
-		gpio_set_flags(drv_config->gpio_in, GPIO_INT_RISING);
-		gpio_enable_interrupt(drv_config->gpio_in);
-		break;
-	}
+	expected_cap_edge = edge;
 
 	if (timeout > 0) {
 		/*
 		 * Take into account the delay from when the interrupt occurs to
-		 * when we actually get here.
+		 * when we actually get here. Since the timing is done in
+		 * software, there is an additional unknown delay from when the
+		 * interrupt occurs to when the ISR starts. Empirically, this
+		 * seems to be about 100 us, so account for this too.
 		 */
-		int delay =
-			CEC_US_TO_TICKS(get_time().val - interrupt_time.val);
+		int delay = CEC_US_TO_TICKS(get_time().val -
+					    interrupt_time.val + 100);
 		int timer_count = timeout - delay;
 
 		/*
@@ -141,6 +135,28 @@ int cec_tmr_cap_get(int port)
 	return CEC_US_TO_TICKS(interrupt_time.val - prev_interrupt_time.val);
 }
 
+/*
+ * In most states it83xx keeps gpio interrupts enabled to improve timing (see
+ * https://crrev.com/c/4899696). But for the debounce logic to work, gpio
+ * interrupts must be disabled, so we disable them when entering the debounce
+ * state and re-enable them when leaving the state.
+ */
+void cec_debounce_enable(int port)
+{
+	const struct bitbang_cec_config *drv_config =
+		cec_config[port].drv_config;
+
+	gpio_disable_interrupt(drv_config->gpio_in);
+}
+
+void cec_debounce_disable(int port)
+{
+	const struct bitbang_cec_config *drv_config =
+		cec_config[port].drv_config;
+
+	gpio_enable_interrupt(drv_config->gpio_in);
+}
+
 __override void cec_update_interrupt_time(int port)
 {
 	prev_interrupt_time = interrupt_time;
@@ -163,8 +179,15 @@ void cec_ext_timer_interrupt(enum ext_timer_sel ext_timer)
 void cec_gpio_interrupt(enum gpio_signal signal)
 {
 	int port = port_from_gpio_in(signal);
+	int level;
 
 	cec_update_interrupt_time(port);
+
+	level = gpio_get_level(signal);
+	if (!((expected_cap_edge == CEC_CAP_EDGE_FALLING && level == 0) ||
+	      (expected_cap_edge == CEC_CAP_EDGE_RISING && level == 1)))
+		return;
+
 	cec_event_cap(port);
 }
 
@@ -180,10 +203,14 @@ void cec_trigger_send(int port)
 
 void cec_enable_timer(int port)
 {
+	const struct bitbang_cec_config *drv_config =
+		cec_config[port].drv_config;
+
 	/*
-	 * Nothing to do. Interrupts will be enabled as needed by
+	 * Enable gpio interrupts. Timer interrupts will be enabled as needed by
 	 * cec_tmr_cap_start().
 	 */
+	gpio_enable_interrupt(drv_config->gpio_in);
 }
 
 void cec_disable_timer(int port)

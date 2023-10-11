@@ -106,9 +106,7 @@ class Suart:
 
                     # If we miss some characters on pty disconnect, that's fine.
                     # ep.read() also throws USBError on timeout, which we discard.
-                    except OSError:
-                        pass
-                    except usb.core.USBError:
+                    except (OSError, usb.core.USBError):
                         pass
                 else:
                     time.sleep(0.1)
@@ -126,15 +124,13 @@ class Suart:
                 if not events:
                     try:
                         r = os.read(self._ptym, 64)
-                        # TODO(crosbug.com/936182): Remove when the servo v4/micro console
-                        # issues are fixed.
+                        # TODO(crosbug.com/936182): Remove when the
+                        # servo v4/micro console issues are fixed.
                         time.sleep(0.001)
                         if r:
                             self._susb._write_ep.write(r, self._susb.TIMEOUT_MS)
 
-                    except OSError:
-                        pass
-                    except usb.core.USBError:
+                    except (OSError, usb.core.USBError):
                         pass
                 else:
                     time.sleep(0.1)
