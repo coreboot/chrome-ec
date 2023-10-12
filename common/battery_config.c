@@ -115,13 +115,6 @@ batt_conf_read_fuel_gauge_info(struct board_batt_params *info)
 	if (batt_conf_read(CBI_TAG_FUEL_GAUGE_FLAGS, (uint8_t *)&d32,
 			   sizeof(d32)) == EC_SUCCESS) {
 		fg->flags = d32;
-		fg->ship_mode.wb_support =
-			!!(d32 & FUEL_GAUGE_FLAG_WRITE_BLOCK);
-		fg->sleep_mode.sleep_supported =
-			!!(d32 & FUEL_GAUGE_FLAG_SLEEP_MODE);
-		fg->fet.mfgacc_support = !!(d32 & FUEL_GAUGE_FLAG_MFGACC);
-		fg->fet.mfgacc_smb_block =
-			!!(d32 & FUEL_GAUGE_FLAG_MFGACC_SMB_BLOCK);
 	}
 
 	batt_conf_read_ship_mode(info);
@@ -221,8 +214,6 @@ static void batt_conf_dump(const struct board_batt_params *info)
 	ccprintf("%02x:\t\t.reg_data = { 0x%04x, 0x%04x },\n",
 		 CBI_TAG_BATT_SHIP_MODE_REG_DATA, ship->reg_data[0],
 		 ship->reg_data[1]);
-	ccprintf("%02x:\t\t.wb_support = %d,\n", CBI_TAG_BATT_SHIP_MODE_FLAGS,
-		 ship->wb_support & BIT(0) ? 1 : 0);
 	ccprintf("   \t},\n");
 
 	ccprintf("   \t.sleep_mode = {\n");
@@ -230,9 +221,6 @@ static void batt_conf_dump(const struct board_batt_params *info)
 		 CBI_TAG_BATT_SLEEP_MODE_REG_ADDR, sleep->reg_addr);
 	ccprintf("%02x:\t\t.reg_data = 0x%04x,\n",
 		 CBI_TAG_BATT_SLEEP_MODE_REG_DATA, sleep->reg_data);
-	ccprintf("%02x:\t\t.sleep_supported = %d,\n",
-		 CBI_TAG_BATT_SLEEP_MODE_FLAGS,
-		 sleep->sleep_supported & BIT(0) ? 1 : 0);
 	ccprintf("   \t},\n");
 
 	ccprintf("   \t.fet = {\n");
@@ -246,8 +234,6 @@ static void batt_conf_dump(const struct board_batt_params *info)
 		 fet->cfet_mask);
 	ccprintf("%02x:\t\t.cfet_off_val = 0x%04x,\n",
 		 CBI_TAG_BATT_FET_CFET_OFF_VAL, fet->cfet_off_val);
-	ccprintf("%02x:\t\t.mfgacc_support = %d,\n", CBI_TAG_BATT_FET_FLAGS,
-		 fet->mfgacc_support & BIT(0) ? 1 : 0);
 	ccprintf("   \t},\n");
 
 	ccprintf("   },\n"); /* end of fuel_gauge */

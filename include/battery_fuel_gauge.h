@@ -34,26 +34,16 @@ struct fuel_gauge_reg_addr_data {
 } __packed;
 
 struct ship_mode_info {
-	/*
-	 * Write Block Support. If wb_support is true, then we use a i2c write
-	 * block command instead of a 16-bit write. The effective difference is
-	 * that the i2c transaction will prefix the length (2) when wb_support
-	 * is enabled.
-	 */
-	uint8_t wb_support;
 	uint8_t reg_addr;
 	uint16_t reg_data[SHIP_MODE_WRITES];
 };
 
 struct sleep_mode_info {
-	bool sleep_supported;
 	uint8_t reg_addr;
 	uint16_t reg_data;
 };
 
 struct fet_info {
-	int mfgacc_support;
-	int mfgacc_smb_block;
 	uint8_t reg_addr;
 	uint16_t reg_mask;
 	uint16_t disconnect_val;

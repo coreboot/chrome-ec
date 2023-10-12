@@ -40,17 +40,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "BYD",
 			.device_name = "DELL 1VX1H",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -72,17 +72,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "BYD",
 			.device_name = "DELL YT39X",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -113,7 +113,7 @@ const struct board_batt_params board_battery_info[] = {
 				.disconnect_val = 0x0000,
 				.cfet_mask = 0x0002,
 				.cfet_off_val = 0x0000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -135,17 +135,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "LGC-LGC3.65",
 			.device_name = "DELL FDRHM",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -167,17 +167,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "LGC-LGC3.65",
 			.device_name = "DELL 8GHCX",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -200,17 +200,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "SWD-ATL3.618",
 			.device_name = "DELL WJPC4",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -232,17 +232,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "SWD-ATL3.618",
 			.device_name = "DELL CTGKT",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -264,17 +264,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "SWD-COS3.634",
 			.device_name = "DELL WJPC4",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -296,17 +296,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "SWD-COS3.634",
 			.device_name = "DELL CTGKT",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -328,17 +328,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "SMP-ATL-3.61",
 			.device_name = "DELL VM732",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -360,17 +360,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "SMP-ATL-3.61",
 			.device_name = "DELL 26JGK",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -401,7 +401,7 @@ const struct board_batt_params board_battery_info[] = {
 				.disconnect_val = 0x0000,
 				.cfet_mask = 0x0002,
 				.cfet_off_val = 0x0000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -423,17 +423,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "SMP-COS3.63",
 			.device_name = "DELL VM732",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -455,17 +455,17 @@ const struct board_batt_params board_battery_info[] = {
 			.manuf_name = "SMP-COS3.63",
 			.device_name = "DELL 26JGK",
 			.ship_mode = {
-				.wb_support = 1,
 				.reg_addr = 0x44,
 				.reg_data = { 0x0010, 0x0010 },
 			},
+			.flags = FUEL_GAUGE_FLAG_WRITE_BLOCK,
 			.fet = {
 				.reg_addr       = 0x0,
 				.reg_mask       = 0x8000,
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -495,7 +495,7 @@ const struct board_batt_params board_battery_info[] = {
 				.disconnect_val = 0x0000,
 				.cfet_mask = 0x0002,
 				.cfet_off_val = 0x0000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max          = 13200,    /* mV */
@@ -525,7 +525,7 @@ const struct board_batt_params board_battery_info[] = {
 				.disconnect_val = 0x000,
 				.cfet_mask = 0x0002,
 				.cfet_off_val = 0x0000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max		= 13200, /* mV */
@@ -555,7 +555,7 @@ const struct board_batt_params board_battery_info[] = {
 				.disconnect_val = 0x8000,
 				.cfet_mask = 0x4000,
 				.cfet_off_val = 0x4000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max		= 13200, /* mV */
@@ -585,7 +585,7 @@ const struct board_batt_params board_battery_info[] = {
 				.disconnect_val = 0x000,
 				.cfet_mask = 0x0002,
 				.cfet_off_val = 0x0000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max		= 13200, /* mV */
@@ -615,7 +615,7 @@ const struct board_batt_params board_battery_info[] = {
 				.disconnect_val = 0x000,
 				.cfet_mask = 0x0002,
 				.cfet_off_val = 0x0000,
-			}
+			},
 		},
 		.batt_info = {
 			.voltage_max		= 13200, /* mV */
