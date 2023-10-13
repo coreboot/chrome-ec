@@ -496,7 +496,7 @@ static const struct option_container cmd_line_options[] = {
 	  "the trace buffer",
 	  GSC_DEVICE_DT },
 	{ { "get_value", required_argument, NULL, 'K' },
-	  "Get value of one of [chassis_open|dev_ids].",
+	  "[chassis_open|dev_ids]%Get properties values",
 	  GSC_DEVICE_DT },
 	{ { "ccd_lock", no_argument, NULL, 'k' }, "Lock CCD" },
 	{ { "flog", optional_argument, NULL, 'L' },
@@ -546,7 +546,7 @@ static const struct option_container cmd_line_options[] = {
 	  "Get Ti50 metrics",
 	  GSC_DEVICE_DT },
 	{ { "wp", optional_argument, NULL, 'w' },
-	  "[enable] Get the current WP setting or enable WP" },
+	  "[enable|disable|follow]%Get or set the write protect setting" },
 	{ { "clog", no_argument, NULL, 'x' },
 	  "Retrieve contents of the most recent crash log.",
 	  GSC_DEVICE_DT },
@@ -3010,8 +3010,8 @@ static enum exit_values process_get_dev_ids(struct transfer_descriptor *td,
 
 	response_size = sizeof(response);
 
-	rv = send_vendor_command(td, VENDOR_CC_SYSINFO, NULL, 0,
-				 &response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_SYSINFO, NULL, 0, &response,
+				 &response_size);
 
 	if (rv != VENDOR_RC_SUCCESS) {
 		fprintf(stderr, "Error %d getting device ids\n", rv);
