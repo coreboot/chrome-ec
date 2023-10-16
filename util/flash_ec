@@ -77,7 +77,6 @@ BOARDS_STM32=(
 	oak_pd
 	pit
 	plankton
-	rainier
 	strago_pd
 	zinger
 )
@@ -141,7 +140,6 @@ BOARDS_RAIDEN=(
 	poppy
 	rammus
 	reef
-	scarlet
 	soraka
 )
 
@@ -1447,10 +1445,18 @@ function flash_it83xx() {
 	print_or_run "${ITEFLASH_ARGS[@]}" || die "${ERROR_MSG}"
 }
 
+# Alias for flashing ITE chips over I2C from all servo types.
+function flash_ite_i2c() {
+        flash_it83xx
+}
+
+# Alias for flashing ITE chips over SPI from all servo types.
 function flash_ite_spi() {
 	flash_flashrom
 }
 
+# Flash ITE chips over SPI when using the servod debug connector
+# and over I2C whn using CCD.
 function flash_ite_spi_ccd_i2c() {
 	if [[ "${SERVO_TYPE}" =~ "servo_micro" || \
 	      "${SERVO_TYPE}" =~ "servo_v2" ]] ; then
@@ -1460,6 +1466,8 @@ function flash_ite_spi_ccd_i2c() {
 	fi
 }
 
+# Flash ITE chips over SPI when using the servod debug connector
+# and over I2C whn using CCD.
 function flash_it8xxx2() {
 	flash_ite_spi_ccd_i2c
 }
@@ -1856,7 +1864,7 @@ function read_chip_partially() {
 
 	CHIP_TYPE=${1:?"missing arg 1: Chip type"}
 	CHIP_CMD_PREFIX=${2:?"missing arg 2: Prefix of command"}
-	CHIP_CMD_PREFIX=(${CHIP_CMD_PREFIX})
+	CHIP_CMD_PREFIX=("${CHIP_CMD_PREFIX}")
 	OFFSET=${3:?"missing arg 3: Offset"}
 	SIZE=${4:?"missing arg 4: Size"}
 	FILE_PATH=${5:?"missing arg 5: Image storage path"}
@@ -1884,7 +1892,7 @@ function read_chip() {
 
 	CHIP_TYPE=${1:?"missing arg 1: Chip type"}
 	CHIP_CMD_PREFIX=${2:?"missing arg 2: Prefix of command"}
-	CHIP_CMD_PREFIX=(${CHIP_CMD_PREFIX})
+	CHIP_CMD_PREFIX=("${CHIP_CMD_PREFIX}")
 	FILE_PATH=${3:?"missing arg 3: Image storage path"}
 
 	if [ "${CHIP_TYPE}" = "npcx_uut" ]; then

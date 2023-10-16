@@ -27,6 +27,7 @@
 #include <linux/time64.h>
 #include <linux/types.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 #include <linux/wait.h>
 
 /* Minimum i2cp_limit module parameter value. */
@@ -3179,7 +3180,11 @@ static int __init i2cp_init(void)
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+	i2cp_class = class_create(I2CP_CLASS_NAME);
+#else
 	i2cp_class = class_create(THIS_MODULE, I2CP_CLASS_NAME);
+#endif
 	if (IS_ERR(i2cp_class))
 		return PTR_ERR(i2cp_class);
 
@@ -3243,6 +3248,8 @@ static void __exit i2cp_exit(void)
 MODULE_AUTHOR("Matthew Blecker <matthewb@ihavethememo.net");
 MODULE_DESCRIPTION("Driver for userspace I2C adapter implementations.");
 MODULE_LICENSE("GPL");
+/* Keep dkms.conf PACKAGE_VERSION in sync with this. */
+MODULE_VERSION("1.1");
 
 module_init(i2cp_init);
 module_exit(i2cp_exit);

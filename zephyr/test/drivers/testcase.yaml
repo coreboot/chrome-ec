@@ -16,6 +16,22 @@ tests:
     - default/prj.conf
     extra_dtc_overlay_files:
     - default/boards/native_posix.overlay
+  drivers.default.dp21:
+    timeout: 360
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_DEFAULT=y
+    - CONFIG_LINK_TEST_SUITE_USB_MALFUNCTION_SINK=y
+    - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
+    - CONFIG_PLATFORM_EC_LID_ANGLE_UPDATE=y
+    - CONFIG_PLATFORM_EC_USB_PD_DPS=y
+    - CONFIG_PLATFORM_EC_I2C_PASSTHRU_RESTRICTED=y
+    - CONFIG_PLATFORM_EC_CONSOLE_CMD_TCPC_DUMP=y
+    - CONFIG_PLATFORM_EC_USB_PD_DP21_MODE=y
+    extra_conf_files:
+    - prj.conf
+    - default/prj.conf
+    extra_dtc_overlay_files:
+    - default/boards/native_posix.overlay
   drivers.default.ec_host_cmd:
     timeout: 360
     extra_configs:
@@ -67,6 +83,30 @@ tests:
     - default/boards/native_posix.overlay
   drivers.default.console_cmds:
     timeout: 360
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS=y
+    - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
+    extra_conf_files:
+    - prj.conf
+    - default/prj.conf
+    extra_dtc_overlay_files:
+    - default/boards/native_posix.overlay
+  drivers.default.console_cmds_ro:
+    timeout: 360
+    extra_args:
+    - EXTRA_CFLAGS=-DSECTION_IS_RO
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS=y
+    - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
+    extra_conf_files:
+    - prj.conf
+    - default/prj.conf
+    extra_dtc_overlay_files:
+    - default/boards/native_posix.overlay
+  drivers.default.console_cmds_rw:
+    timeout: 360
+    extra_args:
+    - EXTRA_CFLAGS=-DSECTION_IS_RW
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS=y
     - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
@@ -204,6 +244,10 @@ tests:
     - prj.conf
     - ap_vdm_control/prj.conf
     - ec_host_cmd.conf
+  drivers.usbc_dp_mode:
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_USBC_DP_MODE=y
+    - CONFIG_PLATFORM_EC_USB_PD_DP21_MODE=y
   drivers.ap_vdm_control_disabled:
     extra_configs:
     - CONFIG_PLATFORM_EC_USB_PD_VDM_AP_CONTROL=n
@@ -691,6 +735,14 @@ tests:
     extra_conf_files:
     - prj.conf
     - ec_host_cmd.conf
+  drivers.led_pwm_fade:
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_LED_PWM_FADE=y
+    extra_conf_files:
+    - prj.conf
+    extra_dtc_overlay_files:
+    - ./boards/native_posix.overlay
+    - ./led_pwm_fade/led_policy.dts
   drivers.locate_chip:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_LOCATE_CHIP_ALTS=y
@@ -798,6 +850,30 @@ tests:
     - CONFIG_AP_ARM_QUALCOMM_SC7280=n
     - CONFIG_PLATFORM_EC_POWERSEQ_SC7280=n
     - CONFIG_POWER_SEQUENCE_MOCK=y
+    - CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP=y
+    - CONFIG_PLATFORM_EC_POWERSEQ_S0IX=y
+    - CONFIG_PLATFORM_EC_EMULATED_SYSRQ=y
+  drivers.power_host_sleep_ro:
+    extra_args:
+    - EXTRA_CFLAGS=-DSECTION_IS_RO
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_POWER_HOST_SLEEP=y
+    # Make tests independent of chipset specific code
+    - CONFIG_AP_ARM_QUALCOMM_SC7280=n
+    - CONFIG_PLATFORM_EC_POWERSEQ_SC7280=n
+    - CONFIG_POWER_SEQUENCE_MOCK=y
+    - CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP=y
+    - CONFIG_PLATFORM_EC_POWERSEQ_S0IX=y
+  drivers.power_host_sleep_rw:
+    extra_args:
+    - EXTRA_CFLAGS=-DSECTION_IS_RW
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_POWER_HOST_SLEEP=y
+    # Make tests independent of chipset specific code
+    - CONFIG_AP_ARM_QUALCOMM_SC7280=n
+    - CONFIG_PLATFORM_EC_POWERSEQ_SC7280=n
+    - CONFIG_POWER_SEQUENCE_MOCK=y
+    - CONFIG_PLATFORM_EC_EMULATED_SYSRQ=y
     - CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP=y
     - CONFIG_PLATFORM_EC_POWERSEQ_S0IX=y
   drivers.power_host_sleep.ec_host_cmd:

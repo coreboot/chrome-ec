@@ -154,6 +154,10 @@ void init_battery_type(void)
 
 const struct board_batt_params *get_batt_params(void)
 {
+	if (IS_ENABLED(TEST_BUILD) && battery_fuel_gauge_type_override >= 0) {
+		return &board_battery_info[battery_fuel_gauge_type_override];
+	}
+
 	return battery_conf;
 }
 
@@ -241,7 +245,7 @@ int board_cut_off_battery(void)
 	if (!params)
 		return EC_RES_ERROR;
 
-	if (params->fuel_gauge.ship_mode.wb_support)
+	if (params->fuel_gauge.flags & FUEL_GAUGE_FLAG_WRITE_BLOCK)
 		rv = cut_off_battery_block_write(&params->fuel_gauge.ship_mode);
 	else
 		rv = cut_off_battery_sb_write(&params->fuel_gauge.ship_mode);
@@ -261,7 +265,7 @@ enum ec_error_list battery_sleep_fuel_gauge(void)
 
 	sleep_command = &params->fuel_gauge.sleep_mode;
 
-	if (!sleep_command->sleep_supported)
+	if (!(params->fuel_gauge.flags & FUEL_GAUGE_FLAG_SLEEP_MODE))
 		return EC_ERROR_UNIMPLEMENTED;
 
 	return sb_write(sleep_command->reg_addr, sleep_command->reg_data);
@@ -276,8 +280,8 @@ static enum ec_error_list battery_get_fet_status_regval(int *regval)
 	ASSERT(params);
 
 	/* Read the status of charge/discharge FETs */
-	if (params->fuel_gauge.fet.mfgacc_support == 1) {
-		if (params->fuel_gauge.fet.mfgacc_smb_block == 1)
+	if (params->fuel_gauge.flags & FUEL_GAUGE_FLAG_MFGACC) {
+		if (params->fuel_gauge.flags & FUEL_GAUGE_FLAG_MFGACC_SMB_BLOCK)
 			rv = sb_read_mfgacc_block(PARAM_OPERATION_STATUS,
 						  SB_ALT_MANUFACTURER_ACCESS,
 						  data, sizeof(data));
@@ -356,20 +360,13 @@ enum battery_disconnect_state battery_get_disconnect_state(void)
 	return BATTERY_NOT_DISCONNECTED;
 }
 
-#ifdef CONFIG_BATTERY_MEASURE_IMBALANCE
-int battery_imbalance_mv(void)
-{
-	const struct board_batt_params *params = get_batt_params();
-
-	/*
-	 * If battery type is unknown, we cannot safely access non-standard
-	 * registers.
-	 */
-	return (!params) ? 0 : params->fuel_gauge.imbalance_mv();
-}
-
-int battery_default_imbalance_mv(void)
+__overridable int
+board_battery_imbalance_mv(const struct board_batt_params *info)
 {
 	return 0;
 }
-#endif /* CONFIG_BATTERY_MEASURE_IMBALANCE */
+
+int battery_imbalance_mv(void)
+{
+	return board_battery_imbalance_mv(get_batt_params());
+}

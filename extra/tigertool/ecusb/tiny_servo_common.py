@@ -53,7 +53,7 @@ def check_usb(vidpid: Iterable[str], serialname=None):
     Returns:
       True if found, False, otherwise.
     """
-    for dev in get_usb_dev(vidpid, serialname):
+    for _unused_dev in get_usb_dev(vidpid, serialname):
         return True
 
     return False
@@ -88,7 +88,7 @@ def get_usb_dev(vidpid: Iterable[str], serialname=None):
       Iterable of pyusb devices, may be empty
     """
 
-    devs = set(map(_parse_vidpid_string, vidpid))
+    devs = set([_parse_vidpid_string(dev) for dev in vidpid])
 
     return usb.core.find(
         find_all=True, custom_match=lambda d: _match_device(d, devs, serialname)

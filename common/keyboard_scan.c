@@ -95,6 +95,8 @@ static const
 					  KEYBOARD_ROW_DOWN },
 		[BOOT_KEY_LEFT_SHIFT] = { KEYBOARD_COL_LEFT_SHIFT,
 					  KEYBOARD_ROW_LEFT_SHIFT },
+		[BOOT_KEY_REFRESH] = { KEYBOARD_COL_REFRESH,
+				       KEYBOARD_ROW_REFRESH },
 	};
 BUILD_ASSERT(ARRAY_SIZE(boot_key_list) == BOOT_KEY_COUNT);
 static uint32_t boot_key_value = BOOT_KEY_NONE;
@@ -134,6 +136,9 @@ static volatile int kbd_polls;
 
 /* If true, we'll force a keyboard poll */
 static volatile int force_poll;
+
+/* Indicates keyboard_scan_task has started. */
+test_export_static uint8_t keyboard_scan_task_started;
 
 test_export_static int keyboard_scan_is_enabled(void)
 {
@@ -288,6 +293,14 @@ static void simulate_key(int row, int col, int pressed)
 	ensure_keyboard_scanned(kbd_polls);
 }
 
+static bool power_button_raw_pressed(void)
+{
+	if (IS_ENABLED(CONFIG_POWER_BUTTON))
+		return power_button_signal_asserted();
+	else
+		return false;
+}
+
 /**
  * Read the raw keyboard matrix state.
  *
@@ -307,6 +320,8 @@ static int read_matrix(uint8_t *state, bool at_boot)
 
 	/* 1. Read input pins */
 	for (c = 0; c < keyboard_cols; c++) {
+		int pb_pressed;
+
 		/*
 		 * Skip if scanning becomes disabled. Clear the state
 		 * to make sure we don't mix new and old states in the
@@ -319,6 +334,8 @@ static int read_matrix(uint8_t *state, bool at_boot)
 			continue;
 		}
 
+		pb_pressed = power_button_raw_pressed();
+
 		/* Select column, then wait a bit for it to settle */
 		keyboard_raw_drive_column(c);
 		udelay(keyscan_config.output_settle_us);
@@ -329,6 +346,13 @@ static int read_matrix(uint8_t *state, bool at_boot)
 #else
 		state[c] = keyboard_raw_read_rows();
 #endif
+
+		if (pb_pressed != power_button_raw_pressed()) {
+			c--;
+			continue;
+		} else if (pb_pressed) {
+			state[c] &= ~KEYBOARD_MASKED_BY_POWERBTN;
+		}
 
 		/* Use simulated keyscan sequence instead if testing active */
 		if (IS_ENABLED(CONFIG_KEYBOARD_TEST))
@@ -526,6 +550,40 @@ test_mockable_static void key_state_changed(int row, int col, uint8_t state)
 	keyboard_state_changed(row, col, !!(state & BIT(row)));
 }
 
+#ifdef CONFIG_KEYBOARD_BOOT_KEYS
+#ifdef CONFIG_POWER_BUTTON
+test_export_static void boot_key_set(enum boot_key key)
+{
+	boot_key_value |= BIT(key);
+}
+#endif
+
+test_export_static void boot_key_clear(enum boot_key key)
+{
+	boot_key_value &= ~BIT(key);
+	CPRINTS("boot key %d cleared", key);
+}
+
+static void boot_key_released(const uint8_t *state)
+{
+	int b = __builtin_ffs(boot_key_value & ~BIT(BOOT_KEY_POWER));
+
+	while (b) {
+		/*
+		 * __builtin_ffs returns the index of the least significant
+		 * 1-bit plus one. 0x1 -> 1.
+		 */
+		b--;
+
+		if (state[boot_key_list[b].col] & BIT(boot_key_list[b].row))
+			continue;
+		/* Key is released. */
+		boot_key_clear(b);
+		b = __builtin_ffs(boot_key_value & ~BIT(BOOT_KEY_POWER));
+	}
+}
+#endif /* CONFIG_KEYBOARD_BOOT_KEYS */
+
 /**
  * Update keyboard state using low-level interface to read keyboard.
  *
@@ -614,6 +672,10 @@ static int check_keys_changed(uint8_t *state)
 		if (print_state_changes)
 			print_state(state, "state");
 
+#ifdef CONFIG_KEYBOARD_BOOT_KEYS
+		boot_key_released(state);
+#endif
+
 #ifdef CONFIG_KEYBOARD_PRINT_SCAN_TIMES
 		/* Print delta times from now back to each previous scan */
 		char ts_str[PRINTF_TIMESTAMP_BUF_SIZE];
@@ -645,16 +707,93 @@ static int check_keys_changed(uint8_t *state)
 	return any_pressed;
 }
 
-static uint8_t keyboard_mask_refresh;
-__overridable uint8_t board_keyboard_row_refresh(void)
+#ifdef CONFIG_KEYBOARD_BOOT_KEYS
+
+#ifdef CONFIG_POWER_BUTTON
+/**
+ * Scan one keyboard column
+ *
+ * Note this doesn't take care of concurrency problems with other processes. For
+ * example, it doesn't restore column states after a scan. Thus, it can be
+ * reliably used only in limited situations (e.g. before tasks start, when
+ * the scan task is paused, etc.).
+ *
+ * @param column
+ * @return scanned row value
+ */
+static uint8_t keyboard_scan_column(int column)
 {
-	if (IS_ENABLED(CONFIG_KEYBOARD_REFRESH_ROW3))
-		return 3;
-	else
-		return 2;
+	uint8_t state;
+
+	keyboard_raw_drive_column(column);
+	udelay(keyscan_config.output_settle_us);
+#ifdef CONFIG_KEYBOARD_SCAN_ADC
+	state = keyboard_read_adc_rows();
+#else
+	state = keyboard_raw_read_rows();
+#endif
+	keyboard_raw_drive_column(KEYBOARD_COLUMN_NONE);
+
+	return state;
 }
 
-#ifdef CONFIG_KEYBOARD_BOOT_KEYS
+/**
+ * A refresh key needs this late boot key detection because at the time of the
+ * pre-init scan, the GSC could have masked the refresh key because the power
+ * button was pressed. So, we detect a refresh key when the power button is
+ * released for the first time.
+ */
+static void power_button_change(void)
+{
+	struct boot_key_entry refresh;
+	uint8_t state;
+
+#ifdef CONFIG_KEYBOARD_MULTIPLE
+	refresh.col = key_typ.col_refresh;
+	refresh.row = key_typ.row_refresh;
+#else
+	refresh.col = KEYBOARD_COL_REFRESH;
+	refresh.row = KEYBOARD_ROW_REFRESH;
+#endif
+
+	/* Proceed only if the power button was initially pressed. */
+	if (!(keyboard_scan_get_boot_keys() & BIT(BOOT_KEY_POWER)))
+		return;
+
+	/*
+	 *  Power button needs to be released for refresh key to be visible.
+	 *  Call power_button_is_pressed (not power_button_signal_asserted)
+	 *  because debounced_power_pressed is initialized to
+	 *  power_button_signal_asserted().
+	 */
+	if (power_button_is_pressed())
+		/* Power button is still pressed. */
+		return;
+
+	/*
+	 * Clear power button as a boot key. This prevents subsequent power
+	 * button releases from being seen.
+	 */
+	boot_key_clear(BOOT_KEY_POWER);
+
+	/*
+	 * keyboard_scan_task_started is set right before the task enters the
+	 * loop. Thus, before it's set, it's safe to directly read a column
+	 * without interfering with the scan task.
+	 */
+	if (keyboard_scan_task_started)
+		state = debounced_state[refresh.col];
+	else
+		state = keyboard_scan_column(refresh.col);
+
+	if (state & BIT(refresh.row)) {
+		boot_key_set(BOOT_KEY_REFRESH);
+		CPRINTS("boot keys: 0x%x", boot_key_value);
+	}
+}
+DECLARE_HOOK(HOOK_POWER_BUTTON_CHANGE, power_button_change, HOOK_PRIO_DEFAULT);
+#endif /* CONFIG_POWER_BUTTON */
+
 /*
  * Returns mask of the boot keys that are pressed, with at most the keys used
  * for keyboard-controlled reset also pressed.
@@ -668,12 +807,6 @@ static uint32_t check_key_list(const uint8_t *state)
 
 	/* Make copy of current debounced state. */
 	memcpy(curr_state, state, sizeof(curr_state));
-
-#ifndef CONFIG_KEYBOARD_MULTIPLE
-	curr_state[KEYBOARD_COL_REFRESH] &= ~keyboard_mask_refresh;
-#else
-	curr_state[key_typ.col_refresh] &= ~keyboard_mask_refresh;
-#endif
 
 	/* Update mask with all boot keys that were pressed. */
 	k = boot_key_list;
@@ -690,8 +823,7 @@ static uint32_t check_key_list(const uint8_t *state)
 	/* If any other key was pressed, ignore all boot keys. */
 	for (c = 0; c < keyboard_cols; c++) {
 		if (curr_state[c]) {
-			CPRINTS("Undefined boot key: state[%d]=0x%02x", c,
-				curr_state[c]);
+			print_state(curr_state, "undefined boot key");
 			return BOOT_KEY_NONE;
 		}
 	}
@@ -797,10 +929,6 @@ void keyboard_scan_init(void)
 		CPRINTS("WARN: Debounce durations not equal");
 	}
 
-	/* Configure refresh key matrix */
-	keyboard_mask_refresh =
-		KEYBOARD_ROW_TO_MASK(board_keyboard_row_refresh());
-
 	if (!IS_ENABLED(CONFIG_KEYBOARD_SCAN_ADC))
 		/* Configure GPIO */
 		keyboard_raw_init();
@@ -820,11 +948,11 @@ void keyboard_scan_init(void)
 	boot_key_value = check_boot_key(debounced_state);
 
 	/*
-	 * If any key other than Esc, Power, or Left_Shift was pressed, do not
-	 * trigger recovery.
+	 * If any key other than Esc, Refresh, Power, or Left_Shift was pressed,
+	 * do not trigger recovery.
 	 */
 	if (boot_key_value & ~(BIT(BOOT_KEY_ESC) | BIT(BOOT_KEY_LEFT_SHIFT) |
-			       BIT(BOOT_KEY_POWER)))
+			       BIT(BOOT_KEY_REFRESH) | BIT(BOOT_KEY_POWER)))
 		return;
 
 #ifdef CONFIG_HOSTCMD_EVENTS
@@ -862,6 +990,7 @@ void keyboard_scan_task(void *u)
 	/* Set initial clock frequency-based minimum delay between scans */
 	keyboard_freq_change();
 
+	keyboard_scan_task_started = 1;
 	while (1) {
 		/* Enable all outputs */
 		CPRINTS5("wait");

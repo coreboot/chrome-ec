@@ -129,7 +129,7 @@ common-$(CONFIG_LID_SWITCH)+=lid_switch.o
 common-$(CONFIG_HOSTCMD_X86)+=acpi.o port80.o ec_features.o
 common-$(CONFIG_MAG_CALIBRATE)+= mag_cal.o math_util.o vec3.o mat33.o mat44.o \
 	kasa.o
-common-$(CONFIG_MKBP_EVENT)+=mkbp_event.o
+common-$(CONFIG_MKBP_EVENT)+=mkbp_event.o mkbp_fifo.o
 common-$(CONFIG_OCPC)+=ocpc.o
 common-$(CONFIG_ONEWIRE)+=onewire.o
 common-$(CONFIG_ORIENTATION_SENSOR)+=motion_orientation.o
@@ -220,6 +220,7 @@ common-$(HAS_TASK_KEYSCAN)+=keyboard_scan.o
 common-$(HAS_TASK_LIGHTBAR)+=lb_common.o lightbar.o
 common-$(HAS_TASK_MOTIONSENSE)+=motion_sense.o
 common-$(CONFIG_SYSTEM_SAFE_MODE)+=system_safe_mode.o
+common-$(CONFIG_HOST_COMMAND_MEMORY_DUMP)+=host_command_memory_dump.o
 
 ifneq ($(HAVE_PRIVATE_AUDIO_CODEC_WOV_LIBS),y)
 common-$(CONFIG_AUDIO_CODEC_WOV)+=hotword_dsp_api.o

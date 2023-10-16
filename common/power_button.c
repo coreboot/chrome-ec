@@ -29,7 +29,8 @@
 #define CONFIG_POWER_BUTTON_FLAGS 0
 #endif
 
-static int debounced_power_pressed; /* Debounced power button state */
+/* Debounced power button state */
+test_export_static int debounced_power_pressed;
 static int simulate_power_pressed;
 static volatile int power_button_is_stable = 1;
 
@@ -40,7 +41,7 @@ static const struct button_config power_button = {
 	.flags = CONFIG_POWER_BUTTON_FLAGS,
 };
 
-int power_button_signal_asserted(void)
+test_mockable int power_button_signal_asserted(void)
 {
 	return !!(
 		gpio_get_level(power_button.gpio) ==

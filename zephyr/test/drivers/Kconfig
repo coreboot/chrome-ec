@@ -254,6 +254,11 @@ config LINK_TEST_SUITE_USBC_RETIMER_PS8811
 	help
 	  Include the PS8811 test suite in the binary.
 
+config LINK_TEST_SUITE_USBC_DP_MODE
+	bool "Link and test the usbc_dp_tests"
+	help
+	  Include the DP 2.1 test suite in the binary.
+
 config LINK_TEST_SUITE_USBC_TBT_MODE
 	bool "Link and test the usbc_tbt_mode tests"
 
@@ -308,5 +313,8 @@ config LINK_TEST_SUITE_BODY_DETECTION
 	bool "Link and test the body detection tests"
 	help
 	  Include the test suite exercising body detection behaviors in the binary.
+
+config LINK_TEST_SUITE_LED_PWM_FADE
+	bool "Link and test the led_pwm_fade.c tests"
 
 source "Kconfig.zephyr"

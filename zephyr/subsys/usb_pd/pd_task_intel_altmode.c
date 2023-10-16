@@ -9,6 +9,8 @@
 
 #include "i2c.h"
 #include "i2c/i2c.h"
+#include "usb_mux.h"
+#include "usb_pd.h"
 #include "usbc/utils.h"
 
 #include <stdlib.h>
@@ -109,25 +111,34 @@ static void process_altmode_pd_data(int port)
 {
 	int rv;
 	union data_status_reg status;
+	mux_state_t mux = USB_PD_MUX_NONE;
 	union data_status_reg *prev_status =
 		&intel_altmode_task_data.data_status[port];
 	union data_control_reg control = { .i2c_int_ack = 1 };
+#ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
+	bool prv_hpd_lvl;
+#endif
 
 	LOG_INF("Process p%d data", port);
 
 	/* Clear the interrupt */
-	rv = pd_altmode_write(pd_config_array[port], &control);
+	rv = pd_altmode_write_control(pd_config_array[port], &control);
 	if (rv) {
 		LOG_ERR("P%d write Err=%d", port, rv);
 		return;
 	}
 
 	/* Read the status register */
-	rv = pd_altmode_read(pd_config_array[port], &status);
+	rv = pd_altmode_read_status(pd_config_array[port], &status);
 	if (rv) {
 		LOG_ERR("P%d read Err=%d", port, rv);
 		return;
 	}
+
+#ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
+	/* Store previous HPD tatus */
+	prv_hpd_lvl = prev_status->hpd_lvl;
+#endif
 
 	/* Nothing to do if the data in the status register has not changed */
 	if (!memcmp(&status.raw_value[0], prev_status,
@@ -137,7 +148,52 @@ static void process_altmode_pd_data(int port)
 	/* Update the new data */
 	memcpy(prev_status, &status, sizeof(union data_status_reg));
 
-	/* TODO: Process MUX events */
+	/* Process MUX events */
+
+	/* Orientation */
+	if (status.conn_ori)
+		mux |= USB_PD_MUX_POLARITY_INVERTED;
+
+	/* USB status */
+	if (status.usb2 || status.usb3_2)
+		mux |= USB_PD_MUX_USB_ENABLED;
+
+#ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
+	/* DP status */
+	if (status.dp)
+		mux |= USB_PD_MUX_DP_ENABLED;
+
+	if (status.hpd_lvl)
+		mux |= USB_PD_MUX_HPD_LVL;
+
+	if (status.dp_irq)
+		mux |= USB_PD_MUX_HPD_IRQ;
+#endif
+
+#ifdef CONFIG_PLATFORM_EC_USB_PD_TBT_COMPAT_MODE
+	/* TBT status */
+	if (status.tbt)
+		mux |= USB_PD_MUX_TBT_COMPAT_ENABLED;
+#endif
+
+#ifdef CONFIG_PLATFORM_EC_USB_PD_USB4
+	if (status.usb4)
+		mux |= USB_PD_MUX_USB4_ENABLED;
+#endif
+
+	LOG_INF("Set p%d mux=0x%x", port, mux);
+
+	usb_mux_set(port, mux,
+		    mux == USB_PD_MUX_NONE ? USB_SWITCH_DISCONNECT :
+					     USB_SWITCH_CONNECT,
+		    status.conn_ori);
+
+#ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
+	/* Update the change in HPD level */
+	if (prv_hpd_lvl != status.hpd_lvl)
+		usb_mux_hpd_update(port,
+				   status.hpd_lvl ? USB_PD_MUX_HPD_LVL : 0);
+#endif
 }
 
 static void intel_altmode_thread(void *unused1, void *unused2, void *unused3)
@@ -183,9 +239,200 @@ static void intel_altmode_thread(void *unused1, void *unused2, void *unused3)
 
 K_THREAD_DEFINE(intel_altmode_tid, CONFIG_TASK_PD_ALTMODE_INTEL_STACK_SIZE,
 		intel_altmode_thread, NULL, NULL, NULL,
-		CONFIG_USBPD_ALTMODE_INTEL_THREAD_PRIORITY, 0, K_TICKS_FOREVER);
+		CONFIG_USBPD_ALTMODE_INTEL_THREAD_PRIORITY, 0, SYS_FOREVER_MS);
 
 void intel_altmode_task_start(void)
 {
 	k_thread_start(intel_altmode_tid);
+}
+
+#ifdef CONFIG_CONSOLE_CMD_USBPD_INTEL_ALTMODE
+static int cmd_get_pd_port(const struct shell *sh, char *arg_val, uint8_t *port)
+{
+	char *e;
+
+	*port = strtoul(arg_val, &e, 0);
+	if (*e || *port >= CONFIG_USB_PD_PORT_MAX_COUNT) {
+		shell_error(sh, "Invalid port");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int cmd_altmode_read(const struct shell *sh, size_t argc, char **argv)
+{
+	int rv, i;
+	uint8_t port;
+	union data_status_reg status;
+
+	/* Get PD port number */
+	rv = cmd_get_pd_port(sh, argv[1], &port);
+	if (rv)
+		return rv;
+
+	/* Read from status register */
+	rv = pd_altmode_read_status(pd_config_array[port], &status);
+	if (rv) {
+		shell_error(sh, "Read failed, rv=%d", rv);
+		return rv;
+	}
+
+	shell_fprintf(sh, SHELL_INFO, "RD_VAL: ");
+	for (i = 0; i < INTEL_ALTMODE_DATA_STATUS_REG_LEN; i++)
+		shell_fprintf(sh, SHELL_INFO, "[%d]0x%x, ", i,
+			      status.raw_value[i]);
+
+	shell_info(sh, "");
+
+	return 0;
+}
+
+static int cmd_altmode_write(const struct shell *sh, size_t argc, char **argv)
+{
+	char *e;
+	int rv, i;
+	uint8_t port;
+	uint16_t val;
+	union data_control_reg control = { 0 };
+
+	/* Get PD port number */
+	rv = cmd_get_pd_port(sh, argv[1], &port);
+	if (rv)
+		return rv;
+
+	/* Fill the control register with data */
+	for (i = 2; i < argc; i++) {
+		val = strtoul(argv[i], &e, 0);
+		if (*e || val > UINT8_MAX) {
+			shell_error(sh, "Invalid data, %s", argv[i]);
+			return -EINVAL;
+		}
+		control.raw_value[i - 2] = (uint8_t)val;
+	}
+
+	/* Write to control register */
+	rv = pd_altmode_write_control(pd_config_array[port], &control);
+	if (rv)
+		shell_error(sh, "Write failed, rv=%d", rv);
+
+	return rv;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(
+	sub_altmode_cmds,
+	SHELL_CMD_ARG(read, NULL,
+		      "Read status register\n"
+		      "Usage: altmode read <port>",
+		      cmd_altmode_read, 2, 1),
+	SHELL_CMD_ARG(write, NULL,
+		      "Write control register\n"
+		      "Usage: altmode write <port> [<byte0>, ...]",
+		      cmd_altmode_write, 3,
+		      INTEL_ALTMODE_DATA_CONTROL_REG_LEN - 1),
+	SHELL_SUBCMD_SET_END);
+
+SHELL_CMD_REGISTER(altmode, &sub_altmode_cmds, "PD Altmode commands", NULL);
+
+#endif /* CONFIG_CONSOLE_CMD_USBPD_INTEL_ALTMODE */
+
+/*
+ * TODO: For all the below functions; need to enable PD to EC power path
+ * interface and gather the information.
+ */
+enum tcpc_cc_polarity pd_get_polarity(int port)
+{
+	return intel_altmode_task_data.data_status[port].conn_ori;
+}
+
+enum pd_data_role pd_get_data_role(int port)
+{
+	return !intel_altmode_task_data.data_status[port].data_role;
+}
+
+int pd_is_connected(int port)
+{
+	return intel_altmode_task_data.data_status[port].data_conn;
+}
+
+#ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
+__override uint8_t get_dp_pin_mode(int port)
+{
+	return intel_altmode_task_data.data_status[port].dp_pin << 2;
+}
+#endif
+
+#ifdef CONFIG_PLATFORM_EC_USB_PD_TBT_COMPAT_MODE
+enum tbt_compat_cable_speed get_tbt_cable_speed(int port)
+{
+	return intel_altmode_task_data.data_status[port].cable_speed;
+}
+
+enum tbt_compat_rounded_support get_tbt_rounded_support(int port)
+{
+	return intel_altmode_task_data.data_status[port].cable_gen;
+}
+#endif
+
+/*
+ * To suppress the compilation error, below functions are added with tested
+ * data.
+ */
+void pd_request_data_swap(int port)
+{
+}
+
+enum pd_power_role pd_get_power_role(int port)
+{
+	return !intel_altmode_task_data.data_status[port].dp_src_snk;
+}
+
+uint8_t pd_get_task_state(int port)
+{
+	return 0;
+}
+
+int pd_comm_is_enabled(int port)
+{
+	return 1;
+}
+
+bool pd_get_vconn_state(int port)
+{
+	return true;
+}
+
+bool pd_get_partner_dual_role_power(int port)
+{
+	return false;
+}
+
+bool pd_get_partner_data_swap_capable(int port)
+{
+	return false;
+}
+
+bool pd_get_partner_usb_comm_capable(int port)
+{
+	return false;
+}
+
+bool pd_get_partner_unconstr_power(int port)
+{
+	return false;
+}
+
+const char *pd_get_task_state_name(int port)
+{
+	return "";
+}
+
+enum pd_cc_states pd_get_task_cc_state(int port)
+{
+	return PD_CC_UFP_ATTACHED;
+}
+
+bool pd_capable(int port)
+{
+	return true;
 }

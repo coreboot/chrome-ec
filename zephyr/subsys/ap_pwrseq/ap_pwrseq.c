@@ -208,7 +208,7 @@ DEVICE_DEFINE(ap_pwrseq_dev, "ap_pwrseq_drv", ap_pwrseq_driver_init, NULL,
 
 K_THREAD_DEFINE(ap_pwrseq_tid, CONFIG_AP_PWRSEQ_STACK_SIZE, ap_pwrseq_thread,
 		DEVICE_GET(ap_pwrseq_dev), NULL, NULL,
-		CONFIG_AP_PWRSEQ_THREAD_PRIORITY, 0, K_TICKS_FOREVER);
+		CONFIG_AP_PWRSEQ_THREAD_PRIORITY, 0, SYS_FOREVER_MS);
 
 static int ap_pwrseq_driver_init(const struct device *dev)
 {
