@@ -1146,6 +1146,12 @@
  */
 #undef CONFIG_WORKAROUND_FLASH_DOWNLOAD_API
 
+/*
+ * Precharge delay time to wait for the charger is stable
+ * to set charge current/voltage.
+ */
+#undef CONFIG_PRECHARGE_DELAY_MS
+
 /*****************************************************************************/
 
 /*
@@ -5337,6 +5343,17 @@
 	defined(CONFIG_CHARGER_ISL9238C) || defined(CONFIG_CHARGER_ISL9241) || \
 	defined(CONFIG_CHARGER_RAA489000) || defined(CONFIG_CHARGER_SM5803)
 #define CONFIG_CHARGER_NARROW_VDC
+#endif
+
+/*****************************************************************************/
+/*
+ * Define CONFIG_PRECHARGE_DELAY_MS 150ms which is the debounce
+ * time after VADP >3.2V for the first time adapter plugged in.
+ */
+#ifdef CONFIG_CHARGER_ISL9238
+#ifndef CONFIG_PRECHARGE_DELAY_MS
+#define CONFIG_PRECHARGE_DELAY_MS 150
+#endif
 #endif
 
 /*****************************************************************************/
