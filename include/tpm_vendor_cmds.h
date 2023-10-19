@@ -346,7 +346,7 @@ struct vendor_cc_spi_hash_request {
 	uint32_t size; /* Size in bytes to hash/read */
 } __packed;
 
-struct ti50_stats {
+struct ti50_stats_v0 {
 	/* filesystem initialization time in ms */
 	uint32_t fs_init_time;
 	/* filesustem usage in bytes */
@@ -357,6 +357,10 @@ struct ti50_stats {
 	 * UMA
 	 */
 	uint32_t expanded_aprov_status;
+};
+
+struct ti50_stats_v1 {
+	struct ti50_stats_v0 stats;
 	/* [31:27] - bits used
 	 * [27: 4] - unused
 	 * [ 3: 3] - CCD_MODE
@@ -364,6 +368,20 @@ struct ti50_stats {
 	 * [ 1: 0] - rdd keep alive state
 	 */
 	uint32_t misc_status;
+};
+
+/*
+ * Keep in sync with
+ * ti50/common/applications/sys_mgr/src/tpm_vendor/metrics.rs
+ */
+struct ti50_stats_v2 {
+	struct ti50_stats_v1 v1;
+	uint32_t version;
+	uint32_t filesystem_busy_count;
+	uint32_t crypto_busy_count;
+	uint32_t dispatcher_busy_count;
+	uint32_t timeslices_expired;
+	uint32_t crypto_init_time;
 };
 
 #define METRICSV_BITS_USED_SHIFT	      27
