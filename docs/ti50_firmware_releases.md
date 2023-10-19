@@ -8,7 +8,8 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.51        | 0.23.51
+[ToT][ToT ebuild]   | 0.24.60        | 0.23.60
+[M119][119 release] | 0.24.51        | 0.23.51
 [M118][118 release] | 0.24.30        | 0.23.30
 [M117][117 release] | 0.24.30        | 0.23.30
 [M116][116 release] | 0.24.30        | 0.23.30
@@ -1163,6 +1164,47 @@ Build:   ti50_common_prepvt-15086.B:v0.0.674-2ad344ef
          @chromeos-ci-firmware-us-central2-d-x32-0-l4sc 2023-09-05 13:28:14
 ```
 
+### 0.24.60 Released on 10/18/2023 in M120
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/4953488)
+
+Builder
+[60](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15086.B-branch/60/overview)
+
+Artifacts:
+[15086.55.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.55.0)
+
+**Features**
+
+*   Add Widevine RoT virtual NV.
+    [b/248610274](https://b.corp.google.com/issues/248610274)
+*   Add the CIK cert virtual NV.
+    [b/248610274](https://b.corp.google.com/issues/248610274)
+*   Enforce WP forced enabled when FWMP dev mode disable is present.
+    [b/299947142](https://b.corp.google.com/issues/299947142)
+*   Add extended AP RO verification status.
+    [b/259098185](https://b.corp.google.com/issues/259098185)
+*   Ensure ccd mode active and power button resets GSC if failed APRO.
+    [b/259098185](https://b.corp.google.com/issues/259098185)
+*   Add GetChassisOpen TPMV command.
+    [b/257255419](https://b.corp.google.com/issues/257255419)
+
+**Bug Fixes**
+
+*   Fix get console logs vendor command.
+    [b/302383688](https://b.corp.google.com/issues/302383688)
+*   Prevent flog error from reading past the end of the page.
+    [b/302383688](https://b.corp.google.com/issues/302383688)
+
+```
+Build:   ti50_common_prepvt-15086.B:v0.0.782-aca516e7
+         libtock-rs:v0.0.925-c38b187
+         tock:v0.0.9659-b09193d54
+         ms-tpm-20-ref:v0.0.327-8e3c8b3
+         @chromeos-ci-firmware-us-central1-b-x32-0-qvwt 2023-10-09 15:15:08
+```
+
 <!-- Links -->
 
 [105 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R105-14989.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
@@ -1179,4 +1221,5 @@ Build:   ti50_common_prepvt-15086.B:v0.0.674-2ad344ef
 [116 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R116-15509.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [117 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R117-15572.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [118 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R118-15604.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[119 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R119-15633.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [ToT ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
