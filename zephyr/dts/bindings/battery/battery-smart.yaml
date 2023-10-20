@@ -22,6 +22,7 @@ properties:
       - "cosmx,ap20cbl"
       - "cosmx,ap20cbl-2"
       - "cosmx,ap20cbl-3"
+      - "cosmx,ap20cbl-4"
       - "cosmx,gh02047xl"
       - "cosmx,si03058xl"
       - "cosmx,l22x3pg0"
