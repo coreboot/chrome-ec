@@ -17,7 +17,10 @@ endif
 
 # Default to clang if TEST_ASAN is enabled
 ifneq ($(TEST_FUZZ)$(TEST_ASAN)$(TEST_MSAN)$(TEST_UBSAN),)
-CC=clang
+ifeq ($(CC_FOR_BUILD),)
+CC_FOR_BUILD = clang
+endif
+CC = $(CC_FOR_BUILD)
 endif
 
 # Extract cc-name
