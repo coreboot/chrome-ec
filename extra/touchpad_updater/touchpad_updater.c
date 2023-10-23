@@ -11,7 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <endian.h>
 #include <getopt.h>
 #include <libusb.h>
 #include <poll.h>
@@ -42,6 +41,11 @@ int iap_version;
 static int le_bytes_to_int(uint8_t *buf)
 {
 	return buf[0] + (int)(buf[1] << 8);
+}
+
+static int be_bytes_to_int(uint8_t *buf)
+{
+	return (int)(buf[0] << 8) + buf[1];
 }
 
 /* Command line parsing related */
@@ -437,7 +441,7 @@ static int elan_i2c_get_pattern(void)
 	 * this command is not implemented the device will respond with 0xFFFF,
 	 * which we will treat as "old" pattern 0.
 	 */
-	int response = le16toh(*(uint16_t *)(rx_buf + I2C_RESPONSE_OFFSET));
+	int response = le_bytes_to_int(rx_buf + I2C_RESPONSE_OFFSET);
 
 	return (response == 0xFFFF) ? 0 : rx_buf[1 + I2C_RESPONSE_OFFSET];
 }
@@ -455,7 +459,7 @@ static void elan_query_product(void)
 		if (elan_read_cmd(ETP_I2C_IC_TYPE_CMD) != 0) {
 			request_exit("Failed to read IC type");
 		}
-		ic_type = be16toh(*(uint16_t *)(rx_buf + I2C_RESPONSE_OFFSET));
+		ic_type = be_bytes_to_int(rx_buf + I2C_RESPONSE_OFFSET);
 
 		if (elan_read_cmd(ETP_I2C_IAP_VERSION_CMD)) {
 			request_exit("Failed to read IAP version");
