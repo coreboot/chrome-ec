@@ -629,11 +629,61 @@ static int test_var_read_write_delete(void)
 	return EC_SUCCESS;
 }
 
+/*
+ * Dump hex contents of objects passes as address/size tuples to help
+ * debugging. `header` is and optional object description passed in as ASCII
+ * string.
+ */
+static void hex_dump(const char *header, const char *data, size_t data_size)
+{
+	size_t i;
+
+	if (header)
+		ccprintf("\n%s:", header);
+
+	for (i = 0; i < data_size; i++)
+		ccprintf(" %02x", (uint8_t)data[i]);
+	ccprintf("\n");
+}
+
+/* Validate that a key/value pair is present in the NVMEM. */
+static int validate_value(const char *key, size_t key_size, const char *value,
+			  size_t value_size)
+{
+	const struct tuple *vart;
+
+	vart = getvar(key, key_size);
+
+	if (vart == NULL) {
+		hex_dump("failed to find value for key", key, key_size);
+		return EC_ERROR_INVAL;
+	}
+
+	if (vart->val_len != value_size) {
+		ccprintf("unexpected value length %d\n", vart->val_len);
+		freevar(vart);
+		return EC_ERROR_INVAL;
+	}
+
+	if (memcmp(vart->data_ + key_size, value, value_size) != 0) {
+		hex_dump("Bad value read back.\nExpected:", value, value_size);
+		hex_dump("    Read:", vart->data_, value_size);
+		freevar(vart);
+		return EC_ERROR_INVAL;
+	}
+
+	freevar(vart);
+	return EC_SUCCESS;
+}
+
 static int test_nvmem_tuple_capacity(void)
 {
 	char key[5];
 	char value[18];
 	int rv;
+	size_t prev_size;
+	size_t free_room;
+	size_t max_tuples;
 
 	/* Does not matter, but for consistency let's init key and value. */
 	memset(key, 0, sizeof(key));
@@ -641,15 +691,29 @@ static int test_nvmem_tuple_capacity(void)
 
 	TEST_ASSERT(post_init_from_scratch(0xff) == EC_SUCCESS);
 
-	/* Fill up var space until it is full. */
+	/* Fill up var space until it is full, changing all keys and values. */
 	while (1) {
 		rv = setvar(key, sizeof(key), value, sizeof(value) - 1);
 		if (rv != EC_SUCCESS)
 			break;
+
 		key[0]++;
+		value[0]++;
 	}
 	TEST_ASSERT(rv == EC_ERROR_OVERFLOW);
+
+	/* Verify that the values were written correctly. */
+	max_tuples = key[0];
+	key[0] = 0;
+	value[0] = 0;
+	while (max_tuples--) {
+		TEST_ASSERT(validate_value(key, sizeof(key), value,
+					   sizeof(value) - 1) == EC_SUCCESS);
+		key[0]++;
+		value[0]++;
+	}
 	iterate_over_flash();
+	prev_size = test_result.tuple_data_size;
 
 	/*
 	 * Verify that total variable size is as expected. We know that the
@@ -659,8 +723,8 @@ static int test_nvmem_tuple_capacity(void)
 	 * If some parameters change in the future such that this assumption
 	 * becomes wrong, the test in the next line would fail.
 	 */
-	TEST_ASSERT(test_result.tuple_data_size < MAX_VAR_TOTAL_SPACE);
-	TEST_ASSERT((MAX_VAR_TOTAL_SPACE - test_result.tuple_data_size) <
+	TEST_ASSERT(prev_size < MAX_VAR_TOTAL_SPACE);
+	TEST_ASSERT((MAX_VAR_TOTAL_SPACE - prev_size) <
 		    (sizeof(key) + sizeof(value) - 1));
 
 	/*
@@ -669,9 +733,55 @@ static int test_nvmem_tuple_capacity(void)
 	 */
 	key[0]--;
 	value[0]++;
-	TEST_ASSERT(setvar(key, sizeof(key),
-			   value, sizeof(value)) == EC_SUCCESS);
+	TEST_ASSERT(setvar(key, sizeof(key), value, sizeof(value)) ==
+		    EC_SUCCESS);
+	iterate_over_flash();
+	TEST_ASSERT(test_result.tuple_data_size == (prev_size + 1));
+	TEST_ASSERT(validate_value(key, sizeof(key), value, sizeof(value)) ==
+		    EC_SUCCESS);
 
+	/* Add a variable to completely fill the space. */
+	free_room = MAX_VAR_TOTAL_SPACE - test_result.tuple_data_size;
+
+	if (free_room < (sizeof(key) + 1)) {
+		/*
+		 * Increase the size of the first tuple's variable to
+		 * capacity.
+		 */
+		char new_value[sizeof(value) + sizeof(key)];
+
+		memset(new_value, 0, sizeof(new_value));
+		key[0] = 0;
+		TEST_ASSERT(setvar(key, sizeof(key), new_value,
+				   sizeof(value) + free_room) == EC_SUCCESS);
+		TEST_ASSERT(rv == EC_SUCCESS);
+	} else if (free_room != 0) {
+		/* Add a new tuple. */
+		key[0] += 2;
+		TEST_ASSERT(setvar(key, sizeof(key), value,
+				   free_room - sizeof(key)) == EC_SUCCESS);
+	}
+
+	iterate_over_flash();
+	TEST_ASSERT(test_result.tuple_data_size == MAX_VAR_TOTAL_SPACE);
+
+	/*
+	 * Try adding the smallest possible tuple, see that it fails the
+	 * expected result.
+	 */
+	TEST_ASSERT(setvar(key, 1, value, 1) == EC_ERROR_OVERFLOW);
+
+	/*
+	 * Verify variables can be changed even when the allotted room is
+	 * full.
+	 */
+	key[0] = 1; /* Access the second tuple in the set. */
+	value[1] += 1; /* Second byte of value has not been modified so far. */
+	TEST_ASSERT(setvar(key, sizeof(key), value, sizeof(value) - 1) ==
+		    EC_SUCCESS);
+
+	TEST_ASSERT(validate_value(key, sizeof(key), value,
+				   sizeof(value) - 1) == EC_SUCCESS);
 	return EC_SUCCESS;
 }
 
@@ -1463,14 +1573,10 @@ static int test_nvmem_tuple_updates(void)
 	TEST_ASSERT(nvmem_init() == EC_SUCCESS);
 	/* Verify the vars are still there. */
 	for (i = 0; i < ARRAY_SIZE(kv_pairs); i++) {
-		const struct tuple *t;
-
-		t = getvar(kv_pairs[i].key, strlen(kv_pairs[i].key));
-		TEST_ASSERT(t);
-		TEST_ASSERT(t->val_len == strlen(kv_pairs[i].value));
-		TEST_ASSERT(!memcmp(t->data_ + strlen(kv_pairs[i].key),
-				    kv_pairs[i].value, t->val_len));
-		freevar(t);
+		TEST_ASSERT(validate_value(
+				    kv_pairs[i].key, strlen(kv_pairs[i].key),
+				    kv_pairs[i].value,
+				    strlen(kv_pairs[i].value)) == EC_SUCCESS);
 	}
 
 	/*
@@ -1483,12 +1589,10 @@ static int test_nvmem_tuple_updates(void)
 	TEST_ASSERT(nvmem_init() == EC_SUCCESS);
 	/* No change should be seen. */
 	for (i = 0; i < ARRAY_SIZE(kv_pairs); i++) {
-		t = getvar(kv_pairs[i].key, strlen(kv_pairs[i].key));
-		TEST_ASSERT(t);
-		TEST_ASSERT(t->val_len == strlen(kv_pairs[i].value));
-		TEST_ASSERT(!memcmp(t->data_ + strlen(kv_pairs[i].key),
-				    kv_pairs[i].value, t->val_len));
-		freevar(t);
+		TEST_ASSERT(validate_value(
+				    kv_pairs[i].key, strlen(kv_pairs[i].key),
+				    kv_pairs[i].value,
+				    strlen(kv_pairs[i].value)) == EC_SUCCESS);
 	}
 	failure_mode = TEST_FAIL_FINALIZING_VAR;
 	TEST_ASSERT(setvar(kv_pairs[1].key, strlen(kv_pairs[1].key),
@@ -1497,20 +1601,14 @@ static int test_nvmem_tuple_updates(void)
 	TEST_ASSERT(nvmem_init() == EC_SUCCESS);
 
 	/* First variable should be still unchanged. */
-	t = getvar(kv_pairs[0].key, strlen(kv_pairs[0].key));
-	TEST_ASSERT(t);
-	TEST_ASSERT(t->val_len == strlen(kv_pairs[0].value));
-	TEST_ASSERT(!memcmp(t->data_ + strlen(kv_pairs[0].key),
-			    kv_pairs[0].value, t->val_len));
-	freevar(t);
+	TEST_ASSERT(validate_value(kv_pairs[0].key, strlen(kv_pairs[0].key),
+				    kv_pairs[0].value,
+				    strlen(kv_pairs[0].value)) == EC_SUCCESS);
 
 	/* Second variable should be updated. */
-	t = getvar(kv_pairs[1].key, strlen(kv_pairs[1].key));
-	TEST_ASSERT(t);
-	TEST_ASSERT(t->val_len == strlen(modified_var1));
-	TEST_ASSERT(!memcmp(t->data_ + strlen(kv_pairs[1].key), modified_var1,
-			    t->val_len));
-	freevar(t);
+	TEST_ASSERT(validate_value(kv_pairs[1].key, strlen(kv_pairs[1].key),
+				   modified_var1, strlen(modified_var1)) ==
+		    EC_SUCCESS);
 
 	/* A corrupted attempt to update second variable. */
 	failure_mode = TEST_FAIL_FINALIZING_VAR;
