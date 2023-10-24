@@ -3,7 +3,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""
+"""Check Zephyr RAM size.
+
 This script enforces that Zephyr builds have enough free RAM to satisfy
 CONFIG_PLATFORM_EC_PRESERVED_END_OF_RAM_SIZE.
 """
@@ -29,6 +30,8 @@ EXCLUDED_BOARDS = [
     "gothrax",
     # Only 800 bytes of free RAM (b/289320515)
     "nereid",
+    # Only 948 bytes of free RAM
+    "pirrha",
 ]
 
 

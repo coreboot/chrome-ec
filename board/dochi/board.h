@@ -27,28 +27,12 @@
 #define CONFIG_MP2964
 
 /* LED */
-#define CONFIG_LED_PWM
-#define CONFIG_LED_PWM_COUNT 2
-#undef CONFIG_LED_PWM_NEAR_FULL_COLOR
-#undef CONFIG_LED_PWM_SOC_ON_COLOR
-#undef CONFIG_LED_PWM_SOC_SUSPEND_COLOR
-#undef CONFIG_LED_PWM_LOW_BATT_COLOR
-#define CONFIG_LED_PWM_NEAR_FULL_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_ON_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_SOC_SUSPEND_COLOR EC_LED_COLOR_WHITE
-#define CONFIG_LED_PWM_LOW_BATT_COLOR EC_LED_COLOR_AMBER
+#define CONFIG_LED_ONOFF_STATES
 
 /* Sensors */
 #define CONFIG_ACCELGYRO_LSM6DSO /* Base accel */
 #define CONFIG_ACCEL_LSM6DSO_INT_EVENT \
 	TASK_EVENT_MOTION_SENSOR_INTERRUPT(BASE_ACCEL)
-
-/* TCS3400 ALS */
-#define CONFIG_ALS
-#define ALS_COUNT 1
-#define CONFIG_ALS_TCS3400
-#define CONFIG_ALS_TCS3400_INT_EVENT \
-	TASK_EVENT_MOTION_SENSOR_INTERRUPT(CLEAR_ALS)
 
 /* Enable sensor fifo, must also define the _SIZE and _THRES */
 #define CONFIG_ACCEL_FIFO
@@ -56,9 +40,6 @@
 #define CONFIG_ACCEL_FIFO_SIZE 256
 /* Depends on how fast the AP boots and typical ODRs */
 #define CONFIG_ACCEL_FIFO_THRES (CONFIG_ACCEL_FIFO_SIZE / 3)
-
-/* Sensors without hardware interrupt are in forced mode */
-#define CONFIG_ACCEL_FORCE_MODE_MASK BIT(CLEAR_ALS)
 
 /* Lid accel */
 #define CONFIG_LID_ANGLE
@@ -177,12 +158,6 @@
 #define CONFIG_CHARGER_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_SENSE_RESISTOR_AC 10
 
-/*
- * Older boards have a different ADC assignment.
- */
-
-#define CONFIG_ADC_CHANNELS_RUNTIME_CONFIG
-
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h" /* needed by registers.h */
@@ -193,7 +168,7 @@ enum adc_channel {
 	ADC_TEMP_SENSOR_1_DDR_SOC,
 	ADC_TEMP_SENSOR_2_AMBIENT,
 	ADC_TEMP_SENSOR_3_CHARGER,
-	ADC_TEMP_SENSOR_4_WWAN,
+	ADC_IADPT,
 	ADC_CH_COUNT
 };
 
@@ -201,28 +176,16 @@ enum temp_sensor_id {
 	TEMP_SENSOR_1_DDR_SOC,
 	TEMP_SENSOR_2_AMBIENT,
 	TEMP_SENSOR_3_CHARGER,
-	TEMP_SENSOR_4_WWAN,
 	TEMP_SENSOR_COUNT
 };
 
-enum sensor_id {
-	LID_ACCEL = 0,
-	BASE_ACCEL,
-	BASE_GYRO,
-	CLEAR_ALS,
-	RGB_ALS,
-	SENSOR_COUNT
-};
+enum sensor_id { LID_ACCEL = 0, BASE_ACCEL, BASE_GYRO, SENSOR_COUNT };
 
 enum battery_type { BATTERY_POWER_TECH, BATTERY_LGC011, BATTERY_TYPE_COUNT };
 
 enum pwm_channel {
-	PWM_CH_LED2 = 0, /* PWM0 (white charger) */
-	PWM_CH_LED3, /* PWM1 (orange on DB) */
-	PWM_CH_LED1, /* PWM2 (orange charger) */
-	PWM_CH_KBLIGHT, /* PWM3 */
+	PWM_CH_KBLIGHT = 0, /* PWM3 */
 	PWM_CH_FAN, /* PWM5 */
-	PWM_CH_LED4, /* PWM7 (white on DB) */
 	PWM_CH_COUNT
 };
 

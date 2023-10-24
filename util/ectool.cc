@@ -968,6 +968,7 @@ static const char *const ec_feature_names[] = {
 	[EC_FEATURE_TYPEC_AP_VDM_SEND] = "AP directed VDM Request messages",
 	[EC_FEATURE_SYSTEM_SAFE_MODE] = "System Safe Mode support",
 	[EC_FEATURE_ASSERT_REBOOTS] = "Assert reboots",
+	[EC_FEATURE_TOKENIZED_LOGGING] = "Tokenized Logging",
 	[EC_FEATURE_AMD_STB_DUMP] = "AMD STB dump",
 	[EC_FEATURE_MEMORY_DUMP] = "Memory Dump",
 };
@@ -1844,21 +1845,36 @@ int cmd_flash_protect(int argc, char *argv[])
 	}
 
 	/* Print returned flags */
-	print_flash_protect_flags("Flash protect flags:", r.flags);
-	print_flash_protect_flags("Valid flags:        ", r.valid_flags);
-	print_flash_protect_flags("Writable flags:     ", r.writable_flags);
+	printf("Flash protect flags: 0x%08x%s\n",
+	       static_cast<int>(flash_protect_command.GetFlags()),
+	       (ec::FlashProtectCommand::ParseFlags(
+			flash_protect_command.GetFlags()))
+		       .c_str());
+	printf("Valid flags:         0x%08x%s\n",
+	       static_cast<int>(flash_protect_command.GetValidFlags()),
+	       (ec::FlashProtectCommand::ParseFlags(
+			flash_protect_command.GetValidFlags()))
+		       .c_str());
+	printf("Writable flags:      0x%08x%s\n",
+	       static_cast<int>(flash_protect_command.GetWritableFlags()),
+
+	       (ec::FlashProtectCommand::ParseFlags(
+			flash_protect_command.GetWritableFlags()))
+		       .c_str());
 
 	/* Check if we got all the flags we asked for */
 	if ((r.flags & p.mask) != (p.flags & p.mask)) {
 		fprintf(stderr,
 			"Unable to set requested flags "
 			"(wanted mask 0x%08x flags 0x%08x)\n",
-			p.mask, p.flags);
-		if (p.mask & ~r.writable_flags)
+			static_cast<int>(mask), static_cast<int>(flags));
+		if ((mask & ~flash_protect_command.GetWritableFlags()) !=
+		    ec::flash_protect::Flags::kNone)
 			fprintf(stderr,
 				"Which is expected, because writable "
 				"mask is 0x%08x.\n",
-				r.writable_flags);
+				static_cast<int>(flash_protect_command
+							 .GetWritableFlags()));
 
 		return -1;
 	}
@@ -8603,9 +8619,7 @@ static void cmd_cbi_help(char *cmd)
 
 static int cmd_cbi_is_string_field(enum cbi_data_tag tag)
 {
-	return tag == CBI_TAG_DRAM_PART_NUM || tag == CBI_TAG_OEM_NAME ||
-	       tag == CBI_TAG_FUEL_GAUGE_MANUF_NAME ||
-	       tag == CBI_TAG_FUEL_GAUGE_DEVICE_NAME;
+	return tag == CBI_TAG_DRAM_PART_NUM || tag == CBI_TAG_OEM_NAME;
 }
 
 /*

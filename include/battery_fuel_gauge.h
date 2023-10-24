@@ -9,6 +9,7 @@
 #define __CROS_EC_BATTERY_FUEL_GAUGE_H
 
 #include "battery.h"
+#include "common.h"
 
 #include <stdbool.h>
 
@@ -18,48 +19,23 @@
 /* When battery type is not initialized */
 #define BATTERY_TYPE_UNINITIALIZED -1
 
-struct battery_voltage_current {
-	uint16_t mv;
-	uint16_t ma;
-} __packed;
-
-struct battery_temperature_range {
-	int8_t min_c;
-	int8_t max_c;
-} __packed;
-
-struct fuel_gauge_reg_addr_data {
-	uint8_t addr;
-	uint16_t data;
-} __packed;
-
 struct ship_mode_info {
-	/*
-	 * Write Block Support. If wb_support is true, then we use a i2c write
-	 * block command instead of a 16-bit write. The effective difference is
-	 * that the i2c transaction will prefix the length (2) when wb_support
-	 * is enabled.
-	 */
-	uint8_t wb_support;
 	uint8_t reg_addr;
 	uint16_t reg_data[SHIP_MODE_WRITES];
-};
+} __packed;
 
 struct sleep_mode_info {
-	bool sleep_supported;
 	uint8_t reg_addr;
 	uint16_t reg_data;
-};
+} __packed;
 
 struct fet_info {
-	int mfgacc_support;
-	int mfgacc_smb_block;
 	uint8_t reg_addr;
 	uint16_t reg_mask;
 	uint16_t disconnect_val;
 	uint16_t cfet_mask; /* CHG FET status mask */
 	uint16_t cfet_off_val;
-};
+} __packed;
 
 enum fuel_gauge_flags {
 	/*
@@ -85,41 +61,37 @@ enum fuel_gauge_flags {
 };
 
 struct fuel_gauge_info {
+#if defined(__x86_64__) && !defined(TEST_BUILD)
+	/* These shouldn't be used on the (__x86_64__) host. */
+	uint32_t reserved[2];
+#else
 	char *manuf_name;
 	char *device_name;
+#endif
 	uint32_t flags;
+	uint32_t board_flags;
 	struct ship_mode_info ship_mode;
 	struct sleep_mode_info sleep_mode;
 	struct fet_info fet;
-
-#ifdef CONFIG_BATTERY_MEASURE_IMBALANCE
-	/* See battery_*_imbalance_mv() for functions which are suitable. */
-	int (*imbalance_mv)(void);
-#endif
-};
+} __packed;
 
 struct board_batt_params {
-	struct fuel_gauge_info fuel_gauge;
 	struct battery_info batt_info;
-};
+	struct fuel_gauge_info fuel_gauge;
+} __packed __aligned(4);
+
+struct batt_conf_header {
+	/* Version of struct batt_conf_header and its internals. */
+	uint8_t struct_version;
+	uint8_t reserved[3];
+	char manuf_name[16];
+	char device_name[16];
+	struct board_batt_params config;
+} __packed __aligned(4);
 
 /* Forward declare board specific data used by common code */
-extern struct board_batt_params default_battery_conf;
 extern const struct board_batt_params board_battery_info[];
 extern const enum battery_type DEFAULT_BATTERY_TYPE;
-
-#ifdef CONFIG_BATTERY_MEASURE_IMBALANCE
-/**
- * Report the absolute difference between the highest and lowest cell voltage in
- * the battery pack, in millivolts.  On error or unimplemented, returns '0'.
- */
-int battery_default_imbalance_mv(void);
-
-#ifdef CONFIG_BATTERY_BQ4050
-int battery_bq4050_imbalance_mv(void);
-#endif
-
-#endif
 
 #ifdef CONFIG_BATTERY_TYPE_NO_AUTO_DETECT
 /*
@@ -171,5 +143,12 @@ enum ec_error_list battery_sleep_fuel_gauge(void);
  * @return true if board supports BCIC or false otherwise.
  */
 __override_proto bool board_batt_conf_enabled(void);
+
+/**
+ * Report the absolute difference between the highest and lowest cell voltage in
+ * the battery pack, in millivolts.  On error or unimplemented, returns '0'.
+ */
+__override_proto int
+board_battery_imbalance_mv(const struct board_batt_params *info);
 
 #endif /* __CROS_EC_BATTERY_FUEL_GAUGE_H */

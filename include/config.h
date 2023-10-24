@@ -590,6 +590,12 @@
 #undef CONFIG_BATTERY_CUTOFF_DELAY_US
 
 /*
+ * After the EC executes battery cutoff, it'll wait for this amount of time in
+ * msec before deciding the cutoff failed.
+ */
+#define CONFIG_BATTERY_CUTOFF_TIMEOUT_MSEC 8000
+
+/*
  * The board-specific battery.c implements get and set functions to read and
  * write arbirary vendor-specific parameters stored in the battery.
  * See include/battery.h for prototypes.
@@ -1396,6 +1402,9 @@
 
 /* Set trickle charge current by taking integer value */
 #define CONFIG_RAA489000_TRICKLE_CHARGE_CURRENT 128
+
+/* Set two level input current limit function  */
+#undef CONFIG_CHANGER_RAA489000_TWO_LEVEL_CURRENT_LIMIT
 
 /* Wireless chargers */
 #undef CONFIG_CPS8100
@@ -5288,6 +5297,11 @@
  * mask for can't trigger interrupt signal.
  */
 #undef CONFIG_USBC_NX20P348X_RCP_5VSRC_MASK_ENABLE
+
+/*
+ * Setting SYV682X OVP to 15v power profile application
+ */
+#undef CONFIG_USBC_PPC_SYV682X_OVP_SET_15V
 
 /*
  * SYV682x PPC high voltage power path current limit.  Default limit is

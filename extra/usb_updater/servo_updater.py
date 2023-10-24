@@ -14,6 +14,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 from typing import Tuple
 
@@ -96,7 +97,7 @@ def do_with_retries(func, *args):
             time.sleep(RETRIES_DELAY)
             continue
 
-    raise Exception(
+    raise ServoUpdaterException(
         "'{}' failed after {} retries".format(func.__name__, RETRIES_COUNT)
     )
 
@@ -144,7 +145,7 @@ def flash2(vidpid, serialno, binfile):
 
     print(cmd)
     help_cmd = "%s --help" % tool
-    with open("/dev/null") as devnull:
+    with open("/dev/null", "rb") as devnull:
         valid_check = subprocess.call(
             help_cmd.split(), stdout=devnull, stderr=devnull
         )
@@ -157,8 +158,7 @@ def flash2(vidpid, serialno, binfile):
 
     if res in (0, 1, 2):
         return res
-    else:
-        raise ServoUpdaterException("%s exit with res = %d" % (cmd, res))
+    raise ServoUpdaterException("%s exit with res = %d" % (cmd, res))
 
 
 def select(tinys, region):
@@ -175,7 +175,7 @@ def select(tinys, region):
     """
 
     if region not in ["rw", "ro"]:
-        raise Exception("Region must be ro or rw")
+        raise ServoUpdaterException("Region must be ro or rw")
 
     if region == "ro":
         cmd = "reboot"
@@ -191,7 +191,9 @@ def select(tinys, region):
     res = tinys.pty._issue_cmd_get_results("sysinfo", [r"Copy:[\s]+(RO|RW)"])
     current_region = res[0][1].lower()
     if current_region != region:
-        raise Exception("Invalid region: %s/%s" % (current_region, region))
+        raise ServoUpdaterException(
+            "Invalid region: %s/%s" % (current_region, region)
+        )
 
 
 def do_version(tinys):
@@ -237,8 +239,7 @@ def do_updater_version(tinys):
         version_number = int(m.group(1))
         if version_number < 5800:
             return 2
-        else:
-            return 6
+        return 6
     raise ServoUpdaterException(
         "Can't determine updater target from vers: [%s]" % vers
     )
@@ -285,7 +286,9 @@ def get_firmware_channel(bname, version):
     for channel in CHANNELS:
         # Pass |bname| as cname to find the board specific file, and pass None as
         # fname to ensure the default directory is searched
-        _, _, vers = get_files_and_version(bname, None, channel=channel)
+        _unused, _unused, vers = get_files_and_version(
+            bname, None, channel=channel
+        )
         if version == vers:
             return channel
     # None of the channels matched. This firmware is currently unknown.
@@ -332,7 +335,7 @@ def get_files_and_version(cname, fname=None, channel=DEFAULT_CHANNEL):
     Returns:
       cname, fname, version: validated filenames selected from the path.
     """
-    updater_path, firmware_path, configs_path = get_updater_path()
+    _unused_updater_path, firmware_path, configs_path = get_updater_path()
 
     if not os.path.isfile(cname):
         # If not an existing file, try checking on the default path.
@@ -346,7 +349,7 @@ def get_files_and_version(cname, fname=None, channel=DEFAULT_CHANNEL):
             raise ServoUpdaterException("Can't find config file: %s." % cname)
 
     # Always retrieve the boardname
-    with open(cname) as data_file:
+    with open(cname, encoding="utf-8") as data_file:
         data = json.load(data_file)
     boardname = data["board"]
 
@@ -387,7 +390,7 @@ def update(dev, serialno, args, devmap):
     """
     vid, pid = dev.idVendor, dev.idProduct
     vidpid = "%04x:%04x" % (vid, pid)
-    board, boardname, iface, brdfile, binfile, newvers = devmap[vidpid]
+    _unused_board, boardname, iface, brdfile, binfile, newvers = devmap[vidpid]
 
     # We need a tiny_servod to query some information. Set it up first.
     tinys = tiny_servod.TinyServod(vid, pid, iface, serialno, args.verbose)
@@ -402,8 +405,7 @@ def update(dev, serialno, args, devmap):
             if args.reboot:
                 select(tinys, "ro")
             return
-        else:
-            print("Updating to recommended version.")
+        print("Updating to recommended version.")
 
     # Make sure the servo MCU is in RO
     print("===== Jumping to RO =====")
@@ -449,6 +451,61 @@ def update(dev, serialno, args, devmap):
     tinys.pty._issue_cmd("reboot")
 
 
+def print_versions(outfile, boards, file, channel):
+    """Print live firmware versions for given servo boards.
+
+    This directly calls print(), this does not return any information.
+
+    The output format is mean for human readability and is subject to change
+    without notice.  Do NOT parse it from code, use the JSON output option for
+    that.
+
+    Args:
+        outfile: file-like object compatible with print()
+        boards: iterable of str - servo board names from BOARDS
+        file: None or str - firmware binary name
+        channel: str - update channel from CHANNELS
+    """
+    for i, board in enumerate(boards):
+        brdfile, binfile, newvers = get_files_and_version(board, file, channel)
+        if i:
+            print(file=outfile)
+        print("board:", board, file=outfile)
+        print("channel:", channel, file=outfile)
+        print("firmware:", newvers, file=outfile)
+        print("firmware file:", binfile, file=outfile)
+
+
+def print_json(outfile, boards, file, channel):
+    """Print live firmware versions for given servo boards.
+
+    This directly calls print(), this does not return any information.
+
+    The JSON output /structure/ is stable and meant for machine parsing by a
+    JSON parser.  Formatting details that do not change the JSON data meaning
+    are subject to change.
+
+    Args:
+        outfile: file-like object compatible with print()
+        boards: iterable of str - servo board names from BOARDS
+        file: None or str - firmware binary name
+        channel: str - update channel from CHANNELS
+    """
+    output = []
+    for board in boards:
+        brdfile, binfile, newvers = get_files_and_version(board, file, channel)
+        output.append(
+            {
+                "board": board,
+                "channel": channel,
+                "firmware": newvers,
+                "firmware file": binfile,
+            }
+        )
+    # print() gives system-correct trailing newline, unlike json.dump()
+    print(json.dumps(output, indent=2, sort_keys=True), file=outfile)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="""
@@ -463,14 +520,14 @@ def main():
         dest="print_only",
         action="store_true",
         default=False,
-        help="only print available firmware for board/channel",
+        help="only print available firmware for board/channel (human friendly, do not parse, format subject to change)",
     )
     parser.add_argument(
         "--json",
         dest="json_only",
         action="store_true",
         default=False,
-        help="only emit available firmware for board/channel as JSON",
+        help="only emit available firmware for board/channel as JSON (stable data structure when parsed as JSON, raw printed formatting is subject to change)",
     )
     parser.add_argument(
         "-s",
@@ -483,7 +540,7 @@ def main():
         "-b",
         "--board",
         action="append",
-        help="Board configuration json file",
+        help="servo board name (can be specified more than once)",
         default=None,
         choices=BOARDS,
     )
@@ -522,42 +579,26 @@ def main():
 
     args = parser.parse_args()
 
-    # If the user only cares about the information then just print it here,
-    # and exit.
-    if args.print_only or args.json_only:
-        if args.print_only and args.json_only:
-            raise ServoUpdaterException("Can't use both --print and --json.")
-
-        board = args.board
-        if board is None:
-            board = BOARD_SERVO_V4
-
-        brdfile, binfile, newvers = get_files_and_version(
-            board, args.file, args.channel
-        )
-
-        output = {
-            "board": board,
-            "channel": args.channel,
-            "firmware": newvers,
-            "firmware file": binfile,
-        }
-
-        if args.print_only:
-            print("board:", output["board"])
-            print("channel:", output["channel"])
-            print("firmware:", output["firmware"])
-            print("firmware file:", output["firmware file"])
-        elif args.json_only:
-            print(json.dumps(output))
-        return
-
-    serialno = args.serialno
-
     if args.board is None:
         boards = BOARDS
     else:
         boards = args.board
+
+    # If the user only wants channel information, just print and return (exit).
+    if args.print_only or args.json_only:
+        if args.print_only and args.json_only:
+            raise ServoUpdaterException("Can't use both --print and --json.")
+        if args.board is None and not args.all:
+            raise ServoUpdaterException(
+                "Use --all if printing info for all boards is intended, or --board to specify specific servo boards."
+            )
+        if args.print_only:
+            print_versions(sys.stdout, boards, args.file, args.channel)
+        elif args.json_only:
+            print_json(sys.stdout, boards, args.file, args.channel)
+        return
+
+    serialno = args.serialno
 
     vidpids = set()
     devmap = {}
@@ -566,7 +607,7 @@ def main():
             board, args.file, args.channel
         )
 
-        with open(brdfile) as data_file:
+        with open(brdfile, encoding="utf-8") as data_file:
             data = json.load(data_file)
         vid, pid = int(data["vid"], 0), int(data["pid"], 0)
         vidpid = "%04x:%04x" % (vid, pid)
@@ -581,8 +622,8 @@ def main():
     devs = c.wait_for_usb(vidpids, serialname=serialno, timeout=5.0)
     if len(devs) > 1 and not args.all:
         raise ServoUpdaterException(
-            "Found %d matching devices to update. Use --all if updating multiple devices is intended."
-            % (len(devs),)
+            "Found %d matching devices to update. "
+            "Use --all if updating multiple devices is intended." % (len(devs),)
         )
 
     for dev in devs:

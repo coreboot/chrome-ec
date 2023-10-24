@@ -36,6 +36,7 @@ Run the script on the remote machine:
 (remote chroot) ./test/run_device_tests.py --remote 127.0.0.1 \
                 --jlink_port 19020 --console_port 10000
 """
+
 # pylint: enable=line-too-long
 # TODO(b/267800058): refactor into multiple modules
 # pylint: disable=too-many-lines
@@ -102,6 +103,9 @@ DATA_ACCESS_VIOLATION_64020000_REGEX = re.compile(
 )
 DATA_ACCESS_VIOLATION_64040000_REGEX = re.compile(
     r"Data access violation, mfar = 64040000\r\n"
+)
+DATA_ACCESS_VIOLATION_200B0000_REGEX = re.compile(
+    r"Data access violation, mfar = 200b0000\r\n"
 )
 
 PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
@@ -364,6 +368,7 @@ class AllTests:
             TestConfig(test_name="timer"),
             TestConfig(test_name="timer_dos"),
             TestConfig(test_name="tpm_seed_clear"),
+            TestConfig(test_name="uart"),
             TestConfig(test_name="unaligned_access"),
             TestConfig(test_name="unaligned_access_benchmark"),
             TestConfig(test_name="utils", timeout_secs=20),
@@ -475,7 +480,7 @@ HELIPILOT_CONFIG = BoardConfig(
     reboot_timeout=1.5,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_64020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_64040000_REGEX,
-    mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
+    mpu_regex=DATA_ACCESS_VIOLATION_200B0000_REGEX,
     variants={},
 )
 

@@ -38,6 +38,7 @@ def register_raw_project(**kwargs):
     return _register_project(**kwargs)
 
 
+# TODO: b/303828221 - Validate tokenizing with ITE
 def register_binman_project(**kwargs):
     """Register a project that uses BinmanPacker."""
     kwargs.setdefault("output_packer", zmake.output_packers.BinmanPacker)
@@ -47,14 +48,15 @@ def register_binman_project(**kwargs):
 def register_npcx_project(**kwargs):
     """Register a project that uses NpcxPacker."""
     kwargs.setdefault("output_packer", zmake.output_packers.NpcxPacker)
-    kwargs.setdefault("modules", ["cmsis", "ec"])
+    # pigweed comes last so its backend is found
+    kwargs.setdefault("modules", ["cmsis", "picolibc", "ec", "pigweed"])
     return register_binman_project(**kwargs)
 
 
 def register_mchp_project(**kwargs):
     """Register a project that uses MchpPacker."""
     kwargs.setdefault("output_packer", zmake.output_packers.MchpPacker)
-    kwargs.setdefault("modules", ["cmsis", "ec"])
+    kwargs.setdefault("modules", ["cmsis", "picolibc", "ec"])
     return register_binman_project(**kwargs)
 
 
@@ -62,5 +64,5 @@ def register_ish_project(**kwargs):
     """Register a project that uses IshBinPacker."""
     kwargs.setdefault("supported_toolchains", ["coreboot-sdk", "zephyr"])
     kwargs.setdefault("output_packer", zmake.output_packers.IshBinPacker)
-    kwargs.setdefault("modules", ["ish", "cmsis", "hal_intel_public", "ec"])
+    kwargs.setdefault("modules", ["ec", "cmsis", "hal_intel_public"])
     return _register_project(**kwargs)
