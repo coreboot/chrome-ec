@@ -556,7 +556,8 @@
 #endif
 
 #if DT_HAS_CHOSEN(zephyr_flash)
-#define CONFIG_PROGRAM_MEMORY_BASE DT_REG_ADDR(DT_CHOSEN(zephyr_flash))
+#define CONFIG_PROGRAM_MEMORY_BASE \
+	_CONCAT(DT_REG_ADDR(DT_CHOSEN(zephyr_flash)), U)
 #else
 #error "A zephyr,flash device must be chosen in the device tree"
 #endif
@@ -3276,6 +3277,11 @@ BUILD_ASSERT((DT_NUM_INST_STATUS_OKAY(mps_mp2964)) == 1,
 #ifdef CONFIG_PLATFORM_EC_BATTERY_CUTOFF_TIMEOUT_MSEC
 #define CONFIG_BATTERY_CUTOFF_TIMEOUT_MSEC \
 	CONFIG_PLATFORM_EC_BATTERY_CUTOFF_TIMEOUT_MSEC
+#endif
+
+#undef CONFIG_CEC_IT83XX
+#ifdef CONFIG_PLATFORM_EC_CEC_IT83XX
+#define CONFIG_CEC_IT83XX
 #endif
 
 #endif /* __CROS_EC_CONFIG_CHIP_H */

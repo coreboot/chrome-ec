@@ -361,6 +361,15 @@ tests:
     extra_conf_files:
     - prj.conf
     - ec_host_cmd.conf
+  drivers.cec_it83xx:
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_CEC_IT83XX=y
+    - CONFIG_PLATFORM_EC_CEC=y
+    - CONFIG_PLATFORM_EC_CEC_IT83XX=y
+    - CONFIG_PLATFORM_EC_CEC_DEBUG=y
+    extra_dtc_overlay_files:
+    - ./boards/native_posix.overlay
+    - ./cec_it83xx/cec_it83xx.dts
   drivers.common_charger:
     extra_configs:
     - CONFIG_PLATFORM_EC_CHARGER_INPUT_CURRENT_DERATE_PCT=5
@@ -735,6 +744,14 @@ tests:
     extra_conf_files:
     - prj.conf
     - ec_host_cmd.conf
+  drivers.led_pwm_fade:
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_LED_PWM_FADE=y
+    extra_conf_files:
+    - prj.conf
+    extra_dtc_overlay_files:
+    - ./boards/native_posix.overlay
+    - ./led_pwm_fade/led_policy.dts
   drivers.locate_chip:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_LOCATE_CHIP_ALTS=y
@@ -1480,3 +1497,18 @@ tests:
     extra_conf_files:
     - prj.conf
     - ec_host_cmd.conf
+  drivers.one_wire_uart.keyboard:
+    extra_dtc_overlay_files:
+    - ./boards/native_posix.overlay
+    - ./one_wire_uart/one_wire_uart.overlay
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_ONE_WIRE_UART=y
+    - CONFIG_PLATFORM_EC_ONE_WIRE_UART_KEYBOARD=y
+    - CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_MKBP=n
+  drivers.one_wire_uart.tablet:
+    extra_dtc_overlay_files:
+    - ./boards/native_posix.overlay
+    - ./one_wire_uart/one_wire_uart.overlay
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_ONE_WIRE_UART=y
+    - CONFIG_PLATFORM_EC_ONE_WIRE_UART_TABLET=y
