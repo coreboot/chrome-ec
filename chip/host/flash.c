@@ -51,16 +51,18 @@ static void flash_get_persistent(void)
 {
 	FILE *f = get_persistent_storage("flash", "rb");
 
-	if (f == NULL) {
-		fprintf(stderr,
-			"No flash storage found. Initializing to 0xff.\n");
-		memset(__host_flash, 0xff, sizeof(__host_flash));
+	if (f) {
+		if (fread(__host_flash, sizeof(__host_flash), 1, f) != 1) {
+			fprintf(stderr,
+				"Flash storage corrupted, init to 0xff.\n");
+			memset(__host_flash, 0xff, sizeof(__host_flash));
+		}
+		release_persistent_storage(f);
 		return;
 	}
 
-	ASSERT(fread(__host_flash, sizeof(__host_flash), 1, f) == 1);
-
-	release_persistent_storage(f);
+	fprintf(stderr, "No flash storage found. Initializing to 0xff.\n");
+	memset(__host_flash, 0xff, sizeof(__host_flash));
 }
 
 int flash_physical_write(int offset, int size, const char *data)
