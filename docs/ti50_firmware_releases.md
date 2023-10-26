@@ -490,6 +490,47 @@ Build:   ti50_common_mp-15224.B:v0.0.621-b1796c1e
         @chromeos-ci-firmware-us-central2-d-x32-0-ca6m 2023-09-22 07:23:46
 ```
 
+### 0.23.60 Released on 10/26/2023 in M120
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/4980930)
+
+Builder
+[36](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15224.B-branch/36/overview)
+
+Artifacts:
+[15224.33.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.33.0)
+
+**Features**
+
+*   Add Widevine RoT virtual NV.
+    [b/248610274](https://b.corp.google.com/issues/248610274)
+*   Add the CIK cert virtual NV.
+    [b/248610274](https://b.corp.google.com/issues/248610274)
+*   Enforce WP forced enabled when FWMP dev mode disable is present.
+    [b/299947142](https://b.corp.google.com/issues/299947142)
+*   Add extended AP RO verification status.
+    [b/259098185](https://b.corp.google.com/issues/259098185)
+*   Ensure ccd mode active and power button resets GSC if failed APRO.
+    [b/259098185](https://b.corp.google.com/issues/259098185)
+*   Add GetChassisOpen TPMV command.
+    [b/257255419](https://b.corp.google.com/issues/257255419)
+
+**Bug Fixes**
+
+*   Fix get console logs vendor command.
+    [b/302383688](https://b.corp.google.com/issues/302383688)
+*   Prevent flog error from reading past the end of the page.
+    [b/302383688](https://b.corp.google.com/issues/302383688)
+
+```
+Build:   ti50_common_mp-15224.B:v0.0.729-2ab3d1fb
+         libtock-rs:v0.0.925-7239450
+         tock:v0.0.9660-5bae23fce
+         ms-tpm-20-ref:v0.0.329-585067c
+         @chromeos-ci-firmware-us-central2-d-x32-0-mjce 2023-10-16 13:29:26
+```
+
 ## PrePVT images
 
 ### 0.22.0 Released 06/21/22
