@@ -7307,12 +7307,7 @@
 #endif
 
 #ifdef HAVE_PRIVATE
-/* Due to a repo issue the helipilot release branch is presently depends upon
- * the bloonchipper private repo branches. Because the bloonchipper release is
- * behind helipilot's the private_config.h file is not yet available.
- */
-/* TODO(b/307922418): Uncomment the code below once helipilot syncs via repo */
-/* #include "private_config.h" */
+#include "private_config.h"
 #endif /* HAVE_PRIVATE */
 
 #endif /* __CROS_EC_CONFIG_H */
