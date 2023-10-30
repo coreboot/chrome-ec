@@ -182,8 +182,23 @@ static void flash_get_status(uint8_t *sr1, uint8_t *sr2)
 	crec_flash_lock_mapped_storage(0);
 }
 
-static void flash_set_status(uint8_t sr1, uint8_t sr2)
+/* Check if Status Register Protect bit 0 is set */
+static int flash_check_status_reg_srp(void)
 {
+	uint8_t sr1, sr2;
+
+	flash_get_status(&sr1, &sr2);
+
+	return !!(sr1 & SPI_FLASH_SR1_SRP0);
+}
+
+static int flash_set_status(uint8_t sr1, uint8_t sr2)
+{
+	if (flash_check_status_reg_srp() &&
+	    (crec_flash_get_protect() & EC_FLASH_PROTECT_GPIO_ASSERTED)) {
+		return EC_ERROR_ACCESS_DENIED;
+	}
+
 	/* Lock physical flash operations */
 	crec_flash_lock_mapped_storage(1);
 
@@ -202,6 +217,8 @@ static void flash_set_status(uint8_t sr1, uint8_t sr2)
 
 	/* Unlock physical flash operations */
 	crec_flash_lock_mapped_storage(0);
+
+	return EC_SUCCESS;
 }
 
 static void flash_set_quad_enable(int enable)
@@ -300,6 +317,8 @@ static void flash_uma_lock(int enable)
 
 static int flash_set_status_for_prot(int reg1, int reg2)
 {
+	int rv;
+
 	/*
 	 * Writing SR regs will fail if our UMA lock is enabled. If WP
 	 * is deasserted then remove the lock and allow the write.
@@ -326,7 +345,11 @@ static int flash_set_status_for_prot(int reg1, int reg2)
 	flash_protect_int_flash(!gpio_get_level(GPIO_WP_L));
 #endif /*_CONFIG_WP_ACTIVE_HIGH_*/
 #endif
-	flash_set_status(reg1, reg2);
+
+	rv = flash_set_status(reg1, reg2);
+	if (rv != EC_SUCCESS) {
+		return rv;
+	}
 
 	spi_flash_reg_to_protect(reg1, reg2, &addr_prot_start,
 				 &addr_prot_length);
@@ -887,3 +910,66 @@ static void flash_preserve_state(void)
 			    sizeof(state), &state);
 }
 DECLARE_HOOK(HOOK_SYSJUMP, flash_preserve_state, HOOK_PRIO_DEFAULT);
+
+#ifdef NPCX_INT_FLASH_SUPPORT
+static int flash_write_disable(void)
+{
+	uint8_t mask = SPI_FLASH_SR1_WEL;
+	int rv;
+	/* Wait for previous operation to complete */
+	rv = flash_wait_ready();
+	if (rv)
+		return rv;
+
+	/* Write enable command */
+	flash_execute_cmd(CMD_WRITE_DIS, MASK_CMD_ONLY);
+
+	/* Wait for flash is not busy */
+	rv = flash_wait_ready();
+	if (rv)
+		return rv;
+
+	if (NPCX_UMA_DB0 & mask)
+		return EC_SUCCESS;
+	else
+		return EC_ERROR_BUSY;
+}
+
+bool flash_control_register_locked(void)
+{
+	/* The name Flash Control Register lock is based on the stm32
+	 * implementation. The closest analogy is to use the Status Register
+	 * Write Enable Latch (WEL) bit.
+	 *
+	 * Per section 4.27.4 of the datasheet writing is locked until
+	 * SPI_FLASH_SR1_WEL is set to 1
+	 */
+	return is_int_flash_protected() ||
+	       ((NPCX_UMA_DB0 & SPI_FLASH_SR1_WEL) == 0);
+}
+
+void unlock_flash_control_register(void)
+{
+	/* The name Flash Control Register Lock is based on the stm32
+	 * implementation. The closest analogy is to call flash_write_enable
+	 */
+	crec_flash_lock_mapped_storage(1);
+	flash_write_enable();
+	crec_flash_lock_mapped_storage(0);
+}
+
+void lock_flash_control_register(void)
+{
+	/* The name Flash Control Register lock is based on the stm32
+	 * implementation. The closest analogy is to call flash_write_disable
+	 */
+	crec_flash_lock_mapped_storage(1);
+	flash_write_disable();
+	crec_flash_lock_mapped_storage(0);
+}
+
+void disable_flash_control_register(void)
+{
+	flash_protect_int_flash(1);
+}
+#endif /* NPCX_INT_FLASH_SUPPORT */

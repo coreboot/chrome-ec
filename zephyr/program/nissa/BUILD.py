@@ -79,6 +79,11 @@ nokris = register_nissa_project(
     chip="npcx9m3f",
 )
 
+naktal = register_nissa_project(
+    project_name="naktal",
+    chip="it81302bx",
+)
+
 craask = register_nissa_project(
     project_name="craask",
     chip="npcx9m3f",
@@ -126,8 +131,9 @@ craaskov = register_nissa_project(
     project_name="craaskov",
     chip="npcx9m3f",
 )
-pirrha = register_nereid_project(
+pirrha = register_nissa_project(
     project_name="pirrha",
+    chip="it81302bx",
 )
 quandiso = register_nissa_project(
     project_name="quandiso",

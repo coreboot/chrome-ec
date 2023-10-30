@@ -361,8 +361,10 @@ common_cbi_set(const struct __ec_align4 ec_params_set_cbi *p)
 	 * These fields are not allowed to be reprogrammed regardless the
 	 * hardware WP state. They're considered as a part of the hardware.
 	 */
-	if (p->tag == CBI_TAG_BOARD_VERSION || p->tag == CBI_TAG_OEM_ID)
+	if (p->tag == CBI_TAG_BOARD_VERSION || p->tag == CBI_TAG_OEM_ID) {
+		CPRINTS("Failed to write tag: %d. System locked", p->tag);
 		return EC_RES_ACCESS_DENIED;
+	}
 #endif
 
 	if (p->flag & CBI_SET_INIT) {
@@ -493,9 +495,7 @@ static int cc_cbi(int argc, const char **argv)
 			return EC_ERROR_PARAM2;
 
 		if (setter->tag == CBI_TAG_DRAM_PART_NUM ||
-		    setter->tag == CBI_TAG_OEM_NAME ||
-		    setter->tag == CBI_TAG_FUEL_GAUGE_MANUF_NAME ||
-		    setter->tag == CBI_TAG_FUEL_GAUGE_DEVICE_NAME) {
+		    setter->tag == CBI_TAG_OEM_NAME) {
 			setter->size = strlen(argv[3]) + 1;
 			memcpy(setter->data, argv[3], setter->size);
 		} else {
@@ -555,10 +555,16 @@ static int cc_cbi(int argc, const char **argv)
 		}
 	}
 
-	if (common_cbi_set(setter) == EC_RES_SUCCESS)
+	switch (common_cbi_set(setter)) {
+	case EC_RES_SUCCESS:
 		return EC_SUCCESS;
-
-	return EC_ERROR_UNKNOWN;
+	case EC_RES_INVALID_PARAM:
+		return EC_ERROR_INVAL;
+	case EC_RES_ACCESS_DENIED:
+		return EC_ERROR_ACCESS_DENIED;
+	default:
+		return EC_ERROR_UNKNOWN;
+	}
 }
 DECLARE_CONSOLE_COMMAND(cbi, cc_cbi,
 			"[set <tag> <value> <size> | "
