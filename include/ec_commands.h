@@ -1650,6 +1650,14 @@ enum ec_feature_code {
 	 * The EC supports triggering an STB dump.
 	 */
 	EC_FEATURE_AMD_STB_DUMP = 50,
+	/*
+	 * The EC supports memory dump commands.
+	 */
+	EC_FEATURE_MEMORY_DUMP = 51,
+	/*
+	 * The EC supports DP2.1 capability
+	 */
+	EC_FEATURE_TYPEC_DP2_1 = 52,
 };
 
 #define EC_FEATURE_MASK_0(event_code) BIT(event_code % 32)
@@ -6297,41 +6305,27 @@ enum cbi_data_tag {
 	CBI_TAG_SSFC = 8, /* uint32_t bit field */
 	CBI_TAG_REWORK_ID = 9, /* uint64_t or smaller */
 	CBI_TAG_FACTORY_CALIBRATION_DATA = 10, /* uint32_t bit field */
+
 	/*
-	 * Battery info
+	 * A uint32_t field reserved for controlling common features at runtime.
+	 * It shouldn't be used at board-level. See union ec_common_control for
+	 * the bit definitions.
 	 */
-	/* struct fuel_gauge_info */
-	CBI_TAG_FUEL_GAUGE_MANUF_NAME,
-	CBI_TAG_FUEL_GAUGE_DEVICE_NAME,
-	CBI_TAG_FUEL_GAUGE_FLAGS,
-	/* struct ship_mod_info */
-	CBI_TAG_BATT_SHIP_MODE_REG_ADDR,
-	CBI_TAG_BATT_SHIP_MODE_REG_DATA,
-	CBI_TAG_BATT_SHIP_MODE_FLAGS, /* enum ship_mode_flag */
-	/* struct sleep_mode_info */
-	CBI_TAG_BATT_SLEEP_MODE_REG_ADDR,
-	CBI_TAG_BATT_SLEEP_MODE_REG_DATA,
-	CBI_TAG_BATT_SLEEP_MODE_FLAGS, /* enum sleep_mode_flag */
-	/* struct fet_info */
-	CBI_TAG_BATT_FET_REG_ADDR,
-	CBI_TAG_BATT_FET_REG_MASK,
-	CBI_TAG_BATT_FET_DISCONNECT_VAL,
-	CBI_TAG_BATT_FET_CFET_MASK,
-	CBI_TAG_BATT_FET_CFET_OFF_VAL,
-	CBI_TAG_BATT_FET_FLAGS, /* enum batt_fet_flag */
-	/* struct battery_info */
-	CBI_TAG_BATT_VOLTAGE_MAX,
-	CBI_TAG_BATT_VOLTAGE_NORMAL,
-	CBI_TAG_BATT_VOLTAGE_MIN,
-	CBI_TAG_BATT_PRECHARGE_VOLTAGE,
-	CBI_TAG_BATT_PRECHARGE_CURRENT,
-	CBI_TAG_BATT_START_CHARGING_MIN_C,
-	CBI_TAG_BATT_START_CHARGING_MAX_C,
-	CBI_TAG_BATT_CHARGING_MIN_C,
-	CBI_TAG_BATT_CHARGING_MAX_C,
-	CBI_TAG_BATT_DISCHARGING_MIN_C,
-	CBI_TAG_BATT_DISCHARGING_MAX_C,
+	CBI_TAG_COMMON_CONTROL = 11,
+
+	/* struct board_batt_params */
+	CBI_TAG_BATTERY_CONFIG = 12,
+	/* CBI_TAG_BATTERY_CONFIG_1 ~ 15 will use 13 ~ 27. */
+
+	/* Last entry */
 	CBI_TAG_COUNT,
+};
+
+union ec_common_control {
+	struct {
+		uint32_t bcic_enabled : 1;
+	};
+	uint32_t raw_value;
 };
 
 /*

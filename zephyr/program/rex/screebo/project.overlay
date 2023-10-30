@@ -109,13 +109,13 @@
 &i2c4_1 {
 	/delete-node/ rt1716@4e;
 
-	nct3807_C1: nct38xx@73 {
+	nct3807_c1: nct38xx@73 {
 		compatible = "nuvoton,nct38xx";
 		reg = <0x73>;
 
 		tcpc_nct38xx_port1: nct38xx-tcpc {
 			compatible = "nuvoton,nct38xx-tcpc";
-			gpio-dev = <&nct3807_C1>;
+			gpio-dev = <&nct3807_c1>;
 			tcpc-flags = <(
 				TCPC_FLAGS_TCPCI_REV2_0 |
 				TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V)>;
@@ -225,6 +225,17 @@
 	rpm_min = <1710>;
 	rpm_start = <1710>;
 	rpm_max = <5700>;
+};
+
+&i2c7_0 {
+	cbi_eeprom: eeprom@50 {
+		compatible = "atmel,at24";
+		reg = <0x50>;
+		size = <2048>;
+		pagesize = <16>;
+		address-width = <8>;
+		timeout = <5>;
+	};
 };
 
 &cbi_flash {

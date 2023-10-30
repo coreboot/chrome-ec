@@ -19,10 +19,8 @@ test-list-y ?= flash_write_protect \
 ifneq ($(TEST_LIST_HOST),)
 test-list-host=$(TEST_LIST_HOST)
 else
-test-list-host = accel_cal
-test-list-host += aes
+test-list-host  = aes
 test-list-host += always_memset
-test-list-host += base32
 test-list-host += battery_config
 test-list-host += battery_get_params_smart
 test-list-host += benchmark
@@ -114,6 +112,7 @@ test-list-host += tablet_no_sensor
 test-list-host += thermal
 test-list-host += timer
 test-list-host += timer_dos
+test-list-host += uart
 test-list-host += uptime
 test-list-host += usb_common
 test-list-host += usb_pd_int
@@ -284,6 +283,7 @@ timer_calib-y=timer_calib.o
 timer_dos-y=timer_dos.o
 timer-y=timer.o
 tpm_seed_clear-y=tpm_seed_clear.o
+uart-y=uart.o
 unaligned_access-y=unaligned_access.o
 unaligned_access_benchmark-y=unaligned_access_benchmark.o
 uptime-y=uptime.o

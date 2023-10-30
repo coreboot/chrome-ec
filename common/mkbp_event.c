@@ -5,6 +5,12 @@
  * Event handling in MKBP keyboard protocol
  */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #include "atomic.h"
 #include "chipset.h"
 #include "gpio.h"
@@ -13,6 +19,7 @@
 #include "hwtimer.h"
 #include "link_defs.h"
 #include "mkbp_event.h"
+#include "mkbp_fifo.h"
 #include "power.h"
 #include "timer.h"
 #include "util.h"
@@ -614,5 +621,14 @@ void mkbp_event_clear_all(void)
 #ifdef CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK
 	mkbp_host_event_wake_mask = CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK;
 #endif /* CONFIG_MKBP_HOST_EVENT_WAKEUP_MASK */
+}
+#endif
+
+#ifdef CONFIG_EMULATED_SYSRQ
+void host_send_sysrq(uint8_t key)
+{
+	uint32_t value = key;
+
+	mkbp_fifo_add(EC_MKBP_EVENT_SYSRQ, (const uint8_t *)&value);
 }
 #endif

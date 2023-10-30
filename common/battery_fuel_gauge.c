@@ -9,15 +9,23 @@
 #include "battery_smart.h"
 #include "builtin/assert.h"
 #include "console.h"
+#include "cros_board_info.h"
 #include "hooks.h"
 #include "i2c.h"
 #include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
+#define BCFGPRT(format, args...) cprints(CC_CHARGER, "BCFG " format, ##args)
 
-#ifdef CONFIG_BATTERY_CONFIG_IN_CBI
-static const struct board_batt_params *battery_conf = &default_battery_conf;
-#endif
+/*
+ * Pointer to effective config (default_battery_conf or board_battery_info[]).
+ */
+const struct board_batt_params *battery_conf;
+
+/* Copies of config and strings of a matching battery found in CBI. */
+test_export_static struct board_batt_params default_battery_conf;
+static char manuf_name[member_size(struct batt_conf_header, manuf_name)];
+static char device_name[member_size(struct batt_conf_header, device_name)];
 
 /*
  * Authenticate the battery connected.
@@ -62,6 +70,9 @@ test_export_static bool authenticate_battery_type(int index,
 }
 
 #ifdef CONFIG_BATTERY_TYPE_NO_AUTO_DETECT
+
+/* When battery type is not initialized */
+#define BATTERY_TYPE_UNINITIALIZED -1
 
 /* Variable to decide the battery type */
 static int fixed_battery_type = BATTERY_TYPE_UNINITIALIZED;
@@ -139,46 +150,123 @@ __overridable int board_get_default_battery_type(void)
 	return DEFAULT_BATTERY_TYPE;
 }
 
-#ifdef CONFIG_BATTERY_CONFIG_IN_CBI
 void init_battery_type(void)
 {
 	int type = get_battery_type();
 
 	if (type == BATTERY_TYPE_COUNT) {
-		CPRINTS("battery conf not found");
+		BCFGPRT("Config not found");
 		type = board_get_default_battery_type();
 	}
+	BCFGPRT("Found config #%d", type);
 
 	battery_conf = &board_battery_info[type];
 }
 
 const struct board_batt_params *get_batt_params(void)
 {
+	if (IS_ENABLED(TEST_BUILD) && battery_fuel_gauge_type_override >= 0) {
+		return &board_battery_info[battery_fuel_gauge_type_override];
+	}
+
 	return battery_conf;
 }
-
-#else /* !CONFIG_BATTERY_CONFIG_IN_CBI */
-
-void init_battery_type(void)
-{
-	if (get_battery_type() == BATTERY_TYPE_COUNT)
-		CPRINTS("battery not found");
-}
-
-const struct board_batt_params *get_batt_params(void)
-{
-	int type = get_battery_type();
-
-	return &board_battery_info[type == BATTERY_TYPE_COUNT ?
-					   board_get_default_battery_type() :
-					   type];
-}
-#endif /* CONFIG_BATTERY_CONFIG_IN_CBI */
 
 const struct battery_info *battery_get_info(void)
 {
 	return &get_batt_params()->batt_info;
 }
+
+static int bcfg_search_in_cbi(struct board_batt_params *info)
+{
+	char manuf[32];
+	char device[32];
+	int tag = CBI_TAG_BATTERY_CONFIG;
+
+	if (battery_manufacturer_name(manuf, sizeof(manuf))) {
+		BCFGPRT("Manuf not found");
+		return EC_ERROR_UNKNOWN;
+	}
+
+	if (battery_device_name(device, sizeof(device))) {
+		BCFGPRT("Name not found");
+		memset(device, 0, sizeof(device));
+		/* Battery name is optional. Proceed. */
+	}
+
+	BCFGPRT("Battery says %s,%s", manuf, device);
+
+	while (1) {
+		struct batt_conf_header head;
+		uint8_t size = sizeof(head);
+		int rv;
+
+		rv = cbi_get_board_info(tag, (void *)&head, &size);
+		if (rv) {
+			BCFGPRT("No more configs (%d)", rv);
+			return rv;
+		}
+		BCFGPRT("Checking config #%d...", tag - CBI_TAG_BATTERY_CONFIG);
+		tag++;
+
+		if (head.struct_version > 0) {
+			BCFGPRT("Version mismatch: 0x%x", head.struct_version);
+			continue;
+		}
+
+		if (strcasecmp(head.manuf_name, manuf)) {
+			BCFGPRT("Manuf mismatch: %s", head.manuf_name);
+			continue;
+		}
+
+		/* "" means a wild card (or don't care). */
+		if (head.device_name[0] &&
+		    strcasecmp(head.device_name, device)) {
+			BCFGPRT("Name mismatch: %s", head.device_name);
+			continue;
+		}
+
+		BCFGPRT("Matched");
+		memcpy(info, &head.config, sizeof(*info));
+		strncpy(manuf_name, head.manuf_name, sizeof(manuf_name));
+		info->fuel_gauge.manuf_name = manuf_name;
+		if (head.device_name[0]) {
+			strncpy(device_name, head.device_name,
+				sizeof(device_name));
+			info->fuel_gauge.device_name = device_name;
+		} else {
+			info->fuel_gauge.device_name = NULL;
+		}
+
+		return EC_SUCCESS;
+	}
+}
+
+__overridable bool board_batt_conf_enabled(void)
+{
+	union ec_common_control ctrl;
+
+	if (cbi_get_common_control(&ctrl) != EC_SUCCESS)
+		return false;
+
+	return !!(ctrl.bcic_enabled);
+}
+
+test_export_static void batt_conf_main(void)
+{
+	if (IS_ENABLED(CONFIG_BATTERY_CONFIG_IN_CBI) &&
+	    board_batt_conf_enabled()) {
+		BCFGPRT("Searching in CBI");
+		if (bcfg_search_in_cbi(&default_battery_conf) == EC_SUCCESS) {
+			battery_conf = &default_battery_conf;
+			return;
+		}
+	}
+	/* Battery config isn't in CBI. */
+	BCFGPRT("Searching in FW");
+	init_battery_type();
+}
+DECLARE_HOOK(HOOK_INIT, batt_conf_main, HOOK_PRIO_POST_I2C);
 
 #ifndef CONFIG_FUEL_GAUGE
 /**
@@ -241,7 +329,7 @@ int board_cut_off_battery(void)
 	if (!params)
 		return EC_RES_ERROR;
 
-	if (params->fuel_gauge.ship_mode.wb_support)
+	if (params->fuel_gauge.flags & FUEL_GAUGE_FLAG_WRITE_BLOCK)
 		rv = cut_off_battery_block_write(&params->fuel_gauge.ship_mode);
 	else
 		rv = cut_off_battery_sb_write(&params->fuel_gauge.ship_mode);
@@ -250,6 +338,7 @@ int board_cut_off_battery(void)
 }
 #endif /* !CONFIG_FUEL_GAUGE */
 
+#ifndef TEST_BATTERY_CONFIG
 enum ec_error_list battery_sleep_fuel_gauge(void)
 {
 	const struct board_batt_params *params = get_batt_params();
@@ -261,7 +350,7 @@ enum ec_error_list battery_sleep_fuel_gauge(void)
 
 	sleep_command = &params->fuel_gauge.sleep_mode;
 
-	if (!sleep_command->sleep_supported)
+	if (!(params->fuel_gauge.flags & FUEL_GAUGE_FLAG_SLEEP_MODE))
 		return EC_ERROR_UNIMPLEMENTED;
 
 	return sb_write(sleep_command->reg_addr, sleep_command->reg_data);
@@ -276,8 +365,8 @@ static enum ec_error_list battery_get_fet_status_regval(int *regval)
 	ASSERT(params);
 
 	/* Read the status of charge/discharge FETs */
-	if (params->fuel_gauge.fet.mfgacc_support == 1) {
-		if (params->fuel_gauge.fet.mfgacc_smb_block == 1)
+	if (params->fuel_gauge.flags & FUEL_GAUGE_FLAG_MFGACC) {
+		if (params->fuel_gauge.flags & FUEL_GAUGE_FLAG_MFGACC_SMB_BLOCK)
 			rv = sb_read_mfgacc_block(PARAM_OPERATION_STATUS,
 						  SB_ALT_MANUFACTURER_ACCESS,
 						  data, sizeof(data));
@@ -355,21 +444,128 @@ enum battery_disconnect_state battery_get_disconnect_state(void)
 
 	return BATTERY_NOT_DISCONNECTED;
 }
+#endif /* TEST_BATTERY_CONFIG */
 
-#ifdef CONFIG_BATTERY_MEASURE_IMBALANCE
-int battery_imbalance_mv(void)
-{
-	const struct board_batt_params *params = get_batt_params();
-
-	/*
-	 * If battery type is unknown, we cannot safely access non-standard
-	 * registers.
-	 */
-	return (!params) ? 0 : params->fuel_gauge.imbalance_mv();
-}
-
-int battery_default_imbalance_mv(void)
+__overridable int
+board_battery_imbalance_mv(const struct board_batt_params *info)
 {
 	return 0;
 }
-#endif /* CONFIG_BATTERY_MEASURE_IMBALANCE */
+
+int battery_imbalance_mv(void)
+{
+	return board_battery_imbalance_mv(get_batt_params());
+}
+
+#ifdef CONFIG_CMD_BATTERY_CONFIG
+
+void batt_conf_dump(const struct board_batt_params *info)
+{
+	const struct fuel_gauge_info *fg = &info->fuel_gauge;
+	const struct ship_mode_info *ship = &info->fuel_gauge.ship_mode;
+	const struct sleep_mode_info *sleep = &info->fuel_gauge.sleep_mode;
+	const struct fet_info *fet = &info->fuel_gauge.fet;
+	const struct battery_info *batt = &info->batt_info;
+
+	ccprintf(".fuel_gauge = {\n");
+
+	ccprintf("\t.manuf_name = \"%s\",\n", fg->manuf_name);
+	ccprintf("\t.device_name= \"%s\",\n", fg->device_name);
+	ccprintf("\t.flags = 0x%x,\n", fg->flags);
+
+	ccprintf("\t.ship_mode = {\n");
+	ccprintf("\t\t.reg_addr = 0x%02x,\n", ship->reg_addr);
+	ccprintf("\t\t.reg_data = { 0x%04x, 0x%04x },\n", ship->reg_data[0],
+		 ship->reg_data[1]);
+	ccprintf("\t},\n");
+
+	ccprintf("\t.sleep_mode = {\n");
+	ccprintf("\t\t.reg_addr = 0x%02x,\n", sleep->reg_addr);
+	ccprintf("\t\t.reg_data = 0x%04x,\n", sleep->reg_data);
+	ccprintf("\t},\n");
+
+	ccprintf("\t.fet = {\n");
+	ccprintf("\t\t.reg_addr = 0x%02x,\n", fet->reg_addr);
+	ccprintf("\t\t.reg_mask = 0x%04x,\n", fet->reg_mask);
+	ccprintf("\t\t.disconnect_val = 0x%04x,\n", fet->disconnect_val);
+	ccprintf("\t\t.cfet_mask = 0x%04x,\n", fet->cfet_mask);
+	ccprintf("\t\t.cfet_off_val = 0x%04x,\n", fet->cfet_off_val);
+	ccprintf("\t},\n");
+
+	ccprintf("},\n"); /* end of fuel_gauge */
+
+	ccprintf(".batt_info = {\n");
+	ccprintf("\t.voltage_max = %d,\n", batt->voltage_max);
+	ccprintf("\t.voltage_normal = %d,\n", batt->voltage_normal);
+	ccprintf("\t.voltage_min = %d,\n", batt->voltage_min);
+	ccprintf("\t.precharge_voltage= %d,\n", batt->precharge_voltage);
+	ccprintf("\t.precharge_current = %d,\n", batt->precharge_current);
+	ccprintf("\t.start_charging_min_c = %d,\n", batt->start_charging_min_c);
+	ccprintf("\t.start_charging_max_c = %d,\n", batt->start_charging_max_c);
+	ccprintf("\t.charging_min_c = %d,\n", batt->charging_min_c);
+	ccprintf("\t.charging_max_c = %d,\n", batt->charging_max_c);
+	ccprintf("\t.discharging_min_c = %d,\n", batt->discharging_min_c);
+	ccprintf("\t.discharging_max_c = %d,\n", batt->discharging_max_c);
+	ccprintf("},\n"); /* end of batt_info */
+}
+
+static int cc_bcfg(int argc, const char *argv[])
+{
+	if (argc == 1) {
+		batt_conf_dump(get_batt_params());
+	} else if (argc == 3) {
+		struct batt_conf_header head = {};
+		uint8_t size = sizeof(head);
+		int index;
+		int rv;
+		char *e;
+
+		index = strtoi(argv[2], &e, 0);
+		if (*e)
+			return EC_ERROR_PARAM1;
+
+		if (strcasecmp(argv[1], "get") == 0) {
+			rv = cbi_get_board_info(index + CBI_TAG_BATTERY_CONFIG,
+						(void *)&head, &size);
+			if (rv) {
+				ccprintf("#%d not found (rv=%d)\n", index, rv);
+				return EC_ERROR_UNAVAILABLE;
+			}
+			ccprintf("struct_ver = 0x%02x\n", head.struct_version);
+			ccprintf("manuf = \"%s\"\n", head.manuf_name);
+			ccprintf("name = \"%s\"\n", head.device_name);
+			ccprintf("size = %u (expect %u)\n", size, sizeof(head));
+			batt_conf_dump(&head.config);
+		} else if (strcasecmp(argv[1], "set") == 0) {
+			const struct board_batt_params *conf =
+				get_batt_params();
+			head.struct_version = 0;
+			strncpy(head.manuf_name, conf->fuel_gauge.manuf_name,
+				sizeof(head.manuf_name));
+			if (conf->fuel_gauge.device_name)
+				strncpy(head.device_name,
+					conf->fuel_gauge.device_name,
+					sizeof(head.device_name));
+			memcpy(&head.config, conf, sizeof(head.config));
+			rv = cbi_set_board_info(index + CBI_TAG_BATTERY_CONFIG,
+						(void *)&head, size);
+			if (rv) {
+				ccprintf("Failed to write #%d (rv=%d)\n", index,
+					 rv);
+				return EC_ERROR_UNKNOWN;
+			}
+		} else {
+			return EC_ERROR_PARAM2;
+		}
+	} else {
+		return EC_ERROR_PARAM_COUNT;
+	}
+
+	return EC_SUCCESS;
+}
+DECLARE_CONSOLE_COMMAND(
+	bcfg, cc_bcfg, "[get/set <index>]",
+	"\n"
+	"Dump effective battery config or config #<index> in CBI.\n"
+	"Read from or write to CBI effective battery config.\n");
+#endif /* CONFIG_CMD_BATTERY_CONFIG */

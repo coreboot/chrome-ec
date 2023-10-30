@@ -36,10 +36,10 @@ UART_PARAMS = {
 }
 
 
-class ptyDriver(object):
+class ptyDriver:
     """Automate interactive commands on a pty interface."""
 
-    def __init__(self, interface, params, fast=False):
+    def __init__(self, interface, _unused_params, fast=False):
         """Init class variables."""
         self._child = None
         self._fd = None
@@ -132,7 +132,7 @@ class ptyDriver(object):
     def _issue_cmd_get_results(
         self, cmds, regex_list, timeout=DEFAULT_UART_TIMEOUT
     ):
-        """Send command to the device and wait for response.
+        r"""Send command to the device and wait for response.
 
         This function waits for response message matching a regular
         expressions.
@@ -152,7 +152,7 @@ class ptyDriver(object):
               High temp: 37.2
               Low temp: 36.4
             regex_list:
-              ['High temp: (\d+)\.(\d+)', 'Low temp: (\d+)\.(\d+)']
+              [r'High temp: (\d+)\.(\d+)', r'Low temp: (\d+)\.(\d+)']
             returns:
               [('High temp: 37.2', '37', '2'), ('Low temp: 36.4', '36', '4')]
 
@@ -170,7 +170,7 @@ class ptyDriver(object):
                 # Create a tuple which contains the entire matched string and all
                 # the subgroups of the match.
                 result = match.group(*range(lastindex + 1)) if match else None
-                if result:
+                if result is not None:
                     result = tuple(res.decode("utf-8") for res in result)
                 result_list.append(result)
         except pexpect.TIMEOUT:
@@ -212,7 +212,7 @@ class ptyDriver(object):
                     result = (
                         match.group(*range(lastindex + 1)) if match else None
                     )
-                    if result:
+                    if result is not None:
                         result = tuple(res.decode("utf-8") for res in result)
                     result_list.append(result)
                 except pexpect.TIMEOUT:

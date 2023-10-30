@@ -12,9 +12,6 @@
 #define VARIANT_DEDEDE_EC_IT8320
 #include "baseboard.h"
 
-/* System unlocked in early development */
-#define CONFIG_SYSTEM_UNLOCKED
-
 #define CONFIG_CMD_CHARGER_DUMP
 
 /* I2C Bus Configuration */
@@ -53,6 +50,7 @@
 #define CONFIG_USBC_PPC
 #define CONFIG_USBC_PPC_SYV682X
 #define CONFIG_CMD_PPC_DUMP
+#define CONFIG_USBC_PPC_SYV682X_OVP_SET_15V
 
 /* USB Mux and Retimer */
 #define CONFIG_USB_MUX_IT5205 /* C0 C1: ITE Mux */

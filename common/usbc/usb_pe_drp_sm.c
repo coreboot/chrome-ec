@@ -625,6 +625,12 @@ static struct policy_engine {
 	uint32_t ado;
 	mutex_t ado_lock;
 
+	/*
+	 * Flag to indicate that the timeout of the current VDM request should
+	 * be extended
+	 */
+	bool vdm_request_extend_timeout;
+
 	/* Counters */
 
 	/*
@@ -1627,7 +1633,9 @@ static bool pe_should_send_data_reset(const int port)
 		pd_get_am_discovery(port, TCPCI_MSG_SOP);
 	const enum idh_ptype ufp_ptype = pd_get_product_type(port);
 	const union ufp_vdo_rev30 ufp_vdo = {
-		.raw_value = disc->identity.product_t1.raw_value
+		.raw_value = disc->identity_cnt >= VDO_INDEX_PTYPE_UFP1_VDO ?
+				     disc->identity.product_t1.raw_value :
+				     0
 	};
 
 	return prl_get_rev(port, TCPCI_MSG_SOP) >= PD_REV30 &&
@@ -5805,13 +5813,27 @@ static void pe_vdm_send_request_run(int port)
 	if (pd_timer_is_expired(port, PE_TIMER_VDM_RESPONSE)) {
 		CPRINTF("VDM %s Response Timeout\n",
 			pe[port].tx_type == TCPCI_MSG_SOP ? "Port" : "Cable");
-		/*
-		 * Flag timeout so child state can mark appropriate discovery
-		 * item as failed.
-		 */
-		PE_SET_FLAG(port, PE_FLAGS_VDM_REQUEST_TIMEOUT);
 
-		set_state_pe(port, get_last_state_pe(port));
+		/*
+		 * If timeout expires, extend it and keep waiting.
+		 * Maximum timeout will be approximately 3x the initial,
+		 * spec-compliant timeout (~90ms). This is approximately 2x the
+		 * highest observed time a partner has taken to respond.
+		 */
+		if (!pe[port].vdm_request_extend_timeout) {
+			CPRINTS("No response: extending VDM request timeout");
+			pd_timer_enable(port, PE_TIMER_VDM_RESPONSE,
+					PD_T_VDM_SNDR_RSP * 2);
+			pe[port].vdm_request_extend_timeout = true;
+		} else {
+			/*
+			 * Flag timeout so child state can mark appropriate
+			 * discovery item as failed.
+			 */
+			PE_SET_FLAG(port, PE_FLAGS_VDM_REQUEST_TIMEOUT);
+
+			set_state_pe(port, get_last_state_pe(port));
+		}
 	}
 }
 
@@ -5827,6 +5849,16 @@ static void pe_vdm_send_request_exit(int port)
 	pe[port].tx_type = TCPCI_MSG_INVALID;
 
 	pd_timer_disable(port, PE_TIMER_VDM_RESPONSE);
+
+	pe[port].vdm_request_extend_timeout = false;
+}
+
+uint32_t pd_compose_svdm_req_header(int port, enum tcpci_msg_type type,
+				    uint16_t svid, int cmd)
+{
+	return VDO(svid, 1,
+		   VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, pe[port].tx_type)) |
+			   VDM_VERS_MINOR | cmd);
 }
 
 /**
@@ -5850,10 +5882,9 @@ static void pe_vdm_identity_request_cbl_entry(int port)
 		set_state_pe(port, get_last_state_pe(port));
 		return;
 	}
-	msg[0] = VDO(
-		USB_SID_PD, 1,
-		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, pe[port].tx_type)) |
-			CMD_DISCOVER_IDENT);
+	msg[0] = pd_compose_svdm_req_header(port, pe[port].tx_type, USB_SID_PD,
+					    CMD_DISCOVER_IDENT);
+
 	tx_emsg[port].len = sizeof(uint32_t);
 
 	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
@@ -6021,10 +6052,10 @@ static void pe_init_port_vdm_identity_request_entry(int port)
 	uint32_t *msg = (uint32_t *)tx_emsg[port].buf;
 
 	print_current_state(port);
-	msg[0] = VDO(
-		USB_SID_PD, 1,
-		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, pe[port].tx_type)) |
-			CMD_DISCOVER_IDENT);
+
+	msg[0] = pd_compose_svdm_req_header(port, pe[port].tx_type, USB_SID_PD,
+					    CMD_DISCOVER_IDENT);
+
 	tx_emsg[port].len = sizeof(uint32_t);
 
 	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
@@ -6117,10 +6148,10 @@ static void pe_init_vdm_svids_request_entry(int port)
 		set_state_pe(port, get_last_state_pe(port));
 		return;
 	}
-	msg[0] = VDO(
-		USB_SID_PD, 1,
-		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, pe[port].tx_type)) |
-			CMD_DISCOVER_SVID);
+
+	msg[0] = pd_compose_svdm_req_header(port, pe[port].tx_type, USB_SID_PD,
+					    CMD_DISCOVER_SVID);
+
 	tx_emsg[port].len = sizeof(uint32_t);
 
 	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
@@ -6221,10 +6252,10 @@ static void pe_init_vdm_modes_request_entry(int port)
 		set_state_pe(port, get_last_state_pe(port));
 		return;
 	}
-	msg[0] = VDO(
-		(uint16_t)svid, 1,
-		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, pe[port].tx_type)) |
-			CMD_DISCOVER_MODES);
+
+	msg[0] = pd_compose_svdm_req_header(port, pe[port].tx_type, svid,
+					    CMD_DISCOVER_MODES);
+
 	tx_emsg[port].len = sizeof(uint32_t);
 
 	send_data_msg(port, pe[port].tx_type, PD_DATA_VENDOR_DEF);
@@ -6498,11 +6529,12 @@ static void pe_vdm_response_entry(int port)
 	 * result of the svdm response function.
 	 */
 	tx_payload[0] &= ~VDO_CMDT_MASK;
-	tx_payload[0] &= ~VDO_SVDM_VERS_MAJOR(0x3);
+	tx_payload[0] &= ~VDO_SVDM_VERS_MASK;
 
 	/* Add SVDM structured version being used */
 	tx_payload[0] |=
 		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, TCPCI_MSG_SOP));
+	tx_payload[0] |= VDM_VERS_MINOR;
 
 	/* Use VDM command to select the response handler function */
 	switch (vdo_cmd) {

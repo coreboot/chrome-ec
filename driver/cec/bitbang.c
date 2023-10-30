@@ -37,30 +37,30 @@
 	CEC_US_TO_TICKS(CEC_FREE_TIME_PI_US - CEC_NOMINAL_BIT_PERIOD_US)
 
 /* Start bit timing */
-#define START_BIT_LOW_TICKS CEC_US_TO_TICKS(3700)
+#define START_BIT_LOW_TICKS CEC_US_TO_TICKS(CEC_START_BIT_LOW_US)
 #define START_BIT_MIN_LOW_TICKS CEC_US_TO_TICKS(3500)
 #define START_BIT_MAX_LOW_TICKS CEC_US_TO_TICKS(3900)
-#define START_BIT_HIGH_TICKS CEC_US_TO_TICKS(800)
+#define START_BIT_HIGH_TICKS CEC_US_TO_TICKS(CEC_START_BIT_HIGH_US)
 #define START_BIT_MIN_DURATION_TICKS CEC_US_TO_TICKS(4300)
 #define START_BIT_MAX_DURATION_TICKS CEC_US_TO_TICKS(5700)
 
 /* Data bit timing */
-#define DATA_ZERO_LOW_TICKS CEC_US_TO_TICKS(1500)
+#define DATA_ZERO_LOW_TICKS CEC_US_TO_TICKS(CEC_DATA_ZERO_LOW_US)
 #define DATA_ZERO_MIN_LOW_TICKS CEC_US_TO_TICKS(1300)
 #define DATA_ZERO_MAX_LOW_TICKS CEC_US_TO_TICKS(1700)
-#define DATA_ZERO_HIGH_TICKS CEC_US_TO_TICKS(900)
+#define DATA_ZERO_HIGH_TICKS CEC_US_TO_TICKS(CEC_DATA_ZERO_HIGH_US)
 #define DATA_ZERO_MIN_DURATION_TICKS CEC_US_TO_TICKS(2050)
 #define DATA_ZERO_MAX_DURATION_TICKS CEC_US_TO_TICKS(2750)
 
-#define DATA_ONE_LOW_TICKS CEC_US_TO_TICKS(600)
+#define DATA_ONE_LOW_TICKS CEC_US_TO_TICKS(CEC_DATA_ONE_LOW_US)
 #define DATA_ONE_MIN_LOW_TICKS CEC_US_TO_TICKS(400)
 #define DATA_ONE_MAX_LOW_TICKS CEC_US_TO_TICKS(800)
-#define DATA_ONE_HIGH_TICKS CEC_US_TO_TICKS(1800)
+#define DATA_ONE_HIGH_TICKS CEC_US_TO_TICKS(CEC_DATA_ONE_HIGH_US)
 #define DATA_ONE_MIN_DURATION_TICKS CEC_US_TO_TICKS(2050)
 #define DATA_ONE_MAX_DURATION_TICKS CEC_US_TO_TICKS(2750)
 
 /* Time from low that it should be safe to sample an ACK */
-#define NOMINAL_SAMPLE_TIME_TICKS CEC_US_TO_TICKS(1050)
+#define NOMINAL_SAMPLE_TIME_TICKS CEC_US_TO_TICKS(CEC_NOMINAL_SAMPLE_TIME_US)
 
 #define DATA_TIME(type, data) \
 	((data) ? (DATA_ONE_##type##_TICKS) : (DATA_ZERO_##type##_TICKS))
@@ -338,6 +338,7 @@ static void enter_state(int port, enum cec_state new_state)
 		timeout = CAP_START_HIGH_TICKS;
 		break;
 	case CEC_STATE_FOLLOWER_DEBOUNCE:
+		cec_debounce_enable(port);
 		if (port_data->rx.debounce_count >= DEBOUNCE_CUTOFF) {
 			timeout = DEBOUNCE_WAIT_LONG_TICKS;
 		} else {
@@ -428,8 +429,14 @@ static void enter_state(int port, enum cec_state new_state)
 		 */
 	}
 
-	if (gpio >= 0)
+	if (gpio >= 0) {
 		gpio_set_level(drv_config->gpio_out, gpio);
+		/*
+		 * Changing the level of the output gpio triggers an unwanted
+		 * interrupt on the input gpio.
+		 */
+		gpio_clear_pending_interrupt(drv_config->gpio_in);
+	}
 	if (timeout >= 0) {
 		cec_tmr_cap_start(port, cap_edge, timeout);
 	}
@@ -531,9 +538,12 @@ void cec_event_timeout(int port)
 		else
 			enter_state(port, CEC_STATE_FOLLOWER_ACK_FINISH);
 		break;
+	case CEC_STATE_FOLLOWER_DEBOUNCE:
+		cec_debounce_disable(port);
+		enter_state(port, CEC_STATE_IDLE);
+		break;
 	case CEC_STATE_FOLLOWER_START_LOW:
 	case CEC_STATE_FOLLOWER_START_HIGH:
-	case CEC_STATE_FOLLOWER_DEBOUNCE:
 	case CEC_STATE_FOLLOWER_HEADER_INIT_LOW:
 	case CEC_STATE_FOLLOWER_HEADER_INIT_HIGH:
 	case CEC_STATE_FOLLOWER_HEADER_DEST_LOW:

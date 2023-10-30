@@ -590,6 +590,12 @@
 #undef CONFIG_BATTERY_CUTOFF_DELAY_US
 
 /*
+ * After the EC executes battery cutoff, it'll wait for this amount of time in
+ * msec before deciding the cutoff failed.
+ */
+#define CONFIG_BATTERY_CUTOFF_TIMEOUT_MSEC 8000
+
+/*
  * The board-specific battery.c implements get and set functions to read and
  * write arbirary vendor-specific parameters stored in the battery.
  * See include/battery.h for prototypes.
@@ -1397,6 +1403,9 @@
 /* Set trickle charge current by taking integer value */
 #define CONFIG_RAA489000_TRICKLE_CHARGE_CURRENT 128
 
+/* Set two level input current limit function  */
+#undef CONFIG_CHANGER_RAA489000_TWO_LEVEL_CURRENT_LIMIT
+
 /* Wireless chargers */
 #undef CONFIG_CPS8100
 
@@ -1408,6 +1417,12 @@
 #define CONFIG_CHARGER_SM5803_VBUS_MON_SEL 2
 #define CONFIG_CHARGER_SM5803_VSYS_MON_SEL 10
 #define CONFIG_CHARGER_SM5803_IBAT_PHOT_SEL IBAT_SEL_MAX
+
+/*
+ * Precharge delay time to wait for the charger is stable
+ * to set charge current/voltage.
+ */
+#undef CONFIG_PRECHARGE_DELAY_MS
 
 /*****************************************************************************/
 
@@ -1489,8 +1504,6 @@
 #undef CONFIG_CHIPSET_MT8183 /* MediaTek MT8183 */
 #undef CONFIG_CHIPSET_MT8192 /* MediaTek MT8192 */
 #undef CONFIG_CHIPSET_CEZANNE /* AMD Cezanne (x86) */
-#undef CONFIG_CHIPSET_RK3288 /* Rockchip rk3288 */
-#undef CONFIG_CHIPSET_RK3399 /* Rockchip rk3399 */
 #undef CONFIG_CHIPSET_SKYLAKE /* Intel Skylake (x86) */
 #undef CONFIG_CHIPSET_SC7180 /* Qualcomm SC7180 */
 #undef CONFIG_CHIPSET_SC7280 /* Qualcomm SC7280 */
@@ -1778,6 +1791,13 @@
  * mode.
  */
 #define CONFIG_SYSTEM_SAFE_MODE_PRINT_STACK
+
+/*
+ * Enables fetching a memory dump using host commands. This is useful when
+ * debugging panics. May not dump all memory, e.g. sensitive memory will
+ * not be dumped.
+ */
+#undef CONFIG_HOST_COMMAND_MEMORY_DUMP
 
 /*
  * Panic on watchdog warning instead of waiting for a regular watchdog.
@@ -5285,6 +5305,11 @@
 #undef CONFIG_USBC_NX20P348X_RCP_5VSRC_MASK_ENABLE
 
 /*
+ * Setting SYV682X OVP to 15v power profile application
+ */
+#undef CONFIG_USBC_PPC_SYV682X_OVP_SET_15V
+
+/*
  * SYV682x PPC high voltage power path current limit.  Default limit is
  * 3.3A.  See the syv682x header file for permissible values.
  */
@@ -6050,7 +6075,7 @@
 #if !defined(CONFIG_USBC_SS_MUX)
 #error CONFIG_USBC_SS_MUX must be enabled for USB4 mode support
 #endif
-#if !defined(CONFIG_USB_PD_ALT_MODE_DFP)
+#if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_USB_PD_ALT_MODE_DFP)
 #error CONFIG_USB_PD_ALT_MODE_DFP must be enabled for USB4 mode support
 #endif
 #endif
@@ -6316,6 +6341,12 @@
 #define CONFIG_BATTERY
 #endif
 
+#if defined(CONFIG_CBI_EEPROM) || defined(CONFIG_CBI_FLASH)
+#if defined(CONFIG_BATTERY) && defined(CONFIG_BATTERY_FUEL_GAUGE)
+#define CONFIG_BATTERY_CONFIG_IN_CBI
+#endif
+#endif
+
 /******************************************************************************/
 /*
  * Ensure CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS is only used on
@@ -6456,6 +6487,17 @@
 
 /*****************************************************************************/
 /*
+ * Define CONFIG_PRECHARGE_DELAY_MS 150ms which is the debounce
+ * time after VADP >3.2V for the first time adapter plugged in.
+ */
+#ifdef CONFIG_CHARGER_ISL9238
+#ifndef CONFIG_PRECHARGE_DELAY_MS
+#define CONFIG_PRECHARGE_DELAY_MS 150
+#endif
+#endif
+
+/*****************************************************************************/
+/*
  * Define CONFIG_BUTTON_TRIGGERED_RECOVERY if a board has a dedicated recovery
  * button.
  */
@@ -6576,8 +6618,6 @@
 #undef CONFIG_CHIPSET_MT8183
 #undef CONFIG_CHIPSET_MT8192
 #undef CONFIG_CHIPSET_CEZANNE
-#undef CONFIG_CHIPSET_RK3399
-#undef CONFIG_CHIPSET_RK3288
 #undef CONFIG_CHIPSET_SDM845
 #undef CONFIG_CHIPSET_SKYLAKE
 #undef CONFIG_CHIPSET_STONEY
@@ -6938,12 +6978,44 @@
 #endif /* CONFIG_DPTF_MULTI_PROFILE && !CONFIG_DPTF */
 
 /*
+ * The EC monitors the AP suspend/resume process using:
+ * - EC_CMD_HOST_SLEEP_EVENT (0x00A9)
+ * - SLP_S0 signal
+ *
+ * When the AP starts the suspend process, it sends EC_CMD_HOST_SLEEP_EVENT to
+ * signal to the EC that a suspend has begun. This starts the EC's timer, which
+ * uses CONFIG_SLEEP_TIMEOUT_MS to determine how long to wait for the suspend to
+ * complete (by monitoring SLP_S0) before considering the AP "hung". Similarly,
+ * when a resume is begun, the EC starts a timer using the same
+ * CONFIG_SLEEP_TIMEOUT_MS value and waits for the AP to send
+ * EC_CMD_HOST_SLEEP_EVENT to indicate the resume has completed.
+ *
+ * For AMD Systems:
+ * If the EC hits the timeout value CONFIG_SLEEP_TIMEOUT_MS, the AP is
+ * considered "hung" and the EC begins the recovery process. If
+ * CONFIG_POWER_SLEEP_FAILURE_DETECTION is enabled for the board, the EC will
+ * send the Host Event EC_HOST_EVENT_HANG_DETECT, possibly triggering recovery
+ * within the AP, and then start a timer to wait CONFIG_HARD_SLEEP_HANG_TIMEOUT.
+ * If the AP fails to complete the sleep step within
+ * CONFIG_HARD_SLEEP_HANG_TIMEOUT, the EC will forcefully reset the AP to
+ * complete recovery.
+ */
+
+/*
  * Define the timeout in milliseconds between when the EC receives a suspend
  * command and when the EC times out and asserts wake because the sleep signal
  * SLP_S0 did not assert.
  */
 #ifndef CONFIG_SLEEP_TIMEOUT_MS
-#define CONFIG_SLEEP_TIMEOUT_MS 15000
+#define CONFIG_SLEEP_TIMEOUT_MS 10000
+#endif
+
+/*
+ * Define the timeout in milliseconds between when the EC |SysRq| to the AP
+ * and when the AP is forcibly reset because it didn't reboot on its own.
+ */
+#ifndef CONFIG_HARD_SLEEP_HANG_TIMEOUT
+#define CONFIG_HARD_SLEEP_HANG_TIMEOUT 10000
 #endif
 
 #ifdef CONFIG_PWM_KBLIGHT

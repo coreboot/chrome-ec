@@ -52,6 +52,9 @@ config LINK_TEST_SUITE_CBI_FLASH
 config LINK_TEST_SUITE_CEC_COMMON
 	bool "Link and run the common/cec.c tests"
 
+config LINK_TEST_SUITE_CEC_IT83XX
+	bool "Link and run tests for driver/cec/it83xx"
+
 config LINK_TEST_SUITE_CHARGESPLASH
 	bool "Link and test the chargesplash tests"
 
@@ -118,6 +121,9 @@ config LINK_TEST_SUITE_KEYBOARD_SCAN
 
 config LINK_TEST_SUITE_LED_DRIVER
 	bool "Link and test the led_driver tests"
+
+config LINK_TEST_SUITE_LED_DRIVER_ALIAS_LED
+	bool "Link and test the led_driver tests with alias LEDs defined"
 
 config LINK_TEST_SUITE_LOCATE_CHIP_ALTS
 	bool "Link tests for alternate operations of the locate chip host cmd"
@@ -254,6 +260,11 @@ config LINK_TEST_SUITE_USBC_RETIMER_PS8811
 	help
 	  Include the PS8811 test suite in the binary.
 
+config LINK_TEST_SUITE_USBC_DP_MODE
+	bool "Link and test the usbc_dp_tests"
+	help
+	  Include the DP 2.1 test suite in the binary.
+
 config LINK_TEST_SUITE_USBC_TBT_MODE
 	bool "Link and test the usbc_tbt_mode tests"
 
@@ -273,6 +284,12 @@ config LINK_TEST_SUITE_CONSOLE
 
 config LINK_TEST_SUITE_HOST_CMD_THREAD
 	bool "Link and test the host command thread override tests"
+
+config LINK_TEST_SUITE_BC12_UPSTREAM
+	bool "Link and test the BC1.2 upsstream tests"
+	help
+	  This test suite validates integration of the EC application with
+	  the upstream Zephyr BC1.2 driver API.
 
 config LINK_TEST_SUITE_PI3USB9201
 	bool "Link and test the pi3usb9201 tests"
@@ -302,5 +319,11 @@ config LINK_TEST_SUITE_BODY_DETECTION
 	bool "Link and test the body detection tests"
 	help
 	  Include the test suite exercising body detection behaviors in the binary.
+
+config LINK_TEST_SUITE_LED_PWM_FADE
+	bool "Link and test the led_pwm_fade.c tests"
+
+config LINK_TEST_SUITE_ONE_WIRE_UART
+	bool "Link and test the one wire uart driver tests"
 
 source "Kconfig.zephyr"

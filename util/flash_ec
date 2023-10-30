@@ -77,7 +77,6 @@ BOARDS_STM32=(
 	oak_pd
 	pit
 	plankton
-	rainier
 	strago_pd
 	zinger
 )
@@ -123,6 +122,7 @@ BOARDS_NPCX_SPI=(
 BOARDS_NPCX_INT_SPI=(
 	adlrvpp_npcx
 	mtlrvpp_npcx
+	mtlrvpp_pd
 )
 
 BOARDS_SPI_1800MV=(
@@ -140,7 +140,6 @@ BOARDS_RAIDEN=(
 	poppy
 	rammus
 	reef
-	scarlet
 	soraka
 )
 
@@ -736,7 +735,7 @@ else
 	info "Could not find ec build folder to calculate baseboard."
 fi
 # shellcheck disable=SC2181
-if [ $? -ne 0 ]; then
+if [ $? -ne 0 ] && [ -z "${FLAGS_image}" ]; then
 	info "EC build system didn't recognize ${BOARD}. Assuming no baseboard."
 fi
 set -e
@@ -1446,10 +1445,18 @@ function flash_it83xx() {
 	print_or_run "${ITEFLASH_ARGS[@]}" || die "${ERROR_MSG}"
 }
 
+# Alias for flashing ITE chips over I2C from all servo types.
+function flash_ite_i2c() {
+        flash_it83xx
+}
+
+# Alias for flashing ITE chips over SPI from all servo types.
 function flash_ite_spi() {
 	flash_flashrom
 }
 
+# Flash ITE chips over SPI when using the servod debug connector
+# and over I2C whn using CCD.
 function flash_ite_spi_ccd_i2c() {
 	if [[ "${SERVO_TYPE}" =~ "servo_micro" || \
 	      "${SERVO_TYPE}" =~ "servo_v2" ]] ; then
@@ -1459,6 +1466,8 @@ function flash_ite_spi_ccd_i2c() {
 	fi
 }
 
+# Flash ITE chips over SPI when using the servod debug connector
+# and over I2C whn using CCD.
 function flash_it8xxx2() {
 	flash_ite_spi_ccd_i2c
 }

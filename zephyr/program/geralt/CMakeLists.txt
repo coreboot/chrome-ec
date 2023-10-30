@@ -26,6 +26,11 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_DETACHABLE_BASE
 			"src/base_detect.c"
 )
 
+zephyr_include_directories(
+			"include"
+			"../roach/include"
+)
+
 if(DEFINED CONFIG_BOARD_GERALT)
 	project(geralt)
 endif()

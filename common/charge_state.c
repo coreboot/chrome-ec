@@ -39,6 +39,12 @@
 #include "usb_pd.h"
 #include "util.h"
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 47
+
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_CHARGER, outstr)
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
@@ -1057,26 +1063,24 @@ DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, bat_low_voltage_throttle_reset,
 static int get_desired_input_current(enum battery_present batt_present,
 				     const struct charger_info *const info)
 {
-	if (batt_present == BP_YES || system_is_locked() || base_connected()) {
 #ifdef CONFIG_CHARGE_MANAGER
-		int ilim = charge_manager_get_charger_current();
-		return ilim == CHARGE_CURRENT_UNINITIALIZED ?
-			       CHARGE_CURRENT_UNINITIALIZED :
-			       MAX(CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT, ilim);
+	int ilim = charge_manager_get_charger_current();
+	return ilim == CHARGE_CURRENT_UNINITIALIZED ?
+		       CHARGE_CURRENT_UNINITIALIZED :
+		       MAX(CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT, ilim);
 #else
-		return CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT;
+	return CONFIG_CHARGER_DEFAULT_CURRENT_LIMIT;
 #endif
-	} else {
-#ifdef CONFIG_USB_POWER_DELIVERY
-		return MIN(PD_MAX_CURRENT_MA, info->input_current_max);
-#else
-		return info->input_current_max;
-#endif
-	}
 }
 
 static void wakeup_battery(int *need_static)
 {
+#ifndef CONFIG_PRECHARGE_DELAY_MS
+	const int precharge_delay = 0;
+#else
+	const int precharge_delay = CONFIG_PRECHARGE_DELAY_MS * MSEC;
+#endif
+
 	if (battery_seems_dead || battery_is_cut_off()) {
 		/* It's dead, do nothing */
 		set_charge_state(ST_IDLE);
@@ -1094,13 +1098,18 @@ static void wakeup_battery(int *need_static)
 	} else {
 		/* See if we can wake it up */
 		if (curr.state != ST_PRECHARGE) {
-			CPRINTS("try to wake battery");
+			CPRINTS("try to wake battery in %d ms",
+				precharge_delay / MSEC);
 			precharge_start_time = get_time();
 			*need_static = 1;
+			set_charge_state(ST_PRECHARGE);
 		}
-		set_charge_state(ST_PRECHARGE);
-		curr.requested_voltage = batt_info->voltage_max;
-		curr.requested_current = batt_info->precharge_current;
+
+		if (get_time().val >
+		    precharge_start_time.val + precharge_delay) {
+			curr.requested_voltage = batt_info->voltage_max;
+			curr.requested_current = batt_info->precharge_current;
+		}
 	}
 }
 
@@ -1932,16 +1941,22 @@ int charge_set_output_current_limit(int chgnum, int ma, int mv)
 }
 #endif
 
-int charge_set_input_current_limit(int ma, int mv)
+static int derate_input_current(int ma)
 {
-	__maybe_unused int chgnum = 0;
-
 #ifdef CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT
 	if (CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT != 0) {
 		ma = (ma * (100 - CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT)) /
 		     100;
 	}
 #endif
+	return ma;
+}
+
+int charge_set_input_current_limit(int ma, int mv)
+{
+	int chgnum = 0;
+
+	ma = derate_input_current(ma);
 #ifdef CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT
 	if (CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT > 0) {
 		ma = MAX(ma, CONFIG_CHARGER_MIN_INPUT_CURRENT_LIMIT);
@@ -1975,8 +1990,10 @@ int charge_set_input_current_limit(int ma, int mv)
 		 */
 
 		if (mv > 0 &&
-		    mv * curr.desired_input_current > PD_MAX_POWER_MW * 1000)
+		    mv * curr.desired_input_current > PD_MAX_POWER_MW * 1000) {
 			ma = (PD_MAX_POWER_MW * 1000) / mv;
+			ma = derate_input_current(ma);
+		}
 		/*
 		 * If the active charger has already been initialized to at
 		 * least this current level, nothing left to do.
