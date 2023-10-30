@@ -357,6 +357,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "chinchou",
+        board = "chinchou",
+    )
+    ec_target(
         name = "chocodile_vpdmcu",
         board = "chocodile_vpdmcu",
         chip = "stm32",
@@ -1426,6 +1430,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "mtlrvpp_m1723",
+        board = "mtlrvpp_m1723",
+        extra_modules = ["cmsis", "picolibc"],
+    )
+    ec_target(
         name = "mtlrvpp_mchp",
         board = "mtlrvpp_mchp",
         extra_modules = ["cmsis", "picolibc"],
@@ -1460,6 +1469,10 @@ def all_targets():
         name = "myst",
         board = "myst",
         extra_modules = ["cmsis", "picolibc", "pigweed"],
+    )
+    ec_target(
+        name = "naktal",
+        board = "naktal",
     )
     ec_target(
         name = "nami",

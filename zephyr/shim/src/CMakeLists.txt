@@ -31,7 +31,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC         cec.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_RT9490
                                                             chg_rt9490.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER     charger.c)
-zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ               chipset_api.c)
+zephyr_library_sources_ifdef(CONFIG_X86_NON_DSX_PWRSEQ      chipset_api.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI
                                                             espi.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN         fan.c)
@@ -82,7 +82,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_NCT38XX
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC        tcpc.c)
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBA        usba.c)
-zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ power_host_sleep_api.c)
+zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ_HOST_SLEEP    power_host_sleep_api.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX     usb_muxes.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_BB
                                                             bb_retimer_usb_mux.c)

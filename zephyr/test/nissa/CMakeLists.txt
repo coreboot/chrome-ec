@@ -80,6 +80,8 @@ if(CONFIG_TEST_NISSA_GOTHRAX)
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/hdmi.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/keyboard.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/usbc.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/usb_mux_config.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/form_factor.c
     )
 endif()
 
@@ -109,5 +111,20 @@ if(CONFIG_TEST_NISSA_CRAASK)
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/led.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/thermal.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_PIRRHA)
+    zephyr_include_directories("${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/include")
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    target_sources(
+	    app PRIVATE
+	    src/pirrha.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/src/charger.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/src/keyboard.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/src/led.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/src/usbc.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/src/battery.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/src/board.c
     )
 endif()
