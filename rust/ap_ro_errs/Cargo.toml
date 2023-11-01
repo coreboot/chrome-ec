@@ -1,0 +1,9 @@
+[package]
+name = "ap_ro_errs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zerocopy = "0.6"
+enum_utils = { path = "../enum_utils" }
+

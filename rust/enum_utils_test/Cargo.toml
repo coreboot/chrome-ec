@@ -1,0 +1,7 @@
+[package]
+name = "enum_utils_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+enum_utils = { path = "../enum_utils" }

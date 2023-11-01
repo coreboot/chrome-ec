@@ -1,0 +1,7 @@
+[package]
+name = "explain_ap_ro_verification_status"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ap_ro_errs = { path = "../ap_ro_errs" }
