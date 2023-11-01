@@ -16,6 +16,18 @@ if(DEFINED CONFIG_PLATFORM_EC AND EXISTS "${EDT_PICKLE}")
   if(NOT "${ret}" STREQUAL "0")
     message(FATAL_ERROR "named_gpios.py failed with return code: ${ret}")
   endif()
+
+  message(STATUS "Generating component manifest file")
+  set(CME_SCRIPT ${PLATFORM_EC}/zephyr/scripts/cme.py)
+  set(CMD_CME ${PYTHON_EXECUTABLE} ${CME_SCRIPT}
+    --zephyr-base ${ZEPHYR_BASE}
+    --edt-pickle ${EDT_PICKLE}
+    --manifest-file "${CMAKE_BINARY_DIR}/zephyr/component_manifest.json"
+  )
+  execute_process(COMMAND ${CMD_CME} RESULT_VARIABLE ret)
+  if(NOT "${ret}" STREQUAL "0")
+    message(FATAL_ERROR "cme.py failed with return code: ${ret}")
+  endif()
 endif()
 
 if(DEFINED ZMAKE_INCLUDE_DIR)
@@ -317,7 +329,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_GET_UPTIME_INFO
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD_REGULATOR
                                                 "${PLATFORM_EC}/common/regulator.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C
-                                                "${PLATFORM_EC}/common/i2c_controller.c")
+                                                "${PLATFORM_EC}/common/i2c_controller.c"
+                                                "${PLATFORM_EC}/common/i2c_passthru.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C_DEBUG
                                                 "${PLATFORM_EC}/common/i2c_trace.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_I2C_VIRTUAL_BATTERY
