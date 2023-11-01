@@ -7,6 +7,7 @@
 
 #include "battery.h"
 #include "battery_fuel_gauge.h"
+#include "button.h"
 #include "charge_manager.h"
 #include "charge_state.h"
 #include "common.h"
@@ -79,12 +80,26 @@ static int check_print_error(int rv)
 
 static void print_battery_status(void)
 {
+	/*
+	 * STATUS_FULLY_DISCHARGED BIT(4)
+	 * STATUS_FULLY_CHARGED BIT(5)
+	 * STATUS_DISCHARGING BIT(6)
+	 * STATUS_INITIALIZED BIT(7)
+	 */
 	static const char *const st[] = {
 		"EMPTY",
 		"FULL",
 		"DCHG",
 		"INIT",
 	};
+	/*
+	 * STATUS_REMAINING_TIME_ALARM BIT(8)
+	 * STATUS_REMAINING_CAPACITY_ALARM BIT(9)
+	 * STATUS_TERMINATE_DISCHARGE_ALARM BIT(11)
+	 * STATUS_OVERTEMP_ALARM BIT(12)
+	 * STATUS_TERMINATE_CHARGE_ALARM BIT(14)
+	 * STATUS_OVERCHARGED_ALARM BIT(15)
+	 */
 	static const char *const al[] = { "RT", "RC", "--", "TD",
 					  "OT", "--", "TC", "OC" };
 
@@ -145,8 +160,10 @@ static void print_battery_params(void)
 	ccprintf("%08x\n", batt->flags);
 
 	print_item_name("Temp:");
-	ccprintf("0x%04x = %.1d K (%.1d C)\n", batt->temperature,
-		 batt->temperature, batt->temperature - 2731);
+	ccprintf("0x%04x = %d.%d K (%d.%d C)\n", batt->temperature,
+		 batt->temperature / 10, batt->temperature % 10,
+		 (batt->temperature - 2731) / 10,
+		 (batt->temperature - 2731) % 10);
 
 	print_item_name("V:");
 	ccprintf("0x%04x = %d mV\n", batt->voltage, batt->voltage);
@@ -424,7 +441,16 @@ static void power_supply_change(void)
 {
 	static bool had_active_charge_port;
 	int port = charge_manager_get_active_charge_port();
-	bool key = keyboard_scan_get_boot_keys() & BIT(BOOT_KEY_REFRESH);
+	bool key = false;
+
+	if (IS_ENABLED(HAS_TASK_KEYSCAN))
+		key = keyboard_scan_get_boot_keys() & BIT(BOOT_KEY_REFRESH);
+
+#ifdef CONFIG_VOLUME_BUTTONS
+	if (!key)
+		/* Strictly vol-up only. */
+		key = button_get_boot_button() == BIT(BUTTON_VOLUME_UP);
+#endif
 
 	if (!key) {
 		/*
@@ -688,7 +714,7 @@ __overridable int battery_get_avg_current(void)
 	return -EC_ERROR_UNIMPLEMENTED;
 }
 
-int battery_manufacturer_name(char *dest, int size)
+test_mockable int battery_manufacturer_name(char *dest, int size)
 {
 	return get_battery_manufacturer_name(dest, size);
 }

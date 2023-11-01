@@ -52,6 +52,9 @@ config LINK_TEST_SUITE_CBI_FLASH
 config LINK_TEST_SUITE_CEC_COMMON
 	bool "Link and run the common/cec.c tests"
 
+config LINK_TEST_SUITE_CEC_IT83XX
+	bool "Link and run tests for driver/cec/it83xx"
+
 config LINK_TEST_SUITE_CHARGESPLASH
 	bool "Link and test the chargesplash tests"
 
@@ -119,6 +122,9 @@ config LINK_TEST_SUITE_KEYBOARD_SCAN
 config LINK_TEST_SUITE_LED_DRIVER
 	bool "Link and test the led_driver tests"
 
+config LINK_TEST_SUITE_LED_DRIVER_ALIAS_LED
+	bool "Link and test the led_driver tests with alias LEDs defined"
+
 config LINK_TEST_SUITE_LOCATE_CHIP_ALTS
 	bool "Link tests for alternate operations of the locate chip host cmd"
 	help
@@ -141,6 +147,12 @@ config LINK_TEST_SUITE_PANIC_OUTPUT
 
 config LINK_TEST_SUITE_POWER_HOST_SLEEP
 	bool "Link and run the power/host_sleep.c specific tests"
+
+config LINK_TEST_SUITE_PS8743
+	bool "Link and test the ps8743 tests"
+	help
+	  Link tests PS8743 test suite for the MUX driver related function
+	  tests.
 
 config LINK_TEST_SUITE_PS8XXX
 	bool "Link and test the ps8xxx tests"
@@ -313,5 +325,11 @@ config LINK_TEST_SUITE_BODY_DETECTION
 	bool "Link and test the body detection tests"
 	help
 	  Include the test suite exercising body detection behaviors in the binary.
+
+config LINK_TEST_SUITE_LED_PWM_FADE
+	bool "Link and test the led_pwm_fade.c tests"
+
+config LINK_TEST_SUITE_ONE_WIRE_UART
+	bool "Link and test the one wire uart driver tests"
 
 source "Kconfig.zephyr"

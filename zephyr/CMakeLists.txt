@@ -237,8 +237,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_FUEL_GAUGE
                                                 "${PLATFORM_EC}/common/battery_fuel_gauge.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_SMART
                                                 "${PLATFORM_EC}/driver/battery/smart.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY_CONFIG_IN_CBI
-                                                "${PLATFORM_EC}/common/battery_config.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_RT1718S
                                                 "${PLATFORM_EC}/driver/bc12/rt1718s.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
@@ -286,6 +284,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_GPIO
                                                 "${PLATFORM_EC}/common/cbi_gpio.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC
                                                 "${PLATFORM_EC}/common/cec.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC_IT83XX
+                                                "${PLATFORM_EC}/driver/cec/it83xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_MEM
                                                 "${PLATFORM_EC}/common/memory_commands.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_DPTF
@@ -406,7 +406,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7180
                                                 "${PLATFORM_EC}/power/qcom.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_SC7280
                                                 "${PLATFORM_EC}/power/qcom.c")
-if (CONFIG_PLATFORM_EC_HIBERNATE AND CONFIG_AP_PWRSEQ)
+if (CONFIG_PLATFORM_EC_HIBERNATE AND CONFIG_AP_PWRSEQ AND NOT DEFINED CONFIG_EMUL_AP_PWRSEQ_DRIVER)
 	zephyr_library_sources(			"${PLATFORM_EC}/power/hibernate.c")
 endif ()
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PANIC
@@ -423,8 +423,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ROLLBACK
                                                 "${PLATFORM_EC}/common/rollback.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SHA256_SW
                                                 "${PLATFORM_EC}/common/sha256.c")
-zephyr_library_sources_ifdef(CONFIG_SOC_IT8XXX2_SHA256_HW_ACCELERATE
+if (NOT DEFINED CONFIG_PLATFORM_EC_SHA256_HW_ZEPHYR)
+	zephyr_library_sources_ifdef(CONFIG_SOC_IT8XXX2_SHA256_HW_ACCELERATE
                                                 "${PLATFORM_EC}/driver/sha256/sha256_it8xxx2.c")
+endif()
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCH
                                                 "${PLATFORM_EC}/common/switch.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SWITCHCAP_LN9310

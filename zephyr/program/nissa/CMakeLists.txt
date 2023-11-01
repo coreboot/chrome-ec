@@ -44,6 +44,16 @@ if(DEFINED CONFIG_BOARD_NOKRIS)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "nokris/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "nokris/src/charger.c")
 endif()
+if(DEFINED CONFIG_BOARD_NAKTAL)
+        project(naktal)
+        zephyr_library_sources(
+                        "naktal/src/led.c"
+                        "naktal/src/keyboard.c"
+                        "naktal/src/hdmi.c"
+        )
+        zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "naktal/src/usbc.c")
+        zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "naktal/src/charger.c")
+endif()
 if(DEFINED CONFIG_BOARD_CRAASK)
 	zephyr_library_sources(
 			"craask/src/fan.c"
@@ -134,6 +144,7 @@ if(DEFINED CONFIG_BOARD_ULDREN)
 			"uldren/src/sub_board.c"
 			"uldren/src/mp2964_update.c"
 			"uldren/src/sensor.c"
+			"uldren/src/usb_mux_config.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "uldren/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "uldren/src/charger.c")
@@ -144,6 +155,7 @@ if(DEFINED CONFIG_BOARD_GOTHRAX)
 			"gothrax/src/keyboard.c"
 			"gothrax/src/hdmi.c"
 			"gothrax/src/usb_mux_config.c"
+			"gothrax/src/form_factor.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "gothrax/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "gothrax/src/charger.c")
@@ -172,4 +184,16 @@ if(DEFINED CONFIG_BOARD_QUANDISO)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "quandiso/src/charger.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "quandiso/src/fan.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "quandiso/src/usbc.c")
+endif()
+if(DEFINED CONFIG_BOARD_PIRRHA)
+	project(pirrha)
+	zephyr_include_directories("pirrha/include")
+	zephyr_library_sources(
+			"pirrha/src/led.c"
+			"pirrha/src/keyboard.c"
+			"pirrha/src/board.c"
+			"pirrha/src/battery.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "pirrha/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "pirrha/src/charger.c")
 endif()

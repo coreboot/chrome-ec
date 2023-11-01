@@ -625,6 +625,12 @@ static struct policy_engine {
 	uint32_t ado;
 	mutex_t ado_lock;
 
+	/*
+	 * Flag to indicate that the timeout of the current VDM request should
+	 * be extended
+	 */
+	bool vdm_request_extend_timeout;
+
 	/* Counters */
 
 	/*
@@ -1627,7 +1633,9 @@ static bool pe_should_send_data_reset(const int port)
 		pd_get_am_discovery(port, TCPCI_MSG_SOP);
 	const enum idh_ptype ufp_ptype = pd_get_product_type(port);
 	const union ufp_vdo_rev30 ufp_vdo = {
-		.raw_value = disc->identity.product_t1.raw_value
+		.raw_value = disc->identity_cnt >= VDO_INDEX_PTYPE_UFP1_VDO ?
+				     disc->identity.product_t1.raw_value :
+				     0
 	};
 
 	return prl_get_rev(port, TCPCI_MSG_SOP) >= PD_REV30 &&
@@ -2080,7 +2088,7 @@ void pd_request_power_swap(int port)
 }
 
 /* The function returns true if there is a PE state change, false otherwise */
-static bool port_try_vconn_swap(int port)
+static bool port_try_vconn_swap_on(int port)
 {
 	if (pe[port].vconn_swap_counter < N_VCONN_SWAP_COUNT) {
 		pd_dpm_request(port, DPM_REQUEST_VCONN_SWAP);
@@ -5768,7 +5776,7 @@ static void pe_vdm_send_request_entry(int port)
 	     * about VCONN role policy.
 	     */
 	    port_discovery_vconn_swap_policy(port, true)) {
-		if (port_try_vconn_swap(port))
+		if (port_try_vconn_swap_on(port))
 			return;
 	}
 
@@ -5805,13 +5813,27 @@ static void pe_vdm_send_request_run(int port)
 	if (pd_timer_is_expired(port, PE_TIMER_VDM_RESPONSE)) {
 		CPRINTF("VDM %s Response Timeout\n",
 			pe[port].tx_type == TCPCI_MSG_SOP ? "Port" : "Cable");
-		/*
-		 * Flag timeout so child state can mark appropriate discovery
-		 * item as failed.
-		 */
-		PE_SET_FLAG(port, PE_FLAGS_VDM_REQUEST_TIMEOUT);
 
-		set_state_pe(port, get_last_state_pe(port));
+		/*
+		 * If timeout expires, extend it and keep waiting.
+		 * Maximum timeout will be approximately 3x the initial,
+		 * spec-compliant timeout (~90ms). This is approximately 2x the
+		 * highest observed time a partner has taken to respond.
+		 */
+		if (!pe[port].vdm_request_extend_timeout) {
+			CPRINTS("No response: extending VDM request timeout");
+			pd_timer_enable(port, PE_TIMER_VDM_RESPONSE,
+					PD_T_VDM_SNDR_RSP * 2);
+			pe[port].vdm_request_extend_timeout = true;
+		} else {
+			/*
+			 * Flag timeout so child state can mark appropriate
+			 * discovery item as failed.
+			 */
+			PE_SET_FLAG(port, PE_FLAGS_VDM_REQUEST_TIMEOUT);
+
+			set_state_pe(port, get_last_state_pe(port));
+		}
 	}
 }
 
@@ -5827,6 +5849,8 @@ static void pe_vdm_send_request_exit(int port)
 	pe[port].tx_type = TCPCI_MSG_INVALID;
 
 	pd_timer_disable(port, PE_TIMER_VDM_RESPONSE);
+
+	pe[port].vdm_request_extend_timeout = false;
 }
 
 uint32_t pd_compose_svdm_req_header(int port, enum tcpci_msg_type type,
@@ -6654,7 +6678,7 @@ static void pe_enter_usb_entry(int port)
 	if ((pe[port].tx_type == TCPCI_MSG_SOP_PRIME ||
 	     pe[port].tx_type == TCPCI_MSG_SOP_PRIME_PRIME) &&
 	    !tc_is_vconn_src(port)) {
-		if (port_try_vconn_swap(port))
+		if (port_try_vconn_swap_on(port))
 			return;
 	}
 
