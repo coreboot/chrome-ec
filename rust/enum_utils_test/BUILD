@@ -3,10 +3,13 @@
 # found in the LICENSE file.
 package(default_visibility = ["//platform:__subpackages__"])
 
-load("@rules_rust//rust:defs.bzl", "rust_proc_macro")
+load("@rules_rust//rust:defs.bzl", "rust_test")
 
-rust_proc_macro(
-    name = "enum_utils",
-    srcs = glob(["**/*.rs"]),
+rust_test(
+    name = "test",
     edition = "2021",
+    srcs = ["src/lib.rs"],
+    proc_macro_deps = [
+        "//platform/gsc-utils/rust/enum_utils",
+    ],
 )
