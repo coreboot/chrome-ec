@@ -77,6 +77,14 @@ config PLATFORM_EC_INTERNAL_STORAGE
 
 endchoice
 
+config PLATFORM_EC_RW_FWID_OVERLAP
+	bool "The EC RW_FWID fmap overlaps with the firmware blob"
+	default $(dt_node_bool_prop,/binman/ec-rw/rw-fw/rw-fwid,overlap)
+	help
+	  This indicates the RW_FWID fmap overlaps with the firmware blob,
+	  because the fmap points to the current_image_data.version[32],
+	  instead of a separate region at the end of the EC_RW.
+
 config PLATFORM_EC_RW_TOTAL_IMAGE_SIZE
 	hex
 	default $(dt_node_int_prop_hex,/binman/ec-rw,size)
@@ -154,7 +162,8 @@ config PLATFORM_EC_USE_ZEPHYR_FLASH_PAGE_LAYOUT
 
 config PLATFORM_EC_SHARED_SPI_FLASH
 	bool "External SPI flash used to store EC & AP firmware"
-	default n
+	default y
+	depends on DT_HAS_CROS_EC_SHARED_SPI_FLASH_ENABLED
 	depends on PLATFORM_EC_EXTERNAL_STORAGE
 	help
 	  Used when EC image flashed onto external flash chip.
