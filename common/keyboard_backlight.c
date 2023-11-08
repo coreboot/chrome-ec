@@ -113,7 +113,17 @@ static void keyboard_backlight_init(void)
 	/* Don't leave kblight enable state undetermined */
 	kblight_enable(0);
 }
+
+/*
+ * Legacy code assumed that the chipset task indicated a system EC and we'd only
+ * need to initialize the backlight during start-up. It also assumed that not
+ * having a chipset task indicated a KBMCU and we'd want to run during init.
+ */
+#if defined(HAS_TASK_CHIPSET) && !defined(CONFIG_KBLIGHT_HOOK_INIT)
+DECLARE_HOOK(HOOK_CHIPSET_STARTUP, keyboard_backlight_init, HOOK_PRIO_DEFAULT);
+#else
 DECLARE_HOOK(HOOK_INIT, keyboard_backlight_init, HOOK_PRIO_DEFAULT);
+#endif
 
 #ifdef HAS_TASK_CHIPSET
 static void kblight_suspend(void)

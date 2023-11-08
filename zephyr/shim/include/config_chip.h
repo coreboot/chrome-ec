@@ -743,6 +743,11 @@ extern struct jump_data mock_jump_data;
 #define CONFIG_KBLIGHT_ENABLE_PIN
 #endif
 
+#undef CONFIG_KBLIGHT_HOOK_INIT
+#ifdef CONFIG_PLATFORM_EC_KBLIGHT_HOOK_INIT
+#define CONFIG_KBLIGHT_HOOK_INIT
+#endif
+
 #undef CONFIG_LED_COMMON
 #ifdef CONFIG_PLATFORM_EC_LED_COMMON
 #define CONFIG_LED_COMMON
