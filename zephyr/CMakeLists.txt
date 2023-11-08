@@ -298,6 +298,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_GPIO
                                                 "${PLATFORM_EC}/common/cbi_gpio.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC
                                                 "${PLATFORM_EC}/common/cec.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC_BITBANG
+                                                "${PLATFORM_EC}/driver/cec/bitbang.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC_IT83XX
                                                 "${PLATFORM_EC}/driver/cec/it83xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_MEM
@@ -306,6 +308,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_DPTF
                                                 "${PLATFORM_EC}/common/dptf.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ
                                                 "${PLATFORM_EC}/common/chipset.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AP_RESET_LOG
+                                                "${PLATFORM_EC}/common/ap_reset_log.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI
                                                 "${PLATFORM_EC}/common/espi.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_EXTPOWER
