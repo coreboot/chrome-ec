@@ -3238,11 +3238,6 @@
 /* Support common LED interface */
 #undef CONFIG_LED_COMMON
 
-/* Standard LED behavior according to spec given that we have a red-green
- * bicolor led for charging and one power led
- */
-#undef CONFIG_LED_POLICY_STD
-
 #ifndef CONFIG_ZEPHYR
 /*
  * Support common PWM-controlled LEDs that conform to the Chrome OS LED
@@ -3884,6 +3879,11 @@
  * keyboard backlight.
  */
 #undef CONFIG_KBLIGHT_ENABLE_PIN
+
+/*
+ * Call keyboard backlight init function during init hook instead of start-up
+ */
+#undef CONFIG_KBLIGHT_HOOK_INIT
 
 /*
  * RGB Keyboard
@@ -6520,6 +6520,9 @@
 #ifdef CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY
 #define CONFIG_LED_PWM_CHARGE_STATE_ONLY
 #endif
+
+/* Define for to turn off power LED in suspend for boards shipped after 2022 */
+#undef CONFIG_LED_PWM_OFF_IN_SUSPEND
 
 /*****************************************************************************/
 /*
