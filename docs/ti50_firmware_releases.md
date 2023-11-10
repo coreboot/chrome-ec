@@ -8,7 +8,9 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.60        | 0.23.60
+[ToT][ToT ebuild]   | 0.24.61        | 0.23.60
+M121                | 0.24.61        | 0.23.60
+[M120][120 release] | 0.24.60        | 0.23.60
 [M119][119 release] | 0.24.51        | 0.23.51
 [M118][118 release] | 0.24.30        | 0.23.30
 [M117][117 release] | 0.24.30        | 0.23.30
@@ -40,9 +42,10 @@ Feature Description                  | Feature Added | Feature Complete | Releas
 ------------------------------------ | ------------- | ---------------- | --------------
 ZTE Serial Number                    |               | 0.22.6           | M107
 CCD Open preserved across deep sleep |               | 0.22.6           | M107
-APRO WP Sense                        | 0.22.6        |                  | M107
-APRO Verification (without reset)    | 0.24.0        |                  | M108
+AP RO WP Sense                       | 0.22.6        |                  | M107
+AP RO Verification (without reset)   | 0.24.0        |                  | M108
 Fix updates after PoR and deep sleep | 0.24.14       | 0.23.14          | M113
+AP RO Verification Enforcement       | 0.24.61       |                  | M121
 
 # RO revisions
 
@@ -511,7 +514,7 @@ Artifacts:
     [b/299947142](https://b.corp.google.com/issues/299947142)
 *   Add extended AP RO verification status.
     [b/259098185](https://b.corp.google.com/issues/259098185)
-*   Ensure ccd mode active and power button resets GSC if failed APRO.
+*   Ensure ccd mode active and power button resets GSC if failed AP RO verification.
     [b/259098185](https://b.corp.google.com/issues/259098185)
 *   Add GetChassisOpen TPMV command.
     [b/257255419](https://b.corp.google.com/issues/257255419)
@@ -1226,7 +1229,7 @@ Artifacts:
     [b/299947142](https://b.corp.google.com/issues/299947142)
 *   Add extended AP RO verification status.
     [b/259098185](https://b.corp.google.com/issues/259098185)
-*   Ensure ccd mode active and power button resets GSC if failed APRO.
+*   Ensure ccd mode active and power button resets GSC if failed AP RO verification.
     [b/259098185](https://b.corp.google.com/issues/259098185)
 *   Add GetChassisOpen TPMV command.
     [b/257255419](https://b.corp.google.com/issues/257255419)
@@ -1246,6 +1249,30 @@ Build:   ti50_common_prepvt-15086.B:v0.0.782-aca516e7
          @chromeos-ci-firmware-us-central1-b-x32-0-qvwt 2023-10-09 15:15:08
 ```
 
+### 0.24.61 Released on 11/10/2023 in M121
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5021577)
+
+Builder
+[64](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15086.B-branch/64/overview)
+
+Artifacts:
+[15086.59.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.59.0)
+
+**Features**
+
+*   Enforce system reset upon AP RO verification failure.
+    [b/259098185](https://b.corp.google.com/issues/259098185)
+
+```
+Build:   ti50_common_prepvt-15086.B:v0.0.784-2e565ca2
+         libtock-rs:v0.0.925-c38b187
+         tock:v0.0.9659-b09193d54
+         ms-tpm-20-ref:v0.0.327-8e3c8b3
+         @chromeos-ci-firmware-us-central2-d-x32-0-lw3f 2023-11-01 13:57:25
+```
+
 <!-- Links -->
 
 [105 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R105-14989.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
@@ -1263,4 +1290,5 @@ Build:   ti50_common_prepvt-15086.B:v0.0.782-aca516e7
 [117 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R117-15572.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [118 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R118-15604.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [119 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R119-15633.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[120 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R120-15662.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [ToT ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
