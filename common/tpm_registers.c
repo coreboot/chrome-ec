@@ -9,6 +9,22 @@
  * by a24-bit address. There is no provision for error reporting at this level.
  */
 
+/*
+ * ENABLE_TPM can be used to free up a bunch of space for developing features
+ * running up on the space limits.
+ */
+#define ENABLE_TPM
+
+/* TPM2 headers shall go first due to conflict with MAX macro in util.h */
+#ifdef ENABLE_TPM
+/* TPM2 library includes. */
+#include "ExecCommand_fp.h"
+#include "Platform.h"
+#include "_TPM_Init_fp.h"
+#include "Manufacture_fp.h"
+#include "Implementation.h"
+#endif
+
 #include "byteorder.h"
 #include "console.h"
 #include "extension.h"
@@ -27,21 +43,6 @@
 #include "util.h"
 #include "watchdog.h"
 #include "wp.h"
-
-/*
- * ENABLE_TPM can be used to free up a bunch of space for developing features
- * running up on the space limits.
- */
-#define ENABLE_TPM
-
-#ifdef ENABLE_TPM
-/* TPM2 library includes. */
-#include "ExecCommand_fp.h"
-#include "Platform.h"
-#include "_TPM_Init_fp.h"
-#include "Manufacture_fp.h"
-
-#endif
 
 /****************************************************************************/
 /*
@@ -77,6 +78,7 @@
 
 #define CPRINTS(format, args...) cprints(CC_TPM, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_TPM, format, ## args)
+#define CPRINTSS(format, args...) cprints(CC_SYSTEM, format, ## args)
 
 /* Register addresses for FIFO mode. */
 #define TPM_ACCESS	    (0)
@@ -1077,11 +1079,31 @@ void tpm_task(void *u)
 				       response_size);
 			} else {
 #ifdef ENABLE_TPM
+#ifdef CONFIG_NVMEM_DEBUG_EPS
+				uint16_t eps_len;
+
+				eps_len = tpm_nv_eps_len();
+				if ((command_code != TPM_CC_Startup) &&
+				    (eps_len == 0 || gp.EPSeed.t.size == 0)) {
+					CPRINTSS("EPS before cmd=0x%x:"
+						 " NV=%u, GP=%u",
+						 command_code, eps_len,
+						 gp.EPSeed.t.size);
+				}
+#endif /* CONFIG_NVMEM_DEBUG_EPS */
 				ExecuteCommand(tpm_.fifo_write_index,
-					       (uint8_t *)tpmh,
-					       &response_size,
+					       (uint8_t *)tpmh, &response_size,
 					       &response);
-#else
+#ifdef CONFIG_NVMEM_DEBUG_EPS
+				eps_len = tpm_nv_eps_len();
+				if (eps_len == 0 || gp.EPSeed.t.size == 0) {
+					CPRINTSS("EPS after cmd=0x%x:"
+						 " NV=%u, GP=%u",
+						 command_code, eps_len,
+						 gp.EPSeed.t.size);
+				}
+#endif /* CONFIG_NVMEM_DEBUG_EPS */
+#else /* ENABLE_TPM */
 				{
 					/*
 					 * This response is sent by actual

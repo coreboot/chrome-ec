@@ -22,6 +22,7 @@
 #include "system_chip.h"
 #include "task.h"
 #include "timer.h"
+#include "tpm_nvmem_ops.h"
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
 /*
@@ -920,9 +921,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 	NV_RESERVED_ITEM ri;
 	uint16_t eps_seed_len = 0; /* Shall match TPM2B size type. */
 
-	/* (b/262324344): debugging EPS status. */
-	NvGetReserved(NV_EP_SEED, &ri);
-	_plat__NvMemoryRead(ri.offset, sizeof(eps_seed_len), &eps_seed_len);
+	eps_seed_len = tpm_nv_eps_len();
 	if (eps_seed_len != ri.size - sizeof(gp.EPSeed.t.size))
 		CPRINTS("%s: EPS before is zero", __func__);
 #endif
@@ -1028,7 +1027,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 
 	/* (b/262324344): debugging EPS status. */
 #ifdef CONFIG_NVMEM_DEBUG_EPS
-	_plat__NvMemoryRead(ri.offset, sizeof(eps_seed_len), &eps_seed_len);
+	eps_seed_len = tpm_nv_eps_len();
 	if (eps_seed_len != ri.size - sizeof(gp.EPSeed.t.size))
 		CPRINTS("%s: EPS after is zero, rv is %d", __func__, rv);
 #endif
