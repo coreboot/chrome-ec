@@ -126,6 +126,9 @@
 /* Loosen CCD open requirements. Only allowed in prePVT images */
 #define CONFIG_CCD_OPEN_PREPVT
 
+/* (b/262324344): Enable debugging of EPS state in NVMEM */
+#define CONFIG_NVMEM_DEBUG_EPS
+
 #ifdef CR50_DEV
 /* Remove console commands to save space. */
 #undef CONFIG_CMD_SLEEPMASK
