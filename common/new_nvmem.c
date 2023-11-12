@@ -1948,6 +1948,10 @@ static enum ec_error_list verify_reserved(uint8_t *reserved_bitmap,
 		container_body[0] = i;
 
 		switch (i) {
+		case NV_EP_SEED:
+			CPRINTS("%s: EPS not loaded", __func__);
+			cflush();
+			break;
 			/*
 			 * No need to save these on initialization from
 			 * scratch, unmarshaling code will properly expand
