@@ -4628,4 +4628,7 @@
 /* Don't use ECDSA pair-wise consistency test. We verify sign/verify. */
 #undef CONFIG_FIPS_ECDSA_PWCT
 
+/* (b/262324344): Enable debugging of EPS state in NVMEM */
+#undef CONFIG_NVMEM_DEBUG_EPS
+
 #endif  /* __CROS_EC_CONFIG_H */
