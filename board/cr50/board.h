@@ -124,6 +124,9 @@
 #define CONFIG_CASE_CLOSED_DEBUG_V1
 #define CONFIG_PHYSICAL_PRESENCE
 
+/* (b/262324344): Enable debugging of EPS state in NVMEM */
+#define CONFIG_NVMEM_DEBUG_EPS
+
 /* Enable read-only `flog` command for Cr50 */
 #define CONFIG_CMD_FLASH_LOG
 
