@@ -86,8 +86,28 @@ int uartn_rx_available(int uart)
 	return !(GR_UART_STATE(uart) & GC_UART_STATE_RXEMPTY_MASK);
 }
 
+void uartn_enable(int uart)
+{
+	/* Enable TX and RX. Disable HW flow control and loopback. */
+	GR_UART_CTRL(uart) = 0x03;
+}
+
+/* Disable TX, RX, HW flow control, and loopback */
+void uartn_disable(int uart)
+{
+	GR_UART_CTRL(uart) = 0;
+}
+
+int uartn_is_enabled(int uart)
+{
+	return !!(GR_UART_CTRL(uart) & 0x03);
+}
+
 void uartn_write_char(int uart, char c)
 {
+	/* Drop the character if uart is not enabled. */
+	if (!uartn_is_enabled(uart))
+		return;
 	/* Wait for space in transmit FIFO. */
 	while (!uartn_tx_ready(uart))
 		;
@@ -110,24 +130,6 @@ void uartn_enable_interrupt(int uart)
 {
 	task_enable_irq(interrupt[uart].tx_int);
 	task_enable_irq(interrupt[uart].rx_int);
-}
-
-
-void uartn_enable(int uart)
-{
-	/* Enable TX and RX. Disable HW flow control and loopback. */
-	GR_UART_CTRL(uart) = 0x03;
-}
-
-/* Disable TX, RX, HW flow control, and loopback */
-void uartn_disable(int uart)
-{
-	GR_UART_CTRL(uart) = 0;
-}
-
-int uartn_is_enabled(int uart)
-{
-	return !!(GR_UART_CTRL(uart) & 0x03);
 }
 
 void uartn_init(int uart)
