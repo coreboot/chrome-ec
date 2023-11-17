@@ -205,10 +205,12 @@ enum vendor_cmd_cc {
 
 	VENDOR_CC_GET_BOOT_TRACE = 71,
 
-	/* Ti50 */
 	VENDOR_CC_GET_CHASSIS_OPEN = 72,
-	/* Cr50 */
-	VENDOR_CC_GET_CR50_METRICS = 72,
+	/*
+	 * 72 was also the old VENDOR_CC_GET_CR50_METRICS value. It was moved
+	 * to avoid conflict with ti50.
+	 */
+	VENDOR_CC_GET_CR50_METRICS = 73,
 
 	LAST_VENDOR_COMMAND = 65535,
 };
