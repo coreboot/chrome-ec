@@ -141,18 +141,19 @@ static const void *log_offset_to_addr(uint16_t log_offset)
 }
 
 /* Wrappers around chip flash access functions. */
-static void flash_log_erase(void)
+static enum ec_error_list flash_log_erase(void)
 {
-	flash_physical_erase(CONFIG_FLASH_LOG_BASE - CONFIG_PROGRAM_MEMORY_BASE,
-			     CONFIG_FLASH_LOG_SPACE);
+	return flash_physical_erase(CONFIG_FLASH_LOG_BASE -
+					    CONFIG_PROGRAM_MEMORY_BASE,
+				    CONFIG_FLASH_LOG_SPACE);
 }
 
-static void flash_log_write(uint16_t log_offset, const void *data,
-			    size_t data_size)
+static enum ec_error_list flash_log_write(uint16_t log_offset, const void *data,
+					  size_t data_size)
 {
-	flash_physical_write(log_offset + CONFIG_FLASH_LOG_BASE -
-				     CONFIG_PROGRAM_MEMORY_BASE,
-			     data_size, data);
+	return flash_physical_write(log_offset + CONFIG_FLASH_LOG_BASE -
+					    CONFIG_PROGRAM_MEMORY_BASE,
+				    data_size, data);
 }
 
 /* Wrappers around platform flash control function, if registered. */
@@ -512,51 +513,62 @@ static int command_flash_log(int argc, char **argv)
 	uint32_t stamp = 0;
 	union entry_u e;
 	int rv;
-	uint32_t type;
-	size_t size;
 	size_t i;
 
-	if (argc > 1) {
-		if (!strcasecmp(argv[1], "-e")) {
-			ccprintf("Erasing flash log\n");
-			flash_log_write_enable();
-			flash_log_erase();
-			flash_log_write_disable();
-
-			log_read_context.read_cursor = 0;
-			log_read_context.prev_timestamp = 0;
-			log_write_cursor = 0;
-
-			argc--;
-			argv++;
+	/* `stamp=0` by default, which means all events are printed. */
+	if (argc == 2)
+		stamp = atoi(argv[1]);
+	if (argc >= 3)
+		return EC_ERROR_PARAM_COUNT;
+	/* Retrieve entries newer than 'stamp'. */
+	while ((rv = flash_log_dequeue_event(stamp, e.entry, sizeof(e))) > 0) {
+		ccprintf("%10u:%02x", e.r.timestamp, e.r.type);
+		for (i = 0; i < FLASH_LOG_PAYLOAD_SIZE(e.r.size); i++) {
+			if (i && !(i % 16))
+				ccprintf("\n          ");
+			ccprintf(" %02x", e.r.payload[i]);
 		}
+		ccprintf("\n");
+		cflush();
+		stamp = e.r.timestamp;
 	}
-	if (argc < 3) {
-		if (argc == 2)
-			stamp = atoi(argv[1]);
+	if (rv)
+		ccprintf("Warning: Last attempt to dequeue returned "
+			 "%d\n",
+			 rv);
+	return EC_SUCCESS;
+}
 
-		/* Retrieve entries newer than 'stamp'. */
-		while ((rv = flash_log_dequeue_event(stamp, e.entry,
-						     sizeof(e))) > 0) {
-			size_t i;
+DECLARE_SAFE_CONSOLE_COMMAND(flog, command_flash_log, "[stamp]",
+			     "Dump on the console the flash log contents");
+#endif /* CONFIG_CMD_FLASH_LOG */
 
-			ccprintf("%10u:%02x", e.r.timestamp, e.r.type);
-			for (i = 0; i < FLASH_LOG_PAYLOAD_SIZE(e.r.size); i++) {
-				if (i && !(i % 16))
-					ccprintf("\n          ");
-				ccprintf(" %02x", e.r.payload[i]);
-			}
-			ccprintf("\n");
-			cflush();
-			stamp = e.r.timestamp;
-		}
-		if (rv)
-			ccprintf("Warning: Last attempt to dequeue returned "
-				 "%d\n",
-				 rv);
-		return EC_SUCCESS;
+#ifdef CONFIG_CMD_FLASH_LOG_UNSAFE
+/*
+ * Display and edit Flash event log.
+ */
+static int command_flash_log_edit(int argc, char **argv)
+{
+	union entry_u e;
+	enum ec_error_list rv;
+	size_t i;
+	uint32_t type;
+	size_t size;
+
+	if (argc <= 1 || argc > 3)
+		return EC_ERROR_PARAM_COUNT;
+
+	if (argc == 2 && !strcasecmp(argv[1], "-e")) {
+		ccprintf("Erasing flash log\n");
+		flash_log_write_enable();
+		rv = flash_log_erase();
+		flash_log_write_disable();
+
+		log_read_context.read_cursor = 0;
+		log_read_context.prev_timestamp = 0;
+		log_write_cursor = 0;
+		return rv;
 	}
-
 	if (argc != 3) {
 		ccprintf("type and size of the entry are required\n");
 		return EC_ERROR_PARAM_COUNT;
@@ -581,9 +593,9 @@ static int command_flash_log(int argc, char **argv)
 	flash_log_add_event(type, size, e.r.payload);
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(flog, command_flash_log,
-			"[-e] ][[stamp]|[<type> <size>]]",
+
+DECLARE_CONSOLE_COMMAND(flogedit, command_flash_log_edit, "-e | <type> <size> ",
 			"Dump on the console the flash log contents,"
 			"optionally erasing it\n"
 			"or add a new entry of <type> and <size> bytes");
-#endif
+#endif /* CONFIG_CMD_FLASH_LOG_UNSAFE */

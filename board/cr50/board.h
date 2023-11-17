@@ -124,6 +124,9 @@
 #define CONFIG_CASE_CLOSED_DEBUG_V1
 #define CONFIG_PHYSICAL_PRESENCE
 
+/* Enable read-only `flog` command for Cr50 */
+#define CONFIG_CMD_FLASH_LOG
+
 #ifdef CR50_DEV
 /* Remove console commands to save space. */
 #undef CONFIG_CMD_SLEEPMASK
@@ -134,7 +137,7 @@
 #undef CONFIG_FLASH
 /* Enable unsafe dev features for CCD in dev builds */
 #define CONFIG_CASE_CLOSED_DEBUG_V1_UNSAFE
-#define CONFIG_CMD_FLASH_LOG
+#define CONFIG_CMD_FLASH_LOG_UNSAFE
 #define CONFIG_PHYSICAL_PRESENCE_DEBUG_UNSAFE
 #define CONFIG_CMD_ROLLBACK
 #endif
