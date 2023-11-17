@@ -144,6 +144,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "axii",
+        board = "axii",
+    )
+    ec_target(
         name = "baklava",
         baseboard = "honeybuns",
         board = "baklava",
@@ -374,6 +378,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "ciri",
+        board = "ciri",
     )
     ec_target(
         name = "coachz",

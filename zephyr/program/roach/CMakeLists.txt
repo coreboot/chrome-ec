@@ -17,4 +17,7 @@ zephyr_include_directories(
 
 if(DEFINED CONFIG_BOARD_ROACH)
 	project(roach)
+elseif(DEFINED CONFIG_BOARD_AXII)
+	project(axii)
+	add_subdirectory(axii)
 endif()

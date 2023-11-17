@@ -165,10 +165,19 @@ config PLATFORM_EC_SHARED_SPI_FLASH
 	default y
 	depends on DT_HAS_CROS_EC_SHARED_SPI_FLASH_ENABLED
 	depends on PLATFORM_EC_EXTERNAL_STORAGE
+	select FLASH_EX_OP_ENABLED
 	help
 	  Used when EC image flashed onto external flash chip.
 	  External flash shared between the EC & AP.
 	  Config implements the configurations needed by EC to access
 	  SPI flash on initial boot and while jumping to EC RW/RO firmware.
+
+config PLATFORM_EC_SPI_CLOCK_DIVIDE
+	int "SPI clock divider"
+	default 2
+	help
+	  SPI output clock is derived from source clock, divided by the SPI
+	  clock  divider value. Clock divide value depends on the spi length
+	  from EC to flashchip.
 
 endif # PLATFORM_EC_FLASH_CROS
