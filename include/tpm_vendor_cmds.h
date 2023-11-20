@@ -276,6 +276,16 @@ enum wp_options {
 	WP_FOLLOW,
 };
 
+/*
+ * Subcommand code, used to set write protect.
+ */
+#define WPV_UPDATE	     BIT(0)
+#define WPV_ENABLE	     BIT(1)
+#define WPV_FORCE	     BIT(2)
+#define WPV_ATBOOT_SET	     BIT(3)
+#define WPV_ATBOOT_ENABLE    BIT(4)
+#define WPV_FWMP_FORCE_WP_EN BIT(5)
+
 /* VENDOR_CC_USER_PRES options. */
 enum user_pres_options {
 	USER_PRES_ENABLE = BIT(0),
@@ -300,28 +310,6 @@ struct user_pres_response {
 /* Our vendor-specific command codes go here */
 #define TPM_CC_VENDOR_CR50 0x0000
 
-/*** Structures and constants for VENDOR_CC_SPI_HASH ***/
-
-enum vendor_cc_spi_hash_request_subcmd {
-	/* Relinquish the bus */
-	SPI_HASH_SUBCMD_DISABLE = 0,
-	/* Acquire the bus for AP SPI */
-	SPI_HASH_SUBCMD_AP = 1,
-	/* Acquire the bus for EC SPI */
-	SPI_HASH_SUBCMD_EC = 2,
-	/* Hash SPI data */
-	SPI_HASH_SUBCMD_SHA256 = 4,
-	/* Read SPI data */
-	SPI_HASH_SUBCMD_DUMP = 5,
-	/* Poll spi hash PP state. */
-	SPI_HASH_PP_POLL = 6,
-};
-
-enum vendor_cc_spi_hash_request_flags {
-	/* EC uses gang programmer mode */
-	SPI_HASH_FLAG_EC_GANG = BIT(0),
-};
-
 /*
  * Errors recognized and returned by the VENDOR_CC_SEED_AP_RO_CHECK vendor
  * command handler.
@@ -342,15 +330,8 @@ enum ap_ro_check_vc_errors {
 	ARCVE_BOARD_ID_BLOCKED = 12,
 };
 
-/* Structure for VENDOR_CC_SPI_HASH request which follows tpm_header */
-struct vendor_cc_spi_hash_request {
-	uint8_t subcmd; /* See vendor_cc_spi_hash_request_subcmd */
-	uint8_t flags; /* See vendor_cc_spi_hash_request_flags */
-	/* Offset and size used by SHA256 and DUMP; ignored by other subcmds */
-	uint32_t offset; /* Offset in flash to hash/read */
-	uint32_t size; /* Size in bytes to hash/read */
-} __packed;
-
+/*****************************************************************************/
+/* Ti50 Specific Structs */
 struct ti50_stats_v0 {
 	/* filesystem initialization time in ms */
 	uint32_t fs_init_time;
@@ -397,6 +378,9 @@ struct ti50_stats_v2 {
 #define METRICSV_CCD_MODE_SHIFT 3
 #define METRICSV_CCD_MODE_MASK	(1 << METRICSV_CCD_MODE_SHIFT)
 
+/* End Ti50 Specific Structs */
+/*****************************************************************************/
+/* Cr50 Specific Structs */
 #define CR50_METRICSV_RDD_IS_DETECTED_SHIFT		0
 #define CR50_METRICSV_RDD_KEEPALIVE_EN_SHIFT		1
 #define CR50_METRICSV_CCD_MODE_EN_SHIFT			2
@@ -427,17 +411,40 @@ struct cr50_stats_response {
 	uint32_t cold_reset_time_s;
 };
 
+/*** Structures and constants for VENDOR_CC_SPI_HASH ***/
 /* Maximum size of a response = SHA-256 hash or 1-32 bytes of data */
 #define SPI_HASH_MAX_RESPONSE_BYTES 32
 
-/*
- * Subcommand code, used to set write protect.
- */
-#define WPV_UPDATE	     BIT(0)
-#define WPV_ENABLE	     BIT(1)
-#define WPV_FORCE	     BIT(2)
-#define WPV_ATBOOT_SET	     BIT(3)
-#define WPV_ATBOOT_ENABLE    BIT(4)
-#define WPV_FWMP_FORCE_WP_EN BIT(5)
+enum vendor_cc_spi_hash_request_subcmd {
+	/* Relinquish the bus */
+	SPI_HASH_SUBCMD_DISABLE = 0,
+	/* Acquire the bus for AP SPI */
+	SPI_HASH_SUBCMD_AP = 1,
+	/* Acquire the bus for EC SPI */
+	SPI_HASH_SUBCMD_EC = 2,
+	/* Hash SPI data */
+	SPI_HASH_SUBCMD_SHA256 = 4,
+	/* Read SPI data */
+	SPI_HASH_SUBCMD_DUMP = 5,
+	/* Poll spi hash PP state. */
+	SPI_HASH_PP_POLL = 6,
+};
+
+enum vendor_cc_spi_hash_request_flags {
+	/* EC uses gang programmer mode */
+	SPI_HASH_FLAG_EC_GANG = BIT(0),
+};
+
+/* Structure for VENDOR_CC_SPI_HASH request which follows tpm_header */
+struct vendor_cc_spi_hash_request {
+	uint8_t subcmd; /* See vendor_cc_spi_hash_request_subcmd */
+	uint8_t flags; /* See vendor_cc_spi_hash_request_flags */
+	/* Offset and size used by SHA256 and DUMP; ignored by other subcmds */
+	uint32_t offset; /* Offset in flash to hash/read */
+	uint32_t size; /* Size in bytes to hash/read */
+} __packed;
+
+
+/* End Cr50 Specific Structs */
 
 #endif /* __INCLUDE_TPM_VENDOR_CMDS_H */
