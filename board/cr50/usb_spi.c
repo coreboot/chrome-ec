@@ -781,18 +781,22 @@ static enum vendor_cmd_rc spi_hash_sha256(uint8_t *dest, uint32_t offset,
 
 /*
  * TPM Vendor command handler for SPI hash commands which need to be available
- * both through CLI and over /dev/tpm0.
+ * both through CLI.
  */
-static enum vendor_cmd_rc spi_hash_vendor(enum vendor_cmd_cc code,
-					  void *buf,
-					  size_t input_size,
-					  size_t *response_size)
+static enum vendor_cmd_rc handle_spi_hash_vc(enum vendor_cmd_cc code,
+					     void *buf,
+					     size_t input_size,
+					     size_t *response_size)
 {
 	const struct vendor_cc_spi_hash_request *req = buf;
 	enum vendor_cmd_rc rc;
 
 	/* Default to no response data */
 	*response_size = 0;
+	if (input_size < sizeof(struct vendor_cc_spi_hash_request)) {
+		CPRINTS("%s: invalid size %d", __func__, input_size);
+		return VENDOR_RC_BOGUS_ARGS;
+	}
 
 	/* Pick what to do based on subcommand. */
 	switch (req->subcmd) {
@@ -829,7 +833,20 @@ static enum vendor_cmd_rc spi_hash_vendor(enum vendor_cmd_cc code,
 		return VENDOR_RC_NO_SUCH_SUBCOMMAND;
 	}
 }
-DECLARE_VENDOR_COMMAND(VENDOR_CC_SPI_HASH, spi_hash_vendor);
+static enum vendor_cmd_rc vc_spi_hash_wrapper(struct vendor_cmd_params *p)
+{
+	p->out_size = 0;
+	/*
+	 * This command is only allowed from USB. It's not allowed from the
+	 * AP.
+	 */
+	if (!(p->flags & (VENDOR_CMD_FROM_USB | VENDOR_CMD_FROM_ALT_IF))) {
+		CPRINTS("%s: not allowed from AP", __func__);
+		return VENDOR_RC_NOT_ALLOWED;
+	}
+	return handle_spi_hash_vc(p->code, p->buffer, p->in_size, &p->out_size);
+}
+DECLARE_VENDOR_COMMAND_P(VENDOR_CC_SPI_HASH, vc_spi_hash_wrapper);
 
 /**
  * Wrapper for hash commands which are passed through the TPM task context.
