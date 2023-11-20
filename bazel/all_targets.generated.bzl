@@ -144,6 +144,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "axii",
+        board = "axii",
+    )
+    ec_target(
         name = "baklava",
         baseboard = "honeybuns",
         board = "baklava",
@@ -374,6 +378,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "ciri",
+        board = "ciri",
     )
     ec_target(
         name = "coachz",
@@ -999,6 +1007,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "it82002_evb",
+        board = "it82002_evb",
+    )
+    ec_target(
         name = "it83xx_evb",
         baseboard = "ite_evb",
         board = "it83xx_evb",
@@ -1107,6 +1119,10 @@ def all_targets():
         chip = "stm32",
         core = "cortex-m0",
         zephyr = False,
+    )
+    ec_target(
+        name = "kelpie",
+        board = "kelpie",
     )
     ec_target(
         name = "kindred",

@@ -28,6 +28,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BATTERY
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_RT9490
                                                             bc12_rt9490.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC         cec.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC_BITBANG
+                                                            cec_bitbang.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER_RT9490
                                                             chg_rt9490.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER     charger.c)
@@ -113,8 +115,6 @@ if(CONFIG_PIGWEED_LOG_TOKENIZED_LIB)
   pw_zephyrize_libraries_ifdef(CONFIG_PIGWEED_LOG_TOKENIZED_LIB
                               platform_ec_log.tokenized_handler
   )
-
-  zephyr_library_sources_ifdef(CONFIG_PIGWEED_LOG_TOKENIZED_LIB console_buffer.c)
 
   include("${ZEPHYR_PIGWEED_MODULE_DIR}/pw_log_tokenized/backend.cmake")
   pw_set_backend(pw_log_tokenized.handler platform_ec_log.tokenized_handler)

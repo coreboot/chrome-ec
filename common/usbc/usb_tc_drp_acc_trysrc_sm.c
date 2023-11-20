@@ -805,7 +805,7 @@ uint32_t tc_get_flags(int port)
 	return tc[port].flags;
 }
 
-int tc_is_attached_src(int port)
+test_mockable int tc_is_attached_src(int port)
 {
 	return IS_ATTACHED_SRC(port);
 }
@@ -1926,11 +1926,6 @@ void pd_request_vconn_swap_on(int port)
 		TC_SET_FLAG(port, TC_FLAGS_REQUEST_VC_SWAP_ON);
 		task_wake(PD_PORT_TO_TASK_ID(port));
 	}
-}
-
-void pd_request_vconn_swap(int port)
-{
-	pd_dpm_request(port, DPM_REQUEST_VCONN_SWAP);
 }
 #endif
 
