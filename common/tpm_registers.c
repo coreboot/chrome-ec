@@ -19,6 +19,7 @@
 #ifdef ENABLE_TPM
 /* TPM2 library includes. */
 #include "ExecCommand_fp.h"
+#include "Global.h"
 #include "Platform.h"
 #include "_TPM_Init_fp.h"
 #include "Manufacture_fp.h"

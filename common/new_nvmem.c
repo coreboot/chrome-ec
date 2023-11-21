@@ -918,11 +918,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 	int saved_object_count;
 	int final_delimiter_needed = 1;
 #ifdef CONFIG_NVMEM_DEBUG_EPS
-	NV_RESERVED_ITEM ri;
-	uint16_t eps_seed_len = 0; /* Shall match TPM2B size type. */
-
-	eps_seed_len = tpm_nv_eps_len();
-	if (eps_seed_len != ri.size - sizeof(gp.EPSeed.t.size))
+	if (tpm_nv_eps_len() == 0)
 		CPRINTS("%s: EPS before is zero", __func__);
 #endif
 	/* How much space was used before compaction. */
@@ -1027,8 +1023,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 
 	/* (b/262324344): debugging EPS status. */
 #ifdef CONFIG_NVMEM_DEBUG_EPS
-	eps_seed_len = tpm_nv_eps_len();
-	if (eps_seed_len != ri.size - sizeof(gp.EPSeed.t.size))
+	if (tpm_nv_eps_len() == 0)
 		CPRINTS("%s: EPS after is zero, rv is %d", __func__, rv);
 #endif
 	return rv;
