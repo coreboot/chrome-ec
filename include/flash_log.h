@@ -74,6 +74,7 @@ enum nvmem_failure_type {
 	NVMEMF_CONTAINER_HASH_MISMATCH = 14,
 	NVMEMF_UNRECOVERABLE_INIT = 15,
 	NVMEMF_NVMEM_WIPE = 16,
+	NVMEMF_COMPACT_EPS = 17,
 };
 
 /* Not all nvmem failures require payload. */
