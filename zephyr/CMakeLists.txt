@@ -5,6 +5,8 @@
 if(DEFINED CONFIG_PLATFORM_EC AND EXISTS "${EDT_PICKLE}")
   message(STATUS "Performing EC specific devicetree checks")
 
+  set(ENV{PYTHONPATH} "${PLATFORM_EC}/zephyr/:${PLATFORM_EC}/zephyr/zmake")
+
   # Zephyr's gen_defines.py creates an EDT object of the final devicetree,
   # saving it as pickle file in the build directory.
   set(NAMED_GPIOS_SCRIPT ${PLATFORM_EC}/zephyr/scripts/named_gpios.py)
@@ -296,6 +298,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_GPIO
                                                 "${PLATFORM_EC}/common/cbi_gpio.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC
                                                 "${PLATFORM_EC}/common/cec.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC_BITBANG
+                                                "${PLATFORM_EC}/driver/cec/bitbang.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC_IT83XX
                                                 "${PLATFORM_EC}/driver/cec/it83xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CONSOLE_CMD_MEM
@@ -304,6 +308,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_DPTF
                                                 "${PLATFORM_EC}/common/dptf.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ
                                                 "${PLATFORM_EC}/common/chipset.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AP_RESET_LOG
+                                                "${PLATFORM_EC}/common/ap_reset_log.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI
                                                 "${PLATFORM_EC}/common/espi.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_EXTPOWER
@@ -404,8 +410,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_ICELAKE
                                                 "${PLATFORM_EC}/power/icelake.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_INTEL
                                                 "${PLATFORM_EC}/power/intel_x86.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_METEORLAKE
-                                                "${PLATFORM_EC}/power/meteorlake.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_HOST_SLEEP
                                                 "${PLATFORM_EC}/power/host_sleep.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_POWERSEQ_MT8186
@@ -631,7 +635,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC_RT1718S
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT_HASH
                                                 "${PLATFORM_EC}/common/vboot_hash.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VOLUME_BUTTONS
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BUTTON
                                                 "${PLATFORM_EC}/common/button.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_VBOOT_EFS2
@@ -663,6 +667,9 @@ add_subdirectory("fake")
 add_subdirectory("mock")
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 
+separate_arguments(EXTRA_EC_VERSION_FLAGS_LIST UNIX_COMMAND
+		   ${EXTRA_EC_VERSION_FLAGS})
+
 # Use external script to generate the ec_version.h header and add as
 # a dependency to the EC application library.
 add_custom_target(
@@ -671,10 +678,8 @@ add_custom_target(
   "PYTHONPATH=${PLATFORM_EC}/zephyr/zmake/" ${PYTHON_EXECUTABLE}
   "${PLATFORM_EC}/zephyr/zmake/zephyr_build_tools/generate_ec_version.py"
   "${CMAKE_CURRENT_BINARY_DIR}/include/ec_version.h"
-  "--base" "${ZEPHYR_BASE}"
   "--name" "${CMAKE_PROJECT_NAME}"
-  "--module" "${ZEPHYR_MODULES}"
-  ${EXTRA_EC_VERSION_FLAGS}
+  ${EXTRA_EC_VERSION_FLAGS_LIST}
 )
 add_dependencies(app ec_version_header)
 

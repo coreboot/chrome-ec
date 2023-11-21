@@ -6,12 +6,12 @@
 #include "crypto/cleanse_wrapper.h"
 #include "crypto/elliptic_curve_key.h"
 #include "ec_commands.h"
-#include "fpsensor.h"
-#include "fpsensor_auth_commands.h"
-#include "fpsensor_auth_crypto.h"
-#include "fpsensor_crypto.h"
-#include "fpsensor_state.h"
-#include "fpsensor_utils.h"
+#include "fpsensor/fpsensor.h"
+#include "fpsensor/fpsensor_auth_commands.h"
+#include "fpsensor/fpsensor_auth_crypto.h"
+#include "fpsensor/fpsensor_crypto.h"
+#include "fpsensor/fpsensor_state.h"
+#include "fpsensor/fpsensor_utils.h"
 #include "openssl/mem.h"
 #include "openssl/rand.h"
 #include "scoped_fast_cpu.h"
@@ -180,13 +180,9 @@ fp_command_generate_nonce(struct host_cmd_handler_args *args)
 	ScopedFastCpu fast_cpu;
 
 	if (fp_encryption_status & FP_CONTEXT_STATUS_NONCE_CONTEXT_SET) {
-		/* If the context is not cleared, reject this request to prevent
-		 * leaking the existing template. */
-		enum ec_error_list ret = check_context_cleared();
-		if (ret != EC_SUCCESS) {
-			CPRINTS("load_pairing_key: Context is not clean");
-			return EC_RES_ACCESS_DENIED;
-		}
+		/* Invalidate the existing context to prevent leaking the
+		 * existing template. */
+		fp_reset_context();
 	}
 
 	RAND_bytes(auth_nonce.data(), auth_nonce.size());

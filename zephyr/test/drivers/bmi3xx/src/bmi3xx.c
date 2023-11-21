@@ -517,10 +517,6 @@ ZTEST_USER(bmi3xx, test_bmi_acc_fifo)
 	int gyr_range = 125;
 	int acc_range = 2;
 	int event;
-	int rv;
-
-	acc = acc;
-	gyr = gyr;
 
 	/* init bmi before test */
 	zassert_equal(EC_RES_SUCCESS, acc->drv->init(acc));
@@ -537,9 +533,6 @@ ZTEST_USER(bmi3xx, test_bmi_acc_fifo)
 	event = CONFIG_ACCELGYRO_BMI3XX_INT_EVENT;
 
 	/* Test fail to read interrupt status registers */
-	set_read_fail_reg(common_data, BMI3_REG_INT_STATUS_INT1);
-	rv = acc->drv->irq_handler(acc, &event);
-	zassert_equal(EC_ERROR_INVAL, acc->drv->irq_handler(acc, &event));
 	set_read_fail_reg(common_data, BMI3_REG_INT_STATUS_INT1);
 	zassert_equal(EC_ERROR_INVAL, acc->drv->irq_handler(acc, &event));
 	set_read_fail_reg(common_data, I2C_COMMON_EMUL_NO_FAIL_REG);
@@ -650,9 +643,31 @@ ZTEST_USER(bmi3xx, test_bmi_acc_fifo)
 
 	/* Trigger irq handler and check results */
 	check_fifo(acc, gyr, f, acc_range, gyr_range);
+}
 
-	/* Remove custom emulator read function */
-	i2c_common_emul_set_read_func(common_data, NULL, NULL);
+/** Test irq handler of accelerometer sensor when interrupt register is stuck.
+ */
+ZTEST_USER(bmi3xx, test_bmi_acc_fifo_stuck)
+{
+	uint32_t event = CONFIG_ACCELGYRO_BMI3XX_INT_EVENT;
+
+	/* Enable FIFO */
+	zassert_equal(EC_SUCCESS, acc->drv->set_data_rate(acc, 50000, 0));
+
+	/* Setup interrupts register */
+	bmi_emul_set_reg16(emul, BMI3_REG_INT_STATUS_INT1, BMI3_INT_STATUS_FWM);
+	bmi_emul_set_reg16(emul, BMI3_REG_FIFO_CTRL, ~BMI3_ENABLE);
+
+	/* Read FIFO in driver */
+	zassert_equal(EC_SUCCESS, acc->drv->irq_handler(acc, &event),
+		      "Failed to read FIFO in irq handler");
+
+	zassert_equal(bmi_emul_get_reg16(emul, BMI3_REG_INT_STATUS_INT1),
+		      BMI3_INT_STATUS_FWM);
+	/* Check flush register has been written to. */
+	zassert_equal(bmi_emul_get_reg16(emul, BMI3_REG_FIFO_CTRL) &
+			      BMI3_ENABLE,
+		      BMI3_ENABLE);
 }
 
 ZTEST_USER(bmi3xx, test_bmi_gyr_fifo)
@@ -667,9 +682,14 @@ ZTEST_USER(bmi3xx, test_bmi_gyr_fifo)
 
 ZTEST_USER(bmi3xx, test_irq_handler)
 {
+	struct i2c_common_emul_data *common_data =
+		emul_bmi_get_i2c_common_data(emul);
+	struct fifo_func_data func_data;
 	struct bmi_emul_frame f;
 
 	zassert_ok(acc->drv->init(acc));
+	/* Set custom function for FIFO test */
+	i2c_common_emul_set_read_func(common_data, emul_fifo_func, &func_data);
 
 	/* test no events */
 	bmi3xx_interrupt(0);
@@ -683,8 +703,9 @@ ZTEST_USER(bmi3xx, test_irq_handler)
 	f.next = NULL;
 	bmi_emul_append_frame(emul, &f);
 
-	bmi_emul_set_reg16(emul, BMI3_REG_INT_STATUS_INT1,
-			   BMI3_INT_STATUS_ORIENTATION | BMI3_INT_STATUS_FFULL);
+	/* Setup interrupts register */
+	func_data.interrupts = BMI3_INT_STATUS_ORIENTATION |
+			       BMI3_INT_STATUS_FFULL;
 
 	bmi3xx_interrupt(0);
 
@@ -729,8 +750,6 @@ ZTEST_USER(bmi3xx, test_read_fifo)
 
 	bmi_emul_append_frame(emul, f);
 
-	bmi_emul_set_reg16(emul, BMI3_REG_INT_STATUS_INT1,
-			   BMI3_INT_STATUS_ORIENTATION | BMI3_INT_STATUS_FFULL);
 	bmi_emul_set_reg16(emul, BMI3_REG_INT_STATUS_INT1,
 			   BMI3_INT_STATUS_ORIENTATION | BMI3_INT_STATUS_FFULL);
 	zassert_ok(acc->drv->irq_handler(acc, &event));

@@ -3,12 +3,12 @@
  * found in the LICENSE file.
  */
 
-/* Clocks and power management settings for STM32L4xx as well as STM32L5xx. */
+/* Clocks and power management settings for STM32L5xx. */
 
 #include "builtin/assert.h"
 #include "chipset.h"
-#include "clock-l4.h"
 #include "clock.h"
+#include "clock_chip.h"
 #include "common.h"
 #include "console.h"
 #include "cpu.h"
@@ -16,6 +16,7 @@
 #include "host_command.h"
 #include "registers.h"
 #include "rtc.h"
+#include "task.h"
 #include "timer.h"
 #include "uart.h"
 #include "util.h"
@@ -23,6 +24,9 @@
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_CLOCK, outstr)
 #define CPRINTS(format, args...) cprints(CC_CLOCK, format, ##args)
+
+#define STM32L5_RTC_REQ 1000000
+#define STM32L5_LSI_CLOCK 32000
 
 /* High-speed oscillator is 16 MHz */
 #define STM32_HSI_CLOCK 16000000
@@ -33,10 +37,10 @@
 
 #ifdef CONFIG_STM32_CLOCK_HSE_HZ
 #define RTC_PREDIV_A 39
-#define RTC_FREQ ((STM32L4_RTC_REQ) / (RTC_PREDIV_A + 1)) /* Hz */
+#define RTC_FREQ ((STM32L5_RTC_REQ) / (RTC_PREDIV_A + 1)) /* Hz */
 #else /* from LSI clock */
 #define RTC_PREDIV_A 1
-#define RTC_FREQ (STM32L4_LSI_CLOCK / (RTC_PREDIV_A + 1)) /* Hz */
+#define RTC_FREQ (STM32L5_LSI_CLOCK / (RTC_PREDIV_A + 1)) /* Hz */
 #endif
 #define RTC_PREDIV_S (RTC_FREQ - 1)
 /*
@@ -58,14 +62,78 @@ enum clock_osc {
 static int freq = STM32_MSI_CLOCK;
 static int current_osc;
 
+/*
+ * Get the core clock frequency.
+ */
 int clock_get_freq(void)
 {
 	return freq;
 }
 
+int clock_get_ahb_freq(void)
+{
+	switch (STM32_RCC_CFGR & STM32_RCC_CFGR_HPRE_MSK) {
+	default:
+		return clock_get_freq();
+	case STM32_RCC_CFGR_HPRE_DIV2:
+		return clock_get_freq() / 2;
+	case STM32_RCC_CFGR_HPRE_DIV4:
+		return clock_get_freq() / 4;
+	case STM32_RCC_CFGR_HPRE_DIV8:
+		return clock_get_freq() / 8;
+	case STM32_RCC_CFGR_HPRE_DIV16:
+		return clock_get_freq() / 16;
+	case STM32_RCC_CFGR_HPRE_DIV64:
+		return clock_get_freq() / 64;
+	case STM32_RCC_CFGR_HPRE_DIV128:
+		return clock_get_freq() / 128;
+	case STM32_RCC_CFGR_HPRE_DIV256:
+		return clock_get_freq() / 256;
+	case STM32_RCC_CFGR_HPRE_DIV512:
+		return clock_get_freq() / 512;
+	}
+}
+
+/*
+ * Get the clock frequency of APB peripherals (assuming that APB1 and APB2
+ * prescalers are set identically.)
+ */
+int clock_get_apb_freq(void)
+{
+	switch (STM32_RCC_CFGR & STM32_RCC_CFGR_PPRE1_MSK) {
+	case STM32_RCC_CFGR_PPRE1_DIV16:
+		return clock_get_ahb_freq() / 16;
+	case STM32_RCC_CFGR_PPRE1_DIV8:
+		return clock_get_ahb_freq() / 8;
+	case STM32_RCC_CFGR_PPRE1_DIV4:
+		return clock_get_ahb_freq() / 4;
+	case STM32_RCC_CFGR_PPRE1_DIV2:
+		return clock_get_ahb_freq() / 2;
+	default:
+		return clock_get_ahb_freq();
+	}
+}
+
 int clock_get_timer_freq(void)
 {
-	return clock_get_freq();
+	/*
+	 * Timer clock is identical to other APB peripheral clocks, except when
+	 * APB prescaling with a factor greater than one, in which case the
+	 * timers run at twice the clock rate of the other peripherals (closer
+	 * to the core frequency.)
+	 */
+	switch (STM32_RCC_CFGR & STM32_RCC_CFGR_PPRE1_MSK) {
+	case STM32_RCC_CFGR_PPRE1_DIV16:
+		return clock_get_ahb_freq() / 8;
+	case STM32_RCC_CFGR_PPRE1_DIV8:
+		return clock_get_ahb_freq() / 4;
+	case STM32_RCC_CFGR_PPRE1_DIV4:
+		return clock_get_ahb_freq() / 2;
+	case STM32_RCC_CFGR_PPRE1_DIV2:
+		return clock_get_ahb_freq();
+	default:
+		return clock_get_ahb_freq();
+	}
 }
 
 void clock_wait_bus_cycles(enum bus_type bus, uint32_t cycles)
@@ -323,9 +391,6 @@ static void clock_set_osc(enum clock_osc osc, enum clock_osc pll_osc)
 		break;
 
 	case OSC_MSI:
-		/* Switch to MSI @ 1MHz */
-		STM32_RCC_CR = (STM32_RCC_CR & ~STM32_RCC_ICSCR_MSIRANGE_MASK) |
-			       STM32_RCC_ICSCR_MSIRANGE_1MHZ;
 		/* Ensure that MSI is ON */
 		clock_enable_osc(osc);
 
@@ -497,7 +562,6 @@ test_mockable void clock_enable_module(enum module_id module, int enable)
 			  (BIT(MODULE_SPI) | BIT(MODULE_SPI_CONTROLLER))) == 0)
 			STM32_RCC_APB2ENR &= ~STM32_RCC_APB2ENR_SPI1EN;
 	} else if (module == MODULE_USB) {
-#ifdef CHIP_FAMILY_STM32L5
 		if (enable) {
 			/* Keep USB subsystem under reset for now. */
 			STM32_RCC_APB1RSTR2 |= STM32_RCC_APB1RSTR2_USBFSRST;
@@ -523,7 +587,6 @@ test_mockable void clock_enable_module(enum module_id module, int enable)
 			STM32_RCC_CRRCR &= ~STM32_RCC_CRRCR_HSI48ON;
 			STM32_PWR_CR2 &= ~STM32_PWR_CR2_USV;
 		}
-#endif
 	}
 
 	clock_mask = new_mask;

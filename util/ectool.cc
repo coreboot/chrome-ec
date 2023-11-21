@@ -96,6 +96,8 @@ const char help_str[] =
 	"      Cut off battery output power\n"
 	"  batteryparam\n"
 	"      Read or write board-specific battery parameter\n"
+	"  bcfg\n"
+	"      Print an active battery config.\n"
 	"  boardversion\n"
 	"      Prints the board version\n"
 	"  button [vup|vdown|rec] <Delay-ms>\n"
@@ -8553,6 +8555,113 @@ cmd_battery_vendor_param_usage:
 	return -1;
 }
 
+static void batt_conf_dump(const struct board_batt_params *conf)
+{
+	const struct fuel_gauge_info *fg = &conf->fuel_gauge;
+	const struct ship_mode_info *ship = &conf->fuel_gauge.ship_mode;
+	const struct sleep_mode_info *sleep = &conf->fuel_gauge.sleep_mode;
+	const struct fet_info *fet = &conf->fuel_gauge.fet;
+	const struct battery_info *info = &conf->batt_info;
+
+	printf(".config = {\n");
+	printf("\t.fuel_gauge = {\n");
+	printf("\t\t.flags = 0x%x,\n", fg->flags);
+
+	printf("\t\t.ship_mode = {\n");
+	printf("\t\t\t.reg_addr = 0x%02x,\n", ship->reg_addr);
+	printf("\t\t\t.reg_data = { 0x%04x, 0x%04x },\n", ship->reg_data[0],
+	       ship->reg_data[1]);
+	printf("\t\t},\n");
+
+	printf("\t\t.sleep_mode = {\n");
+	printf("\t\t\t.reg_addr = 0x%02x,\n", sleep->reg_addr);
+	printf("\t\t\t.reg_data = 0x%04x,\n", sleep->reg_data);
+	printf("\t\t},\n");
+
+	printf("\t\t.fet = {\n");
+	printf("\t\t\t.reg_addr = 0x%02x,\n", fet->reg_addr);
+	printf("\t\t\t.reg_mask = 0x%04x,\n", fet->reg_mask);
+	printf("\t\t\t.disconnect_val = 0x%04x,\n", fet->disconnect_val);
+	printf("\t\t\t.cfet_mask = 0x%04x,\n", fet->cfet_mask);
+	printf("\t\t\t.cfet_off_val = 0x%04x,\n", fet->cfet_off_val);
+	printf("\t\t},\n");
+
+	printf("\t},\n"); /* end of fuel_gauge */
+
+	printf("\t.batt_info = {\n");
+	printf("\t\t.voltage_max = %d,\n", info->voltage_max);
+	printf("\t\t.voltage_normal = %d,\n", info->voltage_normal);
+	printf("\t\t.voltage_min = %d,\n", info->voltage_min);
+	printf("\t\t.precharge_voltage= %d,\n", info->precharge_voltage);
+	printf("\t\t.precharge_current = %d,\n", info->precharge_current);
+	printf("\t\t.start_charging_min_c = %d,\n", info->start_charging_min_c);
+	printf("\t\t.start_charging_max_c = %d,\n", info->start_charging_max_c);
+	printf("\t\t.charging_min_c = %d,\n", info->charging_min_c);
+	printf("\t\t.charging_max_c = %d,\n", info->charging_max_c);
+	printf("\t\t.discharging_min_c = %d,\n", info->discharging_min_c);
+	printf("\t\t.discharging_max_c = %d,\n", info->discharging_max_c);
+	printf("\t},\n"); /* end of batt_info */
+
+	printf("},\n"); /* end of board_batt_params */
+}
+
+static int cmd_battery_config(int argc, char *argv[])
+{
+	const uint8_t struct_version = EC_BATTERY_CONFIG_STRUCT_VERSION;
+	struct batt_conf_header *head;
+	struct board_batt_params conf;
+	uint8_t *p;
+	int expected;
+	int rv;
+
+	if (argc != 1) {
+		fprintf(stderr, "Invalid param count\n");
+		return -1;
+	}
+
+	rv = ec_command(EC_CMD_BATTERY_CONFIG, 0, NULL, 0, ec_inbuf,
+			ec_max_insize);
+	if (rv < 0)
+		return rv;
+
+	head = (struct batt_conf_header *)ec_inbuf;
+	printf("\n");
+	printf(".struct_version = 0x%02x,\n", head->struct_version);
+
+	if (head->struct_version > struct_version) {
+		fprintf(stderr,
+			"Struct version mismatch. Supported: 0x00 ~ 0x%02x.\n",
+			struct_version);
+		return -1;
+	}
+
+	/* Now we know it's ok to read the rest of the header. */
+
+	expected = sizeof(*head) + head->manuf_name_size +
+		   head->device_name_size + sizeof(struct board_batt_params);
+	if (rv != expected) {
+		fprintf(stderr, "Size mismatch: %d (expected=%d)\n", rv,
+			expected);
+		fprintf(stderr, ".manuf_name_size = %d\n",
+			head->manuf_name_size);
+		fprintf(stderr, ".device_name_size = %d\n",
+			head->device_name_size);
+		return -1;
+	}
+
+	/* Now we know it's ok to parse the payload. */
+	p = (uint8_t *)head;
+	p += sizeof(*head);
+	printf(".manuf_name = \"%*s\",\n", head->manuf_name_size, p);
+	p += head->manuf_name_size;
+	printf(".device_name = \"%*s\",\n", head->device_name_size, p);
+	p += head->device_name_size;
+	memcpy(&conf, p, sizeof(conf));
+	batt_conf_dump(&conf);
+
+	return 0;
+}
+
 int cmd_board_version(int argc, char *argv[])
 {
 	struct ec_response_board_version response;
@@ -8591,7 +8700,8 @@ static void cmd_cbi_help(char *cmd)
 {
 	fprintf(stderr,
 		"  Usage: %s get <tag> [get_flag]\n"
-		"  Usage: %s set <tag> <value/string> <size> [set_flag]\n"
+		"  Usage: %s set <tag> <value> <size> [set_flag]\n"
+		"  Usage: %s set <tag> <string/hex> <*> [set_flag]\n"
 		"  Usage: %s remove <tag> [set_flag]\n"
 		"    <tag> is one of:\n"
 		"      0: BOARD_VERSION\n"
@@ -8606,20 +8716,28 @@ static void cmd_cbi_help(char *cmd)
 		"      9: REWORK_ID\n"
 		"      10: FACTORY_CALIBRATION_DATA\n"
 		"      11: COMMON_CONTROL\n"
+		"      12: BATTERY_CONFIG (hex)\n"
 		"    <size> is the size of the data in byte. It should be zero for\n"
 		"      string types.\n"
 		"    <value/string> is an integer or a string to be set\n"
+		"    <*> is unused but must be present (e.g. '0')\n"
+		"    <hex> is a hex string\n"
 		"    [get_flag] is combination of:\n"
 		"      01b: Invalidate cache and reload data from EEPROM\n"
 		"    [set_flag] is combination of:\n"
 		"      01b: Skip write to EEPROM. Use for back-to-back writes\n"
 		"      10b: Set all fields to defaults first\n",
-		cmd, cmd, cmd);
+		cmd, cmd, cmd, cmd);
 }
 
 static int cmd_cbi_is_string_field(enum cbi_data_tag tag)
 {
 	return tag == CBI_TAG_DRAM_PART_NUM || tag == CBI_TAG_OEM_NAME;
+}
+
+static int cmd_cbi_is_binary_field(enum cbi_data_tag tag)
+{
+	return tag == CBI_TAG_BATTERY_CONFIG;
 }
 
 /*
@@ -8632,6 +8750,7 @@ static int cmd_cbi(int argc, char *argv[])
 	enum cbi_data_tag tag;
 	char *e;
 	int rv;
+	int i;
 
 	if (argc < 3) {
 		fprintf(stderr, "Invalid number of params\n");
@@ -8648,7 +8767,6 @@ static int cmd_cbi(int argc, char *argv[])
 
 	if (!strcasecmp(argv[1], "get")) {
 		struct ec_params_get_cbi p = { 0 };
-		int i;
 
 		p.tag = tag;
 		if (argc > 3) {
@@ -8670,6 +8788,11 @@ static int cmd_cbi(int argc, char *argv[])
 		}
 		if (cmd_cbi_is_string_field(tag)) {
 			printf("%.*s", rv, (const char *)ec_inbuf);
+		} else if (cmd_cbi_is_binary_field(tag)) {
+			const uint8_t *const buf =
+				(const uint8_t *const)(ec_inbuf);
+			for (i = 0; i < rv; i++)
+				printf("%02x", buf[i]);
 		} else {
 			const uint8_t *const buffer =
 				(const uint8_t *const)(ec_inbuf);
@@ -8694,8 +8817,10 @@ static int cmd_cbi(int argc, char *argv[])
 			(struct ec_params_set_cbi *)ec_outbuf;
 		void *val_ptr;
 		uint64_t val = 0;
-		uint8_t size;
+		size_t size;
 		uint8_t bad_size = 0;
+		uint8_t *buf = NULL;
+
 		if (argc < 5) {
 			fprintf(stderr, "Invalid number of params\n");
 			cmd_cbi_help(argv[0]);
@@ -8707,6 +8832,37 @@ static int cmd_cbi(int argc, char *argv[])
 		if (cmd_cbi_is_string_field(tag)) {
 			val_ptr = argv[3];
 			size = strlen((char *)(val_ptr)) + 1;
+		} else if (cmd_cbi_is_binary_field(tag)) {
+			const char *p = argv[3];
+
+			size = strlen(p);
+			if (size % 2) {
+				fprintf(stderr,
+					"\n<hex> length must be even.\n");
+				return -1;
+			}
+
+			size /= 2;
+			buf = (uint8_t *)malloc(size);
+			if (!buf) {
+				fprintf(stderr,
+					"\nFailed to allocate buffer.\n");
+				return -1;
+			}
+			for (i = 0; i < size; i++) {
+				char t[3] = {};
+
+				memcpy(t, p, 2);
+				buf[i] = strtoul(t, &e, 16);
+				if (e && *e) {
+					fprintf(stderr, "\nBad value: '%s'\n",
+						t);
+					free(buf);
+					return -1;
+				}
+				p += 2;
+			}
+			val_ptr = buf;
 		} else {
 			val = strtoul(argv[3], &e, 0);
 			/* strtoul sets an errno for invalid input. If the value
@@ -8729,7 +8885,7 @@ static int cmd_cbi(int argc, char *argv[])
 					bad_size = 1;
 			}
 			if (bad_size == 1) {
-				fprintf(stderr, "Bad size: %d\n", size);
+				fprintf(stderr, "Bad size: %zu\n", size);
 				return -1;
 			}
 
@@ -8737,12 +8893,14 @@ static int cmd_cbi(int argc, char *argv[])
 		}
 
 		if (size > ec_max_outsize - sizeof(*p)) {
-			fprintf(stderr, "Size exceeds parameter buffer: %d\n",
+			fprintf(stderr, "Size exceeds parameter buffer: %zu\n",
 				size);
 			return -1;
 		}
 		/* Little endian */
 		memcpy(p->data, val_ptr, size);
+		free(buf);
+		val_ptr = NULL;
 		p->size = size;
 		if (argc > 5) {
 			p->flag = strtol(argv[5], &e, 0);
@@ -11689,6 +11847,7 @@ const struct command commands[] = {
 	{ "battery", cmd_battery },
 	{ "batterycutoff", cmd_battery_cut_off },
 	{ "batteryparam", cmd_battery_vendor_param },
+	{ "bcfg", cmd_battery_config },
 	{ "boardversion", cmd_board_version },
 	{ "boottime", cmd_boottime },
 	{ "button", cmd_button },
