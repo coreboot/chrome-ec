@@ -4069,6 +4069,14 @@
 #undef CONFIG_INTEL_VIRTUAL_MUX
 
 /*****************************************************************************/
+/**
+ * Include new Cr50 configs here, before #include "board.h"
+ */
+
+/* (b/262324344): Enable debugging of EPS state in NVMEM */
+#undef CONFIG_NVMEM_DEBUG_EPS
+
+/*****************************************************************************/
 /*
  * Include board and core configs, since those hold the CONFIG_ constants for a
  * given configuration.  This guarantees they get included everywhere, and
@@ -4628,8 +4636,5 @@
 #undef CONFIG_FIPS_AES_CBC_256
 /* Don't use ECDSA pair-wise consistency test. We verify sign/verify. */
 #undef CONFIG_FIPS_ECDSA_PWCT
-
-/* (b/262324344): Enable debugging of EPS state in NVMEM */
-#undef CONFIG_NVMEM_DEBUG_EPS
 
 #endif  /* __CROS_EC_CONFIG_H */
