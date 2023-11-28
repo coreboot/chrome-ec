@@ -95,6 +95,7 @@ rsource "Kconfig.test"
 rsource "Kconfig.timer"
 rsource "Kconfig.throttle_ap"
 rsource "Kconfig.touchpad"
+rsource "Kconfig.usb_update"
 rsource "Kconfig.usba"
 rsource "Kconfig.usbc"
 rsource "Kconfig.watchdog"
@@ -338,10 +339,10 @@ config PLATFORM_EC_CONSOLE_CMD_SHMEM
 
 config PLATFORM_EC_CROS_FWID_VERSION
 	bool "Include CrOS FWID version"
-	default n
+	select DEPRECATED
 	help
-	  Include Chrome OS FWID in version output. The CrOS FWID will be common
-	  across OS, AP firmware and EC firmware when built together.
+	  Include Chrome OS FWID in version output. The CrOS FWID will
+	  be common across OS, AP firmware and EC firmware when built together.
 
 config PLATFORM_EC_DEBUG_ASSERT
 	bool "Enable assertion failures"
@@ -546,6 +547,15 @@ config PLATFORM_EC_LID_SWITCH
 	  automatically power on.
 
 	  This requires a GPIO named GPIO_LID_OPEN to be defined or aliased.
+
+config PLATFORM_EC_CONSOLE_CMD_MMAPINFO
+	bool "Console command: mmapinfo"
+	default y
+	depends on PLATFORM_EC_LID_SWITCH
+	help
+	  Enable the 'mmapinfo' console command. This command prints the
+	  current switches state (lid, power button, write protect, etc)
+	  that is accesible by the host using the memmory mapped interface.
 
 config MKBP_PROTOCOL
 	bool "MKBP protocol support"
@@ -890,6 +900,15 @@ config PLATFORM_EC_VBOOT_HASH
 	  that it is an incorrect version. It detects this by asking the EC to
 	  hash itself. If the hash is incorrect, new code is write to the EC's
 	  read/write area.
+
+config PLATFORM_EC_CONSOLE_CMD_HASH
+	bool "Console command: hash"
+	default y
+	depends on PLATFORM_EC_VBOOT_HASH
+	help
+	  Enable the 'hash' console command. Use this command to request a hash
+	  recomputation of the RO or RW image.  You can also request a hash
+	  computation over an arbitrary memory range.
 
 config PLATFORM_EC_VSTORE
 	bool "Secure temporary storage for verified boot"

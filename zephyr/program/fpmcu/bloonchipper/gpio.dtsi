@@ -72,17 +72,5 @@
 			flags = <GPIO_INT_EDGE_RISING>;
 			//handler = "";
 		};
-
-		int_slp_l: int_slp_l {
-			irq-pin = <&slp_l>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			//handler = "";
-		};
-
-		int_slp_alt_l: int_slp_alt_l {
-			irq-pin = <&slp_alt_l>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			//handler = "";
-		};
 	};
 };
