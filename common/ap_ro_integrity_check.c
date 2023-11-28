@@ -542,16 +542,14 @@ static int verify_ap_ro_check_space(void)
  *  ARCVE_OK if AP RO verification is supported.
  *  ARCVE_NOT_PROGRAMMED if the hash is not programmed.
  *  ARCVE_FLASH_READ_FAILED if there was an error reading the hash.
- *  ARCVE_BOARD_ID_BLOCKED if ap ro verification is disabled for the board's rlz
+ *  ARCVE_BOARD_ID_BLOCKED the hash is valid, but ap ro verification is
+ *                         disabled for the board's rlz.
+ *  ARCVE_UNSUPPORTED_ADDRESS_TYPE the hash is valid, but ap ro verification
+ *                                 is disabled because of the flash chip size.
  */
 static enum ap_ro_check_vc_errors ap_ro_check_unsupported(int add_flash_event)
 {
-
-	if (ap_ro_board_id_blocked()) {
-		CPRINTS("%s: BID blocked", __func__);
-		return ARCVE_BOARD_ID_BLOCKED;
-	}
-
+	/* Validate the saved hash contents */
 	if (p_chk->header.num_ranges == (uint16_t)~0) {
 		CPRINTS("%s: RO verification not programmed", __func__);
 		if (add_flash_event)
@@ -566,6 +564,16 @@ static enum ap_ro_check_vc_errors ap_ro_check_unsupported(int add_flash_event)
 			ap_ro_add_flash_event(APROF_SPACE_INVALID);
 		return ARCVE_FLASH_READ_FAILED; /* No verification possible. */
 	}
+
+	/*
+	 * The saved hash is valid, but AP RO verification is blocked for some
+	 * other reason.
+	 */
+	if (ap_ro_board_id_blocked()) {
+		CPRINTS("%s: BID blocked", __func__);
+		return ARCVE_BOARD_ID_BLOCKED;
+	}
+
 	if (verify_ap_ro_addressing() != EC_SUCCESS) {
 		CPRINTS("%s: need 4byte addressing", __func__);
 		return ARCVE_UNSUPPORTED_ADDRESS_TYPE;
@@ -1362,9 +1370,14 @@ static enum vendor_cmd_rc vc_get_ap_ro_hash(enum vendor_cmd_cc code,
 
 	rv = ap_ro_check_unsupported(false);
 	if (rv) {
-		*response_size = 1;
-		*response = rv;
-		return VENDOR_RC_INTERNAL_ERROR;
+		if ((rv == ARCVE_BOARD_ID_BLOCKED) ||
+		    (rv == ARCVE_UNSUPPORTED_ADDRESS_TYPE)) {
+			CPRINTS("%s: unsupported hardware %d", __func__, rv);
+		} else {
+			*response_size = 1;
+			*response = rv;
+			return VENDOR_RC_INTERNAL_ERROR;
+		}
 	}
 	*response_size = SHA256_DIGEST_SIZE;
 	memcpy(buf, p_chk->payload.digest, *response_size);
@@ -1394,11 +1407,16 @@ static int ap_ro_info_cmd(int argc, char **argv)
 #endif
 	rv = ap_ro_check_unsupported(false);
 	ccprintf("result    : %d\n", apro_result);
-	ccprintf("supported : %s\n", rv ? "no" : "yes");
+	ccprintf("supported : %s (%d)\n", rv ? "no" : "yes", rv);
 	if (rv == ARCVE_FLASH_READ_FAILED)
 		return EC_ERROR_CRC; /* No verification possible. */
-	/* All other AP RO verificaiton unsupported reasons are fine */
-	if (rv)
+	/*
+	 * All other AP RO verificaiton unsupported reasons are fine
+	 * BID blocked and unsupported address type mean the hash is ok. Print
+	 * it.
+	 */
+	if (rv && (rv != ARCVE_BOARD_ID_BLOCKED) &&
+	    (rv != ARCVE_UNSUPPORTED_ADDRESS_TYPE))
 		return EC_SUCCESS;
 	rv = verify_ap_ro_gbb_space();
 	ccprintf("gbbd      : ");
