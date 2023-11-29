@@ -225,7 +225,7 @@ HEX_NAME := $(shell printf "$(BOARD)" | /usr/bin/awk -F_ ' \
 	     { printf($$1" "toupper($$2)) } \
 	   else \
 	     { printf($$0) } \
-	  }' | xxd -ps)
+	  }' | hexdump -ve '1/1 "%.2x"')
 # This many zeros in the tag field need to be replaced.
 HEX_LEN  := $(shell printf $(HEX_NAME) | wc -c)
 $(shell sed -i "s/tag\": \"0\{$(HEX_LEN)\}/tag\": \"$(HEX_NAME)/" \
