@@ -160,7 +160,7 @@ static void print_help(void)
 	print_help_show();
 }
 
-static int write_file(const char *filename, const char *buf, int size)
+static int write_file(const char *filename, const uint8_t *buf, int size)
 {
 	FILE *f;
 	int i;
@@ -204,7 +204,7 @@ static uint8_t *read_file(const char *filename, uint32_t *size_ptr)
 		return NULL;
 	}
 
-	buf = malloc(size);
+	buf = (uint8_t *)malloc(size);
 	if (!buf) {
 		fclose(f);
 		return NULL;
@@ -236,7 +236,7 @@ static int parse_integer_field(const char *arg, struct integer_field *f)
 {
 	uint64_t val;
 	char *e;
-	char *ch;
+	const char *ch;
 
 	val = strtoull(arg, &e, 0);
 	if (val > UINT32_MAX || !*arg || (e && *e && *e != ':')) {
@@ -271,7 +271,7 @@ static int parse_uint64_field(const char *arg, struct long_integer_field *f)
 {
 	uint64_t val;
 	char *e;
-	char *ch;
+	const char *ch;
 
 	val = strtoul(arg, &e, 0);
 	/* strtoul sets an errno for invalid input. If the value read is out of
@@ -421,7 +421,7 @@ static int cmd_create(int argc, char **argv)
 		return -1;
 	}
 
-	cbi = malloc(size);
+	cbi = (uint8_t *)malloc(size);
 	if (!cbi) {
 		fprintf(stderr, "Failed to allocate memory\n");
 		return -1;

@@ -600,6 +600,12 @@ static struct policy_engine {
 	 */
 	atomic_t events;
 
+	/*
+	 * Desired result of a requested VCONN Swap. Only meaningful if
+	 * DPM_REQUEST_VCONN_SWAP is active.
+	 */
+	enum pd_vconn_role requested_vconn_role;
+
 	/* port address where soft resets are sent */
 	enum tcpci_msg_type soft_reset_sop;
 
@@ -1535,6 +1541,11 @@ static void pe_clear_port_data(int port)
 	tcpc_set_bist_test_mode(port, false);
 }
 
+void pe_set_requested_vconn_role(int port, enum pd_vconn_role role)
+{
+	pe[port].requested_vconn_role = role;
+}
+
 int pe_set_ado(int port, uint32_t data)
 {
 	/* return busy error if unable to set ado */
@@ -1662,6 +1673,14 @@ static bool common_src_snk_dpm_requests(int port)
 {
 	if (IS_ENABLED(CONFIG_USBC_VCONN) &&
 	    PE_CHK_DPM_REQUEST(port, DPM_REQUEST_VCONN_SWAP)) {
+		enum pd_vconn_role request = pe[port].requested_vconn_role;
+		enum pd_vconn_role current = pd_get_vconn_state(port) ?
+						     PD_ROLE_VCONN_SRC :
+						     PD_ROLE_VCONN_OFF;
+		if (request == current) {
+			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_DATA_RESET);
+			return false;
+		}
 		pe_set_dpm_curr_request(port, DPM_REQUEST_VCONN_SWAP);
 		set_state_pe(port, PE_VCS_SEND_SWAP);
 		return true;
@@ -2091,6 +2110,7 @@ void pd_request_power_swap(int port)
 static bool port_try_vconn_swap_on(int port)
 {
 	if (pe[port].vconn_swap_counter < N_VCONN_SWAP_COUNT) {
+		pe_set_requested_vconn_role(port, PD_ROLE_VCONN_SRC);
 		pd_dpm_request(port, DPM_REQUEST_VCONN_SWAP);
 		set_state_pe(port, get_last_state_pe(port));
 		return true;
@@ -2146,16 +2166,6 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 		pd_notify_event(port, PD_STATUS_EVENT_SOP_DISC_DONE);
 		pd_notify_event(port, PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
 		return false;
-	}
-
-	/* Apply Port Discovery VCONN Swap Policy */
-	if (IS_ENABLED(CONFIG_USBC_VCONN) &&
-	    port_discovery_vconn_swap_policy(
-		    port, PE_CHK_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON))) {
-		PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
-		PE_CLR_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON);
-		set_state_pe(port, PE_VCS_SEND_SWAP);
-		return true;
 	}
 
 	/*
@@ -3345,7 +3355,6 @@ static void pe_snk_startup_entry(int port)
 		 * Mark that we'd like to try being Vconn source and DFP
 		 */
 		PE_SET_FLAG(port, PE_FLAGS_DR_SWAP_TO_DFP);
-		PE_SET_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON);
 	}
 
 	/*
@@ -5769,11 +5778,9 @@ static void pe_vdm_send_request_entry(int port)
 	    !tc_is_vconn_src(port) &&
 	    /* TODO(b/188578923): Passing true indicates that the PE wants to
 	     * swap to VCONN Source at this time. It would make more sense to
-	     * pass the current value of PE_FLAGS_VCONN_SWAP_TO_ON, but the PE
-	     * does not actually set the flag when it wants to send a message to
-	     * the cable. The existing mechanisms to control the VCONN role are
-	     * clunky and hard to get right. The DPM should centralize logic
-	     * about VCONN role policy.
+	     * pass the current value of a PE flag, but the PE no longer
+	     * maintains a flag for this purpose. This logic should move into
+	     * the DPM with the other VCONN policy logic.
 	     */
 	    port_discovery_vconn_swap_policy(port, true)) {
 		if (port_try_vconn_swap_on(port))

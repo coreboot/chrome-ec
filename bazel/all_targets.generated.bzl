@@ -106,6 +106,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "anraggar",
+        board = "anraggar",
+    )
+    ec_target(
         name = "arcada_ish",
         board = "arcada_ish",
         chip = "ish",
@@ -1119,6 +1123,10 @@ def all_targets():
         chip = "stm32",
         core = "cortex-m0",
         zephyr = False,
+    )
+    ec_target(
+        name = "kelpie",
+        board = "kelpie",
     )
     ec_target(
         name = "kindred",

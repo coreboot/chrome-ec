@@ -288,6 +288,12 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_SW
                                                 "${PLATFORM_EC}/common/charge_ramp_sw.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CPS8100
                                                 "${PLATFORM_EC}/driver/wpc/cps8100.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CURVE25519
+                                                "${PLATFORM_EC}/common/curve25519.c")
+if (NOT DEFINED CONFIG_CPU_CORTEX_M0)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CURVE25519
+                                                "${PLATFORM_EC}/common/curve25519-generic.c")
+endif()
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_OCPC
                                                 "${PLATFORM_EC}/common/ocpc.c")
 
@@ -477,6 +483,11 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PORT_POWER_DUMB
                                                 "${PLATFORM_EC}/common/usb_port_power_dumb.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PORT_POWER_SMART
                                                 "${PLATFORM_EC}/common/usb_port_power_smart.c")
+
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_UPDATE
+                                                "${PLATFORM_EC}/common/update_fw.c"
+                                                "${PLATFORM_EC}/common/usb_update.c"
+                                                "${PLATFORM_EC}/common/queue_policies.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
                                                 "${PLATFORM_EC}/common/typec_control.c"
