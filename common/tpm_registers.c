@@ -9,9 +9,27 @@
  * by a24-bit address. There is no provision for error reporting at this level.
  */
 
+/*
+ * ENABLE_TPM can be used to free up a bunch of space for developing features
+ * running up on the space limits.
+ */
+#define ENABLE_TPM
+
+/* TPM2 headers shall go first due to conflict with MAX macro in util.h */
+#ifdef ENABLE_TPM
+/* TPM2 library includes. */
+#include "ExecCommand_fp.h"
+#include "Global.h"
+#include "Platform.h"
+#include "_TPM_Init_fp.h"
+#include "Manufacture_fp.h"
+#include "Implementation.h"
+#endif
+
 #include "byteorder.h"
 #include "console.h"
 #include "extension.h"
+#include "fips_rand.h"
 #include "link_defs.h"
 #include "new_nvmem.h"
 #include "printf.h"
@@ -26,21 +44,6 @@
 #include "util.h"
 #include "watchdog.h"
 #include "wp.h"
-
-/*
- * ENABLE_TPM can be used to free up a bunch of space for developing features
- * running up on the space limits.
- */
-#define ENABLE_TPM
-
-#ifdef ENABLE_TPM
-/* TPM2 library includes. */
-#include "ExecCommand_fp.h"
-#include "Platform.h"
-#include "_TPM_Init_fp.h"
-#include "Manufacture_fp.h"
-
-#endif
 
 /****************************************************************************/
 /*
@@ -76,6 +79,7 @@
 
 #define CPRINTS(format, args...) cprints(CC_TPM, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_TPM, format, ## args)
+#define CPRINTSS(format, args...) cprints(CC_SYSTEM, format, ## args)
 
 /* Register addresses for FIFO mode. */
 #define TPM_ACCESS	    (0)
@@ -510,8 +514,9 @@ static void fifo_reg_read(uint8_t *dest, uint32_t data_size)
 void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size)
 {
 	int i;
-	static uint32_t last_sts;
-	static uint32_t checked_sts;
+	static uint32_t last_sts __attribute__((section(".bss.Tpm2_common")));
+	static uint32_t checked_sts
+		__attribute__((section(".bss.Tpm2_common")));
 
 	reset_in_progress = 0;
 
@@ -986,6 +991,8 @@ void tpm_task(void *u)
 		struct tpm_cmd_header *tpmh;
 		size_t buffer_size;
 		uint8_t alt_if_command;
+		bool drbg_initialized = false;
+		bool is_custom_command;
 
 		/* Process unprocessed events or wait for the next event */
 		if (!evt)
@@ -1037,13 +1044,21 @@ void tpm_task(void *u)
 		}
 
 		command_code = be32toh(tpmh->command_code);
-		CPRINTF("%s: received fifo command 0x%04x\n",
-			__func__, command_code);
-
+		is_custom_command = IS_CUSTOM_CODE(command_code);
+		CPRINTF("%s: received fifo %scommand 0x%04x\n", __func__,
+			(is_custom_command) ? "vendor " : "",
+			(is_custom_command) ? be16toh(tpmh->subcommand_code) :
+					      command_code);
 		watchdog_reload();
+		/* Make sure system DRBG is initialized */
+		if (!drbg_initialized) {
+			if (!fips_rand_bytes(NULL, 0))
+				CPRINTS("FIPS DRBG failed");
+			drbg_initialized = true;
+		}
 
 #ifdef CONFIG_EXTENSION_COMMAND
-		if (IS_CUSTOM_CODE(command_code)) {
+		if (is_custom_command) {
 			response_size = buffer_size;
 			call_extension_command(tpmh, &response_size,
 					       alt_if_command ?
@@ -1065,11 +1080,31 @@ void tpm_task(void *u)
 				       response_size);
 			} else {
 #ifdef ENABLE_TPM
+#ifdef CONFIG_NVMEM_DEBUG_EPS
+				uint16_t eps_len;
+
+				eps_len = tpm_nv_eps_len();
+				if ((command_code != TPM_CC_Startup) &&
+				    (eps_len == 0 || gp.EPSeed.t.size == 0)) {
+					CPRINTSS("EPS before cmd=0x%x:"
+						 " NV=%u, GP=%u",
+						 command_code, eps_len,
+						 gp.EPSeed.t.size);
+				}
+#endif /* CONFIG_NVMEM_DEBUG_EPS */
 				ExecuteCommand(tpm_.fifo_write_index,
-					       (uint8_t *)tpmh,
-					       &response_size,
+					       (uint8_t *)tpmh, &response_size,
 					       &response);
-#else
+#ifdef CONFIG_NVMEM_DEBUG_EPS
+				eps_len = tpm_nv_eps_len();
+				if (eps_len == 0 || gp.EPSeed.t.size == 0) {
+					CPRINTSS("EPS after cmd=0x%x:"
+						 " NV=%u, GP=%u",
+						 command_code, eps_len,
+						 gp.EPSeed.t.size);
+				}
+#endif /* CONFIG_NVMEM_DEBUG_EPS */
+#else /* ENABLE_TPM */
 				{
 					/*
 					 * This response is sent by actual
@@ -1108,7 +1143,7 @@ void tpm_task(void *u)
 				board_cfg_reg_write_disable();
 
 #ifdef CONFIG_EXTENSION_COMMAND
-			if (!IS_CUSTOM_CODE(command_code))
+			if (!is_custom_command)
 #endif
 			{
 				/*

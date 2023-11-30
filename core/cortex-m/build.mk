@@ -48,7 +48,7 @@ endif
 
 # Set an option to force LTO to generate target machine code.
 # `-flinker-output=nolto-rel` first became available in gcc 9.x
-export CFLAGS_LTO_PARTIAL_LINK := -flinker-output=nolto-rel
+CFLAGS_LTO_PARTIAL_LINK := -flinker-output=nolto-rel
 
 core-y=cpu.o init.o ldivmod.o llsr.o uldivmod.o vecttable.o
 core-$(CONFIG_AES)+=aes.o
