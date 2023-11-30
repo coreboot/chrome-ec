@@ -40,12 +40,6 @@
 #undef CONFIG_CMD_SLEEPMASK_SET
 #undef CONFIG_CMD_WAITMS
 #undef CONFIG_FLASH
-#else
-/*
- * Add chargen to standard TOT images. The DBG image doesn't have enough room
- * for it.
- */
-#define CONFIG_CMD_CHARGEN
 #endif
 
 #if defined(H1_RED_BOARD) || defined(CR50_DEV)
