@@ -8,8 +8,8 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.61        | 0.23.60
-M121                | 0.24.61        | 0.23.60
+[ToT][ToT ebuild]   | 0.24.62        | 0.23.62
+M121                | 0.24.62        | 0.23.62
 [M120][120 release] | 0.24.60        | 0.23.60
 [M119][119 release] | 0.24.51        | 0.23.51
 [M118][118 release] | 0.24.30        | 0.23.30
@@ -452,7 +452,6 @@ Build:   ti50_common_mp-15224.B:v0.0.302-2afc1adc
          @chromeos-ci-firmware-us-central1-b-x32-0-n85q 2023-06-07 21:19:14
 ```
 
-
 ### 0.23.51 Released on 9/27/2023 in M119
 
 Release
@@ -514,8 +513,8 @@ Artifacts:
     [b/299947142](https://b.corp.google.com/issues/299947142)
 *   Add extended AP RO verification status.
     [b/259098185](https://b.corp.google.com/issues/259098185)
-*   Ensure ccd mode active and power button resets GSC if failed AP RO verification.
-    [b/259098185](https://b.corp.google.com/issues/259098185)
+*   Ensure ccd mode active and power button resets GSC if failed AP RO
+    verification. [b/259098185](https://b.corp.google.com/issues/259098185)
 *   Add GetChassisOpen TPMV command.
     [b/257255419](https://b.corp.google.com/issues/257255419)
 
@@ -532,6 +531,30 @@ Build:   ti50_common_mp-15224.B:v0.0.729-2ab3d1fb
          tock:v0.0.9660-5bae23fce
          ms-tpm-20-ref:v0.0.329-585067c
          @chromeos-ci-firmware-us-central2-d-x32-0-mjce 2023-10-16 13:29:26
+```
+
+### 0.23.62 Released on 12/01/2023 in M121
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5078265)
+
+Builder
+[44](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15224.B-branch/44/overview)
+
+Artifacts:
+[15224.41.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.41.0)
+
+**Features**
+
+*   Add more information to AP RO Verification result UMA report
+    [b/259098185](https://b.corp.google.com/issues/259098185)
+
+```
+Build:   ti50_common_mp-15224.B:v0.0.732-7f94b899
+         libtock-rs:v0.0.925-7239450
+         tock:v0.0.9660-5bae23fce
+         ms-tpm-20-ref:v0.0.329-585067c
+         @chromeos-ci-firmware-us-central2-d-x32-0-e2uq 2023-11-30 07:33:10
 ```
 
 ## PrePVT images
@@ -1229,8 +1252,8 @@ Artifacts:
     [b/299947142](https://b.corp.google.com/issues/299947142)
 *   Add extended AP RO verification status.
     [b/259098185](https://b.corp.google.com/issues/259098185)
-*   Ensure ccd mode active and power button resets GSC if failed AP RO verification.
-    [b/259098185](https://b.corp.google.com/issues/259098185)
+*   Ensure ccd mode active and power button resets GSC if failed AP RO
+    verification. [b/259098185](https://b.corp.google.com/issues/259098185)
 *   Add GetChassisOpen TPMV command.
     [b/257255419](https://b.corp.google.com/issues/257255419)
 
@@ -1271,6 +1294,30 @@ Build:   ti50_common_prepvt-15086.B:v0.0.784-2e565ca2
          tock:v0.0.9659-b09193d54
          ms-tpm-20-ref:v0.0.327-8e3c8b3
          @chromeos-ci-firmware-us-central2-d-x32-0-lw3f 2023-11-01 13:57:25
+```
+
+### 0.24.62 Released on 12/01/2023 in M121
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5078265)
+
+Builder
+[70](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15086.B-branch/70/overview)
+
+Artifacts:
+[15086.65.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.65.0)
+
+**Features**
+
+*   Add more information to AP RO Verification result UMA report
+    [b/259098185](https://b.corp.google.com/issues/259098185)
+
+```
+Build:   ti50_common_prepvt-15086.B:v0.0.787-ab6858a7
+         libtock-rs:v0.0.925-c38b187
+         tock:v0.0.9659-b09193d54
+         ms-tpm-20-ref:v0.0.327-8e3c8b3
+         @chromeos-ci-firmware-us-east1-d-x32-0-o01k 2023-11-30 07:32:57
 ```
 
 <!-- Links -->
