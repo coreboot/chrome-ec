@@ -213,6 +213,7 @@ static void fp_process_finger(void)
 	if (!res) {
 		uint32_t evt = EC_MKBP_FP_IMAGE_READY;
 
+#ifndef CONFIG_ZEPHYR
 		/* Clean up SPI before clocking up to avoid hang on the dsb
 		 * in dma_go. Ignore the return value to let the WDT reboot
 		 * the MCU (and avoid getting trapped in the loop).
@@ -220,6 +221,7 @@ static void fp_process_finger(void)
 		res = spi_transaction_flush(&spi_devices[0]);
 		if (res)
 			CPRINTS("Failed to flush SPI: 0x%x", res);
+#endif
 
 		/* we need CPU power to do the computations */
 		ScopedFastCpu fast_cpu;
@@ -290,8 +292,16 @@ extern "C" void fp_task(void)
 			else
 				timeout_us = -1;
 			if (mode & FP_MODE_ANY_WAIT_IRQ) {
+				/*
+				 * FP_MODE_ANY_WAIT_IRQ is a subset of
+				 * FP_MODE_ANY_DETECT_FINGER. In Zephyr FPMCU
+				 * interrupts are enabled by the sensor driver
+				 * when configuring finger detection.
+				 */
+#ifndef CONFIG_ZEPHYR
 				gpio_clear_pending_interrupt(GPIO_FPS_INT);
 				gpio_enable_interrupt(GPIO_FPS_INT);
+#endif
 			} else if (mode & FP_MODE_RESET_SENSOR) {
 				fp_reset_and_clear_context();
 				sensor_mode &= ~FP_MODE_RESET_SENSOR;
@@ -328,12 +338,24 @@ extern "C" void fp_task(void)
 			if (sensor_mode & FP_MODE_ANY_WAIT_IRQ) {
 				fp_configure_detect();
 
+				/* In Zephyr FPMCU interrupts are enabled by the
+				 * sensor driver when configuring finger
+				 * detection.
+				 */
+#ifndef CONFIG_ZEPHYR
 				gpio_clear_pending_interrupt(GPIO_FPS_INT);
 				gpio_enable_interrupt(GPIO_FPS_INT);
+#endif
 			} else {
+				/*
+				 * In Zephyr FPMCU interrupts are managed by
+				 * the driver.
+				 */
+#ifndef CONFIG_ZEPHYR
 				if (evt & (TASK_EVENT_SENSOR_IRQ))
 					gpio_clear_pending_interrupt(
 						GPIO_FPS_INT);
+#endif
 				fp_sensor_low_power();
 			}
 		}

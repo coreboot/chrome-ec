@@ -2,4 +2,11 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-zephyr_library_sources("src/board_nb_mode.c")
+config INPUT_KBD_MATRIX
+	default y
+
+config CROS_EC_COL_GPIO_DRIVE
+	select INPUT_KBD_DRIVE_COLUMN_HOOK
+	default y
+
+source "Kconfig.zephyr"
