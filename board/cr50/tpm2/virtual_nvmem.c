@@ -108,6 +108,8 @@
 			.TPMA_NV_WRITEDEFINE = 1,			  \
 			/* Index has been written, can be read. */	  \
 			.TPMA_NV_WRITTEN = 1,				  \
+			/* Allow the space to be read by platform. */	  \
+			.TPMA_NV_PPREAD = 1,				  \
 		},							  \
 		.authPolicy = { },					  \
 	},								  \
