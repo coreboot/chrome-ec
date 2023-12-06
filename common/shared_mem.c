@@ -25,7 +25,7 @@ int shared_mem_size(void)
 	return system_usable_ram_end() - (uintptr_t)__shared_mem_buf;
 }
 
-int shared_mem_acquire(int size, char **dest_ptr)
+enum ec_error_list shared_mem_acquire(int size, char **dest_ptr)
 {
 	if (size > shared_mem_size() || size <= 0)
 		return EC_ERROR_INVAL;

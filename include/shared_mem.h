@@ -44,7 +44,7 @@ int shared_mem_size(void);
  * @return EC_SUCCESS if successful, EC_ERROR_BUSY if buffer in use, or
  * other non-zero error code.
  */
-int shared_mem_acquire(int size, char **dest_ptr);
+enum ec_error_list shared_mem_acquire(int size, char **dest_ptr);
 
 #define SHARED_MEM_ACQUIRE_CHECK(size, dest_ptr) \
 	({ \
