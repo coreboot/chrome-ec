@@ -126,7 +126,7 @@ void fips_throw_err(enum fips_status err);
 void fips_power_up_tests(void);
 
 struct fips_vtable {
-	int (*shared_mem_acquire)(int size, char **dest_ptr);
+	enum ec_error_list (*shared_mem_acquire)(int size, char **dest_ptr);
 	void (*shared_mem_release)(void *ptr);
 #ifdef CONFIG_FLASH_LOG
 	void (*flash_log_add_event)(uint8_t type, uint8_t size, void *payload);
