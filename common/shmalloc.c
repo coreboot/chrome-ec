@@ -199,7 +199,7 @@ static void do_release(struct shm_buffer *ptr)
 }
 
 /* Called with the mutex lock acquired. */
-static int do_acquire(int size, struct shm_buffer **dest_ptr)
+static enum ec_error_list do_acquire(int size, struct shm_buffer **dest_ptr)
 {
 	int headroom = 0x10000000; /* we'll never have this much. */
 	struct shm_buffer *pfb;
@@ -307,9 +307,9 @@ int shared_mem_size(void)
 	return max_available;
 }
 
-int shared_mem_acquire(int size, char **dest_ptr)
+enum ec_error_list shared_mem_acquire(int size, char **dest_ptr)
 {
-	int rv;
+	enum ec_error_list rv;
 	struct shm_buffer *new_buf;
 
 	*dest_ptr = NULL;
@@ -330,6 +330,8 @@ int shared_mem_acquire(int size, char **dest_ptr)
 
 		allocced_buf_chain = new_buf;
 
+		/* Clean allocated memory */
+		memset(new_buf + 1, 0, size);
 		*dest_ptr = (void *)(new_buf + 1);
 
 		if (size > max_allocated_size)
