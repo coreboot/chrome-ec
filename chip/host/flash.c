@@ -18,7 +18,12 @@ __aligned(CONFIG_FLASH_ERASE_SIZE) char __host_flash[CONFIG_FLASH_SIZE];
 uint8_t __host_flash_protect[PHYSICAL_BANKS];
 
 /* Override this function to make flash erase/write operation fail */
-test_mockable int flash_pre_op(void)
+test_mockable enum ec_error_list flash_pre_op_write(int offset, int size)
+{
+	return EC_SUCCESS;
+}
+
+test_mockable enum ec_error_list flash_pre_op_erase(int offset, int size)
 {
 	return EC_SUCCESS;
 }
@@ -67,13 +72,15 @@ static void flash_get_persistent(void)
 
 int flash_physical_write(int offset, int size, const char *data)
 {
+	enum ec_error_list rv;
 	ASSERT((size & (CONFIG_FLASH_WRITE_SIZE - 1)) == 0);
-
-	if (flash_pre_op() != EC_SUCCESS)
-		return EC_ERROR_UNKNOWN;
 
 	if (flash_check_protect(offset, size))
 		return EC_ERROR_ACCESS_DENIED;
+
+	rv = flash_pre_op_write(offset, size);
+	if (rv != EC_SUCCESS)
+		return rv;
 
 	memcpy(__host_flash + offset, data, size);
 	flash_set_persistent();
@@ -83,18 +90,23 @@ int flash_physical_write(int offset, int size, const char *data)
 
 int flash_physical_erase(int offset, int size)
 {
-	ASSERT((size & (CONFIG_FLASH_ERASE_SIZE - 1)) == 0);
+	enum ec_error_list rv;
 
-	if (flash_pre_op() != EC_SUCCESS)
-		return EC_ERROR_UNKNOWN;
+	ASSERT((size & (CONFIG_FLASH_ERASE_SIZE - 1)) == 0);
 
 	if (flash_check_protect(offset, size))
 		return EC_ERROR_ACCESS_DENIED;
 
+	rv = flash_pre_op_erase(offset, size);
+	/* Simulate partial erase */
+	if (rv != EC_SUCCESS)
+		/* Simulate partial erase */
+		size -= 4;
+
 	memset(__host_flash + offset, 0xff, size);
 	flash_set_persistent();
 
-	return EC_SUCCESS;
+	return rv;
 }
 
 int flash_physical_get_protect(int bank)
