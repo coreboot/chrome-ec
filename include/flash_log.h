@@ -82,6 +82,7 @@ enum nvmem_failure_type {
 	NVMEMF_COMPACT_FINAL = 22,
 	NVMEMF_COMPACT_DELIMETER = 23,
 	NVMEMF_COMPACT_SAVE = 24,
+	NVMEMF_APPCIPHER_ERROR = 25,
 };
 
 /* Not all nvmem failures require payload. */
