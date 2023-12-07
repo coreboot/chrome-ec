@@ -33,7 +33,6 @@ static const uint8_t legacy_nvmem_image[] = {
 BUILD_ASSERT(sizeof(legacy_nvmem_image) == NVMEM_PARTITION_SIZE);
 
 static uint8_t write_buffer[NVMEM_PARTITION_SIZE];
-static int flash_write_fail;
 
 struct nvmem_test_result {
 	int var_count;
@@ -104,10 +103,31 @@ int crypto_enabled(void)
 	return 1;
 }
 
+/* Offsets where flash erase & write shall fail. `-1` means none. */
+static int write_offset_fail = -1;
+static int erase_offset_fail = -1;
+
 /* Used to allow/prevent Flash erase/write operations */
-int flash_pre_op(void)
+enum ec_error_list flash_pre_op_write(int offset, int size)
 {
-	return flash_write_fail ? EC_ERROR_UNKNOWN : EC_SUCCESS;
+	if (write_offset_fail >= offset &&
+	    write_offset_fail < (offset + size)) {
+		ccprintf("--> Fail write for offset = %d, size = %d\n", offset,
+			 size);
+		return EC_ERROR_UNKNOWN;
+	}
+	return EC_SUCCESS;
+}
+
+enum ec_error_list flash_pre_op_erase(int offset, int size)
+{
+	if (erase_offset_fail >= offset &&
+	    erase_offset_fail < (offset + size)) {
+		ccprintf("--> Fail erase for offset = %d, size = %d\n", offset,
+			 size);
+		return EC_ERROR_UNKNOWN;
+	}
+	return EC_SUCCESS;
 }
 
 static void dump_nvmem_state(const char *title,
@@ -239,13 +259,13 @@ static void *page_to_flash_addr(int page_num)
 			page_num * CONFIG_FLASH_BANK_SIZE);
 }
 
-static int post_init_from_scratch(uint8_t flash_value)
+static int fill_nvmem_pages(uint8_t flash_value)
 {
-	int i;
-	void *flash_p;
+	int old_write_offset = write_offset_fail;
 
 	memset(write_buffer, flash_value, sizeof(write_buffer));
 
+	write_offset_fail = -1; /* Enable all writes. */
 	/* Overwrite nvmem flash space with junk value. */
 	flash_physical_write(
 		CONFIG_FLASH_NEW_NVMEM_BASE_A - CONFIG_PROGRAM_MEMORY_BASE,
@@ -253,7 +273,12 @@ static int post_init_from_scratch(uint8_t flash_value)
 	flash_physical_write(
 		CONFIG_FLASH_NEW_NVMEM_BASE_B - CONFIG_PROGRAM_MEMORY_BASE,
 		NEW_FLASH_HALF_NVMEM_SIZE, (const char *)write_buffer);
+	write_offset_fail = old_write_offset;
+	return EC_SUCCESS;
+}
 
+static int test_init_vars_from_scratch(void)
+{
 	TEST_ASSERT(nvmem_init() == EC_SUCCESS);
 	TEST_ASSERT(iterate_over_flash() == EC_SUCCESS);
 	TEST_ASSERT(test_result.var_count == 0);
@@ -263,6 +288,17 @@ static int post_init_from_scratch(uint8_t flash_value)
 	TEST_ASSERT(test_result.unexpected_count == 0);
 	TEST_ASSERT(test_result.valid_data_size == 1088);
 	TEST_ASSERT(total_var_space == 0);
+	return EC_SUCCESS;
+}
+
+static int post_init_from_scratch(uint8_t flash_value)
+{
+	int i;
+	void *flash_p;
+
+	fill_nvmem_pages(flash_value);
+
+	TEST_ASSERT(test_init_vars_from_scratch() == EC_SUCCESS);
 
 	for (i = 0; i < (NEW_NVMEM_TOTAL_PAGES - 1); i++) {
 		flash_p = page_to_flash_addr(i);
@@ -1140,7 +1176,8 @@ int nvmem_second_task(void *unused)
 static void run_test_setup(void)
 {
 	/* Allow Flash erase/writes */
-	flash_write_fail = 0;
+	erase_offset_fail = -1;
+	write_offset_fail = -1;
 	test_reset();
 }
 
@@ -1403,6 +1440,73 @@ static int test_tpm_nvmem_modify_reserved_objects(void)
 	return EC_SUCCESS;
 }
 
+static int fill_pages(void)
+{
+	uint8_t key[] = "Key";
+	uint8_t value[132] = {};
+	size_t key_len = sizeof(key);
+	size_t i;
+
+	for (i = 0; i < sizeof(value); i++)
+		TEST_ASSERT(setvar(key, key_len, value, i) == EC_SUCCESS);
+	return EC_SUCCESS;
+}
+
+static int test_nvmem_flash_failure(void)
+{
+	fill_nvmem_pages(0x55);
+
+	/* Now set failing offset for erase, page 123 and to write to first page
+	 */
+	erase_offset_fail = 123 * 2048;
+	write_offset_fail = 255 * 2048; /* This is first page in the list */
+	TEST_ASSERT(test_init_vars_from_scratch() == EC_SUCCESS);
+	TEST_ASSERT(page_count == 8);
+	TEST_ASSERT(page_list[0] == 254);
+
+	/* After init again page 255 is not yet detected as bad */
+	TEST_ASSERT(nvmem_init() == EC_SUCCESS);
+	TEST_ASSERT(page_count == 9);
+
+	TEST_ASSERT(iterate_over_flash() == EC_SUCCESS);
+	TEST_ASSERT(new_nvmem_save() == EC_SUCCESS);
+	TEST_ASSERT(fill_pages() == EC_SUCCESS);
+	TEST_ASSERT(new_nvmem_save() == EC_SUCCESS);
+	browse_flash_contents(1);
+	TEST_ASSERT(nvmem_init() == EC_SUCCESS);
+	/* Cause compaction */
+	TEST_ASSERT(fill_pages() == EC_SUCCESS);
+	TEST_ASSERT(new_nvmem_save() == EC_SUCCESS);
+
+	fill_nvmem_pages(0x55);
+	/* Now set failing offset for erase, page 124 */
+	erase_offset_fail = 124 * 2048;
+	write_offset_fail = 254 * 2048; /* This is first page in the list */
+	TEST_ASSERT(test_init_vars_from_scratch() == EC_SUCCESS);
+	TEST_ASSERT(page_count == 9);
+	TEST_ASSERT(page_list[0] == 255);
+
+	TEST_ASSERT(new_nvmem_save() == EC_SUCCESS);
+	TEST_ASSERT(fill_pages() == EC_SUCCESS);
+	/* In the write process we hit page 254 */
+	TEST_ASSERT(page_count == 8);
+	TEST_ASSERT(new_nvmem_save() == EC_SUCCESS);
+	browse_flash_contents(1);
+	/* Cause compaction */
+	TEST_ASSERT(fill_pages() == EC_SUCCESS);
+	TEST_ASSERT(new_nvmem_save() == EC_SUCCESS);
+
+	TEST_ASSERT(compact_nvmem() == EC_SUCCESS);
+	TEST_ASSERT(nvmem_init() == EC_SUCCESS);
+	/* Again, page with write issue is not yet detected */
+	TEST_ASSERT(page_count == 9);
+	TEST_ASSERT(new_nvmem_save() == EC_SUCCESS);
+
+	erase_offset_fail = -1;
+	write_offset_fail = -1;
+	return EC_SUCCESS;
+}
+
 static int compare_object(uint16_t obj_offset, size_t obj_size, const void *obj)
 {
 	uint32_t next_addr;
@@ -1662,6 +1766,6 @@ void run_test(void)
 	 * RUN_TEST(test_lock);
 	 * RUN_TEST(test_malloc_blocking);
 	 */
-
+	RUN_TEST(test_nvmem_flash_failure);
 	test_print_result();
 }
