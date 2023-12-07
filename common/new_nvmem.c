@@ -1057,23 +1057,24 @@ test_export_static enum ec_error_list compact_nvmem(void)
 static enum ec_error_list start_new_flash_page(size_t data_size)
 {
 	struct nn_page_header ph = {};
+	struct nn_page_header *mt_ph;
 	enum ec_error_list rv;
+
+	if ((controller_at.list_index + 1) >= ARRAY_SIZE(page_list))
+		report_no_payload_failure(NVMEMF_PAGE_LIST_OVERFLOW);
+	mt_ph = flash_index_to_ph(page_list[controller_at.list_index + 1]);
 
 	ph.data_offset = sizeof(ph) + data_size;
 	ph.page_number = controller_at.mt.ph->page_number + 1;
 	ph.page_hash = calculate_page_header_hash(&ph);
-	controller_at.list_index++;
-	if (controller_at.list_index == ARRAY_SIZE(page_list))
-		report_no_payload_failure(NVMEMF_PAGE_LIST_OVERFLOW);
 
-	controller_at.mt.ph =
-		(const void *)(((uintptr_t)page_list[controller_at.list_index] *
-				CONFIG_FLASH_BANK_SIZE) +
-			       CONFIG_PROGRAM_MEMORY_BASE);
-
-	rv = write_to_flash(controller_at.mt.ph, &ph, sizeof(ph));
+	rv = write_to_flash(mt_ph, &ph, sizeof(ph));
 	if (rv != EC_SUCCESS)
 		return rv;
+
+	/* Update controller only after successful start of new page. */
+	controller_at.list_index++;
+	controller_at.mt.ph = mt_ph;
 	controller_at.mt.data_offset = sizeof(ph);
 	return rv;
 }
