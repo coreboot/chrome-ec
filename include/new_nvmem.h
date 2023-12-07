@@ -165,7 +165,7 @@ struct nn_page_header *list_element_to_ph(size_t el);
 void *evictable_offs_to_addr(uint16_t offset);
 enum ec_error_list get_next_object(struct access_tracker *at,
 				   struct nn_container *ch,
-				   int include_deleted);
+				   bool include_deleted);
 #endif
 
 #endif /* ! __TPM2_NVMEM_TEST_NEW_NVMEM_H */
