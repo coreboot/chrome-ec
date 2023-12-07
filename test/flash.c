@@ -45,7 +45,12 @@ void host_send_response(struct host_cmd_handler_args *args)
 	/* Do nothing */
 }
 
-int flash_pre_op(void)
+enum ec_error_list flash_pre_op_write(int offset, int size)
+{
+	return mock_flash_op_fail;
+}
+
+enum ec_error_list flash_pre_op_erase(int offset, int size)
 {
 	return mock_flash_op_fail;
 }
@@ -111,11 +116,17 @@ static int verify_erase(int offset, int size)
 		TEST_ASSERT(verify_flash(off, sz) == EC_SUCCESS); \
 	} while (0)
 
+#define VERIFY_ERASE_FAILED(off, sz)                                    \
+	do {                                                            \
+		record_flash(off, sz);                                  \
+		TEST_ASSERT(host_command_erase(off, sz) != EC_SUCCESS); \
+	} while (0)
+
 #define VERIFY_NO_ERASE(off, sz) \
 	do { \
 		record_flash(off, sz); \
 		TEST_ASSERT(host_command_erase(off, sz) != EC_SUCCESS); \
-		TEST_ASSERT(verify_flash(off, sz) == EC_SUCCESS); \
+		TEST_ASSERT(verify_erase(off, sz) != EC_SUCCESS); \
 	} while (0)
 
 #define VERIFY_WRITE(off, sz, d) \
@@ -299,8 +310,8 @@ static int test_overwrite_current(void)
 	mock_is_running_img = 1;
 #endif
 
-	VERIFY_NO_ERASE(offset, strlen(testdata));
-	VERIFY_NO_ERASE(offset + size - strlen(testdata), strlen(testdata));
+	VERIFY_ERASE_FAILED(offset, strlen(testdata));
+	VERIFY_ERASE_FAILED(offset + size - strlen(testdata), strlen(testdata));
 	VERIFY_NO_WRITE(offset, strlen(testdata), testdata);
 	VERIFY_NO_WRITE(offset + size - strlen(testdata), strlen(testdata),
 			testdata);

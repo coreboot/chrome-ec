@@ -169,6 +169,8 @@ enum ec_error_list browse_flash_contents(int);
 enum ec_error_list compact_nvmem(void);
 extern struct access_tracker controller_at;
 extern uint16_t total_var_space;
+extern uint8_t page_list[NEW_NVMEM_TOTAL_PAGES];
+extern uint8_t page_count;
 bool is_uninitialized(const void *p, size_t size);
 size_t init_object_offsets(uint16_t *offsets, size_t count);
 struct nn_page_header *list_element_to_ph(size_t el);
