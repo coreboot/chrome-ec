@@ -51,8 +51,13 @@ struct nn_page_header {
 	unsigned int page_number : 21;
 	unsigned int data_offset : 11;
 	uint32_t page_hash;
-} __packed;
-
+};
+/*
+ * `nn_page_header` may not be packed as it is always at page-aligned address,
+ * but we shall check its internal format for compatibility.
+ */
+BUILD_ASSERT(offsetof(struct nn_page_header, page_hash) == sizeof(uint32_t));
+BUILD_ASSERT(sizeof(struct nn_page_header) == 2 * sizeof(uint32_t));
 /*
  * Index of the 'virtual' last reserved object. RAM index space and max
  * counter objects stored at fixed location in the NVMEM cache are considered
@@ -89,6 +94,7 @@ struct nn_container {
 	unsigned int generation : 2;
 	unsigned int container_hash : 12;
 } __packed;
+BUILD_ASSERT(sizeof(struct nn_container) == sizeof(uint32_t));
 
 /*
  * A structure to keep context of accessing to a page, page header and offset
