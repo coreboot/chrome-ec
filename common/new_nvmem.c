@@ -501,7 +501,9 @@ static uint32_t calculate_page_header_hash(const struct nn_page_header *ph)
 	BUILD_ASSERT(sizeof(hash) ==
 		     offsetof(struct nn_page_header, page_hash));
 
-	app_cipher(salt, &hash, ph, sizeof(hash));
+	/* In case of failure (hw issue?) reboot is the only remedy. */
+	if (!app_cipher(salt, &hash, ph, sizeof(hash)))
+		report_no_payload_failure(NVMEMF_APPCIPHER_ERROR);
 
 	return hash;
 }
@@ -509,7 +511,13 @@ static uint32_t calculate_page_header_hash(const struct nn_page_header *ph)
 /* Verify page header hash. */
 static bool page_header_is_valid(const struct nn_page_header *ph)
 {
-	return calculate_page_header_hash(ph) == ph->page_hash;
+	const uint32_t *ph_raw = (const uint32_t *)ph;
+
+	/* Explicitly detect empty pages. */
+	if ((ph_raw[0] == ph_raw[1]) && ph_raw[0] == NV_FLASH_EMPTY_WORD)
+		return false;
+	return (ph->data_offset >= sizeof(struct nn_page_header) &&
+		calculate_page_header_hash(ph) == ph->page_hash);
 }
 
 /* Convert flash page number in 0..255 range into actual flash address. */
@@ -1650,7 +1658,7 @@ static enum ec_error_list verify_empty_page(void *ph)
 	size_t i;
 
 	for (i = 0; i < (CONFIG_FLASH_BANK_SIZE / sizeof(*word_p)); i++) {
-		if (word_p[i] != (uint32_t)~0) {
+		if (word_p[i] != NV_FLASH_EMPTY_WORD) {
 			log_no_payload_failure(
 				NVMEMF_CORRUPTED_EMPTY_PAGE);
 			CPRINTS("%s: corrupted page at %pP!", __func__, word_p);
