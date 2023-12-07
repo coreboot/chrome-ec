@@ -58,6 +58,10 @@ struct nn_page_header {
  */
 BUILD_ASSERT(offsetof(struct nn_page_header, page_hash) == sizeof(uint32_t));
 BUILD_ASSERT(sizeof(struct nn_page_header) == 2 * sizeof(uint32_t));
+
+/* Value of word in erased flash page. */
+#define NV_FLASH_EMPTY_WORD ((uint32_t)~0)
+
 /*
  * Index of the 'virtual' last reserved object. RAM index space and max
  * counter objects stored at fixed location in the NVMEM cache are considered
