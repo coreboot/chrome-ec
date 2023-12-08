@@ -951,7 +951,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 	saved_object_count = 0;
 
 	do {
-		switch (get_next_object(&at, ch, false)) {
+		switch ((rv = get_next_object(&at, ch, false))) {
 		case EC_SUCCESS:
 			break;
 
