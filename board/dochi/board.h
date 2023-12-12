@@ -10,11 +10,6 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early dochi boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
@@ -181,7 +176,14 @@ enum temp_sensor_id {
 
 enum sensor_id { LID_ACCEL = 0, BASE_ACCEL, BASE_GYRO, SENSOR_COUNT };
 
-enum battery_type { BATTERY_POWER_TECH, BATTERY_LGC011, BATTERY_TYPE_COUNT };
+enum battery_type {
+	BATTERY_POWER_TECH,
+	BATTERY_LGC011,
+	BATTERY_COSMX_AP20CBL_004,
+	BATTERY_AP23A7L,
+	BATTERY_AP23A8L,
+	BATTERY_TYPE_COUNT
+};
 
 enum pwm_channel {
 	PWM_CH_KBLIGHT = 0, /* PWM3 */

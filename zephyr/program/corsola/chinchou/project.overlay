@@ -17,6 +17,7 @@
 #include "../npcx_motionsense.dtsi"
 #include "../ite_usbc.dtsi"
 #include "../ite_shi.dtsi"
+#include "thermistor.dtsi"
 
 #include <cros/thermistor/thermistor.dtsi>
 #include <dt-bindings/battery.h>
@@ -170,6 +171,9 @@
 		compatible = "cros-ec,temp-sensors";
 		temp_sensor_1 {
 			sensor = <&temp_sensor_1_thermistor>;
+		};
+		temp_charger: charger {
+			sensor = <&charger_bc12_port1>;
 		};
 	};
 
@@ -542,8 +546,8 @@
 			};
 		};
 
-		/* Chinchou LED power idle */
-		power-state-idle {
+		/* Chinchou LED power idle, S5*/
+		power-state-idle-s5 {
 			charge-state = "LED_PWRS_IDLE";
 			chipset-state = "POWER_S5";
 
@@ -570,6 +574,34 @@
 				color-1 {
 					led-color = "LED_WHITE";
 					period-ms = <2000>;
+				};
+			};
+		};
+
+		/* Chinchou LED power idle, S0 */
+		power-state-idle-s0 {
+			charge-state = "LED_PWRS_IDLE";
+			chipset-state = "POWER_S0";
+
+			battery-led {
+				led-id = "EC_LED_ID_BATTERY_LED";
+
+				color-0 {
+					led-color = "LED_WHITE";
+				};
+			};
+		};
+
+		/* Chinchou LED power idle, S3 */
+		power-state-idle-s3 {
+			charge-state = "LED_PWRS_IDLE";
+			chipset-state = "POWER_S3";
+
+			battery-led {
+				led-id = "EC_LED_ID_BATTERY_LED";
+
+				color-0 {
+					led-color = "LED_WHITE";
 				};
 			};
 		};
@@ -652,6 +684,7 @@
 		reg = <0x53>;
 		irq = <&int_usb_c0_bc12_charger>;
 		mivr = <4000>;
+		thermistor = <&thermistor_rt9490>;
 	};
 };
 

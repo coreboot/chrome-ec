@@ -24,8 +24,11 @@
 		default_battery: lgc_ap19b8m-2 {
 			compatible = "lgc,ap19b8m", "battery-smart";
 		};
-		cosmx_ap20cbl-3 {
-			compatible = "cosmx,ap20cbl-3", "battery-smart";
+		cosmx_ap20cbl-4 {
+			compatible = "cosmx,ap20cbl-4", "battery-smart";
+		};
+		lges_ap23a8l {
+			compatible = "lges,ap23a8l", "battery-smart";
 		};
 	};
 

@@ -62,6 +62,7 @@ if(DEFINED CONFIG_BOARD_CRAASK)
 			"craask/src/kb_backlight.c"
 			"craask/src/led.c"
 			"craask/src/thermal.c"
+			"craask/src/touch_panel.c"
 	)
 	project(craask)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "craask/src/usbc.c")
@@ -178,6 +179,7 @@ if(DEFINED CONFIG_BOARD_QUANDISO)
 	project(quandiso)
 	zephyr_library_sources(
 			"quandiso/src/board.c"
+			"quandiso/src/sub_board.c"
 			"quandiso/src/keyboard.c"
 			"quandiso/src/led.c"
 			"quandiso/src/thermal.c"
@@ -197,4 +199,18 @@ if(DEFINED CONFIG_BOARD_PIRRHA)
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "pirrha/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "pirrha/src/charger.c")
+endif()
+if(DEFINED CONFIG_BOARD_ANRAGGAR)
+	project(anraggar)
+	zephyr_include_directories("anraggar/include")
+	zephyr_library_sources(
+			"anraggar/src/board.c"
+			"anraggar/src/keyboard.c"
+			"anraggar/src/sub_board.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "anraggar/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "anraggar/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
+			"anraggar/src/keyboard_customization.c"
+	)
 endif()

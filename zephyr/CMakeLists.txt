@@ -2,6 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+separate_arguments(EXTRA_EC_VERSION_FLAGS_LIST UNIX_COMMAND
+		   ${EXTRA_EC_VERSION_FLAGS})
+
 if(DEFINED CONFIG_PLATFORM_EC AND EXISTS "${EDT_PICKLE}")
   message(STATUS "Performing EC specific devicetree checks")
 
@@ -25,6 +28,7 @@ if(DEFINED CONFIG_PLATFORM_EC AND EXISTS "${EDT_PICKLE}")
     --zephyr-base ${ZEPHYR_BASE}
     --edt-pickle ${EDT_PICKLE}
     --manifest-file "${CMAKE_BINARY_DIR}/zephyr/component_manifest.json"
+    ${EXTRA_EC_VERSION_FLAGS_LIST}
   )
   execute_process(COMMAND ${CMD_CME} RESULT_VARIABLE ret)
   if(NOT "${ret}" STREQUAL "0")
@@ -288,6 +292,12 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_SW
                                                 "${PLATFORM_EC}/common/charge_ramp_sw.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CPS8100
                                                 "${PLATFORM_EC}/driver/wpc/cps8100.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CURVE25519
+                                                "${PLATFORM_EC}/common/curve25519.c")
+if (NOT DEFINED CONFIG_CPU_CORTEX_M0)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CURVE25519
+                                                "${PLATFORM_EC}/common/curve25519-generic.c")
+endif()
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_OCPC
                                                 "${PLATFORM_EC}/common/ocpc.c")
 
@@ -478,6 +488,11 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PORT_POWER_DUMB
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PORT_POWER_SMART
                                                 "${PLATFORM_EC}/common/usb_port_power_smart.c")
 
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_UPDATE
+                                                "${PLATFORM_EC}/common/update_fw.c"
+                                                "${PLATFORM_EC}/common/usb_update.c"
+                                                "${PLATFORM_EC}/common/queue_policies.c")
+
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
                                                 "${PLATFORM_EC}/common/typec_control.c"
                                                 "${PLATFORM_EC}/common/usb_common.c"
@@ -667,9 +682,6 @@ add_subdirectory("fake")
 add_subdirectory("mock")
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 
-separate_arguments(EXTRA_EC_VERSION_FLAGS_LIST UNIX_COMMAND
-		   ${EXTRA_EC_VERSION_FLAGS})
-
 # Use external script to generate the ec_version.h header and add as
 # a dependency to the EC application library.
 add_custom_target(
@@ -693,7 +705,7 @@ if (DEFINED CONFIG_PIGWEED_LOG_TOKENIZED_LIB)
       ${ZEPHYR_PIGWEED_MODULE_DIR}/pw_tokenizer/py/pw_tokenizer/database.py
       create
       --force
-      --type csv
+      --type binary
       -d ${CMAKE_BINARY_DIR}/database.bin
       ${CMAKE_BINARY_DIR}/zephyr/zephyr_pre0.elf
   )
