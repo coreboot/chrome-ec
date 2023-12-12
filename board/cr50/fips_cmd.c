@@ -211,8 +211,14 @@ static enum vendor_cmd_rc fips_cmd(enum vendor_cmd_cc code, void *buf,
 		*response_size = sizeof(fips_reverse);
 		break;
 	case FIPS_CMD_ON:
-		u2f_update_keys();
+		if (u2f_update_keys() != EC_SUCCESS)
+			return VENDOR_RC_INTERNAL_ERROR;
 		break;
+	case FIPS_CMD_U2F_STATUS:
+		*cmd = u2f_keys_are_fips();
+		*response_size = sizeof(*cmd);
+		break;
+
 #ifdef CRYPTO_TEST_SETUP
 	case FIPS_CMD_BREAK_TRNG:
 		fips_break_cmd = FIPS_BREAK_TRNG;

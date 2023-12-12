@@ -238,4 +238,11 @@ enum ec_error_list u2f_zeroize_keys(void);
  */
 enum ec_error_list u2f_update_keys(void);
 
+/**
+ * Check status of U2F secrets used for key generation to be FIPS
+ *
+ * @return Return `true` if U2F keys are FIPS-compliant
+ */
+bool u2f_keys_are_fips(void);
+
 #endif /* __CROS_EC_U2F_IMPL_H */
