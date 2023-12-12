@@ -197,6 +197,17 @@ enum ec_error_list u2f_zeroize_keys(void)
 	return result1;
 }
 
+bool u2f_keys_are_fips(void)
+{
+	struct u2f_state *state = u2f_get_state();
+
+	/* if we couldn't load state or state is not representing new keys */
+	if (!state || state->drbg_entropy_size != sizeof(state->drbg_entropy))
+		return false;
+
+	return true;
+}
+
 enum ec_error_list u2f_update_keys(void)
 {
 	struct u2f_state *state = u2f_get_state();

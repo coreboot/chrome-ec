@@ -88,7 +88,8 @@ enum fips_cmd {
 #ifdef CONFIG_FIPS_RSA2048
 	FIPS_CMD_BREAK_RSA2048 = 11,
 #endif
-	FIPS_CMD_NO_BREAK = 12
+	FIPS_CMD_NO_BREAK = 12,
+	FIPS_CMD_U2F_STATUS = 13
 };
 
 /* These symbols defined in core/cortex-m/ec.lds.S. */

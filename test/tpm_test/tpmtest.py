@@ -23,6 +23,7 @@ import crypto_test
 import drbg_test
 import ecc_test
 import ecies_test
+import fipscmd
 import ftdi_spi_tpm
 import hash_test
 import hkdf_test
@@ -191,6 +192,7 @@ def usage():
           '     -l path to output lab result vectors.\n'
           '     -r path for the lab input vector.\n'
           '     -e path for the lab expected results file\n'
+          '     -f run FIPS_CMD test\n'
           '     -p run TPM2 test\n'
           '     -T test to run\n'
           '     -h - this help\n')
@@ -198,13 +200,14 @@ def usage():
 def main():
     """Run TPM tests"""
     try:
-        opts, _ = getopt.getopt(sys.argv[1:], 'dpt:T:hs:o:r:e:l:', 'help')
+        opts, _ = getopt.getopt(sys.argv[1:], 'dpft:T:hs:o:r:e:l:', 'help')
     except getopt.GetoptError as err:
         print(str(err))
         usage()
         sys.exit(2)
     debug_needed = False
     tpmtest_only = False
+    fipstest_only = False
     trng_only = False
     trng_output = '/tmp/trng_output'
     trng_sample_bits = 1
@@ -219,6 +222,8 @@ def main():
             debug_needed = True
         elif option == '-p':
             tpmtest_only = True
+        elif option == '-f':
+            fipstest_only = True
         elif option == '-t':
             trng_only = True
             trng_mode = int(arg)
@@ -241,6 +246,9 @@ def main():
         tpm_object = TPM(debug_mode=debug_needed)
         if tpmtest_only:
             tpm.startup_test(tpm_object)
+            sys.exit(0)
+        if fipstest_only:
+            fipscmd.fips_cmd_test(tpm_object)
             sys.exit(0)
         if trng_only:
             trng_test.trng_test(tpm_object, trng_output,
