@@ -17,6 +17,7 @@ U2F_GENERATE = 44
 U2F_SIGN = 45
 U2F_ATTEST = 46
 DRBG_TEST = 50
+FIPS_CMD = 55
 # The same exception class used by all tpmtest modules.
 class TpmTestError(Exception):
     """TpmTestError exception class"""
