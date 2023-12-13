@@ -971,7 +971,7 @@ static enum ec_error_list release_first_page(struct access_tracker *at)
 /* Reshuffle flash contents dropping deleted objects. */
 test_export_static enum ec_error_list compact_nvmem(void)
 {
-	const void *fence_ph;
+	const struct nn_page_header *fence_ph;
 	enum ec_error_list rv = EC_SUCCESS;
 	size_t before;
 	struct nn_container *ch;
@@ -991,6 +991,36 @@ test_export_static enum ec_error_list compact_nvmem(void)
 	/* One page is enough even for the largest object. */
 	ch = get_scratch_buffer(CONFIG_FLASH_BANK_SIZE);
 
+	/* Check if we can start from empty page. It makes sense if we are not
+	 * at the start of the page already (either at the end, so next save
+	 * will be on the new page, or just after page header) and have at
+	 * least one free page.
+	 */
+	if (controller_at.mt.data_offset != sizeof(*controller_at.mt.ph) &&
+	    controller_at.mt.data_offset != CONFIG_FLASH_BANK_SIZE &&
+	    (controller_at.list_index + 1) < page_count) {
+		/* Size of containers for fill object and delimiter. */
+		const size_t size_of_two_containers = 2 * sizeof(*ch);
+		size_t to_go_in_page =
+			CONFIG_FLASH_BANK_SIZE - controller_at.mt.data_offset;
+		/* 2 cases:
+		 *   >= 8 bytes, so we can create fake object + delimiter, or
+		 *   == 4 bytes, so we can just add a final delimiter.
+		 * `controller_at.mt.data_offset` is always aligned to
+		 * CONFIG_FLASH_WRITE_SIZE, so does container size.
+		 */
+		if (to_go_in_page >= size_of_two_containers) {
+			/* Create fake object till end of page. */
+			ch->container_type = NN_OBJ_OLD_COPY;
+			ch->container_type_copy = NN_OBJ_OLD_COPY;
+			/* Account for container size and delimiter. */
+			ch->size = to_go_in_page - size_of_two_containers;
+			save_container(ch);
+		}
+		/* Final delimiter is always required. */
+		add_final_delimiter();
+	}
+
 	/*
 	 * Page where we should stop compaction, all pages before this would
 	 * be recycled.
@@ -1004,6 +1034,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 			break;
 
 		case EC_ERROR_MEMORY_ALLOCATION:
+			/* This is a case with no objects in nvmem.  */
 			shared_mem_release(ch);
 			return EC_SUCCESS;
 
@@ -3181,13 +3212,10 @@ static void dump_contents(const struct nn_container *ch)
 
 enum ec_error_list nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 {
-	const uint8_t *key;
-	const uint8_t *val;
 	enum ec_error_list rv;
+	enum ec_error_list init_rv;
 	struct nn_container *ch;
 	struct access_tracker at = {};
-	uint8_t saved_list_index;
-	uint8_t key_len;
 
 	if (!crypto_enabled())
 		return EC_ERROR_INVAL;
@@ -3234,68 +3262,16 @@ enum ec_error_list nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 
 	shared_mem_release(ch);
 
-	/*
-	 * Now fill up the current flash page with erased objects to make sure
-	 * that it would be erased during next compaction. Use placeholder key,
-	 * value pairs as the erase objects.
-	 */
-	saved_list_index = controller_at.list_index;
-	key = (const uint8_t *)nvmem_erase_tpm_data;
-	val = (const uint8_t *)nvmem_erase_tpm_data;
-	key_len = MAX_VAR_BODY_SPACE - 255;
-	do {
-		size_t to_go_in_page;
-		uint8_t val_len;
-
-		to_go_in_page =
-			CONFIG_FLASH_BANK_SIZE - controller_at.mt.data_offset;
-		if (to_go_in_page >
-		    (MAX_VAR_BODY_SPACE +
-		     offsetof(struct max_var_container, body) - 1)) {
-			val_len = MAX_VAR_BODY_SPACE - key_len;
-		} else {
-			/*
-			 * Let's not write more than we have to get over the
-			 * page limit. The minimum size we need is:
-			 *
-			 * <container header size> + <tuple header size> + 2
-			 *
-			 * (where key and value are of one byte each).
-			 */
-			if (to_go_in_page <
-			    (offsetof(struct max_var_container, body) + 2)) {
-				/*
-				 * There is very little room left, even key
-				 * and value of size of one each is enough to
-				 * go over.
-				 */
-				key_len = 1;
-				val_len = 1;
-			} else {
-				size_t need_to_cover;
-
-				/* How much space key and value should cover? */
-				need_to_cover =
-					to_go_in_page -
-					offsetof(struct max_var_container,
-						 body) + 1;
-				key_len = need_to_cover / 2;
-				val_len = need_to_cover - key_len;
-			}
-		}
-		if (setvar(key, key_len, val, val_len) != EC_SUCCESS)
-			ccprintf("%s: adding var failed!\n", __func__);
-		if (setvar(key, key_len, NULL, 0) != EC_SUCCESS)
-			ccprintf("%s: deleting var failed!\n", __func__);
-
-	} while (controller_at.list_index != (saved_list_index + 1));
-
 	lock_mutex(__LINE__);
 	rv = compact_nvmem();
 	unlock_mutex(__LINE__);
 
+	/* Return first error, but always do `new_nvmem_init()`.
+	 * This recreates TPM reserved objects to ensure correct operation.
+	 */
+	init_rv = new_nvmem_init();
 	if (rv == EC_SUCCESS)
-		rv = new_nvmem_init();
+		rv = init_rv;
 
 	return rv;
 }

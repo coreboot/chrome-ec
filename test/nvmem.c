@@ -1737,6 +1737,46 @@ static int test_nvmem_tuple_updates(void)
 	return EC_SUCCESS;
 }
 
+
+static int test_nvmem_erase_tpm_data_selective(void)
+{
+	size_t i, j;
+	uint8_t key[] = "K";
+	uint8_t value[255] = {};
+	size_t key_len = sizeof(key);
+
+	TEST_ASSERT(post_init_from_scratch(0xff) == EC_SUCCESS);
+	TEST_ASSERT(nvmem_erase_tpm_data_selective(NULL) == EC_SUCCESS);
+	/* Iterate over different sizes of variable to explore cases when
+	 * we are close to the page boundary, at it and crossing it.
+	 * During test some values of `i` were particular interesting, but
+	 * it is better to try all, rather than few specific options.
+	 */
+	for (i = 0; i < sizeof(value); i += 4) {
+		/* Fill pages so that it doesn't yet cause compaction, but
+		 * is very close to it. 50 iterations cause compaction.
+		 */
+		for (j = 0; j < 49; j++) {
+			TEST_ASSERT(setvar(key, key_len, value,
+					   sizeof(value) - (j & 1)) ==
+				    EC_SUCCESS);
+		}
+		/* Now vary size of variable to explore different cases. */
+		TEST_ASSERT(setvar(key, key_len, value, i) == EC_SUCCESS);
+		TEST_ASSERT(nvmem_erase_tpm_data_selective(NULL) == EC_SUCCESS);
+	}
+	/* Fill in variable space */
+	for (i = 0; i < 3; i++) {
+		TEST_ASSERT(setvar(value, sizeof(value) - i*10, key, key_len) ==
+			    EC_SUCCESS);
+	}
+	TEST_ASSERT(total_var_space == 995);
+	/* Test with very small var space available */
+	TEST_ASSERT(nvmem_erase_tpm_data_selective(NULL) == EC_SUCCESS);
+	TEST_ASSERT(total_var_space == 995);
+	return EC_SUCCESS;
+}
+
 void run_test(void)
 {
 	run_test_setup();
@@ -1758,6 +1798,7 @@ void run_test(void)
 	RUN_TEST(test_nvmem_tuple_capacity);
 	RUN_TEST(test_nvmem_interrupted_compaction);
 	failure_mode = TEST_NO_FAILURE; /* In case the above test failed. */
+	RUN_TEST(test_nvmem_erase_tpm_data_selective);
 
 	/*
 	 * more tests to come
