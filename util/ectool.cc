@@ -43,6 +43,7 @@
 #include <libec/flash_protect_command.h>
 #include <libec/rand_num_command.h>
 #include <libec/versions_command.h>
+#include <memory>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -66,6 +67,7 @@ enum {
 	OPT_ASCII,
 	OPT_I2C_BUS,
 	OPT_DEVICE,
+	OPT_VERBOSE,
 };
 
 static struct option long_opts[] = { { "dev", 1, 0, OPT_DEV },
@@ -74,6 +76,8 @@ static struct option long_opts[] = { { "dev", 1, 0, OPT_DEV },
 				     { "ascii", 0, 0, OPT_ASCII },
 				     { "i2c_bus", 1, 0, OPT_I2C_BUS },
 				     { "device", 1, 0, OPT_DEVICE },
+				     { "verbose", no_argument, NULL,
+				       OPT_VERBOSE },
 				     { NULL, 0, 0, 0 } };
 
 #define GEC_LOCK_TIMEOUT_SECS 30 /* 30 secs */
@@ -403,6 +407,9 @@ BUILD_ASSERT(ARRAY_SIZE(led_names) == EC_LED_ID_COUNT);
 /* ASCII mode for printing, default off */
 int ascii_mode;
 
+/* Message verbosity */
+static int verbose = 0;
+
 /* Check SBS numerical value range */
 int is_battery_range(int val)
 {
@@ -468,8 +475,9 @@ static int find_enum_from_text(const char *str,
 
 void print_help(const char *prog, int print_cmds)
 {
-	printf("Usage: %s [--dev=n] "
-	       "[--interface=dev|i2c|lpc] [--i2c_bus=n] [--device=vid:pid] ",
+	printf("Usage: %s [--dev=n]"
+	       " [--interface=dev|i2c|lpc] [--i2c_bus=n] [--device=vid:pid]"
+	       " --verbose",
 	       prog);
 	printf("[--name=cros_ec|cros_fp|cros_pd|cros_scp|cros_ish] [--ascii] ");
 	printf("<command> [params]\n\n");
@@ -479,6 +487,7 @@ void print_help(const char *prog, int print_cmds)
 	printf("  --interface Specifies the interface.\n\n");
 	printf("  --device    Specifies USB endpoint by vendor ID and product\n"
 	       "              ID (e.g. 18d1:5022).\n\n");
+	printf("  --verbose   Print more messages.\n\n");
 	if (print_cmds)
 		puts(help_str);
 	else
@@ -5327,7 +5336,7 @@ static int ms_help(const char *cmd)
 	printf("  %s odr NUM [ODR [ROUNDUP]]      - set/get sensor ODR\n", cmd);
 	printf("  %s range NUM [RANGE [ROUNDUP]]  - set/get sensor range\n",
 	       cmd);
-	printf("  %s offset NUM [-- X Y Z [TEMP]] - set/get sensor offset\n",
+	printf("  %s offset NUM [X Y Z [TEMP]]    - set/get sensor offset\n",
 	       cmd);
 	printf("  %s kb_wake NUM                  - set/get KB wake ang\n",
 	       cmd);
@@ -5346,9 +5355,9 @@ static int ms_help(const char *cmd)
 	printf("  %s get_activity ACT             - get activity status\n",
 	       cmd);
 	printf("  %s lid_angle                    - print lid angle\n", cmd);
-	printf("  %s spoof -- NUM [0/1] [X Y Z]   - enable/disable spoofing\n",
+	printf("  %s spoof NUM [0/1] [X Y Z]      - enable/disable spoofing\n",
 	       cmd);
-	printf("  %s spoof -- NUM activity ACT [0/1] [STATE] - enable/disable "
+	printf("  %s spoof NUM activity ACT [0/1] [STATE] - enable/disable "
 	       "activity spoofing\n",
 	       cmd);
 	printf("  %s tablet_mode_angle ANG HYS    - set/get tablet mode "
@@ -5379,9 +5388,11 @@ static int cmd_motionsense(int argc, char **argv)
 	int i, rv, status_only = (argc == 2);
 	struct ec_params_motion_sense param;
 	/* The largest size using resp as a response buffer */
-	uint8_t resp_buffer[ms_command_sizes[MOTIONSENSE_CMD_DUMP].insize];
+	std::unique_ptr<uint8_t[]> resp_buffer_ptr =
+		std::make_unique<uint8_t[]>(
+			ms_command_sizes[MOTIONSENSE_CMD_DUMP].insize);
 	struct ec_response_motion_sense *resp =
-		(struct ec_response_motion_sense *)resp_buffer;
+		(struct ec_response_motion_sense *)resp_buffer_ptr.get();
 	char *e;
 	/*
 	 * Warning: the following strings printed out are read in an
@@ -8529,7 +8540,8 @@ cmd_battery_vendor_param_usage:
 }
 
 static void batt_conf_dump(const struct board_batt_params *conf,
-			   const char *manuf_name, const char *device_name)
+			   const char *manuf_name, const char *device_name,
+			   uint8_t struct_version)
 {
 	const struct fuel_gauge_info *fg = &conf->fuel_gauge;
 	const struct ship_mode_info *ship = &conf->fuel_gauge.ship_mode;
@@ -8539,6 +8551,7 @@ static void batt_conf_dump(const struct board_batt_params *conf,
 
 	printf("{\n"); /* Start of root */
 	printf("\t\"%s,%s\": {\n", manuf_name, device_name);
+	printf("\t\t\"struct_version\": \"0x%02x\",\n", struct_version);
 	printf("\t\t\"fuel_gauge\": {\n");
 	printf("\t\t\t\"flags\": \"0x%x\",\n", fg->flags);
 
@@ -8585,7 +8598,8 @@ static void batt_conf_dump(const struct board_batt_params *conf,
 }
 
 static void batt_conf_dump_in_c(const struct board_batt_params *conf,
-				const char *manuf_name, const char *device_name)
+				const char *manuf_name, const char *device_name,
+				uint8_t struct_version)
 {
 	const struct fuel_gauge_info *fg = &conf->fuel_gauge;
 	const struct ship_mode_info *ship = &conf->fuel_gauge.ship_mode;
@@ -8593,6 +8607,7 @@ static void batt_conf_dump_in_c(const struct board_batt_params *conf,
 	const struct fet_info *fet = &conf->fuel_gauge.fet;
 	const struct battery_info *info = &conf->batt_info;
 
+	printf("// struct_version = 0x%02x\n", struct_version);
 	printf(".manuf_name = \"%s\",\n", manuf_name);
 	printf(".device_name = \"%s\",\n", device_name);
 
@@ -8645,7 +8660,8 @@ static int read_u32_from_json(base::Value::Dict *dict, const char *key,
 	char *e;
 
 	if (str == nullptr) {
-		printf("Key '%s' not found\n", key);
+		if (verbose)
+			printf("Key '%s' not found. Ignored.\n", key);
 		return 0;
 	}
 
@@ -8666,7 +8682,8 @@ static int read_u16_from_json(base::Value::Dict *dict, const char *key,
 	char *e;
 
 	if (str == nullptr) {
-		printf("Key '%s' not found\n", key);
+		if (verbose)
+			printf("Key '%s' not found. Ignored.\n", key);
 		return 0;
 	}
 
@@ -8687,7 +8704,8 @@ static int read_u8_from_json(base::Value::Dict *dict, const char *key,
 	char *e;
 
 	if (str == nullptr) {
-		printf("Key '%s' not found\n", key);
+		if (verbose)
+			printf("Key '%s' not found. Ignored.\n", key);
 		return 0;
 	}
 
@@ -8899,9 +8917,11 @@ static int cmd_battery_config_get(int argc, char *argv[])
 	p += head->device_name_size;
 	memcpy(&conf, p, sizeof(conf));
 	if (in_json)
-		batt_conf_dump(&conf, manuf_name, device_name);
+		batt_conf_dump(&conf, manuf_name, device_name,
+			       head->struct_version);
 	else
-		batt_conf_dump_in_c(&conf, manuf_name, device_name);
+		batt_conf_dump_in_c(&conf, manuf_name, device_name,
+				    head->struct_version);
 
 	return 0;
 }
@@ -12375,7 +12395,7 @@ int main(int argc, char *argv[])
 
 	BUILD_ASSERT(ARRAY_SIZE(lb_command_paramcount) == LIGHTBAR_NUM_CMDS);
 
-	while ((i = getopt_long(argc, argv, "+?", long_opts, NULL)) != -1) {
+	while ((i = getopt_long(argc, argv, "+v?", long_opts, NULL)) != -1) {
 		switch (i) {
 		case '?':
 			/* Unhandled option */
@@ -12426,6 +12446,10 @@ int main(int argc, char *argv[])
 			break;
 		case OPT_ASCII:
 			ascii_mode = 1;
+			break;
+		case OPT_VERBOSE:
+		case 'v':
+			verbose = 1;
 			break;
 		}
 	}
