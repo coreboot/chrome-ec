@@ -4493,7 +4493,7 @@ static int process_cr50_get_metrics(struct transfer_descriptor *td,
 static const char *const boot_tracer_stages[] = {
 	"Timespan", /* This one will not be displayed separately. */
 	"ProjectStart",	   "EcRstAsserted", "EcRstDeasserted", "TpmRstAsserted",
-	"TmRstDeasserted", "FirstApComms",  "PcrExtension",    "TpmAppReady"
+	"TpmRstDeasserted", "FirstApComms",  "PcrExtension",    "TpmAppReady"
 };
 
 static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
