@@ -2120,7 +2120,8 @@ static enum ec_error_list delete_object(const struct access_tracker *at,
 
 	flash_ch = page_cursor(&at->ct);
 
-	if (memcmp(ch, flash_ch, sizeof(uint32_t)))
+	/* Assume sizeof(*ch) is equal to flash alignment, so on same page */
+	if (memcmp(ch, flash_ch, sizeof(*ch)))
 		report_no_payload_failure(NVMEMF_PRE_ERASE_MISMATCH);
 
 	if (!del_candidates)
