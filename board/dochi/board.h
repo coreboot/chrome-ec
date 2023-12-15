@@ -10,11 +10,6 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early dochi boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
@@ -152,6 +147,7 @@
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
 #define CONFIG_FANS FAN_CH_COUNT
+#define CONFIG_CUSTOM_FAN_CONTROL
 
 /* Charger defines */
 #define CONFIG_CHARGER_ISL9241
@@ -185,6 +181,8 @@ enum battery_type {
 	BATTERY_POWER_TECH,
 	BATTERY_LGC011,
 	BATTERY_COSMX_AP20CBL_004,
+	BATTERY_AP23A7L,
+	BATTERY_AP23A8L,
 	BATTERY_TYPE_COUNT
 };
 

@@ -10,7 +10,9 @@
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/input/input.h>
+#include <zephyr/input/input_kbd_matrix.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 

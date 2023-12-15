@@ -158,6 +158,14 @@ class ApplicationType(Enum):
     PRODUCTION = 2
 
 
+class FPSensorType(Enum):
+    """Fingerprint sensor types."""
+
+    ELAN = 0
+    FPC = 1
+    UNKNOWN = -1
+
+
 @dataclass
 # pylint: disable-next=too-many-instance-attributes
 class BoardConfig:
@@ -260,7 +268,7 @@ class AllTests:
             TestConfig(test_name="always_memset"),
             TestConfig(test_name="benchmark"),
             TestConfig(test_name="boringssl_crypto"),
-            TestConfig(test_name="cortexm_fpu"),
+            TestConfig(test_name="cortexm_fpu", exclude_boards=[HELIPILOT]),
             TestConfig(test_name="crc"),
             TestConfig(test_name="exception"),
             TestConfig(
@@ -280,7 +288,9 @@ class AllTests:
                 exclude_boards=[BLOONCHIPPER],
             ),
             TestConfig(test_name="fpsensor_auth_crypto_stateless"),
-            TestConfig(test_name="fpsensor_hw"),
+            TestConfig(
+                test_name="fpsensor_hw", pre_test_callback=fp_sensor_sel
+            ),
             TestConfig(
                 config_name="fpsensor_spi_ro",
                 test_name="fpsensor",
@@ -350,7 +360,9 @@ class AllTests:
             TestConfig(test_name="static_if"),
             TestConfig(test_name="stdlib"),
             TestConfig(test_name="std_vector"),
-            TestConfig(test_name="stm32f_rtc", exclude_boards=[DARTMONKEY]),
+            TestConfig(
+                test_name="stm32f_rtc", exclude_boards=[DARTMONKEY, HELIPILOT]
+            ),
             TestConfig(
                 config_name="system_is_locked_wp_on",
                 test_name="system_is_locked",
@@ -602,6 +614,30 @@ def power_cycle(board_config: BoardConfig) -> None:
     time.sleep(board_config.reboot_timeout)
 
 
+def fp_sensor_sel(
+    board_config: BoardConfig, sensor_type: FPSensorType = FPSensorType.FPC
+) -> None:
+    """
+    Explicitly select the appropriate fingerprint sensor.
+    This function assumes that the fp_sensor_sel servo control is connected to
+    the proper gpio on the development board. This is not the case on some
+    older development boards. This should not result in any failures but also
+    may have not actually change the selected sensor.
+    """
+
+    cmd = [
+        "dut-control",
+        "fp_sensor_sel" + ":" + str(sensor_type.value),
+    ]
+
+    logging.debug('Running command: "%s"', " ".join(cmd))
+    subprocess.run(cmd, check=False).check_returncode()
+
+    # power cycle after setting sensor type to ensure detection
+    power_cycle(board_config)
+    return True
+
+
 def hw_write_protect(enable: bool) -> None:
     """Enable/disable hardware write protect."""
     if enable:
@@ -727,15 +763,14 @@ def process_console_output_line(line: bytes, test: TestConfig):
 
 def run_test(
     test: TestConfig,
-    build_board: str,
+    board_config: BoardConfig,
     console: io.FileIO,
-    reboot_timeout: float,
     executor: ThreadPoolExecutor,
 ) -> bool:
     """Run specified test."""
     start = time.time()
 
-    board_config = BOARD_CONFIGS[build_board]
+    reboot_timeout = board_config.reboot_timeout
     logging.debug("Calling pre-test callback")
     if not test.pre_test_callback(board_config):
         logging.error("pre-test callback failed, aborting")
@@ -880,6 +915,9 @@ def flash_and_run_test(
 
     if test.toggle_power:
         power_cycle(board_config)
+    else:
+        # In some cases flash_ec leaves the board off, so just ensure it is on
+        power(board_config, power_on=True)
 
     hw_write_protect(test.enable_hw_write_protect)
 
@@ -900,9 +938,8 @@ def flash_and_run_test(
 
         return run_test(
             test,
-            build_board,
+            board_config,
             console,
-            board_config.reboot_timeout,
             executor=executor,
         )
 

@@ -21,6 +21,7 @@
 #include <linux/kernel.h>
 #include <linux/kobject.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/mutex.h>
 #include <linux/poll.h>
 #include <linux/slab.h>
@@ -43,25 +44,25 @@ static const struct kernel_param_ops param_ops_u32_max = {
 };
 #define param_check_u32_max(name, p) __param_check(name, p, unsigned int)
 
-/* Maximum number of concurrent userspace I2C adapters. */
 static unsigned int max_adapters = 1 << 7;
 module_param(max_adapters, uint, 0444);
+MODULE_PARM_DESC(max_adapters, "Maximum number of concurrent userspace I2C adapters");
 
-/* Maximum number of I2C messages per master_xfer transaction. */
 static unsigned int max_msgs_per_xfer = 1 << 7;
 module_param(max_msgs_per_xfer, u32_max, 0444);
+MODULE_PARM_DESC(max_msgs_per_xfer, "Maximum number of I2C messages per master_xfer transaction");
 
-/* Maximum total size of all buffers per master_xfer transaction. */
 static unsigned int max_total_data_per_xfer = 1 << 15;
 module_param(max_total_data_per_xfer, u32_max, 0444);
+MODULE_PARM_DESC(max_total_data_per_xfer, "Maximum total size of all buffers per master_xfer transaction");
 
-/* Default I2C transaction timeout, in milliseconds. 0 for subsystem default. */
 static unsigned int default_timeout_ms = 3 * MSEC_PER_SEC;
 module_param(default_timeout_ms, u32_max, 0444);
+MODULE_PARM_DESC(default_timeout_ms, "Default I2C transaction timeout, in milliseconds. 0 for subsystem default");
 
-/* Maximum I2C transaction timeout, in milliseconds. */
 static unsigned int max_timeout_ms = 10 * MSEC_PER_SEC;
 module_param(max_timeout_ms, u32_max, 0444);
+MODULE_PARM_DESC(max_timeout_ms, "Maximum I2C transaction timeout, in milliseconds");
 
 static struct class *i2cp_class;
 static dev_t i2cp_cdev_num;
@@ -129,13 +130,8 @@ static inline bool i2cp_check_buf_lens(const struct i2c_msg *msgs,
 				       size_t num_msgs)
 {
 	size_t total_buf_len;
-	return i2cp_sum_buf_lens(msgs, num_msgs, &total_buf_len);
-}
 
-static int i2cp_adapter_master_xfer_atomic(struct i2c_adapter *adap,
-					   struct i2c_msg *msgs, int num)
-{
-	return -ENOSYS;
+	return i2cp_sum_buf_lens(msgs, num_msgs, &total_buf_len);
 }
 
 static inline bool i2cp_master_xfer_wait_cond(enum i2cp_state xfer_state)
@@ -163,6 +159,7 @@ static int i2cp_adapter_master_xfer(struct i2c_adapter *adap,
 		ret = -EMSGSIZE;
 		goto unlock;
 	}
+
 	switch (pdata->xfer_state) {
 	case I2CP_STATE_WAIT_FOR_XFER:
 		break;
@@ -174,11 +171,13 @@ static int i2cp_adapter_master_xfer(struct i2c_adapter *adap,
 		pdata->xfer_counters.unknown_failure++;
 		goto unlock;
 	}
+
 	if (!i2cp_check_buf_lens(msgs, num)) {
 		pdata->xfer_counters.too_much_data++;
 		ret = -ENOBUFS;
 		goto unlock;
 	}
+
 	pdata->xfer_id++;
 	pdata->xfer_msgs = msgs;
 	pdata->xfer_num_msgs = num;
@@ -225,11 +224,13 @@ static int i2cp_adapter_master_xfer(struct i2c_adapter *adap,
 		pdata->xfer_counters.unknown_failure++;
 		goto unlock;
 	}
+
 	WRITE_ONCE(pdata->xfer_state, I2CP_STATE_WAIT_FOR_XFER);
 	if (time_left == 0)
 		ret = -ETIMEDOUT;
 	else if (time_left == -ERESTARTSYS)
 		ret = -EINTR;
+
 unlock:
 	mutex_unlock(&pdata->xfer_lock);
 	return ret;
@@ -243,7 +244,6 @@ static u32 i2cp_adapter_functionality(struct i2c_adapter *adap)
 
 static const struct i2c_algorithm i2cp_algorithm = {
 	.master_xfer = i2cp_adapter_master_xfer,
-	.master_xfer_atomic = i2cp_adapter_master_xfer_atomic,
 	.functionality = i2cp_adapter_functionality,
 };
 
@@ -331,8 +331,10 @@ static inline long i2cp_set_functionality(u32 functionality,
 {
 	if ((functionality & I2C_FUNC_I2C) != I2C_FUNC_I2C ||
 	    (functionality &
-	     ~(I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL | I2C_FUNC_10BIT_ADDR |
-	       I2C_FUNC_PROTOCOL_MANGLING | I2C_FUNC_SLAVE)))
+	     ~(I2C_FUNC_I2C |
+	       I2C_FUNC_10BIT_ADDR |
+	       I2C_FUNC_PROTOCOL_MANGLING |
+	       I2C_FUNC_SMBUS_EMUL)))
 		return -EINVAL;
 	pdata->functionality = functionality;
 	return 0;
@@ -353,6 +355,7 @@ static inline long i2cp_set_name(const char __user *name,
 				 struct i2cp_controller *pdata)
 {
 	long ret;
+
 	if (!name)
 		return -EINVAL;
 	ret = strncpy_from_user(pdata->i2c_adapter.name, name,
@@ -384,11 +387,9 @@ static long i2cp_cdev_ioctl_start(struct file *filep, unsigned long arg)
 	ret = i2cp_set_functionality(arg_copy.functionality, pdata);
 	if (ret < 0)
 		goto unlock;
-
 	ret = i2cp_set_timeout(arg_copy.timeout_ms, pdata);
 	if (ret < 0)
 		goto unlock;
-
 	ret = i2cp_set_name(arg_copy.name, pdata);
 	if (ret < 0)
 		goto unlock;
@@ -426,6 +427,7 @@ static void i2cp_fill_bufs(struct i2c_msg *msgs, u32 num_msgs,
 {
 	u32 i;
 	size_t pos;
+
 	for (i = 0, pos = 0; i < num_msgs; pos += msgs[i++].len) {
 		/*
 		 * The data buffer is always copied, even for reads, to
@@ -457,8 +459,8 @@ static bool i2cp_xfer_req_copy_data(struct i2c_msg *msgs_copy, u32 num_msgs,
 		return true;
 	}
 
-	data_buf_copy =
-		kzalloc(sizeof(*data_buf_copy) * total_buf_len, GFP_KERNEL);
+	data_buf_copy = kzalloc(sizeof(*data_buf_copy) * total_buf_len,
+				GFP_KERNEL);
 	if (!data_buf_copy) {
 		*ret = -ENOMEM;
 		return false;
@@ -479,8 +481,9 @@ static long i2cp_xfer_req_copy_msgs(struct i2c_msg *xfer_msgs, u32 num_msgs,
 {
 	long ret = 0;
 	struct i2c_msg *msgs_copy;
-	msgs_copy =
-		kmemdup(xfer_msgs, sizeof(*xfer_msgs) * num_msgs, GFP_KERNEL);
+
+	msgs_copy = kmemdup(xfer_msgs, sizeof(*xfer_msgs) * num_msgs,
+			    GFP_KERNEL);
 	if (!msgs_copy)
 		return -ENOMEM;
 	if (i2cp_xfer_req_copy_data(msgs_copy, num_msgs, arg_copy->data_buf,
@@ -505,6 +508,7 @@ static long i2cp_cdev_ioctl_xfer_req(struct file *filep, unsigned long arg)
 	struct i2cp_ioctl_xfer_req_arg arg_copy;
 	struct i2cp_ioctl_xfer_req_arg __user *user_arg;
 	struct i2cp_controller *pdata;
+
 	pdata = filep->private_data;
 	user_arg = (void __user *)arg;
 	if (copy_from_user(&arg_copy, user_arg, sizeof(arg_copy)))
@@ -542,6 +546,7 @@ check_xfer_state:
 
 	arg_copy.output.xfer_id = pdata->xfer_id;
 	arg_copy.output.num_msgs = pdata->xfer_num_msgs;
+
 	BUILD_BUG_ON((void *)&arg_copy.output != (void *)&arg_copy);
 	if (copy_to_user(user_arg, &arg_copy.output, sizeof(arg_copy.output))) {
 		ret = -EFAULT;
@@ -551,11 +556,14 @@ check_xfer_state:
 		ret = -EMSGSIZE;
 		goto unlock;
 	}
+
 	ret = i2cp_xfer_req_copy_msgs(pdata->xfer_msgs, pdata->xfer_num_msgs,
 				      &arg_copy);
 	if (ret >= 0) {
 		WRITE_ONCE(pdata->xfer_state, I2CP_STATE_WAIT_FOR_REPLY);
 		wake_up_interruptible_sync(&pdata->state_wait_queue);
+		wake_up_interruptible_sync_poll(&pdata->poll_wait_queue,
+						EPOLLOUT);
 	}
 
 unlock:
@@ -600,6 +608,7 @@ static long i2cp_cdev_ioctl_xfer_reply(struct file *filep, unsigned long arg)
 		ret = -ENOTRECOVERABLE;
 		goto unlock;
 	}
+
 	if (arg_copy.xfer_id != pdata->xfer_id) {
 		ret = arg_copy.xfer_id < pdata->xfer_id ? -ETIME : -EINVAL;
 		goto unlock;
@@ -608,6 +617,7 @@ static long i2cp_cdev_ioctl_xfer_reply(struct file *filep, unsigned long arg)
 		ret = -EINVAL;
 		goto unlock;
 	}
+
 	msgs_copy = kcalloc(arg_copy.num_msgs, sizeof(*msgs_copy), GFP_KERNEL);
 	if (!msgs_copy) {
 		ret = -ENOMEM;
@@ -622,17 +632,20 @@ static long i2cp_cdev_ioctl_xfer_reply(struct file *filep, unsigned long arg)
 		if ((msgs_copy[i].flags & I2C_M_RD) &&
 		    copy_from_user(pdata->xfer_msgs[i].buf, msgs_copy[i].buf,
 				   pdata->xfer_msgs[i].len *
-					   sizeof(*(msgs_copy[i].buf)))) {
+				   sizeof(*(msgs_copy[i].buf)))) {
 			ret = -EFAULT;
 			goto unlock;
 		}
 	}
+
 	if (arg_copy.error > 0)
 		pdata->xfer_ret = min(-1, -(int)arg_copy.error);
 	else
 		pdata->xfer_ret = max(0, (int)arg_copy.num_msgs);
+
 	WRITE_ONCE(pdata->xfer_state, I2CP_STATE_XFER_RETURN);
 	wake_up_interruptible_sync(&pdata->state_wait_queue);
+
 unlock:
 	mutex_unlock(&pdata->xfer_lock);
 	return ret;
@@ -643,14 +656,13 @@ static long i2cp_cdev_ioctl_get_counters(struct file *filep, unsigned long arg)
 	long ret;
 	struct i2cp_ioctl_xfer_counters __user *user_arg;
 	struct i2cp_controller *pdata;
+
 	pdata = filep->private_data;
 	user_arg = (void __user *)arg;
 
 	mutex_lock(&pdata->xfer_lock);
 	ret = copy_to_user(user_arg, &pdata->xfer_counters,
-			   sizeof(pdata->xfer_counters)) ?
-		      -EFAULT :
-		      0;
+			   sizeof(pdata->xfer_counters)) ? -EFAULT : 0;
 	mutex_unlock(&pdata->xfer_lock);
 	return ret;
 }
@@ -658,6 +670,7 @@ static long i2cp_cdev_ioctl_get_counters(struct file *filep, unsigned long arg)
 static long i2cp_cdev_ioctl_shutdown(struct file *filep, unsigned long arg)
 {
 	struct i2cp_controller *pdata;
+
 	if (arg)
 		return -EINVAL;
 	pdata = filep->private_data;
@@ -668,6 +681,7 @@ static long i2cp_cdev_ioctl_shutdown(struct file *filep, unsigned long arg)
 			   I2CP_STATE_RETURN_THEN_SHUTDOWN :
 			   I2CP_STATE_SHUTDOWN);
 	mutex_unlock(&pdata->xfer_lock);
+
 	wake_up_interruptible_all(&pdata->state_wait_queue);
 	wake_up_interruptible_all(&pdata->poll_wait_queue);
 	return 0;
@@ -693,11 +707,12 @@ static long i2cp_cdev_unlocked_ioctl(struct file *filep, unsigned int cmd,
 
 /*
  * EPOLLIN indicates xfer request waiting for I2CP_IOCTL_XFER_REQ. This is what
- * pollers will normally want to wait for.
+ * pollers will normally wait for in conjunction with O_NONBLOCK.
  *
- * EPOLLOUT indicates I2CP_IOCTL_XFER_REPLY will not block, which is always the
- * case. Waiting for this before I2CP_IOCTL_XFER_REPLY is functionally safe but
- * completely unnecessary.
+ * EPOLLOUT indicates xfer request waiting for I2CP_IOCTL_XFER_REPLY. This is
+ * always the case immediately after successful I2CP_IOCTL_XFER_REQ, so polling
+ * for this is unnecessary, it is safe and recommended to call
+ * I2CP_IOCTL_XFER_REPLY as soon as a reply is ready.
  *
  * EPOLLHUP indicates I2CP_IOCTL_SHUTDOWN was called.
  */
@@ -712,14 +727,17 @@ static __poll_t i2cp_cdev_poll(struct file *filep, poll_table *ptp)
 	mutex_lock(&pdata->xfer_lock);
 	switch (pdata->xfer_state) {
 	case I2CP_STATE_WAIT_FOR_REQ:
-		poll_ret = EPOLLOUT | EPOLLIN;
+		poll_ret = EPOLLIN;
+		break;
+	case I2CP_STATE_WAIT_FOR_REPLY:
+		poll_ret = EPOLLOUT;
 		break;
 	case I2CP_STATE_RETURN_THEN_SHUTDOWN:
 	case I2CP_STATE_SHUTDOWN:
-		poll_ret = EPOLLOUT | EPOLLHUP;
+		poll_ret = EPOLLHUP;
 		break;
 	default:
-		poll_ret = EPOLLOUT;
+		poll_ret = 0;
 	}
 	mutex_unlock(&pdata->xfer_lock);
 
@@ -741,6 +759,7 @@ static ssize_t i2cp_open_count_show(struct device *dev,
 	int ret;
 	unsigned int count;
 	struct i2cp_device *i2cp_dev;
+
 	i2cp_dev = container_of(dev, struct i2cp_device, device);
 
 	mutex_lock(&i2cp_dev->count_lock);
@@ -778,6 +797,7 @@ static const struct attribute_group *i2cp_device_sysfs_groups[] = {
 static inline void i2cp_device_release(struct device *dev)
 {
 	struct i2cp_device *i2cp_dev;
+
 	i2cp_dev = container_of(dev, struct i2cp_device, device);
 	kfree(i2cp_dev);
 }
@@ -785,6 +805,7 @@ static inline void i2cp_device_release(struct device *dev)
 static int __init i2cp_init(void)
 {
 	int ret;
+
 /* TODO: upstream patch: remove #if LINUX_VERSION_CODE */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
 	i2cp_class = class_create(THIS_MODULE, "i2c-pseudo");
@@ -844,7 +865,7 @@ MODULE_DESCRIPTION("Driver for userspace I2C adapters");
 MODULE_LICENSE("GPL");
 /* TODO: upstream patch: remove comment about dkms.conf */
 /* Keep dkms.conf PACKAGE_VERSION in sync with this. */
-MODULE_VERSION("2.0");
+MODULE_VERSION("2.4");
 
 module_init(i2cp_init);
 module_exit(i2cp_exit);

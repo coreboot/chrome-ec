@@ -2,10 +2,13 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-if(DEFINED CONFIG_PLATFORM_EC AND EXISTS "${EDT_PICKLE}")
-  message(STATUS "Performing EC specific devicetree checks")
+separate_arguments(EXTRA_EC_VERSION_FLAGS_LIST UNIX_COMMAND
+		   ${EXTRA_EC_VERSION_FLAGS})
 
+if(DEFINED CONFIG_PLATFORM_EC AND EXISTS "${EDT_PICKLE}")
   set(ENV{PYTHONPATH} "${PLATFORM_EC}/zephyr/:${PLATFORM_EC}/zephyr/zmake")
+
+  message(STATUS "Performing EC specific devicetree checks")
 
   # Zephyr's gen_defines.py creates an EDT object of the final devicetree,
   # saving it as pickle file in the build directory.
@@ -19,12 +22,23 @@ if(DEFINED CONFIG_PLATFORM_EC AND EXISTS "${EDT_PICKLE}")
     message(FATAL_ERROR "named_gpios.py failed with return code: ${ret}")
   endif()
 
+  set(LED_POLICY_SCRIPT ${PLATFORM_EC}/zephyr/scripts/led_policy.py)
+  set(CMD_LED_POLICY ${PYTHON_EXECUTABLE} ${LED_POLICY_SCRIPT}
+    --zephyr-base ${ZEPHYR_BASE}
+    --edt-pickle ${EDT_PICKLE}
+  )
+  execute_process(COMMAND ${CMD_LED_POLICY} RESULT_VARIABLE ret)
+  if(NOT "${ret}" STREQUAL "0")
+    message(FATAL_ERROR "led_policy.py failed with return code: ${ret}")
+  endif()
+
   message(STATUS "Generating component manifest file")
   set(CME_SCRIPT ${PLATFORM_EC}/zephyr/scripts/cme.py)
   set(CMD_CME ${PYTHON_EXECUTABLE} ${CME_SCRIPT}
     --zephyr-base ${ZEPHYR_BASE}
     --edt-pickle ${EDT_PICKLE}
     --manifest-file "${CMAKE_BINARY_DIR}/zephyr/component_manifest.json"
+    ${EXTRA_EC_VERSION_FLAGS_LIST}
   )
   execute_process(COMMAND ${CMD_CME} RESULT_VARIABLE ret)
   if(NOT "${ret}" STREQUAL "0")
@@ -288,6 +302,12 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_SW
                                                 "${PLATFORM_EC}/common/charge_ramp_sw.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CPS8100
                                                 "${PLATFORM_EC}/driver/wpc/cps8100.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CURVE25519
+                                                "${PLATFORM_EC}/common/curve25519.c")
+if (NOT DEFINED CONFIG_CPU_CORTEX_M0)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CURVE25519
+                                                "${PLATFORM_EC}/common/curve25519-generic.c")
+endif()
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_OCPC
                                                 "${PLATFORM_EC}/common/ocpc.c")
 
@@ -672,9 +692,6 @@ add_subdirectory("fake")
 add_subdirectory("mock")
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
 
-separate_arguments(EXTRA_EC_VERSION_FLAGS_LIST UNIX_COMMAND
-		   ${EXTRA_EC_VERSION_FLAGS})
-
 # Use external script to generate the ec_version.h header and add as
 # a dependency to the EC application library.
 add_custom_target(
@@ -698,7 +715,7 @@ if (DEFINED CONFIG_PIGWEED_LOG_TOKENIZED_LIB)
       ${ZEPHYR_PIGWEED_MODULE_DIR}/pw_tokenizer/py/pw_tokenizer/database.py
       create
       --force
-      --type csv
+      --type binary
       -d ${CMAKE_BINARY_DIR}/database.bin
       ${CMAKE_BINARY_DIR}/zephyr/zephyr_pre0.elf
   )
