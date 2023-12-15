@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0+ WITH Linux-syscall-note */
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  * i2c-pseudo.h - I2C userspace adapter char device interface
  *
@@ -63,7 +63,7 @@
  *   of either arg->msgs or arg->data_buf will be modified.
  * - Thus arg->output.num_msgs will indicate the arg->msgs_len needed for this
  *   transaction.
- * - A retry with with a sufficiently large arg->msgs_len may be successful.
+ * - A retry with a sufficiently large arg->msgs_len may be successful.
  *   If no such retry will be attempted, it is best to use I2CP_IOCTL_XFER_REPLY
  *   with a non-zero error value to unblock the requesting I2C device driver
  *   from the I2C adapter timeout.
@@ -76,13 +76,12 @@
  *   will be modified.
  * - Thus the sum of each i2c_msg.len will indicate the arg->data_buf_len needed
  *   for this transaction.
- * - A retry with with a sufficiently large arg->data_buf may be successful.
+ * - A retry with a sufficiently large arg->data_buf may be successful.
  *   If no such retry will be attempted, it is best to use I2CP_IOCTL_XFER_REPLY
  *   with a non-zero error value to unblock the requesting I2C device driver
  *   from the I2C adapter timeout.
  */
-#define I2CP_IOCTL_XFER_REQ \
-	_IOWR(I2CP_IOCTL_CODE, 1, struct i2cp_ioctl_xfer_req_arg)
+#define I2CP_IOCTL_XFER_REQ _IOWR(I2CP_IOCTL_CODE, 1, struct i2cp_ioctl_xfer_req_arg)
 
 /*
  * Reply to the most recent I2C transfer request from I2CP_IOCTL_XFER_REQ.
@@ -97,8 +96,7 @@
  * reply, either from a prior I2CP_IOCTL_XFER_REQ call, or from exceeding the
  * I2C adapter timeout.
  */
-#define I2CP_IOCTL_XFER_REPLY \
-	_IOW(I2CP_IOCTL_CODE, 2, struct i2cp_ioctl_xfer_reply_arg)
+#define I2CP_IOCTL_XFER_REPLY _IOW(I2CP_IOCTL_CODE, 2, struct i2cp_ioctl_xfer_reply_arg)
 
 /*
  * Report counters of I2C transfers requested of this pseudo controller.
@@ -119,8 +117,7 @@
  * The sum of all *arg fields is the total number of I2C transfers requested of
  * this pseudo controller, except for those still waiting for a reply.
  */
-#define I2CP_IOCTL_GET_COUNTERS \
-	_IOR(I2CP_IOCTL_CODE, 3, struct i2cp_ioctl_xfer_counters)
+#define I2CP_IOCTL_GET_COUNTERS _IOR(I2CP_IOCTL_CODE, 3, struct i2cp_ioctl_xfer_counters)
 
 /*
  * Unblock all pseudo controller I/O and refuse further I2C transfer requests.

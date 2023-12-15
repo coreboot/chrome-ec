@@ -6352,6 +6352,7 @@ enum cbi_data_tag {
 	/* struct board_batt_params */
 	CBI_TAG_BATTERY_CONFIG = 12,
 	/* CBI_TAG_BATTERY_CONFIG_1 ~ 15 will use 13 ~ 27. */
+	CBI_TAG_BATTERY_CONFIG_15 = 27,
 
 	/* Last entry */
 	CBI_TAG_COUNT,
@@ -7762,7 +7763,7 @@ struct battery_info {
 	uint8_t reserved;
 } __packed __aligned(2);
 
-/**
+/*
  * The 'config' of a battery.
  */
 struct board_batt_params {
@@ -7785,7 +7786,7 @@ struct board_batt_params {
 #define SBS_MAX_STR_SIZE 31
 #define SBS_MAX_STR_OBJ_SIZE (SBS_MAX_STR_SIZE + 1)
 
-/**
+/*
  * Header describing a battery config stored in CBI. Only struct_version has
  * size and position independent of struct_version. The rest varies as
  * struct_version changes.

@@ -43,6 +43,7 @@
 #include <libec/flash_protect_command.h>
 #include <libec/rand_num_command.h>
 #include <libec/versions_command.h>
+#include <memory>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -66,6 +67,7 @@ enum {
 	OPT_ASCII,
 	OPT_I2C_BUS,
 	OPT_DEVICE,
+	OPT_VERBOSE,
 };
 
 static struct option long_opts[] = { { "dev", 1, 0, OPT_DEV },
@@ -74,6 +76,8 @@ static struct option long_opts[] = { { "dev", 1, 0, OPT_DEV },
 				     { "ascii", 0, 0, OPT_ASCII },
 				     { "i2c_bus", 1, 0, OPT_I2C_BUS },
 				     { "device", 1, 0, OPT_DEVICE },
+				     { "verbose", no_argument, NULL,
+				       OPT_VERBOSE },
 				     { NULL, 0, 0, 0 } };
 
 #define GEC_LOCK_TIMEOUT_SECS 30 /* 30 secs */
@@ -403,6 +407,9 @@ BUILD_ASSERT(ARRAY_SIZE(led_names) == EC_LED_ID_COUNT);
 /* ASCII mode for printing, default off */
 int ascii_mode;
 
+/* Message verbosity */
+static int verbose = 0;
+
 /* Check SBS numerical value range */
 int is_battery_range(int val)
 {
@@ -468,8 +475,9 @@ static int find_enum_from_text(const char *str,
 
 void print_help(const char *prog, int print_cmds)
 {
-	printf("Usage: %s [--dev=n] "
-	       "[--interface=dev|i2c|lpc] [--i2c_bus=n] [--device=vid:pid] ",
+	printf("Usage: %s [--dev=n]"
+	       " [--interface=dev|i2c|lpc] [--i2c_bus=n] [--device=vid:pid]"
+	       " --verbose",
 	       prog);
 	printf("[--name=cros_ec|cros_fp|cros_pd|cros_scp|cros_ish] [--ascii] ");
 	printf("<command> [params]\n\n");
@@ -479,6 +487,7 @@ void print_help(const char *prog, int print_cmds)
 	printf("  --interface Specifies the interface.\n\n");
 	printf("  --device    Specifies USB endpoint by vendor ID and product\n"
 	       "              ID (e.g. 18d1:5022).\n\n");
+	printf("  --verbose   Print more messages.\n\n");
 	if (print_cmds)
 		puts(help_str);
 	else
@@ -5379,9 +5388,11 @@ static int cmd_motionsense(int argc, char **argv)
 	int i, rv, status_only = (argc == 2);
 	struct ec_params_motion_sense param;
 	/* The largest size using resp as a response buffer */
-	uint8_t resp_buffer[ms_command_sizes[MOTIONSENSE_CMD_DUMP].insize];
+	std::unique_ptr<uint8_t[]> resp_buffer_ptr =
+		std::make_unique<uint8_t[]>(
+			ms_command_sizes[MOTIONSENSE_CMD_DUMP].insize);
 	struct ec_response_motion_sense *resp =
-		(struct ec_response_motion_sense *)resp_buffer;
+		(struct ec_response_motion_sense *)resp_buffer_ptr.get();
 	char *e;
 	/*
 	 * Warning: the following strings printed out are read in an
@@ -8529,7 +8540,8 @@ cmd_battery_vendor_param_usage:
 }
 
 static void batt_conf_dump(const struct board_batt_params *conf,
-			   const char *manuf_name, const char *device_name)
+			   const char *manuf_name, const char *device_name,
+			   uint8_t struct_version)
 {
 	const struct fuel_gauge_info *fg = &conf->fuel_gauge;
 	const struct ship_mode_info *ship = &conf->fuel_gauge.ship_mode;
@@ -8539,6 +8551,7 @@ static void batt_conf_dump(const struct board_batt_params *conf,
 
 	printf("{\n"); /* Start of root */
 	printf("\t\"%s,%s\": {\n", manuf_name, device_name);
+	printf("\t\t\"struct_version\": \"0x%02x\",\n", struct_version);
 	printf("\t\t\"fuel_gauge\": {\n");
 	printf("\t\t\t\"flags\": \"0x%x\",\n", fg->flags);
 
@@ -8585,7 +8598,8 @@ static void batt_conf_dump(const struct board_batt_params *conf,
 }
 
 static void batt_conf_dump_in_c(const struct board_batt_params *conf,
-				const char *manuf_name, const char *device_name)
+				const char *manuf_name, const char *device_name,
+				uint8_t struct_version)
 {
 	const struct fuel_gauge_info *fg = &conf->fuel_gauge;
 	const struct ship_mode_info *ship = &conf->fuel_gauge.ship_mode;
@@ -8593,6 +8607,7 @@ static void batt_conf_dump_in_c(const struct board_batt_params *conf,
 	const struct fet_info *fet = &conf->fuel_gauge.fet;
 	const struct battery_info *info = &conf->batt_info;
 
+	printf("// struct_version = 0x%02x\n", struct_version);
 	printf(".manuf_name = \"%s\",\n", manuf_name);
 	printf(".device_name = \"%s\",\n", device_name);
 
@@ -8645,7 +8660,8 @@ static int read_u32_from_json(base::Value::Dict *dict, const char *key,
 	char *e;
 
 	if (str == nullptr) {
-		printf("Key '%s' not found\n", key);
+		if (verbose)
+			printf("Key '%s' not found. Ignored.\n", key);
 		return 0;
 	}
 
@@ -8666,7 +8682,8 @@ static int read_u16_from_json(base::Value::Dict *dict, const char *key,
 	char *e;
 
 	if (str == nullptr) {
-		printf("Key '%s' not found\n", key);
+		if (verbose)
+			printf("Key '%s' not found. Ignored.\n", key);
 		return 0;
 	}
 
@@ -8687,7 +8704,8 @@ static int read_u8_from_json(base::Value::Dict *dict, const char *key,
 	char *e;
 
 	if (str == nullptr) {
-		printf("Key '%s' not found\n", key);
+		if (verbose)
+			printf("Key '%s' not found. Ignored.\n", key);
 		return 0;
 	}
 
@@ -8815,15 +8833,17 @@ static void cmd_battery_config_help(const char *cmd)
 {
 	fprintf(stderr,
 		"\n"
-		"Usage: %s get [-c]\n"
+		"Usage: %s get [-c] [<index>]\n"
 		"    Print active battery config in JSON or C-struct (-c).\n"
+		"    If <index> is specified, a config is read from CBI.\n"
 		"\n"
-		"Usage: %s set <json_file> <manuf_name> <device_name>\n"
+		"Usage: %s set <json_file> <manuf_name> <device_name> [<index>]\n"
 		"    Copy battery config from file to CBI.\n"
 		"\n"
 		"    json_file: Path to JSON file containing battery configs\n"
 		"    manuf_name: Manufacturer's name. Up to 31 chars.\n"
 		"    device_name: Battery's name. Up to 31 chars.\n"
+		"    index: Index of config in CBI to be get or set.\n"
 		"\n"
 		"    Run `ectool battery` for <manuf_name> and <device_name>\n",
 		cmd, cmd);
@@ -8840,6 +8860,7 @@ static int cmd_battery_config_get(int argc, char *argv[])
 	bool in_json = true;
 	int rv;
 	int c;
+	int index = -1;
 
 	while ((c = getopt(argc, argv, "c")) != -1) {
 		switch (c) {
@@ -8856,13 +8877,34 @@ static int cmd_battery_config_get(int argc, char *argv[])
 	}
 
 	if (optind < argc) {
+		char *e;
+		index = strtol(argv[optind], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad index: '%s'\n", argv[optind]);
+			return -1;
+		}
+		optind++;
+	}
+
+	if (optind < argc) {
 		fprintf(stderr, "Unknown argument '%s'\n", argv[optind]);
 		cmd_battery_config_help("bcfg");
 		return -1;
 	}
 
-	rv = ec_command(EC_CMD_BATTERY_CONFIG, 0, NULL, 0, ec_inbuf,
-			ec_max_insize);
+	if (index < 0) {
+		rv = ec_command(EC_CMD_BATTERY_CONFIG, 0, NULL, 0, ec_inbuf,
+				ec_max_insize);
+	} else {
+		struct ec_params_get_cbi pa = { 0 };
+
+		pa.tag = index + CBI_TAG_BATTERY_CONFIG;
+		rv = ec_command(EC_CMD_GET_CROS_BOARD_INFO, 0, &pa, sizeof(pa),
+				ec_inbuf, ec_max_insize);
+		if (rv == -EC_RES_INVALID_PARAM - EECRESULT)
+			fprintf(stderr, "Config[%d] not found in CBI.\n",
+				index);
+	}
 	if (rv < 0)
 		return rv;
 
@@ -8899,9 +8941,11 @@ static int cmd_battery_config_get(int argc, char *argv[])
 	p += head->device_name_size;
 	memcpy(&conf, p, sizeof(conf));
 	if (in_json)
-		batt_conf_dump(&conf, manuf_name, device_name);
+		batt_conf_dump(&conf, manuf_name, device_name,
+			       head->struct_version);
 	else
-		batt_conf_dump_in_c(&conf, manuf_name, device_name);
+		batt_conf_dump_in_c(&conf, manuf_name, device_name,
+				    head->struct_version);
 
 	return 0;
 }
@@ -8911,15 +8955,34 @@ static int cmd_battery_config_set(int argc, char *argv[])
 	FILE *fp = NULL;
 	int size;
 	char *json = NULL;
-	const char *json_file = argv[1];
-	const char *manuf_name = argv[2];
-	const char *device_name = argv[3];
+	const char *json_file;
+	const char *manuf_name;
+	const char *device_name;
 	char identifier[SBS_MAX_STR_OBJ_SIZE * 2];
 	struct board_batt_params config;
 	struct ec_params_set_cbi *p = (struct ec_params_set_cbi *)ec_outbuf;
 	struct batt_conf_header *header = (struct batt_conf_header *)p->data;
 	uint8_t *d = (uint8_t *)header;
+	uint8_t struct_version = EC_BATTERY_CONFIG_STRUCT_VERSION;
 	int rv;
+	int index = 0;
+
+	if (argc < 4 || 5 < argc) {
+		fprintf(stderr, "Invalid number of arguments.\n");
+		cmd_battery_config_help("bcfg");
+		return -1;
+	} else if (argc == 5) {
+		char *e;
+		index = strtol(argv[4], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad index: '%s'\n", argv[4]);
+			return -1;
+		}
+	}
+
+	json_file = argv[1];
+	manuf_name = argv[2];
+	device_name = argv[3];
 
 	if (strlen(manuf_name) > SBS_MAX_STR_SIZE) {
 		fprintf(stderr, "manuf_name is too long.");
@@ -8971,6 +9034,8 @@ static int cmd_battery_config_set(int argc, char *argv[])
 		free(json);
 		return -1;
 	}
+	if (read_u8_from_json(dict, "struct_version", &struct_version))
+		return -1;
 
 	/* Clear the dst to ensure it'll be null-terminated. */
 	memset(identifier, 0, sizeof(identifier));
@@ -8983,14 +9048,15 @@ static int cmd_battery_config_set(int argc, char *argv[])
 		free(json);
 		return -1;
 	}
+	if (read_u8_from_json(root_dict, "struct_version", &struct_version))
+		return -1;
 
 	/* Clear config to ensure unspecified (optional) fields are 0. */
 	memset(&config, 0, sizeof(config));
-	if (read_battery_config_from_json(root_dict, &config)) {
+	if (read_battery_config_from_json(root_dict, &config))
 		return -1;
-	}
 
-	header->struct_version = EC_BATTERY_CONFIG_STRUCT_VERSION;
+	header->struct_version = struct_version;
 	header->manuf_name_size = strlen(manuf_name);
 	header->device_name_size = strlen(device_name);
 	d += sizeof(*header);
@@ -9000,7 +9066,7 @@ static int cmd_battery_config_set(int argc, char *argv[])
 	d += header->device_name_size;
 	memcpy(d, &config, sizeof(config));
 
-	p->tag = CBI_TAG_BATTERY_CONFIG;
+	p->tag = index + CBI_TAG_BATTERY_CONFIG;
 	p->size = sizeof(struct batt_conf_header) + header->manuf_name_size +
 		  header->device_name_size + sizeof(config);
 	size = sizeof(*p);
@@ -9109,7 +9175,8 @@ static int cmd_cbi_is_string_field(enum cbi_data_tag tag)
 
 static int cmd_cbi_is_binary_field(enum cbi_data_tag tag)
 {
-	return tag == CBI_TAG_BATTERY_CONFIG;
+	return CBI_TAG_BATTERY_CONFIG <= tag &&
+	       tag <= CBI_TAG_BATTERY_CONFIG_15;
 }
 
 /*
@@ -12375,7 +12442,7 @@ int main(int argc, char *argv[])
 
 	BUILD_ASSERT(ARRAY_SIZE(lb_command_paramcount) == LIGHTBAR_NUM_CMDS);
 
-	while ((i = getopt_long(argc, argv, "+?", long_opts, NULL)) != -1) {
+	while ((i = getopt_long(argc, argv, "+v?", long_opts, NULL)) != -1) {
 		switch (i) {
 		case '?':
 			/* Unhandled option */
@@ -12426,6 +12493,10 @@ int main(int argc, char *argv[])
 			break;
 		case OPT_ASCII:
 			ascii_mode = 1;
+			break;
+		case OPT_VERBOSE:
+		case 'v':
+			verbose = 1;
 			break;
 		}
 	}
