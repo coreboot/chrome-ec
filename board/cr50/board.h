@@ -414,6 +414,7 @@ void usb_i2c_board_disable(void);
 void print_ap_state(void);
 void print_ap_uart_state(void);
 void print_ec_state(void);
+void print_pcr0(void);
 void print_servo_state(void);
 
 void pmu_check_tpm_rst(void);

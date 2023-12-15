@@ -155,9 +155,19 @@ void _plat__OwnerClearCallback(void)
 		CPRINTF("%s: failed (%d)\n", __func__, rv);
 }
 
-/* Returns TRUE if FWMP/antirollback is allowed to be updated
- * with the current PCR state.
- */
+/* Prints the contents of pcr0 */
+void print_pcr0(void)
+{
+	uint8_t pcr0_value[SHA256_DIGEST_SIZE];
+
+	ccprintf("pcr0:    ");
+	if (!get_tpm_pcr_value(0, pcr0_value)) {
+		ccprintf("error\n");
+		return;
+	}
+	ccprintf("%ph\n", HEX_BUF(&pcr0_value, SHA256_DIGEST_SIZE));
+}
+
 static BOOL pcr_allows_boot_policy_update(void)
 {
 	uint8_t pcr0_value[SHA256_DIGEST_SIZE];
