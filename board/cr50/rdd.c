@@ -474,6 +474,7 @@ static int command_ccd_state(int argc, char **argv)
 {
 	print_ap_state();
 	print_ap_uart_state();
+	print_pcr0();
 	print_ec_state();
 	print_servo_state();
 	print_rdd_state();
