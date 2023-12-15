@@ -58,6 +58,7 @@ struct nn_page_header {
  */
 BUILD_ASSERT(offsetof(struct nn_page_header, page_hash) == sizeof(uint32_t));
 BUILD_ASSERT(sizeof(struct nn_page_header) == 2 * sizeof(uint32_t));
+BUILD_ASSERT(sizeof(struct nn_page_header) % CONFIG_FLASH_WRITE_SIZE == 0);
 
 /* Value of word in erased flash page. */
 #define NV_FLASH_EMPTY_WORD ((uint32_t)~0)
@@ -99,6 +100,8 @@ struct nn_container {
 	unsigned int container_hash : 12;
 } __packed;
 BUILD_ASSERT(sizeof(struct nn_container) == sizeof(uint32_t));
+/* This is an assumption in the implementation. */
+BUILD_ASSERT(sizeof(struct nn_container) == CONFIG_FLASH_WRITE_SIZE);
 
 /*
  * A structure to keep context of accessing to a page, page header and offset
