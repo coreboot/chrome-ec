@@ -298,7 +298,7 @@ struct max_var_container {
 	struct tuple t_header;
 	uint8_t body[CONFIG_FLASH_BANK_SIZE - sizeof(struct nn_container) -
 		     sizeof(struct tuple)];
-} __packed;
+} __aligned(CONFIG_FLASH_WRITE_SIZE);
 
 /*
  * Limit of the number of objects which can be updated in one TPM transaction,
@@ -839,6 +839,7 @@ test_export_static enum ec_error_list get_next_object(struct access_tracker *at,
 		 * provided space and continue reading there.
 		 */
 		*ch = temp_ch;
+		/* All containers are aligned to CONFIG_FLASH_WRITE_SIZE */
 		aligned_remaining_size =
 			aligned_container_size(ch) - sizeof(*ch);
 
@@ -1146,6 +1147,7 @@ static enum ec_error_list start_new_flash_page(size_t data_size)
 static enum ec_error_list save_object(const struct nn_container *cont)
 {
 	const void *save_data = cont;
+	/* All containers are aligned to CONFIG_FLASH_WRITE_SIZE */
 	size_t save_size = aligned_container_size(cont);
 	size_t top_room;
 	enum ec_error_list rv;
