@@ -384,7 +384,7 @@ Build:   ti50_common:v0.0.2949-4ee72fd9
          @chromeos-ci-firmware-us-central1-b-x32-0-j9et 2023-04-11 06:54:23
 ```
 
-### 0.23.30 Released on 4/21/2023 in M114
+### 0.23.30 Released on 4/21/2023 in M114 (GUC version)
 
 Release
 [CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/4460212)
@@ -396,6 +396,9 @@ Artifacts:
 [15224.14.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.14.0)
 
 Manifest snapshot: gs://chromeos-manifest-versions/buildspecs/107/15224.14.0.xml
+
+Starting June 2023, the GSC comes preloaded from the GUC factory with this
+version.
 
 **Features**
 
