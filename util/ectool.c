@@ -7488,7 +7488,7 @@ int cmd_charge_control(int argc, char *argv[])
 		return -1;
 	}
 
-	rv = ec_command(EC_CMD_CHARGE_CONTROL, 1, &p, sizeof(p), NULL, 0);
+	rv = ec_command(EC_CMD_CHARGE_CONTROL, 2, &p, sizeof(p), NULL, 0);
 	if (rv < 0) {
 		fprintf(stderr, "Is AC connected?\n");
 		return rv;
