@@ -98,7 +98,7 @@ struct nn_container {
 	unsigned int size : 11;
 	unsigned int generation : 2;
 	unsigned int container_hash : 12;
-} __packed;
+} __aligned(CONFIG_FLASH_WRITE_SIZE);
 BUILD_ASSERT(sizeof(struct nn_container) == sizeof(uint32_t));
 /* This is an assumption in the implementation. */
 BUILD_ASSERT(sizeof(struct nn_container) == CONFIG_FLASH_WRITE_SIZE);
