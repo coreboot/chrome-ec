@@ -17,7 +17,7 @@
 
 use ap_ro_errs::{
     ApRoVerificationResult, ApRoVerificationTpmvStatus, BadValue, CryptoAlgorithmSource,
-    DigestLocation, InternalErrorSource, Result, SignatureLocation, VerifyError, VerifyErrorCode,
+    DigestLocation, InternalErrorSource, SignatureLocation, VerifyError, VerifyErrorCode,
     VersionMismatchSource,
 };
 use std::fmt::Display;
@@ -38,7 +38,8 @@ impl ExplainError {
         }
     }
 }
-fn parse_arg(mut arg: &str) -> core::result::Result<u32, ExplainError> {
+
+fn parse_arg(mut arg: &str) -> Result<u32, ExplainError> {
     if let Some(stripped) = arg.strip_prefix("0x").or_else(|| arg.strip_prefix('x')) {
         arg = stripped;
     } else {
@@ -54,7 +55,7 @@ fn parse_arg(mut arg: &str) -> core::result::Result<u32, ExplainError> {
     u32::from_str_radix(arg, 16).map_err(|_| ExplainError::InvalidArg)
 }
 
-fn get_code_from_args() -> core::result::Result<u32, ExplainError> {
+fn get_code_from_args() -> Result<u32, ExplainError> {
     let mut args = std::env::args();
     let _app_name = args.next();
     let Some(out) = args.next() else {
@@ -76,7 +77,15 @@ fn expected_less_detail(detail: &[u8], at: &str) {
 
 fn explain_code(code: u32) {
     /// Bit that indicates that AP RO verification has succeeded at least once on device.
-    const LATCH_SUCCESS: u32 = 0x80000000;
+    const LATCH_SUCCESS: u32 = 1 << 31;
+
+    /// Bit that indicates that the AllowUnverifiedRo CCD capability was enabled on device at the
+    /// time that the extended status was queried.
+    const ALLOW_UNVERIFIED_RO_ENABLED: u32 = 1 << 30;
+
+    /// Bit that indicates that the AllowUnverifiedRo CCD capability was set to never at the
+    /// time that the extended status was queried.
+    const ALLOW_UNVERIFIED_RO_NEVER: u32 = 1 << 29;
 
     println!("Code: 0x{code:08x}");
     if let Ok(bottom) = u8::try_from(code) {
@@ -90,8 +99,10 @@ fn explain_code(code: u32) {
         println!("It is a SUCCESS status");
         return;
     }
+    let result_code =
+        code & !LATCH_SUCCESS & !ALLOW_UNVERIFIED_RO_ENABLED & !ALLOW_UNVERIFIED_RO_NEVER;
     // Remove latch value before trying to parse the result
-    let result = ApRoVerificationResult::from(code & !LATCH_SUCCESS);
+    let result = ApRoVerificationResult::from(result_code);
     let err = Result::from(result).expect_err("Already checked for success.");
     if err == VerifyError::Internal(InternalErrorSource::CouldNotDeserialize, 0) {
         println!("The code is not recognized by this tool");
@@ -100,6 +111,12 @@ fn explain_code(code: u32) {
     println!("This is likely an expanded error code");
     if code & LATCH_SUCCESS != 0 {
         println!("THIS ERROR OCURRED AFTER SUCCESS WAS LATCHED!")
+    }
+    if code & ALLOW_UNVERIFIED_RO_ENABLED != 0 {
+        println!("The system had the `AllowUnverifiedRo` capability enabled at query time")
+    }
+    if code & ALLOW_UNVERIFIED_RO_NEVER != 0 {
+        println!("The system had the `AllowUnverifiedRo` capability set to Never at query time")
     }
     let code = err.code();
     let detail = err.detail();
