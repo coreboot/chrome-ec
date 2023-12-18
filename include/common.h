@@ -30,6 +30,12 @@
 #endif /* CONFIG_ZEPHYR */
 
 /*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 37
+
+/*
  * Define a new macro (FIXED_SECTION) to abstract away the linker details
  * between platform/ec builds and Zephyr. Each build has a slightly different
  * way of ensuring that the given section is in the same relative location in
@@ -194,6 +200,18 @@
 #define __overridable __attribute__((weak))
 
 /*
+ * Mark a symbol that is provided by a precompiled static library, without
+ * source code.
+ */
+#define __staticlib extern
+
+/*
+ * Mark a symbol that is defined purely as a hook to be used by a static
+ * library.
+ */
+#define __staticlib_hook __unused
+
+/*
  * Attribute that will generate a compiler warning if the return value is not
  * used.
  */
@@ -238,13 +256,14 @@
  */
 #define CELSIUS_TO_DECI_KELVIN(temp_c) \
 	(round_divide(CELSIUS_TO_MILLI_KELVIN(temp_c), 100))
-#define DECI_KELVIN_TO_CELSIUS(temp_dk) (MILLI_KELVIN_TO_CELSIUS((temp_dk)*100))
+#define DECI_KELVIN_TO_CELSIUS(temp_dk) \
+	(MILLI_KELVIN_TO_CELSIUS((temp_dk) * 100))
 #define MILLI_KELVIN_TO_MILLI_CELSIUS(temp_mk) ((temp_mk)-273150)
 #define MILLI_CELSIUS_TO_MILLI_KELVIN(temp_mc) ((temp_mc) + 273150)
 #define MILLI_KELVIN_TO_KELVIN(temp_mk) (round_divide((temp_mk), 1000))
-#define KELVIN_TO_MILLI_KELVIN(temp_k) ((temp_k)*1000)
+#define KELVIN_TO_MILLI_KELVIN(temp_k) ((temp_k) * 1000)
 #define CELSIUS_TO_MILLI_KELVIN(temp_c) \
-	(MILLI_CELSIUS_TO_MILLI_KELVIN((temp_c)*1000))
+	(MILLI_CELSIUS_TO_MILLI_KELVIN((temp_c) * 1000))
 #define MILLI_KELVIN_TO_CELSIUS(temp_mk) \
 	(round_divide(MILLI_KELVIN_TO_MILLI_CELSIUS(temp_mk), 1000))
 
@@ -252,7 +271,7 @@
  * TARGET_WITH_MARGIN(X, 5) returns X' where X' * 100.5% is almost equal to
  * but does not exceed X. */
 #define TARGET_WITH_MARGIN(target, tenths_percent) \
-	(((target)*1000) / (1000 + (tenths_percent)))
+	(((target) * 1000) / (1000 + (tenths_percent)))
 
 /* Call a function, and return the error value unless it returns EC_SUCCESS. */
 #define RETURN_ERROR(fn)                 \

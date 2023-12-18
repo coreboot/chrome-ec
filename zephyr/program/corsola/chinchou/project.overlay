@@ -17,13 +17,14 @@
 #include "../npcx_motionsense.dtsi"
 #include "../ite_usbc.dtsi"
 #include "../ite_shi.dtsi"
+#include "thermistor.dtsi"
 
 #include <cros/thermistor/thermistor.dtsi>
 #include <dt-bindings/battery.h>
 
 / {
 	aliases {
-		bma4xx-int = &lid_accel;
+		lsm6dsm-int = &base_accel;
 	};
 
 	motionsense-sensor-info {
@@ -33,7 +34,9 @@
 		 * list of GPIO interrupts that have to
 		 * be enabled at initial stage
 		 */
-		sensor-irqs = <&int_base_imu &int_lid_imu>;
+		sensor-irqs = <&int_base_imu>;
+
+		accel-force-mode-sensors = <&lid_accel &alt_lid_accel>;
 	};
 
 	batteries {
@@ -54,21 +57,22 @@
 				 1 0 0
 				 0 0 (-1)>;
 		};
+		base_rot_ref_lsm6dsm: base-rotation-ref-lsm6dsm {
+			mat33 = <(-1) 0 0
+				 0 1 0
+				 0 0 (-1)>;
+		};
 	};
 
 	gpio-interrupts {
 		/delete-node/ x_ec_gpio2;
 		/delete-node/ usb_c1_bc12_charger;
+		/delete-node/ lid_imu;
 
 		int_base_imu: base_imu {
 			irq-pin = <&base_imu_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "bmi3xx_interrupt";
-		};
-		int_lid_imu: lid_imu {
-			irq-pin = <&lid_accel_int_l>;
-			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "bma4xx_interrupt";
+			handler = "motion_interrupt";
 		};
 		int_x_ec_gpio2: x_ec_gpio2 {
 			irq-pin = <&gpio_x_ec_gpio2>;
@@ -92,6 +96,7 @@
 		/delete-node/ entering_rw;
 		/delete-node/ usb_c0_ppc_frsinfo;
 		/delete-node/ usb_c1_bc12_charger_int_odl;
+		/delete-node/ lid_accel_int_l;
 
 		ec_en_pp3300_ucam: ec_en_pp3300_ucam{
 			gpios = <&gpioa 2 GPIO_OUTPUT_HIGH>;
@@ -143,6 +148,7 @@
 			<&gpioi 3 GPIO_INPUT_PULL_DOWN>,
 			<&gpioi 5 GPIO_INPUT_PULL_DOWN>,
 			<&gpioi 6 GPIO_INPUT_PULL_DOWN>,
+			<&gpiom 2 (GPIO_INPUT_PULL_DOWN | GPIO_VOLTAGE_1P8)>,
 			<&gpiom 6 (GPIO_INPUT_PULL_DOWN | GPIO_VOLTAGE_1P8)>;
 	};
 
@@ -165,6 +171,9 @@
 		compatible = "cros-ec,temp-sensors";
 		temp_sensor_1 {
 			sensor = <&temp_sensor_1_thermistor>;
+		};
+		temp_charger: charger {
+			sensor = <&charger_bc12_port1>;
 		};
 	};
 
@@ -245,13 +254,147 @@
 		};
 	};
 
+	/* Chinchou-specific ssfc fields. */
+	chinchou-ssfc {
+		compatible = "cros-ec,cbi-ssfc";
+
+		/* SSFC field to identify BASE motion sensor. */
+		base-sensor {
+			enum-name = "BASE_SENSOR";
+			size = <3>;
+
+			base_sensor_0: bmi323 {
+				compatible = "cros-ec,cbi-ssfc-value";
+				status = "okay";
+				value = <1>;
+				default;
+			};
+			base_sensor_1: lsm6dsm {
+				compatible = "cros-ec,cbi-ssfc-value";
+				status = "okay";
+				value = <2>;
+			};
+		};
+
+		/* SSFC field to identify LID motion sensor. */
+		lid-sensor {
+			enum-name = "LID_SENSOR";
+			size = <3>;
+
+			lid_sensor_0: bma422 {
+				compatible = "cros-ec,cbi-ssfc-value";
+				status = "okay";
+				value = <1>;
+				default;
+			};
+			lid_sensor_1: lis2dw12 {
+				compatible = "cros-ec,cbi-ssfc-value";
+				status = "okay";
+				value = <2>;
+			};
+		};
+	};
+
+	/*
+	 * Driver specific data. A driver-specific data can be shared with
+	 * different motion sensors while they are using the same driver.
+	 *
+	 * If a node's compatible starts with "cros-ec,accelgyro-", it is for
+	 * a common structure defined in accelgyro.h.
+	 * e.g) compatible = "cros-ec,accelgyro-als-drv-data" is for
+	 * "struct als_drv_data_t" in accelgyro.h
+	 */
+	motionsense-sensor-data {
+		lis2dw12_data: lis2dw12-drv-data {
+			compatible = "cros-ec,drvdata-lis2dw12";
+			status = "okay";
+		};
+		lsm6dsm_data_accel: lsm6dsm-accel-drv-data {
+			compatible = "cros-ec,drvdata-lsm6dsm";
+			status = "okay";
+		};
+		lsm6dsm_data_gyro: lsm6dsm-gyro-drv-data {
+			compatible = "cros-ec,drvdata-lsm6dsm";
+			status = "okay";
+		};
+	};
+
+	motionsense-sensor-alt {
+		alt_lid_accel: alt-lid-accel {
+			compatible = "cros-ec,lis2dw12";
+			status = "okay";
+
+			active-mask = "SENSOR_ACTIVE_S0_S3";
+			location = "MOTIONSENSE_LOC_LID";
+			mutex = <&lid_mutex>;
+			port = <&i2c_sensor>;
+			rot-standard-ref = <&lid_rot_ref>;
+			default-range = <2>;
+			drv-data = <&lis2dw12_data>;
+			i2c-spi-addr-flags = "LIS2DWL_ADDR0_FLAGS";
+			alternate-for = <&lid_accel>;
+			alternate-ssfc-indicator = <&lid_sensor_1>;
+			configs {
+				compatible =
+					"cros-ec,motionsense-sensor-config";
+				ec-s0 {
+					odr = <(12500 | ROUND_UP_FLAG)>;
+				};
+				ec-s3 {
+					odr = <(12500 | ROUND_UP_FLAG)>;
+				};
+			};
+		};
+
+		alt_base_accel: alt-base-accel {
+			compatible = "cros-ec,lsm6dsm-accel";
+			status = "okay";
+
+			active-mask = "SENSOR_ACTIVE_S0_S3";
+			location = "MOTIONSENSE_LOC_BASE";
+			mutex = <&base_mutex>;
+			port = <&i2c_sensor>;
+			rot-standard-ref = <&base_rot_ref_lsm6dsm>;
+			drv-data = <&lsm6dsm_data_accel>;
+			alternate-for = <&base_accel>;
+			alternate-ssfc-indicator = <&base_sensor_1>;
+			configs {
+				compatible =
+					"cros-ec,motionsense-sensor-config";
+				ec-s0 {
+					odr = <(12500 | ROUND_UP_FLAG)>;
+					ec-rate = <(100 * USEC_PER_MSEC)>;
+				};
+				ec-s3 {
+					odr = <(12500 | ROUND_UP_FLAG)>;
+					ec-rate = <0>;
+				};
+			};
+		};
+
+		alt_base_gyro: alt-base-gyro {
+			compatible = "cros-ec,lsm6dsm-gyro";
+			status = "okay";
+
+			active-mask = "SENSOR_ACTIVE_S0_S3";
+			location = "MOTIONSENSE_LOC_BASE";
+			mutex = <&base_mutex>;
+			port = <&i2c_sensor>;
+			rot-standard-ref = <&base_rot_ref_lsm6dsm>;
+			default-range = <(1000 | ROUND_UP_FLAG)>; /* dps */
+			drv-data = <&lsm6dsm_data_gyro>;
+			alternate-for = <&base_gyro>;
+			alternate-ssfc-indicator = <&base_sensor_1>;
+		};
+	};
+
 	led-colors {
 		compatible = "cros-ec,led-policy";
 
 		bat-power-state-charge-1 {
 			charge-state = "LED_PWRS_CHARGE";
-			/* Battery display percent range (>= 0, <= 97%) */
-			batt-lvl = <BATTERY_LEVEL_EMPTY 97>;
+			/* Battery display percent range (>= Empty, <= 94%) */
+			batt-lvl = <BATTERY_LEVEL_EMPTY 94>;
 
 			battery-led {
 				led-id = "EC_LED_ID_BATTERY_LED";
@@ -264,8 +407,8 @@
 
 		bat-power-state-charge-2 {
 			charge-state = "LED_PWRS_CHARGE";
-			/* Battery display percent range (>= 98, <= 99%) */
-			batt-lvl = <98 99>;
+			/* Battery display percent range (>= 95) */
+			batt-lvl = <95 100>;
 
 			battery-led {
 				led-id = "EC_LED_ID_BATTERY_LED";
@@ -291,6 +434,8 @@
 		bat-power-state-discharge-s0 {
 			charge-state = "LED_PWRS_DISCHARGE";
 			chipset-state = "POWER_S0";
+			/* Battery display percent range (>= 11%, <= 100%) */
+			batt-lvl = <(BATTERY_LEVEL_LOW + 1) BATTERY_LEVEL_FULL>;
 
 			battery-led {
 				led-id = "EC_LED_ID_BATTERY_LED";
@@ -335,7 +480,8 @@
 		bat-power-state-discharge-s0-bat-low {
 			charge-state = "LED_PWRS_DISCHARGE";
 			chipset-state = "POWER_S0";
-			batt-lvl = <BATTERY_LEVEL_EMPTY 7>;
+			/* Battery display percent range (>= 0, <= 10%) */
+			batt-lvl = <BATTERY_LEVEL_EMPTY BATTERY_LEVEL_LOW>;
 
 			battery-led {
 				led-id = "EC_LED_ID_BATTERY_LED";
@@ -400,15 +546,16 @@
 			};
 		};
 
-		/* Chinchou LED power idle */
-		power-state-idle {
+		/* Chinchou LED power idle, S5*/
+		power-state-idle-s5 {
 			charge-state = "LED_PWRS_IDLE";
+			chipset-state = "POWER_S5";
 
 			battery-led {
 				led-id = "EC_LED_ID_BATTERY_LED";
 
 				color-0 {
-					led-color = "LED_WHITE";
+					led-color = "LED_OFF";
 				};
 			};
 		};
@@ -427,6 +574,34 @@
 				color-1 {
 					led-color = "LED_WHITE";
 					period-ms = <2000>;
+				};
+			};
+		};
+
+		/* Chinchou LED power idle, S0 */
+		power-state-idle-s0 {
+			charge-state = "LED_PWRS_IDLE";
+			chipset-state = "POWER_S0";
+
+			battery-led {
+				led-id = "EC_LED_ID_BATTERY_LED";
+
+				color-0 {
+					led-color = "LED_WHITE";
+				};
+			};
+		};
+
+		/* Chinchou LED power idle, S3 */
+		power-state-idle-s3 {
+			charge-state = "LED_PWRS_IDLE";
+			chipset-state = "POWER_S3";
+
+			battery-led {
+				led-id = "EC_LED_ID_BATTERY_LED";
+
+				color-0 {
+					led-color = "LED_WHITE";
 				};
 			};
 		};
@@ -509,6 +684,7 @@
 		reg = <0x53>;
 		irq = <&int_usb_c0_bc12_charger>;
 		mivr = <4000>;
+		thermistor = <&thermistor_rt9490>;
 	};
 };
 

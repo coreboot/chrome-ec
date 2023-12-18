@@ -12,7 +12,6 @@
 #include "../keyboard.dtsi"
 #include "../power_signals.dtsi"
 #include "../rex.dtsi"
-#include "../temp_sensors.dtsi"
 #include "../usbc.dtsi"
 
 /* Karis project DTS includes */
@@ -22,12 +21,14 @@
 #include "led_pins.dtsi"
 #include "led_policy.dtsi"
 #include "motionsense.dtsi"
+#include "temp_sensors.dtsi"
 
 / {
 	named-gpios {
 		/delete-node/ ec_spare_gpio42;
 		/delete-node/ ec_spare_gpioc7;
 		/delete-node/ ec_spare_gpioa4;
+		/delete-node/ ec_spare_gpiob1;
 		/delete-node/ usb_c1_rst_odl;
 		/delete-node/ usb_c0_rt_rst_ls_l;
 		/delete-node/ led_3_l;
@@ -62,6 +63,20 @@
 		gpio_en_pp5000_usba_r: en_pp5000_usba_r {
 			gpios = <&gpiod 7 (GPIO_OUTPUT | GPIO_ACTIVE_LOW)>;
 		};
+		gpio_ec_kso_02_inv: ec_kso_02_inv {
+			gpios = <&gpio1 7 (GPIO_OUTPUT | GPIO_ACTIVE_HIGH)>;
+			enum-name = "GPIO_KBD_KSO2";
+		};
+		/*
+		 * touch panel enable and soc backlight enable
+		 * to control the touch enable timing
+		 */
+		gpio_ec_touch_en: ec_touch_en {
+			gpios = <&gpiob 1 GPIO_OUTPUT_LOW>;
+		};
+		gpio_soc_3v3_edp_bl_en: soc_3v3_edp_bl_en {
+			gpios = <&gpioc 6 GPIO_INPUT_PULL_DOWN>;
+		};
 	};
 
 	unused-pins {
@@ -89,6 +104,11 @@
 			irq-pin = <&gpio_ec_imu_int_r_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "bma4xx_interrupt";
+		};
+		int_soc_edp_bl_en: soc_edp_bl_en {
+			irq-pin = <&gpio_soc_3v3_edp_bl_en>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "soc_edp_bl_interrupt";
 		};
 	};
 };
@@ -149,6 +169,9 @@
 
 &fan0 {
 	pwms = <&pwm5 0 PWM_KHZ(25) PWM_POLARITY_NORMAL>;
+	rpm_min = <2500>;
+	rpm_start = <2500>;
+	rpm_max = <6000>;
 };
 
 &cbi_flash {
@@ -158,4 +181,32 @@
 	 */
 	offset = <0x50000>;
 	size = <0x1000>;
+};
+
+&cros_kb_raw {
+	pinctrl-1 = <
+		&ksi0_gpio_gp31
+		&ksi1_gpio_gp30
+		&ksi2_gpio_gp27
+		&ksi3_gpio_gp26
+		&ksi4_gpio_gp25
+		&ksi5_gpio_gp24
+		&ksi6_gpio_gp23
+		&ksi7_gpio_gp22
+		&kso00_gpio_gp21
+		&kso01_gpio_gp20
+		&kso03_gpio_gp16
+		&kso04_gpio_gp15
+		&kso05_gpio_gp14
+		&kso06_gpio_gp13
+		&kso07_gpio_gp12
+		&kso08_gpio_gp11
+		&kso09_gpio_gp10
+		&kso10_gpio_gp07
+		&kso11_gpio_gp06
+		&kso12_gpio_gp05
+		&kso13_gpio_gp04
+		&kso14_gpio_gp82
+	>;
+	pinctrl-names = "default", "sleep";
 };

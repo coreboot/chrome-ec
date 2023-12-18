@@ -42,10 +42,10 @@
 #define DEFAULT_R_SNS 10
 #define R_AC CONFIG_CHARGER_SENSE_RESISTOR_AC
 #define R_SNS CONFIG_CHARGER_SENSE_RESISTOR
-#define REG_TO_CURRENT(REG) ((REG)*DEFAULT_R_SNS / R_SNS)
-#define CURRENT_TO_REG(CUR) ((CUR)*R_SNS / DEFAULT_R_SNS)
-#define AC_REG_TO_CURRENT(REG) ((REG)*DEFAULT_R_AC / R_AC)
-#define AC_CURRENT_TO_REG(CUR) ((CUR)*R_AC / DEFAULT_R_AC)
+#define REG_TO_CURRENT(REG) ((REG) * DEFAULT_R_SNS / R_SNS)
+#define CURRENT_TO_REG(CUR) ((CUR) * R_SNS / DEFAULT_R_SNS)
+#define AC_REG_TO_CURRENT(REG) ((REG) * DEFAULT_R_AC / R_AC)
+#define AC_CURRENT_TO_REG(CUR) ((CUR) * R_AC / DEFAULT_R_AC)
 
 #if defined(CONFIG_CHARGER_ISL9237)
 #define CHARGER_NAME "isl9237"
@@ -1008,7 +1008,8 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 		rv = raw_write16(chgnum, ISL923X_REG_CONTROL0, regval);
 	}
 	if (rv)
-		CPRINTS("%s(%d): Failed to set Control0!", __func__, chgnum);
+		CPRINTS("%s (%d): Failed to set %02x", __func__, chgnum,
+			ISL923X_REG_CONTROL0);
 
 	rv = raw_read16(chgnum, ISL923X_REG_CONTROL1, &regval);
 	if (!rv) {
@@ -1030,7 +1031,8 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 		rv = raw_write16(chgnum, ISL923X_REG_CONTROL1, regval);
 	}
 	if (rv)
-		CPRINTS("%s(%d): Failed to set Control1!", __func__, chgnum);
+		CPRINTS("%s (%d): Failed to set %02x", __func__, chgnum,
+			ISL923X_REG_CONTROL1);
 
 	rv = raw_read16(chgnum, ISL9238_REG_CONTROL3, &regval);
 	if (!rv) {
@@ -1043,7 +1045,8 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 		rv = raw_write16(chgnum, ISL9238_REG_CONTROL3, regval);
 	}
 	if (rv)
-		CPRINTS("%s(%d): Failed to set Control3!", __func__, chgnum);
+		CPRINTS("%s (%d): Failed to set %02x", __func__, chgnum,
+			ISL9238_REG_CONTROL3);
 
 	rv = raw_read16(chgnum, ISL9238_REG_CONTROL4, &regval);
 	if (!rv) {
@@ -1053,7 +1056,8 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 		rv = raw_write16(chgnum, ISL9238_REG_CONTROL4, regval);
 	}
 	if (rv)
-		CPRINTS("%s(%d):Failed to set Control4!", __func__, chgnum);
+		CPRINTS("%s (%d): Failed to set %02x", __func__, chgnum,
+			ISL9238_REG_CONTROL4);
 
 #ifdef CONFIG_OCPC
 	/* The LDO is needed in the Z-state on the primary charger */
@@ -1067,16 +1071,16 @@ void raa489000_hibernate(int chgnum, bool disable_adc)
 					 regval);
 		}
 		if (rv)
-			CPRINTS("%s(%d):Failed to set Control8!", __func__,
-				chgnum);
+			CPRINTS("%s (%d): Failed to set %02x", __func__, chgnum,
+				RAA489000_REG_CONTROL8);
 	}
 
 	/* Disable DVC on the main charger to reduce power consumption. */
 	if (chgnum == CHARGER_PRIMARY) {
 		rv = raw_write16(chgnum, RAA489000_REG_CONTROL10, 0);
 		if (rv)
-			CPRINTS("%s(%d):Failed to set Control10!", __func__,
-				chgnum);
+			CPRINTS("%s (%d): Failed to set %02x", __func__, chgnum,
+				RAA489000_REG_CONTROL10);
 	}
 #endif
 

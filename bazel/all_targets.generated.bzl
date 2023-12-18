@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 
 # This file is auto-generated.  To update, run:
-# ./util/gen_bazel_targets.py
+# ./bazel/gen_bazel_targets.py
 
 load(":ec_target.bzl", "ec_target")
 
@@ -106,6 +106,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "anraggar",
+        board = "anraggar",
+    )
+    ec_target(
         name = "arcada_ish",
         board = "arcada_ish",
         chip = "ish",
@@ -142,6 +146,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "axii",
+        board = "axii",
     )
     ec_target(
         name = "baklava",
@@ -281,6 +289,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "brya_pdc",
+        board = "brya_pdc",
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
+    )
+    ec_target(
         name = "brya_zephyr",
         board = "brya",
         extra_modules = ["cmsis", "picolibc", "pigweed"],
@@ -374,6 +387,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "ciri",
+        board = "ciri",
     )
     ec_target(
         name = "coachz",
@@ -999,6 +1016,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "it82002_evb",
+        board = "it82002_evb",
+    )
+    ec_target(
         name = "it83xx_evb",
         baseboard = "ite_evb",
         board = "it83xx_evb",
@@ -1107,6 +1128,10 @@ def all_targets():
         chip = "stm32",
         core = "cortex-m0",
         zephyr = False,
+    )
+    ec_target(
+        name = "kelpie",
+        board = "kelpie",
     )
     ec_target(
         name = "kindred",

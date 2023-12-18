@@ -1,3 +1,7 @@
 # Fingerprint release branch OWNERS file
 include chromiumos/platform2:main:/biod/OWNERS
 
+include chromiumos/owners:v1:/firmware/OWNERS.cros_ec
+
+# Don't inherit owners from elsewhere in the manifest
+set noparent

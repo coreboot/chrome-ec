@@ -1499,7 +1499,6 @@
 #undef CONFIG_CHIPSET_GEMINILAKE /* Intel Geminilake (x86) */
 #undef CONFIG_CHIPSET_ICELAKE /* Intel Icelake (x86) */
 #undef CONFIG_CHIPSET_JASPERLAKE /* Intel Jasperlake (x86) */
-#undef CONFIG_CHIPSET_METEORLAKE /* Intel Meteorlake (x86) */
 #undef CONFIG_CHIPSET_MT817X /* MediaTek MT817x */
 #undef CONFIG_CHIPSET_MT8183 /* MediaTek MT8183 */
 #undef CONFIG_CHIPSET_MT8192 /* MediaTek MT8192 */
@@ -1736,7 +1735,6 @@
 #undef CONFIG_CMD_SCRATCHPAD
 #undef CONFIG_CMD_SEVEN_SEG_DISPLAY
 #define CONFIG_CMD_SHMEM
-#undef CONFIG_CMD_SLEEP
 #define CONFIG_CMD_SLEEPMASK
 #define CONFIG_CMD_SLEEPMASK_SET
 #undef CONFIG_CMD_SPI_FLASH
@@ -3220,6 +3218,12 @@
  */
 #undef CONFIG_8042_AUX
 
+/*
+ * Invert the IRQ1/IRQ12 interrupts that come from the NPCX keyboard controller
+ * such that they are active low.
+ */
+#undef CONFIG_NCPX_KBC_IRQ_ACTIVE_LOW
+
 /*****************************************************************************/
 
 /*
@@ -3231,11 +3235,6 @@
 
 /* Support common LED interface */
 #undef CONFIG_LED_COMMON
-
-/* Standard LED behavior according to spec given that we have a red-green
- * bicolor led for charging and one power led
- */
-#undef CONFIG_LED_POLICY_STD
 
 #ifndef CONFIG_ZEPHYR
 /*
@@ -3878,6 +3877,11 @@
  * keyboard backlight.
  */
 #undef CONFIG_KBLIGHT_ENABLE_PIN
+
+/*
+ * Call keyboard backlight init function during init hook instead of start-up
+ */
+#undef CONFIG_KBLIGHT_HOOK_INIT
 
 /*
  * RGB Keyboard
@@ -6515,6 +6519,9 @@
 #define CONFIG_LED_PWM_CHARGE_STATE_ONLY
 #endif
 
+/* Define for to turn off power LED in suspend for boards shipped after 2022 */
+#undef CONFIG_LED_PWM_OFF_IN_SUSPEND
+
 /*****************************************************************************/
 /*
  * Define derived configuration options for EC-EC communication
@@ -6613,7 +6620,6 @@
 #undef CONFIG_CHIPSET_GEMINILAKE
 #undef CONFIG_CHIPSET_ICELAKE
 #undef CONFIG_CHIPSET_JASPERLAKE
-#undef CONFIG_CHIPSET_METEORLAKE
 #undef CONFIG_CHIPSET_MT817X
 #undef CONFIG_CHIPSET_MT8183
 #undef CONFIG_CHIPSET_MT8192
@@ -6749,15 +6755,13 @@
 	defined(CONFIG_CHIPSET_COMETLAKE) ||          \
 	defined(CONFIG_CHIPSET_COMETLAKE_DISCRETE) || \
 	defined(CONFIG_CHIPSET_GEMINILAKE) ||         \
-	defined(CONFIG_CHIPSET_ICELAKE) ||            \
-	defined(CONFIG_CHIPSET_METEORLAKE) || defined(CONFIG_CHIPSET_SKYLAKE)
+	defined(CONFIG_CHIPSET_ICELAKE) || defined(CONFIG_CHIPSET_SKYLAKE)
 #define CONFIG_POWER_COMMON
 #endif
 
 #if defined(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540) || \
 	defined(CONFIG_CHIPSET_CANNONLAKE) ||        \
-	defined(CONFIG_CHIPSET_ICELAKE) ||           \
-	defined(CONFIG_CHIPSET_METEORLAKE) || defined(CONFIG_CHIPSET_SKYLAKE)
+	defined(CONFIG_CHIPSET_ICELAKE) || defined(CONFIG_CHIPSET_SKYLAKE)
 #define CONFIG_CHIPSET_X86_RSMRST_DELAY
 #endif
 
@@ -6895,7 +6899,7 @@
  * period.
  */
 #ifdef CONFIG_WATCHDOG
-#if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS)*2)
+#if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS) * 2)
 #error "CONFIG_AUX_TIMER_PERIOD_MS must be at least 2x HOOK_TICK_INTERVAL_MS"
 #endif
 #endif

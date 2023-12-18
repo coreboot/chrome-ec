@@ -26,13 +26,13 @@ def _board_srcs(board, chip, core, real_board = None, baseboard = None):
             "board/%s/**" % real_board,
         ]
     else:
-        globs += ["board/%s/**" % board]
+        globs.append("board/%s/**" % board)
 
     if baseboard:
-        globs += ["baseboard/%s/**" % baseboard]
+        globs.append("baseboard/%s/**" % baseboard)
 
     if chip == "npcx":
-        globs += ["util/ecst.*"]
+        globs.append("util/ecst.*")
 
     name = "legacy_ec_board_srcs_%s" % board
     native.filegroup(
@@ -54,9 +54,11 @@ def _ec_srcs():
             "builtin/**",
             "common/**",
             "core/build.mk",
+            "crypto/build.mk",
             "driver/**",
             "fuzz/**",
             "include/**",
+            "libc/build.mk",
             "power/**",
             "test/**",
             "third_party/**",
@@ -71,9 +73,9 @@ def _impl(ctx):
     build_dir = ctx.actions.declare_file("ec_%s" % ctx.attr.name)
 
     env = {
-        "COREBOOT_SDK_ROOT": ctx.file._coreboot_root.path,
         "BOARD": ctx.attr.board,
         "BUILD_DIR": build_dir.path,
+        "COREBOOT_SDK_ROOT": ctx.file._coreboot_root.path,
         "EC_DIR": ctx.file._legacy_ec_makefile.dirname,
     }
 
@@ -122,6 +124,12 @@ _rule = rule(
     implementation = _impl,
     doc = "Build an EC binary for a given legacy EC firmware target <name>",
     attrs = {
+        "board": attr.string(),
+        "board_srcs": attr.label(allow_files = True),
+        "_coreboot_root": attr.label(
+            default = "@coreboot_sdk//:coreboot_sdk_root",
+            allow_single_file = True,
+        ),
         "_legacy_ec_makefile": attr.label(
             default = "//platform/ec:legacy_ec_makefile",
             allow_single_file = True,
@@ -130,12 +138,6 @@ _rule = rule(
             default = "//platform/ec:legacy_ec_srcs",
             allow_files = True,
         ),
-        "_coreboot_root": attr.label(
-            default = "@coreboot_sdk//:coreboot_sdk_root",
-            allow_single_file = True,
-        ),
-        "board": attr.string(),
-        "board_srcs": attr.label(allow_files = True),
     },
 )
 

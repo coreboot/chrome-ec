@@ -439,6 +439,7 @@ ZTEST(craask, test_alt_sensor_base_lsm6dso)
 	/* Clear base_imu_irq call count before test */
 	bmi3xx_interrupt_fake.call_count = 0;
 	lsm6dso_interrupt_fake.call_count = 0;
+	bma4xx_interrupt_fake.call_count = 0;
 
 	zassert_ok(gpio_emul_input_set(base_imu_gpio, base_imu_pin, 1), NULL);
 	k_sleep(K_MSEC(100));
@@ -447,6 +448,7 @@ ZTEST(craask, test_alt_sensor_base_lsm6dso)
 
 	zassert_equal(bmi3xx_interrupt_fake.call_count, 0);
 	zassert_equal(lsm6dso_interrupt_fake.call_count, 1);
+	zassert_equal(bma4xx_interrupt_fake.call_count, 0);
 }
 
 ZTEST(craask, test_alt_sensor_base_bmi323)
@@ -469,6 +471,7 @@ ZTEST(craask, test_alt_sensor_base_bmi323)
 	/* Clear base_imu_irq call count before test */
 	bmi3xx_interrupt_fake.call_count = 0;
 	lsm6dso_interrupt_fake.call_count = 0;
+	bma4xx_interrupt_fake.call_count = 0;
 
 	zassert_ok(gpio_emul_input_set(base_imu_gpio, base_imu_pin, 1), NULL);
 	k_sleep(K_MSEC(100));
@@ -477,6 +480,39 @@ ZTEST(craask, test_alt_sensor_base_bmi323)
 
 	zassert_equal(bmi3xx_interrupt_fake.call_count, 1);
 	zassert_equal(lsm6dso_interrupt_fake.call_count, 0);
+	zassert_equal(bma4xx_interrupt_fake.call_count, 0);
+}
+
+ZTEST(craask, test_alt_sensor_base_bma422)
+{
+	const struct device *base_imu_gpio = DEVICE_DT_GET(
+		DT_GPIO_CTLR(DT_NODELABEL(gpio_imu_int_l), gpios));
+	const gpio_port_pins_t base_imu_pin =
+		DT_GPIO_PIN(DT_NODELABEL(gpio_imu_int_l), gpios);
+
+	/* Initial ssfc data for BMA422 base sensor. */
+	cbi_get_ssfc_fake.custom_fake = cbi_get_ssfc_mock;
+	ssfc_data = 0x20;
+	cros_cbi_ssfc_init();
+
+	/* sensor_enable_irqs enable the interrupt int_imu */
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_imu));
+
+	alt_sensor_init();
+
+	/* Clear base_imu_irq call count before test */
+	bmi3xx_interrupt_fake.call_count = 0;
+	lsm6dso_interrupt_fake.call_count = 0;
+	bma4xx_interrupt_fake.call_count = 0;
+
+	zassert_ok(gpio_emul_input_set(base_imu_gpio, base_imu_pin, 1), NULL);
+	k_sleep(K_MSEC(100));
+	zassert_ok(gpio_emul_input_set(base_imu_gpio, base_imu_pin, 0), NULL);
+	k_sleep(K_MSEC(100));
+
+	zassert_equal(bmi3xx_interrupt_fake.call_count, 0);
+	zassert_equal(lsm6dso_interrupt_fake.call_count, 0);
+	zassert_equal(bma4xx_interrupt_fake.call_count, 1);
 }
 
 ZTEST(craask, test_alt_sensor_lid_lis2dw12)
@@ -1138,4 +1174,75 @@ ZTEST(craask, test_15w_thermal_solution)
 	board_override_fan_control(0, &temp);
 	zassert_equal(fan_get_rpm_mode(0), 1);
 	zassert_equal(fan_get_rpm_target(0), 0);
+}
+
+static bool cbi_touch_en;
+static bool cbi_read_fail;
+
+static int cbi_get_touch_en_config(enum cbi_fw_config_field_id field,
+				   uint32_t *value)
+{
+	if (field != FW_TOUCH_EN)
+		return -EINVAL;
+
+	if (cbi_read_fail)
+		return -1;
+
+	*value = cbi_touch_en ? FW_TOUCH_EN_ENABLE : FW_TOUCH_EN_DISABLE;
+	return 0;
+}
+
+#define TEST_DELAY_MS 1
+#define TOUCH_ENABLE_DELAY_MS (500 + TEST_DELAY_MS)
+#define TOUCH_DISABLE_DELAY_MS (0 + TEST_DELAY_MS)
+
+ZTEST(craask, test_touch_enable)
+{
+	const struct gpio_dt_spec *bl_en =
+		GPIO_DT_FROM_NODELABEL(gpio_soc_edp_bl_en);
+	const struct gpio_dt_spec *touch_en =
+		GPIO_DT_FROM_NODELABEL(gpio_ec_touch_en);
+
+	cbi_touch_en = true;
+	cbi_read_fail = false;
+	cros_cbi_get_fw_config_fake.custom_fake = cbi_get_touch_en_config;
+
+	hook_notify(HOOK_INIT);
+
+	/* touch_en become high after TOUCH_ENABLE_DELAY_MS delay */
+	zassert_ok(gpio_emul_input_set(bl_en->port, bl_en->pin, 1), NULL);
+	zassert_equal(gpio_emul_output_get(touch_en->port, touch_en->pin), 0);
+
+	k_sleep(K_MSEC(TOUCH_ENABLE_DELAY_MS));
+	zassert_equal(gpio_emul_output_get(touch_en->port, touch_en->pin), 1);
+
+	/* touch_en become low after TOUCH_DISABLE_DELAY_MS delay */
+	zassert_ok(gpio_emul_input_set(bl_en->port, bl_en->pin, 0), NULL);
+	k_sleep(K_MSEC(TOUCH_DISABLE_DELAY_MS));
+	zassert_equal(gpio_emul_output_get(touch_en->port, touch_en->pin), 0);
+
+	/* touch_en keep low if fw_config is not enabled */
+	cbi_touch_en = false;
+	gpio_disable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_soc_edp_bl_en));
+	hook_notify(HOOK_INIT);
+
+	zassert_ok(gpio_emul_input_set(bl_en->port, bl_en->pin, 1), NULL);
+	zassert_equal(gpio_emul_output_get(touch_en->port, touch_en->pin), 0);
+
+	k_sleep(K_MSEC(TOUCH_ENABLE_DELAY_MS));
+	zassert_equal(gpio_emul_output_get(touch_en->port, touch_en->pin), 0);
+
+	/* touch_en keep low if fw_config read fail */
+	cbi_read_fail = true;
+	gpio_disable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_soc_edp_bl_en));
+	hook_notify(HOOK_INIT);
+
+	zassert_ok(gpio_emul_input_set(bl_en->port, bl_en->pin, 0), NULL);
+	zassert_equal(gpio_emul_output_get(touch_en->port, touch_en->pin), 0);
+
+	zassert_ok(gpio_emul_input_set(bl_en->port, bl_en->pin, 1), NULL);
+	zassert_equal(gpio_emul_output_get(touch_en->port, touch_en->pin), 0);
+
+	k_sleep(K_MSEC(TOUCH_ENABLE_DELAY_MS));
+	zassert_equal(gpio_emul_output_get(touch_en->port, touch_en->pin), 0);
 }

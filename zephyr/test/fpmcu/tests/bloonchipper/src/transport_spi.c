@@ -4,7 +4,7 @@
  */
 
 #include "ec_commands.h"
-#include "fpsensor_detect.h"
+#include "fpsensor/fpsensor_detect.h"
 #include "gpio_signal.h"
 #include "hooks.h"
 #include "zephyr/kernel.h"
@@ -15,17 +15,12 @@
 #include <zephyr/mgmt/ec_host_cmd/ec_host_cmd.h>
 #include <zephyr/ztest.h>
 
-#define SPI_MAX_REQUEST_SIZE 0x220
-#define SPI_MAX_RESPONSE_SIZE 0x220
-
 FAKE_VALUE_FUNC(struct ec_host_cmd_backend *, ec_host_cmd_backend_get_uart,
 		const struct device *);
 FAKE_VALUE_FUNC(struct ec_host_cmd_backend *, ec_host_cmd_backend_get_spi,
 		struct gpio_dt_spec *);
 FAKE_VALUE_FUNC(int, ec_host_cmd_init, struct ec_host_cmd_backend *);
 
-enum ec_host_cmd_status
-host_command_protocol_info(struct ec_host_cmd_handler_args *args);
 int fp_transport_init(void);
 
 static void *transport_setup(void)
@@ -62,27 +57,6 @@ ZTEST(transport, test_transport_type)
 {
 	zassert_equal(get_fp_transport_type(), FP_TRANSPORT_TYPE_SPI,
 		      "Incorrect transport type");
-}
-
-ZTEST(transport, test_protocol_info)
-{
-	struct ec_response_get_protocol_info protocol_info;
-	struct ec_host_cmd_handler_args args;
-
-	memset(&args, 0, sizeof(args));
-	memset(&protocol_info, 0, sizeof(protocol_info));
-	args.output_buf = &protocol_info;
-
-	/* SPI */
-	host_command_protocol_info(&args);
-	zassert_equal(protocol_info.flags,
-		      EC_PROTOCOL_INFO_IN_PROGRESS_SUPPORTED);
-	zassert_equal(protocol_info.max_request_packet_size,
-		      SPI_MAX_REQUEST_SIZE);
-	zassert_equal(protocol_info.max_response_packet_size,
-		      SPI_MAX_RESPONSE_SIZE);
-	zassert_equal(protocol_info.protocol_versions, BIT(3));
-	zassert_equal(args.output_buf_size, sizeof(protocol_info));
 }
 
 ZTEST(transport, test_hc_init)
