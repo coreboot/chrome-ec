@@ -1144,8 +1144,7 @@ static int test_nvmem_interrupted_compaction(void)
 			NvGetReserved(i, &ri);
 
 			/* Direct access to the object. */
-			memset((uint8_t *)nvmem_cache_base(NVMEM_TPM) +
-				       ri.offset,
+			memset(nvmem_cache_base(NVMEM_TPM) + ri.offset,
 			       filler++, ri.size);
 		}
 		TEST_ASSERT(new_nvmem_save() == EC_SUCCESS);
@@ -1390,8 +1389,7 @@ static int test_tpm_nvmem_modify_reserved_objects(void)
 
 		NvGetReserved(res_obj_ids[i], &ri);
 		copy_size = MIN(sizeof(new_values[0]), ri.size);
-		addr_in_cache =
-			(uint8_t *)nvmem_cache_base(NVMEM_TPM) + ri.offset;
+		addr_in_cache = nvmem_cache_base(NVMEM_TPM) + ri.offset;
 
 		/* Prepare a new value for the variable. */
 		memcpy(new_values + i, addr_in_cache, copy_size);

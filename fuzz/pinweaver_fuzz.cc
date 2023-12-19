@@ -34,8 +34,9 @@ constexpr size_t kBufferAlignment = alignof(pw_request_t) >
                                         : alignof(pw_response_t);
 }  // namespace
 
-extern "C" uint32_t nvmem_user_sizes[NVMEM_NUM_USERS] = {NVMEM_TPM_SIZE,
-                                                         NVMEM_CR50_SIZE};
+extern "C" const uint32_t nvmem_user_sizes[NVMEM_NUM_USERS] = {
+	NVMEM_TPM_SIZE, NVMEM_CR50_SIZE
+};
 
 extern "C" void rand_bytes(void* data, size_t len) {
   size_t x = 0;

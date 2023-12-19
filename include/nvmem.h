@@ -66,7 +66,7 @@ extern "C" {
  */
 
 /* NvMem user buffer length table */
-extern uint32_t nvmem_user_sizes[NVMEM_NUM_USERS];
+extern const uint32_t nvmem_user_sizes[NVMEM_NUM_USERS];
 
 #define NVMEM_NUM_PARTITIONS 2
 #define NVMEM_SHA_SIZE CIPHER_SALT_SIZE
@@ -203,7 +203,7 @@ int nvmem_enable_commits(void);
  *
  * @return pointer to the base address.
  */
-void *nvmem_cache_base(enum nvmem_users user);
+uint8_t *const nvmem_cache_base(enum nvmem_users user);
 
 /*
  * Clear all NVMEM cache in SRAM.
