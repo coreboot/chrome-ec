@@ -147,6 +147,7 @@
 #define CONFIG_STEINHART_HART_3V3_30K9_47K_4050B
 
 #define CONFIG_FANS FAN_CH_COUNT
+#define CONFIG_CUSTOM_FAN_CONTROL
 
 /* Charger defines */
 #define CONFIG_CHARGER_ISL9241
@@ -194,6 +195,8 @@ enum pwm_channel {
 enum fan_channel { FAN_CH_0 = 0, FAN_CH_COUNT };
 
 enum mft_channel { MFT_CH_0 = 0, MFT_CH_COUNT };
+
+void pch_edp_bl_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 

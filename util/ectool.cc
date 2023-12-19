@@ -8833,15 +8833,17 @@ static void cmd_battery_config_help(const char *cmd)
 {
 	fprintf(stderr,
 		"\n"
-		"Usage: %s get [-c]\n"
+		"Usage: %s get [-c] [<index>]\n"
 		"    Print active battery config in JSON or C-struct (-c).\n"
+		"    If <index> is specified, a config is read from CBI.\n"
 		"\n"
-		"Usage: %s set <json_file> <manuf_name> <device_name>\n"
+		"Usage: %s set <json_file> <manuf_name> <device_name> [<index>]\n"
 		"    Copy battery config from file to CBI.\n"
 		"\n"
 		"    json_file: Path to JSON file containing battery configs\n"
 		"    manuf_name: Manufacturer's name. Up to 31 chars.\n"
 		"    device_name: Battery's name. Up to 31 chars.\n"
+		"    index: Index of config in CBI to be get or set.\n"
 		"\n"
 		"    Run `ectool battery` for <manuf_name> and <device_name>\n",
 		cmd, cmd);
@@ -8858,6 +8860,7 @@ static int cmd_battery_config_get(int argc, char *argv[])
 	bool in_json = true;
 	int rv;
 	int c;
+	int index = -1;
 
 	while ((c = getopt(argc, argv, "c")) != -1) {
 		switch (c) {
@@ -8874,13 +8877,34 @@ static int cmd_battery_config_get(int argc, char *argv[])
 	}
 
 	if (optind < argc) {
+		char *e;
+		index = strtol(argv[optind], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad index: '%s'\n", argv[optind]);
+			return -1;
+		}
+		optind++;
+	}
+
+	if (optind < argc) {
 		fprintf(stderr, "Unknown argument '%s'\n", argv[optind]);
 		cmd_battery_config_help("bcfg");
 		return -1;
 	}
 
-	rv = ec_command(EC_CMD_BATTERY_CONFIG, 0, NULL, 0, ec_inbuf,
-			ec_max_insize);
+	if (index < 0) {
+		rv = ec_command(EC_CMD_BATTERY_CONFIG, 0, NULL, 0, ec_inbuf,
+				ec_max_insize);
+	} else {
+		struct ec_params_get_cbi pa = { 0 };
+
+		pa.tag = index + CBI_TAG_BATTERY_CONFIG;
+		rv = ec_command(EC_CMD_GET_CROS_BOARD_INFO, 0, &pa, sizeof(pa),
+				ec_inbuf, ec_max_insize);
+		if (rv == -EC_RES_INVALID_PARAM - EECRESULT)
+			fprintf(stderr, "Config[%d] not found in CBI.\n",
+				index);
+	}
 	if (rv < 0)
 		return rv;
 
@@ -8931,15 +8955,34 @@ static int cmd_battery_config_set(int argc, char *argv[])
 	FILE *fp = NULL;
 	int size;
 	char *json = NULL;
-	const char *json_file = argv[1];
-	const char *manuf_name = argv[2];
-	const char *device_name = argv[3];
+	const char *json_file;
+	const char *manuf_name;
+	const char *device_name;
 	char identifier[SBS_MAX_STR_OBJ_SIZE * 2];
 	struct board_batt_params config;
 	struct ec_params_set_cbi *p = (struct ec_params_set_cbi *)ec_outbuf;
 	struct batt_conf_header *header = (struct batt_conf_header *)p->data;
 	uint8_t *d = (uint8_t *)header;
+	uint8_t struct_version = EC_BATTERY_CONFIG_STRUCT_VERSION;
 	int rv;
+	int index = 0;
+
+	if (argc < 4 || 5 < argc) {
+		fprintf(stderr, "Invalid number of arguments.\n");
+		cmd_battery_config_help("bcfg");
+		return -1;
+	} else if (argc == 5) {
+		char *e;
+		index = strtol(argv[4], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad index: '%s'\n", argv[4]);
+			return -1;
+		}
+	}
+
+	json_file = argv[1];
+	manuf_name = argv[2];
+	device_name = argv[3];
 
 	if (strlen(manuf_name) > SBS_MAX_STR_SIZE) {
 		fprintf(stderr, "manuf_name is too long.");
@@ -8991,6 +9034,8 @@ static int cmd_battery_config_set(int argc, char *argv[])
 		free(json);
 		return -1;
 	}
+	if (read_u8_from_json(dict, "struct_version", &struct_version))
+		return -1;
 
 	/* Clear the dst to ensure it'll be null-terminated. */
 	memset(identifier, 0, sizeof(identifier));
@@ -9003,14 +9048,15 @@ static int cmd_battery_config_set(int argc, char *argv[])
 		free(json);
 		return -1;
 	}
+	if (read_u8_from_json(root_dict, "struct_version", &struct_version))
+		return -1;
 
 	/* Clear config to ensure unspecified (optional) fields are 0. */
 	memset(&config, 0, sizeof(config));
-	if (read_battery_config_from_json(root_dict, &config)) {
+	if (read_battery_config_from_json(root_dict, &config))
 		return -1;
-	}
 
-	header->struct_version = EC_BATTERY_CONFIG_STRUCT_VERSION;
+	header->struct_version = struct_version;
 	header->manuf_name_size = strlen(manuf_name);
 	header->device_name_size = strlen(device_name);
 	d += sizeof(*header);
@@ -9020,7 +9066,7 @@ static int cmd_battery_config_set(int argc, char *argv[])
 	d += header->device_name_size;
 	memcpy(d, &config, sizeof(config));
 
-	p->tag = CBI_TAG_BATTERY_CONFIG;
+	p->tag = index + CBI_TAG_BATTERY_CONFIG;
 	p->size = sizeof(struct batt_conf_header) + header->manuf_name_size +
 		  header->device_name_size + sizeof(config);
 	size = sizeof(*p);
@@ -9129,7 +9175,8 @@ static int cmd_cbi_is_string_field(enum cbi_data_tag tag)
 
 static int cmd_cbi_is_binary_field(enum cbi_data_tag tag)
 {
-	return tag == CBI_TAG_BATTERY_CONFIG;
+	return CBI_TAG_BATTERY_CONFIG <= tag &&
+	       tag <= CBI_TAG_BATTERY_CONFIG_15;
 }
 
 /*
