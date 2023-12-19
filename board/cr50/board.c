@@ -89,7 +89,7 @@
 BUILD_ASSERT(NVMEM_TPM_SIZE == NV_MEMORY_SIZE);
 
 /* NvMem user buffer lengths table */
-uint32_t nvmem_user_sizes[NVMEM_NUM_USERS] = {
+const uint32_t nvmem_user_sizes[NVMEM_NUM_USERS] = {
 	NVMEM_TPM_SIZE,
 	NVMEM_CR50_SIZE
 };

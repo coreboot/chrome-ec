@@ -257,7 +257,7 @@ static enum ec_error_list nvmem_generate_offset_table(void)
 	return EC_SUCCESS;
 }
 
-void *nvmem_cache_base(enum nvmem_users user)
+uint8_t *const nvmem_cache_base(enum nvmem_users user)
 {
 	if ((user < 0) || (user >= NVMEM_NUM_USERS))
 		return NULL;

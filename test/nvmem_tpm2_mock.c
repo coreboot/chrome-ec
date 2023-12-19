@@ -18,8 +18,8 @@ struct GlobalStruct  global_struct;
 #define MOCK_NV_MEMORY_SIZE                                                    \
 	(NVMEM_PARTITION_SIZE - sizeof(struct nvmem_tag) - NVMEM_CR50_SIZE)
 
-uint32_t nvmem_user_sizes[NVMEM_NUM_USERS] = {MOCK_NV_MEMORY_SIZE,
-					      NVMEM_CR50_SIZE};
+uint32_t const nvmem_user_sizes[NVMEM_NUM_USERS] = { MOCK_NV_MEMORY_SIZE,
+						     NVMEM_CR50_SIZE };
 
 /*
  * Sizes of the reserved objects stored in the TPM NVMEM. Note that the second

@@ -488,8 +488,7 @@ static STATE_CLEAR_DATA *get_scd(void)
 
 	NvGetReserved(NV_STATE_CLEAR, &ri);
 
-	return (STATE_CLEAR_DATA *)((uint8_t *)nvmem_cache_base(NVMEM_TPM) +
-				    ri.offset);
+	return (STATE_CLEAR_DATA *)(nvmem_cache_base(NVMEM_TPM) + ri.offset);
 }
 
 /*
@@ -1549,12 +1548,13 @@ static enum ec_error_list migrate_objects(struct nn_container *ch)
 	uint32_t next_obj_base;
 	uint32_t obj_base;
 	uint32_t obj_size;
-	void *obj_addr;
+	uint8_t *obj_addr;
+	uint8_t *const tpm_base = nvmem_cache_base(NVMEM_TPM);
 
 	ch->container_type = ch->container_type_copy = NN_OBJ_TPM_EVICTABLE;
 
 	obj_base = s_evictNvStart;
-	obj_addr = nvmem_cache_base(NVMEM_TPM) + obj_base;
+	obj_addr = tpm_base + obj_base;
 	memcpy(&next_obj_base, obj_addr, sizeof(next_obj_base));
 
 	while (next_obj_base && (next_obj_base <= s_evictNvEnd)) {
@@ -1566,7 +1566,7 @@ static enum ec_error_list migrate_objects(struct nn_container *ch)
 		save_container(ch);
 
 		obj_base = next_obj_base;
-		obj_addr = nvmem_cache_base(NVMEM_TPM) + obj_base;
+		obj_addr = tpm_base + obj_base;
 
 		memcpy(&next_obj_base, obj_addr, sizeof(next_obj_base));
 	}
@@ -1853,8 +1853,7 @@ static enum ec_error_list unmarshal_state_clear(uint8_t *pad, int size,
 	uint32_t preserved;
 	uint8_t booleans;
 
-	real_scd = (STATE_CLEAR_DATA *)((uint8_t *)nvmem_cache_base(NVMEM_TPM) +
-					offset);
+	real_scd = (STATE_CLEAR_DATA *)(nvmem_cache_base(NVMEM_TPM) + offset);
 
 	memset(real_scd, 0, sizeof(*real_scd));
 	if (!size)
@@ -1910,8 +1909,7 @@ static enum ec_error_list unmarshal_state_reset(uint8_t *pad, int size,
 	STATE_RESET_DATA *srd;
 	uint32_t preserved;
 
-	real_srd = (STATE_RESET_DATA *)((uint8_t *)nvmem_cache_base(NVMEM_TPM) +
-					offset);
+	real_srd = (STATE_RESET_DATA *)(nvmem_cache_base(NVMEM_TPM) + offset);
 
 	memset(real_srd, 0, sizeof(*real_srd));
 	/* Zero size means no object present, so it will be recreated. */
@@ -2021,8 +2019,7 @@ static enum ec_error_list restore_reserved(void *pad, size_t size,
 			break;
 
 		default:
-			cached = ((uint8_t *)nvmem_cache_base(NVMEM_TPM) +
-				  ri.offset);
+			cached = (nvmem_cache_base(NVMEM_TPM) + ri.offset);
 			memcpy(cached, pad, size);
 			break;
 		}
@@ -2043,7 +2040,7 @@ static void restore_object(void *pad, size_t size)
 	if (!next_evict_obj_base)
 		next_evict_obj_base = s_evictNvStart;
 
-	dest = ((uint8_t *)nvmem_cache_base(NVMEM_TPM) + next_evict_obj_base);
+	dest = nvmem_cache_base(NVMEM_TPM) + next_evict_obj_base;
 	next_evict_obj_base += size + sizeof(next_evict_obj_base);
 	memcpy(dest, &next_evict_obj_base, sizeof(next_evict_obj_base));
 
@@ -2570,10 +2567,11 @@ test_export_static size_t init_object_offsets(uint16_t *offsets, size_t count)
 	size_t num_objects = 0;
 	uint32_t next_obj_base;
 	uint32_t obj_base;
-	void *obj_addr;
+	uint8_t *obj_addr;
+	uint8_t *const tpm_base = nvmem_cache_base(NVMEM_TPM);
 
 	obj_base = s_evictNvStart;
-	obj_addr = (uint8_t *)nvmem_cache_base(NVMEM_TPM) + obj_base;
+	obj_addr = tpm_base + obj_base;
 	memcpy(&next_obj_base, obj_addr, sizeof(next_obj_base));
 
 	while (next_obj_base && (next_obj_base <= s_evictNvEnd)) {
@@ -2586,7 +2584,7 @@ test_export_static size_t init_object_offsets(uint16_t *offsets, size_t count)
 		offsets[num_objects++] =
 			obj_base - s_evictNvStart + sizeof(next_obj_base);
 
-		obj_addr = nvmem_cache_base(NVMEM_TPM) + next_obj_base;
+		obj_addr = tpm_base + next_obj_base;
 		obj_base = next_obj_base;
 		memcpy(&next_obj_base, obj_addr, sizeof(next_obj_base));
 	}
@@ -2741,7 +2739,7 @@ static enum ec_error_list process_reserved(const struct access_tracker *at,
 	if (ri.size) {
 		void *marshaled;
 
-		cached = (uint8_t *)nvmem_cache_base(NVMEM_TPM) + ri.offset;
+		cached = nvmem_cache_base(NVMEM_TPM) + ri.offset;
 
 		/*
 		 * For NV_STATE_CLEAR and NV_STATE_RESET cases Let's marshal
@@ -2781,10 +2779,10 @@ static enum ec_error_list process_object(const struct access_tracker *at,
 	uint32_t flash_type;
 	uint32_t next_obj_base;
 	uint8_t *evict_start;
-	void *pcache;
+	uint8_t *pcache;
 	enum ec_error_list rv;
 
-	evict_start = (uint8_t *)nvmem_cache_base(NVMEM_TPM) + s_evictNvStart;
+	evict_start = nvmem_cache_base(NVMEM_TPM) + s_evictNvStart;
 	memcpy(&flash_type, ch + 1, sizeof(flash_type));
 	for (i = 0; i < *num_objects; i++) {
 
@@ -2803,7 +2801,7 @@ static enum ec_error_list process_object(const struct access_tracker *at,
 		return delete_object(at, ch);
 	}
 
-	memcpy(&next_obj_base, (uint8_t *)pcache - sizeof(next_obj_base),
+	memcpy(&next_obj_base, pcache - sizeof(next_obj_base),
 	       sizeof(next_obj_base));
 	cached_size = next_obj_base - s_evictNvStart - tpm_object_offsets[i];
 	if ((cached_size != ch->size) || memcmp(ch + 1, pcache, cached_size)) {
@@ -2827,10 +2825,9 @@ static enum ec_error_list save_new_object(uint16_t obj_base, void *buf)
 	size_t obj_size;
 	struct nn_container *ch = buf;
 	uint32_t next_obj_base;
-	void *obj_addr;
+	uint8_t *obj_addr;
 
-	obj_addr = (uint8_t *)nvmem_cache_base(NVMEM_TPM) + obj_base +
-		   s_evictNvStart;
+	obj_addr = nvmem_cache_base(NVMEM_TPM) + obj_base + s_evictNvStart;
 	memcpy(&next_obj_base, obj_addr - sizeof(next_obj_base),
 	       sizeof(next_obj_base));
 	obj_size = next_obj_base - obj_base - s_evictNvStart;
