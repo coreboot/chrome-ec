@@ -9,6 +9,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include "common.h"
+/*
+ * A totally arbitrary byte limit for space occupied by (key, value) pairs in
+ * the flash. This is an improvement compared to the legacy case where there
+ * were just 272 bytes dedicated to the (key, value) pairs storage.
+ */
+#define MAX_VAR_TOTAL_SPACE 1000
 
 /*
  * CONFIG_FLASH_NVMEM provides persistent, atomic-update storage in
@@ -22,11 +29,26 @@ extern "C" {
  */
 
 struct tuple {
-	uint8_t key_len;			/* 1 - 255 */
-	uint8_t val_len;			/* 1 - 255 */
-	uint8_t flags;				/* RESERVED, will be zeroed */
-	uint8_t data_[0];			/* Opaque. Don't look here. */
+	uint8_t key_len; /* 1 - 255 */
+	uint8_t val_len; /* 1 - 255 */
+	uint8_t flags; /* RESERVED, will be zeroed */
+	uint8_t data_[0]; /* In legacy layout start of the key.
+			   * Not used in current version.
+			   */
 };
+
+/* Maximal size of variable's value. */
+#define MAX_VAR_VAL_SIZE \
+	((1U << (8 * sizeof(((struct tuple *)0)->val_len))) - 1)
+
+/*
+ * Let's be reasonable: we're unlikely to have keys longer than 40 or so
+ * bytes, and leave full 255 bytes for the value. Total data space occupied by
+ * a (key, value) pair is not to exceed the value below.
+ */
+#define MAX_VAR_BODY_SPACE 300
+
+BUILD_ASSERT(MAX_VAR_BODY_SPACE > MAX_VAR_VAL_SIZE);
 
 /*
  * Both KEY and VALUE can be any binary blob between 1 and 255 bytes (flash
@@ -52,7 +74,7 @@ struct tuple {
  * CONFIG_FLASH_NVMEM_VARS stores all variables in one user region, so if
  * variable access by multiple tasks is required, the tasks should establish
  * their own locks or mutexes to fit their usage. In general that would mean
- * aquiring a lock before calling getvar() or setvar(), and releasing it after
+ * acquiring a lock before calling getvar() or setvar(), and releasing it after
  * calling writevars().
  */
 

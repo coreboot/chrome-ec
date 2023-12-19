@@ -12,20 +12,6 @@
 
 #define NVMEM_NOT_INITIALIZED ((unsigned int)-1)
 
-/*
- * A totally arbitrary byte limit for space occupied by (key, value) pairs in
- * the flash. This is an improvement compared to the legacy case where there
- * were just 272 bytes dedicated to the (key, value) pairs storage.
- */
-#define MAX_VAR_TOTAL_SPACE 1000
-
-/*
- * Let's be reasonable: we're unlikely to have keys longer than 40 or so
- * bytes, and leave full 255 bytes for the value. Total data space occupied by
- * a (key, value) pair is not to exceed the value below.
- */
-#define MAX_VAR_BODY_SPACE 300
-
 enum nn_object_type {
 	NN_OBJ_OLD_COPY = 0,
 	NN_OBJ_TUPLE = 1,
