@@ -5038,7 +5038,7 @@ int main(int argc, char *argv[])
 		 * haven or dauntless vendor and product id to find the usb
 		 * device, but then try the other if the first isn't found
 		 */
-		if (!serial && !vid && !pid) {
+		if (!vid && !pid) {
 			vid = USB_VID_GOOGLE;
 			/*
 			 * Set default product id based on expected device
@@ -5081,16 +5081,6 @@ int main(int argc, char *argv[])
 					exit(update_error);
 				}
 			}
-		} else {
-			if (usb_findit(serial, vid, pid, subclass, protocol,
-				       &td.uep))
-				exit(update_error);
-			/*
-			 * For backwards compatibility H1 is the default
-			 * device type.
-			 */
-			if (gsc_dev == GSC_DEVICE_ANY)
-				gsc_dev = GSC_DEVICE_H1;
 		}
 	} else if (td.ep_type == dev_xfer) {
 		td.tpm_fd = open("/dev/tpm0", O_RDWR);
