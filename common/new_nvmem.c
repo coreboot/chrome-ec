@@ -3309,7 +3309,7 @@ enum ec_error_list nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 }
 
 /*
- * Function which verifes flash contents integrity (and printing objects it
+ * Function which verifies flash contents integrity (and printing objects it
  * finds, if requested by the caller). All objects' active and deleted alike
  * integrity is verified by get_next_object().
  */
@@ -3317,6 +3317,7 @@ test_export_static enum ec_error_list browse_flash_contents(int print)
 {
 	int active = 0;
 	int count = 0;
+	uint8_t prev_index = 255; /* previous page index */
 	enum ec_error_list rv = EC_SUCCESS;
 	size_t line_len = 0;
 	struct nn_container *ch;
@@ -3332,6 +3333,21 @@ test_export_static enum ec_error_list browse_flash_contents(int print)
 
 	while ((rv = get_next_object(&at, ch, true)) == EC_SUCCESS) {
 		uint8_t ctype = ch->container_type;
+		char page_delimeter = ' ';
+
+		/* Detect crossing the page before object. */
+		if (print) {
+			if (prev_index != at.list_index) {
+				prev_index = at.list_index;
+				page_delimeter = '|';
+				/* Check if object spans on two pages. */
+				if (at.mt.data_offset -
+					    aligned_container_size(ch) !=
+				    sizeof(*at.mt.ph))
+					page_delimeter = '%';
+			}
+			ccprintf("%c", page_delimeter);
+		}
 
 		count++;
 
@@ -3348,7 +3364,7 @@ test_export_static enum ec_error_list browse_flash_contents(int print)
 				erased = ' ';
 
 			if (ch->container_type_copy == NN_OBJ_TPM_RESERVED) {
-				ccprintf("%cR:%02x[%03x].%u  ", erased,
+				ccprintf("%cR:%02x[%03x].%u ", erased,
 					 *((uint8_t *)(ch + 1)), ch->size - 1,
 					 ch->generation);
 			} else {
@@ -3378,7 +3394,7 @@ test_export_static enum ec_error_list browse_flash_contents(int print)
 					memcpy(&index, ch + 1, sizeof(index));
 				else
 					index = 0;
-				ccprintf("%c%c:%08x.%d ", erased, tag, index,
+				ccprintf("%c%c:%08x.%d", erased, tag, index,
 					 ch->generation);
 			}
 			if (print > 1) {
