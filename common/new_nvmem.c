@@ -1713,19 +1713,21 @@ enum ec_error_list new_nvmem_migrate(unsigned int act_partition)
 /* Check if the passed in flash page is empty, if not - erase it. */
 static enum ec_error_list verify_empty_page(void *ph)
 {
-	uint32_t *word_p = ph;
+	uint32_t *word_p = ph, used_count = 0;
 	size_t i;
 
-	for (i = 0; i < (CONFIG_FLASH_BANK_SIZE / sizeof(*word_p)); i++) {
-		if (word_p[i] != NV_FLASH_EMPTY_WORD) {
-			log_no_payload_failure(
-				NVMEMF_CORRUPTED_EMPTY_PAGE);
-			CPRINTS("%s: corrupted page at %pP!", __func__, word_p);
-			return flash_physical_erase(
-				(uintptr_t)word_p - CONFIG_PROGRAM_MEMORY_BASE,
-				CONFIG_FLASH_BANK_SIZE);
-		}
+	for (i = 0; i < (CONFIG_FLASH_BANK_SIZE / sizeof(*word_p)); i++)
+		used_count += (word_p[i] != NV_FLASH_EMPTY_WORD);
+
+	if (used_count) {
+		log_no_payload_failure(NVMEMF_CORRUPTED_EMPTY_PAGE);
+		CPRINTS("%s: corrupted page at %pP! %u word(s) unerased",
+			__func__, word_p, used_count);
+		return flash_physical_erase((uintptr_t)word_p -
+						    CONFIG_PROGRAM_MEMORY_BASE,
+					    CONFIG_FLASH_BANK_SIZE);
 	}
+
 	return EC_SUCCESS;
 }
 
