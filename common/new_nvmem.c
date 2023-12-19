@@ -1042,6 +1042,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 			break;
 		}
 
+		/* We are done with first page(s), so can free it. */
 		if (at.list_index != 0) {
 			/*
 			 * We are done with a pre-compaction page, use a
@@ -1061,8 +1062,11 @@ test_export_static enum ec_error_list compact_nvmem(void)
 					log_no_payload_failure(
 						NVMEMF_COMPACT_DELIMETER);
 			}
-
-			release_first_page(&at);
+			/* Release all pages with already copied or no valid
+			 * objects encountered so far.
+			 */
+			while (at.list_index != 0)
+				release_first_page(&at);
 #if defined(NVMEM_TEST_BUILD)
 			if (failure_mode == TEST_FAIL_WHEN_COMPACTING) {
 				shared_mem_release(ch);
