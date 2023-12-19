@@ -110,7 +110,7 @@
  *      reserved objects with the appropriate first bytes.
  *
  *    - evictable tpm object: the first 4 bytes stored in the container, the
- *      evictable TTPM object ID.
+ *      evictable TPM object ID.
  *
  * Don't forget that the contents are usually encrypted. Decryption is needed
  * each time a stored object needs to be examined.
@@ -230,7 +230,7 @@
  *
  * So, during initialization the flash could be in one of three states:
  *
- * - thre is an erased transaction delimiter at the top
+ * - there is an erased transaction delimiter at the top
  *   . this is the normal state after successful commit operation.
  *
  * - there is transaction delimiter at the top, but it is not erased.
