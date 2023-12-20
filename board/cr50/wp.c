@@ -393,7 +393,7 @@ int board_wipe_tpm(int reset_required)
 	int rc;
 
 	/* Wipe the TPM's memory and reset the TPM task. */
-	rc = tpm_reset_request(1, 1);
+	rc = tpm_reset_request(true, true);
 	if (rc != EC_SUCCESS) {
 		flash_log_add_event(FE_LOG_TPM_WIPE_ERROR, 0, NULL);
 		/*

@@ -12,8 +12,6 @@
 #ifndef __CROS_EC_TPM_REGISTERS_H
 #define __CROS_EC_TPM_REGISTERS_H
 
-#include <stdint.h>
-
 #include "common.h"
 
 /* The SPI controller is writing data into a TPM register. */
@@ -44,10 +42,11 @@ void tpm_register_interface(interface_control_func interface_start,
  * If wipe_nvmem_first is true, the caller is expected to keep the rest of the
  * system in reset until TPM wipeout is completed.
  */
-int tpm_reset_request(int wait_until_done, int wipe_nvmem_first);
+enum ec_error_list tpm_reset_request(bool wait_until_done,
+				     bool wipe_nvmem_first);
 
 /* Returns True if successive TPM_RST_L pulses are being debounced. */
-int tpm_reset_in_progress(void);
+bool tpm_reset_in_progress(void);
 
 /*
  * Tell the TPM task to re-enable nvmem commits.
@@ -61,7 +60,7 @@ void tpm_reinstate_nvmem_commits(void);
  * To be called by functions running on the TPM task context. Returns
  * EC_SUCCESS on successful reset.
  */
-int tpm_sync_reset(int wipe_first);
+enum ec_error_list tpm_sync_reset(bool wipe_first);
 
 /*
  * It shuts down the tpm interface, until next tpm reset event.

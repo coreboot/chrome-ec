@@ -1137,7 +1137,7 @@ static void deferred_tpm_rst_isr(void)
 		 */
 		if (!reboot_request_posted || other_rw_is_inactive()) {
 			/* Reset TPM, no need to wait for completion. */
-			tpm_reset_request(0, 0);
+			tpm_reset_request(false, false);
 			return;
 		}
 
@@ -1145,7 +1145,7 @@ static void deferred_tpm_rst_isr(void)
 		 * Reset TPM and wait to completion to make sure nvmem is
 		 * committed before reboot.
 		 */
-		tpm_reset_request(1, 0);
+		tpm_reset_request(true, false);
 	}
 
 	cflush();

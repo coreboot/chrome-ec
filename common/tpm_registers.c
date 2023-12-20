@@ -96,7 +96,12 @@
 #define GOOGLE_DID 0x0028
 #define CR50_RID	0  /* No revision ID yet */
 
-static __preserved uint8_t reset_in_progress;
+/* Flag indicating reset request.
+ * Code below ignores repeated requests if no TPM operation was done.
+ * Set on tpm_reset_request(), reset on TPM register access
+ * (tpm_register_get) and tpm_stop().
+ */
+static __preserved volatile bool reset_in_progress;
 
 /* Tpm state machine states. */
 enum tpm_states {
@@ -518,7 +523,7 @@ void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size)
 	static uint32_t checked_sts
 		__attribute__((section(".bss.Tpm2_common")));
 
-	reset_in_progress = 0;
+	reset_in_progress = false;
 
 	if (regaddr != TPM_STS) {
 		CPRINTF("%s(0x%06x, %u)\n", __func__, regaddr, data_size);
@@ -777,26 +782,29 @@ void tpm_alt_extension(struct tpm_cmd_header *command, size_t buffer_size)
 }
 
 /* Calling task (singular) to notify when the TPM reset has completed */
-static __initialized task_id_t waiting_for_reset = TASK_ID_INVALID;
+static __initialized volatile task_id_t task_waiting_for_reset =
+	TASK_ID_INVALID;
 
 /* Return value from blocking tpm_reset_request() call */
-static __preserved int wipe_result;
+static volatile __preserved enum ec_error_list wipe_result;
 
 /*
  * Did tpm_reset_request() request nvmem wipe? (intentionally cleared on reset)
  */
-static int wipe_requested __attribute__((section(".bss.Tpm2_common")));
+static volatile bool wipe_requested
+	__attribute__((section(".bss.Tpm2_common")));
 
-int tpm_reset_in_progress(void)
+bool tpm_reset_in_progress(void)
 {
 	return reset_in_progress;
 }
 
-int tpm_reset_request(int wait_until_done, int wipe_nvmem_first)
+enum ec_error_list tpm_reset_request(bool wait_until_done,
+				     bool wipe_nvmem_first)
 {
 	uint32_t evt;
 
-	cprints(CC_TASK, "%s(%d, %d)", __func__,
+	cprints(CC_TASK, "%s(%x, %x)", __func__,
 		wait_until_done, wipe_nvmem_first);
 
 	if (reset_in_progress) {
@@ -804,7 +812,7 @@ int tpm_reset_request(int wait_until_done, int wipe_nvmem_first)
 		return EC_ERROR_BUSY;
 	}
 
-	reset_in_progress = 1;
+	reset_in_progress = true;
 	wipe_result = EC_SUCCESS;
 
 	/* We can't change our minds about wiping. */
@@ -815,7 +823,7 @@ int tpm_reset_request(int wait_until_done, int wipe_nvmem_first)
 		 * Completion could take a while, if other things have
 		 * higher priority.
 		 */
-		waiting_for_reset = task_get_current();
+		task_waiting_for_reset = task_get_current();
 
 	/* Ask the TPM task to reset itself */
 	task_set_event(TASK_ID_TPM, TPM_EVENT_RESET, 0);
@@ -825,7 +833,7 @@ int tpm_reset_request(int wait_until_done, int wipe_nvmem_first)
 
 	if (in_interrupt_context() ||
 	    task_get_current() == TASK_ID_TPM) {
-		waiting_for_reset = TASK_ID_INVALID;
+		task_waiting_for_reset = TASK_ID_INVALID;
 		return EC_ERROR_BUSY;	    /* Can't sleep. Clown'll eat me. */
 	}
 
@@ -869,14 +877,14 @@ void tpm_reinstate_nvmem_commits(void)
  *         unorderly shutdown (unless wipe_first is requested). This is a GSC
  *         specific modification to TPM behavior.
  */
-static void tpm_reset_now(int wipe_first, int can_preserve_orderly)
+static void tpm_reset_now(bool wipe_first, bool can_preserve_orderly)
 {
 	char orderly_state_copy[TPM_ORDERLY_STATE_SIZE];
 
 	if_stop();
 
 	/* This is more related to TPM task activity than TPM transactions */
-	cprints(CC_TASK, "%s(%d)", __func__, wipe_first);
+	cprints(CC_TASK, "%s(%x)", __func__, wipe_first);
 
 	if (wipe_first)
 		/* Now wipe the TPM's nvmem */
@@ -916,10 +924,10 @@ static void tpm_reset_now(int wipe_first, int can_preserve_orderly)
 	if (can_preserve_orderly && !wipe_first)
 		tpm_orderly_state_restore(orderly_state_copy);
 
-	if (waiting_for_reset != TASK_ID_INVALID) {
+	if (task_waiting_for_reset != TASK_ID_INVALID) {
 		/* Wake the waiting task, if any */
-		task_set_event(waiting_for_reset, TPM_EVENT_RESET, 0);
-		waiting_for_reset = TASK_ID_INVALID;
+		task_set_event(task_waiting_for_reset, TPM_EVENT_RESET, 0);
+		task_waiting_for_reset = TASK_ID_INVALID;
 	}
 
 	cprints(CC_TASK, "%s: done", __func__);
@@ -933,9 +941,9 @@ static void tpm_reset_now(int wipe_first, int can_preserve_orderly)
 	if_start();
 }
 
-int tpm_sync_reset(int wipe_first)
+enum ec_error_list tpm_sync_reset(bool wipe_first)
 {
-	tpm_reset_now(wipe_first, 1);
+	tpm_reset_now(wipe_first, true);
 
 	return wipe_result;
 }
@@ -952,7 +960,7 @@ void tpm_stop(void)
 	 * not be able to clear either.
 	 * Clear reset in progress to ensure that doesn't happen.
 	 */
-	reset_in_progress = 0;
+	reset_in_progress = false;
 }
 
 void tpm_task(void *u)
@@ -984,7 +992,7 @@ void tpm_task(void *u)
 			__LINE__, evt);
 	}
 
-	tpm_reset_now(0, 0);
+	tpm_reset_now(false, false);
 	while (1) {
 		uint8_t *response = NULL;
 		unsigned response_size;
@@ -1000,7 +1008,7 @@ void tpm_task(void *u)
 			evt = task_wait_event(-1);
 
 		if (evt & TPM_EVENT_RESET) {
-			tpm_reset_now(wipe_requested, 1);
+			tpm_reset_now(wipe_requested, true);
 			if (evt & TPM_EVENT_ALT_EXTENSION) {
 				/*
 				 * Need to tell the waiting task that
