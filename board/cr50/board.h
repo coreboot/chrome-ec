@@ -524,7 +524,8 @@ unsigned int board_cfg_reg_read(void);
 
 #define UARTN UART_CR50
 
-#define CC_DEFAULT     (CC_ALL & ~CC_MASK(CC_TPM))
+/* By default disable TPM and TPM register channels. */
+#define CC_DEFAULT (CC_ALL & ~(CC_MASK(CC_TPM) | CC_MASK(CC_TPM_REG)))
 
 /* Nv Memory users */
 #ifndef __ASSEMBLER__
