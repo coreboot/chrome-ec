@@ -33,7 +33,7 @@
 #include <endian.h>
 #include <string.h>
 
-#define CPRINTF(format, args...) cprintf(CC_EXTENSION, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_EXTENSION, format, ## args)
 
 #define EK_CERT_NV_START_INDEX             0x01C00000
 #define INFO1_EPS_SIZE                     PRIMARY_SEED_SIZE
@@ -464,7 +464,7 @@ static int get_decrypted_eps(uint8_t eps[PRIMARY_SEED_SIZE])
 	int i;
 	uint8_t frk2[AES256_BLOCK_CIPHER_KEY_SIZE];
 
-	CPRINTF("%s: getting eps\n", __func__);
+	CPRINTS("%s: getting eps", __func__);
 	if (!DCRYPTO_ladder_compute_frk2(K_CROS_FW_MAJOR_VERSION, frk2))
 		return 0;
 
@@ -500,9 +500,9 @@ static int handle_cert(
 	/* TODO(ngm): verify that storage succeeded. */
 	if (!store_cert(cert_info->component_type, cert->cert,
 				cert->cert_len)) {
-		CPRINTF("%s(): cert storage failed, type: %d\n", __func__,
+		CPRINTS("%s: cert storage failed, type: %d", __func__,
 			cert_info->component_type);
-		return 0;  /* Internal failure. */
+		return 0; /* Internal failure. */
 	}
 
 	return 1;
@@ -522,7 +522,7 @@ static int store_eps(const uint8_t eps[PRIMARY_SEED_SIZE])
 
 static void endorsement_complete(void)
 {
-	CPRINTF("%s(): SUCCESS\n", __func__);
+	CPRINTS("%s: SUCCESS", __func__);
 }
 
 enum manufacturing_status tpm_endorse(void)
@@ -562,7 +562,7 @@ enum manufacturing_status tpm_endorse(void)
 		return mnf_no_certs;
 
 	if (!get_decrypted_eps(eps)) {
-		CPRINTF("%s(): failed to read eps\n", __func__);
+		CPRINTS("%s: failed to read eps", __func__);
 		return mnf_eps_decr;
 	}
 
@@ -608,14 +608,14 @@ enum manufacturing_status tpm_endorse(void)
 		if (DCRYPTO_equals(p + RO_CERTS_REGION_SIZE - 32,
 				   HMAC_SHA256_final(&hmac),
 				   32) != DCRYPTO_OK) {
-			CPRINTF("%s: bad cert region hmac;", __func__);
+			CPRINTS("%s: bad cert region hmac;", __func__);
 
 			if (board_in_prod_mode()) {
 
 				/* TODO(ngm): is this state considered
 				 * endorsement failure?
 				 */
-				CPRINTF("NO certs installed\n");
+				CPRINTS("NO certs installed");
 				result = mnf_hmac_mismatch;
 				break;
 			}
@@ -632,32 +632,32 @@ enum manufacturing_status tpm_endorse(void)
 			 * problems when TPM identity is required.
 			 */
 			result = mnf_unverified_cert;
-			CPRINTF("installing UNVERIFIED certs\n");
+			CPRINTS("installing UNVERIFIED certs");
 		}
 
 		if (!handle_cert(
 				&rsa_cert->cert_info,
 				(struct cros_perso_certificate_response_v0 *)
 				&rsa_cert->cert_response, eps)) {
-			CPRINTF("%s: Failed to process RSA cert\n", __func__);
+			CPRINTS("%s: Failed to process RSA cert", __func__);
 			result = mnf_rsa_proc;
 			break;
 		}
-		CPRINTF("%s: RSA cert install success\n", __func__);
+		CPRINTS("%s: RSA cert install success", __func__);
 
 		if (!handle_cert(
 				&ecc_cert->cert_info,
 				(struct cros_perso_certificate_response_v0 *)
 				&ecc_cert->cert_response, eps)) {
-			CPRINTF("%s: Failed to process ECC cert\n", __func__);
+			CPRINTS("%s: Failed to process ECC cert", __func__);
 			result = mnf_ecc_proc;
 			break;
 		}
-		CPRINTF("%s: ECC cert install success\n", __func__);
+		CPRINTS("%s: ECC cert install success", __func__);
 
 		/* Copy EPS from INFO1 to flash data region. */
 		if (!store_eps(eps)) {
-			CPRINTF("%s(): eps storage failed\n", __func__);
+			CPRINTS("%s: eps storage failed", __func__);
 			result = mnf_store;
 			break;
 		}
@@ -672,8 +672,7 @@ enum manufacturing_status tpm_endorse(void)
 	always_memset(eps, 0, sizeof(eps));
 #else  /*  CR50_USE_FIXED_CERT vvvv defined    ^^^^^ not defined */
 	if (!install_fixed_certs()) {
-		CPRINTF(" failed to install fixed "
-			"endorsement certs;");
+		CPRINTS("failed to install fixed endorsement certs");
 		result = mnf_hmac_mismatch;
 	} else {
 		/* Mark as endorsed. */

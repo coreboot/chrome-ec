@@ -77,9 +77,9 @@
 
 /****************************************************************************/
 
-#define CPRINTS(format, args...) cprints(CC_TPM, format, ## args)
-#define CPRINTF(format, args...) cprintf(CC_TPM, format, ## args)
+#define CPRINTF(format, args...) cprintf(CC_TPM_REG, format, ## args)
 #define CPRINTSS(format, args...) cprints(CC_SYSTEM, format, ## args)
+#define CPRINTST(format, args...) cprints(CC_TPM, format, ## args)
 
 /* Register addresses for FIFO mode. */
 #define TPM_ACCESS	    (0)
@@ -243,7 +243,7 @@ static void copy_bytes(uint8_t *dest, uint32_t data_size, uint32_t value)
 static void access_reg_write(uint8_t data)
 {
 	if (!single_bit_set(data)) {
-		CPRINTF("%s: attempt to set acces reg to %02x\n",
+		CPRINTF("%s: attempt to set access reg to %02x\n",
 			__func__, data);
 		return;
 	}
@@ -521,7 +521,7 @@ void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size)
 	reset_in_progress = 0;
 
 	if (regaddr != TPM_STS) {
-		CPRINTF("%s(0x%06x, %d)\n", __func__, regaddr, data_size);
+		CPRINTF("%s(0x%06x, %u)\n", __func__, regaddr, data_size);
 		checked_sts = 0;
 	}
 	switch (regaddr) {
@@ -543,7 +543,7 @@ void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size)
 		 * the status changes.
 		 */
 		if (!checked_sts || last_sts != tpm_.regs.sts) {
-			CPRINTF("tpm_get_status(%d)(0x%06x, %d) %x\n",
+			CPRINTF("%s(%d)(0x%06x, %u) %x\n", __func__,
 				checked_sts, regaddr, data_size, tpm_.regs.sts);
 			checked_sts = 1;
 		} else {
@@ -580,7 +580,7 @@ void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size)
 		copy_bytes(dest, data_size, board_cfg_reg_read());
 		break;
 	default:
-		CPRINTS("%s(0x%06x, %d) => ??", __func__, regaddr, data_size);
+		CPRINTF("%s(0x%06x, %u) => ??\n", __func__, regaddr, data_size);
 		return;
 	}
 }
@@ -645,9 +645,10 @@ static void tpm_init(void)
 		_plat__SetNvAvail();
 		endorse_result = tpm_endorse();
 
-		ccprints("Endorsement %s (%d)",
-			 (endorse_result == mnf_success) ?
-			 "succeeded" : "failed", endorse_result);
+		cprints(CC_TASK, "Endorsement %s (%d)",
+			(endorse_result == mnf_success) ? "succeeded" :
+							  "failed",
+			endorse_result);
 		cflush();
 	} else {
 		_plat__SetNvAvail();
@@ -979,8 +980,8 @@ void tpm_task(void *u)
 			break;
 		}
 
-		cprints(CC_TASK, "%s:%d unexpected event %x",
-				__func__, __LINE__, evt);
+		cprints(CC_TASK, "%s:%u unexpected event %x", __func__,
+			__LINE__, evt);
 	}
 
 	tpm_reset_now(0, 0);
@@ -1036,7 +1037,7 @@ void tpm_task(void *u)
 			alt_if_command = 1;
 		} else {
 			if (evt) {
-				cprints(CC_TASK, "%s:%d unexpected event %x",
+				cprints(CC_TASK, "%s:%u unexpected event %x",
 					__func__, __LINE__, evt);
 				evt = 0;
 			}
@@ -1045,15 +1046,16 @@ void tpm_task(void *u)
 
 		command_code = be32toh(tpmh->command_code);
 		is_custom_command = IS_CUSTOM_CODE(command_code);
-		CPRINTF("%s: received fifo %scommand 0x%04x\n", __func__,
-			(is_custom_command) ? "vendor " : "",
-			(is_custom_command) ? be16toh(tpmh->subcommand_code) :
-					      command_code);
+		CPRINTST("%s: received %scommand 0x%04x, %ph", __func__,
+			 (is_custom_command) ? "vendor " : "",
+			 (is_custom_command) ? be16toh(tpmh->subcommand_code) :
+					       command_code,
+			 HEX_BUF(tpmh, sizeof(*tpmh)));
 		watchdog_reload();
 		/* Make sure system DRBG is initialized */
 		if (!drbg_initialized) {
 			if (!fips_rand_bytes(NULL, 0))
-				CPRINTS("FIPS DRBG failed");
+				cprints(CC_TASK, "FIPS DRBG failed");
 			drbg_initialized = true;
 		}
 
@@ -1072,8 +1074,7 @@ void tpm_task(void *u)
 					0, 0, 0, 10,	/* Response size. */
 					0, 0, 9, 0x21	/* TPM_RC_LOCKOUT */
 				};
-				CPRINTF("%s: Ignoring TPM commands\n",
-					__func__);
+				CPRINTST("%s: Ignoring TPM commands", __func__);
 				response = (uint8_t *)tpmh;
 				response_size = sizeof(tpm_broken_response);
 				memcpy(response, tpm_broken_response,
@@ -1125,9 +1126,10 @@ void tpm_task(void *u)
 #endif
 			}
 		}
-		CPRINTF("got %d bytes in response\n", response_size);
-		if (response_size &&
-		    (response_size <= buffer_size)) {
+		CPRINTST("%s: %u bytes in response, %ph", __func__,
+			 response_size,
+			 HEX_BUF(response, MIN(response_size, 10)));
+		if (response_size && (response_size <= buffer_size)) {
 			uint32_t tpm_sts;
 			/*
 			 * TODO(vbendeb): revisit this when

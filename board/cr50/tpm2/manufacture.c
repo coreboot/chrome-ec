@@ -14,7 +14,7 @@
 #include "TpmBuildSwitches.h"
 #include "tpm_types.h"
 
-#define CPRINTF(format, args...) cprintf(CC_EXTENSION, format, ## args)
+#define CPRINTS(format, args...) cprints(CC_EXTENSION, format, ## args)
 
 #define EK_CERT_NV_START_INDEX  0x01C00000
 
@@ -38,11 +38,11 @@ int tpm_manufactured(void)
 	if ((nv_ram_index == ~0) || (eps_seed_len < PRIMARY_SEED_SIZE) ||
 	    (NvIsUndefinedIndex(rsa_ek_nv_index) == TPM_RC_SUCCESS) ||
 	    (NvIsUndefinedIndex(ecc_ek_nv_index) == TPM_RC_SUCCESS)) {
-		CPRINTF("%s: NOT manufactured\n", __func__);
+		CPRINTS("%s: NOT manufactured", __func__);
 		return 0;
 	}
 
-	CPRINTF("%s: manufactured\n", __func__);
+	CPRINTS("%s: manufactured", __func__);
 	cflush();
 	return 1;
 }

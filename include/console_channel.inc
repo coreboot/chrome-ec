@@ -87,6 +87,7 @@ CONSOLE_CHANNEL(CC_ALS,		 "als")
 #endif
 CONSOLE_CHANNEL(CC_THERMAL,      "thermal")
 CONSOLE_CHANNEL(CC_TPM,          "tpm")
+CONSOLE_CHANNEL(CC_TPM_REG,      "tpmreg")
 CONSOLE_CHANNEL(CC_USB,          "usb")
 CONSOLE_CHANNEL(CC_USBCHARGE,    "usbcharge")
 #if defined(CONFIG_USB_POWER_DELIVERY) || defined(CONFIG_USB_PD_TCPC)
