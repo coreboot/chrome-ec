@@ -1577,7 +1577,6 @@ static enum ec_error_list save_var(const uint8_t *key, uint8_t key_len,
 	/* Set up container header. */
 	vc->c_header.container_type_copy = vc->c_header.container_type =
 		NN_OBJ_TUPLE;
-	vc->c_header.encrypted = 1;
 	vc->c_header.size = sizeof(struct tuple) + val_len + key_len;
 
 	rv = save_container(&vc->c_header);
@@ -1673,7 +1672,6 @@ enum ec_error_list new_nvmem_migrate(unsigned int act_partition)
 
 	set_first_page_header();
 
-	ch->encrypted = 1;
 	ch->generation = 0;
 
 	migrate_vars(ch);
@@ -2049,7 +2047,6 @@ static enum ec_error_list verify_reserved(uint8_t *reserved_bitmap,
 	memset(ch, 0, CONFIG_FLASH_BANK_SIZE);
 
 	ch->container_type = ch->container_type_copy = NN_OBJ_TPM_RESERVED;
-	ch->encrypted = 1;
 	container_body = (uint8_t *)(ch + 1);
 
 	rv = EC_SUCCESS;
@@ -2615,7 +2612,6 @@ static enum ec_error_list save_pcr(struct nn_container *ch,
 	uint8_t *container_body;
 
 	ch->container_type = ch->container_type_copy = NN_OBJ_TPM_RESERVED;
-	ch->encrypted = 1;
 	ch->size = pcr_size + 1;
 	ch->generation = 0;
 
@@ -2809,7 +2805,6 @@ static enum ec_error_list save_new_object(uint16_t obj_base, void *buf)
 	obj_size = next_obj_base - obj_base - s_evictNvStart;
 
 	ch->container_type_copy = ch->container_type = NN_OBJ_TPM_EVICTABLE;
-	ch->encrypted = 1;
 	ch->size = obj_size;
 	ch->generation = 0;
 	memcpy(ch + 1, obj_addr, obj_size);

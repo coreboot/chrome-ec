@@ -67,8 +67,6 @@ BUILD_ASSERT(sizeof(struct nn_page_header) % CONFIG_FLASH_WRITE_SIZE == 0);
  * container_type_copy: immutable copy of the container_type field, used to
  *                      verify contents of deleted objects.
  *
- * encrypted: set to 1 if contents are encrypted.
- *
  * size: size of the payload, 12 bits allocated, 11 bits would be enough for
  *       this use case.
  *
@@ -80,7 +78,7 @@ BUILD_ASSERT(sizeof(struct nn_page_header) % CONFIG_FLASH_WRITE_SIZE == 0);
 struct nn_container {
 	unsigned int container_type : 3;
 	unsigned int container_type_copy : 3;
-	unsigned int encrypted : 1;
+	unsigned int _rfu : 1; /* Reserved for future use. */
 	unsigned int size : 11;
 	unsigned int generation : 2;
 	unsigned int container_hash : 12;
