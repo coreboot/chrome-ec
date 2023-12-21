@@ -1046,11 +1046,10 @@ void tpm_task(void *u)
 
 		command_code = be32toh(tpmh->command_code);
 		is_custom_command = IS_CUSTOM_CODE(command_code);
-		CPRINTST("%s: received %scommand 0x%04x, %ph", __func__,
+		CPRINTST("%s: received %scommand 0x%04x", __func__,
 			 (is_custom_command) ? "vendor " : "",
 			 (is_custom_command) ? be16toh(tpmh->subcommand_code) :
-					       command_code,
-			 HEX_BUF(tpmh, sizeof(*tpmh)));
+					       command_code);
 		watchdog_reload();
 		/* Make sure system DRBG is initialized */
 		if (!drbg_initialized) {
