@@ -83,9 +83,9 @@ static uint8_t nvmem_cache[NVMEM_PARTITION_SIZE] __aligned(4);
 static uint8_t commits_enabled;
 
 /* NvMem error state */
-static int nvmem_error_state;
+static enum ec_error_list nvmem_error_state;
 /* Flag to track if an Nv write/move is not completed */
-static int nvmem_write_error;
+static bool nvmem_write_error;
 
 static void nvmem_release_cache(void);
 
@@ -100,7 +100,7 @@ static void nvmem_compute_sha(struct nvmem_tag *tag, void *sha_buf)
 			 sha_buf, sizeof(tag->sha));
 }
 
-static int nvmem_save(void)
+static enum ec_error_list nvmem_save(void)
 {
 	enum ec_error_list rv;
 
@@ -120,7 +120,7 @@ static int nvmem_save(void)
  *         EC_ERROR_BUSY in case of malloc failure
  *         EC_ERROR_UNKNOWN on failure to decrypt of verify.
  */
-static int nvmem_partition_read_verify(int index)
+static enum ec_error_list nvmem_partition_read_verify(enum nvmem_users index)
 {
 	uint8_t sha_comp[NVMEM_SHA_SIZE];
 	struct nvmem_partition *p_part;
@@ -202,7 +202,7 @@ static int nvmem_compare_generation(void)
 	return delta < (1<<(NVMEM_GENERATION_BITS-1)) ? 0 : 1;
 }
 
-static int nvmem_find_partition(void)
+static enum ec_error_list nvmem_find_partition(void)
 {
 	int n;
 	int newest;
@@ -236,7 +236,7 @@ static int nvmem_find_partition(void)
 	return EC_ERROR_INVALID_CONFIG;
 }
 
-static int nvmem_generate_offset_table(void)
+static enum ec_error_list nvmem_generate_offset_table(void)
 {
 	int n;
 	uint32_t start_offset;
@@ -265,8 +265,9 @@ uint8_t *const nvmem_cache_base(enum nvmem_users user)
 	return nvmem_cache + nvmem_user_start_offset[user];
 }
 
-static int nvmem_get_partition_off(int user, uint32_t offset, uint32_t len,
-				   uint32_t *p_buf_offset)
+static enum ec_error_list nvmem_get_partition_off(enum nvmem_users user,
+						  uint32_t offset, uint32_t len,
+						  uint32_t *p_buf_offset)
 {
 	uint32_t start_offset;
 
@@ -288,9 +289,9 @@ static int nvmem_get_partition_off(int user, uint32_t offset, uint32_t len,
 	return EC_SUCCESS;
 }
 
-int nvmem_init(void)
+enum ec_error_list nvmem_init(void)
 {
-	int ret;
+	enum ec_error_list ret;
 
 	/* Generate start offsets within partiion for user buffers */
 	ret = nvmem_generate_offset_table();
@@ -298,7 +299,7 @@ int nvmem_init(void)
 		CPRINTF("%s:%d\n", __func__, __LINE__);
 		return ret;
 	}
-	nvmem_write_error = 0;
+	nvmem_write_error = false;
 
 	/*
 	 * Default policy is to allow all commits. This ensures reinitialization
@@ -326,7 +327,10 @@ int nvmem_init(void)
 	return EC_SUCCESS;
 }
 
-int nvmem_get_error_state(void) { return nvmem_error_state; }
+enum ec_error_list nvmem_get_error_state(void)
+{
+	return nvmem_error_state;
+}
 
 int nvmem_is_different(uint32_t offset, uint32_t size, void *data,
 		       enum nvmem_users user)
@@ -351,10 +355,10 @@ int nvmem_is_different(uint32_t offset, uint32_t size, void *data,
 	return ret;
 }
 
-int nvmem_read(uint32_t offset, uint32_t size,
-		    void *data, enum nvmem_users user)
+enum ec_error_list nvmem_read(uint32_t offset, uint32_t size, void *data,
+			      enum nvmem_users user)
 {
-	int ret;
+	enum ec_error_list ret;
 	uint32_t src_offset;
 
 	nvmem_lock_cache();
@@ -371,8 +375,8 @@ int nvmem_read(uint32_t offset, uint32_t size,
 	return ret;
 }
 
-int nvmem_write(uint32_t offset, uint32_t size,
-		 void *data, enum nvmem_users user)
+enum ec_error_list nvmem_write(uint32_t offset, uint32_t size, void *data,
+			       enum nvmem_users user)
 {
 	int ret;
 	uint8_t *p_dest;
@@ -385,7 +389,7 @@ int nvmem_write(uint32_t offset, uint32_t size,
 	/* Compute partition offset for this write operation */
 	ret = nvmem_get_partition_off(user, offset, size, &dest_offset);
 	if (ret != EC_SUCCESS) {
-		nvmem_write_error = 1;
+		nvmem_write_error = true;
 		return ret;
 	}
 
@@ -398,10 +402,10 @@ int nvmem_write(uint32_t offset, uint32_t size,
 	return EC_SUCCESS;
 }
 
-int nvmem_move(uint32_t src_offset, uint32_t dest_offset, uint32_t size,
-		enum nvmem_users user)
+enum ec_error_list nvmem_move(uint32_t src_offset, uint32_t dest_offset,
+			      uint32_t size, enum nvmem_users user)
 {
-	int ret;
+	enum ec_error_list ret;
 	uint8_t *p_src, *p_dest;
 	uintptr_t base_addr;
 	uint32_t s_buff_offset, d_buff_offset;
@@ -413,14 +417,14 @@ int nvmem_move(uint32_t src_offset, uint32_t dest_offset, uint32_t size,
 	/* Compute partition offset for source */
 	ret = nvmem_get_partition_off(user, src_offset, size, &s_buff_offset);
 	if (ret != EC_SUCCESS) {
-		nvmem_write_error = 1;
+		nvmem_write_error = true;
 		return ret;
 	}
 
 	/* Compute partition offset for destination */
 	ret = nvmem_get_partition_off(user, dest_offset, size, &d_buff_offset);
 	if (ret != EC_SUCCESS) {
-		nvmem_write_error = 1;
+		nvmem_write_error = true;
 		return ret;
 	}
 
@@ -435,7 +439,7 @@ int nvmem_move(uint32_t src_offset, uint32_t dest_offset, uint32_t size,
 	return EC_SUCCESS;
 }
 
-int nvmem_enable_commits(void)
+enum ec_error_list nvmem_enable_commits(void)
 {
 	if (commits_enabled)
 		return EC_SUCCESS;
@@ -459,7 +463,7 @@ void nvmem_disable_commits(void)
 	commits_enabled = 0;
 }
 
-int nvmem_commit(void)
+enum ec_error_list nvmem_commit(void)
 {
 	if (nvmem_mutex.task == TASK_ID_COUNT) {
 		CPRINTF("%s: attempt to commit in unlocked state %d\n",

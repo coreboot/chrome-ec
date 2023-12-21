@@ -97,14 +97,14 @@ struct nvmem_partition {
  * @return EC_SUCCESS if a valid translation table is constructed, else
  *         error code.
  */
-int nvmem_init(void);
+enum ec_error_list nvmem_init(void);
 
 /**
  * Get Nvmem internal error state
  *
  * @return nvmem_error_state variable.
  */
-int nvmem_get_error_state(void);
+enum ec_error_list nvmem_get_error_state(void);
 
 /**
  * Compare 'size' amount of bytes in NvMem
@@ -128,8 +128,8 @@ int nvmem_is_different(uint32_t offset, uint32_t size,
  * @return EC_ERROR_OVERFLOW (non-zero) if the read operation would exceed the
  *         buffer length of the given user, otherwise EC_SUCCESS.
  */
-int nvmem_read(uint32_t startOffset, uint32_t size,
-		void *data, enum nvmem_users user);
+enum ec_error_list nvmem_read(uint32_t startOffset, uint32_t size, void *data,
+			      enum nvmem_users user);
 
 /**
  * Write 'size' amount of bytes to NvMem
@@ -145,8 +145,8 @@ int nvmem_read(uint32_t startOffset, uint32_t size,
  *         EC_ERROR_TIMEOUT if nvmem cache buffer is not available
  *         EC_SUCCESS if no errors.
  */
-int nvmem_write(uint32_t startOffset, uint32_t size,
-		 void *data, enum nvmem_users user);
+enum ec_error_list nvmem_write(uint32_t startOffset, uint32_t size, void *data,
+			       enum nvmem_users user);
 
 /**
  * Move 'size' amount of bytes within NvMem
@@ -162,8 +162,8 @@ int nvmem_write(uint32_t startOffset, uint32_t size,
  *         EC_ERROR_TIMEOUT if nvmem cache buffer is not available
  *         EC_SUCCESS if no errors.
  */
-int nvmem_move(uint32_t src_offset, uint32_t dest_offset, uint32_t size,
-	       enum nvmem_users user);
+enum ec_error_list nvmem_move(uint32_t src_offset, uint32_t dest_offset,
+			      uint32_t size, enum nvmem_users user);
 /**
  * Commit all previous NvMem writes to flash
  *
@@ -175,7 +175,7 @@ int nvmem_move(uint32_t src_offset, uint32_t dest_offset, uint32_t size,
  *                           holding the mutex
  *         EC_ERROR_UNKNOWN  in other error cases
  */
-int nvmem_commit(void);
+enum ec_error_list nvmem_commit(void);
 
 /*
  * Temporarily stopping NVMEM commits could be beneficial. One use case is
@@ -194,7 +194,7 @@ void nvmem_disable_commits(void);
  * @return error if this task does not hold the lock or commit
  *         fails, EC_SUCCESS otherwise.
  */
-int nvmem_enable_commits(void);
+enum ec_error_list nvmem_enable_commits(void);
 
 /*
  * Function to retrieve the base address of the nvmem cache of the appropriate
