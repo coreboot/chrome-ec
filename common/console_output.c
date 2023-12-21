@@ -135,18 +135,27 @@ static int command_ch(int argc, char **argv)
 		} else if (strcasecmp(argv[1], "restore") == 0) {
 			channel_mask = channel_mask_saved;
 			return EC_SUCCESS;
-
-		} else {
-			/* Set the mask */
-			int m = strtoi(argv[1], &e, 0);
-			if (*e)
-				return EC_ERROR_PARAM1;
-
-			/* No disabling the command output channel */
-			channel_mask = m | CC_MASK(CC_COMMAND);
-
-			return EC_SUCCESS;
 		}
+		for (i = 0; i < CC_CHANNEL_COUNT; i++)
+			if (strcasecmp(argv[1], channel_names[i]) == 0) {
+				channel_mask ^= CC_MASK(i);
+				/* Don't disable command output. */
+				channel_mask |= CC_MASK(CC_COMMAND);
+				ccprintf("%s set to %s\n", argv[1],
+					 (channel_mask & CC_MASK(i)) ? "on" :
+								       "off");
+				return EC_SUCCESS;
+			}
+
+		/* Set the mask */
+		i = strtoi(argv[1], &e, 0);
+		if (*e)
+			return EC_ERROR_PARAM1;
+
+		/* No disabling the command output channel */
+		channel_mask = i | CC_MASK(CC_COMMAND);
+
+		return EC_SUCCESS;
 	}
 
 	/* Print the list of channels */
@@ -161,5 +170,5 @@ static int command_ch(int argc, char **argv)
 	return EC_SUCCESS;
 };
 DECLARE_SAFE_CONSOLE_COMMAND(chan, command_ch,
-			     "[ save | restore | <mask> ]",
+			     "[ save | restore | <chan_name> | <mask> ]",
 			     "Save, restore, get or set console channel mask");
