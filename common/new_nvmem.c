@@ -1839,6 +1839,23 @@ static void init_page_list(void)
 	}
 }
 
+static void log_object_size_error(NV_RESERVE index, uint16_t container_size,
+				  uint16_t object_size)
+{
+	struct nvmem_failure_payload fp;
+
+	fp.failure_type = NVMEMF_TPM_OBJECT_SIZE;
+	fp.object.index = (uint8_t)index;
+	fp.object.container_size = container_size;
+	fp.object.size = object_size;
+
+	flash_log_add_event(FE_LOG_NVMEM,
+			    sizeof(fp.object) +
+				    offsetof(struct nvmem_failure_payload,
+					     object),
+			    &fp);
+}
+
 /*
  * The passed in pointer contains marshaled STATE_CLEAR structure as retrieved
  * from flash. This function unmarshals it and places in the NVMEM cache where
@@ -1996,15 +2013,68 @@ static enum ec_error_list restore_ram_index_space(const uint8_t *pad,
 
 	/* Check that container size is valid. */
 	if (size < sizeof(uint32_t) ||
-	    size > RAM_INDEX_SPACE + sizeof(uint32_t))
+	    size > RAM_INDEX_SPACE + sizeof(uint32_t)) {
+		log_object_size_error(NV_RAM_INDEX_SPACE, size,
+				      RAM_INDEX_SPACE);
 		return EC_ERROR_UNKNOWN;
+	}
 
 	/* Get size from size field and check consistency. */
 	memcpy(&index_size, pad, sizeof(index_size));
-	if (index_size + sizeof(index_size) != size)
+	if (index_size + sizeof(index_size) != size) {
+		log_object_size_error(NV_RAM_INDEX_SPACE, size,
+				      MIN(index_size, 0xffff));
 		return EC_ERROR_UNKNOWN;
+	}
 
 	memcpy(cached, pad, size);
+	return EC_SUCCESS;
+}
+
+/*
+ * Restore NV reserved space containing TPM2B value. Check that TPM2B value
+ * size fits allocated space size.
+ * `data` - container data
+ * `size` - size of container data
+ * `space_size` - allocated size as per NvGetReserved()
+ * `cached` - placeholder to output in NV cache
+ */
+static enum ec_error_list restore_tpm2b_space(NV_RESERVE index, uint8_t *data,
+					      size_t size, size_t space_size,
+					      TPM2B *cached)
+{
+	uint16_t index_size;
+	size_t copy_size;
+
+	/* Check that index_size is same size as cached->size in TPM2B. */
+	BUILD_ASSERT(sizeof(cached->size) == sizeof(index_size));
+	/* Ensure we don't need to check for overflow. */
+	BUILD_ASSERT(sizeof(index_size) < sizeof(size));
+
+	/* Check that container size is large enough to contain TPM2B size, but
+	 * not larger than allocated space.
+	 */
+	if (size < sizeof(cached->size) || size > space_size) {
+		log_object_size_error(index, size, space_size);
+		return EC_ERROR_UNKNOWN;
+	}
+
+	/* Get TPM2B size from size field. */
+	memcpy(&index_size, data + offsetof(TPM2B, size), sizeof(index_size));
+
+	/* Check that TPM2B size is less than the size of the container (and
+	 * implicitly allocated space size). It is ok for TPM2B value to be
+	 * less than allocated space. No overflow can happen as index_size is
+	 * 16-bit due to TPM2B definition.
+	 */
+	copy_size = sizeof(index_size) + index_size;
+	if (copy_size > size) {
+		log_object_size_error(index, size, copy_size);
+		return EC_ERROR_UNKNOWN;
+	}
+
+	/* Only copy TPM2B size, effectively zeroizing tail. */
+	memcpy(cached, data, copy_size);
 	return EC_SUCCESS;
 }
 
@@ -2035,6 +2105,22 @@ static enum ec_error_list restore_reserved(void *pad, size_t size,
 
 		case NV_STATE_RESET:
 			rv = unmarshal_state_reset(pad, size, cached);
+			break;
+
+		case NV_OWNER_POLICY:
+		case NV_ENDORSEMENT_POLICY:
+		case NV_LOCKOUT_POLICY:
+		case NV_OWNER_AUTH:
+		case NV_ENDORSEMENT_AUTH:
+		case NV_LOCKOUT_AUTH:
+		case NV_EP_SEED:
+		case NV_SP_SEED:
+		case NV_PP_SEED:
+		case NV_PH_PROOF:
+		case NV_SH_PROOF:
+		case NV_EH_PROOF:
+			rv = restore_tpm2b_space(type, pad, size, ri.size,
+						 cached);
 			break;
 
 		case NV_RAM_INDEX_SPACE:
