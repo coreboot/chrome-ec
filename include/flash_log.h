@@ -83,6 +83,7 @@ enum nvmem_failure_type {
 	NVMEMF_COMPACT_DELIMETER = 23,
 	NVMEMF_COMPACT_SAVE = 24,
 	NVMEMF_APPCIPHER_ERROR = 25,
+	NVMEMF_TPM_OBJECT_SIZE = 26,
 };
 
 /* Not all nvmem failures require payload. */
@@ -96,6 +97,11 @@ struct nvmem_failure_payload {
 		} ph __packed;
 		uint16_t underrun_size; /* How many bytes short. */
 		uint8_t last_obj_type;
+		struct {
+			uint8_t index; /* Object index. */
+			uint16_t size; /* Object size. */
+			uint16_t container_size;
+		} object __packed;
 	} __packed;
 } __packed;
 
