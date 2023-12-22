@@ -608,6 +608,9 @@ enum nvmem_users {
 /* Total time deep sleep should not be allowed while wiping the TPM. */
 #define DISABLE_SLEEP_TIME_TPM_WIPE (TPM_PROCESSING_TIME + TPM_RESET_TIME)
 
+/* Enable dump of NV cache */
+#define CONFIG_CMD_DUMP_NVCACHE
+
 /*****************************************************************************/
 /*
  * Options for CRYPTO_TEST=1 images. Crypto test support takes up more space

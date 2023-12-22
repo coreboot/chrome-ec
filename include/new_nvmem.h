@@ -152,6 +152,7 @@ static inline enum ec_error_list nvmem_erase_tpm_data(void)
 
 #if defined(TEST_BUILD) && !defined(TEST_FUZZ)
 #define NVMEM_TEST_BUILD
+enum ec_error_list browse_nv_cache(void);
 enum ec_error_list browse_flash_contents(int);
 enum ec_error_list compact_nvmem(void);
 extern struct access_tracker controller_at;
