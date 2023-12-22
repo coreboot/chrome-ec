@@ -3412,3 +3412,92 @@ static int command_dump_nvmem(int argc, char **argv)
 }
 DECLARE_SAFE_CONSOLE_COMMAND(dump_nvmem, command_dump_nvmem, "", "");
 #endif /* CONFIG_CMD_DUMP_NVMEM */
+
+#ifdef CONFIG_CMD_DUMP_NVCACHE
+test_export_static enum ec_error_list browse_nv_cache(void)
+{
+	uint32_t i;
+	uint32_t line_len = 0;
+	uint16_t len = 0;
+	uint16_t len_gp = 0;
+	NV_RESERVED_ITEM ri;
+	uint8_t *nv;
+	uint8_t *tpm_gp;
+	uint32_t obj_base;
+	uint8_t *obj_addr;
+	uint32_t next_obj_base;
+
+	nv = nvmem_cache_base(NVMEM_TPM);
+
+	lock_mutex(__LINE__);
+
+	/* Print NV Reserved indexes with TPM2B content. */
+	for (i = NV_OWNER_POLICY, tpm_gp = (uint8_t *)&gp.ownerPolicy;
+	     i <= NV_EH_PROOF; i++) {
+		NvGetReserved(i, &ri);
+		if (ri.size) {
+			memcpy(&len, nv + ri.offset, sizeof(len));
+			/* This is a hack to enumerate fields in struct. It
+			 * works due to choice of sizes and alignment.
+			 */
+			memcpy(&len_gp, tpm_gp, sizeof(len));
+			tpm_gp += ri.size;
+		} else {
+			/* Something wrong with NvGetReserved, print `FF`. */
+			len_gp = len = 0xff;
+		}
+
+		ccprintf("R:%02x[%02x]=%02x/%02x ", i, ri.size, len, len_gp);
+		if (line_len > 70) {
+			ccprintf("\n");
+			cflush();
+			line_len = 0;
+		} else {
+			line_len += 15;
+		}
+	}
+	ccprintf("\n");
+
+	i = 0;
+
+	/* Parse TPM2 NV objects */
+	obj_base = s_evictNvStart;
+	obj_addr = nv + obj_base;
+	memcpy(&next_obj_base, obj_addr, sizeof(next_obj_base));
+	while (next_obj_base && (next_obj_base <= s_evictNvEnd)) {
+		uint32_t index;
+
+		memcpy(&index, obj_addr + sizeof(next_obj_base), sizeof(index));
+		ccprintf("E:%08x:%03x ", index, next_obj_base - obj_base);
+
+		/* Switch to next object. */
+		obj_base = next_obj_base;
+		obj_addr = nv + obj_base;
+		memcpy(&next_obj_base, obj_addr, sizeof(next_obj_base));
+
+		i++;
+		if (line_len > 70) {
+			ccprintf("\n");
+			cflush();
+			line_len = 0;
+		} else {
+			line_len += 15;
+		}
+	}
+	ccprintf("\n%u evictable objects\n", i);
+	unlock_mutex(__LINE__);
+	return EC_SUCCESS;
+}
+
+static int command_dump_nvcache(int argc, char **argv)
+{
+	nvmem_disable_commits();
+
+	browse_nv_cache();
+
+	nvmem_enable_commits();
+
+	return 0;
+}
+DECLARE_SAFE_CONSOLE_COMMAND(dump_nvcache, command_dump_nvcache, "", "");
+#endif /* CONFIG_CMD_DUMP_NVCACHE */
