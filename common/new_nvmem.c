@@ -1845,15 +1845,12 @@ static void init_page_list(void)
  * it belongs. Note that PCRs were not marshaled.
  */
 static enum ec_error_list unmarshal_state_clear(uint8_t *pad, int size,
-						uint32_t offset)
+						STATE_CLEAR_DATA *real_scd)
 {
-	STATE_CLEAR_DATA *real_scd;
 	STATE_CLEAR_DATA *scd;
 	size_t i;
 	uint32_t preserved;
 	uint8_t booleans;
-
-	real_scd = (STATE_CLEAR_DATA *)(nvmem_cache_base(NVMEM_TPM) + offset);
 
 	memset(real_scd, 0, sizeof(*real_scd));
 	if (!size)
@@ -1903,13 +1900,10 @@ static enum ec_error_list unmarshal_state_clear(uint8_t *pad, int size,
  * it belongs.
  */
 static enum ec_error_list unmarshal_state_reset(uint8_t *pad, int size,
-						uint32_t offset)
+						STATE_RESET_DATA *real_srd)
 {
-	STATE_RESET_DATA *real_srd;
 	STATE_RESET_DATA *srd;
 	uint32_t preserved;
-
-	real_srd = (STATE_RESET_DATA *)(nvmem_cache_base(NVMEM_TPM) + offset);
 
 	memset(real_srd, 0, sizeof(*real_srd));
 	/* Zero size means no object present, so it will be recreated. */
@@ -1968,7 +1962,7 @@ static enum ec_error_list unmarshal_state_reset(uint8_t *pad, int size,
  * Based on the passed in index, find the location of the PCR in the NVMEM
  * cache and copy it there.
  */
-static enum ec_error_list restore_pcr(size_t pcr_index, uint8_t *pad,
+static enum ec_error_list restore_pcr(size_t pcr_index, const uint8_t *pad,
 				      size_t size)
 {
 	const STATE_CLEAR_DATA *scd;
@@ -1985,6 +1979,30 @@ static enum ec_error_list restore_pcr(size_t pcr_index, uint8_t *pad,
 	scd = get_scd();
 	cached = (uint8_t *)&scd->pcrSave + pcrd->pcr_array_offset +
 		 pcrd->pcr_size * (pcr_index % NUM_STATIC_PCR);
+
+	memcpy(cached, pad, size);
+	return EC_SUCCESS;
+}
+
+/*
+ * Restore special NV_RAM_INDEX_SPACE which may have a variable size, but
+ * capped to RAM_INDEX_SPACE. Make sure that container size matches its
+ * content.
+ */
+static enum ec_error_list restore_ram_index_space(const uint8_t *pad,
+						  size_t size, uint8_t *cached)
+{
+	uint32_t index_size;
+
+	/* Check that container size is valid. */
+	if (size < sizeof(uint32_t) ||
+	    size > RAM_INDEX_SPACE + sizeof(uint32_t))
+		return EC_ERROR_UNKNOWN;
+
+	/* Get size from size field and check consistency. */
+	memcpy(&index_size, pad, sizeof(index_size));
+	if (index_size + sizeof(index_size) != size)
+		return EC_ERROR_UNKNOWN;
 
 	memcpy(cached, pad, size);
 	return EC_SUCCESS;
@@ -2008,19 +2026,24 @@ static enum ec_error_list restore_reserved(void *pad, size_t size,
 
 	if (type < NV_VIRTUAL_RESERVE_LAST) {
 		NvGetReserved(type, &ri);
+		cached = (nvmem_cache_base(NVMEM_TPM) + ri.offset);
 
 		switch (type) {
 		case NV_STATE_CLEAR:
-			rv = unmarshal_state_clear(pad, size, ri.offset);
+			rv = unmarshal_state_clear(pad, size, cached);
 			break;
 
 		case NV_STATE_RESET:
-			rv = unmarshal_state_reset(pad, size, ri.offset);
+			rv = unmarshal_state_reset(pad, size, cached);
+			break;
+
+		case NV_RAM_INDEX_SPACE:
+			rv = restore_ram_index_space(pad, size, cached);
 			break;
 
 		default:
-			cached = (nvmem_cache_base(NVMEM_TPM) + ri.offset);
-			memcpy(cached, pad, size);
+			/* Make sure we don't read more than allocated. */
+			memcpy(cached, pad, MIN(size, ri.size));
 			break;
 		}
 		/* Only mark as loaded if successfully copied. */
