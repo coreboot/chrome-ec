@@ -345,7 +345,7 @@ The steps to flash the EC differ based on the board being used, but the
 
 ```bash
 (chroot) $ sudo servod -b $BOARD
-(chroot) $ ~/trunk/src/platform/ec/util/flash_ec -i $IMAGE -b $BOARD
+(chroot) $ ~/trunk/src/platform/ec/util/flash_ec --image $IMAGE --board $BOARD
 ```
 
 ## Flashing the AP {#flashap}
