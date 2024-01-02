@@ -281,7 +281,8 @@ static enum ec_error_list nvmem_get_partition_off(enum nvmem_users user,
 	 * Ensure that read/write operation that is calling this function
 	 * doesn't exceed the end of its buffer.
 	 */
-	if (offset + len > nvmem_user_sizes[user])
+	if (offset >= nvmem_user_sizes[user] || len >= nvmem_user_sizes[user] ||
+	    offset + len >= nvmem_user_sizes[user])
 		return EC_ERROR_OVERFLOW;
 	/* Compute offset within the partition for the rd/wr operation */
 	*p_buf_offset = start_offset + offset;
