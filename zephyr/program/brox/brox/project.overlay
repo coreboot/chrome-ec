@@ -12,14 +12,44 @@
 i2c3ALT: &i2c3 {
 };
 
-#include "../generated.dtsi"
+#include <cros/cbi_flash.dtsi>
+
 #include "../adc.dtsi"
 #include "../brox.dtsi"
+#include "../generated.dtsi"
 #include "../gpio.dtsi"
 #include "../i2c.dtsi"
 #include "../interrupts.dtsi"
+#include "../keyboard.dtsi"
 #include "../motionsense.dtsi"
+#include "../power_signals.dtsi"
+#include "../power_signals_gpios.dtsi"
+#include "../usb_typec.dtsi"
 
 /* Brox project DTS includes*/
 
 /* Brox overrides follow... */
+
+/{
+        batteries {
+                default_battery: lgc_ap18c8k {
+                        compatible = "lgc,ap18c8k", "battery-smart";
+                };
+        };
+};
+
+/*
+ * When CBI in flash is enabled, setup RO flash layout as follows:
+ *   RO binary:    0x00000:0x5DFFF
+ *   PSTATE block: 0x5E000:0x5EFFF
+ *   CBI flash:    0x5F000:0x5FFFF
+ */
+&pstate {
+    offset = <(0x60000 - (0x1000 * 2))>;
+    size = <0x1000>;
+};
+
+&cbi_flash {
+	offset = <(0x60000 - (0x1000 * 1))>;
+	size = <0x1000>;
+};
