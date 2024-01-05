@@ -760,10 +760,13 @@ static enum ec_error_list set_first_page_header(void)
  */
 static bool container_is_valid(struct nn_container *ch)
 {
-	struct nn_container placeholder_c;
 	uint32_t hash;
 	uint32_t preserved_hash;
 	uint8_t preserved_type;
+
+	if ((ch->container_type != NN_OBJ_OLD_COPY &&
+	     ch->container_type != ch->container_type_copy))
+		return false;
 
 	preserved_hash = ch->container_hash;
 	preserved_type = ch->container_type;
@@ -776,9 +779,7 @@ static bool container_is_valid(struct nn_container *ch)
 	ch->container_hash = preserved_hash;
 	ch->container_type = preserved_type;
 
-	placeholder_c.container_hash = hash;
-
-	return placeholder_c.container_hash == ch->container_hash;
+	return (hash & NN_CONTAINER_HASH_MASK) == ch->container_hash;
 }
 
 static uint32_t aligned_container_size(const struct nn_container *ch)

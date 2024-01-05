@@ -75,17 +75,20 @@ BUILD_ASSERT(sizeof(struct nn_page_header) % CONFIG_FLASH_WRITE_SIZE == 0);
  * container_hash: hash of the ENTIRE container, both header and body
  *                 included. This field is set to zero before hash is calculated
  */
+#define NN_CONTAINER_HASH_BITS 12
 struct nn_container {
 	unsigned int container_type : 3;
 	unsigned int container_type_copy : 3;
 	unsigned int _rfu : 1; /* Reserved for future use. */
 	unsigned int size : 11;
 	unsigned int generation : 2;
-	unsigned int container_hash : 12;
+	unsigned int container_hash : NN_CONTAINER_HASH_BITS;
 } __aligned(CONFIG_FLASH_WRITE_SIZE);
 BUILD_ASSERT(sizeof(struct nn_container) == sizeof(uint32_t));
 /* This is an assumption in the implementation. */
 BUILD_ASSERT(sizeof(struct nn_container) == CONFIG_FLASH_WRITE_SIZE);
+
+#define NN_CONTAINER_HASH_MASK ((1U << NN_CONTAINER_HASH_BITS) - 1)
 
 /*
  * A structure to keep context of accessing to a page, page header and offset
