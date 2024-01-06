@@ -8155,22 +8155,28 @@ void print_battery_flags(int flags)
 
 static int get_battery_command_print_info(
 	uint8_t index,
-	const struct ec_response_battery_static_info_v2 *const static_r)
+	const struct ec_response_battery_static_info_v2 *const static_r,
+	const struct ec_response_battery_dynamic_info *dynamic_r)
 {
 	struct ec_params_battery_dynamic_info dynamic_p = {
 		.index = index,
 	};
-	struct ec_response_battery_dynamic_info dynamic_r;
+	struct ec_response_battery_dynamic_info d;
+	bool dynamic_from_cmd = false;
 	int rv;
 
-	rv = ec_command(EC_CMD_BATTERY_GET_DYNAMIC, 0, &dynamic_p,
-			sizeof(dynamic_p), &dynamic_r, sizeof(dynamic_r));
-	if (rv < 0)
-		return -1;
+	if (!dynamic_r) {
+		dynamic_from_cmd = true;
+		rv = ec_command(EC_CMD_BATTERY_GET_DYNAMIC, 0, &dynamic_p,
+				sizeof(dynamic_p), &d, sizeof(d));
+		if (rv < 0)
+			return -1;
+		dynamic_r = &d;
+	}
 
 	printf("Battery %d info:\n", index);
 
-	if (dynamic_r.flags & EC_BATT_FLAG_INVALID_DATA) {
+	if (dynamic_r->flags & EC_BATT_FLAG_INVALID_DATA) {
 		printf("  Invalid data (not present?)\n");
 		return -1;
 	}
@@ -8195,9 +8201,9 @@ static int get_battery_command_print_info(
 		goto cmd_error;
 	printf("  Design capacity:        %u mAh\n", static_r->design_capacity);
 
-	if (!is_battery_range(dynamic_r.full_capacity))
+	if (!is_battery_range(dynamic_r->full_capacity))
 		goto cmd_error;
-	printf("  Last full charge:       %u mAh\n", dynamic_r.full_capacity);
+	printf("  Last full charge:       %u mAh\n", dynamic_r->full_capacity);
 
 	if (!is_battery_range(static_r->design_voltage))
 		goto cmd_error;
@@ -8207,27 +8213,33 @@ static int get_battery_command_print_info(
 		goto cmd_error;
 	printf("  Cycle count             %u\n", static_r->cycle_count);
 
-	if (!is_battery_range(dynamic_r.actual_voltage))
+	if (!is_battery_range(dynamic_r->actual_voltage))
 		goto cmd_error;
-	printf("  Present voltage         %u mV\n", dynamic_r.actual_voltage);
+	printf("  Present voltage         %u mV\n", dynamic_r->actual_voltage);
 
 	/* current can be negative */
-	printf("  Present current         %d mA\n", dynamic_r.actual_current);
+	printf("  Present current         %d mA\n", dynamic_r->actual_current);
 
-	if (!is_battery_range(dynamic_r.remaining_capacity))
+	if (!is_battery_range(dynamic_r->remaining_capacity))
 		goto cmd_error;
 	printf("  Remaining capacity      %u mAh\n",
-	       dynamic_r.remaining_capacity);
+	       dynamic_r->remaining_capacity);
 
-	if (!is_battery_range(dynamic_r.desired_voltage))
-		goto cmd_error;
-	printf("  Desired voltage         %u mV\n", dynamic_r.desired_voltage);
+	if (dynamic_from_cmd) {
+		if (!is_battery_range(dynamic_r->desired_voltage))
+			goto cmd_error;
+		printf("  Desired voltage         %u mV\n",
+		       dynamic_r->desired_voltage);
+	}
 
-	if (!is_battery_range(dynamic_r.desired_current))
-		goto cmd_error;
-	printf("  Desired current         %u mA\n", dynamic_r.desired_current);
+	if (dynamic_from_cmd) {
+		if (!is_battery_range(dynamic_r->desired_current))
+			goto cmd_error;
+		printf("  Desired current         %u mA\n",
+		       dynamic_r->desired_current);
+	}
 
-	print_battery_flags(dynamic_r.flags);
+	print_battery_flags(dynamic_r->flags);
 	return 0;
 
 cmd_error:
@@ -8250,7 +8262,7 @@ static int get_battery_command_v2(uint8_t index)
 		return -1;
 	}
 
-	return get_battery_command_print_info(index, &static_r);
+	return get_battery_command_print_info(index, &static_r, NULL);
 }
 
 static int get_battery_command_v1(uint8_t index)
@@ -8283,7 +8295,7 @@ static int get_battery_command_v1(uint8_t index)
 	strncpy(static_v2.chemistry, static_r.type_ext,
 		sizeof(static_v2.chemistry) - 1);
 
-	return get_battery_command_print_info(index, &static_v2);
+	return get_battery_command_print_info(index, &static_v2, NULL);
 }
 static int get_battery_command_v0(uint8_t index)
 {
@@ -8315,16 +8327,63 @@ static int get_battery_command_v0(uint8_t index)
 	strncpy(static_v2.chemistry, static_r.type,
 		sizeof(static_v2.chemistry) - 1);
 
-	return get_battery_command_print_info(index, &static_v2);
+	return get_battery_command_print_info(index, &static_v2, NULL);
+}
+
+static int get_battery_info_from_memmap(void)
+{
+	struct ec_response_battery_static_info_v2 s2 = {};
+	struct ec_response_battery_dynamic_info d = {};
+	int val;
+
+	val = read_mapped_mem8(EC_MEMMAP_BATTERY_VERSION);
+	if (val < 1) {
+		fprintf(stderr, "Battery version %d is not supported\n", val);
+		return -1;
+	}
+
+	d.flags = read_mapped_mem8(EC_MEMMAP_BATT_FLAG);
+
+	read_mapped_string(EC_MEMMAP_BATT_MFGR, s2.manufacturer,
+			   sizeof(s2.manufacturer));
+
+	read_mapped_string(EC_MEMMAP_BATT_MODEL, s2.device_name,
+			   sizeof(s2.device_name));
+
+	read_mapped_string(EC_MEMMAP_BATT_TYPE, s2.chemistry,
+			   sizeof(s2.chemistry));
+
+	read_mapped_string(EC_MEMMAP_BATT_SERIAL, s2.serial, sizeof(s2.serial));
+
+	s2.design_capacity = read_mapped_mem32(EC_MEMMAP_BATT_DCAP);
+
+	d.full_capacity = read_mapped_mem32(EC_MEMMAP_BATT_LFCC);
+
+	s2.design_voltage = read_mapped_mem32(EC_MEMMAP_BATT_DVLT);
+
+	s2.cycle_count = read_mapped_mem32(EC_MEMMAP_BATT_CCNT);
+
+	d.actual_voltage = read_mapped_mem32(EC_MEMMAP_BATT_VOLT);
+
+	d.actual_current = read_mapped_mem32(EC_MEMMAP_BATT_RATE);
+	if (d.flags & EC_BATT_FLAG_DISCHARGING)
+		d.actual_current *= -1;
+
+	d.remaining_capacity = read_mapped_mem32(EC_MEMMAP_BATT_CAP);
+
+	if (get_battery_command_print_info(0, &s2, &d)) {
+		fprintf(stderr,
+			"Bad battery info value. Check protocol version.\n");
+		return -1;
+	}
+
+	return 0;
 }
 
 int cmd_battery(int argc, char *argv[])
 {
-	char batt_text[EC_MEMMAP_TEXT_MAX];
-	int rv, val;
 	char *e;
 	int index = 0;
-	uint8_t flags;
 
 	if (argc > 2) {
 		fprintf(stderr, "Usage: %s [index]\n", argv[0]);
@@ -8351,81 +8410,8 @@ int cmd_battery(int argc, char *argv[])
 		return get_battery_command_v1(index);
 	else if (index > 0)
 		return get_battery_command_v0(index);
-
-	val = read_mapped_mem8(EC_MEMMAP_BATTERY_VERSION);
-	if (val < 1) {
-		fprintf(stderr, "Battery version %d is not supported\n", val);
-		return -1;
-	}
-
-	flags = read_mapped_mem8(EC_MEMMAP_BATT_FLAG);
-
-	printf("Battery info:\n");
-
-	rv = read_mapped_string(EC_MEMMAP_BATT_MFGR, batt_text,
-				sizeof(batt_text));
-	if (rv < 0 || !is_string_printable(batt_text))
-		goto cmd_error;
-	printf("  OEM name:               %s\n", batt_text);
-
-	rv = read_mapped_string(EC_MEMMAP_BATT_MODEL, batt_text,
-				sizeof(batt_text));
-	if (rv < 0 || !is_string_printable(batt_text))
-		goto cmd_error;
-	printf("  Model number:           %s\n", batt_text);
-
-	rv = read_mapped_string(EC_MEMMAP_BATT_TYPE, batt_text,
-				sizeof(batt_text));
-	if (rv < 0 || !is_string_printable(batt_text))
-		goto cmd_error;
-	printf("  Chemistry   :           %s\n", batt_text);
-
-	rv = read_mapped_string(EC_MEMMAP_BATT_SERIAL, batt_text,
-				sizeof(batt_text));
-	printf("  Serial number:          %s\n", batt_text);
-
-	val = read_mapped_mem32(EC_MEMMAP_BATT_DCAP);
-	if (!is_battery_range(val))
-		goto cmd_error;
-	printf("  Design capacity:        %u mAh\n", val);
-
-	val = read_mapped_mem32(EC_MEMMAP_BATT_LFCC);
-	if (!is_battery_range(val))
-		goto cmd_error;
-	printf("  Last full charge:       %u mAh\n", val);
-
-	val = read_mapped_mem32(EC_MEMMAP_BATT_DVLT);
-	if (!is_battery_range(val))
-		goto cmd_error;
-	printf("  Design output voltage   %u mV\n", val);
-
-	val = read_mapped_mem32(EC_MEMMAP_BATT_CCNT);
-	if (!is_battery_range(val))
-		goto cmd_error;
-	printf("  Cycle count             %u\n", val);
-
-	val = read_mapped_mem32(EC_MEMMAP_BATT_VOLT);
-	if (!is_battery_range(val))
-		goto cmd_error;
-	printf("  Present voltage         %u mV\n", val);
-
-	val = read_mapped_mem32(EC_MEMMAP_BATT_RATE);
-	if (!is_battery_range(val))
-		goto cmd_error;
-	printf("  Present current         %u mA%s\n", val,
-	       flags & EC_BATT_FLAG_DISCHARGING ? " (discharging)" : "");
-
-	val = read_mapped_mem32(EC_MEMMAP_BATT_CAP);
-	if (!is_battery_range(val))
-		goto cmd_error;
-	printf("  Remaining capacity      %u mAh\n", val);
-
-	print_battery_flags(flags);
-
-	return 0;
-cmd_error:
-	fprintf(stderr, "Bad battery info value. Check protocol version.\n");
-	return -1;
+	else
+		return get_battery_info_from_memmap();
 }
 
 int cmd_battery_cut_off(int argc, char *argv[])
@@ -8541,13 +8527,14 @@ cmd_battery_vendor_param_usage:
 
 static void batt_conf_dump(const struct board_batt_params *conf,
 			   const char *manuf_name, const char *device_name,
-			   uint8_t struct_version)
+			   uint8_t struct_version, bool is_human_readable)
 {
 	const struct fuel_gauge_info *fg = &conf->fuel_gauge;
 	const struct ship_mode_info *ship = &conf->fuel_gauge.ship_mode;
 	const struct sleep_mode_info *sleep = &conf->fuel_gauge.sleep_mode;
 	const struct fet_info *fet = &conf->fuel_gauge.fet;
 	const struct battery_info *info = &conf->batt_info;
+	const char *comma = is_human_readable ? "," : "";
 
 	printf("{\n"); /* Start of root */
 	printf("\t\"%s,%s\": {\n", manuf_name, device_name);
@@ -8557,13 +8544,13 @@ static void batt_conf_dump(const struct board_batt_params *conf,
 
 	printf("\t\t\t\"ship_mode\": {\n");
 	printf("\t\t\t\t\"reg_addr\": \"0x%02x\",\n", ship->reg_addr);
-	printf("\t\t\t\t\"reg_data\": [ \"0x%04x\", \"0x%04x\" ],\n",
-	       ship->reg_data[0], ship->reg_data[1]);
+	printf("\t\t\t\t\"reg_data\": [ \"0x%04x\", \"0x%04x\" ]%s\n",
+	       ship->reg_data[0], ship->reg_data[1], comma);
 	printf("\t\t\t},\n");
 
 	printf("\t\t\t\"sleep_mode\": {\n");
 	printf("\t\t\t\t\"reg_addr\": \"0x%02x\",\n", sleep->reg_addr);
-	printf("\t\t\t\t\"reg_data\": \"0x%04x\",\n", sleep->reg_data);
+	printf("\t\t\t\t\"reg_data\": \"0x%04x\"%s\n", sleep->reg_data, comma);
 	printf("\t\t\t},\n");
 
 	printf("\t\t\t\"fet\": {\n");
@@ -8572,8 +8559,9 @@ static void batt_conf_dump(const struct board_batt_params *conf,
 	printf("\t\t\t\t\"disconnect_val\": \"0x%04x\",\n",
 	       fet->disconnect_val);
 	printf("\t\t\t\t\"cfet_mask\": \"0x%04x\",\n", fet->cfet_mask);
-	printf("\t\t\t\t\"cfet_off_val\": \"0x%04x\",\n", fet->cfet_off_val);
-	printf("\t\t\t},\n");
+	printf("\t\t\t\t\"cfet_off_val\": \"0x%04x\"%s\n", fet->cfet_off_val,
+	       comma);
+	printf("\t\t\t}%s\n", comma);
 
 	printf("\t\t},\n"); /* end of fuel_gauge */
 
@@ -8590,10 +8578,11 @@ static void batt_conf_dump(const struct board_batt_params *conf,
 	printf("\t\t\t\"charging_min_c\": %d,\n", info->charging_min_c);
 	printf("\t\t\t\"charging_max_c\": %d,\n", info->charging_max_c);
 	printf("\t\t\t\"discharging_min_c\": %d,\n", info->discharging_min_c);
-	printf("\t\t\t\"discharging_max_c\": %d,\n", info->discharging_max_c);
-	printf("\t\t},\n"); /* end of batt_info */
+	printf("\t\t\t\"discharging_max_c\": %d%s\n", info->discharging_max_c,
+	       comma);
+	printf("\t\t}%s\n", comma); /* end of batt_info */
 
-	printf("\t},\n"); /* end of board_batt_params */
+	printf("\t}%s\n", comma); /* end of board_batt_params */
 	printf("}\n"); /* End of root */
 }
 
@@ -8833,8 +8822,10 @@ static void cmd_battery_config_help(const char *cmd)
 {
 	fprintf(stderr,
 		"\n"
-		"Usage: %s get [-c] [<index>]\n"
-		"    Print active battery config in JSON or C-struct (-c).\n"
+		"Usage: %s get [-c/-j/-h] [<index>]\n"
+		"    Print active battery config in one of following formats:\n"
+		"    JSON5 (-h), JSON (-j), C-struct (-c). Default output format is\n"
+		"    JSON5 (-h).\n"
 		"    If <index> is specified, a config is read from CBI.\n"
 		"\n"
 		"Usage: %s set <json_file> <manuf_name> <device_name> [<index>]\n"
@@ -8858,14 +8849,21 @@ static int cmd_battery_config_get(int argc, char *argv[])
 	uint8_t *p;
 	int expected;
 	bool in_json = true;
+	bool in_json_human = true;
 	int rv;
 	int c;
 	int index = -1;
 
-	while ((c = getopt(argc, argv, "c")) != -1) {
+	while ((c = getopt(argc, argv, "chj")) != -1) {
 		switch (c) {
 		case 'c':
 			in_json = false;
+			break;
+		case 'j':
+			in_json_human = false;
+			break;
+		case 'h':
+			in_json_human = true;
 			break;
 		case '?':
 			/* getopt prints error message. */
@@ -8940,12 +8938,13 @@ static int cmd_battery_config_get(int argc, char *argv[])
 	memcpy(device_name, p, head->device_name_size);
 	p += head->device_name_size;
 	memcpy(&conf, p, sizeof(conf));
-	if (in_json)
+	if (in_json) {
 		batt_conf_dump(&conf, manuf_name, device_name,
-			       head->struct_version);
-	else
+			       head->struct_version, in_json_human);
+	} else {
 		batt_conf_dump_in_c(&conf, manuf_name, device_name,
 				    head->struct_version);
+	}
 
 	return 0;
 }
@@ -9056,6 +9055,8 @@ static int cmd_battery_config_set(int argc, char *argv[])
 	if (read_battery_config_from_json(root_dict, &config))
 		return -1;
 
+	/* Data is ready. Create a packet for EC_CMD_SET_CROS_BOARD_INFO. */
+	memset(p, 0, ec_max_outsize);
 	header->struct_version = struct_version;
 	header->manuf_name_size = strlen(manuf_name);
 	header->device_name_size = strlen(device_name);
