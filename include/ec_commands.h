@@ -522,9 +522,9 @@ extern "C" {
 #define USB_RETIMER_FW_UPDATE_SET_TBT 6 /* Set MUX to TBT mode   */
 #define USB_RETIMER_FW_UPDATE_DISCONNECT 7 /* Set MUX to disconnect */
 
-#define EC_ACPI_MEM_USB_RETIMER_PORT(x) ((x)&0x0f)
+#define EC_ACPI_MEM_USB_RETIMER_PORT(x) ((x) & 0x0f)
 #define EC_ACPI_MEM_USB_RETIMER_OP(x) \
-	(((x)&0xf0) >> USB_RETIMER_FW_UPDATE_OP_SHIFT)
+	(((x) & 0xf0) >> USB_RETIMER_FW_UPDATE_OP_SHIFT)
 
 /*
  * ACPI addresses 0x20 - 0xff map to EC_MEMMAP offset 0x00 - 0xdf.  This data
@@ -690,6 +690,8 @@ enum ec_status {
 	EC_RES_INVALID_DATA_CRC = 19, /* Data CRC invalid */
 	EC_RES_DUP_UNAVAILABLE = 20, /* Can't resend response */
 
+	EC_RES_COUNT,
+
 	EC_RES_MAX = UINT16_MAX, /**< Force enum to be 16 bits */
 } __packed;
 BUILD_ASSERT(sizeof(enum ec_status) == sizeof(uint16_t));
@@ -735,6 +737,39 @@ BUILD_ASSERT((uint16_t)EC_RES_DUP_UNAVAILABLE ==
 	     (uint16_t)EC_HOST_CMD_DUP_UNAVAILABLE);
 BUILD_ASSERT((uint16_t)EC_RES_MAX == (uint16_t)EC_HOST_CMD_MAX);
 
+#endif
+
+/* clang-format off */
+#define EC_STATUS_TEXT                                                        \
+	{                                                                     \
+	EC_MAP_ITEM(EC_RES_SUCCESS, SUCCESS),                                 \
+	EC_MAP_ITEM(EC_RES_INVALID_COMMAND, INVALID_COMMAND),                 \
+	EC_MAP_ITEM(EC_RES_ERROR, ERROR),                                     \
+	EC_MAP_ITEM(EC_RES_INVALID_PARAM, INVALID_PARAM),                     \
+	EC_MAP_ITEM(EC_RES_ACCESS_DENIED, ACCESS_DENIED),                     \
+	EC_MAP_ITEM(EC_RES_INVALID_RESPONSE, INVALID_RESPONSE),               \
+	EC_MAP_ITEM(EC_RES_INVALID_VERSION, INVALID_VERSION),                 \
+	EC_MAP_ITEM(EC_RES_INVALID_CHECKSUM, INVALID_CHECKSUM),               \
+	EC_MAP_ITEM(EC_RES_IN_PROGRESS, IN_PROGRESS),                         \
+	EC_MAP_ITEM(EC_RES_UNAVAILABLE, UNAVAILABLE),                         \
+	EC_MAP_ITEM(EC_RES_TIMEOUT, TIMEOUT),                                 \
+	EC_MAP_ITEM(EC_RES_OVERFLOW, OVERFLOW),                               \
+	EC_MAP_ITEM(EC_RES_INVALID_HEADER, INVALID_HEADER),                   \
+	EC_MAP_ITEM(EC_RES_REQUEST_TRUNCATED, REQUEST_TRUNCATED),             \
+	EC_MAP_ITEM(EC_RES_RESPONSE_TOO_BIG, RESPONSE_TOO_BIG),               \
+	EC_MAP_ITEM(EC_RES_BUS_ERROR, BUS_ERROR),                             \
+	EC_MAP_ITEM(EC_RES_BUSY, BUSY),                                       \
+	EC_MAP_ITEM(EC_RES_INVALID_HEADER_VERSION, INVALID_HEADER_VERSION),   \
+	EC_MAP_ITEM(EC_RES_INVALID_HEADER_CRC, INVALID_HEADER_CRC),           \
+	EC_MAP_ITEM(EC_RES_INVALID_DATA_CRC, INVALID_DATA_CRC),               \
+	EC_MAP_ITEM(EC_RES_DUP_UNAVAILABLE, DUP_UNAVAILABLE),                 \
+	}
+/* clang-format on */
+
+#ifndef __cplusplus
+#define EC_MAP_ITEM(k, v) [k] = #v
+BUILD_ASSERT(ARRAY_SIZE(((const char *[])EC_STATUS_TEXT)) == EC_RES_COUNT);
+#undef EC_MAP_ITEM
 #endif
 
 /*
@@ -1646,6 +1681,18 @@ enum ec_feature_code {
 	 * The EC image is built with tokenized logging enabled.
 	 */
 	EC_FEATURE_TOKENIZED_LOGGING = 49,
+	/*
+	 * The EC supports triggering an STB dump.
+	 */
+	EC_FEATURE_AMD_STB_DUMP = 50,
+	/*
+	 * The EC supports memory dump commands.
+	 */
+	EC_FEATURE_MEMORY_DUMP = 51,
+	/*
+	 * The EC supports DP2.1 capability
+	 */
+	EC_FEATURE_TYPEC_DP2_1 = 52,
 };
 
 #define EC_FEATURE_MASK_0(event_code) BIT(event_code % 32)
@@ -4084,15 +4131,15 @@ struct ec_response_keyboard_factory_test {
 } __ec_align2;
 
 /* Fingerprint events in 'fp_events' for EC_MKBP_EVENT_FINGERPRINT */
-#define EC_MKBP_FP_RAW_EVENT(fp_events) ((fp_events)&0x00FFFFFF)
-#define EC_MKBP_FP_ERRCODE(fp_events) ((fp_events)&0x0000000F)
+#define EC_MKBP_FP_RAW_EVENT(fp_events) ((fp_events) & 0x00FFFFFF)
+#define EC_MKBP_FP_ERRCODE(fp_events) ((fp_events) & 0x0000000F)
 #define EC_MKBP_FP_ENROLL_PROGRESS_OFFSET 4
 #define EC_MKBP_FP_ENROLL_PROGRESS(fpe) \
-	(((fpe)&0x00000FF0) >> EC_MKBP_FP_ENROLL_PROGRESS_OFFSET)
+	(((fpe) & 0x00000FF0) >> EC_MKBP_FP_ENROLL_PROGRESS_OFFSET)
 #define EC_MKBP_FP_MATCH_IDX_OFFSET 12
 #define EC_MKBP_FP_MATCH_IDX_MASK 0x0000F000
 #define EC_MKBP_FP_MATCH_IDX(fpe) \
-	(((fpe)&EC_MKBP_FP_MATCH_IDX_MASK) >> EC_MKBP_FP_MATCH_IDX_OFFSET)
+	(((fpe) & EC_MKBP_FP_MATCH_IDX_MASK) >> EC_MKBP_FP_MATCH_IDX_OFFSET)
 #define EC_MKBP_FP_ENROLL BIT(27)
 #define EC_MKBP_FP_MATCH BIT(28)
 #define EC_MKBP_FP_FINGER_DOWN BIT(29)
@@ -4110,6 +4157,7 @@ struct ec_response_keyboard_factory_test {
 #define EC_MKBP_FP_ERR_MATCH_NO 0
 #define EC_MKBP_FP_ERR_MATCH_NO_INTERNAL 6
 #define EC_MKBP_FP_ERR_MATCH_NO_TEMPLATES 7
+#define EC_MKBP_FP_ERR_MATCH_NO_AUTH_FAIL 8
 #define EC_MKBP_FP_ERR_MATCH_NO_LOW_QUALITY 2
 #define EC_MKBP_FP_ERR_MATCH_NO_LOW_COVERAGE 4
 #define EC_MKBP_FP_ERR_MATCH_YES 1
@@ -4445,7 +4493,7 @@ struct ec_params_i2c_write {
  * discharge the battery.
  */
 #define EC_CMD_CHARGE_CONTROL 0x0096
-#define EC_VER_CHARGE_CONTROL 2
+#define EC_VER_CHARGE_CONTROL 3
 
 enum ec_charge_control_mode {
 	CHARGE_CONTROL_NORMAL = 0,
@@ -4467,12 +4515,16 @@ enum ec_charge_control_cmd {
 	EC_CHARGE_CONTROL_CMD_GET,
 };
 
+enum ec_charge_control_flag {
+	EC_CHARGE_CONTROL_FLAG_NO_IDLE = BIT(0),
+};
+
 struct ec_params_charge_control {
 	uint32_t mode; /* enum charge_control_mode */
 
 	/* Below are the fields added in V2. */
 	uint8_t cmd; /* enum ec_charge_control_cmd. */
-	uint8_t reserved;
+	uint8_t flags; /* enum ec_charge_control_flag (v3+) */
 	/*
 	 * Lower and upper thresholds for battery sustainer. This struct isn't
 	 * named to avoid tainting foreign projects' name spaces.
@@ -4494,7 +4546,8 @@ struct ec_response_charge_control {
 		int8_t lower;
 		int8_t upper;
 	} sustain_soc;
-	uint16_t reserved;
+	uint8_t flags; /* enum ec_charge_control_flag (v3+) */
+	uint8_t reserved;
 } __ec_align4;
 
 /*****************************************************************************/
@@ -4800,7 +4853,7 @@ enum charge_state_params {
 	CS_PARAM_DEBUG_MANUAL_MODE,
 	CS_PARAM_DEBUG_SEEMS_DEAD,
 	CS_PARAM_DEBUG_SEEMS_DISCONNECTED,
-	CS_PARAM_DEBUG_BATT_REMOVED,
+	CS_PARAM_DEBUG_BATT_REMOVED, /* Deprecated */
 	CS_PARAM_DEBUG_MANUAL_CURRENT,
 	CS_PARAM_DEBUG_MANUAL_VOLTAGE,
 	CS_PARAM_DEBUG_MAX = 0x2ffff,
@@ -5166,7 +5219,19 @@ struct ec_response_i2c_passthru_protect {
  * These commands are for sending and receiving message via HDMI CEC
  */
 
+#define EC_CEC_MAX_PORTS 16
+
 #define MAX_CEC_MSG_LEN 16
+
+/*
+ * Helper macros for packing/unpacking cec_events.
+ * bits[27:0] : bitmask of events from enum mkbp_cec_event
+ * bits[31:28]: port number
+ */
+#define EC_MKBP_EVENT_CEC_PACK(events, port) \
+	(((events) & GENMASK(27, 0)) | (((port) & 0xf) << 28))
+#define EC_MKBP_EVENT_CEC_GET_EVENTS(event) ((event) & GENMASK(27, 0))
+#define EC_MKBP_EVENT_CEC_GET_PORT(event) (((event) >> 28) & 0xf)
 
 /* CEC message from the AP to be written on the CEC bus */
 #define EC_CMD_CEC_WRITE_MSG 0x00B8
@@ -5179,19 +5244,54 @@ struct ec_params_cec_write {
 	uint8_t msg[MAX_CEC_MSG_LEN];
 } __ec_align1;
 
+/**
+ * struct ec_params_cec_write_v1 - Message to write to the CEC bus
+ * @port: CEC port to write the message on
+ * @msg_len: length of msg in bytes
+ * @msg: message content to write to the CEC bus
+ */
+struct ec_params_cec_write_v1 {
+	uint8_t port;
+	uint8_t msg_len;
+	uint8_t msg[MAX_CEC_MSG_LEN];
+} __ec_align1;
+
+/* CEC message read from a CEC bus reported back to the AP */
+#define EC_CMD_CEC_READ_MSG 0x00B9
+
+/**
+ * struct ec_params_cec_read - Read a message from the CEC bus
+ * @port: CEC port to read a message on
+ */
+struct ec_params_cec_read {
+	uint8_t port;
+} __ec_align1;
+
+/**
+ * struct ec_response_cec_read - Message read from the CEC bus
+ * @msg_len: length of msg in bytes
+ * @msg: message content read from the CEC bus
+ */
+struct ec_response_cec_read {
+	uint8_t msg_len;
+	uint8_t msg[MAX_CEC_MSG_LEN];
+} __ec_align1;
+
 /* Set various CEC parameters */
 #define EC_CMD_CEC_SET 0x00BA
 
 /**
  * struct ec_params_cec_set - CEC parameters set
  * @cmd: parameter type, can be CEC_CMD_ENABLE or CEC_CMD_LOGICAL_ADDRESS
+ * @port: CEC port to set the parameter on
  * @val: in case cmd is CEC_CMD_ENABLE, this field can be 0 to disable CEC
  *	or 1 to enable CEC functionality, in case cmd is
  *	CEC_CMD_LOGICAL_ADDRESS, this field encodes the requested logical
  *	address between 0 and 15 or 0xff to unregister
  */
 struct ec_params_cec_set {
-	uint8_t cmd; /* enum cec_command */
+	uint8_t cmd : 4; /* enum cec_command */
+	uint8_t port : 4;
 	uint8_t val;
 } __ec_align1;
 
@@ -5201,9 +5301,11 @@ struct ec_params_cec_set {
 /**
  * struct ec_params_cec_get - CEC parameters get
  * @cmd: parameter type, can be CEC_CMD_ENABLE or CEC_CMD_LOGICAL_ADDRESS
+ * @port: CEC port to get the parameter on
  */
 struct ec_params_cec_get {
-	uint8_t cmd; /* enum cec_command */
+	uint8_t cmd : 4; /* enum cec_command */
+	uint8_t port : 4;
 } __ec_align1;
 
 /**
@@ -5215,6 +5317,17 @@ struct ec_params_cec_get {
  */
 struct ec_response_cec_get {
 	uint8_t val;
+} __ec_align1;
+
+/* Get the number of CEC ports */
+#define EC_CMD_CEC_PORT_COUNT 0x00C1
+
+/**
+ * struct ec_response_cec_port_count - CEC port count response
+ * @port_count: number of CEC ports
+ */
+struct ec_response_cec_port_count {
+	uint8_t port_count;
 } __ec_align1;
 
 /* CEC parameters command */
@@ -5231,6 +5344,8 @@ enum mkbp_cec_event {
 	EC_MKBP_CEC_SEND_OK = BIT(0),
 	/* Outgoing message was not acknowledged */
 	EC_MKBP_CEC_SEND_FAILED = BIT(1),
+	/* Incoming message can be read out by AP */
+	EC_MKBP_CEC_HAVE_DATA = BIT(2),
 };
 
 /*****************************************************************************/
@@ -5541,6 +5656,11 @@ struct ec_params_reboot_ec {
  * for details.
  */
 #define EC_CMD_GET_PANIC_INFO 0x00D3
+
+struct ec_params_get_panic_info_v1 {
+	/* Do not modify PANIC_DATA_FLAG_OLD_HOSTCMD when reading panic info */
+	uint8_t preserve_old_hostcmd_flag;
+} __ec_align1;
 
 /*****************************************************************************/
 /*
@@ -5945,6 +6065,10 @@ struct ec_params_usb_pd_discovery_entry {
 
 /* Negative port parameters have special meaning */
 enum usb_pd_override_ports {
+	/*
+	 * DONT_CHARGE is for all ports. Thus it's persistent across plug-in
+	 * or plug-out.
+	 */
 	OVERRIDE_DONT_CHARGE = -2,
 	OVERRIDE_OFF = -1,
 	/* [0, CONFIG_USB_PD_PORT_MAX_COUNT): Port# */
@@ -5976,9 +6100,9 @@ struct ec_response_pd_log {
 #define PD_LOG_PORT_MASK 0xe0
 #define PD_LOG_PORT_SHIFT 5
 #define PD_LOG_PORT_SIZE(port, size) \
-	(((port) << PD_LOG_PORT_SHIFT) | ((size)&PD_LOG_SIZE_MASK))
+	(((port) << PD_LOG_PORT_SHIFT) | ((size) & PD_LOG_SIZE_MASK))
 #define PD_LOG_PORT(size_port) ((size_port) >> PD_LOG_PORT_SHIFT)
-#define PD_LOG_SIZE(size_port) ((size_port)&PD_LOG_SIZE_MASK)
+#define PD_LOG_SIZE(size_port) ((size_port) & PD_LOG_SIZE_MASK)
 
 /* PD event log : entry types */
 /* PD MCU events */
@@ -6217,41 +6341,28 @@ enum cbi_data_tag {
 	CBI_TAG_SSFC = 8, /* uint32_t bit field */
 	CBI_TAG_REWORK_ID = 9, /* uint64_t or smaller */
 	CBI_TAG_FACTORY_CALIBRATION_DATA = 10, /* uint32_t bit field */
+
 	/*
-	 * Battery info
+	 * A uint32_t field reserved for controlling common features at runtime.
+	 * It shouldn't be used at board-level. See union ec_common_control for
+	 * the bit definitions.
 	 */
-	/* struct fuel_gauge_info */
-	CBI_TAG_FUEL_GAUGE_MANUF_NAME,
-	CBI_TAG_FUEL_GAUGE_DEVICE_NAME,
-	CBI_TAG_FUEL_GAUGE_FLAGS,
-	/* struct ship_mod_info */
-	CBI_TAG_BATT_SHIP_MODE_REG_ADDR,
-	CBI_TAG_BATT_SHIP_MODE_REG_DATA,
-	CBI_TAG_BATT_SHIP_MODE_FLAGS, /* enum ship_mode_flag */
-	/* struct sleep_mode_info */
-	CBI_TAG_BATT_SLEEP_MODE_REG_ADDR,
-	CBI_TAG_BATT_SLEEP_MODE_REG_DATA,
-	CBI_TAG_BATT_SLEEP_MODE_FLAGS, /* enum sleep_mode_flag */
-	/* struct fet_info */
-	CBI_TAG_BATT_FET_REG_ADDR,
-	CBI_TAG_BATT_FET_REG_MASK,
-	CBI_TAG_BATT_FET_DISCONNECT_VAL,
-	CBI_TAG_BATT_FET_CFET_MASK,
-	CBI_TAG_BATT_FET_CFET_OFF_VAL,
-	CBI_TAG_BATT_FET_FLAGS, /* enum batt_fet_flag */
-	/* struct battery_info */
-	CBI_TAG_BATT_VOLTAGE_MAX,
-	CBI_TAG_BATT_VOLTAGE_NORMAL,
-	CBI_TAG_BATT_VOLTAGE_MIN,
-	CBI_TAG_BATT_PRECHARGE_VOLTAGE,
-	CBI_TAG_BATT_PRECHARGE_CURRENT,
-	CBI_TAG_BATT_START_CHARGING_MIN_C,
-	CBI_TAG_BATT_START_CHARGING_MAX_C,
-	CBI_TAG_BATT_CHARGING_MIN_C,
-	CBI_TAG_BATT_CHARGING_MAX_C,
-	CBI_TAG_BATT_DISCHARGING_MIN_C,
-	CBI_TAG_BATT_DISCHARGING_MAX_C,
+	CBI_TAG_COMMON_CONTROL = 11,
+
+	/* struct board_batt_params */
+	CBI_TAG_BATTERY_CONFIG = 12,
+	/* CBI_TAG_BATTERY_CONFIG_1 ~ 15 will use 13 ~ 27. */
+	CBI_TAG_BATTERY_CONFIG_15 = 27,
+
+	/* Last entry */
 	CBI_TAG_COUNT,
+};
+
+union ec_common_control {
+	struct {
+		uint32_t bcic_enabled : 1;
+	};
+	uint32_t raw_value;
 };
 
 /*
@@ -6491,6 +6602,7 @@ struct ec_response_rollback_info {
 enum ec_chip_type {
 	EC_CHIP_TYPE_CBI_EEPROM = 0,
 	EC_CHIP_TYPE_TCPC = 1,
+	EC_CHIP_TYPE_PDC = 2,
 	EC_CHIP_TYPE_COUNT,
 	EC_CHIP_TYPE_MAX = 0xFF,
 };
@@ -7354,7 +7466,8 @@ enum pchg_state {
 #define EC_MKBP_PCHG_EVENT_TO_PORT(e) (((e) >> EC_MKBP_PCHG_PORT_SHIFT) & 0xf)
 #define EC_MKBP_PCHG_PORT_TO_EVENT(p) ((p) << EC_MKBP_PCHG_PORT_SHIFT)
 /* Utility macro for extracting event bits. */
-#define EC_MKBP_PCHG_EVENT_MASK(e) ((e)&GENMASK(EC_MKBP_PCHG_PORT_SHIFT - 1, 0))
+#define EC_MKBP_PCHG_EVENT_MASK(e) \
+	((e) & GENMASK(EC_MKBP_PCHG_PORT_SHIFT - 1, 0))
 
 #define EC_MKBP_PCHG_UPDATE_OPENED BIT(0)
 #define EC_MKBP_PCHG_WRITE_COMPLETE BIT(1)
@@ -7562,6 +7675,179 @@ struct ec_response_typec_vdm_response {
 	uint32_t vdm_attention[2];
 } __ec_align1;
 
+/*
+ * Get an active battery config from the EC.
+ */
+#define EC_CMD_BATTERY_CONFIG 0x013D
+
+/* Version of struct batt_conf_header and its internals. */
+#define EC_BATTERY_CONFIG_STRUCT_VERSION 0x00
+
+/* Number of writes needed to invoke battery cutoff command */
+#define SHIP_MODE_WRITES 2
+
+struct ship_mode_info {
+	uint8_t reg_addr;
+	uint8_t reserved;
+	uint16_t reg_data[SHIP_MODE_WRITES];
+} __packed __aligned(2);
+
+struct sleep_mode_info {
+	uint8_t reg_addr;
+	uint8_t reserved;
+	uint16_t reg_data;
+} __packed __aligned(2);
+
+struct fet_info {
+	uint8_t reg_addr;
+	uint8_t reserved;
+	uint16_t reg_mask;
+	uint16_t disconnect_val;
+	uint16_t cfet_mask; /* CHG FET status mask */
+	uint16_t cfet_off_val;
+} __packed __aligned(2);
+
+enum fuel_gauge_flags {
+	/*
+	 * Write Block Support. If enabled, we use a i2c write block command
+	 * instead of a 16-bit write. The effective difference is the i2c
+	 * transaction will prefix the length (2).
+	 */
+	FUEL_GAUGE_FLAG_WRITE_BLOCK = BIT(0),
+	/* Sleep command support. fuel_gauge_info.sleep_mode must be defined. */
+	FUEL_GAUGE_FLAG_SLEEP_MODE = BIT(1),
+	/*
+	 * Manufacturer access command support. If enabled, FET status is read
+	 * from the OperationStatus (0x54) register using the
+	 * ManufacturerBlockAccess (0x44).
+	 */
+	FUEL_GAUGE_FLAG_MFGACC = BIT(2),
+	/*
+	 * SMB block protocol support in manufacturer access command. If
+	 * enabled, FET status is read from the OperationStatus (0x54) register
+	 * using the ManufacturerBlockAccess (0x44).
+	 */
+	FUEL_GAUGE_FLAG_MFGACC_SMB_BLOCK = BIT(3),
+};
+
+struct fuel_gauge_info {
+	uint32_t flags;
+	uint32_t board_flags;
+	struct ship_mode_info ship_mode;
+	struct sleep_mode_info sleep_mode;
+	struct fet_info fet;
+} __packed __aligned(4);
+
+/* Battery constants */
+struct battery_info {
+	/* Operation voltage in mV */
+	uint16_t voltage_max;
+	uint16_t voltage_normal;
+	uint16_t voltage_min;
+	/* (TODO(chromium:756700): add desired_charging_current */
+	/**
+	 * Pre-charge to fast charge threshold in mV,
+	 * default to voltage_min if not specified.
+	 * This option is only available on isl923x and rt946x.
+	 */
+	uint16_t precharge_voltage;
+	/* Pre-charge current in mA */
+	uint16_t precharge_current;
+	/* Working temperature ranges in degrees C */
+	int8_t start_charging_min_c;
+	int8_t start_charging_max_c;
+	int8_t charging_min_c;
+	int8_t charging_max_c;
+	int8_t discharging_min_c;
+	int8_t discharging_max_c;
+	/* Used only if CONFIG_BATTERY_VENDOR_PARAM is defined. */
+	uint8_t vendor_param_start;
+	uint8_t reserved;
+} __packed __aligned(2);
+
+/*
+ * The 'config' of a battery.
+ */
+struct board_batt_params {
+	struct fuel_gauge_info fuel_gauge;
+	struct battery_info batt_info;
+} __packed __aligned(4);
+
+/*
+ * The SBS defines a string object as a block of chars, 32 byte maximum, where
+ * the first byte indicates the number of chars in the block (excluding the
+ * first byte).
+ *
+ * Thus, the actual string length (i.e. the value strlen returns) is limited to
+ * 31 (=SBS_MAX_STR_SIZE).
+ *
+ * SBS_MAX_STR_OBJ_SIZE can be used as the size of a buffer for an SBS string
+ * object but also as a buffer for a c-lang string because the null terminating
+ * char also takes one byte.
+ */
+#define SBS_MAX_STR_SIZE 31
+#define SBS_MAX_STR_OBJ_SIZE (SBS_MAX_STR_SIZE + 1)
+
+/*
+ * Header describing a battery config stored in CBI. Only struct_version has
+ * size and position independent of struct_version. The rest varies as
+ * struct_version changes.
+ *
+ * Version 0
+ * Layout:
+ *  +-------------+
+ *  | header      |
+ *  +-------------+
+ *  |             | ^
+ *  | manuf_name  | | manuf_name_size
+ *  |             | v
+ *  +-------------+
+ *  | device_name | ^
+ *  |             | | device_name_size
+ *  |             | v
+ *  +-------------+
+ *  | config      | ^
+ *  |             | |
+ *  |             | | cbi data size
+ *  |             | |    - (header_size+manuf_name_size+device_name_size)
+ *  |             | |
+ *  |             | v
+ *  +-------------+
+ * Note:
+ * - manuf_name and device_name are not null-terminated.
+ * - The config isn't aligned. It should be copied to struct board_batt_params
+ *   before its contents are accessed.
+ */
+struct batt_conf_header {
+	/* Version independent field. It's always here as a uint8_t. */
+	uint8_t struct_version;
+	/* Version 0 members */
+	uint8_t manuf_name_size;
+	uint8_t device_name_size;
+	uint8_t reserved;
+	/* manuf_name, device_name, board_batt_params follow after this. */
+} __packed;
+
+#define BATT_CONF_MAX_SIZE                                            \
+	(sizeof(struct batt_conf_header) + SBS_MAX_STR_OBJ_SIZE * 2 + \
+	 sizeof(struct board_batt_params))
+
+/*
+ * Record the current AP firmware state. This is used to help testing, such as
+ * with FAFT (Fully-Automated Firmware Test), which likes to know which firmware
+ * screen is currently displayed.
+ */
+
+#define EC_CMD_AP_FW_STATE 0x013E
+
+struct ec_params_ap_fw_state {
+	/*
+	 * Value which indicates the state. This is not decoded by the EC, so
+	 * its meaning is entirely outside this code base.
+	 */
+	uint32_t state;
+} __ec_align1;
+
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */
 
@@ -7575,7 +7861,11 @@ struct ec_response_typec_vdm_response {
 /*****************************************************************************/
 /* Fingerprint MCU commands: range 0x0400-0x040x */
 
-/* Fingerprint SPI sensor passthru command: prototyping ONLY */
+/*
+ * Fingerprint SPI sensor passthru command
+ *
+ * This command was used for prototyping and it's now deprecated.
+ */
 #define EC_CMD_FP_PASSTHRU 0x0400
 
 #define EC_FP_FLAG_NOT_COMPLETE 0x1
@@ -7646,7 +7936,7 @@ enum fp_capture_type {
 };
 /* Extracts the capture type from the sensor 'mode' word */
 #define FP_CAPTURE_TYPE(mode) \
-	(((mode)&FP_MODE_CAPTURE_TYPE_MASK) >> FP_MODE_CAPTURE_TYPE_SHIFT)
+	(((mode) & FP_MODE_CAPTURE_TYPE_MASK) >> FP_MODE_CAPTURE_TYPE_SHIFT)
 
 struct ec_params_fp_mode {
 	uint32_t mode; /* as defined by FP_MODE_ constants */
@@ -7660,7 +7950,7 @@ struct ec_response_fp_mode {
 #define EC_CMD_FP_INFO 0x0403
 
 /* Number of dead pixels detected on the last maintenance */
-#define FP_ERROR_DEAD_PIXELS(errors) ((errors)&0x3FF)
+#define FP_ERROR_DEAD_PIXELS(errors) ((errors) & 0x3FF)
 /* Unknown number of dead pixels detected on the last maintenance */
 #define FP_ERROR_DEAD_PIXELS_UNKNOWN (0x3FF)
 /* No interrupt from the sensor */
@@ -7829,6 +8119,10 @@ struct ec_params_fp_seed {
 #define FP_CONTEXT_STATUS_MATCH_PROCESSED_SET BIT(2)
 /* FP auth_nonce had been set or not*/
 #define FP_CONTEXT_AUTH_NONCE_SET BIT(3)
+/* FP user_id had been set or not*/
+#define FP_CONTEXT_USER_ID_SET BIT(4)
+/* FP templates are unlocked for nonce context or not */
+#define FP_CONTEXT_TEMPLATE_UNLOCKED_SET BIT(5)
 
 struct ec_response_fp_encryption_status {
 	/* Used bits in encryption engine status */
@@ -7946,15 +8240,11 @@ struct ec_response_fp_read_match_secret_with_pubkey {
 	uint8_t enc_secret[FP_POSITIVE_MATCH_SECRET_BYTES];
 } __ec_align4;
 
-/* Preload encrypted template into the MCU buffer */
-#define EC_CMD_FP_PRELOAD_TEMPLATE 0x0416
+/* Unlock the fpsensor template with the current nonce context */
+#define EC_CMD_FP_UNLOCK_TEMPLATE 0x0417
 
-struct ec_params_fp_preload_template {
-	uint32_t offset;
-	uint32_t size;
-	uint16_t fgr;
-	uint8_t reserved[2];
-	uint8_t data[];
+struct ec_params_fp_unlock_template {
+	uint16_t fgr_num;
 } __ec_align4;
 
 /*****************************************************************************/
@@ -8065,10 +8355,10 @@ struct ec_response_battery_static_info_v2 {
 	uint16_t design_capacity;
 	uint16_t design_voltage;
 	uint32_t cycle_count;
-	char manufacturer[32];
-	char device_name[32];
-	char serial[32];
-	char chemistry[32];
+	char manufacturer[SBS_MAX_STR_OBJ_SIZE];
+	char device_name[SBS_MAX_STR_OBJ_SIZE];
+	char serial[SBS_MAX_STR_OBJ_SIZE];
+	char chemistry[SBS_MAX_STR_OBJ_SIZE];
 } __ec_align4;
 
 /*

@@ -13,6 +13,7 @@
 #undef CONFIG_SYSTEM_UNLOCKED
 
 #define CONFIG_ALLOW_UNALIGNED_ACCESS
+#define CONFIG_LTO
 
 /*-------------------------------------------------------------------------*
  * Flash layout:
@@ -77,14 +78,22 @@
 /*
  * Define Data RAM size  = 160KB - 4KB (Reserved for booter).
  */
-#define CONFIG_DATA_RAM_SIZE ((96 + 64) * 1024 - 0x1000)
+#define CONFIG_DATA_RAM_SIZE ((96 + 64) * 1024)
+
+#undef CONFIG_RAM_SIZE
+#define CONFIG_RAM_SIZE (CONFIG_DATA_RAM_SIZE - 0x1000)
 /*-------------------------------------------------------------------------*/
 
 #define CONFIG_SHAREDLIB_SIZE 0
 
 #define CONFIG_RO_MEM_OFF 0
-#define CONFIG_RO_STORAGE_OFF 0
-#define CONFIG_RO_SIZE (128 * 1024)
+
+/* Need to account for the 64 (0x40) byte long firmware header */
+#define CONFIG_RO_STORAGE_OFF 64
+#define CONFIG_RO_SIZE (128 * 1024 - 0x1000)
+
+#undef CONFIG_CODE_RAM_SIZE
+#define CONFIG_CODE_RAM_SIZE NPCX_PROGRAM_MEMORY_SIZE
 
 #define CONFIG_RO_PUBKEY_READ_ADDR                                      \
 	(CONFIG_MAPPED_STORAGE_BASE + CONFIG_EC_PROTECTED_STORAGE_OFF + \
@@ -110,7 +119,7 @@
 	 CONFIG_FLASH_ERASE_SIZE)
 
 #define CONFIG_EC_PROTECTED_STORAGE_OFF CONFIG_RO_MEM_OFF
-#define CONFIG_EC_PROTECTED_STORAGE_SIZE CONFIG_RO_SIZE
+#define CONFIG_EC_PROTECTED_STORAGE_SIZE (CONFIG_RO_SIZE + 0x1000)
 #define CONFIG_EC_WRITABLE_STORAGE_OFF \
 	(CONFIG_ROLLBACK_OFF + CONFIG_ROLLBACK_SIZE)
 
@@ -143,6 +152,17 @@
 #define CONSOLE_TASK_STACK_SIZE 4096
 
 /*-------------------------------------------------------------------------*
+ * UART Host Command Interface Defines
+ *-------------------------------------------------------------------------*
+ */
+#define NPCX_UART_BAUDRATE_3M
+
+#undef CONFIG_UART_HOST_COMMAND_HW
+#define CONFIG_UART_HOST_COMMAND_HW 1
+
+#define CONFIG_USART_HOST_COMMAND
+
+/*-------------------------------------------------------------------------*
  * Disable Features
  *-------------------------------------------------------------------------*
  */
@@ -168,6 +188,7 @@
 #define CONFIG_HOST_INTERFACE_SHI
 #define CONFIG_MKBP_EVENT
 #define CONFIG_MKBP_USE_GPIO
+#define CONFIG_PANIC_STRIP_GPR
 #define CONFIG_PRINTF_LONG_IS_32BITS
 #define CONFIG_RNG
 #define CONFIG_SHA256
@@ -247,7 +268,8 @@
 #endif
 
 /* EC rollback protection block */
-#define CONFIG_ROLLBACK_OFF (CONFIG_RO_MEM_OFF + CONFIG_RO_SIZE)
+#define CONFIG_ROLLBACK_OFF \
+	(CONFIG_EC_PROTECTED_STORAGE_OFF + CONFIG_EC_PROTECTED_STORAGE_SIZE)
 #define CONFIG_ROLLBACK_SIZE (128 * 1024 * 2) /* 2 blocks of 128KB each */
 
 /*-------------------------------------------------------------------------*
@@ -268,20 +290,6 @@
  * Chip Specific
  *-------------------------------------------------------------------------*
  */
-
-/*
- * TODO (b/281751547): Remove once Quincy brought up
- * Board should be set to CONFIG_HW_MRIDER or CONFIG_HW_QUINCY, only needed
- * until Quincy stable, re-assigns WP GPIO
- */
-#undef CONFIG_HW_MRIDER
-#define CONFIG_HW_QUINCY
-
-/*
- * TODO (b/279032946): should eventually be removed, required to avoid
- * chip_pre_init disabling JTAG internally
- */
-#define CONFIG_ENABLE_JTAG_SELECTION
 
 /*
  * Macros for GPIO signals used in common code that don't match the

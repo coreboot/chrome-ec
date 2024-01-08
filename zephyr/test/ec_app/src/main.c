@@ -11,7 +11,7 @@
 #include <zephyr/pm/policy.h>
 #include <zephyr/shell/shell_dummy.h>
 #include <zephyr/ztest_assert.h>
-#include <zephyr/ztest_test_new.h>
+#include <zephyr/ztest_test.h>
 
 /* LCOV_EXCL_START */
 void pm_state_set(enum pm_state state, uint8_t substate_id)
@@ -27,13 +27,6 @@ void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
 	irq_unlock(0);
 }
 /* LCOV_EXCL_STOP */
-
-#ifdef CONFIG_CMD_AP_RESET_LOG
-ZTEST(ec_app_tests, test_init_reset_log)
-{
-	zassert_unreachable("TODO: Implement this test.");
-}
-#endif
 
 #ifdef CONFIG_HOSTCMD_X86
 ZTEST(ec_app_tests, test_lpc_init_mask)

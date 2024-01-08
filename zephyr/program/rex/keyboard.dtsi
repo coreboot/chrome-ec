@@ -8,10 +8,14 @@
 		cros-ec,keyboard = &kbd;
 	};
 
-	kblight {
+	kblight: kblight {
 		compatible = "cros-ec,kblight-pwm";
 		pwms = <&pwm3 0 PWM_HZ(2400) PWM_POLARITY_NORMAL>;
 	};
+};
+
+&vivaldi_kbd {
+	status = "okay";
 };
 
 &pwm3 {
@@ -80,4 +84,11 @@
 	pinctrl-names = "default";
 	row-size = <8>;
 	col-size = <13>;
+	settle-time-us = <80>;
+
+	kso-gpio {
+		compatible = "cros-ec,col-gpio";
+		col-num = <2>;
+		col-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+	};
 };

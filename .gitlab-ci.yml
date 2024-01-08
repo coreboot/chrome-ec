@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-image: jbettis/ubuntu-31jul23
+image: jbettis/ubuntu-07sep23
 
 # You can update that image using this repo:
 #   https://gitlab.com/zephyr-ec/gitlab-ci-runner/-/tree/main
@@ -97,11 +97,13 @@ before_script:
   - ec_commit_date="$(cd ${EC_DIR} ; git log -1 HEAD --format=%cd --date=iso)"
   - checkout_at_date "https://chromium.googlesource.com/chromium/tools/depot_tools.git" "main" "${CI_PROJECT_DIR}/depot_tools" "${ec_commit_date}"
   - export PATH="${CI_PROJECT_DIR}/depot_tools:$PATH"
+  - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/cryptoc" "main" "${MODULES_DIR}/cryptoc" "${ec_commit_date}"
   - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/zephyr" "main" "${ZEPHYR_BASE}" "${ec_commit_date}"
   - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/zephyr/cmsis" "chromeos-main" "${MODULES_DIR}/cmsis" "${ec_commit_date}"
   - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/zephyr/hal_stm32" "chromeos-main" "${MODULES_DIR}/hal_stm32" "${ec_commit_date}"
   - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/zephyr/nanopb" "main" "${MODULES_DIR}/nanopb" "${ec_commit_date}"
-  - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/cryptoc" "main" "${MODULES_DIR}/cryptoc" "${ec_commit_date}"
+  - checkout_at_date "https://chromium.googlesource.com/chromiumos/third_party/zephyr/picolibc" "main" "${MODULES_DIR}/picolibc" "${ec_commit_date}"
+  - checkout_at_date "https://chromium.googlesource.com/external/pigweed/pigweed/pigweed" "upstream/main" "${MODULES_DIR}/pigweed" "${ec_commit_date}"
   - repo_clone_at_data "src/third_party/boringssl" "m/main" "${MODULES_DIR}/boringssl" "${ec_commit_date}"
   # Add a symlink so the ec appears in modules directory (hack to make zmake work)
   - ln -s "${EC_DIR}" "${MODULES_DIR}/ec"
@@ -343,16 +345,6 @@ geralt_coverage:
     PROJECT: "geralt"
   <<: *coverage_template
 
-myst:
-  variables:
-    PROJECT: "myst"
-  <<: *build_template
-
-myst_coverage:
-  variables:
-    PROJECT: "myst"
-  <<: *coverage_template
-
 ovis:
   variables:
     PROJECT: "ovis"
@@ -361,6 +353,26 @@ ovis:
 ovis_coverage:
   variables:
     PROJECT: "ovis"
+  <<: *coverage_template
+
+brox:
+  variables:
+    PROJECT: "brox"
+  <<: *build_template
+
+brox_coverage:
+  variables:
+    PROJECT: "brox"
+  <<: *coverage_template
+
+rauru:
+  variables:
+    PROJECT: "rauru"
+  <<: *build_template
+
+rauru_coverage:
+  variables:
+    PROJECT: "rauru"
   <<: *coverage_template
 
 ec_coverage:
@@ -383,7 +395,7 @@ ec_coverage:
 zephyr_coverage:
   stage: test
   needs: []
-  parallel: 3
+  parallel: 6
   script:
     - python3 ${EC_DIR}/twister --coverage --outdir "${TWISTER_OUT_DIR}"
       -v -i -x=ALLOW_WARNINGS=ON -y
@@ -475,8 +487,14 @@ merged_coverage:
 testall:
   stage: test
   needs: []
+  parallel: 6
   script:
     - python3 ${EC_DIR}/twister --outdir "${TWISTER_OUT_DIR}" -v -i
+      -x=ALLOW_WARNINGS=ON -y
+    - tests=( $( jq -r '.testsuites[] | @text "\(.name)"' "${TWISTER_OUT_DIR}/testplan.json" |
+      sort |
+      split -n r/"${CI_NODE_INDEX}"/"${CI_NODE_TOTAL}") )
+    - printf ' -s %s' "${tests[@]}" | xargs python3 ${EC_DIR}/twister --outdir "${TWISTER_OUT_DIR}" -v -i
       -x=ALLOW_WARNINGS=ON
 
 # The download url changed. Disable until we can figure it out.

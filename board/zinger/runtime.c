@@ -5,8 +5,8 @@
 /* tiny substitute of the runtime layer */
 
 #include "atomic.h"
-#include "chip/stm32/clock-f.h"
 #include "clock.h"
+#include "clock_chip.h"
 #include "common.h"
 #include "cpu.h"
 #include "debug_printf.h"
@@ -233,7 +233,7 @@ uint32_t task_wait_event_mask(uint32_t event_mask, int timeout_us)
 	return evt & event_mask;
 }
 
-noreturn void __keep cpu_reset(void)
+__noreturn void __keep cpu_reset(void)
 {
 	/* Disable interrupts */
 	interrupt_disable();

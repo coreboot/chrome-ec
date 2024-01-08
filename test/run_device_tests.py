@@ -36,6 +36,7 @@ Run the script on the remote machine:
 (remote chroot) ./test/run_device_tests.py --remote 127.0.0.1 \
                 --jlink_port 19020 --console_port 10000
 """
+
 # pylint: enable=line-too-long
 # TODO(b/267800058): refactor into multiple modules
 # pylint: disable=too-many-lines
@@ -103,6 +104,9 @@ DATA_ACCESS_VIOLATION_64020000_REGEX = re.compile(
 DATA_ACCESS_VIOLATION_64040000_REGEX = re.compile(
     r"Data access violation, mfar = 64040000\r\n"
 )
+DATA_ACCESS_VIOLATION_200B0000_REGEX = re.compile(
+    r"Data access violation, mfar = 200b0000\r\n"
+)
 
 PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
 
@@ -152,6 +156,14 @@ class ApplicationType(Enum):
 
     TEST = 1
     PRODUCTION = 2
+
+
+class FPSensorType(Enum):
+    """Fingerprint sensor types."""
+
+    ELAN = 0
+    FPC = 1
+    UNKNOWN = -1
 
 
 @dataclass
@@ -256,7 +268,7 @@ class AllTests:
             TestConfig(test_name="always_memset"),
             TestConfig(test_name="benchmark"),
             TestConfig(test_name="boringssl_crypto"),
-            TestConfig(test_name="cortexm_fpu"),
+            TestConfig(test_name="cortexm_fpu", exclude_boards=[HELIPILOT]),
             TestConfig(test_name="crc"),
             TestConfig(test_name="exception"),
             TestConfig(
@@ -270,13 +282,11 @@ class AllTests:
                 toggle_power=True,
                 enable_hw_write_protect=True,
             ),
-            # TODO(b/274162810): Re-enable test on bloonchipper when LTO is re-enabled.
-            TestConfig(
-                test_name="fpsensor_auth_crypto_stateful",
-                exclude_boards=[BLOONCHIPPER],
-            ),
+            TestConfig(test_name="fpsensor_auth_crypto_stateful"),
             TestConfig(test_name="fpsensor_auth_crypto_stateless"),
-            TestConfig(test_name="fpsensor_hw"),
+            TestConfig(
+                test_name="fpsensor_hw", pre_test_callback=fp_sensor_sel
+            ),
             TestConfig(
                 config_name="fpsensor_spi_ro",
                 test_name="fpsensor",
@@ -346,7 +356,9 @@ class AllTests:
             TestConfig(test_name="static_if"),
             TestConfig(test_name="stdlib"),
             TestConfig(test_name="std_vector"),
-            TestConfig(test_name="stm32f_rtc", exclude_boards=[DARTMONKEY]),
+            TestConfig(
+                test_name="stm32f_rtc", exclude_boards=[DARTMONKEY, HELIPILOT]
+            ),
             TestConfig(
                 config_name="system_is_locked_wp_on",
                 test_name="system_is_locked",
@@ -364,6 +376,7 @@ class AllTests:
             TestConfig(test_name="timer"),
             TestConfig(test_name="timer_dos"),
             TestConfig(test_name="tpm_seed_clear"),
+            TestConfig(test_name="uart"),
             TestConfig(test_name="unaligned_access"),
             TestConfig(test_name="unaligned_access_benchmark"),
             TestConfig(test_name="utils", timeout_secs=20),
@@ -475,7 +488,7 @@ HELIPILOT_CONFIG = BoardConfig(
     reboot_timeout=1.5,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_64020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_64040000_REGEX,
-    mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
+    mpu_regex=DATA_ACCESS_VIOLATION_200B0000_REGEX,
     variants={},
 )
 
@@ -594,6 +607,31 @@ def power_cycle(board_config: BoardConfig) -> None:
     power(board_config, power_on=False)
     time.sleep(board_config.reboot_timeout)
     power(board_config, power_on=True)
+    time.sleep(board_config.reboot_timeout)
+
+
+def fp_sensor_sel(
+    board_config: BoardConfig, sensor_type: FPSensorType = FPSensorType.FPC
+) -> None:
+    """
+    Explicitly select the appropriate fingerprint sensor.
+    This function assumes that the fp_sensor_sel servo control is connected to
+    the proper gpio on the development board. This is not the case on some
+    older development boards. This should not result in any failures but also
+    may have not actually change the selected sensor.
+    """
+
+    cmd = [
+        "dut-control",
+        "fp_sensor_sel" + ":" + str(sensor_type.value),
+    ]
+
+    logging.debug('Running command: "%s"', " ".join(cmd))
+    subprocess.run(cmd, check=False).check_returncode()
+
+    # power cycle after setting sensor type to ensure detection
+    power_cycle(board_config)
+    return True
 
 
 def hw_write_protect(enable: bool) -> None:
@@ -721,13 +759,18 @@ def process_console_output_line(line: bytes, test: TestConfig):
 
 def run_test(
     test: TestConfig,
-    build_board: str,
+    board_config: BoardConfig,
     console: io.FileIO,
-    reboot_timeout: float,
     executor: ThreadPoolExecutor,
 ) -> bool:
     """Run specified test."""
     start = time.time()
+
+    reboot_timeout = board_config.reboot_timeout
+    logging.debug("Calling pre-test callback")
+    if not test.pre_test_callback(board_config):
+        logging.error("pre-test callback failed, aborting")
+        return False
 
     # Wait for boot to finish
     time.sleep(reboot_timeout)
@@ -740,11 +783,6 @@ def run_test(
     if test.apptype_to_use != ApplicationType.PRODUCTION:
         test_cmd = "runtest " + " ".join(test.test_args) + "\n"
         console.write(test_cmd.encode())
-
-    logging.debug("Calling pre-test callback")
-    if not test.pre_test_callback(build_board):
-        logging.error("pre-test callback failed, aborting")
-        return False
 
     while True:
         console.flush()
@@ -779,7 +817,7 @@ def run_test(
                     process_console_output_line(line, test)
 
                 logging.debug("Calling post-test callback")
-                post_cb_passed = test.post_test_callback(build_board)
+                post_cb_passed = test.post_test_callback(board_config)
                 return test.num_fails == 0 and post_cb_passed
 
 
@@ -873,6 +911,9 @@ def flash_and_run_test(
 
     if test.toggle_power:
         power_cycle(board_config)
+    else:
+        # In some cases flash_ec leaves the board off, so just ensure it is on
+        power(board_config, power_on=True)
 
     hw_write_protect(test.enable_hw_write_protect)
 
@@ -893,9 +934,8 @@ def flash_and_run_test(
 
         return run_test(
             test,
-            build_board,
+            board_config,
             console,
-            board_config.reboot_timeout,
             executor=executor,
         )
 

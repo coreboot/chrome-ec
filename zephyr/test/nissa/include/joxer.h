@@ -8,10 +8,13 @@
 
 #include "ec_commands.h"
 
-extern const struct ec_response_keybd_config joxer_kb_legacy;
+extern const struct ec_response_keybd_config joxer_kb_w_kb_light;
+extern const struct ec_response_keybd_config joxer_kb_wo_kb_light;
 
 void kb_layout_init(void);
 void fan_init(void);
 void form_factor_init(void);
+
+extern enum joxer_sub_board_type joxer_cached_sub_board;
 
 #endif /* ZEPHYR_TEST_NISSA_INCLUDE_JOXER_H_ */

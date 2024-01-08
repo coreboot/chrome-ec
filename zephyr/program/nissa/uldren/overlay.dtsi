@@ -48,6 +48,9 @@
 		smp_cosrf9h3 {
 			compatible = "smp,cosrf9h3", "battery-smart";
 		};
+		smp_hptrf9h3 {
+			compatible = "smp,hptrf9h3", "battery-smart";
+		};
 	};
 
 	hibernate-wake-pins {
@@ -84,12 +87,12 @@
 		int_imu: ec_imu {
 			irq-pin = <&gpio_imu_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "bmi3xx_interrupt";
+			handler = "motion_interrupt";
 		};
 		int_lid_imu: lid_imu {
 			irq-pin = <&gpio_acc_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "bma4xx_interrupt";
+			handler = "lid_accel_interrupt";
 		};
 		int_vol_down: vol_down {
 			irq-pin = <&gpio_voldn_btn_odl>;
@@ -181,22 +184,25 @@
 		compatible = "cros-ec,temp-sensors";
 		memory {
 			temp_host_high = <85>;
-			temp_host_halt = <90>;
+			temp_host_halt = <99>;
 			temp_host_release_high = <80>;
+			temp_host_release_halt = <98>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_memory>;
 		};
 		charger {
 			temp_host_high = <85>;
-			temp_host_halt = <90>;
+			temp_host_halt = <99>;
 			temp_host_release_high = <80>;
+			temp_host_release_halt = <98>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_charger>;
 		};
 		ambient {
 			temp_host_high = <85>;
-			temp_host_halt = <90>;
+			temp_host_halt = <99>;
 			temp_host_release_high = <80>;
+			temp_host_release_halt = <98>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_ambient>;
 		};
@@ -267,7 +273,6 @@
 			<&gpio3 6 0>,
 			<&gpio5 7 0>,
 			<&gpio6 0 0>,
-			<&gpio6 3 0>,
 			<&gpio6 6 0>,
 			<&gpio7 3 0>,
 			<&gpio8 1 0>,
@@ -277,7 +282,6 @@
 			<&gpiob 1 0>,
 			<&gpiob 7 0>,
 			<&gpioc 0 0>,
-			<&gpioc 6 0>,
 			<&gpioc 7 0>,
 			<&gpiod 5 0>,
 			<&gpioe 4 0>,
@@ -368,7 +372,7 @@
 	anx7483_mux_1: anx7483-mux-1@3e {
 		compatible = "analogix,anx7483";
 		reg = <0x3e>;
-		board-set = "anx7483_set_default_tuning";
+		board-set = "board_anx7483_c1_mux_set";
 		flags = <USB_MUX_FLAG_RESETS_IN_G3>;
 	};
 };

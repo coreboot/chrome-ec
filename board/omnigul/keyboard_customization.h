@@ -8,8 +8,6 @@
 #ifndef __KEYBOARD_CUSTOMIZATION_H
 #define __KEYBOARD_CUSTOMIZATION_H
 
-#define KEYBOARD_MASK_PWRBTN KEYBOARD_ROW_TO_MASK(3)
-
 /*
  * KEYBOARD_COLS_MAX has the build time column size. It's used to allocate
  * exact spaces for arrays. Actual keyboard scanning is done using
@@ -19,8 +17,11 @@
 #undef KEYBOARD_COLS_MAX
 #undef KEYBOARD_ROWS
 
-#define KEYBOARD_COLS_MAX 13
+#define KEYBOARD_COLS_MAX 15
 #define KEYBOARD_ROWS 8
+
+#define KEYBOARD_COLS_NO_KEYPAD 13
+
 #endif
 
 /*
@@ -77,8 +78,6 @@ extern uint8_t keyboard_cols;
 #define KEYBOARD_ROW_LEFT_SHIFT 5
 #define KEYBOARD_MASK_LEFT_SHIFT KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_LEFT_SHIFT)
 
-uint16_t get_scancode_set2(uint8_t row, uint8_t col);
-
-void set_scancode_set2(uint8_t row, uint8_t col, uint16_t val);
+void set_keyboard_scancode_set2(void);
 
 #endif /* __KEYBOARD_CUSTOMIZATION_H */

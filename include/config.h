@@ -590,6 +590,12 @@
 #undef CONFIG_BATTERY_CUTOFF_DELAY_US
 
 /*
+ * After the EC executes battery cutoff, it'll wait for this amount of time in
+ * msec before deciding the cutoff failed.
+ */
+#define CONFIG_BATTERY_CUTOFF_TIMEOUT_MSEC 8000
+
+/*
  * The board-specific battery.c implements get and set functions to read and
  * write arbirary vendor-specific parameters stored in the battery.
  * See include/battery.h for prototypes.
@@ -886,6 +892,7 @@
 
 /* CEC drivers */
 #undef CONFIG_CEC_BITBANG
+#undef CONFIG_CEC_IT83XX
 
 /*****************************************************************************/
 
@@ -928,8 +935,10 @@
 /*****************************************************************************/
 /* Charger config */
 
+#ifndef CONFIG_ZEPHYR
 /* Compile common charge state code. */
 #undef CONFIG_CHARGER
+#endif
 
 /* Compile charger-specific code for these chargers (pick at most one) */
 #undef CONFIG_CHARGER_BD9995X
@@ -1394,8 +1403,26 @@
 /* Set trickle charge current by taking integer value */
 #define CONFIG_RAA489000_TRICKLE_CHARGE_CURRENT 128
 
+/* Set two level input current limit function  */
+#undef CONFIG_CHANGER_RAA489000_TWO_LEVEL_CURRENT_LIMIT
+
 /* Wireless chargers */
 #undef CONFIG_CPS8100
+
+/*
+ * SM5803 PROCHOT configuration
+ * This follow the hardware default value.
+ */
+#define CONFIG_CHARGER_SM5803_PROCHOT_DURATION 2
+#define CONFIG_CHARGER_SM5803_VBUS_MON_SEL 2
+#define CONFIG_CHARGER_SM5803_VSYS_MON_SEL 10
+#define CONFIG_CHARGER_SM5803_IBAT_PHOT_SEL IBAT_SEL_MAX
+
+/*
+ * Precharge delay time to wait for the charger is stable
+ * to set charge current/voltage.
+ */
+#undef CONFIG_PRECHARGE_DELAY_MS
 
 /*****************************************************************************/
 
@@ -1472,13 +1499,10 @@
 #undef CONFIG_CHIPSET_GEMINILAKE /* Intel Geminilake (x86) */
 #undef CONFIG_CHIPSET_ICELAKE /* Intel Icelake (x86) */
 #undef CONFIG_CHIPSET_JASPERLAKE /* Intel Jasperlake (x86) */
-#undef CONFIG_CHIPSET_METEORLAKE /* Intel Meteorlake (x86) */
 #undef CONFIG_CHIPSET_MT817X /* MediaTek MT817x */
 #undef CONFIG_CHIPSET_MT8183 /* MediaTek MT8183 */
 #undef CONFIG_CHIPSET_MT8192 /* MediaTek MT8192 */
 #undef CONFIG_CHIPSET_CEZANNE /* AMD Cezanne (x86) */
-#undef CONFIG_CHIPSET_RK3288 /* Rockchip rk3288 */
-#undef CONFIG_CHIPSET_RK3399 /* Rockchip rk3399 */
 #undef CONFIG_CHIPSET_SKYLAKE /* Intel Skylake (x86) */
 #undef CONFIG_CHIPSET_SC7180 /* Qualcomm SC7180 */
 #undef CONFIG_CHIPSET_SC7280 /* Qualcomm SC7280 */
@@ -1711,7 +1735,6 @@
 #undef CONFIG_CMD_SCRATCHPAD
 #undef CONFIG_CMD_SEVEN_SEG_DISPLAY
 #define CONFIG_CMD_SHMEM
-#undef CONFIG_CMD_SLEEP
 #define CONFIG_CMD_SLEEPMASK
 #define CONFIG_CMD_SLEEPMASK_SET
 #undef CONFIG_CMD_SPI_FLASH
@@ -1766,6 +1789,22 @@
  * mode.
  */
 #define CONFIG_SYSTEM_SAFE_MODE_PRINT_STACK
+
+/*
+ * Enables fetching a memory dump using host commands. This is useful when
+ * debugging panics. May not dump all memory, e.g. sensitive memory will
+ * not be dumped.
+ */
+#undef CONFIG_HOST_COMMAND_MEMORY_DUMP
+
+/*
+ * Panic on watchdog warning instead of waiting for a regular watchdog.
+ * Combined with with system safe mode, this allows for capturing
+ * extra debug information about the system state.
+ * WATCHDOG_PERIOD_MS should be lengthened when this option is enabled,
+ * since it is effectivley shortened by WATCHDOG_WARNING_LEADING_TIME_MS.
+ */
+#undef CONFIG_PANIC_ON_WATCHDOG_WARNING
 
 /*
  * Provide the default GPIO abstraction layer.
@@ -2067,6 +2106,11 @@
  * Fans have non-const configuration.
  */
 #undef CONFIG_FAN_DYNAMIC
+
+/*
+ * Fan config have non-const configuration.
+ */
+#undef CONFIG_FAN_DYNAMIC_CONFIG
 
 /*
  * Replace the default fan_percent_to_rpm() function with a board-specific
@@ -2568,7 +2612,16 @@
 #undef CONFIG_HOSTCMD_PD
 
 /* EC supports EC_CMD_PD_CHIP_INFO */
-#define CONFIG_EC_CMD_PD_CHIP_INFO
+#define CONFIG_HOSTCMD_PD_CHIP_INFO
+
+/* EC supports EC_CMD_TYPEC_DISCOVERY */
+#define CONFIG_HOSTCMD_TYPEC_DISCOVERY
+
+/* EC supports EC_CMD_TYPEC_CONTROL */
+#define CONFIG_HOSTCMD_TYPEC_CONTROL
+
+/* EC supports EC_CMD_TYPEC_STATUS */
+#define CONFIG_HOSTCMD_TYPEC_STATUS
 
 /*
  * Use if PD MCU controls charging (selecting charging port and input
@@ -3165,6 +3218,12 @@
  */
 #undef CONFIG_8042_AUX
 
+/*
+ * Invert the IRQ1/IRQ12 interrupts that come from the NPCX keyboard controller
+ * such that they are active low.
+ */
+#undef CONFIG_NCPX_KBC_IRQ_ACTIVE_LOW
+
 /*****************************************************************************/
 
 /*
@@ -3176,11 +3235,6 @@
 
 /* Support common LED interface */
 #undef CONFIG_LED_COMMON
-
-/* Standard LED behavior according to spec given that we have a red-green
- * bicolor led for charging and one power led
- */
-#undef CONFIG_LED_POLICY_STD
 
 #ifndef CONFIG_ZEPHYR
 /*
@@ -3823,6 +3877,11 @@
  * keyboard backlight.
  */
 #undef CONFIG_KBLIGHT_ENABLE_PIN
+
+/*
+ * Call keyboard backlight init function during init hook instead of start-up
+ */
+#undef CONFIG_KBLIGHT_HOOK_INIT
 
 /*
  * RGB Keyboard
@@ -4538,6 +4597,7 @@
  * When this config option is enabled, one of the following must be enabled:
  *	CONFIG_USB_PD_TCPMV1 - legacy power delivery state machine
  *	CONFIG_USB_PD_TCPMV2 - current power delivery state machine
+ *	CONFIG_USB_PD_CONTROLLER - power delivery controller state machine
  */
 #undef CONFIG_USB_POWER_DELIVERY
 
@@ -4560,6 +4620,11 @@
  * enabled otherwise an error will be emitted.
  */
 #undef CONFIG_USB_PD_TCPMV2
+
+/*
+ * Enables the Power Delivery Controller state machine.
+ */
+#undef CONFIG_USB_PD_CONTROLLER
 
 /*
  * Enable dynamic PDO selection.
@@ -4743,6 +4808,9 @@
  * source port. The custom function is board_is_sourcing_vbus(port).
  */
 #undef CONFIG_USB_PD_5V_EN_CUSTOM
+
+/* Enable Displayport 2.1 Capability */
+#undef CONFIG_USB_PD_DP21_MODE
 
 /* Dynamic USB PD source capability */
 #undef CONFIG_USB_PD_DYNAMIC_SRC_CAP
@@ -5151,6 +5219,22 @@
  */
 #undef CONFIG_USB_PD_RESET_MIN_BATT_SOC
 
+/*
+ * Workaround for power_state:rec with cros_ec_softrec_power on chromeboxes.
+ * cros_ec_softrec works by running `reboot wait-ext ap-off-in-ro`. If a
+ * chromebox is powered by Type-C only, the EC reset will result in a PD hard
+ * reset and the device will brown out. When it boots again the ap-off and
+ * stay-in-ro flags are lost so recovery fails. To work around this, we preserve
+ * the flags across a PD reset.
+ *
+ * This doesn't affect manual recovery on user devices, since it uses the
+ * recovery signal from the GSC, not the reset flags.
+ *
+ * This should only be enabled on chromeboxes which don't have servo micro and
+ * therefore can't use cros_ec_hardrec_power. See b/293545949 and b/295363809.
+ */
+#undef CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS
+
 /* Alternative configuration keeping only the TX part of PHY */
 #undef CONFIG_USB_PD_TX_PHY_ONLY
 
@@ -5229,6 +5313,11 @@
  * mask for can't trigger interrupt signal.
  */
 #undef CONFIG_USBC_NX20P348X_RCP_5VSRC_MASK_ENABLE
+
+/*
+ * Setting SYV682X OVP to 15v power profile application
+ */
+#undef CONFIG_USBC_PPC_SYV682X_OVP_SET_15V
 
 /*
  * SYV682x PPC high voltage power path current limit.  Default limit is
@@ -5769,7 +5858,7 @@
 #undef CONFIG_DFU_BOOTMANAGER_SHARED
 
 /*
- * If defined, charge_get_state returns a special status if battery is
+ * If defined, led_pwr_get_state returns a special status if battery is
  * discharging and battery is nearly full.
  */
 #undef CONFIG_PWR_STATE_DISCHARGE_FULL
@@ -5979,8 +6068,9 @@
 #if defined(CONFIG_USB_PD_TCPMV1) && defined(CONFIG_USB_PD_TCPMV2)
 #error Only one version of the USB PD State Machine can be enabled.
 #endif
-#if !defined(CONFIG_USB_PD_TCPMV1) && !defined(CONFIG_USB_PD_TCPMV2)
-#error Please enable CONFIG_USB_PD_TCPMV1 or CONFIG_USB_PD_TCPMV2.
+#if !defined(CONFIG_USB_PD_TCPMV1) && !defined(CONFIG_USB_PD_TCPMV2) && \
+	!defined(CONFIG_USB_PD_CONTROLLER)
+#error Please enable CONFIG_USB_PD_TCPMV1 or CONFIG_USB_PD_TCPMV2 or CONFIG_USB_PD_CONTROLLER.
 #endif
 #if defined(CONFIG_USB_PD_TCPMV2) && !defined(CONFIG_USB_PD_DECODE_SOP)
 #error CONFIG_USB_PD_DECODE_SOP must be enabled with the TCPMV2 PD state machine
@@ -5996,7 +6086,7 @@
 #if !defined(CONFIG_USBC_SS_MUX)
 #error CONFIG_USBC_SS_MUX must be enabled for USB4 mode support
 #endif
-#if !defined(CONFIG_USB_PD_ALT_MODE_DFP)
+#if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_USB_PD_ALT_MODE_DFP)
 #error CONFIG_USB_PD_ALT_MODE_DFP must be enabled for USB4 mode support
 #endif
 #endif
@@ -6087,12 +6177,16 @@
 
 /******************************************************************************/
 /*
- * Ensure CONFIG_USB_PD_TCPMV2 and CONFIG_USBC_SS_MUX both are defined. USBC
- * retimer firmware update feature requires both.
+ * Ensure CONFIG_USB_PD_TCPMV2 or CONFIG_PLATFORM_EC_USB_PD_CONTROLLER, and
+ * CONFIG_USBC_SS_MUX both are defined. USBC retimer firmware update feature
+ * requires both.
  */
-#if (defined(CONFIG_USBC_RETIMER_FW_UPDATE) && \
-     (!(defined(CONFIG_USB_PD_TCPMV2) && defined(CONFIG_USBC_SS_MUX))))
-#error Retimer firmware update requires TCPMv2 and USBC_SS_MUX
+#if (defined(CONFIG_USBC_RETIMER_FW_UPDATE) &&             \
+     (!((defined(CONFIG_USB_PD_TCPMV2) ||                  \
+	 defined(CONFIG_PLATFORM_EC_USB_PD_CONTROLLER)) && \
+	defined(CONFIG_USBC_SS_MUX))))
+#error "Retimer firmware update requires TCPMv2 or USB PD controller, and" \
+	"USBC_SS_MUX."
 #endif
 
 /******************************************************************************/
@@ -6262,6 +6356,22 @@
 #define CONFIG_BATTERY
 #endif
 
+#if defined(CONFIG_CBI_EEPROM) || defined(CONFIG_CBI_FLASH)
+#if defined(CONFIG_BATTERY) && defined(CONFIG_BATTERY_FUEL_GAUGE)
+#define CONFIG_BATTERY_CONFIG_IN_CBI
+#endif
+#endif
+
+/******************************************************************************/
+/*
+ * Ensure CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS is only used on
+ * chromeboxes.
+ */
+#if defined(CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS) && \
+	defined(CONFIG_BATTERY)
+#error Only use CONFIG_USB_PD_RESET_PRESERVE_RECOVERY_FLAGS on chromeboxes.
+#endif
+
 /*****************************************************************************/
 /* Define CONFIG_USBC_PPC if board has a USB Type-C Power Path Controller. */
 #if defined(CONFIG_USBC_PPC_AOZ1380) || defined(CONFIG_USBC_PPC_NX20P3483) || \
@@ -6392,6 +6502,17 @@
 
 /*****************************************************************************/
 /*
+ * Define CONFIG_PRECHARGE_DELAY_MS 150ms which is the debounce
+ * time after VADP >3.2V for the first time adapter plugged in.
+ */
+#ifdef CONFIG_CHARGER_ISL9238
+#ifndef CONFIG_PRECHARGE_DELAY_MS
+#define CONFIG_PRECHARGE_DELAY_MS 150
+#endif
+#endif
+
+/*****************************************************************************/
+/*
  * Define CONFIG_BUTTON_TRIGGERED_RECOVERY if a board has a dedicated recovery
  * button.
  */
@@ -6408,6 +6529,9 @@
 #ifdef CONFIG_LED_PWM_ACTIVE_CHARGE_PORT_ONLY
 #define CONFIG_LED_PWM_CHARGE_STATE_ONLY
 #endif
+
+/* Define for to turn off power LED in suspend for boards shipped after 2022 */
+#undef CONFIG_LED_PWM_OFF_IN_SUSPEND
 
 /*****************************************************************************/
 /*
@@ -6507,13 +6631,10 @@
 #undef CONFIG_CHIPSET_GEMINILAKE
 #undef CONFIG_CHIPSET_ICELAKE
 #undef CONFIG_CHIPSET_JASPERLAKE
-#undef CONFIG_CHIPSET_METEORLAKE
 #undef CONFIG_CHIPSET_MT817X
 #undef CONFIG_CHIPSET_MT8183
 #undef CONFIG_CHIPSET_MT8192
 #undef CONFIG_CHIPSET_CEZANNE
-#undef CONFIG_CHIPSET_RK3399
-#undef CONFIG_CHIPSET_RK3288
 #undef CONFIG_CHIPSET_SDM845
 #undef CONFIG_CHIPSET_SKYLAKE
 #undef CONFIG_CHIPSET_STONEY
@@ -6645,15 +6766,13 @@
 	defined(CONFIG_CHIPSET_COMETLAKE) ||          \
 	defined(CONFIG_CHIPSET_COMETLAKE_DISCRETE) || \
 	defined(CONFIG_CHIPSET_GEMINILAKE) ||         \
-	defined(CONFIG_CHIPSET_ICELAKE) ||            \
-	defined(CONFIG_CHIPSET_METEORLAKE) || defined(CONFIG_CHIPSET_SKYLAKE)
+	defined(CONFIG_CHIPSET_ICELAKE) || defined(CONFIG_CHIPSET_SKYLAKE)
 #define CONFIG_POWER_COMMON
 #endif
 
 #if defined(CONFIG_CHIPSET_ALDERLAKE_SLG4BD44540) || \
 	defined(CONFIG_CHIPSET_CANNONLAKE) ||        \
-	defined(CONFIG_CHIPSET_ICELAKE) ||           \
-	defined(CONFIG_CHIPSET_METEORLAKE) || defined(CONFIG_CHIPSET_SKYLAKE)
+	defined(CONFIG_CHIPSET_ICELAKE) || defined(CONFIG_CHIPSET_SKYLAKE)
 #define CONFIG_CHIPSET_X86_RSMRST_DELAY
 #endif
 
@@ -6777,7 +6896,9 @@
  * the system.
  */
 #include "fuzz_config.h"
+#ifdef TEST_BUILD
 #include "test_config.h"
+#endif
 
 /*
  * Validity checks to make sure some of the configs above make sense.
@@ -6789,7 +6910,7 @@
  * period.
  */
 #ifdef CONFIG_WATCHDOG
-#if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS)*2)
+#if (CONFIG_AUX_TIMER_PERIOD_MS) < ((HOOK_TICK_INTERVAL_MS) * 2)
 #error "CONFIG_AUX_TIMER_PERIOD_MS must be at least 2x HOOK_TICK_INTERVAL_MS"
 #endif
 #endif
@@ -6872,12 +6993,44 @@
 #endif /* CONFIG_DPTF_MULTI_PROFILE && !CONFIG_DPTF */
 
 /*
+ * The EC monitors the AP suspend/resume process using:
+ * - EC_CMD_HOST_SLEEP_EVENT (0x00A9)
+ * - SLP_S0 signal
+ *
+ * When the AP starts the suspend process, it sends EC_CMD_HOST_SLEEP_EVENT to
+ * signal to the EC that a suspend has begun. This starts the EC's timer, which
+ * uses CONFIG_SLEEP_TIMEOUT_MS to determine how long to wait for the suspend to
+ * complete (by monitoring SLP_S0) before considering the AP "hung". Similarly,
+ * when a resume is begun, the EC starts a timer using the same
+ * CONFIG_SLEEP_TIMEOUT_MS value and waits for the AP to send
+ * EC_CMD_HOST_SLEEP_EVENT to indicate the resume has completed.
+ *
+ * For AMD Systems:
+ * If the EC hits the timeout value CONFIG_SLEEP_TIMEOUT_MS, the AP is
+ * considered "hung" and the EC begins the recovery process. If
+ * CONFIG_POWER_SLEEP_FAILURE_DETECTION is enabled for the board, the EC will
+ * send the Host Event EC_HOST_EVENT_HANG_DETECT, possibly triggering recovery
+ * within the AP, and then start a timer to wait CONFIG_HARD_SLEEP_HANG_TIMEOUT.
+ * If the AP fails to complete the sleep step within
+ * CONFIG_HARD_SLEEP_HANG_TIMEOUT, the EC will forcefully reset the AP to
+ * complete recovery.
+ */
+
+/*
  * Define the timeout in milliseconds between when the EC receives a suspend
  * command and when the EC times out and asserts wake because the sleep signal
  * SLP_S0 did not assert.
  */
 #ifndef CONFIG_SLEEP_TIMEOUT_MS
-#define CONFIG_SLEEP_TIMEOUT_MS 15000
+#define CONFIG_SLEEP_TIMEOUT_MS 10000
+#endif
+
+/*
+ * Define the timeout in milliseconds between when the EC |SysRq| to the AP
+ * and when the AP is forcibly reset because it didn't reboot on its own.
+ */
+#ifndef CONFIG_HARD_SLEEP_HANG_TIMEOUT
+#define CONFIG_HARD_SLEEP_HANG_TIMEOUT 10000
 #endif
 
 #ifdef CONFIG_PWM_KBLIGHT
@@ -7167,5 +7320,9 @@
 #ifndef CONFIG_PRESERVED_END_OF_RAM_SIZE
 #define CONFIG_PRESERVED_END_OF_RAM_SIZE 1024
 #endif
+
+#ifdef HAVE_PRIVATE
+#include "private_config.h"
+#endif /* HAVE_PRIVATE */
 
 #endif /* __CROS_EC_CONFIG_H */

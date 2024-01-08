@@ -45,6 +45,9 @@
 		default_battery: pow-tech_sg20 {
 			compatible = "pow-tech,sg20", "battery-smart";
 		};
+		gfl_mfp-466894 {
+			compatible = "gfl,mfp-466894", "battery-smart";
+		};
 	};
 
 	hibernate-wake-pins {
@@ -91,12 +94,12 @@
 		int_imu: ec_imu {
 			irq-pin = <&gpio_imu_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "bmi3xx_interrupt";
+			handler = "motion_interrupt";
 		};
 		int_lid_imu: lid_imu {
 			irq-pin = <&gpio_acc_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "bma4xx_interrupt";
+			handler = "lid_accel_interrupt";
 		};
 		int_usb_c0: usb_c0 {
 			irq-pin = <&gpio_usb_c0_int_odl>;
@@ -316,7 +319,7 @@
 	};
 };
 
-&i2c0 {
+&i2c2 {
 	label = "I2C_EEPROM";
 	clock-frequency = <I2C_BITRATE_FAST>;
 
@@ -331,6 +334,9 @@
 	pinctrl-0 = <&i2c0_clk_gpb3_default
 		     &i2c0_data_gpb4_default>;
 	pinctrl-names = "default";
+	scl-gpios = <&gpiob 3 0>;
+	sda-gpios = <&gpiob 4 0>;
+	channel-switch-sel = <I2C_CHA_LOCATE>;
 };
 
 &i2c1 {
@@ -341,12 +347,15 @@
 	pinctrl-names = "default";
 };
 
-&i2c2 {
+&i2c0 {
 	label = "I2C_SENSOR";
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-0 = <&i2c2_clk_gpf6_default
 		     &i2c2_data_gpf7_default>;
 	pinctrl-names = "default";
+	scl-gpios = <&gpiof 6 0>;
+	sda-gpios = <&gpiof 7 0>;
+	channel-switch-sel = <I2C_CHC_LOCATE>;
 };
 
 &i2c4 {
@@ -380,7 +389,7 @@
 	anx7483_mux_1: anx7483-mux-1@3e {
 		compatible = "analogix,anx7483";
 		reg = <0x3e>;
-		board-set = "anx7483_set_default_tuning";
+		board-set = "board_anx7483_c1_mux_set";
 		flags = <USB_MUX_FLAG_RESETS_IN_G3>;
 	};
 };

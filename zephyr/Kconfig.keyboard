@@ -116,8 +116,9 @@ config PLATFORM_EC_KEYBOARD_KEYPAD
 	  commonly used symbols, to help speed up numeric data entry.
 
 config PLATFORM_EC_KEYBOARD_VIVALDI
-	bool "Vivaldi keyboard support"
+	bool "Vivaldi keyboard support (legacy)"
 	depends on PLATFORM_EC_KEYBOARD_PROTOCOL_8042
+	depends on !CROS_EC_VIVALDI_KBD
 	default y
 	help
 	  Enable code for Vivaldi keyboard (standard for new Chromium OS
@@ -201,6 +202,7 @@ config PLATFORM_EC_KEYBOARD_SCAN_ADC
 
 config PLATFORM_EC_VOLUME_BUTTONS
 	bool "Board has volume-up and volume-down buttons"
+	select PLATFORM_EC_BUTTON
 	help
 	  Enable this if the board has physical buttons for the volume controls.
 	  These are buttons controlled by GPIOs and are not part of the keyboard
@@ -220,13 +222,6 @@ config PLATFORM_EC_CMD_BUTTON
 	help
 	  This command simulates button press. The buttons are like volume-up,
 	  volume-down, and recovery buttons.
-
-config PLATFORM_EC_BUTTON_TRIGGERED_RECOVERY
-	bool "Support entering recovery mode using buttons"
-	help
-	  Support for entering recovery mode using the volume buttons or a
-	  dedicated recovery button. Note that these are *buttons* and not keys
-	  in the keyboard matrix.
 
 config PLATFORM_EC_CONSOLE_CMD_KEYBOARD
 	bool "Console command: ksstate, kbpress, 8042"
@@ -259,6 +254,7 @@ config PLATFORM_EC_PWM_KBLIGHT
 	bool "PWM keyboard backlight"
 	default y
 	depends on DT_HAS_CROS_EC_KBLIGHT_PWM_ENABLED
+	depends on PLATFORM_EC_LID_SWITCH
 	select PWM
 	select PLATFORM_EC_PWM_HC
 	select PLATFORM_EC_KEYBOARD_BACKLIGHT
@@ -272,6 +268,12 @@ config PLATFORM_EC_KBLIGHT_ENABLE_PIN
 	help
 	  Enables control of the keyboard backlight through a GPIO enable and
 	  disable pin.  This pin must be defined as GPIO_EN_KEYBOARD_BACKLIGHT.
+
+config PLATFORM_EC_KBLIGHT_HOOK_INIT
+	bool "Keyboard backlight during init hook"
+	help
+	  Keyboard backlight init function gets called during init hook instead of
+	  start up hook.
 
 config PLATFORM_EC_KEYBOARD_STRICT_DEBOUNCE
 	bool "Keyboard strict debouncer"
