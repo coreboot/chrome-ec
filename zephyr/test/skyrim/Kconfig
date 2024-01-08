@@ -71,6 +71,9 @@ config TEST_BOARD_FORM_FACTOR
 	  Include tests which checks accelerometer
 	  interrupt and tablet mode.
 
+config TEST_BOARD_I2C_POLICY
+	bool "Enable I2C policy tests"
+
 config TEST_BOARD_USB_PD_POLICY
 	bool "Enable USB PD policy specific tests"
 	select TEST_ENABLE_USB_PD_HOST_CMD
@@ -136,5 +139,11 @@ config PLATFORM_EC_USB_PD_5V_EN_CUSTOM
 
 config BOARD_USB_HUB_RESET
 	bool "Fake config to enable this feature"
+
+config TEST_DISABLE_INLINE_CHIPSET_IN_STATE
+	bool "Disable chipset_in_state inline method"
+	help
+	  This is used to not define chipset_in_state method as inline
+	  function.
 
 source "Kconfig.zephyr"

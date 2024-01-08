@@ -20,13 +20,19 @@
 #error "Can't use set_vconn without set_polarity"
 #endif
 
-#define RT1739_FLAGS_SOURCE_ENABLED BIT(0)
-#define RT1739_FLAGS_FRS_ENABLED BIT(1)
 static int rt1739_pd_connect_flag;
+/* Check RT1739_FLAGS_*. */
 static atomic_t flags[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
+
+#ifdef TEST_BUILD
+int rt1739_get_flag(int port)
+{
+	return flags[port];
+}
+#endif
 
 static int read_reg(uint8_t port, int reg, int *val)
 {
@@ -165,7 +171,7 @@ static int rt1739_get_device_id(int port, int *device_id)
 
 static int rt1739_workaround(int port)
 {
-	int device_id, vconn_ctrl4;
+	int device_id, vconn_ctrl4, lvhvsw_ov_ctrl;
 
 	RETURN_ERROR(rt1739_get_device_id(port, &device_id));
 
@@ -219,8 +225,12 @@ static int rt1739_workaround(int port)
 
 	case RT1739_DEVICE_ID_ES4:
 		CPRINTS("RT1739 ES4");
-		RETURN_ERROR(update_reg(port, RT1739_REG_LVHVSW_OV_CTRL,
-					RT1739_OT_SEL_LVL, MASK_CLR));
+		RETURN_ERROR(read_reg(port, RT1739_REG_LVHVSW_OV_CTRL,
+				      &lvhvsw_ov_ctrl));
+		lvhvsw_ov_ctrl |= RT1739_LVSW_OVP_6V;
+		lvhvsw_ov_ctrl &= ~RT1739_OT_SEL_LVL;
+		RETURN_ERROR(write_reg(port, RT1739_REG_LVHVSW_OV_CTRL,
+				       lvhvsw_ov_ctrl));
 		RETURN_ERROR(
 			read_reg(port, RT1739_REG_VCONN_CTRL4, &vconn_ctrl4));
 		vconn_ctrl4 &= ~RT1739_VCONN_OCP_SEL_MASK;
@@ -244,6 +254,10 @@ static int rt1739_set_frs_enable(int port, int enable)
 	/* Enable FRS RX detect */
 	RETURN_ERROR(update_reg(port, RT1739_REG_CC_FRS_CTRL1, RT1739_FRS_RX_EN,
 				enable ? MASK_SET : MASK_CLR));
+	/* b/296988176: disable SRCP and OSCS mask while FRS enabled */
+	RETURN_ERROR(update_reg(port, RT1739_REG_VBUS_DEG_TIME,
+				RT1739_FRS_SRCP_MASK | RT1739_FRS_OSCS_MASK,
+				enable ? MASK_SET : MASK_CLR));
 
 	/*
 	 * To enable FRS, turn on FRS_RX interrupt and disable
@@ -261,6 +275,9 @@ static int rt1739_set_frs_enable(int port, int enable)
 		atomic_or(&flags[port], RT1739_FLAGS_FRS_ENABLED);
 	else
 		atomic_clear_bits(&flags[port], RT1739_FLAGS_FRS_ENABLED);
+
+	/* Clear Rx receive events. */
+	atomic_clear_bits(&flags[port], RT1739_FLAGS_FRS_RX_RECV);
 
 	return EC_SUCCESS;
 }
@@ -495,8 +512,14 @@ DECLARE_DEFERRED(rt1739_deferred_interrupt);
 
 void rt1739_interrupt(int port)
 {
-	if (flags[port] & RT1739_FLAGS_FRS_ENABLED)
+	/* The RX event maybe sent out multiple times during one FRS RX
+	 * event. Filter the redundant ones.
+	 */
+	if (flags[port] & RT1739_FLAGS_FRS_ENABLED &&
+	    !(flags[port] & RT1739_FLAGS_FRS_RX_RECV)) {
+		atomic_or(&flags[port], RT1739_FLAGS_FRS_RX_RECV);
 		pd_got_frs_signal(port);
+	}
 
 	atomic_or(&pending_events, BIT(port));
 	hook_call_deferred(&rt1739_deferred_interrupt_data, 0);

@@ -3,7 +3,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""
+"""Check Zephyr RAM size.
+
 This script enforces that Zephyr builds have enough free RAM to satisfy
 CONFIG_PLATFORM_EC_PRESERVED_END_OF_RAM_SIZE.
 """
@@ -24,12 +25,9 @@ from elftools.elf.elffile import ELFFile
 from elftools.elf.sections import SymbolTableSection
 
 
-EXCLUDED_BOARDS = [
-    # Only 116 bytes of free RAM (b/289320553)
-    "gothrax",
-    # Only 800 bytes of free RAM (b/289320515)
-    "nereid",
-]
+# Additions to this list MUST contain a reference to a bug for tracking
+# the fix for that board.
+EXCLUDED_BOARDS = []
 
 
 class BuildInfo:

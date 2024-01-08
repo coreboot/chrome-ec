@@ -68,7 +68,7 @@
 			enum-name = "GPIO_PACKET_MODE_EN";
 		};
 		gpio_ec_kso_02_inv: ec_kso_02_inv {
-			gpios = <&gpio1 7 (GPIO_OUTPUT_LOW | GPIO_ACTIVE_LOW)>;
+			gpios = <&gpio1 7 (GPIO_OUTPUT | GPIO_ACTIVE_HIGH)>;
 		};
 		gpio_ec_pch_wake_odl: ec_pch_wake_odl {
 			gpios = <&gpiob 0 GPIO_ODR_LOW>;
@@ -186,6 +186,12 @@
 		gpio_volup_btn_odl: volup_btn_odl {
 			gpios = <&gpio9 3 GPIO_INPUT_PULL_UP>;
 			enum-name = "GPIO_VOLUME_UP_L";
+		};
+		gpio_tchpad_lid_close: tchpad_lid_close {
+			gpios = <&gpio6 3 GPIO_OUTPUT>;
+		};
+		gpio_subboard_detect_l: subboard_detect_l {
+			gpios = <&gpioc 6 GPIO_INPUT_PULL_UP>;
 		};
 	};
 

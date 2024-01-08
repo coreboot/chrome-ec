@@ -30,6 +30,9 @@
 			gpios = <&gpio0 6 GPIO_INPUT>;
 			enum-name = "GPIO_BATT_PRES_ODL";
 		};
+		gpio_en_pp5000_usba_r: en_pp5000_usba_r {
+			gpios = <&gpio0 7 GPIO_OUTPUT>;
+		};
 	};
 
 	/*
@@ -47,5 +50,43 @@
 		gpio-controller;
 		#gpio-cells = <2>;
 		ngpios = <32>;
+	};
+
+	i2c1_0: i2c@100 {
+		status = "okay";
+		compatible = "zephyr,i2c-emul-controller";
+		clock-frequency = <I2C_BITRATE_STANDARD>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x100 4>;
+	};
+	i2c3_0: i2c@300 {
+		status = "okay";
+		compatible = "zephyr,i2c-emul-controller";
+		clock-frequency = <I2C_BITRATE_STANDARD>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x300 4>;
+	};
+	i2c4_1: i2c@410 {
+		status = "okay";
+		compatible = "zephyr,i2c-emul-controller";
+		clock-frequency = <I2C_BITRATE_STANDARD>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x410 4>;
+	};
+	i2c6_1: i2c@610 {
+		status = "okay";
+		compatible = "zephyr,i2c-emul-controller";
+		clock-frequency = <I2C_BITRATE_STANDARD>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x610 4>;
+	};
+
+	usba-port-enable-list {
+		compatible = "cros-ec,usba-port-enable-pins";
+		enable-pins = <&gpio_en_pp5000_usba_r>;
 	};
 };

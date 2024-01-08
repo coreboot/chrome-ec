@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 
 # This file is auto-generated.  To update, run:
-# ./util/gen_bazel_targets.py
+# ./bazel/gen_bazel_targets.py
 
 load(":ec_target.bzl", "ec_target")
 
@@ -19,12 +19,12 @@ def all_targets():
     ec_target(
         name = "adlrvp_mchp",
         board = "adlrvp_mchp",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc"],
     )
     ec_target(
         name = "adlrvp_npcx",
         board = "adlrvp_npcx",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "adlrvpm_ite",
@@ -106,6 +106,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "anraggar",
+        board = "anraggar",
+    )
+    ec_target(
         name = "arcada_ish",
         board = "arcada_ish",
         chip = "ish",
@@ -142,6 +146,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "axii",
+        board = "axii",
     )
     ec_target(
         name = "baklava",
@@ -224,6 +232,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "bloonchipper_zephyr",
+        board = "bloonchipper",
+        extra_modules = ["hal_stm32", "cmsis"],
+    )
+    ec_target(
         name = "bobba",
         baseboard = "octopus",
         board = "bobba",
@@ -264,6 +277,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "brox",
+        board = "brox",
+    )
+    ec_target(
         name = "brya",
         baseboard = "brya",
         board = "brya",
@@ -272,9 +289,14 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "brya_pdc",
+        board = "brya_pdc",
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
+    )
+    ec_target(
         name = "brya_zephyr",
         board = "brya",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "bugzzy",
@@ -348,6 +370,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "chinchou",
+        board = "chinchou",
+    )
+    ec_target(
         name = "chocodile_vpdmcu",
         board = "chocodile_vpdmcu",
         chip = "stm32",
@@ -361,6 +387,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "ciri",
+        board = "ciri",
     )
     ec_target(
         name = "coachz",
@@ -444,12 +474,12 @@ def all_targets():
     ec_target(
         name = "craask",
         board = "craask",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "craaskov",
         board = "craaskov",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "cret",
@@ -470,7 +500,7 @@ def all_targets():
     ec_target(
         name = "crystaldrift",
         board = "crystaldrift",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "dalboz",
@@ -517,6 +547,14 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "dexi",
+        baseboard = "dedede",
+        board = "dexi",
+        chip = "it83xx",
+        core = "nds32",
+        zephyr = False,
+    )
+    ec_target(
         name = "dibbi",
         baseboard = "dedede",
         board = "dibbi",
@@ -551,6 +589,22 @@ def all_targets():
         board = "discovery-stm32f072",
         chip = "stm32",
         core = "cortex-m0",
+        zephyr = False,
+    )
+    ec_target(
+        name = "dita",
+        baseboard = "dedede",
+        board = "dita",
+        chip = "it83xx",
+        core = "nds32",
+        zephyr = False,
+    )
+    ec_target(
+        name = "dochi",
+        baseboard = "brya",
+        board = "dochi",
+        chip = "npcx",
+        core = "cortex-m",
         zephyr = False,
     )
     ec_target(
@@ -750,7 +804,7 @@ def all_targets():
     ec_target(
         name = "frostflow",
         board = "frostflow",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "fusb307bgevb",
@@ -970,6 +1024,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "it82002_evb",
+        board = "it82002_evb",
+    )
+    ec_target(
         name = "it83xx_evb",
         baseboard = "ite_evb",
         board = "it83xx_evb",
@@ -1061,7 +1119,7 @@ def all_targets():
     ec_target(
         name = "karis",
         board = "karis",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "karma",
@@ -1080,6 +1138,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "kelpie",
+        board = "kelpie",
+    )
+    ec_target(
         name = "kindred",
         baseboard = "hatch",
         board = "kindred",
@@ -1090,7 +1152,7 @@ def all_targets():
     ec_target(
         name = "kingler",
         board = "kingler",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "kingoftown",
@@ -1195,7 +1257,7 @@ def all_targets():
     ec_target(
         name = "lazor_zephyr",
         board = "lazor",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "liara",
@@ -1284,7 +1346,7 @@ def all_targets():
     ec_target(
         name = "markarth",
         board = "markarth",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "marzipan",
@@ -1339,7 +1401,7 @@ def all_targets():
     ec_target(
         name = "minimal-npcx9",
         board = "minimal-npcx9",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "minimal-posix",
@@ -1401,14 +1463,24 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "mtlrvpp_m1723",
+        board = "mtlrvpp_m1723",
+        extra_modules = ["cmsis", "picolibc"],
+    )
+    ec_target(
         name = "mtlrvpp_mchp",
         board = "mtlrvpp_mchp",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc"],
     )
     ec_target(
         name = "mtlrvpp_npcx",
         board = "mtlrvpp_npcx",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
+    )
+    ec_target(
+        name = "mtlrvpp_pd",
+        board = "mtlrvpp_pd",
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "munna",
@@ -1429,7 +1501,11 @@ def all_targets():
     ec_target(
         name = "myst",
         board = "myst",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
+    )
+    ec_target(
+        name = "naktal",
+        board = "naktal",
     )
     ec_target(
         name = "nami",
@@ -1480,7 +1556,7 @@ def all_targets():
     ec_target(
         name = "nivviks",
         board = "nivviks",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "nocturne",
@@ -1497,9 +1573,14 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "nokris",
+        board = "nokris",
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
+    )
+    ec_target(
         name = "npcx7",
         board = "npcx7",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "npcx7_evb",
@@ -1511,7 +1592,7 @@ def all_targets():
     ec_target(
         name = "npcx9",
         board = "npcx9",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "npcx9_evb",
@@ -1613,7 +1694,7 @@ def all_targets():
     ec_target(
         name = "ovis",
         board = "ovis",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "palkia",
@@ -1699,7 +1780,7 @@ def all_targets():
     ec_target(
         name = "ponyta",
         board = "ponyta",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "poppy",
@@ -1733,7 +1814,7 @@ def all_targets():
     ec_target(
         name = "pujjo",
         board = "pujjo",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "quackingstick",
@@ -1744,6 +1825,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "quandiso",
+        board = "quandiso",
+    )
+    ec_target(
         name = "quiche",
         baseboard = "honeybuns",
         board = "quiche",
@@ -1752,18 +1837,15 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
-        name = "rainier",
-        board = "rainier",
-        chip = "stm32",
-        core = "cortex-m0",
-        zephyr = False,
-    )
-    ec_target(
         name = "rammus",
         board = "rammus",
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "rauru",
+        board = "rauru",
     )
     ec_target(
         name = "redrix",
@@ -1797,17 +1879,17 @@ def all_targets():
     ec_target(
         name = "rex",
         board = "rex",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "rex-ish",
         board = "rex-ish",
-        extra_modules = ["ish", "cmsis", "hal_intel"],
+        extra_modules = ["cmsis", "hal_intel_public"],
     )
     ec_target(
         name = "rex-ish-ec",
         board = "rex-ish-ec",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "roach",
@@ -1830,13 +1912,6 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
-        name = "scarlet",
-        board = "scarlet",
-        chip = "stm32",
-        core = "cortex-m0",
-        zephyr = False,
-    )
-    ec_target(
         name = "scout",
         board = "scout",
         chip = "npcx",
@@ -1846,7 +1921,7 @@ def all_targets():
     ec_target(
         name = "screebo",
         board = "screebo",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "servo_micro",
@@ -1888,7 +1963,7 @@ def all_targets():
     ec_target(
         name = "skyrim",
         board = "skyrim",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "soraka",
@@ -1929,7 +2004,7 @@ def all_targets():
     ec_target(
         name = "steelix",
         board = "steelix",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "stern",
@@ -2069,7 +2144,7 @@ def all_targets():
     ec_target(
         name = "uldren",
         board = "uldren",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "vell",
@@ -2138,7 +2213,7 @@ def all_targets():
     ec_target(
         name = "voltorb",
         board = "voltorb",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "voxel",
@@ -2225,7 +2300,7 @@ def all_targets():
     ec_target(
         name = "winterhold",
         board = "winterhold",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "woomax",
@@ -2246,12 +2321,12 @@ def all_targets():
     ec_target(
         name = "xivu",
         board = "xivu",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "xivur",
         board = "xivur",
-        extra_modules = ["cmsis"],
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "yaviks",

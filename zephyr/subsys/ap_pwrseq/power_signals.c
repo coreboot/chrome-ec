@@ -126,14 +126,13 @@ static inline void check_debug(enum power_signal signal)
 
 power_signal_mask_t power_get_signals(void)
 {
-	power_signal_mask_t mask = 0;
+	int value;
 
 	for (int i = 0; i < ARRAY_SIZE(polled_signals); i++) {
-		if (power_signal_get(polled_signals[i])) {
-			mask |= POWER_SIGNAL_MASK(polled_signals[i]);
-		}
+		value = power_signal_get(polled_signals[i]);
+		atomic_set_bit_to(&power_signals, polled_signals[i], value);
 	}
-	return mask | atomic_get(&power_signals);
+	return atomic_get(&power_signals);
 }
 
 #ifndef CONFIG_AP_PWRSEQ_DRIVER
@@ -150,7 +149,10 @@ void power_signal_interrupt(enum power_signal signal, int value)
 
 	atomic_set_bit_to(&power_signals, signal, value);
 	check_debug(signal);
-	ap_pwrseq_post_event(ap_pwrseq_dev, AP_PWRSEQ_EVENT_POWER_SIGNAL);
+	if (!IS_ENABLED(CONFIG_EMUL_AP_PWRSEQ_DRIVER)) {
+		ap_pwrseq_post_event(ap_pwrseq_dev,
+				     AP_PWRSEQ_EVENT_POWER_SIGNAL);
+	}
 }
 #endif
 int power_wait_mask_signals_timeout(power_signal_mask_t mask,

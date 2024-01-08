@@ -6,13 +6,20 @@ if(CONFIG_BORINGSSL_CRYPTO)
 
 zephyr_library_named(boringssl)
 
+# Currently BoringSSL is not as a module, so we need to provide a path to
+# sources.
+
 # Look for BoringSSL sources in MODULES_DIR if provided.
 if (DEFINED ENV{MODULES_DIR})
 	set(BORINGSSL_SOURCES $ENV{MODULES_DIR}/boringssl)
+# If MODULES_DIR is not available, look for BoringSSL in modules/boringssl
+# which should be correct in Gitlab CI.
+elseif(EXISTS ${ZEPHYR_BASE}/../../modules/boringssl)
+	set(BORINGSSL_SOURCES ${ZEPHYR_BASE}/../../modules/boringssl)
+# Finally, look for BoringSSL in third_part/boringssl which should be correct
+# when running in cros_sdk.
 else()
-  # Currently BoringSSL is not as a module, so we need to provide a path to
-  # sources.
-  set(BORINGSSL_SOURCES ${ZEPHYR_BASE}/../../boringssl)
+	set(BORINGSSL_SOURCES ${ZEPHYR_BASE}/../../boringssl)
 endif()
 
 # Enable BoringSSL's checks if assert is enabled.
@@ -26,7 +33,7 @@ endif()
 # better way to disable the filesystem, threads and locks usages.
 set(CMAKE_SYSTEM_NAME Linux)
 set(ANDROID TRUE)
-add_definitions(-D__TRUSTY__)
+zephyr_compile_definitions(__TRUSTY__)
 
 # Zephyr defines _XOPEN_SOURCE=600 when compiling 'posix' architecture,
 # but BoringSSL defines _XOPEN_SOURCE=700. Since redefining is not allowed
@@ -41,7 +48,9 @@ set(CMAKE_SKIP_INSTALL_RULES YES)
 # We don't use generated assembly for now.
 set(OPENSSL_NO_ASM "1")
 
+zephyr_include_directories(${BORINGSSL_SOURCES})
 zephyr_include_directories(${BORINGSSL_SOURCES}/include)
+zephyr_include_directories(include)
 
 # Add CMakeLists.txt from BoringSSL. This directory is out-of-tree, so we need
 # to specify binary directory also. BoringSSL defines many CMake targets which
