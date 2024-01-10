@@ -137,19 +137,25 @@ bool get_tpm_pcr_value(uint32_t pcr_num, uint8_t value[SHA256_DIGEST_SIZE])
 	return PCRGetValue(TPM_ALG_SHA256, pcr_num, SHA256_DIGEST_SIZE, value);
 }
 
-uint16_t tpm_nv_eps_len(void)
+uint16_t tpm_nv_tpm2b_len(uint32_t index)
 {
 	NV_RESERVED_ITEM ri;
 	/*
 	 * Make sure we read length of TPM2B struct properly. Note, it is
 	 * stored in machine format, so no ending conversion is needed.
 	 */
-	uint16_t eps_seed_len = 0; /* Shall match TPM2B size type. */
+	uint16_t tpm2b_len = 0; /* Shall match TPM2B size type. */
 
-	BUILD_ASSERT(sizeof(gp.EPSeed.t.size) == sizeof(eps_seed_len));
-	NvGetReserved(NV_EP_SEED, &ri);
-	_plat__NvMemoryRead(ri.offset, sizeof(eps_seed_len), &eps_seed_len);
-	if (eps_seed_len > ri.size - sizeof(gp.EPSeed.t.size))
-		eps_seed_len = 0;
-	return eps_seed_len;
+	BUILD_ASSERT(sizeof(gp.EPSeed.t.size) == sizeof(tpm2b_len));
+	/* This check is only valid for a range of TPM2B spaces. */
+	if (index < NV_OWNER_POLICY || index > NV_EH_PROOF)
+		return 0;
+
+	NvGetReserved(index, &ri);
+	if (ri.size >= sizeof(tpm2b_len)) {
+		_plat__NvMemoryRead(ri.offset, sizeof(tpm2b_len), &tpm2b_len);
+		if (tpm2b_len > ri.size - sizeof(tpm2b_len))
+			tpm2b_len = 0;
+	}
+	return tpm2b_len;
 }
