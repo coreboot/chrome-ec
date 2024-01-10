@@ -963,8 +963,27 @@ void tpm_stop(void)
 	reset_in_progress = false;
 }
 
+#ifdef CONFIG_NVMEM_DEBUG_EPS
+/* Encode EPS/SPS issue into bit flag to detect new issues. */
+static uint32_t seed_err_status(void)
+{
+	uint32_t err_flag = 0;
+
+	if (tpm_nv_tpm2b_len(NV_EP_SEED) == 0)
+		err_flag |= 1;
+	if (tpm_nv_tpm2b_len(NV_SP_SEED) == 0)
+		err_flag |= 2;
+	if (gp.EPSeed.t.size != PRIMARY_SEED_SIZE)
+		err_flag |= 4;
+	if (gp.SPSeed.t.size != PRIMARY_SEED_SIZE)
+		err_flag |= 8;
+	return err_flag;
+}
+#endif
+
 void tpm_task(void *u)
 {
+	uint32_t seed_err_flag = 0;
 	uint32_t evt = 0;
 	bool drbg_initialized = false;
 
@@ -1089,27 +1108,31 @@ void tpm_task(void *u)
 			} else {
 #ifdef ENABLE_TPM
 #ifdef CONFIG_NVMEM_DEBUG_EPS
-				uint16_t eps_len;
+				uint32_t err_flag = seed_err_status();
 
-				eps_len = tpm_nv_eps_len();
 				if ((command_code != TPM_CC_Startup) &&
-				    (eps_len == 0 || gp.EPSeed.t.size == 0)) {
-					CPRINTSS("EPS before cmd=0x%x:"
-						 " NV=%u, GP=%u",
-						 command_code, eps_len,
-						 gp.EPSeed.t.size);
+				    (err_flag != seed_err_flag)) {
+					CPRINTSS("EPS/SPS before cmd=0x%x:"
+						 " E:%x [%x,%x]",
+						 command_code, err_flag,
+						 gp.EPSeed.t.size,
+						 gp.SPSeed.t.size);
+					seed_err_flag = err_flag;
 				}
 #endif /* CONFIG_NVMEM_DEBUG_EPS */
 				ExecuteCommand(tpm_.fifo_write_index,
 					       (uint8_t *)tpmh, &response_size,
 					       &response);
 #ifdef CONFIG_NVMEM_DEBUG_EPS
-				eps_len = tpm_nv_eps_len();
-				if (eps_len == 0 || gp.EPSeed.t.size == 0) {
-					CPRINTSS("EPS after cmd=0x%x:"
-						 " NV=%u, GP=%u",
-						 command_code, eps_len,
-						 gp.EPSeed.t.size);
+				err_flag = seed_err_status();
+				if ((command_code != TPM_CC_Shutdown) &&
+				    err_flag != seed_err_flag) {
+					CPRINTSS("EPS/SPS after cmd=0x%x:"
+						 " E:%x [%x,%x]",
+						 command_code, err_flag,
+						 gp.EPSeed.t.size,
+						 gp.SPSeed.t.size);
+					seed_err_flag = err_flag;
 				}
 #endif /* CONFIG_NVMEM_DEBUG_EPS */
 #else /* ENABLE_TPM */

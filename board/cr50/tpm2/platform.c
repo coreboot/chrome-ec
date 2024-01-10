@@ -129,8 +129,10 @@ void _plat__StartupCallback(void)
 	 */
 
 	/* TODO(b/262324344). Remove when zero sized EPS fixed. */
-	if (gp.EPSeed.t.size == 0) {
-		CPRINTF("%s: EPS seed length is zero!\n", __func__);
+	if (gp.EPSeed.t.size != PRIMARY_SEED_SIZE ||
+	    gp.SPSeed.t.size != PRIMARY_SEED_SIZE) {
+		CPRINTF("%s: Seed length is zero [%x, %x]!\n", __func__,
+			gp.EPSeed.t.size, gp.SPSeed.t.size);
 		cflush();
 	}
 }
