@@ -984,7 +984,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 #ifdef CONFIG_NVMEM_DEBUG_EPS
 	uint16_t eps_seed_len;
 
-	eps_seed_len = tpm_nv_eps_len();
+	eps_seed_len = tpm_nv_tpm2b_len(NV_EP_SEED);
 	if (eps_seed_len == 0)
 		CPRINTS("%s: EPS before is zero", __func__);
 #endif
@@ -1139,7 +1139,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 	/* (b/262324344): debugging EPS status. */
 #ifdef CONFIG_NVMEM_DEBUG_EPS
 	if (eps_seed_len) /* Only record new error */
-		eps_seed_len = tpm_nv_eps_len();
+		eps_seed_len = tpm_nv_tpm2b_len(NV_EP_SEED);
 	if (eps_seed_len == 0) {
 		CPRINTS("%s: EPS after is zero, rv is %d", __func__, rv);
 		log_no_payload_failure(NVMEMF_COMPACT_EPS);

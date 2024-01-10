@@ -23,7 +23,6 @@ int tpm_manufactured(void)
 	uint32_t nv_ram_index;
 	const uint32_t rsa_ek_nv_index = EK_CERT_NV_START_INDEX;
 	const uint32_t ecc_ek_nv_index = EK_CERT_NV_START_INDEX + 1;
-	uint16_t eps_seed_len;
 
 	/*
 	 * If nvram_index (value written at NV RAM offset of zero) is all
@@ -33,9 +32,9 @@ int tpm_manufactured(void)
 	 * Thus, wiping flash NV ram allows to re-manufacture the chip.
 	 */
 	_plat__NvMemoryRead(0, sizeof(nv_ram_index), &nv_ram_index);
-	eps_seed_len = tpm_nv_eps_len();
 
-	if ((nv_ram_index == ~0) || (eps_seed_len < PRIMARY_SEED_SIZE) ||
+	if ((nv_ram_index == ~0) ||
+	    (tpm_nv_tpm2b_len(NV_EP_SEED) < PRIMARY_SEED_SIZE) ||
 	    (NvIsUndefinedIndex(rsa_ek_nv_index) == TPM_RC_SUCCESS) ||
 	    (NvIsUndefinedIndex(ecc_ek_nv_index) == TPM_RC_SUCCESS)) {
 		CPRINTS("%s: NOT manufactured", __func__);

@@ -62,7 +62,7 @@ void tpm_orderly_state_restore(const char copy[TPM_ORDERLY_STATE_SIZE]);
  */
 bool get_tpm_pcr_value(uint32_t pcr_num, uint8_t value[SHA256_DIGEST_SIZE]);
 
-/* Return EPS length from NVmem. */
-uint16_t tpm_nv_eps_len(void);
+/* Return length of TPM2B reserved space from NVmem. */
+uint16_t tpm_nv_tpm2b_len(uint32_t index);
 
 #endif  /* ! __EC_BOARD_CR50_TPM_NVMEM_OPS_H */
