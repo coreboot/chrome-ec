@@ -966,6 +966,7 @@ void tpm_stop(void)
 void tpm_task(void *u)
 {
 	uint32_t evt = 0;
+	bool drbg_initialized = false;
 
 	/*
 	 * Just in case there is a resume from deep sleep where AP is not out
@@ -1000,7 +1001,6 @@ void tpm_task(void *u)
 		struct tpm_cmd_header *tpmh;
 		size_t buffer_size;
 		uint8_t alt_if_command;
-		bool drbg_initialized = false;
 		bool is_custom_command;
 
 		/* Process unprocessed events or wait for the next event */
