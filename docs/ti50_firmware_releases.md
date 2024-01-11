@@ -1323,6 +1323,61 @@ Build:   ti50_common_prepvt-15086.B:v0.0.787-ab6858a7
          @chromeos-ci-firmware-us-east1-d-x32-0-o01k 2023-11-30 07:32:57
 ```
 
+### 0.24.70 Released on 1/11/2024
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5187955)
+
+Builder
+[77](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15086.B-branch/77/overview)
+
+Artifacts:
+[15086.72.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.72.0)
+
+**Features**
+*   rsu: Increase key generation limit from 10 to 100.
+    [b/301156378](https://b.corp.google.com/issues/301156378)
+*   ap-ro: Add exception for Frostflow RLZ codes.
+    [b/309473916](https://b.corp.google.com/issues/309473916)
+*   tpm2: Allow platform read for virtual nvmem.
+
+**Bug Fixes**
+*   usb_spi: handle setup packet errors properly.
+    [b/302691530](https://b.corp.google.com/issues/302691530)
+*   usb_client: prevent lockups when users don't consume RX data.
+    [b/302691530](https://b.corp.google.com/issues/302691530)
+*   wp: do not set at_boot setting for WP TPMV Cmd disable.
+    [b/257255419](https://b.corp.google.com/issues/257255419)
+*   tpm2: Fix the wrong signature of widevine cert.
+    [b/248610274](https://b.corp.google.com/issues/248610274)
+*   cryptolib: adjust CIK & CEK key gen and certs to match actuals.
+    [b/308473146](https://b.corp.google.com/issues/308473146)
+*   flog: Recover from corrupted entries.
+    [b/302383688](https://b.corp.google.com/issues/302383688)
+*   fwmp: Reload WP setting when TPM is wiped.
+    [b/312396594](https://b.corp.google.com/issues/312396594)
+*   ap_ro_verification: Always re-check verification if cached failed.
+    [b/315341905](https://b.corp.google.com/issues/315341905)
+*   rbox: Do not reset GSC on power button push during ccd open.
+    [b/314185172](https://b.corp.google.com/issues/314185172)
+*   capsules/i2c_programmer.rs: Respect I2C CCD capability.
+    [b/317087536](https://b.corp.google.com/issues/317087536)
+*   sys_mgr.rs: Advertise SPI/I2C in board properties.
+    [b/307539350](https://b.corp.google.com/issues/307539350)
+*   tpm: Save PCR values to NV.
+    [b/316884342](https://b.corp.google.com/issues/316884342)
+*   tpm_vendor: some commands are disallowed over USB in non DBG mode.
+    [b/318518004](https://b.corp.google.com/issues/318518004)
+
+
+```
+Build:   ti50_common_prepvt-15086.B:v0.0.931-91dec51b
+         libtock-rs:v0.0.929-ecde39c
+         tock:v0.0.9662-478a746e5
+         ms-tpm-20-ref:v0.0.329-138a187
+         @chromeos-ci-firmware-us-central1-b-x32-0-j5k1 2024-01-05 19:41:43
+
+```
 <!-- Links -->
 
 [105 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R105-14989.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
