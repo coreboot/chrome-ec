@@ -8,6 +8,7 @@
  */
 
 #include <assert.h>
+#include <string.h>
 
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
@@ -773,7 +774,7 @@ static void st_read_run(void *o)
 
 	/* Copy the received data to the user's buffer */
 	switch (data->cmd) {
-	case CMD_GET_IC_STATUS:
+	case CMD_GET_IC_STATUS: {
 		struct pdc_info_t *info = (struct pdc_info_t *)data->user_buf;
 
 		/* Realtek Is running flash code: Byte 1 */
@@ -806,6 +807,7 @@ static void st_read_run(void *o)
 				info->pd_version, info->pd_revision);
 		}
 		break;
+	}
 	case CMD_GET_VBUS_VOLTAGE:
 		/*
 		 * Realtek Voltage reading is on Byte16 and Byte17, but
@@ -817,7 +819,7 @@ static void st_read_run(void *o)
 			((data->rd_buf[2] << 8) | data->rd_buf[1]) *
 			VOLTAGE_SCALE_FACTOR;
 		break;
-	case CMD_GET_CONNECTOR_STATUS:
+	case CMD_GET_CONNECTOR_STATUS: {
 		/* Map Realtek GET_RTK_STATUS bits to UCSI GET_CONNECTOR_STATUS
 		 */
 		struct connector_status_t *cs =
@@ -882,7 +884,8 @@ static void st_read_run(void *o)
 		 * byte) */
 		cs->voltage_reading = data->rd_buf[18] << 8 | data->rd_buf[17];
 		break;
-	case CMD_GET_ERROR_STATUS:
+	}
+	case CMD_GET_ERROR_STATUS: {
 		/* Map Realtek GET_ERROR_STATUS bits to UCSI GET_ERROR_STATUS */
 		union error_status_t *es =
 			(union error_status_t *)data->user_buf;
@@ -920,6 +923,7 @@ static void st_read_run(void *o)
 		 * states
 		 */
 		break;
+	}
 	default:
 		/* No preprocessing needed for the user data */
 		memcpy(data->user_buf, data->rd_buf + offset, len);
@@ -1042,29 +1046,59 @@ static const struct smf_state states[] = {
 	[ST_IRQ] = SMF_CREATE_STATE(st_irq_entry, st_irq_run, NULL, NULL),
 };
 
-static int rts54_get_rtk_status(const struct device *dev, uint8_t offset,
-				uint8_t len, enum cmd_t cmd, uint8_t *buf)
+/**
+ * @brief Helper method for setting up a command call.
+ * @param dev PDC device pointer
+ * @param cmd Command to execute
+ * @param buf Command payload to copy into write buffer
+ * @param len Length of paylaod buffer
+ * @param user_buf Pointer to buffer where response data will be written.
+ * @return 0 on success, -EBUSY if command is already pending.
+ */
+static int rts54_post_command(const struct device *dev, enum cmd_t cmd,
+			      const uint8_t *buf, uint8_t len,
+			      uint8_t *user_buf)
 {
 	struct pdc_data_t *data = dev->data;
 
-	if (buf == NULL) {
-		return -EINVAL;
-	}
-
 	k_mutex_lock(&data->mtx, K_FOREVER);
 
-	data->wr_buf[0] = GET_RTK_STATUS.cmd;
-	data->wr_buf[1] = GET_RTK_STATUS.len;
-	data->wr_buf[2] = GET_RTK_STATUS.sub + offset;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = len;
-	data->wr_buf_len = 5;
-	data->user_buf = buf;
+	if (data->cmd != CMD_NONE) {
+		k_mutex_unlock(&data->mtx);
+		return -EBUSY;
+	}
+
+	if (buf) {
+		assert(len <= ARRAY_SIZE(data->wr_buf));
+		memcpy(data->wr_buf, buf, len);
+	}
+
+	data->wr_buf_len = len;
+	data->user_buf = user_buf;
 	data->cmd = cmd;
 
 	k_mutex_unlock(&data->mtx);
 
 	return 0;
+}
+
+static int rts54_get_rtk_status(const struct device *dev, uint8_t offset,
+				uint8_t len, enum cmd_t cmd, uint8_t *buf)
+{
+	if (buf == NULL) {
+		return -EINVAL;
+	}
+
+	uint8_t payload[] = {
+		GET_RTK_STATUS.cmd,
+		GET_RTK_STATUS.len,
+		GET_RTK_STATUS.sub + offset,
+		0x00,
+		len,
+	};
+
+	return rts54_post_command(dev, CMD_VENDOR_ENABLE, payload,
+				  ARRAY_SIZE(payload), buf);
 }
 
 static int rts54_get_ucsi_version(const struct device *dev, uint16_t *version)
@@ -1098,19 +1132,16 @@ static int rts54_enable(const struct device *dev)
 		return -EBUSY;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		VENDOR_CMD_ENABLE.cmd,
+		VENDOR_CMD_ENABLE.len,
+		VENDOR_CMD_ENABLE.sub,
+		0x0b,
+		0x01,
+	};
 
-	data->wr_buf[0] = VENDOR_CMD_ENABLE.cmd;
-	data->wr_buf[1] = VENDOR_CMD_ENABLE.len;
-	data->wr_buf[2] = VENDOR_CMD_ENABLE.sub;
-	data->wr_buf[3] = 0x0B;
-	data->wr_buf[4] = 0x01;
-	data->wr_buf_len = 5;
-	data->cmd = CMD_VENDOR_ENABLE;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_VENDOR_ENABLE, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_read_power_level(const struct device *dev)
@@ -1121,19 +1152,16 @@ static int rts54_read_power_level(const struct device *dev)
 		return -EBUSY;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		UCSI_READ_POWER_LEVEL.cmd,
+		UCSI_READ_POWER_LEVEL.len,
+		UCSI_READ_POWER_LEVEL.sub,
+		0x00,
+		0x00,
+	};
 
-	data->wr_buf[0] = UCSI_READ_POWER_LEVEL.cmd;
-	data->wr_buf[1] = UCSI_READ_POWER_LEVEL.len;
-	data->wr_buf[2] = UCSI_READ_POWER_LEVEL.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = 0x00;
-	data->wr_buf_len = 5;
-	data->cmd = CMD_READ_POWER_LEVEL;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_READ_POWER_LEVEL, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_reconnect(const struct device *dev)
@@ -1144,18 +1172,15 @@ static int rts54_reconnect(const struct device *dev)
 		return -EBUSY;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		SET_TPC_RECONNECT.cmd,
+		SET_TPC_RECONNECT.len,
+		SET_TPC_RECONNECT.sub,
+		0x00,
+	};
 
-	data->wr_buf[0] = SET_TPC_RECONNECT.cmd;
-	data->wr_buf[1] = SET_TPC_RECONNECT.len;
-	data->wr_buf[2] = SET_TPC_RECONNECT.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf_len = 4;
-	data->cmd = CMD_SET_TPC_RECONNECT;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_SET_TPC_RECONNECT, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_pdc_reset(const struct device *dev)
@@ -1166,9 +1191,7 @@ static int rts54_pdc_reset(const struct device *dev)
 		return -EBUSY;
 	}
 
-	data->cmd = CMD_TRIGGER_PDC_RESET;
-
-	return 0;
+	return rts54_post_command(dev, CMD_TRIGGER_PDC_RESET, NULL, 0, NULL);
 }
 
 static int rts54_reset(const struct device *dev)
@@ -1180,18 +1203,15 @@ static int rts54_reset(const struct device *dev)
 		return -EBUSY;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		PPM_RESET.cmd,
+		PPM_RESET.len,
+		PPM_RESET.sub,
+		0x00,
+	};
 
-	data->wr_buf[0] = PPM_RESET.cmd;
-	data->wr_buf[1] = PPM_RESET.len;
-	data->wr_buf[2] = PPM_RESET.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf_len = 4;
-	data->cmd = CMD_PPM_RESET;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_PPM_RESET, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_connector_reset(const struct device *dev,
@@ -1203,19 +1223,16 @@ static int rts54_connector_reset(const struct device *dev,
 		return -EBUSY;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		CONNECTOR_RESET.cmd,
+		CONNECTOR_RESET.len,
+		CONNECTOR_RESET.sub,
+		0x00,
+		type,
+	};
 
-	data->wr_buf[0] = CONNECTOR_RESET.cmd;
-	data->wr_buf[1] = CONNECTOR_RESET.len;
-	data->wr_buf[2] = CONNECTOR_RESET.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = type;
-	data->wr_buf_len = 5;
-	data->cmd = CMD_CONNECTOR_RESET;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_CONNECTOR_RESET, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_set_power_level(const struct device *dev,
@@ -1244,19 +1261,12 @@ static int rts54_set_power_level(const struct device *dev,
 		break;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		SET_TPC_RP.cmd, SET_TPC_RP.len, SET_TPC_RP.sub, 0x00, byte,
+	};
 
-	data->wr_buf[0] = SET_TPC_RP.cmd;
-	data->wr_buf[1] = SET_TPC_RP.len;
-	data->wr_buf[2] = SET_TPC_RP.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = byte;
-	data->wr_buf_len = 5;
-	data->cmd = CMD_SET_TPC_RP;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_SET_TPC_RP, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_set_sink_path(const struct device *dev, bool en)
@@ -1274,19 +1284,16 @@ static int rts54_set_sink_path(const struct device *dev, bool en)
 		byte = VBSIN_EN_OFF;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		FORCE_SET_POWER_SWITCH.cmd,
+		FORCE_SET_POWER_SWITCH.len,
+		FORCE_SET_POWER_SWITCH.sub,
+		0x00,
+		byte,
+	};
 
-	data->wr_buf[0] = FORCE_SET_POWER_SWITCH.cmd;
-	data->wr_buf[1] = FORCE_SET_POWER_SWITCH.len;
-	data->wr_buf[2] = FORCE_SET_POWER_SWITCH.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = byte;
-	data->wr_buf_len = 5;
-	data->cmd = CMD_SET_SINK_PATH;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_SET_SINK_PATH, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_set_notification_enable(const struct device *dev,
@@ -1300,22 +1307,19 @@ static int rts54_set_notification_enable(const struct device *dev,
 		return -EBUSY;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		SET_NOTIFICATION_ENABLE.cmd,
+		SET_NOTIFICATION_ENABLE.len,
+		SET_NOTIFICATION_ENABLE.sub,
+		0x00,
+		BYTE0(bits.raw_value),
+		BYTE1(bits.raw_value),
+		BYTE0(ext_bits),
+		BYTE1(ext_bits),
+	};
 
-	data->wr_buf[0] = SET_NOTIFICATION_ENABLE.cmd;
-	data->wr_buf[1] = SET_NOTIFICATION_ENABLE.len;
-	data->wr_buf[2] = SET_NOTIFICATION_ENABLE.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = BYTE0(bits.raw_value);
-	data->wr_buf[5] = BYTE1(bits.raw_value);
-	data->wr_buf[6] = BYTE0(ext_bits);
-	data->wr_buf[7] = BYTE1(ext_bits);
-	data->wr_buf_len = 8;
-	data->cmd = CMD_SET_NOTIFICATION_ENABLE;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_SET_NOTIFICATION_ENABLE, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_get_capability(const struct device *dev,
@@ -1331,19 +1335,15 @@ static int rts54_get_capability(const struct device *dev,
 		return -EINVAL;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		GET_CAPABILITY.cmd,
+		GET_CAPABILITY.len,
+		GET_CAPABILITY.sub,
+		0x00,
+	};
 
-	data->wr_buf[0] = GET_CAPABILITY.cmd;
-	data->wr_buf[1] = GET_CAPABILITY.len;
-	data->wr_buf[2] = GET_CAPABILITY.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf_len = 4;
-	data->user_buf = (uint8_t *)caps;
-	data->cmd = CMD_GET_CAPABILITY;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_GET_CAPABILITY, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_get_connector_capability(const struct device *dev,
@@ -1359,19 +1359,15 @@ static int rts54_get_connector_capability(const struct device *dev,
 		return -EINVAL;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		GET_CONNECTOR_CAPABILITY.cmd,
+		GET_CONNECTOR_CAPABILITY.len,
+		GET_CONNECTOR_CAPABILITY.sub,
+		0x00,
+	};
 
-	data->wr_buf[0] = GET_CONNECTOR_CAPABILITY.cmd;
-	data->wr_buf[1] = GET_CONNECTOR_CAPABILITY.len;
-	data->wr_buf[2] = GET_CONNECTOR_CAPABILITY.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf_len = 4;
-	data->user_buf = (uint8_t *)caps;
-	data->cmd = CMD_GET_CONNECTOR_CAPABILITY;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_GET_CONNECTOR_CAPABILITY, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_get_connector_status(const struct device *dev,
@@ -1410,19 +1406,15 @@ static int rts54_get_error_status(const struct device *dev,
 		return -EINVAL;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		UCSI_GET_ERROR_STATUS.cmd,
+		UCSI_GET_ERROR_STATUS.len,
+		UCSI_GET_ERROR_STATUS.sub,
+		0x00,
+	};
 
-	data->wr_buf[0] = UCSI_GET_ERROR_STATUS.cmd;
-	data->wr_buf[1] = UCSI_GET_ERROR_STATUS.len;
-	data->wr_buf[2] = UCSI_GET_ERROR_STATUS.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf_len = 4;
-	data->user_buf = (uint8_t *)es;
-	data->cmd = CMD_GET_ERROR_STATUS;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_GET_ERROR_STATUS, payload,
+				  ARRAY_SIZE(payload), (uint8_t *)es);
 }
 
 static int rts54_set_rdo(const struct device *dev, uint32_t rdo)
@@ -1433,22 +1425,13 @@ static int rts54_set_rdo(const struct device *dev, uint32_t rdo)
 		return -EBUSY;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		SET_RDO.cmd, SET_RDO.len, SET_RDO.sub, 0x00,
+		BYTE0(rdo),  BYTE1(rdo),  BYTE2(rdo),  BYTE3(rdo),
+	};
 
-	data->wr_buf[0] = SET_RDO.cmd;
-	data->wr_buf[1] = SET_RDO.len;
-	data->wr_buf[2] = SET_RDO.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = BYTE0(rdo);
-	data->wr_buf[5] = BYTE1(rdo);
-	data->wr_buf[6] = BYTE2(rdo);
-	data->wr_buf[7] = BYTE3(rdo);
-	data->wr_buf_len = 8;
-	data->cmd = CMD_SET_RDO;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_SET_RDO, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_get_rdo(const struct device *dev, uint32_t *rdo)
@@ -1463,19 +1446,15 @@ static int rts54_get_rdo(const struct device *dev, uint32_t *rdo)
 		return -EINVAL;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		GET_RDO.cmd,
+		GET_RDO.len,
+		GET_RDO.sub,
+		0x00,
+	};
 
-	data->wr_buf[0] = GET_RDO.cmd;
-	data->wr_buf[1] = GET_RDO.len;
-	data->wr_buf[2] = GET_RDO.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf_len = 4;
-	data->user_buf = (uint8_t *)rdo;
-	data->cmd = CMD_GET_RDO;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_GET_RDO, payload,
+				  ARRAY_SIZE(payload), (uint8_t *)rdo);
 }
 
 static int rts54_get_pdos(const struct device *dev, enum pdo_type_t pdo_type,
@@ -1496,22 +1475,14 @@ static int rts54_get_pdos(const struct device *dev, enum pdo_type_t pdo_type,
 	byte4 = (num_pdos << 5) | (pdo_offset << 2) | (port_partner_pdo << 1) |
 		pdo_type;
 
-	memset((uint8_t *)pdos, 0, 4 * num_pdos);
+	memset((uint8_t *)pdos, 0, sizeof(uint32_t) * num_pdos);
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		GET_PDOS.cmd, GET_PDOS.len, GET_PDOS.sub, 0x00, byte4,
+	};
 
-	data->wr_buf[0] = GET_PDOS.cmd;
-	data->wr_buf[1] = GET_PDOS.len;
-	data->wr_buf[2] = GET_PDOS.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = byte4;
-	data->wr_buf_len = 5;
-	data->user_buf = (uint8_t *)pdos;
-	data->cmd = CMD_GET_PDOS;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_GET_PDOS, payload,
+				  ARRAY_SIZE(payload), (uint8_t *)pdos);
 }
 
 static int rts54_get_info(const struct device *dev, struct pdc_info_t *info)
@@ -1526,20 +1497,16 @@ static int rts54_get_info(const struct device *dev, struct pdc_info_t *info)
 		return -EINVAL;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		GET_IC_STATUS.cmd,
+		GET_IC_STATUS.len,
+		GET_IC_STATUS.sub,
+		0x00,
+		26,
+	};
 
-	data->wr_buf[0] = GET_IC_STATUS.cmd;
-	data->wr_buf[1] = GET_IC_STATUS.len;
-	data->wr_buf[2] = GET_IC_STATUS.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = 26;
-	data->wr_buf_len = 5;
-	data->user_buf = (uint8_t *)info;
-	data->cmd = CMD_GET_IC_STATUS;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_GET_IC_STATUS, payload,
+				  ARRAY_SIZE(payload), (uint8_t *)info);
 }
 
 static int rts54_get_vbus_voltage(const struct device *dev, uint16_t *voltage)
@@ -1594,19 +1561,16 @@ static int rts54_set_ccom(const struct device *dev, enum ccom_t ccom,
 	/* We always want Accessory Support */
 	byte |= (1 << 2);
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		SET_TPC_CSD_OPERATION_MODE.cmd,
+		SET_TPC_CSD_OPERATION_MODE.len,
+		SET_TPC_CSD_OPERATION_MODE.sub,
+		0x00,
+		byte,
+	};
 
-	data->wr_buf[0] = SET_TPC_CSD_OPERATION_MODE.cmd;
-	data->wr_buf[1] = SET_TPC_CSD_OPERATION_MODE.len;
-	data->wr_buf[2] = SET_TPC_CSD_OPERATION_MODE.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = byte;
-	data->wr_buf_len = 5;
-	data->cmd = CMD_SET_CCOM;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_SET_CCOM, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_set_uor(const struct device *dev, union uor_t uor)
@@ -1617,19 +1581,12 @@ static int rts54_set_uor(const struct device *dev, union uor_t uor)
 		return -EBUSY;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		SET_UOR.cmd, SET_UOR.len, SET_UOR.sub, 0x00, uor.raw_value,
+	};
 
-	data->wr_buf[0] = SET_UOR.cmd;
-	data->wr_buf[1] = SET_UOR.len;
-	data->wr_buf[2] = SET_UOR.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = uor.raw_value;
-	data->wr_buf_len = 5;
-	data->cmd = CMD_SET_UOR;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_SET_UOR, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_set_pdr(const struct device *dev, union pdr_t pdr)
@@ -1640,19 +1597,12 @@ static int rts54_set_pdr(const struct device *dev, union pdr_t pdr)
 		return -EBUSY;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		SET_PDR.cmd, SET_PDR.len, SET_PDR.sub, 0x00, pdr.raw_value,
+	};
 
-	data->wr_buf[0] = SET_PDR.cmd;
-	data->wr_buf[1] = SET_PDR.len;
-	data->wr_buf[2] = SET_PDR.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf[4] = pdr.raw_value;
-	data->wr_buf_len = 5;
-	data->cmd = CMD_SET_PDR;
-
-	k_mutex_unlock(&data->mtx);
-
-	return 0;
+	return rts54_post_command(dev, CMD_SET_PDR, payload,
+				  ARRAY_SIZE(payload), NULL);
 }
 
 static int rts54_get_current_pdo(const struct device *dev, uint32_t *pdo)
@@ -1667,17 +1617,15 @@ static int rts54_get_current_pdo(const struct device *dev, uint32_t *pdo)
 		return -EINVAL;
 	}
 
-	k_mutex_lock(&data->mtx, K_FOREVER);
+	uint8_t payload[] = {
+		GET_CURRENT_PARTNER_SRC_PDO.cmd,
+		GET_CURRENT_PARTNER_SRC_PDO.len,
+		GET_CURRENT_PARTNER_SRC_PDO.sub,
+		0x00,
+	};
 
-	data->wr_buf[0] = GET_CURRENT_PARTNER_SRC_PDO.cmd;
-	data->wr_buf[1] = GET_CURRENT_PARTNER_SRC_PDO.len;
-	data->wr_buf[2] = GET_CURRENT_PARTNER_SRC_PDO.sub;
-	data->wr_buf[3] = 0x00;
-	data->wr_buf_len = 4;
-	data->user_buf = (uint8_t *)pdo;
-	data->cmd = CMD_GET_CURRENT_PARTNER_SRC_PDO;
-
-	k_mutex_unlock(&data->mtx);
+	return rts54_post_command(dev, CMD_GET_CURRENT_PARTNER_SRC_PDO, payload,
+				  ARRAY_SIZE(payload), (uint8_t *)pdo);
 
 	return 0;
 }
