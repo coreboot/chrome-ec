@@ -302,9 +302,11 @@ struct max_var_container {
 
 /*
  * Limit of the number of objects which can be updated in one TPM transaction,
- * reserved and evictable total. This is much more than practical maximum.
+ * reserved and evictable total. Set it to number of reserved spaces + 4 as
+ * certain operations may result in updates (or clearing) of many reserved
+ * spaces and evictable objects.
  */
-#define MAX_DELETE_CANDIDATES 30
+#define MAX_DELETE_CANDIDATES (NV_VIRTUAL_RESERVE_LAST + 4)
 static struct delete_candidates {
 	size_t num_candidates;
 	const struct nn_container *candidates[MAX_DELETE_CANDIDATES];
