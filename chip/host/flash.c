@@ -44,10 +44,18 @@ static int flash_check_protect(int offset, int size)
 static void flash_set_persistent(void)
 {
 	FILE *f = get_persistent_storage("flash", "wb");
+	size_t write_count;
+
+	if (f == NULL)
+		perror(__func__);
 
 	ASSERT(f != NULL);
-
-	ASSERT(fwrite(__host_flash, sizeof(__host_flash), 1, f) == 1);
+	write_count = fwrite(__host_flash, sizeof(__host_flash), 1, f);
+	if (write_count != 1) {
+		perror("fwrite()");
+		fprintf(stderr, "fwrite() returned: %zu\n", write_count);
+	}
+	ASSERT(write_count == 1);
 
 	release_persistent_storage(f);
 }
@@ -56,7 +64,9 @@ static void flash_get_persistent(void)
 {
 	FILE *f = get_persistent_storage("flash", "rb");
 
-	if (f) {
+	if (f == NULL)
+		perror(__func__);
+	else {
 		if (fread(__host_flash, sizeof(__host_flash), 1, f) != 1) {
 			fprintf(stderr,
 				"Flash storage corrupted, init to 0xff.\n");
