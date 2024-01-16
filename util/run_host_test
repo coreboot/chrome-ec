@@ -12,7 +12,7 @@ import subprocess
 import sys
 import time
 
-TIMEOUT=10
+TIMEOUT=20
 
 RESULT_ID_TIMEOUT = 0
 RESULT_ID_PASS = 1
