@@ -142,19 +142,25 @@ BOOL _plat__ShallSurviveOwnerClear(uint32_t  index)
 	return index == HR_NV_INDEX + FWMP_NV_INDEX;
 }
 
+static void cleanup_report(const char *func, const char *id,
+			   enum ec_error_list status)
+{
+	if (status != EC_SUCCESS)
+		CPRINTF("%s: %s cleanup failed (%d)\n", func, id, status);
+}
+
 void _plat__OwnerClearCallback(void)
 {
-	int result;
-	enum ec_error_list rv;
-
 	/* Invalidate existing biometrics pairing secrets. */
-	result = setvar(PW_FP_PK, sizeof(PW_FP_PK) - 1, NULL, 0);
-	if (result)
-		CPRINTF("%s: failed (%d)\n", __func__, result);
+	cleanup_report(__func__, "pw pk",
+		       setvar(PW_FP_PK, sizeof(PW_FP_PK) - 1, NULL, 0));
+	cleanup_report(__func__, "pw tree",
+		       setvar(PW_TREE_VAR, sizeof(PW_TREE_VAR) - 1, NULL, 0));
+	cleanup_report(__func__, "pw log",
+		       setvar(PW_LOG_VAR0, sizeof(PW_LOG_VAR0) - 1, NULL, 0));
+
 	/* Invalidate existing u2f registrations. */
-	rv = u2f_gen_kek_seed();
-	if (rv != EC_SUCCESS)
-		CPRINTF("%s: failed (%d)\n", __func__, rv);
+	cleanup_report(__func__, "u2f", u2f_zeroize_keys());
 }
 
 /* Prints the contents of pcr0 */
