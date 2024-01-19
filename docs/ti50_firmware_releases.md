@@ -8,8 +8,8 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.70        | 0.23.70
-M122                | 0.24.70        | 0.23.70
+[ToT][ToT ebuild]   | 0.24.71        | 0.23.71
+M122                | 0.24.71        | 0.23.71
 [M121][121 release] | 0.24.62        | 0.23.62
 [M120][120 release] | 0.24.60        | 0.23.60
 [M119][119 release] | 0.24.51        | 0.23.51
@@ -615,6 +615,33 @@ Build:   ti50_common_mp-15224.B:v0.0.876-5b460716
          tock:v0.0.9663-71efb979a
          ms-tpm-20-ref:v0.0.331-6f7f352
          @chromeos-ci-firmware-us-east1-d-x32-0-z9ng 2024-01-12 12:55:08
+```
+
+### 0.23.71 Released on 1/19/2024 in M122
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5217758)
+
+Builder
+[53](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15224.B-branch/53/overview)
+
+Artifacts:
+[15224.50.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.50.0)
+
+**Features**
+
+*   Change default write protect setting to force enabled (does not follow
+    chassis open gpio by default)
+    [b/257255419](https://b.corp.google.com/issues/257255419)
+*   Enforce system reset upon AP RO verification failure.
+    [b/259098185](https://b.corp.google.com/issues/259098185)
+
+```
+Build:   ti50_common_mp-15224.B:v0.0.879-637bdde3
+         libtock-rs:v0.0.929-0b84d08
+         tock:v0.0.9663-71efb979a
+         ms-tpm-20-ref:v0.0.331-6f7f352
+         @chromeos-ci-firmware-us-central1-b-x32-0-e7r7 2024-01-17 14:47:03
 ```
 
 ## PrePVT images
@@ -1434,6 +1461,31 @@ Build:   ti50_common_prepvt-15086.B:v0.0.931-91dec51b
          tock:v0.0.9662-478a746e5
          ms-tpm-20-ref:v0.0.329-138a187
          @chromeos-ci-firmware-us-central1-b-x32-0-j5k1 2024-01-05 19:41:43
+```
+
+### 0.24.71 Released on 1/19/2024 in M122
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5217757)
+
+Builder
+[79](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15086.B-branch/79/overview)
+
+Artifacts:
+[15086.74.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.74.0)
+
+**Features**
+
+*   Change default write protect setting to force enabled (does not follow
+    chassis open gpio by default)
+    [b/257255419](https://b.corp.google.com/issues/257255419)
+
+```
+Build:   ti50_common_prepvt-15086.B:v0.0.934-720e4c92
+         libtock-rs:v0.0.929-ecde39c
+         tock:v0.0.9662-478a746e5
+         ms-tpm-20-ref:v0.0.329-138a187
+         @chromeos-ci-firmware-us-central1-b-x32-0-e7r7 2024-01-17 13:26:11
 ```
 
 <!-- Links -->
