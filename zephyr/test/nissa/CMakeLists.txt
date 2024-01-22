@@ -14,6 +14,13 @@ zephyr_include_directories(
 
 target_sources(app PRIVATE src/stubs.c)
 
+if(CONFIG_TEST_NISSA_BOARD_POWER)
+    # Test source
+    target_sources(app PRIVATE src/board_power.c)
+    # Module under test
+    target_sources(app PRIVATE ${PLATFORM_EC_PROGRAM_DIR}/nissa/src/board_power.c)
+endif()
+
 target_sources_ifdef(
         CONFIG_TEST_NISSA_SUB_BOARD
         app PRIVATE
@@ -124,6 +131,18 @@ if(CONFIG_TEST_NISSA_CRAASK)
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/thermal.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/touch_panel.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_CRAASKOV)
+    zephyr_include_directories("${PLATFORM_EC_PROGRAM_DIR}/nissa/craaskov/include")
+    target_sources(
+	    app PRIVATE
+	    src/craaskov.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craaskov/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/craaskov/src/hdmi.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craaskov/src/keyboard.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craaskov/src/usbc.c
     )
 endif()
 

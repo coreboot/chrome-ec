@@ -295,6 +295,7 @@ struct pdc_data_t {
  */
 static const char *const cmd_names[] = {
 	[CMD_NONE] = "",
+	[CMD_TRIGGER_PDC_RESET] = "TRIGGER_PDC_RESET",
 	[CMD_VENDOR_ENABLE] = "VENDOR_ENABLE",
 	[CMD_SET_NOTIFICATION_ENABLE] = "SET_NOTIFICATION_ENABLE",
 	[CMD_PPM_RESET] = "PPM_RESET",
@@ -445,6 +446,8 @@ static void st_init_entry(void *o)
 	struct pdc_data_t *data = (struct pdc_data_t *)o;
 
 	print_current_state(data);
+
+	data->cmd = CMD_NONE;
 }
 
 static void st_init_run(void *o)
@@ -848,7 +851,7 @@ static void st_read_run(void *o)
 		cs->conn_partner_flags = data->rd_buf[6];
 
 		/* Realtek Connector Partner Type: Byte11, Bit0:2 */
-		cs->conn_partner_flags = (data->rd_buf[11] & 7);
+		cs->conn_partner_type = (data->rd_buf[11] & 7);
 
 		/* Realtek RDO: Bytes [7:10] */
 		cs->rdo = data->rd_buf[10] << 24 | data->rd_buf[9] << 16 |
@@ -1097,8 +1100,7 @@ static int rts54_get_rtk_status(const struct device *dev, uint8_t offset,
 		len,
 	};
 
-	return rts54_post_command(dev, CMD_VENDOR_ENABLE, payload,
-				  ARRAY_SIZE(payload), buf);
+	return rts54_post_command(dev, cmd, payload, ARRAY_SIZE(payload), buf);
 }
 
 static int rts54_get_ucsi_version(const struct device *dev, uint16_t *version)
@@ -1343,7 +1345,7 @@ static int rts54_get_capability(const struct device *dev,
 	};
 
 	return rts54_post_command(dev, CMD_GET_CAPABILITY, payload,
-				  ARRAY_SIZE(payload), NULL);
+				  ARRAY_SIZE(payload), (uint8_t *)caps);
 }
 
 static int rts54_get_connector_capability(const struct device *dev,
@@ -1367,7 +1369,7 @@ static int rts54_get_connector_capability(const struct device *dev,
 	};
 
 	return rts54_post_command(dev, CMD_GET_CONNECTOR_CAPABILITY, payload,
-				  ARRAY_SIZE(payload), NULL);
+				  ARRAY_SIZE(payload), (uint8_t *)caps);
 }
 
 static int rts54_get_connector_status(const struct device *dev,
