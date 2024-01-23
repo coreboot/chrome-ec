@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "board_id.h"
 #include "byteorder.h"
 #include "ccd_config.h"
 #include "console.h"
@@ -561,6 +562,57 @@ void disable_ap_spi_hash_shortcut(void)
 	shortcut_active_ = false;
 }
 
+/* b/208272950 allow spi hash on supported devices. */
+/* RLZs that use spi hash. */
+#define ALLOWED_SPI_HASH_BID_COUNT 3
+const uint32_t spi_hash_bid_allowlist[] = {
+	0x4e425153, /* NBQS */
+	0x58574a45, /* XWJE */
+	0x5a5a4146, /* ZZAF */
+};
+BUILD_ASSERT(ARRAY_SIZE(spi_hash_bid_allowlist) == ALLOWED_SPI_HASH_BID_COUNT);
+#define SPI_HASH_ALLOW_BID 1
+#define SPI_HASH_BLOCK_BID 2
+
+/* Returns true if spi hash is supported based on the chip RLZ. */
+bool spi_hash_bid_allowed(void)
+{
+	static int checked_spi_hash_bid;
+	struct board_id id;
+	int i;
+
+	/* Don't allow spi hash access if there's a board id mismatch. */
+	if (board_id_is_mismatched())
+		return false;
+
+	if (checked_spi_hash_bid)
+		return checked_spi_hash_bid == SPI_HASH_ALLOW_BID;
+
+	/*
+	 * If cr50 can't read the board id for some reason, block spi hash
+	 * access.
+	 */
+	if (read_board_id(&id) != EC_SUCCESS) {
+		CPRINTS("%s: BID read error", __func__);
+		return false;
+	}
+
+	if (board_id_is_blank(&id))
+		return true;
+
+	/*
+	 * Cache the board id block state, so cr50 doesn't need to keep reading
+	 * and checking the RLZ. The board id can't change if it's already set.
+	 */
+	checked_spi_hash_bid = SPI_HASH_BLOCK_BID;
+	for (i = 0; i < ARRAY_SIZE(spi_hash_bid_allowlist); i++) {
+		if (id.type == spi_hash_bid_allowlist[i]) {
+			checked_spi_hash_bid = SPI_HASH_ALLOW_BID;
+			break;
+		}
+	}
+	return checked_spi_hash_bid == SPI_HASH_ALLOW_BID;
+}
 /* Process vendor subcommand dealing with Physical presence polling. */
 static enum vendor_cmd_rc spihash_pp_poll(void *buf,
 					  size_t input_size,
@@ -842,6 +894,10 @@ static enum vendor_cmd_rc vc_spi_hash_wrapper(struct vendor_cmd_params *p)
 	 */
 	if (!(p->flags & (VENDOR_CMD_FROM_USB | VENDOR_CMD_FROM_ALT_IF))) {
 		CPRINTS("%s: not allowed from AP", __func__);
+		return VENDOR_RC_NOT_ALLOWED;
+	}
+	if (!spi_hash_bid_allowed()) {
+		CPRINTS("%s: unsupported BID", __func__);
 		return VENDOR_RC_NOT_ALLOWED;
 	}
 	return handle_spi_hash_vc(p->code, p->buffer, p->in_size, &p->out_size);
