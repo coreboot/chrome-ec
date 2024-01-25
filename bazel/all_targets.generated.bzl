@@ -536,6 +536,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "deku",
+        board = "deku",
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
+    )
+    ec_target(
         name = "delbin",
         baseboard = "volteer",
         board = "delbin",
@@ -668,14 +673,6 @@ def all_targets():
         board = "drawcia",
         chip = "it83xx",
         core = "nds32",
-        zephyr = False,
-    )
-    ec_target(
-        name = "drawcia_riscv",
-        baseboard = "dedede",
-        board = "drawcia_riscv",
-        chip = "it83xx",
-        core = "riscv-rv32i",
         zephyr = False,
     )
     ec_target(
@@ -2310,6 +2307,10 @@ def all_targets():
         name = "winterhold",
         board = "winterhold",
         extra_modules = ["cmsis", "picolibc", "pigweed"],
+    )
+    ec_target(
+        name = "woobat",
+        board = "woobat",
     )
     ec_target(
         name = "woomax",

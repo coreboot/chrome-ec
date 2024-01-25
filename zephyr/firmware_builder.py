@@ -331,9 +331,10 @@ def test(opts):
 
     if opts.code_coverage:
         build_dir = platform_ec / "build" / "zephyr"
-        _extract_lcov_summary(
-            "EC_ZEPHYR_TESTS", metrics, twister_out_dir / "coverage.info"
-        )
+        if twister_out_dir.exists():
+            _extract_lcov_summary(
+                "EC_ZEPHYR_TESTS", metrics, twister_out_dir / "coverage.info"
+            )
         _extract_lcov_summary(
             "EC_ZEPHYR_TESTS_GCC",
             metrics,
@@ -374,6 +375,8 @@ def _extract_lcov_summary(name, metrics, filename):
     zephyr_dir = pathlib.Path(__file__).parent.resolve()
     cmd = [
         "/usr/bin/lcov",
+        "--ignore-errors",
+        "inconsistent",
         "--summary",
         filename,
     ]
