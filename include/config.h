@@ -476,11 +476,6 @@
 #undef CONFIG_BATTERY_CONFIG_IN_CBI
 
 /*
- * Config to indicate the battery type that cannot be auto detected.
- */
-#undef CONFIG_BATTERY_TYPE_NO_AUTO_DETECT
-
-/*
  * Compile battery-specific code.
  *
  * Note that some boards have their own unique battery constants / functions.
@@ -3488,7 +3483,7 @@
 #endif /* CONFIG_ZEPHYR */
 
 /* Provide rudimentary malloc/free like services for shared memory. */
-#undef CONFIG_MALLOC
+#undef CONFIG_SHARED_MALLOC
 
 /* Need for a math library */
 #undef CONFIG_MATH_UTIL
@@ -5301,7 +5296,9 @@
 #undef CONFIG_USBC_PPC_AOZ1380
 #undef CONFIG_USBC_PPC_KTU1125
 #undef CONFIG_USBC_PPC_NX20P3481
+#ifndef CONFIG_ZEPHYR
 #undef CONFIG_USBC_PPC_NX20P3483
+#endif /* CONFIG_ZEPHYR */
 #undef CONFIG_USBC_PPC_RT1718S
 #undef CONFIG_USBC_PPC_SN5S330
 #undef CONFIG_USBC_PPC_SYV682C
