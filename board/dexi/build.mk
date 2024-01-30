@@ -14,4 +14,3 @@ BOARD:=dexi
 
 board-y=board.o led.o usb_pd_policy.o
 board-y+=pwm.o
-board-y+=sensors.o
