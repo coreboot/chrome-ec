@@ -3332,6 +3332,10 @@ enum ec_error_list nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 	if (!crypto_enabled())
 		return EC_ERROR_INVAL;
 
+	/* If not whole NVmem is wiped save current content. */
+	if (objs_to_erase)
+		new_nvmem_save();
+
 	ch = get_scratch_buffer(CONFIG_FLASH_BANK_SIZE);
 
 	lock_mutex(__LINE__);
