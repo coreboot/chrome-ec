@@ -6,8 +6,7 @@
 #include "accelgyro.h"
 #include "adc.h"
 #include "common.h"
-#include "driver/accel_lis2dw12.h"
-#include "driver/accelgyro_lsm6dso.h"
+#include "driver/accel_lis2dh.h"
 #include "gpio.h"
 #include "hooks.h"
 #include "motion_sense.h"
@@ -50,91 +49,71 @@ BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 K_MUTEX_DEFINE(g_lid_accel_mutex);
 K_MUTEX_DEFINE(g_base_accel_mutex);
-static struct stprivate_data g_lis2dw12_data;
-static struct lsm6dso_data lsm6dso_data;
+/* Lid accel private data */
+static struct stprivate_data g_lis2dh_lid_data;
+/* Base accel private data */
+static struct stprivate_data g_lis2dh_base_data;
 
-/* TODO(b/184779333): calibrate the orientation matrix on later board stage */
-static const mat33_fp_t lid_standard_ref = { { 0, FLOAT_TO_FP(1), 0 },
-					     { FLOAT_TO_FP(1), 0, 0 },
+/* calibrate the orientation matrix on board stage */
+static const mat33_fp_t lid_standard_ref = { { FLOAT_TO_FP(-1), 0, 0 },
+					     { 0, FLOAT_TO_FP(1), 0 },
 					     { 0, 0, FLOAT_TO_FP(-1) } };
 
-/* TODO(b/184779743): verify orientation matrix */
-static const mat33_fp_t base_standard_ref = { { FLOAT_TO_FP(1), 0, 0 },
-					      { 0, FLOAT_TO_FP(-1), 0 },
-					      { 0, 0, FLOAT_TO_FP(-1) } };
+/* verify orientation matrix */
+static const mat33_fp_t base_standard_ref = { { 0, FLOAT_TO_FP(1), 0 },
+					      { FLOAT_TO_FP(-1), 0, 0 },
+					      { 0, 0, FLOAT_TO_FP(1) } };
 
 struct motion_sensor_t motion_sensors[] = {
 	[LID_ACCEL] = {
 		.name = "Lid Accel",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LIS2DW12,
+		.chip = MOTIONSENSE_CHIP_LIS2DH,
 		.type = MOTIONSENSE_TYPE_ACCEL,
 		.location = MOTIONSENSE_LOC_LID,
-		.drv = &lis2dw12_drv,
+		.drv = &lis2dh_drv,
 		.mutex = &g_lid_accel_mutex,
-		.drv_data = &g_lis2dw12_data,
+		.drv_data = &g_lis2dh_lid_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LIS2DW12_ADDR0,
+		.i2c_spi_addr_flags = LIS2DH_ADDR0_FLAGS,
 		.rot_standard_ref = &lid_standard_ref, /* identity matrix */
 		.default_range = 2, /* g */
-		.min_frequency = LIS2DW12_ODR_MIN_VAL,
-		.max_frequency = LIS2DW12_ODR_MAX_VAL,
+		.min_frequency = LIS2DH_ODR_MIN_VAL,
+		.max_frequency = LIS2DH_ODR_MAX_VAL,
 		.config = {
 			/* EC use accel for angle detection */
 			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 10000 | ROUND_UP_FLAG,
+				.odr = 12500 | ROUND_UP_FLAG,
 			},
 			/* Sensor on for lid angle detection */
 			[SENSOR_CONFIG_EC_S3] = {
-				.odr = 10000 | ROUND_UP_FLAG,
+				.odr = 12500 | ROUND_UP_FLAG,
 			},
 		},
 	},
-
 	[BASE_ACCEL] = {
 		.name = "Base Accel",
 		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LSM6DSO,
+		.chip = MOTIONSENSE_CHIP_LIS2DH,
 		.type = MOTIONSENSE_TYPE_ACCEL,
 		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &lsm6dso_drv,
+		.drv = &lis2dh_drv,
 		.mutex = &g_base_accel_mutex,
-		.drv_data = LSM6DSO_ST_DATA(lsm6dso_data,
-				MOTIONSENSE_TYPE_ACCEL),
+		.drv_data = &g_lis2dh_base_data,
 		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LSM6DSO_ADDR0_FLAGS,
+		.i2c_spi_addr_flags = LIS2DH_ADDR1_FLAGS,
 		.rot_standard_ref = &base_standard_ref,
-		.default_range = 4,  /* g */
-		.min_frequency = LSM6DSO_ODR_MIN_VAL,
-		.max_frequency = LSM6DSO_ODR_MAX_VAL,
+		.default_range = 2,  /* g */
+		.min_frequency = LIS2DH_ODR_MIN_VAL,
+		.max_frequency = LIS2DH_ODR_MAX_VAL,
 		.config = {
 			[SENSOR_CONFIG_EC_S0] = {
-				.odr = 13000 | ROUND_UP_FLAG,
-				.ec_rate = 100 * MSEC,
+				.odr = 12500 | ROUND_UP_FLAG,
 			},
 			[SENSOR_CONFIG_EC_S3] = {
-				.odr = 10000 | ROUND_UP_FLAG,
-				.ec_rate = 100 * MSEC,
+				.odr = 12500 | ROUND_UP_FLAG,
 			},
 		},
-	},
-
-	[BASE_GYRO] = {
-		.name = "Base Gyro",
-		.active_mask = SENSOR_ACTIVE_S0_S3,
-		.chip = MOTIONSENSE_CHIP_LSM6DSO,
-		.type = MOTIONSENSE_TYPE_GYRO,
-		.location = MOTIONSENSE_LOC_BASE,
-		.drv = &lsm6dso_drv,
-		.mutex = &g_base_accel_mutex,
-		.drv_data = LSM6DSO_ST_DATA(lsm6dso_data,
-				MOTIONSENSE_TYPE_GYRO),
-		.port = I2C_PORT_SENSOR,
-		.i2c_spi_addr_flags = LSM6DSO_ADDR0_FLAGS,
-		.default_range = 1000 | ROUND_UP_FLAG, /* dps */
-		.rot_standard_ref = &base_standard_ref,
-		.min_frequency = LSM6DSO_ODR_MIN_VAL,
-		.max_frequency = LSM6DSO_ODR_MAX_VAL,
 	},
 };
 const unsigned int motion_sensor_count = ARRAY_SIZE(motion_sensors);
@@ -178,22 +157,18 @@ BUILD_ASSERT(ARRAY_SIZE(temp_sensors) == TEMP_SENSOR_COUNT);
  * 130 C.  However, sensor is located next to DDR, so we need to use the lower
  * DDR temperature limit (85 C)
  */
-/*
- * TODO(b/202062363): Remove when clang is fixed.
- */
-#define THERMAL_CPU              \
-	{                        \
-		.temp_host = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(85), \
-			[EC_TEMP_THRESH_HALT] = C_TO_K(90), \
-		}, \
-		.temp_host_release = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80), \
-		}, \
-		.temp_fan_off = C_TO_K(35), \
-		.temp_fan_max = C_TO_K(60), \
-	}
-__maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
+static const struct ec_thermal_config thermal_cpu = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_fan_off = 0,
+	.temp_fan_max = 0,
+};
 
 /*
  * TODO(b/180681346): update for Alder Lake/brya
@@ -208,23 +183,18 @@ __maybe_unused static const struct ec_thermal_config thermal_cpu = THERMAL_CPU;
  * Inductors: limit of 125c
  * PCB: limit is 80c
  */
-/*
- * TODO(b/202062363): Remove when clang is fixed.
- */
-#define THERMAL_AMBIENT          \
-	{                        \
-		.temp_host = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(85), \
-			[EC_TEMP_THRESH_HALT] = C_TO_K(90), \
-		}, \
-		.temp_host_release = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(80), \
-		}, \
-		.temp_fan_off = C_TO_K(35), \
-		.temp_fan_max = C_TO_K(60), \
-	}
-__maybe_unused static const struct ec_thermal_config thermal_ambient =
-	THERMAL_AMBIENT;
+static const struct ec_thermal_config thermal_ambient = {
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_fan_off = C_TO_K(38),
+	.temp_fan_max = C_TO_K(75),
+};
 
 /*
  * Inductor limits - used for both charger and PP3300 regulator
@@ -237,27 +207,38 @@ __maybe_unused static const struct ec_thermal_config thermal_ambient =
  * Inductors: limit of 125c
  * PCB: limit is 80c
  */
-/*
- * TODO(b/202062363): Remove when clang is fixed.
- */
-#define THERMAL_CHARGER          \
-	{                        \
-		.temp_host = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(105), \
-			[EC_TEMP_THRESH_HALT] = C_TO_K(120), \
-		}, \
-		.temp_host_release = { \
-			[EC_TEMP_THRESH_HIGH] = C_TO_K(90), \
-		}, \
-		.temp_fan_off = C_TO_K(35), \
-		.temp_fan_max = C_TO_K(65), \
-	}
-__maybe_unused static const struct ec_thermal_config thermal_charger =
-	THERMAL_CHARGER;
+static const struct ec_thermal_config thermal_charger =	{
+	.temp_host = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(85),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(70),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(80),
+	},
+	.temp_fan_off = 0,
+	.temp_fan_max = 0,
+};
 
 struct ec_thermal_config thermal_params[] = {
-	[TEMP_SENSOR_1_DDR_SOC] = THERMAL_CPU,
-	[TEMP_SENSOR_2_AMBIENT] = THERMAL_AMBIENT,
-	[TEMP_SENSOR_3_CHARGER] = THERMAL_CHARGER,
+	[TEMP_SENSOR_1_DDR_SOC] = thermal_cpu,
+	[TEMP_SENSOR_2_AMBIENT] = thermal_ambient,
+	[TEMP_SENSOR_3_CHARGER] = thermal_charger,
 };
 BUILD_ASSERT(ARRAY_SIZE(thermal_params) == TEMP_SENSOR_COUNT);
+
+static void board_sensors_init(void)
+{
+	/* Enable gpio interrupt for base accelgyro sensor */
+	gpio_enable_interrupt(GPIO_EC_IMU_INT_R_L);
+	gpio_enable_interrupt(GPIO_EC_ACCEL_INT_R_L);
+}
+DECLARE_HOOK(HOOK_INIT, board_sensors_init, HOOK_PRIO_INIT_I2C + 1);
+
+void motion_interrupt(enum gpio_signal signal)
+{
+}
+
+void lid_accel_interrupt(enum gpio_signal signal)
+{
+}

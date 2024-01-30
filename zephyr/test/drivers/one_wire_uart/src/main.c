@@ -4,9 +4,12 @@
  */
 #include "drivers/one_wire_uart.h"
 #include "drivers/one_wire_uart_internal.h"
+#include "test/drivers/test_state.h"
+#include "test/drivers/utils.h"
 #include "timer.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
@@ -248,13 +251,112 @@ ZTEST(one_wire_uart_driver, test_bad_packet_length)
 	zassert_equal(ring_buf_size_get(data->rx_ring_buf), 0);
 }
 
-static void one_wire_uart_driver_before(void *fixture)
+ZTEST(one_wire_uart_driver, test_reset)
+{
+	struct one_wire_uart_data *data = dev->data;
+	struct one_wire_uart_message msg;
+
+	memset(&msg, 0, sizeof(msg));
+	msg.header.magic = 0xEC;
+	msg.header.sender = 1;
+	msg.header.msg_id = 11;
+	msg.header.reset = 1;
+	msg.header.checksum = 0;
+	msg.header.checksum = checksum(&msg);
+	ring_buf_put(data->rx_ring_buf, (uint8_t *)&msg, sizeof(msg.header));
+
+	ring_buf_put(data->tx_ring_buf, "123", 3);
+
+	process_rx_fifo(dev);
+
+	/* expect that
+	 * 1. the junk data in tx_ring_buf is cleared
+	 * 2. an ack message is push into tx_ring_buf
+	 */
+	zassert_equal(ring_buf_size_get(data->tx_ring_buf), sizeof(msg.header));
+	ring_buf_get(data->tx_ring_buf, (uint8_t *)&msg, sizeof(msg.header));
+	zassert_equal(msg.header.ack, 1);
+	zassert_equal(msg.header.msg_id, 11);
+	zassert_equal(msg.header.reset, 0);
+}
+
+ZTEST(one_wire_uart_driver, test_max_retry_count)
+{
+	struct one_wire_uart_data *data = dev->data;
+	struct one_wire_uart_message msg;
+	const int MAX_RETRY = 10;
+	const k_timeout_t RESEND_DELAY = K_MSEC(3);
+
+	memset(&msg, 0, sizeof(msg));
+	msg.header.magic = 0xEC;
+	msg.header.sender = 1;
+	msg.header.msg_id = 11;
+	msg.header.checksum = 0;
+	msg.header.checksum = checksum(&msg);
+	k_msgq_put(data->tx_queue, &msg, K_NO_WAIT);
+
+	for (int i = 0; i < MAX_RETRY; i++) {
+		ring_buf_reset(data->tx_ring_buf);
+		k_sleep(RESEND_DELAY);
+		process_tx_irq(dev);
+		zassert_equal(data->retry_count, i + 1);
+	}
+
+	/* expect that RESET message is queued */
+	ring_buf_reset(data->tx_ring_buf);
+	k_sleep(RESEND_DELAY);
+	process_tx_irq(dev);
+	/* wait for deferred task */
+	k_sleep(K_SECONDS(1));
+	zassert_ok(k_msgq_peek(data->tx_queue, &msg));
+	zassert_equal(msg.header.reset, 1);
+
+	/* send RETRY 10 times */
+	for (int i = 0; i < MAX_RETRY; i++) {
+		ring_buf_reset(data->tx_ring_buf);
+		k_sleep(RESEND_DELAY);
+		process_tx_irq(dev);
+		zassert_equal(data->retry_count, i + 1);
+	}
+
+	/* expect that nothing queued when failed to send RETRY */
+	ring_buf_reset(data->tx_ring_buf);
+	k_sleep(RESEND_DELAY);
+	process_tx_irq(dev);
+	zassert_equal(k_msgq_num_used_get(data->tx_queue), 0);
+}
+
+struct one_wire_uart_fixture {
+	one_wire_uart_msg_received_cb_t orig_cb;
+};
+
+static void *one_wire_uart_setup(void)
+{
+	struct one_wire_uart_data *data = dev->data;
+
+	struct one_wire_uart_fixture *fixture =
+		malloc(sizeof(struct one_wire_uart_fixture));
+
+	fixture->orig_cb = data->msg_received_cb;
+	one_wire_uart_set_callback(dev, on_message_received);
+
+	return fixture;
+}
+
+static void one_wire_uart_driver_before(void *f)
 {
 	one_wire_uart_reset(dev);
 
 	RESET_FAKE(on_message_received);
-	one_wire_uart_set_callback(dev, on_message_received);
 }
 
-ZTEST_SUITE(one_wire_uart_driver, NULL, NULL, one_wire_uart_driver_before, NULL,
-	    NULL);
+static void one_wire_uart_teardown(void *f)
+{
+	struct one_wire_uart_fixture *fixture = f;
+
+	one_wire_uart_set_callback(dev, fixture->orig_cb);
+}
+
+ZTEST_SUITE(one_wire_uart_driver, drivers_predicate_post_main,
+	    one_wire_uart_setup, one_wire_uart_driver_before, NULL,
+	    one_wire_uart_teardown);

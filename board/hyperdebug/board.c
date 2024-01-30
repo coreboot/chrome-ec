@@ -23,8 +23,11 @@
 
 void board_config_pre_init(void)
 {
-	/* enable SYSCFG clock */
-	STM32_RCC_APB2ENR |= STM32_RCC_SYSCFGEN;
+	/* We know VDDIO2 is present, enable the GPIO circuit. */
+	STM32_PWR_CR2 |= STM32_PWR_CR2_IOSV;
+
+	/* Peripheral clock derived by dividing core clock by 4. */
+	STM32_RCC_CFGR = STM32_RCC_CFGR_PPRE1_DIV4 | STM32_RCC_CFGR_PPRE2_DIV4;
 }
 
 /******************************************************************************
@@ -32,7 +35,7 @@ void board_config_pre_init(void)
  */
 
 #define USB_STREAM_RX_SIZE 16
-#define USB_STREAM_TX_SIZE 16
+#define USB_STREAM_TX_SIZE 64
 
 /******************************************************************************
  * Forward USART2 as a simple USB serial interface.
@@ -42,7 +45,7 @@ static struct usart_config const usart2;
 struct usb_stream_config const usart2_usb;
 
 static struct queue const usart2_to_usb =
-	QUEUE_DIRECT(64, uint8_t, usart2.producer, usart2_usb.consumer);
+	QUEUE_DIRECT(1024, uint8_t, usart2.producer, usart2_usb.consumer);
 static struct queue const usb_to_usart2 =
 	QUEUE_DIRECT(64, uint8_t, usart2_usb.producer, usart2.consumer);
 
@@ -50,10 +53,10 @@ static struct usart_config const usart2 =
 	USART_CONFIG(usart2_hw, usart_rx_interrupt, usart_tx_interrupt, 115200,
 		     0, usart2_to_usb, usb_to_usart2);
 
-USB_STREAM_CONFIG(usart2_usb, USB_IFACE_USART2_STREAM,
-		  USB_STR_USART2_STREAM_NAME, USB_EP_USART2_STREAM,
-		  USB_STREAM_RX_SIZE, USB_STREAM_TX_SIZE, usb_to_usart2,
-		  usart2_to_usb)
+USB_STREAM_CONFIG_USART_IFACE(usart2_usb, USB_IFACE_USART2_STREAM,
+			      USB_STR_USART2_STREAM_NAME, USB_EP_USART2_STREAM,
+			      USB_STREAM_RX_SIZE, USB_STREAM_TX_SIZE,
+			      usb_to_usart2, usart2_to_usb, usart2)
 
 /******************************************************************************
  * Forward USART3 as a simple USB serial interface.
@@ -63,7 +66,7 @@ static struct usart_config const usart3;
 struct usb_stream_config const usart3_usb;
 
 static struct queue const usart3_to_usb =
-	QUEUE_DIRECT(64, uint8_t, usart3.producer, usart3_usb.consumer);
+	QUEUE_DIRECT(1024, uint8_t, usart3.producer, usart3_usb.consumer);
 static struct queue const usb_to_usart3 =
 	QUEUE_DIRECT(64, uint8_t, usart3_usb.producer, usart3.consumer);
 
@@ -71,10 +74,10 @@ static struct usart_config const usart3 =
 	USART_CONFIG(usart3_hw, usart_rx_interrupt, usart_tx_interrupt, 115200,
 		     0, usart3_to_usb, usb_to_usart3);
 
-USB_STREAM_CONFIG(usart3_usb, USB_IFACE_USART3_STREAM,
-		  USB_STR_USART3_STREAM_NAME, USB_EP_USART3_STREAM,
-		  USB_STREAM_RX_SIZE, USB_STREAM_TX_SIZE, usb_to_usart3,
-		  usart3_to_usb)
+USB_STREAM_CONFIG_USART_IFACE(usart3_usb, USB_IFACE_USART3_STREAM,
+			      USB_STR_USART3_STREAM_NAME, USB_EP_USART3_STREAM,
+			      USB_STREAM_RX_SIZE, USB_STREAM_TX_SIZE,
+			      usb_to_usart3, usart3_to_usb, usart3)
 
 /******************************************************************************
  * Forward USART4 as a simple USB serial interface.
@@ -84,7 +87,7 @@ static struct usart_config const usart4;
 struct usb_stream_config const usart4_usb;
 
 static struct queue const usart4_to_usb =
-	QUEUE_DIRECT(64, uint8_t, usart4.producer, usart4_usb.consumer);
+	QUEUE_DIRECT(1024, uint8_t, usart4.producer, usart4_usb.consumer);
 static struct queue const usb_to_usart4 =
 	QUEUE_DIRECT(64, uint8_t, usart4_usb.producer, usart4.consumer);
 
@@ -92,10 +95,10 @@ static struct usart_config const usart4 =
 	USART_CONFIG(usart4_hw, usart_rx_interrupt, usart_tx_interrupt, 115200,
 		     0, usart4_to_usb, usb_to_usart4);
 
-USB_STREAM_CONFIG(usart4_usb, USB_IFACE_USART4_STREAM,
-		  USB_STR_USART4_STREAM_NAME, USB_EP_USART4_STREAM,
-		  USB_STREAM_RX_SIZE, USB_STREAM_TX_SIZE, usb_to_usart4,
-		  usart4_to_usb)
+USB_STREAM_CONFIG_USART_IFACE(usart4_usb, USB_IFACE_USART4_STREAM,
+			      USB_STR_USART4_STREAM_NAME, USB_EP_USART4_STREAM,
+			      USB_STREAM_RX_SIZE, USB_STREAM_TX_SIZE,
+			      usb_to_usart4, usart4_to_usb, usart4)
 
 /******************************************************************************
  * Forward USART5 as a simple USB serial interface.
@@ -105,7 +108,7 @@ static struct usart_config const usart5;
 struct usb_stream_config const usart5_usb;
 
 static struct queue const usart5_to_usb =
-	QUEUE_DIRECT(64, uint8_t, usart5.producer, usart5_usb.consumer);
+	QUEUE_DIRECT(1024, uint8_t, usart5.producer, usart5_usb.consumer);
 static struct queue const usb_to_usart5 =
 	QUEUE_DIRECT(64, uint8_t, usart5_usb.producer, usart5.consumer);
 
@@ -113,10 +116,10 @@ static struct usart_config const usart5 =
 	USART_CONFIG(usart5_hw, usart_rx_interrupt, usart_tx_interrupt, 115200,
 		     0, usart5_to_usb, usb_to_usart5);
 
-USB_STREAM_CONFIG(usart5_usb, USB_IFACE_USART5_STREAM,
-		  USB_STR_USART5_STREAM_NAME, USB_EP_USART5_STREAM,
-		  USB_STREAM_RX_SIZE, USB_STREAM_TX_SIZE, usb_to_usart5,
-		  usart5_to_usb)
+USB_STREAM_CONFIG_USART_IFACE(usart5_usb, USB_IFACE_USART5_STREAM,
+			      USB_STR_USART5_STREAM_NAME, USB_EP_USART5_STREAM,
+			      USB_STREAM_RX_SIZE, USB_STREAM_TX_SIZE,
+			      usb_to_usart5, usart5_to_usb, usart5)
 
 /******************************************************************************
  * Define the strings used in our USB descriptors.
@@ -175,18 +178,11 @@ const struct adc_t adc_channels[] = {
 BUILD_ASSERT(ARRAY_SIZE(adc_channels) == ADC_CH_COUNT);
 
 /******************************************************************************
- * Initialize board.
+ * Initialize board.  (More initialization done by hooks in other files.)
  */
 
 static void board_init(void)
 {
-	timestamp_t deadline;
-
-	STM32_GPIO_BSRR(STM32_GPIOE_BASE) |= 0x0000FF00;
-
-	/* We know VDDIO2 is present, enable the GPIO circuit. */
-	STM32_PWR_CR2 |= STM32_PWR_CR2_IOSV;
-
 	/* USB to serial queues */
 	queue_init(&usart2_to_usb);
 	queue_init(&usb_to_usart2);
@@ -203,31 +199,6 @@ static void board_init(void)
 	usart_init(&usart4);
 	usart_init(&usart5);
 
-	/* Structured endpoints */
-	usb_spi_enable(1);
-
-	/* Configure SPI GPIOs */
-	gpio_config_module(MODULE_SPI, 1);
-
-	/*
-	 * Unlike most SPI, I2C and UARTs, which are configured in their
-	 * alternate mode by default, SPI1 pins are in GPIO input mode on
-	 * HyperDebug power-on, for compatibility with previous firmwares.  In
-	 * the future we may decide to leave even more functions off by default,
-	 * in order for HyperDebug to actively drive as little at possible on
-	 * boot.  It is relatively straightforward to declare pins as "Alternate
-	 * mode" in opentitantool json configuration file, to have them enabled
-	 * by "transport init".
-	 *
-	 * The code below sets up the alternate function "number" for the
-	 * relevant pins, such that when alternate mode is enabled on the pins,
-	 * the result is the particular alternate function that HyperDebug
-	 * firmware has chosen for the pin.
-	 */
-	STM32_GPIO_AFRL(STM32_GPIOA_BASE) |= 0x55000000; /* SPI1: PA6/PA7
-							    HIDO/HODI */
-	STM32_GPIO_AFRL(STM32_GPIOB_BASE) |= 0x00005000; /* SPI1: PB3 SCK */
-
 	/*
 	 * Enable TIMER3 in downward mode for precise JTAG bit-banging.
 	 */
@@ -241,66 +212,6 @@ static void board_init(void)
 
 	/* Enable DAC */
 	STM32_RCC_APB1ENR |= STM32_RCC_APB1ENR1_DAC1EN;
-
-	/*
-	 * Enable SPI1.
-	 */
-
-	/* Enable clocks to SPI1 module */
-	STM32_RCC_APB2ENR |= STM32_RCC_APB2ENR_SPI1EN;
-
-	/* Reset SPI1 */
-	STM32_RCC_APB2RSTR |= STM32_RCC_APB2RSTR_SPI1RST;
-	STM32_RCC_APB2RSTR &= ~STM32_RCC_APB2RSTR_SPI1RST;
-
-	spi_enable(&spi_devices[2], 1);
-
-	/*
-	 * Enable SPI2.
-	 */
-
-	/* Enable clocks to SPI2 module */
-	STM32_RCC_APB1ENR1 |= STM32_RCC_APB1ENR1_SPI2EN;
-
-	/* Reset SPI2 */
-	STM32_RCC_APB1RSTR1 |= STM32_RCC_APB1RSTR1_SPI2RST;
-	STM32_RCC_APB1RSTR1 &= ~STM32_RCC_APB1RSTR1_SPI2RST;
-
-	spi_enable(&spi_devices[0], 1);
-
-	/*
-	 * Enable OCTOSPI, no driver for this in chip/stm32.
-	 */
-	deadline.val = get_time().val + OCTOSPI_INIT_TIMEOUT_US;
-
-	STM32_RCC_AHB3ENR |= STM32_RCC_AHB3ENR_QSPIEN;
-	while (STM32_OCTOSPI_SR & STM32_OCTOSPI_SR_BUSY) {
-		timestamp_t now = get_time();
-		if (timestamp_expired(deadline, &now)) {
-			/*
-			 * Ideally, the USB host would have a way of
-			 * discovering our failure to initialize OctoSPI.  But
-			 * for now, log and move on, this would happen only on
-			 * code bug or hardware failure.
-			 */
-			cprints(CC_SPI, "Initialization of OctoSPI failed");
-			break;
-		}
-	}
-
-	/*
-	 * Declare that a "Standard" SPI flash device, maximum size is connected
-	 * to OCTOSPI.  This allows the controller to send arbitrary 32-bit
-	 * addresses, which is needed as we use the instruction and address
-	 * bytes as arbitrary data to send via SPI.
-	 */
-	STM32_OCTOSPI_DCR1 = STM32_OCTOSPI_DCR1_MTYP_STANDARD |
-			     STM32_OCTOSPI_DCR1_DEVSIZE_MSK;
-	/* Clock prescaler (max value 255) */
-	STM32_OCTOSPI_DCR2 = spi_devices[1].div;
-
-	/* Select DMA channel */
-	dma_select_channel(STM32_DMAC_CH13, DMAMUX_REQ_OCTOSPI1);
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 

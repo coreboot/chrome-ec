@@ -3,12 +3,12 @@
  * found in the LICENSE file.
  */
 #include "common.h"
+#include "flash.h"
 #include "soc.h"
 #include "system_chip.h"
 
 #include <zephyr/dt-bindings/clock/npcx_clock.h>
-
-#include <stdnoreturn.h>
+#include <zephyr/toolchain.h>
 
 /* Modules Map */
 #define WDT_NODE DT_INST(0, microchip_xec_watchdog)
@@ -32,7 +32,7 @@
 	(MCHP_QMSPI_STS_TXB_ERR | MCHP_QMSPI_STS_RXB_ERR | \
 	 MCHP_QMSPI_STS_PROG_ERR | MCHP_QMSPI_STS_LDMA_RX_ERR)
 
-noreturn void __keep __attribute__((section(".code_in_sram2")))
+FUNC_NORETURN void __keep __attribute__((section(".code_in_sram2")))
 __start_qspi(uint32_t resetVectAddr)
 {
 	struct pcr_regs *pcr = STRUCT_PCR_REG_BASE_ADDR;
@@ -90,9 +90,15 @@ void system_download_from_flash(uint32_t srcAddr, uint32_t dstAddr,
 
 	/* Check valid address for jumpiing */
 	__ASSERT_NO_MSG(exeAddr != 0x0);
+
+#ifdef CONFIG_FLASH_EX_OP_ENABLED
+	/* flash registers reset before starting DMA */
+	crec_flash_reset();
+#endif
+
 	/* Configure QMSPI controller */
 	qspi->MODE = MCHP_QMSPI_M_SRST;
-	fdiv = 2;
+	fdiv = CONFIG_PLATFORM_EC_SPI_CLOCK_DIVIDE;
 	if (pcr->TURBO_CLK & MCHP_PCR_TURBO_CLK_96M)
 		fdiv *= 2;
 

@@ -10,97 +10,22 @@
 
 #include "battery.h"
 #include "common.h"
+#include "ec_commands.h"
 
 #include <stdbool.h>
 
-/* Number of writes needed to invoke battery cutoff command */
-#define SHIP_MODE_WRITES 2
-
-/* When battery type is not initialized */
-#define BATTERY_TYPE_UNINITIALIZED -1
-
-struct ship_mode_info {
-	uint8_t reg_addr;
-	uint16_t reg_data[SHIP_MODE_WRITES];
-} __packed;
-
-struct sleep_mode_info {
-	uint8_t reg_addr;
-	uint16_t reg_data;
-} __packed;
-
-struct fet_info {
-	uint8_t reg_addr;
-	uint16_t reg_mask;
-	uint16_t disconnect_val;
-	uint16_t cfet_mask; /* CHG FET status mask */
-	uint16_t cfet_off_val;
-} __packed;
-
-enum fuel_gauge_flags {
-	/*
-	 * Write Block Support. If enabled, we use a i2c write block command
-	 * instead of a 16-bit write. The effective difference is the i2c
-	 * transaction will prefix the length (2).
-	 */
-	FUEL_GAUGE_FLAG_WRITE_BLOCK = BIT(0),
-	/* Sleep command support. fuel_gauge_info.sleep_mode must be defined. */
-	FUEL_GAUGE_FLAG_SLEEP_MODE = BIT(1),
-	/*
-	 * Manufacturer access command support. If enabled, FET status is read
-	 * from the OperationStatus (0x54) register using the
-	 * ManufacturerBlockAccess (0x44).
-	 */
-	FUEL_GAUGE_FLAG_MFGACC = BIT(2),
-	/*
-	 * SMB block protocol support in manufacturer access command. If
-	 * enabled, FET status is read from the OperationStatus (0x54) register
-	 * using the ManufacturerBlockAccess (0x44).
-	 */
-	FUEL_GAUGE_FLAG_MFGACC_SMB_BLOCK = BIT(3),
-};
-
-struct fuel_gauge_info {
-#if defined(__x86_64__) && !defined(TEST_BUILD)
-	/* These shouldn't be used on the (__x86_64__) host. */
-	uint32_t reserved[2];
-#else
+/**
+ * Represent a battery config embedded in FW.
+ */
+struct batt_conf_embed {
 	char *manuf_name;
 	char *device_name;
-#endif
-	uint32_t flags;
-	uint32_t board_flags;
-	struct ship_mode_info ship_mode;
-	struct sleep_mode_info sleep_mode;
-	struct fet_info fet;
-} __packed;
-
-struct board_batt_params {
-	struct battery_info batt_info;
-	struct fuel_gauge_info fuel_gauge;
-} __packed __aligned(4);
-
-struct batt_conf_header {
-	/* Version of struct batt_conf_header and its internals. */
-	uint8_t struct_version;
-	uint8_t reserved[3];
-	char manuf_name[16];
-	char device_name[16];
 	struct board_batt_params config;
-} __packed __aligned(4);
+};
 
 /* Forward declare board specific data used by common code */
-extern const struct board_batt_params board_battery_info[];
+extern const struct batt_conf_embed board_battery_info[];
 extern const enum battery_type DEFAULT_BATTERY_TYPE;
-
-#ifdef CONFIG_BATTERY_TYPE_NO_AUTO_DETECT
-/*
- * Set the battery type, when auto-detection cannot be used.
- *
- * @param type	Battery type
- */
-void battery_set_fixed_battery_type(int type);
-#endif
 
 /**
  * Return the board-specific default battery type.
@@ -111,13 +36,22 @@ __override_proto int board_get_default_battery_type(void);
 
 /**
  * Detect a battery model.
+ *
+ * When no matching is found, it'll use the default config.
+ *
+ * Concurrency isn't considered because this routine shall be called only from:
+ *
+ * - HOOK_INIT (before charge_task starts) AND
+ * - charge_task (when a battery becomes newly present),
+ *
+ * which are serialized.
  */
 void init_battery_type(void);
 
 /**
- * Return struct board_batt_params of the battery.
+ * Return pointer to active battery config.
  */
-const struct board_batt_params *get_batt_params(void);
+const struct batt_conf_embed *get_batt_conf(void);
 
 /**
  * Return 1 if CFET is disabled, 0 if enabled. -1 if an error was encountered.

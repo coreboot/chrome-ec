@@ -5,6 +5,12 @@
 
 /* Verified boot hash computing module for Chrome EC */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #include "builtin/assert.h"
 #include "clock.h"
 #include "common.h"
@@ -449,7 +455,7 @@ static void fill_response(struct ec_response_vboot_hash *r, int request_offset)
 		r->reserved0 = 0;
 		r->offset = data_offset;
 		r->size = data_size;
-		ASSERT(SHA256_DIGEST_SIZE < sizeof(r->hash_digest));
+		BUILD_ASSERT(sizeof(r->hash_digest) >= SHA256_DIGEST_SIZE);
 		memcpy(r->hash_digest, hash, SHA256_DIGEST_SIZE);
 	} else
 		r->status = EC_VBOOT_HASH_STATUS_NONE;

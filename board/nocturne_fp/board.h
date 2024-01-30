@@ -19,6 +19,7 @@
 #undef CONFIG_SYSTEM_UNLOCKED
 
 #define CONFIG_ALLOW_UNALIGNED_ACCESS
+#define CONFIG_LTO
 
 /*
  * These allow console commands to be flagged as restricted.
@@ -163,12 +164,6 @@
 #ifdef SECTION_IS_RW
 #define CONFIG_FP_SENSOR_FPC1145
 #define CONFIG_CMD_FPSENSOR_DEBUG
-/*
- * Use the malloc code only in the RW section (for the private library),
- * we cannot enable it in RO since it is not compatible with the RW verification
- * (shared_mem_init done too late).
- */
-#define CONFIG_MALLOC
 /* Special memory regions to store large arrays */
 #define FP_FRAME_SECTION __SECTION(ahb4)
 #define FP_TEMPLATE_SECTION __SECTION(ahb)
@@ -221,8 +216,6 @@
  */
 #define APPLY_RESET_LOOP_FIX
 #endif
-
-#define CONFIG_GOOGLETEST
 
 #ifndef __ASSEMBLER__
 

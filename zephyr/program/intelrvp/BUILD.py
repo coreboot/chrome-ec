@@ -9,13 +9,13 @@
 
 def register_intelrvp_project(
     project_name,
-    chip="npcx9m3f",
+    chip,
     extra_dts_overlays=(),
     extra_kconfig_files=(),
 ):
     """Register a variant of intelrvp."""
     register_func = register_binman_project
-    if chip.startswith("mec1727"):
+    if chip.startswith("mec172"):
         register_func = register_mchp_project
     elif chip.startswith("npcx"):
         register_func = register_npcx_project
@@ -80,7 +80,7 @@ register_intelrvp_project(
 
 register_intelrvp_project(
     project_name="mtlrvpp_m1723",
-    chip="mec1727",
+    chip="mec1723",
     extra_dts_overlays=[
         here / "mtlrvp/mtlrvpp_mchp/fan.dts",
         here / "mtlrvp/mtlrvpp_mchp/gpio.dts",
@@ -178,3 +178,12 @@ register_intelrvp_project(
         here / "mtlrvp/pd.conf",
     ],
 )
+
+# Note for reviews, do not let anyone edit these assertions, the addresses
+# must not change after the first RO release.
+assert_rw_fwid_DO_NOT_EDIT(project_name="adlrvp_mchp", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="adlrvp_npcx", addr=0xCFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="mtlrvpp_m1723", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="mtlrvpp_mchp", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="mtlrvpp_npcx", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="mtlrvpp_pd", addr=0x7FFE0)

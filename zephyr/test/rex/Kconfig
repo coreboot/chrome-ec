@@ -22,6 +22,11 @@ choice TEST_PROJECT_TYPE
 		help
 		Enable tests for karis variant.
 
+	config TEST_PROJECT_REX_ISH
+		bool "Enable rex ISH tests"
+		help
+		Enable tests for rex ISH project. Rex ISH handles motion
+		sensors.
 endchoice # TEST_PROJECT_TYPE
 
 config TEST_PROJECT_NAME
@@ -45,6 +50,12 @@ config TEST_PROJECT_KEYBOARD
 	bool "Run the tests intended for keyboard.c"
 	help
 	  Include project specific keyboard.c into the binary and test
+	  their functions.
+
+config TEST_PROJECT_BOARD
+	bool "Run the tests intended for board.c"
+	help
+	  Include project specific board.c into the binary and test
 	  their functions.
 
 config TEST_PROJECT_CHARGER
@@ -100,6 +111,16 @@ config TEST_DISABLE_AP_PWRSEQ
 	help
 	  This is used to disable CONFIG_AP_PWRSEQ for testing purposes
 	  directly.
+
+config TEST_PROGRAM_I2C_POLICY
+	bool "Run the tests intended for i2c_policy"
+	help
+	  Include i2c_policy.c into the binary and test their functions.
+
+config TEST_PROJECT_TOUCH_PANEL
+	bool "Run the tests intended for touch_panel.c"
+	help
+	  Include touch_panel.c into the binary and test their functions.
 
 module = REX
 module-str = Rex board-specific code

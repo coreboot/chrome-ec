@@ -4,6 +4,7 @@
  */
 
 #include <dt-bindings/usb_pd_tcpm.h>
+#include <cros/integrated_fwid.dtsi>
 
 / {
 	aliases {
@@ -135,6 +136,10 @@
 	pinctrl-names = "default";
 };
 
+&sha0 {
+	status = "okay";
+};
+
 /* Power switch logic input pads */
 &psl_in1_gpd2 {
 	/* LID_OPEN */
@@ -191,7 +196,7 @@
 
 		tcpc_port0: nct38xx-tcpc {
 			compatible = "nuvoton,nct38xx-tcpc";
-			gpio-dev = <&nct3807_C0>;
+			gpio-dev = <&nct38xx_gpio_C0>;
 			tcpc-flags = <(
 				TCPC_FLAGS_TCPCI_REV2_0 |
 				TCPC_FLAGS_TCPCI_REV2_0_NO_VSAFE0V)>;
@@ -210,7 +215,7 @@
 				     (GPIO_OPEN_DRAIN | GPIO_ACTIVE_LOW)>;
 		};
 
-		nct38xx-gpio {
+		nct38xx_gpio_C0: nct38xx-gpio {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			compatible = "nuvoton,nct38xx-gpio";
@@ -373,6 +378,7 @@
 		compatible = "kandou,kb8010";
 		reg = <0x08>;
 		reset-pin = <&gpio_usb_c1_rt_rst_r_odl>;
+		dp-en-pin = <&gpio_usb_c1_rt_int_odl>;
 	};
 
 	usb_c1_hb_retimer: usb-c1-hb-retimer@56 {

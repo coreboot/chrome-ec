@@ -52,6 +52,9 @@ config LINK_TEST_SUITE_CBI_FLASH
 config LINK_TEST_SUITE_CEC_COMMON
 	bool "Link and run the common/cec.c tests"
 
+config LINK_TEST_SUITE_CEC_BITBANG
+	bool "Link and run tests for driver/cec/bitbang"
+
 config LINK_TEST_SUITE_CEC_IT83XX
 	bool "Link and run tests for driver/cec/it83xx"
 
@@ -122,6 +125,9 @@ config LINK_TEST_SUITE_KEYBOARD_SCAN
 config LINK_TEST_SUITE_LED_DRIVER
 	bool "Link and test the led_driver tests"
 
+config LINK_TEST_SUITE_LED_DRIVER_ALIAS_LED
+	bool "Link and test the led_driver tests with alias LEDs defined"
+
 config LINK_TEST_SUITE_LOCATE_CHIP_ALTS
 	bool "Link tests for alternate operations of the locate chip host cmd"
 	help
@@ -145,6 +151,12 @@ config LINK_TEST_SUITE_PANIC_OUTPUT
 config LINK_TEST_SUITE_POWER_HOST_SLEEP
 	bool "Link and run the power/host_sleep.c specific tests"
 
+config LINK_TEST_SUITE_PS8743
+	bool "Link and test the ps8743 tests"
+	help
+	  Link tests PS8743 test suite for the MUX driver related function
+	  tests.
+
 config LINK_TEST_SUITE_PS8XXX
 	bool "Link and test the ps8xxx tests"
 
@@ -158,6 +170,12 @@ config LINK_TEST_SUITE_RT1739
 	bool "Link and test the rt1739 tests"
 	help
 	  Link tests rt1739s test suite for the PPC driver related function
+	  tests.
+
+config LINK_TEST_SUITE_KTU1125
+	bool "Link and test the ktu1125 tests"
+	help
+	  Link tests ktu1125 test suite for the PPC driver related function
 	  tests.
 
 config LINK_TEST_SUITE_RT9490
@@ -322,5 +340,14 @@ config LINK_TEST_SUITE_LED_PWM_FADE
 
 config LINK_TEST_SUITE_ONE_WIRE_UART
 	bool "Link and test the one wire uart driver tests"
+
+config LINK_TEST_SUITE_SMART_BATTERY
+	bool "Link and test the smart battery driver tests"
+
+config LINK_TEST_SUITE_TABLETMODE_INTERRUPT
+	bool "Link and test the tabletmode interrupt driver tests"
+	help
+	  Verifies a singleton driver which handles an external interrupt
+	  signaling to the EC when to switch in or out of tablet mode.
 
 source "Kconfig.zephyr"

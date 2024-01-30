@@ -5,6 +5,7 @@
 
 #include <cros/thermistor/thermistor.dtsi>
 #include <dt-bindings/pwm/pwm.h>
+#include <cros/vivaldi_kbd_default.dtsi>
 
 #include "generic_npcx.dts"
 #include "../program/nissa/craask/cbi.dtsi"
@@ -46,6 +47,12 @@
 			gpios = <&gpio6 3 GPIO_OUTPUT>;
 			no-auto-init;
 		};
+		gpio_ec_touch_en: ec_touch_en {
+			gpios = <&gpio8 3 GPIO_OUTPUT_LOW>;
+		};
+		gpio_soc_edp_bl_en: soc_edp_bl_en {
+			gpios = <&gpioc 7 GPIO_INPUT>;
+		};
 	};
 
 	gpio-interrupts {
@@ -78,6 +85,11 @@
 			irq-pin = <&gpio_tablet_mode_l>;
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "gmr_tablet_switch_isr";
+		};
+		int_soc_edp_bl_en: soc_edp_bl_en {
+			irq-pin = <&gpio_soc_edp_bl_en>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "soc_edp_bl_interrupt";
 		};
 	};
 
@@ -324,4 +336,13 @@
 
 &thermistor_3V3_51K1_47K_4050B  {
 	status = "okay";
+};
+
+&vivaldi_kbd {
+	status = "okay";
+
+	kbd_config_1: kbd-config-1 {
+		vivaldi-codes = <0 0 0 0 0 0 0 0 0 0>;
+		capabilities = <0>;
+	};
 };

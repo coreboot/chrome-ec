@@ -5,6 +5,12 @@
 
 /* Debug console for Chrome EC */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #ifndef __CROS_EC_CONSOLE_H
 #define __CROS_EC_CONSOLE_H
 
@@ -190,7 +196,7 @@ int snprintf_timestamp_now(char *str, size_t size);
 	} while (false)
 #endif
 
-#define cputs(channel, outstr) PW_LOG_INFO("%s", outstr)
+#define cputs(channel, outstr) PW_LOG_INFO(outstr)
 
 #define cprintf(channel, format, ...) PW_LOG_INFO(format, ##__VA_ARGS__)
 

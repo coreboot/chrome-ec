@@ -10,6 +10,7 @@
 _common_dir:=$(dir $(lastword $(MAKEFILE_LIST)))
 
 common-y=util.o
+common-y+=debug.o
 common-y+=version.o printf.o queue.o queue_policies.o irq_locking.o
 common-y+=gettimeofday.o
 
@@ -106,6 +107,7 @@ common-$(CONFIG_I2C_DEBUG)+=i2c_trace.o
 common-$(CONFIG_I2C_HID_TOUCHPAD)+=i2c_hid_touchpad.o
 common-$(CONFIG_I2C_CONTROLLER)+=i2c_controller.o
 common-$(CONFIG_I2C_CONTROLLER)+=i2c_controller_cros_ec.o
+common-$(CONFIG_I2C_CONTROLLER)+=i2c_passthru.o
 common-$(CONFIG_I2C_PERIPHERAL)+=i2c_peripheral.o
 common-$(CONFIG_I2C_BITBANG)+=i2c_bitbang.o
 common-$(CONFIG_I2C_VIRTUAL_BATTERY)+=virtual_battery.o
@@ -119,7 +121,6 @@ common-$(CONFIG_KEYBOARD_VIVALDI)+=keyboard_vivaldi.o
 common-$(CONFIG_MKBP_INPUT_DEVICES)+=mkbp_input_devices.o mkbp_fifo.o \
 	mkbp_info.o
 common-$(CONFIG_LED_COMMON)+=led_common.o
-common-$(CONFIG_LED_POLICY_STD)+=led_policy_std.o
 common-$(CONFIG_LED_PWM)+=led_pwm.o
 common-$(CONFIG_LED_ONOFF_STATES)+=led_onoff_states.o
 common-$(CONFIG_LID_ANGLE)+=motion_lid.o math_util.o
@@ -184,7 +185,7 @@ common-$(CONFIG_USB_POWER_DELIVERY)+=usb_pd_protocol.o usb_pd_policy.o \
 	usb_pd_pdo.o
 endif
 common-$(CONFIG_USB_PD_DUAL_ROLE)+=usb_pd_dual_role.o
-common-$(CONFIG_USB_PD_HOST_CMD)+=usb_pd_host_cmd.o
+common-$(CONFIG_USB_PD_HOST_CMD)+=usb_pd_host_cmd.o pd_host_event.o
 common-$(CONFIG_USB_PD_CONSOLE_CMD)+=usb_pd_console_cmd.o
 endif
 common-$(CONFIG_USB_PD_DISCOVERY)+=usb_pd_discovery.o
@@ -210,6 +211,7 @@ common-$(CONFIG_VSTORE)+=vstore.o
 common-$(CONFIG_WEBUSB_URL)+=webusb_desc.o
 common-$(CONFIG_WIRELESS)+=wireless.o
 common-$(HAS_TASK_CHIPSET)+=chipset.o
+common-$(CONFIG_CMD_AP_RESET_LOG)+=ap_reset_log.o
 common-$(HAS_TASK_CONSOLE)+=console.o console_output.o
 common-$(HAS_TASK_CONSOLE)+=uart_buffering.o uart_hostcmd.o uart_printf.o
 common-$(CONFIG_CMD_MEM)+=memory_commands.o
@@ -226,21 +228,24 @@ common-$(CONFIG_AUDIO_CODEC_WOV)+=hotword_dsp_api.o
 endif
 
 ifeq ($(USE_BUILTIN_STDLIB), 0)
-common-y+=shared_mem_libc.o
+common-$(CONFIG_SHARED_MALLOC)+=shmalloc.o
+common-$(call not_cfg,$(CONFIG_SHARED_MALLOC))+=shared_mem_libc.o
 else ifneq ($(CONFIG_COMMON_RUNTIME),)
 ifeq ($(CONFIG_DFU_BOOTMANAGER_MAIN),ro)
-# Ordinary RO is replaced with DFU bootloader stub, CONFIG_MALLOC should only affect RW.
-ifeq ($(CONFIG_MALLOC),y)
+# Ordinary RO is replaced with DFU bootloader stub,
+# CONFIG_SHARED_MALLOC should only affect RW.
+ifeq ($(CONFIG_SHARED_MALLOC),y)
 common-rw+=shmalloc.o
-else ifeq ($(CONFIG_MALLOC),rw)
+else ifeq ($(CONFIG_SHARED_MALLOC),rw)
 common-rw+=shmalloc.o
 else
 common-rw+=shared_mem.o
 endif
 else
-# CONFIG_MALLOC affects both RO and RW as usual (with shared_mem in case it is disabled.)
-common-$(CONFIG_MALLOC)+=shmalloc.o
-common-$(call not_cfg,$(CONFIG_MALLOC))+=shared_mem.o
+# CONFIG_SHARED_MALLOC affects both RO and RW as usual
+# (with shared_mem in case it is disabled.)
+common-$(CONFIG_SHARED_MALLOC)+=shmalloc.o
+common-$(call not_cfg,$(CONFIG_SHARED_MALLOC))+=shared_mem.o
 endif
 endif
 

@@ -298,6 +298,7 @@ class Zmake:
         all_projects=False,
         extra_cflags=None,
         delete_intermediates=False,
+        version=None,
         static_version=False,
         save_temps=False,
         wait_for_executor=True,
@@ -330,6 +331,7 @@ class Zmake:
                     allow_warnings=allow_warnings,
                     extra_cflags=extra_cflags,
                     delete_intermediates=delete_intermediates,
+                    version=version,
                     static_version=static_version,
                     save_temps=save_temps,
                 )
@@ -338,6 +340,16 @@ class Zmake:
                 result = self.executor.wait()
                 if result:
                     return result
+
+        if build_after_configure:
+            result = self.executor.wait()
+            if result:
+                return result
+            _db = list(build_dir.glob("*/build-r?/database.bin"))
+            if len(_db) > 0:
+                univeral_db = build_dir.parent.joinpath("tokens.bin")
+                util.merge_token_databases(_db, univeral_db)
+
         if coverage and build_after_configure:
             result = self.executor.wait()
             if result:
@@ -371,6 +383,7 @@ class Zmake:
         all_projects=False,
         extra_cflags=None,
         delete_intermediates=False,
+        version=None,
         static_version=False,
         save_temps=False,
     ):
@@ -389,6 +402,7 @@ class Zmake:
             extra_cflags=extra_cflags,
             build_after_configure=True,
             delete_intermediates=delete_intermediates,
+            version=version,
             static_version=static_version,
             save_temps=save_temps,
         )
@@ -508,6 +522,7 @@ class Zmake:
         allow_warnings=False,
         extra_cflags=None,
         delete_intermediates=False,
+        version=None,
         static_version=False,
         save_temps=False,
     ):
@@ -523,6 +538,13 @@ class Zmake:
                     shutil.rmtree(build_dir)
 
                 generated_include_dir = (build_dir / "include").resolve()
+
+                ec_version_flags = []
+                if version:
+                    ec_version_flags.extend(["--version", version])
+                if static_version:
+                    ec_version_flags.append("--static")
+
                 base_config = zmake.build_config.BuildConfig(
                     cmake_defs={
                         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
@@ -543,8 +565,12 @@ class Zmake:
                         "ZMAKE_INCLUDE_DIR": str(generated_include_dir),
                         "Python3_EXECUTABLE": sys.executable,
                         **(
-                            {"EXTRA_EC_VERSION_FLAGS": "--static"}
-                            if static_version
+                            {
+                                "EXTRA_EC_VERSION_FLAGS": util.repr_command(
+                                    ec_version_flags
+                                )
+                            }
+                            if ec_version_flags
                             else {}
                         ),
                     },
@@ -651,6 +677,7 @@ class Zmake:
                     build_dir=build_dir,
                     project=project,
                     coverage=coverage,
+                    version=version,
                     static_version=static_version,
                     delete_intermediates=delete_intermediates,
                 )
@@ -735,6 +762,7 @@ class Zmake:
         build_dir,
         project: zmake.project.Project,
         coverage=False,
+        version=None,
         static_version=False,
         delete_intermediates=False,
     ):
@@ -748,8 +776,7 @@ class Zmake:
             # Compute the version string.
             version_string = zmake.version.get_version_string(
                 project.config.project_name,
-                build_dir / "zephyr_base",
-                zmake.modules.locate_from_directory(build_dir / "modules"),
+                version,
                 static=static_version,
             )
 
@@ -818,6 +845,9 @@ class Zmake:
                     self.logger.debug(
                         "Output file '%s' created.", output_dir / output_name
                     )
+                project.packer.verify_rw_fwid(
+                    packer_work_dir,
+                )
 
             if delete_intermediates:
                 outdir = build_dir / "output"
@@ -903,8 +933,9 @@ class Zmake:
             self.logger.info("Running (initial) lcov on %s.", build_dir)
         else:
             self.logger.info("Running lcov on %s.", build_dir)
+        lcov = util.get_tool_path("lcov")
         cmd = [
-            util.get_tool_path("lcov"),
+            lcov,
             "--gcov-tool",
             gcov,
             "-q",
@@ -915,9 +946,7 @@ class Zmake:
             build_dir,
             "-t",
             build_dir.stem,
-            "--rc",
-            "lcov_branch_coverage=1",
-        ]
+        ] + util.get_lcov_options(lcov)
         if initial:
             cmd += ["-i"]
         proc = self.jobserver.popen(
@@ -955,13 +984,12 @@ class Zmake:
             all_lcov_files.append(project_build_dir / "output" / "zephyr.info")
         # Merge info files into a single lcov.info
         self.logger.info("Merging coverage data into %s.", output_file)
+        lcov = util.get_tool_path("lcov")
         cmd = [
-            util.get_tool_path("lcov"),
+            lcov,
             "-o",
             output_file,
-            "--rc",
-            "lcov_branch_coverage=1",
-        ]
+        ] + util.get_lcov_options(lcov)
         for info in all_lcov_files:
             cmd += ["-a", info]
         proc = self.jobserver.popen(

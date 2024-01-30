@@ -21,7 +21,19 @@ tests:
       - CONFIG_TEST_PROGRAM_BOARD_POWER=y
       - CONFIG_TEST_X86_NON_DSX_PWRSEQ_MTL=y
       - CONFIG_AP_POWER_EVENTS_MOCK=y
-      - CONFIG_POWER_SIGNALS_MOCK=y
+      - CONFIG_AP_EVENTS=n
+
+  rex.board_power.ap_pwrseq_drv:
+    extra_dtc_overlay_files:
+      - boards/board_power.dtsi
+    extra_configs:
+      - CONFIG_TEST_PROGRAM_BOARD_POWER=y
+      - CONFIG_TEST_X86_NON_DSX_PWRSEQ_MTL=y
+      - CONFIG_TEST_DISABLE_AP_PWRSEQ=n
+      - CONFIG_AP_POWER_EVENTS_MOCK=y
+      - CONFIG_AP_PWRSEQ=y
+      - CONFIG_AP_PWRSEQ_DRIVER=y
+      - CONFIG_EMUL_AP_PWRSEQ_DRIVER=y
       - CONFIG_AP_EVENTS=n
 
   rex.battery_present:
@@ -55,6 +67,15 @@ tests:
       - CONFIG_TEST_PROJECT_REX=y
       - CONFIG_TEST_PROJECT_USB_MUX_CONFIG=y
 
+  rex.rex.i2c_policy:
+    extra_dtc_overlay_files:
+      - boards/native_posix.overlay
+      - boards/rex/rex.dtsi
+    extra_configs:
+      - CONFIG_TEST_PROJECT_REX=y
+      - CONFIG_TEST_PROGRAM_I2C_POLICY=y
+      - CONFIG_PLATFORM_EC_I2C_PASSTHRU_RESTRICTED=y
+
   # Screebo project tests
   rex.screebo:
     extra_configs:
@@ -84,6 +105,26 @@ tests:
       - CONFIG_PLATFORM_EC_USB_PD_TCPM_PS8815=y
       - CONFIG_PLATFORM_EC_USB_PD_VBUS_MEASURE_BY_BOARD=y
       - CONFIG_PLATFORM_EC_VBOOT_HASH=n
+
+  rex.screebo.board:
+    extra_dtc_overlay_files:
+      - boards/native_posix.overlay
+    extra_configs:
+      - CONFIG_TEST_PROJECT_SCREEBO=y
+      - CONFIG_TEST_PROJECT_BOARD=y
+      - CONFIG_PLATFORM_EC_BACKLIGHT_LID=n
+      - CONFIG_PLATFORM_EC_HOOKS=y
+      - CONFIG_PLATFORM_EC_USBA=y
+      - CONFIG_PLATFORM_EC_USB_PORT_POWER_DUMB_CUSTOM_HOOK=y
+
+  rex.screebo.i2c_policy:
+    extra_dtc_overlay_files:
+      - boards/native_posix.overlay
+      - boards/screebo/i2c.dtsi
+    extra_configs:
+      - CONFIG_TEST_PROJECT_SCREEBO=y
+      - CONFIG_TEST_PROGRAM_I2C_POLICY=y
+      - CONFIG_PLATFORM_EC_I2C_PASSTHRU_RESTRICTED=y
 
   # Karis project tests
   rex.karis:
@@ -126,3 +167,24 @@ tests:
       - CONFIG_PLATFORM_EC_USB_PD_VBUS_MEASURE_NOT_PRESENT=y
       - CONFIG_PLATFORM_EC_USB_PD_DISCHARGE=n
       - CONFIG_PLATFORM_EC_VBOOT_HASH=n
+  rex.karis.i2c_policy:
+    extra_configs:
+      - CONFIG_TEST_PROJECT_KARIS=y
+      - CONFIG_TEST_PROGRAM_I2C_POLICY=y
+      - CONFIG_PLATFORM_EC_I2C_PASSTHRU_RESTRICTED=y
+
+  rex.karis.touch_panel:
+    extra_dtc_overlay_files:
+      - boards/karis/karis.dtsi
+      - boards/karis/touch.dtsi
+    extra_configs:
+      - CONFIG_TEST_PROJECT_KARIS=y
+      - CONFIG_TEST_PROJECT_TOUCH_PANEL=y
+      - CONFIG_PLATFORM_EC_LID_SWITCH=y
+
+  # ISH project tests
+  rex.ish:
+    extra_dtc_overlay_files:
+      - boards/rex_ish/ish.dtsi
+    extra_configs:
+      - CONFIG_TEST_PROJECT_REX_ISH=y

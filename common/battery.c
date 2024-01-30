@@ -80,12 +80,26 @@ static int check_print_error(int rv)
 
 static void print_battery_status(void)
 {
+	/*
+	 * STATUS_FULLY_DISCHARGED BIT(4)
+	 * STATUS_FULLY_CHARGED BIT(5)
+	 * STATUS_DISCHARGING BIT(6)
+	 * STATUS_INITIALIZED BIT(7)
+	 */
 	static const char *const st[] = {
 		"EMPTY",
 		"FULL",
 		"DCHG",
 		"INIT",
 	};
+	/*
+	 * STATUS_REMAINING_TIME_ALARM BIT(8)
+	 * STATUS_REMAINING_CAPACITY_ALARM BIT(9)
+	 * STATUS_TERMINATE_DISCHARGE_ALARM BIT(11)
+	 * STATUS_OVERTEMP_ALARM BIT(12)
+	 * STATUS_TERMINATE_CHARGE_ALARM BIT(14)
+	 * STATUS_OVERCHARGED_ALARM BIT(15)
+	 */
 	static const char *const al[] = { "RT", "RC", "--", "TD",
 					  "OT", "--", "TC", "OC" };
 
@@ -319,7 +333,7 @@ test_mockable int battery_is_cut_off(void)
 	return (battery_cutoff_state == BATTERY_CUTOFF_STATE_CUT_OFF);
 }
 
-int battery_cutoff_in_progress(void)
+test_mockable int battery_cutoff_in_progress(void)
 {
 	return (battery_cutoff_state == BATTERY_CUTOFF_STATE_IN_PROGRESS);
 }
@@ -450,8 +464,11 @@ static void power_supply_change(void)
 
 	if (port != CHARGE_PORT_NONE) {
 		had_active_charge_port = true;
-		if (key)
+		if (key) {
+			/* Cancel cutoff if AC is backoff again */
+			hook_call_deferred(&pending_cutoff_deferred_data, -1);
 			CUTOFFPRINTS("backoff: P%d is active", port);
+		}
 		return;
 	}
 

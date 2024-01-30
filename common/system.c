@@ -4,6 +4,13 @@
  */
 
 /* System module for Chrome EC : common functions */
+
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #include "battery.h"
 #include "charge_manager.h"
 #include "chipset.h"
@@ -291,7 +298,7 @@ static void print_reset_flags(uint32_t flags)
 			if (count++)
 				CPUTS(" ");
 
-			CPUTS(reset_flag_descs[i]);
+			CPRINTF("%s", reset_flag_descs[i]);
 		}
 	}
 
@@ -826,8 +833,6 @@ const char *system_get_cros_fwid(enum ec_image copy)
 		if (data && (data->cookie3 & CROS_EC_IMAGE_DATA_COOKIE3_MASK) ==
 				    CROS_EC_IMAGE_DATA_COOKIE3)
 			return data->cros_fwid;
-		else
-			return CROS_FWID_MISSING_STR;
 	}
 	return "";
 }
@@ -1007,6 +1012,16 @@ int system_is_manual_recovery(void)
 	return system_info_flags & SYSTEM_IN_MANUAL_RECOVERY;
 }
 
+void system_set_reboot_at_shutdown(const struct ec_params_reboot_ec *p)
+{
+	reboot_at_shutdown = *p;
+}
+
+const struct ec_params_reboot_ec *system_get_reboot_at_shutdown(void)
+{
+	return &reboot_at_shutdown;
+}
+
 /**
  * Handle a pending reboot command.
  */
@@ -1127,7 +1142,6 @@ test_mockable void system_enter_hibernate(uint32_t seconds,
 
 static void system_common_shutdown(void)
 {
-	system_exit_manual_recovery();
 	if (reboot_at_shutdown.cmd)
 		CPRINTF("Reboot at shutdown: %d\n", reboot_at_shutdown.cmd);
 	handle_pending_reboot(&reboot_at_shutdown);

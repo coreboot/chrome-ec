@@ -49,6 +49,9 @@
 		panasonic_ap19b5k {
 			compatible = "panasonic,ap19b5k", "battery-smart";
 		};
+		panasonic_ap23a5l {
+			compatible = "panasonic,ap23a5l", "battery-smart";
+		};
 		smp_ap18c7k {
 			compatible = "smp,ap18c7k", "battery-smart";
 		};
@@ -91,6 +94,21 @@
 
 				color-0 {
 					led-color = "LED_AMBER";
+				};
+			};
+		};
+
+		/* Voltorb LED bat charge, full batt-lvl */
+		bat-power-state-charge-full {
+			charge-state = "LED_PWRS_CHARGE";
+			/* Battery display percent range (100%) */
+			batt-lvl = <BATTERY_LEVEL_FULL BATTERY_LEVEL_FULL>;
+
+			battery-led {
+				led-id = "EC_LED_ID_BATTERY_LED";
+
+				color-0 {
+					led-color = "LED_BLUE";
 				};
 			};
 		};

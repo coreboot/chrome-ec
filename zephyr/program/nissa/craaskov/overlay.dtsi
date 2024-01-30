@@ -112,7 +112,9 @@
 		};
 		gpio_fan_enable: fan-enable {
 			gpios = <&gpio6 3 GPIO_OUTPUT>;
-			no-auto-init;
+		};
+		gpio_fan_tach: fan-tach {
+			gpios = <&gpio7 3 GPIO_INPUT_PULL_UP>;
 		};
 		ec-i2c-sensor-scl {
 			gpios = <&gpio9 0 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
@@ -156,32 +158,30 @@
 	named-temp-sensors {
 		compatible = "cros-ec,temp-sensors";
 		memory {
-			temp_host_warn = <92>;
-			temp_host_high = <95>;
-			temp_host_halt = <100>;
-			temp_host_release_warn = <91>;
-			temp_host_release_high = <80>;
-			temp_host_release_halt = <90>;
+			temp_fan_off = <35>;
+			temp_fan_max = <70>;
+			temp_host_warn = <45>;
+			temp_host_high = <100>;
+			temp_host_halt = <105>;
+			temp_host_release_warn = <40>;
+			temp_host_release_high = <90>;
+			temp_host_release_halt = <95>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_memory>;
 		};
 		charger {
-			temp_host_warn = <92>;
-			temp_host_high = <95>;
-			temp_host_halt = <100>;
-			temp_host_release_warn = <91>;
-			temp_host_release_high = <80>;
-			temp_host_release_halt = <90>;
+			temp_host_high = <98>;
+			temp_host_halt = <105>;
+			temp_host_release_high = <90>;
+			temp_host_release_halt = <95>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_charger>;
 		};
 		ambient {
-			temp_host_warn = <92>;
-			temp_host_high = <95>;
-			temp_host_halt = <100>;
-			temp_host_release_warn = <91>;
-			temp_host_release_high = <80>;
-			temp_host_release_halt = <90>;
+			temp_host_high = <100>;
+			temp_host_halt = <105>;
+			temp_host_release_high = <90>;
+			temp_host_release_halt = <95>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_ambient>;
 		};
@@ -227,10 +227,10 @@
 		compatible = "cros-ec,fans";
 
 		fan_0 {
-			pwms = <&pwm5 5 PWM_KHZ(1) PWM_POLARITY_NORMAL>;
+			pwms = <&pwm5 5 PWM_KHZ(25) PWM_POLARITY_NORMAL>;
 			rpm_min = <2200>;
 			rpm_start = <2200>;
-			rpm_max = <4200>;
+			rpm_max = <6900>;
 			tach = <&tach2>;
 			enable_gpio = <&gpio_fan_enable>;
 		};
@@ -249,9 +249,7 @@
 			<&gpio3 6 0>,
 			<&gpio5 7 0>,
 			<&gpio6 0 0>,
-			<&gpio6 3 0>,
 			<&gpio6 6 0>,
-			<&gpio7 3 0>,
 			<&gpio8 3 0>,
 			<&gpio8 5 0>,
 			<&gpio8 6 0>,
@@ -332,7 +330,6 @@
 
 &pwm5 {
 	status = "okay";
-	clock-bus = "NPCX_CLOCK_BUS_LFCLK";
 	pinctrl-0 = <&pwm5_gpb7>;
 	pinctrl-names = "default";
 };

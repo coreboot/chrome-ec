@@ -37,7 +37,7 @@ def main() -> int:
                     # There are several files in zephyr that have odd coverage
                     # but it seems consistent.
                     # Also ignore test dirs that don't affect coverage numbers
-                    if (
+                    if (  # pylint: disable=too-many-boolean-expressions
                         not "src/third_party/zephyr/cmsis/CMSIS/Core/Include/core_cm4.h"
                         in active_name
                         and not "src/third_party/zephyr/main/arch/arm/core/aarch32/mpu/arm_mpu.c"
@@ -46,7 +46,10 @@ def main() -> int:
                         in active_name
                         and not "src/third_party/zephyr/main/lib/libc/minimal/include/"
                         in active_name
+                        and not "src/third_party/zephyr/main/subsys/testsuite/ztest/"
+                        in active_name
                         and not "platform/ec/zephyr/test/" in active_name
+                        and not "platform/ec/build/" in active_name
                     ):
                         active_file = open(  # pylint: disable=R1732
                             active_name, encoding="utf-8"

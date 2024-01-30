@@ -79,6 +79,11 @@ nokris = register_nissa_project(
     chip="npcx9m3f",
 )
 
+naktal = register_nissa_project(
+    project_name="naktal",
+    chip="it81302bx",
+)
+
 craask = register_nissa_project(
     project_name="craask",
     chip="npcx9m3f",
@@ -133,3 +138,28 @@ pirrha = register_nissa_project(
 quandiso = register_nissa_project(
     project_name="quandiso",
 )
+anraggar = register_nissa_project(
+    project_name="anraggar",
+    chip="it81302bx",
+)
+
+# Note for reviews, do not let anyone edit these assertions, the addresses
+# must not change after the first RO release.
+assert_rw_fwid_DO_NOT_EDIT(project_name="anraggar", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="craask", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="craaskov", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="gothrax", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="joxer", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="naktal", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="nereid", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="nereid_cx", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="nivviks", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="nokris", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="pirrha", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="pujjo", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="quandiso", addr=0xB7FE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="uldren", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="xivu", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="xivur", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="yaviks", addr=0xAFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="yavilla", addr=0xB7FE0)

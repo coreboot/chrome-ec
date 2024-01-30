@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 
 # This file is auto-generated.  To update, run:
-# ./util/gen_bazel_targets.py
+# ./bazel/gen_bazel_targets.py
 
 load(":ec_target.bzl", "ec_target")
 
@@ -106,6 +106,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "anraggar",
+        board = "anraggar",
+    )
+    ec_target(
         name = "arcada_ish",
         board = "arcada_ish",
         chip = "ish",
@@ -142,6 +146,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "axii",
+        board = "axii",
     )
     ec_target(
         name = "baklava",
@@ -273,12 +281,26 @@ def all_targets():
         board = "brox",
     )
     ec_target(
+        name = "brox-ish-ec",
+        board = "brox-ish-ec",
+    )
+    ec_target(
+        name = "brox-tokenized",
+        board = "brox-tokenized",
+        extra_modules = ["picolibc", "pigweed"],
+    )
+    ec_target(
         name = "brya",
         baseboard = "brya",
         board = "brya",
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "brya_pdc",
+        board = "brya_pdc",
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
         name = "brya_zephyr",
@@ -357,6 +379,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "chinchou",
+        board = "chinchou",
+    )
+    ec_target(
         name = "chocodile_vpdmcu",
         board = "chocodile_vpdmcu",
         chip = "stm32",
@@ -370,6 +396,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "ciri",
+        board = "ciri",
     )
     ec_target(
         name = "coachz",
@@ -506,6 +536,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "deku",
+        board = "deku",
+        extra_modules = ["cmsis", "picolibc", "pigweed"],
+    )
+    ec_target(
         name = "delbin",
         baseboard = "volteer",
         board = "delbin",
@@ -571,6 +606,14 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "dita",
+        baseboard = "dedede",
+        board = "dita",
+        chip = "it83xx",
+        core = "nds32",
+        zephyr = False,
+    )
+    ec_target(
         name = "dochi",
         baseboard = "brya",
         board = "dochi",
@@ -630,14 +673,6 @@ def all_targets():
         board = "drawcia",
         chip = "it83xx",
         core = "nds32",
-        zephyr = False,
-    )
-    ec_target(
-        name = "drawcia_riscv",
-        baseboard = "dedede",
-        board = "drawcia_riscv",
-        chip = "it83xx",
-        core = "riscv-rv32i",
         zephyr = False,
     )
     ec_target(
@@ -995,6 +1030,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "it82002_evb",
+        board = "it82002_evb",
+    )
+    ec_target(
         name = "it83xx_evb",
         baseboard = "ite_evb",
         board = "it83xx_evb",
@@ -1103,6 +1142,10 @@ def all_targets():
         chip = "stm32",
         core = "cortex-m0",
         zephyr = False,
+    )
+    ec_target(
+        name = "kelpie",
+        board = "kelpie",
     )
     ec_target(
         name = "kindred",
@@ -1467,6 +1510,10 @@ def all_targets():
         extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
+        name = "naktal",
+        board = "naktal",
+    )
+    ec_target(
         name = "nami",
         board = "nami",
         chip = "npcx",
@@ -1801,6 +1848,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "rauru",
+        board = "rauru",
     )
     ec_target(
         name = "redrix",
@@ -2256,6 +2307,10 @@ def all_targets():
         name = "winterhold",
         board = "winterhold",
         extra_modules = ["cmsis", "picolibc", "pigweed"],
+    )
+    ec_target(
+        name = "woobat",
+        board = "woobat",
     )
     ec_target(
         name = "woomax",

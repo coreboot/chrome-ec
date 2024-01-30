@@ -7,6 +7,7 @@
 #include <dt-bindings/gpio_defines.h>
 #include <dt-bindings/gpio/ite-it8xxx2-gpio.h>
 #include <ite/it8xxx2-pinctrl-map.dtsi>
+#include <cros/vivaldi_kbd_default.dtsi>
 
 #define GPIO_VOLTAGE_1P8 IT8XXX2_GPIO_VOLTAGE_1P8
 
@@ -23,7 +24,7 @@
 
 	/* Override keyboard scanning */
 	soc {
-		/delete-node/ kscan@f01d00;
+		/delete-node/ kbd@f01d00;
 	};
 };
 
@@ -38,8 +39,4 @@
 	pinctrl-0 = <&uart1_rx_gpb0_default
 		     &uart1_tx_gpb1_default>;
 	pinctrl-names = "default";
-};
-
-&espi0 {
-	status = "okay";
 };

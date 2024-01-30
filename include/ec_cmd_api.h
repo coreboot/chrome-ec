@@ -45,6 +45,12 @@ extern "C" {
  * Please keep this list sorted by function name.
  */
 
+static inline int ec_cmd_battery_config(CROS_EC_COMMAND_INFO *h, uint8_t *r)
+{
+	return CROS_EC_COMMAND(h, EC_CMD_BATTERY_CONFIG, 0, NULL, 0, r,
+			       BATT_CONF_MAX_SIZE);
+}
+
 static inline int ec_cmd_get_sku_id(CROS_EC_COMMAND_INFO *h,
 				    struct ec_sku_id_info *r)
 {
@@ -232,6 +238,7 @@ ec_cmd_usb_pd_set_amode(CROS_EC_COMMAND_INFO *h,
 
 _CROS_EC_C0_F_PF_RF(EC_CMD_ADC_READ, adc_read);
 _CROS_EC_CV_F_P(EC_CMD_ADD_ENTROPY, 0, add_entropy, rollback_add_entropy);
+_CROS_EC_C0_F_PF(EC_CMD_AP_FW_STATE, ap_fw_state);
 _CROS_EC_C0_F(EC_CMD_AP_RESET, ap_reset);
 _CROS_EC_CV_F_P(EC_CMD_BATTERY_CUT_OFF, 1, battery_cut_off_v1, battery_cutoff);
 _CROS_EC_C0_F(EC_CMD_BATTERY_CUT_OFF, battery_cut_off);
@@ -285,8 +292,9 @@ _CROS_EC_C0_F_PF_RF(EC_CMD_GET_CMD_VERSIONS, get_cmd_versions);
 _CROS_EC_C0_F_RF(EC_CMD_GET_COMMS_STATUS, get_comms_status);
 _CROS_EC_C0_F_RF(EC_CMD_GET_FEATURES, get_features);
 _CROS_EC_CV_F_R(EC_CMD_GET_KEYBD_CONFIG, 0, get_keybd_config, keybd_config);
-_CROS_EC_CV_F_R(EC_CMD_GET_NEXT_EVENT, 2, get_next_event_v2, get_next_event);
 _CROS_EC_C0_F_RF(EC_CMD_GET_NEXT_EVENT, get_next_event);
+_CROS_EC_C1_F_RF(EC_CMD_GET_NEXT_EVENT, get_next_event);
+_CROS_EC_CV_F_R(EC_CMD_GET_NEXT_EVENT, 2, get_next_event_v2, get_next_event_v1);
 _CROS_EC_C0_F_PF_RF(EC_CMD_GET_PD_PORT_CAPS, get_pd_port_caps);
 _CROS_EC_C0_F_RF(EC_CMD_GET_PROTOCOL_INFO, get_protocol_info);
 _CROS_EC_CV_F_R(EC_CMD_GET_UPTIME_INFO, 0, get_uptime_info, uptime_info);
@@ -297,7 +305,7 @@ _CROS_EC_C1_F_PF_RF(EC_CMD_GPIO_GET, gpio_get);
 _CROS_EC_C0_F_PF(EC_CMD_GPIO_SET, gpio_set);
 _CROS_EC_CV_F_P_R(EC_CMD_GSV_PAUSE_IN_S5, 0, gsv_pause_in_s5, get_set_value,
 		  get_set_value);
-_CROS_EC_C0_F_PF(EC_CMD_HANG_DETECT, hang_detect);
+_CROS_EC_C0_F_PF_RF(EC_CMD_HANG_DETECT, hang_detect);
 _CROS_EC_C0_F_PF_RF(EC_CMD_HELLO, hello);
 _CROS_EC_C0_F_PF_RF(EC_CMD_HIBERNATION_DELAY, hibernation_delay);
 _CROS_EC_C0_F_PF_RF(EC_CMD_HOST_EVENT, host_event);

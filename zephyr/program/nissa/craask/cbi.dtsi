@@ -161,6 +161,28 @@
 				value = <1>;
 			};
 		};
+
+		/*
+		 * FW_CONFIG field to enable touch panel power sequence
+		 * control or not.
+		 */
+		touch-en {
+			enum-name = "FW_TOUCH_EN";
+			start = <21>;
+			size = <1>;
+
+			touch-en-disable {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_TOUCH_EN_DISABLE";
+				value = <0>;
+			};
+			touch-en-enable {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_TOUCH_EN_ENABLE";
+				value = <1>;
+			};
+		};
+
 	};
 	/* Craask-specific ssfc fields. */
 	cbi-ssfc {
@@ -210,6 +232,11 @@
 				compatible = "cros-ec,cbi-ssfc-value";
 				status = "okay";
 				value = <1>;
+			};
+			base_sensor_2: bma422 {
+				compatible = "cros-ec,cbi-ssfc-value";
+				status = "okay";
+				value = <2>;
 			};
 		};
 	};

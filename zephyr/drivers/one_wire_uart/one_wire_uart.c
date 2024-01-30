@@ -78,11 +78,40 @@ int one_wire_uart_send(const struct device *dev, uint8_t cmd,
 		.sender = config->id,
 		.msg_id = data->msg_id++ % 32,
 		.ack = 0,
+		.reset = 0,
 		.checksum = 0,
 	};
 	msg.payload[0] = cmd;
 
 	memcpy(msg.payload + 1, payload, size);
+	msg.header.checksum = checksum(&msg);
+
+	ret = k_msgq_put(tx_queue, &msg, K_NO_WAIT);
+
+	if (!ret) {
+		uart_irq_tx_enable(bus);
+	}
+	return ret;
+}
+
+static int one_wire_uart_send_reset(const struct device *dev)
+{
+	struct one_wire_uart_message msg;
+	const struct one_wire_uart_config *config = dev->config;
+	const struct device *bus = config->bus;
+	struct one_wire_uart_data *data = dev->data;
+	struct k_msgq *tx_queue = data->tx_queue;
+	int ret;
+
+	msg.header = (struct one_wire_uart_header){
+		.magic = HEADER_MAGIC,
+		.payload_len = 0,
+		.sender = config->id,
+		.msg_id = 0,
+		.ack = 0,
+		.reset = 1,
+		.checksum = 0,
+	};
 	msg.header.checksum = checksum(&msg);
 
 	ret = k_msgq_put(tx_queue, &msg, K_NO_WAIT);
@@ -124,6 +153,7 @@ static void gen_ack_response(const struct device *dev,
 		.sender = config->id,
 		.msg_id = msg_id,
 		.ack = 1,
+		.reset = 0,
 		.checksum = 0,
 	};
 
@@ -138,6 +168,14 @@ DECLARE_DEFERRED(wake_tx);
 
 /* retry every 2.5ms */
 #define RETRY_INTERVAL (5 * MSEC / 2)
+#define MAX_RETRY 10
+
+static void start_error_recovery(void)
+{
+	ccprints("one_wire_uart: reached max retry count, trying reset");
+	one_wire_uart_send_reset(DEVICE_DT_GET(DT_DRV_INST(0)));
+}
+DECLARE_DEFERRED(start_error_recovery);
 
 test_export_static void load_next_message(const struct device *dev)
 {
@@ -164,15 +202,24 @@ test_export_static void load_next_message(const struct device *dev)
 
 	if (data->msg_pending) {
 		unsigned int elapsed = time_since32(data->last_send_time);
+		bool can_send = data->retry_count == 0 ||
+				elapsed >= RETRY_INTERVAL;
 
-		if (data->retry_count == 0 || elapsed >= RETRY_INTERVAL) {
+		if (can_send && data->retry_count >= MAX_RETRY) {
+			one_wire_uart_reset(dev);
+
+			/* if the failed message is not a RESET message, try to
+			 * reset remote first. Otherwise, silently stop ourself.
+			 */
+			if (!msg->header.reset) {
+				hook_call_deferred(&start_error_recovery_data,
+						   0);
+			}
+		} else if (can_send) {
 			int len = msg_len(msg);
 
 			ring_buf_put(tx_ring_buf, (uint8_t *)msg, len);
 			data->last_send_time = get_time();
-			/* TODO: implement error recovery when retry count
-			 * exceeds some threshold
-			 */
 			++data->retry_count;
 		} else {
 			hook_call_deferred(&wake_tx_data,
@@ -282,8 +329,13 @@ test_export_static void process_rx_fifo(const struct device *dev)
 			} else {
 				struct one_wire_uart_message ack_resp;
 
-				k_msgq_put(rx_queue, &msg, K_NO_WAIT);
-				hook_call_deferred(&process_packet_data, 0);
+				if (msg.header.reset) {
+					one_wire_uart_reset(dev);
+				} else {
+					k_msgq_put(rx_queue, &msg, K_NO_WAIT);
+					hook_call_deferred(&process_packet_data,
+							   0);
+				}
 
 				gen_ack_response(dev, &ack_resp, msg_id);
 				ring_buf_put(tx_ring_buf, (uint8_t *)&ack_resp,
@@ -365,6 +417,7 @@ void one_wire_uart_enable(const struct device *dev)
 	one_wire_uart_reset(dev);
 	uart_irq_callback_user_data_set(bus, uart_handler, (void *)dev);
 	uart_irq_rx_enable(bus);
+	one_wire_uart_send_reset(dev);
 }
 
 void one_wire_uart_set_callback(const struct device *dev,

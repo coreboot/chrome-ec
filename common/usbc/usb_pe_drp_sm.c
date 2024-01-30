@@ -26,7 +26,6 @@
 #include "stdbool.h"
 #include "system.h"
 #include "task.h"
-#include "tcpm/tcpm.h"
 #include "usb_charge.h"
 #include "usb_common.h"
 #include "usb_dp_alt_mode.h"
@@ -599,6 +598,12 @@ static struct policy_engine {
 	 * Set from PD task but may be cleared by host command
 	 */
 	atomic_t events;
+
+	/*
+	 * Desired result of a requested VCONN Swap. Only meaningful if
+	 * DPM_REQUEST_VCONN_SWAP is active.
+	 */
+	enum pd_vconn_role requested_vconn_role;
 
 	/* port address where soft resets are sent */
 	enum tcpci_msg_type soft_reset_sop;
@@ -1535,6 +1540,11 @@ static void pe_clear_port_data(int port)
 	tcpc_set_bist_test_mode(port, false);
 }
 
+void pe_set_requested_vconn_role(int port, enum pd_vconn_role role)
+{
+	pe[port].requested_vconn_role = role;
+}
+
 int pe_set_ado(int port, uint32_t data)
 {
 	/* return busy error if unable to set ado */
@@ -1633,7 +1643,9 @@ static bool pe_should_send_data_reset(const int port)
 		pd_get_am_discovery(port, TCPCI_MSG_SOP);
 	const enum idh_ptype ufp_ptype = pd_get_product_type(port);
 	const union ufp_vdo_rev30 ufp_vdo = {
-		.raw_value = disc->identity.product_t1.raw_value
+		.raw_value = disc->identity_cnt >= VDO_INDEX_PTYPE_UFP1_VDO ?
+				     disc->identity.product_t1.raw_value :
+				     0
 	};
 
 	return prl_get_rev(port, TCPCI_MSG_SOP) >= PD_REV30 &&
@@ -1660,6 +1672,14 @@ static bool common_src_snk_dpm_requests(int port)
 {
 	if (IS_ENABLED(CONFIG_USBC_VCONN) &&
 	    PE_CHK_DPM_REQUEST(port, DPM_REQUEST_VCONN_SWAP)) {
+		enum pd_vconn_role request = pe[port].requested_vconn_role;
+		enum pd_vconn_role current = pd_get_vconn_state(port) ?
+						     PD_ROLE_VCONN_SRC :
+						     PD_ROLE_VCONN_OFF;
+		if (request == current) {
+			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_DATA_RESET);
+			return false;
+		}
 		pe_set_dpm_curr_request(port, DPM_REQUEST_VCONN_SWAP);
 		set_state_pe(port, PE_VCS_SEND_SWAP);
 		return true;
@@ -2086,9 +2106,10 @@ void pd_request_power_swap(int port)
 }
 
 /* The function returns true if there is a PE state change, false otherwise */
-static bool port_try_vconn_swap(int port)
+static bool port_try_vconn_swap_on(int port)
 {
 	if (pe[port].vconn_swap_counter < N_VCONN_SWAP_COUNT) {
+		pe_set_requested_vconn_role(port, PD_ROLE_VCONN_SRC);
 		pd_dpm_request(port, DPM_REQUEST_VCONN_SWAP);
 		set_state_pe(port, get_last_state_pe(port));
 		return true;
@@ -2144,16 +2165,6 @@ __maybe_unused static bool pe_attempt_port_discovery(int port)
 		pd_notify_event(port, PD_STATUS_EVENT_SOP_DISC_DONE);
 		pd_notify_event(port, PD_STATUS_EVENT_SOP_PRIME_DISC_DONE);
 		return false;
-	}
-
-	/* Apply Port Discovery VCONN Swap Policy */
-	if (IS_ENABLED(CONFIG_USBC_VCONN) &&
-	    port_discovery_vconn_swap_policy(
-		    port, PE_CHK_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON))) {
-		PE_SET_FLAG(port, PE_FLAGS_LOCALLY_INITIATED_AMS);
-		PE_CLR_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON);
-		set_state_pe(port, PE_VCS_SEND_SWAP);
-		return true;
 	}
 
 	/*
@@ -3343,7 +3354,6 @@ static void pe_snk_startup_entry(int port)
 		 * Mark that we'd like to try being Vconn source and DFP
 		 */
 		PE_SET_FLAG(port, PE_FLAGS_DR_SWAP_TO_DFP);
-		PE_SET_FLAG(port, PE_FLAGS_VCONN_SWAP_TO_ON);
 	}
 
 	/*
@@ -4006,7 +4016,8 @@ static void pe_snk_ready_run(int port)
 		/* Inform DPM state machine that PE is set for messages */
 		dpm_set_pe_ready(port, true);
 
-		if (pd_timer_is_expired(port, PE_TIMER_SINK_EPR_KEEP_ALIVE)) {
+		if (IS_ENABLED(CONFIG_USB_PD_EPR) &&
+		    pd_timer_is_expired(port, PE_TIMER_SINK_EPR_KEEP_ALIVE)) {
 			set_state_pe(port, PE_SNK_EPR_KEEP_ALIVE);
 			return;
 		}
@@ -5767,14 +5778,12 @@ static void pe_vdm_send_request_entry(int port)
 	    !tc_is_vconn_src(port) &&
 	    /* TODO(b/188578923): Passing true indicates that the PE wants to
 	     * swap to VCONN Source at this time. It would make more sense to
-	     * pass the current value of PE_FLAGS_VCONN_SWAP_TO_ON, but the PE
-	     * does not actually set the flag when it wants to send a message to
-	     * the cable. The existing mechanisms to control the VCONN role are
-	     * clunky and hard to get right. The DPM should centralize logic
-	     * about VCONN role policy.
+	     * pass the current value of a PE flag, but the PE no longer
+	     * maintains a flag for this purpose. This logic should move into
+	     * the DPM with the other VCONN policy logic.
 	     */
 	    port_discovery_vconn_swap_policy(port, true)) {
-		if (port_try_vconn_swap(port))
+		if (port_try_vconn_swap_on(port))
 			return;
 	}
 
@@ -6676,7 +6685,7 @@ static void pe_enter_usb_entry(int port)
 	if ((pe[port].tx_type == TCPCI_MSG_SOP_PRIME ||
 	     pe[port].tx_type == TCPCI_MSG_SOP_PRIME_PRIME) &&
 	    !tc_is_vconn_src(port)) {
-		if (port_try_vconn_swap(port))
+		if (port_try_vconn_swap_on(port))
 			return;
 	}
 
@@ -7078,7 +7087,8 @@ static void pe_vcs_turn_off_vconn_swap_run(int port)
 		pe[port].discover_identity_counter = 0;
 		pe[port].dr_swap_attempt_counter = 0;
 
-		if (PE_CHK_FLAG(port, PE_FLAGS_ENTERING_EPR))
+		if (IS_ENABLED(CONFIG_USB_PD_EPR) &&
+		    PE_CHK_FLAG(port, PE_FLAGS_ENTERING_EPR))
 			set_state_pe(port,
 				     PE_SNK_EPR_MODE_ENTRY_WAIT_FOR_RESPONSE);
 		else

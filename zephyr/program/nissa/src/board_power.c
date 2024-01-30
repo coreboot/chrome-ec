@@ -14,6 +14,7 @@
 #include <ap_power/ap_power.h>
 #include <ap_power/ap_power_events.h>
 #include <ap_power/ap_power_interface.h>
+#include <ap_power/ap_pwrseq.h>
 #include <ap_power_override_functions.h>
 #include <power_signals.h>
 #include <x86_power_signals.h>
@@ -22,7 +23,7 @@ LOG_MODULE_DECLARE(ap_pwrseq, LOG_LEVEL_INF);
 
 #define X86_NON_DSX_ADLP_NONPWRSEQ_FORCE_SHUTDOWN_TO_MS 5
 
-static bool s0_stable;
+test_export_static bool s0_stable;
 
 static void generate_ec_soc_dsw_pwrok_handler(int delay)
 {
@@ -53,13 +54,15 @@ void board_ap_power_force_shutdown(void)
 		k_msleep(1);
 		timeout_ms--;
 	}
+
+	/* LCOV_EXCL_START messages are informational only */
 	if (power_signal_get(PWR_SLP_SUS) == 0) {
 		LOG_WRN("SLP_SUS is not deasserted! Assuming G3");
 	}
-
 	if (power_signal_get(PWR_RSMRST) == 1) {
 		LOG_WRN("RSMRST is not deasserted! Assuming G3");
 	}
+	/* LCOV_EXCL_STOP */
 
 	power_signal_set(PWR_EN_PP3300_A, 0);
 
@@ -71,8 +74,10 @@ void board_ap_power_force_shutdown(void)
 		timeout_ms--;
 	};
 
+	/* LCOV_EXCL_START informational */
 	if (power_signal_get(PWR_DSW_PWROK))
 		LOG_WRN("DSW_PWROK didn't go low!  Assuming G3.");
+	/* LCOV_EXCL_STOP */
 
 	power_signal_disable(PWR_DSW_PWROK);
 	power_signal_disable(PWR_PG_PP1P05);
@@ -169,3 +174,36 @@ int board_power_signal_set(enum power_signal signal, int value)
 {
 	return -EINVAL;
 }
+
+/*
+ * As a soft power signal, PWR_ALL_SYS_PWRGD will never wake the power state
+ * machine on its own. Since its value depends on the state of
+ * gpio_all_sys_pwrgd, wake the state machine to re-evaluate ALL_SYS_PWRGD
+ * anytime the input changes.
+ */
+void board_all_sys_pwrgd_interrupt(const struct device *unused_device,
+				   struct gpio_callback *unused_callback,
+				   gpio_port_pins_t unused_pin)
+{
+	ap_pwrseq_wake();
+}
+
+static int board_config_pwrgd_interrupt(void)
+{
+	const struct gpio_dt_spec *const pwrgd_gpio =
+		GPIO_DT_FROM_NODELABEL(gpio_all_sys_pwrgd);
+	static struct gpio_callback cb;
+	int rv;
+
+	gpio_init_callback(&cb, board_all_sys_pwrgd_interrupt,
+			   BIT(pwrgd_gpio->pin));
+	gpio_add_callback(pwrgd_gpio->port, &cb);
+
+	rv = gpio_pin_interrupt_configure_dt(pwrgd_gpio, GPIO_INT_EDGE_BOTH);
+	__ASSERT(rv == 0,
+		 "all_sys_pwrgd interrupt configuration returned error %d", rv);
+
+	return 0;
+}
+SYS_INIT(board_config_pwrgd_interrupt, APPLICATION,
+	 CONFIG_APPLICATION_INIT_PRIORITY);

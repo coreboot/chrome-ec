@@ -466,6 +466,7 @@ static void pd_update_dual_role_config(int port);
 /* Forward declare common, private functions */
 static void set_state_tc(const int port, const enum usb_tc_state new_state);
 test_export_static enum usb_tc_state get_state_tc(const int port);
+static bool in_ct_state(int port);
 
 /* Enable variable for Try.SRC states */
 static atomic_t pd_try_src;
@@ -805,7 +806,7 @@ uint32_t tc_get_flags(int port)
 	return tc[port].flags;
 }
 
-int tc_is_attached_src(int port)
+test_mockable int tc_is_attached_src(int port)
 {
 	return IS_ATTACHED_SRC(port);
 }
@@ -824,7 +825,8 @@ void tc_pd_connection(int port, int en)
 	if (en) {
 		bool new_pd_capable = false;
 
-		if (!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_PD_CAPABLE))
+		if (!TC_CHK_FLAG(port, TC_FLAGS_PARTNER_PD_CAPABLE) &&
+		    !in_ct_state(port))
 			new_pd_capable = true;
 
 		TC_SET_FLAG(port, TC_FLAGS_PARTNER_PD_CAPABLE);
@@ -1720,6 +1722,13 @@ static void handle_device_access(int port)
 	}
 }
 
+static bool in_ct_state(int port)
+{
+	return IS_ENABLED(CONFIG_USB_PE_SM) &&
+	       ((get_state_tc(port) == TC_CT_UNATTACHED_SNK) ||
+		(get_state_tc(port) == TC_CT_ATTACHED_SNK));
+}
+
 void tc_event_check(int port, int evt)
 {
 #ifdef DEBUG_PRINT_FLAG_AND_EVENT_NAMES
@@ -1926,11 +1935,6 @@ void pd_request_vconn_swap_on(int port)
 		TC_SET_FLAG(port, TC_FLAGS_REQUEST_VC_SWAP_ON);
 		task_wake(PD_PORT_TO_TASK_ID(port));
 	}
-}
-
-void pd_request_vconn_swap(int port)
-{
-	pd_dpm_request(port, DPM_REQUEST_VCONN_SWAP);
 }
 #endif
 

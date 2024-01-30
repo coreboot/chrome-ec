@@ -12,20 +12,20 @@
 
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
 
-static union brya_cbi_fw_config fw_config;
+static union dochi_cbi_fw_config fw_config;
 BUILD_ASSERT(sizeof(fw_config) == sizeof(uint32_t));
 
 /*
- * FW_CONFIG defaults for brya if the CBI.FW_CONFIG data is not
+ * FW_CONFIG defaults for dochi if the CBI.FW_CONFIG data is not
  * initialized.
  */
-static const union brya_cbi_fw_config fw_config_defaults = {
-	.usb_db = DB_USB3_PS8815,
+static const union dochi_cbi_fw_config fw_config_defaults = {
+	.usb_db = DB_USB_ABSENT,
 	.kb_bl = KEYBOARD_BACKLIGHT_ENABLED,
 };
 
 /****************************************************************************
- * Brya FW_CONFIG access
+ * Dochi FW_CONFIG access
  */
 void board_init_fw_config(void)
 {
@@ -35,7 +35,7 @@ void board_init_fw_config(void)
 	}
 }
 
-union brya_cbi_fw_config get_fw_config(void)
+union dochi_cbi_fw_config get_fw_config(void)
 {
 	return fw_config;
 }
@@ -43,4 +43,14 @@ union brya_cbi_fw_config get_fw_config(void)
 enum ec_cfg_usb_db_type ec_cfg_usb_db_type(void)
 {
 	return fw_config.usb_db;
+}
+
+enum ec_cfg_keyboard_backlight_type ec_cfg_keyboard_backlight_type(void)
+{
+	return fw_config.kb_bl;
+}
+
+enum ec_cfg_panel_power_ec_control ec_cfg_panel_power_ec_control(void)
+{
+	return fw_config.touch_en;
 }

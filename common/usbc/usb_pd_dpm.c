@@ -70,6 +70,10 @@ static struct {
 	enum tcpci_msg_type req_type;
 	mutex_t vdm_req_mutex;
 	enum dpm_pd_button_state pd_button_state;
+	/* The desired VCONN role for an upcoming VCONN Swap. Only meaningful if
+	 * DPM_FLAG_VCONN_SWAP is set.
+	 */
+	enum pd_vconn_role desired_vconn_role;
 } dpm[CONFIG_USB_PD_PORT_MAX_COUNT];
 
 __overridable const struct svdm_response svdm_rsp = {
@@ -98,6 +102,7 @@ static volatile task_id_t sysjump_task_waiting = TASK_ID_INVALID;
 #define DPM_FLAG_PD_BUTTON_PRESSED BIT(7)
 #define DPM_FLAG_PD_BUTTON_RELEASED BIT(8)
 #define DPM_FLAG_PE_READY BIT(9)
+#define DPM_FLAG_VCONN_SWAP BIT(10)
 
 /* List of all Device Policy Manager level states */
 enum usb_dpm_state {
@@ -251,6 +256,14 @@ __overridable bool board_is_tbt_usb4_port(int port)
 	return true;
 }
 
+void pd_request_vconn_swap(int port)
+{
+	dpm[port].desired_vconn_role = pd_get_vconn_state(port) ?
+					       PD_ROLE_VCONN_OFF :
+					       PD_ROLE_VCONN_SRC;
+	DPM_SET_FLAG(port, DPM_FLAG_VCONN_SWAP);
+}
+
 enum ec_status pd_request_vdm(int port, const uint32_t *data, int vdo_count,
 			      enum tcpci_msg_type tx_type)
 {
@@ -341,6 +354,14 @@ void dpm_init(int port)
 	dpm[port].flags = 0;
 	dpm[port].pd_button_state = DPM_PD_BUTTON_IDLE;
 	ap_vdm_init(port);
+
+	/* If the TCPM is not Source/DFP/VCONN Source at the time of Attach,
+	 * trigger a VCONN Swap to VCONN Source as soon as possible.
+	 */
+	if (pd_get_vconn_state(port) == PD_ROLE_VCONN_OFF) {
+		dpm[port].desired_vconn_role = PD_ROLE_VCONN_SRC;
+		DPM_SET_FLAG(port, DPM_FLAG_VCONN_SWAP);
+	}
 
 	/* Ensure that DPM state machine gets reset */
 	set_state_dpm(port, DPM_WAITING);
@@ -439,8 +460,8 @@ void dpm_vdm_acked(int port, enum tcpci_msg_type type, int vdo_count,
 		__fallthrough;
 #endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */
 	default:
-		CPRINTS("C%d: Received unexpected VDM ACK for SVID %d", port,
-			svid);
+		CPRINTS("C%d: Received unexpected VDM ACK for SVID 0x%04x",
+			port, svid);
 	}
 }
 
@@ -467,8 +488,8 @@ void dpm_vdm_naked(int port, enum tcpci_msg_type type, uint16_t svid,
 		__fallthrough;
 #endif /* CONFIG_USB_PD_TBT_COMPAT_MODE */
 	default:
-		CPRINTS("C%d: Received unexpected VDM NAK for SVID %d", port,
-			svid);
+		CPRINTS("C%d: Received unexpected VDM NAK for SVID 0x%04x",
+			port, svid);
 	}
 }
 
@@ -1420,6 +1441,25 @@ static void dpm_waiting_run(const int port)
 	}
 }
 
+/**
+ * Decide whether to initiate a VCONN Swap.
+ *
+ * @param port USB-C port number
+ * @return true if state changed; false otherwise
+ */
+static bool dpm_vconn_swap_policy(int port)
+{
+	if (DPM_CHK_FLAG(port, DPM_FLAG_VCONN_SWAP)) {
+		pe_set_requested_vconn_role(port, dpm[port].desired_vconn_role);
+		pd_dpm_request(port, DPM_REQUEST_VCONN_SWAP);
+		DPM_CLR_FLAG(port, DPM_FLAG_VCONN_SWAP);
+		set_state_dpm(port, DPM_WAITING);
+		return true;
+	}
+
+	return false;
+}
+
 /*
  * DPM_DFP_READY
  */
@@ -1457,6 +1497,10 @@ static void dpm_dfp_ready_run(const int port)
 			return;
 	}
 
+	/* Return early if the VCS policy changed the DPM state. */
+	if (dpm_vconn_swap_policy(port))
+		return;
+
 	/* Run any VDM REQ messages */
 	if (DPM_CHK_FLAG(port, DPM_FLAG_SEND_VDM_REQ)) {
 		dpm_send_req_vdm(port);
@@ -1491,6 +1535,10 @@ static void dpm_ufp_ready_run(const int port)
 		 */
 		return;
 	}
+
+	/* Return early if the VCS policy changed the DPM state. */
+	if (dpm_vconn_swap_policy(port))
+		return;
 
 	/* Run any VDM REQ messages */
 	if (DPM_CHK_FLAG(port, DPM_FLAG_SEND_VDM_REQ)) {

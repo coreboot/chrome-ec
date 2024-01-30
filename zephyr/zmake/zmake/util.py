@@ -9,6 +9,11 @@ import pathlib
 import re
 import shlex
 import shutil
+import subprocess
+import sys
+
+import zmake.jobserver
+import zmake.multiproc
 
 
 def c_str(input_str):
@@ -210,3 +215,85 @@ def get_tool_path(program):
     if not path:
         raise FileNotFoundError(f"{program} not found in PATH")
     return path
+
+
+def get_lcov_options(tool_path):
+    """Return required options for running lcov.
+
+    Varying versions of lcov require different options to successfully work.
+    This function executes lcov to discover its version and returns arguments
+    appropriate for the detected version.
+
+    Args:
+        tool_path: The path to a lcov binary (as from get_tool_path("lcov"))
+
+    Returns:
+        List of strings to be passed to lcov in argv
+    """
+    version_result = subprocess.run(
+        [tool_path, "--version"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=True,
+        text=True,
+    )
+    version_match = re.search(
+        r"LCOV version (?P<major>\d+)\.(?P<minor>\d+)(?P<extra>.*)$",
+        version_result.stdout,
+    )
+    if not version_match:
+        raise ValueError(
+            f"Unable to determine version of lcov: output was: {version_result.stdout:?}"
+        )
+
+    if int(version_match["major"]) < 2:
+        return ["--rc", "lcov_branch_coverage=1"]
+    # 2.0 deprecated the lcov_ prefix from rc options and began treating
+    # many previously-ignored errors as fatal, some of which need to be
+    # ignored.
+    return [
+        "--rc",
+        "branch_coverage=1",
+        "--filter",
+        "range",
+        "--ignore-errors",
+        "inconsistent,source",
+        "--ignore-errors",
+        "gcov,gcov",
+    ]
+
+
+def merge_token_databases(databases, merged_db):
+    """Merge token databases
+
+    Args:
+    databases: Array of token databases to be merged
+    merged_db: Merged token database output path.
+    """
+    checkout = locate_cros_checkout()
+    modules = zmake.modules.locate_from_checkout(pathlib.Path("."))
+    jobclient = zmake.jobserver.GNUMakeJobServer()
+
+    proc = jobclient.popen(
+        [
+            sys.executable,
+            checkout
+            / modules["pigweed"]
+            / "pw_tokenizer"
+            / "py"
+            / "pw_tokenizer"
+            / "database.py",
+            "create",
+            "--type",
+            "binary",
+            "--force",
+            "--database",
+            merged_db,
+            *databases,
+        ],
+        cwd=os.path.dirname(merged_db),
+        encoding="utf-8",
+    )
+
+    if proc.wait(timeout=60):
+        raise OSError("Failed to run PW database.py")
