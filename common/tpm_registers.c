@@ -1110,30 +1110,32 @@ void tpm_task(void *u)
 #ifdef CONFIG_NVMEM_DEBUG_EPS
 				uint32_t err_flag = seed_err_status();
 
-				if ((command_code != TPM_CC_Startup) &&
+				if (err_flag &&
+				    (command_code != TPM_CC_Startup) &&
 				    (err_flag != seed_err_flag)) {
 					CPRINTSS("EPS/SPS before cmd=0x%x:"
 						 " E:%x [%x,%x]",
 						 command_code, err_flag,
 						 gp.EPSeed.t.size,
 						 gp.SPSeed.t.size);
-					seed_err_flag = err_flag;
 				}
+				seed_err_flag = err_flag;
 #endif /* CONFIG_NVMEM_DEBUG_EPS */
 				ExecuteCommand(tpm_.fifo_write_index,
 					       (uint8_t *)tpmh, &response_size,
 					       &response);
 #ifdef CONFIG_NVMEM_DEBUG_EPS
 				err_flag = seed_err_status();
-				if ((command_code != TPM_CC_Shutdown) &&
+				if (err_flag &&
+				    (command_code != TPM_CC_Shutdown) &&
 				    err_flag != seed_err_flag) {
 					CPRINTSS("EPS/SPS after cmd=0x%x:"
 						 " E:%x [%x,%x]",
 						 command_code, err_flag,
 						 gp.EPSeed.t.size,
 						 gp.SPSeed.t.size);
-					seed_err_flag = err_flag;
 				}
+				seed_err_flag = err_flag;
 #endif /* CONFIG_NVMEM_DEBUG_EPS */
 #else /* ENABLE_TPM */
 				{
