@@ -32,6 +32,7 @@ test-list-y=\
        benchmark \
        boringssl_crypto \
        compile_time_macros \
+       cortexm_fpu \
        crc \
        debug \
        exception \
@@ -58,6 +59,7 @@ test-list-y=\
        rollback_entropy \
        rsa3 \
        rtc \
+       rtc_npcx9 \
        sbrk \
        scratchpad \
        sha256 \

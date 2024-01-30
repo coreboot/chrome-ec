@@ -6,7 +6,7 @@
 #include "drivers/ucsi_v3.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_pdc.h"
-#include "emul/emul_realtek_rts54xx.h"
+#include "emul_realtek_rts54xx.h"
 #include "zephyr/sys/util.h"
 #include "zephyr/sys/util_macro.h"
 
@@ -322,6 +322,17 @@ static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 	data->response.rtk_status.battery_charging_status =
 		data->connector_status.battery_charging_cap & BIT_MASK(2);
 
+	/* BYTE 15-18 */
+	data->response.rtk_status.average_current_low = 0;
+	data->response.rtk_status.average_current_high = 0;
+
+	uint32_t voltage = data->connector_status.voltage_reading *
+			   data->connector_status.voltage_scale * 5 / 50;
+	data->response.rtk_status.voltage_reading_low = voltage & 0xFF;
+	data->response.rtk_status.voltage_reading_high = voltage >> 8;
+
+	data->read_offset = req->get_rtk_status.offset;
+
 	send_response(data);
 
 	return 0;
@@ -348,6 +359,98 @@ static int set_pdr(struct rts5453p_emul_pdc_data *data,
 	data->pdr = req->set_pdr.pdr;
 
 	memset(&data->response, 0, sizeof(union rts54_response));
+	send_response(data);
+
+	return 0;
+}
+
+static int set_rdo(struct rts5453p_emul_pdc_data *data,
+		   const union rts54_request *req)
+{
+	LOG_INF("SET_RDO port=%d, rdo=0x%X", req->set_rdo.port_num,
+		req->set_rdo.rdo);
+
+	data->rdo = req->set_rdo.rdo;
+
+	memset(&data->response, 0, sizeof(union rts54_response));
+	send_response(data);
+
+	return 0;
+}
+
+static int get_rdo(struct rts5453p_emul_pdc_data *data,
+		   const union rts54_request *req)
+{
+	LOG_INF("GET_RDO port=%d", req->set_rdo.port_num);
+
+	data->response.get_rdo.byte_count = sizeof(struct get_rdo_response) - 1;
+	data->response.get_rdo.rdo = data->rdo;
+	send_response(data);
+
+	return 0;
+}
+
+static int set_tpc_rp(struct rts5453p_emul_pdc_data *data,
+		      const union rts54_request *req)
+{
+	LOG_INF("SET_TPC_RP port=%d, value=0x%X", req->set_tpc_rp.port_num,
+		req->set_tpc_rp.tpc_rp.raw_value);
+
+	data->tpc_rp = req->set_tpc_rp.tpc_rp;
+
+	memset(&data->response, 0, sizeof(data->response));
+	send_response(data);
+
+	return 0;
+}
+
+static int set_tpc_csd_operation_mode(struct rts5453p_emul_pdc_data *data,
+				      const union rts54_request *req)
+{
+	LOG_INF("SET_TPC_CSD_OPERATION_MODE port=%d",
+		req->set_tpc_csd_operation_mode.port_num);
+
+	data->csd_op_mode = req->set_tpc_csd_operation_mode.op_mode;
+
+	memset(&data->response, 0, sizeof(data->response));
+	send_response(data);
+
+	return 0;
+}
+
+static int force_set_power_switch(struct rts5453p_emul_pdc_data *data,
+				  const union rts54_request *req)
+{
+	LOG_INF("FORCE_SET_POWER_SWITCH port=%d",
+		req->force_set_power_switch.port_num);
+
+	data->set_power_switch_data = req->force_set_power_switch.data;
+
+	memset(&data->response, 0, sizeof(data->response));
+	send_response(data);
+
+	return 0;
+}
+
+static int set_tpc_reconnect(struct rts5453p_emul_pdc_data *data,
+			     const union rts54_request *req)
+{
+	LOG_INF("SET_TPC_RECONNECT port=%d", req->set_tpc_reconnect.port_num);
+
+	data->set_tpc_reconnect_param = req->set_tpc_reconnect.param0;
+
+	memset(&data->response, 0, sizeof(data->response));
+	send_response(data);
+
+	return 0;
+}
+
+static int read_power_level(struct rts5453p_emul_pdc_data *data,
+			    const union rts54_request *req)
+{
+	LOG_INF("READ_POWER_LEVEL port=%d", req->read_power_level.port_num);
+
+	memset(&data->response, 0, sizeof(data->response));
 	send_response(data);
 
 	return 0;
@@ -410,15 +513,15 @@ const struct commands sub_cmd_x08[] = {
 	{ .code = 0x00, HANDLER_DEF(tcpm_reset) },
 	{ .code = 0x01, HANDLER_DEF(set_notification_enable) },
 	{ .code = 0x03, HANDLER_DEF(unsupported) },
-	{ .code = 0x04, HANDLER_DEF(unsupported) },
+	{ .code = 0x04, HANDLER_DEF(set_rdo) },
 	{ .code = 0x44, HANDLER_DEF(unsupported) },
-	{ .code = 0x05, HANDLER_DEF(unsupported) },
+	{ .code = 0x05, HANDLER_DEF(set_tpc_rp) },
 	{ .code = 0x19, HANDLER_DEF(unsupported) },
 	{ .code = 0x1A, HANDLER_DEF(unsupported) },
-	{ .code = 0x1D, HANDLER_DEF(unsupported) },
-	{ .code = 0x1F, HANDLER_DEF(unsupported) },
+	{ .code = 0x1D, HANDLER_DEF(set_tpc_csd_operation_mode) },
+	{ .code = 0x1F, HANDLER_DEF(set_tpc_reconnect) },
 	{ .code = 0x20, HANDLER_DEF(unsupported) },
-	{ .code = 0x21, HANDLER_DEF(unsupported) },
+	{ .code = 0x21, HANDLER_DEF(force_set_power_switch) },
 	{ .code = 0x23, HANDLER_DEF(unsupported) },
 	{ .code = 0x24, HANDLER_DEF(unsupported) },
 	{ .code = 0x26, HANDLER_DEF(unsupported) },
@@ -426,7 +529,7 @@ const struct commands sub_cmd_x08[] = {
 	{ .code = 0x28, HANDLER_DEF(unsupported) },
 	{ .code = 0x2B, HANDLER_DEF(unsupported) },
 	{ .code = 0x83, HANDLER_DEF(unsupported) },
-	{ .code = 0x84, HANDLER_DEF(unsupported) },
+	{ .code = 0x84, HANDLER_DEF(get_rdo) },
 	{ .code = 0x85, HANDLER_DEF(unsupported) },
 	{ .code = 0x99, HANDLER_DEF(unsupported) },
 	{ .code = 0x9A, HANDLER_DEF(unsupported) },
@@ -455,6 +558,7 @@ const struct commands sub_cmd_x0E[] = {
 	{ .code = 0x11, HANDLER_DEF(unsupported) },
 	{ .code = 0x12, HANDLER_DEF(get_connector_status) },
 	{ .code = 0x13, HANDLER_DEF(get_error_status) },
+	{ .code = 0x1E, HANDLER_DEF(read_power_level) },
 };
 
 const struct commands sub_cmd_x12[] = {
@@ -609,14 +713,13 @@ static int rts5453p_emul_read_byte(const struct emul *emul, int reg,
 {
 	struct rts5453p_emul_pdc_data *data = rts5453p_emul_get_pdc_data(emul);
 
-	LOG_DBG("read_byte reg=0x%X, bytes=%d", reg, bytes);
-
 	if (data->read_ping) {
 		LOG_DBG("READING ping_raw_value=0x%X", data->ping_raw_value);
 		*val = data->ping_raw_value;
-		data->read_ping = false;
 	} else {
-		*val = data->response.raw_data[bytes];
+		LOG_DBG("read_byte reg=0x%X, bytes=%d, offset=%d", reg, bytes,
+			data->read_offset);
+		*val = data->response.raw_data[bytes + data->read_offset];
 	}
 
 	return 0;
@@ -634,10 +737,18 @@ static int rts5453p_emul_read_byte(const struct emul *emul, int reg,
  * @return 0 on success
  * @return -EIO on error
  */
-static int rts5453p_emul_finish_read(const struct emul *target, int reg,
+static int rts5453p_emul_finish_read(const struct emul *emul, int reg,
 				     int bytes)
 {
+	struct rts5453p_emul_pdc_data *data = rts5453p_emul_get_pdc_data(emul);
+
 	LOG_DBG("finish_read reg=0x%X, bytes=%d", reg, bytes);
+	if (data->read_ping) {
+		data->read_ping = false;
+	} else {
+		data->read_offset = 0;
+	}
+
 	return 0;
 }
 /**
@@ -681,6 +792,8 @@ static int rts5453p_emul_init(const struct emul *emul,
 
 	i2c_common_emul_init(&data->common);
 
+	data->pdc_data.read_offset = 0;
+
 	data->pdc_data.connector_reset_type = 0xFF;
 	data->pdc_data.ic_status.fw_main_version = 0xAB;
 	data->pdc_data.ic_status.pd_version[0] = 0xCD;
@@ -693,6 +806,8 @@ static int rts5453p_emul_init(const struct emul *emul,
 	data->pdc_data.capability.bcdUSBTypeCVersion = 0xCAFE;
 
 	data->pdc_data.connector_capability.op_mode_usb3 = 1;
+
+	data->pdc_data.set_tpc_reconnect_param = 0xAA;
 
 	k_work_init_delayable(&data->pdc_data.delay_work,
 			      delayable_work_handler);
@@ -790,6 +905,94 @@ static int emul_realtek_rts54xx_get_pdr(const struct emul *target,
 	return 0;
 }
 
+static int
+emul_realtek_rts54xx_get_requested_power_level(const struct emul *target,
+					       enum usb_typec_current_t *level)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+
+	switch (data->tpc_rp.tpc_rp) {
+	case 1:
+		*level = TC_CURRENT_USB_DEFAULT;
+		break;
+	case 2:
+		*level = TC_CURRENT_1_5A;
+		break;
+	case 3:
+		*level = TC_CURRENT_3_0A;
+		break;
+	default:
+		LOG_ERR("Invalid tpc_rp value 0x%X", data->tpc_rp.tpc_rp);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int emul_realtek_rts54xx_get_ccom(const struct emul *target,
+					 enum ccom_t *ccom, enum drp_mode_t *dm)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+
+	switch (data->csd_op_mode.csd_mode) {
+	case 0:
+		*ccom = CCOM_RD;
+		break;
+	case 1:
+		*ccom = CCOM_DRP;
+		switch (data->csd_op_mode.drp_mode) {
+		case 0:
+			*dm = DRP_NORMAL;
+			break;
+		case 1:
+			*dm = DRP_TRY_SRC;
+			break;
+		case 2:
+			*dm = DRP_TRY_SNK;
+			break;
+		default:
+			LOG_ERR("Invalid drp 0x%X", data->csd_op_mode.drp_mode);
+			return -EINVAL;
+		}
+		break;
+	case 2:
+		*ccom = CCOM_RP;
+		break;
+	default:
+		LOG_ERR("Invalid csd_mode 0x%X", data->csd_op_mode.csd_mode);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int emul_realtek_rts54xx_get_sink_path(const struct emul *target,
+					      bool *en)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+
+	*en = data->set_power_switch_data.vbsin_en_control &&
+	      data->set_power_switch_data.vbsin_en == 3;
+
+	return 0;
+}
+
+static int emul_realtek_rts54xx_get_reconnect_req(const struct emul *target,
+						  uint8_t *expected,
+						  uint8_t *val)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+
+	*expected = 0x01;
+	*val = data->set_tpc_reconnect_param;
+
+	return 0;
+}
+
 struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.set_response_delay = emul_realtek_rts54xx_set_response_delay,
 	.get_connector_reset = emul_realtek_rts54xx_get_connector_reset,
@@ -800,6 +1003,11 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.set_connector_status = emul_realtek_rts54xx_set_connector_status,
 	.get_uor = emul_realtek_rts54xx_get_uor,
 	.get_pdr = emul_realtek_rts54xx_get_pdr,
+	.get_requested_power_level =
+		emul_realtek_rts54xx_get_requested_power_level,
+	.get_ccom = emul_realtek_rts54xx_get_ccom,
+	.get_sink_path = emul_realtek_rts54xx_get_sink_path,
+	.get_reconnect_req = emul_realtek_rts54xx_get_reconnect_req,
 };
 
 #define RTS5453P_EMUL_DEFINE(n)                                             \

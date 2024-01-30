@@ -159,6 +159,14 @@ config EMUL_FPC1025
 	  mode) that can be issued by the public driver (without FPC private
 	  library)
 
+config EMUL_SMBUS_ARA
+	bool "SMBUS Alert Response Address emulator"
+	default y
+	depends on DT_HAS_ZEPHYR_SMBUS_ARA_EMUL_ENABLED && EMUL
+	select EMUL_COMMON_I2C
+	help
+	  Enable the SMBUS ARA emulator. This driver use emulated I2C bus.
+
 config EMUL_REALTEK_RTS54_PDC
 	bool "Realtek RTS5453P Type-C Power Delivery Controller emulator"
 	default y
@@ -174,6 +182,17 @@ config EMUL_RTC
 	depends on DT_HAS_CROS_EC_RTC_EMUL_ENABLED
 	help
 	  This options enables the RTC emulator for testing.
+
+config EMUL_KTU1125
+	bool "KTU1125 PPC emulator"
+	default y
+	depends on DT_HAS_ZEPHYR_KTU1125_EMUL_ENABLED
+	help
+	  Enable the KTU1125 PPC emulator. This driver uses an emulated
+	  I2C bus. This is a minimal emulator that does not provide
+	  functional emulation but does support coverage testing of the
+	  KTU1125 PPC driver.
+	  Emulator API is available in zephyr/include/emul/emul_ktu1125.h.
 
 config EMUL_RT1739
 	bool "RT1739 PPC emulator"

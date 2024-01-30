@@ -18,6 +18,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/smf.h>
 LOG_MODULE_REGISTER(pdc_rts54, LOG_LEVEL_INF);
+#include "usbc/utils.h"
+
 #include <drivers/pdc.h>
 
 #define DT_DRV_COMPAT realtek_rts54_pdc
@@ -57,6 +59,13 @@ LOG_MODULE_REGISTER(pdc_rts54, LOG_LEVEL_INF);
  */
 #define VBSIN_EN_ON 0x43
 #define VBSIN_EN_OFF 0x40
+
+/**
+ * @brief Offsets of data fields in the GET_IC_STATUS response
+ */
+#define RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET (4)
+#define RTS54XX_GET_IC_STATUS_FWVER_MINOR_OFFSET (5)
+#define RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET (6)
 
 /**
  * @brief SMbus Command struct for Realtek commands
@@ -783,10 +792,13 @@ static void st_read_run(void *o)
 		/* Realtek Is running flash code: Byte 1 */
 		info->is_running_flash_code = data->rd_buf[1];
 
-		/* Realtek FW main version: Byte4, Byte5, Byte6 (little-endian)
-		 */
-		info->fw_version = data->rd_buf[6] << 16 |
-				   data->rd_buf[5] << 8 | data->rd_buf[4];
+		/* Realtek FW main version: Byte4, Byte5, Byte6 */
+		info->fw_version =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET]
+				<< 16 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_MINOR_OFFSET]
+				<< 8 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET];
 
 		/* Realtek VID PID: Byte10, Byte11, Byte12, Byte13
 		 * (little-endian) */
@@ -1179,6 +1191,7 @@ static int rts54_reconnect(const struct device *dev)
 		SET_TPC_RECONNECT.len,
 		SET_TPC_RECONNECT.sub,
 		0x00,
+		0x01,
 	};
 
 	return rts54_post_command(dev, CMD_SET_TPC_RECONNECT, payload,
@@ -1511,6 +1524,22 @@ static int rts54_get_info(const struct device *dev, struct pdc_info_t *info)
 				  ARRAY_SIZE(payload), (uint8_t *)info);
 }
 
+static int rts54_get_bus_info(const struct device *dev,
+			      struct pdc_bus_info_t *info)
+{
+	const struct pdc_config_t *cfg =
+		(const struct pdc_config_t *)dev->config;
+
+	if (info == NULL) {
+		return -EINVAL;
+	}
+
+	info->bus_type = PDC_BUS_TYPE_I2C;
+	info->i2c = cfg->i2c;
+
+	return 0;
+}
+
 static int rts54_get_vbus_voltage(const struct device *dev, uint16_t *voltage)
 {
 	struct pdc_data_t *data = dev->data;
@@ -1652,6 +1681,7 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.set_handler_cb = rts54_set_handler_cb,
 	.read_power_level = rts54_read_power_level,
 	.get_info = rts54_get_info,
+	.get_bus_info = rts54_get_bus_info,
 	.set_power_level = rts54_set_power_level,
 	.reconnect = rts54_reconnect,
 };
@@ -1762,7 +1792,8 @@ static void rts54xx_thread(void *dev, void *unused1, void *unused2)
 	static const struct pdc_config_t pdc_config##inst = {                 \
 		.i2c = I2C_DT_SPEC_INST_GET(inst),                            \
 		.irq_gpios = GPIO_DT_SPEC_INST_GET(inst, irq_gpios),          \
-		.connector_number = 1, /* TODO: Read from DT */               \
+		.connector_number =                                           \
+			USBC_PORT_FROM_DRIVER_NODE(DT_DRV_INST(inst), pdc),   \
 		.create_thread = create_thread_##inst,                        \
 	};                                                                    \
                                                                               \

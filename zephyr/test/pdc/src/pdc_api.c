@@ -3,14 +3,15 @@
  * found in the LICENSE file.
  */
 
+#include "battery.h"
 #include "common.h"
 #include "console.h"
 #include "drivers/pdc.h"
 #include "drivers/ucsi_v3.h"
-#include "emul/emul_common_i2c.h"
 #include "emul/emul_pdc.h"
-#include "emul/emul_realtek_rts54xx.h"
 #include "i2c.h"
+#include "zephyr/sys/util.h"
+#include "zephyr/sys/util_macro.h"
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
@@ -201,4 +202,107 @@ ZTEST_USER(pdc_api, test_set_pdr)
 	zassert_ok(emul_pdc_get_pdr(emul, &out));
 
 	zassert_equal(out.raw_value, in.raw_value);
+}
+
+ZTEST_USER(pdc_api, test_rdo)
+{
+	uint32_t in, out = 0;
+
+	in = BIT(25) | (BIT_MASK(9) & 0x55);
+	zassert_ok(pdc_set_rdo(dev, in));
+
+	k_sleep(K_MSEC(100));
+	zassert_ok(pdc_get_rdo(dev, &out));
+
+	k_sleep(K_MSEC(100));
+	zassert_equal(in, out);
+}
+
+ZTEST_USER(pdc_api, test_set_power_level)
+{
+	int i;
+	enum usb_typec_current_t out;
+	enum usb_typec_current_t in[] = {
+		TC_CURRENT_USB_DEFAULT,
+		TC_CURRENT_1_5A,
+		TC_CURRENT_3_0A,
+	};
+
+	zassert_equal(pdc_set_power_level(dev, TC_CURRENT_PPM_DEFINED),
+		      -EINVAL);
+
+	for (i = 0; i < ARRAY_SIZE(in); i++) {
+		zassert_ok(pdc_set_power_level(dev, in[i]));
+
+		k_sleep(K_MSEC(100));
+		emul_pdc_get_requested_power_level(emul, &out);
+		zassert_equal(in[i], out);
+	}
+}
+
+ZTEST_USER(pdc_api, test_get_bus_voltage)
+{
+	uint32_t mv_units = 50;
+	uint32_t expected_voltage_mv = 5000;
+	uint16_t out = 0;
+	struct connector_status_t in;
+
+	in.voltage_scale = 10; /* 50 mv units*/
+	in.voltage_reading = expected_voltage_mv / mv_units;
+	emul_pdc_set_connector_status(emul, &in);
+
+	zassert_ok(pdc_get_vbus_voltage(dev, &out));
+	k_sleep(K_MSEC(100));
+
+	zassert_equal(out, expected_voltage_mv);
+
+	zassert_equal(pdc_get_vbus_voltage(dev, NULL), -EINVAL);
+}
+
+ZTEST_USER(pdc_api, test_set_ccom)
+{
+	int i, j;
+	enum ccom_t ccom_in[] = { CCOM_RP, CCOM_RD, CCOM_DRP };
+	enum ccom_t ccom_out;
+	enum drp_mode_t dm_in[] = { DRP_NORMAL, DRP_TRY_SRC, DRP_TRY_SNK };
+	enum drp_mode_t dm_out;
+
+	for (i = 0; i < ARRAY_SIZE(ccom_in); i++) {
+		for (j = 0; j < ARRAY_SIZE(dm_in); j++) {
+			zassert_ok(pdc_set_ccom(dev, ccom_in[i], dm_in[j]));
+
+			k_sleep(K_MSEC(100));
+			zassert_ok(emul_pdc_get_ccom(emul, &ccom_out, &dm_out));
+			zassert_equal(ccom_in[i], ccom_out);
+			if (ccom_in[i] == CCOM_DRP) {
+				zassert_equal(dm_in[j], dm_out);
+			}
+		}
+	}
+}
+
+ZTEST_USER(pdc_api, test_set_sink_path)
+{
+	int i;
+	bool in[] = { true, false }, out;
+
+	for (i = 0; i < ARRAY_SIZE(in); i++) {
+		zassert_ok(pdc_set_sink_path(dev, in[i]));
+
+		k_sleep(K_MSEC(100));
+		zassert_ok(emul_pdc_get_sink_path(emul, &out));
+
+		zassert_equal(in[i], out);
+	}
+}
+
+ZTEST_USER(pdc_api, test_reconnect)
+{
+	uint8_t expected, val;
+
+	zassert_ok(pdc_reconnect(dev));
+
+	k_sleep(K_MSEC(100));
+	zassert_ok(emul_pdc_get_reconnect_req(emul, &expected, &val));
+	zassert_equal(expected, val);
 }

@@ -14,6 +14,13 @@ zephyr_include_directories(
 
 target_sources(app PRIVATE src/stubs.c)
 
+if(CONFIG_TEST_NISSA_BOARD_POWER)
+    # Test source
+    target_sources(app PRIVATE src/board_power.c)
+    # Module under test
+    target_sources(app PRIVATE ${PLATFORM_EC_PROGRAM_DIR}/nissa/src/board_power.c)
+endif()
+
 target_sources_ifdef(
         CONFIG_TEST_NISSA_SUB_BOARD
         app PRIVATE
@@ -33,7 +40,6 @@ target_sources_ifdef(
         src/nivviks.c
         ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/fan.c
         ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/form_factor.c
-        ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/keyboard.c
         ${PLATFORM_EC_PROGRAM_DIR}/nissa/nivviks/src/led.c
 )
 
@@ -54,7 +60,6 @@ if(CONFIG_TEST_NISSA_NEREID)
             src/nereid.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/nereid/src/charger.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/nereid/src/hdmi.c
-            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nereid/src/keyboard.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/nereid/src/usbc.c
     )
 endif()
@@ -66,7 +71,6 @@ if(CONFIG_TEST_NISSA_NOKRIS)
             src/nokris.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/nokris/src/charger.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/nokris/src/hdmi.c
-            ${PLATFORM_EC_PROGRAM_DIR}/nissa/nokris/src/keyboard.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/nokris/src/usbc.c
     )
 endif()
@@ -78,10 +82,10 @@ if(CONFIG_TEST_NISSA_GOTHRAX)
             src/gothrax.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/charger.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/hdmi.c
-            ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/keyboard.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/usbc.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/usb_mux_config.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/form_factor.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/fan.c
     )
 endif()
 
@@ -91,7 +95,6 @@ if(CONFIG_TEST_NISSA_PUJJO)
             src/pujjo.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjo/src/fan.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjo/src/form_factor.c
-            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjo/src/keyboard.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjo/src/hdmi.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjo/src/led.c
     )
@@ -146,7 +149,6 @@ if(CONFIG_TEST_NISSA_PIRRHA)
 	    app PRIVATE
 	    src/pirrha.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/src/charger.c
-	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/src/keyboard.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/src/led.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/src/usbc.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/pirrha/src/battery.c
@@ -160,6 +162,20 @@ if(CONFIG_TEST_NISSA_ANRAGGAR)
     target_sources(
             app PRIVATE
             src/anraggar.c
-            ${PLATFORM_EC_PROGRAM_DIR}/nissa/anraggar/src/keyboard.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_ULDREN)
+    target_sources(
+	    app PRIVATE
+	    src/uldren.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/charger.c
+            #   ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/form_factor.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/kb_backlight.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/mp2964_update.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/sensor.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/sub_board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/usb_mux_config.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/usbc.c
     )
 endif()
