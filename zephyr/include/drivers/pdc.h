@@ -17,11 +17,27 @@
 #include <errno.h>
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/i2c.h>
 #include <zephyr/types.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * Extract the 16-bit VID or PID from the 32-bit container in
+ * `struct pdc_info_t`
+ */
+#define PDC_VIDPID_GET_VID(vidpid) (((vidpid) >> 16) & 0xFFFF)
+#define PDC_VIDPID_GET_PID(vidpid) ((vidpid) & 0xFFFF)
+
+/**
+ * Extract the major, minor, and patch elements from a 32-bit version in
+ * `struct pdc_info_t`
+ */
+#define PDC_FWVER_GET_MAJOR(fwver) (((fwver) >> 16) & 0xFF)
+#define PDC_FWVER_GET_MINOR(fwver) (((fwver) >> 8) & 0xFF)
+#define PDC_FWVER_GET_PATCH(fwver) ((fwver) & 0xFF)
 
 /**
  * @brief Power Delivery Controller Information
@@ -41,6 +57,26 @@ struct pdc_info_t {
 	uint8_t running_in_flash_bank;
 	/** Extra information (optional) */
 	uint16_t extra;
+};
+
+/**
+ * The type of interface used to access the PDC
+ */
+enum pdc_bus_type {
+	PDC_BUS_TYPE_NONE = 0,
+	PDC_BUS_TYPE_I2C,
+	PDC_BUS_TYPE_MAX,
+};
+
+/**
+ * @brief Bus info for PDC chip. This gets exposed via host command to enable
+ *        passthrough access to the PDC from AP during firmware updates.
+ */
+struct pdc_bus_info_t {
+	enum pdc_bus_type bus_type;
+	union {
+		struct i2c_dt_spec i2c;
+	};
 };
 
 /**
@@ -78,6 +114,8 @@ typedef int (*pdc_get_rdo_t)(const struct device *dev, uint32_t *rdo);
 typedef int (*pdc_set_rdo_t)(const struct device *dev, uint32_t rdo);
 typedef int (*pdc_get_info_t)(const struct device *dev,
 			      struct pdc_info_t *info);
+typedef int (*pdc_get_bus_info_t)(const struct device *dev,
+				  struct pdc_bus_info_t *info);
 typedef int (*pdc_get_current_pdo_t)(const struct device *dev, uint32_t *pdo);
 typedef int (*pdc_read_power_level_t)(const struct device *dev);
 typedef int (*pdc_set_power_level_t)(const struct device *dev,
@@ -112,6 +150,7 @@ __subsystem struct pdc_driver_api_t {
 	pdc_set_rdo_t set_rdo;
 	pdc_read_power_level_t read_power_level;
 	pdc_get_info_t get_info;
+	pdc_get_bus_info_t get_bus_info;
 	pdc_set_power_level_t set_power_level;
 	pdc_reconnect_t reconnect;
 	pdc_get_current_flash_bank_t get_current_flash_bank;
@@ -533,6 +572,26 @@ static inline int pdc_get_info(const struct device *dev,
 	__ASSERT(api->get_info != NULL, "GET_INFO is not optional");
 
 	return api->get_info(dev, info);
+}
+
+/**
+ * @brief Get bus interface info about the PDC
+ *
+ * @param dev PDC device structure pointer
+ * @param info Output struct for bus info
+ *
+ * @retval 0 on success
+ * @retval -EINVAL if info pointer is NULL
+ */
+static inline int pdc_get_bus_info(const struct device *dev,
+				   struct pdc_bus_info_t *info)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	__ASSERT(api->get_bus_info != NULL, "GET_INFO is not optional");
+
+	return api->get_bus_info(dev, info);
 }
 
 /**

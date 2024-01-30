@@ -12,6 +12,7 @@
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
 #include <zephyr/logging/log.h>
@@ -322,6 +323,10 @@ static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 	data->response.rtk_status.battery_charging_status =
 		data->connector_status.battery_charging_cap & BIT_MASK(2);
 
+	/* BYTE 12 */
+	data->response.rtk_status.plug_direction =
+		data->connector_status.orientation & BIT_MASK(1);
+
 	/* BYTE 15-18 */
 	data->response.rtk_status.average_current_low = 0;
 	data->response.rtk_status.average_current_high = 0;
@@ -445,6 +450,17 @@ static int set_tpc_reconnect(struct rts5453p_emul_pdc_data *data,
 	return 0;
 }
 
+static int read_power_level(struct rts5453p_emul_pdc_data *data,
+			    const union rts54_request *req)
+{
+	LOG_INF("READ_POWER_LEVEL port=%d", req->read_power_level.port_num);
+
+	memset(&data->response, 0, sizeof(data->response));
+	send_response(data);
+
+	return 0;
+}
+
 static bool send_response(struct rts5453p_emul_pdc_data *data)
 {
 	if (data->delay_ms > 0) {
@@ -547,6 +563,7 @@ const struct commands sub_cmd_x0E[] = {
 	{ .code = 0x11, HANDLER_DEF(unsupported) },
 	{ .code = 0x12, HANDLER_DEF(get_connector_status) },
 	{ .code = 0x13, HANDLER_DEF(get_error_status) },
+	{ .code = 0x1E, HANDLER_DEF(read_power_level) },
 };
 
 const struct commands sub_cmd_x12[] = {
@@ -981,6 +998,17 @@ static int emul_realtek_rts54xx_get_reconnect_req(const struct emul *target,
 	return 0;
 }
 
+static int emul_realtek_rts54xx_pulse_irq(const struct emul *target)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+
+	gpio_emul_input_set(data->irq_gpios.port, data->irq_gpios.pin, 1);
+	gpio_emul_input_set(data->irq_gpios.port, data->irq_gpios.pin, 0);
+
+	return 0;
+}
+
 struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.set_response_delay = emul_realtek_rts54xx_set_response_delay,
 	.get_connector_reset = emul_realtek_rts54xx_get_connector_reset,
@@ -996,6 +1024,7 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.get_ccom = emul_realtek_rts54xx_get_ccom,
 	.get_sink_path = emul_realtek_rts54xx_get_sink_path,
 	.get_reconnect_req = emul_realtek_rts54xx_get_reconnect_req,
+	.pulse_irq = emul_realtek_rts54xx_pulse_irq,
 };
 
 #define RTS5453P_EMUL_DEFINE(n)                                             \
@@ -1008,6 +1037,9 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 			.read_byte = rts5453p_emul_read_byte,		\
 			.finish_read = rts5453p_emul_finish_read,	\
 			.access_reg = rts5453p_emul_access_reg,		\
+		},							\
+		.pdc_data = {						\
+			.irq_gpios = GPIO_DT_SPEC_INST_GET(n, irq_gpios), \
 		},							\
 	};       \
 	static const struct i2c_common_emul_cfg rts5453p_emul_cfg_##n = {   \

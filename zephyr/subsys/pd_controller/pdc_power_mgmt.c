@@ -22,7 +22,7 @@
 #include <drivers/pdc.h>
 #include <usbc/utils.h>
 
-LOG_MODULE_REGISTER(pdc);
+LOG_MODULE_REGISTER(pdc_power_mgmt);
 
 /**
  * @brief maximum number of times to try and send a command
@@ -472,6 +472,15 @@ static void run_public_api_command(struct pdc_port_t *port)
 	} else if (atomic_test_and_clear_bit(port->pdc_cmd_flags,
 					     CMD_PDC_SET_UOR)) {
 		queue_public_cmd(port, CMD_PDC_SET_UOR);
+	} else if (atomic_test_and_clear_bit(port->pdc_cmd_flags,
+					     CMD_PDC_GET_INFO)) {
+		queue_public_cmd(port, CMD_PDC_GET_INFO);
+		return;
+	}
+
+	if (atomic_get(port->pdc_cmd_flags) != 0) {
+		LOG_ERR("Public API does not support this command (%ld)",
+			atomic_get(port->pdc_cmd_flags));
 	}
 }
 
@@ -578,6 +587,26 @@ static void send_cmd_init(struct pdc_port_t *port)
 }
 
 /**
+ * @brief Limits the charge current to zero and invalidates and received Source
+ * PDOS. This function also seeds the charger.
+ */
+static void invalidate_charger_settings(struct pdc_port_t *port)
+{
+	const struct pdc_config_t *const config = port->dev->config;
+
+	typec_set_input_current_limit(config->connector_num, 0, 0);
+	pd_set_input_current_limit(config->connector_num, 0, 0);
+	charge_manager_set_ceil(config->connector_num, CEIL_REQUESTOR_PD,
+				CHARGE_CEIL_NONE);
+	charge_manager_update_dualrole(config->connector_num, CAP_UNKNOWN);
+
+	/* Invalidate PDOS */
+	port->snk_policy.pdo = 0;
+	memset(port->snk_policy.pdos, 0, sizeof(uint32_t) * PDO_NUM);
+	port->snk_policy.pdo_count = 0;
+}
+
+/**
  * @brief Callers of this function should return immediately because the PDC
  * state is changed.
  */
@@ -649,6 +678,40 @@ static void set_attached_flag(struct pdc_port_t *port,
 	k_mutex_unlock(&port->mtx);
 }
 
+/**
+ * @brief This function should only be called after the completion of the
+ * GET_CONNECTOR_STATUS command. It reads the connect_status,
+ * power_operation_mode, and power_direction bit to determine which state should
+ * be entered.
+ * NOTE: This function changes state, so a return should be added
+ * after it's called.
+ */
+static void handle_connector_status(struct pdc_port_t *port)
+{
+	if (!port->connector_status.connect_status) {
+		port->pd_capable = false;
+		/* Port is not connected */
+		set_pdc_state(port, PDC_UNATTACHED);
+	} else {
+		if (port->connector_status.power_operation_mode ==
+		    PD_OPERATION) {
+			port->pd_capable = true;
+			if (port->connector_status.power_direction) {
+				/* Port partner is a sink device
+				 */
+				set_pdc_state(port, PDC_SRC_ATTACHED);
+			} else {
+				/* Port partner is a source
+				 * device */
+				set_pdc_state(port, PDC_SNK_ATTACHED);
+			}
+		} else {
+			port->pd_capable = false;
+			set_pdc_state(port, PDC_SRC_SNK_TYPEC_ONLY);
+		}
+	}
+}
+
 static void run_unattached_policies(struct pdc_port_t *port)
 {
 	if (atomic_test_and_clear_bit(port->una_policy.flags,
@@ -701,6 +764,8 @@ static void pdc_unattached_entry(void *obj)
 
 	port->send_cmd.intern.pending = false;
 
+	invalidate_charger_settings(port);
+
 	if (get_pdc_state(port) != port->send_cmd_return_state) {
 		port->unattached_local_state = UNATTACHED_RUN;
 	}
@@ -746,6 +811,8 @@ static void pdc_src_attached_entry(void *obj)
 	print_current_pdc_state(port);
 
 	port->send_cmd.intern.pending = false;
+
+	invalidate_charger_settings(port);
 
 	if (get_pdc_state(port) != port->send_cmd_return_state) {
 		port->src_attached_local_state =
@@ -932,30 +999,6 @@ static void pdc_snk_attached_run(void *obj)
 	}
 }
 
-/**
- * @brief Exiting from sink attached state.
- */
-static void pdc_snk_attached_exit(void *obj)
-{
-	struct pdc_port_t *port = (struct pdc_port_t *)obj;
-	const struct pdc_config_t *const config = port->dev->config;
-
-	if (port->next_state != PDC_SEND_CMD_START) {
-		/* Set input current limit to zero */
-		pd_set_input_current_limit(config->connector_num, 0, 0);
-		/* Set charge ceil to none */
-		charge_manager_set_ceil(config->connector_num,
-					CEIL_REQUESTOR_PD, CHARGE_CEIL_NONE);
-		charge_manager_update_dualrole(config->connector_num,
-					       CAP_UNKNOWN);
-
-		/* Invalidate PDOS */
-		port->snk_policy.pdo = 0;
-		memset(port->snk_policy.pdos, 0, sizeof(uint32_t) * PDO_NUM);
-		port->snk_policy.pdo_count = 0;
-	}
-}
-
 static void pdc_send_cmd_start_entry(void *obj)
 {
 	struct pdc_port_t *port = (struct pdc_port_t *)obj;
@@ -972,9 +1015,8 @@ static void pdc_send_cmd_start_entry(void *obj)
 	}
 }
 
-static void pdc_send_cmd_start_run(void *obj)
+static int send_pdc_cmd(struct pdc_port_t *port)
 {
-	struct pdc_port_t *port = (struct pdc_port_t *)obj;
 	int rv;
 
 	/* Send PDC command via driver API */
@@ -1026,9 +1068,23 @@ static void pdc_send_cmd_start_run(void *obj)
 		break;
 	default:
 		LOG_ERR("Invalid command: %d", port->cmd->cmd);
-		return;
+		return -EIO;
 	}
 
+	if (rv) {
+		LOG_DBG("Unable to send command: %s",
+			pdc_cmd_names[port->cmd->cmd]);
+	}
+
+	return rv;
+}
+
+static void pdc_send_cmd_start_run(void *obj)
+{
+	struct pdc_port_t *port = (struct pdc_port_t *)obj;
+	int rv;
+
+	rv = send_pdc_cmd(port);
 	if (rv) {
 		LOG_DBG("Unable to send command: %s",
 			pdc_cmd_names[port->cmd->cmd]);
@@ -1077,46 +1133,41 @@ static void pdc_send_cmd_wait_run(void *obj)
 			set_pdc_state(port, port->send_cmd_return_state);
 			return;
 		}
-	} else if (port->cmd->cmd == CMD_PDC_GET_CONNECTOR_STATUS) {
-		if (!port->connector_status.connect_status) {
-			port->pd_capable = false;
-			/* Port is not connected */
-			set_pdc_state(port, PDC_UNATTACHED);
-		} else {
-			if (port->connector_status.power_operation_mode ==
-			    PD_OPERATION) {
-				port->pd_capable = true;
-				if (port->connector_status.power_direction) {
-					/* Port partner is a sink device */
-					set_pdc_state(port, PDC_SRC_ATTACHED);
-				} else {
-					/* Port partner is a source device */
-					set_pdc_state(port, PDC_SNK_ATTACHED);
-				}
-			} else {
-				port->pd_capable = false;
-				set_pdc_state(port, PDC_SRC_SNK_TYPEC_ONLY);
-			}
-		}
-		return;
 	} else if (atomic_test_and_clear_bit(port->cci_flags, CCI_BUSY)) {
 		LOG_DBG("CCI_BUSY");
 	} else if (atomic_test_and_clear_bit(port->cci_flags, CCI_ERROR)) {
 		LOG_DBG("CCI_ERROR");
-		port->cmd->error = true;
-		set_pdc_state(port, port->send_cmd_return_state);
-		return;
+		/* Try to resend command */
+		if (send_pdc_cmd(port) != 0) {
+			/* Set CCI_ERROR flag to trigger a resend of the command
+			 */
+			atomic_set_bit(port->cci_flags, CCI_ERROR);
+		}
 	} else if (atomic_test_and_clear_bit(port->cci_flags,
 					     CCI_CMD_COMPLETED)) {
 		LOG_DBG("CCI_CMD_COMPLETED");
-		set_pdc_state(port, port->send_cmd_return_state);
-		return;
+		if (port->cmd->cmd == CMD_PDC_GET_CONNECTOR_STATUS) {
+			handle_connector_status(port);
+			return;
+		} else {
+			set_pdc_state(port, port->send_cmd_return_state);
+			return;
+		}
 	}
 
 	port->send_cmd.retry_counter++;
 	if (port->send_cmd.retry_counter > RETRY_MAX) {
 		port->cmd->error = true;
-		set_pdc_state(port, port->send_cmd_return_state);
+		if (port->cmd->cmd == CMD_PDC_GET_CONNECTOR_STATUS) {
+			/* Can't get connector status. Enter unattached state
+			 * with error flag set, so it can reset the PDC */
+			port->cmd->cmd = CMD_PDC_RESET;
+			set_pdc_state(port, PDC_UNATTACHED);
+			return;
+		} else {
+			set_pdc_state(port, port->send_cmd_return_state);
+			return;
+		}
 	}
 }
 
@@ -1177,8 +1228,7 @@ static const struct smf_state pdc_states[] = {
 	[PDC_UNATTACHED] = SMF_CREATE_STATE(pdc_unattached_entry,
 					    pdc_unattached_run, NULL, NULL),
 	[PDC_SNK_ATTACHED] = SMF_CREATE_STATE(pdc_snk_attached_entry,
-					      pdc_snk_attached_run,
-					      pdc_snk_attached_exit, NULL),
+					      pdc_snk_attached_run, NULL, NULL),
 	[PDC_SRC_ATTACHED] = SMF_CREATE_STATE(pdc_src_attached_entry,
 					      pdc_src_attached_run, NULL, NULL),
 	[PDC_SEND_CMD_START] = SMF_CREATE_STATE(
@@ -1238,6 +1288,9 @@ static int pdc_subsys_init(const struct device *dev)
 		LOG_ERR("PDC not ready");
 		return -ENODEV;
 	}
+
+	/* This also seeds the Charge Manager */
+	invalidate_charger_settings(port);
 
 	/* Init port variables */
 
@@ -1931,3 +1984,39 @@ static void pd_chipset_shutdown(void)
 	LOG_INF("PD:S3->S5");
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, pd_chipset_shutdown, HOOK_PRIO_DEFAULT);
+
+int pdc_power_mgmt_get_info(int port, struct pdc_info_t *pdc_info)
+{
+	int ret;
+
+	/* Make sure port is in range and that an output buffer is provided */
+	if (!is_pdc_port_valid(port)) {
+		return -ERANGE;
+	}
+
+	if (pdc_info == NULL) {
+		return -EINVAL;
+	}
+
+	/* Block until command completes */
+	ret = public_api_block(port, CMD_PDC_GET_INFO);
+	if (ret) {
+		return ret;
+	}
+
+	/* Provide a copy of the current info struct to avoid exposing internal
+	 * data structs.
+	 */
+
+	memcpy(pdc_info, &pdc_data[port]->port.info, sizeof(struct pdc_info_t));
+	return 0;
+}
+
+int pdc_power_mgmt_get_bus_info(int port, struct pdc_bus_info_t *pdc_bus_info)
+{
+	/* This operation is handled synchronously within the driver based on
+	 * compile-time data. No need to block or go through the state machine.
+	 */
+
+	return pdc_get_bus_info(pdc_data[port]->port.pdc, pdc_bus_info);
+}

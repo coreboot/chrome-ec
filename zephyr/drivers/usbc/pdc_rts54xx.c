@@ -61,6 +61,13 @@ LOG_MODULE_REGISTER(pdc_rts54, LOG_LEVEL_INF);
 #define VBSIN_EN_OFF 0x40
 
 /**
+ * @brief Offsets of data fields in the GET_IC_STATUS response
+ */
+#define RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET (4)
+#define RTS54XX_GET_IC_STATUS_FWVER_MINOR_OFFSET (5)
+#define RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET (6)
+
+/**
  * @brief SMbus Command struct for Realtek commands
  */
 struct smbus_cmd_t {
@@ -364,6 +371,7 @@ static void print_current_state(struct pdc_data_t *data)
 static void call_cci_event_cb(struct pdc_data_t *data)
 {
 	if (data->cci_cb) {
+		LOG_INF("cci_event_cb event=0x%x", data->cci_event.raw_value);
 		data->cci_cb(data->cci_event, data->cb_data);
 	}
 }
@@ -785,10 +793,13 @@ static void st_read_run(void *o)
 		/* Realtek Is running flash code: Byte 1 */
 		info->is_running_flash_code = data->rd_buf[1];
 
-		/* Realtek FW main version: Byte4, Byte5, Byte6 (little-endian)
-		 */
-		info->fw_version = data->rd_buf[6] << 16 |
-				   data->rd_buf[5] << 8 | data->rd_buf[4];
+		/* Realtek FW main version: Byte4, Byte5, Byte6 */
+		info->fw_version =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET]
+				<< 16 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_MINOR_OFFSET]
+				<< 8 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET];
 
 		/* Realtek VID PID: Byte10, Byte11, Byte12, Byte13
 		 * (little-endian) */
@@ -982,6 +993,7 @@ static void st_irq_run(void *o)
 		if (rv == 0) {
 			if ((ara >> 1) == cfg->i2c.addr) {
 				/* This port generated the interrupt */
+				LOG_INF("port generated interrupt");
 				data->irq_state = IRQ_INFORM_SUBSYSTEM;
 			} else {
 				/* This port didn't generate the interrupt */
@@ -1514,6 +1526,22 @@ static int rts54_get_info(const struct device *dev, struct pdc_info_t *info)
 				  ARRAY_SIZE(payload), (uint8_t *)info);
 }
 
+static int rts54_get_bus_info(const struct device *dev,
+			      struct pdc_bus_info_t *info)
+{
+	const struct pdc_config_t *cfg =
+		(const struct pdc_config_t *)dev->config;
+
+	if (info == NULL) {
+		return -EINVAL;
+	}
+
+	info->bus_type = PDC_BUS_TYPE_I2C;
+	info->i2c = cfg->i2c;
+
+	return 0;
+}
+
 static int rts54_get_vbus_voltage(const struct device *dev, uint16_t *voltage)
 {
 	struct pdc_data_t *data = dev->data;
@@ -1655,6 +1683,7 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.set_handler_cb = rts54_set_handler_cb,
 	.read_power_level = rts54_read_power_level,
 	.get_info = rts54_get_info,
+	.get_bus_info = rts54_get_bus_info,
 	.set_power_level = rts54_set_power_level,
 	.reconnect = rts54_reconnect,
 };
