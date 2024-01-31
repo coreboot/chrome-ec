@@ -85,7 +85,7 @@ static uint8_t commits_enabled;
 /* NvMem error state */
 static enum ec_error_list nvmem_error_state;
 /* Flag to track if an Nv write/move is not completed */
-static bool nvmem_write_error;
+static bool nvmem_updated;
 
 static void nvmem_release_cache(void);
 
@@ -265,6 +265,12 @@ uint8_t *const nvmem_cache_base(enum nvmem_users user)
 	return nvmem_cache + nvmem_user_start_offset[user];
 }
 
+static void log_nvmem_offset_error(enum nvmem_users user, uint32_t offset,
+				   uint32_t len)
+{
+	CPRINTS("%s: user %d, offset %u, len %u", __func__, user, offset, len);
+}
+
 static enum ec_error_list nvmem_get_partition_off(enum nvmem_users user,
 						  uint32_t offset, uint32_t len,
 						  uint32_t *p_buf_offset)
@@ -272,8 +278,10 @@ static enum ec_error_list nvmem_get_partition_off(enum nvmem_users user,
 	uint32_t start_offset;
 
 	/* Validity check for user */
-	if (user >= NVMEM_NUM_USERS)
+	if (user >= NVMEM_NUM_USERS) {
+		log_nvmem_offset_error(user, offset, len);
 		return EC_ERROR_OVERFLOW;
+	}
 
 	/* Get offset within the partition for the start of user buffer */
 	start_offset = nvmem_user_start_offset[user];
@@ -282,8 +290,10 @@ static enum ec_error_list nvmem_get_partition_off(enum nvmem_users user,
 	 * doesn't exceed the end of its buffer.
 	 */
 	if (offset >= nvmem_user_sizes[user] || len >= nvmem_user_sizes[user] ||
-	    offset + len >= nvmem_user_sizes[user])
+	    offset + len >= nvmem_user_sizes[user]) {
+		log_nvmem_offset_error(user, offset, len);
 		return EC_ERROR_OVERFLOW;
+	}
 	/* Compute offset within the partition for the rd/wr operation */
 	*p_buf_offset = start_offset + offset;
 
@@ -300,7 +310,7 @@ enum ec_error_list nvmem_init(void)
 		CPRINTF("%s:%d\n", __func__, __LINE__);
 		return ret;
 	}
-	nvmem_write_error = false;
+	nvmem_updated = false;
 
 	/*
 	 * Default policy is to allow all commits. This ensures reinitialization
@@ -389,17 +399,15 @@ enum ec_error_list nvmem_write(uint32_t offset, uint32_t size, void *data,
 
 	/* Compute partition offset for this write operation */
 	ret = nvmem_get_partition_off(user, offset, size, &dest_offset);
-	if (ret != EC_SUCCESS) {
-		nvmem_write_error = true;
+	if (ret != EC_SUCCESS)
 		return ret;
-	}
 
 	/* Advance to correct offset within data buffer */
 	p_dest = nvmem_cache + dest_offset;
 
 	/* Copy data from caller into destination buffer */
 	memcpy(p_dest, data, size);
-
+	nvmem_updated = true;
 	return EC_SUCCESS;
 }
 
@@ -417,17 +425,13 @@ enum ec_error_list nvmem_move(uint32_t src_offset, uint32_t dest_offset,
 
 	/* Compute partition offset for source */
 	ret = nvmem_get_partition_off(user, src_offset, size, &s_buff_offset);
-	if (ret != EC_SUCCESS) {
-		nvmem_write_error = true;
+	if (ret != EC_SUCCESS)
 		return ret;
-	}
 
 	/* Compute partition offset for destination */
 	ret = nvmem_get_partition_off(user, dest_offset, size, &d_buff_offset);
-	if (ret != EC_SUCCESS) {
-		nvmem_write_error = true;
+	if (ret != EC_SUCCESS)
 		return ret;
-	}
 
 	base_addr = (uintptr_t)nvmem_cache;
 	/* Create pointer to src location within partition */
@@ -436,7 +440,7 @@ enum ec_error_list nvmem_move(uint32_t src_offset, uint32_t dest_offset,
 	p_dest = (uint8_t *)(base_addr + d_buff_offset);
 	/* Move the data block in NvMem */
 	memmove(p_dest, p_src, size);
-
+	nvmem_updated = true;
 	return EC_SUCCESS;
 }
 
@@ -466,6 +470,7 @@ void nvmem_disable_commits(void)
 
 enum ec_error_list nvmem_commit(void)
 {
+	enum ec_error_list rv;
 	if (nvmem_mutex.task == TASK_ID_COUNT) {
 		CPRINTF("%s: attempt to commit in unlocked state %d\n",
 			__func__, nvmem_mutex.task);
@@ -479,13 +484,12 @@ enum ec_error_list nvmem_commit(void)
 	}
 
 	/* Ensure that all writes/moves prior to commit call succeeded */
-	if (nvmem_write_error) {
-		CPRINTS("%s: Write Error, commit abandoned", __func__);
-		/* Clear error state */
-		nvmem_write_error = 0;
-		commits_enabled = 1;
+	if (!nvmem_updated) {
+#ifdef CR50_DEV
+		CPRINTS("%s: nothing to commit", __func__);
+#endif
 		nvmem_release_cache();
-		return EC_ERROR_UNKNOWN;
+		return EC_SUCCESS;
 	}
 
 	if (!commits_enabled) {
@@ -494,7 +498,9 @@ enum ec_error_list nvmem_commit(void)
 	}
 
 	/* Write active partition to NvMem */
-	return nvmem_save();
+	rv = nvmem_save();
+	nvmem_updated = false;
+	return rv;
 }
 
 void nvmem_clear_cache(void)
