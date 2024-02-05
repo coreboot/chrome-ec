@@ -98,9 +98,36 @@ static int set_notification_enable(struct rts5453p_emul_pdc_data *data,
 static int get_ic_status(struct rts5453p_emul_pdc_data *data,
 			 const union rts54_request *req)
 {
-	LOG_INF("%s", __func__);
+	LOG_INF("GET_IC_STATUS");
 
-	data->response.ic_status = data->ic_status;
+	data->response.ic_status.byte_count = sizeof(struct rts54_ic_status);
+	data->response.ic_status.fw_main_version = data->info.fw_version >> 16 &
+						   BIT_MASK(8);
+	data->response.ic_status.fw_sub_version[0] =
+		data->info.fw_version >> 8 & BIT_MASK(8);
+	data->response.ic_status.fw_sub_version[1] = data->info.fw_version &
+						     BIT_MASK(8);
+
+	data->response.ic_status.pd_revision[0] = data->info.pd_revision >> 8 &
+						  BIT_MASK(8);
+	data->response.ic_status.pd_revision[1] = data->info.pd_revision &
+						  BIT_MASK(8);
+	data->response.ic_status.pd_version[0] = data->info.pd_version >> 8 &
+						 BIT_MASK(8);
+	data->response.ic_status.pd_version[1] = data->info.pd_version &
+						 BIT_MASK(8);
+
+	data->response.ic_status.vid[1] = data->info.vid_pid >> 24 &
+					  BIT_MASK(8);
+	data->response.ic_status.vid[0] = data->info.vid_pid >> 16 &
+					  BIT_MASK(8);
+	data->response.ic_status.pid[1] = data->info.vid_pid >> 8 & BIT_MASK(8);
+	data->response.ic_status.pid[0] = data->info.vid_pid & BIT_MASK(8);
+
+	data->response.ic_status.is_flash_code =
+		data->info.is_running_flash_code;
+	data->response.ic_status.running_flash_bank_offset =
+		data->info.running_in_flash_bank;
 
 	send_response(data);
 
@@ -383,6 +410,18 @@ static int set_rdo(struct rts5453p_emul_pdc_data *data,
 	return 0;
 }
 
+static int get_pdo(struct rts5453p_emul_pdc_data *data,
+		   const union rts54_request *req)
+{
+	LOG_INF("GET_PDO -- TODO");
+
+	/* TODO: Populate actual PDO response */
+	memset(&data->response, 0, sizeof(union rts54_response));
+	send_response(data);
+
+	return 0;
+}
+
 static int get_rdo(struct rts5453p_emul_pdc_data *data,
 		   const union rts54_request *req)
 {
@@ -533,7 +572,7 @@ const struct commands sub_cmd_x08[] = {
 	{ .code = 0x27, HANDLER_DEF(unsupported) },
 	{ .code = 0x28, HANDLER_DEF(unsupported) },
 	{ .code = 0x2B, HANDLER_DEF(unsupported) },
-	{ .code = 0x83, HANDLER_DEF(unsupported) },
+	{ .code = 0x83, HANDLER_DEF(get_pdo) },
 	{ .code = 0x84, HANDLER_DEF(get_rdo) },
 	{ .code = 0x85, HANDLER_DEF(unsupported) },
 	{ .code = 0x99, HANDLER_DEF(unsupported) },
@@ -1009,6 +1048,17 @@ static int emul_realtek_rts54xx_pulse_irq(const struct emul *target)
 	return 0;
 }
 
+static int emul_realtek_rts54xx_set_info(const struct emul *target,
+					 const struct pdc_info_t *info)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+
+	data->info = *info;
+
+	return 0;
+}
+
 struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.set_response_delay = emul_realtek_rts54xx_set_response_delay,
 	.get_connector_reset = emul_realtek_rts54xx_get_connector_reset,
@@ -1025,6 +1075,7 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.get_sink_path = emul_realtek_rts54xx_get_sink_path,
 	.get_reconnect_req = emul_realtek_rts54xx_get_reconnect_req,
 	.pulse_irq = emul_realtek_rts54xx_pulse_irq,
+	.set_info = emul_realtek_rts54xx_set_info,
 };
 
 #define RTS5453P_EMUL_DEFINE(n)                                             \
