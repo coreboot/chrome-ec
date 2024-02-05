@@ -103,6 +103,20 @@ if (DEFINED CONFIG_RISCV)
   zephyr_cc_option(-fsanitize-undefined-trap-on-error)
 endif()
 
+# TODO: b/323234432 - Investigate explicitly using doubles over floats
+# For now disable the "double-promotion" warning to avoid errors from
+# the sensor code and math_util.h.
+get_target_property(warning_base_override compiler warning_base)
+
+set(double_promotion -Wdouble-promotion)
+
+if(${double_promotion} IN_LIST warning_base_override)
+  list(REMOVE_ITEM warning_base_override ${double_promotion})
+  set_compiler_property(PROPERTY warning_base ${warning_base_override})
+  print(warning_base_override)
+endif()
+
+
 # The EC application is split into two libraries:
 #   app: contains all the legacy code
 #   ec_shim: contains all the code under platform/ec/shim
@@ -387,8 +401,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_MKBP
                                                 "${PLATFORM_EC}/common/keyboard_mkbp.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MKBP_INPUT_DEVICES
                                                 "${PLATFORM_EC}/common/mkbp_input_devices.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_VIVALDI
-                                                "${PLATFORM_EC}/common/keyboard_vivaldi.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM_KBLIGHT
                                                 "${PLATFORM_EC}/common/keyboard_backlight.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
@@ -569,6 +581,9 @@ if (CONFIG_PLATFORM_EC_USB_PD_TCPMV2)
 	include(tcpmv2.cmake)
 endif ()
 
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_HOST_CMD
+                                                "${PLATFORM_EC}/common/usb_pd_host_cmd_common.c")
+
 zephyr_library_sources_ifdef(CONFIG_SVDM_RSP_DFP_ONLY
                                                 "${PLATFORM_EC}/common/usbc/svdm_rsp_dfp_only.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_OCP
@@ -581,11 +596,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_UFP
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DUAL_ROLE
                                                 "${PLATFORM_EC}/common/usb_pd_dual_role.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_CONSOLE_CMD
-                                                "${PLATFORM_EC}/common/usb_pd_console_cmd.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_HOST_CMD
-                                                "${PLATFORM_EC}/common/usb_pd_host_cmd.c"
-                                                "${PLATFORM_EC}/common/usbc/usb_pd_host.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DP_HPD_GPIO
                                                 "${PLATFORM_EC}/common/usbc/dp_hpd_gpio.c")

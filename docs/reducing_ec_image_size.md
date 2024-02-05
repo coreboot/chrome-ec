@@ -171,7 +171,7 @@ prj.conf file to disable the console command.
 |  | CONFIG_CMD_ACCELSPOOF | `accelspoof` | |
 | | CONFIG_CMD_ACCEL_FIFO | `fiforead` | |
 | | CONFIG_CMD_ACCEL_INFO | `accelinfo` | |
-| | CONFIG_CMD_ADC | `adc` | Note firmware_ECAdc uses the `temps` command. |
+| | CONFIG_CMD_ADC | `adc` | Note firmware.ECADC uses the `temps` command. |
 | | CONFIG_CMD_ALS | `als` | |
 | | CONFIG_CMD_APTHROTTLE | `apthrottle` | |
 | | CONFIG_CMD_AP_RESET_LOG |??? | |
@@ -205,7 +205,7 @@ prj.conf file to disable the console command.
 | | CONFIG_CMD_GPIO_EXTENDED | Adds options to `gpioget` and `gpioset`. | Should be renamed to CONFIG_GPOI_EXTENDED |
 | | CONFIG_CMD_GPIO_POWER_DOWN | Not a valid config. | Should be CONFIG_GPIO_POWER_DOWN |
 | | CONFIG_CMD_GT7288 | `gt7288_desc`<br>`gt7288_repdesc`<br>`gt7288_ver`<br>`gt7288_report` | |
-| | CONFIG_CMD_HASH | `hash` | firmware_ECHash uses `ectool echash` |
+| | CONFIG_CMD_HASH | `hash` | tast.firmware.SoftwareSync uses `ectool echash` |
 | x | CONFIG_CMD_HCDEBUG | `hcdebug` | firmware_ECBootTime.py |
 | x | CONFIG_CMD_HOSTCMD | `hostcmd` | |
 | | CONFIG_CMD_I2CWEDGE | `i2cwedge`<br>`i2cunwedge` | |

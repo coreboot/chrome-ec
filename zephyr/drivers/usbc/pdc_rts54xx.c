@@ -61,6 +61,29 @@ LOG_MODULE_REGISTER(pdc_rts54, LOG_LEVEL_INF);
 #define VBSIN_EN_OFF 0x40
 
 /**
+ * @brief Offsets of data fields in the GET_IC_STATUS response
+ */
+#define RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET (4)
+#define RTS54XX_GET_IC_STATUS_FWVER_MINOR_OFFSET (5)
+#define RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET (6)
+
+/**
+ * @brief Macro to transition to init or idle state and return
+ */
+#define TRANSITION_TO_INIT_OR_IDLE_STATE(data)  \
+	transition_to_init_or_idle_state(data); \
+	return
+
+/**
+ * @brief Number of RTS54XX ports detected
+ */
+#define NUM_PDC_RTS54XX_PORTS DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)
+
+/* TODO: b/323371550 */
+BUILD_ASSERT(NUM_PDC_RTS54XX_PORTS <= 2,
+	     "rts54xx driver supports a maximum of 2 ports");
+
+/**
  * @brief SMbus Command struct for Realtek commands
  */
 struct smbus_cmd_t {
@@ -156,18 +179,6 @@ enum init_state_t {
 	INIT_PDC_RESET,
 	/** Initialization complete */
 	INIT_PDC_COMPLETE
-};
-
-/**
- * @brief Sub-states of the ST_IRQ state
- */
-enum irq_state_t {
-	/** Read the ARA */
-	IRQ_READ_ARA,
-	/** Inform Subsystem of interrupt */
-	IRQ_INFORM_SUBSYSTEM,
-	/** Wait state for non-interrupted port */
-	IRQ_OTHER_PORT_WAIT
 };
 
 /**
@@ -276,10 +287,6 @@ struct pdc_data_t {
 	struct k_work work;
 	/** GPIO interrupt callback */
 	struct gpio_callback gpio_cb;
-	/** IRQ state variable */
-	enum irq_state_t irq_state;
-	/** IRQ counter */
-	uint8_t irq_counter;
 	/** Error status */
 	union error_status_t error_status;
 	/** CCI Event */
@@ -290,6 +297,8 @@ struct pdc_data_t {
 	void *cb_data;
 	/** Information about the PDC */
 	struct pdc_info_t info;
+	/** Init done flag */
+	bool init_done;
 };
 
 /**
@@ -330,6 +339,9 @@ static const char *const state_names[] = {
 	[ST_READ] = "READ",   [ST_IRQ] = "IRQ",
 };
 
+static const struct device *irq_shared_port;
+static int irq_share_pin;
+static bool irq_init_done;
 static volatile bool irq_pending;
 static const struct smf_state states[];
 static int rts54_enable(const struct device *dev);
@@ -338,6 +350,11 @@ static int rts54_set_notification_enable(const struct device *dev,
 					 union notification_enable_t bits,
 					 uint16_t ext_bits);
 static int rts54_get_info(const struct device *dev, struct pdc_info_t *info);
+
+/**
+ * @brief PDC port data used in interrupt handler
+ */
+static struct pdc_data_t *pdc_data[NUM_PDC_RTS54XX_PORTS];
 
 static enum state_t get_state(struct pdc_data_t *data)
 {
@@ -363,7 +380,12 @@ static void print_current_state(struct pdc_data_t *data)
 
 static void call_cci_event_cb(struct pdc_data_t *data)
 {
+	if (!data->init_done) {
+		return;
+	}
+
 	if (data->cci_cb) {
+		LOG_INF("cci_event_cb event=0x%x", data->cci_event.raw_value);
 		data->cci_cb(data->cci_event, data->cb_data);
 	}
 }
@@ -382,12 +404,16 @@ static void perform_pdc_init(struct pdc_data_t *data)
 	set_state(data, ST_INIT);
 }
 
-static void return_to_init_or_idle_state(struct pdc_data_t *data)
+/**
+ * @brief This function performs a state change, so a return should
+ * be placed after its immediate call.
+ */
+static void transition_to_init_or_idle_state(struct pdc_data_t *data)
 {
-	if (data->init_local_state != INIT_PDC_COMPLETE) {
-		set_state(data, ST_INIT);
-	} else {
+	if (data->init_done) {
 		set_state(data, ST_IDLE);
+	} else {
+		set_state(data, ST_INIT);
 	}
 }
 
@@ -448,7 +474,7 @@ static void st_init_entry(void *o)
 	struct pdc_data_t *data = (struct pdc_data_t *)o;
 
 	print_current_state(data);
-
+	data->init_done = false;
 	data->cmd = CMD_NONE;
 }
 
@@ -473,15 +499,70 @@ static void st_init_run(void *o)
 		break;
 	case INIT_PDC_RESET:
 		rts54_reset(data->dev);
-		data->init_local_state = INIT_PDC_COMPLETE;
+		if (data->cci_event.reset_completed) {
+			data->init_local_state = INIT_PDC_COMPLETE;
+		}
 		break;
 	case INIT_PDC_COMPLETE:
 		/* Init is complete, so transition to Idle state */
 		set_state(data, ST_IDLE);
+		data->init_done = true;
 		return;
 	}
 
 	set_state(data, ST_WRITE);
+}
+
+/**
+ * @brief Each port has its own IRQ. When an interrupt is pending, one
+ * of the ST_IDLE states will execute and handle all pending interrupts for all
+ * ports.
+ */
+static void handle_irqs(struct pdc_data_t *data)
+{
+	uint8_t ara;
+	int rv;
+
+	/* Clear pending bit, so other thread won't attempt to handle an irq */
+	irq_pending = false;
+
+	for (int i = 0; i < NUM_PDC_RTS54XX_PORTS; i++) {
+		/*
+		 * Read the Alert Response Address to determine
+		 * which port generated the interrupt.
+		 */
+		rv = get_ara(data->dev, &ara);
+		if (rv) {
+			return;
+		}
+
+		/* Search for port with matching I2C address */
+		for (int j = 0; j < CONFIG_USB_PD_PORT_MAX_COUNT; j++) {
+			struct pdc_data_t *pdc_int_data = pdc_data[j];
+			const struct pdc_config_t *cfg =
+				pdc_int_data->dev->config;
+
+			if ((ara >> 1) == cfg->i2c.addr) {
+				LOG_INF("C%d: IRQ", cfg->connector_number);
+
+				/* Found pending interrupt, handle it */
+				/* Inform subsystem of the interrupt */
+				/* Clear the CCI Event */
+				pdc_int_data->cci_event.raw_value = 0;
+				/* Set the port the CCI Event occurred
+				 * on */
+				pdc_int_data->cci_event.connector_change =
+					cfg->connector_number;
+				/* Set the interrupt event */
+				pdc_int_data->cci_event
+					.vendor_defined_indicator = 1;
+				/* Notify system of status change */
+				call_cci_event_cb(pdc_int_data);
+				/* done with this port */
+				break;
+			}
+		}
+	}
 }
 
 static void st_idle_entry(void *o)
@@ -506,7 +587,7 @@ static void st_idle_run(void *o)
 	if (data->cmd == CMD_TRIGGER_PDC_RESET) {
 		perform_pdc_init(data);
 	} else if (irq_pending) {
-		set_state(data, ST_IRQ);
+		handle_irqs(data);
 	} else if (data->cmd != CMD_NONE) {
 		set_state(data, ST_WRITE);
 	}
@@ -560,7 +641,7 @@ static void st_write_run(void *o)
 			 * This state can only be entered from the Init or
 			 * Idle state, so return to one of them.
 			 */
-			return_to_init_or_idle_state(data);
+			TRANSITION_TO_INIT_OR_IDLE_STATE(data);
 		}
 		return;
 	}
@@ -618,11 +699,8 @@ static void st_ping_status_run(void *o)
 			/* Notify system of status change */
 			call_cci_event_cb(data);
 
-			/*
-			 * An error occurred, return to idle state, so
-			 * the subsystem can take action.
-			 */
-			set_state(data, ST_IDLE);
+			/* An error occurred, return to idle state */
+			TRANSITION_TO_INIT_OR_IDLE_STATE(data);
 		}
 		return;
 	}
@@ -654,20 +732,20 @@ static void st_ping_status_run(void *o)
 			/* Notify system of status change */
 			call_cci_event_cb(data);
 
-			/*
-			 * An error occurred, return to idle state, so
-			 * the subsystem can take action.
-			 */
-			set_state(data, ST_IDLE);
+			/* An error occurred, return to idle state */
+			TRANSITION_TO_INIT_OR_IDLE_STATE(data);
 		} else {
 			/*
 			 * If Busy, then set this cci.busy to a 1b
 			 * and all other fields to zero.
 			 */
-			data->cci_event.busy = 1;
+			if (data->cci_event.busy == 0) {
+				/* Only notify subsystem of busy event once */
+				data->cci_event.busy = 1;
 
-			/* Notify system of status change */
-			call_cci_event_cb(data);
+				/* Notify system of status change */
+				call_cci_event_cb(data);
+			}
 		}
 		break;
 	case CMD_DONE:
@@ -680,7 +758,7 @@ static void st_ping_status_run(void *o)
 			call_cci_event_cb(data);
 			LOG_DBG("Realtek PDC reset complete");
 			/* All done, return to Init or Idle state */
-			return_to_init_or_idle_state(data);
+			TRANSITION_TO_INIT_OR_IDLE_STATE(data);
 		} else {
 			LOG_DBG("ping_status: %02x",
 				data->ping_status.raw_value);
@@ -699,7 +777,7 @@ static void st_ping_status_run(void *o)
 				call_cci_event_cb(data);
 
 				/* Return to Idle or Init state */
-				return_to_init_or_idle_state(data);
+				TRANSITION_TO_INIT_OR_IDLE_STATE(data);
 			}
 		}
 		break;
@@ -715,11 +793,8 @@ static void st_ping_status_run(void *o)
 		/* Notify system of status change */
 		call_cci_event_cb(data);
 
-		/*
-		 * An error occurred, return to idle state, so
-		 * the subsystem can take action.
-		 */
-		set_state(data, ST_IDLE);
+		/* An error occurred, return to idle state */
+		TRANSITION_TO_INIT_OR_IDLE_STATE(data);
 		break;
 	}
 }
@@ -763,12 +838,8 @@ static void st_read_run(void *o)
 		/* Notify system of status change */
 		call_cci_event_cb(data);
 
-		/*
-		 * An error occurred, return to idle state, so
-		 * the subsystem can take action.
-		 */
-		set_state(data, ST_IDLE);
-		return;
+		/* An error occurred, return to idle state */
+		TRANSITION_TO_INIT_OR_IDLE_STATE(data);
 	}
 
 	/* Get length of data returned */
@@ -785,10 +856,13 @@ static void st_read_run(void *o)
 		/* Realtek Is running flash code: Byte 1 */
 		info->is_running_flash_code = data->rd_buf[1];
 
-		/* Realtek FW main version: Byte4, Byte5, Byte6 (little-endian)
-		 */
-		info->fw_version = data->rd_buf[6] << 16 |
-				   data->rd_buf[5] << 8 | data->rd_buf[4];
+		/* Realtek FW main version: Byte4, Byte5, Byte6 */
+		info->fw_version =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET]
+				<< 16 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_MINOR_OFFSET]
+				<< 8 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET];
 
 		/* Realtek VID PID: Byte10, Byte11, Byte12, Byte13
 		 * (little-endian) */
@@ -947,97 +1021,7 @@ static void st_read_run(void *o)
 	/* Inform the system of the event */
 	call_cci_event_cb(data);
 	/* All done, return to Init or Idle state */
-	return_to_init_or_idle_state(data);
-}
-
-static void st_irq_entry(void *o)
-{
-	struct pdc_data_t *data = (struct pdc_data_t *)o;
-
-	print_current_state(data);
-
-	data->irq_state = IRQ_READ_ARA;
-	data->irq_counter = 0;
-}
-
-static void st_irq_run(void *o)
-{
-	struct pdc_data_t *data = (struct pdc_data_t *)o;
-	const struct pdc_config_t *cfg = data->dev->config;
-	uint8_t ara;
-	int rv;
-
-	switch (data->irq_state) {
-	case IRQ_READ_ARA:
-		/* Return to Init or Idle state if IRQ was handled */
-		if (irq_pending == false) {
-			return_to_init_or_idle_state(data);
-		}
-
-		/*
-		 * Read the Alert Response Address to determine
-		 * which port generated the interrupt.
-		 */
-		rv = get_ara(data->dev, &ara);
-		if (rv == 0) {
-			if ((ara >> 1) == cfg->i2c.addr) {
-				/* This port generated the interrupt */
-				data->irq_state = IRQ_INFORM_SUBSYSTEM;
-			} else {
-				/* This port didn't generate the interrupt */
-				data->irq_state = IRQ_OTHER_PORT_WAIT;
-			}
-		} else {
-			data->irq_counter++;
-			if (data->irq_counter == 4) {
-				/*
-				 * Can't read from the ARA, so inform the
-				 * subsystem of the problem by setting the
-				 * cci_event.vendor_defined_indicator and
-				 * cci_event.error.
-				 */
-				/* Clear the CCI Event */
-				data->cci_event.raw_value = 0;
-				/* Set the port the CCI Event occurred on */
-				data->cci_event.connector_change =
-					cfg->connector_number;
-				/* Set the interrupt event */
-				data->cci_event.vendor_defined_indicator = 1;
-				/* Set error */
-				data->cci_event.error = 1;
-				/* Notify system of status change */
-				call_cci_event_cb(data);
-				/*
-				 * An error occurred, return to idle state, so
-				 * the subsystem can take action.
-				 */
-				set_state(data, ST_IDLE);
-				/* Clear pending IRQ */
-				irq_pending = false;
-			}
-		}
-		break;
-	case IRQ_INFORM_SUBSYSTEM:
-		/* Inform subsystem of the interrupt */
-		/* Clear the CCI Event */
-		data->cci_event.raw_value = 0;
-		/* Set the port the CCI Event occurred on */
-		data->cci_event.connector_change = cfg->connector_number;
-		/* Set the interrupt event */
-		data->cci_event.vendor_defined_indicator = 1;
-		/* Notify system of status change */
-		call_cci_event_cb(data);
-		/* All done, return to Init or Idle state */
-		return_to_init_or_idle_state(data);
-		/* Clear pending IRQ */
-		irq_pending = false;
-		break;
-	case IRQ_OTHER_PORT_WAIT:
-		/* Wait until the interrupt is handled */
-		if (irq_pending == false) {
-			return_to_init_or_idle_state(data);
-		}
-	}
+	TRANSITION_TO_INIT_OR_IDLE_STATE(data);
 }
 
 /* Populate cmd state table */
@@ -1048,7 +1032,6 @@ static const struct smf_state states[] = {
 	[ST_PING_STATUS] = SMF_CREATE_STATE(st_ping_status_entry,
 					    st_ping_status_run, NULL, NULL),
 	[ST_READ] = SMF_CREATE_STATE(st_read_entry, st_read_run, NULL, NULL),
-	[ST_IRQ] = SMF_CREATE_STATE(st_irq_entry, st_irq_run, NULL, NULL),
 };
 
 /**
@@ -1514,6 +1497,22 @@ static int rts54_get_info(const struct device *dev, struct pdc_info_t *info)
 				  ARRAY_SIZE(payload), (uint8_t *)info);
 }
 
+static int rts54_get_bus_info(const struct device *dev,
+			      struct pdc_bus_info_t *info)
+{
+	const struct pdc_config_t *cfg =
+		(const struct pdc_config_t *)dev->config;
+
+	if (info == NULL) {
+		return -EINVAL;
+	}
+
+	info->bus_type = PDC_BUS_TYPE_I2C;
+	info->i2c = cfg->i2c;
+
+	return 0;
+}
+
 static int rts54_get_vbus_voltage(const struct device *dev, uint16_t *voltage)
 {
 	struct pdc_data_t *data = dev->data;
@@ -1635,7 +1634,15 @@ static int rts54_get_current_pdo(const struct device *dev, uint32_t *pdo)
 	return 0;
 }
 
+static bool rts54_is_init_done(const struct device *dev)
+{
+	struct pdc_data_t *data = dev->data;
+
+	return data->init_done;
+}
+
 static const struct pdc_driver_api_t pdc_driver_api = {
+	.is_init_done = rts54_is_init_done,
 	.get_ucsi_version = rts54_get_ucsi_version,
 	.reset = rts54_pdc_reset,
 	.connector_reset = rts54_connector_reset,
@@ -1655,6 +1662,7 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.set_handler_cb = rts54_set_handler_cb,
 	.read_power_level = rts54_read_power_level,
 	.get_info = rts54_get_info,
+	.get_bus_info = rts54_get_bus_info,
 	.set_power_level = rts54_set_power_level,
 	.reconnect = rts54_reconnect,
 };
@@ -1690,33 +1698,47 @@ static int pdc_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	rv = gpio_pin_configure_dt(&cfg->irq_gpios, GPIO_INPUT);
-	if (rv < 0) {
-		LOG_ERR("Unable to configure GPIO");
-		return rv;
-	}
+	if (!irq_init_done) {
+		irq_shared_port = cfg->irq_gpios.port;
+		irq_share_pin = cfg->irq_gpios.pin;
 
-	gpio_init_callback(&data->gpio_cb, pdc_interrupt_callback,
-			   BIT(cfg->irq_gpios.pin));
+		rv = gpio_pin_configure_dt(&cfg->irq_gpios, GPIO_INPUT);
+		if (rv < 0) {
+			LOG_ERR("Unable to configure GPIO");
+			return rv;
+		}
 
-	rv = gpio_add_callback(cfg->irq_gpios.port, &data->gpio_cb);
-	if (rv < 0) {
-		LOG_ERR("Unable to add callback");
-		return rv;
-	}
+		gpio_init_callback(&data->gpio_cb, pdc_interrupt_callback,
+				   BIT(cfg->irq_gpios.pin));
 
-	rv = gpio_pin_interrupt_configure_dt(&cfg->irq_gpios,
-					     GPIO_INT_EDGE_FALLING);
-	if (rv < 0) {
-		LOG_ERR("Unable to configure interrupt");
-		return rv;
+		rv = gpio_add_callback(cfg->irq_gpios.port, &data->gpio_cb);
+		if (rv < 0) {
+			LOG_ERR("Unable to add callback");
+			return rv;
+		}
+
+		rv = gpio_pin_interrupt_configure_dt(&cfg->irq_gpios,
+						     GPIO_INT_EDGE_FALLING);
+		if (rv < 0) {
+			LOG_ERR("Unable to configure interrupt");
+			return rv;
+		}
+
+		k_work_init(&data->work, interrupt_handler);
+		irq_init_done = true;
+	} else {
+		if (irq_shared_port != cfg->irq_gpios.port ||
+		    irq_share_pin != cfg->irq_gpios.pin) {
+			LOG_ERR("All rts54xx ports must use the same interrupt");
+			return -EINVAL;
+		}
 	}
 
 	k_mutex_init(&data->mtx);
-	k_work_init(&data->work, interrupt_handler);
 
 	data->dev = dev;
 	data->cmd = CMD_NONE;
+	pdc_data[cfg->connector_number] = data;
 
 	/* Set initial state */
 	data->init_local_state = INIT_PDC_ENABLE;

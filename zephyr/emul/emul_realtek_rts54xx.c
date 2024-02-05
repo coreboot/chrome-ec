@@ -12,6 +12,7 @@
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/emul.h>
+#include <zephyr/drivers/gpio/gpio_emul.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i2c_emul.h>
 #include <zephyr/logging/log.h>
@@ -97,9 +98,36 @@ static int set_notification_enable(struct rts5453p_emul_pdc_data *data,
 static int get_ic_status(struct rts5453p_emul_pdc_data *data,
 			 const union rts54_request *req)
 {
-	LOG_INF("%s", __func__);
+	LOG_INF("GET_IC_STATUS");
 
-	data->response.ic_status = data->ic_status;
+	data->response.ic_status.byte_count = sizeof(struct rts54_ic_status);
+	data->response.ic_status.fw_main_version = data->info.fw_version >> 16 &
+						   BIT_MASK(8);
+	data->response.ic_status.fw_sub_version[0] =
+		data->info.fw_version >> 8 & BIT_MASK(8);
+	data->response.ic_status.fw_sub_version[1] = data->info.fw_version &
+						     BIT_MASK(8);
+
+	data->response.ic_status.pd_revision[0] = data->info.pd_revision >> 8 &
+						  BIT_MASK(8);
+	data->response.ic_status.pd_revision[1] = data->info.pd_revision &
+						  BIT_MASK(8);
+	data->response.ic_status.pd_version[0] = data->info.pd_version >> 8 &
+						 BIT_MASK(8);
+	data->response.ic_status.pd_version[1] = data->info.pd_version &
+						 BIT_MASK(8);
+
+	data->response.ic_status.vid[1] = data->info.vid_pid >> 24 &
+					  BIT_MASK(8);
+	data->response.ic_status.vid[0] = data->info.vid_pid >> 16 &
+					  BIT_MASK(8);
+	data->response.ic_status.pid[1] = data->info.vid_pid >> 8 & BIT_MASK(8);
+	data->response.ic_status.pid[0] = data->info.vid_pid & BIT_MASK(8);
+
+	data->response.ic_status.is_flash_code =
+		data->info.is_running_flash_code;
+	data->response.ic_status.running_flash_bank_offset =
+		data->info.running_in_flash_bank;
 
 	send_response(data);
 
@@ -322,6 +350,10 @@ static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 	data->response.rtk_status.battery_charging_status =
 		data->connector_status.battery_charging_cap & BIT_MASK(2);
 
+	/* BYTE 12 */
+	data->response.rtk_status.plug_direction =
+		data->connector_status.orientation & BIT_MASK(1);
+
 	/* BYTE 15-18 */
 	data->response.rtk_status.average_current_low = 0;
 	data->response.rtk_status.average_current_high = 0;
@@ -372,6 +404,18 @@ static int set_rdo(struct rts5453p_emul_pdc_data *data,
 
 	data->rdo = req->set_rdo.rdo;
 
+	memset(&data->response, 0, sizeof(union rts54_response));
+	send_response(data);
+
+	return 0;
+}
+
+static int get_pdo(struct rts5453p_emul_pdc_data *data,
+		   const union rts54_request *req)
+{
+	LOG_INF("GET_PDO -- TODO");
+
+	/* TODO: Populate actual PDO response */
 	memset(&data->response, 0, sizeof(union rts54_response));
 	send_response(data);
 
@@ -438,6 +482,17 @@ static int set_tpc_reconnect(struct rts5453p_emul_pdc_data *data,
 	LOG_INF("SET_TPC_RECONNECT port=%d", req->set_tpc_reconnect.port_num);
 
 	data->set_tpc_reconnect_param = req->set_tpc_reconnect.param0;
+
+	memset(&data->response, 0, sizeof(data->response));
+	send_response(data);
+
+	return 0;
+}
+
+static int read_power_level(struct rts5453p_emul_pdc_data *data,
+			    const union rts54_request *req)
+{
+	LOG_INF("READ_POWER_LEVEL port=%d", req->read_power_level.port_num);
 
 	memset(&data->response, 0, sizeof(data->response));
 	send_response(data);
@@ -517,7 +572,7 @@ const struct commands sub_cmd_x08[] = {
 	{ .code = 0x27, HANDLER_DEF(unsupported) },
 	{ .code = 0x28, HANDLER_DEF(unsupported) },
 	{ .code = 0x2B, HANDLER_DEF(unsupported) },
-	{ .code = 0x83, HANDLER_DEF(unsupported) },
+	{ .code = 0x83, HANDLER_DEF(get_pdo) },
 	{ .code = 0x84, HANDLER_DEF(get_rdo) },
 	{ .code = 0x85, HANDLER_DEF(unsupported) },
 	{ .code = 0x99, HANDLER_DEF(unsupported) },
@@ -547,6 +602,7 @@ const struct commands sub_cmd_x0E[] = {
 	{ .code = 0x11, HANDLER_DEF(unsupported) },
 	{ .code = 0x12, HANDLER_DEF(get_connector_status) },
 	{ .code = 0x13, HANDLER_DEF(get_error_status) },
+	{ .code = 0x1E, HANDLER_DEF(read_power_level) },
 };
 
 const struct commands sub_cmd_x12[] = {
@@ -981,6 +1037,28 @@ static int emul_realtek_rts54xx_get_reconnect_req(const struct emul *target,
 	return 0;
 }
 
+static int emul_realtek_rts54xx_pulse_irq(const struct emul *target)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+
+	gpio_emul_input_set(data->irq_gpios.port, data->irq_gpios.pin, 1);
+	gpio_emul_input_set(data->irq_gpios.port, data->irq_gpios.pin, 0);
+
+	return 0;
+}
+
+static int emul_realtek_rts54xx_set_info(const struct emul *target,
+					 const struct pdc_info_t *info)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+
+	data->info = *info;
+
+	return 0;
+}
+
 struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.set_response_delay = emul_realtek_rts54xx_set_response_delay,
 	.get_connector_reset = emul_realtek_rts54xx_get_connector_reset,
@@ -996,6 +1074,8 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.get_ccom = emul_realtek_rts54xx_get_ccom,
 	.get_sink_path = emul_realtek_rts54xx_get_sink_path,
 	.get_reconnect_req = emul_realtek_rts54xx_get_reconnect_req,
+	.pulse_irq = emul_realtek_rts54xx_pulse_irq,
+	.set_info = emul_realtek_rts54xx_set_info,
 };
 
 #define RTS5453P_EMUL_DEFINE(n)                                             \
@@ -1008,6 +1088,9 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 			.read_byte = rts5453p_emul_read_byte,		\
 			.finish_read = rts5453p_emul_finish_read,	\
 			.access_reg = rts5453p_emul_access_reg,		\
+		},							\
+		.pdc_data = {						\
+			.irq_gpios = GPIO_DT_SPEC_INST_GET(n, irq_gpios), \
 		},							\
 	};       \
 	static const struct i2c_common_emul_cfg rts5453p_emul_cfg_##n = {   \

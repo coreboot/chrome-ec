@@ -12,6 +12,11 @@
 
 #include "usb_pd.h"
 
+#include <stdbool.h>
+#include <stdint.h>
+
+#include <drivers/pdc.h>
+
 /**
  * @brief Get the state of the port partner connection
  *
@@ -257,5 +262,25 @@ void pdc_power_mgmt_request_power_swap(int port);
  * @param port USB-C port number
  */
 void pdc_power_mgmt_request_data_swap(int port);
+
+/*
+ * @brief Query info from the PD chip (USB PID/VID, FW ver, etc)
+ *
+ * @param port USB-C port number
+ * @param pdc_info Output struct for chip info
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_get_info(int port, struct pdc_info_t *pdc_info);
+
+/**
+ * @brief Query bus info from PDC used to access the chip
+ *
+ * @param port USB-C port number
+ * @param pdc_info Output struct for bus info
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_get_bus_info(int port, struct pdc_bus_info_t *pdc_bus_info);
 
 #endif /* __CROS_EC_PDC_POWER_MGMT_H */

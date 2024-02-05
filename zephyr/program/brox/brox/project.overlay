@@ -24,11 +24,7 @@ i2c3ALT: &i2c3 {
 #include "../led_pins.dtsi"
 #include "../led_policy.dtsi"
 #include "../keyboard.dtsi"
-/*
- * TODO: b/319267575 - [Brox Proto1] PP3300_S5 has leakage in Z1
- * Disable I2C sensor bus and configure pins as input.
- */
-/* #include "../motionsense.dtsi" */
+#include "../motionsense.dtsi"
 #include "../power_signals.dtsi"
 #include "../power_signals_gpios.dtsi"
 #include "../pwm.dtsi"
@@ -62,4 +58,12 @@ i2c3ALT: &i2c3 {
 &cbi_flash {
 	offset = <(0x60000 - (0x1000 * 1))>;
 	size = <0x1000>;
+};
+
+/* These GPIOS are initialized by the PDC driver */
+&gpio_usb_pd_int_odl {
+	no-auto-init;
+};
+&gpio_ec_i2c_pmc_pd_int_odl {
+	no-auto-init;
 };
