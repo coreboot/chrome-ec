@@ -24,18 +24,34 @@ extern "C" {
 #endif
 
 /**
+ * @brief Power Delivery Controller Information
+ */
+struct pdc_info_t {
+	/** Firmware version running on the PDC */
+	uint32_t fw_version;
+	/** Power Delivery Revision supported by the PDC */
+	uint16_t pd_revision;
+	/** Power Delivery Version supported byt the PDC */
+	uint16_t pd_version;
+	/** VID:PID of the PDC (optional) */
+	uint32_t vid_pid;
+	/** Set to 1 if running from flash code (optional) */
+	uint8_t is_running_flash_code;
+	/** Set to the currently used flash bank (optional) */
+	uint8_t running_in_flash_bank;
+	/** Extra information (optional) */
+	uint16_t extra;
+};
+
+/**
  * @typedef
  * @brief These are the API function types
  */
-typedef int (*pdc_enable_t)(const struct device *dev);
 typedef int (*pdc_get_ucsi_version_t)(const struct device *dev,
 				      uint16_t *version);
 typedef int (*pdc_reset_t)(const struct device *dev);
 typedef int (*pdc_connector_reset_t)(const struct device *dev,
 				     enum connector_reset_t type);
-typedef int (*pdc_set_notification_enable_t)(const struct device *dev,
-					     union notification_enable_t bits,
-					     uint16_t ext_bits);
 typedef int (*pdc_get_capability_t)(const struct device *dev,
 				    struct capability_t *caps);
 typedef int (*pdc_get_connector_capability_t)(
@@ -60,13 +76,8 @@ typedef int (*pdc_get_pdos_t)(const struct device *dev,
 			      bool port_partner_pdo, uint32_t *pdos);
 typedef int (*pdc_get_rdo_t)(const struct device *dev, uint32_t *rdo);
 typedef int (*pdc_set_rdo_t)(const struct device *dev, uint32_t rdo);
-typedef int (*pdc_is_flash_code_t)(const struct device *dev,
-				   uint8_t *is_flash_code);
-typedef int (*pdc_get_fw_version_t)(const struct device *dev,
-				    uint32_t *fw_version);
-typedef int (*pdc_get_vid_pid_t)(const struct device *dev, uint32_t *vidpid);
-typedef int (*pdc_get_pd_version_t)(const struct device *dev,
-				    uint32_t *pd_version);
+typedef int (*pdc_get_info_t)(const struct device *dev,
+			      struct pdc_info_t *info);
 typedef int (*pdc_get_current_pdo_t)(const struct device *dev, uint32_t *pdo);
 typedef int (*pdc_read_power_level_t)(const struct device *dev);
 typedef int (*pdc_set_power_level_t)(const struct device *dev,
@@ -74,17 +85,17 @@ typedef int (*pdc_set_power_level_t)(const struct device *dev,
 typedef int (*pdc_reconnect_t)(const struct device *dev);
 typedef int (*pdc_get_current_flash_bank_t)(const struct device *dev,
 					    uint8_t *bank);
+typedef int (*pdc_update_retimer_fw_t)(const struct device *dev, bool enable);
+
 /**
  * @cond INTERNAL_HIDDEN
  *
  * These are for internal use only, so skip these in public documentation.
  */
 __subsystem struct pdc_driver_api_t {
-	pdc_enable_t enable;
 	pdc_get_ucsi_version_t get_ucsi_version;
 	pdc_reset_t reset;
 	pdc_connector_reset_t connector_reset;
-	pdc_set_notification_enable_t set_notification_enable;
 	pdc_get_capability_t get_capability;
 	pdc_get_connector_capability_t get_connector_capability;
 	pdc_set_ccom_t set_ccom;
@@ -100,37 +111,15 @@ __subsystem struct pdc_driver_api_t {
 	pdc_get_rdo_t get_rdo;
 	pdc_set_rdo_t set_rdo;
 	pdc_read_power_level_t read_power_level;
-	pdc_is_flash_code_t is_flash_code;
-	pdc_get_fw_version_t get_fw_version;
-	pdc_get_vid_pid_t get_vid_pid;
-	pdc_get_pd_version_t get_pd_version;
+	pdc_get_info_t get_info;
 	pdc_set_power_level_t set_power_level;
 	pdc_reconnect_t reconnect;
 	pdc_get_current_flash_bank_t get_current_flash_bank;
+	pdc_update_retimer_fw_t update_retimer;
 };
 /**
  * @endcond
  */
-
-/**
- * @brief Enable the PDC. Usually the first function that needs to be called
- * @note  CCI Events
- *            <none>
- *
- * @param dev PDC device structure pointer
- *
- * @retval 0 on API call success
- * @retval -EIO on failure
- */
-static inline int pdc_enable(const struct device *dev)
-{
-	const struct pdc_driver_api_t *api =
-		(const struct pdc_driver_api_t *)dev->api;
-
-	__ASSERT(api->enable != NULL, "ENABLE is not optional");
-
-	return api->enable(dev);
-}
 
 /**
  * @brief Trigger the PDC to read the power level when in Source mode.
@@ -247,33 +236,6 @@ static inline int pdc_set_sink_path(const struct device *dev, bool en)
 	__ASSERT(api->set_sink_path != NULL, "SET_SINK_PATH is not optional");
 
 	return api->set_sink_path(dev, en);
-}
-
-/**
- * @brief Sets the list of asynchronous events that the PDC may send
- *        notifications about.
- * @note CCI Events set
- *           busy: if PDC is busy
- *           error: command was unsuccessful
- *           command_commpleted: notifications were enabled
- *
- * @param dev PDC device structure pointer
- * @param bits a bitmask of the notifications.
- *
- * @retval 0 on success
- * @retval -EBUSY if not ready to execute the command
- */
-static inline int pdc_set_notification_enable(const struct device *dev,
-					      union notification_enable_t bits,
-					      uint16_t ext_bits)
-{
-	const struct pdc_driver_api_t *api =
-		(const struct pdc_driver_api_t *)dev->api;
-
-	__ASSERT(api->set_notification_enable != NULL,
-		 "SET_NOTIFICATION_ENABLE is not optional");
-
-	return api->set_notification_enable(dev, bits, ext_bits);
 }
 
 /**
@@ -549,110 +511,28 @@ static inline int pdc_get_pdos(const struct device *dev,
 }
 
 /**
- * @brief Tests if the PDC is executing from Flash or ROM code
+ * @brief Get information about the PDC
  * @note CCI Events set
- *           <none>
+ *           busy: if PDC is busy
+ *           error: if the the info could not be retrieved
+ *           command_completed: if the info was received
  *
  * @param dev PDC device structure pointer
- * @param is_flash_code pointer to where the boolean is stored
- *
- * @retval 0 on success
- * @retval -EBUSY if not ready to execute the command
- * @retval -EINVAL if is_flash_code is NULL
- * @retval -ENOSYS if not implemented
- */
-static inline int pdc_is_flash_code(const struct device *dev,
-				    uint8_t *is_flash_code)
-{
-	const struct pdc_driver_api_t *api =
-		(const struct pdc_driver_api_t *)dev->api;
-
-	/* This is an optional feature, so it might not be implemented */
-	if (api->is_flash_code == NULL) {
-		return -ENOSYS;
-	}
-
-	return api->is_flash_code(dev, is_flash_code);
-}
-
-/**
- * @brief Get the FW version of the PDC
- * @note CCI Events set
- *           <none>
- *
- * @param dev PDC device structure pointer
- * @param fw_version pointer to where the FW version is stored
+ * @param info pointer to where the PDC information is stored
  *
  * @retval 0 on success
  * @retval -EBUSY if not ready to execute the command
  * @retval -EINVAL if fw_version pointers is NULL
- * @retval -ENOSYS if not implemented
  */
-static inline int pdc_get_fw_version(const struct device *dev,
-				     uint32_t *fw_version)
+static inline int pdc_get_info(const struct device *dev,
+			       struct pdc_info_t *info)
 {
 	const struct pdc_driver_api_t *api =
 		(const struct pdc_driver_api_t *)dev->api;
 
-	/* This is an optional feature, so it might not be implemented */
-	if (api->get_fw_version == NULL) {
-		return -ENOSYS;
-	}
+	__ASSERT(api->get_info != NULL, "GET_INFO is not optional");
 
-	return api->get_fw_version(dev, fw_version);
-}
-
-/**
- * @brief Get the PDC's VID and PID
- * @note CCI Events set
- *           <none>
- *
- * @param dev PDC device structure pointer
- * @param vid_pid pointer to where the VID:PID is stored
- *
- * @retval 0 on success
- * @retval -EBUSY if not ready to execute the command
- * @retval -EINVAL if vidpid pointers is NULL
- * @retval -ENOSYS if not implemented
- */
-static inline int pdc_get_vid_pid(const struct device *dev, uint32_t *vidpid)
-{
-	const struct pdc_driver_api_t *api =
-		(const struct pdc_driver_api_t *)dev->api;
-
-	/* This is an optional feature, so it might not be implemented */
-	if (api->get_vid_pid == NULL) {
-		return -ENOSYS;
-	}
-
-	return api->get_vid_pid(dev, vidpid);
-}
-
-/**
- * @brief Get the PD Version of the Port Partner
- * @note CCI Events set
- *           <none>
- *
- * @param dev PDC device structure pointer
- * @param pd_version pointer to where the pd_version is stored
- *
- * @retval 0 on success
- * @retval -EBUSY if not ready to execute the command
- * @retval -EINVAL if pdo pointer is NULL
- * @retval -ENOSYS if not implemented
- */
-static inline int pdc_get_pd_version(const struct device *dev,
-				     uint32_t *pd_version)
-{
-	const struct pdc_driver_api_t *api =
-		(const struct pdc_driver_api_t *)dev->api;
-
-	/* This is an optional feature, so it might not be implemented */
-	if (api->get_pd_version == NULL) {
-		return -ENOSYS;
-	}
-
-	return api->get_pd_version(dev, pd_version);
+	return api->get_info(dev, info);
 }
 
 /**
@@ -803,6 +683,28 @@ static inline int pdc_get_current_flash_bank(const struct device *dev,
 	}
 
 	return api->get_current_flash_bank(dev, bank);
+}
+
+/**
+ * @brief Command PD chip to enter retimer firmware update mode.
+ *
+ * @param enable True->enter, False->exit retimer firmware update mode.
+ *
+ * @retval 0 if success or I2C error.
+ * @retval -EIO if input/output error.
+ * @retval -ENOSYS if API not implemented.
+ */
+static inline int pdc_update_retimer_fw(const struct device *dev, bool enable)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	/* Temporarily optional feature, so it might not be implemented */
+	if (api->update_retimer == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->update_retimer(dev, enable);
 }
 
 #ifdef __cplusplus

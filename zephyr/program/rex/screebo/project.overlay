@@ -16,6 +16,7 @@
 
 /* Screebo project DTS includes */
 #include "cbi.dtsi"
+#include "keyboard.dtsi"
 #include "led_pins.dtsi"
 #include "led_policy.dtsi"
 #include "temp_sensors.dtsi"
@@ -55,6 +56,7 @@
 		/delete-node/ ec_accel;
 		/delete-node/ volume_up;
 		/delete-node/ volume_down;
+		/delete-node/ tablet_mode;
 	};
 
 	batteries {

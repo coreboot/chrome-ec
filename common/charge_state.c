@@ -12,6 +12,7 @@
 #line 13
 
 #include "battery.h"
+#include "battery_fuel_gauge.h"
 #include "battery_smart.h"
 #include "builtin/assert.h"
 #include "charge_manager.h"
@@ -43,7 +44,7 @@
  * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
  * #line marks the *next* line, so it is off by one.
  */
-#line 47
+#line 48
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_CHARGER, outstr)
@@ -150,14 +151,6 @@ STATIC_IF_NOT(CONFIG_USB_PD_PREFER_MV) struct pd_pref_config_t pd_pref_config;
 static int battery_seems_dead;
 
 static int battery_seems_disconnected;
-
-/*
- * Was battery removed?  Set when we see BP_NO, cleared after the battery is
- * reattached and becomes responsive.  Used to indicate an error state after
- * removal and trigger re-reading the battery static info when battery is
- * reattached and responsive.
- */
-static int battery_was_removed;
 
 static int problems_exist;
 
@@ -345,7 +338,6 @@ static void dump_charge_state(void)
 	ccprintf("battery_seems_dead = %d\n", battery_seems_dead);
 	ccprintf("battery_seems_disconnected = %d\n",
 		 battery_seems_disconnected);
-	ccprintf("battery_was_removed = %d\n", battery_was_removed);
 	ccprintf("debug output = %s\n", debugging() ? "on" : "off");
 	ccprintf("Battery sustainer = %s (%d%% ~ %d%%)\n",
 		 battery_sustainer_enabled() ? "on" : "off", sustain_soc.lower,
@@ -1067,8 +1059,7 @@ DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, bat_low_voltage_throttle_reset,
 	     HOOK_PRIO_DEFAULT);
 #endif
 
-static int get_desired_input_current(enum battery_present batt_present,
-				     const struct charger_info *const info)
+static int get_desired_input_current(const struct charger_info *const info)
 {
 #ifdef CONFIG_CHARGE_MANAGER
 	int ilim = charge_manager_get_charger_current();
@@ -1177,15 +1168,14 @@ static void revive_battery(int *need_static)
 		CPRINTS("found battery in disconnect state");
 		curr.requested_voltage = batt_info->voltage_max;
 		curr.requested_current = batt_info->precharge_current;
-	} else if (curr.state == ST_PRECHARGE || battery_seems_dead ||
-		   battery_was_removed) {
+	} else if (curr.state == ST_PRECHARGE || battery_seems_dead) {
 		CPRINTS("battery woke up");
 		/* Update the battery-specific values */
 		batt_info = battery_get_info();
 		*need_static = 1;
 	}
 
-	battery_seems_dead = battery_was_removed = 0;
+	battery_seems_dead = 0;
 }
 
 /* Set up the initial state of the charger task */
@@ -1214,8 +1204,7 @@ static void charger_setup(const struct charger_info *info)
 	 * as needed.
 	 */
 	prev_bp = BP_NOT_INIT;
-	curr.desired_input_current =
-		get_desired_input_current(curr.batt.is_present, info);
+	curr.desired_input_current = get_desired_input_current(info);
 
 	if (IS_ENABLED(CONFIG_USB_PD_PREFER_MV)) {
 		/* init battery desired power */
@@ -1294,10 +1283,15 @@ static void process_battery_present_change(const struct charger_info *info,
 {
 	prev_bp = curr.batt.is_present;
 
-	/* Update battery info due to change of battery */
+	if (curr.batt.is_present && IS_ENABLED(CONFIG_BATTERY_FUEL_GAUGE)) {
+		/* Identify the attached battery. */
+		CPRINTS("Battery now present");
+		init_battery_type();
+	}
+
 	batt_info = battery_get_info();
 
-	curr.desired_input_current = get_desired_input_current(prev_bp, info);
+	curr.desired_input_current = get_desired_input_current(info);
 	if (curr.desired_input_current != CHARGE_CURRENT_UNINITIALIZED)
 		charger_set_input_current_limit(chgnum,
 						curr.desired_input_current);
@@ -1334,7 +1328,6 @@ static void decide_charge_state(int *need_staticp, int *battery_criticalp)
 			CPRINTS("running with no battery and no AC");
 		set_charge_state(ST_IDLE);
 		curr.batt_is_charging = 0;
-		battery_was_removed = 1;
 		return;
 	}
 
@@ -1636,6 +1629,7 @@ void charger_task(void *u)
 	int chgnum = 0;
 	bool is_full = false; /* battery not accepting current */
 	bool prev_full = false;
+	int prev_bf = 0;
 
 	/* Set up the task - note that charger_init() has already run. */
 	charger_setup(info);
@@ -1661,10 +1655,16 @@ void charger_task(void *u)
 			ocpc_get_adcs(&curr.ocpc);
 #endif /* CONFIG_OCPC */
 
-		if (prev_bp != curr.batt.is_present) {
+		if ((prev_bp != curr.batt.is_present) ||
+		    ((prev_bf ^ curr.batt.flags) & BATT_FLAG_RESPONSIVE)) {
+			CPRINTS("Battery presence changed: %d->%d 0x%x->0x%x",
+				prev_bp, curr.batt.is_present,
+				prev_bf & BATT_FLAG_RESPONSIVE,
+				curr.batt.flags & BATT_FLAG_RESPONSIVE);
 			process_battery_present_change(info, chgnum);
 			need_static = 1;
 		}
+		prev_bf = curr.batt.flags;
 
 		battery_validate_params(&curr.batt);
 
@@ -1786,7 +1786,7 @@ bool charge_prevent_power_on(bool power_button_pressed)
 			      ));
 #endif /* CONFIG_CHARGER_MIN_BAT_PCT_FOR_POWER_ON */
 
-#ifdef CONFIG_CHARGE_MANAGER
+#if defined(CONFIG_CHARGE_MANAGER) && !defined(CONFIG_USB_PD_CONTROLLER)
 	/* Always prevent power on until charge current is initialized */
 	if (extpower_is_present() && (charge_manager_get_charger_current() ==
 				      CHARGE_CURRENT_UNINITIALIZED))
@@ -2227,8 +2227,6 @@ static int charge_get_charge_state_debug(int param, uint32_t *value)
 		*value = battery_seems_disconnected;
 		break;
 	case CS_PARAM_DEBUG_BATT_REMOVED:
-		*value = battery_was_removed;
-		break;
 	default:
 		*value = 0;
 		return EC_ERROR_INVAL;

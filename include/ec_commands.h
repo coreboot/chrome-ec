@@ -4853,7 +4853,7 @@ enum charge_state_params {
 	CS_PARAM_DEBUG_MANUAL_MODE,
 	CS_PARAM_DEBUG_SEEMS_DEAD,
 	CS_PARAM_DEBUG_SEEMS_DISCONNECTED,
-	CS_PARAM_DEBUG_BATT_REMOVED,
+	CS_PARAM_DEBUG_BATT_REMOVED, /* Deprecated */
 	CS_PARAM_DEBUG_MANUAL_CURRENT,
 	CS_PARAM_DEBUG_MANUAL_VOLTAGE,
 	CS_PARAM_DEBUG_MAX = 0x2ffff,
@@ -6602,6 +6602,7 @@ struct ec_response_rollback_info {
 enum ec_chip_type {
 	EC_CHIP_TYPE_CBI_EEPROM = 0,
 	EC_CHIP_TYPE_TCPC = 1,
+	EC_CHIP_TYPE_PDC = 2,
 	EC_CHIP_TYPE_COUNT,
 	EC_CHIP_TYPE_MAX = 0xFF,
 };
@@ -8354,10 +8355,10 @@ struct ec_response_battery_static_info_v2 {
 	uint16_t design_capacity;
 	uint16_t design_voltage;
 	uint32_t cycle_count;
-	char manufacturer[32];
-	char device_name[32];
-	char serial[32];
-	char chemistry[32];
+	char manufacturer[SBS_MAX_STR_OBJ_SIZE];
+	char device_name[SBS_MAX_STR_OBJ_SIZE];
+	char serial[SBS_MAX_STR_OBJ_SIZE];
+	char chemistry[SBS_MAX_STR_OBJ_SIZE];
 } __ec_align4;
 
 /*
