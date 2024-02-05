@@ -13,6 +13,7 @@
 #ifndef __EMUL_REALTEK_RTS5453P_H
 #define __EMUL_REALTEK_RTS5453P_H
 
+#include "drivers/pdc.h"
 #include "drivers/ucsi_v3.h"
 #include "emul/emul_common_i2c.h"
 #include "zephyr/kernel.h"
@@ -363,6 +364,7 @@ struct ping_status {
 
 /** @brief Emulated properties */
 struct rts5453p_emul_pdc_data {
+	struct gpio_dt_spec irq_gpios;
 	uint16_t ucsi_version;
 	union vendor_cmd vnd_command;
 	uint8_t connector_reset_type;
@@ -379,6 +381,7 @@ struct rts5453p_emul_pdc_data {
 	union csd_op_mode_t csd_op_mode;
 	struct force_set_power_switch_t set_power_switch_data;
 	uint8_t set_tpc_reconnect_param;
+	struct pdc_info_t info;
 
 	union rts54_request request;
 
