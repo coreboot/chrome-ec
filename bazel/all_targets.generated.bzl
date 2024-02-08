@@ -313,6 +313,14 @@ def all_targets():
         extra_modules = ["cmsis", "picolibc", "pigweed"],
     )
     ec_target(
+        name = "buccaneer",
+        baseboard = "helipilot",
+        board = "buccaneer",
+        chip = "npcx",
+        core = "cortex-m",
+        zephyr = False,
+    )
+    ec_target(
         name = "bugzzy",
         baseboard = "dedede",
         board = "bugzzy",
@@ -992,6 +1000,7 @@ def all_targets():
     )
     ec_target(
         name = "helipilot",
+        baseboard = "helipilot",
         board = "helipilot",
         chip = "npcx",
         core = "cortex-m",
@@ -2342,6 +2351,14 @@ def all_targets():
         name = "xivur",
         board = "xivur",
         extra_modules = ["cmsis", "picolibc", "pigweed"],
+    )
+    ec_target(
+        name = "xol",
+        baseboard = "brya",
+        board = "xol",
+        chip = "npcx",
+        core = "cortex-m",
+        zephyr = False,
     )
     ec_target(
         name = "yaviks",
