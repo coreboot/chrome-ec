@@ -13,7 +13,7 @@ if [[ "$(basename "${EC_DIR}")" != "ec" ]]; then
 fi
 
 # Loads script libraries.
-# shellcheck source=/dev/null
+# shellcheck source=../../../scripts/lib/shflags/shflags
 . "${SHFLAGS:-/usr/share/misc/shflags}" || exit 1
 
 # Redirects tput to stderr, and drop any error messages.
@@ -116,6 +116,7 @@ BOARDS_NPCX_7M7X_JTAG=(
 )
 
 BOARDS_NPCX_SPI=(
+	buccaneer
 	helipilot
 )
 
@@ -248,6 +249,15 @@ function print_or_run() {
 	else
 		"$@"
 	fi
+}
+
+# Helper routine to test if specific control is available.
+# This always executes, even with --dry_run so that the control flow
+# of the script continues normally.
+function dut_has_control() {
+	local CONTROL=$1
+
+	"${DUT_CONTROL_CMD[@]}" -i "${CONTROL}" >/dev/null 2>&1
 }
 
 function dut_control() {
@@ -406,13 +416,15 @@ case "${BOARD}" in
 	chocodile_bec ) MCU="usbpd" ;;
 	oak_pd|strago_pd ) MCU="usbpd" ;;
 	chell_pd|glados_pd ) MCU="usbpd" ;;
-	bloonchipper|dartmonkey|hatch_fp|helipilot|nami_fp|nocturne_fp ) MCU="fpmcu" ;;
+	bloonchipper|buccaneer|dartmonkey|hatch_fp|helipilot|nami_fp|nocturne_fp )
+		MCU="fpmcu"
+		;;
 	dingdong|hoho|twinkie ) DUT_CONTROL_CMD=( "true" ); MCU="ec" ;;
 	*) MCU="ec" ;;
 esac
 
 case "${CHIP}" in
-	"stm32"|"npcx_spi"|"npcx_int_spi"|"it83xx"|"npcx_uut"|"ite_spi"| \
+	"stm32"|"npcx_spi"|"npcx_int_spi"|"it83xx"|"ite_i2c"|"npcx_uut"|"ite_spi"| \
 			"ite_spi_ccd_i2c"|"it8xxx2"|"mchp_int_spi")
 		;;
 	*)
@@ -462,19 +474,19 @@ servo_is_ccd() {
 }
 
 servo_has_warm_reset() {
-	dut_control -i warm_reset >/dev/null 2>&1
+	dut_has_control warm_reset
 }
 
 servo_has_cold_reset() {
-	dut_control -i cold_reset >/dev/null 2>&1
+	dut_has_control cold_reset
 }
 
 servo_has_dut_i2c_mux() {
-	dut_control -i dut_i2c_mux >/dev/null 2>&1
+	dut_has_control dut_i2c_mux
 }
 
 servo_has_dut_i2c_en() {
-	dut_control -i dut_i2c_en >/dev/null 2>&1
+	dut_has_control dut_i2c_en
 }
 
 servo_ec_hard_reset_or_die() {
@@ -1404,10 +1416,39 @@ function dut_i2c_dev() {
 	echo /dev/i2c-"${adap_num}"
 }
 
+function ite_dfu_mode() {
+	# Send the special waveform to the ITE EC.
+	if [[ "${SERVO_TYPE}" =~ "servo_micro" || \
+	      "${SERVO_TYPE}" =~ "c2d2" ]] ; then
+		info "Asking servo to send the dbgr special waveform to ${CHIP}"
+		dut_control_or_die enable_ite_dfu
+	elif servo_is_ccd; then
+		local CCD_I2C_CAP
+		CCD_I2C_CAP="$(dut_control_get ccd_i2c_en)"
+		if [[ "${CCD_I2C_CAP,,}" != "always" ]]; then
+			die "CCD I2C capability is not set as 'Always'" \
+				": ${CCD_I2C_CAP}"
+		fi
+
+		info "Asking CR50 to send the dbgr special waveform to ${CHIP}"
+		sleep 2
+		dut_control_or_die cr50_i2c_ctrl:ite_debugger_mode
+		sleep 3
+	elif [[ "${SERVO_TYPE}" == "servo_v2" ]]; then
+		info "Closing servod connection to ftdi_i2c interface"
+		dut_control_or_die ftdii2c_cmd:close
+	else
+		die "This servo type is not yet supported: ${SERVO_TYPE}"
+	fi
+}
+
 function flash_it83xx() {
 	local TOOL_PATH="${EC_DIR}/build/${BOARD}/util:${PATH}"
 	local ITEFLASH_BIN
+	local TEMP_DIR
 	ITEFLASH_BIN=$(PATH="${TOOL_PATH}" which iteflash)
+	TEMP_DIR="$(mktemp -d --suffix="${TEMP_SUFFIX}")"
+	DELETE_LIST+=("${TEMP_DIR}")
 
 	if [[ ! -x "${ITEFLASH_BIN}" ]]; then
 		die "no iteflash util found."
@@ -1457,29 +1498,7 @@ function flash_it83xx() {
 		servo_ec_hard_reset_or_die
 	fi
 
-	# Send the special waveform to the ITE EC.
-	if [[ "${SERVO_TYPE}" =~ "servo_micro" || \
-	      "${SERVO_TYPE}" =~ "c2d2" ]] ; then
-		info "Asking servo to send the dbgr special waveform to ${CHIP}"
-		dut_control_or_die enable_ite_dfu
-	elif servo_is_ccd; then
-		local CCD_I2C_CAP
-		CCD_I2C_CAP="$(dut_control_get ccd_i2c_en)"
-		if [[ "${CCD_I2C_CAP,,}" != "always" ]]; then
-			die "CCD I2C capability is not set as 'Always'" \
-				": ${CCD_I2C_CAP}"
-		fi
-
-		info "Asking CR50 to send the dbgr special waveform to ${CHIP}"
-		sleep 2
-		dut_control_or_die cr50_i2c_ctrl:ite_debugger_mode
-		sleep 3
-	elif [[ "${SERVO_TYPE}" == "servo_v2" ]]; then
-		info "Closing servod connection to ftdi_i2c interface"
-		dut_control_or_die ftdii2c_cmd:close
-	else
-		die "This servo type is not yet supported: ${SERVO_TYPE}"
-	fi
+	ite_dfu_mode
 
 	# Build the iteflash command line.
 	local ITEFLASH_ARGS=( "${ITEFLASH_BIN}" )
@@ -1493,6 +1512,17 @@ function flash_it83xx() {
 		if servo_is_ccd; then
 			ITEFLASH_ARGS+=( "--block-write-size=256" )
 		fi
+	fi
+
+	if [[ "${FLAGS_no_preserve}" == "${FLAGS_FALSE}" && \
+	      -z "${FLAGS_read}" ]]; then
+		local IMG_CPY
+
+		IMG_CPY="${TEMP_DIR}/ec.new.cpy.bin"
+		cat "${IMG}" > "${IMG_CPY}"
+		IMG="${IMG_CPY}"
+		preserve_sections "ite_i2c" "${IMG}" "${TEMP_DIR}"    \
+			"${ITEFLASH_ARGS[*]}" || die "${MSG_PROGRAM_FAIL}"
 	fi
 
 	local ERROR_MSG
@@ -1828,6 +1858,7 @@ function preserve_sections() {
 		local NEW_FMAP_SIZE
 		local CUR_FMAP_IMG
 		local CUR_IMG
+		local CUR_FMAP_HEADER
 
 		NEW_FMAP=$(dump_fmap "${NEW_IMG}" -e FMAP)
 		NEW_FMAP_NFIELD=$(echo "${NEW_FMAP}" | awk '{print NF}')
@@ -1842,7 +1873,13 @@ function preserve_sections() {
 		info "Reading FMAP section from EC chip"
 		read_chip_partially "${CHIP_TYPE}" "${CHIP_CMD_PREFIX}"  \
 			"${NEW_FMAP_OFFSET}" "${NEW_FMAP_SIZE}" "${CUR_FMAP_IMG}"
-		if [[ -z "$(dump_fmap "${CUR_FMAP_IMG}" -e FMAP)" ]]; then
+		# Verify the partial file starts with the correct FMAP header.
+		# If the FMAP has moved between the current image and new
+		# image, this should catch this.
+		# bash can't store NUL characters into variables so strip
+		# any read from the file.
+		CUR_FMAP_HEADER=$(head -c 8 "${CUR_FMAP_IMG}" | tr -d '\0')
+		if [[ "${CUR_FMAP_HEADER}" != "__FMAP__" ]]; then
 			info "FMAP section read failed, reading complete image"
 			read_chip "${CHIP_TYPE}" "${CHIP_CMD_PREFIX}" "${CUR_IMG}"
 			check_preserve_sections_not_present "${CUR_IMG}"  \
@@ -1906,7 +1943,7 @@ function preserve_sections_with_fmap_image() {
 			read_chip_partially "${CHIP_TYPE}" "${CHIP_CMD_PREFIX}"  \
 				"${SEC_OFFSET}" "${SEC_SIZE}" "${SEC_IMG}"
 			info "Preserving ${line} section in new image"
-			cbfstool "${NEW_IMG}" write -r "${line}" -f "${SEC_IMG}"
+			futility load_fmap "${NEW_IMG}" "${line}:${SEC_IMG}"
 		done
 	)
 }
@@ -1929,8 +1966,9 @@ function preserve_sections_with_cur_image() {
 
 			info "Preserving ${line} section on EC chip"
 			SEC_IMG="${TEMP_DIR}/ec.cur.${line}.bin"
-			cbfstool "${CUR_IMG}" read -r "${line}" -f "${SEC_IMG}"
-			cbfstool "${NEW_IMG}" write -r "${line}" -f "${SEC_IMG}"
+			futility dump_fmap -x "${CUR_IMG}" "${line}"
+			mv "${line}" "${SEC_IMG}"
+			futility load_fmap "${NEW_IMG}" "${line}:${SEC_IMG}"
 		done
 	)
 }
@@ -1941,7 +1979,6 @@ function read_chip_partially() {
 	local OFFSET
 	local SIZE
 	local FILE_PATH
-	local NPCX_BASE_ADDR
 
 	CHIP_TYPE=${1:?"missing arg 1: Chip type"}
 	CHIP_CMD_PREFIX=${2:?"missing arg 2: Prefix of command"}
@@ -1949,11 +1986,11 @@ function read_chip_partially() {
 	OFFSET=${3:?"missing arg 3: Offset"}
 	SIZE=${4:?"missing arg 4: Size"}
 	FILE_PATH=${5:?"missing arg 5: Image storage path"}
-	NPCX_BASE_ADDR=0x64000000
 
 	if [ "${CHIP_TYPE}" = "npcx_uut" ]; then
-		local UUT_CUR_FMAP_RD
+		local NPCX_BASE_ADDR
 
+		NPCX_BASE_ADDR=0x64000000
 		OFFSET=$(("${NPCX_BASE_ADDR}" + "${OFFSET}"))
 		UUT_CUR_FMAP_RD=( "${CHIP_CMD_PREFIX[@]}" "--opr=rd"  \
 			"--addr=${OFFSET}" "--size=${SIZE}"  \
@@ -1961,6 +1998,42 @@ function read_chip_partially() {
 		echo "${UUT_CUR_FMAP_RD[*]}"
 		print_or_run timeout -k 10 -s 9 "${FLAGS_timeout}" \
 					"${UUT_CUR_FMAP_RD[@]}" || die "${MSG_READ_FAIL}"
+	elif [ "${CHIP_TYPE}" == "ite_i2c" ]; then
+		local UUT_CUR_FMAP_RD
+		local ALIGNED_START SKIP_BYTES ALIGNED_SIZE RANGE ALIGNED_FILE
+
+		# ITE flash tool can start reads on a 256 byte page boundary
+		info "ITE partial read: offset ${OFFSET} size ${SIZE}"
+
+		ALIGNED_START=$((OFFSET & 0xFFFFFF00))
+		SKIP_BYTES=$((OFFSET - ALIGNED_START))
+		ALIGNED_SIZE=$((SIZE + SKIP_BYTES))
+		ALIGNED_FILE="${FILE_PATH}.aligned"
+
+		# --range requires hex representation
+		RANGE=$(printf '0x%x:0x%x' "${ALIGNED_START}" "${ALIGNED_SIZE}" )
+		info "ITE partial read range ${RANGE}"
+
+		UUT_CUR_FMAP_RD=( "${CHIP_CMD_PREFIX[@]}" \
+			"--read=${ALIGNED_FILE}" "--range=${RANGE}")
+		print_or_run timeout -k 10 -s 9 "${FLAGS_timeout}" \
+					"${UUT_CUR_FMAP_RD[@]}" || die "${MSG_READ_FAIL}"
+
+		if [[ "${ALIGNED_START}" != "${OFFSET}" ]]; then
+		   	local DD_CMD
+			# We had to read extra data from the DUT. Use dd
+			# to extract just the portion needed.
+			info "Extract ${SIZE} bytes from temp file"
+			DD_CMD=( "dd" "if=${ALIGNED_FILE}" "of=${FILE_PATH}" \
+				"skip=${SKIP_BYTES}" "count=${SIZE}" "bs=1" )
+			print_or_run "${DD_CMD[@]}"
+		else
+			# Extracted file has what we need
+			print_or_run mv "${ALIGNED_FILE}" "${FILE_PATH}"
+		fi
+
+		# ITE DFU mode must be re-enabled after each operation
+		ite_dfu_mode
 	else
 		die "${MSG_CHIP_READ_INVALID}"
 	fi
@@ -1970,6 +2043,7 @@ function read_chip() {
 	local CHIP_TYPE
 	local CHIP_CMD_PREFIX
 	local FILE_PATH
+	local UUT_CUR_RD
 
 	CHIP_TYPE=${1:?"missing arg 1: Chip type"}
 	CHIP_CMD_PREFIX=${2:?"missing arg 2: Prefix of command"}
@@ -1977,12 +2051,18 @@ function read_chip() {
 	FILE_PATH=${3:?"missing arg 3: Image storage path"}
 
 	if [ "${CHIP_TYPE}" = "npcx_uut" ]; then
-		local UUT_CUR_RD
-
 		UUT_CUR_RD=( "${CHIP_CMD_PREFIX[@]}" "--read-flash" "--file=${FILE_PATH}" )
 		echo "${UUT_CUR_RD[*]}"
 		print_or_run timeout -k 10 -s 9 "${FLAGS_timeout}" \
 					"${UUT_CUR_RD[@]}" || die "${MSG_READ_FAIL}"
+	elif [ "${CHIP_TYPE}" == "ite_i2c" ]; then
+		UUT_CUR_RD=( "${CHIP_CMD_PREFIX[@]}" "--read=${FILE_PATH}" )
+		echo "${UUT_CUR_RD[*]}"
+		print_or_run timeout -k 10 -s 9 "${FLAGS_timeout}" \
+					"${UUT_CUR_RD[@]}" || die "${MSG_READ_FAIL}"
+
+		# ITE DFU mode must be re-enabled after each operation
+		ite_dfu_mode
 	else
 		die "${MSG_CHIP_READ_INVALID}"
 	fi
