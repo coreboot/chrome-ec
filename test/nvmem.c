@@ -1198,7 +1198,7 @@ static int test_nvmem_interrupted_compaction(void)
 	/* Save the state of NVMEM cache. */
 	memcpy(buf, nvmem_cache_base(NVMEM_TPM), sizeof(buf));
 	failure_mode = TEST_FAIL_WHEN_COMPACTING;
-	compact_nvmem();
+	compact_nvmem(NV_COMPACT_SAVE);
 	wipe_out_nvmem_cache();
 	ccprintf("%s:%d\n", __func__, __LINE__);
 	TEST_ASSERT(nvmem_init() == EC_SUCCESS);
@@ -1556,7 +1556,7 @@ static int test_nvmem_flash_failure(void)
 	TEST_ASSERT(fill_pages() == EC_SUCCESS);
 	TEST_ASSERT(new_nvmem_save() == EC_SUCCESS);
 
-	TEST_ASSERT(compact_nvmem() == EC_SUCCESS);
+	TEST_ASSERT(compact_nvmem(NV_COMPACT_SAVE) == EC_SUCCESS);
 	TEST_ASSERT(nvmem_init() == EC_SUCCESS);
 	/* Again, page with write issue is not yet detected */
 	TEST_ASSERT(page_count == 9);

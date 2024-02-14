@@ -972,7 +972,8 @@ static enum ec_error_list release_first_page(struct access_tracker *at)
 }
 
 /* Reshuffle flash contents dropping deleted objects. */
-test_export_static enum ec_error_list compact_nvmem(void)
+test_export_static enum ec_error_list compact_nvmem(
+	enum nv_compact_reason reason)
 {
 	const struct nn_page_header *fence_ph;
 	enum ec_error_list rv = EC_SUCCESS;
@@ -1064,7 +1065,7 @@ test_export_static enum ec_error_list compact_nvmem(void)
 		case NN_OBJ_TPM_EVICTABLE:
 			ch->generation++;
 			if (save_container(ch) != EC_SUCCESS) {
-				ccprintf("%s: Saving FAILED\n", __func__);
+				CPRINTS("%s: Saving FAILED", __func__);
 				shared_mem_release(ch);
 				log_no_payload_failure(NVMEMF_COMPACT_SAVE);
 				return EC_ERROR_INVAL;
@@ -1133,8 +1134,8 @@ test_export_static enum ec_error_list compact_nvmem(void)
 			log_no_payload_failure(NVMEMF_COMPACT_FINAL);
 	}
 
-	CPRINTS("Compaction done, went from %zd to %zd bytes, status %d",
-		before, total_used_size(), rv);
+	CPRINTS("Compaction [%x] done, went from %zd to %zd bytes, status %d",
+		reason, before, total_used_size(), rv);
 
 	/* (b/262324344): debugging EPS status. */
 #ifdef CONFIG_NVMEM_DEBUG_EPS
@@ -2555,7 +2556,7 @@ static enum ec_error_list verify_delimiter(struct nn_container *nc)
 		if (rv != EC_SUCCESS)
 			return rv;
 		/* Don't check status as it is ok to fail on corrupted state */
-		compact_nvmem();
+		compact_nvmem(NV_COMPACT_VERIFY);
 	} else {
 		/* Add delimiter at the very top. */
 		rv = add_final_delimiter();
@@ -2978,7 +2979,7 @@ static enum ec_error_list new_nvmem_save_(void)
 
 	/* See if compaction is needed. */
 	if (compaction_needed()) {
-		rv = compact_nvmem();
+		rv = compact_nvmem(NV_COMPACT_SAVE);
 		if (rv != EC_SUCCESS)
 			return rv;
 	}
@@ -3210,7 +3211,7 @@ static enum ec_error_list setvar_(const uint8_t *key, uint8_t key_len,
 
 	/* See if compaction is needed. */
 	if (!erase_request && compaction_needed()) {
-		rv = compact_nvmem();
+		rv = compact_nvmem(NV_COMPACT_SETVAR);
 		if (rv != EC_SUCCESS)
 			return rv;
 	}
@@ -3379,7 +3380,7 @@ enum ec_error_list nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 	shared_mem_release(ch);
 
 	lock_mutex(__LINE__);
-	rv = compact_nvmem();
+	rv = compact_nvmem(NV_COMPACT_ERASE);
 	unlock_mutex(__LINE__);
 
 	/* Return first error, but always do `new_nvmem_init()`.
