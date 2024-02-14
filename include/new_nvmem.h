@@ -153,11 +153,18 @@ static inline enum ec_error_list nvmem_erase_tpm_data(void)
 	return nvmem_erase_tpm_data_selective(NULL);
 }
 
+enum nv_compact_reason {
+	NV_COMPACT_SAVE = 0,
+	NV_COMPACT_SETVAR = 1,
+	NV_COMPACT_VERIFY = 2,
+	NV_COMPACT_ERASE = 3,
+};
+
 #if defined(TEST_BUILD) && !defined(TEST_FUZZ)
 #define NVMEM_TEST_BUILD
 enum ec_error_list browse_nv_cache(void);
 enum ec_error_list browse_flash_contents(int);
-enum ec_error_list compact_nvmem(void);
+enum ec_error_list compact_nvmem(enum nv_compact_reason);
 extern struct access_tracker controller_at;
 extern uint16_t total_var_space;
 extern uint8_t page_list[NEW_NVMEM_TOTAL_PAGES];
