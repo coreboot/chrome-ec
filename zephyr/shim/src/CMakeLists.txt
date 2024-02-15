@@ -41,6 +41,7 @@ zephyr_library_sources_ifdef(CONFIG_X86_NON_DSX_PWRSEQ      chipset_api.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_INTERFACE_ESPI
                                                             espi.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN         fan.c)
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FINGERPRINT fpsensor.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH_CROS  flash.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_GPIO_ID
 							    gpio_id.c)
@@ -104,12 +105,27 @@ zephyr_library_sources_ifdef(CONFIG_HECI
 endif()
 
 if(CONFIG_PIGWEED_LOG_TOKENIZED_LIB)
+  if (DEFINED CONFIG_SOC_FAMILY_NPCX)
+    set(CHIP "npcx")
+  elseif (DEFINED CONFIG_SOC_FAMILY_ITE_EC)
+    set(CHIP "it8xxx2")
+  elseif (DEFINED CONFIG_SOC_FAMILY_MEC)
+    set(CHIP "mchp")
+  elseif (DEFINED CONFIG_SOC_FAMILY_STM32)
+    set(CHIP "stm32")
+  else ()
+    set(CHIP "stub")
+  endif()
+
   pw_add_library(platform_ec_log.tokenized_handler STATIC
     HEADERS
       ${PLATFORM_EC}/zephyr/shim/include/zephyr_console_shim.h
     SOURCES
       pw_log_zephyr_tokenized.cc
     PUBLIC_INCLUDES
+      ${PLATFORM_EC}/include
+      ${PLATFORM_EC}/fuzz/
+      ${PLATFORM_EC}/zephyr/shim/chip/${CHIP}/include
       ${PLATFORM_EC}/zephyr/shim/include
     PUBLIC_DEPS
       pw_log_zephyr.tokenized_lib

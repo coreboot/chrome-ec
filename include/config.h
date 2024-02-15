@@ -1778,7 +1778,7 @@
  * capture the EC state after a panic.
  */
 #undef CONFIG_SYSTEM_SAFE_MODE
-#define CONFIG_SYSTEM_SAFE_MODE_TIMEOUT_MSEC 2000
+#define CONFIG_SYSTEM_SAFE_MODE_TIMEOUT_MSEC 4000
 /*
  * Prints the stack of the faulting task to the console buffer in system safe
  * mode.
@@ -2269,6 +2269,7 @@
 #undef CONFIG_FP_SENSOR_FPC1035
 #undef CONFIG_FP_SENSOR_FPC1145
 #undef CONFIG_FP_SENSOR_ELAN80
+#undef CONFIG_FP_SENSOR_ELAN80SG
 #undef CONFIG_FP_SENSOR_ELAN515
 
 /*****************************************************************************/
@@ -4045,7 +4046,7 @@
 #undef CONFIG_SCI_GPIO
 
 /* Support computing of other hash sizes (without the VBOOT code) */
-#undef CONFIG_SHA256
+#undef CONFIG_SHA256_SW
 
 /* Compute SHA256 by using chip's hardware accelerator */
 #undef CONFIG_SHA256_HW_ACCELERATE
@@ -7105,7 +7106,7 @@
 
 /* EC Codec Wake-on-Voice related definitions */
 #ifdef CONFIG_AUDIO_CODEC_WOV
-#define CONFIG_SHA256
+#define CONFIG_SHA256_SW
 #endif
 
 #ifdef CONFIG_SMBUS_PEC
