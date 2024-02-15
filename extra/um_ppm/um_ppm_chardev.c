@@ -17,7 +17,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-// Packed message skeleton for cdev communication.
+/* Packed message skeleton for cdev communication. */
 struct um_message_skeleton {
 	uint8_t type;
 	uint32_t offset;
@@ -30,22 +30,22 @@ struct um_message_skeleton {
 	(MAX_DATA_SIZE + sizeof(struct um_message_skeleton))
 
 enum um_message_types {
-	// Notify kernel
+	/* Notify kernel */
 	UM_MSG_NOTIFY = 0x1,
 
-	// Kernel reads from userspace
+	/* Kernel reads from userspace */
 	UM_MSG_READ = 0x2,
 
-	// Userspace responds to kernel read
+	/* Userspace responds to kernel read */
 	UM_MSG_READ_RSP = 0x3,
 
-	// Kernel writes to userspace
+	/* Kernel writes to userspace */
 	UM_MSG_WRITE = 0x4,
 
-	// Ready for communication
+	/* Ready for communication */
 	UM_MSG_USERSPACE_READY = 0x5,
 
-	// Closing down
+	/* Closing down */
 	UM_MSG_USERSPACE_CLOSING = 0x6,
 };
 
@@ -75,6 +75,8 @@ struct um_ppm_cdev {
 	struct ucsi_ppm_driver *ppm;
 	struct smbus_driver *smbus;
 	struct pd_driver_config *driver_config;
+
+	uint8_t lpm_out_buffer[256];
 };
 
 #define READ_NOINTR(fd, buf, size)                                  \
@@ -103,11 +105,11 @@ static void pretty_print_message(const char *prefix,
 	DLOG_START("%s: Type 0x%x (%s): ", prefix, msg->type,
 		   message_type_to_string(msg->type));
 
-	// All message types will have offset + data length.
+	/* All message types will have offset + data length. */
 	DLOG_LOOP("Offset = 0x%x, Data Length = 0x%x, ", msg->offset,
 		  msg->data_length);
 
-	// Only write and read responses will have valid data within.
+	/* Only write and read responses will have valid data within. */
 	switch (msg->type) {
 	case UM_MSG_WRITE:
 	case UM_MSG_READ_RSP:
@@ -136,6 +138,47 @@ static void um_ppm_notify(void *context)
 	write_to_cdev(cdev->fd, msg, sizeof(struct um_message_skeleton));
 }
 
+static int um_ppm_apply_platform_policy(void *context)
+{
+	struct um_ppm_cdev *cdev = (struct um_ppm_cdev *)context;
+	struct ucsi_pd_driver *pd = cdev->pd;
+
+	/* Platform policy steps for PPM:
+	 *   - Set new CAM = 0xff to force AP driven alt-mode
+	 *   (Missing is power policy stuff)
+	 *
+	 * Directly write to pd driver for these commands and bypass PPM because
+	 * this happens between PPM_RESET and result from PPM_RESET.
+	 */
+
+	int port_count = pd->get_active_port_count(pd->dev);
+
+	struct ucsi_control control = {
+		.command = UCSI_CMD_SET_NEW_CAM,
+		.data_length = 0,
+		.command_specific = { 0 },
+	};
+
+	struct ucsiv3_set_new_cam_cmd cam_cmd = {
+		.enter_or_exit = 1,
+		.new_cam = 0xff,
+		.am_specific = 0,
+	};
+
+	for (int i = 1; i <= port_count; ++i) {
+		cam_cmd.connector_number = i;
+		platform_memcpy(control.command_specific, &cam_cmd,
+				sizeof(cam_cmd));
+
+		if (pd->execute_cmd(pd->dev, &control, cdev->lpm_out_buffer) <
+		    0) {
+			ELOG("Failed to SET_NEW_CAM enter 0xff on port %d", i);
+		}
+	}
+
+	return 0;
+}
+
 struct um_ppm_cdev *um_ppm_cdev_open(char *devpath, struct ucsi_pd_driver *pd,
 				     struct smbus_driver *smbus,
 				     struct pd_driver_config *driver_config)
@@ -161,6 +204,8 @@ struct um_ppm_cdev *um_ppm_cdev_open(char *devpath, struct ucsi_pd_driver *pd,
 	cdev->driver_config = driver_config;
 
 	cdev->ppm->register_notify(cdev->ppm->dev, um_ppm_notify, (void *)cdev);
+	cdev->ppm->register_platform_policy(
+		cdev->ppm->dev, um_ppm_apply_platform_policy, (void *)cdev);
 
 	return cdev;
 
@@ -174,16 +219,16 @@ handle_error:
 void um_ppm_cdev_cleanup(struct um_ppm_cdev *cdev)
 {
 	if (cdev) {
-		// Clean up the notify task first.
+		/* Clean up the notify task first. */
 		cdev->smbus->cleanup(cdev->smbus);
 
-		// Now clean up the cdev file (stopping communication).
+		/* Now clean up the cdev file (stopping communication). */
 		if (cdev->fd >= 0) {
 			close(cdev->fd);
 			cdev->fd = -1;
 		}
 
-		// Finally, clean up the pd driver.
+		/* Finally, clean up the pd driver. */
 		cdev->pd->cleanup(cdev->pd);
 
 		free(cdev);
@@ -211,7 +256,7 @@ static int um_ppm_handle_message(struct um_ppm_cdev *cdev,
 
 	switch (msg->type) {
 	case UM_MSG_READ:
-		// Read and write response on success.
+		/* Read and write response on success. */
 		ret = ppm->read(ppm->dev, msg->offset, msg->data,
 				msg->data_length);
 		if (ret != -1) {
@@ -252,37 +297,38 @@ void um_ppm_cdev_mainloop(struct um_ppm_cdev *cdev)
 	uint8_t data[MAX_MESSAGE_DATA_SIZE];
 	platform_memset(data, 0, MAX_MESSAGE_DATA_SIZE);
 
-	// Make sure IRQ is configured before continuing.
+	/* Make sure IRQ is configured before continuing. */
 	if (cdev->pd->configure_lpm_irq(cdev->pd->dev) != 0) {
 		ELOG("Failed to configure LPM IRQ!");
 		return;
 	}
 
-	// Wait for ppm to be ready before starting.
+	/* Wait for ppm to be ready before starting. */
 	cdev->pd->init_ppm(cdev->pd->dev);
 
-	// Let kernel know we're ready to handle events.
+	/* Let kernel know we're ready to handle events. */
 	um_ppm_notify_ready(cdev);
 
 	do {
-		// Clear read data and re-read
+		/* Clear read data and re-read */
 		platform_memset(data, 0, MAX_MESSAGE_DATA_SIZE);
 		bytes = read(cdev->fd, data, MAX_MESSAGE_DATA_SIZE);
 
-		// We got a valid message.
+		/* We got a valid message. */
 		if (bytes >= sizeof(struct um_message_skeleton)) {
-			// If there's additional data left, read it out. Only
-			// valid for writes.
+			/* If there's additional data left, read it out. Only
+			 * valid for writes.
+			 */
 			struct um_message_skeleton *msg =
 				(struct um_message_skeleton *)data;
 			pretty_print_message("Read from cdev", msg);
 
-			// Handle the message.
+			/* Handle the message. */
 			if (um_ppm_handle_message(cdev, msg) == -1) {
 				break;
 			}
 		}
-		// Nothing to read at this time (not sure why we woke up).
+		/* Nothing to read at this time (not sure why we woke up). */
 		else if (bytes == 0) {
 			DLOG("Got back zero bytes from read. Shouldn't we block here?");
 			break;

@@ -6,6 +6,7 @@
 #include "drivers/ucsi_v3.h"
 #include "emul/emul_pdc.h"
 #include "emul/emul_smbus_ara.h"
+#include "hooks.h"
 #include "usbc/pdc_power_mgmt.h"
 
 #include <zephyr/devicetree.h>
@@ -22,10 +23,13 @@ static const struct emul *ara = EMUL_DT_GET(SMBUS_ARA_NODE);
 
 void pdc_power_mgmt_setup(void)
 {
-	uint8_t addr = DT_REG_ADDR(RTS5453P_NODE);
-
 	zassume(TEST_PORT < CONFIG_USB_PD_PORT_MAX_COUNT,
 		"TEST_PORT is invalid");
+}
+
+void pdc_power_mgmt_before(void *fixture)
+{
+	uint8_t addr = DT_REG_ADDR(RTS5453P_NODE);
 
 	emul_smbus_ara_set_address(ara, addr);
 	emul_pdc_set_response_delay(emul, 0);
@@ -33,7 +37,8 @@ void pdc_power_mgmt_setup(void)
 	k_sleep(K_MSEC(1000));
 }
 
-ZTEST_SUITE(pdc_power_mgmt_api, NULL, pdc_power_mgmt_setup, NULL, NULL, NULL);
+ZTEST_SUITE(pdc_power_mgmt_api, NULL, pdc_power_mgmt_setup,
+	    pdc_power_mgmt_before, NULL, NULL);
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_usb_pd_port_count)
 {
@@ -269,8 +274,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 	}
 }
 
-#ifdef TODO_B_322851061
-/* TODO(b/322851061) Enable test after b/322851061 is fixed */
 ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 {
 	struct pdc_info_t in, out;
@@ -280,6 +283,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 	in.pd_version = 0x0506;
 	in.pd_revision = 0x0708;
 	in.vid_pid = 0xFEEDBEEF;
+
+	zassert_equal(-ERANGE, pdc_power_mgmt_get_info(
+				       CONFIG_USB_PD_PORT_MAX_COUNT, &out));
+	zassert_equal(-EINVAL, pdc_power_mgmt_get_info(TEST_PORT, NULL));
 
 	emul_pdc_set_info(emul, &in);
 	emul_pdc_configure_src(emul, &connector_status);
@@ -295,8 +302,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 	zassert_equal(in.pd_revision, out.pd_revision);
 	zassert_equal(in.vid_pid, out.vid_pid, "in=0x%X, out=0x%X", in.vid_pid,
 		      out.vid_pid);
+
+	emul_pdc_disconnect(emul);
+	k_sleep(K_MSEC(1000));
 }
-#endif
 
 ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 {
@@ -445,13 +454,12 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_unconstr_power)
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 {
-	zassert_equal(0, pdc_power_mgmt_get_vbus_voltage(TEST_PORT));
-#ifdef TODO_B_322851061
-	/* TODO(b/322851061) Possibly related regarding blocking APIs */
 	struct connector_status_t connector_status;
 	uint32_t mv_units = 50;
 	uint32_t expected_voltage_mv = 5000;
 	uint16_t out;
+
+	zassert_equal(0, pdc_power_mgmt_get_vbus_voltage(TEST_PORT));
 
 	connector_status.voltage_scale = 10; /* 50 mv units*/
 	connector_status.voltage_reading = expected_voltage_mv / mv_units;
@@ -465,7 +473,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 
 	emul_pdc_disconnect(emul);
 	k_sleep(K_MSEC(1000));
-#endif
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
@@ -544,4 +551,81 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 		emul_pdc_disconnect(emul);
 		k_sleep(K_MSEC(2000));
 	}
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_chipset_suspend)
+{
+	struct connector_status_t connector_status;
+	enum ccom_t ccom;
+	enum drp_mode_t dm;
+
+	emul_pdc_configure_src(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	k_sleep(K_MSEC(2000));
+
+	hook_notify(HOOK_CHIPSET_SUSPEND);
+	k_sleep(K_MSEC(2000));
+
+	emul_pdc_disconnect(emul);
+	k_sleep(K_MSEC(2000));
+
+	emul_pdc_get_ccom(emul, &ccom, &dm);
+	zassert_equal(CCOM_RD, ccom);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume)
+{
+	struct connector_status_t connector_status;
+	enum ccom_t ccom;
+	enum drp_mode_t dm;
+
+	emul_pdc_configure_snk(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	k_sleep(K_MSEC(2000));
+
+	hook_notify(HOOK_CHIPSET_RESUME);
+	k_sleep(K_MSEC(2000));
+
+	emul_pdc_get_ccom(emul, &ccom, &dm);
+	zassert_equal(CCOM_DRP, ccom);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_chipset_startup)
+{
+	struct connector_status_t connector_status;
+	enum ccom_t ccom;
+	enum drp_mode_t dm;
+
+	emul_pdc_configure_src(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	k_sleep(K_MSEC(2000));
+
+	hook_notify(HOOK_CHIPSET_STARTUP);
+	k_sleep(K_MSEC(2000));
+
+	emul_pdc_disconnect(emul);
+	k_sleep(K_MSEC(2000));
+
+	emul_pdc_get_ccom(emul, &ccom, &dm);
+	zassert_equal(CCOM_RD, ccom);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
+{
+	struct connector_status_t connector_status;
+	union pdr_t pdr;
+
+	emul_pdc_configure_src(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	k_sleep(K_MSEC(2000));
+
+	hook_notify(HOOK_CHIPSET_SHUTDOWN);
+	k_sleep(K_MSEC(2000));
+
+	emul_pdc_disconnect(emul);
+	k_sleep(K_MSEC(2000));
+
+	emul_pdc_get_pdr(emul, &pdr);
+	zassert_equal(1, pdr.swap_to_snk);
+	zassert_equal(0, pdr.swap_to_src);
 }
