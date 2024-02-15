@@ -3329,6 +3329,7 @@ enum ec_error_list nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 	enum ec_error_list init_rv;
 	struct nn_container *ch;
 	struct access_tracker at = {};
+	bool deleted = false;
 
 	if (!crypto_enabled())
 		return EC_ERROR_INVAL;
@@ -3373,11 +3374,16 @@ enum ec_error_list nvmem_erase_tpm_data_selective(const uint32_t *objs_to_erase)
 				continue;
 		}
 		delete_object(&at, ch);
+		deleted = true;
 	}
 
 	unlock_mutex(__LINE__);
 
 	shared_mem_release(ch);
+
+	/* Nothing was deleted, return. */
+	if (!deleted)
+		return EC_SUCCESS;
 
 	lock_mutex(__LINE__);
 	rv = compact_nvmem(NV_COMPACT_ERASE);
