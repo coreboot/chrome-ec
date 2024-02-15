@@ -208,6 +208,10 @@ def tpm2_flush_context(tpm, handle: bytes):
 def startup_test(tpm):
     """Run TPM2 startup/shutdown in a loop tests"""
     tpm2_startup(tpm, TPM_SU_CLEAR)
+    tpm2_clear(tpm, TPM_RH_PLATFORM)
+    tpm2_shutdown(tpm, TPM_SU_STATE)
+    tpm2_startup(tpm, TPM_SU_CLEAR)
+    tpm2_clear(tpm, TPM_RH_PLATFORM)
     handle = tpm2_create_ek(tpm)
     print('EK handle =', handle.hex())
     tpm2_flush_context(tpm, handle)
