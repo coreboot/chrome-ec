@@ -16,45 +16,48 @@
  * but may persist waiting for some communication with either the OPM or LPM.
  */
 enum ppm_states {
-	// Only handle PPM_RESET or async event for PPM reset.
-	// This is the default state before we are ready to handle any OPM
-	// commands.
+	/* Only handle PPM_RESET or async event for PPM reset.
+	 * This is the default state before we are ready to handle any OPM
+	 * commands.
+	 */
 	PPM_STATE_NOT_READY,
 
-	// Only accept Set Notification Enable. Everything else no-ops.
+	/* Only accept Set Notification Enable. Everything else no-ops. */
 	PPM_STATE_IDLE,
 
-	// Handle most commands.
+	/* Handle most commands. */
 	PPM_STATE_IDLE_NOTIFY,
 
-	// Unused state.
-	// PPM_STATE_BUSY,
+	/* Unused state. */
+	/* PPM_STATE_BUSY, */
 
-	// PPM_STATE_PROCESS_COMMAND is a hidden state that happens
-	// synchronously.
-	// Processing current command.
+	/* PPM_STATE_PROCESS_COMMAND is a hidden state that happens
+	 * synchronously.
+	 */
+
+	/* Processing current command. */
 	PPM_STATE_PROCESSING_COMMAND,
 
-	// Waiting for command complete acknowledgement from OPM.
+	/* Waiting for command complete acknowledgment from OPM. */
 	PPM_STATE_WAITING_CC_ACK,
-	// PPM_STATE_PROCESS_CC_ACK,
+	/* PPM_STATE_PROCESS_CC_ACK, */
 
-	// Waiting for async event acknowledgement from OPM.
+	/* Waiting for async event acknowledgment from OPM. */
 	PPM_STATE_WAITING_ASYNC_EV_ACK,
-	// PPM_STATE_PROCESS_ASYNC_EV_ACK,
+	/* PPM_STATE_PROCESS_ASYNC_EV_ACK, */
 
-	// PPM_STATE_CANCELLING_COMMAND,
+	/* PPM_STATE_CANCELLING_COMMAND, */
 
-	// Just for bounds checking.
+	/* Just for bounds checking. */
 	PPM_STATE_MAX,
 };
 
 /* Indicators of pending data states in the PPM. */
 struct ppm_pending_data {
-	// Async events are received from the LPM.
+	/* Async events are received from the LPM. */
 	uint16_t async_event : 1;
 
-	// Command is pending from OPM.
+	/* Command is pending from OPM. */
 	uint16_t command : 1;
 };
 
@@ -146,10 +149,10 @@ struct ucsi_memory_region {
 	struct ucsi_version version;
 	struct ucsi_cci cci;
 	struct ucsi_control control;
-	// TODO - Message sizes depends on chunking support.
-	// May not need to be full 256.
-	uint8_t message_in[MESSAGE_IN_SIZE]; // OPM to PPM buffer
-	uint8_t message_out[MESSAGE_OUT_SIZE]; // PPM to OPM buffer
+	/* TODO - Message sizes depends on chunking support. */
+	/* May not need to be full 256. */
+	uint8_t message_in[MESSAGE_IN_SIZE]; /* OPM to PPM buffer */
+	uint8_t message_out[MESSAGE_OUT_SIZE]; /* PPM to OPM buffer */
 } __attribute__((__packed__));
 
 /* Commands and data below */
@@ -159,7 +162,7 @@ struct ucsiv3_ack_cc_ci_cmd {
 	unsigned connector_change_ack : 1;
 	unsigned command_complete_ack : 1;
 
-	// 46-bits reserved
+	/* 46-bits reserved */
 	unsigned reserved_0 : 32;
 	unsigned reserved_1 : 14;
 } __attribute__((__packed__));
@@ -172,8 +175,15 @@ struct ucsiv3_get_pd_message_cmd {
 	unsigned number_of_bytes : 8;
 	unsigned response_message_type : 6;
 
-	// 16-bits reserved
+	/* 16-bits reserved */
 	unsigned reserved_0 : 16;
+} __attribute__((__packed__));
+
+struct ucsiv3_set_new_cam_cmd {
+	unsigned connector_number : 7;
+	unsigned enter_or_exit : 1;
+	unsigned new_cam : 8;
+	unsigned am_specific : 32;
 } __attribute__((__packed__));
 
 /* GET_CONNECTOR_STATUS data */
@@ -198,7 +208,7 @@ struct ucsiv3_get_connector_status_data {
 	unsigned volt_scale : 4;
 	unsigned volt_reading : 16;
 
-	// 110-bits reserved (32 + 32 + 32 + 14)
+	/* 110-bits reserved (32 + 32 + 32 + 14) */
 	unsigned reserved_0 : 32;
 	unsigned reserved_1 : 32;
 	unsigned reserved_2 : 32;
@@ -227,7 +237,7 @@ struct ucsiv3_get_error_status_data {
 	uint16_t vendor_defined;
 } __attribute__((__packed__));
 
-// Forward declarations.
+/* Forward declarations. */
 struct ucsi_ppm_device;
 struct ucsi_ppm_driver;
 
@@ -313,6 +323,31 @@ typedef int(ucsi_ppm_register_notify)(struct ucsi_ppm_device *device,
 				      ucsi_ppm_notify *callback, void *context);
 
 /**
+ * Function to apply platform policy after a PPM reset.
+ *
+ * Note that this needs to operate directly on the PD driver outside the PPM
+ * state machine. This method will be called after every PPM reset completes.
+ *
+ * @param context: Context data for the callback. Depends on implementer.
+ */
+typedef int(ucsi_ppm_apply_platform_policy)(void *context);
+
+/**
+ * Register a platform policy callback with the driver. This callback will be
+ * invoked every time PPM reset completes and will restore any policy settings
+ * that need to be applied for the system.
+ *
+ * @param device: Data for PPM implementation.
+ * @param callback: Function to call to set platform policy.
+ * @param context: Context data to pass back to callback.
+ *
+ * @return 0 if new callback set or 1 if callback replaced.
+ */
+typedef int(ucsi_ppm_register_platform_policy)(
+	struct ucsi_ppm_device *device,
+	ucsi_ppm_apply_platform_policy *callback, void *context);
+
+/**
  * Alert the PPM that an LPM has sent a notification.
  *
  * @param device: Data for PPM implementation.
@@ -337,9 +372,10 @@ struct ucsi_ppm_driver {
 	ucsi_ppm_read *read;
 	ucsi_ppm_write *write;
 	ucsi_ppm_register_notify *register_notify;
+	ucsi_ppm_register_platform_policy *register_platform_policy;
 	ucsi_ppm_lpm_alert *lpm_alert;
 
 	ucsi_ppm_cleanup *cleanup;
 };
 
-#endif // UM_PPM_INCLUDE_PPM_H_
+#endif /* UM_PPM_INCLUDE_PPM_H_ */
