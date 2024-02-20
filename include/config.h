@@ -476,11 +476,6 @@
 #undef CONFIG_BATTERY_CONFIG_IN_CBI
 
 /*
- * Config to indicate the battery type that cannot be auto detected.
- */
-#undef CONFIG_BATTERY_TYPE_NO_AUTO_DETECT
-
-/*
  * Compile battery-specific code.
  *
  * Note that some boards have their own unique battery constants / functions.
@@ -1783,7 +1778,7 @@
  * capture the EC state after a panic.
  */
 #undef CONFIG_SYSTEM_SAFE_MODE
-#define CONFIG_SYSTEM_SAFE_MODE_TIMEOUT_MSEC 2000
+#define CONFIG_SYSTEM_SAFE_MODE_TIMEOUT_MSEC 4000
 /*
  * Prints the stack of the faulting task to the console buffer in system safe
  * mode.
@@ -2274,6 +2269,7 @@
 #undef CONFIG_FP_SENSOR_FPC1035
 #undef CONFIG_FP_SENSOR_FPC1145
 #undef CONFIG_FP_SENSOR_ELAN80
+#undef CONFIG_FP_SENSOR_ELAN80SG
 #undef CONFIG_FP_SENSOR_ELAN515
 
 /*****************************************************************************/
@@ -3488,7 +3484,7 @@
 #endif /* CONFIG_ZEPHYR */
 
 /* Provide rudimentary malloc/free like services for shared memory. */
-#undef CONFIG_MALLOC
+#undef CONFIG_SHARED_MALLOC
 
 /* Need for a math library */
 #undef CONFIG_MATH_UTIL
@@ -4050,7 +4046,7 @@
 #undef CONFIG_SCI_GPIO
 
 /* Support computing of other hash sizes (without the VBOOT code) */
-#undef CONFIG_SHA256
+#undef CONFIG_SHA256_SW
 
 /* Compute SHA256 by using chip's hardware accelerator */
 #undef CONFIG_SHA256_HW_ACCELERATE
@@ -4412,6 +4408,9 @@
  * DPTF. We have some hybrid solutions where the EC still manages the fans.
  */
 #undef CONFIG_DPTF
+
+/* If defined, dptf debug prints will print to EC console */
+#undef CONFIG_DPTF_DEBUG_PRINTS
 
 /*
  * If defined, this indicates to the motion lid driver that the board does not
@@ -5301,7 +5300,9 @@
 #undef CONFIG_USBC_PPC_AOZ1380
 #undef CONFIG_USBC_PPC_KTU1125
 #undef CONFIG_USBC_PPC_NX20P3481
+#ifndef CONFIG_ZEPHYR
 #undef CONFIG_USBC_PPC_NX20P3483
+#endif /* CONFIG_ZEPHYR */
 #undef CONFIG_USBC_PPC_RT1718S
 #undef CONFIG_USBC_PPC_SN5S330
 #undef CONFIG_USBC_PPC_SYV682C
@@ -7105,7 +7106,7 @@
 
 /* EC Codec Wake-on-Voice related definitions */
 #ifdef CONFIG_AUDIO_CODEC_WOV
-#define CONFIG_SHA256
+#define CONFIG_SHA256_SW
 #endif
 
 #ifdef CONFIG_SMBUS_PEC

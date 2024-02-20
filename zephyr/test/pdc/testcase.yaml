@@ -1,0 +1,10 @@
+common:
+  platform_allow: native_posix
+tests:
+  pdc.generic:
+    extra_configs:
+    - CONFIG_TEST_SUITE_PDC_GENERIC=y
+
+  pdc.rts54xx:
+    extra_configs:
+    - CONFIG_TEST_SUITE_PDC_RTS54XX=y

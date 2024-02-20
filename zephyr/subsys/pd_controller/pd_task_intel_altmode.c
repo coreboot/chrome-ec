@@ -227,17 +227,21 @@ static void intel_altmode_thread(void *unused1, void *unused2, void *unused3)
 
 		LOG_DBG("Altmode events=0x%x", events);
 
-		if (events & BIT(INTEL_ALTMODE_EVENT_INTERRUPT)) {
+		/*
+		 * Process the forced event first so that they are not
+		 * overlooked in the if-else conditions.
+		 */
+		if (events & BIT(INTEL_ALTMODE_EVENT_FORCE)) {
+			/* Process data for any wake events on all ports */
+			for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
+				process_altmode_pd_data(i);
+		} else if (events & BIT(INTEL_ALTMODE_EVENT_INTERRUPT)) {
 			/* Process data of interrupted port */
 			for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 				if (pd_altmode_is_interrupted(
 					    pd_config_array[i]))
 					process_altmode_pd_data(i);
 			}
-		} else if (events & BIT(INTEL_ALTMODE_EVENT_FORCE)) {
-			/* Process data for any wake events on all ports */
-			for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
-				process_altmode_pd_data(i);
 		}
 	}
 }
@@ -372,25 +376,6 @@ SHELL_CMD_REGISTER(altmode, &sub_altmode_cmds, "PD Altmode commands", NULL);
 
 #endif /* CONFIG_CONSOLE_CMD_USBPD_INTEL_ALTMODE */
 
-/*
- * TODO: For all the below functions; need to enable PD to EC power path
- * interface and gather the information.
- */
-enum tcpc_cc_polarity pd_get_polarity(int port)
-{
-	return intel_altmode_task_data.data_status[port].conn_ori;
-}
-
-enum pd_data_role pd_get_data_role(int port)
-{
-	return !intel_altmode_task_data.data_status[port].data_role;
-}
-
-int pd_is_connected(int port)
-{
-	return intel_altmode_task_data.data_status[port].data_conn;
-}
-
 #ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
 __override uint8_t get_dp_pin_mode(int port)
 {
@@ -409,66 +394,3 @@ enum tbt_compat_rounded_support get_tbt_rounded_support(int port)
 	return intel_altmode_task_data.data_status[port].cable_gen;
 }
 #endif
-
-/*
- * To suppress the compilation error, below functions are added with tested
- * data.
- */
-void pd_request_data_swap(int port)
-{
-}
-
-enum pd_power_role pd_get_power_role(int port)
-{
-	return !intel_altmode_task_data.data_status[port].dp_src_snk;
-}
-
-uint8_t pd_get_task_state(int port)
-{
-	return 0;
-}
-
-int pd_comm_is_enabled(int port)
-{
-	return 1;
-}
-
-bool pd_get_vconn_state(int port)
-{
-	return true;
-}
-
-bool pd_get_partner_dual_role_power(int port)
-{
-	return false;
-}
-
-bool pd_get_partner_data_swap_capable(int port)
-{
-	return false;
-}
-
-bool pd_get_partner_usb_comm_capable(int port)
-{
-	return false;
-}
-
-bool pd_get_partner_unconstr_power(int port)
-{
-	return false;
-}
-
-const char *pd_get_task_state_name(int port)
-{
-	return "";
-}
-
-enum pd_cc_states pd_get_task_cc_state(int port)
-{
-	return PD_CC_UFP_ATTACHED;
-}
-
-bool pd_capable(int port)
-{
-	return true;
-}
