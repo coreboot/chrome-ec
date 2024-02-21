@@ -339,6 +339,7 @@ class AllTests:
             TestConfig(test_name="pingpong"),
             TestConfig(test_name="printf"),
             TestConfig(test_name="queue"),
+            TestConfig(test_name="restricted_console"),
             TestConfig(test_name="rng_benchmark"),
             TestConfig(
                 config_name="rollback_region0",
@@ -356,6 +357,9 @@ class AllTests:
                 test_name="rollback_entropy", imagetype_to_use=ImageType.RO
             ),
             TestConfig(test_name="rtc"),
+            TestConfig(
+                test_name="rtc_npcx9", exclude_boards=[BLOONCHIPPER, DARTMONKEY]
+            ),
             TestConfig(
                 test_name="rtc_stm32f4", exclude_boards=[DARTMONKEY, HELIPILOT]
             ),

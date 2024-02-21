@@ -6350,7 +6350,7 @@ enum cbi_data_tag {
 
 union ec_common_control {
 	struct {
-		uint32_t bcic_enabled : 1;
+		uint32_t bcic_enabled : 1; /* Unused. Take it over as yours. */
 	};
 	uint32_t raw_value;
 };
@@ -6788,6 +6788,8 @@ enum action_key {
 	TK_KBD_BKLIGHT_TOGGLE = 18,
 	TK_MICMUTE = 19,
 	TK_MENU = 20,
+
+	TK_COUNT
 };
 
 /*
