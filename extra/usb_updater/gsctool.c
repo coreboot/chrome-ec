@@ -4317,20 +4317,22 @@ static int process_get_time(struct transfer_descriptor *td)
 	return 0;
 }
 
-static int print_ti50_stats(struct ti50_stats_v0 *stats, size_t size)
+static int print_ti50_stats(struct ti50_stats_v0 *stats_v0, size_t size)
 {
-	stats->fs_init_time = be32toh(stats->fs_init_time);
-	stats->fs_usage = be32toh(stats->fs_usage);
-	stats->aprov_time = be32toh(stats->aprov_time);
-	stats->expanded_aprov_status = be32toh(stats->expanded_aprov_status);
+	stats_v0->fs_init_time = be32toh(stats_v0->fs_init_time);
+	stats_v0->fs_usage = be32toh(stats_v0->fs_usage);
+	stats_v0->aprov_time = be32toh(stats_v0->aprov_time);
+	stats_v0->expanded_aprov_status =
+		be32toh(stats_v0->expanded_aprov_status);
 
-	printf("fs_init_time:          %d\n", stats->fs_init_time);
-	printf("fs_usage:              %d\n", stats->fs_usage);
-	printf("aprov_time:            %d\n", stats->aprov_time);
-	printf("expanded_aprov_status: %X\n", stats->expanded_aprov_status);
+	printf("fs_init_time:          %d\n", stats_v0->fs_init_time);
+	printf("fs_usage:              %d\n", stats_v0->fs_usage);
+	printf("aprov_time:            %d\n", stats_v0->aprov_time);
+	printf("expanded_aprov_status: %X\n", stats_v0->expanded_aprov_status);
 
 	if (size >= sizeof(struct ti50_stats_v1)) {
-		struct ti50_stats_v1 *stats_v1 = (struct ti50_stats_v1 *) stats;
+		struct ti50_stats_v1 *stats_v1 =
+			(struct ti50_stats_v1 *) stats_v0;
 
 		stats_v1->misc_status = be32toh(stats_v1->misc_status);
 		uint32_t bits_used = stats_v1->misc_status >>
@@ -4348,36 +4350,58 @@ static int print_ti50_stats(struct ti50_stats_v0 *stats, size_t size)
 				>> METRICSV_CCD_MODE_SHIFT);
 		}
 	}
-	if (size >= sizeof(struct ti50_stats_v2)) {
-		struct ti50_stats_v2 *stats_v2 = (struct ti50_stats_v2 *) stats;
+	if (size >= sizeof(struct ti50_stats)) {
+		struct ti50_stats *stats = (struct ti50_stats *) stats_v0;
 
 		/* Version was added with v2 and therefore must be >= 2. */
-		if (stats_v2->version < 2) {
-			printf("Invalid stats version %d.", stats_v2->version);
+		if (stats->version < 2) {
+			printf("Invalid stats version %d.", stats->version);
 			return 1;
 		}
 
-		stats_v2->filesystem_busy_count =
-		    be32toh(stats_v2->filesystem_busy_count);
-		stats_v2->crypto_busy_count =
-		    be32toh(stats_v2->crypto_busy_count);
-		stats_v2->dispatcher_busy_count =
-		    be32toh(stats_v2->dispatcher_busy_count);
-		stats_v2->timeslices_expired =
-		    be32toh(stats_v2->timeslices_expired);
-		stats_v2->crypto_init_time =
-		    be32toh(stats_v2->crypto_init_time);
+		stats->filesystem_busy_count =
+		    be32toh(stats->filesystem_busy_count);
+		stats->crypto_busy_count =
+		    be32toh(stats->crypto_busy_count);
+		stats->dispatcher_busy_count =
+		    be32toh(stats->dispatcher_busy_count);
+		stats->timeslices_expired =
+		    be32toh(stats->timeslices_expired);
+		stats->crypto_init_time =
+		    be32toh(stats->crypto_init_time);
 
 		printf("filesystem_busy_count: %d\n",
-			stats_v2->filesystem_busy_count);
+			stats->filesystem_busy_count);
 		printf("crypto_busy_count:     %d\n",
-			stats_v2->crypto_busy_count);
+			stats->crypto_busy_count);
 		printf("dispatcher_busy_count: %d\n",
-			stats_v2->dispatcher_busy_count);
+			stats->dispatcher_busy_count);
 		printf("timeslices_expired:    %d\n",
-			stats_v2->timeslices_expired);
+			stats->timeslices_expired);
 		printf("crypto_init_time:      %d\n",
-			stats_v2->crypto_init_time);
+			stats->crypto_init_time);
+
+		/* Display version 3 metrics */
+		if (stats->version >= 3) {
+			/*
+			 * Note that
+			 * `stats->v1.misc_status >> METRICSV_BITS_USED_SHIFT`
+			 * value should also be >= 7, but version 3 >= should be
+			 * enough to know that these fields are present.
+			 */
+			printf("wp_asserted:           %d\n",
+				(stats->v1.misc_status &
+				METRICSV_WP_ASSERTED_MASK)
+				>> METRICSV_WP_ASSERTED_SHIFT);
+			printf("allow_unverified_ro:   %d\n",
+				(stats->v1.misc_status &
+				METRICSV_ALLOW_UNVERIFIED_RO_MASK)
+				>> METRICSV_ALLOW_UNVERIFIED_RO_SHIFT);
+			printf("is_prod:               %d\n",
+				(stats->v1.misc_status &
+				METRICSV_IS_PROD_MASK)
+				>> METRICSV_IS_PROD_SHIFT);
+		}
 	}
 	return 0;
 }
@@ -4387,7 +4411,7 @@ static int process_ti50_get_metrics(struct transfer_descriptor *td,
 {
 	uint32_t rv;
 	/* Allocate extra space in case future versions add more data. */
-	struct ti50_stats_v2 response[4];
+	struct ti50_stats response[4];
 	size_t response_size = sizeof(response);
 
 	rv = send_vendor_command(td, VENDOR_CC_GET_TI50_STATS, NULL, 0,
