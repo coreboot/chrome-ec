@@ -121,6 +121,19 @@ if(DEFINED CONFIG_BOARD_YAVILLA)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "yavilla/src/charger.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "yavilla/src/fan.c")
 endif()
+if(DEFINED CONFIG_BOARD_YAVISTA)
+	project(yavista)
+	zephyr_library_sources(
+			"yavista/src/led.c"
+			"yavista/src/keyboard.c"
+			"yavista/src/board.c"
+			"yavista/src/sub_board.c"
+			"yavista/src/thermal.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "yavista/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "yavista/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "yavista/src/fan.c")
+endif()
 if(DEFINED CONFIG_BOARD_XIVUR)
 	project(xivur)
 	zephyr_library_sources(
@@ -206,4 +219,14 @@ if(DEFINED CONFIG_BOARD_ANRAGGAR)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
 			"anraggar/src/keyboard_customization.c"
 	)
+endif()
+if(DEFINED CONFIG_BOARD_GLASSWAY)
+	project(glassway)
+	zephyr_library_sources(
+			"glassway/src/led.c"
+			"glassway/src/form_factor.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "glassway/src/fan.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "glassway/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "glassway/src/charger.c")
 endif()

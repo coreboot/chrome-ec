@@ -13,6 +13,13 @@
 #include <zephyr/drivers/emul.h>
 #include <zephyr/ztest.h>
 
+#define TEST_WAIT_FOR(expr, timeout_ms) \
+	WAIT_FOR(expr, 1000 * timeout_ms, k_msleep(100))
+#define ASSERT_FOR_TRUE(expr, timeout_ms) \
+	zassert_true(TEST_WAIT_FOR(expr, timeout_ms))
+#define ASSERT_FOR_FALSE(expr, timeout_ms) \
+	zassert_false(!TEST_WAIT_FOR(!expr, timeout_ms))
+
 #define RTS5453P_NODE DT_NODELABEL(rts5453p_emul)
 
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
@@ -57,17 +64,14 @@ ZTEST_USER(pdc_power_mgmt_api, test_is_connected)
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	k_sleep(K_MSEC(1000));
-	zassert_true(pdc_power_mgmt_is_connected(TEST_PORT));
+	ASSERT_FOR_TRUE(pdc_power_mgmt_is_connected(TEST_PORT), 1000);
 
 	emul_pdc_disconnect(emul);
-	k_sleep(K_MSEC(1000));
-	zassert_false(pdc_power_mgmt_is_connected(TEST_PORT));
+	ASSERT_FOR_FALSE(pdc_power_mgmt_is_connected(TEST_PORT), 1000);
 
 	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	k_sleep(K_MSEC(2000));
-	zassert_true(pdc_power_mgmt_is_connected(TEST_PORT));
+	ASSERT_FOR_TRUE(pdc_power_mgmt_is_connected(TEST_PORT), 2000);
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_pd_get_polarity)
@@ -80,14 +84,16 @@ ZTEST_USER(pdc_power_mgmt_api, test_pd_get_polarity)
 	connector_status.orientation = 1;
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	k_sleep(K_MSEC(1000));
-	zassert_equal(POLARITY_CC2, pdc_power_mgmt_pd_get_polarity(TEST_PORT));
+	ASSERT_FOR_TRUE(POLARITY_CC2 ==
+				pdc_power_mgmt_pd_get_polarity(TEST_PORT),
+			1000);
 
 	connector_status.orientation = 0;
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	k_sleep(K_MSEC(1000));
-	zassert_equal(POLARITY_CC1, pdc_power_mgmt_pd_get_polarity(TEST_PORT));
+	ASSERT_FOR_TRUE(POLARITY_CC1 ==
+				pdc_power_mgmt_pd_get_polarity(TEST_PORT),
+			1000);
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_pd_get_data_role)
@@ -628,4 +634,49 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 	emul_pdc_get_pdr(emul, &pdr);
 	zassert_equal(1, pdr.swap_to_snk);
 	zassert_equal(0, pdr.swap_to_src);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name)
+{
+	struct setup_t {
+		enum power_operation_mode_t mode;
+		emul_pdc_set_connector_status_t configure;
+	};
+	struct expect_t {
+		const char *name;
+	};
+	struct {
+		struct setup_t s;
+		struct expect_t e;
+	} test[] = {
+		{ .s = { .mode = USB_DEFAULT_OPERATION,
+			 .configure = emul_pdc_configure_snk },
+		  .e = { .name = "TypeCAttached" } },
+		{ .s = { .mode = USB_DEFAULT_OPERATION,
+			 .configure = emul_pdc_configure_src },
+		  .e = { .name = "TypeCAttached" } },
+		{ .s = { .mode = PD_OPERATION,
+			 .configure = emul_pdc_configure_snk },
+		  .e = { .name = "Attached.SNK" } },
+		{ .s = { .mode = PD_OPERATION,
+			 .configure = emul_pdc_configure_src },
+		  .e = { .name = "Attached.SRC" } },
+	};
+	const char *state_name;
+	int i;
+	struct connector_status_t connector_status;
+
+	state_name = pdc_power_mgmt_get_task_state_name(TEST_PORT);
+	zassert_equal(strcmp(state_name, "Unattached"), 0);
+
+	for (i = 0; i < ARRAY_SIZE(test); i++) {
+		memset(&connector_status, 0, sizeof(connector_status));
+		test[i].s.configure(emul, &connector_status);
+		connector_status.power_operation_mode = test[i].s.mode;
+		emul_pdc_connect_partner(emul, &connector_status);
+		k_sleep(K_MSEC(2000));
+
+		state_name = pdc_power_mgmt_get_task_state_name(TEST_PORT);
+		zassert_equal(strcmp(state_name, test[i].e.name), 0);
+	}
 }
