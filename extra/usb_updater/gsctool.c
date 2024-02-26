@@ -542,8 +542,7 @@ static const struct option_container cmd_line_options[] = {
 	{ { "verbose", no_argument, NULL, 'V' }, "Enable debug messages" },
 	{ { "version", no_argument, NULL, 'v' },
 	  "Report this utility version" },
-	{ { "metrics", no_argument, NULL, 'W' },
-	  "Get GSC metrics"},
+	{ { "metrics", no_argument, NULL, 'W' }, "Get GSC metrics" },
 	{ { "wp", optional_argument, NULL, 'w' },
 	  "[enable|disable|follow]%Get or set the write protect setting" },
 	{ { "clog", no_argument, NULL, 'x' },
@@ -4332,26 +4331,27 @@ static int print_ti50_stats(struct ti50_stats_v0 *stats_v0, size_t size)
 
 	if (size >= sizeof(struct ti50_stats_v1)) {
 		struct ti50_stats_v1 *stats_v1 =
-			(struct ti50_stats_v1 *) stats_v0;
+			(struct ti50_stats_v1 *)stats_v0;
 
 		stats_v1->misc_status = be32toh(stats_v1->misc_status);
 		uint32_t bits_used = stats_v1->misc_status >>
-			METRICSV_BITS_USED_SHIFT;
+				     METRICSV_BITS_USED_SHIFT;
 		if (bits_used >= 4) {
 			printf("rdd_keepalive:         %d\n",
-				stats_v1->misc_status &
-				METRICSV_RDD_KEEP_ALIVE_MASK);
+			       stats_v1->misc_status &
+				       METRICSV_RDD_KEEP_ALIVE_MASK);
 			printf("rdd_keepalive_at_boot: %d\n",
-				(stats_v1->misc_status &
-				METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK)
-				>> METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT);
+			       (stats_v1->misc_status &
+				METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK) >>
+				       METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT);
 			printf("ccd_mode:              %d\n",
-				(stats_v1->misc_status & METRICSV_CCD_MODE_MASK)
-				>> METRICSV_CCD_MODE_SHIFT);
+			       (stats_v1->misc_status &
+				METRICSV_CCD_MODE_MASK) >>
+				       METRICSV_CCD_MODE_SHIFT);
 		}
 	}
 	if (size >= sizeof(struct ti50_stats)) {
-		struct ti50_stats *stats = (struct ti50_stats *) stats_v0;
+		struct ti50_stats *stats = (struct ti50_stats *)stats_v0;
 
 		/* Version was added with v2 and therefore must be >= 2. */
 		if (stats->version < 2) {
@@ -4360,26 +4360,21 @@ static int print_ti50_stats(struct ti50_stats_v0 *stats_v0, size_t size)
 		}
 
 		stats->filesystem_busy_count =
-		    be32toh(stats->filesystem_busy_count);
-		stats->crypto_busy_count =
-		    be32toh(stats->crypto_busy_count);
+			be32toh(stats->filesystem_busy_count);
+		stats->crypto_busy_count = be32toh(stats->crypto_busy_count);
 		stats->dispatcher_busy_count =
-		    be32toh(stats->dispatcher_busy_count);
-		stats->timeslices_expired =
-		    be32toh(stats->timeslices_expired);
-		stats->crypto_init_time =
-		    be32toh(stats->crypto_init_time);
+			be32toh(stats->dispatcher_busy_count);
+		stats->timeslices_expired = be32toh(stats->timeslices_expired);
+		stats->crypto_init_time = be32toh(stats->crypto_init_time);
 
 		printf("filesystem_busy_count: %d\n",
-			stats->filesystem_busy_count);
-		printf("crypto_busy_count:     %d\n",
-			stats->crypto_busy_count);
+		       stats->filesystem_busy_count);
+		printf("crypto_busy_count:     %d\n", stats->crypto_busy_count);
 		printf("dispatcher_busy_count: %d\n",
-			stats->dispatcher_busy_count);
+		       stats->dispatcher_busy_count);
 		printf("timeslices_expired:    %d\n",
-			stats->timeslices_expired);
-		printf("crypto_init_time:      %d\n",
-			stats->crypto_init_time);
+		       stats->timeslices_expired);
+		printf("crypto_init_time:      %d\n", stats->crypto_init_time);
 
 		/* Display version 3 metrics */
 		if (stats->version >= 3) {
@@ -4390,24 +4385,24 @@ static int print_ti50_stats(struct ti50_stats_v0 *stats_v0, size_t size)
 			 * enough to know that these fields are present.
 			 */
 			printf("wp_asserted:           %d\n",
-				(stats->v1.misc_status &
-				METRICSV_WP_ASSERTED_MASK)
-				>> METRICSV_WP_ASSERTED_SHIFT);
+			       (stats->v1.misc_status &
+				METRICSV_WP_ASSERTED_MASK) >>
+				       METRICSV_WP_ASSERTED_SHIFT);
 			printf("allow_unverified_ro:   %d\n",
-				(stats->v1.misc_status &
-				METRICSV_ALLOW_UNVERIFIED_RO_MASK)
-				>> METRICSV_ALLOW_UNVERIFIED_RO_SHIFT);
+			       (stats->v1.misc_status &
+				METRICSV_ALLOW_UNVERIFIED_RO_MASK) >>
+				       METRICSV_ALLOW_UNVERIFIED_RO_SHIFT);
 			printf("is_prod:               %d\n",
-				(stats->v1.misc_status &
-				METRICSV_IS_PROD_MASK)
-				>> METRICSV_IS_PROD_SHIFT);
+			       (stats->v1.misc_status &
+				METRICSV_IS_PROD_MASK) >>
+				       METRICSV_IS_PROD_SHIFT);
 		}
 	}
 	return 0;
 }
 
 static int process_ti50_get_metrics(struct transfer_descriptor *td,
-		bool show_machine_output)
+				    bool show_machine_output)
 {
 	uint32_t rv;
 	/* Allocate extra space in case future versions add more data. */
@@ -4432,14 +4427,14 @@ static int process_ti50_get_metrics(struct transfer_descriptor *td,
 		for (size_t i = 0; i < response_size; i++)
 			printf("%02X", raw_response[i]);
 	} else {
-		return print_ti50_stats((struct ti50_stats_v0 *) response,
+		return print_ti50_stats((struct ti50_stats_v0 *)response,
 					response_size);
 	}
 	return 0;
 }
 
 static int process_cr50_get_metrics(struct transfer_descriptor *td,
-		bool show_machine_output)
+				    bool show_machine_output)
 {
 	/* Allocate extra space in case future versions add more data. */
 	struct cr50_stats_response response[4] = {};
@@ -4447,8 +4442,8 @@ static int process_cr50_get_metrics(struct transfer_descriptor *td,
 	struct cr50_stats_response stats;
 	uint32_t rv;
 
-	rv = send_vendor_command(td, VENDOR_CC_GET_CR50_METRICS, NULL,
-				 0, (uint8_t *) &response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_GET_CR50_METRICS, NULL, 0,
+				 (uint8_t *)&response, &response_size);
 	if (rv != VENDOR_RC_SUCCESS) {
 		printf("Get stats failed. (%X)\n", rv);
 		return 1;
@@ -4465,43 +4460,33 @@ static int process_cr50_get_metrics(struct transfer_descriptor *td,
 	stats.version = be32toh(stats.version);
 	stats.reset_src = be32toh(stats.reset_src);
 	stats.brdprop = be32toh(stats.brdprop);
-	stats.reset_time_s =
-		be64toh(stats.reset_time_s);
-	stats.cold_reset_time_s =
-		be32toh(stats.cold_reset_time_s);
+	stats.reset_time_s = be64toh(stats.reset_time_s);
+	stats.cold_reset_time_s = be32toh(stats.cold_reset_time_s);
 	stats.misc_status = be32toh(stats.misc_status);
 
 	if (stats.version > CR50_METRICSV_STATS_VERSION) {
 		fprintf(stderr, "unsupported ver - %d. supports up to %d\n",
 			stats.version, CR50_METRICSV_STATS_VERSION);
 	}
-	printf("version:           %10u\n",
-			stats.version);
-	printf("reset_src:       0x%010x\n",
-			stats.reset_src);
-	printf("brdprop:         0x%010x\n",
-			stats.brdprop);
-	printf("cold_reset_time_s: %10u\n",
-			stats.cold_reset_time_s);
-	printf("reset_time_s:      %10u\n",
-			stats.reset_time_s);
-	printf("misc_status:     0x%010x\n",
-			stats.misc_status);
+	printf("version:           %10u\n", stats.version);
+	printf("reset_src:       0x%010x\n", stats.reset_src);
+	printf("brdprop:         0x%010x\n", stats.brdprop);
+	printf("cold_reset_time_s: %10u\n", stats.cold_reset_time_s);
+	printf("reset_time_s:      %10u\n", stats.reset_time_s);
+	printf("misc_status:     0x%010x\n", stats.misc_status);
 
 	printf("   rdd detected:      %7d\n",
-		(stats.misc_status >> CR50_METRICSV_RDD_IS_DETECTED_SHIFT) & 1);
+	       (stats.misc_status >> CR50_METRICSV_RDD_IS_DETECTED_SHIFT) & 1);
 	printf("   rddkeeplive en:    %7d\n",
-		(stats.misc_status >>
-		 CR50_METRICSV_RDD_KEEPALIVE_EN_SHIFT) & 1);
+	       (stats.misc_status >> CR50_METRICSV_RDD_KEEPALIVE_EN_SHIFT) & 1);
 	printf("   rddkeeplive en atboot: %3d\n",
-		(stats.misc_status >>
-		 CR50_METRICSV_RDD_KEEPALIVE_EN_ATBOOT_SHIFT) & 1);
+	       (stats.misc_status >>
+		CR50_METRICSV_RDD_KEEPALIVE_EN_ATBOOT_SHIFT) &
+		       1);
 	printf("   ccd_mode en:       %7d\n",
-		(stats.misc_status >>
-		 CR50_METRICSV_CCD_MODE_EN_SHIFT) & 1);
+	       (stats.misc_status >> CR50_METRICSV_CCD_MODE_EN_SHIFT) & 1);
 	printf("   ambigous straps:   %7d\n",
-		(stats.misc_status >>
-		 CR50_METRICSV_AMBIGUOUS_STRAP_SHIFT) & 1);
+	       (stats.misc_status >> CR50_METRICSV_AMBIGUOUS_STRAP_SHIFT) & 1);
 
 	return 0;
 }
@@ -4516,8 +4501,9 @@ static int process_cr50_get_metrics(struct transfer_descriptor *td,
 #define MAX_TIME_MS	    (1 << TIME_SHIFT)
 static const char *const boot_tracer_stages[] = {
 	"Timespan", /* This one will not be displayed separately. */
-	"ProjectStart",	   "EcRstAsserted", "EcRstDeasserted", "TpmRstAsserted",
-	"TpmRstDeasserted", "FirstApComms",  "PcrExtension",    "TpmAppReady"
+	"ProjectStart",	  "EcRstAsserted",    "EcRstDeasserted",
+	"TpmRstAsserted", "TpmRstDeasserted", "FirstApComms",
+	"PcrExtension",	  "TpmAppReady"
 };
 
 static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
