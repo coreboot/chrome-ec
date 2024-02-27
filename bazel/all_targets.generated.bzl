@@ -908,6 +908,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "glassway",
+        board = "glassway",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "gooey",
         baseboard = "keeby",
         board = "gooey",
@@ -1776,13 +1781,6 @@ def all_targets():
         board = "pirrha",
     )
     ec_target(
-        name = "plankton",
-        board = "plankton",
-        chip = "stm32",
-        core = "cortex-m0",
-        zephyr = False,
-    )
-    ec_target(
         name = "polyberry",
         board = "polyberry",
         chip = "stm32",
@@ -2367,6 +2365,10 @@ def all_targets():
     ec_target(
         name = "yavilla",
         board = "yavilla",
+    )
+    ec_target(
+        name = "yavista",
+        board = "yavista",
     )
     ec_target(
         name = "yorp",
