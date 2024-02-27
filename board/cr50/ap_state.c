@@ -223,11 +223,11 @@ void tpm_rst_asserted(enum gpio_signal unused)
 #endif
 	inkernel = 0;
 	/*
-	 * It's possible the signal is being pulsed. Wait 1 second to disable
+	 * It's possible the signal is being pulsed. Wait 3 seconds to disable
 	 * functionality, so it's more likely the AP is fully off and not being
 	 * reset.
 	 */
-	hook_call_deferred(&deferred_set_ap_off_data, SECOND);
+	hook_call_deferred(&deferred_set_ap_off_data, 3 * SECOND);
 
 	set_state(DEVICE_STATE_DEBOUNCING);
 
