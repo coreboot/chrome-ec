@@ -9,6 +9,7 @@
 #include "extension.h"
 #include "gpio.h"
 #include "hooks.h"
+#include "nvmem.h"
 #include "registers.h"
 #include "system.h"
 #include "timer.h"
@@ -142,6 +143,15 @@ static void deferred_set_ap_off(void)
 	gpio_set_flags(GPIO_INT_AP_L, GPIO_INPUT);
 
 	ccd_update_state();
+
+	/*
+	 * If AP reset w/o TPM2_Shutdown, save NV on flash before deep sleep.
+	 * Note, for most cases this is a no-op as commits happens after each
+	 * TPM2 command. However, if AP is off in the first 3 seconds after
+	 * it was on, so commits are disabled and next AP on doesn't happen
+	 * before cr50 goes to deep sleep, we can loose some data in NV.
+	 */
+	nvmem_enable_commits();
 
 	/*
 	 * We don't enable deep sleep on ARM devices yet, as its processing
