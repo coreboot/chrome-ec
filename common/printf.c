@@ -13,15 +13,18 @@
  *
  * Refer to the Zephyr's Github issue #52739 for more details.
  */
-#ifdef CONFIG_NEWLIB_LIBC
+#if defined(CONFIG_NEWLIB_LIBC) || defined(CONFIG_EXTERNAL_LIBC)
 #define _POSIX_C_SOURCE 200809
 #endif /* CONFIG_NEWLIB_LIBC */
 
 #include "builtin/assert.h"
+#include "builtin/string.h"
 #include "console.h"
 #include "printf.h"
 #include "timer.h"
 #include "util.h"
+
+#include <string.h>
 
 static const char error_str[] = "ERROR";
 
@@ -110,6 +113,17 @@ int snprintf_timestamp_now(char *str, size_t size)
 {
 	return snprintf_timestamp(str, size, get_time().val);
 }
+
+#ifdef CONFIG_PIGWEED_LOG_TOKENIZED_LIB
+const char *get_timestamp_now(void)
+{
+	static char ts_str[PRINTF_TIMESTAMP_BUF_SIZE];
+
+	snprintf_timestamp_now(ts_str, sizeof(ts_str));
+
+	return ts_str;
+}
+#endif
 
 int snprintf_timestamp(char *str, size_t size, uint64_t timestamp)
 {
@@ -287,20 +301,20 @@ int vfnprintf(int (*addchar)(void *context, int c), void *context,
 			continue;
 		}
 
-		/* Handle left-justification ("%-5s") */
-		if (c == '-') {
-			flags |= PF_LEFT;
-			c = *format++;
-		}
+		while (c == '-' || c == '+') {
+			/* Handle left-justification ("%-5s") */
+			if (c == '-')
+				flags |= PF_LEFT;
 
-		/* Handle positive sign (%+d) */
-		if (c == '+') {
-			flags |= PF_SIGN;
+			/* Handle positive sign (%+d) */
+			if (c == '+')
+				flags |= PF_SIGN;
+
 			c = *format++;
 		}
 
 		/* Handle padding with 0's */
-		if (c == '0') {
+		while (c == '0') {
 			flags |= PF_PADZERO;
 			c = *format++;
 		}
@@ -466,10 +480,6 @@ int vfnprintf(int (*addchar)(void *context, int c), void *context,
 			 */
 			precision = -1;
 		}
-
-		/* No padding strings to wider than the precision */
-		if (precision >= 0 && pad_width > precision)
-			pad_width = precision;
 
 		if (precision < 0) {
 			/* If precision is unset, print everything */

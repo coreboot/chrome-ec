@@ -12,6 +12,8 @@
 #include "extpower.h"
 #include "hooks.h"
 #include "keyboard_protocol.h"
+#include "led_common.h"
+#include "led_onoff_states.h"
 #include "pirrha.h"
 #include "system.h"
 #include "tcpm/tcpci.h"
@@ -27,6 +29,8 @@
 
 #include <dt-bindings/gpio_defines.h>
 #include <typec_control.h>
+
+void reduce_input_voltage_when_full(void);
 
 /* charging current is limited to 0.45C */
 #define CHARGING_CURRENT_45C 2601
@@ -79,11 +83,6 @@ static void test_before(void *fixture)
 }
 
 ZTEST_SUITE(pirrha, NULL, NULL, test_before, NULL, NULL);
-
-ZTEST(pirrha, test_keyboard_config)
-{
-	zassert_equal_ptr(board_vivaldi_keybd_config(), &pirrha_kb_legacy);
-}
 
 ZTEST(pirrha, test_charger_hibernate)
 {

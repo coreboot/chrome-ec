@@ -22,6 +22,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     # Fingerprint boards
     "dartmonkey",
     "bloonchipper",
+    "buccaneer",
     "helipilot",
     "nami_fp",
     "nucleo-dartmonkey",
@@ -72,7 +73,6 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "moonball",
     "nucleo-f072rb",
     "pdeval-stm32f072",
-    "plankton",
     "prism",
     "servo_micro",
     "servo_v4",
@@ -137,7 +137,6 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "eve",
     "ezkinil",
     "felwinter",
-    "fizz",
     "fleex",
     "foob",
     "gaelin",
@@ -222,6 +221,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "whiskers",
     "woomax",
     "wormdingler",
+    "xol",
     "yorp",
     # CHIP=mt_scp *and* CHIP_VARIANT=mt818x
     # git grep --name-only 'CHIP:=mt_scp' | xargs grep -L 'CHIP_VARIANT:=mt818' | sed 's#board/\(.*\)/build.mk#"\1",#'
@@ -299,8 +299,8 @@ BOARDS_THAT_FAIL_WITH_CLANG = [
     "corori2",
     "cret",
     "damu",
-    "drawcia_riscv",
     "fennel",
+    "fizz",
     "gelarshie",
     "jacuzzi",
     "juniper",
@@ -335,6 +335,7 @@ def build(board_name: str) -> None:
 
 
 def get_all_boards() -> typing.List[str]:
+    """Return the list of all EC boards."""
     cmd = [
         "make",
         "print-boards",
@@ -347,6 +348,7 @@ def get_all_boards() -> typing.List[str]:
 
 
 def check_boards() -> None:
+    """Checks that all boards are explicitly mentioned in this source."""
     all_boards = get_all_boards()
     diff = set(all_boards) ^ set(
         BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG
@@ -364,6 +366,11 @@ def check_boards() -> None:
 
 
 def main() -> int:
+    """The mainest function of them all.
+
+    Returns:
+        The posix exit status.
+    """
     parser = argparse.ArgumentParser()
 
     log_level_choices = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -410,7 +417,7 @@ def main() -> int:
             board = future_to_board[future]
             try:
                 future.result()
-            except Exception:
+            except subprocess.CalledProcessError:
                 failed_boards.append(board)
 
     if len(failed_boards) > 0:

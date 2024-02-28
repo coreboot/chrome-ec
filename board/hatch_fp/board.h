@@ -197,12 +197,6 @@
 #ifdef SECTION_IS_RW
 #define CONFIG_FP_SENSOR_FPC1025
 /*
- * Use the malloc code only in the RW section (for the private library),
- * we cannot enable it in RO since it is not compatible with the RW verification
- * (shared_mem_init done too late).
- */
-#define CONFIG_MALLOC
-/*
  * FP buffers are allocated in regular SRAM on STM32F4.
  * TODO(b/124773209): Instead of defining to empty, #undef once all CLs that
  * depend on FP_*_SECTION have landed. Also rename the variables to CONFIG_*.
@@ -234,7 +228,7 @@
 #define CONFIG_MKBP_USE_GPIO
 #define CONFIG_PRINTF_LONG_IS_32BITS
 #define CONFIG_RNG
-#define CONFIG_SHA256
+#define CONFIG_SHA256_SW
 #define CONFIG_SHA256_UNROLLED
 #define CONFIG_SPI
 #define CONFIG_WP_ACTIVE_HIGH

@@ -298,7 +298,7 @@ static void print_reset_flags(uint32_t flags)
 			if (count++)
 				CPUTS(" ");
 
-			CPUTS(reset_flag_descs[i]);
+			CPRINTF("%s", reset_flag_descs[i]);
 		}
 	}
 
@@ -1871,6 +1871,28 @@ __overridable int board_write_mac_addr(const char *mac_addr)
 		return EC_ERROR_UNIMPLEMENTED;
 }
 #endif /* CONFIG_MAC_ADDR_LEN */
+
+#ifdef CONFIG_POWERON_CONF_LEN
+/* By default, read servo poweron config from flash, can be overridden. */
+__overridable int board_read_poweron_conf(uint8_t *poweron_conf)
+{
+	if (IS_ENABLED(CONFIG_FLASH_PSTATE) &&
+	    IS_ENABLED(CONFIG_FLASH_PSTATE_BANK))
+		return crec_flash_read_pstate_poweron_conf(poweron_conf);
+	else
+		return EC_ERROR_UNIMPLEMENTED;
+}
+
+/* By default, write servo poweron config from flash, can be overridden. */
+__overridable int board_write_poweron_conf(const uint8_t *poweron_conf)
+{
+	if (IS_ENABLED(CONFIG_FLASH_PSTATE) &&
+	    IS_ENABLED(CONFIG_FLASH_PSTATE_BANK))
+		return crec_flash_write_pstate_poweron_conf(poweron_conf);
+	else
+		return EC_ERROR_UNIMPLEMENTED;
+}
+#endif /* CONFIG_POWERON_CONF_LEN */
 
 __test_only void system_common_reset_state(void)
 {

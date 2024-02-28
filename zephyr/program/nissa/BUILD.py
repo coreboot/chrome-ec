@@ -5,7 +5,7 @@
 """Define zmake projects for nissa."""
 
 # Nivviks and Craask, Pujjo, Xivu, Xivur, Uldren has NPCX993F, Nereid
-# and Joxer, Yaviks, Yavilla, Quandiso has ITE81302
+# and Joxer, Yaviks, Yavilla, Yavista, Quandiso has ITE81302
 
 
 def register_nissa_project(
@@ -119,6 +119,11 @@ yavilla = register_nissa_project(
     chip="it81302bx",
 )
 
+yavista = register_nissa_project(
+    project_name="yavista",
+    chip="it81302bx",
+)
+
 uldren = register_nissa_project(
     project_name="uldren",
     chip="npcx9m3f",
@@ -142,3 +147,29 @@ anraggar = register_nissa_project(
     project_name="anraggar",
     chip="it81302bx",
 )
+glassway = register_nissa_project(
+    project_name="glassway",
+    chip="npcx9m3f",
+)
+# Note for reviews, do not let anyone edit these assertions, the addresses
+# must not change after the first RO release.
+assert_rw_fwid_DO_NOT_EDIT(project_name="anraggar", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="craask", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="craaskov", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="gothrax", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="joxer", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="naktal", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="nereid", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="nereid_cx", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="nivviks", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="nokris", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="pirrha", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="pujjo", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="quandiso", addr=0xB7FE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="uldren", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="xivu", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="xivur", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="yaviks", addr=0xAFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="yavilla", addr=0xB7FE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="glassway", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="yavista", addr=0xAFFE0)
