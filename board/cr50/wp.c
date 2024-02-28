@@ -315,7 +315,7 @@ static void set_wp_follow_ccd_config(void)
 void board_wp_follow_ccd_config(void)
 {
 	/*
-	 * Battery presence can be overidden using CCD. Get that setting before
+	 * Battery presence can be overridden using CCD. Get that setting before
 	 * configuring write protect.
 	 */
 	set_bp_follow_ccd_config();
@@ -345,7 +345,7 @@ static int board_fwmp_check_wp_policy(void)
 void init_wp_state(void)
 {
 	/*
-	 * Battery presence can be overidden using CCD. Get that setting before
+	 * Battery presence can be overridden using CCD. Get that setting before
 	 * configuring write protect.
 	 */
 	set_bp_follow_ccd_config();
@@ -388,9 +388,9 @@ void init_wp_state(void)
  *
  * @return EC_SUCCESS, or non-zero if error.
  */
-int board_wipe_tpm(int reset_required)
+enum ec_error_list board_wipe_tpm(int reset_required)
 {
-	int rc;
+	enum ec_error_list rc;
 
 	/* Wipe the TPM's memory and reset the TPM task. */
 	rc = tpm_reset_request(true, true);
@@ -449,45 +449,6 @@ int board_wipe_tpm(int reset_required)
 /****************************************************************************/
 /* Verified boot TPM NVRAM space support */
 
-/*
- * These definitions and the structure layout were manually copied from
- * src/platform/vboot_reference/firmware/2lib/include/2secdata.h. at
- * git sha 38d7d1c.
- */
-#define FWMP_HASH_SIZE		    32
-#define FWMP_DEV_DISABLE_CCD_UNLOCK BIT(6)
-#define FWMP_DEV_DISABLE_BOOT       BIT(0)
-#define FIRMWARE_FLAG_DEV_MODE      0x02
-
-struct RollbackSpaceFirmware {
-	/* Struct version, for backwards compatibility */
-	uint8_t struct_version;
-	/* Flags (see FIRMWARE_FLAG_* above) */
-	uint8_t flags;
-	/* Firmware versions */
-	uint32_t fw_versions;
-	/* Reserved for future expansion */
-	uint8_t reserved[3];
-	/* Checksum (v2 and later only) */
-	uint8_t crc8;
-} __packed;
-
-/* Firmware management parameters */
-struct RollbackSpaceFwmp {
-	/* CRC-8 of fields following struct_size */
-	uint8_t crc;
-	/* Structure size in bytes */
-	uint8_t struct_size;
-	/* Structure version */
-	uint8_t struct_version;
-	/* Reserved; ignored by current reader */
-	uint8_t reserved0;
-	/* Flags; see enum fwmp_flags */
-	uint32_t flags;
-	/* Hash of developer kernel key */
-	uint8_t dev_key_hash[FWMP_HASH_SIZE];
-} __packed;
-
 #ifndef CR50_DEV
 static int lock_enforced(const struct RollbackSpaceFwmp *fwmp,
 			 enum fwmp_controlled_action_t action)
@@ -527,7 +488,7 @@ static int fwmp_allows(enum fwmp_controlled_action_t action)
 	struct RollbackSpaceFwmp fwmp;
 	int allows;
 
-	switch (read_tpm_nvmem(FWMP_NV_INDEX,
+	switch (read_tpm_nvmem(NV_INDEX_FWMP,
 			       sizeof(struct RollbackSpaceFwmp), &fwmp)) {
 	default:
 		/* Something is messed up, let's not allow. */
@@ -572,7 +533,7 @@ int board_vboot_dev_mode_enabled(void)
 	struct RollbackSpaceFirmware fw;
 
 	if (TPM_READ_SUCCESS ==
-	    read_tpm_nvmem(FIRMWARE_NV_INDEX, sizeof(fw), &fw)) {
+	    read_tpm_nvmem(NV_INDEX_FIRMWARE, sizeof(fw), &fw)) {
 		return !!(fw.flags & FIRMWARE_FLAG_DEV_MODE);
 	}
 

@@ -139,7 +139,7 @@ void _plat__StartupCallback(void)
 
 BOOL _plat__ShallSurviveOwnerClear(uint32_t  index)
 {
-	return index == HR_NV_INDEX + FWMP_NV_INDEX;
+	return index == HR_NV_INDEX + NV_INDEX_FWMP;
 }
 
 static void cleanup_report(const char *func, const char *id,
@@ -197,10 +197,10 @@ static BOOL pcr_allows_boot_policy_update(void)
 BOOL _plat__NvUpdateAllowed(uint32_t handle)
 {
 	switch (handle) {
-	case HR_NV_INDEX + FWMP_NV_INDEX:
+	case HR_NV_INDEX + NV_INDEX_FWMP:
 		return pcr_allows_boot_policy_update();
-	case HR_NV_INDEX + FIRMWARE_NV_INDEX:
-	case HR_NV_INDEX + KERNEL_NV_INDEX:
+	case HR_NV_INDEX + NV_INDEX_FIRMWARE:
+	case HR_NV_INDEX + NV_INDEX_KERNEL:
 		return pcr_allows_boot_policy_update()
 			|| board_fwmp_allows_boot_policy_update();
 	}

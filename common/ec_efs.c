@@ -92,7 +92,7 @@ static int load_ec_hash_(uint8_t * const ec_hash)
 	uint8_t struct_size;
 	uint8_t crc;
 
-	if (read_tpm_nvmem(KERNEL_NV_INDEX, secdata_size,
+	if (read_tpm_nvmem(NV_INDEX_KERNEL, secdata_size,
 			   (void *)&secdata) != TPM_READ_SUCCESS)
 		return EC_ERROR_VBOOT_DATA_UNDERSIZED;
 
@@ -371,7 +371,7 @@ enum ec_error_list ec_efs_corrupt_hash(void)
 	}
 
 	/* Read the kernel secdata */
-	if (read_tpm_nvmem(KERNEL_NV_INDEX, secdata_size,
+	if (read_tpm_nvmem(NV_INDEX_KERNEL, secdata_size,
 			   (void *)&secdata) != TPM_READ_SUCCESS)
 		return EC_ERROR_VBOOT_DATA_UNDERSIZED;
 
@@ -384,8 +384,8 @@ enum ec_error_list ec_efs_corrupt_hash(void)
 		      sizeof(secdata.crc8);
 	secdata.crc8 = crc8((uint8_t *)&secdata.reserved0, size_to_crc);
 
-	/* Corrupt KERNEL_NV_INDEX in nvmem cache. */
-	object_handle = HR_NV_INDEX + KERNEL_NV_INDEX;
+	/* Corrupt NV_INDEX_KERNEL in nvmem cache. */
+	object_handle = HR_NV_INDEX + NV_INDEX_KERNEL;
 	NvGetIndexInfo(object_handle, &nvIndex);
 	NvWriteIndexData(object_handle, &nvIndex, 0, secdata_size, &secdata);
 	nvmem_unlock_cache(1);

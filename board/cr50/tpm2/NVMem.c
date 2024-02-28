@@ -195,8 +195,8 @@ void _plat__ClearNvAvail(void)
 
 void _plat__NvInformIndexDataChanged(unsigned int handle)
 {
-	if (handle == (HR_NV_INDEX + FWMP_NV_INDEX))
+	if (handle == (HR_NV_INDEX + NV_INDEX_FWMP))
 		board_fwmp_update_policies();
-	if (handle == (HR_NV_INDEX + KERNEL_NV_INDEX))
+	if (handle == (HR_NV_INDEX + NV_INDEX_KERNEL))
 		ec_efs_refresh();
 }

@@ -20,6 +20,7 @@
 #include "shared_mem.h"
 #include "system.h"
 #include "task.h"
+#include "tpm_nvmem.h"
 #include "tpm_nvmem_ops.h"
 #include "u2f_impl.h"
 
