@@ -7,6 +7,7 @@
 
 #include "Global.h"
 #include "NV_fp.h"
+#include "tpm_nvmem.h"
 #include "util.h"
 
 static void fill_rand_or_clear(void *buf, size_t size)
@@ -18,11 +19,11 @@ static void fill_rand_or_clear(void *buf, size_t size)
 void nvmem_wipe_cache(void)
 {
 	/*
-	 * Inclusive list of NV indices not to be wiped out when invalidating
+	 * Inclusive range of NV indices not to be wiped out when invalidating
 	 * the cache.
 	 */
-	const uint16_t allowlist_range[] = { 0x1007, 0x100b };
-
+	const uint16_t allowlist_range[] = { NV_INDEX_FIRMWARE,
+					     NV_INDEX_MRC_REC_HASH };
 	NvSelectivelyInvalidateCache(allowlist_range);
 
 	/*

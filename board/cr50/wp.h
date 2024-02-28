@@ -23,12 +23,6 @@ void init_wp_state(void);
 int wp_is_asserted(void);
 
 /**
- * Read the FWMP value from TPM NVMEM and set the console restriction
- * appropriately.
- */
-void read_fwmp(void);
-
-/**
  * Set WP and battery presence as dicated by CCD configuration.
  */
 void board_wp_follow_ccd_config(void);

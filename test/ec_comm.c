@@ -88,7 +88,7 @@ enum tpm_read_rv read_tpm_nvmem(uint16_t object_index, uint16_t object_size,
 				void *obj_value)
 {
 	/* Check the input parameter */
-	if (object_index != KERNEL_NV_INDEX)
+	if (object_index != NV_INDEX_KERNEL)
 		return TPM_READ_NOT_FOUND;
 	if (object_size != test_secdata.struct_size)
 		return TPM_READ_TOO_SMALL;

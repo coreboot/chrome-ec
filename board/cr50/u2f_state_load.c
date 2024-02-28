@@ -7,6 +7,7 @@
 #include "new_nvmem.h"
 #include "nvmem.h"
 #include "nvmem_vars.h"
+#include "tpm_nvmem.h"
 #include "tpm_nvmem_ops.h"
 #include "tpm_vendor_cmds.h"
 #include "u2f_impl.h"

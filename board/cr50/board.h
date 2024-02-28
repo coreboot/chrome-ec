@@ -407,7 +407,14 @@ void board_reboot_ec(void);
  */
 void board_reboot_ec_deferred(int usec_delay);
 void board_closed_loop_reset(void);
-int board_wipe_tpm(int reset_required);
+/**
+ * Wipe the TPM
+ *
+ * @param reset_required: reset the system after wiping the TPM.
+ *
+ * @return EC_SUCCESS, or non-zero if error.
+ */
+enum ec_error_list board_wipe_tpm(int reset_required);
 int board_is_first_factory_boot(void);
 
 int usb_i2c_board_enable(void);
