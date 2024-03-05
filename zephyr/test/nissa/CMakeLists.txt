@@ -16,7 +16,11 @@ target_sources(app PRIVATE src/stubs.c)
 
 if(CONFIG_TEST_NISSA_BOARD_POWER)
     # Test source
-    target_sources(app PRIVATE src/board_power.c)
+    if(CONFIG_AP_PWRSEQ_DRIVER)
+        target_sources(app PRIVATE src/board_ap_pwrseq_drv.c)
+    else()
+        target_sources(app PRIVATE src/board_power.c)
+    endif()
     # Module under test
     target_sources(app PRIVATE ${PLATFORM_EC_PROGRAM_DIR}/nissa/src/board_power.c)
 endif()
@@ -177,5 +181,54 @@ if(CONFIG_TEST_NISSA_ULDREN)
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/sub_board.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/usb_mux_config.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_YAVIKS)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/shim/chip/it8xxx2/include")
+    target_sources(
+            app PRIVATE
+            src/yaviks.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/fan.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/led.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/sub_board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/thermal.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_QUANDISO)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/shim/chip/it8xxx2/include")
+    target_sources(
+            app PRIVATE
+            src/quandiso.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/fan.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/led.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/sub_board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/thermal.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_YAVILLA)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/shim/chip/it8xxx2/include")
+    target_sources(
+            app PRIVATE
+            src/yavilla.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/fan.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/thermal.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/usbc.c
     )
 endif()

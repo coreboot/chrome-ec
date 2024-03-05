@@ -64,9 +64,10 @@
 
 /* PD */
 #define PD_OPERATING_POWER_MW 15000
-#define PD_MAX_POWER_MW 45000
-#define PD_MAX_CURRENT_MA 2250
+#define PD_MAX_POWER_MW 60000
+#define PD_MAX_CURRENT_MA 3000
 #define PD_MAX_VOLTAGE_MV 20000
+#define PD_PREFER_HIGH_VOLTAGE
 
 /*
  * Macros for GPIO signals used in common code that don't match the
