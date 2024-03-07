@@ -68,6 +68,9 @@
 			gpios = <&gpioi 2 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_EN_KEYBOARD_BACKLIGHT";
 		};
+		gpio_ec_kso_02_inv: ec_kso_02_inv {
+			gpios = <&gpioksol 2 GPIO_OUTPUT_HIGH>;
+		};
 
 		/* The legacy system code requires GPIO_ENTERING_RW symbol */
 		gpio_ec_entering_rw: ec_entering_rw {
@@ -113,6 +116,16 @@ gpio_ec_pch_wake_odl: &gpio_sen_mode1_ec_pch_wake_odl {
 	gpios = <&gpioe 6 GPIO_INPUT>;
 };
 
+&gpio_amp_mute_l {
+	gpios = <&gpioj 6 (GPIO_OUTPUT | GPIO_ACTIVE_LOW)>;
+};
+
+/* Default PROCHOT high so it's not asserted
+ * TODO: b/214509787 - zephyr: subsys/ap_pwrseq: support chipset interface APIs
+ */
+&gpio_ec_prochot_odl {
+	gpios = <&gpioi 0 GPIO_ODR_HIGH>;
+};
 
 &gpio_ec_voldn_btn_odl {
 	enum-name = "GPIO_VOLUME_DOWN_L";
