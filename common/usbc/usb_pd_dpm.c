@@ -658,7 +658,7 @@ static void dpm_run_pd_button_sm(int port)
  * them
  */
 static uint32_t max_current_claimed;
-K_MUTEX_DEFINE(max_current_claimed_lock);
+static K_MUTEX_DEFINE(max_current_claimed_lock);
 
 /* Ports with PD sink needing > 1.5 A */
 static atomic_t sink_max_pdo_requested;
@@ -1020,7 +1020,7 @@ __overridable int dpm_get_source_pdo(const uint32_t **src_pdo, const int port)
 	return pd_src_pdo_cnt;
 }
 
-int dpm_get_source_current(const int port)
+__overridable int dpm_get_source_current(const int port)
 {
 	if (pd_get_power_role(port) == PD_ROLE_SINK)
 		return 0;
