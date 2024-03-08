@@ -115,7 +115,9 @@ static uint32_t placeholder_info_reg;
 
 #define PANIC_PRINT_REGS(esf_field, pdata_field, human_name) \
 	panic_printf("  %-8s = 0x%08X\n", #human_name, pdata->pdata_field);
-#define PANIC_PRINT_REGS_GPR(esf_field, pdata_field, human_name)
+#define PANIC_PRINT_REGS_GPR(esf_field, pdata_field, human_name) \
+	IF_DISABLED(CONFIG_PLATFORM_EC_PANIC_STRIP_GPR,          \
+		    (PANIC_PRINT_REGS(esf_field, pdata_field, human_name)))
 
 void panic_data_print(const struct panic_data *pdata)
 {
@@ -140,6 +142,10 @@ static void copy_esf_to_panic_data(const z_arch_esf_t *esf,
 void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
 {
 	struct panic_data *pdata = get_panic_data_write();
+	uint32_t reason_ec = 0;
+	uint32_t info = 0;
+	uint8_t exception = 0;
+
 	/*
 	 * If CONFIG_LOG is on, the exception details
 	 * have already been logged to the console.
@@ -156,6 +162,15 @@ void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
 	}
 
 	LOG_PANIC();
+
+	/* If a panic reason is not set by EC sources, store the reason provided
+	 * by Zephyr.
+	 */
+	panic_get_reason(&reason_ec, &info, &exception);
+	if (!(reason_ec || info || exception)) {
+		panic_set_reason(PANIC_ZEPHYR_FATAL_ERROR, (uint32_t)reason,
+				 task_get_current());
+	}
 
 	/* Start system safe mode if possible */
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_SYSTEM_SAFE_MODE)) {

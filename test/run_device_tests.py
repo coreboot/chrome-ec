@@ -337,6 +337,8 @@ class AllTests:
                 finish_regexes=[board_config.mpu_regex],
             ),
             TestConfig(test_name="mutex"),
+            TestConfig(test_name="mutex_trylock"),
+            TestConfig(test_name="mutex_recursive"),
             TestConfig(test_name="panic"),
             TestConfig(test_name="pingpong"),
             TestConfig(test_name="printf"),
@@ -360,7 +362,9 @@ class AllTests:
             ),
             TestConfig(test_name="rtc"),
             TestConfig(
-                test_name="rtc_npcx9", exclude_boards=[BLOONCHIPPER, DARTMONKEY]
+                test_name="rtc_npcx9",
+                timeout_secs=20,
+                exclude_boards=[BLOONCHIPPER, DARTMONKEY],
             ),
             TestConfig(
                 test_name="rtc_stm32f4", exclude_boards=[DARTMONKEY, HELIPILOT]
