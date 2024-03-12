@@ -469,11 +469,24 @@ static ALWAYS_INLINE void pdc_thread(void *pdc_dev, void *unused1,
 	const struct device *dev = (const struct device *)pdc_dev;
 	struct pdc_data_t *data = dev->data;
 	struct pdc_port_t *port = &data->port;
+	int rv;
 
 	while (1) {
 		/* Wait for timeout or event */
-		k_event_wait(&port->sm_event, PDC_SM_EVENT, false,
-			     K_MSEC(LOOP_DELAY_MS));
+		rv = k_event_wait(&port->sm_event, PDC_SM_EVENT, false,
+				  K_MSEC(LOOP_DELAY_MS));
+
+		/*
+		 * If k_event_wait returns a non-zero value, then
+		 * always clear PDC_SM_EVENT to ensure that the thread goes to
+		 * sleep in cases where PDC_SM_EVENT can't be handled
+		 * immediately such as when a public cmd is posted, but is
+		 * waiting on an internal cmd to be sent.
+		 */
+		if (rv != 0) {
+			k_event_clear(&port->sm_event, PDC_SM_EVENT);
+		}
+
 		/* Run port connection state machine */
 		smf_run_state(&port->ctx);
 	}
@@ -599,6 +612,11 @@ static void invalidate_charger_settings(struct pdc_port_t *port)
  */
 static int queue_public_cmd(struct pdc_port_t *port, enum pdc_cmd_t pdc_cmd)
 {
+	/* Don't send if still in init state */
+	if (get_pdc_state(port) == PDC_INIT) {
+		return -ENOTCONN;
+	}
+
 	/* Don't send another public initiated command if one is already pending
 	 */
 	if (port->send_cmd.public.pending) {
@@ -980,8 +998,6 @@ static void pdc_send_cmd_start_entry(void *obj)
 	} else {
 		port->cmd = &port->send_cmd.public;
 	}
-
-	k_event_clear(&port->sm_event, PDC_SM_EVENT);
 }
 
 static int send_pdc_cmd(struct pdc_port_t *port)
@@ -1365,8 +1381,11 @@ static bool is_connectionless_cmd(enum pdc_cmd_t pdc_cmd)
  */
 static int public_api_block(int port, enum pdc_cmd_t pdc_cmd)
 {
-	if (queue_public_cmd(&pdc_data[port]->port, pdc_cmd)) {
-		return -EBUSY;
+	int ret;
+
+	ret = queue_public_cmd(&pdc_data[port]->port, pdc_cmd);
+	if (ret) {
+		return ret;
 	}
 
 	/* Reset block counter */
@@ -1805,10 +1824,10 @@ uint32_t pdc_power_mgmt_get_vbus_voltage(int port)
 	return pdc_data[port]->port.vbus;
 }
 
-void pdc_power_mgmt_reset(int port)
+int pdc_power_mgmt_reset(int port)
 {
 	/* Block until command completes */
-	public_api_block(port, CMD_PDC_RESET);
+	return public_api_block(port, CMD_PDC_RESET);
 }
 
 uint8_t pdc_power_mgmt_get_src_cap_cnt(int port)
