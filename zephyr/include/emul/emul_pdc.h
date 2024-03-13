@@ -18,7 +18,7 @@ typedef int (*emul_pdc_set_ucsi_version_t)(const struct emul *target,
 					   uint16_t version);
 typedef int (*emul_pdc_reset_t)(const struct emul *target);
 typedef int (*emul_pdc_get_connector_reset_t)(const struct emul *dev,
-					      enum connector_reset_t *type);
+					      union connector_reset_t *reset);
 typedef int (*emul_pdc_set_capability_t)(const struct emul *target,
 					 const struct capability_t *caps);
 typedef int (*emul_pdc_set_connector_capability_t)(
@@ -64,6 +64,11 @@ typedef int (*emul_pdc_get_reconnect_req_t)(const struct emul *target,
 
 typedef int (*emul_pdc_pulse_irq_t)(const struct emul *target);
 
+typedef int (*emul_pdc_get_cable_property_t)(const struct emul *target,
+					     union cable_property_t *property);
+typedef int (*emul_pdc_set_cable_property_t)(
+	const struct emul *target, const union cable_property_t property);
+
 __subsystem struct emul_pdc_api_t {
 	emul_pdc_set_response_delay_t set_response_delay;
 	emul_pdc_set_ucsi_version_t set_ucsi_version;
@@ -87,6 +92,8 @@ __subsystem struct emul_pdc_api_t {
 	emul_pdc_get_requested_power_level_t get_requested_power_level;
 	emul_pdc_get_reconnect_req_t get_reconnect_req;
 	emul_pdc_pulse_irq_t pulse_irq;
+	emul_pdc_set_cable_property_t set_cable_property;
+	emul_pdc_get_cable_property_t get_cable_property;
 };
 
 static inline int emul_pdc_set_ucsi_version(const struct emul *target,
@@ -119,7 +126,7 @@ static inline int emul_pdc_reset(const struct emul *target)
 }
 
 static inline int emul_pdc_get_connector_reset(const struct emul *target,
-					       enum connector_reset_t *type)
+					       union connector_reset_t *reset)
 {
 	if (!target || !target->backend_api) {
 		return -ENOTSUP;
@@ -128,7 +135,7 @@ static inline int emul_pdc_get_connector_reset(const struct emul *target,
 	const struct emul_pdc_api_t *api = target->backend_api;
 
 	if (api->get_connector_reset) {
-		return api->get_connector_reset(target, type);
+		return api->get_connector_reset(target, reset);
 	}
 	return -ENOSYS;
 }
@@ -420,6 +427,37 @@ static inline int emul_pdc_pulse_irq(const struct emul *target)
 
 	if (api->pulse_irq) {
 		return api->pulse_irq(target);
+	}
+	return -ENOSYS;
+}
+
+static inline int emul_pdc_get_cable_property(const struct emul *target,
+					      union cable_property_t *property)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->get_cable_property) {
+		return api->get_cable_property(target, property);
+	}
+	return -ENOSYS;
+}
+
+static inline int
+emul_pdc_set_cable_property(const struct emul *target,
+			    const union cable_property_t property)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->set_cable_property) {
+		return api->set_cable_property(target, property);
 	}
 	return -ENOSYS;
 }

@@ -170,7 +170,11 @@ static int cmd_pdc_reset(const struct shell *sh, size_t argc, char **argv)
 		return rv;
 
 	/* Trigger a PDC reset for this port. */
-	pdc_power_mgmt_reset(port);
+	rv = pdc_power_mgmt_reset(port);
+	if (rv) {
+		shell_error(sh, "Could not reset port %u (%d)", port, rv);
+		return rv;
+	}
 
 	return EC_SUCCESS;
 }
@@ -204,3 +208,18 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 	SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(pdc, &sub_pdc_cmds, "PDC console commands", NULL);
+
+static int cmd_pd_version(const struct shell *sh, size_t argc, char **argv)
+{
+	shell_fprintf(sh, SHELL_INFO, "3\n");
+	return EC_SUCCESS;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_pd_cmds,
+			       SHELL_CMD(version, NULL,
+					 "Get PD version\n"
+					 "Usage: pd version",
+					 cmd_pd_version),
+			       SHELL_SUBCMD_SET_END);
+
+SHELL_CMD_REGISTER(pd, &sub_pd_cmds, "PD commands (deprecated)", NULL);

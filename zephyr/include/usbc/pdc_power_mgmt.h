@@ -212,9 +212,9 @@ uint32_t pdc_power_mgmt_get_vbus_voltage(int port);
  *
  * @param port USB-C port number
  *
- * @retval void
+ * @retval 0 if successful, error code otherwise
  */
-void pdc_power_mgmt_reset(int port);
+int pdc_power_mgmt_reset(int port);
 
 /**
  * @brief Get the source caps list sent by the port partner
@@ -282,5 +282,80 @@ int pdc_power_mgmt_get_info(int port, struct pdc_info_t *pdc_info);
  * @retval 0 if successful or error code
  */
 int pdc_power_mgmt_get_bus_info(int port, struct pdc_bus_info_t *pdc_bus_info);
+
+/**
+ * @brief Get current PD Revision
+ *
+ * @param port USB-C port number
+ * @param type SOP* type
+ *
+ * @retval PD_REV10 for PD Revision 1.0
+ *         PD_REV20 for PD Revision 2.0
+ *         PD_REV30 for PD Revision 3.0
+ */
+int pdc_power_mgmt_get_rev(int port, enum tcpci_msg_type type);
+
+/**
+ * @brief Set the passed charge port as active
+ *
+ * @param port USB-C port number
+ *
+ * @retval 0 if the charge port is accepted, or ec_error_list status
+ */
+int pdc_power_mgmt_set_active_charge_port(int charge_port);
+
+/**
+ * @brief Returns the sink caps list
+ *
+ * @param port USB-C port number
+ *
+ * @retval List of sink capabilities
+ */
+const uint32_t *const pdc_power_mgmt_get_snk_caps(int port);
+
+/**
+ * @brief Returns the number of sink caps
+ *
+ * @param port USB-C port number
+ *
+ * @retval Number of sink capabilites
+ */
+uint8_t pdc_power_mgmt_get_snk_cap_cnt(int port);
+
+/**
+ * @brief Get the Type-C port events
+ *
+ * @param port USB-C port number
+ *
+ * @retval PD_STATUS_EVENT_* bitmask
+ */
+uint32_t pdc_power_mgmt_get_events(int port);
+
+/**
+ * @brief Gets the port partner's Revision Message Data Object (RMDO)
+ *
+ * @param port USB-C port number
+ *
+ * @retval port partner's RMDO
+ */
+struct rmdo pdc_power_mgmt_get_partner_rmdo(int port);
+
+/**
+ * @brief Get identity discovery state for this type and port
+ *
+ * @param port USB-C port number
+ *
+ * @retval Current discovery state
+ */
+enum pd_discovery_state
+pdc_power_mgmt_get_identity_discovery(int port, enum tcpci_msg_type type);
+
+/**
+ * @brief Signal power request to indicate a charger update that affects the
+ * port
+ *
+ * @param port USB-C port number
+ */
+void pd_pdc_power_mgmt_set_new_power_request(int port);
 
 #endif /* __CROS_EC_PDC_POWER_MGMT_H */
