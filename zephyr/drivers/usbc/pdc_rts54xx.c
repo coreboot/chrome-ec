@@ -132,19 +132,21 @@ const struct smbus_cmd_t SET_TPC_RECONNECT = { 0x08, 0x03, 0x1F };
 const struct smbus_cmd_t FORCE_SET_POWER_SWITCH = { 0x08, 0x03, 0x21 };
 const struct smbus_cmd_t GET_PDOS = { 0x08, 0x03, 0x83 };
 const struct smbus_cmd_t GET_RDO = { 0x08, 0x02, 0x84 };
+const struct smbus_cmd_t GET_VDO = { 0x08, 0x03, 0x9A };
 const struct smbus_cmd_t GET_CURRENT_PARTNER_SRC_PDO = { 0x08, 0x02, 0xA7 };
 const struct smbus_cmd_t GET_POWER_SWITCH_STATE = { 0x08, 0x02, 0xA9 };
 const struct smbus_cmd_t GET_RTK_STATUS = { 0x09, 0x03, 0x00 };
 const struct smbus_cmd_t PPM_RESET = { 0x0E, 0x02, 0x01 };
 const struct smbus_cmd_t CONNECTOR_RESET = { 0x0E, 0x03, 0x03 };
 const struct smbus_cmd_t GET_CAPABILITY = { 0x0E, 0x02, 0x06 };
-const struct smbus_cmd_t GET_CONNECTOR_CAPABILITY = { 0x0E, 0x02, 0x07 };
-const struct smbus_cmd_t SET_UOR = { 0x0E, 0x03, 0x09 };
-const struct smbus_cmd_t SET_PDR = { 0x0E, 0x03, 0x0B };
-const struct smbus_cmd_t UCSI_GET_ERROR_STATUS = { 0x0E, 0x02, 0x13 };
-const struct smbus_cmd_t UCSI_READ_POWER_LEVEL = { 0x0E, 0x03, 0x1E };
+const struct smbus_cmd_t GET_CONNECTOR_CAPABILITY = { 0x0E, 0x03, 0x07 };
+const struct smbus_cmd_t SET_UOR = { 0x0E, 0x04, 0x09 };
+const struct smbus_cmd_t SET_PDR = { 0x0E, 0x04, 0x0B };
+const struct smbus_cmd_t UCSI_GET_ERROR_STATUS = { 0x0E, 0x03, 0x13 };
+const struct smbus_cmd_t UCSI_READ_POWER_LEVEL = { 0x0E, 0x05, 0x1E };
 const struct smbus_cmd_t GET_IC_STATUS = { 0x3A, 0x03, 0x00 };
 const struct smbus_cmd_t SET_RETIMER_FW_UPDATE_MODE = { 0x20, 0x03, 0x00 };
+const struct smbus_cmd_t GET_CABLE_PROPERTY = { 0x0E, 0x02, 0x11 };
 
 /**
  * @brief PDC Command states
@@ -265,6 +267,10 @@ enum cmd_t {
 	CMD_SET_TPC_RECONNECT,
 	/** set Retimer into FW Update Mode */
 	CMD_SET_RETIMER_FW_UPDATE_MODE,
+	/** Get the cable properties */
+	CMD_GET_CABLE_PROPERTY,
+	/** Get VDO(s) of PDC, Cable, or Port partner */
+	CMD_GET_VDO,
 };
 
 /**
@@ -377,6 +383,8 @@ static const char *const cmd_names[] = {
 	[CMD_SET_RDO] = "SET_RDO",
 	[CMD_GET_CURRENT_PARTNER_SRC_PDO] = "GET_CURRENT_PARTNER_SRC_PDO",
 	[CMD_SET_RETIMER_FW_UPDATE_MODE] = "SET_RETIMER_FW_UPDATE_MODE",
+	[CMD_GET_CABLE_PROPERTY] = "GET_CABLE_PROPERTY",
+	[CMD_GET_VDO] = "GET VDO",
 };
 
 /**
@@ -964,7 +972,6 @@ static void st_ping_status_run(void *o)
 		} else {
 			LOG_DBG("C%d: ping_status: %02x", cfg->connector_number,
 				data->ping_status.raw_value);
-
 			/*
 			 * The command completed successfully,
 			 * so set cci.command_completed to 1b.
@@ -1442,10 +1449,18 @@ static int rts54_read_power_level(const struct device *dev)
 		return -EBUSY;
 	}
 
+	/*
+	 * TODO(b/326276531): The implementation of this command is not yet
+	 * complete. The fields 'time to read power` and `time interval between
+	 * readings` are not being set and need to be both passed into this
+	 * function from the PDC subsys API and set below.
+	 */
 	uint8_t payload[] = {
 		UCSI_READ_POWER_LEVEL.cmd,
 		UCSI_READ_POWER_LEVEL.len,
 		UCSI_READ_POWER_LEVEL.sub,
+		0x00, /* Data Length --> set to 0x00 */
+		0x00, /* Connector number  */
 		0x00,
 		0x00,
 	};
@@ -1511,7 +1526,7 @@ static int rts54_reset(const struct device *dev)
 }
 
 static int rts54_connector_reset(const struct device *dev,
-				 enum connector_reset_t type)
+				 union connector_reset_t reset)
 {
 	struct pdc_data_t *data = dev->data;
 
@@ -1519,13 +1534,8 @@ static int rts54_connector_reset(const struct device *dev,
 		return -EBUSY;
 	}
 
-	uint8_t payload[] = {
-		CONNECTOR_RESET.cmd,
-		CONNECTOR_RESET.len,
-		CONNECTOR_RESET.sub,
-		0x00,
-		type,
-	};
+	uint8_t payload[] = { CONNECTOR_RESET.cmd, CONNECTOR_RESET.len,
+			      CONNECTOR_RESET.sub, 0x00, reset.raw_value };
 
 	return rts54_post_command(dev, CMD_CONNECTOR_RESET, payload,
 				  ARRAY_SIZE(payload), NULL);
@@ -1659,7 +1669,8 @@ static int rts54_get_connector_capability(const struct device *dev,
 		GET_CONNECTOR_CAPABILITY.cmd,
 		GET_CONNECTOR_CAPABILITY.len,
 		GET_CONNECTOR_CAPABILITY.sub,
-		0x00,
+		0x00, /* Data Length --> set to 0x00 */
+		0x00, /* Connector number --> don't care for Realtek */
 	};
 
 	return rts54_post_command(dev, CMD_GET_CONNECTOR_CAPABILITY, payload,
@@ -1689,6 +1700,30 @@ static int rts54_get_connector_status(const struct device *dev,
 				    (uint8_t *)cs);
 }
 
+static int rts54_get_cable_property(const struct device *dev,
+				    union cable_property_t *cp)
+{
+	struct pdc_data_t *data = dev->data;
+
+	if (get_state(data) != ST_IDLE) {
+		return -EBUSY;
+	}
+
+	if (cp == NULL) {
+		return -EINVAL;
+	}
+
+	uint8_t payload[] = {
+		GET_CABLE_PROPERTY.cmd,
+		GET_CABLE_PROPERTY.len,
+		GET_CABLE_PROPERTY.sub,
+		0x00,
+	};
+
+	return rts54_post_command(dev, CMD_GET_CABLE_PROPERTY, payload,
+				  ARRAY_SIZE(payload), (uint8_t *)cp);
+}
+
 static int rts54_get_error_status(const struct device *dev,
 				  union error_status_t *es)
 {
@@ -1713,7 +1748,8 @@ static int rts54_get_error_status(const struct device *dev,
 		UCSI_GET_ERROR_STATUS.cmd,
 		UCSI_GET_ERROR_STATUS.len,
 		UCSI_GET_ERROR_STATUS.sub,
-		0x00,
+		0x00, /* Data Length --> set to 0x00 */
+		0x00, /* Connector number --> don't care for Realtek */
 	};
 
 	return rts54_post_command(dev, CMD_GET_ERROR_STATUS, payload,
@@ -1901,7 +1937,8 @@ static int rts54_set_uor(const struct device *dev, union uor_t uor)
 	}
 
 	uint8_t payload[] = {
-		SET_UOR.cmd, SET_UOR.len, SET_UOR.sub, 0x00, uor.raw_value,
+		SET_UOR.cmd, SET_UOR.len,	   SET_UOR.sub,
+		0x00,	     uor.raw_value & 0xff, (uor.raw_value >> 8) & 0xff
 	};
 
 	return rts54_post_command(dev, CMD_SET_UOR, payload,
@@ -1917,7 +1954,8 @@ static int rts54_set_pdr(const struct device *dev, union pdr_t pdr)
 	}
 
 	uint8_t payload[] = {
-		SET_PDR.cmd, SET_PDR.len, SET_PDR.sub, 0x00, pdr.raw_value,
+		SET_PDR.cmd, SET_PDR.len,	   SET_PDR.sub,
+		0x00,	     pdr.raw_value & 0xff, (pdr.raw_value >> 8) & 0xff
 	};
 
 	return rts54_post_command(dev, CMD_SET_PDR, payload,
@@ -1954,6 +1992,43 @@ static bool rts54_is_init_done(const struct device *dev)
 	return data->init_done;
 }
 
+static int rts54_get_vdo(const struct device *dev, union get_vdo_t vdo_req,
+			 uint8_t *vdo_req_list, uint32_t *vdo)
+{
+	struct pdc_data_t *data = dev->data;
+
+	if (get_state(data) != ST_IDLE) {
+		return -EBUSY;
+	}
+
+	if (vdo == NULL) {
+		return -EINVAL;
+	}
+
+	uint8_t payload[] = {
+		GET_VDO.cmd,
+		GET_VDO.len + vdo_req.num_vdos,
+		GET_VDO.sub,
+		0x00, /*  3: Port num */
+		vdo_req.raw_value, /*  4: Origin + number of VDOs */
+		0x00, /*  5: VDO type 0 */
+		0x00, /*  6: VDO type 1 */
+		0x00, /*  7: VDO type 2 */
+		0x00, /*  8: VDO type 3 */
+		0x00, /*  9: VDO type 4 */
+		0x00, /* 10: VDO type 5 */
+		0x00, /* 11: VDO type 6 */
+		0x00, /* 12: VDO type 7 */
+	};
+
+	/* Copy the list of VDO types being requested in the cmd message */
+	memcpy(&payload[5], vdo_req_list, vdo_req.num_vdos);
+
+	return rts54_post_command(dev, CMD_GET_VDO, payload,
+				  GET_VDO.len + vdo_req.num_vdos + 2,
+				  (uint8_t *)vdo);
+}
+
 static const struct pdc_driver_api_t pdc_driver_api = {
 	.is_init_done = rts54_is_init_done,
 	.get_ucsi_version = rts54_get_ucsi_version,
@@ -1979,6 +2054,8 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.set_power_level = rts54_set_power_level,
 	.reconnect = rts54_reconnect,
 	.update_retimer = rts54_set_retimer_update_mode,
+	.get_cable_property = rts54_get_cable_property,
+	.get_vdo = rts54_get_vdo,
 };
 
 static void pdc_interrupt_callback(const struct device *dev,

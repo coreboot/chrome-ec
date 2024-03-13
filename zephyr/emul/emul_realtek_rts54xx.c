@@ -156,9 +156,10 @@ static int connector_reset(struct rts5453p_emul_pdc_data *data,
 			   const union rts54_request *req)
 {
 	LOG_INF("CONNECTOR_RESET port=%d, hard_reset=%d",
-		req->connector_reset.port_num, req->connector_reset.hard_reset);
+		req->connector_reset.reset.connector_number,
+		req->connector_reset.reset.reset_type);
 
-	data->connector_reset_type = req->connector_reset.hard_reset;
+	data->reset = req->connector_reset.reset;
 	memset(&data->response, 0, sizeof(union rts54_response));
 	send_response(data);
 
@@ -373,7 +374,8 @@ static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 static int set_uor(struct rts5453p_emul_pdc_data *data,
 		   const union rts54_request *req)
 {
-	LOG_INF("SET_UOR port=%d", req->set_uor.port_num);
+	LOG_INF("SET_UOR port=%d: uor=%x", req->set_uor.uor.connector_number,
+		req->set_uor.uor.raw_value);
 
 	data->uor = req->set_uor.uor;
 
@@ -386,7 +388,7 @@ static int set_uor(struct rts5453p_emul_pdc_data *data,
 static int set_pdr(struct rts5453p_emul_pdc_data *data,
 		   const union rts54_request *req)
 {
-	LOG_INF("SET_PDR port=%d", req->set_pdr.port_num);
+	LOG_INF("SET_PDR port=%d", req->set_pdr.pdr.connector_number);
 
 	data->pdr = req->set_pdr.pdr;
 
@@ -589,6 +591,36 @@ static int get_pdos(struct rts5453p_emul_pdc_data *data,
 	return 0;
 }
 
+static int get_cable_property(struct rts5453p_emul_pdc_data *data,
+			      const union rts54_request *req)
+{
+	union cable_property_t property = data->cable_property;
+
+	LOG_INF("GET_CABLE_PROPERTY property=%x", property);
+	memset(&data->response, 0, sizeof(data->response));
+
+	data->response.get_cable_property.byte_count =
+		sizeof(struct get_cable_property_response);
+	data->response.get_cable_property.raw_value[0] = property.raw_value[0];
+	data->response.get_cable_property.raw_value[1] = property.raw_value[1];
+
+	send_response(data);
+	return 0;
+}
+
+static int get_vdo(struct rts5453p_emul_pdc_data *data,
+		   const union rts54_request *req)
+{
+	LOG_INF("GET_VDO = %x", req->get_vdo.vdo_req.raw_value);
+	memset(&data->response, 0, sizeof(data->response));
+
+	data->response.get_vdo.byte_count =
+		sizeof(uint32_t) * req->get_vdo.vdo_req.num_vdos;
+
+	send_response(data);
+	return 0;
+}
+
 static bool send_response(struct rts5453p_emul_pdc_data *data)
 {
 	if (data->delay_ms > 0) {
@@ -665,7 +697,7 @@ const struct commands sub_cmd_x08[] = {
 	{ .code = 0x84, HANDLER_DEF(get_rdo) },
 	{ .code = 0x85, HANDLER_DEF(unsupported) },
 	{ .code = 0x99, HANDLER_DEF(unsupported) },
-	{ .code = 0x9A, HANDLER_DEF(unsupported) },
+	{ .code = 0x9A, HANDLER_DEF(get_vdo) },
 	{ .code = 0x9D, HANDLER_DEF(unsupported) },
 	{ .code = 0xA2, HANDLER_DEF(unsupported) },
 	{ .code = 0xF0, HANDLER_DEF(unsupported) },
@@ -688,7 +720,7 @@ const struct commands sub_cmd_x0E[] = {
 	{ .code = 0x0E, HANDLER_DEF(unsupported) },
 	{ .code = 0x0F, HANDLER_DEF(unsupported) },
 	{ .code = 0x10, HANDLER_DEF(unsupported) },
-	{ .code = 0x11, HANDLER_DEF(unsupported) },
+	{ .code = 0x11, HANDLER_DEF(get_cable_property) },
 	{ .code = 0x12, HANDLER_DEF(get_connector_status) },
 	{ .code = 0x13, HANDLER_DEF(get_error_status) },
 	{ .code = 0x1E, HANDLER_DEF(read_power_level) },
@@ -945,7 +977,7 @@ static int rts5453p_emul_init(const struct emul *emul,
 
 	data->pdc_data.read_offset = 0;
 
-	data->pdc_data.connector_reset_type = 0xFF;
+	data->pdc_data.reset.raw_value = 0xFF;
 	data->pdc_data.ic_status.fw_main_version = 0xAB;
 	data->pdc_data.ic_status.pd_version[0] = 0xCD;
 	data->pdc_data.ic_status.pd_revision[0] = 0xEF;
@@ -981,12 +1013,12 @@ static int emul_realtek_rts54xx_set_response_delay(const struct emul *target,
 }
 static int
 emul_realtek_rts54xx_get_connector_reset(const struct emul *target,
-					 enum connector_reset_t *type)
+					 union connector_reset_t *reset)
 {
 	struct rts5453p_emul_pdc_data *data =
 		rts5453p_emul_get_pdc_data(target);
 
-	*type = data->connector_reset_type;
+	*reset = data->reset;
 
 	return 0;
 }
@@ -1190,6 +1222,26 @@ static int emul_realtek_rts54xx_set_pdos(const struct emul *target,
 	return set_pdos_direct(data, pdo_type, pdo_offset, num_pdos, pdos);
 }
 
+static int
+emul_realtek_rts54xx_get_cable_property(const struct emul *target,
+					union cable_property_t *property)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+	*property = data->cable_property;
+	return 0;
+}
+
+static int
+emul_realtek_rts54xx_set_cable_property(const struct emul *target,
+					const union cable_property_t property)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+	data->cable_property = property;
+	return 0;
+}
+
 struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.reset = emul_realtek_rts54xx_reset,
 	.set_response_delay = emul_realtek_rts54xx_set_response_delay,
@@ -1210,6 +1262,8 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.set_info = emul_realtek_rts54xx_set_info,
 	.set_pdos = emul_realtek_rts54xx_set_pdos,
 	.get_pdos = emul_realtek_rts54xx_get_pdos,
+	.get_cable_property = emul_realtek_rts54xx_get_cable_property,
+	.set_cable_property = emul_realtek_rts54xx_set_cable_property,
 };
 
 #define RTS5453P_EMUL_DEFINE(n)                                             \

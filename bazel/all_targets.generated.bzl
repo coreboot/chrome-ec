@@ -225,10 +225,19 @@ def all_targets():
     )
     ec_target(
         name = "bloonchipper",
+        baseboard = "bloonchipper",
         board = "bloonchipper",
         chip = "stm32",
         core = "cortex-m",
         real_board = "hatch_fp",
+        zephyr = False,
+    )
+    ec_target(
+        name = "bloonchipper-druid",
+        baseboard = "bloonchipper",
+        board = "bloonchipper-druid",
+        chip = "stm32",
+        core = "cortex-m",
         zephyr = False,
     )
     ec_target(
@@ -981,6 +990,7 @@ def all_targets():
     )
     ec_target(
         name = "hatch_fp",
+        baseboard = "bloonchipper",
         board = "hatch_fp",
         chip = "stm32",
         core = "cortex-m",
