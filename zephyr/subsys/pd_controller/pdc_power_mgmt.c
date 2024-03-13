@@ -87,6 +87,8 @@ enum pdc_cmd_t {
 	CMD_PDC_SET_PDR,
 	/** CMD_PDC_GET_CONNECTOR_STATUS */
 	CMD_PDC_GET_CONNECTOR_STATUS,
+	/** CMD_PDC_GET_CABLE_PROPERTY */
+	CMD_PDC_GET_CABLE_PROPERTY,
 
 	/** CMD_PDC_COUNT */
 	CMD_PDC_COUNT
@@ -142,6 +144,8 @@ struct send_cmd_t {
 enum snk_attached_local_state_t {
 	/** SNK_ATTACHED_GET_CONNECTOR_CAPABILITY */
 	SNK_ATTACHED_GET_CONNECTOR_CAPABILITY,
+	/** SNK_ATTACHED_GET_CABLE_PROPERTY */
+	SNK_ATTACHED_GET_CABLE_PROPERTY,
 	/** SNK_ATTACHED_SET_DR_SWAP_POLICY */
 	SNK_ATTACHED_SET_DR_SWAP_POLICY,
 	/** SNK_ATTACHED_SET_PR_SWAP_POLICY */
@@ -166,6 +170,8 @@ enum snk_attached_local_state_t {
 enum src_attached_local_state_t {
 	/** SRC_ATTACHED_GET_CONNECTOR_CAPABILITY */
 	SRC_ATTACHED_GET_CONNECTOR_CAPABILITY,
+	/** SRC_ATTACHED_GET_CABLE_PROPERTY */
+	SRC_ATTACHED_GET_CABLE_PROPERTY,
 	/** SRC_ATTACHED_SET_DR_SWAP_POLICY */
 	SRC_ATTACHED_SET_DR_SWAP_POLICY,
 	/** SRC_ATTACHED_SET_PR_SWAP_POLICY */
@@ -238,6 +244,7 @@ static const char *const pdc_cmd_names[] = {
 	[CMD_PDC_SET_UOR] = "PDC_SET_UOR",
 	[CMD_PDC_SET_PDR] = "PDC_SET_PDR",
 	[CMD_PDC_GET_CONNECTOR_STATUS] = "PDC_GET_CONNECTOR_STATUS",
+	[CMD_PDC_GET_CABLE_PROPERTY] = "PDC_GET_CABLE_PROPERTY",
 };
 
 /**
@@ -391,6 +398,8 @@ struct pdc_port_t {
 	/** PDC Source Attached policy */
 	struct pdc_src_attached_policy_t src_policy;
 
+	/** Cable Property */
+	union cable_property_t cable_prop;
 	/** PDC version and other information */
 	struct pdc_info_t info;
 	/** Public API block counter */
@@ -469,11 +478,24 @@ static ALWAYS_INLINE void pdc_thread(void *pdc_dev, void *unused1,
 	const struct device *dev = (const struct device *)pdc_dev;
 	struct pdc_data_t *data = dev->data;
 	struct pdc_port_t *port = &data->port;
+	int rv;
 
 	while (1) {
 		/* Wait for timeout or event */
-		k_event_wait(&port->sm_event, PDC_SM_EVENT, false,
-			     K_MSEC(LOOP_DELAY_MS));
+		rv = k_event_wait(&port->sm_event, PDC_SM_EVENT, false,
+				  K_MSEC(LOOP_DELAY_MS));
+
+		/*
+		 * If k_event_wait returns a non-zero value, then
+		 * always clear PDC_SM_EVENT to ensure that the thread goes to
+		 * sleep in cases where PDC_SM_EVENT can't be handled
+		 * immediately such as when a public cmd is posted, but is
+		 * waiting on an internal cmd to be sent.
+		 */
+		if (rv != 0) {
+			k_event_clear(&port->sm_event, PDC_SM_EVENT);
+		}
+
 		/* Run port connection state machine */
 		smf_run_state(&port->ctx);
 	}
@@ -599,6 +621,11 @@ static void invalidate_charger_settings(struct pdc_port_t *port)
  */
 static int queue_public_cmd(struct pdc_port_t *port, enum pdc_cmd_t pdc_cmd)
 {
+	/* Don't send if still in init state */
+	if (get_pdc_state(port) == PDC_INIT) {
+		return -ENOTCONN;
+	}
+
 	/* Don't send another public initiated command if one is already pending
 	 */
 	if (port->send_cmd.public.pending) {
@@ -758,6 +785,10 @@ static void pdc_unattached_entry(void *obj)
 
 	port->send_cmd.intern.pending = false;
 
+	/* Clear any previously set cable property information */
+	port->cable_prop.raw_value[0] = 0;
+	port->cable_prop.raw_value[1] = 0;
+
 	invalidate_charger_settings(port);
 
 	if (get_pdc_state(port) != port->send_cmd_return_state) {
@@ -777,15 +808,6 @@ static void pdc_unattached_run(void *obj)
 	if (atomic_test_and_clear_bit(port->cci_flags, CCI_EVENT)) {
 		queue_internal_cmd(port, CMD_PDC_GET_CONNECTOR_STATUS);
 		return;
-	}
-
-	/* TODO: Limit the number of retries and try to reset PDC, then
-	 * ultimately disable port */
-	if (port->send_cmd.intern.error) {
-		/* The last command could not be sent, so send it again */
-		port->unattached_local_state = port->unattached_last_state;
-	} else {
-		port->unattached_last_state = port->unattached_local_state;
 	}
 
 	switch (port->unattached_local_state) {
@@ -828,22 +850,18 @@ static void pdc_src_attached_run(void *obj)
 		return;
 	}
 
-	/* TODO: Limit the number of retries and try to reset PDC, then
-	 * ultimately disable port */
-	if (port->send_cmd.intern.error) {
-		/* The last command could not be sent, so send it again */
-		port->src_attached_local_state = port->src_attached_last_state;
-	} else {
-		port->src_attached_last_state = port->src_attached_local_state;
-	}
-
 	/* TODO: b/319643480 - Brox: implement SRC policies */
 
 	switch (port->src_attached_local_state) {
 	case SRC_ATTACHED_GET_CONNECTOR_CAPABILITY:
 		port->src_attached_local_state =
-			SRC_ATTACHED_SET_DR_SWAP_POLICY;
+			SRC_ATTACHED_GET_CABLE_PROPERTY;
 		queue_internal_cmd(port, CMD_PDC_GET_CONNECTOR_CAPABILITY);
+		return;
+	case SRC_ATTACHED_GET_CABLE_PROPERTY:
+		port->src_attached_local_state =
+			SRC_ATTACHED_SET_DR_SWAP_POLICY;
+		queue_internal_cmd(port, CMD_PDC_GET_CABLE_PROPERTY);
 		return;
 	case SRC_ATTACHED_SET_DR_SWAP_POLICY:
 		port->src_attached_local_state =
@@ -895,20 +913,16 @@ static void pdc_snk_attached_run(void *obj)
 		return;
 	}
 
-	/* TODO: Limit the number of retries and try to reset PDC, then
-	 * ultimately disable port */
-	if (port->send_cmd.intern.error) {
-		/* The last command could not be sent, so send it again */
-		port->snk_attached_local_state = port->snk_attached_last_state;
-	} else {
-		port->snk_attached_last_state = port->snk_attached_local_state;
-	}
-
 	switch (port->snk_attached_local_state) {
 	case SNK_ATTACHED_GET_CONNECTOR_CAPABILITY:
 		port->snk_attached_local_state =
-			SNK_ATTACHED_SET_DR_SWAP_POLICY;
+			SNK_ATTACHED_GET_CABLE_PROPERTY;
 		queue_internal_cmd(port, CMD_PDC_GET_CONNECTOR_CAPABILITY);
+		return;
+	case SNK_ATTACHED_GET_CABLE_PROPERTY:
+		port->snk_attached_local_state =
+			SNK_ATTACHED_SET_DR_SWAP_POLICY;
+		queue_internal_cmd(port, CMD_PDC_GET_CABLE_PROPERTY);
 		return;
 	case SNK_ATTACHED_SET_DR_SWAP_POLICY:
 		port->snk_attached_local_state =
@@ -1007,8 +1021,6 @@ static void pdc_send_cmd_start_entry(void *obj)
 	} else {
 		port->cmd = &port->send_cmd.public;
 	}
-
-	k_event_clear(&port->sm_event, PDC_SM_EVENT);
 }
 
 static int send_pdc_cmd(struct pdc_port_t *port)
@@ -1061,6 +1073,9 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 	case CMD_PDC_GET_CONNECTOR_STATUS:
 		rv = pdc_get_connector_status(port->pdc,
 					      &port->connector_status);
+		break;
+	case CMD_PDC_GET_CABLE_PROPERTY:
+		rv = pdc_get_cable_property(port->pdc, &port->cable_prop);
 		break;
 	default:
 		LOG_ERR("Invalid command: %d", port->cmd->cmd);
@@ -1168,6 +1183,7 @@ static void pdc_send_cmd_wait_run(void *obj)
 		} else {
 			LOG_ERR("%s resend attempts exceeded!",
 				pdc_cmd_names[port->cmd->cmd]);
+			port->cmd->error = true;
 			set_pdc_state(port, port->send_cmd_return_state);
 			return;
 		}
@@ -1246,6 +1262,8 @@ static void pdc_src_snk_typec_only_run(void *obj)
 		queue_internal_cmd(port, CMD_PDC_GET_CONNECTOR_STATUS);
 		return;
 	}
+
+	send_pending_public_commands(port);
 }
 
 static void pdc_init_entry(void *obj)
@@ -1389,8 +1407,11 @@ static bool is_connectionless_cmd(enum pdc_cmd_t pdc_cmd)
  */
 static int public_api_block(int port, enum pdc_cmd_t pdc_cmd)
 {
-	if (queue_public_cmd(&pdc_data[port]->port, pdc_cmd)) {
-		return -EBUSY;
+	int ret;
+
+	ret = queue_public_cmd(&pdc_data[port]->port, pdc_cmd);
+	if (ret) {
+		return ret;
 	}
 
 	/* Reset block counter */
@@ -1829,10 +1850,10 @@ uint32_t pdc_power_mgmt_get_vbus_voltage(int port)
 	return pdc_data[port]->port.vbus;
 }
 
-void pdc_power_mgmt_reset(int port)
+int pdc_power_mgmt_reset(int port)
 {
 	/* Block until command completes */
-	public_api_block(port, CMD_PDC_RESET);
+	return public_api_block(port, CMD_PDC_RESET);
 }
 
 uint8_t pdc_power_mgmt_get_src_cap_cnt(int port)
@@ -2073,4 +2094,70 @@ int pdc_power_mgmt_get_bus_info(int port, struct pdc_bus_info_t *pdc_bus_info)
 	 */
 
 	return pdc_get_bus_info(pdc_data[port]->port.pdc, pdc_bus_info);
+}
+
+int pdc_power_mgmt_get_rev(int port, enum tcpci_msg_type type)
+{
+	uint32_t rev;
+
+	/* Make sure port is connected */
+	if (!pdc_power_mgmt_is_connected(port)) {
+		return 0;
+	}
+
+	switch (type) {
+	case TCPCI_MSG_SOP:
+		rev = pdc_data[port]->port.ccaps.partner_pd_revision - 1;
+		break;
+	case TCPCI_MSG_SOP_PRIME:
+		rev = pdc_data[port]->port.cable_prop.cable_pd_revision - 1;
+		break;
+	default:
+		rev = 0;
+	}
+
+	return rev;
+}
+
+const uint32_t *const pdc_power_mgmt_get_snk_caps(int port)
+{
+	/* TODO:b/326460749 */
+
+	return NULL;
+}
+
+uint8_t pdc_power_mgmt_get_snk_cap_cnt(int port)
+{
+	/* TODO:b/326460749 */
+
+	return 0;
+}
+
+uint32_t pdc_power_mgmt_get_events(int port)
+{
+	/* TODO:b/326468316 */
+
+	return 0;
+}
+
+struct rmdo pdc_power_mgmt_get_partner_rmdo(int port)
+{
+	struct rmdo value = { 0 };
+
+	/* TODO:b/326466602 */
+
+	return value;
+}
+
+enum pd_discovery_state
+pdc_power_mgmt_get_identity_discovery(int port, enum tcpci_msg_type type)
+{
+	/* TODO:b/326468310 */
+
+	return 0;
+}
+
+void pd_pdc_power_mgmt_set_new_power_request(int port)
+{
+	/* TODO:b/326475515 */
 }
