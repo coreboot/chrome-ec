@@ -18,6 +18,7 @@
 #define CONFIG_LTO /* Link-Time Optimizations to reduce code size */
 #define CONFIG_I2C_DEBUG /* Print i2c traces */
 #define CONFIG_CMD_S5_TIMEOUT /* Allow a user-specified timeout to exit S5 */
+#define CONFIG_EMULATED_SYSRQ
 
 /* Detect sleep hang after 10s */
 #undef CONFIG_SLEEP_TIMEOUT_MS
