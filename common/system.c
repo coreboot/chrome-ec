@@ -1047,6 +1047,14 @@ static int handle_pending_reboot(struct ec_params_reboot_ec *p)
 	case EC_REBOOT_COLD:
 	case EC_REBOOT_COLD_AP_OFF:
 		/*
+		 * When EC trigger cold reboot, for some SoC, the power down
+		 * sequence cannot meet specification, may cause data lost
+		 * or SoC stay an error state. We need force shutdown before
+		 * cold reboot.
+		 */
+		chipset_force_shutdown(CHIPSET_SHUTDOWN_G3);
+
+		/*
 		 * Reboot the PD chip(s) as well, but first suspend the ports
 		 * if this board has PD tasks running so they don't query the
 		 * TCPCs while they reset.
