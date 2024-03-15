@@ -1911,6 +1911,9 @@
 /* Max length of a single line of input */
 #define CONFIG_CONSOLE_INPUT_LINE_SIZE 80
 
+/* Amount of time to keep the console in use flag */
+#define CONFIG_CONSOLE_IN_USE_ON_BOOT_TIME (15 * SECOND)
+
 /* Enable verbose output to UART console and extra timestamp print precision. */
 #define CONFIG_CONSOLE_VERBOSE
 
@@ -3570,6 +3573,15 @@
  * ISL9238C disable the CMOUT latch function.
  */
 #undef CONFIG_ISL9238C_DISABLE_CMOUT_LATCH
+
+/*
+ * ISL9238C input voltage setting.
+ * Set the input voltage for the ISL9238C charger. Setting -1 means use
+ * the default setting defined by the chip.  The ISL9238C input voltage
+ * is configured using 341.3 mV steps.  The value specified is rounded
+ * down.
+ */
+#define CONFIG_ISL9238C_INPUT_VOLTAGE_MV -1
 
 /*
  * ISL9238C enable Force Buck mode.

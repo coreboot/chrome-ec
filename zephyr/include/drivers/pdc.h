@@ -127,6 +127,10 @@ typedef int (*pdc_update_retimer_fw_t)(const struct device *dev, bool enable);
 typedef bool (*pdc_is_init_done_t)(const struct device *dev);
 typedef int (*pdc_get_cable_property_t)(const struct device *dev,
 					union cable_property_t *cable_prop);
+typedef int (*pdc_get_vdo_t)(const struct device *dev, union get_vdo_t req,
+			     uint8_t *req_list, uint32_t *vdo);
+typedef int (*pdc_get_identity_discovery_t)(const struct device *dev,
+					    bool *disc_state);
 
 /**
  * @cond INTERNAL_HIDDEN
@@ -160,6 +164,8 @@ __subsystem struct pdc_driver_api_t {
 	pdc_get_current_flash_bank_t get_current_flash_bank;
 	pdc_update_retimer_fw_t update_retimer;
 	pdc_get_cable_property_t get_cable_property;
+	pdc_get_vdo_t get_vdo;
+	pdc_get_identity_discovery_t get_identity_discovery;
 };
 /**
  * @endcond
@@ -812,6 +818,55 @@ static inline int pdc_get_cable_property(const struct device *dev,
 		 "GET_CABLE_PROPERTY is not optional");
 
 	return api->get_cable_property(dev, cable_prop);
+}
+
+/**
+ * @brief Get the Requested VDO objects
+ * @note CCI Events set
+ *           busy: if PDC is busy
+ *           error:
+ *           command_commpleted: if the VDOs were retrieved
+ *
+ * @param dev PDC device structure pointer
+ * @param vdo pointer to where the VDOs are stored
+ *
+ * @retval 0 on success
+ * @retval -EBUSY if not ready to execute the command
+ * @retval -EINVAL if vdo pointer is NULL
+ */
+static inline int pdc_get_vdo(const struct device *dev, union get_vdo_t vdo_req,
+			      uint8_t *vdo_list, uint32_t *vdo)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	__ASSERT(api->get_vdo != NULL, "GET_VDO is not optional");
+
+	return api->get_vdo(dev, vdo_req, vdo_list, vdo);
+}
+
+/*
+ * @brief get the state of the discovery process
+ *
+ * @param dev PDC device structure pointer
+ * @param disc_state pointer where the discovery state is stored. True if
+ * discovery is complete, else False
+ *
+ * @retval 0 on success
+ * @retval -ENOSYS if not implemented
+ * @retval -EINVAL if disc_state is NULL
+ */
+static inline int pdc_get_identity_discovery(const struct device *dev,
+					     bool *disc_state)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	if (api->get_identity_discovery == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->get_identity_discovery(dev, disc_state);
 }
 
 #ifdef __cplusplus

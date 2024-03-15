@@ -92,7 +92,7 @@ void pd_set_dual_role(int port, enum pd_dual_role_states state)
 
 void pd_set_new_power_request(int port)
 {
-	pdc_power_mgmt_set_new_power_request(port);
+	/* TODO:b/326475515 */
 }
 
 __override uint8_t board_get_usb_pd_port_count(void)
@@ -102,7 +102,9 @@ __override uint8_t board_get_usb_pd_port_count(void)
 
 __override int board_set_active_charge_port(int charge_port)
 {
-	return pdc_power_mgmt_set_active_charge_port(charge_port);
+	/* TODO:b/326475080 */
+
+	return EC_SUCCESS;
 }
 
 const uint32_t *const pd_get_src_caps(int port)
@@ -117,22 +119,32 @@ uint8_t pd_get_src_cap_cnt(int port)
 
 const uint32_t *const pd_get_snk_caps(int port)
 {
-	return pdc_power_mgmt_get_snk_caps(port);
+	/* TODO:b/326460749 */
+
+	return NULL;
 }
 
 uint8_t pd_get_snk_cap_cnt(int port)
 {
-	return pdc_power_mgmt_get_snk_cap_cnt(port);
+	/* TODO:b/326460749 */
+
+	return 0;
 }
 
 uint32_t pd_get_events(int port)
 {
-	return pdc_power_mgmt_get_events(port);
+	/* TODO:b/326468316 */
+
+	return 0;
 }
 
 struct rmdo pd_get_partner_rmdo(int port)
 {
-	return pdc_power_mgmt_get_partner_rmdo(port);
+	struct rmdo value = { 0 };
+
+	/* TODO:b/326466602 */
+
+	return value;
 }
 
 enum pd_discovery_state pd_get_identity_discovery(int port,
@@ -144,4 +156,19 @@ enum pd_discovery_state pd_get_identity_discovery(int port,
 int pd_get_rev(int port, enum tcpci_msg_type type)
 {
 	return pdc_power_mgmt_get_rev(port, type);
+}
+
+uint16_t pd_get_identity_vid(int port)
+{
+	return pdc_power_mgmt_get_identity_vid(port);
+}
+
+uint16_t pd_get_identity_pid(int port)
+{
+	return pdc_power_mgmt_get_identity_pid(port);
+}
+
+uint8_t pd_get_product_type(int port)
+{
+	return pdc_power_mgmt_get_product_type(port);
 }
