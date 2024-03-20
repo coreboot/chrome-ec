@@ -223,6 +223,18 @@ union rts54_request {
 		};
 		uint32_t pdos[PDO_OFFSET_MAX];
 	} __packed get_pdos;
+
+	struct get_cable_property {
+		struct rts54_subcommand_header header;
+		uint8_t port_num;
+	} get_cable_property;
+
+	struct get_vdo_req {
+		struct rts54_subcommand_header header;
+		uint8_t data_len;
+		union get_vdo_t vdo_req;
+		uint8_t vdo_type[7];
+	} get_vdo;
 };
 
 union rts54_response {
@@ -360,6 +372,30 @@ union rts54_response {
 		uint8_t byte_count;
 		uint32_t pdos[PDO_OFFSET_MAX];
 	} __packed get_pdos;
+
+	struct get_cable_property_response {
+		uint8_t byte_count;
+		union {
+			struct {
+				uint16_t bm_speed_supported;
+				uint8_t b_current_capability;
+				uint8_t vbus_in_cable : 1;
+				uint8_t cable_type : 1;
+				uint8_t directionality : 1;
+				uint8_t plug_type : 2;
+				uint8_t mode_support : 1;
+				uint8_t reserved0 : 2;
+				uint8_t latency : 4;
+				uint8_t reserved1 : 4;
+			};
+			uint32_t raw_value[2];
+		};
+	} __packed get_cable_property;
+
+	struct get_vdo_response {
+		uint8_t byte_count;
+		uint32_t vdo[7];
+	} __packed get_vdo;
 };
 
 enum cmd_sts_t {
@@ -400,6 +436,7 @@ struct rts5453p_emul_pdc_data {
 	struct force_set_power_switch_t set_power_switch_data;
 	uint8_t set_tpc_reconnect_param;
 	struct pdc_info_t info;
+	union cable_property_t cable_property;
 
 	union rts54_request request;
 

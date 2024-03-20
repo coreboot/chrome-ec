@@ -129,6 +129,8 @@
 #define CONFIG_WP_STORAGE_SIZE CONFIG_EC_PROTECTED_STORAGE_SIZE
 #define CONFIG_WP_ACTIVE_HIGH
 
+#define CONFIG_OTP_KEY
+
 /*
  * We want to prevent flash readout, and use it as indicator of protection
  * status.
@@ -144,6 +146,8 @@
 #undef CONFIG_CONSOLE_UART
 #define CONFIG_CONSOLE_UART 0 /* 0:UART1 1:UART2 */
 #define NPCX_UART_MODULE2 1 /* 1:GPIO64/65 as UART1 */
+#undef CONFIG_CONSOLE_IN_USE_ON_BOOT_TIME
+#define CONFIG_CONSOLE_IN_USE_ON_BOOT_TIME 0
 
 #undef CONFIG_UART_TX_BUF_SIZE
 #define CONFIG_UART_TX_BUF_SIZE 2048
@@ -261,7 +265,7 @@
 /* EC rollback protection block */
 #define CONFIG_ROLLBACK_OFF \
 	(CONFIG_EC_PROTECTED_STORAGE_OFF + CONFIG_EC_PROTECTED_STORAGE_SIZE)
-#define CONFIG_ROLLBACK_SIZE (128 * 1024 * 2) /* 2 blocks of 128KB each */
+#define CONFIG_ROLLBACK_SIZE (64 * 1024 * 2) /* 2 blocks of 64KB each */
 
 /*-------------------------------------------------------------------------*
  * RW Signature Verification
@@ -292,7 +296,6 @@
 #define GPIO_SHI_CS_L GPIO_SPI_HOST_CS_MCU_ODL
 #define GPIO_FPS_INT GPIO_FP_MCU_INT_L
 #define GPIO_EC_INT_L GPIO_MCU_PLATFORM_INT_L
-#define GPIO_SLP_ALT_L GPIO_SLP_L
 
 #ifndef __ASSEMBLER__
 

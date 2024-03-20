@@ -119,16 +119,12 @@ uint8_t pd_get_src_cap_cnt(int port)
 
 const uint32_t *const pd_get_snk_caps(int port)
 {
-	/* TODO:b/326460749 */
-
-	return NULL;
+	return pdc_power_mgmt_get_snk_caps(port);
 }
 
 uint8_t pd_get_snk_cap_cnt(int port)
 {
-	/* TODO:b/326460749 */
-
-	return 0;
+	return pdc_power_mgmt_get_snk_cap_cnt(port);
 }
 
 uint32_t pd_get_events(int port)
@@ -140,24 +136,31 @@ uint32_t pd_get_events(int port)
 
 struct rmdo pd_get_partner_rmdo(int port)
 {
-	struct rmdo value = { 0 };
-
-	/* TODO:b/326466602 */
-
-	return value;
+	return pdc_power_mgmt_get_partner_rmdo(port);
 }
 
 enum pd_discovery_state pd_get_identity_discovery(int port,
 						  enum tcpci_msg_type type)
 {
-	/* TODO:b/326468310 */
-
-	return 0;
+	return pdc_power_mgmt_get_identity_discovery(port, type);
 }
 
 int pd_get_rev(int port, enum tcpci_msg_type type)
 {
-	/* TODO:b/326466765 */
+	return pdc_power_mgmt_get_rev(port, type);
+}
 
-	return PD_REV30;
+uint16_t pd_get_identity_vid(int port)
+{
+	return pdc_power_mgmt_get_identity_vid(port);
+}
+
+uint16_t pd_get_identity_pid(int port)
+{
+	return pdc_power_mgmt_get_identity_pid(port);
+}
+
+uint8_t pd_get_product_type(int port)
+{
+	return pdc_power_mgmt_get_product_type(port);
 }

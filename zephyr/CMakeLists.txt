@@ -700,6 +700,7 @@ add_subdirectory("emul")
 add_subdirectory("fake")
 add_subdirectory("mock")
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
+add_subdirectory_ifdef(CONFIG_HW_TEST_ON "test/hwtest")
 
 # Use external script to generate the ec_version.h header and add as
 # a dependency to the EC application library.
@@ -720,7 +721,7 @@ zephyr_include_directories("${CMAKE_CURRENT_BINARY_DIR}/include")
 if (DEFINED CONFIG_PIGWEED_LOG_TOKENIZED_LIB)
   set_property(GLOBAL APPEND PROPERTY extra_post_build_commands
     COMMAND
-      ${PYTHON_EXECUTABLE}
+      vpython3 -vpython-spec ${PLATFORM_EC}/zephyr/pigweed-vpython3
       ${ZEPHYR_PIGWEED_MODULE_DIR}/pw_tokenizer/py/pw_tokenizer/database.py
       create
       --force

@@ -22,6 +22,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     # Fingerprint boards
     "dartmonkey",
     "bloonchipper",
+    "bloonchipper-druid",
     "buccaneer",
     "helipilot",
     "nami_fp",
@@ -31,12 +32,10 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     # Boards that use CHIP:=stm32 and *not* CHIP_FAMILY:=stm32f0
     # git grep  --name-only 'CHIP:=stm32' | xargs grep -L 'CHIP_FAMILY:=stm32f0' | sed 's#board/\(.*\)/build.mk#"\1",#'
     "baklava",
-    "bellis",
     "discovery",
     "gingerbread",
     "hatch_fp",
     "hyperdebug",
-    "munna",
     "nocturne_fp",
     "nucleo-f411re",
     "nucleo-g431rb",
@@ -110,6 +109,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "brask",
     "brya",
     "bugzzy",
+    "bujia",
     "cappy2",
     "careena",
     "casta",
@@ -180,6 +180,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "nightfury",
     "nipperkin",
     "nocturne",
+    "nova",
     "npcx7_evb",
     "npcx9_evb",
     "npcx_evb",
@@ -287,9 +288,11 @@ BOARDS_THAT_FAIL_WITH_CLANG = [
     # Boards that use CHIP:=npcx
     "garg",
     # Boards that don't fit in flash with clang
+    "bellis",
     "cerise",
     "corori2",
     "cret",
+    "munna",
     "mushu",
     "volteer",
     "willow",

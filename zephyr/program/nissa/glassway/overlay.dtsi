@@ -21,11 +21,11 @@
 	};
 
 	batteries {
-		default_battery: lgc {
-			compatible = "lgc,ap18c8k", "battery-smart";
+		default_battery: getac_pg01lj3353 {
+			compatible = "getac,pg01lj3353", "battery-smart";
 		};
-		lgc_ap19b8m {
-			compatible = "lgc,ap19b8m", "battery-smart";
+		cosmx_pg01lj3353 {
+			compatible = "cosmx,pg01lj3353", "battery-smart";
 		};
 	};
 
@@ -55,26 +55,6 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "lid_interrupt";
 		};
-		int_tablet_mode: tablet_mode {
-			irq-pin = <&gpio_tablet_mode_l>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "gmr_tablet_switch_isr";
-		};
-		int_imu: ec_imu {
-			irq-pin = <&gpio_imu_int_l>;
-			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "lsm6dso_interrupt";
-		};
-		int_vol_down: vol_down {
-			irq-pin = <&gpio_voldn_btn_odl>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "button_interrupt";
-		};
-		int_vol_up: vol_up {
-			irq-pin = <&gpio_volup_btn_odl>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "button_interrupt";
-		};
 		int_usb_c0: usb_c0 {
 			irq-pin = <&gpio_usb_c0_int_odl>;
 			flags = <GPIO_INT_EDGE_FALLING>;
@@ -98,20 +78,6 @@
 			no-auto-init;
 		};
 
-		/*
-		 * Set I2C pins for type C sub-board to be low voltage (I2C5_1).
-		 * We do this for all boards, since the pins are 3.3V tolerant,
-		 * and the only 2 types of sub-boards used on nivviks both have
-		 * type-C ports on them.
-		 */
-		gpio_sb_3: sb-3 {
-			gpios = <&gpiof 4 (GPIO_OPEN_DRAIN | GPIO_VOLTAGE_1P8)>;
-			no-auto-init;
-		};
-		gpio_sb_4: sb-4 {
-			gpios = <&gpiof 5 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
-			no-auto-init;
-		};
 		gpio_fan_enable: fan-enable {
 			gpios = <&gpio6 3 GPIO_OUTPUT>;
 			no-auto-init;
@@ -130,7 +96,6 @@
 	aliases {
 		/*
 		 * Input GPIO when used with type-C port 1
-		 * Output when used with HDMI sub-board
 		 */
 		gpio-usb-c1-int-odl = &gpio_sb_1;
 		gpio-en-rails-odl = &gpio_sb_1;
@@ -138,15 +103,6 @@
 		 * Sub-board with type A USB, enable.
 		 */
 		gpio-en-usb-a1-vbus = &gpio_sb_2;
-		/*
-		 * HPD pins for HDMI sub-board.
-		 */
-		gpio-hdmi-en-odl = &gpio_sb_3;
-		gpio-hpd-odl = &gpio_sb_4;
-		/*
-		 * Enable S5 rails for LTE sub-board
-		 */
-		gpio-en-sub-s5-rails = &gpio_sb_2;
 	};
 
 	temp_memory: memory {
@@ -280,6 +236,8 @@
 			<&gpio3 3 0>,
 			<&gpio3 5 0>,
 			<&gpio3 6 0>,
+			<&gpio5 0 0>,
+			<&gpio5 6 0>,
 			<&gpio5 7 0>,
 			<&gpio6 0 0>,
 			<&gpio6 3 0>,
@@ -288,10 +246,19 @@
 			<&gpio8 3 0>,
 			<&gpio8 5 0>,
 			<&gpio8 6 0>,
+			<&gpio9 2 0>,
+			<&gpio9 3 0>,
+			<&gpio9 5 0>,
+			<&gpioa 2 0>,
 			<&gpiob 1 0>,
 			<&gpiob 7 0>,
+			<&gpioc 0 0>,
+			<&gpioc 4 0>,
+			<&gpioc 6 0>,
 			<&gpioc 7 0>,
 			<&gpiod 5 0>,
+			<&gpioe 3 0>,
+			<&gpioe 4 0>,
 			<&gpiof 2 0>,
 			<&gpiof 3 0>;
 	 };

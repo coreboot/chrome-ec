@@ -102,8 +102,8 @@ DATA_ACCESS_VIOLATION_24000000_REGEX = re.compile(
 DATA_ACCESS_VIOLATION_64020000_REGEX = re.compile(
     r"Data access violation, mfar = 64020000\r\n"
 )
-DATA_ACCESS_VIOLATION_64040000_REGEX = re.compile(
-    r"Data access violation, mfar = 64040000\r\n"
+DATA_ACCESS_VIOLATION_64030000_REGEX = re.compile(
+    r"Data access violation, mfar = 64030000\r\n"
 )
 DATA_ACCESS_VIOLATION_200B0000_REGEX = re.compile(
     r"Data access violation, mfar = 200b0000\r\n"
@@ -183,7 +183,6 @@ class BoardConfig:
     mpu_regex: object
     reboot_timeout: float
     mcu_power_supply: str
-    power_measurement_delay: int
     expected_fp_power: PowerUtilization
     expected_mcu_power: PowerUtilization
     variants: Dict
@@ -337,6 +336,9 @@ class AllTests:
                 finish_regexes=[board_config.mpu_regex],
             ),
             TestConfig(test_name="mutex"),
+            TestConfig(test_name="mutex_trylock"),
+            TestConfig(test_name="mutex_recursive"),
+            TestConfig(test_name="otp_key"),
             TestConfig(test_name="panic"),
             TestConfig(test_name="pingpong"),
             TestConfig(test_name="printf"),
@@ -481,7 +483,6 @@ BLOONCHIPPER_CONFIG = BoardConfig(
     rollback_region1_regex=DATA_ACCESS_VIOLATION_8040000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
     mcu_power_supply="ppvar_mcu_mw",
-    power_measurement_delay=0,
     expected_fp_power=PowerUtilization(
         idle=RangedValue(0.71, 0.53), sleep=RangedValue(0.69, 0.51)
     ),
@@ -507,7 +508,6 @@ DARTMONKEY_CONFIG = BoardConfig(
     rollback_region1_regex=DATA_ACCESS_VIOLATION_80E0000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_24000000_REGEX,
     mcu_power_supply="ppvar_mcu_mw",
-    power_measurement_delay=0,
     expected_fp_power=PowerUtilization(
         idle=RangedValue(0.03, 0.05), sleep=RangedValue(0.03, 0.05)
     ),
@@ -535,11 +535,9 @@ HELIPILOT_CONFIG = BoardConfig(
     servo_power_enable="fpmcu_pp3300",
     reboot_timeout=1.5,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_64020000_REGEX,
-    rollback_region1_regex=DATA_ACCESS_VIOLATION_64040000_REGEX,
+    rollback_region1_regex=DATA_ACCESS_VIOLATION_64030000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_200B0000_REGEX,
     mcu_power_supply="pp3300_mcu_mw",
-    # TODO(b/326343480): Why is this delay required for helipilot to sleep?
-    power_measurement_delay=15,
     # Power utilization numbers were experimentally derived via onboard ADCs and verified with a DMM
     expected_fp_power=PowerUtilization(
         idle=RangedValue(0.0, 0.1), sleep=RangedValue(0.0, 0.1)
@@ -845,7 +843,10 @@ def run_test(
 
     # Wait for boot to finish
     time.sleep(reboot_timeout)
-    console.write("\n".encode())
+
+    if test.apptype_to_use != ApplicationType.PRODUCTION:
+        console.write("\n".encode())
+
     if test.imagetype_to_use == ImageType.RO:
         console.write("reboot ro\n".encode())
         time.sleep(reboot_timeout)
@@ -1167,8 +1168,6 @@ def get_power_utilization(
         fp_power_signal,
         mcu_power_signal,
     ]
-
-    time.sleep(board_config.power_measurement_delay)
 
     logging.debug('Running command: "%s"', " ".join(cmd))
 
