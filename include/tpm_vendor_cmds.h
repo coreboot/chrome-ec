@@ -212,6 +212,12 @@ enum vendor_cmd_cc {
 	 */
 	VENDOR_CC_GET_CR50_METRICS = 73,
 
+	/*
+	 * Used for UMA collection for feature launch. After feature launch,
+	 * this can be removed as long as the value is reserved.
+	 */
+	VENDOR_CC_GET_AP_RO_RESET_COUNTS = 74,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 

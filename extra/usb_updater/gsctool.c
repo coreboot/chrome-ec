@@ -15,6 +15,7 @@
 #include <openssl/sha.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -3037,6 +3038,65 @@ static enum exit_values process_get_dev_ids(struct transfer_descriptor *td,
 	return noop;
 }
 
+static enum exit_values process_get_aprov_reset_counts(
+	struct transfer_descriptor *td)
+{
+	/*
+	 * We shouldn't need a version for this command since the entire
+	 * command should be removed after feature launch. However, if we
+	 * did need a version, the upper 7 bits of allow_unverified_ro are
+	 * unused.
+	 */
+	struct aprov_reset_counts {
+		uint8_t allow_unverified_ro;
+		uint8_t settings_change;
+		uint8_t external_wp;
+		uint8_t internal_wp;
+	} response;
+	size_t response_size;
+	int rv;
+	int32_t allow_unverified_sign = 1;
+
+	response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_AP_RO_RESET_COUNTS, NULL, 0,
+				 &response, &response_size);
+
+	if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr, "Error %d getting reset counts\n", rv);
+		return update_error;
+	}
+	if (response_size != sizeof(response)) {
+		fprintf(stderr,
+			"Unexpected response size %zd while getting "
+			"reset counts\n",
+			response_size);
+		return update_error;
+	}
+
+	/* Change all of the values to negative if unverified RO is allowed. */
+	if (response.allow_unverified_ro != 0)
+		allow_unverified_sign = -1;
+
+	const uint32_t combined = response.settings_change +
+				  (response.external_wp << 8) +
+				  (response.internal_wp << 16);
+
+	/*
+	 * The `cr50-metrics.conf` file depends on these string names. Do
+	 * not change without updated that file.
+	 */
+	print_machine_output("COMBINED", "0x%08x",
+			     allow_unverified_sign * combined);
+	print_machine_output("SETTINGS_CHANGE", "0x%08x",
+			     allow_unverified_sign * response.settings_change);
+	print_machine_output("EXTERNAL_WP", "0x%08x",
+			     allow_unverified_sign * response.external_wp);
+	print_machine_output("INTERNAL_WP", "0x%08x",
+			     allow_unverified_sign * response.internal_wp);
+	return noop;
+}
+
 static int process_get_apro_hash(struct transfer_descriptor *td)
 {
 	size_t response_size;
@@ -4657,6 +4717,7 @@ int main(int argc, char *argv[])
 	bool get_metrics = false;
 	bool get_chassis_open = false;
 	bool get_dev_ids = false;
+	bool get_aprov_reset_counts = false;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4831,13 +4892,27 @@ int main(int argc, char *argv[])
 			erase_boot_trace = true;
 			break;
 		case 'K':
-			/* We only support a single get_value option as of now*/
 			if (!strncasecmp(optarg, "chassis_open",
 					 strlen(optarg))) {
 				get_chassis_open = true;
 			} else if (!strncasecmp(optarg, "dev_ids",
 						strlen(optarg))) {
 				get_dev_ids = true;
+			} else if (!strncasecmp(optarg,
+						"aprov_gsc_reset_counts",
+						strlen(optarg))) {
+				/*
+				 * Note: This is a temporary command that allows
+				 * us to collect UMA metrics for how many times
+				 * the GSC would have been reset due to the AP
+				 * RO verification feature.
+				 *
+				 * Once the feature is rolled out, remove this
+				 * command line option. That is also why this
+				 * sub-command is not advertised in the help
+				 * menu.
+				 */
+				get_aprov_reset_counts = true;
 			} else {
 				fprintf(stderr,
 					"Invalid get_value argument: "
@@ -5000,7 +5075,7 @@ int main(int argc, char *argv[])
 	    !password && !reboot_gsc && !rma && !set_capability &&
 	    !show_fw_ver && !sn_bits && !sn_inc_rma && !start_apro_verify &&
 	    !openbox_desc_file && !tstamp && !tpm_mode && (wp == WP_NONE) &&
-	    !get_chassis_open && !get_dev_ids) {
+	    !get_chassis_open && !get_dev_ids && !get_aprov_reset_counts) {
 		if (optind >= argc) {
 			fprintf(stderr,
 				"\nERROR: Missing required <binary image>\n\n");
@@ -5139,6 +5214,9 @@ int main(int argc, char *argv[])
 
 	if (get_dev_ids)
 		exit(process_get_dev_ids(&td, show_machine_output));
+
+	if (get_aprov_reset_counts)
+		exit(process_get_aprov_reset_counts(&td));
 
 	if (corrupt_inactive_rw)
 		invalidate_inactive_rw(&td);
