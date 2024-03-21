@@ -98,6 +98,8 @@ enum pdc_cmd_t {
 	CMD_PDC_GET_VDO,
 	/** CMD_PDC_CONNECTOR_RESET */
 	CMD_PDC_CONNECTOR_RESET,
+	/** CMD_PDC_GET_IDENTITY_DISCOVERY */
+	CMD_PDC_GET_IDENTITY_DISCOVERY,
 
 	/** CMD_PDC_COUNT */
 	CMD_PDC_COUNT
@@ -189,6 +191,8 @@ enum src_attached_local_state_t {
 	SRC_ATTACHED_SET_PR_SWAP_POLICY,
 	/** SRC_ATTACHED_GET_VDO */
 	SRC_ATTACHED_GET_VDO,
+	/** SRC_ATTACHED_GET_PDOS */
+	SRC_ATTACHED_GET_PDOS,
 	/** SRC_ATTACHED_RUN */
 	SRC_ATTACHED_RUN,
 };
@@ -260,6 +264,7 @@ static const char *const pdc_cmd_names[] = {
 	[CMD_PDC_GET_CABLE_PROPERTY] = "PDC_GET_CABLE_PROPERTY",
 	[CMD_PDC_GET_VDO] = "PDC_GET_VDO",
 	[CMD_PDC_CONNECTOR_RESET] = "PDC_CONNECTOR_RESET",
+	[CMD_PDC_GET_IDENTITY_DISCOVERY] = "PDC_GET_IDENTITY_DISCOVERY",
 };
 
 /**
@@ -367,6 +372,10 @@ enum policy_src_attached_t {
 struct pdc_src_attached_policy_t {
 	/** SRC Attached policy flags */
 	ATOMIC_DEFINE(flags, SRC_POLICY_COUNT);
+	/** PDOs supported by the Sink */
+	uint32_t pdos[PDO_NUM];
+	/** PDO count */
+	uint8_t pdo_count;
 };
 
 /**
@@ -473,6 +482,12 @@ struct pdc_port_t {
 	uint32_t vdo[VDO_NUM];
 	/** CONNECTOR_RESET temp variable used with CMD_PDC_CONNECTOR_RESET */
 	union connector_reset_t connector_reset;
+	/** PD Port Partner discovery state: True if discovery is complete, else
+	 * false */
+	bool discovery_state;
+	/** Type of PDOs to get: SINK or SOURCE.  Used with CMD_PDC_GET_PDOS
+	 * command */
+	enum pdo_type_t pdo_type;
 };
 
 /**
@@ -937,8 +952,13 @@ static void pdc_src_attached_run(void *obj)
 		queue_internal_cmd(port, CMD_PDC_SET_PDR);
 		return;
 	case SRC_ATTACHED_GET_VDO:
-		port->src_attached_local_state = SRC_ATTACHED_RUN;
+		port->src_attached_local_state = SRC_ATTACHED_GET_PDOS;
 		queue_internal_cmd(port, CMD_PDC_GET_VDO);
+		return;
+	case SRC_ATTACHED_GET_PDOS:
+		port->src_attached_local_state = SRC_ATTACHED_RUN;
+		port->pdo_type = SINK_PDO;
+		queue_internal_cmd(port, CMD_PDC_GET_PDOS);
 		return;
 	case SRC_ATTACHED_RUN:
 		set_attached_flag(port, SRC_ATTACHED_FLAG);
@@ -1007,6 +1027,7 @@ static void pdc_snk_attached_run(void *obj)
 		return;
 	case SNK_ATTACHED_GET_PDOS:
 		port->snk_attached_local_state = SNK_ATTACHED_GET_VDO;
+		port->pdo_type = SOURCE_PDO;
 		queue_internal_cmd(port, CMD_PDC_GET_PDOS);
 		return;
 	case SNK_ATTACHED_GET_VDO:
@@ -1044,7 +1065,7 @@ static void pdc_snk_attached_run(void *obj)
 		max_mv = PDO_FIXED_GET_VOLT(port->snk_policy.pdo);
 		max_mw = max_ma * max_mv / 1000;
 
-		LOG_INF("Charging ON PORT%d\n", config->connector_num);
+		LOG_INF("Available charging on C%d\n", config->connector_num);
 		LOG_INF("PDO: %08x", port->snk_policy.pdo);
 		LOG_INF("V: %d", max_mv);
 		LOG_INF("C: %d", max_ma);
@@ -1113,8 +1134,11 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 				  port->una_policy.drp_mode);
 		break;
 	case CMD_PDC_GET_PDOS:
-		rv = pdc_get_pdos(port->pdc, SOURCE_PDO, PDO_OFFSET_0, PDO_NUM,
-				  true, &port->snk_policy.pdos[0]);
+		rv = pdc_get_pdos(port->pdc, port->pdo_type, PDO_OFFSET_0,
+				  PDO_NUM, true,
+				  (port->pdo_type == SOURCE_PDO) ?
+					  &port->snk_policy.pdos[0] :
+					  &port->src_policy.pdos[0]);
 		break;
 	case CMD_PDC_GET_RDO:
 		rv = pdc_get_rdo(port->pdc, &port->snk_policy.rdo);
@@ -1153,6 +1177,10 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 		break;
 	case CMD_PDC_CONNECTOR_RESET:
 		rv = pdc_connector_reset(port->pdc, port->connector_reset);
+		break;
+	case CMD_PDC_GET_IDENTITY_DISCOVERY:
+		rv = pdc_get_identity_discovery(port->pdc,
+						&port->discovery_state);
 		break;
 	default:
 		LOG_ERR("Invalid command: %d", port->cmd->cmd);
@@ -1595,7 +1623,6 @@ int pdc_power_mgmt_set_active_charge_port(int charge_port)
 		return 1;
 	}
 
-	/* TODO: b/319712834 - Brox: validate charging from multiple ports */
 	for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 		if (i == charge_port) {
 			pdc_data[i]->port.active_charge = true;
@@ -1931,8 +1958,24 @@ uint32_t pdc_power_mgmt_get_vbus_voltage(int port)
 
 int pdc_power_mgmt_reset(int port)
 {
-	/* Block until command completes */
-	return public_api_block(port, CMD_PDC_RESET);
+	int rv;
+
+	if (!is_pdc_port_valid(port)) {
+		return -ERANGE;
+	}
+
+	/* Instruct the PDC driver to reset itself. This resets the driver to
+	 * its initial state and re-runs the PDC setup routine commands.
+	 */
+	rv = public_api_block(port, CMD_PDC_RESET);
+	if (rv) {
+		return rv;
+	}
+
+	/* Revert back to init state */
+	set_pdc_state(&pdc_data[port]->port, PDC_INIT);
+
+	return 0;
 }
 
 uint8_t pdc_power_mgmt_get_src_cap_cnt(int port)
@@ -2196,6 +2239,75 @@ int pdc_power_mgmt_get_rev(int port, enum tcpci_msg_type type)
 	}
 
 	return rev;
+}
+
+const uint32_t *const pdc_power_mgmt_get_snk_caps(int port)
+{
+	/* Make sure port is Sink connected */
+	if (!pdc_power_mgmt_is_source_connected(port)) {
+		return NULL;
+	}
+
+	return (const uint32_t *const)pdc_data[port]->port.src_policy.pdos;
+}
+
+uint8_t pdc_power_mgmt_get_snk_cap_cnt(int port)
+{
+	/* Make sure port is Sink connected */
+	if (!pdc_power_mgmt_is_source_connected(port)) {
+		return 0;
+	}
+
+	return pdc_data[port]->port.src_policy.pdo_count;
+}
+
+struct rmdo pdc_power_mgmt_get_partner_rmdo(int port)
+{
+	struct rmdo value = { 0 };
+
+	/* The PD 3.1 Get_Revision Message is optional and currently not
+	 * supported in the PDC, although this may change in future updates. */
+
+	return value;
+}
+
+enum pd_discovery_state
+pdc_power_mgmt_get_identity_discovery(int port, enum tcpci_msg_type type)
+{
+	enum pdc_cmd_t cmd;
+	int ret;
+
+	/* Make sure port is Sink connected */
+	if (!pdc_power_mgmt_is_connected(port)) {
+		return PD_DISC_NEEDED;
+	}
+
+	switch (type) {
+	case TCPCI_MSG_SOP:
+		cmd = CMD_PDC_GET_IDENTITY_DISCOVERY;
+		break;
+	case TCPCI_MSG_SOP_PRIME:
+		cmd = CMD_PDC_GET_CABLE_PROPERTY;
+		break;
+	default:
+		return PD_DISC_FAIL;
+	}
+
+	/* Block until command completes */
+	ret = public_api_block(port, cmd);
+	if (ret) {
+		return PD_DISC_NEEDED;
+	}
+
+	if (cmd == CMD_PDC_GET_IDENTITY_DISCOVERY) {
+		return pdc_data[port]->port.discovery_state ? PD_DISC_COMPLETE :
+							      PD_DISC_FAIL;
+	} else {
+		return (pdc_data[port]->port.cable_prop.cable_type &&
+			pdc_data[port]->port.cable_prop.mode_support) ?
+			       PD_DISC_COMPLETE :
+			       PD_DISC_FAIL;
+	}
 }
 
 int pdc_power_mgmt_connector_reset(int port, enum connector_reset reset_type)

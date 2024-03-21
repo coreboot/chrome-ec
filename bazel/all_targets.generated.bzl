@@ -338,6 +338,14 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "bujia",
+        baseboard = "brask",
+        board = "bujia",
+        chip = "npcx",
+        core = "cortex-m",
+        zephyr = False,
+    )
+    ec_target(
         name = "burnet",
         baseboard = "kukui",
         board = "burnet",
@@ -1611,6 +1619,14 @@ def all_targets():
         name = "nokris",
         board = "nokris",
         extra_modules = ["cmsis"],
+    )
+    ec_target(
+        name = "nova",
+        baseboard = "brask",
+        board = "nova",
+        chip = "npcx",
+        core = "cortex-m",
+        zephyr = False,
     )
     ec_target(
         name = "npcx7",

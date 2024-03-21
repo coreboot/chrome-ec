@@ -129,6 +129,8 @@
 #define CONFIG_WP_STORAGE_SIZE CONFIG_EC_PROTECTED_STORAGE_SIZE
 #define CONFIG_WP_ACTIVE_HIGH
 
+#define CONFIG_OTP_KEY
+
 /*
  * We want to prevent flash readout, and use it as indicator of protection
  * status.
@@ -263,7 +265,7 @@
 /* EC rollback protection block */
 #define CONFIG_ROLLBACK_OFF \
 	(CONFIG_EC_PROTECTED_STORAGE_OFF + CONFIG_EC_PROTECTED_STORAGE_SIZE)
-#define CONFIG_ROLLBACK_SIZE (128 * 1024 * 2) /* 2 blocks of 128KB each */
+#define CONFIG_ROLLBACK_SIZE (64 * 1024 * 2) /* 2 blocks of 64KB each */
 
 /*-------------------------------------------------------------------------*
  * RW Signature Verification
