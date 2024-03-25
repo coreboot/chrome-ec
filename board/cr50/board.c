@@ -1899,6 +1899,18 @@ static int command_board_properties(int argc, char **argv)
 DECLARE_SAFE_CONSOLE_COMMAND(brdprop, command_board_properties,
 			     NULL, "Display board properties");
 
+static int command_clear_rollback(int argc, char **argv)
+{
+	ccprintf("Clear rollback counter and reboot\n");
+	system_clear_retry_counter();
+	cflush();
+	system_reset(0);
+
+	return EC_SUCCESS;
+}
+DECLARE_SAFE_CONSOLE_COMMAND(clear_rollback, command_clear_rollback,
+	"", "Clear the rollback counter and reboot");
+
 #ifdef CONFIG_CMD_ROLLBACK
 static int command_rollback(int argc, char **argv)
 {
