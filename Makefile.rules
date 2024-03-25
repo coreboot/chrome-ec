@@ -18,8 +18,7 @@ host-srcs := $(foreach u,$(host-util-bin),$(sort $($(u)-objs:%.o=util/%.c) $(wil
 
 # Don't do a build test on the following boards:
 skip_boards = OWNERS host kevin gru
-# TODO(b/323962993): build private boards after the symlinks are working
-boards := $(filter-out $(skip_boards),$(notdir $(wildcard board/*)))
+boards := $(filter-out $(skip_boards),$(notdir $(wildcard board/* private*/board/*)))
 
 # Create output directories if necessary
 _common_dir_create := $(foreach d,$(common_dirs) $(common-dirs-y),\
