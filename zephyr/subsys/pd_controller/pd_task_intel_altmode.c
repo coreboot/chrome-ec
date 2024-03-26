@@ -94,11 +94,15 @@ static void intel_altmode_post_event(enum intel_altmode_event event)
 static void intel_altmode_suspend_handler(struct ap_power_ev_callback *cb,
 					  struct ap_power_ev_data data)
 {
-	LOG_DBG("suspend event: 0x%x", data.event);
+	LOG_DBG("ALTMODE: suspend event: %d, 0x%x", __builtin_ctz(data.event),
+		data.event);
 
-	if (data.event == AP_POWER_RESUME) {
+	/* The retimer is only powered in in S3 and above.
+	 * Disable the altmode thread while in S5 or below.
+	 */
+	if (data.event == AP_POWER_STARTUP) {
 		resume_pd_intel_altmode_task();
-	} else if (data.event == AP_POWER_SUSPEND) {
+	} else if (data.event == AP_POWER_SHUTDOWN) {
 		suspend_pd_intel_altmode_task();
 	} else {
 		LOG_ERR("Invalid suspend event");
@@ -279,7 +283,7 @@ static void intel_altmode_thread(void *unused1, void *unused2, void *unused3)
 	/* Add callbacks for suspend hooks */
 	ap_power_ev_init_callback(&intel_altmode_task_data.cb,
 				  intel_altmode_suspend_handler,
-				  AP_POWER_RESUME | AP_POWER_SUSPEND);
+				  AP_POWER_STARTUP | AP_POWER_SHUTDOWN);
 	ap_power_ev_add_callback(&intel_altmode_task_data.cb);
 
 	/* Register PD interrupt callback */
@@ -468,5 +472,43 @@ enum tbt_compat_cable_speed get_tbt_cable_speed(int port)
 enum tbt_compat_rounded_support get_tbt_rounded_support(int port)
 {
 	return intel_altmode_task_data.data_status[port].cable_gen;
+}
+#endif
+
+#ifdef CONFIG_COMMON_RUNTIME
+/*
+ * Combines the following information into a single byte
+ * Bit 0: Active/Passive cable
+ * Bit 1: Optical/Non-optical cable
+ * Bit 2: Legacy Thunderbolt adapter
+ * Bit 3: Active Link Uni-Direction/Bi-Direction
+ * Bit 4: Retimer/Rediriver cable
+ */
+uint8_t get_pd_control_flags(int port)
+{
+	uint8_t control_flags = 0;
+
+	control_flags |=
+		intel_altmode_task_data.data_status[port].active_passive ==
+				TBT_CABLE_ACTIVE ?
+			USB_PD_CTRL_ACTIVE_CABLE :
+			0;
+	control_flags |= intel_altmode_task_data.data_status[port].cable_type ==
+					 TBT_CABLE_OPTICAL ?
+				 USB_PD_CTRL_OPTICAL_CABLE :
+				 0;
+	control_flags |= intel_altmode_task_data.data_status[port].tbt_type ==
+					 TBT_ADAPTER_TBT2_LEGACY ?
+				 USB_PD_CTRL_TBT_LEGACY_ADAPTER :
+				 0;
+	control_flags |= intel_altmode_task_data.data_status[port].usb4_tbt_lt ?
+				 USB_PD_CTRL_ACTIVE_LINK_UNIDIR :
+				 0;
+	control_flags |= intel_altmode_task_data.data_status[port].ret_redrv ==
+					 USB_RETIMER ?
+				 USB_PD_CTRL_RETIMER_CABLE :
+				 0;
+
+	return control_flags;
 }
 #endif

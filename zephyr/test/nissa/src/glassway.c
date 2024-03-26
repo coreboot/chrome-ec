@@ -15,7 +15,6 @@
 #include "led_onoff_states.h"
 #include "led_pwm.h"
 #include "mock/isl923x.h"
-#include "motionsense_sensors.h"
 #include "pwm_mock.h"
 #include "system.h"
 #include "tcpm/tcpci.h"
@@ -63,11 +62,23 @@ FAKE_VOID_FUNC(usb_interrupt_c1, enum gpio_signal);
 void board_usb_pd_count_init(void);
 static uint32_t fw_config_value;
 
-static void set_fw_config_value(uint32_t value)
+enum glassway_sub_board_type glassway_get_sb_type(void);
+
+static int
+get_fake_sub_board_fw_config_field(enum cbi_fw_config_field_id field_id,
+				   uint32_t *value)
 {
+	*value = fw_config_value;
+	return 0;
+}
+
+static void set_sb_config(uint32_t value)
+{
+	glassway_cached_sub_board = GLASSWAY_SB_UNKNOWN;
+	cros_cbi_get_fw_config_fake.custom_fake =
+		get_fake_sub_board_fw_config_field;
 	fw_config_value = value;
 	board_usb_pd_count_init();
-	fan_init();
 }
 
 static void test_before(void *fixture)
@@ -92,8 +103,11 @@ static void test_before(void *fixture)
 		emul_tcpci_generic_get_i2c_common_data(TCPC1),
 		I2C_COMMON_EMUL_NO_FAIL_REG);
 
-	glassway_cached_sub_board = GLASSWAY_SB_1C_1A;
-	set_fw_config_value(FW_SUB_BOARD_3);
+	/*
+	 * Clear cached sub-board ID from CBI and reset to the default
+	 * sub-board (side effect: cros_cbi_get_fw_config_fake is configured).
+	 */
+	set_sb_config(GLASSWAY_SB_1C_1A);
 }
 
 ZTEST_SUITE(glassway, NULL, NULL, test_before, NULL, NULL);
@@ -403,6 +417,7 @@ ZTEST(glassway, test_fan_cbi_error)
 	gpio_pin_configure_dt(GPIO_DT_FROM_NODELABEL(gpio_fan_enable),
 			      GPIO_DISCONNECTED);
 
+	RESET_FAKE(cros_cbi_get_fw_config);
 	cros_cbi_get_fw_config_fake.return_val = EINVAL;
 	fan_init();
 
@@ -412,28 +427,12 @@ ZTEST(glassway, test_fan_cbi_error)
 	zassert_equal(flags, 0, "actual GPIO flags were %#x", flags);
 }
 
-enum glassway_sub_board_type glassway_get_sb_type(void);
-
-static int
-get_fake_sub_board_fw_config_field(enum cbi_fw_config_field_id field_id,
-				   uint32_t *value)
-{
-	*value = fw_config_value;
-	return 0;
-}
-
 int init_gpios(const struct device *unused);
 
 ZTEST(glassway, test_db_without_c)
 {
-	cros_cbi_get_fw_config_fake.custom_fake =
-		get_fake_sub_board_fw_config_field;
-	/* Reset cached global state. */
-	glassway_cached_sub_board = GLASSWAY_SB_UNKNOWN;
-	fw_config_value = -1;
-
 	/* Set the sub-board, reported configuration is correct. */
-	set_fw_config_value(FW_SUB_BOARD_2);
+	set_sb_config(FW_SUB_BOARD_2);
 	zassert_equal(glassway_get_sb_type(), GLASSWAY_SB_1A);
 	zassert_equal(board_get_usb_pd_port_count(), 1);
 
@@ -442,21 +441,12 @@ ZTEST(glassway, test_db_without_c)
 
 	ASSERT_GPIO_FLAGS(GPIO_DT_FROM_NODELABEL(gpio_sb_1),
 			  GPIO_PULL_UP | GPIO_INPUT | GPIO_INT_EDGE_FALLING);
-
-	glassway_cached_sub_board = GLASSWAY_SB_1C_1A;
-	fw_config_value = -1;
 }
 
 ZTEST(glassway, test_db_with_c)
 {
-	cros_cbi_get_fw_config_fake.custom_fake =
-		get_fake_sub_board_fw_config_field;
-	/* Reset cached global state. */
-	glassway_cached_sub_board = GLASSWAY_SB_UNKNOWN;
-	fw_config_value = -1;
-
 	/* Set the sub-board, reported configuration is correct. */
-	set_fw_config_value(FW_SUB_BOARD_1);
+	set_sb_config(FW_SUB_BOARD_1);
 	zassert_equal(glassway_get_sb_type(), GLASSWAY_SB_1C);
 	zassert_equal(board_get_usb_pd_port_count(), 2);
 
@@ -466,15 +456,8 @@ ZTEST(glassway, test_db_with_c)
 	ASSERT_GPIO_FLAGS(GPIO_DT_FROM_NODELABEL(gpio_sb_1),
 			  GPIO_PULL_UP | GPIO_INPUT | GPIO_INT_EDGE_FALLING);
 
-	glassway_cached_sub_board = GLASSWAY_SB_1C;
-	fw_config_value = -1;
-
-	/* Reset cached global state. */
-	glassway_cached_sub_board = GLASSWAY_SB_UNKNOWN;
-	fw_config_value = -1;
-
 	/* Set the sub-board, reported configuration is correct. */
-	set_fw_config_value(FW_SUB_BOARD_3);
+	set_sb_config(FW_SUB_BOARD_3);
 	zassert_equal(glassway_get_sb_type(), GLASSWAY_SB_1C_1A);
 	zassert_equal(board_get_usb_pd_port_count(), 2);
 
@@ -483,9 +466,6 @@ ZTEST(glassway, test_db_with_c)
 
 	ASSERT_GPIO_FLAGS(GPIO_DT_FROM_NODELABEL(gpio_sb_1),
 			  GPIO_PULL_UP | GPIO_INPUT | GPIO_INT_EDGE_FALLING);
-
-	glassway_cached_sub_board = GLASSWAY_SB_1C_1A;
-	fw_config_value = -1;
 }
 
 ZTEST(glassway, test_led)

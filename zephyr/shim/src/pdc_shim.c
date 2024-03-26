@@ -3,6 +3,9 @@
  * found in the LICENSE file.
  */
 
+#include <zephyr/sys/atomic.h>
+#include <zephyr/toolchain/common.h>
+
 #include <usbc/pdc_power_mgmt.h>
 
 enum tcpc_cc_polarity pd_get_polarity(int port)
@@ -102,9 +105,7 @@ __override uint8_t board_get_usb_pd_port_count(void)
 
 __override int board_set_active_charge_port(int charge_port)
 {
-	/* TODO:b/326475080 */
-
-	return EC_SUCCESS;
+	return pdc_power_mgmt_set_active_charge_port(charge_port);
 }
 
 const uint32_t *const pd_get_src_caps(int port)
@@ -119,45 +120,58 @@ uint8_t pd_get_src_cap_cnt(int port)
 
 const uint32_t *const pd_get_snk_caps(int port)
 {
-	/* TODO:b/326460749 */
-
-	return NULL;
+	return pdc_power_mgmt_get_snk_caps(port);
 }
 
 uint8_t pd_get_snk_cap_cnt(int port)
 {
-	/* TODO:b/326460749 */
-
-	return 0;
+	return pdc_power_mgmt_get_snk_cap_cnt(port);
 }
 
 uint32_t pd_get_events(int port)
 {
-	/* TODO:b/326468316 */
+	/*
+	 * atomic_t (or perhaps eventually atomic_t[] with enough flags) is the
+	 * natural Zephyr data type for a bitfield of events. uint32_t is the
+	 * legacy ECOS type. Ensure that they are compatible.
+	 */
+	BUILD_ASSERT(sizeof(uint32_t) >= sizeof(atomic_t));
 
-	return 0;
+	return pdc_power_mgmt_get_events(port);
+}
+
+void pd_clear_events(int port, uint32_t clear_mask)
+{
+	pdc_power_mgmt_clear_event(port, clear_mask);
 }
 
 struct rmdo pd_get_partner_rmdo(int port)
 {
-	struct rmdo value = { 0 };
-
-	/* TODO:b/326466602 */
-
-	return value;
+	return pdc_power_mgmt_get_partner_rmdo(port);
 }
 
 enum pd_discovery_state pd_get_identity_discovery(int port,
 						  enum tcpci_msg_type type)
 {
-	/* TODO:b/326468310 */
-
-	return 0;
+	return pdc_power_mgmt_get_identity_discovery(port, type);
 }
 
 int pd_get_rev(int port, enum tcpci_msg_type type)
 {
-	/* TODO:b/326466765 */
+	return pdc_power_mgmt_get_rev(port, type);
+}
 
-	return PD_REV30;
+uint16_t pd_get_identity_vid(int port)
+{
+	return pdc_power_mgmt_get_identity_vid(port);
+}
+
+uint16_t pd_get_identity_pid(int port)
+{
+	return pdc_power_mgmt_get_identity_pid(port);
+}
+
+uint8_t pd_get_product_type(int port)
+{
+	return pdc_power_mgmt_get_product_type(port);
 }
