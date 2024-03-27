@@ -4103,9 +4103,6 @@
 #undef CONFIG_SPI
 #endif /* CONFIG_ZEPHYR */
 
-/* Support deprecated SPI protocol version 2. */
-#undef CONFIG_SPI_PROTOCOL_V2
-
 /* Define the SPI port to use to access SPI accelerometer */
 #undef CONFIG_SPI_ACCEL_PORT
 
@@ -5259,17 +5256,6 @@
 
 /* Use DAC as reference for comparator at 850mV. */
 #undef CONFIG_PD_USE_DAC_AS_REF
-
-/*
- * Request for a PDO which voltage is closest to PD_PREFER_MV for sink.
- * This config in theory could achieve better charging efficiency.  Note this
- * may not always pick the PD_PREFER_MV if available (if the PDO's
- * power not sufficient for the system), it will pick second closest PDO until
- * the system desired power is low enough to be charged by the designed PDO.
- *
- * If defined, must also define `struct pd_pref_config_t pd_pref_config`.
- */
-#undef CONFIG_USB_PD_PREFER_MV
 
 /*
  * The Fast Role Swap trigger can be implemented in either the TCPC or PPC
