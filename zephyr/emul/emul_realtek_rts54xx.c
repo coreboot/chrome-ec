@@ -294,7 +294,9 @@ static int get_connector_status(struct rts5453p_emul_pdc_data *data,
 static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 			  const union rts54_request *req)
 {
-	LOG_INF("GET_RTK_STATUS port=%d", req->get_rtk_status.port_num);
+	LOG_INF("GET_RTK_STATUS port=%d offset=%d sts_len=%d",
+		req->get_rtk_status.port_num, req->get_rtk_status.offset,
+		req->get_rtk_status.sts_len);
 
 	data->response.rtk_status.byte_count =
 		MIN(sizeof(struct get_rtk_status_response) - 1,
@@ -355,12 +357,14 @@ static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 	data->response.rtk_status.plug_direction =
 		data->connector_status.orientation & BIT_MASK(1);
 
-	/* BYTE 15-18 */
+	/* BYTE 16-17 */
 	data->response.rtk_status.average_current_low = 0;
 	data->response.rtk_status.average_current_high = 0;
 
 	uint32_t voltage = data->connector_status.voltage_reading *
 			   data->connector_status.voltage_scale * 5 / 50;
+
+	/* BYTE 18-19 */
 	data->response.rtk_status.voltage_reading_low = voltage & 0xFF;
 	data->response.rtk_status.voltage_reading_high = voltage >> 8;
 
@@ -630,9 +634,7 @@ static bool send_response(struct rts5453p_emul_pdc_data *data)
 		return true;
 	}
 
-	set_ping_status(
-		data, CMD_COMPLETE,
-		data->response.byte_count ? data->response.byte_count + 1 : 0);
+	set_ping_status(data, CMD_COMPLETE, data->response.byte_count);
 
 	return false;
 }
@@ -643,9 +645,7 @@ static void delayable_work_handler(struct k_work *w)
 	struct rts5453p_emul_pdc_data *data =
 		CONTAINER_OF(dwork, struct rts5453p_emul_pdc_data, delay_work);
 
-	set_ping_status(
-		data, CMD_COMPLETE,
-		data->response.byte_count ? data->response.byte_count + 1 : 0);
+	set_ping_status(data, CMD_COMPLETE, data->response.byte_count);
 }
 
 struct commands {
@@ -882,9 +882,25 @@ static int rts5453p_emul_read_byte(const struct emul *emul, int reg,
 		LOG_DBG("READING ping_raw_value=0x%X", data->ping_raw_value);
 		*val = data->ping_raw_value;
 	} else {
-		LOG_DBG("read_byte reg=0x%X, bytes=%d, offset=%d", reg, bytes,
-			data->read_offset);
-		*val = data->response.raw_data[bytes + data->read_offset];
+		uint8_t v;
+		int o;
+
+		/*
+		 * Response byte 0 is always .byte_count.
+		 * Remaining bytes are read starting at read_offset.
+		 * Note that the byte following .byte_count is
+		 * considered to be at offset 0.
+		 */
+		if (bytes > 0) {
+			o = bytes + data->read_offset;
+		} else {
+			o = bytes;
+		}
+
+		v = data->response.raw_data[o];
+		LOG_DBG("read_byte reg=0x%X, bytes=%d, offset=%d, val=0x%X",
+			reg, bytes, data->read_offset, v);
+		*val = v;
 	}
 
 	return 0;
