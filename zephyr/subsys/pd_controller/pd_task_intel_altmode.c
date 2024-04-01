@@ -63,13 +63,11 @@ struct intel_altmode_data {
 	struct ap_power_ev_callback cb;
 	/* Cache the dta status register */
 	union data_status_reg data_status[CONFIG_USB_PD_PORT_MAX_COUNT];
-#ifdef CONFIG_USBPD_POLL_PDC
 	/*
 	 * Used in polling mode to synchronize mux_state with PDC attached
 	 * state
 	 */
 	struct usb_mux_info_t mux_pending[CONFIG_USB_PD_PORT_MAX_COUNT];
-#endif
 };
 
 /* Generate device tree for available PDs */
@@ -134,7 +132,7 @@ static void intel_altmode_set_mux(int port, mux_state_t mux,
 	usb_mux_set(port, mux, usb_mode, polarity);
 }
 
-static void process_altmode_pd_data(int port)
+static bool process_altmode_pd_data(int port)
 {
 	int rv;
 	union data_status_reg status;
@@ -142,10 +140,8 @@ static void process_altmode_pd_data(int port)
 	union data_status_reg *prev_status =
 		&intel_altmode_task_data.data_status[port];
 	union data_control_reg control = { .i2c_int_ack = 1 };
-#ifdef CONFIG_USBPD_POLL_PDC
 	struct usb_mux_info_t *mux_pend =
 		&intel_altmode_task_data.mux_pending[port];
-#endif
 	enum usb_switch usb_mode;
 #ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
 	bool prv_hpd_lvl;
@@ -160,14 +156,14 @@ static void process_altmode_pd_data(int port)
 	rv = pd_altmode_write_control(pd_config_array[port], &control);
 	if (rv) {
 		LOG_ERR("P%d write Err=%d", port, rv);
-		return;
+		return false;
 	}
 
 	/* Read the status register */
 	rv = pd_altmode_read_status(pd_config_array[port], &status);
 	if (rv) {
 		LOG_ERR("P%d read Err=%d", port, rv);
-		return;
+		return false;
 	}
 
 #ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
@@ -178,26 +174,32 @@ static void process_altmode_pd_data(int port)
 	/* Nothing to do if the data in the status register has not changed */
 	if (!memcmp(&status.raw_value[0], prev_status,
 		    sizeof(union data_status_reg))) {
-#ifdef CONFIG_USBPD_POLL_PDC
-		/*
-		 * If the mux needs to be set to something other than NONE, the
-		 * set needs to wait until the PDC API has updated its status to
-		 * indicate the port as connected.
-		 */
-		if ((mux_pend->mux_mode != USB_PD_MUX_NONE) &&
-		    pdc_power_mgmt_is_connected(port)) {
+		/* Nothing to do if mux isn't pending */
+		if (mux_pend->mux_mode == USB_PD_MUX_NONE) {
+			return false;
+		}
+
+		/* Mux is pending. Make sure a connection is established */
+		if (pdc_power_mgmt_is_connected(port)) {
 			intel_altmode_set_mux(port, mux_pend->mux_mode,
 					      mux_pend->usb_mode,
 					      mux_pend->polarity);
 			/* Clear mux state so it's no longer pending */
 			mux_pend->mux_mode = USB_PD_MUX_NONE;
+			return false;
 		}
-#endif
-		return;
+
+		/* Mux is pending but a connection hasn't been established */
+		return true;
 	}
 
 	/* Update the new data */
 	memcpy(prev_status, &status, sizeof(union data_status_reg));
+
+	/* Log changes to aid in debugging.  MSB printed first. */
+	LOG_INF("P%d DATA_STATUS: %02x %02x %02x %02x %02x", port,
+		status.raw_value[4], status.raw_value[3], status.raw_value[2],
+		status.raw_value[1], status.raw_value[0]);
 
 	/* Process MUX events */
 
@@ -235,7 +237,6 @@ static void process_altmode_pd_data(int port)
 	usb_mode = mux == USB_PD_MUX_NONE ? USB_SWITCH_DISCONNECT :
 					    USB_SWITCH_CONNECT;
 
-#ifdef CONFIG_USBPD_POLL_PDC
 	/*
 	 * If the new desired mux state is USB_PD_MUX_NONE, then there is no
 	 * current connection and this setting can be applied
@@ -260,9 +261,6 @@ static void process_altmode_pd_data(int port)
 	mux_pend->mux_mode = mux;
 	mux_pend->usb_mode = usb_mode;
 	mux_pend->polarity = status.conn_ori;
-#else
-	intel_altmode_set_mux(port, mux, usb_mode, status.conn_ori);
-#endif
 
 #ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
 	/* Update the change in HPD level */
@@ -270,6 +268,7 @@ static void process_altmode_pd_data(int port)
 		usb_mux_hpd_update(port,
 				   status.hpd_lvl ? USB_PD_MUX_HPD_LVL : 0);
 #endif
+	return true;
 }
 
 static void intel_altmode_thread(void *unused1, void *unused2, void *unused3)
@@ -310,14 +309,20 @@ static void intel_altmode_thread(void *unused1, void *unused2, void *unused3)
 		 */
 		if (events & BIT(INTEL_ALTMODE_EVENT_FORCE)) {
 			/* Process data for any wake events on all ports */
-			for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
-				process_altmode_pd_data(i);
+			for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+				while (process_altmode_pd_data(i)) {
+					k_msleep(25);
+				}
+			}
 		} else if (events & BIT(INTEL_ALTMODE_EVENT_INTERRUPT)) {
 			/* Process data of interrupted port */
 			for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 				if (pd_altmode_is_interrupted(
-					    pd_config_array[i]))
-					process_altmode_pd_data(i);
+					    pd_config_array[i])) {
+					while (process_altmode_pd_data(i)) {
+						k_msleep(25);
+					}
+				}
 			}
 		}
 #if CONFIG_USBPD_POLL_PDC
@@ -398,10 +403,9 @@ static int cmd_altmode_read(const struct shell *sh, size_t argc, char **argv)
 		return rv;
 	}
 
-	shell_fprintf(sh, SHELL_INFO, "RD_VAL: ");
-	for (i = 0; i < INTEL_ALTMODE_DATA_STATUS_REG_LEN; i++)
-		shell_fprintf(sh, SHELL_INFO, "[%d]0x%x, ", i,
-			      status.raw_value[i]);
+	shell_fprintf(sh, SHELL_INFO, "DATA_STATUS (msb-lsb): ");
+	for (i = INTEL_ALTMODE_DATA_STATUS_REG_LEN - 1; i >= 0; i--)
+		shell_fprintf(sh, SHELL_INFO, "%02x ", status.raw_value[i]);
 
 	shell_info(sh, "");
 

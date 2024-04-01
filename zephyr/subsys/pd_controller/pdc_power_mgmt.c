@@ -256,6 +256,8 @@ enum pdc_state_t {
 	PDC_SRC_TYPEC_ONLY,
 	/** PDC_SNK_TYPEC_ONLY */
 	PDC_SNK_TYPEC_ONLY,
+	/** Stop operation */
+	PDC_SUSPENDED,
 };
 
 /**
@@ -295,6 +297,7 @@ static const char *const pdc_state_names[] = {
 	[PDC_SEND_CMD_WAIT] = "SendCmdWait",
 	[PDC_SRC_TYPEC_ONLY] = "TypeCSrcAttached",
 	[PDC_SNK_TYPEC_ONLY] = "TypeCSnkAttached",
+	[PDC_SUSPENDED] = "Suspended",
 };
 
 /**
@@ -428,6 +431,8 @@ struct pdc_port_t {
 	ATOMIC_DEFINE(cci_flags, CCI_FLAGS_COUNT);
 	/** PDC Cmd flags */
 	ATOMIC_DEFINE(pdc_cmd_flags, CMD_PDC_COUNT);
+	/** Flag to suspend the PDC Power Mgmt state machine */
+	atomic_t suspend;
 
 	/** Unattached local state variable */
 	enum unattached_local_state_t unattached_local_state;
@@ -535,10 +540,45 @@ struct pdc_config_t {
 
 static const struct smf_state pdc_states[];
 static enum pdc_state_t get_pdc_state(struct pdc_port_t *port);
+static void set_pdc_state(struct pdc_port_t *port, enum pdc_state_t next_state);
 static int pdc_subsys_init(const struct device *dev);
 static void send_cmd_init(struct pdc_port_t *port);
 static void queue_internal_cmd(struct pdc_port_t *port, enum pdc_cmd_t pdc_cmd);
 static int queue_public_cmd(struct pdc_port_t *port, enum pdc_cmd_t pdc_cmd);
+static void init_port_variables(struct pdc_port_t *port);
+
+static bool should_suspend(struct pdc_port_t *port)
+{
+	if (!atomic_get(&port->suspend)) {
+		return false;
+	}
+
+	/* Suspend has been requested. Wait until we are in a safe state. */
+
+	enum pdc_state_t current_state = get_pdc_state(port);
+
+	switch (current_state) {
+	/* Safe states to suspend from */
+	case PDC_UNATTACHED:
+	case PDC_SNK_ATTACHED:
+	case PDC_SRC_ATTACHED:
+	case PDC_SNK_TYPEC_ONLY:
+	case PDC_SRC_TYPEC_ONLY:
+		return true;
+
+	/* Wait for operation to finish. */
+	case PDC_INIT:
+	case PDC_SEND_CMD_START:
+	case PDC_SEND_CMD_WAIT:
+		return false;
+
+	/* No need to transition */
+	case PDC_SUSPENDED:
+		return false;
+	}
+
+	__builtin_unreachable();
+}
 
 /**
  * @brief PDC thread
@@ -565,6 +605,10 @@ static ALWAYS_INLINE void pdc_thread(void *pdc_dev, void *unused1,
 		 */
 		if (rv != 0) {
 			k_event_clear(&port->sm_event, PDC_SM_EVENT);
+		}
+
+		if (should_suspend(port)) {
+			set_pdc_state(port, PDC_SUSPENDED);
 		}
 
 		/* Run port connection state machine */
@@ -600,6 +644,7 @@ static ALWAYS_INLINE void pdc_thread(void *pdc_dev, void *unused1,
 			DT_INST_PROP(inst, policy), unattached_cc_mode),     \
 		.port.una_policy.drp_mode = DT_STRING_TOKEN(                 \
 			DT_INST_PROP(inst, policy), unattached_try),         \
+		.port.suspend = ATOMIC_INIT(0),                              \
 	};                                                                   \
                                                                              \
 	static struct pdc_config_t config_##inst = {                         \
@@ -711,7 +756,9 @@ static void invalidate_charger_settings(struct pdc_port_t *port)
 static int queue_public_cmd(struct pdc_port_t *port, enum pdc_cmd_t pdc_cmd)
 {
 	/* Don't send if still in init state */
-	if (get_pdc_state(port) == PDC_INIT) {
+	enum pdc_state_t s = get_pdc_state(port);
+
+	if (s == PDC_INIT || s == PDC_SUSPENDED) {
 		return -ENOTCONN;
 	}
 
@@ -747,20 +794,34 @@ static void queue_internal_cmd(struct pdc_port_t *port, enum pdc_cmd_t pdc_cmd)
 }
 
 /**
- * @brief This function should only be called after the completion of the
+ * @brief Reads connector status and takes appropriate action.
+ *
+ * This function should only be called after the completion of the
  * GET_CONNECTOR_STATUS command. It reads the connect_status,
  * power_operation_mode, and power_direction bit to determine which state should
  * be entered.
- * NOTE: This function changes state, so a return should be added
- * after it's called.
+ * Note: The caller should return after this call if it changed state (returned
+ * true).
+ *
+ * @return true if state changed, false otherwise
  */
-static void handle_connector_status(struct pdc_port_t *port)
+static bool handle_connector_status(struct pdc_port_t *port)
 {
-	if (!port->connector_status.connect_status) {
+	struct connector_status_t *status = &port->connector_status;
+	const struct pdc_config_t *config = port->dev->config;
+	int port_number = config->connector_num;
+
+	if (status->conn_status_change_bits.pd_reset_complete) {
+		LOG_INF("C%d: Reset complete indicator", port_number);
+		pdc_power_mgmt_notify_event(port_number,
+					    PD_STATUS_EVENT_HARD_RESET);
+	}
+
+	if (!status->connect_status) {
 		/* Port is not connected */
 		set_pdc_state(port, PDC_UNATTACHED);
 	} else {
-		switch (port->connector_status.power_operation_mode) {
+		switch (status->power_operation_mode) {
 		case USB_DEFAULT_OPERATION:
 			port->typec_current_ma = 500;
 			break;
@@ -769,16 +830,16 @@ static void handle_connector_status(struct pdc_port_t *port)
 			break;
 		case PD_OPERATION:
 			port->typec_current_ma = 0;
-			if (port->connector_status.power_direction) {
+			if (status->power_direction) {
 				/* Port partner is a sink device
 				 */
 				set_pdc_state(port, PDC_SRC_ATTACHED);
-				return;
+				return true;
 			} else {
 				/* Port partner is a source
 				 * device */
 				set_pdc_state(port, PDC_SNK_ATTACHED);
-				return;
+				return true;
 			}
 			break;
 		case USB_TC_CURRENT_1_5A:
@@ -793,16 +854,18 @@ static void handle_connector_status(struct pdc_port_t *port)
 		}
 
 		/* TypeC only connection */
-		if (port->connector_status.power_direction) {
+		if (status->power_direction) {
 			/* Port partner is a Typec Sink device */
 			set_pdc_state(port, PDC_SRC_TYPEC_ONLY);
-			return;
+			return true;
 		} else {
 			/* Port partner is a Typec Source device */
 			set_pdc_state(port, PDC_SNK_TYPEC_ONLY);
-			return;
+			return true;
 		}
 	}
+
+	return true;
 }
 
 /**
@@ -983,7 +1046,10 @@ static void pdc_src_attached_run(void *obj)
 		return;
 	case SRC_ATTACHED_SET_PR_SWAP_POLICY:
 		port->src_attached_local_state = SRC_ATTACHED_GET_VDO;
-		port->pdr.accept_pr_swap = 1; /* TODO read from DT */
+		/* TODO: read from DT */
+		port->pdr = (union pdr_t){ .accept_pr_swap = 1,
+					   .swap_to_src = 0,
+					   .swap_to_snk = 0 };
 		queue_internal_cmd(port, CMD_PDC_SET_PDR);
 		return;
 	case SRC_ATTACHED_GET_VDO:
@@ -1053,7 +1119,10 @@ static void pdc_snk_attached_run(void *obj)
 		return;
 	case SNK_ATTACHED_SET_PR_SWAP_POLICY:
 		port->snk_attached_local_state = SNK_ATTACHED_READ_POWER_LEVEL;
-		port->pdr.accept_pr_swap = 1; /* TODO read from DT */
+		/* TODO: read from DT */
+		port->pdr = (union pdr_t){ .accept_pr_swap = 1,
+					   .swap_to_src = 0,
+					   .swap_to_snk = 0 };
 		queue_internal_cmd(port, CMD_PDC_SET_PDR);
 		return;
 	case SNK_ATTACHED_READ_POWER_LEVEL:
@@ -1335,26 +1404,39 @@ static void pdc_send_cmd_wait_run(void *obj)
 					     CCI_CMD_COMPLETED)) {
 		LOG_DBG("CCI_CMD_COMPLETED");
 		if (port->cmd->cmd == CMD_PDC_GET_CONNECTOR_STATUS) {
-			handle_connector_status(port);
-			return;
+			if (handle_connector_status(port)) {
+				return;
+			}
 		} else {
 			set_pdc_state(port, port->send_cmd_return_state);
 			return;
 		}
-	}
-
-	port->send_cmd.wait_counter++;
-	if (port->send_cmd.wait_counter > WAIT_MAX) {
-		port->cmd->error = true;
-		if (port->cmd->cmd == CMD_PDC_GET_CONNECTOR_STATUS) {
-			/* Can't get connector status. Enter unattached state
-			 * with error flag set, so it can reset the PDC */
-			port->cmd->cmd = CMD_PDC_RESET;
-			set_pdc_state(port, PDC_UNATTACHED);
-			return;
-		} else {
-			set_pdc_state(port, port->send_cmd_return_state);
-			return;
+		/*
+		 * Note: If the command was CONNECTOR_RESET, and the type of
+		 * reset was a Hard Reset, then it would also make sense to
+		 * notify the host of PD_STATUS_EVENT_HARD_RESET. However, this
+		 * would be redundant with the notification that will be
+		 * generated later, upon completion of GET_CONNECTOR_STATUS.
+		 */
+	} else {
+		/* No response: Wait until timeout. */
+		port->send_cmd.wait_counter++;
+		if (port->send_cmd.wait_counter > WAIT_MAX) {
+			port->cmd->error = true;
+			if (port->cmd->cmd == CMD_PDC_GET_CONNECTOR_STATUS) {
+				/*
+				 * Can't get connector status. Enter unattached
+				 * state with error flag set, so it can reset
+				 * the PDC.
+				 */
+				port->cmd->cmd = CMD_PDC_RESET;
+				set_pdc_state(port, PDC_UNATTACHED);
+				return;
+			} else {
+				set_pdc_state(port,
+					      port->send_cmd_return_state);
+				return;
+			}
 		}
 	}
 }
@@ -1483,6 +1565,27 @@ static void pdc_init_run(void *obj)
 	}
 }
 
+static void pdc_suspended_entry(void *obj)
+{
+	struct pdc_port_t *port = (struct pdc_port_t *)obj;
+
+	print_current_pdc_state(port);
+}
+
+static void pdc_suspended_run(void *obj)
+{
+	struct pdc_port_t *port = (struct pdc_port_t *)obj;
+
+	if (atomic_get(&port->suspend)) {
+		/* Still suspended. Do nothing. */
+		return;
+	}
+
+	/* No longer suspended. Do a full reset. */
+	init_port_variables(port);
+	set_pdc_state(port, PDC_INIT);
+}
+
 /**
  * @brief Populate state table
  */
@@ -1504,6 +1607,8 @@ static const struct smf_state pdc_states[] = {
 		pdc_src_typec_only_entry, pdc_src_typec_only_run, NULL, NULL),
 	[PDC_SNK_TYPEC_ONLY] = SMF_CREATE_STATE(
 		pdc_snk_typec_only_entry, pdc_snk_typec_only_run, NULL, NULL),
+	[PDC_SUSPENDED] = SMF_CREATE_STATE(pdc_suspended_entry,
+					   pdc_suspended_run, NULL, NULL),
 };
 
 /**
@@ -1534,6 +1639,24 @@ static void pdc_cci_handler_cb(union cci_event_t cci_event, void *cb_data)
 	}
 }
 
+static void init_port_variables(struct pdc_port_t *port)
+{
+	/* This also seeds the Charge Manager */
+	invalidate_charger_settings(port);
+
+	/* Init port variables */
+
+	atomic_clear(port->pdc_cmd_flags);
+	atomic_clear(port->cci_flags);
+	port->port_event = ATOMIC_INIT(0);
+
+	/* Can charge from port by default */
+	port->active_charge = true;
+
+	port->last_state = PDC_INIT;
+	port->next_state = PDC_INIT;
+}
+
 /**
  * @brief Initialize the PDC Subsystem
  */
@@ -1549,17 +1672,8 @@ static int pdc_subsys_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	/* This also seeds the Charge Manager */
-	invalidate_charger_settings(port);
+	init_port_variables(port);
 
-	/* Init port variables */
-
-	atomic_clear(port->pdc_cmd_flags);
-	atomic_clear(port->cci_flags);
-	port->port_event = ATOMIC_INIT(0);
-
-	/* Can charge from port by default */
-	port->active_charge = true;
 	/* Set cci call back */
 	pdc_set_handler_cb(port->pdc, pdc_cci_handler_cb, (void *)port);
 
@@ -2094,44 +2208,43 @@ const char *pdc_power_mgmt_get_task_state_name(int port)
 
 void pdc_power_mgmt_set_dual_role(int port, enum pd_dual_role_states state)
 {
+	struct pdc_port_t *port_data = &pdc_data[port]->port;
+
 	switch (state) {
 	/* While disconnected, toggle between src and sink */
 	case PD_DRP_TOGGLE_ON:
-		pdc_data[port]->port.una_policy.cc_mode = CCOM_DRP;
-		atomic_set_bit(pdc_data[port]->port.una_policy.flags,
-			       UNA_POLICY_CC_MODE);
+		port_data->una_policy.cc_mode = CCOM_DRP;
+		atomic_set_bit(port_data->una_policy.flags, UNA_POLICY_CC_MODE);
 		break;
 	/* Stay in src until disconnect, then stay in sink forever */
 	case PD_DRP_TOGGLE_OFF:
-		pdc_data[port]->port.una_policy.cc_mode = CCOM_RD;
-		atomic_set_bit(pdc_data[port]->port.una_policy.flags,
-			       UNA_POLICY_CC_MODE);
+		port_data->una_policy.cc_mode = CCOM_RD;
+		atomic_set_bit(port_data->una_policy.flags, UNA_POLICY_CC_MODE);
 		break;
 	/* Stay in current power role, don't switch. No auto-toggle support */
 	case PD_DRP_FREEZE:
 		if (pdc_power_mgmt_is_source_connected(port)) {
-			pdc_data[port]->port.una_policy.cc_mode = CCOM_RP;
+			port_data->una_policy.cc_mode = CCOM_RP;
 		} else {
-			pdc_data[port]->port.una_policy.cc_mode = CCOM_RD;
+			port_data->una_policy.cc_mode = CCOM_RD;
 		}
-		atomic_set_bit(pdc_data[port]->port.una_policy.flags,
-			       UNA_POLICY_CC_MODE);
+		atomic_set_bit(port_data->una_policy.flags, UNA_POLICY_CC_MODE);
 		break;
 	/* Switch to sink */
 	case PD_DRP_FORCE_SINK:
 		if (pdc_power_mgmt_is_source_connected(port)) {
-			pdc_data[port]->port.pdr.swap_to_src = 0;
-			pdc_data[port]->port.pdr.swap_to_snk = 1;
-			atomic_set_bit(pdc_data[port]->port.src_policy.flags,
+			port_data->pdr.swap_to_src = 0;
+			port_data->pdr.swap_to_snk = 1;
+			atomic_set_bit(port_data->src_policy.flags,
 				       SRC_POLICY_SWAP_TO_SNK);
 		}
 		break;
 	/* Switch to source */
 	case PD_DRP_FORCE_SOURCE:
 		if (pdc_power_mgmt_is_sink_connected(port)) {
-			pdc_data[port]->port.pdr.swap_to_src = 1;
-			pdc_data[port]->port.pdr.swap_to_snk = 0;
-			atomic_set_bit(pdc_data[port]->port.snk_policy.flags,
+			port_data->pdr.swap_to_src = 1;
+			port_data->pdr.swap_to_snk = 0;
+			atomic_set_bit(port_data->snk_policy.flags,
 				       SNK_POLICY_SWAP_TO_SRC);
 		}
 		break;
@@ -2518,4 +2631,93 @@ uint8_t pdc_power_mgmt_get_product_type(int port)
 	}
 
 	return ptype;
+}
+
+/** Allow 3s for the PDC SM to suspend itself. */
+#define SUSPEND_TIMEOUT_USEC (3 * USEC_PER_SEC)
+
+/* TODO(b/323371550): This function should be adjusted to target individual PD
+ * chips rather than all ports at once. It should take a chip ID as a param and
+ * track current comms status by chip.
+ */
+int pdc_power_mgmt_set_comms_state(bool enable_comms)
+{
+	int ret;
+	int status = 0;
+	static bool current_comms_status = true;
+
+	if (enable_comms) {
+		if (current_comms_status == true) {
+			/* Comms are already enabled */
+			return -EALREADY;
+		}
+
+		/* Resume and reset the driver layer */
+		for (int p = 0; p < CONFIG_USB_PD_PORT_MAX_COUNT; p++) {
+			ret = pdc_set_comms_state(pdc_data[p]->port.pdc, true);
+			if (ret) {
+				LOG_ERR("Cannot resume port C%d driver: %d", p,
+					ret);
+				status = ret;
+			}
+		}
+
+		/* Release each PDC state machine. A reset is performed when
+		 * exiting the suspended state.
+		 */
+		for (int p = 0; p < CONFIG_USB_PD_PORT_MAX_COUNT; p++) {
+			atomic_set(&pdc_data[p]->port.suspend, 0);
+		}
+
+		if (status == 0) {
+			/* Successfully re-enabled comms */
+			current_comms_status = true;
+		}
+	} else {
+		/* Disable/suspend communications */
+
+		if (current_comms_status == false) {
+			/* Comms are already disabled */
+			return -EALREADY;
+		}
+
+		/* Request each port's PDC state machine to enter the suspend
+		 * state.
+		 */
+		for (int p = 0; p < CONFIG_USB_PD_PORT_MAX_COUNT; p++) {
+			atomic_set(&pdc_data[p]->port.suspend, 1);
+		}
+
+		/* Wait for each PDC state machine to enter suspended state */
+		for (int p = 0; p < CONFIG_USB_PD_PORT_MAX_COUNT; p++) {
+			ret = WAIT_FOR(get_pdc_state(&pdc_data[p]->port) ==
+					       PDC_SUSPENDED,
+				       SUSPEND_TIMEOUT_USEC,
+				       k_sleep(K_MSEC(LOOP_DELAY_MS)));
+			if (!ret) {
+				LOG_ERR("Timed out suspending PDC SM for port "
+					"C%d: %d",
+					p, ret);
+				status = -ETIMEDOUT;
+			}
+		}
+
+		/* Suspend the driver layer */
+		for (int p = 0; p < CONFIG_USB_PD_PORT_MAX_COUNT; p++) {
+			ret = pdc_set_comms_state(pdc_data[p]->port.pdc, false);
+
+			if (ret) {
+				LOG_ERR("Cannot suspend port C%d driver: %d", p,
+					ret);
+				status = ret;
+			}
+		}
+
+		if (status == 0) {
+			/* Successfully disabled comms */
+			current_comms_status = false;
+		}
+	}
+
+	return status;
 }

@@ -95,7 +95,7 @@ void pd_set_dual_role(int port, enum pd_dual_role_states state)
 
 void pd_set_new_power_request(int port)
 {
-	/* TODO:b/326475515 */
+	pdc_power_mgmt_set_new_power_request(port);
 }
 
 __override uint8_t board_get_usb_pd_port_count(void)
@@ -174,4 +174,28 @@ uint16_t pd_get_identity_pid(int port)
 uint8_t pd_get_product_type(int port)
 {
 	return pdc_power_mgmt_get_product_type(port);
+}
+
+void pd_comm_enable(int port, int enable)
+{
+	ARG_UNUSED(port);
+
+	(void)pdc_power_mgmt_set_comms_state(enable);
+}
+
+/* No-op on PDC devices. The suspend/enable operation is handled within
+ * pd_comm_enable() entirely.
+ */
+void pd_set_suspend(int port, int suspend)
+{
+	ARG_UNUSED(port);
+	ARG_UNUSED(suspend);
+}
+
+/**
+ * Board function for resetting the PD chips through EC_CMD_PD_CONTROL. This
+ * feature is not used on PDC devices.
+ */
+void board_reset_pd_mcu(void)
+{
 }
