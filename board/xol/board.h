@@ -10,11 +10,6 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early Xol boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
@@ -144,6 +139,10 @@
 #define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC 10
 #define CONFIG_CHARGER_BQ25710_PSYS_SENSING
+
+/* Keyboard */
+#define KEYBOARD_COLS_MAX 18
+#define CONFIG_KEYBOARD_KEYPAD
 
 #ifndef __ASSEMBLER__
 

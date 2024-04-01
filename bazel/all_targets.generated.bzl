@@ -950,6 +950,10 @@ def all_targets():
         board = "gothrax",
     )
     ec_target(
+        name = "greenbayupoc",
+        board = "greenbayupoc",
+    )
+    ec_target(
         name = "grunt",
         baseboard = "grunt",
         board = "grunt",
@@ -2365,6 +2369,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "wugtrio",
+        board = "wugtrio",
     )
     ec_target(
         name = "xivu",
