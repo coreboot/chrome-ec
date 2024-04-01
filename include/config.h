@@ -2914,9 +2914,6 @@
 /* Support SPI interfaces */
 #undef CONFIG_SPI
 
-/* Support deprecated SPI protocol version 2. */
-#undef CONFIG_SPI_PROTOCOL_V2
-
 /*
  * Support SPI periph interfaces. The first board supporting this is cr50 and
  * in its parlance SPI_PERIPH is called SPP. This convention might be
