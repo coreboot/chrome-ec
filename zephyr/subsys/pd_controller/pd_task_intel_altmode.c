@@ -21,6 +21,7 @@
 #include <ap_power/ap_power.h>
 #include <drivers/intel_altmode.h>
 #include <usbc/pd_task_intel_altmode.h>
+#include <usbc/pdc_power_mgmt.h>
 
 LOG_MODULE_DECLARE(usbpd_altmode, CONFIG_USB_PD_ALTMODE_LOG_LEVEL);
 
@@ -49,6 +50,12 @@ enum intel_altmode_event {
 	INTEL_ALTMODE_EVENT_COUNT
 };
 
+struct usb_mux_info_t {
+	mux_state_t mux_mode;
+	enum usb_switch usb_mode;
+	int polarity;
+};
+
 struct intel_altmode_data {
 	/* Driver event object to receive events posted. */
 	struct k_event evt;
@@ -56,6 +63,11 @@ struct intel_altmode_data {
 	struct ap_power_ev_callback cb;
 	/* Cache the dta status register */
 	union data_status_reg data_status[CONFIG_USB_PD_PORT_MAX_COUNT];
+	/*
+	 * Used in polling mode to synchronize mux_state with PDC attached
+	 * state
+	 */
+	struct usb_mux_info_t mux_pending[CONFIG_USB_PD_PORT_MAX_COUNT];
 };
 
 /* Generate device tree for available PDs */
@@ -80,11 +92,15 @@ static void intel_altmode_post_event(enum intel_altmode_event event)
 static void intel_altmode_suspend_handler(struct ap_power_ev_callback *cb,
 					  struct ap_power_ev_data data)
 {
-	LOG_DBG("suspend event: 0x%x", data.event);
+	LOG_DBG("ALTMODE: suspend event: %d, 0x%x", __builtin_ctz(data.event),
+		data.event);
 
-	if (data.event == AP_POWER_RESUME) {
+	/* The retimer is only powered in in S3 and above.
+	 * Disable the altmode thread while in S5 or below.
+	 */
+	if (data.event == AP_POWER_STARTUP) {
 		resume_pd_intel_altmode_task();
-	} else if (data.event == AP_POWER_SUSPEND) {
+	} else if (data.event == AP_POWER_SHUTDOWN) {
 		suspend_pd_intel_altmode_task();
 	} else {
 		LOG_ERR("Invalid suspend event");
@@ -109,7 +125,14 @@ static uint32_t intel_altmode_wait_event(void)
 	return events & INTEL_ALTMODE_EVENT_MASK;
 }
 
-static void process_altmode_pd_data(int port)
+static void intel_altmode_set_mux(int port, mux_state_t mux,
+				  enum usb_switch usb_mode, int polarity)
+{
+	LOG_INF("Set p%d mux=0x%x", port, mux);
+	usb_mux_set(port, mux, usb_mode, polarity);
+}
+
+static bool process_altmode_pd_data(int port)
 {
 	int rv;
 	union data_status_reg status;
@@ -117,6 +140,9 @@ static void process_altmode_pd_data(int port)
 	union data_status_reg *prev_status =
 		&intel_altmode_task_data.data_status[port];
 	union data_control_reg control = { .i2c_int_ack = 1 };
+	struct usb_mux_info_t *mux_pend =
+		&intel_altmode_task_data.mux_pending[port];
+	enum usb_switch usb_mode;
 #ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
 	bool prv_hpd_lvl;
 #endif
@@ -130,14 +156,14 @@ static void process_altmode_pd_data(int port)
 	rv = pd_altmode_write_control(pd_config_array[port], &control);
 	if (rv) {
 		LOG_ERR("P%d write Err=%d", port, rv);
-		return;
+		return false;
 	}
 
 	/* Read the status register */
 	rv = pd_altmode_read_status(pd_config_array[port], &status);
 	if (rv) {
 		LOG_ERR("P%d read Err=%d", port, rv);
-		return;
+		return false;
 	}
 
 #ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
@@ -147,11 +173,33 @@ static void process_altmode_pd_data(int port)
 
 	/* Nothing to do if the data in the status register has not changed */
 	if (!memcmp(&status.raw_value[0], prev_status,
-		    sizeof(union data_status_reg)))
-		return;
+		    sizeof(union data_status_reg))) {
+		/* Nothing to do if mux isn't pending */
+		if (mux_pend->mux_mode == USB_PD_MUX_NONE) {
+			return false;
+		}
+
+		/* Mux is pending. Make sure a connection is established */
+		if (pdc_power_mgmt_is_connected(port)) {
+			intel_altmode_set_mux(port, mux_pend->mux_mode,
+					      mux_pend->usb_mode,
+					      mux_pend->polarity);
+			/* Clear mux state so it's no longer pending */
+			mux_pend->mux_mode = USB_PD_MUX_NONE;
+			return false;
+		}
+
+		/* Mux is pending but a connection hasn't been established */
+		return true;
+	}
 
 	/* Update the new data */
 	memcpy(prev_status, &status, sizeof(union data_status_reg));
+
+	/* Log changes to aid in debugging.  MSB printed first. */
+	LOG_INF("P%d DATA_STATUS: %02x %02x %02x %02x %02x", port,
+		status.raw_value[4], status.raw_value[3], status.raw_value[2],
+		status.raw_value[1], status.raw_value[0]);
 
 	/* Process MUX events */
 
@@ -186,12 +234,33 @@ static void process_altmode_pd_data(int port)
 		mux |= USB_PD_MUX_USB4_ENABLED;
 #endif
 
-	LOG_INF("Set p%d mux=0x%x", port, mux);
+	usb_mode = mux == USB_PD_MUX_NONE ? USB_SWITCH_DISCONNECT :
+					    USB_SWITCH_CONNECT;
 
-	usb_mux_set(port, mux,
-		    mux == USB_PD_MUX_NONE ? USB_SWITCH_DISCONNECT :
-					     USB_SWITCH_CONNECT,
-		    status.conn_ori);
+	/*
+	 * If the new desired mux state is USB_PD_MUX_NONE, then there is no
+	 * current connection and this setting can be applied
+	 * immediately. However, other mux states imply the port is
+	 * connected. usb_set_mux() will notify the AP and the AP will then
+	 * query the port status via HC 0x0101. Setting the mux needs to be
+	 * delayed until the PDC API has had time to query connector_status and
+	 * updated its connected/disconnected status.
+	 *
+	 * TODO(b/325090383): Reevaluate if this synchronization is required
+	 * once type-c events are being reported to the AP.
+	 */
+	if (usb_mode == USB_SWITCH_DISCONNECT) {
+		intel_altmode_set_mux(port, mux, usb_mode, status.conn_ori);
+	}
+	/*
+	 * Save the desired mux state always. If the desired mux state is NONE,
+	 * then updating these values is a don't care. Otherwise, the mux set
+	 * needs to happen in conjunction with the PDC connected state which is
+	 * checked above.
+	 */
+	mux_pend->mux_mode = mux;
+	mux_pend->usb_mode = usb_mode;
+	mux_pend->polarity = status.conn_ori;
 
 #ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
 	/* Update the change in HPD level */
@@ -199,6 +268,7 @@ static void process_altmode_pd_data(int port)
 		usb_mux_hpd_update(port,
 				   status.hpd_lvl ? USB_PD_MUX_HPD_LVL : 0);
 #endif
+	return true;
 }
 
 static void intel_altmode_thread(void *unused1, void *unused2, void *unused3)
@@ -212,7 +282,7 @@ static void intel_altmode_thread(void *unused1, void *unused2, void *unused3)
 	/* Add callbacks for suspend hooks */
 	ap_power_ev_init_callback(&intel_altmode_task_data.cb,
 				  intel_altmode_suspend_handler,
-				  AP_POWER_RESUME | AP_POWER_SUSPEND);
+				  AP_POWER_STARTUP | AP_POWER_SHUTDOWN);
 	ap_power_ev_add_callback(&intel_altmode_task_data.cb);
 
 	/* Register PD interrupt callback */
@@ -239,14 +309,20 @@ static void intel_altmode_thread(void *unused1, void *unused2, void *unused3)
 		 */
 		if (events & BIT(INTEL_ALTMODE_EVENT_FORCE)) {
 			/* Process data for any wake events on all ports */
-			for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++)
-				process_altmode_pd_data(i);
+			for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+				while (process_altmode_pd_data(i)) {
+					k_msleep(25);
+				}
+			}
 		} else if (events & BIT(INTEL_ALTMODE_EVENT_INTERRUPT)) {
 			/* Process data of interrupted port */
 			for (i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 				if (pd_altmode_is_interrupted(
-					    pd_config_array[i]))
-					process_altmode_pd_data(i);
+					    pd_config_array[i])) {
+					while (process_altmode_pd_data(i)) {
+						k_msleep(25);
+					}
+				}
 			}
 		}
 #if CONFIG_USBPD_POLL_PDC
@@ -327,10 +403,9 @@ static int cmd_altmode_read(const struct shell *sh, size_t argc, char **argv)
 		return rv;
 	}
 
-	shell_fprintf(sh, SHELL_INFO, "RD_VAL: ");
-	for (i = 0; i < INTEL_ALTMODE_DATA_STATUS_REG_LEN; i++)
-		shell_fprintf(sh, SHELL_INFO, "[%d]0x%x, ", i,
-			      status.raw_value[i]);
+	shell_fprintf(sh, SHELL_INFO, "DATA_STATUS (msb-lsb): ");
+	for (i = INTEL_ALTMODE_DATA_STATUS_REG_LEN - 1; i >= 0; i--)
+		shell_fprintf(sh, SHELL_INFO, "%02x ", status.raw_value[i]);
 
 	shell_info(sh, "");
 
@@ -401,5 +476,43 @@ enum tbt_compat_cable_speed get_tbt_cable_speed(int port)
 enum tbt_compat_rounded_support get_tbt_rounded_support(int port)
 {
 	return intel_altmode_task_data.data_status[port].cable_gen;
+}
+#endif
+
+#ifdef CONFIG_COMMON_RUNTIME
+/*
+ * Combines the following information into a single byte
+ * Bit 0: Active/Passive cable
+ * Bit 1: Optical/Non-optical cable
+ * Bit 2: Legacy Thunderbolt adapter
+ * Bit 3: Active Link Uni-Direction/Bi-Direction
+ * Bit 4: Retimer/Rediriver cable
+ */
+uint8_t get_pd_control_flags(int port)
+{
+	uint8_t control_flags = 0;
+
+	control_flags |=
+		intel_altmode_task_data.data_status[port].active_passive ==
+				TBT_CABLE_ACTIVE ?
+			USB_PD_CTRL_ACTIVE_CABLE :
+			0;
+	control_flags |= intel_altmode_task_data.data_status[port].cable_type ==
+					 TBT_CABLE_OPTICAL ?
+				 USB_PD_CTRL_OPTICAL_CABLE :
+				 0;
+	control_flags |= intel_altmode_task_data.data_status[port].tbt_type ==
+					 TBT_ADAPTER_TBT2_LEGACY ?
+				 USB_PD_CTRL_TBT_LEGACY_ADAPTER :
+				 0;
+	control_flags |= intel_altmode_task_data.data_status[port].usb4_tbt_lt ?
+				 USB_PD_CTRL_ACTIVE_LINK_UNIDIR :
+				 0;
+	control_flags |= intel_altmode_task_data.data_status[port].ret_redrv ==
+					 USB_RETIMER ?
+				 USB_PD_CTRL_RETIMER_CABLE :
+				 0;
+
+	return control_flags;
 }
 #endif

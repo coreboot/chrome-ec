@@ -176,6 +176,7 @@ if(DEFINED CONFIG_BOARD_CRAASKOV)
 	zephyr_library_sources(
 			"craaskov/src/keyboard.c"
 			"craaskov/src/hdmi.c"
+			"craaskov/src/touch_panel.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "craaskov/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "craaskov/src/charger.c")
@@ -224,7 +225,6 @@ endif()
 if(DEFINED CONFIG_BOARD_GLASSWAY)
 	project(glassway)
 	zephyr_library_sources(
-			"glassway/src/led.c"
 			"glassway/src/sub_board.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "glassway/src/fan.c")

@@ -125,6 +125,13 @@ typedef int (*pdc_get_current_flash_bank_t)(const struct device *dev,
 					    uint8_t *bank);
 typedef int (*pdc_update_retimer_fw_t)(const struct device *dev, bool enable);
 typedef bool (*pdc_is_init_done_t)(const struct device *dev);
+typedef int (*pdc_get_cable_property_t)(const struct device *dev,
+					union cable_property_t *cable_prop);
+typedef int (*pdc_get_vdo_t)(const struct device *dev, union get_vdo_t req,
+			     uint8_t *req_list, uint32_t *vdo);
+typedef int (*pdc_get_identity_discovery_t)(const struct device *dev,
+					    bool *disc_state);
+typedef int (*pdc_set_comms_state_t)(const struct device *dev, bool active);
 
 /**
  * @cond INTERNAL_HIDDEN
@@ -157,6 +164,10 @@ __subsystem struct pdc_driver_api_t {
 	pdc_reconnect_t reconnect;
 	pdc_get_current_flash_bank_t get_current_flash_bank;
 	pdc_update_retimer_fw_t update_retimer;
+	pdc_get_cable_property_t get_cable_property;
+	pdc_get_vdo_t get_vdo;
+	pdc_get_identity_discovery_t get_identity_discovery;
+	pdc_set_comms_state_t set_comms_state;
 };
 /**
  * @endcond
@@ -521,7 +532,8 @@ static inline int pdc_get_vbus_voltage(const struct device *dev,
 	const struct pdc_driver_api_t *api =
 		(const struct pdc_driver_api_t *)dev->api;
 
-	__ASSERT(api->get_vbus_voltage != NULL, "GET_RDO is not optional");
+	__ASSERT(api->get_vbus_voltage != NULL,
+		 "GET_VBUS_VOLTAGE is not optional");
 
 	return api->get_vbus_voltage(dev, voltage);
 }
@@ -783,6 +795,102 @@ static inline int pdc_update_retimer_fw(const struct device *dev, bool enable)
 	}
 
 	return api->update_retimer(dev, enable);
+}
+
+/**
+ * @brief Gets the attached cable properties
+ * @note CCI Events set
+ *           busy: if PDC is busy
+ *           error: treated as non-emarker cable
+ *           command_commpleted: capability was retrieved
+ *
+ * @param dev PDC device structure pointer
+ * @param cable_prop pointer where the cable properties are stored
+ *
+ * @retval 0 on success
+ * @retval -EBUSY if not ready to execute the command
+ * @retval -EINVAL if caps is NULL
+ */
+static inline int pdc_get_cable_property(const struct device *dev,
+					 union cable_property_t *cable_prop)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	__ASSERT(api->get_cable_property != NULL,
+		 "GET_CABLE_PROPERTY is not optional");
+
+	return api->get_cable_property(dev, cable_prop);
+}
+
+/**
+ * @brief Get the Requested VDO objects
+ * @note CCI Events set
+ *           busy: if PDC is busy
+ *           error:
+ *           command_commpleted: if the VDOs were retrieved
+ *
+ * @param dev PDC device structure pointer
+ * @param vdo pointer to where the VDOs are stored
+ *
+ * @retval 0 on success
+ * @retval -EBUSY if not ready to execute the command
+ * @retval -EINVAL if vdo pointer is NULL
+ */
+static inline int pdc_get_vdo(const struct device *dev, union get_vdo_t vdo_req,
+			      uint8_t *vdo_list, uint32_t *vdo)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	__ASSERT(api->get_vdo != NULL, "GET_VDO is not optional");
+
+	return api->get_vdo(dev, vdo_req, vdo_list, vdo);
+}
+
+/**
+ * @brief get the state of the discovery process
+ *
+ * @param dev PDC device structure pointer
+ * @param disc_state pointer where the discovery state is stored. True if
+ * discovery is complete, else False
+ *
+ * @retval 0 on success
+ * @retval -ENOSYS if not implemented
+ * @retval -EINVAL if disc_state is NULL
+ */
+static inline int pdc_get_identity_discovery(const struct device *dev,
+					     bool *disc_state)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	if (api->get_identity_discovery == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->get_identity_discovery(dev, disc_state);
+}
+
+/**
+ * @brief Control if the driver can communicate with the PDC.
+ *
+ * @param dev PDC device structure pointer
+ * @param comms_active True to allow PDC communication, false to end
+ *        communication
+ *
+ * @retval 0 if success
+ */
+static inline int pdc_set_comms_state(const struct device *dev,
+				      bool comms_active)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	__ASSERT(api->set_comms_state != NULL,
+		 "set_comms_state is not optional");
+
+	return api->set_comms_state(dev, comms_active);
 }
 
 #ifdef __cplusplus

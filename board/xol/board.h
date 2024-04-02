@@ -10,11 +10,6 @@
 
 #include "compile_time_macros.h"
 
-/*
- * Early Xol boards are not set up for vivaldi
- */
-#undef CONFIG_KEYBOARD_VIVALDI
-
 /* Baseboard features */
 #include "baseboard.h"
 
@@ -140,12 +135,14 @@
 #define CONFIG_FANS FAN_CH_COUNT
 
 /* Charger defines */
-#define CONFIG_CHARGER_BQ25720
-#define CONFIG_CHARGER_BQ25720_VSYS_TH2_CUSTOM
-#define CONFIG_CHARGER_BQ25720_VSYS_TH2_DV 70
+#define CONFIG_CHARGER_BQ25710
 #define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR 10
 #define CONFIG_CHARGER_BQ25710_SENSE_RESISTOR_AC 10
 #define CONFIG_CHARGER_BQ25710_PSYS_SENSING
+
+/* Keyboard */
+#define KEYBOARD_COLS_MAX 18
+#define CONFIG_KEYBOARD_KEYPAD
 
 #ifndef __ASSEMBLER__
 
@@ -169,7 +166,7 @@ enum temp_sensor_id {
 
 enum ioex_port { IOEX_C0_NCT38XX = 0, IOEX_C2_NCT38XX, IOEX_PORT_COUNT };
 
-enum battery_type { BATTERY_SDI, BATTERY_TYPE_COUNT };
+enum battery_type { BATTERY_SDI, BATTERY_SWD, BATTERY_TYPE_COUNT };
 
 enum pwm_channel {
 	PWM_CH_KBLIGHT = 0, /* PWM3 */

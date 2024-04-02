@@ -44,6 +44,8 @@ test-list-y = \
        mpu \
        mutex \
        mutex_trylock \
+       mutex_recursive \
+       otp_key \
        panic \
        panic_data \
        pingpong \

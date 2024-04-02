@@ -51,6 +51,15 @@ MEMORY
 #ifdef CONFIG_DRAM_BASE
 	DRAM (rwx) : ORIGIN = CONFIG_DRAM_BASE, LENGTH = CONFIG_DRAM_SIZE
 #endif
+
+#if defined(CHIP_VARIANT_MT8195) && defined(CONFIG_CHIP_MEMORY_REGIONS)
+#define REGION(name, attr, start, size) \
+	name(attr) : ORIGIN = (start), LENGTH = (size)
+#define REGION_LOAD REGION
+#include "memory_regions.inc"
+#undef REGION
+#undef REGION_LOAD
+#endif /* CONFIG_MEMORY_REGIONS */
 }
 
 SECTIONS
@@ -132,6 +141,10 @@ SECTIONS
 		__hooks_init = .;
 		KEEP(*(.rodata.HOOK_INIT))
 		__hooks_init_end = .;
+
+		__hooks_init_early = .;
+		KEEP(*(.rodata.HOOK_EARLY_INIT))
+		__hooks_init_early_end = .;
 
 		__hooks_pre_freq_change = .;
 		KEEP(*(.rodata.HOOK_PRE_FREQ_CHANGE))
@@ -474,6 +487,30 @@ SECTIONS
 		__dram_bss_end = .;
 	} > DRAM
 #endif /* CONFIG_DRAM_BASE */
+
+#if defined(CHIP_VARIANT_MT8195) && defined(CONFIG_CHIP_MEMORY_REGIONS)
+#define REGION(name, attr, start, size) \
+	.name(NOLOAD) : { \
+		. = ALIGN(4); \
+		__##name##_start = .; \
+		KEEP(*(SORT(.name.keep.*))) \
+		*(SORT(.name.*)) \
+		. = ALIGN(4); \
+		__##name##_end = .; \
+	} > name
+#define REGION_LOAD(name, attr, start, size) \
+	.name : { \
+		. = ALIGN(4); \
+		__##name##_start = .; \
+		KEEP(*(SORT(.name.keep.*))) \
+		*(SORT(.name.*)) \
+		. = ALIGN(4); \
+		__##name##_end = .; \
+	} > name
+#include "memory_regions.inc"
+#undef REGION
+#undef REGION_LOAD
+#endif /* CONFIG_CHIP_MEMORY_REGIONS */
 
 #if !(defined(SECTION_IS_RO) && defined(CONFIG_FLASH_CROS))
 	/DISCARD/ : { *(.google) }

@@ -185,6 +185,44 @@ enum power_operation_mode_t {
 };
 
 /**
+ * @brief List of possible VDO message origins
+ */
+enum vdo_origin_t {
+	/** Retrieve VDO from PDC port */
+	VDO_ORIGIN_PORT = 0,
+	/** Retrieve VDO from port partner */
+	VDO_ORIGIN_SOP = 1,
+	/** Retrieve VDO from port cable (SOP') */
+	VDO_ORIGIN_SOP_PRIME = 2,
+	/** Retrieve VDO from port cable (SOP'') */
+	VDO_ORIGIN_SOP_PRIME_PRIME = 3,
+};
+
+/**
+ * @brief
+ * List of types of VDOs that can be retrieved via the Realtek GET_VDO command.
+ * Refer to GET_VDO command details in section 4.2 Realtek Power Delivery
+ * Command Interface spec
+ */
+enum vdo_type_t {
+	VDO_ID_HEADER = 1,
+	VDO_CERT_STATE = 2,
+	VDO_PRODUCT = 3,
+	VDO_PRODUCT_TYPE_1 = 4,
+	VDO_PRODUCT_TYPE_2 = 5,
+	VDO_PRODUCT_TYPE_3 = 6,
+	VDO_SVID_RESPONSE_1 = 7,
+	VDO_SVID_RESPONSE_2 = 8,
+	VDO_SVID_RESPONSE_3 = 9,
+	VDO_SVID_RESPONSE_4 = 10,
+	VDO_SVID_RESPONSE_5 = 11,
+	VDO_SVID_RESPONSE_6 = 12,
+	VDO_PD_DP_CAPS = 13,
+	VDO_PD_DP_STATUS = 14,
+	VDO_PD_DP_CFG = 15,
+};
+
+/**
  * @brief CCI - USB Type-C Command Status and Connector Change Indication
  */
 union cci_event_t {
@@ -735,6 +773,101 @@ struct connector_status_t {
 };
 
 /**
+ * @brief Plug End Type
+ */
+enum plug_end_t {
+	/** Type A */
+	USB_TYPE_A = 0,
+	/** Type B */
+	USB_TYPE_B = 1,
+	/** Type C */
+	USB_TYPE_C = 2,
+	/** Not USB */
+	USB_TYPE_OTHER = 3
+};
+
+/**
+ * @brief Cable Property
+ */
+union cable_property_t {
+	struct {
+		/* first 32-bit value */
+
+		/**
+		 * Supported cable speed.
+		 *
+		 * Bits[1:0]
+		 * Speed Exponent (SE). This field
+		 * defines the base 10 exponent times 3,
+		 * that shall be applied to the Speed
+		 * Mantissa (SM) when calculating the
+		 * maximum bit rate that this Cable
+		 * supports.
+		 *
+		 * Bits[15:2]
+		 * This field defines the mantissa that
+		 * shall be applied to the SE when
+		 * calculating the maximum bit rate.
+		 */
+		uint32_t bm_speed_supported : 16;
+		/**
+		 * Return the amount of current the cable is designed
+		 * for in 50ma units.
+		 */
+		uint32_t b_current_capablilty : 8;
+		/**
+		 * The PPM shall set this field to a one if the cable
+		 * has a VBUS connection from end to end.
+		 */
+		uint32_t vbus_in_cable : 1;
+		/**
+		 * The PPM shall set this field to one if the cable is
+		 * an Active cable otherwise it shall set this field to
+		 * zero if the cable is a Passive cable.
+		 */
+		uint32_t cable_type : 1;
+		/**
+		 * The PPM shall set this field to one if the lane
+		 * directionality is configurable else it shall set this
+		 * field to zero if the lane directionality is fixed in
+		 * the cable.
+		 */
+		uint32_t directionality : 1;
+		/**
+		 * Plug type.
+		 */
+		enum plug_end_t plug_end_type : 2;
+		/**
+		 * This field shall only be valid if the CableType field
+		 * is set to one. This field shall indicate that the cable
+		 * supports Alternate Modes.
+		 *
+		 * The OPM can use the GET_ALTERNATE_MODE command to get
+		 * the list of modes this cable supports.
+		 */
+		uint32_t mode_support : 1;
+		/**
+		 * Cable’s major USB PD Revision from the Specification
+		 * Revision field of the USB PD Message Header.
+		 */
+		uint32_t cable_pd_revision : 2;
+
+		/* second 32-bit value */
+
+		/**
+		 * See Table 6-41 in the [USBPD] for additional
+		 * information on the contents of this field.
+		 */
+		uint32_t latency : 4;
+		/**
+		 * Reserved
+		 */
+		uint32_t reserved : 28;
+	};
+	uint32_t raw_value[2];
+};
+
+/**
  * @brief Option Features
  */
 union bmOptionalFeatures_t {
@@ -1011,6 +1144,26 @@ union connector_reset_t {
 		 * else the reset type is HARD_RESET
 		 */
 		uint8_t reset_type : 1;
+	};
+	uint8_t raw_value;
+};
+
+/**
+ * @brief GET_VDO command
+ */
+union get_vdo_t {
+	struct {
+		/**
+		 * Number of VDOs requested
+		 */
+		uint8_t num_vdos : 3;
+		/**
+		 * Used to specify if VDOs requested are from the PDC,
+		 * port parter, or cable.
+		 */
+		uint8_t vdo_origin : 2;
+		/** Reserved, set to 0. */
+		uint8_t reserved : 3;
 	};
 	uint8_t raw_value;
 };

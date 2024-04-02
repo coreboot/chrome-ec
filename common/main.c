@@ -110,6 +110,15 @@ test_mockable __keep int main(void)
 	       (uintptr_t)(&__dram_data_end) - (uintptr_t)(&__dram_data_start));
 #endif
 
+#if defined(CHIP_VARIANT_MT8195) && defined(CONFIG_CHIP_MEMORY_REGIONS)
+	/* clear up NOLOAD region. */
+#define REGION(name, attr, start, size) \
+	memset(&__##name##_start, 0,    \
+	       (uintptr_t)(&__##name##_end) - (uintptr_t)(&__##name##_start));
+#include "memory_regions.inc"
+#undef REGION
+#endif
+
 #if defined(CONFIG_FLASH_PHYSICAL)
 	/*
 	 * Initialize flash and apply write protect if necessary.  Requires
@@ -210,6 +219,12 @@ test_mockable __keep int main(void)
 			board_pre_task_i2c_peripheral_init();
 		}
 	}
+
+	/*
+	 * Copy this line in case you need even earlier hooks instead of moving
+	 * it. Callbacks of this type are expected to handle multiple calls.
+	 */
+	hook_notify(HOOK_INIT_EARLY);
 
 #ifdef HAS_TASK_KEYSCAN
 

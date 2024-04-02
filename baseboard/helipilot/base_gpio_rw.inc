@@ -10,7 +10,6 @@
 
 /* Interrupts */
 GPIO_INT(FP_MCU_INT_L,         PIN(B, 0), GPIO_INT_RISING, fps_event)
-GPIO_INT(SLP_L,                PIN(A, 0), GPIO_INT_BOTH, slp_event)
 
 /* Inputs */
 GPIO(FP_SENSOR_SEL,            PIN(4, 4), GPIO_INPUT)
@@ -18,6 +17,7 @@ GPIO(FP_SENSOR_SEL,            PIN(4, 4), GPIO_INPUT)
 /* Outputs */
 GPIO(FP_RST_ODL,               PIN(9, 6),  GPIO_OUT_HIGH)
 GPIO(SPI_MCU_CS_FP_L,          PIN(A, 6),  GPIO_OUT_HIGH)
+GPIO(USER_PRES_L,              PIN(A, 5),  GPIO_ODR_HIGH)
 
 /* SPIP - to fingerprint sensor */
 /* SPIP_MOSI/SPIP_SCLK GPIOA3/A1 */

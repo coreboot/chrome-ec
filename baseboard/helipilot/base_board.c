@@ -36,6 +36,25 @@ int console_is_restricted(void)
 /* Must come after other header files. */
 #include "gpio_list.h"
 
+static void ap_deferred(void)
+{
+	/*
+	 * Behavior:
+	 * AP Active  (ex. Intel S0):   SLP_L is 1
+	 * AP Suspend (ex. Intel S0ix): SLP_L is 0
+	 */
+	int running = gpio_get_level(GPIO_SLP_L);
+
+	if (running) { /* S0 */
+		disable_sleep(SLEEP_MASK_AP_RUN);
+		hook_notify(HOOK_CHIPSET_RESUME);
+	} else { /* S0ix */
+		hook_notify(HOOK_CHIPSET_SUSPEND);
+		enable_sleep(SLEEP_MASK_AP_RUN);
+	}
+}
+DECLARE_DEFERRED(ap_deferred);
+
 static void board_init_transport(void)
 {
 	enum fp_transport_type ret_transport = get_fp_transport_type();
@@ -80,13 +99,29 @@ static void board_init(void)
 
 	board_init_transport();
 
-	if (IS_ENABLED(SECTION_IS_RW)) {
-		board_init_rw();
-	}
+	/* Enable interrupt on PCH power signals */
+	gpio_enable_interrupt(GPIO_SLP_L);
 
 	/* Initialize trng peripheral before kicking off the application to
 	 * avoid incurring that cost when generating random numbers
 	 */
 	npcx_trng_hw_init();
+
+	if (IS_ENABLED(SECTION_IS_RW)) {
+		board_init_rw();
+	}
+
+	/*
+	 * Enable the SPI slave interface if the PCH is up.
+	 * Do not use hook_call_deferred(), because ap_deferred() will be
+	 * called after tasks with priority higher than HOOK task (very late).
+	 */
+	ap_deferred();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+/* PCH power state changes */
+void slp_event(enum gpio_signal signal)
+{
+	hook_call_deferred(&ap_deferred_data, 0);
+}

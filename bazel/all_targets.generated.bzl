@@ -338,6 +338,14 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "bujia",
+        baseboard = "brask",
+        board = "bujia",
+        chip = "npcx",
+        core = "cortex-m",
+        zephyr = False,
+    )
+    ec_target(
         name = "burnet",
         baseboard = "kukui",
         board = "burnet",
@@ -940,6 +948,10 @@ def all_targets():
     ec_target(
         name = "gothrax",
         board = "gothrax",
+    )
+    ec_target(
+        name = "greenbayupoc",
+        board = "greenbayupoc",
     )
     ec_target(
         name = "grunt",
@@ -1611,6 +1623,14 @@ def all_targets():
         name = "nokris",
         board = "nokris",
         extra_modules = ["cmsis"],
+    )
+    ec_target(
+        name = "nova",
+        baseboard = "brask",
+        board = "nova",
+        chip = "npcx",
+        core = "cortex-m",
+        zephyr = False,
     )
     ec_target(
         name = "npcx7",
@@ -2349,6 +2369,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "wugtrio",
+        board = "wugtrio",
     )
     ec_target(
         name = "xivu",
