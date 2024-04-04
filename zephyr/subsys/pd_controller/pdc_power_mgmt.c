@@ -481,7 +481,7 @@ struct pdc_port_t {
 	union connector_capability_t ccaps;
 	/** CONNECTOR_STATUS temp variable used with CONNECTOR_GET_STATUS
 	 * command */
-	struct connector_status_t connector_status;
+	union connector_status_t connector_status;
 	/** SINK_PATH_EN temp variable used with CMD_PDC_SET_SINK_PATH command
 	 */
 	bool sink_path_en;
@@ -807,11 +807,14 @@ static void queue_internal_cmd(struct pdc_port_t *port, enum pdc_cmd_t pdc_cmd)
  */
 static bool handle_connector_status(struct pdc_port_t *port)
 {
-	struct connector_status_t *status = &port->connector_status;
+	union connector_status_t *status = &port->connector_status;
 	const struct pdc_config_t *config = port->dev->config;
 	int port_number = config->connector_num;
+	union conn_status_change_bits_t conn_status_change_bits;
 
-	if (status->conn_status_change_bits.pd_reset_complete) {
+	conn_status_change_bits.raw_value = status->raw_conn_status_change_bits;
+
+	if (conn_status_change_bits.pd_reset_complete) {
 		LOG_INF("C%d: Reset complete indicator", port_number);
 		pdc_power_mgmt_notify_event(port_number,
 					    PD_STATUS_EVENT_HARD_RESET);
@@ -1849,8 +1852,11 @@ void pdc_power_mgmt_set_new_power_request(int port)
 
 uint8_t pdc_power_mgmt_get_task_state(int port)
 {
-	/* TODO */
-	return 0;
+	if (!is_pdc_port_valid(port)) {
+		return PDC_UNATTACHED;
+	}
+
+	return get_pdc_state(&pdc_data[port]->port);
 }
 
 int pdc_power_mgmt_comm_is_enabled(int port)
@@ -2720,4 +2726,24 @@ int pdc_power_mgmt_set_comms_state(bool enable_comms)
 	}
 
 	return status;
+}
+
+int pdc_power_mgmt_get_connector_status(
+	int port, union connector_status_t *connector_status)
+{
+	struct pdc_port_t *pdc;
+
+	if (!is_pdc_port_valid(port)) {
+		return -ERANGE;
+	}
+
+	if (connector_status == NULL) {
+		return -EINVAL;
+	}
+
+	pdc = &pdc_data[port]->port;
+
+	*connector_status = pdc->connector_status;
+
+	return 0;
 }
