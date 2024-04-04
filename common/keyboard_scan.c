@@ -102,7 +102,7 @@ BUILD_ASSERT(ARRAY_SIZE(boot_key_list) == BOOT_KEY_COUNT);
 static uint32_t boot_key_value = BOOT_KEY_NONE;
 #endif
 
-uint8_t keyboard_cols = KEYBOARD_COLS_MAX;
+uint8_t keyboard_cols = KEYBOARD_COLS;
 
 /* Debounced key matrix */
 static uint8_t debounced_state[KEYBOARD_COLS_MAX];
@@ -139,6 +139,16 @@ static volatile int force_poll;
 
 /* Indicates keyboard_scan_task has started. */
 test_export_static uint8_t keyboard_scan_task_started;
+
+uint8_t keyboard_get_cols(void)
+{
+	return keyboard_cols;
+}
+
+void keyboard_set_cols(uint8_t cols)
+{
+	keyboard_cols = cols;
+}
 
 test_export_static int keyboard_scan_is_enabled(void)
 {
@@ -421,7 +431,7 @@ test_export_static uint8_t key_vol_up_col = KEYBOARD_DEFAULT_COL_VOL_UP;
 
 void set_vol_up_key(uint8_t row, uint8_t col)
 {
-	if (col < KEYBOARD_COLS_MAX && row < KEYBOARD_ROWS) {
+	if (col < keyboard_cols && row < KEYBOARD_ROWS) {
 		key_vol_up_row = row;
 		key_vol_up_col = col;
 	}
