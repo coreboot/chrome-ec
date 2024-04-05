@@ -98,7 +98,7 @@ typedef int (*pdc_set_uor_t)(const struct device *dev, union uor_t uor);
 typedef int (*pdc_set_pdr_t)(const struct device *dev, union pdr_t pdr);
 typedef int (*pdc_set_sink_path_t)(const struct device *dev, bool en);
 typedef int (*pdc_get_connector_status_t)(
-	const struct device *dev, struct connector_status_t *connector_status);
+	const struct device *dev, union connector_status_t *connector_status);
 typedef int (*pdc_get_error_status_t)(const struct device *dev,
 				      union error_status_t *es);
 typedef void (*pdc_cci_handler_cb_t)(union cci_event_t cci_event,
@@ -132,6 +132,8 @@ typedef int (*pdc_get_vdo_t)(const struct device *dev, union get_vdo_t req,
 typedef int (*pdc_get_identity_discovery_t)(const struct device *dev,
 					    bool *disc_state);
 typedef int (*pdc_set_comms_state_t)(const struct device *dev, bool active);
+typedef int (*pdc_is_vconn_sourcing_t)(const struct device *dev,
+				       bool *vconn_sourcing);
 
 /**
  * @cond INTERNAL_HIDDEN
@@ -168,6 +170,7 @@ __subsystem struct pdc_driver_api_t {
 	pdc_get_vdo_t get_vdo;
 	pdc_get_identity_discovery_t get_identity_discovery;
 	pdc_set_comms_state_t set_comms_state;
+	pdc_is_vconn_sourcing_t is_vconn_sourcing;
 };
 /**
  * @endcond
@@ -352,7 +355,7 @@ static inline int pdc_get_capability(const struct device *dev,
  */
 static inline int
 pdc_get_connector_status(const struct device *dev,
-			 struct connector_status_t *connector_status)
+			 union connector_status_t *connector_status)
 {
 	const struct pdc_driver_api_t *api =
 		(const struct pdc_driver_api_t *)dev->api;
@@ -891,6 +894,29 @@ static inline int pdc_set_comms_state(const struct device *dev,
 		 "set_comms_state is not optional");
 
 	return api->set_comms_state(dev, comms_active);
+}
+
+/**
+ * @brief Checks if the port is sourcing VCONN
+ *
+ * @param dev PDC device structure pointer
+ * @param vconn_sourcing True if the port is sourcing VCONN, else false
+ *
+ * @retval 0 if success
+ * @retval -ENOSYS if not implemented
+ * @retval -EINVAL if vconn_sourcing is NULL
+ */
+static inline int pdc_is_vconn_sourcing(const struct device *dev,
+					bool *vconn_sourcing)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	if (api->is_vconn_sourcing == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->is_vconn_sourcing(dev, vconn_sourcing);
 }
 
 #ifdef __cplusplus

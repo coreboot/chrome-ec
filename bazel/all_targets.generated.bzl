@@ -409,6 +409,15 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "cherry_scp_core1",
+        baseboard = "mtscp-rv32i",
+        board = "cherry_scp_core1",
+        chip = "mt_scp",
+        core = "riscv-rv32i",
+        real_board = "cherry_scp",
+        zephyr = False,
+    )
+    ec_target(
         name = "chinchou",
         board = "chinchou",
     )
@@ -899,6 +908,23 @@ def all_targets():
     ec_target(
         name = "geralt",
         board = "geralt",
+    )
+    ec_target(
+        name = "geralt_scp",
+        baseboard = "mtscp-rv32i",
+        board = "geralt_scp",
+        chip = "mt_scp",
+        core = "riscv-rv32i",
+        zephyr = False,
+    )
+    ec_target(
+        name = "geralt_scp_core1",
+        baseboard = "mtscp-rv32i",
+        board = "geralt_scp_core1",
+        chip = "mt_scp",
+        core = "riscv-rv32i",
+        real_board = "geralt_scp",
+        zephyr = False,
     )
     ec_target(
         name = "gimble",

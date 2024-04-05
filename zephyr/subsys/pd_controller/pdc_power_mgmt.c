@@ -110,7 +110,8 @@ enum pdc_cmd_t {
 	CMD_PDC_CONNECTOR_RESET,
 	/** CMD_PDC_GET_IDENTITY_DISCOVERY */
 	CMD_PDC_GET_IDENTITY_DISCOVERY,
-
+	/** CMD_PDC_IS_SOURCING_VCONN */
+	CMD_PDC_IS_VCONN_SOURCING,
 	/** CMD_PDC_COUNT */
 	CMD_PDC_COUNT
 };
@@ -481,7 +482,7 @@ struct pdc_port_t {
 	union connector_capability_t ccaps;
 	/** CONNECTOR_STATUS temp variable used with CONNECTOR_GET_STATUS
 	 * command */
-	struct connector_status_t connector_status;
+	union connector_status_t connector_status;
 	/** SINK_PATH_EN temp variable used with CMD_PDC_SET_SINK_PATH command
 	 */
 	bool sink_path_en;
@@ -511,6 +512,8 @@ struct pdc_port_t {
 	enum pdo_type_t pdo_type;
 	/** Charge current while in TypeC Sink state */
 	uint32_t typec_current_ma;
+	/** Buffer used by public api to receive data from the driver */
+	uint8_t *public_api_buff;
 };
 
 /**
@@ -807,11 +810,14 @@ static void queue_internal_cmd(struct pdc_port_t *port, enum pdc_cmd_t pdc_cmd)
  */
 static bool handle_connector_status(struct pdc_port_t *port)
 {
-	struct connector_status_t *status = &port->connector_status;
+	union connector_status_t *status = &port->connector_status;
 	const struct pdc_config_t *config = port->dev->config;
 	int port_number = config->connector_num;
+	union conn_status_change_bits_t conn_status_change_bits;
 
-	if (status->conn_status_change_bits.pd_reset_complete) {
+	conn_status_change_bits.raw_value = status->raw_conn_status_change_bits;
+
+	if (conn_status_change_bits.pd_reset_complete) {
 		LOG_INF("C%d: Reset complete indicator", port_number);
 		pdc_power_mgmt_notify_event(port_number,
 					    PD_STATUS_EVENT_HARD_RESET);
@@ -1290,6 +1296,13 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 		rv = pdc_get_identity_discovery(port->pdc,
 						&port->discovery_state);
 		break;
+	case CMD_PDC_IS_VCONN_SOURCING:
+		if (port->public_api_buff == NULL) {
+			return -EINVAL;
+		}
+		rv = pdc_is_vconn_sourcing(port->pdc,
+					   (bool *)port->public_api_buff);
+		break;
 	default:
 		LOG_ERR("Invalid command: %d", port->cmd->cmd);
 		return -EIO;
@@ -1560,6 +1573,7 @@ static void pdc_init_run(void *obj)
 		 */
 		port->send_cmd.intern.cmd = CMD_PDC_GET_CONNECTOR_STATUS;
 		port->send_cmd.intern.pending = true;
+		port->public_api_buff = NULL;
 		set_pdc_state(port, PDC_SEND_CMD_START);
 		return;
 	}
@@ -1849,30 +1863,44 @@ void pdc_power_mgmt_set_new_power_request(int port)
 
 uint8_t pdc_power_mgmt_get_task_state(int port)
 {
-	/* TODO */
-	return 0;
+	if (!is_pdc_port_valid(port)) {
+		return PDC_UNATTACHED;
+	}
+
+	return get_pdc_state(&pdc_data[port]->port);
 }
 
 int pdc_power_mgmt_comm_is_enabled(int port)
 {
-	/* Make sure port is connected */
-	if (!pdc_power_mgmt_is_connected(port)) {
-		return false;
+	if (pdc_power_mgmt_is_sink_connected(port) ||
+	    pdc_power_mgmt_is_source_connected(port)) {
+		return true;
 	}
 
-	/* TODO */
-	return true;
+	return false;
 }
 
 bool pdc_power_mgmt_get_vconn_state(int port)
 {
-	/* Make sure port is connected */
-	if (!pdc_power_mgmt_is_connected(port)) {
+	bool vconn_sourcing;
+
+	/* Make sure port is source connected */
+	if (!pdc_power_mgmt_is_source_connected(port)) {
 		return false;
 	}
 
-	/* TODO: Add driver support for this */
-	return true;
+	pdc_data[port]->port.public_api_buff = (uint8_t *)&vconn_sourcing;
+
+	/* Block until command completes */
+	if (public_api_block(port, CMD_PDC_IS_VCONN_SOURCING)) {
+		/* something went wrong */
+		pdc_data[port]->port.public_api_buff = NULL;
+		return false;
+	}
+
+	pdc_data[port]->port.public_api_buff = NULL;
+
+	return vconn_sourcing;
 }
 
 bool pdc_power_mgmt_get_partner_usb_comm_capable(int port)
@@ -2720,4 +2748,24 @@ int pdc_power_mgmt_set_comms_state(bool enable_comms)
 	}
 
 	return status;
+}
+
+int pdc_power_mgmt_get_connector_status(
+	int port, union connector_status_t *connector_status)
+{
+	struct pdc_port_t *pdc;
+
+	if (!is_pdc_port_valid(port)) {
+		return -ERANGE;
+	}
+
+	if (connector_status == NULL) {
+		return -EINVAL;
+	}
+
+	pdc = &pdc_data[port]->port;
+
+	*connector_status = pdc->connector_status;
+
+	return 0;
 }
