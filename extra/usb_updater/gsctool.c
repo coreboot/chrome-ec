@@ -15,6 +15,7 @@
 #include <openssl/sha.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -542,8 +543,7 @@ static const struct option_container cmd_line_options[] = {
 	{ { "verbose", no_argument, NULL, 'V' }, "Enable debug messages" },
 	{ { "version", no_argument, NULL, 'v' },
 	  "Report this utility version" },
-	{ { "metrics", no_argument, NULL, 'W' },
-	  "Get GSC metrics"},
+	{ { "metrics", no_argument, NULL, 'W' }, "Get GSC metrics" },
 	{ { "wp", optional_argument, NULL, 'w' },
 	  "[enable|disable|follow]%Get or set the write protect setting" },
 	{ { "clog", no_argument, NULL, 'x' },
@@ -3038,6 +3038,65 @@ static enum exit_values process_get_dev_ids(struct transfer_descriptor *td,
 	return noop;
 }
 
+static enum exit_values process_get_aprov_reset_counts(
+	struct transfer_descriptor *td)
+{
+	/*
+	 * We shouldn't need a version for this command since the entire
+	 * command should be removed after feature launch. However, if we
+	 * did need a version, the upper 7 bits of allow_unverified_ro are
+	 * unused.
+	 */
+	struct aprov_reset_counts {
+		uint8_t allow_unverified_ro;
+		uint8_t settings_change;
+		uint8_t external_wp;
+		uint8_t internal_wp;
+	} response;
+	size_t response_size;
+	int rv;
+	int32_t allow_unverified_sign = 1;
+
+	response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_AP_RO_RESET_COUNTS, NULL, 0,
+				 &response, &response_size);
+
+	if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr, "Error %d getting reset counts\n", rv);
+		return update_error;
+	}
+	if (response_size != sizeof(response)) {
+		fprintf(stderr,
+			"Unexpected response size %zd while getting "
+			"reset counts\n",
+			response_size);
+		return update_error;
+	}
+
+	/* Change all of the values to negative if unverified RO is allowed. */
+	if (response.allow_unverified_ro != 0)
+		allow_unverified_sign = -1;
+
+	const uint32_t combined = response.settings_change +
+				  (response.external_wp << 8) +
+				  (response.internal_wp << 16);
+
+	/*
+	 * The `cr50-metrics.conf` file depends on these string names. Do
+	 * not change without updated that file.
+	 */
+	print_machine_output("COMBINED", "0x%08x",
+			     allow_unverified_sign * combined);
+	print_machine_output("SETTINGS_CHANGE", "0x%08x",
+			     allow_unverified_sign * response.settings_change);
+	print_machine_output("EXTERNAL_WP", "0x%08x",
+			     allow_unverified_sign * response.external_wp);
+	print_machine_output("INTERNAL_WP", "0x%08x",
+			     allow_unverified_sign * response.internal_wp);
+	return noop;
+}
+
 static int process_get_apro_hash(struct transfer_descriptor *td)
 {
 	size_t response_size;
@@ -4317,77 +4376,97 @@ static int process_get_time(struct transfer_descriptor *td)
 	return 0;
 }
 
-static int print_ti50_stats(struct ti50_stats_v0 *stats, size_t size)
+static int print_ti50_stats(struct ti50_stats_v0 *stats_v0, size_t size)
 {
-	stats->fs_init_time = be32toh(stats->fs_init_time);
-	stats->fs_usage = be32toh(stats->fs_usage);
-	stats->aprov_time = be32toh(stats->aprov_time);
-	stats->expanded_aprov_status = be32toh(stats->expanded_aprov_status);
+	stats_v0->fs_init_time = be32toh(stats_v0->fs_init_time);
+	stats_v0->fs_usage = be32toh(stats_v0->fs_usage);
+	stats_v0->aprov_time = be32toh(stats_v0->aprov_time);
+	stats_v0->expanded_aprov_status =
+		be32toh(stats_v0->expanded_aprov_status);
 
-	printf("fs_init_time:          %d\n", stats->fs_init_time);
-	printf("fs_usage:              %d\n", stats->fs_usage);
-	printf("aprov_time:            %d\n", stats->aprov_time);
-	printf("expanded_aprov_status: %X\n", stats->expanded_aprov_status);
+	printf("fs_init_time:          %d\n", stats_v0->fs_init_time);
+	printf("fs_usage:              %d\n", stats_v0->fs_usage);
+	printf("aprov_time:            %d\n", stats_v0->aprov_time);
+	printf("expanded_aprov_status: %X\n", stats_v0->expanded_aprov_status);
 
 	if (size >= sizeof(struct ti50_stats_v1)) {
-		struct ti50_stats_v1 *stats_v1 = (struct ti50_stats_v1 *) stats;
+		struct ti50_stats_v1 *stats_v1 =
+			(struct ti50_stats_v1 *)stats_v0;
 
 		stats_v1->misc_status = be32toh(stats_v1->misc_status);
 		uint32_t bits_used = stats_v1->misc_status >>
-			METRICSV_BITS_USED_SHIFT;
+				     METRICSV_BITS_USED_SHIFT;
 		if (bits_used >= 4) {
 			printf("rdd_keepalive:         %d\n",
-				stats_v1->misc_status &
-				METRICSV_RDD_KEEP_ALIVE_MASK);
+			       stats_v1->misc_status &
+				       METRICSV_RDD_KEEP_ALIVE_MASK);
 			printf("rdd_keepalive_at_boot: %d\n",
-				(stats_v1->misc_status &
-				METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK)
-				>> METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT);
+			       (stats_v1->misc_status &
+				METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK) >>
+				       METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT);
 			printf("ccd_mode:              %d\n",
-				(stats_v1->misc_status & METRICSV_CCD_MODE_MASK)
-				>> METRICSV_CCD_MODE_SHIFT);
+			       (stats_v1->misc_status &
+				METRICSV_CCD_MODE_MASK) >>
+				       METRICSV_CCD_MODE_SHIFT);
 		}
 	}
-	if (size >= sizeof(struct ti50_stats_v2)) {
-		struct ti50_stats_v2 *stats_v2 = (struct ti50_stats_v2 *) stats;
+	if (size >= sizeof(struct ti50_stats)) {
+		struct ti50_stats *stats = (struct ti50_stats *)stats_v0;
 
 		/* Version was added with v2 and therefore must be >= 2. */
-		if (stats_v2->version < 2) {
-			printf("Invalid stats version %d.", stats_v2->version);
+		if (stats->version < 2) {
+			printf("Invalid stats version %d.", stats->version);
 			return 1;
 		}
 
-		stats_v2->filesystem_busy_count =
-		    be32toh(stats_v2->filesystem_busy_count);
-		stats_v2->crypto_busy_count =
-		    be32toh(stats_v2->crypto_busy_count);
-		stats_v2->dispatcher_busy_count =
-		    be32toh(stats_v2->dispatcher_busy_count);
-		stats_v2->timeslices_expired =
-		    be32toh(stats_v2->timeslices_expired);
-		stats_v2->crypto_init_time =
-		    be32toh(stats_v2->crypto_init_time);
+		stats->filesystem_busy_count =
+			be32toh(stats->filesystem_busy_count);
+		stats->crypto_busy_count = be32toh(stats->crypto_busy_count);
+		stats->dispatcher_busy_count =
+			be32toh(stats->dispatcher_busy_count);
+		stats->timeslices_expired = be32toh(stats->timeslices_expired);
+		stats->crypto_init_time = be32toh(stats->crypto_init_time);
 
 		printf("filesystem_busy_count: %d\n",
-			stats_v2->filesystem_busy_count);
-		printf("crypto_busy_count:     %d\n",
-			stats_v2->crypto_busy_count);
+		       stats->filesystem_busy_count);
+		printf("crypto_busy_count:     %d\n", stats->crypto_busy_count);
 		printf("dispatcher_busy_count: %d\n",
-			stats_v2->dispatcher_busy_count);
+		       stats->dispatcher_busy_count);
 		printf("timeslices_expired:    %d\n",
-			stats_v2->timeslices_expired);
-		printf("crypto_init_time:      %d\n",
-			stats_v2->crypto_init_time);
+		       stats->timeslices_expired);
+		printf("crypto_init_time:      %d\n", stats->crypto_init_time);
+
+		/* Display version 3 metrics */
+		if (stats->version >= 3) {
+			/*
+			 * Note that
+			 * `stats->v1.misc_status >> METRICSV_BITS_USED_SHIFT`
+			 * value should also be >= 7, but version 3 >= should be
+			 * enough to know that these fields are present.
+			 */
+			printf("wp_asserted:           %d\n",
+			       (stats->v1.misc_status &
+				METRICSV_WP_ASSERTED_MASK) >>
+				       METRICSV_WP_ASSERTED_SHIFT);
+			printf("allow_unverified_ro:   %d\n",
+			       (stats->v1.misc_status &
+				METRICSV_ALLOW_UNVERIFIED_RO_MASK) >>
+				       METRICSV_ALLOW_UNVERIFIED_RO_SHIFT);
+			printf("is_prod:               %d\n",
+			       (stats->v1.misc_status &
+				METRICSV_IS_PROD_MASK) >>
+				       METRICSV_IS_PROD_SHIFT);
+		}
 	}
 	return 0;
 }
 
 static int process_ti50_get_metrics(struct transfer_descriptor *td,
-		bool show_machine_output)
+				    bool show_machine_output)
 {
 	uint32_t rv;
 	/* Allocate extra space in case future versions add more data. */
-	struct ti50_stats_v2 response[4];
+	struct ti50_stats response[4];
 	size_t response_size = sizeof(response);
 
 	rv = send_vendor_command(td, VENDOR_CC_GET_TI50_STATS, NULL, 0,
@@ -4408,14 +4487,14 @@ static int process_ti50_get_metrics(struct transfer_descriptor *td,
 		for (size_t i = 0; i < response_size; i++)
 			printf("%02X", raw_response[i]);
 	} else {
-		return print_ti50_stats((struct ti50_stats_v0 *) response,
+		return print_ti50_stats((struct ti50_stats_v0 *)response,
 					response_size);
 	}
 	return 0;
 }
 
 static int process_cr50_get_metrics(struct transfer_descriptor *td,
-		bool show_machine_output)
+				    bool show_machine_output)
 {
 	/* Allocate extra space in case future versions add more data. */
 	struct cr50_stats_response response[4] = {};
@@ -4423,8 +4502,8 @@ static int process_cr50_get_metrics(struct transfer_descriptor *td,
 	struct cr50_stats_response stats;
 	uint32_t rv;
 
-	rv = send_vendor_command(td, VENDOR_CC_GET_CR50_METRICS, NULL,
-				 0, (uint8_t *) &response, &response_size);
+	rv = send_vendor_command(td, VENDOR_CC_GET_CR50_METRICS, NULL, 0,
+				 (uint8_t *)&response, &response_size);
 	if (rv != VENDOR_RC_SUCCESS) {
 		printf("Get stats failed. (%X)\n", rv);
 		return 1;
@@ -4441,43 +4520,33 @@ static int process_cr50_get_metrics(struct transfer_descriptor *td,
 	stats.version = be32toh(stats.version);
 	stats.reset_src = be32toh(stats.reset_src);
 	stats.brdprop = be32toh(stats.brdprop);
-	stats.reset_time_s =
-		be64toh(stats.reset_time_s);
-	stats.cold_reset_time_s =
-		be32toh(stats.cold_reset_time_s);
+	stats.reset_time_s = be64toh(stats.reset_time_s);
+	stats.cold_reset_time_s = be32toh(stats.cold_reset_time_s);
 	stats.misc_status = be32toh(stats.misc_status);
 
 	if (stats.version > CR50_METRICSV_STATS_VERSION) {
 		fprintf(stderr, "unsupported ver - %d. supports up to %d\n",
 			stats.version, CR50_METRICSV_STATS_VERSION);
 	}
-	printf("version:           %10u\n",
-			stats.version);
-	printf("reset_src:       0x%010x\n",
-			stats.reset_src);
-	printf("brdprop:         0x%010x\n",
-			stats.brdprop);
-	printf("cold_reset_time_s: %10u\n",
-			stats.cold_reset_time_s);
-	printf("reset_time_s:      %10u\n",
-			stats.reset_time_s);
-	printf("misc_status:     0x%010x\n",
-			stats.misc_status);
+	printf("version:           %10u\n", stats.version);
+	printf("reset_src:       0x%010x\n", stats.reset_src);
+	printf("brdprop:         0x%010x\n", stats.brdprop);
+	printf("cold_reset_time_s: %10u\n", stats.cold_reset_time_s);
+	printf("reset_time_s:      %10u\n", stats.reset_time_s);
+	printf("misc_status:     0x%010x\n", stats.misc_status);
 
 	printf("   rdd detected:      %7d\n",
-		(stats.misc_status >> CR50_METRICSV_RDD_IS_DETECTED_SHIFT) & 1);
+	       (stats.misc_status >> CR50_METRICSV_RDD_IS_DETECTED_SHIFT) & 1);
 	printf("   rddkeeplive en:    %7d\n",
-		(stats.misc_status >>
-		 CR50_METRICSV_RDD_KEEPALIVE_EN_SHIFT) & 1);
+	       (stats.misc_status >> CR50_METRICSV_RDD_KEEPALIVE_EN_SHIFT) & 1);
 	printf("   rddkeeplive en atboot: %3d\n",
-		(stats.misc_status >>
-		 CR50_METRICSV_RDD_KEEPALIVE_EN_ATBOOT_SHIFT) & 1);
+	       (stats.misc_status >>
+		CR50_METRICSV_RDD_KEEPALIVE_EN_ATBOOT_SHIFT) &
+		       1);
 	printf("   ccd_mode en:       %7d\n",
-		(stats.misc_status >>
-		 CR50_METRICSV_CCD_MODE_EN_SHIFT) & 1);
+	       (stats.misc_status >> CR50_METRICSV_CCD_MODE_EN_SHIFT) & 1);
 	printf("   ambigous straps:   %7d\n",
-		(stats.misc_status >>
-		 CR50_METRICSV_AMBIGUOUS_STRAP_SHIFT) & 1);
+	       (stats.misc_status >> CR50_METRICSV_AMBIGUOUS_STRAP_SHIFT) & 1);
 
 	return 0;
 }
@@ -4492,8 +4561,9 @@ static int process_cr50_get_metrics(struct transfer_descriptor *td,
 #define MAX_TIME_MS	    (1 << TIME_SHIFT)
 static const char *const boot_tracer_stages[] = {
 	"Timespan", /* This one will not be displayed separately. */
-	"ProjectStart",	   "EcRstAsserted", "EcRstDeasserted", "TpmRstAsserted",
-	"TpmRstDeasserted", "FirstApComms",  "PcrExtension",    "TpmAppReady"
+	"ProjectStart",	  "EcRstAsserted",    "EcRstDeasserted",
+	"TpmRstAsserted", "TpmRstDeasserted", "FirstApComms",
+	"PcrExtension",	  "TpmAppReady"
 };
 
 static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
@@ -4647,6 +4717,7 @@ int main(int argc, char *argv[])
 	bool get_metrics = false;
 	bool get_chassis_open = false;
 	bool get_dev_ids = false;
+	bool get_aprov_reset_counts = false;
 
 	/*
 	 * All options which result in setting a Boolean flag to True, along
@@ -4821,13 +4892,27 @@ int main(int argc, char *argv[])
 			erase_boot_trace = true;
 			break;
 		case 'K':
-			/* We only support a single get_value option as of now*/
 			if (!strncasecmp(optarg, "chassis_open",
 					 strlen(optarg))) {
 				get_chassis_open = true;
 			} else if (!strncasecmp(optarg, "dev_ids",
 						strlen(optarg))) {
 				get_dev_ids = true;
+			} else if (!strncasecmp(optarg,
+						"aprov_gsc_reset_counts",
+						strlen(optarg))) {
+				/*
+				 * Note: This is a temporary command that allows
+				 * us to collect UMA metrics for how many times
+				 * the GSC would have been reset due to the AP
+				 * RO verification feature.
+				 *
+				 * Once the feature is rolled out, remove this
+				 * command line option. That is also why this
+				 * sub-command is not advertised in the help
+				 * menu.
+				 */
+				get_aprov_reset_counts = true;
 			} else {
 				fprintf(stderr,
 					"Invalid get_value argument: "
@@ -4990,7 +5075,7 @@ int main(int argc, char *argv[])
 	    !password && !reboot_gsc && !rma && !set_capability &&
 	    !show_fw_ver && !sn_bits && !sn_inc_rma && !start_apro_verify &&
 	    !openbox_desc_file && !tstamp && !tpm_mode && (wp == WP_NONE) &&
-	    !get_chassis_open && !get_dev_ids) {
+	    !get_chassis_open && !get_dev_ids && !get_aprov_reset_counts) {
 		if (optind >= argc) {
 			fprintf(stderr,
 				"\nERROR: Missing required <binary image>\n\n");
@@ -5129,6 +5214,9 @@ int main(int argc, char *argv[])
 
 	if (get_dev_ids)
 		exit(process_get_dev_ids(&td, show_machine_output));
+
+	if (get_aprov_reset_counts)
+		exit(process_get_aprov_reset_counts(&td));
 
 	if (corrupt_inactive_rw)
 		invalidate_inactive_rw(&td);

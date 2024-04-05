@@ -5,7 +5,7 @@
 
 use core::fmt;
 use enum_utils::enum_as;
-use zerocopy::{transmute, AsBytes, FromBytes};
+use zerocopy::{transmute, AsBytes, FromBytes, FromZeroes};
 
 /// The result type used throughout AP RO verification.
 pub type Result<T> = core::result::Result<T, VerifyError>;
@@ -424,7 +424,7 @@ pub enum StatusRegister {
 }
 
 #[repr(C, align(4))]
-#[derive(AsBytes, FromBytes, Clone, Copy)]
+#[derive(AsBytes, FromBytes, FromZeroes, Clone, Copy)]
 pub struct WriteProtectDescriptor {
     expected_value: ByteWithInverse,
     mask: ByteWithInverse,
@@ -436,7 +436,7 @@ pub struct WriteProtectDescriptor {
 /// since writes can only clear bits.
 /// It also allows for more flexible filling in of individual values than a checksum.
 #[repr(C)]
-#[derive(AsBytes, FromBytes, Clone, Copy)]
+#[derive(AsBytes, FromBytes, FromZeroes, Clone, Copy)]
 struct ByteWithInverse {
     value: u8,
 
