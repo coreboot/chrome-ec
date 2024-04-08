@@ -110,7 +110,8 @@ enum pdc_cmd_t {
 	CMD_PDC_CONNECTOR_RESET,
 	/** CMD_PDC_GET_IDENTITY_DISCOVERY */
 	CMD_PDC_GET_IDENTITY_DISCOVERY,
-
+	/** CMD_PDC_IS_SOURCING_VCONN */
+	CMD_PDC_IS_VCONN_SOURCING,
 	/** CMD_PDC_COUNT */
 	CMD_PDC_COUNT
 };
@@ -258,6 +259,9 @@ enum pdc_state_t {
 	PDC_SNK_TYPEC_ONLY,
 	/** Stop operation */
 	PDC_SUSPENDED,
+
+	/** State count. Always leave as last item. */
+	PDC_STATE_COUNT,
 };
 
 /**
@@ -299,6 +303,9 @@ static const char *const pdc_state_names[] = {
 	[PDC_SNK_TYPEC_ONLY] = "TypeCSnkAttached",
 	[PDC_SUSPENDED] = "Suspended",
 };
+
+BUILD_ASSERT(ARRAY_SIZE(pdc_state_names) == PDC_STATE_COUNT,
+	     "pdc_state_names array has wrong number of elements");
 
 /**
  * @brief Unattached policy flags
@@ -511,6 +518,8 @@ struct pdc_port_t {
 	enum pdo_type_t pdo_type;
 	/** Charge current while in TypeC Sink state */
 	uint32_t typec_current_ma;
+	/** Buffer used by public api to receive data from the driver */
+	uint8_t *public_api_buff;
 };
 
 /**
@@ -575,6 +584,9 @@ static bool should_suspend(struct pdc_port_t *port)
 	/* No need to transition */
 	case PDC_SUSPENDED:
 		return false;
+
+	case PDC_STATE_COUNT:
+		__ASSERT(0, "Invalid state");
 	}
 
 	__builtin_unreachable();
@@ -1293,6 +1305,13 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 		rv = pdc_get_identity_discovery(port->pdc,
 						&port->discovery_state);
 		break;
+	case CMD_PDC_IS_VCONN_SOURCING:
+		if (port->public_api_buff == NULL) {
+			return -EINVAL;
+		}
+		rv = pdc_is_vconn_sourcing(port->pdc,
+					   (bool *)port->public_api_buff);
+		break;
 	default:
 		LOG_ERR("Invalid command: %d", port->cmd->cmd);
 		return -EIO;
@@ -1563,6 +1582,7 @@ static void pdc_init_run(void *obj)
 		 */
 		port->send_cmd.intern.cmd = CMD_PDC_GET_CONNECTOR_STATUS;
 		port->send_cmd.intern.pending = true;
+		port->public_api_buff = NULL;
 		set_pdc_state(port, PDC_SEND_CMD_START);
 		return;
 	}
@@ -1861,24 +1881,35 @@ uint8_t pdc_power_mgmt_get_task_state(int port)
 
 int pdc_power_mgmt_comm_is_enabled(int port)
 {
-	/* Make sure port is connected */
-	if (!pdc_power_mgmt_is_connected(port)) {
-		return false;
+	if (pdc_power_mgmt_is_sink_connected(port) ||
+	    pdc_power_mgmt_is_source_connected(port)) {
+		return true;
 	}
 
-	/* TODO */
-	return true;
+	return false;
 }
 
 bool pdc_power_mgmt_get_vconn_state(int port)
 {
-	/* Make sure port is connected */
-	if (!pdc_power_mgmt_is_connected(port)) {
+	bool vconn_sourcing;
+
+	/* Make sure port is source connected */
+	if (!pdc_power_mgmt_is_source_connected(port)) {
 		return false;
 	}
 
-	/* TODO: Add driver support for this */
-	return true;
+	pdc_data[port]->port.public_api_buff = (uint8_t *)&vconn_sourcing;
+
+	/* Block until command completes */
+	if (public_api_block(port, CMD_PDC_IS_VCONN_SOURCING)) {
+		/* something went wrong */
+		pdc_data[port]->port.public_api_buff = NULL;
+		return false;
+	}
+
+	pdc_data[port]->port.public_api_buff = NULL;
+
+	return vconn_sourcing;
 }
 
 bool pdc_power_mgmt_get_partner_usb_comm_capable(int port)
@@ -2209,7 +2240,20 @@ const uint32_t *const pdc_power_mgmt_get_src_caps(int port)
 
 const char *pdc_power_mgmt_get_task_state_name(int port)
 {
-	return pdc_state_names[get_pdc_state(&pdc_data[port]->port)];
+	enum pdc_state_t indicated_state,
+		actual_state = get_pdc_state(&pdc_data[port]->port);
+
+	/* For a transitional state, report the return-to state instead */
+	switch (actual_state) {
+	case PDC_SEND_CMD_START:
+	case PDC_SEND_CMD_WAIT:
+		indicated_state = pdc_data[port]->port.send_cmd_return_state;
+		break;
+	default:
+		indicated_state = actual_state;
+	}
+
+	return pdc_state_names[indicated_state];
 }
 
 void pdc_power_mgmt_set_dual_role(int port, enum pd_dual_role_states state)
