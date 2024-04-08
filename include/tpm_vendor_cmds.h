@@ -212,6 +212,12 @@ enum vendor_cmd_cc {
 	 */
 	VENDOR_CC_GET_CR50_METRICS = 73,
 
+	/*
+	 * Used for UMA collection for feature launch. After feature launch,
+	 * this can be removed as long as the value is reserved.
+	 */
+	VENDOR_CC_GET_AP_RO_RESET_COUNTS = 74,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 
@@ -359,8 +365,9 @@ struct ti50_stats_v1 {
 /*
  * Keep in sync with
  * ti50/common/applications/sys_mgr/src/tpm_vendor/metrics.rs
+ * The latest time new fields were added as version 2.
  */
-struct ti50_stats_v2 {
+struct ti50_stats {
 	struct ti50_stats_v1 v1;
 	uint32_t version;
 	uint32_t filesystem_busy_count;
@@ -377,6 +384,13 @@ struct ti50_stats_v2 {
 	(1 << METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT)
 #define METRICSV_CCD_MODE_SHIFT 3
 #define METRICSV_CCD_MODE_MASK	(1 << METRICSV_CCD_MODE_SHIFT)
+#define METRICSV_WP_ASSERTED_SHIFT 4
+#define METRICSV_WP_ASSERTED_MASK (1 << METRICSV_WP_ASSERTED_SHIFT)
+#define METRICSV_ALLOW_UNVERIFIED_RO_SHIFT 5
+#define METRICSV_ALLOW_UNVERIFIED_RO_MASK \
+	(1 << METRICSV_ALLOW_UNVERIFIED_RO_SHIFT)
+#define METRICSV_IS_PROD_SHIFT 6
+#define METRICSV_IS_PROD_MASK (1 << METRICSV_IS_PROD_SHIFT)
 
 /* End Ti50 Specific Structs */
 /*****************************************************************************/
