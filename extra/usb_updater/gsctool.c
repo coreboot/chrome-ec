@@ -4376,6 +4376,38 @@ static int process_get_time(struct transfer_descriptor *td)
 	return 0;
 }
 
+static void print_ti50_misc_status(uint32_t misc_status, uint32_t version)
+{
+	misc_status = be32toh(misc_status);
+	printf("misc_status (%d):         %08x\n", version, misc_status);
+	printf("  rdd_keepalive:         %d\n",
+	       misc_status &
+		       METRICSV_RDD_KEEP_ALIVE_MASK);
+	printf("  rdd_keepalive_at_boot: %d\n",
+	       (misc_status &
+		METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK) >>
+		       METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT);
+	printf("  ccd_mode:              %d\n",
+	       (misc_status &
+		METRICSV_CCD_MODE_MASK) >>
+		       METRICSV_CCD_MODE_SHIFT);
+	if (version < 3)
+		return;
+	/* Display metrics added in version 3 */
+	printf("  wp_asserted:           %d\n",
+	       (misc_status &
+		METRICSV_WP_ASSERTED_MASK) >>
+		       METRICSV_WP_ASSERTED_SHIFT);
+	printf("  allow_unverified_ro:   %d\n",
+	       (misc_status &
+		METRICSV_ALLOW_UNVERIFIED_RO_MASK) >>
+		       METRICSV_ALLOW_UNVERIFIED_RO_SHIFT);
+	printf("  is_prod:               %d\n",
+	       (misc_status &
+		METRICSV_IS_PROD_MASK) >>
+		       METRICSV_IS_PROD_SHIFT);
+}
+
 static int print_ti50_stats(struct ti50_stats_v0 *stats_v0, size_t size)
 {
 	stats_v0->fs_init_time = be32toh(stats_v0->fs_init_time);
@@ -4389,30 +4421,16 @@ static int print_ti50_stats(struct ti50_stats_v0 *stats_v0, size_t size)
 	printf("aprov_time:            %d\n", stats_v0->aprov_time);
 	printf("expanded_aprov_status: %X\n", stats_v0->expanded_aprov_status);
 
-	if (size >= sizeof(struct ti50_stats_v1)) {
+	if (size == sizeof(struct ti50_stats_v1)) {
 		struct ti50_stats_v1 *stats_v1 =
 			(struct ti50_stats_v1 *)stats_v0;
-
-		stats_v1->misc_status = be32toh(stats_v1->misc_status);
-		uint32_t bits_used = stats_v1->misc_status >>
-				     METRICSV_BITS_USED_SHIFT;
-		if (bits_used >= 4) {
-			printf("rdd_keepalive:         %d\n",
-			       stats_v1->misc_status &
-				       METRICSV_RDD_KEEP_ALIVE_MASK);
-			printf("rdd_keepalive_at_boot: %d\n",
-			       (stats_v1->misc_status &
-				METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK) >>
-				       METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT);
-			printf("ccd_mode:              %d\n",
-			       (stats_v1->misc_status &
-				METRICSV_CCD_MODE_MASK) >>
-				       METRICSV_CCD_MODE_SHIFT);
-		}
+		print_ti50_misc_status(stats_v1->misc_status, 1);
+		return 0;
 	}
 	if (size >= sizeof(struct ti50_stats)) {
 		struct ti50_stats *stats = (struct ti50_stats *)stats_v0;
 
+		stats->version = be32toh(stats->version);
 		/* Version was added with v2 and therefore must be >= 2. */
 		if (stats->version < 2) {
 			printf("Invalid stats version %d.", stats->version);
@@ -4435,28 +4453,7 @@ static int print_ti50_stats(struct ti50_stats_v0 *stats_v0, size_t size)
 		printf("timeslices_expired:    %d\n",
 		       stats->timeslices_expired);
 		printf("crypto_init_time:      %d\n", stats->crypto_init_time);
-
-		/* Display version 3 metrics */
-		if (stats->version >= 3) {
-			/*
-			 * Note that
-			 * `stats->v1.misc_status >> METRICSV_BITS_USED_SHIFT`
-			 * value should also be >= 7, but version 3 >= should be
-			 * enough to know that these fields are present.
-			 */
-			printf("wp_asserted:           %d\n",
-			       (stats->v1.misc_status &
-				METRICSV_WP_ASSERTED_MASK) >>
-				       METRICSV_WP_ASSERTED_SHIFT);
-			printf("allow_unverified_ro:   %d\n",
-			       (stats->v1.misc_status &
-				METRICSV_ALLOW_UNVERIFIED_RO_MASK) >>
-				       METRICSV_ALLOW_UNVERIFIED_RO_SHIFT);
-			printf("is_prod:               %d\n",
-			       (stats->v1.misc_status &
-				METRICSV_IS_PROD_MASK) >>
-				       METRICSV_IS_PROD_SHIFT);
-		}
+		print_ti50_misc_status(stats->v1.misc_status, stats->version);
 	}
 	return 0;
 }
