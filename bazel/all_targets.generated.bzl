@@ -1304,6 +1304,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "kyogre",
+        board = "kyogre",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "lalala",
         baseboard = "keeby",
         board = "lalala",
@@ -2033,6 +2038,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "skitty",
+        board = "skitty",
     )
     ec_target(
         name = "skyrim",
