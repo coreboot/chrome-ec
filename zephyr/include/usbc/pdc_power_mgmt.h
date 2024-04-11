@@ -15,6 +15,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <zephyr/sys/atomic.h>
+
 #include <drivers/pdc.h>
 
 /**
@@ -368,5 +370,51 @@ uint8_t pdc_power_mgmt_get_product_type(int port);
  * @retval 0 if successful or error code
  */
 int pdc_power_mgmt_connector_reset(int port, enum connector_reset reset_type);
+
+/**
+ * @brief Get the current events for the port.
+ *
+ * @param port USB-C port number
+ *
+ * @retval PD_STATUS_EVENT_* bitmask
+ */
+atomic_val_t pdc_power_mgmt_get_events(int port);
+
+/**
+ * @brief Clear specified events for the port.
+ *
+ * @param port USB-C port number
+ * @param event_mask PD_STATUS_EVENT_* bitmask to clear
+ */
+void pdc_power_mgmt_clear_event(int port, atomic_t event_mask);
+
+/**
+ * Notify the host of an event on the port.
+ *
+ * @param port USB-C port number
+ * @param event_mask PD_STATUS_EVENT_* bitmask to set
+ */
+void pdc_power_mgmt_notify_event(int port, atomic_t event_mask);
+
+/**
+ * @brief Control if the PDC power mgmt and underlying driver threads are
+ *        active.
+ *
+ * @param run True to allow comms, false to suspend
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_set_comms_state(bool run);
+
+/**
+ * @brief Return the current UCSI connector status on a port
+ *
+ * @param port USB-C port number
+ * @param connector_status Output variable to store the connector status
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_get_connector_status(
+	int port, union connector_status_t *connector_status);
 
 #endif /* __CROS_EC_PDC_POWER_MGMT_H */

@@ -37,18 +37,9 @@ else()
 	set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# TODO(b/273639386): Remove these workarounds when the upstream supports
-# better way to disable the filesystem, threads and locks usages.
-set(CMAKE_SYSTEM_NAME Linux)
+# TODO(b/273639386): Remove ANDROID when upstream is fixed.
 set(ANDROID TRUE)
-zephyr_compile_definitions(__TRUSTY__)
-
-# Zephyr defines _XOPEN_SOURCE=600 when compiling 'posix' architecture,
-# but BoringSSL defines _XOPEN_SOURCE=700. Since redefining is not allowed
-# in compiler command line, undefine _XOPEN_SOURCE.
-if (DEFINED CONFIG_ARCH_POSIX)
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -U_XOPEN_SOURCE")
-endif()
+zephyr_compile_definitions(CROS_ZEPHYR)
 
 # We are not going to install BoringSSL, so don't generate install rules.
 set(CMAKE_SKIP_INSTALL_RULES YES)
@@ -70,15 +61,14 @@ add_subdirectory(${BORINGSSL_SOURCES} build EXCLUDE_FROM_ALL)
 # Link 'crypto' library into boringssl library.
 zephyr_library_link_libraries(crypto)
 
-# Provide implementation of CRYPTO_sysrand() using Zephyr Entropy Device.
+# Provide implementation of getentropy() using Zephyr Entropy Device.
 zephyr_library_sources_ifdef(CONFIG_BORINGSSL_HARDWARE_ENTROPY
 	common/sysrand_zephyr.c)
 
-# Change language to C11 because sysrand_zephyr.c includes header from
-# BoringSSL which requires that.
-zephyr_library_compile_options(-std=c11)
-
 # Add compile options required by BoringSSL.
+# -D_POSIX_C_SOURCE=200809L is needed because BoringSSL uses strdup() function
+# is guarded by __POSIX_VISIBLE >=200809 in Newlib's string.h file.
+#
 # -Wno-implicit-function-declaration is needed because BoringSSL sources use
 # functions not defined in Zephyr: fflush(), getenv(), sscanf(). We won't get
 # any linker issues because code that uses these functions is unused and will
@@ -90,7 +80,8 @@ zephyr_library_compile_options(-std=c11)
 #
 # -std=c11 is necessary because BoringSSL sources use features available in
 # C11, e.g. static_assert().
-set(BORINGSSL_COMPILE_OPTIONS -Wno-implicit-function-declaration -fno-common -std=c11)
+set(BORINGSSL_COMPILE_OPTIONS -D_POSIX_C_SOURCE=200809L
+	-Wno-implicit-function-declaration -fno-common -std=c11)
 
 # Target 'fipsmodule' is a object library. It compiles source files, but
 # doesn't archive or link object files into library. Other targets should

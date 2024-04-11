@@ -10,13 +10,7 @@
 #include <zephyr/drivers/entropy.h>
 #include <zephyr/kernel.h>
 
-#include <../crypto/fipsmodule/rand/internal.h>
-#include <openssl/base.h>
-
 #define rng DEVICE_DT_GET(DT_CHOSEN(zephyr_entropy))
-
-// We should define the getentropy for boringssl 24.
-#if BORINGSSL_API_VERSION >= 24
 
 // We don't want to conflict with the linux getentropy.
 #if !defined(__linux__)
@@ -38,7 +32,7 @@ int getentropy(void *buffer, size_t length)
 	}
 
 	/*
-	 * BoringSSL uses size_t to represent buffer size, but Zephyr uses
+	 * getentropy() uses size_t to represent buffer size, but Zephyr uses
 	 * uint16_t. The length check above allows us to safely cast without
 	 * overflow.
 	 */
@@ -50,27 +44,3 @@ int getentropy(void *buffer, size_t length)
 	return 0;
 }
 #endif // !defined(__linux__)
-
-// TDOD(b/273639386): Remove this after we uprev the boringssl.
-#else
-
-void CRYPTO_sysrand(uint8_t *out, size_t requested)
-{
-	/*
-	 * BoringSSL uses size_t to represent buffer size, but Zephyr uses
-	 * uint16_t. Crash the system if user requested more than UINT16_MAX
-	 * bytes.
-	 */
-	if (!device_is_ready(rng) || requested > UINT16_MAX)
-		k_oops();
-
-	if (entropy_get_entropy(rng, out, (uint16_t)requested))
-		k_oops();
-}
-
-void CRYPTO_sysrand_for_seed(uint8_t *out, size_t requested)
-{
-	return CRYPTO_sysrand(out, requested);
-}
-
-#endif // BORINGSSL_API_VERSION >= 24

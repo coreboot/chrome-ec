@@ -285,35 +285,7 @@ union rts54_response {
 
 	struct get_connector_status_response {
 		uint8_t byte_count;
-		union {
-			uint16_t raw_value;
-			struct {
-				uint16_t reserved0 : 1;
-				uint16_t external_supply_change : 1;
-				uint16_t pwr_operation_mode : 1;
-				uint16_t reserved1 : 2;
-				uint16_t supported_provider_caps : 1;
-				uint16_t negotiated_power_level : 1;
-				uint16_t pd_reset_complete : 1;
-				uint16_t supported_cam : 1;
-				uint16_t battery_charging_status : 1;
-				uint16_t reserved2 : 1;
-				uint16_t port_partner : 1;
-				uint16_t pwr_direction : 1;
-				uint16_t reserved3 : 1;
-				uint16_t connect_change : 1;
-				uint16_t error : 1;
-			};
-		} pd_status;
-		uint16_t port_operation_mode : 3;
-		uint16_t connect_status : 1;
-		uint16_t power_direction : 1;
-		uint16_t port_partner_flags : 8;
-		uint16_t port_partner_type : 3;
-		uint32_t request_data_object;
-		uint8_t battery_charging_status : 2;
-		uint8_t provider_capabilities_limited_reason : 4;
-		uint8_t reserved : 2;
+		union connector_status_t status;
 	} __packed connector_status;
 
 	struct get_rtk_status_response {
@@ -356,9 +328,14 @@ union rts54_response {
 		uint8_t unchunked_message_support : 1;
 		uint8_t fr_swap_support : 1;
 		uint8_t reserved : 1;
-		/* BYTE 15 - 18 */
+		/* BYTE 15 */
+		uint8_t ucsi_b_power_reading_ready : 1;
+		uint8_t ucsi_b_scale_cur : 3;
+		uint8_t ucsi_b_scale_vol : 4;
+		/* BYTE 16-17 */
 		uint8_t average_current_low;
 		uint8_t average_current_high;
+		/* BYTE 18-19 */
 		uint8_t voltage_reading_low;
 		uint8_t voltage_reading_high;
 	} __packed rtk_status;
@@ -426,7 +403,7 @@ struct rts5453p_emul_pdc_data {
 	struct rts54_ic_status ic_status;
 	struct capability_t capability;
 	union connector_capability_t connector_capability;
-	struct connector_status_t connector_status;
+	union connector_status_t connector_status;
 	union uor_t uor;
 	union pdr_t pdr;
 	union error_status_t error;
