@@ -8,8 +8,8 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.81        | 0.23.71
-M125                | 0.24.81        | 0.23.71
+[ToT][ToT ebuild]   | 0.24.81        | 0.23.81
+M125                | 0.24.81        | 0.23.81
 [M122][122 release] | 0.24.71        | 0.23.71
 [M121][121 release] | 0.24.62        | 0.23.62
 [M120][120 release] | 0.24.60        | 0.23.60
@@ -651,6 +651,47 @@ Build:   ti50_common_mp-15224.B:v0.0.879-637bdde3
          ms-tpm-20-ref:v0.0.331-6f7f352
          @chromeos-ci-firmware-us-central1-b-x32-0-e7r7 2024-01-17 14:47:03
 ```
+
+### 0.23.81 Released on 4/12/2024 in M125
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5450420)
+
+Builder
+[69](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15224.B-branch/69/overview)
+
+Artifacts:
+[15224.66.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.66.0)
+
+**Features**
+
+* flog: Add entries for AP RO verification
+* wp: Change WP default to be forced enabled
+* rbox: Set key debounce to 20us
+* wp: Monitor WP_SENSE_L and WP state for GSC reboots
+* tpm2: Allow platform read for virtual nvmem
+* filesystem: Print NV partition on release builds.
+```
+Build:   ti50_common_mp-15224.B:v0.0.1091-c88c4ab9
+         libtock-rs:v0.0.929-0b84d08
+         tock:v0.0.9683-f0ca4d1a7
+         ms-tpm-20-ref:v0.0.334-628c70e
+         @chromeos-ci-firmware-us-central2-d-x32-0-hijo 2024-04-08 15:08:25
+```
+
+**Bug Fixes**
+* i2c_programmer: Ensure that ITE waveform response is always 4 bytes
+[b/326258077](https://b.corp.google.com/issues/326258077)
+* crashlog: Fix generation incrementation.
+[b/317804130](https://b.corp.google.com/issues/317804130)
+* flog: Attempt clear flog if initialization fails.
+[b/317221434](https://b.corp.google.com/issues/317221434)
+* ports/dauntless: Fix race in I2C driver
+[b/322037216](https://b.corp.google.com/issues/322037216)
+* filesystem: Handle compaction when all pages are full.
+[b/322037216](https://b.corp.google.com/issues/323043338)
+* event_log: Ensure time always moves forward on init.
+[b/329326190](https://b.corp.google.com/issues/329326190)
 
 ## PrePVT images
 
