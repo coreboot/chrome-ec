@@ -6793,6 +6793,7 @@ enum action_key {
 	TK_KBD_BKLIGHT_TOGGLE = 18,
 	TK_MICMUTE = 19,
 	TK_MENU = 20,
+	TK_DICTATE = 21,
 
 	TK_COUNT
 };
@@ -6818,6 +6819,11 @@ enum action_key {
  * Whether the keyboard has a screenlock key.
  */
 #define KEYBD_CAP_SCRNLOCK_KEY BIT(2)
+
+/*
+ * Whether the keyboard has an assistant key.
+ */
+#define KEYBD_CAP_ASSISTANT_KEY BIT(3)
 
 struct ec_response_keybd_config {
 	/*

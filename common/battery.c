@@ -319,7 +319,7 @@ static int command_battery(int argc, const char **argv)
 		watchdog_reload();
 
 		if (sleep_ms)
-			msleep(sleep_ms);
+			crec_msleep(sleep_ms);
 	}
 
 	return EC_SUCCESS;
@@ -436,7 +436,7 @@ static void ac_change(void)
 	static bool was_ac_on;
 	bool key = false;
 
-	CUTOFFPRINTS("AC %s", extpower_is_present() ? "on" : "off");
+	CPRINTS("AC %s", extpower_is_present() ? "on" : "off");
 	if (IS_ENABLED(HAS_TASK_KEYSCAN))
 		key = keyboard_scan_get_boot_keys() & BIT(BOOT_KEY_REFRESH);
 
@@ -476,7 +476,7 @@ static void ac_change(void)
 	}
 
 	if (!was_ac_on) {
-		CUTOFFPRINTS("backoff: Haven't seen AC on");
+		CPRINTS("backoff: Haven't seen AC on");
 		return;
 	}
 
