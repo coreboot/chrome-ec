@@ -79,6 +79,16 @@ if(CONFIG_TEST_NISSA_NOKRIS)
     )
 endif()
 
+if(CONFIG_TEST_NISSA_SUNDANCE)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0)
+    target_sources(
+            app PRIVATE
+            src/sundance.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/sundance/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/sundance/src/usbc.c
+    )
+endif()
+
 if(CONFIG_TEST_NISSA_GOTHRAX)
     target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
     target_sources(
@@ -90,6 +100,7 @@ if(CONFIG_TEST_NISSA_GOTHRAX)
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/usb_mux_config.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/form_factor.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/fan.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/thermal.c
     )
 endif()
 

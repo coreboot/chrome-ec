@@ -5321,6 +5321,9 @@ static int cmd_motionsense(int argc, char **argv)
 			case MOTIONSENSE_CHIP_BMI220:
 				printf("bmi220\n");
 				break;
+			case MOTIONSENSE_CHIP_VEML3328:
+				printf("veml3328\n");
+				break;
 			default:
 				printf("unknown\n");
 			}
@@ -6592,6 +6595,7 @@ const char *action_key_names[] = {
 	[TK_KBD_BKLIGHT_TOGGLE] = "Keyboard Backlight Toggle",
 	[TK_MICMUTE] = "Microphone Mute",
 	[TK_MENU] = "Menu",
+	[TK_DICTATE] = "Dictation",
 };
 
 BUILD_ASSERT(ARRAY_SIZE(action_key_names) == TK_COUNT);

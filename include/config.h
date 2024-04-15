@@ -53,6 +53,9 @@
  * BOARD_*, CHIP_*, and CHIP_FAMILY_*.
  */
 
+/* When the ec_rate config is set, put the sensor in force mode */
+#undef CONFIG_SENSOR_EC_RATE_FORCE_MODE
+
 /* Add support for sensor FIFO */
 #undef CONFIG_ACCEL_FIFO
 
@@ -353,6 +356,9 @@
 
 /* Define to include the clear channel driver for the tcs3400 light sensor */
 #undef CONFIG_ALS_TCS3400
+
+/* Define to include Vishay VEML3328 driver */
+#undef CONFIG_ALS_VEML3328
 
 /*
  * Define the event to raise when a sensor interrupt triggers.
@@ -6009,6 +6015,12 @@
  * Build and link *test* images with googletest.
  */
 #undef CONFIG_GOOGLETEST
+
+/*
+ * When this option is enabled, some of the experimental features (aka finch)
+ * will be enabled for CROS_EC.
+ */
+#undef CONFIG_FEATURE_FINCH
 
 /*****************************************************************************/
 /*
