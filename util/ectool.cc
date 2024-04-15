@@ -6646,6 +6646,7 @@ const char *action_key_names[] = {
 	[TK_KBD_BKLIGHT_TOGGLE] = "Keyboard Backlight Toggle",
 	[TK_MICMUTE] = "Microphone Mute",
 	[TK_MENU] = "Menu",
+	[TK_DICTATE] = "Dictation",
 };
 
 BUILD_ASSERT(ARRAY_SIZE(action_key_names) == TK_COUNT);

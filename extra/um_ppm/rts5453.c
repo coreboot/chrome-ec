@@ -302,7 +302,7 @@ static int rts5453_smbus_command(struct rts5453_device *dev, uint8_t port,
 	cmd_val = commands[cmd].command_value;
 	read_size = commands[cmd].return_length;
 
-	if (cmd_val == SC_UCSI_COMMANDS) {
+	if (cmd == SC_UCSI_COMMANDS) {
 		DLOG("Sending smbus command 0x%x ucsi command 0x%x", cmd_val,
 		     cmd_data[0]);
 	} else {
@@ -1105,8 +1105,8 @@ static int rts5453_ucsi_configure_lpm_irq(struct ucsi_pd_device *device)
 		return 0;
 	}
 
-	dev->lpm_interrupt_task = platform_task_init(rts5453_lpm_irq_task, dev);
-	if (dev->lpm_interrupt_task == NULL) {
+	if (platform_task_init(rts5453_lpm_irq_task, dev,
+			       &dev->lpm_interrupt_task)) {
 		return -1;
 	}
 
