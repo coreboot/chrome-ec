@@ -691,7 +691,6 @@ Artifacts:
 **Features**
 
 * flog: Add entries for AP RO verification
-* wp: Change WP default to be forced enabled
 * rbox: Set key debounce to 20us
 * wp: Monitor WP_SENSE_L and WP state for GSC reboots
 * tpm2: Allow platform read for virtual nvmem
@@ -1576,11 +1575,11 @@ Artifacts:
 **Features**
 
 * flog: Add entries for AP RO verification
-* wp: Change WP default to be forced enabled
 * rbox: Set key debounce to 20us
 * wp: Monitor WP_SENSE_L and WP state for GSC reboots
 * tpm2: Allow platform read for virtual nvmem
 * filesystem: Print NV partition on release builds.
+
 ```
 Build:   ti50_common_prepvt-15086.B:v0.0.1147-1170d5a9
          libtock-rs:v0.0.929-ecde39c
