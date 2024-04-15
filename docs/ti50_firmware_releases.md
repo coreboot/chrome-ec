@@ -9,7 +9,9 @@ This document captures major feature differences between Ti50 firmware releases
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
 [ToT][ToT ebuild]   | 0.24.81        | 0.23.81
-M125                | 0.24.81        | 0.23.81
+[M125][125 release] | 0.24.81        | 0.23.81
+[M124][124 release] | 0.24.71        | 0.23.71
+[M123][123 release] | 0.24.71        | 0.23.71
 [M122][122 release] | 0.24.71        | 0.23.71
 [M121][121 release] | 0.24.62        | 0.23.62
 [M120][120 release] | 0.24.60        | 0.23.60
@@ -129,7 +131,8 @@ Bits | Lowest MP | Highest MP | Lowest PrePVT | Highest PrePVT | Reason
 0    | N/A       | N/A        | 0.0.4         | 0.0.16         | Initial development
 1    | 0.21.0    | 0.21.1     | 0.22.0        | 0.22.9         | Initial GUC Factory release
 2    | 0.23.0    | 0.23.14    | 0.24.0        | 0.24.14        | First MP image shipping on devices
-3    | 0.23.20   | current    | 0.24.20       | current        | Image header fixes
+3    | 0.23.20   | 0.23.71    | 0.24.20       | 0.24.71        | Image header fixes
+4    | 0.23.74   | current    | 0.24.81       | current        | Enable AP RO verification by default
 
 ## MP images
 
@@ -650,6 +653,28 @@ Build:   ti50_common_mp-15224.B:v0.0.879-637bdde3
          tock:v0.0.9663-71efb979a
          ms-tpm-20-ref:v0.0.331-6f7f352
          @chromeos-ci-firmware-us-central1-b-x32-0-e7r7 2024-01-17 14:47:03
+```
+
+### 0.23.74 Released to GUC 06/2024 (GUC version)
+
+Builder
+[66](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15224.B-branch/66/overview)
+
+Artifacts:
+[15224.63.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.63.0)
+
+This is the first version in the 4-bit [Rollback Era](#Rollback-Era).
+
+Starting June 2024, the GSC comes preloaded from the GUC factory with this
+version.
+
+
+```
+Build:   ti50_common_mp-15224.B:v0.0.884-70a01408
+         libtock-rs:v0.0.929-0b84d08
+         tock:v0.0.9663-71efb979a
+         ms-tpm-20-ref:v0.0.331-6f7f352
+         @chromeos-ci-firmware-us-east1-d-x32-0-sbb9 2024-03-26 11:42:52
 ```
 
 ### 0.23.81 Released on 4/12/2024 in M125
@@ -1599,4 +1624,7 @@ Build:   ti50_common_prepvt-15086.B:v0.0.1147-1170d5a9
 [120 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R120-15662.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [121 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R121-15699.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [122 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R122-15753.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[123 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R123-15786.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[124 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R124-15823.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[125 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R125-15853.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [ToT ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
