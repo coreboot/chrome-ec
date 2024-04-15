@@ -105,7 +105,7 @@ Released with RW 0.24.51
 Released with RW 0.24.81
 
 *   Updated header enforcing post personalization fuse settings.
-[b/181261702](https://buganizer.corp.google.com/issues/181261702)
+    [b/181261702](https://buganizer.corp.google.com/issues/181261702)
 
 # RW revisions
 
@@ -668,7 +668,6 @@ This is the first version in the 4-bit [Rollback Era](#Rollback-Era).
 Starting June 2024, the GSC comes preloaded from the GUC factory with this
 version.
 
-
 ```
 Build:   ti50_common_mp-15224.B:v0.0.884-70a01408
          libtock-rs:v0.0.929-0b84d08
@@ -690,11 +689,12 @@ Artifacts:
 
 **Features**
 
-* flog: Add entries for AP RO verification
-* rbox: Set key debounce to 20us
-* wp: Monitor WP_SENSE_L and WP state for GSC reboots
-* tpm2: Allow platform read for virtual nvmem
-* filesystem: Print NV partition on release builds.
+*   flog: Add entries for AP RO verification
+*   rbox: Set key debounce to 20us
+*   wp: Monitor WP_SENSE_L and WP state for GSC reboots
+*   tpm2: Allow platform read for virtual nvmem
+*   filesystem: Print NV partition on release builds.
+
 ```
 Build:   ti50_common_mp-15224.B:v0.0.1091-c88c4ab9
          libtock-rs:v0.0.929-0b84d08
@@ -704,18 +704,19 @@ Build:   ti50_common_mp-15224.B:v0.0.1091-c88c4ab9
 ```
 
 **Bug Fixes**
-* i2c_programmer: Ensure that ITE waveform response is always 4 bytes
-[b/326258077](https://b.corp.google.com/issues/326258077)
-* crashlog: Fix generation incrementation.
-[b/317804130](https://b.corp.google.com/issues/317804130)
-* flog: Attempt clear flog if initialization fails.
-[b/317221434](https://b.corp.google.com/issues/317221434)
-* ports/dauntless: Fix race in I2C driver
-[b/322037216](https://b.corp.google.com/issues/322037216)
-* filesystem: Handle compaction when all pages are full.
-[b/322037216](https://b.corp.google.com/issues/323043338)
-* event_log: Ensure time always moves forward on init.
-[b/329326190](https://b.corp.google.com/issues/329326190)
+
+*   i2c_programmer: Ensure that ITE waveform response is always 4 bytes
+    [b/326258077](https://b.corp.google.com/issues/326258077)
+*   crashlog: Fix generation incrementation.
+    [b/317804130](https://b.corp.google.com/issues/317804130)
+*   flog: Attempt clear flog if initialization fails.
+    [b/317221434](https://b.corp.google.com/issues/317221434)
+*   ports/dauntless: Fix race in I2C driver
+    [b/322037216](https://b.corp.google.com/issues/322037216)
+*   filesystem: Handle compaction when all pages are full.
+    [b/322037216](https://b.corp.google.com/issues/323043338)
+*   event_log: Ensure time always moves forward on init.
+    [b/329326190](https://b.corp.google.com/issues/329326190)
 
 ## PrePVT images
 
@@ -1574,11 +1575,11 @@ Artifacts:
 
 **Features**
 
-* flog: Add entries for AP RO verification
-* rbox: Set key debounce to 20us
-* wp: Monitor WP_SENSE_L and WP state for GSC reboots
-* tpm2: Allow platform read for virtual nvmem
-* filesystem: Print NV partition on release builds.
+*   flog: Add entries for AP RO verification
+*   rbox: Set key debounce to 20us
+*   wp: Monitor WP_SENSE_L and WP state for GSC reboots
+*   tpm2: Allow platform read for virtual nvmem
+*   filesystem: Print NV partition on release builds.
 
 ```
 Build:   ti50_common_prepvt-15086.B:v0.0.1147-1170d5a9
@@ -1589,19 +1590,19 @@ Build:   ti50_common_prepvt-15086.B:v0.0.1147-1170d5a9
 ```
 
 **Bug Fixes**
-* i2c_programmer: Ensure that ITE waveform response is always 4 bytes
-[b/326258077](https://b.corp.google.com/issues/326258077)
-* crashlog: Fix generation incrementation.
-[b/317804130](https://b.corp.google.com/issues/317804130)
-* flog: Attempt clear flog if initialization fails.
-[b/317221434](https://b.corp.google.com/issues/317221434)
-* ports/dauntless: Fix race in I2C driver
-[b/322037216](https://b.corp.google.com/issues/322037216)
-* filesystem: Handle compaction when all pages are full.
-[b/322037216](https://b.corp.google.com/issues/323043338)
-* event_log: Ensure time always moves forward on init.
-[b/329326190](https://b.corp.google.com/issues/329326190)
 
+*   i2c_programmer: Ensure that ITE waveform response is always 4 bytes
+    [b/326258077](https://b.corp.google.com/issues/326258077)
+*   crashlog: Fix generation incrementation.
+    [b/317804130](https://b.corp.google.com/issues/317804130)
+*   flog: Attempt clear flog if initialization fails.
+    [b/317221434](https://b.corp.google.com/issues/317221434)
+*   ports/dauntless: Fix race in I2C driver
+    [b/322037216](https://b.corp.google.com/issues/322037216)
+*   filesystem: Handle compaction when all pages are full.
+    [b/322037216](https://b.corp.google.com/issues/323043338)
+*   event_log: Ensure time always moves forward on init.
+    [b/329326190](https://b.corp.google.com/issues/329326190)
 
 <!-- Links -->
 
