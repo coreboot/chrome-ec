@@ -156,12 +156,6 @@ endif
 cov-dont-test = is_enabled_error
 # static_if_error is a shell script that does not produce coverage results
 cov-dont-test += static_if_error
-# fpsensor: genhtml looks for build/host/fpsensor/cryptoc/util.c
-cov-dont-test += fpsensor
-# fpsensor_crypto: genhtml looks for build/host/fpsensor_crypto/cryptoc/util.c
-cov-dont-test += fpsensor_crypto
-# fpsensor_state: genhtml looks for build/host/fpsensor_state/cryptoc/util.c
-cov-dont-test += fpsensor_state
 # otp_key: genhtml looks for build/host/chip/npcx/otp_key.c
 cov-dont-test  += otp_key
 # version: Only works in a chroot.
@@ -170,7 +164,7 @@ cov-dont-test += version
 cov-dont-test += interrupt
 # Flaky tests. The number of covered lines changes from run to run
 # b/213374060
-cov-dont-test += accel_cal entropy flash float kb_mkbp kb_scan kb_scan_strict
+cov-dont-test += accel_cal entropy flash float kb_mkbp kb_scan_strict
 cov-dont-test += rsa
 
 cov-test-list-host = $(filter-out $(cov-dont-test), $(test-list-host))

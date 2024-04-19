@@ -38,11 +38,21 @@ enum ec_error_list hkdf_expand(uint8_t *out_key, size_t out_key_size,
 			       const uint8_t *info, size_t info_size);
 
 /**
- * Derive hardware encryption key from rollback secret and |salt|.
+ * Derive hardware encryption key from rollback secret, |salt|, and |info|.
  *
  * @param outkey the pointer to buffer holding the output key.
  * @param salt the salt to use in HKDF.
+ * @param info the info to use in HKDF.
+ * @param info_size the size of |info| in bytes.
  * @return EC_SUCCESS on success and error code otherwise.
+ */
+enum ec_error_list derive_encryption_key_with_info(uint8_t *out_key,
+						   const uint8_t *salt,
+						   const uint8_t *info,
+						   size_t info_size);
+
+/**
+ * Call derive_encryption_key_with_info with the context user_id as |info|.
  */
 enum ec_error_list derive_encryption_key(uint8_t *out_key, const uint8_t *salt);
 
@@ -74,11 +84,11 @@ derive_positive_match_secret(uint8_t *output,
  * @param tag_size the size of |tag|.
  * @return EC_SUCCESS on success and error code otherwise.
  */
-enum ec_error_list aes_gcm_encrypt(const uint8_t *key, int key_size,
-				   const uint8_t *plaintext,
-				   uint8_t *ciphertext, int text_size,
-				   const uint8_t *nonce, int nonce_size,
-				   uint8_t *tag, int tag_size);
+enum ec_error_list aes_128_gcm_encrypt(const uint8_t *key, size_t key_size,
+				       const uint8_t *plaintext,
+				       uint8_t *ciphertext, size_t text_size,
+				       const uint8_t *nonce, size_t nonce_size,
+				       uint8_t *tag, size_t tag_size);
 
 /**
  * Decrypt |plaintext| using AES-GCM128.
@@ -94,11 +104,12 @@ enum ec_error_list aes_gcm_encrypt(const uint8_t *key, int key_size,
  * @param tag_size the length of tag to compare against.
  * @return EC_SUCCESS on success and error code otherwise.
  */
-enum ec_error_list aes_gcm_decrypt(const uint8_t *key, int key_size,
-				   uint8_t *plaintext,
-				   const uint8_t *ciphertext, int text_size,
-				   const uint8_t *nonce, int nonce_size,
-				   const uint8_t *tag, int tag_size);
+enum ec_error_list aes_128_gcm_decrypt(const uint8_t *key, size_t key_size,
+				       uint8_t *plaintext,
+				       const uint8_t *ciphertext,
+				       size_t text_size, const uint8_t *nonce,
+				       size_t nonce_size, const uint8_t *tag,
+				       size_t tag_size);
 
 #ifdef __cplusplus
 }

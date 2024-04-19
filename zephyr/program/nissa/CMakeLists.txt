@@ -165,6 +165,7 @@ if(DEFINED CONFIG_BOARD_GOTHRAX)
 			"gothrax/src/usb_mux_config.c"
 			"gothrax/src/form_factor.c"
 			"gothrax/src/sub_board.c"
+			"gothrax/src/thermal.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "gothrax/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "gothrax/src/charger.c")
@@ -230,4 +231,14 @@ if(DEFINED CONFIG_BOARD_GLASSWAY)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "glassway/src/fan.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "glassway/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "glassway/src/charger.c")
+endif()
+if(DEFINED CONFIG_BOARD_SUNDANCE)
+	project(sundance)
+	zephyr_library_sources(
+			"sundance/src/led.c"
+			"sundance/src/form_factor.c"
+			"sundance/src/board.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "sundance/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "sundance/src/charger.c")
 endif()

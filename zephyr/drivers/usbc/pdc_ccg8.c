@@ -130,8 +130,7 @@ static int ccg_get_connector_capability(const struct device *dev,
 	return 0;
 }
 
-static int ccg_set_ccom(const struct device *dev, enum ccom_t ccom,
-			enum drp_mode_t dm)
+static int ccg_set_ccom(const struct device *dev, enum ccom_t ccom)
 {
 	return 0;
 }
@@ -152,7 +151,7 @@ static int ccg_set_sink_path(const struct device *dev, bool en)
 }
 
 static int ccg_get_connector_status(const struct device *dev,
-				    struct connector_status_t *cs)
+				    union connector_status_t *cs)
 {
 	return 0;
 }

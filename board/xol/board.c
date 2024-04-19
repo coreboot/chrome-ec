@@ -4,6 +4,7 @@
  */
 
 #include "common.h"
+#include "cros_board_info.h"
 #include "driver/mp2964.h"
 #include "hooks.h"
 #include "lid_switch.h"
@@ -57,3 +58,63 @@ static void mp2964_on_startup(void)
 		CPRINTF("[mp2964] try to tune MP2964 (%d)\n", status);
 }
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, mp2964_on_startup, HOOK_PRIO_FIRST);
+
+static const struct ec_response_keybd_config xol_kb = {
+	.num_top_row_keys = 14,
+	.action_keys = {
+		TK_BACK,                /* T1 */
+		TK_REFRESH,             /* T2 */
+		TK_FULLSCREEN,          /* T3 */
+		TK_OVERVIEW,            /* T4 */
+		TK_SNAPSHOT,            /* T5 */
+		TK_BRIGHTNESS_DOWN,     /* T6 */
+		TK_BRIGHTNESS_UP,       /* T7 */
+		TK_KBD_BKLIGHT_DOWN,    /* T8 */
+		TK_KBD_BKLIGHT_UP,      /* T9 */
+		TK_PLAY_PAUSE,          /* T10 */
+		TK_MICMUTE,             /* T11 */
+		TK_VOL_MUTE,            /* T12 */
+		TK_VOL_UP,              /* T13 */
+		TK_VOL_DOWN,            /* T14 */
+	},
+	.capabilities = KEYBD_CAP_FUNCTION_KEYS | KEYBD_CAP_SCRNLOCK_KEY |
+			KEYBD_CAP_NUMERIC_KEYPAD,
+};
+
+__override const struct ec_response_keybd_config *
+board_vivaldi_keybd_config(void)
+{
+	return &xol_kb;
+}
+
+static uint32_t board_id = (uint32_t)UINT8_MAX;
+static void set_board_id(void)
+{
+	uint32_t cbi_val;
+
+	/* Board ID, only need to do it once */
+	if (board_id == (uint32_t)UINT8_MAX) {
+		if (cbi_get_board_version(&cbi_val) != EC_SUCCESS ||
+		    cbi_val > UINT8_MAX)
+			CPRINTS("CBI: Read Board ID failed");
+		else
+			board_id = cbi_val;
+		CPRINTS("Read Board ID: %u", board_id);
+	}
+}
+
+uint8_t board_get_finch_version(void)
+{
+	set_board_id();
+
+	switch (board_id) {
+	case 0x1:
+		return 0x23;
+	case 0x3:
+		return 0x30;
+	default:
+		CPRINTS("WARN: cannot map board id(0x%02x) to finch version",
+			board_id);
+		return 0;
+	}
+}
