@@ -9,6 +9,7 @@
 #include "../arbitrage.dtsi"
 #include "../common.dtsi"
 #include "../usbc.dtsi"
+#include "../usba.dtsi"
 #include "../generated.dtsi"
 #include "../interrupts.dtsi"
 #include "../motionsense.dtsi"
@@ -240,6 +241,12 @@
 		default_battery: cosmx-3 {
 			compatible = "cosmx,ap20cbl-3", "battery-smart";
 		};
+	};
+
+	kb_bl_pwm {
+		compatible = "cros-ec,kblight-pwm";
+		pwms = <&pwm3 0 PWM_HZ(324) PWM_POLARITY_NORMAL>;
+		status = "okay";
 	};
 };
 

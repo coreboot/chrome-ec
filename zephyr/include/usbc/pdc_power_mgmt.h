@@ -432,4 +432,28 @@ int pdc_power_mgmt_get_connector_status(
  */
 uint8_t pdc_power_mgmt_get_dp_pin_mode(int port);
 
+/**
+ * @brief Put a cap on the max voltage requested as a sink.
+ *
+ * @param mv maximum voltage in millivolts.
+ */
+void pdc_power_mgmt_set_max_voltage(unsigned int mv);
+
+/**
+ * @brief Get the max voltage that can be requested as set by
+ * pd_set_max_voltage().
+ *
+ * @return max voltage
+ */
+unsigned int pdc_power_mgmt_get_max_voltage(void);
+
+/**
+ * @brief Requests the specified voltage from the PD source and triggers
+ *	  a new negotiation sequence with the source.
+ *
+ * @param port USB-C port number
+ * @param mv request voltage in millivolts.
+ */
+void pdc_power_mgmt_request_source_voltage(int port, int mv);
+
 #endif /* __CROS_EC_PDC_POWER_MGMT_H */

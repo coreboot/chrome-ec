@@ -80,6 +80,16 @@ greenbayupoc = register_brox_project(
         here / "program.conf",
         # Parent project's config
         here / "greenbayupoc" / "project.conf",
+    ],
+)
+
+lotso = register_brox_project(
+    project_name="lotso",
+    kconfig_files=[
+        # Common to all projects.
+        here / "program.conf",
+        # Project-specific config
+        here / "lotso" / "project.conf",
         # Common sensor configs
         here / "motionsense.conf",
     ],
@@ -92,3 +102,4 @@ assert_rw_fwid_DO_NOT_EDIT(project_name="brox", addr=0xBFFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="brox-ish-ec", addr=0xBFFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="brox-tokenized", addr=0xBFFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="greenbayupoc", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="lotso", addr=0xBFFE0)

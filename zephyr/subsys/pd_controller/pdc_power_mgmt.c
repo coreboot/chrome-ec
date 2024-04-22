@@ -186,6 +186,8 @@ enum snk_attached_local_state_t {
 	SNK_ATTACHED_SET_SINK_PATH,
 	/** SNK_ATTACHED_EVALUATE_PDOS */
 	SNK_ATTACHED_EVALUATE_PDOS,
+	/** SNK_ATTACHED_START_CHARGING */
+	SNK_ATTACHED_START_CHARGING,
 	/** SNK_ATTACHED_RUN */
 	SNK_ATTACHED_RUN,
 };
@@ -359,8 +361,6 @@ struct pdc_unattached_policy_t {
 	enum usb_typec_current_t tcc;
 	/** CC Operation Mode */
 	enum ccom_t cc_mode;
-	/** DRP Operation Mode */
-	enum drp_mode_t drp_mode;
 };
 
 /**
@@ -413,6 +413,8 @@ struct pdc_snk_attached_policy_t {
 	ATOMIC_DEFINE(flags, SNK_POLICY_COUNT);
 	/** Currently active PDO */
 	uint32_t pdo;
+	/** Current active PDO index */
+	uint32_t pdo_index;
 	/** PDOs supported by the Source */
 	uint32_t pdos[PDO_NUM];
 	/** PDO count */
@@ -429,6 +431,8 @@ struct pdc_snk_attached_policy_t {
 enum policy_src_attached_t {
 	/** Enables swap to Sink */
 	SRC_POLICY_SWAP_TO_SNK,
+	/** Forces sink-only operation, even if it requires a disconnect */
+	SRC_POLICY_FORCE_SNK,
 
 	/** SRC_POLICY_COUNT */
 	SRC_POLICY_COUNT
@@ -698,8 +702,6 @@ static ALWAYS_INLINE void pdc_thread(void *pdc_dev, void *unused1,
 			DT_INST_PROP(inst, policy), unattached_rp_value),    \
 		.port.una_policy.cc_mode = DT_STRING_TOKEN(                  \
 			DT_INST_PROP(inst, policy), unattached_cc_mode),     \
-		.port.una_policy.drp_mode = DT_STRING_TOKEN(                 \
-			DT_INST_PROP(inst, policy), unattached_try),         \
 		.port.suspend = ATOMIC_INIT(0),                              \
 	};                                                                   \
                                                                              \
@@ -722,6 +724,18 @@ DT_INST_FOREACH_STATUS_OKAY(PDC_SUBSYS_INIT)
  */
 static struct pdc_data_t *pdc_data[] = { DT_INST_FOREACH_STATUS_OKAY(
 	PDC_DATA_INIT) };
+
+/**
+ * @brief As a sink, this is the max voltage (in millivolts) we can request
+ *        before getting source caps
+ */
+static uint32_t pdc_max_request_mv = CONFIG_PLATFORM_EC_PD_MAX_VOLTAGE_MV;
+
+/**
+ * @brief As a sink, this is the max power (in milliwatts) needed to operate
+ */
+static uint32_t pdc_max_operating_power =
+	CONFIG_PLATFORM_EC_PD_OPERATING_POWER_MW;
 
 static enum pdc_state_t get_pdc_state(struct pdc_port_t *port)
 {
@@ -998,6 +1012,10 @@ static void run_snk_policies(struct pdc_port_t *port)
 					     SNK_POLICY_SWAP_TO_SRC)) {
 		queue_internal_cmd(port, CMD_PDC_SET_PDR);
 		return;
+	} else if (atomic_test_and_clear_bit(port->snk_policy.flags,
+					     SNK_POLICY_NEW_POWER_REQUEST)) {
+		port->snk_attached_local_state = SNK_ATTACHED_GET_PDOS;
+		return;
 	}
 
 	send_pending_public_commands(port);
@@ -1008,6 +1026,10 @@ static void run_src_policies(struct pdc_port_t *port)
 	if (atomic_test_and_clear_bit(port->src_policy.flags,
 				      SRC_POLICY_SWAP_TO_SNK)) {
 		queue_internal_cmd(port, CMD_PDC_SET_PDR);
+		return;
+	} else if (atomic_test_and_clear_bit(port->src_policy.flags,
+					     SRC_POLICY_FORCE_SNK)) {
+		queue_internal_cmd(port, CMD_PDC_SET_CCOM);
 		return;
 	}
 
@@ -1179,6 +1201,7 @@ static void pdc_snk_attached_run(void *obj)
 	struct pdc_port_t *port = (struct pdc_port_t *)obj;
 	const struct pdc_config_t *const config = port->dev->config;
 	uint32_t max_ma, max_mv, max_mw;
+	uint32_t flags;
 
 	/* The CCI_EVENT is set on a connector disconnect, so check the
 	 * connector status and take the appropriate action. */
@@ -1226,36 +1249,63 @@ static void pdc_snk_attached_run(void *obj)
 		queue_internal_cmd(port, CMD_PDC_GET_VDO);
 		return;
 	case SNK_ATTACHED_GET_PDOS:
-		port->snk_attached_local_state = SNK_ATTACHED_GET_RDO;
+		port->snk_attached_local_state = SNK_ATTACHED_EVALUATE_PDOS;
 		port->pdo_type = SOURCE_PDO;
 		queue_internal_cmd(port, CMD_PDC_GET_PDOS);
 		return;
-	case SNK_ATTACHED_GET_RDO:
-		port->snk_attached_local_state = SNK_ATTACHED_EVALUATE_PDOS;
-		queue_internal_cmd(port, CMD_PDC_GET_RDO);
-		return;
 	case SNK_ATTACHED_EVALUATE_PDOS:
+		port->snk_attached_local_state = SNK_ATTACHED_START_CHARGING;
+		/* Select vSafe5V */
+		port->snk_policy.pdo_index = 1;
+		port->snk_policy.pdo = port->snk_policy.pdos[0];
+		flags = 0;
+
 		for (int i = 0; i < PDO_NUM; i++) {
 			LOG_INF("PDO%d: %08x, %d %d", i,
 				port->snk_policy.pdos[i],
 				PDO_FIXED_GET_VOLT(port->snk_policy.pdos[i]),
 				PDO_FIXED_GET_CURR(port->snk_policy.pdos[i]));
-		}
 
-		LOG_INF("RDO: %d", RDO_POS(port->snk_policy.rdo));
-		/* TODO:b/330758295 - Currently only the RDO is retrieved and
-		converted to a PDO, which is sent to the charge manager.
-		Instead, the PDOs should be evaluated, and a proper PDO selected
-		and sent to the charge manager. */
-		port->snk_policy.pdo =
-			port->snk_policy.pdos[RDO_POS(port->snk_policy.rdo) - 1];
+			/* Select maximum charge voltage */
+			if (pdc_max_request_mv ==
+			    PDO_FIXED_GET_VOLT(port->snk_policy.pdos[i])) {
+				port->snk_policy.pdo_index = i + 1;
+				port->snk_policy.pdo = port->snk_policy.pdos[i];
+			}
+		}
 
 		/* Extract Current, Voltage, and calculate Power */
 		max_ma = PDO_FIXED_GET_CURR(port->snk_policy.pdo);
 		max_mv = PDO_FIXED_GET_VOLT(port->snk_policy.pdo);
 		max_mw = max_ma * max_mv / 1000;
 
-		LOG_INF("Available charging on C%d\n", config->connector_num);
+		/* Mismatch bit set if less power offered than the operating
+		 * power */
+		if (max_mw < pdc_max_operating_power) {
+			flags |= RDO_CAP_MISMATCH;
+		}
+
+		/* Set RDO to send */
+		if ((port->snk_policy.pdo & PDO_TYPE_MASK) ==
+		    PDO_TYPE_BATTERY) {
+			port->snk_policy.rdo_to_send =
+				RDO_BATT(port->snk_policy.pdo_index, max_mw,
+					 max_mw, flags);
+		} else {
+			port->snk_policy.rdo_to_send =
+				RDO_FIXED(port->snk_policy.pdo_index, max_ma,
+					  max_ma, flags);
+		}
+
+		LOG_INF("Send RDO: %d", RDO_POS(port->snk_policy.rdo_to_send));
+		queue_internal_cmd(port, CMD_PDC_SET_RDO);
+		return;
+	case SNK_ATTACHED_START_CHARGING:
+		max_ma = PDO_FIXED_GET_CURR(port->snk_policy.pdo);
+		max_mv = PDO_FIXED_GET_VOLT(port->snk_policy.pdo);
+		max_mw = max_ma * max_mv / 1000;
+
+		LOG_INF("Available charging on C%d", config->connector_num);
 		LOG_INF("PDO: %08x", port->snk_policy.pdo);
 		LOG_INF("V: %d", max_mv);
 		LOG_INF("C: %d", max_ma);
@@ -1278,8 +1328,12 @@ static void pdc_snk_attached_run(void *obj)
 						       CAP_DUALROLE);
 		}
 
-		port->snk_attached_local_state = SNK_ATTACHED_SET_SINK_PATH;
+		port->snk_attached_local_state = SNK_ATTACHED_GET_RDO;
 		break;
+	case SNK_ATTACHED_GET_RDO:
+		port->snk_attached_local_state = SNK_ATTACHED_SET_SINK_PATH;
+		queue_internal_cmd(port, CMD_PDC_GET_RDO);
+		return;
 	case SNK_ATTACHED_SET_SINK_PATH:
 		port->snk_attached_local_state = SNK_ATTACHED_RUN;
 
@@ -1331,8 +1385,7 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 		rv = pdc_set_power_level(port->pdc, port->una_policy.tcc);
 		break;
 	case CMD_PDC_SET_CCOM:
-		rv = pdc_set_ccom(port->pdc, port->una_policy.cc_mode,
-				  port->una_policy.drp_mode);
+		rv = pdc_set_ccom(port->pdc, port->una_policy.cc_mode);
 		break;
 	case CMD_PDC_GET_PDOS:
 		rv = pdc_get_pdos(port->pdc, port->pdo_type, PDO_OFFSET_0,
@@ -2416,6 +2469,14 @@ void pdc_power_mgmt_set_dual_role(int port, enum pd_dual_role_states state)
 			port_data->pdr.swap_to_snk = 1;
 			atomic_set_bit(port_data->src_policy.flags,
 				       SRC_POLICY_SWAP_TO_SNK);
+
+			/*
+			 * If PRS to Sink fails, disconnect and reconnect as
+			 * Sink.
+			 */
+			port_data->una_policy.cc_mode = CCOM_RD;
+			atomic_set_bit(port_data->src_policy.flags,
+				       SRC_POLICY_FORCE_SNK);
 		}
 		break;
 	/* Switch to source */
@@ -2948,3 +3009,24 @@ uint8_t pdc_power_mgmt_get_dp_pin_mode(int port)
 	return pin_mode;
 }
 #endif
+
+void pdc_power_mgmt_set_max_voltage(unsigned int mv)
+{
+	pdc_max_request_mv = mv;
+}
+
+unsigned int pdc_power_mgmt_get_max_voltage(void)
+{
+	return pdc_max_request_mv;
+}
+
+void pdc_power_mgmt_request_source_voltage(int port, int mv)
+{
+	pdc_power_mgmt_set_max_voltage(mv);
+
+	if (pdc_power_mgmt_is_sink_connected(port)) {
+		pdc_power_mgmt_set_new_power_request(port);
+	} else {
+		pdc_power_mgmt_request_swap_to_snk(port);
+	}
+}
