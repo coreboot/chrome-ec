@@ -145,6 +145,7 @@
 #define CONFIG_STEINHART_HART_3V3_51K1_47K_4050B
 
 #define CONFIG_FANS FAN_CH_COUNT
+#define CONFIG_CUSTOM_FAN_CONTROL
 
 /* Charger defines */
 #define CONFIG_CHARGER_BQ25710
@@ -169,6 +170,15 @@
 #include "gpio_signal.h" /* needed by registers.h */
 #include "registers.h"
 #include "usbc_config.h"
+
+/* I2C access in polling mode before task is initialized */
+#define CONFIG_I2C_BITBANG
+
+enum banshee_bitbang_i2c_channel {
+	I2C_BITBANG_CHAN_BRD_ID,
+	I2C_BITBANG_CHAN_COUNT
+};
+#define I2C_BITBANG_PORT_COUNT I2C_BITBANG_CHAN_COUNT
 
 enum adc_channel {
 	ADC_TEMP_SENSOR_1,

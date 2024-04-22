@@ -1697,6 +1697,10 @@ enum ec_feature_code {
 	 * The MCU is System Companion Processor Core 1
 	 */
 	EC_FEATURE_SCP_C1 = 53,
+	/*
+	 * The EC supports UCSI PPM.
+	 */
+	EC_FEATURE_UCSI_PPM = 54,
 };
 
 #define EC_FEATURE_MASK_0(event_code) BIT(event_code % 32)
@@ -6355,7 +6359,7 @@ enum cbi_data_tag {
 
 union ec_common_control {
 	struct {
-		uint32_t bcic_enabled : 1; /* Unused. Take it over as yours. */
+		uint32_t ucsi_enabled : 1;
 	};
 	uint32_t raw_value;
 };
@@ -8250,6 +8254,21 @@ struct ec_response_fp_read_match_secret_with_pubkey {
 struct ec_params_fp_unlock_template {
 	uint16_t fgr_num;
 } __ec_align4;
+
+/*
+ * Migrate a legacy FP template (here, legacy refers to being generated in a
+ * raw user_id context instead of a nonce context) by wiping its match secret
+ * salt and treating it as a newly-enrolled template.
+ * The legacy FP template needs to be uploaded by FP_TEMPLATE command first
+ * without committing, then this command will commit it.
+ */
+#define EC_CMD_FP_MIGRATE_TEMPLATE_TO_NONCE_CONTEXT 0x0418
+
+struct ec_params_fp_migrate_template_to_nonce_context {
+	/* The context userid used to encrypt this template when it was created.
+	 */
+	uint32_t userid[FP_CONTEXT_USERID_WORDS];
+};
 
 /*****************************************************************************/
 /* Touchpad MCU commands: range 0x0500-0x05FF */

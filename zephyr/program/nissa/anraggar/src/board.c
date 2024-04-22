@@ -10,7 +10,6 @@
  */
 #include "accelgyro.h"
 #include "battery.h"
-#include "chipset.h"
 #include "common.h"
 #include "cros_cbi.h"
 #include "driver/accel_bma4xx.h"
@@ -50,40 +49,6 @@ static void board_setup_init(void)
 	}
 }
 DECLARE_HOOK(HOOK_INIT, board_setup_init, HOOK_PRIO_PRE_DEFAULT);
-
-static void motionsense_suspend(void)
-{
-	int ret;
-	uint32_t val;
-
-	ret = cros_cbi_get_fw_config(FORM_FACTOR, &val);
-	if (ret != 0) {
-		LOG_ERR("Error retrieving CBI FW_CONFIG field %d", FORM_FACTOR);
-		return;
-	}
-	if (val != CLAMSHELL) {
-		gpio_disable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_imu));
-		gpio_disable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_lid_imu));
-	}
-}
-DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, motionsense_suspend, HOOK_PRIO_DEFAULT);
-
-static void motionsense_resume(void)
-{
-	int ret;
-	uint32_t val;
-
-	ret = cros_cbi_get_fw_config(FORM_FACTOR, &val);
-	if (ret != 0) {
-		LOG_ERR("Error retrieving CBI FW_CONFIG field %d", FORM_FACTOR);
-		return;
-	}
-	if (val != CLAMSHELL) {
-		gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_imu));
-		gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_lid_imu));
-	}
-}
-DECLARE_HOOK(HOOK_CHIPSET_RESUME, motionsense_resume, HOOK_PRIO_DEFAULT);
 
 static bool base_use_alt_sensor;
 static bool lid_use_alt_sensor;

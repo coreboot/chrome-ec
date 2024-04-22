@@ -90,6 +90,7 @@
 		};
 		/* a label to prevent build break in power sequencing */
 		en_pp4200_s5: en_pp3700_s5 {
+			gpios = <&gpioh 5 (GPIO_OUTPUT_LOW)>;
 		};
 		/* Arbitrage doesn't support INPUT | ACTIVE_LOW gpios */
 		als_int_ec_odl {
@@ -194,6 +195,12 @@
 		gpio-voltage = "3v3";
 	};
 	i2c4_data_gpe7_default: i2c4_data_gpe7_default {
+		gpio-voltage = "3v3";
+	};
+	i2c5_clk_gpa4_default: i2c5_clk_gpa4_default {
+		gpio-voltage = "3v3";
+	};
+	i2c5_data_gpa5_default: i2c5_data_gpa5_default {
 		gpio-voltage = "3v3";
 	};
 };
