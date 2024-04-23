@@ -1884,6 +1884,18 @@ static enum vendor_cmd_rc vc_commit_nvmem(enum vendor_cmd_cc code,
 }
 DECLARE_VENDOR_COMMAND(VENDOR_CC_COMMIT_NVMEM, vc_commit_nvmem);
 
+static enum vendor_cmd_rc vc_get_time(enum vendor_cmd_cc code,
+				      void *buf,
+				      size_t input_size,
+				      size_t *response_size)
+{
+	uint64_t *response = buf;
+	*response = htobe64(get_time().val);
+	*response_size = sizeof(*response);
+	return VENDOR_RC_SUCCESS;
+}
+DECLARE_VENDOR_COMMAND(VENDOR_CC_GET_TIME, vc_get_time);
+
 static int command_board_properties(int argc, char **argv)
 {
 	/*
