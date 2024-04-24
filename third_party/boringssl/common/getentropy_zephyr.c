@@ -3,17 +3,16 @@
  * found in the LICENSE file.
  */
 
-/* Implement the BoringSSL sysrand from Zephyr Entropy Device. */
+/* Implement getentropy (used by BoringSSL) using Zephyr Entropy Device. */
 
 #include <errno.h>
+#include <stddef.h>
 
 #include <zephyr/drivers/entropy.h>
 #include <zephyr/kernel.h>
 
 #define rng DEVICE_DT_GET(DT_CHOSEN(zephyr_entropy))
 
-// We don't want to conflict with the linux getentropy.
-#if !defined(__linux__)
 int getentropy(void *buffer, size_t length)
 {
 	if (!buffer) {
@@ -43,4 +42,3 @@ int getentropy(void *buffer, size_t length)
 
 	return 0;
 }
-#endif // !defined(__linux__)

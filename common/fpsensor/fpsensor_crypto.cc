@@ -3,16 +3,13 @@
  * found in the LICENSE file.
  */
 
-#include "aes_gcm_helpers.h"
 #include "fpsensor/fpsensor_crypto.h"
 #include "fpsensor/fpsensor_state_without_driver_info.h"
 #include "fpsensor/fpsensor_utils.h"
-#include "openssl/aes.h"
+#include "openssl/aead.h"
 #include "openssl/mem.h"
 
-/* These must be included after the "openssl/aes.h" */
-#include "crypto/fipsmodule/aes/internal.h"
-#include "crypto/fipsmodule/modes/internal.h"
+#include <span>
 
 extern "C" {
 #include "otp_key.h"
@@ -247,7 +244,10 @@ derive_positive_match_secret(uint8_t *output,
 	return ret;
 }
 
-enum ec_error_list derive_encryption_key(uint8_t *out_key, const uint8_t *salt)
+enum ec_error_list derive_encryption_key_with_info(uint8_t *out_key,
+						   const uint8_t *salt,
+						   const uint8_t *info,
+						   size_t info_size)
 {
 	enum ec_error_list ret;
 	uint8_t ikm[IKM_SIZE_BYTES];
@@ -255,7 +255,11 @@ enum ec_error_list derive_encryption_key(uint8_t *out_key, const uint8_t *salt)
 
 	BUILD_ASSERT(SBP_ENC_KEY_LEN <= SHA256_DIGEST_SIZE);
 	BUILD_ASSERT(SBP_ENC_KEY_LEN <= CONFIG_ROLLBACK_SECRET_SIZE);
-	BUILD_ASSERT(sizeof(user_id) == SHA256_DIGEST_SIZE);
+
+	if (info_size != SHA256_DIGEST_SIZE) {
+		CPRINTS("Invalid info size: %zu", info_size);
+		return EC_ERROR_INVAL;
+	}
 
 	ret = get_ikm(ikm);
 	if (ret != EC_SUCCESS) {
@@ -275,81 +279,89 @@ enum ec_error_list derive_encryption_key(uint8_t *out_key, const uint8_t *salt)
 	 * https://tools.ietf.org/html/rfc5869#section-2.3
 	 */
 	ret = hkdf_expand_one_step(out_key, SBP_ENC_KEY_LEN, prk, sizeof(prk),
-				   (uint8_t *)user_id, sizeof(user_id));
+				   info, SHA256_DIGEST_SIZE);
 	OPENSSL_cleanse(prk, sizeof(prk));
 
 	return ret;
 }
 
-enum ec_error_list aes_128_gcm_encrypt(const uint8_t *key, size_t key_size,
-				       const uint8_t *plaintext,
-				       uint8_t *ciphertext, size_t text_size,
-				       const uint8_t *nonce, size_t nonce_size,
-				       uint8_t *tag, size_t tag_size)
+enum ec_error_list derive_encryption_key(uint8_t *out_key, const uint8_t *salt)
 {
-	int res;
-	AES_KEY aes_key;
-	GCM128_CONTEXT ctx;
+	BUILD_ASSERT(sizeof(user_id) == SHA256_DIGEST_SIZE);
+	return derive_encryption_key_with_info(
+		out_key, salt, reinterpret_cast<uint8_t *>(user_id),
+		sizeof(user_id));
+}
 
-	if (nonce_size != FP_CONTEXT_NONCE_BYTES) {
-		CPRINTS("Invalid nonce size %zu bytes", nonce_size);
+enum ec_error_list aes_128_gcm_encrypt(std::span<const uint8_t> key,
+				       std::span<const uint8_t> plaintext,
+				       std::span<uint8_t> ciphertext,
+				       std::span<const uint8_t> nonce,
+				       std::span<uint8_t> tag)
+{
+	if (nonce.size() != FP_CONTEXT_NONCE_BYTES) {
+		CPRINTS("Invalid nonce size %zu bytes", nonce.size());
 		return EC_ERROR_INVAL;
 	}
 
-	/* TODO(b/279950931): Use public boringssl API. */
-	res = AES_set_encrypt_key(key, 8 * key_size, &aes_key);
-	if (res) {
-		CPRINTS("Failed to set encryption key: %d", res);
+	bssl::ScopedEVP_AEAD_CTX ctx;
+	int ret = EVP_AEAD_CTX_init(ctx.get(), EVP_aead_aes_128_gcm(),
+				    key.data(), key.size(), tag.size(),
+				    nullptr);
+	if (!ret) {
+		CPRINTS("Failed to initialize encryption context");
 		return EC_ERROR_UNKNOWN;
 	}
-	CRYPTO_gcm128_init(&ctx, &aes_key, (block128_f)AES_encrypt, 0);
-	CRYPTO_gcm128_setiv(&ctx, &aes_key, nonce, nonce_size);
-	/* CRYPTO functions return 1 on success, 0 on error. */
-	res = CRYPTO_gcm128_encrypt(&ctx, &aes_key, plaintext, ciphertext,
-				    text_size);
-	if (!res) {
-		CPRINTS("Failed to encrypt: %d", res);
+
+	size_t out_tag_size = 0;
+	std::span<uint8_t> extra_input; /* no extra input */
+	std::span<uint8_t> additional_data; /* no additional data */
+	ret = EVP_AEAD_CTX_seal_scatter(
+		ctx.get(), ciphertext.data(), tag.data(), &out_tag_size,
+		tag.size(), nonce.data(), nonce.size(), plaintext.data(),
+		plaintext.size(), extra_input.data(), extra_input.size(),
+		additional_data.data(), additional_data.size());
+	if (!ret) {
+		CPRINTS("Failed to encrypt");
 		return EC_ERROR_UNKNOWN;
 	}
-	CRYPTO_gcm128_tag(&ctx, tag, tag_size);
+	if (out_tag_size != tag.size()) {
+		CPRINTS("Resulting tag size %zu does not match expected size: %zu",
+			out_tag_size, tag.size());
+		return EC_ERROR_UNKNOWN;
+	}
 	return EC_SUCCESS;
 }
 
-enum ec_error_list aes_128_gcm_decrypt(const uint8_t *key, size_t key_size,
-				       uint8_t *plaintext,
-				       const uint8_t *ciphertext,
-				       size_t text_size, const uint8_t *nonce,
-				       size_t nonce_size, const uint8_t *tag,
-				       size_t tag_size)
+enum ec_error_list aes_128_gcm_decrypt(std::span<const uint8_t> key,
+				       std::span<uint8_t> plaintext,
+				       std::span<const uint8_t> ciphertext,
+				       std::span<const uint8_t> nonce,
+				       std::span<const uint8_t> tag)
 {
-	int res;
-	AES_KEY aes_key;
-	GCM128_CONTEXT ctx;
-
-	if (nonce_size != FP_CONTEXT_NONCE_BYTES) {
-		CPRINTS("Invalid nonce size %zu bytes", nonce_size);
+	if (nonce.size() != FP_CONTEXT_NONCE_BYTES) {
+		CPRINTS("Invalid nonce size %zu bytes", nonce.size());
 		return EC_ERROR_INVAL;
 	}
 
-	/* TODO(b/279950931): Use public boringssl API. */
-	res = AES_set_encrypt_key(key, 8 * key_size, &aes_key);
-	if (res) {
-		CPRINTS("Failed to set decryption key: %d", res);
+	bssl::ScopedEVP_AEAD_CTX ctx;
+	int ret = EVP_AEAD_CTX_init(ctx.get(), EVP_aead_aes_128_gcm(),
+				    key.data(), key.size(), tag.size(),
+				    nullptr);
+	if (!ret) {
+		CPRINTS("Failed to initialize encryption context");
 		return EC_ERROR_UNKNOWN;
 	}
-	CRYPTO_gcm128_init(&ctx, &aes_key, (block128_f)AES_encrypt, 0);
-	CRYPTO_gcm128_setiv(&ctx, &aes_key, nonce, nonce_size);
-	/* CRYPTO functions return 1 on success, 0 on error. */
-	res = CRYPTO_gcm128_decrypt(&ctx, &aes_key, ciphertext, plaintext,
-				    text_size);
-	if (!res) {
-		CPRINTS("Failed to decrypt: %d", res);
+
+	std::span<uint8_t> additional_data; /* no additional data */
+	ret = EVP_AEAD_CTX_open_gather(
+		ctx.get(), plaintext.data(), nonce.data(), nonce.size(),
+		ciphertext.data(), ciphertext.size(), tag.data(), tag.size(),
+		additional_data.data(), additional_data.size());
+	if (!ret) {
+		CPRINTS("Failed to decrypt");
 		return EC_ERROR_UNKNOWN;
 	}
-	res = CRYPTO_gcm128_finish(&ctx, tag, tag_size);
-	if (!res) {
-		CPRINTS("Found incorrect tag: %d", res);
-		return EC_ERROR_UNKNOWN;
-	}
+
 	return EC_SUCCESS;
 }

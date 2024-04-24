@@ -119,8 +119,7 @@ fp_command_establish_pairing_key_wrap(struct host_cmd_handler_args *args)
 
 	ret = encrypt_data_in_place(FP_AES_KEY_ENC_METADATA_VERSION,
 				    r->encrypted_pairing_key.info,
-				    r->encrypted_pairing_key.data,
-				    sizeof(r->encrypted_pairing_key.data));
+				    r->encrypted_pairing_key.data);
 	if (ret != EC_SUCCESS) {
 		return EC_RES_UNAVAILABLE;
 	}
@@ -153,9 +152,7 @@ fp_command_load_pairing_key(struct host_cmd_handler_args *args)
 	}
 
 	ret = decrypt_data(params->encrypted_pairing_key.info,
-			   params->encrypted_pairing_key.data,
-			   sizeof(params->encrypted_pairing_key.data),
-			   pairing_key.data(), pairing_key.size());
+			   params->encrypted_pairing_key.data, pairing_key);
 	if (ret != EC_SUCCESS) {
 		CPRINTS("load_pairing_key: Failed to decrypt pairing key");
 		return EC_RES_UNAVAILABLE;
@@ -206,9 +203,7 @@ fp_command_nonce_context(struct host_cmd_handler_args *args)
 
 	std::array<uint8_t, SHA256_DIGEST_SIZE> gsc_session_key;
 	enum ec_error_list ret = generate_gsc_session_key(
-		auth_nonce.data(), auth_nonce.size(), p->gsc_nonce,
-		sizeof(p->gsc_nonce), pairing_key.data(), pairing_key.size(),
-		gsc_session_key.data(), gsc_session_key.size());
+		auth_nonce, p->gsc_nonce, pairing_key, gsc_session_key);
 
 	if (ret != EC_SUCCESS) {
 		return EC_RES_INVALID_PARAM;
@@ -220,9 +215,7 @@ fp_command_nonce_context(struct host_cmd_handler_args *args)
 		  raw_user_id.data());
 
 	ret = decrypt_data_with_gsc_session_key_in_place(
-		gsc_session_key.data(), gsc_session_key.size(),
-		p->enc_user_id_iv, sizeof(p->enc_user_id_iv),
-		raw_user_id.data(), raw_user_id.size());
+		gsc_session_key, p->enc_user_id_iv, raw_user_id);
 
 	if (ret != EC_SUCCESS) {
 		return EC_RES_ERROR;
@@ -265,8 +258,7 @@ fp_command_read_match_secret_with_pubkey(struct host_cmd_handler_args *args)
 	}
 
 	enum ec_error_list ret = encrypt_data_with_ecdh_key_in_place(
-		params->pubkey, secret.data(), secret.size(), response->iv,
-		sizeof(response->iv), response->pubkey);
+		params->pubkey, secret, response->iv, response->pubkey);
 
 	if (ret != EC_SUCCESS) {
 		return EC_RES_UNAVAILABLE;
@@ -307,20 +299,18 @@ static enum ec_status unlock_template(uint16_t idx)
 	/* We reuse the fp_enc_buffer for the data decryption, because we don't
 	 * want to allocate a huge array on the stack.
 	 * Note: fp_enc_buffer = fp_template || fp_positive_match_salt */
-	constexpr size_t template_size = sizeof(fp_template[0]);
-	constexpr size_t salt_size = sizeof(fp_positive_match_salt[0]);
-	constexpr size_t enc_buffer_size = template_size + salt_size;
-	static_assert(enc_buffer_size <= sizeof(fp_enc_buffer));
+	constexpr std::span enc_template(fp_enc_buffer, sizeof(fp_template[0]));
+	constexpr std::span enc_salt(enc_template.end(),
+				     sizeof(fp_positive_match_salt[0]));
+	constexpr std::span enc_buffer(fp_enc_buffer,
+				       enc_template.size() + enc_salt.size());
+	static_assert(enc_buffer.size() <= sizeof(fp_enc_buffer));
 
-	const std::span enc_template(std::begin(fp_enc_buffer),
-				     std::begin(fp_enc_buffer) + template_size);
-	const std::span enc_salt(enc_template.end(),
-				 enc_template.end() + salt_size);
-
-	std::copy(fp_template[idx], fp_template[idx] + template_size,
+	std::copy(fp_template[idx], fp_template[idx] + enc_template.size(),
 		  enc_template.begin());
 	std::copy(fp_positive_match_salt[idx],
-		  fp_positive_match_salt[idx] + salt_size, enc_salt.begin());
+		  fp_positive_match_salt[idx] + enc_salt.size(),
+		  enc_salt.begin());
 
 	CleanseWrapper<std::array<uint8_t, SBP_ENC_KEY_LEN> > key;
 	if (derive_encryption_key(key.data(), enc_info.encryption_salt) !=
@@ -330,10 +320,8 @@ static enum ec_status unlock_template(uint16_t idx)
 		return EC_RES_UNAVAILABLE;
 	}
 
-	if (aes_128_gcm_decrypt(key.data(), SBP_ENC_KEY_LEN, fp_enc_buffer,
-				fp_enc_buffer, enc_buffer_size, enc_info.nonce,
-				FP_CONTEXT_NONCE_BYTES, enc_info.tag,
-				FP_CONTEXT_TAG_BYTES) != EC_SUCCESS) {
+	if (aes_128_gcm_decrypt(key, enc_buffer, enc_buffer, enc_info.nonce,
+				enc_info.tag) != EC_SUCCESS) {
 		fp_clear_finger_context(idx);
 		OPENSSL_cleanse(fp_enc_buffer, sizeof(fp_enc_buffer));
 		return EC_RES_UNAVAILABLE;

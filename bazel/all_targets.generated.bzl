@@ -1370,6 +1370,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "lotso",
+        board = "lotso",
+    )
+    ec_target(
         name = "lux",
         board = "lux",
         chip = "npcx",
@@ -2063,6 +2067,10 @@ def all_targets():
         chip = "it83xx",
         core = "riscv-rv32i",
         zephyr = False,
+    )
+    ec_target(
+        name = "spikyrock",
+        board = "spikyrock",
     )
     ec_target(
         name = "staff",

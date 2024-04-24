@@ -121,6 +121,7 @@ DATA_ACCESS_VIOLATION_200B0000_REGEX = re.compile(
 PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
 
 BLOONCHIPPER = "bloonchipper"
+BUCCANEER = "buccaneer"
 DARTMONKEY = "dartmonkey"
 HELIPILOT = "helipilot"
 
@@ -195,6 +196,8 @@ class BoardConfig:
     expected_fp_power: PowerUtilization
     expected_mcu_power: PowerUtilization
     variants: Dict
+    expected_fp_power_zephyr: PowerUtilization = None
+    expected_mcu_power_zephyr: PowerUtilization = None
 
 
 @dataclass
@@ -413,7 +416,9 @@ class AllTests:
                 test_name="power_utilization",
                 apptype_to_use=ApplicationType.PRODUCTION,
                 toggle_power=True,
-                pre_test_callback=lambda config=None: set_sleep_mode(False),
+                pre_test_callback=lambda config: power_pre_test(
+                    board_config=config, enter_sleep=False
+                ),
                 post_test_callback=verify_idle_power_utilization,
                 finish_regexes=[RW_IMAGE_BOOTED_REGEX],
             ),
@@ -422,7 +427,9 @@ class AllTests:
                 test_name="power_utilization",
                 apptype_to_use=ApplicationType.PRODUCTION,
                 toggle_power=True,
-                pre_test_callback=lambda config=None: set_sleep_mode(True),
+                pre_test_callback=lambda config: power_pre_test(
+                    board_config=config, enter_sleep=True
+                ),
                 post_test_callback=verify_sleep_power_utilization,
                 finish_regexes=[RW_IMAGE_BOOTED_REGEX],
             ),
@@ -500,6 +507,13 @@ BLOONCHIPPER_CONFIG = BoardConfig(
     expected_mcu_power=PowerUtilization(
         idle=RangedValue(16.05, 0.14 * 2), sleep=RangedValue(0.53, 0.35 * 2)
     ),
+    expected_fp_power_zephyr=PowerUtilization(
+        idle=RangedValue(0.17, 0.04), sleep=RangedValue(0.17, 0.04)
+    ),
+    # TODO(b/311568657) Update expected value once b/311568657 is closed.
+    expected_mcu_power_zephyr=PowerUtilization(
+        idle=RangedValue(14.61, 0.14 * 2), sleep=RangedValue(0.28, 0.04)
+    ),
     variants={
         "bloonchipper_v2.0.4277": {
             "ro_image_path": BLOONCHIPPER_V4277_IMAGE_PATH
@@ -556,11 +570,17 @@ HELIPILOT_CONFIG = BoardConfig(
     expected_mcu_power=PowerUtilization(
         idle=RangedValue(34.8, 3.0), sleep=RangedValue(2.7, 2.5)
     ),
+    # TODO(b/336640650): Add helipilot variants once RO is uploaded
     variants={},
 )
 
+BUCCANEER_CONFIG = HELIPILOT_CONFIG
+BUCCANEER_CONFIG.name = BUCCANEER
+# TODO(b/336640151): Add buccaneer variants once RO is created
+
 BOARD_CONFIGS = {
     "bloonchipper": BLOONCHIPPER_CONFIG,
+    "buccaneer": BUCCANEER_CONFIG,
     "dartmonkey": DARTMONKEY_CONFIG,
     "helipilot": HELIPILOT_CONFIG,
 }
@@ -692,7 +712,7 @@ def power_cycle(board_config: BoardConfig) -> None:
 
 def fp_sensor_sel(
     board_config: BoardConfig, sensor_type: FPSensorType = FPSensorType.FPC
-) -> None:
+) -> bool:
     """
     Explicitly select the appropriate fingerprint sensor.
     This function assumes that the fp_sensor_sel servo control is connected to
@@ -707,10 +727,25 @@ def fp_sensor_sel(
     ]
 
     logging.debug('Running command: "%s"', " ".join(cmd))
-    subprocess.run(cmd, check=False).check_returncode()
+    proc = subprocess.run(cmd, check=False)
 
-    # power cycle after setting sensor type to ensure detection
-    power_cycle(board_config)
+    if proc.returncode == 0:
+        # power cycle after setting sensor type to ensure detection
+        power_cycle(board_config)
+        return True
+
+    return False
+
+
+def power_pre_test(board_config: BoardConfig, enter_sleep: bool) -> bool:
+    """
+    Prepare a board for a power_utilization test
+    """
+
+    if not set_sleep_mode(enter_sleep):
+        return False
+
+    return fp_sensor_sel(board_config)
 
 
 def hw_write_protect(enable: bool) -> None:
@@ -1102,17 +1137,6 @@ def flash_and_run_test(
         )
         return False
 
-    if test.toggle_power:
-        power_cycle(board_config)
-    else:
-        # In some cases flash_ec leaves the board off, so just ensure it is on
-        power(board_config, power_on=True)
-
-    hw_write_protect(test.enable_hw_write_protect)
-
-    # run the test
-    logging.info('Running test: "%s"', test.config_name)
-
     with ExitStack() as stack:
         if args.remote and args.console_port:
             console_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1124,6 +1148,17 @@ def flash_and_run_test(
             # pylint: disable-next=consider-using-with
             console_file = open(get_console(board_config), "wb+", buffering=0)
             console = stack.enter_context(console_file)
+
+        if test.toggle_power:
+            power_cycle(board_config)
+        else:
+            # In some cases flash_ec leaves the board off, so just ensure it is on
+            power(board_config, power_on=True)
+
+        hw_write_protect(test.enable_hw_write_protect)
+
+        # run the test
+        logging.info('Running test: "%s"', test.config_name)
 
         return run_test(
             test,
@@ -1257,6 +1292,11 @@ def main():
     validate_args_combination(args)
 
     board_config = BOARD_CONFIGS[args.board]
+    # Use expected values for Zephyr
+    if args.zephyr:
+        board_config.expected_fp_power = board_config.expected_fp_power_zephyr
+        board_config.expected_mcu_power = board_config.expected_mcu_power_zephyr
+
     test_list = get_test_list(board_config, args.tests, args.with_private)
     logging.debug("Running tests: %s", [test.config_name for test in test_list])
 
