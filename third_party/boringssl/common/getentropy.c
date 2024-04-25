@@ -3,16 +3,13 @@
  * found in the LICENSE file.
  */
 
-/* Implement the boringssl sysrand from EC TRNG. */
+/* Implement getentropy (used by BoringSSL) using the EC TRNG. */
 
 #include "trng.h"
 
 #include <errno.h>
-
 #include <unistd.h>
 
-// We don't want to conflict with the linux getentropy.
-#if !defined(__linux__)
 int getentropy(void *buffer, size_t length)
 {
 	if (!buffer) {
@@ -30,4 +27,3 @@ int getentropy(void *buffer, size_t length)
 	trng_exit();
 	return 0;
 }
-#endif // !defined(__linux__)
