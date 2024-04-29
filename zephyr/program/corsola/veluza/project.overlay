@@ -17,6 +17,7 @@
 #include "../ite_usbc.dtsi"
 #include "../ite_shi.dtsi"
 #include "./cbi.dtsi"
+#include "./keyboard.dtsi"
 #include "./thermistor.dtsi"
 / {
 	named-gpios {
@@ -29,6 +30,12 @@
 		usb_c0_frs_en: usb_c0_frs_en {
 			gpios = <&gpiof 0 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_USB_C0_FRS_EN";
+		};
+		usb_a1_fault_odl: usb_a1_fault_odl {
+			gpios = <&gpioh 6 GPIO_INPUT>;
+		};
+		en_pp5000_usb_a1_vbus_x: en_pp5000_usb_a1_vbus_x {
+			gpios = <&gpioa 7 GPIO_ODR_HIGH>;
 		};
 	};
 	unused-pins {
@@ -43,13 +50,15 @@
 			<&gpioe 1 GPIO_INPUT>,
 			/* ec_pen_chg_dis_odl */
 			<&gpioh 3 GPIO_ODR_HIGH>,
+			/* usb_c1_bc12_charger_int_odl */
+			<&gpioj 4 GPIO_INPUT>,
 			/* unnamed nc pins */
+			<&gpioh 2 GPIO_INPUT_PULL_DOWN>,
 			<&gpioa 3 GPIO_INPUT_PULL_DOWN>,
 			<&gpioa 6 GPIO_INPUT_PULL_DOWN>,
-			<&gpioa 7 GPIO_INPUT_PULL_DOWN>,
+			<&gpiof 1 GPIO_INPUT_PULL_DOWN>,
 			<&gpiod 7 GPIO_INPUT_PULL_DOWN>,
 			<&gpioh 0 GPIO_INPUT_PULL_DOWN>,
-			<&gpioh 6 GPIO_INPUT_PULL_DOWN>,
 			<&gpioi 3 GPIO_INPUT_PULL_DOWN>,
 			<&gpioi 6 GPIO_INPUT_PULL_DOWN>,
 			<&gpioi 7 GPIO_INPUT_PULL_DOWN>,
@@ -77,7 +86,7 @@
 	};
 	usbc {
 		port0@0 {
-			ppc_alt = <&ppc_port0>;
+			ppc = <&ppc_port0>;
 		};
 		/delete-node/ port1@1;
 	};
@@ -86,6 +95,10 @@
 			enum-name = "ADC_TEMP_SENSOR_2_AMBIENT";
 			io-channels = <&adc0 5>;
 		};
+	};
+	named-i2c-ports {
+		compatible = "named-i2c-ports";
+		/delete-node/ usb-c1;
 	};
 	temp_ambient: ambient {
 		compatible = "cros-ec,temp-sensor-thermistor";
@@ -210,8 +223,26 @@
 		};
 	};
 	batteries {
-		default_battery: c235 {
-			compatible = "celxpert,c235-41", "battery-smart";
+		default_battery: 313_b7_32_a {
+			compatible = "nvt,313-b7-32-a", "battery-smart";
+		};
+		313_ac_32_a {
+			compatible = "cosmx,313-ac-32-a", "battery-smart";
+		};
+		313_2d_32_a {
+			compatible = "dynapack,313-2d-32-a", "battery-smart";
+		};
+		333_2c_32_a {
+			compatible = "dynapack,333-2c-32-a", "battery-smart";
+		};
+		313_12_32_a {
+			compatible = "smp,313-12-32-a", "battery-smart";
+		};
+		333_17_32_a {
+			compatible = "smp,333-17-32-a", "battery-smart";
+		};
+		333_cf_32_a {
+			compatible = "sunwoda,333-cf-32-a", "battery-smart";
 		};
 	};
 };
@@ -240,4 +271,10 @@
 &i2c4 {
 	/delete-node/ tusb1064-mux-1@44;
 	/delete-node/ ps8743_mux_1;
+};
+
+/* Veluza usba port enable config */
+&usba_port_enable_list {
+	enable-pins = <&en_pp5000_usb_a0_vbus
+		       &en_pp5000_usb_a1_vbus_x>;
 };

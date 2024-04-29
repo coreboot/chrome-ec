@@ -572,12 +572,11 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 		       sizeof(fp_positive_match_salt[0]));
 
 		/* Encrypt the secret blob in-place. */
-		ret = aes_128_gcm_encrypt(key, SBP_ENC_KEY_LEN,
-					  encrypted_template,
-					  encrypted_template,
-					  encrypted_blob_size, enc_info->nonce,
-					  FP_CONTEXT_NONCE_BYTES, enc_info->tag,
-					  FP_CONTEXT_TAG_BYTES);
+		std::span encrypted_template_span(encrypted_template,
+						  encrypted_blob_size);
+		ret = aes_128_gcm_encrypt(key, encrypted_template_span,
+					  encrypted_template_span,
+					  enc_info->nonce, enc_info->tag);
 		OPENSSL_cleanse(key, sizeof(key));
 		if (ret != EC_SUCCESS) {
 			CPRINTS("fgr%d: Failed to encrypt template", fgr);
@@ -633,7 +632,7 @@ validate_template_format(struct ec_fp_template_encryption_metadata *enc_info)
 	return EC_RES_SUCCESS;
 }
 
-enum ec_status fp_commit_template(const uint8_t *context, size_t context_size)
+enum ec_status fp_commit_template(std::span<const uint8_t> context)
 {
 	ScopedFastCpu fast_cpu;
 
@@ -675,19 +674,18 @@ enum ec_status fp_commit_template(const uint8_t *context, size_t context_size)
 	enum ec_error_list ret;
 	if (fp_encryption_status & FP_CONTEXT_USER_ID_SET) {
 		ret = derive_encryption_key_with_info(
-			key, enc_info->encryption_salt, context, context_size);
+			key, enc_info->encryption_salt, context);
 		if (ret != EC_SUCCESS) {
 			CPRINTS("fgr%d: Failed to derive key", idx);
 			return EC_RES_UNAVAILABLE;
 		}
 
 		/* Decrypt the secret blob in-place. */
-		ret = aes_128_gcm_decrypt(key, SBP_ENC_KEY_LEN,
-					  encrypted_template,
-					  encrypted_template,
-					  encrypted_blob_size, enc_info->nonce,
-					  FP_CONTEXT_NONCE_BYTES, enc_info->tag,
-					  FP_CONTEXT_TAG_BYTES);
+		std::span encrypted_template_span(encrypted_template,
+						  encrypted_blob_size);
+		ret = aes_128_gcm_decrypt(key, encrypted_template_span,
+					  encrypted_template_span,
+					  enc_info->nonce, enc_info->tag);
 		OPENSSL_cleanse(key, sizeof(key));
 		if (ret != EC_SUCCESS) {
 			CPRINTS("fgr%d: Failed to decipher template", idx);
@@ -748,8 +746,9 @@ static enum ec_status fp_command_template(struct host_cmd_handler_args *args)
 	memcpy(&fp_enc_buffer[offset], params->data, size);
 
 	if (xfer_complete) {
-		return fp_commit_template(reinterpret_cast<uint8_t *>(user_id),
-					  sizeof(user_id));
+		return fp_commit_template(
+			{ reinterpret_cast<uint8_t *>(user_id),
+			  sizeof(user_id) });
 	}
 
 	return EC_RES_SUCCESS;
@@ -782,8 +781,8 @@ fp_command_migrate_template_to_nonce_context(struct host_cmd_handler_args *args)
 
 	BUILD_ASSERT(sizeof(params->userid) == SHA256_DIGEST_SIZE);
 	ec_status res = fp_commit_template(
-		reinterpret_cast<const uint8_t *>(params->userid),
-		sizeof(params->userid));
+		{ reinterpret_cast<const uint8_t *>(params->userid),
+		  sizeof(params->userid) });
 	if (res != EC_RES_SUCCESS) {
 		return res;
 	}

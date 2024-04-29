@@ -48,8 +48,7 @@ const struct tcpc_config_t tcpc_config[] = {
 			.addr_flags = NCT38XX_I2C_ADDR1_1_FLAGS,
 		},
 		.drv = &nct38xx_tcpm_drv,
-		.flags = TCPC_FLAGS_TCPCI_REV2_0 |
-			TCPC_FLAGS_NO_DEBUG_ACC_CONTROL,
+		.flags = TCPC_FLAGS_TCPCI_REV2_0,
 	},
 	[USBC_PORT_C2] = {
 		.bus_type = EC_BUS_TYPE_I2C,
@@ -277,4 +276,9 @@ void retimer_interrupt(enum gpio_signal signal)
 	/*
 	 * TODO(b/179513527): add USB-C support
 	 */
+}
+
+__override bool board_is_dts_port(int port)
+{
+	return port == USBC_PORT_C0;
 }

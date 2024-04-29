@@ -482,6 +482,8 @@ struct pdc_port_t {
 	ATOMIC_DEFINE(pdc_cmd_flags, CMD_PDC_COUNT);
 	/** Flag to suspend the PDC Power Mgmt state machine */
 	atomic_t suspend;
+	/** Flag to notify that a Hard Reset was sent */
+	atomic_t hard_reset_sent;
 
 	/** Source TypeC attached local state variable */
 	enum src_typec_attached_local_state_t src_typec_attached_local_state;
@@ -734,8 +736,7 @@ static uint32_t pdc_max_request_mv = CONFIG_PLATFORM_EC_PD_MAX_VOLTAGE_MV;
 /**
  * @brief As a sink, this is the max power (in milliwatts) needed to operate
  */
-static uint32_t pdc_max_operating_power =
-	CONFIG_PLATFORM_EC_PD_OPERATING_POWER_MW;
+static uint32_t pdc_max_operating_power = CONFIG_PLATFORM_EC_PD_MAX_POWER_MW;
 
 static enum pdc_state_t get_pdc_state(struct pdc_port_t *port)
 {
@@ -903,6 +904,8 @@ static bool handle_connector_status(struct pdc_port_t *port)
 		LOG_INF("C%d: Reset complete indicator", port_number);
 		pdc_power_mgmt_notify_event(port_number,
 					    PD_STATUS_EVENT_HARD_RESET);
+
+		atomic_set(&port->hard_reset_sent, true);
 	}
 
 	if (!status->connect_status) {
@@ -1201,6 +1204,8 @@ static void pdc_snk_attached_run(void *obj)
 	struct pdc_port_t *port = (struct pdc_port_t *)obj;
 	const struct pdc_config_t *const config = port->dev->config;
 	uint32_t max_ma, max_mv, max_mw;
+	uint32_t tmp_curr_ma, tmp_volt_mv, tmp_pwr_mw;
+	uint32_t pdo_pwr_mw;
 	uint32_t flags;
 
 	/* The CCI_EVENT is set on a connector disconnect, so check the
@@ -1255,21 +1260,30 @@ static void pdc_snk_attached_run(void *obj)
 		return;
 	case SNK_ATTACHED_EVALUATE_PDOS:
 		port->snk_attached_local_state = SNK_ATTACHED_START_CHARGING;
-		/* Select vSafe5V */
-		port->snk_policy.pdo_index = 1;
-		port->snk_policy.pdo = port->snk_policy.pdos[0];
+		pdo_pwr_mw = 0;
 		flags = 0;
 
 		for (int i = 0; i < PDO_NUM; i++) {
-			LOG_INF("PDO%d: %08x, %d %d", i,
-				port->snk_policy.pdos[i],
-				PDO_FIXED_GET_VOLT(port->snk_policy.pdos[i]),
-				PDO_FIXED_GET_CURR(port->snk_policy.pdos[i]));
+			if ((port->snk_policy.pdos[i] & PDO_TYPE_MASK) !=
+			    PDO_TYPE_FIXED) {
+				continue;
+			}
 
-			/* Select maximum charge voltage */
-			if (pdc_max_request_mv ==
-			    PDO_FIXED_GET_VOLT(port->snk_policy.pdos[i])) {
-				port->snk_policy.pdo_index = i + 1;
+			tmp_volt_mv =
+				PDO_FIXED_GET_VOLT(port->snk_policy.pdos[i]);
+			tmp_curr_ma =
+				PDO_FIXED_GET_CURR(port->snk_policy.pdos[i]);
+			tmp_pwr_mw = (tmp_volt_mv * tmp_curr_ma) / 1000;
+
+			LOG_INF("PDO%d: %08x, %d %d %d", i,
+				port->snk_policy.pdos[i], tmp_volt_mv,
+				tmp_curr_ma, tmp_pwr_mw);
+
+			if ((tmp_pwr_mw > pdo_pwr_mw) &&
+			    (tmp_pwr_mw <= pdc_max_operating_power) &&
+			    (tmp_volt_mv <= pdc_max_request_mv)) {
+				pdo_pwr_mw = tmp_pwr_mw;
+				port->snk_policy.pdo_index = i;
 				port->snk_policy.pdo = port->snk_policy.pdos[i];
 			}
 		}
@@ -1284,6 +1298,9 @@ static void pdc_snk_attached_run(void *obj)
 		if (max_mw < pdc_max_operating_power) {
 			flags |= RDO_CAP_MISMATCH;
 		}
+
+		/* Prepare PDO index for creation of RDO */
+		port->snk_policy.pdo_index += 1;
 
 		/* Set RDO to send */
 		if ((port->snk_policy.pdo & PDO_TYPE_MASK) ==
@@ -1343,7 +1360,14 @@ static void pdc_snk_attached_run(void *obj)
 		return;
 	case SNK_ATTACHED_RUN:
 		set_attached_pdc_state(port, SNK_ATTACHED_STATE);
-		run_snk_policies(port);
+		/* Hard Reset could disable Sink FET. Re-enable it */
+		if (atomic_get(&port->hard_reset_sent)) {
+			atomic_clear(&port->hard_reset_sent);
+			port->snk_attached_local_state =
+				SNK_ATTACHED_SET_SINK_PATH;
+		} else {
+			run_snk_policies(port);
+		}
 		break;
 	}
 }
@@ -1737,7 +1761,14 @@ static void pdc_snk_typec_only_run(void *obj)
 		queue_internal_cmd(port, CMD_PDC_SET_SINK_PATH);
 		return;
 	case SNK_TYPEC_ATTACHED_RUN:
-		send_pending_public_commands(port);
+		/* Hard Reset could disable Sink FET. Re-enable it */
+		if (atomic_get(&port->hard_reset_sent)) {
+			atomic_clear(&port->hard_reset_sent);
+			port->snk_typec_attached_local_state =
+				SNK_TYPEC_ATTACHED_SET_SINK_PATH_ON;
+		} else {
+			send_pending_public_commands(port);
+		}
 		break;
 	}
 }

@@ -8,8 +8,6 @@
 #include "include/ppm.h"
 #include "ppm_common.h"
 
-#include <pthread.h>
-
 const char *ppm_state_strings[PPM_STATE_MAX] = {
 	"PPM_STATE_NOT_READY",	    "PPM_STATE_IDLE",
 	"PPM_STATE_IDLE_NOTIFY",    "PPM_STATE_PROCESSING_COMMAND",
@@ -963,7 +961,7 @@ static void ppm_common_cleanup(struct ucsi_ppm_driver *driver)
 	}
 }
 
-struct ucsi_ppm_driver *ppm_open(struct ucsi_pd_driver *pd_driver)
+struct ucsi_ppm_driver *ppm_open(const struct ucsi_pd_driver *pd_driver)
 {
 	struct ppm_common_device *dev = NULL;
 	struct ucsi_ppm_driver *drv = NULL;
