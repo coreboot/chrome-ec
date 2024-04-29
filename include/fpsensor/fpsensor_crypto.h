@@ -42,21 +42,21 @@ enum ec_error_list hkdf_expand(uint8_t *out_key, size_t out_key_size,
 /**
  * Derive hardware encryption key from rollback secret, |salt|, and |info|.
  *
- * @param outkey the pointer to buffer holding the output key.
+ * @param out_key the pointer to buffer holding the output key.
  * @param salt the salt to use in HKDF.
  * @param info the info to use in HKDF.
- * @param info_size the size of |info| in bytes.
  * @return EC_SUCCESS on success and error code otherwise.
  */
-enum ec_error_list derive_encryption_key_with_info(uint8_t *out_key,
-						   const uint8_t *salt,
-						   const uint8_t *info,
-						   size_t info_size);
+enum ec_error_list
+derive_encryption_key_with_info(std::span<uint8_t> out_key,
+				std::span<const uint8_t> salt,
+				std::span<const uint8_t> info);
 
 /**
  * Call derive_encryption_key_with_info with the context user_id as |info|.
  */
-enum ec_error_list derive_encryption_key(uint8_t *out_key, const uint8_t *salt);
+enum ec_error_list derive_encryption_key(std::span<uint8_t> out_key,
+					 std::span<const uint8_t> salt);
 
 /**
  * Derive positive match secret from |input_positive_match_salt| and
@@ -68,9 +68,9 @@ enum ec_error_list derive_encryption_key(uint8_t *out_key, const uint8_t *salt);
  * least FP_POSITIVE_MATCH_SALT_BYTES in size.
  * @return EC_SUCCESS on success and error code otherwise.
  */
-enum ec_error_list
-derive_positive_match_secret(uint8_t *output,
-			     const uint8_t *input_positive_match_salt);
+enum ec_error_list derive_positive_match_secret(
+	std::span<uint8_t> output,
+	std::span<const uint8_t> input_positive_match_salt);
 
 /**
  * Encrypt |plaintext| using AES-GCM128.

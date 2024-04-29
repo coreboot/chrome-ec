@@ -98,7 +98,6 @@
 
 #define I2C_PORT_USB_C0_C2_MUX NPCX_I2C_PORT3_0
 
-#define I2C_PORT_PSE NPCX_I2C_PORT5_0
 #define I2C_PORT_ADB NPCX_I2C_PORT6_1
 
 #define I2C_PORT_EEPROM NPCX_I2C_PORT7_0
@@ -128,9 +127,6 @@
 
 /* ADC */
 #define CONFIG_ADC
-
-/* PSE */
-#define CONFIG_PSE_LTC4291
 
 /*
  * TODO(b/197478860): Enable the fan control. We need
@@ -186,7 +182,7 @@ enum fan_channel { FAN_CH_0 = 0, FAN_CH_COUNT };
 
 enum mft_channel { MFT_CH_0 = 0, MFT_CH_COUNT };
 
-enum cec_port { CEC_PORT_0, CEC_PORT_1, CEC_PORT_COUNT };
+enum cec_port { CEC_PORT_0, CEC_PORT_COUNT };
 
 extern void adp_connect_interrupt(enum gpio_signal signal);
 

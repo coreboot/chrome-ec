@@ -32,10 +32,6 @@ GPIO_INT(HDMI_CONN_OC_ODL,           PIN(5, 0), GPIO_INPUT | GPIO_INT_BOTH, port
 GPIO_INT(USB_A0_OC_ODL,              PIN(3, 1), GPIO_INPUT | GPIO_PULL_UP | GPIO_INT_BOTH, port_ocp_interrupt)
 GPIO_INT(USB_A1_OC_ODL,              PIN(3, 0), GPIO_INPUT | GPIO_PULL_UP | GPIO_INT_BOTH, port_ocp_interrupt)
 
-/* PSE controller */
-GPIO(EC_PSE_PWM_INT,                 PIN(9, 6), GPIO_INPUT)
-GPIO(EC_RST_LTC4291,                 PIN(9, 7), GPIO_OUT_HIGH)
-
 /* TPU */
 GPIO(PP3300_TPU_EN,                  PIN(2, 6), GPIO_OUT_HIGH)
 
@@ -86,13 +82,8 @@ GPIO(GSC_EC_RECOVERY_BTN_OD,         PIN(2, 2), GPIO_INPUT)
 GPIO(HDMIA_CEC_IN,                   PIN(D, 3), GPIO_INPUT)
 GPIO(HDMIA_CEC_OUT,                  PIN(1, 0), GPIO_OUT_HIGH | GPIO_OPEN_DRAIN)
 GPIO(HDMIA_CEC_PULL_UP,              PIN(1, 1), GPIO_OUT_HIGH)
-GPIO(HDMIB_CEC_IN,                   PIN(4, 0), GPIO_INPUT)
-GPIO(HDMIB_CEC_OUT,                  PIN(2, 7), GPIO_OUT_HIGH | GPIO_OPEN_DRAIN)
-GPIO(HDMIB_CEC_PULL_UP,              PIN(C, 2), GPIO_OUT_HIGH)
 
 /* I2C SCL/SDA */
-GPIO(EC_I2C_LTC_SCL,                 PIN(3, 3), GPIO_INPUT)
-GPIO(EC_I2C_LTC_SDA,                 PIN(3, 6), GPIO_INPUT)
 GPIO(EC_I2C_MISC_SCL_R,              PIN(B, 3), GPIO_INPUT)
 GPIO(EC_I2C_MISC_SDA_R,              PIN(B, 2), GPIO_INPUT)
 GPIO(EC_I2C_USB_C1_TCPC_SCL,         PIN(B, 5), GPIO_INPUT)
@@ -180,3 +171,10 @@ UNUSED(PIN(A, 3))       /* SPIP_MOSI/GPIOA3 */
 UNUSED(PIN(9, 5))       /* SPIP_MISO/GPIO95 */
 UNUSED(PIN(D, 2))       /* PSL_IN1/GPIOD2 */
 UNUSED(PIN(0, 2))       /* GPIO02/PSL_IN4 */
+UNUSED(PIN(4, 0))       /* GPIO40 */
+UNUSED(PIN(2, 7))       /* GPIO27 */
+UNUSED(PIN(C, 2))       /* GPIOC2 */
+UNUSED(PIN(9, 6))       /* GPIO96 */
+UNUSED(PIN(9, 7))       /* GPIO97 */
+UNUSED(PIN(3, 3))       /* GPIO33/I2C5_SCL0 */
+UNUSED(PIN(3, 6))       /* GPIO36/I2C5_SDA0 */
