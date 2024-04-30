@@ -21,6 +21,16 @@
 #define CPRINTF(format, args...) cprintf(CC_CLOCK, format, ##args)
 #define CPRINTS(format, args...) cprints(CC_CLOCK, format, ##args)
 
+#ifdef BOARD_CHERRY_SCP_CORE1
+
+void clock_init(void)
+{
+	/* clock is controlled by core 0 */
+	return;
+}
+
+#else
+
 enum {
 	OPP_ULPOSC2_LOW_SPEED,
 	OPP_ULPOSC2_HIGH_SPEED,
@@ -370,9 +380,13 @@ power_chipset_handle_host_sleep_event(enum host_sleep_event state,
 	if (state == HOST_SLEEP_EVENT_S3_SUSPEND) {
 		CPRINTS("AP suspend");
 		clock_select_clock(SCP_CLK_ULPOSC2_LOW_SPEED);
+#ifdef HAS_TASK_SR
 		task_set_event(TASK_ID_SR, TASK_EVENT_SUSPEND);
+#endif
 	} else if (state == HOST_SLEEP_EVENT_S3_RESUME) {
+#ifdef HAS_TASK_SR
 		task_set_event(TASK_ID_SR, TASK_EVENT_RESUME);
+#endif
 		clock_select_clock(SCP_CLK_ULPOSC2_HIGH_SPEED);
 		CPRINTS("AP resume");
 	}
@@ -433,7 +447,7 @@ int command_ulposc(int argc, const char *argv[])
 DECLARE_CONSOLE_COMMAND(ulposc, command_ulposc, "[ulposc]",
 			"Measure ULPOSC frequency");
 #endif
-
 test_mockable void clock_enable_module(enum module_id module, int enable)
 {
 }
+#endif /* BOARD_CHERRY_SCP_CORE1 */

@@ -175,19 +175,17 @@ union rts54_request {
 		} tpc_rp;
 	} set_tpc_rp;
 
-	struct set_tpc_csd_operation_mode_req {
+	struct set_ccom_req {
 		struct rts54_subcommand_header header;
-		uint8_t port_num;
-		union csd_op_mode_t {
-			uint8_t raw_value;
+		union port_and_ccom_t {
+			uint16_t raw_value;
 			struct {
-				uint8_t csd_mode : 2;
-				uint8_t accessory_support : 1;
-				uint8_t drp_mode : 2;
-				uint8_t reserved : 3;
+				uint16_t port_num : 7;
+				uint16_t ccom : 4;
+				uint16_t reserved : 5;
 			};
-		} op_mode;
-	} set_tpc_csd_operation_mode;
+		} port_and_ccom;
+	} set_ccom;
 
 	struct force_set_power_switch_req {
 		struct rts54_subcommand_header header;
@@ -273,47 +271,27 @@ union rts54_response {
 
 	struct get_error_status_response {
 		uint8_t byte_count;
-		uint8_t unrecognized_command : 1;
-		uint8_t non_existent_connector_number : 1;
-		uint8_t invalid_command_specific_param : 1;
-		uint8_t incompatible_connector_partner : 1;
-		uint8_t cc_communication_error : 1;
-		uint8_t cmd_unsuccessful_dead_batt : 1;
-		uint8_t contract_negotiation_failed : 1;
-		uint8_t reserved : 1;
-	} error_status;
+		uint16_t unrecognized_command : 1;
+		uint16_t non_existent_connector_number : 1;
+		uint16_t invalid_command_specific_param : 1;
+		uint16_t incompatible_connector_partner : 1;
+		uint16_t cc_communication_error : 1;
+		uint16_t cmd_unsuccessful_dead_batt : 1;
+		uint16_t contract_negotiation_failed : 1;
+		uint16_t overcurrent : 1;
+		uint16_t undefined : 1;
+		uint16_t port_partner_rejected_swap : 1;
+		uint16_t hard_reset : 1;
+		uint16_t ppm_policy_conflict : 1;
+		uint16_t swap_rejected : 1;
+		uint16_t reverse_current_protection : 1;
+		uint16_t set_sink_path_rejected : 1;
+		uint16_t reserved0 : 1;
+	} __packed error_status;
 
 	struct get_connector_status_response {
 		uint8_t byte_count;
-		union {
-			uint16_t raw_value;
-			struct {
-				uint16_t reserved0 : 1;
-				uint16_t external_supply_change : 1;
-				uint16_t pwr_operation_mode : 1;
-				uint16_t reserved1 : 2;
-				uint16_t supported_provider_caps : 1;
-				uint16_t negotiated_power_level : 1;
-				uint16_t pd_reset_complete : 1;
-				uint16_t supported_cam : 1;
-				uint16_t battery_charging_status : 1;
-				uint16_t reserved2 : 1;
-				uint16_t port_partner : 1;
-				uint16_t pwr_direction : 1;
-				uint16_t reserved3 : 1;
-				uint16_t connect_change : 1;
-				uint16_t error : 1;
-			};
-		} pd_status;
-		uint16_t port_operation_mode : 3;
-		uint16_t connect_status : 1;
-		uint16_t power_direction : 1;
-		uint16_t port_partner_flags : 8;
-		uint16_t port_partner_type : 3;
-		uint32_t request_data_object;
-		uint8_t battery_charging_status : 2;
-		uint8_t provider_capabilities_limited_reason : 4;
-		uint8_t reserved : 2;
+		union connector_status_t status;
 	} __packed connector_status;
 
 	struct get_rtk_status_response {
@@ -393,7 +371,7 @@ union rts54_response {
 				uint8_t latency : 4;
 				uint8_t reserved1 : 4;
 			};
-			uint32_t raw_value[2];
+			uint8_t raw_value[5];
 		};
 	} __packed get_cable_property;
 
@@ -431,13 +409,13 @@ struct rts5453p_emul_pdc_data {
 	struct rts54_ic_status ic_status;
 	struct capability_t capability;
 	union connector_capability_t connector_capability;
-	struct connector_status_t connector_status;
+	union connector_status_t connector_status;
 	union uor_t uor;
 	union pdr_t pdr;
 	union error_status_t error;
 	uint32_t rdo;
 	union tpc_rp_t tpc_rp;
-	union csd_op_mode_t csd_op_mode;
+	union port_and_ccom_t set_ccom_mode;
 	struct force_set_power_switch_t set_power_switch_data;
 	uint8_t set_tpc_reconnect_param;
 	struct pdc_info_t info;

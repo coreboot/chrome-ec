@@ -53,6 +53,9 @@
  * BOARD_*, CHIP_*, and CHIP_FAMILY_*.
  */
 
+/* When the ec_rate config is set, put the sensor in force mode */
+#undef CONFIG_SENSOR_EC_RATE_FORCE_MODE
+
 /* Add support for sensor FIFO */
 #undef CONFIG_ACCEL_FIFO
 
@@ -353,6 +356,9 @@
 
 /* Define to include the clear channel driver for the tcs3400 light sensor */
 #undef CONFIG_ALS_TCS3400
+
+/* Define to include Vishay VEML3328 driver */
+#undef CONFIG_ALS_VEML3328
 
 /*
  * Define the event to raise when a sensor interrupt triggers.
@@ -6010,6 +6016,12 @@
  */
 #undef CONFIG_GOOGLETEST
 
+/*
+ * When this option is enabled, some of the experimental features (aka finch)
+ * will be enabled for CROS_EC.
+ */
+#undef CONFIG_FEATURE_FINCH
+
 /*****************************************************************************/
 /*
  * Include board and core configs, since those hold the CONFIG_ constants for a
@@ -6503,7 +6515,7 @@
 	defined(CONFIG_CHARGER_ISL9238C) || defined(CONFIG_CHARGER_ISL9241) || \
 	defined(CONFIG_CHARGER_RAA489000) || defined(CONFIG_CHARGER_SM5803) || \
 	defined(CONFIG_CHARGER_BQ25710) || defined(CONFIG_CHARGER_BQ25720) ||  \
-	defined(CONFIG_CHARGER_RAA489110)
+	defined(CONFIG_CHARGER_RAA489110) || defined(CONFIG_CHARGER_RT9490)
 #define CONFIG_CHARGER_NARROW_VDC
 #endif
 
