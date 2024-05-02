@@ -293,9 +293,9 @@ test_static int test_derive_encryption_key_failure_seed_not_set(void)
 	return EC_SUCCESS;
 }
 
-static int test_derive_encryption_key_raw(const uint32_t *user_id_,
-					  const uint8_t *salt,
-					  const uint8_t *expected_key)
+static int test_derive_encryption_key_raw(std::span<const uint32_t> user_id_,
+					  std::span<const uint8_t> salt,
+					  std::span<const uint8_t> expected_key)
 {
 	uint8_t key[SBP_ENC_KEY_LEN];
 	enum ec_error_list rv;
@@ -304,7 +304,7 @@ static int test_derive_encryption_key_raw(const uint32_t *user_id_,
 	 * |user_id| is a global variable used as "info" in HKDF expand
 	 * in derive_encryption_key().
 	 */
-	memcpy(user_id, user_id_, sizeof(user_id));
+	memcpy(user_id, user_id_.data(), sizeof(user_id));
 	rv = derive_encryption_key(key, salt);
 
 	TEST_ASSERT(rv == EC_SUCCESS);
@@ -315,16 +315,14 @@ static int test_derive_encryption_key_raw(const uint32_t *user_id_,
 	return EC_SUCCESS;
 }
 
-static int test_derive_encryption_key_with_info_raw(const uint32_t *user_id_,
-						    const uint8_t *salt,
-						    const uint8_t *info,
-						    size_t info_size,
-						    const uint8_t *expected_key)
+static int test_derive_encryption_key_with_info_raw(
+	std::span<const uint32_t> user_id_, std::span<const uint8_t> salt,
+	std::span<const uint8_t> info, std::span<const uint8_t> expected_key)
 {
 	uint8_t key[SBP_ENC_KEY_LEN];
 	enum ec_error_list rv;
 
-	rv = derive_encryption_key_with_info(key, salt, info, info_size);
+	rv = derive_encryption_key_with_info(key, salt, info);
 
 	TEST_ASSERT(rv == EC_SUCCESS);
 	TEST_ASSERT_ARRAY_EQ(key, expected_key, sizeof(key));
@@ -394,12 +392,13 @@ test_static int test_derive_encryption_key(void)
 	/* Providing user_id1 as custom info should still result in key1. */
 	TEST_ASSERT(test_derive_encryption_key_with_info_raw(
 			    user_id1, salt1,
-			    reinterpret_cast<const uint8_t *>(user_id1),
-			    sizeof(user_id1), key1) == EC_SUCCESS);
+			    { reinterpret_cast<const uint8_t *>(user_id1),
+			      sizeof(user_id1) },
+			    key1) == EC_SUCCESS);
 	/* Providing custom info with invalid size should fail. */
-	TEST_ASSERT(derive_encryption_key_with_info(
-			    unused_key, unused_salt, info_wrong_size,
-			    sizeof(info_wrong_size)) == EC_ERROR_INVAL);
+	TEST_ASSERT(derive_encryption_key_with_info(unused_key, unused_salt,
+						    info_wrong_size) ==
+		    EC_ERROR_INVAL);
 
 	return EC_SUCCESS;
 }

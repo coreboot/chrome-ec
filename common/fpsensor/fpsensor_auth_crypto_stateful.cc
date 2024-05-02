@@ -12,14 +12,11 @@
 #include "crypto/cleanse_wrapper.h"
 #include "crypto/elliptic_curve_key.h"
 #include "openssl/bn.h"
-#include "openssl/ec.h"
 #include "openssl/mem.h"
-#include "openssl/obj_mac.h"
 #include "openssl/rand.h"
 
 extern "C" {
 #include "ec_commands.h"
-#include "sha256.h"
 }
 
 // clang-format off
@@ -46,7 +43,7 @@ encrypt_data_in_place(uint16_t version,
 
 	CleanseWrapper<std::array<uint8_t, SBP_ENC_KEY_LEN> > enc_key;
 	enum ec_error_list ret =
-		derive_encryption_key(enc_key.data(), info.encryption_salt);
+		derive_encryption_key(enc_key, info.encryption_salt);
 	if (ret != EC_SUCCESS) {
 		return ret;
 	}
@@ -88,7 +85,7 @@ decrypt_data(const struct fp_auth_command_encryption_metadata &info,
 
 	CleanseWrapper<std::array<uint8_t, SBP_ENC_KEY_LEN> > enc_key;
 	enum ec_error_list ret =
-		derive_encryption_key(enc_key.data(), info.encryption_salt);
+		derive_encryption_key(enc_key, info.encryption_salt);
 	if (ret != EC_SUCCESS) {
 		CPRINTS("Failed to derive key");
 		return ret;

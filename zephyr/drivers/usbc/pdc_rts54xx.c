@@ -596,7 +596,7 @@ static int rts54_i2c_read(const struct device *dev)
 
 	msg[1].buf = data->rd_buf;
 	msg[1].len = data->ping_status.data_len + 1;
-	msg[1].flags = I2C_MSG_READ | I2C_MSG_STOP;
+	msg[1].flags = I2C_MSG_RESTART | I2C_MSG_READ | I2C_MSG_STOP;
 
 	rv = i2c_transfer_dt(&cfg->i2c, msg, 2);
 	if (rv < 0) {
@@ -604,6 +604,12 @@ static int rts54_i2c_read(const struct device *dev)
 	}
 
 	data->rd_buf_len = data->ping_status.data_len;
+
+	if (IS_ENABLED(CONFIG_USBC_PDC_TRACE_MSG)) {
+		pdc_trace_msg_resp(cfg->connector_number,
+				   PDC_TRACE_CHIP_TYPE_RTS54XX, data->rd_buf,
+				   data->ping_status.data_len + 1);
+	}
 
 	return rv;
 }
@@ -1400,6 +1406,14 @@ static int rts54_post_command(const struct device *dev, enum cmd_t cmd,
 	data->wr_buf_len = len;
 	data->user_buf = user_buf;
 	data->cmd = cmd;
+
+	if (IS_ENABLED(CONFIG_USBC_PDC_TRACE_MSG)) {
+		const struct pdc_config_t *cfg = dev->config;
+
+		pdc_trace_msg_req(cfg->connector_number,
+				  PDC_TRACE_CHIP_TYPE_RTS54XX, data->wr_buf,
+				  data->wr_buf_len);
+	}
 
 	k_mutex_unlock(&data->mtx);
 
