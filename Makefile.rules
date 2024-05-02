@@ -655,7 +655,7 @@ print-configs:
 .PHONY: clean
 clean:
 	-rm -rf $(out)
-	-rm /dev/shm/EC_persist*
+	-rm -f /dev/shm/EC_persist*
 
 .PHONY: clobber
 clobber:
