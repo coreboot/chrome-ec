@@ -1604,6 +1604,37 @@ Build:   ti50_common_prepvt-15086.B:v0.0.1147-1170d5a9
 *   event_log: Ensure time always moves forward on init.
     [b/329326190](https://b.corp.google.com/issues/329326190)
 
+### 0.24.90 Released on 4/9/2024 in M126
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5515766)
+
+Builder
+[98](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15086.B-branch/98/overview)
+
+Artifacts:
+[15086.89.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.93.0)
+
+**Features**
+
+* capsules: Allow dynamically changing baud rate
+
+```
+Build:   ti50_common_prepvt-15086.B:v0.0.1147-1170d5a9
+         libtock-rs:v0.0.929-ecde39c
+         tock:v0.0.9682-1b39efeb9
+         ms-tpm-20-ref:v0.0.333-50b2409
+         @chromeos-ci-firmware-us-central2-d-x32-0-2g96 2024-04-02 13:05:03
+```
+**Bug Fixes**
+
+* tpm2: Check if a key is already wrapped before wrapping
+  [b/302699979](https://b.corp.google.com/issues/302699979)
+* cryptolib: Prevent buffer overrun
+  [b/327499069](https://b.corp.google.com/issues/327499069)
+* dispatcher: Ensure buffer is inaccessible after enqueued
+  [b/332326497](https://b.corp.google.com/issues/332326497)
+
 <!-- Links -->
 
 [105 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R105-14989.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
