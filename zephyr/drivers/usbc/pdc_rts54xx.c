@@ -141,7 +141,7 @@ const struct smbus_cmd_t GET_RDO = { 0x08, 0x02, 0x84 };
 const struct smbus_cmd_t GET_VDO = { 0x08, 0x03, 0x9A };
 const struct smbus_cmd_t GET_CURRENT_PARTNER_SRC_PDO = { 0x08, 0x02, 0xA7 };
 const struct smbus_cmd_t GET_POWER_SWITCH_STATE = { 0x08, 0x02, 0xA9 };
-const struct smbus_cmd_t GET_RTK_STATUS = { 0x09, 0x03, 0x00 };
+const struct smbus_cmd_t GET_RTK_STATUS = { 0x09, 0x03 };
 const struct smbus_cmd_t PPM_RESET = { 0x0E, 0x02, 0x01 };
 const struct smbus_cmd_t CONNECTOR_RESET = { 0x0E, 0x03, 0x03 };
 const struct smbus_cmd_t GET_CAPABILITY = { 0x0E, 0x02, 0x06 };
@@ -152,9 +152,9 @@ const struct smbus_cmd_t UCSI_GET_CONNECTOR_STATUS = { 0x0E, 0x3, 0x12 };
 const struct smbus_cmd_t UCSI_GET_ERROR_STATUS = { 0x0E, 0x03, 0x13 };
 const struct smbus_cmd_t UCSI_READ_POWER_LEVEL = { 0x0E, 0x05, 0x1E };
 const struct smbus_cmd_t UCSI_SET_CCOM = { 0x0E, 0x04, 0x08 };
-const struct smbus_cmd_t GET_IC_STATUS = { 0x3A, 0x03, 0x00 };
+const struct smbus_cmd_t GET_IC_STATUS = { 0x3A, 0x03 };
 const struct smbus_cmd_t SET_RETIMER_FW_UPDATE_MODE = { 0x20, 0x03, 0x00 };
-const struct smbus_cmd_t GET_CABLE_PROPERTY = { 0x0E, 0x02, 0x11 };
+const struct smbus_cmd_t GET_CABLE_PROPERTY = { 0x0E, 0x03, 0x11 };
 
 /**
  * @brief PDC Command states
@@ -596,7 +596,7 @@ static int rts54_i2c_read(const struct device *dev)
 
 	msg[1].buf = data->rd_buf;
 	msg[1].len = data->ping_status.data_len + 1;
-	msg[1].flags = I2C_MSG_READ | I2C_MSG_STOP;
+	msg[1].flags = I2C_MSG_RESTART | I2C_MSG_READ | I2C_MSG_STOP;
 
 	rv = i2c_transfer_dt(&cfg->i2c, msg, 2);
 	if (rv < 0) {
@@ -604,6 +604,12 @@ static int rts54_i2c_read(const struct device *dev)
 	}
 
 	data->rd_buf_len = data->ping_status.data_len;
+
+	if (IS_ENABLED(CONFIG_USBC_PDC_TRACE_MSG)) {
+		pdc_trace_msg_resp(cfg->connector_number,
+				   PDC_TRACE_CHIP_TYPE_RTS54XX, data->rd_buf,
+				   data->ping_status.data_len + 1);
+	}
 
 	return rv;
 }
@@ -1401,6 +1407,14 @@ static int rts54_post_command(const struct device *dev, enum cmd_t cmd,
 	data->user_buf = user_buf;
 	data->cmd = cmd;
 
+	if (IS_ENABLED(CONFIG_USBC_PDC_TRACE_MSG)) {
+		const struct pdc_config_t *cfg = dev->config;
+
+		pdc_trace_msg_req(cfg->connector_number,
+				  PDC_TRACE_CHIP_TYPE_RTS54XX, data->wr_buf,
+				  data->wr_buf_len);
+	}
+
 	k_mutex_unlock(&data->mtx);
 
 	return 0;
@@ -1421,11 +1435,7 @@ static int rts54_get_rtk_status(const struct device *dev, uint8_t offset,
 	}
 
 	uint8_t payload[] = {
-		GET_RTK_STATUS.cmd,
-		GET_RTK_STATUS.len,
-		GET_RTK_STATUS.sub + offset,
-		0x00,
-		len,
+		GET_RTK_STATUS.cmd, GET_RTK_STATUS.len, offset, 0x00, len,
 	};
 
 	return rts54_post_command(dev, cmd, payload, ARRAY_SIZE(payload), buf);
@@ -1776,6 +1786,7 @@ static int rts54_get_cable_property(const struct device *dev,
 		GET_CABLE_PROPERTY.len,
 		GET_CABLE_PROPERTY.sub,
 		0x00,
+		0x00,
 	};
 
 	return rts54_post_command(dev, CMD_GET_CABLE_PROPERTY, payload,
@@ -1895,11 +1906,7 @@ static int rts54_get_info(const struct device *dev, struct pdc_info_t *info)
 	}
 
 	uint8_t payload[] = {
-		GET_IC_STATUS.cmd,
-		GET_IC_STATUS.len,
-		GET_IC_STATUS.sub,
-		0x00,
-		26,
+		GET_IC_STATUS.cmd, GET_IC_STATUS.len, 0, 0x00, 26,
 	};
 
 	return rts54_post_command(dev, CMD_GET_IC_STATUS, payload,

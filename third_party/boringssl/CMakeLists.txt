@@ -4,7 +4,7 @@
 
 if(CONFIG_BORINGSSL_CRYPTO)
 
-zephyr_library_named(boringssl)
+zephyr_interface_library_named(boringssl)
 
 # Currently BoringSSL is not as a module, so we need to provide a path to
 # sources.
@@ -47,7 +47,6 @@ set(CMAKE_SKIP_INSTALL_RULES YES)
 # We don't use generated assembly for now.
 set(OPENSSL_NO_ASM "1")
 
-zephyr_include_directories(${BORINGSSL_SOURCES})
 zephyr_include_directories(${BORINGSSL_SOURCES}/include)
 zephyr_include_directories(include)
 
@@ -60,10 +59,6 @@ add_subdirectory(${BORINGSSL_SOURCES} build EXCLUDE_FROM_ALL)
 
 # Link 'crypto' library into boringssl library.
 zephyr_library_link_libraries(crypto)
-
-# Provide implementation of getentropy() using Zephyr Entropy Device.
-zephyr_library_sources_ifdef(CONFIG_BORINGSSL_HARDWARE_ENTROPY
-	common/sysrand_zephyr.c)
 
 # Add compile options required by BoringSSL.
 # -D_POSIX_C_SOURCE=200809L is needed because BoringSSL uses strdup() function
@@ -80,12 +75,8 @@ zephyr_library_sources_ifdef(CONFIG_BORINGSSL_HARDWARE_ENTROPY
 #
 # -Wno-return-type is needed to ignore non-void functions that calls abort() and
 # don't have return statement (e.g. aes_hw_set_encrypt_key()).
-#
-# -std=c11 is necessary because BoringSSL sources use features available in
-# C11, e.g. static_assert().
 set(BORINGSSL_COMPILE_OPTIONS -D_POSIX_C_SOURCE=200809L
-	-Wno-implicit-function-declaration -fno-common -Wno-return-type
-	-std=c11)
+	-Wno-implicit-function-declaration -fno-common -Wno-return-type)
 
 # Create interface library that specifies compile options required by
 # BoringSSL. This is the same trick used by zephyr_library_compile_options()

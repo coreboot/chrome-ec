@@ -100,7 +100,8 @@ static int get_ic_status(struct rts5453p_emul_pdc_data *data,
 {
 	LOG_INF("GET_IC_STATUS");
 
-	data->response.ic_status.byte_count = sizeof(struct rts54_ic_status);
+	data->response.ic_status.byte_count = MIN(
+		sizeof(struct rts54_ic_status) - 1, req->get_ic_status.sts_len);
 	data->response.ic_status.fw_main_version = data->info.fw_version >> 16 &
 						   BIT_MASK(8);
 	data->response.ic_status.fw_sub_version[0] =
@@ -553,15 +554,21 @@ static int get_pdos(struct rts5453p_emul_pdc_data *data,
 static int get_cable_property(struct rts5453p_emul_pdc_data *data,
 			      const union rts54_request *req)
 {
-	union cable_property_t property = data->cable_property;
+	const union cable_property_t *ucsi_property = &data->cable_property;
 
-	LOG_INF("GET_CABLE_PROPERTY property=%x", property);
+	LOG_INF("GET_CABLE_PROPERTY property=%x", ucsi_property->raw_value[0]);
 	memset(&data->response, 0, sizeof(data->response));
 
+	/*
+	 * The RTK command only returns 5 bytes of cable property, but
+	 * they map to the first 5 bytes of the 8 byte UCSI response.
+	 */
+	BUILD_ASSERT(sizeof(data->response.get_cable_property) == 1 + 5);
 	data->response.get_cable_property.byte_count =
-		sizeof(struct get_cable_property_response);
-	data->response.get_cable_property.raw_value[0] = property.raw_value[0];
-	data->response.get_cable_property.raw_value[1] = property.raw_value[1];
+		sizeof(data->response.get_cable_property) - 1;
+	memcpy(data->response.get_cable_property.raw_value,
+	       ucsi_property->raw_value,
+	       data->response.get_cable_property.byte_count);
 
 	send_response(data);
 	return 0;

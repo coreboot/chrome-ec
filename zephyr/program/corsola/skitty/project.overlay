@@ -91,7 +91,7 @@
 
 	usbc {
 		port0@0 {
-			ppc_alt = <&ppc_port0>;
+			ppc = <&ppc_port0>;
 		};
 
 		/delete-node/ port1@1;
@@ -102,6 +102,11 @@
 			enum-name = "ADC_TEMP_SENSOR_2_AMBIENT";
 			io-channels = <&adc0 5>;
 		};
+	};
+
+	named-i2c-ports {
+		compatible = "named-i2c-ports";
+		/delete-node/ usb-c1;
 	};
 
 	temp_ambient: ambient {
@@ -254,8 +259,11 @@
 	};
 
 	batteries {
-		default_battery: c235 {
-			compatible = "celxpert,c235-41", "battery-smart";
+		default_battery: dynapack_highpower_po02037xl {
+			compatible = "dynapack,highpower_po02037xl", "battery-smart";
+ 		};
+		dynapack_coslight_po02037xl {
+			compatible = "dynapack,coslight_po02037xl", "battery-smart";
 		};
 	};
 

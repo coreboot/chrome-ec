@@ -1807,6 +1807,13 @@
  */
 #undef CONFIG_PANIC_ON_WATCHDOG_WARNING
 
+/**
+ * Enables nesting for the `crash` console command.
+ * Calling the crash console command with multiple crash arguments
+ * will result in nested crashes in the order specified.
+ */
+#define CONFIG_CMD_CRASH_NESTED
+
 /*
  * Provide the default GPIO abstraction layer.
  * You want this unless you are doing a really tiny firmware.
@@ -6515,7 +6522,7 @@
 	defined(CONFIG_CHARGER_ISL9238C) || defined(CONFIG_CHARGER_ISL9241) || \
 	defined(CONFIG_CHARGER_RAA489000) || defined(CONFIG_CHARGER_SM5803) || \
 	defined(CONFIG_CHARGER_BQ25710) || defined(CONFIG_CHARGER_BQ25720) ||  \
-	defined(CONFIG_CHARGER_RAA489110)
+	defined(CONFIG_CHARGER_RAA489110) || defined(CONFIG_CHARGER_RT9490)
 #define CONFIG_CHARGER_NARROW_VDC
 #endif
 
@@ -6905,6 +6912,13 @@
 #if (defined(CONFIG_USBC_RETIMER_INTEL_BB) || \
      defined(CONFIG_USBC_RETIMER_KB800X))
 #define CONFIG_CMD_RETIMER
+#endif
+
+/**
+ * CONFIG_CMD_CRASH_NESTED depends on CONFIG_CMD_CRASH
+ */
+#if !defined(CONFIG_CMD_CRASH) && defined(CONFIG_CMD_CRASH_NESTED)
+#error "CONFIG_CMD_CRASH_NESTED depends on CONFIG_CMD_CRASH"
 #endif
 
 /*****************************************************************************/

@@ -222,6 +222,8 @@ enum snk_typec_attached_local_state_t {
 	SNK_TYPEC_ATTACHED_SET_CHARGE_CURRENT,
 	/** SNK_TYPEC_ATTACHED_SET_SINK_PATH_ON */
 	SNK_TYPEC_ATTACHED_SET_SINK_PATH_ON,
+	/** SNK_TYPEC_ATTACHED_DEBOUNCE */
+	SNK_TYPEC_ATTACHED_DEBOUNCE,
 	/** SNK_TYPEC_ATTACHED_RUN */
 	SNK_TYPEC_ATTACHED_RUN,
 };
@@ -232,6 +234,8 @@ enum snk_typec_attached_local_state_t {
 enum src_typec_attached_local_state_t {
 	/** SRC_TYPEC_ATTACHED_SET_SINK_PATH_OFF */
 	SRC_TYPEC_ATTACHED_SET_SINK_PATH_OFF,
+	/** SRC_TYPEC_ATTACHED_DEBOUNCE */
+	SRC_TYPEC_ATTACHED_DEBOUNCE,
 	/** SRC_TYPEC_ATTACHED_RUN */
 	SRC_TYPEC_ATTACHED_RUN,
 };
@@ -482,6 +486,8 @@ struct pdc_port_t {
 	ATOMIC_DEFINE(pdc_cmd_flags, CMD_PDC_COUNT);
 	/** Flag to suspend the PDC Power Mgmt state machine */
 	atomic_t suspend;
+	/** Flag to notify that a Hard Reset was sent */
+	atomic_t hard_reset_sent;
 
 	/** Source TypeC attached local state variable */
 	enum src_typec_attached_local_state_t src_typec_attached_local_state;
@@ -568,6 +574,8 @@ struct pdc_port_t {
 	uint32_t typec_current_ma;
 	/** Buffer used by public api to receive data from the driver */
 	uint8_t *public_api_buff;
+	/** Timer to used to verify typec_only vs USB-PD port partner */
+	struct k_timer typec_only_timer;
 };
 
 /**
@@ -734,8 +742,7 @@ static uint32_t pdc_max_request_mv = CONFIG_PLATFORM_EC_PD_MAX_VOLTAGE_MV;
 /**
  * @brief As a sink, this is the max power (in milliwatts) needed to operate
  */
-static uint32_t pdc_max_operating_power =
-	CONFIG_PLATFORM_EC_PD_OPERATING_POWER_MW;
+static uint32_t pdc_max_operating_power = CONFIG_PLATFORM_EC_PD_MAX_POWER_MW;
 
 static enum pdc_state_t get_pdc_state(struct pdc_port_t *port)
 {
@@ -903,6 +910,8 @@ static bool handle_connector_status(struct pdc_port_t *port)
 		LOG_INF("C%d: Reset complete indicator", port_number);
 		pdc_power_mgmt_notify_event(port_number,
 					    PD_STATUS_EVENT_HARD_RESET);
+
+		atomic_set(&port->hard_reset_sent, true);
 	}
 
 	if (!status->connect_status) {
@@ -1201,6 +1210,8 @@ static void pdc_snk_attached_run(void *obj)
 	struct pdc_port_t *port = (struct pdc_port_t *)obj;
 	const struct pdc_config_t *const config = port->dev->config;
 	uint32_t max_ma, max_mv, max_mw;
+	uint32_t tmp_curr_ma, tmp_volt_mv, tmp_pwr_mw;
+	uint32_t pdo_pwr_mw;
 	uint32_t flags;
 
 	/* The CCI_EVENT is set on a connector disconnect, so check the
@@ -1255,21 +1266,30 @@ static void pdc_snk_attached_run(void *obj)
 		return;
 	case SNK_ATTACHED_EVALUATE_PDOS:
 		port->snk_attached_local_state = SNK_ATTACHED_START_CHARGING;
-		/* Select vSafe5V */
-		port->snk_policy.pdo_index = 1;
-		port->snk_policy.pdo = port->snk_policy.pdos[0];
+		pdo_pwr_mw = 0;
 		flags = 0;
 
 		for (int i = 0; i < PDO_NUM; i++) {
-			LOG_INF("PDO%d: %08x, %d %d", i,
-				port->snk_policy.pdos[i],
-				PDO_FIXED_GET_VOLT(port->snk_policy.pdos[i]),
-				PDO_FIXED_GET_CURR(port->snk_policy.pdos[i]));
+			if ((port->snk_policy.pdos[i] & PDO_TYPE_MASK) !=
+			    PDO_TYPE_FIXED) {
+				continue;
+			}
 
-			/* Select maximum charge voltage */
-			if (pdc_max_request_mv ==
-			    PDO_FIXED_GET_VOLT(port->snk_policy.pdos[i])) {
-				port->snk_policy.pdo_index = i + 1;
+			tmp_volt_mv =
+				PDO_FIXED_GET_VOLT(port->snk_policy.pdos[i]);
+			tmp_curr_ma =
+				PDO_FIXED_GET_CURR(port->snk_policy.pdos[i]);
+			tmp_pwr_mw = (tmp_volt_mv * tmp_curr_ma) / 1000;
+
+			LOG_INF("PDO%d: %08x, %d %d %d", i,
+				port->snk_policy.pdos[i], tmp_volt_mv,
+				tmp_curr_ma, tmp_pwr_mw);
+
+			if ((tmp_pwr_mw > pdo_pwr_mw) &&
+			    (tmp_pwr_mw <= pdc_max_operating_power) &&
+			    (tmp_volt_mv <= pdc_max_request_mv)) {
+				pdo_pwr_mw = tmp_pwr_mw;
+				port->snk_policy.pdo_index = i;
 				port->snk_policy.pdo = port->snk_policy.pdos[i];
 			}
 		}
@@ -1284,6 +1304,9 @@ static void pdc_snk_attached_run(void *obj)
 		if (max_mw < pdc_max_operating_power) {
 			flags |= RDO_CAP_MISMATCH;
 		}
+
+		/* Prepare PDO index for creation of RDO */
+		port->snk_policy.pdo_index += 1;
 
 		/* Set RDO to send */
 		if ((port->snk_policy.pdo & PDO_TYPE_MASK) ==
@@ -1343,7 +1366,14 @@ static void pdc_snk_attached_run(void *obj)
 		return;
 	case SNK_ATTACHED_RUN:
 		set_attached_pdc_state(port, SNK_ATTACHED_STATE);
-		run_snk_policies(port);
+		/* Hard Reset could disable Sink FET. Re-enable it */
+		if (atomic_get(&port->hard_reset_sent)) {
+			atomic_clear(&port->hard_reset_sent);
+			port->snk_attached_local_state =
+				SNK_ATTACHED_SET_SINK_PATH;
+		} else {
+			run_snk_policies(port);
+		}
 		break;
 	}
 }
@@ -1664,6 +1694,16 @@ static void pdc_src_typec_only_entry(void *obj)
 	if (get_pdc_state(port) != port->send_cmd_return_state) {
 		port->src_typec_attached_local_state =
 			SRC_TYPEC_ATTACHED_SET_SINK_PATH_OFF;
+
+		/* Start one shot typec only timer. This timer is used to
+		 * differentiate between a port partner that supports USB PD or
+		 * is typec_only. Note that the timer is not explicitly
+		 * stopped. Since there is no callback associated, letting it
+		 * expire in the src.attached state will have no effect and the
+		 * k_timer_start call always resets the timer status.
+		 */
+		k_timer_start(&port->typec_only_timer,
+			      K_USEC(PD_T_SINK_WAIT_CAP), K_NO_WAIT);
 	}
 }
 
@@ -1682,10 +1722,17 @@ static void pdc_src_typec_only_run(void *obj)
 
 	switch (port->src_typec_attached_local_state) {
 	case SRC_TYPEC_ATTACHED_SET_SINK_PATH_OFF:
-		port->src_typec_attached_local_state = SRC_TYPEC_ATTACHED_RUN;
+		port->src_typec_attached_local_state =
+			SRC_TYPEC_ATTACHED_DEBOUNCE;
 
 		port->sink_path_en = false;
 		queue_internal_cmd(port, CMD_PDC_SET_SINK_PATH);
+		return;
+	case SRC_TYPEC_ATTACHED_DEBOUNCE:
+		if (k_timer_status_get(&port->typec_only_timer) > 0) {
+			port->src_typec_attached_local_state =
+				SRC_TYPEC_ATTACHED_RUN;
+		}
 		return;
 	case SRC_TYPEC_ATTACHED_RUN:
 		send_pending_public_commands(port);
@@ -1701,6 +1748,16 @@ static void pdc_snk_typec_only_entry(void *obj)
 	if (get_pdc_state(port) != port->send_cmd_return_state) {
 		port->snk_typec_attached_local_state =
 			SNK_TYPEC_ATTACHED_SET_CHARGE_CURRENT;
+
+		/* Start one shot typec only timer. This timer is used to
+		 * differentiate between a port partner that supports USB PD or
+		 * is typec_only. Note that the timer is not explicitly
+		 * stopped. Since there is no callback associated, letting it
+		 * expire in the snk.attached state will have no effect and the
+		 * k_timer_start call always resets the timer status.
+		 */
+		k_timer_start(&port->typec_only_timer,
+			      K_USEC(PD_T_SINK_WAIT_CAP), K_NO_WAIT);
 	}
 
 	print_current_pdc_state(port);
@@ -1732,12 +1789,26 @@ static void pdc_snk_typec_only_run(void *obj)
 					       CAP_DEDICATED);
 		break;
 	case SNK_TYPEC_ATTACHED_SET_SINK_PATH_ON:
-		port->snk_typec_attached_local_state = SNK_TYPEC_ATTACHED_RUN;
+		port->snk_typec_attached_local_state =
+			SNK_TYPEC_ATTACHED_DEBOUNCE;
 		port->sink_path_en = true;
 		queue_internal_cmd(port, CMD_PDC_SET_SINK_PATH);
 		return;
+	case SNK_TYPEC_ATTACHED_DEBOUNCE:
+		if (k_timer_status_get(&port->typec_only_timer) > 0) {
+			port->snk_typec_attached_local_state =
+				SNK_TYPEC_ATTACHED_RUN;
+		}
+		return;
 	case SNK_TYPEC_ATTACHED_RUN:
-		send_pending_public_commands(port);
+		/* Hard Reset could disable Sink FET. Re-enable it */
+		if (atomic_get(&port->hard_reset_sent)) {
+			atomic_clear(&port->hard_reset_sent);
+			port->snk_typec_attached_local_state =
+				SNK_TYPEC_ATTACHED_SET_SINK_PATH_ON;
+		} else {
+			send_pending_public_commands(port);
+		}
 		break;
 	}
 }
@@ -1891,6 +1962,9 @@ static int pdc_subsys_init(const struct device *dev)
 	/* Initialize command mutex */
 	k_mutex_init(&port->mtx);
 	smf_set_initial(&port->ctx, &pdc_states[PDC_INIT]);
+
+	/* Initialize typec only timer */
+	k_timer_init(&port->typec_only_timer, NULL, NULL);
 
 	/* Create the thread for this port */
 	config->create_thread(dev);
@@ -3029,4 +3103,19 @@ void pdc_power_mgmt_request_source_voltage(int port, int mv)
 	} else {
 		pdc_power_mgmt_request_swap_to_snk(port);
 	}
+}
+
+int pdc_power_mgmt_get_cable_prop(int port, union cable_property_t *cable_prop)
+{
+	if (!is_pdc_port_valid(port)) {
+		return -ERANGE;
+	}
+
+	if (cable_prop == NULL) {
+		return -EINVAL;
+	}
+
+	*cable_prop = pdc_data[port]->port.cable_prop;
+
+	return 0;
 }
