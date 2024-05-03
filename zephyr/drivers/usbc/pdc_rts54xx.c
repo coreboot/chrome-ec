@@ -134,7 +134,6 @@ const struct smbus_cmd_t SET_NOTIFICATION_ENABLE = { 0x08, 0x06, 0x01 };
 const struct smbus_cmd_t SET_PDOS = { 0x08, 0x03, 0x03 };
 const struct smbus_cmd_t SET_RDO = { 0x08, 0x06, 0x04 };
 const struct smbus_cmd_t SET_TPC_RP = { 0x08, 0x03, 0x05 };
-const struct smbus_cmd_t SET_TPC_CSD_OPERATION_MODE = { 0x08, 0x03, 0x1D };
 const struct smbus_cmd_t SET_TPC_RECONNECT = { 0x08, 0x03, 0x1F };
 const struct smbus_cmd_t FORCE_SET_POWER_SWITCH = { 0x08, 0x03, 0x21 };
 const struct smbus_cmd_t GET_PDOS = { 0x08, 0x03, 0x83 };
@@ -142,7 +141,7 @@ const struct smbus_cmd_t GET_RDO = { 0x08, 0x02, 0x84 };
 const struct smbus_cmd_t GET_VDO = { 0x08, 0x03, 0x9A };
 const struct smbus_cmd_t GET_CURRENT_PARTNER_SRC_PDO = { 0x08, 0x02, 0xA7 };
 const struct smbus_cmd_t GET_POWER_SWITCH_STATE = { 0x08, 0x02, 0xA9 };
-const struct smbus_cmd_t GET_RTK_STATUS = { 0x09, 0x03, 0x00 };
+const struct smbus_cmd_t GET_RTK_STATUS = { 0x09, 0x03 };
 const struct smbus_cmd_t PPM_RESET = { 0x0E, 0x02, 0x01 };
 const struct smbus_cmd_t CONNECTOR_RESET = { 0x0E, 0x03, 0x03 };
 const struct smbus_cmd_t GET_CAPABILITY = { 0x0E, 0x02, 0x06 };
@@ -152,9 +151,10 @@ const struct smbus_cmd_t SET_PDR = { 0x0E, 0x04, 0x0B };
 const struct smbus_cmd_t UCSI_GET_CONNECTOR_STATUS = { 0x0E, 0x3, 0x12 };
 const struct smbus_cmd_t UCSI_GET_ERROR_STATUS = { 0x0E, 0x03, 0x13 };
 const struct smbus_cmd_t UCSI_READ_POWER_LEVEL = { 0x0E, 0x05, 0x1E };
-const struct smbus_cmd_t GET_IC_STATUS = { 0x3A, 0x03, 0x00 };
+const struct smbus_cmd_t UCSI_SET_CCOM = { 0x0E, 0x04, 0x08 };
+const struct smbus_cmd_t GET_IC_STATUS = { 0x3A, 0x03 };
 const struct smbus_cmd_t SET_RETIMER_FW_UPDATE_MODE = { 0x20, 0x03, 0x00 };
-const struct smbus_cmd_t GET_CABLE_PROPERTY = { 0x0E, 0x02, 0x11 };
+const struct smbus_cmd_t GET_CABLE_PROPERTY = { 0x0E, 0x03, 0x11 };
 
 /**
  * @brief PDC Command states
@@ -283,6 +283,8 @@ enum cmd_t {
 	CMD_GET_VDO,
 	/** CMD_GET_IDENTITY_DISCOVERY */
 	CMD_GET_IDENTITY_DISCOVERY,
+	/** CMD_GET_IS_VCONN_SOURCING */
+	CMD_GET_IS_VCONN_SOURCING,
 };
 
 /**
@@ -396,6 +398,7 @@ static const char *const cmd_names[] = {
 	[CMD_GET_CABLE_PROPERTY] = "GET_CABLE_PROPERTY",
 	[CMD_GET_VDO] = "GET VDO",
 	[CMD_GET_IDENTITY_DISCOVERY] = "CMD_GET_IDENTITY_DISCOVERY",
+	[CMD_GET_IS_VCONN_SOURCING] = "CMD_GET_IS_VCONN_SOURCING",
 };
 
 /**
@@ -593,7 +596,7 @@ static int rts54_i2c_read(const struct device *dev)
 
 	msg[1].buf = data->rd_buf;
 	msg[1].len = data->ping_status.data_len + 1;
-	msg[1].flags = I2C_MSG_READ | I2C_MSG_STOP;
+	msg[1].flags = I2C_MSG_RESTART | I2C_MSG_READ | I2C_MSG_STOP;
 
 	rv = i2c_transfer_dt(&cfg->i2c, msg, 2);
 	if (rv < 0) {
@@ -601,6 +604,12 @@ static int rts54_i2c_read(const struct device *dev)
 	}
 
 	data->rd_buf_len = data->ping_status.data_len;
+
+	if (IS_ENABLED(CONFIG_USBC_PDC_TRACE_MSG)) {
+		pdc_trace_msg_resp(cfg->connector_number,
+				   PDC_TRACE_CHIP_TYPE_RTS54XX, data->rd_buf,
+				   data->ping_status.data_len + 1);
+	}
 
 	return rv;
 }
@@ -1238,6 +1247,13 @@ static void st_read_run(void *o)
 		*disc_state = (data->rd_buf[14] & 0x07);
 		break;
 	}
+	case CMD_GET_IS_VCONN_SOURCING: {
+		bool *vconn_sourcing = (bool *)data->user_buf;
+
+		/* Realtek PD Sourcing VCONN, Byte 11, bit 5 */
+		*vconn_sourcing = (data->rd_buf[11] & 0x20);
+		break;
+	}
 	default:
 		/* No preprocessing needed for the user data */
 		memcpy(data->user_buf, data->rd_buf + offset, len);
@@ -1391,6 +1407,14 @@ static int rts54_post_command(const struct device *dev, enum cmd_t cmd,
 	data->user_buf = user_buf;
 	data->cmd = cmd;
 
+	if (IS_ENABLED(CONFIG_USBC_PDC_TRACE_MSG)) {
+		const struct pdc_config_t *cfg = dev->config;
+
+		pdc_trace_msg_req(cfg->connector_number,
+				  PDC_TRACE_CHIP_TYPE_RTS54XX, data->wr_buf,
+				  data->wr_buf_len);
+	}
+
 	k_mutex_unlock(&data->mtx);
 
 	return 0;
@@ -1411,11 +1435,7 @@ static int rts54_get_rtk_status(const struct device *dev, uint8_t offset,
 	}
 
 	uint8_t payload[] = {
-		GET_RTK_STATUS.cmd,
-		GET_RTK_STATUS.len,
-		GET_RTK_STATUS.sub + offset,
-		0x00,
-		len,
+		GET_RTK_STATUS.cmd, GET_RTK_STATUS.len, offset, 0x00, len,
 	};
 
 	return rts54_post_command(dev, cmd, payload, ARRAY_SIZE(payload), buf);
@@ -1766,6 +1786,7 @@ static int rts54_get_cable_property(const struct device *dev,
 		GET_CABLE_PROPERTY.len,
 		GET_CABLE_PROPERTY.sub,
 		0x00,
+		0x00,
 	};
 
 	return rts54_post_command(dev, CMD_GET_CABLE_PROPERTY, payload,
@@ -1885,11 +1906,7 @@ static int rts54_get_info(const struct device *dev, struct pdc_info_t *info)
 	}
 
 	uint8_t payload[] = {
-		GET_IC_STATUS.cmd,
-		GET_IC_STATUS.len,
-		GET_IC_STATUS.sub,
-		0x00,
-		26,
+		GET_IC_STATUS.cmd, GET_IC_STATUS.len, 0, 0x00, 26,
 	};
 
 	return rts54_post_command(dev, CMD_GET_IC_STATUS, payload,
@@ -1928,11 +1945,15 @@ static int rts54_get_vbus_voltage(const struct device *dev, uint16_t *voltage)
 				    (uint8_t *)voltage);
 }
 
-static int rts54_set_ccom(const struct device *dev, enum ccom_t ccom,
-			  enum drp_mode_t dm)
+static int rts54_set_ccom(const struct device *dev, enum ccom_t ccom)
 {
 	struct pdc_data_t *data = dev->data;
-	uint8_t byte = 0;
+	uint16_t conn_opmode = 0;
+	/*
+	 * From bit 32, the first 7 bits are connector. The next 4 bits are for
+	 * the CC operation mode.
+	 */
+	const uint8_t opmode_offset = 7;
 
 	if (get_state(data) != ST_IDLE) {
 		return -EBUSY;
@@ -1940,36 +1961,20 @@ static int rts54_set_ccom(const struct device *dev, enum ccom_t ccom,
 
 	switch (ccom) {
 	case CCOM_RP:
-		byte = 0x02;
-		break;
-	case CCOM_DRP:
-		byte = 0x01;
-		switch (dm) {
-		case DRP_NORMAL:
-			/* No Try.Src or Try.Snk */
-			break;
-		case DRP_TRY_SRC:
-			byte |= (1 << 3);
-			break;
-		case DRP_TRY_SNK:
-			byte |= (2 << 3);
-			break;
-		}
+		conn_opmode = 1 << (opmode_offset + 0);
 		break;
 	case CCOM_RD:
-		byte = 0;
+		conn_opmode = 1 << (opmode_offset + 1);
+		break;
+	case CCOM_DRP:
+		conn_opmode = 1 << (opmode_offset + 2);
 		break;
 	}
 
-	/* We always want Accessory Support */
-	byte |= (1 << 2);
-
 	uint8_t payload[] = {
-		SET_TPC_CSD_OPERATION_MODE.cmd,
-		SET_TPC_CSD_OPERATION_MODE.len,
-		SET_TPC_CSD_OPERATION_MODE.sub,
-		0x00,
-		byte,
+		UCSI_SET_CCOM.cmd,  UCSI_SET_CCOM.len,
+		UCSI_SET_CCOM.sub,  0x00 /* data length */,
+		conn_opmode & 0xff, (conn_opmode >> 8) & 0xff,
 	};
 
 	return rts54_post_command(dev, CMD_SET_CCOM, payload,
@@ -2048,6 +2053,23 @@ static int rts54_get_identity_discovery(const struct device *dev,
 
 	return rts54_get_rtk_status(dev, 0, 14, CMD_GET_IDENTITY_DISCOVERY,
 				    (uint8_t *)disc_state);
+}
+
+static int rts54_is_vconn_sourcing(const struct device *dev,
+				   bool *vconn_sourcing)
+{
+	struct pdc_data_t *data = dev->data;
+
+	if (get_state(data) != ST_IDLE) {
+		return -EBUSY;
+	}
+
+	if (vconn_sourcing == NULL) {
+		return -EINVAL;
+	}
+
+	return rts54_get_rtk_status(dev, 0, 11, CMD_GET_IS_VCONN_SOURCING,
+				    (uint8_t *)vconn_sourcing);
 }
 
 static bool rts54_is_init_done(const struct device *dev)
@@ -2161,6 +2183,7 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.get_vdo = rts54_get_vdo,
 	.get_identity_discovery = rts54_get_identity_discovery,
 	.set_comms_state = rts54_set_comms_state,
+	.is_vconn_sourcing = rts54_is_vconn_sourcing,
 };
 
 static void pdc_interrupt_callback(const struct device *dev,

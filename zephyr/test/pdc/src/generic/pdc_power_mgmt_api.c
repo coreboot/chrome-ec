@@ -52,89 +52,81 @@ ZTEST_USER(pdc_power_mgmt_api, test_is_connected)
 {
 	union connector_status_t connector_status;
 
-	zassert_false(
-		pdc_power_mgmt_is_connected(CONFIG_USB_PD_PORT_MAX_COUNT));
+	zassert_false(pd_is_connected(CONFIG_USB_PD_PORT_MAX_COUNT));
 
-	zassert_false(pdc_power_mgmt_is_connected(TEST_PORT));
+	zassert_false(pd_is_connected(TEST_PORT));
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
 	emul_pdc_disconnect(emul);
-	zassert_true(TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(!pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
 	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_pd_get_polarity)
 {
 	union connector_status_t connector_status;
 
-	zassert_equal(POLARITY_COUNT, pdc_power_mgmt_pd_get_polarity(
-					      CONFIG_USB_PD_PORT_MAX_COUNT));
+	zassert_false(
+		pdc_power_mgmt_is_connected(CONFIG_USB_PD_PORT_MAX_COUNT));
 
 	connector_status.orientation = 1;
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-
-	zassert_true(TEST_WAIT_FOR(
-		POLARITY_CC2 == pdc_power_mgmt_pd_get_polarity(TEST_PORT),
-		PDC_TEST_TIMEOUT));
+	zassert_true(TEST_WAIT_FOR(POLARITY_CC2 == pd_get_polarity(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
 
 	connector_status.orientation = 0;
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(
-		POLARITY_CC1 == pdc_power_mgmt_pd_get_polarity(TEST_PORT),
-		PDC_TEST_TIMEOUT));
+	zassert_true(TEST_WAIT_FOR(POLARITY_CC1 == pd_get_polarity(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_pd_get_data_role)
 {
 	union connector_status_t connector_status;
 
-	zassert_equal(
-		PD_ROLE_DISCONNECTED,
-		pdc_power_mgmt_pd_get_data_role(CONFIG_USB_PD_PORT_MAX_COUNT));
+	zassert_equal(PD_ROLE_DISCONNECTED,
+		      pd_get_data_role(CONFIG_USB_PD_PORT_MAX_COUNT));
 
 	connector_status.conn_partner_type = DFP_ATTACHED;
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(
-		PD_ROLE_UFP == pdc_power_mgmt_pd_get_data_role(TEST_PORT),
-		PDC_TEST_TIMEOUT));
+	zassert_true(TEST_WAIT_FOR(PD_ROLE_UFP == pd_get_data_role(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
 
 	connector_status.conn_partner_type = UFP_ATTACHED;
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(
-		PD_ROLE_DFP == pdc_power_mgmt_pd_get_data_role(TEST_PORT),
-		PDC_TEST_TIMEOUT));
+	zassert_true(TEST_WAIT_FOR(PD_ROLE_DFP == pd_get_data_role(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_pd_get_power_role)
 {
 	union connector_status_t connector_status;
-	zassert_equal(PD_ROLE_SINK, pdc_power_mgmt_get_power_role(
-					    CONFIG_USB_PD_PORT_MAX_COUNT));
+	zassert_equal(PD_ROLE_SINK,
+		      pd_get_power_role(CONFIG_USB_PD_PORT_MAX_COUNT));
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(
-		PD_ROLE_SOURCE == pdc_power_mgmt_get_power_role(TEST_PORT),
-		PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(PD_ROLE_SOURCE == pd_get_power_role(TEST_PORT),
+			      PDC_TEST_TIMEOUT));
 
 	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(
-		PD_ROLE_SINK == pdc_power_mgmt_get_power_role(TEST_PORT),
-		PDC_TEST_TIMEOUT));
+	zassert_true(TEST_WAIT_FOR(PD_ROLE_SINK == pd_get_power_role(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_pd_get_task_cc_state)
@@ -153,8 +145,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_pd_get_task_cc_state)
 		  .out = PD_CC_UFP_AUDIO_ACC },
 	};
 
-	zassert_equal(PD_CC_NONE, pdc_power_mgmt_get_task_cc_state(
-					  CONFIG_USB_PD_PORT_MAX_COUNT));
+	zassert_equal(PD_CC_NONE,
+		      pd_get_task_cc_state(CONFIG_USB_PD_PORT_MAX_COUNT));
 
 	for (i = 0; i < ARRAY_SIZE(test); i++) {
 		union connector_status_t connector_status;
@@ -163,8 +155,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_pd_get_task_cc_state)
 		emul_pdc_configure_src(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
 		zassert_true(TEST_WAIT_FOR(
-			test[i].out ==
-				pdc_power_mgmt_get_task_cc_state(TEST_PORT),
+			test[i].out == pd_get_task_cc_state(TEST_PORT),
 			PDC_TEST_TIMEOUT));
 	}
 }
@@ -172,22 +163,18 @@ ZTEST_USER(pdc_power_mgmt_api, test_pd_get_task_cc_state)
 ZTEST_USER(pdc_power_mgmt_api, test_pd_capable)
 {
 	union connector_status_t connector_status;
-	zassert_equal(false,
-		      pdc_power_mgmt_pd_capable(CONFIG_USB_PD_PORT_MAX_COUNT));
+	zassert_equal(false, pd_capable(CONFIG_USB_PD_PORT_MAX_COUNT));
 
 	emul_pdc_disconnect(emul);
-	zassert_false(TEST_WAIT_FOR(pdc_power_mgmt_pd_capable(TEST_PORT),
-				    PDC_TEST_TIMEOUT));
+	zassert_false(TEST_WAIT_FOR(pd_capable(TEST_PORT), PDC_TEST_TIMEOUT));
 
 	connector_status.power_operation_mode = USB_DEFAULT_OPERATION;
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_false(TEST_WAIT_FOR(pdc_power_mgmt_pd_capable(TEST_PORT),
-				    PDC_TEST_TIMEOUT));
+	zassert_false(TEST_WAIT_FOR(pd_capable(TEST_PORT), PDC_TEST_TIMEOUT));
 
 	connector_status.power_operation_mode = PD_OPERATION;
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_pd_capable(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(TEST_WAIT_FOR(pd_capable(TEST_PORT), PDC_TEST_TIMEOUT));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_partner_usb_comm_capable)
@@ -209,8 +196,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_usb_comm_capable)
 		{ .ccap = { .op_mode_rd_only = 1 }, .expected = false },
 	};
 
-	zassert_false(pdc_power_mgmt_get_partner_usb_comm_capable(
-		CONFIG_USB_PD_PORT_MAX_COUNT));
+	zassert_false(
+		pd_get_partner_usb_comm_capable(CONFIG_USB_PD_PORT_MAX_COUNT));
 
 	for (i = 0; i < ARRAY_SIZE(test); i++) {
 		emul_pdc_set_connector_capability(emul, &test[i].ccap);
@@ -218,14 +205,12 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_usb_comm_capable)
 		emul_pdc_connect_partner(emul, &connector_status);
 		zassert_true(TEST_WAIT_FOR(
 			test[i].expected ==
-				pdc_power_mgmt_get_partner_usb_comm_capable(
-					TEST_PORT),
+				pd_get_partner_usb_comm_capable(TEST_PORT),
 			PDC_TEST_TIMEOUT));
 
 		emul_pdc_disconnect(emul);
-		zassert_true(
-			TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
-				      PDC_TEST_TIMEOUT));
+		zassert_true(TEST_WAIT_FOR(!pd_is_connected(TEST_PORT),
+					   PDC_TEST_TIMEOUT));
 	}
 }
 
@@ -272,8 +257,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 	uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
 	uint32_t start;
 
-	zassert_false(pdc_power_mgmt_get_partner_data_swap_capable(
-		CONFIG_USB_PD_PORT_MAX_COUNT));
+	zassert_false(
+		pd_get_partner_data_swap_capable(CONFIG_USB_PD_PORT_MAX_COUNT));
 
 	for (i = 0; i < ARRAY_SIZE(test); i++) {
 		emul_pdc_set_connector_capability(emul, &test[i].ccap);
@@ -285,23 +270,20 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 			k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
 
 			if (test[i].expected !=
-			    pdc_power_mgmt_get_partner_data_swap_capable(
-				    TEST_PORT))
+			    pd_get_partner_data_swap_capable(TEST_PORT))
 				continue;
 
 			break;
 		}
 
-		zassert_equal(
-			test[i].expected,
-			pdc_power_mgmt_get_partner_data_swap_capable(TEST_PORT),
-			"[%d] expected=%d, ccap=0x%X", i, test[i].expected,
-			test[i].ccap);
+		zassert_equal(test[i].expected,
+			      pd_get_partner_data_swap_capable(TEST_PORT),
+			      "[%d] expected=%d, ccap=0x%X", i,
+			      test[i].expected, test[i].ccap);
 
 		emul_pdc_disconnect(emul);
-		zassert_true(
-			TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
-				      PDC_TEST_TIMEOUT));
+		zassert_true(TEST_WAIT_FOR(!pd_is_connected(TEST_PORT),
+					   PDC_TEST_TIMEOUT));
 	}
 }
 
@@ -322,8 +304,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 	emul_pdc_set_info(emul, &in);
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
 	zassert_ok(pdc_power_mgmt_get_info(TEST_PORT, &out));
 	zassert_equal(in.fw_version, out.fw_version, "in=0x%X, out=0x%X",
@@ -334,8 +316,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 		      out.vid_pid);
 
 	emul_pdc_disconnect(emul);
-	zassert_true(TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(!pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
@@ -386,11 +368,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 
 		test[i].s.configure(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
-		zassert_true(
-			TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
-				      PDC_TEST_TIMEOUT));
+		zassert_true(TEST_WAIT_FOR(pd_is_connected(TEST_PORT),
+					   PDC_TEST_TIMEOUT));
 
-		pdc_power_mgmt_request_power_swap(TEST_PORT);
+		pd_request_power_swap(TEST_PORT);
 
 		start = k_cycle_get_32();
 		while (k_cycle_get_32() - start < timeout) {
@@ -415,9 +396,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 		zassert_equal(pdr.accept_pr_swap, test[i].e.pdr.accept_pr_swap);
 
 		emul_pdc_disconnect(emul);
-		zassert_true(
-			TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
-				      PDC_TEST_TIMEOUT));
+		zassert_true(TEST_WAIT_FOR(!pd_is_connected(TEST_PORT),
+					   PDC_TEST_TIMEOUT));
 	}
 }
 
@@ -469,11 +449,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_data_swap)
 
 		test[i].s.configure(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
-		zassert_true(
-			TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
-				      PDC_TEST_TIMEOUT));
+		zassert_true(TEST_WAIT_FOR(pd_is_connected(TEST_PORT),
+					   PDC_TEST_TIMEOUT));
 
-		pdc_power_mgmt_request_data_swap(TEST_PORT);
+		pd_request_data_swap(TEST_PORT);
 		start = k_cycle_get_32();
 		while (k_cycle_get_32() - start < timeout) {
 			k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
@@ -497,9 +476,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_data_swap)
 		zassert_equal(uor.accept_dr_swap, test[i].e.uor.accept_dr_swap);
 
 		emul_pdc_disconnect(emul);
-		zassert_true(
-			TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
-				      PDC_TEST_TIMEOUT));
+		zassert_true(TEST_WAIT_FOR(!pd_is_connected(TEST_PORT),
+					   PDC_TEST_TIMEOUT));
 	}
 }
 
@@ -507,26 +485,24 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_unconstr_power)
 {
 	union connector_status_t connector_status;
 
-	zassert_false(pdc_power_mgmt_get_partner_unconstr_power(
-		CONFIG_USB_PD_PORT_MAX_COUNT));
+	zassert_false(
+		pd_get_partner_unconstr_power(CONFIG_USB_PD_PORT_MAX_COUNT));
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
 
-	zassert_false(TEST_WAIT_FOR(
-		pdc_power_mgmt_get_partner_unconstr_power(TEST_PORT),
-		PDC_TEST_TIMEOUT));
+	zassert_false(TEST_WAIT_FOR(pd_get_partner_unconstr_power(TEST_PORT),
+				    PDC_TEST_TIMEOUT));
 
 	emul_pdc_disconnect(emul);
-	zassert_true(TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(!pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
 	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
 
-	zassert_false(TEST_WAIT_FOR(
-		pdc_power_mgmt_get_partner_unconstr_power(TEST_PORT),
-		PDC_TEST_TIMEOUT));
+	zassert_false(TEST_WAIT_FOR(pd_get_partner_unconstr_power(TEST_PORT),
+				    PDC_TEST_TIMEOUT));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
@@ -559,8 +535,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 		      expected_voltage_mv, out);
 
 	emul_pdc_disconnect(emul);
-	zassert_true(TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(!pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
@@ -609,7 +585,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 
 	union connector_status_t connector_status;
 	enum ccom_t ccom;
-	enum drp_mode_t dm;
 	union pdr_t pdr;
 	uint32_t timeout = k_ms_to_cyc_ceil32(4000);
 	uint32_t start;
@@ -619,19 +594,18 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 		if (test[i].s.configure) {
 			test[i].s.configure(emul, &connector_status);
 			emul_pdc_connect_partner(emul, &connector_status);
-			zassert_true(TEST_WAIT_FOR(
-				pdc_power_mgmt_is_connected(TEST_PORT),
-				PDC_TEST_TIMEOUT));
+			zassert_true(TEST_WAIT_FOR(pd_is_connected(TEST_PORT),
+						   PDC_TEST_TIMEOUT));
 		}
 
-		pdc_power_mgmt_set_dual_role(TEST_PORT, test[i].s.state);
+		pd_set_dual_role(TEST_PORT, test[i].s.state);
 		start = k_cycle_get_32();
 
 		while (k_cycle_get_32() - start < timeout) {
 			k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
 
 			if (test[i].e.check_cc_mode) {
-				emul_pdc_get_ccom(emul, &ccom, &dm);
+				emul_pdc_get_ccom(emul, &ccom);
 
 				if (test[i].e.cc_mode != ccom)
 					continue;
@@ -660,9 +634,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 				      pdr.swap_to_src);
 		}
 		emul_pdc_disconnect(emul);
-		zassert_true(
-			TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
-				      PDC_TEST_TIMEOUT));
+		zassert_true(TEST_WAIT_FOR(!pd_is_connected(TEST_PORT),
+					   PDC_TEST_TIMEOUT));
 	}
 }
 
@@ -670,14 +643,13 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_suspend)
 {
 	union connector_status_t connector_status;
 	enum ccom_t ccom;
-	enum drp_mode_t dm;
 	uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
 	uint32_t start;
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
 	hook_notify(HOOK_CHIPSET_SUSPEND);
 	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
@@ -687,7 +659,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_suspend)
 	start = k_cycle_get_32();
 	while (k_cycle_get_32() - start < timeout) {
 		k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
-		emul_pdc_get_ccom(emul, &ccom, &dm);
+		emul_pdc_get_ccom(emul, &ccom);
 
 		if (ccom != CCOM_RD)
 			continue;
@@ -702,17 +674,16 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume)
 {
 	union connector_status_t connector_status;
 	enum ccom_t ccom;
-	enum drp_mode_t dm;
 
 	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
 	hook_notify(HOOK_CHIPSET_RESUME);
 	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
 
-	emul_pdc_get_ccom(emul, &ccom, &dm);
+	emul_pdc_get_ccom(emul, &ccom);
 	zassert_equal(CCOM_DRP, ccom);
 }
 
@@ -720,14 +691,13 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_startup)
 {
 	union connector_status_t connector_status;
 	enum ccom_t ccom;
-	enum drp_mode_t dm;
 	uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
 	uint32_t start;
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
 	hook_notify(HOOK_CHIPSET_STARTUP);
 	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
@@ -737,7 +707,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_startup)
 	start = k_cycle_get_32();
 	while (k_cycle_get_32() - start < timeout) {
 		k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
-		emul_pdc_get_ccom(emul, &ccom, &dm);
+		emul_pdc_get_ccom(emul, &ccom);
 
 		if (ccom != CCOM_RD)
 			continue;
@@ -757,8 +727,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
-				   PDC_TEST_TIMEOUT));
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
 	hook_notify(HOOK_CHIPSET_SHUTDOWN);
 	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
@@ -815,7 +785,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name)
 	uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
 	uint32_t start;
 
-	state_name = pdc_power_mgmt_get_task_state_name(TEST_PORT);
+	state_name = pd_get_task_state_name(TEST_PORT);
 	zassert_equal(strcmp(state_name, "Unattached"), 0);
 
 	for (i = 0; i < ARRAY_SIZE(test); i++) {
@@ -827,8 +797,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name)
 		start = k_cycle_get_32();
 		while (k_cycle_get_32() - start < timeout) {
 			k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
-			state_name =
-				pdc_power_mgmt_get_task_state_name(TEST_PORT);
+			state_name = pd_get_task_state_name(TEST_PORT);
 
 			if (strcmp(state_name, test[i].e.name) != 0)
 				continue;
@@ -887,4 +856,73 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_connector_status)
 	emul_pdc_disconnect(emul);
 	zassert_true(TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
 				   PDC_TEST_TIMEOUT));
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_get_cable_prop)
+{
+	union cable_property_t in, out, exp;
+	union connector_status_t in_conn_status, out_conn_status;
+	union conn_status_change_bits_t in_conn_status_change_bits;
+
+	zassert_equal(-ERANGE, pdc_power_mgmt_get_cable_prop(
+				       CONFIG_USB_PD_PORT_MAX_COUNT, &out));
+	zassert_equal(-EINVAL, pdc_power_mgmt_get_cable_prop(TEST_PORT, NULL));
+
+	in.raw_value[0] = 0x1a2b3c4d;
+	in.raw_value[1] = 0x5a6b7c8d;
+	emul_pdc_set_cable_property(emul, in);
+
+	in_conn_status_change_bits.external_supply_change = 1;
+	in_conn_status_change_bits.connector_partner = 1;
+	in_conn_status_change_bits.connect_change = 1;
+	in_conn_status.raw_conn_status_change_bits =
+		in_conn_status_change_bits.raw_value;
+
+	in_conn_status.conn_partner_flags = 1;
+	in_conn_status.conn_partner_type = UFP_ATTACHED;
+	in_conn_status.rdo = 0x01234567;
+
+	emul_pdc_configure_snk(emul, &in_conn_status);
+	emul_pdc_connect_partner(emul, &in_conn_status);
+	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
+
+	zassert_ok(pdc_power_mgmt_get_connector_status(TEST_PORT,
+						       &out_conn_status));
+
+	zassert_ok(pdc_power_mgmt_get_cable_prop(TEST_PORT, &out));
+
+	/*
+	 * The RTS54xx only returns 5 bytes of cable property.
+	 */
+	zassert_mem_equal(in.raw_value, out.raw_value, 5,
+			  "Returned cable property did not match input "
+			  "in 0x%08X:%08X != out 0x%08X:%08X",
+			  in.raw_value[0], in.raw_value[1], out.raw_value[0],
+			  out.raw_value[1]);
+
+	exp.raw_value[0] = in.raw_value[0];
+	exp.raw_value[1] = in.raw_value[1] & 0xff;
+	zassert_mem_equal(exp.raw_value, out.raw_value, sizeof(exp),
+			  "Returned cable property included extra data "
+			  "exp 0x%08X:%08X != out 0x%08X:%08X",
+			  exp.raw_value[0], exp.raw_value[1], out.raw_value[0],
+			  out.raw_value[1]);
+
+	emul_pdc_disconnect(emul);
+	zassert_true(TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
+}
+
+/*
+ * Validate that all possible PDC power management states have a name
+ * assigned.  This could possibly be done with some macrobatics, but
+ * a runtime unit test is easier to maintain.
+ */
+ZTEST_USER(pdc_power_mgmt_api, test_names)
+{
+	for (int i = 0; i < pdc_cmd_types; i++) {
+		zassert_not_null(pdc_cmd_names[i],
+				 "PDC command %d missing name", i);
+	}
 }

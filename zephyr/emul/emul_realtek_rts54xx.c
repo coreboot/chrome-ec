@@ -100,7 +100,8 @@ static int get_ic_status(struct rts5453p_emul_pdc_data *data,
 {
 	LOG_INF("GET_IC_STATUS");
 
-	data->response.ic_status.byte_count = sizeof(struct rts54_ic_status);
+	data->response.ic_status.byte_count = MIN(
+		sizeof(struct rts54_ic_status) - 1, req->get_ic_status.sts_len);
 	data->response.ic_status.fw_main_version = data->info.fw_version >> 16 &
 						   BIT_MASK(8);
 	data->response.ic_status.fw_sub_version[0] =
@@ -398,13 +399,12 @@ static int set_tpc_rp(struct rts5453p_emul_pdc_data *data,
 	return 0;
 }
 
-static int set_tpc_csd_operation_mode(struct rts5453p_emul_pdc_data *data,
-				      const union rts54_request *req)
+static int set_ccom(struct rts5453p_emul_pdc_data *data,
+		    const union rts54_request *req)
 {
-	LOG_INF("SET_TPC_CSD_OPERATION_MODE port=%d",
-		req->set_tpc_csd_operation_mode.port_num);
+	LOG_INF("SET_CCOM port=%d", req->set_ccom.port_and_ccom.port_num);
 
-	data->csd_op_mode = req->set_tpc_csd_operation_mode.op_mode;
+	data->set_ccom_mode = req->set_ccom.port_and_ccom;
 
 	memset(&data->response, 0, sizeof(data->response));
 	send_response(data);
@@ -554,15 +554,21 @@ static int get_pdos(struct rts5453p_emul_pdc_data *data,
 static int get_cable_property(struct rts5453p_emul_pdc_data *data,
 			      const union rts54_request *req)
 {
-	union cable_property_t property = data->cable_property;
+	const union cable_property_t *ucsi_property = &data->cable_property;
 
-	LOG_INF("GET_CABLE_PROPERTY property=%x", property);
+	LOG_INF("GET_CABLE_PROPERTY property=%x", ucsi_property->raw_value[0]);
 	memset(&data->response, 0, sizeof(data->response));
 
+	/*
+	 * The RTK command only returns 5 bytes of cable property, but
+	 * they map to the first 5 bytes of the 8 byte UCSI response.
+	 */
+	BUILD_ASSERT(sizeof(data->response.get_cable_property) == 1 + 5);
 	data->response.get_cable_property.byte_count =
-		sizeof(struct get_cable_property_response);
-	data->response.get_cable_property.raw_value[0] = property.raw_value[0];
-	data->response.get_cable_property.raw_value[1] = property.raw_value[1];
+		sizeof(data->response.get_cable_property) - 1;
+	memcpy(data->response.get_cable_property.raw_value,
+	       ucsi_property->raw_value,
+	       data->response.get_cable_property.byte_count);
 
 	send_response(data);
 	return 0;
@@ -639,7 +645,7 @@ const struct commands sub_cmd_x08[] = {
 	{ .code = 0x05, HANDLER_DEF(set_tpc_rp) },
 	{ .code = 0x19, HANDLER_DEF(unsupported) },
 	{ .code = 0x1A, HANDLER_DEF(unsupported) },
-	{ .code = 0x1D, HANDLER_DEF(set_tpc_csd_operation_mode) },
+	{ .code = 0x1D, HANDLER_DEF(unsupported) },
 	{ .code = 0x1F, HANDLER_DEF(set_tpc_reconnect) },
 	{ .code = 0x20, HANDLER_DEF(unsupported) },
 	{ .code = 0x21, HANDLER_DEF(force_set_power_switch) },
@@ -669,6 +675,7 @@ const struct commands sub_cmd_x0E[] = {
 	{ .code = 0x03, HANDLER_DEF(connector_reset) },
 	{ .code = 0x06, HANDLER_DEF(get_capability) },
 	{ .code = 0x07, HANDLER_DEF(get_connector_capability) },
+	{ .code = 0x08, HANDLER_DEF(set_ccom) },
 	{ .code = 0x09, HANDLER_DEF(set_uor) },
 	{ .code = 0x0B, HANDLER_DEF(set_pdr) },
 	{ .code = 0x0C, HANDLER_DEF(unsupported) },
@@ -1088,37 +1095,23 @@ emul_realtek_rts54xx_get_requested_power_level(const struct emul *target,
 }
 
 static int emul_realtek_rts54xx_get_ccom(const struct emul *target,
-					 enum ccom_t *ccom, enum drp_mode_t *dm)
+					 enum ccom_t *ccom)
 {
 	struct rts5453p_emul_pdc_data *data =
 		rts5453p_emul_get_pdc_data(target);
 
-	switch (data->csd_op_mode.csd_mode) {
-	case 0:
-		*ccom = CCOM_RD;
-		break;
-	case 1:
-		*ccom = CCOM_DRP;
-		switch (data->csd_op_mode.drp_mode) {
-		case 0:
-			*dm = DRP_NORMAL;
-			break;
-		case 1:
-			*dm = DRP_TRY_SRC;
-			break;
-		case 2:
-			*dm = DRP_TRY_SNK;
-			break;
-		default:
-			LOG_ERR("Invalid drp 0x%X", data->csd_op_mode.drp_mode);
-			return -EINVAL;
-		}
-		break;
-	case 2:
+	switch (data->set_ccom_mode.ccom) {
+	case 0x1:
 		*ccom = CCOM_RP;
 		break;
+	case 0x2:
+		*ccom = CCOM_RD;
+		break;
+	case 0x4:
+		*ccom = CCOM_DRP;
+		break;
 	default:
-		LOG_ERR("Invalid csd_mode 0x%X", data->csd_op_mode.csd_mode);
+		LOG_ERR("Invalid ccom mode 0x%X", data->set_ccom_mode.ccom);
 		return -EINVAL;
 	}
 

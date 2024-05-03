@@ -75,7 +75,12 @@ static void print_reg(int regnum, const uint32_t *regs, int index)
  */
 static int32_t is_frame_in_handler_stack(const uint32_t exc_return)
 {
-	return (exc_return & 0xf) == 1 || (exc_return & 0xf) == 9;
+#ifdef CONFIG_FPU
+	return exc_return == 0xfffffff1 || exc_return == 0xfffffff9 ||
+	       exc_return == 0xffffffe1 || exc_return == 0xffffffe9;
+#else
+	return exc_return == 0xfffffff1 || exc_return == 0xfffffff9;
+#endif /* CONFIG_FPU */
 }
 
 /*
@@ -370,10 +375,15 @@ void __keep report_panic(void)
 	if (IS_ENABLED(CONFIG_ARMV7M_CACHE))
 		cpu_clean_invalidate_dcache();
 
+	if (IS_ENABLED(CONFIG_CMD_CRASH_NESTED))
+		command_crash_nested_handler();
+
 	/* Start safe mode if possible */
 	if (IS_ENABLED(CONFIG_SYSTEM_SAFE_MODE)) {
-		/* TODO: check for nested exceptions */
-		if (start_system_safe_mode() == EC_SUCCESS) {
+		/* Only start safe mode if panic occurred in thread context */
+		if (!is_frame_in_handler_stack(
+			    pdata->cm.regs[CORTEX_PANIC_REGISTER_LR]) &&
+		    start_system_safe_mode() == EC_SUCCESS) {
 			pdata->flags |= PANIC_DATA_FLAG_SAFE_MODE_STARTED;
 			/* If not in an interrupt context (e.g. software_panic),
 			 * the next highest priority task will immediately

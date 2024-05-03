@@ -19,6 +19,11 @@
 
 #include <drivers/pdc.h>
 
+#ifdef CONFIG_ZTEST
+extern const char *const pdc_cmd_names[];
+extern const int pdc_cmd_types;
+#endif
+
 /**
  * @brief Get the state of the port partner connection
  *
@@ -416,5 +421,49 @@ int pdc_power_mgmt_set_comms_state(bool run);
  */
 int pdc_power_mgmt_get_connector_status(
 	int port, union connector_status_t *connector_status);
+
+/**
+ * @brief Return the current DP pin assignment configured by the PDC as
+ * as the DP source.
+ *
+ * @param port USB-C port number
+ *
+ * @retval DP pin assignment mask (MODE_DP_PIN_x defines from ec_commands.h)
+ */
+uint8_t pdc_power_mgmt_get_dp_pin_mode(int port);
+
+/**
+ * @brief Put a cap on the max voltage requested as a sink.
+ *
+ * @param mv maximum voltage in millivolts.
+ */
+void pdc_power_mgmt_set_max_voltage(unsigned int mv);
+
+/**
+ * @brief Get the max voltage that can be requested as set by
+ * pd_set_max_voltage().
+ *
+ * @return max voltage
+ */
+unsigned int pdc_power_mgmt_get_max_voltage(void);
+
+/**
+ * @brief Requests the specified voltage from the PD source and triggers
+ *	  a new negotiation sequence with the source.
+ *
+ * @param port USB-C port number
+ * @param mv request voltage in millivolts.
+ */
+void pdc_power_mgmt_request_source_voltage(int port, int mv);
+
+/**
+ * @brief Return the current UCSI cable property on a port
+ *
+ * @param port USB-C port number
+ * @param cable_prop Output variable to store the cable property
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_get_cable_prop(int port, union cable_property_t *cable_prop);
 
 #endif /* __CROS_EC_PDC_POWER_MGMT_H */

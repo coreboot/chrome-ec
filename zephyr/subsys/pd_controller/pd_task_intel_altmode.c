@@ -181,7 +181,10 @@ static bool process_altmode_pd_data(int port)
 		}
 
 		/* Mux is pending. Make sure a connection is established */
-		if (pdc_power_mgmt_is_connected(port)) {
+		if (pdc_power_mgmt_is_connected(port) ||
+		    /* Retimer Firmware update NDA case */
+		    (!pdc_power_mgmt_is_connected(port) &&
+		     mux_pend->mux_mode == USB_PD_MUX_TBT_COMPAT_ENABLED)) {
 			intel_altmode_set_mux(port, mux_pend->mux_mode,
 					      mux_pend->usb_mode,
 					      mux_pend->polarity);
@@ -479,13 +482,6 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 SHELL_CMD_REGISTER(altmode, &sub_altmode_cmds, "PD Altmode commands", NULL);
 
 #endif /* CONFIG_CONSOLE_CMD_USBPD_INTEL_ALTMODE */
-
-#ifdef CONFIG_PLATFORM_EC_USB_PD_DP_MODE
-__override uint8_t get_dp_pin_mode(int port)
-{
-	return intel_altmode_task_data.data_status[port].dp_pin << 2;
-}
-#endif
 
 #ifdef CONFIG_PLATFORM_EC_USB_PD_TBT_COMPAT_MODE
 enum tbt_compat_cable_speed get_tbt_cable_speed(int port)

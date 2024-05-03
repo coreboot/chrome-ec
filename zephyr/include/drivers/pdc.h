@@ -92,8 +92,7 @@ typedef int (*pdc_get_capability_t)(const struct device *dev,
 				    struct capability_t *caps);
 typedef int (*pdc_get_connector_capability_t)(
 	const struct device *dev, union connector_capability_t *caps);
-typedef int (*pdc_set_ccom_t)(const struct device *dev, enum ccom_t ccom,
-			      enum drp_mode_t dm);
+typedef int (*pdc_set_ccom_t)(const struct device *dev, enum ccom_t ccom);
 typedef int (*pdc_set_uor_t)(const struct device *dev, union uor_t uor);
 typedef int (*pdc_set_pdr_t)(const struct device *dev, union pdr_t pdr);
 typedef int (*pdc_set_sink_path_t)(const struct device *dev, bool en);
@@ -132,6 +131,8 @@ typedef int (*pdc_get_vdo_t)(const struct device *dev, union get_vdo_t req,
 typedef int (*pdc_get_identity_discovery_t)(const struct device *dev,
 					    bool *disc_state);
 typedef int (*pdc_set_comms_state_t)(const struct device *dev, bool active);
+typedef int (*pdc_is_vconn_sourcing_t)(const struct device *dev,
+				       bool *vconn_sourcing);
 
 /**
  * @cond INTERNAL_HIDDEN
@@ -168,6 +169,7 @@ __subsystem struct pdc_driver_api_t {
 	pdc_get_vdo_t get_vdo;
 	pdc_get_identity_discovery_t get_identity_discovery;
 	pdc_set_comms_state_t set_comms_state;
+	pdc_is_vconn_sourcing_t is_vconn_sourcing;
 };
 /**
  * @endcond
@@ -431,8 +433,7 @@ pdc_get_connector_capability(const struct device *dev,
  * @retval -EBUSY if not ready to execute the command
  * @retval -ENOSYS if not implemented
  */
-static inline int pdc_set_ccom(const struct device *dev, enum ccom_t ccom,
-			       enum drp_mode_t dm)
+static inline int pdc_set_ccom(const struct device *dev, enum ccom_t ccom)
 {
 	const struct pdc_driver_api_t *api =
 		(const struct pdc_driver_api_t *)dev->api;
@@ -442,7 +443,7 @@ static inline int pdc_set_ccom(const struct device *dev, enum ccom_t ccom,
 		return -ENOSYS;
 	}
 
-	return api->set_ccom(dev, ccom, dm);
+	return api->set_ccom(dev, ccom);
 }
 
 /**
@@ -892,6 +893,60 @@ static inline int pdc_set_comms_state(const struct device *dev,
 
 	return api->set_comms_state(dev, comms_active);
 }
+
+/**
+ * @brief Checks if the port is sourcing VCONN
+ *
+ * @param dev PDC device structure pointer
+ * @param vconn_sourcing True if the port is sourcing VCONN, else false
+ *
+ * @retval 0 if success
+ * @retval -ENOSYS if not implemented
+ * @retval -EINVAL if vconn_sourcing is NULL
+ */
+static inline int pdc_is_vconn_sourcing(const struct device *dev,
+					bool *vconn_sourcing)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	if (api->is_vconn_sourcing == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->is_vconn_sourcing(dev, vconn_sourcing);
+}
+
+/**
+ * @brief PDC message type or chip type identifiers. These are 8-bit
+ *        values.
+ */
+enum pdc_trace_chip_type {
+	PDC_TRACE_CHIP_TYPE_UNSPEC = 0,
+	PDC_TRACE_CHIP_TYPE_RTS54XX = 0x54,
+};
+
+/**
+ * @brief Log outgoing PDC message for tracing
+ *
+ * @param port Type-C port number
+ * @param msg_type Message type (hint how to interpret message)
+ * @param buf Message to log
+ * @param count Message length
+ */
+void pdc_trace_msg_req(int port, enum pdc_trace_chip_type msg_type,
+		       const uint8_t *buf, const int count);
+
+/**
+ * @brief Log incoming PDC message for tracing
+ *
+ * @param port Type-C port number
+ * @param msg_type Message type (hint how to interpret message)
+ * @param buf Message to log
+ * @param count Message length
+ */
+void pdc_trace_msg_resp(int port, enum pdc_trace_chip_type msg_type,
+			const uint8_t *buf, const int count);
 
 #ifdef __cplusplus
 }

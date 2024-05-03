@@ -28,7 +28,7 @@
 
 #ifdef CONFIG_ZEPHYR
 
-const uint8_t __keep
+test_overridable_const uint8_t __keep
 	touchpad_fw_hashes[CONFIG_TOUCHPAD_FW_CHUNKS][SHA256_DIGEST_SIZE];
 const uint8_t __keep touchpad_fw_full_hash[SHA256_DIGEST_SIZE];
 
@@ -321,6 +321,7 @@ void fw_update_command_handler(void *body, size_t cmd_size,
 
 	new_chunk_written(block_offset);
 
+#ifndef CONFIG_ZTEST
 	/* Verify that data was written properly. */
 	if (memcmp(update_data,
 		   (void *)(block_offset + CONFIG_PROGRAM_MEMORY_BASE),
@@ -330,6 +331,7 @@ void fw_update_command_handler(void *body, size_t cmd_size,
 			__LINE__);
 		return;
 	}
+#endif
 
 	*error_code = UPDATE_SUCCESS;
 }
