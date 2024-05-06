@@ -9,13 +9,14 @@
 #include "fpsensor/fpsensor.h"
 #include "fpsensor/fpsensor_auth_commands.h"
 #include "fpsensor/fpsensor_auth_crypto.h"
+#include "fpsensor/fpsensor_console.h"
 #include "fpsensor/fpsensor_crypto.h"
 #include "fpsensor/fpsensor_state.h"
 #include "fpsensor/fpsensor_template_state.h"
-#include "fpsensor/fpsensor_utils.h"
 #include "openssl/mem.h"
 #include "openssl/rand.h"
 #include "scoped_fast_cpu.h"
+#include "sha256.h"
 #include "util.h"
 
 #include <algorithm>
