@@ -1807,6 +1807,13 @@
  */
 #undef CONFIG_PANIC_ON_WATCHDOG_WARNING
 
+/**
+ * Enables nesting for the `crash` console command.
+ * Calling the crash console command with multiple crash arguments
+ * will result in nested crashes in the order specified.
+ */
+#define CONFIG_CMD_CRASH_NESTED
+
 /*
  * Provide the default GPIO abstraction layer.
  * You want this unless you are doing a really tiny firmware.
@@ -1922,6 +1929,11 @@
 
 /* Enable verbose output to UART console and extra timestamp print precision. */
 #define CONFIG_CONSOLE_VERBOSE
+
+/* Enable the console print command. This allows the host to print messages
+ * directly in the EC console.
+ */
+#define CONFIG_HOSTCMD_CONSOLE_PRINT
 
 /*****************************************************************************/
 /* Support for EC-EC communication */
@@ -6905,6 +6917,13 @@
 #if (defined(CONFIG_USBC_RETIMER_INTEL_BB) || \
      defined(CONFIG_USBC_RETIMER_KB800X))
 #define CONFIG_CMD_RETIMER
+#endif
+
+/**
+ * CONFIG_CMD_CRASH_NESTED depends on CONFIG_CMD_CRASH
+ */
+#if !defined(CONFIG_CMD_CRASH) && defined(CONFIG_CMD_CRASH_NESTED)
+#error "CONFIG_CMD_CRASH_NESTED depends on CONFIG_CMD_CRASH"
 #endif
 
 /*****************************************************************************/

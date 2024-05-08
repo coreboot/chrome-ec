@@ -61,6 +61,11 @@ choice TEST_TARGET
 	  help
 	    The test target that exercises nissa/pujjo/*.c
 
+	config TEST_NISSA_PUJJOGA
+	  bool "Tests for Pujjoga-specific code"
+	  help
+	    The test target that exercises nissa/pujjoga/*.c
+
 	config TEST_NISSA_JOXER
 	  bool "Tests for Joxer-specific code"
 	  help
@@ -115,6 +120,12 @@ choice TEST_TARGET
 	  select TEST_DISABLE_INLINE_CHIPSET_IN_STATE
 	  help
 	    The test target that exercises nissa/glassway/*.c
+
+	config TEST_NISSA_RIVEN
+	  bool "Tests for Riven-specific code"
+	  select TEST_DISABLE_INLINE_CHIPSET_IN_STATE
+	  help
+		The test target that exercises nissa/riven/*.c
 endchoice
 
 config TEST_DISABLE_INLINE_CHIPSET_IN_STATE

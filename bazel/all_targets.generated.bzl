@@ -1900,6 +1900,11 @@ def all_targets():
         extra_modules = ["cmsis"],
     )
     ec_target(
+        name = "pujjoga",
+        board = "pujjoga",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "quackingstick",
         baseboard = "trogdor",
         board = "quackingstick",
@@ -1972,6 +1977,11 @@ def all_targets():
     ec_target(
         name = "rex-ish-ec",
         board = "rex-ish-ec",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
+        name = "riven",
+        board = "riven",
         extra_modules = ["cmsis"],
     )
     ec_target(

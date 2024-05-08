@@ -25,7 +25,7 @@ extern "C" {
 #include "host_command.h"
 #include "link_defs.h"
 #include "mkbp_event.h"
-#include "overflow.h"
+#include "sha256.h"
 #include "spi.h"
 #include "system.h"
 #include "task.h"
@@ -35,8 +35,10 @@ extern "C" {
 }
 
 #include "fpsensor/fpsensor.h"
+#include "fpsensor/fpsensor_console.h"
 #include "fpsensor/fpsensor_crypto.h"
 #include "fpsensor/fpsensor_detect.h"
+#include "fpsensor/fpsensor_modes.h"
 #include "fpsensor/fpsensor_state.h"
 #include "fpsensor/fpsensor_template_state.h"
 #include "fpsensor/fpsensor_utils.h"
@@ -83,13 +85,6 @@ static inline int is_raw_capture(uint32_t mode)
 
 	return (capture_type == FP_CAPTURE_VENDOR_FORMAT ||
 		capture_type == FP_CAPTURE_QUALITY_TEST);
-}
-
-__maybe_unused bool fp_match_success(int match_result)
-{
-	return match_result == EC_MKBP_FP_ERR_MATCH_YES ||
-	       match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATED ||
-	       match_result == EC_MKBP_FP_ERR_MATCH_YES_UPDATE_FAILED;
 }
 
 #ifdef HAVE_FP_PRIVATE_DRIVER
@@ -448,21 +443,6 @@ DECLARE_HOST_COMMAND(EC_CMD_FP_INFO, fp_command_info,
 		     EC_VER_MASK(0) | EC_VER_MASK(1));
 
 BUILD_ASSERT(FP_CONTEXT_NONCE_BYTES == 12);
-
-enum ec_error_list validate_fp_buffer_offset(const uint32_t buffer_size,
-					     const uint32_t offset,
-					     const uint32_t size)
-{
-	uint32_t bytes_requested;
-
-	if (check_add_overflow(size, offset, &bytes_requested))
-		return EC_ERROR_OVERFLOW;
-
-	if (bytes_requested > buffer_size)
-		return EC_ERROR_INVAL;
-
-	return EC_SUCCESS;
-}
 
 static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 {

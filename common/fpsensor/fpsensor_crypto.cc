@@ -3,10 +3,12 @@
  * found in the LICENSE file.
  */
 
+#include "fpsensor/fpsensor_console.h"
 #include "fpsensor/fpsensor_crypto.h"
 #include "fpsensor/fpsensor_state_without_driver_info.h"
-#include "fpsensor/fpsensor_utils.h"
 #include "openssl/aead.h"
+#include "openssl/evp.h"
+#include "openssl/hkdf.h"
 #include "openssl/mem.h"
 
 #include <span>
@@ -41,7 +43,8 @@ BUILD_ASSERT(IKM_SIZE_BYTES == 64);
 #error "fpsensor requires CONFIG_BORINGSSL_CRYPTO and ROLLBACK_SECRET_SIZE"
 #endif
 
-test_export_static enum ec_error_list get_ikm(uint8_t *ikm)
+test_export_static enum ec_error_list
+get_ikm(std::span<uint8_t, IKM_SIZE_BYTES> ikm)
 {
 	enum ec_error_list ret;
 
@@ -54,7 +57,7 @@ test_export_static enum ec_error_list get_ikm(uint8_t *ikm)
 	 * The first CONFIG_ROLLBACK_SECRET_SIZE bytes of IKM are read from the
 	 * anti-rollback blocks.
 	 */
-	ret = rollback_get_secret(ikm);
+	ret = rollback_get_secret(ikm.data());
 	if (ret != EC_SUCCESS) {
 		CPRINTS("Failed to read rollback secret: %d", ret);
 		return EC_ERROR_HW_INTERNAL;
@@ -63,7 +66,8 @@ test_export_static enum ec_error_list get_ikm(uint8_t *ikm)
 	 * IKM is the concatenation of the rollback secret and the seed from
 	 * the TPM.
 	 */
-	memcpy(ikm + CONFIG_ROLLBACK_SECRET_SIZE, tpm_seed, sizeof(tpm_seed));
+	memcpy(ikm.data() + CONFIG_ROLLBACK_SECRET_SIZE, tpm_seed,
+	       sizeof(tpm_seed));
 
 #ifdef CONFIG_OTP_KEY
 	uint8_t otp_key[OTP_KEY_SIZE_BYTES] = { 0 };
@@ -86,7 +90,7 @@ test_export_static enum ec_error_list get_ikm(uint8_t *ikm)
 	 * IKM is now the concatenation of the rollback secret, the seed
 	 * from the TPM and the key stored in OTP
 	 */
-	memcpy(ikm + IKM_OTP_OFFSET_BYTES, otp_key, sizeof(otp_key));
+	memcpy(ikm.data() + IKM_OTP_OFFSET_BYTES, otp_key, sizeof(otp_key));
 	BUILD_ASSERT((IKM_SIZE_BYTES - IKM_OTP_OFFSET_BYTES) ==
 		     sizeof(otp_key));
 	OPENSSL_cleanse(otp_key, OTP_KEY_SIZE_BYTES);
@@ -197,6 +201,23 @@ enum ec_error_list hkdf_expand(uint8_t *out_key, size_t L, const uint8_t *prk,
 	OPENSSL_cleanse(info_buffer, sizeof(info_buffer));
 	return EC_SUCCESS;
 #undef HASH_LEN
+}
+
+bool hkdf_sha256_impl(std::span<uint8_t> out_key, std::span<const uint8_t> ikm,
+		      std::span<const uint8_t> salt,
+		      std::span<const uint8_t> info)
+{
+	return HKDF(out_key.data(), out_key.size(), EVP_sha256(), ikm.data(),
+		    ikm.size(), salt.data(), salt.size(), info.data(),
+		    info.size());
+}
+
+test_mockable bool hkdf_sha256(std::span<uint8_t> out_key,
+			       std::span<const uint8_t> ikm,
+			       std::span<const uint8_t> salt,
+			       std::span<const uint8_t> info)
+{
+	return hkdf_sha256_impl(out_key, ikm, salt, info);
 }
 
 enum ec_error_list
