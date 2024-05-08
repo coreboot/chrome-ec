@@ -44,6 +44,7 @@
 #include <libec/rand_num_command.h>
 #include <libec/versions_command.h>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -656,6 +657,7 @@ static const char *const ec_feature_names[] = {
 	[EC_FEATURE_TOKENIZED_LOGGING] = "Tokenized Logging",
 	[EC_FEATURE_AMD_STB_DUMP] = "AMD STB dump",
 	[EC_FEATURE_MEMORY_DUMP] = "Memory Dump",
+	[EC_FEATURE_UCSI_PPM] = "UCSI PPM",
 };
 
 int cmd_inventory(int argc, char *argv[])
@@ -5320,6 +5322,9 @@ static int cmd_motionsense(int argc, char **argv)
 			case MOTIONSENSE_CHIP_BMI220:
 				printf("bmi220\n");
 				break;
+			case MOTIONSENSE_CHIP_VEML3328:
+				printf("veml3328\n");
+				break;
 			default:
 				printf("unknown\n");
 			}
@@ -6591,6 +6596,7 @@ const char *action_key_names[] = {
 	[TK_KBD_BKLIGHT_TOGGLE] = "Keyboard Backlight Toggle",
 	[TK_MICMUTE] = "Microphone Mute",
 	[TK_MENU] = "Menu",
+	[TK_DICTATE] = "Dictation",
 };
 
 BUILD_ASSERT(ARRAY_SIZE(action_key_names) == TK_COUNT);
@@ -8514,27 +8520,27 @@ static int read_battery_config_from_json(base::Value::Dict *root_dict,
 	}
 
 	struct battery_info *bi = &config->batt_info;
-	absl::optional<int> voltage_max = batt_info->FindInt("voltage_max");
-	absl::optional<int> voltage_normal =
+	std::optional<int> voltage_max = batt_info->FindInt("voltage_max");
+	std::optional<int> voltage_normal =
 		batt_info->FindInt("voltage_normal");
-	absl::optional<int> voltage_min = batt_info->FindInt("voltage_min");
-	absl::optional<int> precharge_voltage =
+	std::optional<int> voltage_min = batt_info->FindInt("voltage_min");
+	std::optional<int> precharge_voltage =
 		batt_info->FindInt("precharge_voltage");
-	absl::optional<int> precharge_current =
+	std::optional<int> precharge_current =
 		batt_info->FindInt("precharge_current");
-	absl::optional<int> start_charging_min_c =
+	std::optional<int> start_charging_min_c =
 		batt_info->FindInt("start_charging_min_c");
-	absl::optional<int> start_charging_max_c =
+	std::optional<int> start_charging_max_c =
 		batt_info->FindInt("start_charging_max_c");
-	absl::optional<int> charging_min_c =
+	std::optional<int> charging_min_c =
 		batt_info->FindInt("charging_min_c");
-	absl::optional<int> charging_max_c =
+	std::optional<int> charging_max_c =
 		batt_info->FindInt("charging_max_c");
-	absl::optional<int> discharging_min_c =
+	std::optional<int> discharging_min_c =
 		batt_info->FindInt("discharging_min_c");
-	absl::optional<int> discharging_max_c =
+	std::optional<int> discharging_max_c =
 		batt_info->FindInt("discharging_max_c");
-	absl::optional<int> vendor_param_start =
+	std::optional<int> vendor_param_start =
 		batt_info->FindInt("vendor_param_start");
 	bi->voltage_max = voltage_max.value();
 	bi->voltage_normal = voltage_normal.value();
@@ -8547,7 +8553,7 @@ static int read_battery_config_from_json(base::Value::Dict *root_dict,
 	bi->charging_max_c = charging_max_c.value();
 	bi->discharging_min_c = discharging_min_c.value();
 	bi->discharging_max_c = discharging_max_c.value();
-	if (vendor_param_start != absl::nullopt)
+	if (vendor_param_start != std::nullopt)
 		bi->vendor_param_start = vendor_param_start.value();
 
 	return 0;
@@ -8571,8 +8577,11 @@ static void cmd_battery_config_help(const char *cmd)
 		"    device_name: Battery's name. Up to 31 chars.\n"
 		"    index: Index of config in CBI to be get or set.\n"
 		"\n"
-		"    Run `ectool battery` for <manuf_name> and <device_name>\n",
-		cmd, cmd);
+		"    Run `ectool battery` for <manuf_name> and <device_name>\n"
+		"\n"
+		"Usage: %s search <json_file> <manuf_name> <device_name> [<index>]\n"
+		"    Search for a matching battery config in the config file.\n",
+		cmd, cmd, cmd);
 }
 
 static int cmd_battery_config_get(int argc, char *argv[])
@@ -8684,7 +8693,7 @@ static int cmd_battery_config_get(int argc, char *argv[])
 	return 0;
 }
 
-static int cmd_battery_config_set(int argc, char *argv[])
+static int cmd_battery_config_set(int argc, char *argv[], bool search_only)
 {
 	FILE *fp = NULL;
 	int size;
@@ -8754,9 +8763,9 @@ static int cmd_battery_config_set(int argc, char *argv[])
 
 	fclose(fp);
 
-	absl::optional<base::Value> root =
+	std::optional<base::Value> root =
 		base::JSONReader::Read(json, base::JSON_PARSE_RFC);
-	if (root == absl::nullopt) {
+	if (root == std::nullopt) {
 		fprintf(stderr, "File %s isn't properly formed JSON file.\n",
 			json_file);
 		free(json);
@@ -8784,6 +8793,12 @@ static int cmd_battery_config_set(int argc, char *argv[])
 	}
 	if (read_u8_from_json(root_dict, "struct_version", &struct_version))
 		return -1;
+
+	if (search_only) {
+		printf("Battery config with identifier: %s,%s is found at %s\n",
+		       manuf_name, device_name, json_file);
+		return 0;
+	}
 
 	/* Clear config to ensure unspecified (optional) fields are 0. */
 	memset(&config, 0, sizeof(config));
@@ -8828,7 +8843,9 @@ static int cmd_battery_config(int argc, char *argv[])
 	if (argc > 1 && !strcasecmp(argv[1], "get"))
 		return cmd_battery_config_get(--argc, ++argv);
 	else if (argc > 1 && !strcasecmp(argv[1], "set"))
-		return cmd_battery_config_set(--argc, ++argv);
+		return cmd_battery_config_set(--argc, ++argv, false);
+	else if (argc > 1 && !strcasecmp(argv[1], "search"))
+		return cmd_battery_config_set(--argc, ++argv, true);
 
 	fprintf(stderr, "Invalid sub-command '%s'\n",
 		argv[1] ? argv[1] : "(null)");
@@ -9425,6 +9442,29 @@ int cmd_console(int argc, char *argv[])
 	printf("\n");
 	return 0;
 }
+
+static int cmd_console_print(int argc, char *argv[])
+{
+	char *msg;
+	int msg_len;
+
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <msg>\n", argv[0]);
+		return -1;
+	}
+	msg = argv[1];
+	msg_len = strlen(msg);
+	if (msg_len > ec_max_outsize - 1) {
+		/* Truncate message */
+		msg_len = ec_max_outsize - 1;
+		msg[msg_len] = '\0';
+		fprintf(stderr,
+			"Message exceeds max-length(%d), truncating to '%s'\n",
+			ec_max_outsize - 1, msg);
+	}
+	return ec_command(EC_CMD_CONSOLE_PRINT, 0, msg, msg_len + 1, NULL, 0);
+}
+
 struct param_info {
 	const char *name; /* name of this parameter */
 	const char *help; /* help message */
@@ -9691,10 +9731,10 @@ static int cmd_memory_dump(int argc, char *argv[])
 		rv = -1;
 		goto cmd_memory_dump_cleanup;
 	}
-	segments = (struct mem_segment *)malloc(sizeof(struct mem_segment) *
-						entry_count);
+	segments = (struct mem_segment *)calloc(entry_count,
+						sizeof(struct mem_segment));
 	if (segments == NULL) {
-		fprintf(stderr, "malloc failed\n");
+		fprintf(stderr, "calloc failed\n");
 		rv = -1;
 		goto cmd_memory_dump_cleanup;
 	}
@@ -12061,6 +12101,9 @@ const struct command commands[] = {
 	  "<cmd>\n\tPrints supported version mask for a command number." },
 	{ "console", cmd_console,
 	  "\n\tPrints the last output to the EC debug console." },
+	{ "console_print", cmd_console_print,
+	  "<message>\n"
+	  "\tPrints a message to the EC console." },
 	{ "echash", cmd_ec_hash, "[CMDS]\n\tVarious EC hash commands." },
 	{ "eventclear", cmd_host_event_clear,
 	  "<mask>\n"

@@ -97,6 +97,7 @@ if (DEFINED CONFIG_ARM)
   zephyr_cc_option(-mno-unaligned-access)
 endif()
 zephyr_cc_option(-Wimplicit-fallthrough)
+zephyr_cc_option(-Wint-conversion)
 
 if (DEFINED CONFIG_RISCV)
   zephyr_cc_option(-fsanitize=integer-divide-by-zero)
@@ -257,6 +258,8 @@ zephyr_library_sources_ifdef(CONFIG_NAMED_ADC_CHANNELS
                                                 "${PLATFORM_EC}/common/adc.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_TCS3400
                                                 "${PLATFORM_EC}/driver/als_tcs3400.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_VEML3328
+                                                "${PLATFORM_EC}/driver/als_veml3328.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_CM32183
                                                 "${PLATFORM_EC}/driver/als_cm32183.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACPI
@@ -364,6 +367,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FINGERPRINT
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_auth_crypto_stateful.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_auth_crypto_stateless.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_detect_strings.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_utils.cc"
 						"${PLATFORM_EC}/crypto/elliptic_curve_key.cc")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD
                                                 "${PLATFORM_EC}/common/host_command.c")
@@ -554,6 +558,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_HB
                                                 "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_KB8010
                                                 "${PLATFORM_EC}/driver/retimer/kb8010.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8802
+                                                "${PLATFORM_EC}/driver/retimer/ps8802.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8818
                                                 "${PLATFORM_EC}/driver/retimer/ps8818.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8828
@@ -697,6 +703,7 @@ add_subdirectory("emul")
 add_subdirectory("fake")
 add_subdirectory("mock")
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
+add_subdirectory_ifdef(CONFIG_HW_TEST_ON "test/hwtest")
 
 # Use external script to generate the ec_version.h header and add as
 # a dependency to the EC application library.
@@ -717,7 +724,7 @@ zephyr_include_directories("${CMAKE_CURRENT_BINARY_DIR}/include")
 if (DEFINED CONFIG_PIGWEED_LOG_TOKENIZED_LIB)
   set_property(GLOBAL APPEND PROPERTY extra_post_build_commands
     COMMAND
-      ${PYTHON_EXECUTABLE}
+      vpython3 -vpython-spec ${PLATFORM_EC}/zephyr/pigweed-vpython3
       ${ZEPHYR_PIGWEED_MODULE_DIR}/pw_tokenizer/py/pw_tokenizer/database.py
       create
       --force

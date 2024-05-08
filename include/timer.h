@@ -87,7 +87,7 @@ int timestamp_expired(timestamp_t deadline, const timestamp_t *now);
  * has been called.
  *
  * Note that calling this with us>1000 may impact system performance; use
- * usleep() for longer delays.
+ * crec_usleep() for longer delays.
  *
  * @param us		Number of microseconds to delay.
  */
@@ -103,31 +103,35 @@ void udelay(unsigned int us);
  * This may only be called from a task function, with interrupts enabled.
  *
  * @param us		Number of microseconds to sleep.
+ * @return 0 on success, negative on error
  */
-void usleep(unsigned int us);
+int crec_usleep(unsigned int us);
 
 /**
  * Sleep for milliseconds.
  *
- * Otherwise the same as usleep().
+ * Otherwise the same as crec_usleep().
  *
  * @param ms		Number of milliseconds to sleep.
  */
-static inline void msleep(unsigned int ms)
+static inline void crec_msleep(unsigned int ms)
 {
-	usleep(ms * MSEC);
+	crec_usleep(ms * MSEC);
 }
 
 /**
  * Sleep for seconds
  *
- * Otherwise the same as usleep().
+ * Otherwise the same as crec_usleep().
  *
  * @param sec		Number of seconds to sleep.
+ * @return 0 if the requested time has elapsed, or the number of seconds left
+ *   to sleep, if the call was interrupted by a signal handler.
  */
-static inline void sleep(unsigned int sec)
+static inline unsigned int crec_sleep(unsigned int sec)
 {
-	usleep(sec * SECOND);
+	crec_usleep(sec * SECOND);
+	return 0;
 }
 
 /**
@@ -156,7 +160,7 @@ void timer_print_info(void);
  * Returns a free running millisecond clock counter, which matches tpm2
  * library expectations.
  */
-clock_t clock(void);
+clock_t clock(void) __THROW;
 
 /**
  * Compute how far to_time is from from_time with rollover taken into account

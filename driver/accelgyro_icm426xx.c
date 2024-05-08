@@ -380,7 +380,7 @@ static int icm426xx_enable_sensor(const struct motion_sensor_t *s, int enable)
 		rem = icm_get_sensor_stabilized(s, __hw_clock_source_read());
 		/* rem > stop_delay means counter rollover */
 		if (rem > 0 && rem <= stop_delay)
-			usleep(rem);
+			crec_usleep(rem);
 	}
 
 	mutex_lock(s->mutex);
@@ -390,7 +390,7 @@ static int icm426xx_enable_sensor(const struct motion_sensor_t *s, int enable)
 		icm_set_stabilize_ts(s, delay);
 		/* when turning sensor on block any register write for 200 us */
 		if (enable)
-			usleep(200);
+			crec_usleep(200);
 	}
 
 	mutex_unlock(s->mutex);
@@ -577,7 +577,7 @@ static int icm426xx_get_hw_offset(const struct motion_sensor_t *s,
 
 	/* Extend sign-bit of 12 bits signed values */
 	for (i = X; i <= Z; ++i)
-		offset[i] = sign_extend(offset[i], 11);
+		offset[i] = icm_sign_extend(offset[i], 11);
 
 	return EC_SUCCESS;
 }
@@ -792,7 +792,7 @@ static int icm426xx_read_temp(const struct motion_sensor_t *s, int *temp_ptr)
 		return ret;
 
 	/* ensure correct propagation of 16 bits sign bit */
-	val = sign_extend(val, 15);
+	val = icm_sign_extend(val, 15);
 
 	if (val == ICM426XX_INVALID_DATA)
 		return EC_ERROR_NOT_POWERED;
@@ -897,7 +897,7 @@ static int icm426xx_init(struct motion_sensor_t *s)
 				 ICM426XX_SOFT_RESET_CONFIG);
 		if (ret)
 			goto out_unlock;
-		msleep(1);
+		crec_msleep(1);
 
 		ret = icm_read8(s, ICM426XX_REG_INT_STATUS, &val);
 		if (ret)

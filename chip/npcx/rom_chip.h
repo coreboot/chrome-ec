@@ -6,9 +6,11 @@
 #ifndef __CROS_EC_ROM_CHIP_H_
 #define __CROS_EC_ROM_CHIP_H_
 
+#include "util.h"
+
 /******************************************************************************/
 /*
- * Enumerations of ROM api functions
+ * Enumerations of ROM API functions
  */
 enum API_SIGN_OPTIONS_T {
 	SIGN_NO_CHECK = 0,
@@ -44,33 +46,7 @@ enum API_RETURN_STATUS_T {
 
 /******************************************************************************/
 /*
- * Macro functions of ROM api functions
- * TODO(b/323098079): Update functions to avoid macro style
- */
-#define ADDR_DOWNLOAD_FROM_FLASH (*(volatile uint32_t *)0x40)
-#define download_from_flash(src_offset, dest_addr, size, sign, exe_addr, \
-			    status)                                      \
-	(((download_from_flash_ptr)ADDR_DOWNLOAD_FROM_FLASH)(            \
-		src_offset, dest_addr, size, sign, exe_addr, status))
-
-#define ADDR_OTPI_POWER (*(volatile uint32_t *)0x4C)
-#define otpi_power(on) (((otpi_power_ptr)ADDR_OTPI_POWER)(on))
-
-#define ADDR_OTPI_READ (*(volatile uint32_t *)0x50)
-#define otpi_read(address, data) \
-	(((otpi_read_ptr)ADDR_OTPI_READ)(address, data))
-
-#define ADDR_OTPI_WRITE (*(volatile uint32_t *)0x54)
-#define otpi_write(address, data) \
-	(((otpi_write_ptr)ADDR_OTPI_WRITE)(address, data))
-
-#define ADDR_OTPI_WRITE_PROTECT (*(volatile uint32_t *)0x5C)
-#define otpi_write_protect(address, size) \
-	(((otpi_write_prot_ptr)ADDR_OTPI_WRITE_PROTECT)(address, size))
-
-/******************************************************************************/
-/*
- * Declarations of ROM api functions
+ * Declarations of ROM API functions
  */
 
 /*
@@ -110,5 +86,56 @@ typedef enum API_RETURN_STATUS_T (*otpi_write_ptr)(uint32_t address,
  */
 typedef enum API_RETURN_STATUS_T (*otpi_write_prot_ptr)(uint32_t address,
 							uint32_t size);
+
+/******************************************************************************/
+/*
+ * Inline functions for ROM APIs
+ */
+static const volatile uint32_t *ADDR_DOWNLOAD_FROM_FLASH = (uint32_t *)0x40;
+static inline void download_from_flash(uint32_t src_offset, uint32_t dest_addr,
+				       uint32_t size,
+				       enum API_SIGN_OPTIONS_T sign,
+				       uint32_t exe_addr,
+				       enum API_RETURN_STATUS_T *status)
+{
+	((download_from_flash_ptr)*ADDR_DOWNLOAD_FROM_FLASH)(
+		src_offset, dest_addr, size, sign, exe_addr, status);
+}
+
+#ifndef HAS_MOCK_OTPI
+static const volatile uint32_t *ADDR_OTPI_POWER = (uint32_t *)0x4C;
+static inline enum API_RETURN_STATUS_T otpi_power(bool on)
+{
+	return ((otpi_power_ptr)*ADDR_OTPI_POWER)(on);
+}
+
+static const volatile uint32_t *ADDR_OTPI_READ = (uint32_t *)0x50;
+
+static inline enum API_RETURN_STATUS_T otpi_read(uint32_t address,
+						 uint8_t *data)
+{
+	return ((otpi_read_ptr)*ADDR_OTPI_READ)(address, data);
+}
+
+static const volatile uint32_t *ADDR_OTPI_WRITE = (uint32_t *)0x54;
+static inline enum API_RETURN_STATUS_T otpi_write(uint32_t address,
+						  uint8_t data)
+{
+	return ((otpi_write_ptr)*ADDR_OTPI_WRITE)(address, data);
+}
+
+static const volatile uint32_t *ADDR_OTPI_WRITE_PROTECT = (uint32_t *)0x5C;
+static inline enum API_RETURN_STATUS_T otpi_write_protect(uint32_t address,
+							  uint32_t size)
+{
+	return ((otpi_write_prot_ptr)*ADDR_OTPI_WRITE_PROTECT)(address, size);
+}
+#else
+extern enum API_RETURN_STATUS_T otpi_power(bool on);
+extern enum API_RETURN_STATUS_T otpi_read(uint32_t address, uint8_t *data);
+extern enum API_RETURN_STATUS_T otpi_write(uint32_t address, uint8_t data);
+extern enum API_RETURN_STATUS_T otpi_write_protect(uint32_t address,
+						   uint32_t size);
+#endif
 
 #endif /* __CROS_EC_ROM_CHIP_H_ */

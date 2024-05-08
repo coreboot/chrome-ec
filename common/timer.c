@@ -5,6 +5,12 @@
 
 /* Timer module for Chrome EC operating system */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 13
+
 #include "atomic.h"
 #include "builtin/assert.h"
 #include "common.h"
@@ -176,19 +182,21 @@ void timer_cancel(task_id_t tskid)
  * probability of delay longer than 2*us (and possibly infinite delay)
  * increases.
  */
-void usleep(unsigned int us)
+int crec_usleep(unsigned int us)
 {
 	uint32_t evt = 0;
 	uint32_t t0;
 
 	/* If a wait is 0, return immediately. */
-	if (!us)
-		return;
+	if (!us) {
+		return 0;
+	}
 
 	if (IS_ENABLED(CONFIG_ZEPHYR)) {
-		while (us)
+		while (us) {
 			us = k_usleep(us);
-		return;
+		}
+		return 0;
 	}
 
 	t0 = __hw_clock_source_read();
@@ -196,7 +204,7 @@ void usleep(unsigned int us)
 	/* If task scheduling has not started, just delay */
 	if (!task_start_called()) {
 		udelay(us);
-		return;
+		return 0;
 	}
 
 	/* If in interrupt context or interrupts are disabled, use udelay() */
@@ -211,7 +219,7 @@ void usleep(unsigned int us)
 		}
 
 		udelay(us);
-		return;
+		return 0;
 	}
 
 	do {
@@ -220,9 +228,11 @@ void usleep(unsigned int us)
 		 ((__hw_clock_source_read() - t0) < us));
 
 	/* Re-queue other events which happened in the meanwhile */
-	if (evt)
+	if (evt) {
 		atomic_or(task_get_event_bitmap(task_get_current()),
 			  evt & ~TASK_EVENT_TIMER);
+	}
+	return 0;
 }
 
 #ifdef CONFIG_ZTEST

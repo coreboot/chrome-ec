@@ -100,7 +100,8 @@ static int get_ic_status(struct rts5453p_emul_pdc_data *data,
 {
 	LOG_INF("GET_IC_STATUS");
 
-	data->response.ic_status.byte_count = sizeof(struct rts54_ic_status);
+	data->response.ic_status.byte_count = MIN(
+		sizeof(struct rts54_ic_status) - 1, req->get_ic_status.sts_len);
 	data->response.ic_status.fw_main_version = data->info.fw_version >> 16 &
 						   BIT_MASK(8);
 	data->response.ic_status.fw_sub_version[0] =
@@ -156,9 +157,10 @@ static int connector_reset(struct rts5453p_emul_pdc_data *data,
 			   const union rts54_request *req)
 {
 	LOG_INF("CONNECTOR_RESET port=%d, hard_reset=%d",
-		req->connector_reset.port_num, req->connector_reset.hard_reset);
+		req->connector_reset.reset.connector_number,
+		req->connector_reset.reset.reset_type);
 
-	data->connector_reset_type = req->connector_reset.hard_reset;
+	data->reset = req->connector_reset.reset;
 	memset(&data->response, 0, sizeof(union rts54_response));
 	send_response(data);
 
@@ -237,53 +239,8 @@ static int get_connector_status(struct rts5453p_emul_pdc_data *data,
 		req->get_connector_status.port_num);
 
 	data->response.connector_status.byte_count =
-		sizeof(struct get_connector_status_response) - 1;
-
-	/* Massage PD status into RTS54 response */
-	data->response.connector_status.pd_status.external_supply_change =
-		data->connector_status.conn_status_change_bits
-			.external_supply_change;
-	data->response.connector_status.pd_status.pwr_operation_mode =
-		data->connector_status.conn_status_change_bits
-			.pwr_operation_mode;
-	data->response.connector_status.pd_status.supported_provider_caps =
-		data->connector_status.conn_status_change_bits
-			.supported_provider_caps;
-	data->response.connector_status.pd_status.negotiated_power_level =
-		data->connector_status.conn_status_change_bits
-			.negotiated_power_level;
-	data->response.connector_status.pd_status.pd_reset_complete =
-		data->connector_status.conn_status_change_bits.pd_reset_complete;
-	data->response.connector_status.pd_status.supported_cam =
-		data->connector_status.conn_status_change_bits.supported_cam;
-	data->response.connector_status.pd_status.battery_charging_status =
-		data->connector_status.conn_status_change_bits
-			.battery_charging_status;
-	data->response.connector_status.pd_status.port_partner =
-		data->connector_status.conn_status_change_bits.connector_partner;
-	data->response.connector_status.pd_status.pwr_direction =
-		data->connector_status.conn_status_change_bits.pwr_direction;
-	data->response.connector_status.pd_status.connect_change =
-		data->connector_status.conn_status_change_bits.connect_change;
-	data->response.connector_status.pd_status.error =
-		data->connector_status.conn_status_change_bits.error;
-
-	data->response.connector_status.port_operation_mode =
-		data->connector_status.power_operation_mode;
-	data->response.connector_status.connect_status =
-		data->connector_status.connect_status & BIT_MASK(1);
-	data->response.connector_status.power_direction =
-		data->connector_status.power_direction & BIT_MASK(1);
-	data->response.connector_status.port_partner_flags =
-		data->connector_status.conn_partner_flags;
-	data->response.connector_status.port_partner_type =
-		data->connector_status.conn_partner_type & BIT_MASK(3);
-	data->response.connector_status.request_data_object =
-		data->connector_status.rdo;
-	data->response.connector_status.battery_charging_status =
-		data->connector_status.battery_charging_cap & BIT_MASK(2);
-	data->response.connector_status.provider_capabilities_limited_reason =
-		data->connector_status.provider_caps_limited & BIT_MASK(4);
+		sizeof(union connector_status_t);
+	data->response.connector_status.status = data->connector_status;
 
 	send_response(data);
 
@@ -293,7 +250,14 @@ static int get_connector_status(struct rts5453p_emul_pdc_data *data,
 static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 			  const union rts54_request *req)
 {
-	LOG_INF("GET_RTK_STATUS port=%d", req->get_rtk_status.port_num);
+	union conn_status_change_bits_t conn_status_change_bits;
+
+	conn_status_change_bits.raw_value =
+		data->connector_status.raw_conn_status_change_bits;
+
+	LOG_INF("GET_RTK_STATUS port=%d offset=%d sts_len=%d",
+		req->get_rtk_status.port_num, req->get_rtk_status.offset,
+		req->get_rtk_status.sts_len);
 
 	data->response.rtk_status.byte_count =
 		MIN(sizeof(struct get_rtk_status_response) - 1,
@@ -302,32 +266,27 @@ static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 	/* Massage PD status into RTS54 response */
 	/* BYTE 1-4 */
 	data->response.rtk_status.pd_status.external_supply_charge =
-		data->connector_status.conn_status_change_bits
-			.external_supply_change;
+		conn_status_change_bits.external_supply_change;
 	data->response.rtk_status.pd_status.power_operation_mode_change =
-		data->connector_status.conn_status_change_bits
-			.pwr_operation_mode;
+		conn_status_change_bits.pwr_operation_mode;
 	data->response.rtk_status.pd_status.provider_capabilities_change =
-		data->connector_status.conn_status_change_bits
-			.supported_provider_caps;
+		conn_status_change_bits.supported_provider_caps;
 	data->response.rtk_status.pd_status.negotiated_power_level_change =
-		data->connector_status.conn_status_change_bits
-			.negotiated_power_level;
+		conn_status_change_bits.negotiated_power_level;
 	data->response.rtk_status.pd_status.pd_reset_complete =
-		data->connector_status.conn_status_change_bits.pd_reset_complete;
+		conn_status_change_bits.pd_reset_complete;
 	data->response.rtk_status.pd_status.supported_cam_change =
-		data->connector_status.conn_status_change_bits.supported_cam;
+		conn_status_change_bits.supported_cam;
 	data->response.rtk_status.pd_status.battery_charging_status_change =
-		data->connector_status.conn_status_change_bits
-			.battery_charging_status;
+		conn_status_change_bits.battery_charging_status;
 	data->response.rtk_status.pd_status.port_partner_changed =
-		data->connector_status.conn_status_change_bits.connector_partner;
+		conn_status_change_bits.connector_partner;
 	data->response.rtk_status.pd_status.power_direction_changed =
-		data->connector_status.conn_status_change_bits.pwr_direction;
+		conn_status_change_bits.pwr_direction;
 	data->response.rtk_status.pd_status.connect_change =
-		data->connector_status.conn_status_change_bits.connect_change;
+		conn_status_change_bits.connect_change;
 	data->response.rtk_status.pd_status.error =
-		data->connector_status.conn_status_change_bits.error;
+		conn_status_change_bits.error;
 
 	/* BYTE 5 */
 	data->response.rtk_status.supply = 0;
@@ -348,18 +307,21 @@ static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 	data->response.rtk_status.port_partner_type =
 		data->connector_status.conn_partner_type & BIT_MASK(3);
 	data->response.rtk_status.battery_charging_status =
-		data->connector_status.battery_charging_cap & BIT_MASK(2);
+		data->connector_status.battery_charging_cap_status &
+		BIT_MASK(2);
 
 	/* BYTE 12 */
 	data->response.rtk_status.plug_direction =
 		data->connector_status.orientation & BIT_MASK(1);
 
-	/* BYTE 15-18 */
+	/* BYTE 16-17 */
 	data->response.rtk_status.average_current_low = 0;
 	data->response.rtk_status.average_current_high = 0;
 
 	uint32_t voltage = data->connector_status.voltage_reading *
 			   data->connector_status.voltage_scale * 5 / 50;
+
+	/* BYTE 18-19 */
 	data->response.rtk_status.voltage_reading_low = voltage & 0xFF;
 	data->response.rtk_status.voltage_reading_high = voltage >> 8;
 
@@ -373,7 +335,8 @@ static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 static int set_uor(struct rts5453p_emul_pdc_data *data,
 		   const union rts54_request *req)
 {
-	LOG_INF("SET_UOR port=%d", req->set_uor.port_num);
+	LOG_INF("SET_UOR port=%d: uor=%x", req->set_uor.uor.connector_number,
+		req->set_uor.uor.raw_value);
 
 	data->uor = req->set_uor.uor;
 
@@ -386,7 +349,7 @@ static int set_uor(struct rts5453p_emul_pdc_data *data,
 static int set_pdr(struct rts5453p_emul_pdc_data *data,
 		   const union rts54_request *req)
 {
-	LOG_INF("SET_PDR port=%d", req->set_pdr.port_num);
+	LOG_INF("SET_PDR port=%d", req->set_pdr.pdr.connector_number);
 
 	data->pdr = req->set_pdr.pdr;
 
@@ -443,6 +406,19 @@ static int set_tpc_csd_operation_mode(struct rts5453p_emul_pdc_data *data,
 		req->set_tpc_csd_operation_mode.port_num);
 
 	data->csd_op_mode = req->set_tpc_csd_operation_mode.op_mode;
+
+	memset(&data->response, 0, sizeof(data->response));
+	send_response(data);
+
+	return 0;
+}
+
+static int set_ccom(struct rts5453p_emul_pdc_data *data,
+		    const union rts54_request *req)
+{
+	LOG_INF("SET_CCOM port=%d", req->set_ccom.port_and_ccom.port_num);
+
+	data->set_ccom_mode = req->set_ccom.port_and_ccom;
 
 	memset(&data->response, 0, sizeof(data->response));
 	send_response(data);
@@ -589,6 +565,42 @@ static int get_pdos(struct rts5453p_emul_pdc_data *data,
 	return 0;
 }
 
+static int get_cable_property(struct rts5453p_emul_pdc_data *data,
+			      const union rts54_request *req)
+{
+	const union cable_property_t *ucsi_property = &data->cable_property;
+
+	LOG_INF("GET_CABLE_PROPERTY property=%x", ucsi_property->raw_value[0]);
+	memset(&data->response, 0, sizeof(data->response));
+
+	/*
+	 * The RTK command only returns 5 bytes of cable property, but
+	 * they map to the first 5 bytes of the 8 byte UCSI response.
+	 */
+	BUILD_ASSERT(sizeof(data->response.get_cable_property) == 1 + 5);
+	data->response.get_cable_property.byte_count =
+		sizeof(data->response.get_cable_property) - 1;
+	memcpy(data->response.get_cable_property.raw_value,
+	       ucsi_property->raw_value,
+	       data->response.get_cable_property.byte_count);
+
+	send_response(data);
+	return 0;
+}
+
+static int get_vdo(struct rts5453p_emul_pdc_data *data,
+		   const union rts54_request *req)
+{
+	LOG_INF("GET_VDO = %x", req->get_vdo.vdo_req.raw_value);
+	memset(&data->response, 0, sizeof(data->response));
+
+	data->response.get_vdo.byte_count =
+		sizeof(uint32_t) * req->get_vdo.vdo_req.num_vdos;
+
+	send_response(data);
+	return 0;
+}
+
 static bool send_response(struct rts5453p_emul_pdc_data *data)
 {
 	if (data->delay_ms > 0) {
@@ -598,9 +610,7 @@ static bool send_response(struct rts5453p_emul_pdc_data *data)
 		return true;
 	}
 
-	set_ping_status(
-		data, CMD_COMPLETE,
-		data->response.byte_count ? data->response.byte_count + 1 : 0);
+	set_ping_status(data, CMD_COMPLETE, data->response.byte_count);
 
 	return false;
 }
@@ -611,9 +621,7 @@ static void delayable_work_handler(struct k_work *w)
 	struct rts5453p_emul_pdc_data *data =
 		CONTAINER_OF(dwork, struct rts5453p_emul_pdc_data, delay_work);
 
-	set_ping_status(
-		data, CMD_COMPLETE,
-		data->response.byte_count ? data->response.byte_count + 1 : 0);
+	set_ping_status(data, CMD_COMPLETE, data->response.byte_count);
 }
 
 struct commands {
@@ -665,7 +673,7 @@ const struct commands sub_cmd_x08[] = {
 	{ .code = 0x84, HANDLER_DEF(get_rdo) },
 	{ .code = 0x85, HANDLER_DEF(unsupported) },
 	{ .code = 0x99, HANDLER_DEF(unsupported) },
-	{ .code = 0x9A, HANDLER_DEF(unsupported) },
+	{ .code = 0x9A, HANDLER_DEF(get_vdo) },
 	{ .code = 0x9D, HANDLER_DEF(unsupported) },
 	{ .code = 0xA2, HANDLER_DEF(unsupported) },
 	{ .code = 0xF0, HANDLER_DEF(unsupported) },
@@ -681,6 +689,7 @@ const struct commands sub_cmd_x0E[] = {
 	{ .code = 0x03, HANDLER_DEF(connector_reset) },
 	{ .code = 0x06, HANDLER_DEF(get_capability) },
 	{ .code = 0x07, HANDLER_DEF(get_connector_capability) },
+	{ .code = 0x08, HANDLER_DEF(set_ccom) },
 	{ .code = 0x09, HANDLER_DEF(set_uor) },
 	{ .code = 0x0B, HANDLER_DEF(set_pdr) },
 	{ .code = 0x0C, HANDLER_DEF(unsupported) },
@@ -688,7 +697,7 @@ const struct commands sub_cmd_x0E[] = {
 	{ .code = 0x0E, HANDLER_DEF(unsupported) },
 	{ .code = 0x0F, HANDLER_DEF(unsupported) },
 	{ .code = 0x10, HANDLER_DEF(unsupported) },
-	{ .code = 0x11, HANDLER_DEF(unsupported) },
+	{ .code = 0x11, HANDLER_DEF(get_cable_property) },
 	{ .code = 0x12, HANDLER_DEF(get_connector_status) },
 	{ .code = 0x13, HANDLER_DEF(get_error_status) },
 	{ .code = 0x1E, HANDLER_DEF(read_power_level) },
@@ -850,9 +859,25 @@ static int rts5453p_emul_read_byte(const struct emul *emul, int reg,
 		LOG_DBG("READING ping_raw_value=0x%X", data->ping_raw_value);
 		*val = data->ping_raw_value;
 	} else {
-		LOG_DBG("read_byte reg=0x%X, bytes=%d, offset=%d", reg, bytes,
-			data->read_offset);
-		*val = data->response.raw_data[bytes + data->read_offset];
+		uint8_t v;
+		int o;
+
+		/*
+		 * Response byte 0 is always .byte_count.
+		 * Remaining bytes are read starting at read_offset.
+		 * Note that the byte following .byte_count is
+		 * considered to be at offset 0.
+		 */
+		if (bytes > 0) {
+			o = bytes + data->read_offset;
+		} else {
+			o = bytes;
+		}
+
+		v = data->response.raw_data[o];
+		LOG_DBG("read_byte reg=0x%X, bytes=%d, offset=%d, val=0x%X",
+			reg, bytes, data->read_offset, v);
+		*val = v;
 	}
 
 	return 0;
@@ -945,7 +970,7 @@ static int rts5453p_emul_init(const struct emul *emul,
 
 	data->pdc_data.read_offset = 0;
 
-	data->pdc_data.connector_reset_type = 0xFF;
+	data->pdc_data.reset.raw_value = 0xFF;
 	data->pdc_data.ic_status.fw_main_version = 0xAB;
 	data->pdc_data.ic_status.pd_version[0] = 0xCD;
 	data->pdc_data.ic_status.pd_revision[0] = 0xEF;
@@ -981,12 +1006,12 @@ static int emul_realtek_rts54xx_set_response_delay(const struct emul *target,
 }
 static int
 emul_realtek_rts54xx_get_connector_reset(const struct emul *target,
-					 enum connector_reset_t *type)
+					 union connector_reset_t *reset)
 {
 	struct rts5453p_emul_pdc_data *data =
 		rts5453p_emul_get_pdc_data(target);
 
-	*type = data->connector_reset_type;
+	*reset = data->reset;
 
 	return 0;
 }
@@ -1026,7 +1051,7 @@ static int emul_realtek_rts54xx_set_error_status(const struct emul *target,
 
 static int emul_realtek_rts54xx_set_connector_status(
 	const struct emul *target,
-	const struct connector_status_t *connector_status)
+	const union connector_status_t *connector_status)
 {
 	struct rts5453p_emul_pdc_data *data =
 		rts5453p_emul_get_pdc_data(target);
@@ -1083,18 +1108,15 @@ emul_realtek_rts54xx_get_requested_power_level(const struct emul *target,
 	return 0;
 }
 
-static int emul_realtek_rts54xx_get_ccom(const struct emul *target,
-					 enum ccom_t *ccom, enum drp_mode_t *dm)
+static int emul_realtek_rts54xx_get_drp_mode(const struct emul *target,
+					     enum drp_mode_t *dm)
 {
 	struct rts5453p_emul_pdc_data *data =
 		rts5453p_emul_get_pdc_data(target);
 
+	*dm = DRP_INVALID;
 	switch (data->csd_op_mode.csd_mode) {
-	case 0:
-		*ccom = CCOM_RD;
-		break;
 	case 1:
-		*ccom = CCOM_DRP;
 		switch (data->csd_op_mode.drp_mode) {
 		case 0:
 			*dm = DRP_NORMAL;
@@ -1110,11 +1132,35 @@ static int emul_realtek_rts54xx_get_ccom(const struct emul *target,
 			return -EINVAL;
 		}
 		break;
+	case 0:
 	case 2:
+	default:
+		LOG_ERR("CSD_MODE != DRP (0x%X), DRP mode is invalid",
+			data->csd_op_mode.csd_mode);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int emul_realtek_rts54xx_get_ccom(const struct emul *target,
+					 enum ccom_t *ccom)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+
+	switch (data->set_ccom_mode.ccom) {
+	case 0x1:
 		*ccom = CCOM_RP;
 		break;
+	case 0x2:
+		*ccom = CCOM_RD;
+		break;
+	case 0x4:
+		*ccom = CCOM_DRP;
+		break;
 	default:
-		LOG_ERR("Invalid csd_mode 0x%X", data->csd_op_mode.csd_mode);
+		LOG_ERR("Invalid ccom mode 0x%X", data->set_ccom_mode.ccom);
 		return -EINVAL;
 	}
 
@@ -1190,6 +1236,26 @@ static int emul_realtek_rts54xx_set_pdos(const struct emul *target,
 	return set_pdos_direct(data, pdo_type, pdo_offset, num_pdos, pdos);
 }
 
+static int
+emul_realtek_rts54xx_get_cable_property(const struct emul *target,
+					union cable_property_t *property)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+	*property = data->cable_property;
+	return 0;
+}
+
+static int
+emul_realtek_rts54xx_set_cable_property(const struct emul *target,
+					const union cable_property_t property)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+	data->cable_property = property;
+	return 0;
+}
+
 struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.reset = emul_realtek_rts54xx_reset,
 	.set_response_delay = emul_realtek_rts54xx_set_response_delay,
@@ -1204,12 +1270,15 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.get_requested_power_level =
 		emul_realtek_rts54xx_get_requested_power_level,
 	.get_ccom = emul_realtek_rts54xx_get_ccom,
+	.get_drp_mode = emul_realtek_rts54xx_get_drp_mode,
 	.get_sink_path = emul_realtek_rts54xx_get_sink_path,
 	.get_reconnect_req = emul_realtek_rts54xx_get_reconnect_req,
 	.pulse_irq = emul_realtek_rts54xx_pulse_irq,
 	.set_info = emul_realtek_rts54xx_set_info,
 	.set_pdos = emul_realtek_rts54xx_set_pdos,
 	.get_pdos = emul_realtek_rts54xx_get_pdos,
+	.get_cable_property = emul_realtek_rts54xx_get_cable_property,
+	.set_cable_property = emul_realtek_rts54xx_set_cable_property,
 };
 
 #define RTS5453P_EMUL_DEFINE(n)                                             \

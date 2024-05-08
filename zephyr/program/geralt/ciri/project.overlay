@@ -28,6 +28,7 @@
 / {
 	named-gpios {
 		/delete-node/ als-rgb-int-odl;
+		/delete-node/ lid-360-l;
 		/delete-node/ usb-c0-ppc-bc12-int-odl;
 
 		usb_c0_frs_en: usb-c0-frs-en {
@@ -69,6 +70,7 @@
 			 * EC_AP_RSVD0_ODL
 			 */
 			<&gpioh 0 GPIO_INPUT>,
+			<&gpioj 7 GPIO_INPUT_PULL_DOWN>,
 			<&gpiom 2 (GPIO_INPUT_PULL_DOWN | GPIO_VOLTAGE_1P8)>,
 			<&gpiom 6 (GPIO_INPUT_PULL_DOWN | GPIO_VOLTAGE_1P8)>;
 	};
@@ -104,6 +106,8 @@
 
 	gpio-interrupts {
 		compatible = "cros-ec,gpio-interrupts";
+
+		/delete-node/ lid-360-l;
 
 		int_lid_imu: lid-imu {
 			handler = "motion_interrupt";
@@ -167,7 +171,7 @@
 			compatible = "cros-ec,lsm6dsm-accel";
 			status = "okay";
 
-			active-mask = "SENSOR_ACTIVE_S0_S3";
+			active-mask = "SENSOR_ACTIVE_S0";
 			location = "MOTIONSENSE_LOC_LID";
 			mutex = <&lid_mutex>;
 			port = <&i2c_sensor>;
@@ -182,10 +186,6 @@
 					odr = <(12500 | ROUND_UP_FLAG)>;
 					ec-rate = <(100 * USEC_PER_MSEC)>;
 				};
-				ec-s3 {
-					odr = <(12500 | ROUND_UP_FLAG)>;
-					ec-rate = <0>;
-				};
 			};
 		};
 
@@ -193,7 +193,7 @@
 			compatible = "cros-ec,lsm6dsm-gyro";
 			status = "okay";
 
-			active-mask = "SENSOR_ACTIVE_S0_S3";
+			active-mask = "SENSOR_ACTIVE_S0";
 			location = "MOTIONSENSE_LOC_LID";
 			mutex = <&lid_mutex>;
 			port = <&i2c_sensor>;

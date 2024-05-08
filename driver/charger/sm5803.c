@@ -88,6 +88,14 @@ static int attempt_bfet_enable;
  */
 static bool fast_charge_disabled;
 
+#ifdef CONFIG_BATTERY
+/*
+ * During charge idle mode, we want to disable fast-charge/ pre-charge/
+ * trickle-charge. Add this variable to avoid re-send command to charger.
+ */
+test_export_static int charge_idle_enabled;
+#endif
+
 #ifdef TEST_BUILD
 void test_sm5803_set_fast_charge_disabled(bool value)
 {
@@ -663,9 +671,6 @@ static void sm5803_init(int chgnum)
 
 		if (is_platform_id_3s(platform_id)) {
 			/* 3S Battery inits */
-			/* set 13.3V VBAT_SNSP TH GPADC THRESHOLD*/
-			rv |= meas_write8(chgnum, 0x26,
-					  SM5803_VBAT_SNSP_MAXTH_3S_LEVEL);
 			/* OV_VBAT HW second level (14.1V) */
 			rv |= chg_write8(chgnum, 0x21,
 					 SM5803_VBAT_PWR_MINTH_3S_LEVEL);
@@ -708,14 +713,6 @@ static void sm5803_init(int chgnum)
 			rv |= chg_write8(chgnum, 0x5C, 0x7A);
 		} else if (is_platform_id_2s(platform_id)) {
 			/* 2S Battery inits */
-
-			/*
-			 * Set 9V as higher threshold for VBATSNSP_MAX_TH GPADC
-			 * threshold for interrupt generation.
-			 */
-			rv |= meas_write8(chgnum, 0x26,
-					  SM5803_VBAT_SNSP_MAXTH_2S_LEVEL);
-
 			/* Set OV_VBAT HW second level threshold as 9.4V */
 			rv |= chg_write8(chgnum, 0x21,
 					 SM5803_VBAT_PWR_MINTH_2S_LEVEL);
@@ -841,8 +838,6 @@ static void sm5803_init(int chgnum)
 
 	/*
 	 * Configure TINT interrupt to fire after thresholds are set.
-	 * b:292038738: Temporarily disable VBAT_SNSP high interrupt since
-	 * the setpoint is not confirmed.
 	 */
 	rv |= main_write8(chgnum, SM5803_REG_INT2_EN, SM5803_INT2_TINT);
 
@@ -1304,72 +1299,6 @@ void sm5803_handle_interrupt(int chgnum)
 		 */
 	}
 
-	if (int_reg & SM5803_INT2_VBATSNSP) {
-		int meas_volt;
-		uint32_t platform_id;
-
-		rv = main_read8(chgnum, SM5803_REG_PLATFORM, &platform_id);
-		if (rv) {
-			CPRINTS("%s %d: Failed to read platform in interrupt",
-				CHARGER_NAME, chgnum);
-			return;
-		}
-		platform_id &= SM5803_PLATFORM_ID;
-		act_chg = charge_manager_get_active_charge_port();
-		rv = meas_read8(CHARGER_PRIMARY, SM5803_REG_VBATSNSP_MEAS_MSB,
-				&meas_reg);
-		if (rv)
-			return;
-		meas_volt = meas_reg << 2;
-		rv = meas_read8(CHARGER_PRIMARY, SM5803_REG_VBATSNSP_MEAS_LSB,
-				&meas_reg);
-		if (rv)
-			return;
-		meas_volt |= meas_reg & 0x03;
-		rv = meas_read8(CHARGER_PRIMARY, SM5803_REG_VBATSNSP_MAX_TH,
-				&meas_reg);
-		if (rv)
-			return;
-
-		if (is_platform_id_2s(platform_id)) {
-			/* 2S Battery */
-			CPRINTS("%s %d : VBAT_SNSP_HIGH_TH: %d mV ! - "
-				"VBAT %d mV",
-				CHARGER_NAME, CHARGER_PRIMARY,
-				meas_reg * 408 / 10, meas_volt * 102 / 10);
-		}
-
-		if (is_platform_id_3s(platform_id)) {
-			/* 3S Battery */
-			CPRINTS("%s %d : VBAT_SNSP_HIGH_TH: %d mV ! "
-				"- VBAT %d mV",
-				CHARGER_NAME, CHARGER_PRIMARY,
-				meas_reg * 616 / 10, meas_volt * 154 / 10);
-		}
-
-		/* Set Vbat Threshold to Max value to re-arm the interrupt */
-		rv = meas_write8(CHARGER_PRIMARY, SM5803_REG_VBATSNSP_MAX_TH,
-				 0xFF);
-
-		/* Disable battery charge */
-		rv |= sm5803_flow1_update(chgnum, SM5803_FLOW1_MODE, MASK_CLR);
-		if (is_platform_id_2s(platform_id)) {
-			/* 2S battery: set VBAT_SENSP TH 9V */
-			rv |= meas_write8(CHARGER_PRIMARY,
-					  SM5803_REG_VBATSNSP_MAX_TH,
-					  SM5803_VBAT_SNSP_MAXTH_2S_LEVEL);
-		}
-		if (is_platform_id_3s(platform_id)) {
-			/* 3S battery: set VBAT_SENSP TH 13.3V */
-			rv |= meas_write8(CHARGER_PRIMARY,
-					  SM5803_REG_VBATSNSP_MAX_TH,
-					  SM5803_VBAT_SNSP_MAXTH_3S_LEVEL);
-		}
-
-		active_restart_port = act_chg;
-		hook_call_deferred(&sm5803_restart_charging_data, 1 * SECOND);
-	}
-
 	/* TODO(b/159376384): Take action on fatal BFET power alert. */
 	rv = main_read8(chgnum, SM5803_REG_INT3_REQ, &int_reg);
 	if (rv) {
@@ -1528,6 +1457,43 @@ static enum ec_error_list sm5803_set_mode(int chgnum, int mode)
 		rv |= sm5803_flow2_update(chgnum, SM5803_FLOW2_AUTO_ENABLED,
 					  MASK_CLR);
 	}
+
+#ifdef CONFIG_BATTERY
+	if ((get_chg_ctrl_mode() == CHARGE_CONTROL_IDLE) &&
+	    !charge_idle_enabled) {
+		/*
+		 * Writes to the FLOW2_AUTO_ENABLED bits below have no effect if
+		 * flow1 is set to an active state, so disable sink mode first
+		 * before making other config changes.
+		 */
+		rv = sm5803_flow1_update(chgnum, SM5803_FLOW1_MODE, MASK_CLR);
+		/*
+		 * Disable fast-charge/ pre-charge/ trickle-charge.
+		 */
+		rv |= sm5803_flow2_update(chgnum, SM5803_FLOW2_AUTO_ENABLED,
+					  MASK_CLR);
+		/*
+		 * Enable Sink mode to make sure battery will not discharge.
+		 */
+		rv |= sm5803_flow1_update(chgnum, CHARGER_MODE_SINK, MASK_SET);
+		charge_idle_enabled = 1;
+	} else if ((get_chg_ctrl_mode() == CHARGE_CONTROL_NORMAL) &&
+		   charge_idle_enabled) {
+		rv = sm5803_flow1_update(chgnum, SM5803_FLOW1_MODE, MASK_CLR);
+		rv |= sm5803_flow2_update(chgnum, SM5803_FLOW2_AUTO_ENABLED,
+					  MASK_SET);
+		rv |= sm5803_flow1_update(chgnum, CHARGER_MODE_SINK, MASK_SET);
+		charge_idle_enabled = 0;
+	} else if ((get_chg_ctrl_mode() == CHARGE_CONTROL_DISCHARGE) &&
+		   charge_idle_enabled) {
+		/*
+		 * Discharge is controlled by discharge_on_ac, so only need to
+		 * reset charge_idle_enabled.
+		 */
+		charge_idle_enabled = 0;
+	}
+
+#endif
 
 	return rv;
 }
@@ -1842,7 +1808,7 @@ static enum ec_error_list sm5803_get_option(int chgnum, int *option)
 
 	rv |= chg_read8(chgnum, SM5803_REG_FLOW3, &reg);
 	control |= reg << 16;
-
+	*option = control;
 	return rv;
 }
 
@@ -1989,7 +1955,7 @@ static enum ec_error_list sm5803_enable_otg_power(int chgnum, int enabled)
 					 CHARGER_MODE_SOURCE |
 						 SM5803_FLOW1_DIRECTCHG_SRC_EN,
 					 MASK_SET);
-		usleep(4000);
+		crec_usleep(4000);
 
 		sm5803_set_otg_current_voltage(chgnum, selected_current, 5000);
 	} else {

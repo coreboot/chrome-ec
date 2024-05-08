@@ -41,11 +41,12 @@
 	M_GPR(extra_info.callee->v7, cm.regs[CORTEX_PANIC_REGISTER_R10], v7) \
 	M_GPR(extra_info.callee->v8, cm.regs[CORTEX_PANIC_REGISTER_R11], v8) \
 	M(extra_info.callee->psp, cm.regs[CORTEX_PANIC_REGISTER_PSP], psp)   \
+	M(basic.xpsr, cm.regs[CORTEX_PANIC_REGISTER_IPSR], ipsr)             \
 	M(extra_info.exc_return, cm.regs[CORTEX_PANIC_REGISTER_LR], exc_rtn) \
 	M(extra_info.msp, cm.regs[CORTEX_PANIC_REGISTER_MSP], msp)
 /*
- * IPSR is not copied. IPSR is a subset of xPSR, which is already
- * captured in PANIC_REG_LIST.
+ * IPSR is a subset of xPSR, which is already captured in PANIC_REG_LIST, but
+ * print it anyway because it may contain panic exception.
  */
 #else
 #define EXTRA_PANIC_REG_LIST(M, M_GPR)
@@ -115,11 +116,14 @@ static uint32_t placeholder_info_reg;
 
 #define PANIC_PRINT_REGS(esf_field, pdata_field, human_name) \
 	panic_printf("  %-8s = 0x%08X\n", #human_name, pdata->pdata_field);
-#define PANIC_PRINT_REGS_GPR(esf_field, pdata_field, human_name)
 
 void panic_data_print(const struct panic_data *pdata)
 {
-	PANIC_REG_LIST(PANIC_PRINT_REGS, PANIC_PRINT_REGS_GPR);
+	PANIC_REG_LIST(PANIC_PRINT_REGS, PANIC_PRINT_REGS);
+#if defined(CONFIG_RISCV) && !defined(CONFIG_64BIT)
+	PANIC_PRINT_REGS(NULL, riscv.regs[10], S1);
+	PANIC_PRINT_REGS(NULL, riscv.regs[11], S0);
+#endif
 }
 
 static void copy_esf_to_panic_data(const z_arch_esf_t *esf,
@@ -140,6 +144,7 @@ static void copy_esf_to_panic_data(const z_arch_esf_t *esf,
 void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
 {
 	struct panic_data *pdata = get_panic_data_write();
+
 	/*
 	 * If CONFIG_LOG is on, the exception details
 	 * have already been logged to the console.
@@ -153,9 +158,21 @@ void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
 		if (!IS_ENABLED(CONFIG_LOG)) {
 			panic_data_print(panic_get_data());
 		}
+	} else {
+		/* If a esf structure is empty, store just the reason provided
+		 * by Zephyr. It can be caused e.g. by a spurious interrupt.
+		 */
+		uint8_t flags = pdata->flags;
+		panic_set_reason(PANIC_ZEPHYR_FATAL_ERROR, (uint32_t)reason,
+				 task_get_current());
+		/* Keep panic flags */
+		pdata->flags = flags;
 	}
 
 	LOG_PANIC();
+
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_CONSOLE_CMD_CRASH_NESTED))
+		command_crash_nested_handler();
 
 	/* Start system safe mode if possible */
 	if (IS_ENABLED(CONFIG_PLATFORM_EC_SYSTEM_SAFE_MODE)) {

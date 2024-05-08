@@ -215,6 +215,24 @@ static void board_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
+static void usart_reinit(struct usb_stream_config const *usart_usb,
+			 struct usart_config const *usart)
+{
+	usb_usart_clear(usart_usb, usart, CLEAR_BOTH_FIFOS);
+	usart_set_parity(usart, 0);
+	usart_set_baud(usart, 115200);
+	usart_set_break(usart, false);
+}
+
+static void usart_reinit_all(void)
+{
+	usart_reinit(&usart2_usb, &usart2);
+	usart_reinit(&usart3_usb, &usart3);
+	usart_reinit(&usart4_usb, &usart4);
+	usart_reinit(&usart5_usb, &usart5);
+}
+DECLARE_HOOK(HOOK_REINIT, usart_reinit_all, HOOK_PRIO_DEFAULT);
+
 static int command_reinit(int argc, const char **argv)
 {
 	/* Let every module know to re-initialize to power-on state. */

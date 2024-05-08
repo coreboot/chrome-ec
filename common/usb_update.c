@@ -10,6 +10,7 @@
 #include "curve25519.h"
 #include "flash.h"
 #include "host_command.h"
+#include "printf.h"
 #include "queue_policies.h"
 #include "rollback.h"
 #include "rwsig.h"
@@ -280,7 +281,8 @@ static int try_vendor_command(struct consumer const *consumer, size_t count)
 
 			CPRINTS("Adding %db of entropy", data_count);
 			/* Add the entropy to secret. */
-			rollback_add_entropy(buffer + header_size, data_count);
+			response = rollback_add_entropy(buffer + header_size,
+							data_count);
 			break;
 		}
 #endif /* CONFIG_ROLLBACK_UPDATE */
@@ -383,6 +385,23 @@ static int try_vendor_command(struct consumer const *consumer, size_t count)
 			return 1;
 		}
 #endif
+		case UPDATE_EXTRA_CMD_GET_VERSION_STRING: {
+			enum ec_image active_slot = system_get_active_copy();
+			char version_str[35] = {};
+
+			response = EC_RES_SUCCESS;
+			if (snprintf(version_str, sizeof(version_str), "%s:%s",
+				     active_slot == EC_IMAGE_RO ? "RO" : "RW",
+				     system_get_version(active_slot)) < 0) {
+				response = EC_RES_ERROR;
+				break;
+			}
+			response = EC_SUCCESS;
+			QUEUE_ADD_UNITS(&update_to_usb, &response, 1);
+			QUEUE_ADD_UNITS(&update_to_usb, version_str,
+					sizeof(version_str));
+			return 1;
+		}
 		default:
 			response = EC_RES_INVALID_COMMAND;
 		}
@@ -406,7 +425,7 @@ static uint64_t prev_activity_timestamp;
 static uint8_t data_was_transferred;
 
 /* Reply with an error to remote side, reset state. */
-static void send_error_reset(uint8_t resp_value)
+test_export_static void send_error_reset(uint8_t resp_value)
 {
 	QUEUE_ADD_UNITS(&update_to_usb, &resp_value, 1);
 	rx_state_ = rx_idle;

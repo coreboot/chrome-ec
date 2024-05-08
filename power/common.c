@@ -448,7 +448,7 @@ static enum power_state power_common_state(void)
 			 * user specified delay times out.
 			 */
 			for (i = 0; i < reboot_ap_at_g3_delay; i += 100)
-				msleep(100);
+				crec_msleep(100);
 			reboot_ap_at_g3_delay = 0;
 
 			return POWER_G3S5;
@@ -1090,7 +1090,7 @@ __overridable void board_power_5v_enable(int enable)
 
 /* 5V enable request bitmask from various tasks. */
 static uint32_t pwr_5v_en_req;
-K_MUTEX_DEFINE(pwr_5v_ctl_mtx);
+static K_MUTEX_DEFINE(pwr_5v_ctl_mtx);
 
 void power_5v_enable(task_id_t tid, int enable)
 {

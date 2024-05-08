@@ -16,7 +16,11 @@ target_sources(app PRIVATE src/stubs.c)
 
 if(CONFIG_TEST_NISSA_BOARD_POWER)
     # Test source
-    target_sources(app PRIVATE src/board_power.c)
+    if(CONFIG_AP_PWRSEQ_DRIVER)
+        target_sources(app PRIVATE src/board_ap_pwrseq_drv.c)
+    else()
+        target_sources(app PRIVATE src/board_power.c)
+    endif()
     # Module under test
     target_sources(app PRIVATE ${PLATFORM_EC_PROGRAM_DIR}/nissa/src/board_power.c)
 endif()
@@ -75,6 +79,16 @@ if(CONFIG_TEST_NISSA_NOKRIS)
     )
 endif()
 
+if(CONFIG_TEST_NISSA_SUNDANCE)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0)
+    target_sources(
+            app PRIVATE
+            src/sundance.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/sundance/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/sundance/src/usbc.c
+    )
+endif()
+
 if(CONFIG_TEST_NISSA_GOTHRAX)
     target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
     target_sources(
@@ -86,6 +100,7 @@ if(CONFIG_TEST_NISSA_GOTHRAX)
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/usb_mux_config.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/form_factor.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/fan.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/thermal.c
     )
 endif()
 
@@ -97,6 +112,19 @@ if(CONFIG_TEST_NISSA_PUJJO)
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjo/src/form_factor.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjo/src/hdmi.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjo/src/led.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_PUJJOGA)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0)
+    target_sources(
+            app PRIVATE
+            src/pujjoga.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/hdmi.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/led.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/sub_board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/usbc.c
     )
 endif()
 
@@ -138,6 +166,7 @@ if(CONFIG_TEST_NISSA_CRAASKOV)
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craaskov/src/charger.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/craaskov/src/hdmi.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craaskov/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/craaskov/src/touch_panel.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craaskov/src/usbc.c
     )
 endif()
@@ -177,5 +206,82 @@ if(CONFIG_TEST_NISSA_ULDREN)
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/sub_board.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/usb_mux_config.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/uldren/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_YAVIKS)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/shim/chip/it8xxx2/include")
+    target_sources(
+            app PRIVATE
+            src/yaviks.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/fan.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/led.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/sub_board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/thermal.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yaviks/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_QUANDISO)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/shim/chip/it8xxx2/include")
+    target_sources(
+            app PRIVATE
+            src/quandiso.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/fan.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/led.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/sub_board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/thermal.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_YAVILLA)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/shim/chip/it8xxx2/include")
+    target_sources(
+            app PRIVATE
+            src/yavilla.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/fan.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/thermal.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/yavilla/src/usbc.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_GLASSWAY)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    target_sources(
+            app PRIVATE
+            src/glassway.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/glassway/src/fan.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/glassway/src/sub_board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/glassway/src/usbc.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/glassway/src/charger.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_RIVEN)
+    target_sources(
+	    app PRIVATE
+	    src/riven.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/charger.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/fan.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/form_factor.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/kb_backlight.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/keyboard.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/led.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/thermal.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/touch_panel.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/usbc.c
     )
 endif()

@@ -3,6 +3,12 @@
  * found in the LICENSE file.
  */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 11
+
 #include "builtin/assert.h"
 #include "compile_time_macros.h"
 #include "console.h"
@@ -188,7 +194,7 @@ static bool query_usb_mux_set_completed_timeout(int port)
 
 	for (i = 0; i < POLLING_CYCLE; i++) {
 		if (!usb_mux_set_completed(port))
-			msleep(POLLING_TIME_MS);
+			crec_msleep(POLLING_TIME_MS);
 		else
 			return false;
 	}

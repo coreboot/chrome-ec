@@ -10,6 +10,10 @@
 
 #include "common.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum hook_priority {
 	/* Generic values across all hooks */
 	HOOK_PRIO_FIRST = 1, /* Highest priority */
@@ -78,6 +82,13 @@ enum hook_type {
 	 * before task scheduling is enabled.
 	 */
 	HOOK_INIT = 0,
+
+	/*
+	 * This hook is called before HOOK_INIT and some early init routines.
+	 * Hook routines of this type are expected to be called multiple times.
+	 * So, make sure your routine takes care of 'initialized' state.
+	 */
+	HOOK_INIT_EARLY,
 
 	/*
 	 * System clock changed frequency.
@@ -301,13 +312,17 @@ struct hook_data {
  * This function must be called from the correct type-specific context (task);
  * see enum hook_type for details.  hook_notify() should NEVER be called from
  * interrupt context unless specifically allowed for a hook type, because hook
- * routines may need to perform task-level calls like usleep() and mutex
+ * routines may need to perform task-level calls like crec_usleep() and mutex
  * operations that are not valid in interrupt context.  Instead of calling a
  * hook from interrupt context, use a deferred function.
  *
  * @param type		Type of hook routines to call.
  */
 void hook_notify(enum hook_type type);
+
+#ifdef __cplusplus
+}
+#endif
 
 /*
  * CONFIG_PLATFORM_EC_HOOKS is enabled by default during a Zephyr

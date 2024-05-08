@@ -60,6 +60,12 @@ config BOARD_PUJJO
 	  Build Google Pujjo board. Pujjo has Intel ADL-N SoC
 	  with NPCX993FA0BX EC.
 
+config BOARD_PUJJOGA
+	bool "Google Pujjoga Board"
+	help
+	  Build Google Pujjoga board. Pujjoga has Intel ADL-N SoC
+	  with NPCX993FA0BX EC.
+
 config BOARD_XIVU
         bool "Google Xivu Board"
         help
@@ -88,6 +94,12 @@ config BOARD_YAVILLA
 	bool "Google Yavilla Board"
 	help
 	  Build Google Yavilla board. Yavilla has Intel ADL-N SoC
+	  with IT81302 EC.
+
+config BOARD_YAVISTA
+	bool "Google Yavista Board"
+	help
+	  Build Google Yavista board. Yavista has Intel ADL-N SoC
 	  with IT81302 EC.
 
 config BOARD_ULDREN
@@ -125,6 +137,24 @@ config BOARD_ANRAGGAR
 	help
 	  Build Google Anraggar reference board. Anraggar has Intel ADL-N SoC
 	  with IT81302 EC.
+
+config BOARD_GLASSWAY
+	bool "Google Glassway Board"
+	help
+	  Build Google Glassway reference board. Nivviks has Intel ADL-N SoC
+	  with NPCX993FA0BX EC.
+
+config BOARD_SUNDANCE
+        bool "Google Sundance Board"
+        help
+          Build Google Sundance reference board. Nokris has Intel ADL-N SoC
+          with NPCX993FA0BX EC.
+
+config BOARD_RIVEN
+	bool "Google Riven Board"
+	help
+	  Build Google Riven board. Riven has Intel TWL SoC
+	  with NPCX993FA0BX EC.
 
 module = NISSA
 module-str = Nissa board-specific code

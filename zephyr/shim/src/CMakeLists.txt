@@ -19,10 +19,15 @@ else()
   zephyr_library_sources(system.c)
 endif()
 
-zephyr_library_sources_ifdef(no_libgcc
-  libgcc_${ARCH}.S
-  popcountsi2.c
-)
+zephyr_library_sources_ifdef(no_libgcc libgcc_${ARCH}.S)
+
+if (no_libgcc AND CONFIG_INPUT)
+  # Implements __popcountsi2, currently used by few input functions. This is
+  # called from __builtin_popcount and LTO gets confused and tries to collect
+  # it so it's declared as __used, only build it when necessary to avoid
+  # wasting flash space.
+  zephyr_library_sources(popcountsi2.c)
+endif()
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_CONTROLLER pdc_shim.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7452 anx7452_usb_mux.c)
@@ -85,8 +90,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_BC12_DETECT_PI3USB9201
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_PPC    ppc.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_TCPM_NCT38XX
                                                             tcpc_nct38xx.c)
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC        tcpc.c)
-
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBA        usba.c)
 zephyr_library_sources_ifdef(CONFIG_AP_PWRSEQ_HOST_SLEEP    power_host_sleep_api.c)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_MUX     usb_muxes.c)
@@ -109,7 +112,7 @@ if(CONFIG_PIGWEED_LOG_TOKENIZED_LIB)
     set(CHIP "npcx")
   elseif (DEFINED CONFIG_SOC_FAMILY_ITE_EC)
     set(CHIP "it8xxx2")
-  elseif (DEFINED CONFIG_SOC_FAMILY_MEC)
+  elseif (DEFINED CONFIG_SOC_FAMILY_MICROCHIP_MEC)
     set(CHIP "mchp")
   elseif (DEFINED CONFIG_SOC_FAMILY_STM32)
     set(CHIP "stm32")

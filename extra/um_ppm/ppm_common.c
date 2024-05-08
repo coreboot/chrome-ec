@@ -130,7 +130,7 @@ static void clear_pending_command(struct ppm_common_device *dev)
 
 static void ppm_common_handle_async_event(struct ppm_common_device *dev)
 {
-	uint8_t port;
+	uint8_t port = 0;
 	struct ucsiv3_get_connector_status_data *port_status;
 	bool alert_port = false;
 
@@ -172,8 +172,7 @@ static void ppm_common_handle_async_event(struct ppm_common_device *dev)
 				sizeof(struct ucsiv3_get_connector_status_data));
 
 			if (dev->pd->execute_cmd(dev->pd->dev, &get_cs_cmd,
-						 (uint8_t *)port_status) ==
-			    -1) {
+						 (uint8_t *)port_status) < 0) {
 				ELOG("Failed to read port %d status. No recovery.",
 				     port + 1);
 			} else {
@@ -253,6 +252,7 @@ static int ppm_common_execute_pending_cmd(struct ppm_common_device *dev)
 	struct ucsi_cci *cci = &dev->ucsi_data.cci;
 	uint8_t *message_in = (uint8_t *)&dev->ucsi_data.message_in;
 	uint8_t ucsi_command = control->command;
+	struct ucsiv3_ack_cc_ci_cmd *ack_cmd;
 	int ret = -1;
 	bool ack_ci = false;
 
@@ -270,8 +270,8 @@ static int ppm_common_execute_pending_cmd(struct ppm_common_device *dev)
 
 	switch (ucsi_command) {
 	case UCSI_CMD_ACK_CC_CI:
-		struct ucsiv3_ack_cc_ci_cmd *ack_cmd =
-			(struct ucsiv3_ack_cc_ci_cmd *)control->command_specific;
+		ack_cmd = (struct ucsiv3_ack_cc_ci_cmd *)
+				  control->command_specific;
 		/* The ack should already validated before we reach here. */
 		ack_ci = ack_cmd->connector_change_ack;
 		break;
@@ -307,9 +307,14 @@ static int ppm_common_execute_pending_cmd(struct ppm_common_device *dev)
 	}
 
 success:
-	DLOG("Completed UCSI command 0x%x (%s)", ucsi_command,
-	     ucsi_command_to_string(ucsi_command));
+	DLOG("Completed UCSI command 0x%x (%s). Read %d bytes.", ucsi_command,
+	     ucsi_command_to_string(ucsi_command), ret);
 	clear_cci(dev);
+
+	if (ret > 0)
+		DLOG_HEXDUMP(message_in, ret, "Command 0x%x (%s) response",
+			     ucsi_command,
+			     ucsi_command_to_string(ucsi_command));
 
 	/* Post-success command handling */
 	if (ack_ci) {
@@ -416,6 +421,7 @@ static void ppm_common_handle_pending_command(struct ppm_common_device *dev)
 			ppm_common_opm_notify(dev);
 			/* Intentional fallthrough since we are now processing.
 			 */
+			/* fallthrough */
 		case PPM_STATE_PROCESSING_COMMAND:
 			/* TODO - Handle the case where we have a command that
 			 * takes multiple smbus calls to process (i.e. firmware
@@ -527,10 +533,18 @@ static void ppm_common_task(void *context)
 	 * PPM lock; may need to  fix that.
 	 */
 	do {
-		/* Wait for a task from OPM unless we are already processing a
-		 * command.
+		/* We will handle async events only in idle state if there is
+		 * one pending.
 		 */
-		if (dev->ppm_state != PPM_STATE_PROCESSING_COMMAND) {
+		bool handle_async_event =
+			(dev->ppm_state <= PPM_STATE_IDLE_NOTIFY) &&
+			is_pending_async_event(dev);
+		/* Wait for a task from OPM unless we are already processing a
+		 * command or we need to fall through for a pending command or
+		 * handleable async event.
+		 */
+		if (dev->ppm_state != PPM_STATE_PROCESSING_COMMAND &&
+		    !is_pending_command(dev) && !handle_async_event) {
 			DLOG("Waiting for next command at state %d (%s)...",
 			     dev->ppm_state,
 			     ppm_state_to_string(dev->ppm_state));
@@ -593,12 +607,15 @@ static void ppm_common_task(void *context)
 
 		/* Waiting for a command completion acknowledge. */
 		case PPM_STATE_WAITING_CC_ACK:
-			if (!match_pending_command(dev, UCSI_CMD_ACK_CC_CI) ||
-			    is_invalid_ack(dev)) {
-				invalid_ack_notify(dev);
-				break;
+			if (is_pending_command(dev)) {
+				if (!match_pending_command(
+					    dev, UCSI_CMD_ACK_CC_CI) ||
+				    is_invalid_ack(dev)) {
+					invalid_ack_notify(dev);
+					break;
+				}
+				ppm_common_handle_pending_command(dev);
 			}
-			ppm_common_handle_pending_command(dev);
 			break;
 
 		/* Waiting for async event ack. */
@@ -633,7 +650,7 @@ static void ppm_common_task(void *context)
 	} while (!dev->cleaning_up);
 
 	platform_mutex_unlock(dev->ppm_lock);
-
+	DLOG("Exiting ppm common task");
 	platform_task_exit();
 }
 
@@ -655,30 +672,31 @@ static int ppm_common_init_and_wait(struct ucsi_ppm_device *device,
 	ucsi_data->version.lpm_address = 0x0;
 
 	/* Init lock to sync PPM task and main task context. */
-	dev->ppm_lock = platform_mutex_init();
-	if (!dev->ppm_lock) {
+	if (platform_mutex_init(&dev->ppm_lock)) {
+		ELOG("Failed to init ppm_lock");
 		return -1;
 	}
 
 	/* Init condvar to notify PPM task. */
-	dev->ppm_condvar = platform_condvar_init();
-	if (!dev->ppm_condvar) {
+	if (platform_condvar_init(&dev->ppm_condvar)) {
+		ELOG("Failed to init ppm_condvar");
 		return -1;
 	}
 
 	/* Allocate per port status (used for PPM async event notifications). */
-	dev->num_ports = num_ports;
-	dev->per_port_status = platform_calloc(
-		dev->num_ports,
-		sizeof(struct ucsiv3_get_connector_status_data));
+	if (num_ports != dev->num_ports) {
+		dev->num_ports = num_ports;
+		dev->per_port_status = platform_calloc(
+			dev->num_ports,
+			sizeof(struct ucsiv3_get_connector_status_data));
+	}
 	dev->last_connector_changed = -1;
 
 	DLOG("Ready to initialize PPM task!");
 
 	/* Initialize the PPM task. */
-	dev->ppm_task_handle =
-		platform_task_init((void *)ppm_common_task, (void *)dev);
-	if (!dev->ppm_task_handle) {
+	if (platform_task_init((void *)ppm_common_task, (void *)dev,
+			       &dev->ppm_task_handle)) {
 		ELOG("No ppm task created.");
 		return -1;
 	}
@@ -846,12 +864,12 @@ static int ppm_common_write(struct ucsi_ppm_device *device, unsigned int offset,
 	}
 
 	if (offset >= UCSI_MESSAGE_OUT_OFFSET &&
-	    offset + length >= UCSI_MESSAGE_OUT_OFFSET + MESSAGE_OUT_SIZE) {
-		ELOG("UCSI write to MESSAGE_OUT exceeds bounds: offset(0x%x) + size(0x%x) "
-		     ">= "
-		     "end(0x%x)",
-		     offset, length,
-		     UCSI_MESSAGE_OUT_OFFSET + MESSAGE_OUT_SIZE);
+	    offset + length > UCSI_MESSAGE_OUT_OFFSET + MESSAGE_OUT_SIZE) {
+		ELOG("UCSI write [0x%x ~ 0x%x] exceeds the "
+		     "MESSAGE_OUT range [0x%x ~ 0x%x]",
+		     offset, offset + length - 1, UCSI_MESSAGE_OUT_OFFSET,
+		     UCSI_MESSAGE_OUT_OFFSET + MESSAGE_OUT_SIZE - 1);
+
 		return -1;
 	}
 
@@ -943,24 +961,18 @@ static void ppm_common_cleanup(struct ucsi_ppm_driver *driver)
 	}
 }
 
-struct ucsi_ppm_driver *ppm_open(struct ucsi_pd_driver *pd_driver)
+struct ucsi_ppm_driver *ppm_open(const struct ucsi_pd_driver *pd_driver)
 {
 	struct ppm_common_device *dev = NULL;
 	struct ucsi_ppm_driver *drv = NULL;
 
-	dev = platform_calloc(1, sizeof(struct ppm_common_device));
-	if (!dev) {
-		goto handle_error;
-	}
+	drv = platform_allocate_ppm();
+	if (!drv)
+		return NULL;
 
+	dev = (struct ppm_common_device *)drv->dev;
 	dev->pd = pd_driver;
 
-	drv = platform_calloc(1, sizeof(struct ucsi_ppm_driver));
-	if (!drv) {
-		goto handle_error;
-	}
-
-	drv->dev = (struct ucsi_ppm_device *)dev;
 	drv->init_and_wait = ppm_common_init_and_wait;
 	drv->get_data_region = ppm_common_get_data_region;
 	drv->get_next_connector_status = ppm_common_get_next_connector_status;
@@ -972,10 +984,4 @@ struct ucsi_ppm_driver *ppm_open(struct ucsi_pd_driver *pd_driver)
 	drv->cleanup = ppm_common_cleanup;
 
 	return drv;
-
-handle_error:
-	platform_free(dev);
-	platform_free(drv);
-
-	return NULL;
 }

@@ -102,9 +102,6 @@
  *
  */
 
-/* Hardware timer used for bitbanging. */
-#define BITBANG_TIMER 5
-
 /* Size of buffer used for bitbanging waveform. */
 #define BITBANG_BUFFER_SIZE 16384
 
@@ -653,6 +650,37 @@ static int command_gpio_analog_set(int argc, const char **argv)
 
 	if (set_dac(gpio, argv[3]) != EC_SUCCESS)
 		return EC_ERROR_PARAM3;
+	return EC_SUCCESS;
+}
+
+/*
+ * Configure drive speed of a given pin, mostly useful for SPI pins if clock
+ * frequency is to exceed 10MHz.  The STM32L5 datasheet defines four levels 0-3,
+ * higher numbers mean faster slew rate, default for all pins is level 0.
+ */
+static int command_gpio_set_speed(int argc, const char **argv)
+{
+	if (argc < 4)
+		return EC_ERROR_PARAM_COUNT;
+
+	int gpio = gpio_find_by_name(argv[2]);
+	if (gpio == GPIO_COUNT)
+		return EC_ERROR_PARAM2;
+
+	char *e;
+	int speed = strtoi(argv[3], &e, 0);
+	if (*e)
+		return EC_ERROR_PARAM3;
+	if (speed < 0 || speed > 3)
+		return EC_ERROR_PARAM3;
+
+	int index = GPIO_MASK_TO_NUM(gpio_list[gpio].mask);
+
+	uint32_t register_value = STM32_GPIO_OSPEEDR(gpio_list[gpio].port);
+	register_value &= ~(3U << (index * 2));
+	register_value |= speed << (index * 2);
+	STM32_GPIO_OSPEEDR(gpio_list[gpio].port) = register_value;
+
 	return EC_SUCCESS;
 }
 
@@ -1382,6 +1410,8 @@ static int command_gpio(int argc, const char **argv)
 		return EC_ERROR_PARAM_COUNT;
 	if (!strcasecmp(argv[1], "analog-set"))
 		return command_gpio_analog_set(argc, argv);
+	if (!strcasecmp(argv[1], "set-speed"))
+		return command_gpio_set_speed(argc, argv);
 	if (!strcasecmp(argv[1], "monitoring"))
 		return command_gpio_monitoring(argc, argv);
 	if (!strcasecmp(argv[1], "multiset"))
@@ -1396,6 +1426,7 @@ DECLARE_CONSOLE_COMMAND_FLAGS(
 	gpio, command_gpio,
 	"multiset name [level] [mode] [pullmode] [milli_volts]"
 	"\nanalog-set name milli_volts"
+	"\nset-speed name 0-3"
 	"\nset-reset name"
 	"\nmonitoring start name..."
 	"\nmonitoring read name..."
@@ -1463,42 +1494,6 @@ static void led_tick(void)
 }
 DECLARE_HOOK(HOOK_TICK, led_tick, HOOK_PRIO_DEFAULT);
 
-size_t queue_add_units(struct queue const *q, const void *src, size_t count);
-
-static void queue_blocking_add(struct queue const *q, const void *src,
-			       size_t count)
-{
-	while (true) {
-		size_t progress = queue_add_units(q, src, count);
-		src += progress;
-		if (progress >= count)
-			return;
-		count -= progress;
-		/*
-		 * Wait for queue consumer to wake up this task, when there is
-		 * more room in the queue.
-		 */
-		task_wait_event(0);
-	}
-}
-
-static void queue_blocking_remove(struct queue const *q, void *dest,
-				  size_t count)
-{
-	while (true) {
-		size_t progress = queue_remove_units(q, dest, count);
-		dest += progress;
-		if (progress >= count)
-			return;
-		count -= progress;
-		/*
-		 * Wait for queue consumer to wake up this task, when there is
-		 * more data in the queue.
-		 */
-		task_wait_event(0);
-	}
-}
-
 /*
  * Declaration of header used in the binary USB protocol (Google HyperDebug
  * extensions to CMSIS-DAP protocol.)
@@ -1563,6 +1558,8 @@ static void dap_goog_gpio_monitoring_read(size_t peek_c)
 		rx_buffer[str_len] = '\0';
 		gpios[i] = gpio_find_by_name(rx_buffer);
 	}
+	if (cmsis_dap_unwind_requested())
+		return;
 
 	/*
 	 * Start the one-byte CMSIS-DAP encapsulation header at offset 7 in
@@ -1742,6 +1739,8 @@ void dap_goog_gpio_bitbang(size_t peek_c, bool streaming)
 		queue_blocking_remove(&cmsis_dap_rx_queue, bitbang_data,
 				      data_len - remaning_space);
 	}
+	if (cmsis_dap_unwind_requested())
+		return;
 
 	uint8_t status = validate_received_waveform(data_len, streaming);
 	if (status != 0) {
@@ -1861,10 +1860,24 @@ void dap_goog_gpio_bitbang(size_t peek_c, bool streaming)
  *
  * CAUTION: This handler routine runs on the CMSIS-DAP task, and the code below
  * may block waiting to receive/send data via USB.  This has the potential to
- * conflict with the console task, particularly if that one invokes
- * `stop_all_gpio_bitbanging()`.  There is currently no attempt at detecting
- * the conflict, or handling it by unwinding any partially completed invocation
- * of this function.
+ * conflict with the console task, particularly if that one invokes a function
+ * like `stop_all_gpio_bitbanging()`, which modifies the same state as methods
+ * below.
+ *
+ * As long as clients behave, and do not simultaneously request monitoring or
+ * bitbanging operations though the CMSIS-DAP interface while also sending
+ * `reinit` console command, the one case we are worried about is a bitbanging
+ * or monitoring client having stopped "in the middle" of performing some
+ * CMSIS-DAP operation, leaving the CMSIS-DAP task stuck in one of the handler
+ * functions in this file.  Then the next test session would presumably start by
+ * invoking `reinit`, which will be handled this way: In `cmsis-dap.c` a REINIT
+ * hook is registered with high priority, which will set
+ * `cmsis_dap_unwind_requested()` and will cause any blocking queue operation of
+ * the CMSIS-DAP task to exit.  Handler functions above will respond by exiting
+ * immediately, even if that means possibly leaving inconsistent state (such as
+ * having updated `head_level` but not moved the `head` pointer to match).  The
+ * normal priority REINIT hook in this file will then be called, which resets
+ * the state, such that it will be in a consistent and known initial state.
  */
 void dap_goog_gpio(size_t peek_c)
 {

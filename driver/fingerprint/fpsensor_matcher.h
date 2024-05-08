@@ -48,15 +48,17 @@
 #define FP_SENSOR_IMAGE_OFFSET (0)
 #endif
 
-#ifdef CONFIG_LIB_DRUID_WRAPPER
-#include "mcu/primitives/templates.h"
+/*
+ * Druid can be used in EMU/host environments, since it can be compiled for any
+ * target platform and, thus, does not have the same restrictions as the
+ * above private matching libraries.
+ */
+#if defined(CONFIG_LIB_DRUID_WRAPPER) && defined(HAVE_PRIVATE)
 
 #undef FP_ALGORITHM_TEMPLATE_SIZE
-#define FP_ALGORITHM_TEMPLATE_SIZE sizeof(fingerprintauth::FingerTemplate)
-
 #undef FP_MAX_FINGER_COUNT
-#define FP_MAX_FINGER_COUNT 2
+#include "mcu/cros/template_storage.h"
 
-#endif /* CONFIG_LIB_DRUID_WRAPPER */
+#endif /* CONFIG_LIB_DRUID_WRAPPER && HAVE_PRIVATE */
 
 #endif /* __CROS_EC_DRIVER_FINGERPRINT_FPSENSOR_MATCHER_H_ */

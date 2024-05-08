@@ -1229,6 +1229,7 @@ enum pd_cc_states pd_get_task_cc_state(int port);
  * @return PD state
  * Note: TCPMv1 returns enum pd_states
  *       TCPMv2 returns enum usb_tc_state
+ *       PD_CONTROLLER returns enum pdc_state_t
  */
 uint8_t pd_get_task_state(int port);
 
@@ -3418,6 +3419,13 @@ void svdm_set_hpd_gpio(int port, int en);
  */
 int svdm_get_hpd_gpio(int port);
 
+/*
+ * Generate IRQ_HPD on the HPD GPIO pin
+ *
+ * @param port The PD port number
+ */
+void svdm_set_hpd_gpio_irq(int port);
+
 /**
  * Configure the pins used for DisplayPort Alternate Mode into safe state.
  *
@@ -3592,6 +3600,14 @@ __override_proto int svdm_tbt_compat_attention(int port, uint32_t *payload);
  */
 
 __override_proto enum ec_pd_port_location board_get_pd_port_location(int port);
+
+/**
+ * Called when EC_CMD_USB_PD_CONTROL host command is received
+ *
+ * @param port  The PD port number
+ * @return      Information related connected port partner and cable
+ */
+uint8_t get_pd_control_flags(int port);
 
 /****************************************************************************
  * TCPC CC/Rp Management

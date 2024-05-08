@@ -210,6 +210,11 @@ __override uint32_t board_override_feature_flags0(uint32_t flags0)
 		return flags0;
 }
 
+__overridable void zork_board_hibernate(void)
+{
+	/* Stub for model specific hibernate callback */
+}
+
 void board_hibernate(void)
 {
 	int port;
@@ -225,8 +230,10 @@ void board_hibernate(void)
 		pd_request_source_voltage(port, SAFE_RESET_VBUS_MV);
 
 		/* Give PD task and PPC chip time to get to 5V */
-		msleep(900);
+		crec_msleep(900);
 	}
+
+	zork_board_hibernate();
 }
 
 __overridable int check_hdmi_hpd_status(void)
@@ -302,7 +309,7 @@ void board_pwrbtn_to_pch(int level)
 		 * From measurement, wait 80 ms for RSMRST_L to rise after
 		 * S5_PGOOD.
 		 */
-		msleep(80);
+		crec_msleep(80);
 
 		if (!gpio_get_level(GPIO_S5_PGOOD))
 			ccprints("Error: pwrbtn S5_PGOOD low");

@@ -295,7 +295,7 @@
 		};
 
 		/* Tentacruel LED bat discharge */
-		bat-power-state-discharge {
+		bat-power-state-discharge-s0 {
 			charge-state = "LED_PWRS_DISCHARGE";
 			chipset-state = "POWER_S0";
 			/* Battery percent range (>= 11%, <= Full) */
@@ -412,6 +412,9 @@
 	batteries {
 		default_battery: dynapack_c140254 {
 			compatible = "dynapack,c140254", "battery-smart";
+		};
+		smp_c223_50 {
+			compatible = "smp,c223-50", "battery-smart";
 		};
 	};
 };

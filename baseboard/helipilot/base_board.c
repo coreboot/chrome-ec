@@ -36,33 +36,19 @@ int console_is_restricted(void)
 /* Must come after other header files. */
 #include "gpio_list.h"
 
-/*
- * Some platforms have a broken SLP_S0_L signal (stuck to 0 in S0)
- * if set, ignore it and only uses SLP_S3_L for the AP state.
- */
-static bool broken_slp;
-
 static void ap_deferred(void)
 {
 	/*
 	 * Behavior:
 	 * AP Active  (ex. Intel S0):   SLP_L is 1
 	 * AP Suspend (ex. Intel S0ix): SLP_L is 0
-	 * The alternative SLP_ALT_L should be pulled high at all the times.
-	 *
-	 * Legacy Intel behavior:
-	 * in S3:   SLP_ALT_L is 0 and SLP_L is X.
-	 * in S0ix: SLP_ALT_L is 1 and SLP_L is 0.
-	 * in S0:   SLP_ALT_L is 1 and SLP_L is 1.
-	 * in S5/G3, the FP MCU should not be running.
 	 */
-	int running = gpio_get_level(GPIO_SLP_ALT_L) &&
-		      (gpio_get_level(GPIO_SLP_L) || broken_slp);
+	int running = gpio_get_level(GPIO_SLP_L);
 
 	if (running) { /* S0 */
 		disable_sleep(SLEEP_MASK_AP_RUN);
 		hook_notify(HOOK_CHIPSET_RESUME);
-	} else { /* S0ix/S3 */
+	} else { /* S0ix */
 		hook_notify(HOOK_CHIPSET_SUSPEND);
 		enable_sleep(SLEEP_MASK_AP_RUN);
 	}
@@ -78,14 +64,6 @@ static void board_init_transport(void)
 	/* Initialize transport based on bootstrap */
 	switch (ret_transport) {
 	case FP_TRANSPORT_TYPE_UART:
-		/*
-		 * The Zork variants currently have a broken SLP_S0_L signal
-		 * (stuck to 0 in S0). For now, unconditionally ignore it here
-		 * as they are the only UART users and the AP has no S0ix state.
-		 * TODO(b/174695987) once the RW AP firmware has been updated
-		 * on all those machines, remove this workaround.
-		 */
-		broken_slp = true;
 
 		/* Check if CONFIG_USART_HOST_COMMAND is enabled. */
 		if (IS_ENABLED(CONFIG_USART_HOST_COMMAND))
@@ -122,17 +100,16 @@ static void board_init(void)
 	board_init_transport();
 
 	/* Enable interrupt on PCH power signals */
-	gpio_enable_interrupt(GPIO_SLP_ALT_L);
 	gpio_enable_interrupt(GPIO_SLP_L);
-
-	if (IS_ENABLED(SECTION_IS_RW)) {
-		board_init_rw();
-	}
 
 	/* Initialize trng peripheral before kicking off the application to
 	 * avoid incurring that cost when generating random numbers
 	 */
 	npcx_trng_hw_init();
+
+	if (IS_ENABLED(SECTION_IS_RW)) {
+		board_init_rw();
+	}
 
 	/*
 	 * Enable the SPI slave interface if the PCH is up.
@@ -148,8 +125,3 @@ void slp_event(enum gpio_signal signal)
 {
 	hook_call_deferred(&ap_deferred_data, 0);
 }
-#ifndef HAS_TASK_FPSENSOR
-void fps_event(enum gpio_signal signal)
-{
-}
-#endif

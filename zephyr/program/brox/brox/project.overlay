@@ -43,7 +43,6 @@ i2c3ALT: &i2c3 {
                         compatible = "lgc,ap18c8k", "battery-smart";
                 };
         };
-
 };
 
 /* These GPIOS are initialized by the PDC driver */

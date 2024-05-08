@@ -10,6 +10,7 @@
 #include "drivers/ucsi_v3.h"
 #include "emul/emul_pdc.h"
 #include "i2c.h"
+#include "pdc_trace_msg.h"
 #include "zephyr/sys/util.h"
 #include "zephyr/sys/util_macro.h"
 
@@ -23,6 +24,7 @@
 LOG_MODULE_REGISTER(test_pdc_api, LOG_LEVEL_INF);
 
 #define RTS5453P_NODE DT_NODELABEL(rts5453p_emul)
+#define SLEEP_MS 120
 
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 static const struct device *dev = DEVICE_DT_GET(RTS5453P_NODE);
@@ -31,6 +33,9 @@ void pdc_before_test(void *data)
 {
 	emul_pdc_reset(emul);
 	emul_pdc_set_response_delay(emul, 0);
+	if (IS_ENABLED(CONFIG_TEST_PDC_MESSAGE_TRACING)) {
+		set_pdc_trace_msg_mocks();
+	}
 }
 
 ZTEST_SUITE(pdc_api, NULL, NULL, pdc_before_test, NULL, NULL);
@@ -54,19 +59,21 @@ ZTEST_USER(pdc_api, test_reset)
 
 ZTEST_USER(pdc_api, test_connector_reset)
 {
-	enum connector_reset_t type = 0;
+	union connector_reset_t in;
+	union connector_reset_t out;
+
+	in.raw_value = 0;
+	out.raw_value = 0;
+
+	in.reset_type = PD_DATA_RESET;
 
 	emul_pdc_set_response_delay(emul, 50);
-	zassert_ok(pdc_connector_reset(dev, PD_HARD_RESET),
-		   "Failed to reset connector");
+	zassert_ok(pdc_connector_reset(dev, in), "Failed to reset connector");
 
-	k_sleep(K_MSEC(5));
-	emul_pdc_get_connector_reset(emul, &type);
-	zassert_not_equal(type, PD_HARD_RESET);
+	k_sleep(K_MSEC(SLEEP_MS));
+	emul_pdc_get_connector_reset(emul, &out);
 
-	k_sleep(K_MSEC(100));
-	emul_pdc_get_connector_reset(emul, &type);
-	zassert_equal(type, PD_HARD_RESET);
+	zassert_equal(in.reset_type, out.reset_type);
 }
 
 ZTEST_USER(pdc_api, test_get_capability)
@@ -101,7 +108,7 @@ ZTEST_USER(pdc_api, test_get_connector_capability)
 	zassert_ok(pdc_get_connector_capability(dev, &out),
 		   "Failed to get connector capability");
 
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
 
 	/* Verify data from emulator */
 	zassert_equal(out.op_mode_rp_only, in.op_mode_rp_only);
@@ -121,7 +128,7 @@ ZTEST_USER(pdc_api, test_get_error_status)
 	zassert_ok(pdc_get_error_status(dev, &out),
 		   "Failed to get connector capability");
 	zassert_equal(pdc_get_error_status(dev, &out), -EBUSY);
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
 
 	/* Verify data from emulator */
 	zassert_equal(out.unrecognized_command, in.unrecognized_command);
@@ -135,11 +142,15 @@ ZTEST_USER(pdc_api, test_get_error_status)
 
 ZTEST_USER(pdc_api, test_get_connector_status)
 {
-	struct connector_status_t in, out;
+	union connector_status_t in, out;
+	union conn_status_change_bits_t in_conn_status_change_bits;
+	union conn_status_change_bits_t out_conn_status_change_bits;
 
-	in.conn_status_change_bits.external_supply_change = 1;
-	in.conn_status_change_bits.connector_partner = 1;
-	in.conn_status_change_bits.connect_change = 1;
+	in_conn_status_change_bits.external_supply_change = 1;
+	in_conn_status_change_bits.connector_partner = 1;
+	in_conn_status_change_bits.connect_change = 1;
+	in.raw_conn_status_change_bits = in_conn_status_change_bits.raw_value;
+
 	in.power_operation_mode = PD_OPERATION;
 	in.connect_status = 1;
 	in.power_direction = 0;
@@ -152,15 +163,16 @@ ZTEST_USER(pdc_api, test_get_connector_status)
 	zassert_ok(pdc_get_connector_status(dev, &out),
 		   "Failed to get connector capability");
 
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
+	out_conn_status_change_bits.raw_value = out.raw_conn_status_change_bits;
 
 	/* Verify data from emulator */
-	zassert_equal(out.conn_status_change_bits.external_supply_change,
-		      in.conn_status_change_bits.external_supply_change);
-	zassert_equal(out.conn_status_change_bits.connector_partner,
-		      in.conn_status_change_bits.connector_partner);
-	zassert_equal(out.conn_status_change_bits.connect_change,
-		      in.conn_status_change_bits.connect_change);
+	zassert_equal(out_conn_status_change_bits.external_supply_change,
+		      in_conn_status_change_bits.external_supply_change);
+	zassert_equal(out_conn_status_change_bits.connector_partner,
+		      in_conn_status_change_bits.connector_partner);
+	zassert_equal(out_conn_status_change_bits.connect_change,
+		      in_conn_status_change_bits.connect_change);
 	zassert_equal(out.power_operation_mode, in.power_operation_mode);
 	zassert_equal(out.connect_status, in.connect_status);
 	zassert_equal(out.power_direction, in.power_direction);
@@ -175,12 +187,15 @@ ZTEST_USER(pdc_api, test_set_uor)
 {
 	union uor_t in, out;
 
+	in.raw_value = 0;
+	out.raw_value = 0;
+
 	in.accept_dr_swap = 1;
 	in.swap_to_ufp = 1;
 
 	zassert_ok(pdc_set_uor(dev, in), "Failed to set uor");
 
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
 	zassert_ok(emul_pdc_get_uor(emul, &out));
 
 	zassert_equal(out.raw_value, in.raw_value);
@@ -190,12 +205,15 @@ ZTEST_USER(pdc_api, test_set_pdr)
 {
 	union pdr_t in, out;
 
+	in.raw_value = 0;
+	out.raw_value = 0;
+
 	in.accept_pr_swap = 1;
 	in.swap_to_src = 1;
 
 	zassert_ok(pdc_set_pdr(dev, in), "Failed to set pdr");
 
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
 	zassert_ok(emul_pdc_get_pdr(emul, &out));
 
 	zassert_equal(out.raw_value, in.raw_value);
@@ -208,10 +226,10 @@ ZTEST_USER(pdc_api, test_rdo)
 	in = BIT(25) | (BIT_MASK(9) & 0x55);
 	zassert_ok(pdc_set_rdo(dev, in));
 
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
 	zassert_ok(pdc_get_rdo(dev, &out));
 
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
 	zassert_equal(in, out);
 }
 
@@ -231,7 +249,7 @@ ZTEST_USER(pdc_api, test_set_power_level)
 	for (i = 0; i < ARRAY_SIZE(in); i++) {
 		zassert_ok(pdc_set_power_level(dev, in[i]));
 
-		k_sleep(K_MSEC(100));
+		k_sleep(K_MSEC(SLEEP_MS));
 		emul_pdc_get_requested_power_level(emul, &out);
 		zassert_equal(in[i], out);
 	}
@@ -242,14 +260,14 @@ ZTEST_USER(pdc_api, test_get_bus_voltage)
 	uint32_t mv_units = 50;
 	uint32_t expected_voltage_mv = 5000;
 	uint16_t out = 0;
-	struct connector_status_t in;
+	union connector_status_t in;
 
 	in.voltage_scale = 10; /* 50 mv units*/
 	in.voltage_reading = expected_voltage_mv / mv_units;
 	emul_pdc_set_connector_status(emul, &in);
 
 	zassert_ok(pdc_get_vbus_voltage(dev, &out));
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
 
 	zassert_equal(out, expected_voltage_mv);
 
@@ -258,23 +276,35 @@ ZTEST_USER(pdc_api, test_get_bus_voltage)
 
 ZTEST_USER(pdc_api, test_set_ccom)
 {
-	int i, j;
+	int i;
 	enum ccom_t ccom_in[] = { CCOM_RP, CCOM_RD, CCOM_DRP };
 	enum ccom_t ccom_out;
+
+	k_sleep(K_MSEC(SLEEP_MS));
+
+	for (i = 0; i < ARRAY_SIZE(ccom_in); i++) {
+		zassert_ok(pdc_set_ccom(dev, ccom_in[i]));
+
+		k_sleep(K_MSEC(SLEEP_MS));
+		zassert_ok(emul_pdc_get_ccom(emul, &ccom_out));
+		zassert_equal(ccom_in[i], ccom_out);
+	}
+}
+
+ZTEST_USER(pdc_api, test_set_drp_mode)
+{
+	int i;
 	enum drp_mode_t dm_in[] = { DRP_NORMAL, DRP_TRY_SRC, DRP_TRY_SNK };
 	enum drp_mode_t dm_out;
 
-	for (i = 0; i < ARRAY_SIZE(ccom_in); i++) {
-		for (j = 0; j < ARRAY_SIZE(dm_in); j++) {
-			zassert_ok(pdc_set_ccom(dev, ccom_in[i], dm_in[j]));
+	k_sleep(K_MSEC(SLEEP_MS));
 
-			k_sleep(K_MSEC(100));
-			zassert_ok(emul_pdc_get_ccom(emul, &ccom_out, &dm_out));
-			zassert_equal(ccom_in[i], ccom_out);
-			if (ccom_in[i] == CCOM_DRP) {
-				zassert_equal(dm_in[j], dm_out);
-			}
-		}
+	for (i = 0; i < ARRAY_SIZE(dm_in); i++) {
+		zassert_ok(pdc_set_drp_mode(dev, dm_in[i]));
+
+		k_sleep(K_MSEC(SLEEP_MS));
+		zassert_ok(emul_pdc_get_drp_mode(emul, &dm_out));
+		zassert_equal(dm_in[i], dm_out);
 	}
 }
 
@@ -286,7 +316,7 @@ ZTEST_USER(pdc_api, test_set_sink_path)
 	for (i = 0; i < ARRAY_SIZE(in); i++) {
 		zassert_ok(pdc_set_sink_path(dev, in[i]));
 
-		k_sleep(K_MSEC(100));
+		k_sleep(K_MSEC(SLEEP_MS));
 		zassert_ok(emul_pdc_get_sink_path(emul, &out));
 
 		zassert_equal(in[i], out);
@@ -299,7 +329,7 @@ ZTEST_USER(pdc_api, test_reconnect)
 
 	zassert_ok(pdc_reconnect(dev));
 
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
 	zassert_ok(emul_pdc_get_reconnect_req(emul, &expected, &val));
 	zassert_equal(expected, val);
 }
@@ -317,7 +347,7 @@ ZTEST_USER(pdc_api, test_get_info)
 
 	emul_pdc_set_info(emul, &in);
 	zassert_ok(pdc_get_info(dev, &out));
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
 
 	zassert_equal(in.fw_version, out.fw_version, "in=0x%X, out=0x%X",
 		      in.fw_version, out.fw_version);
@@ -335,13 +365,36 @@ ZTEST_USER(pdc_api, test_get_pdo)
 	/* Test source fixed pdo. */
 	zassert_ok(pdc_get_pdos(dev, SOURCE_PDO, PDO_OFFSET_0, 1, false,
 				&fixed_pdo));
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
 	zassert_equal(PDO_FIXED_GET_VOLT(fixed_pdo), 5000);
 
 	/* Test sink fixed pdo. */
 	fixed_pdo = 0;
 	zassert_ok(pdc_get_pdos(dev, SINK_PDO, PDO_OFFSET_0, 1, false,
 				&fixed_pdo));
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(SLEEP_MS));
 	zassert_equal(PDO_FIXED_GET_VOLT(fixed_pdo), 5000);
+}
+
+ZTEST_USER(pdc_api, test_get_cable_property)
+{
+	/* Properties chosen to be spread throughout the bytes of the union. */
+	const union cable_property_t property = {
+		.b_current_capablilty = 50,
+		.plug_end_type = USB_TYPE_C,
+		.latency = 4,
+	};
+	union cable_property_t read_property;
+
+	memset(&read_property, 0, sizeof(union cable_property_t));
+	zassert_ok(emul_pdc_set_cable_property(emul, property));
+	zassert_ok(emul_pdc_get_cable_property(emul, &read_property));
+	zassert_ok(memcmp(&read_property, &property,
+			  sizeof(union cable_property_t)));
+
+	memset(&read_property, 0, sizeof(union cable_property_t));
+	zassert_ok(pdc_get_cable_property(dev, &read_property));
+	k_sleep(K_MSEC(SLEEP_MS));
+	zassert_ok(memcmp(&read_property, &property,
+			  sizeof(union cable_property_t)));
 }

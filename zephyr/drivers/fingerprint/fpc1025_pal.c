@@ -35,6 +35,10 @@ int __unused fpc_sensor_spi_write_read(uint8_t *write, uint8_t *read,
 	const struct spi_buf_set tx = { .buffers = tx_buf, .count = 1 };
 	const struct spi_buf_set rx = { .buffers = rx_buf, .count = 1 };
 
+	/* Block communicating with sensor by other threads while a series of
+	 * SPI transaction is ongoing, until CS is asserted,
+	 */
+	fp_sensor_lock(fp_sensor_dev);
 	int err = spi_transceive_dt(&cfg->spi, &tx, &rx);
 
 	/*
@@ -60,6 +64,7 @@ int __unused fpc_sensor_spi_write_read(uint8_t *write, uint8_t *read,
 	if (!leave_cs_asserted) {
 		/* Release CS line */
 		spi_release_dt(&cfg->spi);
+		fp_sensor_unlock(fp_sensor_dev);
 	}
 
 	if (err != 0) {

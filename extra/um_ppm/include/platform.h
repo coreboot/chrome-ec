@@ -38,6 +38,13 @@
 #define ELOG(fmt, ...) \
 	platform_eprintf("ERR: %s: " fmt "\n", __func__, ##__VA_ARGS__)
 
+#define DLOG_HEXDUMP(array, array_size, prefix_fmt, ...)     \
+	{                                                    \
+		DLOG_START(prefix_fmt " : [ ", __VA_ARGS__); \
+		platform_hexdump(array, array_size);         \
+		DLOG_END(" ]");                              \
+	}
+
 void *platform_malloc(size_t size);
 void *platform_calloc(size_t nmemb, size_t size);
 void platform_free(void *ptr);
@@ -52,11 +59,21 @@ void platform_eprintf(const char *format, ...);
 
 void platform_usleep(uint32_t usec);
 
+void platform_hexdump(const uint8_t *data, size_t len);
+
 /* Opaque task id type.*/
 struct task_handle;
 
-/* Initialize a task (code that can be independently scheduled). */
-struct task_handle *platform_task_init(void *start_fn, void *arg);
+/**
+ * Initialize a task (code that can be independently scheduled).
+ *
+ * @param start_fn Start routine
+ * @param arg Argument passed to start_fn
+ * @param handle Task id type. If *handle is NULL, memory will be allocated.
+ * @return 0 Success
+ * @return -1 Fail
+ */
+int platform_task_init(void *start_fn, void *arg, struct task_handle **handle);
 
 /* Called from within the task to complete / exit. */
 void platform_task_exit();
@@ -67,8 +84,14 @@ int platform_task_complete(struct task_handle *handle);
 /* Opaque mutex struct. */
 struct platform_mutex;
 
-/* Allocate and initialize a platform mutex. */
-struct platform_mutex *platform_mutex_init();
+/**
+ * @brief Allocate and initialize a platform mutex.
+ *
+ * @param mutex POSIX mutex. If *mutex is NULL, memory will be allocated.
+ * @retval 0 Success
+ * @retval -1 Fail
+ */
+int platform_mutex_init(struct platform_mutex **mutex);
 
 void platform_mutex_lock(struct platform_mutex *mutex);
 void platform_mutex_unlock(struct platform_mutex *mutex);
@@ -76,8 +99,14 @@ void platform_mutex_unlock(struct platform_mutex *mutex);
 /* Opaque notifier struct. */
 struct platform_condvar;
 
-/* Allocate and initialize a platform condvar. */
-struct platform_condvar *platform_condvar_init();
+/**
+ * @brief Allocate and initialize a platform condvar.
+ *
+ * @param cond POSIX condvar. If *cond is NULL, memory will be allocated.
+ * @retval 0 Success
+ * @retval -1 Fail
+ */
+int platform_condvar_init(struct platform_condvar **cond);
 
 void platform_condvar_wait(struct platform_condvar *condvar,
 			   struct platform_mutex *mutex);

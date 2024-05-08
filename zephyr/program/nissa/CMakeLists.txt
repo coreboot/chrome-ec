@@ -86,6 +86,7 @@ endif()
 if(DEFINED CONFIG_BOARD_JOXER)
 	project(joxer)
 	zephyr_library_sources(
+			"joxer/src/board.c"
 			"joxer/src/led.c"
 			"joxer/src/keyboard.c"
 			"joxer/src/form_factor.c"
@@ -121,6 +122,19 @@ if(DEFINED CONFIG_BOARD_YAVILLA)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "yavilla/src/charger.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "yavilla/src/fan.c")
 endif()
+if(DEFINED CONFIG_BOARD_YAVISTA)
+	project(yavista)
+	zephyr_library_sources(
+			"yavista/src/led.c"
+			"yavista/src/keyboard.c"
+			"yavista/src/board.c"
+			"yavista/src/sub_board.c"
+			"yavista/src/thermal.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "yavista/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "yavista/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "yavista/src/fan.c")
+endif()
 if(DEFINED CONFIG_BOARD_XIVUR)
 	project(xivur)
 	zephyr_library_sources(
@@ -151,6 +165,7 @@ if(DEFINED CONFIG_BOARD_GOTHRAX)
 			"gothrax/src/usb_mux_config.c"
 			"gothrax/src/form_factor.c"
 			"gothrax/src/sub_board.c"
+			"gothrax/src/thermal.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "gothrax/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "gothrax/src/charger.c")
@@ -162,6 +177,7 @@ if(DEFINED CONFIG_BOARD_CRAASKOV)
 	zephyr_library_sources(
 			"craaskov/src/keyboard.c"
 			"craaskov/src/hdmi.c"
+			"craaskov/src/touch_panel.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "craaskov/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "craaskov/src/charger.c")
@@ -206,4 +222,47 @@ if(DEFINED CONFIG_BOARD_ANRAGGAR)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
 			"anraggar/src/keyboard_customization.c"
 	)
+endif()
+if(DEFINED CONFIG_BOARD_GLASSWAY)
+	project(glassway)
+	zephyr_library_sources(
+			"glassway/src/sub_board.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "glassway/src/fan.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "glassway/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "glassway/src/charger.c")
+endif()
+if(DEFINED CONFIG_BOARD_SUNDANCE)
+	project(sundance)
+	zephyr_library_sources(
+			"sundance/src/led.c"
+			"sundance/src/form_factor.c"
+			"sundance/src/board.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "sundance/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "sundance/src/charger.c")
+endif()
+if(DEFINED CONFIG_BOARD_PUJJOGA)
+	project(pujjoga)
+	zephyr_library_sources(
+			"pujjoga/src/led.c"
+			"pujjoga/src/hdmi.c"
+			"pujjoga/src/sub_board.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "pujjoga/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "pujjoga/src/charger.c")
+endif()
+if(DEFINED CONFIG_BOARD_RIVEN)
+	zephyr_library_sources(
+			"riven/src/fan.c"
+			"riven/src/form_factor.c"
+			"riven/src/keyboard.c"
+			"riven/src/kb_backlight.c"
+			"riven/src/led.c"
+			"riven/src/thermal.c"
+			"riven/src/touch_panel.c"
+	)
+	project(riven)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "riven/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "riven/src/charger.c")
 endif()

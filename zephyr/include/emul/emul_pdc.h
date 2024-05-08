@@ -18,19 +18,22 @@ typedef int (*emul_pdc_set_ucsi_version_t)(const struct emul *target,
 					   uint16_t version);
 typedef int (*emul_pdc_reset_t)(const struct emul *target);
 typedef int (*emul_pdc_get_connector_reset_t)(const struct emul *dev,
-					      enum connector_reset_t *type);
+					      union connector_reset_t *reset);
 typedef int (*emul_pdc_set_capability_t)(const struct emul *target,
 					 const struct capability_t *caps);
 typedef int (*emul_pdc_set_connector_capability_t)(
 	const struct emul *target, const union connector_capability_t *caps);
-typedef int (*emul_pdc_get_ccom_t)(const struct emul *target, enum ccom_t *ccom,
-				   enum drp_mode_t *dm);
+typedef int (*emul_pdc_get_ccom_t)(const struct emul *target,
+				   enum ccom_t *ccom);
+typedef int (*emul_pdc_get_drp_mode_t)(const struct emul *target,
+				       enum drp_mode_t *dm);
+
 typedef int (*emul_pdc_get_uor_t)(const struct emul *target, union uor_t *uor);
 typedef int (*emul_pdc_get_pdr_t)(const struct emul *target, union pdr_t *pdr);
 typedef int (*emul_pdc_get_sink_path_t)(const struct emul *target, bool *en);
 typedef int (*emul_pdc_set_connector_status_t)(
 	const struct emul *target,
-	const struct connector_status_t *connector_status);
+	const union connector_status_t *connector_status);
 typedef int (*emul_pdc_set_error_status_t)(const struct emul *target,
 					   const union error_status_t *es);
 
@@ -64,6 +67,11 @@ typedef int (*emul_pdc_get_reconnect_req_t)(const struct emul *target,
 
 typedef int (*emul_pdc_pulse_irq_t)(const struct emul *target);
 
+typedef int (*emul_pdc_get_cable_property_t)(const struct emul *target,
+					     union cable_property_t *property);
+typedef int (*emul_pdc_set_cable_property_t)(
+	const struct emul *target, const union cable_property_t property);
+
 __subsystem struct emul_pdc_api_t {
 	emul_pdc_set_response_delay_t set_response_delay;
 	emul_pdc_set_ucsi_version_t set_ucsi_version;
@@ -72,6 +80,7 @@ __subsystem struct emul_pdc_api_t {
 	emul_pdc_set_capability_t set_capability;
 	emul_pdc_set_connector_capability_t set_connector_capability;
 	emul_pdc_get_ccom_t get_ccom;
+	emul_pdc_get_drp_mode_t get_drp_mode;
 	emul_pdc_get_uor_t get_uor;
 	emul_pdc_get_pdr_t get_pdr;
 	emul_pdc_get_sink_path_t get_sink_path;
@@ -87,6 +96,8 @@ __subsystem struct emul_pdc_api_t {
 	emul_pdc_get_requested_power_level_t get_requested_power_level;
 	emul_pdc_get_reconnect_req_t get_reconnect_req;
 	emul_pdc_pulse_irq_t pulse_irq;
+	emul_pdc_set_cable_property_t set_cable_property;
+	emul_pdc_get_cable_property_t get_cable_property;
 };
 
 static inline int emul_pdc_set_ucsi_version(const struct emul *target,
@@ -119,7 +130,7 @@ static inline int emul_pdc_reset(const struct emul *target)
 }
 
 static inline int emul_pdc_get_connector_reset(const struct emul *target,
-					       enum connector_reset_t *type)
+					       union connector_reset_t *reset)
 {
 	if (!target || !target->backend_api) {
 		return -ENOTSUP;
@@ -128,7 +139,7 @@ static inline int emul_pdc_get_connector_reset(const struct emul *target,
 	const struct emul_pdc_api_t *api = target->backend_api;
 
 	if (api->get_connector_reset) {
-		return api->get_connector_reset(target, type);
+		return api->get_connector_reset(target, reset);
 	}
 	return -ENOSYS;
 }
@@ -165,7 +176,7 @@ emul_pdc_set_connector_capability(const struct emul *target,
 }
 
 static inline int emul_pdc_get_ccom(const struct emul *target,
-				    enum ccom_t *ccom, enum drp_mode_t *dm)
+				    enum ccom_t *ccom)
 {
 	if (!target || !target->backend_api) {
 		return -ENOTSUP;
@@ -174,7 +185,22 @@ static inline int emul_pdc_get_ccom(const struct emul *target,
 	const struct emul_pdc_api_t *api = target->backend_api;
 
 	if (api->get_ccom) {
-		return api->get_ccom(target, ccom, dm);
+		return api->get_ccom(target, ccom);
+	}
+	return -ENOSYS;
+}
+
+static inline int emul_pdc_get_drp_mode(const struct emul *target,
+					enum drp_mode_t *dm)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->get_drp_mode) {
+		return api->get_drp_mode(target, dm);
 	}
 	return -ENOSYS;
 }
@@ -223,7 +249,7 @@ static inline int emul_pdc_get_sink_path(const struct emul *target, bool *en)
 
 static inline int
 emul_pdc_set_connector_status(const struct emul *target,
-			      const struct connector_status_t *connector_status)
+			      const union connector_status_t *connector_status)
 {
 	if (!target || !target->backend_api) {
 		return -ENOTSUP;
@@ -424,9 +450,40 @@ static inline int emul_pdc_pulse_irq(const struct emul *target)
 	return -ENOSYS;
 }
 
+static inline int emul_pdc_get_cable_property(const struct emul *target,
+					      union cable_property_t *property)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->get_cable_property) {
+		return api->get_cable_property(target, property);
+	}
+	return -ENOSYS;
+}
+
+static inline int
+emul_pdc_set_cable_property(const struct emul *target,
+			    const union cable_property_t property)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->set_cable_property) {
+		return api->set_cable_property(target, property);
+	}
+	return -ENOSYS;
+}
+
 static inline void
 emul_pdc_configure_src(const struct emul *target,
-		       struct connector_status_t *connector_status)
+		       union connector_status_t *connector_status)
 {
 	ARG_UNUSED(target);
 	connector_status->power_operation_mode = PD_OPERATION;
@@ -435,7 +492,7 @@ emul_pdc_configure_src(const struct emul *target,
 
 static inline void
 emul_pdc_configure_snk(const struct emul *target,
-		       struct connector_status_t *connector_status)
+		       union connector_status_t *connector_status)
 {
 	ARG_UNUSED(target);
 	connector_status->power_operation_mode = PD_OPERATION;
@@ -444,7 +501,7 @@ emul_pdc_configure_snk(const struct emul *target,
 
 static inline int
 emul_pdc_connect_partner(const struct emul *target,
-			 struct connector_status_t *connector_status)
+			 union connector_status_t *connector_status)
 {
 	connector_status->connect_status = 1;
 	emul_pdc_set_connector_status(target, connector_status);
@@ -455,7 +512,7 @@ emul_pdc_connect_partner(const struct emul *target,
 
 static inline int emul_pdc_disconnect(const struct emul *target)
 {
-	struct connector_status_t connector_status;
+	union connector_status_t connector_status;
 
 	connector_status.connect_status = 0;
 	emul_pdc_set_connector_status(target, &connector_status);
