@@ -89,17 +89,6 @@ int pd_snk_is_vbus_provided(int port)
 
 /* ----------------- Vendor Defined Messages ------------------ */
 #ifdef CONFIG_USB_PD_ALT_MODE_DFP
-__override uint8_t get_dp_pin_mode(int port)
-{
-	uint8_t mode = pd_dfp_dp_get_pin_mode(port, dp_status[port]);
-
-	/* If C is selected, use D instead as 2 lanes are reserved to USB SS. */
-	if (mode == MODE_DP_PIN_C) {
-		mode = MODE_DP_PIN_D;
-	}
-	return mode;
-}
-
 __override int svdm_dp_config(int port, uint32_t *payload)
 {
 	int opos = pd_alt_mode(port, TCPCI_MSG_SOP, USB_SID_DISPLAYPORT);
@@ -242,12 +231,12 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 		uint64_t now = get_time().val;
 		/* Wait for the minimum spacing between IRQ_HPD if needed */
 		if (now < svdm_hpd_deadline[port])
-			usleep(svdm_hpd_deadline[port] - now);
+			crec_usleep(svdm_hpd_deadline[port] - now);
 
 		/* Generate IRQ_HPD pulse */
 		CPRINTS("C%d: Recv IRQ. HPD->0", port);
 		gpio_set_level(hpd, 0);
-		usleep(HPD_DSTREAM_DEBOUNCE_IRQ);
+		crec_usleep(HPD_DSTREAM_DEBOUNCE_IRQ);
 		gpio_set_level(hpd, 1);
 		CPRINTS("C%d: Recv IRQ. HPD->1", port);
 

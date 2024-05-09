@@ -6,19 +6,25 @@
 #include "ap_power/ap_power_events.h"
 #include "charge_manager.h"
 #include "cros_board_info.h"
+#include "cros_cbi.h"
 #include "driver/charger/isl923x_public.h"
 #include "driver/tcpm/raa489000.h"
 #include "emul/retimer/emul_anx7483.h"
 #include "emul/tcpc/emul_tcpci.h"
 #include "extpower.h"
+#include "fan.h"
 #include "gothrax.h"
 #include "gpio/gpio_int.h"
+#include "hooks.h"
 #include "keyboard_protocol.h"
+#include "mock/isl923x.h"
 #include "motionsense_sensors.h"
 #include "nissa_hdmi.h"
 #include "system.h"
 #include "tablet_mode.h"
 #include "tcpm/tcpci.h"
+#include "temp_sensor/temp_sensor.h"
+#include "thermal.h"
 #include "typec_control.h"
 #include "usb_charge.h"
 #include "usb_pd.h"
@@ -58,7 +64,11 @@ FAKE_VOID_FUNC(usb_charger_task_set_event_sync, int, uint8_t);
 FAKE_VALUE_FUNC(int, cbi_get_ssfc, uint32_t *);
 FAKE_VOID_FUNC(bmi3xx_interrupt, enum gpio_signal);
 FAKE_VOID_FUNC(bma4xx_interrupt, enum gpio_signal);
-static enum ec_error_list raa489000_is_acok_absent(int charger, bool *acok);
+
+FAKE_VALUE_FUNC(int, cros_cbi_get_fw_config, enum cbi_fw_config_field_id,
+		uint32_t *);
+
+void fan_init(void);
 
 static void test_before(void *fixture)
 {
@@ -86,11 +96,6 @@ static void test_before(void *fixture)
 }
 
 ZTEST_SUITE(gothrax, NULL, NULL, test_before, NULL, NULL);
-
-ZTEST(gothrax, test_keyboard_config)
-{
-	zassert_equal_ptr(board_vivaldi_keybd_config(), &gothrax_kb_legacy);
-}
 
 static int cbi_get_board_version_1(uint32_t *version)
 {
@@ -131,23 +136,6 @@ ZTEST(gothrax, test_charger_hibernate)
 	zassert_equal(raa489000_hibernate_fake.arg0_history[1],
 		      CHARGER_PRIMARY);
 	zassert_true(raa489000_hibernate_fake.arg1_history[1]);
-}
-
-static enum ec_error_list raa489000_is_acok_absent(int charger, bool *acok)
-{
-	*acok = false;
-	return EC_SUCCESS;
-}
-
-static enum ec_error_list raa489000_is_acok_present(int charger, bool *acok)
-{
-	*acok = true;
-	return EC_SUCCESS;
-}
-
-static enum ec_error_list raa489000_is_acok_error(int charger, bool *acok)
-{
-	return EC_ERROR_UNIMPLEMENTED;
 }
 
 ZTEST(gothrax, test_check_extpower)
@@ -611,4 +599,111 @@ ZTEST(gothrax, test_clamshell)
 	interrupt_count = bmi3xx_interrupt_fake.call_count +
 			  bma4xx_interrupt_fake.call_count;
 	zassert_equal(interrupt_count, 0);
+}
+
+static int get_fan_config_present(enum cbi_fw_config_field_id field,
+				  uint32_t *value)
+{
+	zassert_equal(field, FW_FAN);
+	*value = FW_FAN_PRESENT;
+	return 0;
+}
+
+static int get_fan_config_absent(enum cbi_fw_config_field_id field,
+				 uint32_t *value)
+{
+	zassert_equal(field, FW_FAN);
+	*value = FW_FAN_NOT_PRESENT;
+	return 0;
+}
+
+ZTEST(gothrax, test_fan_present)
+{
+	int flags;
+
+	gpio_pin_configure_dt(GPIO_DT_FROM_NODELABEL(gpio_fan_enable),
+			      GPIO_DISCONNECTED);
+	cros_cbi_get_fw_config_fake.custom_fake = get_fan_config_present;
+	fan_init();
+
+	zassert_ok(gpio_pin_get_config_dt(
+		GPIO_DT_FROM_NODELABEL(gpio_fan_enable), &flags));
+	zassert_equal(flags, GPIO_OUTPUT | GPIO_OUTPUT_INIT_LOW,
+		      "actual GPIO flags were %#x", flags);
+}
+
+ZTEST(gothrax, test_fan_absent)
+{
+	int flags;
+
+	gpio_pin_configure_dt(GPIO_DT_FROM_NODELABEL(gpio_fan_enable),
+			      GPIO_DISCONNECTED);
+	cros_cbi_get_fw_config_fake.custom_fake = get_fan_config_absent;
+	fan_init();
+
+	/* Fan enable is left unconfigured */
+	zassert_ok(gpio_pin_get_config_dt(
+		GPIO_DT_FROM_NODELABEL(gpio_fan_enable), &flags));
+	zassert_equal(flags, 0, "actual GPIO flags were %#x", flags);
+}
+static int chipset_state;
+static int chipset_in_state_mock(int state_mask)
+{
+	if (state_mask & chipset_state)
+		return 1;
+	return 0;
+}
+ZTEST(gothrax, test_board_override_fan_control)
+{
+	int temp = 35;
+
+	fan_channel_setup(0, FAN_USE_RPM_MODE);
+	fan_set_enabled(0, 1);
+	chipset_in_state_fake.custom_fake = chipset_in_state_mock;
+	chipset_state = CHIPSET_STATE_ON;
+	board_override_fan_control(0, &temp);
+	zassert_equal(fan_get_rpm_mode(0), 1);
+	zassert_equal(fan_get_rpm_target(0), 0);
+	temp = 45;
+	board_override_fan_control(0, &temp);
+	zassert_equal(fan_get_rpm_mode(0), 1);
+	zassert_equal(fan_get_rpm_target(0), 3000);
+	temp = 47;
+	board_override_fan_control(0, &temp);
+	zassert_equal(fan_get_rpm_mode(0), 1);
+	zassert_equal(fan_get_rpm_target(0), 3500);
+	temp = 53;
+	board_override_fan_control(0, &temp);
+	zassert_equal(fan_get_rpm_mode(0), 1);
+	zassert_equal(fan_get_rpm_target(0), 4000);
+	temp = 63;
+	board_override_fan_control(0, &temp);
+	zassert_equal(fan_get_rpm_mode(0), 1);
+	zassert_equal(fan_get_rpm_target(0), 4500);
+	temp = 70;
+	board_override_fan_control(0, &temp);
+	zassert_equal(fan_get_rpm_mode(0), 1);
+	zassert_equal(fan_get_rpm_target(0), 4800);
+	temp = 85;
+	board_override_fan_control(0, &temp);
+	zassert_equal(fan_get_rpm_mode(0), 1);
+	zassert_equal(fan_get_rpm_target(0), 4800);
+	temp = 66;
+	board_override_fan_control(0, &temp);
+	zassert_equal(fan_get_rpm_mode(0), 1);
+	zassert_equal(fan_get_rpm_target(0), 4500);
+
+	temp = 49;
+	board_override_fan_control(0, &temp);
+	zassert_equal(fan_get_rpm_mode(0), 1);
+	zassert_equal(fan_get_rpm_target(0), 3500);
+
+	temp = 43;
+	board_override_fan_control(0, &temp);
+	zassert_equal(fan_get_rpm_mode(0), 1);
+	zassert_equal(fan_get_rpm_target(0), 3000);
+	temp = 37;
+	board_override_fan_control(0, &temp);
+	zassert_equal(fan_get_rpm_mode(0), 1);
+	zassert_equal(fan_get_rpm_target(0), 0);
 }

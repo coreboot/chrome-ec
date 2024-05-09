@@ -304,9 +304,10 @@ static void ps8815_reset(int port)
 	}
 
 	gpio_set_level(ps8xxx_rst_odl, 0);
-	msleep(GENERIC_MAX(PS8XXX_RESET_DELAY_MS, PS8815_PWR_H_RST_H_DELAY_MS));
+	crec_msleep(GENERIC_MAX(PS8XXX_RESET_DELAY_MS,
+				PS8815_PWR_H_RST_H_DELAY_MS));
 	gpio_set_level(ps8xxx_rst_odl, 1);
-	msleep(PS8815_FW_INIT_DELAY_MS);
+	crec_msleep(PS8815_FW_INIT_DELAY_MS);
 
 	CPRINTS("[C%d] %s: patching ps8815 registers", port, __func__);
 
@@ -391,7 +392,7 @@ board_vivaldi_keybd_config(void)
 
 static void ps8811_init(void)
 {
-	int rv;
+	__maybe_unused int rv;
 
 	/* Set Channel A output swing to Level1 */
 	rv = i2c_write8(I2C_PORT_USB_1_MIX,

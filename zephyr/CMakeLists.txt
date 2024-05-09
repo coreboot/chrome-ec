@@ -79,7 +79,7 @@ if(DEFINED CONFIG_PLATFORM_EC)
   # and links all Chromium OS sources.
   # TODO: Enable LTO for all sources when Zephyr supports it.
   # See https://github.com/zephyrproject-rtos/zephyr/issues/2112
-  if (DEFINED CONFIG_LTO)
+  if (DEFINED CONFIG_PLATFORM_EC_LTO)
     # The Zephyr toolchain generates linker errors if both CONFIG_LTO and
     # CONFIG_FPU are used. See b/184302085.
     if(("${ZEPHYR_TOOLCHAIN_VARIANT}" STREQUAL "zephyr") AND
@@ -97,11 +97,26 @@ if (DEFINED CONFIG_ARM)
   zephyr_cc_option(-mno-unaligned-access)
 endif()
 zephyr_cc_option(-Wimplicit-fallthrough)
+zephyr_cc_option(-Wint-conversion)
 
 if (DEFINED CONFIG_RISCV)
   zephyr_cc_option(-fsanitize=integer-divide-by-zero)
   zephyr_cc_option(-fsanitize-undefined-trap-on-error)
 endif()
+
+# TODO: b/323234432 - Investigate explicitly using doubles over floats
+# For now disable the "double-promotion" warning to avoid errors from
+# the sensor code and math_util.h.
+get_target_property(warning_base_override compiler warning_base)
+
+set(double_promotion -Wdouble-promotion)
+
+if(${double_promotion} IN_LIST warning_base_override)
+  list(REMOVE_ITEM warning_base_override ${double_promotion})
+  set_compiler_property(PROPERTY warning_base ${warning_base_override})
+  print(warning_base_override)
+endif()
+
 
 # The EC application is split into two libraries:
 #   app: contains all the legacy code
@@ -161,6 +176,7 @@ if (ZEPHYR_PIGWEED_MODULE_DIR)
     target_compile_options(log_tokenized_config INTERFACE -include
                            ${PLATFORM_EC}/zephyr/include/pigweed/pw_zephyr_tokenized_custom_log.h)
     pw_set_module_config(pw_log_tokenized_CONFIG log_tokenized_config)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/include/pigweed")
   endif()
 endif()
 
@@ -243,6 +259,8 @@ zephyr_library_sources_ifdef(CONFIG_NAMED_ADC_CHANNELS
                                                 "${PLATFORM_EC}/common/adc.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_TCS3400
                                                 "${PLATFORM_EC}/driver/als_tcs3400.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_VEML3328
+                                                "${PLATFORM_EC}/driver/als_veml3328.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ALS_CM32183
                                                 "${PLATFORM_EC}/driver/als_cm32183.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACPI
@@ -340,6 +358,18 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN
                                                 "${PLATFORM_EC}/common/fan.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH_CROS
                                                 "${PLATFORM_EC}/common/flash.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FINGERPRINT
+						"${PLATFORM_EC}/common/fpsensor/fpsensor.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_state.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_state_without_driver_info.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_crypto.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_debug.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_auth_commands.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_auth_crypto_stateful.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_auth_crypto_stateless.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_detect_strings.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_utils.cc"
+						"${PLATFORM_EC}/crypto/elliptic_curve_key.cc")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD
                                                 "${PLATFORM_EC}/common/host_command.c")
 if (NOT DEFINED CONFIG_EC_HOST_CMD)
@@ -387,8 +417,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_PROTOCOL_MKBP
                                                 "${PLATFORM_EC}/common/keyboard_mkbp.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_MKBP_INPUT_DEVICES
                                                 "${PLATFORM_EC}/common/mkbp_input_devices.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_VIVALDI
-                                                "${PLATFORM_EC}/common/keyboard_vivaldi.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PWM_KBLIGHT
                                                 "${PLATFORM_EC}/common/keyboard_backlight.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_LED_COMMON
@@ -531,6 +559,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_INTEL_HB
                                                 "${PLATFORM_EC}/driver/retimer/bb_retimer.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_KB8010
                                                 "${PLATFORM_EC}/driver/retimer/kb8010.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8802
+                                                "${PLATFORM_EC}/driver/retimer/ps8802.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8818
                                                 "${PLATFORM_EC}/driver/retimer/ps8818.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8828
@@ -569,6 +599,9 @@ if (CONFIG_PLATFORM_EC_USB_PD_TCPMV2)
 	include(tcpmv2.cmake)
 endif ()
 
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_HOST_CMD
+                                                "${PLATFORM_EC}/common/usb_pd_host_cmd_common.c")
+
 zephyr_library_sources_ifdef(CONFIG_SVDM_RSP_DFP_ONLY
                                                 "${PLATFORM_EC}/common/usbc/svdm_rsp_dfp_only.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_OCP
@@ -581,11 +614,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_ALT_MODE_UFP
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DUAL_ROLE
                                                 "${PLATFORM_EC}/common/usb_pd_dual_role.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_CONSOLE_CMD
-                                                "${PLATFORM_EC}/common/usb_pd_console_cmd.c")
-zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_HOST_CMD
-                                                "${PLATFORM_EC}/common/usb_pd_host_cmd.c"
-                                                "${PLATFORM_EC}/common/usbc/usb_pd_host.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_DP_HPD_GPIO
                                                 "${PLATFORM_EC}/common/usbc/dp_hpd_gpio.c")
@@ -663,6 +691,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SYSTEM_SAFE_MODE
                                                 "${PLATFORM_EC}/common/system_safe_mode.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOST_COMMAND_MEMORY_DUMP
                                                 "${PLATFORM_EC}/common/host_command_memory_dump.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_AP_HANG_DETECT
+                                                "${PLATFORM_EC}/common/ap_hang_detect.c")
 
 # Switch to ec_shim library for all Zephyr sources
 set(ZEPHYR_CURRENT_LIBRARY ec_shim)
@@ -674,6 +704,7 @@ add_subdirectory("emul")
 add_subdirectory("fake")
 add_subdirectory("mock")
 add_subdirectory_ifdef(CONFIG_PLATFORM_EC "shim")
+add_subdirectory_ifdef(CONFIG_HW_TEST_ON "test/hwtest")
 
 # Use external script to generate the ec_version.h header and add as
 # a dependency to the EC application library.
@@ -694,7 +725,7 @@ zephyr_include_directories("${CMAKE_CURRENT_BINARY_DIR}/include")
 if (DEFINED CONFIG_PIGWEED_LOG_TOKENIZED_LIB)
   set_property(GLOBAL APPEND PROPERTY extra_post_build_commands
     COMMAND
-      ${PYTHON_EXECUTABLE}
+      vpython3 -vpython-spec ${PLATFORM_EC}/zephyr/pigweed-vpython3
       ${ZEPHYR_PIGWEED_MODULE_DIR}/pw_tokenizer/py/pw_tokenizer/database.py
       create
       --force

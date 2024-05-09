@@ -211,6 +211,7 @@ void usart_set_baud_f0_l(struct usart_config const *config, int baud,
 			 int frequency_hz);
 void usart_set_baud_f(struct usart_config const *config, int baud,
 		      int frequency_hz);
+int usart_get_baud_f0_l(struct usart_config const *config, int frequency_hz);
 
 /*
  * Allow specification of parity for this usart.
@@ -230,6 +231,29 @@ int usart_get_parity(struct usart_config const *config);
  * goes to deep idle.
  */
 void usart_set_baud(struct usart_config const *config, int baud);
+
+/*
+ * Get the current baud rate for this uart.
+ */
+int usart_get_baud(struct usart_config const *config);
+
+/*
+ * Start or end "break condition" on the TX line of this uart.
+ */
+void usart_set_break(struct usart_config const *config, bool enable);
+
+enum clear_which_fifo {
+	CLEAR_RX_FIFO = 0x01,
+	CLEAR_TX_FIFO = 0x02,
+	CLEAR_BOTH_FIFOS = 0x03,
+};
+
+/*
+ * For the families that support UART FIFO, this method will clear inbound
+ * and/or outbound FIFO, discarding any characters.
+ */
+void usart_clear_fifos(struct usart_config const *config,
+		       enum clear_which_fifo);
 
 /*
  * Different families provide different ways of clearing the transmit complete

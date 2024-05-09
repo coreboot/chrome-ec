@@ -5,11 +5,11 @@
 
 #include "common.h"
 
-void board_dc_jack_interrupt(enum gpio_signal signal)
+void board_charging_enable(int port, int enable)
 {
 }
 
-__override uint8_t board_get_usb_pd_port_count(void)
+int board_vbus_source_enabled(int port)
 {
-	return CONFIG_USB_PD_PORT_MAX_COUNT;
+	return 0;
 }

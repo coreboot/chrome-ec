@@ -10,7 +10,6 @@ import re
 import shlex
 import shutil
 import subprocess
-import sys
 
 import zmake.jobserver
 import zmake.multiproc
@@ -251,7 +250,16 @@ def get_lcov_options(tool_path):
     # 2.0 deprecated the lcov_ prefix from rc options and began treating
     # many previously-ignored errors as fatal, some of which need to be
     # ignored.
-    return ["--rc", "branch_coverage=1", "--filter", "range"]
+    return [
+        "--rc",
+        "branch_coverage=1",
+        "--filter",
+        "range",
+        "--ignore-errors",
+        "inconsistent,source",
+        "--ignore-errors",
+        "gcov,gcov",
+    ]
 
 
 def merge_token_databases(databases, merged_db):
@@ -267,7 +275,9 @@ def merge_token_databases(databases, merged_db):
 
     proc = jobclient.popen(
         [
-            sys.executable,
+            get_tool_path("vpython3"),
+            "-vpython-spec",
+            checkout / modules["ec"] / "zephyr" / "pigweed-vpython3",
             checkout
             / modules["pigweed"]
             / "pw_tokenizer"
@@ -284,6 +294,7 @@ def merge_token_databases(databases, merged_db):
         ],
         cwd=os.path.dirname(merged_db),
         encoding="utf-8",
+        env={"PATH": os.environ["PATH"], "HOME": os.environ["HOME"]},
     )
 
     if proc.wait(timeout=60):

@@ -83,6 +83,43 @@ struct consumer_ops const usb_stream_consumer_ops = {
 	.written = usb_written,
 };
 
+void usb_usart_clear(struct usb_stream_config const *config,
+		     struct usart_config const *usart,
+		     enum clear_which_fifo which)
+{
+	if (which & CLEAR_TX_FIFO) {
+		/*
+		 * Drop data queued to be transmitted on UART, that is, which
+		 * was received via USB.
+		 */
+		usb_stream_clear_rx(config);
+	}
+
+	usart_clear_fifos(usart, which);
+
+	if (which & CLEAR_RX_FIFO) {
+		/*
+		 * Drop data which was received from UART, that is, which has
+		 * been queued to be transmitted via USB.
+		 */
+		usb_stream_clear_tx(config);
+	}
+}
+
+void usb_stream_clear_rx(struct usb_stream_config const *config)
+{
+	/* Remove any data in the queue received via USB. */
+	queue_advance_head(config->producer.queue, (size_t)-1);
+}
+
+void usb_stream_clear_tx(struct usb_stream_config const *config)
+{
+	/* Remove any data in the queue for USB transmission. */
+	queue_advance_head(config->consumer.queue, (size_t)-1);
+	/* Revoke any data already in USB memory marked as ready for sending. */
+	STM32_TOGGLE_EP(config->endpoint, EP_TX_MASK, EP_TX_NAK, 0);
+}
+
 void usb_stream_deferred(struct usb_stream_config const *config)
 {
 	if (!tx_valid(config) && tx_write(config))
@@ -133,7 +170,7 @@ void usb_stream_event(struct usb_stream_config const *config,
 	config->state->rx_waiting = 0;
 
 	STM32_USB_EP(i) = ((i << 0) | /* Endpoint Addr*/
-			   (2 << 4) | /* TX NAK */
+			   (tx_write(config) ? EP_TX_VALID : EP_TX_NAK) |
 			   (0 << 9) | /* Bulk EP */
 			   (rx_disabled(config) ? EP_RX_NAK : EP_RX_VALID));
 }
@@ -145,6 +182,29 @@ int usb_usart_interface(struct usb_stream_config const *config,
 	struct usb_setup_packet req;
 
 	usb_read_setup_packet(rx_buf, &req);
+
+	if (req.bmRequestType ==
+	    (USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_INTERFACE)) {
+		uint16_t response;
+		switch (req.bRequest) {
+		/* Get current parity setting. */
+		case USB_USART_REQ_PARITY:
+			response = usart_get_parity(usart);
+			break;
+		/* Get current baud rate. */
+		case USB_USART_REQ_BAUD:
+			response = DIV_ROUND_NEAREST(usart_get_baud(usart) + 50,
+						     100);
+			break;
+		default:
+			return -1;
+		}
+		memcpy_to_usbram((void *)usb_sram_addr(tx_buf), &response,
+				 sizeof(response));
+		btable_ep[0].tx_count = sizeof(response);
+		STM32_TOGGLE_EP(0, EP_TX_RX_MASK, EP_TX_RX_VALID, 0);
+		return 0;
+	}
 
 	if (req.bmRequestType !=
 	    (USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE))
@@ -158,12 +218,31 @@ int usb_usart_interface(struct usb_stream_config const *config,
 	case USB_USART_SET_PARITY:
 		usart_set_parity(usart, req.wValue);
 		break;
+	/* Set baud rate. */
 	case USB_USART_SET_BAUD:
 		usart_set_baud(usart, req.wValue * 100);
 		break;
-
-	/* TODO(nsanders): support reading parity. */
-	/* TODO(nsanders): support reading baud. */
+	/* Start or end break condition on the TX wire. */
+	case USB_USART_BREAK:
+		if (req.wValue == 0xFFFF) {
+			/* Start indefinite break condition. */
+			usart_set_break(usart, true);
+		} else if (req.wValue == 0) {
+			/* End break condition. */
+			usart_set_break(usart, false);
+		} else {
+			/*
+			 * Other values reserved for future support for pulse
+			 * of particular length.
+			 */
+			return -1;
+		}
+		break;
+	/* Discard all queued inbound and/or outbound data. */
+	case USB_USART_CLEAR_QUEUES:
+		usb_usart_clear(config, usart,
+				(enum clear_which_fifo)req.wValue);
+		break;
 	default:
 		return -1;
 	}

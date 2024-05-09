@@ -22,6 +22,7 @@
 #include "gpio.h"
 #include "hooks.h"
 #include "intc.h"
+#include "keyboard_8042_sharedlib.h"
 #include "keyboard_raw.h"
 #include "keyboard_scan.h"
 #include "lid_switch.h"
@@ -428,6 +429,19 @@ void board_init(void)
 		keyscan_config.actual_key_mask[13] = 0xff;
 		keyscan_config.actual_key_mask[14] = 0xff;
 	}
+
+	/* Keyboard config = 1 : CA-FR US keyboard*/
+	if (get_cbi_fw_config_keyboard() == 1) {
+		/*
+		 * Candian French keyboard (US Type).
+		 * \|:		0x0061 -> 0x61 -> 0x56
+		 * r-ctrl:	0xe014 -> 0x14 -> 0x1d
+		 */
+		uint16_t tmp = get_scancode_set2(4, 0);
+
+		set_scancode_set2(4, 0, get_scancode_set2(2, 7));
+		set_scancode_set2(2, 7, tmp);
+	}
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
 
@@ -766,7 +780,7 @@ __override void board_pulse_entering_rw(void)
 	 */
 	gpio_set_level(GPIO_EC_ENTERING_RW, 1);
 	gpio_set_level(GPIO_EC_ENTERING_RW2, 1);
-	usleep(MSEC);
+	crec_usleep(MSEC);
 	gpio_set_level(GPIO_EC_ENTERING_RW, 0);
 	gpio_set_level(GPIO_EC_ENTERING_RW2, 0);
 }
@@ -790,4 +804,34 @@ __override uint8_t board_get_charger_chip_count(void)
 __override bool board_usb_charger_support(void)
 {
 	return (get_cbi_fw_config_bc_support() == BC12_SUPPORT);
+}
+
+enum battery_cell_type battery_cell;
+
+static void get_battery_cell(void)
+{
+	int val;
+
+	if (i2c_read16(I2C_PORT_USB_C0, ISL923X_ADDR_FLAGS, ISL9238_REG_INFO2,
+		       &val) == EC_SUCCESS) {
+		/* PROG resistor read out. Number of battery cells [4:0] */
+		val = val & 0x001f;
+	}
+
+	if (val == 0 || val >= 0x18)
+		battery_cell = BATTERY_CELL_TYPE_1S;
+	else if (val >= 0x01 && val <= 0x08)
+		battery_cell = BATTERY_CELL_TYPE_2S;
+	else if (val >= 0x09 && val <= 0x10)
+		battery_cell = BATTERY_CELL_TYPE_3S;
+	else
+		battery_cell = BATTERY_CELL_TYPE_4S;
+
+	CPRINTS("Get battery cells: %d", battery_cell);
+}
+DECLARE_HOOK(HOOK_INIT, get_battery_cell, HOOK_PRIO_INIT_I2C + 1);
+
+enum battery_cell_type board_get_battery_cell_type(void)
+{
+	return battery_cell;
 }

@@ -15,10 +15,10 @@
 /*
  * Offsets of fields in struct cyclic_buffer_header_t.
  */
-#define BUF_TAIL_TIME_OFF 0
-#define BUF_HEAD_TIME_OFF 8
-#define BUF_HEAD_OFF 12
-#define BUF_TAIL_OFF 16
+#define BUF_HEAD_TIME_OFF 0
+#define BUF_TAIL_TIME_OFF 8
+#define BUF_TAIL_OFF 12
+#define BUF_HEAD_OFF 16
 #define BUF_SIZE_OFF 20
 #define BUF_OVERRUN_OFF 24
 #define BUF_NUM_SIGNALS_OFF 25
@@ -41,9 +41,9 @@ gpio_pin_mask:
 	.long 117
 gpio_signal:
 	.long 117
-head_level:
-	.long 117
 tail_level:
+	.long 117
+head_level:
 	.long 117
 signal_no:
 	.byte 117
@@ -100,9 +100,9 @@ load_pin_mask_location_end:
 	ldr	r6, cyclic_buffer_header
 
 	/* Compute diff since last timestamp (in r1), and store current timestamp */
-	ldr	r0, [r6, #BUF_HEAD_TIME_OFF]
+	ldr	r0, [r6, #BUF_TAIL_TIME_OFF]
 	sub	r1, r3, r0
-	str	r3, [r6, #BUF_HEAD_TIME_OFF]
+	str	r3, [r6, #BUF_TAIL_TIME_OFF]
 	/* Shift time-diff enough to be able to store signal number in low bits */
 signal_bits_location:
 	/* This instruction will be replaced a runtime from signal_bits_table */
@@ -116,15 +116,15 @@ signal_no_location_end:
 	/*
 	* r1: diff
 	* r2: buffer_data[0]
-	* r3: buffer_data[head]
-	* r4: buffer_data[tail]
+	* r3: buffer_data[tail]
+	* r4: buffer_data[head]
 	* r5: buffer_data[size]
 	* r6: cyclic_buffer_header_t address
 	* lr: current logic level
 	*/
 	add	r2, r6, #BUF_DATA_OFF
-	ldr	r3, [r6, #BUF_HEAD_OFF]
-	ldr	r4, [r6, #BUF_TAIL_OFF]
+	ldr	r3, [r6, #BUF_TAIL_OFF]
+	ldr	r4, [r6, #BUF_HEAD_OFF]
 	ldr	r5, [r6, #BUF_SIZE_OFF]
 
 	/*
@@ -153,24 +153,18 @@ encode_last_byte:
 	it	eq
 	moveq	r3, r2
 	cmp	r3, r4
-	beq	overrun
+	beq	report_overrun
 
-	ldr	r1, head_level
+	ldr	r1, tail_level
 	cmp	r1, lr
-	adr	r1, head_level
+	adr	r1, tail_level
 	beq	encode_extra_edge
 	str	lr, [r1]
 leave:
-	str	r3, [r6, #BUF_HEAD_OFF]
+	str	r3, [r6, #BUF_TAIL_OFF]
 
 	/* Restore registers from stack, and return from interrupt handler */
 	ldmia.w sp!, {r4, r5, r6, pc}
-
-/*
- * Store 32-bit immediate values here (used in "ldr .., =.."), will be copied
- * along with code.
- */
-.ltorg
 
 /*
  * Uncommon case, more than 7 bits in value of "diff", see above for description
@@ -202,9 +196,16 @@ encode_extra_edge:
 
 /* Uncommon case, out of buffer space */
 report_overrun:
+	ldmia.w sp!, {r4, r5, r6, lr}
 	ldr	r1, =overrun
 	adr	r0, my_slot
 	bx	r1
+
+/*
+ * Store 32-bit immediate values used in above code here (used in "ldr .., =..").
+ * Will be copied along with above code.
+ */
+.ltorg
 
 .global edge_int_end
 edge_int_end:

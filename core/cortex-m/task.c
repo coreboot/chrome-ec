@@ -664,7 +664,7 @@ static inline int try_release_reset_lock(uint32_t *state)
 static inline void sleep_forever(void)
 {
 	while (1)
-		usleep(-1);
+		crec_usleep(-1);
 }
 
 void task_enable_resets(void)
@@ -881,7 +881,6 @@ static void __nvic_init_irqs(void)
 
 void mutex_lock(struct mutex *mtx)
 {
-	uint32_t value;
 	uint32_t id;
 
 	/*
@@ -902,6 +901,29 @@ void mutex_lock(struct mutex *mtx)
 
 	atomic_or(&mtx->waiters, id);
 
+	while (!mutex_try_lock(mtx)) {
+		/* Contention on the mutex */
+		task_wait_event_mask(TASK_EVENT_MUTEX, 0);
+	}
+
+	atomic_clear_bits(&mtx->waiters, id);
+}
+
+int mutex_try_lock(struct mutex *mtx)
+{
+	uint32_t value;
+
+	/* mutex_try_lock() must not be used in interrupt context. */
+	ASSERT(!in_interrupt_context());
+
+	/*
+	 * Task ID is not valid before task_start() (since current_task is
+	 * scratchpad), and no need for mutex locking before task switching has
+	 * begun.
+	 */
+	if (!task_start_called())
+		return 1;
+
 	do {
 		/* Try to get the lock (set 1 into the lock field) */
 		__asm__ __volatile__("   ldrex   %0, [%1]\n"
@@ -912,15 +934,16 @@ void mutex_lock(struct mutex *mtx)
 				     : "r"(&mtx->lock), "r"(2)
 				     : "cc");
 		/*
-		 * "value" is equals to 1 if the store conditional failed,
+		 * Variable "value" equals to 1 if the store conditional failed,
 		 * 2 if somebody else owns the mutex, 0 else.
 		 */
-		if (value == 2)
+		if (value == 2) {
 			/* Contention on the mutex */
-			task_wait_event_mask(TASK_EVENT_MUTEX, 0);
+			return 0;
+		}
 	} while (value);
 
-	atomic_clear_bits(&mtx->waiters, id);
+	return 1;
 }
 
 void mutex_unlock(struct mutex *mtx)

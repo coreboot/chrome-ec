@@ -67,7 +67,7 @@ static inline int bma4_write8(const struct motion_sensor_t *s, const int reg,
 	 * the sensor. Given we are only doing write during init, add
 	 * the delay unconditionally.
 	 */
-	usleep(450);
+	crec_usleep(450);
 
 	return ret;
 }
@@ -147,7 +147,7 @@ static int wait_and_read_data(struct motion_sensor_t *s, intv3_t v)
 	/* Check if data is ready */
 	while (try_cnt && (!(reg_data[0] & BMA4_STAT_DATA_RDY_ACCEL_MSK))) {
 		/* 20ms delay for 50Hz ODR */
-		msleep(20);
+		crec_msleep(20);
 
 		/* Read the status register */
 		RETURN_ERROR(i2c_read_block(s->port, s->i2c_spi_addr_flags,
@@ -562,14 +562,13 @@ static int init(struct motion_sensor_t *s)
 		 */
 		GOTO_ON_ERROR(out, bma4_write8(s, BMA4_INT_LATCH_ADDR,
 					       BMA4_INT_LATCH));
-		GOTO_ON_ERROR(out, bma4_write8(s, BMA4_INT1_IO_CTRL_ADDR,
-					       BMA4_INT1_OUTPUT_EN));
 		GOTO_ON_ERROR(out, bma4_write8(s, BMA4_INT_MAP_DATA_ADDR,
 					       BMA4_INT1_DRDY | BMA4_INT1_FWM |
 						       BMA4_INT1_FFULL));
 		/* Enable FIFO in headerless mode, accel data only */
 		GOTO_ON_ERROR(out, bma4_write8(s, BMA4_FIFO_CONFIG_1_ADDR,
 					       BMA4_FIFO_ACC_EN));
+		GOTO_ON_ERROR(out, s->drv->enable_interrupt(s, true));
 	}
 
 out:
@@ -583,6 +582,23 @@ out:
 
 #ifdef BMA4XX_USE_INTERRUPTS
 static uint32_t last_irq_timestamp;
+
+static int bma4xx_enable_interrupt(const struct motion_sensor_t *s, bool enable)
+{
+	int ret;
+
+	mutex_lock(s->mutex);
+
+	/* Flush the FIFO */
+	GOTO_ON_ERROR(out, bma4_write8(s, BMA4_CMD_ADDR, BMA4_FIFO_FLUSH));
+
+	/* Configure INT1 pin */
+	GOTO_ON_ERROR(out, bma4_write8(s, BMA4_INT1_IO_CTRL_ADDR,
+				       enable ? BMA4_INT1_OUTPUT_EN : 0));
+out:
+	mutex_unlock(s->mutex);
+	return ret;
+}
 
 /* Handle IRQ from sensor: schedule read from task context */
 test_mockable void bma4xx_interrupt(enum gpio_signal signal)
@@ -680,6 +696,7 @@ const struct accelgyro_drv bma4_accel_drv = {
 	.get_offset = get_offset,
 	.perform_calib = perform_calib,
 #ifdef BMA4XX_USE_INTERRUPTS
+	.enable_interrupt = bma4xx_enable_interrupt,
 	.interrupt = bma4xx_interrupt,
 	.irq_handler = irq_handler,
 #endif

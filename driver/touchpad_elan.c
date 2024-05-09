@@ -111,6 +111,10 @@
 #define GPIO_TOUCHPAD_INT GPIO_SIGNAL(DT_PROP(DT_PROP(TP_NODE, irq), irq_pin))
 #define CONFIG_TOUCHPAD_I2C_ADDR_FLAGS DT_REG_ADDR(TP_NODE)
 #define CONFIG_TOUCHPAD_I2C_PORT I2C_PORT_BY_DEV(TP_NODE)
+#define CONFIG_USB_HID_TOUCHPAD_LOGICAL_MAX_X DT_PROP(TP_NODE, logical_max_x)
+#define CONFIG_USB_HID_TOUCHPAD_LOGICAL_MAX_Y DT_PROP(TP_NODE, logical_max_y)
+#define CONFIG_USB_HID_TOUCHPAD_PHYSICAL_MAX_X DT_PROP(TP_NODE, physical_max_x)
+#define CONFIG_USB_HID_TOUCHPAD_PHYSICAL_MAX_Y DT_PROP(TP_NODE, physical_max_y)
 
 #endif /* DT_HAS_COMPAT_STATUS_OKAY(elan_ekth3000) */
 #endif /* CONFIG_ZEPHYR */
@@ -423,7 +427,7 @@ static void elan_tp_init(void)
 	CPRINTS("%s", __func__);
 
 	elan_tp_write_cmd(ETP_I2C_STAND_CMD, ETP_I2C_RESET);
-	msleep(100);
+	crec_msleep(100);
 	rv = i2c_xfer(CONFIG_TOUCHPAD_I2C_PORT, CONFIG_TOUCHPAD_I2C_ADDR_FLAGS,
 		      NULL, 0, val, sizeof(val));
 
@@ -488,7 +492,8 @@ static void elan_tp_init(void)
 		elan_tp_params.width_y, elan_tp_params.pressure_adj, dpi_x,
 		dpi_y);
 
-#ifdef CONFIG_USB_HID_TOUCHPAD
+#if defined(CONFIG_USB_HID_TOUCHPAD) || \
+	defined(CONFIG_PLATFORM_EC_ONE_WIRE_UART_KEYBOARD)
 	/* Validity check dimensions provided at build time. */
 	if (elan_tp_params.max_x != CONFIG_USB_HID_TOUCHPAD_LOGICAL_MAX_X ||
 	    elan_tp_params.max_y != CONFIG_USB_HID_TOUCHPAD_LOGICAL_MAX_Y ||
@@ -581,11 +586,11 @@ static int elan_prepare_for_update(void)
 	if (!initial_mode) {
 		CPRINTS("%s: In IAP mode, reset IC.", __func__);
 		elan_tp_write_cmd(ETP_I2C_IAP_RESET_CMD, ETP_I2C_IAP_RESET);
-		msleep(30);
+		crec_msleep(30);
 	}
 	/* Send the passphrase */
 	elan_tp_write_cmd(ETP_I2C_IAP_CMD, ETP_I2C_IAP_PASSWORD);
-	msleep(initial_mode ? 100 : 30);
+	crec_msleep(initial_mode ? 100 : 30);
 
 	/* We should be in the IAP mode now */
 	if (elan_in_main_mode()) {
@@ -600,7 +605,7 @@ static int elan_prepare_for_update(void)
 
 	/* Send the passphrase again */
 	elan_tp_write_cmd(ETP_I2C_IAP_CMD, ETP_I2C_IAP_PASSWORD);
-	msleep(30);
+	crec_msleep(30);
 
 	/* Verify the password */
 	if (elan_tp_read_cmd(ETP_I2C_IAP_CMD, &rx_buf)) {
@@ -654,7 +659,7 @@ fail:
 	i2c_lock(CONFIG_TOUCHPAD_I2C_PORT, 0);
 	if (rv)
 		return rv;
-	msleep(elan_tp_params.page_size >= 512 ? 50 : 35);
+	crec_msleep(elan_tp_params.page_size >= 512 ? 50 : 35);
 
 	rv = elan_tp_read_cmd(ETP_I2C_IAP_CTRL_CMD, &rx_buf);
 
@@ -863,7 +868,7 @@ void elan_tp_read_report_retry(void)
 			return;
 
 		/* Try again */
-		msleep(1);
+		crec_msleep(1);
 	}
 
 	/* Failed to read data, reset the touchpad. */

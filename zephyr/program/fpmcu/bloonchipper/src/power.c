@@ -11,6 +11,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
+#include <zephyr/pm/device.h>
 #include <zephyr/pm/policy.h>
 
 static struct k_work slp_event_work;
@@ -91,3 +92,15 @@ static int slp_event_init(void)
 	return 0;
 }
 SYS_INIT(slp_event_init, POST_KERNEL, CONFIG_APPLICATION_INIT_PRIORITY);
+
+static int gpio_init(void)
+{
+	const struct device *dev_gpioc = DEVICE_DT_GET(DT_NODELABEL(gpioc));
+	const struct device *dev_gpioh = DEVICE_DT_GET(DT_NODELABEL(gpioh));
+
+	pm_device_action_run(dev_gpioc, PM_DEVICE_ACTION_SUSPEND);
+	pm_device_action_run(dev_gpioh, PM_DEVICE_ACTION_SUSPEND);
+
+	return 0;
+}
+SYS_INIT(gpio_init, POST_KERNEL, CONFIG_APPLICATION_INIT_PRIORITY);

@@ -203,9 +203,10 @@ void udelay(unsigned int us)
 		;
 }
 
-void usleep(unsigned int us)
+int crec_usleep(unsigned int us)
 {
 	udelay(us);
+	return 0;
 }
 
 int timestamp_expired(timestamp_t deadline, const timestamp_t *now)
@@ -311,7 +312,7 @@ __noreturn void watchdog_reset(void)
 {
 	uart_puts("EXCEPTION!\nTriggering watchdog reset\n");
 	/* trigger reset in 1 ms */
-	usleep(1000);
+	crec_usleep(1000);
 	MCHP_PCR_SYS_RST = MCHP_PCR_SYS_SOFT_RESET;
 	while (1)
 		;

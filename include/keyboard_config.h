@@ -13,6 +13,7 @@
 #ifdef CONFIG_KEYBOARD_CUSTOMIZATION
 /* include the board layer keyboard header file */
 #include "keyboard_customization.h"
+#define KEYBOARD_COLS KEYBOARD_COLS_MAX
 #else /* CONFIG_KEYBOARD_CUSTOMIZATION */
 
 /* Keyboard matrix is 13 (or 15 with keypad) output columns x 8 input rows */
@@ -20,14 +21,18 @@
 #define KEYBOARD_COLS_NO_KEYPAD 13
 
 /*
- * KEYBOARD_COLS_MAX has the build time column size. It's used to allocate
- * exact spaces for arrays. Actual keyboard scanning is done using
- * keyboard_cols, which holds a runtime column size.
+ * KEYBOARD_COLS has the column size of the default matrix. KEYBOARD_COLS_MAX
+ * has the column size of the largest matrix. It's used to statically allocate
+ * arrays used by the scanner. keyboard_cols holds a runtime column size. The
+ * scanner uses it as a loop terminal.
  */
 #ifdef CONFIG_KEYBOARD_KEYPAD
-#define KEYBOARD_COLS_MAX KEYBOARD_COLS_WITH_KEYPAD
+#define KEYBOARD_COLS KEYBOARD_COLS_WITH_KEYPAD
 #else
-#define KEYBOARD_COLS_MAX KEYBOARD_COLS_NO_KEYPAD
+#define KEYBOARD_COLS KEYBOARD_COLS_NO_KEYPAD
+#endif
+#ifndef KEYBOARD_COLS_MAX
+#define KEYBOARD_COLS_MAX KEYBOARD_COLS
 #endif
 #define KEYBOARD_ROWS 8
 
@@ -67,24 +72,6 @@ extern uint8_t keyboard_cols;
 #define KEYBOARD_MASK_RIGHT_ALT KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_RIGHT_ALT)
 #define KEYBOARD_DEFAULT_COL_VOL_UP 4
 #define KEYBOARD_DEFAULT_ROW_VOL_UP 0
-#define KEYBOARD_COL_LEFT_CTRL 0
-#define KEYBOARD_ROW_LEFT_CTRL 2
-#define KEYBOARD_MASK_LEFT_CTRL KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_LEFT_CTRL)
-#define KEYBOARD_COL_RIGHT_CTRL 0
-#define KEYBOARD_ROW_RIGHT_CTRL 4
-#define KEYBOARD_MASK_RIGHT_CTRL KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_RIGHT_CTRL)
-#define KEYBOARD_COL_SEARCH 1
-#define KEYBOARD_ROW_SEARCH 0
-#define KEYBOARD_MASK_SEARCH KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_SEARCH)
-#define KEYBOARD_COL_KEY_0 8
-#define KEYBOARD_ROW_KEY_0 6
-#define KEYBOARD_MASK_KEY_0 KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_KEY_0)
-#define KEYBOARD_COL_KEY_1 1
-#define KEYBOARD_ROW_KEY_1 6
-#define KEYBOARD_MASK_KEY_1 KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_KEY_1)
-#define KEYBOARD_COL_KEY_2 4
-#define KEYBOARD_ROW_KEY_2 6
-#define KEYBOARD_MASK_KEY_2 KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_KEY_2)
 #define KEYBOARD_COL_LEFT_SHIFT 7
 #define KEYBOARD_ROW_LEFT_SHIFT 5
 #define KEYBOARD_MASK_LEFT_SHIFT KEYBOARD_ROW_TO_MASK(KEYBOARD_ROW_LEFT_SHIFT)

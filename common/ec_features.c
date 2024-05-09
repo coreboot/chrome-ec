@@ -103,7 +103,8 @@ uint32_t get_feature_flags0(void)
 #ifdef HAS_TASK_CENTROIDING
 			  | EC_FEATURE_MASK_0(EC_FEATURE_TOUCHPAD)
 #endif
-#if defined(HAS_TASK_RWSIG) || defined(HAS_TASK_RWSIG_RO)
+#if defined(HAS_TASK_RWSIG) || defined(HAS_TASK_RWSIG_RO) || \
+	defined(CONFIG_PLATFORM_EC_RWSIG)
 			  | EC_FEATURE_MASK_0(EC_FEATURE_RWSIG)
 #endif
 #ifdef CONFIG_DEVICE_EVENT
@@ -146,12 +147,17 @@ uint32_t get_feature_flags1(void)
 		| EC_FEATURE_MASK_1(EC_FEATURE_EFS2)
 #endif
 #ifdef CONFIG_IPI
+#if defined(SCP_CORE_SN) && SCP_CORE_SN == 1
+		| EC_FEATURE_MASK_1(EC_FEATURE_SCP_C1)
+#else
 		| EC_FEATURE_MASK_1(EC_FEATURE_SCP)
+#endif
 #endif
 #ifdef CHIP_ISH
 		| EC_FEATURE_MASK_1(EC_FEATURE_ISH)
 #endif
-#ifdef CONFIG_USB_PD_TCPMV2
+#if defined(CONFIG_USB_PD_TCPMV2) || \
+	defined(CONFIG_PLATFORM_EC_USB_PD_CONTROLLER)
 		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_CMD)
 #endif
 #ifdef CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
@@ -186,6 +192,9 @@ uint32_t get_feature_flags1(void)
 #endif
 #ifdef CONFIG_USB_PD_DP21_MODE
 		| EC_FEATURE_MASK_1(EC_FEATURE_TYPEC_DP2_1)
+#endif
+#ifdef CONFIG_UCSI_PPM
+		| EC_FEATURE_MASK_1(EC_FEATURE_UCSI_PPM)
 #endif
 		;
 	return board_override_feature_flags1(result);

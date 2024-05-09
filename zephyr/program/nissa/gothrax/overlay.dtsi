@@ -48,6 +48,9 @@
 		gfl_mfp-466894 {
 			compatible = "gfl,mfp-466894", "battery-smart";
 		};
+		gfl_mfp-549358 {
+			compatible = "gfl,mfp-549358", "battery-smart";
+		};
 	};
 
 	hibernate-wake-pins {
@@ -154,6 +157,10 @@
 			gpios = <&gpioe 0 0>;
 			no-auto-init;
 		};
+		gpio_fan_enable: fan-enable {
+			gpios = <&gpiog 3 GPIO_OUTPUT>;
+			no-auto-init;
+		};
 		gpio_ec_chg_led_r: ec_chg_led_r {
 			gpios = <&gpioa 1 GPIO_OUTPUT_LOW>;
 		};
@@ -162,17 +169,17 @@
 		};
 	};
 
-	temp_memory: memory {
+	temp_memory_thermistor: memory {
 		compatible = "cros-ec,temp-sensor-thermistor";
 		thermistor = <&thermistor_3V3_51K1_47K_4050B>;
 		adc = <&adc_temp_sensor_1>;
 	};
-	temp_charger: charger {
+	temp_charger_thermistor: charger {
 		compatible = "cros-ec,temp-sensor-thermistor";
 		thermistor = <&thermistor_3V3_51K1_47K_4050B>;
 		adc = <&adc_temp_sensor_2>;
 	};
-	temp_ambient: ambient {
+	temp_ambient_thermistor: ambient {
 		compatible = "cros-ec,temp-sensor-thermistor";
 		thermistor = <&thermistor_3V3_51K1_47K_4050B>;
 		adc = <&adc_temp_sensor_3>;
@@ -180,26 +187,32 @@
 
 	named-temp-sensors {
 		compatible = "cros-ec,temp-sensors";
-		memory {
-			temp_host_high = <85>;
-			temp_host_halt = <90>;
-			temp_host_release_high = <80>;
+		temp_memory: memory {
+			temp_fan_off = <38>;
+			temp_fan_max = <76>;
+			temp_host_high = <102>;
+			temp_host_halt = <104>;
+			temp_host_release_high = <94>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
-			sensor = <&temp_memory>;
+			sensor = <&temp_memory_thermistor>;
 		};
-		charger {
+		temp_charger: charger {
+			temp_fan_off = <35>;
+			temp_fan_max = <60>;
 			temp_host_high = <85>;
 			temp_host_halt = <90>;
 			temp_host_release_high = <80>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
-			sensor = <&temp_charger>;
+			sensor = <&temp_charger_thermistor>;
 		};
-		ambient {
+		temp_ambient: ambient {
+			temp_fan_off = <35>;
+			temp_fan_max = <60>;
 			temp_host_high = <85>;
 			temp_host_halt = <90>;
 			temp_host_release_high = <80>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
-			sensor = <&temp_ambient>;
+			sensor = <&temp_ambient_thermistor>;
 		};
 	};
 
@@ -258,6 +271,51 @@
 			virtual_mux_1: virtual-mux-1 {
 				compatible = "cros-ec,usbc-mux-virtual";
 			};
+		};
+	};
+	fans {
+		compatible = "cros-ec,fans";
+
+		fan_0 {
+			pwms = <&pwm0 0 PWM_KHZ(30) PWM_POLARITY_NORMAL>;
+			tach = <&tach1>;
+			rpm_min = <2500>;
+			rpm_start = <2500>;
+			rpm_max = <4800>;
+			enable_gpio = <&gpio_fan_enable>;
+		};
+	};
+	fan_steps {
+		compatible = "cros-ec,fan-steps";
+		level_0 {
+			temp_on = <37 0 0>;
+			temp_off = <99 0 0>;
+			rpm_target = <0>;
+		};
+		level_1 {
+			temp_on = <41 0 0>;
+			temp_off = <38 0 0>;
+			rpm_target = <3000>;
+		};
+		level_2 {
+			temp_on = <47 0 0>;
+			temp_off = <44 0 0>;
+			rpm_target = <3500>;
+		};
+		level_3 {
+			temp_on = <53 0 0>;
+			temp_off = <50 0 0>;
+			rpm_target = <4000>;
+		};
+		level_4 {
+			temp_on = <63 0 0>;
+			temp_off = <60 0 0>;
+			rpm_target = <4500>;
+		};
+		level_5 {
+			temp_on = <70 0 0>;
+			temp_off = <67 0 0>;
+			rpm_target = <4800>;
 		};
 	};
 };
@@ -440,6 +498,10 @@
 };
 
 /* fan tachometer sensor */
+&tach1a_gpd7_default {
+	bias-pull-up;
+};
+
 &tach1 {
 	status = "okay";
 	channel = <IT8XXX2_TACH_CHANNEL_A>;

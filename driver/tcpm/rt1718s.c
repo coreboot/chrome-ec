@@ -35,7 +35,7 @@
 #define FLAG_FRS_RX_SIGNALLED BIT(1)
 #define FLAG_FRS_VBUS_VALID_FALL BIT(2)
 static atomic_t frs_flag[CONFIG_USB_PD_PORT_MAX_COUNT];
-K_MUTEX_DEFINE(adc_lock);
+static K_MUTEX_DEFINE(adc_lock);
 
 /* i2c_write function which won't wake TCPC from low power mode. */
 static int rt1718s_write(int port, int reg, int val, int len)
@@ -105,7 +105,7 @@ test_mockable int rt1718s_sw_reset(int port)
 	rv = rt1718s_update_bits8(port, RT1718S_SYS_CTRL3, RT1718S_SWRESET_MASK,
 				  0xFF);
 
-	msleep(RT1718S_SW_RESET_DELAY_MS);
+	crec_msleep(RT1718S_SW_RESET_DELAY_MS);
 
 	return rv;
 }
@@ -168,7 +168,7 @@ static int rt1718s_set_vconn(int port, int enable)
 
 	if (enable) {
 		/* It takes 10ms that we can switch back to shutdown mode. */
-		msleep(10);
+		crec_msleep(10);
 		RETURN_ERROR(rt1718s_update_bits8(port, RT1718S_VCON_CTRL3,
 						  RT1718S_VCON_LIMIT_MODE, 0));
 	} else {
@@ -474,7 +474,7 @@ test_mockable int rt1718s_get_adc(int port, enum rt1718s_adc_channel channel,
 	for (int i = 0; i < max_wait_times; i++) {
 		int adc_done;
 
-		usleep(100);
+		crec_usleep(100);
 		rv = rt1718s_read8(port, RT1718S_RT_INT6, &adc_done);
 		if (rv)
 			goto out;

@@ -6,4 +6,10 @@
 #ifndef __STM32F4xx_LL_TIM_H
 #define __STM32F4xx_LL_TIM_H
 
+/* Add definitions of types normally provided by the STM32 HAL.
+ * Tests don't use HAL, all needed functions are mocked.
+ */
+typedef uint32_t TIM_TypeDef;
+void LL_TIM_DisableCounter(TIM_TypeDef *TIMx);
+
 #endif

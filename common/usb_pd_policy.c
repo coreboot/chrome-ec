@@ -1127,11 +1127,11 @@ __overridable int svdm_dp_attention(int port, uint32_t *payload)
 		uint64_t now = get_time().val;
 		/* wait for the minimum spacing between IRQ_HPD if needed */
 		if (now < svdm_hpd_deadline[port])
-			usleep(svdm_hpd_deadline[port] - now);
+			crec_usleep(svdm_hpd_deadline[port] - now);
 
 		/* generate IRQ_HPD pulse */
 		svdm_set_hpd_gpio(port, 0);
-		usleep(HPD_DSTREAM_DEBOUNCE_IRQ);
+		crec_usleep(HPD_DSTREAM_DEBOUNCE_IRQ);
 		svdm_set_hpd_gpio(port, 1);
 	} else {
 		svdm_set_hpd_gpio(port, lvl);
@@ -1277,4 +1277,4 @@ DECLARE_HOST_COMMAND(EC_CMD_USB_PD_DEV_INFO, hc_remote_pd_dev_info,
 
 #endif /* CONFIG_USB_PD_ALT_MODE_DFP */
 
-/* LCOV_EXCL_END */
+/* LCOV_EXCL_STOP */

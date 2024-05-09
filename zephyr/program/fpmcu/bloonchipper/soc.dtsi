@@ -4,6 +4,7 @@
  */
 
 #include <cros/st/stm32.dtsi>
+#include <zephyr/dt-bindings/pinctrl/stm32-pinctrl.h>
 
 &iwdg {
 	status = "okay";
@@ -43,7 +44,8 @@
 
 &usart1 {
 	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
-	pinctrl-names = "default";
+	pinctrl-1 = <&analog_pa9 &analog_pa10>;
+	pinctrl-names = "default", "sleep";
 	current-speed = <3000000>;
 	dmas = <&dma2 7 4 0x38440 0x03>,
 		<&dma2 2 4 0x38480 0x03>;
@@ -52,12 +54,16 @@
 };
 
 &usart2 {
+	pinctrl-1 = <&analog_pa2 &analog_pa3>;
+	pinctrl-names = "default", "sleep";
 	dmas = <&dma1 6 4 0x08440 0x03>,
 		<&dma1 5 4 0x08480 0x03>;
 	dma-names = "tx", "rx";
 };
 
 &spi1 {
+	pinctrl-1 = <&analog_pa4 &analog_pa5 &analog_pa6 &analog_pa7>;
+	pinctrl-names = "default", "sleep";
 	/* Change the compatible string to use the Host Command version of the
 	 * STM32 SPI driver
 	 */
@@ -71,14 +77,40 @@
 	cs-gpios = <&gpioa 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 };
 
+/*
+ * Introduce additional pinctrl nodes that describe PB13, PB14, PB15 pin
+ * configuration used when SPI module goes to sleep state. Without that
+ * these pins are connected to disabled SPI module which increases power
+ * consumption by the sensor.
+ */
+&pinctrl {
+	gpio_out_low_pb13: gpio_out_low_pb13 {
+		pinmux = <STM32_PINMUX('B', 13, GPIO)>;
+		output-low;
+	};
+	gpio_out_low_pb14: gpio_out_low_pb14 {
+		pinmux = <STM32_PINMUX('B', 14, GPIO)>;
+		output-low;
+	};
+	gpio_out_low_pb15: gpio_out_low_pb15 {
+		pinmux = <STM32_PINMUX('B', 15, GPIO)>;
+		output-low;
+	};
+};
+
 &spi2 {
 	/*
 	 * Exclude spi2_nss_pb12 from pinctrl-0. Without CS pin the driver will
 	 * disable hardware CS management. This is necessary because deasserting
 	 * CS pin clears command context in the sensor.
 	 */
-	pinctrl-0 = <&spi2_sck_pb13 &spi2_miso_pb14
-		     &spi2_mosi_pb15>;
+	pinctrl-0 = <&spi2_sck_pb13 &spi2_miso_pb14 &spi2_mosi_pb15>;
+	/*
+	 * Set the sleep state as output low to reduce FP sensor
+	 * power consumption.
+	 */
+	pinctrl-1 = <&gpio_out_low_pb13 &gpio_out_low_pb14 &gpio_out_low_pb15>;
+	pinctrl-names = "default", "sleep";
 
 	dmas = <&dma1 4 0 0x38440 0x03>,
 		<&dma1 3 0 0x38480 0x03>;
@@ -86,4 +118,12 @@
 
 	/* Use PB12 pin as a CS for the device (managed by SPI controller) */
 	cs-gpios = <&gpiob 12 GPIO_ACTIVE_LOW>;
+};
+
+&flash0 {
+	/*
+	 * 4 byte parallelism can be enabled when the voltage is at least 2.7V.
+	 * See STM32F412 reference manual for more details.
+	 */
+	write-block-size = <4>;
 };

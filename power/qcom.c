@@ -365,7 +365,7 @@ static int wait_switchcap_power_good(int enable)
 	poll_deadline.val += SWITCHCAP_PG_CHECK_TIMEOUT;
 	while (enable != board_is_switchcap_power_good() &&
 	       get_time().val < poll_deadline.val) {
-		usleep(SWITCHCAP_PG_CHECK_WAIT);
+		crec_usleep(SWITCHCAP_PG_CHECK_WAIT);
 	}
 
 	/*
@@ -427,7 +427,7 @@ static int wait_pmic_pwron(int enable, unsigned int timeout)
 	poll_deadline.val += timeout;
 	while (enable != is_pmic_pwron() &&
 	       get_time().val < poll_deadline.val) {
-		usleep(PMIC_POWER_AP_WAIT);
+		crec_usleep(PMIC_POWER_AP_WAIT);
 	}
 
 	/* Check the timeout case */
@@ -478,7 +478,7 @@ static int set_system_power(int enable)
 		/* Ensure POWER_GOOD drop to low if it is a forced shutdown */
 		ret |= wait_pmic_pwron(0, FORCE_OFF_RESPONSE_TIMEOUT);
 	}
-	usleep(SYSTEM_POWER_ON_DELAY);
+	crec_usleep(SYSTEM_POWER_ON_DELAY);
 
 	return ret;
 }
@@ -631,7 +631,7 @@ static void power_off_seq(uint8_t shutdown_event)
 		} else {
 			/* Do a graceful way to shutdown PMIC/AP first */
 			set_pmic_pwron(0);
-			usleep(PMIC_POWER_OFF_DELAY);
+			crec_usleep(PMIC_POWER_OFF_DELAY);
 		}
 	}
 
@@ -667,7 +667,7 @@ static int power_is_enough(void)
 	 */
 	while (!system_can_boot_ap() && !charge_want_shutdown() &&
 	       get_time().val < poll_deadline.val) {
-		usleep(CAN_BOOT_AP_CHECK_WAIT);
+		crec_usleep(CAN_BOOT_AP_CHECK_WAIT);
 	}
 
 	return system_can_boot_ap() && !charge_want_shutdown();
@@ -855,7 +855,7 @@ static int warm_reset_seq(void)
 	 */
 
 	gpio_set_level(GPIO_PMIC_RESIN_L, 0);
-	usleep(PMIC_RESIN_PULSE_LENGTH);
+	crec_usleep(PMIC_RESIN_PULSE_LENGTH);
 	gpio_set_level(GPIO_PMIC_RESIN_L, 1);
 
 	rv = power_wait_signals_timeout(IN_AP_RST_ASSERTED,
@@ -943,6 +943,11 @@ power_chipset_handle_host_sleep_event(enum host_sleep_event state,
 		power_signal_enable_interrupt(GPIO_AP_SUSPEND);
 
 	} else if (state == HOST_SLEEP_EVENT_S3_RESUME) {
+		/*
+		 * In case the suspend fails, cancel the power button timer,
+		 * similar to what we do in S3S0, the suspend success case.
+		 */
+		cancel_power_button_timer();
 		/*
 		 * Wake up chipset task and indicate to power state machine that
 		 * listeners need to be notified of chipset resume.

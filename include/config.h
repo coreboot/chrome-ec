@@ -53,6 +53,9 @@
  * BOARD_*, CHIP_*, and CHIP_FAMILY_*.
  */
 
+/* When the ec_rate config is set, put the sensor in force mode */
+#undef CONFIG_SENSOR_EC_RATE_FORCE_MODE
+
 /* Add support for sensor FIFO */
 #undef CONFIG_ACCEL_FIFO
 
@@ -354,6 +357,9 @@
 /* Define to include the clear channel driver for the tcs3400 light sensor */
 #undef CONFIG_ALS_TCS3400
 
+/* Define to include Vishay VEML3328 driver */
+#undef CONFIG_ALS_VEML3328
+
 /*
  * Define the event to raise when a sensor interrupt triggers.
  * Must be within TASK_EVENT_MOTION_INTERRUPT_MASK.
@@ -474,11 +480,6 @@
  * Enable Battery-config-in-CBI. It makes a board read battery info from CBI.
  */
 #undef CONFIG_BATTERY_CONFIG_IN_CBI
-
-/*
- * Config to indicate the battery type that cannot be auto detected.
- */
-#undef CONFIG_BATTERY_TYPE_NO_AUTO_DETECT
 
 /*
  * Compile battery-specific code.
@@ -1783,7 +1784,7 @@
  * capture the EC state after a panic.
  */
 #undef CONFIG_SYSTEM_SAFE_MODE
-#define CONFIG_SYSTEM_SAFE_MODE_TIMEOUT_MSEC 2000
+#define CONFIG_SYSTEM_SAFE_MODE_TIMEOUT_MSEC 4000
 /*
  * Prints the stack of the faulting task to the console buffer in system safe
  * mode.
@@ -1805,6 +1806,13 @@
  * since it is effectivley shortened by WATCHDOG_WARNING_LEADING_TIME_MS.
  */
 #undef CONFIG_PANIC_ON_WATCHDOG_WARNING
+
+/**
+ * Enables nesting for the `crash` console command.
+ * Calling the crash console command with multiple crash arguments
+ * will result in nested crashes in the order specified.
+ */
+#define CONFIG_CMD_CRASH_NESTED
 
 /*
  * Provide the default GPIO abstraction layer.
@@ -1916,8 +1924,16 @@
 /* Max length of a single line of input */
 #define CONFIG_CONSOLE_INPUT_LINE_SIZE 80
 
+/* Amount of time to keep the console in use flag */
+#define CONFIG_CONSOLE_IN_USE_ON_BOOT_TIME (15 * SECOND)
+
 /* Enable verbose output to UART console and extra timestamp print precision. */
 #define CONFIG_CONSOLE_VERBOSE
+
+/* Enable the console print command. This allows the host to print messages
+ * directly in the EC console.
+ */
+#define CONFIG_HOSTCMD_CONSOLE_PRINT
 
 /*****************************************************************************/
 /* Support for EC-EC communication */
@@ -2274,6 +2290,7 @@
 #undef CONFIG_FP_SENSOR_FPC1035
 #undef CONFIG_FP_SENSOR_FPC1145
 #undef CONFIG_FP_SENSOR_ELAN80
+#undef CONFIG_FP_SENSOR_ELAN80SG
 #undef CONFIG_FP_SENSOR_ELAN515
 
 /*****************************************************************************/
@@ -2617,7 +2634,9 @@
 /* EC supports EC_CMD_TYPEC_DISCOVERY */
 #define CONFIG_HOSTCMD_TYPEC_DISCOVERY
 
-/* EC supports EC_CMD_TYPEC_CONTROL */
+/* EC supports EC_CMD_TYPEC_CONTROL
+ * Note: this gets undefined later if TCPMv1 is selected.
+ */
 #define CONFIG_HOSTCMD_TYPEC_CONTROL
 
 /* EC supports EC_CMD_TYPEC_STATUS */
@@ -3488,7 +3507,7 @@
 #endif /* CONFIG_ZEPHYR */
 
 /* Provide rudimentary malloc/free like services for shared memory. */
-#undef CONFIG_MALLOC
+#undef CONFIG_SHARED_MALLOC
 
 /* Need for a math library */
 #undef CONFIG_MATH_UTIL
@@ -3572,6 +3591,15 @@
  * ISL9238C disable the CMOUT latch function.
  */
 #undef CONFIG_ISL9238C_DISABLE_CMOUT_LATCH
+
+/*
+ * ISL9238C input voltage setting.
+ * Set the input voltage for the ISL9238C charger. Setting -1 means use
+ * the default setting defined by the chip.  The ISL9238C input voltage
+ * is configured using 341.3 mV steps.  The value specified is rounded
+ * down.
+ */
+#define CONFIG_ISL9238C_INPUT_VOLTAGE_MV -1
 
 /*
  * ISL9238C enable Force Buck mode.
@@ -4031,6 +4059,12 @@
 /* Size of the MAC address field if needed. */
 #undef CONFIG_MAC_ADDR_LEN
 
+/* Support programmable device poweron config. */
+#undef CONFIG_POWERON_CONF
+
+/* Size of the poweron config field if needed. */
+#undef CONFIG_POWERON_CONF_LEN
+
 /****************************************************************************/
 /* Shared objects library. */
 
@@ -4050,7 +4084,7 @@
 #undef CONFIG_SCI_GPIO
 
 /* Support computing of other hash sizes (without the VBOOT code) */
-#undef CONFIG_SHA256
+#undef CONFIG_SHA256_SW
 
 /* Compute SHA256 by using chip's hardware accelerator */
 #undef CONFIG_SHA256_HW_ACCELERATE
@@ -4086,9 +4120,6 @@
 /* Support SPI interfaces */
 #undef CONFIG_SPI
 #endif /* CONFIG_ZEPHYR */
-
-/* Support deprecated SPI protocol version 2. */
-#undef CONFIG_SPI_PROTOCOL_V2
 
 /* Define the SPI port to use to access SPI accelerometer */
 #undef CONFIG_SPI_ACCEL_PORT
@@ -4412,6 +4443,9 @@
  * DPTF. We have some hybrid solutions where the EC still manages the fans.
  */
 #undef CONFIG_DPTF
+
+/* If defined, dptf debug prints will print to EC console */
+#undef CONFIG_DPTF_DEBUG_PRINTS
 
 /*
  * If defined, this indicates to the motion lid driver that the board does not
@@ -5242,17 +5276,6 @@
 #undef CONFIG_PD_USE_DAC_AS_REF
 
 /*
- * Request for a PDO which voltage is closest to PD_PREFER_MV for sink.
- * This config in theory could achieve better charging efficiency.  Note this
- * may not always pick the PD_PREFER_MV if available (if the PDO's
- * power not sufficient for the system), it will pick second closest PDO until
- * the system desired power is low enough to be charged by the designed PDO.
- *
- * If defined, must also define `struct pd_pref_config_t pd_pref_config`.
- */
-#undef CONFIG_USB_PD_PREFER_MV
-
-/*
  * The Fast Role Swap trigger can be implemented in either the TCPC or PPC
  * driver. If either CONFIG_USB_PD_FRS_TCPC or CONFIG_USB_PD_FRS_PPC is set,
  * CONFIG_USB_FRS will be set automatically to enable the protocol-side of FRS.
@@ -5301,7 +5324,9 @@
 #undef CONFIG_USBC_PPC_AOZ1380
 #undef CONFIG_USBC_PPC_KTU1125
 #undef CONFIG_USBC_PPC_NX20P3481
+#ifndef CONFIG_ZEPHYR
 #undef CONFIG_USBC_PPC_NX20P3483
+#endif /* CONFIG_ZEPHYR */
 #undef CONFIG_USBC_PPC_RT1718S
 #undef CONFIG_USBC_PPC_SN5S330
 #undef CONFIG_USBC_PPC_SYV682C
@@ -6003,6 +6028,12 @@
  */
 #undef CONFIG_GOOGLETEST
 
+/*
+ * When this option is enabled, some of the experimental features (aka finch)
+ * will be enabled for CROS_EC.
+ */
+#undef CONFIG_FEATURE_FINCH
+
 /*****************************************************************************/
 /*
  * Include board and core configs, since those hold the CONFIG_ constants for a
@@ -6496,7 +6527,7 @@
 	defined(CONFIG_CHARGER_ISL9238C) || defined(CONFIG_CHARGER_ISL9241) || \
 	defined(CONFIG_CHARGER_RAA489000) || defined(CONFIG_CHARGER_SM5803) || \
 	defined(CONFIG_CHARGER_BQ25710) || defined(CONFIG_CHARGER_BQ25720) ||  \
-	defined(CONFIG_CHARGER_RAA489110)
+	defined(CONFIG_CHARGER_RAA489110) || defined(CONFIG_CHARGER_RT9490)
 #define CONFIG_CHARGER_NARROW_VDC
 #endif
 
@@ -6888,6 +6919,13 @@
 #define CONFIG_CMD_RETIMER
 #endif
 
+/**
+ * CONFIG_CMD_CRASH_NESTED depends on CONFIG_CMD_CRASH
+ */
+#if !defined(CONFIG_CMD_CRASH) && defined(CONFIG_CMD_CRASH_NESTED)
+#error "CONFIG_CMD_CRASH_NESTED depends on CONFIG_CMD_CRASH"
+#endif
+
 /*****************************************************************************/
 
 /*
@@ -7105,7 +7143,7 @@
 
 /* EC Codec Wake-on-Voice related definitions */
 #ifdef CONFIG_AUDIO_CODEC_WOV
-#define CONFIG_SHA256
+#define CONFIG_SHA256_SW
 #endif
 
 #ifdef CONFIG_SMBUS_PEC
@@ -7165,6 +7203,14 @@
 	"CONFIG_USB_PD_TCPM_PS8* are intended to support in a board."
 #endif
 #endif /* defined(CONFIG_USB_PD_TCPM_PS8705) + ... */
+
+/*
+ * CONFIG_HOSTCMD_TYPEC_CONTROL is not supported for TCPMv1, so disable it in
+ * that case.
+ */
+#ifdef CONFIG_USB_PD_TCPMV1
+#undef CONFIG_HOSTCMD_TYPEC_CONTROL
+#endif /* CONFIG_USB_PD_TCPMV1 */
 
 /******************************************************************************/
 /* Check body detection setup */

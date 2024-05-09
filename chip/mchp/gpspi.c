@@ -48,7 +48,7 @@ static int gpspi_wait_byte(const int ctrl)
 	while ((MCHP_SPI_SR(ctrl) & 0x3) != 0x3) {
 		if (timestamp_expired(deadline, NULL))
 			return EC_ERROR_TIMEOUT;
-		usleep(SPI_BYTE_TRANSFER_POLL_INTERVAL_US);
+		crec_usleep(SPI_BYTE_TRANSFER_POLL_INTERVAL_US);
 	}
 	return EC_SUCCESS;
 }
@@ -56,7 +56,7 @@ static int gpspi_wait_byte(const int ctrl)
 /* NOTE: auto-read must be disabled before calling this routine! */
 static void gpspi_rx_fifo_clean(const int ctrl)
 {
-	uint8_t unused = 0;
+	__maybe_unused uint8_t unused = 0;
 
 	/* If ACTIVE and/or RXFF then clean it */
 	if ((MCHP_SPI_SR(ctrl) & 0x4) == 0x4)
@@ -189,7 +189,7 @@ int gpspi_transaction_flush(const struct spi_device_t *spi_device)
 			ret = EC_ERROR_TIMEOUT;
 			break;
 		}
-		usleep(SPI_BYTE_TRANSFER_POLL_INTERVAL_US);
+		crec_usleep(SPI_BYTE_TRANSFER_POLL_INTERVAL_US);
 	}
 
 	dma_disable(chan);

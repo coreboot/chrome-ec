@@ -42,6 +42,7 @@
 #define LED_OFF EC_LED_COLOR_COUNT
 #define LED_EVENT_SUSPEND TASK_EVENT_CUSTOM_BIT(0)
 #define LED_EVENT_200MS_TICK TASK_EVENT_CUSTOM_BIT(1)
+#define BATT_NEAR_FULL 900
 
 static int tick;
 
@@ -71,8 +72,15 @@ static void led_set_battery(void)
 {
 	switch (led_pwr_get_state()) {
 	case LED_PWRS_CHARGE:
-		/* Always indicate when charging, even in suspend. */
-		led_set_color_battery(EC_LED_COLOR_AMBER);
+		/*
+		 * Always indicate when charging, even in suspend.
+		 * When the battery RSOC > 90, set LED to white.
+		 */
+		if (charge_get_display_charge() > BATT_NEAR_FULL)
+			led_set_color_battery(EC_LED_COLOR_WHITE);
+		else
+			led_set_color_battery(EC_LED_COLOR_AMBER);
+
 		break;
 	case LED_PWRS_DISCHARGE:
 		led_set_color_battery(LED_OFF);
@@ -187,7 +195,7 @@ static void suspend_led_update(void)
 				     tick * LED_BAT_S3_PWM_RESCALE);
 			pwm_set_duty(PWM_CH_LED4,
 				     tick * LED_BAT_S3_PWM_RESCALE);
-			msleep(LED_BAT_S3_TICK_MS);
+			crec_msleep(LED_BAT_S3_TICK_MS);
 		} else if (tick <= TICKS_STEP3_OFF) {
 			/* decrease 5 duty every 50ms until PWM=0
 			 * enter here 20 times, total duartion is 1sec
@@ -200,10 +208,10 @@ static void suspend_led_update(void)
 			pwm_set_duty(PWM_CH_LED4,
 				     (TICKS_STEP3_OFF - tick) *
 					     LED_BAT_S3_PWM_RESCALE);
-			msleep(LED_BAT_S3_TICK_MS);
+			crec_msleep(LED_BAT_S3_TICK_MS);
 		} else {
 			tick = TICKS_STEP1_BRIGHTER;
-			msleep(LED_BAT_S3_OFF_TIME_MS);
+			crec_msleep(LED_BAT_S3_OFF_TIME_MS);
 		}
 	}
 }

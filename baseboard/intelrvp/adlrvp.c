@@ -326,7 +326,7 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 		 * retimer_init() function ensures power is up before calling
 		 * this function.
 		 */
-		msleep(1);
+		crec_msleep(1);
 		ioex_set_level((enum ioex_signal)bb_controls[me->usb_port]
 				       .retimer_rst_gpio,
 			       1);
@@ -335,13 +335,13 @@ __override int bb_retimer_power_enable(const struct usb_mux *me, bool enable)
 		 * Allow 1ms time for the retimer to power up lc_domain
 		 * which powers I2C controller within retimer
 		 */
-		msleep(1);
+		crec_msleep(1);
 
 	} else {
 		ioex_set_level((enum ioex_signal)bb_controls[me->usb_port]
 				       .retimer_rst_gpio,
 			       0);
-		msleep(1);
+		crec_msleep(1);
 		ioex_set_level((enum ioex_signal)bb_controls[me->usb_port]
 				       .usb_ls_en_gpio,
 			       0);
@@ -460,10 +460,8 @@ static void configure_retimer_usbmux(void)
 	}
 }
 
-static void configure_battery_type(void)
+__override int board_get_default_battery_type(void)
 {
-	int bat_cell_type;
-
 	switch (ADL_RVP_BOARD_ID(board_get_version())) {
 	case ADLM_LP4_RVP1_SKU_BOARD_ID:
 	case ADLM_LP5_RVP2_SKU_BOARD_ID:
@@ -471,17 +469,13 @@ static void configure_battery_type(void)
 	case ADLN_LP5_ERB_SKU_BOARD_ID:
 	case ADLN_LP5_RVP_SKU_BOARD_ID:
 		/* configure Battery to 2S based */
-		bat_cell_type = BATTERY_GETAC_SMP_HHP_408_2S;
-		break;
+		return BATTERY_GETAC_SMP_HHP_408_2S;
 	default:
 		/* configure Battery to 3S based */
-		bat_cell_type = BATTERY_GETAC_SMP_HHP_408_3S;
-		break;
+		return BATTERY_GETAC_SMP_HHP_408_3S;
 	}
-
-	/* Set the fixed battery type */
-	battery_set_fixed_battery_type(bat_cell_type);
 }
+
 /******************************************************************************/
 /* PWROK signal configuration */
 /*
@@ -571,9 +565,6 @@ __override void board_pre_task_i2c_peripheral_init(void)
 
 	/* Make sure SBU are routed to CCD or AUX based on CCD status at init */
 	board_connect_c0_sbu_deferred();
-
-	/* Configure battery type */
-	configure_battery_type();
 
 	/* Reconfigure board specific charger drivers */
 	configure_charger();

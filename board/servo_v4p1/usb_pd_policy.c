@@ -754,7 +754,7 @@ __override void pd_transition_voltage(int idx)
 		CPRINTS("Waiting for CHG port transition");
 		while (charge_port_is_active() && vbus[CHG].mv != mv &&
 		       get_time().val < deadline.val)
-			msleep(10);
+			crec_msleep(10);
 
 		if (vbus[CHG].mv != mv) {
 			CPRINTS("Missed CHG transition, resetting DUT");
@@ -1191,7 +1191,7 @@ static void do_cc(int cc_config_new)
 			 * time for DUT to detach, use tErrorRecovery.
 			 */
 			if (!(cc_config_new & CC_DETACH))
-				usleep(PD_T_ERROR_RECOVERY);
+				crec_usleep(PD_T_ERROR_RECOVERY);
 		}
 
 		if ((cc_config & ~cc_config_new) & CC_DISABLE_DTS) {
@@ -1237,6 +1237,17 @@ static void do_cc(int cc_config_new)
 				pd_comm_enable(DUT, chargeable);
 		}
 	}
+}
+
+void set_cc_flag(int flag, bool set)
+{
+	int cc_config_new = cc_config;
+
+	if (set)
+		cc_config_new |= flag;
+	else
+		cc_config_new &= ~flag;
+	do_cc(cc_config_new);
 }
 
 static int command_cc(int argc, const char **argv)

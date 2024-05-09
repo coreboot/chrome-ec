@@ -28,7 +28,7 @@
 #ifdef SECTION_IS_RO
 
 /* Configure the Boot Manager. */
-#define CONFIG_MALLOC
+#define CONFIG_SHARED_MALLOC
 #define CONFIG_DFU_BOOTMANAGER_MAIN
 #define CONFIG_DFU_BOOTMANAGER_SHARED
 #undef CONFIG_COMMON_RUNTIME
@@ -100,6 +100,13 @@
 #define CONFIG_USB
 #define CONFIG_USB_PID 0x520e
 #define CONFIG_USB_CONSOLE
+
+/*
+ * Some commands take a list of GPIO names, which can exceed the default 80
+ * character limit.
+ */
+#undef CONFIG_CONSOLE_INPUT_LINE_SIZE
+#define CONFIG_CONSOLE_INPUT_LINE_SIZE 256
 
 /*
  * Enabling USB updating would exceed the number of USB endpoints
@@ -185,7 +192,17 @@
 #ifndef __ASSEMBLER__
 
 /* Timer selection */
+#define UNUSED_TIMER_1 1
 #define TIM_CLOCK32 2
+#define JTAG_TIMER 3
+#define UNUSED_TIMER_4 4
+#define BITBANG_TIMER 5
+#define UNUSED_TIMER_6 6
+#define UNUSED_TIMER_7 7
+#define UNUSED_TIMER_8 8
+#define UNUSED_TIMER_15 15
+#define UNUSED_TIMER_16 16
+#define UNUSED_TIMER_17 17
 
 #include "gpio_signal.h"
 

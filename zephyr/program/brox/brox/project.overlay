@@ -15,6 +15,7 @@ i2c3ALT: &i2c3 {
 #include <cros/cbi_flash.dtsi>
 
 #include "../adc.dtsi"
+#include "../binman.dtsi"
 #include "../brox.dtsi"
 #include "../fan.dtsi"
 #include "../generated.dtsi"
@@ -30,6 +31,7 @@ i2c3ALT: &i2c3 {
 #include "../pwm.dtsi"
 #include "../temp_sensors.dtsi"
 #include "../usb_typec.dtsi"
+#include "../usba.dtsi"
 
 /* Brox project DTS includes*/
 
@@ -43,18 +45,10 @@ i2c3ALT: &i2c3 {
         };
 };
 
-/*
- * When CBI in flash is enabled, setup RO flash layout as follows:
- *   RO binary:    0x00000:0x5DFFF
- *   PSTATE block: 0x5E000:0x5EFFF
- *   CBI flash:    0x5F000:0x5FFFF
- */
-&pstate {
-    offset = <(0x60000 - (0x1000 * 2))>;
-    size = <0x1000>;
+/* These GPIOS are initialized by the PDC driver */
+&gpio_usb_pd_int_odl {
+	no-auto-init;
 };
-
-&cbi_flash {
-	offset = <(0x60000 - (0x1000 * 1))>;
-	size = <0x1000>;
+&gpio_ec_i2c_pmc_pd_int_odl {
+	no-auto-init;
 };

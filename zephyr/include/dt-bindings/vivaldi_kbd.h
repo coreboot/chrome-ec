@@ -3,9 +3,12 @@
  * found in the LICENSE file.
  */
 
+#ifndef DT_BINDINGS_VIVALDI_KBD_H_
+#define DT_BINDINGS_VIVALDI_KBD_H_
+
 #include <zephyr/dt-bindings/dt-util.h>
 
-#define VIVALDI_RC(row, col) ((((row) & 0xff) << 8) | ((col) & 0xff))
+#include <dt-bindings/kbd.h>
 
 #define VIVALDI_TK_ABSENT 0
 #define VIVALDI_TK_BACK 1
@@ -28,7 +31,10 @@
 #define VIVALDI_TK_KBD_BKLIGHT_TOGGLE 18
 #define VIVALDI_TK_MICMUTE 19
 #define VIVALDI_TK_MENU 20
+#define VIVALDI_TK_DICTATE 21
 
 #define VIVALDI_KEYBD_CAP_FUNCTION_KEYS BIT(0)
 #define VIVALDI_KEYBD_CAP_NUMERIC_KEYPAD BIT(1)
 #define VIVALDI_KEYBD_CAP_SCRNLOCK_KEY BIT(2)
+
+#endif /* DT_BINDINGS_VIVALDI_KBD_H_ */

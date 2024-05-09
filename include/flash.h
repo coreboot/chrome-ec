@@ -144,6 +144,19 @@ int crec_flash_response_fill_banks(struct ec_response_flash_info_2 *r,
 #endif /* CONFIG_FLASH_MULTIPLE_REGION */
 #endif /* CONFIG_ROLLBACK */
 
+#ifdef CONFIG_FLASH_PROTECT_RW
+#ifdef CONFIG_FLASH_MULTIPLE_REGION
+#define RW_BANK_OFFSET crec_flash_bank_index(CONFIG_EC_WRITABLE_STORAGE_OFF)
+#define RW_BANK_COUNT                                         \
+	crec_flash_bank_count(CONFIG_EC_WRITABLE_STORAGE_OFF, \
+			      CONFIG_EC_WRITABLE_STORAGE_SIZE)
+#else
+#define RW_BANK_OFFSET (CONFIG_EC_WRITABLE_STORAGE_OFF / CONFIG_FLASH_BANK_SIZE)
+#define RW_BANK_COUNT (CONFIG_EC_WRITABLE_STORAGE_SIZE / CONFIG_FLASH_BANK_SIZE)
+#endif
+
+#endif /* CONFIG_FLASH_PROTECT_RW */
+
 /* This enum is useful to identify different regions during verification. */
 enum flash_region {
 	FLASH_REGION_RW = 0,
@@ -420,6 +433,26 @@ const char *crec_flash_read_pstate_mac_addr(void);
  * @return success status.
  */
 int crec_flash_write_pstate_mac_addr(const char *mac_addr);
+
+/**
+ * Get the poweron config from flash.
+ *
+ *  @param poweron_conf	pointer to uint8_t buffer,
+ *         which need to be in size of CONFIG_POWERON_CONF_LEN
+ *
+ * @return success status
+ */
+int crec_flash_read_pstate_poweron_conf(uint8_t *poweron_conf);
+
+/**
+ * Set the poweron config in flash.
+ *
+ * @param poweron_conf pointer to uint8_t buffer,
+ *        which need to be in size of CONFIG_POWERON_CONF_LEN
+ *
+ * @return success status.
+ */
+int crec_flash_write_pstate_poweron_conf(const uint8_t *poweron_conf);
 
 #ifdef CONFIG_FLASH_EX_OP_ENABLED
 /**

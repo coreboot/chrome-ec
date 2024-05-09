@@ -42,6 +42,7 @@ Run the script on the remote machine:
 # pylint: disable=too-many-lines
 
 import argparse
+from collections import namedtuple
 import concurrent
 from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -55,6 +56,7 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from typing import BinaryIO, Callable, Dict, List, Optional, Tuple
 
@@ -62,6 +64,7 @@ from typing import BinaryIO, Callable, Dict, List, Optional, Tuple
 import colorama  # type: ignore[import]
 from contextlib2 import ExitStack
 import fmap
+import yaml
 
 
 # pylint: enable=import-error
@@ -69,16 +72,23 @@ import fmap
 EC_DIR = Path(os.path.dirname(os.path.realpath(__file__))).parent
 JTRACE_FLASH_SCRIPT = os.path.join(EC_DIR, "util/flash_jlink.py")
 SERVO_MICRO_FLASH_SCRIPT = os.path.join(EC_DIR, "util/flash_ec")
+ZEPHYR_FPMCU_DIR = os.path.join(EC_DIR, "zephyr/program/fpmcu")
 
-ALL_TESTS_PASSED_REGEX = re.compile(r"Pass!\r\n")
-ALL_TESTS_FAILED_REGEX = re.compile(r"Fail! \(\d+ tests\)\r\n")
+# .* is added to regexes because Zephyr uses VT100 commands at the beginning of
+# a new line.
+ALL_TESTS_PASSED_REGEX = re.compile(r"(Pass!\r\n)|(.*TESTSUITE.*succeeded)")
+ALL_TESTS_FAILED_REGEX = re.compile(
+    r"(Fail! \(\d+ tests\)\r\n)|(.*TESTSUITE.*failed)"
+)
 
-SINGLE_CHECK_PASSED_REGEX = re.compile(r"Pass: .*")
-SINGLE_CHECK_FAILED_REGEX = re.compile(r".*failed:.*")
+SINGLE_CHECK_PASSED_REGEX = re.compile(r"(Pass: .*)|(.* PASS - )")
+SINGLE_CHECK_FAILED_REGEX = re.compile(r"(.*failed:.*)|(.* FAIL - )")
 
-RW_IMAGE_BOOTED_REGEX = re.compile(r"^\[Image: RW.*")
+RW_IMAGE_BOOTED_REGEX = re.compile(r".*\[Image: RW.*")
 
-ASSERTION_FAILURE_REGEX = re.compile(r"ASSERTION FAILURE.*")
+ASSERTION_FAILURE_REGEX = re.compile(
+    r"(ASSERTION FAILURE.*)|(.*Assertion failed at)"
+)
 
 DATA_ACCESS_VIOLATION_8020000_REGEX = re.compile(
     r"Data access violation, mfar = 8020000\r\n"
@@ -101,8 +111,8 @@ DATA_ACCESS_VIOLATION_24000000_REGEX = re.compile(
 DATA_ACCESS_VIOLATION_64020000_REGEX = re.compile(
     r"Data access violation, mfar = 64020000\r\n"
 )
-DATA_ACCESS_VIOLATION_64040000_REGEX = re.compile(
-    r"Data access violation, mfar = 64040000\r\n"
+DATA_ACCESS_VIOLATION_64030000_REGEX = re.compile(
+    r"Data access violation, mfar = 64030000\r\n"
 )
 DATA_ACCESS_VIOLATION_200B0000_REGEX = re.compile(
     r"Data access violation, mfar = 200b0000\r\n"
@@ -111,6 +121,7 @@ DATA_ACCESS_VIOLATION_200B0000_REGEX = re.compile(
 PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
 
 BLOONCHIPPER = "bloonchipper"
+BUCCANEER = "buccaneer"
 DARTMONKEY = "dartmonkey"
 HELIPILOT = "helipilot"
 
@@ -140,6 +151,9 @@ BLOONCHIPPER_V4277_IMAGE_PATH = os.path.join(
 BLOONCHIPPER_V5938_IMAGE_PATH = os.path.join(
     TEST_ASSETS_BUCKET, "bloonchipper_v2.0.5938-197506c1.bin"
 )
+
+RangedValue = namedtuple("RangedValue", "nominal range")
+PowerUtilization = namedtuple("PowerUtilization", "idle sleep")
 
 
 class ImageType(Enum):
@@ -178,7 +192,12 @@ class BoardConfig:
     rollback_region1_regex: object
     mpu_regex: object
     reboot_timeout: float
+    mcu_power_supply: str
+    expected_fp_power: PowerUtilization
+    expected_mcu_power: PowerUtilization
     variants: Dict
+    expected_fp_power_zephyr: PowerUtilization = None
+    expected_mcu_power_zephyr: PowerUtilization = None
 
 
 @dataclass
@@ -204,6 +223,7 @@ class TestConfig:
     passed: bool = field(init=False, default=False)
     num_passes: int = field(init=False, default=0)
     num_fails: int = field(init=False, default=0)
+    skip_for_zephyr: bool = False
 
     # The callbacks below are called before and after a test is executed and
     # may be used for additional test setup, post test activities, or other tasks
@@ -265,10 +285,12 @@ class AllTests:
             ),
             TestConfig(test_name="abort"),
             TestConfig(test_name="aes"),
-            TestConfig(test_name="always_memset"),
+            # Cryptoc is not supported with Zephyr.
+            # TODO(b/333039464) A new test for OPENSSL_cleanse has to be implemented.
+            TestConfig(test_name="always_memset", skip_for_zephyr=True),
             TestConfig(test_name="benchmark"),
             TestConfig(test_name="boringssl_crypto"),
-            TestConfig(test_name="cortexm_fpu", exclude_boards=[HELIPILOT]),
+            TestConfig(test_name="cortexm_fpu"),
             TestConfig(test_name="crc"),
             TestConfig(test_name="exception"),
             TestConfig(
@@ -284,6 +306,7 @@ class AllTests:
             ),
             TestConfig(test_name="fpsensor_auth_crypto_stateful"),
             TestConfig(test_name="fpsensor_auth_crypto_stateless"),
+            TestConfig(test_name="fpsensor_crypto"),
             TestConfig(
                 test_name="fpsensor_hw", pre_test_callback=fp_sensor_sel
             ),
@@ -309,6 +332,7 @@ class AllTests:
                 test_name="fpsensor",
                 test_args=["uart"],
             ),
+            TestConfig(test_name="fpsensor_utils"),
             TestConfig(test_name="ftrapv"),
             TestConfig(
                 test_name="libc_printf",
@@ -329,10 +353,16 @@ class AllTests:
                 finish_regexes=[board_config.mpu_regex],
             ),
             TestConfig(test_name="mutex"),
+            TestConfig(test_name="mutex_trylock"),
+            TestConfig(test_name="mutex_recursive"),
+            TestConfig(
+                test_name="otp_key", exclude_boards=[BLOONCHIPPER, DARTMONKEY]
+            ),
             TestConfig(test_name="panic"),
             TestConfig(test_name="pingpong"),
             TestConfig(test_name="printf"),
             TestConfig(test_name="queue"),
+            TestConfig(test_name="restricted_console"),
             TestConfig(test_name="rng_benchmark"),
             TestConfig(
                 config_name="rollback_region0",
@@ -350,15 +380,20 @@ class AllTests:
                 test_name="rollback_entropy", imagetype_to_use=ImageType.RO
             ),
             TestConfig(test_name="rtc"),
+            TestConfig(
+                test_name="rtc_npcx9",
+                timeout_secs=20,
+                exclude_boards=[BLOONCHIPPER, DARTMONKEY],
+            ),
+            TestConfig(
+                test_name="rtc_stm32f4", exclude_boards=[DARTMONKEY, HELIPILOT]
+            ),
             TestConfig(test_name="sbrk", imagetype_to_use=ImageType.RO),
             TestConfig(test_name="sha256"),
             TestConfig(test_name="sha256_unrolled"),
             TestConfig(test_name="static_if"),
             TestConfig(test_name="stdlib"),
             TestConfig(test_name="std_vector"),
-            TestConfig(
-                test_name="stm32f_rtc", exclude_boards=[DARTMONKEY, HELIPILOT]
-            ),
             TestConfig(
                 config_name="system_is_locked_wp_on",
                 test_name="system_is_locked",
@@ -381,6 +416,28 @@ class AllTests:
             TestConfig(test_name="unaligned_access_benchmark"),
             TestConfig(test_name="utils", timeout_secs=20),
             TestConfig(test_name="utils_str"),
+            TestConfig(
+                config_name="power_utilization_idle",
+                test_name="power_utilization",
+                apptype_to_use=ApplicationType.PRODUCTION,
+                toggle_power=True,
+                pre_test_callback=lambda config: power_pre_test(
+                    board_config=config, enter_sleep=False
+                ),
+                post_test_callback=verify_idle_power_utilization,
+                finish_regexes=[RW_IMAGE_BOOTED_REGEX],
+            ),
+            TestConfig(
+                config_name="power_utilization_sleep",
+                test_name="power_utilization",
+                apptype_to_use=ApplicationType.PRODUCTION,
+                toggle_power=True,
+                pre_test_callback=lambda config: power_pre_test(
+                    board_config=config, enter_sleep=True
+                ),
+                post_test_callback=verify_sleep_power_utilization,
+                finish_regexes=[RW_IMAGE_BOOTED_REGEX],
+            ),
         ]
 
         # Run unaligned access tests for all boards and RO versions.
@@ -448,6 +505,20 @@ BLOONCHIPPER_CONFIG = BoardConfig(
     rollback_region0_regex=DATA_ACCESS_VIOLATION_8020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_8040000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
+    mcu_power_supply="ppvar_mcu_mw",
+    expected_fp_power=PowerUtilization(
+        idle=RangedValue(0.71, 0.53), sleep=RangedValue(0.69, 0.51)
+    ),
+    expected_mcu_power=PowerUtilization(
+        idle=RangedValue(16.05, 0.14 * 2), sleep=RangedValue(0.53, 0.35 * 2)
+    ),
+    expected_fp_power_zephyr=PowerUtilization(
+        idle=RangedValue(0.17, 0.04), sleep=RangedValue(0.17, 0.04)
+    ),
+    # TODO(b/311568657) Update expected value once b/311568657 is closed.
+    expected_mcu_power_zephyr=PowerUtilization(
+        idle=RangedValue(14.61, 0.14 * 2), sleep=RangedValue(0.28, 0.04)
+    ),
     variants={
         "bloonchipper_v2.0.4277": {
             "ro_image_path": BLOONCHIPPER_V4277_IMAGE_PATH
@@ -466,6 +537,13 @@ DARTMONKEY_CONFIG = BoardConfig(
     rollback_region0_regex=DATA_ACCESS_VIOLATION_80C0000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_80E0000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_24000000_REGEX,
+    mcu_power_supply="ppvar_mcu_mw",
+    expected_fp_power=PowerUtilization(
+        idle=RangedValue(0.03, 0.05), sleep=RangedValue(0.03, 0.05)
+    ),
+    expected_mcu_power=PowerUtilization(
+        idle=RangedValue(42.67, 0.35 * 2), sleep=RangedValue(4.46, 0.23 * 2)
+    ),
     # For dartmonkey board, run panic data test also on nocturne_fp and
     # nami_fp boards with appropriate RO image.
     variants={
@@ -487,13 +565,27 @@ HELIPILOT_CONFIG = BoardConfig(
     servo_power_enable="fpmcu_pp3300",
     reboot_timeout=1.5,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_64020000_REGEX,
-    rollback_region1_regex=DATA_ACCESS_VIOLATION_64040000_REGEX,
+    rollback_region1_regex=DATA_ACCESS_VIOLATION_64030000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_200B0000_REGEX,
+    mcu_power_supply="pp3300_mcu_mw",
+    # Power utilization numbers were experimentally derived via onboard ADCs and verified with a DMM
+    expected_fp_power=PowerUtilization(
+        idle=RangedValue(0.0, 0.1), sleep=RangedValue(0.0, 0.1)
+    ),
+    expected_mcu_power=PowerUtilization(
+        idle=RangedValue(34.8, 3.0), sleep=RangedValue(2.7, 2.5)
+    ),
+    # TODO(b/336640650): Add helipilot variants once RO is uploaded
     variants={},
 )
 
+BUCCANEER_CONFIG = HELIPILOT_CONFIG
+BUCCANEER_CONFIG.name = BUCCANEER
+# TODO(b/336640151): Add buccaneer variants once RO is created
+
 BOARD_CONFIGS = {
     "bloonchipper": BLOONCHIPPER_CONFIG,
+    "buccaneer": BUCCANEER_CONFIG,
     "dartmonkey": DARTMONKEY_CONFIG,
     "helipilot": HELIPILOT_CONFIG,
 }
@@ -586,6 +678,19 @@ def get_console(board_config: BoardConfig) -> Optional[str]:
     return None
 
 
+def set_sleep_mode(enter_sleep: bool) -> bool:
+    """Enters or exists sleep mode based on enter_sleep parameter"""
+    sleep_mode = "on" if enter_sleep else "off"
+    cmd = [
+        "dut-control",
+        f"fpmcu_slp:{sleep_mode}",
+    ]
+
+    logging.debug('Running command: "%s"', cmd)
+    proc = subprocess.run(cmd, check=False)
+    return proc.returncode == 0
+
+
 def power(board_config: BoardConfig, power_on: bool) -> None:
     """Turn power to board on/off."""
     if power_on:
@@ -612,13 +717,13 @@ def power_cycle(board_config: BoardConfig) -> None:
 
 def fp_sensor_sel(
     board_config: BoardConfig, sensor_type: FPSensorType = FPSensorType.FPC
-) -> None:
+) -> bool:
     """
     Explicitly select the appropriate fingerprint sensor.
     This function assumes that the fp_sensor_sel servo control is connected to
     the proper gpio on the development board. This is not the case on some
     older development boards. This should not result in any failures but also
-    may have not actually change the selected sensor.
+    may have not actually changed the selected sensor.
     """
 
     cmd = [
@@ -627,11 +732,25 @@ def fp_sensor_sel(
     ]
 
     logging.debug('Running command: "%s"', " ".join(cmd))
-    subprocess.run(cmd, check=False).check_returncode()
+    proc = subprocess.run(cmd, check=False)
 
-    # power cycle after setting sensor type to ensure detection
-    power_cycle(board_config)
-    return True
+    if proc.returncode == 0:
+        # power cycle after setting sensor type to ensure detection
+        power_cycle(board_config)
+        return True
+
+    return False
+
+
+def power_pre_test(board_config: BoardConfig, enter_sleep: bool) -> bool:
+    """
+    Prepare a board for a power_utilization test
+    """
+
+    if not set_sleep_mode(enter_sleep):
+        return False
+
+    return fp_sensor_sel(board_config)
 
 
 def hw_write_protect(enable: bool) -> None:
@@ -649,25 +768,92 @@ def hw_write_protect(enable: bool) -> None:
     subprocess.run(cmd, check=False).check_returncode()
 
 
-def build(
-    test_name: str, board_name: str, compiler: str, app_type: ApplicationType
-) -> None:
-    """Build specified test for specified board."""
+def build_ec(
+    test_name: str,
+    board_name: str,
+    compiler: str,
+    app_type: ApplicationType,
+) -> List[str]:
+    """Prepare a command to build test using CrosEC"""
     cmd = ["make"]
-
     if compiler == CLANG:
         cmd = cmd + ["CC=arm-none-eabi-clang"]
-
     cmd = cmd + [
         "BOARD=" + board_name,
         "-j",
     ]
-
     # If the image type is a test image, then apply test- prefix to the target name
     if app_type == ApplicationType.TEST:
         cmd = cmd + [
             "test-" + test_name,
         ]
+
+    return cmd
+
+
+def build_zephyr(
+    test_name: str,
+    board_name: str,
+    app_type: ApplicationType,
+    img_type: ImageType,
+) -> List[str]:
+    """Prepare a command to build test using Zephyr"""
+    cmd = ["zmake"] + ["build"]
+    cmd = cmd + [board_name] + ["--clobber"]
+    if app_type != ApplicationType.TEST:
+        return cmd
+
+    # Create tmp file to pass needed configs
+    test_conf = os.path.join(tempfile.gettempdir(), "test.conf")
+    with open(test_conf, "w", encoding="utf-8") as f_test_config:
+        cmd = cmd + ["-DOVERLAY_CONFIG=" + test_conf]
+        # Get list of supported tests
+        testcase = os.path.join(ZEPHYR_FPMCU_DIR, "testcase.yaml")
+        with open(testcase, encoding="utf-8") as testcase:
+            lines = testcase.read()
+        testcase_data = yaml.load(lines, Loader=yaml.SafeLoader)
+        if "tests" not in testcase_data:
+            raise ValueError(
+                'testcase.yaml file doesn\'t contain "tests" section'
+            )
+        # Make sure the current test is supported
+        if test_name not in testcase_data["tests"]:
+            raise ValueError(test_name + " not present in testcase.yaml")
+        # Add configs needed for a specific test from "extra_conf_files"
+        # and "extra_configs" sections
+        if "extra_conf_files" in testcase_data["tests"][test_name]:
+            for config_file in testcase_data["tests"][test_name][
+                "extra_conf_files"
+            ]:
+                config_file_path = os.path.join(ZEPHYR_FPMCU_DIR, config_file)
+                with open(
+                    config_file_path, "r", encoding="utf-8"
+                ) as f_config_file:
+                    f_test_config.write(f_config_file.read())
+        if "extra_configs" in testcase_data["tests"][test_name]:
+            for config in testcase_data["tests"][test_name]["extra_configs"]:
+                f_test_config.write(config + "\n")
+        # Include tests also in RO part. It is not done by default
+        # because of lack of space
+        if img_type == ImageType.RO:
+            f_test_config.write("CONFIG_HW_TEST_RW_ONLY=n\n")
+
+    return cmd
+
+
+def build(
+    test_name: str,
+    board_name: str,
+    compiler: str,
+    app_type: ApplicationType,
+    img_type: ImageType,
+    zephyr: bool,
+) -> None:
+    """Build specified test for specified board."""
+    if zephyr:
+        cmd = build_zephyr(test_name, board_name, app_type, img_type)
+    else:
+        cmd = build_ec(test_name, board_name, compiler, app_type)
 
     logging.debug('Running command: "%s"', " ".join(cmd))
     subprocess.run(cmd, check=False).check_returncode()
@@ -757,11 +943,35 @@ def process_console_output_line(line: bytes, test: TestConfig):
         return None
 
 
+def run_test_ec(test: TestConfig) -> str:
+    """Prepare a command to run test on CrosEC"""
+    test_cmd = "runtest " + " ".join(test.test_args) + "\n"
+
+    return test_cmd
+
+
+def run_test_zephyr(test: TestConfig) -> str:
+    """Prepare a command to run test on Zephyr"""
+    if len(test.test_args) == 0:
+        # If there are no args just run-all not to be limited by suite name
+        test_cmd = "ztest run-all\n"
+    else:
+        # ZTEST console doesn't support passing test arguments
+        # Assume a testsuite for every test + arg combination
+        test_cmd = "ztest run-testcase " + test.test_name
+        for test_arg in test.test_args:
+            test_cmd = test_cmd + "_" + test_arg
+        test_cmd = test_cmd + "\n"
+
+    return test_cmd
+
+
 def run_test(
     test: TestConfig,
     board_config: BoardConfig,
     console: io.FileIO,
     executor: ThreadPoolExecutor,
+    zephyr: bool,
 ) -> bool:
     """Run specified test."""
     start = time.time()
@@ -774,14 +984,21 @@ def run_test(
 
     # Wait for boot to finish
     time.sleep(reboot_timeout)
-    console.write("\n".encode())
+
+    if test.apptype_to_use != ApplicationType.PRODUCTION:
+        console.write("\n".encode())
+
     if test.imagetype_to_use == ImageType.RO:
         console.write("reboot ro\n".encode())
         time.sleep(reboot_timeout)
 
     # Skip runtest if using standard app type
     if test.apptype_to_use != ApplicationType.PRODUCTION:
-        test_cmd = "runtest " + " ".join(test.test_args) + "\n"
+        if zephyr:
+            test_cmd = run_test_zephyr(test)
+        else:
+            test_cmd = run_test_ec(test)
+
         console.write(test_cmd.encode())
 
     while True:
@@ -849,6 +1066,27 @@ def get_test_list(
     return test_list
 
 
+def get_image_path(test: TestConfig, build_board: str, zephyr: bool):
+    """Get a path to a built image"""
+    if zephyr:
+        image_path = os.path.join(
+            EC_DIR, "build", "zephyr", build_board, "output", "ec.bin"
+        )
+    else:
+        if test.apptype_to_use == ApplicationType.PRODUCTION:
+            image_path = os.path.join(EC_DIR, "build", build_board, "ec.bin")
+        else:
+            image_path = os.path.join(
+                EC_DIR,
+                "build",
+                build_board,
+                test.test_name,
+                test.test_name + ".bin",
+            )
+
+    return image_path
+
+
 def flash_and_run_test(
     test: TestConfig,
     board_config: BoardConfig,
@@ -864,21 +1102,20 @@ def flash_and_run_test(
 
     # attempt to build test binary, reporting a test failure on error
     try:
-        build(test.test_name, build_board, args.compiler, test.apptype_to_use)
+        build(
+            test.test_name,
+            build_board,
+            args.compiler,
+            test.apptype_to_use,
+            test.imagetype_to_use,
+            args.zephyr,
+        )
     except Exception as exception:  # pylint: disable=broad-except
         logging.error("failed to build %s: %s", test.test_name, exception)
         return False
 
-    if test.apptype_to_use == ApplicationType.PRODUCTION:
-        image_path = os.path.join(EC_DIR, "build", build_board, "ec.bin")
-    else:
-        image_path = os.path.join(
-            EC_DIR,
-            "build",
-            build_board,
-            test.test_name,
-            test.test_name + ".bin",
-        )
+    image_path = get_image_path(test, build_board, args.zephyr)
+
     logging.debug("image_path: %s", image_path)
 
     if test.ro_image is not None:
@@ -909,17 +1146,6 @@ def flash_and_run_test(
         )
         return False
 
-    if test.toggle_power:
-        power_cycle(board_config)
-    else:
-        # In some cases flash_ec leaves the board off, so just ensure it is on
-        power(board_config, power_on=True)
-
-    hw_write_protect(test.enable_hw_write_protect)
-
-    # run the test
-    logging.info('Running test: "%s"', test.config_name)
-
     with ExitStack() as stack:
         if args.remote and args.console_port:
             console_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -932,11 +1158,23 @@ def flash_and_run_test(
             console_file = open(get_console(board_config), "wb+", buffering=0)
             console = stack.enter_context(console_file)
 
+        if test.toggle_power:
+            power_cycle(board_config)
+        else:
+            # In some cases flash_ec leaves the board off, so just ensure it is on
+            power(board_config, power_on=True)
+
+        hw_write_protect(test.enable_hw_write_protect)
+
+        # run the test
+        logging.info('Running test: "%s"', test.config_name)
+
         return run_test(
             test,
             board_config,
             console,
             executor=executor,
+            zephyr=args.zephyr,
         )
 
 
@@ -1052,6 +1290,10 @@ def main():
         "--with_private", choices=with_private_choices, default=PRIVATE_YES
     )
 
+    parser.add_argument(
+        "--zephyr", help="Use Zephyr build", action="store_true"
+    )
+
     args = parser.parse_args()
     logging.basicConfig(
         format="%(levelname)s:%(message)s", level=args.log_level
@@ -1059,11 +1301,18 @@ def main():
     validate_args_combination(args)
 
     board_config = BOARD_CONFIGS[args.board]
+    # Use expected values for Zephyr
+    if args.zephyr:
+        board_config.expected_fp_power = board_config.expected_fp_power_zephyr
+        board_config.expected_mcu_power = board_config.expected_mcu_power_zephyr
+
     test_list = get_test_list(board_config, args.tests, args.with_private)
     logging.debug("Running tests: %s", [test.config_name for test in test_list])
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         for test in test_list:
+            if test.skip_for_zephyr and args.zephyr:
+                continue
             test.passed = flash_and_run_test(test, board_config, args, executor)
 
         colorama.init()
@@ -1071,15 +1320,125 @@ def main():
         for test in test_list:
             # print results
             print('Test "' + test.config_name + '": ', end="")
-            if test.passed:
-                print(colorama.Fore.GREEN + "PASSED")
+            if test.skip_for_zephyr and args.zephyr:
+                print(colorama.Fore.YELLOW + "SKIPPED")
             else:
-                print(colorama.Fore.RED + "FAILED")
-                exit_code = 1
+                if test.passed:
+                    print(colorama.Fore.GREEN + "PASSED")
+                else:
+                    print(colorama.Fore.RED + "FAILED")
+                    exit_code = 1
 
             print(colorama.Style.RESET_ALL)
 
     sys.exit(exit_code)
+
+
+def get_power_utilization(
+    board_config: BoardConfig,
+) -> Tuple[Optional[float], Optional[float]]:
+    """Retrieve board power utilization data"""
+    fp_power_signal = "ppvar_fp_mw"
+    mcu_power_signal = board_config.mcu_power_supply
+    cmd = [
+        "dut-control",
+        "--value_only",  # only the summary will print the field names
+        "-t",
+        "10",  # sample time in seconds
+        fp_power_signal,
+        mcu_power_signal,
+    ]
+
+    logging.debug('Running command: "%s"', " ".join(cmd))
+
+    fp_power_mw = None
+    mcu_power_mw = None
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE) as proc:
+        for line in io.TextIOWrapper(proc.stdout):  # type: ignore[arg-type]
+            # Only the summary is required and those lines start with @@ and have 6 other fields
+            # (NAME, COUNT, AVERAGE, STDDEV, MAX, MIN)
+            response = line.split()
+            if len(response) != 7 or response[0] != "@@":
+                continue
+
+            resp_name, _, resp_avg, _, _, _ = response[1:]
+
+            if resp_name == fp_power_signal:
+                fp_power_mw = float(resp_avg.strip())
+            elif resp_name == mcu_power_signal:
+                mcu_power_mw = float(resp_avg.strip())
+
+            logging.debug(
+                "fp_power_mw:%s \t mcu_power_mw:%s", fp_power_mw, mcu_power_mw
+            )
+
+            if fp_power_mw is not None and mcu_power_mw is not None:
+                return (fp_power_mw, mcu_power_mw)
+
+    logging.error("Failed to receive required power data from FPMCU")
+    return (None, None)
+
+
+def verify_power_utilization(
+    fp_power_mw: float,
+    mcu_power_mw: float,
+    fp_expected: RangedValue,
+    mcu_expected: RangedValue,
+) -> bool:
+    """Get the name of the console for a given board."""
+
+    if fp_power_mw is not None and mcu_power_mw is not None:
+        fp_mw_delta = abs(fp_power_mw - fp_expected.nominal)
+        mcu_mw_delta = abs(mcu_power_mw - mcu_expected.nominal)
+
+        logging.info(
+            "fp power:\tactual: %0.2f expected: %0.2f threshold: +/-%0.2f",
+            fp_power_mw,
+            fp_expected.nominal,
+            fp_expected.range,
+        )
+        logging.info(
+            "mcu power:\tactual: %0.2f expected: %0.2f threshold: +/-%0.2f",
+            mcu_power_mw,
+            mcu_expected.nominal,
+            mcu_expected.range,
+        )
+
+        return (
+            fp_mw_delta <= fp_expected.range
+            and mcu_mw_delta <= mcu_expected.range
+        )
+
+    logging.error("Failed to receive required power data from FPMCU")
+    return False
+
+
+def verify_idle_power_utilization(board_config: BoardConfig) -> bool:
+    """Verifies that idle power utilization is within range for the specified board"""
+
+    fp_power_mw, mcu_power_mw = get_power_utilization(board_config)
+    return verify_power_utilization(
+        fp_power_mw,
+        mcu_power_mw,
+        board_config.expected_fp_power.idle,
+        board_config.expected_mcu_power.idle,
+    )
+
+
+def verify_sleep_power_utilization(board_config: BoardConfig) -> bool:
+    """Verifies that sleep power utilization is within range for the specified board"""
+
+    fp_power_mw, mcu_power_mw = get_power_utilization(board_config)
+    ret = verify_power_utilization(
+        fp_power_mw,
+        mcu_power_mw,
+        board_config.expected_fp_power.sleep,
+        board_config.expected_mcu_power.sleep,
+    )
+
+    # Make sure to exit sleep mode!
+    set_sleep_mode(False)
+    return ret
 
 
 if __name__ == "__main__":

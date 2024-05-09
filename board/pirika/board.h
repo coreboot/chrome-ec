@@ -20,6 +20,9 @@
 
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
+#define CONFIG_BATTERY_V2
+#define CONFIG_HOSTCMD_BATTERY_V2
+#define CONFIG_BATTERY_COUNT 1
 
 /* BC 1.2 */
 #define CONFIG_BC12_DETECT_PI3USB9201
@@ -139,6 +142,14 @@ enum battery_type {
 	BATTERY_TYPE_COUNT,
 };
 
+enum battery_cell_type {
+	BATTERY_CELL_TYPE_1S = 1,
+	BATTERY_CELL_TYPE_2S = 2,
+	BATTERY_CELL_TYPE_3S = 3,
+	BATTERY_CELL_TYPE_4S = 4,
+};
+
+enum battery_cell_type board_get_battery_cell_type(void);
 #endif /* !__ASSEMBLER__ */
 
 #endif /* __CROS_EC_BOARD_H */

@@ -5,12 +5,14 @@
 
 #include "battery.h"
 #include "battery_smart.h"
+#include "charge_state.h"
 #include "charger.h"
 #include "driver/charger/sm5803.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_sm5803.h"
 #include "emul/tcpc/emul_tcpci_partner_snk.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
+#include "extpower.h"
 #include "hooks.h"
 #include "tcpm/tcpci.h"
 #include "test/drivers/charger_utils.h"
@@ -266,7 +268,6 @@ ZTEST(sm5803, test_init_2s)
 	/* Gets chip ID (already cached) and PMODE. */
 	LOG_ASSERT_R(SM5803_ADDR_MAIN_FLAGS, SM5803_REG_PLATFORM);
 	/* Writes a lot of registers for presumably important reasons. */
-	LOG_ASSERT_W(SM5803_ADDR_MEAS_FLAGS, 0x26, 0xdc);
 	LOG_ASSERT_W(SM5803_ADDR_CHARGER_FLAGS, 0x21, 0x9b);
 	LOG_ASSERT_W(SM5803_ADDR_MAIN_FLAGS, 0x30, 0xc0);
 	LOG_ASSERT_W(SM5803_ADDR_MAIN_FLAGS, 0x80, 0x01);
@@ -346,7 +347,6 @@ ZTEST(sm5803, test_init_3s)
 	/* Gets chip ID (already cached) and PMODE. */
 	LOG_ASSERT_R(SM5803_ADDR_MAIN_FLAGS, SM5803_REG_PLATFORM);
 	/* Writes a lot of registers for presumably important reasons. */
-	LOG_ASSERT_W(SM5803_ADDR_MEAS_FLAGS, 0x26, 0xd8);
 	LOG_ASSERT_W(SM5803_ADDR_CHARGER_FLAGS, 0x21, 0x9b);
 	LOG_ASSERT_W(SM5803_ADDR_MAIN_FLAGS, 0x30, 0xc0);
 	LOG_ASSERT_W(SM5803_ADDR_MAIN_FLAGS, 0x80, 0x01);
@@ -1003,6 +1003,41 @@ ZTEST(sm5803, test_set_option)
 	zassert_not_equal(sm5803_drv.set_option(CHARGER_NUM, 0), 0);
 }
 
+FAKE_VALUE_FUNC(int, extpower_is_present);
+
+ZTEST_F(sm5803, test_set_mode)
+{
+	int temp;
+
+	/* Make cur.ac = 1 */
+	pd_connect_source(fixture);
+	extpower_is_present_fake.return_val = 1;
+	zassert_true(extpower_is_present());
+	/* add delay to let curr.ac to be 1 */
+	k_sleep(K_SECONDS(1));
+
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgstate idle off"));
+	charge_idle_enabled = 1;
+	zassert_ok(charger_set_mode(0));
+	zassert_ok(charger_get_option(&temp));
+	/* Flow1(0x1C) Bit[1:0]=01, Flow2(0x1D) Bit[2:0]=111 */
+	zassert_equal(temp, 0x701);
+
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgstate idle on"));
+	zassert_ok(charger_set_mode(0));
+	zassert_ok(charger_get_option(&temp));
+	/* Flow1(0x1C) Bit[1:0]=01, Flow2(0x1D) Bit[2:0]=000 */
+	zassert_equal(temp, 0x1);
+
+	zassert_ok(shell_execute_cmd(get_ec_shell(), "chgstate discharge on"));
+	zassert_ok(charger_set_mode(0));
+	zassert_equal(charge_idle_enabled, 0);
+
+	/* Reset AC status */
+	extpower_is_present_fake.return_val = 0;
+	zassert_false(extpower_is_present());
+}
+
 ZTEST(sm5803, test_acok)
 {
 	bool acok;
@@ -1233,131 +1268,6 @@ ZTEST_F(sm5803, test_explicit_lpm_connected)
 		      "Comparators other than VBUS should be disabled,"
 		      " but PHOT1 was %#x",
 		      sm5803_emul_get_phot1(SM5803_EMUL));
-}
-
-ZTEST_F(sm5803, test_vbat_overvoltage_2s)
-{
-	struct i2c_log log = {};
-	struct i2c_log *const log_ptr = &log;
-	uint8_t flow1;
-
-	pd_connect_source(fixture);
-	sm5803_emul_get_flow_regs(SM5803_EMUL, &flow1, NULL, NULL);
-	zassert_equal(flow1, 1, "charger should be sinking, but FLOW1 was %#x",
-		      flow1);
-
-	/* Log accesses to sense parameters to verify they're as expected. */
-	i2c_common_emul_set_read_func(sm5803_emul_get_i2c_meas(SM5803_EMUL),
-				      i2c_log_read_meas, log_ptr);
-	i2c_common_emul_set_write_func(sm5803_emul_get_i2c_meas(SM5803_EMUL),
-				       i2c_log_write_meas, log_ptr);
-
-	/*
-	 * Trigger VBAT_SNS overvoltage interrupt. Default threshold for 2S is
-	 * 9V.
-	 */
-	sm5803_emul_set_vbat_sns_mv(SM5803_EMUL, 9050);
-	sm5803_emul_set_irqs(SM5803_EMUL, 0, SM5803_INT2_VBATSNSP, 0, 0);
-	/* Allow interrupt to be serviced */
-	k_sleep(K_SECONDS(0.1));
-
-	/*
-	 * Interrupt handler logged voltages, then reset the threshold to reset
-	 * the interrupt, and programmed the expected threshold back.
-	 */
-	LOG_ASSERT_R(SM5803_ADDR_MEAS_FLAGS, SM5803_REG_VBATSNSP_MEAS_MSB);
-	LOG_ASSERT_R(SM5803_ADDR_MEAS_FLAGS, SM5803_REG_VBATSNSP_MEAS_LSB);
-	LOG_ASSERT_R(SM5803_ADDR_MEAS_FLAGS, SM5803_REG_VBATSNSP_MAX_TH);
-	LOG_ASSERT_W(SM5803_ADDR_MEAS_FLAGS, SM5803_REG_VBATSNSP_MAX_TH, 0xff);
-	LOG_ASSERT_W(SM5803_ADDR_MEAS_FLAGS, SM5803_REG_VBATSNSP_MAX_TH, 0xdc);
-	/* Interrupt handler also stopped sinking. */
-	sm5803_emul_get_flow_regs(SM5803_EMUL, &flow1, NULL, NULL);
-	zassert_equal(flow1, 0,
-		      "FLOW1 should disable charger, but value was %#x", flow1);
-
-	/*
-	 * Charger will now attempt to re-enable sinking automatically. Stop
-	 * logging because we don't care anymore and there will be a lot of
-	 * accesses in the background while we wait.
-	 */
-	i2c_common_emul_set_read_func(sm5803_emul_get_i2c_meas(SM5803_EMUL),
-				      NULL, NULL);
-	i2c_common_emul_set_write_func(sm5803_emul_get_i2c_meas(SM5803_EMUL),
-				       NULL, NULL);
-	k_sleep(K_SECONDS(2));
-	sm5803_emul_get_flow_regs(SM5803_EMUL, &flow1, NULL, NULL);
-	zassert_equal(flow1, 1,
-		      "FLOW1 should resume sinking, but value was %#x", flow1);
-
-	/* Assorted error paths in the interrupt. */
-	i2c_common_emul_set_read_fail_reg(sm5803_emul_get_i2c_meas(SM5803_EMUL),
-					  SM5803_REG_VBATSNSP_MAX_TH);
-	sm5803_emul_set_irqs(SM5803_EMUL, 0, SM5803_INT2_VBATSNSP, 0, 0);
-	sm5803_handle_interrupt(CHARGER_NUM);
-	i2c_common_emul_set_read_fail_reg(sm5803_emul_get_i2c_meas(SM5803_EMUL),
-					  SM5803_REG_VBATSNSP_MEAS_LSB);
-	sm5803_emul_set_irqs(SM5803_EMUL, 0, SM5803_INT2_VBATSNSP, 0, 0);
-	sm5803_handle_interrupt(CHARGER_NUM);
-	i2c_common_emul_set_read_fail_reg(sm5803_emul_get_i2c_meas(SM5803_EMUL),
-					  SM5803_REG_VBATSNSP_MEAS_MSB);
-	sm5803_emul_set_irqs(SM5803_EMUL, 0, SM5803_INT2_VBATSNSP, 0, 0);
-	sm5803_handle_interrupt(CHARGER_NUM);
-	i2c_common_emul_set_read_fail_reg(sm5803_emul_get_i2c_main(SM5803_EMUL),
-					  SM5803_REG_PLATFORM);
-	sm5803_emul_set_irqs(SM5803_EMUL, 0, SM5803_INT2_VBATSNSP, 0, 0);
-	sm5803_handle_interrupt(CHARGER_NUM);
-}
-
-ZTEST_F(sm5803, test_vbat_overvoltage_3s)
-{
-	/*
-	 * This test case is nearly identical to test_vbat_overvoltage_2s but
-	 * expects different thresholds.
-	 */
-	struct i2c_log log = {};
-	struct i2c_log *const log_ptr = &log;
-	uint8_t flow1;
-
-	/* Set 3S PMODE */
-	sm5803_emul_set_pmode(SM5803_EMUL, 0x14);
-
-	/* Connect PD source and begin charging. */
-	pd_connect_source(fixture);
-	sm5803_emul_get_flow_regs(SM5803_EMUL, &flow1, NULL, NULL);
-	zassert_equal(flow1, 1, "charger should be sinking, but FLOW1 was %#x",
-		      flow1);
-
-	/* Log accesses to sense parameters to verify they're as expected. */
-	i2c_common_emul_set_read_func(sm5803_emul_get_i2c_meas(SM5803_EMUL),
-				      i2c_log_read_meas, log_ptr);
-	i2c_common_emul_set_write_func(sm5803_emul_get_i2c_meas(SM5803_EMUL),
-				       i2c_log_write_meas, log_ptr);
-
-	/*
-	 * Trigger VBAT_SNS overvoltage interrupt. Default threshold for 3S is
-	 * 13.3V.
-	 */
-	sm5803_emul_set_vbat_sns_mv(SM5803_EMUL, 13450);
-	sm5803_emul_set_irqs(SM5803_EMUL, 0, SM5803_INT2_VBATSNSP, 0, 0);
-	/* Allow interrupt to be serviced */
-	k_sleep(K_SECONDS(0.1));
-	zassert_false(
-		gpio_pin_get_dt(sm5803_emul_get_interrupt_gpio(SM5803_EMUL)),
-		"IRQ is still asserted");
-
-	/*
-	 * Interrupt handler logged voltages, then reset the threshold to reset
-	 * the interrupt, and programmed the expected threshold back.
-	 */
-	LOG_ASSERT_R(SM5803_ADDR_MEAS_FLAGS, SM5803_REG_VBATSNSP_MEAS_MSB);
-	LOG_ASSERT_R(SM5803_ADDR_MEAS_FLAGS, SM5803_REG_VBATSNSP_MEAS_LSB);
-	LOG_ASSERT_R(SM5803_ADDR_MEAS_FLAGS, SM5803_REG_VBATSNSP_MAX_TH);
-	LOG_ASSERT_W(SM5803_ADDR_MEAS_FLAGS, SM5803_REG_VBATSNSP_MAX_TH, 0xff);
-	LOG_ASSERT_W(SM5803_ADDR_MEAS_FLAGS, SM5803_REG_VBATSNSP_MAX_TH, 0xd8);
-	/* Interrupt handler also stopped sinking. */
-	sm5803_emul_get_flow_regs(SM5803_EMUL, &flow1, NULL, NULL);
-	zassert_equal(flow1, 0,
-		      "FLOW1 should disable charger, but value was %#x", flow1);
 }
 
 FAKE_VOID_FUNC(chipset_throttle_cpu, int);
@@ -1596,6 +1506,7 @@ static void sm5803_before_test(void *data)
 
 	system_get_jump_tag_fake.custom_fake = NULL;
 	RESET_FAKE(board_overcurrent_event);
+	RESET_FAKE(extpower_is_present);
 }
 
 static void sm5803_after_test(void *data)
