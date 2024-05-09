@@ -176,6 +176,7 @@ if (ZEPHYR_PIGWEED_MODULE_DIR)
     target_compile_options(log_tokenized_config INTERFACE -include
                            ${PLATFORM_EC}/zephyr/include/pigweed/pw_zephyr_tokenized_custom_log.h)
     pw_set_module_config(pw_log_tokenized_CONFIG log_tokenized_config)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/include/pigweed")
   endif()
 endif()
 
@@ -367,6 +368,7 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FINGERPRINT
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_auth_crypto_stateful.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_auth_crypto_stateless.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_detect_strings.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_utils.cc"
 						"${PLATFORM_EC}/crypto/elliptic_curve_key.cc")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD
                                                 "${PLATFORM_EC}/common/host_command.c")

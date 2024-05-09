@@ -91,7 +91,7 @@
 
 	usbc {
 		port0@0 {
-			ppc_alt = <&ppc_port0>;
+			ppc = <&ppc_port0>;
 		};
 
 		/delete-node/ port1@1;
@@ -102,6 +102,11 @@
 			enum-name = "ADC_TEMP_SENSOR_2_AMBIENT";
 			io-channels = <&adc0 5>;
 		};
+	};
+
+	named-i2c-ports {
+		compatible = "named-i2c-ports";
+		/delete-node/ usb-c1;
 	};
 
 	temp_ambient: ambient {
@@ -124,6 +129,29 @@
 			temp_host_release_high = <59>;
 			sensor = <&charger_bc12_port1>;
 		};
+	};
+
+	cros-keyscan {
+		compatible = "cros-ec,keyscan";
+
+		debounce-down = <15000>;
+		debounce-up = <15000>;
+
+		actual-key-mask = <
+			0x14	/* C0 */
+			0xff	/* C1 */
+			0xff	/* C2 */
+			0xff	/* C3 */
+			0xff	/* C4 */
+			0xf5	/* C5 */
+			0xff	/* C6 */
+			0xa4	/* C7 */
+			0xff	/* C8 */
+			0xf6	/* C9 */
+			0x55	/* C10 */
+			0xfa	/* C11 */
+			0xca	/* C12 */
+			>;
 	};
 
 	led-colors {
@@ -254,8 +282,11 @@
 	};
 
 	batteries {
-		default_battery: c235 {
-			compatible = "celxpert,c235-41", "battery-smart";
+		default_battery: dynapack_highpower_po02037xl {
+			compatible = "dynapack,highpower_po02037xl", "battery-smart";
+ 		};
+		dynapack_coslight_po02037xl {
+			compatible = "dynapack,coslight_po02037xl", "battery-smart";
 		};
 	};
 

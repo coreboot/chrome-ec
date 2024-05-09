@@ -115,6 +115,19 @@ if(CONFIG_TEST_NISSA_PUJJO)
     )
 endif()
 
+if(CONFIG_TEST_NISSA_PUJJOGA)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0)
+    target_sources(
+            app PRIVATE
+            src/pujjoga.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/hdmi.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/led.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/sub_board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/usbc.c
+    )
+endif()
+
 if(CONFIG_TEST_NISSA_JOXER)
     target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
     target_sources(
@@ -254,5 +267,21 @@ if(CONFIG_TEST_NISSA_GLASSWAY)
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/glassway/src/sub_board.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/glassway/src/usbc.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/glassway/src/charger.c
+    )
+endif()
+
+if(CONFIG_TEST_NISSA_RIVEN)
+    target_sources(
+	    app PRIVATE
+	    src/riven.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/charger.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/fan.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/form_factor.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/kb_backlight.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/keyboard.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/led.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/thermal.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/touch_panel.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/usbc.c
     )
 endif()

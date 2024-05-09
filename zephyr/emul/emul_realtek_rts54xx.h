@@ -175,6 +175,20 @@ union rts54_request {
 		} tpc_rp;
 	} set_tpc_rp;
 
+	struct set_tpc_csd_operation_mode_req {
+		struct rts54_subcommand_header header;
+		uint8_t port_num;
+		union csd_op_mode_t {
+			uint8_t raw_value;
+			struct {
+				uint8_t csd_mode : 2;
+				uint8_t accessory_support : 1;
+				uint8_t drp_mode : 2;
+				uint8_t reserved : 3;
+			};
+		} op_mode;
+	} set_tpc_csd_operation_mode;
+
 	struct set_ccom_req {
 		struct rts54_subcommand_header header;
 		union port_and_ccom_t {
@@ -233,6 +247,14 @@ union rts54_request {
 		union get_vdo_t vdo_req;
 		uint8_t vdo_type[7];
 	} get_vdo;
+
+	struct get_ic_status_req {
+		uint8_t command_code;
+		uint8_t data_len;
+		uint8_t offset;
+		uint8_t reserved;
+		uint8_t sts_len;
+	} get_ic_status;
 };
 
 union rts54_response {
@@ -271,15 +293,23 @@ union rts54_response {
 
 	struct get_error_status_response {
 		uint8_t byte_count;
-		uint8_t unrecognized_command : 1;
-		uint8_t non_existent_connector_number : 1;
-		uint8_t invalid_command_specific_param : 1;
-		uint8_t incompatible_connector_partner : 1;
-		uint8_t cc_communication_error : 1;
-		uint8_t cmd_unsuccessful_dead_batt : 1;
-		uint8_t contract_negotiation_failed : 1;
-		uint8_t reserved : 1;
-	} error_status;
+		uint16_t unrecognized_command : 1;
+		uint16_t non_existent_connector_number : 1;
+		uint16_t invalid_command_specific_param : 1;
+		uint16_t incompatible_connector_partner : 1;
+		uint16_t cc_communication_error : 1;
+		uint16_t cmd_unsuccessful_dead_batt : 1;
+		uint16_t contract_negotiation_failed : 1;
+		uint16_t overcurrent : 1;
+		uint16_t undefined : 1;
+		uint16_t port_partner_rejected_swap : 1;
+		uint16_t hard_reset : 1;
+		uint16_t ppm_policy_conflict : 1;
+		uint16_t swap_rejected : 1;
+		uint16_t reverse_current_protection : 1;
+		uint16_t set_sink_path_rejected : 1;
+		uint16_t reserved0 : 1;
+	} __packed error_status;
 
 	struct get_connector_status_response {
 		uint8_t byte_count;
@@ -362,8 +392,8 @@ union rts54_response {
 				uint8_t reserved0 : 2;
 				uint8_t latency : 4;
 				uint8_t reserved1 : 4;
-			};
-			uint32_t raw_value[2];
+			} __packed;
+			uint8_t raw_value[5];
 		};
 	} __packed get_cable_property;
 
@@ -407,6 +437,7 @@ struct rts5453p_emul_pdc_data {
 	union error_status_t error;
 	uint32_t rdo;
 	union tpc_rp_t tpc_rp;
+	union csd_op_mode_t csd_op_mode;
 	union port_and_ccom_t set_ccom_mode;
 	struct force_set_power_switch_t set_power_switch_data;
 	uint8_t set_tpc_reconnect_param;

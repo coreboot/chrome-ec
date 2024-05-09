@@ -121,6 +121,7 @@ DATA_ACCESS_VIOLATION_200B0000_REGEX = re.compile(
 PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
 
 BLOONCHIPPER = "bloonchipper"
+BUCCANEER = "buccaneer"
 DARTMONKEY = "dartmonkey"
 HELIPILOT = "helipilot"
 
@@ -195,6 +196,8 @@ class BoardConfig:
     expected_fp_power: PowerUtilization
     expected_mcu_power: PowerUtilization
     variants: Dict
+    expected_fp_power_zephyr: PowerUtilization = None
+    expected_mcu_power_zephyr: PowerUtilization = None
 
 
 @dataclass
@@ -220,6 +223,7 @@ class TestConfig:
     passed: bool = field(init=False, default=False)
     num_passes: int = field(init=False, default=0)
     num_fails: int = field(init=False, default=0)
+    skip_for_zephyr: bool = False
 
     # The callbacks below are called before and after a test is executed and
     # may be used for additional test setup, post test activities, or other tasks
@@ -281,7 +285,9 @@ class AllTests:
             ),
             TestConfig(test_name="abort"),
             TestConfig(test_name="aes"),
-            TestConfig(test_name="always_memset"),
+            # Cryptoc is not supported with Zephyr.
+            # TODO(b/333039464) A new test for OPENSSL_cleanse has to be implemented.
+            TestConfig(test_name="always_memset", skip_for_zephyr=True),
             TestConfig(test_name="benchmark"),
             TestConfig(test_name="boringssl_crypto"),
             TestConfig(test_name="cortexm_fpu"),
@@ -300,6 +306,7 @@ class AllTests:
             ),
             TestConfig(test_name="fpsensor_auth_crypto_stateful"),
             TestConfig(test_name="fpsensor_auth_crypto_stateless"),
+            TestConfig(test_name="fpsensor_crypto"),
             TestConfig(
                 test_name="fpsensor_hw", pre_test_callback=fp_sensor_sel
             ),
@@ -325,6 +332,7 @@ class AllTests:
                 test_name="fpsensor",
                 test_args=["uart"],
             ),
+            TestConfig(test_name="fpsensor_utils"),
             TestConfig(test_name="ftrapv"),
             TestConfig(
                 test_name="libc_printf",
@@ -413,7 +421,9 @@ class AllTests:
                 test_name="power_utilization",
                 apptype_to_use=ApplicationType.PRODUCTION,
                 toggle_power=True,
-                pre_test_callback=lambda config=None: set_sleep_mode(False),
+                pre_test_callback=lambda config: power_pre_test(
+                    board_config=config, enter_sleep=False
+                ),
                 post_test_callback=verify_idle_power_utilization,
                 finish_regexes=[RW_IMAGE_BOOTED_REGEX],
             ),
@@ -422,7 +432,9 @@ class AllTests:
                 test_name="power_utilization",
                 apptype_to_use=ApplicationType.PRODUCTION,
                 toggle_power=True,
-                pre_test_callback=lambda config=None: set_sleep_mode(True),
+                pre_test_callback=lambda config: power_pre_test(
+                    board_config=config, enter_sleep=True
+                ),
                 post_test_callback=verify_sleep_power_utilization,
                 finish_regexes=[RW_IMAGE_BOOTED_REGEX],
             ),
@@ -500,6 +512,13 @@ BLOONCHIPPER_CONFIG = BoardConfig(
     expected_mcu_power=PowerUtilization(
         idle=RangedValue(16.05, 0.14 * 2), sleep=RangedValue(0.53, 0.35 * 2)
     ),
+    expected_fp_power_zephyr=PowerUtilization(
+        idle=RangedValue(0.17, 0.04), sleep=RangedValue(0.17, 0.04)
+    ),
+    # TODO(b/311568657) Update expected value once b/311568657 is closed.
+    expected_mcu_power_zephyr=PowerUtilization(
+        idle=RangedValue(14.61, 0.14 * 2), sleep=RangedValue(0.28, 0.04)
+    ),
     variants={
         "bloonchipper_v2.0.4277": {
             "ro_image_path": BLOONCHIPPER_V4277_IMAGE_PATH
@@ -556,11 +575,17 @@ HELIPILOT_CONFIG = BoardConfig(
     expected_mcu_power=PowerUtilization(
         idle=RangedValue(34.8, 3.0), sleep=RangedValue(2.7, 2.5)
     ),
+    # TODO(b/336640650): Add helipilot variants once RO is uploaded
     variants={},
 )
 
+BUCCANEER_CONFIG = HELIPILOT_CONFIG
+BUCCANEER_CONFIG.name = BUCCANEER
+# TODO(b/336640151): Add buccaneer variants once RO is created
+
 BOARD_CONFIGS = {
     "bloonchipper": BLOONCHIPPER_CONFIG,
+    "buccaneer": BUCCANEER_CONFIG,
     "dartmonkey": DARTMONKEY_CONFIG,
     "helipilot": HELIPILOT_CONFIG,
 }
@@ -715,6 +740,17 @@ def fp_sensor_sel(
         return True
 
     return False
+
+
+def power_pre_test(board_config: BoardConfig, enter_sleep: bool) -> bool:
+    """
+    Prepare a board for a power_utilization test
+    """
+
+    if not set_sleep_mode(enter_sleep):
+        return False
+
+    return fp_sensor_sel(board_config)
 
 
 def hw_write_protect(enable: bool) -> None:
@@ -916,12 +952,16 @@ def run_test_ec(test: TestConfig) -> str:
 
 def run_test_zephyr(test: TestConfig) -> str:
     """Prepare a command to run test on Zephyr"""
-    test_cmd = "ztest run-testcase " + test.test_name
-    # ZTEST console doesn't support passing test arguments
-    # Assume a testsuite for every test + arg combination
-    for test_arg in test.test_args:
-        test_cmd = test_cmd + "_" + test_arg
-    test_cmd = test_cmd + "\n"
+    if len(test.test_args) == 0:
+        # If there are no args just run-all not to be limited by suite name
+        test_cmd = "ztest run-all\n"
+    else:
+        # ZTEST console doesn't support passing test arguments
+        # Assume a testsuite for every test + arg combination
+        test_cmd = "ztest run-testcase " + test.test_name
+        for test_arg in test.test_args:
+            test_cmd = test_cmd + "_" + test_arg
+        test_cmd = test_cmd + "\n"
 
     return test_cmd
 
@@ -1261,11 +1301,18 @@ def main():
     validate_args_combination(args)
 
     board_config = BOARD_CONFIGS[args.board]
+    # Use expected values for Zephyr
+    if args.zephyr:
+        board_config.expected_fp_power = board_config.expected_fp_power_zephyr
+        board_config.expected_mcu_power = board_config.expected_mcu_power_zephyr
+
     test_list = get_test_list(board_config, args.tests, args.with_private)
     logging.debug("Running tests: %s", [test.config_name for test in test_list])
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         for test in test_list:
+            if test.skip_for_zephyr and args.zephyr:
+                continue
             test.passed = flash_and_run_test(test, board_config, args, executor)
 
         colorama.init()
@@ -1273,11 +1320,14 @@ def main():
         for test in test_list:
             # print results
             print('Test "' + test.config_name + '": ', end="")
-            if test.passed:
-                print(colorama.Fore.GREEN + "PASSED")
+            if test.skip_for_zephyr and args.zephyr:
+                print(colorama.Fore.YELLOW + "SKIPPED")
             else:
-                print(colorama.Fore.RED + "FAILED")
-                exit_code = 1
+                if test.passed:
+                    print(colorama.Fore.GREEN + "PASSED")
+                else:
+                    print(colorama.Fore.RED + "FAILED")
+                    exit_code = 1
 
             print(colorama.Style.RESET_ALL)
 

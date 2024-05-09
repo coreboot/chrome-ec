@@ -2,30 +2,20 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE /* Needed for getentropy */
+#endif
+
 #include <zephyr/ztest_assert.h>
 #include <zephyr/ztest_test.h>
 
 #include <openssl/crypto.h>
 #include <openssl/rand.h>
+#include <unistd.h> /* getentropy */
 
 void CRYPTO_sysrand(uint8_t *out, size_t requested);
 
 ZTEST_SUITE(boringssl_crypto, NULL, NULL, NULL, NULL, NULL);
-
-static ZTEST_DMEM volatile int expected_reason = -1;
-
-void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *pEsf)
-{
-	printk("Caught system error -- reason %d\n", reason);
-
-	zassert_not_equal(expected_reason, -1, "Unexpected crash");
-	zassert_equal(reason, expected_reason,
-		      "Wrong crash type got %d expected %d\n", reason,
-		      expected_reason);
-
-	expected_reason = -1;
-	ztest_test_pass();
-}
 
 ZTEST(boringssl_crypto, test_boringssl_self_test)
 {

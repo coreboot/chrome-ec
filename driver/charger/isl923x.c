@@ -380,6 +380,27 @@ static enum ec_error_list isl923x_set_frequency(int chgnum, int freq_khz)
 
 	/* Certain frequencies are only supported by the ISL9237.  */
 	reg &= ~ISL923X_C1_SWITCH_FREQ_MASK;
+
+#ifdef CONFIG_CHARGER_RAA489000
+	if (freq_khz >= 1500)
+		reg |= RAA489000_C1_SWITCH_FREQ_1500K;
+	else if (freq_khz >= 1235)
+		reg |= RAA489000_C1_SWITCH_FREQ_1235K;
+	else if (freq_khz >= 1050)
+		reg |= RAA489000_C1_SWITCH_FREQ_1050K;
+	else if (freq_khz >= 913)
+		reg |= RAA489000_C1_SWITCH_FREQ_913K;
+	else if (freq_khz >= 808)
+		reg |= RAA489000_C1_SWITCH_FREQ_808K;
+	else if (freq_khz >= 724)
+		reg |= RAA489000_C1_SWITCH_FREQ_724K;
+	else if (freq_khz >= 656)
+		reg |= RAA489000_C1_SWITCH_FREQ_656K;
+	else if (freq_khz >= 600)
+		reg |= RAA489000_C1_SWITCH_FREQ_600K;
+	else
+		reg |= RAA489000_C1_SWITCH_FREQ_724K; /* default */
+#else
 	if (freq_khz >= 1000)
 		reg |= ISL923X_C1_SWITCH_FREQ_PROG;
 	else if (freq_khz >= 913 && dev_id == ISL9237_DEV_ID)
@@ -399,6 +420,7 @@ static enum ec_error_list isl923x_set_frequency(int chgnum, int freq_khz)
 	else
 		reg |= ISL923X_C1_SWITCH_FREQ_PROG;
 
+#endif
 	rv = raw_write16(chgnum, ISL923X_REG_CONTROL1, reg);
 
 	mutex_unlock(&control1_mutex_isl923x);
@@ -807,12 +829,6 @@ static void isl923x_init(int chgnum)
 			reg &= ~ISL923X_C2_TRICKLE_MASK;
 			reg |= ISL923X_C2_TRICKLE_128;
 			if (raw_write16(chgnum, ISL923X_REG_CONTROL2, reg))
-				goto init_fail;
-
-			if (raw_read16(chgnum, ISL9238_REG_CONTROL3, &reg))
-				goto init_fail;
-			reg |= ISL9238_C3_PSYS_GAIN;
-			if (raw_write16(chgnum, ISL9238_REG_CONTROL3, reg))
 				goto init_fail;
 		}
 	}
