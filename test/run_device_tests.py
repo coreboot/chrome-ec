@@ -45,6 +45,7 @@ import argparse
 from collections import namedtuple
 import concurrent
 from concurrent.futures.thread import ThreadPoolExecutor
+import copy
 from dataclasses import dataclass
 from dataclasses import field
 from enum import Enum
@@ -285,7 +286,9 @@ class AllTests:
             ),
             TestConfig(test_name="abort"),
             TestConfig(test_name="aes"),
-            TestConfig(test_name="always_memset"),
+            # Cryptoc is not supported with Zephyr.
+            # TODO(b/333039464) A new test for OPENSSL_cleanse has to be implemented.
+            TestConfig(test_name="always_memset", skip_for_zephyr=True),
             TestConfig(test_name="benchmark"),
             TestConfig(test_name="boringssl_crypto"),
             TestConfig(test_name="cortexm_fpu"),
@@ -330,6 +333,7 @@ class AllTests:
                 test_name="fpsensor",
                 test_args=["uart"],
             ),
+            TestConfig(test_name="fpsensor_utils"),
             TestConfig(test_name="ftrapv"),
             TestConfig(
                 test_name="libc_printf",
@@ -576,7 +580,7 @@ HELIPILOT_CONFIG = BoardConfig(
     variants={},
 )
 
-BUCCANEER_CONFIG = HELIPILOT_CONFIG
+BUCCANEER_CONFIG = copy.deepcopy(HELIPILOT_CONFIG)
 BUCCANEER_CONFIG.name = BUCCANEER
 # TODO(b/336640151): Add buccaneer variants once RO is created
 

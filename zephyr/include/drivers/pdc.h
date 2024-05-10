@@ -80,6 +80,24 @@ struct pdc_bus_info_t {
 };
 
 /**
+ * @brief PDO Source: PDC or Port Partner
+ */
+enum pdo_source_t {
+	/** LPM */
+	LPM_PDO,
+	/** Port Partner PDO */
+	PARTNER_PDO,
+};
+
+/**
+ * @brief Used for building CMD_PDC_GET_PDOS
+ */
+struct get_pdo_t {
+	enum pdo_type_t pdo_type;
+	enum pdo_source_t pdo_source;
+};
+
+/**
  * @typedef
  * @brief These are the API function types
  */
@@ -93,6 +111,7 @@ typedef int (*pdc_get_capability_t)(const struct device *dev,
 typedef int (*pdc_get_connector_capability_t)(
 	const struct device *dev, union connector_capability_t *caps);
 typedef int (*pdc_set_ccom_t)(const struct device *dev, enum ccom_t ccom);
+typedef int (*pdc_set_drp_mode_t)(const struct device *dev, enum drp_mode_t dm);
 typedef int (*pdc_set_uor_t)(const struct device *dev, union uor_t uor);
 typedef int (*pdc_set_pdr_t)(const struct device *dev, union pdr_t pdr);
 typedef int (*pdc_set_sink_path_t)(const struct device *dev, bool en);
@@ -133,6 +152,8 @@ typedef int (*pdc_get_identity_discovery_t)(const struct device *dev,
 typedef int (*pdc_set_comms_state_t)(const struct device *dev, bool active);
 typedef int (*pdc_is_vconn_sourcing_t)(const struct device *dev,
 				       bool *vconn_sourcing);
+typedef int (*pdc_set_pdos_t)(const struct device *dev, enum pdo_type_t type,
+			      uint32_t *pdo, int count);
 
 /**
  * @cond INTERNAL_HIDDEN
@@ -147,6 +168,7 @@ __subsystem struct pdc_driver_api_t {
 	pdc_get_capability_t get_capability;
 	pdc_get_connector_capability_t get_connector_capability;
 	pdc_set_ccom_t set_ccom;
+	pdc_set_drp_mode_t set_drp_mode;
 	pdc_set_uor_t set_uor;
 	pdc_set_pdr_t set_pdr;
 	pdc_set_sink_path_t set_sink_path;
@@ -170,6 +192,7 @@ __subsystem struct pdc_driver_api_t {
 	pdc_get_identity_discovery_t get_identity_discovery;
 	pdc_set_comms_state_t set_comms_state;
 	pdc_is_vconn_sourcing_t is_vconn_sourcing;
+	pdc_set_pdos_t set_pdos;
 };
 /**
  * @endcond
@@ -444,6 +467,33 @@ static inline int pdc_set_ccom(const struct device *dev, enum ccom_t ccom)
 	}
 
 	return api->set_ccom(dev, ccom);
+}
+
+/**
+ * @brief Sets the DRP mode of the PDC
+ * @note CCI Events set
+ *           busy: if PDC is busy
+ *           error: command was unsuccessful
+ *           command_commpleted: DRP mode was set
+ *
+ * @param dev PDC device structure pointer
+ * @param dm DRP mode
+ *
+ * @retval 0 on success
+ * @retval -EBUSY if not ready to execute the command
+ * @retval -ENOSYS if not implemented
+ */
+static inline int pdc_set_drp_mode(const struct device *dev, enum drp_mode_t dm)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	/* This is an optional feature, so it might not be implemented */
+	if (api->set_drp_mode == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->set_drp_mode(dev, dm);
 }
 
 /**
@@ -895,6 +945,29 @@ static inline int pdc_set_comms_state(const struct device *dev,
 }
 
 /**
+ * @brief Sends a Power Data Object to the PDC
+ * @note CCI Events set
+ *           busy: if the PDC is busy
+ *           command_commpleted: PDO was sent to LPM or port partner
+ *
+ * @param dev PDC device structure pointer
+ * @param type SINK_PDO or SOURCE_PDO
+ * @param pdo Pointer to PDO array
+ * @param count Number of PDOs to send
+ *
+ * @retval 0 on success
+ * @retval -EBUSY if not ready to execute the command
+ */
+static inline int pdc_set_pdos(const struct device *dev, enum pdo_type_t type,
+			       uint32_t *pdo, int count)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	return api->set_pdos(dev, type, pdo, count);
+}
+
+/**
  * @brief Checks if the port is sourcing VCONN
  *
  * @param dev PDC device structure pointer
@@ -933,8 +1006,10 @@ enum pdc_trace_chip_type {
  * @param msg_type Message type (hint how to interpret message)
  * @param buf Message to log
  * @param count Message length
+ *
+ * @retval true IFF pushed into FIFO
  */
-void pdc_trace_msg_req(int port, enum pdc_trace_chip_type msg_type,
+bool pdc_trace_msg_req(int port, enum pdc_trace_chip_type msg_type,
 		       const uint8_t *buf, const int count);
 
 /**
@@ -944,8 +1019,10 @@ void pdc_trace_msg_req(int port, enum pdc_trace_chip_type msg_type,
  * @param msg_type Message type (hint how to interpret message)
  * @param buf Message to log
  * @param count Message length
+ *
+ * @retval true IFF pushed into FIFO
  */
-void pdc_trace_msg_resp(int port, enum pdc_trace_chip_type msg_type,
+bool pdc_trace_msg_resp(int port, enum pdc_trace_chip_type msg_type,
 			const uint8_t *buf, const int count);
 
 #ifdef __cplusplus

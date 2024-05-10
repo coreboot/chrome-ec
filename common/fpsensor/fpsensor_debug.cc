@@ -104,7 +104,7 @@ static enum ec_error_list fp_console_action(uint32_t mode)
 	uint32_t mode_output = 0;
 	int rc = 0;
 
-	if (!(sensor_mode & FP_MODE_RESET_SENSOR))
+	if (!(global_context.sensor_mode & FP_MODE_RESET_SENSOR))
 		CPRINTS("Waiting for finger ...");
 
 	rc = fp_set_sensor_mode(mode, &mode_output);
@@ -118,8 +118,9 @@ static enum ec_error_list fp_console_action(uint32_t mode)
 	}
 
 	while (tries--) {
-		if (!(sensor_mode & FP_MODE_ANY_CAPTURE)) {
-			CPRINTS("done (events:%x)", (int)fp_events);
+		if (!(global_context.sensor_mode & FP_MODE_ANY_CAPTURE)) {
+			CPRINTS("done (events:%x)",
+				(int)global_context.fp_events);
 			return EC_SUCCESS;
 		}
 		crec_usleep(100 * MSEC);
@@ -236,17 +237,19 @@ static int command_fpenroll(int argc, const char **argv)
 				       FP_MODE_ENROLL_IMAGE);
 		if (rc != EC_SUCCESS)
 			break;
-		event = atomic_clear(&fp_events);
+		event = atomic_clear(&global_context.fp_events);
 		percent = EC_MKBP_FP_ENROLL_PROGRESS(event);
 		CPRINTS("Enroll capture: %s (%d%%)",
 			enroll_str[EC_MKBP_FP_ERRCODE(event) & 3], percent);
 		/* wait for finger release between captures */
-		sensor_mode = FP_MODE_ENROLL_SESSION | FP_MODE_FINGER_UP;
+		global_context.sensor_mode = FP_MODE_ENROLL_SESSION |
+					     FP_MODE_FINGER_UP;
 		task_set_event(TASK_ID_FPSENSOR, TASK_EVENT_UPDATE_CONFIG);
-		while (tries-- && sensor_mode & FP_MODE_FINGER_UP)
+		while (tries-- &&
+		       global_context.sensor_mode & FP_MODE_FINGER_UP)
 			crec_usleep(20 * MSEC);
 	} while (percent < 100);
-	sensor_mode = 0; /* reset FP_MODE_ENROLL_SESSION */
+	global_context.sensor_mode = 0; /* reset FP_MODE_ENROLL_SESSION */
 	task_set_event(TASK_ID_FPSENSOR, TASK_EVENT_UPDATE_CONFIG);
 
 	return rc;
@@ -257,7 +260,7 @@ DECLARE_CONSOLE_COMMAND_FLAGS(fpenroll, command_fpenroll, NULL,
 static int command_fpmatch(int argc, const char **argv)
 {
 	enum ec_error_list rc = fp_console_action(FP_MODE_MATCH);
-	uint32_t event = atomic_clear(&fp_events);
+	uint32_t event = atomic_clear(&global_context.fp_events);
 
 	if (rc == EC_SUCCESS && event & EC_MKBP_FP_MATCH) {
 		uint32_t match_errcode = EC_MKBP_FP_ERRCODE(event);
@@ -283,7 +286,7 @@ static int command_fpclear(int argc, const char **argv)
 	if (rc != EC_SUCCESS)
 		CPRINTS("Failed to clear fingerprint context: %d", rc);
 
-	atomic_clear(&fp_events);
+	atomic_clear(&global_context.fp_events);
 
 	return rc;
 }
@@ -307,7 +310,7 @@ static int command_fpmaintenance(int argc, const char **argv)
 	}
 
 	/* Block console until maintenance is finished. */
-	while (sensor_mode & FP_MODE_SENSOR_MAINTENANCE) {
+	while (global_context.sensor_mode & FP_MODE_SENSOR_MAINTENANCE) {
 		crec_usleep(100 * MSEC);
 	}
 #endif /* #ifdef HAVE_FP_PRIVATE_DRIVER */
