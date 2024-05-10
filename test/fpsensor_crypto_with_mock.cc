@@ -22,7 +22,7 @@ extern "C" {
 #include "util.h"
 }
 
-extern int get_ikm(uint8_t *ikm);
+extern enum ec_error_list get_ikm(std::span<uint8_t, 64> ikm);
 
 #include <stdbool.h>
 
@@ -110,10 +110,10 @@ static const uint8_t expected_positive_match_secret_for_fake_user_id[] = {
 
 test_static int test_get_ikm_failure_seed_not_set(void)
 {
-	uint8_t ikm;
+	uint8_t ikm[CONFIG_ROLLBACK_SECRET_SIZE + FP_CONTEXT_TPM_BYTES];
 
 	TEST_ASSERT(fp_tpm_seed_is_set() == 0);
-	TEST_ASSERT(get_ikm(&ikm) == EC_ERROR_ACCESS_DENIED);
+	TEST_ASSERT(get_ikm(ikm) == EC_ERROR_ACCESS_DENIED);
 	return EC_SUCCESS;
 }
 
@@ -204,13 +204,14 @@ static int test_derive_encryption_key_raw(std::span<const uint32_t> user_id_,
 	 * |user_id| is a global variable used as "info" in HKDF expand
 	 * in derive_encryption_key().
 	 */
-	memcpy(user_id, user_id_.data(), sizeof(user_id));
+	memcpy(global_context.user_id, user_id_.data(),
+	       sizeof(global_context.user_id));
 	rv = derive_encryption_key(key, salt);
 
 	TEST_ASSERT(rv == EC_SUCCESS);
 	TEST_ASSERT_ARRAY_EQ(key, expected_key, sizeof(key));
 
-	memset(user_id, 0, sizeof(user_id));
+	memset(global_context.user_id, 0, sizeof(global_context.user_id));
 
 	return EC_SUCCESS;
 }
@@ -350,7 +351,7 @@ test_static int test_derive_new_pos_match_secret(void)
 	static uint8_t output[FP_POSITIVE_MATCH_SECRET_BYTES];
 
 	/* First, for empty user_id. */
-	memset(user_id, 0, sizeof(user_id));
+	memset(global_context.user_id, 0, sizeof(global_context.user_id));
 
 	/* GIVEN that the encryption salt is not trivial. */
 	TEST_ASSERT(!bytes_are_trivial(fake_positive_match_salt,
@@ -374,13 +375,13 @@ test_static int test_derive_new_pos_match_secret(void)
 		sizeof(expected_positive_match_secret_for_empty_user_id));
 
 	/* Now change the user_id to be non-trivial. */
-	memcpy(user_id, fake_user_id, sizeof(fake_user_id));
+	memcpy(global_context.user_id, fake_user_id, sizeof(fake_user_id));
 	TEST_ASSERT(derive_positive_match_secret(
 			    output, fake_positive_match_salt) == EC_SUCCESS);
 	TEST_ASSERT_ARRAY_EQ(
 		output, expected_positive_match_secret_for_fake_user_id,
 		sizeof(expected_positive_match_secret_for_fake_user_id));
-	memset(user_id, 0, sizeof(user_id));
+	memset(global_context.user_id, 0, sizeof(global_context.user_id));
 
 	return EC_SUCCESS;
 }
@@ -422,7 +423,7 @@ test_static int test_derive_positive_match_secret_fail_trivial_key_0x00(void)
 	static uint8_t output[FP_POSITIVE_MATCH_SECRET_BYTES];
 
 	/* GIVEN that the user ID is set to a known value. */
-	memcpy(user_id, fake_user_id, sizeof(fake_user_id));
+	memcpy(global_context.user_id, fake_user_id, sizeof(fake_user_id));
 
 	/*
 	 * GIVEN that the TPM seed is set, and reading the rollback secret will
@@ -437,7 +438,7 @@ test_static int test_derive_positive_match_secret_fail_trivial_key_0x00(void)
 
 	/* GIVEN that the sha256 output is trivial (0x00) */
 	mock_ctrl_fpsensor_crypto.output_type =
-		MOCK_CTRL_FPSENSOR_CRYPTO_SHA256_TYPE_ZEROS;
+		MOCK_CTRL_FPSENSOR_CRYPTO_HKDF_SHA256_TYPE_ZEROS;
 
 	/* THEN the derivation will fail with EC_ERROR_HW_INTERNAL. */
 	TEST_ASSERT(derive_positive_match_secret(output,
@@ -448,7 +449,7 @@ test_static int test_derive_positive_match_secret_fail_trivial_key_0x00(void)
 
 	/* GIVEN that the sha256 output is non-trivial */
 	mock_ctrl_fpsensor_crypto.output_type =
-		MOCK_CTRL_FPSENSOR_CRYPTO_SHA256_TYPE_REAL;
+		MOCK_CTRL_FPSENSOR_CRYPTO_HKDF_SHA256_TYPE_REAL;
 
 	/* THEN the derivation will succeed */
 	TEST_ASSERT(derive_positive_match_secret(
@@ -465,7 +466,7 @@ test_static int test_derive_positive_match_secret_fail_trivial_key_0xff(void)
 	static uint8_t output[FP_POSITIVE_MATCH_SECRET_BYTES];
 
 	/* GIVEN that the user ID is set to a known value. */
-	memcpy(user_id, fake_user_id, sizeof(fake_user_id));
+	memcpy(global_context.user_id, fake_user_id, sizeof(fake_user_id));
 
 	/*
 	 * GIVEN that the TPM seed is set, and reading the rollback secret will
@@ -480,7 +481,7 @@ test_static int test_derive_positive_match_secret_fail_trivial_key_0xff(void)
 
 	/* GIVEN that the sha256 output is trivial (0xFF) */
 	mock_ctrl_fpsensor_crypto.output_type =
-		MOCK_CTRL_FPSENSOR_CRYPTO_SHA256_TYPE_FF;
+		MOCK_CTRL_FPSENSOR_CRYPTO_HKDF_SHA256_TYPE_FF;
 
 	/* THEN the derivation will fail with EC_ERROR_HW_INTERNAL. */
 	TEST_ASSERT(derive_positive_match_secret(output,
@@ -491,7 +492,7 @@ test_static int test_derive_positive_match_secret_fail_trivial_key_0xff(void)
 
 	/* GIVEN that the sha256 output is non-trivial */
 	mock_ctrl_fpsensor_crypto.output_type =
-		MOCK_CTRL_FPSENSOR_CRYPTO_SHA256_TYPE_REAL;
+		MOCK_CTRL_FPSENSOR_CRYPTO_HKDF_SHA256_TYPE_REAL;
 
 	/* THEN the derivation will succeed */
 	TEST_ASSERT(derive_positive_match_secret(
@@ -568,7 +569,7 @@ test_static int test_command_read_match_secret(void)
 	timestamp_t now = get_time();
 
 	/* For empty user_id. */
-	memset(user_id, 0, sizeof(user_id));
+	memset(global_context.user_id, 0, sizeof(global_context.user_id));
 
 	/* Invalid finger index should be rejected. */
 	params.fgr = FP_NO_SUCH_TEMPLATE;
@@ -585,8 +586,8 @@ test_static int test_command_read_match_secret(void)
 	params.fgr = 0;
 
 	/* GIVEN that positive match secret is enabled. */
-	fp_enable_positive_match_secret(params.fgr,
-					&positive_match_secret_state);
+	fp_enable_positive_match_secret(
+		params.fgr, &global_context.positive_match_secret_state);
 
 	/* GIVEN that salt is non-trivial. */
 	memcpy(fp_positive_match_salt[0], fake_positive_match_salt,
@@ -599,7 +600,8 @@ test_static int test_command_read_match_secret(void)
 		return -1;
 	}
 	/* AND the readable bit should be cleared after the read. */
-	TEST_ASSERT(positive_match_secret_state.readable == false);
+	TEST_ASSERT(global_context.positive_match_secret_state.readable ==
+		    false);
 
 	TEST_ASSERT_ARRAY_EQ(
 		resp.positive_match_secret,
@@ -610,7 +612,8 @@ test_static int test_command_read_match_secret(void)
 	 * Now try reading secret again.
 	 * EVEN IF the deadline has not passed.
 	 */
-	positive_match_secret_state.deadline.val = now.val + 1 * SECOND;
+	global_context.positive_match_secret_state.deadline.val =
+		now.val + 1 * SECOND;
 	rv = test_send_host_command(EC_CMD_FP_READ_MATCH_SECRET, 0, &params,
 				    sizeof(params), NULL, 0);
 	/*
@@ -634,8 +637,8 @@ test_static int test_command_read_match_secret_wrong_finger(void)
 	 * GIVEN that positive match secret is enabled for a different
 	 * finger.
 	 */
-	fp_enable_positive_match_secret(params.fgr + 1,
-					&positive_match_secret_state);
+	fp_enable_positive_match_secret(
+		params.fgr + 1, &global_context.positive_match_secret_state);
 
 	/* Reading secret will fail. */
 	rv = test_send_host_command(EC_CMD_FP_READ_MATCH_SECRET, 0, &params,
@@ -651,9 +654,9 @@ test_static int test_command_read_match_secret_timeout(void)
 
 	params.fgr = 0;
 	/* GIVEN that the read is too late. */
-	fp_enable_positive_match_secret(params.fgr,
-					&positive_match_secret_state);
-	set_time(positive_match_secret_state.deadline);
+	fp_enable_positive_match_secret(
+		params.fgr, &global_context.positive_match_secret_state);
+	set_time(global_context.positive_match_secret_state.deadline);
 
 	/* EVEN IF encryption salt is non-trivial. */
 	memcpy(fp_positive_match_salt[0], fake_positive_match_salt,
@@ -672,12 +675,14 @@ test_static int test_command_read_match_secret_unreadable(void)
 
 	params.fgr = 0;
 	/* GIVEN that the readable bit is not set. */
-	fp_enable_positive_match_secret(params.fgr,
-					&positive_match_secret_state);
-	positive_match_secret_state.readable = false;
+	fp_enable_positive_match_secret(
+		params.fgr, &global_context.positive_match_secret_state);
+	global_context.positive_match_secret_state.readable = false;
 
 	/* EVEN IF the finger is just matched. */
-	TEST_ASSERT(positive_match_secret_state.template_matched == params.fgr);
+	TEST_ASSERT(
+		global_context.positive_match_secret_state.template_matched ==
+		params.fgr);
 
 	/* EVEN IF encryption salt is non-trivial. */
 	memcpy(fp_positive_match_salt[0], fake_positive_match_salt,

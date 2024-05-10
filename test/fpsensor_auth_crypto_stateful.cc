@@ -33,11 +33,11 @@ void init_tpm_seed(void)
 		0x82, 0xce, 0x06, 0x3f, 0xcc, 0x23, 0xb9, 0xe7,
 	};
 
-	static_assert(fake_tpm_seed.size() == sizeof(tpm_seed));
+	static_assert(fake_tpm_seed.size() == sizeof(global_context.tpm_seed));
 
-	std::ranges::copy(fake_tpm_seed, tpm_seed);
+	std::ranges::copy(fake_tpm_seed, global_context.tpm_seed);
 
-	fp_encryption_status |= FP_ENC_STATUS_SEED_SET;
+	global_context.fp_encryption_status |= FP_ENC_STATUS_SEED_SET;
 }
 
 test_static enum ec_error_list test_fp_encrypt_decrypt_data(void)

@@ -34,19 +34,20 @@ std::array<uint8_t, FP_CK_AUTH_NONCE_LEN> auth_nonce;
 
 enum ec_error_list check_context_cleared()
 {
-	for (uint32_t partial : user_id)
+	for (uint32_t partial : global_context.user_id)
 		if (partial != 0)
 			return EC_ERROR_ACCESS_DENIED;
 	for (uint8_t partial : auth_nonce)
 		if (partial != 0)
 			return EC_ERROR_ACCESS_DENIED;
-	if (templ_valid != 0)
+	if (global_context.templ_valid != 0)
 		return EC_ERROR_ACCESS_DENIED;
-	if (templ_dirty != 0)
+	if (global_context.templ_dirty != 0)
 		return EC_ERROR_ACCESS_DENIED;
-	if (positive_match_secret_state.template_matched != FP_NO_SUCH_TEMPLATE)
+	if (global_context.positive_match_secret_state.template_matched !=
+	    FP_NO_SUCH_TEMPLATE)
 		return EC_ERROR_ACCESS_DENIED;
-	if (fp_encryption_status & FP_CONTEXT_USER_ID_SET)
+	if (global_context.fp_encryption_status & FP_CONTEXT_USER_ID_SET)
 		return EC_ERROR_ACCESS_DENIED;
 	return EC_SUCCESS;
 }
@@ -147,7 +148,8 @@ fp_command_load_pairing_key(struct host_cmd_handler_args *args)
 		return EC_RES_ACCESS_DENIED;
 	}
 
-	if (fp_encryption_status & FP_CONTEXT_STATUS_NONCE_CONTEXT_SET) {
+	if (global_context.fp_encryption_status &
+	    FP_CONTEXT_STATUS_NONCE_CONTEXT_SET) {
 		CPRINTS("load_pairing_key: In an nonce context");
 		return EC_RES_ACCESS_DENIED;
 	}
@@ -171,7 +173,8 @@ fp_command_generate_nonce(struct host_cmd_handler_args *args)
 
 	ScopedFastCpu fast_cpu;
 
-	if (fp_encryption_status & FP_CONTEXT_STATUS_NONCE_CONTEXT_SET) {
+	if (global_context.fp_encryption_status &
+	    FP_CONTEXT_STATUS_NONCE_CONTEXT_SET) {
 		/* Invalidate the existing context and templates to prevent
 		 * leaking the existing template. */
 		fp_reset_context();
@@ -181,7 +184,7 @@ fp_command_generate_nonce(struct host_cmd_handler_args *args)
 
 	std::ranges::copy(auth_nonce, r->nonce);
 
-	fp_encryption_status |= FP_CONTEXT_AUTH_NONCE_SET;
+	global_context.fp_encryption_status |= FP_CONTEXT_AUTH_NONCE_SET;
 
 	args->response_size = sizeof(*r);
 	return EC_RES_SUCCESS;
@@ -195,7 +198,8 @@ fp_command_nonce_context(struct host_cmd_handler_args *args)
 	const auto *p =
 		static_cast<const ec_params_fp_nonce_context *>(args->params);
 
-	if (!(fp_encryption_status & FP_CONTEXT_AUTH_NONCE_SET)) {
+	if (!(global_context.fp_encryption_status &
+	      FP_CONTEXT_AUTH_NONCE_SET)) {
 		CPRINTS("No existing auth nonce");
 		return EC_RES_ACCESS_DENIED;
 	}
@@ -210,8 +214,8 @@ fp_command_nonce_context(struct host_cmd_handler_args *args)
 		return EC_RES_INVALID_PARAM;
 	}
 
-	static_assert(sizeof(user_id) == sizeof(p->enc_user_id));
-	std::array<uint8_t, sizeof(user_id)> raw_user_id;
+	static_assert(sizeof(global_context.user_id) == sizeof(p->enc_user_id));
+	std::array<uint8_t, sizeof(global_context.user_id)> raw_user_id;
 	std::ranges::copy(p->enc_user_id, raw_user_id.begin());
 
 	ret = decrypt_data_with_gsc_session_key_in_place(
@@ -223,11 +227,12 @@ fp_command_nonce_context(struct host_cmd_handler_args *args)
 
 	/* Set the user_id. */
 	std::copy(raw_user_id.begin(), raw_user_id.end(),
-		  reinterpret_cast<uint8_t *>(user_id));
+		  reinterpret_cast<uint8_t *>(global_context.user_id));
 
-	fp_encryption_status &= FP_ENC_STATUS_SEED_SET;
-	fp_encryption_status |= FP_CONTEXT_USER_ID_SET;
-	fp_encryption_status |= FP_CONTEXT_STATUS_NONCE_CONTEXT_SET;
+	global_context.fp_encryption_status &= FP_ENC_STATUS_SEED_SET;
+	global_context.fp_encryption_status |= FP_CONTEXT_USER_ID_SET;
+	global_context.fp_encryption_status |=
+		FP_CONTEXT_STATUS_NONCE_CONTEXT_SET;
 	return EC_RES_SUCCESS;
 }
 DECLARE_HOST_COMMAND(EC_CMD_FP_NONCE_CONTEXT, fp_command_nonce_context,
@@ -278,8 +283,9 @@ static enum ec_status unlock_template(uint16_t idx)
 	auto *dec_state =
 		std::get_if<fp_decrypted_template_state>(&template_states[idx]);
 	if (dec_state) {
-		if (safe_memcmp(dec_state->user_id.begin(), user_id,
-				sizeof(user_id)) != 0) {
+		if (safe_memcmp(dec_state->user_id.begin(),
+				global_context.user_id,
+				sizeof(global_context.user_id)) != 0) {
 			return EC_RES_ACCESS_DENIED;
 		}
 		return EC_RES_SUCCESS;
@@ -344,11 +350,13 @@ fp_command_unlock_template(struct host_cmd_handler_args *args)
 
 	ScopedFastCpu fast_cpu;
 
-	if (!(fp_encryption_status & FP_CONTEXT_STATUS_NONCE_CONTEXT_SET)) {
+	if (!(global_context.fp_encryption_status &
+	      FP_CONTEXT_STATUS_NONCE_CONTEXT_SET)) {
 		return EC_RES_ACCESS_DENIED;
 	}
 
-	if (fp_encryption_status & FP_CONTEXT_STATUS_MATCH_PROCESSED_SET) {
+	if (global_context.fp_encryption_status &
+	    FP_CONTEXT_STATUS_MATCH_PROCESSED_SET) {
 		return EC_RES_ACCESS_DENIED;
 	}
 
@@ -363,8 +371,8 @@ fp_command_unlock_template(struct host_cmd_handler_args *args)
 		}
 	}
 
-	fp_encryption_status |= FP_CONTEXT_TEMPLATE_UNLOCKED_SET;
-	templ_valid = fgr_num;
+	global_context.fp_encryption_status |= FP_CONTEXT_TEMPLATE_UNLOCKED_SET;
+	global_context.templ_valid = fgr_num;
 
 	return EC_RES_SUCCESS;
 }

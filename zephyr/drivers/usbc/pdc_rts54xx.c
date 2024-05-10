@@ -131,9 +131,10 @@ struct smbus_cmd_t {
 
 const struct smbus_cmd_t VENDOR_CMD_ENABLE = { 0x01, 0x03, 0xDA };
 const struct smbus_cmd_t SET_NOTIFICATION_ENABLE = { 0x08, 0x06, 0x01 };
-const struct smbus_cmd_t SET_PDOS = { 0x08, 0x03, 0x03 };
+const struct smbus_cmd_t SET_PDO = { 0x08, 0x03, 0x03 };
 const struct smbus_cmd_t SET_RDO = { 0x08, 0x06, 0x04 };
 const struct smbus_cmd_t SET_TPC_RP = { 0x08, 0x03, 0x05 };
+const struct smbus_cmd_t SET_TPC_CSD_OPERATION_MODE = { 0x08, 0x03, 0x1D };
 const struct smbus_cmd_t SET_TPC_RECONNECT = { 0x08, 0x03, 0x1F };
 const struct smbus_cmd_t FORCE_SET_POWER_SWITCH = { 0x08, 0x03, 0x21 };
 const struct smbus_cmd_t GET_PDOS = { 0x08, 0x03, 0x83 };
@@ -261,6 +262,8 @@ enum cmd_t {
 	CMD_GET_IC_STATUS,
 	/** Set CCOM */
 	CMD_SET_CCOM,
+	/** Set DRP_MODE */
+	CMD_SET_DRP_MODE,
 	/** Read Power Level */
 	CMD_READ_POWER_LEVEL,
 	/** Get RDO */
@@ -285,6 +288,8 @@ enum cmd_t {
 	CMD_GET_IDENTITY_DISCOVERY,
 	/** CMD_GET_IS_VCONN_SOURCING */
 	CMD_GET_IS_VCONN_SOURCING,
+	/** CMD_SET_PDO */
+	CMD_SET_PDO,
 };
 
 /**
@@ -387,6 +392,7 @@ static const char *const cmd_names[] = {
 	[CMD_GET_VBUS_VOLTAGE] = "GET_VBUS_VOLTAGE",
 	[CMD_GET_IC_STATUS] = "GET_IC_STATUS",
 	[CMD_SET_CCOM] = "SET_CCOM",
+	[CMD_SET_DRP_MODE] = "SET_DRP_MODE",
 	[CMD_SET_SINK_PATH] = "SET_SINK_PATH",
 	[CMD_READ_POWER_LEVEL] = "READ_POWER_LEVEL",
 	[CMD_GET_RDO] = "GET_RDO",
@@ -399,6 +405,7 @@ static const char *const cmd_names[] = {
 	[CMD_GET_VDO] = "GET VDO",
 	[CMD_GET_IDENTITY_DISCOVERY] = "CMD_GET_IDENTITY_DISCOVERY",
 	[CMD_GET_IS_VCONN_SOURCING] = "CMD_GET_IS_VCONN_SOURCING",
+	[CMD_SET_PDO] = "CMD_SET_PDO",
 };
 
 /**
@@ -1354,18 +1361,23 @@ static void st_suspended_run(void *o)
 
 /* Populate cmd state table */
 static const struct smf_state states[] = {
-	[ST_INIT] = SMF_CREATE_STATE(st_init_entry, st_init_run, NULL, NULL),
-	[ST_IDLE] = SMF_CREATE_STATE(st_idle_entry, st_idle_run, NULL, NULL),
-	[ST_WRITE] = SMF_CREATE_STATE(st_write_entry, st_write_run, NULL, NULL),
-	[ST_PING_STATUS] = SMF_CREATE_STATE(st_ping_status_entry,
-					    st_ping_status_run, NULL, NULL),
-	[ST_READ] = SMF_CREATE_STATE(st_read_entry, st_read_run, NULL, NULL),
-	[ST_ERROR_RECOVERY] = SMF_CREATE_STATE(
-		st_error_recovery_entry, st_error_recovery_run, NULL, NULL),
-	[ST_DISABLE] =
-		SMF_CREATE_STATE(st_disable_entry, st_disable_run, NULL, NULL),
+	[ST_INIT] =
+		SMF_CREATE_STATE(st_init_entry, st_init_run, NULL, NULL, NULL),
+	[ST_IDLE] =
+		SMF_CREATE_STATE(st_idle_entry, st_idle_run, NULL, NULL, NULL),
+	[ST_WRITE] = SMF_CREATE_STATE(st_write_entry, st_write_run, NULL, NULL,
+				      NULL),
+	[ST_PING_STATUS] = SMF_CREATE_STATE(
+		st_ping_status_entry, st_ping_status_run, NULL, NULL, NULL),
+	[ST_READ] =
+		SMF_CREATE_STATE(st_read_entry, st_read_run, NULL, NULL, NULL),
+	[ST_ERROR_RECOVERY] = SMF_CREATE_STATE(st_error_recovery_entry,
+					       st_error_recovery_run, NULL,
+					       NULL, NULL),
+	[ST_DISABLE] = SMF_CREATE_STATE(st_disable_entry, st_disable_run, NULL,
+					NULL, NULL),
 	[ST_SUSPENDED] = SMF_CREATE_STATE(st_suspended_entry, st_suspended_run,
-					  NULL, NULL),
+					  NULL, NULL, NULL),
 
 };
 
@@ -1632,6 +1644,16 @@ static int rts54_set_power_level(const struct device *dev,
 		byte = 0x01 << 2;
 		break;
 	}
+
+	/*
+	 * Apply the same value to both TPC Rp and PD Rp as 0 is a reserved
+	 * value and without setting both fields, the command will fail.
+	 *
+	 * bits 1:0 reserved
+	 * bits 3:2 TPC Rp
+	 * bits 5:4 PD Rp
+	 */
+	byte |= (byte << 2);
 
 	uint8_t payload[] = {
 		SET_TPC_RP.cmd, SET_TPC_RP.len, SET_TPC_RP.sub, 0x00, byte,
@@ -1981,6 +2003,50 @@ static int rts54_set_ccom(const struct device *dev, enum ccom_t ccom)
 				  ARRAY_SIZE(payload), NULL);
 }
 
+static int rts54_set_drp_mode(const struct device *dev, enum drp_mode_t dm)
+{
+	struct pdc_data_t *data = dev->data;
+	uint8_t opmode = 0;
+
+	if (get_state(data) != ST_IDLE) {
+		return -EBUSY;
+	}
+
+	/* Set CSD mode to DRP */
+	opmode = 0x01;
+	switch (dm) {
+	case DRP_NORMAL:
+		/* No Try.Src or Try.Snk
+		 * opmode |= (0 << 3);
+		 */
+		break;
+	case DRP_TRY_SRC:
+		opmode |= (1 << 3);
+		break;
+	case DRP_TRY_SNK:
+		opmode |= (2 << 3);
+		break;
+	case DRP_INVALID:
+	default:
+		LOG_ERR("Invalid DRP mode: %d", dm);
+		break;
+	}
+
+	/* We always want Accessory Support */
+	opmode |= (1 << 2);
+
+	uint8_t payload[] = {
+		SET_TPC_CSD_OPERATION_MODE.cmd,
+		SET_TPC_CSD_OPERATION_MODE.len,
+		SET_TPC_CSD_OPERATION_MODE.sub,
+		0x00,
+		opmode,
+	};
+
+	return rts54_post_command(dev, CMD_SET_DRP_MODE, payload,
+				  ARRAY_SIZE(payload), NULL);
+}
+
 static int rts54_set_uor(const struct device *dev, union uor_t uor)
 {
 	struct pdc_data_t *data = dev->data;
@@ -2154,6 +2220,39 @@ static int rts54_set_comms_state(const struct device *dev, bool comms_active)
 	return 0;
 }
 
+static int rts54_set_pdo(const struct device *dev, enum pdo_type_t type,
+			 uint32_t *pdo, int count)
+{
+	struct pdc_data_t *data = dev->data;
+	uint8_t pdo_info;
+
+	if (get_state(data) != ST_IDLE) {
+		return -EBUSY;
+	}
+
+	/*
+	 * TODO(b/319643480): Current implementation only supports setting the
+	 * first SNK or SRC CAP.
+	 */
+	if (count != 1) {
+		count = 1;
+		LOG_WRN("rts54xx: set_pdos only sets the first PDO passed in");
+	}
+
+	pdo_info = (count & 0x7) | (type << 3);
+
+	uint8_t payload[] = {
+		SET_PDO.cmd,   SET_PDO.len + sizeof(uint32_t) * count,
+		SET_PDO.sub,   0x00,
+		pdo_info,      BYTE0(pdo[0]),
+		BYTE1(pdo[0]), BYTE2(pdo[0]),
+		BYTE3(pdo[0]),
+	};
+
+	return rts54_post_command(dev, CMD_SET_PDO, payload,
+				  ARRAY_SIZE(payload), NULL);
+}
+
 static const struct pdc_driver_api_t pdc_driver_api = {
 	.is_init_done = rts54_is_init_done,
 	.get_ucsi_version = rts54_get_ucsi_version,
@@ -2162,6 +2261,7 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.get_capability = rts54_get_capability,
 	.get_connector_capability = rts54_get_connector_capability,
 	.set_ccom = rts54_set_ccom,
+	.set_drp_mode = rts54_set_drp_mode,
 	.set_uor = rts54_set_uor,
 	.set_pdr = rts54_set_pdr,
 	.set_sink_path = rts54_set_sink_path,
@@ -2184,6 +2284,7 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.get_identity_discovery = rts54_get_identity_discovery,
 	.set_comms_state = rts54_set_comms_state,
 	.is_vconn_sourcing = rts54_is_vconn_sourcing,
+	.set_pdos = rts54_set_pdo,
 };
 
 static void pdc_interrupt_callback(const struct device *dev,

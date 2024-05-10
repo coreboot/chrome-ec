@@ -45,6 +45,7 @@ import argparse
 from collections import namedtuple
 import concurrent
 from concurrent.futures.thread import ThreadPoolExecutor
+import copy
 from dataclasses import dataclass
 from dataclasses import field
 from enum import Enum
@@ -223,6 +224,7 @@ class TestConfig:
     passed: bool = field(init=False, default=False)
     num_passes: int = field(init=False, default=0)
     num_fails: int = field(init=False, default=0)
+    skip_for_zephyr: bool = False
 
     # The callbacks below are called before and after a test is executed and
     # may be used for additional test setup, post test activities, or other tasks
@@ -284,7 +286,9 @@ class AllTests:
             ),
             TestConfig(test_name="abort"),
             TestConfig(test_name="aes"),
-            TestConfig(test_name="always_memset"),
+            # Cryptoc is not supported with Zephyr.
+            # TODO(b/333039464) A new test for OPENSSL_cleanse has to be implemented.
+            TestConfig(test_name="always_memset", skip_for_zephyr=True),
             TestConfig(test_name="benchmark"),
             TestConfig(test_name="boringssl_crypto"),
             TestConfig(test_name="cortexm_fpu"),
@@ -329,6 +333,7 @@ class AllTests:
                 test_name="fpsensor",
                 test_args=["uart"],
             ),
+            TestConfig(test_name="fpsensor_utils"),
             TestConfig(test_name="ftrapv"),
             TestConfig(
                 test_name="libc_printf",
@@ -575,7 +580,7 @@ HELIPILOT_CONFIG = BoardConfig(
     variants={},
 )
 
-BUCCANEER_CONFIG = HELIPILOT_CONFIG
+BUCCANEER_CONFIG = copy.deepcopy(HELIPILOT_CONFIG)
 BUCCANEER_CONFIG.name = BUCCANEER
 # TODO(b/336640151): Add buccaneer variants once RO is created
 
@@ -948,12 +953,16 @@ def run_test_ec(test: TestConfig) -> str:
 
 def run_test_zephyr(test: TestConfig) -> str:
     """Prepare a command to run test on Zephyr"""
-    test_cmd = "ztest run-testcase " + test.test_name
-    # ZTEST console doesn't support passing test arguments
-    # Assume a testsuite for every test + arg combination
-    for test_arg in test.test_args:
-        test_cmd = test_cmd + "_" + test_arg
-    test_cmd = test_cmd + "\n"
+    if len(test.test_args) == 0:
+        # If there are no args just run-all not to be limited by suite name
+        test_cmd = "ztest run-all\n"
+    else:
+        # ZTEST console doesn't support passing test arguments
+        # Assume a testsuite for every test + arg combination
+        test_cmd = "ztest run-testcase " + test.test_name
+        for test_arg in test.test_args:
+            test_cmd = test_cmd + "_" + test_arg
+        test_cmd = test_cmd + "\n"
 
     return test_cmd
 
@@ -1303,6 +1312,8 @@ def main():
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         for test in test_list:
+            if test.skip_for_zephyr and args.zephyr:
+                continue
             test.passed = flash_and_run_test(test, board_config, args, executor)
 
         colorama.init()
@@ -1310,11 +1321,14 @@ def main():
         for test in test_list:
             # print results
             print('Test "' + test.config_name + '": ', end="")
-            if test.passed:
-                print(colorama.Fore.GREEN + "PASSED")
+            if test.skip_for_zephyr and args.zephyr:
+                print(colorama.Fore.YELLOW + "SKIPPED")
             else:
-                print(colorama.Fore.RED + "FAILED")
-                exit_code = 1
+                if test.passed:
+                    print(colorama.Fore.GREEN + "PASSED")
+                else:
+                    print(colorama.Fore.RED + "FAILED")
+                    exit_code = 1
 
             print(colorama.Style.RESET_ALL)
 
