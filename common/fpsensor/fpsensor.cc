@@ -557,7 +557,9 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 			trng_exit();
 		}
 
-		ret = derive_encryption_key(key, enc_info->encryption_salt);
+		ret = derive_encryption_key(key, enc_info->encryption_salt,
+					    global_context.user_id,
+					    global_context.tpm_seed);
 		if (ret != EC_SUCCESS) {
 			CPRINTS("fgr%d: Failed to derive key", fgr);
 			return EC_RES_UNAVAILABLE;
@@ -675,8 +677,8 @@ enum ec_status fp_commit_template(std::span<const uint8_t> context)
 
 	enum ec_error_list ret;
 	if (global_context.fp_encryption_status & FP_CONTEXT_USER_ID_SET) {
-		ret = derive_encryption_key_with_info(
-			key, enc_info->encryption_salt, context);
+		ret = derive_encryption_key(key, enc_info->encryption_salt,
+					    context, global_context.tpm_seed);
 		if (ret != EC_SUCCESS) {
 			CPRINTS("fgr%d: Failed to derive key", idx);
 			return EC_RES_UNAVAILABLE;
@@ -748,9 +750,7 @@ static enum ec_status fp_command_template(struct host_cmd_handler_args *args)
 	memcpy(&fp_enc_buffer[offset], params->data, size);
 
 	if (xfer_complete) {
-		return fp_commit_template(
-			{ reinterpret_cast<uint8_t *>(global_context.user_id),
-			  sizeof(global_context.user_id) });
+		return fp_commit_template(global_context.user_id);
 	}
 
 	return EC_RES_SUCCESS;

@@ -6,7 +6,6 @@
 #include "crypto/cleanse_wrapper.h"
 #include "fpsensor/fpsensor_console.h"
 #include "fpsensor/fpsensor_crypto.h"
-#include "fpsensor/fpsensor_state_without_driver_info.h"
 #include "openssl/aead.h"
 #include "openssl/evp.h"
 #include "openssl/hkdf.h"
@@ -25,13 +24,13 @@ extern "C" {
 
 #ifdef CONFIG_OTP_KEY
 constexpr uint8_t IKM_OTP_OFFSET_BYTES =
-	CONFIG_ROLLBACK_SECRET_SIZE + sizeof(global_context.tpm_seed);
+	CONFIG_ROLLBACK_SECRET_SIZE + FP_CONTEXT_TPM_BYTES;
 constexpr uint8_t IKM_SIZE_BYTES = IKM_OTP_OFFSET_BYTES + OTP_KEY_SIZE_BYTES;
 BUILD_ASSERT(IKM_SIZE_BYTES == 96);
 
 #else
 constexpr uint8_t IKM_SIZE_BYTES =
-	CONFIG_ROLLBACK_SECRET_SIZE + sizeof(global_context.tpm_seed);
+	CONFIG_ROLLBACK_SECRET_SIZE + FP_CONTEXT_TPM_BYTES;
 BUILD_ASSERT(IKM_SIZE_BYTES == 64);
 #endif
 
@@ -40,11 +39,12 @@ BUILD_ASSERT(IKM_SIZE_BYTES == 64);
 #endif
 
 test_export_static enum ec_error_list
-get_ikm(std::span<uint8_t, IKM_SIZE_BYTES> ikm)
+get_ikm(std::span<uint8_t, IKM_SIZE_BYTES> ikm,
+	std::span<const uint8_t, FP_CONTEXT_TPM_BYTES> tpm_seed)
 {
 	enum ec_error_list ret;
 
-	if (!fp_tpm_seed_is_set()) {
+	if (bytes_are_trivial(tpm_seed.data(), tpm_seed.size_bytes())) {
 		CPRINTS("Seed hasn't been set.");
 		return EC_ERROR_ACCESS_DENIED;
 	}
@@ -62,8 +62,8 @@ get_ikm(std::span<uint8_t, IKM_SIZE_BYTES> ikm)
 	 * IKM is the concatenation of the rollback secret and the seed from
 	 * the TPM.
 	 */
-	memcpy(ikm.data() + CONFIG_ROLLBACK_SECRET_SIZE,
-	       global_context.tpm_seed, sizeof(global_context.tpm_seed));
+	memcpy(ikm.data() + CONFIG_ROLLBACK_SECRET_SIZE, tpm_seed.data(),
+	       tpm_seed.size_bytes());
 
 #ifdef CONFIG_OTP_KEY
 	uint8_t otp_key[OTP_KEY_SIZE_BYTES] = { 0 };
@@ -112,14 +112,16 @@ test_mockable bool hkdf_sha256(std::span<uint8_t> out_key,
 	return hkdf_sha256_impl(out_key, ikm, salt, info);
 }
 
-enum ec_error_list
-derive_positive_match_secret(std::span<uint8_t> output,
-			     std::span<const uint8_t> input_positive_match_salt)
+enum ec_error_list derive_positive_match_secret(
+	std::span<uint8_t> output,
+	std::span<const uint8_t> input_positive_match_salt,
+	std::span<const uint8_t, FP_CONTEXT_USERID_BYTES> user_id,
+	std::span<const uint8_t, FP_CONTEXT_TPM_BYTES> tpm_seed)
 {
 	enum ec_error_list ret;
 	CleanseWrapper<std::array<uint8_t, IKM_SIZE_BYTES> > ikm;
 	static const char info_prefix[] = "positive_match_secret for user ";
-	uint8_t info[sizeof(info_prefix) - 1 + sizeof(global_context.user_id)];
+	uint8_t info[sizeof(info_prefix) - 1 + user_id.size_bytes()];
 
 	if (bytes_are_trivial(input_positive_match_salt.data(),
 			      input_positive_match_salt.size())) {
@@ -128,15 +130,15 @@ derive_positive_match_secret(std::span<uint8_t> output,
 		return EC_ERROR_INVAL;
 	}
 
-	ret = get_ikm(ikm);
+	ret = get_ikm(ikm, tpm_seed);
 	if (ret != EC_SUCCESS) {
 		CPRINTS("Failed to get IKM: %d", ret);
 		return ret;
 	}
 
 	memcpy(info, info_prefix, strlen(info_prefix));
-	memcpy(info + strlen(info_prefix), global_context.user_id,
-	       sizeof(global_context.user_id));
+	memcpy(info + strlen(info_prefix), user_id.data(),
+	       user_id.size_bytes());
 
 	if (!hkdf_sha256(output, ikm, input_positive_match_salt, info)) {
 		CPRINTS("Failed to perform HKDF");
@@ -153,9 +155,9 @@ derive_positive_match_secret(std::span<uint8_t> output,
 }
 
 enum ec_error_list
-derive_encryption_key_with_info(std::span<uint8_t> out_key,
-				std::span<const uint8_t> salt,
-				std::span<const uint8_t> info)
+derive_encryption_key(std::span<uint8_t> out_key, std::span<const uint8_t> salt,
+		      std::span<const uint8_t> info,
+		      std::span<const uint8_t, FP_CONTEXT_TPM_BYTES> tpm_seed)
 {
 	enum ec_error_list ret;
 	CleanseWrapper<std::array<uint8_t, IKM_SIZE_BYTES> > ikm;
@@ -168,7 +170,7 @@ derive_encryption_key_with_info(std::span<uint8_t> out_key,
 		return EC_ERROR_INVAL;
 	}
 
-	ret = get_ikm(ikm);
+	ret = get_ikm(ikm, tpm_seed);
 	if (ret != EC_SUCCESS) {
 		CPRINTS("Failed to get IKM: %d", ret);
 		return ret;
@@ -180,16 +182,6 @@ derive_encryption_key_with_info(std::span<uint8_t> out_key,
 	}
 
 	return ret;
-}
-
-enum ec_error_list derive_encryption_key(std::span<uint8_t> out_key,
-					 std::span<const uint8_t> salt)
-{
-	BUILD_ASSERT(sizeof(global_context.user_id) == SHA256_DIGEST_SIZE);
-	return derive_encryption_key_with_info(
-		out_key, salt,
-		{ reinterpret_cast<uint8_t *>(global_context.user_id),
-		  sizeof(global_context.user_id) });
 }
 
 enum ec_error_list aes_128_gcm_encrypt(std::span<const uint8_t> key,

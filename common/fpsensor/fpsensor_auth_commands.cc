@@ -34,7 +34,7 @@ std::array<uint8_t, FP_CK_AUTH_NONCE_LEN> auth_nonce;
 
 enum ec_error_list check_context_cleared()
 {
-	for (uint32_t partial : global_context.user_id)
+	for (uint8_t partial : global_context.user_id)
 		if (partial != 0)
 			return EC_ERROR_ACCESS_DENIED;
 	for (uint8_t partial : auth_nonce)
@@ -67,7 +67,9 @@ fp_command_establish_pairing_key_keygen(struct host_cmd_handler_args *args)
 
 	std::optional<fp_encrypted_private_key> encrypted_private_key =
 		create_encrypted_private_key(*ecdh_key,
-					     FP_AES_KEY_ENC_METADATA_VERSION);
+					     FP_AES_KEY_ENC_METADATA_VERSION,
+					     global_context.user_id,
+					     global_context.tpm_seed);
 	if (!encrypted_private_key.has_value()) {
 		CPRINTS("pairing_keygen: Failed to fill response encrypted private key");
 		return EC_RES_UNAVAILABLE;
@@ -100,8 +102,9 @@ fp_command_establish_pairing_key_wrap(struct host_cmd_handler_args *args)
 
 	ScopedFastCpu fast_cpu;
 
-	bssl::UniquePtr<EC_KEY> private_key =
-		decrypt_private_key(params->encrypted_private_key);
+	bssl::UniquePtr<EC_KEY> private_key = decrypt_private_key(
+		params->encrypted_private_key, global_context.user_id,
+		global_context.tpm_seed);
 	if (private_key == nullptr) {
 		return EC_RES_UNAVAILABLE;
 	}
@@ -121,6 +124,8 @@ fp_command_establish_pairing_key_wrap(struct host_cmd_handler_args *args)
 
 	ret = encrypt_data_in_place(FP_AES_KEY_ENC_METADATA_VERSION,
 				    r->encrypted_pairing_key.info,
+				    global_context.user_id,
+				    global_context.tpm_seed,
 				    r->encrypted_pairing_key.data);
 	if (ret != EC_SUCCESS) {
 		return EC_RES_UNAVAILABLE;
@@ -155,6 +160,7 @@ fp_command_load_pairing_key(struct host_cmd_handler_args *args)
 	}
 
 	ret = decrypt_data(params->encrypted_pairing_key.info,
+			   global_context.user_id, global_context.tpm_seed,
 			   params->encrypted_pairing_key.data, pairing_key);
 	if (ret != EC_SUCCESS) {
 		CPRINTS("load_pairing_key: Failed to decrypt pairing key");
@@ -227,7 +233,7 @@ fp_command_nonce_context(struct host_cmd_handler_args *args)
 
 	/* Set the user_id. */
 	std::copy(raw_user_id.begin(), raw_user_id.end(),
-		  reinterpret_cast<uint8_t *>(global_context.user_id));
+		  global_context.user_id);
 
 	global_context.fp_encryption_status &= FP_ENC_STATUS_SEED_SET;
 	global_context.fp_encryption_status |= FP_CONTEXT_USER_ID_SET;
@@ -319,8 +325,9 @@ static enum ec_status unlock_template(uint16_t idx)
 		  enc_salt.begin());
 
 	CleanseWrapper<std::array<uint8_t, SBP_ENC_KEY_LEN> > key;
-	if (derive_encryption_key(key, enc_info.encryption_salt) !=
-	    EC_SUCCESS) {
+	if (derive_encryption_key(key, enc_info.encryption_salt,
+				  global_context.user_id,
+				  global_context.tpm_seed) != EC_SUCCESS) {
 		fp_clear_finger_context(idx);
 		OPENSSL_cleanse(fp_enc_buffer, sizeof(fp_enc_buffer));
 		return EC_RES_UNAVAILABLE;

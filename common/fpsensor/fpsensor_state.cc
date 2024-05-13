@@ -60,6 +60,27 @@ uint8_t fp_positive_match_salt[FP_MAX_FINGER_COUNT]
 /* The states for different fingers. */
 std::array<fp_template_state, FP_MAX_FINGER_COUNT> template_states;
 
+struct fpsensor_context global_context = {
+	.template_newly_enrolled = FP_NO_SUCH_TEMPLATE,
+	.templ_valid = 0,
+	.templ_dirty = 0,
+	.fp_events = 0,
+	.sensor_mode = 0,
+	.tpm_seed = { 0 },
+	.user_id = { 0 },
+	.positive_match_secret_state = {
+		.template_matched = FP_NO_SUCH_TEMPLATE,
+		.readable = false,
+		.deadline = {
+			.val = 0,
+		}},
+};
+
+int fp_tpm_seed_is_set(void)
+{
+	return global_context.fp_encryption_status & FP_ENC_STATUS_SEED_SET;
+}
+
 /* LCOV_EXCL_START */
 __test_only void fp_task_simulate(void)
 {
@@ -93,7 +114,7 @@ void fp_reset_context()
 
 void fp_init_decrypted_template_state_with_user_id(uint16_t idx)
 {
-	std::array<uint32_t, FP_CONTEXT_USERID_WORDS> raw_user_id;
+	std::array<uint8_t, FP_CONTEXT_USERID_BYTES> raw_user_id;
 	std::ranges::copy(global_context.user_id, raw_user_id.begin());
 	template_states[idx] = fp_decrypted_template_state{
 		.user_id = raw_user_id,
@@ -338,7 +359,8 @@ enum ec_status fp_read_match_secret(
 
 	if (derive_positive_match_secret(
 		    { positive_match_secret, FP_POSITIVE_MATCH_SECRET_BYTES },
-		    fp_positive_match_salt[fgr]) != EC_SUCCESS) {
+		    fp_positive_match_salt[fgr], global_context.user_id,
+		    global_context.tpm_seed) != EC_SUCCESS) {
 		CPRINTS("Failed to derive positive match secret for finger %d",
 			fgr);
 		/* Keep the template and encryption salt. */
