@@ -8,7 +8,8 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.81        | 0.23.81
+[ToT][ToT ebuild]   | 0.24.90        | 0.23.90
+[M126][126 release] | 0.24.90        | 0.23.90
 [M125][125 release] | 0.24.81        | 0.23.81
 [M124][124 release] | 0.24.71        | 0.23.71
 [M123][123 release] | 0.24.71        | 0.23.71
@@ -717,6 +718,36 @@ Build:   ti50_common_mp-15224.B:v0.0.1091-c88c4ab9
     [b/322037216](https://b.corp.google.com/issues/323043338)
 *   event_log: Ensure time always moves forward on init.
     [b/329326190](https://b.corp.google.com/issues/329326190)
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5529740)
+
+Builder
+[74](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15224.B-branch/74/overview)
+
+Artifacts:
+[15224.71.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.71.0)
+
+**Features**
+
+*   capsules: Allow dynamically changing baud rate
+
+```
+Build:   ti50_common_mp-15224.B:v0.0.1148-c04edba0
+         libtock-rs:v0.0.932-419cdc2
+         tock:v0.0.9685-1ae1fff89
+         ms-tpm-20-ref:v0.0.334-628c70e
+         @chromeos-ci-firmware-us-central1-b-x32-0-8m95 2024-05-06 10:59:19
+```
+
+**Bug Fixes**
+
+*   tpm2: Check if a key is already wrapped before wrapping
+    [b/302699979](https://b.corp.google.com/issues/302699979)
+*   cryptolib: Prevent buffer overrun
+    [b/327499069](https://b.corp.google.com/issues/327499069)
+*   dispatcher: Ensure buffer is inaccessible after enqueued
+    [b/332326497](https://b.corp.google.com/issues/332326497)
 
 ## PrePVT images
 
@@ -1617,7 +1648,7 @@ Artifacts:
 
 **Features**
 
-* capsules: Allow dynamically changing baud rate
+*   capsules: Allow dynamically changing baud rate
 
 ```
 Build:   ti50_common_prepvt-15086.B:v0.0.1147-1170d5a9
@@ -1626,14 +1657,15 @@ Build:   ti50_common_prepvt-15086.B:v0.0.1147-1170d5a9
          ms-tpm-20-ref:v0.0.333-50b2409
          @chromeos-ci-firmware-us-central2-d-x32-0-2g96 2024-04-02 13:05:03
 ```
+
 **Bug Fixes**
 
-* tpm2: Check if a key is already wrapped before wrapping
-  [b/302699979](https://b.corp.google.com/issues/302699979)
-* cryptolib: Prevent buffer overrun
-  [b/327499069](https://b.corp.google.com/issues/327499069)
-* dispatcher: Ensure buffer is inaccessible after enqueued
-  [b/332326497](https://b.corp.google.com/issues/332326497)
+*   tpm2: Check if a key is already wrapped before wrapping
+    [b/302699979](https://b.corp.google.com/issues/302699979)
+*   cryptolib: Prevent buffer overrun
+    [b/327499069](https://b.corp.google.com/issues/327499069)
+*   dispatcher: Ensure buffer is inaccessible after enqueued
+    [b/332326497](https://b.corp.google.com/issues/332326497)
 
 <!-- Links -->
 
@@ -1658,4 +1690,5 @@ Build:   ti50_common_prepvt-15086.B:v0.0.1147-1170d5a9
 [123 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R123-15786.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [124 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R124-15823.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [125 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R125-15853.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[126 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R126-15886.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [ToT ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
