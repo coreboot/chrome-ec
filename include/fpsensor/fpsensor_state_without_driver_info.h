@@ -19,7 +19,6 @@
 extern "C" {
 #endif
 
-#define SBP_ENC_KEY_LEN 16
 #define FP_NO_SUCH_TEMPLATE (UINT16_MAX)
 
 /* --- Global variables defined in fpsensor_state_without_driver_info.c --- */
@@ -49,7 +48,7 @@ struct fpsensor_context {
 	 */
 	uint8_t tpm_seed[FP_CONTEXT_TPM_BYTES];
 	/** Current user ID */
-	uint32_t user_id[FP_CONTEXT_USERID_WORDS];
+	uint8_t user_id[FP_CONTEXT_USERID_BYTES];
 	struct positive_match_secret_state positive_match_secret_state;
 };
 

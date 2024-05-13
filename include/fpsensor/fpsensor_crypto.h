@@ -13,7 +13,10 @@
 
 extern "C" {
 #include "common.h"
+#include "ec_commands.h"
 }
+
+#define SBP_ENC_KEY_LEN 16
 
 #define HKDF_MAX_INFO_SIZE 128
 #define HKDF_SHA256_MAX_BLOCK_COUNT 255
@@ -44,18 +47,13 @@ bool hkdf_sha256(std::span<uint8_t> out_key, std::span<const uint8_t> ikm,
  * @param out_key the pointer to buffer holding the output key.
  * @param salt the salt to use in HKDF.
  * @param info the info to use in HKDF.
+ * @param tpm_seed the seed from the TPM for deriving secret.
  * @return EC_SUCCESS on success and error code otherwise.
  */
 enum ec_error_list
-derive_encryption_key_with_info(std::span<uint8_t> out_key,
-				std::span<const uint8_t> salt,
-				std::span<const uint8_t> info);
-
-/**
- * Call derive_encryption_key_with_info with the context user_id as |info|.
- */
-enum ec_error_list derive_encryption_key(std::span<uint8_t> out_key,
-					 std::span<const uint8_t> salt);
+derive_encryption_key(std::span<uint8_t> out_key, std::span<const uint8_t> salt,
+		      std::span<const uint8_t> info,
+		      std::span<const uint8_t, FP_CONTEXT_TPM_BYTES> tpm_seed);
 
 /**
  * Derive positive match secret from |input_positive_match_salt| and
@@ -65,11 +63,15 @@ enum ec_error_list derive_encryption_key(std::span<uint8_t> out_key,
  * FP_POSITIVE_MATCH_SECRET_BYTES in size.
  * @param input_positive_match_salt the salt for deriving secret, must be at
  * least FP_POSITIVE_MATCH_SALT_BYTES in size.
+ * @param user_id the user_id used for deriving secret.
+ * @param tpm_seed the seed from the TPM for deriving secret.
  * @return EC_SUCCESS on success and error code otherwise.
  */
 enum ec_error_list derive_positive_match_secret(
 	std::span<uint8_t> output,
-	std::span<const uint8_t> input_positive_match_salt);
+	std::span<const uint8_t> input_positive_match_salt,
+	std::span<const uint8_t, FP_CONTEXT_USERID_BYTES> user_id,
+	std::span<const uint8_t, FP_CONTEXT_TPM_BYTES> tpm_seed);
 
 /**
  * Encrypt |plaintext| using AES-GCM128.
