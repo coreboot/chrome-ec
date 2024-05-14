@@ -8,6 +8,7 @@
 #include "base_state.h"
 #include "chipset.h"
 #include "console.h"
+#include "drivers/one_wire_uart.h"
 #include "hooks.h"
 #include "lid_switch.h"
 #include "tablet_mode.h"
@@ -25,19 +26,22 @@ static void base_update(bool attached)
 {
 	const struct gpio_dt_spec *en_cc_lid_base_pu =
 		GPIO_DT_FROM_NODELABEL(en_cc_lid_base_pu);
+	const static struct device *one_wire_uart =
+		DEVICE_DT_GET(DT_NODELABEL(one_wire_uart));
+	bool base_en;
 
 	if (IS_ENABLED(CONFIG_GERALT_LID_DETECTION_SELECTED)) {
 		enable_lid_detect(attached);
-		if (chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
-			gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(en_ppvar_base_x),
-					false);
-		} else {
-			gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(en_ppvar_base_x),
-					attached);
-		}
+		base_en = attached && !chipset_in_state(CHIPSET_STATE_ANY_OFF);
 	} else {
-		gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(en_ppvar_base_x),
-				attached);
+		base_en = attached;
+	}
+
+	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(en_ppvar_base_x), base_en);
+	if (base_en) {
+		one_wire_uart_enable(one_wire_uart);
+	} else {
+		one_wire_uart_disable(one_wire_uart);
 	}
 
 	base_set_state(attached);
@@ -120,13 +124,8 @@ static int base_init(void)
 				  AP_POWER_STARTUP | AP_POWER_SHUTDOWN);
 	ap_power_ev_add_callback(&cb);
 
-	if (!chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
-		base_detect_enable(true);
-	}
-
 	return 0;
 }
-
 SYS_INIT(base_init, APPLICATION, 1);
 
 void base_init_setting(void)
@@ -134,7 +133,9 @@ void base_init_setting(void)
 	if (adc_read_channel(ADC_BASE_DET) > DETACH_MIN_THRESHOLD_MV) {
 		base_update(false);
 	}
-	if (IS_ENABLED(CONFIG_GERALT_LID_DETECTION_SELECTED)) {
+
+	if (IS_ENABLED(CONFIG_GERALT_LID_DETECTION_SELECTED) ||
+	    !chipset_in_state(CHIPSET_STATE_ANY_OFF)) {
 		base_detect_enable(true);
 	}
 }

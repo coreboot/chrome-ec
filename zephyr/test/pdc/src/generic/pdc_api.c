@@ -10,6 +10,7 @@
 #include "drivers/ucsi_v3.h"
 #include "emul/emul_pdc.h"
 #include "i2c.h"
+#include "pdc_trace_msg.h"
 #include "zephyr/sys/util.h"
 #include "zephyr/sys/util_macro.h"
 
@@ -32,6 +33,9 @@ void pdc_before_test(void *data)
 {
 	emul_pdc_reset(emul);
 	emul_pdc_set_response_delay(emul, 0);
+	if (IS_ENABLED(CONFIG_TEST_PDC_MESSAGE_TRACING)) {
+		set_pdc_trace_msg_mocks();
+	}
 }
 
 ZTEST_SUITE(pdc_api, NULL, NULL, pdc_before_test, NULL, NULL);
@@ -284,6 +288,23 @@ ZTEST_USER(pdc_api, test_set_ccom)
 		k_sleep(K_MSEC(SLEEP_MS));
 		zassert_ok(emul_pdc_get_ccom(emul, &ccom_out));
 		zassert_equal(ccom_in[i], ccom_out);
+	}
+}
+
+ZTEST_USER(pdc_api, test_set_drp_mode)
+{
+	int i;
+	enum drp_mode_t dm_in[] = { DRP_NORMAL, DRP_TRY_SRC, DRP_TRY_SNK };
+	enum drp_mode_t dm_out;
+
+	k_sleep(K_MSEC(SLEEP_MS));
+
+	for (i = 0; i < ARRAY_SIZE(dm_in); i++) {
+		zassert_ok(pdc_set_drp_mode(dev, dm_in[i]));
+
+		k_sleep(K_MSEC(SLEEP_MS));
+		zassert_ok(emul_pdc_get_drp_mode(emul, &dm_out));
+		zassert_equal(dm_in[i], dm_out);
 	}
 }
 

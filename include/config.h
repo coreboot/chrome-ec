@@ -1930,6 +1930,11 @@
 /* Enable verbose output to UART console and extra timestamp print precision. */
 #define CONFIG_CONSOLE_VERBOSE
 
+/* Enable the console print command. This allows the host to print messages
+ * directly in the EC console.
+ */
+#define CONFIG_HOSTCMD_CONSOLE_PRINT
+
 /*****************************************************************************/
 /* Support for EC-EC communication */
 
@@ -6106,11 +6111,11 @@
 /******************************************************************************/
 /*
  * If CONFIG_USB_PD_USB4 is enabled, make sure CONFIG_USBC_SS_MUX and
- * CONFIG_USB_PD_ALT_MODE_DFP is enabled
+ * CONFIG_USB_PD_ALT_MODE_DFP is enabled for TCPM configs
  */
 #ifdef CONFIG_USB_PD_USB4
-#if !defined(CONFIG_USBC_SS_MUX)
-#error CONFIG_USBC_SS_MUX must be enabled for USB4 mode support
+#if !defined(CONFIG_USBC_SS_MUX) && !defined(CONFIG_USB_PD_CONTROLLER)
+#error CONFIG_USBC_SS_MUX must be enabled for TCPM USB4 mode support
 #endif
 #if !defined(CONFIG_ZEPHYR) && !defined(CONFIG_USB_PD_ALT_MODE_DFP)
 #error CONFIG_USB_PD_ALT_MODE_DFP must be enabled for USB4 mode support
@@ -6203,16 +6208,15 @@
 
 /******************************************************************************/
 /*
- * Ensure CONFIG_USB_PD_TCPMV2 or CONFIG_PLATFORM_EC_USB_PD_CONTROLLER, and
- * CONFIG_USBC_SS_MUX both are defined. USBC retimer firmware update feature
- * requires both.
+ * Ensure CONFIG_USB_PD_TCPMV2 and CONFIG_USBC_SS_MUX, or
+ * CONFIG_PLATFORM_EC_USB_PD_CONTROLLER are defined.
+ * USBC retimer firmware update feature requires one of these.
  */
-#if (defined(CONFIG_USBC_RETIMER_FW_UPDATE) &&             \
-     (!((defined(CONFIG_USB_PD_TCPMV2) ||                  \
-	 defined(CONFIG_PLATFORM_EC_USB_PD_CONTROLLER)) && \
-	defined(CONFIG_USBC_SS_MUX))))
-#error "Retimer firmware update requires TCPMv2 or USB PD controller, and" \
-	"USBC_SS_MUX."
+#if (defined(CONFIG_USBC_RETIMER_FW_UPDATE) &&                            \
+     (!((defined(CONFIG_USB_PD_TCPMV2) && defined(CONFIG_USBC_SS_MUX)) || \
+	defined(CONFIG_PLATFORM_EC_USB_PD_CONTROLLER))))
+#error "Retimer firmware update requires TCPMv2 and USBC_SS_MUX, or " \
+	"USB PD controller."
 #endif
 
 /******************************************************************************/

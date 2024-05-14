@@ -80,6 +80,24 @@ struct pdc_bus_info_t {
 };
 
 /**
+ * @brief PDO Source: PDC or Port Partner
+ */
+enum pdo_source_t {
+	/** LPM */
+	LPM_PDO,
+	/** Port Partner PDO */
+	PARTNER_PDO,
+};
+
+/**
+ * @brief Used for building CMD_PDC_GET_PDOS
+ */
+struct get_pdo_t {
+	enum pdo_type_t pdo_type;
+	enum pdo_source_t pdo_source;
+};
+
+/**
  * @typedef
  * @brief These are the API function types
  */
@@ -93,6 +111,7 @@ typedef int (*pdc_get_capability_t)(const struct device *dev,
 typedef int (*pdc_get_connector_capability_t)(
 	const struct device *dev, union connector_capability_t *caps);
 typedef int (*pdc_set_ccom_t)(const struct device *dev, enum ccom_t ccom);
+typedef int (*pdc_set_drp_mode_t)(const struct device *dev, enum drp_mode_t dm);
 typedef int (*pdc_set_uor_t)(const struct device *dev, union uor_t uor);
 typedef int (*pdc_set_pdr_t)(const struct device *dev, union pdr_t pdr);
 typedef int (*pdc_set_sink_path_t)(const struct device *dev, bool en);
@@ -133,6 +152,15 @@ typedef int (*pdc_get_identity_discovery_t)(const struct device *dev,
 typedef int (*pdc_set_comms_state_t)(const struct device *dev, bool active);
 typedef int (*pdc_is_vconn_sourcing_t)(const struct device *dev,
 				       bool *vconn_sourcing);
+typedef int (*pdc_set_pdos_t)(const struct device *dev, enum pdo_type_t type,
+			      uint32_t *pdo, int count);
+typedef int (*pdc_get_pch_data_status_t)(const struct device *dev,
+					 uint8_t port_num, uint8_t *status_reg);
+typedef int (*pdc_execute_command_sync_t)(const struct device *dev,
+					  uint8_t ucsi_command,
+					  uint8_t data_size,
+					  uint8_t *command_specific,
+					  uint8_t *lpm_data_out);
 
 /**
  * @cond INTERNAL_HIDDEN
@@ -147,6 +175,7 @@ __subsystem struct pdc_driver_api_t {
 	pdc_get_capability_t get_capability;
 	pdc_get_connector_capability_t get_connector_capability;
 	pdc_set_ccom_t set_ccom;
+	pdc_set_drp_mode_t set_drp_mode;
 	pdc_set_uor_t set_uor;
 	pdc_set_pdr_t set_pdr;
 	pdc_set_sink_path_t set_sink_path;
@@ -170,6 +199,9 @@ __subsystem struct pdc_driver_api_t {
 	pdc_get_identity_discovery_t get_identity_discovery;
 	pdc_set_comms_state_t set_comms_state;
 	pdc_is_vconn_sourcing_t is_vconn_sourcing;
+	pdc_set_pdos_t set_pdos;
+	pdc_get_pch_data_status_t get_pch_data_status;
+	pdc_execute_command_sync_t execute_command_sync;
 };
 /**
  * @endcond
@@ -444,6 +476,33 @@ static inline int pdc_set_ccom(const struct device *dev, enum ccom_t ccom)
 	}
 
 	return api->set_ccom(dev, ccom);
+}
+
+/**
+ * @brief Sets the DRP mode of the PDC
+ * @note CCI Events set
+ *           busy: if PDC is busy
+ *           error: command was unsuccessful
+ *           command_commpleted: DRP mode was set
+ *
+ * @param dev PDC device structure pointer
+ * @param dm DRP mode
+ *
+ * @retval 0 on success
+ * @retval -EBUSY if not ready to execute the command
+ * @retval -ENOSYS if not implemented
+ */
+static inline int pdc_set_drp_mode(const struct device *dev, enum drp_mode_t dm)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	/* This is an optional feature, so it might not be implemented */
+	if (api->set_drp_mode == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->set_drp_mode(dev, dm);
 }
 
 /**
@@ -799,6 +858,29 @@ static inline int pdc_update_retimer_fw(const struct device *dev, bool enable)
 }
 
 /**
+ * @brief Command to get the PDC PCH DATA STATUS REG value.
+ *
+ * @param enable True->enter, False->exit get pch data status.
+ *
+ * @retval 0 if success.
+ * @retval -EIO if input/output error.
+ * @retval -ENOSYS if API not implemented.
+ */
+static inline int pdc_get_pch_data_status(const struct device *dev,
+					  uint8_t port_num, uint8_t *status_reg)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	/* Temporarily optional feature, so it might not be implemented */
+	if (api->get_pch_data_status == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->get_pch_data_status(dev, port_num, status_reg);
+}
+
+/**
  * @brief Gets the attached cable properties
  * @note CCI Events set
  *           busy: if PDC is busy
@@ -895,6 +977,29 @@ static inline int pdc_set_comms_state(const struct device *dev,
 }
 
 /**
+ * @brief Sends a Power Data Object to the PDC
+ * @note CCI Events set
+ *           busy: if the PDC is busy
+ *           command_commpleted: PDO was sent to LPM or port partner
+ *
+ * @param dev PDC device structure pointer
+ * @param type SINK_PDO or SOURCE_PDO
+ * @param pdo Pointer to PDO array
+ * @param count Number of PDOs to send
+ *
+ * @retval 0 on success
+ * @retval -EBUSY if not ready to execute the command
+ */
+static inline int pdc_set_pdos(const struct device *dev, enum pdo_type_t type,
+			       uint32_t *pdo, int count)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	return api->set_pdos(dev, type, pdo, count);
+}
+
+/**
  * @brief Checks if the port is sourcing VCONN
  *
  * @param dev PDC device structure pointer
@@ -933,8 +1038,10 @@ enum pdc_trace_chip_type {
  * @param msg_type Message type (hint how to interpret message)
  * @param buf Message to log
  * @param count Message length
+ *
+ * @retval true IFF pushed into FIFO
  */
-void pdc_trace_msg_req(int port, enum pdc_trace_chip_type msg_type,
+bool pdc_trace_msg_req(int port, enum pdc_trace_chip_type msg_type,
 		       const uint8_t *buf, const int count);
 
 /**
@@ -944,9 +1051,44 @@ void pdc_trace_msg_req(int port, enum pdc_trace_chip_type msg_type,
  * @param msg_type Message type (hint how to interpret message)
  * @param buf Message to log
  * @param count Message length
+ *
+ * @retval true IFF pushed into FIFO
  */
-void pdc_trace_msg_resp(int port, enum pdc_trace_chip_type msg_type,
+bool pdc_trace_msg_resp(int port, enum pdc_trace_chip_type msg_type,
 			const uint8_t *buf, const int count);
+
+/**
+ * @brief Execute UCSI command synchronously
+ *
+ * @param dev PDC device structure pointer
+ * @param ucsi_command UCSI command
+ * @param data_size Size of the command specific data.
+ * @param command_specific Command specific data to be sent
+ * @param lpm_data_out Buffer to receive data returned from a PDC
+ *
+ * @return 0 on success
+ * @return -EBUSY if PDC is busy with serving another request.
+ * @return -ECONNREFUSED if PDC is suspended.
+ * @retval -ENOSYS if not implemented
+ * @return -ETIMEDOUT if timer expires while waiting for write or read operation
+ *         to finish.
+ */
+static inline int pdc_execute_command_sync(const struct device *dev,
+					   uint8_t ucsi_command,
+					   uint8_t data_size,
+					   uint8_t *command_specific,
+					   uint8_t *lpm_data_out)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	if (api->execute_command_sync == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->execute_command_sync(dev, ucsi_command, data_size,
+					 command_specific, lpm_data_out);
+}
 
 #ifdef __cplusplus
 }
