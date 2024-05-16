@@ -275,10 +275,12 @@ void pdc_power_mgmt_request_data_swap(int port);
  *
  * @param port USB-C port number
  * @param pdc_info Output struct for chip info
+ * @param live True forces a read from the chip. False returns a cached value
+ *        from driver initialization or latest live read.
  *
  * @retval 0 if successful or error code
  */
-int pdc_power_mgmt_get_info(int port, struct pdc_info_t *pdc_info);
+int pdc_power_mgmt_get_info(int port, struct pdc_info_t *pdc_info, bool live);
 
 /**
  * @brief Query bus info from PDC used to access the chip
@@ -507,4 +509,23 @@ enum usb_typec_current_t pdc_power_mgmt_get_default_current_limit(int port);
  */
 int pdc_power_mgmt_frs_enable(int port_num, bool enable);
 
+/**
+ * @brief Enable/Disable PDC TrySRC on a port
+ *
+ * @param port USB-C port number
+ * @param enable enable or disable TrySRC on port
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_set_trysrc(int port, bool enable);
+
+/*
+ * @brief Return PCH DATA STATUS register for PMC Debug
+ *
+ * @param port USB-C port number
+ * @param status PCH data status Output variable to store register value
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_get_pch_data_status(int port, uint8_t *status);
 #endif /* __CROS_EC_PDC_POWER_MGMT_H */

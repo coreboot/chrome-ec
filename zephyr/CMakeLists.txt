@@ -176,6 +176,7 @@ if (ZEPHYR_PIGWEED_MODULE_DIR)
     target_compile_options(log_tokenized_config INTERFACE -include
                            ${PLATFORM_EC}/zephyr/include/pigweed/pw_zephyr_tokenized_custom_log.h)
     pw_set_module_config(pw_log_tokenized_CONFIG log_tokenized_config)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/include/pigweed")
   endif()
 endif()
 
@@ -226,6 +227,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_BMA4XX
                                                 "${PLATFORM_EC}/driver/accel_bma4xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_KX022
                                                 "${PLATFORM_EC}/driver/accel_kionix.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_LIS2DE
+                                                "${PLATFORM_EC}/driver/accel_lis2dh.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_LIS2DS
                                                 "${PLATFORM_EC}/driver/accel_lis2ds.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_LIS2DW12
@@ -360,7 +363,6 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH_CROS
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FINGERPRINT
 						"${PLATFORM_EC}/common/fpsensor/fpsensor.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_state.cc"
-						"${PLATFORM_EC}/common/fpsensor/fpsensor_state_without_driver_info.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_crypto.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_debug.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_auth_commands.cc"
@@ -479,10 +481,11 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_PSE_LTC4291
                                                 "${PLATFORM_EC}/driver/pse_ltc4291.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RSA
                                                 "${PLATFORM_EC}/common/rsa.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RWSIG
+                                                "${PLATFORM_EC}/common/vboot/vb21_lib.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_RWSIG_VERIFY
                                                 "${PLATFORM_EC}/common/rwsig.c"
-                                                "${PLATFORM_EC}/common/vboot/common.c"
-                                                "${PLATFORM_EC}/common/vboot/vb21_lib.c")
+                                                "${PLATFORM_EC}/common/vboot/common.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ROLLBACK
                                                 "${PLATFORM_EC}/common/rollback.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_SHA256_SW

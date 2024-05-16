@@ -9,6 +9,10 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/toolchain.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define LID_ACCEL SENSOR_ID(DT_NODELABEL(lid_accel))
 
 #define SENSOR_NODE DT_PATH(motionsense_sensor)
@@ -2504,6 +2508,11 @@ extern char mock_jump_data[CONFIG_PLATFORM_EC_PRESERVED_END_OF_RAM_SIZE];
 #define CONFIG_ACCEL_KX022
 #endif
 
+#undef CONFIG_ACCEL_LIS2DE
+#ifdef CONFIG_PLATFORM_EC_ACCEL_LIS2DE
+#define CONFIG_ACCEL_LIS2DE
+#endif
+
 #undef CONFIG_ACCEL_LIS2DS
 #ifdef CONFIG_PLATFORM_EC_ACCEL_LIS2DS
 #define CONFIG_ACCEL_LIS2DS
@@ -3309,12 +3318,11 @@ BUILD_ASSERT((DT_NUM_INST_STATUS_OKAY(mps_mp2964)) == 1,
 #undef CONFIG_RWSIG
 #ifdef CONFIG_PLATFORM_EC_RWSIG_VERIFY
 #define CONFIG_RWSIG
+#endif
 
 #ifdef CONFIG_PLATFORM_EC_RWSIG_TYPE_RWSIG
 #define CONFIG_RWSIG_TYPE_RWSIG
 #endif
-
-#endif /* CONFIG_PLATFORM_EC_RWSIG */
 
 #undef CONFIG_RO_PUBKEY_STORAGE_OFF
 #ifdef CONFIG_PLATFORM_EC_RO_PUBKEY_STORAGE_OFF
@@ -3441,6 +3449,10 @@ BUILD_ASSERT((DT_NUM_INST_STATUS_OKAY(mps_mp2964)) == 1,
 #undef CONFIG_HOSTCMD_CONSOLE_PRINT
 #ifdef CONFIG_PLATFORM_EC_HOSTCMD_CONSOLE_PRINT
 #define CONFIG_HOSTCMD_CONSOLE_PRINT
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif /* __CROS_EC_CONFIG_CHIP_H */

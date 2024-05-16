@@ -2,19 +2,10 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+"""Pip config for some tools that are probably not used any longer."""
+
 from setuptools import setup
 
-
-setup(
-    name="ecusb",
-    version="1.0",
-    author="Nick Sanders",
-    author_email="nsanders@chromium.org",
-    url="https://www.chromium.org/chromium-os/ec-development",
-    package_dir={"": "extra/tigertool"},
-    packages=["ecusb"],
-    description="Tiny implementation of servod.",
-)
 
 setup(
     name="powerlog",

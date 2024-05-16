@@ -118,25 +118,25 @@ test_static enum ec_error_list test_fp_command_check_context_cleared(void)
 	fp_reset_and_clear_context();
 	TEST_EQ(check_context_cleared(), EC_SUCCESS, "%d");
 
-	templ_valid++;
+	global_context.templ_valid++;
 	TEST_EQ(check_context_cleared(), EC_ERROR_ACCESS_DENIED, "%d");
 
 	fp_reset_and_clear_context();
 	TEST_EQ(check_context_cleared(), EC_SUCCESS, "%d");
 
-	templ_dirty |= BIT(0);
+	global_context.templ_dirty |= BIT(0);
 	TEST_EQ(check_context_cleared(), EC_ERROR_ACCESS_DENIED, "%d");
 
 	fp_reset_and_clear_context();
 	TEST_EQ(check_context_cleared(), EC_SUCCESS, "%d");
 
-	positive_match_secret_state.template_matched = 0;
+	global_context.positive_match_secret_state.template_matched = 0;
 	TEST_EQ(check_context_cleared(), EC_ERROR_ACCESS_DENIED, "%d");
 
 	fp_reset_and_clear_context();
 	TEST_EQ(check_context_cleared(), EC_SUCCESS, "%d");
 
-	fp_encryption_status |= FP_CONTEXT_USER_ID_SET;
+	global_context.fp_encryption_status |= FP_CONTEXT_USER_ID_SET;
 	TEST_EQ(check_context_cleared(), EC_ERROR_ACCESS_DENIED, "%d");
 
 	fp_reset_and_clear_context();
@@ -413,7 +413,7 @@ test_static enum ec_error_list test_fp_command_nonce_context(void)
 	TEST_EQ(get_fp_encryption_status(&status), EC_SUCCESS, "%d");
 	TEST_BITS_CLEARED((int)status, FP_CONTEXT_USER_ID_SET);
 
-	templ_valid = 1;
+	global_context.templ_valid = 1;
 
 	rv = test_send_host_command(EC_CMD_FP_GENERATE_NONCE, 0, NULL, 0,
 				    &nonce_response, sizeof(nonce_response));
@@ -431,7 +431,7 @@ test_static enum ec_error_list test_fp_command_nonce_context(void)
 	TEST_EQ(get_fp_encryption_status(&status), EC_SUCCESS, "%d");
 	TEST_BITS_SET((int)status, FP_CONTEXT_USER_ID_SET);
 
-	TEST_EQ(templ_valid, 1u, "%d");
+	TEST_EQ(global_context.templ_valid, 1u, "%d");
 
 	return EC_SUCCESS;
 }
@@ -468,7 +468,7 @@ test_static enum ec_error_list test_fp_command_nonce_context_deny(void)
 
 	TEST_EQ(rv, EC_RES_SUCCESS, "%d");
 
-	for (auto user_id_partial : user_id) {
+	for (auto user_id_partial : global_context.user_id) {
 		TEST_EQ(user_id_partial, 0u, "%d");
 	}
 
@@ -703,14 +703,14 @@ test_fp_command_read_match_secret_with_pubkey_succeed(void)
 
 	params.pubkey = pubkey.value();
 
-	positive_match_secret_state = test_state_1;
+	global_context.positive_match_secret_state = test_state_1;
 	/* Set fp_positive_match_salt to the default fake positive match salt */
 	for (size_t fgr = 0; fgr < ARRAY_SIZE(fp_positive_match_salt); ++fgr)
 		std::ranges::copy(default_fake_fp_positive_match_salt,
 				  fp_positive_match_salt[fgr]);
 
 	/* Initialize an empty user_id to compare positive_match_secret */
-	std::ranges::fill(user_id, 0);
+	std::ranges::fill(global_context.user_id, 0);
 
 	TEST_ASSERT(fp_tpm_seed_is_set());
 	/* Test with the correct matched finger state and the default fake
@@ -851,7 +851,8 @@ test_static enum ec_error_list test_fp_command_template_decrypted(void)
 	std::ranges::fill(salt_data, 0xab);
 
 	struct fp_auth_command_encryption_metadata info;
-	encrypt_data_in_place(1, info,
+	encrypt_data_in_place(1, info, global_context.user_id,
+			      global_context.tpm_seed,
 			      { template_data.data(),
 				template_data.size() + salt_data.size() });
 
@@ -946,7 +947,8 @@ test_static enum ec_error_list test_fp_command_unlock_template(void)
 	std::ranges::fill(salt_data, 0xab);
 
 	struct fp_auth_command_encryption_metadata info;
-	encrypt_data_in_place(1, info,
+	encrypt_data_in_place(1, info, global_context.user_id,
+			      global_context.tpm_seed,
 			      { template_data.data(),
 				template_data.size() + salt_data.size() });
 
@@ -984,7 +986,8 @@ test_static enum ec_error_list test_fp_command_unlock_template(void)
 	TEST_BITS_SET((int)status, FP_CONTEXT_TEMPLATE_UNLOCKED_SET);
 
 	/* Lock the template manually. */
-	fp_encryption_status &= ~FP_CONTEXT_TEMPLATE_UNLOCKED_SET;
+	global_context.fp_encryption_status &=
+		~FP_CONTEXT_TEMPLATE_UNLOCKED_SET;
 
 	struct ec_params_fp_unlock_template unlock2_params {
 		.fgr_num = 2
@@ -1042,7 +1045,8 @@ test_static enum ec_error_list test_fp_command_unlock_template(void)
 	TEST_EQ(get_fp_encryption_status(&status), EC_SUCCESS, "%d");
 	TEST_BITS_CLEARED((int)status, FP_CONTEXT_TEMPLATE_UNLOCKED_SET);
 
-	fp_encryption_status |= FP_CONTEXT_STATUS_MATCH_PROCESSED_SET;
+	global_context.fp_encryption_status |=
+		FP_CONTEXT_STATUS_MATCH_PROCESSED_SET;
 
 	TEST_EQ(test_send_host_command(EC_CMD_FP_UNLOCK_TEMPLATE, 0,
 				       &unlock_params, sizeof(unlock_params),
@@ -1167,7 +1171,8 @@ test_fp_command_unlock_template_pre_encrypted(void)
 	std::ranges::fill(salt_data, 0xab);
 
 	struct fp_auth_command_encryption_metadata info;
-	encrypt_data_in_place(1, info,
+	encrypt_data_in_place(1, info, global_context.user_id,
+			      global_context.tpm_seed,
 			      { template_data.data(),
 				template_data.size() + salt_data.size() });
 
@@ -1189,8 +1194,8 @@ test_fp_command_unlock_template_pre_encrypted(void)
 	static_assert(metadata_size == sizeof(enc_metadata_data));
 	memcpy(enc_metadata.data(), &enc_metadata_data, enc_metadata.size());
 
-	std::array<uint32_t, FP_CONTEXT_USERID_WORDS> backup_user_id;
-	std::ranges::copy(user_id, backup_user_id.begin());
+	std::array<uint8_t, FP_CONTEXT_USERID_BYTES> backup_user_id;
+	std::ranges::copy(global_context.user_id, backup_user_id.begin());
 
 	fp_reset_and_clear_context();
 
@@ -1213,7 +1218,7 @@ test_fp_command_unlock_template_pre_encrypted(void)
 				       NULL, 0),
 		EC_RES_SUCCESS, "%d");
 
-	std::ranges::copy(backup_user_id, user_id);
+	std::ranges::copy(backup_user_id, global_context.user_id);
 
 	TEST_EQ(test_send_host_command(EC_CMD_FP_UNLOCK_TEMPLATE, 0,
 				       &unlock_params, sizeof(unlock_params),
@@ -1258,7 +1263,8 @@ test_static enum ec_error_list test_fp_command_commit_v2(void)
 	std::ranges::fill(template_data, 0xc4);
 
 	struct fp_auth_command_encryption_metadata info;
-	encrypt_data_in_place(1, info, template_data);
+	encrypt_data_in_place(1, info, global_context.user_id,
+			      global_context.tpm_seed, template_data);
 
 	struct ec_fp_template_encryption_metadata enc_metadata_data {
 		.struct_version = 2
@@ -1314,7 +1320,8 @@ test_static enum ec_error_list test_fp_command_commit_v3(void)
 	std::ranges::fill(template_data, 0xc4);
 
 	struct fp_auth_command_encryption_metadata info;
-	encrypt_data_in_place(1, info, template_data);
+	encrypt_data_in_place(1, info, global_context.user_id,
+			      global_context.tpm_seed, template_data);
 
 	struct ec_fp_template_encryption_metadata enc_metadata_data {
 		.struct_version = 3
@@ -1381,7 +1388,8 @@ test_static enum ec_error_list test_fp_command_commit_trivial_salt(void)
 	std::ranges::fill(template_data, 0xc4);
 
 	struct fp_auth_command_encryption_metadata info;
-	encrypt_data_in_place(1, info,
+	encrypt_data_in_place(1, info, global_context.user_id,
+			      global_context.tpm_seed,
 			      { template_data.data(),
 				template_data.size() + salt_data.size() });
 
@@ -1509,7 +1517,8 @@ test_fp_command_migrate_template_to_nonce_context(void)
 	std::ranges::fill(salt_data, 0xab);
 
 	struct fp_auth_command_encryption_metadata info;
-	encrypt_data_in_place(1, info,
+	encrypt_data_in_place(1, info, global_context.user_id,
+			      global_context.tpm_seed,
 			      { template_data.data(),
 				template_data.size() + salt_data.size() });
 
@@ -1560,7 +1569,7 @@ test_fp_command_migrate_template_to_nonce_context(void)
 			EC_CMD_FP_MIGRATE_TEMPLATE_TO_NONCE_CONTEXT, 0,
 			&migrate_params, sizeof(migrate_params), NULL, 0),
 		EC_RES_SUCCESS, "%d");
-	TEST_EQ(templ_valid, 1, "%d");
+	TEST_EQ(global_context.templ_valid, 1, "%d");
 
 	return EC_SUCCESS;
 }
@@ -1593,13 +1602,13 @@ test_fp_command_migrate_template_to_nonce_context_failure(void)
 			&migrate_params, sizeof(migrate_params), NULL, 0),
 		EC_RES_INVALID_PARAM, "%d");
 
-	templ_valid = 5;
+	global_context.templ_valid = 5;
 	/* Migrate command should fail without overflow. */
 	TEST_EQ(test_send_host_command(
 			EC_CMD_FP_MIGRATE_TEMPLATE_TO_NONCE_CONTEXT, 0,
 			&migrate_params, sizeof(migrate_params), NULL, 0),
 		EC_RES_OVERFLOW, "%d");
-	templ_valid = 0;
+	global_context.templ_valid = 0;
 	return EC_SUCCESS;
 }
 

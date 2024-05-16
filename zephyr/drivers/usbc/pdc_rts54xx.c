@@ -79,10 +79,26 @@ LOG_MODULE_REGISTER(pdc_rts54, LOG_LEVEL_INF);
 
 /**
  * @brief Offsets of data fields in the GET_IC_STATUS response
+ *
+ * Note that in the Realtek spec version 3.3.22, bit offsets and byte
+ * numbers are inconsistent. Byte numbers appear to be accurate.
+ *
+ * "Data Byte 0" is the first byte after "Byte Count" and is available
+ * at .rd_buf[1].
  */
-#define RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET (4)
-#define RTS54XX_GET_IC_STATUS_FWVER_MINOR_OFFSET (5)
-#define RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET (6)
+#define RTS54XX_GET_IC_STATUS_RUNNING_FLASH_CODE 1
+#define RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET 4
+#define RTS54XX_GET_IC_STATUS_FWVER_MINOR_OFFSET 5
+#define RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET 6
+#define RTS54XX_GET_IC_STATUS_VID_L 10
+#define RTS54XX_GET_IC_STATUS_VID_H 11
+#define RTS54XX_GET_IC_STATUS_PID_L 12
+#define RTS54XX_GET_IC_STATUS_PID_H 13
+#define RTS54XX_GET_IC_STATUS_RUNNING_FLASH_BANK 15
+#define RTS54XX_GET_IC_STATUS_PD_REV_MAJOR_OFFSET 23
+#define RTS54XX_GET_IC_STATUS_PD_REV_MINOR_OFFSET 24
+#define RTS54XX_GET_IC_STATUS_PD_VER_MAJOR_OFFSET 25
+#define RTS54XX_GET_IC_STATUS_PD_VER_MINOR_OFFSET 26
 
 /**
  * @brief Macro to transition to init or idle state and return
@@ -128,6 +144,7 @@ struct smbus_cmd_t {
 };
 
 /** @brief Realtek SMbus commands */
+#define REALTEK_PD_COMMAND 0x0e
 
 const struct smbus_cmd_t VENDOR_CMD_ENABLE = { 0x01, 0x03, 0xDA };
 const struct smbus_cmd_t SET_NOTIFICATION_ENABLE = { 0x08, 0x06, 0x01 };
@@ -156,6 +173,7 @@ const struct smbus_cmd_t UCSI_SET_CCOM = { 0x0E, 0x04, 0x08 };
 const struct smbus_cmd_t GET_IC_STATUS = { 0x3A, 0x03 };
 const struct smbus_cmd_t SET_RETIMER_FW_UPDATE_MODE = { 0x20, 0x03, 0x00 };
 const struct smbus_cmd_t GET_CABLE_PROPERTY = { 0x0E, 0x03, 0x11 };
+const struct smbus_cmd_t GET_PCH_DATA_STATUS = { 0x08, 0x02, 0xE0 };
 
 /**
  * @brief PDC Command states
@@ -290,6 +308,8 @@ enum cmd_t {
 	CMD_GET_IS_VCONN_SOURCING,
 	/** CMD_SET_PDO */
 	CMD_SET_PDO,
+	/** Get PDC ALT MODE Status Register value */
+	CMD_GET_PCH_DATA_STATUS,
 };
 
 /**
@@ -406,6 +426,7 @@ static const char *const cmd_names[] = {
 	[CMD_GET_IDENTITY_DISCOVERY] = "CMD_GET_IDENTITY_DISCOVERY",
 	[CMD_GET_IS_VCONN_SOURCING] = "CMD_GET_IS_VCONN_SOURCING",
 	[CMD_SET_PDO] = "CMD_SET_PDO",
+	[CMD_GET_PCH_DATA_STATUS] = "CMD_GET_PCH_DATA_STATUS",
 };
 
 /**
@@ -432,7 +453,8 @@ static int rts54_reset(const struct device *dev);
 static int rts54_set_notification_enable(const struct device *dev,
 					 union notification_enable_t bits,
 					 uint16_t ext_bits);
-static int rts54_get_info(const struct device *dev, struct pdc_info_t *info);
+static int rts54_get_info(const struct device *dev, struct pdc_info_t *info,
+			  bool live);
 static int rts54_get_error_status(const struct device *dev,
 				  union error_status_t *es);
 
@@ -713,7 +735,7 @@ static void st_init_run(void *o)
 		init_write_cmd_and_change_state(data, INIT_PDC_GET_IC_STATUS);
 		return;
 	case INIT_PDC_GET_IC_STATUS:
-		rv = rts54_get_info(data->dev, &data->info);
+		rv = rts54_get_info(data->dev, &data->info, true);
 		if (rv) {
 			LOG_ERR("C:%d, Internal(INIT_PDC_GET_IC_STATUS)", cnum);
 			set_state(data, ST_DISABLE);
@@ -1151,10 +1173,11 @@ static void st_read_run(void *o)
 	case CMD_GET_IC_STATUS: {
 		struct pdc_info_t *info = (struct pdc_info_t *)data->user_buf;
 
-		/* Realtek Is running flash code: Byte 1 */
-		info->is_running_flash_code = data->rd_buf[1];
+		/* Realtek Is running flash code: Data Byte0 */
+		info->is_running_flash_code =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_RUNNING_FLASH_CODE];
 
-		/* Realtek FW main version: Byte4, Byte5, Byte6 */
+		/* Realtek FW main version: Data Byte3..5 */
 		info->fw_version =
 			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET]
 				<< 16 |
@@ -1162,20 +1185,28 @@ static void st_read_run(void *o)
 				<< 8 |
 			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET];
 
-		/* Realtek VID PID: Byte10, Byte11, Byte12, Byte13
-		 * (little-endian) */
-		info->vid_pid = data->rd_buf[11] << 24 |
-				data->rd_buf[10] << 16 | data->rd_buf[13] << 8 |
-				data->rd_buf[12];
+		/* Realtek VID PID: Data Byte9..12 (little-endian) */
+		info->vid_pid =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_VID_H] << 24 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_VID_L] << 16 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PID_H] << 8 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PID_L];
 
-		/* Realtek Running flash bank offset: Byte15 */
-		info->running_in_flash_bank = data->rd_buf[15];
+		/* Realtek Running flash bank offset: Data Byte14 */
+		info->running_in_flash_bank =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_RUNNING_FLASH_BANK];
 
-		/* Realtek PD Revision: Byte23, Byte24 (big-endian) */
-		info->pd_revision = data->rd_buf[23] << 8 | data->rd_buf[24];
+		/* Realtek PD Revision: Data Byte22..23 (big-endian) */
+		info->pd_revision =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PD_REV_MAJOR_OFFSET]
+				<< 8 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PD_REV_MINOR_OFFSET];
 
-		/* Realtek PD Version: Byte25, Byte26 (big-endian) */
-		info->pd_version = data->rd_buf[25] << 8 | data->rd_buf[26];
+		/* Realtek PD Version: Data Byte24..25 (big-endian) */
+		info->pd_version =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PD_VER_MAJOR_OFFSET]
+				<< 8 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PD_VER_MINOR_OFFSET];
 
 		/* Only print this log on init */
 		if (data->init_local_state != INIT_PDC_COMPLETE) {
@@ -1188,6 +1219,10 @@ static void st_read_run(void *o)
 				cfg->connector_number, info->pd_version,
 				info->pd_revision);
 		}
+
+		/* Retain a cached copy of this data */
+		data->info = *info;
+
 		break;
 	}
 	case CMD_GET_VBUS_VOLTAGE:
@@ -1361,18 +1396,23 @@ static void st_suspended_run(void *o)
 
 /* Populate cmd state table */
 static const struct smf_state states[] = {
-	[ST_INIT] = SMF_CREATE_STATE(st_init_entry, st_init_run, NULL, NULL),
-	[ST_IDLE] = SMF_CREATE_STATE(st_idle_entry, st_idle_run, NULL, NULL),
-	[ST_WRITE] = SMF_CREATE_STATE(st_write_entry, st_write_run, NULL, NULL),
-	[ST_PING_STATUS] = SMF_CREATE_STATE(st_ping_status_entry,
-					    st_ping_status_run, NULL, NULL),
-	[ST_READ] = SMF_CREATE_STATE(st_read_entry, st_read_run, NULL, NULL),
-	[ST_ERROR_RECOVERY] = SMF_CREATE_STATE(
-		st_error_recovery_entry, st_error_recovery_run, NULL, NULL),
-	[ST_DISABLE] =
-		SMF_CREATE_STATE(st_disable_entry, st_disable_run, NULL, NULL),
+	[ST_INIT] =
+		SMF_CREATE_STATE(st_init_entry, st_init_run, NULL, NULL, NULL),
+	[ST_IDLE] =
+		SMF_CREATE_STATE(st_idle_entry, st_idle_run, NULL, NULL, NULL),
+	[ST_WRITE] = SMF_CREATE_STATE(st_write_entry, st_write_run, NULL, NULL,
+				      NULL),
+	[ST_PING_STATUS] = SMF_CREATE_STATE(
+		st_ping_status_entry, st_ping_status_run, NULL, NULL, NULL),
+	[ST_READ] =
+		SMF_CREATE_STATE(st_read_entry, st_read_run, NULL, NULL, NULL),
+	[ST_ERROR_RECOVERY] = SMF_CREATE_STATE(st_error_recovery_entry,
+					       st_error_recovery_run, NULL,
+					       NULL, NULL),
+	[ST_DISABLE] = SMF_CREATE_STATE(st_disable_entry, st_disable_run, NULL,
+					NULL, NULL),
 	[ST_SUSPENDED] = SMF_CREATE_STATE(st_suspended_entry, st_suspended_run,
-					  NULL, NULL),
+					  NULL, NULL, NULL),
 
 };
 
@@ -1910,21 +1950,56 @@ static int rts54_get_pdos(const struct device *dev, enum pdo_type_t pdo_type,
 				  ARRAY_SIZE(payload), (uint8_t *)pdos);
 }
 
-static int rts54_get_info(const struct device *dev, struct pdc_info_t *info)
+static int rts54_get_info(const struct device *dev, struct pdc_info_t *info,
+			  bool live)
 {
+	const struct pdc_config_t *cfg = dev->config;
 	struct pdc_data_t *data = dev->data;
-
-	if ((get_state(data) != ST_IDLE) && (get_state(data) != ST_INIT)) {
-		return -EBUSY;
-	}
 
 	if (info == NULL) {
 		return -EINVAL;
 	}
 
+	/* If caller is OK with a non-live value and we have one, we can
+	 * immediately return a cached value.
+	 */
+	if (!live) {
+		k_mutex_lock(&data->mtx, K_FOREVER);
+
+		/* Check FW ver and VID/PID fields for valid values to ensure
+		 * we have a resident value.
+		 */
+		if (data->info.fw_version == PDC_FWVER_INVALID ||
+		    data->info.vid_pid == PDC_VIDPID_INVALID) {
+			k_mutex_unlock(&data->mtx);
+
+			/* No cached value. Caller should request a live read */
+			return -EAGAIN;
+		}
+
+		*info = data->info;
+		k_mutex_unlock(&data->mtx);
+
+		LOG_DBG("C%d: Use cached chip info (%u.%u.%u)",
+			cfg->connector_number,
+			PDC_FWVER_GET_MAJOR(data->info.fw_version),
+			PDC_FWVER_GET_MINOR(data->info.fw_version),
+			PDC_FWVER_GET_PATCH(data->info.fw_version));
+		return 0;
+	}
+
+	/* Handle a live read */
+
+	if ((get_state(data) != ST_IDLE) && (get_state(data) != ST_INIT)) {
+		return -EBUSY;
+	}
+
+	/* Post a command and perform a chip operation */
 	uint8_t payload[] = {
 		GET_IC_STATUS.cmd, GET_IC_STATUS.len, 0, 0x00, 26,
 	};
+
+	LOG_DBG("C%d: Get live chip info", cfg->connector_number);
 
 	return rts54_post_command(dev, CMD_GET_IC_STATUS, payload,
 				  ARRAY_SIZE(payload), (uint8_t *)info);
@@ -2133,6 +2208,31 @@ static int rts54_is_vconn_sourcing(const struct device *dev,
 				    (uint8_t *)vconn_sourcing);
 }
 
+static int rts54_get_pch_data_status(const struct device *dev, uint8_t port_num,
+				     uint8_t *status_reg)
+{
+	struct pdc_data_t *data = dev->data;
+
+	if (get_state(data) != ST_IDLE) {
+		return -EBUSY;
+	}
+
+	if (status_reg == NULL) {
+		return -EINVAL;
+	}
+
+	uint8_t payload[] = {
+		GET_PCH_DATA_STATUS.cmd,
+		GET_PCH_DATA_STATUS.len,
+		GET_PCH_DATA_STATUS.sub,
+		port_num,
+	};
+
+	rts54_post_command(dev, CMD_GET_PCH_DATA_STATUS, payload,
+			   ARRAY_SIZE(payload), status_reg);
+	return 0;
+}
+
 static bool rts54_is_init_done(const struct device *dev)
 {
 	struct pdc_data_t *data = dev->data;
@@ -2248,6 +2348,66 @@ static int rts54_set_pdo(const struct device *dev, enum pdo_type_t type,
 				  ARRAY_SIZE(payload), NULL);
 }
 
+#define SMBUS_MAX_BLOCK_SIZE 32
+
+static int rts54_execute_command_sync(const struct device *dev,
+				      uint8_t ucsi_command, uint8_t data_size,
+				      uint8_t *command_specific,
+				      uint8_t *lpm_data_out)
+{
+	struct pdc_data_t *data = dev->data;
+	uint8_t cmd_buffer[SMBUS_MAX_BLOCK_SIZE];
+	pdc_cci_handler_cb_t cci_cb_copy;
+	void *cb_data_copy;
+	int call_counter;
+	int rv;
+
+	/* We don't know yet if the PDC driver is busy or not. */
+	if (get_state(data) != ST_IDLE || data->cmd != CMD_NONE) {
+		LOG_ERR("%s: Failed to run (-EBUSY)", __func__);
+		return -EBUSY;
+	}
+
+	cmd_buffer[0] = REALTEK_PD_COMMAND;
+	cmd_buffer[1] = data_size + 2;
+	cmd_buffer[2] = ucsi_command; /* sub-cmd */
+	cmd_buffer[3] = 0;
+	memcpy(&cmd_buffer[4], command_specific, data_size);
+
+	rv = rts54_post_command(dev, ucsi_command, cmd_buffer, data_size + 4,
+				lpm_data_out);
+	if (rv < 0) {
+		LOG_ERR("%s: Failed to run (%d)", __func__, rv);
+		return rv;
+	}
+
+	cci_cb_copy = data->cci_cb;
+	cb_data_copy = data->cb_data;
+	rts54_set_handler_cb(dev, NULL, NULL);
+	call_counter = 0;
+
+	do {
+		/* Wait for timeout or event */
+		k_sleep(K_MSEC(20));
+
+		call_counter++;
+		if (call_counter > 100) {
+			LOG_ERR("%s: Block call timeout", __func__);
+			rv = -ETIMEDOUT;
+			break;
+		}
+	} while (!data->cci_event.command_completed && !data->cci_event.error);
+
+	rts54_set_handler_cb(dev, cci_cb_copy, cb_data_copy);
+
+	if (rv == 0) {
+		/* May have read some data. */
+		rv = data->cci_event.data_len;
+	}
+
+	return rv;
+}
+
 static const struct pdc_driver_api_t pdc_driver_api = {
 	.is_init_done = rts54_is_init_done,
 	.get_ucsi_version = rts54_get_ucsi_version,
@@ -2280,6 +2440,8 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.set_comms_state = rts54_set_comms_state,
 	.is_vconn_sourcing = rts54_is_vconn_sourcing,
 	.set_pdos = rts54_set_pdo,
+	.get_pch_data_status = rts54_get_pch_data_status,
+	.execute_command_sync = rts54_execute_command_sync,
 };
 
 static void pdc_interrupt_callback(const struct device *dev,
@@ -2349,6 +2511,7 @@ static int pdc_init(const struct device *dev)
 	data->cmd = CMD_NONE;
 	data->error_recovery_counter = 0;
 	data->init_retry_counter = 0;
+
 	pdc_data[cfg->connector_number] = data;
 
 	/* Set initial state */

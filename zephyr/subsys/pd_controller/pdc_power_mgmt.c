@@ -11,6 +11,7 @@
 
 #include "charge_manager.h"
 #include "hooks.h"
+#include "test/util.h"
 #include "usbc/pdc_dpm.h"
 #include "usbc/pdc_power_mgmt.h"
 
@@ -20,10 +21,14 @@
 #include <zephyr/smf.h>
 #include <zephyr/sys/atomic.h>
 
+#ifdef CONFIG_ZTEST
+#include <zephyr/ztest.h>
+#endif
+
 #include <drivers/pdc.h>
 #include <usbc/utils.h>
 
-LOG_MODULE_REGISTER(pdc_power_mgmt);
+LOG_MODULE_REGISTER(pdc_power_mgmt, CONFIG_USB_PDC_LOG_LEVEL);
 
 /**
  * @brief Event triggered by sending an internal command
@@ -81,6 +86,8 @@ enum pdc_cmd_t {
 	CMD_PDC_SET_POWER_LEVEL,
 	/** CMD_PDC_SET_CCOM */
 	CMD_PDC_SET_CCOM,
+	/** CMD_PDC_SET_DRP */
+	CMD_PDC_SET_DRP,
 	/** CMD_PDC_GET_PDOS */
 	CMD_PDC_GET_PDOS,
 	/** CMD_PDC_GET_RDO */
@@ -117,6 +124,8 @@ enum pdc_cmd_t {
 	CMD_PDC_GET_PD_VDO_DP_CFG_SELF,
 	/** CMD_PDC_SET_PDOS */
 	CMD_PDC_SET_PDOS,
+	/** CMD_PDC_GET_PCH_DATA_STATUS */
+	CMD_PDC_GET_PCH_DATA_STATUS,
 	/** CMD_PDC_COUNT */
 	CMD_PDC_COUNT
 };
@@ -308,6 +317,7 @@ test_export_static const char *const pdc_cmd_names[] = {
 	[CMD_PDC_RESET] = "PDC_RESET",
 	[CMD_PDC_SET_POWER_LEVEL] = "PDC_SET_POWER_LEVEL",
 	[CMD_PDC_SET_CCOM] = "PDC_SET_CCOM",
+	[CMD_PDC_SET_DRP] = "PDC_SET_DRP",
 	[CMD_PDC_GET_PDOS] = "PDC_GET_PDOS",
 	[CMD_PDC_GET_RDO] = "PDC_GET_RDO",
 	[CMD_PDC_SET_RDO] = "PDC_SET_RDO",
@@ -326,6 +336,7 @@ test_export_static const char *const pdc_cmd_names[] = {
 	[CMD_PDC_IS_VCONN_SOURCING] = "PDC_IS_VCONN_SOURCING",
 	[CMD_PDC_GET_PD_VDO_DP_CFG_SELF] = "PDC_GET_PD_VDO_DP_CFG_SELF",
 	[CMD_PDC_SET_PDOS] = "PDC_SET_PDOS",
+	[CMD_PDC_GET_PCH_DATA_STATUS] = "PDC_GET_PCH_DATA_STATUS",
 };
 const int pdc_cmd_types = CMD_PDC_COUNT;
 
@@ -620,6 +631,10 @@ struct pdc_port_t {
 	struct get_pdo_t get_pdo;
 	/** Variable used to store/set PDC LPM SRC CAPs */
 	struct set_pdos_t set_pdos;
+	/** Buffer used by public api to receive data from the driver */
+	uint8_t pch_data_status[5];
+	/** SET_DRP variable used with CMD_SET_DRP */
+	enum drp_mode_t drp;
 };
 
 /**
@@ -1085,6 +1100,8 @@ static void run_unattached_policies(struct pdc_port_t *port)
 					     UNA_POLICY_TCC)) {
 		/* Set RP current policy */
 		queue_internal_cmd(port, CMD_PDC_SET_POWER_LEVEL);
+		/* Make sure new Rp value is applied */
+		atomic_set_bit(port->una_policy.flags, UNA_POLICY_CC_MODE);
 		return;
 	}
 
@@ -1189,6 +1206,7 @@ static void pdc_unattached_entry(void *obj)
 	discovery_info_init(port);
 
 	if (get_pdc_state(port) != port->send_cmd_return_state) {
+		invalidate_charger_settings(port);
 		port->unattached_local_state = UNATTACHED_SET_SINK_PATH_OFF;
 		/* Update source current limit policy */
 		pdc_dpm_remove_sink(port_number);
@@ -1234,6 +1252,7 @@ static void pdc_src_attached_entry(void *obj)
 	port->send_cmd.intern.pending = false;
 
 	if (get_pdc_state(port) != port->send_cmd_return_state) {
+		invalidate_charger_settings(port);
 		port->src_attached_local_state = SRC_ATTACHED_SET_SINK_PATH_OFF;
 	}
 }
@@ -1536,13 +1555,16 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 		rv = pdc_reset(port->pdc);
 		break;
 	case CMD_PDC_GET_INFO:
-		rv = pdc_get_info(port->pdc, &port->info);
+		rv = pdc_get_info(port->pdc, &port->info, true);
 		break;
 	case CMD_PDC_SET_POWER_LEVEL:
 		rv = pdc_set_power_level(port->pdc, port->una_policy.tcc);
 		break;
 	case CMD_PDC_SET_CCOM:
 		rv = pdc_set_ccom(port->pdc, port->una_policy.cc_mode);
+		break;
+	case CMD_PDC_SET_DRP:
+		rv = pdc_set_drp_mode(port->pdc, port->drp);
 		break;
 	case CMD_PDC_GET_PDOS:
 		rv = pdc_get_pdos(port->pdc, port->get_pdo.pdo_type,
@@ -1566,10 +1588,6 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 		rv = pdc_get_vbus_voltage(port->pdc, &port->vbus);
 		break;
 	case CMD_PDC_SET_SINK_PATH:
-		/* Charger settings are invalid when sink path is off */
-		if (!port->sink_path_en) {
-			invalidate_charger_settings(port);
-		}
 		rv = pdc_set_sink_path(port->pdc, port->sink_path_en);
 		break;
 	case CMD_PDC_READ_POWER_LEVEL:
@@ -1627,6 +1645,10 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 		rv = pdc_set_pdos(port->pdc, port->set_pdos.type,
 				  port->set_pdos.pdos, port->set_pdos.count);
 		break;
+	case CMD_PDC_GET_PCH_DATA_STATUS:
+		rv = pdc_get_pch_data_status(port->pdc, config->connector_num,
+					     port->pch_data_status);
+		break;
 	default:
 		LOG_ERR("Invalid command: %d", port->cmd->cmd);
 		return -EIO;
@@ -1655,10 +1677,12 @@ static void pdc_send_cmd_start_run(void *obj)
 	 * If the PDC is still processing a command (not in the IDLE state),
 	 * then will remain in this state and CCI_CMD_COMPLETED can be set via
 	 * the cci_event_cb function when the PDC driver finishes with the
-	 * previous command. This flag is only meaningful for the command that
-	 * was just sent to the PDC.
+	 * previous command, which previously didn't complete or fail within
+	 * WAIT_MAX. This flag is only meaningful for the command that was just
+	 * sent to the PDC.
 	 */
 	atomic_clear_bit(port->cci_flags, CCI_CMD_COMPLETED);
+	atomic_clear_bit(port->cci_flags, CCI_ERROR);
 
 	/* Test if command was successful. If not, try again until max
 	 * retries is reached */
@@ -1945,14 +1969,11 @@ static void pdc_snk_typec_only_run(void *obj)
 		}
 		return;
 	case SNK_TYPEC_ATTACHED_RUN:
-		/* Hard Reset could disable Sink FET. Re-enable it */
-		if (atomic_get(&port->hard_reset_sent)) {
-			atomic_clear(&port->hard_reset_sent);
-			port->snk_typec_attached_local_state =
-				SNK_TYPEC_ATTACHED_SET_SINK_PATH_ON;
-		} else {
-			send_pending_public_commands(port);
-		}
+		/* Note - hard resets specifically not checked for here.
+		 * We don't expect hard resets while connected to a non-PD
+		 * partner.
+		 */
+		send_pending_public_commands(port);
 		break;
 	}
 }
@@ -2014,24 +2035,28 @@ static void pdc_suspended_run(void *obj)
  */
 static const struct smf_state pdc_states[] = {
 	/* Normal States */
-	[PDC_INIT] = SMF_CREATE_STATE(pdc_init_entry, pdc_init_run, NULL, NULL),
-	[PDC_UNATTACHED] = SMF_CREATE_STATE(pdc_unattached_entry,
-					    pdc_unattached_run, NULL, NULL),
-	[PDC_SNK_ATTACHED] = SMF_CREATE_STATE(pdc_snk_attached_entry,
-					      pdc_snk_attached_run, NULL, NULL),
-	[PDC_SRC_ATTACHED] = SMF_CREATE_STATE(pdc_src_attached_entry,
-					      pdc_src_attached_run, NULL, NULL),
-	[PDC_SEND_CMD_START] = SMF_CREATE_STATE(
-		pdc_send_cmd_start_entry, pdc_send_cmd_start_run, NULL, NULL),
-	[PDC_SEND_CMD_WAIT] = SMF_CREATE_STATE(pdc_send_cmd_wait_entry,
-					       pdc_send_cmd_wait_run,
-					       pdc_send_cmd_wait_exit, NULL),
-	[PDC_SRC_TYPEC_ONLY] = SMF_CREATE_STATE(
-		pdc_src_typec_only_entry, pdc_src_typec_only_run, NULL, NULL),
-	[PDC_SNK_TYPEC_ONLY] = SMF_CREATE_STATE(
-		pdc_snk_typec_only_entry, pdc_snk_typec_only_run, NULL, NULL),
+	[PDC_INIT] = SMF_CREATE_STATE(pdc_init_entry, pdc_init_run, NULL, NULL,
+				      NULL),
+	[PDC_UNATTACHED] = SMF_CREATE_STATE(
+		pdc_unattached_entry, pdc_unattached_run, NULL, NULL, NULL),
+	[PDC_SNK_ATTACHED] = SMF_CREATE_STATE(
+		pdc_snk_attached_entry, pdc_snk_attached_run, NULL, NULL, NULL),
+	[PDC_SRC_ATTACHED] = SMF_CREATE_STATE(
+		pdc_src_attached_entry, pdc_src_attached_run, NULL, NULL, NULL),
+	[PDC_SEND_CMD_START] = SMF_CREATE_STATE(pdc_send_cmd_start_entry,
+						pdc_send_cmd_start_run, NULL,
+						NULL, NULL),
+	[PDC_SEND_CMD_WAIT] =
+		SMF_CREATE_STATE(pdc_send_cmd_wait_entry, pdc_send_cmd_wait_run,
+				 pdc_send_cmd_wait_exit, NULL, NULL),
+	[PDC_SRC_TYPEC_ONLY] = SMF_CREATE_STATE(pdc_src_typec_only_entry,
+						pdc_src_typec_only_run, NULL,
+						NULL, NULL),
+	[PDC_SNK_TYPEC_ONLY] = SMF_CREATE_STATE(pdc_snk_typec_only_entry,
+						pdc_snk_typec_only_run, NULL,
+						NULL, NULL),
 	[PDC_SUSPENDED] = SMF_CREATE_STATE(pdc_suspended_entry,
-					   pdc_suspended_run, NULL, NULL),
+					   pdc_suspended_run, NULL, NULL, NULL),
 };
 
 /**
@@ -2040,26 +2065,34 @@ static const struct smf_state pdc_states[] = {
 static void pdc_cci_handler_cb(union cci_event_t cci_event, void *cb_data)
 {
 	struct pdc_port_t *port = (struct pdc_port_t *)cb_data;
+	bool post_event = false;
 
 	/* Handle busy event from driver */
 	if (cci_event.busy) {
 		atomic_set_bit(port->cci_flags, CCI_BUSY);
+		post_event = true;
 	}
 
 	/* Handle error event from driver */
 	if (cci_event.error) {
 		atomic_set_bit(port->cci_flags, CCI_ERROR);
+		post_event = true;
 	}
 
 	/* Handle command completed event from driver */
 	if (cci_event.command_completed) {
 		atomic_set_bit(port->cci_flags, CCI_CMD_COMPLETED);
+		post_event = true;
 	}
 
 	/* Handle generic vendor defined event from driver */
 	if (cci_event.vendor_defined_indicator) {
 		atomic_set_bit(port->cci_flags, CCI_EVENT);
+		post_event = true;
 	}
+
+	if (post_event)
+		k_event_post(&port->sm_event, PDC_SM_EVENT);
 }
 
 static void init_port_variables(struct pdc_port_t *port)
@@ -2179,6 +2212,7 @@ static int public_api_block(int port, enum pdc_cmd_t pdc_cmd)
 			/* something went wrong */
 			LOG_ERR("C%d: Public API blocking timeout: %s", port,
 				pdc_cmd_names[public_cmd->cmd]);
+			public_cmd->pending = false;
 			return -EBUSY;
 		}
 
@@ -2228,7 +2262,7 @@ static bool pdc_power_mgmt_is_source_connected(int port)
 	return pdc_data[port]->port.attached_state == SRC_ATTACHED_STATE;
 }
 
-bool pdc_power_mgmt_is_connected(int port)
+test_mockable bool pdc_power_mgmt_is_connected(int port)
 {
 	if (!is_pdc_port_valid(port)) {
 		return false;
@@ -2422,7 +2456,7 @@ void pdc_power_mgmt_request_data_swap_to_dfp(int port)
 	pdc_power_mgmt_request_data_swap_intern(port, PD_ROLE_DFP);
 }
 
-void pdc_power_mgmt_request_data_swap(int port)
+test_mockable void pdc_power_mgmt_request_data_swap(int port)
 {
 	if (pdc_power_mgmt_pd_get_data_role(port) == PD_ROLE_DFP) {
 		pdc_power_mgmt_request_data_swap_intern(port, PD_ROLE_UFP);
@@ -2469,7 +2503,7 @@ void pdc_power_mgmt_request_swap_to_snk(int port)
 	pdc_power_mgmt_request_power_swap_intern(port, PD_ROLE_SINK);
 }
 
-void pdc_power_mgmt_request_power_swap(int port)
+test_mockable void pdc_power_mgmt_request_power_swap(int port)
 {
 	if (pdc_power_mgmt_is_sink_connected(port)) {
 		pdc_power_mgmt_request_power_swap_intern(port, PD_ROLE_SOURCE);
@@ -2478,7 +2512,7 @@ void pdc_power_mgmt_request_power_swap(int port)
 	}
 }
 
-enum tcpc_cc_polarity pdc_power_mgmt_pd_get_polarity(int port)
+test_mockable enum tcpc_cc_polarity pdc_power_mgmt_pd_get_polarity(int port)
 {
 	if (pdc_data[port]->port.connector_status.orientation) {
 		return POLARITY_CC2;
@@ -2487,7 +2521,7 @@ enum tcpc_cc_polarity pdc_power_mgmt_pd_get_polarity(int port)
 	return POLARITY_CC1;
 }
 
-enum pd_data_role pdc_power_mgmt_pd_get_data_role(int port)
+test_mockable enum pd_data_role pdc_power_mgmt_pd_get_data_role(int port)
 {
 	/* Make sure port is connected */
 	if (!pdc_power_mgmt_is_connected(port)) {
@@ -2502,7 +2536,7 @@ enum pd_data_role pdc_power_mgmt_pd_get_data_role(int port)
 	return PD_ROLE_DFP;
 }
 
-enum pd_power_role pdc_power_mgmt_get_power_role(int port)
+test_mockable enum pd_power_role pdc_power_mgmt_get_power_role(int port)
 {
 	/* Make sure port is connected */
 	if (!pdc_power_mgmt_is_connected(port)) {
@@ -2562,7 +2596,7 @@ bool pdc_power_mgmt_get_partner_dual_role_power(int port)
 	return pdc_data[port]->port.ccaps.op_mode_drp;
 }
 
-bool pdc_power_mgmt_get_partner_data_swap_capable(int port)
+test_mockable bool pdc_power_mgmt_get_partner_data_swap_capable(int port)
 {
 	/* Make sure port is connected */
 	if (!pdc_power_mgmt_is_connected(port)) {
@@ -2598,7 +2632,7 @@ uint32_t pdc_power_mgmt_get_vbus_voltage(int port)
 	return pdc_data[port]->port.vbus;
 }
 
-int pdc_power_mgmt_reset(int port)
+test_mockable int pdc_power_mgmt_reset(int port)
 {
 	int rv;
 
@@ -2640,7 +2674,7 @@ const uint32_t *const pdc_power_mgmt_get_src_caps(int port)
 	return (const uint32_t *const)pdc_data[port]->port.snk_policy.src.pdos;
 }
 
-const char *pdc_power_mgmt_get_task_state_name(int port)
+test_mockable const char *pdc_power_mgmt_get_task_state_name(int port)
 {
 	enum pdc_state_t indicated_state,
 		actual_state = get_pdc_state(&pdc_data[port]->port);
@@ -2658,7 +2692,8 @@ const char *pdc_power_mgmt_get_task_state_name(int port)
 	return pdc_state_names[indicated_state];
 }
 
-void pdc_power_mgmt_set_dual_role(int port, enum pd_dual_role_states state)
+test_mockable void pdc_power_mgmt_set_dual_role(int port,
+						enum pd_dual_role_states state)
 {
 	struct pdc_port_t *port_data = &pdc_data[port]->port;
 
@@ -2709,6 +2744,15 @@ void pdc_power_mgmt_set_dual_role(int port, enum pd_dual_role_states state)
 		}
 		break;
 	}
+}
+
+test_mockable int pdc_power_mgmt_set_trysrc(int port, bool enable)
+{
+	LOG_INF("PD setting TrySrc=%d", enable);
+
+	pdc_data[port]->port.drp = (enable ? DRP_TRY_SRC : DRP_NORMAL);
+
+	return public_api_block(port, CMD_PDC_SET_DRP);
 }
 
 /**
@@ -2836,7 +2880,8 @@ static void pd_chipset_shutdown(void)
 }
 DECLARE_HOOK(HOOK_CHIPSET_SHUTDOWN, pd_chipset_shutdown, HOOK_PRIO_DEFAULT);
 
-int pdc_power_mgmt_get_info(int port, struct pdc_info_t *pdc_info)
+test_mockable int pdc_power_mgmt_get_info(int port, struct pdc_info_t *pdc_info,
+					  bool live)
 {
 	int ret;
 
@@ -2849,18 +2894,27 @@ int pdc_power_mgmt_get_info(int port, struct pdc_info_t *pdc_info)
 		return -EINVAL;
 	}
 
-	/* Block until command completes */
-	ret = public_api_block(port, CMD_PDC_GET_INFO);
-	if (ret) {
-		return ret;
+	if (live) {
+		/* Caller wants live chip info. Set up a public API call to
+		 * retrieve it from the PDC.
+		 */
+		ret = public_api_block(port, CMD_PDC_GET_INFO);
+		if (ret) {
+			return ret;
+		}
+
+		/* Provide a copy of the current info struct to avoid exposing
+		 * internal data structs.
+		 */
+		memcpy(pdc_info, &pdc_data[port]->port.info,
+		       sizeof(struct pdc_info_t));
+		return 0;
 	}
 
-	/* Provide a copy of the current info struct to avoid exposing internal
-	 * data structs.
+	/* Non-live requests can be handled synchronously by calling directly
+	 * into the PDC driver.
 	 */
-
-	memcpy(pdc_info, &pdc_data[port]->port.info, sizeof(struct pdc_info_t));
-	return 0;
+	return pdc_get_info(pdc_data[port]->port.pdc, pdc_info, false);
 }
 
 int pdc_power_mgmt_get_bus_info(int port, struct pdc_bus_info_t *pdc_bus_info)
@@ -2964,7 +3018,8 @@ pdc_power_mgmt_get_identity_discovery(int port, enum tcpci_msg_type type)
 	}
 }
 
-int pdc_power_mgmt_connector_reset(int port, enum connector_reset reset_type)
+test_mockable int
+pdc_power_mgmt_connector_reset(int port, enum connector_reset reset_type)
 {
 	/* Make sure port is in range and that an output buffer is provided */
 	if (!is_pdc_port_valid(port)) {
@@ -3100,7 +3155,7 @@ uint8_t pdc_power_mgmt_get_product_type(int port)
  * chips rather than all ports at once. It should take a chip ID as a param and
  * track current comms status by chip.
  */
-int pdc_power_mgmt_set_comms_state(bool enable_comms)
+test_mockable int pdc_power_mgmt_set_comms_state(bool enable_comms)
 {
 	int ret;
 	int status = 0;
@@ -3182,8 +3237,9 @@ int pdc_power_mgmt_set_comms_state(bool enable_comms)
 	return status;
 }
 
-int pdc_power_mgmt_get_connector_status(
-	int port, union connector_status_t *connector_status)
+test_mockable int
+pdc_power_mgmt_get_connector_status(int port,
+				    union connector_status_t *connector_status)
 {
 	struct pdc_port_t *pdc;
 
@@ -3251,7 +3307,8 @@ void pdc_power_mgmt_request_source_voltage(int port, int mv)
 	}
 }
 
-int pdc_power_mgmt_get_cable_prop(int port, union cable_property_t *cable_prop)
+test_mockable int
+pdc_power_mgmt_get_cable_prop(int port, union cable_property_t *cable_prop)
 {
 	if (!is_pdc_port_valid(port)) {
 		return -ERANGE;
@@ -3355,3 +3412,66 @@ int pdc_power_mgmt_frs_enable(int port_num, bool enable)
 
 	return EC_SUCCESS;
 }
+
+int pdc_power_mgmt_get_pch_data_status(int port, uint8_t *status)
+{
+	if (!is_pdc_port_valid(port)) {
+		return -ERANGE;
+	}
+
+	if (status == NULL) {
+		return -EINVAL;
+	}
+
+	/* Block until command completes */
+	if (public_api_block(port, CMD_PDC_GET_PCH_DATA_STATUS)) {
+		/* something went wrong */
+		return -EIO;
+	}
+
+	memcpy(status, pdc_data[port]->port.pch_data_status, 5);
+	return 0;
+}
+
+#ifdef CONFIG_ZTEST
+
+/*
+ * Reset the state machine for each port to its unattached state. This ensures
+ * that tests start from the same state and prevents commands from a previous
+ * test from impacting subsequently run tests.
+ */
+static void test_reset(const struct ztest_unit_test *test, void *data)
+{
+	int num_unattached;
+
+	ARG_UNUSED(test);
+	ARG_UNUSED(data);
+
+	for (int i = 0; i < ARRAY_SIZE(pdc_data); i++) {
+		set_pdc_state(&pdc_data[i]->port, PDC_UNATTACHED);
+	}
+
+	/* Wait for up to 20 * 100ms for all ports to become unattached. */
+	for (int i = 0; i < 20; i++) {
+		num_unattached = 0;
+
+		for (int port = 0; port < ARRAY_SIZE(pdc_data); port++) {
+			if (pdc_data[i]->port.unattached_local_state ==
+			    UNATTACHED_RUN) {
+				num_unattached++;
+			}
+		}
+
+		if (num_unattached == ARRAY_SIZE(pdc_data)) {
+			break;
+		}
+
+		k_msleep(100);
+	}
+
+	zassert_equal(num_unattached, ARRAY_SIZE(pdc_data));
+}
+
+ZTEST_RULE(pdc_power_mgmt_test_reset, NULL, test_reset);
+
+#endif
