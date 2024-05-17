@@ -139,16 +139,16 @@ endif
 MANIFEST := util/signer/ec_RW-manifest-dev.json
 CR50_RO_KEY ?= rom-testkey-A.pem
 
-# Make sure signing happens only when the signer is available.
-REAL_SIGNER = /usr/bin/cr50-codesigner
-ifneq ($(wildcard $(REAL_SIGNER)),)
-SIGNED_IMAGES = 1
-SIGNER := $(REAL_SIGNER)
-endif
-
 ifeq ($(CHIP_MK_INCLUDED_ONCE),)
 
 CHIP_MK_INCLUDED_ONCE := 1
+
+CODESIGNER_PATH := $(abspath ../cr50-utils/software/tools/codesigner)
+
+# Try to find preinstalled or pre-built codesigner
+SIGNER := $(firstword $(wildcard /usr/bin/cr50-codesigner\
+	    $(CODESIGNER_PATH)/codesigner))
+
 # We'll have to tweak the manifest no matter what, but different ways
 # depending on the way the image is built.
 SIGNER_MANIFEST := $(shell mktemp /tmp/h1.signer.XXXXXX)
@@ -174,6 +174,19 @@ CR50_RW_KEY = loader-testkey-A.pem
 # Make sure manifset Key ID field matches the actual key.
 DUM := $(shell sed 's/860844255/-764428053/' $(MANIFEST) > $(SIGNER_MANIFEST))
 else
+# Try to build signer from the known location, if it is missing
+ifeq ($(SIGNER),)
+# If source path is present, build codesigner later as dependency
+ifneq ($(wildcard $(CODESIGNER_PATH)),)
+SIGNER := $(CODESIGNER_PATH)/codesigner
+# Set CFLAGS and CXX to avoid passing target configuration
+$(SIGNER):
+	CFLAGS="-O2" CXX="clang++" $(MAKE) -C $(CODESIGNER_PATH) codesigner
+else
+$(error cr50-codesigner is not available!)
+endif
+endif
+
 # The private key comes from the sighing fob.
 CR50_RW_KEY = cr50_rom0-dev-blsign.pem.pub
 
