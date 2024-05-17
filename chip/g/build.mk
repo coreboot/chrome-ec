@@ -139,16 +139,26 @@ endif
 MANIFEST := util/signer/ec_RW-manifest-dev.json
 CR50_RO_KEY ?= rom-testkey-A.pem
 
-# Make sure signing happens only when the signer is available.
-REAL_SIGNER = /usr/bin/cr50-codesigner
-ifneq ($(wildcard $(REAL_SIGNER)),)
-SIGNED_IMAGES = 1
-SIGNER := $(REAL_SIGNER)
-endif
-
 ifeq ($(CHIP_MK_INCLUDED_ONCE),)
 
 CHIP_MK_INCLUDED_ONCE := 1
+
+CODESIGNER_PATH := $(abspath ../cr50-utils/software/tools/codesigner)
+SIGNER = /usr/bin/cr50-codesigner
+
+# Try to build signer from the known location, if it is missing
+ifeq ($(wildcard $(SIGNER)),)
+# If source path is present, build codesigner later as dependency
+ifneq ($(CODESIGNER_PATH),)
+SIGNER:=$(CODESIGNER_PATH)/codesigner
+
+# Set CFLAGS and CXX to avoid passing target configuration
+$(SIGNER): $(CODESIGNER_PATH)/*.cc $(CODESIGNER_PATH)/../common/*
+	CFLAGS="-O2" CXX="clang++" $(MAKE) -C $(CODESIGNER_PATH) codesigner
+
+endif
+endif
+
 # We'll have to tweak the manifest no matter what, but different ways
 # depending on the way the image is built.
 SIGNER_MANIFEST := $(shell mktemp /tmp/h1.signer.XXXXXX)
