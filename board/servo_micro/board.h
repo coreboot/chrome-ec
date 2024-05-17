@@ -85,6 +85,7 @@
 /* Enable control of I2C over USB */
 #define CONFIG_USB_I2C
 #define CONFIG_I2C
+#define CONFIG_CMD_I2C_SPEED
 #define CONFIG_I2C_MASTER
 #define I2C_PORT_MASTER 0
 
