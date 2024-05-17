@@ -35,12 +35,19 @@
 #include "gsctool.h"
 #include "misc_util.h"
 #include "signed_header.h"
+#include "signed_manifest.h"
 #include "tpm_registers.h"
 #include "tpm_vendor_cmds.h"
 #include "upgrade_fw.h"
 #include "u2f.h"
 #include "usb_descriptor.h"
 #include "verify_ro.h"
+
+/* View of an image header for either H1/DT images or NuvoTitan images. */
+union ImageHeader {
+	struct SignedHeader h;
+	struct SignedManifest m;
+};
 
 /*
  * This enum must match CcdCap enum in applications/sys_mgr/src/ccd.rs in the
@@ -313,6 +320,7 @@ enum gsc_device {
 	GSC_DEVICE_ANY = 0,
 	GSC_DEVICE_H1,
 	GSC_DEVICE_DT,
+	GSC_DEVICE_NT,
 };
 
 /*
@@ -512,6 +520,9 @@ static const struct option_container cmd_line_options[] = {
 	  "Effective with -b, -f, -i, -J, -r, and -O." },
 	{ { "tpm_mode", optional_argument, NULL, 'm' },
 	  "[enable|disable]%Change or query tpm_mode" },
+	{ { "nuvotitan", no_argument, NULL, 'N' },
+	  "Communicate with NuvoTitan chip. This may also be implied.",
+	  GSC_DEVICE_NT },
 	{ { "serial", required_argument, NULL, 'n' },
 	  "Cr50 CCD serial number" },
 	{ { "openbox_rma", required_argument, NULL, 'O' },
@@ -1171,20 +1182,21 @@ static struct {
 #undef CONFIG_RW_SIZE
 #undef CONFIG_FLASH_SIZE
 
-/* Returns true if the specified header is valid */
-static bool valid_header(const struct SignedHeader *const h, const size_t size)
+/* Returns true if the specified signed header is valid */
+static bool valid_signed_header(const struct SignedHeader *const h,
+				const size_t size)
 {
 	if (size < sizeof(struct SignedHeader))
+		return false;
+
+	/* Only H1 and D2 are currently supported. */
+	if (h->magic != MAGIC_HAVEN && h->magic != MAGIC_DAUNTLESS)
 		return false;
 
 	if (h->image_size > size)
 		return false;
 
 	if (h->image_size < CONFIG_FLASH_BANK_SIZE)
-		return false;
-
-	/* Only H1 and D2 are currently supported. */
-	if (h->magic != MAGIC_HAVEN && h->magic != MAGIC_DAUNTLESS)
 		return false;
 
 	/*
@@ -1204,6 +1216,79 @@ static bool valid_header(const struct SignedHeader *const h, const size_t size)
 	return true;
 }
 
+/* Returns true if the specified opentitan manifest header is valid */
+static bool valid_nt_manifest(const struct SignedManifest *const m,
+			      const size_t size)
+{
+	if (size < sizeof(struct SignedManifest))
+		return false;
+
+	if (m->identifier != ID_ROM_EXT && m->identifier != ID_OWNER_FW)
+		return false;
+
+	if (m->length > size)
+		return false;
+
+	if (m->code_start > m->code_end)
+		return false;
+
+	if (m->code_start > m->length)
+		return false;
+
+	if (m->code_end > m->length)
+		return false;
+
+	if (m->entry_point > m->code_end)
+		return false;
+
+	if (m->entry_point < m->code_start)
+		return false;
+
+	return true;
+}
+
+/* Returns true if the specified image header is valid */
+static bool valid_image_header(const union ImageHeader *const h,
+			       const size_t size, enum gsc_device *out_device)
+{
+	if (valid_nt_manifest(&h->m, size)) {
+		if (out_device)
+			*out_device = GSC_DEVICE_NT;
+		return true;
+	}
+	if (valid_signed_header(&h->h, size)) {
+		if (out_device) {
+			if (h->h.magic == MAGIC_HAVEN) {
+				*out_device = GSC_DEVICE_H1;
+			} else if (h->h.magic == MAGIC_DAUNTLESS) {
+				*out_device = GSC_DEVICE_DT;
+			} else {
+				fprintf(stderr,
+					"Error: Cannot determine image type.\n");
+				/* Unsupported image type */
+				exit(update_error);
+			}
+		}
+		return true;
+	}
+	return false;
+}
+
+/* Returns the image size from the header. This assumes it is valid */
+static uint32_t get_size_from_header(const union ImageHeader *const h)
+{
+	if (gsc_dev == GSC_DEVICE_H1 || gsc_dev == GSC_DEVICE_DT)
+		return h->h.image_size;
+
+	if (gsc_dev == GSC_DEVICE_NT)
+		return h->m.length;
+
+	fprintf(stderr, "Error: Cannot determine image type.\n");
+	/* Unsupported image type */
+	exit(update_error);
+	return 0;
+}
+
 /* Rounds and address up to the next 2KB boundary if not one already */
 static inline uint32_t round_up_2kb(const uint32_t addr)
 {
@@ -1212,7 +1297,7 @@ static inline uint32_t round_up_2kb(const uint32_t addr)
 	return (addr + mask) & ~mask;
 }
 
-static const struct SignedHeader *as_header(const void *image, uint32_t offset)
+static const union ImageHeader *as_header(const void *image, uint32_t offset)
 {
 	return (void *)((uintptr_t)image + offset);
 }
@@ -1224,7 +1309,8 @@ static int32_t find_rw_header(const void *image, uint32_t offset,
 	offset = round_up_2kb(offset);
 
 	while (offset < end) {
-		if (valid_header(as_header(image, offset), end - offset))
+		if (valid_image_header(as_header(image, offset), end - offset,
+				       NULL))
 			return offset;
 		offset = round_up_2kb(offset + 1);
 	}
@@ -1236,8 +1322,9 @@ static int32_t find_rw_header(const void *image, uint32_t offset,
 static bool locate_headers(const void *image, const uint32_t size)
 {
 	const uint32_t slot_a_end = size / 2;
-	const struct SignedHeader *h;
+	const union ImageHeader *h;
 	int32_t rw_offset;
+	enum gsc_device image_device;
 
 	/*
 	 * We assume that all 512KB images are "valid" H1 images. The DBG images
@@ -1259,8 +1346,8 @@ static bool locate_headers(const void *image, const uint32_t size)
 	}
 
 	/*
-	 * We know that all other image types supported (i.e. Dauntless) are
-	 * 1MB in size.
+	 * We know that all other image types supported (i.e. Dauntless,
+	 * NuvoTitan) are 1MB in size.
 	 */
 	if (size != (1024 * 1024)) {
 		fprintf(stderr, "\nERROR: Image size (%d KB) is invalid\n",
@@ -1270,24 +1357,21 @@ static bool locate_headers(const void *image, const uint32_t size)
 
 	/* Validate the RO_A header */
 	h = as_header(image, 0);
-	if (!valid_header(h, slot_a_end)) {
+	if (!valid_image_header(h, slot_a_end, &image_device)) {
 		fprintf(stderr, "\nERROR: RO_A header is invalid\n");
 		return false;
 	}
 
-	if (h->magic != MAGIC_DAUNTLESS) {
-		fprintf(stderr,
-			"Error: Cannot use non-Ti50 image with dauntless.\n");
+	/* Ensure that device for image and selected device match */
+	if (gsc_dev == GSC_DEVICE_ANY) {
+		gsc_dev = image_device;
+	} else if (gsc_dev != image_device) {
+		fprintf(stderr, "Error: Invalid image for chip.\n");
 		return false;
 	}
 
-	if ((gsc_dev != GSC_DEVICE_ANY) && (gsc_dev != GSC_DEVICE_DT))
-		return false;
-
-	gsc_dev = GSC_DEVICE_DT;
-
 	sections[RO_A].offset = 0;
-	sections[RO_A].size = h->image_size;
+	sections[RO_A].size = get_size_from_header(h);
 
 	/* Find RW_A */
 	rw_offset = find_rw_header(
@@ -1297,16 +1381,16 @@ static bool locate_headers(const void *image, const uint32_t size)
 		return false;
 	}
 	sections[RW_A].offset = rw_offset;
-	sections[RW_A].size = as_header(image, rw_offset)->image_size;
+	sections[RW_A].size = get_size_from_header(as_header(image, rw_offset));
 
 	/* Validate the RO_B header */
 	h = as_header(image, slot_a_end);
-	if (!valid_header(h, size - slot_a_end)) {
+	if (!valid_image_header(h, size - slot_a_end, NULL)) {
 		fprintf(stderr, "\nERROR: RO_B header is invalid\n");
 		return false;
 	}
 	sections[RO_B].offset = slot_a_end;
-	sections[RO_B].size = h->image_size;
+	sections[RO_B].size = get_size_from_header(h);
 
 	/* Find RW_B */
 	rw_offset = find_rw_header(
@@ -1316,7 +1400,7 @@ static bool locate_headers(const void *image, const uint32_t size)
 		return false;
 	}
 	sections[RW_B].offset = rw_offset;
-	sections[RW_B].size = as_header(image, rw_offset)->image_size;
+	sections[RW_B].size = get_size_from_header(as_header(image, rw_offset));
 
 	/* We found all of the headers and updated offset/size in sections */
 	return true;
@@ -1331,12 +1415,12 @@ static bool fetch_header_versions(const void *image)
 	size_t i;
 
 	for (i = 0; i < ARRAY_SIZE(sections); i++) {
-		const struct SignedHeader *h;
+		const union ImageHeader *h;
 
-		h = (const struct SignedHeader *)((uintptr_t)image +
-						  sections[i].offset);
+		h = (const union ImageHeader *)((uintptr_t)image +
+						sections[i].offset);
 
-		if (h->image_size < CONFIG_FLASH_BANK_SIZE) {
+		if (get_size_from_header(h) < CONFIG_FLASH_BANK_SIZE) {
 			/*
 			 * Return an error for incorrectly signed images. If
 			 * it's a RO image with 0 as its size, ignore the error.
@@ -1344,20 +1428,30 @@ static bool fetch_header_versions(const void *image)
 			 * TODO(b/273510573): revisit after dbg versioning is
 			 * figured out.
 			 */
-			if (h->image_size || sections[i].offset) {
+			if (get_size_from_header(h) || sections[i].offset) {
 				fprintf(stderr,
 					"Image at offset %#5x too short "
 					"(%d bytes)\n",
-					sections[i].offset, h->image_size);
+					sections[i].offset, h->h.image_size);
 				return false;
 			}
 
 			printf("warning: invalid RO_A (size 0)\n");
 		}
-		sections[i].shv.epoch = h->epoch_;
-		sections[i].shv.major = h->major_;
-		sections[i].shv.minor = h->minor_;
-		sections[i].keyid = h->keyid;
+		if (gsc_dev == GSC_DEVICE_H1 || gsc_dev == GSC_DEVICE_DT) {
+			sections[i].shv.epoch = h->h.epoch_;
+			sections[i].shv.major = h->h.major_;
+			sections[i].shv.minor = h->h.minor_;
+			sections[i].keyid = h->h.keyid;
+		} else if (gsc_dev == GSC_DEVICE_NT) {
+			sections[i].shv.epoch = 0;
+			sections[i].shv.major = h->m.version_major;
+			sections[i].shv.minor = h->m.version_minor;
+			sections[i].keyid = 0;
+		} else {
+			fprintf(stderr, "\nERROR: Unknown image type.\n");
+			exit(update_error);
+		}
 	}
 	return true;
 }
@@ -1635,6 +1729,7 @@ static void send_done(struct usb_endpoint *uep)
 /*
  * H1 support for flashing RO immediately after RW added in 0.3.20/0.4.20.
  * D2 support exists in all versions.
+ * NT support exists in all versions.
  */
 static int supports_reordered_section_updates(struct signed_header_version *rw)
 {
@@ -1643,6 +1738,8 @@ static int supports_reordered_section_updates(struct signed_header_version *rw)
 		return (rw->epoch || rw->major > 4 ||
 			(rw->major >= 3 && rw->minor >= 20));
 	case GSC_DEVICE_DT:
+		return true;
+	case GSC_DEVICE_NT:
 		return true;
 	default:
 		return false;
@@ -2038,7 +2135,7 @@ static void sha_init(EVP_MD_CTX *ctx)
 {
 	if (gsc_dev == GSC_DEVICE_H1)
 		EVP_DigestInit_ex(ctx, EVP_sha1(), NULL);
-	else if (gsc_dev == GSC_DEVICE_DT)
+	else if (gsc_dev == GSC_DEVICE_DT || gsc_dev == GSC_DEVICE_NT)
 		EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
 	else {
 		fprintf(stderr, "Error: unknown GSC device type\n");
@@ -2149,9 +2246,9 @@ static int show_headers_versions(const void *image, bool show_machine_output)
 	size_t i;
 
 	for (i = 0; i < ARRAY_SIZE(sections); i++) {
-		const struct SignedHeader *h =
-			(const struct SignedHeader *)((uintptr_t)image +
-						      sections[i].offset);
+		const union ImageHeader *h =
+			(const union ImageHeader *)((uintptr_t)image +
+						    sections[i].offset);
 		const size_t slot_idx = i / kNumSectionsPerSlot;
 
 		uint32_t cur_bid;
@@ -2160,29 +2257,57 @@ static int show_headers_versions(const void *image, bool show_machine_output)
 		if (sections[i].name[1] == 'O') {
 			/* RO. */
 			snprintf(ro_fw_ver[slot_idx], MAX_FW_VER_LENGTH,
-				 "%d.%d.%d", h->epoch_, h->major_, h->minor_);
+				 "%d.%d.%d", sections[i].shv.epoch,
+				 sections[i].shv.major, sections[i].shv.minor);
 			/* No need to read board ID in an RO section. */
 			continue;
 		} else {
 			/* RW. */
 			snprintf(rw_fw_ver[slot_idx], MAX_FW_VER_LENGTH,
-				 "%d.%d.%d", h->epoch_, h->major_, h->minor_);
+				 "%d.%d.%d", sections[i].shv.epoch,
+				 sections[i].shv.major, sections[i].shv.minor);
 		}
 
 		/*
 		 * For RW sections, retrieves the board ID fields' contents,
 		 * which are stored XORed with a padding value.
 		 */
-		bid[slot_idx].id = h->board_id_type ^ SIGNED_HEADER_PADDING;
-		bid[slot_idx].mask = h->board_id_type_mask ^
-				     SIGNED_HEADER_PADDING;
-		bid[slot_idx].flags = h->board_id_flags ^ SIGNED_HEADER_PADDING;
+		if (gsc_dev == GSC_DEVICE_H1 || gsc_dev == GSC_DEVICE_DT) {
+			bid[slot_idx].id = h->h.board_id_type ^
+					   SIGNED_HEADER_PADDING;
+			bid[slot_idx].mask = h->h.board_id_type_mask ^
+					     SIGNED_HEADER_PADDING;
+			bid[slot_idx].flags = h->h.board_id_flags ^
+					      SIGNED_HEADER_PADDING;
 
-		dev_id0_[slot_idx] = h->dev_id0_;
-		dev_id1_[slot_idx] = h->dev_id1_;
+			dev_id0_[slot_idx] = h->h.dev_id0_;
+			dev_id1_[slot_idx] = h->h.dev_id1_;
+		} else if (gsc_dev == GSC_DEVICE_NT) {
+			/*
+			 * TODO(b/341348812): Get BID info from signed manifest
+			 * header.
+			 */
+			fprintf(stderr, "BID info not support on NT yet.\n");
+			bid[slot_idx].id = -1;
+			bid[slot_idx].mask = -1;
+			bid[slot_idx].flags = -1;
+
+			/* Check if devid constraints are being enforced */
+			if (h->m.constraint_selector_bits & 0x6) {
+				dev_id0_[slot_idx] =
+					h->m.constraint_device_id[1];
+				dev_id1_[slot_idx] =
+					h->m.constraint_device_id[2];
+			} else {
+				dev_id0_[slot_idx] = 0;
+				dev_id1_[slot_idx] = 0;
+			}
+		} else {
+			fprintf(stderr, "\nERROR: Unknown image type.\n");
+			exit(update_error);
+		}
 		/* Print the devid if any slot has a non-zero devid. */
-		print_devid |= h->dev_id0_ | h->dev_id1_;
-
+		print_devid |= dev_id0_[slot_idx] | dev_id1_[slot_idx];
 		/*
 		 * If board ID is a 4-uppercase-letter string (as it ought to
 		 * be), print it as 4 letters, otherwise print it as an 8-digit
@@ -4925,6 +5050,13 @@ int main(int argc, char *argv[])
 		case 'm':
 			tpm_mode = 1;
 			tpm_mode_arg = optarg;
+			break;
+		case 'N':
+			/*
+			 * as a result of processing this command line option
+			 * gsc_dev has been set to GSC_DEVICE_NT by
+			 * set_device_type(), no further action is required.
+			 */
 			break;
 		case 'n':
 			serial = optarg;
