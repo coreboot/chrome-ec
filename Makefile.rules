@@ -443,22 +443,15 @@ endif
 $(out)/RW/%.hex: $(out)/RW/%.elf$(rw_elf_ext) $(out)/RW/%.smap
 	$(call quiet,elf_to_hex,OBJCOPY)
 
-ifeq ($(SIGNED_IMAGES),)
-$(out)/%.flat: $(out)/%.elf $(out)/%.smap $(build-utils)
-	$(call quiet,ec_elf_to_flat,OBJCOPY)
-
-$(out)/RO/%.hex: $(out)/RO/%.elf $(out)/RO/%.smap
-	$(call quiet,elf_to_hex,OBJCOPY)
-else
-$(out)/RO/%.flat: $(out)/RO/%.elf  $(out)/RO/%.smap
+$(out)/RO/%.flat: $(out)/RO/%.elf  $(out)/RO/%.smap | $(SIGNER)
 	$(call quiet,elf_to_signed,RO_SIGN,$(CR50_RO_KEY))
 
-$(out)/RW/%.flat: $(out)/RW/%.elf$(rw_elf_ext) $(out)/RW/%.smap
+$(out)/RW/%.flat: $(out)/RW/%.elf$(rw_elf_ext) $(out)/RW/%.smap | $(SIGNER)
 	$(call quiet,elf_to_signed,RW_SIGN,$(CR50_RW_KEY))
 
 $(out)/RO/%.hex: $(out)/RO/%.flat
 	$(call quiet,bin_to_hex,OBJCOPY)
-endif
+
 $(out)/$(PROJECT).hex: $(out)/$(PROJECT).bin
 	$(call quiet,bin_to_hex,OBJCOPY)
 
