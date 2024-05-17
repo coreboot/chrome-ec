@@ -4381,31 +4381,24 @@ static void print_ti50_misc_status(uint32_t misc_status, uint32_t version)
 	misc_status = be32toh(misc_status);
 	printf("misc_status (%d):         %08x\n", version, misc_status);
 	printf("  rdd_keepalive:         %d\n",
-	       misc_status &
-		       METRICSV_RDD_KEEP_ALIVE_MASK);
+	       misc_status & METRICSV_RDD_KEEP_ALIVE_MASK);
 	printf("  rdd_keepalive_at_boot: %d\n",
-	       (misc_status &
-		METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK) >>
+	       (misc_status & METRICSV_RDD_KEEP_ALIVE_AT_BOOT_MASK) >>
 		       METRICSV_RDD_KEEP_ALIVE_AT_BOOT_SHIFT);
 	printf("  ccd_mode:              %d\n",
-	       (misc_status &
-		METRICSV_CCD_MODE_MASK) >>
+	       (misc_status & METRICSV_CCD_MODE_MASK) >>
 		       METRICSV_CCD_MODE_SHIFT);
 	if (version < 3)
 		return;
 	/* Display metrics added in version 3 */
 	printf("  wp_asserted:           %d\n",
-	       (misc_status &
-		METRICSV_WP_ASSERTED_MASK) >>
+	       (misc_status & METRICSV_WP_ASSERTED_MASK) >>
 		       METRICSV_WP_ASSERTED_SHIFT);
 	printf("  allow_unverified_ro:   %d\n",
-	       (misc_status &
-		METRICSV_ALLOW_UNVERIFIED_RO_MASK) >>
+	       (misc_status & METRICSV_ALLOW_UNVERIFIED_RO_MASK) >>
 		       METRICSV_ALLOW_UNVERIFIED_RO_SHIFT);
 	printf("  is_prod:               %d\n",
-	       (misc_status &
-		METRICSV_IS_PROD_MASK) >>
-		       METRICSV_IS_PROD_SHIFT);
+	       (misc_status & METRICSV_IS_PROD_MASK) >> METRICSV_IS_PROD_SHIFT);
 }
 
 static int print_ti50_stats(struct ti50_stats_v0 *stats_v0, size_t size)
