@@ -136,6 +136,8 @@ enum drp_mode_t {
 	DRP_TRY_SRC,
 	/** DRP Try.SNK */
 	DRP_TRY_SNK,
+	/** DRP Invalid */
+	DRP_INVALID,
 };
 
 /**
@@ -817,7 +819,7 @@ union cable_property_t {
 		 * Return the amount of current the cable is designed
 		 * for in 50ma units.
 		 */
-		uint32_t b_current_capablilty : 8;
+		uint32_t b_current_capability : 8;
 		/**
 		 * The PPM shall set this field to a one if the cable
 		 * has a VBUS connection from end to end.

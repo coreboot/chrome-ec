@@ -9,3 +9,27 @@ config HW_TEST_ABORT
 	help
 	  The test verify if abort() call works correctly and validates panic
 	  data.
+
+config HW_TEST_CORTEXM_FPU
+	bool "Cortex-M FPU test"
+	select ZTEST
+	depends on BOARD_FINGERPRINT
+
+config HW_TEST_CRC
+	bool "CRC test"
+	select ZTEST
+
+config HW_TEST_FLASH_PHYSICAL
+	bool "Flash physical test"
+	select ZTEST
+	depends on FLASH
+
+config HW_TEST_FLASH_WRITE_PROTECT
+	bool "Flash write protect test"
+	select ZTEST
+	depends on PLATFORM_EC_FLASH_CROS
+
+config HW_TEST_FP_TRANSPORT
+	bool "FP transport layer test"
+	select ZTEST
+	depends on EC_HOST_CMD

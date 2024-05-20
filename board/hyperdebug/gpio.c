@@ -43,7 +43,13 @@
  * such "cluster" is to be all concatenated (least significant bits in first
  * bytes), in order to form an integer number of clock ticks of delay.  A delay
  * of one tick is equivalent to repeating the last sample (and thus does not
- * save any memory), a delay of zero ticks is invalid.
+ * save any memory).
+ *
+ * A delay of zero ticks is invalid, so the encoding of one or more consecutive
+ * bytes with value 0x80, surrounded by bytes with a high bit of zero, is used
+ * as escape for special features.  Currently the four byte sequence: [0x80 0x80
+ * mask pattern] is used to request an indefinite delay until sampled pins equal
+ * the given `pattern` for all bits which are set to one in the given `mask`.
  *
  * +----------------+---------------+-----------------+---------------+
  * | cmsis_cmd : 1B | gpio_cmd : 1B | data count : 2B | data  (>= 0B) |
@@ -101,9 +107,6 @@
  *                described above).
  *
  */
-
-/* Hardware timer used for bitbanging. */
-#define BITBANG_TIMER 5
 
 /* Size of buffer used for bitbanging waveform. */
 #define BITBANG_BUFFER_SIZE 16384
@@ -438,6 +441,12 @@ static void board_gpio_init(void)
 		sram_vectors[16 + STM32_IRQ_EXTI0 + i] =
 			DATA_TO_THUMB_CODE_PTR(&monitoring_slots[i].code);
 	}
+
+	/*
+	 * Enable TIMER7 for precise JTAG bit-banging.
+	 */
+	__hw_timer_enable_clock(JTAG_TIMER, 1);
+	STM32_TIM_CR1(JTAG_TIMER) = STM32_TIM_CR1_CEN;
 
 	/* Prepare timer for use in GPIO bit-banging. */
 	__hw_timer_enable_clock(BITBANG_TIMER, 1);
@@ -1240,6 +1249,14 @@ static volatile uint32_t bitbang_head = 0;
  */
 static uint32_t bitbang_countdown;
 
+/*
+ * In case the encoded data indicates a "pause" until certain input trigger,
+ * this is represented by `bitbang_mask` being non-zero.  Only once the sampled
+ * input pins match `bitbang_pattern` for all of the bits set in `bitbang_mask`
+ * will processing of the remaining part of the bitbanging waveform resume.
+ */
+static uint8_t bitbang_mask, bitbang_pattern;
+
 #define BITBANG_DELAY_BIT 0x80
 #define BITBANG_DATA_MASK 0x7F
 
@@ -1261,26 +1278,7 @@ void IRQ_HANDLER(IRQ_TIM(BITBANG_TIMER))(void)
 		STM32_TIM_CR1(BITBANG_TIMER) = 0;
 		return;
 	}
-	if (bitbang_countdown) {
-		bitbang_countdown--;
-		return;
-	}
-	uint8_t data_byte = *bitbang_data_ptr(bitbang_irq);
-	if (data_byte & BITBANG_DELAY_BIT) {
-		/* Maintain current levels for a number of cycles. */
-		uint8_t delay_scale = 0;
-		bitbang_countdown = 0;
-		do {
-			bitbang_irq++;
-			bitbang_countdown += ((data_byte & BITBANG_DATA_MASK)
-					      << delay_scale);
-			delay_scale += 7;
-			data_byte = *bitbang_data_ptr(bitbang_irq);
-		} while (data_byte & BITBANG_DELAY_BIT);
-		/* One cycle of delay already spent processing */
-		bitbang_countdown--;
-		return;
-	}
+
 	/*
 	 * Read current level of all pins part of bit-banging.  If some of the
 	 * pins are in push-pull mode, this will be what was written the
@@ -1292,7 +1290,68 @@ void IRQ_HANDLER(IRQ_TIM(BITBANG_TIMER))(void)
 				 bitbang_pin_masks[i])
 			      << i;
 	}
-	*bitbang_data_ptr(bitbang_irq++) = input_data;
+
+	/*
+	 * See if there are reasons for not yet proceeding with the remaining
+	 * part of the waveform.
+	 */
+	if (bitbang_countdown) {
+		/* Waiting for a fixed duration to pass. */
+		bitbang_countdown--;
+		return;
+	}
+	if (bitbang_mask) {
+		/* Waiting for a particular trigger pattern. */
+		if ((input_data ^ bitbang_pattern) & bitbang_mask) {
+			/* No match, sample again next cycle */
+			return;
+		}
+		/* Match, proceed */
+		bitbang_mask = 0;
+	}
+
+	/*
+	 * Past reasons to pause have been resolved.  Now inspect the next byte
+	 * of the waveform encoding.
+	 */
+	uint8_t data_byte = *bitbang_data_ptr(bitbang_irq);
+	while (data_byte & BITBANG_DELAY_BIT) {
+		/* Maintain current levels for a number of cycles. */
+		uint8_t delay_scale = 0;
+		bitbang_countdown = 0;
+		do {
+			bitbang_irq++;
+			bitbang_countdown += ((data_byte & BITBANG_DATA_MASK)
+					      << delay_scale);
+			delay_scale += 7;
+			data_byte = *bitbang_data_ptr(bitbang_irq);
+		} while (data_byte & BITBANG_DELAY_BIT);
+		if (bitbang_countdown > 0) {
+			/* One cycle of delay already spent processing */
+			bitbang_countdown--;
+			return;
+		}
+		/*
+		 * Zero-cycle delay is not possible, the encoding is used as
+		 * escape for "special" commands, in this case waiting
+		 * indefinitely for a particular trigger.
+		 */
+		bitbang_mask = *bitbang_data_ptr(bitbang_irq++);
+		bitbang_pattern = *bitbang_data_ptr(bitbang_irq++);
+
+		if ((input_data ^ bitbang_pattern) & bitbang_mask) {
+			/* No match, sample again next cycle */
+			return;
+		}
+		/*
+		 * Match, immediately proceed, taking care that next byte could
+		 * either be a sample or another delay/wait, hence the need for
+		 * another iteration in the loop.
+		 */
+		bitbang_mask = 0;
+		data_byte = *bitbang_data_ptr(bitbang_irq);
+	}
+
 	/*
 	 * Set drive of all pins which are part of bit-banging.  If some of the
 	 * pins are in input mode, this will have no effect.
@@ -1306,6 +1365,9 @@ void IRQ_HANDLER(IRQ_TIM(BITBANG_TIMER))(void)
 				bitbang_pin_masks[i] << 16;
 		}
 	}
+
+	/* Record sampled data, overwriting the given waveform. */
+	*bitbang_data_ptr(bitbang_irq++) = input_data;
 }
 
 /*
@@ -1323,6 +1385,21 @@ const struct irq_priority __keep IRQ_PRIORITY(IRQ_TIM(BITBANG_TIMER))
 	__attribute__((weak, section(".rodata.irqprio"))) = {
 		IRQ_TIM(BITBANG_TIMER), 1
 	};
+
+/*
+ * Returns a prescaler value such that the divisor can fit into a 16-bit
+ * register.
+ */
+static uint32_t find_suitable_prescaler(uint64_t divisor)
+{
+	/* Find power of two for prescaling */
+	uint8_t prescaler_shift = 0;
+
+	while (divisor > (0x10000ULL << prescaler_shift))
+		prescaler_shift++;
+
+	return 1U << prescaler_shift;
+}
 
 static void stop_all_gpio_bitbanging(void)
 {
@@ -1354,11 +1431,11 @@ static int command_gpio_bit_bang(int argc, const char **argv)
 	char *e;
 	uint64_t desired_period_ns = strtoull(argv[2], &e, 0);
 	if (*e)
-		return EC_ERROR_PARAM3;
+		return EC_ERROR_PARAM2;
 
 	if (desired_period_ns > 0xFFFFFFFFFFFFFFFFULL / timer_freq) {
 		/* Would overflow below. */
-		return EC_ERROR_PARAM3;
+		return EC_ERROR_PARAM2;
 	}
 
 	/*
@@ -1369,7 +1446,7 @@ static int command_gpio_bit_bang(int argc, const char **argv)
 
 	if (divisor > (1ULL << 32)) {
 		/* Would overflow the 32-bit timer. */
-		return EC_ERROR_PARAM3;
+		return EC_ERROR_PARAM2;
 	}
 
 	int gpios[7];
@@ -1394,11 +1471,15 @@ static int command_gpio_bit_bang(int argc, const char **argv)
 		bitbang_pin_masks[i] = gpio_list[gpios[i]].mask;
 	}
 
-	/* Set clock divisor to achieve requested tick period. */
-	STM32_TIM32_ARR(BITBANG_TIMER) = divisor - 1;
+	/* Appropriate power of two for prescaling */
+	uint32_t prescaler = find_suitable_prescaler(divisor);
 
-	/* Update prescaler to increment every tick */
-	STM32_TIM_PSC(BITBANG_TIMER) = 0;
+	/* Set clock divisor to achieve requested tick period. */
+	STM32_TIM_ARR(BITBANG_TIMER) =
+		DIV_ROUND_NEAREST(divisor, prescaler) - 1;
+
+	/* Update prescaler. */
+	STM32_TIM_PSC(BITBANG_TIMER) = prescaler - 1;
 
 	/* Set up the overflow interrupt */
 	STM32_TIM_SR(BITBANG_TIMER) = 0;
@@ -1677,29 +1758,59 @@ static uint8_t validate_received_waveform(uint16_t data_len, bool streaming)
 	uint32_t idx = bitbang_irq_tail;
 	uint32_t valid_idx = idx;
 	while (idx != tail_goal) {
-		if (*bitbang_data_ptr(idx) & BITBANG_DELAY_BIT) {
-			uint8_t delay_scale = 0;
-			while (idx != tail_goal &&
-			       *bitbang_data_ptr(idx) & BITBANG_DELAY_BIT) {
-				/*
-				 * Shifting right by 32 - delay_scale
-				 * effectively gives us the low bytes of the
-				 * upper 32 bits of what we would have gotten by
-				 * shifting left by delay_scale.  If that is
-				 * non-zero, it means that the encoded value
-				 * would exceed 32 bits.
-				 */
-				if ((*bitbang_data_ptr(idx) &
-				     BITBANG_DATA_MASK) >>
-				    (32 - delay_scale)) {
-					return STATUS_ERROR_WAVEFORM;
-				}
-				delay_scale += 7;
-				idx++;
-			}
-		} else {
+		if (!(*bitbang_data_ptr(idx) & BITBANG_DELAY_BIT)) {
+			/*
+			 * Single-byte sample for output.  The interrupt routine
+			 * is prepared for this being the last byte in the valid
+			 * range of the buffer.
+			 */
 			idx++;
 			valid_idx = idx;
+			continue;
+		}
+		uint8_t delay_scale = 0, num_bytes = 0;
+		bool all_zeroes = true;
+		while (idx != tail_goal &&
+		       *bitbang_data_ptr(idx) & BITBANG_DELAY_BIT) {
+			uint8_t data = *bitbang_data_ptr(idx) &
+				       BITBANG_DATA_MASK;
+			/*
+			 * Shifting right by 32 - delay_scale effectively gives
+			 * us the low bytes of the upper 32 bits of what we
+			 * would have gotten by shifting left by delay_scale.
+			 * If that is non-zero, it means that the encoded value
+			 * would exceed 32 bits.
+			 */
+			if (data >> (32 - delay_scale)) {
+				return STATUS_ERROR_WAVEFORM;
+			}
+			delay_scale += 7;
+			num_bytes++;
+			if (data != 0)
+				all_zeroes = false;
+			idx++;
+		}
+		if (idx != tail_goal && all_zeroes) {
+			/*
+			 * Zero-cycle delay is invalid, the encoding is used as
+			 * escape for "special" commands.
+			 */
+			if (num_bytes == 2) {
+				/*
+				 * Request to wait for particular pattern of
+				 * input pins.  Verify that required parameters
+				 * are present.
+				 */
+				if (++idx == tail_goal)
+					break;
+				if (++idx == tail_goal)
+					break;
+			} else {
+				/*
+				 * Unrecognized special request encoding.
+				 */
+				return STATUS_ERROR_WAVEFORM;
+			}
 		}
 	}
 
@@ -1735,12 +1846,12 @@ void dap_goog_gpio_bitbang(size_t peek_c, bool streaming)
 	if (tail_ptr + data_len <= bitbang_data + sizeof(bitbang_data)) {
 		queue_blocking_remove(&cmsis_dap_rx_queue, tail_ptr, data_len);
 	} else {
-		uint16_t remaning_space =
+		uint16_t remaining_space =
 			bitbang_data + sizeof(bitbang_data) - tail_ptr;
 		queue_blocking_remove(&cmsis_dap_rx_queue, tail_ptr,
-				      remaning_space);
+				      remaining_space);
 		queue_blocking_remove(&cmsis_dap_rx_queue, bitbang_data,
-				      data_len - remaning_space);
+				      data_len - remaining_space);
 	}
 	if (cmsis_dap_unwind_requested())
 		return;
@@ -1769,7 +1880,10 @@ void dap_goog_gpio_bitbang(size_t peek_c, bool streaming)
 		 * to start the timer, so that the next interrupt will begin
 		 * producing the waveform.
 		 */
-		uint32_t divisor = STM32_TIM32_ARR(BITBANG_TIMER);
+		uint32_t prescaler = STM32_TIM_PSC(BITBANG_TIMER) + 1;
+		uint64_t divisor =
+			(uint64_t)(STM32_TIM32_ARR(BITBANG_TIMER) + 1) *
+			prescaler;
 
 		/* Number of timer increments per millisecond. */
 		uint32_t counts_in_1ms = clock_get_timer_freq() / 1000;
@@ -1783,7 +1897,8 @@ void dap_goog_gpio_bitbang(size_t peek_c, bool streaming)
 			 * seconds.
 			 */
 			STM32_TIM32_CNT(BITBANG_TIMER) =
-				divisor - counts_in_1ms;
+				STM32_TIM32_ARR(BITBANG_TIMER) -
+				DIV_ROUND_UP(counts_in_1ms, prescaler);
 			bitbang_countdown = 0;
 		} else {
 			/*

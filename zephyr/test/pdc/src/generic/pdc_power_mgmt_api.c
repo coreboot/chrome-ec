@@ -12,7 +12,10 @@
 
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/emul.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/ztest.h>
+
+LOG_MODULE_REGISTER(pdc_power_mgmt_api);
 
 #define PDC_TEST_TIMEOUT 2000
 #define RTS5453P_NODE DT_NODELABEL(rts5453p_emul)
@@ -22,6 +25,8 @@ static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 
 #define SMBUS_ARA_NODE DT_NODELABEL(smbus_ara_emul)
 static const struct emul *ara = EMUL_DT_GET(SMBUS_ARA_NODE);
+
+bool pdc_rts54xx_test_idle_wait(void);
 
 void pdc_power_mgmt_setup(void)
 {
@@ -37,6 +42,8 @@ void pdc_power_mgmt_before(void *fixture)
 	emul_pdc_set_response_delay(emul, 0);
 	emul_pdc_disconnect(emul);
 	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+
+	zassert_true(pdc_rts54xx_test_idle_wait());
 }
 
 ZTEST_SUITE(pdc_power_mgmt_api, NULL, pdc_power_mgmt_setup,
@@ -177,6 +184,146 @@ ZTEST_USER(pdc_power_mgmt_api, test_pd_capable)
 	zassert_true(TEST_WAIT_FOR(pd_capable(TEST_PORT), PDC_TEST_TIMEOUT));
 }
 
+K_THREAD_STACK_DEFINE(test_toggle_stack, 256);
+static bool test_toggle_done;
+static union connector_status_t test_toggle_status;
+
+static void test_thread_toggle(void *a, void *b, void *c)
+{
+	union conn_status_change_bits_t status_change_bits;
+
+	memset(&status_change_bits, 0, sizeof(union conn_status_change_bits_t));
+	test_toggle_status.raw_conn_status_change_bits =
+		status_change_bits.raw_value;
+
+	LOG_INF("Emul PDC disconnect partner");
+	emul_pdc_connect_partner(emul, &test_toggle_status);
+
+	while (!test_toggle_done) {
+		k_msleep(50);
+
+		/* Toggle attention on each pass to keep the PDC busy */
+		status_change_bits.attention ^= status_change_bits.attention;
+		test_toggle_status.raw_conn_status_change_bits =
+			status_change_bits.raw_value;
+
+		LOG_INF("Emul PDC toggle attention");
+		emul_pdc_connect_partner(emul, &test_toggle_status);
+	}
+}
+
+static k_tid_t start_toggle_thread(struct k_thread *thread,
+				   union connector_status_t *connector_status)
+{
+	memcpy(&test_toggle_status, connector_status,
+	       sizeof(union connector_status_t));
+	test_toggle_done = false;
+
+	return k_thread_create(thread, test_toggle_stack,
+			       K_THREAD_STACK_SIZEOF(test_toggle_stack),
+			       test_thread_toggle, NULL, NULL, NULL, -1, 0,
+			       K_NO_WAIT);
+}
+
+static int join_toggle_thread(k_tid_t thread)
+{
+	test_toggle_done = true;
+	return k_thread_join(thread, K_MSEC(100));
+}
+
+static void run_toggle_test(union connector_status_t *connector_status)
+{
+	struct pdc_info_t pdc_info;
+	struct k_thread test_thread_data;
+	int ret;
+
+	LOG_INF("Emul PDC disconnect partner");
+	emul_pdc_disconnect(emul);
+	zassert_false(TEST_WAIT_FOR(pd_capable(TEST_PORT), PDC_TEST_TIMEOUT));
+
+	/*
+	 * Create a new thread to toggle keep the PDC busy with interrupts.
+	 * Thread priority set to cooperative to ensure it preempts the PDC
+	 * subsystem.
+	 */
+	memset(connector_status, 0, sizeof(union connector_status_t));
+	k_tid_t test_thread =
+		start_toggle_thread(&test_thread_data, connector_status);
+
+	/* Allow the test thread some cycles to run. */
+	k_msleep(100);
+
+	LOG_INF("Sending GET INFO");
+	ret = pdc_power_mgmt_get_info(TEST_PORT, &pdc_info, true);
+	zassert_equal(-EBUSY, ret,
+		      "pdc_power_mgmt_get_info() returned %d (expected %d)",
+		      ret, -EBUSY);
+
+	/* Allow the test thread to exit. */
+	zassert_ok(join_toggle_thread(test_thread));
+
+	/* All the PDC subsystem to settle. */
+	k_msleep(250);
+
+	/* Public API command should now succeed. */
+	ret = pdc_power_mgmt_get_info(TEST_PORT, &pdc_info, true);
+	zassert_false(ret, "pdc_power_mgmt_get_info() failed (%d)", ret);
+}
+
+/* Verify that public commands complete when a non PD partner is connected */
+ZTEST_USER(pdc_power_mgmt_api, test_non_pd_snk_public_cmd)
+{
+	union connector_status_t connector_status;
+
+	memset(&connector_status, 0, sizeof(union connector_status_t));
+	connector_status.power_operation_mode = USB_TC_CURRENT_5A;
+	connector_status.power_direction = 0;
+
+	run_toggle_test(&connector_status);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_non_pd_src_public_cmd)
+{
+	union connector_status_t connector_status;
+
+	memset(&connector_status, 0, sizeof(union connector_status_t));
+	connector_status.power_operation_mode = USB_TC_CURRENT_5A;
+	connector_status.power_direction = 1;
+
+	run_toggle_test(&connector_status);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_pd_snk_public_cmd)
+{
+	union connector_status_t connector_status;
+
+	memset(&connector_status, 0, sizeof(union connector_status_t));
+	connector_status.power_operation_mode = PD_OPERATION;
+	connector_status.power_direction = 0;
+
+	run_toggle_test(&connector_status);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_pd_src_public_cmd)
+{
+	union connector_status_t connector_status;
+
+	memset(&connector_status, 0, sizeof(union connector_status_t));
+	connector_status.power_operation_mode = PD_OPERATION;
+	connector_status.power_direction = 1;
+
+	run_toggle_test(&connector_status);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_unattached_public_cmd)
+{
+	union connector_status_t connector_status;
+
+	memset(&connector_status, 0, sizeof(union connector_status_t));
+
+	run_toggle_test(&connector_status);
+}
+
 ZTEST_USER(pdc_power_mgmt_api, test_get_partner_usb_comm_capable)
 {
 	int i;
@@ -289,31 +436,60 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 {
-	struct pdc_info_t in, out;
+	struct pdc_info_t in1 = {
+		.fw_version = 0x001a2b3c,
+		.pd_version = 0xabcd,
+		.pd_revision = 0x1234,
+		.vid_pid = 0x12345678,
+	};
+	struct pdc_info_t in2 = {
+		.fw_version = 0x002a3b4c,
+		.pd_version = 0xef01,
+		.pd_revision = 0x5678,
+		.vid_pid = 0x9abcdef0,
+	};
+	struct pdc_info_t out = { 0 };
 	union connector_status_t connector_status;
 
-	in.fw_version = 0x010203;
-	in.pd_version = 0x0506;
-	in.pd_revision = 0x0708;
-	in.vid_pid = 0xFEEDBEEF;
+	zassert_equal(-ERANGE,
+		      pdc_power_mgmt_get_info(CONFIG_USB_PD_PORT_MAX_COUNT,
+					      &out, true));
+	zassert_equal(-EINVAL, pdc_power_mgmt_get_info(TEST_PORT, NULL, true));
 
-	zassert_equal(-ERANGE, pdc_power_mgmt_get_info(
-				       CONFIG_USB_PD_PORT_MAX_COUNT, &out));
-	zassert_equal(-EINVAL, pdc_power_mgmt_get_info(TEST_PORT, NULL));
-
-	emul_pdc_set_info(emul, &in);
+	emul_pdc_set_info(emul, &in1);
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
-	zassert_ok(pdc_power_mgmt_get_info(TEST_PORT, &out));
-	zassert_equal(in.fw_version, out.fw_version, "in=0x%X, out=0x%X",
-		      in.fw_version, out.fw_version);
-	zassert_equal(in.pd_version, out.pd_version);
-	zassert_equal(in.pd_revision, out.pd_revision);
-	zassert_equal(in.vid_pid, out.vid_pid, "in=0x%X, out=0x%X", in.vid_pid,
-		      out.vid_pid);
+	zassert_ok(pdc_power_mgmt_get_info(TEST_PORT, &out, true));
+	zassert_equal(in1.fw_version, out.fw_version, "in=0x%X, out=0x%X",
+		      in1.fw_version, out.fw_version);
+	zassert_equal(in1.pd_version, out.pd_version);
+	zassert_equal(in1.pd_revision, out.pd_revision);
+	zassert_equal(in1.vid_pid, out.vid_pid, "in=0x%X, out=0x%X",
+		      in1.vid_pid, out.vid_pid);
+
+	/* Repeat but non-live. The cached info should match the original
+	 * read instead of `in2`.
+	 */
+	emul_pdc_set_info(emul, &in2);
+	zassert_ok(pdc_power_mgmt_get_info(TEST_PORT, &out, false));
+	zassert_equal(in1.fw_version, out.fw_version, "in=0x%X, out=0x%X",
+		      in1.fw_version, out.fw_version);
+	zassert_equal(in1.pd_version, out.pd_version);
+	zassert_equal(in1.pd_revision, out.pd_revision);
+	zassert_equal(in1.vid_pid, out.vid_pid, "in=0x%X, out=0x%X",
+		      in1.vid_pid, out.vid_pid);
+
+	/* Live read again. This time we should get `in2`. */
+	zassert_ok(pdc_power_mgmt_get_info(TEST_PORT, &out, true));
+	zassert_equal(in2.fw_version, out.fw_version, "in=0x%X, out=0x%X",
+		      in2.fw_version, out.fw_version);
+	zassert_equal(in2.pd_version, out.pd_version);
+	zassert_equal(in2.pd_revision, out.pd_revision);
+	zassert_equal(in2.vid_pid, out.vid_pid, "in=0x%X, out=0x%X",
+		      in2.vid_pid, out.vid_pid);
 
 	emul_pdc_disconnect(emul);
 	zassert_true(
@@ -852,6 +1028,62 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_connector_status)
 		      in.conn_partner_flags);
 	zassert_equal(out.conn_partner_type, in.conn_partner_type);
 	zassert_equal(out.rdo, in.rdo);
+
+	emul_pdc_disconnect(emul);
+	zassert_true(TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_get_cable_prop)
+{
+	union cable_property_t in, out, exp;
+	union connector_status_t in_conn_status, out_conn_status;
+	union conn_status_change_bits_t in_conn_status_change_bits;
+
+	zassert_equal(-ERANGE, pdc_power_mgmt_get_cable_prop(
+				       CONFIG_USB_PD_PORT_MAX_COUNT, &out));
+	zassert_equal(-EINVAL, pdc_power_mgmt_get_cable_prop(TEST_PORT, NULL));
+
+	in.raw_value[0] = 0x1a2b3c4d;
+	in.raw_value[1] = 0x5a6b7c8d;
+	emul_pdc_set_cable_property(emul, in);
+
+	in_conn_status_change_bits.external_supply_change = 1;
+	in_conn_status_change_bits.connector_partner = 1;
+	in_conn_status_change_bits.connect_change = 1;
+	in_conn_status.raw_conn_status_change_bits =
+		in_conn_status_change_bits.raw_value;
+
+	in_conn_status.conn_partner_flags = 1;
+	in_conn_status.conn_partner_type = UFP_ATTACHED;
+	in_conn_status.rdo = 0x01234567;
+
+	emul_pdc_configure_snk(emul, &in_conn_status);
+	emul_pdc_connect_partner(emul, &in_conn_status);
+	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
+
+	zassert_ok(pdc_power_mgmt_get_connector_status(TEST_PORT,
+						       &out_conn_status));
+
+	zassert_ok(pdc_power_mgmt_get_cable_prop(TEST_PORT, &out));
+
+	/*
+	 * The RTS54xx only returns 5 bytes of cable property.
+	 */
+	zassert_mem_equal(in.raw_value, out.raw_value, 5,
+			  "Returned cable property did not match input "
+			  "in 0x%08X:%08X != out 0x%08X:%08X",
+			  in.raw_value[0], in.raw_value[1], out.raw_value[0],
+			  out.raw_value[1]);
+
+	exp.raw_value[0] = in.raw_value[0];
+	exp.raw_value[1] = in.raw_value[1] & 0xff;
+	zassert_mem_equal(exp.raw_value, out.raw_value, sizeof(exp),
+			  "Returned cable property included extra data "
+			  "exp 0x%08X:%08X != out 0x%08X:%08X",
+			  exp.raw_value[0], exp.raw_value[1], out.raw_value[0],
+			  out.raw_value[1]);
 
 	emul_pdc_disconnect(emul);
 	zassert_true(TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),

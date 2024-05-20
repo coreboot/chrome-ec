@@ -275,10 +275,12 @@ void pdc_power_mgmt_request_data_swap(int port);
  *
  * @param port USB-C port number
  * @param pdc_info Output struct for chip info
+ * @param live True forces a read from the chip. False returns a cached value
+ *        from driver initialization or latest live read.
  *
  * @retval 0 if successful or error code
  */
-int pdc_power_mgmt_get_info(int port, struct pdc_info_t *pdc_info);
+int pdc_power_mgmt_get_info(int port, struct pdc_info_t *pdc_info, bool live);
 
 /**
  * @brief Query bus info from PDC used to access the chip
@@ -456,4 +458,74 @@ unsigned int pdc_power_mgmt_get_max_voltage(void);
  */
 void pdc_power_mgmt_request_source_voltage(int port, int mv);
 
+/**
+ * @brief Return the current UCSI cable property on a port
+ *
+ * @param port USB-C port number
+ * @param cable_prop Output variable to store the cable property
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_get_cable_prop(int port, union cable_property_t *cable_prop);
+
+/**
+ * @brief Sets the SRC CAPs sent by the PDC to its port partner when attached in
+ * a source power role
+ *
+ * @param port USB-C port number
+ * @param src_pdo Pointer to array of PDOs
+ * @param pdc_count Number of PDOs to write
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_set_src_pdo(int port, const uint32_t *src_pdo,
+			       uint8_t pdo_count);
+
+/**
+ * @brief Set current limit for USB-C port acting in a source power role
+ *
+ * @param port USB-C port number
+ * @param tcc Desired source current limit (1.5 or 3.0A)
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_set_current_limit(int port, enum usb_typec_current_t tcc);
+
+/**
+ * @brief Get the default source current limit for a USB-C port
+ *
+ * @param port USB-C port number
+ *
+ * @retval USB-C current limit enum value
+ */
+enum usb_typec_current_t pdc_power_mgmt_get_default_current_limit(int port);
+
+/**
+ * @brief Enable/Disable FRS for a given port
+ *
+ * @param port USB-C port number
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_frs_enable(int port_num, bool enable);
+
+/**
+ * @brief Enable/Disable PDC TrySRC on a port
+ *
+ * @param port USB-C port number
+ * @param enable enable or disable TrySRC on port
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_set_trysrc(int port, bool enable);
+
+/*
+ * @brief Return PCH DATA STATUS register for PMC Debug
+ *
+ * @param port USB-C port number
+ * @param status PCH data status Output variable to store register value
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_get_pch_data_status(int port, uint8_t *status);
 #endif /* __CROS_EC_PDC_POWER_MGMT_H */

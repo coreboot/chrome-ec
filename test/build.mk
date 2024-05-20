@@ -9,7 +9,6 @@ test-list-y ?= flash_write_protect \
 	stdlib \
 	timer_calib \
 	timer_dos \
-	timer_jump \
 	mutex \
 	utils \
 	utils_str
@@ -45,12 +44,14 @@ test-list-host += fan
 test-list-host += flash
 test-list-host += float
 test-list-host += fp
-test-list-host += fpsensor
+test-list-host += fp_transport
 test-list-host += fpsensor_auth_commands
 test-list-host += fpsensor_auth_crypto_stateful
 test-list-host += fpsensor_auth_crypto_stateless
 test-list-host += fpsensor_crypto
+test-list-host += fpsensor_crypto_with_mock
 test-list-host += fpsensor_state
+test-list-host += fpsensor_utils
 test-list-host += gettimeofday
 test-list-host += gyro_cal
 test-list-host += hooks
@@ -204,13 +205,15 @@ fan-y=fan.o
 flash-y=flash.o
 flash_physical-y=flash_physical.o
 flash_write_protect-y=flash_write_protect.o
-fpsensor-y=fpsensor.o
+fp_transport-y=fp_transport.o
 fpsensor_auth_commands-y=fpsensor_auth_commands.o
 fpsensor_auth_crypto_stateful-y=fpsensor_auth_crypto_stateful.o
 fpsensor_auth_crypto_stateless-y=fpsensor_auth_crypto_stateless.o
 fpsensor_crypto-y=fpsensor_crypto.o
+fpsensor_crypto_with_mock-y=fpsensor_crypto_with_mock.o
 fpsensor_hw-y=fpsensor_hw.o
 fpsensor_state-y=fpsensor_state.o
+fpsensor_utils-y=fpsensor_utils.o
 ftrapv-y=ftrapv.o
 gettimeofday-y=gettimeofday.o
 global_initialization-y=global_initialization.o
@@ -275,6 +278,7 @@ scoped_fast_cpu-y=scoped_fast_cpu.o
 sha256-y=sha256.o
 sha256_unrolled-y=sha256.o
 shmalloc-y=shmalloc.o
+sram_mpu_protection-y=sram_mpu_protection.o
 static_if-y=static_if.o
 stdlib-y=stdlib.o
 std_vector-y=std_vector.o

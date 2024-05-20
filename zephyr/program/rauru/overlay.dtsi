@@ -23,6 +23,10 @@
 	named-i2c-ports {
 		ec_i2c_usb_c0_scl_3v3 {
 			i2c-port = <&i2c2ALT>;
+			remote-port = <8>;
+		};
+		ec_smb_batt_scl_3v3 {
+			remote-port = <7>;
 		};
 
 		/delete-node/ ec_i2c5;

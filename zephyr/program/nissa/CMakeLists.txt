@@ -245,10 +245,25 @@ endif()
 if(DEFINED CONFIG_BOARD_PUJJOGA)
 	project(pujjoga)
 	zephyr_library_sources(
+			"pujjoga/src/board.c"
 			"pujjoga/src/led.c"
 			"pujjoga/src/hdmi.c"
 			"pujjoga/src/sub_board.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "pujjoga/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "pujjoga/src/charger.c")
+endif()
+if(DEFINED CONFIG_BOARD_RIVEN)
+	zephyr_library_sources(
+			"riven/src/fan.c"
+			"riven/src/form_factor.c"
+			"riven/src/keyboard.c"
+			"riven/src/kb_backlight.c"
+			"riven/src/led.c"
+			"riven/src/thermal.c"
+			"riven/src/touch_panel.c"
+	)
+	project(riven)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "riven/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "riven/src/charger.c")
 endif()
