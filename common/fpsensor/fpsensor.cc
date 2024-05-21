@@ -2,38 +2,14 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include "compile_time_macros.h"
 
-/* Boringssl headers need to be included before extern "C" section. */
-#include "openssl/mem.h"
-
-#ifdef CONFIG_ZEPHYR
-#include <zephyr/shell/shell.h>
-#endif
-
-#include <array>
-#include <variant>
-
-extern "C" {
 #include "assert.h"
 #include "atomic.h"
 #include "clock.h"
 #include "common.h"
+#include "compile_time_macros.h"
 #include "console.h"
 #include "ec_commands.h"
-#include "gpio.h"
-#include "host_command.h"
-#include "link_defs.h"
-#include "mkbp_event.h"
-#include "sha256.h"
-#include "spi.h"
-#include "system.h"
-#include "task.h"
-#include "trng.h"
-#include "util.h"
-#include "watchdog.h"
-}
-
 #include "fpsensor/fpsensor.h"
 #include "fpsensor/fpsensor_console.h"
 #include "fpsensor/fpsensor_crypto.h"
@@ -42,7 +18,26 @@ extern "C" {
 #include "fpsensor/fpsensor_state.h"
 #include "fpsensor/fpsensor_template_state.h"
 #include "fpsensor/fpsensor_utils.h"
+#include "gpio.h"
+#include "host_command.h"
+#include "link_defs.h"
+#include "mkbp_event.h"
+#include "openssl/mem.h"
 #include "scoped_fast_cpu.h"
+#include "sha256.h"
+#include "spi.h"
+#include "system.h"
+#include "task.h"
+#include "trng.h"
+#include "util.h"
+#include "watchdog.h"
+
+#include <array>
+#include <variant>
+
+#ifdef CONFIG_ZEPHYR
+#include <zephyr/shell/shell.h>
+#endif
 
 #if !defined(CONFIG_RNG)
 #error "fpsensor requires RNG"
@@ -68,7 +63,7 @@ static uint8_t timestamps_invalid;
 BUILD_ASSERT(sizeof(struct ec_fp_template_encryption_metadata) % 4 == 0);
 
 /* Interrupt line from the fingerprint sensor */
-void fps_event(enum gpio_signal signal)
+extern "C" void fps_event(enum gpio_signal signal)
 {
 	task_set_event(TASK_ID_FPSENSOR, TASK_EVENT_SENSOR_IRQ);
 }
@@ -616,19 +611,9 @@ static enum ec_status fp_command_stats(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_FP_STATS, fp_command_stats, EC_VER_MASK(0));
 
-static bool template_needs_validation_value(
-	struct ec_fp_template_encryption_metadata *enc_info)
-{
-	return enc_info->struct_version == 3 && FP_TEMPLATE_FORMAT_VERSION == 4;
-}
-
 static enum ec_status
 validate_template_format(struct ec_fp_template_encryption_metadata *enc_info)
 {
-	if (template_needs_validation_value(enc_info))
-		/* The host requested migration to v4. */
-		return EC_RES_SUCCESS;
-
 	if (enc_info->struct_version != FP_TEMPLATE_FORMAT_VERSION) {
 		CPRINTS("Invalid template format %d", enc_info->struct_version);
 		return EC_RES_INVALID_PARAM;
@@ -647,7 +632,6 @@ enum ec_status fp_commit_template(std::span<const uint8_t> context)
 	/* Positive match salt is after the template. */
 	uint8_t *positive_match_salt =
 		encrypted_template + sizeof(fp_template[0]);
-	size_t encrypted_blob_size;
 	uint8_t key[SBP_ENC_KEY_LEN];
 
 	/*
@@ -666,14 +650,8 @@ enum ec_status fp_commit_template(std::span<const uint8_t> context)
 		return EC_RES_INVALID_PARAM;
 	}
 
-	// TODO(b/335132437): Remove support for older templates (with
-	// struct_version < 4) after migration is completed.
-	if (enc_info->struct_version <= 3) {
-		encrypted_blob_size = sizeof(fp_template[0]);
-	} else {
-		encrypted_blob_size = sizeof(fp_template[0]) +
-				      sizeof(fp_positive_match_salt[0]);
-	}
+	size_t encrypted_blob_size =
+		sizeof(fp_template[0]) + sizeof(fp_positive_match_salt[0]);
 
 	enum ec_error_list ret;
 	if (global_context.fp_encryption_status & FP_CONTEXT_USER_ID_SET) {
@@ -706,13 +684,6 @@ enum ec_status fp_commit_template(std::span<const uint8_t> context)
 	}
 
 	memcpy(fp_template[idx], encrypted_template, sizeof(fp_template[0]));
-	if (template_needs_validation_value(enc_info)) {
-		CPRINTS("fgr%d: Generating positive match salt.", idx);
-		trng_init();
-		trng_rand_bytes(positive_match_salt,
-				FP_POSITIVE_MATCH_SALT_BYTES);
-		trng_exit();
-	}
 	if (bytes_are_trivial(positive_match_salt,
 			      sizeof(fp_positive_match_salt[0]))) {
 		CPRINTS("fgr%d: Trivial positive match salt.", idx);

@@ -137,10 +137,6 @@
 			gpios = <&gpiof 4 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 			no-auto-init;
 		};
-		gpio_fan_enable: fan-enable {
-			gpios = <&gpio6 3 GPIO_OUTPUT>;
-			no-auto-init;
-		};
 		ec-i2c-sensor-scl {
 			gpios = <&gpio9 0 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
@@ -270,11 +266,6 @@
 		};
 	};
 
-	kblight {
-		compatible = "cros-ec,kblight-pwm";
-		pwms = <&pwm6 6 PWM_KHZ(10) PWM_POLARITY_NORMAL>;
-	};
-
 	 /*
 	  * Declare unused GPIOs so that they are shut down
 	  * and use minimal power
@@ -289,10 +280,12 @@
 			<&gpio6 0 0>,
 			<&gpio6 3 0>,
 			<&gpio6 6 0>,
-			<&gpio7 3 0>,
+			<&gpio8 3 0>,
 			<&gpio8 6 0>,
+			<&gpioa 0 0>,
 			<&gpiob 1 0>,
 			<&gpiob 7 0>,
+			<&gpioc 0 0>,
 			<&gpiof 2 0>,
 			<&gpiof 3 0>;
 	 };
@@ -382,12 +375,6 @@
 &i2c7_0 {
 	label = "I2C_BATTERY";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
-};
-
-&pwm6 {
-	status = "okay";
-	pinctrl-0 = <&pwm6_gpc0>;
-	pinctrl-names = "default";
 };
 
 /* host interface */

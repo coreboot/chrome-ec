@@ -27,7 +27,9 @@
 #include <ec_tasks.h>
 #include <fpsensor/fpsensor_state.h>
 #include <host_command.h>
+#include <mkbp_event.h>
 #include <rollback.h>
+#include <system.h>
 
 DEFINE_FFF_GLOBALS;
 
@@ -40,7 +42,7 @@ FAKE_VALUE_FUNC(int, system_is_locked);
 		DT_CHOSEN(cros_fp_fingerprint_sensor))
 static uint8_t frame_buffer[IMAGE_SIZE];
 
-static const char fake_rollback_entropy[] = "some_rollback_entropy";
+static const uint8_t fake_rollback_entropy[] = "some_rollback_entropy";
 
 /* The fake TPM seed is "very_secret_32_bytes_of_tpm_seed" */
 #define FAKE_TPM_SEED                                                         \

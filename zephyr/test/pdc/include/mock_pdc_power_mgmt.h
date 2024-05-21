@@ -15,7 +15,8 @@ DECLARE_FAKE_VALUE_FUNC(int, pdc_power_mgmt_get_cable_prop, int,
 			union cable_property_t *);
 DECLARE_FAKE_VALUE_FUNC(int, pdc_power_mgmt_get_connector_status, int,
 			union connector_status_t *);
-DECLARE_FAKE_VALUE_FUNC(int, pdc_power_mgmt_get_info, int, struct pdc_info_t *);
+DECLARE_FAKE_VALUE_FUNC(int, pdc_power_mgmt_get_info, int, struct pdc_info_t *,
+			bool);
 DECLARE_FAKE_VALUE_FUNC(bool, pdc_power_mgmt_get_partner_data_swap_capable,
 			int);
 DECLARE_FAKE_VALUE_FUNC(enum pd_power_role, pdc_power_mgmt_get_power_role, int);
@@ -32,6 +33,8 @@ DECLARE_FAKE_VALUE_FUNC(int, pdc_power_mgmt_set_comms_state, bool);
 DECLARE_FAKE_VOID_FUNC(pdc_power_mgmt_set_dual_role, int,
 		       enum pd_dual_role_states);
 DECLARE_FAKE_VALUE_FUNC(int, pdc_power_mgmt_set_trysrc, int, bool);
+DECLARE_FAKE_VOID_FUNC(pdc_power_mgmt_request_source_voltage, int, int);
+DECLARE_FAKE_VALUE_FUNC(unsigned int, pdc_power_mgmt_get_max_voltage);
 
 /**
  * @brief Reset the above set of fakes

@@ -156,10 +156,10 @@ static int cmd_pdc_get_cable_prop(const struct shell *sh, size_t argc,
 		      "   bm_speed_supported               : 0x%04x\n",
 		      cable_prop.bm_speed_supported);
 	shell_fprintf(sh, SHELL_INFO,
-		      "   b_current_capablilty             : %d mA\n",
-		      cable_prop.b_current_capablilty * 50);
+		      "   b_current_capability             : %d mA\n",
+		      cable_prop.b_current_capability * 50);
 	shell_fprintf(sh, SHELL_INFO,
-		      "   vbus_in_cables                   : %d\n",
+		      "   vbus_in_cable                    : %d\n",
 		      cable_prop.vbus_in_cable);
 	shell_fprintf(sh, SHELL_INFO,
 		      "   cable_type                       : %d\n",
@@ -187,6 +187,7 @@ static int cmd_pdc_get_info(const struct shell *sh, size_t argc, char **argv)
 {
 	int rv;
 	uint8_t port;
+	bool live = true;
 	struct pdc_info_t pdc_info = { 0 };
 
 	/* Get PD port number */
@@ -194,21 +195,34 @@ static int cmd_pdc_get_info(const struct shell *sh, size_t argc, char **argv)
 	if (rv)
 		return rv;
 
+	if (argc > 2) {
+		/* Parse optional live parameter */
+		char *e;
+		int live_param = strtoul(argv[2], &e, 0);
+		if (*e) {
+			shell_error(sh, "Pass 0/1 for live");
+			return -EINVAL;
+		}
+
+		live = !!live_param;
+	}
+
 	/* Get PDC Status */
-	rv = pdc_power_mgmt_get_info(port, &pdc_info);
+	rv = pdc_power_mgmt_get_info(port, &pdc_info, live);
 	if (rv) {
 		shell_error(sh, "Could not get port %u info (%d)", port, rv);
 		return rv;
 	}
 
 	shell_fprintf(sh, SHELL_INFO,
+		      "Live: %d\n"
 		      "FW Ver: %u.%u.%u\n"
 		      "PD Rev: %u\n"
 		      "PD Ver: %u\n"
 		      "VID/PID: %04x:%04x\n"
 		      "Running Flash Code: %c\n"
 		      "Flash Bank: %u\n",
-		      PDC_FWVER_GET_MAJOR(pdc_info.fw_version),
+		      live, PDC_FWVER_GET_MAJOR(pdc_info.fw_version),
 		      PDC_FWVER_GET_MINOR(pdc_info.fw_version),
 		      PDC_FWVER_GET_PATCH(pdc_info.fw_version),
 		      pdc_info.pd_revision, pdc_info.pd_version,
@@ -365,6 +379,7 @@ static int cmd_pdc_connector_reset(const struct shell *sh, size_t argc,
 	return rv;
 }
 
+/* LCOV_EXCL_START - No known way to test tab-completion feature */
 /**
  * @brief Tab-completion of "suspend" or "resume" for the comms subcommand
  */
@@ -388,6 +403,7 @@ static void pdc_console_get_suspend_or_resume(size_t idx,
 
 SHELL_DYNAMIC_CMD_CREATE(dsub_suspend_or_resume,
 			 pdc_console_get_suspend_or_resume);
+/* LCOV_EXCL_STOP */
 
 static int cmd_pdc_comms_state(const struct shell *sh, size_t argc, char **argv)
 {
@@ -457,9 +473,10 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		      "Usage: pdc status <port>",
 		      cmd_pdc_get_status, 2, 0),
 	SHELL_CMD_ARG(info, NULL,
-		      "Get PDC chip info\n"
-		      "Usage: pdc info <port>",
-		      cmd_pdc_get_info, 2, 0),
+		      "Get PDC chip info. Live defaults to 1 to force a new "
+		      "read from chip. Pass 0 to use cached info.\n"
+		      "Usage: pdc info <port> [live]",
+		      cmd_pdc_get_info, 2, 1),
 	SHELL_CMD_ARG(prs, NULL,
 		      "Trigger power role swap\n"
 		      "Usage: pdc prs <port>",
