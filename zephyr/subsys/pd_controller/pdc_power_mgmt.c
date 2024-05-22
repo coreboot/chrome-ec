@@ -2654,7 +2654,7 @@ test_mockable int pdc_power_mgmt_reset(int port)
 	return 0;
 }
 
-uint8_t pdc_power_mgmt_get_src_cap_cnt(int port)
+test_mockable uint8_t pdc_power_mgmt_get_src_cap_cnt(int port)
 {
 	/* Make sure port is Sink connected */
 	if (!pdc_power_mgmt_is_sink_connected(port)) {
@@ -2664,7 +2664,7 @@ uint8_t pdc_power_mgmt_get_src_cap_cnt(int port)
 	return pdc_data[port]->port.snk_policy.src.pdo_count;
 }
 
-const uint32_t *const pdc_power_mgmt_get_src_caps(int port)
+test_mockable const uint32_t *const pdc_power_mgmt_get_src_caps(int port)
 {
 	/* Make sure port is Sink connected */
 	if (!pdc_power_mgmt_is_sink_connected(port)) {
@@ -3291,12 +3291,12 @@ void pdc_power_mgmt_set_max_voltage(unsigned int mv)
 	pdc_max_request_mv = mv;
 }
 
-unsigned int pdc_power_mgmt_get_max_voltage(void)
+test_mockable unsigned int pdc_power_mgmt_get_max_voltage(void)
 {
 	return pdc_max_request_mv;
 }
 
-void pdc_power_mgmt_request_source_voltage(int port, int mv)
+test_mockable void pdc_power_mgmt_request_source_voltage(int port, int mv)
 {
 	pdc_power_mgmt_set_max_voltage(mv);
 
@@ -3435,43 +3435,53 @@ int pdc_power_mgmt_get_pch_data_status(int port, uint8_t *status)
 
 #ifdef CONFIG_ZTEST
 
+bool test_pdc_power_mgmt_is_snk_typec_attached_run(int port)
+{
+	LOG_INF("RPZ SRC %d",
+		pdc_data[port]->port.snk_typec_attached_local_state);
+	return pdc_data[port]->port.snk_typec_attached_local_state ==
+	       SNK_TYPEC_ATTACHED_RUN;
+}
+
+bool test_pdc_power_mgmt_is_src_typec_attached_run(int port)
+{
+	LOG_INF("RPZ SRC %d",
+		pdc_data[port]->port.src_typec_attached_local_state);
+	return pdc_data[port]->port.src_typec_attached_local_state ==
+	       SRC_TYPEC_ATTACHED_RUN;
+}
+
 /*
  * Reset the state machine for each port to its unattached state. This ensures
  * that tests start from the same state and prevents commands from a previous
  * test from impacting subsequently run tests.
  */
-static void test_reset(const struct ztest_unit_test *test, void *data)
+bool pdc_power_mgmt_test_wait_unattached(void)
 {
 	int num_unattached;
 
-	ARG_UNUSED(test);
-	ARG_UNUSED(data);
-
-	for (int i = 0; i < ARRAY_SIZE(pdc_data); i++) {
-		set_pdc_state(&pdc_data[i]->port, PDC_UNATTACHED);
+	for (int port = 0; port < ARRAY_SIZE(pdc_data); port++) {
+		set_pdc_state(&pdc_data[port]->port, PDC_UNATTACHED);
 	}
 
 	/* Wait for up to 20 * 100ms for all ports to become unattached. */
 	for (int i = 0; i < 20; i++) {
+		k_msleep(100);
 		num_unattached = 0;
 
 		for (int port = 0; port < ARRAY_SIZE(pdc_data); port++) {
-			if (pdc_data[i]->port.unattached_local_state ==
+			if (pdc_data[port]->port.unattached_local_state ==
 			    UNATTACHED_RUN) {
 				num_unattached++;
 			}
 		}
 
 		if (num_unattached == ARRAY_SIZE(pdc_data)) {
-			break;
+			return true;
 		}
-
-		k_msleep(100);
 	}
 
-	zassert_equal(num_unattached, ARRAY_SIZE(pdc_data));
+	return false;
 }
-
-ZTEST_RULE(pdc_power_mgmt_test_reset, NULL, test_reset);
 
 #endif

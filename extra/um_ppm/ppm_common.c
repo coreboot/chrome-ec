@@ -254,6 +254,18 @@ static bool match_pending_command(struct ppm_common_device *dev,
 	       dev->ucsi_data.control.command == command;
 }
 
+static void ppm_common_reset_data(struct ppm_common_device *dev)
+{
+	clear_last_error(dev);
+	dev->last_connector_changed = -1;
+	dev->last_connector_alerted = -1;
+	memset(&dev->pending, 0, sizeof(dev->pending));
+	memset(dev->per_port_status, 0,
+	       sizeof(struct ucsiv3_get_connector_status_data) *
+		       dev->num_ports);
+	memset(&dev->ucsi_data, 0, sizeof(dev->ucsi_data));
+}
+
 static int ppm_common_execute_pending_cmd(struct ppm_common_device *dev)
 {
 	struct ucsi_control *control = &dev->ucsi_data.control;
@@ -296,6 +308,10 @@ static int ppm_common_execute_pending_cmd(struct ppm_common_device *dev)
 			goto success;
 		}
 		break;
+	case UCSI_CMD_PPM_RESET:
+		ppm_common_reset_data(dev);
+		ret = 0;
+		goto success;
 	default:
 		break;
 	}
@@ -310,7 +326,17 @@ static int ppm_common_execute_pending_cmd(struct ppm_common_device *dev)
 		ELOG("Error with UCSI command 0x%x. Return was %d",
 		     ucsi_command, ret);
 		clear_last_error(dev);
-		dev->last_error = ERROR_LPM;
+		if (ret == -ENOTSUP) {
+			dev->last_error = ERROR_PPM;
+			dev->ppm_error_result.error_information
+				.unrecognized_command = 1;
+		} else if (ret == -EBUSY || ret == -ETIMEDOUT) {
+			dev->last_error = ERROR_PPM;
+			dev->ppm_error_result.error_information
+				.ppm_policy_conflict = 1;
+		} else {
+			dev->last_error = ERROR_LPM;
+		}
 		set_cci_error(dev);
 		return ret;
 	}

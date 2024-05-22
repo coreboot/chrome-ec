@@ -26,6 +26,12 @@ static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 #define SMBUS_ARA_NODE DT_NODELABEL(smbus_ara_emul)
 static const struct emul *ara = EMUL_DT_GET(SMBUS_ARA_NODE);
 
+bool pdc_power_mgmt_test_wait_unattached(void);
+bool pdc_rts54xx_test_idle_wait(void);
+
+bool test_pdc_power_mgmt_is_snk_typec_attached_run(int port);
+bool test_pdc_power_mgmt_is_src_typec_attached_run(int port);
+
 void pdc_power_mgmt_setup(void)
 {
 	zassume(TEST_PORT < CONFIG_USB_PD_PORT_MAX_COUNT,
@@ -40,6 +46,9 @@ void pdc_power_mgmt_before(void *fixture)
 	emul_pdc_set_response_delay(emul, 0);
 	emul_pdc_disconnect(emul);
 	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+
+	zassert_true(pdc_power_mgmt_test_wait_unattached());
+	zassert_true(pdc_rts54xx_test_idle_wait());
 }
 
 ZTEST_SUITE(pdc_power_mgmt_api, NULL, pdc_power_mgmt_setup,
@@ -180,42 +189,54 @@ ZTEST_USER(pdc_power_mgmt_api, test_pd_capable)
 	zassert_true(TEST_WAIT_FOR(pd_capable(TEST_PORT), PDC_TEST_TIMEOUT));
 }
 
-K_THREAD_STACK_DEFINE(test_stack, 256);
-static bool test_done;
+K_THREAD_STACK_DEFINE(test_toggle_stack, 256);
+static bool test_toggle_done;
+static union connector_status_t test_toggle_status;
 
-static void test_thread_entry(void *a, void *b, void *c)
+static void test_thread_toggle(void *a, void *b, void *c)
 {
-	union connector_status_t connector_status;
 	union conn_status_change_bits_t status_change_bits;
 
-	memset(&connector_status, 0, sizeof(union connector_status_t));
 	memset(&status_change_bits, 0, sizeof(union conn_status_change_bits_t));
-
-	connector_status.power_operation_mode = USB_TC_CURRENT_5A;
-	connector_status.power_direction = 0;
-	status_change_bits.attention = 0;
-	connector_status.raw_conn_status_change_bits =
+	test_toggle_status.raw_conn_status_change_bits =
 		status_change_bits.raw_value;
 
 	LOG_INF("Emul PDC disconnect partner");
-	emul_pdc_connect_partner(emul, &connector_status);
-	test_done = false;
+	emul_pdc_connect_partner(emul, &test_toggle_status);
 
-	while (!test_done) {
+	while (!test_toggle_done) {
 		k_msleep(50);
 
 		/* Toggle attention on each pass to keep the PDC busy */
 		status_change_bits.attention ^= status_change_bits.attention;
-		connector_status.raw_conn_status_change_bits =
+		test_toggle_status.raw_conn_status_change_bits =
 			status_change_bits.raw_value;
 
 		LOG_INF("Emul PDC toggle attention");
-		emul_pdc_connect_partner(emul, &connector_status);
+		emul_pdc_connect_partner(emul, &test_toggle_status);
 	}
 }
 
-/* Verify that public commands complete when a non PD partner is connected */
-ZTEST_USER(pdc_power_mgmt_api, test_non_pd_public_cmd)
+static k_tid_t start_toggle_thread(struct k_thread *thread,
+				   union connector_status_t *connector_status)
+{
+	memcpy(&test_toggle_status, connector_status,
+	       sizeof(union connector_status_t));
+	test_toggle_done = false;
+
+	return k_thread_create(thread, test_toggle_stack,
+			       K_THREAD_STACK_SIZEOF(test_toggle_stack),
+			       test_thread_toggle, NULL, NULL, NULL, -1, 0,
+			       K_NO_WAIT);
+}
+
+static int join_toggle_thread(k_tid_t thread)
+{
+	test_toggle_done = true;
+	return k_thread_join(thread, K_MSEC(100));
+}
+
+static void run_toggle_test(union connector_status_t *connector_status)
 {
 	struct pdc_info_t pdc_info;
 	struct k_thread test_thread_data;
@@ -230,10 +251,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_non_pd_public_cmd)
 	 * Thread priority set to cooperative to ensure it preempts the PDC
 	 * subsystem.
 	 */
-	k_tid_t test_thread = k_thread_create(&test_thread_data, test_stack,
-					      K_THREAD_STACK_SIZEOF(test_stack),
-					      test_thread_entry, NULL, NULL,
-					      NULL, -1, 0, K_NO_WAIT);
+	memset(connector_status, 0, sizeof(union connector_status_t));
+	k_tid_t test_thread =
+		start_toggle_thread(&test_thread_data, connector_status);
 
 	/* Allow the test thread some cycles to run. */
 	k_msleep(100);
@@ -245,9 +265,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_non_pd_public_cmd)
 		      ret, -EBUSY);
 
 	/* Allow the test thread to exit. */
-	test_done = true;
-	k_msleep(100);
-	k_thread_suspend(test_thread);
+	zassert_ok(join_toggle_thread(test_thread));
 
 	/* All the PDC subsystem to settle. */
 	k_msleep(250);
@@ -255,6 +273,60 @@ ZTEST_USER(pdc_power_mgmt_api, test_non_pd_public_cmd)
 	/* Public API command should now succeed. */
 	ret = pdc_power_mgmt_get_info(TEST_PORT, &pdc_info, true);
 	zassert_false(ret, "pdc_power_mgmt_get_info() failed (%d)", ret);
+}
+
+/* Verify that public commands complete when a non PD partner is connected */
+ZTEST_USER(pdc_power_mgmt_api, test_non_pd_snk_public_cmd)
+{
+	union connector_status_t connector_status;
+
+	memset(&connector_status, 0, sizeof(union connector_status_t));
+	connector_status.power_operation_mode = USB_TC_CURRENT_5A;
+	connector_status.power_direction = 0;
+
+	run_toggle_test(&connector_status);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_non_pd_src_public_cmd)
+{
+	union connector_status_t connector_status;
+
+	memset(&connector_status, 0, sizeof(union connector_status_t));
+	connector_status.power_operation_mode = USB_TC_CURRENT_5A;
+	connector_status.power_direction = 1;
+
+	run_toggle_test(&connector_status);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_pd_snk_public_cmd)
+{
+	union connector_status_t connector_status;
+
+	memset(&connector_status, 0, sizeof(union connector_status_t));
+	connector_status.power_operation_mode = PD_OPERATION;
+	connector_status.power_direction = 0;
+
+	run_toggle_test(&connector_status);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_pd_src_public_cmd)
+{
+	union connector_status_t connector_status;
+
+	memset(&connector_status, 0, sizeof(union connector_status_t));
+	connector_status.power_operation_mode = PD_OPERATION;
+	connector_status.power_direction = 1;
+
+	run_toggle_test(&connector_status);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_unattached_public_cmd)
+{
+	union connector_status_t connector_status;
+
+	memset(&connector_status, 0, sizeof(union connector_status_t));
+
+	run_toggle_test(&connector_status);
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_partner_usb_comm_capable)
@@ -862,60 +934,89 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 	zassert_equal(0, pdr.swap_to_src);
 }
 
-ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name)
+static bool wait_state_name(int port, const char *target_name)
 {
-	struct setup_t {
-		enum power_operation_mode_t mode;
-		emul_pdc_set_connector_status_t configure;
-	};
-	struct expect_t {
-		const char *name;
-	};
-	struct {
-		struct setup_t s;
-		struct expect_t e;
-	} test[] = {
-		{ .s = { .mode = USB_DEFAULT_OPERATION,
-			 .configure = emul_pdc_configure_snk },
-		  .e = { .name = "TypeCSnkAttached" } },
-		{ .s = { .mode = USB_DEFAULT_OPERATION,
-			 .configure = emul_pdc_configure_src },
-		  .e = { .name = "TypeCSrcAttached" } },
-		{ .s = { .mode = PD_OPERATION,
-			 .configure = emul_pdc_configure_snk },
-		  .e = { .name = "Attached.SNK" } },
-		{ .s = { .mode = PD_OPERATION,
-			 .configure = emul_pdc_configure_src },
-		  .e = { .name = "Attached.SRC" } },
-	};
-	const char *state_name;
-	int i;
-	union connector_status_t connector_status;
-	uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
-	uint32_t start;
+	const uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
+	uint32_t start = k_cycle_get_32();
+	const char *state_name = pd_get_task_state_name(TEST_PORT);
 
-	state_name = pd_get_task_state_name(TEST_PORT);
-	zassert_equal(strcmp(state_name, "Unattached"), 0);
+	while (k_cycle_get_32() - start < timeout) {
+		k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
+		state_name = pd_get_task_state_name(TEST_PORT);
 
-	for (i = 0; i < ARRAY_SIZE(test); i++) {
-		memset(&connector_status, 0, sizeof(connector_status));
-		test[i].s.configure(emul, &connector_status);
-		connector_status.power_operation_mode = test[i].s.mode;
-		emul_pdc_connect_partner(emul, &connector_status);
+		if (strcmp(state_name, target_name) != 0)
+			continue;
 
-		start = k_cycle_get_32();
-		while (k_cycle_get_32() - start < timeout) {
-			k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
-			state_name = pd_get_task_state_name(TEST_PORT);
-
-			if (strcmp(state_name, test[i].e.name) != 0)
-				continue;
-
-			break;
-		}
-
-		zassert_equal(strcmp(state_name, test[i].e.name), 0);
+		return true;
 	}
+
+	return false;
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_typec_snk_attached)
+{
+	union connector_status_t connector_status;
+
+	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+
+	memset(&connector_status, 0, sizeof(connector_status));
+	emul_pdc_configure_snk(emul, &connector_status);
+	connector_status.power_operation_mode = USB_DEFAULT_OPERATION;
+	emul_pdc_connect_partner(emul, &connector_status);
+
+	zassert_true(wait_state_name(TEST_PORT, "TypeCSnkAttached"));
+
+	/* Allow for debouncing time. */
+	TEST_WORKING_DELAY(PD_T_SINK_WAIT_CAP);
+	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+	zassert_true(test_pdc_power_mgmt_is_snk_typec_attached_run(TEST_PORT));
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_typec_src_attached)
+{
+	union connector_status_t connector_status;
+
+	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+
+	memset(&connector_status, 0, sizeof(connector_status));
+	emul_pdc_configure_src(emul, &connector_status);
+	connector_status.power_operation_mode = USB_DEFAULT_OPERATION;
+	emul_pdc_connect_partner(emul, &connector_status);
+
+	zassert_true(wait_state_name(TEST_PORT, "TypeCSrcAttached"));
+
+	/* Allow for debouncing time. */
+	TEST_WORKING_DELAY(PD_T_SINK_WAIT_CAP);
+	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+	zassert_true(test_pdc_power_mgmt_is_src_typec_attached_run(TEST_PORT));
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_attached_snk)
+{
+	union connector_status_t connector_status;
+
+	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+
+	memset(&connector_status, 0, sizeof(connector_status));
+	emul_pdc_configure_snk(emul, &connector_status);
+	connector_status.power_operation_mode = PD_OPERATION;
+	emul_pdc_connect_partner(emul, &connector_status);
+
+	zassert_true(wait_state_name(TEST_PORT, "Attached.SNK"));
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_attached_src)
+{
+	union connector_status_t connector_status;
+
+	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+
+	memset(&connector_status, 0, sizeof(connector_status));
+	emul_pdc_configure_src(emul, &connector_status);
+	connector_status.power_operation_mode = PD_OPERATION;
+	emul_pdc_connect_partner(emul, &connector_status);
+
+	zassert_true(wait_state_name(TEST_PORT, "Attached.SRC"));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_connector_status)
