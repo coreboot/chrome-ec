@@ -1,0 +1,5 @@
+---
+allow_software_keys: true
+skip_fork_handlers: true
+tokens:
+  - key_ring: "projects/gsc-cloud-kms-signing/locations/us/keyRings/gsc-node-locked-signing-keys"
