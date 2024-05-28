@@ -719,6 +719,8 @@ Build:   ti50_common_mp-15224.B:v0.0.1091-c88c4ab9
 *   event_log: Ensure time always moves forward on init.
     [b/329326190](https://b.corp.google.com/issues/329326190)
 
+### 0.23.90 Released on 5/09/2024 in M126
+
 Release
 [CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5529740)
 
