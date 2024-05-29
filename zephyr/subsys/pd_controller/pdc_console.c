@@ -4,6 +4,7 @@
  */
 
 #include "uart.h"
+#include "usb_common.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -156,10 +157,10 @@ static int cmd_pdc_get_cable_prop(const struct shell *sh, size_t argc,
 		      "   bm_speed_supported               : 0x%04x\n",
 		      cable_prop.bm_speed_supported);
 	shell_fprintf(sh, SHELL_INFO,
-		      "   b_current_capablilty             : %d mA\n",
-		      cable_prop.b_current_capablilty * 50);
+		      "   b_current_capability             : %d mA\n",
+		      cable_prop.b_current_capability * 50);
 	shell_fprintf(sh, SHELL_INFO,
-		      "   vbus_in_cables                   : %d\n",
+		      "   vbus_in_cable                    : %d\n",
 		      cable_prop.vbus_in_cable);
 	shell_fprintf(sh, SHELL_INFO,
 		      "   cable_type                       : %d\n",
@@ -187,6 +188,7 @@ static int cmd_pdc_get_info(const struct shell *sh, size_t argc, char **argv)
 {
 	int rv;
 	uint8_t port;
+	bool live = true;
 	struct pdc_info_t pdc_info = { 0 };
 
 	/* Get PD port number */
@@ -194,28 +196,47 @@ static int cmd_pdc_get_info(const struct shell *sh, size_t argc, char **argv)
 	if (rv)
 		return rv;
 
+	if (argc > 2) {
+		/* Parse optional live parameter */
+		char *e;
+		int live_param = strtoul(argv[2], &e, 0);
+		if (*e) {
+			shell_error(sh, "Pass 0/1 for live");
+			return -EINVAL;
+		}
+
+		live = !!live_param;
+	}
+
 	/* Get PDC Status */
-	rv = pdc_power_mgmt_get_info(port, &pdc_info);
+	rv = pdc_power_mgmt_get_info(port, &pdc_info, live);
 	if (rv) {
 		shell_error(sh, "Could not get port %u info (%d)", port, rv);
 		return rv;
 	}
 
+	/* Check if the FW project name is set. */
+	bool has_proj_name = pdc_info.project_name[0] != '\0' &&
+			     pdc_info.project_name[0] != 0xFF;
+
 	shell_fprintf(sh, SHELL_INFO,
+		      "Live: %d\n"
 		      "FW Ver: %u.%u.%u\n"
 		      "PD Rev: %u\n"
 		      "PD Ver: %u\n"
 		      "VID/PID: %04x:%04x\n"
 		      "Running Flash Code: %c\n"
-		      "Flash Bank: %u\n",
-		      PDC_FWVER_GET_MAJOR(pdc_info.fw_version),
+		      "Flash Bank: %u\n"
+		      "Project Name: '%s'\n",
+		      live, PDC_FWVER_GET_MAJOR(pdc_info.fw_version),
 		      PDC_FWVER_GET_MINOR(pdc_info.fw_version),
 		      PDC_FWVER_GET_PATCH(pdc_info.fw_version),
 		      pdc_info.pd_revision, pdc_info.pd_version,
 		      PDC_VIDPID_GET_VID(pdc_info.vid_pid),
 		      PDC_VIDPID_GET_PID(pdc_info.vid_pid),
 		      pdc_info.is_running_flash_code ? 'Y' : 'N',
-		      pdc_info.running_in_flash_bank);
+		      pdc_info.running_in_flash_bank,
+		      has_proj_name ? pdc_info.project_name : "<None>");
 
 	return EC_SUCCESS;
 }
@@ -365,6 +386,7 @@ static int cmd_pdc_connector_reset(const struct shell *sh, size_t argc,
 	return rv;
 }
 
+/* LCOV_EXCL_START - No known way to test tab-completion feature */
 /**
  * @brief Tab-completion of "suspend" or "resume" for the comms subcommand
  */
@@ -388,6 +410,7 @@ static void pdc_console_get_suspend_or_resume(size_t idx,
 
 SHELL_DYNAMIC_CMD_CREATE(dsub_suspend_or_resume,
 			 pdc_console_get_suspend_or_resume);
+/* LCOV_EXCL_STOP */
 
 static int cmd_pdc_comms_state(const struct shell *sh, size_t argc, char **argv)
 {
@@ -450,6 +473,73 @@ static int cmd_pdc_src_voltage(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+static int cmd_pdc_srccaps(const struct shell *sh, size_t argc, char **argv)
+{
+	int rv;
+	uint8_t port;
+
+	/* Get PD port number */
+	rv = cmd_get_pd_port(sh, argv[1], &port);
+	if (rv)
+		return rv;
+
+	const uint32_t *const src_caps = pdc_power_mgmt_get_src_caps(port);
+	uint8_t src_caps_count = pdc_power_mgmt_get_src_cap_cnt(port);
+
+	if (src_caps == NULL || src_caps_count == 0) {
+		shell_fprintf(sh, SHELL_ERROR, "No source caps for port %u\n",
+			      port);
+		return 0;
+	}
+
+	for (uint8_t i = 0; i < src_caps_count; i++) {
+		uint32_t src_cap = src_caps[i];
+		uint32_t max_ma = 0, max_mv = 0, min_mv = 0;
+		const char *type_str;
+
+		pd_extract_pdo_power(src_cap, &max_ma, &max_mv, &min_mv);
+
+		switch (src_cap & PDO_TYPE_MASK) {
+		case PDO_TYPE_FIXED:
+			type_str = "FIX";
+			/* Fixed PDOs have flags and a single voltage */
+			shell_fprintf(
+				sh, SHELL_INFO,
+				"Src %02u: %08x %s %13umV, %5umA "
+				"[%s %s %s %s %s]\n",
+				i, src_cap, type_str, max_mv, max_ma,
+				src_cap & PDO_FIXED_DUAL_ROLE ? "DRP" : "   ",
+				src_cap & PDO_FIXED_UNCONSTRAINED ? "UP" : "  ",
+				src_cap & PDO_FIXED_COMM_CAP ? "USB" : "   ",
+				src_cap & PDO_FIXED_DATA_SWAP ? "DRD" : "   ",
+				src_cap & PDO_FIXED_FRS_CURR_MASK ? "FRS" :
+								    "   ");
+			continue;
+		case PDO_TYPE_BATTERY:
+			type_str = "BAT";
+			break;
+		case PDO_TYPE_VARIABLE:
+			type_str = "VAR";
+			break;
+		case PDO_TYPE_AUGMENTED:
+			type_str = "AUG";
+			break;
+		}
+
+		/* Battery, variable, and augmented PDOs have voltage
+		 * ranges but no flags.
+		 */
+		shell_fprintf(sh, SHELL_INFO,
+			      "Src %02u: %08x %s %5umV-%5umV, %5um%c\n", i,
+			      src_cap, type_str, min_mv, max_mv, max_ma,
+			      (((src_cap & PDO_TYPE_MASK) == PDO_TYPE_BATTERY) ?
+				       'W' :
+				       'A'));
+	}
+
+	return 0;
+}
+
 SHELL_STATIC_SUBCMD_SET_CREATE(
 	sub_pdc_cmds,
 	SHELL_CMD_ARG(status, NULL,
@@ -457,9 +547,10 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		      "Usage: pdc status <port>",
 		      cmd_pdc_get_status, 2, 0),
 	SHELL_CMD_ARG(info, NULL,
-		      "Get PDC chip info\n"
-		      "Usage: pdc info <port>",
-		      cmd_pdc_get_info, 2, 0),
+		      "Get PDC chip info. Live defaults to 1 to force a new "
+		      "read from chip. Pass 0 to use cached info.\n"
+		      "Usage: pdc info <port> [live]",
+		      cmd_pdc_get_info, 2, 1),
 	SHELL_CMD_ARG(prs, NULL,
 		      "Trigger power role swap\n"
 		      "Usage: pdc prs <port>",
@@ -501,6 +592,11 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		      "Omit last arg to use maximum supported voltage.\n"
 		      "Usage: pdc src_voltage <port> [volts]",
 		      cmd_pdc_src_voltage, 2, 1),
+	SHELL_CMD_ARG(srccaps, NULL,
+		      "Print current source capability PDOs received by the "
+		      "given port.\n"
+		      "Usage pdc srccaps <port>",
+		      cmd_pdc_srccaps, 2, 0),
 	SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(pdc, &sub_pdc_cmds, "PDC console commands", NULL);

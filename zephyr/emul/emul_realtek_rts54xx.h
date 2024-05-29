@@ -255,6 +255,11 @@ union rts54_request {
 		uint8_t reserved;
 		uint8_t sts_len;
 	} get_ic_status;
+
+	struct get_pch_data_status_req {
+		struct rts54_subcommand_header header;
+		uint8_t port_num;
+	} get_pch_data_status;
 };
 
 union rts54_response {
@@ -278,7 +283,7 @@ union rts54_response {
 		uint8_t reserved5[7];
 		uint8_t pd_revision[2];
 		uint8_t pd_version[2];
-		uint8_t reserved6[6];
+		uint8_t project_name[12];
 	} ic_status;
 
 	struct get_capability_response {
@@ -401,6 +406,11 @@ union rts54_response {
 		uint8_t byte_count;
 		uint32_t vdo[7];
 	} __packed get_vdo;
+
+	struct get_pch_data_status_response {
+		uint8_t byte_count;
+		uint8_t pch_data_status[5];
+	} __packed get_pch_data_status;
 };
 
 enum cmd_sts_t {

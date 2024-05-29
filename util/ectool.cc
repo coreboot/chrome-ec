@@ -6648,6 +6648,8 @@ const char *action_key_names[] = {
 	[TK_MICMUTE] = "Microphone Mute",
 	[TK_MENU] = "Menu",
 	[TK_DICTATE] = "Dictation",
+	[TK_ACCESSIBILITY] = "Accessibility",
+	[TK_DONOTDISTURB] = "Do Not Disturb",
 };
 
 BUILD_ASSERT(ARRAY_SIZE(action_key_names) == TK_COUNT);
@@ -9189,6 +9191,136 @@ static int cmd_cbi(int argc, char *argv[])
 	return -1;
 }
 
+static void cmd_cbi_bin_help(char *cmd)
+{
+	fprintf(stderr,
+		"  Usage: %s read <file> <size>\n"
+		"    read from cbi in flash or EEPROM into file.\n"
+		"  Usage: %s write <file> <size>\n"
+		"    write from file into cbi flash or EEPROM.\n",
+		cmd, cmd);
+}
+
+/*
+ * Read or Write to CBI binary
+ */
+static int cmd_cbi_bin(int argc, char *argv[])
+{
+	char *e;
+	int rv;
+	int packet_max_size = 64;
+
+	if (argc != 4) {
+		fprintf(stderr, "Invalid number of params\n");
+		cmd_cbi_bin_help(argv[0]);
+		return -1;
+	}
+
+	if (!strcasecmp(argv[1], "read")) {
+		struct ec_params_get_cbi_bin p = { 0 };
+		int i;
+
+		FILE *fp = fopen(argv[2], "wb");
+
+		if (!fp) {
+			fprintf(stderr, "\nCan't open %s: %s\n", argv[2],
+				strerror(errno));
+			return -1;
+		}
+
+		int size = strtol(argv[3], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad size\n");
+			return -1;
+		}
+
+		for (i = 0; i < size; i += packet_max_size) {
+			p.size = MIN(packet_max_size, size - i);
+			p.offset = i;
+
+			rv = ec_command(EC_CMD_CBI_BIN_READ, 0, &p, sizeof(p),
+					ec_inbuf, ec_max_insize);
+			if (rv < 0) {
+				fprintf(stderr, "Error code: %d\n", rv);
+				return rv;
+			}
+			if (rv < sizeof(uint8_t)) {
+				fprintf(stderr, "Invalid size: %d\n", rv);
+				return -1;
+			}
+			fwrite((uint8_t *)ec_inbuf, sizeof(uint8_t), p.size,
+			       fp);
+		}
+
+		fclose(fp);
+		printf("Read successful.\n");
+		return 0;
+	} else if (!strcasecmp(argv[1], "write")) {
+		struct ec_params_set_cbi_bin *p =
+			(struct ec_params_set_cbi_bin *)ec_outbuf;
+		uint8_t buffer[packet_max_size];
+		int i;
+
+		FILE *fp = fopen(argv[2], "rb");
+
+		if (!fp) {
+			fprintf(stderr, "\nCan't open %s: %s\n", argv[2],
+				strerror(errno));
+			return -1;
+		}
+
+		int size = strtol(argv[3], &e, 0);
+		if (e && *e) {
+			fprintf(stderr, "Bad size\n");
+			return -1;
+		}
+
+		for (i = 0; i < size; i += packet_max_size) {
+			memset(p, 0, ec_max_outsize);
+
+			p->size = MIN(packet_max_size, size - i);
+			p->offset = i;
+			if (p->offset == 0) {
+				p->flags |= EC_CBI_BIN_BUFFER_CLEAR;
+			}
+			if (p->size + p->offset == size) {
+				p->flags |= EC_CBI_BIN_BUFFER_WRITE;
+			}
+
+			uint16_t read_len =
+				fread(buffer, sizeof(*buffer), p->size, fp);
+
+			/*
+			 * p->data is 0 initialized so if size is bigger than
+			 * file length the extra length is padded with 0.
+			 */
+			memcpy(p->data, buffer, read_len);
+
+			rv = ec_command(EC_CMD_CBI_BIN_WRITE, 0, p,
+					sizeof(*p) + p->size, NULL, 0);
+			if (rv < 0) {
+				if (rv == -EC_RES_ACCESS_DENIED - EECRESULT)
+					fprintf(stderr,
+						"Write-protect is enabled or "
+						"EC explicitly refused to change the "
+						"requested field.\n");
+				else
+					fprintf(stderr, "Error code: %d\n", rv);
+				return rv;
+			}
+		}
+
+		fclose(fp);
+		printf("Write successful.\n");
+		return 0;
+	}
+
+	fprintf(stderr, "Invalid sub command: %s\n", argv[1]);
+	cmd_cbi_bin_help(argv[0]);
+
+	return -1;
+}
+
 int cmd_chipinfo(int argc, char *argv[])
 {
 	struct ec_response_get_chip_info info;
@@ -9505,6 +9637,33 @@ static int cmd_console_print(int argc, char *argv[])
 			ec_max_outsize - 1, msg);
 	}
 	return ec_command(EC_CMD_CONSOLE_PRINT, 0, msg, msg_len + 1, NULL, 0);
+}
+
+int cmd_set_alarm_slp_s0_dbg(int argc, char *argv[])
+{
+	struct ec_params_set_alarm_slp_s0_dbg p;
+	char *e;
+	int rv;
+
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <sec>\n", argv[0]);
+		return -1;
+	}
+	p.time = strtol(argv[1], &e, 0);
+	if (e && *e) {
+		fprintf(stderr, "Bad time.\n");
+		return -1;
+	}
+
+	rv = ec_command(EC_CMD_SET_ALARM_SLP_S0_DBG, 0, &p, sizeof(p), NULL, 0);
+	if (rv < 0)
+		return rv;
+
+	if (p.time == 0)
+		printf("Disabling alarm for SLP S0 Debug.\n");
+	else
+		printf("Wake host in %d secs for SLP_S0 Debug.\n", p.time);
+	return 0;
 }
 
 struct param_info {
@@ -10987,10 +11146,10 @@ int cmd_pd_control(int argc, char *argv[])
 int cmd_pd_chip_info(int argc, char *argv[])
 {
 	struct ec_params_pd_chip_info p;
-	struct ec_response_pd_chip_info_v1 r;
+	struct ec_response_pd_chip_info_v2 r;
 	char *e;
 	int rv;
-	int cmdver = 1;
+	int cmdver;
 
 	if (argc < 2 || 3 < argc) {
 		fprintf(stderr,
@@ -11018,8 +11177,9 @@ int cmd_pd_chip_info(int argc, char *argv[])
 		}
 	}
 
-	if (!ec_cmd_version_supported(EC_CMD_PD_CHIP_INFO, cmdver))
-		cmdver = 0;
+	rv = ec_get_highest_supported_cmd_version(EC_CMD_PD_CHIP_INFO, &cmdver);
+	if (rv)
+		return rv;
 
 	rv = ec_command(EC_CMD_PD_CHIP_INFO, cmdver, &p, sizeof(p), &r,
 			sizeof(r));
@@ -11030,9 +11190,15 @@ int cmd_pd_chip_info(int argc, char *argv[])
 	printf("product_id: 0x%x\n", r.product_id);
 	printf("device_id: 0x%x\n", r.device_id);
 
-	if (r.fw_version_number != -1)
+	if (r.fw_version_number != -1) {
 		printf("fw_version: 0x%" PRIx64 "\n", r.fw_version_number);
-	else
+
+		printf("fw_version_dec: %u.%u.%u.%u.%u.%u.%u.%u\n",
+		       r.fw_version_string[7], r.fw_version_string[6],
+		       r.fw_version_string[5], r.fw_version_string[4],
+		       r.fw_version_string[3], r.fw_version_string[2],
+		       r.fw_version_string[1], r.fw_version_string[0]);
+	} else
 		printf("fw_version: UNSUPPORTED\n");
 
 	if (cmdver >= 1)
@@ -11040,6 +11206,14 @@ int cmd_pd_chip_info(int argc, char *argv[])
 		       r.min_req_fw_version_number);
 	else
 		printf("min_req_fw_version: UNSUPPORTED\n");
+
+	if (cmdver >= 2) {
+		printf("fw_update_flags: 0x%04x\n", r.fw_update_flags);
+		printf("fw_name_str: '%s'\n", r.fw_name_str);
+	} else {
+		printf("fw_update_flags: UNSUPPORTED\n");
+		printf("fw_name_str: UNSUPPORTED\n");
+	}
 
 	return 0;
 }
@@ -12126,6 +12300,7 @@ const struct command commands[] = {
 	{ "button", cmd_button,
 	  "[vup|vdown|rec] <Delay-ms>\n\tSimulates button press." },
 	{ "cbi", cmd_cbi, "\n\tGet/Set/Remove Cros Board Info." },
+	{ "cbibin", cmd_cbi_bin, "\n\tRead/Write Cros Board Info into file." },
 	{ "cec", cmd_cec, "\n\tRead or write CEC messages and settings." },
 	{ "chargecontrol", cmd_charge_control,
 	  "\n\tForce the battery to stop charging or discharge." },
@@ -12391,6 +12566,10 @@ const struct command commands[] = {
 	  "[reboot] [help]\n"
 	  "\tStress test the ec host command interface." },
 	{ "switches", cmd_switches, "\n\tPrints current EC switch positions" },
+	{ "slps0dbgsetalarm", cmd_set_alarm_slp_s0_dbg,
+	  "<sec>\n"
+	  "\tSet alarm to wake host in <sec> seconds, "
+	  "PS: EC won't wake host if SLP_S0 is not asserted" },
 	{ "sysinfo", cmd_sysinfo,
 	  "[flags|reset_flags|firmware_copy]\n"
 	  "\tDisplay system info." },

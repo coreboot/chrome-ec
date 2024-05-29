@@ -1859,6 +1859,13 @@
 #undef CONFIG_ALLOW_UNALIGNED_ACCESS
 
 /*
+ * Protect the code RAM section on devices that execute code from RAM. On these
+ * devices, this mechanism protects the code from being modified using the MPU.
+ * The MPU protections are setup on boot.
+ */
+#undef CONFIG_PROTECT_CODE_RAM
+
+/*
  * Provide common runtime layer code (tasks, hooks ...)
  * You want this unless you are doing a really tiny firmware.
  */
@@ -3094,14 +3101,6 @@
  * to use alternate functions on KSO pins.
  */
 #define CONFIG_KEYBOARD_KSO_BASE 0
-
-/*
- * For certain board configurations, KSI2 or KSI3 will be stuck asserted for all
- * scan columns if the power button is held. We must be aware of this case
- * in order to correctly handle recovery mode key combinations.
- */
-#undef CONFIG_KEYBOARD_PWRBTN_ASSERTS_KSI2
-#undef CONFIG_KEYBOARD_PWRBTN_ASSERTS_KSI3
 
 /* Enable extra debugging output from keyboard modules */
 #undef CONFIG_KEYBOARD_DEBUG

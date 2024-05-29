@@ -1027,8 +1027,13 @@ void keyboard_scan_task(void *u)
 					new_disable_scanning);
 
 			if (!new_disable_scanning) {
-				/* Enabled now */
+				/*
+				 * Enabled now, then wait a bit to let
+				 * keyboard_raw_read_rows() below gets correct
+				 * results.
+				 */
 				keyboard_raw_drive_column(KEYBOARD_COLUMN_ALL);
+				udelay(keyscan_config.output_settle_us);
 			} else if (!local_disable_scanning) {
 				/*
 				 * Scanning isn't enabled but it was last time
@@ -1062,8 +1067,21 @@ void keyboard_scan_task(void *u)
 			     !gpio_get_level(GPIO_RFR_KEY_L)))
 				break;
 #endif
-			else
+			else {
+#ifdef CONFIG_KEYBOARD_BOOT_KEYS
+				/*
+				 * This is needed to fix boot_key_value in case
+				 * keys are released before the scanner is
+				 * ready. If any key is being pressed, the 1st
+				 * inner loop is exited above and the 2nd loop
+				 * corrects boot_key_value. If no key is being
+				 * pressed, we come here and clear all boot
+				 * keys.
+				 */
+				boot_key_value &= BIT(BOOT_KEY_POWER);
+#endif /* CONFIG_KEYBOARD_BOOT_KEYS */
 				task_wait_event(-1);
+			}
 		}
 
 		/* We're about to poll, so any existing forces are fulfilled */

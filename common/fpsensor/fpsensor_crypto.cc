@@ -10,17 +10,14 @@
 #include "openssl/evp.h"
 #include "openssl/hkdf.h"
 #include "openssl/mem.h"
-
-#include <span>
-
-extern "C" {
 #include "otp_key.h"
 #include "rollback.h"
 #include "sha256.h"
 #include "util.h"
-}
 
 #include <stdbool.h>
+
+#include <span>
 
 #ifdef CONFIG_OTP_KEY
 constexpr uint8_t IKM_OTP_OFFSET_BYTES =
@@ -161,9 +158,6 @@ derive_encryption_key(std::span<uint8_t> out_key, std::span<const uint8_t> salt,
 {
 	enum ec_error_list ret;
 	CleanseWrapper<std::array<uint8_t, IKM_SIZE_BYTES> > ikm;
-
-	BUILD_ASSERT(SBP_ENC_KEY_LEN <= SHA256_DIGEST_SIZE);
-	BUILD_ASSERT(SBP_ENC_KEY_LEN <= CONFIG_ROLLBACK_SECRET_SIZE);
 
 	if (info.size() != SHA256_DIGEST_SIZE) {
 		CPRINTS("Invalid info size: %zu", info.size());

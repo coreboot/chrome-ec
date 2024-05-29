@@ -7,25 +7,17 @@
  * rely on global state. */
 
 #include "compile_time_macros.h"
-
-/* Boringssl headers need to be included before extern "C" section. */
 #include "crypto/cleanse_wrapper.h"
 #include "crypto/elliptic_curve_key.h"
+#include "ec_commands.h"
+#include "fpsensor/fpsensor_auth_crypto.h"
+#include "fpsensor/fpsensor_console.h"
+#include "fpsensor/fpsensor_crypto.h"
 #include "openssl/bn.h"
 #include "openssl/mem.h"
 #include "openssl/rand.h"
 
-extern "C" {
-#include "ec_commands.h"
-}
-
-// clang-format off
 #include <array>
-
-#include "fpsensor/fpsensor_auth_crypto.h"
-#include "fpsensor/fpsensor_crypto.h"
-#include "fpsensor/fpsensor_console.h"
-// clang-format on
 
 enum ec_error_list
 encrypt_data_in_place(uint16_t version,
@@ -42,7 +34,7 @@ encrypt_data_in_place(uint16_t version,
 	RAND_bytes(info.nonce, sizeof(info.nonce));
 	RAND_bytes(info.encryption_salt, sizeof(info.encryption_salt));
 
-	CleanseWrapper<std::array<uint8_t, SBP_ENC_KEY_LEN> > enc_key;
+	FpEncryptionKey enc_key;
 	enum ec_error_list ret = derive_encryption_key(
 		enc_key, info.encryption_salt, user_id, tpm_seed);
 	if (ret != EC_SUCCESS) {
@@ -88,7 +80,7 @@ decrypt_data(const struct fp_auth_command_encryption_metadata &info,
 		return EC_ERROR_INVAL;
 	}
 
-	CleanseWrapper<std::array<uint8_t, SBP_ENC_KEY_LEN> > enc_key;
+	FpEncryptionKey enc_key;
 	enum ec_error_list ret = derive_encryption_key(
 		enc_key, info.encryption_salt, user_id, tpm_seed);
 	if (ret != EC_SUCCESS) {

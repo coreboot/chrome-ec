@@ -9,6 +9,7 @@
 #include "openssl/bn.h"
 #include "openssl/ec.h"
 #include "openssl/obj_mac.h"
+#include "rollback.h"
 #include "test_util.h"
 #include "util.h"
 
@@ -17,7 +18,7 @@
 
 #include <array>
 
-extern "C" enum ec_error_list rollback_get_secret(uint8_t *secret)
+enum ec_error_list rollback_get_secret(uint8_t *secret)
 {
 	// We should not call this function in the test.
 	TEST_ASSERT(false);
@@ -174,7 +175,7 @@ test_static enum ec_error_list test_fp_generate_ecdh_shared_secret(void)
 
 } // namespace
 
-extern "C" void run_test(int argc, const char **argv)
+void run_test(int argc, const char **argv)
 {
 	RUN_TEST(test_fp_create_ec_key_from_pubkey);
 	RUN_TEST(test_fp_create_ec_key_from_pubkey_fail);

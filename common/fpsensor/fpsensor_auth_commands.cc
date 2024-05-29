@@ -263,7 +263,7 @@ fp_command_read_match_secret_with_pubkey(struct host_cmd_handler_args *args)
 	CleanseWrapper<std::array<uint8_t, FP_POSITIVE_MATCH_SECRET_BYTES> >
 		secret;
 
-	enum ec_status status = fp_read_match_secret(fgr, secret.data());
+	enum ec_status status = fp_read_match_secret(fgr, secret);
 	if (status != EC_RES_SUCCESS) {
 		return status;
 	}
@@ -286,8 +286,8 @@ DECLARE_HOST_COMMAND(EC_CMD_FP_READ_MATCH_SECRET_WITH_PUBKEY,
 
 static enum ec_status unlock_template(uint16_t idx)
 {
-	auto *dec_state =
-		std::get_if<fp_decrypted_template_state>(&template_states[idx]);
+	auto *dec_state = std::get_if<fp_decrypted_template_state>(
+		&global_context.template_states[idx]);
 	if (dec_state) {
 		if (safe_memcmp(dec_state->user_id.begin(),
 				global_context.user_id,
@@ -297,8 +297,8 @@ static enum ec_status unlock_template(uint16_t idx)
 		return EC_RES_SUCCESS;
 	}
 
-	auto *enc_state =
-		std::get_if<fp_encrypted_template_state>(&template_states[idx]);
+	auto *enc_state = std::get_if<fp_encrypted_template_state>(
+		&global_context.template_states[idx]);
 	if (!enc_state) {
 		return EC_RES_INVALID_PARAM;
 	}
@@ -311,40 +311,37 @@ static enum ec_status unlock_template(uint16_t idx)
 	/* We reuse the fp_enc_buffer for the data decryption, because we don't
 	 * want to allocate a huge array on the stack.
 	 * Note: fp_enc_buffer = fp_template || fp_positive_match_salt */
-	constexpr std::span enc_template(fp_enc_buffer, sizeof(fp_template[0]));
-	constexpr std::span enc_salt(enc_template.end(),
-				     sizeof(fp_positive_match_salt[0]));
-	constexpr std::span enc_buffer(fp_enc_buffer,
+	constexpr std::span enc_template = fp_enc_buffer.fp_template;
+	constexpr std::span enc_salt = fp_enc_buffer.positive_match_salt;
+	constexpr std::span enc_buffer(enc_template.data(),
 				       enc_template.size() + enc_salt.size());
 	static_assert(enc_buffer.size() <= sizeof(fp_enc_buffer));
 
-	std::copy(fp_template[idx], fp_template[idx] + enc_template.size(),
-		  enc_template.begin());
-	std::copy(fp_positive_match_salt[idx],
-		  fp_positive_match_salt[idx] + enc_salt.size(),
-		  enc_salt.begin());
+	std::ranges::copy(fp_template[idx], enc_template.begin());
+	std::ranges::copy(global_context.fp_positive_match_salt[idx],
+			  enc_salt.begin());
 
-	CleanseWrapper<std::array<uint8_t, SBP_ENC_KEY_LEN> > key;
+	FpEncryptionKey key;
 	if (derive_encryption_key(key, enc_info.encryption_salt,
 				  global_context.user_id,
 				  global_context.tpm_seed) != EC_SUCCESS) {
 		fp_clear_finger_context(idx);
-		OPENSSL_cleanse(fp_enc_buffer, sizeof(fp_enc_buffer));
+		OPENSSL_cleanse(&fp_enc_buffer, sizeof(fp_enc_buffer));
 		return EC_RES_UNAVAILABLE;
 	}
 
 	if (aes_128_gcm_decrypt(key, enc_buffer, enc_buffer, enc_info.nonce,
 				enc_info.tag) != EC_SUCCESS) {
 		fp_clear_finger_context(idx);
-		OPENSSL_cleanse(fp_enc_buffer, sizeof(fp_enc_buffer));
+		OPENSSL_cleanse(&fp_enc_buffer, sizeof(fp_enc_buffer));
 		return EC_RES_UNAVAILABLE;
 	}
 
 	std::ranges::copy(enc_template, fp_template[idx]);
-	std::ranges::copy(enc_salt, fp_positive_match_salt[idx]);
+	std::ranges::copy(enc_salt, global_context.fp_positive_match_salt[idx]);
 
 	fp_init_decrypted_template_state_with_user_id(idx);
-	OPENSSL_cleanse(fp_enc_buffer, sizeof(fp_enc_buffer));
+	OPENSSL_cleanse(&fp_enc_buffer, sizeof(fp_enc_buffer));
 	return EC_RES_SUCCESS;
 }
 
@@ -367,7 +364,7 @@ fp_command_unlock_template(struct host_cmd_handler_args *args)
 		return EC_RES_ACCESS_DENIED;
 	}
 
-	if (fgr_num > template_states.size()) {
+	if (fgr_num > global_context.template_states.size()) {
 		return EC_RES_OVERFLOW;
 	}
 

@@ -44,9 +44,7 @@ test_static enum ec_error_list test_fp_encrypt_decrypt_data(void)
 						1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1,
 						2, 3, 4, 5, 6, 7, 8, 9, 1, 2 };
 	uint16_t version = 1;
-	std::array<uint8_t, 32> data;
-
-	std::copy(input.begin(), input.end(), data.begin());
+	std::array<uint8_t, 32> data = input;
 
 	TEST_EQ(encrypt_data_in_place(version, info, kFakeUserId, kFakeTpmSeed,
 				      data),
@@ -280,7 +278,7 @@ test_static enum ec_error_list test_fp_encrypt_data_with_ecdh_key_in_place(void)
 
 } // namespace
 
-extern "C" void run_test(int argc, const char **argv)
+void run_test(int argc, const char **argv)
 {
 	RUN_TEST(test_fp_encrypt_decrypt_data);
 	RUN_TEST(test_fp_encrypt_decrypt_key);

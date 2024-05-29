@@ -21,6 +21,7 @@ target_sources_ifdef(CONFIG_TEST_PDC_MESSAGE_TRACING  app PRIVATE
 if (DEFINED CONFIG_TEST_SUITE_PDC_GENERIC)
 	target_sources(app PRIVATE src/generic/pdc_api.c)
 	target_sources(app PRIVATE src/generic/pdc_power_mgmt_api.c)
+	target_sources(app PRIVATE src/generic/pdc_pmc_debug_api.c)
 endif()
 
 if (DEFINED CONFIG_TEST_SUITE_PDC_RTS54XX)
@@ -33,4 +34,10 @@ endif()
 
 if (DEFINED CONFIG_TEST_SUITE_PDC_CONSOLE)
 	target_sources(app PRIVATE src/generic/pdc_console.c)
+	target_sources(app PRIVATE src/mock_pdc_power_mgmt.c)
+endif()
+
+if (DEFINED CONFIG_TEST_SUITE_PDC_HOSTCMD)
+	target_sources(app PRIVATE src/generic/pdc_host_cmd.c)
+	target_sources(app PRIVATE src/mock_pdc_power_mgmt.c)
 endif()

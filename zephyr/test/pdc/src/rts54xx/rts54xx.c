@@ -57,6 +57,8 @@ static const uint32_t mixed_pdos_failure[] = {
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 static const struct device *dev = DEVICE_DT_GET(RTS5453P_NODE);
 
+bool pdc_rts54xx_test_idle_wait(void);
+
 static void rts54xx_before_test(void *data)
 {
 	emul_pdc_reset(emul);
@@ -64,6 +66,8 @@ static void rts54xx_before_test(void *data)
 	if (IS_ENABLED(CONFIG_TEST_PDC_MESSAGE_TRACING)) {
 		set_pdc_trace_msg_mocks();
 	}
+
+	zassert_true(pdc_rts54xx_test_idle_wait());
 }
 
 static int emul_get_src_pdos(enum pdo_offset_t pdo_offset, uint8_t pdo_count,
@@ -201,7 +205,7 @@ ZTEST_USER(rts54xx, test_pdos)
 	 */
 	memset(pdos, 0, sizeof(pdos));
 	zassert_ok(pdc_get_pdos(dev, SOURCE_PDO, PDO_OFFSET_1, 6, false, pdos));
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(1000));
 	zassert_ok(
 		memcmp(pdos, mixed_pdos_success, sizeof(mixed_pdos_success)));
 }

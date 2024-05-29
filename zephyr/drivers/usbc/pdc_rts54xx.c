@@ -23,6 +23,7 @@ LOG_MODULE_REGISTER(pdc_rts54, LOG_LEVEL_INF);
 #include "usbc/utils.h"
 
 #include <drivers/pdc.h>
+#include <include/ppm.h>
 
 #define DT_DRV_COMPAT realtek_rts54_pdc
 
@@ -79,10 +80,34 @@ LOG_MODULE_REGISTER(pdc_rts54, LOG_LEVEL_INF);
 
 /**
  * @brief Offsets of data fields in the GET_IC_STATUS response
+ *
+ * Note that in the Realtek spec version 3.3.22, bit offsets and byte
+ * numbers are inconsistent. Byte numbers appear to be accurate.
+ *
+ * "Data Byte 0" is the first byte after "Byte Count" and is available
+ * at .rd_buf[1].
  */
-#define RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET (4)
-#define RTS54XX_GET_IC_STATUS_FWVER_MINOR_OFFSET (5)
-#define RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET (6)
+#define RTS54XX_GET_IC_STATUS_RUNNING_FLASH_CODE 1
+#define RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET 4
+#define RTS54XX_GET_IC_STATUS_FWVER_MINOR_OFFSET 5
+#define RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET 6
+#define RTS54XX_GET_IC_STATUS_VID_L 10
+#define RTS54XX_GET_IC_STATUS_VID_H 11
+#define RTS54XX_GET_IC_STATUS_PID_L 12
+#define RTS54XX_GET_IC_STATUS_PID_H 13
+#define RTS54XX_GET_IC_STATUS_RUNNING_FLASH_BANK 15
+#define RTS54XX_GET_IC_STATUS_PD_REV_MAJOR_OFFSET 23
+#define RTS54XX_GET_IC_STATUS_PD_REV_MINOR_OFFSET 24
+#define RTS54XX_GET_IC_STATUS_PD_VER_MAJOR_OFFSET 25
+#define RTS54XX_GET_IC_STATUS_PD_VER_MINOR_OFFSET 26
+#define RTS54XX_GET_IC_STATUS_PROG_NAME_STR 27
+#define RTS54XX_GET_IC_STATUS_PROG_NAME_STR_LEN 12
+
+/* FW project name length should not exceed the max length supported in struct
+ * pdc_info_t
+ */
+BUILD_ASSERT(RTS54XX_GET_IC_STATUS_PROG_NAME_STR_LEN <=
+	     (sizeof(((struct pdc_info_t *)0)->project_name) - 1));
 
 /**
  * @brief Macro to transition to init or idle state and return
@@ -364,6 +389,8 @@ struct pdc_data_t {
 	pdc_cci_handler_cb_t cci_cb;
 	/** CCI Event callback data */
 	void *cb_data;
+	/** Asynchronous (CI) Event callbacks */
+	sys_slist_t ci_cb_list;
 	/** Information about the PDC */
 	struct pdc_info_t info;
 	/** Init done flag */
@@ -374,6 +401,10 @@ struct pdc_data_t {
 	uint16_t error_recovery_counter;
 	/** Error Status used during initialization */
 	union error_status_t es;
+	/** Connector Status */
+	union connector_status_t conn_status;
+	/** Connector Status Cache State */
+	bool conn_status_cached;
 };
 
 /**
@@ -437,7 +468,8 @@ static int rts54_reset(const struct device *dev);
 static int rts54_set_notification_enable(const struct device *dev,
 					 union notification_enable_t bits,
 					 uint16_t ext_bits);
-static int rts54_get_info(const struct device *dev, struct pdc_info_t *info);
+static int rts54_get_info(const struct device *dev, struct pdc_info_t *info,
+			  bool live);
 static int rts54_get_error_status(const struct device *dev,
 				  union error_status_t *es);
 
@@ -503,16 +535,25 @@ static void print_current_state(struct pdc_data_t *data)
 static void call_cci_event_cb(struct pdc_data_t *data)
 {
 	const struct pdc_config_t *cfg = data->dev->config;
+	const union cci_event_t cci = data->cci_event;
 
 	if (!data->init_done) {
 		return;
 	}
 
-	if (data->cci_cb) {
+	/*
+	 * CC and CI events are separately reported. So, we need to call only
+	 * one callback or the other.
+	 */
+	if (cci.connector_change) {
+		pdc_fire_callbacks(&data->ci_cb_list, data->dev, cci);
+	} else if (data->cci_cb) {
 		LOG_INF("C%d: cci_event_cb event=0x%x", cfg->connector_number,
 			data->cci_event.raw_value);
 		data->cci_cb(data->cci_event, data->cb_data);
 	}
+
+	data->cci_event.raw_value = 0;
 }
 
 static int get_ara(const struct device *dev, uint8_t *ara)
@@ -718,7 +759,7 @@ static void st_init_run(void *o)
 		init_write_cmd_and_change_state(data, INIT_PDC_GET_IC_STATUS);
 		return;
 	case INIT_PDC_GET_IC_STATUS:
-		rv = rts54_get_info(data->dev, &data->info);
+		rv = rts54_get_info(data->dev, &data->info, true);
 		if (rv) {
 			LOG_ERR("C:%d, Internal(INIT_PDC_GET_IC_STATUS)", cnum);
 			set_state(data, ST_DISABLE);
@@ -854,10 +895,11 @@ static void handle_irqs(struct pdc_data_t *data)
 				/* Set the port the CCI Event occurred
 				 * on */
 				pdc_int_data->cci_event.connector_change =
-					cfg->connector_number;
+					cfg->connector_number + 1;
 				/* Set the interrupt event */
 				pdc_int_data->cci_event
 					.vendor_defined_indicator = 1;
+				pdc_int_data->conn_status_cached = false;
 				/* Notify system of status change */
 				call_cci_event_cb(pdc_int_data);
 				/* done with this port */
@@ -901,7 +943,6 @@ static void st_idle_run(void *o)
 static void st_write_entry(void *o)
 {
 	struct pdc_data_t *data = (struct pdc_data_t *)o;
-	const struct pdc_config_t *cfg = data->dev->config;
 
 	print_current_state(data);
 
@@ -917,8 +958,6 @@ static void st_write_entry(void *o)
 	}
 	/* Clear the CCI Event */
 	data->cci_event.raw_value = 0;
-	/* Set the port the CCI Event occurred on */
-	data->cci_event.connector_change = cfg->connector_number;
 }
 
 static void st_write_run(void *o)
@@ -942,7 +981,6 @@ static void st_write_run(void *o)
 static void st_ping_status_entry(void *o)
 {
 	struct pdc_data_t *data = (struct pdc_data_t *)o;
-	const struct pdc_config_t *cfg = data->dev->config;
 
 	print_current_state(data);
 
@@ -957,8 +995,6 @@ static void st_ping_status_entry(void *o)
 	data->ping_status.raw_value = 0;
 	/* Clear the CCI Event */
 	data->cci_event.raw_value = 0;
-	/* Set the port the CCI Event occurred on */
-	data->cci_event.connector_change = cfg->connector_number;
 }
 
 static void st_ping_status_run(void *o)
@@ -1091,7 +1127,6 @@ static void st_ping_status_run(void *o)
 static void st_read_entry(void *o)
 {
 	struct pdc_data_t *data = (struct pdc_data_t *)o;
-	const struct pdc_config_t *cfg = data->dev->config;
 
 	print_current_state(data);
 
@@ -1103,7 +1138,6 @@ static void st_read_entry(void *o)
 	/* Clear I2c Transaction Retry Counter */
 	data->i2c_transaction_retry_counter = 0;
 	/* Set the port the CCI Event occurred on */
-	data->cci_event.connector_change = cfg->connector_number;
 }
 
 static void st_read_run(void *o)
@@ -1156,10 +1190,11 @@ static void st_read_run(void *o)
 	case CMD_GET_IC_STATUS: {
 		struct pdc_info_t *info = (struct pdc_info_t *)data->user_buf;
 
-		/* Realtek Is running flash code: Byte 1 */
-		info->is_running_flash_code = data->rd_buf[1];
+		/* Realtek Is running flash code: Data Byte0 */
+		info->is_running_flash_code =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_RUNNING_FLASH_CODE];
 
-		/* Realtek FW main version: Byte4, Byte5, Byte6 */
+		/* Realtek FW main version: Data Byte3..5 */
 		info->fw_version =
 			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_MAJOR_OFFSET]
 				<< 16 |
@@ -1167,32 +1202,52 @@ static void st_read_run(void *o)
 				<< 8 |
 			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET];
 
-		/* Realtek VID PID: Byte10, Byte11, Byte12, Byte13
-		 * (little-endian) */
-		info->vid_pid = data->rd_buf[11] << 24 |
-				data->rd_buf[10] << 16 | data->rd_buf[13] << 8 |
-				data->rd_buf[12];
+		/* Realtek VID PID: Data Byte9..12 (little-endian) */
+		info->vid_pid =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_VID_H] << 24 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_VID_L] << 16 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PID_H] << 8 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PID_L];
 
-		/* Realtek Running flash bank offset: Byte15 */
-		info->running_in_flash_bank = data->rd_buf[15];
+		/* Realtek Running flash bank offset: Data Byte14 */
+		info->running_in_flash_bank =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_RUNNING_FLASH_BANK];
 
-		/* Realtek PD Revision: Byte23, Byte24 (big-endian) */
-		info->pd_revision = data->rd_buf[23] << 8 | data->rd_buf[24];
+		/* Realtek PD Revision: Data Byte22..23 (big-endian) */
+		info->pd_revision =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PD_REV_MAJOR_OFFSET]
+				<< 8 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PD_REV_MINOR_OFFSET];
 
-		/* Realtek PD Version: Byte25, Byte26 (big-endian) */
-		info->pd_version = data->rd_buf[25] << 8 | data->rd_buf[26];
+		/* Realtek PD Version: Data Byte24..25 (big-endian) */
+		info->pd_version =
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PD_VER_MAJOR_OFFSET]
+				<< 8 |
+			data->rd_buf[RTS54XX_GET_IC_STATUS_PD_VER_MINOR_OFFSET];
+
+		/* Project name string is supported on version >= 0.3.x */
+		memcpy(info->project_name,
+		       &data->rd_buf[RTS54XX_GET_IC_STATUS_PROG_NAME_STR],
+		       RTS54XX_GET_IC_STATUS_PROG_NAME_STR_LEN);
+		info->project_name[RTS54XX_GET_IC_STATUS_PROG_NAME_STR_LEN] =
+			'\0';
 
 		/* Only print this log on init */
 		if (data->init_local_state != INIT_PDC_COMPLETE) {
-			LOG_INF("C%d: Realtek: FW Version: %u.%u.%u",
+			LOG_INF("C%d: Realtek: FW Version: %u.%u.%u (%s)",
 				cfg->connector_number,
 				PDC_FWVER_GET_MAJOR(info->fw_version),
 				PDC_FWVER_GET_MINOR(info->fw_version),
-				PDC_FWVER_GET_PATCH(info->fw_version));
+				PDC_FWVER_GET_PATCH(info->fw_version),
+				info->project_name);
 			LOG_INF("C%d: Realtek: PD Version: %u, Rev %u",
 				cfg->connector_number, info->pd_version,
 				info->pd_revision);
 		}
+
+		/* Retain a cached copy of this data */
+		data->info = *info;
+
 		break;
 	}
 	case CMD_GET_VBUS_VOLTAGE:
@@ -1266,6 +1321,14 @@ static void st_read_run(void *o)
 		*vconn_sourcing = (data->rd_buf[11] & 0x20);
 		break;
 	}
+	case CMD_GET_CONNECTOR_STATUS:
+		memcpy(data->user_buf, data->rd_buf + offset, len);
+		/* Save connector status in cache. */
+		k_mutex_lock(&data->mtx, K_FOREVER);
+		memcpy(&data->conn_status, data->user_buf, len);
+		k_mutex_unlock(&data->mtx);
+		data->conn_status_cached = true;
+		break;
 	default:
 		/* No preprocessing needed for the user data */
 		memcpy(data->user_buf, data->rd_buf + offset, len);
@@ -1920,21 +1983,56 @@ static int rts54_get_pdos(const struct device *dev, enum pdo_type_t pdo_type,
 				  ARRAY_SIZE(payload), (uint8_t *)pdos);
 }
 
-static int rts54_get_info(const struct device *dev, struct pdc_info_t *info)
+static int rts54_get_info(const struct device *dev, struct pdc_info_t *info,
+			  bool live)
 {
+	const struct pdc_config_t *cfg = dev->config;
 	struct pdc_data_t *data = dev->data;
-
-	if ((get_state(data) != ST_IDLE) && (get_state(data) != ST_INIT)) {
-		return -EBUSY;
-	}
 
 	if (info == NULL) {
 		return -EINVAL;
 	}
 
+	/* If caller is OK with a non-live value and we have one, we can
+	 * immediately return a cached value.
+	 */
+	if (!live) {
+		k_mutex_lock(&data->mtx, K_FOREVER);
+
+		/* Check FW ver and VID/PID fields for valid values to ensure
+		 * we have a resident value.
+		 */
+		if (data->info.fw_version == PDC_FWVER_INVALID ||
+		    data->info.vid_pid == PDC_VIDPID_INVALID) {
+			k_mutex_unlock(&data->mtx);
+
+			/* No cached value. Caller should request a live read */
+			return -EAGAIN;
+		}
+
+		*info = data->info;
+		k_mutex_unlock(&data->mtx);
+
+		LOG_DBG("C%d: Use cached chip info (%u.%u.%u)",
+			cfg->connector_number,
+			PDC_FWVER_GET_MAJOR(data->info.fw_version),
+			PDC_FWVER_GET_MINOR(data->info.fw_version),
+			PDC_FWVER_GET_PATCH(data->info.fw_version));
+		return 0;
+	}
+
+	/* Handle a live read */
+
+	if ((get_state(data) != ST_IDLE) && (get_state(data) != ST_INIT)) {
+		return -EBUSY;
+	}
+
+	/* Post a command and perform a chip operation */
 	uint8_t payload[] = {
-		GET_IC_STATUS.cmd, GET_IC_STATUS.len, 0, 0x00, 26,
+		GET_IC_STATUS.cmd, GET_IC_STATUS.len, 0, 0x00, 38,
 	};
+
+	LOG_DBG("C%d: Get live chip info", cfg->connector_number);
 
 	return rts54_post_command(dev, CMD_GET_IC_STATUS, payload,
 				  ARRAY_SIZE(payload), (uint8_t *)info);
@@ -2297,6 +2395,16 @@ static int rts54_execute_command_sync(const struct device *dev,
 	int call_counter;
 	int rv;
 
+	if (ucsi_command == UCSI_CMD_GET_CONNECTOR_STATUS &&
+	    data->conn_status_cached) {
+		LOG_INF("%s: Read conn status from cache", __func__);
+		k_mutex_lock(&data->mtx, K_FOREVER);
+		memcpy(lpm_data_out, &data->conn_status,
+		       sizeof(data->conn_status));
+		k_mutex_unlock(&data->mtx);
+		return sizeof(data->conn_status);
+	}
+
 	/* We don't know yet if the PDC driver is busy or not. */
 	if (get_state(data) != ST_IDLE || data->cmd != CMD_NONE) {
 		LOG_ERR("%s: Failed to run (-EBUSY)", __func__);
@@ -2343,6 +2451,14 @@ static int rts54_execute_command_sync(const struct device *dev,
 	return rv;
 }
 
+static int rts54_manage_callback(const struct device *dev,
+				 struct pdc_callback *callback, bool set)
+{
+	struct pdc_data_t *const data = dev->data;
+
+	return pdc_manage_callbacks(&data->ci_cb_list, callback, set);
+}
+
 static const struct pdc_driver_api_t pdc_driver_api = {
 	.is_init_done = rts54_is_init_done,
 	.get_ucsi_version = rts54_get_ucsi_version,
@@ -2377,6 +2493,7 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.set_pdos = rts54_set_pdo,
 	.get_pch_data_status = rts54_get_pch_data_status,
 	.execute_command_sync = rts54_execute_command_sync,
+	.manage_callback = rts54_manage_callback,
 };
 
 static void pdc_interrupt_callback(const struct device *dev,
@@ -2446,6 +2563,7 @@ static int pdc_init(const struct device *dev)
 	data->cmd = CMD_NONE;
 	data->error_recovery_counter = 0;
 	data->init_retry_counter = 0;
+
 	pdc_data[cfg->connector_number] = data;
 
 	/* Set initial state */
@@ -2541,3 +2659,43 @@ static void rts54xx_thread(void *dev, void *unused1, void *unused2)
 			      &pdc_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(PDC_DEFINE)
+
+#ifdef CONFIG_ZTEST
+
+struct pdc_data_t;
+
+#define PDC_TEST_DEFINE(inst) &pdc_data_##inst,
+
+static struct pdc_data_t *pdc_data[] = { DT_INST_FOREACH_STATUS_OKAY(
+	PDC_TEST_DEFINE) };
+
+/*
+ * Wait for drivers to become idle.
+ */
+/* LCOV_EXCL_START */
+bool pdc_rts54xx_test_idle_wait(void)
+{
+	int num_finished;
+
+	/* Wait for up to 20 * 100ms for all drivers to become idle. */
+	for (int i = 0; i < 20; i++) {
+		num_finished = 0;
+
+		k_msleep(100);
+		for (int port = 0; port < ARRAY_SIZE(pdc_data); port++) {
+			if (get_state(pdc_data[port]) == ST_IDLE &&
+			    pdc_data[port]->cmd == CMD_NONE) {
+				num_finished++;
+			}
+		}
+
+		if (num_finished == ARRAY_SIZE(pdc_data)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+/* LCOV_EXCL_STOP */
+
+#endif
