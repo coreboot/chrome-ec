@@ -14,7 +14,9 @@
 #include "util.h"
 
 #include <zephyr/devicetree.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys_clock.h>
 
 #include <drivers/pdc.h>
 
@@ -28,6 +30,11 @@ LOG_MODULE_REGISTER(ppm, LOG_LEVEL_INF);
 BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
 	     "Exactly one instance of ucsi,ppm should be defined.");
 
+K_EVENT_DEFINE(ppm_event);
+#define PPM_EVENT_CMD_COMPLETE BIT(0)
+#define PPM_EVENT_CMD_ERROR BIT(1)
+#define PPM_EVENT_ALL (PPM_EVENT_CMD_COMPLETE | PPM_EVENT_CMD_ERROR)
+
 struct ucsi_commands_t {
 	uint8_t command;
 	uint8_t command_copy_length;
@@ -38,7 +45,7 @@ struct ucsi_commands_t {
 		.command = cmd, .command_copy_length = length, \
 	}
 
-struct ucsi_commands_t ucsi_commands[UCSI_CMD_VENDOR_CMD + 1] = {
+struct ucsi_commands_t ucsi_commands[] = {
 	UCSI_CMD_ENTRY(UCSI_CMD_RESERVED, 0),
 	UCSI_CMD_ENTRY(UCSI_CMD_PPM_RESET, 0),
 	UCSI_CMD_ENTRY(UCSI_CMD_CANCEL, 0),
@@ -74,6 +81,9 @@ struct ucsi_commands_t ucsi_commands[UCSI_CMD_VENDOR_CMD + 1] = {
 	UCSI_CMD_ENTRY(UCSI_CMD_VENDOR_CMD, 6),
 };
 
+BUILD_ASSERT(ARRAY_SIZE(ucsi_commands) == UCSI_CMD_MAX,
+	     "Not all UCSI commands are handled.");
+
 #define PHANDLE_TO_DEV(node_id, prop, idx) \
 	[idx] = DEVICE_DT_GET(DT_PHANDLE_BY_IDX(node_id, prop, idx)),
 
@@ -90,6 +100,9 @@ struct ppm_data {
 	struct ucsi_ppm_driver *ppm;
 	struct ucsiv3_get_connector_status_data
 		port_status[NUM_PORTS] __aligned(4);
+	struct pdc_callback cc_cb;
+	struct pdc_callback ci_cb;
+	union cci_event_t cci_event;
 };
 static struct ppm_data ppm_data;
 
@@ -109,20 +122,26 @@ static struct ucsi_ppm_driver *ucsi_ppm_get(const struct device *device)
 	return dat->ppm;
 }
 
-static int ucsi_ppm_execute_cmd(const struct device *device,
-				struct ucsi_control *control,
-				uint8_t *lpm_data_out)
+#define SYNC_CMD_TIMEOUT_MSEC 2000
+#define RETRY_INTERVAL_MS 20
+
+static int ucsi_ppm_execute_cmd_sync(const struct device *device,
+				     struct ucsi_control *control,
+				     uint8_t *lpm_data_out)
 {
 	const struct ppm_config *cfg =
 		(const struct ppm_config *)device->config;
-	struct ppm_data *dat = (struct ppm_data *)device->data;
+	struct ppm_data *data = (struct ppm_data *)device->data;
 	struct ppm_common_device *dev =
-		(struct ppm_common_device *)dat->ppm->dev;
+		(struct ppm_common_device *)data->ppm->dev;
 	uint8_t ucsi_command = control->command;
 	uint8_t conn; /* 1:port=0, 2:port=1, ... */
 	uint8_t data_size;
+	uint32_t events;
+	k_timepoint_t timeout;
+	int rv;
 
-	if (ucsi_command == 0 || ucsi_command > UCSI_CMD_VENDOR_CMD) {
+	if (ucsi_command == 0 || ucsi_command >= UCSI_CMD_MAX) {
 		LOG_ERR("Invalid command 0x%x", ucsi_command);
 		return -1;
 	}
@@ -165,9 +184,45 @@ static int ucsi_ppm_execute_cmd(const struct device *device,
 	data_size = ucsi_commands[ucsi_command].command_copy_length;
 	LOG_INF("%s: Executing conn=%u cmd=0x%02x data_size=%d", __func__, conn,
 		ucsi_command, data_size);
-	return pdc_execute_command_sync(cfg->lpm[conn - 1], ucsi_command,
-					data_size, control->command_specific,
-					lpm_data_out);
+
+	timeout = sys_timepoint_calc(K_MSEC(SYNC_CMD_TIMEOUT_MSEC));
+	k_event_clear(&ppm_event, PPM_EVENT_ALL);
+	do {
+		rv = pdc_execute_ucsi_cmd(cfg->lpm[conn - 1], ucsi_command,
+					  data_size, control->command_specific,
+					  lpm_data_out, &data->cc_cb);
+
+		if (rv == 0) {
+			/* Command posted but not finished. */
+			break;
+		}
+		if (rv != -EBUSY) {
+			/* Failed to post command not because of contention. */
+			return rv;
+		}
+
+		/* Command can't be posted due to contention. Wait and retry. */
+		if (sys_timepoint_expired(timeout)) {
+			LOG_DBG("%s: Timed out before posting cmd", __func__);
+			return -ETIMEDOUT;
+		}
+		k_sleep(K_MSEC(RETRY_INTERVAL_MS));
+	} while (true);
+
+	LOG_DBG("C%d: Posted command. Waiting for completion.", conn - 1);
+	/* Wait for command completion, error, or timeout. */
+	events = k_event_wait(&ppm_event, PPM_EVENT_ALL, false,
+			      sys_timepoint_timeout(timeout));
+
+	if (events == 0) {
+		rv = -ETIMEDOUT;
+	} else if (events & PPM_EVENT_CMD_ERROR) {
+		rv = -EIO;
+	} else if (events & PPM_EVENT_CMD_COMPLETE) {
+		rv = data->cci_event.data_len;
+	}
+
+	return rv;
 }
 
 static int ucsi_get_active_port_count(const struct device *dev)
@@ -175,16 +230,68 @@ static int ucsi_get_active_port_count(const struct device *dev)
 	return NUM_PORTS;
 }
 
+/*
+ * Callback for command completion. It's shared by all the connectors because
+ * the PPM executes only one command at a time.
+ */
+static void ppm_cc_cb(const struct device *dev,
+		      const struct pdc_callback *callback,
+		      union cci_event_t cci_event)
+{
+	struct ppm_data *data = CONTAINER_OF(callback, struct ppm_data, cc_cb);
+	uint32_t events = 0;
+
+	LOG_DBG("%s called", __func__);
+
+	data->cci_event = cci_event;
+
+	if (cci_event.command_completed) {
+		events |= PPM_EVENT_CMD_COMPLETE;
+	}
+	if (cci_event.error) {
+		events |= PPM_EVENT_CMD_ERROR;
+	}
+
+	if (events) {
+		k_event_post(&ppm_event, events);
+	}
+}
+
+/*
+ * Callback for connector change events. It's shared by all the connectors.
+ */
+static void ppm_ci_cb(const struct device *dev,
+		      const struct pdc_callback *callback,
+		      union cci_event_t cci_event)
+{
+	const struct ppm_config *cfg = (const struct ppm_config *)dev->config;
+	struct ppm_data *data = CONTAINER_OF(callback, struct ppm_data, ci_cb);
+	struct ucsi_ppm_driver *api = data->ppm;
+
+	LOG_DBG("%s: CCI=0x%08x", __func__, cci_event.raw_value);
+
+	if (cci_event.connector_change == 0 ||
+	    cci_event.connector_change > cfg->active_port_count) {
+		LOG_WRN("%s: Received CI on invalid connector = %u", __func__,
+			cci_event.connector_change);
+		return;
+	}
+
+	api->lpm_alert(api->dev, cci_event.connector_change);
+}
+
 static struct ucsi_pd_driver ppm_drv = {
 	.init_ppm = ucsi_ppm_init,
 	.get_ppm = ucsi_ppm_get,
-	.execute_cmd = ucsi_ppm_execute_cmd,
+	.execute_cmd = ucsi_ppm_execute_cmd_sync,
 	.get_active_port_count = ucsi_get_active_port_count,
 };
 
 static int ppm_init(const struct device *device)
 {
-	struct ppm_data *dat = (struct ppm_data *)device->data;
+	const struct ppm_config *cfg =
+		(const struct ppm_config *)device->config;
+	struct ppm_data *data = (struct ppm_data *)device->data;
 	const struct ucsi_pd_driver *drv = device->api;
 	union ec_common_control ctrl;
 
@@ -194,11 +301,28 @@ static int ppm_init(const struct device *device)
 	}
 
 	/* Initialize the PPM. */
-	dat->ppm = ppm_open(drv, dat->port_status);
-	if (!dat->ppm) {
+	data->ppm = ppm_open(drv, data->port_status, device);
+	if (!data->ppm) {
 		LOG_ERR("Failed to open PPM");
 		return -ENODEV;
 	}
+
+	/*
+	 * Register connector change callback. Command completion callback will
+	 * be registered on every command execution.
+	 */
+	data->ci_cb.handler = ppm_ci_cb;
+	for (int i = 0; i < cfg->active_port_count; i++) {
+		int rv = pdc_add_ci_callback(cfg->lpm[i], &data->ci_cb);
+		if (rv) {
+			LOG_ERR("C%d: Failed to add CI callback (%d)", i, rv);
+			return rv;
+		}
+	}
+
+	data->cc_cb.handler = ppm_cc_cb;
+
+	k_event_init(&ppm_event);
 
 	return 0;
 }

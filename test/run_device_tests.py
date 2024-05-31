@@ -124,7 +124,8 @@ DATA_ACCESS_VIOLATION_200B0000_REGEX = re.compile(
     r"Data access violation, mfar = 200b0000\r\n"
 )
 
-PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
+# \r is added twice by Zephyr code.
+PRINTF_CALLED_REGEX = re.compile(r"printf called(\r){1,2}\n")
 
 BLOONCHIPPER = "bloonchipper"
 BUCCANEER = "buccaneer"
@@ -357,16 +358,19 @@ class AllTests:
             TestConfig(test_name="global_initialization"),
             TestConfig(test_name="libcxx"),
             TestConfig(test_name="malloc", imagetype_to_use=ImageType.RO),
+            # MPU functionality is handled by Zephyr code.
             TestConfig(
                 config_name="mpu_ro",
                 test_name="mpu",
                 imagetype_to_use=ImageType.RO,
                 finish_regexes=[board_config.mpu_regex],
+                skip_for_zephyr=True,
             ),
             TestConfig(
                 config_name="mpu_rw",
                 test_name="mpu",
                 finish_regexes=[board_config.mpu_regex],
+                skip_for_zephyr=True,
             ),
             TestConfig(test_name="mutex"),
             TestConfig(test_name="mutex_trylock"),

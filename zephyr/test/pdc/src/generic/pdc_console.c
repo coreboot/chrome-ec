@@ -432,7 +432,7 @@ ZTEST_USER(console_cmd_pdc, test_src_voltage)
 		pdc_power_mgmt_request_source_voltage_fake.arg1_history[0]);
 }
 
-ZTEST_USER(console_cmd_pdc, test_dualrole)
+ZTEST_USER(console_cmd_pdc, test_dualrole_set)
 {
 	int rv;
 
@@ -489,6 +489,51 @@ ZTEST_USER(console_cmd_pdc, test_dualrole)
 		      pdc_power_mgmt_set_dual_role_fake.arg1_history[4]);
 }
 
+/**
+ * @brief Helper for test_dualrole_get that sets the mock's return value and
+ *        compares the console output against the provided string
+ *
+ * @param state Dual role mode to set mock to
+ * @param state_str Expected string to see in console output
+ * @return true if state_str appears in console output
+ */
+bool helper_set_and_check_dual_role_mode(enum pd_dual_role_states state,
+					 const char *state_str)
+{
+	int rv;
+	const char *outbuffer;
+	size_t buffer_size;
+
+	shell_backend_dummy_clear_output(get_ec_shell());
+
+	pdc_power_mgmt_get_dual_role_fake.return_val = state;
+	rv = shell_execute_cmd(get_ec_shell(), "pdc dualrole 0");
+	zassert_equal(rv, EC_SUCCESS, "Expected %d, but got %d", EC_SUCCESS,
+		      rv);
+
+	outbuffer =
+		shell_backend_dummy_get_output(get_ec_shell(), &buffer_size);
+	zassert_true(buffer_size > 0, NULL);
+
+	return strstr(outbuffer, state_str) != NULL;
+}
+
+ZTEST_USER(console_cmd_pdc, test_dualrole_get)
+{
+	zassert_true(helper_set_and_check_dual_role_mode(
+		PD_DRP_TOGGLE_ON, "Dual role state: TOGGLE_ON"));
+	zassert_true(helper_set_and_check_dual_role_mode(
+		PD_DRP_TOGGLE_OFF, "Dual role state: TOGGLE_OFF"));
+	zassert_true(helper_set_and_check_dual_role_mode(
+		PD_DRP_FREEZE, "Dual role state: FREEZE"));
+	zassert_true(helper_set_and_check_dual_role_mode(
+		PD_DRP_FORCE_SINK, "Dual role state: FORCE_SINK"));
+	zassert_true(helper_set_and_check_dual_role_mode(
+		PD_DRP_FORCE_SOURCE, "Dual role state: FORCE_SOURCE"));
+	zassert_true(helper_set_and_check_dual_role_mode(
+		-1, "Dual role state: Unknown"));
+}
+
 ZTEST_USER(console_cmd_pdc, test_drs)
 {
 	int rv;
@@ -540,11 +585,14 @@ ZTEST_USER(console_cmd_pdc, test_prs)
 		      pdc_power_mgmt_request_power_swap_fake.arg0_history[0]);
 }
 
+static char get_info_project_name[12];
+
 /**
  * @brief Custom fake for pdc_power_mgmt_get_info that outputs some test PDC
  *        chip info.
  */
-static int custom_fake_pdc_power_mgmt_get_info(int port, struct pdc_info_t *out)
+static int custom_fake_pdc_power_mgmt_get_info(int port, struct pdc_info_t *out,
+					       bool live)
 {
 	zassert_not_null(out);
 
@@ -560,6 +608,9 @@ static int custom_fake_pdc_power_mgmt_get_info(int port, struct pdc_info_t *out)
 		.extra = 0xffff,
 	};
 
+	memcpy(out->project_name, get_info_project_name,
+	       sizeof(out->project_name));
+
 	return 0;
 }
 
@@ -573,6 +624,10 @@ ZTEST_USER(console_cmd_pdc, test_info)
 	rv = shell_execute_cmd(get_ec_shell(), "pdc info 99");
 	zassert_equal(rv, -EINVAL, "Expected %d, but got %d", -EINVAL, rv);
 
+	/* Invalid live/cached param */
+	rv = shell_execute_cmd(get_ec_shell(), "pdc info 0 xyz");
+	zassert_equal(rv, -EINVAL, "Expected %d, but got %d", -EINVAL, rv);
+
 	/* Error getting chip info */
 	pdc_power_mgmt_get_info_fake.return_val = 1;
 
@@ -584,6 +639,8 @@ ZTEST_USER(console_cmd_pdc, test_info)
 	RESET_FAKE(pdc_power_mgmt_get_info);
 
 	/* Successful path */
+	strncpy(get_info_project_name, "ProjectName",
+		sizeof(get_info_project_name));
 	pdc_power_mgmt_get_info_fake.custom_fake =
 		custom_fake_pdc_power_mgmt_get_info;
 
@@ -591,9 +648,12 @@ ZTEST_USER(console_cmd_pdc, test_info)
 	zassert_equal(rv, EC_SUCCESS, "Expected %d, but got %d", EC_SUCCESS,
 		      rv);
 
-	/* Ensure we called get_info once with the correct port # */
+	/* Ensure we called get_info once with the correct port # and requested
+	 * a live reading by default
+	 */
 	zassert_equal(1, pdc_power_mgmt_get_info_fake.call_count);
 	zassert_equal(0, pdc_power_mgmt_get_info_fake.arg0_history[0]);
+	zassert_true(pdc_power_mgmt_get_info_fake.arg2_history[0]);
 
 	/* Check console output for correctness */
 	outbuffer =
@@ -606,6 +666,36 @@ ZTEST_USER(console_cmd_pdc, test_info)
 	zassert_not_null(strstr(outbuffer, "VID/PID: 7890:3456"));
 	zassert_not_null(strstr(outbuffer, "Running Flash Code: Y"));
 	zassert_not_null(strstr(outbuffer, "Flash Bank: 16"));
+	zassert_not_null(strstr(outbuffer, "Project Name: 'ProjectName'"));
+
+	RESET_FAKE(pdc_power_mgmt_get_info);
+
+	/* Successful path, but with a cached read */
+	rv = shell_execute_cmd(get_ec_shell(), "pdc info 0 0");
+	zassert_equal(rv, EC_SUCCESS, "Expected %d, but got %d", EC_SUCCESS,
+		      rv);
+
+	zassert_equal(1, pdc_power_mgmt_get_info_fake.call_count);
+	zassert_equal(0, pdc_power_mgmt_get_info_fake.arg0_history[0]);
+	zassert_false(pdc_power_mgmt_get_info_fake.arg2_history[0]);
+
+	RESET_FAKE(pdc_power_mgmt_get_info);
+	shell_backend_dummy_clear_output(get_ec_shell());
+
+	/* Successful path, but no project name in FW image */
+	strncpy(get_info_project_name, "", sizeof(get_info_project_name));
+	pdc_power_mgmt_get_info_fake.custom_fake =
+		custom_fake_pdc_power_mgmt_get_info;
+
+	rv = shell_execute_cmd(get_ec_shell(), "pdc info 0");
+	zassert_equal(rv, EC_SUCCESS, "Expected %d, but got %d", EC_SUCCESS,
+		      rv);
+
+	outbuffer =
+		shell_backend_dummy_get_output(get_ec_shell(), &buffer_size);
+	zassert_true(buffer_size > 0, NULL);
+
+	zassert_not_null(strstr(outbuffer, "Project Name: '<None>'"));
 }
 
 /**
