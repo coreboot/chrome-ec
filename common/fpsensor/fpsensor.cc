@@ -75,38 +75,7 @@ static void send_mkbp_event(uint32_t event)
 	mkbp_send_event(EC_MKBP_EVENT_FINGERPRINT);
 }
 
-/*
- * Returns true if the mode is one that yields a frame in which
- * all bytes should be returned over EC_CMD_FP_FRAME.
- *
- * Other captures modes (simple, pattern0, pattern1, and reset_test) are
- * only interested in the height*width*bpp image bytes that are offset inside
- * the frame.
- *
- * These modes correspond to using the ectool fpframe "raw" modifier.
- */
-static inline int is_raw_capture(uint32_t mode)
-{
-	int capture_type = FP_CAPTURE_TYPE(mode);
-
-	return (capture_type == FP_CAPTURE_VENDOR_FORMAT ||
-		capture_type == FP_CAPTURE_QUALITY_TEST);
-}
-
 #ifdef HAVE_FP_PRIVATE_DRIVER
-/*
- * Returns true if the mode is a test capture that does not require finger
- * touch.
- */
-static inline int is_test_capture(uint32_t mode)
-{
-	int capture_type = FP_CAPTURE_TYPE(mode);
-
-	return (mode & FP_MODE_CAPTURE) &&
-	       (capture_type == FP_CAPTURE_PATTERN0 ||
-		capture_type == FP_CAPTURE_PATTERN1 ||
-		capture_type == FP_CAPTURE_RESET_TEST);
-}
 
 /*
  * contains the bit FP_MODE_ENROLL_SESSION if a finger enrollment is on-going.
@@ -144,8 +113,11 @@ static uint32_t fp_process_enroll(void)
 			fp_enable_positive_match_secret(
 				global_context.templ_valid,
 				&global_context.positive_match_secret_state);
-			fp_init_decrypted_template_state_with_user_id(
-				global_context.templ_valid);
+			global_context
+				.template_states[global_context.templ_valid] =
+				fp_decrypted_template_state{
+					.user_id = global_context.user_id,
+				};
 			global_context.templ_valid++;
 		}
 		global_context.sensor_mode &= ~FP_MODE_ENROLL_SESSION;
@@ -692,7 +664,10 @@ enum ec_status fp_commit_template(std::span<const uint8_t> context)
 			fp_clear_finger_context(idx);
 			return EC_RES_UNAVAILABLE;
 		}
-		fp_init_decrypted_template_state_with_user_id(idx);
+		global_context.template_states[idx] =
+			fp_decrypted_template_state{
+				.user_id = global_context.user_id,
+			};
 	} else {
 		global_context.template_states[idx] =
 			fp_encrypted_template_state{

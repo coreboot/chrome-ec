@@ -80,9 +80,9 @@ struct fpsensor_context {
 	/** Part of the IKM used to derive encryption keys received from the
 	 * TPM.
 	 */
-	uint8_t tpm_seed[FP_CONTEXT_TPM_BYTES];
+	std::array<uint8_t, FP_CONTEXT_TPM_BYTES> tpm_seed;
 	/** Current user ID */
-	uint8_t user_id[FP_CONTEXT_USERID_BYTES];
+	std::array<uint8_t, FP_CONTEXT_USERID_BYTES> user_id;
 	struct positive_match_secret_state positive_match_secret_state;
 	/** Salt used in derivation of positive match secret. */
 	uint8_t fp_positive_match_salt[FP_MAX_FINGER_COUNT]
@@ -120,11 +120,6 @@ void fp_clear_finger_context(uint16_t idx);
  * Reset the current user id associated.
  */
 void fp_reset_context(void);
-
-/**
- * Init the decrypted template state with the current user_id.
- */
-void fp_init_decrypted_template_state_with_user_id(uint16_t idx);
 
 /**
  * Clear all fingerprint templates associated with the current user id and

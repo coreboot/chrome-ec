@@ -312,11 +312,6 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
-        name = "brya_pdc",
-        board = "brya_pdc",
-        extra_modules = ["cmsis"],
-    )
-    ec_target(
         name = "brya_zephyr",
         board = "brya",
         extra_modules = ["cmsis"],
@@ -1610,6 +1605,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "navi",
+        board = "navi",
     )
     ec_target(
         name = "nereid",

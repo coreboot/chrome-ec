@@ -3148,6 +3148,9 @@
 /* Add support for a switch that indicates if the device is in tablet mode. */
 #undef CONFIG_KEYBOARD_TABLET_MODE_SWITCH
 
+/* Add support for skipping lid close when the system into tablet mode. */
+#undef CONFIG_TABLET_MODE_SKIP_LID_CLOSE
+
 /*
  * Minimum CPU clocks between scans.  This ensures that keyboard scanning
  * doesn't starve the other EC tasks of CPU when running at a decreased system
@@ -5223,6 +5226,9 @@
 /* Define if there is a specific method to measure Vbus voltage */
 #undef CONFIG_USB_PD_VBUS_MEASURE_BY_BOARD
 
+/* Define if the PDC on the board supports VBUS measurement */
+#undef CONFIG_USB_PD_VBUS_MEASURE_PDC
+
 /* Define the type-c port controller I2C base address. */
 #define CONFIG_TCPC_I2C_BASE_ADDR_FLAGS 0x4E
 
@@ -5448,6 +5454,12 @@
 /* The delay in ms from power off to power on for MAX14637 */
 #define CONFIG_BC12_MAX14637_DELAY_FROM_OFF_TO_ON_MS 1
 
+/*
+ * Max. size of packets for the control endpoint, valid values: 8, 16, 32, 64.
+ * Defaults to the largest supported value.
+ */
+#undef CONFIG_USB_MAX_CONTROL_PACKET_SIZE
+
 /* Enable USB serial console module. */
 #undef CONFIG_USB_CONSOLE
 
@@ -5610,6 +5622,13 @@
  * that there is no current drop (e.g. 3A -> 1.5A) on active source ports.
  */
 #undef CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT
+
+/*
+ * Maximum number of interrupts in a second. Exceeding this limit
+ * will cause the TCPM to break the PD connection to avoid a
+ * watchdog timeout crash
+ */
+#define CONFIG_USB_PD_INT_STORM_MAX 1800
 
 /******************************************************************************/
 /* stm32f4 dwc usb configs. */
