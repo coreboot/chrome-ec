@@ -338,6 +338,12 @@ tests:
     extra_dtc_overlay_files:
     - boards/native_posix.overlay
     - cbi_flash/binman.dts
+  drivers.charge_manager:
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_CHARGE_MANAGER=y
+    - CONFIG_PLATFORM_EC_USB_PD_VBUS_MEASURE_PDC=y
+    extra_dtc_overlay_files:
+    - boards/native_posix.overlay
   drivers.common_cbi:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_COMMON_CBI=y
@@ -1369,6 +1375,9 @@ tests:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_USBC_FRS=y
     - CONFIG_PLATFORM_EC_USB_PD_FRS_TCPC=y
+  drivers.usbc_power_contract:
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_USBC_POWER_CONTRACT=y
   drivers.usbc_frs.ec_host_cmd:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_USBC_FRS=y

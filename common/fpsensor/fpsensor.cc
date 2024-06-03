@@ -9,6 +9,7 @@
 #include "common.h"
 #include "compile_time_macros.h"
 #include "console.h"
+#include "crypto/cleanse_wrapper.h"
 #include "ec_commands.h"
 #include "fpsensor/fpsensor.h"
 #include "fpsensor/fpsensor_console.h"
@@ -74,24 +75,7 @@ static void send_mkbp_event(uint32_t event)
 	mkbp_send_event(EC_MKBP_EVENT_FINGERPRINT);
 }
 
-static inline int is_raw_capture(uint32_t mode)
-{
-	int capture_type = FP_CAPTURE_TYPE(mode);
-
-	return (capture_type == FP_CAPTURE_VENDOR_FORMAT ||
-		capture_type == FP_CAPTURE_QUALITY_TEST);
-}
-
 #ifdef HAVE_FP_PRIVATE_DRIVER
-static inline int is_test_capture(uint32_t mode)
-{
-	int capture_type = FP_CAPTURE_TYPE(mode);
-
-	return (mode & FP_MODE_CAPTURE) &&
-	       (capture_type == FP_CAPTURE_PATTERN0 ||
-		capture_type == FP_CAPTURE_PATTERN1 ||
-		capture_type == FP_CAPTURE_RESET_TEST);
-}
 
 /*
  * contains the bit FP_MODE_ENROLL_SESSION if a finger enrollment is on-going.
@@ -129,8 +113,11 @@ static uint32_t fp_process_enroll(void)
 			fp_enable_positive_match_secret(
 				global_context.templ_valid,
 				&global_context.positive_match_secret_state);
-			fp_init_decrypted_template_state_with_user_id(
-				global_context.templ_valid);
+			global_context
+				.template_states[global_context.templ_valid] =
+				fp_decrypted_template_state{
+					.user_id = global_context.user_id,
+				};
 			global_context.templ_valid++;
 		}
 		global_context.sensor_mode &= ~FP_MODE_ENROLL_SESSION;
@@ -468,7 +455,6 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 	uint32_t offset = params->offset & FP_FRAME_OFFSET_MASK;
 	uint32_t size = params->size;
 	uint16_t fgr;
-	uint8_t key[SBP_ENC_KEY_LEN];
 	struct ec_fp_template_encryption_metadata *enc_info;
 	enum ec_error_list ret;
 
@@ -479,6 +465,11 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 		/* The host requested a frame. */
 		if (system_is_locked())
 			return EC_RES_ACCESS_DENIED;
+		/*
+		 * Checks if the capture mode is one where we only care about
+		 * the embedded/offset image bytes, like simple, pattern0,
+		 * pattern1, and reset_test.
+		 */
 		if (!is_raw_capture(global_context.sensor_mode))
 			offset += FP_SENSOR_IMAGE_OFFSET;
 
@@ -510,27 +501,27 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 
 		/* Host has requested the first chunk, do the encryption. */
 		timestamp_t now = get_time();
+
 		/* Encrypted template is after the metadata. */
-		uint8_t *encrypted_template = fp_enc_buffer + sizeof(*enc_info);
+		std::span templ = fp_enc_buffer.fp_template;
 		/* Positive match salt is after the template. */
-		uint8_t *positive_match_salt =
-			encrypted_template + sizeof(fp_template[0]);
-		size_t encrypted_blob_size = sizeof(fp_template[0]) +
-					     sizeof(fp_positive_match_salt[0]);
+		std::span positive_match_salt =
+			fp_enc_buffer.positive_match_salt;
+		std::span encrypted_template_and_positive_match_salt(
+			templ.data(),
+			templ.size_bytes() + positive_match_salt.size_bytes());
 
 		/* b/114160734: Not more than 1 encrypted message per second. */
 		if (!timestamp_expired(encryption_deadline, &now))
 			return EC_RES_BUSY;
 		encryption_deadline.val = now.val + (1 * SECOND);
 
-		memset(fp_enc_buffer, 0, sizeof(fp_enc_buffer));
+		memset(&fp_enc_buffer, 0, sizeof(fp_enc_buffer));
 		/*
 		 * The beginning of the buffer contains nonce, encryption_salt
 		 * and tag.
 		 */
-		enc_info = reinterpret_cast<
-			struct ec_fp_template_encryption_metadata *>(
-			fp_enc_buffer);
+		enc_info = &fp_enc_buffer.metadata;
 		enc_info->struct_version = FP_TEMPLATE_FORMAT_VERSION;
 		trng_init();
 		trng_rand_bytes(enc_info->nonce, FP_CONTEXT_NONCE_BYTES);
@@ -547,11 +538,13 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 			global_context.template_newly_enrolled =
 				FP_NO_SUCH_TEMPLATE;
 			trng_init();
-			trng_rand_bytes(fp_positive_match_salt[fgr],
-					FP_POSITIVE_MATCH_SALT_BYTES);
+			trng_rand_bytes(
+				global_context.fp_positive_match_salt[fgr],
+				FP_POSITIVE_MATCH_SALT_BYTES);
 			trng_exit();
 		}
 
+		FpEncryptionKey key;
 		ret = derive_encryption_key(key, enc_info->encryption_salt,
 					    global_context.user_id,
 					    global_context.tpm_seed);
@@ -564,25 +557,22 @@ static enum ec_status fp_command_frame(struct host_cmd_handler_args *args)
 		 * Copy the payload to |fp_enc_buffer| where it will be
 		 * encrypted in-place.
 		 */
-		memcpy(encrypted_template, fp_template[fgr],
-		       sizeof(fp_template[0]));
-		memcpy(positive_match_salt, fp_positive_match_salt[fgr],
-		       sizeof(fp_positive_match_salt[0]));
+		std::ranges::copy(fp_template[fgr], templ.begin());
+		std::ranges::copy(global_context.fp_positive_match_salt[fgr],
+				  positive_match_salt.begin());
 
 		/* Encrypt the secret blob in-place. */
-		std::span encrypted_template_span(encrypted_template,
-						  encrypted_blob_size);
-		ret = aes_128_gcm_encrypt(key, encrypted_template_span,
-					  encrypted_template_span,
-					  enc_info->nonce, enc_info->tag);
-		OPENSSL_cleanse(key, sizeof(key));
+		ret = aes_128_gcm_encrypt(
+			key, encrypted_template_and_positive_match_salt,
+			encrypted_template_and_positive_match_salt,
+			enc_info->nonce, enc_info->tag);
 		if (ret != EC_SUCCESS) {
 			CPRINTS("fgr%d: Failed to encrypt template", fgr);
 			return EC_RES_UNAVAILABLE;
 		}
 		global_context.templ_dirty &= ~BIT(fgr);
 	}
-	memcpy(out, fp_enc_buffer + offset, size);
+	memcpy(out, reinterpret_cast<uint8_t *>(&fp_enc_buffer) + offset, size);
 	args->response_size = size;
 
 	return EC_RES_SUCCESS;
@@ -611,19 +601,9 @@ static enum ec_status fp_command_stats(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_FP_STATS, fp_command_stats, EC_VER_MASK(0));
 
-static bool template_needs_validation_value(
-	struct ec_fp_template_encryption_metadata *enc_info)
-{
-	return enc_info->struct_version == 3 && FP_TEMPLATE_FORMAT_VERSION == 4;
-}
-
 static enum ec_status
 validate_template_format(struct ec_fp_template_encryption_metadata *enc_info)
 {
-	if (template_needs_validation_value(enc_info))
-		/* The host requested migration to v4. */
-		return EC_RES_SUCCESS;
-
 	if (enc_info->struct_version != FP_TEMPLATE_FORMAT_VERSION) {
 		CPRINTS("Invalid template format %d", enc_info->struct_version);
 		return EC_RES_INVALID_PARAM;
@@ -637,13 +617,6 @@ enum ec_status fp_commit_template(std::span<const uint8_t> context)
 
 	uint16_t idx = global_context.templ_valid;
 	struct ec_fp_template_encryption_metadata *enc_info;
-	/* Encrypted template is after the metadata. */
-	uint8_t *encrypted_template = fp_enc_buffer + sizeof(*enc_info);
-	/* Positive match salt is after the template. */
-	uint8_t *positive_match_salt =
-		encrypted_template + sizeof(fp_template[0]);
-	size_t encrypted_blob_size;
-	uint8_t key[SBP_ENC_KEY_LEN];
 
 	/*
 	 * The complete encrypted template has been received, start
@@ -654,24 +627,24 @@ enum ec_status fp_commit_template(std::span<const uint8_t> context)
 	 * The beginning of the buffer contains nonce, encryption_salt
 	 * and tag.
 	 */
-	enc_info = (struct ec_fp_template_encryption_metadata *)fp_enc_buffer;
+	enc_info = &fp_enc_buffer.metadata;
 	enum ec_status res = validate_template_format(enc_info);
 	if (res != EC_RES_SUCCESS) {
 		CPRINTS("fgr%d: Template format not supported", idx);
 		return EC_RES_INVALID_PARAM;
 	}
 
-	// TODO(b/335132437): Remove support for older templates (with
-	// struct_version < 4) after migration is completed.
-	if (enc_info->struct_version <= 3) {
-		encrypted_blob_size = sizeof(fp_template[0]);
-	} else {
-		encrypted_blob_size = sizeof(fp_template[0]) +
-				      sizeof(fp_positive_match_salt[0]);
-	}
+	/* Encrypted template is after the metadata. */
+	std::span templ = fp_enc_buffer.fp_template;
+	/* Positive match salt is after the template. */
+	std::span positive_match_salt = fp_enc_buffer.positive_match_salt;
+	std::span encrypted_template_and_positive_match_salt(
+		templ.data(),
+		templ.size_bytes() + positive_match_salt.size_bytes());
 
 	enum ec_error_list ret;
 	if (global_context.fp_encryption_status & FP_CONTEXT_USER_ID_SET) {
+		FpEncryptionKey key;
 		ret = derive_encryption_key(key, enc_info->encryption_salt,
 					    context, global_context.tpm_seed);
 		if (ret != EC_SUCCESS) {
@@ -680,12 +653,10 @@ enum ec_status fp_commit_template(std::span<const uint8_t> context)
 		}
 
 		/* Decrypt the secret blob in-place. */
-		std::span encrypted_template_span(encrypted_template,
-						  encrypted_blob_size);
-		ret = aes_128_gcm_decrypt(key, encrypted_template_span,
-					  encrypted_template_span,
-					  enc_info->nonce, enc_info->tag);
-		OPENSSL_cleanse(key, sizeof(key));
+		ret = aes_128_gcm_decrypt(
+			key, encrypted_template_and_positive_match_salt,
+			encrypted_template_and_positive_match_salt,
+			enc_info->nonce, enc_info->tag);
 		if (ret != EC_SUCCESS) {
 			CPRINTS("fgr%d: Failed to decipher template", idx);
 			/* Don't leave bad data in the template buffer
@@ -693,29 +664,26 @@ enum ec_status fp_commit_template(std::span<const uint8_t> context)
 			fp_clear_finger_context(idx);
 			return EC_RES_UNAVAILABLE;
 		}
-		fp_init_decrypted_template_state_with_user_id(idx);
+		global_context.template_states[idx] =
+			fp_decrypted_template_state{
+				.user_id = global_context.user_id,
+			};
 	} else {
-		template_states[idx] = fp_encrypted_template_state{
-			.enc_metadata = *enc_info,
-		};
+		global_context.template_states[idx] =
+			fp_encrypted_template_state{
+				.enc_metadata = *enc_info,
+			};
 	}
 
-	memcpy(fp_template[idx], encrypted_template, sizeof(fp_template[0]));
-	if (template_needs_validation_value(enc_info)) {
-		CPRINTS("fgr%d: Generating positive match salt.", idx);
-		trng_init();
-		trng_rand_bytes(positive_match_salt,
-				FP_POSITIVE_MATCH_SALT_BYTES);
-		trng_exit();
-	}
-	if (bytes_are_trivial(positive_match_salt,
-			      sizeof(fp_positive_match_salt[0]))) {
+	std::ranges::copy(templ, fp_template[idx]);
+	if (bytes_are_trivial(positive_match_salt.data(),
+			      positive_match_salt.size_bytes())) {
 		CPRINTS("fgr%d: Trivial positive match salt.", idx);
 		OPENSSL_cleanse(fp_template[idx], sizeof(fp_template[0]));
 		return EC_RES_INVALID_PARAM;
 	}
-	memcpy(fp_positive_match_salt[idx], positive_match_salt,
-	       sizeof(fp_positive_match_salt[0]));
+	std::ranges::copy(positive_match_salt,
+			  global_context.fp_positive_match_salt[idx]);
 
 	global_context.templ_valid++;
 	return EC_RES_SUCCESS;
@@ -742,7 +710,8 @@ static enum ec_status fp_command_template(struct host_cmd_handler_args *args)
 	if (ret != EC_SUCCESS)
 		return EC_RES_INVALID_PARAM;
 
-	memcpy(&fp_enc_buffer[offset], params->data, size);
+	memcpy(reinterpret_cast<uint8_t *>(&fp_enc_buffer) + offset,
+	       params->data, size);
 
 	if (xfer_complete) {
 		return fp_commit_template(global_context.user_id);
@@ -792,7 +761,8 @@ fp_command_migrate_template_to_nonce_context(struct host_cmd_handler_args *args)
 	 * match secrets of legacy templates. New match secret needs to be
 	 * generated for them.
 	 */
-	memset(fp_positive_match_salt[idx], 0, FP_POSITIVE_MATCH_SALT_BYTES);
+	memset(global_context.fp_positive_match_salt[idx], 0,
+	       FP_POSITIVE_MATCH_SALT_BYTES);
 	int ret = fp_enable_positive_match_secret(
 		idx, &global_context.positive_match_secret_state);
 	if (ret != EC_SUCCESS) {

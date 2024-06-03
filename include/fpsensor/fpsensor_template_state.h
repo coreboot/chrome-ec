@@ -9,15 +9,12 @@
 #define __CROS_EC_FPSENSOR_TEMPLATE_STATE_H
 
 #include "ec_commands.h"
+#include "fpsensor_driver.h"
 
 #include <stdbool.h>
 
 #include <array>
 #include <variant>
-
-extern "C" {
-#include "fpsensor_driver.h"
-}
 
 /* The extra information for the encrypted template.
  * Note: the encrypted template content and encrypted positive match salt will
@@ -38,8 +35,5 @@ struct fp_decrypted_template_state {
 using fp_template_state =
 	std::variant<std::monostate, fp_encrypted_template_state,
 		     fp_decrypted_template_state>;
-
-/* The states for different fingers. */
-extern std::array<fp_template_state, FP_MAX_FINGER_COUNT> template_states;
 
 #endif /* __CROS_EC_FPSENSOR_TEMPLATE_STATE_H */

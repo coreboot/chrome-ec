@@ -12,7 +12,6 @@
 #include "cros_cbi.h"
 #include "emul/tcpc/emul_tcpci.h"
 #include "extpower.h"
-#include "fan.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
 #include "keyboard_8042_sharedlib.h"
@@ -44,7 +43,6 @@ LOG_MODULE_REGISTER(nissa, LOG_LEVEL_INF);
 
 FAKE_VALUE_FUNC(int, cros_cbi_get_fw_config, enum cbi_fw_config_field_id,
 		uint32_t *);
-FAKE_VALUE_FUNC(int, cbi_get_board_version, uint32_t *);
 FAKE_VALUE_FUNC(int, cbi_get_ssfc, uint32_t *);
 FAKE_VALUE_FUNC(enum nissa_sub_board_type, nissa_get_sb_type);
 FAKE_VOID_FUNC(usb_interrupt_c1, enum gpio_signal);
@@ -67,7 +65,6 @@ FAKE_VOID_FUNC(lpc_keyboard_resume_irq);
 
 static void test_before(void *fixture)
 {
-	RESET_FAKE(cbi_get_board_version);
 	RESET_FAKE(cros_cbi_get_fw_config);
 	RESET_FAKE(cbi_get_ssfc);
 	RESET_FAKE(nissa_get_sb_type);
@@ -95,166 +92,9 @@ static void test_before(void *fixture)
 
 ZTEST_SUITE(riven, NULL, NULL, test_before, NULL, NULL);
 
-static int board_version;
-
-static int cbi_get_board_version_mock(uint32_t *value)
-{
-	*value = board_version;
-	return 0;
-}
-
 int clock_get_freq(void)
 {
 	return 16000000;
-}
-
-static bool has_keypad;
-
-static int cbi_get_keyboard_configuration(enum cbi_fw_config_field_id field,
-					  uint32_t *value)
-{
-	if (field != FW_KB_NUMERIC_PAD)
-		return -EINVAL;
-
-	*value = has_keypad ? FW_KB_NUMERIC_PAD_PRESENT :
-			      FW_KB_NUMERIC_PAD_ABSENT;
-	return 0;
-}
-
-ZTEST(riven, test_keyboard_configuration)
-{
-	cros_cbi_get_fw_config_fake.custom_fake =
-		cbi_get_keyboard_configuration;
-
-	has_keypad = false;
-	kb_init();
-	zassert_equal(keyboard_raw_get_cols(), KEYBOARD_COLS_NO_KEYPAD);
-	zassert_equal(keyscan_config.actual_key_mask[11], 0xfa);
-	zassert_equal(keyscan_config.actual_key_mask[12], 0xca);
-	zassert_equal(keyscan_config.actual_key_mask[13], 0x00);
-	zassert_equal(keyscan_config.actual_key_mask[14], 0x00);
-	zassert_equal(board_vivaldi_keybd_idx(), 0);
-
-	/* Initialize keyboard_cols for next test */
-	keyboard_raw_set_cols(KEYBOARD_COLS_MAX);
-
-	has_keypad = true;
-	kb_init();
-	zassert_equal(keyboard_raw_get_cols(), KEYBOARD_COLS_WITH_KEYPAD);
-	zassert_equal(keyscan_config.actual_key_mask[11], 0xfe);
-	zassert_equal(keyscan_config.actual_key_mask[12], 0xff);
-	zassert_equal(keyscan_config.actual_key_mask[13], 0xff);
-	zassert_equal(keyscan_config.actual_key_mask[14], 0xff);
-	zassert_equal(board_vivaldi_keybd_idx(), 1);
-}
-
-static bool keyboard_ca_fr;
-
-static int cbi_get_keyboard_type_config(enum cbi_fw_config_field_id field,
-					uint32_t *value)
-{
-	if (field != FW_KB_TYPE)
-		return -EINVAL;
-
-	*value = keyboard_ca_fr ? FW_KB_TYPE_CA_FR : FW_KB_TYPE_DEFAULT;
-	return 0;
-}
-
-ZTEST(riven, test_keyboard_type)
-{
-	uint16_t forwardslash_pipe_key = get_scancode_set2(2, 7);
-	uint16_t right_control_key = get_scancode_set2(4, 0);
-
-	cros_cbi_get_fw_config_fake.custom_fake = cbi_get_keyboard_type_config;
-
-	keyboard_ca_fr = false;
-	kb_init();
-	zassert_equal(get_scancode_set2(4, 0), right_control_key);
-	zassert_equal(get_scancode_set2(2, 7), forwardslash_pipe_key);
-
-	keyboard_ca_fr = true;
-	kb_init();
-	zassert_equal(get_scancode_set2(4, 0), forwardslash_pipe_key);
-	zassert_equal(get_scancode_set2(2, 7), right_control_key);
-}
-
-static bool lid_inverted;
-
-static int cbi_get_lid_orientation_config(enum cbi_fw_config_field_id field,
-					  uint32_t *value)
-{
-	if (field == FW_LID_INVERSION)
-		*value = lid_inverted ? FW_LID_XY_ROT_180 : FW_LID_REGULAR;
-
-	return 0;
-}
-
-ZTEST(riven, test_base_orientation)
-{
-	const int BASE_SENSOR = SENSOR_ID(DT_NODELABEL(base_accel));
-	const void *const normal_rotation =
-		&SENSOR_ROT_STD_REF_NAME(DT_NODELABEL(base_rot_ref));
-	const void *const inverted_rotation =
-		&SENSOR_ROT_STD_REF_NAME(DT_NODELABEL(base_rot_ver1));
-
-	motion_sensors[BASE_SENSOR].rot_standard_ref = normal_rotation;
-
-	cbi_get_board_version_fake.custom_fake = cbi_get_board_version_mock;
-	board_version = 2;
-	form_factor_init();
-	zassert_equal_ptr(motion_sensors[BASE_SENSOR].rot_standard_ref,
-			  normal_rotation,
-			  "base normal orientation should be base_rot_ref");
-
-	RESET_FAKE(cbi_get_board_version);
-	cbi_get_board_version_fake.return_val = EINVAL;
-	form_factor_init();
-	zassert_equal_ptr(motion_sensors[BASE_SENSOR].rot_standard_ref,
-			  normal_rotation,
-			  "errors should leave the rotation unchanged");
-
-	cbi_get_board_version_fake.custom_fake = cbi_get_board_version_mock;
-	board_version = 1;
-	form_factor_init();
-	zassert_equal_ptr(motion_sensors[BASE_SENSOR].rot_standard_ref,
-			  inverted_rotation,
-			  "base inverted orientation should be base_rot_ver1");
-}
-
-ZTEST(riven, test_lid_orientation)
-{
-	const int LID_SENSOR = SENSOR_ID(DT_NODELABEL(lid_accel));
-	const void *const normal_rotation =
-		&SENSOR_ROT_STD_REF_NAME(DT_NODELABEL(lid_rot_ref));
-	const void *const inverted_rotation =
-		&SENSOR_ROT_STD_REF_NAME(DT_NODELABEL(lid_rot_bma422));
-
-	motion_sensors[LID_SENSOR].rot_standard_ref = normal_rotation;
-
-	cros_cbi_get_fw_config_fake.custom_fake =
-		cbi_get_lid_orientation_config;
-
-	lid_inverted = false;
-	form_factor_init();
-	zassert_equal_ptr(motion_sensors[LID_SENSOR].rot_standard_ref,
-			  normal_rotation,
-			  "normal orientation should be lid_rot_ref");
-
-	RESET_FAKE(cros_cbi_get_fw_config);
-	cros_cbi_get_fw_config_fake.return_val = EINVAL;
-	form_factor_init();
-	zassert_equal_ptr(motion_sensors[LID_SENSOR].rot_standard_ref,
-			  normal_rotation,
-			  "errors should leave the rotation unchanged");
-
-	cros_cbi_get_fw_config_fake.custom_fake =
-		cbi_get_lid_orientation_config;
-
-	lid_inverted = true;
-	form_factor_init();
-	zassert_equal_ptr(
-		motion_sensors[LID_SENSOR].rot_standard_ref, inverted_rotation,
-		"inverted orientation should be same as lid_rot_bma422");
 }
 
 static bool clamshell_mode;
@@ -552,58 +392,6 @@ ZTEST(riven, test_alt_sensor_lid_bma422)
 	zassert_equal(bma4xx_interrupt_fake.call_count, 1);
 }
 
-static bool fan_present;
-
-static int cbi_get_fan_fw_config(enum cbi_fw_config_field_id field,
-				 uint32_t *value)
-{
-	if (field != FW_FAN)
-		return -EINVAL;
-
-	*value = fan_present ? FW_FAN_PRESENT : FW_FAN_NOT_PRESENT;
-	return 0;
-}
-
-ZTEST(riven, test_fan_present)
-{
-	int flags;
-
-	/* Default fan_count = CONFIG_FANS = CONFIG_PLATFORM_EC_NUM_FANS */
-	fan_set_count(CONFIG_PLATFORM_EC_NUM_FANS);
-
-	cros_cbi_get_fw_config_fake.custom_fake = cbi_get_fan_fw_config;
-
-	fan_present = true;
-	fan_init();
-
-	zassert_equal(fan_get_count(), 1, "only have 1 fan");
-	zassert_ok(gpio_pin_get_config_dt(
-		GPIO_DT_FROM_NODELABEL(gpio_fan_enable), &flags));
-	zassert_equal(flags, GPIO_OUTPUT | GPIO_OUTPUT_INIT_LOW,
-		      "actual GPIO flags were %#x", flags);
-}
-
-ZTEST(riven, test_fan_absent)
-{
-	int flags;
-
-	/* Default fan_count = CONFIG_FANS = CONFIG_PLATFORM_EC_NUM_FANS */
-	fan_set_count(CONFIG_PLATFORM_EC_NUM_FANS);
-
-	cros_cbi_get_fw_config_fake.custom_fake = cbi_get_fan_fw_config;
-
-	fan_present = false;
-	fan_init();
-
-	/* call fan_set_count to set 0 to fan_count. */
-	zassert_equal(fan_get_count(), 0);
-
-	/* Fan enable is left unconfigured */
-	zassert_ok(gpio_pin_get_config_dt(
-		GPIO_DT_FROM_NODELABEL(gpio_fan_enable), &flags));
-	zassert_equal(flags, 0, "actual GPIO flags were %#x", flags);
-}
-
 static int extpower_handle_update_call_count;
 
 static void call_extpower_handle_update(void)
@@ -880,45 +668,6 @@ ZTEST(riven, test_process_pd_alert)
 		      USB_CHG_EVENT_BC12);
 }
 
-static bool kb_backlight_sku;
-
-static int cbi_get_kb_bl_fw_config(enum cbi_fw_config_field_id field,
-				   uint32_t *value)
-{
-	zassert_equal(field, FW_KB_BL);
-	*value = kb_backlight_sku ? FW_KB_BL_PRESENT : FW_KB_BL_NOT_PRESENT;
-	return 0;
-}
-
-ZTEST(riven, test_keyboard_backlight)
-{
-	/* For PLATFORM_EC_PWM_KBLIGHT default enabled, EC_FEATURE_PWM_KEYB
-	 * is set.
-	 */
-	uint32_t flags0 = EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB);
-	uint32_t result;
-
-	/* Support keyboard backlight */
-	cros_cbi_get_fw_config_fake.custom_fake = cbi_get_kb_bl_fw_config;
-	kb_backlight_sku = true;
-	result = board_override_feature_flags0(flags0);
-	zassert_equal(result, flags0,
-		      "Support kblight, should keep PWM_KEYB feature.");
-
-	/* Error reading fw_config */
-	RESET_FAKE(cros_cbi_get_fw_config);
-	cros_cbi_get_fw_config_fake.return_val = EINVAL;
-	result = board_override_feature_flags0(flags0);
-	zassert_equal(result, flags0,
-		      "Unchange ec feature, keep PWM_KEYB feature.");
-
-	/* Not support keyboard backlight */
-	cros_cbi_get_fw_config_fake.custom_fake = cbi_get_kb_bl_fw_config;
-	kb_backlight_sku = false;
-	result = board_override_feature_flags0(flags0);
-	zassert_equal(result, 0, "No kblight should clear PWM_KEYB feature.");
-}
-
 ZTEST(riven, test_led_pwm)
 {
 	led_set_color_battery(EC_LED_COLOR_RED);
@@ -937,182 +686,6 @@ ZTEST(riven, test_led_pwm)
 	led_set_color_battery(EC_LED_COLOR_GREEN);
 	zassert_equal(set_pwm_led_color_fake.arg0_val, PWM_LED0);
 	zassert_equal(set_pwm_led_color_fake.arg1_val, -1);
-}
-
-static int thermal_solution;
-
-static int cbi_get_thermal_fw_config(enum cbi_fw_config_field_id field,
-				     uint32_t *value)
-{
-	zassert_equal(field, FW_THERMAL);
-	*value = thermal_solution;
-	return 0;
-}
-
-static int chipset_state;
-
-static int chipset_in_state_mock(int state_mask)
-{
-	if (state_mask & chipset_state)
-		return 1;
-
-	return 0;
-}
-
-ZTEST(riven, test_6w_thermal_solution)
-{
-	int temp = 35;
-
-	/* Initialize pwm fam (pwm_fan_init) */
-	fan_channel_setup(0, FAN_USE_RPM_MODE);
-	fan_set_enabled(0, 1);
-
-	/* Test fan table for 6W CPU */
-	cros_cbi_get_fw_config_fake.custom_fake = cbi_get_thermal_fw_config;
-	thermal_solution = FW_THERMAL_6W;
-	thermal_init();
-
-	/* Turn on fan when chipset state on. */
-	chipset_in_state_fake.custom_fake = chipset_in_state_mock;
-	chipset_state = CHIPSET_STATE_ON;
-
-	/* level_0 */
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 0);
-
-	/* level_1 */
-	temp = 40;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 2500);
-
-	/* level_2 */
-	temp = 45;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 2800);
-
-	/* level_3 */
-	temp = 50;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 3000);
-
-	/* level_4 */
-	temp = 55;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 3200);
-
-	/* level_5 */
-	temp = 60;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 3600);
-
-	/* level_6 */
-	temp = 65;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 4000);
-
-	/* level_7 */
-	temp = 70;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 4600);
-
-	/* decrase temp to level_7 */
-	temp = 65;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 4600);
-
-	/* Turn off fan when chipset suspend or shutdown */
-	chipset_in_state_fake.custom_fake = chipset_in_state_mock;
-	chipset_state = CHIPSET_STATE_STANDBY;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 0);
-}
-
-ZTEST(riven, test_15w_thermal_solution)
-{
-	int temp = 35;
-
-	/* init fan config, flags = FAN_USE_RPM_MODE */
-	fan_channel_setup(0, FAN_USE_RPM_MODE);
-	fan_set_enabled(0, 1);
-
-	/* Test fan table for 15W CPU */
-	cros_cbi_get_fw_config_fake.custom_fake = cbi_get_thermal_fw_config;
-	thermal_solution = FW_THERMAL_15W;
-	thermal_init();
-
-	/* Turn on fan when chipset state on. */
-	chipset_in_state_fake.custom_fake = chipset_in_state_mock;
-	chipset_state = CHIPSET_STATE_ON;
-
-	/* level_0 */
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 0);
-
-	/* level_1 */
-	temp = 40;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 2500);
-
-	/* level_2 */
-	temp = 45;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 2800);
-
-	/* level_3 */
-	temp = 50;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 3000);
-
-	/* level_5 */
-	temp = 55;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 3600);
-
-	/* level_6 */
-	temp = 60;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 4000);
-
-	/* level_7 */
-	temp = 70;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 4600);
-
-	/* level_9 */
-	temp = 75;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 5500);
-
-	/* decrease temp to level_8 */
-	temp = 70;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 5000);
-
-	/* Turn off fan when chipset suspend or shutdown */
-	chipset_in_state_fake.custom_fake = chipset_in_state_mock;
-	chipset_state = CHIPSET_STATE_STANDBY;
-	board_override_fan_control(0, &temp);
-	zassert_equal(fan_get_rpm_mode(0), 1);
-	zassert_equal(fan_get_rpm_target(0), 0);
 }
 
 static bool cbi_touch_en;

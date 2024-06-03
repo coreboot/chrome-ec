@@ -86,6 +86,7 @@ if(CONFIG_TEST_NISSA_SUNDANCE)
             src/sundance.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/sundance/src/charger.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/sundance/src/usbc.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/sundance/src/led.c
     )
 endif()
 
@@ -276,12 +277,9 @@ if(CONFIG_TEST_NISSA_RIVEN)
 	    app PRIVATE
 	    src/riven.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/charger.c
-	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/fan.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/form_factor.c
-	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/kb_backlight.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/keyboard.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/led.c
-	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/thermal.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/touch_panel.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/usbc.c
     )

@@ -27,7 +27,7 @@ __override uint32_t board_override_feature_flags0(uint32_t flags0)
 		return flags0;
 	}
 
-	if (val == FW_KB_BL_NOT_PRESENT)
+	if (val == FW_KB_BL_ABSENT)
 		return (flags0 & ~EC_FEATURE_MASK_0(EC_FEATURE_PWM_KEYB));
 	else
 		return flags0;
