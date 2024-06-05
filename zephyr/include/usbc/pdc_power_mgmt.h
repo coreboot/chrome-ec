@@ -210,9 +210,9 @@ bool pdc_power_mgmt_pd_capable(int port);
  *
  * @param port USB-C port number
  *
- * @retval VBUS voltage
+ * @retval VBUS voltage in millivolts
  */
-uint32_t pdc_power_mgmt_get_vbus_voltage(int port);
+int pdc_power_mgmt_get_vbus_voltage(int port);
 
 /**
  * @brief Resets the PDC
@@ -247,6 +247,14 @@ uint8_t pdc_power_mgmt_get_src_cap_cnt(int port);
  * pd_dual_role_states
  */
 void pdc_power_mgmt_set_dual_role(int port, enum pd_dual_role_states state);
+
+/**
+ * @brief Get the previously set dual role state
+ *
+ * @param port USB-C port number
+ * @return most recently-set dual role state, or -1 if never set.
+ */
+enum pd_dual_role_states pdc_power_mgmt_get_dual_role(int port);
 
 /**
  * @brief Get the current PD state name of USB-C port

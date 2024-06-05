@@ -26,6 +26,8 @@ static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 #define SMBUS_ARA_NODE DT_NODELABEL(smbus_ara_emul)
 static const struct emul *ara = EMUL_DT_GET(SMBUS_ARA_NODE);
 
+bool pdc_power_mgmt_test_wait_unattached(void);
+bool pdc_power_mgmt_test_wait_attached(int port);
 bool pdc_rts54xx_test_idle_wait(void);
 
 bool test_pdc_power_mgmt_is_snk_typec_attached_run(int port);
@@ -46,6 +48,7 @@ void pdc_power_mgmt_before(void *fixture)
 	emul_pdc_disconnect(emul);
 	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
 
+	zassert_true(pdc_power_mgmt_test_wait_unattached());
 	zassert_true(pdc_rts54xx_test_idle_wait());
 }
 
@@ -444,12 +447,14 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 		.pd_version = 0xabcd,
 		.pd_revision = 0x1234,
 		.vid_pid = 0x12345678,
+		.project_name = "ProjectName",
 	};
 	struct pdc_info_t in2 = {
 		.fw_version = 0x002a3b4c,
 		.pd_version = 0xef01,
 		.pd_revision = 0x5678,
 		.vid_pid = 0x9abcdef0,
+		.project_name = "MyProj",
 	};
 	struct pdc_info_t out = { 0 };
 	union connector_status_t connector_status;
@@ -472,6 +477,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 	zassert_equal(in1.pd_revision, out.pd_revision);
 	zassert_equal(in1.vid_pid, out.vid_pid, "in=0x%X, out=0x%X",
 		      in1.vid_pid, out.vid_pid);
+	zassert_mem_equal(in1.project_name, out.project_name,
+			  sizeof(in1.project_name));
 
 	/* Repeat but non-live. The cached info should match the original
 	 * read instead of `in2`.
@@ -484,6 +491,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 	zassert_equal(in1.pd_revision, out.pd_revision);
 	zassert_equal(in1.vid_pid, out.vid_pid, "in=0x%X, out=0x%X",
 		      in1.vid_pid, out.vid_pid);
+	zassert_mem_equal(in1.project_name, out.project_name,
+			  sizeof(in1.project_name));
 
 	/* Live read again. This time we should get `in2`. */
 	zassert_ok(pdc_power_mgmt_get_info(TEST_PORT, &out, true));
@@ -493,6 +502,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 	zassert_equal(in2.pd_revision, out.pd_revision);
 	zassert_equal(in2.vid_pid, out.vid_pid, "in=0x%X, out=0x%X",
 		      in2.vid_pid, out.vid_pid);
+	zassert_mem_equal(in2.project_name, out.project_name,
+			  sizeof(in2.project_name));
 
 	emul_pdc_disconnect(emul);
 	zassert_true(
@@ -547,8 +558,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 
 		test[i].s.configure(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
-		zassert_true(TEST_WAIT_FOR(pd_is_connected(TEST_PORT),
-					   PDC_TEST_TIMEOUT));
+		zassert_true(TEST_WAIT_FOR(
+			pdc_power_mgmt_test_wait_attached(TEST_PORT),
+			PDC_TEST_TIMEOUT));
 
 		pd_request_power_swap(TEST_PORT);
 
@@ -628,8 +640,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_data_swap)
 
 		test[i].s.configure(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
-		zassert_true(TEST_WAIT_FOR(pd_is_connected(TEST_PORT),
-					   PDC_TEST_TIMEOUT));
+		zassert_true(TEST_WAIT_FOR(
+			pdc_power_mgmt_test_wait_attached(TEST_PORT),
+			PDC_TEST_TIMEOUT));
 
 		pd_request_data_swap(TEST_PORT);
 		start = k_cycle_get_32();
@@ -755,7 +768,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 		{ .s = { .state = PD_DRP_FORCE_SINK,
 			 .configure = emul_pdc_configure_src },
 		  .e = { .check_pdr = true,
-			 .pdr = { .swap_to_src = 0, .swap_to_snk = 1 } } },
+			 .pdr = { .swap_to_src = 0, .swap_to_snk = 1 },
+			 .check_cc_mode = true,
+			 .cc_mode = CCOM_RD } },
 		{ .s = { .state = PD_DRP_FORCE_SOURCE,
 			 .configure = emul_pdc_configure_snk },
 		  .e = { .check_pdr = true,
@@ -773,11 +788,15 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 		if (test[i].s.configure) {
 			test[i].s.configure(emul, &connector_status);
 			emul_pdc_connect_partner(emul, &connector_status);
-			zassert_true(TEST_WAIT_FOR(pd_is_connected(TEST_PORT),
-						   PDC_TEST_TIMEOUT));
+			zassert_true(TEST_WAIT_FOR(
+				pdc_power_mgmt_test_wait_attached(TEST_PORT),
+				PDC_TEST_TIMEOUT));
 		}
 
 		pd_set_dual_role(TEST_PORT, test[i].s.state);
+
+		zassert_equal(test[i].s.state, pd_get_dual_role(TEST_PORT));
+
 		start = k_cycle_get_32();
 
 		while (k_cycle_get_32() - start < timeout) {

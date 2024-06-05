@@ -34,7 +34,7 @@ void board_config_pre_init(void)
  * Forward UARTs as a USB serial interface.
  */
 
-#define USB_STREAM_RX_SIZE 16
+#define USB_STREAM_RX_SIZE 64
 #define USB_STREAM_TX_SIZE 64
 
 /******************************************************************************
@@ -207,7 +207,7 @@ static void board_init(void)
 	/* Enable DAC */
 	STM32_RCC_APB1ENR |= STM32_RCC_APB1ENR1_DAC1EN;
 }
-DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_PRE_DEFAULT);
 
 static void usart_reinit(struct usb_stream_config const *usart_usb,
 			 struct usart_config const *usart)

@@ -78,6 +78,9 @@
 #define CONFIG_STREAM_USB
 #define CONFIG_CMD_USART_INFO
 
+/* Use faster SYSCLK for the UARTS used for USB forwarding */
+#define CONFIG_USART_SYSCLK
+
 /* The UART console is on LPUART (UART9), connected to st-link debugger. */
 #undef CONFIG_UART_CONSOLE
 #define CONFIG_UART_CONSOLE 9
@@ -100,6 +103,9 @@
 #define CONFIG_USB
 #define CONFIG_USB_PID 0x520e
 #define CONFIG_USB_CONSOLE
+
+/* Reduced control endpoint buffer usage, to allow more for UART forwarding */
+#define CONFIG_USB_MAX_CONTROL_PACKET_SIZE 32
 
 /*
  * Some commands take a list of GPIO names, which can exceed the default 80
@@ -192,17 +198,17 @@
 #ifndef __ASSEMBLER__
 
 /* Timer selection */
-#define UNUSED_TIMER_1 1
+#define PWM_TIMER_1 1
 #define TIM_CLOCK32 2
-#define UNUSED_TIMER_3 3
-#define UNUSED_TIMER_4 4
-#define UNUSED_TIMER_5 5
+#define PWM_TIMER_3 3
+#define PWM_TIMER_4 4
+#define PWM_TIMER_5 5
 #define BITBANG_TIMER 6
 #define JTAG_TIMER 7
-#define UNUSED_TIMER_8 8
-#define UNUSED_TIMER_15 15
-#define UNUSED_TIMER_16 16
-#define UNUSED_TIMER_17 17
+#define PWM_TIMER_8 8
+#define PWM_TIMER_15 15
+#define PWM_TIMER_16 16
+#define PWM_TIMER_17 17
 
 #include "gpio_signal.h"
 

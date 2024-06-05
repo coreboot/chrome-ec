@@ -432,7 +432,7 @@ ZTEST_USER(console_cmd_pdc, test_src_voltage)
 		pdc_power_mgmt_request_source_voltage_fake.arg1_history[0]);
 }
 
-ZTEST_USER(console_cmd_pdc, test_dualrole)
+ZTEST_USER(console_cmd_pdc, test_dualrole_set)
 {
 	int rv;
 
@@ -489,6 +489,51 @@ ZTEST_USER(console_cmd_pdc, test_dualrole)
 		      pdc_power_mgmt_set_dual_role_fake.arg1_history[4]);
 }
 
+/**
+ * @brief Helper for test_dualrole_get that sets the mock's return value and
+ *        compares the console output against the provided string
+ *
+ * @param state Dual role mode to set mock to
+ * @param state_str Expected string to see in console output
+ * @return true if state_str appears in console output
+ */
+bool helper_set_and_check_dual_role_mode(enum pd_dual_role_states state,
+					 const char *state_str)
+{
+	int rv;
+	const char *outbuffer;
+	size_t buffer_size;
+
+	shell_backend_dummy_clear_output(get_ec_shell());
+
+	pdc_power_mgmt_get_dual_role_fake.return_val = state;
+	rv = shell_execute_cmd(get_ec_shell(), "pdc dualrole 0");
+	zassert_equal(rv, EC_SUCCESS, "Expected %d, but got %d", EC_SUCCESS,
+		      rv);
+
+	outbuffer =
+		shell_backend_dummy_get_output(get_ec_shell(), &buffer_size);
+	zassert_true(buffer_size > 0, NULL);
+
+	return strstr(outbuffer, state_str) != NULL;
+}
+
+ZTEST_USER(console_cmd_pdc, test_dualrole_get)
+{
+	zassert_true(helper_set_and_check_dual_role_mode(
+		PD_DRP_TOGGLE_ON, "Dual role state: TOGGLE_ON"));
+	zassert_true(helper_set_and_check_dual_role_mode(
+		PD_DRP_TOGGLE_OFF, "Dual role state: TOGGLE_OFF"));
+	zassert_true(helper_set_and_check_dual_role_mode(
+		PD_DRP_FREEZE, "Dual role state: FREEZE"));
+	zassert_true(helper_set_and_check_dual_role_mode(
+		PD_DRP_FORCE_SINK, "Dual role state: FORCE_SINK"));
+	zassert_true(helper_set_and_check_dual_role_mode(
+		PD_DRP_FORCE_SOURCE, "Dual role state: FORCE_SOURCE"));
+	zassert_true(helper_set_and_check_dual_role_mode(
+		-1, "Dual role state: Unknown"));
+}
+
 ZTEST_USER(console_cmd_pdc, test_drs)
 {
 	int rv;
@@ -540,11 +585,14 @@ ZTEST_USER(console_cmd_pdc, test_prs)
 		      pdc_power_mgmt_request_power_swap_fake.arg0_history[0]);
 }
 
+static char get_info_project_name[12];
+
 /**
  * @brief Custom fake for pdc_power_mgmt_get_info that outputs some test PDC
  *        chip info.
  */
-static int custom_fake_pdc_power_mgmt_get_info(int port, struct pdc_info_t *out)
+static int custom_fake_pdc_power_mgmt_get_info(int port, struct pdc_info_t *out,
+					       bool live)
 {
 	zassert_not_null(out);
 
@@ -560,6 +608,9 @@ static int custom_fake_pdc_power_mgmt_get_info(int port, struct pdc_info_t *out)
 		.extra = 0xffff,
 	};
 
+	memcpy(out->project_name, get_info_project_name,
+	       sizeof(out->project_name));
+
 	return 0;
 }
 
@@ -573,6 +624,10 @@ ZTEST_USER(console_cmd_pdc, test_info)
 	rv = shell_execute_cmd(get_ec_shell(), "pdc info 99");
 	zassert_equal(rv, -EINVAL, "Expected %d, but got %d", -EINVAL, rv);
 
+	/* Invalid live/cached param */
+	rv = shell_execute_cmd(get_ec_shell(), "pdc info 0 xyz");
+	zassert_equal(rv, -EINVAL, "Expected %d, but got %d", -EINVAL, rv);
+
 	/* Error getting chip info */
 	pdc_power_mgmt_get_info_fake.return_val = 1;
 
@@ -584,6 +639,8 @@ ZTEST_USER(console_cmd_pdc, test_info)
 	RESET_FAKE(pdc_power_mgmt_get_info);
 
 	/* Successful path */
+	strncpy(get_info_project_name, "ProjectName",
+		sizeof(get_info_project_name));
 	pdc_power_mgmt_get_info_fake.custom_fake =
 		custom_fake_pdc_power_mgmt_get_info;
 
@@ -591,9 +648,12 @@ ZTEST_USER(console_cmd_pdc, test_info)
 	zassert_equal(rv, EC_SUCCESS, "Expected %d, but got %d", EC_SUCCESS,
 		      rv);
 
-	/* Ensure we called get_info once with the correct port # */
+	/* Ensure we called get_info once with the correct port # and requested
+	 * a live reading by default
+	 */
 	zassert_equal(1, pdc_power_mgmt_get_info_fake.call_count);
 	zassert_equal(0, pdc_power_mgmt_get_info_fake.arg0_history[0]);
+	zassert_true(pdc_power_mgmt_get_info_fake.arg2_history[0]);
 
 	/* Check console output for correctness */
 	outbuffer =
@@ -606,6 +666,36 @@ ZTEST_USER(console_cmd_pdc, test_info)
 	zassert_not_null(strstr(outbuffer, "VID/PID: 7890:3456"));
 	zassert_not_null(strstr(outbuffer, "Running Flash Code: Y"));
 	zassert_not_null(strstr(outbuffer, "Flash Bank: 16"));
+	zassert_not_null(strstr(outbuffer, "Project Name: 'ProjectName'"));
+
+	RESET_FAKE(pdc_power_mgmt_get_info);
+
+	/* Successful path, but with a cached read */
+	rv = shell_execute_cmd(get_ec_shell(), "pdc info 0 0");
+	zassert_equal(rv, EC_SUCCESS, "Expected %d, but got %d", EC_SUCCESS,
+		      rv);
+
+	zassert_equal(1, pdc_power_mgmt_get_info_fake.call_count);
+	zassert_equal(0, pdc_power_mgmt_get_info_fake.arg0_history[0]);
+	zassert_false(pdc_power_mgmt_get_info_fake.arg2_history[0]);
+
+	RESET_FAKE(pdc_power_mgmt_get_info);
+	shell_backend_dummy_clear_output(get_ec_shell());
+
+	/* Successful path, but no project name in FW image */
+	strncpy(get_info_project_name, "", sizeof(get_info_project_name));
+	pdc_power_mgmt_get_info_fake.custom_fake =
+		custom_fake_pdc_power_mgmt_get_info;
+
+	rv = shell_execute_cmd(get_ec_shell(), "pdc info 0");
+	zassert_equal(rv, EC_SUCCESS, "Expected %d, but got %d", EC_SUCCESS,
+		      rv);
+
+	outbuffer =
+		shell_backend_dummy_get_output(get_ec_shell(), &buffer_size);
+	zassert_true(buffer_size > 0, NULL);
+
+	zassert_not_null(strstr(outbuffer, "Project Name: '<None>'"));
 }
 
 /**
@@ -723,4 +813,110 @@ ZTEST_USER(console_cmd_pdc, test_connector_status)
 		strstr(outbuffer, "   voltage_reading                  : 400"));
 	zassert_not_null(strstr(
 		outbuffer, "   voltage                          : 20000 mV"));
+}
+
+/** Test PDOs for `test_srccaps` */
+static const uint32_t source_caps[] = {
+	PDO_FIXED(5000 /*mV*/, 3000 /*mA*/, PDO_FIXED_DUAL_ROLE),
+	PDO_FIXED(5000 /*mV*/, 3000 /*mA*/, PDO_FIXED_UNCONSTRAINED),
+	PDO_FIXED(5000 /*mV*/, 3000 /*mA*/, PDO_FIXED_COMM_CAP),
+	PDO_FIXED(5000 /*mV*/, 3000 /*mA*/, PDO_FIXED_DATA_SWAP),
+	PDO_FIXED(5000 /*mV*/, 3000 /*mA*/, PDO_FIXED_FRS_CURR_MASK),
+	PDO_VAR(5000 /*mV*/, 20000 /*mV*/, 1500 /*mA*/),
+	PDO_BATT(5000 /*mV*/, 20000 /*mV*/, 50000 /*mW*/),
+	PDO_AUG(9000 /*mV*/, 15000 /*mV*/, 2000 /*mA*/),
+};
+
+/**
+ * @brief Custom fake for pdc_power_mgmt_get_src_caps(). Because the return
+ *        value of this function is a const ptr to a const, we cannot override
+ *        the `.return_val` member in the fake's FFF struct. Instead, use a
+ *        custom fake to return a source cap list.
+ */
+static const uint32_t *const custom_fake_pdc_power_mgmt_get_src_caps(int port)
+{
+	return (const uint32_t *const)&source_caps;
+}
+
+ZTEST_USER(console_cmd_pdc, test_srccaps)
+{
+	int rv;
+	const char *outbuffer;
+	size_t buffer_size;
+
+	/* Invalid port number */
+	rv = shell_execute_cmd(get_ec_shell(), "pdc srccaps 99");
+	zassert_equal(rv, -EINVAL, "Expected %d, but got %d", -EINVAL, rv);
+
+	/* No source caps present */
+	pdc_power_mgmt_get_src_cap_cnt_fake.return_val = 0;
+
+	rv = shell_execute_cmd(get_ec_shell(), "pdc srccaps 0");
+	zassert_equal(rv, EC_SUCCESS, "Expected %d, but got %d", EC_SUCCESS,
+		      rv);
+
+	zassert_equal(1, pdc_power_mgmt_get_src_caps_fake.call_count);
+	zassert_equal(1, pdc_power_mgmt_get_src_cap_cnt_fake.call_count);
+
+	outbuffer =
+		shell_backend_dummy_get_output(get_ec_shell(), &buffer_size);
+
+	zassert_true(buffer_size > 0, NULL);
+	zassert_not_null(strstr(outbuffer, "No source caps for port"));
+
+	RESET_FAKE(pdc_power_mgmt_get_src_caps);
+	RESET_FAKE(pdc_power_mgmt_get_src_cap_cnt);
+
+	/* Successful path w/ source caps */
+	pdc_power_mgmt_get_src_caps_fake.custom_fake =
+		&custom_fake_pdc_power_mgmt_get_src_caps;
+	pdc_power_mgmt_get_src_cap_cnt_fake.return_val =
+		ARRAY_SIZE(source_caps);
+
+	rv = shell_execute_cmd(get_ec_shell(), "pdc srccaps 0");
+	zassert_equal(rv, EC_SUCCESS, "Expected %d, but got %d", EC_SUCCESS,
+		      rv);
+
+	zassert_equal(1, pdc_power_mgmt_get_src_caps_fake.call_count);
+	zassert_equal(1, pdc_power_mgmt_get_src_cap_cnt_fake.call_count);
+
+	outbuffer =
+		shell_backend_dummy_get_output(get_ec_shell(), &buffer_size);
+
+	zassert_true(buffer_size > 0, NULL);
+
+	/*
+	 * Sample output:
+	 *
+	 * Src 00: 2001912c FIX          5000mV,  3000mA [DRP               ]
+	 * Src 01: 0801912c FIX          5000mV,  3000mA [    UP            ]
+	 * Src 02: 0401912c FIX          5000mV,  3000mA [       USB        ]
+	 * Src 03: 0201912c FIX          5000mV,  3000mA [           DRD    ]
+	 * Src 04: 0181912c FIX          5000mV,  3000mA [               FRS]
+	 * Src 05: 99019096 VAR  5000mV-20000mV,  1500mA
+	 * Src 06: 590190c8 BAT  5000mV-20000mV,  3000mW
+	 * Src 07: c12c5a28 AUG  9000mV-15000mV,  2000mA
+	 */
+
+	zassert_not_null(strstr(outbuffer,
+				"Src 00: 2001912c FIX          5000mV,  3000mA "
+				"[DRP               ]"));
+	zassert_not_null(strstr(outbuffer,
+				"Src 01: 0801912c FIX          5000mV,  3000mA "
+				"[    UP            ]"));
+	zassert_not_null(strstr(outbuffer,
+				"Src 02: 0401912c FIX          5000mV,  3000mA "
+				"[       USB        ]"));
+	zassert_not_null(strstr(outbuffer,
+				"Src 03: 0201912c FIX          5000mV,  3000mA "
+				"[           DRD    ]"));
+	zassert_not_null(strstr(outbuffer,
+				"Src 04: 0181912c FIX          5000mV,  3000mA "
+				"[               FRS]"));
+	zassert_not_null(strstr(
+		outbuffer, "Src 05: 99019096 VAR  5000mV-20000mV,  1500mA"));
+	zassert_not_null(strstr(
+		outbuffer, "Src 06: 590190c8 BAT  5000mV-20000mV,  3000mW"));
+	zassert_not_null(strstr(
+		outbuffer, "Src 07: c12c5a28 AUG  9000mV-15000mV,  2000mA"));
 }
