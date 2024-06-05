@@ -1653,11 +1653,11 @@ Artifacts:
 *   capsules: Allow dynamically changing baud rate
 
 ```
-Build:   ti50_common_prepvt-15086.B:v0.0.1147-1170d5a9
-         libtock-rs:v0.0.929-ecde39c
-         tock:v0.0.9682-1b39efeb9
+Build:   ti50_common_prepvt-15086.B:v0.0.1204-5ad11b3f
+         libtock-rs:v0.0.932-0f90e08
+         tock:v0.0.9684-aae949e75
          ms-tpm-20-ref:v0.0.333-50b2409
-         @chromeos-ci-firmware-us-central2-d-x32-0-2g96 2024-04-02 13:05:03
+         @chromeos-ci-firmware-us-east1-d-x32-0-y2he 2024-04-25 15:11:17
 ```
 
 **Bug Fixes**
