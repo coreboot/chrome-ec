@@ -19,7 +19,10 @@ test/flash_write_protect.c
 test/fp_transport.c
 test/ftrapv.c
 test/libc_printf.c
-test/malloc.c"
+test/malloc.c
+test/panic.c
+test/printf.c
+test/queue.c"
 
 for file in "$@"; do
   ec_file="${file##**/platform/ec/}"

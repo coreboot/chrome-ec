@@ -182,14 +182,15 @@ struct timer_pwm_use_t {
 struct timer_pwm_use_t timer_pwm_use[18];
 
 struct dac_t {
+	uint8_t channel_no;
 	uint32_t enable_mask;
 	volatile uint32_t *data_register;
 };
 
 /* Sparse array of DAC capabilities for GPIO pins. */
 const struct dac_t dac_channels[GPIO_COUNT] = {
-	[GPIO_CN7_9] = { STM32_DAC_CR_EN1, &STM32_DAC_DHR12R1 },
-	[GPIO_CN7_10] = { STM32_DAC_CR_EN2, &STM32_DAC_DHR12R2 },
+	[GPIO_CN7_9] = { 0, STM32_DAC_CR_EN1, &STM32_DAC_DHR12R1 },
+	[GPIO_CN7_10] = { 1, STM32_DAC_CR_EN2, &STM32_DAC_DHR12R2 },
 };
 
 /*
@@ -1371,13 +1372,18 @@ struct bitbang_state_t {
 	uint8_t mask, pattern;
 
 	/*
-	 * For speed of interrupt handler, each pin to be manipulated by
-	 * bitbanging is recorded as the base address of the GPIO bank, as well
-	 * as the 16-bit "mask" to use to access the particular pin in the bank.
+	 * How many bytes used for an "ordinary" sample, that is, not a special
+	 * pause encoding.  The BITBANG_DELAY_BIT of the first byte of such a
+	 * sample is zero, subsequent bytes of the sample may use all eight bits
+	 * for data.
 	 */
-	uint8_t num_pins;
-	size_t pin_bases[7];
-	uint32_t pin_masks[7];
+	uint8_t num_sample_bytes;
+
+	/*
+	 * Space in SRAM for interrupt handler to be composed just-in-time from
+	 * machine code snippets, based on the set of pins being manipulated.
+	 */
+	uint8_t code[512] __attribute__((aligned(4)));
 };
 
 struct bitbang_state_t bitbang;
@@ -1393,116 +1399,6 @@ static inline uint8_t *bitbang_data_ptr(uint32_t idx)
 
 #define BITBANG_DELAY_BIT 0x80
 #define BITBANG_DATA_MASK 0x7F
-
-/*
- * Bitbang timer interrupt handler.  Will read the status of GPIOs, then set
- * GPIO output according to the byte at `bitbang.irq`, before overwriting it
- * with the sampled GPIOs and incrementing `bitbang.irq`.  (Except when high
- * bit of byte it set, which means to pause for a number of cycles.)
- */
-void IRQ_HANDLER(IRQ_TIM(BITBANG_TIMER))(void)
-{
-	uint32_t triggered = STM32_TIM_SR(BITBANG_TIMER);
-	if (!(triggered & 1)) {
-		return;
-	}
-	STM32_TIM_SR(BITBANG_TIMER) = 0xFFFE;
-	if (bitbang.irq == bitbang.irq_tail) {
-		/* End of waveform, stop timer */
-		STM32_TIM_CR1(BITBANG_TIMER) = 0;
-		return;
-	}
-
-	/*
-	 * Read current level of all pins part of bit-banging.  If some of the
-	 * pins are in push-pull mode, this will be what was written the
-	 * previous tick.
-	 */
-	uint8_t input_data = 0;
-	for (uint8_t i = 0; i < bitbang.num_pins; i++) {
-		input_data |= !!(STM32_GPIO_IDR(bitbang.pin_bases[i]) &
-				 bitbang.pin_masks[i])
-			      << i;
-	}
-
-	/*
-	 * See if there are reasons for not yet proceeding with the remaining
-	 * part of the waveform.
-	 */
-	if (bitbang.countdown) {
-		/* Waiting for a fixed duration to pass. */
-		bitbang.countdown--;
-		return;
-	}
-	if (bitbang.mask) {
-		/* Waiting for a particular trigger pattern. */
-		if ((input_data ^ bitbang.pattern) & bitbang.mask) {
-			/* No match, sample again next cycle */
-			return;
-		}
-		/* Match, proceed */
-		bitbang.mask = 0;
-	}
-
-	/*
-	 * Past reasons to pause have been resolved.  Now inspect the next byte
-	 * of the waveform encoding.
-	 */
-	uint8_t data_byte = *bitbang_data_ptr(bitbang.irq);
-	while (data_byte & BITBANG_DELAY_BIT) {
-		/* Maintain current levels for a number of cycles. */
-		uint8_t delay_scale = 0;
-		bitbang.countdown = 0;
-		do {
-			bitbang.irq++;
-			bitbang.countdown += ((data_byte & BITBANG_DATA_MASK)
-					      << delay_scale);
-			delay_scale += 7;
-			data_byte = *bitbang_data_ptr(bitbang.irq);
-		} while (data_byte & BITBANG_DELAY_BIT);
-		if (bitbang.countdown > 0) {
-			/* One cycle of delay already spent processing */
-			bitbang.countdown--;
-			return;
-		}
-		/*
-		 * Zero-cycle delay is not possible, the encoding is used as
-		 * escape for "special" commands, in this case waiting
-		 * indefinitely for a particular trigger.
-		 */
-		bitbang.mask = *bitbang_data_ptr(bitbang.irq++);
-		bitbang.pattern = *bitbang_data_ptr(bitbang.irq++);
-
-		if ((input_data ^ bitbang.pattern) & bitbang.mask) {
-			/* No match, sample again next cycle */
-			return;
-		}
-		/*
-		 * Match, immediately proceed, taking care that next byte could
-		 * either be a sample or another delay/wait, hence the need for
-		 * another iteration in the loop.
-		 */
-		bitbang.mask = 0;
-		data_byte = *bitbang_data_ptr(bitbang.irq);
-	}
-
-	/*
-	 * Set drive of all pins which are part of bit-banging.  If some of the
-	 * pins are in input mode, this will have no effect.
-	 */
-	for (uint8_t i = 0; i < bitbang.num_pins; i++) {
-		if (data_byte & (1 << i)) {
-			STM32_GPIO_BSRR(bitbang.pin_bases[i]) =
-				bitbang.pin_masks[i];
-		} else {
-			STM32_GPIO_BSRR(bitbang.pin_bases[i]) =
-				bitbang.pin_masks[i] << 16;
-		}
-	}
-
-	/* Record sampled data, overwriting the given waveform. */
-	*bitbang_data_ptr(bitbang.irq++) = input_data;
-}
 
 /*
  * Bitbanging timer interrupt one level below the GPIO edge detection
@@ -1553,6 +1449,45 @@ static void stop_all_gpio_bitbanging(void)
 	bitbang.head = 0;
 }
 
+void bitbang_int_begin(void); /* Not a real function */
+void bitbang_int(void);
+void bitbang_int_end(void); /* Not a real function */
+
+struct snippet_t {
+	uint32_t count;
+	uint8_t *table, *table_end;
+};
+
+extern struct snippet_t read_gpio_snippet;
+extern struct snippet_t get_bit_snippet;
+
+extern struct snippet_t align_bits_snippet;
+extern struct snippet_t midway_snippet;
+
+extern struct snippet_t set_bit_snippet;
+extern struct snippet_t set_additional_bit_snippet;
+extern struct snippet_t apply_gpio_snippet;
+
+extern struct snippet_t fetch_dac_value_snippet;
+extern struct snippet_t fetch_dac_value2_snippet;
+extern struct snippet_t apply_dac_snippet;
+
+extern struct snippet_t finish_snippet;
+
+void append_snippet(uint8_t **code_ptr, const struct snippet_t *snippet,
+		    size_t index)
+{
+	ASSERT(index < snippet->count);
+	ASSERT((snippet->table_end - snippet->table) % (snippet->count * 2) ==
+	       0);
+	size_t snippet_size =
+		(snippet->table_end - snippet->table) / snippet->count;
+	memcpy(*code_ptr,
+	       THUMB_CODE_TO_DATA_PTR(snippet->table) + index * snippet_size,
+	       snippet_size);
+	*code_ptr += snippet_size;
+}
+
 static int command_gpio_bit_bang(int argc, const char **argv)
 {
 	if (argc < 4)
@@ -1599,11 +1534,7 @@ static int command_gpio_bit_bang(int argc, const char **argv)
 	/*
 	 * All input valid, now record the request.
 	 */
-	bitbang.num_pins = gpio_num;
-	for (int i = 0; i < bitbang.num_pins; i++) {
-		bitbang.pin_bases[i] = gpio_list[gpios[i]].port;
-		bitbang.pin_masks[i] = gpio_list[gpios[i]].mask;
-	}
+	bitbang.num_sample_bytes = 1;
 
 	/* Appropriate power of two for prescaling */
 	uint32_t prescaler = find_suitable_prescaler(divisor);
@@ -1619,6 +1550,212 @@ static int command_gpio_bit_bang(int argc, const char **argv)
 	STM32_TIM_SR(BITBANG_TIMER) = 0;
 	STM32_TIM_DIER(BITBANG_TIMER) = 0x0001;
 
+	/* Make copy of initial part of interrupt routine */
+	size_t initial_size = &bitbang_int_end - &bitbang_int_begin;
+	memcpy(bitbang.code, THUMB_CODE_TO_DATA_PTR(&bitbang_int_begin),
+	       initial_size);
+	uint8_t *code_ptr = bitbang.code + initial_size;
+
+	/*
+	 * Compose code to sample levels of the particular pins.
+	 */
+	for (int i = 0; i < gpio_num; i++) {
+		/* Load GPIOx_IDR into CPU register. */
+		append_snippet(&code_ptr, &read_gpio_snippet,
+			       (gpio_list[gpios[i]].port - STM32_GPIOA_BASE) /
+				       (STM32_GPIOB_BASE - STM32_GPIOA_BASE));
+		/*
+		 * Inpect a particular from above bit, and shift it into high
+		 * bit of accumulator register.
+		 */
+		append_snippet(&code_ptr, &get_bit_snippet,
+			       GPIO_MASK_TO_NUM(gpio_list[gpios[i]].mask));
+		/*
+		 * In case the next pins are on the same GPIO bank, no need to
+		 * load GPIOx_IRD again, instead inspect other bits on the same
+		 * value in CPU register, each time shifting into high bit of
+		 * the accumulator register.
+		 */
+		while (i + 1 < gpio_num && gpio_list[gpios[i + 1]].port ==
+						   gpio_list[gpios[i]].port) {
+			i++;
+			append_snippet(
+				&code_ptr, &get_bit_snippet,
+				GPIO_MASK_TO_NUM(gpio_list[gpios[i]].mask));
+		}
+	}
+	/*
+	 * Shift accumulator right, so that the `gpio_num` highest bits become
+	 * the `gpio_num` lowest bits.
+	 */
+	append_snippet(&code_ptr, &align_bits_snippet, gpio_num - 1);
+
+	/*
+	 * Large section of fixed logic in the interrupt handler, which will
+	 * load a byte from the waveform data, and decides whether it encodes
+	 * instructions to pause, in which case it returns, or whether it
+	 * encodes ordinary samples to be output, in which case it passes
+	 * control to the code below, after having overwritten the byte in the
+	 * buffer with the accumulator value gathered above.
+	 */
+	append_snippet(&code_ptr, &midway_snippet, 0);
+
+	/*
+	 * Compose code to apply levels to the particular pins.
+	 */
+	for (int i = 0; i < gpio_num; i++) {
+		/*
+		 * Shift out the lower bit from an accumulator register, and
+		 * prepare a value in another CPU register, containing a single
+		 * bit in either the upper 16 bits or lower 16 bits, depending
+		 * on the aforementioned bit.  This value will be suitable for
+		 * writing to the "bit set/reset" register GPIOn_BSRR, to make a
+		 * particular pin go either low or high.
+		 */
+		append_snippet(&code_ptr, &set_bit_snippet,
+			       GPIO_MASK_TO_NUM(gpio_list[gpios[i]].mask));
+		/*
+		 * In case the next pins are on the same GPIO bank, no need to
+		 * write to GPIOn_BSRR multiple times, instead shift further
+		 * bits out of the accumulator, and set bits in either upper or
+		 * lower part of the CPU register.
+		 */
+		while (i + 1 < gpio_num && gpio_list[gpios[i + 1]].port ==
+						   gpio_list[gpios[i]].port) {
+			i++;
+			append_snippet(
+				&code_ptr, &set_additional_bit_snippet,
+				GPIO_MASK_TO_NUM(gpio_list[gpios[i]].mask));
+		}
+		/* Store CPU register into GPIOn_BSRR. */
+		append_snippet(&code_ptr, &apply_gpio_snippet,
+			       (gpio_list[gpios[i]].port - STM32_GPIOA_BASE) /
+				       (STM32_GPIOB_BASE - STM32_GPIOA_BASE));
+	}
+	/* Return from interrupt handler. */
+	append_snippet(&code_ptr, &finish_snippet, 0);
+
+	if (code_ptr > bitbang.code + sizeof(bitbang.code))
+		panic("Interrupt handler does not fit");
+	sram_vectors[16 + IRQ_TIM(BITBANG_TIMER)] = DATA_TO_THUMB_CODE_PTR(
+		&bitbang_int - &bitbang_int_begin + bitbang.code);
+	return EC_SUCCESS;
+}
+
+static int command_gpio_dac_bang(int argc, const char **argv)
+{
+	if (argc < 4)
+		return EC_ERROR_PARAM_COUNT;
+	int gpio_num = argc - 3;
+	if (gpio_num > 7)
+		return EC_ERROR_PARAM_COUNT;
+
+	const uint32_t timer_freq = clock_get_timer_freq();
+	char *e;
+	uint64_t desired_period_ns = strtoull(argv[2], &e, 0);
+	if (*e)
+		return EC_ERROR_PARAM3;
+
+	if (desired_period_ns > 0xFFFFFFFFFFFFFFFFULL / timer_freq) {
+		/* Would overflow below. */
+		return EC_ERROR_PARAM3;
+	}
+
+	/*
+	 * Calculate number of hardware timer cycles for each bit-banging
+	 * sample.
+	 */
+	uint64_t divisor = desired_period_ns * timer_freq / 1000000000;
+
+	if (divisor > (1ULL << 32)) {
+		/* Would overflow the 32-bit timer. */
+		return EC_ERROR_PARAM3;
+	}
+
+	int gpios[7];
+	for (int i = 0; i < gpio_num; i++) {
+		gpios[i] = gpio_find_by_name(argv[3 + i]);
+		if (gpios[i] == GPIO_COUNT) {
+			return EC_ERROR_PARAM3 + i;
+		}
+		if (dac_channels[gpios[i]].enable_mask == 0) {
+			ccprintf("Error: Pin %s does not support DAC\n",
+				 gpio_list[gpios[i]].name);
+			return EC_ERROR_PARAM3 + i;
+		}
+	}
+
+	if (STM32_TIM_CR1(BITBANG_TIMER) & STM32_TIM_CR1_CEN) {
+		ccprintf("Error: Ongoing operation, cannot change settings.\n");
+		return EC_ERROR_INVAL;
+	}
+
+	/*
+	 * All input valid, now record the request.
+	 */
+	bitbang.num_sample_bytes = 1;
+
+	/* Appropriate power of two for prescaling */
+	uint32_t prescaler = find_suitable_prescaler(divisor);
+
+	/* Set clock divisor to achieve requested tick period. */
+	STM32_TIM_ARR(BITBANG_TIMER) =
+		DIV_ROUND_NEAREST(divisor, prescaler) - 1;
+
+	/* Update prescaler. */
+	STM32_TIM_PSC(BITBANG_TIMER) = prescaler - 1;
+
+	/* Set up the overflow interrupt */
+	STM32_TIM_SR(BITBANG_TIMER) = 0;
+	STM32_TIM_DIER(BITBANG_TIMER) = 0x0001;
+
+	/* Make copy of initial part of interrupt routine */
+	size_t initial_size = &bitbang_int_end - &bitbang_int_begin;
+	memcpy(bitbang.code, THUMB_CODE_TO_DATA_PTR(&bitbang_int_begin),
+	       initial_size);
+	uint8_t *code_ptr = bitbang.code + initial_size;
+
+	/*
+	 * Large section of fixed logic in the interrupt handler, which will
+	 * load a byte from the waveform data, and decides whether it encodes
+	 * instructions to pause, in which case it returns, or wether it encodes
+	 * ordinary samples to be output, in which case it passes control to the
+	 * code below.  (Unlike GPIO bit-banging, there is no sampling phase
+	 * before this.)
+	 */
+	append_snippet(&code_ptr, &midway_snippet, 0);
+
+	/*
+	 * Compose code to apply levels to the particular DAC channels.
+	 */
+	for (int i = 0; i < gpio_num; i++) {
+		if (i == 0) {
+			/*
+			 * Load 12-bit value into CPU register by combining the
+			 * 7-bit value loaded by the midway_snippet with one
+			 * more byte fetched from the waveform data buffer.
+			 */
+			append_snippet(&code_ptr, &fetch_dac_value_snippet, 0);
+			bitbang.num_sample_bytes += 1;
+		} else {
+			/*
+			 * Load 12-bit value into CPU register by fetching two
+			 * bytes from the waveform data buffer.
+			 */
+			append_snippet(&code_ptr, &fetch_dac_value2_snippet, 0);
+			bitbang.num_sample_bytes += 2;
+		}
+		/* Store 12-bit value into a particular DAC output register. */
+		append_snippet(&code_ptr, &apply_dac_snippet,
+			       dac_channels[gpios[i]].channel_no);
+	}
+	/* Return from interrupt handler. */
+	append_snippet(&code_ptr, &finish_snippet, 0);
+
+	if (code_ptr > bitbang.code + sizeof(bitbang.code))
+		panic("Interrupt handler does not fit");
+	sram_vectors[16 + IRQ_TIM(BITBANG_TIMER)] = DATA_TO_THUMB_CODE_PTR(
+		&bitbang_int - &bitbang_int_begin + bitbang.code);
 	return EC_SUCCESS;
 }
 
@@ -1795,6 +1932,8 @@ static int command_gpio(int argc, const char **argv)
 		return command_gpio_set_reset(argc, argv);
 	if (!strcasecmp(argv[1], "bit-bang"))
 		return command_gpio_bit_bang(argc, argv);
+	if (!strcasecmp(argv[1], "dac-bang"))
+		return command_gpio_dac_bang(argc, argv);
 	if (!strcasecmp(argv[1], "pwm"))
 		return command_gpio_pwm(argc, argv);
 	return EC_ERROR_PARAM1;
@@ -2071,13 +2210,18 @@ static uint8_t validate_received_waveform(uint16_t data_len, bool streaming)
 	while (idx != tail_goal) {
 		if (!(*bitbang_data_ptr(idx) & BITBANG_DELAY_BIT)) {
 			/*
-			 * Single-byte sample for output.  The interrupt routine
-			 * is prepared for this being the last byte in the valid
-			 * range of the buffer.
+			 * Sample for output.  Ensure that if each sample takes
+			 * up more than a single byte, that we have received all
+			 * bytes for this sample, before allowing the interrupt
+			 * handler to see and process any byte of it.
 			 */
-			idx++;
-			valid_idx = idx;
-			continue;
+			idx += bitbang.num_sample_bytes;
+			if ((int32_t)(tail_goal - idx) >= 0) {
+				valid_idx = idx;
+				continue;
+			} else {
+				break;
+			}
 		}
 		uint8_t delay_scale = 0, num_bytes = 0;
 		bool all_zeroes = true;
@@ -2222,6 +2366,8 @@ void dap_goog_gpio_bitbang(size_t peek_c, bool streaming)
 			STM32_TIM32_CNT(BITBANG_TIMER) = 0;
 			bitbang.countdown = 3;
 		}
+
+		bitbang.mask = 0;
 
 		/* Start counting */
 		STM32_TIM_CR1(BITBANG_TIMER) |= STM32_TIM_CR1_CEN;
