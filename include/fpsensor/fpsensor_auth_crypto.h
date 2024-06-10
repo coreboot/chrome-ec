@@ -8,15 +8,11 @@
 #ifndef __CROS_EC_FPSENSOR_FPSENSOR_AUTH_CRYPTO_H
 #define __CROS_EC_FPSENSOR_FPSENSOR_AUTH_CRYPTO_H
 
+#include "ec_commands.h"
 #include "openssl/ec.h"
 
-#include <span>
-
-extern "C" {
-#include "ec_commands.h"
-}
-
 #include <optional>
+#include <span>
 
 /**
  * Create a @fp_elliptic_curve_public_key with the content of boringssl @p
@@ -83,12 +79,16 @@ encrypt_data_in_place(uint16_t version,
  *
  * @param[in] key the private
  * @param[in] version the version of the encryption method
+ * @param[in] user_id the user_id used for deriving secret
+ * @param[in] tpm_seed the seed from the TPM for deriving secret
  *
  * @return @p fp_encrypted_private_key on success
  * @return std::nullopt on error
  */
-std::optional<fp_encrypted_private_key>
-create_encrypted_private_key(const EC_KEY &key, uint16_t version);
+std::optional<fp_encrypted_private_key> create_encrypted_private_key(
+	const EC_KEY &key, uint16_t version,
+	std::span<const uint8_t, FP_CONTEXT_USERID_BYTES> user_id,
+	std::span<const uint8_t, FP_CONTEXT_TPM_BYTES> tpm_seed);
 
 /**
  * Decrypt the encrypted data.
@@ -97,6 +97,8 @@ create_encrypted_private_key(const EC_KEY &key, uint16_t version);
  * seed, rollback secret and user_id.
  *
  * @param[in] info the metadata of the encryption output
+ * @param[in] user_id the user_id used for deriving secret
+ * @param[in] tpm_seed the seed from the TPM for deriving secret
  * @param[in] enc_data the encrypted data
  * @param[out] data the decrypted data
  *
@@ -105,6 +107,8 @@ create_encrypted_private_key(const EC_KEY &key, uint16_t version);
  */
 enum ec_error_list
 decrypt_data(const struct fp_auth_command_encryption_metadata &info,
+	     std::span<const uint8_t, FP_CONTEXT_USERID_BYTES> user_id,
+	     std::span<const uint8_t, FP_CONTEXT_TPM_BYTES> tpm_seed,
 	     std::span<const uint8_t> enc_data, std::span<uint8_t> data);
 
 /**
@@ -114,12 +118,16 @@ decrypt_data(const struct fp_auth_command_encryption_metadata &info,
  * seed, rollback secret and user_id.
  *
  * @param[in] encrypted_private_key encrypted private key
+ * @param[in] user_id the user_id used for deriving secret
+ * @param[in] tpm_seed the seed from the TPM for deriving secret
  *
  * @return EC_SUCCESS on success
  * @return EC_ERROR_* on error
  */
 bssl::UniquePtr<EC_KEY> decrypt_private_key(
-	const struct fp_encrypted_private_key &encrypted_private_key);
+	const struct fp_encrypted_private_key &encrypted_private_key,
+	std::span<const uint8_t, FP_CONTEXT_USERID_BYTES> user_id,
+	std::span<const uint8_t, FP_CONTEXT_TPM_BYTES> tpm_seed);
 
 /**
  * Generate the ECDH shared secret from private key and public key.

@@ -3,24 +3,22 @@
  * found in the LICENSE file.
  */
 
+#include "builtin/assert.h"
+#include "common.h"
 #include "compile_time_macros.h"
+#include "ec_commands.h"
 #include "fpsensor/fpsensor_crypto.h"
 #include "fpsensor/fpsensor_state.h"
 #include "mock/fpsensor_crypto_mock.h"
-
-#include <array>
-
-extern "C" {
-#include "builtin/assert.h"
-#include "common.h"
-#include "ec_commands.h"
 #include "mock/fpsensor_state_mock.h"
 #include "mock/rollback_mock.h"
 #include "mock/timer_mock.h"
 #include "sha256.h"
 #include "test_util.h"
 #include "util.h"
-}
+
+#include <algorithm>
+#include <array>
 
 extern enum ec_error_list
 get_ikm(std::span<uint8_t, 64> ikm,
@@ -178,7 +176,7 @@ test_static int test_get_ikm_success(void)
 
 test_static int test_derive_encryption_key_failure_seed_not_set(void)
 {
-	static uint8_t unused_key[SBP_ENC_KEY_LEN];
+	FpEncryptionKey unused_key{};
 	static const uint8_t unused_salt[FP_CONTEXT_ENCRYPTION_SALT_BYTES] = {
 		0
 	};
@@ -200,7 +198,7 @@ static int test_derive_encryption_key_raw(
 	std::span<const uint8_t, FP_CONTEXT_TPM_BYTES> tpm_seed,
 	std::span<const uint8_t> expected_key)
 {
-	uint8_t key[SBP_ENC_KEY_LEN];
+	FpEncryptionKey key;
 	enum ec_error_list rv;
 
 	rv = derive_encryption_key(
@@ -224,41 +222,40 @@ test_static int test_derive_encryption_key(void)
 	 * locally to get the output key. The IKM used in the run is the
 	 * concatenation of |fake_rollback_secret| and |fake_tpm_seed|.
 	 */
-	static const uint32_t user_id1[] = {
-		0x608b1b0b, 0xe10d3d24, 0x0bbbe4e6, 0x807b36d9,
-		0x2a1f8abc, 0xea38104a, 0x562d9431, 0x64d721c5,
+	struct EncryptionKeyTestVector {
+		std::array<uint32_t, 8> user_id;
+		std::array<uint8_t, 16> salt;
+		std::array<uint8_t, 16> key;
+	};
+	constexpr EncryptionKeyTestVector test_vector1 = {
+		.user_id = {
+			0x608b1b0b, 0xe10d3d24, 0x0bbbe4e6, 0x807b36d9,
+			0x2a1f8abc, 0xea38104a, 0x562d9431, 0x64d721c5,
+		},
+		.salt = {
+			0xd0, 0x88, 0x34, 0x15, 0xc0, 0xfa, 0x8e, 0x22,
+			0x9f, 0xb4, 0xd5, 0xa9, 0xee, 0xd3, 0x15, 0x19,
+		},
+		.key = {
+			0xdb, 0x49, 0x6e, 0x1b, 0x67, 0x8a, 0x35, 0xc6,
+			0xa0, 0x9d, 0xb6, 0xa0, 0x13, 0xf4, 0x21, 0xb3,
+		}
 	};
 
-	static const uint8_t salt1[] = {
-		0xd0, 0x88, 0x34, 0x15, 0xc0, 0xfa, 0x8e, 0x22,
-		0x9f, 0xb4, 0xd5, 0xa9, 0xee, 0xd3, 0x15, 0x19,
+	constexpr EncryptionKeyTestVector test_vector2 = {
+		.user_id = {
+			0x2546a2ca, 0xf1891f7a, 0x44aad8b8, 0x0d6aac74,
+			0x6a4ab846, 0x9c279796, 0x5a72eae1, 0x8276d2a3,
+		},
+		.salt =  {
+			0x72, 0x6b, 0xc1, 0xe4, 0x64, 0xd4, 0xff, 0xa2,
+			0x5a, 0xac, 0x5b, 0x0b, 0x06, 0x67, 0xe1, 0x53,
+		},
+		.key = {
+			0x8d, 0x53, 0xaf, 0x4c, 0x96, 0xa2, 0xee, 0x46,
+			0x9c, 0xe2, 0xe2, 0x6f, 0xe6, 0x66, 0x3d, 0x3a,
+		}
 	};
-
-	static const uint8_t key1[] = {
-		0xdb, 0x49, 0x6e, 0x1b, 0x67, 0x8a, 0x35, 0xc6,
-		0xa0, 0x9d, 0xb6, 0xa0, 0x13, 0xf4, 0x21, 0xb3,
-	};
-
-	static const uint32_t user_id2[] = {
-		0x2546a2ca, 0xf1891f7a, 0x44aad8b8, 0x0d6aac74,
-		0x6a4ab846, 0x9c279796, 0x5a72eae1, 0x8276d2a3,
-	};
-
-	static const uint8_t salt2[] = {
-		0x72, 0x6b, 0xc1, 0xe4, 0x64, 0xd4, 0xff, 0xa2,
-		0x5a, 0xac, 0x5b, 0x0b, 0x06, 0x67, 0xe1, 0x53,
-	};
-
-	static const uint8_t key2[] = {
-		0x8d, 0x53, 0xaf, 0x4c, 0x96, 0xa2, 0xee, 0x46,
-		0x9c, 0xe2, 0xe2, 0x6f, 0xe6, 0x66, 0x3d, 0x3a,
-	};
-
-	static uint8_t unused_key[SBP_ENC_KEY_LEN];
-	static const uint8_t unused_salt[FP_CONTEXT_ENCRYPTION_SALT_BYTES] = {
-		0
-	};
-	static const uint8_t info_wrong_size[] = { 0x01, 0x02, 0x03 };
 
 	/* GIVEN that the TPM seed is set. */
 	TEST_ASSERT(!bytes_are_trivial(default_fake_tpm_seed,
@@ -268,15 +265,21 @@ test_static int test_derive_encryption_key(void)
 	TEST_ASSERT(!mock_ctrl_rollback.get_secret_fail);
 
 	/* THEN the derivation will succeed. */
-	TEST_ASSERT(test_derive_encryption_key_raw(user_id1, salt1,
-						   default_fake_tpm_seed,
-						   key1) == EC_SUCCESS);
+	TEST_ASSERT(test_derive_encryption_key_raw(
+			    test_vector1.user_id, test_vector1.salt,
+			    default_fake_tpm_seed,
+			    test_vector1.key) == EC_SUCCESS);
 
-	TEST_ASSERT(test_derive_encryption_key_raw(user_id2, salt2,
-						   default_fake_tpm_seed,
-						   key2) == EC_SUCCESS);
+	TEST_ASSERT(test_derive_encryption_key_raw(
+			    test_vector2.user_id, test_vector2.salt,
+			    default_fake_tpm_seed,
+			    test_vector2.key) == EC_SUCCESS);
 
 	/* Providing custom info with invalid size should fail. */
+	FpEncryptionKey unused_key{};
+	constexpr std::array<uint8_t, FP_CONTEXT_ENCRYPTION_SALT_BYTES>
+		unused_salt{};
+	constexpr std::array<uint8_t, 3> info_wrong_size = { 0x01, 0x02, 0x03 };
 	TEST_ASSERT(
 		derive_encryption_key(unused_key, unused_salt, info_wrong_size,
 				      default_fake_tpm_seed) == EC_ERROR_INVAL);
@@ -286,7 +289,7 @@ test_static int test_derive_encryption_key(void)
 
 test_static int test_derive_encryption_key_failure_rollback_fail(void)
 {
-	static uint8_t unused_key[SBP_ENC_KEY_LEN];
+	FpEncryptionKey unused_key{};
 	static const uint8_t unused_salt[FP_CONTEXT_ENCRYPTION_SALT_BYTES] = {
 		0
 	};
@@ -568,7 +571,7 @@ test_static int test_command_read_match_secret(void)
 	timestamp_t now = get_time();
 
 	/* For empty user_id. */
-	memset(global_context.user_id, 0, sizeof(global_context.user_id));
+	std::ranges::fill(global_context.user_id, 0);
 
 	/* Invalid finger index should be rejected. */
 	params.fgr = FP_NO_SUCH_TEMPLATE;
@@ -589,8 +592,8 @@ test_static int test_command_read_match_secret(void)
 		params.fgr, &global_context.positive_match_secret_state);
 
 	/* GIVEN that salt is non-trivial. */
-	memcpy(fp_positive_match_salt[0], fake_positive_match_salt,
-	       sizeof(fp_positive_match_salt[0]));
+	std::ranges::copy(fake_positive_match_salt,
+			  global_context.fp_positive_match_salt[0]);
 	/* THEN reading positive match secret should succeed. */
 	rv = test_send_host_command(EC_CMD_FP_READ_MATCH_SECRET, 0, &params,
 				    sizeof(params), &resp, sizeof(resp));
@@ -658,8 +661,8 @@ test_static int test_command_read_match_secret_timeout(void)
 	set_time(global_context.positive_match_secret_state.deadline);
 
 	/* EVEN IF encryption salt is non-trivial. */
-	memcpy(fp_positive_match_salt[0], fake_positive_match_salt,
-	       sizeof(fp_positive_match_salt[0]));
+	std::ranges::copy(fake_positive_match_salt,
+			  global_context.fp_positive_match_salt[0]);
 	/* Reading secret will fail. */
 	rv = test_send_host_command(EC_CMD_FP_READ_MATCH_SECRET, 0, &params,
 				    sizeof(params), NULL, 0);
@@ -684,8 +687,8 @@ test_static int test_command_read_match_secret_unreadable(void)
 		params.fgr);
 
 	/* EVEN IF encryption salt is non-trivial. */
-	memcpy(fp_positive_match_salt[0], fake_positive_match_salt,
-	       sizeof(fp_positive_match_salt[0]));
+	std::ranges::copy(fake_positive_match_salt,
+			  global_context.fp_positive_match_salt[0]);
 	/* Reading secret will fail. */
 	rv = test_send_host_command(EC_CMD_FP_READ_MATCH_SECRET, 0, &params,
 				    sizeof(params), NULL, 0);

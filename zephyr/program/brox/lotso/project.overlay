@@ -18,12 +18,9 @@
 #include "../binman.dtsi"
 #include "../brox.dtsi"
 #include "../fan.dtsi"
-#include "../generated.dtsi"
-#include "../gpio.dtsi"
+#include "gpio.dtsi"
 #include "../i2c.dtsi"
 #include "../interrupts.dtsi"
-#include "../led_pins.dtsi"
-#include "../led_policy.dtsi"
 #include "../keyboard.dtsi"
 #include "../motionsense.dtsi"
 #include "../power_signals.dtsi"
@@ -33,7 +30,9 @@
 #include "../usb_typec.dtsi"
 #include "../usba.dtsi"
 
-/* Brox project DTS includes*/
+/* Lotso project DTS includes*/
+#include "led_pins.dtsi"
+#include "led_policy.dtsi"
 
 /* Lotso overrides follow... */
 
@@ -43,6 +42,11 @@
                         compatible = "lgc,ap18c8k", "battery-smart";
                 };
         };
+
+        gpio-interrupts {
+                /delete-node/ volume_up;
+                /delete-node/ volume_down;
+        };
 };
 
 /* These GPIOS are initialized by the PDC driver */
@@ -51,4 +55,14 @@
 };
 &gpio_ec_i2c_pmc_pd_int_odl {
 	no-auto-init;
+};
+
+&i2c4 {
+	/delete-node/ isl9238@9;
+
+        charger: bq25710@9 {
+		compatible = "ti,bq25710";
+		status = "okay";
+		reg = <0x9>;
+	};
 };

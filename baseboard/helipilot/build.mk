@@ -32,7 +32,7 @@ test-list-y = \
        exception \
        flash_physical \
        flash_write_protect \
-       fpsensor \
+       fp_transport \
        fpsensor_auth_crypto_stateful \
        fpsensor_auth_crypto_stateless \
        fpsensor_crypto \
@@ -64,6 +64,7 @@ test-list-y = \
        scratchpad \
        sha256 \
        sha256_unrolled \
+       sram_mpu_protection \
        static_if \
        stdlib \
        std_vector \
@@ -78,4 +79,6 @@ test-list-y = \
        utils_str
 
 # This is relative to the EC root directory.
+ifneq ($(BOARD_BUCCANEER),y)
 -include private/board/helipilot/build.mk
+endif

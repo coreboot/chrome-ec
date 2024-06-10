@@ -299,6 +299,10 @@ def all_targets():
         board = "brox-ish-ec",
     )
     ec_target(
+        name = "brox-sku4",
+        board = "brox-sku4",
+    )
+    ec_target(
         name = "brox-tokenized",
         board = "brox-tokenized",
         extra_modules = ["picolibc", "pigweed"],
@@ -310,11 +314,6 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
-    )
-    ec_target(
-        name = "brya_pdc",
-        board = "brya_pdc",
-        extra_modules = ["cmsis"],
     )
     ec_target(
         name = "brya_zephyr",
@@ -1612,6 +1611,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "navi",
+        board = "navi",
+    )
+    ec_target(
         name = "nereid",
         board = "nereid",
     )
@@ -1772,6 +1775,11 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "orisa",
+        board = "orisa",
+        extra_modules = ["cmsis"],
     )
     ec_target(
         name = "osiris",

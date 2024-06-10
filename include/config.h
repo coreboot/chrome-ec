@@ -1025,6 +1025,18 @@
 #undef CONFIG_CHARGER_PSYS_READ
 
 /*
+ * Sets the AC current threshold that triggers PROCHOT assertion from the
+ * charger.  -1 uses the power on reset threshold defined by the charger chip.
+ */
+#define CONFIG_CHARGER_AC_PROCHOT_CURRENT_MA -1
+
+/*
+ * Sets the DC current threshold that triggers PROCHOT assertion from the
+ * charger.  -1 uses the power on reset threshold defined by the charger chip.
+ */
+#define CONFIG_CHARGER_DC_PROCHOT_CURRENT_MA -1
+
+/*
  * Board supports discharge mode.  In this mode, the battery will discharge
  * even if AC is present.  Used for testing.
  */
@@ -1857,6 +1869,13 @@
 
 /* Allow unaligned access */
 #undef CONFIG_ALLOW_UNALIGNED_ACCESS
+
+/*
+ * Protect the code RAM section on devices that execute code from RAM. On these
+ * devices, this mechanism protects the code from being modified using the MPU.
+ * The MPU protections are setup on boot.
+ */
+#undef CONFIG_PROTECT_CODE_RAM
 
 /*
  * Provide common runtime layer code (tasks, hooks ...)
@@ -3095,14 +3114,6 @@
  */
 #define CONFIG_KEYBOARD_KSO_BASE 0
 
-/*
- * For certain board configurations, KSI2 or KSI3 will be stuck asserted for all
- * scan columns if the power button is held. We must be aware of this case
- * in order to correctly handle recovery mode key combinations.
- */
-#undef CONFIG_KEYBOARD_PWRBTN_ASSERTS_KSI2
-#undef CONFIG_KEYBOARD_PWRBTN_ASSERTS_KSI3
-
 /* Enable extra debugging output from keyboard modules */
 #undef CONFIG_KEYBOARD_DEBUG
 
@@ -3148,6 +3159,9 @@
 
 /* Add support for a switch that indicates if the device is in tablet mode. */
 #undef CONFIG_KEYBOARD_TABLET_MODE_SWITCH
+
+/* Add support for skipping lid close when the system into tablet mode. */
+#undef CONFIG_TABLET_MODE_SKIP_LID_CLOSE
 
 /*
  * Minimum CPU clocks between scans.  This ensures that keyboard scanning
@@ -5224,6 +5238,9 @@
 /* Define if there is a specific method to measure Vbus voltage */
 #undef CONFIG_USB_PD_VBUS_MEASURE_BY_BOARD
 
+/* Define if the PDC on the board supports VBUS measurement */
+#undef CONFIG_USB_PD_VBUS_MEASURE_PDC
+
 /* Define the type-c port controller I2C base address. */
 #define CONFIG_TCPC_I2C_BASE_ADDR_FLAGS 0x4E
 
@@ -5449,6 +5466,12 @@
 /* The delay in ms from power off to power on for MAX14637 */
 #define CONFIG_BC12_MAX14637_DELAY_FROM_OFF_TO_ON_MS 1
 
+/*
+ * Max. size of packets for the control endpoint, valid values: 8, 16, 32, 64.
+ * Defaults to the largest supported value.
+ */
+#undef CONFIG_USB_MAX_CONTROL_PACKET_SIZE
+
 /* Enable USB serial console module. */
 #undef CONFIG_USB_CONSOLE
 
@@ -5611,6 +5634,13 @@
  * that there is no current drop (e.g. 3A -> 1.5A) on active source ports.
  */
 #undef CONFIG_USB_PD_MAX_TOTAL_SOURCE_CURRENT
+
+/*
+ * Maximum number of interrupts in a second. Exceeding this limit
+ * will cause the TCPM to break the PD connection to avoid a
+ * watchdog timeout crash
+ */
+#define CONFIG_USB_PD_INT_STORM_MAX 1800
 
 /******************************************************************************/
 /* stm32f4 dwc usb configs. */

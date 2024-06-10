@@ -8,36 +8,32 @@
 #ifndef __CROS_EC_FPSENSOR_FPSENSOR_CRYPTO_H
 #define __CROS_EC_FPSENSOR_FPSENSOR_CRYPTO_H
 
+#include "common.h"
+#include "crypto/cleanse_wrapper.h"
+#include "ec_commands.h"
+
 #include <cstdint>
 #include <span>
 
-extern "C" {
-#include "common.h"
-#include "ec_commands.h"
-}
-
-#define SBP_ENC_KEY_LEN 16
-
-#define HKDF_MAX_INFO_SIZE 128
-#define HKDF_SHA256_MAX_BLOCK_COUNT 255
+/**
+ * A buffer holding an encryption key. Automatically cleared on destruction.
+ */
+using FpEncryptionKey = CleanseWrapper<std::array<uint8_t, 16> >;
+BUILD_ASSERT(sizeof(FpEncryptionKey) == 16, "Encryption key must be 128 bits.");
+BUILD_ASSERT(sizeof(FpEncryptionKey) <= CONFIG_ROLLBACK_SECRET_SIZE);
 
 /**
- * Expand hkdf pseudorandom key |prk| to length |out_key_size|.
+ * Computes HKDF (as specified by RFC 5869) using SHA-256 as the digest.
  *
- * @param out_key the buffer to hold output key material.
- * @param out_key_size length of output key in bytes. Must be less than
- * or equal to HKDF_SHA256_MAX_BLOCK_COUNT * SHA256_DIGEST_SIZE bytes.
- * @param prk pseudorandom key.
- * @param prk_size length of |prk| in bytes.
- * @param info optional context.
- * @param info_size size of |info| in bytes, must be less than or equal to
- * HKDF_MAX_INFO_SIZE bytes.
- * @return EC_SUCCESS on success and error code otherwise.
+ * @param[out] out_key buffer to hold output key material. Max size must be less
+ * than or equal to 255 * 32 (SHA256_DIGEST_SIZE) bytes = 8160 bytes.
+ * @param[in] ikm input keying material.
+ * @param[in] salt optional salt value (a non-secret random value).
+ * @param[in] info optional context and application specific information (can be
+ * a zero-length string).
+ * @return true on success
+ * @return false on failure
  */
-enum ec_error_list hkdf_expand(uint8_t *out_key, size_t out_key_size,
-			       const uint8_t *prk, size_t prk_size,
-			       const uint8_t *info, size_t info_size);
-
 bool hkdf_sha256(std::span<uint8_t> out_key, std::span<const uint8_t> ikm,
 		 std::span<const uint8_t> salt, std::span<const uint8_t> info);
 

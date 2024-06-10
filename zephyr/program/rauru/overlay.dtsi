@@ -11,6 +11,145 @@
 		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
 	};
 
+	rauru-fw-config {
+		compatible = "cros-ec,cbi-fw-config";
+
+		form-factor {
+			enum-name = "FW_FORM_FACTOR";
+			start = <16>;
+			size = <2>;
+			clamshell {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_FORM_FACTOR_CLAMSHELL";
+				value = <0>;
+			};
+			convertible {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_FORM_FACTOR_CONVERTIBLE";
+				value = <1>;
+			};
+			detchable {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_FORM_FACTOR_DETACHABLE";
+				value = <2>;
+				default;
+			};
+			chromebox {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_FORM_FACTOR_CHROMEBOX";
+				value = <3>;
+			};
+		};
+		panel {
+			enum-name = "FW_PANEL";
+			start = <18>;
+			size = <5>;
+			default-panel {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_PANEL_DEFAULT";
+				value = <0>;
+				default;
+			};
+			old {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_PANEL_OLD";
+				value = <1>;
+			};
+		};
+		fan {
+			enum-name = "FW_FAN";
+			start = <23>;
+			size = <1>;
+
+			no-fan {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_FAN_NOT_PRESENT";
+				value = <0>;
+			};
+			fan-present {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_FAN_PRESENT";
+				value = <1>;
+				/*
+				 * Set as default so that unprovisioned
+				 * configs will run the fan regardless.
+				 */
+				default;
+			};
+		};
+		usb-combo {
+			enum-name = "FW_USB_COMBO";
+			start = <24>;
+			size = <2>;
+
+			usb-combo-a-c {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_USB_A_C";
+				value = <0>;
+			};
+
+			usb-combo-a {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_USB_A";
+				value = <1>;
+				default;
+			};
+			usb-combo-c {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_USB_C";
+				value = <2>;
+			};
+			usb-combo-none {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_USB_NONE";
+				value = <3>;
+			};
+		};
+		sub-board {
+			enum-name = "FW_SUB_BOARD";
+			start = <26>;
+			size = <2>;
+
+			sub-board-none {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_SB_NONE";
+				value = <0>;
+			};
+
+			sub-board-redriver-tusb1046-ps8761 {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_SB_REDRIVER";
+				value = <1>;
+				default;
+			};
+			sub-board-retimer-anx3443-ps8811 {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_SB_RETIMER";
+				value = <2>;
+			};
+		};
+		amp {
+			enum-name = "FW_AMP";
+			start = <28>;
+			size = <2>;
+		};
+		storage {
+			enum-name = "FW_STORAGE";
+			start = <30>;
+			size = <2>;
+			ufs {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_STORAGE_UFS";
+				value = <0>;
+			};
+			nvme {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_STORAGE_NVME";
+				value = <1>;
+			};
+		};
+	};
+
 	named-adc-channels {
 		adc_ec_usb_c0_vbus_sense: ec_usb_c0_vbus_sense {
 			mul = <10>;
@@ -23,6 +162,10 @@
 	named-i2c-ports {
 		ec_i2c_usb_c0_scl_3v3 {
 			i2c-port = <&i2c2ALT>;
+			remote-port = <8>;
+		};
+		ec_smb_batt_scl_3v3 {
+			remote-port = <7>;
 		};
 
 		/delete-node/ ec_i2c5;
@@ -161,27 +304,35 @@
 	/* I2C property setting */
 	i2c0_clk_gpb3_default: i2c0_clk_gpb3_default {
 		gpio-voltage = "3v3";
+		drive-strength = "low";
 	};
 	i2c0_data_gpb4_default: i2c0_data_gpb4_default {
 		gpio-voltage = "3v3";
+		drive-strength = "low";
 	};
 	i2c1_clk_gpc1_default: i2c1_clk_gpc1_default {
 		gpio-voltage = "3v3";
+		drive-strength = "low";
 	};
 	i2c1_data_gpc2_default: i2c1_data_gpc2_default {
 		gpio-voltage = "3v3";
+		drive-strength = "low";
 	};
 	i2c2_clk_gpf6_default: i2c2_clk_gpf6_default {
 		gpio-voltage = "3v3";
+		drive-strength = "low";
 	};
 	i2c2_data_gpf7_default: i2c2_data_gpf7_default {
 		gpio-voltage = "3v3";
+		drive-strength = "low";
 	};
 	i2c3_clk_gpb2_default: i2c3_clk_gpb2_default {
 		gpio-voltage = "1v8";
+		drive-strength = "low";
 	};
 	i2c3_data_gpb5_default: i2c3_data_gpb5_default {
 		gpio-voltage = "1v8";
+		drive-strength = "low";
 	};
 	i2c3_clk_gpb2_sleep: i2c3_clk_gpb2_sleep {
 		pinmuxs = <&pinctrlb 2 IT8XXX2_ALT_DEFAULT>;
@@ -193,9 +344,11 @@
 	};
 	i2c4_clk_gpe0_default: i2c4_clk_gpe0_default {
 		gpio-voltage = "3v3";
+		drive-strength = "low";
 	};
 	i2c4_data_gpe7_default: i2c4_data_gpe7_default {
 		gpio-voltage = "3v3";
+		drive-strength = "low";
 	};
 	i2c5_clk_gpa4_default: i2c5_clk_gpa4_default {
 		gpio-voltage = "3v3";
@@ -207,18 +360,22 @@
 
 &i2c0 {
 	label = "I2C_PWR_CBI";
+	prescale-scl-low = <8>;
 	clock-frequency = <I2C_BITRATE_FAST>;
 };
 
 &i2c1 {
 	label = "I2C_BATTERY";
-	clock-frequency = <50000>;
+	/* Only i2c1 uses 100kHz SMBus which needs data-hold-time */
+	data-hold-time = <10>;
+	prescale-scl-low = <8>;
+	clock-frequency = <100000>;
 };
 
 &i2c2 {
 	label = "I2C_USB_C0";
+	prescale-scl-low = <8>;
 	clock-frequency = <I2C_BITRATE_FAST>;
-
 };
 
 &i2c3 {
@@ -229,13 +386,13 @@
 	pinctrl-1 = <&i2c3_clk_gpb2_sleep
 			&i2c3_data_gpb5_sleep>;
 	pinctrl-names = "default", "sleep";
-	prescale-scl-low = <1>;
+	prescale-scl-low = <8>;
 };
 
 &i2c4 {
 	label = "I2C_USB_C1";
 	clock-frequency = <I2C_BITRATE_FAST>;
-	prescale-scl-low = <1>;
+	prescale-scl-low = <8>;
 };
 
 &i2c5ALT {
