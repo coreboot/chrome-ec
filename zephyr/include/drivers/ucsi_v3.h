@@ -694,6 +694,14 @@ union conn_status_change_bits_t {
 	uint16_t raw_value;
 };
 
+#define CONNECTOR_PARTNER_FLAG_USB BIT(0)
+#define CONNECTOR_PARTNER_FLAG_ALTERNATE_MODE BIT(1)
+#define CONNECTOR_PARTNER_FLAG_USB4_GEN3 BIT(2)
+#define CONNECTOR_PARTNER_FLAG_USB4_GEN4 BIT(4)
+#define CONNECTOR_PARTNER_PD_CAPABLE             \
+	(CONNECTOR_PARTNER_FLAG_ALTERNATE_MODE | \
+	 CONNECTOR_PARTNER_FLAG_USB4_GEN3 | CONNECTOR_PARTNER_FLAG_USB4_GEN4)
+
 /**
  * @brief Current status of the connector
  */
@@ -1255,6 +1263,24 @@ union get_vdo_t {
 	};
 	uint8_t raw_value;
 };
+
+/**
+ * @brief response for UCSI_GET_LPM_PPM_INFO
+ */
+struct lpm_ppm_info_t {
+	/** USB vendor ID */
+	uint16_t vid;
+	/** USB product ID */
+	uint16_t pid;
+	/** ID assigned by USB-IF for compliance */
+	uint32_t xid;
+	/** FW version */
+	uint32_t fw_ver;
+	/** FW sub-version */
+	uint32_t fw_ver_sub;
+	/** Hardware version */
+	uint32_t hw_ver;
+} __packed;
 
 #ifdef __cplusplus
 }

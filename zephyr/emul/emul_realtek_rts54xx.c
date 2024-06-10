@@ -6,7 +6,9 @@
 #include "drivers/ucsi_v3.h"
 #include "emul/emul_common_i2c.h"
 #include "emul/emul_pdc.h"
+#include "emul/emul_smbus_ara.h"
 #include "emul_realtek_rts54xx.h"
+#include "usbc/utils.h"
 #include "zephyr/sys/util.h"
 #include "zephyr/sys/util_macro.h"
 
@@ -34,6 +36,12 @@ struct rts5453p_emul_data {
 
 	/** Data required to simulate PD Controller */
 	struct rts5453p_emul_pdc_data pdc_data;
+
+	uint8_t port;
+
+	/* Pointer to ara implementation so we can queue alert addresses ahead
+	 * of the interrupt firing. */
+	const struct emul *ara_emul;
 };
 
 struct rts5453p_emul_pdc_data *
@@ -132,6 +140,20 @@ static int get_ic_status(struct rts5453p_emul_pdc_data *data,
 
 	memcpy(data->response.ic_status.project_name, data->info.project_name,
 	       sizeof(data->response.ic_status.project_name));
+
+	send_response(data);
+
+	return 0;
+}
+
+static int get_lpm_ppm_info(struct rts5453p_emul_pdc_data *data,
+			    const union rts54_request *req)
+{
+	LOG_INF("UCSI_GET_LPM_PPM_INFO");
+
+	data->response.lpm_ppm_info.byte_count = sizeof(struct lpm_ppm_info_t);
+
+	data->response.lpm_ppm_info.info = data->lpm_ppm_info;
 
 	send_response(data);
 
@@ -337,6 +359,21 @@ static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 	/* BYTE 12 */
 	data->response.rtk_status.plug_direction =
 		data->connector_status.orientation & BIT_MASK(1);
+
+	/* Byte 14 */
+	/* If the partner type supports PD (alternate mode or USB4(),
+	 * set the alternate mode status as if all configuration is complete.
+	 */
+	if (data->connector_status.connect_status &&
+	    data->connector_status.conn_partner_flags &
+		    CONNECTOR_PARTNER_PD_CAPABLE) {
+		/* 6 = DP Configure Command Done */
+		data->response.rtk_status.alt_mode_related_status = 0x6;
+	} else {
+		/* 0 = Discovery Identity not done, partner doesn't support PD
+		 */
+		data->response.rtk_status.alt_mode_related_status = 0x0;
+	}
 
 	/* BYTE 16-17 */
 	data->response.rtk_status.average_current_low = 0;
@@ -774,6 +811,7 @@ const struct commands sub_cmd_x0E[] = {
 	{ .code = 0x12, HANDLER_DEF(get_connector_status) },
 	{ .code = 0x13, HANDLER_DEF(get_error_status) },
 	{ .code = 0x1E, HANDLER_DEF(read_power_level) },
+	{ .code = 0x22, HANDLER_DEF(get_lpm_ppm_info) },
 };
 
 const struct commands sub_cmd_x12[] = {
@@ -1270,7 +1308,11 @@ static int emul_realtek_rts54xx_pulse_irq(const struct emul *target)
 {
 	struct rts5453p_emul_pdc_data *data =
 		rts5453p_emul_get_pdc_data(target);
+	struct rts5453p_emul_data *emul_data = target->data;
+	const struct i2c_common_emul_cfg *cfg = target->cfg;
 
+	emul_smbus_ara_queue_address(emul_data->ara_emul, emul_data->port,
+				     cfg->addr);
 	gpio_emul_input_set(data->irq_gpios.port, data->irq_gpios.pin, 1);
 	gpio_emul_input_set(data->irq_gpios.port, data->irq_gpios.pin, 0);
 
@@ -1284,6 +1326,18 @@ static int emul_realtek_rts54xx_set_info(const struct emul *target,
 		rts5453p_emul_get_pdc_data(target);
 
 	data->info = *info;
+
+	return 0;
+}
+
+static int
+emul_realtek_rts54xx_set_lpm_ppm_info(const struct emul *target,
+				      const struct lpm_ppm_info_t *info)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+
+	data->lpm_ppm_info = *info;
 
 	return 0;
 }
@@ -1349,6 +1403,7 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.get_reconnect_req = emul_realtek_rts54xx_get_reconnect_req,
 	.pulse_irq = emul_realtek_rts54xx_pulse_irq,
 	.set_info = emul_realtek_rts54xx_set_info,
+	.set_lpm_ppm_info = emul_realtek_rts54xx_set_lpm_ppm_info,
 	.set_pdos = emul_realtek_rts54xx_set_pdos,
 	.get_pdos = emul_realtek_rts54xx_get_pdos,
 	.get_cable_property = emul_realtek_rts54xx_get_cable_property,
@@ -1369,6 +1424,8 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 		.pdc_data = {						\
 			.irq_gpios = GPIO_DT_SPEC_INST_GET(n, irq_gpios), \
 		},							\
+		.port = USBC_PORT_FROM_DRIVER_NODE(DT_DRV_INST(n), pdc),  \
+		.ara_emul = EMUL_DT_GET(DT_NODELABEL(smbus_ara_emul)),       \
 	};       \
 	static const struct i2c_common_emul_cfg rts5453p_emul_cfg_##n = {   \
 		.dev_label = DT_NODE_FULL_NAME(DT_DRV_INST(n)),             \

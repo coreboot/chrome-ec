@@ -20,6 +20,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/smf.h>
 #include <zephyr/sys/atomic.h>
+#include <zephyr/sys_clock.h>
 
 #ifdef CONFIG_ZTEST
 #include <zephyr/ztest.h>
@@ -75,6 +76,11 @@ LOG_MODULE_REGISTER(pdc_power_mgmt, CONFIG_USB_PDC_LOG_LEVEL);
 #define VDO_NUM 8
 
 /**
+ * @brief Cached duration for VBUS voltage.
+ */
+#define VBUS_READ_CACHE_MS 500
+
+/**
  * @brief PDC driver commands
  */
 enum pdc_cmd_t {
@@ -128,6 +134,8 @@ enum pdc_cmd_t {
 	CMD_PDC_GET_PCH_DATA_STATUS,
 	/** CMD_PDC_ACK_CC_CI */
 	CMD_PDC_ACK_CC_CI,
+	/** CMD_PDC_GET_LPM_PPM_INFO */
+	CMD_PDC_GET_LPM_PPM_INFO,
 	/** CMD_PDC_COUNT */
 	CMD_PDC_COUNT
 };
@@ -342,6 +350,7 @@ test_export_static const char *const pdc_cmd_names[] = {
 	[CMD_PDC_SET_PDOS] = "PDC_SET_PDOS",
 	[CMD_PDC_GET_PCH_DATA_STATUS] = "PDC_GET_PCH_DATA_STATUS",
 	[CMD_PDC_ACK_CC_CI] = "PDC_ACK_CC_CI",
+	[CMD_PDC_GET_LPM_PPM_INFO] = "PDC_GET_LPM_PPM_INFO",
 };
 const int pdc_cmd_types = CMD_PDC_COUNT;
 
@@ -521,6 +530,11 @@ struct pdc_src_attached_policy_t {
 #define IDENTITY_PID_VDO_IDX 1
 
 /**
+ * @brief Invalid value for VDO used to check if VDO has been queried already.
+ */
+#define INVALID_VDO_VALUE -1u
+
+/**
  * @brief Table of VDO types to request in the GET_VDO command
  */
 static const enum vdo_type_t vdo_discovery_list[] = {
@@ -603,6 +617,11 @@ struct pdc_port_t {
 	/** SINK_PATH_EN temp variable used with CMD_PDC_SET_SINK_PATH command
 	 */
 	bool sink_path_en;
+	/**
+	 * Time at which the current vbus value is expired and should be
+	 * re-queried.
+	 */
+	k_timepoint_t vbus_expired;
 	/** VBUS temp variable used with CMD_PDC_GET_VBUS_VOLTAGE command */
 	uint16_t vbus;
 	/** UOR variable used with CMD_PDC_SET_UOR command */
@@ -615,6 +634,8 @@ struct pdc_port_t {
 	enum attached_state_t attached_state;
 	/** GET_VDO temp variable used with CMD_GET_VDO */
 	union get_vdo_t vdo_req;
+	/** LPM_PPM_INFO temp variable to hold user buffer pointer */
+	struct lpm_ppm_info_t *lpm_ppm_info;
 	/** Array used to hold the list of VDO types to request */
 	uint8_t vdo_type[VDO_NUM];
 	/** Array used to store VDOs returned from the GET_VDO command */
@@ -1008,6 +1029,13 @@ static bool handle_connector_status(struct pdc_port_t *port)
 		atomic_set(&port->hard_reset_sent, true);
 	}
 
+	/* On potential power changes, expire the vbus cache immediately. */
+	if (conn_status_change_bits.negotiated_power_level ||
+	    conn_status_change_bits.connector_partner ||
+	    conn_status_change_bits.pwr_direction) {
+		port->vbus_expired = sys_timepoint_calc(K_NO_WAIT);
+	}
+
 	if (!status->connect_status) {
 		/* Port is not connected */
 		set_pdc_state(port, PDC_UNATTACHED);
@@ -1081,7 +1109,7 @@ static void discovery_info_init(struct pdc_port_t *port)
 	/* Create the list of VDO types being requested */
 	for (i = 0; i < ARRAY_SIZE(vdo_discovery_list); i++) {
 		port->vdo_type[i] = vdo_discovery_list[i];
-		port->vdo[i] = 0;
+		port->vdo[i] = INVALID_VDO_VALUE;
 	}
 
 	/* Clear the DP Config VDO, which stores the DP pin assignment */
@@ -1229,6 +1257,9 @@ static void pdc_unattached_entry(void *obj)
 
 	/* Ensure VDOs aren't valid from previous connection */
 	discovery_info_init(port);
+
+	/* Clear VBUS cache timeout. */
+	port->vbus_expired = sys_timepoint_calc(K_NO_WAIT);
 
 	if (get_pdc_state(port) != port->send_cmd_return_state) {
 		invalidate_charger_settings(port);
@@ -1713,6 +1744,9 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 	case CMD_PDC_ACK_CC_CI:
 		rv = pdc_ack_cc_ci(port->pdc, port->ci, port->cc,
 				   port->vendor_defined_ci);
+		break;
+	case CMD_PDC_GET_LPM_PPM_INFO:
+		rv = pdc_get_lpm_ppm_info(port->pdc, port->lpm_ppm_info);
 		break;
 	default:
 		LOG_ERR("Invalid command: %d", port->cmd->cmd);
@@ -2259,6 +2293,8 @@ static bool is_connectionless_cmd(enum pdc_cmd_t pdc_cmd)
 	case CMD_PDC_SET_POWER_LEVEL:
 		__fallthrough;
 	case CMD_PDC_GET_INFO:
+		__fallthrough;
+	case CMD_PDC_GET_LPM_PPM_INFO:
 		return true;
 	default:
 		return false;
@@ -2715,15 +2751,24 @@ test_mockable bool pdc_power_mgmt_get_partner_data_swap_capable(int port)
 
 int pdc_power_mgmt_get_vbus_voltage(int port)
 {
+	struct pdc_port_t *port_data;
+
 	/* Make sure port is connected */
 	if (!pdc_power_mgmt_is_connected(port)) {
 		return 0;
 	}
 
-	/* Block until command completes */
-	if (public_api_block(port, CMD_PDC_GET_VBUS_VOLTAGE)) {
-		/* something went wrong */
-		return 0;
+	port_data = &pdc_data[port]->port;
+
+	if (sys_timepoint_expired(port_data->vbus_expired)) {
+		/* Block until command completes */
+		if (public_api_block(port, CMD_PDC_GET_VBUS_VOLTAGE)) {
+			/* something went wrong */
+			return 0;
+		}
+
+		port_data->vbus_expired =
+			sys_timepoint_calc(K_MSEC(VBUS_READ_CACHE_MS));
 	}
 
 	/* Return VBUS */
@@ -3024,6 +3069,30 @@ test_mockable int pdc_power_mgmt_get_info(int port, struct pdc_info_t *pdc_info,
 	return pdc_get_info(pdc_data[port]->port.pdc, pdc_info, false);
 }
 
+test_mockable int pdc_power_mgmt_get_lpm_ppm_info(int port,
+						  struct lpm_ppm_info_t *info)
+{
+	int ret;
+
+	/* Make sure port is in range and that an output buffer is provided */
+	if (!is_pdc_port_valid(port)) {
+		return -ERANGE;
+	}
+
+	if (info == NULL) {
+		return -EINVAL;
+	}
+
+	pdc_data[port]->port.lpm_ppm_info = info;
+
+	ret = public_api_block(port, CMD_PDC_GET_LPM_PPM_INFO);
+	if (ret) {
+		return ret;
+	}
+
+	return 0;
+}
+
 int pdc_power_mgmt_get_bus_info(int port, struct pdc_bus_info_t *pdc_bus_info)
 {
 	/* This operation is handled synchronously within the driver based on
@@ -3102,8 +3171,10 @@ pdc_power_mgmt_get_identity_discovery(int port, enum tcpci_msg_type type)
 		cmd = CMD_PDC_GET_IDENTITY_DISCOVERY;
 		break;
 	case TCPCI_MSG_SOP_PRIME:
-		cmd = CMD_PDC_GET_CABLE_PROPERTY;
-		break;
+		return (pdc_data[port]->port.cable_prop.cable_type &&
+			pdc_data[port]->port.cable_prop.mode_support) ?
+			       PD_DISC_COMPLETE :
+			       PD_DISC_FAIL;
 	default:
 		return PD_DISC_FAIL;
 	}
@@ -3114,15 +3185,8 @@ pdc_power_mgmt_get_identity_discovery(int port, enum tcpci_msg_type type)
 		return PD_DISC_NEEDED;
 	}
 
-	if (cmd == CMD_PDC_GET_IDENTITY_DISCOVERY) {
-		return pdc_data[port]->port.discovery_state ? PD_DISC_COMPLETE :
-							      PD_DISC_FAIL;
-	} else {
-		return (pdc_data[port]->port.cable_prop.cable_type &&
-			pdc_data[port]->port.cable_prop.mode_support) ?
-			       PD_DISC_COMPLETE :
-			       PD_DISC_FAIL;
-	}
+	return pdc_data[port]->port.discovery_state ? PD_DISC_COMPLETE :
+						      PD_DISC_FAIL;
 }
 
 test_mockable int
@@ -3200,7 +3264,7 @@ uint16_t pdc_power_mgmt_get_identity_vid(int port)
 	 * capable.
 	 *
 	 */
-	if (pdc->vdo[IDENTITY_VID_VDO_IDX] == 0) {
+	if (pdc->vdo[IDENTITY_VID_VDO_IDX] == INVALID_VDO_VALUE) {
 		pdc_run_get_discovery(port);
 	}
 
@@ -3222,7 +3286,7 @@ uint16_t pdc_power_mgmt_get_identity_pid(int port)
 
 	pdc = &pdc_data[port]->port;
 
-	if (pdc->vdo[IDENTITY_VID_VDO_IDX] == 0) {
+	if (pdc->vdo[IDENTITY_VID_VDO_IDX] == INVALID_VDO_VALUE) {
 		pdc_run_get_discovery(port);
 	}
 
@@ -3244,7 +3308,7 @@ uint8_t pdc_power_mgmt_get_product_type(int port)
 
 	pdc = &pdc_data[port]->port;
 
-	if (pdc->vdo[IDENTITY_PTYPE_VDO_IDX] == 0) {
+	if (pdc->vdo[IDENTITY_PTYPE_VDO_IDX] == INVALID_VDO_VALUE) {
 		pdc_run_get_discovery(port);
 	}
 

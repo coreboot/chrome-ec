@@ -181,7 +181,7 @@ config EMUL_SMBUS_ARA
 config EMUL_REALTEK_RTS54_PDC
 	bool "Realtek RTS5453P Type-C Power Delivery Controller emulator"
 	default y
-	depends on DT_HAS_REALTEK_RTS54_PDC_ENABLED && EMUL
+	depends on DT_HAS_REALTEK_RTS54_PDC_ENABLED && EMUL_SMBUS_ARA && EMUL
 	select EMUL_COMMON_I2C
 	help
 	  Enable the Realtek RTS5453P emulator. This driver use emulated I2C bus.
@@ -296,11 +296,11 @@ config EMUL_ICM42607
 	  Enable the ICM42607 accelerometer and gyroscope emulator.
 
 config EMUL_LSM6DSO
-  bool "lsm6dso emulator"
-  default y
-  depends on DT_HAS_CROS_LSM6DSO_EMUL_ENABLED
-  help
-    Enable the LSM6DSO accelerometer and gyroscope emulator.
+	bool "lsm6dso emulator"
+	default y
+	depends on DT_HAS_CROS_LSM6DSO_EMUL_ENABLED
+	help
+	  Enable the LSM6DSO accelerometer and gyroscope emulator.
 
 rsource "Kconfig.ln9310"
 rsource "Kconfig.lis2dw12"
