@@ -21,7 +21,6 @@
 #include "gpio.dtsi"
 #include "../i2c.dtsi"
 #include "../interrupts.dtsi"
-#include "../keyboard.dtsi"
 #include "../motionsense.dtsi"
 #include "../power_signals.dtsi"
 #include "../power_signals_gpios.dtsi"
@@ -31,6 +30,7 @@
 #include "../usba.dtsi"
 
 /* Lotso project DTS includes*/
+#include "keyboard.dtsi"
 #include "led_pins.dtsi"
 #include "led_policy.dtsi"
 
@@ -38,9 +38,12 @@
 
 /{
         batteries {
-                default_battery: lgc_ap18c8k {
-                        compatible = "lgc,ap18c8k", "battery-smart";
-                };
+		default_battery: sunwoda_l24d3pg1 {
+			compatible = "sunwoda,l24d3pg1", "battery-smart";
+		};
+		cosmx_l24x3pg1 {
+			compatible = "cosmx,l24x3pg1", "battery-smart";
+		};
         };
 
         gpio-interrupts {

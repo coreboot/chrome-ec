@@ -97,10 +97,10 @@ ASSERTION_FAILURE_REGEX = re.compile(
 )
 
 DATA_ACCESS_VIOLATION_8020000_REGEX = re.compile(
-    r"Data access violation, mfar = 8020000\r\n"
+    r"(Data access violation, mfar = 8020000\r\n)|(.*MMFAR Address: 0x8020000\r\n)"
 )
 DATA_ACCESS_VIOLATION_8040000_REGEX = re.compile(
-    r"Data access violation, mfar = 8040000\r\n"
+    r"(Data access violation, mfar = 8040000\r\n)|(.*MMFAR Address: 0x8040000\r\n)"
 )
 DATA_ACCESS_VIOLATION_80C0000_REGEX = re.compile(
     r"Data access violation, mfar = 80c0000\r\n"
@@ -506,7 +506,9 @@ class AllTests:
         tests = []
         try:
             current_dir = os.path.dirname(__file__)
-            private_dir = os.path.join(current_dir, os.pardir, "private/test")
+            private_dir = os.path.join(
+                current_dir, os.pardir, os.pardir, "ec-private/test"
+            )
             have_private = os.path.isdir(private_dir)
             if not have_private:
                 return []
