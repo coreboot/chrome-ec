@@ -190,9 +190,9 @@ ifneq ($(USE_CLOUD_KMS_SIGNER),)
 # The private key comes from Cloud KMS.
 export KMS_PKCS11_CONFIG = $(abspath chip/g/config.yaml)
 PKCS11_MODULE_PATH = /usr/lib64/libkmsp11.so
-KMS_KEY_RESOURCE_NAME = projects/gsc-cloud-kms-signing/locations/us/keyRings/gsc-node-locked-signing-keys/cryptoKeys/cr50-node-locked-key/cryptoKeyVersions/3
+KMS_KEY_RESOURCE_NAME = projects/gsc-cloud-kms-signing/locations/us/keyRings/gsc-node-locked-signing-keys/cryptoKeys/cr50-hsm-node-locked-key/cryptoKeyVersions/1
 RW_SIGNER_EXTRAS += --pkcs11_engine="$(PKCS11_MODULE_PATH):0:$(KMS_KEY_RESOURCE_NAME)"
-CR50_RW_KEY = cr50_RW-prod.pem.pub
+CR50_RW_KEY = cr50-hsm-node-locked-key.pem.pub
 else
 # The private key comes from the sighing fob.
 CR50_RW_KEY = cr50_rom0-dev-blsign.pem.pub
