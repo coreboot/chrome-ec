@@ -40,6 +40,89 @@ extern "C" {
 #define PDC_MAX_DATA_LENGTH 256
 
 /**
+ * @brief UCSI Commands
+ */
+enum ucsi_command_t {
+	/** UCSI COMMAND 0x00 RESERVED */
+	/** UCSI PPM RESET */
+	UCSI_PPM_RESET = 0x01,
+	/** UCSI CANCEL */
+	UCSI_CANCEL = 0x02,
+	/** UCSI CONNECTOR RESET */
+	UCSI_CONNECTOR_RESET = 0x03,
+	/** UCSI ACK CC CI */
+	UCSI_ACK_CC_CI = 0x04,
+	/** UCSI SET NOTIFICATION ENABLE */
+	UCSI_SET_NOTIFICATION_ENABLE = 0x05,
+	/** UCSI CAPABILITY */
+	UCSI_GET_CAPABILITY = 0x06,
+	/** UCSI CONNECTOR CAPABILITY */
+	UCSI_GET_CONNECTOR_CAPABILITY = 0x07,
+	/** UCSI SET CCOM */
+	UCSI_SET_CCOM = 0x08,
+	/** UCSI SET UOR */
+	UCSI_SET_UOR = 0x09,
+	/** UCSI SET PDM 0x0a OBSOLETE*/
+	/** UCSI SET PDR */
+	UCSI_SET_PDR = 0x0b,
+	/** UCSI ALTERNATE MODES */
+	UCSI_GET_ALTERNATE_MODES = 0x0c,
+	/** UCSI GET CAM SUPPORTED */
+	UCSI_GET_CAM_SUPPORTED = 0x0d,
+	/** UCSI GET CURRENT CAM */
+	UCSI_GET_CURRENT_CAM = 0x0e,
+	/** UCSI NEW CAM */
+	UCSI_SET_NEW_CAM = 0x0f,
+	/** UCSI GET PDOS */
+	UCSI_GET_PDOS = 0x10,
+	/** UCSI GET CABLE PROPERTY */
+	UCSI_GET_CABLE_PROPERTY = 0x11,
+	/** UCSI GET CONNECTOR STATUS */
+	UCSI_GET_CONNECTOR_STATUS = 0x12,
+	/** UCSI GET ERROR STATUS */
+	UCSI_GET_ERROR_STATUS = 0x13,
+	/** UCSI SET POWER LEVEL */
+	UCSI_SET_POWER_LEVEL = 0x14,
+	/** UCSI GET PD MESSAGE */
+	UCSI_GET_PD_MESSAGE = 0x15,
+	/** UCSI GET ATTENTION VDO */
+	UCSI_GET_ATTENTION_VDO = 0x16,
+	/** UCSI COMMAND 0x17 RESERVED */
+	/** UCSI GET CAM CS */
+	UCSI_GET_CAM_CS = 0x18,
+	/** UCSI LPM FW UPDATE REQUEST */
+	UCSI_LPM_FW_UPDATE_REQUEST = 0x19,
+	/** UCSI SECURITY REQUEST */
+	UCSI_SECURITY_REQUEST = 0x1a,
+	/** UCSI SET RETIMER MODE */
+	UCSI_SET_RETIMER_MODE = 0x1b,
+	/** UCSI SET SINK PATH */
+	UCSI_SET_SINK_PATH = 0x1c,
+	/** UCSI SET PDOS */
+	UCSI_SET_PDOS = 0x1d,
+	/** UCSI READ POWER LEVEL */
+	UCSI_READ_POWER_LEVEL = 0x1e,
+	/** UCSI CHUNKING SUPPORTED */
+	UCSI_CHUNKING_SUPPORT = 0x1f,
+	/** UCSI VENDOR DEFINED COMMAND */
+	UCSI_VENDOR_DEFINED_COMMAND = 0x20,
+	/** UCSI SET USB */
+	UCSI_SET_USB = 0x21,
+	/** UCSI GET LPM PPM INFO */
+	UCSI_GET_LPM_PPM_INFO = 0x22,
+};
+
+/**
+ * @brief Returns a pointer to the string name of a UCSI Command
+ * @note The get_ucsi_command_name function must be updated when the enum
+ * ucsi_command_t is updated
+ *
+ * @param cmd UCSI command
+ * @ret pointer to string name of the UCSI command
+ */
+const char *const get_ucsi_command_name(enum ucsi_command_t cmd);
+
+/**
  * @brief PDO Offset to start reading PDOs
  */
 enum pdo_offset_t {
@@ -611,6 +694,14 @@ union conn_status_change_bits_t {
 	uint16_t raw_value;
 };
 
+#define CONNECTOR_PARTNER_FLAG_USB BIT(0)
+#define CONNECTOR_PARTNER_FLAG_ALTERNATE_MODE BIT(1)
+#define CONNECTOR_PARTNER_FLAG_USB4_GEN3 BIT(2)
+#define CONNECTOR_PARTNER_FLAG_USB4_GEN4 BIT(4)
+#define CONNECTOR_PARTNER_PD_CAPABLE             \
+	(CONNECTOR_PARTNER_FLAG_ALTERNATE_MODE | \
+	 CONNECTOR_PARTNER_FLAG_USB4_GEN3 | CONNECTOR_PARTNER_FLAG_USB4_GEN4)
+
 /**
  * @brief Current status of the connector
  */
@@ -819,7 +910,7 @@ union cable_property_t {
 		 * Return the amount of current the cable is designed
 		 * for in 50ma units.
 		 */
-		uint32_t b_current_capablilty : 8;
+		uint32_t b_current_capability : 8;
 		/**
 		 * The PPM shall set this field to a one if the cable
 		 * has a VBUS connection from end to end.
@@ -1172,6 +1263,24 @@ union get_vdo_t {
 	};
 	uint8_t raw_value;
 };
+
+/**
+ * @brief response for UCSI_GET_LPM_PPM_INFO
+ */
+struct lpm_ppm_info_t {
+	/** USB vendor ID */
+	uint16_t vid;
+	/** USB product ID */
+	uint16_t pid;
+	/** ID assigned by USB-IF for compliance */
+	uint32_t xid;
+	/** FW version */
+	uint32_t fw_ver;
+	/** FW sub-version */
+	uint32_t fw_ver_sub;
+	/** Hardware version */
+	uint32_t hw_ver;
+} __packed;
 
 #ifdef __cplusplus
 }

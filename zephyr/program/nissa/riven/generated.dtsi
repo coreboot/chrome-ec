@@ -105,14 +105,10 @@
 			gpios = <&gpioa 4 GPIO_ODR_HIGH>;
 		};
 		gpio_ec_touch_en: ec_touch_en {
-			gpios = <&gpio8 3 GPIO_OUTPUT_LOW>;
+			gpios = <&gpio7 3 GPIO_OUTPUT_LOW>;
 		};
 		gpio_ec_wp_odl: ec_wp_odl {
 			gpios = <&gpioa 1 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
-		};
-		gpio_en_kb_bl: en_kb_bl {
-			gpios = <&gpioa 0 GPIO_OUTPUT>;
-			enum-name = "GPIO_EN_KEYBOARD_BACKLIGHT";
 		};
 		gpio_en_pp3300_s5: en_pp3300_s5 {
 			gpios = <&gpiob 6 GPIO_OUTPUT>;
@@ -223,6 +219,10 @@
 			i2c-port = <&i2c3_0>;
 			enum-names = "I2C_PORT_USB_C0_TCPC";
 		};
+		i2c_ec_i2c_sensor_2: ec_i2c_sensor_2 {
+			i2c-port = <&i2c4_1>;
+			enum-names = "I2C_PORT_SENSOR_2";
+		};
 		i2c_ec_i2c_sub_usb_c1: ec_i2c_sub_usb_c1 {
 			i2c-port = <&i2c5_1>;
 			enum-names = "I2C_PORT_USB_C1_TCPC";
@@ -269,6 +269,12 @@
 	pinctrl-names = "default";
 };
 
+&i2c4_1 {
+	status = "okay";
+	pinctrl-0 = <&i2c4_1_sda_scl_gpf2_f3>;
+	pinctrl-names = "default";
+};
+
 &i2c5_1 {
 	status = "okay";
 	pinctrl-0 = <&i2c5_1_sda_scl_gpf4_f5>;
@@ -291,6 +297,10 @@
 };
 
 &i2c_ctrl3 {
+	status = "okay";
+};
+
+&i2c_ctrl4 {
 	status = "okay";
 };
 
