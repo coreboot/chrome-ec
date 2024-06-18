@@ -52,3 +52,43 @@ config HW_TEST_MALLOC
 	select ZTEST
 	help
 	  The test verifies basic malloc operations.
+
+config HW_TEST_PANIC
+	bool "Panic test"
+	select ZTEST
+	depends on ARM
+	help
+	  The test verifies panic data.
+
+config HW_TEST_PRINTF
+	bool "printf test"
+	select ZTEST
+	help
+	  The test verifies printf related functions.
+
+config HW_TEST_QUEUE
+	bool "Queue test"
+	select ZTEST
+	help
+	  The test verifies queue functionality in EC.
+
+config HW_TEST_RESTRICTED_CONSOLE
+	bool "Restricted console test"
+	select ZTEST
+	depends on BOARD_FINGERPRINT
+	help
+	  The test verifies restricted console.
+
+config HW_TEST_ROLLBACK
+	bool "Rollback test"
+	select ZTEST
+	depends on BOARD_FINGERPRINT
+	help
+	  The test verifies rollback regions functionality.
+
+config HW_TEST_ROLLBACK_ENTROPY
+	bool "Rollback entropy test"
+	select ZTEST
+	depends on PLATFORM_EC_ROLLBACK
+	help
+	  The test verifies rollback entropy functionality.

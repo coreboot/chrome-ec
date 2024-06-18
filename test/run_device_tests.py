@@ -97,10 +97,10 @@ ASSERTION_FAILURE_REGEX = re.compile(
 )
 
 DATA_ACCESS_VIOLATION_8020000_REGEX = re.compile(
-    r"Data access violation, mfar = 8020000\r\n"
+    r"(Data access violation, mfar = 8020000\r\n)|(.*MMFAR Address: 0x8020000\r\n)"
 )
 DATA_ACCESS_VIOLATION_8040000_REGEX = re.compile(
-    r"Data access violation, mfar = 8040000\r\n"
+    r"(Data access violation, mfar = 8040000\r\n)|(.*MMFAR Address: 0x8040000\r\n)"
 )
 DATA_ACCESS_VIOLATION_80C0000_REGEX = re.compile(
     r"Data access violation, mfar = 80c0000\r\n"
@@ -344,6 +344,10 @@ class AllTests:
                 test_args=["uart"],
             ),
             TestConfig(test_name="fpsensor_auth_crypto_stateful"),
+            TestConfig(
+                test_name="fpsensor_auth_crypto_stateful_otp",
+                exclude_boards=[BLOONCHIPPER, DARTMONKEY],
+            ),
             TestConfig(test_name="fpsensor_auth_crypto_stateless"),
             TestConfig(test_name="fpsensor_crypto"),
             TestConfig(
@@ -372,14 +376,18 @@ class AllTests:
                 finish_regexes=[board_config.mpu_regex],
                 skip_for_zephyr=True,
             ),
-            TestConfig(test_name="mutex"),
-            TestConfig(test_name="mutex_trylock"),
-            TestConfig(test_name="mutex_recursive"),
+            # Handled by Zephyr - kernel.mutex test
+            TestConfig(test_name="mutex", skip_for_zephyr=True),
+            TestConfig(test_name="mutex_trylock", skip_for_zephyr=True),
+            TestConfig(test_name="mutex_recursive", skip_for_zephyr=True),
             TestConfig(
                 test_name="otp_key", exclude_boards=[BLOONCHIPPER, DARTMONKEY]
             ),
             TestConfig(test_name="panic"),
-            TestConfig(test_name="pingpong"),
+            # Task synchronization covered by Zephyr tests and shim layer by unit tests.
+            # task_wait_event is implemented based on k_poll_event and it is verified by
+            # the kernel.poll test.
+            TestConfig(test_name="pingpong", skip_for_zephyr=True),
             TestConfig(test_name="printf"),
             TestConfig(test_name="queue"),
             TestConfig(test_name="restricted_console"),
@@ -502,7 +510,9 @@ class AllTests:
         tests = []
         try:
             current_dir = os.path.dirname(__file__)
-            private_dir = os.path.join(current_dir, os.pardir, "private/test")
+            private_dir = os.path.join(
+                current_dir, os.pardir, os.pardir, "ec-private/test"
+            )
             have_private = os.path.isdir(private_dir)
             if not have_private:
                 return []

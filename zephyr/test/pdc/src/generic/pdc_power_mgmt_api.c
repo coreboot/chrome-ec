@@ -5,7 +5,6 @@
 
 #include "drivers/ucsi_v3.h"
 #include "emul/emul_pdc.h"
-#include "emul/emul_smbus_ara.h"
 #include "hooks.h"
 #include "test/util.h"
 #include "usbc/pdc_power_mgmt.h"
@@ -23,9 +22,6 @@ LOG_MODULE_REGISTER(pdc_power_mgmt_api);
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 #define TEST_PORT 0
 
-#define SMBUS_ARA_NODE DT_NODELABEL(smbus_ara_emul)
-static const struct emul *ara = EMUL_DT_GET(SMBUS_ARA_NODE);
-
 bool pdc_power_mgmt_test_wait_unattached(void);
 bool pdc_power_mgmt_test_wait_attached(int port);
 bool pdc_rts54xx_test_idle_wait(void);
@@ -41,9 +37,6 @@ void pdc_power_mgmt_setup(void)
 
 void pdc_power_mgmt_before(void *fixture)
 {
-	uint8_t addr = DT_REG_ADDR(RTS5453P_NODE);
-
-	emul_smbus_ara_set_address(ara, addr);
 	emul_pdc_set_response_delay(emul, 0);
 	emul_pdc_disconnect(emul);
 	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
@@ -510,6 +503,43 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 		TEST_WAIT_FOR(!pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 }
 
+ZTEST_USER(pdc_power_mgmt_api, test_get_lpm_ppm_info)
+{
+	struct lpm_ppm_info_t out = { 0 };
+	struct lpm_ppm_info_t in = {
+		.vid = 0x1234,
+		.pid = 0x5678,
+		.xid = 0xa1b2c3d4,
+		.fw_ver = 123,
+		.fw_ver_sub = 456,
+		.hw_ver = 0xa5b6c7de,
+	};
+
+	/* Bad params */
+	zassert_equal(-ERANGE, pdc_power_mgmt_get_lpm_ppm_info(
+				       CONFIG_USB_PD_PORT_MAX_COUNT, &out));
+	zassert_equal(-EINVAL,
+		      pdc_power_mgmt_get_lpm_ppm_info(TEST_PORT, NULL));
+
+	/* Successful */
+	emul_pdc_set_lpm_ppm_info(emul, &in);
+	zassert_equal(EC_SUCCESS,
+		      pdc_power_mgmt_get_lpm_ppm_info(TEST_PORT, &out));
+
+	zassert_equal(in.vid, out.vid, "Got $%04x, expected $%04x", out.vid,
+		      in.vid);
+	zassert_equal(in.pid, out.pid, "Got $%04x, expected $%04x", out.pid,
+		      in.pid);
+	zassert_equal(in.xid, out.xid, "Got $%08x, expected $%08x", out.xid,
+		      in.xid);
+	zassert_equal(in.fw_ver, out.fw_ver, "Got %u, expected %u", out.fw_ver,
+		      in.fw_ver);
+	zassert_equal(in.fw_ver_sub, out.fw_ver_sub, "Got %u, expected %u",
+		      out.fw_ver_sub, in.fw_ver_sub);
+	zassert_equal(in.hw_ver, out.hw_ver, "Got %08x, expected $%08x",
+		      out.hw_ver, in.hw_ver);
+}
+
 ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 {
 	int i;
@@ -699,9 +729,14 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_unconstr_power)
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 {
+/* Keep in line with |pdc_power_mgmt_api.c|. */
+#define VBUS_READ_CACHE_MS 500
+
 	union connector_status_t connector_status;
+	union conn_status_change_bits_t change_bits;
 	uint32_t mv_units = 50;
 	const uint32_t expected_voltage_mv = 5000;
+	uint32_t next_expected_voltage_mv = 6000;
 	uint16_t out;
 	uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
 	uint32_t start;
@@ -725,6 +760,36 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 
 	zassert_equal(expected_voltage_mv, out, "expected=%d, out=%d",
 		      expected_voltage_mv, out);
+
+	/*
+	 * Change the voltage and expect that we keep getting cached value until
+	 * 500ms has passed.
+	 */
+	connector_status.voltage_reading = next_expected_voltage_mv / mv_units;
+	emul_pdc_set_connector_status(emul, &connector_status);
+	k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
+	zassert_equal(expected_voltage_mv,
+		      pdc_power_mgmt_get_vbus_voltage(TEST_PORT));
+
+	zassert_true(TEST_WAIT_FOR(
+		next_expected_voltage_mv ==
+			pdc_power_mgmt_get_vbus_voltage(TEST_PORT),
+		VBUS_READ_CACHE_MS));
+
+	/*
+	 * Connector status change bits can also immediately trigger vbus reads.
+	 */
+	change_bits.raw_value = 0;
+	change_bits.negotiated_power_level = 1;
+	next_expected_voltage_mv += 100;
+	connector_status.voltage_reading = next_expected_voltage_mv / mv_units;
+	connector_status.raw_conn_status_change_bits = change_bits.raw_value;
+	emul_pdc_set_connector_status(emul, &connector_status);
+	emul_pdc_pulse_irq(emul);
+	k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
+
+	zassert_equal(next_expected_voltage_mv,
+		      pdc_power_mgmt_get_vbus_voltage(TEST_PORT));
 
 	emul_pdc_disconnect(emul);
 	zassert_true(
@@ -1140,6 +1205,114 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_cable_prop)
 	zassert_true(TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
 				   PDC_TEST_TIMEOUT));
 }
+
+ZTEST_USER(pdc_power_mgmt_api, test_get_identity_discovery)
+{
+	struct setup_t {
+		enum tcpci_msg_type type;
+		bool cable_type;
+		bool mode_support;
+	};
+	struct expect_t {
+		bool check_cc_mode;
+		enum ccom_t cc_mode;
+		bool check_pdr;
+		union pdr_t pdr;
+	};
+	struct {
+		char *description;
+		struct setup_t s;
+		enum pd_discovery_state expected_state;
+	} test[] = {
+		{
+			.description = "SOP with alt mode support",
+			.s = { .type = TCPCI_MSG_SOP,
+			       .cable_type = false,
+			       .mode_support = true, },
+			.expected_state = PD_DISC_COMPLETE,
+		},
+		{
+			.description = "SOP without alt mode support",
+			.s = { .type = TCPCI_MSG_SOP,
+			       .cable_type = false,
+			       .mode_support = false, },
+			.expected_state = PD_DISC_FAIL,
+		},
+		{
+			.description = "SOP' with alt mode support",
+			.s = { .type = TCPCI_MSG_SOP_PRIME,
+			       .cable_type = true,
+			       .mode_support = true, },
+			.expected_state = PD_DISC_COMPLETE,
+		},
+		{
+			.description = "SOP' without alt mode support",
+			.s = { .type = TCPCI_MSG_SOP_PRIME,
+			       .cable_type = true,
+			       .mode_support = false, },
+			.expected_state = PD_DISC_FAIL,
+		},
+		{
+			/* SOP'' not supported and should always fail. */
+			.description = "SOP'' with alt mode support",
+			.s = { .type = TCPCI_MSG_SOP_PRIME_PRIME,
+			       .cable_type = true,
+			       .mode_support = true, },
+			.expected_state = PD_DISC_FAIL,
+		},
+	};
+
+	union cable_property_t in;
+	union connector_status_t in_conn_status;
+	union conn_status_change_bits_t in_conn_status_change_bits;
+	enum pd_discovery_state actual_state;
+
+	in_conn_status_change_bits.external_supply_change = 1;
+	in_conn_status_change_bits.connector_partner = 1;
+	in_conn_status_change_bits.connect_change = 1;
+	in_conn_status.raw_conn_status_change_bits =
+		in_conn_status_change_bits.raw_value;
+
+	in_conn_status.conn_partner_type = UFP_ATTACHED;
+	in_conn_status.rdo = 0x01234567;
+	emul_pdc_configure_snk(emul, &in_conn_status);
+
+	for (int i = 0; i < ARRAY_SIZE(test); i++) {
+		LOG_INF("Testing %s", test[i].description);
+
+		if (test[i].s.mode_support) {
+			in_conn_status.conn_partner_flags =
+				CONNECTOR_PARTNER_FLAG_ALTERNATE_MODE;
+		} else {
+			in_conn_status.conn_partner_flags =
+				CONNECTOR_PARTNER_FLAG_USB;
+		}
+		in.cable_type = test[i].s.cable_type;
+		in.mode_support = test[i].s.mode_support;
+
+		emul_pdc_set_cable_property(emul, in);
+
+		emul_pdc_connect_partner(emul, &in_conn_status);
+		zassert_true(
+			TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+				      PDC_TEST_TIMEOUT));
+
+		actual_state = pdc_power_mgmt_get_identity_discovery(
+			TEST_PORT, test[i].s.type);
+		zassert_equal(test[i].expected_state, actual_state,
+			      "%s: expected state %d, actual %d",
+			      test[i].description, test[i].expected_state);
+
+		emul_pdc_disconnect(emul);
+		zassert_true(
+			TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
+				      PDC_TEST_TIMEOUT));
+	}
+
+	zassert_equal(pdc_power_mgmt_get_identity_discovery(TEST_PORT,
+							    TCPCI_MSG_SOP),
+		      PD_DISC_NEEDED);
+};
 
 /*
  * Validate that all possible PDC power management states have a name

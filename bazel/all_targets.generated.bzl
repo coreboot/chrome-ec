@@ -299,6 +299,10 @@ def all_targets():
         board = "brox-ish-ec",
     )
     ec_target(
+        name = "brox-sku4",
+        board = "brox-sku4",
+    )
+    ec_target(
         name = "brox-tokenized",
         board = "brox-tokenized",
         extra_modules = ["picolibc", "pigweed"],
@@ -1773,6 +1777,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "orisa",
+        board = "orisa",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "osiris",
         baseboard = "brya",
         board = "osiris",
@@ -1885,6 +1894,11 @@ def all_targets():
         chip = "stm32",
         core = "cortex-m0",
         zephyr = False,
+    )
+    ec_target(
+        name = "ptlrvp_mchp",
+        board = "ptlrvp_mchp",
+        extra_modules = ["cmsis"],
     )
     ec_target(
         name = "puff",
