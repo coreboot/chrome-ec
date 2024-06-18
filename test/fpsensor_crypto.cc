@@ -4,15 +4,12 @@
  */
 
 #include "fpsensor/fpsensor_crypto.h"
-#include "fpsensor/fpsensor_state_without_driver_info.h"
+#include "rollback.h"
+#include "sha256.h"
+#include "test_util.h"
 
 #include <array>
 #include <vector>
-
-extern "C" {
-#include "sha256.h"
-#include "test_util.h"
-}
 
 struct HkdfTestVector {
 	std::vector<uint8_t> ikm;
@@ -22,7 +19,7 @@ struct HkdfTestVector {
 	std::vector<uint8_t> okm;
 };
 
-extern "C" enum ec_error_list rollback_get_secret(uint8_t *secret)
+enum ec_error_list rollback_get_secret(uint8_t *secret)
 {
 	// We should not call this function in the test.
 	TEST_ASSERT(false);
@@ -142,8 +139,6 @@ test_static int test_hkdf_expand(void)
 		}
 	};
 
-	std::array<uint8_t, SHA256_DIGEST_SIZE> unused_output{};
-
 	const std::array test_vectors = { test_vector1, test_vector2,
 					  test_vector3 };
 
@@ -151,30 +146,41 @@ test_static int test_hkdf_expand(void)
 		const auto &expected_okm = test_vector.okm;
 		std::vector<uint8_t> actual_okm(expected_okm.size());
 
-		TEST_ASSERT(hkdf_expand(actual_okm.data(), actual_okm.size(),
-					test_vector.prk.data(),
-					test_vector.prk.size(),
-					test_vector.info.data(),
-					test_vector.info.size()) == EC_SUCCESS);
+		TEST_ASSERT(hkdf_sha256(actual_okm, test_vector.ikm,
+					test_vector.salt, test_vector.info));
 		TEST_ASSERT_ARRAY_EQ(expected_okm.data(), actual_okm.data(),
 				     expected_okm.size());
 	}
 
 	/* OKM size too big. */
-	TEST_ASSERT(hkdf_expand(unused_output.data(), 256 * SHA256_DIGEST_SIZE,
-				test_vector1.prk.data(),
-				test_vector1.prk.size(),
-				test_vector1.info.data(),
-				test_vector1.info.size()) == EC_ERROR_INVAL);
+	std::array<uint8_t, 256 * SHA256_DIGEST_SIZE> unused_output{};
+	const auto &test_vector = test_vector1;
+	TEST_ASSERT(!hkdf_sha256(unused_output, test_vector.ikm,
+				 test_vector.salt, test_vector.info));
+
 	return EC_SUCCESS;
 }
 
 test_static ec_error_list test_aes_128_gcm_encrypt_in_place()
 {
-	constexpr std::array<uint8_t, SBP_ENC_KEY_LEN> key = {
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-		0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-	};
+	const FpEncryptionKey key = { {
+		0x00,
+		0x01,
+		0x02,
+		0x03,
+		0x04,
+		0x05,
+		0x06,
+		0x07,
+		0x08,
+		0x09,
+		0x0A,
+		0x0B,
+		0x0C,
+		0x0D,
+		0x0E,
+		0x0F,
+	} };
 	std::array<uint8_t, 16> plaintext = { 0x00, 0x00, 0x00, 0x00,
 					      0x00, 0x00, 0x00, 0x00,
 					      0x00, 0x00, 0x00, 0x00,
@@ -205,10 +211,24 @@ test_static ec_error_list test_aes_128_gcm_encrypt_in_place()
 
 test_static ec_error_list test_aes_128_gcm_decrypt_in_place()
 {
-	constexpr std::array<uint8_t, SBP_ENC_KEY_LEN> key = {
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-		0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-	};
+	const FpEncryptionKey key = { {
+		0x00,
+		0x01,
+		0x02,
+		0x03,
+		0x04,
+		0x05,
+		0x06,
+		0x07,
+		0x08,
+		0x09,
+		0x0A,
+		0x0B,
+		0x0C,
+		0x0D,
+		0x0E,
+		0x0F,
+	} };
 	/* Using the same values as from test_aes_gcm_encrypt_in_place means we
 	 * should get back the original plaintext from that function.
 	 */
@@ -241,7 +261,7 @@ test_static ec_error_list test_aes_128_gcm_decrypt_in_place()
 
 test_static ec_error_list test_aes_128_gcm_encrypt_invalid_nonce_size()
 {
-	constexpr std::array<uint8_t, SBP_ENC_KEY_LEN> key{};
+	const FpEncryptionKey key{};
 	std::array<uint8_t, 16> text{};
 	std::array<uint8_t, FP_CONTEXT_TAG_BYTES> tag{};
 
@@ -256,7 +276,7 @@ test_static ec_error_list test_aes_128_gcm_encrypt_invalid_nonce_size()
 
 test_static ec_error_list test_aes_128_gcm_decrypt_invalid_nonce_size()
 {
-	constexpr std::array<uint8_t, SBP_ENC_KEY_LEN> key{};
+	const FpEncryptionKey key{};
 	std::array<uint8_t, 16> text{};
 	constexpr std::array<uint8_t, FP_CONTEXT_TAG_BYTES> tag{};
 
@@ -275,7 +295,8 @@ test_static ec_error_list test_aes_128_gcm_encrypt_invalid_key_size()
 	constexpr std::array<uint8_t, FP_CONTEXT_NONCE_BYTES> nonce{};
 
 	/* Use an invalid key size. Key must be exactly 128 bits. */
-	constexpr std::array<uint8_t, SBP_ENC_KEY_LEN - 1> key{};
+	BUILD_ASSERT(sizeof(FpEncryptionKey) == 16);
+	constexpr std::array<uint8_t, 15> key{};
 
 	ec_error_list ret = aes_128_gcm_encrypt(key, text, text, nonce, tag);
 	TEST_EQ(ret, EC_ERROR_UNKNOWN, "%d");
@@ -290,7 +311,8 @@ test_static ec_error_list test_aes_128_gcm_decrypt_invalid_key_size()
 	constexpr std::array<uint8_t, FP_CONTEXT_NONCE_BYTES> nonce{};
 
 	/* Use an invalid key size. Key must be exactly 128 bits. */
-	constexpr std::array<uint8_t, SBP_ENC_KEY_LEN - 1> key{};
+	BUILD_ASSERT(sizeof(FpEncryptionKey) == 16);
+	constexpr std::array<uint8_t, 15> key{};
 
 	ec_error_list ret = aes_128_gcm_decrypt(key, text, text, nonce, tag);
 	TEST_EQ(ret, EC_ERROR_UNKNOWN, "%d");

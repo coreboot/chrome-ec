@@ -68,6 +68,10 @@ int one_wire_uart_send(const struct device *dev, uint8_t cmd,
 	struct k_msgq *tx_queue = data->tx_queue;
 	int ret;
 
+	if (!data->enabled) {
+		return -ESHUTDOWN;
+	}
+
 	if (size > ONE_WIRE_UART_MAX_PAYLOAD_SIZE) {
 		return -EINVAL;
 	}
@@ -102,6 +106,10 @@ static int one_wire_uart_send_reset(const struct device *dev)
 	struct one_wire_uart_data *data = dev->data;
 	struct k_msgq *tx_queue = data->tx_queue;
 	int ret;
+
+	if (!data->enabled) {
+		return 0;
+	}
 
 	msg.header = (struct one_wire_uart_header){
 		.magic = HEADER_MAGIC,
@@ -166,10 +174,9 @@ static void wake_tx(void)
 }
 DECLARE_DEFERRED(wake_tx);
 
-/* retry every 2ms */
-#define RETRY_INTERVAL (2 * MSEC)
-/* b/319924645#comment23, temporary increase from 20 to 50. */
-#define MAX_RETRY 50
+/* retry every 2.5ms * 100 times */
+#define RETRY_INTERVAL (5 * MSEC / 2)
+#define MAX_RETRY 100
 
 static void start_error_recovery(void)
 {
@@ -377,7 +384,7 @@ void load_rx_fifo(const struct device *dev)
 	}
 }
 
-void uart_handler(const struct device *bus, void *user_data)
+static void uart_handler(const struct device *bus, void *user_data)
 {
 	const struct device *dev = user_data;
 
@@ -410,15 +417,47 @@ void one_wire_uart_reset(const struct device *dev)
 	ring_buf_reset(data->rx_ring_buf);
 }
 
-void one_wire_uart_enable(const struct device *dev)
+static int one_wire_uart_init(const struct device *dev)
 {
 	const struct one_wire_uart_config *config = dev->config;
 	const struct device *bus = config->bus;
 
-	one_wire_uart_reset(dev);
 	uart_irq_callback_user_data_set(bus, uart_handler, (void *)dev);
+	one_wire_uart_enable(dev);
+
+	return 0;
+}
+
+void one_wire_uart_enable(const struct device *dev)
+{
+	const struct one_wire_uart_config *config = dev->config;
+	const struct device *bus = config->bus;
+	struct one_wire_uart_data *data = dev->data;
+
+	if (data->enabled) {
+		return;
+	}
+
+	data->enabled = true;
+	one_wire_uart_reset(dev);
 	uart_irq_rx_enable(bus);
 	one_wire_uart_send_reset(dev);
+}
+
+void one_wire_uart_disable(const struct device *dev)
+{
+	const struct one_wire_uart_config *config = dev->config;
+	const struct device *bus = config->bus;
+	struct one_wire_uart_data *data = dev->data;
+
+	if (!data->enabled) {
+		return;
+	}
+
+	data->enabled = false;
+	one_wire_uart_reset(dev);
+	uart_irq_callback_user_data_set(bus, uart_handler, (void *)dev);
+	uart_irq_rx_disable(bus);
 }
 
 void one_wire_uart_set_callback(const struct device *dev,
@@ -452,7 +491,8 @@ void one_wire_uart_set_callback(const struct device *dev,
 		.rx_queue = &rx_queue##n,                                    \
 		.ack = -1,                                                   \
 	};                                                                   \
-	DEVICE_DT_INST_DEFINE(n, NULL, NULL, &one_wire_uart_data##n,         \
+	DEVICE_DT_INST_DEFINE(n, &one_wire_uart_init, NULL,                  \
+			      &one_wire_uart_data##n,                        \
 			      &one_wire_uart_config##n, POST_KERNEL, 50, NULL)
 
 DT_INST_FOREACH_STATUS_OKAY(INIT_ONE_WIRE_UART_DEVICE);

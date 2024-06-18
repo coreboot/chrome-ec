@@ -175,6 +175,7 @@ if(DEFINED CONFIG_BOARD_CRAASKOV)
 	project(craaskov)
 	zephyr_include_directories("craaskov/include")
 	zephyr_library_sources(
+			"craaskov/src/board.c"
 			"craaskov/src/keyboard.c"
 			"craaskov/src/hdmi.c"
 			"craaskov/src/touch_panel.c"
@@ -184,6 +185,18 @@ if(DEFINED CONFIG_BOARD_CRAASKOV)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
 	"craaskov/src/keyboard.c"
 	"craaskov/src/keyboard_customization.c"
+	)
+endif()
+if(DEFINED CONFIG_BOARD_ORISA)
+	project(orisa)
+	zephyr_include_directories("orisa/include")
+	zephyr_library_sources(
+			"orisa/src/usbc.c"
+			"orisa/src/sub_board.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
+	"orisa/src/keyboard.c"
+	"orisa/src/keyboard_customization.c"
 	)
 endif()
 if(DEFINED CONFIG_BOARD_QUANDISO)
@@ -227,6 +240,7 @@ if(DEFINED CONFIG_BOARD_GLASSWAY)
 	project(glassway)
 	zephyr_library_sources(
 			"glassway/src/sub_board.c"
+			"glassway/src/kb_backlight.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "glassway/src/fan.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "glassway/src/usbc.c")
@@ -245,6 +259,7 @@ endif()
 if(DEFINED CONFIG_BOARD_PUJJOGA)
 	project(pujjoga)
 	zephyr_library_sources(
+			"pujjoga/src/board.c"
 			"pujjoga/src/led.c"
 			"pujjoga/src/hdmi.c"
 			"pujjoga/src/sub_board.c"
@@ -254,12 +269,9 @@ if(DEFINED CONFIG_BOARD_PUJJOGA)
 endif()
 if(DEFINED CONFIG_BOARD_RIVEN)
 	zephyr_library_sources(
-			"riven/src/fan.c"
 			"riven/src/form_factor.c"
 			"riven/src/keyboard.c"
-			"riven/src/kb_backlight.c"
 			"riven/src/led.c"
-			"riven/src/thermal.c"
 			"riven/src/touch_panel.c"
 	)
 	project(riven)

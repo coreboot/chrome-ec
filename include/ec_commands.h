@@ -527,6 +527,65 @@ extern "C" {
 	(((x) & 0xf0) >> USB_RETIMER_FW_UPDATE_OP_SHIFT)
 
 /*
+ * Offset 0x15 is reserved for PBOK, added to Coreboot in
+ * https://crrev.com/c/3840943 and proposed for inclusion here
+ * in https://crrev.com/c/3547317.
+ */
+
+/*
+ * Get extended strings from the EC.
+ * Write:
+ *     String index, or 0 to probe for EC support.
+ * Read:
+ *     String bytes, following by repeating null bytes.
+ *
+ * Writing a byte (EC_ACPI_MEM_STRINGS_FIFO_ID_*) selects a string, and the
+ * following reads return the non-null bytes of the string in sequence until
+ * the end of the string is reached. After the end of the string, reads 0 until
+ * another byte is written. This interface allows ACPI firmware to read longer
+ * strings from the EC than can reasonably fit into the shared memory region.
+ *
+ * To probe for EC support, write FIFO_ID_VERSION and read will return at least
+ * one nonzero (MEM_STRINGS_FIFO_V1 for example) if MEM_STRINGS_FIFO is
+ * supported. Returned values will indicate which strings are supported. If the
+ * first byte is 0xff, the strings FIFO is unsupported.
+ */
+#define EC_ACPI_MEM_STRINGS_FIFO 0x16
+
+/* String index to probe EC support. */
+#define EC_ACPI_MEM_STRINGS_FIFO_ID_VERSION 0
+#define EC_ACPI_MEM_STRINGS_FIFO_V1 1
+/*
+ * 0xff is the value the EC returns for unimplemented reads, indicating
+ * the current EC firmware does not implement this command.
+ */
+#define EC_ACPI_MEM_STRINGS_FIFO_UNSUPPORTED 0xff
+
+/*
+ * Battery model number for the selected battery. Supported since V1.
+ * Presents the same data as EC_MEMMAP_BATT_MODEL, but can provide more
+ * than 8 bytes.
+ *
+ * This and the other FIFO_ID_BATTERY strings can select one of multiple
+ * batteries by changing the value at EC_MEMMAP_BATT_INDEX. Once that index
+ * is changed, reads of these strings will return information for the
+ * corresponding battery, if present.
+ */
+#define EC_ACPI_MEM_STRINGS_FIFO_ID_BATTERY_MODEL 1
+/*
+ * Battery serial number for the selected battery. Supported since V1.
+ * Presents the same data as EC_MEMMAP_BATT_SERIAL, but can provide more
+ * than 8 bytes.
+ */
+#define EC_ACPI_MEM_STRINGS_FIFO_ID_BATTERY_SERIAL 2
+/*
+ * Battery manufacturer for the selected battery. Supported since V1.
+ * Presents the same data as EC_MEMMAP_BATT_MFGR, but can provide more
+ * than 8 bytes.
+ */
+#define EC_ACPI_MEM_STRINGS_FIFO_ID_BATTERY_MANUFACTURER 3
+
+/*
  * ACPI addresses 0x20 - 0xff map to EC_MEMMAP offset 0x00 - 0xdf.  This data
  * is read-only from the AP.  Added in EC_ACPI_MEM_VERSION 2.
  */
@@ -3970,6 +4029,11 @@ struct ec_result_keyscan_seq_ctrl {
  * Get the next pending MKBP event.
  *
  * Returns EC_RES_UNAVAILABLE if there is no event pending.
+ *
+ * V0: ec_response_get_next_data
+ * V1: ec_response_get_next_data_v1. Increased key_matrix size from 13 -> 16.
+ * V2: Added EC_MKBP_HAS_MORE_EVENTS.
+ * V3: ec_response_get_next_data_v3. Increased key_matrix size from 16 -> 18.
  */
 #define EC_CMD_GET_NEXT_EVENT 0x0067
 
@@ -4107,6 +4171,34 @@ union __ec_align_offset1 ec_response_get_next_data_v1 {
 };
 BUILD_ASSERT(sizeof(union ec_response_get_next_data_v1) == 16);
 
+union __ec_align_offset1 ec_response_get_next_data_v3 {
+	uint8_t key_matrix[18];
+
+	/* Unaligned */
+	uint32_t host_event;
+	uint64_t host_event64;
+
+	struct __ec_todo_unpacked {
+		/* For aligning the fifo_info */
+		uint8_t reserved[3];
+		struct ec_response_motion_sense_fifo_info info;
+	} sensor_fifo;
+
+	uint32_t buttons;
+
+	uint32_t switches;
+
+	uint32_t fp_events;
+
+	uint32_t sysrq;
+
+	/* CEC events from enum mkbp_cec_event */
+	uint32_t cec_events;
+
+	uint8_t cec_message[16];
+};
+BUILD_ASSERT(sizeof(union ec_response_get_next_data_v3) == 18);
+
 struct ec_response_get_next_event {
 	uint8_t event_type;
 	/* Followed by event data if any */
@@ -4117,6 +4209,12 @@ struct ec_response_get_next_event_v1 {
 	uint8_t event_type;
 	/* Followed by event data if any */
 	union ec_response_get_next_data_v1 data;
+} __ec_align1;
+
+struct ec_response_get_next_event_v3 {
+	uint8_t event_type;
+	/* Followed by event data if any */
+	union ec_response_get_next_data_v3 data;
 } __ec_align1;
 
 /* Bit indices for buttons and switches.*/
@@ -5821,6 +5919,7 @@ struct ec_response_pd_status {
 #define PD_EVENT_IDENTITY_RECEIVED BIT(2)
 #define PD_EVENT_DATA_SWAP BIT(3)
 #define PD_EVENT_TYPEC BIT(4)
+#define PD_EVENT_PPM BIT(5)
 
 struct ec_response_host_event_status {
 	uint32_t status; /* PD MCU host event status */
@@ -6292,6 +6391,37 @@ struct ec_response_pd_chip_info_v1 {
 	} __ec_align2;
 } __ec_align2;
 
+/** Indicates the chip should NOT receive a firmware update, if set. This is
+ *  useful when multiple ports are serviced by a single chip, to avoid
+ *  performing redundant updates. The host command implementation shall ensure
+ *  only one port out of each physical chip has FW updates active.
+ */
+#define USB_PD_CHIP_INFO_FWUP_FLAG_NO_UPDATE BIT(0)
+
+/** Maximum length of a project name embedded in a PDC FW image. This length
+ *  does NOT include a NUL-terminator.
+ */
+#define USB_PD_CHIP_INFO_PROJECT_NAME_LEN 12
+struct ec_response_pd_chip_info_v2 {
+	uint16_t vendor_id;
+	uint16_t product_id;
+	uint16_t device_id;
+	union {
+		uint8_t fw_version_string[8];
+		uint64_t fw_version_number;
+	} __ec_align2;
+	union {
+		uint8_t min_req_fw_version_string[8];
+		uint64_t min_req_fw_version_number;
+	} __ec_align2;
+	/** Flag to control the FW update process for this chip. */
+	uint16_t fw_update_flags;
+	/** Project name string associated with the chip's FW. Add an extra
+	 *  byte for a NUL-terminator.
+	 */
+	char fw_name_str[USB_PD_CHIP_INFO_PROJECT_NAME_LEN + 1];
+} __ec_align2;
+
 /* Run RW signature verification and get status */
 #define EC_CMD_RWSIG_CHECK_STATUS 0x011C
 
@@ -6395,6 +6525,38 @@ struct ec_params_set_cbi {
 	uint32_t tag; /* enum cbi_data_tag */
 	uint32_t flag; /* CBI_SET_* */
 	uint32_t size; /* Data size */
+	uint8_t data[]; /* For string and raw data */
+} __ec_align1;
+
+/*
+ * Retrieve binary from CrOS Board Info primary memory source.
+ */
+#define EC_CMD_CBI_BIN_READ 0x0504
+/*
+ * Write binary into CrOS Board Info temporary buffer and then commit it to
+ * permanent storage once complete. Write fails if the board has hardware
+ * write-protect enabled.
+ */
+#define EC_CMD_CBI_BIN_WRITE 0x0505
+
+/*
+ * CBI binary read/write flags
+ * The default write behavior is to always append any data to the buffer.
+ * If 'CLEAR' flag is set, buffer is cleared then data is appended.
+ * If 'WRITE' flag is set, data is appended then buffer is written to memory.
+ */
+#define EC_CBI_BIN_BUFFER_CLEAR BIT(0)
+#define EC_CBI_BIN_BUFFER_WRITE BIT(1)
+
+struct ec_params_get_cbi_bin {
+	uint32_t offset; /* Data offset */
+	uint32_t size; /* Data size */
+} __ec_align4;
+
+struct ec_params_set_cbi_bin {
+	uint32_t offset; /* Data offset */
+	uint32_t size; /* Data size */
+	uint8_t flags; /* bit field for EC_CBI_BIN_COMMIT_FLAG_* */
 	uint8_t data[]; /* For string and raw data */
 } __ec_align1;
 
@@ -6801,6 +6963,8 @@ enum action_key {
 	TK_MICMUTE = 19,
 	TK_MENU = 20,
 	TK_DICTATE = 21,
+	TK_ACCESSIBILITY = 22,
+	TK_DONOTDISTURB = 23,
 
 	TK_COUNT
 };
@@ -7859,6 +8023,36 @@ struct ec_params_ap_fw_state {
 	uint32_t state;
 } __ec_align1;
 
+/*
+ * UCSI OPM-PPM commands
+ *
+ * These commands are used for communication between OPM and PPM.
+ * Only UCSI3.0 is tested.
+ */
+
+#define EC_CMD_UCSI_PPM_SET 0x0140
+
+/* The data size is stored in the host command protocol header. */
+struct ec_params_ucsi_ppm_set {
+	uint16_t offset;
+	uint8_t data[];
+} __ec_align2;
+
+#define EC_CMD_UCSI_PPM_GET 0x0141
+
+/* For 'GET' sub-commands, data will be returned as a raw payload. */
+struct ec_params_ucsi_ppm_get {
+	uint16_t offset;
+	uint8_t size;
+} __ec_align2;
+
+#define EC_CMD_SET_ALARM_SLP_S0_DBG 0x0142
+
+/* RTC params and response structures */
+struct ec_params_set_alarm_slp_s0_dbg {
+	uint32_t time;
+} __ec_align2;
+
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */
 
@@ -8026,7 +8220,8 @@ struct ec_response_fp_info {
 
 /* Constants for encryption parameters */
 #define FP_CONTEXT_NONCE_BYTES 12
-#define FP_CONTEXT_USERID_WORDS (32 / sizeof(uint32_t))
+#define FP_CONTEXT_USERID_BYTES 32
+#define FP_CONTEXT_USERID_WORDS (FP_CONTEXT_USERID_BYTES / sizeof(uint32_t))
 #define FP_CONTEXT_TAG_BYTES 16
 #define FP_CONTEXT_ENCRYPTION_SALT_BYTES 16
 #define FP_CONTEXT_TPM_BYTES 32
