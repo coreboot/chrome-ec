@@ -14,6 +14,15 @@ config TEST_SUITE_PDC_RETIMER_FW_UPDATE
 config TEST_SUITE_PDC_CONSOLE
 	bool "Enable pdc console command tests"
 
+config TEST_SUITE_PDC_HOSTCMD
+	bool "Enable PDC host command tests"
+
+config TEST_SUITE_PDC_UCSI
+	bool "Enable UCSI tests"
+
+config TEST_SUITE_PPM
+	bool "Enable PPM tests"
+
 config TEST_PDC_MESSAGE_TRACING
 	bool "Enable PDC message tracing"
 	help

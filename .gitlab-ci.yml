@@ -435,6 +435,7 @@ zephyr_coverage:
     expire_in: 1 week
   coverage: '/lines\.*: \d+\.\d+%/'
 
+# Bloonchipper won't build because it depends on private zephyr modules.
 zephyr_boards_coverage:
   stage: build
   needs: []
