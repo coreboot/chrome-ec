@@ -193,6 +193,7 @@ if(DEFINED CONFIG_BOARD_ORISA)
 	zephyr_library_sources(
 			"orisa/src/usbc.c"
 			"orisa/src/sub_board.c"
+			"orisa/src/touch_panel.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
 	"orisa/src/keyboard.c"
@@ -268,13 +269,17 @@ if(DEFINED CONFIG_BOARD_PUJJOGA)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "pujjoga/src/charger.c")
 endif()
 if(DEFINED CONFIG_BOARD_RIVEN)
+	zephyr_include_directories("riven/include")
 	zephyr_library_sources(
 			"riven/src/form_factor.c"
-			"riven/src/keyboard.c"
 			"riven/src/led.c"
 			"riven/src/touch_panel.c"
 	)
 	project(riven)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "riven/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "riven/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
+	"riven/src/keyboard.c"
+	"riven/src/keyboard_customization.c"
+	)
 endif()
