@@ -186,7 +186,7 @@ endif
 endif
 
 RW_SIGNER_EXTRAS += --override-keyid
-ifneq ($(USE_CLOUD_KMS_SIGNER),)
+ifeq ($(USE_USB_FOB_KEY),)
 # The private key comes from Cloud KMS.
 export KMS_PKCS11_CONFIG = $(abspath chip/g/config.yaml)
 PKCS11_MODULE_PATH = /usr/lib64/libkmsp11.so
