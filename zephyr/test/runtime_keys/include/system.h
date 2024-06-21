@@ -3,4 +3,6 @@
  * found in the LICENSE file.
  */
 
-#include "native_sim.dts"
+#include <stdint.h>
+
+void system_enter_hibernate(uint32_t seconds, uint32_t microseconds);
