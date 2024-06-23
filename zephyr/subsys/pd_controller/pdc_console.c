@@ -222,6 +222,7 @@ static int cmd_pdc_get_info(const struct shell *sh, size_t argc, char **argv)
 	shell_fprintf(sh, SHELL_INFO,
 		      "Live: %d\n"
 		      "FW Ver: %u.%u.%u\n"
+		      "FW Config Ver: %u\n"
 		      "PD Rev: %u\n"
 		      "PD Ver: %u\n"
 		      "VID/PID: %04x:%04x\n"
@@ -231,14 +232,43 @@ static int cmd_pdc_get_info(const struct shell *sh, size_t argc, char **argv)
 		      live, PDC_FWVER_GET_MAJOR(pdc_info.fw_version),
 		      PDC_FWVER_GET_MINOR(pdc_info.fw_version),
 		      PDC_FWVER_GET_PATCH(pdc_info.fw_version),
-		      pdc_info.pd_revision, pdc_info.pd_version,
-		      PDC_VIDPID_GET_VID(pdc_info.vid_pid),
+		      pdc_info.fw_config_version, pdc_info.pd_revision,
+		      pdc_info.pd_version, PDC_VIDPID_GET_VID(pdc_info.vid_pid),
 		      PDC_VIDPID_GET_PID(pdc_info.vid_pid),
 		      pdc_info.is_running_flash_code ? 'Y' : 'N',
 		      pdc_info.running_in_flash_bank,
 		      has_proj_name ? pdc_info.project_name : "<None>");
 
 	return EC_SUCCESS;
+}
+
+static int cmd_lpm_ppm_info(const struct shell *sh, size_t argc, char **argv)
+{
+	struct lpm_ppm_info_t info;
+	uint8_t port;
+	int rv;
+
+	/* Get PD port number */
+	rv = cmd_get_pd_port(sh, argv[1], &port);
+	if (rv)
+		return rv;
+
+	/* Get PDC info using UCSI GET_LPM_PPM_INFO command */
+	rv = pdc_power_mgmt_get_lpm_ppm_info(port, &info);
+	if (rv) {
+		shell_error(sh, "Could not get port %u info (%d)", port, rv);
+		return rv;
+	}
+
+	shell_fprintf(sh, SHELL_INFO,
+		      "VID/PID: %04x:%04x\n"
+		      "XID: %08x\n"
+		      "FW Ver: %u.%u\n"
+		      "HW Ver: %08x\n",
+		      info.vid, info.pid, info.xid, info.fw_ver,
+		      info.fw_ver_sub, info.hw_ver);
+
+	return 0;
 }
 
 static int cmd_pdc_prs(const struct shell *sh, size_t argc, char **argv)
@@ -571,6 +601,37 @@ static int cmd_pdc_srccaps(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+#ifdef CONFIG_USBC_PDC_TPS6699X
+/* LCOV_EXCL_START - non-shipping code */
+extern int tps_pdc_do_firmware_update(void);
+
+static int cmd_pdc_fwupdate(const struct shell *sh, size_t argc, char **argv)
+{
+	int rv;
+
+	/* Disable all comms before doing update. */
+	rv = pdc_power_mgmt_set_comms_state(/*enable=*/false);
+	if (rv) {
+		shell_fprintf(sh, SHELL_ERROR, "Could not suspend PDC: %d\n",
+			      rv);
+		return rv;
+	}
+
+	rv = tps_pdc_do_firmware_update();
+	if (rv) {
+		shell_fprintf(sh, SHELL_ERROR, "Could not update fw: %d\n", rv);
+	}
+
+	if (pdc_power_mgmt_set_comms_state(/*enable=*/true)) {
+		shell_fprintf(sh, SHELL_ERROR,
+			      "Could not resume PDC. May want to restart EC.");
+	}
+
+	return rv;
+}
+/* LCOV_EXCL_STOP - non-shipping code */
+#endif /* defined(CONFIG_USBC_PDC_TPS6699X) */
+
 SHELL_STATIC_SUBCMD_SET_CREATE(
 	sub_pdc_cmds,
 	SHELL_CMD_ARG(status, NULL,
@@ -628,6 +689,16 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		      "given port.\n"
 		      "Usage pdc srccaps <port>",
 		      cmd_pdc_srccaps, 2, 0),
+	SHELL_CMD_ARG(lpm_ppm_info, NULL,
+		      "Get PDC chip info via GET_LPM_PPM_INFO UCSI cmd\n"
+		      "Usage: pdc lpm_ppm_info <port>",
+		      cmd_lpm_ppm_info, 2, 0),
+#ifdef CONFIG_USBC_PDC_TPS6699X
+	SHELL_CMD_ARG(fwupdate, NULL,
+		      "Updates TPS6699x firmware\n"
+		      "Usage pdc fwupdate",
+		      cmd_pdc_fwupdate, 1, 0),
+#endif /* defined(CONFIG_USBC_PDC_TPS6699X) */
 	SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(pdc, &sub_pdc_cmds, "PDC console commands", NULL);

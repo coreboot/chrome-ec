@@ -1,5 +1,5 @@
 common:
-  platform_allow: native_posix
+  platform_allow: native_sim
 tests:
   pdc.generic:
     timeout: 300
@@ -8,6 +8,12 @@ tests:
     - CONFIG_TEST_PDC_MESSAGE_TRACING=y
     - CONFIG_USBC_PDC_TRACE_MSG=y
     - CONFIG_USB_PDC_LOG_LEVEL_DBG=y
+
+  pdc.generic.api_null_check:
+    timeout: 300
+    extra_configs:
+    - CONFIG_TEST_SUITE_PDC_API_NULL_CHECK=y
+    - CONFIG_ASSERT_TEST=y
 
   pdc.rts54xx:
     extra_configs:
