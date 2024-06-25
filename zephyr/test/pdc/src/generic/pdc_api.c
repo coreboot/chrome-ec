@@ -10,7 +10,6 @@
 #include "drivers/ucsi_v3.h"
 #include "emul/emul_pdc.h"
 #include "i2c.h"
-#include "include/ppm.h"
 #include "pdc_trace_msg.h"
 #include "zephyr/sys/util.h"
 #include "zephyr/sys/util_macro.h"
@@ -21,6 +20,8 @@
 #include <zephyr/fff.h>
 #include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
+
+#include <usbc/ppm.h>
 
 LOG_MODULE_REGISTER(test_pdc_api, LOG_LEVEL_INF);
 
@@ -522,7 +523,7 @@ static void test_cc_cb(const struct device *dev,
 ZTEST_USER(pdc_api, test_execute_ucsi_cmd)
 {
 	struct ucsi_memory_region ucsi_data;
-	struct ucsi_control *control = &ucsi_data.control;
+	struct ucsi_control_t *control = &ucsi_data.control;
 	struct pdc_callback callback;
 	union error_status_t in, *out;
 
@@ -534,7 +535,7 @@ ZTEST_USER(pdc_api, test_execute_ucsi_cmd)
 
 	control->command_specific[0] = 1;
 	callback.handler = test_cc_cb;
-	zassert_ok(pdc_execute_ucsi_cmd(dev, UCSI_CMD_GET_ERROR_STATUS, 1,
+	zassert_ok(pdc_execute_ucsi_cmd(dev, UCSI_GET_ERROR_STATUS, 1,
 					control->command_specific,
 					ucsi_data.message_in, &callback));
 	k_sleep(K_MSEC(SLEEP_MS));
@@ -548,7 +549,7 @@ ZTEST_USER(pdc_api, test_execute_ucsi_cmd)
 ZTEST_USER(pdc_api, test_execute_ucsi_cmd_get_connector_status)
 {
 	struct ucsi_memory_region ucsi_data;
-	struct ucsi_control *control = &ucsi_data.control;
+	struct ucsi_control_t *control = &ucsi_data.control;
 	struct pdc_callback callback;
 	union connector_status_t in;
 	union connector_status_t *out =
@@ -564,7 +565,7 @@ ZTEST_USER(pdc_api, test_execute_ucsi_cmd_get_connector_status)
 	k_sleep(K_MSEC(SLEEP_MS));
 
 	callback.handler = test_cc_cb;
-	zassert_ok(pdc_execute_ucsi_cmd(dev, UCSI_CMD_GET_CONNECTOR_STATUS, 0,
+	zassert_ok(pdc_execute_ucsi_cmd(dev, UCSI_GET_CONNECTOR_STATUS, 0,
 					control->command_specific,
 					ucsi_data.message_in, &callback));
 	k_sleep(K_MSEC(SLEEP_MS));
@@ -576,7 +577,7 @@ ZTEST_USER(pdc_api, test_execute_ucsi_cmd_get_connector_status)
 	 */
 	in.connect_status = 0;
 	zassert_ok(emul_pdc_set_connector_status(emul, &in));
-	zassert_ok(pdc_execute_ucsi_cmd(dev, UCSI_CMD_GET_CONNECTOR_STATUS, 0,
+	zassert_ok(pdc_execute_ucsi_cmd(dev, UCSI_GET_CONNECTOR_STATUS, 0,
 					control->command_specific,
 					ucsi_data.message_in, &callback));
 	k_sleep(K_MSEC(SLEEP_MS));

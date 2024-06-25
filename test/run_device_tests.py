@@ -413,8 +413,11 @@ class AllTests:
                 timeout_secs=20,
                 exclude_boards=[BLOONCHIPPER, DARTMONKEY],
             ),
+            # Covered by Zephyr drivers.counter.basic_api.stm32_subsec test
             TestConfig(
-                test_name="rtc_stm32f4", exclude_boards=[DARTMONKEY, HELIPILOT]
+                test_name="rtc_stm32f4",
+                exclude_boards=[DARTMONKEY, HELIPILOT],
+                skip_for_zephyr=True,
             ),
             TestConfig(test_name="sbrk", imagetype_to_use=ImageType.RO),
             TestConfig(test_name="sha256"),
@@ -544,6 +547,12 @@ class AllTests:
                 zephyr_name="drivers.flash.stm32.f4.block_registers",
                 test_name="zephyr_flash_stm32f4_block_registers",
                 exclude_boards=[DARTMONKEY, HELIPILOT],
+            ),
+            TestConfig(
+                zephyr_name="drivers.counter.basic_api.stm32_subsec",
+                test_name="zephyr_counter_basic_api_stm32_subsec",
+                exclude_boards=[DARTMONKEY, HELIPILOT],
+                timeout_secs=20,
             ),
         ]
 
