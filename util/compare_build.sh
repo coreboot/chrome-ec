@@ -36,6 +36,7 @@
 # Although this script is a good proving ground for new testing techniques,
 # care should be taken to offload functionality to other core components.
 
+# shellcheck disable=SC1091
 # shellcheck source=../../../scripts/lib/shflags/shflags
 . "${SHFLAGS:-/usr/share/misc/shflags}" || exit 1
 

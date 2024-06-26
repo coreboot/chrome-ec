@@ -3,6 +3,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+# shellcheck disable=SC1091
 # shellcheck source=../../../scripts/lib/shflags/shflags
 . "${SHFLAGS:-/usr/share/misc/shflags}" || exit 1
 
