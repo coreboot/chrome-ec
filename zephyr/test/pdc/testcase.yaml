@@ -1,5 +1,8 @@
 common:
   platform_allow: native_sim
+  extra_dtc_overlay_files:
+  - "./boards/native_sim.overlay"
+  - "./boards/rts5453p.overlay"
 tests:
   pdc.generic:
     timeout: 300
@@ -45,3 +48,9 @@ tests:
   pdc.ppm:
     extra_configs:
     - CONFIG_TEST_SUITE_PPM=y
+
+  pdc.trace_msg:
+    extra_configs:
+    - CONFIG_TEST_SUITE_PDC_TRACE_MSG=y
+    - CONFIG_USBC_PDC_TRACE_MSG=y
+    - CONFIG_USBC_PDC_TRACE_MSG_LOG_LEVEL_DBG=y

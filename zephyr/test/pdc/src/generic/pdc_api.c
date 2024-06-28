@@ -25,15 +25,13 @@
 
 LOG_MODULE_REGISTER(test_pdc_api, LOG_LEVEL_INF);
 
-#define RTS5453P_NODE DT_NODELABEL(rts5453p_emul)
+#define RTS5453P_NODE DT_NODELABEL(pdc_emul1)
 #define SLEEP_MS 120
 
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 static const struct device *dev = DEVICE_DT_GET(RTS5453P_NODE);
 static bool test_cc_cb_called;
 static union cci_event_t test_cc_cb_cci;
-
-bool pdc_rts54xx_test_idle_wait(void);
 
 void pdc_before_test(void *data)
 {
@@ -43,7 +41,7 @@ void pdc_before_test(void *data)
 		set_pdc_trace_msg_mocks();
 	}
 
-	zassert_true(pdc_rts54xx_test_idle_wait());
+	zassert_ok(emul_pdc_idle_wait(emul));
 
 	test_cc_cb_called = false;
 	test_cc_cb_cci.raw_value = 0;

@@ -26,8 +26,8 @@
 
 LOG_MODULE_REGISTER(test_rts54xx, LOG_LEVEL_INF);
 
-#define RTS5453P_NODE DT_NODELABEL(rts5453p_emul)
-#define RTS5453P_NODE2 DT_NODELABEL(rts5453p_emul2)
+#define RTS5453P_NODE DT_NODELABEL(pdc_emul1)
+#define RTS5453P_NODE2 DT_NODELABEL(pdc_emul2)
 
 #define EMUL_PORT 0
 #define EMUL2_PORT 1
@@ -67,8 +67,6 @@ static const struct emul *emul2 = EMUL_DT_GET(RTS5453P_NODE2);
 static const struct device *dev = DEVICE_DT_GET(RTS5453P_NODE);
 static const struct device *dev2 = DEVICE_DT_GET(RTS5453P_NODE2);
 
-bool pdc_rts54xx_test_idle_wait(void);
-
 static void rts54xx_before_test(void *data)
 {
 	emul_pdc_reset(emul);
@@ -77,7 +75,7 @@ static void rts54xx_before_test(void *data)
 		set_pdc_trace_msg_mocks();
 	}
 
-	zassert_true(pdc_rts54xx_test_idle_wait());
+	zassert_ok(emul_pdc_idle_wait(emul));
 }
 
 static int emul_get_src_pdos(enum pdo_offset_t pdo_offset, uint8_t pdo_count,
