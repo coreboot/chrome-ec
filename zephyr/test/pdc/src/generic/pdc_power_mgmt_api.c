@@ -17,14 +17,13 @@
 LOG_MODULE_REGISTER(pdc_power_mgmt_api);
 
 #define PDC_TEST_TIMEOUT 2000
-#define RTS5453P_NODE DT_NODELABEL(rts5453p_emul)
+#define RTS5453P_NODE DT_NODELABEL(pdc_emul1)
 
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 #define TEST_PORT 0
 
 bool pdc_power_mgmt_test_wait_unattached(void);
 bool pdc_power_mgmt_test_wait_attached(int port);
-bool pdc_rts54xx_test_idle_wait(void);
 
 bool test_pdc_power_mgmt_is_snk_typec_attached_run(int port);
 bool test_pdc_power_mgmt_is_src_typec_attached_run(int port);
@@ -42,7 +41,7 @@ void pdc_power_mgmt_before(void *fixture)
 	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
 
 	zassert_true(pdc_power_mgmt_test_wait_unattached());
-	zassert_true(pdc_rts54xx_test_idle_wait());
+	zassert_ok(emul_pdc_idle_wait(emul));
 }
 
 ZTEST_SUITE(pdc_power_mgmt_api, NULL, pdc_power_mgmt_setup,
