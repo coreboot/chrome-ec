@@ -37,10 +37,6 @@ else()
 	set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# TODO(b/273639386): Remove ANDROID when upstream is fixed.
-set(ANDROID TRUE)
-zephyr_compile_definitions(CROS_ZEPHYR)
-
 # We are not going to install BoringSSL, so don't generate install rules.
 set(CMAKE_SKIP_INSTALL_RULES YES)
 
@@ -72,11 +68,11 @@ zephyr_library_link_libraries(crypto)
 # -fno-common disables merging tentative definitions (uninitialized global
 # variables) into pre-existing definition (initialized global variable).
 # Recommended by BoringSSL.
-#
-# -Wno-return-type is needed to ignore non-void functions that calls abort() and
-# don't have return statement (e.g. aes_hw_set_encrypt_key()).
-set(BORINGSSL_COMPILE_OPTIONS -D_POSIX_C_SOURCE=200809L
-	-Wno-implicit-function-declaration -fno-common -Wno-return-type)
+set(BORINGSSL_COMPILE_OPTIONS
+	-D_POSIX_C_SOURCE=200809L
+	-Wno-implicit-function-declaration
+	-fno-common
+)
 
 # Create interface library that specifies compile options required by
 # BoringSSL. This is the same trick used by zephyr_library_compile_options()

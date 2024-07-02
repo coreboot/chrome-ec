@@ -8,17 +8,9 @@
 #ifndef __CROS_EC_FPSENSOR_FPSENSOR_UTILS_H
 #define __CROS_EC_FPSENSOR_FPSENSOR_UTILS_H
 
-#include "console.h"
+#include "common.h"
 
-#include <stdbool.h>
-#include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#define CPRINTF(format, args...) cprintf(CC_FP, format, ##args)
-#define CPRINTS(format, args...) cprints(CC_FP, format, ##args)
+#include <cstdint>
 
 /**
  * Test that size+offset does not exceed buffer_size
@@ -31,16 +23,24 @@ extern "C" {
 enum ec_error_list validate_fp_buffer_offset(uint32_t buffer_size,
 					     uint32_t offset, uint32_t size);
 
-#ifdef __cplusplus
-}
-#endif
-
-#define FP_MODE_ANY_CAPTURE \
-	(FP_MODE_CAPTURE | FP_MODE_ENROLL_IMAGE | FP_MODE_MATCH)
-#define FP_MODE_ANY_DETECT_FINGER \
-	(FP_MODE_FINGER_DOWN | FP_MODE_FINGER_UP | FP_MODE_ANY_CAPTURE)
-#define FP_MODE_ANY_WAIT_IRQ (FP_MODE_FINGER_DOWN | FP_MODE_ANY_CAPTURE)
-
 bool fp_match_success(int match_result);
+
+/**
+ * @param mode sensor mode
+ * @return true if the mode is a test capture that does not require finger
+ * touch.
+ */
+bool is_test_capture(uint32_t mode);
+
+/**
+ * @param mode sensor mode
+ * @return true if the mode is one that yields a frame in which all bytes should
+ * be returned over EC_CMD_FRAME.
+ * Other captures modes (simple, pattern0, pattern1, and reset_test) are
+ * only interested in the height*width*bpp image bytes that are offset inside
+ * the frame.
+ * These modes correspond to using the ectool fpframe "raw" modifier.
+ */
+bool is_raw_capture(uint32_t mode);
 
 #endif /* __CROS_EC_FPSENSOR_FPSENSOR_UTILS_H */

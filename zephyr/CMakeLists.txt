@@ -176,6 +176,7 @@ if (ZEPHYR_PIGWEED_MODULE_DIR)
     target_compile_options(log_tokenized_config INTERFACE -include
                            ${PLATFORM_EC}/zephyr/include/pigweed/pw_zephyr_tokenized_custom_log.h)
     pw_set_module_config(pw_log_tokenized_CONFIG log_tokenized_config)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/include/pigweed")
   endif()
 endif()
 
@@ -226,6 +227,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_BMA4XX
                                                 "${PLATFORM_EC}/driver/accel_bma4xx.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_KX022
                                                 "${PLATFORM_EC}/driver/accel_kionix.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_LIS2DE
+                                                "${PLATFORM_EC}/driver/accel_lis2dh.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_LIS2DS
                                                 "${PLATFORM_EC}/driver/accel_lis2ds.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_ACCEL_LIS2DW12
@@ -320,10 +323,10 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGE_RAMP_SW
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CPS8100
                                                 "${PLATFORM_EC}/driver/wpc/cps8100.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CURVE25519
-                                                "${PLATFORM_EC}/common/curve25519.c")
+                                                "${PLATFORM_EC}/third_party/boringssl/common/curve25519.c")
 if (NOT DEFINED CONFIG_CPU_CORTEX_M0)
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CURVE25519
-                                                "${PLATFORM_EC}/common/curve25519-generic.c")
+                                                "${PLATFORM_EC}/third_party/boringssl/common/curve25519-generic.c")
 endif()
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_OCPC
                                                 "${PLATFORM_EC}/common/ocpc.c")
@@ -360,13 +363,13 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FLASH_CROS
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FINGERPRINT
 						"${PLATFORM_EC}/common/fpsensor/fpsensor.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_state.cc"
-						"${PLATFORM_EC}/common/fpsensor/fpsensor_state_without_driver_info.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_crypto.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_debug.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_auth_commands.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_auth_crypto_stateful.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_auth_crypto_stateless.cc"
 						"${PLATFORM_EC}/common/fpsensor/fpsensor_detect_strings.cc"
+						"${PLATFORM_EC}/common/fpsensor/fpsensor_utils.cc"
 						"${PLATFORM_EC}/crypto/elliptic_curve_key.cc")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_HOSTCMD
                                                 "${PLATFORM_EC}/common/host_command.c")
@@ -538,7 +541,12 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_POWER_DELIVERY
                                                 "${PLATFORM_EC}/common/usbc/usb_pd_timer.c"
                                                 "${PLATFORM_EC}/common/usbc/usb_sm.c"
                                                 "${PLATFORM_EC}/common/usbc_intr_task.c"
+                                                "${PLATFORM_EC}/common/usbc_utils.c"
                                                 "${PLATFORM_EC}/common/usb_pd_flags.c")
+
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USB_PD_CONTROLLER
+                                                "${PLATFORM_EC}/common/usbc_utils.c")
+
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_TOUCHPAD_ELAN
                                                 "${PLATFORM_EC}/driver/touchpad_elan.c")
 

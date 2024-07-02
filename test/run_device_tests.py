@@ -45,6 +45,7 @@ import argparse
 from collections import namedtuple
 import concurrent
 from concurrent.futures.thread import ThreadPoolExecutor
+import copy
 from dataclasses import dataclass
 from dataclasses import field
 from enum import Enum
@@ -73,6 +74,8 @@ EC_DIR = Path(os.path.dirname(os.path.realpath(__file__))).parent
 JTRACE_FLASH_SCRIPT = os.path.join(EC_DIR, "util/flash_jlink.py")
 SERVO_MICRO_FLASH_SCRIPT = os.path.join(EC_DIR, "util/flash_ec")
 ZEPHYR_FPMCU_DIR = os.path.join(EC_DIR, "zephyr/program/fpmcu")
+ZEPHYR_TWISTER = os.path.join(EC_DIR, "twister")
+ZEPHYR_TWISTER_BUILD_DIR = os.path.join(EC_DIR, "build/zephyr/fpmcu-test")
 
 # .* is added to regexes because Zephyr uses VT100 commands at the beginning of
 # a new line.
@@ -80,6 +83,9 @@ ALL_TESTS_PASSED_REGEX = re.compile(r"(Pass!\r\n)|(.*TESTSUITE.*succeeded)")
 ALL_TESTS_FAILED_REGEX = re.compile(
     r"(Fail! \(\d+ tests\)\r\n)|(.*TESTSUITE.*failed)"
 )
+# Finish regex for Zephyr upstream tests
+ALL_TESTS_PASSED_REGEX_ZEPHYR = re.compile(r"PROJECT EXECUTION SUCCESSFUL")
+ALL_TESTS_FAILED_REGEX_ZEPHYR = re.compile(r"PROJECT EXECUTION FAILED")
 
 SINGLE_CHECK_PASSED_REGEX = re.compile(r"(Pass: .*)|(.* PASS - )")
 SINGLE_CHECK_FAILED_REGEX = re.compile(r"(.*failed:.*)|(.* FAIL - )")
@@ -91,10 +97,10 @@ ASSERTION_FAILURE_REGEX = re.compile(
 )
 
 DATA_ACCESS_VIOLATION_8020000_REGEX = re.compile(
-    r"Data access violation, mfar = 8020000\r\n"
+    r"(Data access violation, mfar = 8020000\r\n)|(.*MMFAR Address: 0x8020000\r\n)"
 )
 DATA_ACCESS_VIOLATION_8040000_REGEX = re.compile(
-    r"Data access violation, mfar = 8040000\r\n"
+    r"(Data access violation, mfar = 8040000\r\n)|(.*MMFAR Address: 0x8040000\r\n)"
 )
 DATA_ACCESS_VIOLATION_80C0000_REGEX = re.compile(
     r"Data access violation, mfar = 80c0000\r\n"
@@ -118,7 +124,8 @@ DATA_ACCESS_VIOLATION_200B0000_REGEX = re.compile(
     r"Data access violation, mfar = 200b0000\r\n"
 )
 
-PRINTF_CALLED_REGEX = re.compile(r"printf called\r\n")
+# \r is added twice by Zephyr code.
+PRINTF_CALLED_REGEX = re.compile(r"printf called(\r){1,2}\n")
 
 BLOONCHIPPER = "bloonchipper"
 BUCCANEER = "buccaneer"
@@ -198,6 +205,7 @@ class BoardConfig:
     variants: Dict
     expected_fp_power_zephyr: PowerUtilization = None
     expected_mcu_power_zephyr: PowerUtilization = None
+    zephyr_board_name: str = None
 
 
 @dataclass
@@ -223,6 +231,8 @@ class TestConfig:
     passed: bool = field(init=False, default=False)
     num_passes: int = field(init=False, default=0)
     num_fails: int = field(init=False, default=0)
+    skip_for_zephyr: bool = False
+    zephyr_name: str = None
 
     # The callbacks below are called before and after a test is executed and
     # may be used for additional test setup, post test activities, or other tasks
@@ -253,7 +263,9 @@ class AllTests:
     """All possible tests."""
 
     @staticmethod
-    def get(board_config: BoardConfig, with_private: str) -> List[TestConfig]:
+    def get(
+        board_config: BoardConfig, with_private: str, zephyr: bool
+    ) -> List[TestConfig]:
         """Return public and private test configs for the specified board."""
         public_tests = (
             []
@@ -264,7 +276,13 @@ class AllTests:
             [] if with_private == PRIVATE_NO else AllTests.get_private_tests()
         )
 
-        all_tests = public_tests + private_tests
+        zephyr_upstream_tests = (
+            []
+            if with_private == PRIVATE_ONLY or not zephyr
+            else AllTests.get_zephyr_tests()
+        )
+
+        all_tests = public_tests + private_tests + zephyr_upstream_tests
         board_tests = list(
             filter(
                 lambda e: (board_config.name not in e.exclude_boards), all_tests
@@ -284,7 +302,9 @@ class AllTests:
             ),
             TestConfig(test_name="abort"),
             TestConfig(test_name="aes"),
-            TestConfig(test_name="always_memset"),
+            # Cryptoc is not supported with Zephyr.
+            # TODO(b/333039464) A new test for OPENSSL_cleanse has to be implemented.
+            TestConfig(test_name="always_memset", skip_for_zephyr=True),
             TestConfig(test_name="benchmark"),
             TestConfig(test_name="boringssl_crypto"),
             TestConfig(test_name="cortexm_fpu"),
@@ -301,34 +321,39 @@ class AllTests:
                 toggle_power=True,
                 enable_hw_write_protect=True,
             ),
+            TestConfig(
+                config_name="fp_transport_spi_ro",
+                test_name="fp_transport",
+                imagetype_to_use=ImageType.RO,
+                test_args=["spi"],
+            ),
+            TestConfig(
+                config_name="fp_transport_spi_rw",
+                test_name="fp_transport",
+                test_args=["spi"],
+            ),
+            TestConfig(
+                config_name="fp_transport_uart_ro",
+                test_name="fp_transport",
+                imagetype_to_use=ImageType.RO,
+                test_args=["uart"],
+            ),
+            TestConfig(
+                config_name="fp_transport_uart_rw",
+                test_name="fp_transport",
+                test_args=["uart"],
+            ),
             TestConfig(test_name="fpsensor_auth_crypto_stateful"),
+            TestConfig(
+                test_name="fpsensor_auth_crypto_stateful_otp",
+                exclude_boards=[BLOONCHIPPER, DARTMONKEY],
+            ),
             TestConfig(test_name="fpsensor_auth_crypto_stateless"),
             TestConfig(test_name="fpsensor_crypto"),
             TestConfig(
                 test_name="fpsensor_hw", pre_test_callback=fp_sensor_sel
             ),
-            TestConfig(
-                config_name="fpsensor_spi_ro",
-                test_name="fpsensor",
-                imagetype_to_use=ImageType.RO,
-                test_args=["spi"],
-            ),
-            TestConfig(
-                config_name="fpsensor_spi_rw",
-                test_name="fpsensor",
-                test_args=["spi"],
-            ),
-            TestConfig(
-                config_name="fpsensor_uart_ro",
-                test_name="fpsensor",
-                imagetype_to_use=ImageType.RO,
-                test_args=["uart"],
-            ),
-            TestConfig(
-                config_name="fpsensor_uart_rw",
-                test_name="fpsensor",
-                test_args=["uart"],
-            ),
+            TestConfig(test_name="fpsensor_utils"),
             TestConfig(test_name="ftrapv"),
             TestConfig(
                 test_name="libc_printf",
@@ -337,25 +362,32 @@ class AllTests:
             TestConfig(test_name="global_initialization"),
             TestConfig(test_name="libcxx"),
             TestConfig(test_name="malloc", imagetype_to_use=ImageType.RO),
+            # MPU functionality is handled by Zephyr code.
             TestConfig(
                 config_name="mpu_ro",
                 test_name="mpu",
                 imagetype_to_use=ImageType.RO,
                 finish_regexes=[board_config.mpu_regex],
+                skip_for_zephyr=True,
             ),
             TestConfig(
                 config_name="mpu_rw",
                 test_name="mpu",
                 finish_regexes=[board_config.mpu_regex],
+                skip_for_zephyr=True,
             ),
-            TestConfig(test_name="mutex"),
-            TestConfig(test_name="mutex_trylock"),
-            TestConfig(test_name="mutex_recursive"),
+            # Handled by Zephyr - kernel.mutex test
+            TestConfig(test_name="mutex", skip_for_zephyr=True),
+            TestConfig(test_name="mutex_trylock", skip_for_zephyr=True),
+            TestConfig(test_name="mutex_recursive", skip_for_zephyr=True),
             TestConfig(
                 test_name="otp_key", exclude_boards=[BLOONCHIPPER, DARTMONKEY]
             ),
             TestConfig(test_name="panic"),
-            TestConfig(test_name="pingpong"),
+            # Task synchronization covered by Zephyr tests and shim layer by unit tests.
+            # task_wait_event is implemented based on k_poll_event and it is verified by
+            # the kernel.poll test.
+            TestConfig(test_name="pingpong", skip_for_zephyr=True),
             TestConfig(test_name="printf"),
             TestConfig(test_name="queue"),
             TestConfig(test_name="restricted_console"),
@@ -375,14 +407,19 @@ class AllTests:
             TestConfig(
                 test_name="rollback_entropy", imagetype_to_use=ImageType.RO
             ),
-            TestConfig(test_name="rtc"),
+            # RTC is handled by Zephyr drivers, covered by Zephyr tests. Time
+            # translation is covered by the utilities.time test.
+            TestConfig(test_name="rtc", skip_for_zephyr=True),
             TestConfig(
                 test_name="rtc_npcx9",
                 timeout_secs=20,
                 exclude_boards=[BLOONCHIPPER, DARTMONKEY],
             ),
+            # Covered by Zephyr drivers.counter.basic_api.stm32_subsec test
             TestConfig(
-                test_name="rtc_stm32f4", exclude_boards=[DARTMONKEY, HELIPILOT]
+                test_name="rtc_stm32f4",
+                exclude_boards=[DARTMONKEY, HELIPILOT],
+                skip_for_zephyr=True,
             ),
             TestConfig(test_name="sbrk", imagetype_to_use=ImageType.RO),
             TestConfig(test_name="sha256"),
@@ -474,7 +511,9 @@ class AllTests:
         tests = []
         try:
             current_dir = os.path.dirname(__file__)
-            private_dir = os.path.join(current_dir, os.pardir, "private/test")
+            private_dir = os.path.join(
+                current_dir, os.pardir, os.pardir, "ec-private/test"
+            )
             have_private = os.path.isdir(private_dir)
             if not have_private:
                 return []
@@ -490,6 +529,37 @@ class AllTests:
             )
             logging.debug("Ignore error and continue.")
             return []
+        return tests
+
+    @staticmethod
+    def get_zephyr_tests() -> List[TestConfig]:
+        """Return Zephyr upstream test configs."""
+        # Make sure proper paths are added in the twister script, see ZEPHYR_TEST_PATHS
+        tests = [
+            TestConfig(
+                zephyr_name="drivers.flash.stm32.f4",
+                test_name="zephyr_flash_stm32f4",
+                exclude_boards=[DARTMONKEY, HELIPILOT],
+            ),
+            TestConfig(
+                zephyr_name="drivers.flash.stm32.f4.block_registers",
+                test_name="zephyr_flash_stm32f4_block_registers",
+                exclude_boards=[DARTMONKEY, HELIPILOT],
+            ),
+            TestConfig(
+                zephyr_name="drivers.counter.basic_api.stm32_subsec",
+                test_name="zephyr_counter_basic_api_stm32_subsec",
+                exclude_boards=[DARTMONKEY, HELIPILOT],
+                timeout_secs=20,
+            ),
+        ]
+
+        for test in tests:
+            test.finish_regexes = [
+                ALL_TESTS_PASSED_REGEX_ZEPHYR,
+                ALL_TESTS_FAILED_REGEX_ZEPHYR,
+            ]
+
         return tests
 
 
@@ -523,6 +593,7 @@ BLOONCHIPPER_CONFIG = BoardConfig(
             "ro_image_path": BLOONCHIPPER_V5938_IMAGE_PATH
         },
     },
+    zephyr_board_name="google_dragonclaw",
 )
 
 DARTMONKEY_CONFIG = BoardConfig(
@@ -553,6 +624,7 @@ DARTMONKEY_CONFIG = BoardConfig(
             "build_board": "nami_fp",
         },
     },
+    zephyr_board_name="google_icetower",
 )
 
 HELIPILOT_CONFIG = BoardConfig(
@@ -573,9 +645,10 @@ HELIPILOT_CONFIG = BoardConfig(
     ),
     # TODO(b/336640650): Add helipilot variants once RO is uploaded
     variants={},
+    zephyr_board_name="google_quincy",
 )
 
-BUCCANEER_CONFIG = HELIPILOT_CONFIG
+BUCCANEER_CONFIG = copy.deepcopy(HELIPILOT_CONFIG)
 BUCCANEER_CONFIG.name = BUCCANEER
 # TODO(b/336640151): Add buccaneer variants once RO is created
 
@@ -787,13 +860,26 @@ def build_ec(
     return cmd
 
 
-def build_zephyr(
-    test_name: str,
-    board_name: str,
-    app_type: ApplicationType,
-    img_type: ImageType,
-) -> List[str]:
+def build_zephyr_upstream(test_name: str, board_name: str) -> List[str]:
+    """Prepare a command to build Zephyr test"""
+    # Build only with Zephyr and clobber a previous build
+    cmd = [ZEPHYR_TWISTER] + ["-b"] + ["-c"]
+    cmd = cmd + ["-p"] + [board_name]
+    cmd = cmd + ["-O"] + [ZEPHYR_TWISTER_BUILD_DIR]
+    cmd = cmd + ["-s"] + [test_name]
+
+    return cmd
+
+
+def build_zephyr(test: TestConfig, board_name: str) -> List[str]:
     """Prepare a command to build test using Zephyr"""
+    if test.zephyr_name is not None:
+        return build_zephyr_upstream(test.zephyr_name, board_name)
+
+    test_name = test.test_name
+    app_type = test.apptype_to_use
+    img_type = test.imagetype_to_use
+
     cmd = ["zmake"] + ["build"]
     cmd = cmd + [board_name] + ["--clobber"]
     if app_type != ApplicationType.TEST:
@@ -838,18 +924,18 @@ def build_zephyr(
 
 
 def build(
-    test_name: str,
+    test: TestConfig,
     board_name: str,
     compiler: str,
-    app_type: ApplicationType,
-    img_type: ImageType,
     zephyr: bool,
 ) -> None:
     """Build specified test for specified board."""
     if zephyr:
-        cmd = build_zephyr(test_name, board_name, app_type, img_type)
+        cmd = build_zephyr(test, board_name)
     else:
-        cmd = build_ec(test_name, board_name, compiler, app_type)
+        cmd = build_ec(
+            test.test_name, board_name, compiler, test.apptype_to_use
+        )
 
     logging.debug('Running command: "%s"', " ".join(cmd))
     subprocess.run(cmd, check=False).check_returncode()
@@ -948,12 +1034,19 @@ def run_test_ec(test: TestConfig) -> str:
 
 def run_test_zephyr(test: TestConfig) -> str:
     """Prepare a command to run test on Zephyr"""
-    test_cmd = "ztest run-testcase " + test.test_name
-    # ZTEST console doesn't support passing test arguments
-    # Assume a testsuite for every test + arg combination
-    for test_arg in test.test_args:
-        test_cmd = test_cmd + "_" + test_arg
-    test_cmd = test_cmd + "\n"
+    # Zephyr upstream tests run automatically
+    if test.zephyr_name:
+        return []
+    if len(test.test_args) == 0:
+        # If there are no args just run-all not to be limited by suite name
+        test_cmd = "ztest run-all\n"
+    else:
+        # ZTEST console doesn't support passing test arguments
+        # Assume a testsuite for every test + arg combination
+        test_cmd = "ztest run-testcase " + test.test_name
+        for test_arg in test.test_args:
+            test_cmd = test_cmd + "_" + test_arg
+        test_cmd = test_cmd + "\n"
 
     return test_cmd
 
@@ -991,7 +1084,8 @@ def run_test(
         else:
             test_cmd = run_test_ec(test)
 
-        console.write(test_cmd.encode())
+        if len(test_cmd) > 0:
+            console.write(test_cmd.encode())
 
     while True:
         console.flush()
@@ -1031,11 +1125,11 @@ def run_test(
 
 
 def get_test_list(
-    config: BoardConfig, test_args, with_private: str
+    config: BoardConfig, test_args, with_private: str, zephyr: bool
 ) -> List[TestConfig]:
     """Get a list of tests to run."""
     if test_args == "all":
-        return AllTests.get(config, with_private)
+        return AllTests.get(config, with_private, zephyr)
 
     test_list = []
     for test in test_args:
@@ -1043,7 +1137,7 @@ def get_test_list(
         test_regex = re.compile(test)
         tests = [
             test
-            for test in AllTests.get(config, with_private)
+            for test in AllTests.get(config, with_private, zephyr)
             if test_regex.fullmatch(test.config_name)
         ]
         if not tests:
@@ -1058,23 +1152,43 @@ def get_test_list(
     return test_list
 
 
-def get_image_path(test: TestConfig, build_board: str, zephyr: bool):
-    """Get a path to a built image"""
-    if zephyr:
+def get_zephyr_image_path(test: TestConfig, build_board: str):
+    """Get a path to a Zephyr built image"""
+    if test.zephyr_name is not None:
+        # The path to binary differs depending on a test name, path and platform,
+        # so just find the zephyr.bin in the build dir.
+        twister_out = os.walk(ZEPHYR_TWISTER_BUILD_DIR)
+        image_path = None
+        for dirpath, _, filenames in twister_out:
+            for file in filenames:
+                if file == "zephyr.bin":
+                    image_path = os.path.join(dirpath, "zephyr.bin")
+                    break
+            if image_path is not None:
+                break
+    else:
         image_path = os.path.join(
             EC_DIR, "build", "zephyr", build_board, "output", "ec.bin"
         )
+
+    return image_path
+
+
+def get_image_path(test: TestConfig, build_board: str, zephyr: bool):
+    """Get a path to a built image"""
+    if zephyr:
+        return get_zephyr_image_path(test, build_board)
+
+    if test.apptype_to_use == ApplicationType.PRODUCTION:
+        image_path = os.path.join(EC_DIR, "build", build_board, "ec.bin")
     else:
-        if test.apptype_to_use == ApplicationType.PRODUCTION:
-            image_path = os.path.join(EC_DIR, "build", build_board, "ec.bin")
-        else:
-            image_path = os.path.join(
-                EC_DIR,
-                "build",
-                build_board,
-                test.test_name,
-                test.test_name + ".bin",
-            )
+        image_path = os.path.join(
+            EC_DIR,
+            "build",
+            build_board,
+            test.test_name,
+            test.test_name + ".bin",
+        )
 
     return image_path
 
@@ -1088,18 +1202,18 @@ def flash_and_run_test(
     """Run a single test using the test and board configuration specified"""
     build_board = args.board
     # If test provides this information, build image for board specified
-    # by test.
+    # by test. Also if a test is in Zephyr upstream use the dev board name.
     if test.build_board is not None:
         build_board = test.build_board
+    elif test.zephyr_name is not None:
+        build_board = board_config.zephyr_board_name
 
     # attempt to build test binary, reporting a test failure on error
     try:
         build(
-            test.test_name,
+            test,
             build_board,
             args.compiler,
-            test.apptype_to_use,
-            test.imagetype_to_use,
             args.zephyr,
         )
     except Exception as exception:  # pylint: disable=broad-except
@@ -1298,11 +1412,15 @@ def main():
         board_config.expected_fp_power = board_config.expected_fp_power_zephyr
         board_config.expected_mcu_power = board_config.expected_mcu_power_zephyr
 
-    test_list = get_test_list(board_config, args.tests, args.with_private)
+    test_list = get_test_list(
+        board_config, args.tests, args.with_private, args.zephyr
+    )
     logging.debug("Running tests: %s", [test.config_name for test in test_list])
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         for test in test_list:
+            if test.skip_for_zephyr and args.zephyr:
+                continue
             test.passed = flash_and_run_test(test, board_config, args, executor)
 
         colorama.init()
@@ -1310,11 +1428,14 @@ def main():
         for test in test_list:
             # print results
             print('Test "' + test.config_name + '": ', end="")
-            if test.passed:
-                print(colorama.Fore.GREEN + "PASSED")
+            if test.skip_for_zephyr and args.zephyr:
+                print(colorama.Fore.YELLOW + "SKIPPED")
             else:
-                print(colorama.Fore.RED + "FAILED")
-                exit_code = 1
+                if test.passed:
+                    print(colorama.Fore.GREEN + "PASSED")
+                else:
+                    print(colorama.Fore.RED + "FAILED")
+                    exit_code = 1
 
             print(colorama.Style.RESET_ALL)
 

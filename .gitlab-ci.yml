@@ -183,7 +183,6 @@ before_script:
       "${EC_DIR}/zephyr/drivers/cros_tabletmode_interrupt/*"
       "${EC_DIR}/zephyr/drivers/fingerprint/*"
       "${EC_DIR}/zephyr/drivers/keyboard_input/*"
-      "${EC_DIR}/zephyr/drivers/one_wire_uart/*"
       "${EC_DIR}/zephyr/drivers/sm5803/*"
       "${EC_DIR}/zephyr/drivers/vivaldi_kbd/*"
       "${EC_DIR}/zephyr/include/drivers/cros_displight.h"
@@ -194,9 +193,6 @@ before_script:
       "${EC_DIR}/zephyr/include/drivers/cros_system.h"
       "${EC_DIR}/zephyr/include/drivers/fingerprint_sim.h"
       "${EC_DIR}/zephyr/include/drivers/fingerprint.h"
-      "${EC_DIR}/zephyr/include/drivers/one_wire_uart_internal.h"
-      "${EC_DIR}/zephyr/include/drivers/one_wire_uart_stream.h"
-      "${EC_DIR}/zephyr/include/drivers/one_wire_uart.h"
       "${EC_DIR}/zephyr/include/drivers/vivaldi_kbd.h"
       "${EC_DIR}/zephyr/shim/chip/**" "${EC_DIR}/zephyr/shim/core/**"
       "/usr/include/**"
@@ -392,6 +388,16 @@ brox_coverage:
     PROJECT: "brox"
   <<: *coverage_template
 
+brox_sku4:
+  variables:
+    PROJECT: "brox-sku4"
+  <<: *build_template
+
+brox_sku4_coverage:
+  variables:
+    PROJECT: "brox-sku4"
+  <<: *coverage_template
+
 rauru:
   variables:
     PROJECT: "rauru"
@@ -422,7 +428,7 @@ ec_coverage:
 zephyr_coverage:
   stage: test
   needs: []
-  parallel: 6
+  parallel: 8
   script:
     - export PIGWEED_DIR=${MODULES_DIR}/pigweed
     - python3 ${EC_DIR}/twister --coverage --outdir "${TWISTER_OUT_DIR}"
@@ -439,6 +445,7 @@ zephyr_coverage:
     expire_in: 1 week
   coverage: '/lines\.*: \d+\.\d+%/'
 
+# Bloonchipper won't build because it depends on private zephyr modules.
 zephyr_boards_coverage:
   stage: build
   needs: []

@@ -175,6 +175,20 @@ union rts54_request {
 		} tpc_rp;
 	} set_tpc_rp;
 
+	struct set_tpc_csd_operation_mode_req {
+		struct rts54_subcommand_header header;
+		uint8_t port_num;
+		union csd_op_mode_t {
+			uint8_t raw_value;
+			struct {
+				uint8_t csd_mode : 2;
+				uint8_t accessory_support : 1;
+				uint8_t drp_mode : 2;
+				uint8_t reserved : 3;
+			};
+		} op_mode;
+	} set_tpc_csd_operation_mode;
+
 	struct set_ccom_req {
 		struct rts54_subcommand_header header;
 		union port_and_ccom_t {
@@ -241,6 +255,24 @@ union rts54_request {
 		uint8_t reserved;
 		uint8_t sts_len;
 	} get_ic_status;
+
+	struct get_pch_data_status_req {
+		struct rts54_subcommand_header header;
+		uint8_t port_num;
+	} get_pch_data_status;
+
+	struct ack_cc_ci_req {
+		uint8_t command_code;
+		uint8_t data_len;
+		uint8_t reserved;
+		uint8_t port_num;
+		union conn_status_change_bits_t ci;
+		uint16_t vendor_defined_ci;
+		struct {
+			uint8_t cc_ack : 1;
+			uint8_t rsvd : 7;
+		};
+	} __packed ack_cc_ci;
 };
 
 union rts54_response {
@@ -264,8 +296,13 @@ union rts54_response {
 		uint8_t reserved5[7];
 		uint8_t pd_revision[2];
 		uint8_t pd_version[2];
-		uint8_t reserved6[6];
-	} ic_status;
+		uint8_t project_name[12];
+	} __packed ic_status;
+
+	struct rts54_ucsi_get_lpm_ppm_info {
+		uint8_t byte_count;
+		struct lpm_ppm_info_t info;
+	} __packed lpm_ppm_info;
 
 	struct get_capability_response {
 		uint8_t byte_count;
@@ -387,6 +424,11 @@ union rts54_response {
 		uint8_t byte_count;
 		uint32_t vdo[7];
 	} __packed get_vdo;
+
+	struct get_pch_data_status_response {
+		uint8_t byte_count;
+		uint8_t pch_data_status[5];
+	} __packed get_pch_data_status;
 };
 
 enum cmd_sts_t {
@@ -423,10 +465,12 @@ struct rts5453p_emul_pdc_data {
 	union error_status_t error;
 	uint32_t rdo;
 	union tpc_rp_t tpc_rp;
+	union csd_op_mode_t csd_op_mode;
 	union port_and_ccom_t set_ccom_mode;
 	struct force_set_power_switch_t set_power_switch_data;
 	uint8_t set_tpc_reconnect_param;
 	struct pdc_info_t info;
+	struct lpm_ppm_info_t lpm_ppm_info;
 	union cable_property_t cable_property;
 
 	union rts54_request request;

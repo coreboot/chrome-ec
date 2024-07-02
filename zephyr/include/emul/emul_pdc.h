@@ -25,6 +25,9 @@ typedef int (*emul_pdc_set_connector_capability_t)(
 	const struct emul *target, const union connector_capability_t *caps);
 typedef int (*emul_pdc_get_ccom_t)(const struct emul *target,
 				   enum ccom_t *ccom);
+typedef int (*emul_pdc_get_drp_mode_t)(const struct emul *target,
+				       enum drp_mode_t *dm);
+
 typedef int (*emul_pdc_get_uor_t)(const struct emul *target, union uor_t *uor);
 typedef int (*emul_pdc_get_pdr_t)(const struct emul *target, union pdr_t *pdr);
 typedef int (*emul_pdc_get_sink_path_t)(const struct emul *target, bool *en);
@@ -47,6 +50,8 @@ typedef int (*emul_pdc_set_pdos_t)(const struct emul *target,
 				   uint8_t num_pdos, const uint32_t *pdos);
 typedef int (*emul_pdc_set_info_t)(const struct emul *target,
 				   const struct pdc_info_t *info);
+typedef int (*emul_pdc_set_lpm_ppm_info_t)(const struct emul *target,
+					   const struct lpm_ppm_info_t *info);
 typedef int (*emul_pdc_set_current_pdo_t)(const struct emul *target,
 					  uint32_t pdo);
 typedef int (*emul_pdc_get_current_flash_bank_t)(const struct emul *target,
@@ -69,6 +74,8 @@ typedef int (*emul_pdc_get_cable_property_t)(const struct emul *target,
 typedef int (*emul_pdc_set_cable_property_t)(
 	const struct emul *target, const union cable_property_t property);
 
+typedef int (*emul_pdc_idle_wait_t)(const struct emul *target);
+
 __subsystem struct emul_pdc_api_t {
 	emul_pdc_set_response_delay_t set_response_delay;
 	emul_pdc_set_ucsi_version_t set_ucsi_version;
@@ -77,6 +84,7 @@ __subsystem struct emul_pdc_api_t {
 	emul_pdc_set_capability_t set_capability;
 	emul_pdc_set_connector_capability_t set_connector_capability;
 	emul_pdc_get_ccom_t get_ccom;
+	emul_pdc_get_drp_mode_t get_drp_mode;
 	emul_pdc_get_uor_t get_uor;
 	emul_pdc_get_pdr_t get_pdr;
 	emul_pdc_get_sink_path_t get_sink_path;
@@ -87,6 +95,7 @@ __subsystem struct emul_pdc_api_t {
 	emul_pdc_set_current_pdo_t set_current_pdo;
 	emul_pdc_set_pdos_t set_pdos;
 	emul_pdc_set_info_t set_info;
+	emul_pdc_set_lpm_ppm_info_t set_lpm_ppm_info;
 	emul_pdc_get_current_flash_bank_t get_current_flash_bank;
 	emul_pdc_get_retimer_fw_t get_retimer;
 	emul_pdc_get_requested_power_level_t get_requested_power_level;
@@ -94,6 +103,7 @@ __subsystem struct emul_pdc_api_t {
 	emul_pdc_pulse_irq_t pulse_irq;
 	emul_pdc_set_cable_property_t set_cable_property;
 	emul_pdc_get_cable_property_t get_cable_property;
+	emul_pdc_idle_wait_t idle_wait;
 };
 
 static inline int emul_pdc_set_ucsi_version(const struct emul *target,
@@ -182,6 +192,21 @@ static inline int emul_pdc_get_ccom(const struct emul *target,
 
 	if (api->get_ccom) {
 		return api->get_ccom(target, ccom);
+	}
+	return -ENOSYS;
+}
+
+static inline int emul_pdc_get_drp_mode(const struct emul *target,
+					enum drp_mode_t *dm)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->get_drp_mode) {
+		return api->get_drp_mode(target, dm);
 	}
 	return -ENOSYS;
 }
@@ -322,6 +347,21 @@ static inline int emul_pdc_set_info(const struct emul *target,
 
 	if (api->set_info) {
 		return api->set_info(target, info);
+	}
+	return -ENOSYS;
+}
+
+static inline int emul_pdc_set_lpm_ppm_info(const struct emul *target,
+					    const struct lpm_ppm_info_t *info)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->set_lpm_ppm_info) {
+		return api->set_lpm_ppm_info(target, info);
 	}
 	return -ENOSYS;
 }
@@ -500,6 +540,20 @@ static inline int emul_pdc_disconnect(const struct emul *target)
 	emul_pdc_pulse_irq(target);
 
 	return 0;
+}
+
+static inline int emul_pdc_idle_wait(const struct emul *target)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->idle_wait) {
+		return api->idle_wait(target);
+	}
+	return -ENOSYS;
 }
 
 #endif /* ZEPHYR_INCLUDE_EMUL_PDC_H_ */

@@ -86,6 +86,7 @@ if(CONFIG_TEST_NISSA_SUNDANCE)
             src/sundance.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/sundance/src/charger.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/sundance/src/usbc.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/sundance/src/led.c
     )
 endif()
 
@@ -120,6 +121,7 @@ if(CONFIG_TEST_NISSA_PUJJOGA)
     target_sources(
             app PRIVATE
             src/pujjoga.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/board.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/charger.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/hdmi.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjoga/src/led.c
@@ -146,6 +148,7 @@ if(CONFIG_TEST_NISSA_CRAASK)
     target_sources(
 	    app PRIVATE
 	    src/craask.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/battery.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/charger.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/fan.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/craask/src/form_factor.c
@@ -271,16 +274,15 @@ if(CONFIG_TEST_NISSA_GLASSWAY)
 endif()
 
 if(CONFIG_TEST_NISSA_RIVEN)
+    zephyr_include_directories("${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/include")
     target_sources(
 	    app PRIVATE
 	    src/riven.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/charger.c
-	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/fan.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/form_factor.c
-	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/kb_backlight.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/keyboard.c
+	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/keyboard_customization.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/led.c
-	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/thermal.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/touch_panel.c
 	    ${PLATFORM_EC_PROGRAM_DIR}/nissa/riven/src/usbc.c
     )
