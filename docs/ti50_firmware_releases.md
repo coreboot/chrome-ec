@@ -8,7 +8,8 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.90        | 0.23.90
+[ToT][ToT ebuild]   | 0.24.101       | 0.23.101
+[M127][127 release] | 0.24.101       | 0.23.101
 [M126][126 release] | 0.24.90        | 0.23.90
 [M125][125 release] | 0.24.81        | 0.23.81
 [M124][124 release] | 0.24.71        | 0.23.71
@@ -750,6 +751,38 @@ Build:   ti50_common_mp-15224.B:v0.0.1148-c04edba0
     [b/327499069](https://b.corp.google.com/issues/327499069)
 *   dispatcher: Ensure buffer is inaccessible after enqueued
     [b/332326497](https://b.corp.google.com/issues/332326497)
+
+### 0.23.101 Released on 6/25/2024 in M128 (cherry-picked to M127)
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5651548)
+
+Builder
+[79](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15224.B-branch/79/overview)
+
+Artifacts:
+[15224.76.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15224.76.0)
+
+**Features**
+
+*   Print chip ID on boot
+*   Print reset type earlier
+*   pmu: Delay sleep when sleep mask changes
+*   rbox: Update tablet RMA sequence to use taps
+
+```
+Build:   ti50_common_mp-15224.B:v0.0.1203-81f5f518
+         libtock-rs:v0.0.932-419cdc2
+         tock:v0.0.9687-a764056a2
+         ms-tpm-20-ref:v0.0.336-d9aef2b
+         @chromeos-ci-firmware-us-central2-d-x32-0-dbfd 2024-06-04 12:40:30
+```
+
+**Bug Fixes**
+
+*   fix ti50 hang issue
+    [b/339262751](https://b.corp.google.com/issues/339262751)
+
 
 ## PrePVT images
 
@@ -1646,7 +1679,7 @@ Builder
 [98](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15086.B-branch/98/overview)
 
 Artifacts:
-[15086.89.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.93.0)
+[15086.93.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.93.0)
 
 **Features**
 
@@ -1668,6 +1701,37 @@ Build:   ti50_common_prepvt-15086.B:v0.0.1204-5ad11b3f
     [b/327499069](https://b.corp.google.com/issues/327499069)
 *   dispatcher: Ensure buffer is inaccessible after enqueued
     [b/332326497](https://b.corp.google.com/issues/332326497)
+
+### 0.24.101 Released on 6/8/2024 in M127
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5609008)
+
+Builder
+[106](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15086.B-branch/106/overview)
+
+Artifacts:
+[15086.101.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15086.101.0)
+
+**Features**
+
+*   Print chip ID on boot
+*   Print reset type earlier
+*   pmu: Delay sleep when sleep mask changes
+*   rbox: Update tablet RMA sequence to use taps
+
+```
+Build:   ti50_common_prepvt-15086.B:v0.0.1259-527d854e
+         libtock-rs:v0.0.932-0f90e08
+         tock:v0.0.9686-3fd401f26
+         ms-tpm-20-ref:v0.0.335-dfaf9c2
+         @chromeos-ci-firmware-us-central2-d-x32-0-cik0 2024-06-04 10:39:47
+```
+
+**Bug Fixes**
+
+*   fix ti50 hang issue
+    [b/339262751](https://b.corp.google.com/issues/339262751)
 
 <!-- Links -->
 
@@ -1693,4 +1757,5 @@ Build:   ti50_common_prepvt-15086.B:v0.0.1204-5ad11b3f
 [124 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R124-15823.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [125 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R125-15853.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [126 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R126-15886.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[127 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R127-15917.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [ToT ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
