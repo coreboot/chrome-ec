@@ -185,16 +185,16 @@ static void boot_keys_timeout_handler(struct k_work *work)
 	}
 }
 
-static int boot_keys_init(void)
+static void boot_keys_init(void)
 {
 	/* Don't check when jumping from RO to RW. */
 	if (system_jumped_late()) {
-		return 0;
+		return;
 	}
 
 	/* Only check if reset is from GSC through the reset pin. */
 	if ((system_get_reset_flags() & EC_RESET_FLAG_RESET_PIN) == 0) {
-		return 0;
+		return;
 	}
 
 	k_work_init_delayable(&boot_keys_timeout_dwork,
@@ -202,9 +202,14 @@ static int boot_keys_init(void)
 	k_work_reschedule(&boot_keys_timeout_dwork,
 			  K_MSEC(BOOT_KEYS_SETTLE_TIME_MS));
 
-	return 0;
+	while (k_work_delayable_is_pending(&boot_keys_timeout_dwork)) {
+		/* delay the rest of the boot until we finished checking for
+		 * boot keys so that the host is notified before VB runs
+		 */
+		k_sleep(K_MSEC(1));
+	}
 }
-SYS_INIT(boot_keys_init, POST_KERNEL, 99);
+DECLARE_HOOK(HOOK_INIT_EARLY, boot_keys_init, HOOK_PRIO_DEFAULT);
 
 #if CONFIG_TEST
 void test_power_button_change(void)
@@ -212,13 +217,17 @@ void test_power_button_change(void)
 	power_button_change();
 }
 
-int test_reinit(void)
+void test_reset(void)
 {
 	boot_keys_value = 0;
 	boot_keys_value_external = 0;
 	boot_keys_counter = 0;
 	boot_keys_timeout = false;
-	return boot_keys_init();
+}
+
+void test_reinit(void)
+{
+	boot_keys_init();
 }
 
 bool test_dwork_pending(void)
