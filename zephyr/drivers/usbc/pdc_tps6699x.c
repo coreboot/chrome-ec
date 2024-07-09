@@ -346,7 +346,9 @@ static void st_irq_run(void *o)
 	if (interrupt_pending) {
 		/* Set CCI EVENT for connector change */
 		data->cci_event.connector_change =
-			pdc_interrupt.plug_insert_or_removal;
+			(pdc_interrupt.plug_insert_or_removal |
+			 pdc_interrupt.power_swap_complete |
+			 pdc_interrupt.fr_swap_complete);
 		/* Set CCI EVENT for not supported */
 		data->cci_event.not_supported =
 			pdc_interrupt.not_supported_received;
@@ -435,8 +437,10 @@ static void st_idle_entry(void *o)
 
 	print_current_state(data);
 
-	/* Reset the command */
-	data->cmd = CMD_NONE;
+	/* Reset the command if no pending PDC_CMD_EVENT */
+	if (!k_event_test(&data->pdc_event, PDC_CMD_EVENT)) {
+		data->cmd = CMD_NONE;
+	}
 }
 
 static void st_idle_run(void *o)
@@ -1083,22 +1087,14 @@ static void task_ucsi(struct pdc_data_t *data, enum ucsi_command_t ucsi_command)
 		}
 		break;
 	case CMD_SET_UOR:
-		if (data->uor.swap_to_dfp) {
-			cmd_data.data[2] |= (1 << 7);
-		} else if (data->uor.swap_to_ufp) {
-			cmd_data.data[3] = 1;
-		} else if (data->uor.accept_dr_swap) {
-			cmd_data.data[3] = 2;
-		}
+		cmd_data.data[2] |= (data->uor.swap_to_dfp << 7);
+		cmd_data.data[3] = (data->uor.swap_to_ufp |
+				    (data->uor.accept_dr_swap << 1));
 		break;
 	case CMD_SET_PDR:
-		if (data->pdr.swap_to_src) {
-			cmd_data.data[2] |= (1 << 7);
-		} else if (data->pdr.swap_to_snk) {
-			cmd_data.data[3] = 1;
-		} else if (data->pdr.accept_pr_swap) {
-			cmd_data.data[3] = 2;
-		}
+		cmd_data.data[2] |= (data->pdr.swap_to_src << 7);
+		cmd_data.data[3] = (data->pdr.swap_to_snk |
+				    (data->pdr.accept_pr_swap << 1));
 		break;
 	case CMD_SET_NOTIFICATION_ENABLE:
 		*(uint32_t *)&cmd_data.data[2] = cfg->bits.raw_value;
@@ -1622,6 +1618,8 @@ static int pdc_interrupt_mask_init(struct pdc_data_t *data)
 	union reg_interrupt irq_mask = {
 		.pd_hardreset = 1,
 		.plug_insert_or_removal = 1,
+		.power_swap_complete = 1,
+		.fr_swap_complete = 1,
 		.status_updated = 1,
 		.power_event_occurred_error = 1,
 		.externl_dcdc_event_received = 1,
@@ -1659,6 +1657,14 @@ static int pdc_init(const struct device *dev)
 		return -ENODEV;
 	}
 
+	k_event_init(&data->pdc_event);
+	k_mutex_init(&data->mtx);
+
+	data->cmd = CMD_NONE;
+	data->dev = dev;
+	pdc_data[cfg->connector_number] = data;
+	data->init_done = false;
+
 	rv = gpio_pin_configure_dt(&cfg->irq_gpios, GPIO_INPUT);
 	if (rv < 0) {
 		LOG_ERR("Unable to configure GPIO");
@@ -1680,14 +1686,6 @@ static int pdc_init(const struct device *dev)
 		LOG_ERR("Unable to configure interrupt");
 		return rv;
 	}
-
-	k_event_init(&data->pdc_event);
-	k_mutex_init(&data->mtx);
-
-	data->cmd = CMD_NONE;
-	data->dev = dev;
-	pdc_data[cfg->connector_number] = data;
-	data->init_done = false;
 
 	/* Set initial state */
 	smf_set_initial(SMF_CTX(data), &states[ST_INIT]);
