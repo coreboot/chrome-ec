@@ -113,11 +113,10 @@
 /* ADC */
 #define CONFIG_ADC
 
-/*
- * TODO(b/197478860): Enable the fan control. We need
- * to check the sensor value and adjust the fan speed.
- */
+/* Fan feature */
 #define CONFIG_FANS FAN_CH_COUNT
+#define CONFIG_CUSTOM_FAN_CONTROL
+#define RPM_DEVIATION 1
 
 /* Include math_util for bitmask_uint64 used in pd_timers */
 #define CONFIG_MATH_UTIL
@@ -166,6 +165,8 @@ enum mft_channel { MFT_CH_0 = 0, MFT_CH_COUNT };
 enum cec_port { CEC_PORT_0, CEC_PORT_COUNT };
 
 extern void adp_connect_interrupt(enum gpio_signal signal);
+
+void ps_on_interrupt(enum gpio_signal signal);
 
 #endif /* !__ASSEMBLER__ */
 
