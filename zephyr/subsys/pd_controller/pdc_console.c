@@ -14,6 +14,7 @@
 
 #include <drivers/pdc.h>
 #include <usbc/pdc_power_mgmt.h>
+#include <usbc/pdc_trace_msg.h>
 
 static int cmd_get_pd_port(const struct shell *sh, char *arg_val, uint8_t *port)
 {
@@ -222,6 +223,7 @@ static int cmd_pdc_get_info(const struct shell *sh, size_t argc, char **argv)
 	shell_fprintf(sh, SHELL_INFO,
 		      "Live: %d\n"
 		      "FW Ver: %u.%u.%u\n"
+		      "FW Config Ver: %u\n"
 		      "PD Rev: %u\n"
 		      "PD Ver: %u\n"
 		      "VID/PID: %04x:%04x\n"
@@ -231,8 +233,8 @@ static int cmd_pdc_get_info(const struct shell *sh, size_t argc, char **argv)
 		      live, PDC_FWVER_GET_MAJOR(pdc_info.fw_version),
 		      PDC_FWVER_GET_MINOR(pdc_info.fw_version),
 		      PDC_FWVER_GET_PATCH(pdc_info.fw_version),
-		      pdc_info.pd_revision, pdc_info.pd_version,
-		      PDC_VIDPID_GET_VID(pdc_info.vid_pid),
+		      pdc_info.fw_config_version, pdc_info.pd_revision,
+		      pdc_info.pd_version, PDC_VIDPID_GET_VID(pdc_info.vid_pid),
 		      PDC_VIDPID_GET_PID(pdc_info.vid_pid),
 		      pdc_info.is_running_flash_code ? 'Y' : 'N',
 		      pdc_info.running_in_flash_bank,
@@ -698,6 +700,12 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		      "Usage pdc fwupdate",
 		      cmd_pdc_fwupdate, 1, 0),
 #endif /* defined(CONFIG_USBC_PDC_TPS6699X) */
+	SHELL_COND_CMD_ARG(IS_ENABLED(CONFIG_USBC_PDC_TRACE_MSG_CONSOLE_CMD),
+			   trace, NULL,
+			   "Dump accumulated PDC trace messages "
+			   "and optionally set trace port\n"
+			   "<Type-C port number>|all|on|none|off",
+			   cmd_pdc_trace, 1, 1),
 	SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(pdc, &sub_pdc_cmds, "PDC console commands", NULL);
