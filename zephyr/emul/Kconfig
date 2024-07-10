@@ -178,7 +178,7 @@ config EMUL_SMBUS_ARA
 	help
 	  Enable the SMBUS ARA emulator. This driver use emulated I2C bus.
 
-config EMUL_REALTEK_RTS54_PDC
+config EMUL_PDC_RTS54
 	bool "Realtek RTS5453P Type-C Power Delivery Controller emulator"
 	default y
 	depends on DT_HAS_REALTEK_RTS54_PDC_ENABLED && EMUL_SMBUS_ARA && EMUL
@@ -186,6 +186,16 @@ config EMUL_REALTEK_RTS54_PDC
 	help
 	  Enable the Realtek RTS5453P emulator. This driver use emulated I2C bus.
 	  Emulator API is available in zephyr/include/emul/emul_realtek_rts5453p.h
+
+config EMUL_PDC_TPS6699X
+	bool "TI TPS6699x Type-C Power Delivery Controller emulator"
+	default y
+	depends on DT_HAS_TI_TPS6699_PDC_ENABLED && EMUL
+	select EMUL_COMMON_I2C
+	help
+	  Enable the TI TPS6699x emulator. This emulator uses an emulated I2C
+	  bus. Emulator API is available in
+	  zephyr/include/emul/emul_tps6699x.h.
 
 config EMUL_RTC
 	bool "Emulated RTC driver for Zephyr shim"

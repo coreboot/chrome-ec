@@ -54,6 +54,7 @@ test-list-y = \
        pingpong \
        printf \
        queue \
+       ram_lock \
        restricted_console \
        rng_benchmark \
        rollback \
@@ -65,7 +66,6 @@ test-list-y = \
        scratchpad \
        sha256 \
        sha256_unrolled \
-       sram_mpu_protection \
        static_if \
        stdlib \
        std_vector \

@@ -9,8 +9,10 @@
 #include "console.h"
 #include "cpu.h"
 #include "mpu.h"
+#ifdef CONFIG_RAM_LOCK
+#include "ram_lock.h"
+#endif
 #include "registers.h"
-#include "system.h"
 #include "task.h"
 #include "util.h"
 
@@ -258,6 +260,13 @@ int mpu_protect_data_ram(void)
 {
 	int ret;
 
+#ifdef CONFIG_RAM_LOCK
+	ret = ram_lock_config_lock_region(REGION_DATA_RAM, CONFIG_RAM_BASE,
+					  CONFIG_DATA_RAM_SIZE);
+	if (ret != EC_SUCCESS)
+		return ret;
+#endif
+
 	/* Prevent code execution from data RAM */
 	ret = mpu_config_region(
 		REGION_DATA_RAM, CONFIG_RAM_BASE, CONFIG_DATA_RAM_SIZE,
@@ -275,6 +284,16 @@ int mpu_protect_data_ram(void)
 #if defined(CONFIG_EXTERNAL_STORAGE) || !defined(CONFIG_FLASH_PHYSICAL)
 int mpu_protect_code_ram(void)
 {
+#ifdef CONFIG_RAM_LOCK
+	int ret;
+
+	ret = ram_lock_config_lock_region(
+		REGION_STORAGE, CONFIG_PROGRAM_MEMORY_BASE + CONFIG_RO_MEM_OFF,
+		CONFIG_CODE_RAM_SIZE);
+	if (ret != EC_SUCCESS)
+		return ret;
+#endif
+
 	/* Prevent write access to code RAM */
 	return mpu_config_region(REGION_STORAGE,
 				 CONFIG_PROGRAM_MEMORY_BASE + CONFIG_RO_MEM_OFF,
@@ -459,22 +478,4 @@ int mpu_pre_init(void)
 		cpu_enable_caches();
 
 	return EC_SUCCESS;
-}
-
-void mpu_post_init(void)
-{
-	if (IS_ENABLED(CONFIG_PROTECT_CODE_RAM) &&
-	    (IS_ENABLED(CONFIG_EXTERNAL_STORAGE) ||
-	     !IS_ENABLED(CONFIG_FLASH_PHYSICAL)) &&
-	    !IS_ENABLED(CONFIG_ZEPHYR)) {
-		if (system_is_locked()) {
-			int ret = mpu_protect_code_ram();
-			if (ret == EC_SUCCESS) {
-				cprints(CC_SYSTEM, "code RAM protected.");
-				return;
-			}
-			cprints(CC_SYSTEM, "Failed to protect code RAM (%d)",
-				ret);
-		}
-	}
 }
