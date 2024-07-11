@@ -25,6 +25,34 @@ from chromite.api.gen.chromite.api import firmware_pb2
 DEFAULT_BUNDLE_DIRECTORY = '/tmp/artifact_bundles'
 DEFAULT_BUNDLE_METADATA_FILE = '/tmp/artifact_bundle_metadata'
 
+def init_toolchain():
+    """Initialize coreboot-sdk.
+
+    Returns:
+        Environment variables to use for toolchain.
+    """
+    # (environment variable, bazel target)
+    toolchains = [
+        ("COREBOOT_SDK_ROOT_arm", "@coreboot-sdk-arm-eabi//:get_path"),
+    ]
+
+    subprocess.run(
+        ["bazel", "build", *(target for _, target in toolchains)],
+        check=True,
+    )
+
+    result = {}
+    for name, target in toolchains:
+        run_result = subprocess.run(
+            ["bazel", "run", target],
+            check=True,
+            stdout=subprocess.PIPE,
+        )
+        result[name] = run_result.stdout.strip()
+
+    return result
+
+
 def build(opts):
     """Builds all EC firmware targets
 
@@ -37,6 +65,8 @@ def build(opts):
     """
     # TODO(b/169178847): Add appropriate metric information
     metrics = firmware_pb2.FwBuildMetricList()
+    env = os.environ.copy()
+    env.update(init_toolchain())
     with open(opts.metrics, 'w') as f:
         f.write(json_format.MessageToJson(metrics))
 
@@ -49,17 +79,20 @@ def build(opts):
     print(f'# Running {" ".join(cmd)}.')
     subprocess.run(cmd,
                    cwd=os.path.dirname(__file__),
-                   check=True)
+                   check=True,
+                   env=env)
     cmd = ['make', 'BOARD=cr50', 'CR50_DEV=1', '-j{}'.format(opts.cpus)]
     print(f'# Running {" ".join(cmd)}.')
     subprocess.run(cmd,
                    cwd=os.path.dirname(__file__),
-                   check=True)
+                   check=True,
+                   env=env)
     cmd = ['make', 'BOARD=cr50', 'CRYPTO_TEST=1', '-j{}'.format(opts.cpus)]
     print(f'# Running {" ".join(cmd)}.')
     subprocess.run(cmd,
                    cwd=os.path.dirname(__file__),
-                   check=True)
+                   check=True,
+                   env=env)
 
 def bundle(opts):
     if opts.code_coverage:
@@ -134,6 +167,8 @@ def test(opts):
     """Runs all of the unit tests for EC firmware"""
     # TODO(b/169178847): Add appropriate metric information
     metrics = firmware_pb2.FwTestMetricList()
+    env = os.environ.copy()
+    env.update(init_toolchain())
     with open(opts.metrics, 'w') as f:
         f.write(json_format.MessageToJson(metrics))
 
@@ -148,7 +183,8 @@ def test(opts):
     print(f'# Running {" ".join(cmd)}.')
     subprocess.run(cmd,
                    cwd=os.path.dirname(__file__),
-                   check=True)
+                   check=True,
+                   env=env)
 
 
 def main(args):

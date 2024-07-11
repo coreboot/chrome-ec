@@ -5,7 +5,11 @@
 # Force gcc compiler
 CROSS_COMPILE_CC_NAME:=gcc
 
+CROSS_COMPILE_ARM_DEFAULT:=arm-eabi
+COREBOOT_TOOLCHAIN:=arm
+USE_COREBOOT_SDK:=1
+
 # Use coreboot-sdk
 $(call set-option,CROSS_COMPILE,\
 	$(CROSS_COMPILE_arm),\
-	/opt/coreboot-sdk/bin/arm-eabi-)
+	arm-eabi)
