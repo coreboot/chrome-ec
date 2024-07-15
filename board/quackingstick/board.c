@@ -38,6 +38,7 @@
 #include "temp_sensor/thermistor.h"
 #include "thermal.h"
 #include "usbc_ppc.h"
+#include "watchdog.h"
 
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ## args)
 #define CPRINTF(format, args...) cprintf(CC_USBCHARGE, format, ## args)
@@ -460,7 +461,13 @@ enum battery_present battery_is_present(void)
 		if (battery_get_disconnect_state() ==
 		    BATTERY_NOT_DISCONNECTED) {
 			CPRINTS("Delay 2s on the first power on.");
-			sleep(2);
+			/*
+			 * Sleeping 2s triggers a watchdog reset. Break it
+			 * into 2 calls and reload the watchdog in between.
+			 */
+			sleep(1);
+			watchdog_reload();
+			sleep(1);
 		}
 		first_check_done = 1;
 	}
