@@ -12,6 +12,7 @@
 #include "fan.dtsi"
 #include "gpio.dtsi"
 #include "i2c.dts"
+#include "vci.dtsi"
 #include "../battery.dtsi"
 #include "../i2c.dtsi"
 #include "../ioex.dtsi"
