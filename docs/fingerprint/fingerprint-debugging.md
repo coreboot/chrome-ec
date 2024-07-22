@@ -22,8 +22,8 @@ used for JTAG and SWD for ARM devices.
 *   JTAG/SWD Debugger Probe: Any debug probe that supports SWD will work, but
     this document assumes that you're using a
     [Segger J-Trace PRO for Cortex-M][J-Trace].
-*   [Dragonclaw v0.3 Development board][FPMCU dev board] or
-    [Icetower v0.1 Development board][FPMCU dev board].
+*   [Dragonclaw v4 Development board][FPMCU dev board] or
+    [Icetower v3 Development board][FPMCU dev board].
 *   [Servo Micro].
 
 ## Software Required
@@ -53,29 +53,19 @@ be complete.
 
 ## Connecting SWD {#connect-swd}
 
-### Dragonclaw v0.3
+### Dragonclaw v4
 
-The connector for SWD is `J4` on Dragonclaw v0.3.
+The connector for SWD is `J5` on Dragonclaw v4. It is labeled as `CoreSight20`.
 
 <!-- mdformat off(b/139308852) -->
 *** note
-**NOTE**: Pay attention to the location of pin 1 (red wire) in the
-photos below so that you connect with the correct orientation.
-
-`SW2` on the edge of Dragonclaw must be set to `CORESIGHT`.
-
-If you want to connect a 20-Pin ARM Standard JTAG Connector (0.10" / 2.54 mm),
-you can use the following [adapter][JTAG to SWD Adapter] and [cable][SWD Cable].
+**NOTE**: `SW5` on the edge of Dragonclaw must be set to `C-SGHT`.
 ***
 <!-- mdformat on -->
 
-Dragonclaw v0.3 with 20-pin SWD (0.05" / 1.27mm) on J4. Only half the pins are connected. |
------------------------------------------------------------------------------------------ |
-![Dragonclaw with 20-pin SWD]                                                             |
-
-Dragonclaw v0.3 with 10-pin SWD (0.05" / 1.27mm) on J4. |
-------------------------------------------------------- |
-![Dragonclaw with 10-pin SWD]                           |
+Dragonclaw v4 with 20-pin SWD (0.05" / 1.27mm) on J5 |
+---------------------------------------------------- |
+![Dragonclaw with 20-pin SWD]                        |
 
 ### Icetower v3
 
@@ -86,6 +76,22 @@ The connector for SWD is labeled with `CORESIGHT20 DB CONN` on Icetower v3.
 Icetower v3 with 20-pin SWD (0.05" / 1.27mm) on `CORESIGHT20 DB CONN`. |
 ---------------------------------------------------------------------- |
 ![Icetower with 20-pin SWD]                                            |
+
+### Quincy v3
+
+The connector for SWD is `J4`. It is labeled with `CORESIGHT20`.
+
+<!-- mdformat off(b/139308852) -->
+*** note
+**NOTE**: `SW2` on the edge of Quincy must be set to `C-SGHT`, the `JEN#`
+switch (`SW7`) must be set low, and [`CONFIG_ENABLE_JTAG_SELECTION`] must be
+enabled for the board.
+***
+<!-- mdformat on -->
+
+Quincy v3 with 20-pin SWD (0.05" / 1.27mm) on `J4`. |
+--------------------------------------------------- |
+![Quincy with 20-pin SWD]                           |
 
 ## Powering the Board {#power}
 
@@ -239,8 +245,6 @@ STM32F412 package that does not have the synchronous trace pins, but the
 [J-Trace]: https://www.segger.com/products/debug-probes/j-trace/models/j-trace/
 [JLink Software]: https://www.segger.com/downloads/jlink/#J-LinkSoftwareAndDocumentationPack
 [Servo Micro]: ./fingerprint-dev-for-partners.md#Servo-Micro
-[JTAG to SWD Adapter]: https://www.adafruit.com/product/2094
-[SWD Cable]: https://www.adafruit.com/product/1675
 [Ozone]: https://www.segger.com/products/development-tools/ozone-j-link-debugger/
 [CLion]: https://www.jetbrains.com/clion/
 [CLion for ChromeOS]: http://go/clion-for-chromeos
@@ -253,9 +257,10 @@ STM32F412 package that does not have the synchronous trace pins, but the
 [power pin]: https://www.segger.com/products/debug-probes/j-link/technology/interface-description/
 [fingerprint hardware]: ./fingerprint.md#hardware
 [`flash_jlink.py`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/util/flash_jlink.py
+[`CONFIG_ENABLE_JTAG_SELECTION`]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/include/config.h;l=3084-3091;drc=a8b8b850ccc36b704f823094b62339662f6a7077
 
 <!-- Images -->
 
-[Dragonclaw with 20-pin SWD]: ../images/dragonclaw_with_20_pin_swd.jpg
-[Dragonclaw with 10-pin SWD]: ../images/dragonclaw_with_10_pin_swd.jpg
+[Dragonclaw with 20-pin SWD]: ../images/dragonclaw_v4_with_20_pin_swd.jpg
 [Icetower with 20-pin SWD]: ../images/icetower_with_20_pin_swd.jpg
+[Quincy with 20-pin SWD]: ../images/quincy_v3_with_20_pin_swd.jpg
