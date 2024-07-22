@@ -23,7 +23,7 @@ used for JTAG and SWD for ARM devices.
     this document assumes that you're using a
     [Segger J-Trace PRO for Cortex-M][J-Trace].
 *   [Dragonclaw v4 Development board][FPMCU dev board] or
-    [Icetower v0.1 Development board][FPMCU dev board].
+    [Icetower v3 Development board][FPMCU dev board].
 *   [Servo Micro].
 
 ## Software Required
@@ -76,6 +76,22 @@ The connector for SWD is labeled with `CORESIGHT20 DB CONN` on Icetower v3.
 Icetower v3 with 20-pin SWD (0.05" / 1.27mm) on `CORESIGHT20 DB CONN`. |
 ---------------------------------------------------------------------- |
 ![Icetower with 20-pin SWD]                                            |
+
+### Quincy v3
+
+The connector for SWD is `J4`. It is labeled with `CORESIGHT20`.
+
+<!-- mdformat off(b/139308852) -->
+*** note
+**NOTE**: `SW2` on the edge of Quincy must be set to `C-SGHT`, the `JEN#`
+switch (`SW7`) must be set low, and [`CONFIG_ENABLE_JTAG_SELECTION`] must be
+enabled for the board.
+***
+<!-- mdformat on -->
+
+Quincy v3 with 20-pin SWD (0.05" / 1.27mm) on `J4`. |
+--------------------------------------------------- |
+![Quincy with 20-pin SWD]                           |
 
 ## Powering the Board {#power}
 
@@ -241,8 +257,10 @@ STM32F412 package that does not have the synchronous trace pins, but the
 [power pin]: https://www.segger.com/products/debug-probes/j-link/technology/interface-description/
 [fingerprint hardware]: ./fingerprint.md#hardware
 [`flash_jlink.py`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/util/flash_jlink.py
+[`CONFIG_ENABLE_JTAG_SELECTION`]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/include/config.h;l=3084-3091;drc=a8b8b850ccc36b704f823094b62339662f6a7077
 
 <!-- Images -->
 
 [Dragonclaw with 20-pin SWD]: ../images/dragonclaw_v4_with_20_pin_swd.jpg
 [Icetower with 20-pin SWD]: ../images/icetower_with_20_pin_swd.jpg
+[Quincy with 20-pin SWD]: ../images/quincy_v3_with_20_pin_swd.jpg

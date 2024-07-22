@@ -27,7 +27,10 @@ test/restricted_console.c
 test/rollback.c
 test/rollback_entropy.c
 test/sha256.c
-test/static_if.c"
+test/static_if.c
+test/system_is_locked.c
+test/utils_str.c
+test/utils.c"
 
 for file in "$@"; do
   ec_file="${file##**/platform/ec/}"
