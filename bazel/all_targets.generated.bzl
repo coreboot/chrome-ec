@@ -668,6 +668,10 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "domika",
+        board = "domika",
+    )
+    ec_target(
         name = "don",
         board = "don",
         chip = "stm32",
@@ -1154,6 +1158,10 @@ def all_targets():
     ec_target(
         name = "joxer",
         board = "joxer",
+    )
+    ec_target(
+        name = "jubilant",
+        board = "jubilant",
     )
     ec_target(
         name = "juniper",
@@ -1894,6 +1902,11 @@ def all_targets():
         chip = "stm32",
         core = "cortex-m0",
         zephyr = False,
+    )
+    ec_target(
+        name = "ptlrvp_mchp",
+        board = "ptlrvp_mchp",
+        extra_modules = ["cmsis"],
     )
     ec_target(
         name = "puff",

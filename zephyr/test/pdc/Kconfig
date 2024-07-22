@@ -5,8 +5,17 @@
 config TEST_SUITE_PDC_GENERIC
 	bool "Enable generic PDC tests"
 
+config TEST_SUITE_PDC_API_NULL_CHECK
+	bool "Enable PDC API null-protection checks"
+
+config TEST_SUITE_PDC_DEVICE_NOT_READY
+	bool "Enable PDC subsystem tests for device-not-ready"
+
 config TEST_SUITE_PDC_RTS54XX
-	bool "Enable generic PDC tests"
+	bool "Enable RTS54xx PDC tests"
+
+config TEST_SUITE_PDC_TPS6699X
+	bool "Enable TPS6699x PDC tests"
 
 config TEST_SUITE_PDC_RETIMER_FW_UPDATE
 	bool "Enable retimer FW update tests"
@@ -31,5 +40,21 @@ config TEST_PDC_MESSAGE_TRACING
 	  as those defined for the rts54xx chip. Message data is
 	  reported in the test run logs and in a separate "rts.pcap"
 	  file in PCAP capture file format.
+
+config TEST_SUITE_PDC_TRACE_MSG
+	bool "Enable PDC message tracing tests"
+	depends on !TEST_PDC_MESSAGE_TRACING
+	help
+	  No help.
+
+	  These tests are incompatible with TEST_PDC_MESSAGE_TRACING
+	  since that config enables an alternate implementation of the
+	  code to be tested here.
+
+config TEST_DISABLE_INLINE_CHIPSET_IN_STATE
+	bool "Disable chipset_in_state inline method"
+	help
+	  This is used to not define chipset_in_state method as inline
+	  function.
 
 source "Kconfig.zephyr"

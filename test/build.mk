@@ -46,10 +46,13 @@ test-list-host += float
 test-list-host += fp
 test-list-host += fp_transport
 test-list-host += fpsensor_auth_commands
+test-list-host += fpsensor_auth_commands_otp
 test-list-host += fpsensor_auth_crypto_stateful
+test-list-host += fpsensor_auth_crypto_stateful_otp
 test-list-host += fpsensor_auth_crypto_stateless
 test-list-host += fpsensor_crypto
 test-list-host += fpsensor_crypto_with_mock
+test-list-host += fpsensor_crypto_with_mock_otp
 test-list-host += fpsensor_state
 test-list-host += fpsensor_utils
 test-list-host += gettimeofday
@@ -148,7 +151,7 @@ test-list-host += vboot
 test-list-host += version
 test-list-host += x25519
 test-list-host += stillness_detector
--include private/test/build.mk
+-include ../ec-private/test/build.mk
 endif
 
 # Build up the list of coverage test targets based on test-list-host, but
@@ -170,6 +173,13 @@ cov-dont-test += accel_cal entropy flash float kb_mkbp kb_scan_strict
 cov-dont-test += rsa
 
 cov-test-list-host = $(filter-out $(cov-dont-test), $(test-list-host))
+
+rw-test = rw
+ifeq ($(and $(BOARD_HOST),$(TEST_BUILD)),y)
+# TODO(b/346616972): The "emulator" (TEST_BUILD=y with BOARD=host) runs the
+# tests from the RO image, so we need to build for RO.
+rw-test = ro
+endif
 
 abort-y=abort.o
 accel_cal-y=accel_cal.o
@@ -208,10 +218,13 @@ flash_physical-y=flash_physical.o
 flash_write_protect-y=flash_write_protect.o
 fp_transport-y=fp_transport.o
 fpsensor_auth_commands-y=fpsensor_auth_commands.o
+fpsensor_auth_commands_otp-$(rw-test)=fpsensor_auth_commands_otp.o
 fpsensor_auth_crypto_stateful-y=fpsensor_auth_crypto_stateful.o
+fpsensor_auth_crypto_stateful_otp-y=fpsensor_auth_crypto_stateful_otp.o
 fpsensor_auth_crypto_stateless-y=fpsensor_auth_crypto_stateless.o
 fpsensor_crypto-y=fpsensor_crypto.o
 fpsensor_crypto_with_mock-y=fpsensor_crypto_with_mock.o
+fpsensor_crypto_with_mock_otp-y=fpsensor_crypto_with_mock_otp.o
 fpsensor_hw-y=fpsensor_hw.o
 fpsensor_state-y=fpsensor_state.o
 fpsensor_utils-y=fpsensor_utils.o
@@ -262,6 +275,7 @@ power_button-y=power_button.o
 powerdemo-y=powerdemo.o
 printf-y=printf.o
 queue-y=queue.o
+ram_lock-y=ram_lock.o
 restricted_console-y=restricted_console.o
 rng_benchmark-y=rng_benchmark.o
 rollback-y=rollback.o
@@ -279,7 +293,6 @@ scoped_fast_cpu-y=scoped_fast_cpu.o
 sha256-y=sha256.o
 sha256_unrolled-y=sha256.o
 shmalloc-y=shmalloc.o
-sram_mpu_protection-y=sram_mpu_protection.o
 static_if-y=static_if.o
 stdlib-y=stdlib.o
 std_vector-y=std_vector.o

@@ -47,14 +47,9 @@
 #define USB_PORT_COUNT 1
 #define CONFIG_USB_PORT_POWER_DUMB
 
-/* USB Type C and USB PD defines */
-#define CONFIG_USB_PD_REQUIRE_AP_MODE_ENTRY
-
 #define CONFIG_IO_EXPANDER
 #define CONFIG_IO_EXPANDER_NCT38XX
 #define CONFIG_IO_EXPANDER_PORT_COUNT 2
-
-#define CONFIG_USB_PD_FRS_PPC
 
 /* I2C speed console command */
 #define CONFIG_CMD_I2C_SPEED

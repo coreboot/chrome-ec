@@ -19,9 +19,6 @@
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/ztest.h>
 
-#include <fcntl.h>
-#include <sys/mman.h>
-
 void send_error_reset(uint8_t resp_value);
 
 static void send_vendor_command(enum update_extra_command command,
@@ -265,7 +262,6 @@ static void vendor_command_before(void *f)
 	       sizeof(initial_rollback));
 	memcpy(flash + CONFIG_ROLLBACK_OFF + CONFIG_FLASH_ERASE_SIZE,
 	       &initial_rollback, sizeof(initial_rollback));
-	msync(flash, flash_size, MS_SYNC | MS_INVALIDATE);
 
 	/* reset the usb_updater's internal state */
 	send_error_reset(0);

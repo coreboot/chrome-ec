@@ -97,10 +97,10 @@ ASSERTION_FAILURE_REGEX = re.compile(
 )
 
 DATA_ACCESS_VIOLATION_8020000_REGEX = re.compile(
-    r"Data access violation, mfar = 8020000\r\n"
+    r"(Data access violation, mfar = 8020000\r\n)|(.*MMFAR Address: 0x8020000\r\n)"
 )
 DATA_ACCESS_VIOLATION_8040000_REGEX = re.compile(
-    r"Data access violation, mfar = 8040000\r\n"
+    r"(Data access violation, mfar = 8040000\r\n)|(.*MMFAR Address: 0x8040000\r\n)"
 )
 DATA_ACCESS_VIOLATION_80C0000_REGEX = re.compile(
     r"Data access violation, mfar = 80c0000\r\n"
@@ -344,6 +344,10 @@ class AllTests:
                 test_args=["uart"],
             ),
             TestConfig(test_name="fpsensor_auth_crypto_stateful"),
+            TestConfig(
+                test_name="fpsensor_auth_crypto_stateful_otp",
+                exclude_boards=[BLOONCHIPPER, DARTMONKEY],
+            ),
             TestConfig(test_name="fpsensor_auth_crypto_stateless"),
             TestConfig(test_name="fpsensor_crypto"),
             TestConfig(
@@ -377,7 +381,8 @@ class AllTests:
             TestConfig(test_name="mutex_trylock", skip_for_zephyr=True),
             TestConfig(test_name="mutex_recursive", skip_for_zephyr=True),
             TestConfig(
-                test_name="otp_key", exclude_boards=[BLOONCHIPPER, DARTMONKEY]
+                test_name="otp_key",
+                exclude_boards=[BLOONCHIPPER, DARTMONKEY],
             ),
             TestConfig(test_name="panic"),
             # Task synchronization covered by Zephyr tests and shim layer by unit tests.
@@ -386,6 +391,10 @@ class AllTests:
             TestConfig(test_name="pingpong", skip_for_zephyr=True),
             TestConfig(test_name="printf"),
             TestConfig(test_name="queue"),
+            TestConfig(
+                test_name="ram_lock",
+                exclude_boards=[BLOONCHIPPER, DARTMONKEY],
+            ),
             TestConfig(test_name="restricted_console"),
             TestConfig(test_name="rng_benchmark"),
             TestConfig(
@@ -403,22 +412,23 @@ class AllTests:
             TestConfig(
                 test_name="rollback_entropy", imagetype_to_use=ImageType.RO
             ),
-            TestConfig(test_name="rtc"),
+            # RTC is handled by Zephyr drivers, covered by Zephyr tests. Time
+            # translation is covered by the utilities.time test.
+            TestConfig(test_name="rtc", skip_for_zephyr=True),
             TestConfig(
                 test_name="rtc_npcx9",
                 timeout_secs=20,
                 exclude_boards=[BLOONCHIPPER, DARTMONKEY],
             ),
+            # Covered by Zephyr drivers.counter.basic_api.stm32_subsec test
             TestConfig(
-                test_name="rtc_stm32f4", exclude_boards=[DARTMONKEY, HELIPILOT]
+                test_name="rtc_stm32f4",
+                exclude_boards=[DARTMONKEY, HELIPILOT],
+                skip_for_zephyr=True,
             ),
             TestConfig(test_name="sbrk", imagetype_to_use=ImageType.RO),
             TestConfig(test_name="sha256"),
             TestConfig(test_name="sha256_unrolled"),
-            TestConfig(
-                test_name="sram_mpu_protection",
-                exclude_boards=[BLOONCHIPPER, DARTMONKEY],
-            ),
             TestConfig(test_name="static_if"),
             TestConfig(test_name="stdlib"),
             TestConfig(test_name="std_vector"),
@@ -437,12 +447,16 @@ class AllTests:
                 enable_hw_write_protect=False,
             ),
             TestConfig(test_name="timer"),
-            TestConfig(test_name="timer_dos"),
+            # task_wait_event works only with the shimmed task list, which is
+            # hardcoded. The task synchronization functions are covered by
+            # Zephyr tests. task_wait_event is implemented based on k_poll_event
+            # and it is verified by the kernel.poll test.
+            TestConfig(test_name="timer_dos", skip_for_zephyr=True),
             TestConfig(test_name="tpm_seed_clear"),
             TestConfig(test_name="uart"),
             TestConfig(test_name="unaligned_access"),
             TestConfig(test_name="unaligned_access_benchmark"),
-            TestConfig(test_name="utils", timeout_secs=20),
+            TestConfig(test_name="utils", timeout_secs=25),
             TestConfig(test_name="utils_str"),
             TestConfig(
                 config_name="power_utilization_idle",
@@ -506,7 +520,9 @@ class AllTests:
         tests = []
         try:
             current_dir = os.path.dirname(__file__)
-            private_dir = os.path.join(current_dir, os.pardir, "private/test")
+            private_dir = os.path.join(
+                current_dir, os.pardir, os.pardir, "ec-private/test"
+            )
             have_private = os.path.isdir(private_dir)
             if not have_private:
                 return []
@@ -538,6 +554,16 @@ class AllTests:
                 zephyr_name="drivers.flash.stm32.f4.block_registers",
                 test_name="zephyr_flash_stm32f4_block_registers",
                 exclude_boards=[DARTMONKEY, HELIPILOT],
+            ),
+            TestConfig(
+                zephyr_name="drivers.counter.basic_api.stm32_subsec",
+                test_name="zephyr_counter_basic_api_stm32_subsec",
+                exclude_boards=[DARTMONKEY, HELIPILOT],
+                timeout_secs=60,
+            ),
+            TestConfig(
+                zephyr_name="kernel.poll",
+                test_name="zephyr_kernel_poll",
             ),
         ]
 

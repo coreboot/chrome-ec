@@ -527,6 +527,65 @@ extern "C" {
 	(((x) & 0xf0) >> USB_RETIMER_FW_UPDATE_OP_SHIFT)
 
 /*
+ * Offset 0x15 is reserved for PBOK, added to Coreboot in
+ * https://crrev.com/c/3840943 and proposed for inclusion here
+ * in https://crrev.com/c/3547317.
+ */
+
+/*
+ * Get extended strings from the EC.
+ * Write:
+ *     String index, or 0 to probe for EC support.
+ * Read:
+ *     String bytes, following by repeating null bytes.
+ *
+ * Writing a byte (EC_ACPI_MEM_STRINGS_FIFO_ID_*) selects a string, and the
+ * following reads return the non-null bytes of the string in sequence until
+ * the end of the string is reached. After the end of the string, reads 0 until
+ * another byte is written. This interface allows ACPI firmware to read longer
+ * strings from the EC than can reasonably fit into the shared memory region.
+ *
+ * To probe for EC support, write FIFO_ID_VERSION and read will return at least
+ * one nonzero (MEM_STRINGS_FIFO_V1 for example) if MEM_STRINGS_FIFO is
+ * supported. Returned values will indicate which strings are supported. If the
+ * first byte is 0xff, the strings FIFO is unsupported.
+ */
+#define EC_ACPI_MEM_STRINGS_FIFO 0x16
+
+/* String index to probe EC support. */
+#define EC_ACPI_MEM_STRINGS_FIFO_ID_VERSION 0
+#define EC_ACPI_MEM_STRINGS_FIFO_V1 1
+/*
+ * 0xff is the value the EC returns for unimplemented reads, indicating
+ * the current EC firmware does not implement this command.
+ */
+#define EC_ACPI_MEM_STRINGS_FIFO_UNSUPPORTED 0xff
+
+/*
+ * Battery model number for the selected battery. Supported since V1.
+ * Presents the same data as EC_MEMMAP_BATT_MODEL, but can provide more
+ * than 8 bytes.
+ *
+ * This and the other FIFO_ID_BATTERY strings can select one of multiple
+ * batteries by changing the value at EC_MEMMAP_BATT_INDEX. Once that index
+ * is changed, reads of these strings will return information for the
+ * corresponding battery, if present.
+ */
+#define EC_ACPI_MEM_STRINGS_FIFO_ID_BATTERY_MODEL 1
+/*
+ * Battery serial number for the selected battery. Supported since V1.
+ * Presents the same data as EC_MEMMAP_BATT_SERIAL, but can provide more
+ * than 8 bytes.
+ */
+#define EC_ACPI_MEM_STRINGS_FIFO_ID_BATTERY_SERIAL 2
+/*
+ * Battery manufacturer for the selected battery. Supported since V1.
+ * Presents the same data as EC_MEMMAP_BATT_MFGR, but can provide more
+ * than 8 bytes.
+ */
+#define EC_ACPI_MEM_STRINGS_FIFO_ID_BATTERY_MANUFACTURER 3
+
+/*
  * ACPI addresses 0x20 - 0xff map to EC_MEMMAP offset 0x00 - 0xdf.  This data
  * is read-only from the AP.  Added in EC_ACPI_MEM_VERSION 2.
  */
@@ -7993,6 +8052,75 @@ struct ec_params_ucsi_ppm_get {
 struct ec_params_set_alarm_slp_s0_dbg {
 	uint32_t time;
 } __ec_align2;
+
+/*
+ * Control PDC tracing.
+ *   EC_PDC_TRACE_MSG_PORT_NONE disable tracing
+ *   EC_PDC_TRACE_MSG_PORT_ALL enable tracing on all ports
+ *   else, enable tracing on a specific port.
+ */
+
+#define EC_CMD_PDC_TRACE_MSG_ENABLE 0x0143
+
+#define EC_PDC_TRACE_MSG_PORT_NONE 0xff
+#define EC_PDC_TRACE_MSG_PORT_ALL 0xfe
+
+struct ec_params_pdc_trace_msg_enable {
+	uint8_t port;
+};
+
+struct ec_response_pdc_trace_msg_enable {
+	/* Previous port value. */
+	uint8_t port;
+	uint8_t reserved;
+	/* Number of free bytes in FIFO. */
+	uint16_t fifo_free;
+	/* Running total of dropped messages (may wrap). */
+	uint32_t dropped_count;
+} __ec_align4;
+
+/*
+ * Fetch multiple PDC trace entries.
+ *
+ * If no entries are available, pl_size is 0.
+ * At most MAX_HC_PDC_TRACE_MSG_GET_PAYLOAD bytes worth of entries
+ * are returned. Only whole entries are returned.
+ */
+
+#define EC_CMD_PDC_TRACE_MSG_GET_ENTRIES 0x0144
+#define MAX_HC_PDC_TRACE_MSG_GET_PAYLOAD 240
+
+struct ec_response_pdc_trace_msg_get_entries {
+	/* Total bytes of payload. */
+	uint16_t pl_size;
+	/* Packed array of pdc_trace_msg_entry structs. */
+	uint8_t payload[FLEXIBLE_ARRAY_MEMBER_SIZE];
+};
+
+enum pdc_trace_msg_direction {
+	PDC_TRACE_MSG_DIR_IN = 0,
+	PDC_TRACE_MSG_DIR_OUT = 1,
+};
+
+struct pdc_trace_msg_entry {
+	/*
+	 * Timestamp - least significant 32 bits of EC epoch time
+	 * (microseconds, will wrap around).
+	 */
+	uint32_t time32_us;
+	/* Entry sequence number (wraps around). */
+	uint16_t seq_num;
+	/* Port number associated with this entry. */
+	uint8_t port_num;
+	/* Direction of message (enum pdc_trace_msg_direction) */
+	uint8_t direction;
+	/* Format of pdc_data (PDC chip identifier). */
+	uint8_t msg_type;
+	/* Bytes in pdc_data. */
+	uint8_t pdc_data_size;
+	/* Captured PDC message. */
+	uint8_t pdc_data[0];
+} __ec_align1;
 
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */

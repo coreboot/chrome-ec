@@ -51,7 +51,9 @@ def locate_from_checkout(checkout_dir):
     """
     result = {}
     for name, locator in known_modules.items():
-        result[name] = locator(name, checkout_dir)
+        path = locator(name, checkout_dir)
+        if path.exists():
+            result[name] = path
     return result
 
 
@@ -117,5 +119,4 @@ def default_projects_dirs(modules):
     ret = []
     if "ec" in modules:
         ret.append(modules["ec"] / "zephyr" / "program")
-        ret.append(modules["ec"] / "private" / "zephyr" / "program")
     return ret
