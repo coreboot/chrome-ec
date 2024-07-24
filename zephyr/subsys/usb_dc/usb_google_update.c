@@ -132,7 +132,7 @@ static void google_update_status_cb(struct usb_cfg_data *cfg,
 	}
 }
 
-void updater_stream_written(struct consumer const *consumer, size_t count)
+void usb_update_stream_written(struct consumer const *consumer, size_t count)
 {
 	static uint8_t data[USB_MAX_FS_BULK_MPS];
 
