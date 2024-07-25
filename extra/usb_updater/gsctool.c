@@ -1445,7 +1445,7 @@ static bool fetch_header_versions(const void *image)
 			sections[i].shv.minor = h->h.minor_;
 			sections[i].keyid = h->h.keyid;
 		} else if (gsc_dev == GSC_DEVICE_NT) {
-			sections[i].shv.epoch = 0;
+			sections[i].shv.epoch = h->m.security_version;
 			sections[i].shv.major = h->m.version_major;
 			sections[i].shv.minor = h->m.version_minor;
 			sections[i].keyid = 0;
