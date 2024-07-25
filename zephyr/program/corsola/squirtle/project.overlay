@@ -55,6 +55,9 @@
 		default_battery: lges-ap23a8l {
 			compatible = "lges,ap23a8l", "battery-smart";
 		};
+		cosmx_ap23abl {
+			compatible = "cosmx,ap23abl", "battery-smart";
+		};
 		smp_ap23a7l {
 			compatible = "smp,ap23a7l", "battery-smart";
 		};
@@ -95,8 +98,8 @@
 	motionsense-rotation-ref {
 		compatible = "cros-ec,motionsense-rotation-ref";
 		lid_rot_lis2de12: lid-rotation-ref-lis2de12 {
-			mat33 = <0 (-1) 0
-				 (-1) 0 0
+			mat33 = <0 1 0
+				 1 0 0
 				 0 0 (-1)>;
 		};
 

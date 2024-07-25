@@ -13,6 +13,9 @@ exit_code=0
 # fixes are applied for both versions.
 migrated_tests="
 test/abort.c
+test/aes.cc
+test/benchmark.cc
+test/boringssl_crypto.cc
 test/cortexm_fpu.c
 test/crc.c
 test/flash_write_protect.c
@@ -25,7 +28,12 @@ test/printf.c
 test/queue.c
 test/restricted_console.c
 test/rollback.c
-test/rollback_entropy.c"
+test/rollback_entropy.c
+test/sha256.c
+test/static_if.c
+test/system_is_locked.c
+test/utils_str.c
+test/utils.c"
 
 for file in "$@"; do
   ec_file="${file##**/platform/ec/}"

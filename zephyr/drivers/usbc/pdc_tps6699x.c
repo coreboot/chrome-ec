@@ -104,6 +104,8 @@ enum cmd_t {
 	CMD_GET_IDENTITY_DISCOVERY,
 	/** CMD_GET_PCH_DATA_STATUS */
 	CMD_GET_PCH_DATA_STATUS,
+	/** CMD_SET_DRP_MODE */
+	CMD_SET_DRP_MODE,
 };
 
 /**
@@ -194,6 +196,8 @@ struct pdc_data_t {
 	union pdr_t pdr;
 	/** UOR */
 	union uor_t uor;
+	/** DRP mode */
+	enum drp_mode_t drp_mode;
 	/** Pointer to user data */
 	uint8_t *user_buf;
 	/** Command mutex */
@@ -222,6 +226,7 @@ static const char *const state_names[] = {
 
 static const struct smf_state states[];
 
+static void cmd_set_drp_mode(struct pdc_data_t *data);
 static void cmd_set_tpc_rp(struct pdc_data_t *data);
 static void cmd_get_rdo(struct pdc_data_t *data);
 static void cmd_get_ic_status(struct pdc_data_t *data);
@@ -346,7 +351,9 @@ static void st_irq_run(void *o)
 	if (interrupt_pending) {
 		/* Set CCI EVENT for connector change */
 		data->cci_event.connector_change =
-			pdc_interrupt.plug_insert_or_removal;
+			(pdc_interrupt.plug_insert_or_removal |
+			 pdc_interrupt.power_swap_complete |
+			 pdc_interrupt.fr_swap_complete);
 		/* Set CCI EVENT for not supported */
 		data->cci_event.not_supported =
 			pdc_interrupt.not_supported_received;
@@ -435,8 +442,10 @@ static void st_idle_entry(void *o)
 
 	print_current_state(data);
 
-	/* Reset the command */
-	data->cmd = CMD_NONE;
+	/* Reset the command if no pending PDC_CMD_EVENT */
+	if (!k_event_test(&data->pdc_event, PDC_CMD_EVENT)) {
+		data->cmd = CMD_NONE;
+	}
 }
 
 static void st_idle_run(void *o)
@@ -533,6 +542,9 @@ static void st_idle_run(void *o)
 		case CMD_SET_TPC_RP:
 			cmd_set_tpc_rp(data);
 			break;
+		case CMD_SET_DRP_MODE:
+			cmd_set_drp_mode(data);
+			break;
 		case CMD_SET_RETIMER_FW_UPDATE_MODE:
 			task_ucsi(data, UCSI_SET_RETIMER_MODE);
 			break;
@@ -608,6 +620,52 @@ static void st_suspended_run(void *o)
 	}
 
 	set_state(data, ST_INIT);
+}
+
+static void cmd_set_drp_mode(struct pdc_data_t *data)
+{
+	struct pdc_config_t const *cfg = data->dev->config;
+	union reg_port_configuration pdc_port_configuration;
+	int rv;
+
+	/* Read PDC port configuration */
+	rv = tps_rw_port_configuration(&cfg->i2c, &pdc_port_configuration,
+				       I2C_MSG_READ);
+	if (rv) {
+		LOG_ERR("Read port configuration failed");
+		set_state(data, ST_ERROR_RECOVERY);
+		return;
+	}
+
+	/* Modify */
+	switch (data->drp_mode) {
+	case DRP_NORMAL:
+	case DRP_TRY_SRC:
+		pdc_port_configuration.typec_support_options = data->drp_mode;
+		break;
+	default:
+		LOG_ERR("Unsupported DRP mode");
+		set_state(data, ST_IDLE);
+		return;
+	}
+
+	/* Write PDC port configuration */
+	rv = tps_rw_port_configuration(&cfg->i2c, &pdc_port_configuration,
+				       I2C_MSG_WRITE);
+	if (rv) {
+		LOG_ERR("Write port configuration failed");
+		set_state(data, ST_ERROR_RECOVERY);
+		return;
+	}
+
+	/* Command has completed */
+	data->cci_event.command_completed = 1;
+	/* Inform the system of the event */
+	call_cci_event_cb(data);
+
+	/* Transition to idle state */
+	set_state(data, ST_IDLE);
+	return;
 }
 
 static void cmd_set_tpc_rp(struct pdc_data_t *data)
@@ -1083,22 +1141,14 @@ static void task_ucsi(struct pdc_data_t *data, enum ucsi_command_t ucsi_command)
 		}
 		break;
 	case CMD_SET_UOR:
-		if (data->uor.swap_to_dfp) {
-			cmd_data.data[2] |= (1 << 7);
-		} else if (data->uor.swap_to_ufp) {
-			cmd_data.data[3] = 1;
-		} else if (data->uor.accept_dr_swap) {
-			cmd_data.data[3] = 2;
-		}
+		cmd_data.data[2] |= (data->uor.swap_to_dfp << 7);
+		cmd_data.data[3] = (data->uor.swap_to_ufp |
+				    (data->uor.accept_dr_swap << 1));
 		break;
 	case CMD_SET_PDR:
-		if (data->pdr.swap_to_src) {
-			cmd_data.data[2] |= (1 << 7);
-		} else if (data->pdr.swap_to_snk) {
-			cmd_data.data[3] = 1;
-		} else if (data->pdr.accept_pr_swap) {
-			cmd_data.data[3] = 2;
-		}
+		cmd_data.data[2] |= (data->pdr.swap_to_src << 7);
+		cmd_data.data[3] = (data->pdr.swap_to_snk |
+				    (data->pdr.accept_pr_swap << 1));
 		break;
 	case CMD_SET_NOTIFICATION_ENABLE:
 		*(uint32_t *)&cmd_data.data[2] = cfg->bits.raw_value;
@@ -1109,6 +1159,11 @@ static void task_ucsi(struct pdc_data_t *data, enum ucsi_command_t ucsi_command)
 	}
 
 	rv = write_task_cmd(cfg, COMMAND_TASK_UCSI, &cmd_data);
+	if (rv) {
+		LOG_ERR("Failed to write command");
+		set_state(data, ST_ERROR_RECOVERY);
+		return;
+	}
 
 	/* Transition to wait state */
 	set_state(data, ST_TASK_WAIT);
@@ -1483,6 +1538,15 @@ static int tps_set_pdr(const struct device *dev, union pdr_t pdr)
 	return tps_post_command(dev, CMD_SET_PDR, NULL);
 }
 
+static int tps_set_drp_mode(const struct device *dev, enum drp_mode_t dm)
+{
+	struct pdc_data_t *data = dev->data;
+
+	data->drp_mode = dm;
+
+	return tps_post_command(dev, CMD_SET_DRP_MODE, NULL);
+}
+
 static int tps_get_current_pdo(const struct device *dev, uint32_t *pdo)
 {
 	/* TODO */
@@ -1592,6 +1656,7 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.set_ccom = tps_set_ccom,
 	.set_uor = tps_set_uor,
 	.set_pdr = tps_set_pdr,
+	.set_drp_mode = tps_set_drp_mode,
 	.set_sink_path = tps_set_sink_path,
 	.get_connector_status = tps_get_connector_status,
 	.get_pdos = tps_get_pdos,
@@ -1622,6 +1687,8 @@ static int pdc_interrupt_mask_init(struct pdc_data_t *data)
 	union reg_interrupt irq_mask = {
 		.pd_hardreset = 1,
 		.plug_insert_or_removal = 1,
+		.power_swap_complete = 1,
+		.fr_swap_complete = 1,
 		.status_updated = 1,
 		.power_event_occurred_error = 1,
 		.externl_dcdc_event_received = 1,
@@ -1659,6 +1726,14 @@ static int pdc_init(const struct device *dev)
 		return -ENODEV;
 	}
 
+	k_event_init(&data->pdc_event);
+	k_mutex_init(&data->mtx);
+
+	data->cmd = CMD_NONE;
+	data->dev = dev;
+	pdc_data[cfg->connector_number] = data;
+	data->init_done = false;
+
 	rv = gpio_pin_configure_dt(&cfg->irq_gpios, GPIO_INPUT);
 	if (rv < 0) {
 		LOG_ERR("Unable to configure GPIO");
@@ -1680,14 +1755,6 @@ static int pdc_init(const struct device *dev)
 		LOG_ERR("Unable to configure interrupt");
 		return rv;
 	}
-
-	k_event_init(&data->pdc_event);
-	k_mutex_init(&data->mtx);
-
-	data->cmd = CMD_NONE;
-	data->dev = dev;
-	pdc_data[cfg->connector_number] = data;
-	data->init_done = false;
 
 	/* Set initial state */
 	smf_set_initial(SMF_CTX(data), &states[ST_INIT]);
