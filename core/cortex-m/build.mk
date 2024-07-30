@@ -6,12 +6,6 @@
 # Cortex-M4 core OS files build
 #
 
-# Use coreboot-sdk
-$(call set-option,CROSS_COMPILE,\
-	$(CROSS_COMPILE_arm),\
-	/opt/coreboot-sdk/bin/arm-eabi-)
-# Force gcc compiler
-cc-name:=gcc
 # FPU compilation flags
 CFLAGS_FPU-$(CONFIG_FPU)=-mfpu=fpv4-sp-d16 -mfloat-abi=hard
 
@@ -27,7 +21,7 @@ endif
 
 # gcc 11.2 had a known issue which doesn't affect Cr50 build anymore
 # but we can't remove -fno-ipa-modref as it changes FIPS module digest
-GCC_VERSION := $(shell $(CROSS_COMPILE)$(cc-name) -dumpversion)
+GCC_VERSION := $(shell $(CROSS_COMPILE)$(CROSS_COMPILE_CC_NAME) -dumpversion)
 ifeq ("$(GCC_VERSION)","11.2.0")
 # IPA modref pass crashes gcc 11.2 when LTO is used with partial linking
 CFLAGS_CPU += -fno-ipa-modref
