@@ -20,53 +20,75 @@ endif
 
 # Default to clang if TEST_ASAN is enabled
 ifneq ($(TEST_FUZZ)$(TEST_ASAN)$(TEST_MSAN)$(TEST_UBSAN),)
-CC=clang
+CROSS_COMPILE_CC_NAME=clang
 endif
-
-# Extract cc-name
-cc-name:=$(shell $(CC) -v 2>&1 | grep -q "clang version" && echo clang || echo gcc)
 
 # Try not to assume too much about optional tools and prefixes
 CCACHE:=$(shell which ccache 2>/dev/null)
 ifeq ($(origin HOST_CROSS_COMPILE),undefined)
-HOST_CROSS_COMPILE:=$(if $(shell which x86_64-pc-linux-gnu-gcc 2>/dev/null),x86_64-pc-linux-gnu-,)
+# If building with Portage use the environment variable it provides.
+# https://wiki.gentoo.org/wiki/Embedded_Handbook/General/Introduction#Environment_variables
+ifneq ($(CHOST),)
+HOST_CROSS_COMPILE:=$(CHOST)-
+else
+HOST_CROSS_COMPILE:=$(if $(shell which x86_64-pc-linux-gnu-$(CROSS_COMPILE_CC_NAME) 2>/dev/null),x86_64-pc-linux-gnu-,)
+endif
+endif
+
+# Assume we want to use same compiler for both C and C++
+ifeq ($(CROSS_COMPILE_CC_NAME),gcc)
+CROSS_COMPILE_CXX_NAME?=g++
+else
+CROSS_COMPILE_CXX_NAME?=$(CROSS_COMPILE_CC_NAME)++
 endif
 
 AR=$(CROSS_COMPILE)ar
-CC=$(CCACHE) $(CROSS_COMPILE)$(cc-name)
+CC=$(CCACHE) $(CROSS_COMPILE)$(CROSS_COMPILE_CC_NAME)
 CPP=$(CC) -E
-CXX=$(CROSS_COMPILE)clang++
+CXX=$(CROSS_COMPILE)$(CROSS_COMPILE_CXX_NAME)
 LD=$(CROSS_COMPILE)ld
 NM=$(CROSS_COMPILE)nm
 OBJCOPY=$(CROSS_COMPILE)objcopy
 OBJDUMP=$(CROSS_COMPILE)objdump
 ADDR2LINE=$(CROSS_COMPILE)addr2line
 PKG_CONFIG?=pkg-config
-BUILDCC?=$(CCACHE) gcc
-HOSTCC?=$(CCACHE) $(HOST_CROSS_COMPILE)gcc
-HOSTCXX?=$(CCACHE) $(HOST_CROSS_COMPILE)clang++
+ifeq ($(shell which /usr/bin/x86_64-pc-linux-gnu-$(CROSS_COMPILE_CC_NAME) 2>/dev/null),)
+BUILDCC?=$(CCACHE) $(CROSS_COMPILE_CC_NAME)
+else
+BUILDCC?=$(CCACHE) /usr/bin/x86_64-pc-linux-gnu-$(CROSS_COMPILE_CC_NAME)
+endif
+BUILDCC_NAME?=$(CROSS_COMPILE_CC_NAME)
+HOSTCC?=$(CCACHE) $(HOST_CROSS_COMPILE)$(CROSS_COMPILE_CC_NAME)
+HOSTCXX?=$(CCACHE) $(HOST_CROSS_COMPILE)$(CROSS_COMPILE_CXX_NAME)
 HOST_PKG_CONFIG?=$(HOST_CROSS_COMPILE)pkg-config
 PROTOC?=protoc
 GCOV=$(CROSS_COMPILE)gcov
+ifeq ($(CROSS_COMPILE_CC_NAME),clang)
 HOSTGCOV=$(CURDIR)/util/llvm-gcov.sh
+else
+HOSTGCOV=$(HOST_CROSS_COMPILE)gcov
+endif
 
 C_WARN = -Wstrict-prototypes -Wdeclaration-after-statement -Wno-pointer-sign
 COMMON_WARN = -Wall -Wundef -Werror -Werror-implicit-function-declaration \
 	-Wno-trigraphs -Wno-format-security -Wno-address-of-packed-member \
 	-fno-common -fno-strict-aliasing -fno-strict-overflow
-ifeq ($(cc-name),clang)
-COMMON_WARN+=-Werror=uninitialized
-endif
-ifeq ($(cc-name),gcc)
-COMMON_WARN+=-Werror=maybe-uninitialized
+ifndef ALLOW_WARNINGS
+COMMON_WARN+=-Werror
+COMMON_WARN-clang+=-Werror=uninitialized
+COMMON_WARN-gcc+=-Werror=maybe-uninitialized
 endif
 
 UBSAN_FLAGS=-fsanitize=array-bounds,vla-bound \
 	-fno-sanitize=vptr \
 	-fno-sanitize-recover=all
 
-CFLAGS_WARN = $(COMMON_WARN) $(C_WARN)
-CXXFLAGS_WARN = $(COMMON_WARN)
+CFLAGS_WARN = $(COMMON_WARN) $(C_WARN) \
+	$(COMMON_WARN-$(CROSS_COMPILE_CC_NAME)) $(C_WARN-$(CROSS_COMPILE_CC_NAME))
+CXXFLAGS_WARN = $(COMMON_WARN) $(COMMON_WARN-$(CROSS_COMPILE_CC_NAME))
+BUILDCC_WARN = $(COMMON_WARN) $(C_WARN) \
+	$(COMMON_WARN-$(BUILDCC_NAME)) $(C_WARN-$(BUILDCC_NAME))
+BUILDCXX_WARN = $(COMMON_WARN) $(COMMON_WARN-$(BUILDCC_NAME))
 CFLAGS_DEBUG= -g
 CFLAGS_DEBUG+=$(CFLAGS_DEBUG_CHIP)
 CFLAGS_INCLUDE=$(foreach i,$(includes),-I$(i) ) -I.
@@ -109,10 +131,10 @@ else
 CPPFLAGS+=-Og
 endif
 CPPFLAGS+= -DCHROMIUM_EC=$(EMPTY)
-CFLAGS=$(CPPFLAGS) $(CFLAGS_CPU) $(CFLAGS_DEBUG) $(COMMON_WARN) $(CFLAGS_y)
+CFLAGS=$(CPPFLAGS) $(CFLAGS_CPU) $(CFLAGS_DEBUG) $(COMMON_WARN) $(COMMON_WARN-$(CROSS_COMPILE_CC_NAME)) $(CFLAGS_y)
 CFLAGS+= -ffunction-sections -fshort-wchar
 CFLAGS+= -fno-delete-null-pointer-checks
-ifneq ($(cc-name),clang)
+ifneq ($(CROSS_COMPILE_CC_NAME),clang)
 CFLAGS+= -ffat-lto-objects
 CFLAGS+= -fconserve-stack
 endif
@@ -141,7 +163,7 @@ LIBPROTOBUF_MUTATOR_LDLIBS:=$(shell $(PKG_CONFIG) --libs libprotobuf-mutator) \
 endif
 
 BUILD_CFLAGS=$(LIBFTDIUSB_CFLAGS) $(BUILD_CPPFLAGS) -O3 $(CFLAGS_DEBUG)
-BUILD_CFLAGS+=$(CFLAGS_WARN)
+BUILD_CFLAGS+=$(BUILDCC_WARN)
 BUILD_CFLAGS+=-DCHROMIUM_EC=$(EMPTY)
 HOST_CFLAGS=$(HOST_CPPFLAGS) -O3 $(CFLAGS_DEBUG) $(CFLAGS_WARN) \
 	    -DHOST_TOOLS_BUILD=$(EMPTY)
