@@ -6,11 +6,16 @@ zephyr_include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 zephyr_library_sources("src/main.c")
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_ABORT src/abort.c)
+zephyr_library_sources_ifdef(CONFIG_HW_TEST_AES src/aes.cc)
+zephyr_library_sources_ifdef(CONFIG_HW_TEST_BENCHMARK src/benchmark.cc)
+zephyr_library_sources_ifdef(CONFIG_HW_TEST_BORINGSSL_CRYPTO src/boringssl_crypto.cc)
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_CORTEXM_FPU src/cortexm_fpu.c)
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_CRC ${PLATFORM_EC}/zephyr/test/crc/main.c)
+zephyr_library_sources_ifdef(CONFIG_HW_TEST_EXCEPTION src/exception.cc)
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_FLASH_PHYSICAL src/flash_physical.c)
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_FLASH_WRITE_PROTECT src/flash_write_protect.c)
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_FP_TRANSPORT src/fp_transport.c)
+zephyr_library_sources_ifdef(CONFIG_HW_TEST_FPSENSOR_AUTH_CRYPTO_STATEFUL src/fpsensor_auth_crypto_stateful.cc)
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_FTRAPV src/ftrapv.c)
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_LIBC_PRINTF src/libc_printf.c)
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_MALLOC src/malloc.c)
@@ -24,3 +29,16 @@ zephyr_library_sources_ifdef(CONFIG_HW_TEST_SHA256 ${PLATFORM_EC}/zephyr/test/cr
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_SHA256_UNROLLED ${PLATFORM_EC}/zephyr/test/crypto/src/sha256.c)
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_STATIC_IF ${PLATFORM_EC}/zephyr/test/utils/src/static_if.c)
 zephyr_library_sources_ifdef(CONFIG_HW_TEST_SYSTEM_IS_LOCKED src/system_is_locked.c)
+zephyr_library_sources_ifdef(CONFIG_HW_TEST_UTILS ${PLATFORM_EC}/zephyr/test/utils/src/utils.c)
+zephyr_library_sources_ifdef(CONFIG_HW_TEST_UTILS_STR ${PLATFORM_EC}/zephyr/test/utils/src/utils_str.c)
+
+# Create an external lib for tests. The Zephyr build doesn't allow using
+# try/throw instructions, when exceptions are disabled.
+if(${CONFIG_HW_TEST_EXCEPTION})
+  zephyr_library_named(exception_lib)
+  zephyr_library_sources(src/exception_lib.cc)
+  zephyr_library_compile_options(-fexceptions)
+  set(ZEPHYR_CURRENT_LIBRARY ec_shim)
+endif()
+
+zephyr_library_sources_ifdef(CONFIG_MOCK_ROLLBACK ${PLATFORM_EC}/common/mock/rollback_mock.c)

@@ -10,6 +10,24 @@ config HW_TEST_ABORT
 	  The test verify if abort() call works correctly and validates panic
 	  data.
 
+config HW_TEST_AES
+	bool "AES test"
+	select ZTEST
+	help
+	  The test verifies AES functions.
+
+config HW_TEST_BENCHMARK
+	bool "Benchmark test"
+	select ZTEST
+	help
+	  The test verifies benchmark feature.
+
+config HW_TEST_BORINGSSL_CRYPTO
+	bool "Benchmark test"
+	select ZTEST
+	help
+	  The test verifies the boringssl library.
+
 config HW_TEST_CORTEXM_FPU
 	bool "Cortex-M FPU test"
 	select ZTEST
@@ -17,6 +35,10 @@ config HW_TEST_CORTEXM_FPU
 
 config HW_TEST_CRC
 	bool "CRC test"
+	select ZTEST
+
+config HW_TEST_EXCEPTION
+	bool "Exception test"
 	select ZTEST
 
 config HW_TEST_FLASH_PHYSICAL
@@ -33,6 +55,11 @@ config HW_TEST_FP_TRANSPORT
 	bool "FP transport layer test"
 	select ZTEST
 	depends on EC_HOST_CMD
+
+config HW_TEST_FPSENSOR_AUTH_CRYPTO_STATEFUL
+	bool "FP sensor auth crypto stateful test"
+	select ZTEST
+	select MOCK_ROLLBACK
 
 config HW_TEST_FTRAPV
 	bool "ftrapv test"
@@ -117,3 +144,18 @@ config HW_TEST_SYSTEM_IS_LOCKED
 	select ZTEST
 	help
 	  The test verifies system_is_locked function with wp on/off.
+
+config HW_TEST_UTILS
+	bool "Utils test"
+	select ZTEST
+	help
+	  The test verifies util functions.
+
+config HW_TEST_UTILS_STR
+	bool "Utils string test"
+	select ZTEST
+	help
+	  The test verifies util string functions.
+
+config MOCK_ROLLBACK
+	bool "Mock rollback for tests"
