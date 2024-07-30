@@ -18,8 +18,10 @@ test/benchmark.cc
 test/boringssl_crypto.cc
 test/cortexm_fpu.c
 test/crc.c
+test/exception.cc
 test/flash_write_protect.c
 test/fp_transport.c
+test/fpsensor_auth_crypto_stateful.cc
 test/ftrapv.c
 test/libc_printf.c
 test/malloc.c
