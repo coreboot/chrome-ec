@@ -69,7 +69,7 @@ CFLAGS_TEST=$(if $(TEST_BUILD),-DTEST_BUILD=$(EMPTY) \
             $(if $(TEST_ASAN),-fsanitize=address) \
             $(if $(TEST_MSAN),-fsanitize=memory) \
             $(if $(TEST_UBSAN),$(UBSAN_FLAGS)) \
-            $(if $(TEST_FUZZ),-fsanitize=fuzzer-no-link -fno-PIE \
+            $(if $(TEST_FUZZ),-fsanitize=fuzzer-no-link -fPIE \
                        -fcoverage-mapping \
                        -fprofile-instr-generate \
                        -DTEST_FUZZ=$(EMPTY))
