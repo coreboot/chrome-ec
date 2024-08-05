@@ -144,3 +144,6 @@ config USBD_HID_SUPPORT
 endif # CROS_EC_RO
 
 endmenu
+
+rsource "Kconfig.gupdate"
+rsource "Kconfig.gi2c"
