@@ -32,7 +32,8 @@ def build(opts):
     doing anything but creating the metrics file and giving an informational
     message.
     """
-    # TODO(b/169178847): Add appropriate metric information
+    # Write empty metrics file as there is nothing to report but recipe needs
+    # the file to exist.
     metrics = firmware_pb2.FwBuildMetricList()
     with open(opts.metrics, 'w') as f:
         f.write(json_format.MessageToJson(metrics))
@@ -46,10 +47,20 @@ def build(opts):
 
 
 def bundle(opts):
+    # Write empty metrics file as there is nothing to report but recipe needs
+    # the file to exist.
+    metrics = firmware_pb2.FwBuildMetricList()
+    with open(opts.metrics, 'w') as f:
+        f.write(json_format.MessageToJson(metrics))
     pass # Nothing to bundle.
 
 
 def test(opts):
+    # Write empty metrics file as there is nothing to report but recipe needs
+    # the file to exist.
+    metrics = firmware_pb2.FwBuildMetricList()
+    with open(opts.metrics, 'w') as f:
+        f.write(json_format.MessageToJson(metrics))
     pass # Nothing to test
 
 
