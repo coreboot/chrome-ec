@@ -61,6 +61,18 @@ config HW_TEST_FPSENSOR_AUTH_CRYPTO_STATEFUL
 	select ZTEST
 	select MOCK_ROLLBACK
 
+config HW_TEST_FPSENSOR_AUTH_CRYPTO_STATELESS
+	bool "FP sensor auth crypto stateless test"
+	select ZTEST
+
+config HW_TEST_FPSENSOR_CRYPTO
+	bool "FP sensor crypto test"
+	select ZTEST
+
+config HW_TEST_FPSENSOR_HW
+	bool "FP sensor hw test"
+	select ZTEST
+
 config HW_TEST_FTRAPV
 	bool "ftrapv test"
 	select ZTEST
