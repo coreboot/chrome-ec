@@ -52,20 +52,15 @@ def build(opts):
 
 
 def bundle(opts):
-    # Write empty metrics file as there is nothing to report but recipe needs
-    # the file to exist.
-    metrics = firmware_pb2.FwBuildMetricList()
-    with open(opts.metrics, "w") as f:
-        f.write(json_format.MessageToJson(metrics))
-    pass  # Nothing to bundle.
+    # Provide an empty metadata file since the file is required, but we
+    # don't have any artifacts that needs to be uploadeddd
+    if opts.metadata:
+        metadata = firmware_pb2.FirmwareArtifactInfo()
+        with open(opts.metadata, "w") as f:
+            f.write(json_format.MessageToJson(metadata))
 
 
 def test(opts):
-    # Write empty metrics file as there is nothing to report but recipe needs
-    # the file to exist.
-    metrics = firmware_pb2.FwBuildMetricList()
-    with open(opts.metrics, "w") as f:
-        f.write(json_format.MessageToJson(metrics))
     pass  # Nothing to test
 
 
