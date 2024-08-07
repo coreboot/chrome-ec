@@ -1733,6 +1733,40 @@ Build:   ti50_common_prepvt-15086.B:v0.0.1259-527d854e
 *   fix ti50 hang issue
     [b/339262751](https://b.corp.google.com/issues/339262751)
 
+### 0.24.112 Released on 2024-08-07 in M129
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5768030)
+
+Builder
+[firmware-ti50-prepvt-15974.B-branch/1](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15974.B-branch/1/overview)
+
+Artifacts:
+[15974.2.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15974.2.0)
+
+**Features**
+
+*   Set EC UART baud rate and parity (via bitbang command or USB)
+    [b/333811294](https://b.corp.google.com/issues/333811294)
+
+```
+Build:   ti50_common_tot:v0.0.1414-fd2d8291
+         libtock-rs:v0.0.925-1213708
+         tock:v0.0.9673-2649e0509
+         ms-tpm-20-ref:v0.0.318-9942b1f
+         @chromeos-ci-firmware-us-central1-b-x32-0-zc52 2024-08-01 08:25:40
+```
+
+**Bug Fixes**
+
+*   Fix tock error 6 during CCD open
+    [b/258716147](https://b.corp.google.com/issues/258716147)
+*   Always allow update within 60s of POR
+    [b/352518342](https://b.corp.google.com/issues/352518342)
+*   Print PCR0 in ccdstate output
+    [b/329439532](https://b.corp.google.com/issues/329439532)
+*   Print AP RO verification latch state
+
 <!-- Links -->
 
 [105 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R105-14989.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
