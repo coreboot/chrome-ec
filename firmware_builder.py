@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -36,14 +35,14 @@ def build(opts):
     """
     # Write empty metrics file as there is nothing to report but recipe needs
     # the file to exist.
-    metrics = firmware_pb2.FwBuildMetricList()
-    with open(opts.metrics, "w") as f:
+    metrics = firmware_pb2.FwBuildMetricList()  # pylint: disable=no-member
+    with open(opts.metrics, "w", encoding="utf-8") as f:
         f.write(json_format.MessageToJson(metrics))
 
     cmd = [
         "make",
         "BOARD=cr50",
-        "-j{}".format(opts.cpus),
+        f"-j{opts.cpus}",
         "-C",
         "extra/usb_updater",
     ]
@@ -52,16 +51,20 @@ def build(opts):
 
 
 def bundle(opts):
+    """Bundles all of the EC targets."""
     # Provide an empty metadata file since the file is required, but we
     # don't have any artifacts that needs to be uploadeddd
     if opts.metadata:
-        metadata = firmware_pb2.FirmwareArtifactInfo()
-        with open(opts.metadata, "w") as f:
+        metadata = (
+            firmware_pb2.FirmwareArtifactInfo()  # pylint: disable=no-member
+        )
+        with open(opts.metadata, "w", encoding="utf-8") as f:
             f.write(json_format.MessageToJson(metadata))
 
 
 def test(opts):
-    pass  # Nothing to test
+    """Tests all of the EC targets."""
+    del opts  # Unused.
 
 
 def main(args):
@@ -85,6 +88,7 @@ def main(args):
 
 
 def parse_args(args):
+    """Parses command-line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument(
