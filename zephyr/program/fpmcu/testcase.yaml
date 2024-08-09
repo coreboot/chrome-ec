@@ -82,6 +82,11 @@ tests:
     - CONFIG_HW_TEST_FPSENSOR_HW=y
     extra_conf_files:
     - prj_hw_tests.conf
+  fpsensor_utils:
+    extra_configs:
+    - CONFIG_HW_TEST_FPSENSOR_UTILS=y
+    extra_conf_files:
+    - prj_hw_tests.conf
   ftrapv:
     extra_configs:
     - CONFIG_HW_TEST_FTRAPV=y
@@ -90,6 +95,11 @@ tests:
   libc_printf:
     extra_configs:
     - CONFIG_HW_TEST_LIBC_PRINTF=y
+    extra_conf_files:
+    - prj_hw_tests.conf
+  libcxx:
+    extra_configs:
+    - CONFIG_HW_TEST_LIBCXX=y
     extra_conf_files:
     - prj_hw_tests.conf
   malloc:
@@ -103,6 +113,12 @@ tests:
     extra_configs:
     - CONFIG_HW_TEST_PANIC=y
     - CONFIG_PLATFORM_EC_PANIC_STRIP_GPR=n
+    extra_conf_files:
+    - prj_hw_tests.conf
+  panic_data:
+    extra_configs:
+    - CONFIG_HW_TEST_PANIC_DATA=y
+    - CONFIG_PLATFORM_EC_DEBUG_ASSERT_REBOOTS=y
     extra_conf_files:
     - prj_hw_tests.conf
   printf:
@@ -119,6 +135,11 @@ tests:
   restricted_console:
     extra_configs:
     - CONFIG_HW_TEST_RESTRICTED_CONSOLE=y
+    extra_conf_files:
+    - prj_hw_tests.conf
+  rng_benchmark:
+    extra_configs:
+    - CONFIG_HW_TEST_RNG_BENCHMARK=y
     extra_conf_files:
     - prj_hw_tests.conf
   rollback:
@@ -148,9 +169,34 @@ tests:
     - CONFIG_HW_TEST_STATIC_IF=y
     extra_conf_files:
     - prj_hw_tests.conf
+  std_vector:
+    extra_configs:
+    - CONFIG_HW_TEST_STD_VECTOR=y
+    extra_conf_files:
+    - prj_hw_tests.conf
   system_is_locked:
     extra_configs:
     - CONFIG_HW_TEST_SYSTEM_IS_LOCKED=y
+    extra_conf_files:
+    - prj_hw_tests.conf
+  timer:
+    extra_configs:
+    - CONFIG_HW_TEST_TIMER=y
+    extra_conf_files:
+    - prj_hw_tests.conf
+  tpm_seed_clear:
+    extra_configs:
+    - CONFIG_HW_TEST_TPM_SEED_CLEAR=y
+    extra_conf_files:
+    - prj_hw_tests.conf
+  unaligned_access:
+    extra_configs:
+    - CONFIG_HW_TEST_UNALIGNED_ACCESS=y
+    extra_conf_files:
+    - prj_hw_tests.conf
+  unaligned_access_benchmark:
+    extra_configs:
+    - CONFIG_HW_TEST_UNALIGNED_ACCESS_BENCHMARK=y
     extra_conf_files:
     - prj_hw_tests.conf
   utils:

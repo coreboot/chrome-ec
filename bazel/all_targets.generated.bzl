@@ -812,6 +812,15 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "fatcat_it82002aw",
+        board = "fatcat_it82002aw",
+    )
+    ec_target(
+        name = "fatcat_npcx9m7f",
+        board = "fatcat_npcx9m7f",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "felwinter",
         baseboard = "brya",
         board = "felwinter",
@@ -1596,11 +1605,6 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
-        name = "myst",
-        board = "myst",
-        extra_modules = ["cmsis"],
-    )
-    ec_target(
         name = "naktal",
         board = "naktal",
     )
@@ -1795,6 +1799,11 @@ def all_targets():
     ec_target(
         name = "orisa",
         board = "orisa",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
+        name = "orisa_ti",
+        board = "orisa_ti",
         extra_modules = ["cmsis"],
     )
     ec_target(
@@ -2214,6 +2223,10 @@ def all_targets():
         chip = "it83xx",
         core = "nds32",
         zephyr = False,
+    )
+    ec_target(
+        name = "teliks",
+        board = "teliks",
     )
     ec_target(
         name = "tentacruel",

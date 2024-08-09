@@ -223,7 +223,6 @@ static int cmd_pdc_get_info(const struct shell *sh, size_t argc, char **argv)
 	shell_fprintf(sh, SHELL_INFO,
 		      "Live: %d\n"
 		      "FW Ver: %u.%u.%u\n"
-		      "FW Config Ver: %u\n"
 		      "PD Rev: %u\n"
 		      "PD Ver: %u\n"
 		      "VID/PID: %04x:%04x\n"
@@ -233,8 +232,8 @@ static int cmd_pdc_get_info(const struct shell *sh, size_t argc, char **argv)
 		      live, PDC_FWVER_GET_MAJOR(pdc_info.fw_version),
 		      PDC_FWVER_GET_MINOR(pdc_info.fw_version),
 		      PDC_FWVER_GET_PATCH(pdc_info.fw_version),
-		      pdc_info.fw_config_version, pdc_info.pd_revision,
-		      pdc_info.pd_version, PDC_VIDPID_GET_VID(pdc_info.vid_pid),
+		      pdc_info.pd_revision, pdc_info.pd_version,
+		      PDC_VIDPID_GET_VID(pdc_info.vid_pid),
 		      PDC_VIDPID_GET_PID(pdc_info.vid_pid),
 		      pdc_info.is_running_flash_code ? 'Y' : 'N',
 		      pdc_info.running_in_flash_bank,
@@ -609,7 +608,7 @@ static int cmd_pdc_srccaps(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-#ifdef CONFIG_USBC_PDC_TPS6699X
+#ifdef CONFIG_USBC_PDC_TPS6699X_FW_UPDATER
 /* LCOV_EXCL_START - non-shipping code */
 extern int tps_pdc_do_firmware_update(void);
 
@@ -638,7 +637,7 @@ static int cmd_pdc_fwupdate(const struct shell *sh, size_t argc, char **argv)
 	return rv;
 }
 /* LCOV_EXCL_STOP - non-shipping code */
-#endif /* defined(CONFIG_USBC_PDC_TPS6699X) */
+#endif /* defined(CONFIG_USBC_PDC_TPS6699X_FW_UPDATER) */
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
 	sub_pdc_cmds,
@@ -701,12 +700,12 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		      "Get PDC chip info via GET_LPM_PPM_INFO UCSI cmd\n"
 		      "Usage: pdc lpm_ppm_info <port>",
 		      cmd_lpm_ppm_info, 2, 0),
-#ifdef CONFIG_USBC_PDC_TPS6699X
+#ifdef CONFIG_USBC_PDC_TPS6699X_FW_UPDATER
 	SHELL_CMD_ARG(fwupdate, NULL,
 		      "Updates TPS6699x firmware\n"
 		      "Usage pdc fwupdate",
 		      cmd_pdc_fwupdate, 1, 0),
-#endif /* defined(CONFIG_USBC_PDC_TPS6699X) */
+#endif /* defined(CONFIG_USBC_PDC_TPS6699X_FW_UPDATER) */
 	SHELL_COND_CMD_ARG(IS_ENABLED(CONFIG_USBC_PDC_TRACE_MSG_CONSOLE_CMD),
 			   trace, NULL,
 			   "Dump accumulated PDC trace messages "
