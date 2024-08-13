@@ -105,7 +105,7 @@ default:
 ```
 
 where `<BOARD>` is the board you are working with
-([`dartmonkey` or `bloonchipper`][fingerprint hardware]).
+([`dartmonkey`, `bloonchipper`, or `helipilot`][fingerprint hardware]).
 
 Theoretically, it's also possible to power through J-Trace, though the
 [power pin] on J-Trace only outputs 5V, whereas the MCU runs at 3.3V and the
@@ -151,7 +151,8 @@ Waiting for client connections...
 (chroot) $ make BOARD=<BOARD> -j
 ```
 
-replacing `<BOARD>` with [`bloonchipper` or `dartmonkey`][fingerprint hardware].
+replacing `<BOARD>` with
+[`bloonchipper`, `dartmonkey`, or `helipilot`][fingerprint hardware].
 
 *   Run the [`flash_jlink.py`] script:
 
@@ -159,17 +160,33 @@ replacing `<BOARD>` with [`bloonchipper` or `dartmonkey`][fingerprint hardware].
 (chroot) $ ~/trunk/src/platform/ec/util/flash_jlink.py --board <BOARD> --image ./build/<BOARD>/ec.bin
 ```
 
-replacing `<BOARD>` with [`bloonchipper` or `dartmonkey`][fingerprint hardware].
+replacing `<BOARD>` with
+[`bloonchipper`, `dartmonkey`, or `helipilot`][fingerprint hardware].
 
 ## Using JLink gdbserver {#gdb}
 
-Start the JLink gdbserver for the appropriate MCU type:
+Start the JLink gdbserver for the appropriate MCU type and interface speed:
 
 *   Dragonclaw / [Nucleo STM32F412ZG]: `STM32F412CG`
 *   Icetower / [Nucleo STM32H743ZI]: `STM32H743ZI`
+*   Quincy / NPCX99FP: `NPCX9mnx`
+
+Dragonclaw:
 
 ```bash
 (chroot) $ JLinkGDBServerCLExe -select USB -device STM32F412CG -endian little -if SWD -speed auto -noir -noLocalhostOnly
+```
+
+Icetower:
+
+```bash
+(chroot) $ JLinkGDBServerCLExe -select USB -device STM32H743ZI -endian little -if SWD -speed auto -noir -noLocalhostOnly
+```
+
+Quincy:
+
+```bash
+(chroot) $ JLinkGDBServerCLExe -select USB -device NPCX9mnx -endian little -if SWD -speed 4000 -noir -noLocalhostOnly
 ```
 
 You should see the port that `gdbserver` is running on in the output:
@@ -236,7 +253,7 @@ Ozone is a free standalone debugger provided by Segger that works with the
 gdbserver can provide. For example, Ozone has a register mapping for the MCUs we
 use, so you can easily inspect CPU registers. It can also be automated with a
 scripting language and show code coverage when used with a [J-Trace] that is
-connected to the trace pins on a board. Note that the Dragonclaw v0.3 uses an
+connected to the trace pins on a board. Note that the Dragonclaw v4 uses an
 STM32F412 package that does not have the synchronous trace pins, but the
 [Nucleo STM32F412ZG] does have the trace pins.
 
