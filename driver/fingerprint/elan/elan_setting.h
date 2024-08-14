@@ -7,6 +7,7 @@
 #define ELAN_SETTING_H
 
 #include "common.h"
+#include "elan_misc.h"
 
 #include <stdint.h>
 
@@ -15,6 +16,10 @@
 #define PID 0x0903
 #define MID 0x01
 #define VERSION 0x100B
+
+/* The 16-bit hardware ID  */
+#define FP_SENSOR_HWID_ELAN FP_SENSOR_HWID_ELAN_80SG
+#define FP_SENSOR_HWID_ELAN_80SG 0x4f4f
 
 /**
  * Elan sensor operation is controlled by sending commands and receiving
@@ -94,7 +99,7 @@
 #define REK_TIMES 3
 
 /* Console output macros */
-#define LOGE_SA(format, args...) cprints(CC_FP, format, ##args)
+#define LOGE_SA(format, args...) elan_log_var(format, ##args)
 
 /**
  * Set ELAN fingerprint sensor register initialization
@@ -102,7 +107,7 @@
  * @return 0 on success.
  *         negative value on error.
  */
-__staticlib int register_initialization(void);
+__staticlib int elan_register_initialization(void);
 
 /**
  * To calibrate ELAN fingerprint sensor and keep the calibration results
@@ -111,6 +116,6 @@ __staticlib int register_initialization(void);
  * @return 0 on success.
  *         negative value on error.
  */
-__staticlib int calibration(void);
+__staticlib int elan_calibration(void);
 
 #endif /* _ELAN_SETTING_H */

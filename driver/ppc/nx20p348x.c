@@ -255,6 +255,14 @@ __maybe_unused static int nx20p3483_vbus_source_enable(int port, int enable)
 	if (rv)
 		return rv;
 
+	/* We want to control vbus discharge with source enable */
+	if (IS_ENABLED(CONFIG_USBC_NX20P348X_VBUS_DISCHARGE_BY_SRC_EN)) {
+		if (enable)
+			nx20p348x_discharge_vbus(port, 0);
+		else
+			nx20p348x_discharge_vbus(port, 1);
+	}
+
 	/*
 	 * Wait up to NX20P348X_SWITCH_STATUS_DEBOUNCE_MSEC for the status
 	 * to reflect the control command.
@@ -545,10 +553,9 @@ static int nx20p348x_dev_is_connected(int port, enum ppc_device_role dev)
 	/* VBUS Discharge must be off in sink mode. */
 	if (dev == PPC_DEV_SRC || dev == PPC_DEV_SNK)
 		return nx20p348x_discharge_vbus(port, 0);
-	else if (dev == PPC_DEV_DISCONNECTED)
-		return nx20p348x_discharge_vbus(port, 1);
 
-	return EC_SUCCESS;
+	/* PPC_DEV_DISCONNECTED and other possible cases */
+	return nx20p348x_discharge_vbus(port, 1);
 }
 
 const struct ppc_drv nx20p348x_drv = {
