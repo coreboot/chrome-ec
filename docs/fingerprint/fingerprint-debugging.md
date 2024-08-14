@@ -23,7 +23,7 @@ used for JTAG and SWD for ARM devices.
     this document assumes that you're using a
     [Segger J-Trace PRO for Cortex-M][J-Trace].
 *   [Dragonclaw v4 Development board][FPMCU dev board] or
-    [Icetower v0.1 Development board][FPMCU dev board].
+    [Icetower v3 Development board][FPMCU dev board].
 *   [Servo Micro].
 
 ## Software Required
@@ -77,6 +77,22 @@ Icetower v3 with 20-pin SWD (0.05" / 1.27mm) on `CORESIGHT20 DB CONN`. |
 ---------------------------------------------------------------------- |
 ![Icetower with 20-pin SWD]                                            |
 
+### Quincy v3
+
+The connector for SWD is `J4`. It is labeled with `CORESIGHT20`.
+
+<!-- mdformat off(b/139308852) -->
+*** note
+**NOTE**: `SW2` on the edge of Quincy must be set to `C-SGHT`, the `JEN#`
+switch (`SW7`) must be set low, and [`CONFIG_ENABLE_JTAG_SELECTION`] must be
+enabled for the board.
+***
+<!-- mdformat on -->
+
+Quincy v3 with 20-pin SWD (0.05" / 1.27mm) on `J4`. |
+--------------------------------------------------- |
+![Quincy with 20-pin SWD]                           |
+
 ## Powering the Board {#power}
 
 [Servo Micro] can provide both the 3.3V for the MCU and 1.8V for the sensor.
@@ -89,7 +105,7 @@ default:
 ```
 
 where `<BOARD>` is the board you are working with
-([`dartmonkey` or `bloonchipper`][fingerprint hardware]).
+([`dartmonkey`, `bloonchipper`, or `helipilot`][fingerprint hardware]).
 
 Theoretically, it's also possible to power through J-Trace, though the
 [power pin] on J-Trace only outputs 5V, whereas the MCU runs at 3.3V and the
@@ -135,7 +151,8 @@ Waiting for client connections...
 (chroot) $ make BOARD=<BOARD> -j
 ```
 
-replacing `<BOARD>` with [`bloonchipper` or `dartmonkey`][fingerprint hardware].
+replacing `<BOARD>` with
+[`bloonchipper`, `dartmonkey`, or `helipilot`][fingerprint hardware].
 
 *   Run the [`flash_jlink.py`] script:
 
@@ -143,17 +160,33 @@ replacing `<BOARD>` with [`bloonchipper` or `dartmonkey`][fingerprint hardware].
 (chroot) $ ~/trunk/src/platform/ec/util/flash_jlink.py --board <BOARD> --image ./build/<BOARD>/ec.bin
 ```
 
-replacing `<BOARD>` with [`bloonchipper` or `dartmonkey`][fingerprint hardware].
+replacing `<BOARD>` with
+[`bloonchipper`, `dartmonkey`, or `helipilot`][fingerprint hardware].
 
 ## Using JLink gdbserver {#gdb}
 
-Start the JLink gdbserver for the appropriate MCU type:
+Start the JLink gdbserver for the appropriate MCU type and interface speed:
 
 *   Dragonclaw / [Nucleo STM32F412ZG]: `STM32F412CG`
 *   Icetower / [Nucleo STM32H743ZI]: `STM32H743ZI`
+*   Quincy / NPCX99FP: `NPCX9mnx`
+
+Dragonclaw:
 
 ```bash
 (chroot) $ JLinkGDBServerCLExe -select USB -device STM32F412CG -endian little -if SWD -speed auto -noir -noLocalhostOnly
+```
+
+Icetower:
+
+```bash
+(chroot) $ JLinkGDBServerCLExe -select USB -device STM32H743ZI -endian little -if SWD -speed auto -noir -noLocalhostOnly
+```
+
+Quincy:
+
+```bash
+(chroot) $ JLinkGDBServerCLExe -select USB -device NPCX9mnx -endian little -if SWD -speed 4000 -noir -noLocalhostOnly
 ```
 
 You should see the port that `gdbserver` is running on in the output:
@@ -220,7 +253,7 @@ Ozone is a free standalone debugger provided by Segger that works with the
 gdbserver can provide. For example, Ozone has a register mapping for the MCUs we
 use, so you can easily inspect CPU registers. It can also be automated with a
 scripting language and show code coverage when used with a [J-Trace] that is
-connected to the trace pins on a board. Note that the Dragonclaw v0.3 uses an
+connected to the trace pins on a board. Note that the Dragonclaw v4 uses an
 STM32F412 package that does not have the synchronous trace pins, but the
 [Nucleo STM32F412ZG] does have the trace pins.
 
@@ -241,8 +274,10 @@ STM32F412 package that does not have the synchronous trace pins, but the
 [power pin]: https://www.segger.com/products/debug-probes/j-link/technology/interface-description/
 [fingerprint hardware]: ./fingerprint.md#hardware
 [`flash_jlink.py`]: https://chromium.googlesource.com/chromiumos/platform/ec/+/HEAD/util/flash_jlink.py
+[`CONFIG_ENABLE_JTAG_SELECTION`]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/ec/include/config.h;l=3084-3091;drc=a8b8b850ccc36b704f823094b62339662f6a7077
 
 <!-- Images -->
 
 [Dragonclaw with 20-pin SWD]: ../images/dragonclaw_v4_with_20_pin_swd.jpg
 [Icetower with 20-pin SWD]: ../images/icetower_with_20_pin_swd.jpg
+[Quincy with 20-pin SWD]: ../images/quincy_v3_with_20_pin_swd.jpg

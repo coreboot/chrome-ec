@@ -12,11 +12,6 @@
 
 #include <zephyr/drivers/gpio.h>
 
-/* TODO(b/345231373): need to check the scancodes for the following keys
- * G (Win key) : 30 (row:3, col: 0)
- * Fn          : 127(row:0, col:16)
- * right Fn(JP): 66 (row:1, col:16)
- */
 static uint16_t scancode_set2[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
 	{ 0x0000, 0x0000, 0x0000, 0xe01f, 0x0000, 0x0000, 0x0000, 0x0000 },
 	{ 0x0078, 0x0076, 0x000d, 0x000e, 0x001c, 0x0016, 0x001a, 0x003c },
@@ -33,8 +28,8 @@ static uint16_t scancode_set2[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
 	{ 0x001f, 0x0064, 0xe07d, 0x0067, 0xe069, 0xe07a, 0xe074, 0xe06b },
 	{ 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0011, 0x0000 },
 	{ 0x0000, 0x0014, 0x0000, 0xe014, 0x0000, 0x0000, 0x0000, 0x0000 },
-	{ 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0xe01f, 0x0000 },
-	{ 0x0037, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 },
+	{ 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0027, 0x0000 },
+	{ 0x0037, 0x0037, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 },
 	{ 0x0000, 0x0000, 0x006a, 0x0000, 0x0000, 0x0000, 0x005d, 0x0061 },
 };
 
@@ -53,7 +48,7 @@ void set_scancode_set2(uint8_t row, uint8_t col, uint16_t val)
 
 #ifdef CONFIG_KEYBOARD_DEBUG
 static uint8_t keycap_label[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
-	{ KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
+	{ KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_SEARC, KLLI_UNKNO,
 	  KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO },
 	{ KLLI_F11, KLLI_ESC, KLLI_TAB, '~', 'a', '1', 'z', 'u' },
 	{ KLLI_F1, KLLI_F4, KLLI_F3, KLLI_F2, 'd', ',', '3', 'i' },
@@ -77,7 +72,7 @@ static uint8_t keycap_label[KEYBOARD_COLS_MAX][KEYBOARD_ROWS] = {
 	{ KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
 	  KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO },
 	{ KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
-	  KLLI_UNKNO, KLLI_SEARC, KLLI_UNKNO },
+	  KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO },
 	{ KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,
 	  KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO },
 	{ KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO, KLLI_UNKNO,

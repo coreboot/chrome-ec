@@ -560,7 +560,7 @@ ZTEST(riven, test_touch_enable)
 ZTEST(riven, test_get_scancode_set2)
 {
 	/* Test some special keys of the customization matrix */
-	zassert_equal(get_scancode_set2(6, 15), SCANCODE_LEFT_WIN);
+	zassert_equal(get_scancode_set2(3, 0), SCANCODE_LEFT_WIN);
 	zassert_equal(get_scancode_set2(0, 12), SCANCODE_F15);
 
 	/* Test out of the matrix range */
@@ -586,7 +586,7 @@ ZTEST(riven, test_set_scancode_set2)
 
 ZTEST(riven, test_get_keycap_label)
 {
-	zassert_equal(get_keycap_label(6, 15), KLLI_SEARC);
+	zassert_equal(get_keycap_label(3, 0), KLLI_SEARC);
 	zassert_equal(get_keycap_label(0, 12), KLLI_F15);
 	zassert_equal(get_keycap_label(8, 12), KLLI_UNKNO);
 	zassert_equal(get_keycap_label(0, 18), KLLI_UNKNO);
@@ -601,4 +601,37 @@ ZTEST(riven, test_set_keycap_label)
 	zassert_equal(get_keycap_label(0, 14), KLLI_UNKNO);
 	set_keycap_label(0, 14, KLLI_F15);
 	zassert_equal(get_keycap_label(0, 14), KLLI_F15);
+}
+
+static bool keyboard_ca_fr;
+
+static int cbi_get_keyboard_type_config(enum cbi_fw_config_field_id field,
+					uint32_t *value)
+{
+	if (field != FW_KB_TYPE)
+		return -EINVAL;
+
+	*value = keyboard_ca_fr ? FW_KB_TYPE_CA_FR : FW_KB_TYPE_DEFAULT;
+	return 0;
+}
+
+ZTEST(riven, test_keyboard_type)
+{
+	uint16_t forwardslash_pipe_key = 0x0061;
+	uint16_t right_control_key = 0xe014;
+
+	cros_cbi_get_fw_config_fake.custom_fake = cbi_get_keyboard_type_config;
+	keyboard_ca_fr = false;
+	kb_init();
+	zassert_equal(get_scancode_set2(3, 14), right_control_key);
+
+	RESET_FAKE(cros_cbi_get_fw_config);
+	cros_cbi_get_fw_config_fake.return_val = EINVAL;
+	kb_init();
+	zassert_equal(get_scancode_set2(3, 14), right_control_key);
+
+	cros_cbi_get_fw_config_fake.custom_fake = cbi_get_keyboard_type_config;
+	keyboard_ca_fr = true;
+	kb_init();
+	zassert_equal(get_scancode_set2(3, 14), forwardslash_pipe_key);
 }

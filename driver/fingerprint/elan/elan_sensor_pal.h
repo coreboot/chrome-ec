@@ -75,6 +75,17 @@ int elan_spi_transaction(uint8_t *tx, int tx_len, uint8_t *rx, int rx_len);
 __staticlib_hook int elan_write_register(uint8_t regaddr, uint8_t regdata);
 
 /**
+ * @brief Read fp register data from sensor
+ *
+ * @param[in]    regaddr  One byte register address to read
+ * @param[out]   regdata  Single byte value read from register
+ *
+ * @return 0 on success.
+ *         negative value on error.
+ */
+int elan_read_register(uint8_t regaddr, uint8_t *regdata);
+
+/**
  * @brief Select sensor RAM page of register
  *
  * @param[in]   page    The number of RAM page control registers
@@ -110,7 +121,7 @@ __staticlib_hook int elan_write_reg_vector(const uint8_t *reg_table,
  * @return 0 on success.
  *         negative value on error.
  */
-__staticlib_hook int raw_capture(uint16_t *short_raw);
+__staticlib_hook int elan_raw_capture(uint16_t *short_raw);
 
 /**
  * Execute calibrate ELAN fingerprint sensor flow.
@@ -133,7 +144,7 @@ __staticlib void elan_execute_reset(void);
  * @return 0 on success.
  *         negative value on error.
  */
-__staticlib int fp_sensor_maintenance(fp_sensor_info_t *fp_sensor_info);
+__staticlib int elan_fp_sensor_maintenance(fp_sensor_info_t *fp_sensor_info);
 
 /**
  * @brief Set sensor reset state.
@@ -160,4 +171,11 @@ __staticlib_hook void elan_sensor_set_rst(bool state);
  */
 int elan_set_hv_chip(bool state);
 
+/**
+ * @brief Sleep
+ *
+ * @param[in] us    Number of microseconds to sleep.
+ * @return 0 on success, negative on error
+ */
+__staticlib_hook int elan_usleep(unsigned int us);
 #endif
