@@ -1,0 +1,9 @@
+common:
+  platform_allow: native_sim
+tests:
+  lib.stdlib:
+    extra_configs:
+    - CONFIG_TEST_LIB_STDLIB=y
+  lib.std_vector:
+    extra_configs:
+    - CONFIG_TEST_LIB_STD_VECTOR=y
