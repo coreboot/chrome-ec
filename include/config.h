@@ -3374,6 +3374,12 @@
 #undef CONFIG_LID_SWITCH_GPIO_LIST
 
 /*
+ * Lid swtich debounce timing customize.
+ * Default is 30ms.
+ */
+#define CONFIG_LID_DEBOUNCE_US (30 * MSEC)
+
+/*
  * Support for turning the lightbar power rails on briefly when the AP is off.
  * Enabling this requires implementing the board-specific lb_power() function
  * to do it (see lb_common.h).
@@ -4282,6 +4288,11 @@
  * as the means for determining the state of the flipped-360-degree mode.
  */
 #undef CONFIG_GMR_TABLET_MODE_CUSTOM
+
+/*
+ * GMR tablet mode sensor debounce time.
+ */
+#define CONFIG_GMR_SENSOR_DEBOUNCE_US (CONFIG_LID_DEBOUNCE_US + 10 * MSEC)
 
 /*
  * Add a virtual switch to indicate when detachable device has
@@ -5358,6 +5369,14 @@
  * mask for can't trigger interrupt signal.
  */
 #undef CONFIG_USBC_NX20P348X_RCP_5VSRC_MASK_ENABLE
+
+/*
+ * NX20P348x control vbus discharge with SRC_EN
+ * in case we don't have hardware logic.
+ * When SRC_EN goes low, we want to control vbus discharge earlier.
+ * It is to speed up the speed at which vbus falls to zero.
+ */
+#undef CONFIG_USBC_NX20P348X_VBUS_DISCHARGE_BY_SRC_EN
 
 /*
  * Setting SYV682X OVP to 15v power profile application

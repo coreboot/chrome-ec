@@ -1,0 +1,25 @@
+/* Copyright 2024 The ChromiumOS Authors
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+/* fatcat program common DTS includes */
+
+#include <cros/integrated_fwid.dtsi>
+
+#include "../fatcat_stub.dts"
+
+/* fatcat_npcx9m7f project DTS includes */
+
+#include <cros/cbi_flash.dtsi>
+
+/* fatcat_npcx9m7f overrides follow... */
+
+&cbi_flash {
+	/*
+	 * CBI section size is 0x1000 bytes, the CBI portion lies at the end of
+	 * EC_RO section. EC_RO section ends at 0x50000 byte which is the offset
+	 */
+	offset = <0x50000>;
+	size = <0x1000>;
+};

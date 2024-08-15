@@ -11,7 +11,7 @@ parameters that may be used, please consult the Twister documentation.
 """
 
 # [VPYTHON:BEGIN]
-# python_version: "3.8"
+# python_version: "3.11"
 # wheel: <
 #   name: "infra/python/wheels/anytree-py2_py3"
 #   version: "version:2.8.0"
@@ -66,7 +66,7 @@ parameters that may be used, please consult the Twister documentation.
 # >
 # wheel: <
 #   name: "infra/python/wheels/ruamel_yaml_clib/${vpython_platform}"
-#   version: "version:0.2.6"
+#   version: "version:0.2.8"
 # >
 # wheel: <
 #   name: "infra/python/wheels/ruamel_yaml-py3"
@@ -110,6 +110,7 @@ EC_TEST_PATHS = [
 # Paths under ZEPHYR_BASE that we also wish to search for test cases.
 ZEPHYR_TEST_PATHS = [
     Path("tests/drivers/counter/counter_basic_api"),
+    Path("tests/drivers/entropy"),
     Path("tests/drivers/flash/stm32"),
     Path("tests/drivers/fuel_gauge/sbs_gauge"),
     Path("tests/drivers/gpio"),
@@ -139,9 +140,9 @@ def find_checkout() -> Path:
 def find_paths():
     """Find EC base, Zephyr base, and Zephyr modules paths and return as a 3-tuple."""
 
-    # Determine where the source tree is checked out. Will be None if operating outside
-    # of the chroot (e.g. Gitlab builds). In this case, additional paths need to be
-    # passed in through environment variables.
+    # Determine where the source tree is checked out. Will be None if operating
+    # outside of the chroot. In this case, additional paths need to be passed in
+    # through environment variables.
     cros_checkout = find_checkout()
 
     if cros_checkout:

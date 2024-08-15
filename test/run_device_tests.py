@@ -429,6 +429,10 @@ class AllTests:
             TestConfig(test_name="sbrk", imagetype_to_use=ImageType.RO),
             TestConfig(test_name="sha256"),
             TestConfig(test_name="sha256_unrolled"),
+            TestConfig(
+                test_name="sram_mpu_protection",
+                exclude_boards=[BLOONCHIPPER, DARTMONKEY],
+            ),
             TestConfig(test_name="static_if"),
             TestConfig(test_name="stdlib"),
             TestConfig(test_name="std_vector"),
@@ -453,7 +457,8 @@ class AllTests:
             # and it is verified by the kernel.poll test.
             TestConfig(test_name="timer_dos", skip_for_zephyr=True),
             TestConfig(test_name="tpm_seed_clear"),
-            TestConfig(test_name="uart"),
+            # UART buffering is not used with Zephyr.
+            TestConfig(test_name="uart", skip_for_zephyr=True),
             TestConfig(test_name="unaligned_access"),
             TestConfig(test_name="unaligned_access_benchmark"),
             TestConfig(test_name="utils", timeout_secs=25),
@@ -545,6 +550,10 @@ class AllTests:
         """Return Zephyr upstream test configs."""
         # Make sure proper paths are added in the twister script, see ZEPHYR_TEST_PATHS
         tests = [
+            TestConfig(
+                zephyr_name="drivers.entropy",
+                test_name="zephyr_drivers_entropy",
+            ),
             TestConfig(
                 zephyr_name="drivers.flash.stm32.f4",
                 test_name="zephyr_flash_stm32f4",
@@ -1246,6 +1255,9 @@ def flash_and_run_test(
             )
             return False
 
+    # Get the console file before flashing to listen ASAP after flashing.
+    console_pty = get_console(board_config)
+
     # flash test binary
     # TODO(b/158327221): First attempt to flash fails after
     #  flash_write_protect test is run; works after second attempt.
@@ -1274,7 +1286,7 @@ def flash_and_run_test(
             )
         else:
             # pylint: disable-next=consider-using-with
-            console_file = open(get_console(board_config), "wb+", buffering=0)
+            console_file = open(console_pty, "wb+", buffering=0)
             console = stack.enter_context(console_file)
 
         hw_write_protect(test.enable_hw_write_protect)

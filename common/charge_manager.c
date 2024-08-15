@@ -40,6 +40,8 @@
 #error Mock defined HAS_MOCK_CHARGE_MANAGER
 #endif
 
+#line 44
+
 #define CPRINTS(format, args...) cprints(CC_USBCHARGE, format, ##args)
 
 #define POWER(charge_port) ((charge_port.current) * (charge_port.voltage))
@@ -1246,8 +1248,9 @@ void typec_set_input_current_limit(int port, typec_current_t max_ma,
 						     NULL);
 }
 
-void charge_manager_update_charge(int supplier, int port,
-				  const struct charge_port_info *charge)
+test_mockable void
+charge_manager_update_charge(int supplier, int port,
+			     const struct charge_port_info *charge)
 {
 	struct charge_port_info zero = { 0 };
 	if (!charge)
