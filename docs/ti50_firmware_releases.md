@@ -8,7 +8,8 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.101       | 0.23.101
+[ToT][ToT ebuild]   | 0.24.112       | 0.23.112
+[M128][128 release] | 0.24.101       | 0.23.101
 [M127][127 release] | 0.24.101       | 0.23.101
 [M126][126 release] | 0.24.90        | 0.23.90
 [M125][125 release] | 0.24.81        | 0.23.81
@@ -108,6 +109,12 @@ Released with RW 0.24.81
 
 *   Updated header enforcing post personalization fuse settings.
     [b/181261702](https://buganizer.corp.google.com/issues/181261702)
+
+## 0.0.58 released on 08/16/2024 in M129
+
+Released with RW 0.24.112 and 0.23.112
+
+*   New dev image keys
 
 # RW revisions
 
@@ -783,6 +790,39 @@ Build:   ti50_common_mp-15224.B:v0.0.1203-81f5f518
 *   fix ti50 hang issue
     [b/339262751](https://b.corp.google.com/issues/339262751)
 
+### 0.23.112 Released on 2024-08-16 in M129
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5793447)
+
+Builder
+[firmware-ti50-mp-15980.B-branch/7](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15980.B-branch/7/overview)
+
+Artifacts:
+[15980.5.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/canary-channel/betty/15980.5.0)
+
+**Features**
+
+*   Set EC UART baud rate and parity (via bitbang command or USB)
+    [b/333811294](https://b.corp.google.com/issues/333811294)
+
+```
+Build:   ti50_common_mp-15980.B:v0.0.0-2b632158
+         libtock-rs:v0.0.925-1213708
+         tock:v0.0.9673-2649e0509
+         ms-tpm-20-ref:v0.0.318-9942b1f
+         @chromeos-ci-firmware-us-east1-d-x32-0-1kpj 2024-08-09 10:21:30
+```
+
+**Bug Fixes**
+
+*   Fix tock error 6 during CCD open
+    [b/258716147](https://b.corp.google.com/issues/258716147)
+*   Always allow update within 60s of POR
+    [b/352518342](https://b.corp.google.com/issues/352518342)
+*   Print PCR0 in ccdstate output
+    [b/329439532](https://b.corp.google.com/issues/329439532)
+*   Print AP RO verification latch state
 
 ## PrePVT images
 
@@ -1792,4 +1832,5 @@ Build:   ti50_common_tot:v0.0.1414-fd2d8291
 [125 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R125-15853.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [126 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R126-15886.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [127 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R127-15917.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[128 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R128-15964.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [ToT ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
