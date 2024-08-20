@@ -5254,40 +5254,39 @@ int main(int argc, char *argv[])
 			 * device type is not set - start with H1.
 			 */
 			pid = (gsc_dev == GSC_DEVICE_DT) ? D2_PID : H1_PID;
+		}
+		if (usb_findit(serial, vid, pid, subclass, protocol, &td.uep)) {
+			/*
+			 * If a certain device was requested and has
+			 * not been found - exit.
+			 */
+			if (gsc_dev != GSC_DEVICE_ANY)
+				exit(update_error);
+			/*
+			 * Try Dauntless, as the only way to get here
+			 * is when a particular device was not
+			 * requested and we tried H1 first.
+			 */
+			pid = D2_PID;
 			if (usb_findit(serial, vid, pid, subclass, protocol,
-				       &td.uep)) {
-				/*
-				 * If a certain device was requested and has
-				 * not been found - exit.
-				 */
-				if (gsc_dev != GSC_DEVICE_ANY)
-					exit(update_error);
-				/*
-				 * Try Dauntless, as the only way to get here
-				 * is when a particular device was not
-				 * requested and we tried H1 first.
-				 */
-				pid = D2_PID;
-				if (usb_findit(serial, vid, pid, subclass,
-					       protocol, &td.uep))
-					exit(update_error);
+				       &td.uep))
+				exit(update_error);
+			gsc_dev = GSC_DEVICE_DT;
+		}
+		/* Make sure device type is set. */
+		if (gsc_dev == GSC_DEVICE_ANY) {
+			switch (pid) {
+			case D2_PID:
 				gsc_dev = GSC_DEVICE_DT;
-			}
-			/* Make sure device type is set. */
-			if (gsc_dev == GSC_DEVICE_ANY) {
-				switch (pid) {
-				case D2_PID:
-					gsc_dev = GSC_DEVICE_DT;
-					break;
-				case H1_PID:
-					gsc_dev = GSC_DEVICE_H1;
-					break;
-				default:
-					fprintf(stderr,
-						"EROOR: Unsupported USB PID %04x\n",
-						pid);
-					exit(update_error);
-				}
+				break;
+			case H1_PID:
+				gsc_dev = GSC_DEVICE_H1;
+				break;
+			default:
+				fprintf(stderr,
+					"EROOR: Unsupported USB PID %04x\n",
+					pid);
+				exit(update_error);
 			}
 		}
 	} else if (td.ep_type == dev_xfer) {
