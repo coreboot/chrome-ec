@@ -2,7 +2,6 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include "ap_ro_board_id_blocklist.h"
 #include "ap_ro_integrity_check.h"
 #include "board_id.h"
 #include "ccd_config.h"
@@ -780,51 +779,6 @@ static void  check_board_id_mismatch(void)
 }
 
 /*****************************************************************************/
-#define AP_RO_ALLOW_BID 1
-#define AP_RO_BLOCK_BID 2
-
-int ap_ro_board_id_blocked(void)
-{
-	static int checked_ap_ro_bid;
-	struct board_id id;
-	int i;
-
-	/*
-	 * Don't allow ap ro verification if the image board id is mismatched.
-	 * This ensures the device can boot to get an update.
-	 */
-	if (board_id_is_mismatched())
-		return 1;
-
-	if (checked_ap_ro_bid)
-		return checked_ap_ro_bid == AP_RO_BLOCK_BID;
-
-	/*
-	 * If cr50 can't read the board id for some reason, return 1 just to
-	 * be safe.
-	 */
-	if (read_board_id(&id) != EC_SUCCESS) {
-		CPRINTS("%s: BID read error", __func__);
-		return 1;
-	}
-
-	if (board_id_is_blank(&id))
-		return 0;
-
-	/*
-	 * Cache the board id block state, so cr50 doesn't need to keep reading
-	 * and checking the RLZ. The board id can't change if it's already set.
-	 */
-	checked_ap_ro_bid = AP_RO_ALLOW_BID;
-	for (i = 0; i < ARRAY_SIZE(ap_ro_board_id_blocklist); i++) {
-		if (id.type == ap_ro_board_id_blocklist[i]) {
-			checked_ap_ro_bid = AP_RO_BLOCK_BID;
-			break;
-		}
-	}
-	return checked_ap_ro_bid == AP_RO_BLOCK_BID;
-}
-/*****************************************************************************/
 
 /*
  * Check if ITE SYNC sequence generation was requested before the reset, if so
@@ -1228,10 +1182,6 @@ static void key_combo0_irq(void)
 		hook_call_deferred(&board_reboot_ec_data, 0);
 	}
 
-#ifdef CONFIG_AP_RO_VERIFICATION
-	ap_ro_clear_ec_rst_override();
-#endif
-
 	CPRINTS("Recovery Requested");
 }
 DECLARE_IRQ(GC_IRQNUM_RBOX0_INTR_BUTTON_COMBO0_RDY_INT, key_combo0_irq, 0);
@@ -1347,14 +1297,6 @@ void assert_ec_rst(void)
 
 void deassert_ec_rst(void)
 {
-#ifdef CONFIG_AP_RO_VERIFICATION
-	if (ec_rst_override()) {
-		ccprintf("EC un-reset blocked, try powercycle or Cr50 reboot."
-			 "\n");
-		return;
-	}
-#endif /* CONFIG_AP_RO_VERIFICATION */
-
 	wait_ec_rst(0);
 
 	if (uart_bitbang_is_enabled())
