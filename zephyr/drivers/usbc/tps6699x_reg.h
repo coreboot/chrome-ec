@@ -320,7 +320,7 @@ enum command_task {
 	/*Auto Negotiate Sink Update */
 	COMMAND_TASK_ANEG,
 	/* Clear Dead Battery Flag */
-	COMMAND_TASK_DBFG,
+	COMMAND_TASK_DBFG = 0x67664244,
 	/* Error handling for I2C3m transactions */
 	COMMAND_TASK_MUXR,
 	/* Trigger an Input GPIO Event */
@@ -486,7 +486,7 @@ union reg_interrupt {
 		uint8_t sink_transition_completeed : 1;
 		uint8_t plug_early_notification : 1;
 		uint8_t prochot_notification : 1;
-		uint8_t reserved10 : 1;
+		uint8_t ucsi_connector_status_change_notification : 1;
 		uint8_t unable_to_source_error : 1;
 		uint8_t reserved11 : 1;
 
