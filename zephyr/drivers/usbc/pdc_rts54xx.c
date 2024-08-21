@@ -1257,9 +1257,6 @@ static void st_read_run(void *o)
 				<< 8 |
 			data->rd_buf[RTS54XX_GET_IC_STATUS_FWVER_PATCH_OFFSET];
 
-		/* The Realtek PDC does not currently provide this. */
-		info->fw_config_version = 0;
-
 		/* Realtek VID PID: Data Byte9..12 (little-endian) */
 		info->vid_pid =
 			data->rd_buf[RTS54XX_GET_IC_STATUS_VID_H] << 24 |
@@ -2041,7 +2038,7 @@ static int rts54_get_rdo(const struct device *dev, uint32_t *rdo)
 
 static int rts54_get_pdos(const struct device *dev, enum pdo_type_t pdo_type,
 			  enum pdo_offset_t pdo_offset, uint8_t num_pdos,
-			  bool port_partner_pdo, uint32_t *pdos)
+			  enum pdo_source_t source, uint32_t *pdos)
 {
 	struct pdc_data_t *data = dev->data;
 	uint8_t byte4;
@@ -2054,8 +2051,7 @@ static int rts54_get_pdos(const struct device *dev, enum pdo_type_t pdo_type,
 		return -EINVAL;
 	}
 
-	byte4 = (num_pdos << 5) | (pdo_offset << 2) | (port_partner_pdo << 1) |
-		pdo_type;
+	byte4 = (num_pdos << 5) | (pdo_offset << 2) | (source << 1) | pdo_type;
 
 	memset((uint8_t *)pdos, 0, sizeof(uint32_t) * num_pdos);
 

@@ -129,6 +129,22 @@ enum px_ext_vbus_sw {
 };
 
 /**
+ * @brief Chip operating modes
+ */
+enum tps_mode {
+	/** Chip is booting */
+	REG_MODE_BOOT = 0x544f4f42,
+	/** Firmware update / both banks corrupted */
+	REG_MODE_F211 = 0x31313246,
+	/** Flash code running pre-appconfig */
+	REG_MODE_APP0 = 0x30505041,
+	/** Flash code running post-appconfig */
+	REG_MODE_APP1 = 0x31505041,
+	/** Flash code is waiting for power */
+	REG_MODE_WTPR = 0x52505457,
+};
+
+/**
  * @brief 4.1 Vendor ID Register (Offset = 0x00)
  *
  * Intel-assigned Thunderbolt Vendor ID
@@ -237,8 +253,7 @@ union reg_customer_use {
 		 * The first byte is a version code, set using the firmware
 		 * config tool.
 		 */
-		uint8_t fw_config_version;
-		uint8_t data[7];
+		uint8_t data[8];
 	} __packed;
 	uint8_t raw_value[10];
 };
@@ -305,7 +320,7 @@ enum command_task {
 	/*Auto Negotiate Sink Update */
 	COMMAND_TASK_ANEG,
 	/* Clear Dead Battery Flag */
-	COMMAND_TASK_DBFG,
+	COMMAND_TASK_DBFG = 0x67664244,
 	/* Error handling for I2C3m transactions */
 	COMMAND_TASK_MUXR,
 	/* Trigger an Input GPIO Event */
@@ -471,7 +486,7 @@ union reg_interrupt {
 		uint8_t sink_transition_completeed : 1;
 		uint8_t plug_early_notification : 1;
 		uint8_t prochot_notification : 1;
-		uint8_t reserved10 : 1;
+		uint8_t ucsi_connector_status_change_notification : 1;
 		uint8_t unable_to_source_error : 1;
 		uint8_t reserved11 : 1;
 

@@ -115,6 +115,12 @@ tests:
     - CONFIG_PLATFORM_EC_PANIC_STRIP_GPR=n
     extra_conf_files:
     - prj_hw_tests.conf
+  panic_data:
+    extra_configs:
+    - CONFIG_HW_TEST_PANIC_DATA=y
+    - CONFIG_PLATFORM_EC_DEBUG_ASSERT_REBOOTS=y
+    extra_conf_files:
+    - prj_hw_tests.conf
   printf:
     extra_configs:
     - CONFIG_HW_TEST_PRINTF=y
@@ -144,6 +150,13 @@ tests:
   rollback_entropy:
     extra_configs:
     - CONFIG_HW_TEST_ROLLBACK_ENTROPY=y
+    # Added to reduce RO flash usage
+    - CONFIG_PM=n
+    extra_conf_files:
+    - prj_hw_tests.conf
+  sbrk:
+    extra_configs:
+    - CONFIG_HW_TEST_SBRK=y
     # Added to reduce RO flash usage
     - CONFIG_PM=n
     extra_conf_files:

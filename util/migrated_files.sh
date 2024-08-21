@@ -30,6 +30,7 @@ test/ftrapv.c
 test/libc_printf.c
 test/libcxx.cc
 test/malloc.c
+test/panic_data.c
 test/panic.c
 test/printf.c
 test/queue.c
@@ -37,6 +38,7 @@ test/restricted_console.c
 test/rng_benchmark.cc
 test/rollback.c
 test/rollback_entropy.c
+test/sbrk.c
 test/sha256.c
 test/static_if.c
 test/std_vector.cc

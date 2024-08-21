@@ -11,7 +11,7 @@ parameters that may be used, please consult the Twister documentation.
 """
 
 # [VPYTHON:BEGIN]
-# python_version: "3.8"
+# python_version: "3.11"
 # wheel: <
 #   name: "infra/python/wheels/anytree-py2_py3"
 #   version: "version:2.8.0"
@@ -66,7 +66,7 @@ parameters that may be used, please consult the Twister documentation.
 # >
 # wheel: <
 #   name: "infra/python/wheels/ruamel_yaml_clib/${vpython_platform}"
-#   version: "version:0.2.6"
+#   version: "version:0.2.8"
 # >
 # wheel: <
 #   name: "infra/python/wheels/ruamel_yaml-py3"
@@ -79,6 +79,18 @@ parameters that may be used, please consult the Twister documentation.
 # wheel: <
 #   name: "infra/python/wheels/west-py3"
 #   version: "version:0.14.0"
+# >
+# wheel: <
+#   name: "infra/python/wheels/pytest-py3"
+#   version: "version:7.3.1"
+# >
+# wheel: <
+#   name: "infra/python/wheels/iniconfig-py3"
+#   version: "version:1.1.1"
+# >
+# wheel: <
+#   name: "infra/python/wheels/pluggy-py3"
+#   version: "version:0.13.1"
 # >
 # [VPYTHON:END]
 

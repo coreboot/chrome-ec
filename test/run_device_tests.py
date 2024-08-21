@@ -889,6 +889,7 @@ def build_zephyr_upstream(test_name: str, board_name: str) -> List[str]:
     cmd = cmd + ["-p"] + [board_name]
     cmd = cmd + ["-O"] + [ZEPHYR_TWISTER_BUILD_DIR]
     cmd = cmd + ["-s"] + [test_name]
+    cmd = cmd + ["--no-upload-cros-rdb"]
 
     return cmd
 
@@ -1255,6 +1256,9 @@ def flash_and_run_test(
             )
             return False
 
+    # Get the console file before flashing to listen ASAP after flashing.
+    console_pty = get_console(board_config)
+
     # flash test binary
     # TODO(b/158327221): First attempt to flash fails after
     #  flash_write_protect test is run; works after second attempt.
@@ -1283,7 +1287,7 @@ def flash_and_run_test(
             )
         else:
             # pylint: disable-next=consider-using-with
-            console_file = open(get_console(board_config), "wb+", buffering=0)
+            console_file = open(console_pty, "wb+", buffering=0)
             console = stack.enter_context(console_file)
 
         hw_write_protect(test.enable_hw_write_protect)

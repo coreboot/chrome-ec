@@ -63,6 +63,10 @@
 		pen_fault_od {
 			gpios = <&gpiof 3 GPIO_INPUT>;
 		};
+		ec_batt_pres_odl: ec_batt_pres_odl {
+			gpios = <&gpioe 0 GPIO_INPUT>;
+			enum-name = "GPIO_BATT_PRES_ODL";
+		};
 	};
 
 	/*
@@ -109,9 +113,11 @@
 					"cros-ec,motionsense-sensor-config";
 				ec-s0 {
 					odr = <(10000 | ROUND_UP_FLAG)>;
+					ec-rate = <(100 * USEC_PER_MSEC)>;
 				};
 				ec-s3 {
 					odr = <(10000 | ROUND_UP_FLAG)>;
+					ec-rate = <0>;
 				};
 			};
 		};
@@ -132,9 +138,11 @@
 					"cros-ec,motionsense-sensor-config";
 				ec-s0 {
 					odr = <(10000 | ROUND_UP_FLAG)>;
+					ec-rate = <(100 * USEC_PER_MSEC)>;
 				};
 				ec-s3 {
 					odr = <(10000 | ROUND_UP_FLAG)>;
+					ec-rate = <0>;
 				};
 			};
 		};
@@ -161,7 +169,10 @@
 		 * list of GPIO interrupts that have to
 		 * be enabled at initial stage
 		 */
-		sensor-irqs = <&int_base_imu &int_lid_imu>;
+		/delete-property/ sensor-irqs;
+
+		/* list of sensors in force mode */
+		accel-force-mode-sensors = <&lid_accel &base_accel>;
 	};
 
 	/* Rotation matrix used by drivers. */
@@ -223,12 +234,12 @@
 
 				color-0 {
 					led-color = "LED_WHITE";
-					period-ms = <3000>;
+					period-ms = <500>;
 				};
 
 				color-1 {
 					led-color = "LED_OFF";
-					period-ms = <500>;
+					period-ms = <2500>;
 				};
 			};
 		};
@@ -246,8 +257,8 @@
 
 		bat-state1-charge {
 			charge-state = "LED_PWRS_CHARGE";
-			/* Battery display percent range (>= 0, <= 96%) */
-			batt-lvl = <BATTERY_LEVEL_EMPTY 96>;
+			/* Battery display percent range (>= 0, <= 89%) */
+			batt-lvl = <BATTERY_LEVEL_EMPTY 89>;
 
 			battery-led {
 				led-id = "EC_LED_ID_BATTERY_LED";
@@ -259,8 +270,8 @@
 
 		bat-state2-charge {
 			charge-state = "LED_PWRS_CHARGE";
-			/* Battery display percent range (>= 97, <= 100) */
-			batt-lvl = <97 100>;
+			/* Battery display percent range (>= 90, <= 100) */
+			batt-lvl = <90 100>;
 
 			battery-led {
 				led-id = "EC_LED_ID_BATTERY_LED";

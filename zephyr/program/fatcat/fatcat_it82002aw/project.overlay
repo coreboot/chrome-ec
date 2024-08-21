@@ -1,0 +1,23 @@
+/* Copyright 2024 The ChromiumOS Authors
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+/* fatcat program common DTS includes */
+
+#include <cros/integrated_fwid.dtsi>
+
+#include "../fatcat_stub.dts"
+
+/* fatcat_it82002aw project DTS includes */
+
+#include "console.dtsi"
+
+#include "adc.dtsi"
+#include "i2c.dtsi"
+
+/* these need to be promoted to program.conf */
+
+#include "binman.dtsi"
+
+/* fatcat_it82002aw overrides follow... */

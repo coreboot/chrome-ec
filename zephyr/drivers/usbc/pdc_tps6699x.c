@@ -8,6 +8,7 @@
  */
 
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <zephyr/devicetree.h>
@@ -49,6 +50,12 @@ LOG_MODULE_REGISTER(tps6699x, CONFIG_USBC_LOG_LEVEL);
 /* TODO: b/323371550 */
 BUILD_ASSERT(NUM_PDC_TPS6699X_PORTS <= 2,
 	     "tps6699x driver supports a maximum of 2 ports");
+
+/* Make sure pdc_info_t::project_name has enough space for the config identifier
+ * string stored in the customer-use register plus a NUL-terminator byte.
+ */
+BUILD_ASSERT(sizeof(((union reg_customer_use *)0)->data) + 1 <=
+	     sizeof(((struct pdc_info_t *)0)->project_name));
 
 /**
  * @brief PDC commands
@@ -108,6 +115,8 @@ enum cmd_t {
 	CMD_GET_PCH_DATA_STATUS,
 	/** CMD_SET_DRP_MODE */
 	CMD_SET_DRP_MODE,
+	/** CMD_RAW_UCSI */
+	CMD_RAW_UCSI,
 };
 
 /**
@@ -193,7 +202,7 @@ struct pdc_data_t {
 	/** PDOS */
 	uint32_t *pdos;
 	/** Port Partner PDO */
-	bool port_partner_pdo;
+	enum pdo_source_t pdo_source;
 	/** CCOM */
 	enum ccom_t ccom;
 	/** PDR */
@@ -208,12 +217,20 @@ struct pdc_data_t {
 	struct k_mutex mtx;
 	/** Vendor command to send */
 	enum cmd_t cmd;
+	/** UCSI command valid in |task_wait| state or 0 if vendor cmd */
+	enum ucsi_command_t running_ucsi_cmd;
 	/* VDO request list */
 	enum vdo_type_t vdo_req_list[8];
 	/* Request VDO */
 	union get_vdo_t vdo_req;
 	/* PDC event: Interrupt or Command */
 	struct k_event pdc_event;
+	/* Should use cached connector status change bits */
+	bool use_cached_conn_status_change;
+	/* Cached connector status for this connector. */
+	union connector_status_t cached_conn_status;
+	/* Raw UCSI data to send. */
+	union reg_data raw_ucsi_cmd_data;
 };
 
 /**
@@ -244,8 +261,10 @@ static void cmd_get_identity_discovery(struct pdc_data_t *data);
 static void cmd_get_pdc_data_status_reg(struct pdc_data_t *data);
 static void task_gaid(struct pdc_data_t *data);
 static void task_srdy(struct pdc_data_t *data);
+static void task_dbfg(struct pdc_data_t *data);
 static void task_ucsi(struct pdc_data_t *data,
 		      enum ucsi_command_t ucsi_command);
+static void task_raw_ucsi(struct pdc_data_t *data);
 
 /**
  * @brief PDC port data used in interrupt handler
@@ -368,6 +387,12 @@ static void st_irq_run(void *o)
 		 * that an interrupt occurred */
 		data->cci_event.vendor_defined_indicator = 1;
 
+		/* If a UCSI event is seen, stop using the cached connector
+		 * status change bits and re-read from PDC. */
+		if (pdc_interrupt.ucsi_connector_status_change_notification) {
+			data->use_cached_conn_status_change = false;
+		}
+
 		/* TODO(b/345783692): Handle other interrupt bits. */
 
 		/* Clear the pending interrupt events */
@@ -453,6 +478,9 @@ static void st_idle_entry(void *o)
 	if (!k_event_test(&data->pdc_event, PDC_CMD_EVENT)) {
 		data->cmd = CMD_NONE;
 	}
+
+	/* Reset running ucsi command back to invalid. */
+	data->running_ucsi_cmd = 0;
 }
 
 static void st_idle_run(void *o)
@@ -572,6 +600,9 @@ static void st_idle_run(void *o)
 			break;
 		case CMD_GET_PCH_DATA_STATUS:
 			cmd_get_pdc_data_status_reg(data);
+			break;
+		case CMD_RAW_UCSI:
+			task_raw_ucsi(data);
 		}
 	}
 }
@@ -963,8 +994,9 @@ static int cmd_get_ic_status_sync_internal(const struct i2c_dt_spec *i2c,
 {
 	union reg_version version;
 	union reg_tx_identity tx_identity;
-	int rv;
 	union reg_customer_use customer_val;
+	union reg_mode mode_reg;
+	int rv;
 
 	if (info == NULL) {
 		return -EINVAL;
@@ -988,14 +1020,19 @@ static int cmd_get_ic_status_sync_internal(const struct i2c_dt_spec *i2c,
 		return rv;
 	}
 
-	/* TI Is running flash code */
-	info->is_running_flash_code = 1;
+	rv = tps_rd_mode(i2c, &mode_reg);
+	if (rv) {
+		LOG_ERR("Failed to read mode");
+		return rv;
+	}
+
+	uint32_t mode = *(uint32_t *)mode_reg.data;
+
+	info->is_running_flash_code =
+		(mode == REG_MODE_APP0 || mode == REG_MODE_APP1);
 
 	/* TI FW main version */
 	info->fw_version = version.version;
-
-	/* FW config version for this FW version */
-	info->fw_config_version = customer_val.fw_config_version;
 
 	/* TI VID PID (little-endian) */
 	info->vid_pid = (*(uint16_t *)tx_identity.vendor_id) << 16 |
@@ -1009,6 +1046,19 @@ static int cmd_get_ic_status_sync_internal(const struct i2c_dt_spec *i2c,
 
 	/* TI PD Version (big-endian) */
 	info->pd_version = 0x0000;
+
+	if (memcmp(customer_val.data, "GOOG", strlen("GOOG")) == 0) {
+		/* Using the unified config identifier scheme */
+		memcpy(info->project_name, customer_val.data,
+		       sizeof(customer_val.data));
+		info->project_name[sizeof(customer_val.data)] = '\0';
+	} else {
+		/* Old scheme of incrementing an integer in the customer use
+		 * reg. Convert to an ASCII string.
+		 */
+		snprintf(info->project_name, sizeof(info->project_name), "TI%d",
+			 customer_val.data[0]);
+	}
 
 	return 0;
 }
@@ -1196,11 +1246,29 @@ error_recovery:
 	set_state(data, ST_ERROR_RECOVERY);
 }
 
+static void task_dbfg(struct pdc_data_t *data)
+{
+	struct pdc_config_t const *cfg = data->dev->config;
+	int rv;
+
+	rv = write_task_cmd(cfg, COMMAND_TASK_DBFG, NULL);
+	if (rv) {
+		set_state(data, ST_ERROR_RECOVERY);
+		return;
+	}
+
+	set_state(data, ST_TASK_WAIT);
+	return;
+}
+
 static void task_ucsi(struct pdc_data_t *data, enum ucsi_command_t ucsi_command)
 {
 	struct pdc_config_t const *cfg = data->dev->config;
 	union reg_data cmd_data;
 	int rv;
+
+	/* Set the currently running UCSI command. */
+	data->running_ucsi_cmd = ucsi_command;
 
 	memset(cmd_data.data, 0, sizeof(cmd_data.data));
 	/* Byte 0: UCSI Command Code */
@@ -1220,7 +1288,7 @@ static void task_ucsi(struct pdc_data_t *data, enum ucsi_command_t ucsi_command)
 		break;
 	case CMD_GET_PDOS:
 		/* Partner PDO: Byte 2, bits 7 */
-		cmd_data.data[2] |= (data->port_partner_pdo << 7);
+		cmd_data.data[2] |= (data->pdo_source << 7);
 		/* PDO Offset: Byte 3, bits 7:0 */
 		cmd_data.data[3] = data->pdo_offset;
 		/* Number of PDOs: Byte 4, bits 1:0 */
@@ -1267,6 +1335,21 @@ static void task_ucsi(struct pdc_data_t *data, enum ucsi_command_t ucsi_command)
 		set_state(data, ST_ERROR_RECOVERY);
 		return;
 	}
+
+	/* Transition to wait state */
+	set_state(data, ST_TASK_WAIT);
+	return;
+}
+
+static void task_raw_ucsi(struct pdc_data_t *data)
+{
+	struct pdc_config_t const *cfg = data->dev->config;
+	int rv;
+
+	/* Byte 0 of |union reg_data.data| is the ucsi command. */
+	data->running_ucsi_cmd = data->raw_ucsi_cmd_data.data[0];
+
+	rv = write_task_cmd(cfg, COMMAND_TASK_UCSI, &data->raw_ucsi_cmd_data);
 
 	/* Transition to wait state */
 	set_state(data, ST_TASK_WAIT);
@@ -1331,25 +1414,57 @@ static void st_task_wait_run(void *o)
 		data->cci_event.error = 1;
 	}
 
-	switch (data->cmd) {
-	case CMD_GET_CONNECTOR_CAPABILITY:
+	switch (data->running_ucsi_cmd) {
+	case UCSI_GET_CAPABILITY:
+		offset = 1;
+		len = sizeof(struct capability_t);
+		break;
+	case UCSI_GET_CONNECTOR_CAPABILITY:
 		offset = 1;
 		len = sizeof(union connector_capability_t);
 		break;
-	case CMD_GET_CONNECTOR_STATUS:
+	case UCSI_GET_CONNECTOR_STATUS:
 		offset = 1;
 		len = sizeof(union connector_status_t);
-		/* TODO(b/345783692): Cache result */
+		if (((union connector_status_t *)&cmd_data.data[offset])
+			    ->conn_partner_type == DEBUG_ACCESSORY_ATTACHED) {
+			union reg_status pdc_status;
+			rv = tps_rd_status(&cfg->i2c, &pdc_status);
+			if (!rv) {
+				((union connector_status_t *)&cmd_data
+					 .data[offset])
+					->conn_partner_type =
+					(pdc_status.data_role ? UFP_ATTACHED :
+								DFP_ATTACHED);
+			}
+		}
+
+		/* If we had previously cached the connection status change,
+		 * append those bits in GET_CONNECTOR_STATUS. The PDC clears
+		 * these after the first read but we want these to be visible
+		 * until they are ACK-ed.
+		 */
+		if (data->use_cached_conn_status_change) {
+			*((uint16_t *)&cmd_data.data[offset]) |=
+				data->cached_conn_status
+					.raw_conn_status_change_bits;
+		}
+
+		/* Cache result of GET_CONNECTOR_STATUS and use this for
+		 * subsequent calls.
+		 */
+		memcpy(&data->cached_conn_status, &cmd_data.data[offset], len);
+		data->use_cached_conn_status_change = true;
 		break;
-	case CMD_GET_CABLE_PROPERTY:
+	case UCSI_GET_CABLE_PROPERTY:
 		offset = 1;
 		len = sizeof(union cable_property_t);
 		break;
-	case CMD_GET_ERROR_STATUS:
+	case UCSI_GET_ERROR_STATUS:
 		offset = 2;
 		len = cmd_data.data[1];
 		break;
-	case CMD_GET_PDOS: {
+	case UCSI_GET_PDOS: {
 		len = cmd_data.data[1];
 		offset = 2;
 		break;
@@ -1368,6 +1483,8 @@ static void st_task_wait_run(void *o)
 		}
 	}
 
+	/* Set cci.data_len. This will be zero if no data is available. */
+	data->cci_event.data_len = len;
 	/* Command has completed */
 	data->cci_event.command_completed = 1;
 	/* Inform the system of the event */
@@ -1397,14 +1514,22 @@ static const struct smf_state states[] = {
 					  NULL, NULL, NULL),
 };
 
-static int tps_post_command(const struct device *dev, enum cmd_t cmd,
-			    void *user_buf)
+static int tps_post_command_with_callback(const struct device *dev,
+					  enum cmd_t cmd,
+					  union reg_data *cmd_data,
+					  void *user_buf,
+					  struct pdc_callback *callback)
 {
 	struct pdc_data_t *data = dev->data;
 
 	/* TODO(b/345783692): Double check this logic. */
 	if (get_state(data) != ST_IDLE) {
 		return -EBUSY;
+	}
+
+	/* Raw UCSI calls must provide the cmd data to be sent. */
+	if (cmd == CMD_RAW_UCSI && cmd_data == NULL) {
+		return -EINVAL;
 	}
 
 	if (k_mutex_lock(&data->mtx, K_MSEC(100)) == 0) {
@@ -1415,6 +1540,11 @@ static int tps_post_command(const struct device *dev, enum cmd_t cmd,
 
 		data->user_buf = user_buf;
 		data->cmd = cmd;
+		data->cc_cb_tmp = callback;
+		if (cmd_data) {
+			memcpy(&data->raw_ucsi_cmd_data, cmd_data,
+			       sizeof(*cmd_data));
+		}
 
 		k_mutex_unlock(&data->mtx);
 		k_event_post(&data->pdc_event, PDC_CMD_EVENT);
@@ -1423,6 +1553,12 @@ static int tps_post_command(const struct device *dev, enum cmd_t cmd,
 	}
 
 	return 0;
+}
+
+static int tps_post_command(const struct device *dev, enum cmd_t cmd,
+			    void *user_buf)
+{
+	return tps_post_command_with_callback(dev, cmd, NULL, user_buf, NULL);
 }
 
 static int tps_manage_callback(const struct device *dev,
@@ -1443,7 +1579,11 @@ static int tps_ack_cc_ci(const struct device *dev,
 		return -EBUSY;
 	}
 
-	/* TODO(b/345783692): Implement */
+	/* Clear cached status bits with given mask. */
+	if (ci.raw_value) {
+		data->cached_conn_status.raw_conn_status_change_bits &=
+			~(ci.raw_value);
+	}
 
 	return 0;
 }
@@ -1551,7 +1691,7 @@ static int tps_get_rdo(const struct device *dev, uint32_t *rdo)
 
 static int tps_get_pdos(const struct device *dev, enum pdo_type_t pdo_type,
 			enum pdo_offset_t pdo_offset, uint8_t num_pdos,
-			bool port_partner_pdo, uint32_t *pdos)
+			enum pdo_source_t source, uint32_t *pdos)
 {
 	struct pdc_data_t *data = dev->data;
 
@@ -1562,7 +1702,7 @@ static int tps_get_pdos(const struct device *dev, enum pdo_type_t pdo_type,
 	data->pdo_type = pdo_type;
 	data->pdo_offset = pdo_offset;
 	data->num_pdos = num_pdos;
-	data->port_partner_pdo = port_partner_pdo;
+	data->pdo_source = source;
 
 	return tps_post_command(dev, CMD_GET_PDOS, pdos);
 }
@@ -1776,6 +1916,42 @@ static int tps_get_pch_data_status(const struct device *dev, uint8_t port_num,
 	return tps_post_command(dev, CMD_GET_PCH_DATA_STATUS, status_reg);
 }
 
+static int tps_execute_ucsi_cmd(const struct device *dev, uint8_t ucsi_command,
+				uint8_t data_size, uint8_t *command_specific,
+				uint8_t *lpm_data_out,
+				struct pdc_callback *callback)
+{
+	struct pdc_config_t const *cfg = dev->config;
+	union reg_data cmd_data;
+	enum cmd_t cmd = CMD_RAW_UCSI;
+
+	memset(cmd_data.data, 0, sizeof(cmd_data.data));
+	/* Byte 0: UCSI Command Code */
+	cmd_data.data[0] = ucsi_command;
+	/* Byte 1: Data length per UCSI spec.
+	 * TODO(b/360881314) - PPM should be forwarding this to driver
+	 */
+	cmd_data.data[1] = 0;
+
+	/* If additional command specific bytes are provided, copy them. */
+	if (data_size && command_specific) {
+		memcpy(&cmd_data.data[2], command_specific, data_size);
+	}
+
+	/* TI UCSI tasks always require a connector number even when the UCSI
+	 * spec doesn't require it. Except GET_ALTERNATE_MODES, all other
+	 * commands will fit the connector number on Byte 2, bits 6:0. There's
+	 * no need to modify it for GET_ALTERNATE_MODES since it is always
+	 * required (and will be on Byte 3, bits 14:8).
+	 */
+	if (ucsi_command != UCSI_GET_ALTERNATE_MODES) {
+		cmd_data.data[2] |= (cfg->connector_number + 1) & 0x7f;
+	}
+
+	return tps_post_command_with_callback(dev, cmd, &cmd_data, lpm_data_out,
+					      callback);
+}
+
 static const struct pdc_driver_api_t pdc_driver_api = {
 	.is_init_done = tps_is_init_done,
 	.get_ucsi_version = tps_get_ucsi_version,
@@ -1809,6 +1985,7 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.ack_cc_ci = tps_ack_cc_ci,
 	.set_comms_state = tps_set_comms_state,
 	.get_pch_data_status = tps_get_pch_data_status,
+	.execute_ucsi_cmd = tps_execute_ucsi_cmd,
 };
 
 static int pdc_interrupt_mask_init(struct pdc_data_t *data)
@@ -1820,12 +1997,32 @@ static int pdc_interrupt_mask_init(struct pdc_data_t *data)
 		.power_swap_complete = 1,
 		.fr_swap_complete = 1,
 		.data_swap_complete = 1,
+		.ucsi_connector_status_change_notification = 1,
 		.status_updated = 1,
 		.power_event_occurred_error = 1,
 		.externl_dcdc_event_received = 1,
 	};
 
 	return tps_rw_interrupt_mask(&cfg->i2c, &irq_mask, I2C_MSG_WRITE);
+}
+
+static int pdc_exit_dead_battery(struct pdc_data_t *data)
+{
+	struct pdc_config_t const *cfg = data->dev->config;
+	union reg_boot_flags pdc_boot_flags;
+	int rv;
+
+	rv = tps_rd_boot_flags(&cfg->i2c, &pdc_boot_flags);
+	if (rv) {
+		LOG_ERR("Read boot flags failed");
+		set_state(data, ST_ERROR_RECOVERY);
+		return rv;
+	}
+
+	if (pdc_boot_flags.dead_battery_flag) {
+		task_dbfg(data);
+	}
+	return 0;
 }
 
 static void pdc_interrupt_callback(const struct device *dev,
@@ -1897,6 +2094,11 @@ static int pdc_init(const struct device *dev)
 	rv = pdc_interrupt_mask_init(data);
 	if (rv < 0) {
 		LOG_ERR("Write interrupt mask failed");
+		return rv;
+	}
+	rv = pdc_exit_dead_battery(data);
+	if (rv < 0) {
+		LOG_ERR("Clear dead battery flag failed");
 		return rv;
 	}
 
