@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "charge_manager.h"
 #include "chipset.h"
 #include "drivers/intel_altmode.h"
 #include "drivers/ucsi_v3.h"
@@ -74,6 +75,9 @@ static void pdc_power_mgmt_after(void *fixture)
 ZTEST_SUITE(pdc_power_mgmt_api, NULL, pdc_power_mgmt_setup,
 	    pdc_power_mgmt_before, pdc_power_mgmt_after, NULL);
 
+/* TODO(b/345292002): The tests below fail with the TPS6699x emulator/driver. */
+#ifndef CONFIG_TODO_B_345292002
+
 ZTEST_USER(pdc_power_mgmt_api, test_get_usb_pd_port_count)
 {
 	zassert_equal(CONFIG_USB_PD_PORT_MAX_COUNT,
@@ -85,6 +89,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_is_connected)
 	union connector_status_t connector_status;
 
 	zassert_false(pd_is_connected(CONFIG_USB_PD_PORT_MAX_COUNT));
+	zassert_equal(pd_get_task_state(CONFIG_USB_PD_PORT_MAX_COUNT),
+		      PDC_UNATTACHED);
 
 	zassert_false(pd_is_connected(TEST_PORT));
 
@@ -101,6 +107,29 @@ ZTEST_USER(pdc_power_mgmt_api, test_is_connected)
 	emul_pdc_connect_partner(emul, &connector_status);
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_comm_is_enabled)
+{
+	union connector_status_t connector_status;
+
+	zassert_false(pd_comm_is_enabled(CONFIG_USB_PD_PORT_MAX_COUNT));
+
+	zassert_false(pd_comm_is_enabled(TEST_PORT));
+
+	emul_pdc_configure_src(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	zassert_true(
+		TEST_WAIT_FOR(pd_comm_is_enabled(TEST_PORT), PDC_TEST_TIMEOUT));
+
+	emul_pdc_disconnect(emul);
+	zassert_true(TEST_WAIT_FOR(!pd_comm_is_enabled(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
+
+	emul_pdc_configure_snk(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	zassert_true(
+		TEST_WAIT_FOR(pd_comm_is_enabled(TEST_PORT), PDC_TEST_TIMEOUT));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_pd_get_polarity)
@@ -764,10 +793,23 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_data_swap)
 ZTEST_USER(pdc_power_mgmt_api, test_get_partner_unconstr_power)
 {
 	union connector_status_t connector_status;
+	const uint32_t pdos_no_up[] = {
+		PDO_FIXED(5000, 3000, PDO_FIXED_DUAL_ROLE),
+	};
+	const uint32_t pdos_up[] = {
+		PDO_FIXED(5000, 3000,
+			  PDO_FIXED_DUAL_ROLE |
+				  PDO_FIXED_GET_UNCONSTRAINED_PWR),
+	};
 
 	zassert_false(
 		pd_get_partner_unconstr_power(CONFIG_USB_PD_PORT_MAX_COUNT));
 
+	/* If the port is not in Attached.SNK, unconstrained power is considered
+	 * to be false.
+	 */
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO,
+			  pdos_up);
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
 
@@ -778,11 +820,27 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_unconstr_power)
 	zassert_true(
 		TEST_WAIT_FOR(!pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
+	/* If the port is in Attached.SNK, unconstrained power should be the
+	 * partner's advertised capability.
+	 */
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO,
+			  pdos_no_up);
 	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
 
 	zassert_false(TEST_WAIT_FOR(pd_get_partner_unconstr_power(TEST_PORT),
 				    PDC_TEST_TIMEOUT));
+
+	emul_pdc_disconnect(emul);
+	zassert_true(
+		TEST_WAIT_FOR(!pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
+
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO,
+			  pdos_up);
+	emul_pdc_configure_snk(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	zassert_true(TEST_WAIT_FOR(pd_get_partner_unconstr_power(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
@@ -993,7 +1051,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_suspend)
 	zassert_equal(CCOM_RD, ccom);
 }
 
-ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume)
+ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume_no_partner)
 {
 	enum ccom_t ccom;
 
@@ -1003,6 +1061,55 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume)
 	zassert_ok(emul_pdc_get_ccom(emul, &ccom),
 		   "Invalid CCOM value in emul");
 	zassert_equal(CCOM_DRP, ccom);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume_drp_partner)
+{
+	union connector_status_t connector_status;
+	union pdr_t pdr;
+	const uint32_t pdos[] = {
+		PDO_FIXED(5000, 3000, PDO_FIXED_DUAL_ROLE),
+	};
+
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_1, 1, PARTNER_PDO, pdos);
+	emul_pdc_configure_snk(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
+
+	hook_notify(HOOK_CHIPSET_RESUME);
+	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+
+	zassert_ok(emul_pdc_get_pdr(emul, &pdr), "Invalid PDR value in emul");
+	zassert_equal(pdr.swap_to_src, 1);
+	zassert_equal(pdr.accept_pr_swap, 1);
+
+	zassert_true(pd_is_connected(TEST_PORT));
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume_up_drp_partner)
+{
+	union connector_status_t connector_status;
+	union pdr_t pdr;
+	const uint32_t pdos[] = {
+		PDO_FIXED(5000, 3000,
+			  PDO_FIXED_DUAL_ROLE |
+				  PDO_FIXED_GET_UNCONSTRAINED_PWR),
+	};
+
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO, pdos);
+	emul_pdc_configure_snk(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
+
+	hook_notify(HOOK_CHIPSET_RESUME);
+	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+
+	zassert_ok(emul_pdc_get_pdr(emul, &pdr), "Invalid PDR value in emul");
+	zassert_equal(pdr.swap_to_src, 0);
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_chipset_startup)
@@ -1072,20 +1179,23 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 	zassert_equal(0, pdr.swap_to_src);
 }
 
-static bool wait_state_name(int port, const char *target_name)
+static bool wait_state_name(int port, const uint8_t target_state,
+			    const char *target_name)
 {
 	const uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
 	uint32_t start = k_cycle_get_32();
-	const char *state_name = pd_get_task_state_name(TEST_PORT);
+	const char *state_name = pd_get_task_state_name(port);
+	uint8_t state = pd_get_task_state(port);
 
 	while (k_cycle_get_32() - start < timeout) {
 		k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
-		state_name = pd_get_task_state_name(TEST_PORT);
+		state_name = pd_get_task_state_name(port);
+		state = pd_get_task_state(port);
 
 		if (strcmp(state_name, target_name) != 0)
 			continue;
 
-		return true;
+		return target_state == state;
 	}
 
 	return false;
@@ -1095,14 +1205,15 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_typec_snk_attached)
 {
 	union connector_status_t connector_status;
 
-	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_UNATTACHED, "Unattached"));
 
 	memset(&connector_status, 0, sizeof(connector_status));
 	emul_pdc_configure_snk(emul, &connector_status);
 	connector_status.power_operation_mode = USB_DEFAULT_OPERATION;
 	emul_pdc_connect_partner(emul, &connector_status);
 
-	zassert_true(wait_state_name(TEST_PORT, "TypeCSnkAttached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_SNK_TYPEC_ONLY,
+				     "TypeCSnkAttached"));
 
 	/* Allow for debouncing time. */
 	TEST_WORKING_DELAY(PD_T_SINK_WAIT_CAP);
@@ -1114,14 +1225,15 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_typec_src_attached)
 {
 	union connector_status_t connector_status;
 
-	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_UNATTACHED, "Unattached"));
 
 	memset(&connector_status, 0, sizeof(connector_status));
 	emul_pdc_configure_src(emul, &connector_status);
 	connector_status.power_operation_mode = USB_DEFAULT_OPERATION;
 	emul_pdc_connect_partner(emul, &connector_status);
 
-	zassert_true(wait_state_name(TEST_PORT, "TypeCSrcAttached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_SRC_TYPEC_ONLY,
+				     "TypeCSrcAttached"));
 
 	/* Allow for debouncing time. */
 	TEST_WORKING_DELAY(PD_T_SINK_WAIT_CAP);
@@ -1133,28 +1245,30 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_attached_snk)
 {
 	union connector_status_t connector_status;
 
-	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_UNATTACHED, "Unattached"));
 
 	memset(&connector_status, 0, sizeof(connector_status));
 	emul_pdc_configure_snk(emul, &connector_status);
 	connector_status.power_operation_mode = PD_OPERATION;
 	emul_pdc_connect_partner(emul, &connector_status);
 
-	zassert_true(wait_state_name(TEST_PORT, "Attached.SNK"));
+	zassert_true(
+		wait_state_name(TEST_PORT, PDC_SNK_ATTACHED, "Attached.SNK"));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_attached_src)
 {
 	union connector_status_t connector_status;
 
-	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_UNATTACHED, "Unattached"));
 
 	memset(&connector_status, 0, sizeof(connector_status));
 	emul_pdc_configure_src(emul, &connector_status);
 	connector_status.power_operation_mode = PD_OPERATION;
 	emul_pdc_connect_partner(emul, &connector_status);
 
-	zassert_true(wait_state_name(TEST_PORT, "Attached.SRC"));
+	zassert_true(
+		wait_state_name(TEST_PORT, PDC_SRC_ATTACHED, "Attached.SRC"));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_connector_status)
@@ -1460,6 +1574,33 @@ ZTEST_USER(pdc_power_mgmt_api, test_sysjump_policy_on)
 	helper_wait_for_ccom_mode(CCOM_DRP);
 }
 
+/**
+ * @brief Helper function for polling sink path status
+ */
+static bool is_sink_path_enabled()
+{
+	bool sink_path_en;
+	zassert_ok(emul_pdc_get_sink_path(emul, &sink_path_en));
+	return sink_path_en;
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_pdc_power_mgmt_set_active_charge_port)
+{
+	union connector_status_t connector_status;
+
+	zassert_ok(board_set_active_charge_port(CHARGE_PORT_NONE));
+	emul_pdc_configure_snk(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
+	/* Sink path should be disabled because it's not active charge port */
+	zassert_false(is_sink_path_enabled());
+
+	zassert_ok(board_set_active_charge_port(TEST_PORT));
+	/* Sink path should be enabled after activating TEST_PORT */
+	zassert_true(TEST_WAIT_FOR(is_sink_path_enabled(), PDC_TEST_TIMEOUT));
+}
+
 /*
  * Suspended PDC - These tests take place with the PDC Power Mgmt subsystem
  * in the suspended state, when communication with the PDC is not allowed.
@@ -1502,3 +1643,5 @@ ZTEST_USER(pdc_power_mgmt_api_suspended, test_get_info)
 	zassert_equal(-ENOTCONN, rv, "Expected %d (-ENOTCONN) but got %d",
 		      -ENOTCONN, rv);
 }
+
+#endif /* CONFIG_TODO_B_345292002 */

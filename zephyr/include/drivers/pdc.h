@@ -71,6 +71,8 @@ struct pdc_info_t {
 	uint8_t running_in_flash_bank;
 	/** 12-byte program name string plus NUL terminator */
 	char project_name[USB_PD_CHIP_INFO_PROJECT_NAME_LEN + 1];
+	/** Compat string of driver */
+	char driver_name[USB_PD_CHIP_INFO_DRIVER_NAME_LEN + 1];
 	/** Extra information (optional) */
 	uint16_t extra;
 };
@@ -146,7 +148,7 @@ typedef int (*pdc_get_vbus_t)(const struct device *dev, uint16_t *vbus);
 typedef int (*pdc_get_pdos_t)(const struct device *dev,
 			      enum pdo_type_t pdo_type,
 			      enum pdo_offset_t pdo_offset, uint8_t num_pdos,
-			      bool port_partner_pdo, uint32_t *pdos);
+			      enum pdo_source_t source, uint32_t *pdos);
 typedef int (*pdc_get_rdo_t)(const struct device *dev, uint32_t *rdo);
 typedef int (*pdc_set_rdo_t)(const struct device *dev, uint32_t rdo);
 typedef int (*pdc_get_info_t)(const struct device *dev, struct pdc_info_t *info,
@@ -654,7 +656,7 @@ static inline int pdc_get_vbus_voltage(const struct device *dev,
 static inline int pdc_get_pdos(const struct device *dev,
 			       enum pdo_type_t pdo_type,
 			       enum pdo_offset_t pdo_offset, uint8_t num_pdos,
-			       bool port_partner_pdo, uint32_t *pdos)
+			       enum pdo_source_t source, uint32_t *pdos)
 {
 	const struct pdc_driver_api_t *api =
 		(const struct pdc_driver_api_t *)dev->api;
@@ -664,8 +666,7 @@ static inline int pdc_get_pdos(const struct device *dev,
 		return -ENOSYS;
 	}
 
-	return api->get_pdos(dev, pdo_type, pdo_offset, num_pdos,
-			     port_partner_pdo, pdos);
+	return api->get_pdos(dev, pdo_type, pdo_offset, num_pdos, source, pdos);
 }
 
 /**
