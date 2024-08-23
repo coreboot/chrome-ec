@@ -301,33 +301,6 @@ enum cci_flag_t {
 };
 
 /**
- * @brief State Machine States
- */
-enum pdc_state_t {
-	/** PDC_INIT */
-	PDC_INIT,
-	/** PDC_UNATTACHED */
-	PDC_UNATTACHED,
-	/** PDC_SNK_ATTACHED */
-	PDC_SNK_ATTACHED,
-	/** PDC_SRC_ATTACHED */
-	PDC_SRC_ATTACHED,
-	/** PDC_SEND_CMD_START */
-	PDC_SEND_CMD_START,
-	/** PDC_SEND_CMD_WAIT */
-	PDC_SEND_CMD_WAIT,
-	/** PDC_SRC_TYPEC_ONLY */
-	PDC_SRC_TYPEC_ONLY,
-	/** PDC_SNK_TYPEC_ONLY */
-	PDC_SNK_TYPEC_ONLY,
-	/** Stop operation */
-	PDC_SUSPENDED,
-
-	/** State count. Always leave as last item. */
-	PDC_STATE_COUNT,
-};
-
-/**
  * @brief PDC Command Names
  */
 test_export_static const char *const pdc_cmd_names[] = {
@@ -420,6 +393,8 @@ enum policy_snk_attached_t {
 	SNK_POLICY_SET_ACTIVE_CHARGE_PORT,
 	/** Runs a test to determine if we should become a source instead */
 	SNK_POLICY_EVAL_SWAP_TO_SRC,
+	/** Triggers an update of the allow_pr_swap bit in CMD_SET_DRP */
+	SNK_POLICY_UPDATE_ALLOW_PR_SWAP,
 	/** SNK_POLICY_COUNT */
 	SNK_POLICY_COUNT,
 };
@@ -490,6 +465,8 @@ struct pdc_snk_attached_policy_t {
 	uint32_t rdo;
 	/** New RDO to send */
 	uint32_t rdo_to_send;
+	/** If true, accept a power role swap request from port partner */
+	bool accept_power_role_swap;
 };
 
 /**
@@ -511,6 +488,8 @@ enum policy_src_attached_t {
 	 * balancing policy.
 	 */
 	SRC_POLICY_GET_RDO,
+	/** Triggers an update of the allow_pr_swap bit in CMD_SET_DRP */
+	SRC_POLICY_UPDATE_ALLOW_PR_SWAP,
 
 	/** SRC_POLICY_COUNT */
 	SRC_POLICY_COUNT
@@ -528,6 +507,8 @@ struct pdc_src_attached_policy_t {
 	struct pdc_pdos_t src;
 	/** Request RDO from port partner */
 	uint32_t rdo;
+	/** If true, accept a power role swap request from port partner */
+	bool accept_power_role_swap;
 };
 
 /**
@@ -1213,6 +1194,7 @@ static void run_snk_policies(struct pdc_port_t *port)
 					     SNK_POLICY_SWAP_TO_SRC)) {
 		port->pdr.swap_to_src = 1;
 		port->pdr.swap_to_snk = 0;
+		/* allow_pr_swap will be set by the src state entry code */
 		queue_internal_cmd(port, CMD_PDC_SET_PDR);
 		return;
 	} else if (atomic_test_and_clear_bit(port->snk_policy.flags,
@@ -1226,6 +1208,12 @@ static void run_snk_policies(struct pdc_port_t *port)
 				pdc_data[port_num]->port.snk_policy.flags,
 				SNK_POLICY_SWAP_TO_SRC);
 		}
+		return;
+	} else if (atomic_test_and_clear_bit(port->snk_policy.flags,
+					     SNK_POLICY_UPDATE_ALLOW_PR_SWAP)) {
+		port->pdr.accept_pr_swap =
+			port->snk_policy.accept_power_role_swap;
+		queue_internal_cmd(port, CMD_PDC_SET_PDR);
 		return;
 	}
 
@@ -1241,6 +1229,7 @@ static void run_src_policies(struct pdc_port_t *port)
 				      SRC_POLICY_SWAP_TO_SNK)) {
 		port->pdr.swap_to_src = 0;
 		port->pdr.swap_to_snk = 1;
+		/* allow_pr_swap will be set by the snk state entry code */
 		queue_internal_cmd(port, CMD_PDC_SET_PDR);
 		return;
 	} else if (atomic_test_and_clear_bit(port->src_policy.flags,
@@ -1267,6 +1256,12 @@ static void run_src_policies(struct pdc_port_t *port)
 					     SRC_POLICY_GET_RDO)) {
 		/* Get the RDO from the port partner */
 		queue_internal_cmd(port, CMD_PDC_GET_RDO);
+	} else if (atomic_test_and_clear_bit(port->src_policy.flags,
+					     SRC_POLICY_UPDATE_ALLOW_PR_SWAP)) {
+		port->pdr.accept_pr_swap =
+			port->src_policy.accept_power_role_swap;
+		queue_internal_cmd(port, CMD_PDC_SET_PDR);
+		return;
 	}
 
 	send_pending_public_commands(port);
@@ -1433,10 +1428,15 @@ static void pdc_src_attached_run(void *obj)
 	case SRC_ATTACHED_SET_PR_SWAP_POLICY:
 		port->src_attached_local_state = SRC_ATTACHED_READ_POWER_LEVEL;
 		/* TODO: read from DT */
-		port->pdr = (union pdr_t){ .accept_pr_swap = 1,
-					   .swap_to_src = 1,
-					   .swap_to_snk = 0 };
+		port->pdr = (union pdr_t){
+			.accept_pr_swap =
+				port->src_policy.accept_power_role_swap,
+			.swap_to_src = 1,
+			.swap_to_snk = 0,
+		};
 		queue_internal_cmd(port, CMD_PDC_SET_PDR);
+		atomic_clear_bit(port->src_policy.flags,
+				 SRC_POLICY_UPDATE_ALLOW_PR_SWAP);
 		return;
 	case SRC_ATTACHED_READ_POWER_LEVEL:
 		port->src_attached_local_state = SRC_ATTACHED_GET_VDO;
@@ -1530,10 +1530,15 @@ static void pdc_snk_attached_run(void *obj)
 	case SNK_ATTACHED_SET_PR_SWAP_POLICY:
 		port->snk_attached_local_state = SNK_ATTACHED_GET_VDO;
 		/* TODO: read from DT */
-		port->pdr = (union pdr_t){ .accept_pr_swap = 1,
-					   .swap_to_src = 0,
-					   .swap_to_snk = 1 };
+		port->pdr = (union pdr_t){
+			.accept_pr_swap =
+				port->snk_policy.accept_power_role_swap,
+			.swap_to_src = 0,
+			.swap_to_snk = 1,
+		};
 		queue_internal_cmd(port, CMD_PDC_SET_PDR);
+		atomic_clear_bit(port->snk_policy.flags,
+				 SNK_POLICY_UPDATE_ALLOW_PR_SWAP);
 		return;
 	case SNK_ATTACHED_GET_VDO:
 		port->snk_attached_local_state = SNK_ATTACHED_GET_PDOS;
@@ -2611,44 +2616,6 @@ bool pdc_power_mgmt_get_partner_unconstr_power(int port)
 		PDO_FIXED_GET_UNCONSTRAINED_PWR);
 }
 
-int pdc_power_mgmt_accept_data_swap(int port, bool val)
-{
-	/* Make sure port is connected */
-	if (!pdc_power_mgmt_is_connected(port)) {
-		return 1;
-	}
-
-	/* Set DR accept swap policy */
-	pdc_data[port]->port.uor.accept_dr_swap = val;
-
-	/* Block until command completes */
-	if (public_api_block(port, CMD_PDC_SET_UOR)) {
-		/* something went wrong */
-		return 1;
-	}
-
-	return 0;
-}
-
-int pdc_power_mgmt_accept_power_swap(int port, bool val)
-{
-	/* Make sure port is connected */
-	if (!pdc_power_mgmt_is_connected(port)) {
-		return 1;
-	}
-
-	/* Set PR accept swap policy */
-	pdc_data[port]->port.pdr.accept_pr_swap = val;
-
-	/* Block until command completes */
-	if (public_api_block(port, CMD_PDC_SET_PDR)) {
-		/* something went wrong */
-		return 1;
-	}
-
-	return EC_SUCCESS;
-}
-
 static int pdc_power_mgmt_request_data_swap_intern(int port,
 						   enum pd_data_role role)
 {
@@ -2677,16 +2644,6 @@ static int pdc_power_mgmt_request_data_swap_intern(int port,
 	}
 
 	return EC_SUCCESS;
-}
-
-void pdc_power_mgmt_request_data_swap_to_ufp(int port)
-{
-	pdc_power_mgmt_request_data_swap_intern(port, PD_ROLE_UFP);
-}
-
-void pdc_power_mgmt_request_data_swap_to_dfp(int port)
-{
-	pdc_power_mgmt_request_data_swap_intern(port, PD_ROLE_DFP);
 }
 
 test_mockable void pdc_power_mgmt_request_data_swap(int port)
@@ -2831,21 +2788,28 @@ bool pdc_power_mgmt_get_partner_dual_role_power(int port)
 
 test_mockable bool pdc_power_mgmt_get_partner_data_swap_capable(int port)
 {
+	struct pdc_port_t *pdc_port;
+	uint32_t fixed_vsafe5v_pdo;
+
 	/* Make sure port is connected */
 	if (!pdc_power_mgmt_is_connected(port)) {
 		return false;
 	}
 
-	/* Make sure port partner is DRP, RP only, or RD only */
-	if (!pdc_data[port]->port.ccaps.op_mode_drp &&
-	    !pdc_data[port]->port.ccaps.op_mode_rp_only &&
-	    !pdc_data[port]->port.ccaps.op_mode_rd_only) {
-		return false;
-	}
+	pdc_port = &pdc_data[port]->port;
 
-	/* Return swap to UFP or DFP capability */
-	return pdc_data[port]->port.ccaps.swap_to_dfp ||
-	       pdc_data[port]->port.ccaps.swap_to_ufp;
+	fixed_vsafe5v_pdo =
+		get_pdc_pdos_ptr(pdc_port, &pdc_port->get_pdo)->pdos[0];
+
+	/*
+	 * Error check that first PDO is fixed, as 6.4.1 Capabilities requires
+	 * in the Power Delivery Specification.
+	 * "The vSafe5V Fixed Supply Object Shall always be the first object"
+	 */
+	if ((fixed_vsafe5v_pdo & PDO_TYPE_MASK) != PDO_TYPE_FIXED)
+		return false;
+
+	return fixed_vsafe5v_pdo & PDO_FIXED_DATA_SWAP;
 }
 
 int pdc_power_mgmt_get_vbus_voltage(int port)
@@ -2954,16 +2918,29 @@ test_mockable void pdc_power_mgmt_set_dual_role(int port,
 	switch (state) {
 	/* While disconnected, toggle between src and sink */
 	case PD_DRP_TOGGLE_ON:
+		/* Allow external power role swaps */
+		port_data->src_policy.accept_power_role_swap = true;
+		port_data->snk_policy.accept_power_role_swap = true;
+
 		port_data->una_policy.cc_mode = CCOM_DRP;
 		atomic_set_bit(port_data->una_policy.flags, UNA_POLICY_CC_MODE);
 		break;
 	/* Stay in src until disconnect, then stay in sink forever */
 	case PD_DRP_TOGGLE_OFF:
+		/* Allow external power role swap from source to sink, but not
+		 * the reverse */
+		port_data->src_policy.accept_power_role_swap = true;
+		port_data->snk_policy.accept_power_role_swap = false;
+
 		port_data->una_policy.cc_mode = CCOM_RD;
 		atomic_set_bit(port_data->una_policy.flags, UNA_POLICY_CC_MODE);
 		break;
 	/* Stay in current power role, don't switch. No auto-toggle support */
 	case PD_DRP_FREEZE:
+		/* No external power role swaps accepted */
+		port_data->src_policy.accept_power_role_swap = false;
+		port_data->snk_policy.accept_power_role_swap = false;
+
 		if (pdc_power_mgmt_is_source_connected(port)) {
 			port_data->una_policy.cc_mode = CCOM_RP;
 		} else {
@@ -2973,6 +2950,10 @@ test_mockable void pdc_power_mgmt_set_dual_role(int port,
 		break;
 	/* Switch to sink */
 	case PD_DRP_FORCE_SINK:
+		/* Allow external power role swap from src to sink */
+		port_data->src_policy.accept_power_role_swap = true;
+		port_data->snk_policy.accept_power_role_swap = false;
+
 		if (pdc_power_mgmt_is_source_connected(port)) {
 			port_data->pdr.swap_to_src = 0;
 			port_data->pdr.swap_to_snk = 1;
@@ -2991,6 +2972,10 @@ test_mockable void pdc_power_mgmt_set_dual_role(int port,
 		break;
 	/* Switch to source */
 	case PD_DRP_FORCE_SOURCE:
+		/* Allow external power role swap from sink to src */
+		port_data->src_policy.accept_power_role_swap = false;
+		port_data->snk_policy.accept_power_role_swap = true;
+
 		if (pdc_power_mgmt_is_sink_connected(port)) {
 			port_data->pdr.swap_to_src = 1;
 			port_data->pdr.swap_to_snk = 0;
@@ -2999,6 +2984,12 @@ test_mockable void pdc_power_mgmt_set_dual_role(int port,
 		}
 		break;
 	}
+
+	/* Trigger updates to the power role swap allow bit */
+	atomic_set_bit(port_data->src_policy.flags,
+		       SRC_POLICY_UPDATE_ALLOW_PR_SWAP);
+	atomic_set_bit(port_data->snk_policy.flags,
+		       SNK_POLICY_UPDATE_ALLOW_PR_SWAP);
 
 	port_data->dual_role_state = state;
 }
@@ -3595,34 +3586,6 @@ pdc_power_mgmt_get_cable_prop(int port, union cable_property_t *cable_prop)
 	*cable_prop = pdc_data[port]->port.cable_prop;
 
 	return 0;
-}
-
-int pdc_power_mgmt_set_src_pdo(int port, const uint32_t *src_pdo,
-			       uint8_t pdo_count)
-{
-	struct pdc_port_t *pdc;
-	int i;
-	int ret;
-
-	pdc = &pdc_data[port]->port;
-
-	if (pdo_count > PDO_NUM) {
-		return -ERANGE;
-	}
-	/* Set up */
-	pdc->set_pdos.count = pdo_count;
-	pdc->set_pdos.type = SOURCE_PDO;
-	for (i = 0; i < pdo_count; i++) {
-		pdc->set_pdos.pdos[i] = src_pdo[i];
-	}
-
-	/* Block until command completes */
-	ret = public_api_block(port, CMD_PDC_SET_PDOS);
-	if (ret) {
-		return ret;
-	}
-
-	return EC_SUCCESS;
 }
 
 enum usb_typec_current_t pdc_power_mgmt_get_default_current_limit(int port)
