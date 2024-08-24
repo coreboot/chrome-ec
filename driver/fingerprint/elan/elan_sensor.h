@@ -3,11 +3,16 @@
  * found in the LICENSE file.
  */
 
-#ifndef CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SENSOR_H
-#define CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SENSOR_H
+#ifndef __CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SENSOR_H_
+#define __CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SENSOR_H_
+
 #include "common.h"
 #include "ec_commands.h"
 #include "fpsensor/fpsensor_types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Sensor pixel resolution */
 #if (defined(CONFIG_FP_SENSOR_ELAN80) || defined(CONFIG_FP_SENSOR_ELAN80SG))
@@ -175,4 +180,9 @@ int elan_fp_maintenance(uint16_t *error_state);
  * @return EC_SUCCESS on success otherwise error.
  */
 __staticlib int elan_fp_deinit(void);
+
+#ifdef __cplusplus
+}
 #endif
+
+#endif /* __CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SENSOR_H_ */
