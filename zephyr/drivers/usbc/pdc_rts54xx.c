@@ -24,7 +24,6 @@ LOG_MODULE_REGISTER(pdc_rts54, LOG_LEVEL_INF);
 #include "usbc/utils.h"
 
 #include <drivers/pdc.h>
-#include <usbc/ppm.h>
 
 #define DT_DRV_COMPAT realtek_rts54_pdc
 
@@ -108,6 +107,12 @@ LOG_MODULE_REGISTER(pdc_rts54, LOG_LEVEL_INF);
  */
 BUILD_ASSERT(RTS54XX_GET_IC_STATUS_PROG_NAME_STR_LEN <=
 	     (sizeof(((struct pdc_info_t *)0)->project_name) - 1));
+
+/**
+ * @brief Extra bits supported by the Realtek SET_NOTIFICATION_ENABLE command.
+ */
+#define RTS54XX_NOTIFY_DP_STATUS BIT(21)
+#define RTS54XX_NOTIFY_EXT_BIT_OFFSET 16
 
 /**
  * @brief Macro to transition to init or idle state and return
@@ -207,6 +212,16 @@ enum cmd_sts_t {
 	CMD_DEFERRED = 2,
 	/** Command completed with error. Send GET_ERROR_STATUS for details */
 	CMD_ERROR = 3
+};
+
+/**
+ * @brief PDC port flags
+ */
+enum pdc_flags_t {
+	/** PDC is currently processing IRQ. */
+	PDC_HANDLING_IRQ,
+	/** Number of supported PDC flags. */
+	PDC_FLAGS_COUNT,
 };
 
 /**
@@ -353,6 +368,8 @@ struct pdc_config_t {
 	union notification_enable_t bits;
 	/** Create thread function */
 	void (*create_thread)(const struct device *dev);
+	/** If true, do not apply PDC FW updates to this port */
+	bool no_fw_update;
 };
 
 /**
@@ -421,12 +438,12 @@ struct pdc_data_t {
 	uint16_t error_recovery_counter;
 	/** Error Status used during initialization */
 	union error_status_t es;
-	/** Connector Status */
-	union connector_status_t conn_status;
-	/** Connector Status Cache State */
-	bool conn_status_cached;
 	/* Driver specific events to handle. */
 	struct k_event driver_event;
+	/** Port specific PDC flags */
+	atomic_t flags;
+	/* Currently running UCSI command. */
+	enum ucsi_command_t active_ucsi_cmd;
 };
 
 /**
@@ -551,8 +568,14 @@ static void print_current_state(struct pdc_data_t *data)
 	int st = get_state(data);
 
 	if (st == ST_WRITE) {
-		LOG_INF("ST%d: %s %s", cfg->connector_number, state_names[st],
-			cmd_names[data->cmd]);
+		if (data->cmd == CMD_RAW_UCSI) {
+			LOG_INF("ST%d: %s RAW:%s", cfg->connector_number,
+				state_names[st],
+				get_ucsi_command_name(data->active_ucsi_cmd));
+		} else {
+			LOG_INF("ST%d: %s %s", cfg->connector_number,
+				state_names[st], cmd_names[data->cmd]);
+		}
 	} else if (st == ST_ERROR_RECOVERY) {
 		LOG_INF("ST%d: %s %s %d", cfg->connector_number,
 			state_names[st], cmd_names[data->cmd],
@@ -802,7 +825,10 @@ static void st_init_run(void *o)
 			data, INIT_PDC_SET_NOTIFICATION_ENABLE);
 		return;
 	case INIT_PDC_SET_NOTIFICATION_ENABLE:
-		rv = rts54_set_notification_enable(data->dev, cfg->bits, 0);
+		rv = rts54_set_notification_enable(
+			data->dev, cfg->bits,
+			RTS54XX_NOTIFY_DP_STATUS >>
+				RTS54XX_NOTIFY_EXT_BIT_OFFSET);
 		if (rv) {
 			LOG_ERR("C:%d, Internal(INIT_PDC_SET_NOTIFICATION_ENABLE)",
 				cnum);
@@ -941,7 +967,9 @@ static void handle_irqs(struct pdc_data_t *data)
 				/* Set the interrupt event */
 				pdc_int_data->cci_event
 					.vendor_defined_indicator = 1;
-				pdc_int_data->conn_status_cached = false;
+				/* Set local interrupt handling flag */
+				atomic_set_bit(&pdc_int_data->flags,
+					       PDC_HANDLING_IRQ);
 				/* Notify system of status change */
 				call_cci_event_cb(pdc_int_data);
 				/* done with this port */
@@ -958,6 +986,7 @@ static void st_idle_entry(void *o)
 	print_current_state(data);
 
 	data->cmd = CMD_NONE;
+	data->active_ucsi_cmd = 0;
 }
 
 static void st_idle_run(void *o)
@@ -1305,6 +1334,8 @@ static void st_read_run(void *o)
 			sizeof(info->driver_name));
 		info->driver_name[sizeof(info->driver_name) - 1] = '\0';
 
+		info->no_fw_update = cfg->no_fw_update;
+
 		/* Retain a cached copy of this data */
 		data->info = *info;
 
@@ -1383,11 +1414,29 @@ static void st_read_run(void *o)
 	}
 	case CMD_GET_CONNECTOR_STATUS:
 		memcpy(data->user_buf, data->rd_buf + offset, len);
-		/* Save connector status in cache. */
-		k_mutex_lock(&data->mtx, K_FOREVER);
-		memcpy(&data->conn_status, data->user_buf, len);
-		k_mutex_unlock(&data->mtx);
-		data->conn_status_cached = true;
+
+		/*
+		 * If this is the first connector status since an IRQ, it may
+		 * be in response to an Attention message. Check current partner
+		 * flags and status change bits to determine if it was likely an
+		 * Attention message (DP Status).
+		 *
+		 * TODO(b/356955093) Remove this when the PDC firmware supports
+		 * IRQs on Attention messages.
+		 */
+		if (atomic_test_and_clear_bit(&data->flags, PDC_HANDLING_IRQ)) {
+			union connector_status_t *status =
+				(union connector_status_t *)data->user_buf;
+			if ((status->conn_partner_flags &
+			     CONNECTOR_PARTNER_FLAG_ALTERNATE_MODE) &&
+			    !status->raw_conn_status_change_bits) {
+				union conn_status_change_bits_t
+					status_change_bits = { 0 };
+				status_change_bits.attention = 1;
+				status->raw_conn_status_change_bits =
+					status_change_bits.raw_value;
+			}
+		}
 		break;
 	case CMD_RAW_UCSI:
 		memcpy(data->user_buf, data->rd_buf + offset, len);
@@ -1561,6 +1610,13 @@ static int rts54_post_command_with_callback(const struct device *dev,
 	data->user_buf = user_buf;
 	data->cmd = cmd;
 	data->cc_cb_tmp = callback;
+
+	/* If sending a raw UCSI command, byte[2] is the actual UCSI command
+	 * being executed.
+	 */
+	if (cmd == CMD_RAW_UCSI && buf) {
+		data->active_ucsi_cmd = data->wr_buf[2];
+	}
 
 	if (IS_ENABLED(CONFIG_USBC_PDC_TRACE_MSG)) {
 		const struct pdc_config_t *cfg = dev->config;
@@ -1785,6 +1841,7 @@ static int rts54_set_power_level(const struct device *dev,
 
 	/* Map UCSI USB Type-C current to Realtek format */
 	switch (tcc) {
+	default:
 	case TC_CURRENT_PPM_DEFINED:
 		/* Realtek does not support this */
 		return -EINVAL;
@@ -2477,26 +2534,7 @@ static int rts54_execute_ucsi_cmd(const struct device *dev,
 				  struct pdc_callback *callback)
 {
 	struct pdc_data_t *data = dev->data;
-	const struct pdc_config_t *cfg = dev->config;
 	uint8_t cmd_buffer[SMBUS_MAX_BLOCK_SIZE];
-	enum cmd_t use_cmd = CMD_RAW_UCSI;
-
-	if (ucsi_command == UCSI_GET_CONNECTOR_STATUS &&
-	    data->conn_status_cached) {
-		LOG_INF("%s: Read conn status from cache", __func__);
-		k_mutex_lock(&data->mtx, K_FOREVER);
-		memcpy(lpm_data_out, &data->conn_status,
-		       sizeof(data->conn_status));
-		k_mutex_unlock(&data->mtx);
-		if (callback) {
-			union cci_event_t cci = {
-				.data_len = sizeof(data->conn_status),
-				.command_completed = 1,
-			};
-			callback->handler(dev, callback, cci);
-		}
-		return 0;
-	}
 
 	if (get_state(data) != ST_IDLE)
 		return -EBUSY;
@@ -2510,33 +2548,14 @@ static int rts54_execute_ucsi_cmd(const struct device *dev,
 	/* Convert standard UCSI command to Realtek vendor specific formats. */
 	switch (ucsi_command) {
 	case UCSI_ACK_CC_CI: {
-		union ack_cc_ci_t *cmd = (union ack_cc_ci_t *)command_specific;
-
+		/* Note: Change acknowledgements should be intercepted by the
+		 * PPM and handled by the pdc_api instead.
+		 */
 		data_size = 5;
 		memset(cmd_buffer, 0, ACK_CC_CI.len + 2);
 		cmd_buffer[0] = ACK_CC_CI.cmd;
 		cmd_buffer[1] = ACK_CC_CI.len;
 
-		if (cmd->connector_change_ack) {
-			union conn_status_change_bits_t csc = {};
-
-			/* Note there is concurrency issue here: b/343733474. */
-			if (!data->conn_status_cached) {
-				LOG_ERR("C%d: Found no conn state cache for ACK CI",
-					cfg->connector_number);
-				return -ENODATA;
-			};
-
-			k_mutex_lock(&data->mtx, K_FOREVER);
-			csc.raw_value =
-				data->conn_status.raw_conn_status_change_bits;
-			k_mutex_unlock(&data->mtx);
-
-			cmd_buffer[4] = BYTE0(csc.raw_value);
-			cmd_buffer[5] = BYTE1(csc.raw_value);
-			cmd_buffer[6] = 0xff;
-			cmd_buffer[7] = 0xff;
-		}
 		break;
 	}
 	case UCSI_GET_PD_MESSAGE: {
@@ -2580,14 +2599,11 @@ static int rts54_execute_ucsi_cmd(const struct device *dev,
 		cmd_buffer[11] = 0x06;
 		break;
 	}
-	case UCSI_GET_CONNECTOR_STATUS:
-		use_cmd = CMD_GET_CONNECTOR_STATUS;
-		break;
 	default:
 		break;
 	}
 
-	return rts54_post_command_with_callback(dev, use_cmd, cmd_buffer,
+	return rts54_post_command_with_callback(dev, CMD_RAW_UCSI, cmd_buffer,
 						data_size + 4, lpm_data_out,
 						callback);
 }
@@ -2845,6 +2861,7 @@ static void rts54xx_thread(void *dev, void *unused1, void *unused2)
 		.bits.connect_change = 1,                                     \
 		.bits.error = 1,                                              \
 		.create_thread = create_thread_##inst,                        \
+		.no_fw_update = DT_INST_PROP(inst, no_fw_update),             \
 	};                                                                    \
                                                                               \
 	DEVICE_DT_INST_DEFINE(inst, pdc_init, NULL, &pdc_data_##inst,         \

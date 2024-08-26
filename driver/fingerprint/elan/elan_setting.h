@@ -3,13 +3,17 @@
  * found in the LICENSE file.
  */
 
-#ifndef ELAN_SETTING_H
-#define ELAN_SETTING_H
+#ifndef __CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SETTINGS_H_
+#define __CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SETTINGS_H_
 
 #include "common.h"
 #include "elan_misc.h"
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* The hardware ID information and FW version */
 #define VID 0x04F3
@@ -118,4 +122,8 @@ __staticlib int elan_register_initialization(void);
  */
 __staticlib int elan_calibration(void);
 
-#endif /* _ELAN_SETTING_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SETTINGS_H_ */

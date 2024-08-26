@@ -93,6 +93,87 @@ static void tps6699x_emul_connector_reset(struct tps6699x_emul_pdc_data *data,
 	data->reset_cmd = reset_cmd;
 }
 
+static void tps699x_emul_get_capability(struct tps6699x_emul_pdc_data *data)
+{
+	data->response.result = COMMAND_RESULT_SUCCESS;
+	data->response.data.capability = data->capability;
+
+	memcpy(data->reg_val[TPS6699X_REG_DATA_I2C1], &data->response,
+	       sizeof(data->response));
+}
+
+static void
+tps699x_emul_get_connector_capability(struct tps6699x_emul_pdc_data *data)
+{
+	data->response.result = COMMAND_RESULT_SUCCESS;
+	data->response.data.connector_capability = data->connector_capability;
+
+	memcpy(data->reg_val[TPS6699X_REG_DATA_I2C1], &data->response,
+	       sizeof(data->response));
+}
+
+static void tps699x_emul_get_error_status(struct tps6699x_emul_pdc_data *data)
+{
+	data->response.result = COMMAND_RESULT_SUCCESS;
+	data->response.data.length = sizeof(data->error);
+	data->response.data.error = data->error;
+
+	memcpy(&data->reg_val[TPS6699X_REG_DATA_I2C1], &data->response,
+	       sizeof(data->response));
+}
+
+static void
+tps699x_emul_get_connector_status(struct tps6699x_emul_pdc_data *data)
+{
+	data->response.result = COMMAND_RESULT_SUCCESS;
+	data->response.data.connector_status = data->connector_status;
+
+	memcpy(data->reg_val[TPS6699X_REG_DATA_I2C1], &data->response,
+	       sizeof(data->response));
+
+	/* TPS6699x clears the connector status change on read. */
+	data->connector_status.raw_conn_status_change_bits = 0;
+}
+
+static void tps699x_emul_set_uor(struct tps6699x_emul_pdc_data *data,
+				 const union uor_t *uor)
+{
+	data->response.result = COMMAND_RESULT_SUCCESS;
+
+	data->uor = *uor;
+	LOG_INF("UOR=0x%x", data->uor.raw_value);
+}
+
+static void tps699x_emul_set_pdr(struct tps6699x_emul_pdc_data *data,
+				 const union pdr_t *pdr)
+{
+	data->response.result = COMMAND_RESULT_SUCCESS;
+
+	data->pdr = *pdr;
+}
+
+static void tps699x_emul_set_ccom(struct tps6699x_emul_pdc_data *data,
+				  const void *in)
+{
+	const struct ti_ccom *ccom = in;
+	data->response.result = COMMAND_RESULT_SUCCESS;
+
+	switch (ccom->cc_operation_mode) {
+	case 1:
+		data->ccom = CCOM_RP;
+		break;
+	case 2:
+		data->ccom = CCOM_RD;
+		break;
+	case 4:
+		data->ccom = CCOM_DRP;
+		break;
+	default:
+		LOG_ERR("Unexpected ccom = %u", ccom->cc_operation_mode);
+		break;
+	}
+}
+
 static void tps6699x_emul_handle_ucsi(struct tps6699x_emul_pdc_data *data,
 				      uint8_t *data_reg)
 {
@@ -109,17 +190,32 @@ static void tps6699x_emul_handle_ucsi(struct tps6699x_emul_pdc_data *data,
 	zassert_equal(data_len, 0);
 	/* TODO(b/345292002): Validate connector number field. */
 
+	LOG_INF("UCSI command 0x%X", cmd);
 	switch (cmd) {
+	case UCSI_GET_CAPABILITY:
+		tps699x_emul_get_capability(data);
+		break;
+	case UCSI_GET_CONNECTOR_CAPABILITY:
+		tps699x_emul_get_connector_capability(data);
+		break;
+	case UCSI_GET_ERROR_STATUS:
+		tps699x_emul_get_error_status(data);
+		break;
+	case UCSI_GET_CONNECTOR_STATUS:
+		tps699x_emul_get_connector_status(data);
+		break;
 	case UCSI_CONNECTOR_RESET:
 		tps6699x_emul_connector_reset(
 			data, (union connector_reset_t)data_reg[2]);
 		break;
-	case UCSI_GET_CONNECTOR_STATUS:
-		memcpy(&data_reg[1], &data->connector_status,
-		       sizeof(union connector_status_t));
-
-		/* TPS6699x clears the connector status change on read. */
-		data->connector_status.raw_conn_status_change_bits = 0;
+	case UCSI_SET_UOR:
+		tps699x_emul_set_uor(data, (union uor_t *)&data_reg[2]);
+		break;
+	case UCSI_SET_PDR:
+		tps699x_emul_set_pdr(data, (union pdr_t *)&data_reg[2]);
+		break;
+	case UCSI_SET_CCOM:
+		tps699x_emul_set_ccom(data, &data_reg[2]);
 		break;
 	default:
 		LOG_WRN("tps6699x_emul: Unimplemented UCSI command %#04x", cmd);
@@ -326,14 +422,155 @@ static int emul_tps6699x_set_response_delay(const struct emul *target,
 	return 0;
 }
 
+static int emul_tps6699x_set_capability(const struct emul *target,
+					const struct capability_t *caps)
+{
+	struct tps6699x_emul_pdc_data *data =
+		tps6699x_emul_get_pdc_data(target);
+
+	data->capability = *caps;
+
+	return 0;
+}
+
+static int
+emul_tps6699x_set_connector_capability(const struct emul *target,
+				       const union connector_capability_t *caps)
+{
+	struct tps6699x_emul_pdc_data *data =
+		tps6699x_emul_get_pdc_data(target);
+
+	data->connector_capability = *caps;
+
+	return 0;
+}
+
+static int emul_tps6699x_set_error_status(const struct emul *target,
+					  const union error_status_t *es)
+{
+	struct tps6699x_emul_pdc_data *data =
+		tps6699x_emul_get_pdc_data(target);
+
+	data->error = *es;
+
+	return 0;
+}
+
 static int emul_tps6699x_set_connector_status(
 	const struct emul *target,
 	const union connector_status_t *connector_status)
 {
 	struct tps6699x_emul_pdc_data *data =
 		tps6699x_emul_get_pdc_data(target);
+	union reg_adc_results *adc_results =
+		(union reg_adc_results *)data->reg_val[TPS6699X_REG_ADC_RESULTS];
+	uint16_t voltage;
 
 	data->connector_status = *connector_status;
+
+	voltage = data->connector_status.voltage_reading *
+		  data->connector_status.voltage_scale * 5;
+	LOG_INF("Setting adc_results %u", voltage);
+	adc_results->pa_vbus = voltage;
+	adc_results->pb_vbus = voltage;
+
+	return 0;
+}
+
+static int emul_tps6699x_get_uor(const struct emul *target, union uor_t *uor)
+{
+	struct tps6699x_emul_pdc_data *data =
+		tps6699x_emul_get_pdc_data(target);
+
+	*uor = data->uor;
+
+	return 0;
+}
+
+static int emul_tps6699x_get_pdr(const struct emul *target, union pdr_t *pdr)
+{
+	struct tps6699x_emul_pdc_data *data =
+		tps6699x_emul_get_pdc_data(target);
+
+	*pdr = data->pdr;
+
+	return 0;
+}
+
+static int
+emul_tps6699x_get_requested_power_level(const struct emul *target,
+					enum usb_typec_current_t *tcc)
+{
+	struct tps6699x_emul_pdc_data *data =
+		tps6699x_emul_get_pdc_data(target);
+	const union reg_port_control *pdc_port_control =
+		(const union reg_port_control *)
+			data->reg_val[TPS6699X_REG_PORT_CONTROL];
+	const enum usb_typec_current_t convert[] = {
+		TC_CURRENT_USB_DEFAULT,
+		TC_CURRENT_1_5A,
+		TC_CURRENT_3_0A,
+	};
+
+	if (pdc_port_control->typec_current >= ARRAY_SIZE(convert)) {
+		return -EINVAL;
+	}
+
+	/* Convert back to EC type */
+	*tcc = convert[pdc_port_control->typec_current];
+
+	return 0;
+}
+
+static int emul_tps6699x_get_ccom(const struct emul *target, enum ccom_t *ccom)
+{
+	struct tps6699x_emul_pdc_data *data =
+		tps6699x_emul_get_pdc_data(target);
+
+	*ccom = data->ccom;
+
+	return 0;
+}
+
+static int emul_tps6699x_get_drp_mode(const struct emul *target,
+				      enum drp_mode_t *dm)
+{
+	struct tps6699x_emul_pdc_data *data =
+		tps6699x_emul_get_pdc_data(target);
+
+	const union reg_port_configuration *pdc_port_cfg =
+		(const union reg_port_configuration *)
+			data->reg_val[TPS6699X_REG_PORT_CONFIGURATION];
+
+	*dm = pdc_port_cfg->typec_support_options;
+
+	return 0;
+}
+
+static int emul_tps6699x_get_supported_drp_modes(const struct emul *target,
+						 enum drp_mode_t *dm,
+						 uint8_t size, uint8_t *num)
+{
+	enum drp_mode_t supported[] = { DRP_NORMAL, DRP_TRY_SRC };
+
+	memcpy(dm, supported,
+	       sizeof(enum drp_mode_t) * MIN(size, ARRAY_SIZE(supported)));
+
+	*num = ARRAY_SIZE(supported);
+
+	return 0;
+}
+
+static int emul_tps6699x_reset(const struct emul *target)
+{
+	struct tps6699x_emul_pdc_data *data =
+		tps6699x_emul_get_pdc_data(target);
+
+	/* Reset PDOs. */
+	memset(data->src_pdos, 0x0, sizeof(data->src_pdos));
+	memset(data->snk_pdos, 0x0, sizeof(data->snk_pdos));
+	memset(data->partner_src_pdos, 0x0, sizeof(data->partner_src_pdos));
+	memset(data->partner_snk_pdos, 0x0, sizeof(data->partner_snk_pdos));
 
 	return 0;
 }
@@ -350,18 +587,19 @@ static int tps6699x_emul_idle_wait(const struct emul *emul)
 }
 
 static struct emul_pdc_api_t emul_tps6699x_api = {
-	.reset = NULL,
+	.reset = emul_tps6699x_reset,
 	.set_response_delay = emul_tps6699x_set_response_delay,
 	.get_connector_reset = emul_tps6699x_get_connector_reset,
-	.set_capability = NULL,
-	.set_connector_capability = NULL,
-	.set_error_status = NULL,
+	.set_capability = emul_tps6699x_set_capability,
+	.set_connector_capability = emul_tps6699x_set_connector_capability,
+	.set_error_status = emul_tps6699x_set_error_status,
 	.set_connector_status = emul_tps6699x_set_connector_status,
-	.get_uor = NULL,
-	.get_pdr = NULL,
-	.get_requested_power_level = NULL,
-	.get_ccom = NULL,
-	.get_drp_mode = NULL,
+	.get_uor = emul_tps6699x_get_uor,
+	.get_pdr = emul_tps6699x_get_pdr,
+	.get_requested_power_level = emul_tps6699x_get_requested_power_level,
+	.get_ccom = emul_tps6699x_get_ccom,
+	.get_drp_mode = emul_tps6699x_get_drp_mode,
+	.get_supported_drp_modes = emul_tps6699x_get_supported_drp_modes,
 	.get_sink_path = NULL,
 	.get_reconnect_req = NULL,
 	.pulse_irq = NULL,
