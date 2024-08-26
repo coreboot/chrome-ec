@@ -5,10 +5,12 @@
 
 /* UCSI PPM Driver */
 
+#include "charge_manager.h"
 #include "cros_board_info.h"
 #include "ec_commands.h"
 #include "ppm_common.h"
 #include "usb_pd.h"
+#include "usbc/pdc_power_mgmt.h"
 #include "util.h"
 
 #include <zephyr/devicetree.h>
@@ -128,6 +130,84 @@ static int ucsi_get_active_port_count(const struct device *dev)
 #define SYNC_CMD_TIMEOUT_MSEC 2000
 #define RETRY_INTERVAL_MS 20
 
+static int execute_cmd_with_pdc_power_mgmt(const struct device *device,
+					   struct ucsi_control_t *control,
+					   uint8_t *lpm_data_out)
+{
+	uint8_t conn = UCSI_7BIT_PORTMASK(control->command_specific[0]);
+	uint8_t ucsi_command = control->command;
+	struct ppm_data *data = (struct ppm_data *)device->data;
+	union set_sink_path_t set_sink_path;
+	int charge_port;
+	int rv;
+
+	/* Handled commands must return. */
+	switch (ucsi_command) {
+	case UCSI_SET_SINK_PATH:
+		/*
+		 * Intercept UCSI_SET_SINK_PATH. This command will be sent by
+		 * the ucsi kernel driver with enable set or cleared. If the
+		 * enable bit in the command is set, then use the port number
+		 * for the override port. If the enable bit is clear, then pass
+		 * OVERIDE_OFF to the charge manager, disabling any previous
+		 * override.
+		 *
+		 * If this requires a change to the charging port, then the
+		 * charge_manager will call into the PDM which in turn will
+		 * cause SET_SINK_PATH to get sent the PDC. So this command
+		 * should not be passed directly to the PDC from the PPM.
+		 */
+		set_sink_path.raw_value = control->command_specific[0];
+		conn = set_sink_path.connector_number - 1;
+		charge_port = set_sink_path.sink_path_enable ? conn :
+							       OVERRIDE_OFF;
+
+		if (charge_port == OVERRIDE_OFF ||
+		    (pdc_power_mgmt_get_power_role(charge_port) ==
+			     PD_ROLE_SINK &&
+		     pdc_power_mgmt_is_connected(charge_port))) {
+			rv = charge_manager_set_override(charge_port);
+			return rv == EC_SUCCESS ? 0 : -EINVAL;
+		} else {
+			return -EINVAL;
+		}
+
+	/* We intercept both GET_CONNECTOR_STATUS and ACK_CC_CI by
+	 * forwarding it to the PDM to do caching.
+	 */
+	case UCSI_GET_CONNECTOR_STATUS:
+		int rv = pdc_power_mgmt_get_connector_status_for_ppm(
+			conn - 1, (union connector_status_t *)lpm_data_out);
+		if (rv == 0)
+			rv = sizeof(union connector_status_t);
+
+		return rv;
+	case UCSI_ACK_CC_CI:
+		union connector_status_t *conn_status;
+		union conn_status_change_bits_t ci;
+		union ack_cc_ci_t *cmd =
+			(union ack_cc_ci_t *)control->command_specific;
+
+		if (!cmd->connector_change_ack) {
+			/* This ACK is only for CC. Internally handle it. */
+			return 0;
+		}
+		/* This ACK includes only CI or both CC and CI. */
+		if (!ucsi_ppm_get_next_connector_status(data->ppm_dev, &conn,
+							&conn_status)) {
+			LOG_ERR("Cx: Found no port with CI to ack.");
+			return -EINVAL;
+		}
+
+		ci.raw_value = conn_status->raw_conn_status_change_bits;
+		return pdc_power_mgmt_ppm_ack_status_change(conn - 1, ci);
+	default:
+		break;
+	}
+
+	return -EINVAL;
+}
+
 static int ucsi_ppm_execute_cmd_sync(const struct device *device,
 				     struct ucsi_control_t *control,
 				     uint8_t *lpm_data_out)
@@ -153,23 +233,6 @@ static int ucsi_ppm_execute_cmd_sync(const struct device *device,
 	 * bit 24 and some commands don't use a connector number at all
 	 */
 	switch (ucsi_command) {
-	case UCSI_ACK_CC_CI: {
-		union connector_status_t *conn_status;
-		union ack_cc_ci_t *cmd =
-			(union ack_cc_ci_t *)control->command_specific;
-
-		if (!cmd->connector_change_ack) {
-			/* This ACK is only for CC. Internally handle it. */
-			return 0;
-		}
-		/* This ACK includes only CI or both CC and CI. */
-		if (!ucsi_ppm_get_next_connector_status(data->ppm_dev, &conn,
-							&conn_status)) {
-			LOG_ERR("Cx: Found no port with CI to ack.");
-			return -ENOMSG;
-		}
-		break;
-	}
 	case UCSI_PPM_RESET:
 	case UCSI_SET_NOTIFICATION_ENABLE:
 		return 0;
@@ -177,7 +240,6 @@ static int ucsi_ppm_execute_cmd_sync(const struct device *device,
 	case UCSI_GET_CONNECTOR_CAPABILITY:
 	case UCSI_GET_CAM_SUPPORTED:
 	case UCSI_GET_CURRENT_CAM:
-	case UCSI_SET_NEW_CAM:
 	case UCSI_GET_PDOS:
 	case UCSI_GET_CABLE_PROPERTY:
 	case UCSI_GET_CONNECTOR_STATUS:
@@ -185,6 +247,15 @@ static int ucsi_ppm_execute_cmd_sync(const struct device *device,
 	case UCSI_GET_PD_MESSAGE:
 	case UCSI_GET_ATTENTION_VDO:
 	case UCSI_GET_CAM_CS:
+	case UCSI_SET_CCOM:
+	case UCSI_SET_UOR:
+	case UCSI_SET_PDR:
+	case UCSI_SET_POWER_LEVEL:
+	case UCSI_SET_RETIMER_MODE:
+	case UCSI_SET_SINK_PATH:
+	case UCSI_SET_PDOS:
+	case UCSI_SET_NEW_CAM:
+	case UCSI_SET_USB:
 		conn = UCSI_7BIT_PORTMASK(control->command_specific[0]);
 		break;
 	case UCSI_GET_ALTERNATE_MODES:
@@ -196,7 +267,19 @@ static int ucsi_ppm_execute_cmd_sync(const struct device *device,
 
 	if (conn == 0 || conn > NUM_PORTS) {
 		LOG_ERR("Invalid conn=%d", conn);
-		return -EINVAL;
+		return -ERANGE;
+	}
+
+	/* Some commands should get intercepted and handled directly via the PDC
+	 * power mgmt apis.
+	 */
+	switch (ucsi_command) {
+	case UCSI_GET_CONNECTOR_STATUS:
+	case UCSI_ACK_CC_CI:
+	case UCSI_SET_SINK_PATH:
+		rv = execute_cmd_with_pdc_power_mgmt(device, control,
+						     lpm_data_out);
+		goto done;
 	}
 
 	data_size = ucsi_commands[ucsi_command].command_copy_length;
@@ -240,15 +323,34 @@ static int ucsi_ppm_execute_cmd_sync(const struct device *device,
 		rv = data->cci_event.data_len;
 	}
 
-	/* Intercept and override some values. */
-	switch (ucsi_command) {
-	case UCSI_GET_CAPABILITY:
-		/* Override the number of supported ports with what's defined in
-		 * device tree.
+done:
+	if (rv >= 0) {
+		/* Certain SET_* commands require sychronizing the pdc power
+		 * mgmt api so it can respond to subsequent calls. Do that here
+		 * and wait for it to sync.
 		 */
-		struct capability_t *caps = (struct capability_t *)lpm_data_out;
-		caps->bNumConnectors = ucsi_get_active_port_count(device);
-		break;
+		switch (ucsi_command) {
+		case UCSI_SET_CCOM:
+		case UCSI_SET_PDR:
+		case UCSI_SET_UOR:
+		case UCSI_SET_PDOS:
+		case UCSI_SET_SINK_PATH:
+			pdc_power_mgmt_resync_port_state_for_ppm(conn - 1);
+			break;
+		}
+
+		/* Intercept and override some values. */
+		switch (ucsi_command) {
+		case UCSI_GET_CAPABILITY:
+			/* Override the number of supported ports with what's
+			 * defined in device tree.
+			 */
+			struct capability_t *caps =
+				(struct capability_t *)lpm_data_out;
+			caps->bNumConnectors =
+				ucsi_get_active_port_count(device);
+			break;
+		}
 	}
 
 	return rv;
@@ -288,15 +390,14 @@ static void ppm_ci_cb(const struct device *dev,
 		      const struct pdc_callback *callback,
 		      union cci_event_t cci_event)
 {
-	const struct ppm_config *cfg = (const struct ppm_config *)dev->config;
 	struct ppm_data *data = CONTAINER_OF(callback, struct ppm_data, ci_cb);
 
 	LOG_DBG("%s: CCI=0x%08x", __func__, cci_event.raw_value);
 
 	if (cci_event.connector_change == 0 ||
-	    cci_event.connector_change > cfg->active_port_count) {
-		LOG_WRN("%s: Received CI on invalid connector = %u", __func__,
-			cci_event.connector_change);
+	    cci_event.connector_change > NUM_PORTS) {
+		LOG_WRN("%s: Received CI on invalid connector = %u (port_count=%u)",
+			__func__, cci_event.connector_change, NUM_PORTS);
 		return;
 	}
 
@@ -327,11 +428,12 @@ static int ppm_init(const struct device *device)
 
 	/*
 	 * Register connector change callback. Command completion callback will
-	 * be registered on every command execution.
+	 * be registered on every command execution. This is intercepted and
+	 * returned by the PDM.
 	 */
 	data->ci_cb.handler = ppm_ci_cb;
 	for (int i = 0; i < cfg->active_port_count; i++) {
-		int rv = pdc_add_ci_callback(cfg->lpm[i], &data->ci_cb);
+		int rv = pdc_power_mgmt_register_ppm_callback(&data->ci_cb);
 		if (rv) {
 			LOG_ERR("C%d: Failed to add CI callback (%d)", i, rv);
 			return rv;
