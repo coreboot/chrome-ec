@@ -3197,7 +3197,7 @@
 #undef CONFIG_KEYBOARD_CUSTOMIZATION
 
 /*
- * Allow support multiple keyboard matrix for speical key.
+ * Allow support multiple keyboard matrix for special key.
  */
 #undef CONFIG_KEYBOARD_MULTIPLE
 
@@ -3372,6 +3372,12 @@
  * If not defined, it is using GPIO_LID_OPEN.
  */
 #undef CONFIG_LID_SWITCH_GPIO_LIST
+
+/*
+ * Lid swtich debounce timing customize.
+ * Default is 30ms.
+ */
+#define CONFIG_LID_DEBOUNCE_US (30 * MSEC)
 
 /*
  * Support for turning the lightbar power rails on briefly when the AP is off.
@@ -4282,6 +4288,11 @@
  * as the means for determining the state of the flipped-360-degree mode.
  */
 #undef CONFIG_GMR_TABLET_MODE_CUSTOM
+
+/*
+ * GMR tablet mode sensor debounce time.
+ */
+#define CONFIG_GMR_SENSOR_DEBOUNCE_US (CONFIG_LID_DEBOUNCE_US + 10 * MSEC)
 
 /*
  * Add a virtual switch to indicate when detachable device has

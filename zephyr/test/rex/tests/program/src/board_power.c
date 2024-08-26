@@ -27,12 +27,6 @@
 
 #define X86_NON_DSX_MTL_FORCE_SHUTDOWN_TO_MS 50
 
-DEFINE_FAKE_VALUE_FUNC(int, power_signal_set, enum power_signal, int);
-DEFINE_FAKE_VALUE_FUNC(int, power_signal_get, enum power_signal);
-DEFINE_FAKE_VALUE_FUNC(int, power_wait_mask_signals_timeout,
-		       power_signal_mask_t, power_signal_mask_t, int);
-DEFINE_FAKE_VOID_FUNC(ap_power_ev_send_callbacks, enum ap_power_events);
-
 int mock_power_signal_set_ap_force_shutdown(enum power_signal signal, int value)
 {
 	if (power_signal_set_fake.call_count == 1) {

@@ -25,6 +25,33 @@ extern const int pdc_cmd_types;
 #endif
 
 /**
+ * @brief State Machine States
+ */
+enum pdc_state_t {
+	/** PDC_INIT */
+	PDC_INIT,
+	/** PDC_UNATTACHED */
+	PDC_UNATTACHED,
+	/** PDC_SNK_ATTACHED */
+	PDC_SNK_ATTACHED,
+	/** PDC_SRC_ATTACHED */
+	PDC_SRC_ATTACHED,
+	/** PDC_SEND_CMD_START */
+	PDC_SEND_CMD_START,
+	/** PDC_SEND_CMD_WAIT */
+	PDC_SEND_CMD_WAIT,
+	/** PDC_SRC_TYPEC_ONLY */
+	PDC_SRC_TYPEC_ONLY,
+	/** PDC_SNK_TYPEC_ONLY */
+	PDC_SNK_TYPEC_ONLY,
+	/** Stop operation */
+	PDC_SUSPENDED,
+
+	/** State count. Always leave as last item. */
+	PDC_STATE_COUNT,
+};
+
+/**
  * @brief Get the state of the port partner connection
  *
  * @param port USB-C port number
@@ -110,9 +137,10 @@ void pdc_power_mgmt_request_swap_to_dfp(int port);
  *
  * @param port USB-C port number
  *
- * @retval void
+ * @retval EC_SUCCESS if successful, or -ENOTCONN if the port is not attached in
+ * SNK role
  */
-void pdc_power_mgmt_set_new_power_request(int port);
+int pdc_power_mgmt_set_new_power_request(int port);
 
 /**
  * @brief Get current power role
@@ -433,6 +461,17 @@ int pdc_power_mgmt_get_connector_status(
 	int port, union connector_status_t *connector_status);
 
 /**
+ * @brief Return the last non-zero connector status change on a port
+ *
+ * @param port USB-C port number
+ * @param status_change Output variable to store the connector status change
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_get_last_status_change(
+	int port, union conn_status_change_bits_t *status_change);
+
+/**
  * @brief Return the current DP pin assignment configured by the PDC as
  * as the DP source.
  *
@@ -546,5 +585,60 @@ int pdc_power_mgmt_get_pch_data_status(int port, uint8_t *status);
  * @retval 0 if successful or error code
  */
 int pdc_power_mgmt_get_lpm_ppm_info(int port, struct lpm_ppm_info_t *info);
+
+/**
+ * @brief Recheck connector status on given port and wait for state to settle.
+ *
+ * Role swaps do not trigger a connector status change event when initiated by
+ * the host so manually query connector status again and wait for the state to
+ * settle.
+ *
+ * This API is intended to be used by the PPM only to make sure the power mgmt
+ * state stays in sync.
+ *
+ * @param port USB-C port number
+ *
+ * @retval 0 if successful or -ETIMEDOUT or error code
+ */
+int pdc_power_mgmt_resync_port_state_for_ppm(int port);
+
+/**
+ * @brief Register for notifications from PDM when connector interrupts occur.
+ *
+ * In order to keep the PPM and the PDC power mgmt api in sync, we let PDM first
+ * handle interrupts and then forward them to the PPM.
+ *
+ * @param callback - Callback for when a new connector interrupt is seen.
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_register_ppm_callback(const struct pdc_callback *callback);
+
+/**
+ * @brief Acknowledge connector status change bits with PDM.
+ *
+ * @param port - USB-C port number
+ * @param ci - Connector Status change bits to acknowledge
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_ppm_ack_status_change(int port,
+					 union conn_status_change_bits_t ci);
+
+/**
+ * @brief Return the current UCSI connector status on a port for the PPM.
+ *
+ * This api may have different connector status change bits indicated where the
+ * pdc power mgmt api may have triggered role swaps and the LPM did not generate
+ * any change bits. This is to make sure the OPM stays in sync with the current
+ * role.
+ *
+ * @param port USB-C port number
+ * @param connector_status Output variable to store the connector status
+ *
+ * @retval 0 if successful or error code
+ */
+int pdc_power_mgmt_get_connector_status_for_ppm(
+	int port, union connector_status_t *connector_status);
 
 #endif /* __CROS_EC_PDC_POWER_MGMT_H */

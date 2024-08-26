@@ -3,6 +3,7 @@
  * found in the LICENSE file.
  */
 
+#include "charge_manager.h"
 #include "chipset.h"
 #include "drivers/intel_altmode.h"
 #include "drivers/ucsi_v3.h"
@@ -88,6 +89,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_is_connected)
 	union connector_status_t connector_status;
 
 	zassert_false(pd_is_connected(CONFIG_USB_PD_PORT_MAX_COUNT));
+	zassert_equal(pd_get_task_state(CONFIG_USB_PD_PORT_MAX_COUNT),
+		      PDC_UNATTACHED);
 
 	zassert_false(pd_is_connected(TEST_PORT));
 
@@ -104,6 +107,29 @@ ZTEST_USER(pdc_power_mgmt_api, test_is_connected)
 	emul_pdc_connect_partner(emul, &connector_status);
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_comm_is_enabled)
+{
+	union connector_status_t connector_status;
+
+	zassert_false(pd_comm_is_enabled(CONFIG_USB_PD_PORT_MAX_COUNT));
+
+	zassert_false(pd_comm_is_enabled(TEST_PORT));
+
+	emul_pdc_configure_src(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	zassert_true(
+		TEST_WAIT_FOR(pd_comm_is_enabled(TEST_PORT), PDC_TEST_TIMEOUT));
+
+	emul_pdc_disconnect(emul);
+	zassert_true(TEST_WAIT_FOR(!pd_comm_is_enabled(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
+
+	emul_pdc_configure_snk(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	zassert_true(
+		TEST_WAIT_FOR(pd_comm_is_enabled(TEST_PORT), PDC_TEST_TIMEOUT));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_pd_get_polarity)
@@ -426,39 +452,31 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 	int i;
 	union connector_status_t connector_status;
 	struct {
-		union connector_capability_t ccap;
+		enum pd_power_role power_role;
+		uint32_t pdo;
 		bool expected;
 	} test[] = {
-		{ .ccap = { .raw_value = 0 }, .expected = false },
-		{ .ccap = { .op_mode_drp = 1,
-			    .op_mode_rp_only = 0,
-			    .op_mode_rd_only = 0,
-			    .swap_to_ufp = 1 },
+		{ .power_role = PD_ROLE_SINK, .pdo = 0, .expected = false },
+		{ .power_role = PD_ROLE_SOURCE, .pdo = 0, .expected = false },
+		{ .power_role = PD_ROLE_SINK,
+		  .pdo = PDO_FIXED(5000, 3000,
+				   PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP),
 		  .expected = true },
-		{ .ccap = { .op_mode_drp = 0,
-			    .op_mode_rp_only = 1,
-			    .op_mode_rd_only = 0,
-			    .swap_to_dfp = 1 },
+		{ .power_role = PD_ROLE_SOURCE,
+		  .pdo = PDO_FIXED(5000, 3000,
+				   PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP),
 		  .expected = true },
-		{ .ccap = { .op_mode_drp = 0,
-			    .op_mode_rp_only = 0,
-			    .op_mode_rd_only = 1,
-			    .swap_to_dfp = 1 },
-		  .expected = true },
-		{ .ccap = { .op_mode_drp = 0,
-			    .op_mode_rp_only = 0,
-			    .op_mode_rd_only = 1,
-			    .swap_to_dfp = 0 },
+		{ .power_role = PD_ROLE_SINK,
+		  .pdo = PDO_FIXED(5000, 3000, PDO_FIXED_UNCONSTRAINED),
 		  .expected = false },
-		{ .ccap = { .op_mode_drp = 0,
-			    .op_mode_rp_only = 0,
-			    .op_mode_rd_only = 0,
-			    .swap_to_ufp = 1 },
+		{ .power_role = PD_ROLE_SOURCE,
+		  .pdo = PDO_FIXED(5000, 3000, PDO_FIXED_UNCONSTRAINED),
 		  .expected = false },
-		{ .ccap = { .op_mode_drp = 0,
-			    .op_mode_rp_only = 0,
-			    .op_mode_rd_only = 0,
-			    .swap_to_dfp = 1 },
+		{ .power_role = PD_ROLE_SINK,
+		  .pdo = PDO_VAR(5000, 3000, 15000),
+		  .expected = false },
+		{ .power_role = PD_ROLE_SOURCE,
+		  .pdo = PDO_VAR(5000, 3000, 15000),
 		  .expected = false },
 	};
 	uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
@@ -468,8 +486,15 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 		pd_get_partner_data_swap_capable(CONFIG_USB_PD_PORT_MAX_COUNT));
 
 	for (i = 0; i < ARRAY_SIZE(test); i++) {
-		emul_pdc_set_connector_capability(emul, &test[i].ccap);
-		emul_pdc_configure_src(emul, &connector_status);
+		emul_pdc_set_pdos(emul,
+				  (test[i].power_role == PD_ROLE_SINK ?
+					   SOURCE_PDO :
+					   SINK_PDO),
+				  PDO_OFFSET_0, 1, PARTNER_PDO, &test[i].pdo);
+		if (test[i].power_role == PD_ROLE_SINK)
+			emul_pdc_configure_snk(emul, &connector_status);
+		else
+			emul_pdc_configure_src(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
 
 		start = k_cycle_get_32();
@@ -485,8 +510,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 
 		zassert_equal(test[i].expected,
 			      pd_get_partner_data_swap_capable(TEST_PORT),
-			      "[%d] expected=%d, ccap=0x%X", i,
-			      test[i].expected, test[i].ccap);
+			      "[%d] expected=%d, pdo=0x%X", i, test[i].expected,
+			      test[i].pdo);
 
 		emul_pdc_disconnect(emul);
 		zassert_true(TEST_WAIT_FOR(!pd_is_connected(TEST_PORT),
@@ -642,6 +667,12 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 	uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
 	uint32_t start;
 
+	/* Set the pdr.allow_pr_swap bit to 1 by enabling the TOGGLE_ON DRP
+	 * mode. This provides a consistent value for the pdr.accept_pr_swap
+	 * assertions below. */
+	pdc_power_mgmt_set_dual_role(TEST_PORT, PD_DRP_TOGGLE_ON);
+	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+
 	for (i = 0; i < ARRAY_SIZE(test); i++) {
 		memset(&connector_status, 0, sizeof(connector_status));
 		connector_status.conn_partner_type =
@@ -649,9 +680,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 
 		test[i].s.configure(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
-		zassert_true(TEST_WAIT_FOR(
-			pdc_power_mgmt_test_wait_attached(TEST_PORT),
-			PDC_TEST_TIMEOUT));
+		zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_test_wait_attached(
+						   TEST_PORT),
+					   PDC_TEST_TIMEOUT),
+			     "PD not connected in time (i=%d)", i);
 
 		pd_request_power_swap(TEST_PORT);
 
@@ -673,13 +705,20 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 			break;
 		}
 
-		zassert_equal(pdr.swap_to_src, test[i].e.pdr.swap_to_src);
-		zassert_equal(pdr.swap_to_snk, test[i].e.pdr.swap_to_snk);
-		zassert_equal(pdr.accept_pr_swap, test[i].e.pdr.accept_pr_swap);
+		zassert_equal(pdr.swap_to_src, test[i].e.pdr.swap_to_src,
+			      "Got %u, expected %u (i=%d)", pdr.swap_to_src,
+			      test[i].e.pdr.swap_to_src, i);
+		zassert_equal(pdr.swap_to_snk, test[i].e.pdr.swap_to_snk,
+			      "Got %u, expected %u (i=%d)", pdr.swap_to_snk,
+			      test[i].e.pdr.swap_to_snk, i);
+		zassert_equal(pdr.accept_pr_swap, test[i].e.pdr.accept_pr_swap,
+			      "Got %u, expected %u (i=%d)", pdr.accept_pr_swap,
+			      test[i].e.pdr.accept_pr_swap, i);
 
 		emul_pdc_disconnect(emul);
 		zassert_true(TEST_WAIT_FOR(!pd_is_connected(TEST_PORT),
-					   PDC_TEST_TIMEOUT));
+					   PDC_TEST_TIMEOUT),
+			     "PD not disconnected in time (i=%d)", i);
 	}
 }
 
@@ -903,12 +942,14 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 		struct setup_t s;
 		struct expect_t e;
 	} test[] = {
+		/* Unattached tests */
 		{ .s = { .state = PD_DRP_TOGGLE_ON, .configure = NULL },
 		  .e = { .check_cc_mode = true, .cc_mode = CCOM_DRP } },
 		{ .s = { .state = PD_DRP_TOGGLE_OFF, .configure = NULL },
 		  .e = { .check_cc_mode = true, .cc_mode = CCOM_RD } },
 		{ .s = { .state = PD_DRP_FREEZE, .configure = NULL },
 		  .e = { .check_cc_mode = true, .cc_mode = CCOM_RD } },
+		/* Freeze while a sink */
 		{ .s = { .state = PD_DRP_FREEZE,
 			 .configure = emul_pdc_configure_snk },
 		  .e = { .check_cc_mode = true, .cc_mode = CCOM_RD } },
@@ -920,16 +961,86 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 			 .configure = emul_pdc_configure_src },
 		  .e = { .check_cc_mode = true, .cc_mode = CCOM_RP } },
 #endif
+		/* Force sink while a source */
 		{ .s = { .state = PD_DRP_FORCE_SINK,
 			 .configure = emul_pdc_configure_src },
 		  .e = { .check_pdr = true,
-			 .pdr = { .swap_to_src = 0, .swap_to_snk = 1 },
+			 .pdr = { .swap_to_src = 0,
+				  .swap_to_snk = 1,
+				  /* External swaps are allowed because we are
+				   * a source wanting to become a sink */
+				  .accept_pr_swap = 1 },
 			 .check_cc_mode = true,
 			 .cc_mode = CCOM_RD } },
+		/* Force source while a sink */
 		{ .s = { .state = PD_DRP_FORCE_SOURCE,
 			 .configure = emul_pdc_configure_snk },
 		  .e = { .check_pdr = true,
-			 .pdr = { .swap_to_src = 1, .swap_to_snk = 0 } } },
+			 .pdr = { .swap_to_src = 1,
+				  .swap_to_snk = 0,
+				  /* External swaps are allowed because we are
+				   * a sink wanting to become a source */
+				  .accept_pr_swap = 1 } } },
+		/* Force sink while already a sink */
+		{ .s = { .state = PD_DRP_FORCE_SINK,
+			 .configure = emul_pdc_configure_snk },
+		  .e = { .check_pdr = true,
+			 .pdr = { .swap_to_src = 0,
+				  .swap_to_snk = 1,
+				  /* No external swaps allowed because we are
+				   * already in the desired role. */
+				  .accept_pr_swap = 0 },
+			 .check_cc_mode = true,
+			 .cc_mode = CCOM_RD } },
+		/* Force source while already a source */
+		{ .s = { .state = PD_DRP_FORCE_SOURCE,
+			 .configure = emul_pdc_configure_src },
+		  .e = { .check_pdr = true,
+			 .pdr = { .swap_to_src = 1,
+				  .swap_to_snk = 0,
+				  /* No external swaps allowed because we are
+				   * already in the desired role. */
+				  .accept_pr_swap = 0 } } },
+		/* Toggling on while a source */
+		{ .s = { .state = PD_DRP_TOGGLE_ON,
+			 .configure = emul_pdc_configure_src },
+		  .e = { .check_pdr = true,
+			 .pdr = {
+				  /* Don't initiate a swap but allow external
+				   * swaps. */
+				  .swap_to_src = 1,
+				  .swap_to_snk = 0,
+				  .accept_pr_swap = 1 } } },
+		/* Toggling on while a sink */
+		{ .s = { .state = PD_DRP_TOGGLE_ON,
+			 .configure = emul_pdc_configure_snk },
+		  .e = { .check_pdr = true,
+			 .pdr = {
+				  /* Don't initiate a swap but allow external
+				   * swaps. */
+				  .swap_to_src = 0,
+				  .swap_to_snk = 1,
+				  .accept_pr_swap = 1 } } },
+		/* Toggling off while a source */
+		{ .s = { .state = PD_DRP_TOGGLE_OFF,
+			 .configure = emul_pdc_configure_src },
+		  .e = { .check_pdr = true,
+			 .pdr = {
+				  /* Remain a source but allow a swap to
+				   * sink */
+				  .swap_to_src = 1,
+				  .swap_to_snk = 0,
+				  .accept_pr_swap = 1 } } },
+		/* Toggling off while a sink */
+		{ .s = { .state = PD_DRP_TOGGLE_OFF,
+			 .configure = emul_pdc_configure_snk },
+		  .e = { .check_pdr = true,
+			 .pdr = {
+				  /* Remain a sink and don't allow an external
+				   * swap. */
+				  .swap_to_src = 0,
+				  .swap_to_snk = 1,
+				  .accept_pr_swap = 0 } } },
 	};
 
 	union connector_status_t connector_status;
@@ -969,7 +1080,11 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 				emul_pdc_get_pdr(emul, &pdr);
 
 				if (test[i].e.pdr.swap_to_snk !=
-				    pdr.swap_to_snk)
+					    pdr.swap_to_snk ||
+				    test[i].e.pdr.swap_to_src !=
+					    pdr.swap_to_src ||
+				    test[i].e.pdr.accept_pr_swap !=
+					    pdr.accept_pr_swap)
 					continue;
 			}
 
@@ -983,9 +1098,20 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 		}
 		if (test[i].e.check_pdr) {
 			zassert_equal(test[i].e.pdr.swap_to_snk,
-				      pdr.swap_to_snk);
+				      pdr.swap_to_snk,
+				      "Expected %u, got %u (i=%d)",
+				      test[i].e.pdr.swap_to_snk,
+				      pdr.swap_to_snk, i);
 			zassert_equal(test[i].e.pdr.swap_to_src,
-				      pdr.swap_to_src);
+				      pdr.swap_to_src,
+				      "Expected %u, got %u (i=%d)",
+				      test[i].e.pdr.swap_to_src,
+				      pdr.swap_to_src, i);
+			zassert_equal(test[i].e.pdr.accept_pr_swap,
+				      pdr.accept_pr_swap,
+				      "Expected %u, got %u (i=%d)",
+				      test[i].e.pdr.accept_pr_swap,
+				      pdr.accept_pr_swap, i);
 		}
 		emul_pdc_disconnect(emul);
 		zassert_true(TEST_WAIT_FOR(!pd_is_connected(TEST_PORT),
@@ -1153,20 +1279,23 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 	zassert_equal(0, pdr.swap_to_src);
 }
 
-static bool wait_state_name(int port, const char *target_name)
+static bool wait_state_name(int port, const uint8_t target_state,
+			    const char *target_name)
 {
 	const uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
 	uint32_t start = k_cycle_get_32();
-	const char *state_name = pd_get_task_state_name(TEST_PORT);
+	const char *state_name = pd_get_task_state_name(port);
+	uint8_t state = pd_get_task_state(port);
 
 	while (k_cycle_get_32() - start < timeout) {
 		k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
-		state_name = pd_get_task_state_name(TEST_PORT);
+		state_name = pd_get_task_state_name(port);
+		state = pd_get_task_state(port);
 
 		if (strcmp(state_name, target_name) != 0)
 			continue;
 
-		return true;
+		return target_state == state;
 	}
 
 	return false;
@@ -1176,14 +1305,15 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_typec_snk_attached)
 {
 	union connector_status_t connector_status;
 
-	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_UNATTACHED, "Unattached"));
 
 	memset(&connector_status, 0, sizeof(connector_status));
 	emul_pdc_configure_snk(emul, &connector_status);
 	connector_status.power_operation_mode = USB_DEFAULT_OPERATION;
 	emul_pdc_connect_partner(emul, &connector_status);
 
-	zassert_true(wait_state_name(TEST_PORT, "TypeCSnkAttached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_SNK_TYPEC_ONLY,
+				     "TypeCSnkAttached"));
 
 	/* Allow for debouncing time. */
 	TEST_WORKING_DELAY(PD_T_SINK_WAIT_CAP);
@@ -1195,14 +1325,15 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_typec_src_attached)
 {
 	union connector_status_t connector_status;
 
-	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_UNATTACHED, "Unattached"));
 
 	memset(&connector_status, 0, sizeof(connector_status));
 	emul_pdc_configure_src(emul, &connector_status);
 	connector_status.power_operation_mode = USB_DEFAULT_OPERATION;
 	emul_pdc_connect_partner(emul, &connector_status);
 
-	zassert_true(wait_state_name(TEST_PORT, "TypeCSrcAttached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_SRC_TYPEC_ONLY,
+				     "TypeCSrcAttached"));
 
 	/* Allow for debouncing time. */
 	TEST_WORKING_DELAY(PD_T_SINK_WAIT_CAP);
@@ -1214,28 +1345,30 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_attached_snk)
 {
 	union connector_status_t connector_status;
 
-	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_UNATTACHED, "Unattached"));
 
 	memset(&connector_status, 0, sizeof(connector_status));
 	emul_pdc_configure_snk(emul, &connector_status);
 	connector_status.power_operation_mode = PD_OPERATION;
 	emul_pdc_connect_partner(emul, &connector_status);
 
-	zassert_true(wait_state_name(TEST_PORT, "Attached.SNK"));
+	zassert_true(
+		wait_state_name(TEST_PORT, PDC_SNK_ATTACHED, "Attached.SNK"));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_task_state_name_attached_src)
 {
 	union connector_status_t connector_status;
 
-	zassert_true(wait_state_name(TEST_PORT, "Unattached"));
+	zassert_true(wait_state_name(TEST_PORT, PDC_UNATTACHED, "Unattached"));
 
 	memset(&connector_status, 0, sizeof(connector_status));
 	emul_pdc_configure_src(emul, &connector_status);
 	connector_status.power_operation_mode = PD_OPERATION;
 	emul_pdc_connect_partner(emul, &connector_status);
 
-	zassert_true(wait_state_name(TEST_PORT, "Attached.SRC"));
+	zassert_true(
+		wait_state_name(TEST_PORT, PDC_SRC_ATTACHED, "Attached.SRC"));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_connector_status)
@@ -1264,8 +1397,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_connector_status)
 				   PDC_TEST_TIMEOUT));
 
 	zassert_ok(pdc_power_mgmt_get_connector_status(TEST_PORT, &out));
-
-	out_conn_status_change_bits.raw_value = out.raw_conn_status_change_bits;
+	zassert_ok(pdc_power_mgmt_get_last_status_change(
+		TEST_PORT, &out_conn_status_change_bits));
 
 	zassert_equal(out_conn_status_change_bits.external_supply_change,
 		      in_conn_status_change_bits.external_supply_change);
@@ -1539,6 +1672,91 @@ ZTEST_USER(pdc_power_mgmt_api, test_sysjump_policy_on)
 	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
 
 	helper_wait_for_ccom_mode(CCOM_DRP);
+}
+
+/**
+ * @brief Helper function for polling sink path status
+ */
+static bool is_sink_path_enabled()
+{
+	bool sink_path_en;
+	zassert_ok(emul_pdc_get_sink_path(emul, &sink_path_en));
+	return sink_path_en;
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_pdc_power_mgmt_set_active_charge_port)
+{
+	union connector_status_t connector_status;
+
+	zassert_ok(board_set_active_charge_port(CHARGE_PORT_NONE));
+	emul_pdc_configure_snk(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
+	/* Sink path should be disabled because it's not active charge port */
+	zassert_false(is_sink_path_enabled());
+
+	zassert_ok(board_set_active_charge_port(TEST_PORT));
+	/* Sink path should be enabled after activating TEST_PORT */
+	zassert_true(TEST_WAIT_FOR(is_sink_path_enabled(), PDC_TEST_TIMEOUT));
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_hpd_wake)
+{
+	uint32_t dp_status_vdo;
+	union connector_status_t in_conn_status;
+	union conn_status_change_bits_t in_conn_status_change_bits;
+
+	/* Connect (DP) alternate mode partner. */
+	in_conn_status_change_bits.connect_change = 1;
+	in_conn_status.raw_conn_status_change_bits =
+		in_conn_status_change_bits.raw_value;
+	in_conn_status.power_operation_mode = PD_OPERATION;
+	in_conn_status.conn_partner_flags =
+		CONNECTOR_PARTNER_FLAG_ALTERNATE_MODE;
+	emul_pdc_configure_src(emul, &in_conn_status);
+	emul_pdc_connect_partner(emul, &in_conn_status);
+	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
+
+	/* Configure PDC emulator to respond to GET_VDO with DP Status VDO with
+	 * HPD_LVL low.
+	 */
+	dp_status_vdo = 0x01;
+	emul_pdc_set_vdo(emul, 1, &dp_status_vdo);
+	k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
+
+	/* Send an IRQ for the PDC power manager to update its DP Status. */
+	in_conn_status.raw_conn_status_change_bits = 0x0;
+	emul_pdc_set_connector_status(emul, &in_conn_status);
+	emul_pdc_pulse_irq(emul);
+	k_msleep(TEST_WAIT_FOR_INTERVAL_MS * 2);
+
+	/* Suspend the DUT. */
+	fake_chipset_state = CHIPSET_STATE_SUSPEND;
+	hook_notify(HOOK_CHIPSET_SUSPEND);
+	k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
+
+	/* Clear any USB mux host event. */
+	host_clear_events(EC_HOST_EVENT_MASK(EC_HOST_EVENT_USB_MUX));
+	zassert_false(host_is_event_set(EC_HOST_EVENT_USB_MUX));
+
+	/* Configure PDC emulator to respond to GET_VDO with DP Status VDO with
+	 * HPD_LVL high.
+	 */
+	dp_status_vdo = 0x81;
+	emul_pdc_set_vdo(emul, 1, &dp_status_vdo);
+	k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
+
+	/* Send an IRQ for the PDC power manager to update its DP Status. */
+	emul_pdc_set_connector_status(emul, &in_conn_status);
+	emul_pdc_pulse_irq(emul);
+	k_msleep(TEST_WAIT_FOR_INTERVAL_MS * 2);
+
+	/* Confirm that the IRQ with HPD_LVL high caused a USB mux host
+	 * event.
+	 */
+	zassert_true(host_is_event_set(EC_HOST_EVENT_USB_MUX));
 }
 
 /*
