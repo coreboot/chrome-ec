@@ -5,6 +5,8 @@
 cmake_minimum_required(VERSION 3.13.1)
 
 find_package(Zephyr REQUIRED HINTS "${ZEPHYR_BASE}")
+
+if (NOT DEFINED CONFIG_BOARD_INTEL_ISH_5_8_0)
 project(intelrvp)
 
 cros_ec_library_include_directories(include)
@@ -14,6 +16,7 @@ cros_ec_library_include_directories("${PLATFORM_EC}/driver/tcpm")
 cros_ec_library_include_directories("${PLATFORM_EC}/driver/usb_mux")
 zephyr_library_sources("src/intelrvp.c")
 zephyr_library_sources("src/intel_rvp_board_id.c")
+endif()
 
 if((DEFINED CONFIG_BOARD_ADLRVP_MCHP) OR (DEFINED CONFIG_BOARD_ADLRVP_NPCX))
   add_subdirectory(adlrvp)
@@ -36,3 +39,5 @@ if(DEFINED CONFIG_BOARD_PTLRVP_COMMON)
   add_subdirectory(ptlrvp)
   zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_DEDICATED_CHARGE_PORT "src/dc_jack.c")
 endif()
+
+add_subdirectory_ifdef(CONFIG_BOARD_INTEL_ISH_5_8_0 ish)
