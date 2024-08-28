@@ -21,7 +21,7 @@ def register_intelrvp_project(
     elif chip.startswith("npcx"):
         register_func = register_npcx_project
 
-    kconfig_files = [here / "prj.conf"]
+    kconfig_files = [here / "program.conf"]
     dts_overlays = []
     if project_name.startswith("adlrvp"):
         kconfig_files.append(here / "adlrvp/prj.conf")
