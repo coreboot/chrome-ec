@@ -1,0 +1,7 @@
+tests:
+  pw_fsm.state_machine:
+    harness: gtest
+    extra_args:
+      - TEST_LIB=pw_fsm.fsm_test
+    platform_allow:
+      - native_sim
