@@ -15,6 +15,41 @@
 #define TPS6699X_MAX_REG 0xa4
 #define TPS6699X_REG_SIZE 64
 
+struct ti_ccom {
+	uint16_t connector_number : 7;
+	uint16_t cc_operation_mode : 3;
+	uint16_t reserved : 6;
+} __packed;
+
+enum switch_select {
+	PP_5V1 = 0,
+	PP_5V2 = 1,
+	PP_EXT1 = 2,
+	PP_EXT2 = 3,
+};
+
+struct ti_task_srdy {
+	uint8_t switch_select : 3;
+	uint8_t reserved : 5;
+} __packed;
+
+struct tps6699x_response {
+	uint8_t result : 4;
+	uint8_t reserved : 4;
+	union {
+		struct {
+			uint8_t length;
+			union {
+				union error_status_t error;
+				struct ti_ccom ccom;
+			};
+		} __packed;
+		union connector_status_t connector_status;
+		struct capability_t capability;
+		union connector_capability_t connector_capability;
+	} data;
+} __packed;
+
 struct tps6699x_emul_pdc_data {
 	struct gpio_dt_spec irq_gpios;
 	uint32_t delay_ms;
@@ -29,6 +64,19 @@ struct tps6699x_emul_pdc_data {
 
 	union connector_status_t connector_status;
 	union connector_reset_t reset_cmd;
+	union error_status_t error;
+	struct capability_t capability;
+	union connector_capability_t connector_capability;
+	union uor_t uor;
+	union pdr_t pdr;
+	enum ccom_t ccom;
+
+	struct tps6699x_response response;
+
+	uint32_t snk_pdos[PDO_OFFSET_MAX];
+	uint32_t src_pdos[PDO_OFFSET_MAX];
+	uint32_t partner_snk_pdos[PDO_OFFSET_MAX];
+	uint32_t partner_src_pdos[PDO_OFFSET_MAX];
 };
 
 #endif /* __EMUL_TPS6699X_H_ */

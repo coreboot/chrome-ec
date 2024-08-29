@@ -41,6 +41,16 @@ tests:
     extra_dtc_overlay_files:
     - "./boards/rts5453p_deferred.overlay"
 
+  pdc.policy:
+    timeout: 300
+    extra_configs:
+    - CONFIG_TEST_SUITE_PDC_POLICY=y
+    - CONFIG_USBC_PDC_TRACE_MSG=y
+    - CONFIG_USB_PDC_LOG_LEVEL_DBG=y
+    - CONFIG_TEST_DISABLE_INLINE_CHIPSET_IN_STATE=y
+    extra_dtc_overlay_files:
+    - "./boards/rts5453p.overlay"
+
   pdc.rts54xx:
     extra_configs:
     - CONFIG_TEST_SUITE_PDC_RTS54XX=y
@@ -83,6 +93,13 @@ tests:
   pdc.ucsi_hostcmd:
     extra_configs:
     - CONFIG_TEST_SUITE_UCSI_HOSTCMD=y
+    extra_dtc_overlay_files:
+    - "./boards/rts5453p.overlay"
+
+  pdc.ppm_driver:
+    extra_configs:
+    - CONFIG_TEST_SUITE_PPM_DRIVER=y
+    - CONFIG_EMUL_PPM_DRIVER=n
     extra_dtc_overlay_files:
     - "./boards/rts5453p.overlay"
 

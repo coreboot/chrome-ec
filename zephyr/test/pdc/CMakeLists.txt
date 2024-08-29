@@ -24,6 +24,10 @@ if (DEFINED CONFIG_TEST_SUITE_PDC_GENERIC)
 	target_sources(app PRIVATE src/generic/pdc_pmc_debug_api.c)
 endif()
 
+if (DEFINED CONFIG_TEST_SUITE_PDC_POLICY)
+	target_sources(app PRIVATE src/pdc_policy/src_policy.c)
+endif()
+
 if (DEFINED CONFIG_TEST_SUITE_PDC_API_NULL_CHECK)
 	target_sources(app PRIVATE src/generic/pdc_null_api.c)
 endif()
@@ -57,6 +61,11 @@ endif()
 if (DEFINED CONFIG_TEST_SUITE_UCSI_HOSTCMD)
 	target_sources(app PRIVATE src/generic/ucsi_host_cmd.c)
 	target_sources(app PRIVATE ${PLATFORM_EC}/zephyr/subsys/ucsi/ucsi_host_cmd.c)
+endif()
+
+if (DEFINED CONFIG_TEST_SUITE_PPM_DRIVER)
+	target_sources(app PRIVATE src/generic/ppm_driver.c)
+	target_sources(app PRIVATE ${PLATFORM_EC}/zephyr/subsys/ucsi/ppm_driver.c)
 endif()
 
 if (DEFINED CONFIG_TEST_SUITE_PDC_UCSI)
