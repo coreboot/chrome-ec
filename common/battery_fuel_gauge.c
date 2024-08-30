@@ -12,6 +12,7 @@
 #include "cros_board_info.h"
 #include "hooks.h"
 #include "i2c.h"
+#include "timer.h"
 #include "util.h"
 
 #define CPRINTS(format, args...) cprints(CC_CHARGER, format, ##args)
@@ -175,13 +176,39 @@ static int bcfg_search_in_cbi(struct batt_conf_embed *batt)
 	}
 }
 
+/* The host command EC_CMD_BATTERY_GET_STATIC v0 and v1 truncate the battery
+ * strings to 7 and 11 chars respectively. Since the battery names in CBI
+ * will be set later, we don't know if 7 chars is enough for unique names in
+ * the future. Therefore, always enable V2 if BCIC is enabled.
+ */
+#if defined(CONFIG_BATTERY_CONFIG_IN_CBI)
+#if !defined(CONFIG_HOSTCMD_BATTERY_V2)
+#error CONFIG_HOSTCMD_BATTERY_V2 is required if \
+CONFIG_BATTERY_CONFIG_IN_CBI is enabled.
+#endif
+#endif
+
 void init_battery_type(void)
 {
 	int type;
 	int dflt = board_get_default_battery_type();
+	int ret;
 
-	if (battery_manufacturer_name(batt_manuf_name,
-				      sizeof(batt_manuf_name))) {
+	ret = battery_manufacturer_name(batt_manuf_name,
+					sizeof(batt_manuf_name));
+
+	for (int i = 0; i < CONFIG_BATTERY_INIT_TYPE_RETRY_COUNT; i++) {
+		if (ret == EC_SUCCESS) {
+			break;
+		}
+		CPRINTS("Manuf name not found, wait 100ms then retry (attempt %d)",
+			i);
+		crec_msleep(100);
+		ret = battery_manufacturer_name(batt_manuf_name,
+						sizeof(batt_manuf_name));
+	}
+
+	if (ret) {
 		BCFGPRT("Manuf name not found");
 		battery_conf = &board_battery_info[dflt];
 		return;
@@ -189,7 +216,20 @@ void init_battery_type(void)
 
 	/* Don't carry over any previous name (in case i2c fail). */
 	memset(batt_device_name, 0, sizeof(batt_device_name));
-	if (battery_device_name(batt_device_name, sizeof(batt_device_name))) {
+	ret = battery_device_name(batt_device_name, sizeof(batt_device_name));
+
+	for (int i = 0; i < CONFIG_BATTERY_INIT_TYPE_RETRY_COUNT; i++) {
+		if (ret == EC_SUCCESS) {
+			break;
+		}
+		CPRINTS("Device name not found, wait 100ms then retry (attempt %d)",
+			i);
+		crec_msleep(100);
+		ret = battery_device_name(batt_device_name,
+					  sizeof(batt_device_name));
+	}
+
+	if (ret) {
 		BCFGPRT("Device name not found");
 		memset(batt_device_name, 0, sizeof(batt_device_name));
 		/* Battery name is optional. Proceed. */
