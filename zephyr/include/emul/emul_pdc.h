@@ -28,9 +28,13 @@ typedef int (*emul_pdc_get_ccom_t)(const struct emul *target,
 				   enum ccom_t *ccom);
 typedef int (*emul_pdc_get_drp_mode_t)(const struct emul *target,
 				       enum drp_mode_t *dm);
+typedef int (*emul_pdc_get_supported_drp_modes_t)(const struct emul *target,
+						  enum drp_mode_t *modes,
+						  uint8_t size, uint8_t *num);
 
 typedef int (*emul_pdc_get_uor_t)(const struct emul *target, union uor_t *uor);
 typedef int (*emul_pdc_get_pdr_t)(const struct emul *target, union pdr_t *pdr);
+typedef int (*emul_pdc_get_rdo_t)(const struct emul *target, uint32_t *rdo);
 typedef int (*emul_pdc_get_sink_path_t)(const struct emul *target, bool *en);
 typedef int (*emul_pdc_set_connector_status_t)(
 	const struct emul *target,
@@ -76,6 +80,9 @@ typedef int (*emul_pdc_get_cable_property_t)(const struct emul *target,
 typedef int (*emul_pdc_set_cable_property_t)(
 	const struct emul *target, const union cable_property_t property);
 
+typedef int (*emul_pdc_set_vdo_t)(const struct emul *target, uint8_t num_vdos,
+				  const uint32_t *vdos);
+
 typedef int (*emul_pdc_idle_wait_t)(const struct emul *target);
 
 __subsystem struct emul_pdc_api_t {
@@ -87,8 +94,10 @@ __subsystem struct emul_pdc_api_t {
 	emul_pdc_set_connector_capability_t set_connector_capability;
 	emul_pdc_get_ccom_t get_ccom;
 	emul_pdc_get_drp_mode_t get_drp_mode;
+	emul_pdc_get_supported_drp_modes_t get_supported_drp_modes;
 	emul_pdc_get_uor_t get_uor;
 	emul_pdc_get_pdr_t get_pdr;
+	emul_pdc_get_rdo_t get_rdo;
 	emul_pdc_get_sink_path_t get_sink_path;
 	emul_pdc_set_connector_status_t set_connector_status;
 	emul_pdc_set_error_status_t set_error_status;
@@ -105,6 +114,7 @@ __subsystem struct emul_pdc_api_t {
 	emul_pdc_pulse_irq_t pulse_irq;
 	emul_pdc_set_cable_property_t set_cable_property;
 	emul_pdc_get_cable_property_t get_cable_property;
+	emul_pdc_set_vdo_t set_vdo;
 	emul_pdc_idle_wait_t idle_wait;
 };
 
@@ -213,6 +223,22 @@ static inline int emul_pdc_get_drp_mode(const struct emul *target,
 	return -ENOSYS;
 }
 
+static inline int emul_pdc_get_supported_drp_modes(const struct emul *target,
+						   enum drp_mode_t *modes,
+						   uint8_t size, uint8_t *num)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->get_supported_drp_modes) {
+		return api->get_supported_drp_modes(target, modes, size, num);
+	}
+	return -ENOSYS;
+}
+
 static inline int emul_pdc_get_uor(const struct emul *target, union uor_t *uor)
 {
 	if (!target || !target->backend_api) {
@@ -237,6 +263,20 @@ static inline int emul_pdc_get_pdr(const struct emul *target, union pdr_t *pdr)
 
 	if (api->get_pdr) {
 		return api->get_pdr(target, pdr);
+	}
+	return -ENOSYS;
+}
+
+static inline int emul_pdc_get_rdo(const struct emul *target, uint32_t *rdo)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->get_rdo) {
+		return api->get_rdo(target, rdo);
 	}
 	return -ENOSYS;
 }
@@ -501,6 +541,21 @@ emul_pdc_set_cable_property(const struct emul *target,
 
 	if (api->set_cable_property) {
 		return api->set_cable_property(target, property);
+	}
+	return -ENOSYS;
+}
+
+static inline int emul_pdc_set_vdo(const struct emul *target, uint8_t num_vdos,
+				   const uint32_t *vdos)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->set_vdo) {
+		return api->set_vdo(target, num_vdos, vdos);
 	}
 	return -ENOSYS;
 }

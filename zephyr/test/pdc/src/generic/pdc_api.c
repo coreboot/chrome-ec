@@ -11,6 +11,7 @@
 #include "emul/emul_pdc.h"
 #include "i2c.h"
 #include "pdc_trace_msg.h"
+#include "usbc/utils.h"
 #include "zephyr/sys/util.h"
 #include "zephyr/sys/util_macro.h"
 
@@ -30,6 +31,8 @@ LOG_MODULE_REGISTER(test_pdc_api, LOG_LEVEL_INF);
 
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 static const struct device *dev = DEVICE_DT_GET(RTS5453P_NODE);
+static const uint8_t connector_number =
+	USBC_PORT_FROM_DRIVER_NODE(RTS5453P_NODE, pdc) + 1;
 static bool test_cc_cb_called;
 static union cci_event_t test_cc_cb_cci;
 
@@ -89,9 +92,6 @@ ZTEST_USER(pdc_api, test_connector_reset)
 
 	zassert_equal(in.reset_type, out.reset_type);
 }
-
-/* TODO(b/345292002): The tests below fail with the TPS6699x emulator/driver. */
-#ifndef CONFIG_TODO_B_345292002
 
 ZTEST_USER(pdc_api, test_get_capability)
 {
@@ -209,6 +209,7 @@ ZTEST_USER(pdc_api, test_set_uor)
 
 	in.accept_dr_swap = 1;
 	in.swap_to_ufp = 1;
+	in.connector_number = connector_number;
 
 	zassert_ok(pdc_set_uor(dev, in), "Failed to set uor");
 
@@ -227,6 +228,7 @@ ZTEST_USER(pdc_api, test_set_pdr)
 
 	in.accept_pr_swap = 1;
 	in.swap_to_src = 1;
+	in.connector_number = connector_number;
 
 	zassert_ok(pdc_set_pdr(dev, in), "Failed to set pdr");
 
@@ -236,6 +238,8 @@ ZTEST_USER(pdc_api, test_set_pdr)
 	zassert_equal(out.raw_value, in.raw_value);
 }
 
+/* TODO(b/345292002): TPS6699x driver set_rdo is not supported yet. */
+#ifndef CONFIG_TODO_B_345292002
 ZTEST_USER(pdc_api, test_rdo)
 {
 	uint32_t in, out = 0;
@@ -249,6 +253,7 @@ ZTEST_USER(pdc_api, test_rdo)
 	k_sleep(K_MSEC(SLEEP_MS));
 	zassert_equal(in, out);
 }
+#endif
 
 ZTEST_USER(pdc_api, test_set_power_level)
 {
@@ -270,6 +275,8 @@ ZTEST_USER(pdc_api, test_set_power_level)
 		emul_pdc_get_requested_power_level(emul, &out);
 		zassert_equal(in[i], out);
 	}
+
+	zassert_equal(pdc_set_power_level(dev, 0xF), -EINVAL);
 }
 
 ZTEST_USER(pdc_api, test_get_bus_voltage)
@@ -312,11 +319,16 @@ ZTEST_USER(pdc_api, test_set_drp_mode)
 {
 	int i;
 	enum drp_mode_t dm_in[] = { DRP_NORMAL, DRP_TRY_SRC, DRP_TRY_SNK };
+	uint8_t num_modes = ARRAY_SIZE(dm_in);
 	enum drp_mode_t dm_out;
+
+	/* Emulator may not support this so defaults above should be used. */
+	(void)emul_pdc_get_supported_drp_modes(emul, dm_in, ARRAY_SIZE(dm_in),
+					       &num_modes);
 
 	k_sleep(K_MSEC(SLEEP_MS));
 
-	for (i = 0; i < ARRAY_SIZE(dm_in); i++) {
+	for (i = 0; i < num_modes; i++) {
 		zassert_ok(pdc_set_drp_mode(dev, dm_in[i]));
 
 		k_sleep(K_MSEC(SLEEP_MS));
@@ -340,6 +352,8 @@ ZTEST_USER(pdc_api, test_set_sink_path)
 	}
 }
 
+/* TODO(b/345292002): The tests below fail with the TPS6699x emulator/driver. */
+#ifndef CONFIG_TODO_B_345292002
 ZTEST_USER(pdc_api, test_reconnect)
 {
 	uint8_t expected, val;
@@ -550,44 +564,6 @@ ZTEST_USER(pdc_api, test_execute_ucsi_cmd)
 
 	out = (union error_status_t *)ucsi_data.message_in;
 	zassert_equal(out->raw_value, in.raw_value);
-}
-
-ZTEST_USER(pdc_api, test_execute_ucsi_cmd_get_connector_status)
-{
-	struct ucsi_memory_region ucsi_data;
-	struct ucsi_control_t *control = &ucsi_data.control;
-	struct pdc_callback callback;
-	union connector_status_t in;
-	union connector_status_t *out =
-		(union connector_status_t *)ucsi_data.message_in;
-
-	memset(&ucsi_data, 0, sizeof(ucsi_data));
-	memset(in.raw_value, 0, sizeof(in.raw_value));
-	in.connect_status = 1;
-	zassert_ok(emul_pdc_set_connector_status(emul, &in));
-
-	/* Trigger IRQ to clear the cache. */
-	emul_pdc_pulse_irq(emul);
-	k_sleep(K_MSEC(SLEEP_MS));
-
-	callback.handler = test_cc_cb;
-	zassert_ok(pdc_execute_ucsi_cmd(dev, UCSI_GET_CONNECTOR_STATUS, 0,
-					control->command_specific,
-					ucsi_data.message_in, &callback));
-	k_sleep(K_MSEC(SLEEP_MS));
-	zassert_equal(out->connect_status, 1);
-
-	/*
-	 * Expect the command to ignore the emul status and return the previous
-	 * status (from the cache).
-	 */
-	in.connect_status = 0;
-	zassert_ok(emul_pdc_set_connector_status(emul, &in));
-	zassert_ok(pdc_execute_ucsi_cmd(dev, UCSI_GET_CONNECTOR_STATUS, 0,
-					control->command_specific,
-					ucsi_data.message_in, &callback));
-	k_sleep(K_MSEC(SLEEP_MS));
-	zassert_equal(out->connect_status, 1);
 }
 
 /*

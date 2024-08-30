@@ -18,7 +18,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/ztest.h>
 
-LOG_MODULE_REGISTER(pdc_power_mgmt_api);
+LOG_MODULE_REGISTER(pdc_power_mgmt_api, LOG_LEVEL_INF);
 
 #define PDC_TEST_TIMEOUT 2000
 #define RTS5453P_NODE DT_NODELABEL(pdc_emul1)
@@ -26,7 +26,7 @@ LOG_MODULE_REGISTER(pdc_power_mgmt_api);
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 #define TEST_PORT 0
 
-bool pdc_power_mgmt_test_wait_attached(int port);
+bool pdc_power_mgmt_is_pd_attached(int port);
 
 bool test_pdc_power_mgmt_is_snk_typec_attached_run(int port);
 bool test_pdc_power_mgmt_is_src_typec_attached_run(int port);
@@ -497,6 +497,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 			emul_pdc_configure_src(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
 
+		zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+
 		start = k_cycle_get_32();
 		while (k_cycle_get_32() - start < timeout) {
 			k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
@@ -680,10 +682,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 
 		test[i].s.configure(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
-		zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_test_wait_attached(
-						   TEST_PORT),
-					   PDC_TEST_TIMEOUT),
-			     "PD not connected in time (i=%d)", i);
+		zassert_true(
+			TEST_WAIT_FOR(pdc_power_mgmt_is_pd_attached(TEST_PORT),
+				      PDC_TEST_TIMEOUT),
+			"PD not connected in time (i=%d)", i);
 
 		pd_request_power_swap(TEST_PORT);
 
@@ -770,9 +772,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_data_swap)
 
 		test[i].s.configure(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
-		zassert_true(TEST_WAIT_FOR(
-			pdc_power_mgmt_test_wait_attached(TEST_PORT),
-			PDC_TEST_TIMEOUT));
+		zassert_true(
+			TEST_WAIT_FOR(pdc_power_mgmt_is_pd_attached(TEST_PORT),
+				      PDC_TEST_TIMEOUT));
 
 		pd_request_data_swap(TEST_PORT);
 		start = k_cycle_get_32();
@@ -1055,7 +1057,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 			test[i].s.configure(emul, &connector_status);
 			emul_pdc_connect_partner(emul, &connector_status);
 			zassert_true(TEST_WAIT_FOR(
-				pdc_power_mgmt_test_wait_attached(TEST_PORT),
+				pdc_power_mgmt_is_pd_attached(TEST_PORT),
 				PDC_TEST_TIMEOUT));
 		}
 
@@ -1393,12 +1395,12 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_connector_status)
 
 	emul_pdc_configure_snk(emul, &in);
 	emul_pdc_connect_partner(emul, &in);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_pd_attached(TEST_PORT),
 				   PDC_TEST_TIMEOUT));
 
 	zassert_ok(pdc_power_mgmt_get_connector_status(TEST_PORT, &out));
-
-	out_conn_status_change_bits.raw_value = out.raw_conn_status_change_bits;
+	zassert_ok(pdc_power_mgmt_get_last_status_change(
+		TEST_PORT, &out_conn_status_change_bits));
 
 	zassert_equal(out_conn_status_change_bits.external_supply_change,
 		      in_conn_status_change_bits.external_supply_change);
@@ -1446,7 +1448,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_cable_prop)
 
 	emul_pdc_configure_snk(emul, &in_conn_status);
 	emul_pdc_connect_partner(emul, &in_conn_status);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_pd_attached(TEST_PORT),
 				   PDC_TEST_TIMEOUT));
 
 	zassert_ok(pdc_power_mgmt_get_connector_status(TEST_PORT,
@@ -1564,14 +1566,15 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_identity_discovery)
 
 		emul_pdc_connect_partner(emul, &in_conn_status);
 		zassert_true(
-			TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+			TEST_WAIT_FOR(pdc_power_mgmt_is_pd_attached(TEST_PORT),
 				      PDC_TEST_TIMEOUT));
 
 		actual_state = pdc_power_mgmt_get_identity_discovery(
 			TEST_PORT, test[i].s.type);
 		zassert_equal(test[i].expected_state, actual_state,
 			      "%s: expected state %d, actual %d",
-			      test[i].description, test[i].expected_state);
+			      test[i].description, test[i].expected_state,
+			      actual_state);
 
 		emul_pdc_disconnect(emul);
 		zassert_true(
@@ -1675,6 +1678,52 @@ ZTEST_USER(pdc_power_mgmt_api, test_sysjump_policy_on)
 }
 
 /**
+ * @brief Helper function for getting object position in RDO from the emulator
+ */
+static int get_obj_pos_from_rdo()
+{
+	uint32_t rdo;
+
+	zassert_ok(emul_pdc_get_rdo(emul, &rdo));
+	return RDO_POS(rdo);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_set_new_power_request)
+{
+	union connector_status_t connector_status;
+	const uint32_t pdo_15W[] = {
+		PDO_FIXED(5000, 3000, PDO_FIXED_DUAL_ROLE),
+	};
+	const uint32_t pdo_27W[] = {
+		PDO_FIXED(9000, 3000, PDO_FIXED_DUAL_ROLE),
+	};
+
+	/* This should result in no-op */
+	zassert_not_ok(pdc_power_mgmt_set_new_power_request(TEST_PORT));
+
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO,
+			  pdo_15W);
+	emul_pdc_configure_snk(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
+	LOG_DBG("RDO position before new power request: %d",
+		get_obj_pos_from_rdo());
+
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_1, 1, PARTNER_PDO,
+			  pdo_27W);
+	zassert_ok(pdc_power_mgmt_set_new_power_request(TEST_PORT));
+
+	/* The 27W PDO at position 2 must be selected after the new power
+	 * request.
+	 */
+	zassert_true(
+		TEST_WAIT_FOR(get_obj_pos_from_rdo() == 2, PDC_TEST_TIMEOUT));
+	LOG_DBG("RDO position after new power request: %d",
+		get_obj_pos_from_rdo());
+}
+
+/**
  * @brief Helper function for polling sink path status
  */
 static bool is_sink_path_enabled()
@@ -1699,6 +1748,65 @@ ZTEST_USER(pdc_power_mgmt_api, test_pdc_power_mgmt_set_active_charge_port)
 	zassert_ok(board_set_active_charge_port(TEST_PORT));
 	/* Sink path should be enabled after activating TEST_PORT */
 	zassert_true(TEST_WAIT_FOR(is_sink_path_enabled(), PDC_TEST_TIMEOUT));
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_hpd_wake)
+{
+	uint32_t dp_status_vdo;
+	union connector_status_t in_conn_status;
+	union conn_status_change_bits_t in_conn_status_change_bits;
+
+	/* Connect (DP) alternate mode partner. */
+	in_conn_status_change_bits.connect_change = 1;
+	in_conn_status.raw_conn_status_change_bits =
+		in_conn_status_change_bits.raw_value;
+	in_conn_status.power_operation_mode = PD_OPERATION;
+	in_conn_status.conn_partner_flags =
+		CONNECTOR_PARTNER_FLAG_ALTERNATE_MODE;
+	emul_pdc_configure_src(emul, &in_conn_status);
+	emul_pdc_connect_partner(emul, &in_conn_status);
+	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
+
+	/* Configure PDC emulator to respond to GET_VDO with DP Status VDO with
+	 * HPD_LVL low.
+	 */
+	dp_status_vdo = 0x01;
+	emul_pdc_set_vdo(emul, 1, &dp_status_vdo);
+	k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
+
+	/* Send an IRQ for the PDC power manager to update its DP Status. */
+	in_conn_status.raw_conn_status_change_bits = 0x0;
+	emul_pdc_set_connector_status(emul, &in_conn_status);
+	emul_pdc_pulse_irq(emul);
+	k_msleep(TEST_WAIT_FOR_INTERVAL_MS * 2);
+
+	/* Suspend the DUT. */
+	fake_chipset_state = CHIPSET_STATE_SUSPEND;
+	hook_notify(HOOK_CHIPSET_SUSPEND);
+	k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
+
+	/* Clear any USB mux host event. */
+	host_clear_events(EC_HOST_EVENT_MASK(EC_HOST_EVENT_USB_MUX));
+	zassert_false(host_is_event_set(EC_HOST_EVENT_USB_MUX));
+
+	/* Configure PDC emulator to respond to GET_VDO with DP Status VDO with
+	 * HPD_LVL high.
+	 */
+	dp_status_vdo = 0x81;
+	emul_pdc_set_vdo(emul, 1, &dp_status_vdo);
+	k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
+
+	/* Send an IRQ for the PDC power manager to update its DP Status. */
+	emul_pdc_set_connector_status(emul, &in_conn_status);
+	emul_pdc_pulse_irq(emul);
+
+	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+
+	/* Confirm that the IRQ with HPD_LVL high caused a USB mux host
+	 * event.
+	 */
+	zassert_true(host_is_event_set(EC_HOST_EVENT_USB_MUX));
 }
 
 /*
