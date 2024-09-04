@@ -11,6 +11,7 @@
 #include "emul/emul_pdc.h"
 #include "i2c.h"
 #include "pdc_trace_msg.h"
+#include "usbc/utils.h"
 #include "zephyr/sys/util.h"
 #include "zephyr/sys/util_macro.h"
 
@@ -30,6 +31,8 @@ LOG_MODULE_REGISTER(test_pdc_api, LOG_LEVEL_INF);
 
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 static const struct device *dev = DEVICE_DT_GET(RTS5453P_NODE);
+static const uint8_t connector_number =
+	USBC_PORT_FROM_DRIVER_NODE(RTS5453P_NODE, pdc) + 1;
 static bool test_cc_cb_called;
 static union cci_event_t test_cc_cb_cci;
 
@@ -59,17 +62,12 @@ ZTEST_USER(pdc_api, test_get_ucsi_version)
 	zassert_equal(version, UCSI_VERSION);
 }
 
-/* TODO(b/345292002): The tests below fail with the TPS6699x emulator/driver. */
-#ifndef CONFIG_TODO_B_345292002
-
 ZTEST_USER(pdc_api, test_reset)
 {
 	zassert_ok(pdc_reset(dev), "Failed to reset PDC");
 
 	k_sleep(K_MSEC(500));
 }
-
-#endif /* CONFIG_TODO_B_345292002 */
 
 ZTEST_USER(pdc_api, test_connector_reset)
 {
@@ -89,9 +87,6 @@ ZTEST_USER(pdc_api, test_connector_reset)
 
 	zassert_equal(in.reset_type, out.reset_type);
 }
-
-/* TODO(b/345292002): The tests below fail with the TPS6699x emulator/driver. */
-#ifndef CONFIG_TODO_B_345292002
 
 ZTEST_USER(pdc_api, test_get_capability)
 {
@@ -209,6 +204,7 @@ ZTEST_USER(pdc_api, test_set_uor)
 
 	in.accept_dr_swap = 1;
 	in.swap_to_ufp = 1;
+	in.connector_number = connector_number;
 
 	zassert_ok(pdc_set_uor(dev, in), "Failed to set uor");
 
@@ -227,6 +223,7 @@ ZTEST_USER(pdc_api, test_set_pdr)
 
 	in.accept_pr_swap = 1;
 	in.swap_to_src = 1;
+	in.connector_number = connector_number;
 
 	zassert_ok(pdc_set_pdr(dev, in), "Failed to set pdr");
 
@@ -236,6 +233,8 @@ ZTEST_USER(pdc_api, test_set_pdr)
 	zassert_equal(out.raw_value, in.raw_value);
 }
 
+/* TODO(b/345292002): TPS6699x driver set_rdo is not supported yet. */
+#ifndef CONFIG_TODO_B_345292002
 ZTEST_USER(pdc_api, test_rdo)
 {
 	uint32_t in, out = 0;
@@ -249,6 +248,7 @@ ZTEST_USER(pdc_api, test_rdo)
 	k_sleep(K_MSEC(SLEEP_MS));
 	zassert_equal(in, out);
 }
+#endif
 
 ZTEST_USER(pdc_api, test_set_power_level)
 {
@@ -270,6 +270,8 @@ ZTEST_USER(pdc_api, test_set_power_level)
 		emul_pdc_get_requested_power_level(emul, &out);
 		zassert_equal(in[i], out);
 	}
+
+	zassert_equal(pdc_set_power_level(dev, 0xF), -EINVAL);
 }
 
 ZTEST_USER(pdc_api, test_get_bus_voltage)
@@ -312,11 +314,16 @@ ZTEST_USER(pdc_api, test_set_drp_mode)
 {
 	int i;
 	enum drp_mode_t dm_in[] = { DRP_NORMAL, DRP_TRY_SRC, DRP_TRY_SNK };
+	uint8_t num_modes = ARRAY_SIZE(dm_in);
 	enum drp_mode_t dm_out;
+
+	/* Emulator may not support this so defaults above should be used. */
+	(void)emul_pdc_get_supported_drp_modes(emul, dm_in, ARRAY_SIZE(dm_in),
+					       &num_modes);
 
 	k_sleep(K_MSEC(SLEEP_MS));
 
-	for (i = 0; i < ARRAY_SIZE(dm_in); i++) {
+	for (i = 0; i < num_modes; i++) {
 		zassert_ok(pdc_set_drp_mode(dev, dm_in[i]));
 
 		k_sleep(K_MSEC(SLEEP_MS));
@@ -340,6 +347,8 @@ ZTEST_USER(pdc_api, test_set_sink_path)
 	}
 }
 
+/* TODO(b/345292002): TPS6699x pdc_reconnect not implemented */
+#ifndef CONFIG_TODO_B_345292002
 ZTEST_USER(pdc_api, test_reconnect)
 {
 	uint8_t expected, val;
@@ -350,6 +359,7 @@ ZTEST_USER(pdc_api, test_reconnect)
 	zassert_ok(emul_pdc_get_reconnect_req(emul, &expected, &val));
 	zassert_equal(expected, val);
 }
+#endif
 
 /**
  * @brief Clears the cached PDC FW info struct inside the driver.
@@ -363,6 +373,23 @@ void helper_clear_cached_chip_info(void)
 	k_sleep(K_MSEC(SLEEP_MS));
 }
 
+#define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
+#if DT_NODE_EXISTS(ZEPHYR_USER_NODE)
+static const struct pdc_info_t info_in1 = {
+	.fw_version = 0x001a2b3c,
+	.pd_version = DT_PROP(ZEPHYR_USER_NODE, pd_version),
+	.pd_revision = DT_PROP(ZEPHYR_USER_NODE, pd_revision),
+	.vid_pid = 0x12345678,
+	.project_name = DT_PROP(ZEPHYR_USER_NODE, project_name),
+};
+static const struct pdc_info_t info_in2 = {
+	.fw_version = 0x002a3b4c,
+	.pd_version = DT_PROP(ZEPHYR_USER_NODE, pd_version),
+	.pd_revision = DT_PROP(ZEPHYR_USER_NODE, pd_revision),
+	.vid_pid = 0x9abcdef0,
+	.project_name = DT_PROP(ZEPHYR_USER_NODE, project_name),
+};
+#else
 /* Two sets of chip info to test against */
 static const struct pdc_info_t info_in1 = {
 	.fw_version = 0x001a2b3c,
@@ -379,6 +406,7 @@ static const struct pdc_info_t info_in2 = {
 	.vid_pid = 0x9abcdef0,
 	.project_name = "MyProj",
 };
+#endif /* DT_NODE_EXISTS(ZEPHYR_USER_NODE) */
 
 ZTEST_USER(pdc_api, test_get_info)
 {
@@ -453,6 +481,10 @@ ZTEST_USER(pdc_api, test_get_lpm_ppm_info)
 		.fw_ver_sub = 456,
 		.hw_ver = 0xa5b6c7de,
 	};
+
+	if (pdc_get_lpm_ppm_info(dev, NULL) == -ENOSYS) {
+		ztest_test_skip();
+	}
 
 	/* Test output param NULL check */
 	zassert_equal(-EINVAL, pdc_get_lpm_ppm_info(dev, NULL));
@@ -615,8 +647,10 @@ ZTEST_USER(pdc_api_suspended, test_get_lpm_ppm_info)
 {
 	struct lpm_ppm_info_t out;
 
+	if (pdc_get_lpm_ppm_info(dev, NULL) == -ENOSYS) {
+		ztest_test_skip();
+	}
+
 	/* Read should return busy because comms are blocked */
 	zassert_equal(-EBUSY, pdc_get_lpm_ppm_info(dev, &out));
 }
-
-#endif /* CONFIG_TODO_B_345292002 */

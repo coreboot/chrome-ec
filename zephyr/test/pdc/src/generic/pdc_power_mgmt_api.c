@@ -18,15 +18,23 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/ztest.h>
 
-LOG_MODULE_REGISTER(pdc_power_mgmt_api);
+LOG_MODULE_REGISTER(pdc_power_mgmt_api, LOG_LEVEL_INF);
 
+#define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
+
+#if DT_NODE_EXISTS(ZEPHYR_USER_NODE)
+#define PDC_TEST_TIMEOUT DT_PROP_OR(ZEPHYR_USER_NODE, test_timeout, 2000)
+#else
 #define PDC_TEST_TIMEOUT 2000
+#endif
+/* Time needed for chipset power to stabilize */
+#define PDC_POWER_STABLE_TIMEOUT (PDC_TEST_TIMEOUT * 2)
 #define RTS5453P_NODE DT_NODELABEL(pdc_emul1)
 
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 #define TEST_PORT 0
 
-bool pdc_power_mgmt_test_wait_attached(int port);
+bool pdc_power_mgmt_is_pd_attached(int port);
 
 bool test_pdc_power_mgmt_is_snk_typec_attached_run(int port);
 bool test_pdc_power_mgmt_is_src_typec_attached_run(int port);
@@ -39,6 +47,7 @@ static enum chipset_state_mask fake_chipset_state = CHIPSET_STATE_ON;
 
 static int custom_fake_chipset_in_state(int mask)
 {
+	LOG_DBG("MOCK: chipset_in_state");
 	return !!(fake_chipset_state & mask);
 }
 
@@ -47,6 +56,7 @@ static void reset_fakes(void)
 	RESET_FAKE(system_jumped_late);
 	RESET_FAKE(chipset_in_state);
 
+	fake_chipset_state = CHIPSET_STATE_ON;
 	chipset_in_state_fake.custom_fake = custom_fake_chipset_in_state;
 }
 
@@ -74,9 +84,6 @@ static void pdc_power_mgmt_after(void *fixture)
 
 ZTEST_SUITE(pdc_power_mgmt_api, NULL, pdc_power_mgmt_setup,
 	    pdc_power_mgmt_before, pdc_power_mgmt_after, NULL);
-
-/* TODO(b/345292002): The tests below fail with the TPS6699x emulator/driver. */
-#ifndef CONFIG_TODO_B_345292002
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_usb_pd_port_count)
 {
@@ -201,7 +208,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_pd_get_task_cc_state)
 		{ .in = UFP_ATTACHED, .out = PD_CC_UFP_ATTACHED },
 		{ .in = POWERED_CABLE_NO_UFP_ATTACHED, .out = PD_CC_NONE },
 		{ .in = POWERED_CABLE_UFP_ATTACHED, .out = PD_CC_UFP_ATTACHED },
+#ifndef CONFIG_TODO_B_345292002
 		{ .in = DEBUG_ACCESSORY_ATTACHED, .out = PD_CC_UFP_DEBUG_ACC },
+#endif
 		{ .in = AUDIO_ADAPTER_ACCESSORY_ATTACHED,
 		  .out = PD_CC_UFP_AUDIO_ACC },
 	};
@@ -381,7 +390,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_unattached_public_cmd)
 ZTEST_USER(pdc_power_mgmt_api, test_connectionless_cmds)
 {
 	struct pdc_info_t pdc_info;
+#ifndef CONFIG_TODO_B_345292002
 	struct lpm_ppm_info_t lpm_ppm_info;
+#endif
 	union data_status_reg status;
 
 	LOG_INF("Emul PDC disconnect partner");
@@ -402,8 +413,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_connectionless_cmds)
 	zassert_ok(pdc_power_mgmt_get_pch_data_status(TEST_PORT,
 						      status.raw_value));
 
+#ifndef CONFIG_TODO_B_345292002
 	LOG_INF("Sending GET LPM PPM INFO");
 	zassert_ok(pdc_power_mgmt_get_lpm_ppm_info(TEST_PORT, &lpm_ppm_info));
+#endif
 
 	/* Send a command that requires a connection. It should fail. */
 	LOG_INF("Sending SET DRP");
@@ -497,6 +510,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 			emul_pdc_configure_src(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
 
+		zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+
 		start = k_cycle_get_32();
 		while (k_cycle_get_32() - start < timeout) {
 			k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
@@ -521,6 +536,22 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 {
+#if DT_NODE_EXISTS(ZEPHYR_USER_NODE)
+	static const struct pdc_info_t in1 = {
+		.fw_version = 0x001a2b3c,
+		.pd_version = DT_PROP(ZEPHYR_USER_NODE, pd_version),
+		.pd_revision = DT_PROP(ZEPHYR_USER_NODE, pd_revision),
+		.vid_pid = 0x12345678,
+		.project_name = DT_PROP(ZEPHYR_USER_NODE, project_name),
+	};
+	static const struct pdc_info_t in2 = {
+		.fw_version = 0x002a3b4c,
+		.pd_version = DT_PROP(ZEPHYR_USER_NODE, pd_version),
+		.pd_revision = DT_PROP(ZEPHYR_USER_NODE, pd_revision),
+		.vid_pid = 0x9abcdef0,
+		.project_name = DT_PROP(ZEPHYR_USER_NODE, project_name),
+	};
+#else
 	struct pdc_info_t in1 = {
 		.fw_version = 0x001a2b3c,
 		.pd_version = 0xabcd,
@@ -535,6 +566,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 		.vid_pid = 0x9abcdef0,
 		.project_name = "MyProj",
 	};
+#endif
 	struct pdc_info_t out = { 0 };
 	union connector_status_t connector_status;
 
@@ -549,6 +581,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
+	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
 	zassert_ok(pdc_power_mgmt_get_info(TEST_PORT, &out, true));
 	zassert_equal(in1.fw_version, out.fw_version, "in=0x%X, out=0x%X",
 		      in1.fw_version, out.fw_version);
@@ -589,6 +622,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 		TEST_WAIT_FOR(!pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 }
 
+/* TODO(b/345292002): Implement set_pdo for TPS6699x emulator/driver. */
+#ifndef CONFIG_TODO_B_345292002
 ZTEST_USER(pdc_power_mgmt_api, test_get_lpm_ppm_info)
 {
 	struct lpm_ppm_info_t out = { 0 };
@@ -625,6 +660,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_lpm_ppm_info)
 	zassert_equal(in.hw_ver, out.hw_ver, "Got %08x, expected $%08x",
 		      out.hw_ver, in.hw_ver);
 }
+#endif
 
 ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 {
@@ -680,10 +716,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 
 		test[i].s.configure(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
-		zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_test_wait_attached(
-						   TEST_PORT),
-					   PDC_TEST_TIMEOUT),
-			     "PD not connected in time (i=%d)", i);
+		zassert_true(
+			TEST_WAIT_FOR(pdc_power_mgmt_is_pd_attached(TEST_PORT),
+				      PDC_TEST_TIMEOUT),
+			"PD not connected in time (i=%d)", i);
 
 		pd_request_power_swap(TEST_PORT);
 
@@ -770,9 +806,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_data_swap)
 
 		test[i].s.configure(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
-		zassert_true(TEST_WAIT_FOR(
-			pdc_power_mgmt_test_wait_attached(TEST_PORT),
-			PDC_TEST_TIMEOUT));
+		zassert_true(
+			TEST_WAIT_FOR(pdc_power_mgmt_is_pd_attached(TEST_PORT),
+				      PDC_TEST_TIMEOUT));
 
 		pd_request_data_swap(TEST_PORT);
 		start = k_cycle_get_32();
@@ -856,6 +892,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_unconstr_power)
 				   PDC_TEST_TIMEOUT));
 }
 
+/* TODO(b/345292002): Implement set_pdo for TPS6699x emulator/driver. */
+#ifndef CONFIG_TODO_B_345292002
 ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 {
 /* Keep in line with |pdc_power_mgmt_api.c|. */
@@ -924,6 +962,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 	zassert_true(
 		TEST_WAIT_FOR(!pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 }
+#endif
 
 ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 {
@@ -1055,7 +1094,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 			test[i].s.configure(emul, &connector_status);
 			emul_pdc_connect_partner(emul, &connector_status);
 			zassert_true(TEST_WAIT_FOR(
-				pdc_power_mgmt_test_wait_attached(TEST_PORT),
+				pdc_power_mgmt_is_pd_attached(TEST_PORT),
 				PDC_TEST_TIMEOUT));
 		}
 
@@ -1131,8 +1170,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_suspend)
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
+	fake_chipset_state = CHIPSET_STATE_SUSPEND;
 	hook_notify(HOOK_CHIPSET_SUSPEND);
-	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+	TEST_WORKING_DELAY(PDC_POWER_STABLE_TIMEOUT);
 
 	emul_pdc_disconnect(emul);
 
@@ -1155,8 +1195,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume_no_partner)
 {
 	enum ccom_t ccom;
 
+	fake_chipset_state = CHIPSET_STATE_ON;
 	hook_notify(HOOK_CHIPSET_RESUME);
-	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+	TEST_WORKING_DELAY(PDC_POWER_STABLE_TIMEOUT);
 
 	zassert_ok(emul_pdc_get_ccom(emul, &ccom),
 		   "Invalid CCOM value in emul");
@@ -1178,8 +1219,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume_drp_partner)
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
+	fake_chipset_state = CHIPSET_STATE_ON;
 	hook_notify(HOOK_CHIPSET_RESUME);
-	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+	TEST_WORKING_DELAY(PDC_POWER_STABLE_TIMEOUT);
 
 	zassert_ok(emul_pdc_get_pdr(emul, &pdr), "Invalid PDR value in emul");
 	zassert_equal(pdr.swap_to_src, 1);
@@ -1206,7 +1248,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume_up_drp_partner)
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
 	hook_notify(HOOK_CHIPSET_RESUME);
-	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+	TEST_WORKING_DELAY(PDC_POWER_STABLE_TIMEOUT);
 
 	zassert_ok(emul_pdc_get_pdr(emul, &pdr), "Invalid PDR value in emul");
 	zassert_equal(pdr.swap_to_src, 0);
@@ -1224,8 +1266,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_startup)
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
+	fake_chipset_state = CHIPSET_STATE_ON;
 	hook_notify(HOOK_CHIPSET_STARTUP);
-	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+	TEST_WORKING_DELAY(PDC_POWER_STABLE_TIMEOUT);
 
 	emul_pdc_disconnect(emul);
 
@@ -1256,8 +1299,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
+	fake_chipset_state = CHIPSET_STATE_HARD_OFF;
 	hook_notify(HOOK_CHIPSET_SHUTDOWN);
-	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT);
+	TEST_WORKING_DELAY(PDC_POWER_STABLE_TIMEOUT);
 
 	emul_pdc_disconnect(emul);
 
@@ -1393,7 +1437,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_connector_status)
 
 	emul_pdc_configure_snk(emul, &in);
 	emul_pdc_connect_partner(emul, &in);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_pd_attached(TEST_PORT),
 				   PDC_TEST_TIMEOUT));
 
 	zassert_ok(pdc_power_mgmt_get_connector_status(TEST_PORT, &out));
@@ -1446,7 +1490,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_cable_prop)
 
 	emul_pdc_configure_snk(emul, &in_conn_status);
 	emul_pdc_connect_partner(emul, &in_conn_status);
-	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_pd_attached(TEST_PORT),
 				   PDC_TEST_TIMEOUT));
 
 	zassert_ok(pdc_power_mgmt_get_connector_status(TEST_PORT,
@@ -1564,14 +1608,15 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_identity_discovery)
 
 		emul_pdc_connect_partner(emul, &in_conn_status);
 		zassert_true(
-			TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+			TEST_WAIT_FOR(pdc_power_mgmt_is_pd_attached(TEST_PORT),
 				      PDC_TEST_TIMEOUT));
 
 		actual_state = pdc_power_mgmt_get_identity_discovery(
 			TEST_PORT, test[i].s.type);
 		zassert_equal(test[i].expected_state, actual_state,
 			      "%s: expected state %d, actual %d",
-			      test[i].description, test[i].expected_state);
+			      test[i].description, test[i].expected_state,
+			      actual_state);
 
 		emul_pdc_disconnect(emul);
 		zassert_true(
@@ -1674,6 +1719,55 @@ ZTEST_USER(pdc_power_mgmt_api, test_sysjump_policy_on)
 	helper_wait_for_ccom_mode(CCOM_DRP);
 }
 
+/* TODO(b/345292002): Need Set RDO API for TPS6699x emulator/driver. */
+#ifndef CONFIG_TODO_B_345292002
+/**
+ * @brief Helper function for getting object position in RDO from the emulator
+ */
+static int get_obj_pos_from_rdo()
+{
+	uint32_t rdo;
+
+	zassert_ok(emul_pdc_get_rdo(emul, &rdo));
+	return RDO_POS(rdo);
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_set_new_power_request)
+{
+	union connector_status_t connector_status;
+	const uint32_t pdo_15W[] = {
+		PDO_FIXED(5000, 3000, PDO_FIXED_DUAL_ROLE),
+	};
+	const uint32_t pdo_27W[] = {
+		PDO_FIXED(9000, 3000, PDO_FIXED_DUAL_ROLE),
+	};
+
+	/* This should result in no-op */
+	zassert_not_ok(pdc_power_mgmt_set_new_power_request(TEST_PORT));
+
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO,
+			  pdo_15W);
+	emul_pdc_configure_snk(emul, &connector_status);
+	emul_pdc_connect_partner(emul, &connector_status);
+	zassert_true(
+		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
+	LOG_DBG("RDO position before new power request: %d",
+		get_obj_pos_from_rdo());
+
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_1, 1, PARTNER_PDO,
+			  pdo_27W);
+	zassert_ok(pdc_power_mgmt_set_new_power_request(TEST_PORT));
+
+	/* The 27W PDO at position 2 must be selected after the new power
+	 * request.
+	 */
+	zassert_true(
+		TEST_WAIT_FOR(get_obj_pos_from_rdo() == 2, PDC_TEST_TIMEOUT));
+	LOG_DBG("RDO position after new power request: %d",
+		get_obj_pos_from_rdo());
+}
+#endif
+
 /**
  * @brief Helper function for polling sink path status
  */
@@ -1701,6 +1795,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_pdc_power_mgmt_set_active_charge_port)
 	zassert_true(TEST_WAIT_FOR(is_sink_path_enabled(), PDC_TEST_TIMEOUT));
 }
 
+/* TODO(b/345292002): The tests below fail with the TPS6699x emulator/driver. */
+#ifndef CONFIG_TODO_B_345292002
 ZTEST_USER(pdc_power_mgmt_api, test_hpd_wake)
 {
 	uint32_t dp_status_vdo;
@@ -1735,7 +1831,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_hpd_wake)
 	/* Suspend the DUT. */
 	fake_chipset_state = CHIPSET_STATE_SUSPEND;
 	hook_notify(HOOK_CHIPSET_SUSPEND);
-	k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
+	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT * 2);
 
 	/* Clear any USB mux host event. */
 	host_clear_events(EC_HOST_EVENT_MASK(EC_HOST_EVENT_USB_MUX));
@@ -1751,13 +1847,16 @@ ZTEST_USER(pdc_power_mgmt_api, test_hpd_wake)
 	/* Send an IRQ for the PDC power manager to update its DP Status. */
 	emul_pdc_set_connector_status(emul, &in_conn_status);
 	emul_pdc_pulse_irq(emul);
-	k_msleep(TEST_WAIT_FOR_INTERVAL_MS * 2);
+	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT * 2);
+
+	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
 
 	/* Confirm that the IRQ with HPD_LVL high caused a USB mux host
 	 * event.
 	 */
 	zassert_true(host_is_event_set(EC_HOST_EVENT_USB_MUX));
 }
+#endif
 
 /*
  * Suspended PDC - These tests take place with the PDC Power Mgmt subsystem
@@ -1801,5 +1900,3 @@ ZTEST_USER(pdc_power_mgmt_api_suspended, test_get_info)
 	zassert_equal(-ENOTCONN, rv, "Expected %d (-ENOTCONN) but got %d",
 		      -ENOTCONN, rv);
 }
-
-#endif /* CONFIG_TODO_B_345292002 */

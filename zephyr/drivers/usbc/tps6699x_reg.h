@@ -318,7 +318,7 @@ enum command_task {
 	/* Abort current task */
 	COMMAND_TASK_ABRT,
 	/*Auto Negotiate Sink Update */
-	COMMAND_TASK_ANEG,
+	COMMAND_TASK_ANEG = 0x67654E41,
 	/* Clear Dead Battery Flag */
 	COMMAND_TASK_DBFG = 0x67664244,
 	/* Error handling for I2C3m transactions */
@@ -929,6 +929,13 @@ union reg_port_configuration {
 
 	} __packed;
 	uint8_t raw_value[19];
+};
+
+enum port_control_typec_current_t {
+	TI_TYPEC_DEFAULT = 0,
+	TI_1_5_A = 1,
+	TI_3_0_A = 2,
+	TI_RESERVED = 3,
 };
 
 /**
