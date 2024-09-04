@@ -1131,22 +1131,6 @@ static void transfer_section(struct transfer_descriptor *td, uint8_t *data_ptr,
 /* Information about the target */
 static struct first_response_pdu targ;
 
-/*
- * Each RO or RW section of the new image can be in one of the following
- * states.
- */
-enum upgrade_status {
-	not_needed = 0, /* Version below or equal that on the target. */
-	not_possible, /*
-		       * RO is newer, but can't be transferred due to
-		       * target RW shortcomings.
-		       */
-	needed /*
-		* This section needs to be transferred to the
-		* target.
-		*/
-};
-
 /* Index to refer to a section within sections array */
 enum section {
 	RO_A,
@@ -1163,7 +1147,7 @@ static struct {
 	const char *name;
 	uint32_t offset;
 	uint32_t size;
-	enum upgrade_status ustatus;
+	bool update_needed;
 	struct signed_header_version shv;
 	uint32_t keyid;
 } sections[] = { [RO_A] = { "RO_A", CONFIG_RO_MEM_OFF, CONFIG_RO_SIZE },
@@ -1548,7 +1532,7 @@ static void pick_sections(struct transfer_descriptor *td)
 				/* Check will exit if disallowed */
 				check_rw_upgrade(&targ.shv[1],
 						 &sections[i].shv);
-				sections[i].ustatus = needed;
+				sections[i].update_needed = true;
 			}
 			/* Rest of loop is RO */
 			continue;
@@ -1564,7 +1548,7 @@ static void pick_sections(struct transfer_descriptor *td)
 		 */
 		if (a_newer_than_b(&sections[i].shv, &targ.shv[0]) ||
 		    td->force_ro)
-			sections[i].ustatus = needed;
+			sections[i].update_needed = true;
 	}
 }
 
@@ -1765,7 +1749,7 @@ static int transfer_image(struct transfer_descriptor *td, uint8_t *data,
 	for (i = 0; i < ARRAY_SIZE(update_order); i++) {
 		const enum section sect = update_order[i];
 
-		if (sections[sect].ustatus != needed)
+		if (!sections[sect].update_needed)
 			continue;
 		if (num_txed_sections && needs_delay) {
 			/*
@@ -4772,7 +4756,6 @@ int main(int argc, char *argv[])
 	uint16_t vid = 0;
 	uint16_t pid = 0;
 	int i;
-	size_t j;
 	int transferred_sections = 0;
 	int binary_vers = 0;
 	int show_fw_ver = 0;
@@ -5475,16 +5458,6 @@ int main(int argc, char *argv[])
 
 	if (!transferred_sections)
 		return noop;
-	/*
-	 * We should indicate if RO update was not done because of the
-	 * insufficient RW version.
-	 */
-	for (j = 0; j < ARRAY_SIZE(sections); j++)
-		if (sections[j].ustatus == not_possible) {
-			/* This will allow scripting repeat attempts. */
-			printf("Failed to update RO, run the command again\n");
-			return rw_updated;
-		}
 
 	printf("image updated\n");
 	return all_updated;
