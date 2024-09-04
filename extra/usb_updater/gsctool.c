@@ -5253,7 +5253,18 @@ int main(int argc, char *argv[])
 			 * type set when processing command line options. If
 			 * device type is not set - start with H1.
 			 */
-			pid = (gsc_dev == GSC_DEVICE_DT) ? D2_PID : H1_PID;
+			switch (gsc_dev) {
+			case GSC_DEVICE_H1:
+			default:
+				pid = H1_PID;
+				break;
+			case GSC_DEVICE_DT:
+				pid = D2_PID;
+				break;
+			case GSC_DEVICE_NT:
+				pid = D2_PID;
+				break;
+			}
 		}
 		if (usb_findit(serial, vid, pid, subclass, protocol, &td.uep)) {
 			/*
