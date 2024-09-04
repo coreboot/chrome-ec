@@ -14,7 +14,8 @@
 #define CONSOLE_STACK_SIZE CONFIG_STACK_SIZE
 #endif
 
+/* See b/350643334 for how the TPM task size was calculated */
 #define CONFIG_TASK_LIST \
 	TASK_ALWAYS(HOOKS, hook_task, NULL, CONFIG_STACK_SIZE) \
-	TASK_NOTEST(TPM, tpm_task, NULL, 8192) \
+	TASK_NOTEST(TPM, tpm_task, NULL, 8320) \
 	TASK_ALWAYS(CONSOLE, console_task, NULL, CONSOLE_STACK_SIZE)
