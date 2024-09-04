@@ -4,6 +4,7 @@
  * found in the LICENSE file.
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,12 +65,16 @@ out:
 }
 
 static libusb_device_handle *check_device(libusb_device *dev, uint16_t vid,
-					  uint16_t pid, const char *serial)
+					  uint16_t *pid, int pid_count,
+					  const char *serial)
 {
 	struct libusb_device_descriptor desc;
 	libusb_device_handle *handle = NULL;
 	char sn[256];
 	size_t sn_size = 0;
+	bool match_failed = false;
+	bool pid_matches = false;
+	int i;
 
 	if (libusb_get_device_descriptor(dev, &desc) < 0)
 		return NULL;
@@ -86,27 +91,33 @@ static libusb_device_handle *check_device(libusb_device *dev, uint16_t vid,
 	 * If the VID, PID, and serial number don't match, then it's not the
 	 * correct device. Close the handle and return NULL.
 	 */
-	if ((vid && vid != desc.idVendor) || (pid && pid != desc.idProduct) ||
-	    (serial &&
-	     ((sn_size != strlen(serial)) || memcmp(sn, serial, sn_size)))) {
+	match_failed |= vid && vid != desc.idVendor;
+	match_failed |= serial && ((sn_size != strlen(serial)) ||
+				   memcmp(sn, serial, sn_size));
+	for (i = 0; i < pid_count; i++)
+		pid_matches |= pid[i] == desc.idProduct;
+	match_failed |= pid_count && !pid_matches;
+
+	if (match_failed) {
 		libusb_close(handle);
 		return NULL;
 	}
 	return handle;
 }
 
-int usb_findit(const char *serial, uint16_t vid, uint16_t pid,
+int usb_findit(const char *serial, uint16_t vid, uint16_t *pid, int pid_count,
 	       uint16_t subclass, uint16_t protocol, struct usb_endpoint *uep)
 {
 	int iface_num, r, i;
 	libusb_device **devs;
 	libusb_device_handle *devh = NULL;
+	libusb_device_handle *search_handle = NULL;
 	ssize_t count;
 
 	memset(uep, 0, sizeof(*uep));
 
 	/* Must supply either serial or vendor and product ids. */
-	if (!serial && !(vid && pid))
+	if (!serial && !(vid && pid && pid_count))
 		goto terminate_usb_findit;
 
 	r = libusb_init(NULL);
@@ -116,8 +127,10 @@ int usb_findit(const char *serial, uint16_t vid, uint16_t pid,
 	}
 
 	printf("finding_device ");
-	if (vid)
-		printf("%04x:%04x ", vid, pid);
+	if (vid) {
+		for (i = 0; i < pid_count; i++)
+			printf("%04x:%04x ", vid, pid[i]);
+	}
 	if (serial)
 		printf("%s", serial);
 	printf("\n");
@@ -127,20 +140,30 @@ int usb_findit(const char *serial, uint16_t vid, uint16_t pid,
 		goto terminate_usb_findit;
 
 	for (i = 0; i < count; i++) {
-		devh = check_device(devs[i], vid, pid, serial);
-		if (devh) {
-			printf("Found device.\n");
-			break;
+		search_handle =
+			check_device(devs[i], vid, pid, pid_count, serial);
+		if (search_handle) {
+			if (devh)
+				break;
+			devh = search_handle;
 		}
 	}
 
 	libusb_free_device_list(devs, 1);
 
-	if (!devh) {
+	if (devh) {
+		uep->devh = devh;
+		if (search_handle && search_handle != devh) {
+			fprintf(stderr, "Found multiple devices. "
+					"Please specify --serial\n");
+			libusb_close(search_handle);
+			goto terminate_usb_findit;
+		}
+		printf("Found device.\n");
+	} else {
 		fprintf(stderr, "Can't find device\n");
 		goto terminate_usb_findit;
 	}
-	uep->devh = devh;
 
 	iface_num = find_interface(subclass, protocol, uep);
 	if (iface_num < 0) {

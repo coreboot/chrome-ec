@@ -246,6 +246,7 @@ BUILD_ASSERT((CR50_CCD_CAP_COUNT / 32) == (TI50_CCD_CAP_COUNT / 32));
 /* Look for Cr50 FW update interface */
 #define H1_PID	 0x5014
 #define D2_PID	 0x504A
+#define NT_PID	 0x5066
 #define SUBCLASS USB_SUBCLASS_GOOGLE_CR50
 #define PROTOCOL USB_PROTOCOL_GOOGLE_CR50_NON_HC_FW_UPDATE
 
@@ -330,7 +331,6 @@ enum gsc_device {
 struct option_container {
 	struct option opt;
 	const char *help_text;
-	enum gsc_device opt_device; /* Initted to ANY by default. */
 };
 
 static void sha_init(EVP_MD_CTX *ctx);
@@ -340,11 +340,6 @@ static void sha_final_into_block_digest(EVP_MD_CTX *ctx, void *block_digest,
 
 /* Type of the GSC device we are talking to, determined at run time. */
 static enum gsc_device gsc_dev = GSC_DEVICE_ANY;
-/*
- * Type of the GSC device the currently processed command line option
- * requires, set during option scanning along with optarg.
- */
-static enum gsc_device opt_gsc_dev = GSC_DEVICE_ANY;
 
 /*
  * Current AP RO verification config setting version
@@ -460,26 +455,22 @@ static const struct option_container cmd_line_options[] = {
 	  "Try any interfaces to find Cr50"
 	  " (-d, -s, -t are all ignored)" },
 	{ { "apro_boot", optional_argument, NULL, 'B' },
-	  "[start] get the stored ap ro boot state or start ap ro verify",
-	  GSC_DEVICE_DT },
+	  "[start] get the stored ap ro boot state or start ap ro verify" },
 	{ { "binvers", no_argument, NULL, 'b' },
 	  "Report versions of Cr50 image's "
 	  "RW and RO headers, do not update" },
 	{ { "apro_config_spi_mode", optional_argument, NULL, 'C' },
-	  "Get/set the ap ro verify spi mode either to `3byte` or `4byte`",
-	  GSC_DEVICE_DT },
+	  "Get/set the ap ro verify spi mode either to `3byte` or `4byte`" },
 	{ { "corrupt", no_argument, NULL, 'c' }, "Corrupt the inactive rw" },
 	{ { "dauntless", no_argument, NULL, 'D' },
-	  "Communicate with Dauntless chip. This may also be implied.",
-	  GSC_DEVICE_DT },
+	  "Deprecated. No longer needed as runtime selection is used." },
 	{ { "device", required_argument, NULL, 'd' },
 	  "VID:PID%USB device (default 18d1:5014 or 18d1:504a based on"
 	  " image)" },
 	{ { "apro_config_write_protect", optional_argument, NULL, 'E' },
 	  "Get/set the ap ro verify write protect descriptors with hex "
 	  "bytes (ex: 0x01, 0x1, 01 or 1) in the following format: "
-	  "[sr1 mask1 [sr2 mask2] [sr3 mask3]]",
-	  GSC_DEVICE_DT },
+	  "[sr1 mask1 [sr2 mask2] [sr3 mask3]]" },
 	{ { "endorsement_seed", optional_argument, NULL, 'e' },
 	  "[state]%get/set the endorsement key seed" },
 	{ { "factory", required_argument, NULL, 'F' },
@@ -491,8 +482,7 @@ static const struct option_container cmd_line_options[] = {
 	{ { "getbootmode", no_argument, NULL, 'g' },
 	  "Get the system boot mode" },
 	{ { "erase_ap_ro_hash", no_argument, NULL, 'H' },
-	  "Erase AP RO hash (possible only if Board ID is not set)",
-	  GSC_DEVICE_H1 },
+	  "Erase AP RO hash (possible only if Board ID is not set)" },
 	{ { "help", no_argument, NULL, 'h' }, "Show this message" },
 	{ { "ccd_info", optional_argument, NULL, 'I' },
 	  "[capability:value]%Get information about CCD state or set capability"
@@ -502,29 +492,22 @@ static const struct option_container cmd_line_options[] = {
 	  "hex or 4 character string." },
 	{ { "boot_trace", optional_argument, NULL, 'J' },
 	  "[erase]%Retrieve boot trace from the chip, optionally erasing "
-	  "the trace buffer",
-	  GSC_DEVICE_DT },
+	  "the trace buffer" },
 	{ { "get_value", required_argument, NULL, 'K' },
-	  "[chassis_open|dev_ids]%Get properties values",
-	  GSC_DEVICE_DT },
+	  "[chassis_open|dev_ids]%Get properties values" },
 	{ { "ccd_lock", no_argument, NULL, 'k' }, "Lock CCD" },
 	{ { "flog", optional_argument, NULL, 'L' },
 	  "[prev entry]%Retrieve contents of the flash log"
 	  " (newer than <prev entry> if specified)" },
 	{ { "console", no_argument, NULL, 'l' },
 	  "Get console logs. This may need to be run multiple times to collect "
-	  "all available logs.",
-	  GSC_DEVICE_DT },
+	  "all available logs." },
 	{ { "machine", no_argument, NULL, 'M' },
 	  "Output in a machine-friendly way. "
 	  "Effective with -b, -f, -i, -J, -r, and -O." },
 	{ { "tpm_mode", optional_argument, NULL, 'm' },
 	  "[enable|disable]%Change or query tpm_mode" },
-	{ { "nuvotitan", no_argument, NULL, 'N' },
-	  "Communicate with NuvoTitan chip. This may also be implied.",
-	  GSC_DEVICE_NT },
-	{ { "serial", required_argument, NULL, 'n' },
-	  "Cr50 CCD serial number" },
+	{ { "serial", required_argument, NULL, 'n' }, "GSC USB serial number" },
 	{ { "openbox_rma", required_argument, NULL, 'O' },
 	  "<desc_file>%Verify other device's RO integrity using information "
 	  "provided in <desc file>" },
@@ -558,8 +541,7 @@ static const struct option_container cmd_line_options[] = {
 	{ { "wp", optional_argument, NULL, 'w' },
 	  "[enable|disable|follow]%Get or set the write protect setting" },
 	{ { "clog", no_argument, NULL, 'x' },
-	  "Retrieve contents of the most recent crash log.",
-	  GSC_DEVICE_DT },
+	  "Retrieve contents of the most recent crash log." },
 	{ { "factory_config", optional_argument, NULL, 'y' },
 	  "[value]%Sets the factory config bits in INFO. value should be 64 "
 	  "bit hex." },
@@ -600,6 +582,13 @@ static int from_hexascii(char c)
 		return c - '0';
 
 	return c - 'a' + 10;
+}
+
+/* Returns true if the connected GSC device has Ti50-based firmware. */
+static bool is_ti50_device(void)
+{
+	/* Assume Ti50 is not H1 device. */
+	return gsc_dev != GSC_DEVICE_H1;
 }
 
 /* Functions to communicate with the TPM over the trunks_send --raw channel. */
@@ -1524,7 +1513,26 @@ static void pick_sections(struct transfer_descriptor *td)
 	}
 }
 
-static void setup_connection(struct transfer_descriptor *td)
+/*
+ * Indicate to the target that update image transfer has been completed. Upon
+ * receiving of this message the target state machine transitions into the
+ * 'rx_idle' state. The host may send an extension command to reset the target
+ * after this.
+ */
+static void send_done(struct usb_endpoint *uep)
+{
+	uint32_t out;
+
+	/* Send stop request, ignoring reply. */
+	out = htobe32(UPGRADE_DONE);
+	do_xfer(uep, &out, sizeof(out), &out, 1, 0, NULL);
+}
+
+/*
+ * Gets and caches the GSC version information from the currently connected
+ * device.
+ */
+static void get_version(struct transfer_descriptor *td, bool leave_pending)
 {
 	size_t rxed_size;
 	size_t i;
@@ -1538,9 +1546,6 @@ static void setup_connection(struct transfer_descriptor *td)
 		struct first_response_pdu rpdu;
 		uint32_t legacy_resp;
 	} start_resp;
-
-	/* Send start request. */
-	printf("start\n");
 
 	if (td->ep_type == usb_xfer) {
 		struct update_pdu updu;
@@ -1574,8 +1579,6 @@ static void setup_connection(struct transfer_descriptor *td)
 		exit(update_error);
 	}
 
-	printf("target running protocol version %d\n", protocol_version);
-
 	error_code = be32toh(start_resp.rpdu.return_value);
 
 	if (error_code) {
@@ -1598,11 +1601,20 @@ static void setup_connection(struct transfer_descriptor *td)
 	for (i = 0; i < ARRAY_SIZE(targ.keyid); i++)
 		targ.keyid[i] = be32toh(start_resp.rpdu.keyid[i]);
 
+	if (!leave_pending && td->ep_type == usb_xfer)
+		send_done(&td->uep);
+}
+
+static void setup_connection(struct transfer_descriptor *td)
+{
+	/* Send start request. */
+	printf("start\n");
+
+	get_version(td, true);
+
 	printf("keyids: RO 0x%08x, RW 0x%08x\n", targ.keyid[0], targ.keyid[1]);
 	printf("offsets: backup RO at %#x, backup RW at %#x\n", td->ro_offset,
 	       td->rw_offset);
-
-	pick_sections(td);
 }
 
 /*
@@ -1656,21 +1668,6 @@ static int ext_cmd_over_usb(struct usb_endpoint *uep, uint16_t subcommand,
 }
 
 /*
- * Indicate to the target that update image transfer has been completed. Upon
- * receiveing of this message the target state machine transitions into the
- * 'rx_idle' state. The host may send an extension command to reset the target
- * after this.
- */
-static void send_done(struct usb_endpoint *uep)
-{
-	uint32_t out;
-
-	/* Send stop request, ignoring reply. */
-	out = htobe32(UPGRADE_DONE);
-	do_xfer(uep, &out, sizeof(out), &out, 1, 0, NULL);
-}
-
-/*
  * Old cr50 images fail the update if sections are sent out of order. They
  * require each block to have an offset greater than the block that was sent
  * before. RO has a lower offset than RW, so old cr50 images reject RO if it's
@@ -1718,6 +1715,8 @@ static int transfer_image(struct transfer_descriptor *td, uint8_t *data,
 	 */
 	const enum section update_order[] = { RW_A, RW_B, RO_A, RO_B };
 
+	/* Now that we have an active connection, pick sections */
+	pick_sections(td);
 	for (i = 0; i < ARRAY_SIZE(update_order); i++) {
 		const enum section sect = update_order[i];
 
@@ -1736,6 +1735,8 @@ static int transfer_image(struct transfer_descriptor *td, uint8_t *data,
 			       NEXT_SECTION_DELAY, sections[sect].name);
 			sleep(NEXT_SECTION_DELAY);
 			setup_connection(td);
+			/* Pick sections again in case GSC versions changed. */
+			pick_sections(td);
 		}
 
 		transfer_section(td, data + sections[sect].offset,
@@ -4097,13 +4098,6 @@ static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
 	const int max_retries = 3;
 	int retries = max_retries;
 	bool time_zone_reported = false;
-	bool is_dauntless;
-
-	/*
-	 * For backwards compatibility assume DT only if was explicitly
-	 * requested.
-	 */
-	is_dauntless = (gsc_dev == GSC_DEVICE_DT);
 
 	while (retries--) {
 		struct parsed_flog_entry entry = { 0 };
@@ -4111,7 +4105,7 @@ static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
 		size_t i;
 		struct tm loc_time;
 		char date_str[25];
-		if (is_dauntless) {
+		if (is_ti50_device()) {
 			rv = pop_flog_dt(td, &entry);
 		} else {
 			rv = pop_flog(td, &entry);
@@ -4332,8 +4326,6 @@ static int getopt_all(int argc, char *argv[])
 			 */
 			longindex = get_longindex(i, long_opts);
 		}
-
-		opt_gsc_dev = cmd_line_options[longindex].opt_device;
 
 		if (long_opts[longindex].has_arg == optional_argument) {
 			/*
@@ -4693,29 +4685,24 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 }
 
 /*
- * Try setting the GSC device type.
- *
- * dev - type to set to
- * option - short command line option requiring this device type
- * error_counter - pointer to the counter to increment in case of error.
- *
- * Returns false and increments error counter if gsc_dev is already set to a
- * different device type.
+ * Returns the GSC device type determine by how is responds to TPMV and
+ * version requests.
  */
-static bool set_device_type(enum gsc_device dev, char option,
-			    int *error_counter)
+static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 {
-	if (gsc_dev == dev)
-		return true;
+	int major;
+	/* First try the newer TPMV command */
+	/* TODO(b/364705511): Add new TPMV command */
 
-	if (gsc_dev == GSC_DEVICE_ANY) {
-		gsc_dev = dev;
-		return true;
-	}
-
-	fprintf(stderr, "Inconsistent -%c option\n", option);
-	(*error_counter)++;
-	return false;
+	/* If that fails, use the firmware version to determine type */
+	get_version(td, false);
+	major = targ.shv[1].major;
+	if (major >= 30 && major < 40)
+		return GSC_DEVICE_NT;
+	else if (major >= 20 && major < 30)
+		return GSC_DEVICE_DT;
+	else
+		return GSC_DEVICE_H1;
 }
 
 int main(int argc, char *argv[])
@@ -4833,10 +4820,6 @@ int main(int argc, char *argv[])
 	opterr = 0; /* quiet, you */
 
 	while ((i = getopt_all(argc, argv)) != -1) {
-		if (opt_gsc_dev != GSC_DEVICE_ANY) {
-			if (!set_device_type(opt_gsc_dev, i, &errorcnt))
-				continue;
-		}
 		if (check_boolean(omap, i))
 			continue;
 		switch (i) {
@@ -4872,11 +4855,7 @@ int main(int argc, char *argv[])
 					arv_config_spi_addr_mode_get;
 			break;
 		case 'D':
-			/*
-			 * as a result of processing this command line option
-			 * gsc_dev has been set to GSC_DEVICE_DT by
-			 * set_device_type(), no further action is required.
-			 */
+			/* Option is deprecated and igorned */
 			break;
 		case 'd':
 			if (!parse_vidpid(optarg, &vid, &pid)) {
@@ -4935,8 +4914,6 @@ int main(int argc, char *argv[])
 			if (optarg) {
 				set_capability = 1;
 				capability_parameter = optarg;
-				/* Supported on Dauntless only. */
-				set_device_type(GSC_DEVICE_DT, i, &errorcnt);
 			} else {
 				ccd_info = 1;
 			}
@@ -5006,13 +4983,6 @@ int main(int argc, char *argv[])
 		case 'm':
 			tpm_mode = 1;
 			tpm_mode_arg = optarg;
-			break;
-		case 'N':
-			/*
-			 * as a result of processing this command line option
-			 * gsc_dev has been set to GSC_DEVICE_NT by
-			 * set_device_type(), no further action is required.
-			 */
 			break;
 		case 'n':
 			serial = optarg;
@@ -5084,14 +5054,10 @@ int main(int argc, char *argv[])
 			}
 			if (!strcasecmp(optarg, "disable")) {
 				wp = WP_DISABLE;
-				/* Supported on Dauntless only. */
-				set_device_type(GSC_DEVICE_DT, i, &errorcnt);
 				break;
 			}
 			if (!strcasecmp(optarg, "follow")) {
 				wp = WP_FOLLOW;
-				/* Supported on Dauntless only. */
-				set_device_type(GSC_DEVICE_DT, i, &errorcnt);
 				break;
 			}
 			fprintf(stderr, "Illegal wp option \"%s\"\n", optarg);
@@ -5196,64 +5162,24 @@ int main(int argc, char *argv[])
 		const uint16_t subclass = USB_SUBCLASS_GOOGLE_CR50;
 		const uint16_t protocol =
 			USB_PROTOCOL_GOOGLE_CR50_NON_HC_FW_UPDATE;
+		uint16_t pids[] = { H1_PID, D2_PID, NT_PID };
+		int pid_count = ARRAY_SIZE(pids);
+
 		/*
-		 * If no usb device information was given, default to the using
-		 * haven or dauntless vendor and product id to find the usb
-		 * device, but then try the other if the first isn't found
+		 * If no usb device information was given, use default vid and
+		 * pids to search for GSC devices.
 		 */
-		if (!vid && !pid) {
+		if (!vid)
 			vid = USB_VID_GOOGLE;
-			/*
-			 * Set default product id based on expected device
-			 * type set when processing command line options. If
-			 * device type is not set - start with H1.
-			 */
-			switch (gsc_dev) {
-			case GSC_DEVICE_H1:
-			default:
-				pid = H1_PID;
-				break;
-			case GSC_DEVICE_DT:
-				pid = D2_PID;
-				break;
-			case GSC_DEVICE_NT:
-				pid = D2_PID;
-				break;
-			}
+		if (pid) {
+			pids[0] = pid;
+			pid_count = 1;
 		}
-		if (usb_findit(serial, vid, pid, subclass, protocol, &td.uep)) {
-			/*
-			 * If a certain device was requested and has
-			 * not been found - exit.
-			 */
-			if (gsc_dev != GSC_DEVICE_ANY)
-				exit(update_error);
-			/*
-			 * Try Dauntless, as the only way to get here
-			 * is when a particular device was not
-			 * requested and we tried H1 first.
-			 */
-			pid = D2_PID;
-			if (usb_findit(serial, vid, pid, subclass, protocol,
-				       &td.uep))
-				exit(update_error);
-			gsc_dev = GSC_DEVICE_DT;
-		}
-		/* Make sure device type is set. */
-		if (gsc_dev == GSC_DEVICE_ANY) {
-			switch (pid) {
-			case D2_PID:
-				gsc_dev = GSC_DEVICE_DT;
-				break;
-			case H1_PID:
-				gsc_dev = GSC_DEVICE_H1;
-				break;
-			default:
-				fprintf(stderr,
-					"EROOR: Unsupported USB PID %04x\n",
-					pid);
-				exit(update_error);
-			}
+		if (usb_findit(serial, vid, pids, pid_count, subclass, protocol,
+			       &td.uep)) {
+			fprintf(stderr,
+				"ERROR: Cannot find single GSC device\n");
+			exit(update_error);
 		}
 	} else if (td.ep_type == dev_xfer) {
 		td.tpm_fd = open("/dev/tpm0", O_RDWR);
@@ -5266,9 +5192,17 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	/* If device type still not clear - fall back to H1. */
-	if (gsc_dev == GSC_DEVICE_ANY)
-		gsc_dev = GSC_DEVICE_H1;
+	/* Perform run selection of GSC device now that we have a connection */
+	{
+		enum gsc_device current_device = determine_gsc_type(&td);
+
+		if (gsc_dev != GSC_DEVICE_ANY && gsc_dev != current_device) {
+			fprintf(stderr,
+				"ERROR: Image does not match device type\n");
+			exit(update_error);
+		}
+		gsc_dev = current_device;
+	}
 
 	if (openbox_desc_file)
 		return verify_ro(&td, openbox_desc_file, show_machine_output);
@@ -5376,7 +5310,7 @@ int main(int argc, char *argv[])
 					    show_machine_output));
 
 	if (get_metrics) {
-		if (gsc_dev == GSC_DEVICE_DT)
+		if (is_ti50_device())
 			exit(process_ti50_get_metrics(&td,
 						      show_machine_output));
 		else
