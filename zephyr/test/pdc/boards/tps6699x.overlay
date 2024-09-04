@@ -5,6 +5,18 @@
 
 #include "native_sim.overlay"
 
+/{
+        /* Leverage 'zephyr,user' node for driver specific behavior */
+        zephyr,user {
+                /* TODO(b/362781605): Improve TI driver response time */
+                test_timeout = <14000>;
+                /* TI PDC Info */
+                pd_version = <0>;
+                pd_revision = <0>;
+                project_name = "GOOG";
+        };
+};
+
 &i2c0 {
         pdc_emul1: tps6699-pdc@20 {
                 compatible = "ti,tps6699-pdc";

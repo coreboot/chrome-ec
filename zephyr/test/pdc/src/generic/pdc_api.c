@@ -62,17 +62,12 @@ ZTEST_USER(pdc_api, test_get_ucsi_version)
 	zassert_equal(version, UCSI_VERSION);
 }
 
-/* TODO(b/345292002): The tests below fail with the TPS6699x emulator/driver. */
-#ifndef CONFIG_TODO_B_345292002
-
 ZTEST_USER(pdc_api, test_reset)
 {
 	zassert_ok(pdc_reset(dev), "Failed to reset PDC");
 
 	k_sleep(K_MSEC(500));
 }
-
-#endif /* CONFIG_TODO_B_345292002 */
 
 ZTEST_USER(pdc_api, test_connector_reset)
 {
@@ -352,7 +347,7 @@ ZTEST_USER(pdc_api, test_set_sink_path)
 	}
 }
 
-/* TODO(b/345292002): The tests below fail with the TPS6699x emulator/driver. */
+/* TODO(b/345292002): TPS6699x pdc_reconnect not implemented */
 #ifndef CONFIG_TODO_B_345292002
 ZTEST_USER(pdc_api, test_reconnect)
 {
@@ -364,6 +359,7 @@ ZTEST_USER(pdc_api, test_reconnect)
 	zassert_ok(emul_pdc_get_reconnect_req(emul, &expected, &val));
 	zassert_equal(expected, val);
 }
+#endif
 
 /**
  * @brief Clears the cached PDC FW info struct inside the driver.
@@ -377,6 +373,23 @@ void helper_clear_cached_chip_info(void)
 	k_sleep(K_MSEC(SLEEP_MS));
 }
 
+#define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
+#if DT_NODE_EXISTS(ZEPHYR_USER_NODE)
+static const struct pdc_info_t info_in1 = {
+	.fw_version = 0x001a2b3c,
+	.pd_version = DT_PROP(ZEPHYR_USER_NODE, pd_version),
+	.pd_revision = DT_PROP(ZEPHYR_USER_NODE, pd_revision),
+	.vid_pid = 0x12345678,
+	.project_name = DT_PROP(ZEPHYR_USER_NODE, project_name),
+};
+static const struct pdc_info_t info_in2 = {
+	.fw_version = 0x002a3b4c,
+	.pd_version = DT_PROP(ZEPHYR_USER_NODE, pd_version),
+	.pd_revision = DT_PROP(ZEPHYR_USER_NODE, pd_revision),
+	.vid_pid = 0x9abcdef0,
+	.project_name = DT_PROP(ZEPHYR_USER_NODE, project_name),
+};
+#else
 /* Two sets of chip info to test against */
 static const struct pdc_info_t info_in1 = {
 	.fw_version = 0x001a2b3c,
@@ -393,6 +406,7 @@ static const struct pdc_info_t info_in2 = {
 	.vid_pid = 0x9abcdef0,
 	.project_name = "MyProj",
 };
+#endif /* DT_NODE_EXISTS(ZEPHYR_USER_NODE) */
 
 ZTEST_USER(pdc_api, test_get_info)
 {
@@ -467,6 +481,10 @@ ZTEST_USER(pdc_api, test_get_lpm_ppm_info)
 		.fw_ver_sub = 456,
 		.hw_ver = 0xa5b6c7de,
 	};
+
+	if (pdc_get_lpm_ppm_info(dev, NULL) == -ENOSYS) {
+		ztest_test_skip();
+	}
 
 	/* Test output param NULL check */
 	zassert_equal(-EINVAL, pdc_get_lpm_ppm_info(dev, NULL));
@@ -629,8 +647,10 @@ ZTEST_USER(pdc_api_suspended, test_get_lpm_ppm_info)
 {
 	struct lpm_ppm_info_t out;
 
+	if (pdc_get_lpm_ppm_info(dev, NULL) == -ENOSYS) {
+		ztest_test_skip();
+	}
+
 	/* Read should return busy because comms are blocked */
 	zassert_equal(-EBUSY, pdc_get_lpm_ppm_info(dev, &out));
 }
-
-#endif /* CONFIG_TODO_B_345292002 */
