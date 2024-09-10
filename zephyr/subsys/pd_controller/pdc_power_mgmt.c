@@ -73,8 +73,7 @@ LOG_MODULE_REGISTER(pdc_power_mgmt, CONFIG_USB_PDC_LOG_LEVEL);
 /**
  * @brief Maximum time to wait for PDC state to settle.
  */
-/* TODO(b/362781605): Improve TI driver response time */
-#define PDC_SM_SETTLED_TIMEOUT_MS (PDC_CMD_TIMEOUT_MS * 10)
+#define PDC_SM_SETTLED_TIMEOUT_MS (PDC_CMD_TIMEOUT_MS)
 
 /** @brief Delay to wait for stable power state before running hooks */
 #define PDC_POWER_STATE_DEBOUNCE_S (K_SECONDS(2))
@@ -159,6 +158,8 @@ enum pdc_cmd_t {
 	CMD_PDC_GET_LPM_PPM_INFO,
 	/** CMD_PDC_GET_PD_VDO_DP_STATUS */
 	CMD_PDC_GET_PD_VDO_DP_STATUS,
+	/** CMD_PDC_SET_FRS */
+	CMD_PDC_SET_FRS,
 	/** CMD_PDC_COUNT */
 	CMD_PDC_COUNT
 };
@@ -187,8 +188,8 @@ struct cmd_t {
 	enum pdc_cmd_t cmd;
 	/** True if command is pending */
 	bool pending;
-	/** True if command failed to send */
-	bool error;
+	/** != 0 if command failed to send */
+	int8_t error;
 };
 
 /**
@@ -219,6 +220,8 @@ enum snk_attached_local_state_t {
 	SNK_ATTACHED_SET_DR_SWAP_POLICY,
 	/** SNK_ATTACHED_SET_PR_SWAP_POLICY */
 	SNK_ATTACHED_SET_PR_SWAP_POLICY,
+	/** SNK_ATTACHED_DISABLE_FRS */
+	SNK_ATTACHED_DISABLE_FRS,
 	/** SNK_ATTACHED_GET_PDOS */
 	SNK_ATTACHED_GET_PDOS,
 	/** SNK_ATTACHED_GET_VDO */
@@ -352,6 +355,7 @@ test_export_static const char *const pdc_cmd_names[] = {
 	[CMD_PDC_ACK_CC_CI] = "PDC_ACK_CC_CI",
 	[CMD_PDC_GET_LPM_PPM_INFO] = "PDC_GET_LPM_PPM_INFO",
 	[CMD_PDC_GET_PD_VDO_DP_STATUS] = "PDC_GET_PD_VDO_DP_STATUS",
+	[CMD_PDC_SET_FRS] = "PDC_SET_FRS",
 };
 const int pdc_cmd_types = CMD_PDC_COUNT;
 
@@ -693,6 +697,8 @@ struct pdc_port_t {
 	bool hpd_wake_watch;
 	/** Additional change bits to report to PPM. */
 	union conn_status_change_bits_t overlay_ppm_changes;
+	/** LPM should enable FRS. */
+	bool frs_enable;
 };
 
 /**
@@ -740,7 +746,6 @@ static int queue_public_cmd(struct pdc_port_t *port, enum pdc_cmd_t pdc_cmd);
 static void init_port_variables(struct pdc_port_t *port);
 static int pdc_power_mgmt_request_power_swap_intern(int port,
 						    enum pd_power_role role);
-static bool pdc_power_mgmt_is_sink_connected(int port);
 static void pd_chipset_startup(void);
 static void pd_chipset_resume(void);
 static void pd_chipset_suspend(void);
@@ -916,10 +921,10 @@ static void set_attached_pdc_state(struct pdc_port_t *port,
 static void send_cmd_init(struct pdc_port_t *port)
 {
 	port->send_cmd.public.cmd = CMD_PDC_NONE;
-	port->send_cmd.public.error = false;
+	port->send_cmd.public.error = 0;
 	port->send_cmd.public.pending = false;
 	port->send_cmd.intern.cmd = CMD_PDC_NONE;
-	port->send_cmd.intern.error = false;
+	port->send_cmd.intern.error = 0;
 	port->send_cmd.intern.pending = false;
 	port->send_cmd.local_state = SEND_CMD_START_ENTRY;
 }
@@ -999,7 +1004,7 @@ static int queue_public_cmd(struct pdc_port_t *port, enum pdc_cmd_t pdc_cmd)
 
 	k_mutex_lock(&port->mtx, K_FOREVER);
 	port->send_cmd.public.cmd = pdc_cmd;
-	port->send_cmd.public.error = false;
+	port->send_cmd.public.error = 0;
 	port->send_cmd.public.pending = true;
 	k_mutex_unlock(&port->mtx);
 	k_event_post(&port->sm_event, PDC_SM_EVENT);
@@ -1014,7 +1019,7 @@ static void queue_internal_cmd(struct pdc_port_t *port, enum pdc_cmd_t pdc_cmd)
 {
 	k_mutex_lock(&port->mtx, K_FOREVER);
 	port->send_cmd.intern.cmd = pdc_cmd;
-	port->send_cmd.intern.error = false;
+	port->send_cmd.intern.error = 0;
 	port->send_cmd.intern.pending = true;
 	k_mutex_unlock(&port->mtx);
 	k_event_post(&port->sm_event, PDC_SM_EVENT);
@@ -1119,8 +1124,11 @@ static bool handle_connector_status(struct pdc_port_t *port)
 				atomic_set_bit(port->cci_flags, CCI_ATTENTION);
 			}
 
-			if (conn_status_change_bits.supported_provider_caps &&
-			    pdc_power_mgmt_is_sink_connected(port_number)) {
+			if (conn_status_change_bits.battery_charging_status &&
+			    status->sink_path_status == 0 &&
+			    port->attached_state == SNK_ATTACHED_STATE &&
+			    port->snk_attached_local_state >
+				    SNK_ATTACHED_GET_PDOS) {
 				/* Source caps have changed. Set the sink-
 				 * attached state machine back to the get PDO
 				 * substate. This will cause PDOs to be re-
@@ -1128,6 +1136,8 @@ static bool handle_connector_status(struct pdc_port_t *port)
 				 * again. */
 				atomic_set_bit(port->snk_policy.flags,
 					       SNK_POLICY_NEW_POWER_REQUEST);
+				LOG_INF("C%d: Sink path disconnected",
+					port_number);
 			}
 
 			if (status->power_direction) {
@@ -1747,7 +1757,7 @@ static void pdc_snk_attached_run(void *obj)
 		queue_internal_cmd(port, CMD_PDC_SET_UOR);
 		return;
 	case SNK_ATTACHED_SET_PR_SWAP_POLICY:
-		port->snk_attached_local_state = SNK_ATTACHED_GET_VDO;
+		port->snk_attached_local_state = SNK_ATTACHED_DISABLE_FRS;
 		/* TODO: read from DT */
 		port->pdr = (union pdr_t){
 			.accept_pr_swap =
@@ -1758,6 +1768,14 @@ static void pdc_snk_attached_run(void *obj)
 		queue_internal_cmd(port, CMD_PDC_SET_PDR);
 		atomic_clear_bit(port->snk_policy.flags,
 				 SNK_POLICY_UPDATE_ALLOW_PR_SWAP);
+		return;
+	case SNK_ATTACHED_DISABLE_FRS:
+		/* Always disable FRS by default. The source policy manager
+		 * is responsible for enabling FRS is the power budget allows.
+		 */
+		port->snk_attached_local_state = SNK_ATTACHED_GET_VDO;
+		port->frs_enable = false;
+		queue_internal_cmd(port, CMD_PDC_SET_FRS);
 		return;
 	case SNK_ATTACHED_GET_VDO:
 		port->snk_attached_local_state = SNK_ATTACHED_GET_PDOS;
@@ -2047,6 +2065,9 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 		rv = pdc_set_pdos(port->pdc, port->set_pdos.type,
 				  port->set_pdos.pdos, port->set_pdos.count);
 		break;
+	case CMD_PDC_SET_FRS:
+		rv = pdc_set_frs(port->pdc, port->frs_enable);
+		break;
 	case CMD_PDC_GET_PCH_DATA_STATUS:
 		rv = pdc_get_pch_data_status(port->pdc, config->connector_num,
 					     port->pch_data_status);
@@ -2064,8 +2085,8 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 	}
 
 	if (rv) {
-		LOG_DBG("Unable to send command: %s",
-			pdc_cmd_names[port->cmd->cmd]);
+		LOG_DBG("Unable to send command: %s rv=%d",
+			pdc_cmd_names[port->cmd->cmd], rv);
 	}
 
 	return rv;
@@ -2078,8 +2099,8 @@ static void pdc_send_cmd_start_run(void *obj)
 
 	rv = send_pdc_cmd(port);
 	if (rv) {
-		LOG_DBG("Unable to send command: %s",
-			pdc_cmd_names[port->cmd->cmd]);
+		LOG_DBG("Unable to send command: %s, rv=%d",
+			pdc_cmd_names[port->cmd->cmd], rv);
 	}
 
 	/*
@@ -2093,15 +2114,24 @@ static void pdc_send_cmd_start_run(void *obj)
 	atomic_clear_bit(port->cci_flags, CCI_CMD_COMPLETED);
 	atomic_clear_bit(port->cci_flags, CCI_ERROR);
 
+	/* Command not implemented, no need to retry, return immediately */
+	if (rv == -ENOSYS) {
+		LOG_INF("Command (%s) not implemented",
+			pdc_cmd_names[port->cmd->cmd]);
+		port->cmd->error = -ENOSYS;
+		port->cmd->pending = false;
+		set_pdc_state(port, port->send_cmd_return_state);
+		return;
+	}
 	/* Test if command was successful. If not, try again until max
 	 * retries is reached */
-	if (rv) {
+	else if (rv) {
 		port->send_cmd.wait_counter++;
 		if (port->send_cmd.wait_counter > WAIT_MAX) {
 			/* Could not send command: TODO handle error */
 			LOG_INF("Command (%s) retry timeout",
 				pdc_cmd_names[port->cmd->cmd]);
-			port->cmd->error = true;
+			port->cmd->error = rv;
 			port->cmd->pending = false;
 			set_pdc_state(port, port->send_cmd_return_state);
 		}
@@ -2133,7 +2163,7 @@ static void pdc_send_cmd_wait_run(void *obj)
 	 */
 	if (port->cmd->cmd == CMD_PDC_RESET) {
 		if (pdc_is_init_done(port->pdc)) {
-			port->cmd->error = false;
+			port->cmd->error = 0;
 			set_pdc_state(port, port->send_cmd_return_state);
 			return;
 		}
@@ -2166,7 +2196,7 @@ static void pdc_send_cmd_wait_run(void *obj)
 		} else {
 			LOG_ERR("%s resend attempts exceeded!",
 				pdc_cmd_names[port->cmd->cmd]);
-			port->cmd->error = true;
+			port->cmd->error = -EBUSY;
 			set_pdc_state(port, port->send_cmd_return_state);
 			return;
 		}
@@ -2196,7 +2226,7 @@ static void pdc_send_cmd_wait_run(void *obj)
 		/* No response: Wait until timeout. */
 		port->send_cmd.wait_counter++;
 		if (port->send_cmd.wait_counter > WAIT_MAX) {
-			port->cmd->error = true;
+			port->cmd->error = -EBUSY;
 			if (port->cmd->cmd == CMD_PDC_GET_CONNECTOR_STATUS) {
 				/*
 				 * Can't get connector status. Enter unattached
@@ -2425,7 +2455,7 @@ static void pdc_init_entry(void *obj)
  */
 static void enforce_pd_chipset_resume_policy_1(int port)
 {
-	LOG_DBG("Chipset Resume Policy 1");
+	LOG_DBG("C%d: Chipset Resume Policy 1", port);
 
 	/* If we're in a sink role, run a check to determine if we'd prefer a
 	 * source role.
@@ -2838,9 +2868,10 @@ static int public_api_block(int port, enum pdc_cmd_t pdc_cmd)
 		}
 	}
 
-	if (pdc_data[port]->port.send_cmd.public.error) {
-		LOG_ERR("Public API command not sent");
-		return -EIO;
+	if (public_cmd->error) {
+		LOG_ERR("Public API command %s not sent, err=%d",
+			pdc_cmd_names[public_cmd->cmd], public_cmd->error);
+		return public_cmd->error;
 	}
 
 	return 0;

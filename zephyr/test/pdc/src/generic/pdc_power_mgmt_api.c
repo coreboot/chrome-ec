@@ -27,8 +27,10 @@ LOG_MODULE_REGISTER(pdc_power_mgmt_api, LOG_LEVEL_INF);
 #else
 #define PDC_TEST_TIMEOUT 2000
 #endif
-/* Time needed for chipset power to stabilize */
-#define PDC_POWER_STABLE_TIMEOUT (PDC_TEST_TIMEOUT * 2)
+/* Time needed for chipset power to stabilize
+ * (PDC_POWER_STATE_DEBOUNCE_S * 2) defined in pdc_power_mgmt.c
+ */
+#define PDC_POWER_STABLE_TIMEOUT (4000)
 #define RTS5453P_NODE DT_NODELABEL(pdc_emul1)
 
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
@@ -94,6 +96,17 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_usb_pd_port_count)
 ZTEST_USER(pdc_power_mgmt_api, test_is_connected)
 {
 	union connector_status_t connector_status;
+	bool frs_enabled;
+
+	/* Verify that the emulator tracks whether FRS enable/disable
+	 * has been configured.
+	 *
+	 *  TODO(b/345292002): FRS not supported by TPS6699x driver
+	 */
+	if (!IS_ENABLED(CONFIG_TODO_B_345292002)) {
+		zassert_ok(emul_pdc_reset(emul));
+		zassert_equal(emul_pdc_get_frs(emul, &frs_enabled), -EIO);
+	}
 
 	zassert_false(pd_is_connected(CONFIG_USB_PD_PORT_MAX_COUNT));
 	zassert_equal(pd_get_task_state(CONFIG_USB_PD_PORT_MAX_COUNT),
@@ -112,8 +125,17 @@ ZTEST_USER(pdc_power_mgmt_api, test_is_connected)
 
 	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
+	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
+
+	/* TODO(b/345292002): FRS not supported by TPS6699x driver */
+	if (!IS_ENABLED(CONFIG_PLATFORM_EC_USB_PD_FRS) &&
+	    !IS_ENABLED(CONFIG_TODO_B_345292002)) {
+		/* FRS should be disabled after connecting a partner source. */
+		zassert_ok(emul_pdc_get_frs(emul, &frs_enabled));
+	}
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_comm_is_enabled)
@@ -300,6 +322,9 @@ static void run_toggle_test(union connector_status_t *connector_status)
 	struct k_thread test_thread_data;
 	int ret;
 
+	/* Slow down driver response to give -EBUSY response */
+	emul_pdc_set_response_delay(emul, 20);
+
 	LOG_INF("Emul PDC disconnect partner");
 	emul_pdc_disconnect(emul);
 	zassert_false(TEST_WAIT_FOR(pd_capable(TEST_PORT), PDC_TEST_TIMEOUT));
@@ -387,40 +412,60 @@ ZTEST_USER(pdc_power_mgmt_api, test_unattached_public_cmd)
 	run_toggle_test(&connector_status);
 }
 
-ZTEST_USER(pdc_power_mgmt_api, test_connectionless_cmds)
+static void pdc_power_mgmt_connectionless_before(void *fixture)
 {
-	struct pdc_info_t pdc_info;
-#ifndef CONFIG_TODO_B_345292002
-	struct lpm_ppm_info_t lpm_ppm_info;
-#endif
-	union data_status_reg status;
-
-	LOG_INF("Emul PDC disconnect partner");
-	emul_pdc_disconnect(emul);
+	pdc_power_mgmt_before(fixture);
 	zassert_false(TEST_WAIT_FOR(pd_capable(TEST_PORT), PDC_TEST_TIMEOUT));
+}
 
+ZTEST_SUITE(pdc_power_mgmt_api_connectionless, NULL, pdc_power_mgmt_setup,
+	    pdc_power_mgmt_connectionless_before, pdc_power_mgmt_after, NULL);
+
+ZTEST_USER(pdc_power_mgmt_api_connectionless, test_reset)
+{
 	/* These commands are expected to succeed without a connection. */
 	LOG_INF("Sending PDC RESET");
 	zassert_ok(pdc_power_mgmt_reset(TEST_PORT));
 
 	emul_pdc_disconnect(emul);
 	zassert_false(TEST_WAIT_FOR(pd_capable(TEST_PORT), PDC_TEST_TIMEOUT));
+}
+
+ZTEST_USER(pdc_power_mgmt_api_connectionless, test_get_info)
+{
+	struct pdc_info_t pdc_info;
 
 	LOG_INF("Sending GET INFO");
 	zassert_ok(pdc_power_mgmt_get_info(TEST_PORT, &pdc_info, true));
+}
+
+ZTEST_USER(pdc_power_mgmt_api_connectionless, test_get_pch_data_status)
+{
+	union data_status_reg status;
 
 	LOG_INF("Sending GET PCH DATA_STATUS");
 	zassert_ok(pdc_power_mgmt_get_pch_data_status(TEST_PORT,
 						      status.raw_value));
+}
 
-#ifndef CONFIG_TODO_B_345292002
-	LOG_INF("Sending GET LPM PPM INFO");
-	zassert_ok(pdc_power_mgmt_get_lpm_ppm_info(TEST_PORT, &lpm_ppm_info));
-#endif
-
+ZTEST_USER(pdc_power_mgmt_api_connectionless, test_set_trysrc)
+{
 	/* Send a command that requires a connection. It should fail. */
 	LOG_INF("Sending SET DRP");
 	zassert_equal(-EIO, pdc_power_mgmt_set_trysrc(TEST_PORT, true));
+}
+
+ZTEST_USER(pdc_power_mgmt_api_connectionless, test_get_lpm_ppm_info)
+{
+	struct lpm_ppm_info_t lpm_ppm_info;
+	int rv;
+
+	LOG_INF("Sending GET LPM PPM INFO");
+	rv = pdc_power_mgmt_get_lpm_ppm_info(TEST_PORT, &lpm_ppm_info);
+	if (rv == -ENOSYS) {
+		ztest_test_skip();
+	}
+	zassert_ok(rv, "rv=%d", rv);
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_partner_usb_comm_capable)
@@ -622,8 +667,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 		TEST_WAIT_FOR(!pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 }
 
-/* TODO(b/345292002): Implement set_pdo for TPS6699x emulator/driver. */
-#ifndef CONFIG_TODO_B_345292002
 ZTEST_USER(pdc_power_mgmt_api, test_get_lpm_ppm_info)
 {
 	struct lpm_ppm_info_t out = { 0 };
@@ -641,6 +684,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_lpm_ppm_info)
 				       CONFIG_USB_PD_PORT_MAX_COUNT, &out));
 	zassert_equal(-EINVAL,
 		      pdc_power_mgmt_get_lpm_ppm_info(TEST_PORT, NULL));
+
+	if (pdc_power_mgmt_get_lpm_ppm_info(TEST_PORT, &out) == -ENOSYS) {
+		ztest_test_skip();
+	}
 
 	/* Successful */
 	emul_pdc_set_lpm_ppm_info(emul, &in);
@@ -660,7 +707,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_lpm_ppm_info)
 	zassert_equal(in.hw_ver, out.hw_ver, "Got %08x, expected $%08x",
 		      out.hw_ver, in.hw_ver);
 }
-#endif
 
 ZTEST_USER(pdc_power_mgmt_api, test_request_power_swap)
 {
@@ -892,8 +938,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_unconstr_power)
 				   PDC_TEST_TIMEOUT));
 }
 
-/* TODO(b/345292002): Implement set_pdo for TPS6699x emulator/driver. */
-#ifndef CONFIG_TODO_B_345292002
 ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 {
 /* Keep in line with |pdc_power_mgmt_api.c|. */
@@ -938,6 +982,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 	zassert_equal(expected_voltage_mv,
 		      pdc_power_mgmt_get_vbus_voltage(TEST_PORT));
 
+	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
 	zassert_true(TEST_WAIT_FOR(
 		next_expected_voltage_mv ==
 			pdc_power_mgmt_get_vbus_voltage(TEST_PORT),
@@ -955,6 +1000,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 	emul_pdc_pulse_irq(emul);
 	k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
 
+	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
 	zassert_equal(next_expected_voltage_mv,
 		      pdc_power_mgmt_get_vbus_voltage(TEST_PORT));
 
@@ -962,7 +1008,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 	zassert_true(
 		TEST_WAIT_FOR(!pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 }
-#endif
 
 ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 {
@@ -1254,7 +1299,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume_up_drp_partner)
 	zassert_equal(pdr.swap_to_src, 0);
 }
 
-ZTEST_USER(pdc_power_mgmt_api, test_chipset_startup)
+ZTEST_USER(pdc_power_mgmt_api, test_chipset_on)
 {
 	union connector_status_t connector_status;
 	enum ccom_t ccom;
@@ -1268,6 +1313,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_startup)
 
 	fake_chipset_state = CHIPSET_STATE_ON;
 	hook_notify(HOOK_CHIPSET_STARTUP);
+	hook_notify(HOOK_CHIPSET_RESUME);
 	TEST_WORKING_DELAY(PDC_POWER_STABLE_TIMEOUT);
 
 	emul_pdc_disconnect(emul);
@@ -1278,13 +1324,13 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_startup)
 		zassert_ok(emul_pdc_get_ccom(emul, &ccom),
 			   "Invalid CCOM value in emul");
 
-		if (ccom != CCOM_RD)
+		if (ccom != CCOM_DRP)
 			continue;
 
 		break;
 	}
 
-	zassert_equal(CCOM_RD, ccom);
+	zassert_equal(CCOM_DRP, ccom);
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
@@ -1479,7 +1525,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_new_pd_sink_contract)
 
 	/* Simulate the port partner changing its PDOs. The sink path is
 	 * disabled during this step */
-	in_conn_status_change_bits.supported_provider_caps = 1;
+	in_conn_status_change_bits.battery_charging_status = 1;
 	in.raw_conn_status_change_bits = in_conn_status_change_bits.raw_value;
 	emul_pdc_connect_partner(emul, &in);
 
