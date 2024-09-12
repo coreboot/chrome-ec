@@ -45,6 +45,7 @@ import argparse
 from collections import namedtuple
 import concurrent
 from concurrent.futures.thread import ThreadPoolExecutor
+from contextlib import ExitStack
 import copy
 from dataclasses import dataclass
 from dataclasses import field
@@ -63,7 +64,6 @@ from typing import BinaryIO, Callable, Dict, List, Optional, Tuple
 
 # pylint: disable=import-error
 import colorama  # type: ignore[import]
-from contextlib2 import ExitStack
 import fmap
 import yaml
 
@@ -363,7 +363,7 @@ class AllTests:
             TestConfig(test_name="global_initialization", skip_for_zephyr=True),
             TestConfig(test_name="libcxx"),
             TestConfig(test_name="malloc", imagetype_to_use=ImageType.RO),
-            # MPU functionality is handled by Zephyr code.
+            # TODO(b/363277530): Add Zephyr MPU tests.
             TestConfig(
                 config_name="mpu_ro",
                 test_name="mpu",

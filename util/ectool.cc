@@ -344,8 +344,6 @@ int cmd_hibdelay(int argc, char *argv[])
 	}
 
 	printf("Hibernation delay: %u s\n", r.hibernate_delay);
-	printf("Time G3: %u s\n", r.time_g3);
-	printf("Time left: %u s\n", r.time_remaining);
 	return 0;
 }
 
@@ -8752,20 +8750,35 @@ static int cmd_battery_config_set(int argc, char *argv[], bool search_only)
 	/* Clear the dst to ensure it'll be null-terminated. */
 	memset(identifier, 0, sizeof(identifier));
 	sprintf(identifier, "%s,%s", manuf_name, device_name);
-	base::Value::Dict *root_dict = dict->FindDict(identifier);
-	if (root_dict == nullptr) {
-		fprintf(stderr,
-			"Config matching identifier=%s not found in %s.\n",
-			identifier, json_file);
+	base::Value::Dict *root_dict = nullptr;
+	int num_matches = 0;
+
+	for (const auto &identifier_in_json : *dict) {
+		if (!strncasecmp(identifier, identifier_in_json.first.c_str(),
+				 identifier_in_json.first.size())) {
+			root_dict = identifier_in_json.second.GetIfDict();
+			++num_matches;
+		}
+	}
+
+	if (num_matches == 0) {
+		fprintf(stderr, "No config found for '%s' in %s\n", identifier,
+			json_file);
+		free(json);
+		return -1;
+	} else if (num_matches > 1) {
+		fprintf(stderr, "Multiple (%d) configs found for '%s' in %s\n",
+			num_matches, identifier, json_file);
 		free(json);
 		return -1;
 	}
+
 	if (read_u8_from_json(root_dict, "struct_version", &struct_version))
 		return -1;
 
 	if (search_only) {
-		printf("Battery config with identifier: %s,%s is found at %s\n",
-		       manuf_name, device_name, json_file);
+		printf("Battery config with identifier: '%s' is found at %s\n",
+		       identifier, json_file);
 		return 0;
 	}
 
@@ -11105,6 +11118,15 @@ int cmd_pd_chip_info(int argc, char *argv[])
 	rv = ec_get_highest_supported_cmd_version(EC_CMD_PD_CHIP_INFO, &cmdver);
 	if (rv)
 		return rv;
+
+	/* Protect against the EC supporting a higher HC version than ectool.
+	 * This should be incremented as ectool support for newer versions is
+	 * implemented (specific response struct type and decoding logic below)
+	 */
+	const int highest_supported_version = 3;
+	if (cmdver > highest_supported_version) {
+		cmdver = highest_supported_version;
+	}
 
 	rv = ec_command(EC_CMD_PD_CHIP_INFO, cmdver, &p, sizeof(p), &r,
 			sizeof(r));
