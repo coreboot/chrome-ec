@@ -43,12 +43,6 @@
 #include "usb_descriptor.h"
 #include "verify_ro.h"
 
-/* View of an image header for either H1/DT images or NuvoTitan images. */
-union ImageHeader {
-	struct SignedHeader h;
-	struct SignedManifest m;
-};
-
 /*
  * This enum must match CcdCap enum in applications/sys_mgr/src/ccd.rs in the
  * Ti50 common git tree.
@@ -246,6 +240,7 @@ BUILD_ASSERT((CR50_CCD_CAP_COUNT / 32) == (TI50_CCD_CAP_COUNT / 32));
 /* Look for Cr50 FW update interface */
 #define H1_PID	 0x5014
 #define D2_PID	 0x504A
+#define NT_PID	 0x5066
 #define SUBCLASS USB_SUBCLASS_GOOGLE_CR50
 #define PROTOCOL USB_PROTOCOL_GOOGLE_CR50_NON_HC_FW_UPDATE
 
@@ -312,15 +307,56 @@ struct options_map {
 };
 
 /*
- * Type of the GSC device we're supposed to be connected to. Is determined
- * based on various inputs, like command line parameters and/or image supplied
+ * Type of the GSC device. This is used to represent which type of GSC we are
+ * connected to and to tag an image file for compatibility.
  * for downloading.
  */
 enum gsc_device {
-	GSC_DEVICE_ANY = 0,
 	GSC_DEVICE_H1,
 	GSC_DEVICE_DT,
 	GSC_DEVICE_NT,
+};
+
+/* Index to refer to a section within sections array */
+enum section {
+	RO_A,
+	RW_A,
+	RO_B,
+	RW_B,
+	NUM_SECTIONS,
+};
+
+/* Human-readable section names */
+const char *SECTION_NAMES[NUM_SECTIONS] = { [RO_A] = "RO_A",
+					    [RW_A] = "RW_A",
+					    [RO_B] = "RO_B",
+					    [RW_B] = "RW_B" };
+
+/* Describes each of the sections found in the GSC image */
+struct section_t {
+	uint32_t offset;
+	uint32_t size;
+	bool update_needed;
+	struct signed_header_version shv;
+	uint32_t keyid;
+};
+
+/* Holds a GSC image from disk that can be transfer to a GSC as an update */
+struct image {
+	uint8_t *data;
+	size_t data_len;
+	enum gsc_device type;
+	const char *file_path;
+	struct section_t sections[NUM_SECTIONS];
+};
+
+/* A header with a GSC device type */
+struct typed_image_header {
+	enum gsc_device type;
+	union {
+		struct SignedHeader *h;
+		struct SignedManifest *m;
+	};
 };
 
 /*
@@ -330,7 +366,6 @@ enum gsc_device {
 struct option_container {
 	struct option opt;
 	const char *help_text;
-	enum gsc_device opt_device; /* Initted to ANY by default. */
 };
 
 static void sha_init(EVP_MD_CTX *ctx);
@@ -339,12 +374,7 @@ static void sha_final_into_block_digest(EVP_MD_CTX *ctx, void *block_digest,
 					size_t size);
 
 /* Type of the GSC device we are talking to, determined at run time. */
-static enum gsc_device gsc_dev = GSC_DEVICE_ANY;
-/*
- * Type of the GSC device the currently processed command line option
- * requires, set during option scanning along with optarg.
- */
-static enum gsc_device opt_gsc_dev = GSC_DEVICE_ANY;
+static enum gsc_device gsc_dev = GSC_DEVICE_H1;
 
 /*
  * Current AP RO verification config setting version
@@ -460,26 +490,22 @@ static const struct option_container cmd_line_options[] = {
 	  "Try any interfaces to find Cr50"
 	  " (-d, -s, -t are all ignored)" },
 	{ { "apro_boot", optional_argument, NULL, 'B' },
-	  "[start] get the stored ap ro boot state or start ap ro verify",
-	  GSC_DEVICE_DT },
+	  "[start] get the stored ap ro boot state or start ap ro verify" },
 	{ { "binvers", no_argument, NULL, 'b' },
 	  "Report versions of Cr50 image's "
 	  "RW and RO headers, do not update" },
 	{ { "apro_config_spi_mode", optional_argument, NULL, 'C' },
-	  "Get/set the ap ro verify spi mode either to `3byte` or `4byte`",
-	  GSC_DEVICE_DT },
+	  "Get/set the ap ro verify spi mode either to `3byte` or `4byte`" },
 	{ { "corrupt", no_argument, NULL, 'c' }, "Corrupt the inactive rw" },
 	{ { "dauntless", no_argument, NULL, 'D' },
-	  "Communicate with Dauntless chip. This may also be implied.",
-	  GSC_DEVICE_DT },
+	  "Deprecated. No longer needed as runtime selection is used." },
 	{ { "device", required_argument, NULL, 'd' },
 	  "VID:PID%USB device (default 18d1:5014 or 18d1:504a based on"
 	  " image)" },
 	{ { "apro_config_write_protect", optional_argument, NULL, 'E' },
 	  "Get/set the ap ro verify write protect descriptors with hex "
 	  "bytes (ex: 0x01, 0x1, 01 or 1) in the following format: "
-	  "[sr1 mask1 [sr2 mask2] [sr3 mask3]]",
-	  GSC_DEVICE_DT },
+	  "[sr1 mask1 [sr2 mask2] [sr3 mask3]]" },
 	{ { "endorsement_seed", optional_argument, NULL, 'e' },
 	  "[state]%get/set the endorsement key seed" },
 	{ { "factory", required_argument, NULL, 'F' },
@@ -491,8 +517,7 @@ static const struct option_container cmd_line_options[] = {
 	{ { "getbootmode", no_argument, NULL, 'g' },
 	  "Get the system boot mode" },
 	{ { "erase_ap_ro_hash", no_argument, NULL, 'H' },
-	  "Erase AP RO hash (possible only if Board ID is not set)",
-	  GSC_DEVICE_H1 },
+	  "Erase AP RO hash (possible only if Board ID is not set)" },
 	{ { "help", no_argument, NULL, 'h' }, "Show this message" },
 	{ { "ccd_info", optional_argument, NULL, 'I' },
 	  "[capability:value]%Get information about CCD state or set capability"
@@ -502,29 +527,22 @@ static const struct option_container cmd_line_options[] = {
 	  "hex or 4 character string." },
 	{ { "boot_trace", optional_argument, NULL, 'J' },
 	  "[erase]%Retrieve boot trace from the chip, optionally erasing "
-	  "the trace buffer",
-	  GSC_DEVICE_DT },
+	  "the trace buffer" },
 	{ { "get_value", required_argument, NULL, 'K' },
-	  "[chassis_open|dev_ids]%Get properties values",
-	  GSC_DEVICE_DT },
+	  "[chassis_open|dev_ids]%Get properties values" },
 	{ { "ccd_lock", no_argument, NULL, 'k' }, "Lock CCD" },
 	{ { "flog", optional_argument, NULL, 'L' },
 	  "[prev entry]%Retrieve contents of the flash log"
 	  " (newer than <prev entry> if specified)" },
 	{ { "console", no_argument, NULL, 'l' },
 	  "Get console logs. This may need to be run multiple times to collect "
-	  "all available logs.",
-	  GSC_DEVICE_DT },
+	  "all available logs." },
 	{ { "machine", no_argument, NULL, 'M' },
 	  "Output in a machine-friendly way. "
 	  "Effective with -b, -f, -i, -J, -r, and -O." },
 	{ { "tpm_mode", optional_argument, NULL, 'm' },
 	  "[enable|disable]%Change or query tpm_mode" },
-	{ { "nuvotitan", no_argument, NULL, 'N' },
-	  "Communicate with NuvoTitan chip. This may also be implied.",
-	  GSC_DEVICE_NT },
-	{ { "serial", required_argument, NULL, 'n' },
-	  "Cr50 CCD serial number" },
+	{ { "serial", required_argument, NULL, 'n' }, "GSC USB serial number" },
 	{ { "openbox_rma", required_argument, NULL, 'O' },
 	  "<desc_file>%Verify other device's RO integrity using information "
 	  "provided in <desc file>" },
@@ -558,8 +576,7 @@ static const struct option_container cmd_line_options[] = {
 	{ { "wp", optional_argument, NULL, 'w' },
 	  "[enable|disable|follow]%Get or set the write protect setting" },
 	{ { "clog", no_argument, NULL, 'x' },
-	  "Retrieve contents of the most recent crash log.",
-	  GSC_DEVICE_DT },
+	  "Retrieve contents of the most recent crash log." },
 	{ { "factory_config", optional_argument, NULL, 'y' },
 	  "[value]%Sets the factory config bits in INFO. value should be 64 "
 	  "bit hex." },
@@ -600,6 +617,13 @@ static int from_hexascii(char c)
 		return c - '0';
 
 	return c - 'a' + 10;
+}
+
+/* Returns true if the connected GSC device has Ti50-based firmware. */
+static bool is_ti50_device(void)
+{
+	/* Assume Ti50 is not H1 device. */
+	return gsc_dev != GSC_DEVICE_H1;
 }
 
 /* Functions to communicate with the TPM over the trunks_send --raw channel. */
@@ -1131,45 +1155,13 @@ static void transfer_section(struct transfer_descriptor *td, uint8_t *data_ptr,
 /* Information about the target */
 static struct first_response_pdu targ;
 
-/*
- * Each RO or RW section of the new image can be in one of the following
- * states.
- */
-enum upgrade_status {
-	not_needed = 0, /* Version below or equal that on the target. */
-	not_possible, /*
-		       * RO is newer, but can't be transferred due to
-		       * target RW shortcomings.
-		       */
-	needed /*
-		* This section needs to be transferred to the
-		* target.
-		*/
+/* The well known CR50 section location and sizes. These are not scanned for. */
+const struct section_t CR50_SECTIONS[NUM_SECTIONS] = {
+	[RO_A] = { CONFIG_RO_MEM_OFF, CONFIG_RO_SIZE },
+	[RW_A] = { CONFIG_RW_MEM_OFF, CONFIG_RW_SIZE },
+	[RO_B] = { CHIP_RO_B_MEM_OFF, CONFIG_RO_SIZE },
+	[RW_B] = { CONFIG_RW_B_MEM_OFF, CONFIG_RW_SIZE }
 };
-
-/* Index to refer to a section within sections array */
-enum section {
-	RO_A,
-	RW_A,
-	RO_B,
-	RW_B,
-};
-
-/*
- * This array describes all four sections of the new image. Defaults are for
- * H1 images. D2 images are scanned for SignedHeaders in the image
- */
-static struct {
-	const char *name;
-	uint32_t offset;
-	uint32_t size;
-	enum upgrade_status ustatus;
-	struct signed_header_version shv;
-	uint32_t keyid;
-} sections[] = { [RO_A] = { "RO_A", CONFIG_RO_MEM_OFF, CONFIG_RO_SIZE },
-		 [RW_A] = { "RW_A", CONFIG_RW_MEM_OFF, CONFIG_RW_SIZE },
-		 [RO_B] = { "RO_B", CHIP_RO_B_MEM_OFF, CONFIG_RO_SIZE },
-		 [RW_B] = { "RW_B", CONFIG_RW_B_MEM_OFF, CONFIG_RW_SIZE } };
 
 /*
  * Remove these definitions so a developer doesn't accidentally use them in
@@ -1249,40 +1241,48 @@ static bool valid_nt_manifest(const struct SignedManifest *const m,
 }
 
 /* Returns true if the specified image header is valid */
-static bool valid_image_header(const union ImageHeader *const h,
+static bool valid_image_header(const struct typed_image_header h,
 			       const size_t size, enum gsc_device *out_device)
 {
-	if (valid_nt_manifest(&h->m, size)) {
-		if (out_device)
-			*out_device = GSC_DEVICE_NT;
-		return true;
-	}
-	if (valid_signed_header(&h->h, size)) {
+	if (valid_nt_manifest(h.m, size)) {
+		enum gsc_device type = GSC_DEVICE_NT;
+
 		if (out_device) {
-			if (h->h.magic == MAGIC_HAVEN) {
-				*out_device = GSC_DEVICE_H1;
-			} else if (h->h.magic == MAGIC_DAUNTLESS) {
-				*out_device = GSC_DEVICE_DT;
-			} else {
-				fprintf(stderr,
-					"Error: Cannot determine image type.\n");
-				/* Unsupported image type */
-				exit(update_error);
-			}
+			*out_device = type;
+			return true;
+		} else {
+			return h.type == type;
 		}
-		return true;
+	}
+	if (valid_signed_header(h.h, size)) {
+		enum gsc_device type = GSC_DEVICE_H1;
+
+		if (h.h->magic == MAGIC_DAUNTLESS) {
+			type = GSC_DEVICE_DT;
+		} else if (h.h->magic != MAGIC_HAVEN) {
+			fprintf(stderr,
+				"Error: Cannot determine image type.\n");
+			/* Unsupported image type */
+			exit(update_error);
+		}
+		if (out_device) {
+			*out_device = type;
+			return true;
+		} else {
+			return h.type == type;
+		}
 	}
 	return false;
 }
 
 /* Returns the image size from the header. This assumes it is valid */
-static uint32_t get_size_from_header(const union ImageHeader *const h)
+static uint32_t get_size_from_header(const struct typed_image_header h)
 {
-	if (gsc_dev == GSC_DEVICE_H1 || gsc_dev == GSC_DEVICE_DT)
-		return h->h.image_size;
+	if (h.type == GSC_DEVICE_H1 || h.type == GSC_DEVICE_DT)
+		return h.h->image_size;
 
-	if (gsc_dev == GSC_DEVICE_NT)
-		return h->m.length;
+	if (h.type == GSC_DEVICE_NT)
+		return h.m->length;
 
 	fprintf(stderr, "Error: Cannot determine image type.\n");
 	/* Unsupported image type */
@@ -1298,13 +1298,18 @@ static inline uint32_t round_up_2kb(const uint32_t addr)
 	return (addr + mask) & ~mask;
 }
 
-static const union ImageHeader *as_header(const void *image, uint32_t offset)
+static struct typed_image_header as_header(const struct image *image,
+					   uint32_t offset)
 {
-	return (void *)((uintptr_t)image + offset);
+	struct typed_image_header ret = {
+		image->type,
+		{ (void *)((uintptr_t)image->data + offset) },
+	};
+	return ret;
 }
 
 /* Returns the RW header or -1 if one cannot be found */
-static int32_t find_rw_header(const void *image, uint32_t offset,
+static int32_t find_rw_header(const struct image *image, uint32_t offset,
 			      const uint32_t end)
 {
 	offset = round_up_2kb(offset);
@@ -1320,12 +1325,11 @@ static int32_t find_rw_header(const void *image, uint32_t offset,
 }
 
 /* Return true if we located headers and set sections correctly */
-static bool locate_headers(const void *image, const uint32_t size)
+static bool locate_headers(struct image *image)
 {
-	const uint32_t slot_a_end = size / 2;
-	const union ImageHeader *h;
+	const uint32_t slot_a_end = image->data_len / 2;
+	struct section_t *sections = image->sections;
 	int32_t rw_offset;
-	enum gsc_device image_device;
 
 	/*
 	 * We assume that all 512KB images are "valid" H1 images. The DBG images
@@ -1334,15 +1338,9 @@ static bool locate_headers(const void *image, const uint32_t size)
 	 * testing. The H1 offsets are also static, so we don't need to scan
 	 * for RW headers.
 	 */
-	if (size == (512 * 1024)) {
-		if (gsc_dev == GSC_DEVICE_ANY) {
-			gsc_dev = GSC_DEVICE_H1;
-			return true;
-		}
-		if (gsc_dev != GSC_DEVICE_H1) {
-			fprintf(stderr, "Error: Cannot use Cr50 image.\n");
-			return false;
-		}
+	if (image->data_len == (512 * 1024)) {
+		image->type = GSC_DEVICE_H1;
+		memcpy(sections, CR50_SECTIONS, sizeof(CR50_SECTIONS));
 		return true;
 	}
 
@@ -1350,29 +1348,21 @@ static bool locate_headers(const void *image, const uint32_t size)
 	 * We know that all other image types supported (i.e. Dauntless,
 	 * NuvoTitan) are 1MB in size.
 	 */
-	if (size != (1024 * 1024)) {
-		fprintf(stderr, "\nERROR: Image size (%d KB) is invalid\n",
-			size / 1024);
+	if (image->data_len != (1024 * 1024)) {
+		fprintf(stderr, "\nERROR: Image size (%zd KB) is invalid\n",
+			image->data_len / 1024);
 		return false;
 	}
 
 	/* Validate the RO_A header */
-	h = as_header(image, 0);
-	if (!valid_image_header(h, slot_a_end, &image_device)) {
+	if (!valid_image_header(as_header(image, 0), slot_a_end,
+				&image->type)) {
 		fprintf(stderr, "\nERROR: RO_A header is invalid\n");
 		return false;
 	}
 
-	/* Ensure that device for image and selected device match */
-	if (gsc_dev == GSC_DEVICE_ANY) {
-		gsc_dev = image_device;
-	} else if (gsc_dev != image_device) {
-		fprintf(stderr, "Error: Invalid image for chip.\n");
-		return false;
-	}
-
 	sections[RO_A].offset = 0;
-	sections[RO_A].size = get_size_from_header(h);
+	sections[RO_A].size = get_size_from_header(as_header(image, 0));
 
 	/* Find RW_A */
 	rw_offset = find_rw_header(
@@ -1385,17 +1375,19 @@ static bool locate_headers(const void *image, const uint32_t size)
 	sections[RW_A].size = get_size_from_header(as_header(image, rw_offset));
 
 	/* Validate the RO_B header */
-	h = as_header(image, slot_a_end);
-	if (!valid_image_header(h, size - slot_a_end, NULL)) {
+	if (!valid_image_header(as_header(image, slot_a_end),
+				image->data_len - slot_a_end, NULL)) {
 		fprintf(stderr, "\nERROR: RO_B header is invalid\n");
 		return false;
 	}
 	sections[RO_B].offset = slot_a_end;
-	sections[RO_B].size = get_size_from_header(h);
+	sections[RO_B].size =
+		get_size_from_header(as_header(image, slot_a_end));
 
 	/* Find RW_B */
-	rw_offset = find_rw_header(
-		image, sections[RO_B].offset + sections[RO_B].size, size);
+	rw_offset = find_rw_header(image,
+				   sections[RO_B].offset + sections[RO_B].size,
+				   image->data_len);
 	if (rw_offset == -1) {
 		fprintf(stderr, "\nERROR: RW_B header cannot be found\n");
 		return false;
@@ -1411,15 +1403,14 @@ static bool locate_headers(const void *image, const uint32_t size)
  * Scan the new image and retrieve versions of all four sections, two RO and
  * two RW, verifying that image size is not too short along the way.
  */
-static bool fetch_header_versions(const void *image)
+static bool fetch_header_versions(struct image *image)
 {
 	size_t i;
+	struct section_t *const sections = image->sections;
 
-	for (i = 0; i < ARRAY_SIZE(sections); i++) {
-		const union ImageHeader *h;
-
-		h = (const union ImageHeader *)((uintptr_t)image +
-						sections[i].offset);
+	for (i = 0; i < NUM_SECTIONS; i++) {
+		const struct typed_image_header h =
+			as_header(image, sections[i].offset);
 
 		if (get_size_from_header(h) < CONFIG_FLASH_BANK_SIZE) {
 			/*
@@ -1433,21 +1424,21 @@ static bool fetch_header_versions(const void *image)
 				fprintf(stderr,
 					"Image at offset %#5x too short "
 					"(%d bytes)\n",
-					sections[i].offset, h->h.image_size);
+					sections[i].offset, h.h->image_size);
 				return false;
 			}
 
 			printf("warning: invalid RO_A (size 0)\n");
 		}
-		if (gsc_dev == GSC_DEVICE_H1 || gsc_dev == GSC_DEVICE_DT) {
-			sections[i].shv.epoch = h->h.epoch_;
-			sections[i].shv.major = h->h.major_;
-			sections[i].shv.minor = h->h.minor_;
-			sections[i].keyid = h->h.keyid;
-		} else if (gsc_dev == GSC_DEVICE_NT) {
-			sections[i].shv.epoch = 0;
-			sections[i].shv.major = h->m.version_major;
-			sections[i].shv.minor = h->m.version_minor;
+		if (h.type == GSC_DEVICE_H1 || h.type == GSC_DEVICE_DT) {
+			sections[i].shv.epoch = h.h->epoch_;
+			sections[i].shv.major = h.h->major_;
+			sections[i].shv.minor = h.h->minor_;
+			sections[i].keyid = h.h->keyid;
+		} else if (h.type == GSC_DEVICE_NT) {
+			sections[i].shv.epoch = h.m->security_version;
+			sections[i].shv.major = h.m->version_major;
+			sections[i].shv.minor = h.m->version_minor;
 			sections[i].keyid = 0;
 		} else {
 			fprintf(stderr, "\nERROR: Unknown image type.\n");
@@ -1492,39 +1483,15 @@ static int a_newer_than_b(const struct signed_header_version *a,
 }
 
 /*
- * Determine if the current RW version can be upgrade to the potential RW
- * version. If not, will exit the program.
- */
-static void check_rw_upgrade(const struct signed_header_version *current_rw,
-			     const struct signed_header_version *to_rw)
-{
-	/*
-	 * Disallow upgrade to 0.0.16+ without going through 0.0.15
-	 * first. This check won't be needed after 2023-01-01
-	 */
-	const struct signed_header_version ver15 = { .epoch = 0,
-						     .major = 0,
-						     .minor = 15 };
-	const int current_less_than_15 = a_newer_than_b(&ver15, current_rw);
-	const int to_greater_than_15 = a_newer_than_b(to_rw, &ver15);
-
-	if ((gsc_dev == GSC_DEVICE_DT) && current_less_than_15 &&
-	    to_greater_than_15) {
-		printf("Must upgrade to RW 0.0.15 first!\n");
-		/*  Do not continue with any upgrades RW or RO */
-		exit(update_error);
-	}
-}
-
-/*
  * Pick sections to transfer based on information retrieved from the target,
  * the new image, and the protocol version the target is running.
  */
-static void pick_sections(struct transfer_descriptor *td)
+static void pick_sections(struct transfer_descriptor *td, struct image *image)
 {
 	size_t i;
+	struct section_t *sections = image->sections;
 
-	for (i = 0; i < ARRAY_SIZE(sections); i++) {
+	for (i = 0; i < NUM_SECTIONS; i++) {
 		uint32_t offset = sections[i].offset;
 
 		if ((i == RW_A) || (i == RW_B)) {
@@ -1545,10 +1512,7 @@ static void pick_sections(struct transfer_descriptor *td)
 
 			if (a_newer_than_b(&sections[i].shv, &targ.shv[1]) ||
 			    !td->upstart_mode) {
-				/* Check will exit if disallowed */
-				check_rw_upgrade(&targ.shv[1],
-						 &sections[i].shv);
-				sections[i].ustatus = needed;
+				sections[i].update_needed = true;
 			}
 			/* Rest of loop is RO */
 			continue;
@@ -1564,11 +1528,30 @@ static void pick_sections(struct transfer_descriptor *td)
 		 */
 		if (a_newer_than_b(&sections[i].shv, &targ.shv[0]) ||
 		    td->force_ro)
-			sections[i].ustatus = needed;
+			sections[i].update_needed = true;
 	}
 }
 
-static void setup_connection(struct transfer_descriptor *td)
+/*
+ * Indicate to the target that update image transfer has been completed. Upon
+ * receiving of this message the target state machine transitions into the
+ * 'rx_idle' state. The host may send an extension command to reset the target
+ * after this.
+ */
+static void send_done(struct usb_endpoint *uep)
+{
+	uint32_t out;
+
+	/* Send stop request, ignoring reply. */
+	out = htobe32(UPGRADE_DONE);
+	do_xfer(uep, &out, sizeof(out), &out, 1, 0, NULL);
+}
+
+/*
+ * Gets and caches the GSC version information from the currently connected
+ * device.
+ */
+static void get_version(struct transfer_descriptor *td, bool leave_pending)
 {
 	size_t rxed_size;
 	size_t i;
@@ -1582,9 +1565,6 @@ static void setup_connection(struct transfer_descriptor *td)
 		struct first_response_pdu rpdu;
 		uint32_t legacy_resp;
 	} start_resp;
-
-	/* Send start request. */
-	printf("start\n");
 
 	if (td->ep_type == usb_xfer) {
 		struct update_pdu updu;
@@ -1618,8 +1598,6 @@ static void setup_connection(struct transfer_descriptor *td)
 		exit(update_error);
 	}
 
-	printf("target running protocol version %d\n", protocol_version);
-
 	error_code = be32toh(start_resp.rpdu.return_value);
 
 	if (error_code) {
@@ -1642,11 +1620,20 @@ static void setup_connection(struct transfer_descriptor *td)
 	for (i = 0; i < ARRAY_SIZE(targ.keyid); i++)
 		targ.keyid[i] = be32toh(start_resp.rpdu.keyid[i]);
 
+	if (!leave_pending && td->ep_type == usb_xfer)
+		send_done(&td->uep);
+}
+
+static void setup_connection(struct transfer_descriptor *td)
+{
+	/* Send start request. */
+	printf("start\n");
+
+	get_version(td, true);
+
 	printf("keyids: RO 0x%08x, RW 0x%08x\n", targ.keyid[0], targ.keyid[1]);
 	printf("offsets: backup RO at %#x, backup RW at %#x\n", td->ro_offset,
 	       td->rw_offset);
-
-	pick_sections(td);
 }
 
 /*
@@ -1700,21 +1687,6 @@ static int ext_cmd_over_usb(struct usb_endpoint *uep, uint16_t subcommand,
 }
 
 /*
- * Indicate to the target that update image transfer has been completed. Upon
- * receiveing of this message the target state machine transitions into the
- * 'rx_idle' state. The host may send an extension command to reset the target
- * after this.
- */
-static void send_done(struct usb_endpoint *uep)
-{
-	uint32_t out;
-
-	/* Send stop request, ignoring reply. */
-	out = htobe32(UPGRADE_DONE);
-	do_xfer(uep, &out, sizeof(out), &out, 1, 0, NULL);
-}
-
-/*
  * Old cr50 images fail the update if sections are sent out of order. They
  * require each block to have an offset greater than the block that was sent
  * before. RO has a lower offset than RW, so old cr50 images reject RO if it's
@@ -1748,12 +1720,12 @@ static int supports_reordered_section_updates(struct signed_header_version *rw)
 }
 
 /* Returns number of successfully transmitted image sections. */
-static int transfer_image(struct transfer_descriptor *td, uint8_t *data,
-			  size_t data_len)
+static int transfer_image(struct transfer_descriptor *td, struct image *image)
 {
 	size_t i;
 	int num_txed_sections = 0;
 	int needs_delay = !supports_reordered_section_updates(&targ.shv[1]);
+	struct section_t *sections = image->sections;
 
 	/*
 	 * In case both RO and RW updates are required, make sure the RW
@@ -1762,10 +1734,12 @@ static int transfer_image(struct transfer_descriptor *td, uint8_t *data,
 	 */
 	const enum section update_order[] = { RW_A, RW_B, RO_A, RO_B };
 
+	/* Now that we have an active connection and an image, pick sections */
+	pick_sections(td, image);
 	for (i = 0; i < ARRAY_SIZE(update_order); i++) {
 		const enum section sect = update_order[i];
 
-		if (sections[sect].ustatus != needed)
+		if (!sections[sect].update_needed)
 			continue;
 		if (num_txed_sections && needs_delay) {
 			/*
@@ -1777,12 +1751,14 @@ static int transfer_image(struct transfer_descriptor *td, uint8_t *data,
 			if (td->ep_type == usb_xfer)
 				send_done(&td->uep);
 			printf("Waiting %ds for %s update.\n",
-			       NEXT_SECTION_DELAY, sections[sect].name);
+			       NEXT_SECTION_DELAY, SECTION_NAMES[sect]);
 			sleep(NEXT_SECTION_DELAY);
 			setup_connection(td);
+			/* Pick sections again in case GSC versions changed. */
+			pick_sections(td, image);
 		}
 
-		transfer_section(td, data + sections[sect].offset,
+		transfer_section(td, image->data + sections[sect].offset,
 				 sections[sect].offset, sections[sect].size);
 		num_txed_sections++;
 	}
@@ -2215,7 +2191,8 @@ __attribute__((__format__(__printf__, 2, 3))) static void print_machine_output(
  * Prints out the header, including FW versions and board IDs, of the given
  * image. Output in a machine-friendly format if show_machine_output is true.
  */
-static int show_headers_versions(const void *image, bool show_machine_output)
+static int show_headers_versions(const struct image *image,
+				 bool show_machine_output)
 {
 	/*
 	 * There are 2 FW slots in an image, and each slot has 2 sections, RO
@@ -2224,6 +2201,7 @@ static int show_headers_versions(const void *image, bool show_machine_output)
 	 */
 	const size_t kNumSlots = 2;
 	const size_t kNumSectionsPerSlot = 2;
+	const struct section_t *sections = image->sections;
 
 	/*
 	 * String representation of FW version (<epoch>:<major>:<minor>), one
@@ -2246,16 +2224,15 @@ static int show_headers_versions(const void *image, bool show_machine_output)
 
 	size_t i;
 
-	for (i = 0; i < ARRAY_SIZE(sections); i++) {
-		const union ImageHeader *h =
-			(const union ImageHeader *)((uintptr_t)image +
-						    sections[i].offset);
+	for (i = 0; i < NUM_SECTIONS; i++) {
+		const struct typed_image_header h =
+			as_header(image, sections[i].offset);
 		const size_t slot_idx = i / kNumSectionsPerSlot;
 
 		uint32_t cur_bid;
 		size_t j;
 
-		if (sections[i].name[1] == 'O') {
+		if (i == RO_A || i == RO_B) {
 			/* RO. */
 			snprintf(ro_fw_ver[slot_idx], MAX_FW_VER_LENGTH,
 				 "%d.%d.%d", sections[i].shv.epoch,
@@ -2273,17 +2250,17 @@ static int show_headers_versions(const void *image, bool show_machine_output)
 		 * For RW sections, retrieves the board ID fields' contents,
 		 * which are stored XORed with a padding value.
 		 */
-		if (gsc_dev == GSC_DEVICE_H1 || gsc_dev == GSC_DEVICE_DT) {
-			bid[slot_idx].id = h->h.board_id_type ^
+		if (h.type == GSC_DEVICE_H1 || h.type == GSC_DEVICE_DT) {
+			bid[slot_idx].id = h.h->board_id_type ^
 					   SIGNED_HEADER_PADDING;
-			bid[slot_idx].mask = h->h.board_id_type_mask ^
+			bid[slot_idx].mask = h.h->board_id_type_mask ^
 					     SIGNED_HEADER_PADDING;
-			bid[slot_idx].flags = h->h.board_id_flags ^
+			bid[slot_idx].flags = h.h->board_id_flags ^
 					      SIGNED_HEADER_PADDING;
 
-			dev_id0_[slot_idx] = h->h.dev_id0_;
-			dev_id1_[slot_idx] = h->h.dev_id1_;
-		} else if (gsc_dev == GSC_DEVICE_NT) {
+			dev_id0_[slot_idx] = h.h->dev_id0_;
+			dev_id1_[slot_idx] = h.h->dev_id1_;
+		} else if (h.type == GSC_DEVICE_NT) {
 			/*
 			 * TODO(b/341348812): Get BID info from signed manifest
 			 * header.
@@ -2294,11 +2271,11 @@ static int show_headers_versions(const void *image, bool show_machine_output)
 			bid[slot_idx].flags = -1;
 
 			/* Check if devid constraints are being enforced */
-			if (h->m.constraint_selector_bits & 0x6) {
+			if (h.m->constraint_selector_bits & 0x6) {
 				dev_id0_[slot_idx] =
-					h->m.constraint_device_id[1];
+					h.m->constraint_device_id[1];
 				dev_id1_[slot_idx] =
-					h->m.constraint_device_id[2];
+					h.m->constraint_device_id[2];
 			} else {
 				dev_id0_[slot_idx] = 0;
 				dev_id1_[slot_idx] = 0;
@@ -4141,13 +4118,6 @@ static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
 	const int max_retries = 3;
 	int retries = max_retries;
 	bool time_zone_reported = false;
-	bool is_dauntless;
-
-	/*
-	 * For backwards compatibility assume DT only if was explicitly
-	 * requested.
-	 */
-	is_dauntless = (gsc_dev == GSC_DEVICE_DT);
 
 	while (retries--) {
 		struct parsed_flog_entry entry = { 0 };
@@ -4155,7 +4125,7 @@ static int process_get_flog(struct transfer_descriptor *td, uint64_t prev_stamp,
 		size_t i;
 		struct tm loc_time;
 		char date_str[25];
-		if (is_dauntless) {
+		if (is_ti50_device()) {
 			rv = pop_flog_dt(td, &entry);
 		} else {
 			rv = pop_flog(td, &entry);
@@ -4376,8 +4346,6 @@ static int getopt_all(int argc, char *argv[])
 			 */
 			longindex = get_longindex(i, long_opts);
 		}
-
-		opt_gsc_dev = cmd_line_options[longindex].opt_device;
 
 		if (long_opts[longindex].has_arg == optional_argument) {
 			/*
@@ -4737,29 +4705,24 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 }
 
 /*
- * Try setting the GSC device type.
- *
- * dev - type to set to
- * option - short command line option requiring this device type
- * error_counter - pointer to the counter to increment in case of error.
- *
- * Returns false and increments error counter if gsc_dev is already set to a
- * different device type.
+ * Returns the GSC device type determine by how is responds to TPMV and
+ * version requests.
  */
-static bool set_device_type(enum gsc_device dev, char option,
-			    int *error_counter)
+static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 {
-	if (gsc_dev == dev)
-		return true;
+	int major;
+	/* First try the newer TPMV command */
+	/* TODO(b/364705511): Add new TPMV command */
 
-	if (gsc_dev == GSC_DEVICE_ANY) {
-		gsc_dev = dev;
-		return true;
-	}
-
-	fprintf(stderr, "Inconsistent -%c option\n", option);
-	(*error_counter)++;
-	return false;
+	/* If that fails, use the firmware version to determine type */
+	get_version(td, false);
+	major = targ.shv[1].major;
+	if (major >= 30 && major < 40)
+		return GSC_DEVICE_NT;
+	else if (major >= 20 && major < 30)
+		return GSC_DEVICE_DT;
+	else
+		return GSC_DEVICE_H1;
 }
 
 int main(int argc, char *argv[])
@@ -4767,12 +4730,11 @@ int main(int argc, char *argv[])
 	struct transfer_descriptor td;
 	int rv = 0;
 	int errorcnt;
-	uint8_t *fw_image_data = 0;
-	size_t data_len = 0;
+	struct image *images = NULL;
+	int num_images = 0;
 	uint16_t vid = 0;
 	uint16_t pid = 0;
 	int i;
-	size_t j;
 	int transferred_sections = 0;
 	int binary_vers = 0;
 	int show_fw_ver = 0;
@@ -4878,10 +4840,6 @@ int main(int argc, char *argv[])
 	opterr = 0; /* quiet, you */
 
 	while ((i = getopt_all(argc, argv)) != -1) {
-		if (opt_gsc_dev != GSC_DEVICE_ANY) {
-			if (!set_device_type(opt_gsc_dev, i, &errorcnt))
-				continue;
-		}
 		if (check_boolean(omap, i))
 			continue;
 		switch (i) {
@@ -4917,11 +4875,7 @@ int main(int argc, char *argv[])
 					arv_config_spi_addr_mode_get;
 			break;
 		case 'D':
-			/*
-			 * as a result of processing this command line option
-			 * gsc_dev has been set to GSC_DEVICE_DT by
-			 * set_device_type(), no further action is required.
-			 */
+			/* Option is deprecated and igorned */
 			break;
 		case 'd':
 			if (!parse_vidpid(optarg, &vid, &pid)) {
@@ -4980,8 +4934,6 @@ int main(int argc, char *argv[])
 			if (optarg) {
 				set_capability = 1;
 				capability_parameter = optarg;
-				/* Supported on Dauntless only. */
-				set_device_type(GSC_DEVICE_DT, i, &errorcnt);
 			} else {
 				ccd_info = 1;
 			}
@@ -5051,13 +5003,6 @@ int main(int argc, char *argv[])
 		case 'm':
 			tpm_mode = 1;
 			tpm_mode_arg = optarg;
-			break;
-		case 'N':
-			/*
-			 * as a result of processing this command line option
-			 * gsc_dev has been set to GSC_DEVICE_NT by
-			 * set_device_type(), no further action is required.
-			 */
 			break;
 		case 'n':
 			serial = optarg;
@@ -5129,14 +5074,10 @@ int main(int argc, char *argv[])
 			}
 			if (!strcasecmp(optarg, "disable")) {
 				wp = WP_DISABLE;
-				/* Supported on Dauntless only. */
-				set_device_type(GSC_DEVICE_DT, i, &errorcnt);
 				break;
 			}
 			if (!strcasecmp(optarg, "follow")) {
 				wp = WP_FOLLOW;
-				/* Supported on Dauntless only. */
-				set_device_type(GSC_DEVICE_DT, i, &errorcnt);
 				break;
 			}
 			fprintf(stderr, "Illegal wp option \"%s\"\n", optarg);
@@ -5199,26 +5140,40 @@ int main(int argc, char *argv[])
 	    !show_fw_ver && !sn_bits && !sn_inc_rma && !start_apro_verify &&
 	    !openbox_desc_file && !tstamp && !tpm_mode && (wp == WP_NONE) &&
 	    !get_chassis_open && !get_dev_ids && !get_aprov_reset_counts) {
-		if (optind >= argc) {
+		num_images = argc - optind;
+		if (num_images <= 0) {
 			fprintf(stderr,
 				"\nERROR: Missing required <binary image>\n\n");
 			usage(1);
 		}
 
-		fw_image_data = get_file_or_die(argv[optind], &data_len);
-		printf("read %zd(%#zx) bytes from %s\n", data_len, data_len,
-		       argv[optind]);
+		images = malloc(sizeof(struct image) * num_images);
 
-		/* Validate image size and locate headers within image */
-		if (!locate_headers(fw_image_data, data_len))
-			exit(update_error);
+		for (i = 0; i < num_images; i++) {
+			images[i].data = get_file_or_die(argv[optind + i],
+							 &images[i].data_len);
+			images[i].file_path = argv[optind + i];
+			printf("read %zd(%#zx) bytes from %s\n",
+			       images[i].data_len, images[i].data_len,
+			       images[i].file_path);
 
-		if (!fetch_header_versions(fw_image_data))
-			exit(update_error);
+			/* Validate images and locate headers within image */
+			if (!locate_headers(&images[i]))
+				exit(update_error);
 
+			if (!fetch_header_versions(&images[i]))
+				exit(update_error);
+
+			if (binary_vers) {
+				int error = show_headers_versions(
+					&images[i], show_machine_output);
+				if (error)
+					exit(error);
+			}
+		}
+		/* If displaying versions, exit now since we're done. */
 		if (binary_vers)
-			exit(show_headers_versions(fw_image_data,
-						   show_machine_output));
+			exit(0);
 	} else {
 		if (optind < argc)
 			printf("Ignoring binary image %s\n", argv[optind]);
@@ -5241,54 +5196,24 @@ int main(int argc, char *argv[])
 		const uint16_t subclass = USB_SUBCLASS_GOOGLE_CR50;
 		const uint16_t protocol =
 			USB_PROTOCOL_GOOGLE_CR50_NON_HC_FW_UPDATE;
+		uint16_t pids[] = { H1_PID, D2_PID, NT_PID };
+		int pid_count = ARRAY_SIZE(pids);
+
 		/*
-		 * If no usb device information was given, default to the using
-		 * haven or dauntless vendor and product id to find the usb
-		 * device, but then try the other if the first isn't found
+		 * If no usb device information was given, use default vid and
+		 * pids to search for GSC devices.
 		 */
-		if (!vid && !pid) {
+		if (!vid)
 			vid = USB_VID_GOOGLE;
-			/*
-			 * Set default product id based on expected device
-			 * type set when processing command line options. If
-			 * device type is not set - start with H1.
-			 */
-			pid = (gsc_dev == GSC_DEVICE_DT) ? D2_PID : H1_PID;
-			if (usb_findit(serial, vid, pid, subclass, protocol,
-				       &td.uep)) {
-				/*
-				 * If a certain device was requested and has
-				 * not been found - exit.
-				 */
-				if (gsc_dev != GSC_DEVICE_ANY)
-					exit(update_error);
-				/*
-				 * Try Dauntless, as the only way to get here
-				 * is when a particular device was not
-				 * requested and we tried H1 first.
-				 */
-				pid = D2_PID;
-				if (usb_findit(serial, vid, pid, subclass,
-					       protocol, &td.uep))
-					exit(update_error);
-				gsc_dev = GSC_DEVICE_DT;
-			}
-			/* Make sure device type is set. */
-			if (gsc_dev == GSC_DEVICE_ANY) {
-				switch (pid) {
-				case D2_PID:
-					gsc_dev = GSC_DEVICE_DT;
-					break;
-				case H1_PID:
-					gsc_dev = GSC_DEVICE_H1;
-					break;
-				default:
-					fprintf(stderr,
-						"EROOR: Unsupported USB PID %04x\n",
-						pid);
-					exit(update_error);
-				}
-			}
+		if (pid) {
+			pids[0] = pid;
+			pid_count = 1;
+		}
+		if (usb_findit(serial, vid, pids, pid_count, subclass, protocol,
+			       &td.uep)) {
+			fprintf(stderr,
+				"ERROR: Cannot find single GSC device\n");
+			exit(update_error);
 		}
 	} else if (td.ep_type == dev_xfer) {
 		td.tpm_fd = open("/dev/tpm0", O_RDWR);
@@ -5301,9 +5226,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	/* If device type still not clear - fall back to H1. */
-	if (gsc_dev == GSC_DEVICE_ANY)
-		gsc_dev = GSC_DEVICE_H1;
+	/* Perform run selection of GSC device now that we have a connection */
+	gsc_dev = determine_gsc_type(&td);
 
 	if (openbox_desc_file)
 		return verify_ro(&td, openbox_desc_file, show_machine_output);
@@ -5411,7 +5335,7 @@ int main(int argc, char *argv[])
 					    show_machine_output));
 
 	if (get_metrics) {
-		if (gsc_dev == GSC_DEVICE_DT)
+		if (is_ti50_device())
 			exit(process_ti50_get_metrics(&td,
 						      show_machine_output));
 		else
@@ -5419,14 +5343,45 @@ int main(int argc, char *argv[])
 						      show_machine_output));
 	}
 
-	if (fw_image_data || show_fw_ver) {
+	if (images || show_fw_ver) {
+		struct image *match = NULL;
+
+		/* Find the matching image for the runtime-determined device */
+		for (i = 0; i < num_images; i++) {
+			if (images[i].type == gsc_dev) {
+				if (match) {
+					fprintf(stderr,
+						"ERROR: Must only specify a "
+						"single image for each chip "
+						"type.\n");
+					exit(update_error);
+				}
+				match = &images[i];
+			}
+		}
+
+		if (images && !match) {
+			fprintf(stderr,
+				"ERROR: No images matches chip type.\n");
+			exit(update_error);
+		}
+
 		setup_connection(&td);
 
-		if (fw_image_data) {
-			transferred_sections =
-				transfer_image(&td, fw_image_data, data_len);
-			free(fw_image_data);
+		if (match) {
+			if (num_images > 1) {
+				printf("Using file for update: %s\n",
+				       match->file_path);
+			}
+			transferred_sections = transfer_image(&td, match);
 		}
+
+		/* Free images */
+		match = NULL;
+		for (i = 0; i < num_images; i++)
+			free(images[i].data);
+		free(images);
+		images = NULL;
 
 		/*
 		 * Move USB updater sate machine to idle state so that
@@ -5465,16 +5420,6 @@ int main(int argc, char *argv[])
 
 	if (!transferred_sections)
 		return noop;
-	/*
-	 * We should indicate if RO update was not done because of the
-	 * insufficient RW version.
-	 */
-	for (j = 0; j < ARRAY_SIZE(sections); j++)
-		if (sections[j].ustatus == not_possible) {
-			/* This will allow scripting repeat attempts. */
-			printf("Failed to update RO, run the command again\n");
-			return rw_updated;
-		}
 
 	printf("image updated\n");
 	return all_updated;
