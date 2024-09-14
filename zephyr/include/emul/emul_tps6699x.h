@@ -7,6 +7,8 @@
 #define __EMUL_TPS6699X_H_
 
 #include "drivers/ucsi_v3.h"
+#include "emul/emul_pdc_pdo.h"
+#include "include/usb_pd.h"
 
 #include <stdint.h>
 
@@ -19,6 +21,16 @@ struct ti_ccom {
 	uint16_t connector_number : 7;
 	uint16_t cc_operation_mode : 3;
 	uint16_t reserved : 6;
+} __packed;
+
+struct ti_get_pdos {
+	uint8_t connector_number : 7;
+	uint8_t partner_pdo : 1;
+	uint8_t pdo_offset : 8;
+	uint8_t num_pdos : 2;
+	uint8_t source : 1;
+	uint8_t source_caps : 2;
+	uint8_t reserved : 1;
 } __packed;
 
 enum switch_select {
@@ -42,17 +54,20 @@ struct tps6699x_response {
 			union {
 				union error_status_t error;
 				struct ti_ccom ccom;
+				uint32_t pdos[4];
 			};
 		} __packed;
 		union connector_status_t connector_status;
 		struct capability_t capability;
 		union connector_capability_t connector_capability;
+		union cable_property_t cable_property;
 	} data;
 } __packed;
 
 struct tps6699x_emul_pdc_data {
 	struct gpio_dt_spec irq_gpios;
 	uint32_t delay_ms;
+	struct k_work_delayable delay_work;
 	/* The register address currently being read or written. */
 	uint8_t reg_addr;
 	/* The stated length of the current read or write. */
@@ -70,13 +85,11 @@ struct tps6699x_emul_pdc_data {
 	union uor_t uor;
 	union pdr_t pdr;
 	enum ccom_t ccom;
+	union cable_property_t cable_property;
 
 	struct tps6699x_response response;
 
-	uint32_t snk_pdos[PDO_OFFSET_MAX];
-	uint32_t src_pdos[PDO_OFFSET_MAX];
-	uint32_t partner_snk_pdos[PDO_OFFSET_MAX];
-	uint32_t partner_src_pdos[PDO_OFFSET_MAX];
+	struct emul_pdc_pdo_t pdo;
 };
 
 #endif /* __EMUL_TPS6699X_H_ */

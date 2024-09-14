@@ -28,12 +28,26 @@ LOG_MODULE_REGISTER(tps6699x, CONFIG_USBC_LOG_LEVEL);
 
 #define DT_DRV_COMPAT ti_tps6699_pdc
 
+/** @brief maximum number of PDOs */
+#define MAX_PDOS 7
+
 /** @brief PDC IRQ EVENT bit */
 #define PDC_IRQ_EVENT BIT(0)
 /** @brief PDC COMMAND EVENT bit */
 #define PDC_CMD_EVENT BIT(1)
 /** @brief Requests the driver to enter the suspended state */
 #define PDC_CMD_SUSPEND_REQUEST_EVENT BIT(2)
+/** @brief Trigger internal event to wake up (or keep awake) thread to handle
+ *         requests */
+#define PDC_INTERNAL_EVENT BIT(3)
+/** @brief Trigger thread to send command complete back to
+ *         PDC Power Mgmt thread */
+#define PDC_CMD_COMPLETE_EVENT BIT(4)
+/** @brief Bit mask of all PDC events */
+#define PDC_ALL_EVENTS BIT_MASK(5)
+
+/** @brief Time between checking TI CMDx register for data ready */
+#define PDC_TI_DATA_READY_TIME_MS (10)
 
 /**
  * @brief All raw_value data uses byte-0 for contains the register data was
@@ -97,6 +111,8 @@ enum cmd_t {
 	CMD_READ_POWER_LEVEL,
 	/** Get RDO */
 	CMD_GET_RDO,
+	/** Set RDO */
+	CMD_SET_RDO,
 	/** Set Sink Path */
 	CMD_SET_SINK_PATH,
 	/** Get current Partner SRC PDO */
@@ -205,6 +221,10 @@ struct pdc_data_t {
 	uint32_t *pdos;
 	/** Port Partner PDO */
 	enum pdo_source_t pdo_source;
+	/** Cached PDOS */
+	uint32_t cached_pdos[MAX_PDOS];
+	/** RDO */
+	uint32_t rdo;
 	/** CCOM */
 	enum ccom_t ccom;
 	/** PDR */
@@ -227,6 +247,10 @@ struct pdc_data_t {
 	union get_vdo_t vdo_req;
 	/* PDC event: Interrupt or Command */
 	struct k_event pdc_event;
+	/* Events to be processed */
+	uint32_t events;
+	/* Deferred handler to trigger event to check if data is ready */
+	struct k_work_delayable data_ready;
 	/* Should use cached connector status change bits */
 	bool use_cached_conn_status_change;
 	/* Cached connector status for this connector. */
@@ -252,6 +276,7 @@ static const struct smf_state states[];
 static void cmd_set_drp_mode(struct pdc_data_t *data);
 static void cmd_set_tpc_rp(struct pdc_data_t *data);
 static void cmd_get_rdo(struct pdc_data_t *data);
+static void cmd_set_rdo(struct pdc_data_t *data);
 static void cmd_set_src_pdos(struct pdc_data_t *data);
 static void cmd_set_snk_pdos(struct pdc_data_t *data);
 static void cmd_get_ic_status(struct pdc_data_t *data);
@@ -264,6 +289,7 @@ static void cmd_get_pdc_data_status_reg(struct pdc_data_t *data);
 static void task_gaid(struct pdc_data_t *data);
 static void task_srdy(struct pdc_data_t *data);
 static void task_dbfg(struct pdc_data_t *data);
+static void task_aneg(struct pdc_data_t *data);
 static void task_ucsi(struct pdc_data_t *data,
 		      enum ucsi_command_t ucsi_command);
 static void task_raw_ucsi(struct pdc_data_t *data);
@@ -280,6 +306,19 @@ static enum state_t get_state(struct pdc_data_t *data)
 
 static void set_state(struct pdc_data_t *data, const enum state_t next_state)
 {
+	/* Make sure the run functions are executed for these states
+	 * on transitions.
+	 */
+	switch (next_state) {
+	case ST_TASK_WAIT:
+	case ST_ERROR_RECOVERY:
+	case ST_IRQ:
+	case ST_SUSPENDED:
+		k_event_post(&data->pdc_event, PDC_INTERNAL_EVENT);
+		break;
+	default:
+		break;
+	}
 	smf_set_state(SMF_CTX(data), &states[next_state]);
 }
 
@@ -488,13 +527,7 @@ static void st_idle_entry(void *o)
 static void st_idle_run(void *o)
 {
 	struct pdc_data_t *data = (struct pdc_data_t *)o;
-	uint32_t events;
-
-	/* Wait for interrupt or a command to send */
-	events = k_event_wait(&data->pdc_event,
-			      (PDC_IRQ_EVENT | PDC_CMD_EVENT |
-			       PDC_CMD_SUSPEND_REQUEST_EVENT),
-			      false, K_FOREVER);
+	uint32_t events = data->events;
 
 	if (check_comms_suspended()) {
 		/* Do not start executing commands or processing IRQs if
@@ -504,8 +537,11 @@ static void st_idle_run(void *o)
 		set_state(data, ST_SUSPENDED);
 		return;
 	}
-
-	if (events & PDC_IRQ_EVENT) {
+	if (events & PDC_CMD_COMPLETE_EVENT) {
+		k_event_clear(&data->pdc_event, PDC_CMD_COMPLETE_EVENT);
+		data->cci_event.command_completed = 1;
+		call_cci_event_cb(data);
+	} else if (events & PDC_IRQ_EVENT) {
 		k_event_clear(&data->pdc_event, PDC_IRQ_EVENT);
 		/* Handle interrupt */
 		set_state(data, ST_IRQ);
@@ -575,6 +611,9 @@ static void st_idle_run(void *o)
 			break;
 		case CMD_GET_RDO:
 			cmd_get_rdo(data);
+			break;
+		case CMD_SET_RDO:
+			cmd_set_rdo(data);
 			break;
 		case CMD_SET_SINK_PATH:
 			task_srdy(data);
@@ -659,6 +698,8 @@ static void st_suspended_entry(void *o)
 static void st_suspended_run(void *o)
 {
 	struct pdc_data_t *data = (struct pdc_data_t *)o;
+
+	k_event_clear(&data->pdc_event, PDC_CMD_SUSPEND_REQUEST_EVENT);
 
 	/* Stay here while suspended */
 	if (check_comms_suspended()) {
@@ -869,6 +910,52 @@ error_recovery:
 	set_state(data, ST_ERROR_RECOVERY);
 }
 
+static void cmd_set_rdo(struct pdc_data_t *data)
+{
+	struct pdc_config_t const *cfg = data->dev->config;
+	union reg_autonegotiate_sink an_snk;
+	int rv, max_a, max_v, min_v, min_power;
+	uint32_t pdo = data->cached_pdos[RDO_POS(data->rdo) - 1];
+
+	rv = tps_rw_autonegotiate_sink(&cfg->i2c, &an_snk, I2C_MSG_READ);
+	if (rv) {
+		LOG_ERR("Failed to read auto negotiate sink register.");
+		goto error_recovery;
+	}
+	if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_BATTERY) {
+		max_v = PDO_BATT_GET_MAX_VOLT(pdo);
+		min_v = PDO_BATT_GET_MIN_VOLT(pdo);
+		max_a = CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA / 10;
+		min_power = PDO_BATT_GET_OP_POWER(pdo);
+	} else {
+		max_v = min_v = PDO_FIXED_GET_VOLT(pdo);
+		max_a = PDO_FIXED_GET_CURR(pdo);
+		min_power = max_v * max_a;
+	}
+
+	an_snk.auto_compute_sink_min_power = 0;
+	an_snk.auto_compute_sink_min_voltage = 0;
+	an_snk.auto_compute_sink_max_voltage = 0;
+	an_snk.auto_neg_max_current = max_a / 10;
+	an_snk.auto_neg_sink_min_required_power = min_power / 250;
+	an_snk.auto_neg_max_voltage = max_v / 50;
+	an_snk.auto_neg_min_voltage = min_v / 50;
+	an_snk.auto_neg_capabilities_mismach_power =
+		CONFIG_PLATFORM_EC_PD_MAX_POWER_MW / 250;
+
+	rv = tps_rw_autonegotiate_sink(&cfg->i2c, &an_snk, I2C_MSG_WRITE);
+	if (rv) {
+		LOG_ERR("Failed to write auto negotiate sink register.");
+		goto error_recovery;
+	}
+
+	task_aneg(data);
+	return;
+
+error_recovery:
+	set_state(data, ST_ERROR_RECOVERY);
+}
+
 static void cmd_get_vdo(struct pdc_data_t *data)
 {
 	struct pdc_config_t const *cfg = data->dev->config;
@@ -1034,11 +1121,11 @@ static int cmd_get_ic_status_sync_internal(struct pdc_config_t const *cfg,
 	/* TI PD Version (big-endian) */
 	info->pd_version = 0x0000;
 
+	memset(info->project_name, 0, sizeof(info->project_name));
 	if (memcmp(customer_val.data, "GOOG", strlen("GOOG")) == 0) {
 		/* Using the unified config identifier scheme */
 		memcpy(info->project_name, customer_val.data,
 		       sizeof(customer_val.data));
-		info->project_name[sizeof(customer_val.data)] = '\0';
 	} else {
 		/* Old scheme of incrementing an integer in the customer use
 		 * reg. Convert to an ASCII string.
@@ -1255,6 +1342,21 @@ static void task_dbfg(struct pdc_data_t *data)
 	return;
 }
 
+static void task_aneg(struct pdc_data_t *data)
+{
+	struct pdc_config_t const *cfg = data->dev->config;
+	int rv;
+
+	rv = write_task_cmd(cfg, COMMAND_TASK_ANEG, NULL);
+	if (rv) {
+		set_state(data, ST_ERROR_RECOVERY);
+		return;
+	}
+
+	set_state(data, ST_TASK_WAIT);
+	return;
+}
+
 static void task_ucsi(struct pdc_data_t *data, enum ucsi_command_t ucsi_command)
 {
 	struct pdc_config_t const *cfg = data->dev->config;
@@ -1357,6 +1459,15 @@ static void st_task_wait_entry(void *o)
 	print_current_state(data);
 }
 
+static void tps_check_data_ready(struct k_work *work)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct pdc_data_t *data =
+		CONTAINER_OF(dwork, struct pdc_data_t, data_ready);
+
+	k_event_post(&data->pdc_event, PDC_INTERNAL_EVENT);
+}
+
 static void st_task_wait_run(void *o)
 {
 	struct pdc_data_t *data = (struct pdc_data_t *)o;
@@ -1381,6 +1492,10 @@ static void st_task_wait_run(void *o)
 	 *  2) command is set to "!CMD" for unknown command
 	 */
 	if (cmd.command && cmd.command != COMMAND_TASK_NO_COMMAND) {
+		LOG_INF("Data not ready, check again in %d ms",
+			PDC_TI_DATA_READY_TIME_MS);
+		k_work_reschedule(&data->data_ready,
+				  K_MSEC(PDC_TI_DATA_READY_TIME_MS));
 		return;
 	}
 
@@ -1461,6 +1576,8 @@ static void st_task_wait_run(void *o)
 	case UCSI_GET_PDOS: {
 		len = cmd_data.data[1];
 		offset = 2;
+		memcpy(data->cached_pdos + data->pdo_offset,
+		       &cmd_data.data[offset], len);
 		break;
 	}
 	default:
@@ -1579,6 +1696,8 @@ static int tps_ack_cc_ci(const struct device *dev,
 			~(ci.raw_value);
 	}
 
+	k_event_post(&data->pdc_event, PDC_CMD_COMPLETE_EVENT);
+
 	return 0;
 }
 
@@ -1692,8 +1811,10 @@ static int tps_get_error_status(const struct device *dev,
 
 static int tps_set_rdo(const struct device *dev, uint32_t rdo)
 {
-	/* TODO */
-	return 0;
+	struct pdc_data_t *data = dev->data;
+
+	data->rdo = rdo;
+	return tps_post_command(dev, CMD_SET_RDO, NULL);
 }
 
 static int tps_get_rdo(const struct device *dev, uint32_t *rdo)
@@ -1887,6 +2008,7 @@ static int tps_set_comms_state(const struct device *dev, bool comms_active)
 		 * PDC driver is a no-op)
 		 */
 		enable_comms();
+		k_event_post(&data->pdc_event, PDC_IRQ_EVENT);
 
 	} else {
 		/** Allow 3 seconds for the driver to suspend itself. */
@@ -2071,6 +2193,7 @@ static int pdc_init(const struct device *dev)
 
 	k_event_init(&data->pdc_event);
 	k_mutex_init(&data->mtx);
+	k_work_init_delayable(&data->data_ready, tps_check_data_ready);
 
 	data->cmd = CMD_NONE;
 	data->dev = dev;
@@ -2144,13 +2267,18 @@ int tps_pdc_do_firmware_update(void)
 static void tps_thread(void *dev, void *unused1, void *unused2)
 {
 	struct pdc_data_t *data = ((const struct device *)dev)->data;
+	const struct pdc_config_t *cfg = ((const struct device *)dev)->config;
 
 	while (1) {
 		smf_run_state(SMF_CTX(data));
-		/* TODO(b/345783692): Consider waiting for an event with a
-		 * timeout to avoid high interrupt-handling latency.
-		 */
-		k_sleep(K_MSEC(50));
+
+		/* Wait for event to handle */
+		data->events = k_event_wait(&data->pdc_event, PDC_ALL_EVENTS,
+					    false, K_FOREVER);
+		LOG_INF("tps_thread[%d]: events=0x%X", cfg->connector_number,
+			data->events);
+
+		k_event_clear(&data->pdc_event, PDC_INTERNAL_EVENT);
 	}
 }
 
@@ -2208,3 +2336,43 @@ static void tps_thread(void *dev, void *unused1, void *unused2)
 			      &pdc_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(PDC_DEFINE)
+
+#ifdef CONFIG_ZTEST
+
+struct pdc_data_t;
+
+#define PDC_TEST_DEFINE(inst) &pdc_data_##inst,
+
+static struct pdc_data_t *pdc_data[] = { DT_INST_FOREACH_STATUS_OKAY(
+	PDC_TEST_DEFINE) };
+
+/*
+ * Wait for drivers to become idle.
+ */
+/* LCOV_EXCL_START */
+bool pdc_tps6699x_test_idle_wait(void)
+{
+	int num_finished;
+	k_timepoint_t timeout = sys_timepoint_calc(K_MSEC(20 * 100));
+
+	while (!sys_timepoint_expired((timeout))) {
+		num_finished = 0;
+
+		k_msleep(100);
+		for (int port = 0; port < ARRAY_SIZE(pdc_data); port++) {
+			if (get_state(pdc_data[port]) == ST_IDLE &&
+			    pdc_data[port]->cmd == CMD_NONE) {
+				num_finished++;
+			}
+		}
+
+		if (num_finished == ARRAY_SIZE(pdc_data)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+/* LCOV_EXCL_STOP */
+
+#endif /* CONFIG_ZTEST */

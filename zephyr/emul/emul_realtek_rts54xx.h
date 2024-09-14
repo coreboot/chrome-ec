@@ -16,6 +16,7 @@
 #include "drivers/pdc.h"
 #include "drivers/ucsi_v3.h"
 #include "emul/emul_common_i2c.h"
+#include "emul/emul_pdc_pdo.h"
 #include "emul/emul_realtek_rts54xx_public.h"
 #include "zephyr/kernel.h"
 
@@ -286,6 +287,12 @@ union rts54_request {
 			uint8_t rsvd : 7;
 		};
 	} __packed ack_cc_ci;
+
+	struct set_frs_function_req {
+		struct rts54_subcommand_header header;
+		uint8_t port_num;
+		uint8_t enable;
+	} set_frs_function;
 };
 
 union rts54_response {
@@ -499,11 +506,11 @@ struct rts5453p_emul_pdc_data {
 	uint16_t delay_ms;
 	struct k_work_delayable delay_work;
 
-	uint32_t snk_pdos[PDO_OFFSET_MAX];
-	uint32_t src_pdos[PDO_OFFSET_MAX];
-	uint32_t partner_snk_pdos[PDO_OFFSET_MAX];
-	uint32_t partner_src_pdos[PDO_OFFSET_MAX];
+	struct emul_pdc_pdo_t pdo;
+
 	uint32_t vdos[PDC_DISC_IDENTITY_VDO_COUNT];
+	bool frs_configured;
+	bool frs_enabled;
 };
 
 /**
