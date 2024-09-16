@@ -25,7 +25,7 @@ struct usb_endpoint {
  *
  * Return 0 on success, -1 on failure.
  */
-int usb_findit(const char *serialno, uint16_t vid, uint16_t pid,
+int usb_findit(const char *serialno, uint16_t vid, uint16_t *pid, int pid_count,
 	       uint16_t subclass, uint16_t protocol, struct usb_endpoint *uep);
 
 /*

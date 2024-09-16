@@ -1,0 +1,54 @@
+// Copyright 2024 The ChromiumOS Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+cc_defaults {
+    name: "gsctool_defaults",
+    // cflags used are identical to those of extra/usb_updater/Makefile
+    cflags: [
+        "-std=gnu99",
+        "-g",
+        "-Wall",
+        "-Werror",
+        "-Wpointer-arith",
+        "-Wcast-align",
+        "-Wundef",
+        "-Wsign-compare",
+        "-Wredundant-decls",
+        "-Wmissing-declarations",
+    ],
+    generated_headers: ["generated_version.h"],
+    include_dirs: [
+        "external/libusb/include/libusb",
+    ],
+    shared_libs: [
+        "libusb",
+        // Contains openssl headers.
+        "libcrypto",
+    ],
+}
+
+genrule {
+    name: "generated_version.h",
+    srcs: ["android/android_generated_version.h"],
+    cmd: "cp $(location android/android_generated_version.h) $(out)",
+    out: ["generated_version.h"],
+}
+
+cc_binary {
+    name: "gsctool",
+    defaults: ["gsctool_defaults"],
+    srcs: [
+        "extra/usb_updater/*.c",
+        "util/usb_if.c"
+    ],
+    local_include_dirs: [
+        "extra/usb_updater",
+        "util",
+        "include",
+        "chip/g",
+        "board/cr50",
+        "fuzz",
+        "test",
+    ],
+}
