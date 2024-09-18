@@ -4,23 +4,22 @@
 
 // THIS CODE IS GENERATED - DO NOT MODIFY!
 
-#include "trunks/tpm_generated.h"
+#include "tpm_generated.h"
 
 #include <iterator>
 #include <memory>
 #include <string>
 
-#include <base/check.h>
 #include <base/functional/bind.h>
 #include <base/functional/callback.h>
 #include <base/logging.h>
 #include <base/strings/string_number_conversions.h>
 #include <base/sys_byteorder.h>
-#include <crypto/secure_hash.h>
+#include <secure_hash.h>
 
-#include "trunks/authorization_delegate.h"
-#include "trunks/command_transceiver.h"
-#include "trunks/error_codes.h"
+#include "authorization_delegate.h"
+#include "command_transceiver.h"
+#include "error_codes.h"
 
 namespace trunks {
 

@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include "trunks/tpm_generated.h"  // For TPM_RC.
-#include "trunks/trunks_export.h"
+#include "tpm_generated.h"  // For TPM_RC.
+#include "trunks_export.h"
 
 namespace trunks {
 

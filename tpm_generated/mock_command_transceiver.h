@@ -10,7 +10,7 @@
 #include <base/functional/callback.h>
 #include <gmock/gmock.h>
 
-#include "trunks/command_transceiver.h"
+#include "command_transceiver.h"
 
 namespace trunks {
 

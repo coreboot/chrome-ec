@@ -9,7 +9,7 @@
 
 #include <gmock/gmock.h>
 
-#include "trunks/authorization_delegate.h"
+#include "authorization_delegate.h"
 
 namespace trunks {
 

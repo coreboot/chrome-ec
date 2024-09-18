@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "crypto/secure_hash.h"
+#include "secure_hash.h"
 
 #if defined(OPENSSL_IS_BORINGSSL)
 #include <openssl/mem.h>
@@ -13,9 +13,7 @@
 #include <stddef.h>
 
 #include "base/logging.h"
-#include "base/notreached.h"
 #include "base/pickle.h"
-#include "crypto/openssl_util.h"
 
 namespace crypto {
 
@@ -40,9 +38,8 @@ class SecureHashSHA256 : public SecureHash {
   }
 
   void Finish(void* output, size_t len) override {
-    ScopedOpenSSLSafeSizeBuffer<SHA256_DIGEST_LENGTH> result(
-        static_cast<unsigned char*>(output), len);
-    SHA256_Final(result.safe_buffer(), &ctx_);
+    CHECK(len >= SHA256_DIGEST_LENGTH);
+    SHA256_Final(static_cast<uint8_t*>(output), &ctx_);
   }
 
   SecureHash* Clone() const override {

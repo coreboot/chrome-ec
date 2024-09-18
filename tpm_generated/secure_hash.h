@@ -7,13 +7,11 @@
 
 #include <stddef.h>
 
-#include "crypto/crypto_export.h"
-
 namespace crypto {
 
 // A wrapper to calculate secure hashes incrementally, allowing to
 // be used when the full input is not known in advance.
-class CRYPTO_EXPORT SecureHash {
+class SecureHash {
  public:
   enum Algorithm {
     SHA256,

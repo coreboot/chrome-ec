@@ -9,10 +9,9 @@
 
 #include <string>
 
-#include <base/check.h>
 #include <base/functional/callback_forward.h>
 
-#include "trunks/trunks_export.h"
+#include "trunks_export.h"
 
 namespace trunks {
 
@@ -6055,25 +6054,6 @@ class TRUNKS_EXPORT Tpm {
       AuthorizationDelegate* authorization_delegate);
   static TPM_RC ParseResponse_PolicyFidoSigned(
       const std::string& response,
-      AuthorizationDelegate* authorization_delegate);
-  virtual void PolicyFidoSigned(
-      const TPMI_DH_OBJECT& auth_object,
-      const std::string& auth_object_name,
-      const TPMI_SH_POLICY& policy_session,
-      const std::string& policy_session_name,
-      const std::string& auth_data,
-      const std::vector<FIDO_DATA_RANGE>& auth_data_descr,
-      const TPMT_SIGNATURE& auth,
-      AuthorizationDelegate* authorization_delegate,
-      PolicyFidoSignedResponse callback);
-  virtual TPM_RC PolicyFidoSignedSync(
-      const TPMI_DH_OBJECT& auth_object,
-      const std::string& auth_object_name,
-      const TPMI_SH_POLICY& policy_session,
-      const std::string& policy_session_name,
-      const std::string& auth_data,
-      const std::vector<FIDO_DATA_RANGE>& auth_data_descr,
-      const TPMT_SIGNATURE& auth,
       AuthorizationDelegate* authorization_delegate);
 
  private:

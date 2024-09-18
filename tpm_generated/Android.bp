@@ -4,3 +4,32 @@
 
 // A library for generating TPM commands and parsing TPM responses. Derived from
 // the Chromium OS trunks daemon's TPM code.
+
+cc_library {
+    name: "libtpmgenerated",
+    host_supported: true,
+    shared_libs: [
+        "libchrome",
+        "libcrypto",
+    ],
+    srcs: [
+        "secure_hash.cc",
+        "tpm_generated.cc",
+    ],
+}
+
+cc_test_host {
+    name: "libtpmgenerated_test",
+    srcs: [
+        "mock_authorization_delegate.cc",
+        "mock_command_transceiver.cc",
+        "tpm_generated_test.cc",
+    ],
+    shared_libs: [
+        "libchrome",
+        "libtpmgenerated",
+    ],
+    static_libs: [
+        "libgmock",
+    ],
+}

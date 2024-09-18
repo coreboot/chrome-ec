@@ -9,7 +9,6 @@
 #include <utility>
 
 #include <base/functional/callback.h>
-#include <trunks/tpm_constants.h>
 
 namespace trunks {
 

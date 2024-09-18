@@ -10,13 +10,13 @@
 #include <base/functional/bind.h>
 #include <base/functional/callback.h>
 #include <base/run_loop.h>
-#include <base/task/single_thread_task_runner.h>
-#include <base/test/task_environment.h>
+#include <base/threading/thread_task_runner_handle.h>
+#include <base/message_loop/message_loop.h>
 #include <gtest/gtest.h>
 
-#include "trunks/mock_authorization_delegate.h"
-#include "trunks/mock_command_transceiver.h"
-#include "trunks/tpm_generated.h"
+#include "mock_authorization_delegate.h"
+#include "mock_command_transceiver.h"
+#include "tpm_generated.h"
 
 using testing::_;
 using testing::DoAll;
@@ -300,8 +300,7 @@ class CommandFlowTest : public testing::Test {
     run_loop.RunUntilIdle();
   }
 
-  base::test::TaskEnvironment task_environment_{
-          base::test::TaskEnvironment::ThreadingMode::MAIN_THREAD_ONLY};
+  base::MessageLoop message_loop_;
 
   TPM_RC response_code_;
   std::string signature_;
@@ -316,7 +315,7 @@ class PostResponse {
  public:
   explicit PostResponse(const std::string& response) : response_(response) {}
   void operator()(base::OnceCallback<void(const std::string&)> callback) {
-    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+    base::ThreadTaskRunnerHandle::Get()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), response_));
   }
 
