@@ -1,0 +1,4 @@
+*.o
+*.d
+test_dice
+test*.cbor
