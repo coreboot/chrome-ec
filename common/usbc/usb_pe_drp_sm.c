@@ -3769,23 +3769,52 @@ static void pe_snk_transition_sink_run(int port)
 					port, *pd_get_snk_caps(port));
 
 			/*
-			 * Per PD r3.1 v1.8 ss 8.3.3.3.6, the PE should start
-			 * actually sinking according to the new power contract
-			 * upon exit from PE_SNK_Transition_Sink. Setting the
-			 * current limit here in the run function instead of the
-			 * exit function ensures that this happens before the
-			 * next run of the type-C state machine. This avoids a
-			 * race condition in the case where the TC transitions
-			 * to Unattached immediately after contract negotiation.
-			 * In this case, the TC sets the current limit to 0, and
-			 * this should happen last.
+			 * Per PD r3.1 v1.8 ss 6.4.1.2.2, when a source wants
+			 * a sink, consuming power from Vbus, to go to its
+			 * lowest power state, the voltage (bit 19:10) shall be
+			 * set to 5V and the maximum current shall be set to
+			 * 0mA. This is used in cases where the source wants the
+			 * sink to draw pSnkSusp (25mW).
+			 * This also can pass PD CTS TEST.PD.PS.SNK.1#11.
 			 */
-			pd_set_input_current_limit(port, pe[port].curr_limit,
-						   pe[port].supply_voltage);
-			if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
-				/* Set ceiling based on what's negotiated */
-				charge_manager_set_ceil(port, CEIL_REQUESTOR_PD,
-							pe[port].curr_limit);
+			if (pe[port].curr_limit == 0) {
+				pd_set_input_current_limit(port, 0, 0);
+
+				if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
+					typec_set_input_current_limit(port, 0,
+								      0);
+					charge_manager_set_ceil(
+						port, CEIL_REQUESTOR_PD,
+						CHARGE_CEIL_NONE);
+				}
+			} else {
+				/*
+				 * Per PD r3.1 v1.8 ss 8.3.3.3.6, the PE should
+				 * start actually sinking according to the new
+				 * power contract upon exit from
+				 * PE_SNK_Transition_Sink. Setting the current
+				 * limit here in the run function instead of the
+				 * exit function ensures that this happens
+				 * before the next run of the type-C state
+				 * machine. This avoids a race condition in the
+				 * case where the TC transitions to Unattached
+				 * immediately after contract negotiation. In
+				 * this case, the TC sets the current limit to
+				 * 0, and this should happen last.
+				 */
+				pd_set_input_current_limit(
+					port, pe[port].curr_limit,
+					pe[port].supply_voltage);
+				if (IS_ENABLED(CONFIG_CHARGE_MANAGER)) {
+					/*
+					 * Set ceiling based on what's
+					 * negotiated
+					 */
+					charge_manager_set_ceil(
+						port, CEIL_REQUESTOR_PD,
+						pe[port].curr_limit);
+				}
+			}
 			set_state_pe(port, PE_SNK_READY);
 		} else {
 			/*
