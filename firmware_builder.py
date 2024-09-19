@@ -33,18 +33,18 @@ def init_toolchain():
     """
     # (environment variable, bazel target)
     toolchains = [
-        ("COREBOOT_SDK_ROOT_arm", "@coreboot-sdk-arm-eabi//:get_path"),
+        ("COREBOOT_SDK_ROOT_arm", "@cr50-coreboot-sdk-arm-eabi//:get_path"),
     ]
 
     subprocess.run(
-        ["bazel", "build", *(target for _, target in toolchains)],
+        ["bazel", "--project", "fwsdk", "build", *(target for _, target in toolchains)],
         check=True,
     )
 
     result = {}
     for name, target in toolchains:
         run_result = subprocess.run(
-            ["bazel", "run", target],
+            ["bazel", "--project", "fwsdk", "run", target],
             check=True,
             stdout=subprocess.PIPE,
         )
