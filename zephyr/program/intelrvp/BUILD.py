@@ -12,6 +12,7 @@ def register_intelrvp_project(
     chip,
     extra_dts_overlays=(),
     extra_kconfig_files=(),
+    inherited_from=None,
 ):
     """Register a variant of intelrvp."""
     register_func = register_binman_project
@@ -34,12 +35,15 @@ def register_intelrvp_project(
     kconfig_files.extend(extra_kconfig_files)
     dts_overlays.extend(extra_dts_overlays)
 
+    if inherited_from is None:
+        inherited_from = ["intelrvp"]
+
     register_func(
         project_name=project_name,
         zephyr_board=chip,
         dts_overlays=dts_overlays,
         kconfig_files=kconfig_files,
-        inherited_from=["intelrvp"],
+        inherited_from=inherited_from,
     )
 
 
@@ -128,6 +132,7 @@ register_intelrvp_project(
         here / "mtlrvp/mtlrvpp_mchp/board_mchp.conf",
         here / "mtlrvp/tcpc.conf",
     ],
+    inherited_from=["fatcat", "rex"],
 )
 
 
@@ -155,6 +160,7 @@ register_intelrvp_project(
         here / "mtlrvp/mtlrvpp_npcx/board_npcx.conf",
         here / "mtlrvp/tcpc.conf",
     ],
+    inherited_from=["fatcat", "rex"],
 )
 
 register_intelrvp_project(
@@ -180,6 +186,20 @@ register_intelrvp_project(
         here / "mtlrvp/pd.conf",
     ],
 )
+
+register_intelrvp_project(
+    project_name="ptlrvp_npcx",
+    chip="npcx9/npcx9m7f",
+    extra_dts_overlays=[
+        here / "ptlrvp/ptlrvp_npcx/project.overlay",
+    ],
+    extra_kconfig_files=[
+        here / "ptlrvp/ptlrvp_npcx/project.conf",
+        here / "ptlrvp/pd.conf",
+        here / "zephyr_ap_pwrseq.conf",
+    ],
+)
+
 register_intelrvp_project(
     project_name="ptlrvp_mchp",
     chip="mec172x/mec172x_nsz/mec1727",
@@ -201,4 +221,5 @@ assert_rw_fwid_DO_NOT_EDIT(project_name="mtlrvpp_m1723", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="mtlrvpp_mchp", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="mtlrvpp_npcx", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="mtlrvpp_pd", addr=0x7FFE0)
-assert_rw_fwid_DO_NOT_EDIT(project_name="ptlrvp_mchp", addr=0x7FFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="ptlrvp_mchp", addr=0x40318)
+assert_rw_fwid_DO_NOT_EDIT(project_name="ptlrvp_npcx", addr=0x80144)

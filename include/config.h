@@ -560,6 +560,11 @@
 #undef CONFIG_BATTERY_FUEL_GAUGE
 
 /*
+ * Defines retry count for reading Manuf/Device name in init_battery_type
+ */
+#define CONFIG_BATTERY_INIT_TYPE_RETRY_COUNT 0
+
+/*
  * Critical battery shutdown timeout (seconds)
  *
  * If the battery is at extremely low charge (and discharging) or extremely
@@ -2308,6 +2313,7 @@
 #undef CONFIG_FP_SENSOR_FPC1025
 #undef CONFIG_FP_SENSOR_FPC1035
 #undef CONFIG_FP_SENSOR_FPC1145
+#undef CONFIG_FP_SENSOR_EGIS630
 #undef CONFIG_FP_SENSOR_ELAN80
 #undef CONFIG_FP_SENSOR_ELAN80SG
 #undef CONFIG_FP_SENSOR_ELAN515
@@ -3197,7 +3203,7 @@
 #undef CONFIG_KEYBOARD_CUSTOMIZATION
 
 /*
- * Allow support multiple keyboard matrix for speical key.
+ * Allow support multiple keyboard matrix for special key.
  */
 #undef CONFIG_KEYBOARD_MULTIPLE
 

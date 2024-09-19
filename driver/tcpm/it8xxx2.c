@@ -15,6 +15,7 @@
 #include "registers.h"
 #include "system.h"
 #include "task.h"
+#include "tcpm/tcpm.h"
 #include "timer.h"
 #include "usb_common.h"
 #include "usb_pd.h"
@@ -493,7 +494,7 @@ static int it8xxx2_tcpm_set_vconn(int port, int enable)
 			 * dropped below 3.3v (>500us) to avoid the potential
 			 * risk of voltage fed back into Vcore.
 			 */
-			crec_usleep(IT83XX_USBPD_T_VCONN_BELOW_3_3V);
+			udelay(IT83XX_USBPD_T_VCONN_BELOW_3_3V);
 			/*
 			 * Since our cc are not Vconn SRC, enable cc analog
 			 * module (ex.UP/RD/DET/Tx/Rx) and disable 5v tolerant.
@@ -562,6 +563,19 @@ static enum tcpc_transmit_complete it8xxx2_tx_data(enum usbpd_port port,
 		memcpy((uint32_t *)&IT83XX_USBPD_TDO(port), buf, length * 4);
 
 	for (r = 0; r <= retry_count; r++) {
+		/*
+		 * The PRL_RX state machine should force a discard of PRL_TX any
+		 * time a new message comes in.  However, since most of the
+		 * PRL_RX runs on the TCPC, we may receive a RX interrupt
+		 * between the EC PRL_RX and PRL_TX state machines running.  In
+		 * this case, mark the message discarded and don't tell the TCPC
+		 * to transmit.
+		 */
+		if (tcpm_has_pending_message(port)) {
+			restore_sop_header_pwr_data_role(port, type);
+			return TCPC_TX_COMPLETE_DISCARDED;
+		}
+
 		/* Start Tx */
 		USBPD_KICK_TX_START(port);
 		evt = task_wait_event_mask(TASK_EVENT_PHY_TX_DONE,
@@ -655,6 +669,7 @@ static int it8xxx2_tcpm_transmit(int port, enum tcpci_msg_type type,
 				 uint16_t header, const uint32_t *data)
 {
 	int status = TCPC_TX_COMPLETE_FAILED;
+	bool pd_transmit_complete_called = false;
 
 	switch (type) {
 	case TCPCI_MSG_SOP:
@@ -663,6 +678,12 @@ static int it8xxx2_tcpm_transmit(int port, enum tcpci_msg_type type,
 	case TCPCI_MSG_SOP_DEBUG_PRIME:
 	case TCPCI_MSG_SOP_DEBUG_PRIME_PRIME:
 		status = it8xxx2_tx_data(port, type, header, data);
+		/* To improve the SendResponseTimer accuracy,
+		 * pd_transmit_complete() is call inside irq handler if the
+		 * message is successfully transmitted.
+		 */
+		pd_transmit_complete_called =
+			(status == TCPC_TX_COMPLETE_SUCCESS);
 		break;
 	case TCPCI_MSG_TX_BIST_MODE_2:
 		it8xxx2_send_bist_mode2_pattern(port);
@@ -678,7 +699,9 @@ static int it8xxx2_tcpm_transmit(int port, enum tcpci_msg_type type,
 		status = TCPC_TX_COMPLETE_FAILED;
 		break;
 	}
-	pd_transmit_complete(port, status);
+	if (!pd_transmit_complete_called) {
+		pd_transmit_complete(port, status);
+	}
 
 	return EC_SUCCESS;
 }

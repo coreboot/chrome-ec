@@ -3,25 +3,39 @@
  * found in the LICENSE file.
  */
 
-#ifndef CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SENSOR_H
-#define CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SENSOR_H
+#ifndef __CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SENSOR_H_
+#define __CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SENSOR_H_
+
 #include "common.h"
 #include "ec_commands.h"
 #include "fpsensor/fpsensor_types.h"
 
-/* Sensor pixel resolution */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* The 16-bit hardware ID  */
+#define FP_SENSOR_HWID_ELAN_80SG 0x4f4f
+
 #if (defined(CONFIG_FP_SENSOR_ELAN80) || defined(CONFIG_FP_SENSOR_ELAN80SG))
 #define FP_SENSOR_IMAGE_SIZE_ELAN (80 * 80 * 2)
 #define FP_SENSOR_RES_X_ELAN 80
 #define FP_SENSOR_RES_Y_ELAN 80
+#define FP_SENSOR_HWID_ELAN FP_SENSOR_HWID_ELAN_80SG
 #elif defined(CONFIG_FP_SENSOR_ELAN515)
 #define FP_SENSOR_IMAGE_SIZE_ELAN (52 * 150 * 2)
 #define FP_SENSOR_RES_X_ELAN 52
 #define FP_SENSOR_RES_Y_ELAN 150
+#define FP_SENSOR_HWID_ELAN 0
 #endif
 
 #define FP_SENSOR_IMAGE_OFFSET_ELAN (0)
 #define FP_SENSOR_RES_BPP_ELAN (14)
+
+/**
+ * Get the fingerprint sensor HWID.
+ */
+int elan_get_hwid(uint16_t *id);
 
 /**
  * Set ELAN fingerprint sensor into finger touch detects and power saving mode
@@ -175,4 +189,9 @@ int elan_fp_maintenance(uint16_t *error_state);
  * @return EC_SUCCESS on success otherwise error.
  */
 __staticlib int elan_fp_deinit(void);
+
+#ifdef __cplusplus
+}
 #endif
+
+#endif /* __CROS_EC_DRIVER_FINGERPRINT_ELAN_ELAN_SENSOR_H_ */

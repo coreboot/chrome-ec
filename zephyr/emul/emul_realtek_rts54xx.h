@@ -16,6 +16,7 @@
 #include "drivers/pdc.h"
 #include "drivers/ucsi_v3.h"
 #include "emul/emul_common_i2c.h"
+#include "emul/emul_pdc_pdo.h"
 #include "emul/emul_realtek_rts54xx_public.h"
 #include "zephyr/kernel.h"
 
@@ -158,6 +159,18 @@ union rts54_request {
 		uint32_t rdo;
 	} set_rdo;
 
+	struct set_pdo_req {
+		struct rts54_subcommand_header header;
+		uint8_t port_num;
+		struct {
+			uint8_t spr_pdo_number : 3;
+			uint8_t pdo_type : 1;
+			uint8_t epr_pdo_number : 3;
+			uint8_t reserved : 1;
+		};
+		uint32_t pdos[PDO_OFFSET_MAX];
+	} __packed set_pdo;
+
 	struct get_rdo_req {
 		struct rts54_subcommand_header header;
 		uint8_t port_num;
@@ -228,14 +241,8 @@ union rts54_request {
 
 	struct get_pdo {
 		struct rts54_subcommand_header header;
-		uint8_t port_num;
-		struct {
-			uint8_t src : 1;
-			enum pdo_source_t partner : 1;
-			uint8_t offset : 3;
-			uint8_t num : 3;
-		};
-		uint32_t pdos[PDO_OFFSET_MAX];
+		uint8_t data_length;
+		union get_pdos_t ucsi;
 	} __packed get_pdos;
 
 	struct get_cable_property {
@@ -275,6 +282,12 @@ union rts54_request {
 			uint8_t rsvd : 7;
 		};
 	} __packed ack_cc_ci;
+
+	struct set_frs_function_req {
+		struct rts54_subcommand_header header;
+		uint8_t port_num;
+		uint8_t enable;
+	} set_frs_function;
 };
 
 union rts54_response {
@@ -465,7 +478,6 @@ struct rts5453p_emul_pdc_data {
 	union uor_t uor;
 	union pdr_t pdr;
 	union error_status_t error;
-	uint32_t rdo;
 	union tpc_rp_t tpc_rp;
 	union csd_op_mode_t csd_op_mode;
 	union port_and_ccom_t set_ccom_mode;
@@ -488,10 +500,12 @@ struct rts5453p_emul_pdc_data {
 	uint16_t delay_ms;
 	struct k_work_delayable delay_work;
 
-	uint32_t snk_pdos[PDO_OFFSET_MAX];
-	uint32_t src_pdos[PDO_OFFSET_MAX];
-	uint32_t partner_snk_pdos[PDO_OFFSET_MAX];
-	uint32_t partner_src_pdos[PDO_OFFSET_MAX];
+	struct emul_pdc_pdo_t pdo;
+
+	uint32_t vdos[PDC_DISC_IDENTITY_VDO_COUNT];
+	bool frs_configured;
+	bool frs_enabled;
+	bool vconn_sourcing;
 };
 
 /**

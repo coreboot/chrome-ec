@@ -144,10 +144,6 @@ ZTEST_USER(rts54xx, test_emul_pdos)
 	zassert_ok(emul_pdc_get_pdos(emul, SINK_PDO, PDO_OFFSET_0, 1,
 				     PARTNER_PDO, pdos));
 
-	/* Test that offset zero is invalid for setting. */
-	zassert_not_ok(emul_set_src_pdos(PDO_OFFSET_0, 1, pdos));
-	zassert_not_ok(emul_set_snk_pdos(PDO_OFFSET_0, 1, pdos));
-
 	/* Test PDO overflow. */
 	zassert_not_ok(emul_set_src_pdos(PDO_OFFSET_1, 8, spr_pdos));
 	zassert_not_ok(emul_set_snk_pdos(PDO_OFFSET_1, 8, spr_pdos));
@@ -205,6 +201,7 @@ ZTEST_USER(rts54xx, test_emul_pdos)
 ZTEST_USER(rts54xx, test_pdos)
 {
 	uint32_t pdos[PDO_OFFSET_MAX];
+	int num_pdos = GET_PDOS_MAX_NUM;
 
 	memset(pdos, 0, sizeof(pdos));
 	zassert_ok(emul_set_src_pdos(PDO_OFFSET_1, 6, mixed_pdos_success));
@@ -214,9 +211,17 @@ ZTEST_USER(rts54xx, test_pdos)
 	 * emul_pdc_get_pdos so we only need to do a basic test.
 	 */
 	memset(pdos, 0, sizeof(pdos));
-	zassert_ok(
-		pdc_get_pdos(dev, SOURCE_PDO, PDO_OFFSET_1, 6, LPM_PDO, pdos));
-	k_sleep(K_MSEC(1000));
+
+	for (int i = PDO_OFFSET_1; i <= PDO_OFFSET_6; i += num_pdos) {
+		if (i + num_pdos > PDO_OFFSET_6) {
+			num_pdos = PDO_OFFSET_6 - i + 1;
+		}
+		/* UCSI GET_PDOS supports a maximum of 4 PDOs per
+		 * request. */
+		zassert_ok(pdc_get_pdos(dev, SOURCE_PDO, i, num_pdos, LPM_PDO,
+					&pdos[i - 1]));
+		k_sleep(K_MSEC(1000));
+	}
 	zassert_ok(
 		memcmp(pdos, mixed_pdos_success, sizeof(mixed_pdos_success)));
 }

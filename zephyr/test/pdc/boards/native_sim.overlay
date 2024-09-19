@@ -51,6 +51,11 @@
 				compatible = "cros-ec,usbc-mux-virtual";
 			};
 		};
+
+		ppm_driver_nodelabel: ppm-driver {
+			compatible = "ucsi-ppm";
+			lpm = <&pdc_emul1 &pdc_emul2>;
+		};
 	};
 
 	batteries {

@@ -28,9 +28,15 @@ typedef int (*emul_pdc_get_ccom_t)(const struct emul *target,
 				   enum ccom_t *ccom);
 typedef int (*emul_pdc_get_drp_mode_t)(const struct emul *target,
 				       enum drp_mode_t *dm);
+typedef int (*emul_pdc_get_supported_drp_modes_t)(const struct emul *target,
+						  enum drp_mode_t *modes,
+						  uint8_t size, uint8_t *num);
 
 typedef int (*emul_pdc_get_uor_t)(const struct emul *target, union uor_t *uor);
 typedef int (*emul_pdc_get_pdr_t)(const struct emul *target, union pdr_t *pdr);
+typedef int (*emul_pdc_get_rdo_t)(const struct emul *target, uint32_t *rdo);
+typedef int (*emul_pdc_set_partner_rdo_t)(const struct emul *target,
+					  uint32_t rdo);
 typedef int (*emul_pdc_get_sink_path_t)(const struct emul *target, bool *en);
 typedef int (*emul_pdc_set_connector_status_t)(
 	const struct emul *target,
@@ -56,8 +62,8 @@ typedef int (*emul_pdc_set_lpm_ppm_info_t)(const struct emul *target,
 					   const struct lpm_ppm_info_t *info);
 typedef int (*emul_pdc_set_current_pdo_t)(const struct emul *target,
 					  uint32_t pdo);
-typedef int (*emul_pdc_get_current_flash_bank_t)(const struct emul *target,
-						 uint8_t *bank);
+typedef int (*emul_pdc_set_current_flash_bank_t)(const struct emul *target,
+						 uint8_t bank);
 typedef int (*emul_pdc_get_retimer_fw_t)(const struct emul *target,
 					 bool *enable);
 
@@ -76,7 +82,18 @@ typedef int (*emul_pdc_get_cable_property_t)(const struct emul *target,
 typedef int (*emul_pdc_set_cable_property_t)(
 	const struct emul *target, const union cable_property_t property);
 
+typedef int (*emul_pdc_set_vdo_t)(const struct emul *target, uint8_t num_vdos,
+				  const uint32_t *vdos);
+
+typedef int (*emul_pdc_get_frs_t)(const struct emul *target, bool *enabled);
+
 typedef int (*emul_pdc_idle_wait_t)(const struct emul *target);
+
+typedef int (*emul_pdc_set_vconn_sourcing_t)(const struct emul *target,
+					     bool enabled);
+
+typedef int (*emul_pdc_set_cmd_error_t)(const struct emul *target,
+					bool enabled);
 
 __subsystem struct emul_pdc_api_t {
 	emul_pdc_set_response_delay_t set_response_delay;
@@ -87,8 +104,11 @@ __subsystem struct emul_pdc_api_t {
 	emul_pdc_set_connector_capability_t set_connector_capability;
 	emul_pdc_get_ccom_t get_ccom;
 	emul_pdc_get_drp_mode_t get_drp_mode;
+	emul_pdc_get_supported_drp_modes_t get_supported_drp_modes;
 	emul_pdc_get_uor_t get_uor;
 	emul_pdc_get_pdr_t get_pdr;
+	emul_pdc_get_rdo_t get_rdo;
+	emul_pdc_set_partner_rdo_t set_partner_rdo;
 	emul_pdc_get_sink_path_t get_sink_path;
 	emul_pdc_set_connector_status_t set_connector_status;
 	emul_pdc_set_error_status_t set_error_status;
@@ -98,14 +118,18 @@ __subsystem struct emul_pdc_api_t {
 	emul_pdc_set_pdos_t set_pdos;
 	emul_pdc_set_info_t set_info;
 	emul_pdc_set_lpm_ppm_info_t set_lpm_ppm_info;
-	emul_pdc_get_current_flash_bank_t get_current_flash_bank;
+	emul_pdc_set_current_flash_bank_t set_current_flash_bank;
 	emul_pdc_get_retimer_fw_t get_retimer;
 	emul_pdc_get_requested_power_level_t get_requested_power_level;
 	emul_pdc_get_reconnect_req_t get_reconnect_req;
 	emul_pdc_pulse_irq_t pulse_irq;
 	emul_pdc_set_cable_property_t set_cable_property;
 	emul_pdc_get_cable_property_t get_cable_property;
+	emul_pdc_set_vdo_t set_vdo;
+	emul_pdc_get_frs_t get_frs;
 	emul_pdc_idle_wait_t idle_wait;
+	emul_pdc_set_vconn_sourcing_t set_vconn_sourcing;
+	emul_pdc_set_cmd_error_t set_cmd_error;
 };
 
 static inline int emul_pdc_set_ucsi_version(const struct emul *target,
@@ -213,6 +237,22 @@ static inline int emul_pdc_get_drp_mode(const struct emul *target,
 	return -ENOSYS;
 }
 
+static inline int emul_pdc_get_supported_drp_modes(const struct emul *target,
+						   enum drp_mode_t *modes,
+						   uint8_t size, uint8_t *num)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->get_supported_drp_modes) {
+		return api->get_supported_drp_modes(target, modes, size, num);
+	}
+	return -ENOSYS;
+}
+
 static inline int emul_pdc_get_uor(const struct emul *target, union uor_t *uor)
 {
 	if (!target || !target->backend_api) {
@@ -237,6 +277,35 @@ static inline int emul_pdc_get_pdr(const struct emul *target, union pdr_t *pdr)
 
 	if (api->get_pdr) {
 		return api->get_pdr(target, pdr);
+	}
+	return -ENOSYS;
+}
+
+static inline int emul_pdc_get_rdo(const struct emul *target, uint32_t *rdo)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->get_rdo) {
+		return api->get_rdo(target, rdo);
+	}
+	return -ENOSYS;
+}
+
+static inline int emul_pdc_set_partner_rdo(const struct emul *target,
+					   uint32_t rdo)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->set_partner_rdo) {
+		return api->set_partner_rdo(target, rdo);
 	}
 	return -ENOSYS;
 }
@@ -320,6 +389,13 @@ static inline int emul_pdc_get_pdos(const struct emul *target,
 	return -ENOSYS;
 }
 
+/*
+ * Set the PDOs of the LPM or the partner.
+ *
+ * When setting the partner sink PDO, this function automatically sets
+ * the partner RDO to match the fixed PDO provided.  To change the partner
+ * RDO, call emul_pdc_set_partner_rdo() after this function.
+ */
 static inline int emul_pdc_set_pdos(const struct emul *target,
 				    enum pdo_type_t pdo_type,
 				    enum pdo_offset_t pdo_offset,
@@ -384,8 +460,8 @@ static inline int emul_pdc_set_current_pdo(const struct emul *target,
 	return -ENOSYS;
 }
 
-static inline int emul_pdc_get_current_flash_bank(const struct emul *target,
-						  uint8_t *bank)
+static inline int emul_pdc_set_current_flash_bank(const struct emul *target,
+						  uint8_t bank)
 {
 	if (!target || !target->backend_api) {
 		return -ENOTSUP;
@@ -393,8 +469,8 @@ static inline int emul_pdc_get_current_flash_bank(const struct emul *target,
 
 	const struct emul_pdc_api_t *api = target->backend_api;
 
-	if (api->get_current_flash_bank) {
-		return api->get_current_flash_bank(target, bank);
+	if (api->set_current_flash_bank) {
+		return api->set_current_flash_bank(target, bank);
 	}
 	return -ENOSYS;
 }
@@ -505,6 +581,21 @@ emul_pdc_set_cable_property(const struct emul *target,
 	return -ENOSYS;
 }
 
+static inline int emul_pdc_set_vdo(const struct emul *target, uint8_t num_vdos,
+				   const uint32_t *vdos)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->set_vdo) {
+		return api->set_vdo(target, num_vdos, vdos);
+	}
+	return -ENOSYS;
+}
+
 static inline void
 emul_pdc_configure_src(const struct emul *target,
 		       union connector_status_t *connector_status)
@@ -551,6 +642,21 @@ static inline int emul_pdc_disconnect(const struct emul *target)
 	return 0;
 }
 
+static inline int emul_pdc_get_frs(const struct emul *target, bool *enabled)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->get_frs) {
+		return api->get_frs(target, enabled);
+	}
+
+	return -ENOSYS;
+}
+
 static inline int emul_pdc_idle_wait(const struct emul *target)
 {
 	if (!target || !target->backend_api) {
@@ -561,6 +667,36 @@ static inline int emul_pdc_idle_wait(const struct emul *target)
 
 	if (api->idle_wait) {
 		return api->idle_wait(target);
+	}
+	return -ENOSYS;
+}
+
+static inline int emul_pdc_set_vconn_sourcing(const struct emul *target,
+					      bool enabled)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->set_vconn_sourcing) {
+		return api->set_vconn_sourcing(target, enabled);
+	}
+	return -ENOSYS;
+}
+
+static inline int emul_pdc_set_cmd_error(const struct emul *target,
+					 bool enabled)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+
+	if (api->set_cmd_error) {
+		return api->set_cmd_error(target, enabled);
 	}
 	return -ENOSYS;
 }

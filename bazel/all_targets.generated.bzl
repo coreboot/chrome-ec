@@ -1931,6 +1931,11 @@ def all_targets():
         extra_modules = ["cmsis"],
     )
     ec_target(
+        name = "ptlrvp_npcx",
+        board = "ptlrvp_npcx",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "puff",
         board = "puff",
         chip = "npcx",
@@ -2291,6 +2296,10 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
+    )
+    ec_target(
+        name = "trulo",
+        board = "trulo",
     )
     ec_target(
         name = "twinkie",
