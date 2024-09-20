@@ -33,7 +33,12 @@
 			ppc = <&ppc_port1>;
 			usb-mux-chain-1 {
 				compatible = "cros-ec,usb-mux-chain";
+				usb-muxes = <&anx3443_mux_1 &virtual_mux_1>;
+			};
+			usb_mux_chain_tusb1046_port1: usb-mux-chain-1-tusb {
+				compatible = "cros-ec,usb-mux-chain";
 				usb-muxes = <&tusb1046_mux_1 &virtual_mux_1>;
+				alternative-chain;
 			};
 		};
 
@@ -104,5 +109,11 @@
 		compatible = "ti,tusb1044";
 		status = "okay";
 		reg = <0x12>;
+	};
+
+	anx3443_mux_1: anx3443-mux-1@10 {
+		compatible = "analogix,anx3443";
+		status = "okay";
+		reg = <0x10>;
 	};
 };
