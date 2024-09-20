@@ -4741,9 +4741,24 @@ static struct get_chip_id_response get_chip_id_info(
 static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 {
 	int major;
-	/* First try the newer TPMV command */
-	const struct get_chip_id_response chip_id = get_chip_id_info(td);
+	struct get_chip_id_response chip_id;
 
+	/*
+	 * Get the firmware version first. See if this is a specific GSC version
+	 * where the Ti50 FW does not response with an error code if the host
+	 * tries an unknown TPMV command. This prevents a USB timeout and
+	 * shutting down of USB subsystem within gsctool.
+	 */
+	get_version(td, false);
+	if (targ.shv[1].epoch == 0 && targ.shv[1].major == 21)
+		return GSC_DEVICE_DT;
+
+	/*
+	 * Try the newer TPMV command. If the command isn't supported,
+	 * then the GSC should respond with an error. If that happens we will
+	 * fall back to the GSC version as the indicator.
+	 */
+	chip_id = get_chip_id_info(td);
 	switch (chip_id.tpm_vid_pid) {
 	case 0x50666666:
 		return GSC_DEVICE_NT;
@@ -4761,7 +4776,6 @@ static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 	 * If TPMV command doesn't exist or VID_PID is unrecognized then,
 	 * use the firmware version to determine type.
 	 */
-	get_version(td, false);
 	major = targ.shv[1].major;
 	if (major >= 30 && major < 40)
 		return GSC_DEVICE_NT;
