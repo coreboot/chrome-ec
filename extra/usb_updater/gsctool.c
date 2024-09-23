@@ -4746,12 +4746,15 @@ static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 	/*
 	 * Get the firmware version first. See if this is a specific GSC version
 	 * where the Ti50 FW does not response with an error code if the host
-	 * tries an unknown TPMV command. This prevents a USB timeout and
-	 * shutting down of USB subsystem within gsctool.
+	 * tries an unknown TPMV command over USB. This prevents a USB timeout
+	 * and shutting down of USB subsystem within gsctool (b/368631328).
 	 */
 	get_version(td, false);
-	if (targ.shv[1].epoch == 0 && targ.shv[1].major == 21)
+	major = targ.shv[1].major;
+	if (targ.shv[1].epoch == 0 &&
+	    (major == 21 || major == 23 || major == 24)) {
 		return GSC_DEVICE_DT;
+	}
 
 	/*
 	 * Try the newer TPMV command. If the command isn't supported,
