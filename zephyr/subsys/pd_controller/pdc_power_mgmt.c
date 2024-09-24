@@ -7,10 +7,12 @@
  * PD Controller subsystem
  */
 
+#include "zephyr/toolchain.h"
 #define DT_DRV_COMPAT named_usbc_port
 
 #include "charge_manager.h"
 #include "chipset.h"
+#include "drivers/ucsi_v3.h"
 #include "hooks.h"
 #include "test/util.h"
 #include "usb_pd.h"
@@ -234,6 +236,8 @@ enum snk_attached_local_state_t {
 	SNK_ATTACHED_EVALUATE_PDOS,
 	/** SNK_ATTACHED_START_CHARGING */
 	SNK_ATTACHED_START_CHARGING,
+	/** SNK_ATTACHED_GET_SINK_PDO */
+	SNK_ATTACHED_GET_SINK_PDO,
 	/** SNK_ATTACHED_RUN */
 	SNK_ATTACHED_RUN,
 };
@@ -425,6 +429,10 @@ enum policy_snk_attached_t {
 	SNK_POLICY_UPDATE_ALLOW_PR_SWAP,
 	/** Sends SET_PDO to the LPM. */
 	SNK_POLICY_UPDATE_SRC_CAPS,
+	/** Evaluates sink PDOs from DRP partner. */
+	SNK_POLICY_EVAL_SNK_FIXED_PDO,
+	/** Enables/disables FRS on the LPM. */
+	SNK_POLICY_UPDATE_FRS,
 	/** SNK_POLICY_COUNT */
 	SNK_POLICY_COUNT,
 };
@@ -1387,6 +1395,32 @@ static void run_snk_policies(struct pdc_port_t *port)
 		return;
 	}
 
+	if (IS_ENABLED(CONFIG_PLATFORM_EC_USB_PD_FRS)) {
+		/* When FRS is supported, the source current limits need
+		 * rebalancing when a DRP source is attached.
+		 */
+		if (atomic_test_and_clear_bit(port->snk_policy.flags,
+					      SNK_POLICY_EVAL_SNK_FIXED_PDO)) {
+			struct get_pdo_t get_partner_snk_pdo = {
+				.pdo_source = PARTNER_PDO,
+				.pdo_type = SINK_PDO,
+			};
+			uint32_t sink_fixed_pdo =
+				get_pdc_pdos_ptr(port, &get_partner_snk_pdo)
+					->pdos[0];
+			pdc_dpm_eval_sink_fixed_pdo(port_num, sink_fixed_pdo);
+			return;
+		} else if (atomic_test_and_clear_bit(port->snk_policy.flags,
+						     SNK_POLICY_UPDATE_FRS)) {
+			/* Port is currently a SNK, but we need enable or
+			 * disable fast role swap to comply with the Chromebook
+			 * source policy.
+			 */
+			queue_internal_cmd(port, CMD_PDC_SET_FRS);
+			return;
+		}
+	}
+
 	send_pending_public_commands(port);
 }
 
@@ -1443,6 +1477,7 @@ static void run_src_policies(struct pdc_port_t *port)
 					     SRC_POLICY_GET_RDO)) {
 		/* Get the RDO from the port partner */
 		queue_internal_cmd(port, CMD_PDC_GET_RDO);
+		return;
 	} else if (atomic_test_and_clear_bit(port->src_policy.flags,
 					     SRC_POLICY_UPDATE_ALLOW_PR_SWAP)) {
 		port->pdr.accept_pr_swap =
@@ -1657,7 +1692,7 @@ static void pdc_src_attached_run(void *obj)
 			port->get_pdo.pdo_offset = PDO_OFFSET_0;
 			port->get_pdo.updating = true;
 		}
-		if (port->get_pdo.num_pdos > 4) {
+		if (port->get_pdo.num_pdos > GET_PDOS_MAX_NUM) {
 			port->src_attached_local_state = SRC_ATTACHED_GET_PDOS;
 		} else {
 			port->src_attached_local_state = SRC_ATTACHED_RUN;
@@ -1793,7 +1828,7 @@ static void pdc_snk_attached_run(void *obj)
 			port->get_pdo.pdo_offset = PDO_OFFSET_0;
 			port->get_pdo.updating = true;
 		}
-		if (port->get_pdo.num_pdos > 4) {
+		if (port->get_pdo.num_pdos > GET_PDOS_MAX_NUM) {
 			port->snk_attached_local_state = SNK_ATTACHED_GET_PDOS;
 		} else {
 			port->snk_attached_local_state =
@@ -1884,7 +1919,7 @@ static void pdc_snk_attached_run(void *obj)
 		charge_manager_set_ceil(config->connector_num,
 					CEIL_REQUESTOR_PD, max_ma);
 
-		if (((PDO_GET_TYPE(port->snk_policy.pdo) == 0) &&
+		if (((PDO_GET_TYPE(port->snk_policy.pdo) == PDO_TYPE_FIXED) &&
 		     (!(port->snk_policy.pdo & PDO_FIXED_GET_DRP) ||
 		      (port->snk_policy.pdo &
 		       PDO_FIXED_GET_UNCONSTRAINED_PWR))) ||
@@ -1903,12 +1938,43 @@ static void pdc_snk_attached_run(void *obj)
 		queue_internal_cmd(port, CMD_PDC_GET_RDO);
 		return;
 	case SNK_ATTACHED_SET_SINK_PATH:
-		port->snk_attached_local_state = SNK_ATTACHED_RUN;
+		if (IS_ENABLED(CONFIG_PLATFORM_EC_USB_PD_FRS) &&
+		    port->ccaps.op_mode_drp) {
+			port->snk_attached_local_state =
+				SNK_ATTACHED_GET_SINK_PDO;
+		} else {
+			port->snk_attached_local_state = SNK_ATTACHED_RUN;
+		}
 
 		/* Test if battery can be charged from this port */
 		port->sink_path_en = port->active_charge;
 		queue_internal_cmd(port, CMD_PDC_SET_SINK_PATH);
 		return;
+	case SNK_ATTACHED_GET_SINK_PDO:
+		port->snk_attached_local_state = SNK_ATTACHED_RUN;
+
+		if (IS_ENABLED(CONFIG_PLATFORM_EC_USB_PD_FRS)) {
+			/*
+			 * We only care about the first fixed PDO for FRS, so
+			 * only ask for the first sink PDO from the partner.
+			 */
+			port->get_pdo.num_pdos = 1;
+			port->get_pdo.pdo_offset = PDO_OFFSET_0;
+			port->get_pdo.pdo_type = SINK_PDO;
+			port->get_pdo.pdo_source = PARTNER_PDO;
+			port->get_pdo.updating = false;
+
+			/* Evaluate SNK CAP after it's been retrieved from the
+			 * PDC */
+			atomic_set_bit(port->snk_policy.flags,
+				       SNK_POLICY_EVAL_SNK_FIXED_PDO);
+
+			queue_internal_cmd(port, CMD_PDC_GET_PDOS);
+			return;
+		}
+		/* If !CONFIG_PLATFORM_EC_USB_PD_FRS, fallthrough */
+		__fallthrough;
+
 	case SNK_ATTACHED_RUN:
 		/* Hard Reset could disable Sink FET. Re-enable it */
 		if (atomic_get(&port->hard_reset_sent)) {
@@ -1966,15 +2032,14 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 		rv = pdc_set_drp_mode(port->pdc, port->drp);
 		break;
 	case CMD_PDC_GET_PDOS:
-		rv = pdc_get_pdos(
-			port->pdc, port->get_pdo.pdo_type,
-			port->get_pdo.pdo_offset,
-			port->get_pdo.num_pdos > 4 ? 4 : port->get_pdo.num_pdos,
-			port->get_pdo.pdo_source,
-			get_pdc_pdos_ptr(port, &port->get_pdo)->pdos +
-				port->get_pdo.pdo_offset);
-		if (!rv && port->get_pdo.num_pdos > 4) {
-			port->get_pdo.num_pdos -= 4;
+		rv = pdc_get_pdos(port->pdc, port->get_pdo.pdo_type,
+				  port->get_pdo.pdo_offset,
+				  MIN(port->get_pdo.num_pdos, GET_PDOS_MAX_NUM),
+				  port->get_pdo.pdo_source,
+				  get_pdc_pdos_ptr(port, &port->get_pdo)->pdos +
+					  port->get_pdo.pdo_offset);
+		if (!rv && port->get_pdo.num_pdos > GET_PDOS_MAX_NUM) {
+			port->get_pdo.num_pdos -= GET_PDOS_MAX_NUM;
 			port->get_pdo.pdo_offset = PDO_OFFSET_4;
 		}
 		break;
@@ -2270,7 +2335,8 @@ static void pdc_send_cmd_wait_exit(void *obj)
 		 * pdo_count. */
 		/* TODO This is temporary until APDOs can be handled  */
 		for (int i = 0; i < PDO_NUM; i++) {
-			if (pdc_pdos->pdos[i] & PDO_TYPE_AUGMENTED) {
+			if ((pdc_pdos->pdos[i] & PDO_TYPE_MASK) ==
+			    PDO_TYPE_AUGMENTED) {
 				pdc_pdos->pdos[i] = 0;
 			} else {
 				pdc_pdos->pdo_count++;
@@ -3562,10 +3628,10 @@ int pdc_power_mgmt_get_rev(int port, enum tcpci_msg_type type)
 
 	switch (type) {
 	case TCPCI_MSG_SOP:
-		rev = pdc_data[port]->port.ccaps.partner_pd_revision - 1;
+		rev = pdc_data[port]->port.ccaps.partner_pd_revision;
 		break;
 	case TCPCI_MSG_SOP_PRIME:
-		rev = pdc_data[port]->port.cable_prop.cable_pd_revision - 1;
+		rev = pdc_data[port]->port.cable_prop.cable_pd_revision;
 		break;
 	default:
 		rev = 0;
@@ -3762,7 +3828,7 @@ uint8_t pdc_power_mgmt_get_product_type(int port)
 	}
 
 	if (pdc->vdo[IDENTITY_PTYPE_VDO_IDX]) {
-		ptype = PD_IDH_VID(pdc->vdo[IDENTITY_PTYPE_VDO_IDX]);
+		ptype = PD_IDH_PTYPE(pdc->vdo[IDENTITY_PTYPE_VDO_IDX]);
 	}
 
 	return ptype;
@@ -3992,6 +4058,9 @@ int pdc_power_mgmt_set_current_limit(int port_num,
 					pdc_src_pdo_max[0] :
 					pdc_src_pdo_nominal[0];
 
+	LOG_INF("C%d: set current limit %s", port_num,
+		(current == TC_CURRENT_3_0A) ? "3.0A" : "1.5A");
+
 	/* Further actions depend on the port attached state and power role */
 	switch (pdc->attached_state) {
 	case SRC_ATTACHED_TYPEC_ONLY_STATE:
@@ -4037,10 +4106,19 @@ int pdc_power_mgmt_set_current_limit(int port_num,
 
 int pdc_power_mgmt_frs_enable(int port_num, bool enable)
 {
-	/*
-	 * TODO(b/337958604): Currently there is no mechanism to enable/disable
-	 * FRS. Waiting for this control to be available in PDC.
-	 */
+	struct pdc_port_t *pdc;
+
+	if (!is_pdc_port_valid(port_num)) {
+		return -ERANGE;
+	}
+
+	pdc = &pdc_data[port_num]->port;
+
+	pdc->frs_enable = enable;
+
+	LOG_INF("C%d, set FRS %d", port_num, enable);
+
+	atomic_set_bit(pdc->snk_policy.flags, SNK_POLICY_UPDATE_FRS);
 
 	return EC_SUCCESS;
 }

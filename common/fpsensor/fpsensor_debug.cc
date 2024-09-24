@@ -9,6 +9,7 @@
 #include "compile_time_macros.h"
 #include "console.h"
 #include "ec_commands.h"
+#include "fpsensor/fpsensor.h"
 #include "fpsensor/fpsensor_console.h"
 #include "fpsensor/fpsensor_crypto.h"
 #include "fpsensor/fpsensor_detect.h"
@@ -163,7 +164,7 @@ DECLARE_CONSOLE_COMMAND_FLAGS(fpcapture, command_fpcapture, NULL,
 static int command_fpupload(int argc, const char **argv)
 {
 	if (argc != 3)
-		return EC_ERROR_PARAM1;
+		return EC_ERROR_PARAM_COUNT;
 	if (system_is_locked())
 		return EC_ERROR_ACCESS_DENIED;
 	int offset = atoi(argv[1]);
@@ -244,6 +245,41 @@ static int command_fpenroll(int argc, const char **argv)
 }
 DECLARE_CONSOLE_COMMAND_FLAGS(fpenroll, command_fpenroll, NULL,
 			      "Enroll a new fingerprint", CMD_FLAG_RESTRICTED);
+
+static int command_fpinfo(int argc, const char **argv)
+{
+	ec_response_fp_info info;
+
+#if defined(HAVE_FP_PRIVATE_DRIVER) || defined(BOARD_HOST)
+	if (fp_sensor_get_info(&info) < 0)
+		return EC_ERROR_UNKNOWN;
+#else
+	return EC_ERROR_UNKNOWN;
+#endif
+
+	constexpr int align = 15;
+
+	ccprintf("%*s: 0x%X (%s)\n", align, "Vendor ID", info.vendor_id,
+		 fourcc_to_string(info.vendor_id).c_str());
+	ccprintf("%*s: 0x%X\n", align, "Product ID", info.product_id);
+	ccprintf("%*s: 0x%X\n", align, "Model ID", info.model_id);
+	ccprintf("%*s: 0x%X\n", align, "Version", info.version);
+
+	ccprintf("%*s: %u x %u %ubpp\n", align, "Sensor (w x h)", info.width,
+		 info.height, info.bpp);
+	ccprintf("%*s: %u\n", align, "Frame Size", info.frame_size);
+	ccprintf("%*s: 0x%X (%s)\n", align, "Pixel Format", info.pixel_format,
+		 fourcc_to_string(info.pixel_format).c_str());
+
+	ccprintf("%*s: 0x%X\n", align, "Error State", info.errors);
+
+	ccprintf("%*s: %s\n", align, "Sensor Strap",
+		 fp_sensor_type_to_str(fpsensor_detect_get_type()));
+
+	return EC_SUCCESS;
+}
+DECLARE_SAFE_CONSOLE_COMMAND(fpinfo, command_fpinfo, NULL,
+			     "Print fingerprint system info");
 
 static int command_fpmatch(int argc, const char **argv)
 {

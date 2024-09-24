@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(ppm_test, LOG_LEVEL_DBG);
 #define PDC_ALTERNATE_CONNECTOR PDC_NUM_PORTS
 #define PDC_INVALID_CONNECTOR (PDC_NUM_PORTS + 1)
 #define PDC_DEFAULT_CONNECTOR_STATUS_CHANGE (1u << 14)
+#define CCI_CONNECTOR_CHANGE_RAW(cc) ((uint32_t)(cc) << 1)
 #define PDC_WAIT_FOR_ITERATIONS 3
 
 #define CMD_WAIT_TIMEOUT K_MSEC(200)
@@ -472,8 +473,12 @@ static void ppm_test_before(void *f)
 }
 
 const union cci_event_t cci_cmd_complete = { .command_completed = 1 };
+const union cci_event_t cci_cancel_complete = { .cancel_completed = 1,
+						.command_completed = 1 };
 const union cci_event_t cci_busy = { .busy = 1 };
 const union cci_event_t cci_error = { .error = 1, .command_completed = 1 };
+const union cci_event_t cci_not_supported_command = { .not_supported = 1,
+						      .command_completed = 1 };
 const union cci_event_t cci_ack_command = { .acknowledge_command = 1 };
 const union cci_event_t cci_connector_change_1_with_ack = {
 	.acknowledge_command = 1,
@@ -498,12 +503,12 @@ ZTEST_USER_F(ppm_test, test_IDLE_drops_unexpected_commands)
 {
 	zassert_true(initialize_fake(fixture));
 
-	/* Try all commands except PPM_RESET and SET_NOTIFICATION_ENABLE.
+	/* Try all commands except PPM_RESET, SET_NOTIFICATION_ENABLE & CANCEL.
 	 * They should result in no change to the state.
 	 */
 	for (uint8_t cmd = UCSI_PPM_RESET; cmd <= UCSI_CMD_MAX; cmd++) {
 		if (cmd == UCSI_PPM_RESET ||
-		    cmd == UCSI_SET_NOTIFICATION_ENABLE) {
+		    cmd == UCSI_SET_NOTIFICATION_ENABLE || cmd == UCSI_CANCEL) {
 			continue;
 		}
 
@@ -625,42 +630,30 @@ ZTEST_USER_F(ppm_test, test_IDLENOTIFY_send_invalid_ucsi_command)
 
 	zassert_false(write_command(fixture, &control) < 0);
 	zassert_true(wait_for_cmd_to_process(fixture));
-	zassert_true(check_cci_matches(fixture, &cci_error));
+	zassert_true(check_cci_matches(fixture, &cci_not_supported_command));
 
-	/* Ack the error before getting the error status. */
+	/* Not supported commands also require Ack. */
 	queue_command_for_fake_driver(fixture, UCSI_ACK_CC_CI,
 				      /*result=*/0, /*lpm_data=*/NULL);
 	zassert_false(write_ack_command(fixture, /*connector_change_ack=*/false,
 					/*command_complete_ack=*/true) < 0);
 	zassert_true(wait_for_cmd_to_process(fixture));
 	zassert_true(check_cci_matches(fixture, &cci_ack_command));
-
-	int notified_count = fixture->notified_count;
-	control.command = UCSI_GET_ERROR_STATUS;
-	zassert_false(write_command(fixture, &control) < 0);
-	zassert_true(wait_for_cmd_to_process(fixture));
-	notified_count++;
-	zassert_true(wait_for_notification(fixture, notified_count));
-
-	union error_status_t data;
-	union cci_event_t complete_with_size = cci_cmd_complete;
-	complete_with_size.data_len = sizeof(data);
-
-	zassert_true(check_cci_matches(fixture, &complete_with_size));
-	zassert_false(read_command_result(fixture, (uint8_t *)&data,
-					  sizeof(data)) < 0);
-	zassert_true(data.unrecognized_command);
 }
 
 /*
- * While in the processing command state, the PPM is busy and should reject any
- * new commands that are sent.
+ * PPM should reject new commands sent while the current system is busy handling
+ * a pending command.
  */
-ZTEST_EXPECT_SKIP(ppm_test, test_PROCESSING_busy_rejects_commands);
-ZTEST_USER_F(ppm_test, test_PROCESSING_busy_rejects_commands)
+ZTEST_USER_F(ppm_test, test_busy_rejects_commands)
 {
-	/* TODO(b/340895744) - Not yet implemented. */
-	ztest_test_skip();
+	/* Writing while busy should result in failure. */
+	struct ucsi_control_t control = {
+		.command = UCSI_GET_CONNECTOR_CAPABILITY, .data_length = 0
+	};
+	/* First write succeeds and second one responds with -EBUSY. */
+	zassert_false(write_command(fixture, &control) < 0);
+	zassert_equal(write_command(fixture, &control), -EBUSY);
 }
 
 /*
@@ -668,11 +661,28 @@ ZTEST_USER_F(ppm_test, test_PROCESSING_busy_rejects_commands)
  * be sent WHILE a command is in progress. If a command is cancellable, it will
  * replace the current command.
  */
-ZTEST_EXPECT_SKIP(ppm_test, test_PROCESSING_busy_allows_cancel_command);
 ZTEST_USER_F(ppm_test, test_PROCESSING_busy_allows_cancel_command)
 {
-	/* TODO(b/340895744) - Cancel is not yet implemented. */
-	ztest_test_skip();
+	initialize_fake_to_idle_notify(fixture);
+
+	struct ucsi_control_t control = {
+		.command = UCSI_GET_CONNECTOR_CAPABILITY, .data_length = 0
+	};
+	struct ucsi_control_t cancel = { .command = UCSI_CANCEL,
+					 .data_length = 0 };
+
+	/* First write succeeds and second one responds with -EBUSY. */
+	zassert_false(write_command(fixture, &control) < 0);
+	zassert_equal(write_command(fixture, &control), -EBUSY);
+	/* Cancel while busy should succeed. */
+	zassert_false(write_command(fixture, &cancel) < 0);
+
+	/* Once command completes, we should see cancel_completed in CCI. */
+	zassert_true(wait_for_cmd_to_process(fixture));
+	zassert_true(check_cci_matches(fixture, &cci_cancel_complete));
+
+	/* Trying to cancel while not busy should also result in an error. */
+	zassert_equal(write_command(fixture, &cancel), -EINVAL);
 }
 
 /*
@@ -713,6 +723,7 @@ ZTEST_USER_F(ppm_test, test_CCACK_support_simultaneous_ack_CC_and_CI)
 {
 	initialize_fake_to_idle_notify(fixture);
 	int notified_count = fixture->notified_count;
+	union cci_event_t cci;
 
 	trigger_expected_connector_change(fixture, PDC_DEFAULT_CONNECTOR);
 	zassert_true(wait_for_async_event_to_process(fixture));
@@ -732,7 +743,9 @@ ZTEST_USER_F(ppm_test, test_CCACK_support_simultaneous_ack_CC_and_CI)
 	zassert_false(write_command(fixture, &control) < 0);
 	notified_count++;
 	zassert_true(wait_for_notification(fixture, notified_count));
-	zassert_true(check_cci_matches(fixture, &cci_cmd_complete));
+	cci.raw_value = cci_cmd_complete.raw_value |
+			CCI_CONNECTOR_CHANGE_RAW(PDC_DEFAULT_CONNECTOR);
+	zassert_true(check_cci_matches(fixture, &cci));
 
 	uint8_t changed_port_num;
 	union connector_status_t *status;
@@ -883,6 +896,7 @@ ZTEST_USER_F(ppm_test, test_CIACK_ack_immediately)
 {
 	initialize_fake_to_idle_notify(fixture);
 	int notified_count = fixture->notified_count;
+	union cci_event_t cci;
 
 	/* We should have an acknowledge from setting up above. */
 	zassert_true(check_cci_matches(fixture, &cci_ack_command));
@@ -917,7 +931,9 @@ ZTEST_USER_F(ppm_test, test_CIACK_ack_immediately)
 					/*connector_change_ack=*/false,
 					/*command_complete_ack=*/true) < 0);
 	zassert_true(wait_for_notification(fixture, ++notified_count));
-	zassert_true(check_cci_matches(fixture, &cci_error));
+	cci.raw_value = cci_error.raw_value |
+			CCI_CONNECTOR_CHANGE_RAW(PDC_DEFAULT_CONNECTOR);
+	zassert_true(check_cci_matches(fixture, &cci));
 }
 
 /* If we get an ACK_CC_CI when there is no active connector indication, we
@@ -1069,14 +1085,6 @@ ZTEST_USER_F(ppm_test, test_invalid_read_writes)
 	zassert_equal(raw_ppm_write(fixture, UCSI_CONTROL_OFFSET, buf,
 				    sizeof(struct ucsi_control_t) + 1),
 		      -EINVAL);
-
-	/* Writing while busy should result in failure. */
-	struct ucsi_control_t control = {
-		.command = UCSI_GET_CONNECTOR_CAPABILITY, .data_length = 0
-	};
-	/* First write succeeds and second one responds with -EBUSY. */
-	zassert_false(write_command(fixture, &control) < 0);
-	zassert_equal(write_command(fixture, &control), -EBUSY);
 }
 
 /* Test mapping of driver errors to PPM errors. */

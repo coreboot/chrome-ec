@@ -5,6 +5,7 @@
 
 #include "gpio.h"
 #include "gpio_signal.h"
+#include "include/system.h"
 #include "system_boot_time.h"
 
 #include <zephyr/drivers/gpio.h>
@@ -54,6 +55,16 @@ static int board_ap_power_action_g3_run(void *data)
 		power_signal_set(PWR_EN_PP5000_A, 1);
 		/* Turn on the PP3300_PRIM rail. */
 		power_signal_set(PWR_EN_PP3300_A, 1);
+
+		/* Indication to soc on recovery boot */
+		if (system_is_manual_recovery()) {
+			gpio_pin_set_dt(
+				GPIO_DT_FROM_NODELABEL(cse_early_rec_sw), 1);
+		} else {
+			gpio_pin_set_dt(
+				GPIO_DT_FROM_NODELABEL(cse_early_rec_sw), 0);
+		}
+
 		update_ap_boot_time(ARAIL);
 	}
 
@@ -67,10 +78,23 @@ AP_POWER_APP_STATE_DEFINE(AP_POWER_STATE_G3, board_ap_power_action_g3_entry,
 
 int board_power_signal_get(enum power_signal signal)
 {
-	return 0;
+	switch (signal) {
+	case PWR_EC_PCH_SYS_PWROK:
+		return power_signal_get(PWR_PCH_PWROK);
+	case PWR_SYS_RST:
+		return gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(sys_rst_odl));
+	default:
+		return -EINVAL;
+	}
 }
 
 int board_power_signal_set(enum power_signal signal, int value)
 {
-	return 0;
+	switch (signal) {
+	case PWR_SYS_RST:
+		return gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(sys_rst_odl),
+				       value);
+	default:
+		return -EINVAL;
+	}
 }

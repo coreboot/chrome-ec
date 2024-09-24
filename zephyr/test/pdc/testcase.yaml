@@ -48,6 +48,18 @@ tests:
     - CONFIG_USBC_PDC_TRACE_MSG=y
     - CONFIG_USB_PDC_LOG_LEVEL_DBG=y
     - CONFIG_TEST_DISABLE_INLINE_CHIPSET_IN_STATE=y
+    - CONFIG_PLATFORM_EC_USB_PD_FRS=y
+    extra_dtc_overlay_files:
+    - "./boards/rts5453p.overlay"
+
+  pdc.policy.no_frs:
+    timeout: 300
+    extra_configs:
+    - CONFIG_TEST_SUITE_PDC_POLICY=y
+    - CONFIG_USBC_PDC_TRACE_MSG=y
+    - CONFIG_USB_PDC_LOG_LEVEL_DBG=y
+    - CONFIG_TEST_DISABLE_INLINE_CHIPSET_IN_STATE=y
+    - CONFIG_PLATFORM_EC_USB_PD_FRS=n
     extra_dtc_overlay_files:
     - "./boards/rts5453p.overlay"
 
@@ -76,6 +88,16 @@ tests:
     - CONFIG_USBC_PDC_TRACE_MSG=y
     extra_dtc_overlay_files:
     - "./boards/rts5453p.overlay"
+
+  pdc.tps6699x.retimer_fw_update:
+    extra_configs:
+    - CONFIG_TEST_SUITE_PDC_RETIMER_FW_UPDATE=y
+    - CONFIG_PLATFORM_EC_USBC_SS_MUX=y
+    - CONFIG_PLATFORM_EC_USBC_RETIMER_FW_UPDATE=y
+    - CONFIG_TEST_PDC_MESSAGE_TRACING=y
+    - CONFIG_USBC_PDC_TRACE_MSG=y
+    extra_dtc_overlay_files:
+    - "./boards/tps6699x.overlay"
 
   pdc.console:
     extra_configs:
@@ -109,9 +131,9 @@ tests:
     extra_dtc_overlay_files:
     - "./boards/rts5453p.overlay"
 
-  pdc.ppm:
+  pdc.ppm_state_machine:
     extra_configs:
-    - CONFIG_TEST_SUITE_PPM=y
+    - CONFIG_TEST_SUITE_PPM_STATE_MACHINE=y
     extra_dtc_overlay_files:
     - "./boards/rts5453p.overlay"
 

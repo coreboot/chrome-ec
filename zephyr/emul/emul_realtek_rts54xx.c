@@ -361,6 +361,7 @@ static int get_rtk_status(struct rts5453p_emul_pdc_data *data,
 	data->response.rtk_status.battery_charging_status =
 		data->connector_status.battery_charging_cap_status &
 		BIT_MASK(2);
+	data->response.rtk_status.pd_sourcing_vconn = data->vconn_sourcing;
 
 	/* BYTE 12 */
 	data->response.rtk_status.plug_direction =
@@ -416,9 +417,21 @@ static int set_uor(struct rts5453p_emul_pdc_data *data,
 static int set_pdr(struct rts5453p_emul_pdc_data *data,
 		   const union rts54_request *req)
 {
-	LOG_INF("SET_PDR port=%d", req->set_pdr.pdr.connector_number);
+	LOG_INF("SET_PDR port=%d, swap_to_src=%d, swap_to_snk=%d, accept_pr_swap=%d}",
+		req->set_pdr.pdr.connector_number, req->set_pdr.pdr.swap_to_src,
+		req->set_pdr.pdr.swap_to_snk, req->set_pdr.pdr.accept_pr_swap);
 
 	data->pdr = req->set_pdr.pdr;
+
+	if (data->connector_status.power_operation_mode == PD_OPERATION &&
+	    data->connector_status.connect_status &&
+	    data->set_ccom_mode.ccom == BIT(2)) {
+		if (data->pdr.swap_to_snk) {
+			data->connector_status.power_direction = 0;
+		} else if (data->pdr.swap_to_src) {
+			data->connector_status.power_direction = 1;
+		}
+	}
 
 	memset(&data->response, 0, sizeof(union rts54_response));
 	send_response(data);
@@ -432,7 +445,17 @@ static int set_rdo(struct rts5453p_emul_pdc_data *data,
 	LOG_INF("SET_RDO port=%d, rdo=0x%X", req->set_rdo.port_num,
 		req->set_rdo.rdo);
 
-	data->rdo = req->set_rdo.rdo;
+	/* The SET_RDO command triggers a Request Object to be sent
+	 * to the port partner when the LPM is a sink.
+	 * The command is only valid when acting as a sink.
+	 */
+	if (data->connector_status.power_direction == 1) {
+		/* We are a provider. Generate an error. */
+		set_ping_status(data, CMD_ERROR, 0);
+		return -EIO;
+	}
+
+	data->pdo.rdo = req->set_rdo.rdo;
 
 	memset(&data->response, 0, sizeof(union rts54_response));
 	send_response(data);
@@ -446,7 +469,16 @@ static int get_rdo(struct rts5453p_emul_pdc_data *data,
 	LOG_INF("GET_RDO port=%d", req->set_rdo.port_num);
 
 	data->response.get_rdo.byte_count = sizeof(struct get_rdo_response) - 1;
-	data->response.get_rdo.rdo = data->rdo;
+
+	if (data->connector_status.power_direction == 1) {
+		/* We are the provider, return the RDO set by the partner.
+		 */
+		data->response.get_rdo.rdo = data->pdo.partner_rdo;
+	} else {
+		/* We are the consumer, return the RDO set using SET_RDO */
+		data->response.get_rdo.rdo = data->pdo.rdo;
+	}
+
 	send_response(data);
 
 	return 0;
@@ -561,20 +593,20 @@ static int set_pdo(struct rts5453p_emul_pdc_data *data,
 static int get_pdos(struct rts5453p_emul_pdc_data *data,
 		    const union rts54_request *req)
 {
-	enum pdo_type_t pdo_type = req->get_pdos.src ? SOURCE_PDO : SINK_PDO;
-	enum pdo_source_t pdo_source = req->get_pdos.partner ? PARTNER_PDO :
-							       LPM_PDO;
-	enum pdo_offset_t pdo_offset = req->get_pdos.offset;
+	enum pdo_type_t pdo_type = req->get_pdos.ucsi.pdo_type;
+	enum pdo_source_t pdo_source = req->get_pdos.ucsi.pdo_source;
+	enum pdo_offset_t pdo_offset = req->get_pdos.ucsi.pdo_offset;
+	uint8_t pdo_count = req->get_pdos.ucsi.number_of_pdos + 1;
+
 	/* GET_PDOS stops at the end if there's a requested overflow. */
-	uint8_t pdo_count = MIN(PDO_OFFSET_MAX - pdo_offset, req->get_pdos.num);
+	pdo_count = MIN(PDO_OFFSET_MAX - pdo_offset, pdo_count);
 
 	LOG_INF("GET_PDO source %d, type=%d, offset=%d, count=%d", pdo_source,
 		pdo_type, pdo_offset, pdo_count);
 
 	memset(&data->response, 0, sizeof(data->response));
 	emul_pdc_pdo_get_direct(&data->pdo, pdo_type, pdo_offset, pdo_count,
-				req->get_pdos.partner,
-				data->response.get_pdos.pdos);
+				pdo_source, data->response.get_pdos.pdos);
 	data->response.get_pdos.byte_count = sizeof(uint32_t) * pdo_count;
 
 	send_response(data);
@@ -677,14 +709,14 @@ static int get_pch_data_status(struct rts5453p_emul_pdc_data *data,
 static int set_frs_function(struct rts5453p_emul_pdc_data *data,
 			    const union rts54_request *req)
 {
-	LOG_INF("SET_FRST_FUNCTION port=%d, setting %d",
+	LOG_INF("SET_FRS_FUNCTION port=%d, setting %d",
 		req->set_frs_function.port_num, req->set_frs_function.enable);
 
 	data->frs_configured = true;
 	data->frs_enabled = req->set_frs_function.enable;
-	send_response(data);
 
 	memset(&data->response, 0, sizeof(union rts54_response));
+	send_response(data);
 	return 0;
 }
 
@@ -756,7 +788,7 @@ const struct commands sub_cmd_x08[] = {
 	{ .code = 0x27, HANDLER_DEF(unsupported) },
 	{ .code = 0x28, HANDLER_DEF(unsupported) },
 	{ .code = 0x2B, HANDLER_DEF(unsupported) },
-	{ .code = 0x83, HANDLER_DEF(get_pdos) },
+	{ .code = 0x83, HANDLER_DEF(unsupported) },
 	{ .code = 0x84, HANDLER_DEF(get_rdo) },
 	{ .code = 0x85, HANDLER_DEF(unsupported) },
 	{ .code = 0x99, HANDLER_DEF(unsupported) },
@@ -785,7 +817,7 @@ const struct commands sub_cmd_x0E[] = {
 	{ .code = 0x0D, HANDLER_DEF(unsupported) },
 	{ .code = 0x0E, HANDLER_DEF(unsupported) },
 	{ .code = 0x0F, HANDLER_DEF(unsupported) },
-	{ .code = 0x10, HANDLER_DEF(unsupported) },
+	{ .code = 0x10, HANDLER_DEF(get_pdos) },
 	{ .code = 0x11, HANDLER_DEF(get_cable_property) },
 	{ .code = 0x12, HANDLER_DEF(get_connector_status) },
 	{ .code = 0x13, HANDLER_DEF(get_error_status) },
@@ -1185,7 +1217,21 @@ static int emul_realtek_rts54xx_get_rdo(const struct emul *target,
 	struct rts5453p_emul_pdc_data *data =
 		rts5453p_emul_get_pdc_data(target);
 
-	*rdo = data->rdo;
+	/* Always return the RDO configured using SET_RDO or
+	 * pdc_power_mgmt_set_new_power_request().
+	 */
+	*rdo = data->pdo.rdo;
+
+	return 0;
+}
+
+static int emul_realtek_rts54xx_set_partner_rdo(const struct emul *target,
+						uint32_t rdo)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+
+	data->pdo.partner_rdo = rdo;
 
 	return 0;
 }
@@ -1428,6 +1474,15 @@ static int emul_realtek_rts54xx_idle_wait(const struct emul *target)
 	return -ETIMEDOUT;
 }
 
+static int emul_realtek_rts54xx_set_vconn_sourcing(const struct emul *target,
+						   bool enabled)
+{
+	struct rts5453p_emul_pdc_data *data =
+		rts5453p_emul_get_pdc_data(target);
+	data->vconn_sourcing = enabled;
+	return 0;
+}
+
 struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.reset = emul_realtek_rts54xx_reset,
 	.set_response_delay = emul_realtek_rts54xx_set_response_delay,
@@ -1440,6 +1495,7 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.get_uor = emul_realtek_rts54xx_get_uor,
 	.get_pdr = emul_realtek_rts54xx_get_pdr,
 	.get_rdo = emul_realtek_rts54xx_get_rdo,
+	.set_partner_rdo = emul_realtek_rts54xx_set_partner_rdo,
 	.get_requested_power_level =
 		emul_realtek_rts54xx_get_requested_power_level,
 	.get_ccom = emul_realtek_rts54xx_get_ccom,
@@ -1456,6 +1512,7 @@ struct emul_pdc_api_t emul_realtek_rts54xx_api = {
 	.set_vdo = emul_realtek_rts54xx_set_vdo,
 	.get_frs = emul_realtek_rts54xx_get_frs,
 	.idle_wait = emul_realtek_rts54xx_idle_wait,
+	.set_vconn_sourcing = emul_realtek_rts54xx_set_vconn_sourcing,
 };
 
 #define RTS5453P_EMUL_DEFINE(n)                                             \

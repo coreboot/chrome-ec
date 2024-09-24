@@ -201,6 +201,7 @@ ZTEST_USER(rts54xx, test_emul_pdos)
 ZTEST_USER(rts54xx, test_pdos)
 {
 	uint32_t pdos[PDO_OFFSET_MAX];
+	int num_pdos = GET_PDOS_MAX_NUM;
 
 	memset(pdos, 0, sizeof(pdos));
 	zassert_ok(emul_set_src_pdos(PDO_OFFSET_1, 6, mixed_pdos_success));
@@ -210,9 +211,17 @@ ZTEST_USER(rts54xx, test_pdos)
 	 * emul_pdc_get_pdos so we only need to do a basic test.
 	 */
 	memset(pdos, 0, sizeof(pdos));
-	zassert_ok(
-		pdc_get_pdos(dev, SOURCE_PDO, PDO_OFFSET_1, 6, LPM_PDO, pdos));
-	k_sleep(K_MSEC(1000));
+
+	for (int i = PDO_OFFSET_1; i <= PDO_OFFSET_6; i += num_pdos) {
+		if (i + num_pdos > PDO_OFFSET_6) {
+			num_pdos = PDO_OFFSET_6 - i + 1;
+		}
+		/* UCSI GET_PDOS supports a maximum of 4 PDOs per
+		 * request. */
+		zassert_ok(pdc_get_pdos(dev, SOURCE_PDO, i, num_pdos, LPM_PDO,
+					&pdos[i - 1]));
+		k_sleep(K_MSEC(1000));
+	}
 	zassert_ok(
 		memcmp(pdos, mixed_pdos_success, sizeof(mixed_pdos_success)));
 }
@@ -301,52 +310,4 @@ ZTEST_USER(rts54xx, test_irq)
 void ucsi_cc_callback(const struct device *port, struct pdc_callback *cb,
 		      union cci_event_t cci_event)
 {
-}
-
-/* TODO(b/331801899) - Workarounds we have in place for GET_PD_MESSAGE not being
- * correctly implemented in FW. Remove this after GET_PD_MESSAGE is correctly
- * implemented.
- */
-ZTEST_USER(rts54xx, test_get_pd_message_workarounds)
-{
-#define DISCOVER_IDENTITY_RESPONSE 4
-	static struct pdc_callback cc_cb;
-	union get_pd_message_t cmd;
-	struct capability_t read_caps;
-	struct capability_t caps;
-	uint8_t response[32];
-
-	cc_cb.handler = ucsi_cc_callback;
-
-	/* Set an arbitrary capability to validate. */
-	caps.bmOptionalFeatures.cable_details = 1;
-
-	emul_pdc_set_capability(emul, &caps);
-
-	/* Normal api path doesn't insert GET_PD_MESSAGE bit into caps. */
-	zassert_ok(pdc_get_capability(dev, &read_caps));
-	k_sleep(K_MSEC(TEST_WAIT_FOR_INTERVAL_MS));
-	zassert_equal(read_caps.bmOptionalFeatures.raw_value,
-		      caps.bmOptionalFeatures.raw_value);
-
-	/* Use UCSI path to check capabilities and expect bit is set. */
-	zassert_ok(pdc_execute_ucsi_cmd(dev, UCSI_GET_CAPABILITY,
-					/*command specific=*/0, NULL,
-					(uint8_t *)&read_caps, &cc_cb));
-	k_sleep(K_MSEC(TEST_WAIT_FOR_INTERVAL_MS));
-	zassert_true(read_caps.bmOptionalFeatures.get_pd_message);
-
-	/* Anything that's not for Discover Identity will be rejected. */
-	memset(&cmd, 0, sizeof(cmd));
-	zassert_equal(pdc_execute_ucsi_cmd(dev, UCSI_GET_PD_MESSAGE,
-					   sizeof(union get_pd_message_t),
-					   (uint8_t *)&cmd, response, &cc_cb),
-		      -ENOTSUP);
-
-	/* Response type of Discover identity should queue command. */
-	cmd.response_message_type = DISCOVER_IDENTITY_RESPONSE;
-	zassert_ok(pdc_execute_ucsi_cmd(dev, UCSI_GET_PD_MESSAGE,
-					sizeof(union get_pd_message_t),
-					(uint8_t *)&cmd, response, &cc_cb));
-	k_sleep(K_MSEC(TEST_WAIT_FOR_INTERVAL_MS));
 }
