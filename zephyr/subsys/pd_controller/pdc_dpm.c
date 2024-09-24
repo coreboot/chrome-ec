@@ -120,6 +120,8 @@ static void pdc_dpm_balance_source_ports(struct k_work *work)
 						  max_current_claimed);
 
 			pdc_power_mgmt_frs_enable(rem_frs, false);
+			rp = pdc_power_mgmt_get_default_current_limit(rem_frs);
+			pdc_power_mgmt_set_current_limit(rem_frs, rp);
 			max_current_claimed &= ~BIT(rem_frs);
 
 			/* Give 50 ms for the PD task to process DPM flag */
@@ -142,6 +144,8 @@ static void pdc_dpm_balance_source_ports(struct k_work *work)
 			max_current_claimed |= BIT(new_frs_port);
 			/* Enable FRS for this port */
 			pdc_power_mgmt_frs_enable(new_frs_port, true);
+			pdc_power_mgmt_set_current_limit(new_frs_port,
+							 TC_CURRENT_3_0A);
 		} else if (non_pd_sink_max_requested & max_current_claimed) {
 			int rem_non_pd = LOWEST_PORT(non_pd_sink_max_requested &
 						     max_current_claimed);
@@ -243,6 +247,7 @@ void pdc_dpm_evaluate_request_rdo(int port, uint32_t rdo)
 {
 	int idx;
 	int op_ma;
+	enum usb_typec_current_t rp;
 
 	if (CONFIG_PLATFORM_EC_CONFIG_USB_PD_3A_PORTS == 0)
 		return;
@@ -257,10 +262,16 @@ void pdc_dpm_evaluate_request_rdo(int port, uint32_t rdo)
 	if (atomic_test_bit(&sink_max_pdo_requested, port) && (op_ma <= 1500)) {
 		/*
 		 * sink_max_pdo_requested will be set when we get 5V/3A sink
-		 * capability from port partner. If port partner only request
-		 * 5V/1.5A, we need to provide 5V/1.5A.
+		 * capability from port partner. If port partner only requests
+		 * 5V/1.5A after we send the 5V/3A source cap, 5V/1.5A, we need
+		 * to downgrade the source cap back 5V/1.5A so that we can offer
+		 * 3A to another port.
 		 */
 		atomic_clear_bit(&sink_max_pdo_requested, port);
+
+		/* Restore selected default Rp on the port */
+		rp = pdc_power_mgmt_get_default_current_limit(port);
+		pdc_power_mgmt_set_current_limit(port, rp);
 		pdc_dpm_balance_source_ports(&dpm_work.work);
 	}
 }
@@ -287,6 +298,8 @@ void pdc_dpm_remove_sink(int port)
 
 void pdc_dpm_remove_source(int port)
 {
+	enum usb_typec_current_t rp;
+
 	if (CONFIG_PLATFORM_EC_CONFIG_USB_PD_3A_PORTS == 0)
 		return;
 
@@ -297,5 +310,9 @@ void pdc_dpm_remove_source(int port)
 		return;
 
 	atomic_clear_bit(&source_frs_max_requested, port);
+
+	/* Restore selected default Rp on the port */
+	rp = pdc_power_mgmt_get_default_current_limit(port);
+	pdc_power_mgmt_set_current_limit(port, rp);
 	pdc_dpm_balance_source_ports(&dpm_work.work);
 }

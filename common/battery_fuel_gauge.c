@@ -68,7 +68,6 @@ test_export_static bool authenticate_battery_type(int index,
 			return false;
 	}
 
-	CPRINTS("found batt:%s", conf->manuf_name);
 	return true;
 }
 
@@ -112,10 +111,9 @@ static int bcfg_search_in_cbi(struct batt_conf_embed *batt)
 
 		rv = cbi_get_board_info(tag, buf, &size);
 		if (rv) {
-			BCFGPRT("No more configs (%d)", rv);
 			return rv;
 		}
-		BCFGPRT("Checking config #%d (size=%d)...",
+		BCFGPRT("Checking config_cbi[%d] (size=%d)...",
 			tag - CBI_TAG_BATTERY_CONFIG, size);
 		tag++;
 
@@ -161,8 +159,6 @@ static int bcfg_search_in_cbi(struct batt_conf_embed *batt)
 				head->device_name_size, d);
 			continue;
 		}
-
-		BCFGPRT("Matched");
 
 		/* Save config in cache. */
 		memset(batt->manuf_name, 0, SBS_MAX_STR_OBJ_SIZE);
@@ -237,27 +233,27 @@ void init_battery_type(void)
 
 	BCFGPRT("Battery says %s,%s", batt_manuf_name, batt_device_name);
 
-	if (IS_ENABLED(CONFIG_BATTERY_CONFIG_IN_CBI) &&
-	    board_batt_conf_enabled()) {
-		BCFGPRT("Searching in CBI");
+	type = get_battery_type();
+	if (type != BATTERY_TYPE_COUNT) {
+		BCFGPRT("Found config_fw[%d]", type);
+		battery_conf = &board_battery_info[type];
+		return;
+	}
+
+	BCFGPRT("Config not found in FW");
+
+	if (IS_ENABLED(CONFIG_BATTERY_CONFIG_IN_CBI)) {
 		if (bcfg_search_in_cbi(&battery_conf_cache) == EC_SUCCESS) {
+			BCFGPRT("Found config in CBI");
 			battery_conf = &battery_conf_cache;
 			return;
 		}
+		BCFGPRT("Config not found in CBI");
 	}
 
 	/* Battery config isn't in CBI. */
-	BCFGPRT("Searching in FW");
-
-	type = get_battery_type();
-	if (type == BATTERY_TYPE_COUNT) {
-		BCFGPRT("Config not found. Fall back to config #%d", dflt);
-		type = dflt;
-	} else {
-		BCFGPRT("Found config #%d", type);
-	}
-
-	battery_conf = &board_battery_info[type];
+	BCFGPRT("Fall back to config_fw[%d]", dflt);
+	battery_conf = &board_battery_info[dflt];
 }
 DECLARE_HOOK(HOOK_INIT, init_battery_type, HOOK_PRIO_BATTERY_INIT);
 
@@ -274,11 +270,6 @@ test_export_static const struct board_batt_params *get_batt_params(void)
 const struct battery_info *battery_get_info(void)
 {
 	return &get_batt_params()->batt_info;
-}
-
-__overridable bool board_batt_conf_enabled(void)
-{
-	return true;
 }
 
 #ifndef CONFIG_FUEL_GAUGE

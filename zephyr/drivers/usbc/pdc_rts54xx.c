@@ -63,9 +63,9 @@ LOG_MODULE_REGISTER(pdc_rts54, LOG_LEVEL_INF);
 #define N_INIT_RETRY_ATTEMPT_MAX 2
 
 /**
- * @brief VBUS Voltage Scale Factor is 50mV
+ * @brief Connector Status VBUS Voltage Scale Factor is 5mV
  */
-#define VOLTAGE_SCALE_FACTOR 50
+#define VOLTAGE_SCALE_FACTOR 5
 
 /**
  * @brief FORCE_SET_POWER_SWITCH enable
@@ -169,7 +169,6 @@ static const struct smbus_cmd_t SET_TPC_CSD_OPERATION_MODE = { 0x08, 0x03,
 							       0x1D };
 static const struct smbus_cmd_t SET_TPC_RECONNECT = { 0x08, 0x03, 0x1F };
 static const struct smbus_cmd_t FORCE_SET_POWER_SWITCH = { 0x08, 0x03, 0x21 };
-static const struct smbus_cmd_t GET_PDOS = { 0x08, 0x03, 0x83 };
 static const struct smbus_cmd_t GET_RDO = { 0x08, 0x02, 0x84 };
 static const struct smbus_cmd_t GET_VDO = { 0x08, 0x03, 0x9A };
 static const struct smbus_cmd_t GET_CURRENT_PARTNER_SRC_PDO = { 0x08, 0x02,
@@ -184,6 +183,9 @@ static const struct smbus_cmd_t RTS_UCSI_GET_CONNECTOR_CAPABILITY = { 0x0E,
 								      0x07 };
 static const struct smbus_cmd_t RTS_UCSI_SET_UOR = { 0x0E, 0x04, 0x09 };
 static const struct smbus_cmd_t RTS_UCSI_SET_PDR = { 0x0E, 0x04, 0x0B };
+static const struct smbus_cmd_t RTS_UCSI_GET_PDOS = { .cmd = 0x0E,
+						      .len = 0x05,
+						      .sub = 0x10 };
 static const struct smbus_cmd_t RTS_UCSI_GET_CONNECTOR_STATUS = { 0x0E, 0x3,
 								  0x12 };
 static const struct smbus_cmd_t RTS_UCSI_GET_ERROR_STATUS = { 0x0E, 0x03,
@@ -1345,17 +1347,14 @@ static void st_read_run(void *o)
 
 		break;
 	}
-	case CMD_GET_VBUS_VOLTAGE:
-		/*
-		 * Realtek Voltage reading is on Byte18 and Byte19, but
-		 * the READ_RTK_STATUS command was issued with reading
-		 * 2-bytes from offset 18, so the data is read from
-		 * rd_buf at Byte1 and Byte2.
-		 */
-		*(uint16_t *)data->user_buf =
-			((data->rd_buf[2] << 8) | data->rd_buf[1]) *
-			VOLTAGE_SCALE_FACTOR;
+	case CMD_GET_VBUS_VOLTAGE: {
+		union connector_status_t *status =
+			(union connector_status_t *)(data->rd_buf + offset);
+		*(uint16_t *)data->user_buf = status->voltage_reading *
+					      status->voltage_scale *
+					      VOLTAGE_SCALE_FACTOR;
 		break;
+	}
 	case CMD_GET_ERROR_STATUS: {
 		/* Map Realtek GET_ERROR_STATUS bits to UCSI GET_ERROR_STATUS */
 		union error_status_t *es =
@@ -1440,19 +1439,6 @@ static void st_read_run(void *o)
 				status->raw_conn_status_change_bits =
 					status_change_bits.raw_value;
 			}
-		}
-		break;
-	case CMD_RAW_UCSI:
-		memcpy(data->user_buf, data->rd_buf + offset, len);
-
-		/* TODO(b/331801899) - Set GET_PD_MESSAGE bit in
-		 * GET_CAPABILITIES so that we can Discover Identity Response.
-		 */
-		if (data->wr_buf[0] == REALTEK_PD_COMMAND &&
-		    data->wr_buf[2] == UCSI_GET_CAPABILITY) {
-			struct capability_t *caps =
-				(struct capability_t *)data->user_buf;
-			caps->bmOptionalFeatures.get_pd_message = 1;
 		}
 		break;
 	default:
@@ -2106,8 +2092,9 @@ static int rts54_get_pdos(const struct device *dev, enum pdo_type_t pdo_type,
 			  enum pdo_offset_t pdo_offset, uint8_t num_pdos,
 			  enum pdo_source_t source, uint32_t *pdos)
 {
+	const struct pdc_config_t *cfg = dev->config;
 	struct pdc_data_t *data = dev->data;
-	uint8_t byte4;
+	union get_pdos_t *get_pdo;
 
 	if (get_state(data) != ST_IDLE) {
 		return -EBUSY;
@@ -2117,13 +2104,36 @@ static int rts54_get_pdos(const struct device *dev, enum pdo_type_t pdo_type,
 		return -EINVAL;
 	}
 
-	byte4 = (num_pdos << 5) | (pdo_offset << 2) | (source << 1) | pdo_type;
-
+	/* b/366470065 - The vendor specific GET_PDO command fails to generate
+	 * the appropriate PD message if the requested PDO type has not
+	 * been received.
+	 *
+	 * Use the UCSI version which has the correct behavior.
+	 */
 	memset((uint8_t *)pdos, 0, sizeof(uint32_t) * num_pdos);
 
 	uint8_t payload[] = {
-		GET_PDOS.cmd, GET_PDOS.len, GET_PDOS.sub, 0x00, byte4,
+		RTS_UCSI_GET_PDOS.cmd,
+		RTS_UCSI_GET_PDOS.len,
+		RTS_UCSI_GET_PDOS.sub,
+		0x00, /* data length - must be zero */
+		0x00,
+		0x00,
+		0x00,
 	};
+
+	BUILD_ASSERT(ARRAY_SIZE(payload) == sizeof(RTS_UCSI_GET_PDOS) +
+						    /* length byte */ 1 +
+						    sizeof(union get_pdos_t));
+
+	get_pdo = (union get_pdos_t *)&payload[4];
+	get_pdo->connector_number = cfg->connector_number + 1;
+	get_pdo->pdo_source = source;
+	get_pdo->pdo_offset = pdo_offset;
+	get_pdo->number_of_pdos = num_pdos - 1;
+	get_pdo->pdo_type = pdo_type;
+	get_pdo->source_caps = CURRENT_SUPPORTED_SOURCE_CAPS;
+	get_pdo->range = SPR_RANGE;
 
 	return rts54_post_command(dev, CMD_GET_PDOS, payload,
 				  ARRAY_SIZE(payload), (uint8_t *)pdos);
@@ -2212,8 +2222,16 @@ static int rts54_get_vbus_voltage(const struct device *dev, uint16_t *voltage)
 		return -EINVAL;
 	}
 
-	return rts54_get_rtk_status(dev, 17, 2, CMD_GET_VBUS_VOLTAGE,
-				    (uint8_t *)voltage);
+	uint8_t payload[] = {
+		RTS_UCSI_GET_CONNECTOR_STATUS.cmd,
+		RTS_UCSI_GET_CONNECTOR_STATUS.len,
+		RTS_UCSI_GET_CONNECTOR_STATUS.sub,
+		0x00, /* Data Length --> set to 0x00 */
+		0x00, /* Connector number --> don't care for Realtek */
+	};
+
+	return rts54_post_command(dev, CMD_GET_VBUS_VOLTAGE, payload,
+				  ARRAY_SIZE(payload), (uint8_t *)voltage);
 }
 
 static int rts54_set_ccom(const struct device *dev, enum ccom_t ccom)
@@ -2580,47 +2598,6 @@ static int rts54_execute_ucsi_cmd(const struct device *dev,
 		cmd_buffer[0] = ACK_CC_CI.cmd;
 		cmd_buffer[1] = ACK_CC_CI.len;
 
-		break;
-	}
-	case UCSI_GET_PD_MESSAGE: {
-		/* The Realtek PDC does not support GET_PD_MESSAGE, but it can
-		 * return SOP/SOP' identity with GET_VDO. If the GET_PD_MESSAGE
-		 * request is for the discover identity response, map it to the
-		 * corresponding GET_VDO command.
-		 */
-		union get_pd_message_t *get_pd_message_cmd =
-			(union get_pd_message_t *)command_specific;
-
-		if (get_pd_message_cmd->response_message_type != 4) {
-			LOG_ERR("Unsupported Response Message type in GET_PD_MESSAGE: %d",
-				get_pd_message_cmd->response_message_type);
-			return -ENOTSUP;
-		}
-
-		data_size = 8; /* Everything after port num. */
-		memset(cmd_buffer, 0, data_size + 4);
-		cmd_buffer[0] = GET_VDO.cmd;
-		cmd_buffer[1] = data_size + 2;
-
-		/* GET_VDO sub command */
-		cmd_buffer[2] = GET_VDO.sub;
-		/* Fixed port-num = 0 */
-		cmd_buffer[3] = 0x00;
-		/* Recipient | Num VDOs (7) */
-		cmd_buffer[4] = (get_pd_message_cmd->recipient << 3) | 7;
-		/* VDOs in the Discover identity response. GET_PD_MESSAGE
-		 * also returns the VDM header, so cmd_buffer[5] requests a
-		 * reserved value as a placeholder. cmd_buffer[6] through
-		 * cmd_buffer[11] request the ID header VDO, Cert Stat VDO,
-		 * and Product VDO followed by Product Type VDOs 1-3.
-		 */
-		cmd_buffer[5] = 0x00;
-		cmd_buffer[6] = 0x01;
-		cmd_buffer[7] = 0x02;
-		cmd_buffer[8] = 0x03;
-		cmd_buffer[9] = 0x04;
-		cmd_buffer[10] = 0x05;
-		cmd_buffer[11] = 0x06;
 		break;
 	}
 	default:
