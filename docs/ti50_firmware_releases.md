@@ -8,7 +8,9 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.112       | 0.23.112
+[ToT][ToT ebuild]   | 0.24.120       | 0.23.112
+[M130][130 release] | 0.24.112       | 0.23.112
+[M129][129 release] | 0.24.112       | 0.23.112
 [M128][128 release] | 0.24.101       | 0.23.101
 [M127][127 release] | 0.24.101       | 0.23.101
 [M126][126 release] | 0.24.90        | 0.23.90
@@ -1807,6 +1809,31 @@ Build:   ti50_common_tot:v0.0.1414-fd2d8291
     [b/329439532](https://b.corp.google.com/issues/329439532)
 *   Print AP RO verification latch state
 
+### 0.24.120 Released on 2024-09-26 in M131
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5891857)
+
+Builder
+[firmware-ti50-prepvt-15974.B-branch/14](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15974.B-branch/14/overview)
+
+Artifacts:
+[15974.14.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/firmware-ti50-prepvt-15974.B-branch/R129-15974.14.0-1-8736609614553322753/ti50.tar.bz2/)
+
+**Features**
+
+*   MISC SPI host improvements
+    [b/319124176](https://b.corp.google.com/issues/319124176)
+*   Add misc debug prints for I2C and PMU
+
+```
+Build:   ti50_common_prepvt-15974.B:v0.0.92-7f6c1fcb
+         libtock-rs:v0.0.925-1213708
+         tock:v0.0.9676-524942299
+         ms-tpm-20-ref:v0.0.320-cc605af
+         chrome-bot@chromeos-ci-firmware-us-central2-d-x32-1-csf8 2024-09-13 08:58:43
+```
+
 <!-- Links -->
 
 [105 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R105-14989.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
@@ -1833,4 +1860,6 @@ Build:   ti50_common_tot:v0.0.1414-fd2d8291
 [126 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R126-15886.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [127 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R127-15917.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [128 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R128-15964.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[129 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R129-16002.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
+[130 release]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/release-R130-16033.B/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
 [ToT ebuild]: https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/refs/heads/main/chromeos-base/chromeos-ti50/chromeos-ti50-0.0.1.ebuild
