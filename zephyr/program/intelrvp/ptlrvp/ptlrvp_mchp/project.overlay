@@ -5,6 +5,7 @@
 
 #include "include/board.h"
 
+#include <cros/cbi_flash.dtsi>
 #include <cros/integrated_fwid.dtsi>
 
 #include "adc.dtsi"
@@ -23,3 +24,8 @@
 #include "../usbc.dtsi"
 #include "../led_pins.dtsi"
 #include "../led_policy.dtsi"
+
+&cbi_flash {
+	offset = <0x3F000>;
+	size = <0x1000>;
+};
