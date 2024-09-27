@@ -154,6 +154,7 @@ BOARDS_RAIDEN=(
 
 BOARDS_MCHP_INT_SPI=(
 	mtlrvpp_mchp
+	ptlrvp_mchp
 )
 DEFAULT_PORT="${SERVOD_PORT:-9999}"
 BITBANG_RATE="57600"  # Could be overwritten by a command line option.
