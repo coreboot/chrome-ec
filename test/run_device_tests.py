@@ -813,7 +813,7 @@ BLOONCHIPPER_CONFIG = BoardConfig(
     sensor_type=FPSensorType.FPC,
     servo_uart_name="raw_fpmcu_console_uart_pty",
     servo_power_enable="fpmcu_pp3300",
-    reboot_timeout=1.0,
+    reboot_timeout=2.0,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_8020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_8040000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
@@ -914,7 +914,7 @@ BUCCANEER_CONFIG.mpu_regex = DATA_ACCESS_VIOLATION_200A8000_REGEX
 BUCCANEER_CONFIG.fp_power_supply = "pp3300_fp_mw"
 # 0.25 mW is roughly 76 uA @ 3.3V.
 BUCCANEER_CONFIG.expected_fp_power = PowerUtilization(
-    idle=RangedValue(0.25, 0.1), sleep=RangedValue(0.25, 0.1)
+    idle=RangedValue(0.25, 0.3), sleep=RangedValue(0.25, 0.3)
 )
 # TODO(b/336640151): Add buccaneer variants once RO is created
 

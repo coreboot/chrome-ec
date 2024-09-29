@@ -7,6 +7,7 @@
  * Function: ITE COM DBGR Flash Utility
  */
 
+#include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -149,6 +150,9 @@ const static uint8_t read_id_buf[8] = { W_CMD_PORT,	   DBUS_DATA,
 const static uint8_t read_status_buf[7] = { W_CMD_PORT, DBUS_DATA,  W_DATA_PORT,
 					    SPI_RDSR,	W_CMD_PORT, DBUS_DATA,
 					    R_DATA_PORT };
+
+static struct termios tty_saved;
+volatile static int tty_saved_fd = -1;
 
 static void hexdump(uint8_t *buffer, int len)
 {
@@ -802,8 +806,9 @@ static void enter_uart_dbgr_mode(struct itecomdbgr_config *conf)
 
 static int uart_app(struct itecomdbgr_config *conf)
 {
-	struct termios tty, tty_saved;
+	struct termios tty;
 	uint8_t dbgr_reset_buf[4] = { W_CMD_PORT, 0x27, W_DATA_PORT, 0x80 };
+	int return_status = 0;
 
 	if (conf->device_name == NULL) {
 		fprintf(stderr,
@@ -824,6 +829,7 @@ static int uart_app(struct itecomdbgr_config *conf)
 	}
 
 	tty_saved = tty;
+	tty_saved_fd = dup(conf->g_fd);
 
 	tty.c_cflag |= PARENB;
 	tty.c_cflag &= ~CSTOPB;
@@ -916,6 +922,7 @@ static int uart_app(struct itecomdbgr_config *conf)
 		break;
 	default:
 		printf("Invalid EFLASH TYPE!\n\r");
+		return_status = -1;
 		goto out;
 	}
 
@@ -924,27 +931,49 @@ static int uart_app(struct itecomdbgr_config *conf)
 		goto out;
 	}
 
-	if (erase_flash(conf))
+	if (erase_flash(conf)) {
+		return_status = -1;
 		goto out;
+	}
 
-	if (!conf->noverify)
-		if (check_flash(conf))
+	if (!conf->noverify) {
+		if (check_flash(conf)) {
+			return_status = -1;
 			goto out;
+		}
+	}
 
-	if (write_flash(conf))
+	if (write_flash(conf)) {
+		return_status = -1;
 		goto out;
+	}
 
-	if (!conf->noverify)
-		if (verify_flash(conf))
+	if (!conf->noverify) {
+		if (verify_flash(conf)) {
+			return_status = -1;
 			goto out;
+		}
+	}
+
 out:
 
 	/* dbgr reset */
 	write_com(conf, dbgr_reset_buf, sizeof(dbgr_reset_buf));
 	tcflush(conf->g_fd, TCIOFLUSH);
-	tcsetattr(conf->g_fd, TCSANOW, &tty_saved);
+	tcsetattr(tty_saved_fd, TCSANOW, &tty_saved);
+	close(tty_saved_fd);
+	tty_saved_fd = -1;
 	close(conf->g_fd);
-	return 0;
+	return return_status;
+}
+
+static void exit_handler(int signum)
+{
+	if (tty_saved_fd >= 0) {
+		tcsetattr(tty_saved_fd, TCSANOW, &tty_saved);
+		close(tty_saved_fd);
+	}
+	_exit(EXIT_FAILURE);
 }
 
 int main(int argc, char **argv)
@@ -1052,8 +1081,13 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	uart_app(&conf);
+	signal(SIGHUP, exit_handler);
+	signal(SIGINT, exit_handler);
+	signal(SIGQUIT, exit_handler);
+	signal(SIGTERM, exit_handler);
+
+	r = uart_app(&conf);
 	exit_file(&conf);
 	show_time();
-	return r;
+	return (r != 0) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
