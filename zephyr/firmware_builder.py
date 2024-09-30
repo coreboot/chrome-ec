@@ -402,8 +402,6 @@ def test(opts):
     # Run tests from Makefile.cq because make knows how to run things
     # in parallel.
     cmd = ["make", "-f", "Makefile.cq", f"-j{opts.cpus}", "test"]
-    env = os.environ.copy()
-    env.update(init_toolchain())
     if opts.code_coverage:
         cmd.append("COVERAGE=1")
     if SPECIAL_BOARDS:
@@ -414,7 +412,6 @@ def test(opts):
         check=True,
         cwd=ZEPHYR_DIR,
         stdin=subprocess.DEVNULL,
-        env=env,
     )
 
     # Twister-based tests

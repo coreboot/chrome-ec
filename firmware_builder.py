@@ -56,37 +56,6 @@ BINARY_SIZE_BOARDS = [
 ]
 
 
-def init_toolchain():
-    """Initialize coreboot-sdk.
-
-    Returns:
-        Environment variables to use for toolchain.
-    """
-    # (environment variable, bazel target)
-    toolchains = [
-        ("COREBOOT_SDK_ROOT_arm", "@coreboot-sdk-arm-eabi//:get_path"),
-        ("COREBOOT_SDK_ROOT_x86", "@coreboot-sdk-i386-elf//:get_path"),
-        ("COREBOOT_SDK_ROOT_riscv", "@coreboot-sdk-riscv-elf//:get_path"),
-        ("COREBOOT_SDK_ROOT_nds32", "@coreboot-sdk-nds32le-elf//:get_path"),
-    ]
-
-    subprocess.run(
-        ["bazel", "build", *(target for _, target in toolchains)],
-        check=True,
-    )
-
-    result = {}
-    for name, target in toolchains:
-        run_result = subprocess.run(
-            ["bazel", "run", target],
-            check=True,
-            stdout=subprocess.PIPE,
-        )
-        result[name] = run_result.stdout.strip()
-
-    return result
-
-
 def build(opts):
     """Builds all EC firmware targets
 
@@ -98,14 +67,12 @@ def build(opts):
     message.
     """
     metric_list = firmware_pb2.FwBuildMetricList()  # pylint: disable=no-member
-    env = os.environ.copy()
-    env.update(init_toolchain())
     ec_dir = pathlib.Path(__file__).parent
 
     # Run formatting checks on all python files.
     cmd = ["black", "--check", "."]
     print(f"# Running {' '.join(cmd)}.")
-    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
     chromite_dir = ec_dir.resolve().parent.parent.parent / "chromite"
     cmd = [
         "isort",
@@ -120,7 +87,6 @@ def build(opts):
         cmd,
         cwd=os.path.dirname(__file__),
         check=True,
-        env=env,
     )
 
     if opts.code_coverage:
@@ -134,29 +100,29 @@ def build(opts):
 
     cmd = ["make", "clobber"]
     print(f"# Running {' '.join(cmd)}.")
-    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
     cmd = ["make", "buildall_only", f"-j{opts.cpus}"]
     print(f"# Running {' '.join(cmd)}.")
-    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
     # extra/rma_reset is used in chromeos-base/ec-utils-test
     cmd = ["make", "-C", "extra/rma_reset", "clean"]
     print(f"# Running {' '.join(cmd)}.")
-    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
     cmd = ["make", "-C", "extra/rma_reset", f"-j{opts.cpus}"]
     print(f"# Running {' '.join(cmd)}.")
-    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
     # extra/usb_updater is used in chromeos-base/ec-devutils
     cmd = ["make", "-C", "extra/usb_updater", "clean"]
     print(f"# Running {' '.join(cmd)}.")
-    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
     cmd = ["make", "-C", "extra/usb_updater", "usb_updater2", f"-j{opts.cpus}"]
     print(f"# Running {' '.join(cmd)}.")
-    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
     cmd = ["make", "print-all-baseboards", f"-j{opts.cpus}"]
     print(f"# Running {' '.join(cmd)}.")
@@ -167,7 +133,6 @@ def build(opts):
         check=True,
         universal_newlines=True,
         stdout=subprocess.PIPE,
-        env=env,
     ).stdout.splitlines():
         parts = line.split("=")
         if len(parts) > 1:
@@ -211,7 +176,7 @@ def build(opts):
         # successfully with clang: b/172020503.
         cmd = ["./util/build_with_clang.py", f"-j{opts.cpus}"]
         print(f'# Running {" ".join(cmd)}.')
-        subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+        subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
     finally:
         shutil.rmtree(build_dir)
         os.rename(gcc_build_dir, build_dir)
@@ -350,12 +315,10 @@ def test(opts):
     #
     # Otherwise, build the 'runtests' target, which verifies all
     # posix-based unit tests build and pass.
-    env = os.environ.copy()
-    env.update(init_toolchain())
     target = "coverage" if opts.code_coverage else "runtests"
     cmd = ["make", target, f"-j{opts.cpus}"]
     print(f"# Running {' '.join(cmd)}.")
-    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+    subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
     if not opts.code_coverage:
         # Verify compilation of the on-device unit test binaries.
@@ -364,7 +327,7 @@ def test(opts):
         cmd = ["make", f"-j{opts.cpus}"]
         cmd.extend(["tests-" + b for b in BOARDS_UNIT_TEST])
         print(f"# Running {' '.join(cmd)}.")
-        subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+        subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
         # Verify the tests pass with ASan also
         ec_dir = os.path.dirname(__file__)
@@ -375,7 +338,7 @@ def test(opts):
 
         cmd = ["make", "TEST_ASAN=y", target, f"-j{opts.cpus}"]
         print(f"# Running {' '.join(cmd)}.")
-        subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+        subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
         # Use the x86_64-cros-linux-gnu- compiler also
         cmd = [
@@ -387,7 +350,7 @@ def test(opts):
             f"-j{opts.cpus}",
         ]
         print(f"# Running {' '.join(cmd)}.")
-        subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True, env=env)
+        subprocess.run(cmd, cwd=os.path.dirname(__file__), check=True)
 
 
 def main(args):
