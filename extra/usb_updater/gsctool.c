@@ -632,7 +632,7 @@ static bool is_ti50_device(void)
 static FILE *tpm_output;
 static int ts_write(const void *out, size_t len)
 {
-	const char *cmd_head = "PATH=\"${PATH}:/usr/sbin\" "
+	const char *cmd_head = "PATH=\"${PATH}:/usr/sbin:/vendor/bin/hw\" "
 			       "${TRUNKS_SEND_BIN:-trunks_send} --raw ";
 	size_t head_size = strlen(cmd_head);
 	char full_command[head_size + 2 * len + 1];
