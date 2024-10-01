@@ -2643,6 +2643,13 @@
 #undef CONFIG_PLATFORM_PINWEAVER
 
 /*****************************************************************************/
+/* BootParam config
+ * A feature which enables generating BootParam for the device in GSC. This
+ * creates vnvmem spaces that let AP FW read boot parameters.
+ */
+#undef CONFIG_PLATFORM_BOOT_PARAM
+
+/*****************************************************************************/
 /* PMU config */
 
 /*

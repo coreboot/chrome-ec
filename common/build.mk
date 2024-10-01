@@ -233,6 +233,17 @@ $(out)/RW/common/pinweaver.o: $(PINWEAVERLIB)/pinweaver.c
 	$(call quiet,c_to_o,CC     )
 endif
 
+# Build platform/gsc-utils/dice.
+ifeq ($(CONFIG_PLATFORM_BOOT_PARAM),y)
+BOOT_PARAM_PATH := $(realpath ../gsc-utils/boot_param)
+CPPFLAGS += -I$(BOOT_PARAM_PATH)
+
+common-y += boot_param.o
+
+$(out)/RW/common/boot_param.o: $(BOOT_PARAM_PATH)/boot_param.c
+	$(call quiet,c_to_o,CC     )
+endif
+
 # Build and link against libcryptoc.
 ifeq ($(CONFIG_LIBCRYPTOC),y)
 CRYPTOCLIB := $(realpath ../../third_party/cryptoc)
