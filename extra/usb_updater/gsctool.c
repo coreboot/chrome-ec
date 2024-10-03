@@ -4740,6 +4740,7 @@ static struct get_chip_id_response get_chip_id_info(
  */
 static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 {
+	int epoch;
 	int major;
 	struct get_chip_id_response chip_id;
 
@@ -4750,12 +4751,10 @@ static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 	 * and shutting down of USB subsystem within gsctool (b/368631328).
 	 */
 	get_version(td, false);
+	epoch = targ.shv[1].epoch;
 	major = targ.shv[1].major;
-	if (targ.shv[1].epoch == 0 &&
-	    (major == 21 || major == 23 || major == 24)) {
+	if ((epoch == 0 || epoch == 1) && (major >= 21 && major <= 26))
 		return GSC_DEVICE_DT;
-	}
-
 	/*
 	 * Try the newer TPMV command. If the command isn't supported,
 	 * then the GSC should respond with an error. If that happens we will
