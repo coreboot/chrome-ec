@@ -3244,19 +3244,6 @@ static int process_get_apro_hash(struct transfer_descriptor *td)
 	return 0;
 }
 
-static int process_start_apro_verify(struct transfer_descriptor *td)
-{
-	int rv = 0;
-
-	rv = send_vendor_command(td, VENDOR_CC_AP_RO_VALIDATE, NULL, 0, NULL,
-				 NULL);
-	if (rv != VENDOR_RC_SUCCESS) {
-		fprintf(stderr, "Error %d starting RO verify\n", rv);
-		return update_error;
-	}
-	return 0;
-}
-
 static int process_get_apro_boot_status(struct transfer_descriptor *td)
 {
 	size_t response_size;
@@ -4236,6 +4223,27 @@ static int process_reboot_gsc(struct transfer_descriptor *td, size_t timeout_ms)
 	if (rv != VENDOR_RC_SUCCESS) {
 		fprintf(stderr, "Error %d sending immediate reset command\n",
 			rv);
+		return update_error;
+	}
+
+	return 0;
+}
+
+static int process_start_apro_verify(struct transfer_descriptor *td)
+{
+	int rv = 0;
+
+	/*
+	 * For Ti50, we need to restart GSC to perform AP RO verification again.
+	 */
+	if (is_ti50_device())
+		return process_reboot_gsc(td, 1000);
+
+	/* If H1 chip, then send vendor command to start AP RO verification */
+	rv = send_vendor_command(td, VENDOR_CC_AP_RO_VALIDATE, NULL, 0, NULL,
+				 NULL);
+	if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr, "Error %d starting RO verify\n", rv);
 		return update_error;
 	}
 
