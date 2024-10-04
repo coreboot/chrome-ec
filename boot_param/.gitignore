@@ -1,4 +1,4 @@
 *.o
 *.d
-test_dice
+test_boot_param
 test*.cbor

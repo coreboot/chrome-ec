@@ -4,8 +4,8 @@
  * found in the LICENSE file.
  */
 
-#ifndef __GSC_UTILS_DICE_PLATFORM_H
-#define __GSC_UTILS_DICE_PLATFORM_H
+#ifndef __GSC_UTILS_BOOT_PARAM_PLATFORM_H
+#define __GSC_UTILS_BOOT_PARAM_PLATFORM_H
 
 #include "dice_types.h"
 
@@ -98,4 +98,4 @@ int __platform_memcmp(const void *str1, const void *str2, size_t size);
 } /* extern "C" */
 #endif
 
-#endif /* __GSC_UTILS_DICE_PLATFORM_H */
+#endif /* __GSC_UTILS_BOOT_PARAM_PLATFORM_H */

@@ -7,7 +7,7 @@
 #include "cbor_dice.h"
 #include "cdi.h"
 #include "dice.h"
-#include "platform.h"
+#include "boot_param_platform.h"
 
 /* Common structure to build Sig_structure or DICE Handover structure
  */

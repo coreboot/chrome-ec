@@ -9,8 +9,8 @@
 
 #include "cbor_dice.h"
 #include "dice.h"
-#include "platform.h"
-#include "platform_host.h"
+#include "boot_param_platform.h"
+#include "boot_param_platform_host.h"
 
 #undef TEST_PLATFORM
 

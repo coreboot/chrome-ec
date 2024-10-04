@@ -4,7 +4,7 @@
  * found in the LICENSE file.
  */
 
-#include "platform.h"
+#include "boot_param_platform.h"
 
 #include <openssl/core_names.h>
 #include <openssl/err.h>

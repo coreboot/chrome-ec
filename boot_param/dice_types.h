@@ -4,8 +4,8 @@
  * found in the LICENSE file.
  */
 
-#ifndef __GSC_UTILS_DICE_DICE_TYPES_H
-#define __GSC_UTILS_DICE_DICE_TYPES_H
+#ifndef __GSC_UTILS_BOOT_PARAM_DICE_TYPES_H
+#define __GSC_UTILS_BOOT_PARAM_DICE_TYPES_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -64,4 +64,4 @@ struct dice_config_s {
 } /* extern "C" */
 #endif
 
-#endif /* __GSC_UTILS_DICE_DICE_TYPES_H */
+#endif /* __GSC_UTILS_BOOT_PARAM_DICE_TYPES_H */

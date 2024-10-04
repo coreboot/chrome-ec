@@ -4,11 +4,11 @@
  * found in the LICENSE file.
  */
 
-#ifndef __GSC_UTILS_DICE_DICE_H
-#define __GSC_UTILS_DICE_DICE_H
+#ifndef __GSC_UTILS_BOOT_PARAM_DICE_H
+#define __GSC_UTILS_BOOT_PARAM_DICE_H
 
 #include "dice_types.h"
-#include "platform.h"
+#include "boot_param_platform.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,4 +31,4 @@ size_t get_dice_handover_bytes(
 } /* extern "C" */
 #endif
 
-#endif /* __GSC_UTILS_DICE_DICE_H */
+#endif /* __GSC_UTILS_BOOT_PARAM_DICE_H */

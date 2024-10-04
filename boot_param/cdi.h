@@ -4,8 +4,8 @@
  * found in the LICENSE file.
  */
 
-#ifndef __GSC_UTILS_DICE_CDI_H
-#define __GSC_UTILS_DICE_CDI_H
+#ifndef __GSC_UTILS_BOOT_PARAM_CDI_H
+#define __GSC_UTILS_BOOT_PARAM_CDI_H
 
 #include "dice_types.h"
 
@@ -29,4 +29,4 @@ struct cdi_attest_inputs_s {
 } /* extern "C" */
 #endif
 
-#endif /* __GSC_UTILS_DICE_CDI_H */
+#endif /* __GSC_UTILS_BOOT_PARAM_CDI_H */

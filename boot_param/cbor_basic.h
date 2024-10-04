@@ -4,8 +4,8 @@
  * found in the LICENSE file.
  */
 
-#ifndef __GSC_UTILS_DICE_CBOR_BASIC_H
-#define __GSC_UTILS_DICE_CBOR_BASIC_H
+#ifndef __GSC_UTILS_BOOT_PARAM_CBOR_BASIC_H
+#define __GSC_UTILS_BOOT_PARAM_CBOR_BASIC_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -160,4 +160,4 @@ struct cbor_uint32_s {
 } /* extern "C" */
 #endif
 
-#endif /* __CGSC_UTILS_DICE_CBOR_BASIC_H */
+#endif /* __CGSC_UTILS_BOOT_PARAM_CBOR_BASIC_H */

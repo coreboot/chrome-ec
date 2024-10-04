@@ -4,8 +4,8 @@
  * found in the LICENSE file.
  */
 
-#ifndef __GSC_UTILS_DICE_CBOR_DICE_H
-#define __GSC_UTILS_DICE_CBOR_DICE_H
+#ifndef __GSC_UTILS_BOOT_PARAM_CBOR_DICE_H
+#define __GSC_UTILS_BOOT_PARAM_CBOR_DICE_H
 
 #include "cbor_basic.h"
 #include "dice_types.h"
@@ -312,4 +312,4 @@ struct dice_handover_hdr_s {
 } /* extern "C" */
 #endif
 
-#endif /* __GSC_UTILS_DICE_CBOR_DICE_H */
+#endif /* __GSC_UTILS_BOOT_PARAM_CBOR_DICE_H */

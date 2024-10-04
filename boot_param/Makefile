@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 
 CC ?= gcc
-PROGRAM := test_dice
+PROGRAM := test_boot_param
 LIBS    := -lcrypto
 CFLAGS  += -std=gnu99 \
 	-g \
@@ -34,7 +34,7 @@ all: test
 test: $(PROGRAM)
 	./$(PROGRAM) $(PROGRAM_OPTIONS)
 
-SOURCES := test.c dice.c platform_host.c
+SOURCES := test.c dice.c boot_param_platform_host.c
 OBJS := $(patsubst %.c,%.o,$(SOURCES))
 DEPS := $(patsubst %.c,%.d,$(SOURCES))
 
