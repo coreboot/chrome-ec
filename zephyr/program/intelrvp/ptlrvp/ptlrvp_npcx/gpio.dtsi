@@ -30,7 +30,7 @@
 		virtual-battery {
 			gpios = <&gpio8 0 GPIO_INPUT>;
 		};
-		scroll-lock {
+		c-edp-bklt-en {
 			gpios = <&gpiob 7 GPIO_INPUT>;
 		};
 
@@ -39,7 +39,7 @@
 			gpios = <&gpioc 0 GPIO_INPUT>;
 		};
 
-		prochot-ec-n {
+		nb-boot-stall {
 			gpios = <&gpio6 0 GPIO_INPUT>;
 		};
 
@@ -69,48 +69,48 @@
 		smb-bs-data {
 			gpios = <&gpio9 1 GPIO_INPUT>;
 		};
-		nb-cpu-c10-gate {
+		c-ec-pdb-ctrl {
 			gpios = <&gpiod 1 GPIO_INPUT>;
 		};
-		cse_early_rec_sw: ec-cse-early-sw {
+		c-ec-ish-alrt {
 			gpios = <&gpiod 0 GPIO_ODR_LOW>;
 		};
-		ec-pg3-wake {
+		smb-pck-ck {
 			gpios = <&gpiof 3 GPIO_INPUT>;
 		};
-		vol_up_ec: volume-up {
+		smb-pch-data {
 			gpios = <&gpiof 2 GPIO_INPUT>;
-			enum-name = "GPIO_VOLUME_UP_L";
 		};
-		pm-slp-lan-n {
+		c-ish-ec-clk {
 			gpios = <&gpio3 3 GPIO_INPUT>;
 		};
-		pch-slp-wlan-r-n {
+		c-ish-ec-data {
 			gpios = <&gpio3 6 GPIO_INPUT>;
 		};
-		dnx-force-reload {
+		cse_early_rec_sw: c-mecc-cse-early-sw {
 			gpios = <&gpiof 5 GPIO_INPUT>;
 		};
-		pm-rsmrst-n {
+		gpiof4 {
 			gpios = <&gpiof 4 GPIO_INPUT>;
 		};
-		smb-pch-ck {
+		gpioe4 {
 			gpios = <&gpioe 4 GPIO_INPUT>;
 		};
-		smb-pch-data {
+		gpioe3 {
 			gpios = <&gpioe 3 GPIO_INPUT>;
 		};
-		gpiob3 {
+		c-usbc-pd-clk-aic3_4 {
 			gpios = <&gpiob 3 GPIO_INPUT>;
 		};
-		pm-batlow-n {
+		c-usbc-pd-data-aic3_4 {
 			gpios = <&gpiob 2 GPIO_INPUT>;
 		};
-		mecc-kbd-clk {
+		c-usbc-pd-alrt-aic4 {
 			gpios = <&gpio6 7 GPIO_INPUT>;
 		};
-		mecc-kbd-data {
+		ioex_kbd_intr_n: c-ioex-kbd-intr {
 			gpios = <&gpio7 0 GPIO_INPUT>;
+			enum-name = "GPIO_KB_DISCRETE_INT";
 		};
 		std_adp_prsnt: mecc-std-adp-prsnt {
 			gpios = <&gpio6 2 GPIO_INPUT>;
@@ -119,107 +119,75 @@
 			gpios = <&gpio6 3 GPIO_INPUT>;
 			enum-name = "GPIO_PG_EC_ALL_SYS_PWRGD";
 		};
-		mecc-mouse-ck {
+		c-chrg-amon-bmon {
 			gpios = <&gpio3 7 GPIO_INPUT>;
 		};
-		mecc-mouse-data {
+		c-usbc-pd-alrt-aic3 {
 			gpios = <&gpio3 4 GPIO_INPUT>;
 		};
 
-		/* GPIO45: (Alternate function) DT_VR_TEMP/V_1P05_PCH_EC */
-		/* GPIO44: (Alternate function) DT_SKIN_THERM_IN */
+		/* GPIO45: (Alternate function) NB_C_AMBIENT_THERM_IN0 */
+		/* GPIO44: (Alternate function) DT_C_SKIN_THERM_IN */
 
 		ccd_mode_odl: nb-c-ccd-mode-odl {
 			gpios = <&gpio4 3 GPIO_INPUT>;
 			enum-name = "GPIO_CCD_MODE_ODL";
 		};
 
-		/* GPIO42: (Alternate function) DT_DDR_THERM_IN */
+		/* GPIO42: (Alternate function) DT_C_DDR_THERM_IN */
 
-		en_pp3300_a: nb-ec-ds3 {
+		en_pp3300_a: nb-c-ec-ds3 {
 			gpios = <&gpio4 1 GPIO_OUTPUT_LOW>;
 			enum-name = "GPIO_EN_PP3300_A";
 			alias = "GPIO_TEMP_SENSOR_POWER";
 		};
-		pch_slp_s0_n: pch-slp-s0-n {
+		gpioe1 {
 			gpios = <&gpioe 1 GPIO_INPUT>;
-			enum-name = "GPIO_PCH_SLP_S0_L";
 		};
 		vol_dn_ec: mecc-vol-dn-ec {
 			gpios = <&gpiof 1 GPIO_INPUT>;
 			enum-name = "GPIO_VOLUME_DOWN_L";
 		};
-		gpio_pdc_pow_irq: mecc-usbc-pd-tcpc-i2c0-alrt-p0 {
+		gpio_pdc_pow_irq: mecc-tcss-alrt-aic1 {
 			gpios = <&gpiof 0 GPIO_INPUT>;
 		};
 
-		/*
-		 * GPIOE0: (Alternate function)
-		 * Reworked pin: NB_AMBIENT_THERM_IN0
-		 */
+		/* GPIOE0: (Alternate function) DT_C_VR_TEMP/V_1P05_PCH_EC */
 
-		c-rtc-rst-n {
+		c-ec-wp-odl {
 			gpios = <&gpioc 7 GPIO_INPUT>;
 		};
-		c-ec-uart-flash-prog-n {
+		pm-slp-a-n {
 			gpios = <&gpioc 1 GPIO_INPUT>;
 		};
 		ec_slatemode_hallout_snsr {
 			gpios = <&gpio7 4 GPIO_INPUT>;
 		};
-		kso04 {
-			gpios = <&gpio1 5 GPIO_INPUT>;
-		};
-		kso05 {
-			gpios = <&gpio1 4 GPIO_INPUT>;
-		};
-		bat-det {
-			gpios = <&gpio1 3 GPIO_INPUT>;
-		};
-		kso08 {
-			gpios = <&gpio1 1 GPIO_INPUT>;
-		};
-		kso09 {
-			gpios = <&gpio1 0 GPIO_INPUT>;
-		};
-		d-pm-slp-sus-ec-n {
-			gpios = <&gpio0 7 GPIO_INPUT>;
-		};
-		ioex_kbd_intr_n: c-ioex-kbd-intr {
-			gpios = <&gpio0 6 GPIO_INPUT>;
-			enum-name = "GPIO_KB_DISCRETE_INT";
-		};
-		buf-plt-rst-n {
-			gpios = <&gpio0 5 GPIO_INPUT>;
-		};
-		pm-slp-s5-n {
-			gpios = <&gpio0 4 GPIO_INPUT>;
-		};
-		kso14 {
-			gpios = <&gpio8 2 GPIO_INPUT>;
-		};
-		pm-slp-s4-n {
-			gpios = <&gpio8 3 GPIO_INPUT>;
-		};
-		pm-slp-s3-n {
-			gpios = <&gpio0 3 GPIO_INPUT>;
-		};
-		kso17 {
-			gpios = <&gpiob 1 GPIO_INPUT>;
-		};
-		ksi7 {
-			gpios = <&gpio2 2 GPIO_INPUT>;
-		};
-		/* Keep low to prioritize AC brick power source selection */
-		std-adpt-cntrl-gpio {
-			gpios = <&gpio2 3 GPIO_OUTPUT_LOW>;
-		};
+
+		/*
+		 * Keyboard pins
+		 * KSO04
+		 * KSO05
+		 * KSO06
+		 * KSO08
+		 * KSO09
+		 * KSO10
+		 * KSO11
+		 * KSO12
+		 * KSO13
+		 * KSO14
+		 * KSO15
+		 * KSO16
+		 * KSO17
+		 * KSI7
+		 * KSI6
+		 */
 
 		bc_acok: bc-acok {
 			gpios = <&gpiod 2 GPIO_INPUT>;
 			enum-name = "GPIO_AC_PRESENT";
 		};
-		pwrbtn: pwrbtn-ec-in-n {
+		pwrbtn: rvp-pwrbtn-115 {
 			gpios = <&gpio0 0 GPIO_INPUT>;
 			enum-name = "GPIO_POWER_BUTTON_L";
 		};
@@ -227,30 +195,33 @@
 			gpios = <&gpio0 1 GPIO_INPUT>;
 			enum-name = "GPIO_LID_OPEN";
 		};
-		usbc-pd-tcpc-i2c1-alrt-p2 {
+		wc-usbc-pd-alrt-aic2 {
 			gpios = <&gpio0 2 GPIO_INPUT>;
 		};
 
 		/* GPIO85: (Alternate function) PSL_OUT */
 
-		gpiod7 {
+		c-en-5v-typea {
 			gpios = <&gpiod 7 GPIO_INPUT>;
 		};
-		pm-pwrbtn-n {
-			gpios = <&gpio6 6 GPIO_ODR_HIGH>;
-			enum-name = "GPIO_PCH_PWRBTN_L";
+
+		/* Keep low to prioritize AC brick power source selection */
+		std-adpt-cntrl-gpio {
+			gpios = <&gpio6 6 GPIO_OUTPUT_LOW>;
 		};
-		peci-data {
+
+
+		peci-data-gpio81 {
 			gpios = <&gpio8 1 GPIO_INPUT>;
 		};
 		gpio-b6 {
 			gpios = <&gpiob 6 GPIO_INPUT>;
 		};
-
-		/* GPO35: TEST */
-
-		en_pp5000_s5: c5v-vr-en-opt {
-			gpios = <&gpio3 2 GPIO_OUTPUT_LOW>;
+		nb-c-prochot-ec-n {
+			gpios = <&gpio3 5 GPIO_INPUT>;
+		};
+		gpio_ec_pch_wake_odl: smc-wake-sci-n {
+			gpios = <&gpio3 2 GPIO_ODR_HIGH>;
 		};
 		c32kxout {
 			gpios = <&gpio7 1 GPIO_INPUT>;
@@ -258,13 +229,14 @@
 		clock32 {
 			gpios = <&gpioe 7 GPIO_INPUT>;
 		};
-		i3c-1-sda {
+		vol_up_ec: volume-up {
+			enum-name = "GPIO_VOLUME_UP_L";
 			gpios = <&gpio5 0 GPIO_INPUT>;
 		};
-		i3c-1-scl {
+		gpio56 {
 			gpios = <&gpio5 6 GPIO_INPUT>;
 		};
-		smc-extsmi-n {
+		smc-extsmi-n-c-ec-pch-int-odl {
 			gpios = <&gpioc 6 GPIO_INPUT>;
 		};
 		rst-push-n-d {
@@ -273,8 +245,8 @@
 
 		/* GPIO77: VCC1_RST# */
 
-		gpio_ec_pch_wake_odl: smc-wake-sci-n {
-			gpios = <&gpio7 6 GPIO_ODR_HIGH>;
+		en_pp5000_s5: dt-nv-usba-5v-vr-en {
+			gpios = <&gpio7 6 GPIO_INPUT>;
 		};
 		rsmrst_pwrgd: rsmrst-pwrgd-n {
 			gpios = <&gpio7 2 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
@@ -284,16 +256,16 @@
 			gpios = <&gpio6 1 GPIO_ODR_LOW>;
 			enum-name = "GPIO_PCH_PWROK";
 		};
-
-		/* GPIO75: (Alternate function) EC_UART_RX_R */
-		/* GPIO86: (Alternate function) EC_UART_TX_R */
-
-		gpio64 {
-			gpios = <&gpio6 4 GPIO_INPUT>;
+		gpio75 {
+			gpios = <&gpio7 5 GPIO_INPUT>;
 		};
-		gpio65 {
-			gpios = <&gpio6 5 GPIO_INPUT>;
+		gpio86 {
+			gpios = <&gpio8 6 GPIO_INPUT>;
 		};
+
+		/* GPIO64: (Alternate function) EC_UART_RX_R */
+		/* GPIO65: (Alternate function) EC_UART_TX_R */
+
 		gpiod6 {
 			gpios = <&gpiod 6 GPIO_INPUT>;
 		};
@@ -303,8 +275,9 @@
 		gpioa6 {
 			gpios = <&gpioa 6 GPIO_INPUT>;
 		};
-		ec-spi-cs0 {
-			gpios = <&gpioa 0 GPIO_INPUT>;
+		nb-pm-pwrbtn-n {
+			gpios = <&gpioa 0 GPIO_ODR_HIGH>;
+			enum-name = "GPIO_PCH_PWRBTN_L";
 		};
 		ec-spi-dio3 {
 			gpios = <&gpioa 7 GPIO_INPUT>;
@@ -321,50 +294,37 @@
 		f-alt-sclk {
 			gpios = <&gpioa 1 GPIO_INPUT>;
 		};
-		f-alt-cs1 {
+		nb-c-cpu-c10-gate {
 			gpios = <&gpioa 5 GPIO_INPUT>;
 		};
-		f-alt-cs0 {
+		dt-c-sys-pwrok-ec {
 			gpios = <&gpio9 7 GPIO_INPUT>;
 		};
-		f-alt-dio3 {
+		pch_slp_s0_n: mecc-pch-slp-s0-n {
 			gpios = <&gpiob 0 GPIO_INPUT>;
+			enum-name = "GPIO_PCH_SLP_S0_L";
 		};
-		f-alt-dio2 {
+		mecc-pch-slp-s3-n {
 			gpios = <&gpio9 4 GPIO_INPUT>;
 		};
-
-		/* 1.8V capable reworked pin */
 		ec_pch_rsmrst_l: f-alt-miso {
 			gpios = <&gpio9 5 GPIO_INPUT>;
 			enum-name = "GPIO_PCH_RSMRST_L";
 		};
-
 		f-alt-mosi {
 			gpios = <&gpioa 3 GPIO_INPUT>;
 		};
-		kso07 {
-			gpios = <&gpio1 2 GPIO_INPUT>;
-		};
 
-		gpio24 {
-			gpios = <&gpio2 4 GPIO_INPUT>;
-		};
-		gpio25 {
-			gpios = <&gpio2 5 GPIO_INPUT>;
-		};
-		gpio31 {
-			gpios = <&gpio3 1 GPIO_INPUT>;
-		};
-		gpio30 {
-			gpios = <&gpio3 0 GPIO_INPUT>;
-		};
-		ksi2 {
-			gpios = <&gpio2 7 GPIO_INPUT>;
-		};
-		ksi3 {
-			gpios = <&gpio2 6 GPIO_INPUT>;
-		};
+		/*
+		 * Keyboard pins
+		 * KSO07
+		 * KSI5
+		 * KSI4
+		 * KSI0
+		 * KSI1
+		 * KSI2
+		 * KSI3
+		 */
 
 		gpiod5 {
 			gpios = <&gpiod 5 GPIO_INPUT>;
@@ -372,28 +332,21 @@
 		gpioe5 {
 			gpios = <&gpioe 5 GPIO_INPUT>;
 		};
-
-		/* Reworked pin to avoid strap pin of NPCX9 */
-		gpiod4 {
+		mecc-bat-det {
 			gpios = <&gpiod 4 GPIO_INPUT>;
 			enum-name = "GPIO_BATT_PRES_ODL";
 		};
-
 		gpioe2 {
 			gpios = <&gpioe 2 GPIO_INPUT>;
 		};
-		kso00 {
-			gpios = <&gpio2 1 GPIO_INPUT>;
-		};
-		kso01 {
-			gpios = <&gpio2 0 GPIO_INPUT>;
-		};
-		kso03 {
-			gpios = <&gpio1 6 GPIO_INPUT>;
-		};
-		kso02 {
-			gpios = <&gpio1 7 GPIO_INPUT>;
-		};
+
+		/*
+		 * Keyboard pins
+		 * KSO00
+		 * KSO01
+		 * KSO03
+		 * KSO02
+		 */
 
 		/* eSPI pins */
 		/* GPIO54: MECC_ESPI_RST_N */
@@ -411,26 +364,5 @@
 &espi0 {
 	status = "okay";
 	pinctrl-0 = <&espi_lpc_gp46_47_51_52_53_54_55_57>;
-	pinctrl-names = "default";
-};
-
-/* UART interface: UART2 is used on MECC Gen2 Rev1 */
-&uart1 {
-	status = "disabled";
-};
-
-/ {
-	chosen {
-		zephyr,console = &uart2;
-		zephyr,shell-uart = &uart2;
-	};
-};
-
-&uart2 {
-	status = "okay";
-	current-speed = <115200>;
-	/* Use UART2 ie. PIN75.86 */
-	pinctrl-0 = <&uart2_sin_gp75
-		     &uart2_sout_gp86>;
 	pinctrl-names = "default";
 };
