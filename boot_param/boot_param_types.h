@@ -4,8 +4,8 @@
  * found in the LICENSE file.
  */
 
-#ifndef __GSC_UTILS_BOOT_PARAM_DICE_TYPES_H
-#define __GSC_UTILS_BOOT_PARAM_DICE_TYPES_H
+#ifndef __GSC_UTILS_BOOT_PARAM_BOOT_PARAM_TYPES_H
+#define __GSC_UTILS_BOOT_PARAM_BOOT_PARAM_TYPES_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -18,6 +18,11 @@ extern "C" {
 #define DIGEST_BYTES	  32
 #define ECDSA_POINT_BYTES 32
 #define ECDSA_SIG_BYTES	  (2 * ECDSA_POINT_BYTES) /* 32 byte R + 32 byte S */
+
+/* Sizes of GGSCBootParam fields */
+#define EARLY_ENTROPY_BYTES     64
+#define KEY_SEED_BYTES          32
+
 
 /* UDS_ID and CDI_ID sizes */
 #define DICE_ID_BYTES	  20
@@ -64,4 +69,4 @@ struct dice_config_s {
 } /* extern "C" */
 #endif
 
-#endif /* __GSC_UTILS_BOOT_PARAM_DICE_TYPES_H */
+#endif /* __GSC_UTILS_BOOT_PARAM_BOOT_PARAM_TYPES_H */

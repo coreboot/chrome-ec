@@ -7,7 +7,7 @@
 #ifndef __GSC_UTILS_BOOT_PARAM_PLATFORM_H
 #define __GSC_UTILS_BOOT_PARAM_PLATFORM_H
 
-#include "dice_types.h"
+#include "boot_param_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,6 +39,16 @@ bool __platform_sha256(
 bool __platform_get_dice_config(
 	/* [OUT] DICE config */
 	struct dice_config_s *cfg
+);
+
+/* Get GSC boot parameters */
+bool __platform_get_gsc_boot_param(
+	/* [OUT] early entropy */
+	uint8_t early_entropy[EARLY_ENTROPY_BYTES],
+	/* [OUT] SessionKeySeed */
+	uint8_t session_key_seed[KEY_SEED_BYTES],
+	/* [OUT] AuthTokenKeySeed */
+	uint8_t auth_token_key_seed[KEY_SEED_BYTES]
 );
 
 /* Generate ECDSA P-256 key using HMAC-DRBG initialized by the seed */

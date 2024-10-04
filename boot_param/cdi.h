@@ -7,7 +7,7 @@
 #ifndef __GSC_UTILS_BOOT_PARAM_CDI_H
 #define __GSC_UTILS_BOOT_PARAM_CDI_H
 
-#include "dice_types.h"
+#include "boot_param_types.h"
 
 #ifdef __cplusplus
 extern "C" {

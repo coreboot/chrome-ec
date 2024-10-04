@@ -7,29 +7,28 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "cbor_dice.h"
-#include "dice.h"
+#include "boot_param.h"
 #include "boot_param_platform.h"
 #include "boot_param_platform_host.h"
+
+#define DUMPVAR(name) hexdump(#name, name, sizeof(name))
+
+static void hexdump(const char *pfx, const uint8_t *buf, size_t size)
+{
+	size_t i;
+
+	printf("%s:\n  ", pfx);
+	for (i = 0; i < size; i++) {
+		if (i > 0 && i % 16 == 0)
+			printf("\n  ");
+		printf("%02x ", buf[i]);
+	}
+	printf("\n");
+}
 
 #undef TEST_PLATFORM
 
 #ifdef TEST_PLATFORM
-
-#define DBGDUMP(name)                        \
-	do {                                 \
-		printf("%s: ", #name);       \
-		hexdump(name, sizeof(name)); \
-		printf("\n");                \
-	} while (0)
-
-static void hexdump(const uint8_t *buf, size_t size)
-{
-	size_t i;
-
-	for (i = 0; i < size; i++)
-		printf("%02x ", buf[i]);
-}
 
 static void test_hkdf(void)
 {
@@ -47,7 +46,7 @@ static void test_hkdf(void)
 
 	if (__platform_hkdf_sha256(ikm, salt, info, result)) {
 		__platform_log_str("HKDF: success");
-		DBGDUMP(derived);
+		DUMPVAR(derived);
 	} else {
 		__platform_log_str("HKDF: failed");
 	}
@@ -62,7 +61,7 @@ static void test_sha(void)
 
 	if (__platform_sha256(input, digest)) {
 		__platform_log_str("SHA256: success");
-		DBGDUMP(digest);
+		DUMPVAR(digest);
 	} else {
 		__platform_log_str("SHA256: failed");
 	}
@@ -97,9 +96,9 @@ static void test_ecdsa(void)
 
 	__platform_ecdsa_p256_free(key);
 	__platform_log_str("ECDSA: success");
-	DBGDUMP(signature);
-	DBGDUMP(pub_key.x);
-	DBGDUMP(pub_key.y);
+	DUMPVAR(signature);
+	DUMPVAR(pub_key.x);
+	DUMPVAR(pub_key.y);
 }
 #endif /* TEST_PLATFORM */
 
@@ -122,27 +121,35 @@ static bool save_to_file(
 	return written == size;
 }
 
-const size_t kDiceChainOffset = sizeof(struct dice_handover_hdr_s);
-static bool test_dice_handover(
+static bool test_boot_param(
 	const char *filename_handover,
 	const char *filename_chain
 )
 {
-	uint8_t dice_handover[kDiceHandoverSize];
-	size_t res =
-		get_dice_handover_bytes(dice_handover, 0, kDiceHandoverSize);
+	uint8_t boot_param[kBootParamSize];
+	uint8_t dice_chain[kDiceChainSize];
 
-	if (res != kDiceHandoverSize) {
-		printf("get_dice_handover_bytes failed");
+	if (get_boot_param_bytes(boot_param, 0, kBootParamSize) !=
+				 kBootParamSize) {
+		printf("get_boot_param_bytes failed");
 		return false;
 	}
+	DUMPVAR(boot_param);
+
+	if (get_dice_chain_bytes(dice_chain, 0, kDiceChainSize) !=
+				 kDiceChainSize) {
+		printf("get_dice_chain_bytes failed");
+		return false;
+	}
+	DUMPVAR(dice_chain);
+
 	return
 		save_to_file(filename_handover,
-			     dice_handover,
-			     kDiceHandoverSize) &&
+			     boot_param,
+			     kBootParamSize) &&
 		save_to_file(filename_chain,
-			     dice_handover + kDiceChainOffset,
-			     kDiceHandoverSize - kDiceChainOffset);
+			     dice_chain,
+			     kDiceChainSize);
 }
 
 /* PCR0 values for various modes - see go/pcr0-tpm2 */
@@ -193,17 +200,18 @@ static void set_pcr0(const char *param)
 int main(int argc, char *argv[])
 {
 #ifdef TEST_PLATFORM
-	printf("kDiceHandoverSize = %zu\n", kDiceHandoverSize);
+	printf("kBootParamSize = %zu\n", kBootParamSize);
+	printf("kDiceChainSize = %zu\n", kDiceChainSize);
 	test_hkdf();
 	test_sha();
 	test_ecdsa();
 #endif /* TEST_PLATFORM */
 
 	if (argc != 1 + 3) {
-		printf("Syntax: %s <handover> <dice_chain> <bootmode>\n"
+		printf("Syntax: %s <boot_param> <dice_chain> <bootmode>\n"
 		       "  where\n"
-		       "    <handover> - filename for writing the "
-		       "dice handover structure\n"
+		       "    <boot_param> - filename for writing the "
+		       "BootParam structure\n"
 		       "    <dice_chain> - filename for writing the "
 		       "dice chain structure\n"
 		       "    <bootmode> - sets PCR0 value: when starts with\n"
@@ -216,5 +224,5 @@ int main(int argc, char *argv[])
 		return 2;
 	}
 	set_pcr0(argv[3]);
-	return test_dice_handover(argv[1], argv[2]) ? 0 : 1;
+	return test_boot_param(argv[1], argv[2]) ? 0 : 1;
 }

@@ -4,11 +4,11 @@
  * found in the LICENSE file.
  */
 
-#ifndef __GSC_UTILS_BOOT_PARAM_CBOR_DICE_H
-#define __GSC_UTILS_BOOT_PARAM_CBOR_DICE_H
+#ifndef __GSC_UTILS_BOOT_PARAM_CBOR_BOOT_PARAM_H
+#define __GSC_UTILS_BOOT_PARAM_CBOR_BOOT_PARAM_H
 
 #include "cbor_basic.h"
-#include "dice_types.h"
+#include "boot_param_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -308,8 +308,29 @@ struct dice_handover_hdr_s {
 	/* DICE cert chain is not included */
 };
 
+/* GSC Boot Parameters for TEE.
+ * GSCBootParam = {
+ *   1  : bstr .size 64,     ; EarlyEntropy
+ *   2  : bstr .size 32,     ; SessionKeySeed
+ *   3  : bstr .size 32,     ; AuthTokenKeySeed
+ * }
+ */
+struct gsc_boot_param_s {
+	/* Map header: 3 entries */
+	uint8_t map_hdr;
+	/* 1. EarlyEntropy: uint(1, 0bytes) => bstr(entropy, 64bytes) */
+	uint8_t early_entropy_label;
+	struct cbor_bstr64_s early_entropy;
+	/* 2. SessionKeySeed: uint(2, 0bytes) => bstr(entropy, 32bytes) */
+	uint8_t session_key_seed_label;
+	struct cbor_bstr32_s session_key_seed;
+	/* 3. AuthTokenKeySeed: uint(3, 0bytes) => bstr(entropy, 32bytes) */
+	uint8_t auth_token_key_seed_label;
+	struct cbor_bstr32_s auth_token_key_seed;
+};
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
-#endif /* __GSC_UTILS_BOOT_PARAM_CBOR_DICE_H */
+#endif /* __GSC_UTILS_BOOT_PARAM_CBOR_BOOT_PARAM_H */

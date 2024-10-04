@@ -7,7 +7,7 @@
 #ifndef __GSC_UTILS_BOOT_PARAM_PLATFORM_HOST_H
 #define __GSC_UTILS_BOOT_PARAM_PLATFORM_HOST_H
 
-#include "dice_types.h"
+#include "boot_param_types.h"
 
 #ifdef __cplusplus
 extern "C" {

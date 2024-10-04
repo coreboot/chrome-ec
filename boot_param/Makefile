@@ -15,7 +15,7 @@ CFLAGS  += -std=gnu99 \
 	-Wsign-compare \
 	-Wredundant-decls \
 	-Wmissing-declarations
-RESULT_FILES := test_handover.cbor test_dice_chain.cbor
+RESULT_FILES := test_boot_param.cbor test_dice_chain.cbor
 PCR0_OPTION := normal
 PROGRAM_OPTIONS := $(RESULT_FILES) $(PCR0_OPTION)
 
@@ -34,7 +34,7 @@ all: test
 test: $(PROGRAM)
 	./$(PROGRAM) $(PROGRAM_OPTIONS)
 
-SOURCES := test.c dice.c boot_param_platform_host.c
+SOURCES := test.c boot_param.c boot_param_platform_host.c
 OBJS := $(patsubst %.c,%.o,$(SOURCES))
 DEPS := $(patsubst %.c,%.d,$(SOURCES))
 

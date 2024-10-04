@@ -4,9 +4,9 @@
  * found in the LICENSE file.
  */
 
-#include "cbor_dice.h"
+#include "cbor_boot_param.h"
 #include "cdi.h"
-#include "dice.h"
+#include "boot_param.h"
 #include "boot_param_platform.h"
 
 /* Common structure to build Sig_structure or DICE Handover structure
@@ -38,13 +38,35 @@ struct dice_handover_s {
 	struct cwt_claims_bstr_s payload;
 	struct cbor_bstr64_s signature;
 };
+const size_t kDiceChainSize =
+	sizeof(struct dice_handover_s) - sizeof(struct dice_handover_hdr_s);
 
-const size_t kDiceHandoverSize = sizeof(struct dice_handover_s);
+/* BootParam = {
+ *   1  : uint,               ; structure version (0)
+ *   2  : GSCBootParam,
+ *   3  : AndroidDiceHandover,
+ * }
+ */
+#define BOOT_PARAM_VERSION 0
+struct boot_param_s {
+	/* Map header: 3 entries */
+	uint8_t map_hdr;
+	/* 1. Version: uint(1, 0bytes) => uint(BOOT_PARAM_VERSION, 0bytes) */
+	uint8_t version_label;
+	uint8_t version;
+	/* 2. GSCBootParam: uint(2, 0bytes) => GSCBootParam */
+	uint8_t gsc_boot_param_label;
+	struct gsc_boot_param_s gsc_boot_param;
+	/* 3. AndroidDiceHandover: uint(3, 0bytes) => AndroidDiceHandover */
+	uint8_t dice_handover_label;
+	struct dice_handover_s dice_handover;
+};
+const size_t kBootParamSize = sizeof(struct boot_param_s);
 
 /* Context to pass between functions that build the DICE handover structure
  */
 struct dice_ctx_s {
-	struct dice_handover_s output;
+	struct boot_param_s output;
 	struct dice_config_s cfg;
 };
 
@@ -371,7 +393,7 @@ static inline void fill_inputs_seal(
 	__platform_memset(inputs->auth_data_digest, 0, DIGEST_BYTES);
 	__platform_memcpy(inputs->hidden_digest, ctx->cfg.hidden_digest,
 			  DIGEST_BYTES);
-	inputs->mode = ctx->output.payload.data.mode.value;
+	inputs->mode = ctx->output.dice_handover.payload.data.mode.value;
 }
 
 /* Fills inputs for attestation CDI
@@ -384,11 +406,14 @@ static inline void fill_inputs_attest(
 	struct cdi_attest_inputs_s *inputs
 )
 {
+	const struct cwt_claims_s *cwt_claims =
+		&ctx->output.dice_handover.payload.data;
+
 	__platform_memcpy(inputs->code_digest,
-			  ctx->output.payload.data.code_hash.value,
+			  cwt_claims->code_hash.value,
 			  DIGEST_BYTES);
 	__platform_memcpy(inputs->cfg_desr_digest,
-			  ctx->output.payload.data.cfg_hash.value,
+			  cwt_claims->cfg_hash.value,
 			  DIGEST_BYTES);
 	fill_inputs_seal(ctx, &inputs->seal_inputs);
 }
@@ -476,17 +501,19 @@ static inline bool fill_cdi_cert_signature(
 	const void *key
 )
 {
-	uint8_t *sig_struct = ((uint8_t *)&ctx->output.payload) -
+	uint8_t *sig_struct = ((uint8_t *)&ctx->output.dice_handover.payload) -
 			      sizeof(struct cdi_sig_struct_hdr_s);
 	const struct slice_ref_s data_to_sign = {
 		CDI_SIG_STRUCT_LEN, sig_struct
 	};
+	struct cbor_bstr64_s *sig_bstr64 =
+		&ctx->output.dice_handover.signature;
 
 	__platform_memcpy(sig_struct, &kSigStructFixedHdr,
 			  sizeof(struct cdi_sig_struct_hdr_s));
-	__platform_memcpy(ctx->output.signature.cbor_hdr, kSigHdr, 2);
+	__platform_memcpy(sig_bstr64->cbor_hdr, kSigHdr, 2);
 	return __platform_ecdsa_p256_sign(key, data_to_sign,
-					  ctx->output.signature.value);
+					  sig_bstr64->value);
 }
 
 /* Generates key from UDS or CDI_Attest value.
@@ -596,7 +623,8 @@ static inline bool fill_cdi_details_with_key(
 {
 	struct ecdsa_public_s cdi_pub_key;
 	uint8_t cdi_id[DICE_ID_BYTES];
-	struct cwt_claims_s *cwt_claims = &ctx->output.payload.data;
+	struct cwt_claims_s *cwt_claims =
+		&ctx->output.dice_handover.payload.data;
 
 	if (!__platform_ecdsa_p256_get_pub_key(cdi_key, &cdi_pub_key)) {
 		__platform_log_str("Failed to get CDI pubkey");
@@ -623,18 +651,19 @@ static inline bool fill_cdi_details(
 {
 	const void *cdi_key;
 	bool result;
+	struct dice_handover_hdr_s *hdr = &ctx->output.dice_handover.hdr;
 
-	__platform_memcpy(&ctx->output.hdr, &kDiceHandoverHdrTemplate,
+	__platform_memcpy(hdr, &kDiceHandoverHdrTemplate,
 			  sizeof(struct dice_handover_hdr_s));
-	if (!calc_cdi_attest(ctx, ctx->output.hdr.cdi_attest.value)) {
+	if (!calc_cdi_attest(ctx, hdr->cdi_attest.value)) {
 		__platform_log_str("Failed to calc CDI_attest");
 		return false;
 	}
-	if (!calc_cdi_seal(ctx, ctx->output.hdr.cdi_seal.value)) {
+	if (!calc_cdi_seal(ctx, hdr->cdi_seal.value)) {
 		__platform_log_str("Failed to calc CDI_seal");
 		return false;
 	}
-	if (!generate_key(ctx->output.hdr.cdi_attest.value, &cdi_key)) {
+	if (!generate_key(hdr->cdi_attest.value, &cdi_key)) {
 		__platform_log_str("Failed to generate CDI key");
 		return false;
 	}
@@ -656,7 +685,10 @@ static inline bool fill_uds_details_with_key(
 {
 	struct ecdsa_public_s uds_pub_key;
 	uint8_t uds_id[DICE_ID_BYTES];
-	struct cwt_claims_s *cwt_claims = &ctx->output.payload.data;
+	struct cwt_claims_s *cwt_claims =
+		&ctx->output.dice_handover.payload.data;
+	struct combined_hdr_s *combined_hdr =
+		&ctx->output.dice_handover.options.dice_handover;
 
 	if (!__platform_ecdsa_p256_get_pub_key(uds_key, &uds_pub_key)) {
 		__platform_log_str("Failed to get UDS pubkey");
@@ -676,11 +708,12 @@ static inline bool fill_uds_details_with_key(
 	/* We can do the rest only after we generated the signature because */
 	/* signature generation uses ctx->output.hdr temporarily to build */
 	/* Sig_struct for signing. */
-	__platform_memcpy(&ctx->output.options.dice_handover,
-			  &kCombinedHdrTemplate, sizeof(struct combined_hdr_s));
+	__platform_memcpy(combined_hdr,
+			  &kCombinedHdrTemplate,
+			  sizeof(struct combined_hdr_s));
 	fill_cose_pubkey(
 		&uds_pub_key,
-		&ctx->output.options.dice_handover.cert_chain.uds_pub_key);
+		&combined_hdr->cert_chain.uds_pub_key);
 
 	return true;
 }
@@ -722,7 +755,7 @@ static inline bool fill_config_details(
 	struct dice_ctx_s *ctx /* [IN/OUT] dice context */
 )
 {
-	struct cwt_claims_bstr_s *payload = &ctx->output.payload;
+	struct cwt_claims_bstr_s *payload = &ctx->output.dice_handover.payload;
 	struct cwt_claims_s *cwt_claims = &payload->data;
 	struct cfg_descr_s *cfg_descr = &payload->data.cfg_descr.data;
 	const struct slice_ref_s cfg_descr_slice = { sizeof(struct cfg_descr_s),
@@ -772,23 +805,125 @@ static inline bool generate_dice_handover(
 		fill_uds_details(ctx);
 }
 
-/* Get (part of) DICE handover structure: [offset .. offset + size). */
-size_t get_dice_handover_bytes(
+/* Fills GSCBootParam. */
+static inline bool fill_gsc_boot_param(
+	struct gsc_boot_param_s *gsc_boot_param /* [IN/OUT] GSCBootParam */
+)
+{
+	/* GSCBootParam: Map header: 3 entries */
+	gsc_boot_param->map_hdr = CBOR_HDR1(CBOR_MAJOR_MAP, 3);
+
+	/* GSCBootParam entry 1: EarlyEntropy:
+	 * uint(1, 0bytes) => bstr(entropy, 64bytes)
+	 */
+	gsc_boot_param->early_entropy_label = CBOR_UINT0(1);
+	gsc_boot_param->early_entropy.cbor_hdr[0] =
+		CBOR_HDR1(CBOR_MAJOR_BSTR, CBOR_BYTES1);
+	gsc_boot_param->early_entropy.cbor_hdr[1] = EARLY_ENTROPY_BYTES;
+
+	/* GSCBootParam entry 2: SessionKeySeed:
+	 * uint(2, 0bytes) => bstr(entropy, 32bytes)
+	 */
+	gsc_boot_param->session_key_seed_label = CBOR_UINT0(2);
+	gsc_boot_param->session_key_seed.cbor_hdr[0] =
+		CBOR_HDR1(CBOR_MAJOR_BSTR, CBOR_BYTES1);
+	gsc_boot_param->session_key_seed.cbor_hdr[1] = KEY_SEED_BYTES;
+
+	/* GSCBootParam entry 3: AuthTokenKeySeed:
+	 * uint(3, 0bytes) => bstr(entropy, 32bytes)
+	 */
+	gsc_boot_param->auth_token_key_seed_label = CBOR_UINT0(3);
+	gsc_boot_param->auth_token_key_seed.cbor_hdr[0] =
+		CBOR_HDR1(CBOR_MAJOR_BSTR, CBOR_BYTES1);
+	gsc_boot_param->auth_token_key_seed.cbor_hdr[1] = KEY_SEED_BYTES;
+
+	if (!__platform_get_gsc_boot_param(
+			gsc_boot_param->early_entropy.value,
+			gsc_boot_param->session_key_seed.value,
+			gsc_boot_param->auth_token_key_seed.value)) {
+		__platform_log_str("Failed to get GSC boot param");
+		return false;
+	}
+	return true;
+}
+
+/* Fills GSCBootParam and BootParam header in struct dice_ctx_s. */
+/* Doesn't touch DICE handover structure */
+static inline bool fill_boot_param(
+	struct dice_ctx_s *ctx /* [IN/OUT] dice context */
+)
+{
+	/* BootParam: Map header: 3 entries */
+	ctx->output.map_hdr = CBOR_HDR1(CBOR_MAJOR_MAP, 3);
+
+	/* BootParam entry 1: Version:
+	 * uint(1, 0bytes) => uint(BOOT_PARAM_VERSION, 0bytes)
+	 */
+	ctx->output.version_label = CBOR_UINT0(1);
+	ctx->output.version = CBOR_UINT0(0);
+
+	/* BootParam entry 2: GSCBootParam:
+	 * uint(2, 0bytes) => GSCBootParam (filled in fill_gsc_boot_param)
+	 */
+	ctx->output.gsc_boot_param_label = CBOR_UINT0(2);
+
+	/* BootParam entry 3: AndroidDiceHandover:
+	 * uint(3, 0bytes) => AndroidDiceHandover (not touched in this func)
+	 */
+	ctx->output.dice_handover_label = CBOR_UINT0(3);
+
+	return fill_gsc_boot_param(&ctx->output.gsc_boot_param);
+}
+
+/* Get (part of) BootParam structure: [offset .. offset + size). */
+size_t get_boot_param_bytes(
 	/* [OUT] destination buffer to fill */
 	uint8_t *dest,
-	/* [IN] starting offset in the DICE handover struct */
+	/* [IN] starting offset in the BootParam struct */
 	size_t offset,
-	/* [IN] size of the DICE handover struct to copy */
+	/* [IN] size of the BootParam struct to copy */
 	size_t size
 )
 {
 	struct dice_ctx_s ctx;
 	uint8_t *src = (uint8_t *)&ctx.output;
 
-	if (size == 0 || offset >= sizeof(struct dice_handover_s))
+	if (size == 0 || offset >= kBootParamSize)
 		return 0;
-	if (size > sizeof(struct dice_handover_s) - offset)
-		size = sizeof(struct dice_handover_s) - offset;
+	if (size > kBootParamSize - offset)
+		size = kBootParamSize - offset;
+
+	if (!__platform_get_dice_config(&ctx.cfg)) {
+		__platform_log_str("Failed to get DICE config");
+		return 0;
+	}
+	if (!generate_dice_handover(&ctx))
+		return 0;
+
+	if (!fill_boot_param(&ctx))
+		return 0;
+
+	__platform_memcpy(dest, src + offset, size);
+	return size;
+}
+
+/* Get (part of) DiceChain structure: [offset .. offset + size) */
+size_t get_dice_chain_bytes(
+	/* [OUT] destination buffer to fill */
+	uint8_t *dest,
+	/* [IN] starting offset in the DiceChain struct */
+	size_t offset,
+	/* [IN] size of the data to copy */
+	size_t size
+)
+{
+	struct dice_ctx_s ctx;
+	uint8_t *src = (uint8_t *)&ctx.output.dice_handover.options;
+
+	if (size == 0 || offset >= kDiceChainSize)
+		return 0;
+	if (size > kDiceChainSize - offset)
+		size = kDiceChainSize - offset;
 
 	if (!__platform_get_dice_config(&ctx.cfg)) {
 		__platform_log_str("Failed to get DICE config");
