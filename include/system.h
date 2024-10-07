@@ -561,6 +561,7 @@ void print_system_rtc(enum console_channel channel);
 #else
 static inline void print_system_rtc(enum console_channel channel)
 {
+	(void)channel;
 }
 #endif /* !defined(CONFIG_RTC) */
 

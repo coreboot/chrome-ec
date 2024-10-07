@@ -16,16 +16,6 @@ config PLATFORM_EC_DSP_CLIENT
 	  notify or request data from the EC (this should be done on the
 	  DSP core).
 
-config PLATFORM_EC_DSP_CLIENT_REMOTE_CBI
-	bool "DSP client implements local CBI read operations"
-	default y if !TEST
-	depends on PLATFORM_EC_DSP_CLIENT
-	help
-	  When enabled, functions such as cbi_get_board_info() will be routed
-	  to the DSP client instead of their local implementation. The
-	  Kconfig is needed to allow tests which implement both the
-	  client and the service to function.
-
 config PLATFORM_EC_DSP_CLIENT_TIMEOUT_MS
 	int "Milliseconds to timeout waiting for the service response"
 	default 300

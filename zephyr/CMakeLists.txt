@@ -343,9 +343,19 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_OCPC
                                                 "${PLATFORM_EC}/common/ocpc.c")
 
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI
-                                                "${PLATFORM_EC}/common/cbi.c"
-                                                "${PLATFORM_EC}/common/cbi_common.c"
-                                                "${PLATFORM_EC}/common/cbi_config.c")
+                                                "${PLATFORM_EC}/common/cbi_common.c")
+
+# Only include cbi.c and cbi_config.c if we enable CBI and we're not a DSP client with
+# remote CBI enabled.
+if(DEFINED CONFIG_PLATFORM_EC_CBI AND
+  NOT(DEFINED CONFIG_PLATFORM_EC_DSP_REMOTE_CBI AND DEFINED CONFIG_PLATFORM_EC_DSP_CLIENT))
+  zephyr_library_sources(
+    "${PLATFORM_EC}/common/cbi.c"
+    "${PLATFORM_EC}/common/cbi_config.c"
+  )
+endif(DEFINED CONFIG_PLATFORM_EC_CBI AND
+  NOT(DEFINED CONFIG_PLATFORM_EC_DSP_REMOTE_CBI AND DEFINED CONFIG_PLATFORM_EC_DSP_CLIENT))
+
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CBI_GPIO
                                                 "${PLATFORM_EC}/common/cbi_gpio.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CEC

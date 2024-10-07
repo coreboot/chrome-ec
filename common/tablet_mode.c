@@ -20,6 +20,27 @@
 #define CPRINTF(format, args...) cprintf(CC_MOTION_LID, format, ##args)
 
 /*
+ * Tablet mode might be controlled by a remote MCU (such as the ISH). This
+ * happens if the DSP client is active and either the remote lid switch or
+ * tablet switch configs are enabled.
+ */
+#if defined(CONFIG_PLATFORM_EC_DSP_CLIENT) && \
+	defined(CONFIG_PLATFORM_EC_DSP_REMOTE_LID_SWITCH)
+#define USE_REMOTE_GMR_LID_SWITCH
+#endif /* CONFIG_PLATFORM_EC_DSP_CLIENT && \
+	  CONFIG_PLATFORM_EC_DSP_REMOTE_LID_SWITCH */
+
+#if defined(CONFIG_PLATFORM_EC_DSP_CLIENT) && \
+	defined(CONFIG_PLATFORM_EC_DSP_REMOTE_TABLET_SWITCH)
+#define USE_REMOTE_GMR_TABLET_SWITCH
+#endif /* CONFIG_PLATFORM_EC_DSP_CLIENT && \
+	  CONFIG_PLATFORM_EC_DSP_REMOTE_TABLET_SWITCH */
+
+#if defined(CONFIG_GMR_TABLET_MODE) || defined(USE_REMOTE_GMR_TABLET_SWITCH)
+#define GMR_TABLET_MODE
+#endif
+
+/*
  * Other code modules assume that notebook mode (i.e. tablet_mode = 0) at
  * startup.
  * tablet_mode is mask, one bit for each source that can trigger a change to
@@ -42,10 +63,10 @@ static bool tablet_mode_forced;
 static uint32_t tablet_mode_store;
 
 /* True if the tablet GMR sensor is reporting 360 degrees. */
-STATIC_IF(CONFIG_GMR_TABLET_MODE) bool gmr_sensor_at_360;
+STATIC_IF(GMR_TABLET_MODE) bool gmr_sensor_at_360;
 
 /* True if the lid GMR sensor is reporting 0 degrees. */
-STATIC_IF(CONFIG_GMR_TABLET_MODE) bool gmr_sensor_at_0;
+STATIC_IF(GMR_TABLET_MODE) bool gmr_sensor_at_0;
 
 /*
  * True: all calls to tablet_set_mode are ignored and tablet_mode if forced to 0
@@ -189,8 +210,10 @@ static void gmr_tablet_switch_interrupt_debounce(void)
 	 * When tablet mode is only decided by the GMR sensor (or
 	 * or substitute, send the tablet_mode change request.
 	 */
-	if (!IS_ENABLED(CONFIG_LID_ANGLE))
+	if (!IS_ENABLED(CONFIG_LID_ANGLE) &&
+	    !IS_ENABLED(CONFIG_PLATFORM_EC_DSP_REMOTE_LID_ANGLE)) {
 		tablet_set_mode(gmr_sensor_at_360, TABLET_TRIGGER_LID);
+	}
 
 	/*
 	 * 1. Peripherals are disabled only when lid reaches 360 position (It's
@@ -211,14 +234,16 @@ static void gmr_tablet_switch_interrupt_debounce(void)
 	 * It would mean the user was able to transition in less than ~10ms...
 	 */
 	if (IS_ENABLED(CONFIG_LID_ANGLE)) {
-		if (gmr_sensor_at_360)
+		if (gmr_sensor_at_360) {
 			tablet_set_mode(1, TABLET_TRIGGER_LID);
-		else if (gmr_sensor_at_0)
+		} else if (gmr_sensor_at_0) {
 			tablet_set_mode(0, TABLET_TRIGGER_LID);
+		}
 	}
 
-	if (IS_ENABLED(CONFIG_LID_ANGLE_UPDATE) && gmr_sensor_at_360)
+	if (IS_ENABLED(CONFIG_LID_ANGLE_UPDATE) && gmr_sensor_at_360) {
 		lid_angle_peripheral_enable(0);
+	}
 }
 DECLARE_DEFERRED(gmr_tablet_switch_interrupt_debounce);
 
@@ -261,7 +286,8 @@ static __maybe_unused void tablet_mode_lid_event(void)
 		gmr_sensor_at_0 = false;
 	}
 }
-#if defined(CONFIG_LID_ANGLE) && defined(CONFIG_LID_SWITCH)
+#if defined(CONFIG_LID_ANGLE) && \
+	(defined(CONFIG_LID_SWITCH) || defined(USE_REMOTE_GMR_LID_SWITCH))
 DECLARE_HOOK(HOOK_LID_CHANGE, tablet_mode_lid_event, HOOK_PRIO_DEFAULT);
 #endif
 
