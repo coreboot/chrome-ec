@@ -80,37 +80,55 @@
 						       *   + sizeof(NV_INDEX)
 						       */
 
+/*
+ * For TPMA_NV values below:
+ *
+ * The spec requires at least one write authentication method to
+ * be specified. We intentionally don't include one, so that
+ * this index cannot be spoofed by an attacker running a version
+ * of cr50 that pre-dates the implementation of virtual NV indices.
+ *
+ * Similarly, we only allow deletion if the authPolicy is
+ * satisied. The authPolicy is empty, and so cannot be satisfied,
+ * so this effectively disables deletion.
+ */
+
+#define TPMA_NV_REGULAR ((TPMA_NV) {				  \
+	/* Allow the space to be read by platform. */		  \
+	.TPMA_NV_PPREAD = 1,					  \
+	/* Allow index to be read using its authValue. */	  \
+	.TPMA_NV_AUTHREAD = 1,					  \
+	/* Disable deleting by requiring to satisfy policy. */	  \
+	.TPMA_NV_POLICY_DELETE = 1,				  \
+	/* Prevent writes. */					  \
+	.TPMA_NV_WRITELOCKED = 1,				  \
+	/* Write-lock will not be cleared on startup. */	  \
+	.TPMA_NV_WRITEDEFINE = 1,				  \
+	/* Index has been written, can be read. */		  \
+	.TPMA_NV_WRITTEN = 1,					  \
+})
+
+#define TPMA_NV_PLATFORM_READ_ONLY ((TPMA_NV) {			  \
+	/* Allow the space to be read by platform ONLY. */	  \
+	.TPMA_NV_PPREAD = 1,					  \
+	/* Disable deleting by requiring to satisfy policy. */	  \
+	.TPMA_NV_POLICY_DELETE = 1,				  \
+	/* Prevent writes. */					  \
+	.TPMA_NV_WRITELOCKED = 1,				  \
+	/* Write-lock will not be cleared on startup. */	  \
+	.TPMA_NV_WRITEDEFINE = 1,				  \
+	/* Index has been written, can be read. */		  \
+	.TPMA_NV_WRITTEN = 1,					  \
+	/* The Index may be undefined with Platform Auth only */  \
+	.TPMA_NV_PLATFORMCREATE = 1,				  \
+	/* TPM2_NV_ReadLock may be usedfor this index. */	  \
+	.TPMA_NV_READ_STCLEAR = 1,				  \
+})
+
 /* Template for the NV_INDEX data. */
 #define NV_INDEX_TEMPLATE {						  \
 	.publicArea = {							  \
 		.nameAlg = TPM_ALG_SHA256,				  \
-		.attributes = {						  \
-			/* Allow index to be read using its authValue. */ \
-			.TPMA_NV_AUTHREAD = 1,				  \
-			/*						  \
-			 * The spec requires at least one write		  \
-			 * authentication method to be specified. We	  \
-			 * intentionally don't include one, so that	  \
-			 * this index cannot be spoofed by an		  \
-			 * attacker running a version of cr50 that	  \
-			 * pre-dates the implementation of virtual	  \
-			 * NV indices.					  \
-			 * .TPMA_NV_AUTHWRITE = 1,			  \
-			 * Only allow deletion if the authPolicy is	  \
-			 * satisied. The authPolicy is empty, and so	  \
-			 * cannot be satisfied, so this effectively	  \
-			 * disables deletion.				  \
-			 */						  \
-			.TPMA_NV_POLICY_DELETE = 1,			  \
-			/* Prevent writes. */				  \
-			.TPMA_NV_WRITELOCKED = 1,			  \
-			/* Write-lock will not be cleared on startup. */  \
-			.TPMA_NV_WRITEDEFINE = 1,			  \
-			/* Index has been written, can be read. */	  \
-			.TPMA_NV_WRITTEN = 1,				  \
-			/* Allow the space to be read by platform. */	  \
-			.TPMA_NV_PPREAD = 1,				  \
-		},							  \
 		.authPolicy = { },					  \
 	},								  \
 	.authValue = { },						  \
@@ -118,19 +136,21 @@
 
 /* Configuration data for virtual NV indexes. */
 struct virtual_nv_index_cfg {
+	TPMA_NV attributes;
 	uint16_t size;
 
 	void (*get_data_fn)(BYTE *to, size_t offset, size_t size);
 } __packed;
 
-#define REGISTER_CONFIG(r_index, r_size, r_get_data_fn) \
+#define REGISTER_CONFIG(r_index, r_attr, r_size, r_get_data_fn) \
 	[r_index - VIRTUAL_NV_INDEX_START] = { \
+		.attributes = r_attr, \
 		.size = r_size, \
 		.get_data_fn = r_get_data_fn \
 	},
 
 #define REGISTER_DEPRECATED_CONFIG(r_index) \
-	REGISTER_CONFIG(r_index, 0, 0)
+	REGISTER_CONFIG(r_index, TPMA_NV_REGULAR, 0, 0)
 
 
 /*
@@ -172,11 +192,13 @@ static inline BOOL NvOffsetToNvIndex(uint32_t offset)
  * it with the specified NV index and size values.
  */
 static inline void CopyNvIndex(void *dest, size_t start, size_t count,
-			       uint32_t nvIndex, uint32_t size)
+			       uint32_t nvIndex, TPMA_NV attributes,
+			       uint32_t size)
 {
 	NV_INDEX nv_index_template = NV_INDEX_TEMPLATE;
 
 	nv_index_template.publicArea.nvIndex = nvIndex;
+	nv_index_template.publicArea.attributes = attributes;
 	nv_index_template.publicArea.dataSize = size;
 	memcpy(dest, ((BYTE *) &nv_index_template) + start, count);
 }
@@ -238,7 +260,9 @@ void _plat__NvVirtualMemoryRead(unsigned int startOffset, unsigned int size,
 			CopyNvIndex((BYTE *)data + offset - startOffset,
 				    section_offset,
 				    copied,
-				    nvIndex, nvIndexConfig.size);
+				    nvIndex,
+				    nvIndexConfig.attributes,
+				    nvIndexConfig.size);
 		} else if (offset < NV_DATA_READ_OFFSET + nvIndexConfig.size) {
 			/*
 			 * The actual NV data is the final section, which
@@ -348,21 +372,26 @@ BUILD_ASSERT(VIRTUAL_NV_INDEX_FACTORY_CONFIG_SIZE == INFO_FACTORY_CFG_SIZE);
 
 static const struct virtual_nv_index_cfg index_config[] = {
 	REGISTER_CONFIG(VIRTUAL_NV_INDEX_BOARD_ID,
+			TPMA_NV_REGULAR,
 			VIRTUAL_NV_INDEX_BOARD_ID_SIZE,
 			GetBoardId)
 	REGISTER_CONFIG(VIRTUAL_NV_INDEX_SN_DATA,
+			TPMA_NV_REGULAR,
 			VIRTUAL_NV_INDEX_SN_DATA_SIZE,
 			GetSnData)
 	REGISTER_CONFIG(VIRTUAL_NV_INDEX_G2F_CERT,
+			TPMA_NV_REGULAR,
 			VIRTUAL_NV_INDEX_G2F_CERT_SIZE,
 			GetG2fCert)
 	REGISTER_CONFIG(VIRTUAL_NV_INDEX_RSU_DEV_ID,
+			TPMA_NV_REGULAR,
 			VIRTUAL_NV_INDEX_RSU_DEV_ID_SIZE,
 			GetRSUDevID)
 	/* TODO(b/278118981): implement get RMA BYTES and WV UDS */
 	REGISTER_DEPRECATED_CONFIG(VIRTUAL_NV_INDEX_RMA_BYTES_UNIMPLEMENTED)
 	REGISTER_DEPRECATED_CONFIG(VIRTUAL_NV_INDEX_WV_UDS_BYTES_UNIMPLEMENTED)
 	REGISTER_CONFIG(VIRTUAL_NV_INDEX_FACTORY_CONFIG,
+			TPMA_NV_REGULAR,
 			VIRTUAL_NV_INDEX_FACTORY_CONFIG_SIZE,
 			GetFactoryCfg)
 };
