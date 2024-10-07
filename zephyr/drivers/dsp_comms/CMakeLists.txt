@@ -2,8 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-include($ENV{PW_ROOT}/pw_build/pigweed.cmake)
-include($ENV{PW_ROOT}/pw_protobuf_compiler/proto.cmake)
+include(${ZEPHYR_PIGWEED_MODULE_DIR}/pw_build/pigweed.cmake)
+include(${ZEPHYR_PIGWEED_MODULE_DIR}/pw_protobuf_compiler/proto.cmake)
 
 pw_proto_library(dsp_comms.proto
   SOURCES

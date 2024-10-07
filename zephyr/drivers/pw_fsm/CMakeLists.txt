@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-include($ENV{PW_ROOT}/pw_build/pigweed.cmake)
+include(${ZEPHYR_PIGWEED_MODULE_DIR}/pw_build/pigweed.cmake)
 
 pw_add_library(pw_fsm.fsm INTERFACE
   HEADERS

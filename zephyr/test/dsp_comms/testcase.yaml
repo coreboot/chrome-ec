@@ -5,3 +5,10 @@ tests:
       - TEST_LIB=pw_fsm.fsm_test
     platform_allow:
       - native_sim
+  pw_transport.service:
+    harness: gtest
+    extra_args:
+      - TEST_LIB=pw_transport.service_test
+      - PW_TRANSPORT_STATUS_FLAGS_SIZE=2
+    platform_allow:
+      - native_sim
