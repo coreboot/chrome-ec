@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include <base/functional/callback.h>
+#include "callback.h"
 
 namespace trunks {
 
@@ -16,7 +16,7 @@ namespace trunks {
 // receives responses. It can operate synchronously or asynchronously.
 class CommandTransceiver {
  public:
-  typedef base::OnceCallback<void(const std::string& response)>
+  typedef trunks::OnceCallback<void(const std::string& response)>
       ResponseCallback;
 
   virtual ~CommandTransceiver() {}

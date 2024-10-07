@@ -7,11 +7,6 @@
 #include <iterator>
 #include <utility>
 
-#include <base/functional/bind.h>
-#include <base/functional/callback.h>
-#include <base/run_loop.h>
-#include <base/threading/thread_task_runner_handle.h>
-#include <base/message_loop/message_loop.h>
 #include <gtest/gtest.h>
 
 #include "mock_authorization_delegate.h"
@@ -295,28 +290,19 @@ class CommandFlowTest : public testing::Test {
   }
 
  protected:
-  void Run() {
-    base::RunLoop run_loop;
-    run_loop.RunUntilIdle();
-  }
-
-  base::MessageLoop message_loop_;
+  void Run() {}
 
   TPM_RC response_code_;
   std::string signature_;
   std::string signed_data_;
 };
 
-// A functor for posting command responses. This is different than invoking the
-// callback directly (e.g. via InvokeArgument) in that the original call will
-// return before the response callback is invoked. This more closely matches how
-// this code is expected to work when integrated.
+// A functor for posting command responses.
 class PostResponse {
  public:
   explicit PostResponse(const std::string& response) : response_(response) {}
   void operator()(base::OnceCallback<void(const std::string&)> callback) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), response_));
+    std::move(callback).Run(response_);
   }
 
  private:
@@ -361,8 +347,9 @@ TEST_F(CommandFlowTest, SimpleCommandFlow) {
   Tpm tpm(&transceiver);
   response_code_ = TPM_RC_FAILURE;
   tpm.Startup(TPM_SU_CLEAR, &authorization,
-              base::BindOnce(&CommandFlowTest::StartupCallback,
-                             base::Unretained(this)));
+              std::function<void(TPM_RC)>([this](TPM_RC response_code) {
+                this->StartupCallback(response_code);
+              }));
   Run();
   EXPECT_EQ(TPM_RC_SUCCESS, response_code_);
 }
@@ -388,8 +375,9 @@ TEST_F(CommandFlowTest, SimpleCommandFlowWithError) {
       .WillOnce(Return(true));
   Tpm tpm(&transceiver);
   tpm.Startup(TPM_SU_CLEAR, &authorization,
-              base::BindOnce(&CommandFlowTest::StartupCallback,
-                             base::Unretained(this)));
+              std::function<void(TPM_RC)>([this](TPM_RC response_code) {
+                this->StartupCallback(response_code);
+              }));
   Run();
   EXPECT_EQ(TPM_RC_FAILURE, response_code_);
 }
@@ -453,10 +441,14 @@ TEST_F(CommandFlowTest, FullCommandFlow) {
   null_scheme.scheme = TPM_ALG_NULL;
   null_scheme.details.rsassa.hash_alg = TPM_ALG_SHA256;
   Tpm tpm(&transceiver);
-  tpm.Certify(0x11223344u, "object_handle", 0x55667788u, "sign_handle",
-              Make_TPM2B_DATA("pt_user_data"), null_scheme, &authorization,
-              base::BindOnce(&CommandFlowTest::CertifyCallback,
-                             base::Unretained(this)));
+  tpm.Certify(
+      0x11223344u, "object_handle", 0x55667788u, "sign_handle",
+      Make_TPM2B_DATA("pt_user_data"), null_scheme, &authorization,
+      std::function<void(TPM_RC, const TPM2B_ATTEST&, const TPMT_SIGNATURE&)>(
+          [this](TPM_RC response_code, const TPM2B_ATTEST& certify_info,
+                 const TPMT_SIGNATURE& signature) {
+            this->CertifyCallback(response_code, certify_info, signature);
+          }));
   Run();
   ASSERT_EQ(TPM_RC_SUCCESS, response_code_);
   EXPECT_EQ("pt_signed_data", signed_data_);

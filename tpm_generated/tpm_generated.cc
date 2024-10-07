@@ -10,16 +10,17 @@
 #include <memory>
 #include <string>
 
-#include <base/functional/bind.h>
-#include <base/functional/callback.h>
-#include <base/logging.h>
-#include <base/strings/string_number_conversions.h>
-#include <base/sys_byteorder.h>
+#include <android-base/endian.h>
+#include <android-base/logging.h>
 #include <secure_hash.h>
 
 #include "authorization_delegate.h"
+#include "callback.h"
 #include "command_transceiver.h"
 #include "error_codes.h"
+
+// Redirect VLOG invocations written for libchrome to android-base's LOG macro.
+#define VLOG(x) LOG(INFO)
 
 namespace trunks {
 
@@ -480,13 +481,13 @@ TPM_RC Serialize_uint8_t(const uint8_t& value, std::string* buffer) {
   uint8_t value_net = value;
   switch (sizeof(uint8_t)) {
     case 2:
-      value_net = base::HostToNet16(value);
+      value_net = htons(value);
       break;
     case 4:
-      value_net = base::HostToNet32(value);
+      value_net = htonl(value);
       break;
     case 8:
-      value_net = base::HostToNet64(value);
+      value_net = htonq(value);
       break;
     default:
       break;
@@ -506,13 +507,13 @@ TPM_RC Parse_uint8_t(std::string* buffer,
   memcpy(&value_net, buffer->data(), sizeof(uint8_t));
   switch (sizeof(uint8_t)) {
     case 2:
-      *value = base::NetToHost16(value_net);
+      *value = ntohs(value_net);
       break;
     case 4:
-      *value = base::NetToHost32(value_net);
+      *value = ntohl(value_net);
       break;
     case 8:
-      *value = base::NetToHost64(value_net);
+      *value = ntohq(value_net);
       break;
     default:
       *value = value_net;
@@ -529,13 +530,13 @@ TPM_RC Serialize_int8_t(const int8_t& value, std::string* buffer) {
   int8_t value_net = value;
   switch (sizeof(int8_t)) {
     case 2:
-      value_net = base::HostToNet16(value);
+      value_net = htons(value);
       break;
     case 4:
-      value_net = base::HostToNet32(value);
+      value_net = htonl(value);
       break;
     case 8:
-      value_net = base::HostToNet64(value);
+      value_net = htonq(value);
       break;
     default:
       break;
@@ -555,13 +556,13 @@ TPM_RC Parse_int8_t(std::string* buffer,
   memcpy(&value_net, buffer->data(), sizeof(int8_t));
   switch (sizeof(int8_t)) {
     case 2:
-      *value = base::NetToHost16(value_net);
+      *value = ntohs(value_net);
       break;
     case 4:
-      *value = base::NetToHost32(value_net);
+      *value = ntohl(value_net);
       break;
     case 8:
-      *value = base::NetToHost64(value_net);
+      *value = ntohq(value_net);
       break;
     default:
       *value = value_net;
@@ -578,13 +579,13 @@ TPM_RC Serialize_int(const int& value, std::string* buffer) {
   int value_net = value;
   switch (sizeof(int)) {
     case 2:
-      value_net = base::HostToNet16(value);
+      value_net = htons(value);
       break;
     case 4:
-      value_net = base::HostToNet32(value);
+      value_net = htonl(value);
       break;
     case 8:
-      value_net = base::HostToNet64(value);
+      value_net = htonq(value);
       break;
     default:
       break;
@@ -602,13 +603,13 @@ TPM_RC Parse_int(std::string* buffer, int* value, std::string* value_bytes) {
   memcpy(&value_net, buffer->data(), sizeof(int));
   switch (sizeof(int)) {
     case 2:
-      *value = base::NetToHost16(value_net);
+      *value = ntohs(value_net);
       break;
     case 4:
-      *value = base::NetToHost32(value_net);
+      *value = ntohl(value_net);
       break;
     case 8:
-      *value = base::NetToHost64(value_net);
+      *value = ntohq(value_net);
       break;
     default:
       *value = value_net;
@@ -625,13 +626,13 @@ TPM_RC Serialize_uint16_t(const uint16_t& value, std::string* buffer) {
   uint16_t value_net = value;
   switch (sizeof(uint16_t)) {
     case 2:
-      value_net = base::HostToNet16(value);
+      value_net = htons(value);
       break;
     case 4:
-      value_net = base::HostToNet32(value);
+      value_net = htonl(value);
       break;
     case 8:
-      value_net = base::HostToNet64(value);
+      value_net = htonq(value);
       break;
     default:
       break;
@@ -651,13 +652,13 @@ TPM_RC Parse_uint16_t(std::string* buffer,
   memcpy(&value_net, buffer->data(), sizeof(uint16_t));
   switch (sizeof(uint16_t)) {
     case 2:
-      *value = base::NetToHost16(value_net);
+      *value = ntohs(value_net);
       break;
     case 4:
-      *value = base::NetToHost32(value_net);
+      *value = ntohl(value_net);
       break;
     case 8:
-      *value = base::NetToHost64(value_net);
+      *value = ntohq(value_net);
       break;
     default:
       *value = value_net;
@@ -674,13 +675,13 @@ TPM_RC Serialize_int16_t(const int16_t& value, std::string* buffer) {
   int16_t value_net = value;
   switch (sizeof(int16_t)) {
     case 2:
-      value_net = base::HostToNet16(value);
+      value_net = htons(value);
       break;
     case 4:
-      value_net = base::HostToNet32(value);
+      value_net = htonl(value);
       break;
     case 8:
-      value_net = base::HostToNet64(value);
+      value_net = htonq(value);
       break;
     default:
       break;
@@ -700,13 +701,13 @@ TPM_RC Parse_int16_t(std::string* buffer,
   memcpy(&value_net, buffer->data(), sizeof(int16_t));
   switch (sizeof(int16_t)) {
     case 2:
-      *value = base::NetToHost16(value_net);
+      *value = ntohs(value_net);
       break;
     case 4:
-      *value = base::NetToHost32(value_net);
+      *value = ntohl(value_net);
       break;
     case 8:
-      *value = base::NetToHost64(value_net);
+      *value = ntohq(value_net);
       break;
     default:
       *value = value_net;
@@ -723,13 +724,13 @@ TPM_RC Serialize_uint32_t(const uint32_t& value, std::string* buffer) {
   uint32_t value_net = value;
   switch (sizeof(uint32_t)) {
     case 2:
-      value_net = base::HostToNet16(value);
+      value_net = htons(value);
       break;
     case 4:
-      value_net = base::HostToNet32(value);
+      value_net = htonl(value);
       break;
     case 8:
-      value_net = base::HostToNet64(value);
+      value_net = htonq(value);
       break;
     default:
       break;
@@ -749,13 +750,13 @@ TPM_RC Parse_uint32_t(std::string* buffer,
   memcpy(&value_net, buffer->data(), sizeof(uint32_t));
   switch (sizeof(uint32_t)) {
     case 2:
-      *value = base::NetToHost16(value_net);
+      *value = ntohs(value_net);
       break;
     case 4:
-      *value = base::NetToHost32(value_net);
+      *value = ntohl(value_net);
       break;
     case 8:
-      *value = base::NetToHost64(value_net);
+      *value = ntohq(value_net);
       break;
     default:
       *value = value_net;
@@ -772,13 +773,13 @@ TPM_RC Serialize_int32_t(const int32_t& value, std::string* buffer) {
   int32_t value_net = value;
   switch (sizeof(int32_t)) {
     case 2:
-      value_net = base::HostToNet16(value);
+      value_net = htons(value);
       break;
     case 4:
-      value_net = base::HostToNet32(value);
+      value_net = htonl(value);
       break;
     case 8:
-      value_net = base::HostToNet64(value);
+      value_net = htonq(value);
       break;
     default:
       break;
@@ -798,13 +799,13 @@ TPM_RC Parse_int32_t(std::string* buffer,
   memcpy(&value_net, buffer->data(), sizeof(int32_t));
   switch (sizeof(int32_t)) {
     case 2:
-      *value = base::NetToHost16(value_net);
+      *value = ntohs(value_net);
       break;
     case 4:
-      *value = base::NetToHost32(value_net);
+      *value = ntohl(value_net);
       break;
     case 8:
-      *value = base::NetToHost64(value_net);
+      *value = ntohq(value_net);
       break;
     default:
       *value = value_net;
@@ -821,13 +822,13 @@ TPM_RC Serialize_uint64_t(const uint64_t& value, std::string* buffer) {
   uint64_t value_net = value;
   switch (sizeof(uint64_t)) {
     case 2:
-      value_net = base::HostToNet16(value);
+      value_net = htons(value);
       break;
     case 4:
-      value_net = base::HostToNet32(value);
+      value_net = htonl(value);
       break;
     case 8:
-      value_net = base::HostToNet64(value);
+      value_net = htonq(value);
       break;
     default:
       break;
@@ -847,13 +848,13 @@ TPM_RC Parse_uint64_t(std::string* buffer,
   memcpy(&value_net, buffer->data(), sizeof(uint64_t));
   switch (sizeof(uint64_t)) {
     case 2:
-      *value = base::NetToHost16(value_net);
+      *value = ntohs(value_net);
       break;
     case 4:
-      *value = base::NetToHost32(value_net);
+      *value = ntohl(value_net);
       break;
     case 8:
-      *value = base::NetToHost64(value_net);
+      *value = ntohq(value_net);
       break;
     default:
       *value = value_net;
@@ -870,13 +871,13 @@ TPM_RC Serialize_int64_t(const int64_t& value, std::string* buffer) {
   int64_t value_net = value;
   switch (sizeof(int64_t)) {
     case 2:
-      value_net = base::HostToNet16(value);
+      value_net = htons(value);
       break;
     case 4:
-      value_net = base::HostToNet32(value);
+      value_net = htonl(value);
       break;
     case 8:
-      value_net = base::HostToNet64(value);
+      value_net = htonq(value);
       break;
     default:
       break;
@@ -896,13 +897,13 @@ TPM_RC Parse_int64_t(std::string* buffer,
   memcpy(&value_net, buffer->data(), sizeof(int64_t));
   switch (sizeof(int64_t)) {
     case 2:
-      *value = base::NetToHost16(value_net);
+      *value = ntohs(value_net);
       break;
     case 4:
-      *value = base::NetToHost32(value_net);
+      *value = ntohl(value_net);
       break;
     case 8:
-      *value = base::NetToHost64(value_net);
+      *value = ntohq(value_net);
       break;
     default:
       *value = value_net;

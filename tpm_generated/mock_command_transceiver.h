@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include <base/functional/callback.h>
 #include <gmock/gmock.h>
 
 #include "command_transceiver.h"

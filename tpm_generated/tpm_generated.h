@@ -9,9 +9,19 @@
 
 #include <string>
 
-#include <base/functional/callback_forward.h>
-
+#include "callback.h"
+#include "hex.h"
 #include "trunks_export.h"
+
+// Mini-libchrome: reproduces just the parts of libchrome that this file needs.
+// Embedded in an anonymous namespace so we're not polluting base.
+namespace {
+namespace base {
+using trunks::BindOnce;
+using trunks::HexEncode;
+using trunks::OnceCallback;
+}
+}
 
 namespace trunks {
 
