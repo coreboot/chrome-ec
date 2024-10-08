@@ -8,6 +8,9 @@
 #include "Global.h"
 
 #include "board_id.h"
+#ifdef CONFIG_PLATFORM_BOOT_PARAM
+#include "boot_param.h"
+#endif /* CONFIG_PLATFORM_BOOT_PARAM */
 #include "console.h"
 #include "dcrypto.h"
 #include "factory_config.h"
@@ -359,6 +362,24 @@ static void GetFactoryCfg(BYTE *to, size_t offset, size_t size)
 }
 BUILD_ASSERT(VIRTUAL_NV_INDEX_FACTORY_CONFIG_SIZE == INFO_FACTORY_CFG_SIZE);
 
+#ifdef CONFIG_PLATFORM_BOOT_PARAM
+static void GetDiceChain(BYTE *to, size_t offset, size_t size)
+{
+	if (get_dice_chain_bytes(to, offset, size) != size) {
+		memset(to, 0, size);
+		return;
+	}
+}
+
+static void GetBootParam(BYTE *to, size_t offset, size_t size)
+{
+	if (get_boot_param_bytes(to, offset, size) != size) {
+		memset(to, 0, size);
+		return;
+	}
+}
+#endif /* CONFIG_PLATFORM_BOOT_PARAM */
+
 /*
  * Registration of current virtual indexes.
  *
@@ -394,6 +415,21 @@ static const struct virtual_nv_index_cfg index_config[] = {
 			TPMA_NV_REGULAR,
 			VIRTUAL_NV_INDEX_FACTORY_CONFIG_SIZE,
 			GetFactoryCfg)
+	REGISTER_DEPRECATED_CONFIG(VIRTUAL_NV_INDEX_WV_ROT_CERT_UNIMPLEMENTED)
+	REGISTER_DEPRECATED_CONFIG(VIRTUAL_NV_INDEX_ID_CERT_UNIMPLEMENTED)
+#ifdef CONFIG_PLATFORM_BOOT_PARAM
+	REGISTER_CONFIG(VIRTUAL_NV_INDEX_DICE_CHAIN,
+			TPMA_NV_REGULAR,
+			DICE_CHAIN_SIZE,
+			GetDiceChain)
+	REGISTER_CONFIG(VIRTUAL_NV_INDEX_BOOT_PARAM,
+			TPMA_NV_PLATFORM_READ_ONLY,
+			BOOT_PARAM_SIZE,
+			GetBootParam)
+#else /* !CONFIG_PLATFORM_BOOT_PARAM */
+	REGISTER_DEPRECATED_CONFIG(VIRTUAL_NV_INDEX_DICE_CHAIN)
+	REGISTER_DEPRECATED_CONFIG(VIRTUAL_NV_INDEX_BOOT_PARAM)
+#endif /* !CONFIG_PLATFORM_BOOT_PARAM */
 };
 
 /* Check validity check of above config. */

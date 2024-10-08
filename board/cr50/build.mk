@@ -195,6 +195,10 @@ board-y += wp.o
 board-$(CONFIG_PINWEAVER)+=pinweaver_tpm_imports.o
 board-$(CONFIG_PLATFORM_PINWEAVER)+=pinweaver_tpm_imports.o
 board-$(CONFIG_PLATFORM_BOOT_PARAM)+=boot_param_platform.o
+ifeq ($(CRYPTO_TEST),)
+# hkdf is added separately for boot_param to avoid including in fips region
+board-${CONFIG_PLATFORM_BOOT_PARAM} += dcrypto/hkdf.o
+endif
 
 TPM2_MODULE := linkedtpm2.cp.o
 board-y += $(TPM2_MODULE)
