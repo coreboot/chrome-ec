@@ -38,8 +38,10 @@ struct dice_handover_s {
 	struct cwt_claims_bstr_s payload;
 	struct cbor_bstr64_s signature;
 };
-const size_t kDiceChainSize =
-	sizeof(struct dice_handover_s) - sizeof(struct dice_handover_hdr_s);
+_Static_assert(
+	sizeof(struct dice_handover_s) - sizeof(struct dice_handover_hdr_s) ==
+	DICE_CHAIN_SIZE
+);
 
 /* BootParam = {
  *   1  : uint,               ; structure version (0)
@@ -61,7 +63,7 @@ struct boot_param_s {
 	uint8_t dice_handover_label;
 	struct dice_handover_s dice_handover;
 };
-const size_t kBootParamSize = sizeof(struct boot_param_s);
+_Static_assert(sizeof(struct boot_param_s) == BOOT_PARAM_SIZE);
 
 /* Context to pass between functions that build the DICE handover structure
  */
@@ -888,10 +890,10 @@ size_t get_boot_param_bytes(
 	struct dice_ctx_s ctx;
 	uint8_t *src = (uint8_t *)&ctx.output;
 
-	if (size == 0 || offset >= kBootParamSize)
+	if (size == 0 || offset >= BOOT_PARAM_SIZE)
 		return 0;
-	if (size > kBootParamSize - offset)
-		size = kBootParamSize - offset;
+	if (size > BOOT_PARAM_SIZE - offset)
+		size = BOOT_PARAM_SIZE - offset;
 
 	if (!__platform_get_dice_config(&ctx.cfg)) {
 		__platform_log_str("Failed to get DICE config");
@@ -920,10 +922,10 @@ size_t get_dice_chain_bytes(
 	struct dice_ctx_s ctx;
 	uint8_t *src = (uint8_t *)&ctx.output.dice_handover.options;
 
-	if (size == 0 || offset >= kDiceChainSize)
+	if (size == 0 || offset >= DICE_CHAIN_SIZE)
 		return 0;
-	if (size > kDiceChainSize - offset)
-		size = kDiceChainSize - offset;
+	if (size > DICE_CHAIN_SIZE - offset)
+		size = DICE_CHAIN_SIZE - offset;
 
 	if (!__platform_get_dice_config(&ctx.cfg)) {
 		__platform_log_str("Failed to get DICE config");

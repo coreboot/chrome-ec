@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
 /* Size of BootParam structure in bytes */
-extern const size_t kBootParamSize;
+#define BOOT_PARAM_SIZE 820
 
 /* Get (part of) BootParam structure: [offset .. offset + size) */
 size_t get_boot_param_bytes(
@@ -28,7 +28,7 @@ size_t get_boot_param_bytes(
 );
 
 /* Size of DiceChain structure in bytes */
-extern const size_t kDiceChainSize;
+#define DICE_CHAIN_SIZE 605
 
 /* Get (part of) DiceChain structure: [offset .. offset + size) */
 size_t get_dice_chain_bytes(

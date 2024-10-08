@@ -126,18 +126,18 @@ static bool test_boot_param(
 	const char *filename_chain
 )
 {
-	uint8_t boot_param[kBootParamSize];
-	uint8_t dice_chain[kDiceChainSize];
+	uint8_t boot_param[BOOT_PARAM_SIZE];
+	uint8_t dice_chain[DICE_CHAIN_SIZE];
 
-	if (get_boot_param_bytes(boot_param, 0, kBootParamSize) !=
-				 kBootParamSize) {
+	if (get_boot_param_bytes(boot_param, 0, BOOT_PARAM_SIZE) !=
+				 BOOT_PARAM_SIZE) {
 		printf("get_boot_param_bytes failed");
 		return false;
 	}
 	DUMPVAR(boot_param);
 
-	if (get_dice_chain_bytes(dice_chain, 0, kDiceChainSize) !=
-				 kDiceChainSize) {
+	if (get_dice_chain_bytes(dice_chain, 0, DICE_CHAIN_SIZE) !=
+				 DICE_CHAIN_SIZE) {
 		printf("get_dice_chain_bytes failed");
 		return false;
 	}
@@ -146,10 +146,10 @@ static bool test_boot_param(
 	return
 		save_to_file(filename_handover,
 			     boot_param,
-			     kBootParamSize) &&
+			     BOOT_PARAM_SIZE) &&
 		save_to_file(filename_chain,
 			     dice_chain,
-			     kDiceChainSize);
+			     DICE_CHAIN_SIZE);
 }
 
 /* PCR0 values for various modes - see go/pcr0-tpm2 */
@@ -200,8 +200,8 @@ static void set_pcr0(const char *param)
 int main(int argc, char *argv[])
 {
 #ifdef TEST_PLATFORM
-	printf("kBootParamSize = %zu\n", kBootParamSize);
-	printf("kDiceChainSize = %zu\n", kDiceChainSize);
+	printf("BOOT_PARAM_SIZE = %zu\n", BOOT_PARAM_SIZE);
+	printf("DICE_CHAIN_SIZE = %zu\n", DICE_CHAIN_SIZE);
 	test_hkdf();
 	test_sha();
 	test_ecdsa();
