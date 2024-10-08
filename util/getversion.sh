@@ -100,6 +100,7 @@ main() {
       (cr50)
         dir_list+=( ../../third_party/tpm2 )
         dir_list+=( ../pinweaver )
+        dir_list+=( ../gsc-utils )
         ;;
       (*_fp)
         dir_list+=( ./private )
