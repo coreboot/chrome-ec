@@ -1784,7 +1784,7 @@ uint32_t send_vendor_command(struct transfer_descriptor *td,
 		 * to be stripped from the actual response body by this
 		 * function.
 		 */
-		uint8_t temp_response[MAX_RX_BUF_SIZE];
+		uint8_t temp_response[MAX_RX_BUF_SIZE + 1];
 		size_t max_response_size;
 
 		if (!response_size) {
