@@ -87,6 +87,14 @@ config PDC_POWER_MGMT_STATE_MACHINE_SETTLED_TIMEOUT_MS
 	  pdc_power_mgmt_wait_for_sync(). The default of 2000ms
 	  matches the PDC command processing timeout (PDC_CMD_TIMEOUT_MS).
 
+config PDC_POWER_MGMT_USB_MUX
+	bool "Enable USB mux control"
+	depends on PLATFORM_EC_USB_MUX && USB_PDC_POWER_MGMT
+	help
+	  Enable USB mux control in PDC power manager.  This needs to be
+	  enabled if the USB3/DP mux control is managed by the EC rather than
+	  the SoC.
+
 module = USB_PDC
 module-str = USB PDC
 source "subsys/logging/Kconfig.template.log_config"

@@ -345,6 +345,7 @@ config PLATFORM_EC_USBC_RETIMER_FW_UPDATE
 config PLATFORM_EC_CONSOLE_CMD_TYPEC
 	bool "Console command: typec"
 	default y
+	depends on !PDC_POWER_MGMT_USB_MUX
 	help
 	  Enable the 'typec' console command. Use this command to override
 	  the USB Type-C connector mux configuration on a specified port.

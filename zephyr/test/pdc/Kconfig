@@ -14,6 +14,9 @@ config TEST_SUITE_PDC_DEVICE_NOT_READY
 config TEST_SUITE_PDC_POLICY
 	bool "Enable PDC policy tests"
 
+config TEST_SUITE_PDC_PMC_USB_MUX
+	bool "Enable PDC PMC USB mux tests"
+
 config TEST_SUITE_PDC_RTS54XX
 	bool "Enable RTS54xx PDC tests"
 

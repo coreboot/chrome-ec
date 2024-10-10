@@ -13,8 +13,10 @@
 #include "charge_manager.h"
 #include "chipset.h"
 #include "drivers/ucsi_v3.h"
+#include "ec_commands.h"
 #include "hooks.h"
 #include "test/util.h"
+#include "usb_mux.h"
 #include "usb_pd.h"
 #include "usbc/pdc_dpm.h"
 #include "usbc/pdc_power_mgmt.h"
@@ -1747,6 +1749,13 @@ static void pdc_unattached_entry(void *obj)
 					   BIT_MASK(PD_STATUS_EVENT_COUNT));
 		pdc_power_mgmt_notify_event(port_number,
 					    PD_STATUS_EVENT_DISCONNECTED);
+
+		if (IS_ENABLED(CONFIG_PDC_POWER_MGMT_USB_MUX)) {
+			usb_mux_set(port_number, USB_PD_MUX_NONE,
+				    USB_SWITCH_DISCONNECT,
+				    /* port is unattacehd, not meaningful */
+				    POLARITY_CC1);
+		}
 	}
 }
 
@@ -1788,6 +1797,8 @@ static void pdc_unattached_run(void *obj)
 static void pdc_src_attached_entry(void *obj)
 {
 	struct pdc_port_t *port = (struct pdc_port_t *)obj;
+	const struct pdc_config_t *config = port->dev->config;
+	int port_number = config->connector_num;
 
 	print_current_pdc_state(port);
 	set_attached_pdc_state(port, SRC_ATTACHED_STATE);
@@ -1802,6 +1813,13 @@ static void pdc_src_attached_entry(void *obj)
 		/* We always want to evalulate sink caps when we a source. */
 		atomic_set_bit(port->src_policy.flags,
 			       SRC_POLICY_GET_SINK_CAPS);
+
+		if (IS_ENABLED(CONFIG_PDC_POWER_MGMT_USB_MUX)) {
+			usb_mux_set(
+				port_number, USB_PD_MUX_USB_ENABLED,
+				USB_SWITCH_CONNECT,
+				pdc_power_mgmt_pd_get_polarity(port_number));
+		}
 	}
 
 	/* Clear a piece of sink policy as it is no longer relevant in the
@@ -1919,6 +1937,13 @@ static void pdc_snk_attached_entry(void *obj)
 		 * attached sink has been disconnected.
 		 */
 		pdc_dpm_remove_sink(port_number);
+
+		if (IS_ENABLED(CONFIG_PDC_POWER_MGMT_USB_MUX)) {
+			usb_mux_set(
+				port_number, USB_PD_MUX_USB_ENABLED,
+				USB_SWITCH_CONNECT,
+				pdc_power_mgmt_pd_get_polarity(port_number));
+		}
 	}
 }
 
@@ -2637,6 +2662,8 @@ static void pdc_send_cmd_wait_exit(void *obj)
 static void pdc_src_typec_only_entry(void *obj)
 {
 	struct pdc_port_t *port = (struct pdc_port_t *)obj;
+	const struct pdc_config_t *config = port->dev->config;
+	int port_number = config->connector_num;
 
 	print_current_pdc_state(port);
 	set_attached_pdc_state(port, SRC_ATTACHED_TYPEC_ONLY_STATE);
@@ -2655,6 +2682,13 @@ static void pdc_src_typec_only_entry(void *obj)
 		 */
 		k_timer_start(&port->typec_only_timer,
 			      K_USEC(PD_T_SINK_WAIT_CAP), K_NO_WAIT);
+
+		if (IS_ENABLED(CONFIG_PDC_POWER_MGMT_USB_MUX)) {
+			usb_mux_set(
+				port_number, USB_PD_MUX_USB_ENABLED,
+				USB_SWITCH_CONNECT,
+				pdc_power_mgmt_pd_get_polarity(port_number));
+		}
 	}
 }
 
@@ -2711,6 +2745,8 @@ static void pdc_src_typec_only_run(void *obj)
 static void pdc_snk_typec_only_entry(void *obj)
 {
 	struct pdc_port_t *port = (struct pdc_port_t *)obj;
+	const struct pdc_config_t *config = port->dev->config;
+	int port_number = config->connector_num;
 
 	port->send_cmd.intern.pending = false;
 	if (get_pdc_state(port) != port->send_cmd_return_state) {
@@ -2726,6 +2762,13 @@ static void pdc_snk_typec_only_entry(void *obj)
 		 */
 		k_timer_start(&port->typec_only_timer,
 			      K_USEC(PD_T_SINK_WAIT_CAP), K_NO_WAIT);
+
+		if (IS_ENABLED(CONFIG_PDC_POWER_MGMT_USB_MUX)) {
+			usb_mux_set(
+				port_number, USB_PD_MUX_USB_ENABLED,
+				USB_SWITCH_CONNECT,
+				pdc_power_mgmt_pd_get_polarity(port_number));
+		}
 	}
 
 	print_current_pdc_state(port);
@@ -2796,6 +2839,8 @@ static void pdc_snk_typec_only_run(void *obj)
 static void pdc_init_entry(void *obj)
 {
 	struct pdc_port_t *port = (struct pdc_port_t *)obj;
+	const struct pdc_config_t *config = port->dev->config;
+	int port_number = config->connector_num;
 
 	print_current_pdc_state(port);
 
@@ -2810,6 +2855,9 @@ static void pdc_init_entry(void *obj)
 		/* Set up GET_VDO command data */
 		discovery_info_init(port);
 
+		if (IS_ENABLED(CONFIG_PDC_POWER_MGMT_USB_MUX)) {
+			usb_mux_init(port_number);
+		}
 		port->init_local_state = INIT_WAIT_FOR_READY;
 		port->public_api_buff = NULL;
 	}

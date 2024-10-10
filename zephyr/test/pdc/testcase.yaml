@@ -13,6 +13,16 @@ tests:
     extra_dtc_overlay_files:
     - "./boards/rts5453p.overlay"
 
+  pdc.usb_mux:
+    timeout: 500
+    extra_configs:
+    - CONFIG_TEST_SUITE_PDC_PMC_USB_MUX=y
+    - CONFIG_PDC_POWER_MGMT_USB_MUX=y
+    - CONFIG_PLATFORM_EC_USBC_SS_MUX=y
+    - CONFIG_USB_PDC_LOG_LEVEL_DBG=y
+    extra_dtc_overlay_files:
+    - "./boards/rts5453p.overlay"
+
   pdc.generic.tps6699x:
     timeout: 300
     extra_configs:

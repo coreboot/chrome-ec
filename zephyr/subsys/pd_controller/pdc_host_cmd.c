@@ -104,6 +104,7 @@ static enum ec_status hc_pd_ports(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_USB_PD_PORTS, hc_pd_ports, EC_VER_MASK(0));
 
+#ifndef CONFIG_PDC_POWER_MGMT_USB_MUX
 static enum ec_status hc_usb_pd_mux_info(struct host_cmd_handler_args *args)
 {
 	const struct ec_params_usb_pd_mux_info *p = args->params;
@@ -130,6 +131,7 @@ static enum ec_status hc_usb_pd_mux_info(struct host_cmd_handler_args *args)
 }
 DECLARE_HOST_COMMAND(EC_CMD_USB_PD_MUX_INFO, hc_usb_pd_mux_info,
 		     EC_VER_MASK(0));
+#endif /* CONFIG_PDC_POWER_MGMT_USB_MUX */
 
 #if !defined(CONFIG_USB_PD_ALTMODE_INTEL)
 uint8_t get_pd_control_flags(int port)
