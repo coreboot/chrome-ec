@@ -5,5 +5,8 @@
 zephyr_library_sources_ifdef(CONFIG_FINGERPRINT_SENSOR_FPC1025	fpc1025.c)
 zephyr_library_sources_ifdef(CONFIG_FINGERPRINT_SENSOR_FPC1025_PAL
 			     fpc1025_pal.c)
+zephyr_library_sources_ifdef(CONFIG_FINGERPRINT_SENSOR_FPC1145	fpc1145.c)
+zephyr_library_sources_ifdef(CONFIG_FINGERPRINT_SENSOR_FPC1145_PAL
+			     fpc1145_pal.c)
 zephyr_library_sources_ifdef(CONFIG_FINGERPRINT_SENSOR_SIMULATOR
 			     fingerprint_sensor_sim.c)
