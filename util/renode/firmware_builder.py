@@ -22,10 +22,14 @@ from google.protobuf import json_format
 from chromite.api.gen_sdk.chromite.api import firmware_pb2
 
 
-BOARDS = [
+EC_BOARDS = [
     "bloonchipper",
     "dartmonkey",
     "helipilot",
+]
+
+ZEPHYR_BOARDS = [
+    "bloonchipper",
 ]
 
 
@@ -37,7 +41,7 @@ def build(opts):
         "make",
         f"-j{opts.cpus}",
     ]
-    cmd.extend(["tests-" + b for b in BOARDS])
+    cmd.extend(["tests-" + b for b in EC_BOARDS])
     subprocess.run(cmd, cwd=working_dir, check=True)
 
 
@@ -52,6 +56,27 @@ def bundle(opts):
                 firmware_pb2.FirmwareArtifactInfo()  # pylint: disable=no-member
             )
         )
+
+
+def run_device_tests(board: str, working_dir: Path, zephyr: bool):
+    """Run device tests on Renode emulator."""
+    cmd = [
+        "test/run_device_tests.py",
+        "-b",
+        board,
+        "--renode",
+        "--with_private",
+        "no",
+    ]
+
+    if zephyr:
+        cmd.append("--zephyr")
+
+    subprocess.run(
+        cmd,
+        cwd=working_dir,
+        check=True,
+    )
 
 
 def test(_opts):
@@ -94,19 +119,11 @@ def test(_opts):
     # TODO(b/371633141): Add a parallel option to run_device_tests.py to speed
     # this up. Right now the EC/Zephyr coverage builders take longer than this,
     # so it doesn't affect overall CQ time.
-    for board in BOARDS:
-        subprocess.run(
-            [
-                "test/run_device_tests.py",
-                "-b",
-                board,
-                "--renode",
-                "--with_private",
-                "no",
-            ],
-            cwd=working_dir,
-            check=True,
-        )
+    for board in EC_BOARDS:
+        run_device_tests(board, working_dir, zephyr=False)
+
+    for board in ZEPHYR_BOARDS:
+        run_device_tests(board, working_dir, zephyr=True)
 
 
 def main(args):
