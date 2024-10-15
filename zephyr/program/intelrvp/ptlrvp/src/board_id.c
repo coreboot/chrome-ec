@@ -43,7 +43,7 @@ __override int board_get_version(void)
 	}
 
 	/* return -1 if failed to read board id */
-	if (rv)
+	if (rv < 0)
 		return -1;
 
 	/*
