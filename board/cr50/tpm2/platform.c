@@ -7,6 +7,7 @@
 #include "Platform.h"
 #include "TPM_Types.h"
 
+#include "boot_param_platform_cr50.h"
 #include "ccd_config.h"
 #include "console.h"
 #include "nvmem_vars.h"
@@ -111,6 +112,7 @@ void   _plat__GetFwVersion(uint32_t *firmwareV1, uint32_t *firmwareV2)
 void _plat__StartupCallback(void)
 {
 	pinweaver_init();
+	boot_param_handle_tpm_startup();
 
 	/*
 	 * Eventually, we'll want to allow CCD unlock with no password, so
@@ -161,6 +163,8 @@ void _plat__OwnerClearCallback(void)
 
 	/* Invalidate existing u2f registrations. */
 	cleanup_report(__func__, "u2f", u2f_zeroize_keys());
+
+	boot_param_handle_owner_clear();
 }
 
 /* Prints the contents of pcr0 */

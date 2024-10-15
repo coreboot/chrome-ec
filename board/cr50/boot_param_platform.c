@@ -4,9 +4,12 @@
  */
 
 #include <boot_param_platform.h>
+#include <nvmem_vars.h>
 
+#include "boot_param_platform_cr50.h"
 #include "console.h"
 #include "internal.h"
+#include "tpm_nvmem_ops.h"
 
 #define VERBOSE_BOOT_PARAM
 
@@ -17,6 +20,26 @@
 #endif
 
 #define MAX_ECDSA_KEYGEN_ATTEMPTS 16
+
+const char *g_owner_data_var_name = "BPOD";
+
+/* Per-AP-boot configuration parameters */
+struct ap_boot_config_s {
+	/* [OUT] early entropy */
+	uint8_t early_entropy[EARLY_ENTROPY_BYTES];
+	/* [OUT] SessionKeySeed */
+	uint8_t session_key_seed[KEY_SEED_BYTES];
+	/* [OUT] AuthTokenKeySeed */
+	uint8_t auth_token_key_seed[KEY_SEED_BYTES];
+};
+static struct ap_boot_config_s g_ap_boot_config = { 0 };
+static bool g_ap_boot_config_valid = { 0 };
+
+static inline void invalidate_ap_boot_config(void)
+{
+	memset(&g_ap_boot_config, 0, sizeof(struct ap_boot_config_s));
+	g_ap_boot_config_valid = false;
+}
 
 /* Static ECDSA key seed. Only one key is allowed to be used at any time. */
 static uint8_t g_key_seed[P256_NBYTES] = { 0 };
@@ -57,9 +80,99 @@ bool __platform_sha256(
 	uint8_t digest[DIGEST_BYTES]
 )
 {
-	/* SHA256_hw_hash produces big-endian hash */
-	SHA256_hw_hash(data.data, data.size, (struct sha256_digest *)digest);
+	struct sha256_digest aligned_digest;
 
+	/* SHA256_hw_hash produces big-endian hash */
+	SHA256_hw_hash(data.data, data.size, &aligned_digest);
+	memcpy(digest, aligned_digest.b8, DIGEST_BYTES);
+
+	return true;
+}
+
+/* Generate salt for UDS crypto ladder */
+static inline void generate_name_hash(struct sha256_digest *digest)
+{
+	const char *uds_salt_name = "CrOS UDS";
+
+	SHA256_hw_hash(uds_salt_name, strlen(uds_salt_name), digest);
+
+	/* Note that unlike DCRYPTO_appkey_init/derive we don't byteswap
+	 * the resulting constant. We just need it to be different from
+	 * PINWEAVER salt, which it is.
+	 */
+}
+
+/* Derive UDS from key ladder.
+ * We can't use DCRYPTO_appkey_init/derive since they are in fips module,
+ * and we'd need to add the 7th const to dcrypto_app_names[] in app_keys.
+ * Instead, copy the simplified DCRYPTO_appkey_init/derive logic here and
+ * re-use PINWEAVER app_id for this case.
+ */
+static inline bool derive_uds(uint8_t uds[DIGEST_BYTES])
+{
+	const enum dcrypto_appid uds_app_id = PINWEAVER;
+	const uint32_t uds_input[8] = {
+		0xa5a5a5a5,
+		0x5a5a5a5a,
+		0xa5a5a5a5,
+		0x5a5a5a5a,
+		0xa5a5a5a5,
+		0x5a5a5a5a,
+		0xa5a5a5a5,
+		0x5a5a5a5a,
+	};
+	uint32_t uds_buf[8]; /* intermediate buffer to ensure alignment */
+	struct sha256_digest digest;
+	int res;
+
+	generate_name_hash(&digest);
+
+	if (!dcrypto_ladder_compute_usr(uds_app_id, digest.b32)) {
+		verbose_log("dcrypto_ladder_compute_usr failed");
+		return false;
+	}
+
+	res = dcrypto_ladder_derive(uds_app_id, digest.b32, uds_input, uds_buf);
+	DCRYPTO_appkey_finish();
+	if (!res) {
+		verbose_log("dcrypto_ladder_derive failed");
+		return false;
+	}
+	memcpy(uds, uds_buf, DIGEST_BYTES);
+	memset(uds_buf, 0, DIGEST_BYTES); /* zeroize temp buf */
+	return true;
+}
+
+/* Get data that changes with owner clear */
+static inline bool get_hidden_owner_data(uint8_t owner_data[DIGEST_BYTES])
+{
+	const struct tuple *var;
+
+	var = getvar(g_owner_data_var_name,
+		     sizeof(g_owner_data_var_name) - 1);
+	if (var) {
+		/* Variable exists, let's get owner data. */
+		if (var->val_len != DIGEST_BYTES) {
+			verbose_log("wrong boot_param owner data size");
+			freevar(var);
+			return false;
+		}
+		memcpy(owner_data, tuple_val(var), DIGEST_BYTES);
+		freevar(var);
+		return true;
+	}
+
+	/* No owner data yet, let's create it. */
+	if (!fips_trng_bytes(owner_data, DIGEST_BYTES)) {
+		verbose_log("generating boot_param owner data failed");
+		return false;
+	}
+	if (setvar(g_owner_data_var_name,
+		   sizeof(g_owner_data_var_name) - 1,
+		   owner_data, DIGEST_BYTES) != 0) {
+		verbose_log("setting boot_param var failed");
+		return false;
+	}
 	return true;
 }
 
@@ -69,8 +182,56 @@ bool __platform_get_dice_config(
 	struct dice_config_s *cfg
 )
 {
-	/* TODO: get all configuration variables */
-	return false;
+	/* Just in case, pre-set all fields to zeroes.
+	 * Future-proofing in case we add new fields to dice_config_s
+	 * w/o updating platform code in cr50.
+	 */
+	memset(cfg, 0, sizeof(struct dice_config_s));
+
+	/* Cr50 can't provide APROV status.
+	 * Always return SettingNotProvisioned = 33
+	 */
+	cfg->aprov_status = 33;
+
+	/* Cr50 can't provide GSCVD info.
+	 * Leave sec_ver and code_digest at 0:
+	 * cfg->sec_ver = 0;
+	 * memset(cfg->code_digest, 0, DIGEST_BYTES);
+	 */
+
+	if (!derive_uds(cfg->uds))
+		return false;
+
+	if (!get_hidden_owner_data(cfg->hidden_digest))
+		return false;
+
+	if (!get_tpm_pcr_value(0, cfg->pcr0)) {
+		verbose_log("getting pcr0 failed");
+		return false;
+	}
+
+	if (!get_tpm_pcr_value(10, cfg->pcr10)) {
+		verbose_log("getting pcr10 failed");
+		return false;
+	}
+
+	return true;
+}
+
+/* Generate per-AP boot configuration */
+static inline bool ensure_ap_boot_config(void)
+{
+	if (g_ap_boot_config_valid)
+		return true;
+
+	if (!fips_trng_bytes(&g_ap_boot_config,
+			     sizeof(struct ap_boot_config_s))) {
+		verbose_log("generating boot config failed");
+		return false;
+	}
+
+	g_ap_boot_config_valid = true;
+	return true;
 }
 
 /* Get GSC boot parameters */
@@ -83,8 +244,20 @@ bool __platform_get_gsc_boot_param(
 	uint8_t auth_token_key_seed[KEY_SEED_BYTES]
 )
 {
-	/* TODO: get all configuration variables */
-	return false;
+	if (!ensure_ap_boot_config())
+		return false;
+
+	memcpy(early_entropy,
+	       g_ap_boot_config.early_entropy,
+	       EARLY_ENTROPY_BYTES);
+	memcpy(session_key_seed,
+	       g_ap_boot_config.session_key_seed,
+	       KEY_SEED_BYTES);
+	memcpy(auth_token_key_seed,
+	       g_ap_boot_config.auth_token_key_seed,
+	       KEY_SEED_BYTES);
+
+	return true;
 }
 
 /*
@@ -243,7 +416,7 @@ bool __platform_ecdsa_p256_sign(
 	p256_to_bin(&r, signature);
 	p256_to_bin(&s, signature + ECDSA_POINT_BYTES);
 
-	return false;
+	return true;
 }
 
 /* Get ECDSA public key X, Y */
@@ -313,4 +486,25 @@ void __platform_memset(void *dest, uint8_t fill, size_t size)
 int __platform_memcmp(const void *str1, const void *str2, size_t size)
 {
 	return memcmp(str1, str2, size);
+}
+
+/* Handler for Owner Clear event.
+ * Called by _plat__OwnerClearCallback.
+ */
+void boot_param_handle_owner_clear(void)
+{
+	if (setvar(g_owner_data_var_name,
+		   sizeof(g_owner_data_var_name) - 1,
+		   NULL, 0) != 0) {
+		verbose_log("clearing boot_param var failed");
+	}
+}
+
+/* Handler for TPM Startup event.
+ * Called by _plat__StartupCallback.
+ */
+void boot_param_handle_tpm_startup(void)
+{
+	invalidate_g_key_seed();
+	invalidate_ap_boot_config();
 }
