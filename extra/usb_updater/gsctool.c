@@ -1624,6 +1624,23 @@ static void get_version(struct transfer_descriptor *td, bool leave_pending)
 		send_done(&td->uep);
 }
 
+/*
+ * Gets a string of the currently detected GSC device type.
+ */
+static const char *device_string()
+{
+	switch (gsc_dev) {
+	case GSC_DEVICE_H1:
+		return "H1";
+	case GSC_DEVICE_DT:
+		return "DT";
+	case GSC_DEVICE_NT:
+		return "NT";
+	default:
+		return "Unknown";
+	}
+}
+
 static void setup_connection(struct transfer_descriptor *td)
 {
 	/* Send start request. */
@@ -1631,6 +1648,7 @@ static void setup_connection(struct transfer_descriptor *td)
 
 	get_version(td, true);
 
+	printf("device: %s\n", device_string());
 	printf("keyids: RO 0x%08x, RW 0x%08x\n", targ.keyid[0], targ.keyid[1]);
 	printf("offsets: backup RO at %#x, backup RW at %#x\n", td->ro_offset,
 	       td->rw_offset);
