@@ -906,6 +906,7 @@ size_t get_boot_param_bytes(
 		return 0;
 
 	__platform_memcpy(dest, src + offset, size);
+	__platform_memset(&ctx, 0, sizeof(struct dice_ctx_s)); /* zeroize */
 	return size;
 }
 
@@ -935,5 +936,6 @@ size_t get_dice_chain_bytes(
 		return 0;
 
 	__platform_memcpy(dest, src + offset, size);
+	__platform_memset(&ctx, 0, sizeof(struct dice_ctx_s)); /* zeroize */
 	return size;
 }
