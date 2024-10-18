@@ -1,0 +1,33 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "boot_param_hdrs",
+    srcs = [
+        "boot_param.h",
+        "boot_param_platform.h",
+        "boot_param_types.h",
+    ],
+)
+
+filegroup(
+    name = "boot_param_srcs",
+    srcs = [
+        "boot_param.c",
+        "cbor_basic.h",
+        "cbor_boot_param.h",
+        "cdi.h",
+    ],
+)
+
+cc_library(
+    name = "boot_param",
+    srcs = [
+        ":boot_param_srcs"
+    ],
+    hdrs = [
+        ":boot_param_hdrs"
+    ],
+    linkstatic = True,
+)
