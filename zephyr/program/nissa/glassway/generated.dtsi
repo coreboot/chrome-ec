@@ -169,6 +169,24 @@
 		gpio_led_a_odl: led_a_odl {
 			gpios = <&gpioc 3 GPIO_OUTPUT_HIGH>;
 		};
+		gpio_acc_int_l: acc_int_l {
+			gpios = <&gpio5 0 GPIO_INPUT>;
+		};
+		gpio_imu_int_l: imu_int_l {
+			gpios = <&gpio5 6 GPIO_INPUT>;
+		};
+		gpio_tablet_mode_l: tablet_mode_l {
+			gpios = <&gpio9 5 GPIO_INPUT>;
+			enum-name = "GPIO_TABLET_MODE_L";
+		};
+		gpio_voldn_btn_odl: voldn_btn_odl {
+			gpios = <&gpioa 2 GPIO_INPUT_PULL_UP>;
+			enum-name = "GPIO_VOLUME_DOWN_L";
+		};
+		gpio_volup_btn_odl: volup_btn_odl {
+			gpios = <&gpio9 3 GPIO_INPUT_PULL_UP>;
+			enum-name = "GPIO_VOLUME_UP_L";
+		};
 	};
 
 	named-i2c-ports {
