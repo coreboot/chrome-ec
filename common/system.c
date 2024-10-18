@@ -331,7 +331,8 @@ void system_print_banner(void)
 	}
 }
 
-#ifdef CONFIG_RAM_SIZE
+#if defined(CONFIG_RAM_SIZE) && \
+	(defined(CONFIG_COMMON_PANIC_OUTPUT) || defined(BOARD_HOST))
 struct jump_data *get_jump_data(void)
 {
 	uintptr_t addr;
@@ -346,7 +347,7 @@ struct jump_data *get_jump_data(void)
 
 	return (struct jump_data *)(addr - sizeof(struct jump_data));
 }
-#endif
+#endif /* CONFIG_RAM_SIZE && (CONFIG_COMMON_PANIC_OUTPUT || BOARD_HOST) */
 
 test_mockable int system_jumped_to_this_image(void)
 {
@@ -926,6 +927,15 @@ void system_common_pre_init(void)
 		else if (reason != PANIC_SW_WATCHDOG || !pdata ||
 			 pdata->flags & PANIC_DATA_FLAG_OLD_HOSTCMD)
 			panic_set_reason(PANIC_SW_WATCHDOG, 0, 0);
+	}
+
+	/*
+	 * get_jump_data() is only available if one of the following are
+	 * enabled.
+	 */
+	if (!(IS_ENABLED(CONFIG_COMMON_PANIC_OUTPUT) ||
+	      IS_ENABLED(BOARD_HOST))) {
+		return;
 	}
 
 	jdata = get_jump_data();
