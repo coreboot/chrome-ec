@@ -716,6 +716,28 @@ struct pd_ecdb {
 	uint8_t data;
 } __packed;
 
+/* Values for Source_Info Data Object, Port Type field */
+enum pd_source_port_type {
+	PD_SOURCE_PORT_CAPABILITY_MANAGED = 0,
+	PD_SOURCE_PORT_CAPABILITY_GUARANTEED,
+};
+
+/* PD Source_Info Data Object (SIDO) */
+union sido {
+	struct {
+		/* PDP values are the integer portion (floor) of the relevant
+		 * PDP rating in W.
+		 */
+		uint8_t port_reported_pdp;
+		uint8_t port_present_pdp;
+		uint8_t port_maximum_pdp;
+		unsigned reserved : 7;
+		/* 0 = Managed Capability, 1 = Guaranteed Capability */
+		unsigned port_type : 1;
+	};
+	uint32_t raw;
+};
+
 /* PD Rev 3.1 Revision Message Data Object (RMDO) */
 struct rmdo {
 	uint32_t reserved : 16;

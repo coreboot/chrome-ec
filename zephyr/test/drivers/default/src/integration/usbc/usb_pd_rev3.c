@@ -9,6 +9,7 @@
 #include "ec_commands.h"
 #include "emul/emul_isl923x.h"
 #include "emul/emul_smart_battery.h"
+#include "emul/tcpc/emul_tcpci_partner_snk.h"
 #include "emul/tcpc/emul_tcpci_partner_src.h"
 #include "hooks.h"
 #include "host_command.h"
@@ -618,4 +619,125 @@ ZTEST_F(usb_attach_5v_3a_pd_source_rev3, test_give_sink_cap_ext)
 		      SKEDB_SINK_VBUS_POWERED | SKEDB_SINK_BATTERY_POWERED);
 	zassert_equal(fixture->source_5v_3a.skedb.sink_minimum_pdp, 15);
 	zassert_equal(fixture->source_5v_3a.skedb.sink_maximum_pdp, 60);
+}
+
+ZTEST_F(usb_attach_5v_3a_pd_source_rev3, test_give_source_info)
+{
+	const union sido expected_sido = {
+		.port_type = 0,
+		.port_maximum_pdp = CONFIG_USB_PD_3A_PORTS > 0 ? 15 : 7,
+		.port_present_pdp = CONFIG_USB_PD_3A_PORTS > 0 ? 15 : 7,
+		.port_reported_pdp = 7,
+	};
+
+	tcpci_partner_send_control_msg(&fixture->source_5v_3a,
+				       PD_CTRL_GET_SOURCE_INFO, 0);
+	k_sleep(K_SECONDS(2));
+
+	const union sido *actual_sido = &fixture->source_5v_3a.tcpm_sido;
+	zexpect_equal(actual_sido->port_type, expected_sido.port_type,
+		      "Unexpected port type %u", actual_sido->port_type);
+	zexpect_equal(actual_sido->port_maximum_pdp,
+		      expected_sido.port_maximum_pdp,
+		      "Unexpected maximum PDP %u",
+		      actual_sido->port_maximum_pdp);
+	zexpect_equal(actual_sido->port_present_pdp,
+		      expected_sido.port_present_pdp,
+		      "Unexpected present PDP %u",
+		      actual_sido->port_present_pdp);
+	zexpect_equal(actual_sido->port_reported_pdp,
+		      expected_sido.port_reported_pdp,
+		      "Unexpected reported PDP %u",
+		      actual_sido->port_reported_pdp);
+}
+
+struct usb_attach_pd_sink_rev3_fixture {
+	struct tcpci_partner_data sink;
+	struct tcpci_snk_emul_data snk_ext;
+	const struct emul *tcpci_emul;
+	const struct emul *charger_emul;
+};
+
+static void *usb_attach_pd_sink_setup(void)
+{
+	static struct usb_attach_pd_sink_rev3_fixture test_fixture;
+
+	/* Get references for the emulators */
+	test_fixture.tcpci_emul = EMUL_GET_USBC_BINDING(0, tcpc);
+	test_fixture.charger_emul = EMUL_GET_USBC_BINDING(0, chg);
+
+	/* Initialized the charger to supply 5V and 3A */
+	tcpci_partner_init(&test_fixture.sink, PD_REV30);
+	test_fixture.sink.extensions = tcpci_snk_emul_init(
+		&test_fixture.snk_ext, &test_fixture.sink, NULL);
+	test_fixture.snk_ext.pdo[1] =
+		PDO_FIXED(5000, 3000, PDO_FIXED_UNCONSTRAINED);
+
+	return &test_fixture;
+}
+
+static void usb_attach_pd_sink_before(void *data)
+{
+	struct usb_attach_pd_sink_rev3_fixture *fixture = data;
+
+	/* Set chipset to ON, this will set TCPM to DRP */
+	test_set_chipset_to_s0();
+
+	/* TODO(b/214401892): Check why need to give time TCPM to spin */
+	k_sleep(K_SECONDS(1));
+
+	/* Set the partner's USB PD Revision to 3.1 */
+	fixture->sink.rmdo = 0x31000000;
+
+	connect_sink_to_port(&fixture->sink, fixture->tcpci_emul,
+			     fixture->charger_emul);
+
+	/* Clear Alert and Status receive checks; clear message log */
+	tcpci_snk_emul_clear_alert_received(&fixture->snk_ext);
+	zassert_false(fixture->snk_ext.alert_received);
+	tcpci_partner_common_clear_logged_msgs(&fixture->sink);
+
+	/* Initial check on power state */
+	zassert_true(chipset_in_state(CHIPSET_STATE_ON));
+}
+
+static void usb_attach_pd_sink_after(void *data)
+{
+	struct usb_attach_pd_sink_rev3_fixture *fixture = data;
+
+	disconnect_sink_from_port(fixture->tcpci_emul);
+}
+
+ZTEST_SUITE(usb_attach_pd_sink_rev3, drivers_predicate_post_main,
+	    usb_attach_pd_sink_setup, usb_attach_pd_sink_before,
+	    usb_attach_pd_sink_after, NULL);
+
+ZTEST_F(usb_attach_pd_sink_rev3, test_give_source_info)
+{
+	const union sido expected_sido = {
+		.port_type = 0,
+		.port_maximum_pdp = CONFIG_USB_PD_3A_PORTS > 0 ? 15 : 7,
+		.port_present_pdp = CONFIG_USB_PD_3A_PORTS > 0 ? 15 : 7,
+		.port_reported_pdp = 7,
+	};
+
+	tcpci_partner_send_control_msg(&fixture->sink, PD_CTRL_GET_SOURCE_INFO,
+				       0);
+	k_sleep(K_SECONDS(2));
+
+	const union sido *actual_sido = &fixture->sink.tcpm_sido;
+	zexpect_equal(actual_sido->port_type, expected_sido.port_type,
+		      "Unexpected port type %u", actual_sido->port_type);
+	zexpect_equal(actual_sido->port_maximum_pdp,
+		      expected_sido.port_maximum_pdp,
+		      "Unexpected maximum PDP %u",
+		      actual_sido->port_maximum_pdp);
+	zexpect_equal(actual_sido->port_present_pdp,
+		      expected_sido.port_present_pdp,
+		      "Unexpected present PDP %u",
+		      actual_sido->port_present_pdp);
+	zexpect_equal(actual_sido->port_reported_pdp,
+		      expected_sido.port_reported_pdp,
+		      "Unexpected reported PDP %u",
+		      actual_sido->port_reported_pdp);
 }

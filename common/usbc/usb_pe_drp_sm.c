@@ -285,10 +285,11 @@ enum usb_pe_state {
 	PE_SRC_CHUNK_RECEIVED, /* pe-st75 */
 	PE_SNK_CHUNK_RECEIVED, /* pe-st76 */
 	PE_VCS_FORCE_VCONN, /* pe-st77 */
-	PE_GET_REVISION, /* pe-st78 */
-	PE_GIVE_REVISION, /* pe-st79 */
-	PE_SNK_GIVE_SINK_CAP_EXT, /* pe-st80 */
-	PE_DR_SRC_GIVE_SINK_CAP_EXT, /* pe-st81 */
+	PE_SRC_GIVE_SOURCE_INFO, /* pe-st78 */
+	PE_GET_REVISION, /* pe-st79 */
+	PE_GIVE_REVISION, /* pe-st80 */
+	PE_SNK_GIVE_SINK_CAP_EXT, /* pe-st81 */
+	PE_DR_SRC_GIVE_SINK_CAP_EXT, /* pe-st82 */
 
 	/* EPR states */
 	PE_SNK_SEND_EPR_MODE_ENTRY,
@@ -409,6 +410,7 @@ __maybe_unused static __const_data const char *const pe_state_names[] = {
 /* PD3.0 only states below here*/
 #ifdef CONFIG_USB_PD_REV30
 	[PE_FRS_SNK_SRC_START_AMS] = "PE_FRS_SNK_SRC_Start_Ams",
+	[PE_SRC_GIVE_SOURCE_INFO] = "PE_SRC_Give_Source_Info",
 	[PE_GET_REVISION] = "PE_Get_Revision",
 	[PE_GIVE_REVISION] = "PE_Give_Revision",
 #ifdef CONFIG_USB_PD_EXTENDED_MESSAGES
@@ -3059,6 +3061,9 @@ static void pe_src_ready_run(int port)
 				return;
 #endif /* CONFIG_USB_PD_EXTENDED_MESSAGES */
 #ifdef CONFIG_USB_PD_REV30
+			case PD_CTRL_GET_SOURCE_INFO:
+				set_state_pe(port, PE_SRC_GIVE_SOURCE_INFO);
+				return;
 			case PD_CTRL_GET_REVISION:
 				set_state_pe(port, PE_GIVE_REVISION);
 				return;
@@ -4002,6 +4007,12 @@ static void pe_snk_ready_run(int port)
 						      rx_emsg[port].header));
 				return;
 #ifdef CONFIG_USB_PD_REV30
+			/* Despite the name of this state, it applies when the
+			 * TCPM is a Sink as well as a Source.
+			 */
+			case PD_CTRL_GET_SOURCE_INFO:
+				set_state_pe(port, PE_SRC_GIVE_SOURCE_INFO);
+				return;
 			case PD_CTRL_GET_REVISION:
 				set_state_pe(port, PE_GIVE_REVISION);
 				return;
@@ -8415,6 +8426,33 @@ static void pe_snk_epr_mode_exit_received_entry(int port)
 #endif /* CONFIG_USB_PD_EPR */
 
 /**
+ * PE_SRC_Give_Source_Info
+ * This state may be active when the port is Sink as well as when it is Source.
+ */
+__maybe_unused static void pe_src_give_source_info_entry(int port)
+{
+	union sido *source_info = (union sido *)tx_emsg[port].buf;
+
+	tx_emsg[port].len = sizeof(*source_info);
+	*source_info = dpm_get_source_info_msg(port);
+
+	send_data_msg(port, TCPCI_MSG_SOP, PD_DATA_SOURCE_INFO);
+}
+
+__maybe_unused static void pe_src_give_source_info_run(int port)
+{
+	if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
+		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
+		pe_set_ready_state(port);
+	} else if (PE_CHK_FLAG(port, PE_FLAGS_PROTOCOL_ERROR) ||
+		   PE_CHK_FLAG(port, PE_FLAGS_MSG_DISCARDED)) {
+		PE_CLR_FLAG(port, PE_FLAGS_PROTOCOL_ERROR);
+		PE_CLR_FLAG(port, PE_FLAGS_MSG_DISCARDED);
+		pe_send_soft_reset(port, TCPCI_MSG_SOP);
+	}
+}
+
+/**
  * PE_Give_Revision
  */
 __maybe_unused static void pe_give_revision_entry(int port)
@@ -8878,6 +8916,10 @@ static __const_data const struct usb_state pe_states[] = {
 		.entry = pe_get_revision_entry,
 		.run   = pe_get_revision_run,
 		.exit  = pe_get_revision_exit,
+	},
+	[PE_SRC_GIVE_SOURCE_INFO] = {
+		.entry = pe_src_give_source_info_entry,
+		.run   = pe_src_give_source_info_run,
 	},
 	[PE_GIVE_REVISION] = {
 		.entry = pe_give_revision_entry,
