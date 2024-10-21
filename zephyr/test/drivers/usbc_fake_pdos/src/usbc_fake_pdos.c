@@ -88,3 +88,25 @@ static void usbc_fake_pdos_after(void *data)
 
 ZTEST_SUITE(usbc_fake_pdos, drivers_predicate_post_main, usbc_fake_pdos_setup,
 	    usbc_fake_pdos_before, usbc_fake_pdos_after, NULL);
+
+ZTEST_F(usbc_fake_pdos, test_give_source_info_0_pdos)
+{
+	const union sido expected_sido = {
+		.port_type = 0,
+		.port_maximum_pdp = CONFIG_USB_PD_3A_PORTS > 0 ? 15 : 7,
+		.port_present_pdp = CONFIG_USB_PD_3A_PORTS > 0 ? 15 : 7,
+		.port_reported_pdp = 0,
+	};
+
+	dpm_get_source_pdo_fake.return_val = 0;
+
+	tcpci_partner_send_control_msg(&fixture->source_5v_3a,
+				       PD_CTRL_GET_SOURCE_INFO, 0);
+	k_sleep(K_SECONDS(2));
+
+	const union sido *actual_sido = &fixture->source_5v_3a.tcpm_sido;
+	zexpect_equal(actual_sido->port_reported_pdp,
+		      expected_sido.port_reported_pdp,
+		      "Unexpected reported PDP %u",
+		      actual_sido->port_reported_pdp);
+}

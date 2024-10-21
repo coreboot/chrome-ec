@@ -208,6 +208,7 @@ enum ec_status pd_set_bist_share_mode(uint8_t enable);
  * Get BIST Shared Test Mode status
  */
 uint8_t pd_get_bist_share_mode(void);
+
 /*
  * Build SOP Status Data Block (SDB)
  *
@@ -216,6 +217,14 @@ uint8_t pd_get_bist_share_mode(void);
  * @param *len		pointer to uint32_t holding length of SDB
  */
 int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len);
+
+/*
+ * Build Source_Info Data Object (SIDO).
+ *
+ * @param port		USB-C port number
+ * @return Source_Info Data Object
+ */
+union sido dpm_get_source_info_msg(int port);
 
 /*
  * DPM function to handle a received alert message

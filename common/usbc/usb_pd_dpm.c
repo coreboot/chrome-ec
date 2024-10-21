@@ -1167,6 +1167,57 @@ int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len)
 	return EC_SUCCESS;
 }
 
+union sido dpm_get_source_info_msg(int port)
+{
+	/* This implementation makes the following simplifying assumptions:
+	 * 1. The TCPM will only ever offer fixed 5V PDOs in its Source Caps.
+	 * 2. The TCPM will only offer 1.5A or 3A PDOs, so it will not be
+	 *    limited by any cable capabilities.
+	 */
+
+	union sido source_info; /* LCOV_EXCL_LINE: b/375430524 */
+	const uint32_t *pdos; /* LCOV_EXCL_LINE: b/375430524 */
+	int pdo_count = dpm_get_source_pdo(&pdos, port);
+
+	source_info.port_type = (CONFIG_USB_PD_3A_PORTS > 0) ?
+					PD_SOURCE_PORT_CAPABILITY_MANAGED :
+					PD_SOURCE_PORT_CAPABILITY_GUARANTEED;
+
+	source_info.reserved = 0;
+
+	/* Max PDP: 5V * 3A = 15W; floor(5V * 1.5A = 7W */
+	source_info.port_maximum_pdp = (CONFIG_USB_PD_3A_PORTS > 0) ? 15 : 7;
+
+	/* Reported PDP: voltage * current offered in Source Caps. */
+	if (pdo_count <= 0) {
+		/* This should never happen, but 0 is the most plausible
+		 * default.
+		 */
+		source_info.port_reported_pdp = 0;
+	} else {
+		uint32_t highest_pdo = pdos[pdo_count - 1];
+
+		source_info.port_reported_pdp =
+			PDO_FIXED_GET_VOLT(highest_pdo) *
+			PDO_FIXED_GET_CURR(highest_pdo) / 1000000;
+	}
+
+	/* Present PDP:
+	 * Max current allocated to this port: Same as max PDP (and also
+	 * reported PDP)
+	 * Max current not fully allocated: Same as max PDP
+	 * Max current otherwise fully allocated: Same as reported PDP
+	 */
+	if (max_current_claimed & BIT(port) ||
+	    count_port_bits(max_current_claimed) < CONFIG_USB_PD_3A_PORTS) {
+		source_info.port_present_pdp = source_info.port_maximum_pdp;
+	} else {
+		source_info.port_present_pdp = source_info.port_reported_pdp;
+	}
+
+	return source_info;
+}
+
 enum ec_status pd_set_bist_share_mode(uint8_t enable)
 {
 	/*
