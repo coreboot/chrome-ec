@@ -47,8 +47,3 @@ Next, you can:
 * [Add the lid switch](https://crrev.com/c/2749768)
 * [Add the power button](https://crrev.com/c/2749426)
 * [Add AC presence detection](https://crrev.com/c/2749428)
-
-## Power Sequencing
-
-TODO(jrosenth): add steps on enabling power sequencing and expand this
-document.
