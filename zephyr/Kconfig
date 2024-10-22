@@ -708,6 +708,17 @@ config PLATFORM_EC_POWER_BUTTON_IGNORE_LID
 	  This option should be used when power button support is required,
 	  but there is no lid switch present.
 
+config PLATFORM_EC_POWER_BUTTON_INIT_IDLE
+	bool "Remain in S5 with AC connect following gracefule shutdown"
+	depends on PLATFORM_EC_POWER_BUTTON
+	help
+	  Set/clear AP_IDLE flag. It's set when the system gracefully shuts
+	  down and it's cleared when the system boots up. The result is the
+	  system tries to go back to the previous state upon AC plug-in. If
+	  the system uncleanly shuts down, it boots immediately. If the system
+	  shuts down gracefully, it'll stay at S5 and wait for power button
+	  press.
+
 config PLATFORM_EC_BUTTON_DEBOUNCE
 	int "button debounce in us"
 	default 30000
