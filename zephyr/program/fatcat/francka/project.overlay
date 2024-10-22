@@ -14,9 +14,19 @@
 #include <cros/cbi_flash.dtsi>
 
 #include "adc.dtsi"
+#include "battery.dtsi"
 #include "cbi.dtsi"
 #include "gpios.dtsi"
 #include "i2c.dtsi"
+#include "keyboard.dtsi"
+#include "led_pins.dtsi"
+#include "led_policy.dtsi"
+#include "motionsense.dtsi"
+#include "overlay.dtsi"
+#include "power_signals.dtsi"
+#include "thermal.dtsi"
+#include "usba.dtsi"
+#include "usbc.dtsi"
 
 /* francka overrides follow... */
 

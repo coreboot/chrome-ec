@@ -1,0 +1,23 @@
+/* Copyright 2024 The ChromiumOS Authors
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+#include <dt-bindings/usbc_mux.h>
+#include <dt-bindings/usb_pd_tcpm.h>
+#include <usbc-policy.dtsi>
+
+
+ / {
+	usbc {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		usbc_port0: port0@0 {
+			compatible = "named-usbc-port";
+			reg = <0>;
+			chg = <&charger>;
+			pdc = <&pdc_power_p0>;
+			policy = <&cros_policy>;
+		};
+	};
+ };
+ 
