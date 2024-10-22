@@ -2042,6 +2042,10 @@ def all_targets():
         board = "roach",
     )
     ec_target(
+        name = "rull",
+        board = "rull",
+    )
+    ec_target(
         name = "sasuke",
         baseboard = "dedede",
         board = "sasuke",
