@@ -475,10 +475,31 @@ static int check_runtime_keys(const uint8_t *state)
 	int c;
 
 	/*
+	 * if volume up and r are on the same column,
+	 * the coresponding row should be masked.
+	 */
+#ifndef CONFIG_KEYBOARD_MULTIPLE
+	uint8_t mask_key_r_row = 0;
+	uint8_t mask_key_vol_up_row = 0;
+
+	if (key_vol_up_col == KEYBOARD_COL_KEY_R) {
+		mask_key_r_row = KEYBOARD_MASK_KEY_R;
+		mask_key_vol_up_row = KEYBOARD_ROW_TO_MASK(key_vol_up_row);
+	}
+#else
+	uint8_t mask_key_r_row = 0;
+
+	if (key_vol_up_col == KEYBOARD_COL_KEY_R) {
+		mask_key_r_row = KEYBOARD_MASK_KEY_R;
+	}
+#endif
+
+	/*
 	 * All runtime key combos are (right or left ) alt + volume up + (some
 	 * key NOT on the same col as alt or volume up )
 	 */
-	if (state[key_vol_up_col] != KEYBOARD_ROW_TO_MASK(key_vol_up_row))
+	if ((state[key_vol_up_col] & ~mask_key_r_row) !=
+	    KEYBOARD_ROW_TO_MASK(key_vol_up_row))
 		return 0;
 
 #ifndef CONFIG_KEYBOARD_MULTIPLE
@@ -501,12 +522,13 @@ static int check_runtime_keys(const uint8_t *state)
 			num_press++;
 	}
 
-	if (num_press != 3)
+	if (num_press > 3)
 		return 0;
 
 #ifndef CONFIG_KEYBOARD_MULTIPLE
 	/* Check individual keys */
-	if (state[KEYBOARD_COL_KEY_R] == KEYBOARD_MASK_KEY_R) {
+	if ((state[KEYBOARD_COL_KEY_R] & ~mask_key_vol_up_row) ==
+	    KEYBOARD_MASK_KEY_R) {
 		/* R = reboot */
 		CPRINTS("warm reboot");
 		keyboard_clear_buffer();
