@@ -1461,12 +1461,12 @@ void pd_send_vdm(int port, uint32_t vid, int cmd, const uint32_t *data,
 		 int count)
 {
 	/* Copy VDM Header */
-	pe[port].vdm_data[0] = VDO(
-		vid,
-		((vid & USB_SID_PD) == USB_SID_PD) ?
-			1 :
-			(PD_VDO_CMD(cmd) <= CMD_ATTENTION),
-		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, TCPCI_MSG_SOP)) | cmd);
+	pe[port].vdm_data[0] =
+		VDO(vid,
+		    ((vid & USB_SID_PD) == USB_SID_PD) ?
+			    1 :
+			    (PD_VDO_CMD(cmd) <= CMD_ATTENTION),
+		    VDO_SVDM_VERS(pd_get_vdo_ver(port, TCPCI_MSG_SOP)) | cmd);
 
 	/*
 	 * Copy VDOs after the VDM Header. Note that the count refers to VDO
@@ -6003,7 +6003,7 @@ uint32_t pd_compose_svdm_req_header(int port, enum tcpci_msg_type type,
 				    uint16_t svid, int cmd)
 {
 	return VDO(svid, 1,
-		   VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, pe[port].tx_type)) |
+		   VDO_SVDM_VERS(pd_get_vdo_ver(port, pe[port].tx_type)) |
 			   VDM_VERS_MINOR | cmd);
 }
 
@@ -6690,8 +6690,7 @@ static void pe_vdm_response_entry(int port)
 	tx_payload[0] &= ~VDO_SVDM_VERS_MASK;
 
 	/* Add SVDM structured version being used */
-	tx_payload[0] |=
-		VDO_SVDM_VERS_MAJOR(pd_get_vdo_ver(port, TCPCI_MSG_SOP));
+	tx_payload[0] |= VDO_SVDM_VERS(pd_get_vdo_ver(port, TCPCI_MSG_SOP));
 	tx_payload[0] |= VDM_VERS_MINOR;
 
 	/* Use VDM command to select the response handler function */
