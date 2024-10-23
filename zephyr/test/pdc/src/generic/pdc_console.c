@@ -404,6 +404,11 @@ ZTEST_USER(console_cmd_pdc, test_src_voltage)
 	zassert_equal(rv, EC_ERROR_PARAM2, "Expected %d, but got %d",
 		      EC_ERROR_PARAM2, rv);
 
+	/* V must be >= 5V */
+	rv = shell_execute_cmd(get_ec_shell(), "pdc src_voltage 0 4");
+	zassert_equal(rv, EC_ERROR_PARAM2, "Expected %d, but got %d",
+		      EC_ERROR_PARAM2, rv);
+
 	/* Successful path using optional parameter */
 	rv = shell_execute_cmd(get_ec_shell(), "pdc src_voltage 0 20");
 	zassert_equal(rv, EC_SUCCESS, "Expected %d, but got %d", EC_SUCCESS,

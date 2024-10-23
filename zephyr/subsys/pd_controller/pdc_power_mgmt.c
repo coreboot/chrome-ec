@@ -1911,6 +1911,75 @@ static void pdc_snk_attached_entry(void *obj)
 }
 
 /**
+ * @brief Evaluate a set of source PDOs and return the index of the best PDO.
+ *
+ * The rule used to choose a PDO is select the highest-wattage, highest-voltage
+ * PDO that does not exceed the board's maximum PD voltage.
+ *
+ * @param pdos Input list of PDOs to check
+ * @param num_pdos Number of PDOs in \p pdos
+ * @param selected[out] Output parameter for 0-based index of selected PDO
+ *
+ * @return 0 on success
+ * @return -EINVAL if \p selected is NULL or \p num_pdos is 0
+ * @return -ENOTSUP if no PDO in \p pdos meets criteria
+ */
+static int evaluate_src_pdos(const uint32_t *pdos, size_t num_pdos,
+			     size_t *selected)
+{
+	uint32_t highest_mw = 0, highest_mv = 0;
+	int best_index = -1;
+
+	if (selected == NULL || num_pdos == 0) {
+		return -EINVAL;
+	}
+
+	for (size_t i = 0; i < num_pdos; i++) {
+		/* PD spec requires the first PDO to be a 5V fixed, so there
+		 * is expected to always be a usable PDO in this list.
+		 */
+
+		if ((pdos[i] & PDO_TYPE_MASK) != PDO_TYPE_FIXED) {
+			/* Only consider fixed PDOs */
+			continue;
+		}
+
+		/* Extract voltage and current from PDO, and compute wattage */
+		uint32_t mv = PDO_FIXED_GET_VOLT(pdos[i]);
+		uint32_t ma = PDO_FIXED_GET_CURR(pdos[i]);
+		uint32_t mw = (mv * ma) / 1000;
+
+		LOG_INF("PDO%d: %08x, %d %d %d", i + 1, pdos[i], mv, ma, mw);
+
+		/* Find highest-wattage PDO that does not exceed the board max
+		 * voltage.
+		 */
+
+		if (mv > pdc_max_request_mv) {
+			/* Voltage too high. Skip. */
+			continue;
+		}
+
+		if ((mw > highest_mw) ||
+		    (mw == highest_mw && mv > highest_mv)) {
+			/* Found a higher-wattage PDO, or an equivalent-wattage
+			 * PDO that is higher voltage. */
+			highest_mw = mw;
+			highest_mv = mv;
+			best_index = i;
+		}
+	}
+
+	if (best_index < 0) {
+		/* No PDO matched. */
+		return -ENOTSUP;
+	}
+
+	*selected = best_index;
+	return 0;
+}
+
+/**
  * @brief Run sink attached state.
  */
 static void pdc_snk_attached_run(void *obj)
@@ -1918,9 +1987,9 @@ static void pdc_snk_attached_run(void *obj)
 	struct pdc_port_t *port = (struct pdc_port_t *)obj;
 	const struct pdc_config_t *const config = port->dev->config;
 	uint32_t max_ma, max_mv, max_mw;
-	uint32_t tmp_curr_ma, tmp_volt_mv, tmp_pwr_mw;
-	uint32_t pdo_pwr_mw, pdo_volt_mv;
 	uint32_t flags;
+	size_t selected_pdo = 0;
+	int rv;
 
 	/* The CCI_EVENT is set to re-query connector status, so check the
 	 * connector status and take the appropriate action.
@@ -2019,38 +2088,20 @@ static void pdc_snk_attached_run(void *obj)
 		return;
 	case SNK_ATTACHED_EVALUATE_PDOS:
 		port->snk_attached_local_state = SNK_ATTACHED_START_CHARGING;
-		pdo_pwr_mw = 0;
-		pdo_volt_mv = 0;
 		flags = RDO_COMM_CAP;
 
-		for (int i = 0; i < PDO_NUM; i++) {
-			if ((port->snk_policy.src.pdos[i] & PDO_TYPE_MASK) !=
-			    PDO_TYPE_FIXED) {
-				continue;
-			}
-
-			tmp_volt_mv = PDO_FIXED_GET_VOLT(
-				port->snk_policy.src.pdos[i]);
-			tmp_curr_ma = PDO_FIXED_GET_CURR(
-				port->snk_policy.src.pdos[i]);
-			tmp_pwr_mw = (tmp_volt_mv * tmp_curr_ma) / 1000;
-
-			LOG_INF("PDO%d: %08x, %d %d %d", i,
-				port->snk_policy.src.pdos[i], tmp_volt_mv,
-				tmp_curr_ma, tmp_pwr_mw);
-
-			if ((tmp_pwr_mw >= pdo_pwr_mw) &&
-			    (tmp_pwr_mw <= pdc_max_operating_power) &&
-			    (tmp_volt_mv <= pdc_max_request_mv))
-				if ((tmp_pwr_mw > pdo_pwr_mw) ||
-				    (tmp_volt_mv > pdo_volt_mv)) {
-					pdo_pwr_mw = tmp_pwr_mw;
-					pdo_volt_mv = tmp_volt_mv;
-					port->snk_policy.pdo_index = i;
-					port->snk_policy.pdo =
-						port->snk_policy.src.pdos[i];
-				}
+		rv = evaluate_src_pdos(port->snk_policy.src.pdos, PDO_NUM,
+				       &selected_pdo);
+		if (rv) {
+			LOG_ERR("C%d: No suitable PDO found (%d)",
+				config->connector_num, rv);
 		}
+
+		/* Store the selected PDO. Convert the PDO number to 1-based
+		 * indexing.
+		 */
+		port->snk_policy.pdo = port->snk_policy.src.pdos[selected_pdo];
+		port->snk_policy.pdo_index = selected_pdo + 1;
 
 		/* Extract Current, Voltage, and calculate Power */
 		max_ma = PDO_FIXED_GET_CURR(port->snk_policy.pdo);
@@ -2062,9 +2113,6 @@ static void pdc_snk_attached_run(void *obj)
 		if (max_mw < pdc_max_operating_power) {
 			flags |= RDO_CAP_MISMATCH;
 		}
-
-		/* Prepare PDO index for creation of RDO */
-		port->snk_policy.pdo_index += 1;
 
 		/* Set RDO to send */
 		if ((port->snk_policy.pdo & PDO_TYPE_MASK) ==

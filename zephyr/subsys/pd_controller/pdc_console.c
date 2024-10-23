@@ -580,6 +580,11 @@ static int cmd_pdc_src_voltage(const struct shell *sh, size_t argc, char **argv)
 		shell_fprintf(sh, SHELL_INFO, "Using max voltage (%dmV)\n", mv);
 	}
 
+	if (mv < 5000) {
+		shell_fprintf(sh, SHELL_ERROR, "Must be >= 5000mV\n");
+		return EC_ERROR_PARAM2;
+	}
+
 	shell_fprintf(sh, SHELL_INFO, "Requesting to source %dmV\n", mv);
 	pd_request_source_voltage(port, mv);
 
