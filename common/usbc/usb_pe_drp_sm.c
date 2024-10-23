@@ -694,17 +694,6 @@ test_export_static enum usb_pe_state get_state_pe(const int port);
 test_export_static void set_state_pe(const int port,
 				     const enum usb_pe_state new_state);
 static void pe_set_dpm_curr_request(const int port, const int request);
-/*
- * The spec. revision is used to index into this array.
- *  PD 1.0 (VDO 1.0) - return SVDM_VER_1_0
- *  PD 2.0 (VDO 1.0) - return SVDM_VER_1_0
- *  PD 3.0 (VDO 2.0) - return SVDM_VER_1_0
- */
-static const uint8_t vdo_ver[] = {
-	[PD_REV10] = SVDM_VER_1_0,
-	[PD_REV20] = SVDM_VER_1_0,
-	[PD_REV30] = SVDM_VER_2_0,
-};
 
 int pd_get_rev(int port, enum tcpci_msg_type type)
 {
@@ -713,12 +702,18 @@ int pd_get_rev(int port, enum tcpci_msg_type type)
 
 int pd_get_vdo_ver(int port, enum tcpci_msg_type type)
 {
-	enum pd_rev_type rev = prl_get_rev(port, type);
+	const struct pd_discovery *disc = pd_get_am_discovery(port, type);
 
-	if (rev < PD_REV30)
-		return vdo_ver[rev];
-	else
-		return SVDM_VER_2_0;
+	if (disc->identity_discovery != PD_DISC_COMPLETE) {
+		enum pd_rev_type rev = prl_get_rev(port, type);
+
+		if (rev < PD_REV30) {
+			return SVDM_VER_1_0;
+		}
+		return SVDM_VER_2_1;
+	}
+
+	return disc->svdm_vers;
 }
 
 static void pe_set_ready_state(int port)
@@ -5992,8 +5987,7 @@ uint32_t pd_compose_svdm_req_header(int port, enum tcpci_msg_type type,
 				    uint16_t svid, int cmd)
 {
 	return VDO(svid, 1,
-		   VDO_SVDM_VERS(pd_get_vdo_ver(port, pe[port].tx_type)) |
-			   VDM_VERS_MINOR | cmd);
+		   VDO_SVDM_VERS(pd_get_vdo_ver(port, pe[port].tx_type)) | cmd);
 }
 
 /**
@@ -6651,21 +6645,13 @@ static void pe_vdm_response_entry(int port)
 	 *    vdo_len < 0  --> BUSY
 	 */
 	memcpy(tx_payload, rx_payload, PD_HEADER_CNT(rx_emsg[port].header) * 4);
-	/*
-	 * Clear fields in SVDM response message that will be set based on the
-	 * result of the svdm response function.
-	 */
-	tx_payload[0] &= ~VDO_CMDT_MASK;
-	tx_payload[0] &= ~VDO_SVDM_VERS_MASK;
-
-	/* Add SVDM structured version being used */
-	tx_payload[0] |= VDO_SVDM_VERS(pd_get_vdo_ver(port, TCPCI_MSG_SOP));
-	tx_payload[0] |= VDM_VERS_MINOR;
 
 	/* Use VDM command to select the response handler function */
 	switch (vdo_cmd) {
 	case CMD_DISCOVER_IDENT:
 		func = svdm_rsp.identity;
+		pd_set_svdm_ver(port, TCPCI_MSG_SOP,
+				PD_VDO_SVDM_VERS(rx_payload[0]));
 		break;
 	case CMD_DISCOVER_SVID:
 		func = svdm_rsp.svids;
@@ -6701,6 +6687,16 @@ static void pe_vdm_response_entry(int port)
 	default:
 		CPRINTF("VDO ERR:CMD:%d\n", vdo_cmd);
 	}
+
+	/*
+	 * Clear fields in SVDM response message that will be set based on the
+	 * result of the svdm response function.
+	 */
+	tx_payload[0] &= ~VDO_CMDT_MASK;
+	tx_payload[0] &= ~VDO_SVDM_VERS_MASK;
+
+	/* Add SVDM structured version being used */
+	tx_payload[0] |= VDO_SVDM_VERS(pd_get_vdo_ver(port, TCPCI_MSG_SOP));
 
 	/*
 	 * If the port partner is PD_REV20 and our data role is DFP, we must
