@@ -80,7 +80,7 @@ ZTEST_F(usb_pd_discovery, test_verify_discovery)
 	partner->identity_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_IDENT) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->identity_vdm[VDO_INDEX_IDH] = VDO_IDH(
 		/* USB host */ false, /* USB device */ true, IDH_PTYPE_HUB,
 		/* modal operation */ true, USB_VID_GOOGLE);
@@ -97,7 +97,7 @@ ZTEST_F(usb_pd_discovery, test_verify_discovery)
 	partner->modes_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_DISPLAYPORT, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_MODES) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->modes_vdm[VDO_INDEX_HDR + 1] =
 		VDO_MODE_DP(MODE_DP_PIN_E, 0, 1, CABLE_RECEPTACLE, MODE_DP_V13,
 			    MODE_DP_SNK);
@@ -107,7 +107,7 @@ ZTEST_F(usb_pd_discovery, test_verify_discovery)
 	partner->svids_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_SVID) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->svids_vdm[VDO_INDEX_HDR + 1] =
 		VDO_SVID(USB_SID_DISPLAYPORT, 0);
 	partner->svids_vdos = VDO_INDEX_HDR + 2;
@@ -131,6 +131,91 @@ ZTEST_F(usb_pd_discovery, test_verify_discovery)
 		      fixture->partner.modes_vdm[1]);
 }
 
+static void verify_no_discover_svids(sys_slist_t *msg_log)
+{
+	struct tcpci_partner_log_msg *msg;
+
+	SYS_SLIST_FOR_EACH_CONTAINER(msg_log, msg, node)
+	{
+		uint16_t header = sys_get_le16(msg->buf);
+
+		/* Ignore messages from ourselves */
+		if (msg->sender == TCPCI_PARTNER_SENDER_PARTNER) {
+			continue;
+		}
+
+		/*
+		 * Control messages, non-VDMs, and extended messages are not of
+		 * interest
+		 */
+		if ((PD_HEADER_CNT(header) == 0) ||
+		    (PD_HEADER_TYPE(header) != PD_DATA_VENDOR_DEF) ||
+		    (PD_HEADER_EXT(header) != 0)) {
+			continue;
+		}
+
+		/* We have a VDM, check entry we're interested in */
+		uint32_t vdm_header = sys_get_le32(msg->buf + sizeof(header));
+
+		zassert_not_equal(PD_VDO_CMD(vdm_header), CMD_DISCOVER_SVID);
+	}
+}
+
+/* Set Modal Operation to 0 in the Discover Identity ACK, but still ACK Discover
+ * SVIDs. The TCPM should not REQ Discover SVIDs and should consequently report
+ * 0 SVIDs to the host.
+ */
+ZTEST_F(usb_pd_discovery, test_no_modal_operation)
+{
+	struct tcpci_partner_data *partner = &fixture->partner;
+	uint8_t response_buffer[EC_LPC_HOST_PACKET_SIZE];
+	struct ec_response_typec_discovery *discovery =
+		(struct ec_response_typec_discovery *)response_buffer;
+
+	/* Add Discover Identity response with Modal Operation = 0 */
+	partner->identity_vdm[VDO_INDEX_HDR] =
+		VDO(USB_SID_PD, /* structured VDM */ true,
+		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_IDENT) |
+		VDO_SVDM_VERS(SVDM_VER_2_0);
+	partner->identity_vdm[VDO_INDEX_IDH] = VDO_IDH(
+		/* USB host */ false, /* USB device */ true, IDH_PTYPE_HUB,
+		/* modal operation */ false, USB_VID_GOOGLE);
+	partner->identity_vdm[VDO_INDEX_CSTAT] = 0;
+	partner->identity_vdm[VDO_INDEX_PRODUCT] = VDO_PRODUCT(0xBEAD, 0x1001);
+	partner->identity_vdm[VDO_INDEX_PTYPE_UFP1_VDO] = VDO_UFP1(
+		(VDO_UFP1_CAPABILITY_USB20 | VDO_UFP1_CAPABILITY_USB32),
+		USB_TYPEC_RECEPTACLE, VDO_UFP1_ALT_MODE_RECONFIGURE,
+		USB_R30_SS_U32_U40_GEN2);
+	partner->identity_vdos = VDO_INDEX_PTYPE_UFP1_VDO + 1;
+
+	/* Add Discover SVIDs response for DP anyway */
+	partner->svids_vdm[VDO_INDEX_HDR] =
+		VDO(USB_SID_PD, /* structured VDM */ true,
+		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_SVID) |
+		VDO_SVDM_VERS(SVDM_VER_2_0);
+	partner->svids_vdm[VDO_INDEX_HDR + 1] =
+		VDO_SVID(USB_SID_DISPLAYPORT, 0);
+	partner->svids_vdos = VDO_INDEX_HDR + 2;
+
+	tcpci_partner_common_enable_pd_logging(&fixture->partner, true);
+	connect_sink_to_port(&fixture->partner, fixture->tcpci_emul,
+			     fixture->charger_emul);
+
+	host_cmd_typec_discovery(TEST_PORT, TYPEC_PARTNER_SOP, response_buffer,
+				 sizeof(response_buffer));
+	tcpci_partner_common_enable_pd_logging(&fixture->partner, false);
+
+	verify_no_discover_svids(&fixture->partner.msg_log);
+
+	/* The host command does not count the VDM header in identity_count. */
+	zassert_equal(discovery->identity_count,
+		      fixture->partner.identity_vdos - 1);
+	zassert_mem_equal(
+		discovery->discovery_vdo, fixture->partner.identity_vdm + 1,
+		discovery->identity_count * sizeof(*discovery->discovery_vdo));
+	zassert_equal(discovery->svid_count, 0);
+}
+
 /* Now: Duplicate the DP SID */
 ZTEST_F(usb_pd_discovery, test_verify_svid_duplicate)
 {
@@ -143,7 +228,7 @@ ZTEST_F(usb_pd_discovery, test_verify_svid_duplicate)
 	partner->identity_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_IDENT) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->identity_vdm[VDO_INDEX_IDH] = VDO_IDH(
 		/* USB host */ false, /* USB device */ true, IDH_PTYPE_HUB,
 		/* modal operation */ true, USB_VID_GOOGLE);
@@ -160,7 +245,7 @@ ZTEST_F(usb_pd_discovery, test_verify_svid_duplicate)
 	partner->svids_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_SVID) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->svids_vdm[VDO_INDEX_HDR + 1] =
 		VDO_SVID(USB_SID_DISPLAYPORT, USB_SID_DISPLAYPORT);
 	partner->svids_vdm[VDO_INDEX_HDR + 2] = 0;
@@ -170,7 +255,7 @@ ZTEST_F(usb_pd_discovery, test_verify_svid_duplicate)
 	partner->modes_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_DISPLAYPORT, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_MODES) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->modes_vdm[VDO_INDEX_HDR + 1] =
 		VDO_MODE_DP(MODE_DP_PIN_E, 0, 1, CABLE_RECEPTACLE, MODE_DP_V13,
 			    MODE_DP_SNK);
@@ -199,7 +284,7 @@ ZTEST_F(usb_pd_discovery, test_verify_bad_termination)
 	partner->identity_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_IDENT) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->identity_vdm[VDO_INDEX_IDH] = VDO_IDH(
 		/* USB host */ false, /* USB device */ true, IDH_PTYPE_HUB,
 		/* modal operation */ true, USB_VID_GOOGLE);
@@ -216,7 +301,7 @@ ZTEST_F(usb_pd_discovery, test_verify_bad_termination)
 	partner->svids_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_SVID) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->svids_vdm[VDO_INDEX_HDR + 1] =
 		VDO_SVID(USB_SID_DISPLAYPORT, USB_VID_INTEL);
 	partner->svids_vdos = VDO_INDEX_HDR + 2;
@@ -225,7 +310,7 @@ ZTEST_F(usb_pd_discovery, test_verify_bad_termination)
 	partner->modes_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_DISPLAYPORT, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_MODES) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->modes_vdm[VDO_INDEX_HDR + 1] =
 		VDO_MODE_DP(MODE_DP_PIN_E, 0, 1, CABLE_RECEPTACLE, MODE_DP_V13,
 			    MODE_DP_SNK);
@@ -255,7 +340,7 @@ ZTEST_F(usb_pd_discovery, test_verify_modes_nak)
 	partner->identity_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_IDENT) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->identity_vdm[VDO_INDEX_IDH] = VDO_IDH(
 		/* USB host */ false, /* USB device */ true, IDH_PTYPE_HUB,
 		/* modal operation */ true, USB_VID_GOOGLE);
@@ -272,7 +357,7 @@ ZTEST_F(usb_pd_discovery, test_verify_modes_nak)
 	partner->svids_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_SVID) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->svids_vdm[VDO_INDEX_HDR + 1] = VDO_SVID(USB_VID_INTEL, 0);
 	partner->svids_vdos = VDO_INDEX_HDR + 2;
 
@@ -280,7 +365,7 @@ ZTEST_F(usb_pd_discovery, test_verify_modes_nak)
 	partner->modes_vdm[VDO_INDEX_HDR] =
 		VDO(USB_VID_INTEL, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_NAK) | CMD_DISCOVER_MODES) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->modes_vdos = 1;
 
 	connect_sink_to_port(&fixture->partner, fixture->tcpci_emul,
@@ -305,7 +390,7 @@ ZTEST_F(usb_pd_discovery, test_verify_bad_mode)
 	partner->identity_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_IDENT) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->identity_vdm[VDO_INDEX_IDH] = VDO_IDH(
 		/* USB host */ false, /* USB device */ true, IDH_PTYPE_HUB,
 		/* modal operation */ true, USB_VID_GOOGLE);
@@ -322,7 +407,7 @@ ZTEST_F(usb_pd_discovery, test_verify_bad_mode)
 	partner->svids_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_SVID) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->svids_vdm[VDO_INDEX_HDR + 1] = VDO_SVID(USB_VID_INTEL, 0);
 	partner->svids_vdos = VDO_INDEX_HDR + 2;
 
@@ -330,7 +415,7 @@ ZTEST_F(usb_pd_discovery, test_verify_bad_mode)
 	partner->modes_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_DISPLAYPORT, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_MODES) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->modes_vdm[VDO_INDEX_HDR + 1] =
 		VDO_MODE_DP(MODE_DP_PIN_E, 0, 1, CABLE_RECEPTACLE, MODE_DP_V13,
 			    MODE_DP_SNK);
@@ -358,7 +443,7 @@ ZTEST_F(usb_pd_discovery, test_verify_modes_missing)
 	partner->identity_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_IDENT) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->identity_vdm[VDO_INDEX_IDH] = VDO_IDH(
 		/* USB host */ false, /* USB device */ true, IDH_PTYPE_HUB,
 		/* modal operation */ true, USB_VID_GOOGLE);
@@ -375,7 +460,7 @@ ZTEST_F(usb_pd_discovery, test_verify_modes_missing)
 	partner->svids_vdm[VDO_INDEX_HDR] =
 		VDO(USB_SID_PD, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_SVID) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->svids_vdm[VDO_INDEX_HDR + 1] = VDO_SVID(USB_VID_INTEL, 0);
 	partner->svids_vdos = VDO_INDEX_HDR + 2;
 
@@ -383,7 +468,7 @@ ZTEST_F(usb_pd_discovery, test_verify_modes_missing)
 	partner->modes_vdm[VDO_INDEX_HDR] =
 		VDO(USB_VID_INTEL, /* structured VDM */ true,
 		    VDO_CMDT(CMDT_RSP_ACK) | CMD_DISCOVER_MODES) |
-		VDO_SVDM_VERS_MAJOR(SVDM_VER_2_0);
+		VDO_SVDM_VERS(SVDM_VER_2_0);
 	partner->modes_vdos = 1;
 
 	connect_sink_to_port(&fixture->partner, fixture->tcpci_emul,
