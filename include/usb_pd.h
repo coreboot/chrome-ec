@@ -503,9 +503,9 @@ enum pd_alternate_modes {
 #endif
 
 enum usb_pd_svdm_ver {
-	SVDM_VER_1_0,
-	SVDM_VER_2_0,
-	SVDM_VER_2_1,
+	SVDM_VER_1_0 = 0b0000,
+	SVDM_VER_2_0 = 0b0100,
+	SVDM_VER_2_1 = 0b0101,
 };
 
 /* Discovery results for a port partner (SOP) or cable plug (SOP') */
@@ -560,13 +560,16 @@ struct partner_active_modes {
 	(((vid) << 16) | ((type) << 15) | ((custom) & 0x7FFF))
 
 #define VDO_SVDM_TYPE BIT(15)
-#define VDO_SVDM_VERS_MAJOR(x) (x << 13)
+#define VDO_SVDM_VERS_MASK (0xF << 11)
+#define VDO_SVDM_VERS(x) (((x) << 11) & VDO_SVDM_VERS_MASK)
+/* TODO: VDO_SVDM_VERS_MINOR and VDM_VERS_MINOR will be removed in
+ * CL:5875304, after we correctly set the version field to 2.1
+ */
 #define VDO_SVDM_VERS_MINOR(x) (x << 11)
 #define VDO_OPOS(x) (x << 8)
 #define VDO_CMDT(x) (x << 6)
 #define VDO_OPOS_MASK VDO_OPOS(0x7)
 #define VDO_CMDT_MASK VDO_CMDT(0x3)
-#define VDO_SVDM_VERS_MASK (VDO_SVDM_VERS_MAJOR(0x3) | VDO_SVDM_VERS_MINOR(0x3))
 
 #define CMDT_INIT 0
 #define CMDT_RSP_ACK 1
@@ -607,8 +610,7 @@ struct partner_active_modes {
 #define PD_VDO_OPOS(vdo) (((vdo) >> 8) & 0x7)
 #define PD_VDO_CMD(vdo) ((vdo) & 0x1f)
 #define PD_VDO_CMDT(vdo) (((vdo) >> 6) & 0x3)
-#define PD_VDO_SVDM_VERS_MAJOR(vdo) (((vdo) >> 13) & 0x3)
-#define PD_VDO_SVDM_VERS_MINOR(vdo) (((vdo) >> 11) & 0x3)
+#define PD_VDO_SVDM_VERS(vdo) (((vdo) >> 11) & 0xF)
 
 /*
  * SVDM Identity request -> response
