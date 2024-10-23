@@ -34,6 +34,7 @@ i2c3ALT: &i2c3 {
 		pch_slp_s0_n: pch_slp_s0_n_r {};
 		ec_pch_pwrok_od: pch_pwrok_ec_r {};
 		all_sys_pwrgd: all_sys_pwrgd_r {};
+		pwrbtn: bga_pinb4 {};
 	};
 };
 
