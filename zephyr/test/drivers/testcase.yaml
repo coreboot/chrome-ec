@@ -1511,6 +1511,9 @@ tests:
     extra_conf_files:
     - prj.conf
     - ec_host_cmd.conf
+  drivers.usbc_fake_pdos:
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_USBC_FAKE_PDOS=y
   drivers.host_cmd_thread:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_HOST_CMD_THREAD=y
