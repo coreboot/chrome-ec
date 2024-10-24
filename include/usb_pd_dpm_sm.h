@@ -175,7 +175,8 @@ void dpm_remove_source(int port);
  * @param port		USB-C port number
  * @return		Number of PDOs
  */
-int dpm_get_source_pdo(const uint32_t **src_pdo, const int port);
+__override_proto int dpm_get_source_pdo(const uint32_t **src_pdo,
+					const int port);
 
 /*
  * Report offered source current for this port
