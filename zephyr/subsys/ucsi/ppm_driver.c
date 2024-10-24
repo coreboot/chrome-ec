@@ -337,7 +337,7 @@ done:
 		case UCSI_SET_UOR:
 		case UCSI_SET_PDOS:
 		case UCSI_SET_SINK_PATH:
-			pdc_power_mgmt_resync_port_state_for_ppm(conn - 1);
+			pdc_power_mgmt_wait_for_sync(conn - 1, -1);
 			break;
 		}
 

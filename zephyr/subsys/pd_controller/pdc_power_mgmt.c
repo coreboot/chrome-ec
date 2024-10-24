@@ -4489,10 +4489,11 @@ test_mockable int pdc_power_mgmt_get_pch_data_status(int port, uint8_t *status)
 	return 0;
 }
 
-int pdc_power_mgmt_resync_port_state_for_ppm(int port)
+int pdc_power_mgmt_wait_for_sync(int port, int timeout_ms)
 {
 	struct pdc_port_t *pdc;
 	int rv;
+	int ktime = (timeout_ms == -1 ? PDC_SM_SETTLED_TIMEOUT_MS : timeout_ms);
 
 	if (!is_pdc_port_valid(port)) {
 		return -ERANGE;
@@ -4508,7 +4509,7 @@ int pdc_power_mgmt_resync_port_state_for_ppm(int port)
 	k_event_post(&pdc->sm_event, PDC_SM_EVENT);
 
 	rv = k_event_wait(&pdc->sm_event, PDC_SM_SETTLED_EVENT, false,
-			  K_MSEC(PDC_SM_SETTLED_TIMEOUT_MS));
+			  K_MSEC(ktime));
 
 	if (!rv) {
 		return -ETIMEDOUT;
