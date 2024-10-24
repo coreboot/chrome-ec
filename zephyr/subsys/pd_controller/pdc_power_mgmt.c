@@ -1986,7 +1986,7 @@ static void pdc_snk_attached_run(void *obj)
 {
 	struct pdc_port_t *port = (struct pdc_port_t *)obj;
 	const struct pdc_config_t *const config = port->dev->config;
-	uint32_t max_ma, max_mv, max_mw;
+	uint32_t max_ma, max_mv, max_mw, max_mw_pdo;
 	uint32_t flags;
 	size_t selected_pdo = 0;
 	int rv;
@@ -2103,14 +2103,23 @@ static void pdc_snk_attached_run(void *obj)
 		port->snk_policy.pdo = port->snk_policy.src.pdos[selected_pdo];
 		port->snk_policy.pdo_index = selected_pdo + 1;
 
-		/* Extract Current, Voltage, and calculate Power */
-		max_ma = PDO_FIXED_GET_CURR(port->snk_policy.pdo);
+		/* Extract Current, Voltage, and calculate Power. Current is
+		 * clamped to the board maximum here so that the RDO and charge
+		 * manager are given the correct board operating current.
+		 */
+		max_ma = MIN(PDO_FIXED_GET_CURR(port->snk_policy.pdo),
+			     CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA);
 		max_mv = PDO_FIXED_GET_VOLT(port->snk_policy.pdo);
 		max_mw = max_ma * max_mv / 1000;
 
-		/* Mismatch bit set if less power offered than the operating
-		 * power */
-		if (max_mw < pdc_max_operating_power) {
+		/* max_mw_pdo holds the raw PDO wattage without clamping. Use
+		 * this to set the mismatch bit if less power is offered than
+		 * our operating requirement.
+		 */
+		max_mw_pdo = PDO_FIXED_GET_CURR(port->snk_policy.pdo) *
+			     PDO_FIXED_GET_VOLT(port->snk_policy.pdo) / 1000;
+
+		if (max_mw_pdo < pdc_max_operating_power) {
 			flags |= RDO_CAP_MISMATCH;
 		}
 
@@ -2130,7 +2139,8 @@ static void pdc_snk_attached_run(void *obj)
 		queue_internal_cmd(port, CMD_PDC_SET_RDO);
 		return;
 	case SNK_ATTACHED_START_CHARGING:
-		max_ma = PDO_FIXED_GET_CURR(port->snk_policy.pdo);
+		max_ma = MIN(PDO_FIXED_GET_CURR(port->snk_policy.pdo),
+			     CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA);
 		max_mv = PDO_FIXED_GET_VOLT(port->snk_policy.pdo);
 		max_mw = max_ma * max_mv / 1000;
 
