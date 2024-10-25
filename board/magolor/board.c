@@ -78,13 +78,7 @@ const int usb_port_enable[USB_PORT_COUNT] = {
 #ifdef BOARD_MAGOLOR
 /* Keyboard scan setting */
 __override struct keyboard_scan_config keyscan_config = {
-	/*
-	 * F3 key scan cycle completed but scan input is not
-	 * charging to logic high when EC start scan next
-	 * column for "T" key, so we set .output_settle_us
-	 * to 80us from 50us.
-	 */
-	.output_settle_us = 80,
+	.output_settle_us = 50,
 	.debounce_down_us = 9 * MSEC,
 	.debounce_up_us = 30 * MSEC,
 	.scan_period_us = 3 * MSEC,

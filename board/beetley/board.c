@@ -47,7 +47,7 @@
 #define INT_RECHECK_US 5000
 
 __override struct keyboard_scan_config keyscan_config = {
-	.output_settle_us = 80,
+	.output_settle_us = 50,
 	.debounce_down_us = 30 * MSEC,
 	.debounce_up_us = 30 * MSEC,
 	.scan_period_us = 3 * MSEC,

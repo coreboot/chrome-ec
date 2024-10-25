@@ -53,14 +53,7 @@ DECLARE_DEFERRED(check_c0_line);
 
 /* Use default keyboard scan config, because board didn't supply one */
 __override struct keyboard_scan_config keyscan_config = {
-	/*
-	 * CONFIG_KEYBOARD_COL2_INVERTED is defined for passing the column 2
-	 * to H1 which inverts the signal. The signal passing through H1
-	 * adds more delay. Need a larger delay value. Otherwise, pressing
-	 * Refresh key will also trigger T key, which is in the next scanning
-	 * column line. See http://b/156007029.
-	 */
-	.output_settle_us = 80,
+	.output_settle_us = 50,
 	.debounce_down_us = 9 * MSEC,
 	.debounce_up_us = 30 * MSEC,
 	.scan_period_us = 3 * MSEC,
