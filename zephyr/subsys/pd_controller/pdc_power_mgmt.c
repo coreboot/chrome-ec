@@ -1488,6 +1488,7 @@ static void run_snk_policies(struct pdc_port_t *port)
 		return;
 	} else if (atomic_test_and_clear_bit(port->snk_policy.flags,
 					     SNK_POLICY_NEW_POWER_REQUEST)) {
+		port->get_pdo = (struct get_pdo_t){ 0 };
 		port->snk_attached_local_state = SNK_ATTACHED_GET_PDOS;
 		return;
 	} else if (atomic_test_and_clear_bit(port->snk_policy.flags,
@@ -1784,6 +1785,7 @@ static void pdc_src_attached_entry(void *obj)
 	if (get_pdc_state(port) != port->send_cmd_return_state) {
 		invalidate_charger_settings(port, true);
 		port->src_attached_local_state = SRC_ATTACHED_SET_SINK_PATH_OFF;
+		port->get_pdo = (struct get_pdo_t){ 0 };
 
 		/* We always want to evalulate sink caps when we a source. */
 		atomic_set_bit(port->src_policy.flags,
@@ -1896,8 +1898,10 @@ static void pdc_snk_attached_entry(void *obj)
 		const struct pdc_config_t *config = port->dev->config;
 		int port_number = config->connector_num;
 
+		/* Reset local state */
 		port->snk_attached_local_state =
 			SNK_ATTACHED_GET_CONNECTOR_CAPABILITY;
+		port->get_pdo = (struct get_pdo_t){ 0 };
 
 		/* If we were just a SRC, tell the DPM that the
 		 * attached sink has been disconnected.
