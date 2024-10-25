@@ -2017,7 +2017,7 @@ static void pdc_snk_attached_run(void *obj)
 		port->snk_attached_local_state = SNK_ATTACHED_START_CHARGING;
 		pdo_pwr_mw = 0;
 		pdo_volt_mv = 0;
-		flags = 0;
+		flags = RDO_COMM_CAP;
 
 		for (int i = 0; i < PDO_NUM; i++) {
 			if ((port->snk_policy.src.pdos[i] & PDO_TYPE_MASK) !=

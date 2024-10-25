@@ -1933,12 +1933,13 @@ ZTEST_USER(pdc_power_mgmt_api, test_sysjump_policy_on)
 /**
  * @brief Helper function for getting object position in RDO from the emulator
  */
-static int get_obj_pos_from_rdo()
+static uint32_t get_rdo()
 {
 	uint32_t rdo;
 
 	zassert_ok(emul_pdc_get_rdo(emul, &rdo));
-	return RDO_POS(rdo);
+
+	return rdo;
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_set_new_power_request)
@@ -1961,7 +1962,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_new_power_request)
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 	LOG_DBG("RDO position before new power request: %d",
-		get_obj_pos_from_rdo());
+		RDO_POS(get_rdo()));
 
 	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_1, 1, PARTNER_PDO,
 			  pdo_27W);
@@ -1970,10 +1971,14 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_new_power_request)
 	/* The 27W PDO at position 2 must be selected after the new power
 	 * request.
 	 */
-	zassert_true(
-		TEST_WAIT_FOR(get_obj_pos_from_rdo() == 2, PDC_TEST_TIMEOUT));
-	LOG_DBG("RDO position after new power request: %d",
-		get_obj_pos_from_rdo());
+	zassert_true(TEST_WAIT_FOR(RDO_POS(get_rdo()) == 2, PDC_TEST_TIMEOUT));
+
+	/* RDO should always have the USB communication capable bit set */
+	zassert_true(get_rdo() & RDO_COMM_CAP,
+		     "RDO (0x%08x) is missing RDO_COMM_CAP bit (bit 25)",
+		     get_rdo());
+
+	LOG_DBG("RDO position after new power request: %d", RDO_POS(get_rdo()));
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_request_source_voltage)
