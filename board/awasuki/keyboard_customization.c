@@ -51,7 +51,7 @@ void set_scancode_set2(uint8_t row, uint8_t col, uint16_t val)
 }
 
 __override struct keyboard_scan_config keyscan_config = {
-	.output_settle_us = 80,
+	.output_settle_us = 50,
 	.debounce_down_us = 15 * MSEC,
 	.debounce_up_us = 15 * MSEC,
 	.scan_period_us = 3 * MSEC,
