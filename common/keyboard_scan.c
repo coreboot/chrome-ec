@@ -86,6 +86,7 @@ __overridable struct keyboard_scan_config keyscan_config = {
 	.debounce_down_us = 9 * MSEC,
 	.debounce_up_us = 30 * MSEC,
 	.scan_period_us = 3 * MSEC,
+	.stable_scan_period_us = 9 * MSEC,
 	.min_post_scan_delay_us = 1000,
 	.poll_timeout_us = 100 * MSEC,
 	.actual_key_mask = {
@@ -227,7 +228,7 @@ static void ensure_keyboard_scanned(int old_polls)
 	 */
 	while ((kbd_polls == old_polls) &&
 	       (get_time().val - start_time < SCAN_TASK_TIMEOUT_US))
-		crec_usleep(keyscan_config.scan_period_us);
+		crec_usleep(keyscan_config.stable_scan_period_us);
 }
 
 #ifdef CONFIG_KEYBOARD_SCAN_ADC
@@ -1032,6 +1033,17 @@ void keyboard_scan_init(void)
 #endif /* CONFIG_KEYBOARD_BOOT_KEYS */
 }
 
+static bool keyboard_is_debouncing(void)
+{
+	for (uint8_t c = 0; c < keyboard_cols; c++) {
+		if (debouncing[c] != 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void keyboard_scan_task(void *u)
 {
 	timestamp_t poll_deadline, start;
@@ -1145,8 +1157,14 @@ void keyboard_scan_task(void *u)
 			}
 
 			/* Delay between scans */
-			wait_time = keyscan_config.scan_period_us -
-				    (get_time().val - start.val);
+			if (keyscan_config.stable_scan_period_us > 0 &&
+			    !keyboard_is_debouncing()) {
+				wait_time =
+					keyscan_config.stable_scan_period_us;
+			} else {
+				wait_time = keyscan_config.scan_period_us;
+			}
+			wait_time -= get_time().val - start.val;
 
 			if (wait_time < keyscan_config.min_post_scan_delay_us)
 				wait_time =

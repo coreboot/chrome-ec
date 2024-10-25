@@ -8,6 +8,7 @@
 		compatible = "cros-ec,keyscan";
 
 		scan-period = <10000>;
+		stable-scan-period = <10000>;
 
 		actual-key-mask = <
 			0x1c	/* C0 */
