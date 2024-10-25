@@ -65,10 +65,6 @@ i2c3ALT: &i2c3 {
 	named-gpios {
 		compatible = "named-gpios";
 
-		/* The legacy system code requires GPIO_ENTERING_RW symbol */
-		entering-rw {
-			enum-name = "GPIO_ENTERING_RW";
-		};
 		c_ioex_kbd_intr_r {
 			enum-name = "GPIO_KB_DISCRETE_INT";
 		};
