@@ -31,7 +31,7 @@ FAKE_VALUE_FUNC(int, chipset_in_state, int);
 BUILD_ASSERT(CONFIG_USB_PD_PORT_MAX_COUNT == 2,
 	     "PDC source policy test suite must supply exactly 2 PDC ports");
 
-BUILD_ASSERT(CONFIG_PLATFORM_EC_CONFIG_USB_PD_3A_PORTS == 1,
+BUILD_ASSERT(CONFIG_PLATFORM_EC_USB_PD_3A_PORTS == 1,
 	     "PDC source policy test suite only supports one 3A port");
 
 #define PDC_TEST_TIMEOUT 2000
