@@ -1003,9 +1003,11 @@ include Makefile.ide
 
 .PHONY: get_sdk
 get_sdk:
+ifneq ($(BAZEL_SUPPORTED),)
 	declare -A toolchain_dict=($(shell ./util/coreboot_sdk.py)) ; \
 	rm -rf build/Makefile.sdk ; \
 	for key in "$${!toolchain_dict[@]}"; do \
 		echo "export $${key} := $${toolchain_dict[$${key}]}" >> build/Makefile.sdk ; \
 	done
 	sync
+endif

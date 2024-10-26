@@ -31,7 +31,22 @@ def init_toolchain():
         ("COREBOOT_SDK_ROOT_riscv", "@ec-coreboot-sdk-riscv-elf//:get_path"),
         ("COREBOOT_SDK_ROOT_nds32", "@ec-coreboot-sdk-nds32le-elf//:get_path"),
     ]
-
+    try:
+        subprocess.run(
+            [
+                "bazel",
+                "--project",
+                "fwsdk",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print(
+            "bazel doesn't exist or is not the right version to download packages for coreboot-sdk"
+        )
+        return {}
     subprocess.run(
         [
             "bazel",
