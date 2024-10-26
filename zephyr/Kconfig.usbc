@@ -342,15 +342,30 @@ config PLATFORM_EC_USBC_RETIMER_FW_UPDATE
 	   update can only be performed on retimers which show up in the AP
 	   thunderbolt device entries.
 
-config PLATFORM_EC_CONSOLE_CMD_TYPEC
-	bool "Console command: typec"
-	default y
-	depends on !PDC_POWER_MGMT_USB_MUX
+choice PLATFORM_EC_CONSOLE_CMD_TYPEC_CHOICE
+	prompt "Console command typec choices"
+	default PLATFORM_EC_CONSOLE_CMD_TYPEC
 	help
-	  Enable the 'typec' console command. Use this command to override
-	  the USB Type-C connector mux configuration on a specified port.
+	   This symbol selects the typec command implemtation used
+	   on the ChromiumOS EC.
+
+config PLATFORM_EC_CONSOLE_CMD_TYPEC
+	bool "Console command typec for EC managed USB muxes"
+	depends on PLATFORM_EC_USBC_SS_MUX || PDC_POWER_MGMT_USB_MUX
+	help
+	  Enable the 'typec' console command for EC managed USB Type-C
+	  connector muxes.
+
+config PLATFORM_EC_CONSOLE_CMD_PDC_TYPEC
+	bool "Console command typec for PDC/AP managed USB muxes"
+	depends on USB_PDC_POWER_MGMT && !PDC_POWER_MGMT_USB_MUX
+	help
+	  Enable the 'typec' console command for USB muxes are _not_ managed by
+	  EC.  Use this command to override the USB Type-C connector mux
+	  configuration on a specified port.
 
 	  Passing in 'debug' instead of a port number turns on additional
 	  debug messages whenever the EC application modifies the mux state.
+endchoice
 
 endif  # PLATFORM_EC_USBC
