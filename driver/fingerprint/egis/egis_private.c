@@ -17,6 +17,8 @@
 /* Lock to access the sensor */
 static K_MUTEX_DEFINE(sensor_lock);
 static task_id_t sensor_owner;
+/* recorded error flags */
+static uint16_t errors;
 
 /* Sensor description */
 static struct ec_response_fp_info egis_fp_sensor_info = {
@@ -54,7 +56,16 @@ void fp_sensor_low_power(void)
 
 int fp_sensor_init(void)
 {
-	return egis_sensor_init();
+	int ret = egis_sensor_init();
+	errors = 0;
+	if (ret == EGIS_API_ERROR_IO_SPI) {
+		errors |= FP_ERROR_SPI_COMM;
+	} else if (ret == EGIS_API_ERROR_DEVICE_NOT_FOUND) {
+		errors |= FP_ERROR_BAD_HWID;
+	} else if (ret != EGIS_API_OK) {
+		errors |= FP_ERROR_INIT_FAIL;
+	}
+	return EC_SUCCESS;
 }
 
 int fp_sensor_deinit(void)
@@ -66,6 +77,7 @@ int fp_sensor_get_info(struct ec_response_fp_info *resp)
 {
 	int rc = EC_SUCCESS;
 	memcpy(resp, &egis_fp_sensor_info, sizeof(struct ec_response_fp_info));
+	resp->errors = errors;
 	return rc;
 }
 
