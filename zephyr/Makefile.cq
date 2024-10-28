@@ -25,7 +25,8 @@ GENERATED_AND_SYSTEM_PATTERNS='$(PLATFORM_EC)/build/**' \
 	'$(PLATFORM_EC)/twister-out*/**' \
 	'/usr/include/**' \
 	'/usr/lib/**' \
-	'**/picolibc/picolibc/include/**'
+	'**/picolibc/picolibc/include/**' \
+	'**/third_party/boringssl/crypto/**'
 TEST_PATTERNS='$(PLATFORM_EC)/test/**' \
 	'$(PLATFORM_EC)/include/tests/**' \
 	'$(PLATFORM)/ec-private/test/**' \
