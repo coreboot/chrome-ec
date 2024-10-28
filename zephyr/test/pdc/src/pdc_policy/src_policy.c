@@ -772,6 +772,7 @@ ZTEST_USER_F(src_policy, test_src_policy_non_pd_downgrade_for_frs)
 	zassert_equal(typec_current, TC_CURRENT_1_5A);
 
 	/* FRS should be enabled. */
+	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT1));
 	zassert_ok(emul_pdc_get_frs(fixture->emul_pdc[TEST_USBC_PORT1],
 				    &frs_enabled));
 	zassert_true(frs_enabled);
