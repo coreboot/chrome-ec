@@ -2485,7 +2485,6 @@ static void pdc_send_cmd_wait_run(void *obj)
 static void pdc_send_cmd_wait_exit(void *obj)
 {
 	struct pdc_port_t *port = (struct pdc_port_t *)obj;
-	const struct pdc_config_t *const config = port->dev->config;
 	struct pdc_pdos_t *pdc_pdos;
 
 	if (port->cmd == &port->send_cmd.public) {
@@ -2513,13 +2512,6 @@ static void pdc_send_cmd_wait_exit(void *obj)
 			} else {
 				pdc_pdos->pdo_count++;
 			}
-		}
-		break;
-	case CMD_PDC_GET_RDO:
-		if (port->attached_state == SRC_ATTACHED_STATE) {
-			/* Inform DPM port partner's current request */
-			pdc_dpm_evaluate_request_rdo(config->connector_num,
-						     port->src_policy.rdo);
 		}
 		break;
 	case CMD_PDC_SET_PDR:

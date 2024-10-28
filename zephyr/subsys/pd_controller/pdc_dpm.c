@@ -243,39 +243,6 @@ void pdc_dpm_add_non_pd_sink(int port)
 	pdc_dpm_balance_source_ports(&dpm_work.work);
 }
 
-void pdc_dpm_evaluate_request_rdo(int port, uint32_t rdo)
-{
-	int idx;
-	int op_ma;
-	enum usb_typec_current_t rp;
-
-	if (CONFIG_PLATFORM_EC_CONFIG_USB_PD_3A_PORTS == 0)
-		return;
-
-	idx = RDO_POS(rdo);
-	/* Check for invalid index */
-	if (!idx)
-		return;
-
-	/* Extract the requested current which is report in mA/10 units */
-	op_ma = 10 * ((rdo >> 10) & 0x3FF);
-	if (atomic_test_bit(&sink_max_pdo_requested, port) && (op_ma <= 1500)) {
-		/*
-		 * sink_max_pdo_requested will be set when we get 5V/3A sink
-		 * capability from port partner. If port partner only requests
-		 * 5V/1.5A after we send the 5V/3A source cap, 5V/1.5A, we need
-		 * to downgrade the source cap back 5V/1.5A so that we can offer
-		 * 3A to another port.
-		 */
-		atomic_clear_bit(&sink_max_pdo_requested, port);
-
-		/* Restore selected default Rp on the port */
-		rp = pdc_power_mgmt_get_default_current_limit(port);
-		pdc_power_mgmt_set_current_limit(port, rp);
-		pdc_dpm_balance_source_ports(&dpm_work.work);
-	}
-}
-
 void pdc_dpm_remove_sink(int port)
 {
 	enum usb_typec_current_t rp;
