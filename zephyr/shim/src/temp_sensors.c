@@ -3,6 +3,12 @@
  * found in the LICENSE file.
  */
 
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 11
+
 #include "adc.h"
 #include "charger/chg_rt9490.h"
 #include "driver/charger/rt9490.h"
@@ -14,6 +20,12 @@
 #include "temp_sensor/temp_sensor.h"
 #include "temp_sensor/thermistor.h"
 #include "temp_sensor/tmp112.h"
+
+/*
+ * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
+ * #line marks the *next* line, so it is off by one.
+ */
+#line 29
 
 #if DT_HAS_COMPAT_STATUS_OKAY(TEMP_SENSORS_COMPAT)
 

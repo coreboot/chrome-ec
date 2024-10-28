@@ -11,6 +11,7 @@
 #include <zephyr/ztest.h>
 
 #include <usbc/ppm.h>
+#line 15 /* For coverage. Put after #includes and point to next line. */
 
 LOG_MODULE_REGISTER(ppm_test, LOG_LEVEL_DBG);
 
