@@ -647,6 +647,8 @@ struct pdc_port_t {
 	enum src_attached_local_state_t src_attached_local_state;
 	/** State machine run event */
 	struct k_event sm_event;
+	/** PDC settled event */
+	struct k_event settle_event;
 
 	/** Transitioning from last_state */
 	enum pdc_state_t last_state;
@@ -1019,9 +1021,11 @@ static void send_cmd_init(struct pdc_port_t *port)
 static void send_pending_public_commands(struct pdc_port_t *port)
 {
 	/* If we are running public commands, policy state machine must have
-	 * finished settling.
+	 * finished settling. Post if not already set.
 	 */
-	k_event_post(&port->sm_event, PDC_SM_SETTLED_EVENT);
+	if (k_event_test(&port->settle_event, PDC_SM_SETTLED_EVENT) == 0) {
+		k_event_post(&port->settle_event, PDC_SM_SETTLED_EVENT);
+	}
 
 	/* Send a pending public command */
 	if (port->send_cmd.public.pending) {
@@ -3153,6 +3157,7 @@ static int pdc_subsys_init(const struct device *dev)
 
 	/* Initialize state machine run event */
 	k_event_init(&port->sm_event);
+	k_event_init(&port->settle_event);
 
 	/* Initialize command mutex */
 	k_mutex_init(&port->mtx);
@@ -4527,21 +4532,21 @@ int pdc_power_mgmt_wait_for_sync(int port, int timeout_ms)
 
 	pdc = &pdc_data[port]->port;
 
-	/* First clear the settle state event if it wasn't triggered for PPM. */
-	k_event_clear(&pdc->sm_event, PDC_SM_SETTLED_EVENT);
-
 	/* Trigger re-scan of connector status. */
 	atomic_set_bit(pdc->cci_flags, CCI_EVENT);
 	k_event_post(&pdc->sm_event, PDC_SM_EVENT);
 
-	rv = k_event_wait(&pdc->sm_event, PDC_SM_SETTLED_EVENT, false,
+	/* To avoid any race conditions, set reset arg to true to clear all
+	 * events in settle_event, then wait for PDC_SM_SETTLED_EVENT to be
+	 * posted. This is all handled under a lock within k_event_wait. */
+	rv = k_event_wait(&pdc->settle_event, PDC_SM_SETTLED_EVENT, true,
 			  K_MSEC(ktime));
 
 	if (!rv) {
 		return -ETIMEDOUT;
 	}
 
-	k_event_clear(&pdc->sm_event, rv);
+	k_event_clear(&pdc->settle_event, rv);
 	return 0;
 }
 
