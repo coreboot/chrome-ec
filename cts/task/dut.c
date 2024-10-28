@@ -120,11 +120,6 @@ enum cts_rc test_task_priority(void)
 	return CTS_RC_SUCCESS;
 }
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Winfinite-recursion"
-#endif
-
 static void recurse(int x)
 {
 	CPRINTS("+%d", x);
@@ -132,10 +127,6 @@ static void recurse(int x)
 	recurse(x + 1);
 	CPRINTS("-%d", x);
 }
-
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif
 
 enum cts_rc test_stack_overflow(void)
 {
