@@ -750,6 +750,10 @@ struct pdc_port_t {
 	bool frs_enable;
 	/** Store response to the GET_ATTENTION_VDO command */
 	union get_attention_vdo_t attention_vdo;
+	/** board callback for Type-C port unattach event */
+	pdc_power_mgmt_board_unattached_cb board_unattach_cb;
+	/** board callback for DP Attention event */
+	pdc_power_mgmt_board_dp_attention_cb board_dp_attention_cb;
 };
 
 /**
@@ -1473,6 +1477,8 @@ static bool should_swap_to_source(struct pdc_port_t *port)
 
 static void handle_attention_vdo(struct pdc_port_t *port)
 {
+	const struct pdc_config_t *config = port->dev->config;
+	int port_num = config->connector_num;
 	/* Check for an HPD wake on DP Status. The conditions are...
 	 *  a) Device is suspended.
 	 *  b) Port is currently using an alternate mode.
@@ -1485,6 +1491,10 @@ static void handle_attention_vdo(struct pdc_port_t *port)
 	    port->hpd_wake_watch &&
 	    PD_VDO_DPSTS_HPD_LVL(port->attention_vdo.vdo)) {
 		host_set_single_event(EC_HOST_EVENT_USB_MUX);
+	}
+
+	if (port->board_dp_attention_cb) {
+		port->board_dp_attention_cb(port_num, port->attention_vdo.vdo);
 	}
 }
 
@@ -1760,6 +1770,10 @@ static void pdc_unattached_entry(void *obj)
 				    USB_SWITCH_DISCONNECT,
 				    /* port is unattacehd, not meaningful */
 				    POLARITY_CC1);
+		}
+
+		if (port->board_unattach_cb) {
+			port->board_unattach_cb(port_number);
 		}
 	}
 }
@@ -4646,6 +4660,31 @@ int pdc_power_mgmt_register_ppm_callback(const struct pdc_callback *callback)
 	for (port = 0; port < pdc_power_mgmt_get_usb_pd_port_count(); ++port) {
 		pdc = &pdc_data[port]->port;
 		pdc->ppm_ci_cb = callback;
+	}
+
+	return 0;
+}
+
+int pdc_power_mgmt_register_board_callback(enum pdc_power_mgmt_board_cb_t type,
+					   const void *callback)
+{
+	struct pdc_port_t *pdc;
+	int port;
+
+	for (port = 0; port < pdc_power_mgmt_get_usb_pd_port_count(); ++port) {
+		pdc = &pdc_data[port]->port;
+		switch (type) {
+		case PDC_BOARD_CB_UNATTACH:
+			pdc->board_unattach_cb =
+				(pdc_power_mgmt_board_unattached_cb)callback;
+			break;
+		case PDC_BOARD_CB_DP_ATTENTION:
+			pdc->board_dp_attention_cb =
+				(pdc_power_mgmt_board_dp_attention_cb)callback;
+			break;
+		default:
+			break;
+		};
 	}
 
 	return 0;
