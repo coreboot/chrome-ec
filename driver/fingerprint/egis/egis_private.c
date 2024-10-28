@@ -10,6 +10,7 @@
 #include "task.h"
 #include "util.h"
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #define LOG_TAG "RBS-rapwer"
@@ -34,6 +35,24 @@ static struct ec_response_fp_info egis_fp_sensor_info = {
 	.height = FP_SENSOR_RES_Y_EGIS,
 	.bpp = 16,
 };
+
+static int convert_egis_get_image_error_code(egis_api_return_t code)
+{
+	switch (code) {
+	case EGIS_API_IMAGE_QUALITY_GOOD:
+		return EC_SUCCESS;
+	case EGIS_API_IMAGE_QUALITY_BAD:
+	case EGIS_API_IMAGE_QUALITY_WATER:
+		return FP_SENSOR_LOW_IMAGE_QUALITY;
+	case EGIS_API_IMAGE_EMPTY:
+		return FP_SENSOR_TOO_FAST;
+	case EGIS_API_IMAGE_QUALITY_PARTIAL:
+		return FP_SENSOR_LOW_SENSOR_COVERAGE;
+	default:
+		assert(code < 0);
+		return code;
+	}
+}
 
 void fp_sensor_lock(void)
 {
@@ -111,12 +130,13 @@ int fp_maintenance(void)
 
 int fp_acquire_image_with_mode(uint8_t *image_data, int mode)
 {
-	return egis_get_image_with_mode(image_data, mode);
+	return convert_egis_get_image_error_code(
+		egis_get_image_with_mode(image_data, mode));
 }
 
 int fp_acquire_image(uint8_t *image_data)
 {
-	return egis_get_image(image_data);
+	return convert_egis_get_image_error_code(egis_get_image(image_data));
 }
 
 enum finger_state fp_finger_status(void)
