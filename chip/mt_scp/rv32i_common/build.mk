@@ -8,8 +8,6 @@
 
 CORE:=riscv-rv32i
 
-_ZIFENCEI_EXTENSION=_zifencei
-
 # Required chip modules
 chip-y+=rv32i_common/cache.o
 chip-y+=rv32i_common/gpio.o
