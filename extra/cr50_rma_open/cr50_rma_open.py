@@ -64,10 +64,12 @@ RMA_SUPPORT_PREPVT = '0.4.5'
 DEV_MODE_OPEN_PROD = '0.3.9'
 DEV_MODE_OPEN_PREPVT = '0.4.7'
 TESTLAB_PROD = '0.3.10'
-CR50_USB = '18d1:5014'
-CR50_LSUSB_CMD = ['lsusb', '-vd', CR50_USB]
-TI50_USB = '18d1:504a'
-TI50_LSUSB_CMD = ['lsusb', '-vd', TI50_USB]
+H1_USB = '18d1:5014'
+H1_LSUSB_CMD = ['lsusb', '-vd', H1_USB]
+DT_USB = '18d1:504a'
+DT_LSUSB_CMD = ['lsusb', '-vd', DT_USB]
+NT_USB = '18d1:5066'
+NT_LSUSB_CMD = ['lsusb', '-vd', DT_USB]
 ERASED_BID = 'ffffffff'
 
 DEBUG_MISSING_USB = """
@@ -517,7 +519,7 @@ class RMAOpen(object):
         Raises:
             ValueError if the console can't be found with the given serialname
         """
-        usb_serial = self.find_cr50_usb(usb_serial)
+        usb_serial = self.find_gsc_usb(usb_serial)
         logging.info('SERIALNAME: %s', usb_serial)
         devid = '0x' + ' 0x'.join(usb_serial.lower().split('-'))
         logging.info('DEVID: %s', devid)
@@ -551,11 +553,12 @@ class RMAOpen(object):
         logging.info('RLZ: %s', ''.join(chrs[::-1]))
 
     @staticmethod
-    def find_cr50_usb(usb_serial):
+    def find_gsc_usb(usb_serial):
         """Make sure the Cr50 USB device exists"""
         try:
-            output = subprocess.check_output(CR50_LSUSB_CMD, encoding='utf-8')
-            output += subprocess.check_output(TI50_LSUSB_CMD, encoding='utf-8')
+            output = subprocess.check_output(H1_LSUSB_CMD, encoding='utf-8')
+            output += subprocess.check_output(DT_LSUSB_CMD, encoding='utf-8')
+            output += subprocess.check_output(NT_LSUSB_CMD, encoding='utf-8')
         except:
             logging.warning(DEBUG_MISSING_USB)
             raise ValueError('Could not find Cr50 USB device')
