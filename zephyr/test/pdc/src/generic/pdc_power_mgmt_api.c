@@ -66,6 +66,14 @@ static void reset_fakes(void)
 	chipset_in_state_fake.custom_fake = custom_fake_chipset_in_state;
 }
 
+static void clear_partner_pdos(const struct emul *e, enum pdo_type_t type)
+{
+	uint32_t clear_pdos[PDO_MAX_OBJECTS] = { 0 };
+
+	emul_pdc_set_pdos(e, type, PDO_OFFSET_0, ARRAY_SIZE(clear_pdos),
+			  PARTNER_PDO, clear_pdos);
+}
+
 static void pdc_power_mgmt_setup(void)
 {
 	zassume(TEST_PORT < CONFIG_USB_PD_PORT_MAX_COUNT,
@@ -74,6 +82,7 @@ static void pdc_power_mgmt_setup(void)
 
 static void pdc_power_mgmt_before(void *fixture)
 {
+	emul_pdc_reset(emul);
 	emul_pdc_set_response_delay(emul, 0);
 	emul_pdc_disconnect(emul);
 
@@ -284,7 +293,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_pd_capable)
 	emul_pdc_connect_partner(emul, &connector_status);
 	zassert_false(TEST_WAIT_FOR(pd_capable(TEST_PORT), PDC_TEST_TIMEOUT));
 
-	connector_status.power_operation_mode = PD_OPERATION;
+	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
 	zassert_true(TEST_WAIT_FOR(pd_capable(TEST_PORT), PDC_TEST_TIMEOUT));
 }
@@ -584,15 +593,15 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 		pd_get_partner_data_swap_capable(CONFIG_USB_PD_PORT_MAX_COUNT));
 
 	for (i = 0; i < ARRAY_SIZE(test); i++) {
+		if (test[i].power_role == PD_ROLE_SINK)
+			emul_pdc_configure_snk(emul, &connector_status);
+		else
+			emul_pdc_configure_src(emul, &connector_status);
 		emul_pdc_set_pdos(emul,
 				  (test[i].power_role == PD_ROLE_SINK ?
 					   SOURCE_PDO :
 					   SINK_PDO),
 				  PDO_OFFSET_0, 1, PARTNER_PDO, &test[i].pdo);
-		if (test[i].power_role == PD_ROLE_SINK)
-			emul_pdc_configure_snk(emul, &connector_status);
-		else
-			emul_pdc_configure_src(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
 
 		zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
@@ -944,9 +953,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_unconstr_power_src)
 	/* If the port is not in Attached.SNK, unconstrained power is considered
 	 * to be false.
 	 */
+	emul_pdc_configure_src(emul, &connector_status);
+	clear_partner_pdos(emul, SOURCE_PDO);
 	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO,
 			  pdos_up);
-	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
 
 	zassert_false(TEST_WAIT_FOR(pd_get_partner_unconstr_power(TEST_PORT),
@@ -960,9 +970,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_unconstr_power_snk_no_up)
 		PDO_FIXED(5000, 3000, PDO_FIXED_DUAL_ROLE),
 	};
 
+	emul_pdc_configure_snk(emul, &connector_status);
+	clear_partner_pdos(emul, SOURCE_PDO);
 	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO,
 			  pdos_no_up);
-	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
 
 	zassert_false(TEST_WAIT_FOR(pd_get_partner_unconstr_power(TEST_PORT),
@@ -981,9 +992,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_unconstr_power_snk_up)
 	/* If the port is in Attached.SNK, unconstrained power should be the
 	 * partner's advertised capability.
 	 */
+	emul_pdc_configure_snk(emul, &connector_status);
+	clear_partner_pdos(emul, SOURCE_PDO);
 	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO,
 			  pdos_up);
-	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
 	zassert_true(TEST_WAIT_FOR(pd_get_partner_unconstr_power(TEST_PORT),
 				   PDC_TEST_TIMEOUT));
@@ -1316,8 +1328,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume_drp_partner)
 		PDO_FIXED(5000, 3000, PDO_FIXED_DUAL_ROLE),
 	};
 
-	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_1, 1, PARTNER_PDO, pdos);
 	emul_pdc_configure_snk(emul, &connector_status);
+	clear_partner_pdos(emul, SOURCE_PDO);
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_1, 1, PARTNER_PDO, pdos);
 	emul_pdc_connect_partner(emul, &connector_status);
 
 	zassert_true(
@@ -1344,8 +1357,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_resume_up_drp_partner)
 				  PDO_FIXED_GET_UNCONSTRAINED_PWR),
 	};
 
-	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO, pdos);
 	emul_pdc_configure_snk(emul, &connector_status);
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO, pdos);
 	emul_pdc_connect_partner(emul, &connector_status);
 
 	zassert_true(
@@ -1578,8 +1591,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_new_pd_sink_contract)
 	};
 
 	/* Connect a sourcing port partner */
-	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO, pdos);
 	emul_pdc_configure_snk(emul, &in);
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO, pdos);
 	emul_pdc_connect_partner(emul, &in);
 
 	/* Ensure we are connected */
@@ -1725,10 +1738,11 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_identity_discovery)
 
 	in_conn_status.conn_partner_type = UFP_ATTACHED;
 	in_conn_status.rdo = 0x01234567;
-	emul_pdc_configure_snk(emul, &in_conn_status);
 
 	for (int i = 0; i < ARRAY_SIZE(test); i++) {
 		LOG_INF("Testing %s", test[i].description);
+
+		emul_pdc_configure_snk(emul, &in_conn_status);
 
 		if (test[i].s.mode_support) {
 			in_conn_status.conn_partner_flags =
@@ -1955,9 +1969,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_new_power_request)
 	/* This should result in no-op */
 	zassert_not_ok(pdc_power_mgmt_set_new_power_request(TEST_PORT));
 
+	emul_pdc_configure_snk(emul, &connector_status);
+	clear_partner_pdos(emul, SOURCE_PDO);
 	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO,
 			  pdo_15W);
-	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
@@ -1993,14 +2008,14 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_source_voltage)
 	int prev_mv = pdc_power_mgmt_get_max_voltage();
 	int source_mv = 5000;
 
-	zassert_ok(emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0,
-				     ARRAY_SIZE(partner_src_pdos), PARTNER_PDO,
-				     partner_src_pdos));
 	/* Setup    - Configure as SNK and request 5v
 	 * Validate - Confirm 5v PDO selected
 	 */
 	pdc_power_mgmt_request_source_voltage(TEST_PORT, source_mv);
 	emul_pdc_configure_snk(emul, &connector_status);
+	zassert_ok(emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0,
+				     ARRAY_SIZE(partner_src_pdos), PARTNER_PDO,
+				     partner_src_pdos));
 	emul_pdc_connect_partner(emul, &connector_status);
 	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
 
@@ -2031,11 +2046,11 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_source_voltage)
 
 	pdc_power_mgmt_request_source_voltage(TEST_PORT, prev_mv);
 	emul_pdc_reset(emul);
+	emul_pdc_configure_src(emul, &connector_status);
 	zassert_ok(emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0,
 				     ARRAY_SIZE(partner_src_pdos), PARTNER_PDO,
 				     partner_src_pdos));
 	source_mv = 5000;
-	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
 	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
 	zassert_equal(PD_ROLE_SOURCE, pd_get_power_role(TEST_PORT));
@@ -2073,9 +2088,12 @@ ZTEST_USER(pdc_power_mgmt_api, test_pdc_power_mgmt_set_active_charge_port)
 {
 	union connector_status_t connector_status;
 
-	zassert_ok(board_set_active_charge_port(CHARGE_PORT_NONE));
 	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
+	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_true(is_sink_path_enabled());
+
+	zassert_ok(board_set_active_charge_port(CHARGE_PORT_NONE));
 	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
 	/* Sink path should be disabled because it's not active charge port */
 	zassert_false(is_sink_path_enabled());

@@ -603,18 +603,34 @@ static inline void
 emul_pdc_configure_src(const struct emul *target,
 		       union connector_status_t *connector_status)
 {
-	ARG_UNUSED(target);
+	uint32_t partner_pdos[] = {
+		PDO_FIXED(5000, 3000, 0),
+		PDO_FIXED(12000, 3000, 0),
+		PDO_FIXED(20000, 5000, 0),
+	};
+
 	connector_status->power_operation_mode = PD_OPERATION;
 	connector_status->power_direction = 1;
+
+	emul_pdc_set_pdos(target, SOURCE_PDO, PDO_OFFSET_0,
+			  ARRAY_SIZE(partner_pdos), PARTNER_PDO, partner_pdos);
 }
 
 static inline void
 emul_pdc_configure_snk(const struct emul *target,
 		       union connector_status_t *connector_status)
 {
-	ARG_UNUSED(target);
+	uint32_t partner_pdos[] = {
+		PDO_FIXED(5000, 3000, 0),
+		PDO_FIXED(12000, 3000, 0),
+		PDO_FIXED(20000, 5000, 0),
+	};
+
 	connector_status->power_operation_mode = PD_OPERATION;
 	connector_status->power_direction = 0;
+
+	emul_pdc_set_pdos(target, SOURCE_PDO, PDO_OFFSET_0,
+			  ARRAY_SIZE(partner_pdos), PARTNER_PDO, partner_pdos);
 }
 
 static inline int
