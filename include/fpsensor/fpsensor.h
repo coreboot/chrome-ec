@@ -34,7 +34,33 @@ extern "C" {
 /* --- functions provided by the sensor-specific driver --- */
 
 /**
- * Initialize the connected sensor hardware and put it in a low power mode.
+ * @brief Initialize the connected sensor hardware and put it in a low power
+ * mode.
+ *
+ * It is expected that @ref fp_sensor_init and @ref fp_sensor_deinit may be
+ * called multiple times during runtime to clear the active user session. For
+ * example, on user logout, @ref fp_sensor_deinit is called and then @ref
+ * fp_sensor_init is called.
+ *
+ * This function updates a static error variable with the following error codes
+ * (whenever detected), which is read using the @ref fp_sensor_get_info function
+ * defined in the same source file. The errors are ultimately read from the
+ * application processor using the host command EC_CMD_FP_INFO:
+ *
+ * FP_ERROR_DEAD_PIXELS: The number of dead pixels detected on the sensor during
+ * maintenance.
+ *
+ * FP_ERROR_DEAD_PIXELS_UNKNOWN: The number of dead pixels has not been tested
+ * yet.
+ *
+ * FP_ERROR_NO_IRQ: No interrupt signal received from the sensor.
+ *
+ * FP_ERROR_SPI_COMM: Error in SPI communication with the sensor.
+ *
+ * FP_ERROR_BAD_HWID: Invalid sensor hardware ID.
+ *
+ * FP_ERROR_INIT_FAIL: Sensor initialization failed.
+ *
  *
  * @return EC_SUCCESS always
  */
