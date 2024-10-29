@@ -10,7 +10,7 @@
 		/*
 		 * Interrupt bindings for sensor devices.
 		 */
-		lis2dw12-int = &lid_accel;
+		lis2dw12-int = &alt_lid_accel;
 	};
 
 	/*
