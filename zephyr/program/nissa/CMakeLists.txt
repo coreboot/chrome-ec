@@ -313,6 +313,20 @@ if(DEFINED CONFIG_BOARD_TELIKS)
 			"teliks/src/keyboard_customization.c"
 	)
 endif()
+if(DEFINED CONFIG_BOARD_TELITH)
+	project(telith)
+	zephyr_include_directories("telith/include")
+	zephyr_library_sources(
+			"telith/src/board.c"
+			"telith/src/sub_board.c"
+			"telith/src/prochot.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "telith/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "telith/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
+			"telith/src/keyboard_customization.c"
+	)
+endif()
 if(DEFINED CONFIG_BOARD_INTEL_ISH_5_4_1)
 	project(orisa-ish)
 	add_subdirectory(orisa-ish)
