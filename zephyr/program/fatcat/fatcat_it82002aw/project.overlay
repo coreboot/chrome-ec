@@ -7,17 +7,85 @@
 
 #include <cros/integrated_fwid.dtsi>
 
-#include "../fatcat_stub.dts"
-
 /* fatcat_it82002aw project DTS includes */
 
-#include "console.dtsi"
+/* TODO(b/358612639)
+ * Arbitrage generates an incorrect node label when using alternate pins.
+ * Create a 2nd node label on I2C3 as a workaround.
+ */
+i2c3ALT: &i2c3 {
+};
+
+#include "generated.dtsi"
+#include "include/board.h"
+
+#define CHARGER_I2C i2c4
+#define PD_POW_I2C i2c1
+
+/ {
+	named-gpios {
+		/*
+		 * Aliases for power signal names
+		 */
+		en_pp3300_a: ec_ds3_r {};
+		en_pp5000_s5: bga_pinf4 {};
+		rsmrst_pwrgd: rsmrst_pwrgd_n_r {};
+		ec_pch_rsmrst_l: pm_rsmrst_n_r {};
+		pch_slp_s0_n: pch_slp_s0_n_r {};
+		ec_pch_pwrok_od: pch_pwrok_ec_r {};
+		all_sys_pwrgd: all_sys_pwrgd_r {};
+	};
+};
+
+#include "../../intelrvp/ptlrvp/i2c.dtsi"
+#include "../../intelrvp/ptlrvp/keyboard.dtsi"
+#include "../../intelrvp/ptlrvp/power_signals.dtsi"
 
 #include "adc.dtsi"
+#include "console.dtsi"
+#include "gpios.dtsi"
+#include "gsc_board.dtsi"
 #include "i2c.dtsi"
+#include "interrupts.dtsi"
+#include "keyboard.dtsi"
+#include "pwm.dtsi"
 
 /* these need to be promoted to program.conf */
 
 #include "binman.dtsi"
 
 /* fatcat_it82002aw overrides follow... */
+
+/ {
+	aliases {
+		gpio-wp = &gpio_c_ec_wp_odl_r;
+	};
+
+	named-gpios {
+		compatible = "named-gpios";
+
+		/* The legacy system code requires GPIO_ENTERING_RW symbol */
+		entering-rw {
+			enum-name = "GPIO_ENTERING_RW";
+		};
+		c_ioex_kbd_intr_r {
+			enum-name = "GPIO_KB_DISCRETE_INT";
+		};
+		bga_pine5 {
+			enum-name = "GPIO_AC_PRESENT";
+		};
+		/* override since arb does not support GPIO_VOLTAGE_1P8 */
+		gpio_rsmrst_pwrgd_n_r: rsmrst_pwrgd_n_r {
+			gpios = <&gpiof 0 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
+		};
+	};
+};
+
+/* AP interface */
+&espi0 {
+	status = "okay";
+};
+
+&sha0 {
+	status = "okay";
+};

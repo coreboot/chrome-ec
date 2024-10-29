@@ -204,6 +204,9 @@ enum pdo_augmented_pps {
 	(RDO_OBJ_POS(n) | (flags) | RDO_BATT_OP_POWER(op_mw) | \
 	 RDO_BATT_MAX_POWER(max_mw))
 
+#define RDO_FIXED_GET_VAR_OP_CURR(rdo) ((((rdo) >> 10) & 0x3FF) * 10)
+#define RDO_FIXED_GET_VAR_MAX_CURR(rdo) ((((rdo) >> 0) & 0x3FF) * 10)
+
 /* BDO : BIST Data Object
  * 31:28 BIST Mode
  *       In PD 3.0, all but Carrier Mode 2 (as Carrier Mode) and Test Data are
@@ -252,23 +255,24 @@ enum pdo_augmented_pps {
 #define PD_T_SOURCE_ACTIVITY (45 * MSEC) /* between 40ms and 50ms */
 #define PD_T_ENTER_EPR (500 * MSEC) /* between 450ms and 550ms */
 /*
- * Adjusting for TCPMv2 PD2 Compliance. In tests like TD.PD.SRC.E5 this
+ * Adjusting for TCPMv2 PD2 Compliance. In tests like TEST.PD.PROT.SRC.2 this
  * value is the duration before the Hard Reset can be sent. Setting the
- * timer value to the maximum will delay sending the HardReset until
- * after the window has closed instead of when it is desired at the
- * beginning of the window.
+ * timer value to the minimum to ensure that the TCPM actually sends any Hard
+ * Reset between tSenderResponse min and max.
  * Leaving TCPMv1 as it was as there are no current requests to adjust
- * for compliance on the old stack and making this change  breaks the
+ * for compliance on the old stack and making this change breaks the
  * usb_pd unit test.
  */
-#ifndef CONFIG_USB_PD_TCPMV2
+#ifdef CONFIG_USB_PD_TCPMV1
 #define PD_T_SENDER_RESPONSE (30 * MSEC) /* between 24ms and 30ms */
 #else
+/* PD R2.0 V1.3: between 24ms and 30ms */
+#define PD2_T_SENDER_RESPONSE (24 * MSEC)
 /*
- * In USB Power Delivery Specification Revision 3.1, Version 1.5,
- * the tSenderResponse have changed to min 26/ max 32 ms.
+ * PD R3.1 V1.5: between 26ms and 32ms
+ * PD R3.2 V1.0: between 27ms and 33ms
  */
-#define PD_T_SENDER_RESPONSE (26 * MSEC) /* between 26ms and 32ms */
+#define PD3_T_SENDER_RESPONSE (27 * MSEC)
 #endif
 #define PD_T_PS_TRANSITION (500 * MSEC) /* between 450ms and 550ms */
 /*
@@ -718,6 +722,28 @@ struct pd_ecdb {
 	uint8_t data;
 } __packed;
 
+/* Values for Source_Info Data Object, Port Type field */
+enum pd_source_port_type {
+	PD_SOURCE_PORT_CAPABILITY_MANAGED = 0,
+	PD_SOURCE_PORT_CAPABILITY_GUARANTEED,
+};
+
+/* PD Source_Info Data Object (SIDO) */
+union sido {
+	struct {
+		/* PDP values are the integer portion (floor) of the relevant
+		 * PDP rating in W.
+		 */
+		uint8_t port_reported_pdp;
+		uint8_t port_present_pdp;
+		uint8_t port_maximum_pdp;
+		unsigned reserved : 7;
+		/* 0 = Managed Capability, 1 = Guaranteed Capability */
+		unsigned port_type : 1;
+	};
+	uint32_t raw;
+};
+
 /* PD Rev 3.1 Revision Message Data Object (RMDO) */
 struct rmdo {
 	uint32_t reserved : 16;
@@ -729,6 +755,38 @@ struct rmdo {
 
 /* Confirm RMDO is 32 bits. */
 BUILD_ASSERT(sizeof(struct rmdo) == 4);
+
+/* Sink Capabilities Extended Data Block (SKEDB) */
+struct skedb {
+	uint16_t vid;
+	uint16_t pid;
+	uint32_t xid;
+	uint8_t fw_version;
+	uint8_t hw_version;
+	uint8_t skedb_version;
+	uint8_t load_step;
+	uint16_t sink_load_characteristics;
+	uint8_t compliance;
+	uint8_t touch_temp;
+	uint8_t battery_info;
+	uint8_t sink_modes;
+	uint8_t sink_minimum_pdp;
+	uint8_t sink_operational_pdp;
+	uint8_t sink_maximum_pdp;
+	uint8_t epr_sink_minimum_pdp;
+	uint8_t epr_sink_operational_pdp;
+	uint8_t epr_sink_maximum_pdp;
+} __packed;
+
+/* skedb.sink_modes bit field */
+#define SKEDB_SINK_PPS_CHARGING_SUPPORTED BIT(0)
+#define SKEDB_SINK_VBUS_POWERED BIT(1)
+#define SKEDB_SINK_MAINS_POWERED BIT(2)
+#define SKEDB_SINK_BATTERY_POWERED BIT(3)
+#define SKEDB_SINK_BATTERY_ESSENTIALLY_UNLIMITED BIT(4)
+#define SKEDB_SINK_AVS_SUPPORTED BIT(5)
+
+BUILD_ASSERT(sizeof(struct skedb) == 24);
 
 /*
  * Message id starts from 0 to 7. If last_msg_id is initialized to 0,

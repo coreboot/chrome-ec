@@ -4,6 +4,7 @@
  */
 
 #include "common.h"
+#include "drivers/intel_altmode.h"
 #include "drivers/ucsi_v3.h"
 #include "ec_commands.h"
 #include "emul/emul_pdc.h"
@@ -29,13 +30,20 @@ const static struct pdc_info_t info = {
 	.pd_revision = 123,
 	.pd_version = 456,
 	/* VID:PID = 7890:3456 */
-	.vid_pid = (0x7890 << 16) | (0x3456 << 0),
+	.vid = 0x7890,
+	.pid = 0x3456,
 	.is_running_flash_code = 1,
 	.running_in_flash_bank = 16,
 	.project_name = "ProjectName",
 	.extra = 0xffff,
 	.driver_name = "driver_name",
 	.no_fw_update = true,
+};
+
+const static union data_status_reg data_status = {
+	/* 0x71 0x85 0x00 0x00 0x00 */
+	.data_conn = 1, .usb2 = 1,   .usb3_2 = 1,  .usb3_2_speed = 1,
+	.dp = 1,	.dp_pin = 1, .hpd_lvl = 1,
 };
 
 /**
@@ -48,6 +56,23 @@ static int custom_fake_pdc_power_mgmt_get_info(int port, struct pdc_info_t *out,
 	zassert_not_null(out);
 
 	*out = info;
+
+	return 0;
+}
+
+/**
+ * @brief Custom fake for pdc_power_mgmt_get_pch_data_status that outputs some
+ * test PDC data status.
+ */
+static int custom_fake_pdc_power_mgmt_get_pch_data_status(int port,
+							  uint8_t *out)
+{
+	zassert_not_null(out);
+
+	if (port < 0 || port > CONFIG_USB_PD_PORT_MAX_COUNT)
+		return -ERANGE;
+
+	memcpy(out, data_status.raw_value, sizeof(data_status));
 
 	return 0;
 }
@@ -80,8 +105,8 @@ ZTEST(host_cmd_pdc, test_ec_cmd_pd_chip_info_v0)
 	zassert_equal(EC_RES_SUCCESS, rv, "Got %d, expected %d", rv,
 		      EC_RES_SUCCESS);
 
-	zassert_equal(PDC_VIDPID_GET_VID(info.vid_pid), resp.vendor_id);
-	zassert_equal(PDC_VIDPID_GET_PID(info.vid_pid), resp.product_id);
+	zassert_equal(info.vid, resp.vendor_id);
+	zassert_equal(info.pid, resp.product_id);
 	zassert_equal(PDC_FWVER_GET_MAJOR(info.fw_version),
 		      resp.fw_version_string[2]);
 	zassert_equal(PDC_FWVER_GET_MINOR(info.fw_version),
@@ -108,8 +133,8 @@ ZTEST(host_cmd_pdc, test_ec_cmd_pd_chip_info_v1)
 	zassert_equal(EC_RES_SUCCESS, rv, "Got %d, expected %d", rv,
 		      EC_RES_SUCCESS);
 
-	zassert_equal(PDC_VIDPID_GET_VID(info.vid_pid), resp.vendor_id);
-	zassert_equal(PDC_VIDPID_GET_PID(info.vid_pid), resp.product_id);
+	zassert_equal(info.vid, resp.vendor_id);
+	zassert_equal(info.pid, resp.product_id);
 	zassert_equal(PDC_FWVER_GET_MAJOR(info.fw_version),
 		      resp.fw_version_string[2]);
 	zassert_equal(PDC_FWVER_GET_MINOR(info.fw_version),
@@ -139,8 +164,8 @@ ZTEST(host_cmd_pdc, test_ec_cmd_pd_chip_info_v2)
 	zassert_equal(EC_RES_SUCCESS, rv, "Got %d, expected %d", rv,
 		      EC_RES_SUCCESS);
 
-	zassert_equal(PDC_VIDPID_GET_VID(info.vid_pid), resp.vendor_id);
-	zassert_equal(PDC_VIDPID_GET_PID(info.vid_pid), resp.product_id);
+	zassert_equal(info.vid, resp.vendor_id);
+	zassert_equal(info.pid, resp.product_id);
 	zassert_equal(PDC_FWVER_GET_MAJOR(info.fw_version),
 		      resp.fw_version_string[2]);
 	zassert_equal(PDC_FWVER_GET_MINOR(info.fw_version),
@@ -177,8 +202,8 @@ ZTEST(host_cmd_pdc, test_ec_cmd_pd_chip_info_v3)
 	zassert_equal(EC_RES_SUCCESS, rv, "Got %d, expected %d", rv,
 		      EC_RES_SUCCESS);
 
-	zassert_equal(PDC_VIDPID_GET_VID(info.vid_pid), resp.vendor_id);
-	zassert_equal(PDC_VIDPID_GET_PID(info.vid_pid), resp.product_id);
+	zassert_equal(info.vid, resp.vendor_id);
+	zassert_equal(info.pid, resp.product_id);
 	zassert_equal(PDC_FWVER_GET_MAJOR(info.fw_version),
 		      resp.fw_version_string[2]);
 	zassert_equal(PDC_FWVER_GET_MINOR(info.fw_version),
@@ -211,4 +236,22 @@ ZTEST(host_cmd_pdc, test_ec_cmd_usb_pd_ports)
 	zassert_equal(EC_RES_SUCCESS, rv, "Got %d, expected %d", rv,
 		      EC_RES_SUCCESS);
 	zassert_equal(CONFIG_USB_PD_PORT_MAX_COUNT, resp.num_ports);
+}
+
+ZTEST(host_cmd_pdc, test_ec_cmd_usb_pd_mux_info)
+{
+	int expect = (USB_PD_MUX_USB_ENABLED | USB_PD_MUX_DP_ENABLED |
+		      USB_PD_MUX_HPD_LVL);
+	struct ec_params_usb_pd_mux_info param;
+	struct ec_response_usb_pd_mux_info resp;
+
+	pdc_power_mgmt_get_pch_data_status_fake.custom_fake =
+		custom_fake_pdc_power_mgmt_get_pch_data_status;
+
+	param.port = -1;
+	zassert_not_ok(ec_cmd_usb_pd_mux_info(NULL, &param, &resp));
+
+	param.port = 0;
+	zassert_ok(ec_cmd_usb_pd_mux_info(NULL, &param, &resp));
+	zassert_equal(resp.flags, expect);
 }

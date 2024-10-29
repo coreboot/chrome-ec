@@ -19,16 +19,27 @@ from typing import List, Optional
 DEFAULT_BOARD = "bloonchipper"
 DEFAULT_PROJECT = "ec"
 
+DARTMONKEY_CONSOLE = "sysbus.usart1"
+
 CONSOLE_MAP: dict[str, str] = {
     "bloonchipper": "sysbus.usart2",
     "buccaneer": "sysbus.cr_uart1",
-    "dartmonkey": "sysbus.usart1",
+    "dartmonkey": DARTMONKEY_CONSOLE,
     "helipilot": "sysbus.cr_uart1",
+    "nami_fp": DARTMONKEY_CONSOLE,
+    "nocturne_fp": DARTMONKEY_CONSOLE,
 }
+
+DARTMONKEY_GPIO_WP = "sysbus.gpioPortB.GPIO_WP"
+HELIPILOT_GPIO_WP = "sysbus.gpioa.GPIO_WP"
 
 GPIO_WP_MAP: dict[str, str] = {
     "bloonchipper": "sysbus.gpioPortB.GPIO_WP",
-    "dartmonkey": "sysbus.gpioPortB.GPIO_WP",
+    "buccaneer": HELIPILOT_GPIO_WP,
+    "dartmonkey": DARTMONKEY_GPIO_WP,
+    "helipilot": HELIPILOT_GPIO_WP,
+    "nami_fp": DARTMONKEY_GPIO_WP,
+    "nocturne_fp": DARTMONKEY_GPIO_WP,
 }
 
 GPIO_WP_ENABLE = "Release"
@@ -70,13 +81,21 @@ def launch(opts: argparse.Namespace) -> int:
     script_path = pathlib.Path(__file__).parent.resolve()
     ec_dir = script_path.parent
 
-    out_dir = ec_dir / "build" / board
-    if project != "ec":
-        out_dir /= project
+    if project == "zephyr":
+        out_dir = ec_dir / "build" / "zephyr" / board / "output"
+    else:
+        out_dir = ec_dir / "build" / board
+        if project != "ec":
+            out_dir /= project
 
-    bin_file = out_dir / f"{project}.bin"
-    elf_ro_file = out_dir / "RO" / f"{project}.RO.elf"
-    elf_rw_file = out_dir / "RW" / f"{project}.RW.elf"
+    if project == "zephyr":
+        bin_file = out_dir / "ec.bin"
+        elf_ro_file = out_dir / "zephyr.ro.elf"
+        elf_rw_file = out_dir / "zephyr.rw.elf"
+    else:
+        bin_file = out_dir / f"{project}.bin"
+        elf_ro_file = out_dir / "RO" / f"{project}.RO.elf"
+        elf_rw_file = out_dir / "RW" / f"{project}.RW.elf"
 
     if not bin_file.exists():
         print(f"Error - The bin file '{bin_file}' does not exist.")
@@ -161,8 +180,8 @@ def main(argv: Optional[List[str]] = None) -> Optional[int]:
         nargs="?",
         default=os.environ.get("PROJECT", DEFAULT_PROJECT),
         help="""
-        Name of the EC project. This is normally just 'ec', but could be a test
-        name for on-board test images
+        Name of the EC project. This is normally just 'ec' or 'zephyr', but
+        could be a test name for on-board test images.
         """,
     )
 

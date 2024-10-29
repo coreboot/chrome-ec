@@ -17,6 +17,8 @@
 #error "Mocks should only be in the test build."
 #endif
 
+/* LCOV_EXCL_START - These mocks just avoid linker errors with stubs. */
+
 __overridable const struct svdm_response svdm_rsp = {
 	.identity = NULL,
 	.svids = NULL,
@@ -110,6 +112,13 @@ int dpm_get_status_msg(int port, uint8_t *msg, uint32_t *len)
 	return EC_SUCCESS;
 }
 
+union sido dpm_get_source_info_msg(int port)
+{
+	return (union sido){
+		.raw = 0,
+	};
+}
+
 void dpm_handle_alert(int port, uint32_t ado)
 {
 }
@@ -117,3 +126,5 @@ void dpm_handle_alert(int port, uint32_t ado)
 void dpm_set_pe_ready(int port, bool enable)
 {
 }
+
+/* LCOV_EXCL_STOP */

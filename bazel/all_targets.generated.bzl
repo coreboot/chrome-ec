@@ -311,6 +311,11 @@ def all_targets():
         board = "brox-sku4",
     )
     ec_target(
+        name = "brox-sku4-tokenized",
+        board = "brox-sku4-tokenized",
+        extra_modules = ["picolibc", "pigweed"],
+    )
+    ec_target(
         name = "brox-tokenized",
         board = "brox-tokenized",
         extra_modules = ["picolibc", "pigweed"],
@@ -322,11 +327,6 @@ def all_targets():
         chip = "npcx",
         core = "cortex-m",
         zephyr = False,
-    )
-    ec_target(
-        name = "brya_zephyr",
-        board = "brya",
-        extra_modules = ["cmsis"],
     )
     ec_target(
         name = "buccaneer",
@@ -867,6 +867,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "francka",
+        board = "francka",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "frostflow",
         board = "frostflow",
         extra_modules = ["cmsis"],
@@ -1024,6 +1029,14 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "gwendolin",
+        baseboard = "helipilot",
+        board = "gwendolin",
+        chip = "npcx",
+        core = "cortex-m",
+        zephyr = False,
+    )
+    ec_target(
         name = "haboki",
         baseboard = "keeby",
         board = "haboki",
@@ -1100,6 +1113,10 @@ def all_targets():
         chip = "host",
         core = "host",
         zephyr = False,
+    )
+    ec_target(
+        name = "hylia",
+        board = "hylia",
     )
     ec_target(
         name = "hyperdebug",
@@ -1198,6 +1215,11 @@ def all_targets():
         zephyr = False,
     )
     ec_target(
+        name = "kanix",
+        board = "kanix",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "kano",
         baseboard = "brya",
         board = "kano",
@@ -1212,11 +1234,6 @@ def all_targets():
         chip = "stm32",
         core = "cortex-m0",
         zephyr = False,
-    )
-    ec_target(
-        name = "kanix",
-        board = "kanix",
-        extra_modules = ["cmsis"],
     )
     ec_target(
         name = "karis",
@@ -1807,14 +1824,14 @@ def all_targets():
         extra_modules = ["cmsis"],
     )
     ec_target(
-        name = "orisa_ti",
-        board = "orisa_ti",
-        extra_modules = ["cmsis"],
-    )
-    ec_target(
         name = "orisa-ish",
         board = "orisa-ish",
         extra_modules = ["cmsis", "hal_intel_public"],
+    )
+    ec_target(
+        name = "orisa_ti",
+        board = "orisa_ti",
+        extra_modules = ["cmsis"],
     )
     ec_target(
         name = "osiris",
@@ -1989,6 +2006,10 @@ def all_targets():
         board = "rauru",
     )
     ec_target(
+        name = "rauru-pdc",
+        board = "rauru-pdc",
+    )
+    ec_target(
         name = "redrix",
         baseboard = "brya",
         board = "redrix",
@@ -2040,6 +2061,10 @@ def all_targets():
     ec_target(
         name = "roach",
         board = "roach",
+    )
+    ec_target(
+        name = "rull",
+        board = "rull",
     )
     ec_target(
         name = "sasuke",
@@ -2305,6 +2330,12 @@ def all_targets():
     ec_target(
         name = "trulo",
         board = "trulo",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
+        name = "trulo-ti",
+        board = "trulo-ti",
+        extra_modules = ["cmsis"],
     )
     ec_target(
         name = "twinkie",

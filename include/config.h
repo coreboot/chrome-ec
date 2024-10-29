@@ -1973,15 +1973,6 @@
  */
 #undef CONFIG_EC_EC_COMM_BATTERY
 
-/*
- * Enable the experimental console.
- *
- * NOTE: If you enable this experimental console, you will need to run the
- * EC-3PO interactive console in the util directory!  Otherwise, you won't be
- * able to enter any commands.
- */
-#undef CONFIG_EXPERIMENTAL_CONSOLE
-
 /* Include CRC-8 utility function */
 #undef CONFIG_CRC8
 
@@ -2317,6 +2308,7 @@
 #undef CONFIG_FP_SENSOR_ELAN80
 #undef CONFIG_FP_SENSOR_ELAN80SG
 #undef CONFIG_FP_SENSOR_ELAN515
+#undef CONFIG_FP_SENSOR_INT_ACTIVE_LOW
 
 /*****************************************************************************/
 
@@ -3250,6 +3242,11 @@
  * in the order the keys are pressed.
  */
 #undef CONFIG_KEYBOARD_STRICT_DEBOUNCE
+
+/*
+ * Enable Strauss keyboard.
+ */
+#undef CONFIG_KEYBOARD_STRAUSS
 
 /*
  * Enable the 8042 AUX port. This is typically used for PS/2 mouse devices.
@@ -6365,18 +6362,6 @@
 #define CONFIG_SHAREDMEM_MINIMUM_SIZE 0
 #endif
 #endif /* !CONFIG_SHAREDMEM_MINIMUM_SIZE */
-
-/******************************************************************************/
-/*
- * Disable the built-in console history if using the experimental console.
- *
- * The experimental console keeps its own session-persistent history which
- * survives EC reboot.  It also requires CRC8 for command integrity.
- */
-#ifdef CONFIG_EXPERIMENTAL_CONSOLE
-#undef CONFIG_CONSOLE_HISTORY
-#define CONFIG_CRC8
-#endif /* defined(CONFIG_EXPERIMENTAL_CONSOLE) */
 
 /******************************************************************************/
 /*

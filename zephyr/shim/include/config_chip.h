@@ -569,8 +569,7 @@ extern "C" {
 #endif
 
 #if DT_HAS_CHOSEN(zephyr_flash)
-#define CONFIG_PROGRAM_MEMORY_BASE \
-	_CONCAT(DT_REG_ADDR(DT_CHOSEN(zephyr_flash)), U)
+#define CONFIG_PROGRAM_MEMORY_BASE DT_REG_ADDR(DT_CHOSEN(zephyr_flash))
 #else
 #error "A zephyr,flash device must be chosen in the device tree"
 #endif
@@ -3510,6 +3509,11 @@ BUILD_ASSERT((DT_NUM_INST_STATUS_OKAY(mps_mp2964)) == 1,
 #undef CONFIG_FLASH_PROTECT_NEXT_BOOT
 #ifdef CONFIG_PLATFORM_EC_FLASH_PROTECT_NEXT_BOOT
 #define CONFIG_FLASH_PROTECT_NEXT_BOOT
+#endif
+
+#undef CONFIG_KEYBOARD_STRAUSS
+#ifdef CONFIG_PLATFORM_EC_KEYBOARD_STRAUSS
+#define CONFIG_KEYBOARD_STRAUSS
 #endif
 
 #undef CONFIG_FEATURE_FINCH

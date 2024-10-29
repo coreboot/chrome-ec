@@ -125,7 +125,7 @@ set(double_promotion -Wdouble-promotion)
 
 if(${double_promotion} IN_LIST warning_base_override)
   list(REMOVE_ITEM warning_base_override ${double_promotion})
-  set_compiler_property(PROPERTY warning_base ${warning_base_override})
+  check_set_compiler_property(PROPERTY warning_base ${warning_base_override})
   print(warning_base_override)
 endif()
 
@@ -182,13 +182,13 @@ if (DEFINED CONFIG_PLATFORM_EC)
 endif()
 
 if (ZEPHYR_PIGWEED_MODULE_DIR)
-  include("${ZEPHYR_PIGWEED_MODULE_DIR}/pw_build/pigweed.cmake")
   if (DEFINED CONFIG_PIGWEED_LOG_TOKENIZED_LIB)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/include/pigweed")
+    include("${ZEPHYR_PIGWEED_MODULE_DIR}/pw_build/pigweed.cmake")
     add_library(log_tokenized_config INTERFACE)
     target_compile_options(log_tokenized_config INTERFACE -include
                            ${PLATFORM_EC}/zephyr/include/pigweed/pw_zephyr_tokenized_custom_log.h)
     pw_set_module_config(pw_log_tokenized_CONFIG log_tokenized_config)
-    zephyr_include_directories("${PLATFORM_EC}/zephyr/include/pigweed")
   endif()
 endif()
 
@@ -601,6 +601,8 @@ zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8833
                                                 "${PLATFORM_EC}/driver/retimer/ps8833.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_PS8811
                                                 "${PLATFORM_EC}/driver/retimer/ps8811.c")
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX3443
+                                                "${PLATFORM_EC}/driver/usb_mux/anx3443.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_RETIMER_ANX7451
                                                 "${PLATFORM_EC}/driver/usb_mux/anx7451.c")
 zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC_SS_MUX
@@ -757,7 +759,7 @@ zephyr_include_directories("${CMAKE_CURRENT_BINARY_DIR}/include")
 if (DEFINED CONFIG_PIGWEED_LOG_TOKENIZED_LIB)
   set_property(GLOBAL APPEND PROPERTY extra_post_build_commands
     COMMAND
-      vpython3 -vpython-spec ${PLATFORM_EC}/zephyr/pigweed-vpython3
+      /usr/bin/python3.11
       ${ZEPHYR_PIGWEED_MODULE_DIR}/pw_tokenizer/py/pw_tokenizer/database.py
       create
       --force

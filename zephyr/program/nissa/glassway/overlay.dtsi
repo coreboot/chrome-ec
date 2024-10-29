@@ -33,6 +33,9 @@
 		smp_pg01nl3353 {
 			compatible = "smp,pg01nl3353", "battery-smart";
 		};
+		getac_ca31a53 {
+			compatible = "getac,ca31a53", "battery-smart";
+		};
 	};
 
 	hibernate-wake-pins {

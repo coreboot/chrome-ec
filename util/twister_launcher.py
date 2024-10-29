@@ -475,6 +475,7 @@ def main():
         f"-x=ZEPHYR_BASE={zephyr_base}",
         f"-x=ZEPHYR_MODULES={';'.join([str(p) for p in zephyr_modules])}",
         f"-x=Python3_EXECUTABLE={sys.executable}",
+        f"-x=PW_ROOT={str(pigweed_dir)}",
     ]
 
     # `-T` flags (used for specifying test directories to build and run)
@@ -612,6 +613,7 @@ def main():
             # Zephyr calls verify-toolchain.cmake
             "ZEPHYR_TOOLCHAIN_VARIANT": intercepted_args.toolchain,
             "PARSETAB_DIR": parsetab_dir,
+            "PW_ROOT": str(pigweed_dir),
         }
         protoc_path = shutil.which("protoc")
         if protoc_path:

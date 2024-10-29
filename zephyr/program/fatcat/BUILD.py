@@ -7,11 +7,13 @@
 
 def register_npcx9_project(
     project_name,
+    chip="npcx9/npcx9m7f",
+    extra_kconfig_files=(),
 ):
     """Register an npcx9 based variant of fatcat."""
     register_npcx_project(
         project_name=project_name,
-        zephyr_board="npcx9/npcx9m7f",
+        zephyr_board=chip,
         dts_overlays=[
             here / project_name / "project.overlay",
         ],
@@ -20,12 +22,15 @@ def register_npcx9_project(
             here / "program.conf",
             # Project-specific KConfig customization.
             here / project_name / "project.conf",
+            # Additional project-specific KConfig customization.
+            *extra_kconfig_files,
         ],
     )
 
 
 def register_it8xxx2_project(
     project_name,
+    extra_kconfig_files=(),
 ):
     """Register an it8xxx2 based variant of fatcat."""
     register_binman_project(
@@ -39,6 +44,8 @@ def register_it8xxx2_project(
             here / "program.conf",
             # Project-specific KConfig customization.
             here / project_name / "project.conf",
+            # Additional project-specific KConfig customization.
+            *extra_kconfig_files,
         ],
     )
 
@@ -49,9 +56,18 @@ register_npcx9_project(
 
 register_it8xxx2_project(
     project_name="fatcat_it82002aw",
+    extra_kconfig_files=[
+        here / ".." / "intelrvp" / "zephyr_ap_pwrseq.conf",
+    ],
+)
+
+register_npcx9_project(
+    project_name="francka",
+    chip="npcx9/npcx9m3f",
 )
 
 # Note for reviews, do not let anyone edit these assertions, the addresses
 # must not change after the first RO release.
 assert_rw_fwid_DO_NOT_EDIT(project_name="fatcat_npcx9m7f", addr=0x80144)
 assert_rw_fwid_DO_NOT_EDIT(project_name="fatcat_it82002aw", addr=0x60098)
+assert_rw_fwid_DO_NOT_EDIT(project_name="francka", addr=0x40144)

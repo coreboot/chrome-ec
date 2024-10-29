@@ -119,6 +119,7 @@ parse-boards() {
     dartmonkey
     bloonchipper
     buccaneer
+    gwendolin
     helipilot
     nucleo-dartmonkey
     nucleo-h743zi
@@ -223,6 +224,13 @@ if [[ "${FLAGS_private}" == "${FLAGS_TRUE}" ]]; then
   LINKS+=( fingerprint )
 fi
 
+# TODO support changing toolchains between versions
+echo "# Adding coreboot-sdk to env."
+TOOLCHAIN_VARS=$(./util/coreboot_sdk.py)
+declare -A toolchain_dict
+eval "toolchain_dict=(${TOOLCHAIN_VARS})"
+
+
 ##########################################################################
 # Runtime                                                                #
 ##########################################################################
@@ -241,6 +249,14 @@ EIGEN3_DIR ?= $(realpath ../../third_party/eigen3)
 ZEPHYR_BASE ?= $(realpath ../../../src/third_party/zephyr/main)
 BOARDS ?= ${BOARDS[*]}
 LINKS ?= ${LINKS[*]}
+HEREDOC
+
+# Add the variables to the environment
+for key in "${!toolchain_dict[@]}"; do
+    echo "${key} ?= ${toolchain_dict[${key}]}" >> "${TMP_DIR}/Makefile"
+done
+
+cat >> "${TMP_DIR}/Makefile" <<HEREDOC
 
 .PHONY: all
 all: build-${OLD_REF} build-${NEW_REF}
@@ -259,6 +275,14 @@ build-%: ec-%
 		CRYPTOC_DIR=\$(CRYPTOC_DIR)                                   \\
 		EIGEN3_DIR=\$(EIGEN3_DIR)                                     \\
 		ZEPHYR_BASE=\$(ZEPHYR_BASE)                                   \\
+HEREDOC
+
+# Add the variables to the environment
+for key in "${!toolchain_dict[@]}"; do
+    echo "		${key}=\$(${key})       \\" >> "${TMP_DIR}/Makefile"
+done
+
+cat >> "${TMP_DIR}/Makefile" <<HEREDOC
 		\$(addprefix proj-,\$(BOARDS))
 	@printf "  MKDIR   %s\n" "\$@"
 	@mkdir -p \$@

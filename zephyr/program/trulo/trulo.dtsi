@@ -8,6 +8,7 @@
 / {
 	aliases {
 		gpio-wp = &gpio_ec_wp_odl;
+		gpio-kbd-kso2 = &gpio_ec_kso_02_inv;
 	};
 
 	gpio-interrupts {
@@ -18,6 +19,43 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "power_button_interrupt";
 		};
+		int_wp_l: wp_l {
+			irq-pin = <&gpio_ec_wp_odl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "switch_interrupt";
+		};
+		int_lid_open: lid_open {
+			irq-pin = <&gpio_lid_open>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "lid_interrupt";
+		};
+		int_vol_down: vol_down {
+			irq-pin = <&gpio_voldn_btn_odl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "button_interrupt";
+		};
+		int_vol_up: vol_up {
+			irq-pin = <&gpio_volup_btn_odl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "button_interrupt";
+		};
+		int_ac_present: ac_present {
+			irq-pin = <&gpio_ec_acok_od>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "extpower_interrupt";
+		};
+		int_soc_enkbl: soc_enbkl {
+			irq-pin = <&gpio_soc_enbkl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "soc_signal_interrupt";
+		};
+	};
+
+	hibernate-wake-pins {
+		compatible = "cros-ec,hibernate-wake-pins";
+		wakeup-irqs = <&int_ac_present
+			       &int_power_button
+			       &int_lid_open>;
 	};
 
 	named-gpios {
@@ -40,4 +78,8 @@ gpio_ec_pch_wake_odl: &gpio_ec_soc_wake_odl {
 	status = "okay";
 	pinctrl-0 = <&espi_lpc_gp46_47_51_52_53_54_55_57>;
 	pinctrl-names = "default";
+};
+
+&sha0 {
+	status = "okay";
 };

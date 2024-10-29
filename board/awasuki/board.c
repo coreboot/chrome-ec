@@ -90,6 +90,34 @@ static void backlight_interrupt(enum gpio_signal s)
 	gpio_set_level(GPIO_EC_PPVAR_BLPWR, 1);
 }
 
+static void check_audio_jack(void);
+DECLARE_DEFERRED(check_audio_jack);
+
+static void check_audio_jack(void)
+{
+	enum power_state powerstate;
+
+	powerstate = power_get_state();
+
+	if (powerstate == POWER_S0 || powerstate == POWER_S3S0) {
+		if (gpio_get_level(GPIO_JACK_DETECT))
+			gpio_set_level(GPIO_LOADING_ENABLE, 0);
+		else
+			gpio_set_level(GPIO_LOADING_ENABLE, 1);
+	} else {
+		gpio_set_level(GPIO_LOADING_ENABLE, 0);
+	}
+}
+
+DECLARE_HOOK(HOOK_INIT, check_audio_jack, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, check_audio_jack, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, check_audio_jack, HOOK_PRIO_DEFAULT);
+
+static void audio_jack_interrupt(enum gpio_signal s)
+{
+	hook_call_deferred(&check_audio_jack_data, INT_RECHECK_US);
+}
+
 /* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
@@ -362,6 +390,7 @@ void board_init(void)
 
 	gpio_enable_interrupt(GPIO_USB_C0_CCSBU_OVP_ODL);
 	gpio_enable_interrupt(GPIO_VBL_PD_OD);
+	gpio_enable_interrupt(GPIO_JACK_DETECT);
 
 	/* Turn on 5V if the system is on, otherwise turn it off */
 	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |

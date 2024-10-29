@@ -73,7 +73,7 @@ __overridable const int supplier_priority[] = {
 	[CHARGE_SUPPLIER_PD] = 1,
 	[CHARGE_SUPPLIER_TYPEC] = 2,
 	[CHARGE_SUPPLIER_TYPEC_DTS] = 2,
-#ifdef CHARGE_MANAGER_BC12
+#ifdef CONFIG_USB_CHARGER
 	[CHARGE_SUPPLIER_PROPRIETARY] = 3,
 	[CHARGE_SUPPLIER_BC12_DCP] = 3,
 	[CHARGE_SUPPLIER_BC12_CDP] = 3,
@@ -513,7 +513,7 @@ charge_manager_fill_power_info(int port,
 		case CHARGE_SUPPLIER_TYPEC_DTS:
 			r->type = USB_CHG_TYPE_C;
 			break;
-#ifdef CHARGE_MANAGER_BC12
+#ifdef CONFIG_USB_CHARGER
 		case CHARGE_SUPPLIER_PROPRIETARY:
 			r->type = USB_CHG_TYPE_PROPRIETARY;
 			break;
@@ -783,6 +783,7 @@ static void charge_manager_get_best_port(int *new_port, int *new_supplier)
 	 */
 	if (charge_port != CHARGE_PORT_NONE && charge_port != port &&
 	    (battery_is_present() == BP_NO ||
+	     battery_is_present() == BP_NOT_SURE ||
 	     (battery_is_present() == BP_YES &&
 	      battery_is_cut_off() != BATTERY_CUTOFF_STATE_NORMAL))) {
 		port = charge_port;
@@ -1206,9 +1207,9 @@ void typec_set_input_current_limit(int port, typec_current_t max_ma,
 	static const enum charge_supplier typec_suppliers[] = {
 		CHARGE_SUPPLIER_TYPEC,
 		CHARGE_SUPPLIER_TYPEC_DTS,
-#ifdef CHARGE_MANAGER_BC12
+#ifdef CONFIG_USB_CHARGER
 		CHARGE_SUPPLIER_TYPEC_UNDER_1_5A,
-#endif /* CHARGE_MANAGER_BC12 */
+#endif /* CONFIG_USB_CHARGER */
 	};
 
 	charge.current = max_ma & TYPEC_CURRENT_ILIM_MASK;
@@ -1225,7 +1226,7 @@ void typec_set_input_current_limit(int port, typec_current_t max_ma,
 
 	supplier = dts ? CHARGE_SUPPLIER_TYPEC_DTS : CHARGE_SUPPLIER_TYPEC;
 
-#ifdef CHARGE_MANAGER_BC12
+#ifdef CONFIG_USB_CHARGER
 	/*
 	 * According to USB-C spec 1.3 Table 4-17 "Precedence of power source
 	 * usage", the priority should be: USB-C 3.0A, 1.5A > BC1.2 > USB-C
@@ -1234,7 +1235,7 @@ void typec_set_input_current_limit(int port, typec_current_t max_ma,
 	 */
 	if (charge.current < 1500)
 		supplier = CHARGE_SUPPLIER_TYPEC_UNDER_1_5A;
-#endif /* CHARGE_MANAGER_BC12 */
+#endif /* CONFIG_USB_CHARGER */
 
 	charge_manager_update_charge(supplier, port, &charge);
 
@@ -1297,7 +1298,6 @@ void charge_manager_leave_safe_mode(void)
 	 */
 	crec_msleep(board_get_leave_safe_mode_delay_ms());
 	CPRINTS("%s()", __func__);
-	cflush();
 	left_safe_mode = 1;
 	if (charge_manager_is_seeded())
 		hook_call_deferred(&charge_manager_refresh_data, 0);
@@ -1421,6 +1421,20 @@ int charge_manager_get_charger_voltage(void)
 enum charge_supplier charge_manager_get_supplier(void)
 {
 	return charge_supplier;
+}
+
+void charge_manager_set_supplier(int port, enum charge_supplier supplier)
+{
+	if (charge_supplier != CHARGE_SUPPLIER_NONE ||
+	    charge_port != CHARGE_PORT_NONE) {
+		return;
+	}
+
+	CPRINTS("Seeding initial charge supplier, port %d, supplier %d", port,
+		supplier);
+
+	charge_port = port;
+	charge_supplier = supplier;
 }
 
 int charge_manager_get_power_limit_uw(void)
