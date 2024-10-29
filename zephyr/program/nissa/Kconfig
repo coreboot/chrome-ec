@@ -180,6 +180,12 @@ config BOARD_RULL
 	  Build Google RULL reference board. RULL has Intel TWL SoC
 	  with IT81302 EC.
 
+config BOARD_TELITH
+	bool "Google Telith Board"
+	help
+	  Build Google Telith reference board. Telith has Intel TWL SoC
+	  with IT81302 EC.
+
 module = NISSA
 module-str = Nissa board-specific code
 source "subsys/logging/Kconfig.template.log_config"
