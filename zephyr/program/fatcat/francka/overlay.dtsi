@@ -35,6 +35,11 @@
 	clock-frequency = <I2C_BITRATE_FAST>;
 };
 
+&i2c2_0 {
+	label = "I2C_THERMAL";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
 &i2c3_0 {
 	label = "I2C_PORT_PD";
 	clock-frequency = <I2C_BITRATE_FAST_PLUS>;
@@ -95,6 +100,6 @@
  * after waking up automatically for better power consumption.
  */
 &power_leakage_io {
-	leak-gpios = <&gpioa 4 GPIO_OPEN_DRAIN
+	leak-gpios = <&gpioa 4 (GPIO_OPEN_DRAIN | GPIO_VOLTAGE_1P8)
 		      &gpiof 1 GPIO_OPEN_DRAIN>;
 };

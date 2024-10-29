@@ -4,6 +4,12 @@
  */
 
 / {
+	kb_bl_pwm {
+		compatible = "cros-ec,kblight-pwm";
+		pwms = <&pwm3 0 PWM_HZ(324) PWM_POLARITY_NORMAL>;
+		status = "okay";
+	};
+
 	cros-keyscan {
 		compatible = "cros-ec,keyscan";
 		actual-key-mask = <
