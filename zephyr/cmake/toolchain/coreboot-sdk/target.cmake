@@ -22,20 +22,6 @@ endif()
 
 if(DEFINED COREBOOT_SDK_ROOT_${ARCH})
   set(COREBOOT_SDK_ROOT "${COREBOOT_SDK_ROOT_${ARCH}}")
-elseif(NOT DEFINED COREBOOT_SDK_ROOT)
-  set(COREBOOT_SDK_PKG "ec-coreboot-sdk-${CROSS_COMPILE_TARGET}")
-
-  # Package for riscv64-elf is riscv-elf.
-  if("${ARCH}" STREQUAL "riscv")
-    set(COREBOOT_SDK_PKG "ec-coreboot-sdk-riscv-elf")
-  endif()
-
-  execute_process(
-    COMMAND bazel --project fwsdk run "@${COREBOOT_SDK_PKG}//:get_path"
-    OUTPUT_VARIABLE COREBOOT_SDK_ROOT
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    COMMAND_ERROR_IS_FATAL ANY
-  )
 endif()
 
 set(CC gcc)
