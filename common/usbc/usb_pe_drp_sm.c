@@ -2805,8 +2805,10 @@ static void pe_src_transition_supply_run(int port)
 
 			/*
 			 * Set first message flag to trigger a wait and add
-			 * jitter delay when operating in PD2.0 mode. Skip
-			 * if we already have a contract.
+			 * jitter delay when operating in PD2.0 mode. Skip if
+			 * this is not the initial power contract in this role.
+			 * TODO(b/376924852): Consider only running this timer
+			 * once per attach.
 			 */
 			if (!pe_is_explicit_contract(port)) {
 				PE_SET_FLAG(port, PE_FLAGS_FIRST_MSG);
@@ -3633,9 +3635,6 @@ static void pe_snk_select_capability_run(int port)
 			 * Accept Message Received
 			 */
 			if (type == PD_CTRL_ACCEPT) {
-				/* explicit contract is now in place */
-				pe_set_explicit_contract(port);
-
 				if (IS_ENABLED(CONFIG_CHARGE_MANAGER))
 					pe_snk_apply_psnkstdby(port);
 
@@ -3729,10 +3728,19 @@ static void pe_snk_transition_sink_run(int port)
 		    (PD_HEADER_TYPE(rx_emsg[port].header) == PD_CTRL_PS_RDY)) {
 			/*
 			 * Set first message flag to trigger a wait and add
-			 * jitter delay when operating in PD2.0 mode.
+			 * jitter delay when operating in PD2.0 mode. Skip if
+			 * this is not the initial power contract in this role.
+			 * TODO(b/376924852): Consider only running this timer
+			 * once per attach.
 			 */
-			PE_SET_FLAG(port, PE_FLAGS_FIRST_MSG);
-			pd_timer_disable(port, PE_TIMER_WAIT_AND_ADD_JITTER);
+			if (!pe_is_explicit_contract(port)) {
+				PE_SET_FLAG(port, PE_FLAGS_FIRST_MSG);
+				pd_timer_disable(port,
+						 PE_TIMER_WAIT_AND_ADD_JITTER);
+			} /* LCOV_EXCL_LINE b/375430524 */
+
+			/* explicit contract is now in place */
+			pe_set_explicit_contract(port);
 
 			/*
 			 * If we've successfully completed our new power
