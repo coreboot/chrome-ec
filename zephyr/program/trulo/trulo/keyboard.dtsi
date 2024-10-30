@@ -1,4 +1,6 @@
-/* Copyright 2022 The ChromiumOS Authors
+<<<<<<< HEAD   (6af72f Rull/Roric/Ruke：Modify keyboard type)
+=======
+/* Copyright 2024 The ChromiumOS Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,17 +9,9 @@
 	chosen {
 		cros-ec,keyboard = &kbd;
 	};
-
-	kblight: kblight {
-		compatible = "cros-ec,kblight-pwm";
-		pwms = <&pwm3 0 PWM_HZ(2400) PWM_POLARITY_NORMAL>;
-	};
 };
 
 &kbd {
-	/* Experimental: only used for testing with the upstream keyboard
-	 * driver.
-	 */
 	status = "okay";
 	pinctrl-0 = <
 		&ksi0_gp31 /* KSI0 PIN31 */
@@ -125,3 +119,4 @@
 		pin30-gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>;
 	};
 };
+>>>>>>> CHANGE (6294a9 keyboard_input: add a dedicated col2 settle delay)

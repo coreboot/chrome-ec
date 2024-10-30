@@ -138,7 +138,6 @@
 	pinctrl-names = "default", "sleep";
 	row-size = <8>;
 	col-size = <18>;
-	settle-time-us = <80>;
 	debounce-down-ms = <15>;
 	debounce-up-ms = <15>;
 	actual-key-mask = <
