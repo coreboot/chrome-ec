@@ -433,6 +433,7 @@ class Renode(Platform):
                 "power_utilization",
                 "rtc_stm32f4",
                 "std_vector",
+                "timer_dos",  # TODO(b/374798079)
             ]:
                 return True
         elif board_config.name in [HELIPILOT, BUCCANEER]:
