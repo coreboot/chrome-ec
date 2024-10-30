@@ -182,16 +182,6 @@
 #define TIMER_DISABLED 0xffffffffffffffff /* Unreachable time in future */
 
 /*
- * The time that we allow the port partner to send any messages after an
- * explicit contract is established.  200ms was chosen somewhat arbitrarily as
- * it should be long enough for sources to decide to send a message if they were
- * going to, but not so long that a "low power charger connected" notification
- * would be shown in the chrome OS UI. Setting t0o large a delay can cause
- * problems if the PD discovery time exceeds 1s (tAMETimeout)
- */
-#define SRC_SNK_READY_HOLD_OFF_US (200 * MSEC)
-
-/*
  * Function pointer to a Structured Vendor Defined Message (SVDM) response
  * function defined in the board's usb_pd_policy.c file.
  */
@@ -2225,8 +2215,12 @@ bool pd_setup_vdm_request(int port, enum tcpci_msg_type tx_type, uint32_t *vdm,
 }
 
 /*
+ * In PD2.0 Mode, delay the TCPM's initial chatter to avoid collisions
+ * with the partner's initial chatter. Add jitter to avoid collisions
+ * with a partner implementing the same base hold-off time.
+ *
  * This function must only be called from the PE_SNK_READY entry and
- * PE_SRC_READY entry State.
+ * PE_SRC_READY entry state.
  *
  * TODO(b:181339670) Rethink jitter timer restart if this is the first
  * message but the partner gets a message in first, may not want to
@@ -2234,30 +2228,40 @@ bool pd_setup_vdm_request(int port, enum tcpci_msg_type tx_type, uint32_t *vdm,
  */
 static void pe_update_wait_and_add_jitter_timer(int port)
 {
-	/*
-	 * In PD2.0 Mode
-	 *
-	 * For Source:
-	 * Give the sink some time to send any messages
-	 * before we may send messages of our own.  Add
-	 * some jitter of up to ~345ms, to prevent
-	 * multiple collisions. This delay also allows
-	 * the sink device to request power role swap
-	 * and allow the the accept message to be sent
-	 * prior to CMD_DISCOVER_IDENT being sent in the
-	 * SRC_READY state.
-	 *
-	 * For Sink:
-	 * Give the source some time to send any messages before
-	 * we start our interrogation.  Add some jitter of up to
-	 * ~345ms to prevent multiple collisions.
-	 */
 	if (prl_get_rev(port, TCPCI_MSG_SOP) == PD_REV20 &&
 	    PE_CHK_FLAG(port, PE_FLAGS_FIRST_MSG) &&
 	    pd_timer_is_disabled(port, PE_TIMER_WAIT_AND_ADD_JITTER)) {
+		/* The initial delay is somewhat arbitrary:
+		 * * It should be long enough for partners to finish sending
+		 *   their initial chatter.
+		 * * It should be short enough that the Chrome OS UI does not
+		 *   display a "low power charger connected" notification.
+		 * * It should be short enough that the TCPM can finish alt mode
+		 *   entry before tAMETimeout (1s).
+		 * * It should be short enough that the TCPM can finish its
+		 *   chatter before tCtsLastPoint (500 ms) during compliance
+		 * tests.
+		 *
+		 * tCtsLastPoint is the strictest requirement. The maximum delay
+		 * should be well under 500 ms.
+		 *
+		 * Within the range of 0-500 ms, the minimum and maximum delays
+		 * form 3 regions:
+		 * * 0 < t <= min: Initial chatter of partner with no delay
+		 * * min < t <= max: Chatter of partner with shorter delay
+		 * * max < t < 500 ms: Chatter of partner with longer delay
+		 * Each of these ranges are meant to accommodate similar initial
+		 * chatter, so they should be roughly equivalent in duration.
+		 *
+		 * Make the delay range 167 ms - 332 ms.
+		 */
+		const uint32_t base_us = 167 * MSEC;
+		/* 0xf * 11 = 165; 167 + 165 = 332 */
+		const uint32_t jitter_us = (get_time().le.lo & 0xf) * 11 * MSEC;
+		const uint32_t hold_off_us = base_us + jitter_us;
+
 		pd_timer_enable(port, PE_TIMER_WAIT_AND_ADD_JITTER,
-				SRC_SNK_READY_HOLD_OFF_US +
-					(get_time().le.lo & 0xf) * 23 * MSEC);
+				hold_off_us); /* LCOV_EXCL_LINE b/375430524 */
 	}
 }
 
