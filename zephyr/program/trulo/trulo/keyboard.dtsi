@@ -58,7 +58,6 @@
 	pinctrl-names = "default", "sleep";
 	row-size = <8>;
 	col-size = <13>;
-	settle-time-us = <80>;
 
 	kso-gpio {
 		compatible = "cros-ec,col-gpio";
