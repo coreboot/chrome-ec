@@ -3074,6 +3074,13 @@
 #undef CONFIG_IT8XXX2_MUL_WORKAROUND
 
 /*
+ * Allows pre-watchdog timer interrupt to be unmasked even when all interrupts
+ * are disabled.
+ * NOTE: this config is only relevant for non-zephyr boards with NDS32 arch
+ */
+#undef CONFIG_IT83XX_PREWDT_ALWAYS_ENABLED
+
+/*
  * Support the standard integer multiplication and division instruction
  * extension.
  */

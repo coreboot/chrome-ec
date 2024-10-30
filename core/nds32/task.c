@@ -208,8 +208,10 @@ static inline task_ *__task_id_to_ptr(task_id_t id)
 void __ram_code interrupt_disable(void)
 {
 	/* Mask all interrupts, except division by zero and timer-related */
-	uint32_t val = IDIVZE | BIT(3);
+	uint32_t val = IDIVZE;
 
+#ifdef CONFIG_IT83XX_PREWDT_ALWAYS_ENABLED
+	val |= BIT(3);
 	/* Group 3: disable and clear interrupt */
 	IT83XX_INTC_REG(IT83XX_INTC_IER3) &= ~GROUP3_TO_INT3_MASK;
 	IT83XX_INTC_ISR3 |= GROUP3_TO_INT3_MASK;
@@ -218,6 +220,7 @@ void __ram_code interrupt_disable(void)
 	/* Group 19: disable and clear interrupts */
 	IT83XX_INTC_REG(IT83XX_INTC_IER19) &= ~GROUP19_TO_INT3_MASK;
 	IT83XX_INTC_ISR19 |= GROUP19_TO_INT3_MASK;
+#endif
 
 	asm volatile("mtsr %0, $INT_MASK" : : "r"(val));
 	asm volatile("dsb");
@@ -229,11 +232,13 @@ void __ram_code interrupt_enable(void)
 	uint32_t val = (IDIVZE | 0xFFFC);
 	asm volatile("mtsr %0, $INT_MASK" : : "r"(val));
 
+#ifdef CONFIG_IT83XX_PREWDT_ALWAYS_ENABLED
 	/* Enable interrupt groups in reverse order, starting with group 19 */
 	IT83XX_INTC_REG(IT83XX_INTC_IER19) |= GROUP19_TO_INT3_MASK;
 	/* Skip group 10 and group 7, same as in interrupt_disable() */
 	/* Group 3 */
 	IT83XX_INTC_REG(IT83XX_INTC_IER3) |= GROUP3_TO_INT3_MASK;
+#endif
 }
 
 inline bool is_interrupt_enabled(void)
