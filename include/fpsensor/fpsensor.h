@@ -168,11 +168,18 @@ int fp_acquire_image(uint8_t *image_data);
  */
 int fp_acquire_image_with_mode(uint8_t *image_data, int mode);
 
+/*
+ * TODO(b/378523729): Refactor fpsensor API so that error_state is maintained by
+ * our code.
+ */
 /**
  * Runs a test for defective pixels.
  *
  * Should be triggered periodically by the client. The maintenance command can
- * take several hundred milliseconds to run.
+ * take several hundred milliseconds to run. The function updates the
+ * `error_state`, which is a uint16_t variable where the error state will be
+ * stored. The function must update error_state about dead pixels by setting
+ * bits in the FP_ERROR_DEAD_PIXELS field.
  *
  * @return EC_ERROR_HW_INTERNAL on error (such as finger on sensor)
  * @return EC_SUCCESS on success
