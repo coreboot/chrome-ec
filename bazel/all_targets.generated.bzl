@@ -2489,6 +2489,10 @@ def all_targets():
         board = "wugtrio",
     )
     ec_target(
+        name = "wyrdeer",
+        board = "wyrdeer",
+    )
+    ec_target(
         name = "xivu",
         board = "xivu",
         extra_modules = ["cmsis"],
