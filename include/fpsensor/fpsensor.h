@@ -53,7 +53,7 @@ int fp_sensor_deinit(void);
  * as required by the EC_CMD_FP_INFO host command.
  *
  * Fills both the static information and information read from the sensor at
- * runtime.
+ * runtime such as sensor_id, errors, etc.
  *
  * @param[out] resp sensor info
  *
