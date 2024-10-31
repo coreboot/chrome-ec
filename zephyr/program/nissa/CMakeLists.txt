@@ -330,6 +330,7 @@ if(DEFINED CONFIG_BOARD_TELITH)
 	project(telith)
 	zephyr_include_directories("telith/include")
 	zephyr_library_sources(
+			"telith/src/board_als.c"
 			"telith/src/board.c"
 			"telith/src/sub_board.c"
 			"telith/src/prochot.c"
