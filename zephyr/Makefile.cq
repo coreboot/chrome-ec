@@ -26,7 +26,8 @@ GENERATED_AND_SYSTEM_PATTERNS='$(PLATFORM_EC)/build/**' \
 	'/usr/include/**' \
 	'/usr/lib/**' \
 	'**/picolibc/picolibc/include/**' \
-	'**/third_party/boringssl/crypto/**'
+	'**/third_party/boringssl/crypto/**' \
+	'**/lib/gcc/**'
 TEST_PATTERNS='$(PLATFORM_EC)/test/**' \
 	'$(PLATFORM_EC)/include/tests/**' \
 	'$(PLATFORM)/ec-private/test/**' \
