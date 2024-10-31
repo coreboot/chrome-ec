@@ -82,7 +82,7 @@ void fp_configure_detect(void);
  * Returns the status of the finger on the sensor.
  * (assumes fp_configure_detect was called before)
  *
- * @return finger_state
+ * @return finger_state A value from @ref finger_state enum.
  */
 enum finger_state fp_finger_status(void);
 
