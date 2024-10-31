@@ -57,6 +57,8 @@ SPECIAL_BOARDS = [
     # Nissa variants
     "nereid",
     "nivviks",
+    "orisa",
+    "orisa-ish",
     # Skyrim variants
     "winterhold",
     "frostflow",
