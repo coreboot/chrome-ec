@@ -1627,9 +1627,9 @@ static void get_version(struct transfer_descriptor *td, bool leave_pending)
 /*
  * Gets a string of the currently detected GSC device type.
  */
-static const char *device_string()
+static const char *device_string(enum gsc_device device)
 {
-	switch (gsc_dev) {
+	switch (device) {
 	case GSC_DEVICE_H1:
 		return "H1";
 	case GSC_DEVICE_DT:
@@ -1648,7 +1648,7 @@ static void setup_connection(struct transfer_descriptor *td)
 
 	get_version(td, true);
 
-	printf("device: %s\n", device_string());
+	printf("device: %s\n", device_string(gsc_dev));
 	printf("keyids: RO 0x%08x, RW 0x%08x\n", targ.keyid[0], targ.keyid[1]);
 	printf("offsets: backup RO at %#x, backup RW at %#x\n", td->ro_offset,
 	       td->rw_offset);
@@ -2325,12 +2325,15 @@ static int show_headers_versions(const struct image *image,
 	}
 
 	if (show_machine_output) {
+		print_machine_output("IMAGE_DEVICE_TYPE", "%s",
+				     device_string(image->type));
 		print_machine_output("IMAGE_RO_FW_VER", "%s", ro_fw_ver[0]);
 		print_machine_output("IMAGE_RW_FW_VER", "%s", rw_fw_ver[0]);
 		print_machine_output("IMAGE_BID_STRING", "%s", bid_string[0]);
 		print_machine_output("IMAGE_BID_MASK", "%08x", bid[0].mask);
 		print_machine_output("IMAGE_BID_FLAGS", "%08x", bid[0].flags);
 	} else {
+		printf("device: %s\n", device_string(image->type));
 		printf("RO_A:%s RW_A:%s[%s:%08x:%08x] ", ro_fw_ver[0],
 		       rw_fw_ver[0], bid_string[0], bid[0].mask, bid[0].flags);
 		printf("RO_B:%s RW_B:%s[%s:%08x:%08x]\n", ro_fw_ver[1],
