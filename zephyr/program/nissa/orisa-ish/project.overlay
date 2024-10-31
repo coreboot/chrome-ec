@@ -8,4 +8,4 @@
 #include "i2c.dtsi"
 #include "interrupts_motionsense.dtsi"
 #include "ish.dtsi"
-#include "../orisa/motionsense.dtsi"
+#include "motionsense.dtsi"
