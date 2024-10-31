@@ -161,6 +161,7 @@
 		0xff  /* C16 */
 		0xff  /* C17 */
 	>;
+	kso-ignore-mask = <04>;
 
 	kso-gpio {
 		compatible = "cros-ec,col-gpio";
