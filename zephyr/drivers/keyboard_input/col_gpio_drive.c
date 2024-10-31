@@ -16,6 +16,12 @@ BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(cros_ec_col_gpio) == 1,
 
 #define COL_GPIO_NODE DT_INST(0, cros_ec_col_gpio)
 
+#if CONFIG_DT_HAS_ITE_IT8XXX2_KBD_ENABLED
+BUILD_ASSERT(DT_PROP(DT_PARENT(COL_GPIO_NODE), kso_ignore_mask) != 0,
+	     "kso-ignore-mask must be specified on ITE devices for "
+	     "ec-col-gpio to work correctly");
+#endif
+
 struct col_gpio_config {
 	const struct device *kbd_dev;
 	struct gpio_dt_spec gpio;
