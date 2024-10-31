@@ -91,7 +91,7 @@ using TransitionNode = std::variant<State, StateMatcher>;
 
 /** A single transition in the state machine */
 template <typename State>
-class Transition {
+class alignas(alignof(TransitionNode<State>)) Transition {
  public:
   /** The type nodes for the nodes 'from' and 'to' */
   using node_type = TransitionNode<State>;
@@ -240,7 +240,8 @@ struct FsmConfigStorage : public FsmConfig<State, impl::kGeneric> {
   constexpr State starting_state() const { return starting_state_; }
 
   State starting_state_;
-  std::array<Transition<State>, kNumTransitions> transitions_;
+  alignas(Transition<State>)
+      std::array<Transition<State>, kNumTransitions> transitions_;
 };
 
 /**
