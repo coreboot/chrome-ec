@@ -10,6 +10,7 @@
 #ifndef __CROS_EC_PDC_POWER_MGMT_H
 #define __CROS_EC_PDC_POWER_MGMT_H
 
+#include "usb_mux.h"
 #include "usb_pd.h"
 
 #include <stdbool.h>
@@ -633,6 +634,24 @@ int pdc_power_mgmt_register_ppm_callback(const struct pdc_callback *callback);
  */
 int pdc_power_mgmt_ppm_ack_status_change(int port,
 					 union conn_status_change_bits_t ci);
+
+/**
+ * @brief Get the latest DP Attention/Status VDO for the port.
+ *
+ * @param port USB-C port number
+ *
+ * @retval Cached Attention VDO
+ */
+uint32_t pdc_power_mgmt_get_dp_status(int port);
+
+/**
+ * @brief Get DP mux mode by the pin assignment
+ *
+ * @param port USB-C port number
+ *
+ * @retval Mux state for the DP pin assignment
+ */
+mux_state_t pdc_power_mgmt_get_dp_mux_mode(int port);
 
 /**
  * @brief Return the current UCSI connector status on a port for the PPM.

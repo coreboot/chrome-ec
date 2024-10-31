@@ -1035,6 +1035,11 @@ static void send_pending_public_commands(struct pdc_port_t *port)
 	}
 }
 
+uint32_t pdc_power_mgmt_get_dp_status(int port)
+{
+	return pdc_data[port]->port.attention_vdo.vdo;
+}
+
 atomic_val_t pdc_power_mgmt_get_events(int port)
 {
 	return pdc_data[port]->port.port_event;
@@ -4418,6 +4423,22 @@ uint8_t pdc_power_mgmt_get_dp_pin_mode(int port)
 	LOG_INF("C%d: DP pin mode 0x%02x", port, pin_mode);
 
 	return pin_mode;
+}
+
+mux_state_t pdc_power_mgmt_get_dp_mux_mode(int port)
+{
+	int pin_mode = get_dp_pin_mode(port);
+	/* Default dp_port_mf_allow is true */
+	int mf_pref = PD_VDO_DPSTS_MF_PREF(pdc_power_mgmt_get_dp_status(port));
+
+	/*
+	 * Multi-function operation is only allowed if that pin config is
+	 * supported.
+	 */
+	if ((pin_mode & MODE_DP_PIN_MF_MASK) && mf_pref)
+		return USB_PD_MUX_DOCK;
+	else
+		return USB_PD_MUX_DP_ENABLED;
 }
 #endif
 
