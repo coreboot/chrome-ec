@@ -8,6 +8,7 @@
 def register_trulo_project(
     project_name,
     kconfig_files=None,
+    **kwargs,
 ):
     """Register a variant of Trulo."""
     if kconfig_files is None:
@@ -26,6 +27,7 @@ def register_trulo_project(
         ],
         kconfig_files=kconfig_files,
         inherited_from=["trulo"],
+        **kwargs,
     )
 
 
@@ -37,6 +39,7 @@ register_trulo_project(
         # Parent project's config
         here / "trulo" / "project.conf",
     ],
+    modules=["cmsis", "picolibc", "ec", "pigweed"],
 )
 
 register_trulo_project(
@@ -49,6 +52,7 @@ register_trulo_project(
         # Project-specific KConfig customization.
         here / "trulo-ti" / "project.conf",
     ],
+    modules=["cmsis", "picolibc", "ec", "pigweed"],
 )
 
 # Note for reviews, do not let anyone edit these assertions, the addresses
