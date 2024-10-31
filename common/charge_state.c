@@ -1536,7 +1536,7 @@ void charger_task(void *u)
 {
 	int sleep_usec;
 	int battery_critical;
-	int need_static = 1;
+	int need_static = 0;
 	const struct charger_info *const info = charger_get_info();
 	int chgnum = 0;
 	bool is_full = false; /* battery not accepting current */
@@ -1574,7 +1574,7 @@ void charger_task(void *u)
 				prev_bf & BATT_FLAG_RESPONSIVE,
 				curr.batt.flags & BATT_FLAG_RESPONSIVE);
 			process_battery_present_change(info, chgnum);
-			need_static = 1;
+			need_static = (curr.batt.is_present == BP_YES);
 		}
 		prev_bf = curr.batt.flags;
 
