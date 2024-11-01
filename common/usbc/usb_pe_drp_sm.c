@@ -1418,7 +1418,7 @@ void pd_resume_check_pr_swap_needed(int port)
 				       pd_get_src_caps(port)) &&
 	    (!IS_ENABLED(CONFIG_CHARGE_MANAGER) ||
 	     charge_manager_get_active_charge_port() != port))
-		pd_dpm_request(port, DPM_REQUEST_PR_SWAP);
+		pd_request_power_swap(port);
 }
 
 void pd_dpm_request(int port, enum pd_dpm_request req)
@@ -3090,7 +3090,7 @@ static void pe_src_ready_run(int port)
 	if (PE_CHK_FLAG(port, PE_FLAGS_WAITING_PR_SWAP) &&
 	    pd_timer_is_expired(port, PE_TIMER_PR_SWAP_WAIT)) {
 		PE_CLR_FLAG(port, PE_FLAGS_WAITING_PR_SWAP);
-		PE_SET_DPM_REQUEST(port, DPM_REQUEST_PR_SWAP);
+		pd_request_power_swap(port);
 	}
 
 	if (pd_timer_is_disabled(port, PE_TIMER_WAIT_AND_ADD_JITTER) ||
