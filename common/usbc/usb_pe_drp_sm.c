@@ -1124,7 +1124,7 @@ static int pe_in_spr_contract(int port)
 static bool pe_can_send_sop_prime(int port)
 {
 	if (IS_ENABLED(CONFIG_USBC_VCONN)) {
-		if (PE_CHK_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT)) {
+		if (pe_is_explicit_contract(port)) {
 			if (prl_get_rev(port, TCPCI_MSG_SOP) == PD_REV20)
 				return tc_is_vconn_src(port) &&
 				       pe[port].data_role == PD_ROLE_DFP;
@@ -1154,7 +1154,7 @@ static bool pe_can_send_sop_prime(int port)
  */
 static bool pe_can_send_sop_vdm(int port, int vdm_cmd)
 {
-	if (PE_CHK_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT)) {
+	if (pe_is_explicit_contract(port)) {
 		if (prl_get_rev(port, TCPCI_MSG_SOP) == PD_REV20) {
 			if (pe[port].data_role == PD_ROLE_UFP &&
 			    vdm_cmd != CMD_ATTENTION) {
@@ -1335,8 +1335,7 @@ void pe_report_error(int port, enum pe_error e, enum tcpci_msg_type type)
 	if ((e != ERR_TCH_XMIT &&
 	     !PE_CHK_FLAG(port, PE_FLAGS_INTERRUPTIBLE_AMS)) ||
 	    e == ERR_TCH_XMIT ||
-	    (!PE_CHK_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT) &&
-	     type == TCPCI_MSG_SOP)) {
+	    (!pe_is_explicit_contract(port) && type == TCPCI_MSG_SOP)) {
 		pe_send_soft_reset(port, type);
 	}
 	/*
@@ -3182,7 +3181,7 @@ static void pe_src_capability_response_run(int port)
 	if (PE_CHK_FLAG(port, PE_FLAGS_TX_COMPLETE)) {
 		PE_CLR_FLAG(port, PE_FLAGS_TX_COMPLETE);
 
-		if (PE_CHK_FLAG(port, PE_FLAGS_EXPLICIT_CONTRACT))
+		if (pe_is_explicit_contract(port))
 			/*
 			 * NOTE: The src capabilities listed in
 			 *       board/xxx/usb_pd_policy.c will not
@@ -3660,8 +3659,7 @@ static void pe_snk_select_capability_run(int port)
 				 * We had a previous explicit contract, so
 				 * transition to PE_SNK_Ready
 				 */
-				if (PE_CHK_FLAG(port,
-						PE_FLAGS_EXPLICIT_CONTRACT))
+				if (pe_is_explicit_contract(port))
 					set_state_pe(port, PE_SNK_READY);
 				/*
 				 * No previous explicit contract, so transition
