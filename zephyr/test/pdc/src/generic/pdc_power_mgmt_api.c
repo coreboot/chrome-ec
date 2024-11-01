@@ -2237,6 +2237,120 @@ ZTEST_SUITE(pdc_power_mgmt_api_suspended, NULL, pdc_power_mgmt_suspend_setup,
 	    pdc_power_mgmt_suspend_before, pdc_power_mgmt_suspend_after,
 	    pdc_power_mgmt_suspend_teardown);
 
+/*
+ * Source PDO selection tests
+ */
+
+extern int evaluate_src_pdos(const uint32_t *pdos, size_t num_pdos,
+			     size_t *selected);
+
+ZTEST_USER(pdc_power_mgmt_api_eval_src_pdos, test_invalid_input)
+{
+	uint32_t pdos[1] = { 0 };
+	size_t selected;
+
+	/* No PDO array pointer */
+	zassert_equal(-EINVAL, evaluate_src_pdos(NULL, 1, &selected));
+
+	/* Zero length */
+	zassert_equal(-EINVAL, evaluate_src_pdos(pdos, 0, &selected));
+
+	/* No output param for selected PDO */
+	zassert_equal(-EINVAL, evaluate_src_pdos(pdos, 1, NULL));
+}
+
+ZTEST_USER(pdc_power_mgmt_api_eval_src_pdos, test_no_valid_pdo)
+{
+	uint32_t pdos[3] = { 0 };
+	size_t selected;
+
+	/* PDOs are all zero (all invalid) */
+	zassert_equal(-ENOTSUP,
+		      evaluate_src_pdos(pdos, ARRAY_SIZE(pdos), &selected));
+}
+
+ZTEST_USER(pdc_power_mgmt_api_eval_src_pdos, test_board_values)
+{
+	/* Check assumed board values. If these change, the test cases
+	 * following might need adjustment since the PDO evaluation function
+	 */
+	zassert_equal(20000, CONFIG_PLATFORM_EC_PD_MAX_VOLTAGE_MV);
+	zassert_equal(3000, CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA);
+	zassert_equal(60000, CONFIG_PLATFORM_EC_PD_MAX_POWER_MW);
+}
+
+ZTEST_USER(pdc_power_mgmt_api_eval_src_pdos, test_fallback_pdo)
+{
+	uint32_t pdos[3] = { PDO_FIXED(5000, 0, 0) };
+	size_t selected = 9999;
+
+	/* Receive a single PDO, but it has a 0A current. It should be selected
+	 * since its voltage is below the board max, and there are no better
+	 * choices.
+	 */
+	zassert_ok(evaluate_src_pdos(pdos, ARRAY_SIZE(pdos), &selected));
+	zassert_equal(0, selected);
+
+	/* Same test, but the only PDO has 21V / 0A. This is above the limit,
+	 * so no PDO should get chosen (error case)
+	 */
+	pdos[0] = PDO_FIXED(21000, 0, 0);
+	selected = -99;
+
+	zassert_equal(-ENOTSUP,
+		      evaluate_src_pdos(pdos, ARRAY_SIZE(pdos), &selected));
+}
+
+ZTEST_USER(pdc_power_mgmt_api_eval_src_pdos, test_select_pdo)
+{
+	uint32_t pdos[] = {
+		PDO_FIXED(5000, 1500, 0),  PDO_FIXED(9000, 3000, 0),
+		PDO_FIXED(15000, 4000, 0), PDO_FIXED(20000, 3000, 0),
+		PDO_FIXED(21000, 5000, 0),
+	};
+	size_t selected = 9999;
+
+	/* Should select PDO array index 3 (Would be position 4 in RDO):
+	 *  - 21V/5A is highest overall wattage but too much voltage
+	 *  - 15V/4A and 20V/3A are tied for highest wattage not exceeding the
+	 *    voltage limit. Prefer the higher-V PDO (20V/3A)
+	 */
+	zassert_ok(evaluate_src_pdos(pdos, ARRAY_SIZE(pdos), &selected));
+	zassert_equal(3, selected);
+}
+
+ZTEST_USER(pdc_power_mgmt_api_eval_src_pdos, test_select_higher_wattage)
+{
+	uint32_t pdos[] = {
+		PDO_FIXED(5000, 1500, 0),  PDO_FIXED(9000, 3000, 0),
+		PDO_FIXED(15000, 4000, 0), PDO_FIXED(20000, 4000, 0),
+		PDO_FIXED(21000, 5000, 0),
+	};
+	size_t selected = 9999;
+
+	/* Should select PDO array index 3 despite having a higher wattage than
+	 * needed.
+	 */
+	zassert_ok(evaluate_src_pdos(pdos, ARRAY_SIZE(pdos), &selected));
+	zassert_equal(3, selected);
+}
+
+ZTEST_USER(pdc_power_mgmt_api_eval_src_pdos, test_non_fixed_pdos)
+{
+	uint32_t pdos[] = {
+		PDO_FIXED(5000, 3000, 0),
+		PDO_BATT(5000, 20000, 60000),
+		PDO_FIXED(9000, 3000, 0),
+	};
+	size_t selected = 9999;
+
+	/* Should select PDO array index 2, as we only consider fixed PDOs. */
+	zassert_ok(evaluate_src_pdos(pdos, ARRAY_SIZE(pdos), &selected));
+	zassert_equal(2, selected);
+}
+
+ZTEST_SUITE(pdc_power_mgmt_api_eval_src_pdos, NULL, NULL, NULL, NULL, NULL);
+
 ZTEST_USER(pdc_power_mgmt_api_suspended, test_get_info)
 {
 	struct pdc_info_t info;
