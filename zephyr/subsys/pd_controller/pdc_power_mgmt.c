@@ -691,8 +691,6 @@ struct pdc_port_t {
 	union uor_t uor;
 	/** PDR variable used with CMD_PDC_SET_PDR command */
 	union pdr_t pdr;
-	/** True if battery can charge from this port */
-	bool active_charge;
 	/** Tracks current connection state */
 	enum attached_state_t attached_state;
 	/** GET_VDO temp variable used with CMD_GET_VDO */
@@ -1559,7 +1557,9 @@ static void run_typec_snk_policies(struct pdc_port_t *port)
 	 */
 	if (atomic_test_and_clear_bit(port->snk_policy.flags,
 				      SNK_POLICY_SET_ACTIVE_CHARGE_PORT)) {
-		port->sink_path_en = port->active_charge;
+		/* Check if we are the active charge port */
+		port->sink_path_en = charge_manager_get_active_charge_port() ==
+				     config->connector_num;
 		queue_internal_cmd(port, CMD_PDC_SET_SINK_PATH);
 	} else if (atomic_test_and_clear_bit(port->snk_policy.flags,
 					     SNK_POLICY_UPDATE_SRC_CAPS)) {
@@ -2188,8 +2188,9 @@ static void pdc_snk_attached_run(void *obj)
 			port->snk_attached_local_state = SNK_ATTACHED_RUN;
 		}
 
-		/* Test if battery can be charged from this port */
-		port->sink_path_en = port->active_charge;
+		/* Test if battery should be charged from this port */
+		port->sink_path_en = charge_manager_get_active_charge_port() ==
+				     config->connector_num;
 		queue_internal_cmd(port, CMD_PDC_SET_SINK_PATH);
 		return;
 	case SNK_ATTACHED_GET_SINK_PDO:
@@ -2304,9 +2305,9 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 		rv = pdc_get_vbus_voltage(port->pdc, &port->vbus);
 		break;
 	case CMD_PDC_SET_SINK_PATH:
-		LOG_INF("C%d: sink_path_en=%d, active_charge=%d",
+		LOG_INF("C%d: sink_path_en=%d, chg_mgr_active_charge_port=%d",
 			config->connector_num, port->sink_path_en,
-			port->active_charge);
+			charge_manager_get_active_charge_port());
 		rv = pdc_set_sink_path(port->pdc, port->sink_path_en);
 		break;
 	case CMD_PDC_READ_POWER_LEVEL:
@@ -3081,9 +3082,6 @@ static void init_port_variables(struct pdc_port_t *port,
 	port->port_event = ATOMIC_INIT(0);
 	port->get_pdo.updating = false;
 
-	/* Can charge from port by default */
-	port->active_charge = true;
-
 	port->last_state = PDC_INIT;
 	port->next_state = PDC_INIT;
 }
@@ -3271,23 +3269,24 @@ uint8_t pdc_power_mgmt_get_usb_pd_port_count(void)
 
 int pdc_power_mgmt_set_active_charge_port(int charge_port)
 {
-	if (charge_port == CHARGE_PORT_NONE) {
-		/* Disable all ports */
-		for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
-			pdc_data[i]->port.active_charge = false;
-			atomic_set_bit(pdc_data[i]->port.snk_policy.flags,
-				       SNK_POLICY_SET_ACTIVE_CHARGE_PORT);
-		}
-	} else if (is_pdc_port_valid(charge_port)) {
-		for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
-			if (i == charge_port) {
-				pdc_data[i]->port.active_charge = true;
-			} else {
-				pdc_data[i]->port.active_charge = false;
-			}
-			atomic_set_bit(pdc_data[i]->port.snk_policy.flags,
-				       SNK_POLICY_SET_ACTIVE_CHARGE_PORT);
-		}
+	/* Note: pdc_power_mgmt_set_active_charge_port() does not alter the
+	 * active charging port. It triggers all ports to ask charge_manager
+	 * for the currently active port and adjust their sink path states.
+	 *
+	 * Overriding the active charge port externally should be done through
+	 * charge manager's charge_manager_set_override() function.
+	 */
+
+	LOG_INF("%s: charge_port=%d", __func__, charge_port);
+
+	/* Contact all ports by raising a policy flag. The individual port
+	 * state machines will react by checking if they are now the active
+	 * charge port and adjust their sink paths accordingly.
+	 */
+
+	for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
+		atomic_set_bit(pdc_data[i]->port.snk_policy.flags,
+			       SNK_POLICY_SET_ACTIVE_CHARGE_PORT);
 	}
 
 	return EC_SUCCESS;

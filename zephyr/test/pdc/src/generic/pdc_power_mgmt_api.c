@@ -2093,12 +2093,12 @@ ZTEST_USER(pdc_power_mgmt_api, test_pdc_power_mgmt_set_active_charge_port)
 	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
 	zassert_true(is_sink_path_enabled());
 
-	zassert_ok(board_set_active_charge_port(CHARGE_PORT_NONE));
+	zassert_ok(charge_manager_set_override(OVERRIDE_DONT_CHARGE));
 	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
 	/* Sink path should be disabled because it's not active charge port */
 	zassert_false(is_sink_path_enabled());
 
-	zassert_ok(board_set_active_charge_port(TEST_PORT));
+	zassert_ok(charge_manager_set_override(TEST_PORT));
 	/* Sink path should be enabled after activating TEST_PORT */
 	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
 	zassert_true(is_sink_path_enabled());
