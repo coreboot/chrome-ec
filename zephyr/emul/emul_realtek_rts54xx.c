@@ -541,10 +541,17 @@ static int set_ccom(struct rts5453p_emul_pdc_data *data,
 static int force_set_power_switch(struct rts5453p_emul_pdc_data *data,
 				  const union rts54_request *req)
 {
-	LOG_INF("FORCE_SET_POWER_SWITCH port=%d",
-		req->force_set_power_switch.port_num);
+	bool sink_path_active =
+		req->force_set_power_switch.data.vbsin_en_control &&
+		req->force_set_power_switch.data.vbsin_en == 3;
+
+	LOG_INF("FORCE_SET_POWER_SWITCH port=%d, enabled=%d",
+		req->force_set_power_switch.port_num, sink_path_active);
 
 	data->set_power_switch_data = req->force_set_power_switch.data;
+
+	/* Update connector status with new sink path state */
+	data->connector_status.sink_path_status = sink_path_active;
 
 	memset(&data->response, 0, sizeof(data->response));
 	send_response(data);

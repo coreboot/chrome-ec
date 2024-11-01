@@ -301,6 +301,9 @@ static void tps6699x_emul_handle_srdy(struct tps6699x_emul_pdc_data *data,
 			EXT_VBUS_SWITCH_ENABLED_INPUT;
 		power_path_status->pb_ext_vbus_sw =
 			EXT_VBUS_SWITCH_ENABLED_INPUT;
+
+		/* Update connector status with new sink path state */
+		data->connector_status.sink_path_status = 1;
 		break;
 	default:
 		break;
@@ -318,6 +321,9 @@ static void tps6699x_emul_handle_sryr(struct tps6699x_emul_pdc_data *data,
 	LOG_INF("SRYR TASK");
 	power_path_status->pa_ext_vbus_sw = EXT_VBUS_SWITCH_DISABLED;
 	power_path_status->pb_ext_vbus_sw = EXT_VBUS_SWITCH_DISABLED;
+
+	/* Update connector status with new sink path state */
+	data->connector_status.sink_path_status = 0;
 	data_reg[0] = TASK_COMPLETED_SUCCESSFULLY;
 }
 
