@@ -49,6 +49,11 @@
 /* Round up to a multiple of 4 */
 #define ROUNDUP4(x) (((x) + 3) & ~3)
 
+/**
+ * Returns a pointer to the jump data structure.
+ */
+struct jump_data *get_jump_data(void);
+
 /* Data for an individual jump tag */
 struct jump_tag {
 	uint16_t tag; /* Tag ID */
