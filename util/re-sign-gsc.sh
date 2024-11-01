@@ -24,6 +24,12 @@ if [[ -z ${NOCLEAN} ]]; then
   trap 'rm -rf "${TMPD}"' EXIT
 fi
 
+# PKCS11 connector library needed for codesigner to access keys in Cloud KMS.
+PKCS11_MODULE_PATH="/usr/lib64/libkmsp11.so"
+
+# Cloud KMS path to the location of the GSC signing keys.
+KMS_PROJECT_PATH="projects/gsc-cloud-kms-signing/locations/us/keyRings/gsc-node-locked-signing-keys/cryptoKeys"
+
 # Make sure there is a codesigner in the path.
 CODESIGNER=""
 for f in  cr50-codesigner \
@@ -136,12 +142,16 @@ main () {
   case "${bin_size}" in
     (524288) rw_a_base=16384 # RO area size is fixed at 16K
              rw_b_base=$(( bin_size / 2 + rw_a_base ))
-             rw_key="util/signer/cr50_rom0-dev-blsign.pem.pub"
+             rw_key="util/signer/cr50-hsm-node-locked-key.pem.pub"
              manifest="util/signer/ec_RW-manifest-dev.json"
              xml="util/signer/fuses.xml"
-             codesigner_params+=( --b )
+             codesigner_params+=(
+               --b
+               --pkcs11_engine="${PKCS11_MODULE_PATH}:0:${KMS_PROJECT_PATH}/cr50-hsm-node-locked-key/cryptoKeyVersions/1"
+             )
              flash_base=262144
              prefix="cr50"
+             KMS_PKCS11_CONFIG="$(readlink -f chip/g/config.yaml)"
              ;;
     (1048576) local rw_bases
               # Third and sixths lines showing signed header magic are base
@@ -158,9 +168,14 @@ main () {
               rw_key="ports/dauntless/signing/ti50_dev.key"
               manifest="ports/dauntless/signing/manifest.TOT.json"
               xml="ports/dauntless/signing/fuses.xml"
-              codesigner_params+=( --dauntless )
+              codesigner_params+=(
+                --dauntless
+                --pkcs11_engine="${PKCS11_MODULE_PATH}:0:${KMS_PROJECT_PATH}/ti50-node-locked-key/cryptoKeyVersions/1"
+              )
               flash_base=524288
               prefix="ti50"
+              KMS_PKCS11_CONFIG="$(readlink -f ports/dauntless/config.yaml)"
+
               ;;
     (*) echo "What is ${full_bin}?" >&2
         exit 1
@@ -203,6 +218,8 @@ main () {
   )
 
   echo "Re-signing a ${prefix} image"
+
+  export KMS_PKCS11_CONFIG
 
   re_sign_rw "${tmp_file}" "${flash_base}" "${rw_a_base}" \
              "${codesigner_params[@]}"

@@ -1,0 +1,4 @@
+*.o
+*.d
+test_boot_param
+test*.cbor
