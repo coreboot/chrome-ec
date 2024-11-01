@@ -135,7 +135,7 @@ int fp_acquire_image(uint8_t *image_data)
 
 enum finger_state fp_finger_status(void)
 {
-	int rc = EGIS_API_FINGER_UNSTABLE;
+	int rc = FINGER_NONE;
 	egislog_i("");
 	rc = egis_check_int_status();
 
@@ -144,7 +144,7 @@ enum finger_state fp_finger_status(void)
 		rc = FINGER_PRESENT;
 		break;
 	case EGIS_API_FINGER_LOST:
-		rc = FINGER_PARTIAL;
+		rc = FINGER_NONE;
 		break;
 	default:
 		rc = FINGER_NONE;
