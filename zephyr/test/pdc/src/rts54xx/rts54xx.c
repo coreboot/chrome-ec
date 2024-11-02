@@ -70,6 +70,7 @@ static const struct device *dev2 = DEVICE_DT_GET(RTS5453P_NODE2);
 static void rts54xx_before_test(void *data)
 {
 	emul_pdc_reset(emul);
+	emul_pdc_reset(emul2);
 	emul_pdc_set_response_delay(emul, 0);
 	if (IS_ENABLED(CONFIG_TEST_PDC_MESSAGE_TRACING)) {
 		set_pdc_trace_msg_mocks();
@@ -269,8 +270,12 @@ ZTEST_USER(rts54xx, test_irq)
 {
 #define IRQ_TEST_TIMEOUT_MS (TEST_WAIT_FOR_INTERVAL_MS * 5)
 
-	union connector_status_t status1;
-	union connector_status_t status2;
+	/* Set connector statuses for both ports to be disconnected. This test
+	 * only cares about triggering an interrupt / callback, so don't
+	 * inadvertently trigger other actions.
+	 */
+	union connector_status_t status1 = { .connect_status = 0 };
+	union connector_status_t status2 = { .connect_status = 0 };
 	struct capability_t unused_caps;
 	struct pdc_callback ci_cb;
 
@@ -288,7 +293,7 @@ ZTEST_USER(rts54xx, test_irq)
 	emul_pdc_set_response_delay(emul, IRQ_TEST_TIMEOUT_MS);
 	zassert_ok(pdc_get_capability(dev, &unused_caps));
 
-	/* Disconnect both ports but expect that we don't see interrupts until
+	/* Trigger an interrupt but expect that we don't see interrupts until
 	 * the command is completed.
 	 */
 	zassert_ok(emul_pdc_connect_partner(emul, &status1));
