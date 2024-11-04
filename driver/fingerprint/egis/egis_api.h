@@ -74,9 +74,9 @@ typedef enum {
  * @return EGIS_API_ERROR_SENSOR_OCP_DETECT : on sensor OCP detect
  * @return EGIS_API_ERROR_SENSOR_NEED_RESET : on sensor need reset
  * @return EGIS_API_ERROR_SENSOR_SENSING_MDOE_CALIBRATION : on sensor
- calibration sensing mdoe fail
+ * calibration sensing mode fail
  * @return EGIS_API_ERROR_SENSOR_DETECT_MDOE_CALIBRATION : on sensor calibration
- detect mdoe fail
+ * detect mode fail
  * @return EGIS_API_ERROR_MEMORY : on alloc memory fail
  * @return EGIS_API_ERROR_GENERAL : on other operation fail
  * @return EGIS_API_ERROR_SENSOR_GENERAL : on sensor operation fail
@@ -105,8 +105,7 @@ void egis_sensor_power_down(void);
  * @param[in] mode  enum fp_capture_type.
  *
  * @return EGIS_API_IMAGE_QUALITY_GOOD : on success
- * @return EGIS_API_IMAGE_QUALITY_BAD : on image captured but quality is too
- * low
+ * @return EGIS_API_IMAGE_QUALITY_BAD : on image captured but quality is too low
  * @return EGIS_API_IMAGE_QUALITY_WATER : on image captured but image may had
  * water
  * @return EGIS_API_IMAGE_QUALITY_PARTIAL : on sensor not fully covered by
@@ -119,6 +118,9 @@ void egis_sensor_power_down(void);
  * @return EGIS_API_ERROR_PARAMETER : on incorrect parameter
  * @return EGIS_API_ERROR_IO_SPI : on execute SPI transfer fail
  */
+/*
+ * TODO(b/376870662): Create additional modes for `egis_get_image_with_mode`.
+ */
 int egis_get_image_with_mode(uint8_t *image_data, int mode);
 
 /**
@@ -128,8 +130,7 @@ int egis_get_image_with_mode(uint8_t *image_data, int mode);
  * with size FP_SENSOR_IMAGE_SIZE.
  *
  * @return EGIS_API_IMAGE_QUALITY_GOOD : on success
- * @return EGIS_API_IMAGE_QUALITY_BAD : on image captured but quality is too
- * low
+ * @return EGIS_API_IMAGE_QUALITY_BAD : on image captured but quality is too low
  * @return EGIS_API_IMAGE_QUALITY_WATER : on image captured but image may had
  * water
  * @return EGIS_API_IMAGE_QUALITY_PARTIAL : on sensor not fully covered by
