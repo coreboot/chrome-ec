@@ -15,6 +15,7 @@
 			compatible = "named-usbc-port";
 			reg = <0>;
 			chg = <&charger>;
+			chg_alt = <&alt_charger>;
 			pdc = <&pdc_power_p0>;
 			policy = <&cros_policy>;
 		};

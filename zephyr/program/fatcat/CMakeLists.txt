@@ -22,5 +22,6 @@ if(DEFINED CONFIG_BOARD_FRANCKA)
 	zephyr_library_sources(
 			"francka/src/touch_panel.c"
 			"francka/src/board_power.c"
+			"francka/src/alt_charger.c"
 	)
 endif()

@@ -65,6 +65,12 @@
 		status = "okay";
 		reg = <0x9>;
 	};
+
+	alt_charger: isl9538@9 {
+		compatible = "intersil,isl923x";
+		status = "okay";
+		reg = <0x9>;
+	};
 };
 
 &pwm5_gpb7 {
