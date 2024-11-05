@@ -17,6 +17,9 @@
 #undef CONFIG_VOLUME_BUTTONS
 #undef CONFIG_USB_CHARGER
 
+/* Chipset config */
+#define CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
+
 /* EC console commands */
 #define CONFIG_CMD_TCPC_DUMP
 #define CONFIG_CMD_CHARGER_DUMP
