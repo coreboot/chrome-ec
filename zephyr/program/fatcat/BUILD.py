@@ -51,6 +51,9 @@ def register_it8xxx2_project(
 
 register_npcx9_project(
     project_name="fatcat_npcx9m7f",
+    extra_kconfig_files=[
+        here / ".." / "intelrvp" / "zephyr_ap_pwrseq.conf",
+    ],
 )
 
 register_it8xxx2_project(

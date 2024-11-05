@@ -15,3 +15,12 @@
 gpio_ec_pch_wake_odl: &gpio_ec_soc_wake_ls_odl {};
 pwrbtn: &gpio_ec_soc_pwr_btn_odl {};
 gpio_c_ioex_kbd_intr_r: &gpio_ioex_kbd_int_odl {};
+cse_early_rec_sw: &gpio_ec_soc_rec_switch_odl {};
+
+en_pp5000_s5: &gpio_en_pp5000_s5 {};
+ec_pch_pwrok_od: &gpio_soc_pwrok_r {};
+all_sys_pwrgd: &gpio_all_sys_pwrgd {};
+en_pp3300_a: &gpio_en_s5_rails {};
+pch_slp_s0_n: &gpio_sys_slp_s0ix_l {};
+ec_pch_rsmrst_l: &gpio_ec_soc_rsmrst_l_r {};
+rsmrst_pwrgd: &gpio_ec_rsmrst_odl {};
