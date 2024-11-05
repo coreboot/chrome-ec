@@ -10,6 +10,7 @@ config CROS_SHI_NPCX
 	depends on !EC_HOST_CMD
 	depends on DT_HAS_NUVOTON_NPCX_SHI_ENABLED || \
 		   DT_HAS_NUVOTON_NPCX_SHI_ENHANCED_ENABLED
+	select PINCTRL
 	help
 	  This option enables Serial Host Interface driver for the NPCX family
 	  of processors. This is used for host-command communication on the
