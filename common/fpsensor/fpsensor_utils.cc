@@ -48,8 +48,7 @@ bool is_raw_capture(uint32_t mode)
 {
 	int capture_type = FP_CAPTURE_TYPE(mode);
 
-	return (mode & FP_MODE_CAPTURE) &&
-	       (capture_type == FP_CAPTURE_VENDOR_FORMAT ||
+	return (capture_type == FP_CAPTURE_VENDOR_FORMAT ||
 		capture_type == FP_CAPTURE_QUALITY_TEST);
 }
 
