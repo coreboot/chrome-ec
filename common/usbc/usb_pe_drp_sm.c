@@ -2744,11 +2744,6 @@ static void pe_src_negotiate_capability_entry(int port)
 	payload = *(uint32_t *)(&rx_emsg[port].buf);
 
 	/*
-	 * Evaluate the Request from the Attached Sink
-	 */
-
-	dpm_evaluate_request_rdo(port, payload);
-	/*
 	 * Transition to the PE_SRC_Capability_Response state when:
 	 *  1) The Request cannot be met.
 	 *  2) Or the Request can be met later from the Power Reserve
