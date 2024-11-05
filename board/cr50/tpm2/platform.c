@@ -6,6 +6,7 @@
 #include "Global.h"
 #include "Platform.h"
 #include "TPM_Types.h"
+#include "NV_fp.h"
 
 #include "boot_param_platform_cr50.h"
 #include "ccd_config.h"
@@ -109,9 +110,82 @@ void   _plat__GetFwVersion(uint32_t *firmwareV1, uint32_t *firmwareV2)
 	*firmwareV2 = strtoi(ver_str, NULL, 16);
 }
 
+/* Old FWMP spaces were created with these attrs. */
+#define OLD_FWMP_ATTRS ((TPMA_NV) {				  \
+	.TPMA_NV_AUTHWRITE = 1,					  \
+	.TPMA_NV_AUTHREAD = 1,					  \
+	.TPMA_NV_PPREAD = 1,					  \
+	.TPMA_NV_WRITEDEFINE = 1,				  \
+})
+
+/* New FWMP spaces were created with these attrs. */
+#define NEW_FWMP_ATTRS ((TPMA_NV) {				  \
+	.TPMA_NV_PLATFORMCREATE = 1,				  \
+	.TPMA_NV_OWNERWRITE = 1,				  \
+	.TPMA_NV_AUTHREAD = 1,					  \
+	.TPMA_NV_PPREAD = 1,					  \
+	.TPMA_NV_PPWRITE = 1,					  \
+})
+
+static TPMA_NV board_get_new_fwmp_attributes(TPMA_NV attributes)
+{
+	TPMA_NV new_attributes = NEW_FWMP_ATTRS;
+
+	if (attributes.TPMA_NV_WRITTEN == 1)
+		new_attributes.TPMA_NV_WRITTEN = 1;
+
+	return new_attributes;
+}
+
+static bool fwmp_uses_old_attributes(TPMA_NV attributes)
+{
+	TPMA_NV old_fwmp_attrs = OLD_FWMP_ATTRS;
+	/* Ignore the WRITTEN and WRITELOCKED values. */
+	old_fwmp_attrs.TPMA_NV_WRITTEN = attributes.TPMA_NV_WRITTEN;
+	old_fwmp_attrs.TPMA_NV_WRITELOCKED = attributes.TPMA_NV_WRITELOCKED;
+	return memcmp(&attributes, &old_fwmp_attrs, sizeof(attributes)) == 0;
+}
+
+/* Update NV_INDEX_FWMP attributes. */
+static void board_update_fwmp_attributes(void)
+{
+	TPM_HANDLE handle;
+	NV_INDEX nvIndex;
+	TPM_RC result;
+	uint32_t handle_addr;
+
+	result = NvIsAvailable();
+	if (result != TPM_RC_SUCCESS)
+		return;
+
+	handle = HR_NV_INDEX + NV_INDEX_FWMP;
+	handle_addr = NvEarlyStageFindHandle(handle);
+	if (!handle_addr) {
+		CPRINTF("%s: object at 0x%x not found\n", __func__,
+			NV_INDEX_FWMP);
+		return;
+	}
+
+	NvGetIndexInfo(handle, &nvIndex);
+
+	if (!fwmp_uses_old_attributes(nvIndex.publicArea.attributes))
+		return;
+
+	CPRINTF("%s: updating FWMP attrs\n", __func__);
+	/* Change the old FWMP space attributes to the new attributes. */
+	nvIndex.publicArea.attributes = board_get_new_fwmp_attributes(
+			nvIndex.publicArea.attributes);
+	/*
+	 * Write the new FWMP attributes. Don't run NvCommit. It'll get run
+	 * later in the boot process
+	 */
+	NvWriteIndexInfo(handle, &nvIndex);
+}
+
 void _plat__StartupCallback(void)
 {
 	pinweaver_init();
+	board_update_fwmp_attributes();
 	boot_param_handle_tpm_startup();
 
 	/*
