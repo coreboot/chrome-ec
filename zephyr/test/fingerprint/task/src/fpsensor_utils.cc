@@ -69,22 +69,21 @@ ZTEST(fpsensor_utils, test_is_test_capture)
 
 ZTEST(fpsensor_utils, test_is_raw_capture)
 {
-	zassert_true(is_raw_capture(FP_MODE_CAPTURE |
-				    FP_CAPTURE_VENDOR_FORMAT
-					    << FP_MODE_CAPTURE_TYPE_SHIFT));
-	zassert_false(is_raw_capture(FP_MODE_CAPTURE |
-				     FP_CAPTURE_SIMPLE_IMAGE
-					     << FP_MODE_CAPTURE_TYPE_SHIFT));
-	zassert_false(is_raw_capture(FP_MODE_CAPTURE |
-				     FP_CAPTURE_PATTERN0
-					     << FP_MODE_CAPTURE_TYPE_SHIFT));
-	zassert_false(is_raw_capture(FP_MODE_CAPTURE |
-				     FP_CAPTURE_PATTERN1
-					     << FP_MODE_CAPTURE_TYPE_SHIFT));
+	zassert_true(is_raw_capture(FP_CAPTURE_VENDOR_FORMAT
+				    << FP_MODE_CAPTURE_TYPE_SHIFT));
+	zassert_false(is_raw_capture(FP_CAPTURE_SIMPLE_IMAGE
+				     << FP_MODE_CAPTURE_TYPE_SHIFT));
+	zassert_false(is_raw_capture(FP_CAPTURE_PATTERN0
+				     << FP_MODE_CAPTURE_TYPE_SHIFT));
+	zassert_false(is_raw_capture(FP_CAPTURE_PATTERN1
+				     << FP_MODE_CAPTURE_TYPE_SHIFT));
+	zassert_true(is_raw_capture(FP_CAPTURE_QUALITY_TEST
+				    << FP_MODE_CAPTURE_TYPE_SHIFT));
+	zassert_false(is_raw_capture(FP_CAPTURE_RESET_TEST
+				     << FP_MODE_CAPTURE_TYPE_SHIFT));
+
+	/* Check the case when FP_MODE_CAPTURE is set. */
 	zassert_true(is_raw_capture(FP_MODE_CAPTURE |
 				    FP_CAPTURE_QUALITY_TEST
 					    << FP_MODE_CAPTURE_TYPE_SHIFT));
-	zassert_false(is_raw_capture(FP_MODE_CAPTURE |
-				     FP_CAPTURE_RESET_TEST
-					     << FP_MODE_CAPTURE_TYPE_SHIFT));
 }
