@@ -28,6 +28,46 @@
 				value = <1>;
 			};
 		};
+		/*
+		 * FW_CONFIG field to enable KB back light or not.
+		 */
+		kb-bl {
+			enum-name = "FW_KB_BL";
+			start = <17>;
+			size = <1>;
+
+			no-kb-bl {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_KB_BL_NOT_PRESENT";
+				value = <0>;
+				default;
+			};
+			kb-bl-present {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_KB_BL_PRESENT";
+				value = <1>;
+			};
+		};
+		/*
+		 * FW_CONFIG field to enable KB Numpat or not
+		 */
+		kb-numpad {
+			enum-name = "FW_KB_NUMPAD";
+			start = <18>;
+			size = <1>;
+
+			no-kb-numpad {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_KB_NUMPAD_NOT_PRESENT";
+				value = <0>;
+				default;
+			};
+			kb-numpat-present {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_KB_NUMPAD_PRESENT";
+				value = <1>;
+			};
+		};
 	};
 
 	/* Telith-specific ssfc fields. */
