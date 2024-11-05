@@ -14,6 +14,12 @@
 #ifndef CC_DEFAULT
 #define CC_DEFAULT CC_ALL
 #endif
+
+/* Any consoles not enabled by default are restricted */
+#ifndef CC_RESTRICTED
+#define CC_RESTRICTED ((CC_ALL ^ CC_DEFAULT) & CC_ALL)
+#endif
+
 uint32_t channel_mask = CC_DEFAULT;
 static uint32_t channel_mask_saved = CC_DEFAULT;
 
@@ -121,6 +127,16 @@ void cflush(void)
 /*****************************************************************************/
 /* Console commands */
 
+static int update_channel_mask(uint32_t new_mask)
+{
+	if (console_is_restricted() && (new_mask & CC_RESTRICTED)) {
+		ccprintf("restricted chan: 0x%08x\n", new_mask & CC_RESTRICTED);
+		return EC_ERROR_ACCESS_DENIED;
+	}
+	channel_mask = new_mask;
+	return EC_SUCCESS;
+}
+
 /* Set active channels */
 static int command_ch(int argc, char **argv)
 {
@@ -129,22 +145,25 @@ static int command_ch(int argc, char **argv)
 
 	/* If one arg, save / restore, or set the mask */
 	if (argc == 2) {
+
 		if (strcasecmp(argv[1], "save") == 0) {
-			channel_mask_saved = channel_mask;
+			/* Only save unrestricted channels. */
+			channel_mask_saved = (channel_mask & CC_DEFAULT);
 			return EC_SUCCESS;
 		} else if (strcasecmp(argv[1], "restore") == 0) {
-			channel_mask = channel_mask_saved;
-			return EC_SUCCESS;
+			return update_channel_mask(channel_mask_saved);
 		}
 		for (i = 0; i < CC_CHANNEL_COUNT; i++)
 			if (strcasecmp(argv[1], channel_names[i]) == 0) {
-				channel_mask ^= CC_MASK(i);
+				uint32_t new_mask = channel_mask;
+
+				new_mask ^= CC_MASK(i);
 				/* Don't disable command output. */
-				channel_mask |= CC_MASK(CC_COMMAND);
-				ccprintf("%s set to %s\n", argv[1],
-					 (channel_mask & CC_MASK(i)) ? "on" :
-								       "off");
-				return EC_SUCCESS;
+				new_mask |= CC_MASK(CC_COMMAND);
+				ccprintf("setting %s to %s\n", argv[1],
+					 (new_mask & CC_MASK(i)) ?
+					 "on" : "off");
+				return update_channel_mask(new_mask);
 			}
 
 		/* Set the mask */
@@ -153,9 +172,7 @@ static int command_ch(int argc, char **argv)
 			return EC_ERROR_PARAM1;
 
 		/* No disabling the command output channel */
-		channel_mask = i | CC_MASK(CC_COMMAND);
-
-		return EC_SUCCESS;
+		return update_channel_mask(i | CC_MASK(CC_COMMAND));
 	}
 
 	/* Print the list of channels */
