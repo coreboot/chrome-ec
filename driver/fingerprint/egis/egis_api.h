@@ -65,6 +65,19 @@ typedef enum {
 } egis_api_return_t;
 
 /**
+ * @brief Get the fingerprint sensor HWID
+ *
+ * @param[out] id sensor id read from sensor.
+ *
+ * @return EGIS_OK : on success.
+ * @return EGIS_API_ERROR_IO_SPI on SPI transfer failure, @p id filled with
+ * zeros
+ * @return EGIS_API_ERROR_PARAMETER on incorrect parameter, @p id filled with
+ * zeros
+ */
+int egis_get_hwid(uint16_t *id);
+
+/**
  * @brief Reset and initialize the sensor IC.
  *
  * @return EGIS_OK : on success
