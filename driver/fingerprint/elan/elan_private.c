@@ -27,7 +27,7 @@ static uint16_t errors;
 /* Sensor description */
 static struct ec_response_fp_info ec_fp_sensor_info = {
 	/* Sensor identification */
-	.vendor_id = VID,
+	.vendor_id = FOURCC('E', 'L', 'A', 'N'),
 	.product_id = PID,
 	.model_id = MID,
 	.version = VERSION,
