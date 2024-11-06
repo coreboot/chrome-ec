@@ -435,18 +435,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_pd_src_public_cmd)
 ZTEST_USER(pdc_power_mgmt_api, test_unattached_public_cmd)
 {
 	union connector_status_t connector_status;
-	const enum drp_mode_t expected = USBC0_UNA_DRP_MODE;
-	enum drp_mode_t drp_mode = DRP_INVALID;
-	int rv;
 
 	memset(&connector_status, 0, sizeof(union connector_status_t));
 
 	run_toggle_test(&connector_status);
-
-	rv = pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode);
-	if (rv == EC_SUCCESS) {
-		zassert_equal(drp_mode, expected);
-	}
 }
 
 static void pdc_power_mgmt_connectionless_before(void *fixture)
@@ -1377,6 +1369,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_on)
 	enum ccom_t ccom;
 	uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
 	uint32_t start;
+	const enum drp_mode_t expected = USBC0_UNA_DRP_MODE;
+	enum drp_mode_t drp_mode = DRP_INVALID;
+	int rv;
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
@@ -1403,6 +1398,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_on)
 	}
 
 	zassert_equal(CCOM_DRP, ccom);
+	rv = pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode);
+	if (rv == EC_SUCCESS) {
+		zassert_equal(drp_mode, expected);
+	}
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
@@ -1411,6 +1410,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 	union pdr_t pdr;
 	uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
 	uint32_t start;
+	const enum drp_mode_t expected = DRP_NORMAL;
+	enum drp_mode_t drp_mode = DRP_INVALID;
+	int rv;
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
@@ -1439,6 +1441,10 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 
 	zassert_equal(1, pdr.swap_to_snk);
 	zassert_equal(0, pdr.swap_to_src);
+	rv = pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode);
+	if (rv == EC_SUCCESS) {
+		zassert_equal(drp_mode, expected);
+	}
 }
 
 static bool wait_state_name(int port, const uint8_t target_state,
