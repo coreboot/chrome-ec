@@ -330,6 +330,10 @@ SECTIONS
 		. = ALIGN(256);
 		*(.h2ram.pool.i2cslv)
 #endif
+#ifdef CONFIG_IT83XX_I2C_CMD_QUEUE
+		. = ALIGN(256);
+		*(.h2ram.pool.i2c_cq)
+#endif
 		__h2ram_end = .;
 	} > H2RAM
 
