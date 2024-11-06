@@ -91,7 +91,7 @@
 #define CONF_SRCDTS_NOPD3A0(c)                                           \
 	CONF_SET_CLEAR(c, CC_ALLOW_SRC | CC_SRC_WITHOUT_PD | CC_SRC_3A0, \
 		       CC_ENABLE_DRP | CC_DISABLE_DTS | CC_SNK_WITH_PD | \
-			       CC_SRC_3A0)
+			       CC_SRC_1A5)
 
 /* Macros to apply Rd/Rp to CC lines */
 #define DUT_ACTIVE_CC_SET(r, flags)                            \
