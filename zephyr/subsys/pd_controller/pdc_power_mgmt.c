@@ -1388,16 +1388,22 @@ static struct pdc_pdos_t *get_pdc_pdos_ptr(struct pdc_port_t *port,
 static void run_unattached_policies(struct pdc_port_t *port)
 {
 	if (atomic_test_and_clear_bit(port->una_policy.flags,
-				      UNA_POLICY_CC_MODE)) {
-		/* Set CC PULL Resistor and TrySrc or TrySnk */
-		queue_internal_cmd(port, CMD_PDC_SET_CCOM);
-		atomic_set_bit(port->una_policy.flags, UNA_POLICY_DRP_MODE);
+				      UNA_POLICY_DRP_MODE)) {
+		/* Set DRP current policy */
+		queue_internal_cmd(port, CMD_PDC_SET_DRP);
 		return;
 	} else if (atomic_test_and_clear_bit(port->una_policy.flags,
-					     UNA_POLICY_DRP_MODE)) {
-		/* Set DRP current policy */
-		port->drp = port->una_policy.drp_mode;
-		queue_internal_cmd(port, CMD_PDC_SET_DRP);
+					     UNA_POLICY_CC_MODE)) {
+		/* Set CC PULL Resistor and TrySrc or TrySnk */
+		queue_internal_cmd(port, CMD_PDC_SET_CCOM);
+		if (port->una_policy.cc_mode == CCOM_DRP) {
+			/* Apply DRP mode after setting CCOM_DRP
+			 * SET_CCOM doesn't specify what DRP mode we'll enter
+			 * so we should follow up by setting it ourselves.
+			 */
+			atomic_set_bit(port->una_policy.flags,
+				       UNA_POLICY_DRP_MODE);
+		}
 		return;
 	} else if (atomic_test_and_clear_bit(port->una_policy.flags,
 					     UNA_POLICY_TCC)) {
@@ -2269,9 +2275,13 @@ static int send_pdc_cmd(struct pdc_port_t *port)
 		rv = pdc_set_power_level(port->pdc, port->una_policy.tcc);
 		break;
 	case CMD_PDC_SET_CCOM:
+		LOG_DBG("C%d: SET_CCOM=%s", config->connector_num,
+			get_ccom_name(port->una_policy.cc_mode));
 		rv = pdc_set_ccom(port->pdc, port->una_policy.cc_mode);
 		break;
 	case CMD_PDC_SET_DRP:
+		LOG_DBG("C%d: SET_DRP_MODE=%s", config->connector_num,
+			get_drp_mode_name(port->drp));
 		rv = pdc_set_drp_mode(port->pdc, port->drp);
 		break;
 	case CMD_PDC_GET_DRP:
@@ -3105,6 +3115,7 @@ static int pdc_subsys_init(const struct device *dev)
 	}
 
 	init_port_variables(port, false);
+	port->drp = port->una_policy.drp_mode;
 
 	/* Set cc call back */
 	port->cc_cb.handler = pdc_cc_handler_cb;
@@ -3705,6 +3716,7 @@ test_mockable void pdc_power_mgmt_set_dual_role(int port,
 		port_data->snk_policy.accept_power_role_swap = true;
 
 		port_data->una_policy.cc_mode = CCOM_DRP;
+		port_data->drp = port_data->una_policy.drp_mode;
 		atomic_set_bit(port_data->una_policy.flags, UNA_POLICY_CC_MODE);
 		break;
 	/* Stay in src until disconnect, then stay in sink forever */
@@ -3748,6 +3760,9 @@ test_mockable void pdc_power_mgmt_set_dual_role(int port,
 		 * and reconnect as Sink.
 		 */
 		port_data->una_policy.cc_mode = CCOM_RD;
+		port_data->drp = DRP_NORMAL;
+		atomic_set_bit(port_data->una_policy.flags,
+			       UNA_POLICY_DRP_MODE);
 		atomic_set_bit(port_data->una_policy.flags, UNA_POLICY_CC_MODE);
 		atomic_set_bit(port_data->src_policy.flags,
 			       SRC_POLICY_FORCE_SNK);
