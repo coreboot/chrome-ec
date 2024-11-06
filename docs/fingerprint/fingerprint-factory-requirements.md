@@ -398,11 +398,12 @@ protection is not enabled, so the test should check the following command works
 enabled:
 
 ```bash
-(dut) $ ectool --name=cros_fp fpframe raw
+(dut) $ ectool --name=cros_fp fpframe
+# When write protection is disabled, the exit code is 0 and a large text
+# block will be printed, starting with the letters "P2".
 
-# write protection disabled, exit code 0 and output will be raw bytes
-
-# write protection enabled, exit code 1 and output will be
+# When write protection is enabled, the exit code is 1 and the output will
+# mention ACCESS_DENIED, like the example below:
 EC result 4 (ACCESS_DENIED)
 Failed to get FP sensor frame
 ```
