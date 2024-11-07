@@ -323,13 +323,6 @@ int sensor_board_is_lid_angle_available(void);
  */
 void motion_sense_push_raw_xyz(struct motion_sensor_t *s);
 
-/**
- * Check whether the given sensor is in force mode or not.
- *
- * @param s Pointer to the sensor.
- */
-bool motion_sensor_in_forced_mode(const struct motion_sensor_t *s);
-
 /*
  * There are 4 variables that represent the number of sensors:
  * SENSOR_COUNT: The number of available motion sensors in board.
