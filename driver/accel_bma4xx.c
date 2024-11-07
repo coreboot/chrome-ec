@@ -17,7 +17,6 @@
 #include "hwtimer.h"
 #include "i2c.h"
 #include "math_util.h"
-#include "motion_sense.h"
 #include "spi.h"
 #include "task.h"
 #include "util.h"
@@ -658,8 +657,7 @@ static int irq_handler(struct motion_sensor_t *s, uint32_t *event)
 	int interrupt_status_reg, fifo_depth;
 
 	if ((s->type != MOTIONSENSE_TYPE_ACCEL) ||
-	    (!(*event & CONFIG_ACCEL_BMA4XX_INT_EVENT)) ||
-	    motion_sensor_in_forced_mode(s)) {
+	    (!(*event & CONFIG_ACCEL_BMA4XX_INT_EVENT))) {
 		return EC_ERROR_NOT_HANDLED;
 	}
 
