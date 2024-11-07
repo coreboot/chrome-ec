@@ -69,3 +69,18 @@ const char *get_drp_mode_name(enum drp_mode_t mode)
 		return "INVALID DRP MODE";
 	}
 }
+
+static const char *ccom_name[] = {
+	"CCOM_RP",
+	"CCOM_RD",
+	"CCOM_DRP",
+};
+
+const char *get_ccom_name(enum ccom_t ccom)
+{
+	if (ccom <= CCOM_DRP) {
+		return ccom_name[ccom];
+	} else {
+		return "INVALID CCOM";
+	}
+}

@@ -229,6 +229,7 @@ enum ccom_t {
 	/** CCOM DRP */
 	CCOM_DRP
 };
+const char *get_ccom_name(enum ccom_t ccom);
 
 /**
  * @brief DRP Mode
