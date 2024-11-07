@@ -6,12 +6,10 @@
 #ifndef __CROS_EC_POWER_MT8186_H_
 #define __CROS_EC_POWER_MT8186_H_
 
-enum power_signal {
-	AP_IN_RST,
-	AP_IN_S3,
-	AP_WDT_ASSERTED,
-	AP_WARM_RST_REQ,
-	POWER_SIGNAL_COUNT,
-};
+#include "common.h"
+#include "ec_commands.h"
+
+__override_proto void
+board_process_host_sleep_event(enum host_sleep_event state);
 
 #endif /* __CROS_EC_POWER_MT8186_H_ */
