@@ -57,7 +57,9 @@ DISAMBIGUATION_DICTIONARY = {
             {
                 "reg": "0x00",
                 "mask": "0xff",
-                "value": "0x43",
+                # TODO(b/377225164): Correct the expected value
+                # once runtime_probe supports more than 1 byte
+                "value": "0x00",
             },
             None,
         ),
