@@ -265,9 +265,6 @@
 		gpio_ec_tcpc_p2_en: ec_tcpc_p2_en {
 			gpios = <&gpio6 1 GPIO_OUTPUT>;
 		};
-		gpio_vr_on: vr_on {
-			gpios =  <&gpio9 6 (GPIO_ODR_HIGH | GPIO_VOLTAGE_1P8)>;
-		};
 		gpio_ec_als_int_l: ec_als_int_l {
 			gpios =  <&gpio3 7 GPIO_INPUT>;
 		};
@@ -293,7 +290,8 @@
 			<&gpiod 5 0>,
 			<&gpioe 2 0>,
 			<&gpiof 2 0>,
-			<&gpiof 3 0>;
+			<&gpiof 3 0>,
+			<&gpio9 6 0>;
 	};
 };
 
