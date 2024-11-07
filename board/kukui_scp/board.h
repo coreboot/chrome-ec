@@ -48,7 +48,7 @@
 #define CONFIG_DRAM_BASE 0x10000000
 /* Shared memory address in AP physical address space. */
 #define CONFIG_DRAM_BASE_LOAD 0x50000000
-#define CONFIG_DRAM_SIZE 0x01400000 /* 20 MB */
+#define CONFIG_DRAM_SIZE 0x02900000 /* 41 MB */
 
 /* IPI configs */
 #define CONFIG_IPC_SHARED_OBJ_BUF_SIZE 288
