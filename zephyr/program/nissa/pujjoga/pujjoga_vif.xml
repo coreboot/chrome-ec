@@ -33,9 +33,9 @@
                 <!--;General PD-->
                 <!--;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-->
                 <vif:PD_Spec_Revision_Major value="3">3</vif:PD_Spec_Revision_Major>
-                <vif:PD_Spec_Revision_Minor value="1">1</vif:PD_Spec_Revision_Minor>
+                <vif:PD_Spec_Revision_Minor value="2">2</vif:PD_Spec_Revision_Minor>
                 <vif:PD_Spec_Version_Major value="1">1</vif:PD_Spec_Version_Major>
-                <vif:PD_Spec_Version_Minor value="8">8</vif:PD_Spec_Version_Minor>
+                <vif:PD_Spec_Version_Minor value="0">0</vif:PD_Spec_Version_Minor>
                 <vif:PD_Specification_Revision value="2">Revision 3</vif:PD_Specification_Revision>
                 <vif:SOP_Capable value="true" />
                 <vif:SOP_P_Capable value="true" />
@@ -128,7 +128,7 @@
                 <!--;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-->
                 <!--;PD Sink-->
                 <!--;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-->
-                <vif:PD_Power_As_Sink value="45000">45000 mW</vif:PD_Power_As_Sink>
+                <vif:PD_Power_As_Sink value="65000">65000 mW</vif:PD_Power_As_Sink>
                 <vif:EPR_Supported_As_Snk value="false" />
                 <vif:No_USB_Suspend_May_Be_Set value="true" />
                 <vif:GiveBack_May_Be_Set value="false" />
@@ -154,8 +154,8 @@
                                 <!--Sink PDO 3-->
                                 <vif:Snk_PDO_Supply_Type value="2">Variable</vif:Snk_PDO_Supply_Type>
                                 <vif:Snk_PDO_Min_Voltage value="95">4750 mV (Factor = 50)</vif:Snk_PDO_Min_Voltage>
-                                <vif:Snk_PDO_Max_Voltage value="300">15000 mV (Factor = 50)</vif:Snk_PDO_Max_Voltage>
-                                <vif:Snk_PDO_Op_Current value="300">3000 mA (Factor = 10)</vif:Snk_PDO_Op_Current>
+                                <vif:Snk_PDO_Max_Voltage value="400">20000 mV (Factor = 50)</vif:Snk_PDO_Max_Voltage>
+                                <vif:Snk_PDO_Op_Current value="310">3100 mA (Factor = 10)</vif:Snk_PDO_Op_Current>
                         </vif:SnkPDO>
                 </vif:SnkPdoList>
                 <!--;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-->
@@ -293,7 +293,7 @@
                 <!--;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-->
                 <!--;PD Sink-->
                 <!--;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-->
-                <vif:PD_Power_As_Sink value="45000">45000 mW</vif:PD_Power_As_Sink>
+                <vif:PD_Power_As_Sink value="65000">65000 mW</vif:PD_Power_As_Sink>
                 <vif:EPR_Supported_As_Snk value="false" />
                 <vif:No_USB_Suspend_May_Be_Set value="true" />
                 <vif:GiveBack_May_Be_Set value="false" />
@@ -319,8 +319,8 @@
                                 <!--Sink PDO 3-->
                                 <vif:Snk_PDO_Supply_Type value="2">Variable</vif:Snk_PDO_Supply_Type>
                                 <vif:Snk_PDO_Min_Voltage value="95">4750 mV (Factor = 50)</vif:Snk_PDO_Min_Voltage>
-                                <vif:Snk_PDO_Max_Voltage value="300">15000 mV (Factor = 50)</vif:Snk_PDO_Max_Voltage>
-                                <vif:Snk_PDO_Op_Current value="300">3000 mA (Factor = 10)</vif:Snk_PDO_Op_Current>
+                                <vif:Snk_PDO_Max_Voltage value="400">20000 mV (Factor = 50)</vif:Snk_PDO_Max_Voltage>
+                                <vif:Snk_PDO_Op_Current value="310">3100 mA (Factor = 10)</vif:Snk_PDO_Op_Current>
                         </vif:SnkPDO>
                 </vif:SnkPdoList>
                 <!--;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-->
