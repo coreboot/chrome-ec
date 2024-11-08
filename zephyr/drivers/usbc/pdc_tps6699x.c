@@ -2356,7 +2356,6 @@ static int pdc_interrupt_mask_init(struct pdc_data_t *data)
 		.fr_swap_complete = 1,
 		.data_swap_complete = 1,
 		.ucsi_connector_status_change_notification = 1,
-		.status_updated = 1,
 		.power_event_occurred_error = 1,
 		.externl_dcdc_event_received = 1,
 	};
