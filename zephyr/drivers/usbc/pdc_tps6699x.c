@@ -463,6 +463,17 @@ static void st_irq_run(void *o)
 
 		/* Inform the subsystem of the event */
 		call_cci_event_cb(data);
+
+		/*
+		 * Check if interrupt is still active. It's possible that the
+		 * PDC will set another bit in the interrupt status register
+		 * between the time when the EC reads this register and clears
+		 * these status bits above. If there is still another interrupt
+		 * pending, then the interrupt line will still be active.
+		 */
+		if (gpio_pin_get_dt(&cfg->irq_gpios)) {
+			k_event_post(&data->pdc_event, PDC_IRQ_EVENT);
+		}
 	}
 
 	/* All done, transition back to idle state */

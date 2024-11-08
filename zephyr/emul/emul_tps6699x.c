@@ -427,6 +427,11 @@ static void tps6699x_emul_handle_write(struct tps6699x_emul_pdc_data *data,
 			data, (const union reg_port_control *)
 				      data->reg_val[REG_PORT_CONTROL]);
 		break;
+	case REG_INTERRUPT_CLEAR_FOR_I2C1:
+		/* Interrupts have been cleared */
+		gpio_emul_input_set(data->irq_gpios.port, data->irq_gpios.pin,
+				    1);
+		break;
 	default:
 		/* No action on write */
 		break;
