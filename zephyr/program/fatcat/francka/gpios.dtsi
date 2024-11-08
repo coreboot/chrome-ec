@@ -79,9 +79,6 @@
 			gpios = <&gpiof 5 GPIO_INPUT>;
 			no-auto-init;
 		};
-		gpio_chr_pulgin: chr_pulgin {
-			gpios = <&gpio6 3 GPIO_OUTPUT_LOW>;
-		};
 		gpio_fan_tach: fan-tach {
 			gpios = <&gpio7 3 GPIO_INPUT_PULL_UP>;
 		};
@@ -155,7 +152,7 @@
 			gpios = <&gpio7 0 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 		};
 		sen_mode_ec_pch_int_odl {
-			gpios = <&gpioa 0 (GPIO_ODR_HIGH | GPIO_VOLTAGE_1P8)>;
+			gpios = <&gpioa 0 (GPIO_INPUT | GPIO_ACTIVE_LOW | GPIO_VOLTAGE_1P8)>;
 		};
 		gpio_en_pp3300_s5: en_pp3300_s5 {
 			gpios = <&gpiob 6 GPIO_OUTPUT>;
@@ -256,15 +253,6 @@
 		gpio_ec_pln_l: ec_pln_l {
 			gpios = <&gpioc 2 GPIO_ODR_HIGH>;
 		};
-		gpio_ec_tcpc_p0_en: ec_tcpc_p0_en {
-			gpios = <&gpiod 4 GPIO_OUTPUT>;
-		};
-		gpio_ec_tcpc_p3_en: ec_tcpc_p3_en {
-			gpios = <&gpiod 5 GPIO_OUTPUT>;
-		};
-		gpio_ec_tcpc_p2_en: ec_tcpc_p2_en {
-			gpios = <&gpio6 1 GPIO_OUTPUT>;
-		};
 		gpio_ec_als_int_l: ec_als_int_l {
 			gpios =  <&gpio3 7 GPIO_INPUT>;
 		};
@@ -287,11 +275,14 @@
 			<&gpioa 7 0>,
 			<&gpiob 1 0>,
 			<&gpiob 7 0>,
-			<&gpiod 5 0>,
 			<&gpioe 2 0>,
 			<&gpiof 2 0>,
 			<&gpiof 3 0>,
-			<&gpio9 6 0>;
+			<&gpio9 6 0>,
+			<&gpio6 3 0>,
+			<&gpiod 4 0>,
+			<&gpiod 5 0>,
+			<&gpio6 1 0>;
 	};
 };
 
