@@ -7,15 +7,24 @@
 
 #include <cros/integrated_fwid.dtsi>
 
-#include "../fatcat_stub.dts"
-
 /* fatcat_npcx9m7f project DTS includes */
 
 #include <cros/cbi_flash.dtsi>
 
+#include "generated.dtsi"
+
 #include "adc.dtsi"
 #include "gpios.dtsi"
 #include "i2c.dtsi"
+
+#include "../fatcat_it82002aw/gsc_board.dtsi"
+#include "../fatcat_it82002aw/interrupts.dtsi"
+
+#define CHARGER_I2C i2c2_0
+#define PD_POW_I2C i2c0_0
+
+#include "../../intelrvp/ptlrvp/i2c.dtsi"
+#include "../../intelrvp/ptlrvp/keyboard.dtsi"
 
 /* fatcat_npcx9m7f overrides follow... */
 
@@ -34,9 +43,3 @@
 	pinctrl-0 = <&espi_lpc_gp46_47_51_52_53_54_55_57>;
 	pinctrl-names = "default";
 };
-
-/*
- * Local Variables:
- * Mode: c
- * End:
- */

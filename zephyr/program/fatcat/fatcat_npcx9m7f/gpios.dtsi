@@ -4,22 +4,14 @@
  */
 
 / {
-	named-gpios {
-		compatible = "named-gpios";
-
-		gpio_smc_wake_sci_n: smc_wake_sci_n {
-			gpios = <&gpio3 2 (GPIO_OUTPUT | GPIO_OPEN_DRAIN | GPIO_ACTIVE_HIGH | GPIO_OUTPUT_INIT_LOW)>;
-		};
+	aliases {
+		gpio-wp = &gpio_ec_write_protect;
 	};
 };
 
 /*
  * Aliases to common names
  */
-gpio_ec_pch_wake_odl: &gpio_smc_wake_sci_n {};
-
-/*
- * Local Variables:
- * Mode: c
- * End:
- */
+gpio_ec_pch_wake_odl: &gpio_ec_soc_wake_ls_odl {};
+pwrbtn: &gpio_ec_soc_pwr_btn_odl {};
+gpio_c_ioex_kbd_intr_r: &gpio_ioex_kbd_int_odl {};
