@@ -69,8 +69,16 @@ int fp_sensor_init(void);
 /**
  * De-initialize the sensor hardware.
  *
+ * This function closes the fingerprint sensor. It also shuts down any ongoing
+ * biometric algorithm processes. It is called as part of the sensor reset
+ * process.
+ *
+ * @warning This function **must be called before** releasing the resources used
+ * by the matching algorithm including @p fp_buffer.
+ *
  * @return 0 on success
- * @return negative value on error
+ * @return negative value on error including failures to properly exit from the
+ * biometric algorithm or close the fingerprint sensor.
  */
 int fp_sensor_deinit(void);
 
