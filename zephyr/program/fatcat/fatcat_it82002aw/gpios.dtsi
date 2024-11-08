@@ -3,6 +3,12 @@
  * found in the LICENSE file.
  */
 
+/ {
+	aliases {
+		gpio-wp = &gpio_ec_write_protect;
+	};
+};
+
 /*
  * Aliases to common names
  */

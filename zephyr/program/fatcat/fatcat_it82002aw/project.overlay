@@ -58,10 +58,6 @@ i2c3ALT: &i2c3 {
 /* fatcat_it82002aw overrides follow... */
 
 / {
-	aliases {
-		gpio-wp = &gpio_c_ec_wp_odl_r;
-	};
-
 	named-gpios {
 		compatible = "named-gpios";
 
