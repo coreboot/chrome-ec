@@ -21,17 +21,23 @@ ZTEST_SUITE(kanix_charger, NULL, NULL, NULL, NULL, NULL);
 
 ZTEST(kanix_charger, test_get_leave_safe_mode_delay_ms)
 {
-	/* cosmx battery should delay 2000ms to leave safe mode. */
-	battery_conf = &board_battery_info[0];
+	/* battery should delay 2000ms to leave safe mode. */
+	battery_conf = &board_battery_info[2];
 	zassert_equal(board_get_leave_safe_mode_delay_ms(), 2000);
 
-	/* Not cosmx battery would use defaut delay time 500ms. */
+	/* Not battery would use defaut delay time 500ms. */
+	battery_conf = &board_battery_info[0];
+	zassert_equal(board_get_leave_safe_mode_delay_ms(), 500);
+
 	battery_conf = &board_battery_info[1];
 	zassert_equal(board_get_leave_safe_mode_delay_ms(), 500);
 
-	battery_conf = &board_battery_info[2];
+	battery_conf = &board_battery_info[3];
 	zassert_equal(board_get_leave_safe_mode_delay_ms(), 500);
 
-	battery_conf = &board_battery_info[3];
+	battery_conf = &board_battery_info[4];
+	zassert_equal(board_get_leave_safe_mode_delay_ms(), 500);
+
+	battery_conf = &board_battery_info[5];
 	zassert_equal(board_get_leave_safe_mode_delay_ms(), 500);
 }
