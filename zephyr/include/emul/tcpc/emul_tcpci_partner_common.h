@@ -203,6 +203,8 @@ struct tcpci_partner_data {
 
 	/* Responses received from the TCPM. */
 	union sido tcpm_sido;
+	/* RMDO received from the TCPM. */
+	uint32_t tcpm_rmdo;
 
 	/*
 	 * Cable which is "plugged in" to this port partner

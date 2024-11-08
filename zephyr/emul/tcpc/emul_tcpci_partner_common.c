@@ -794,7 +794,7 @@ static enum tcpci_partner_handler_res
 tcpci_partner_revision_handler(struct tcpci_partner_data *data,
 			       const struct tcpci_emul_msg *message)
 {
-	data->rmdo = *(uint32_t *)(message->buf + TCPCI_MSG_HEADER_LEN);
+	data->tcpm_rmdo = *(uint32_t *)(message->buf + TCPCI_MSG_HEADER_LEN);
 
 	return TCPCI_PARTNER_COMMON_MSG_HANDLED;
 }
