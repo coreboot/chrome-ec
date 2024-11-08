@@ -76,8 +76,10 @@ BINARY_SIZE_REGIONS = [
 ]
 
 
-def log_cmd(cmd, env=None):
+def log_cmd(cmd, env=None, cwd=None):
     """Log subprocess command."""
+    if cwd:
+        print(f"cd {cwd};", end=" ")
     if env is not None:
         print("env", end=" ")
         [  # pylint:disable=expression-not-assigned
@@ -320,6 +322,7 @@ def bundle_firmware(opts):
     modules = zmake.modules.locate_from_checkout(find_checkout())
     projects_path = zmake.modules.default_projects_dirs(modules)
     subprocesses = []
+    per_board_targets = collections.defaultdict(list)
     for project in zmake.project.find_projects(projects_path).values():
         build_dir = (
             platform_ec / "build" / "zephyr" / project.config.project_name
@@ -333,8 +336,15 @@ def bundle_firmware(opts):
         else:
             tarball_name = f"{project.config.project_name}.EC.tar.bz2"
         tarball_path = bundle_dir.joinpath(tarball_name)
-        cmd = ["tar", "cfj", tarball_path, "."]
-        log_cmd(cmd)
+        for board in set(project.config.inherited_from):
+            per_board_targets[board].append(
+                f"{project.config.project_name}/output"
+            )
+        cmd = ["tar", "cfj", tarball_path]
+        cmd.extend(
+            [x.relative_to(artifacts_dir) for x in artifacts_dir.glob("*")]
+        )
+        log_cmd(cmd, cwd=artifacts_dir)
         subprocesses.append(
             subprocess.Popen(  # pylint: disable=consider-using-with
                 cmd, cwd=artifacts_dir, stdin=subprocess.DEVNULL
@@ -348,6 +358,34 @@ def bundle_firmware(opts):
         )
         # TODO(kmshelton): Populate the rest of metadata contents as it
         # gets defined in infra/proto/src/chromite/api/firmware.proto.
+    # For each board, create a big tar file that contains all the models.
+    # TODO(b/358654822): Remove this once DLM can show the small tarfiles.
+    for board, dirs in per_board_targets.items():
+        tarball_name = f"{board}/firmware_from_source.tar.bz2"
+        (bundle_dir / board).mkdir(exist_ok=True)
+        cmd = [
+            "tar",
+            "--exclude=*.elf",
+            "--exclude=*.lst",
+            "-cjf",
+            str(bundle_dir / tarball_name),
+            "-C",
+            str(platform_ec / "build" / "zephyr"),
+            "--transform",
+            "s,/output,,",
+        ] + dirs
+        log_cmd(cmd)
+        subprocesses.append(
+            subprocess.Popen(  # pylint: disable=consider-using-with
+                cmd, stdin=subprocess.DEVNULL
+            )
+        )
+        meta = info.objects.add()
+        meta.tarball_info.board.append(board)
+        meta.file_name = tarball_name
+        meta.tarball_info.type = (
+            firmware_pb2.FirmwareArtifactInfo.TarballInfo.FirmwareType.EC  # pylint: disable=no-member
+        )
     for proc in subprocesses:
         proc.wait()
         if proc.returncode != 0:
