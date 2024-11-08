@@ -941,7 +941,8 @@ __override void pd_check_dr_role(int port, enum pd_data_role dr_role, int flags)
 		return;
 
 	/* If DFP, try to switch to UFP, to let DUT see the USB hub. */
-	if ((flags & PD_FLAGS_PARTNER_DR_DATA) && dr_role == PD_ROLE_DFP)
+	if ((flags & PD_FLAGS_PARTNER_DR_DATA) && dr_role == PD_ROLE_DFP &&
+	    allow_dr_swap)
 		pd_request_data_swap(port);
 }
 
