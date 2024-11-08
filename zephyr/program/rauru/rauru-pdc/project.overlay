@@ -85,7 +85,7 @@
 
 				rgb-cal-x {
 					offset = <0>;
-					coeff = <0 0 0 1>;
+					coeff = "0", "0", "0", "1";
 					als-channel-scale {
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
@@ -95,7 +95,7 @@
 				};
 				rgb-cal-y {
 					offset = <0>;
-					coeff = <0 0 0 1>;
+					coeff = "0", "0", "0", "1";
 					als-channel-scale {
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
@@ -105,7 +105,7 @@
 				};
 				rgb-cal-z {
 					offset = <0>;
-					coeff = <0 0 0 1>;
+					coeff = "0", "0", "0", "1";
 					als-channel-scale {
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";

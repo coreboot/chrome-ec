@@ -65,14 +65,18 @@
 
 #define RGB_CAL_RGB_SET_SCALE(id) .scale = ACCELGYRO_ALS_CHANNEL_SCALE(id),
 
-#define RGB_CAL_RGB_SET_ONE(id, suffix)                                \
-	.rgb_cal[suffix] = {                                           \
-		.offset = DT_PROP(id, offset),                         \
-		.coeff[0] = FLOAT_TO_FP(DT_PROP_BY_IDX(id, coeff, 0)), \
-		.coeff[1] = FLOAT_TO_FP(DT_PROP_BY_IDX(id, coeff, 1)), \
-		.coeff[2] = FLOAT_TO_FP(DT_PROP_BY_IDX(id, coeff, 2)), \
-		.coeff[3] = FLOAT_TO_FP(DT_PROP_BY_IDX(id, coeff, 3)), \
-		RGB_CAL_RGB_SET_SCALE(DT_CHILD(id, als_channel_scale)) \
+#define RGB_CAL_RGB_SET_ONE(id, suffix)                                       \
+	.rgb_cal[suffix] = {                                                  \
+		.offset = DT_PROP(id, offset),                                \
+		.coeff[0] =                                                   \
+			FLOAT_TO_FP(DT_STRING_UNQUOTED_BY_IDX(id, coeff, 0)), \
+		.coeff[1] =                                                   \
+			FLOAT_TO_FP(DT_STRING_UNQUOTED_BY_IDX(id, coeff, 1)), \
+		.coeff[2] =                                                   \
+			FLOAT_TO_FP(DT_STRING_UNQUOTED_BY_IDX(id, coeff, 2)), \
+		.coeff[3] =                                                   \
+			FLOAT_TO_FP(DT_STRING_UNQUOTED_BY_IDX(id, coeff, 3)), \
+		RGB_CAL_RGB_SET_SCALE(DT_CHILD(id, als_channel_scale))        \
 	},
 
 /*
@@ -87,7 +91,7 @@
  *
  *	rgb-cal-x {
  *		offset = <0>;
- *		coeff = <0 0 0 0>;
+ *		coeff = "0", "0", "0", "0";
  *		als-channel-scale {
  *		compatible = "cros-ec,accelgyro-als-channel-scale";
  *			k-channel-scale = <1>;
@@ -96,7 +100,7 @@
  *	};
  *	rgb-cal-y {
  *		offset = <0>;
- *		coeff = <0 0 0 0>;
+ *		coeff = "0", "0", "0", "0";
  *		als-channel-scale {
  *		compatible = "cros-ec,accelgyro-als-channel-scale";
  *			k-channel-scale = <1>;
@@ -105,7 +109,7 @@
  *	};
  *	rgb-cal-z {
  *		offset = <0>;
- *		coeff = <0 0 0 0>;
+ *		coeff = "0", "0", "0", "0";
  *		als-channel-scale {
  *		compatible = "cros-ec,accelgyro-als-channel-scale";
  *			k-channel-scale = <1>;
