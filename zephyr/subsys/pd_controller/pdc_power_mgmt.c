@@ -1220,6 +1220,7 @@ static void handle_connector_status(struct pdc_port_t *port)
 
 		if (conn_status_change_bits.attention) {
 			atomic_set_bit(port->cci_flags, CCI_ATTENTION);
+			LOG_INF("C%d: Attention", port_number);
 		}
 
 		if (conn_status_change_bits.battery_charging_status &&
