@@ -86,6 +86,9 @@
 #define CONFIG_CMD_ACCELS
 #define CONFIG_CMD_ACCEL_INFO
 
+/* Keyboard */
+#define CONFIG_KEYBOARD_STRICT_DEBOUNCE
+
 /* Variant references the TCPCs to determine Vbus sourcing */
 #define CONFIG_USB_PD_5V_EN_CUSTOM
 
