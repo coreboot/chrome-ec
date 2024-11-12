@@ -33,7 +33,7 @@
 		compatible = "intel,ap-pwrseq-gpio";
 		dbg-label = "RSMRST power good from regulator";
 		enum-name = "PWR_RSMRST_PWRGD";
-		gpios = <&gpiof 0 0>;
+		gpios = <&gpioc 0 0>;
 		interrupt-flags = <GPIO_INT_EDGE_BOTH>;
 	};
 	pwr-ec-pch-rsmrst-odl {
@@ -68,7 +68,7 @@
 		compatible = "intel,ap-pwrseq-gpio";
 		dbg-label = "PCH_PWROK output to PCH";
 		enum-name = "PWR_PCH_PWROK";
-		gpios = <&gpioa 3 (GPIO_OPEN_DRAIN | GPIO_VOLTAGE_1P8)>;
+		gpios = <&gpioa 3 (0 | GPIO_VOLTAGE_1P8)>;
 		output;
 	};
 	pwr-ec-pch-sys-pwrok {
@@ -105,31 +105,6 @@
 		compatible = "intel,ap-pwrseq-external";
 		dbg-label = "Combined all power good";
 		enum-name = "PWR_ALL_SYS_PWRGD";
-	};
-	pwr-adc-pp3300 {
-		compatible = "intel,ap-pwrseq-adc";
-		dbg-label = "PP3300 PWROK (from ADC)";
-		enum-name = "PWR_DSW_PWROK";
-		trigger-high = <&cmp_pp3300_s5_high>;
-		trigger-low = <&cmp_pp3300_s5_low>;
-	};
-	adc-cmp {
-		cmp_pp3300_s5_high: pp3300_high {
-			compatible = "nuvoton,adc-cmp";
-			io-channels = <&adc0 6>;
-			comparison = "ADC_CMP_NPCX_GREATER";
-			/*
-			 * This is 90% of nominal voltage considering voltage
-			 * divider on ADC input.
-			 */
-			threshold-mv = <2448>;
-		};
-		cmp_pp3300_s5_low: pp3300_low {
-			compatible = "nuvoton,adc-cmp";
-			io-channels = <&adc0 6>;
-			comparison = "ADC_CMP_NPCX_LESS_OR_EQUAL";
-			threshold-mv = <2448>;
-		};
 	};
 };
 

@@ -25,41 +25,18 @@
 
 LOG_MODULE_DECLARE(ap_pwrseq, LOG_LEVEL_INF);
 
-#define X86_NON_DSX_ADLP_NONPWRSEQ_FORCE_SHUTDOWN_TO_MS 5
-
 #ifndef CONFIG_AP_PWRSEQ_DRIVER
 test_export_static bool s0_stable;
 #endif
 
 void board_ap_power_force_shutdown(void)
 {
-	int timeout_ms = X86_NON_DSX_ADLP_NONPWRSEQ_FORCE_SHUTDOWN_TO_MS;
-
-#ifndef CONFIG_AP_PWRSEQ_DRIVER
-	if (s0_stable) {
-		/* Enable these power signals in case of sudden shutdown */
-		power_signal_enable(PWR_DSW_PWROK);
-	}
-#endif
-
 	power_signal_set(PWR_EC_PCH_RSMRST, 1);
 
 	power_signal_set(PWR_EN_PP3300_A, 0);
 
 	power_signal_set(PWR_EN_PP5000_A, 0);
 
-	timeout_ms = X86_NON_DSX_ADLP_NONPWRSEQ_FORCE_SHUTDOWN_TO_MS;
-	while (power_signal_get(PWR_DSW_PWROK) && timeout_ms > 0) {
-		k_msleep(1);
-		timeout_ms--;
-	};
-
-	/* LCOV_EXCL_START informational */
-	if (power_signal_get(PWR_DSW_PWROK))
-		LOG_WRN("DSW_PWROK didn't go low!  Assuming G3.");
-	/* LCOV_EXCL_STOP */
-
-	power_signal_disable(PWR_DSW_PWROK);
 #ifndef CONFIG_AP_PWRSEQ_DRIVER
 	s0_stable = false;
 #endif
@@ -68,8 +45,6 @@ void board_ap_power_force_shutdown(void)
 #ifndef CONFIG_AP_PWRSEQ_DRIVER
 void board_ap_power_action_g3_s5(void)
 {
-	power_signal_enable(PWR_DSW_PWROK);
-
 	LOG_DBG("Turning on PWR_EN_PP5000_A and PWR_EN_PP3300_A");
 	power_signal_set(PWR_EN_PP5000_A, 1);
 	power_signal_set(PWR_EN_PP3300_A, 1);
@@ -88,7 +63,6 @@ void board_ap_power_action_s3_s0(void)
 
 void board_ap_power_action_s0_s3(void)
 {
-	power_signal_enable(PWR_DSW_PWROK);
 	s0_stable = false;
 }
 
@@ -98,7 +72,6 @@ void board_ap_power_action_s0(void)
 		return;
 	}
 	LOG_INF("Reaching S0");
-	power_signal_disable(PWR_DSW_PWROK);
 	s0_stable = true;
 }
 
@@ -130,7 +103,6 @@ static void board_ap_power_cb(const struct device *dev,
 		/* Avoid enabling signals when entering S0IX */
 		return;
 	}
-	power_signal_enable(PWR_DSW_PWROK);
 }
 
 static int board_ap_power_init(void)
@@ -159,15 +131,12 @@ static int board_ap_power_g3_entry(void *data)
 static int board_ap_power_g3_run(void *data)
 {
 	if (ap_pwrseq_sm_is_event_set(data, AP_PWRSEQ_EVENT_POWER_STARTUP)) {
-		power_signal_enable(PWR_DSW_PWROK);
-
 		LOG_INF("Turning on PWR_EN_PP5000_A and PWR_EN_PP3300_A");
 
 		power_signal_set(PWR_EN_PP5000_A, 1);
 		power_signal_set(PWR_EN_PP3300_A, 1);
 
 		power_wait_signals_on_timeout(
-			POWER_SIGNAL_MASK(PWR_DSW_PWROK),
 			AP_PWRSEQ_DT_VALUE(wait_signal_timeout));
 	}
 
@@ -184,16 +153,6 @@ AP_POWER_APP_STATE_DEFINE(AP_POWER_STATE_G3, board_ap_power_g3_entry,
 
 static int board_ap_power_s0_run(void *data)
 {
-	if (power_signal_get(PWR_ALL_SYS_PWRGD) &&
-	    power_signal_get(PWR_PCH_PWROK) &&
-	    power_signal_get(PWR_EC_PCH_SYS_PWROK)) {
-		/*
-		 * Make sure all the signals checked inside the condition are
-		 * asserted before disabling these two power signals.
-		 */
-		power_signal_disable(PWR_DSW_PWROK);
-	}
-
 	return 0;
 }
 

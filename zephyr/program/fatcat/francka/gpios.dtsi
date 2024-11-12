@@ -79,17 +79,20 @@
 			gpios = <&gpiof 5 GPIO_INPUT>;
 			no-auto-init;
 		};
+		gpio_chr_pulgin: chr_pulgin {
+			gpios = <&gpio6 3 GPIO_ODR_HIGH>;
+		};
 		gpio_fan_tach: fan-tach {
 			gpios = <&gpio7 3 GPIO_INPUT_PULL_UP>;
 		};
 		ec-i2c-sensor-scl {
-			gpios = <&gpio9 0 GPIO_INPUT>;
+			gpios = <&gpio9 2 GPIO_INPUT>;
 		};
 		ec-i2c-sensor-sda {
-			gpios = <&gpio8 7 GPIO_INPUT>;
+			gpios = <&gpio9 1 GPIO_INPUT>;
 		};
 		gpio_acc_int_l: acc_int_l {
-			gpios = <&gpioc 7 GPIO_INPUT>;
+			gpios = <&gpio3 3 GPIO_INPUT>;
 		};
 		gpio_all_sys_pwrgd: all_sys_pwrgd {
 			gpios = <&gpioc 5 GPIO_INPUT>;
@@ -108,12 +111,6 @@
 			gpios = <&gpiod 3 GPIO_ODR_HIGH>;
 			enum-name = "GPIO_ENABLE_BACKLIGHT";
 		};
-		/delete-node/ entering-rw;
-		gpio_ec_entering_rw: ec_entering_rw {
-			/* test point */
-			gpios = <&gpio0 3 GPIO_OUTPUT>;
-			enum-name = "GPIO_ENTERING_RW";
-		};
 		gpio_ec_gsc_packet_mode: ec_gsc_packet_mode {
 			gpios = <&gpio7 5 GPIO_OUTPUT>;
 			enum-name = "GPIO_PACKET_MODE_EN";
@@ -128,14 +125,14 @@
 			gpios = <&gpiof 1 GPIO_ODR_HIGH>;
 		};
 		gpio_ec_soc_int_odl: ec_soc_int_odl {
-			gpios = <&gpioa 4 (GPIO_ODR_HIGH | GPIO_VOLTAGE_1P8)>;
+			gpios = <&gpioa 4 (GPIO_OUTPUT | GPIO_VOLTAGE_1P8)>;
 			enum-name = "GPIO_EC_INT_L";
 		};
 		gpio_ec_soc_pch_pwrok_od: ec_soc_pch_pwrok_od {
-			gpios = <&gpioa 3 (GPIO_ODR_HIGH | GPIO_VOLTAGE_1P8)>;
+			gpios = <&gpioa 3 (GPIO_OUTPUT | GPIO_VOLTAGE_1P8)>;
 		};
 		gpio_ec_soc_pwr_btn_odl: ec_soc_pwr_btn_odl {
-			gpios = <&gpio5 0 GPIO_ODR_HIGH>;
+			gpios = <&gpio5 0 (GPIO_ODR_HIGH | GPIO_VOLTAGE_1P8)>;
 			enum-name = "GPIO_PCH_PWRBTN_L";
 		};
 		gpio_ec_soc_rsmrst_l: ec_soc_rsmrst_l {
@@ -152,7 +149,7 @@
 			gpios = <&gpio7 0 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 		};
 		sen_mode_ec_pch_int_odl {
-			gpios = <&gpioa 0 (GPIO_INPUT | GPIO_ACTIVE_LOW | GPIO_VOLTAGE_1P8)>;
+			gpios = <&gpioa 0 (GPIO_ODR_HIGH | GPIO_ACTIVE_LOW | GPIO_VOLTAGE_1P8)>;
 		};
 		gpio_en_pp3300_s5: en_pp3300_s5 {
 			gpios = <&gpiob 6 GPIO_OUTPUT>;
@@ -160,7 +157,7 @@
 		};
 		me_en {
 			/* workaround for b/333336079, reserved */
-			gpios = <&gpio5 6 GPIO_INPUT>;
+			gpios = <&gpio5 6 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
 		gpio_en_pp5000_s5: en_pp5000_s5 {
 			gpios = <&gpio4 0 GPIO_OUTPUT>;
@@ -172,11 +169,11 @@
 			gpios = <&gpioe 3 GPIO_OUTPUT>;
 		};
 		gpio_gsc_ec_pwr_btn_odl: gsc_ec_pwr_btn_odl {
-			gpios = <&gpio0 0 GPIO_INPUT_PULL_UP>;
+			gpios = <&gpioc 6 GPIO_INPUT_PULL_UP>;
 			enum-name = "GPIO_POWER_BUTTON_L";
 		};
-		gpio_ec_acok_otg_c0: ec_acok_otg_c0 {
-			gpios = <&gpioc 6 GPIO_OUTPUT>;
+		gpio_pwr_btn_odl: pwr_btn_odl {
+			gpios = <&gpio0 0 GPIO_INPUT>;
 		};
 		gpio_imu_int_l: imu_int_l {
 			gpios = <&gpio6 2 GPIO_INPUT>;
@@ -212,7 +209,7 @@
 			gpios = <&gpio9 4 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 		};
 		gpio_sys_rst_odl: sys_rst_odl {
-			gpios = <&gpio9 3 (GPIO_ODR_HIGH| GPIO_VOLTAGE_1P8)>;
+			gpios = <&gpio9 3 (GPIO_ODR_HIGH | GPIO_VOLTAGE_1P8)>;
 		};
 		gpio_tablet_mode_l: tablet_mode_l {
 			gpios = <&gpio7 2 GPIO_INPUT>;
@@ -235,8 +232,8 @@
 		gpio_usb_pd0_int_odl: usb_pd0_int_odl {
 			gpios = <&gpioc 1 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
 		};
-		gpio_ish_i2c_ec_int_l: ish_i2c_ec_int_l {
-			gpios = <&gpio3 6 (GPIO_INPUT | GPIO_ACTIVE_LOW)>;
+		gpio_tbt_rst_l: tbt_rst_l {
+			gpios = <&gpio3 6 GPIO_ODR_HIGH>;
 		};
 		gpio_amon_chg: amon_chg {
 			gpios = <&gpio4 1 GPIO_INPUT>;
@@ -253,8 +250,20 @@
 		gpio_ec_pln_l: ec_pln_l {
 			gpios = <&gpioc 2 GPIO_ODR_HIGH>;
 		};
+		gpio_ec_tcpc_p0_en: ec_tcpc_p0_en {
+			gpios = <&gpiod 4 GPIO_ODR_HIGH>;
+		};
+		gpio_ec_tcpc_p3_en: ec_tcpc_p3_en {
+			gpios = <&gpiod 5 GPIO_ODR_HIGH>;
+		};
+		gpio_ec_tcpc_p2_en: ec_tcpc_p2_en {
+			gpios = <&gpio6 1 GPIO_ODR_HIGH>;
+		};
 		gpio_ec_als_int_l: ec_als_int_l {
 			gpios =  <&gpio3 7 GPIO_INPUT>;
+		};
+		ad_bid {
+			gpios = <&gpioc 7 GPIO_ODR_HIGH>;
 		};
 	};
 
@@ -266,7 +275,6 @@
 		compatible = "unused-gpios";
 		unused-gpios =
 			<&gpio3 2 0>,
-			<&gpio3 3 0>,
 			<&gpio3 5 0>,
 			<&gpio5 7 0>,
 			<&gpio6 0 0>,
@@ -274,15 +282,10 @@
 			<&gpio8 3 0>,
 			<&gpioa 7 0>,
 			<&gpiob 1 0>,
-			<&gpiob 7 0>,
 			<&gpioe 2 0>,
 			<&gpiof 2 0>,
 			<&gpiof 3 0>,
-			<&gpio9 6 0>,
-			<&gpio6 3 0>,
-			<&gpiod 4 0>,
-			<&gpiod 5 0>,
-			<&gpio6 1 0>;
+			<&gpio9 6 0>;
 	};
 };
 

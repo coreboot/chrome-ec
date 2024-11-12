@@ -47,7 +47,13 @@
 	pdc_power_p0: rts54-pdc@67 {
 		compatible = "realtek,rts54-pdc";
 		reg = <0x67>;
-		irq-gpios = <&gpio0 2 GPIO_ACTIVE_LOW>;
+		irq-gpios = <&gpioc 1 GPIO_ACTIVE_LOW>;
+	};
+	pdc_power_p1: rts54-pdc@66 {
+		compatible = "realtek,rts54-pdc";
+		reg = <0x66>;
+		irq-gpios = <&gpioc 1 GPIO_ACTIVE_LOW>;
+		no-fw-update;
 	};
 };
 
@@ -106,6 +112,6 @@
  * after waking up automatically for better power consumption.
  */
 &power_leakage_io {
-	leak-gpios = <&gpioa 4 (GPIO_OPEN_DRAIN | GPIO_VOLTAGE_1P8)
+	leak-gpios = <&gpioa 4 (GPIO_OUTPUT | GPIO_VOLTAGE_1P8)
 		      &gpiof 1 GPIO_OPEN_DRAIN>;
 };
