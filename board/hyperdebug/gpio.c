@@ -1409,7 +1409,7 @@ struct bitbang_state_t {
 	uint8_t data[BITBANG_BUFFER_SIZE];
 
 	/* Index incremented by CMSIS_DAP task when data arrives from PC. */
-	volatile uint32_t tail;
+	uint32_t tail;
 
 	/*
 	 * Index indicating how far the interrupt handler can process, set by
@@ -1430,7 +1430,7 @@ struct bitbang_state_t {
 	volatile uint32_t irq;
 
 	/* Index incremented by CMSIS_DAP task when data is sent to PC. */
-	volatile uint32_t head;
+	uint32_t head;
 
 	/*
 	 * For the cases where encoded data indicates a "pause" of several clock
@@ -2486,6 +2486,18 @@ void dap_goog_gpio_bitbang(size_t peek_c, bool streaming)
 	uint32_t idx = bitbang.irq;
 	tx_buffer[1] = bitbang.head != bitbang.tail ? STATUS_BITBANG_ONGOING :
 						      STATUS_BITBANG_IDLE;
+
+	if (!streaming && idx == bitbang.tail) {
+		/*
+		 * No more data to process, this means that at the next timer
+		 * interrupt, the handler will disable the timer, if not
+		 * already.  Since `command_gpio_bit_bang()` rejects new
+		 * settings, if the timer interrupt is enabled, as very slow
+		 * tick clock could result in the next operation being rejected,
+		 * unless we explicitly stop the timer here.
+		 */
+		STM32_TIM_CR1(BITBANG_TIMER) &= ~STM32_TIM_CR1_CEN;
+	}
 
 	/* Number of data bytes to return in this response. */
 	data_len = idx - bitbang.head;
