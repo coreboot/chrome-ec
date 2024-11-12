@@ -7,6 +7,7 @@
 #include "adc.h"
 #include "atomic.h"
 #include "builtin/assert.h"
+#include "clock.h"
 #include "clock_chip.h"
 #include "cmsis-dap.h"
 #include "common.h"
@@ -540,8 +541,23 @@ static void calibrate_adc(void)
 	 * ratio between voltage in millivolts and ADC/DAC counts in the range
 	 * 0-4095.
 	 */
-	dac_divisor = 3000 * STM32_VREFINT_CALIBRATION / 256;
-	dac_multiplier = 4096 * reading / num_readings / 256;
+	int supply_mv = 0;
+	if (reading > 0)
+		supply_mv = 3000 * STM32_VREFINT_CALIBRATION * num_readings /
+			    reading;
+	if (supply_mv < 1000 || supply_mv > 4000) {
+		/*
+		 * The reading of the bandgap reference corresponds to an
+		 * unrealistic supply voltage, something must be wrong.
+		 */
+		ccprintf("Error: ADC calibration reading: %d\n", reading);
+		/* Use hardcoded values, in part to avoid division by zero. */
+		dac_divisor = 3300;
+		dac_multiplier = 4096;
+	} else {
+		dac_divisor = 3000 * STM32_VREFINT_CALIBRATION / 256;
+		dac_multiplier = 4096 * reading / num_readings / 256;
+	}
 
 	/*
 	 * Set conversion factor for all the ADC channels (inverse of DAC
@@ -638,11 +654,9 @@ static void board_gpio_init(void)
 	}
 
 	/* Enable ADC */
-	STM32_RCC_AHB2ENR |= STM32_RCC_AHB2ENR_ADCEN;
+	clock_enable_module(MODULE_ADC, 1);
 	/* Enable internal VREFINT voltage reference. */
 	STM32_ADC1_CCR |= BIT(22);
-	/* Initialize the ADC by performing a fake reading */
-	adc_read_channel(ADC_CN9_11);
 	/* Perform first calibration (again on every reinit()). */
 	calibrate_adc();
 
