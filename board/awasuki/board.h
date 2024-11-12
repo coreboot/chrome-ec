@@ -16,6 +16,8 @@
 #undef GPIO_VOLUME_DOWN_L
 #undef CONFIG_VOLUME_BUTTONS
 #undef CONFIG_USB_CHARGER
+#undef CONFIG_I2C_DEBUG
+#undef CONFIG_CMD_POWERINDEBUG
 
 /* Chipset config */
 #define CONFIG_CHIPSET_X86_RSMRST_AFTER_S5
@@ -27,7 +29,6 @@
 /* Bring up function */
 #define CONFIG_CMD_I2C_SCAN
 #define CONFIG_CMD_I2C_XFER
-#define CONFIG_SYSTEM_UNLOCKED
 
 /* Battery */
 #define CONFIG_BATTERY_FUEL_GAUGE
