@@ -33,7 +33,7 @@
 		 */
 		keyboard-type {
 			enum-name = "FW_KB_TYPE";
-			start = <12>;
+			start = <14>;
 			size = <1>;
 
 			kb-default {
@@ -53,7 +53,7 @@
 		 */
 		touch-en {
 			enum-name = "FW_TOUCH_EN";
-			start = <14>;
+			start = <15>;
 			size = <1>;
 
 			touch-en-disable {
