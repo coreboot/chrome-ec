@@ -22,12 +22,22 @@
 
 #include <stdint.h>
 
+enum usb_stream_state_flags_t {
+	/*
+	 * Set if the producer has requested flush(), and we have not yet
+	 * completely emptied the TX queue.
+	 */
+	USB_STREAM_TX_FLUSH = BIT(0),
+};
+
 /*
  * Per-USB stream state stored in RAM.  Zero initialization of this structure
  * by the BSS initialization leaves it in a valid and correctly initialized
  * state, so there is no need currently for a usb_stream_init style function.
  */
-struct usb_stream_state {};
+struct usb_stream_state {
+	enum usb_stream_state_flags_t flags;
+};
 
 /*
  * Compile time Per-USB stream configuration stored in flash.  Instances of this
