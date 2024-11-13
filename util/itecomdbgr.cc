@@ -542,6 +542,15 @@ static int spi_sr1_wel(struct itecomdbgr_config *conf)
 	return FAIL;
 }
 
+static void print_delta(const char *msg, int *prev_percent, int new_percent)
+{
+	if (new_percent != *prev_percent) {
+		printf("\r%-17s: %3d%%", msg, new_percent);
+		*prev_percent = new_percent;
+		fflush(stdout);
+	}
+}
+
 static int erase_flash(struct itecomdbgr_config *conf)
 {
 	int i = 0;
@@ -582,11 +591,7 @@ static int erase_flash(struct itecomdbgr_config *conf)
 		start_addr += conf->sector_size;
 
 		progress_percent = (++i * 100) / total_sectors;
-		if (progress_percent != prev_percent) {
-			printf("\rErasing...       : %3d%%", progress_percent);
-			prev_percent = progress_percent;
-			fflush(stdout);
-		}
+		print_delta("Erasing...", &prev_percent, progress_percent);
 	}
 out:
 	write_com(conf, disable_follow_mode, sizeof(disable_follow_mode));
@@ -637,6 +642,10 @@ static int fast_read_burst_cdata(struct itecomdbgr_config *conf,
 	}
 
 	write_com(conf, enable_follow_mode, sizeof(enable_follow_mode));
+
+	int prev_percent = -1;
+	int progress_percent;
+
 	while (start_addr < end_addr) {
 		if ((end_addr - start_addr) >= conf->page_size)
 			read_count = conf->page_size;
@@ -659,22 +668,22 @@ static int fast_read_burst_cdata(struct itecomdbgr_config *conf,
 			read_com(conf, &DBG_BUF[0 + k * 64], 64);
 		}
 
+		progress_percent = (++j * 100) / total_size;
+
 		if (conf->read_start_addr != NO_READ) {
 			fwrite(DBG_BUF, 1, read_count, pW);
-			printf("\rSaving...     : %d%%                ",
-			       (++j * 100) / (total_size));
-
+			print_delta("Saving...", &prev_percent,
+				    progress_percent);
 		} else {
 			if (check_erased) {
 				count = memcmp(&DBG_BUF, &allff, 256);
-				printf("\rChecking...     : %d%%               ",
-				       (++j * 100) / (total_size - 1));
-
+				print_delta("Checking...", &prev_percent,
+					    progress_percent);
 			} else {
 				count = memcmp(&C_Data[start_addr], DBG_BUF,
 					       256);
-				printf("\rVerifying...    : %d%%               ",
-				       (++j * 100) / (total_size - 1));
+				print_delta("Verifying...", &prev_percent,
+					    progress_percent);
 			}
 
 			if (count) {
@@ -784,11 +793,7 @@ static int page_program_burst_v2(struct itecomdbgr_config *conf,
 		start_addr += conf->page_size;
 
 		progress_percent = (++j * 100) / total_pages;
-		if (progress_percent != prev_percent) {
-			printf("\rProgramming...   : %3d%%", progress_percent);
-			prev_percent = progress_percent;
-			fflush(stdout);
-		}
+		print_delta("Programming...", &prev_percent, progress_percent);
 	}
 out:
 	write_com(conf, disable_follow_mode, sizeof(disable_follow_mode));
