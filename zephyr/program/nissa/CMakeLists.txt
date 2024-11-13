@@ -333,7 +333,6 @@ if(DEFINED CONFIG_BOARD_TELITH)
 	zephyr_library_sources(
 			"telith/src/board_als.c"
 			"telith/src/board.c"
-			"telith/src/sub_board.c"
 			"telith/src/prochot.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "telith/src/usbc.c")

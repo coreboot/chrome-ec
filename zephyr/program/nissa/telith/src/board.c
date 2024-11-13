@@ -204,3 +204,12 @@ int8_t board_vivaldi_keybd_idx(void)
 		return DT_NODE_CHILD_IDX(DT_NODELABEL(kbd_config_0));
 	}
 }
+
+/*
+ * Enable interrupts
+ */
+static void board_init(void)
+{
+	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_en_pp5000_s5), 1);
+}
+DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
