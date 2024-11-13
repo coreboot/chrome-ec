@@ -18,6 +18,7 @@
 #include "cbi.dtsi"
 #include "fan.dtsi"
 #include "usbc.dtsi"
+#include "led.dtsi"
 
 / {
 	aliases {
