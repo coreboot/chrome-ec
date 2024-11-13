@@ -106,11 +106,22 @@ static void als_change_deferred(void)
 	uint8_t data[1];
 
 	if (!gpio_get_level(GPIO_DOOR_OPEN_EC)) {
-		if (!debouncing)
+		if (!debouncing) {
 			debouncing = true;
+			return;
+		}
 
 		debouncing = false;
 		als_eeprom_read(0x00, data, 1);
+
+		/* Detect the als enable status,used to disable als function in
+		 * debug status*/
+		if (!(data[0] & ALS_ENABLE)) {
+			als_enable = 0;
+			CPRINTS(" function disable-%d", data[0]);
+			return;
+		}
+
 		if (!(data[0] & ALS_NORMAL_COUNT))
 			als_data_handler();
 
