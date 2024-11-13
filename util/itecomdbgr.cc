@@ -226,19 +226,6 @@ static void exit_file(struct itecomdbgr_config *conf)
 		fclose(conf->fi);
 }
 
-static void show_time(void)
-{
-	time_t current_time;
-	char *c_time_string;
-
-	/* Obtain current time. */
-	current_time = time(NULL);
-
-	/* Convert to local time format. */
-	c_time_string = ctime(&current_time);
-	(void)printf("Current time is %s", c_time_string);
-}
-
 static int read_com(struct itecomdbgr_config *conf, uint8_t *inbuff,
 		    int ReadBytes)
 {
@@ -1109,7 +1096,6 @@ int main(int argc, char **argv)
 	}
 
 	printf("ITE COMDBGR Linux Flash Tool: Version %s\n\r", VERSION);
-	show_time();
 	if ((conf.baudrate != 115200) && (conf.baudrate != 3000000)) {
 		printf("UART Baudrate only support 115200  or 3M\n\r");
 		return 0;
@@ -1140,6 +1126,5 @@ int main(int argc, char **argv)
 
 	r = uart_app(&conf);
 	exit_file(&conf);
-	show_time();
 	return (r != 0) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
