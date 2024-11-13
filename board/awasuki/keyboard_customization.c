@@ -3,8 +3,11 @@
  * found in the LICENSE file.
  */
 
+#include "cbi_fw_config.h"
 #include "common.h"
+#include "cros_board_info.h"
 #include "gpio.h"
+#include "hooks.h"
 #include "keyboard_8042_sharedlib.h"
 #include "keyboard_customization.h"
 #include "keyboard_protocol.h"
@@ -111,3 +114,15 @@ __override struct key {
 	{ .row = 0, .col = 12 }, /* T15 */
 };
 BUILD_ASSERT(ARRAY_SIZE(vivaldi_keys) == MAX_TOP_ROW_KEYS);
+
+static void board_update_keyboard_layout(void)
+{
+	if (get_cbi_fw_config_keyboard() == KB_LAYOUT_1) {
+		/*
+		 * If keyboard is KB_LAYOUT_1, we need translate right ctrl
+		 * to backslash(\|) key.
+		 */
+		set_scancode_set2(3, 14, get_scancode_set2(2, 7));
+	}
+}
+DECLARE_HOOK(HOOK_INIT, board_update_keyboard_layout, HOOK_PRIO_DEFAULT);
