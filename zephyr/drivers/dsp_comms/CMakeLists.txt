@@ -8,6 +8,8 @@
 include(${ZEPHYR_PIGWEED_MODULE_DIR}/pw_build/pigweed.cmake)
 include(${ZEPHYR_PIGWEED_MODULE_DIR}/pw_protobuf_compiler/proto.cmake)
 
+set(pw_protobuf_compiler_GENERATE_PROTOS_ARGS "--no-experimental-editions" CACHE STRING "Args to generate_protos.py" FORCE)
+
 pw_proto_library(dsp_comms.proto
   SOURCES
     proto/ec_dsp.proto
