@@ -27,21 +27,7 @@
  * by the BSS initialization leaves it in a valid and correctly initialized
  * state, so there is no need currently for a usb_stream_init style function.
  */
-struct usb_stream_state {
-	/*
-	 * Flag indicating that there is a full RX buffer in the USB packet RAM
-	 * that we were not able to move into the RX queue because there was
-	 * not enough room when the packet was initially received.  The
-	 * producer read operation checks this flag so that once there is
-	 * room in the queue it can copy the RX buffer into the queue and
-	 * restart USB reception by marking the RX buffer as VALID.
-	 */
-	int rx_waiting;
-	/*
-	 * Flag indicating that the incoming data on the USB link are discarded.
-	 */
-	int rx_disabled;
-};
+struct usb_stream_state {};
 
 /*
  * Compile time Per-USB stream configuration stored in flash.  Instances of this
