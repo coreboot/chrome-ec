@@ -19,6 +19,7 @@
 #include "fan.dtsi"
 #include "usbc.dtsi"
 #include "led.dtsi"
+#include "temp.dtsi"
 
 / {
 	aliases {
