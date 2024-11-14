@@ -1,0 +1,133 @@
+/* Copyright 2024 The ChromiumOS Authors
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ *
+ * This file is auto-generated - do not edit!
+ */
+
+/ {
+
+	named-gpios {
+		compatible = "named-gpios";
+
+		gpio_acok_od: acok_od {
+			gpios = <&gpiod 2 (GPIO_INPUT)>;
+			enum-name = "GPIO_AC_PRESENT";
+		};
+		gpio_all_sys_pwrgd: all_sys_pwrgd {
+			gpios = <&gpio6 3 (GPIO_INPUT)>;
+			enum-name = "GPIO_PG_EC_ALL_SYS_PWRGD";
+		};
+		gpio_ec_mech_pwr_btn_l: ec_mech_pwr_btn_l {
+			gpios = <&gpio0 0 (GPIO_INPUT)>;
+			enum-name = "GPIO_POWER_BUTTON_L";
+		};
+		gpio_ec_rsmrst_odl: ec_rsmrst_odl {
+			gpios = <&gpio7 2 (GPIO_INPUT)>;
+			enum-name = "GPIO_PG_EC_RSMRST_ODL";
+		};
+		gpio_ec_soc_pwr_btn_odl: ec_soc_pwr_btn_odl {
+			gpios = <&gpioa 0 (GPIO_OUTPUT | GPIO_OPEN_DRAIN | GPIO_ACTIVE_HIGH | GPIO_OUTPUT_INIT_HIGH)>;
+			enum-name = "GPIO_PCH_PWRBTN_L";
+		};
+		gpio_ec_soc_rec_switch_odl: ec_soc_rec_switch_odl {
+			gpios = <&gpiof 5 (GPIO_INPUT)>;
+		};
+		gpio_ec_soc_rsmrst_l_r: ec_soc_rsmrst_l_r {
+			gpios = <&gpio9 5 (GPIO_INPUT)>;
+			enum-name = "GPIO_PCH_RSMRST_L";
+		};
+		gpio_ec_soc_wake_ls_odl: ec_soc_wake_ls_odl {
+			gpios = <&gpio3 2 (GPIO_OUTPUT | GPIO_OPEN_DRAIN | GPIO_ACTIVE_HIGH | GPIO_OUTPUT_INIT_LOW)>;
+		};
+		gpio_en_pp5000_s5: en_pp5000_s5 {
+			gpios = <&gpio7 6 (GPIO_INPUT)>;
+		};
+		gpio_en_s5_rails: en_s5_rails {
+			gpios = <&gpio4 1 (GPIO_INPUT)>;
+			enum-name = "GPIO_EN_PP3300_A";
+		};
+		gpio_ioex_kbd_int_odl: ioex_kbd_int_odl {
+			gpios = <&gpio7 0 (GPIO_INPUT)>;
+			enum-name = "GPIO_KB_DISCRETE_INT";
+		};
+		gpio_soc_pwrok_r: soc_pwrok_r {
+			gpios = <&gpio6 1 (GPIO_INPUT)>;
+			enum-name = "GPIO_PCH_PWROK";
+		};
+		gpio_sys_slp_s0ix_l: sys_slp_s0ix_l {
+			gpios = <&gpiob 0 (GPIO_INPUT)>;
+			enum-name = "GPIO_PCH_SLP_S0_L";
+		};
+	};
+
+	named-i2c-ports {
+		compatible = "named-i2c-ports";
+
+		i2c_ec_i2c_pd_scl_r: ec_i2c_pd_scl_r {
+			i2c-port = <&i2c0_0>;
+		};
+		i2c_ec_i2c_mi: ec_i2c_mi {
+			i2c-port = <&i2c2_0>;
+		};
+	};
+};
+
+&i2c0_0 {
+	status = "okay";
+	pinctrl-0 = <&i2c0_0_sda_scl_gpb4_b5>;
+	pinctrl-names = "default";
+};
+
+&i2c2_0 {
+	status = "okay";
+	pinctrl-0 = <&i2c2_0_sda_scl_gp91_92>;
+	pinctrl-names = "default";
+};
+
+&i2c_ctrl0 {
+	status = "okay";
+};
+
+&i2c_ctrl2 {
+	status = "okay";
+};
+
+&tach1 {
+	status = "okay";
+	pinctrl-0 = <&ta1_1_in_gp40>;
+	pinctrl-names = "default";
+	port = <NPCX_TACH_PORT_A>;
+	sample-clk = <NPCX_TACH_FREQ_LFCLK>;
+	pulses-per-round = <2>;
+};
+
+&cros_kb_raw {
+	status = "okay";
+	/* No KSO2 (it's inverted and implemented by GPIO) */
+	pinctrl-0 = <
+		&ksi0_gp31
+		&ksi1_gp30
+		&ksi2_gp27
+		&ksi3_gp26
+		&ksi4_gp25
+		&ksi5_gp24
+		&ksi6_gp23
+		&ksi7_gp22
+		&kso00_gp21
+		&kso01_gp20
+		&kso03_gp16
+		&kso04_gp15
+		&kso05_gp14
+		&kso06_gp13
+		&kso07_gp12
+		&kso08_gp11
+		&kso09_gp10
+		&kso10_gp07
+		&kso11_gp06
+		&kso12_gp05
+		&kso13_gp04
+		&kso14_gp82
+	>;
+	pinctrl-names = "default";
+};

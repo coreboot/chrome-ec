@@ -7,15 +7,34 @@
 
 #include <cros/integrated_fwid.dtsi>
 
-#include "../fatcat_stub.dts"
-
 /* fatcat_npcx9m7f project DTS includes */
 
 #include <cros/cbi_flash.dtsi>
 
+#include "generated.dtsi"
+
 #include "adc.dtsi"
 #include "gpios.dtsi"
 #include "i2c.dtsi"
+
+#include "../fatcat_it82002aw/gsc_board.dtsi"
+#include "../fatcat_it82002aw/interrupts.dtsi"
+
+/* Power Signals */
+#define PWR_EN_PP3300_S5 &gpio4 1
+#define PWR_EN_PP5000_S5 &gpio7 6
+#define PWR_RSMRST_PWRGD &gpio7 2
+#define PWR_EC_PCH_RSMRST &gpio9 5
+#define PWR_SLP_S0 &gpiob 0
+#define PWR_PCH_PWROK &gpio6 1
+#define PWR_ALL_SYS_PWRGD &gpio6 3
+
+#define CHARGER_I2C i2c2_0
+#define PD_POW_I2C i2c0_0
+
+#include "../../intelrvp/ptlrvp/power_signals.dtsi"
+#include "../../intelrvp/ptlrvp/i2c.dtsi"
+#include "../../intelrvp/ptlrvp/keyboard.dtsi"
 
 /* fatcat_npcx9m7f overrides follow... */
 
@@ -35,8 +54,7 @@
 	pinctrl-names = "default";
 };
 
-/*
- * Local Variables:
- * Mode: c
- * End:
- */
+/* Enable hardware acceleration */
+&sha0 {
+	status = "okay";
+};

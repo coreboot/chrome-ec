@@ -16,7 +16,6 @@ extern "C" {
 #endif
 
 /* The hardware ID information and FW version */
-#define VID 0x04F3 /* Elan USB vendor ID */
 #define PID 0x0903 /* USB product ID */
 #define MID 0x01 /* Elan doesn't track model, so this has no meaning. */
 #define VERSION 0x100B /* Elan internal firmware version */

@@ -8,6 +8,7 @@
 		compatible = "cros-ec,keyscan";
 
 		scan-period = <10000>;
+		stable-scan-period = <10000>;
 		output-settle = <80>; /* us */
 
 		actual-key-mask = <

@@ -50,6 +50,11 @@
 				value = <3>;
 				default;
 			};
+			sub-board-4 {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_SUB_BOARD_4";
+				value = <4>;
+			};
 		};
 		/*
 		 * FW_CONFIG field to enable TypeC BC1.2.
@@ -90,5 +95,55 @@
 				value = <1>;
 			};
 		};
+		/*
+		 * FW_CONFIG field to describe Clamshell/Convertible.
+		 */
+		form_factor {
+			enum-name = "FORM_FACTOR";
+			start = <15>;
+			size = <1>;
+			clamshell {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "CLAMSHELL";
+				value = <0>;
+				default;
+			};
+			covertible {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "CONVERTIBLE";
+				value = <1>;
+			};
+		};
+	};
+
+	/* Glassway-specific ssfc fields. */
+        cbi-ssfc {
+                compatible = "cros-ec,cbi-ssfc";
+                /*
+                 * SSFC field to panel type.
+                 */
+                panel-type {
+			enum-name = "PANEL_TYPE";
+			size = <3>;
+		};
+
+                /*
+                 * SSFC field to identify BASE motion sensor.
+                 */
+                base-sensor {
+                        enum-name = "BASE_SENSOR";
+                        size = <2>;
+                        base_sensor_bmi323: bmi323 {
+                                compatible = "cros-ec,cbi-ssfc-value";
+                                status = "okay";
+                                value = <0>;
+                                default;
+                        };
+                        base_sensor_icm42607: icm42607 {
+                                compatible = "cros-ec,cbi-ssfc-value";
+                                status = "okay";
+                                value = <1>;
+                        };
+                };
 	};
 };

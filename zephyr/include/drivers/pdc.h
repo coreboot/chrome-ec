@@ -26,14 +26,8 @@
 extern "C" {
 #endif
 
-/**
- * Extract the 16-bit VID or PID from the 32-bit container in
- * `struct pdc_info_t`
- */
-#define PDC_VIDPID_GET_VID(vidpid) (((vidpid) >> 16) & 0xFFFF)
-#define PDC_VIDPID_GET_PID(vidpid) ((vidpid) & 0xFFFF)
-
-#define PDC_VIDPID_INVALID (0x00000000)
+#define PDC_VID_INVALID (0x0000)
+#define PDC_PID_INVALID (0x0000)
 
 /**
  * Compare PDC versions
@@ -63,8 +57,10 @@ struct pdc_info_t {
 	uint16_t pd_revision;
 	/** Power Delivery Version supported by the PDC */
 	uint16_t pd_version;
-	/** VID:PID of the PDC (optional) */
-	uint32_t vid_pid;
+	/** VID of the PDC (optional) */
+	uint16_t vid;
+	/** PID of the PDC (optional) */
+	uint16_t pid;
 	/** Set to 1 if running from flash code (optional) */
 	uint8_t is_running_flash_code;
 	/** Set to the currently used flash bank (optional) */
@@ -128,6 +124,8 @@ typedef int (*pdc_get_connector_capability_t)(
 	const struct device *dev, union connector_capability_t *caps);
 typedef int (*pdc_set_ccom_t)(const struct device *dev, enum ccom_t ccom);
 typedef int (*pdc_set_drp_mode_t)(const struct device *dev, enum drp_mode_t dm);
+typedef int (*pdc_get_drp_mode_t)(const struct device *dev,
+				  enum drp_mode_t *dm);
 typedef int (*pdc_set_uor_t)(const struct device *dev, union uor_t uor);
 typedef int (*pdc_set_pdr_t)(const struct device *dev, union pdr_t pdr);
 typedef int (*pdc_set_sink_path_t)(const struct device *dev, bool en);
@@ -186,6 +184,8 @@ typedef int (*pdc_ack_cc_ci_t)(const struct device *dev,
 typedef int (*pdc_get_lpm_ppm_info_t)(const struct device *dev,
 				      struct lpm_ppm_info_t *info);
 typedef int (*pdc_set_frs_t)(const struct device *dev, bool enable);
+typedef int (*pdc_get_attention_vdo_t)(const struct device *dev,
+				       union get_attention_vdo_t *vdo);
 
 /**
  * @cond INTERNAL_HIDDEN
@@ -201,6 +201,7 @@ __subsystem struct pdc_driver_api_t {
 	pdc_get_connector_capability_t get_connector_capability;
 	pdc_set_ccom_t set_ccom;
 	pdc_set_drp_mode_t set_drp_mode;
+	pdc_get_drp_mode_t get_drp_mode;
 	pdc_set_uor_t set_uor;
 	pdc_set_pdr_t set_pdr;
 	pdc_set_sink_path_t set_sink_path;
@@ -231,6 +232,7 @@ __subsystem struct pdc_driver_api_t {
 	pdc_ack_cc_ci_t ack_cc_ci;
 	pdc_get_lpm_ppm_info_t get_lpm_ppm_info;
 	pdc_set_frs_t set_frs;
+	pdc_get_attention_vdo_t get_attention_vdo;
 };
 /**
  * @endcond
@@ -532,6 +534,20 @@ static inline int pdc_set_drp_mode(const struct device *dev, enum drp_mode_t dm)
 	}
 
 	return api->set_drp_mode(dev, dm);
+}
+
+static inline int pdc_get_drp_mode(const struct device *dev,
+				   enum drp_mode_t *dm)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	/* This is an optional feature, so it might not be implemented */
+	if (api->get_drp_mode == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->get_drp_mode(dev, dm);
 }
 
 /**
@@ -1023,6 +1039,8 @@ static inline int pdc_set_comms_state(const struct device *dev,
  *
  * @retval 0 on success
  * @retval -EBUSY if not ready to execute the command
+ * @retval -ERANGE if the count is not supported
+ * @retval -EINVAL if \p pdo is NULL
  */
 static inline int pdc_set_pdos(const struct device *dev, enum pdo_type_t type,
 			       uint32_t *pdo, int count)
@@ -1308,6 +1326,26 @@ static inline int pdc_set_frs(const struct device *dev, bool enable)
 	}
 
 	return api->set_frs(dev, enable);
+}
+
+/**
+ * @brief UCSI command to request an Attention VDO received from the partner
+ * @param dev PDC device structure pointer
+ * @param get_attention_vdo_t pointer where the GET_ATTENTION_VDO response is
+ * stored.
+ * @return 0 on success, negative errno otherwise
+ */
+static inline int pdc_get_attention_vdo(const struct device *dev,
+					union get_attention_vdo_t *vdo)
+{
+	const struct pdc_driver_api_t *api =
+		(const struct pdc_driver_api_t *)dev->api;
+
+	if (api->get_attention_vdo == NULL) {
+		return -ENOSYS;
+	}
+
+	return api->get_attention_vdo(dev, vdo);
 }
 
 #ifdef __cplusplus

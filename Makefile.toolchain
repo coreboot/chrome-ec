@@ -40,6 +40,7 @@ CLANG_BOARDS:= \
 	bloonchipper-druid \
 	buccaneer \
 	dartmonkey \
+	gwendolin \
 	hatch_fp \
 	helipilot \
 	nami_fp \
@@ -60,7 +61,7 @@ endif
 
 ifeq ($(BOARD), host)
 USE_BUILTIN_STDLIB:=0
-ifeq ($(COVERAGE),)
+ifeq ($(TEST_COVERAGE),)
 CROSS_COMPILE_CC_NAME=clang
 endif
 endif
@@ -203,6 +204,16 @@ CFLAGS+= -ffunction-sections
 CFLAGS+= -fno-delete-null-pointer-checks
 CFLAGS+= -fno-PIC
 ifneq ($(CROSS_COMPILE_CC_NAME),clang)
+# GCC 11 and above may generate a warning when dereferencing a constant
+# address pointer whose address is below the value specified by the
+# `min-pagesize` parameter (defaults to 0x1000). The `min-pagesize` parameter
+# is set to 0 such that GCC never generates any warnings for the constant
+# address pointers. For more details, refer to the GCC PR99578.
+ifneq ($(BOARD), host)
+CFLAGS+= --param min-pagesize=0
+endif
+endif
+ifneq ($(CROSS_COMPILE_CC_NAME),clang)
 CFLAGS+= -ffat-lto-objects
 CFLAGS+= -fconserve-stack
 endif
@@ -243,7 +254,7 @@ endif
 BUILD_CFLAGS=$(LIBFTDIUSB_BUILD_CFLAGS) $(BUILD_CPPFLAGS) -O3 $(CFLAGS_DEBUG)
 BUILD_CFLAGS+=$(BUILDCC_WARN)
 BUILD_CFLAGS+=-DCHROMIUM_EC=$(EMPTY)
-HOST_CFLAGS=$(HOST_CPPFLAGS) -O3 $(CFLAGS_DEBUG) $(CFLAGS_WARN) \
+HOST_CFLAGS+=$(HOST_CPPFLAGS) -O3 $(CFLAGS_DEBUG) $(CFLAGS_WARN) \
 	    -DHOST_TOOLS_BUILD=$(EMPTY)
 HOST_CFLAGS+=$(LIBFTDIUSB_HOST_CFLAGS)
 HOST_CFLAGS+=-DCHROMIUM_EC=$(EMPTY)
@@ -264,7 +275,7 @@ ifeq ($(CROSS_COMPILE_CC_NAME),gcc)
 MEMSIZE_FLAGS+=-Wl,--print-memory-usage
 endif
 BUILD_LDFLAGS=$(LIBFTDIUSB_BUILD_LDLIBS)
-HOST_LDFLAGS=$(LIBFTDIUSB_HOST_LDLIBS)
+HOST_LDFLAGS+=$(LIBFTDIUSB_HOST_LDLIBS)
 ifneq (${HOST_SYSROOT},)
   HOST_LDFLAGS+=--sysroot=${HOST_SYSROOT}
 endif

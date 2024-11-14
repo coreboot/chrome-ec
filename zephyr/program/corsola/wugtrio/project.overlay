@@ -235,9 +235,6 @@
 			configs {
 				compatible =
 					"cros-ec,motionsense-sensor-config";
-				ec-s0 {
-					odr = <(10000 | ROUND_UP_FLAG)>;
-				};
 			};
 		};
 
@@ -270,10 +267,6 @@
 			configs {
 				compatible =
 					"cros-ec,motionsense-sensor-config";
-				ec-s0 {
-					odr = <(12500 | ROUND_UP_FLAG)>;
-					ec-rate = <(100 * USEC_PER_MSEC)>;
-				};
 			};
 		};
 
@@ -599,6 +592,7 @@
 	charger_bc12_port1: rt9490@53{
 		compatible = "richtek,rt9490";
 		thermistor = <&thermistor_rt9490>;
+		eoc-current = <120>;
 		/delete-property/ irq;
 	};
 };

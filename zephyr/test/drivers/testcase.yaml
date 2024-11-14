@@ -91,6 +91,8 @@ tests:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS=y
     - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
+    - CONFIG_SHELL_BACKEND_DUMMY_BUF_SIZE=4096
+    - CONFIG_PLATFORM_EC_KEYBOARD_STRAUSS=y
     extra_conf_files:
     - prj.conf
     - default/prj.conf
@@ -103,6 +105,7 @@ tests:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS=y
     - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
+    - CONFIG_SHELL_BACKEND_DUMMY_BUF_SIZE=4096
     extra_conf_files:
     - prj.conf
     - default/prj.conf
@@ -115,6 +118,7 @@ tests:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS=y
     - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
+    - CONFIG_SHELL_BACKEND_DUMMY_BUF_SIZE=4096
     extra_conf_files:
     - prj.conf
     - default/prj.conf
@@ -125,6 +129,7 @@ tests:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS=y
     - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
+    - CONFIG_SHELL_BACKEND_DUMMY_BUF_SIZE=4096
     extra_conf_files:
     - prj.conf
     - default/prj.conf
@@ -137,6 +142,7 @@ tests:
     - CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS=y
     - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
     - CONFIG_PLATFORM_EC_POWER_BUTTON=n
+    - CONFIG_SHELL_BACKEND_DUMMY_BUF_SIZE=4096
     extra_conf_files:
     - prj.conf
     - default/prj.conf
@@ -149,6 +155,7 @@ tests:
     - CONFIG_LINK_TEST_SUITE_DEFAULT_CONSOLE_CMDS=y
     - CONFIG_PLATFORM_EC_BATTERY_CUT_OFF=y
     - CONFIG_PLATFORM_EC_POWER_BUTTON=n
+    - CONFIG_SHELL_BACKEND_DUMMY_BUF_SIZE=4096
     extra_conf_files:
     - prj.conf
     - default/prj.conf
@@ -1510,6 +1517,9 @@ tests:
     extra_conf_files:
     - prj.conf
     - ec_host_cmd.conf
+  drivers.usbc_fake_pdos:
+    extra_configs:
+    - CONFIG_LINK_TEST_SUITE_USBC_FAKE_PDOS=y
   drivers.host_cmd_thread:
     extra_configs:
     - CONFIG_LINK_TEST_SUITE_HOST_CMD_THREAD=y

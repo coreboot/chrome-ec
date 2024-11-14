@@ -8,6 +8,7 @@
 def register_trulo_project(
     project_name,
     kconfig_files=None,
+    **kwargs,
 ):
     """Register a variant of Trulo."""
     if kconfig_files is None:
@@ -26,13 +27,35 @@ def register_trulo_project(
         ],
         kconfig_files=kconfig_files,
         inherited_from=["trulo"],
+        **kwargs,
     )
 
 
 register_trulo_project(
     project_name="trulo",
+    kconfig_files=[
+        # Common to all projects.
+        here / "program.conf",
+        # Parent project's config
+        here / "trulo" / "project.conf",
+    ],
+    modules=["cmsis", "picolibc", "ec", "pigweed"],
+)
+
+register_trulo_project(
+    project_name="trulo-ti",
+    kconfig_files=[
+        # Common to all projects.
+        here / "program.conf",
+        # Parent project's config
+        here / "trulo" / "project.conf",
+        # Project-specific KConfig customization.
+        here / "trulo-ti" / "project.conf",
+    ],
+    modules=["cmsis", "picolibc", "ec", "pigweed"],
 )
 
 # Note for reviews, do not let anyone edit these assertions, the addresses
 # must not change after the first RO release.
 assert_rw_fwid_DO_NOT_EDIT(project_name="trulo", addr=0x40144)
+assert_rw_fwid_DO_NOT_EDIT(project_name="trulo-ti", addr=0x40144)

@@ -63,6 +63,16 @@ union pd_status_t {
 	};
 };
 
+union csd_op_mode_t {
+	uint8_t raw_value;
+	struct {
+		uint8_t csd_mode : 2;
+		uint8_t accessory_support : 1;
+		uint8_t drp_mode : 2;
+		uint8_t reserved : 3;
+	};
+};
+
 union rts54_request {
 	uint8_t raw_data[0];
 	struct rts54_command {
@@ -193,17 +203,13 @@ union rts54_request {
 	struct set_tpc_csd_operation_mode_req {
 		struct rts54_subcommand_header header;
 		uint8_t port_num;
-		union csd_op_mode_t {
-			uint8_t raw_value;
-			struct {
-				uint8_t csd_mode : 2;
-				uint8_t accessory_support : 1;
-				uint8_t drp_mode : 2;
-				uint8_t reserved : 3;
-			};
-		} op_mode;
+		union csd_op_mode_t op_mode;
 	} set_tpc_csd_operation_mode;
 
+	struct get_tpc_csd_operartion_mode_req {
+		struct rts54_subcommand_header header;
+		uint8_t port_num;
+	} get_tpc_csd_operartion_mode;
 	struct set_ccom_req {
 		struct rts54_subcommand_header header;
 		union port_and_ccom_t {
@@ -288,6 +294,11 @@ union rts54_request {
 		uint8_t port_num;
 		uint8_t enable;
 	} set_frs_function;
+
+	struct get_attention_vdo_req {
+		struct rts54_subcommand_header header;
+		uint8_t port_num;
+	} get_attention_vdo;
 };
 
 union rts54_response {
@@ -444,6 +455,16 @@ union rts54_response {
 		uint8_t byte_count;
 		uint8_t pch_data_status[5];
 	} __packed get_pch_data_status;
+
+	struct get_attention_vdo_response {
+		uint8_t byte_count;
+		union get_attention_vdo_t attention_vdo;
+	} __packed get_attention_vdo;
+
+	struct get_tpc_csd_operation_mode {
+		uint8_t byte_count;
+		union csd_op_mode_t op_mode;
+	} __packed get_tpc_csd_operation_mode;
 };
 
 enum cmd_sts_t {
@@ -506,6 +527,7 @@ struct rts5453p_emul_pdc_data {
 	bool frs_configured;
 	bool frs_enabled;
 	bool vconn_sourcing;
+	union get_attention_vdo_t attention_vdo;
 };
 
 /**

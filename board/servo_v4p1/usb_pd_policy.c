@@ -38,31 +38,60 @@
 #define CONF_SET_CLEAR(c, set, clear) ((c | (set)) & ~(clear))
 #define CONF_SRC(c)                                      \
 	CONF_SET_CLEAR(c, CC_DISABLE_DTS | CC_ALLOW_SRC, \
-		       CC_ENABLE_DRP | CC_SNK_WITH_PD)
-#define CONF_SNK(c)                       \
-	CONF_SET_CLEAR(c, CC_DISABLE_DTS, \
-		       CC_ALLOW_SRC | CC_ENABLE_DRP | CC_SNK_WITH_PD)
+		       CC_ENABLE_DRP | CC_SNK_WITH_PD | CC_SRC_WITHOUT_PD)
+#define CONF_SNK(c)                                                    \
+	CONF_SET_CLEAR(c, CC_DISABLE_DTS,                              \
+		       CC_ALLOW_SRC | CC_ENABLE_DRP | CC_SNK_WITH_PD | \
+			       CC_SRC_WITHOUT_PD)
 #define CONF_PDSNK(c)                                      \
 	CONF_SET_CLEAR(c, CC_DISABLE_DTS | CC_SNK_WITH_PD, \
-		       CC_ALLOW_SRC | CC_ENABLE_DRP)
+		       CC_ALLOW_SRC | CC_ENABLE_DRP | CC_SRC_WITHOUT_PD)
 #define CONF_DRP(c)                                                      \
 	CONF_SET_CLEAR(c, CC_DISABLE_DTS | CC_ALLOW_SRC | CC_ENABLE_DRP, \
-		       CC_SNK_WITH_PD)
-#define CONF_SRCDTS(c)                  \
-	CONF_SET_CLEAR(c, CC_ALLOW_SRC, \
-		       CC_ENABLE_DRP | CC_DISABLE_DTS | CC_SNK_WITH_PD)
+		       CC_SNK_WITH_PD | CC_SRC_WITHOUT_PD)
+#define CONF_SRCDTS(c)                                                   \
+	CONF_SET_CLEAR(c, CC_ALLOW_SRC,                                  \
+		       CC_ENABLE_DRP | CC_DISABLE_DTS | CC_SNK_WITH_PD | \
+			       CC_SRC_WITHOUT_PD)
 #define CONF_SNKDTS(c)                                                 \
 	CONF_SET_CLEAR(c, 0,                                           \
 		       CC_ALLOW_SRC | CC_ENABLE_DRP | CC_DISABLE_DTS | \
-			       CC_SNK_WITH_PD)
-#define CONF_PDSNKDTS(c)                  \
-	CONF_SET_CLEAR(c, CC_SNK_WITH_PD, \
-		       CC_ALLOW_SRC | CC_ENABLE_DRP | CC_DISABLE_DTS)
+			       CC_SNK_WITH_PD | CC_SRC_WITHOUT_PD)
+#define CONF_PDSNKDTS(c)                                               \
+	CONF_SET_CLEAR(c, CC_SNK_WITH_PD,                              \
+		       CC_ALLOW_SRC | CC_ENABLE_DRP | CC_DISABLE_DTS | \
+			       CC_SRC_WITHOUT_PD)
 #define CONF_DRPDTS(c)                                  \
 	CONF_SET_CLEAR(c, CC_ALLOW_SRC | CC_ENABLE_DRP, \
-		       CC_DISABLE_DTS | CC_SNK_WITH_PD)
+		       CC_DISABLE_DTS | CC_SNK_WITH_PD | CC_SRC_WITHOUT_PD)
 #define CONF_DTSOFF(c) CONF_SET_CLEAR(c, CC_DISABLE_DTS, 0)
 #define CONF_DTSON(c) CONF_SET_CLEAR(c, 0, CC_DISABLE_DTS)
+#define CONF_SRC_NOPDUSB(c)                                                  \
+	CONF_SET_CLEAR(c, CC_DISABLE_DTS | CC_ALLOW_SRC | CC_SRC_WITHOUT_PD, \
+		       CC_ENABLE_DRP | CC_SNK_WITH_PD | CC_SRC_1A5 |         \
+			       CC_SRC_3A0)
+#define CONF_SRC_NOPD1A5(c)                                                \
+	CONF_SET_CLEAR(c,                                                  \
+		       CC_DISABLE_DTS | CC_ALLOW_SRC | CC_SRC_WITHOUT_PD | \
+			       CC_SRC_1A5,                                 \
+		       CC_ENABLE_DRP | CC_SNK_WITH_PD | CC_SRC_3A0)
+#define CONF_SRC_NOPD3A0(c)                                                \
+	CONF_SET_CLEAR(c,                                                  \
+		       CC_DISABLE_DTS | CC_ALLOW_SRC | CC_SRC_WITHOUT_PD | \
+			       CC_SRC_3A0,                                 \
+		       CC_ENABLE_DRP | CC_SNK_WITH_PD | CC_SRC_1A5)
+#define CONF_SRCDTS_NOPDUSB(c)                                           \
+	CONF_SET_CLEAR(c, CC_ALLOW_SRC | CC_SRC_WITHOUT_PD,              \
+		       CC_ENABLE_DRP | CC_DISABLE_DTS | CC_SNK_WITH_PD | \
+			       CC_SRC_1A5 | CC_SRC_3A0)
+#define CONF_SRCDTS_NOPD1A5(c)                                           \
+	CONF_SET_CLEAR(c, CC_ALLOW_SRC | CC_SRC_WITHOUT_PD | CC_SRC_1A5, \
+		       CC_ENABLE_DRP | CC_DISABLE_DTS | CC_SNK_WITH_PD | \
+			       CC_SRC_3A0)
+#define CONF_SRCDTS_NOPD3A0(c)                                           \
+	CONF_SET_CLEAR(c, CC_ALLOW_SRC | CC_SRC_WITHOUT_PD | CC_SRC_3A0, \
+		       CC_ENABLE_DRP | CC_DISABLE_DTS | CC_SNK_WITH_PD | \
+			       CC_SRC_1A5)
 
 /* Macros to apply Rd/Rp to CC lines */
 #define DUT_ACTIVE_CC_SET(r, flags)                            \
@@ -912,7 +941,8 @@ __override void pd_check_dr_role(int port, enum pd_data_role dr_role, int flags)
 		return;
 
 	/* If DFP, try to switch to UFP, to let DUT see the USB hub. */
-	if ((flags & PD_FLAGS_PARTNER_DR_DATA) && dr_role == PD_ROLE_DFP)
+	if ((flags & PD_FLAGS_PARTNER_DR_DATA) && dr_role == PD_ROLE_DFP &&
+	    allow_dr_swap)
 		pd_request_data_swap(port);
 }
 
@@ -1233,7 +1263,18 @@ static void do_cc(int cc_config_new)
 			 */
 			if (cc_config & CC_SNK_WITH_PD)
 				pd_comm_enable(DUT, 1);
-			else
+			else if (cc_config & CC_SRC_WITHOUT_PD) {
+				pd_comm_enable(DUT, 0);
+				if (cc_config & CC_SRC_1A5)
+					pd_set_rp_rd(DUT, TYPEC_CC_RP,
+						     TYPEC_RP_1A5);
+				else if (cc_config & CC_SRC_3A0)
+					pd_set_rp_rd(DUT, TYPEC_CC_RP,
+						     TYPEC_RP_3A0);
+				else
+					pd_set_rp_rd(DUT, TYPEC_CC_RP,
+						     TYPEC_RP_USB);
+			} else
 				pd_comm_enable(DUT, chargeable);
 		}
 	}
@@ -1289,6 +1330,18 @@ static int command_cc(int argc, const char **argv)
 			cc_config_new |= CC_EMCA_SERVO;
 		else if (!strcasecmp(argv[1], "nonemca"))
 			cc_config_new &= ~CC_EMCA_SERVO;
+		else if (!strcasecmp(argv[1], "nopdsrcdts3A0"))
+			cc_config_new = CONF_SRCDTS_NOPD3A0(cc_config_new);
+		else if (!strcasecmp(argv[1], "nopdsrcdts1A5"))
+			cc_config_new = CONF_SRCDTS_NOPD1A5(cc_config_new);
+		else if (!strcasecmp(argv[1], "nopdsrcdtsusb"))
+			cc_config_new = CONF_SRCDTS_NOPDUSB(cc_config_new);
+		else if (!strcasecmp(argv[1], "nopdsrc3A0"))
+			cc_config_new = CONF_SRC_NOPD3A0(cc_config_new);
+		else if (!strcasecmp(argv[1], "nopdsrc1A5"))
+			cc_config_new = CONF_SRC_NOPD1A5(cc_config_new);
+		else if (!strcasecmp(argv[1], "nopdsrcusb"))
+			cc_config_new = CONF_SRC_NOPDUSB(cc_config_new);
 		else
 			return EC_ERROR_PARAM2;
 	}

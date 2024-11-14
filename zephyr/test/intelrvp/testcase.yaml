@@ -121,6 +121,7 @@ tests:
       - CONFIG_CHIPSET_API_MOCK=y
       - CONFIG_AP_EVENTS=n
       - CONFIG_TEST_AP_PWRSEQ_PP5500=y
+      - CONFIG_EEPROM=y
 
   intelrvp.ptlrvp.board_id:
     extra_dtc_overlay_files:
@@ -133,3 +134,4 @@ tests:
     extra_configs:
       - CONFIG_TEST_PROJECT_PTLRVP_MCHP=y
       - CONFIG_TEST_PROJECT_INTELRVP_BOARD_ID=y
+      - CONFIG_EEPROM=y

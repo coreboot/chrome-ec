@@ -116,6 +116,7 @@ BOARDS_NPCX_7M7X_JTAG=(
 
 BOARDS_NPCX_SPI=(
 	buccaneer
+	gwendolin
 	helipilot
 )
 
@@ -154,6 +155,7 @@ BOARDS_RAIDEN=(
 
 BOARDS_MCHP_INT_SPI=(
 	mtlrvpp_mchp
+	ptlrvp_mchp
 )
 DEFAULT_PORT="${SERVOD_PORT:-9999}"
 BITBANG_RATE="57600"  # Could be overwritten by a command line option.
@@ -437,7 +439,8 @@ case "${BOARD}" in
 	chocodile_bec ) MCU="usbpd" ;;
 	oak_pd|strago_pd ) MCU="usbpd" ;;
 	chell_pd|glados_pd ) MCU="usbpd" ;;
-	bloonchipper|buccaneer|dartmonkey|hatch_fp|helipilot|nami_fp|nocturne_fp )
+	bloonchipper|buccaneer|dartmonkey|gwendolin|hatch_fp|helipilot| \
+	             nami_fp|nocturne_fp )
 		MCU="fpmcu"
 		;;
 	dingdong|hoho|twinkie ) DUT_CONTROL_CMD=( "true" ); MCU="ec" ;;
@@ -446,7 +449,7 @@ esac
 
 case "${CHIP}" in
 	"stm32"|"npcx_spi"|"npcx_int_spi"|"it83xx"|"ite_i2c"|"npcx_uut"|"ite_spi"| \
-			"ite_spi_ccd_i2c"|"ite_spi_ccd_uart"|"ite_uart_3m"| \
+			"ite_spi_ccd_i2c"|"ite_spi_ccd_uart"|"ite_uart"|"ite_uart_3m"| \
 			"it8xxx2"|"mchp_int_spi")
 		;;
 	*)

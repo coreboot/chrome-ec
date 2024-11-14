@@ -15,3 +15,13 @@ if(DEFINED CONFIG_BOARD_FATCAT_IT82002AW)
 	project(fatcat_it82002aw)
 	add_subdirectory(fatcat_it82002aw)
 endif()
+
+if(DEFINED CONFIG_BOARD_FRANCKA)
+	project(francka)
+	add_subdirectory(francka)
+	zephyr_library_sources(
+			"francka/src/touch_panel.c"
+			"francka/src/board_power.c"
+			"francka/src/alt_charger.c"
+	)
+endif()

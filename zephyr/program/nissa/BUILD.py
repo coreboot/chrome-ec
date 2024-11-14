@@ -197,6 +197,11 @@ teliks = register_nissa_project(
     chip="it8xxx2/it81302bx",
 )
 
+telith = register_nissa_project(
+    project_name="telith",
+    chip="it8xxx2/it81302bx",
+)
+
 register_ish_project(
     project_name="orisa-ish",
     zephyr_board="intel_ish_5_4_1",
@@ -206,6 +211,11 @@ register_ish_project(
     kconfig_files=[
         here / "orisa-ish" / "prj.conf",
     ],
+)
+
+rull = register_nissa_project(
+    project_name="rull",
+    chip="it8xxx2/it81302bx",
 )
 
 # Note for reviews, do not let anyone edit these assertions, the addresses
@@ -237,3 +247,5 @@ assert_rw_fwid_DO_NOT_EDIT(project_name="sundance", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="riven", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="domika", addr=0xB7FE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="teliks", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="rull", addr=0xBFFE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="telith", addr=0xBFFE0)

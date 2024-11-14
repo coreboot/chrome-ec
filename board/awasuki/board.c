@@ -90,6 +90,34 @@ static void backlight_interrupt(enum gpio_signal s)
 	gpio_set_level(GPIO_EC_PPVAR_BLPWR, 1);
 }
 
+static void check_audio_jack(void);
+DECLARE_DEFERRED(check_audio_jack);
+
+static void check_audio_jack(void)
+{
+	enum power_state powerstate;
+
+	powerstate = power_get_state();
+
+	if (powerstate == POWER_S0 || powerstate == POWER_S3S0) {
+		if (gpio_get_level(GPIO_JACK_DETECT))
+			gpio_set_level(GPIO_LOADING_ENABLE, 0);
+		else
+			gpio_set_level(GPIO_LOADING_ENABLE, 1);
+	} else {
+		gpio_set_level(GPIO_LOADING_ENABLE, 0);
+	}
+}
+
+DECLARE_HOOK(HOOK_INIT, check_audio_jack, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_RESUME, check_audio_jack, HOOK_PRIO_DEFAULT);
+DECLARE_HOOK(HOOK_CHIPSET_SUSPEND, check_audio_jack, HOOK_PRIO_DEFAULT);
+
+static void audio_jack_interrupt(enum gpio_signal s)
+{
+	hook_call_deferred(&check_audio_jack_data, INT_RECHECK_US);
+}
+
 /* Must come after other header files and interrupt handler declarations */
 #include "gpio_list.h"
 
@@ -362,6 +390,7 @@ void board_init(void)
 
 	gpio_enable_interrupt(GPIO_USB_C0_CCSBU_OVP_ODL);
 	gpio_enable_interrupt(GPIO_VBL_PD_OD);
+	gpio_enable_interrupt(GPIO_JACK_DETECT);
 
 	/* Turn on 5V if the system is on, otherwise turn it off */
 	on = chipset_in_state(CHIPSET_STATE_ON | CHIPSET_STATE_ANY_SUSPEND |
@@ -372,3 +401,58 @@ void board_init(void)
 	setup_thermal();
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
+
+static int svdm_identity(int port, uint32_t *payload)
+{
+	/* The SVID in the Discover Identity Command request Shall be set to the
+	 * PD SID */
+	if (PD_VDO_VID(payload[VDO_INDEX_HDR]) != USB_SID_PD) {
+		return 0;
+	}
+
+	payload[VDO_I(CSTAT)] = VDO_CSTAT(CONFIG_USB_PD_XID);
+	payload[VDO_I(PRODUCT)] =
+		VDO_PRODUCT(CONFIG_USB_PID, CONFIG_USB_BCD_DEV);
+
+	if (pd_get_rev(port, TCPCI_MSG_SOP) < PD_REV30) {
+		payload[VDO_I(IDH)] = VDO_IDH(1, /* USB host */
+					      0, /* Not a USB device */
+					      IDH_PTYPE_UNDEF, /* Not a UFP */
+					      0, /* No alt modes (not a UFP) */
+					      CONFIG_USB_VID);
+
+		return VDO_I(PRODUCT) + 1;
+	} else {
+		payload[VDO_I(IDH)] =
+			VDO_IDH_REV30(1, /* USB host */
+				      0, /* Not a USB device */
+				      IDH_PTYPE_UNDEF, /* Not a UFP */
+				      0, /* No alt modes (not a UFP) */
+				      IDH_PTYPE_DFP_HOST, /* PDUSB host */
+				      USB_TYPEC_RECEPTACLE, CONFIG_USB_VID);
+
+		/* Single VDO for DFP product type */
+		payload[VDO_I(PRODUCT) + 1] =
+			VDO_DFP(VDO_DFP_HOST_CAPABILITY_USB32,
+				USB_TYPEC_RECEPTACLE, port);
+
+		return VDO_I(PRODUCT) + 2;
+	}
+}
+
+/* 6.4.4.3.2 A Responder that does not support any SVIDs Shall return a NAK.*/
+static int svdm_svids(int port, uint32_t *payload)
+{
+	return 0;
+}
+
+__override const struct svdm_response svdm_rsp = {
+	.identity = svdm_identity,
+	.svids = svdm_svids,
+	/*
+	 * Discover Identity support is required for devices with more than one
+	 * DFP, but other SVDM commands are optional. We don't support operating
+	 * as Responder in any mode, so leave them unimplemented. See 6.13.5,
+	 * Applicability of Structured VDM Commands.
+	 */
+};

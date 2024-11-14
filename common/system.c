@@ -5,12 +5,6 @@
 
 /* System module for Chrome EC : common functions */
 
-/*
- * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
- * #line marks the *next* line, so it is off by one.
- */
-#line 13
-
 #include "battery.h"
 #include "charge_manager.h"
 #include "chipset.h"
@@ -46,12 +40,6 @@
 #include "usb_pd_tcpm.h"
 #include "util.h"
 #include "watchdog.h"
-
-/*
- * TODO(b/272518464): Work around coreboot GCC preprocessor bug.
- * #line marks the *next* line, so it is off by one.
- */
-#line 55
 
 /* Console output macros */
 #define CPUTS(outstr) cputs(CC_SYSTEM, outstr)
@@ -844,7 +832,7 @@ const char *system_get_cros_fwid(enum ec_image copy)
 }
 
 #ifdef CONFIG_ROLLBACK
-int32_t system_get_rollback_version(enum ec_image copy)
+test_mockable int32_t system_get_rollback_version(enum ec_image copy)
 {
 	const struct image_data *data = system_get_image_data(copy);
 

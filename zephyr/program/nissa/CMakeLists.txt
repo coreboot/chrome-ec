@@ -245,6 +245,7 @@ if(DEFINED CONFIG_BOARD_GLASSWAY)
 	zephyr_library_sources(
 			"glassway/src/sub_board.c"
 			"glassway/src/kb_backlight.c"
+			"glassway/src/board.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_FAN "glassway/src/fan.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "glassway/src/usbc.c")
@@ -311,6 +312,33 @@ if(DEFINED CONFIG_BOARD_TELIKS)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "teliks/src/charger.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
 			"teliks/src/keyboard_customization.c"
+	)
+endif()
+if(DEFINED CONFIG_BOARD_RULL)
+	project(rull)
+	zephyr_include_directories("rull/include")
+	zephyr_library_sources(
+			"rull/src/board.c"
+			"rull/src/sub_board.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "rull/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "rull/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
+			"rull/src/keyboard_customization.c"
+	)
+endif()
+if(DEFINED CONFIG_BOARD_TELITH)
+	project(telith)
+	zephyr_include_directories("telith/include")
+	zephyr_library_sources(
+			"telith/src/board_als.c"
+			"telith/src/board.c"
+			"telith/src/prochot.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "telith/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "telith/src/charger.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_CUSTOMIZATION
+			"telith/src/keyboard_customization.c"
 	)
 endif()
 if(DEFINED CONFIG_BOARD_INTEL_ISH_5_4_1)

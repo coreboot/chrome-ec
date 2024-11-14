@@ -14,6 +14,22 @@
 	rauru-fw-config {
 		compatible = "cros-ec,cbi-fw-config";
 
+		pdc {
+			enum-name = "FW_PDC";
+			start = <12>;
+			size = <1>;
+			pdc-not-present {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_PDC_NOT_PRESENT";
+				value = <0>;
+				default;
+			};
+			pdc-present {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_PDC_PRESENT";
+				value = <1>;
+			};
+		};
 		hdmi {
 			enum-name = "FW_HDMI";
 			start = <13>;

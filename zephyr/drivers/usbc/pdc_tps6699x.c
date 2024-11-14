@@ -118,6 +118,8 @@ enum cmd_t {
 	CMD_GET_CURRENT_PARTNER_SRC_PDO,
 	/** Set the Rp TypeC current */
 	CMD_SET_TPC_RP,
+	/** Set Fast Role Swap */
+	CMD_SET_FRS,
 	/** set Retimer into FW Update Mode */
 	CMD_SET_RETIMER_FW_UPDATE_MODE,
 	/** Get the cable properties */
@@ -214,6 +216,8 @@ struct pdc_data_t {
 	union reg_port_control pdc_port_control;
 	/** TypeC current */
 	enum port_control_typec_current_t tcc;
+	/** Fast Role Swap flag */
+	bool fast_role_swap;
 	/** Sink FET enable */
 	bool snk_fet_en;
 	/** Update retimer enable */
@@ -284,6 +288,7 @@ static const struct smf_state states[];
 
 static void cmd_set_drp_mode(struct pdc_data_t *data);
 static void cmd_set_tpc_rp(struct pdc_data_t *data);
+static void cmd_set_frs(struct pdc_data_t *data);
 static void cmd_get_rdo(struct pdc_data_t *data);
 static void cmd_set_rdo(struct pdc_data_t *data);
 static void cmd_set_src_pdos(struct pdc_data_t *data);
@@ -291,7 +296,6 @@ static void cmd_set_snk_pdos(struct pdc_data_t *data);
 static void cmd_get_ic_status(struct pdc_data_t *data);
 static int cmd_get_ic_status_sync_internal(struct pdc_config_t const *cfg,
 					   struct pdc_info_t *info);
-static void cmd_get_vbus_voltage(struct pdc_data_t *data);
 static void cmd_get_vdo(struct pdc_data_t *data);
 static void cmd_get_identity_discovery(struct pdc_data_t *data);
 static void cmd_get_pdc_data_status_reg(struct pdc_data_t *data);
@@ -323,6 +327,7 @@ static void set_state(struct pdc_data_t *data, const enum state_t next_state)
 	 * on transitions.
 	 */
 	switch (next_state) {
+	case ST_INIT:
 	case ST_TASK_WAIT:
 	case ST_ERROR_RECOVERY:
 	case ST_IRQ:
@@ -418,9 +423,8 @@ static void st_irq_run(void *o)
 	 * written too, or read from, and byte-1 contains the length of said
 	 * data. The actual data starts at index 2. */
 	LOG_DBG("IRQ PORT %d", cfg->connector_number);
-	for (i = RV_DATA_START; i < sizeof(union reg_interrupt); i++) {
-		LOG_DBG("Byte%d: %02x", i - RV_DATA_START,
-			pdc_interrupt.raw_value[i]);
+	for (i = 0; i < sizeof(union reg_interrupt); i++) {
+		LOG_DBG("Byte%d: %02x", i, pdc_interrupt.raw_value[i]);
 		if (pdc_interrupt.raw_value[i]) {
 			interrupt_pending = true;
 		}
@@ -459,6 +463,17 @@ static void st_irq_run(void *o)
 
 		/* Inform the subsystem of the event */
 		call_cci_event_cb(data);
+
+		/*
+		 * Check if interrupt is still active. It's possible that the
+		 * PDC will set another bit in the interrupt status register
+		 * between the time when the EC reads this register and clears
+		 * these status bits above. If there is still another interrupt
+		 * pending, then the interrupt line will still be active.
+		 */
+		if (gpio_pin_get_dt(&cfg->irq_gpios)) {
+			k_event_post(&data->pdc_event, PDC_IRQ_EVENT);
+		}
 	}
 
 	/* All done, transition back to idle state */
@@ -605,13 +620,11 @@ static void st_idle_run(void *o)
 				cmd_set_snk_pdos(data);
 			break;
 		case CMD_GET_CONNECTOR_STATUS:
+		case CMD_GET_VBUS_VOLTAGE:
 			task_ucsi(data, UCSI_GET_CONNECTOR_STATUS);
 			break;
 		case CMD_GET_ERROR_STATUS:
 			task_ucsi(data, UCSI_GET_ERROR_STATUS);
-			break;
-		case CMD_GET_VBUS_VOLTAGE:
-			cmd_get_vbus_voltage(data);
 			break;
 		case CMD_GET_IC_STATUS:
 			cmd_get_ic_status(data);
@@ -636,6 +649,9 @@ static void st_idle_run(void *o)
 			break;
 		case CMD_SET_TPC_RP:
 			cmd_set_tpc_rp(data);
+			break;
+		case CMD_SET_FRS:
+			cmd_set_frs(data);
 			break;
 		case CMD_SET_DRP_MODE:
 			cmd_set_drp_mode(data);
@@ -724,7 +740,14 @@ static void st_suspended_run(void *o)
 {
 	struct pdc_data_t *data = (struct pdc_data_t *)o;
 
-	k_event_clear(&data->pdc_event, PDC_CMD_SUSPEND_REQUEST_EVENT);
+	if (data->events & PDC_IRQ_EVENT) {
+		LOG_INF("IRQ in suspend state");
+		k_event_clear(&data->pdc_event, PDC_IRQ_EVENT);
+	}
+
+	if (data->events & PDC_CMD_SUSPEND_REQUEST_EVENT) {
+		k_event_clear(&data->pdc_event, PDC_CMD_SUSPEND_REQUEST_EVENT);
+	}
 
 	/* Stay here while suspended */
 	if (check_comms_suspended()) {
@@ -794,6 +817,42 @@ static void cmd_set_tpc_rp(struct pdc_data_t *data)
 	}
 
 	pdc_port_control.typec_current = data->tcc;
+
+	/* Write PDC port control */
+	rv = tps_rw_port_control(&cfg->i2c, &pdc_port_control, I2C_MSG_WRITE);
+	if (rv) {
+		LOG_ERR("Write port control failed");
+		goto error_recovery;
+	}
+
+	/* Command has completed */
+	data->cci_event.command_completed = 1;
+	/* Inform the system of the event */
+	call_cci_event_cb(data);
+
+	/* Transition to idle state */
+	set_state(data, ST_IDLE);
+	return;
+
+error_recovery:
+	set_state(data, ST_ERROR_RECOVERY);
+}
+
+static void cmd_set_frs(struct pdc_data_t *data)
+{
+	struct pdc_config_t const *cfg = data->dev->config;
+	union reg_port_control pdc_port_control;
+	int rv;
+
+	/* Read PDC port control */
+	rv = tps_rw_port_control(&cfg->i2c, &pdc_port_control, I2C_MSG_READ);
+	if (rv) {
+		LOG_ERR("Read port control failed");
+		goto error_recovery;
+	}
+
+	LOG_INF("SET FRS %d", data->fast_role_swap);
+	pdc_port_control.fr_swap_enabled = data->fast_role_swap;
 
 	/* Write PDC port control */
 	rv = tps_rw_port_control(&cfg->i2c, &pdc_port_control, I2C_MSG_WRITE);
@@ -1231,9 +1290,11 @@ static int cmd_get_ic_status_sync_internal(struct pdc_config_t const *cfg,
 	/* TI FW main version */
 	info->fw_version = version.version;
 
-	/* TI VID PID (little-endian) */
-	info->vid_pid = (*(uint16_t *)tx_identity.vendor_id) << 16 |
-			*(uint16_t *)tx_identity.product_id;
+	/* TI VID (little-endian) */
+	info->vid = *(uint16_t *)tx_identity.vendor_id;
+
+	/* TI PID (little-endian) */
+	info->pid = *(uint16_t *)tx_identity.product_id;
 
 	/* TI Running flash bank offset */
 	info->running_in_flash_bank = 0;
@@ -1295,40 +1356,6 @@ error_recovery:
 	set_state(data, ST_ERROR_RECOVERY);
 }
 
-static void cmd_get_vbus_voltage(struct pdc_data_t *data)
-{
-	struct pdc_config_t const *cfg = data->dev->config;
-	union reg_adc_results adc_results;
-
-	uint16_t *vbus = (uint16_t *)data->user_buf;
-	int rv;
-
-	if (data->user_buf == NULL) {
-		LOG_ERR("Null user buffer; can't read VBUS voltage");
-		goto error_recovery;
-	}
-
-	rv = tps_rd_adc_results(&cfg->i2c, &adc_results);
-	if (rv) {
-		LOG_ERR("Failed to read ADC results");
-		goto error_recovery;
-	}
-
-	*vbus = cfg->connector_number ? adc_results.pa_vbus :
-					adc_results.pb_vbus;
-
-	/* Command has completed */
-	data->cci_event.command_completed = 1;
-	/* Inform the system of the event */
-	call_cci_event_cb(data);
-
-	set_state(data, ST_IDLE);
-	return;
-
-error_recovery:
-	set_state(data, ST_ERROR_RECOVERY);
-}
-
 static void cmd_get_pdc_data_status_reg(struct pdc_data_t *data)
 {
 	struct pdc_config_t const *cfg = data->dev->config;
@@ -1347,12 +1374,7 @@ static void cmd_get_pdc_data_status_reg(struct pdc_data_t *data)
 		goto error_recovery;
 	}
 
-	/* Copy over the 5 status bytes, skipping the reg and length bytes */
-	data->user_buf[0] = data_status.raw_value[2];
-	data->user_buf[1] = data_status.raw_value[3];
-	data->user_buf[2] = data_status.raw_value[4];
-	data->user_buf[3] = data_status.raw_value[5];
-	data->user_buf[4] = data_status.raw_value[6];
+	memcpy(data->user_buf, data_status.raw_value, sizeof(data_status));
 
 	/* Command has completed */
 	data->cci_event.command_completed = 1;
@@ -1673,39 +1695,46 @@ static void st_task_wait_run(void *o)
 		offset = 1;
 		len = sizeof(union connector_capability_t);
 		break;
-	case UCSI_GET_CONNECTOR_STATUS:
+	case UCSI_GET_CONNECTOR_STATUS: {
 		offset = 1;
-		len = sizeof(union connector_status_t);
-		if (((union connector_status_t *)&cmd_data.data[offset])
-			    ->conn_partner_type == DEBUG_ACCESSORY_ATTACHED) {
-			union reg_status pdc_status;
-			rv = tps_rd_status(&cfg->i2c, &pdc_status);
-			if (!rv) {
-				((union connector_status_t *)&cmd_data
-					 .data[offset])
-					->conn_partner_type =
-					(pdc_status.data_role ? UFP_ATTACHED :
-								DFP_ATTACHED);
+		union connector_status_t *cs =
+			(union connector_status_t *)&cmd_data.data[offset];
+		if (data->cmd == CMD_GET_VBUS_VOLTAGE) {
+			uint16_t *voltage = (uint16_t *)data->user_buf;
+			len = 0;
+			*voltage = cs->voltage_reading * cs->voltage_scale * 5;
+		} else {
+			len = sizeof(union connector_status_t);
+			if (cs->conn_partner_type == DEBUG_ACCESSORY_ATTACHED) {
+				union reg_status pdc_status;
+				rv = tps_rd_status(&cfg->i2c, &pdc_status);
+				if (!rv) {
+					cs->conn_partner_type =
+						(pdc_status.data_role ?
+							 UFP_ATTACHED :
+							 DFP_ATTACHED);
+				}
 			}
-		}
 
-		/* If we had previously cached the connection status change,
-		 * append those bits in GET_CONNECTOR_STATUS. The PDC clears
-		 * these after the first read but we want these to be visible
-		 * until they are ACK-ed.
-		 */
-		if (data->use_cached_conn_status_change) {
-			*((uint16_t *)&cmd_data.data[offset]) |=
-				data->cached_conn_status
-					.raw_conn_status_change_bits;
-		}
+			/* If we had previously cached the connection status
+			 * change, append those bits in GET_CONNECTOR_STATUS.
+			 * The PDC clears these after the first read but we want
+			 * these to be visible until they are ACK-ed.
+			 */
+			if (data->use_cached_conn_status_change) {
+				cs->raw_conn_status_change_bits |=
+					data->cached_conn_status
+						.raw_conn_status_change_bits;
+			}
 
-		/* Cache result of GET_CONNECTOR_STATUS and use this for
-		 * subsequent calls.
-		 */
-		memcpy(&data->cached_conn_status, &cmd_data.data[offset], len);
-		data->use_cached_conn_status_change = true;
+			/* Cache result of GET_CONNECTOR_STATUS and use this for
+			 * subsequent calls.
+			 */
+			data->cached_conn_status = *cs;
+			data->use_cached_conn_status_change = true;
+		}
 		break;
+	}
 	case UCSI_GET_CABLE_PROPERTY:
 		offset = 1;
 		len = sizeof(union cable_property_t);
@@ -1913,6 +1942,15 @@ static int tps_set_power_level(const struct device *dev,
 	return tps_post_command(dev, CMD_SET_TPC_RP, NULL);
 }
 
+static int tps_set_fast_role_swap(const struct device *dev, bool enable)
+{
+	struct pdc_data_t *data = dev->data;
+
+	data->fast_role_swap = enable;
+
+	return tps_post_command(dev, CMD_SET_FRS, NULL);
+}
+
 static int tps_set_sink_path(const struct device *dev, bool en)
 {
 	struct pdc_data_t *data = dev->data;
@@ -1984,6 +2022,14 @@ static int tps_set_pdos(const struct device *dev, enum pdo_type_t type,
 			uint32_t *pdo, int count)
 {
 	struct pdc_data_t *data = dev->data;
+
+	if (pdo == NULL) {
+		return -EINVAL;
+	}
+
+	if (count < 1 || count > 7) {
+		return -ERANGE;
+	}
 
 	data->pdo_type = type;
 	data->pdos = pdo;
@@ -2297,6 +2343,7 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.get_current_flash_bank = tps_get_current_flash_bank,
 	.update_retimer = tps_update_retimer_mode,
 	.execute_ucsi_cmd = tps_execute_ucsi_cmd,
+	.set_frs = tps_set_fast_role_swap,
 };
 
 static int pdc_interrupt_mask_init(struct pdc_data_t *data)
@@ -2309,7 +2356,6 @@ static int pdc_interrupt_mask_init(struct pdc_data_t *data)
 		.fr_swap_complete = 1,
 		.data_swap_complete = 1,
 		.ucsi_connector_status_change_notification = 1,
-		.status_updated = 1,
 		.power_event_occurred_error = 1,
 		.externl_dcdc_event_received = 1,
 	};
@@ -2446,7 +2492,8 @@ static void tps_thread(void *dev, void *unused1, void *unused2)
 		/* Wait for event to handle */
 		data->events = k_event_wait(&data->pdc_event, PDC_ALL_EVENTS,
 					    false, K_FOREVER);
-		LOG_INF("tps_thread[%d]: events=0x%X", cfg->connector_number,
+		LOG_INF("tps_thread[%d][%s]: events=0x%X",
+			cfg->connector_number, state_names[get_state(data)],
 			data->events);
 
 		k_event_clear(&data->pdc_event, PDC_INTERNAL_EVENT);

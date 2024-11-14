@@ -4,27 +4,14 @@
  */
 
 #include "atomic.h"
-#include "clock.h"
 #include "common.h"
-#include "compile_time_macros.h"
-#include "console.h"
-#include "ec_commands.h"
 #include "fpsensor/fpsensor.h"
 #include "fpsensor/fpsensor_console.h"
-#include "fpsensor/fpsensor_crypto.h"
 #include "fpsensor/fpsensor_detect.h"
 #include "fpsensor/fpsensor_modes.h"
 #include "fpsensor/fpsensor_state.h"
 #include "fpsensor/fpsensor_utils.h"
-#include "gpio.h"
-#include "host_command.h"
-#include "link_defs.h"
-#include "mkbp_event.h"
-#include "overflow.h"
-#include "spi.h"
 #include "system.h"
-#include "task.h"
-#include "trng.h"
 #include "util.h"
 #include "watchdog.h"
 
@@ -101,7 +88,7 @@ static enum ec_error_list fp_console_action(uint32_t mode)
 		CPRINTS("Waiting for finger ...");
 
 	uint32_t mode_output = 0;
-	int rc = fp_set_sensor_mode(mode, &mode_output);
+	const int rc = fp_set_sensor_mode(mode, &mode_output);
 
 	if (rc != EC_RES_SUCCESS) {
 		/*
@@ -115,7 +102,7 @@ static enum ec_error_list fp_console_action(uint32_t mode)
 	while (tries--) {
 		if (!(global_context.sensor_mode & FP_MODE_ANY_CAPTURE)) {
 			CPRINTS("done (events:%x)",
-				(int)global_context.fp_events);
+				static_cast<int>(global_context.fp_events));
 			return EC_SUCCESS;
 		}
 		crec_usleep(100 * MSEC);
@@ -125,10 +112,8 @@ static enum ec_error_list fp_console_action(uint32_t mode)
 
 static int command_fpcapture(int argc, const char **argv)
 {
-#ifdef CONFIG_ZEPHYR
 	if (system_is_locked())
 		return EC_ERROR_ACCESS_DENIED;
-#endif
 
 	int capture_type = FP_CAPTURE_SIMPLE_IMAGE;
 
@@ -139,19 +124,18 @@ static int command_fpcapture(int argc, const char **argv)
 		if (*e || capture_type < 0)
 			return EC_ERROR_PARAM1;
 	}
-	uint32_t mode = FP_MODE_CAPTURE |
-			((capture_type << FP_MODE_CAPTURE_TYPE_SHIFT) &
-			 FP_MODE_CAPTURE_TYPE_MASK);
+	const uint32_t mode = FP_MODE_CAPTURE |
+			      ((capture_type << FP_MODE_CAPTURE_TYPE_SHIFT) &
+			       FP_MODE_CAPTURE_TYPE_MASK);
 
-	enum ec_error_list rc = fp_console_action(mode);
+	const enum ec_error_list rc = fp_console_action(mode);
 	if (rc == EC_SUCCESS)
 		upload_pgm_image(fp_buffer + FP_SENSOR_IMAGE_OFFSET);
 
 	return rc;
 }
-DECLARE_CONSOLE_COMMAND_FLAGS(fpcapture, command_fpcapture, NULL,
-			      "Capture fingerprint in PGM format",
-			      CMD_FLAG_RESTRICTED);
+DECLARE_CONSOLE_COMMAND(fpcapture, command_fpcapture, nullptr,
+			"Capture fingerprint in PGM format");
 
 /* Transfer a chunk of the image from the host to the FPMCU
  *
@@ -164,7 +148,7 @@ DECLARE_CONSOLE_COMMAND_FLAGS(fpcapture, command_fpcapture, NULL,
 static int command_fpupload(int argc, const char **argv)
 {
 	if (argc != 3)
-		return EC_ERROR_PARAM1;
+		return EC_ERROR_PARAM_COUNT;
 	if (system_is_locked())
 		return EC_ERROR_ACCESS_DENIED;
 	int offset = atoi(argv[1]);
@@ -176,15 +160,15 @@ static int command_fpupload(int argc, const char **argv)
 	while (*pixels_str) {
 		if (dest >= fp_buffer + FP_SENSOR_IMAGE_SIZE)
 			return EC_ERROR_PARAM1;
-		char hex_str[] = { pixels_str[0], pixels_str[1], '\0' };
-		*dest = static_cast<uint8_t>(strtol(hex_str, NULL, 16));
+		const char hex_str[] = { pixels_str[0], pixels_str[1], '\0' };
+		*dest = static_cast<uint8_t>(strtol(hex_str, nullptr, 16));
 		pixels_str += 2;
 		++dest;
 	}
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(fpupload, command_fpupload, NULL,
+DECLARE_CONSOLE_COMMAND(fpupload, command_fpupload, nullptr,
 			"Copy fp image onto fpmcu fpsensor buffer");
 
 /* Transfer an image from the FPMCU to the host
@@ -204,7 +188,7 @@ static int command_fpdownload(int argc, const char **argv)
 	upload_pgm_image(fp_buffer + FP_SENSOR_IMAGE_OFFSET);
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(fpdownload, command_fpdownload, NULL,
+DECLARE_CONSOLE_COMMAND(fpdownload, command_fpdownload, nullptr,
 			"Copy fp image from fpmcu fpsensor buffer");
 
 static int command_fpenroll(int argc, const char **argv)
@@ -214,10 +198,8 @@ static int command_fpenroll(int argc, const char **argv)
 	static const char *const enroll_str[] = { "OK", "Low Quality",
 						  "Immobile", "Low Coverage" };
 
-#ifdef CONFIG_ZEPHYR
 	if (system_is_locked())
 		return EC_ERROR_ACCESS_DENIED;
-#endif
 
 	do {
 		int tries = 1000;
@@ -226,7 +208,7 @@ static int command_fpenroll(int argc, const char **argv)
 				       FP_MODE_ENROLL_IMAGE);
 		if (rc != EC_SUCCESS)
 			break;
-		uint32_t event = atomic_clear(&global_context.fp_events);
+		const uint32_t event = atomic_clear(&global_context.fp_events);
 		percent = EC_MKBP_FP_ENROLL_PROGRESS(event);
 		CPRINTS("Enroll capture: %s (%d%%)",
 			enroll_str[EC_MKBP_FP_ERRCODE(event) & 3], percent);
@@ -243,8 +225,8 @@ static int command_fpenroll(int argc, const char **argv)
 
 	return rc;
 }
-DECLARE_CONSOLE_COMMAND_FLAGS(fpenroll, command_fpenroll, NULL,
-			      "Enroll a new fingerprint", CMD_FLAG_RESTRICTED);
+DECLARE_CONSOLE_COMMAND(fpenroll, command_fpenroll, nullptr,
+			"Enroll a new fingerprint");
 
 static int command_fpinfo(int argc, const char **argv)
 {
@@ -278,16 +260,19 @@ static int command_fpinfo(int argc, const char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_SAFE_CONSOLE_COMMAND(fpinfo, command_fpinfo, NULL,
+DECLARE_SAFE_CONSOLE_COMMAND(fpinfo, command_fpinfo, nullptr,
 			     "Print fingerprint system info");
 
 static int command_fpmatch(int argc, const char **argv)
 {
-	enum ec_error_list rc = fp_console_action(FP_MODE_MATCH);
-	uint32_t event = atomic_clear(&global_context.fp_events);
+	if (system_is_locked())
+		return EC_ERROR_ACCESS_DENIED;
+
+	const enum ec_error_list rc = fp_console_action(FP_MODE_MATCH);
+	const uint32_t event = atomic_clear(&global_context.fp_events);
 
 	if (rc == EC_SUCCESS && event & EC_MKBP_FP_MATCH) {
-		uint32_t match_errcode = EC_MKBP_FP_ERRCODE(event);
+		const uint32_t match_errcode = EC_MKBP_FP_ERRCODE(event);
 
 		CPRINTS("Match: %s (%d)",
 			fp_match_success(match_errcode) ? "YES" : "NO",
@@ -296,7 +281,7 @@ static int command_fpmatch(int argc, const char **argv)
 
 	return rc;
 }
-DECLARE_CONSOLE_COMMAND(fpmatch, command_fpmatch, NULL,
+DECLARE_CONSOLE_COMMAND(fpmatch, command_fpmatch, nullptr,
 			"Run match algorithm against finger");
 
 static int command_fpclear(int argc, const char **argv)
@@ -305,7 +290,7 @@ static int command_fpclear(int argc, const char **argv)
 	 * We intentionally run this on the fp_task so that we use the
 	 * same code path as host commands.
 	 */
-	enum ec_error_list rc = fp_console_action(FP_MODE_RESET_SENSOR);
+	const enum ec_error_list rc = fp_console_action(FP_MODE_RESET_SENSOR);
 
 	if (rc != EC_SUCCESS)
 		CPRINTS("Failed to clear fingerprint context: %d", rc);
@@ -314,14 +299,15 @@ static int command_fpclear(int argc, const char **argv)
 
 	return rc;
 }
-DECLARE_CONSOLE_COMMAND(fpclear, command_fpclear, NULL,
+DECLARE_CONSOLE_COMMAND(fpclear, command_fpclear, nullptr,
 			"Clear fingerprint sensor context");
 
 static int command_fpmaintenance(int argc, const char **argv)
 {
 #ifdef HAVE_FP_PRIVATE_DRIVER
 	uint32_t mode_output = 0;
-	int rc = fp_set_sensor_mode(FP_MODE_SENSOR_MAINTENANCE, &mode_output);
+	const int rc =
+		fp_set_sensor_mode(FP_MODE_SENSOR_MAINTENANCE, &mode_output);
 
 	if (rc != EC_RES_SUCCESS) {
 		/*
@@ -339,7 +325,7 @@ static int command_fpmaintenance(int argc, const char **argv)
 
 	return EC_SUCCESS;
 }
-DECLARE_CONSOLE_COMMAND(fpmaintenance, command_fpmaintenance, NULL,
+DECLARE_CONSOLE_COMMAND(fpmaintenance, command_fpmaintenance, nullptr,
 			"Run fingerprint sensor maintenance");
 
 #endif /* CONFIG_CMD_FPSENSOR_DEBUG */

@@ -318,6 +318,12 @@ config LINK_TEST_SUITE_USBC_VCONN_SWAP
 	help
 	  Include the test suite exercising VCONN Swap behaviors in the binary.
 
+config LINK_TEST_SUITE_USBC_FAKE_PDOS
+	bool "Link and test the usbc_fake_pdos tests"
+	help
+	  Include the test suite exercising non-standard PDO behaviors in the
+	  binary.
+
 config LINK_TEST_SUITE_CONSOLE
 	bool "Link and test the console tests"
 	select UART_INTERRUPT_DRIVEN

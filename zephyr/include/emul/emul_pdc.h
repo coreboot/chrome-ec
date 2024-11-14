@@ -94,6 +94,8 @@ typedef int (*emul_pdc_set_vconn_sourcing_t)(const struct emul *target,
 
 typedef int (*emul_pdc_set_cmd_error_t)(const struct emul *target,
 					bool enabled);
+typedef int (*emul_pdc_set_attention_vdo_t)(const struct emul *target,
+					    union get_attention_vdo_t);
 
 __subsystem struct emul_pdc_api_t {
 	emul_pdc_set_response_delay_t set_response_delay;
@@ -130,6 +132,7 @@ __subsystem struct emul_pdc_api_t {
 	emul_pdc_idle_wait_t idle_wait;
 	emul_pdc_set_vconn_sourcing_t set_vconn_sourcing;
 	emul_pdc_set_cmd_error_t set_cmd_error;
+	emul_pdc_set_attention_vdo_t set_attention_vdo;
 };
 
 static inline int emul_pdc_set_ucsi_version(const struct emul *target,
@@ -600,18 +603,34 @@ static inline void
 emul_pdc_configure_src(const struct emul *target,
 		       union connector_status_t *connector_status)
 {
-	ARG_UNUSED(target);
+	uint32_t partner_pdos[] = {
+		PDO_FIXED(5000, 3000, 0),
+		PDO_FIXED(12000, 3000, 0),
+		PDO_FIXED(20000, 5000, 0),
+	};
+
 	connector_status->power_operation_mode = PD_OPERATION;
 	connector_status->power_direction = 1;
+
+	emul_pdc_set_pdos(target, SOURCE_PDO, PDO_OFFSET_0,
+			  ARRAY_SIZE(partner_pdos), PARTNER_PDO, partner_pdos);
 }
 
 static inline void
 emul_pdc_configure_snk(const struct emul *target,
 		       union connector_status_t *connector_status)
 {
-	ARG_UNUSED(target);
+	uint32_t partner_pdos[] = {
+		PDO_FIXED(5000, 3000, 0),
+		PDO_FIXED(12000, 3000, 0),
+		PDO_FIXED(20000, 5000, 0),
+	};
+
 	connector_status->power_operation_mode = PD_OPERATION;
 	connector_status->power_direction = 0;
+
+	emul_pdc_set_pdos(target, SOURCE_PDO, PDO_OFFSET_0,
+			  ARRAY_SIZE(partner_pdos), PARTNER_PDO, partner_pdos);
 }
 
 static inline int
@@ -697,6 +716,21 @@ static inline int emul_pdc_set_cmd_error(const struct emul *target,
 
 	if (api->set_cmd_error) {
 		return api->set_cmd_error(target, enabled);
+	}
+	return -ENOSYS;
+}
+
+static inline int
+emul_pdc_set_attention_vdo(const struct emul *target,
+			   union get_attention_vdo_t attention_vdo)
+{
+	if (!target || !target->backend_api) {
+		return -ENOTSUP;
+	}
+
+	const struct emul_pdc_api_t *api = target->backend_api;
+	if (api->set_attention_vdo) {
+		return api->set_attention_vdo(target, attention_vdo);
 	}
 	return -ENOSYS;
 }

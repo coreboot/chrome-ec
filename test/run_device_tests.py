@@ -42,6 +42,9 @@ Run the script on the remote machine:
 # TODO(b/267803007): refactor into multiple modules
 # pylint: disable=too-many-lines
 
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
 import argparse
 from collections import namedtuple
 import concurrent
@@ -61,7 +64,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import BinaryIO, Callable, Dict, List, Optional, Tuple
+from typing import BinaryIO, Callable, Optional
 
 # pylint: disable=import-error
 import colorama  # type: ignore[import]
@@ -169,6 +172,12 @@ BLOONCHIPPER_V4277_IMAGE_PATH = os.path.join(
 BLOONCHIPPER_V5938_IMAGE_PATH = os.path.join(
     TEST_ASSETS_BUCKET, "bloonchipper_v2.0.5938-197506c1.bin"
 )
+BUCCANEER_IMAGE_PATH = os.path.join(
+    TEST_ASSETS_BUCKET, "buccaneer_v2.0.26328-821504380b.bin"
+)
+HELIPILOT_IMAGE_PATH = os.path.join(
+    TEST_ASSETS_BUCKET, "helipilot_v2.0.24337-2726e9f149.bin"
+)
 
 RangedValue = namedtuple("RangedValue", "nominal range")
 PowerUtilization = namedtuple("PowerUtilization", "idle sleep")
@@ -207,18 +216,253 @@ class BoardConfig:
     sensor_type: FPSensorType
     servo_uart_name: str
     servo_power_enable: str
-    rollback_region0_regex: object
-    rollback_region1_regex: object
-    mpu_regex: object
+    rollback_region0_regex: re.Pattern[str]
+    rollback_region1_regex: re.Pattern[str]
+    mpu_regex: re.Pattern[str]
     reboot_timeout: float
     fp_power_supply: str
     mcu_power_supply: str
     expected_fp_power: PowerUtilization
     expected_mcu_power: PowerUtilization
-    variants: Dict
-    expected_fp_power_zephyr: PowerUtilization = None
-    expected_mcu_power_zephyr: PowerUtilization = None
-    zephyr_board_name: str = None
+    variants: dict[str, dict[str, str]]
+    expected_fp_power_zephyr: Optional[PowerUtilization] = None
+    expected_mcu_power_zephyr: Optional[PowerUtilization] = None
+    zephyr_board_name: Optional[str] = None
+
+
+class Platform(ABC):
+    """Platform-specific methods."""
+
+    @abstractmethod
+    def get_console(self, board_config: BoardConfig) -> Optional[str]:
+        """Get the name of the console for a given board."""
+
+    @abstractmethod
+    def hw_write_protect(self, enable: bool) -> None:
+        """Enable/disable hardware write protect."""
+
+    @abstractmethod
+    def power(self, board_config: BoardConfig, power_on: bool) -> None:
+        """Turn power to board on/off."""
+
+    @abstractmethod
+    def flash(
+        self,
+        image_path: str,
+        board: str,
+        flasher: str,
+        remote_ip: str,
+        remote_port: int,
+        build_board: str,
+        test_name: str,
+        enable_hw_write_protect: bool,
+    ) -> bool:
+        """Flash specified test to specified board."""
+
+    @abstractmethod
+    def cleanup(self) -> None:
+        """Clean up after a test run."""
+
+    @abstractmethod
+    def skip_test(
+        self, test_name: str, board_config: BoardConfig, zephyr: bool
+    ) -> bool:
+        """Returns true if the given test should be skipped."""
+
+
+class Hardware(Platform):
+    """Platform implementation for running on development boards."""
+
+    def get_console(self, board_config: BoardConfig) -> Optional[str]:
+        cmd = [
+            "dut-control",
+            board_config.servo_uart_name,
+        ]
+        logging.debug('Running command: "%s"', " ".join(cmd))
+
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE) as proc:
+            for line in io.TextIOWrapper(proc.stdout):  # type: ignore[arg-type]
+                logging.debug(line)
+                pty = line.split(":")
+                if len(pty) == 2 and pty[0] == board_config.servo_uart_name:
+                    return pty[1].strip()
+
+        return None
+
+    def hw_write_protect(self, enable: bool) -> None:
+        if enable:
+            state = "force_on"
+        else:
+            state = "force_off"
+
+        cmd = [
+            "dut-control",
+            "fw_wp_state:" + state,
+        ]
+        logging.debug('Running command: "%s"', " ".join(cmd))
+        subprocess.run(cmd, check=False).check_returncode()
+
+    def power(self, board_config: BoardConfig, power_on: bool) -> None:
+        if power_on:
+            state = "pp3300"
+        else:
+            state = "off"
+
+        cmd = [
+            "dut-control",
+            board_config.servo_power_enable + ":" + state,
+        ]
+        logging.debug('Running command: "%s"', " ".join(cmd))
+        subprocess.run(cmd, check=False).check_returncode()
+
+    def flash(
+        self,
+        image_path: str,
+        board: str,
+        flasher: str,
+        remote_ip: str,
+        remote_port: int,
+        build_board: str,
+        test_name: str,
+        enable_hw_write_protect: bool,
+    ) -> bool:
+        logging.info("Flashing test")
+
+        cmd = []
+        if flasher == JTRACE:
+            cmd.append(JTRACE_FLASH_SCRIPT)
+            if remote_ip:
+                cmd.extend(["--remote", remote_ip + ":" + str(remote_port)])
+        elif flasher == SERVO_MICRO:
+            cmd.append(SERVO_MICRO_FLASH_SCRIPT)
+        else:
+            logging.error('Unknown flasher: "%s"', flasher)
+            return False
+        cmd.extend(
+            [
+                "--board",
+                board,
+                "--image",
+                image_path,
+            ]
+        )
+        logging.debug('Running command: "%s"', " ".join(cmd))
+        completed_process = subprocess.run(cmd, check=False)
+        return completed_process.returncode == 0
+
+    def cleanup(self) -> None:
+        pass
+
+    def skip_test(
+        self, test_name: str, board_config: BoardConfig, zephyr: bool
+    ) -> bool:
+        return False
+
+
+class Renode(Platform):
+    """Platform implementation for running on Renode emulator."""
+
+    def __init__(self):
+        self.process = None
+
+    def get_console(self, board_config: BoardConfig) -> Optional[str]:
+        return "/tmp/renode-uart"
+
+    def hw_write_protect(self, enable: bool) -> None:
+        pass
+
+    def power(self, board_config: BoardConfig, power_on: bool) -> None:
+        pass
+
+    def flash(
+        self,
+        image_path: str,
+        board: str,
+        flasher: str,
+        remote_ip: str,
+        remote_port: int,
+        build_board: str,
+        test_name: str,
+        enable_hw_write_protect: bool,
+    ) -> bool:
+        cmd = ["./util/renode-ec-launch", build_board, test_name]
+        if enable_hw_write_protect:
+            cmd.append("--enable-write-protect")
+
+        # pylint: disable-next=consider-using-with
+        self.process = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE
+        )
+        time.sleep(10)
+        return True
+
+    def cleanup(self) -> None:
+        self.process.kill()
+
+    def skip_test(
+        self, test_name: str, board_config: BoardConfig, zephyr: bool
+    ) -> bool:
+        if board_config.name in [BLOONCHIPPER, DARTMONKEY]:
+            if board_config.name == BLOONCHIPPER:
+                if test_name in [
+                    "timer",  # TODO(b/372968708)
+                ]:
+                    return True
+                if zephyr and test_name in [
+                    "abort",
+                    "assert_builtin",
+                    "assert_stdlib",
+                    "exit",
+                    "fp_transport",
+                    "fpsensor_debug",
+                    "ftrapv",
+                    "panic",
+                    "panic_data",
+                    "rollback",
+                    "stdlib",
+                    "utils_str",
+                ]:
+                    return True
+            # TODO(b/356476313): Remove these when Renode is fixed.
+            if test_name in [
+                "production_app_test",
+                "benchmark",
+                "exception",
+                "fpsensor_hw",
+                "libcxx",
+                "power_utilization",
+                "rtc_stm32f4",
+                "std_vector",
+                "timer_dos",  # TODO(b/374798079)
+            ]:
+                return True
+        elif board_config.name in [HELIPILOT, BUCCANEER]:
+            if test_name in [
+                "production_app_test",
+                "benchmark",
+                "exception",
+                "exit",
+                "flash_physical",
+                "flash_write_protect",
+                "fpsensor_hw",
+                "fp_transport",
+                "libcxx",
+                "malloc",
+                "mpu",
+                "otp_key",
+                "power_utilization",
+                "ram_lock",
+                "rollback",
+                "rollback_entropy",
+                "rtc_npcx9",
+                "sbrk",
+                "std_vector",
+                "fpsensor_auth_crypto_stateless",  # TODO(b/372969110)
+                "unaligned_access_benchmark",  # TODO(372969629)
+            ]:
+                return True
+
+        return False
 
 
 @dataclass
@@ -229,23 +473,22 @@ class TestConfig:
     test_name: str
     imagetype_to_use: ImageType = ImageType.RW
     apptype_to_use: ApplicationType = ApplicationType.TEST
-    finish_regexes: List = None
-    fail_regexes: List = None
+    finish_regexes: Optional[list[re.Pattern[str]]] = None
+    fail_regexes: Optional[list[re.Pattern[str]]] = None
     toggle_power: bool = False
-    test_args: List[str] = field(default_factory=list)
-    num_flash_attempts: int = 2
-    timeout_secs: int = 10
+    test_args: list[str] = field(default_factory=list)
+    timeout_secs: int = 60
     enable_hw_write_protect: bool = False
-    ro_image: str = None
-    build_board: str = None
-    config_name: str = None
-    exclude_boards: List = field(default_factory=list)
-    logs: List = field(init=False, default_factory=list)
+    ro_image: Optional[str] = None
+    build_board: Optional[str] = None
+    config_name: Optional[str] = None
+    exclude_boards: list = field(default_factory=list)
+    logs: list = field(init=False, default_factory=list)
     passed: bool = field(init=False, default=False)
     num_passes: int = field(init=False, default=0)
     num_fails: int = field(init=False, default=0)
     skip_for_zephyr: bool = False
-    zephyr_name: str = None
+    zephyr_name: Optional[str] = None
 
     # The callbacks below are called before and after a test is executed and
     # may be used for additional test setup, post test activities, or other tasks
@@ -277,13 +520,16 @@ class AllTests:
 
     @staticmethod
     def get(
-        board_config: BoardConfig, with_private: str, zephyr: bool
-    ) -> List[TestConfig]:
+        platform: Platform,
+        board_config: BoardConfig,
+        with_private: str,
+        zephyr: bool,
+    ) -> list[TestConfig]:
         """Return public and private test configs for the specified board."""
         public_tests = (
             []
             if with_private == PRIVATE_ONLY
-            else AllTests.get_public_tests(board_config)
+            else AllTests.get_public_tests(platform, board_config)
         )
         private_tests = (
             [] if with_private == PRIVATE_NO else AllTests.get_private_tests()
@@ -304,7 +550,9 @@ class AllTests:
         return board_tests
 
     @staticmethod
-    def get_public_tests(board_config: BoardConfig) -> List[TestConfig]:
+    def get_public_tests(
+        platform: Platform, board_config: BoardConfig
+    ) -> list[TestConfig]:
         """Return public test configs for the specified board."""
         tests = [
             TestConfig(
@@ -380,10 +628,13 @@ class AllTests:
             TestConfig(test_name="fpsensor_crypto"),
             TestConfig(test_name="fpsensor_debug"),
             TestConfig(
-                test_name="fpsensor_hw", pre_test_callback=fp_sensor_sel
+                test_name="fpsensor_hw",
+                pre_test_callback=lambda config: fp_sensor_sel(
+                    platform=platform, board_config=config
+                ),
             ),
             TestConfig(test_name="fpsensor_utils"),
-            TestConfig(test_name="ftrapv"),
+            TestConfig(test_name="ftrapv", timeout_secs=60),
             TestConfig(
                 test_name="libc_printf",
                 finish_regexes=[PRINTF_CALLED_REGEX],
@@ -415,6 +666,14 @@ class AllTests:
                 exclude_boards=[BLOONCHIPPER, DARTMONKEY],
             ),
             TestConfig(test_name="panic"),
+            TestConfig(
+                config_name="panic_data",
+                test_name="panic_data",
+                fail_regexes=[
+                    SINGLE_CHECK_FAILED_REGEX,
+                    ALL_TESTS_FAILED_REGEX,
+                ],
+            ),
             # Task synchronization covered by Zephyr tests and shim layer by unit tests.
             # task_wait_event is implemented based on k_poll_event and it is verified by
             # the kernel.poll test.
@@ -447,7 +706,6 @@ class AllTests:
             TestConfig(test_name="rtc", skip_for_zephyr=True),
             TestConfig(
                 test_name="rtc_npcx9",
-                timeout_secs=20,
                 exclude_boards=[BLOONCHIPPER, DARTMONKEY],
             ),
             # Covered by Zephyr drivers.counter.basic_api.stm32_subsec test
@@ -487,7 +745,7 @@ class AllTests:
             TestConfig(test_name="uart", skip_for_zephyr=True),
             TestConfig(test_name="unaligned_access"),
             TestConfig(test_name="unaligned_access_benchmark"),
-            TestConfig(test_name="utils", timeout_secs=25),
+            TestConfig(test_name="utils"),
             TestConfig(test_name="utils_str"),
             TestConfig(
                 config_name="power_utilization_idle",
@@ -495,7 +753,7 @@ class AllTests:
                 apptype_to_use=ApplicationType.PRODUCTION,
                 toggle_power=True,
                 pre_test_callback=lambda config: power_pre_test(
-                    board_config=config, enter_sleep=False
+                    platform=platform, board_config=config, enter_sleep=False
                 ),
                 post_test_callback=verify_idle_power_utilization,
                 finish_regexes=[RW_IMAGE_BOOTED_REGEX],
@@ -506,7 +764,7 @@ class AllTests:
                 apptype_to_use=ApplicationType.PRODUCTION,
                 toggle_power=True,
                 pre_test_callback=lambda config: power_pre_test(
-                    board_config=config, enter_sleep=True
+                    platform=platform, board_config=config, enter_sleep=True
                 ),
                 post_test_callback=verify_sleep_power_utilization,
                 finish_regexes=[RW_IMAGE_BOOTED_REGEX],
@@ -546,7 +804,7 @@ class AllTests:
         return tests
 
     @staticmethod
-    def get_private_tests() -> List[TestConfig]:
+    def get_private_tests() -> list[TestConfig]:
         """Return private test configs for the specified board, if available."""
         tests = []
         try:
@@ -572,7 +830,7 @@ class AllTests:
         return tests
 
     @staticmethod
-    def get_zephyr_tests() -> List[TestConfig]:
+    def get_zephyr_tests() -> list[TestConfig]:
         """Return Zephyr upstream test configs."""
         # Make sure proper paths are added in the twister script, see ZEPHYR_TEST_PATHS
         tests = [
@@ -624,7 +882,7 @@ BLOONCHIPPER_CONFIG = BoardConfig(
     sensor_type=FPSensorType.FPC,
     servo_uart_name="raw_fpmcu_console_uart_pty",
     servo_power_enable="fpmcu_pp3300",
-    reboot_timeout=1.0,
+    reboot_timeout=2.0,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_8020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_8040000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_20000000_REGEX,
@@ -692,7 +950,7 @@ HELIPILOT_CONFIG = BoardConfig(
     sensor_type=FPSensorType.FPC,
     servo_uart_name="raw_fpmcu_console_uart_pty",
     servo_power_enable="fpmcu_pp3300",
-    reboot_timeout=1.5,
+    reboot_timeout=3,
     rollback_region0_regex=DATA_ACCESS_VIOLATION_64020000_REGEX,
     rollback_region1_regex=DATA_ACCESS_VIOLATION_64030000_REGEX,
     mpu_regex=DATA_ACCESS_VIOLATION_200B0000_REGEX,
@@ -709,8 +967,13 @@ HELIPILOT_CONFIG = BoardConfig(
     expected_mcu_power=PowerUtilization(
         idle=RangedValue(34.8, 7.0), sleep=RangedValue(2.7, 2.5)
     ),
-    # TODO(b/336640650): Add helipilot variants once RO is uploaded
-    variants={},
+    variants={
+        "helipilot_v2.0.24337": {"ro_image_path": HELIPILOT_IMAGE_PATH},
+        "buccaneer_v2.0.26328": {
+            "ro_image_path": BUCCANEER_IMAGE_PATH,
+            "build_board": "buccaneer",
+        },
+    },
     zephyr_board_name="google_quincy",
 )
 
@@ -727,7 +990,6 @@ BUCCANEER_CONFIG.fp_power_supply = "pp3300_fp_mw"
 BUCCANEER_CONFIG.expected_fp_power = PowerUtilization(
     idle=RangedValue(0.25, 0.3), sleep=RangedValue(0.25, 0.3)
 )
-# TODO(b/336640151): Add buccaneer variants once RO is created
 
 BOARD_CONFIGS = {
     "bloonchipper": BLOONCHIPPER_CONFIG,
@@ -748,7 +1010,7 @@ def read_file_gsutil(path: str) -> bytes:
     return gsutil.stdout
 
 
-def find_section_offset_size(section: str, image: bytes) -> Tuple[int, int]:
+def find_section_offset_size(section: str, image: bytes) -> tuple[int, int]:
     """Get offset and size of the section in image"""
     areas = fmap.fmap_decode(image)["areas"]
     area = next(area for area in areas if area["name"] == section)
@@ -806,24 +1068,6 @@ def replace_ro(image: bytearray, ro_section: bytes):
     write_section(ro_pubkey, image, "KEY_RO")
 
 
-def get_console(board_config: BoardConfig) -> Optional[str]:
-    """Get the name of the console for a given board."""
-    cmd = [
-        "dut-control",
-        board_config.servo_uart_name,
-    ]
-    logging.debug('Running command: "%s"', " ".join(cmd))
-
-    with subprocess.Popen(cmd, stdout=subprocess.PIPE) as proc:
-        for line in io.TextIOWrapper(proc.stdout):  # type: ignore[arg-type]
-            logging.debug(line)
-            pty = line.split(":")
-            if len(pty) == 2 and pty[0] == board_config.servo_uart_name:
-                return pty[1].strip()
-
-    return None
-
-
 def set_sleep_mode(enter_sleep: bool) -> bool:
     """Enters or exists sleep mode based on enter_sleep parameter"""
     sleep_mode = "on" if enter_sleep else "off"
@@ -837,32 +1081,19 @@ def set_sleep_mode(enter_sleep: bool) -> bool:
     return proc.returncode == 0
 
 
-def power(board_config: BoardConfig, power_on: bool) -> None:
-    """Turn power to board on/off."""
-    if power_on:
-        state = "pp3300"
-    else:
-        state = "off"
-
-    cmd = [
-        "dut-control",
-        board_config.servo_power_enable + ":" + state,
-    ]
-    logging.debug('Running command: "%s"', " ".join(cmd))
-    subprocess.run(cmd, check=False).check_returncode()
-
-
-def power_cycle(board_config: BoardConfig) -> None:
+def power_cycle(platform: Platform, board_config: BoardConfig) -> None:
     """power_cycle the boards."""
     logging.debug("power_cycling board")
-    power(board_config, power_on=False)
+    platform.power(board_config, power_on=False)
     time.sleep(board_config.reboot_timeout)
-    power(board_config, power_on=True)
+    platform.power(board_config, power_on=True)
     time.sleep(board_config.reboot_timeout)
 
 
 def fp_sensor_sel(
-    board_config: BoardConfig, sensor_type: Optional[FPSensorType] = None
+    platform: Platform,
+    board_config: BoardConfig,
+    sensor_type: Optional[FPSensorType] = None,
 ) -> bool:
     """
     Explicitly select the appropriate fingerprint sensor.
@@ -885,13 +1116,15 @@ def fp_sensor_sel(
 
     if proc.returncode == 0:
         # power cycle after setting sensor type to ensure detection
-        power_cycle(board_config)
+        power_cycle(platform, board_config)
         return True
 
     return False
 
 
-def power_pre_test(board_config: BoardConfig, enter_sleep: bool) -> bool:
+def power_pre_test(
+    platform: Platform, board_config: BoardConfig, enter_sleep: bool
+) -> bool:
     """
     Prepare a board for a power_utilization test
     """
@@ -899,22 +1132,7 @@ def power_pre_test(board_config: BoardConfig, enter_sleep: bool) -> bool:
     if not set_sleep_mode(enter_sleep):
         return False
 
-    return fp_sensor_sel(board_config)
-
-
-def hw_write_protect(enable: bool) -> None:
-    """Enable/disable hardware write protect."""
-    if enable:
-        state = "force_on"
-    else:
-        state = "force_off"
-
-    cmd = [
-        "dut-control",
-        "fw_wp_state:" + state,
-    ]
-    logging.debug('Running command: "%s"', " ".join(cmd))
-    subprocess.run(cmd, check=False).check_returncode()
+    return fp_sensor_sel(platform, board_config)
 
 
 def build_ec(
@@ -922,7 +1140,7 @@ def build_ec(
     board_name: str,
     compiler: str,
     app_type: ApplicationType,
-) -> List[str]:
+) -> list[str]:
     """Prepare a command to build test using CrosEC"""
     cmd = ["make"]
     if compiler == CLANG:
@@ -940,7 +1158,7 @@ def build_ec(
     return cmd
 
 
-def build_zephyr_upstream(test_name: str, board_name: str) -> List[str]:
+def build_zephyr_upstream(test_name: str, board_name: str) -> list[str]:
     """Prepare a command to build Zephyr test"""
     # Build only with Zephyr and clobber a previous build
     cmd = [ZEPHYR_TWISTER] + ["-b"] + ["-c"]
@@ -952,7 +1170,7 @@ def build_zephyr_upstream(test_name: str, board_name: str) -> List[str]:
     return cmd
 
 
-def build_zephyr(test: TestConfig, board_name: str) -> List[str]:
+def build_zephyr(test: TestConfig, board_name: str) -> list[str]:
     """Prepare a command to build test using Zephyr"""
     if test.zephyr_name is not None:
         return build_zephyr_upstream(test.zephyr_name, board_name)
@@ -1022,35 +1240,6 @@ def build(
     subprocess.run(cmd, check=False).check_returncode()
 
 
-def flash(
-    image_path: str, board: str, flasher: str, remote_ip: str, remote_port: int
-) -> bool:
-    """Flash specified test to specified board."""
-    logging.info("Flashing test")
-
-    cmd = []
-    if flasher == JTRACE:
-        cmd.append(JTRACE_FLASH_SCRIPT)
-        if remote_ip:
-            cmd.extend(["--remote", remote_ip + ":" + str(remote_port)])
-    elif flasher == SERVO_MICRO:
-        cmd.append(SERVO_MICRO_FLASH_SCRIPT)
-    else:
-        logging.error('Unknown flasher: "%s"', flasher)
-        return False
-    cmd.extend(
-        [
-            "--board",
-            board,
-            "--image",
-            image_path,
-        ]
-    )
-    logging.debug('Running command: "%s"', " ".join(cmd))
-    completed_process = subprocess.run(cmd, check=False)
-    return completed_process.returncode == 0
-
-
 def patch_image(test: TestConfig, image_path: str):
     """Replace RO part of the firmware with provided one."""
     with open(image_path, "rb+") as image_file:
@@ -1075,9 +1264,9 @@ def readline(
 
 def readlines_until_timeout(
     executor, file: BinaryIO, timeout_secs: int
-) -> List[bytes]:
+) -> list[bytes]:
     """Continuously read lines for timeout_secs."""
-    lines: List[bytes] = []
+    lines: list[bytes] = []
     while True:
         line = readline(executor, file, timeout_secs)
         if not line:
@@ -1206,11 +1395,15 @@ def run_test(
 
 
 def get_test_list(
-    config: BoardConfig, test_args, with_private: str, zephyr: bool
-) -> List[TestConfig]:
+    platform: Platform,
+    config: BoardConfig,
+    test_args,
+    with_private: str,
+    zephyr: bool,
+) -> list[TestConfig]:
     """Get a list of tests to run."""
     if test_args == "all":
-        return AllTests.get(config, with_private, zephyr)
+        return AllTests.get(platform, config, with_private, zephyr)
 
     test_list = []
     for test in test_args:
@@ -1218,7 +1411,7 @@ def get_test_list(
         test_regex = re.compile(test)
         tests = [
             test
-            for test in AllTests.get(config, with_private, zephyr)
+            for test in AllTests.get(platform, config, with_private, zephyr)
             if test_regex.fullmatch(test.config_name)
         ]
         if not tests:
@@ -1276,6 +1469,7 @@ def get_image_path(test: TestConfig, build_board: str, zephyr: bool):
 
 def flash_and_run_test(
     test: TestConfig,
+    platform: Platform,
     board_config: BoardConfig,
     args: argparse.Namespace,
     executor,
@@ -1315,25 +1509,20 @@ def flash_and_run_test(
             return False
 
     # Get the console file before flashing to listen ASAP after flashing.
-    console_pty = get_console(board_config)
+    console_pty = platform.get_console(board_config)
 
     # flash test binary
-    # TODO(b/158327221): First attempt to flash fails after
-    #  flash_write_protect test is run; works after second attempt.
-    flash_succeeded = False
-    for i in range(0, test.num_flash_attempts):
-        logging.debug("Flash attempt %d", i + 1)
-        if flash(
-            image_path, args.board, args.flasher, args.remote, args.jlink_port
-        ):
-            flash_succeeded = True
-            break
-        time.sleep(board_config.reboot_timeout)
-
-    if not flash_succeeded:
-        logging.debug(
-            "Flashing failed after max attempts: %d", test.num_flash_attempts
-        )
+    if not platform.flash(
+        image_path,
+        args.board,
+        args.flasher,
+        args.remote,
+        args.jlink_port,
+        build_board,
+        test.test_name,
+        test.enable_hw_write_protect,
+    ):
+        logging.debug("Flashing failed")
         return False
 
     with ExitStack() as stack:
@@ -1348,24 +1537,28 @@ def flash_and_run_test(
             console_file = open(console_pty, "wb+", buffering=0)
             console = stack.enter_context(console_file)
 
-        hw_write_protect(test.enable_hw_write_protect)
+        platform.hw_write_protect(test.enable_hw_write_protect)
 
         if test.toggle_power:
-            power_cycle(board_config)
+            power_cycle(platform, board_config)
         else:
             # In some cases flash_ec leaves the board off, so just ensure it is on
-            power(board_config, power_on=True)
+            platform.power(board_config, power_on=True)
 
         # run the test
         logging.info('Running test: "%s"', test.config_name)
 
-        return run_test(
+        ret = run_test(
             test,
             board_config,
             console,
             executor=executor,
             zephyr=args.zephyr,
         )
+
+        platform.cleanup()
+
+        return ret
 
 
 def parse_remote_arg(remote: str) -> str:
@@ -1484,6 +1677,10 @@ def main():
         "--zephyr", help="Use Zephyr build", action="store_true"
     )
 
+    parser.add_argument(
+        "--renode", help="Run tests with Renode emulator", action="store_true"
+    )
+
     args = parser.parse_args()
     logging.basicConfig(
         format="%(levelname)s:%(message)s", level=args.log_level
@@ -1496,23 +1693,34 @@ def main():
         board_config.expected_fp_power = board_config.expected_fp_power_zephyr
         board_config.expected_mcu_power = board_config.expected_mcu_power_zephyr
 
+    if args.renode:
+        platform = Renode()
+    else:
+        platform = Hardware()
+
     test_list = get_test_list(
-        board_config, args.tests, args.with_private, args.zephyr
+        platform, board_config, args.tests, args.with_private, args.zephyr
     )
     logging.debug("Running tests: %s", [test.config_name for test in test_list])
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         for test in test_list:
-            if test.skip_for_zephyr and args.zephyr:
+            if (test.skip_for_zephyr and args.zephyr) or platform.skip_test(
+                test.test_name, board_config, args.zephyr
+            ):
                 continue
-            test.passed = flash_and_run_test(test, board_config, args, executor)
+            test.passed = flash_and_run_test(
+                test, platform, board_config, args, executor
+            )
 
         colorama.init()
         exit_code = 0
         for test in test_list:
             # print results
             print('Test "' + test.config_name + '": ', end="")
-            if test.skip_for_zephyr and args.zephyr:
+            if (test.skip_for_zephyr and args.zephyr) or platform.skip_test(
+                test.test_name, board_config, args.zephyr
+            ):
                 print(colorama.Fore.YELLOW + "SKIPPED")
             else:
                 if test.passed:
@@ -1523,12 +1731,14 @@ def main():
 
             print(colorama.Style.RESET_ALL)
 
-    sys.exit(exit_code)
+        # TODO(b/368684364): Fix the underlying issue that prevents sys.exit()
+        # from working correctly.
+        os._exit(exit_code)  # pylint: disable=protected-access
 
 
 def get_power_utilization(
     board_config: BoardConfig,
-) -> Tuple[Optional[float], Optional[float]]:
+) -> tuple[Optional[float], Optional[float]]:
     """Retrieve board power utilization data"""
     fp_power_signal = board_config.fp_power_supply
     mcu_power_signal = board_config.mcu_power_supply

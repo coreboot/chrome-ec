@@ -7,6 +7,7 @@
 #include "adc.h"
 #include "atomic.h"
 #include "builtin/assert.h"
+#include "clock.h"
 #include "clock_chip.h"
 #include "cmsis-dap.h"
 #include "common.h"
@@ -540,8 +541,23 @@ static void calibrate_adc(void)
 	 * ratio between voltage in millivolts and ADC/DAC counts in the range
 	 * 0-4095.
 	 */
-	dac_divisor = 3000 * STM32_VREFINT_CALIBRATION / 256;
-	dac_multiplier = 4096 * reading / num_readings / 256;
+	int supply_mv = 0;
+	if (reading > 0)
+		supply_mv = 3000 * STM32_VREFINT_CALIBRATION * num_readings /
+			    reading;
+	if (supply_mv < 1000 || supply_mv > 4000) {
+		/*
+		 * The reading of the bandgap reference corresponds to an
+		 * unrealistic supply voltage, something must be wrong.
+		 */
+		ccprintf("Error: ADC calibration reading: %d\n", reading);
+		/* Use hardcoded values, in part to avoid division by zero. */
+		dac_divisor = 3300;
+		dac_multiplier = 4096;
+	} else {
+		dac_divisor = 3000 * STM32_VREFINT_CALIBRATION / 256;
+		dac_multiplier = 4096 * reading / num_readings / 256;
+	}
 
 	/*
 	 * Set conversion factor for all the ADC channels (inverse of DAC
@@ -638,11 +654,9 @@ static void board_gpio_init(void)
 	}
 
 	/* Enable ADC */
-	STM32_RCC_AHB2ENR |= STM32_RCC_AHB2ENR_ADCEN;
+	clock_enable_module(MODULE_ADC, 1);
 	/* Enable internal VREFINT voltage reference. */
 	STM32_ADC1_CCR |= BIT(22);
-	/* Initialize the ADC by performing a fake reading */
-	adc_read_channel(ADC_CN9_11);
 	/* Perform first calibration (again on every reinit()). */
 	calibrate_adc();
 
@@ -1395,7 +1409,7 @@ struct bitbang_state_t {
 	uint8_t data[BITBANG_BUFFER_SIZE];
 
 	/* Index incremented by CMSIS_DAP task when data arrives from PC. */
-	volatile uint32_t tail;
+	uint32_t tail;
 
 	/*
 	 * Index indicating how far the interrupt handler can process, set by
@@ -1416,7 +1430,7 @@ struct bitbang_state_t {
 	volatile uint32_t irq;
 
 	/* Index incremented by CMSIS_DAP task when data is sent to PC. */
-	volatile uint32_t head;
+	uint32_t head;
 
 	/*
 	 * For the cases where encoded data indicates a "pause" of several clock
@@ -2472,6 +2486,18 @@ void dap_goog_gpio_bitbang(size_t peek_c, bool streaming)
 	uint32_t idx = bitbang.irq;
 	tx_buffer[1] = bitbang.head != bitbang.tail ? STATUS_BITBANG_ONGOING :
 						      STATUS_BITBANG_IDLE;
+
+	if (!streaming && idx == bitbang.tail) {
+		/*
+		 * No more data to process, this means that at the next timer
+		 * interrupt, the handler will disable the timer, if not
+		 * already.  Since `command_gpio_bit_bang()` rejects new
+		 * settings, if the timer interrupt is enabled, as very slow
+		 * tick clock could result in the next operation being rejected,
+		 * unless we explicitly stop the timer here.
+		 */
+		STM32_TIM_CR1(BITBANG_TIMER) &= ~STM32_TIM_CR1_CEN;
+	}
 
 	/* Number of data bytes to return in this response. */
 	data_len = idx - bitbang.head;

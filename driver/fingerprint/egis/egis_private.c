@@ -52,13 +52,11 @@ void fp_sensor_low_power(void)
 	egis_sensor_power_down();
 }
 
-/* Reset and initialize the sensor IC */
 int fp_sensor_init(void)
 {
 	return egis_sensor_init();
 }
 
-/* Deinitialize the sensor IC */
 int fp_sensor_deinit(void)
 {
 	return egis_sensor_deinit();
@@ -67,9 +65,7 @@ int fp_sensor_deinit(void)
 int fp_sensor_get_info(struct ec_response_fp_info *resp)
 {
 	int rc = EC_SUCCESS;
-	egislog_i("");
 	memcpy(resp, &egis_fp_sensor_info, sizeof(struct ec_response_fp_info));
-
 	return rc;
 }
 
@@ -77,61 +73,43 @@ __overridable int fp_finger_match(void *templ, uint32_t templ_count,
 				  uint8_t *image, int32_t *match_index,
 				  uint32_t *update_bitmap)
 {
-	int rc = EC_SUCCESS;
-	egislog_i("");
-
-	return rc;
+	return egis_finger_match(templ, templ_count, image, match_index,
+				 update_bitmap);
 }
 
 __overridable int fp_enrollment_begin(void)
 {
-	int rc = EC_SUCCESS;
-	egislog_i("");
-	return rc;
+	return egis_enrollment_begin();
 }
 
 __overridable int fp_enrollment_finish(void *templ)
 {
-	int rc = EC_SUCCESS;
-	egislog_i("");
-
-	return rc;
+	return egis_enrollment_finish(templ);
 }
 
 __overridable int fp_finger_enroll(uint8_t *image, int *completion)
 {
-	int rc = EC_SUCCESS;
-	egislog_i("");
-
-	return rc;
+	return egis_finger_enroll(image, completion);
 }
 
 int fp_maintenance(void)
 {
-	egislog_i("");
 	return EC_SUCCESS;
 }
 
 int fp_acquire_image_with_mode(uint8_t *image_data, int mode)
 {
-	int ret = EGIS_API_OK;
-	ret = egis_get_image_with_mode(image_data, mode);
-	egislog_i("ret %d", ret);
-
-	return EC_SUCCESS;
+	return egis_get_image_with_mode(image_data, mode);
 }
 
 int fp_acquire_image(uint8_t *image_data)
 {
-	int ret = EGIS_API_OK;
-	ret = egis_get_image(image_data);
-	egislog_i("ret %d", ret);
-	return ret;
+	return egis_get_image(image_data);
 }
 
 enum finger_state fp_finger_status(void)
 {
-	int rc = EGIS_API_FINGER_UNSTABLE;
+	int rc = FINGER_NONE;
 	egislog_i("");
 	rc = egis_check_int_status();
 
@@ -140,7 +118,7 @@ enum finger_state fp_finger_status(void)
 		rc = FINGER_PRESENT;
 		break;
 	case EGIS_API_FINGER_LOST:
-		rc = FINGER_PARTIAL;
+		rc = FINGER_NONE;
 		break;
 	default:
 		rc = FINGER_NONE;

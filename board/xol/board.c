@@ -65,10 +65,11 @@ static void mp2964_on_startup(void)
 DECLARE_HOOK(HOOK_CHIPSET_STARTUP, mp2964_on_startup, HOOK_PRIO_FIRST);
 
 __override struct keyboard_scan_config keyscan_config = {
-	.output_settle_us = 80,
+	.output_settle_us = 50,
 	.debounce_down_us = 20 * MSEC,
 	.debounce_up_us = 30 * MSEC,
 	.scan_period_us = 3 * MSEC,
+	.stable_scan_period_us = 9 * MSEC,
 	.min_post_scan_delay_us = 1000,
 	.poll_timeout_us = 100 * MSEC,
 	.actual_key_mask = { 0x08, 0xff, 0xff, 0xff, 0xff, 0xf5, 0xff, 0xa4,

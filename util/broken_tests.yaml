@@ -12,7 +12,8 @@
 
 - scenarios:
     - cpp.main.picolibc
+    - boringssl.selftest
   platforms:
-    - native_sim
+    - native_sim.*
   comment: "Picolibc detects builtin functions incorrectly for clang,
             see https://github.com/picolibc/picolibc/issues/805"

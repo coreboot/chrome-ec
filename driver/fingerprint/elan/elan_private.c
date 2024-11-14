@@ -27,7 +27,7 @@ static uint16_t errors;
 /* Sensor description */
 static struct ec_response_fp_info ec_fp_sensor_info = {
 	/* Sensor identification */
-	.vendor_id = VID,
+	.vendor_id = FOURCC('E', 'L', 'A', 'N'),
 	.product_id = PID,
 	.model_id = MID,
 	.version = VERSION,
@@ -119,7 +119,8 @@ int fp_sensor_deinit(void)
  *
  * @param[out] resp      retrieve the version, sensor and template information
  *
- * @return EC_SUCCESS on success otherwise error.
+ * @return EC_SUCCESS on success.
+ * @return EC_RES_ERROR on error.
  */
 int fp_sensor_get_info(struct ec_response_fp_info *resp)
 {
@@ -127,7 +128,10 @@ int fp_sensor_get_info(struct ec_response_fp_info *resp)
 
 	CPRINTF("========%s=======\n", __func__);
 	memcpy(resp, &ec_fp_sensor_info, sizeof(struct ec_response_fp_info));
-	elan_get_hwid(&id);
+
+	if (elan_get_hwid(&id)) {
+		return EC_RES_ERROR;
+	}
 
 	resp->model_id = id;
 	resp->errors = errors;
