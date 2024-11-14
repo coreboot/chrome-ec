@@ -872,6 +872,11 @@ def all_targets():
         extra_modules = ["cmsis"],
     )
     ec_target(
+        name = "francka-ti",
+        board = "francka-ti",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "frostflow",
         board = "frostflow",
         extra_modules = ["cmsis"],
