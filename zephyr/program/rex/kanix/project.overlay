@@ -40,6 +40,8 @@
 		/delete-node/ usb_c1_frs_en;
 		/delete-node/ usb_c0_rt_3p3_sx_en;
 		/delete-node/ usb_c1_bc12_int_odl;
+		/delete-node/ ec_voldn_btn_odl;
+		/delete-node/ ec_volup_btn_odl;
 
 		gpio_usb_c0_frs_en: usb_c0_frs_en {
 			gpios = <&gpio4 2 GPIO_OUTPUT_LOW>;
@@ -91,7 +93,9 @@
 	unused-pins {
 		compatible = "unused-gpios";
 		unused-gpios =
-			<&gpio5 0 0>; /* usb_c1_bc12_int_odl */
+			<&gpio5 0 0>, /* usb_c1_bc12_int_odl */
+			<&gpio9 3 0>, /* ec_voldn_btn_odl */
+			<&gpio9 7 0>; /* ec_volup_btn_odl */
 	};
 
 	aliases {
@@ -106,6 +110,8 @@
 		/delete-node/ c0_sbu_fault;
 		/delete-node/ usb_c0_bc12;
 		/delete-node/ usb_c1_bc12;
+		/delete-node/ volume_up;
+		/delete-node/ volume_down;
 
 		int_imu: ec_imu {
 			irq-pin = <&gpio_ec_imu_int_r_l>;
