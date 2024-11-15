@@ -8251,6 +8251,8 @@ struct ec_response_fp_mode {
 
 /* Mask for dead pixels */
 #define FP_ERROR_DEAD_PIXELS_MASK 0x3FF
+/* Maximum number of dead pixels */
+#define FP_ERROR_DEAD_PIXELS_MAX (FP_ERROR_DEAD_PIXELS_MASK - 1)
 /* Number of dead pixels detected on the last maintenance */
 #define FP_ERROR_DEAD_PIXELS(errors) ((errors) & FP_ERROR_DEAD_PIXELS_MASK)
 /* Unknown number of dead pixels detected on the last maintenance */
