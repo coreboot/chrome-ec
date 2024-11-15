@@ -47,6 +47,10 @@ int fpc_fp_maintenance(uint16_t *error_state)
 		return EC_ERROR_HW_INTERNAL;
 	}
 
+	/*
+	 * Reset the number of dead pixels before any update.
+	 */
+	*error_state &= ~FP_ERROR_DEAD_PIXELS_MASK;
 	*error_state |= FP_ERROR_DEAD_PIXELS(sensor_info.num_defective_pixels);
 	CPRINTS("num_defective_pixels: %d", sensor_info.num_defective_pixels);
 
