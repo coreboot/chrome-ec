@@ -129,6 +129,8 @@ const uint32_t GOOG_CAP_GpioMonitoring = BIT(2);
 const uint32_t GOOG_CAP_GpioBitbanging = BIT(3);
 /* This bit indicates support for a particular UART USB control request */
 const uint32_t GOOG_CAP_UartClearQueue = BIT(4);
+/* This bit indicates support for SPI and I2C polling for TPM ready. */
+const uint32_t GOOG_CAP_TpmPoll = BIT(5);
 
 /* Bitfield used in DAP_SWJ_Pins request */
 const uint8_t PIN_SwClk_Tck = 0x01;
@@ -583,7 +585,8 @@ static void dap_goog_info(size_t peek_c)
 {
 	const uint16_t CAPABILITIES =
 		GOOG_CAP_I2c | GOOG_CAP_I2cDevice | GOOG_CAP_GpioMonitoring |
-		GOOG_CAP_GpioBitbanging | GOOG_CAP_UartClearQueue;
+		GOOG_CAP_GpioBitbanging | GOOG_CAP_UartClearQueue |
+		GOOG_CAP_TpmPoll;
 
 	if (peek_c < 2)
 		return;
