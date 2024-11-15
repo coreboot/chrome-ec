@@ -11,7 +11,6 @@
 #include "../usba.dtsi"
 #include "../interrupts.dtsi"
 #include "../motionsense.dtsi"
-#include "../keyboard.dtsi"
 #include "../power_signal.dtsi"
 #include "generated.dtsi"
 #include "i2c.dtsi"
@@ -20,6 +19,7 @@
 #include "usbc.dtsi"
 #include "led.dtsi"
 #include "temp.dtsi"
+#include "keyboard.dtsi"
 
 / {
 	aliases {
