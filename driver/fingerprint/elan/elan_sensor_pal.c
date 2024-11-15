@@ -229,9 +229,14 @@ int elan_fp_maintenance(uint16_t *error_state)
 	}
 	if (sensor_info.num_defective_pixels >= FP_ERROR_DEAD_PIXELS_UNKNOWN)
 		*error_state = FP_ERROR_DEAD_PIXELS_UNKNOWN;
-	else
+	else {
+		/*
+		 * Reset the number of dead pixels before any update.
+		 */
+		*error_state &= ~FP_ERROR_DEAD_PIXELS_MASK;
 		*error_state |=
 			FP_ERROR_DEAD_PIXELS(sensor_info.num_defective_pixels);
+	}
 	LOGE_SA("num_defective_pixels: %d", sensor_info.num_defective_pixels);
 	LOGE_SA("sensor_error_code: %d", sensor_info.sensor_error_code);
 
