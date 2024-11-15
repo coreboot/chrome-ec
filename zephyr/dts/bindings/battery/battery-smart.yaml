@@ -33,6 +33,7 @@ properties:
       - "cosmx,ap20cbl-3"
       - "cosmx,ap20cbl-4"
       - "cosmx,ap23abl"
+      - "cosmx,ap23cbp"
       - "cosmx,gg02047xl"
       - "cosmx,gh02047xl"
       - "cosmx,pg01lj3353"
