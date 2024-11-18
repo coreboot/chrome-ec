@@ -12,6 +12,7 @@
 #include "gpio/gpio_int.h"
 #include "hooks.h"
 #include "keyboard_backlight.h"
+#include "keyboard_customization.h"
 
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
@@ -48,15 +49,31 @@ test_export_static void fan_init(void)
 }
 DECLARE_HOOK(HOOK_INIT, fan_init, HOOK_PRIO_POST_FIRST);
 
-static bool key_bl = FW_KB_BL_NOT_PRESENT;
+static bool has_backlight = FW_KB_BL_NOT_PRESENT;
+static bool has_numeric_pad = FW_KB_NUMPAD_NOT_PRESENT;
 
 int8_t board_vivaldi_keybd_idx(void)
 {
-	CPRINTS("idx:This is %s kb backlight.", key_bl ? "with" : "without");
-	if (key_bl == FW_KB_BL_NOT_PRESENT) {
+	int config_index;
+
+	CPRINTS("Keyboard configuration: %s backlight.",
+		has_backlight ? "with" : "without");
+	CPRINTS("Keyboard configuration: %s numeric pad.",
+		has_numeric_pad ? "with" : "without");
+
+	config_index = (has_backlight << 1) | has_numeric_pad;
+
+	switch (config_index) {
+	case 0: // No backlight, no numeric pad
 		return DT_NODE_CHILD_IDX(DT_NODELABEL(kbd_config_0));
-	} else {
+	case 1: // No backlight, with numeric pad
 		return DT_NODE_CHILD_IDX(DT_NODELABEL(kbd_config_1));
+	case 2: // With backlight, no numeric pad
+		return DT_NODE_CHILD_IDX(DT_NODELABEL(kbd_config_2));
+	case 3: // With backlight, with numeric pad
+		return DT_NODE_CHILD_IDX(DT_NODELABEL(kbd_config_3));
+	default: // Default to configuration 0
+		return DT_NODE_CHILD_IDX(DT_NODELABEL(kbd_config_0));
 	}
 }
 
@@ -74,12 +91,25 @@ test_export_static void kb_init(void)
 		return;
 	}
 
-	CPRINTS("This is %s kb backlight.", key_bl ? "with" : "without");
 	if (val == FW_KB_BL_PRESENT) {
-		key_bl = FW_KB_BL_PRESENT;
+		has_backlight = FW_KB_BL_PRESENT;
 	} else {
-		key_bl = FW_KB_BL_NOT_PRESENT;
+		has_backlight = FW_KB_BL_NOT_PRESENT;
 		kblight_enable(0);
 	}
+
+	ret = cros_cbi_get_fw_config(FW_KB_NUMPAD, &val);
+	if (ret != 0) {
+		LOG_ERR("Error retrieving CBI FW_CONFIG field %d, "
+			"assuming FW_KB_NUMERIC_PAD_PRESENT",
+			FW_KB_NUMPAD);
+		val = FW_KB_NUMPAD_NOT_PRESENT;
+	}
+
+	if (val == FW_KB_NUMPAD_PRESENT) {
+		has_numeric_pad = FW_KB_NUMPAD_PRESENT;
+	} else {
+		has_numeric_pad = FW_KB_NUMPAD_NOT_PRESENT;
+	}
 }
-DECLARE_HOOK(HOOK_INIT, kb_init, HOOK_PRIO_POST_FIRST);
+DECLARE_HOOK(HOOK_INIT, kb_init, HOOK_PRIO_POST_I2C);
