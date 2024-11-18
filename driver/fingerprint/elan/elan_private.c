@@ -86,7 +86,7 @@ int fp_sensor_init(void)
 {
 	CPRINTF("========%s=======\n", __func__);
 
-	errors = 0;
+	errors = FP_ERROR_DEAD_PIXELS_UNKNOWN;
 	elan_execute_reset();
 	elan_alg_param_setting();
 	if (IC_SELECTION == EFSA80SG)
