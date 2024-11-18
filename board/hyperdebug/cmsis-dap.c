@@ -634,6 +634,8 @@ static void cmsis_dap_dispatch(void)
 		tx_buffer[0] = rx_buffer[0];
 		/* Invoke handler routine. */
 		dispatch_table[rx_buffer[0]](peek_c);
+		/* Trigger sending of response. */
+		queue_flush(&cmsis_dap_tx_queue);
 	} else {
 		/*
 		 * Unrecognized command.  The CMSIS-DAP protocol does not allow
@@ -673,6 +675,14 @@ bool cmsis_dap_unwind_requested(void)
  */
 void cmsis_dap_task(void *unused)
 {
+	/*
+	 * Signal that the consumer is allowed to buffer characters
+	 * indefinitely.  `queue_flush()` will be invoked by
+	 * `cmsis_dap_dispatch()` after processing each command, to ensure that
+	 * the complete response is sent via USB.
+	 */
+	queue_enable_buffered_mode(&cmsis_dap_tx_queue);
+
 	while (true) {
 		/*
 		 * If another task has requested unwinding, we can now report
