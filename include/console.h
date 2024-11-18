@@ -158,18 +158,18 @@ static inline bool console_channel_is_disabled(enum console_channel channel)
 #ifdef CONFIG_PIGWEED_LOG_TOKENIZED_LIB
 const char *get_timestamp_now(void);
 
-#define cputs(channel, outstr)                        \
-	PW_LOG(PW_LOG_LEVEL_INFO, PW_LOG_MODULE_NAME, \
+#define cputs(channel, outstr)                                      \
+	PW_LOG(PW_LOG_LEVEL_INFO, PW_LOG_LEVEL, PW_LOG_MODULE_NAME, \
 	       PW_EC_CHANNEL_TO_FLAG(channel), outstr)
 
-#define cprintf(channel, format, ...)                 \
-	PW_LOG(PW_LOG_LEVEL_INFO, PW_LOG_MODULE_NAME, \
+#define cprintf(channel, format, ...)                               \
+	PW_LOG(PW_LOG_LEVEL_INFO, PW_LOG_LEVEL, PW_LOG_MODULE_NAME, \
 	       PW_EC_CHANNEL_TO_FLAG(channel), format, ##__VA_ARGS__)
 
 #define cprints(channel, format, ...)                                       \
 	do {                                                                \
 		const char *ts_str = get_timestamp_now();                   \
-		PW_LOG(PW_LOG_LEVEL_INFO, PW_LOG_MODULE_NAME,               \
+		PW_LOG(PW_LOG_LEVEL_INFO, PW_LOG_LEVEL, PW_LOG_MODULE_NAME, \
 		       PW_EC_CHANNEL_TO_FLAG(channel), "[%s " format "]\n", \
 		       ts_str, ##__VA_ARGS__);                              \
 	} while (false)
