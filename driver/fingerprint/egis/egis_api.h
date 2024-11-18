@@ -46,6 +46,17 @@ typedef enum {
 	EGIS_API_IMAGE_EMPTY = 4,
 	EGIS_API_FINGER_PRESENT = 5,
 	EGIS_API_FINGER_LOST = 6,
+	EGIS_API_ENROLL_FINISH = 11,
+	EGIS_API_ENROLL_IMAGE_OK = 12,
+	EGIS_API_ENROLL_REDUNDANT_INPUT = 13,
+	EGIS_API_ENROLL_LOW_QUALITY = 14,
+	EGIS_API_ENROLL_LOW_COVERAGE = 15,
+	EGIS_API_MATCH_MATCHED = 21,
+	EGIS_API_MATCH_MATCHED_UPDATED = 22,
+	EGIS_API_MATCH_MATCHED_UPDATED_FAILED = 23,
+	EGIS_API_MATCH_NOT_MATCHED = 24,
+	EGIS_API_MATCH_LOW_QUALITY = 25,
+	EGIS_API_MATCH_LOW_COVERAGE = 26,
 	EGIS_API_ERROR_GENERAL = -1,
 	EGIS_API_ERROR_COMMAND_FAIL = -2,
 	EGIS_API_ERROR_DEVICE_NOT_FOUND = -3,
@@ -193,12 +204,16 @@ int egis_check_int_status(void);
  * @param[out] update_bitmap contains one bit per template, the bit is set if
  * the match has updated the given template.
  *
- * @return EC_MKBP_FP_ERR_MATCH_NO on non-match
- * @return EC_MKBP_FP_ERR_MATCH_YES for match when template was not updated with
+ * @return EGIS_API_MATCH_NOT_MATCHED on non-match
+ * @return EGIS_API_MATCH_MATCHED for match when template was not updated with
  * new data
- * @return EC_MKBP_FP_ERR_MATCH_YES_UPDATED for match when template was updated
- * @return EC_MKBP_FP_ERR_MATCH_YES_UPDATE_FAILED match, but update failed (not
+ * @return EGIS_API_MATCH_MATCHED_UPDATED for match when template was updated
+ * @return EGIS_API_MATCH_MATCHED_UPDATED_FAILED match, but update failed (not
  * saved)
+ * @return EGIS_API_MATCH_LOW_QUALITY when matching could not be performed due
+ * to low image quality
+ * @return EGIS_API_MATCH_LOW_COVERAGE when matching could not be performed due
+ * to finger covering too little area of the sensor
  * @return negative value on error, list below
  * @return EGIS_API_ERROR_PARAMETER : on incorrect parameter
  * @return EGIS_API_ERROR_MATCHER_LIB_FAIL : on matcher lib fail
@@ -236,9 +251,15 @@ int egis_enrollment_finish(void *templ);
  * complete: [0-100].
  *
  * @return 0 on success
- * @return EC_MKBP_FP_ERR_ENROLL_OK when image was successfully enrolled
- * @return EC_MKBP_FP_ERR_ENROLL_IMMOBILE when image added, but user should be
+ * @return EGIS_API_ENROLL_FINISH when image was successfully enrolled and
+ * enroll_percentage 100%
+ * @return EGIS_API_ENROLL_IMAGE_OK when image was successfully enrolled
+ * @return EGIS_API_ENROLL_REDUNDANT_INPUT when image added, but user should be
  * advised to move finger
+ * @return EGIS_API_ENROLL_LOW_QUALITY when image could not be used due to low
+ * image quality
+ * @return EGIS_API_ENROLL_LOW_COVERAGE when image could not be used due to
+ * finger covering too little area of the sensor
  * @return negative value on error, list below
  * @return EGIS_API_ERROR_PARAMETER : on incorrect parameter
  * @return EGIS_API_ERROR_MATCHER_LIB_FAIL : on matcher lib fail
