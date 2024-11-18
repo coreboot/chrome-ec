@@ -9,7 +9,7 @@
  * to see how file and module can be included in tokenized logging output.
  * Additional handling is needed in EC3PO to parse additional fields.
  */
-#define PW_LOG_TOKENIZED_FORMAT_STRING(string) string
+#define PW_LOG_TOKENIZED_FORMAT_STRING(module, string) string
 
 /* Use a rarely used char in EC logging as tokenizer prefix
  * If prefix changes, make sure to update the following files to match
