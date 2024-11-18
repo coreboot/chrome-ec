@@ -106,14 +106,14 @@ int egis_get_hwid(uint16_t *id);
  * @return EGIS_API_ERROR_SENSOR_GENERAL : on sensor operation fail
  * @return EGIS_API_ERROR_PARAMETER : on incorrect parameter
  */
-int egis_sensor_init(void);
+egis_api_return_t egis_sensor_init(void);
 
 /**
  * @brief Deinitialize the sensor IC.
  *
  * @return EGIS_OK : on success.
  */
-int egis_sensor_deinit(void);
+egis_api_return_t egis_sensor_deinit(void);
 
 /**
  * Power down the sensor IC.
@@ -145,7 +145,7 @@ void egis_sensor_power_down(void);
 /*
  * TODO(b/376870662): Create additional modes for `egis_get_image_with_mode`.
  */
-int egis_get_image_with_mode(uint8_t *image_data, int mode);
+egis_api_return_t egis_get_image_with_mode(uint8_t *image_data, int mode);
 
 /**
  * @brief Get 8bits image data from EGIS fingerprint sensor.
@@ -167,7 +167,7 @@ int egis_get_image_with_mode(uint8_t *image_data, int mode);
  * @return EGIS_API_ERROR_PARAMETER : on incorrect parameter
  * @return EGIS_API_ERROR_IO_SPI : on execute SPI transfer fail
  */
-int egis_get_image(uint8_t *image_data);
+egis_api_return_t egis_get_image(uint8_t *image_data);
 
 /**
  * @brief Set the finger detection mode for the Egis sensor.
@@ -189,7 +189,7 @@ void egis_set_detect_mode(void);
  * @return EGIS_API_ERROR_PARAMETER : on incorrect parameter
  * @return EGIS_API_ERROR_IO_SPI : on execute SPI transfer fail
  */
-int egis_check_int_status(void);
+egis_api_return_t egis_check_int_status(void);
 
 /**
  * Compares given finger image against enrolled templates.
@@ -219,8 +219,9 @@ int egis_check_int_status(void);
  * @return EGIS_API_ERROR_MATCHER_LIB_FAIL : on matcher lib fail
  * @return EGIS_API_ERROR_EMFP_LIB_FAIL : on emfp lib fail
  */
-int egis_finger_match(void *templ, uint32_t templ_count, uint8_t *image,
-		      int32_t *match_index, uint32_t *update_bitmap);
+egis_api_return_t egis_finger_match(void *templ, uint32_t templ_count,
+				    uint8_t *image, int32_t *match_index,
+				    uint32_t *update_bitmap);
 
 /**
  * Start a finger enrollment session.
@@ -229,7 +230,7 @@ int egis_finger_match(void *templ, uint32_t templ_count, uint8_t *image,
  * @return negative value on error, list below
  * @return EGIS_API_ERROR_MATCHER_LIB_FAIL : on matcher lib fail
  */
-int egis_enrollment_begin(void);
+egis_api_return_t egis_enrollment_begin(void);
 
 /**
  * Generate a template from the finger whose enrollment has just being
@@ -241,7 +242,7 @@ int egis_enrollment_begin(void);
  * @return negative value on error, list below
  * @return EGIS_API_ERROR : on fail.
  */
-int egis_enrollment_finish(void *templ);
+egis_api_return_t egis_enrollment_finish(void *templ);
 
 /**
  * Adds fingerprint image to the current enrollment session.
@@ -265,7 +266,7 @@ int egis_enrollment_finish(void *templ);
  * @return EGIS_API_ERROR_MATCHER_LIB_FAIL : on matcher lib fail
  * @return EGIS_API_ERROR_EMFP_LIB_FAIL : on emfp lib fail
  */
-int egis_finger_enroll(uint8_t *image, int *completion);
+egis_api_return_t egis_finger_enroll(uint8_t *image, int *completion);
 
 #ifdef __cplusplus
 }
