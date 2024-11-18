@@ -4,7 +4,7 @@
  */
 
 / {
-	rauru-fw-config {
+    hylia-fw-config {
 		compatible = "cros-ec,cbi-fw-config";
 
 		pdc {
@@ -85,7 +85,7 @@
 		panel {
 			enum-name = "FW_PANEL";
 			start = <18>;
-			size = <5>;
+			size = <4>;
 			default-panel {
 				compatible = "cros-ec,cbi-fw-config-value";
 				enum-name = "FW_PANEL_DEFAULT";
@@ -96,6 +96,22 @@
 				compatible = "cros-ec,cbi-fw-config-value";
 				enum-name = "FW_PANEL_OLD";
 				value = <1>;
+			};
+		};
+        kb_bl {
+			enum-name = "FW_KB_BL";
+			start = <22>;
+			size = <1>;
+			kb-bl-not-present {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_KB_BL_NOT_PRESENT";
+				value = <0>;
+			};
+			kb-bl-present {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FW_KB_BL_PRESENT";
+				value = <1>;
+                default;
 			};
 		};
 		fan {
