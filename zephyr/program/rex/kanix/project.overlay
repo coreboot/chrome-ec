@@ -44,6 +44,8 @@
 		/delete-node/ ec_imu_int_r_l;
 		/delete-node/ ec_accel_int_r_l;
 		/delete-node/ tablet_mode_l;
+		/delete-node/ usb_c0_tcpc_rst_odl;
+		/delete-node/ ec_kb_bl_en_l;
 
 		gpio_usb_c0_frs_en: usb_c0_frs_en {
 			gpios = <&gpio4 2 GPIO_OUTPUT_LOW>;
@@ -100,7 +102,9 @@
 			<&gpio9 7 0>, /* ec_volup_btn_odl */
 			<&gpio5 6 0>, /* ec_imu_int_r_l */
 			<&gpio8 1 0>, /* ec_accel_int_r_l */
-			<&gpio9 5 0>; /* tablet_mode_l */
+			<&gpio9 5 0>, /* tablet_mode_l */
+			<&gpio6 7 0>, /* usb_c0_tcpc_rst_odl */
+			<&gpio8 6 0>; /* ec_kb_bl_en_l */
 	};
 
 	aliases {
