@@ -18,6 +18,7 @@
 set -ue
 
 SCRIPT_NAME="$(basename "$0")"
+SCRIPT_DIR="$(dirname "$0")"
 TMPD="$(mktemp -d "/tmp/${SCRIPT_NAME}.XXXXX")"
 NOCLEAN="${NOCLEAN:-}"
 if [[ -z ${NOCLEAN} ]]; then
@@ -33,7 +34,7 @@ KMS_PROJECT_PATH="projects/gsc-cloud-kms-signing/locations/us/keyRings/gsc-node-
 # Make sure there is a codesigner in the path.
 CODESIGNER=""
 for f in  cr50-codesigner \
-            ../../cr50-utils/software/tools/codesigner/codesigner \
+            "${SCRIPT_DIR}/../../cr50-utils/software/tools/codesigner/codesigner" \
             codesigner; do
   if command -v "${f}" > /dev/null 2>&1; then
     CODESIGNER="${f}"
