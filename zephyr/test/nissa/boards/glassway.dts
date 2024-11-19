@@ -9,6 +9,19 @@
 #include "../program/nissa/glassway/motionsense.dtsi"
 
 / {
+        aliases {
+                /* type-C */
+                gpio-usb-c1-int-odl = &gpio_sb_1;
+                /* type-A */
+                gpio-en-usb-a1-vbus = &gpio_sb_2;
+                /* HDMI */
+                gpio-en-rails-odl = &gpio_sb_1;
+                gpio-hdmi-en-odl = &gpio_sb_3;
+                gpio-hpd-odl = &gpio_sb_4;
+                /* LTE */
+                gpio-en-sub-s5-rails = &gpio_sb_2;
+        };
+
 	gpio-interrupts {
 		compatible = "cros-ec,gpio-interrupts";
 		int_imu: ec_imu {
@@ -62,6 +75,25 @@
                 };
                 gpio_en_pp5000_pen_x: en_pp5000_pen_x {
                         gpios = <&gpioe 2 GPIO_OUTPUT>;
+                };
+                gpio_sb_1: sb-1 {
+                        gpios = <&gpio0 2 GPIO_PULL_UP>;
+                        no-auto-init;
+                };
+
+                gpio_sb_2: sb-2 {
+                        gpios = <&gpiod 4 GPIO_OUTPUT>;
+                        no-auto-init;
+                };
+
+                gpio_sb_3: sb-3 {
+                        gpios = <&gpiof 4 0>;
+                        no-auto-init;
+                };
+
+                gpio_sb_4: sb-4 {
+                        gpios = <&gpiof 5 GPIO_INPUT>;
+                        no-auto-init;
                 };
 	};
 
