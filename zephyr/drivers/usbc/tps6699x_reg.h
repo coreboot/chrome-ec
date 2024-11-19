@@ -417,7 +417,7 @@ union reg_interrupt {
 		uint8_t source_cap_updated : 1;
 
 		/* Bits 8 - 15 */
-		uint8_t reserved2 : 1;
+		uint8_t sink_ready : 1;
 		uint8_t overcurent : 1;
 		uint8_t attention_received : 1;
 		uint8_t vdm_received : 1;
@@ -1445,6 +1445,24 @@ union reg_adc_results {
 		uint16_t reserved3 : 16;
 	} __packed;
 	uint8_t raw_value[62];
+};
+
+/**
+ * @brief - 10.6.1 SRDY switch settings
+ */
+enum srdy_switch_select {
+	SWITCH_SELECT_PP_5V1 = 0x00,
+	SWITCH_SELECT_PP_5V2 = 0x01,
+	SWITCH_SELECT_PP_EXT1 = 0x02,
+	SWITCH_SELECT_PP_EXT2 = 0x03,
+
+	/* Automatically-selected by the PP*Config field in the
+	 * GLOBAL_SYSTEM_CONFIG register (0x27).
+	 */
+	SWITCH_SELECT_PP_GLOBAL_CFG = 0x06,
+
+	/* Automatically-selected by PD Controller policy. */
+	SWITCH_SELECT_PP_PD_POLICY = 0x07,
 };
 
 #endif /* __CROS_EC_PDC_TPS6699X_REG_H */

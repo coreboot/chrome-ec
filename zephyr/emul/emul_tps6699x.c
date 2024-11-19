@@ -327,11 +327,27 @@ static void tps6699x_emul_handle_sryr(struct tps6699x_emul_pdc_data *data,
 	data_reg[0] = TASK_COMPLETED_SUCCESSFULLY;
 }
 
+static void aneg_delayable_work_handler(struct k_work *w)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(w);
+	struct tps6699x_emul_pdc_data *data = CONTAINER_OF(
+		dwork, struct tps6699x_emul_pdc_data, aneg_delay_work);
+	union reg_interrupt *reg_interrupt =
+		(union reg_interrupt *)
+			data->reg_val[REG_INTERRUPT_EVENT_FOR_I2C1];
+
+	reg_interrupt->new_contract_as_consumer = 1;
+	/* Trigger interrupt */
+	gpio_emul_input_set(data->irq_gpios.port, data->irq_gpios.pin, 1);
+	gpio_emul_input_set(data->irq_gpios.port, data->irq_gpios.pin, 0);
+}
+
 static void tps6699x_emul_handle_aneg(struct tps6699x_emul_pdc_data *data,
 				      uint8_t *data_reg)
 {
 	LOG_INF("ANEg TASK");
 	data_reg[0] = TASK_COMPLETED_SUCCESSFULLY;
+	k_work_schedule(&data->aneg_delay_work, K_MSEC(1));
 }
 
 static void tps6699x_emul_handle_disc(struct tps6699x_emul_pdc_data *data,
@@ -896,7 +912,24 @@ static int emul_tps6699x_pulse_irq(const struct emul *target)
 		(union reg_interrupt *)
 			data->reg_val[REG_INTERRUPT_EVENT_FOR_I2C1];
 
+	/*
+	 * TODO(b/345292002): Need to enhance how interrupt status bits are
+	 * set/cleared based on emulated connection
+	 * events. plug_insert_or_removal should be based of a change in
+	 * connect_status and not always set. Similarly, the setting of
+	 * sink_ready and new_contract_as_consumer can be moved to
+	 * set_connector_status.
+	 */
 	reg_interrupt->plug_insert_or_removal = 1;
+	/*
+	 * SET_SINK_PATH requires these interrupt status bits to avoid a delay
+	 * in closing the sink FET.
+	 */
+	if (data->connector_status.connect_status &&
+	    !data->connector_status.power_direction) {
+		reg_interrupt->sink_ready = 1;
+		reg_interrupt->new_contract_as_consumer = 1;
+	}
 	gpio_emul_input_set(data->irq_gpios.port, data->irq_gpios.pin, 1);
 	gpio_emul_input_set(data->irq_gpios.port, data->irq_gpios.pin, 0);
 
@@ -941,6 +974,8 @@ static int tps6699x_emul_init(const struct emul *emul,
 	i2c_common_emul_init(&data->common);
 	k_work_init_delayable(&data->pdc_data.delay_work,
 			      delayable_work_handler);
+	k_work_init_delayable(&data->pdc_data.aneg_delay_work,
+			      aneg_delayable_work_handler);
 
 	return 0;
 }

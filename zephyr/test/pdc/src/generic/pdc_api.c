@@ -346,7 +346,7 @@ ZTEST_USER(pdc_api, test_set_sink_path)
 	for (i = 0; i < ARRAY_SIZE(in); i++) {
 		zassert_ok(pdc_set_sink_path(dev, in[i]));
 
-		k_sleep(K_MSEC(SLEEP_MS));
+		k_sleep(K_MSEC(SLEEP_MS * 10));
 		zassert_ok(emul_pdc_get_sink_path(emul, &out));
 
 		zassert_equal(in[i], out);

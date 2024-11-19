@@ -42,11 +42,24 @@ LOG_MODULE_REGISTER(tps6699x, CONFIG_USBC_LOG_LEVEL);
 /** @brief Trigger thread to send command complete back to
  *         PDC Power Mgmt thread */
 #define PDC_CMD_COMPLETE_EVENT BIT(4)
+/** @brief Trigger thread to send command error back to
+ *         PDC Power Mgmt thread */
+#define PDC_CMD_ERROR_EVENT BIT(5)
 /** @brief Bit mask of all PDC events */
-#define PDC_ALL_EVENTS BIT_MASK(5)
+#define PDC_ALL_EVENTS BIT_MASK(6)
 
 /** @brief Time between checking TI CMDx register for data ready */
 #define PDC_TI_DATA_READY_TIME_MS (10)
+
+/** @brief Delay after "New Contract as Consumer" interrupt bit set that the
+ * TPS6699x will accept SRDY to enable the sink path. See b/358274846.
+ */
+#define PDC_TI_NEW_POWER_CONTRACT_DELAY_MS (5)
+/** @brief Delay after SET_SINK_PATH is called without any active power
+ * contract. If there is no new power contract after this delay, return an error
+ * on SET_SINK_PATH.
+ */
+#define PDC_TI_SET_SINK_PATH_DELAY_MS (1000)
 
 /**
  * @brief All raw_value data uses byte-0 for contains the register data was
@@ -266,6 +279,14 @@ struct pdc_data_t {
 	uint32_t events;
 	/* Deferred handler to trigger event to check if data is ready */
 	struct k_work_delayable data_ready;
+	/* Deferred handler to trigger event when new contract has been stable
+	 * long enough that PDC should accept SRDY.
+	 */
+	struct k_work_delayable new_power_contract;
+	/* Set when aNEG may be used. */
+	atomic_t set_rdo_possible;
+	/* Set when SRDY may be used. */
+	atomic_t sink_enable_possible;
 	/* Should use cached connector status change bits */
 	bool use_cached_conn_status_change;
 	/* Cached connector status for this connector. */
@@ -406,6 +427,35 @@ static void st_irq_entry(void *o)
 	print_current_state(data);
 }
 
+static void tps_notify_new_power_contract(struct k_work *work)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct pdc_data_t *data =
+		CONTAINER_OF(dwork, struct pdc_data_t, new_power_contract);
+
+	/* If we're not currently idle, nothing to do. */
+	if (get_state(data) != ST_IDLE) {
+		return;
+	}
+
+	/* If we were attempting to run CMD_SET_SINK_PATH, re-trigger the
+	 * command execution.
+	 *
+	 * This task gets scheduled for only two reasons:
+	 * - New Power Contract interrupt is seen (setting sink_enable_possible
+	 *   to true)
+	 * - Previous SET_SINK_PATH attempt timed out before seeing new
+	 *   contract.
+	 */
+	if (data->cmd == CMD_SET_SINK_PATH) {
+		atomic_set(&data->sink_enable_possible, 1);
+		k_event_post(&data->pdc_event, PDC_CMD_EVENT);
+	} else if (data->cmd == CMD_SET_RDO) {
+		atomic_set(&data->set_rdo_possible, 1);
+		k_event_post(&data->pdc_event, PDC_CMD_EVENT);
+	}
+}
+
 static void st_irq_run(void *o)
 {
 	struct pdc_data_t *data = (struct pdc_data_t *)o;
@@ -451,6 +501,25 @@ static void st_irq_run(void *o)
 			data->use_cached_conn_status_change = false;
 			data->cci_event.connector_change =
 				cfg->connector_number + 1;
+		}
+
+		if (pdc_interrupt.plug_insert_or_removal) {
+			atomic_set(&data->set_rdo_possible, 0);
+			atomic_set(&data->sink_enable_possible, 0);
+		}
+
+		if (pdc_interrupt.sink_ready) {
+			atomic_set(&data->set_rdo_possible, 1);
+			k_work_reschedule(
+				&data->new_power_contract,
+				K_MSEC(PDC_TI_NEW_POWER_CONTRACT_DELAY_MS));
+		}
+
+		if (pdc_interrupt.new_contract_as_consumer) {
+			atomic_set(&data->sink_enable_possible, 1);
+			k_work_reschedule(
+				&data->new_power_contract,
+				K_MSEC(PDC_TI_NEW_POWER_CONTRACT_DELAY_MS));
 		}
 
 		/* TODO(b/345783692): Handle other interrupt bits. */
@@ -576,6 +645,18 @@ static void st_idle_run(void *o)
 		k_event_clear(&data->pdc_event, PDC_CMD_COMPLETE_EVENT);
 		data->cci_event.command_completed = 1;
 		call_cci_event_cb(data);
+
+		/* Re-enter idle state. */
+		set_state(data, ST_IDLE);
+	} else if (events & PDC_CMD_ERROR_EVENT) {
+		k_event_clear(&data->pdc_event, PDC_CMD_ERROR_EVENT);
+
+		data->cci_event.error = 1;
+		data->cci_event.command_completed = 1;
+		call_cci_event_cb(data);
+
+		/* Re-enter idle state. */
+		set_state(data, ST_IDLE);
 	} else if (events & PDC_IRQ_EVENT) {
 		k_event_clear(&data->pdc_event, PDC_IRQ_EVENT);
 		/* Handle interrupt */
@@ -1132,6 +1213,12 @@ static void cmd_set_rdo(struct pdc_data_t *data)
 	int rv, max_a, max_v, min_v, min_power;
 	uint32_t pdo = data->cached_pdos[RDO_POS(data->rdo) - 1];
 
+	if (!atomic_get(&data->set_rdo_possible)) {
+		k_work_reschedule(&data->new_power_contract,
+				  K_MSEC(PDC_TI_SET_SINK_PATH_DELAY_MS));
+		return;
+	}
+
 	rv = tps_rw_autonegotiate_sink(&cfg->i2c, &an_snk, I2C_MSG_READ);
 	if (rv) {
 		LOG_ERR("Failed to read auto negotiate sink register.");
@@ -1463,6 +1550,7 @@ static void task_srdy(struct pdc_data_t *data)
 	union reg_power_path_status pdc_power_path_status;
 	int rv;
 	uint32_t ext_vbus_sw;
+	bool cur_sink_enabled;
 
 	rv = tps_rd_power_path_status(&cfg->i2c, &pdc_power_path_status);
 	if (rv) {
@@ -1473,12 +1561,29 @@ static void task_srdy(struct pdc_data_t *data)
 	ext_vbus_sw = (cfg->connector_number == 0 ?
 			       pdc_power_path_status.pa_ext_vbus_sw :
 			       pdc_power_path_status.pb_ext_vbus_sw);
-	if (data->snk_fet_en && ext_vbus_sw != EXT_VBUS_SWITCH_ENABLED_INPUT) {
+	cur_sink_enabled = (ext_vbus_sw == EXT_VBUS_SWITCH_ENABLED_INPUT);
+
+	if (data->snk_fet_en && !cur_sink_enabled) {
+		if (!atomic_get(&data->sink_enable_possible)) {
+			/* Retry this command within timeout if a new power
+			 * contract is seen. Otherwise, it will return an error
+			 * to the caller.
+			 */
+			k_work_reschedule(
+				&data->new_power_contract,
+				K_MSEC(PDC_TI_SET_SINK_PATH_DELAY_MS));
+			return;
+		}
+
+		/* TODO(b/358274846) - Check whether this can be moved to
+		 * appconfig so we don't have to select by connector number.
+		 */
+		cmd_data.data[0] = cfg->connector_number ?
+					   SWITCH_SELECT_PP_EXT1 :
+					   SWITCH_SELECT_PP_EXT2;
 		/* Enable Sink FET */
-		cmd_data.data[0] = cfg->connector_number ? 0x02 : 0x03;
 		rv = write_task_cmd(cfg, COMMAND_TASK_SRDY, &cmd_data);
-	} else if (!data->snk_fet_en &&
-		   ext_vbus_sw == EXT_VBUS_SWITCH_ENABLED_INPUT) {
+	} else if (!data->snk_fet_en && cur_sink_enabled) {
 		/* Disable Sink FET */
 		rv = write_task_cmd(cfg, COMMAND_TASK_SRYR, NULL);
 	} else {
@@ -1671,7 +1776,7 @@ static void st_task_wait_run(void *o)
 	union reg_command cmd;
 	union reg_data cmd_data;
 	uint8_t offset;
-	uint32_t len;
+	uint32_t len = 0;
 	int rv;
 
 	/* Read command register for the particular port */
@@ -1717,6 +1822,16 @@ static void st_task_wait_run(void *o)
 				cmd_data.data[0]);
 		}
 		data->cci_event.error = 1;
+		goto data_out;
+	}
+
+	switch (data->cmd) {
+	case CMD_SET_RDO:
+		/* Re-set sink enable until after aNEG completes. */
+		atomic_set(&data->sink_enable_possible, 0);
+		break;
+	default:
+		break;
 	}
 
 	switch (data->running_ucsi_cmd) {
@@ -1788,6 +1903,7 @@ static void st_task_wait_run(void *o)
 		len = 0;
 	}
 
+data_out:
 	if (data->user_buf && len) {
 		if (data->cci_event.error) {
 			memset(data->user_buf, 0, len);
@@ -2394,6 +2510,8 @@ static int pdc_interrupt_mask_init(struct pdc_data_t *data)
 		.power_swap_complete = 1,
 		.fr_swap_complete = 1,
 		.data_swap_complete = 1,
+		.sink_ready = 1,
+		.new_contract_as_consumer = 1,
 		.ucsi_connector_status_change_notification = 1,
 		.power_event_occurred_error = 1,
 		.externl_dcdc_event_received = 1,
@@ -2450,6 +2568,8 @@ static int pdc_init(const struct device *dev)
 	k_event_init(&data->pdc_event);
 	k_mutex_init(&data->mtx);
 	k_work_init_delayable(&data->data_ready, tps_check_data_ready);
+	k_work_init_delayable(&data->new_power_contract,
+			      tps_notify_new_power_contract);
 
 	data->cmd = CMD_NONE;
 	data->dev = dev;
