@@ -256,6 +256,7 @@ class Platform(ABC):
         build_board: str,
         test_name: str,
         enable_hw_write_protect: bool,
+        zephyr: bool,
     ) -> bool:
         """Flash specified test to specified board."""
 
@@ -325,6 +326,7 @@ class Hardware(Platform):
         build_board: str,
         test_name: str,
         enable_hw_write_protect: bool,
+        zephyr: bool,
     ) -> bool:
         logging.info("Flashing test")
 
@@ -384,8 +386,13 @@ class Renode(Platform):
         build_board: str,
         test_name: str,
         enable_hw_write_protect: bool,
+        zephyr: bool,
     ) -> bool:
-        cmd = ["./util/renode-ec-launch", build_board, test_name]
+        cmd = [
+            "./util/renode-ec-launch",
+            build_board,
+            "zephyr" if zephyr else test_name,
+        ]
         if enable_hw_write_protect:
             cmd.append("--enable-write-protect")
 
@@ -1524,6 +1531,7 @@ def flash_and_run_test(
         build_board,
         test.test_name,
         test.enable_hw_write_protect,
+        args.zephyr,
     ):
         logging.debug("Flashing failed")
         return False
