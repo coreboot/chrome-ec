@@ -65,6 +65,11 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "extpower_interrupt";
 		};
+		int_ap_bl_en: int_ap__bl_en{
+			irq-pin = <&gpio_ap_bl_en_odl>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "ap_bl_en_interrupt";
+		};
 	};
 
 	unused-pins {
@@ -72,12 +77,9 @@
 		unused-gpios =
 			<&gpioa 0 0>,
 			<&gpiob 5 0>,
-			<&gpioc 0 0>,
 			<&gpioc 7 0>,
 			<&gpiod 4 0>,
 			<&gpioh 6 0>,
-			<&gpioi 6 0>,
-			<&gpioi 7 0>,
 			<&gpioj 1 0>,
 			<&gpioj 3 0>,
 			<&gpioj 7 0>;
