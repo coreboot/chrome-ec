@@ -438,6 +438,7 @@ class Renode(Platform):
                 return True
         elif board_config.name in [HELIPILOT, BUCCANEER]:
             if test_name in [
+                "abort",  # TODO(b/379897106)
                 "production_app_test",
                 "benchmark",
                 "exception",
@@ -446,6 +447,7 @@ class Renode(Platform):
                 "flash_write_protect",
                 "fpsensor_hw",
                 "fp_transport",
+                "ftrapv",  # TODO(b/379880481)
                 "libcxx",
                 "malloc",
                 "mpu",
@@ -456,6 +458,7 @@ class Renode(Platform):
                 "rollback_entropy",
                 "rtc_npcx9",
                 "sbrk",
+                "stdlib",  # TODO(b/379897213)
                 "std_vector",
                 "fpsensor_auth_crypto_stateless",  # TODO(b/372969110)
                 "unaligned_access_benchmark",  # TODO(372969629)
