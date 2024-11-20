@@ -108,10 +108,6 @@
 			enum-name = "GPIO_PMIC_EC_RESETB";
 		};
 
-		gpio_ac_lcd: gpio-ac-lcd{
-			gpios = <&gpiom 6 GPIO_OUTPUT_LOW>;
-		};
-
 		/delete-node/ entering_rw;
 		/*
 		 * Not used, only to make system.c compilable.
@@ -142,7 +138,8 @@
 		<&gpioh 2 GPIO_INPUT_PULL_DOWN>,
 		<&gpioi 3 GPIO_INPUT_PULL_DOWN>,	//EC_AP_RSVD0_ODL
 		<&gpioj 4 GPIO_INPUT_PULL_DOWN>,
-		<&gpiom 2 GPIO_INPUT_PULL_DOWN>;
+		<&gpiom 2 GPIO_INPUT_PULL_DOWN>,
+		<&gpiom 6 GPIO_INPUT_PULL_DOWN>;
 	};
 
 	/delete-node/ cros-keyscan;
