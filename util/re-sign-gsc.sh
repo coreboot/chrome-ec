@@ -142,12 +142,13 @@ main () {
   case "${bin_size}" in
     (524288) rw_a_base=16384 # RO area size is fixed at 16K
              rw_b_base=$(( bin_size / 2 + rw_a_base ))
-             rw_key="util/signer/cr50-hsm-node-locked-key.pem.pub"
+	     key_name="cr50-hsm-backed-node-locked-key"
+             rw_key="util/signer/${key_name}.pem.pub"
              manifest="util/signer/ec_RW-manifest-dev.json"
              xml="util/signer/fuses.xml"
              codesigner_params+=(
                --b
-               --pkcs11_engine="${PKCS11_MODULE_PATH}:0:${KMS_PROJECT_PATH}/cr50-hsm-node-locked-key/cryptoKeyVersions/1"
+               --pkcs11_engine="${PKCS11_MODULE_PATH}:0:${KMS_PROJECT_PATH}/${key_name}/cryptoKeyVersions/1"
              )
              flash_base=262144
              prefix="cr50"
