@@ -80,6 +80,11 @@
 			gpios = <MCHP_GPIO_DECODE_057 GPIO_INPUT>;
 			enum-name = "GPIO_PG_EC_ALL_SYS_PWRGD";
 		};
+
+		/* KSO02 is inverted */
+		kbc-scanout-2 {
+			gpios = <MCHP_GPIO_DECODE_046 GPIO_OUTPUT_HIGH>;
+		};
 		pwrbtn: pwrbtn-ec-in-n {
 			gpios = <MCHP_GPIO_DECODE_106 GPIO_INPUT>;
 			enum-name = "GPIO_POWER_BUTTON_L";
