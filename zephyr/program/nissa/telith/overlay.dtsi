@@ -91,11 +91,11 @@
 
 	unused-pins {
 		compatible = "unused-gpios";
-		unused-gpios = <&gpiod 4 0>,
-			       <&gpioe 6 0>,
-			       <&gpioh 6 0>,
-			       <&gpiob 5 0>,
-			       <&gpioj 1 0>;
+		unused-gpios = <&gpiod 4 GPIO_INPUT_PULL_DOWN>,
+			       <&gpioe 6 GPIO_INPUT_PULL_DOWN>,
+			       <&gpioh 6 GPIO_INPUT_PULL_DOWN>,
+			       <&gpiob 5 GPIO_INPUT_PULL_DOWN>,
+			       <&gpioj 1 GPIO_INPUT_PULL_DOWN>;
 	};
 
 	temp_cpu_vr: cpu_vr {
