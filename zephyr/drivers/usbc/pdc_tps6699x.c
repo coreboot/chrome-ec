@@ -132,6 +132,8 @@ enum cmd_t {
 	CMD_GET_PCH_DATA_STATUS,
 	/** CMD_SET_DRP_MODE */
 	CMD_SET_DRP_MODE,
+	/** CMD_GET_DRP_MODE */
+	CMD_GET_DRP_MODE,
 	/** CMD_UPDATE_RETIMER */
 	CMD_UPDATE_RETIMER,
 	/** CMD_RECONNECT */
@@ -287,6 +289,7 @@ static const char *const state_names[] = {
 static const struct smf_state states[];
 
 static void cmd_set_drp_mode(struct pdc_data_t *data);
+static void cmd_get_drp_mode(struct pdc_data_t *data);
 static void cmd_set_tpc_rp(struct pdc_data_t *data);
 static void cmd_set_frs(struct pdc_data_t *data);
 static void cmd_get_rdo(struct pdc_data_t *data);
@@ -656,6 +659,9 @@ static void st_idle_run(void *o)
 		case CMD_SET_DRP_MODE:
 			cmd_set_drp_mode(data);
 			break;
+		case CMD_GET_DRP_MODE:
+			cmd_get_drp_mode(data);
+			break;
 		case CMD_SET_RETIMER_FW_UPDATE_MODE:
 			task_ucsi(data, UCSI_SET_RETIMER_MODE);
 			break;
@@ -792,6 +798,29 @@ static void cmd_set_drp_mode(struct pdc_data_t *data)
 		set_state(data, ST_ERROR_RECOVERY);
 		return;
 	}
+
+	/* Command has completed */
+	data->cci_event.command_completed = 1;
+	/* Inform the system of the event */
+	call_cci_event_cb(data);
+
+	/* Transition to idle state */
+	set_state(data, ST_IDLE);
+	return;
+}
+
+static void cmd_get_drp_mode(struct pdc_data_t *data)
+{
+	struct pdc_config_t const *cfg = data->dev->config;
+	union reg_port_configuration pdc_port_configuration;
+	uint8_t *drp_mode = (uint8_t *)data->user_buf;
+	int rv;
+
+	/* Read PDC port configuration */
+	rv = tps_rw_port_configuration(&cfg->i2c, &pdc_port_configuration,
+				       I2C_MSG_READ);
+
+	*drp_mode = pdc_port_configuration.typec_support_options;
 
 	/* Command has completed */
 	data->cci_event.command_completed = 1;
@@ -2139,6 +2168,11 @@ static int tps_set_drp_mode(const struct device *dev, enum drp_mode_t dm)
 	return tps_post_command(dev, CMD_SET_DRP_MODE, NULL);
 }
 
+static int tps_get_drp_mode(const struct device *dev, enum drp_mode_t *dm)
+{
+	return tps_post_command(dev, CMD_GET_DRP_MODE, dm);
+}
+
 static int tps_update_retimer_mode(const struct device *dev, bool enable)
 {
 	struct pdc_data_t *data = dev->data;
@@ -2317,6 +2351,7 @@ static const struct pdc_driver_api_t pdc_driver_api = {
 	.set_uor = tps_set_uor,
 	.set_pdr = tps_set_pdr,
 	.set_drp_mode = tps_set_drp_mode,
+	.get_drp_mode = tps_get_drp_mode,
 	.set_sink_path = tps_set_sink_path,
 	.get_connector_status = tps_get_connector_status,
 	.get_pdos = tps_get_pdos,
