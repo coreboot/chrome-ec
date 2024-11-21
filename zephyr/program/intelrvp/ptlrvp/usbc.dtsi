@@ -23,5 +23,9 @@
 			pdc = <&pd_pow_port1>;
 			policy = <&cros_policy>;
 		};
+		ppm-driver {
+			compatible = "ucsi-ppm";
+			lpm = <&pd_pow_port0 &pd_pow_port1>;
+		};
 	};
 };
