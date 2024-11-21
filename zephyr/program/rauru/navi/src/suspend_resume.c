@@ -7,6 +7,7 @@
 #include "atomic.h"
 #include "cros_board_info.h"
 #include "hooks.h"
+#include "power.h"
 #include "power/mt8186.h"
 #include "timer.h"
 
@@ -139,7 +140,7 @@ static void init_suspend_resume_workaround(void)
 }
 DECLARE_HOOK(HOOK_INIT, init_suspend_resume_workaround, HOOK_PRIO_LAST);
 
-__override void board_process_host_sleep_event(enum host_sleep_event state)
+__override void board_handle_host_sleep_event(enum host_sleep_event state)
 {
 	/* Workaround not needed for newer boards */
 	if (board_version > 1) {
@@ -152,5 +153,20 @@ __override void board_process_host_sleep_event(enum host_sleep_event state)
 		 * ongoing SPI transaction.
 		 */
 		hook_call_deferred(&enable_cs_interrupt_data, 50 * MSEC);
+	}
+}
+
+__override void board_handle_sleep_hang(enum sleep_hang_type hang_type)
+{
+	const struct gpio_dt_spec *s3_indicator_l =
+		GPIO_DT_FROM_NODELABEL(gpio_ap_in_sleep_l);
+
+	/* Note the S0IX is not actually S3 on ARM platform */
+	if (hang_type == SLEEP_HANG_S0IX_SUSPEND ||
+	    hang_type == SLEEP_HANG_S0IX_RESUME) {
+		disable_cs_interrupt();
+		gpio_pin_configure_dt(s3_indicator_l, GPIO_INPUT);
+	} else {
+		LOG_WRN("Unhandled hang %x", hang_type);
 	}
 }
