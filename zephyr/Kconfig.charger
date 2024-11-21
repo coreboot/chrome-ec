@@ -63,6 +63,13 @@ config PLATFORM_EC_CHARGE_MANAGER
 	  source is available on the hardware, so cannot be built without
 	  PLATFORM_EC_USBC.
 
+config PLATFORM_EC_CHARGE_MANAGER_EXTERNAL_POWER_LIMIT
+	bool "Charge manager external power limit"
+	help
+	  Enables Application processor to send host command to control the
+	  input current and voltage limit. Enabling this config will allow the
+	  EC to accept host command EC_CMD_EXTERNAL_POWER_LIMIT.
+
 config PLATFORM_EC_CHARGE_STATE_DEBUG
 	bool "Debug information about the charge state"
 	depends on PLATFORM_EC_CHARGE_MANAGER
