@@ -226,20 +226,20 @@ static void exit_file(struct itecomdbgr_config *conf)
 		fclose(conf->fi);
 }
 
-static int read_com(struct itecomdbgr_config *conf, uint8_t *inbuff,
-		    int ReadBytes)
+static ssize_t read_com(struct itecomdbgr_config *conf, uint8_t *inbuff,
+			int ReadBytes)
 {
-	int bReadStat;
+	ssize_t bReadStat;
 
 	bReadStat = read(conf->g_fd, inbuff, ReadBytes);
 
 	return bReadStat;
 }
 
-static int write_com(struct itecomdbgr_config *conf, const uint8_t *lpOutBuffer,
-		     int WriteBytes)
+static ssize_t write_com(struct itecomdbgr_config *conf,
+			 const uint8_t *lpOutBuffer, int WriteBytes)
 {
-	int bWriteStat;
+	ssize_t bWriteStat;
 
 	bWriteStat = write(conf->g_fd, lpOutBuffer, WriteBytes);
 
@@ -249,7 +249,7 @@ static int write_com(struct itecomdbgr_config *conf, const uint8_t *lpOutBuffer,
 static uint8_t debug_getc(struct itecomdbgr_config *conf)
 {
 	uint8_t data[1];
-	int res;
+	ssize_t res;
 
 	res = read(conf->g_fd, data, 1);
 
