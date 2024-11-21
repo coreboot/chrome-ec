@@ -87,10 +87,37 @@ static const struct ec_response_keybd_config awasuki_keybd = {
 			KEYBD_CAP_ASSISTANT_KEY,
 };
 
+static const struct ec_response_keybd_config awadoron_keybd = {
+	.num_top_row_keys = 15,
+	.action_keys = {
+		TK_BACK,		/* T1 */
+		TK_REFRESH,		/* T2 */
+		TK_FULLSCREEN,		/* T3 */
+		TK_OVERVIEW,		/* T4 */
+		TK_SNAPSHOT,		/* T5 */
+		TK_BRIGHTNESS_DOWN,	/* T6 */
+		TK_BRIGHTNESS_UP,	/* T7 */
+		TK_DICTATE,		/* T8 */
+		TK_DONOTDISTURB,	/* T9 */
+		TK_ACCESSIBILITY,	/* T10 */
+		TK_PLAY_PAUSE,		/* T11 */
+		TK_MICMUTE,		/* T12 */
+		TK_VOL_MUTE,		/* T13 */
+		TK_VOL_DOWN,		/* T14 */
+		TK_VOL_UP,		/* T15 */
+	},
+	.capabilities = KEYBD_CAP_FUNCTION_KEYS | KEYBD_CAP_NUMERIC_KEYPAD |
+			KEYBD_CAP_ASSISTANT_KEY,
+};
+
 __override const struct ec_response_keybd_config *
 board_vivaldi_keybd_config(void)
 {
-	return &awasuki_keybd;
+	if (get_cbi_fw_config_numeric_pad() == NUMERIC_PAD_PRESENT) {
+		return &awadoron_keybd;
+	} else {
+		return &awasuki_keybd;
+	}
 }
 
 __override struct key {
