@@ -47,6 +47,42 @@ if [[ -z ${CODESIGNER} ]]; then
   exit 1
 fi
 
+# Make sure there is a gsctool in the path.
+GSCTOOL=""
+for f in  gsctool \
+	    "${SCRIPT_DIR}/../extra/usb_updater/gsctool"; do
+  if command -v "${f}" > /dev/null 2>&1; then
+    GSCTOOL="${f}"
+    break
+  fi
+done
+if [[ -z ${GSCTOOL} ]]; then
+  echo "SCRIPT_NAME error: can't find gsctool" >&2
+  exit 1
+fi
+
+# Update the manifest
+update_manifest() {
+  local full_bin="${1}"
+  local manifest="${2}"
+  local epoch
+  local major
+  local minor
+  local rw_ver
+
+  # Remove the board id and info rollback bits.
+  sed -ziE 's/"board_[^,]+,\s*//g;s/"info"[^}]+},\s*/"info": { },/' \
+	  "${manifest}"
+
+  rw_ver="$("${GSCTOOL}" "-M" "-b" "${full_bin}" | \
+	  awk -F= '/IMAGE_RW_FW_VER/ {print $2}')"
+  IFS='.' read -r epoch major minor <<<"${rw_ver}"
+  echo "RW: ${rw_ver}"
+  sed "s/epoch\": [0-9]*/epoch\": ${epoch}/" "${manifest}" -i
+  sed "s/major\": [0-9]*/major\": ${major}/" "${manifest}" -i
+  sed "s/minor\": [0-9]*/minor\": ${minor}/" "${manifest}" -i
+}
+
 # Re-sign a single RW section.
 re_sign_rw() {
   local tmp_file="$1"
@@ -218,12 +254,13 @@ main () {
     fi
   done
 
-  # Clean up the manifest.
-  sed -zE 's/"board_[^,]+,\s*//g;s/"info"[^}]+},\s*/"info": { },/' \
-      "${manifest}" > "${TMPD}/manifest.json"
-
   tmp_file="${TMPD}/full.bin"
   cp "${full_bin}" "${tmp_file}"
+
+  cp "${manifest}" "${TMPD}/manifest.json"
+  # Clear the board id and rollback info mask. Update the manifest to use
+  # the same version as the original image.
+  update_manifest "${tmp_file}" "${TMPD}/manifest.json"
 
   codesigner_params+=(
       --json "${TMPD}/manifest.json"
