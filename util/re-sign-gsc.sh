@@ -72,7 +72,7 @@ update_manifest() {
   local rw_ver
 
   # Remove the board id and info rollback bits.
-  sed -ziE 's/"board_[^,]+,\s*//g;s/"info"[^}]+},\s*/"info": { },/' \
+  sed -i -zE 's/"board_[^,]+,\s*//g;s/"info"[^}]+},\s*/"info": { },/' \
 	  "${manifest}"
 
   rw_ver="$("${GSCTOOL}" "-M" "-b" "${full_bin}" | \
