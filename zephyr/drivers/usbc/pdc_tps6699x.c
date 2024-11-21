@@ -435,23 +435,22 @@ static void st_irq_run(void *o)
 	LOG_DBG("\n");
 
 	if (interrupt_pending) {
-		/* Set CCI EVENT for connector change */
-		data->cci_event.connector_change =
-			(pdc_interrupt.plug_insert_or_removal |
-			 pdc_interrupt.power_swap_complete |
-			 pdc_interrupt.fr_swap_complete |
-			 pdc_interrupt.data_swap_complete);
 		/* Set CCI EVENT for not supported */
 		data->cci_event.not_supported =
 			pdc_interrupt.not_supported_received;
+
 		/* Set CCI EVENT for vendor defined indicator (informs subsystem
 		 * that an interrupt occurred */
 		data->cci_event.vendor_defined_indicator = 1;
 
 		/* If a UCSI event is seen, stop using the cached connector
-		 * status change bits and re-read from PDC. */
+		 * status change bits and re-read from PDC and set CCI_EVENT for
+		 * connector change.
+		 */
 		if (pdc_interrupt.ucsi_connector_status_change_notification) {
 			data->use_cached_conn_status_change = false;
+			data->cci_event.connector_change =
+				cfg->connector_number + 1;
 		}
 
 		/* TODO(b/345783692): Handle other interrupt bits. */
@@ -522,6 +521,11 @@ static void st_init_run(void *o)
 
 	/* Set PDC notifications */
 	data->cmd = CMD_SET_NOTIFICATION_ENABLE;
+	/*
+	 * Need to post PDC_CMD_EVENT so the command isn't cleared in
+	 * st_idle_entry
+	 */
+	k_event_post(&data->pdc_event, PDC_CMD_EVENT);
 
 	/* Transition to the idle state */
 	set_state(data, ST_IDLE);
