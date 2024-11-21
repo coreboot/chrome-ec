@@ -478,7 +478,7 @@ static void getchipid(struct itecomdbgr_config *conf)
 
 static int read_id_2(struct itecomdbgr_config *conf)
 {
-	int result = 0;
+	int result;
 	uint8_t FlashID[3];
 
 	write_com(conf, enable_follow_mode, sizeof(enable_follow_mode));
@@ -499,16 +499,16 @@ static int read_id_2(struct itecomdbgr_config *conf)
 	    (FlashID[2] == 0xFE)) {
 		printf("FLASH TYPE = 8315\n\r");
 		conf->eflash_type = EFLASH_TYPE_8315;
-		result = 0;
+		result = SUCCESS;
 	} else if ((FlashID[0] == 0xC8) || (FlashID[0] == 0xEF)) {
 		printf("FLASH TYPE = KGD\n\r");
 		conf->eflash_type = EFLASH_TYPE_KGD;
-		result = 0;
+		result = SUCCESS;
 		conf->g_steps = STEPS_EXIT;
 	} else {
 		printf("\rInvalid EFLASH TYPE");
 		conf->eflash_type = EFLASH_TYPE_NONE;
-		result = 1;
+		result = FAIL;
 	}
 	return result;
 }
@@ -570,8 +570,8 @@ static int erase_flash(struct itecomdbgr_config *conf)
 		erase_buf[15] = 0;
 		write_com(conf, erase_buf, sizeof(erase_buf));
 		write_com(conf, cs_high, sizeof(cs_high));
-		if (check_status(conf, 0x01, 0) < 0) {
-			printf("erase_4k:check_status error 2\n\r");
+		if (check_status(conf, SPI_SR1_BUSY, 0) < 0) {
+			printf("%s: SPI_SR1_BUSY\n", __func__);
 			result = FAIL;
 			goto out;
 		}
@@ -639,7 +639,7 @@ static int fast_read_burst_cdata(struct itecomdbgr_config *conf,
 		else
 			read_count = end_addr - start_addr;
 
-		if (check_status(conf, 0x01, 0) < 0) {
+		if (check_status(conf, SPI_SR1_BUSY, 0) < 0) {
 			printf("fast_read_burst_cdata:check_status error 1\n\r");
 			result = FAIL;
 			goto out;
@@ -681,7 +681,7 @@ static int fast_read_burst_cdata(struct itecomdbgr_config *conf,
 			}
 		}
 		write_com(conf, cs_high, sizeof(cs_high));
-		if (check_status(conf, 0x01, 0) < 0) {
+		if (check_status(conf, SPI_SR1_BUSY, 0) < 0) {
 			printf("fast_read_burst_cdata:check_status error 2\n\r");
 			result = FAIL;
 			goto out;
@@ -801,7 +801,7 @@ static int check_flash(struct itecomdbgr_config *conf)
 {
 	int result = SUCCESS;
 
-	if ((result = fast_read_burst_cdata(conf, NULL, 1)) != 0) {
+	if ((result = fast_read_burst_cdata(conf, NULL, 1)) != SUCCESS) {
 		printf("check_flash : error\n\r");
 	}
 	printf("\n\r");
@@ -812,7 +812,8 @@ static int verify_flash(struct itecomdbgr_config *conf)
 {
 	int result = SUCCESS;
 
-	if ((result = fast_read_burst_cdata(conf, conf->g_writebuf, 0)) != 0) {
+	if ((result = fast_read_burst_cdata(conf, conf->g_writebuf, 0)) !=
+	    SUCCESS) {
 		printf("verify_flash : error\n\r");
 		result = FAIL;
 	}
@@ -827,7 +828,7 @@ static int read_flash(struct itecomdbgr_config *conf)
 	conf->update_start_addr = conf->read_start_addr;
 	conf->update_end_addr = conf->read_start_addr + conf->read_range;
 
-	if ((result = fast_read_burst_cdata(conf, NULL, 2)) != 0) {
+	if ((result = fast_read_burst_cdata(conf, NULL, true)) != SUCCESS) {
 		printf("read_flash : error\n\r");
 		result = FAIL;
 	}
