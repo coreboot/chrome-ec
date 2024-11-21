@@ -47,6 +47,9 @@ extern "C" {
 
 /** Dead pixels bitmask. */
 #define FINGERPRINT_ERROR_DEAD_PIXELS_MASK GENMASK(9, 0)
+/* Maximum number of dead pixels */
+#define FINGERPRINT_ERROR_DEAD_PIXELS_MAX \
+	(FINGERPRINT_ERROR_DEAD_PIXELS_MASK - 1)
 /** Number of dead pixels detected on the last maintenance. */
 #define FINGERPRINT_ERROR_DEAD_PIXELS(errors) \
 	((errors) & FINGERPRINT_ERROR_DEAD_PIXELS_MASK)
