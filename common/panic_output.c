@@ -24,7 +24,7 @@
 /*
  * For host tests, use a static area for panic data.
  */
-#ifdef CONFIG_BOARD_NATIVE_POSIX
+#if defined(CONFIG_BOARD_NATIVE_POSIX) || defined(CONFIG_BOARD_NATIVE_SIM)
 static struct panic_data zephyr_panic_data;
 #undef PANIC_DATA_PTR
 #undef CONFIG_PANIC_DATA_BASE
@@ -189,7 +189,8 @@ uintptr_t get_panic_data_start(void)
 	if (pdata_ptr->magic != PANIC_DATA_MAGIC)
 		return 0;
 
-	if (IS_ENABLED(CONFIG_BOARD_NATIVE_POSIX))
+	if (IS_ENABLED(CONFIG_BOARD_NATIVE_POSIX) ||
+	    IS_ENABLED(CONFIG_BOARD_NATIVE_SIM))
 		return (uintptr_t)pdata_ptr;
 
 	/* LCOV_EXCL_START - Can't cover non posix lines (yet) */
@@ -212,7 +213,7 @@ static uint32_t get_panic_data_size(void)
  * It can also delete panic data from previous boot, so this function
  * should be used when we are sure that we don't need it.
  */
-#ifdef CONFIG_BOARD_NATIVE_POSIX
+#if defined(CONFIG_BOARD_NATIVE_POSIX) || defined(CONFIG_BOARD_NATIVE_SIM)
 struct panic_data *test_get_panic_data_pointer(void)
 {
 	return pdata_ptr;
