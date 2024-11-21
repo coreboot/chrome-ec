@@ -4,21 +4,26 @@
  */
 
 #include "battery.h"
+#include "charge_state.h"
 #include "common.h"
 #include "cros_board_info.h"
 #include "cros_cbi.h"
 #include "ec_commands.h"
 #include "fan.h"
+#include "gpio.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
 #include "keyboard_backlight.h"
 #include "keyboard_customization.h"
+#include "util.h"
 
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(board_init, LOG_LEVEL_INF);
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, format, ##args)
+
+#define SB_AP23A7L 0x00
 
 enum battery_present battery_hw_present(void)
 {
@@ -28,6 +33,28 @@ enum battery_present battery_hw_present(void)
 
 	/* The GPIO is low when the battery is physically present */
 	return gpio_pin_get_dt(batt_pres) ? BP_NO : BP_YES;
+}
+
+enum battery_present battery_is_present(void)
+{
+	int state;
+
+	if (gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_ec_battery_pres_odl)))
+		return BP_NO;
+
+	/*
+	 *  According to the battery manufacturer's reply:
+	 *  To detect a bad battery, need to read the 0x00 register.
+	 *  If the 12th bit(Permanently Failure) is 1, it means a bad battery.
+	 */
+	if (sb_read(SB_MANUFACTURER_ACCESS, &state))
+		return BP_NO;
+
+	/* Detect the 12th bit value */
+	if (state & BIT(12))
+		return BP_NO;
+
+	return BP_YES;
 }
 
 test_export_static void fan_init(void)
