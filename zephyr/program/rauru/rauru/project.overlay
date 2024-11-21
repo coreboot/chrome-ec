@@ -238,8 +238,8 @@
 	};
 
 	batteries {
-		default_battery: cosmx-3 {
-			compatible = "cosmx,ap20cbl-3", "battery-smart";
+		default_battery: cosmx-ap23cbp {
+			compatible = "cosmx,ap23cbp", "battery-smart";
 		};
 	};
 
