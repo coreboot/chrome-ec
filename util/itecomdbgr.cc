@@ -947,8 +947,6 @@ static int uart_app(struct itecomdbgr_config *conf)
 
 	dbgr_disable_protect_path(conf);
 
-	conf->eflash_type = EFLASH_TYPE_KGD;
-
 	switch (conf->eflash_type) {
 	case EFLASH_TYPE_8315:
 		conf->sector_erase_pages = 4;
