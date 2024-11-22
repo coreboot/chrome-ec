@@ -312,7 +312,7 @@ ZTEST_USER(pdc_api, test_set_ccom)
 
 ZTEST_USER(pdc_api, test_set_drp_mode)
 {
-	int i, rv;
+	int i;
 	enum drp_mode_t dm_in[] = { DRP_NORMAL, DRP_TRY_SRC, DRP_TRY_SNK };
 	uint8_t num_modes = ARRAY_SIZE(dm_in);
 	enum drp_mode_t dm_out;
@@ -332,11 +332,9 @@ ZTEST_USER(pdc_api, test_set_drp_mode)
 
 		/* Check PDC driver API if supported */
 		dm_out = DRP_INVALID;
-		rv = pdc_get_drp_mode(dev, &dm_out);
+		zassert_ok(pdc_get_drp_mode(dev, &dm_out));
 		k_sleep(K_MSEC(SLEEP_MS));
-		if (rv == EC_SUCCESS) {
-			zassert_equal(dm_in[i], dm_out);
-		}
+		zassert_equal(dm_in[i], dm_out);
 	}
 }
 

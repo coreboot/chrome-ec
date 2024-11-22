@@ -486,14 +486,9 @@ ZTEST_USER(pdc_power_mgmt_api_connectionless, test_set_trysrc)
 ZTEST_USER(pdc_power_mgmt_api_connectionless, test_get_drp)
 {
 	enum drp_mode_t drp_mode = DRP_NORMAL;
-	int rv;
 
 	LOG_INF("Sending GET DRP");
-	rv = pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode);
-	if (rv == -ENOSYS) {
-		ztest_test_skip();
-	}
-	zassert_ok(rv, "rv=%d", rv);
+	zassert_ok(pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode));
 }
 
 ZTEST_USER(pdc_power_mgmt_api_connectionless, test_get_lpm_ppm_info)
@@ -1371,7 +1366,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_on)
 	uint32_t start;
 	const enum drp_mode_t expected = USBC0_UNA_DRP_MODE;
 	enum drp_mode_t drp_mode = DRP_INVALID;
-	int rv;
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
@@ -1398,10 +1392,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_on)
 	}
 
 	zassert_equal(CCOM_DRP, ccom);
-	rv = pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode);
-	if (rv == EC_SUCCESS) {
-		zassert_equal(drp_mode, expected);
-	}
+	zassert_ok(pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode));
+	zassert_equal(drp_mode, expected);
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
@@ -1412,7 +1404,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 	uint32_t start;
 	const enum drp_mode_t expected = DRP_NORMAL;
 	enum drp_mode_t drp_mode = DRP_INVALID;
-	int rv;
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
@@ -1441,10 +1432,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 
 	zassert_equal(1, pdr.swap_to_snk);
 	zassert_equal(0, pdr.swap_to_src);
-	rv = pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode);
-	if (rv == EC_SUCCESS) {
-		zassert_equal(drp_mode, expected);
-	}
+	zassert_ok(pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode));
+	zassert_equal(drp_mode, expected);
 }
 
 static bool wait_state_name(int port, const uint8_t target_state,
