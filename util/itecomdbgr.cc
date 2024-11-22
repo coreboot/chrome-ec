@@ -260,9 +260,11 @@ static uint8_t debug_getc(struct itecomdbgr_config *conf)
 	}
 }
 
-static void rw_reg(struct itecomdbgr_config *conf, unsigned long Address,
-		   uint8_t RW)
+static int rw_reg(struct itecomdbgr_config *conf, unsigned long Address,
+		  uint8_t RW)
 {
+	ssize_t cc;
+
 	/* [3][7][11] mapping to Address A2 A1 A0 */
 	uint8_t rw_reg_buf[15] = { W_CMD_PORT,
 				   0x80,
@@ -285,22 +287,35 @@ static void rw_reg(struct itecomdbgr_config *conf, unsigned long Address,
 	} else {
 		rw_reg_buf[14] = R_DATA_PORT;
 	}
-	write_com(conf, rw_reg_buf, sizeof(rw_reg_buf));
+	cc = write_com(conf, rw_reg_buf, sizeof(rw_reg_buf));
+	if (cc != sizeof(rw_reg_buf))
+		return FAIL;
+
+	return SUCCESS;
 }
 
-static void wr_reg(struct itecomdbgr_config *conf, unsigned long Address,
-		   uint8_t WrD0)
+static int wr_reg(struct itecomdbgr_config *conf, unsigned long Address,
+		  uint8_t WrD0)
 {
 	uint8_t Data[1];
+	ssize_t cc;
 
 	Data[0] = WrD0;
-	rw_reg(conf, Address, REG_WRITE);
-	write_com(conf, Data, sizeof(Data));
+	if (rw_reg(conf, Address, REG_WRITE) != SUCCESS)
+		return FAIL;
+	cc = write_com(conf, Data, sizeof(Data));
+	if (cc != sizeof(Data))
+		return FAIL;
+
+	return SUCCESS;
 }
 
-static uint8_t rd_reg(struct itecomdbgr_config *conf, unsigned long Address)
+static uint8_t rd_reg_or_ff(struct itecomdbgr_config *conf,
+			    unsigned long Address)
 {
-	rw_reg(conf, Address, REG_READ);
+	if (rw_reg(conf, Address, REG_READ) != SUCCESS)
+		return 0xff;
+
 	msleep(1);
 	return debug_getc(conf);
 }
@@ -446,10 +461,10 @@ static void getchipid(struct itecomdbgr_config *conf)
 	write_com(conf, test, 3);
 	printf("\rgetchipid = %x", debug_getc(conf));
 
-	chipid[0] = rd_reg(conf, 0xF02085);
-	chipid[1] = rd_reg(conf, 0xF02086);
-	chipid[2] = rd_reg(conf, 0xF02087);
-	chipver = rd_reg(conf, 0xF02002);
+	chipid[0] = rd_reg_or_ff(conf, 0xF02085);
+	chipid[1] = rd_reg_or_ff(conf, 0xF02086);
+	chipid[2] = rd_reg_or_ff(conf, 0xF02087);
+	chipver = rd_reg_or_ff(conf, 0xF02002);
 	printf("\rChip ID = %02x%02x%02x", chipid[0], chipid[1], chipid[2]);
 	printf(" , Chip Ver= %02x", chipver);
 	eflash_size_flag = chipver >> 4;
