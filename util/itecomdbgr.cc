@@ -920,7 +920,8 @@ static int uart_app(struct itecomdbgr_config *conf)
 	}
 	tcflush(conf->g_fd, TCIOFLUSH);
 
-	while (1) {
+	int tries = 0;
+	while (++tries < 25) {
 		if (conf->g_steps == STEPS_TEST) {
 			enter_uart_dbgr_mode(conf);
 			read_id_2(conf);
