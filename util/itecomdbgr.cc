@@ -186,7 +186,6 @@ static int init_file(struct itecomdbgr_config *conf)
 	if (conf->read_start_addr != NO_READ)
 		return 0;
 
-	printf("\n\rOpen file: %s\n\r", conf->file_name);
 	conf->fi = fopen(conf->file_name, "rb");
 	if (conf->fi != NULL) {
 		if (fstat(fileno(conf->fi), &st) < 0) {
