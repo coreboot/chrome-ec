@@ -22,7 +22,6 @@
 #include <termios.h>
 #include <unistd.h>
 
-#define VERSION "0.0.15"
 #define ITE_ERR 0xF0
 
 #define FW_UPDATE_START 0x00000
@@ -1093,7 +1092,6 @@ int main(int argc, char **argv)
 		case 'h':
 		default:
 			printf("\n\r");
-			printf("ITE COMDBGR Flash Tool:%s\n\r", VERSION);
 			printf("Usage:\n\r");
 			printf("	-f [fw filename]\n\r");
 			printf("	-d [device name]\n\r");
@@ -1110,7 +1108,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	printf("ITE COMDBGR Linux Flash Tool: Version %s\n\r", VERSION);
 	if ((conf.baudrate != 115200) && (conf.baudrate != 3000000)) {
 		printf("UART Baudrate only support 115200  or 3M\n\r");
 		return 0;
