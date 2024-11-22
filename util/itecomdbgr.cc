@@ -913,7 +913,7 @@ static int uart_app(struct itecomdbgr_config *conf)
 	tty.c_oflag &= ~ONLCR;
 
 	tty.c_cc[VTIME] = 10;
-	tty.c_cc[VMIN] = 255;
+	tty.c_cc[VMIN] = 0;
 
 	if (conf->baudrate != 3000000) {
 		/* set baud rate to 115200 */
