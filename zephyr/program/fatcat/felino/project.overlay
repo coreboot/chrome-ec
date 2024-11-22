@@ -1,0 +1,65 @@
+/* Copyright 2024 The ChromiumOS Authors
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
+/* fatcat program common DTS includes */
+
+#include <cros/integrated_fwid.dtsi>
+
+/* fatcat_it82002aw project DTS includes */
+
+#include "gpios.dtsi"
+#include "include/board.h"
+
+#define CHARGER_I2C i2c4
+#define PD_POW_I2C i2c1
+
+/ {
+	named-gpios {
+		/*
+		 * Aliases for power signal names
+		 */
+		en_pp3300_a: ec_ds3_r {};
+		en_pp5000_s5: bga_pinf4 {};
+		rsmrst_pwrgd: rsmrst_pwrgd_n_r {};
+		ec_pch_rsmrst_l: pm_rsmrst_n_r {};
+		pch_slp_s0_n: pch_slp_s0_n_r {};
+		ec_pch_pwrok_od: pch_pwrok_ec_r {};
+		all_sys_pwrgd: all_sys_pwrgd_r {};
+		pwrbtn: gsc_ec_pwr_btn_odl {};
+	};
+};
+
+#include "../../intelrvp/ptlrvp/power_signals.dtsi"
+
+#include "adc.dtsi"
+#include "console.dtsi"
+#include "i2c.dtsi"
+#include "interrupts.dtsi"
+
+/* these need to be promoted to program.conf */
+
+#include "binman.dtsi"
+
+/* Felino overrides follow... */
+
+/ {
+	named-gpios {
+		compatible = "named-gpios";
+
+		/* override since arb does not support GPIO_VOLTAGE_1P8 */
+		gpio_rsmrst_pwrgd_n_r: rsmrst_pwrgd_n_r {
+			gpios = <&gpiof 0 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
+		};
+	};
+};
+
+/* AP interface */
+&espi0 {
+	status = "okay";
+};
+
+&sha0 {
+	status = "okay";
+};

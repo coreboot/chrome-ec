@@ -22,6 +22,12 @@ config BOARD_FRANCKA
 	  Build Google Francka board. Francka has Intel PTL SoC
 	  with NPCX993FA0BX EC.
 
+config BOARD_FELINO
+	bool "Google felino"
+	help
+	  Build Google Felino board. Felino has Intel PTL SoC
+	  with it82002aw EC.
+
 module = Fatcat
 module-str = Fatcat board-specific code
 source "subsys/logging/Kconfig.template.log_config"

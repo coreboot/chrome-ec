@@ -25,3 +25,8 @@ if(DEFINED CONFIG_BOARD_FRANCKA)
 			"francka/src/alt_charger.c"
 	)
 endif()
+
+if(DEFINED CONFIG_BOARD_FELINO)
+	project(felino)
+	add_subdirectory(felino)
+endif()
