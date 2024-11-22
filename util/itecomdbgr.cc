@@ -463,15 +463,15 @@ static void getchipid(struct itecomdbgr_config *conf)
 	chipid[1] = rd_reg_or_ff(conf, 0xF02086);
 	chipid[2] = rd_reg_or_ff(conf, 0xF02087);
 	chipver = rd_reg_or_ff(conf, 0xF02002);
-	printf("\rChip ID = %02x%02x%02x", chipid[0], chipid[1], chipid[2]);
-	printf(" , Chip Ver= %02x", chipver);
+	printf("\rChip ID = %02x %02x %02x", chipid[0], chipid[1], chipid[2]);
+	printf(", Chip Ver = %02x", chipver);
 	eflash_size_flag = chipver >> 4;
 	if (eflash_size_flag == 0xC)
 		conf->eflash_size_in_k = 1024;
 	if (eflash_size_flag == 0x8)
 		conf->eflash_size_in_k = 512;
-	printf(" , eflash size = %04d KB", conf->eflash_size_in_k);
-	printf(" , file size = %04d B\n", conf->file_size);
+	printf(", eflash size = %4d KB", conf->eflash_size_in_k);
+	printf(", file size = %4d KB\n", conf->file_size / 1024);
 
 	/* Get the real flash size , 64K for 1 Block*/
 	/* Reset the global flash value */
@@ -504,7 +504,7 @@ static int read_id_2(struct itecomdbgr_config *conf)
 
 	write_com(conf, cs_high, sizeof(cs_high));
 	write_com(conf, disable_follow_mode, sizeof(disable_follow_mode));
-	printf(" Flash ID :%02x %02x %02x\n\r", FlashID[0], FlashID[1],
+	printf("Flash ID = %02x %02x %02x\n\r", FlashID[0], FlashID[1],
 	       FlashID[2]);
 	tcflush(conf->g_fd, TCIOFLUSH);
 
