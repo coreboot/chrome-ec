@@ -460,9 +460,10 @@ ZTEST_USER(pdc_api, test_reconnect)
  */
 void helper_clear_cached_chip_info(void)
 {
-	struct pdc_info_t zero = { 0 }, out;
+	struct pdc_info_t init = { 0 }, out;
 
-	emul_pdc_set_info(emul, &zero);
+	init.fw_version = PDC_FWVER_INVALID;
+	emul_pdc_set_info(emul, &init);
 	zassert_ok(pdc_get_info(dev, &out, true));
 	k_sleep(K_MSEC(SLEEP_MS));
 }

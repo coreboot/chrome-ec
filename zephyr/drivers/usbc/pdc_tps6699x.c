@@ -2451,6 +2451,7 @@ static int pdc_init(const struct device *dev)
 	data->dev = dev;
 	pdc_data[cfg->connector_number] = data;
 	data->init_done = false;
+	data->info.fw_version = PDC_FWVER_INVALID;
 
 	rv = gpio_pin_configure_dt(&cfg->irq_gpios, GPIO_INPUT);
 	if (rv < 0) {

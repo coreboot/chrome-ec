@@ -2812,6 +2812,7 @@ static int pdc_init(const struct device *dev)
 	data->cmd = CMD_NONE;
 	data->error_recovery_counter = 0;
 	data->init_retry_counter = 0;
+	data->info.fw_version = PDC_FWVER_INVALID;
 
 	pdc_data[cfg->connector_number] = data;
 
