@@ -45,7 +45,7 @@ extern "C" {
 #define PDC_FWVER_GET_MINOR(fwver) (((fwver) >> 8) & 0xFF)
 #define PDC_FWVER_GET_PATCH(fwver) ((fwver) & 0xFF)
 
-#define PDC_FWVER_INVALID (0x00000000)
+#define PDC_FWVER_INVALID (0xFFFFFFFF)
 
 /**
  * @brief Power Delivery Controller Information
