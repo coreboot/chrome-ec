@@ -389,7 +389,12 @@ class Renode(Platform):
             board_config.name,
         ]
         if zephyr:
-            cmd.append("--zephyr")
+            # We've adopted the convention that we prefix upstream Zephyr test
+            # names with "zephyr_".
+            if test_name.startswith("zephyr_"):
+                cmd.extend(["--zephyr-bin", image_path])
+            else:
+                cmd.append("--zephyr")
         else:
             cmd.extend(["--ec", test_name])
 

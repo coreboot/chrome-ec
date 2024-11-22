@@ -60,6 +60,7 @@ def launch(
     board: str,
     enable_write_protect: bool,
     zephyr: bool,
+    zephyr_bin: str,
     ec_project: str,
 ) -> int:
     """Launches an EC image in Renode.
@@ -70,6 +71,7 @@ def launch(
         board: The name of the EC/Zephyr board.
         enable_write_protect: Whether to enable hardware write protection.
         zephyr: True if running EC-based Zephyr image.
+        zephyr_bin: Path to Zephyr binary.
         ec_project: The name of the EC project.
     Returns:
         0 on success, otherwise non-zero.
@@ -80,7 +82,12 @@ def launch(
     script_path = pathlib.Path(__file__).parent.resolve()
     ec_dir = script_path.parent
 
-    if zephyr:
+    if zephyr_bin:
+        bin_file = pathlib.Path(zephyr_bin)
+        elf_ro_file = pathlib.Path(os.path.dirname(zephyr_bin)) / "zephyr.elf"
+        # There is only a single ELF file in upstream Zephyr builds.
+        elf_rw_file = elf_ro_file
+    elif zephyr:
         out_dir = ec_dir / "build" / "zephyr" / board / "output"
         bin_file = out_dir / "ec.bin"
         elf_ro_file = out_dir / "zephyr.ro.elf"
@@ -192,6 +199,16 @@ def main(argv: Optional[List[str]] = None) -> Optional[int]:
         "--zephyr", action="store_true", help="Run Zephyr."
     )
 
+    exclusive_group.add_argument(
+        "--zephyr-bin",
+        type=str,
+        help="""
+        Full path to a Zephyr binary.
+
+        Used for running upstream Zephyr binaries.
+        """,
+    )
+
     parser.add_argument(
         "-w",
         "--enable-write-protect",
@@ -204,6 +221,7 @@ def main(argv: Optional[List[str]] = None) -> Optional[int]:
         board=opts.board,
         enable_write_protect=opts.enable_write_protect,
         zephyr=opts.zephyr,
+        zephyr_bin=opts.zephyr_bin,
         ec_project=opts.ec,
     )
 
