@@ -172,7 +172,7 @@ static void hexdump(uint8_t *buffer, int len)
 			printf(" - ");
 		}
 		if (i % 16 == 15) {
-			printf("\n\r");
+			printf("\n");
 		}
 	}
 }
@@ -189,17 +189,17 @@ static int init_file(struct itecomdbgr_config *conf)
 	conf->fi = fopen(conf->file_name, "rb");
 	if (conf->fi != NULL) {
 		if (fstat(fileno(conf->fi), &st) < 0) {
-			printf("fstat error\n\r");
+			printf("fstat error\n");
 			return 1;
 		}
 		conf->file_size = st.st_size;
 		conf->g_writebuf = (uint8_t *)malloc(conf->file_size);
 		if (conf->g_writebuf == NULL) {
-			printf("alloc g_writebuf fail\n\r");
+			printf("alloc g_writebuf fail\n");
 		}
 		conf->g_readbuf = (uint8_t *)malloc(conf->file_size);
 		if (conf->g_readbuf == NULL) {
-			printf("alloc g_readbuf fail\n\r");
+			printf("alloc g_readbuf fail\n");
 		}
 		bytes = fread(conf->g_writebuf, 1, conf->file_size, conf->fi);
 
@@ -436,7 +436,7 @@ static int check_status(struct itecomdbgr_config *conf, uint8_t wait_mask,
 		status = debug_getc(conf);
 		write_com(conf, cs_high, sizeof(cs_high));
 		if (timeout++ > 200) {
-			printf("check_status timeout exit!\n\r");
+			printf("check_status timeout exit!\n");
 			return -1;
 		}
 
@@ -457,13 +457,13 @@ static void getchipid(struct itecomdbgr_config *conf)
 
 	/* Get CHIPID_1 for dbgr command set */
 	write_com(conf, test, 3);
-	printf("\rgetchipid = %x", debug_getc(conf));
+	printf("getchipid = %02x\n", debug_getc(conf));
 
 	chipid[0] = rd_reg_or_ff(conf, 0xF02085);
 	chipid[1] = rd_reg_or_ff(conf, 0xF02086);
 	chipid[2] = rd_reg_or_ff(conf, 0xF02087);
 	chipver = rd_reg_or_ff(conf, 0xF02002);
-	printf("\rChip ID = %02x %02x %02x", chipid[0], chipid[1], chipid[2]);
+	printf("Chip ID = %02x %02x %02x", chipid[0], chipid[1], chipid[2]);
 	printf(", Chip Ver = %02x", chipver);
 	eflash_size_flag = chipver >> 4;
 	if (eflash_size_flag == 0xC)
@@ -504,22 +504,22 @@ static int read_id_2(struct itecomdbgr_config *conf)
 
 	write_com(conf, cs_high, sizeof(cs_high));
 	write_com(conf, disable_follow_mode, sizeof(disable_follow_mode));
-	printf("Flash ID = %02x %02x %02x\n\r", FlashID[0], FlashID[1],
+	printf("Flash ID = %02x %02x %02x\n", FlashID[0], FlashID[1],
 	       FlashID[2]);
 	tcflush(conf->g_fd, TCIOFLUSH);
 
 	if ((FlashID[0] == 0xFF) && (FlashID[1] == 0xFF) &&
 	    (FlashID[2] == 0xFE)) {
-		printf("FLASH TYPE = 8315\n\r");
+		printf("FLASH TYPE = 8315\n");
 		conf->eflash_type = EFLASH_TYPE_8315;
 		result = SUCCESS;
 	} else if ((FlashID[0] == 0xC8) || (FlashID[0] == 0xEF)) {
-		printf("FLASH TYPE = KGD\n\r");
+		printf("FLASH TYPE = KGD\n");
 		conf->eflash_type = EFLASH_TYPE_KGD;
 		result = SUCCESS;
 		conf->g_steps = STEPS_EXIT;
 	} else {
-		printf("\rInvalid EFLASH TYPE");
+		printf("Invalid EFLASH TYPE\n");
 		conf->eflash_type = EFLASH_TYPE_NONE;
 		result = FAIL;
 	}
@@ -573,7 +573,7 @@ static int erase_flash(struct itecomdbgr_config *conf)
 	write_com(conf, enable_follow_mode, sizeof(enable_follow_mode));
 	while (start_addr < end_addr) {
 		if (spi_sr1_wel(conf) != SUCCESS) {
-			printf("erase_4k:check_status error 1\n\r");
+			printf("erase_4k:check_status error 1\n");
 			result = FAIL;
 			goto out;
 		}
@@ -653,7 +653,7 @@ static int fast_read_burst_cdata(struct itecomdbgr_config *conf,
 			read_count = end_addr - start_addr;
 
 		if (check_status(conf, SPI_SR1_BUSY, 0) < 0) {
-			printf("fast_read_burst_cdata:check_status error 1\n\r");
+			printf("fast_read_burst_cdata:check_status error 1\n");
 			result = FAIL;
 			goto out;
 		}
@@ -687,7 +687,7 @@ static int fast_read_burst_cdata(struct itecomdbgr_config *conf,
 			}
 
 			if (count) {
-				printf("fast_read_burst_cdata ERR\n\r");
+				printf("fast_read_burst_cdata ERR\n");
 				hexdump(DBG_BUF, 256);
 				result = FAIL;
 				goto out;
@@ -695,7 +695,7 @@ static int fast_read_burst_cdata(struct itecomdbgr_config *conf,
 		}
 		write_com(conf, cs_high, sizeof(cs_high));
 		if (check_status(conf, SPI_SR1_BUSY, 0) < 0) {
-			printf("fast_read_burst_cdata:check_status error 2\n\r");
+			printf("fast_read_burst_cdata:check_status error 2\n");
 			result = FAIL;
 			goto out;
 		}
@@ -804,9 +804,9 @@ static int write_flash(struct itecomdbgr_config *conf)
 {
 	int result = SUCCESS;
 	if ((result = page_program_burst_v2(conf, conf->g_writebuf)) != 0) {
-		printf("write_flash : error\n\r");
+		printf("write_flash : error\n");
 	}
-	printf("\n\r");
+	printf("\n");
 	return result;
 }
 
@@ -815,9 +815,9 @@ static int check_flash(struct itecomdbgr_config *conf)
 	int result = SUCCESS;
 
 	if ((result = fast_read_burst_cdata(conf, NULL, 1)) != SUCCESS) {
-		printf("check_flash : error\n\r");
+		printf("check_flash : error\n");
 	}
-	printf("\n\r");
+	printf("\n");
 	return result;
 }
 
@@ -827,10 +827,10 @@ static int verify_flash(struct itecomdbgr_config *conf)
 
 	if ((result = fast_read_burst_cdata(conf, conf->g_writebuf, 0)) !=
 	    SUCCESS) {
-		printf("verify_flash : error\n\r");
+		printf("verify_flash : error\n");
 		result = FAIL;
 	}
-	printf("\n\r");
+	printf("\n");
 	return result;
 }
 
@@ -842,10 +842,10 @@ static int read_flash(struct itecomdbgr_config *conf)
 	conf->update_end_addr = conf->read_start_addr + conf->read_range;
 
 	if ((result = fast_read_burst_cdata(conf, NULL, true)) != SUCCESS) {
-		printf("read_flash : error\n\r");
+		printf("read_flash : error\n");
 		result = FAIL;
 	}
-	printf("\n\r");
+	printf("\n");
 	return result;
 }
 
@@ -973,7 +973,7 @@ static int uart_app(struct itecomdbgr_config *conf)
 		conf->sector_size = 4096;
 		break;
 	default:
-		printf("Invalid EFLASH TYPE!\n\r");
+		printf("Invalid EFLASH TYPE!\n");
 		return_status = -1;
 		goto out;
 	}
@@ -1090,25 +1090,25 @@ int main(int argc, char **argv)
 			break;
 		case 'h':
 		default:
-			printf("\n\r");
-			printf("Usage:\n\r");
-			printf("	-f [fw filename]\n\r");
-			printf("	-d [device name]\n\r");
-			printf("	-b [baudrate]\n\r");
-			printf("	-n : no verify\n\r");
-			printf("	-r : [read filename]\n\r");
-			printf("	-R : [read start addr] [length]\n\r");
-			printf("Example :\n\r");
-			printf("    %s -f ec.bin -d /dev/ttyUSB3\n\r", argv[0]);
-			printf("    %s -f ec.bin -d /dev/ttyUSB3 -n\n\r",
+			printf("\n");
+			printf("Usage:\n");
+			printf("	-f [fw filename]\n");
+			printf("	-d [device name]\n");
+			printf("	-b [baudrate]\n");
+			printf("	-n : no verify\n");
+			printf("	-r : [read filename]\n");
+			printf("	-R : [read start addr] [length]\n");
+			printf("Example :\n");
+			printf("    %s -f ec.bin -d /dev/ttyUSB3\n", argv[0]);
+			printf("    %s -f ec.bin -d /dev/ttyUSB3 -n\n",
 			       argv[0]);
-			printf("    %s -R 0 0x100000\n\r", argv[0]);
+			printf("    %s -R 0 0x100000\n", argv[0]);
 			exit(1);
 		}
 	}
 
 	if ((conf.baudrate != 115200) && (conf.baudrate != 3000000)) {
-		printf("UART Baudrate only support 115200  or 3M\n\r");
+		printf("UART Baudrate only support 115200  or 3M\n");
 		return 0;
 	}
 
@@ -1120,13 +1120,13 @@ int main(int argc, char **argv)
 
 	if ((conf.file_name == NULL) && (conf.read_start_addr == NO_READ) &&
 	    (conf.read_range == 0)) {
-		printf("choose a file to flash..\n\r");
+		printf("choose a file to flash..\n");
 		return 0;
 	}
 
 	r = init_file(&conf);
 	if (r) {
-		printf("Open file error\n\r");
+		printf("Open file error\n");
 		exit(1);
 	}
 
