@@ -224,14 +224,21 @@ static void exit_file(struct itecomdbgr_config *conf)
 		fclose(conf->fi);
 }
 
-static ssize_t read_com(struct itecomdbgr_config *conf, uint8_t *inbuff,
-			int ReadBytes)
+static ssize_t read_com(struct itecomdbgr_config *conf, uint8_t *const inbuff,
+			const size_t ReadBytes)
 {
-	ssize_t bReadStat;
+	size_t input_cc;
+	ssize_t cc;
 
-	bReadStat = read(conf->g_fd, inbuff, ReadBytes);
+	for (input_cc = 0; input_cc < ReadBytes; input_cc += cc) {
+		cc = read(conf->g_fd, inbuff + input_cc, ReadBytes - input_cc);
+		if (cc < 0)
+			return -1;
+		if (cc == 0)
+			break;
+	}
 
-	return bReadStat;
+	return input_cc;
 }
 
 static ssize_t write_com(struct itecomdbgr_config *conf,
@@ -616,7 +623,6 @@ static int fast_read_burst_cdata(struct itecomdbgr_config *conf,
 	uint8_t DBG_BUF[256];
 	uint8_t allff[256];
 	int j = 0;
-	int k = 0;
 	int read_count = 0;
 	int count;
 	int result = SUCCESS;
@@ -647,6 +653,8 @@ static int fast_read_burst_cdata(struct itecomdbgr_config *conf,
 	int progress_percent;
 
 	while (start_addr < end_addr) {
+		ssize_t cc;
+
 		if ((end_addr - start_addr) >= conf->page_size)
 			read_count = conf->page_size;
 		else
@@ -664,8 +672,11 @@ static int fast_read_burst_cdata(struct itecomdbgr_config *conf,
 		fastread_buf[15] = (start_addr) & 0xFF;
 		write_com(conf, fastread_buf, sizeof(fastread_buf));
 
-		for (k = 0; k < 4; k++) {
-			read_com(conf, &DBG_BUF[0 + k * 64], 64);
+		cc = read_com(conf, DBG_BUF, sizeof(DBG_BUF));
+		if (cc != sizeof(DBG_BUF)) {
+			fprintf(stderr, "%s: partial read %zd\n", __func__, cc);
+			result = FAIL;
+			goto out;
 		}
 
 		progress_percent = (++j * 100) / total_size;
