@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env vpython3
 # Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -26,17 +26,38 @@ import glob
 import os
 import pathlib
 import re
+import site
 import sys
 import tempfile
 import traceback
 
+
+EC_BASE = pathlib.Path(__file__).parent.parent
+
+if "ZEPHYR_BASE" in os.environ:
+    ZEPHYR_BASE = pathlib.Path(os.environ.get("ZEPHYR_BASE"))
+else:
+    ZEPHYR_BASE = pathlib.Path(
+        EC_BASE.resolve().parent.parent / "third_party" / "zephyr" / "main"
+    )
+
+if not os.path.exists(ZEPHYR_BASE):
+    raise Exception(
+        f"ZEPHYR_BASE path does not exist!\nZEPHYR_BASE={ZEPHYR_BASE}"
+    )
+
+
+site.addsitedir(ZEPHYR_BASE / "scripts")
+site.addsitedir(ZEPHYR_BASE / "scripts" / "kconfig")
 
 # Try to use kconfiglib if available, but fall back to a simple recursive grep.
 # This is used by U-Boot in some situations so we keep it to avoid forking this
 # script.
 USE_KCONFIGLIB = False
 try:
+    # pylint:disable=import-error,wrong-import-position
     import kconfiglib
+    import zephyr_module
 
     USE_KCONFIGLIB = True
 except ImportError:
@@ -335,50 +356,63 @@ class KconfigCheck:
         Returns:
             List of config and menuconfig options found
         """
+        _ = search_paths
+        kconfigs = []
+
         if USE_KCONFIGLIB and try_kconfiglib:
             with tempfile.TemporaryDirectory() as temp_dir:
-                (pathlib.Path(temp_dir) / "Kconfig.modules").touch()
+                modules = zephyr_module.parse_modules(
+                    ZEPHYR_BASE, modules=[EC_BASE]
+                )
+
+                kconfig = ""
+                for module in modules:
+                    kconfig += zephyr_module.process_kconfig(
+                        module.project, module.meta
+                    )
+
+                # generate Kconfig.modules file
+                with open(
+                    pathlib.Path(temp_dir) / "Kconfig.modules",
+                    "w",
+                    encoding="utf-8",
+                ) as file:
+                    file.write(kconfig)
+
+                # generate few more stub files
+                (pathlib.Path(temp_dir) / "Kconfig.dts").touch()
                 (pathlib.Path(temp_dir) / "soc").mkdir()
-                (pathlib.Path(temp_dir) / "soc" / "Kconfig.defconfig").touch()
                 (pathlib.Path(temp_dir) / "soc" / "Kconfig.soc").touch()
+                (pathlib.Path(temp_dir) / "soc" / "Kconfig.defconfig").touch()
                 (pathlib.Path(temp_dir) / "arch").mkdir()
                 (pathlib.Path(temp_dir) / "arch" / "Kconfig").touch()
 
-                os.environ.update(
-                    {
-                        "srctree": srcdir,
-                        "SOC_DIR": "soc",
-                        "ARCH_DIR": "arch",
-                        "BOARD_DIR": "boards/*/*",
-                        "ARCH": "*",
-                        "KCONFIG_BINARY_DIR": temp_dir,
-                        "HWM_SCHEME": "v2",
-                    }
-                )
-                kconfigs = []
-                for filename in [
-                    "Kconfig",
-                    os.path.join(os.environ["ZEPHYR_BASE"], "Kconfig.zephyr"),
-                ]:
-                    kconf = kconfiglib.Kconfig(
-                        filename,
-                        warn=False,
-                        search_paths=search_paths,
-                        allow_empty_macros=True,
-                    )
+                os.environ["ZEPHYR_BASE"] = str(ZEPHYR_BASE)
+                os.environ["srctree"] = str(ZEPHYR_BASE)
+                os.environ["KCONFIG_BINARY_DIR"] = temp_dir
+                os.environ["ARCH_DIR"] = "arch"
+                os.environ["ARCH"] = "*"
+                os.environ["HWM_SCHEME"] = "v2"
+                os.environ["BOARD"] = "boards"
 
-                    symbols = [
-                        node.item.name
-                        for node in kconf.node_iter()
-                        if isinstance(node.item, kconfiglib.Symbol)
-                    ]
+                if srcdir:
+                    filename = os.path.join(srcdir, "Kconfig")
+                else:
+                    filename = os.path.join(ZEPHYR_BASE, "Kconfig")
 
-                    symbols = cls.fixup_symbols(symbols, replace_list)
+                kconf = kconfiglib.Kconfig(filename)
 
-                    kconfigs += symbols
+                symbols = [
+                    node.item.name
+                    for node in kconf.node_iter()
+                    if isinstance(node.item, kconfiglib.Symbol)
+                ]
+
+                symbols = cls.fixup_symbols(symbols, replace_list)
+
+                kconfigs += symbols
         else:
             symbols = []
-            kconfigs = []
             # Remove the prefix if present
             expr = re.compile(r"\n(config|menuconfig) ([A-Za-z0-9_]*)\n")
             for fname in cls.find_kconfigs(srcdir):

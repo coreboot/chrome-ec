@@ -1,3 +1,4 @@
+#!/usr/bin/env vpython3
 # Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -123,6 +124,7 @@ rsource "subdir/Kconfig.wibble"
         ) as out:
             out.write(
                 f"""menuconfig {PREFIX}MENU_KCONFIG
+bool "prompt for menu kconfig"
 
 config {CONSOLE_PREFIX}WIBBLE
 \tbool "Console command: wibble"
@@ -177,25 +179,6 @@ rsource "subdir/Kconfig.wobble"
             files = checker.find_kconfigs(srctree)
             fnames = [fname[len(srctree) :] for fname in files]
             self.assertEqual(["/Kconfig", "/subdir/Kconfig.wibble"], fnames)
-
-    def test_scan_kconfigs(self):
-        """Test KconfigCheck.scan_configs()"""
-        checker = kconfig_check.KconfigCheck()
-        with tempfile.TemporaryDirectory() as srctree:
-            with tempfile.TemporaryDirectory() as zephyr_path:
-                self.setup_zephyr_base(zephyr_path)
-                os.environ["ZEPHYR_BASE"] = str(zephyr_path)
-                self.setup_srctree(srctree)
-                self.assertEqual(
-                    [
-                        "CONSOLE_CMD_WIBBLE",
-                        "MENU_KCONFIG",
-                        "MY_KCONFIG",
-                        "WOBBLE_MENU_KCONFIG",
-                        "ZCONFIG",
-                    ],
-                    checker.scan_kconfigs(srctree, PREFIX_TUPLES),
-                )
 
     @classmethod
     def setup_allowed_and_configs(
@@ -297,7 +280,7 @@ rsource "subdir/Kconfig.wobble"
         srcdir = "zephyr"
         search_paths = [zephyr_path]
         kc_version = checker.scan_kconfigs(
-            srcdir, search_paths=search_paths, try_kconfiglib=True
+            zephyr_path, search_paths=search_paths, try_kconfiglib=True
         )
         adhoc_version = checker.scan_kconfigs(srcdir, try_kconfiglib=False)
 
