@@ -138,13 +138,6 @@ a corresponding Kconfig option for Zephyr"""
         help="Kconfig options to ignore (without CONFIG_ prefix)",
     )
     parser.add_argument(
-        "-I",
-        "--search-path",
-        type=str,
-        action="append",
-        help="Search paths to look for Kconfigs",
-    )
-    parser.add_argument(
         "-r",
         "--replace",
         metavar="prefix,adhoc",
@@ -339,7 +332,6 @@ class KconfigCheck:
         cls,
         srcdir,
         replace_list=None,
-        search_paths=None,
         try_kconfiglib=True,
     ):
         """Scan a source tree for Kconfig options
@@ -349,14 +341,11 @@ class KconfigCheck:
             replace_list: List of prefix/adhoc tuples.  The "prefix" is removed
                 from Kconfig symbols and replaced by "adhoc".
                 e.g. ('PLATFORM_EC, '')
-            search_paths: List of project paths to search for Kconfig files, in
-                addition to the current directory
             try_kconfiglib: Use kconfiglib if available
 
         Returns:
             List of config and menuconfig options found
         """
-        _ = search_paths
         kconfigs = []
 
         if USE_KCONFIGLIB and try_kconfiglib:
@@ -431,7 +420,6 @@ class KconfigCheck:
         allowed_file,
         replace_list=None,
         use_defines=False,
-        search_paths=None,
     ):
         """Find new and unneeded ad-hoc configs in the configs_file
 
@@ -443,8 +431,6 @@ class KconfigCheck:
                 from Kconfig symbols and replaced by "adhoc".
                 e.g. ('PLATFORM_EC, '')
             use_defines: True if each line of the file starts with #define
-            search_paths: List of project paths to search for Kconfig files, in
-                addition to the current directory
 
         Returns:
             Tuple:
@@ -457,7 +443,7 @@ class KconfigCheck:
         """
         configs = self.read_configs(configs_file, use_defines)
         try:
-            kconfigs = self.scan_kconfigs(srcdir, replace_list, search_paths)
+            kconfigs = self.scan_kconfigs(srcdir, replace_list)
         except kconfiglib.KconfigError:
             # If we don't actually have access to the full Kconfig then we may
             # get an error. Fall back to using manual methods.
@@ -466,7 +452,6 @@ class KconfigCheck:
             kconfigs = self.scan_kconfigs(
                 srcdir,
                 replace_list,
-                search_paths,
                 try_kconfiglib=False,
             )
 
@@ -483,7 +468,6 @@ class KconfigCheck:
         allowed_file,
         replace_list,
         use_defines,
-        search_paths,
         ignore=None,
     ):
         """Find new ad-hoc configs in the configs_file
@@ -496,8 +480,6 @@ class KconfigCheck:
                 from each Kconfig and replaced with the adhoc string prior to
                 comparison.  (e.e. ['PLATFORM_EC',''])
             use_defines: True if each line of the file starts with #define
-            search_paths: List of project paths to search for Kconfig files, in
-                addition to the current directory
             ignore: List of Kconfig options to ignore if they match an ad-hoc
                 CONFIG. This means they will not cause an error if they match
                 an ad-hoc CONFIG.
@@ -511,7 +493,6 @@ class KconfigCheck:
             allowed_file,
             replace_list,
             use_defines,
-            search_paths,
         )
         if new_adhoc:
             file_list = "\n".join([f"CONFIG_{name}" for name in new_adhoc])
@@ -565,7 +546,6 @@ update in your CL:
         allowed_file,
         replace_list,
         use_defines,
-        search_paths,
     ):
         """Find new ad-hoc configs in the configs_file
 
@@ -577,8 +557,6 @@ update in your CL:
                 from each Kconfig and replaced with the adhoc string prior to
                 comparison.  (e.e. ['PLATFORM_EC',''])
             use_defines: True if each line of the file starts with #define
-            search_paths: List of project paths to search for Kconfig files, in
-                addition to the current directory
 
         Returns:
             Exit code: 0 if OK, 1 if a problem was found
@@ -589,7 +567,6 @@ update in your CL:
             allowed_file,
             replace_list,
             use_defines,
-            search_paths,
         )
         with open(NEW_ALLOWED_FNAME, "w", encoding="utf-8") as out:
             combined = sorted(new_adhoc + updated_adhoc)
@@ -600,24 +577,17 @@ update in your CL:
     def check_undef(
         self,
         srcdir,
-        search_paths,
     ):
         """Parse the ec header files and find zephyr Kconfigs that are
         incorrectly undefined or defined to a default value.
 
         Args:
             srcdir: Source directory to scan for Kconfig files
-            search_paths: List of project paths to search for Kconfig files, in
-                addition to the current directory
 
         Returns:
             Exit code: 0 if OK, 1 if a problem was found
         """
-        kconfigs = set(
-            self.scan_kconfigs(
-                srcdir=srcdir, replace_list=None, search_paths=search_paths
-            )
-        )
+        kconfigs = set(self.scan_kconfigs(srcdir=srcdir, replace_list=None))
 
         if_re = re.compile(r"^\s*#\s*if(ndef CONFIG_ZEPHYR)?")
         endif_re = re.compile(r"^\s*#\s*endif")
@@ -685,7 +655,6 @@ def main(argv):
             allowed_file=args.allowed,
             replace_list=replace_list,
             use_defines=args.use_defines,
-            search_paths=args.search_path,
             ignore=args.ignore,
         )
     if args.cmd == "build":
@@ -695,12 +664,10 @@ def main(argv):
             allowed_file=args.allowed,
             replace_list=replace_list,
             use_defines=args.use_defines,
-            search_paths=args.search_path,
         )
     if args.cmd == "check_undef":
         return checker.check_undef(
             srcdir=args.srctree,
-            search_paths=args.search_path,
         )
     return 2
 

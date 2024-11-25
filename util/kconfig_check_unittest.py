@@ -278,10 +278,7 @@ rsource "subdir/Kconfig.wobble"
 
         checker = kconfig_check.KconfigCheck()
         srcdir = "zephyr"
-        search_paths = [zephyr_path]
-        kc_version = checker.scan_kconfigs(
-            zephyr_path, search_paths=search_paths, try_kconfiglib=True
-        )
+        kc_version = checker.scan_kconfigs(zephyr_path, try_kconfiglib=True)
         adhoc_version = checker.scan_kconfigs(srcdir, try_kconfiglib=False)
 
         # List of things missing from the Kconfig
