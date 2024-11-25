@@ -113,7 +113,7 @@ enum sensor_config motion_sense_get_ec_config(void)
 #define CONFIG_ACCEL_FORCE_MODE_MASK 0
 #endif
 
-static bool motion_sensor_in_forced_mode(const struct motion_sensor_t *sensor)
+bool motion_sensor_in_forced_mode(const struct motion_sensor_t *sensor)
 {
 	/* Sensor in force mode */
 	if ((CONFIG_ACCEL_FORCE_MODE_MASK & (1 << (sensor - motion_sensors)))) {
