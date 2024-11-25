@@ -18,6 +18,8 @@ zephyr_library_sources("src/intelrvp.c")
 zephyr_library_sources("src/intel_rvp_board_id.c")
 endif()
 
+zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_KEYBOARD_STRAUSS "src/kbd_strauss.c")
+
 if((DEFINED CONFIG_BOARD_ADLRVP_MCHP) OR (DEFINED CONFIG_BOARD_ADLRVP_NPCX))
   add_subdirectory(adlrvp)
   zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "${PLATFORM_EC}/baseboard/intelrvp/usb_pd_policy_mecc_1_0.c")

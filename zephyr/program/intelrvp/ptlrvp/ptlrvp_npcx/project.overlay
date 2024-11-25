@@ -13,6 +13,7 @@
 #include "gpio.dtsi"
 #include "i2c.dts"
 #include "psl.dtsi"
+#include "keyboard.dtsi"
 #include "../battery.dtsi"
 #include "../gsc_board.dtsi"
 #include "../i2c.dtsi"
@@ -34,10 +35,6 @@
 &it8801_mfd {
 	irq-gpios = <&gpio7 0 GPIO_ACTIVE_HIGH>;
 };
-
-/* TODO: Enable with Keyboard logic b/377409155 */
-/delete-node/ &int_vol_up;
-/delete-node/ &int_vol_dn;
 
 &cbi_flash {
     /*
