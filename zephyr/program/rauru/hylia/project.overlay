@@ -23,8 +23,19 @@
 	aliases {
 		bmi3xx-int = &base_accel;
 		lis2dw12-int = &lid_accel;
-		gpio-en-hdmi-pwr = &gpio_en_hdmi_pwr;
 		tcs3400-int = &als_clear;
+	};
+
+	gpio-interrupts {
+		/delete-node/ volume-up;
+		/delete-node/ volume-down;
+		/delete-node/ hdmi-ec-hpd;
+		/delete-node/ ec_als_rgb;
+		/delete-node/ ec-imu;
+		int_lid_accel: lid-accel {
+				irq-pin = <&gpio_lid_accel_int_ec_l>;
+				flags = <GPIO_INT_EDGE_FALLING>;
+		};
 	};
 
 	/* Rotation matrix used by drivers. */
@@ -234,9 +245,9 @@
 		 * list of GPIO interrupts that have to
 		 * be enabled at initial stage
 		 */
-		sensor-irqs = <&int_imu &int_als_rgb>;
+		sensor-irqs = <&int_lid_accel>;
 		/* list of sensors in force mode */
-		accel-force-mode-sensors = <&als_clear>;
+		accel-force-mode-sensors = <&base_accel>;
 	};
 
 	batteries {
