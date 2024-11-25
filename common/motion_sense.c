@@ -734,7 +734,6 @@ static int motion_sense_process(struct motion_sensor_t *sensor, uint32_t *event,
 	}
 
 	if ((*event & TASK_EVENT_MOTION_INTERRUPT_MASK || is_odr_pending) &&
-	    (!motion_sensor_in_forced_mode(sensor)) &&
 	    (sensor->drv->irq_handler != NULL)) {
 		ret = sensor->drv->irq_handler(sensor, event);
 		if (ret == EC_SUCCESS)
