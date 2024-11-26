@@ -8,6 +8,12 @@ config BOARD_TRULO
 	  Build Google Trulo reference board.  This board uses an Intel TWL SoC
 	  and NUVATON EC
 
+config BOARD_ULDRENITE
+	bool "Google Uldrenite Board"
+	help
+	  Build Google Uldrenite reference board.  This board uses an Intel TWL SoC
+	  and NPCX997FB0BX EC
+
 module = Trulo
 module-str = Trulo board-specific code
 source "subsys/logging/Kconfig.template.log_config"
