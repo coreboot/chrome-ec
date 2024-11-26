@@ -20,14 +20,15 @@
  * als-channel-scale {
  *	compatible = "cros-ec,accelgyro-als-channel-scale";
  *		k-channel-scale = <1>;
- *		cover-scale = <1>;
+ *		cover-scale = "1.0f";
  *	};
  */
-#define ACCELGYRO_ALS_CHANNEL_SCALE(id)                                     \
-	{                                                                   \
-		.k_channel_scale =                                          \
-			ALS_CHANNEL_SCALE(DT_PROP(id, k_channel_scale)),    \
-		.cover_scale = ALS_CHANNEL_SCALE(DT_PROP(id, cover_scale)), \
+#define ACCELGYRO_ALS_CHANNEL_SCALE(id)                                  \
+	{                                                                \
+		.k_channel_scale =                                       \
+			ALS_CHANNEL_SCALE(DT_PROP(id, k_channel_scale)), \
+		.cover_scale = ALS_CHANNEL_SCALE(                        \
+			DT_STRING_UNQUOTED(id, cover_scale)),            \
 	}
 
 #define ALS_CALIBRATION_CHANNEL_SCALE(id) \
@@ -53,7 +54,7 @@
  *		als-channel-scale {
  *		compatible = "cros-ec,accelgyro-als-channel-scale";
  *			k-channel-scale = <1>;
- *			cover-scale = <1>;
+ *			cover-scale = "1.0f";
  *		};
  *	};
  * };
@@ -95,7 +96,7 @@
  *		als-channel-scale {
  *		compatible = "cros-ec,accelgyro-als-channel-scale";
  *			k-channel-scale = <1>;
- *			cover-scale = <1>;
+ *			cover-scale = "1.0f";
  *		};
  *	};
  *	rgb-cal-y {
@@ -104,7 +105,7 @@
  *		als-channel-scale {
  *		compatible = "cros-ec,accelgyro-als-channel-scale";
  *			k-channel-scale = <1>;
- *			cover-scale = <1>;
+ *			cover-scale = "1.0f";
  *		};
  *	};
  *	rgb-cal-z {
@@ -113,7 +114,7 @@
  *		als-channel-scale {
  *		compatible = "cros-ec,accelgyro-als-channel-scale";
  *			k-channel-scale = <1>;
- *			cover-scale = <1>;
+ *			cover-scale = "1.0f";
  *		};
  *	};
  * };
