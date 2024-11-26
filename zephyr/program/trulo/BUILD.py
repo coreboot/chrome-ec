@@ -55,7 +55,18 @@ register_trulo_project(
     modules=["cmsis", "picolibc", "ec", "pigweed"],
 )
 
+register_trulo_project(
+    project_name="uldrenite",
+    kconfig_files=[
+        # Common to all projects.
+        here / "program.conf",
+        # Parent project's config
+        here / "uldrenite" / "project.conf",
+    ],
+)
+
 # Note for reviews, do not let anyone edit these assertions, the addresses
 # must not change after the first RO release.
 assert_rw_fwid_DO_NOT_EDIT(project_name="trulo", addr=0x40144)
 assert_rw_fwid_DO_NOT_EDIT(project_name="trulo-ti", addr=0x40144)
+assert_rw_fwid_DO_NOT_EDIT(project_name="uldrenite", addr=0x40144)

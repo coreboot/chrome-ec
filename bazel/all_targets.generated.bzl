@@ -2352,6 +2352,11 @@ def all_targets():
         extra_modules = ["cmsis"],
     )
     ec_target(
+        name = "uldrenite",
+        board = "uldrenite",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "twinkie",
         board = "twinkie",
         chip = "stm32",
