@@ -180,7 +180,7 @@
     <vif:Modal_Operation_Supported_SOP value="false" />
     <vif:USB_VID_SOP value="6353">18D1</vif:USB_VID_SOP>
     <vif:PID_SOP value="20581">5065</vif:PID_SOP>
-    <vif:bcdDevice_SOP value="34">0022</vif:bcdDevice_SOP>
+    <vif:bcdDevice_SOP value="36">0024</vif:bcdDevice_SOP>
   </vif:Component>
   <vif:Component>
     <!--Component 1: Port 1-->
@@ -346,6 +346,6 @@
     <vif:Modal_Operation_Supported_SOP value="false" />
     <vif:USB_VID_SOP value="6353">18D1</vif:USB_VID_SOP>
     <vif:PID_SOP value="20581">5065</vif:PID_SOP>
-    <vif:bcdDevice_SOP value="34">0022</vif:bcdDevice_SOP>
+    <vif:bcdDevice_SOP value="36">0024</vif:bcdDevice_SOP>
   </vif:Component>
 </vif:VIF>
