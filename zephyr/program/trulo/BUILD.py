@@ -7,6 +7,7 @@
 
 def register_trulo_project(
     project_name,
+    chip="npcx9/npcx9m3f",
     kconfig_files=None,
     **kwargs,
 ):
@@ -21,7 +22,7 @@ def register_trulo_project(
 
     register_npcx_project(
         project_name=project_name,
-        zephyr_board="npcx9/npcx9m3f",
+        zephyr_board=chip,
         dts_overlays=[
             here / project_name / "project.overlay",
         ],
@@ -57,6 +58,7 @@ register_trulo_project(
 
 register_trulo_project(
     project_name="uldrenite",
+    chip="npcx9/npcx9m7fb",
     kconfig_files=[
         # Common to all projects.
         here / "program.conf",
