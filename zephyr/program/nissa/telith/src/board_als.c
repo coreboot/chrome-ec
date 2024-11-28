@@ -23,6 +23,7 @@
 
 #define ALS_ENABLE BIT(0)
 #define FACTORY_CLEAR BIT(1)
+#define ALS_NORMAL_COUNT BIT(2)
 
 static int als_enable = 0;
 static int als_det_enable = 1;
@@ -81,6 +82,11 @@ static void check_als_status(void)
 	 * Normally, we will not set the Bit6 position. */
 	if ((data[0] & ALS_ENABLE) && (data[0] != 0x43)) {
 		als_enable = 1;
+		if ((data[0] & ALS_NORMAL_COUNT) &&
+		    gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(ec_als_odl))) {
+			data[0] &= ~ALS_NORMAL_COUNT;
+			als_eeprom_write(0x00, data, 1);
+		}
 	}
 }
 DECLARE_HOOK(HOOK_INIT, check_als_status, HOOK_PRIO_DEFAULT);
@@ -94,15 +100,24 @@ static void als_change_deferred(void)
 {
 	static bool debouncing;
 	int out;
+	uint8_t data[1];
 
 	out = gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(ec_als_odl));
 
 	if (out == 0) {
-		if (!debouncing)
+		if (!debouncing) {
 			debouncing = true;
-
+			return;
+		}
 		debouncing = false;
-		als_data_handler();
+
+		als_eeprom_read(0x00, data, 1);
+		if (!(data[0] & ALS_NORMAL_COUNT))
+			als_data_handler();
+
+		data[0] |= ALS_NORMAL_COUNT;
+		als_eeprom_write(0x00, data, 1);
+
 		chipset_force_shutdown(CHIPSET_SHUTDOWN_BOARD_CUSTOM);
 		if (extpower_is_present()) {
 			CPRINTS("AC off!");
