@@ -5,6 +5,7 @@
 
 #include "../cbi.dtsi"
 
+#include "cbi.dtsi"
 #include "gpio.dtsi"
 #include "keyboard.dtsi"
 #include "motionsense.dtsi"
