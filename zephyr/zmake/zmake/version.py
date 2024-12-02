@@ -7,10 +7,15 @@
 import datetime
 import getpass
 import io
+import pathlib
 import platform
+import re
 import subprocess
 
 from zmake import util
+
+
+EC_BASE = pathlib.Path(__file__).parent.parent
 
 
 def _get_num_commits(repo):
@@ -127,7 +132,36 @@ def get_version_string(
     if not version:
         version = "0.0.0"
 
-    result = f"{project}-{version}"
+    dir_path = pathlib.Path(
+        EC_BASE.resolve().parent.parent
+        / "build"
+        / "zephyr"
+        / f"{project}"
+        / "build-singleimage"
+        / "zephyr"
+        / "include"
+        / "generated"
+        / "zephyr"
+    )
+
+    if dir_path.exists():
+        ish_prj = util.read_kconfig_autoconf_value(
+            dir_path,
+            "CONFIG_SOC_FAMILY_INTEL_ISH",
+        )
+        if ish_prj:
+            ish_version = util.read_kconfig_autoconf_value(
+                dir_path,
+                "CONFIG_BOARD",
+            )
+            # remove "intel_ish_" from config value
+            ish_version = re.sub(r'"intel_ish_', "", ish_version)
+            ish_version = re.sub(r'"', "", ish_version)
+            result = f"{project}-{ish_version}-{version}"
+        else:
+            result = f"{project}-{version}"
+    else:
+        result = f"{project}-{version}"
 
     if static:
         return result
