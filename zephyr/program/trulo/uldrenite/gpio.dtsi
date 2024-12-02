@@ -24,6 +24,10 @@
 		/delete-node/ vccin_aux_r_vid0;
 		/delete-node/ vccin_aux_r_vid1;
 		/delete-node/ all_sys_pwrgd;
+		/delete-node/ volup_btn_odl;
+		/delete-node/ voldn_btn_odl;
+		/delete-node/ en_pp5000_vbus;
+		/delete-node/ pg_pp5000_z1_od;
 
 		gpio_ec_acok_od: ec_acok_od {
 			gpios = <&gpio0 1 GPIO_INPUT_PULL_UP>;
@@ -52,9 +56,6 @@
 		gpio_all_sys_pwrgd: all_sys_pwrgd {
 			gpios = <&gpioa 7 GPIO_INPUT>;
 		};
-		gpio_ec_acok_otg_c0: ec_acok_otg_c0 {
-			gpios = <&gpioc 6 GPIO_OUTPUT>;
-		};
 		gpio_soc_enbkl: soc_enbkl {
 			gpios = <&gpioc 7 GPIO_INPUT>;
 		};
@@ -62,12 +63,59 @@
 			gpios = <&gpio7 4 GPIO_OUTPUT>;
 		};
 		gpio_en_usb_a0_vbus: en_usb_a0_vbus {
-			gpios = <&gpio9 1 GPIO_OUTPUT>;
+			gpios = <&gpiod 4 GPIO_OUTPUT>;
+		};
+		gpio_spok_5v: spok_5v {
+			gpios = <&gpio4 2 GPIO_INPUT>;
+		};
+		gpio_en_slp_z: en_slp_z {
+			gpios = <&gpioe 1 GPIO_OUTPUT>;
+		};
+		gpio_ec_batt_pres_odl: ec_batt_pres_odl {
+			gpios = <&gpioa 3 GPIO_INPUT>;
+			enum-name = "GPIO_BATT_PRES_ODL";
+		};
+		gpio_tchpad_lid_close: tchpad_lid_close {
+			gpios = <&gpio6 3 GPIO_OUTPUT>;
 		};
 	};
-
-	unused-pins {
+	gpio-interrupts {
+		/delete-node/ vol_down;
+		/delete-node/ vol_up;
 	};
+	unused-pins {
+		compatible = "unused-gpios";
+		unused-gpios =
+			<&gpio3 2 0>,
+			<&gpio3 3 0>,
+			<&gpio3 5 0>,
+			<&gpio3 6 0>,
+			<&gpio6 6 0>,
+			<&gpio7 3 0>,
+			<&gpio8 6 0>,
+			<&gpio9 1 0>,
+			<&gpio9 3 0>,
+			<&gpio9 6 0>,
+			<&gpioa 0 0>,
+			<&gpioa 2 0>,
+			<&gpiob 7 0>,
+			<&gpioc 0 0>,
+			<&gpioc 6 0>,
+			<&gpiod 5 0>,
+			<&gpiod 6 0>,
+			<&gpiod 7 0>,
+			<&gpioe 2 0>,
+			<&gpioe 4 0>,
+			<&gpiof 4 0>,
+			<&gpiof 5 0>;
+	};
+};
+&pwm1 {
+	status = "disabled";
+};
+
+&pwm6 {
+	status = "disabled";
 };
 
 /* These GPIOS are initialized by the PDC driver */
