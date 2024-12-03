@@ -1023,7 +1023,7 @@ static int tps6699x_emul_get_frs(const struct emul *target, bool *enabled)
 	return 0;
 }
 
-static struct emul_pdc_api_t emul_tps6699x_api = {
+static const struct emul_pdc_driver_api emul_tps6699x_api = {
 	.reset = emul_tps6699x_reset,
 	.set_response_delay = emul_tps6699x_set_response_delay,
 	.get_connector_reset = emul_tps6699x_get_connector_reset,
