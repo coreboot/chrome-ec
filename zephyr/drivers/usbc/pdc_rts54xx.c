@@ -2699,7 +2699,7 @@ static int rts54_get_attention_vdo(const struct device *dev,
 				  ARRAY_SIZE(payload), (uint8_t *)vdo);
 }
 
-static const struct pdc_driver_api_t pdc_driver_api = {
+static const struct pdc_driver_api pdc_driver_api = {
 	.is_init_done = rts54_is_init_done,
 	.get_ucsi_version = rts54_get_ucsi_version,
 	.reset = rts54_pdc_reset,

@@ -18,7 +18,7 @@
 static bool expect_assert = false;
 
 /* Set up a fake PDC API implementation with all-NULL function pointers */
-static struct pdc_driver_api_t fake_pdc_api = { 0 };
+static const struct pdc_driver_api_t fake_pdc_api;
 static const struct device fake_pdc = {
 	.api = &fake_pdc_api,
 };
@@ -325,8 +325,7 @@ ZTEST(pdc_api_null_check, test_pdc_get_drp_mode)
 ZTEST(pdc_api_null_check, test_completeness)
 {
 	/* Count the number of PDC API methods supported */
-	size_t num_api_methods =
-		sizeof(struct pdc_driver_api_t) / sizeof(void *);
+	size_t num_api_methods = sizeof(struct pdc_driver_api) / sizeof(void *);
 
 	/* Get the number of tests, not counting this one. */
 	size_t num_tests = ZTEST_TEST_COUNT - 1;
@@ -335,7 +334,7 @@ ZTEST(pdc_api_null_check, test_completeness)
 
 	zassert_equal(
 		num_api_methods, num_tests,
-		"Found %zu API methods in 'struct pdc_driver_api_t' but only "
+		"Found %zu API methods in 'struct pdc_driver_api' but only "
 		"%zu tests in 'pdc_null_api.c'. Please write a test to make "
 		"sure this API method is NULL-protected",
 		num_api_methods, num_tests);
