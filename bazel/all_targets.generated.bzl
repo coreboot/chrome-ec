@@ -1963,6 +1963,11 @@ def all_targets():
         extra_modules = ["cmsis"],
     )
     ec_target(
+        name = "ptlgcs",
+        board = "ptlgcs",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "puff",
         board = "puff",
         chip = "npcx",

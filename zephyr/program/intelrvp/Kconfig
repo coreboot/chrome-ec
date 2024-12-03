@@ -66,6 +66,14 @@ config BOARD_PTLRVP_MCHP
 	  Build Intel PTLRVP_MCHP reference board. This board is Intel PTL RVP
 	  SOC with SOC_MEC172X_NSZ.
 
+config BOARD_PTLGCS
+	bool "Intel PTLRVP_MCHP board"
+	depends on SOC_MEC172X_NSZ
+	select BOARD_PTLRVP_COMMON
+	help
+	  Build Intel PTL Generic Chassis System (GCS). This board is Intel PTL
+	  GCS SOC with SOC_MEC172X_NSZ.
+
 # Override the default USB-C stack choice baseed on the board type.
 # This must be done before including Kconfig.zephyr below.
 choice PLATFORM_EC_USBC_STACK

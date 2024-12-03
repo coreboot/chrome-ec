@@ -213,6 +213,20 @@ register_intelrvp_project(
     ],
 )
 
+register_intelrvp_project(
+    project_name="ptlgcs",
+    chip="mec172x/mec172x_nsz/mec1727",
+    extra_dts_overlays=[
+        here / "ptlrvp/ptlgcs/project.overlay",
+    ],
+    extra_kconfig_files=[
+        here / "ptlrvp/program.conf",
+        here / "ptlrvp/ptlgcs/project.conf",
+        here / "ptlrvp/pd.conf",
+        here / "zephyr_ap_pwrseq.conf",
+    ],
+)
+
 # Note for reviews, do not let anyone edit these assertions, the addresses
 # must not change after the first RO release.
 assert_rw_fwid_DO_NOT_EDIT(project_name="adlrvp_mchp", addr=0x7FFE0)
@@ -223,3 +237,4 @@ assert_rw_fwid_DO_NOT_EDIT(project_name="mtlrvpp_npcx", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="mtlrvpp_pd", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="ptlrvp_mchp", addr=0x40318)
 assert_rw_fwid_DO_NOT_EDIT(project_name="ptlrvp_npcx", addr=0x80144)
+assert_rw_fwid_DO_NOT_EDIT(project_name="ptlgcs", addr=0x40318)
