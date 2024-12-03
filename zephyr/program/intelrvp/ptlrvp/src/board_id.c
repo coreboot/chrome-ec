@@ -22,7 +22,13 @@ __override int board_get_version(void)
 
 	int i;
 	int rv = EC_ERROR_UNKNOWN;
-	int fab_id, board_id, bom_id;
+	int board_id;
+#if RVP_ID_HAS_BOM_GPIOS
+	int bom_id;
+#endif
+#if RVP_ID_HAS_FAB_GPIOS
+	int fab_id;
+#endif
 
 	/* Board ID is already read */
 	if (ptl_board_id)
@@ -34,7 +40,7 @@ __override int board_get_version(void)
 	 * This loop retries to ensure rail is settled and read is successful
 	 */
 	for (i = 0; i < RVP_VERSION_READ_RETRY_CNT; i++) {
-		rv = gpio_pin_get_dt(&bom_id_config[0]);
+		rv = gpio_pin_get_dt(&board_id_config[0]);
 
 		if (rv >= 0)
 			break;
@@ -47,20 +53,6 @@ __override int board_get_version(void)
 		return -1;
 
 	/*
-	 * BOM ID [2]   : IOEX[0]
-	 * BOM ID [1:0] : IOEX[15:14]
-	 */
-	bom_id = gpio_pin_get_dt(&bom_id_config[0]);
-	bom_id |= gpio_pin_get_dt(&bom_id_config[1]) << 1;
-	bom_id |= gpio_pin_get_dt(&bom_id_config[2]) << 2;
-	/*
-	 * FAB ID [1:0] : IOEX[2:1] + 1
-	 */
-	fab_id = gpio_pin_get_dt(&fab_id_config[0]);
-	fab_id |= gpio_pin_get_dt(&fab_id_config[1]) << 1;
-	fab_id += 1;
-
-	/*
 	 * BOARD ID[5:0] : IOEX[13:8]
 	 */
 	board_id = gpio_pin_get_dt(&board_id_config[0]);
@@ -70,8 +62,32 @@ __override int board_get_version(void)
 	board_id |= gpio_pin_get_dt(&board_id_config[4]) << 4;
 	board_id |= gpio_pin_get_dt(&board_id_config[5]) << 5;
 
-	LOG_INF("BID:0x%x, FID:0x%x, BOM:0x%x", board_id, fab_id, bom_id);
+	ptl_board_id = board_id;
 
-	ptl_board_id = board_id | (fab_id << 8);
+	LOG_INF("BOARD_ID:0x%x", board_id);
+#if RVP_ID_HAS_BOM_GPIOS
+	/*
+	 * BOM ID [2]   : IOEX[0]
+	 * BOM ID [1:0] : IOEX[15:14]
+	 */
+	bom_id = gpio_pin_get_dt(&bom_id_config[0]);
+	bom_id |= gpio_pin_get_dt(&bom_id_config[1]) << 1;
+	bom_id |= gpio_pin_get_dt(&bom_id_config[2]) << 2;
+
+	LOG_INF("BOM_ID:0x%x", bom_id);
+#endif
+#if RVP_ID_HAS_FAB_GPIOS
+	/*
+	 * FAB ID [1:0] : IOEX[2:1] + 1
+	 */
+	fab_id = gpio_pin_get_dt(&fab_id_config[0]);
+	fab_id |= gpio_pin_get_dt(&fab_id_config[1]) << 1;
+	fab_id += 1;
+
+	LOG_INF("FAB_ID:0x%x", fab_id);
+
+	ptl_board_id |= (fab_id << 8);
+#endif
+
 	return ptl_board_id;
 }
