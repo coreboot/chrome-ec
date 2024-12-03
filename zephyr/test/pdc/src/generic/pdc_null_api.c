@@ -18,7 +18,7 @@
 static bool expect_assert = false;
 
 /* Set up a fake PDC API implementation with all-NULL function pointers */
-static const struct pdc_driver_api_t fake_pdc_api;
+static DEVICE_API(pdc, fake_pdc_api);
 static const struct device fake_pdc = {
 	.api = &fake_pdc_api,
 };

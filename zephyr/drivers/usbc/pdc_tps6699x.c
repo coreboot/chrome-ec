@@ -2340,7 +2340,7 @@ static int tps_execute_ucsi_cmd(const struct device *dev, uint8_t ucsi_command,
 					      callback);
 }
 
-static const struct pdc_driver_api pdc_driver_api = {
+static DEVICE_API(pdc, pdc_driver_api) = {
 	.is_init_done = tps_is_init_done,
 	.get_ucsi_version = tps_get_ucsi_version,
 	.reset = tps_pdc_reset,

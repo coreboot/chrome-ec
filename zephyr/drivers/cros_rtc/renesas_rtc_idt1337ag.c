@@ -335,7 +335,7 @@ static void renesas_rtc_idt1337ag_isr(const struct device *port,
 	}
 }
 
-static const struct cros_rtc_driver_api renesas_rtc_idt1337ag_driver_api = {
+static DEVICE_API(cros_rtc, renesas_rtc_idt1337ag_driver_api) = {
 	.configure = renesas_rtc_idt1337ag_configure,
 	.get_value = renesas_rtc_idt1337ag_get_value,
 	.set_value = renesas_rtc_idt1337ag_set_value,

@@ -1529,7 +1529,7 @@ emul_realtek_rts54xx_set_attention_vdo(const struct emul *target,
 	return 0;
 }
 
-static const struct emul_pdc_driver_api emul_realtek_rts54xx_api = {
+static DEVICE_API(emul_pdc, emul_realtek_rts54xx_api) = {
 	.reset = emul_realtek_rts54xx_reset,
 	.set_response_delay = emul_realtek_rts54xx_set_response_delay,
 	.get_connector_reset = emul_realtek_rts54xx_get_connector_reset,

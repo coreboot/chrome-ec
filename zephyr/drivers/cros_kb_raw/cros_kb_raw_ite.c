@@ -285,7 +285,7 @@ static int cros_kb_raw_ite_init(const struct device *dev)
 	return 0;
 }
 
-static const struct cros_kb_raw_driver_api cros_kb_raw_ite_driver_api = {
+static DEVICE_API(cros_kb_raw, cros_kb_raw_ite_driver_api) = {
 	.init = cros_kb_raw_ite_init,
 	.drive_colum = cros_kb_raw_ite_drive_column,
 	.read_rows = cros_kb_raw_ite_read_row,

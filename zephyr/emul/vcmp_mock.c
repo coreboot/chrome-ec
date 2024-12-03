@@ -99,7 +99,7 @@ static int vcmp_mock_channel_get(const struct device *dev,
 	return -ENOTSUP;
 }
 
-static const struct sensor_driver_api vcmp_mock_driver_api = {
+static DEVICE_API(sensor, vcmp_mock_driver_api) = {
 	.attr_set = vcmp_mock_attr_set,
 	.channel_get = vcmp_mock_channel_get,
 	.sample_fetch = vcmp_mock_sample_fetch,
