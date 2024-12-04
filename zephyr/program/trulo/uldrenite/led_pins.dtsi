@@ -6,10 +6,10 @@
 / {
 	pwmleds {
 		compatible = "pwm-leds";
-		pwm_a: pwm_a {
+		pwm_led_1: pwm_led_1 {
 			pwms = <&pwm2 0 PWM_HZ(100) PWM_POLARITY_INVERTED>;
 		};
-		pwm_b: pwm_b {
+		pwm_led_2: pwm_led_2 {
 			pwms = <&pwm0 0 PWM_HZ(100) PWM_POLARITY_INVERTED>;
 		};
 	};
@@ -19,20 +19,20 @@
 
 		battery_led: battery-led {
 			led-id = "EC_LED_ID_BATTERY_LED";
-			led-pwms = <&pwm_a &pwm_b>;
+			led-pwms = <&pwm_led_1 &pwm_led_2>;
 
 			color_off: color-off {
 				led-color = "LED_OFF";
 				led-values = <0 0>;
 			};
 
-			color_amber: color-amber {
-				led-color = "LED_AMBER";
+			color_white: color-white {
+				led-color = "LED_WHITE";
 				led-values = <100 0>;
 			};
 
-			color_blue: color-blue {
-				led-color = "LED_BLUE";
+			color_amber: color-amber {
+				led-color = "LED_AMBER";
 				led-values = <0 100>;
 			};
 		};
