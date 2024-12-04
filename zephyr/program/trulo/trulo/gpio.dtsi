@@ -64,6 +64,9 @@
 		gpio_en_usb_a0_vbus: en_usb_a0_vbus {
 			gpios = <&gpio9 1 GPIO_OUTPUT>;
 		};
+		gpio_en_slp_z: en_slp_z {
+			gpios = <&gpioe 1 GPIO_OUTPUT>;
+		};
 	};
 
 	unused-pins {
