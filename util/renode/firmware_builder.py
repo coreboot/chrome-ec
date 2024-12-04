@@ -64,11 +64,11 @@ def test(_opts):
     # https://chrome-infra-packages.appspot.com/p/chromiumos/infra/tools/renode.
     cipd_renode_version = (
         "ebuild_source:"
-        + "app-crypt/mit-krb5-1.21.3,"
-        + "app-emulation/renode-1.15.3_p20241010,"
-        + "dev-lang/mono-6.12.0.122,"
-        + "sys-fs/e2fsprogs-1.47.0-r4,"
-        + "sys-libs/glibc-2.37-r9"
+        + "app-emulation/renode-1.15.3_p20241011-r2,"
+        + "dev-libs/icu-70.1-r2,"
+        + "dev-libs/openssl-3.2.1-r1,"
+        + "dev-libs/userspace-rcu-0.13.2-r1,"
+        + "dev-util/lttng-ust-2.12.1-r1"
     )
 
     # Install Renode.
