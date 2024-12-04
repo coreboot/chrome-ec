@@ -7,6 +7,7 @@
 
 #include "emul/emul_pdc.h"
 #include "usbc/pdc_power_mgmt.h"
+#include "usbc/utils.h"
 
 #include <stdbool.h>
 
@@ -20,17 +21,33 @@
 
 LOG_MODULE_REGISTER(pdc_attached_snk);
 
-#define RTS5453P_NODE DT_NODELABEL(pdc_emul1)
-static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
 #define TEST_PORT 0
 
-ZTEST_SUITE(pdc_attached_snk, NULL, NULL, NULL, NULL, NULL);
+#define PDC_NODE_PORT0 DT_NODELABEL(pdc_emul1)
+#define TEST_USBC_PORT0 USBC_PORT_FROM_DRIVER_NODE(PDC_NODE_PORT0, pdc)
+
+struct pdc_attached_snk_fixture {
+	int port;
+	const struct emul *emul_pdc;
+};
+
+static void *pdc_attached_snk_setup(void)
+{
+	static struct pdc_attached_snk_fixture fixture;
+
+	fixture.emul_pdc = EMUL_DT_GET(PDC_NODE_PORT0);
+	fixture.port = TEST_USBC_PORT0;
+
+	return &fixture;
+};
+
+ZTEST_SUITE(pdc_attached_snk, NULL, pdc_attached_snk_setup, NULL, NULL, NULL);
 
 /* Verify the DUT sinks the correct amount of current, when
  * the partner sends new source caps.
  */
 
-ZTEST_USER(pdc_attached_snk, test_new_pd_sink_contract)
+ZTEST_USER_F(pdc_attached_snk, test_new_pd_sink_contract)
 {
 	union connector_status_t in = { 0 };
 	union conn_status_change_bits_t in_conn_status_change_bits;
@@ -42,25 +59,26 @@ ZTEST_USER(pdc_attached_snk, test_new_pd_sink_contract)
 	};
 
 	/* Connect a sourcing port partner */
-	emul_pdc_configure_snk(emul, &in);
-	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO, pdos);
-	emul_pdc_connect_partner(emul, &in);
+	emul_pdc_configure_snk(fixture->emul_pdc, &in);
+	emul_pdc_set_pdos(fixture->emul_pdc, SOURCE_PDO, PDO_OFFSET_0, 1,
+			  PARTNER_PDO, pdos);
+	emul_pdc_connect_partner(fixture->emul_pdc, &in);
 
 	/* Ensure we are connected */
 	pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT);
 
 	/* Simulate the port partner changing its PDOs. The sink path is
 	 * disabled during this step */
-	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, ARRAY_SIZE(pdos),
-			  PARTNER_PDO, pdos);
+	emul_pdc_set_pdos(fixture->emul_pdc, SOURCE_PDO, PDO_OFFSET_0,
+			  ARRAY_SIZE(pdos), PARTNER_PDO, pdos);
 	in_conn_status_change_bits.battery_charging_status = 1;
 	in.raw_conn_status_change_bits = in_conn_status_change_bits.raw_value;
-	emul_pdc_connect_partner(emul, &in);
+	emul_pdc_connect_partner(fixture->emul_pdc, &in);
 
 	/* Pause to allow pdc_power_mgmt to process interrupt and re-settle */
 	pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT);
 
 	/* Check that the sink path is on again */
-	zassert_ok(emul_pdc_get_sink_path(emul, &sink_path_en));
+	zassert_ok(emul_pdc_get_sink_path(fixture->emul_pdc, &sink_path_en));
 	zassert_true(sink_path_en);
 }
