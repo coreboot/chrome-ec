@@ -448,6 +448,8 @@ struct pdc_unattached_policy_t {
 enum policy_snk_attached_t {
 	/** Request a new power level */
 	SNK_POLICY_NEW_POWER_REQUEST,
+	/** New source caps */
+	SNK_POLICY_NEW_SRC_CAPS_AVAILABLE,
 	/** Enables swap to Source */
 	SNK_POLICY_SWAP_TO_SRC,
 	/** Selects the low power PDO on connect */
@@ -1226,14 +1228,14 @@ static void handle_connector_status(struct pdc_port_t *port)
 		if (conn_status_change_bits.battery_charging_status &&
 		    status->sink_path_status == 0 &&
 		    port->attached_state == SNK_ATTACHED_STATE &&
-		    port->snk_attached_local_state > SNK_ATTACHED_GET_PDOS) {
+		    port->snk_attached_local_state >= SNK_ATTACHED_GET_PDOS) {
 			/* Source caps have changed. Set the sink-
 			 * attached state machine back to the get PDO
 			 * substate. This will cause PDOs to be re-
 			 * evaluated and the sink path to get enabled
 			 * again. */
 			atomic_set_bit(port->snk_policy.flags,
-				       SNK_POLICY_NEW_POWER_REQUEST);
+				       SNK_POLICY_NEW_SRC_CAPS_AVAILABLE);
 			LOG_INF("C%d: Sink path disconnected", port_number);
 		}
 
@@ -1493,6 +1495,10 @@ static void run_snk_policies(struct pdc_port_t *port)
 		return;
 	} else if (atomic_test_and_clear_bit(port->snk_policy.flags,
 					     SNK_POLICY_NEW_POWER_REQUEST)) {
+		/* TODO: b/382277419
+		 * this policy flag should construct a new RDO request
+		 * based on the current maximum voltage and maximum current.
+		 */
 		port->get_pdo = (struct get_pdo_t){ 0 };
 		port->snk_attached_local_state = SNK_ATTACHED_GET_PDOS;
 		return;
@@ -2021,6 +2027,21 @@ static void pdc_snk_attached_run(void *obj)
 		return;
 	}
 
+	/* If the attached charger sends new source caps, the PDC will
+	 * turn off the sink path and we need to get the current
+	 * source PDOs from the partner.
+	 */
+	if (port->snk_attached_local_state >= SNK_ATTACHED_GET_PDOS &&
+	    atomic_test_and_clear_bit(port->snk_policy.flags,
+				      SNK_POLICY_NEW_SRC_CAPS_AVAILABLE)) {
+		port->get_pdo = (struct get_pdo_t){ 0 };
+		invalidate_charger_settings(port, true);
+		/* Update the local state immediately without requiring
+		 * a reschedule of the thread.
+		 */
+		port->snk_attached_local_state = SNK_ATTACHED_GET_PDOS;
+	}
+
 	switch (port->snk_attached_local_state) {
 	case SNK_ATTACHED_GET_CONNECTOR_CAPABILITY:
 		port->snk_attached_local_state =
@@ -2077,6 +2098,8 @@ static void pdc_snk_attached_run(void *obj)
 		 */
 		atomic_clear_bit(port->snk_policy.flags,
 				 SNK_POLICY_NEW_POWER_REQUEST);
+		atomic_clear_bit(port->snk_policy.flags,
+				 SNK_POLICY_NEW_SRC_CAPS_AVAILABLE);
 		if (!port->get_pdo.updating) {
 			port->get_pdo.num_pdos = PDO_NUM;
 			port->get_pdo.pdo_offset = PDO_OFFSET_0;
@@ -3311,6 +3334,9 @@ int pdc_power_mgmt_set_new_power_request(int port)
 		return -ENOTCONN;
 	}
 
+	/* TODO: b/382277419
+	 * NEW_POWER_REQUEST should build up a new RDO request only.
+	 */
 	atomic_set_bit(pdc_data[port]->port.snk_policy.flags,
 		       SNK_POLICY_NEW_POWER_REQUEST);
 
