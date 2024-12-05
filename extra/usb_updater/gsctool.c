@@ -4688,6 +4688,7 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 	size_t response_size = sizeof(boot_trace);
 	uint32_t rv;
 	uint64_t timespan = 0;
+	uint64_t absolute_ms = 0;
 	size_t i;
 
 	rv = send_vendor_command(td, VENDOR_CC_GET_BOOT_TRACE, &payload,
@@ -4701,8 +4702,11 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 	if (response_size == 0)
 		return 0; /* Trace is empty. */
 
-	if (!show_machine_output)
+	if (!show_machine_output) {
 		printf("    got %zd bytes back:\n", response_size);
+		/* Print out header for event info that follows */
+		printf("                Event   Delta     Total\n");
+	}
 	if (response_size > 0) {
 		for (i = 0; i < response_size / sizeof(uint16_t); i++) {
 			uint16_t entry = boot_trace[i];
@@ -4723,16 +4727,17 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 				timespan += (uint64_t)delta_time * MAX_TIME_MS;
 				continue;
 			}
-			printf(" %20s: %4" PRId64 " ms\n",
+			/* Accumulate the absolute time so we can report it */
+			absolute_ms += timespan + delta_time;
+			printf(" %20s %4" PRId64 " ms %6" PRId64 " ms\n",
 			       boot_tracer_stages[event_id],
-			       timespan + delta_time);
+			       timespan + delta_time, absolute_ms);
 			timespan = 0;
 		}
 		printf("\n");
 	}
 	return 0;
 }
-
 
 /*
  * Gets the chip information. Note that Cr50 does not support this command yet
