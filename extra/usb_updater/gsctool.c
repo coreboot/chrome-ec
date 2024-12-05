@@ -4738,6 +4738,11 @@ struct get_chip_id_response {
 	uint32_t chip_id;
 };
 
+/*
+ * Gets the chip information. Note that Cr50 does not support this command yet
+ * and calling this produces UMA alerts events even if the error is
+ * appropriately handled in this layer.
+ */
 static struct get_chip_id_response get_chip_id_info(
 	struct transfer_descriptor *td)
 {
@@ -4769,25 +4774,27 @@ static struct get_chip_id_response get_chip_id_info(
  */
 static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 {
-	int epoch;
 	int major;
 	struct get_chip_id_response chip_id;
 
 	/*
-	 * Get the firmware version first. See if this is a specific GSC version
-	 * where the Ti50 FW does not response with an error code if the host
-	 * tries an unknown TPMV command over USB. This prevents a USB timeout
-	 * and shutting down of USB subsystem within gsctool (b/368631328).
+	 * If the major version is within the known ranges, stop there since
+	 * not all versions of Cr50 and Ti50 support the GET_CHIP_ID vendor
+	 * command, and if we call it when it isn't supported it will generate
+	 * an UMA alert even if we handle the error here (b/376500403).
+	 * There is also a USB issue to work around (b/368631328).
 	 */
 	get_version(td, false);
-	epoch = targ.shv[1].epoch;
 	major = targ.shv[1].major;
-	if ((epoch == 0 || epoch == 1) && (major >= 21 && major <= 26))
+	if (major >= 30 && major < 40)
+		return GSC_DEVICE_NT;
+	else if (major >= 20 && major < 30)
 		return GSC_DEVICE_DT;
+	else if (major < 10)
+		return GSC_DEVICE_H1;
 	/*
-	 * Try the newer TPMV command. If the command isn't supported,
-	 * then the GSC should respond with an error. If that happens we will
-	 * fall back to the GSC version as the indicator.
+	 * If the major version isn't in the known range, then use the TPMV
+	 * command, which should be supported at that point
 	 */
 	chip_id = get_chip_id_info(td);
 	switch (chip_id.tpm_vid_pid) {
@@ -4803,17 +4810,8 @@ static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 		fprintf(stderr, "Unregonized VID_PID 0x%X\n",
 			chip_id.tpm_vid_pid);
 
-	/*
-	 * If TPMV command doesn't exist or VID_PID is unrecognized then,
-	 * use the firmware version to determine type.
-	 */
-	major = targ.shv[1].major;
-	if (major >= 30 && major < 40)
-		return GSC_DEVICE_NT;
-	else if (major >= 20 && major < 30)
-		return GSC_DEVICE_DT;
-	else
-		return GSC_DEVICE_H1;
+	/* We have to pick something, but this probably isn't correct */
+	return GSC_DEVICE_H1;
 }
 
 int main(int argc, char *argv[])
