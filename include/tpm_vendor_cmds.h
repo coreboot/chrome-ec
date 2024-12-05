@@ -212,6 +212,15 @@ enum vendor_cmd_cc {
 	 */
 	VENDOR_CC_GET_CR50_METRICS = 73,
 
+	/*
+	 * Used for UMA collection for feature launch. After feature launch,
+	 * this can be removed as long as the value is reserved.
+	 * Cr50 doesn.t use this.
+	 * VENDOR_CC_GET_AP_RO_RESET_COUNTS = 74,
+	 */
+	/* Returns info to identify the specific GSC chip type. */
+	VENDOR_CC_GET_CHIP_ID = 75,
+
 	LAST_VENDOR_COMMAND = 65535,
 };
 

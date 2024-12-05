@@ -14,6 +14,10 @@
 
 #include "common.h"
 
+#define GOOGLE_VID	0x1ae0
+#define GOOGLE_DID	0x0028
+#define GOOGLE_DID_VID	((GOOGLE_DID << 16) | GOOGLE_VID)
+
 /* The SPI controller is writing data into a TPM register. */
 void tpm_register_put(uint32_t regaddr,
 		      const uint8_t *data, uint32_t data_size);

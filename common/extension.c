@@ -46,6 +46,7 @@ uint32_t extension_route_command(struct vendor_cmd_params *p)
 		case VENDOR_CC_GET_AP_RO_STATUS:
 		case VENDOR_CC_GET_BOARD_ID:
 		case VENDOR_CC_GET_BOOT_MODE:
+		case VENDOR_CC_GET_CHIP_ID:
 		case VENDOR_CC_GET_FACTORY_CONFIG:
 		case VENDOR_CC_POP_LOG_ENTRY:
 		case VENDOR_CC_RMA_CHALLENGE_RESPONSE:
@@ -76,6 +77,7 @@ uint32_t extension_route_command(struct vendor_cmd_params *p)
 		case EXTENSION_FW_UPGRADE:
 		case VENDOR_CC_REPORT_TPM_STATE:
 		case VENDOR_CC_TURN_UPDATE_ON:
+		case VENDOR_CC_GET_CHIP_ID:
 		case EXTENSION_POST_RESET:
 			break;
 		default:

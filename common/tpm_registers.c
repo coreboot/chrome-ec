@@ -92,8 +92,6 @@
 #define TPM_FW_VER	    (0xf90)
 #define TPM_BOARD_CFG	    (0xfe0)
 
-#define GOOGLE_VID 0x1ae0
-#define GOOGLE_DID 0x0028
 #define CR50_RID	0  /* No revision ID yet */
 
 /* Flag indicating reset request.
@@ -512,7 +510,6 @@ static void fifo_reg_read(uint8_t *dest, uint32_t data_size)
 	tpm_.regs.sts = tpm_sts;
 }
 
-
 /* TODO: data_size is between 1 and 64, but is not trustworthy! We must return
  * that many bytes, but not leak any secrets if data_size is larger than
  * it should be. Return 0x00 or 0xff or whatever the spec says instead. */
@@ -531,7 +528,7 @@ void tpm_register_get(uint32_t regaddr, uint8_t *dest, uint32_t data_size)
 	}
 	switch (regaddr) {
 	case TPM_DID_VID:
-		copy_bytes(dest, data_size, (GOOGLE_DID << 16) | GOOGLE_VID);
+		copy_bytes(dest, data_size, GOOGLE_DID_VID);
 		break;
 	case TPM_RID:
 		copy_bytes(dest, data_size, CR50_RID);

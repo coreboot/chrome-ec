@@ -1761,6 +1761,26 @@ static enum vendor_cmd_rc vc_sysinfo(enum vendor_cmd_cc code,
 }
 DECLARE_VENDOR_COMMAND(VENDOR_CC_SYSINFO, vc_sysinfo);
 
+static enum vendor_cmd_rc vc_get_chip_id(enum vendor_cmd_cc code,
+				     void *buf,
+				     size_t input_size,
+				     size_t *response_size)
+{
+	struct get_chip_id_response *chip_id = buf;
+
+	*response_size = 0;
+
+	if (input_size)
+		return VENDOR_RC_BOGUS_ARGS;
+
+	chip_id->tpm_did_vid = htobe32(GOOGLE_DID_VID);
+	chip_id->chip_id = htobe32(GSC_DEVICE_H1);
+
+	*response_size = sizeof(*chip_id);
+	return VENDOR_RC_SUCCESS;
+}
+DECLARE_VENDOR_COMMAND(VENDOR_CC_GET_CHIP_ID, vc_get_chip_id);
+
 static enum vendor_cmd_rc vc_invalidate_inactive_rw(enum vendor_cmd_cc code,
 						    void *buf,
 						    size_t input_size,
