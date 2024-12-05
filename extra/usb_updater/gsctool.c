@@ -4755,7 +4755,7 @@ static struct get_chip_id_response get_chip_id_info(
 		debug("Unexpected response size. (%zu)\n", response_size);
 	} else {
 		/* Success, convert endianness then return */
-		response.tpm_vid_pid = be32toh(response.tpm_vid_pid);
+		response.tpm_did_vid = be32toh(response.tpm_did_vid);
 		response.chip_id = be32toh(response.chip_id);
 		return response;
 	}
@@ -4793,7 +4793,7 @@ static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 	 * command, which should be supported at that point
 	 */
 	chip_id = get_chip_id_info(td);
-	switch (chip_id.tpm_vid_pid) {
+	switch (chip_id.tpm_did_vid) {
 	case 0x50666666:
 		return GSC_DEVICE_NT;
 	case 0x504a6666:
@@ -4802,9 +4802,9 @@ static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 		return GSC_DEVICE_H1;
 	}
 
-	if (chip_id.tpm_vid_pid)
+	if (chip_id.tpm_did_vid)
 		fprintf(stderr, "Unregonized VID_PID 0x%X\n",
-			chip_id.tpm_vid_pid);
+			chip_id.tpm_did_vid);
 
 	/* We have to pick something, but this probably isn't correct */
 	return GSC_DEVICE_H1;
