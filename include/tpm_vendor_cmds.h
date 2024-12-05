@@ -338,6 +338,12 @@ enum ap_ro_check_vc_errors {
 	ARCVE_BOARD_ID_BLOCKED = 12,
 };
 
+/* Returns info to identify the specific GSC chip type. */
+struct get_chip_id_response {
+	uint32_t tpm_vid_pid;
+	uint32_t chip_id;
+};
+
 /*****************************************************************************/
 /* Ti50 Specific Structs */
 struct ti50_stats_v0 {

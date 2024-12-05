@@ -4733,10 +4733,6 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 	return 0;
 }
 
-struct get_chip_id_response {
-	uint32_t tpm_vid_pid;
-	uint32_t chip_id;
-};
 
 /*
  * Gets the chip information. Note that Cr50 does not support this command yet
