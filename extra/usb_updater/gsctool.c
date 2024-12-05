@@ -306,17 +306,6 @@ struct options_map {
 	int *flag;
 };
 
-/*
- * Type of the GSC device. This is used to represent which type of GSC we are
- * connected to and to tag an image file for compatibility.
- * for downloading.
- */
-enum gsc_device {
-	GSC_DEVICE_H1,
-	GSC_DEVICE_DT,
-	GSC_DEVICE_NT,
-};
-
 /* Index to refer to a section within sections array */
 enum section {
 	RO_A,
