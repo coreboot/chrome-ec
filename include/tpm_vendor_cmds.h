@@ -334,7 +334,7 @@ enum ap_ro_check_vc_errors {
 
 /* Returns info to identify the specific GSC chip type. */
 struct get_chip_id_response {
-	uint32_t tpm_vid_pid;
+	uint32_t tpm_did_vid;
 	uint32_t chip_id;
 };
 
