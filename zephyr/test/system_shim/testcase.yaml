@@ -1,7 +1,8 @@
 common:
-  platform_allow: native_sim
+  platform_allow:
+  - native_sim
   tags:
-    system
+  - system
 tests:
   system_shim.default:
     extra_dtc_overlay_files:

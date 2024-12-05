@@ -3,7 +3,8 @@
 # found in the LICENSE file.
 
 common:
-  platform_allow: native_sim
+  platform_allow:
+    - native_sim
 tests:
   nissa.board_power:
     extra_dtc_overlay_files:
