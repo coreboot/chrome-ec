@@ -1302,13 +1302,19 @@ def run_test_zephyr(test: TestConfig) -> str:
     # Zephyr upstream tests run automatically
     if test.zephyr_name:
         return []
+
+    # TODO(b/382705460): This extra command is to work around an issue where
+    # sometimes there is a missing character in the test command: "zest"
+    # instead of "ztest".
+    test_cmd = "\n\n\n\n\n\n"
+
     if len(test.test_args) == 0:
         # If there are no args just run-all not to be limited by suite name
-        test_cmd = "ztest run-all\n"
+        test_cmd += "ztest run-all\n"
     else:
         # ZTEST console doesn't support passing test arguments
         # Assume a testsuite for every test + arg combination
-        test_cmd = "ztest run-testcase " + test.test_name
+        test_cmd += "ztest run-testcase " + test.test_name
         for test_arg in test.test_args:
             test_cmd = test_cmd + "_" + test_arg
         test_cmd = test_cmd + "\n"
