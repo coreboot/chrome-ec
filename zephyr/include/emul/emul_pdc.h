@@ -603,7 +603,7 @@ static inline void
 emul_pdc_configure_src(const struct emul *target,
 		       union connector_status_t *connector_status)
 {
-	uint32_t partner_pdos[] = {
+	uint32_t partner_pdos[PDO_OFFSET_MAX] = {
 		PDO_FIXED(5000, 3000, 0),
 		PDO_FIXED(12000, 3000, 0),
 		PDO_FIXED(20000, 5000, 0),
