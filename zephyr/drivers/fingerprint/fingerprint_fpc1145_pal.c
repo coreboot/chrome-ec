@@ -3,9 +3,9 @@
  * found in the LICENSE file.
  */
 
-#include "fpc1145.h"
-#include "fpc1145_pal.h"
-#include "fpc1145_private.h"
+#include "fingerprint_fpc1145.h"
+#include "fingerprint_fpc1145_pal.h"
+#include "fingerprint_fpc1145_private.h"
 
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>

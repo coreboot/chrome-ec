@@ -8,7 +8,7 @@
 
 #include <zephyr/kernel.h>
 
-#include <fpc1145_pal.h>
+#include <fingerprint_fpc1145_pal.h>
 
 __syscall int fpc1145_pal_spi_writeread(fpc_device_t device, uint8_t *tx_buffer,
 					uint8_t *rx_buffer, uint32_t size);

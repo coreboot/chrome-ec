@@ -6,7 +6,7 @@
 #ifndef ZEPHYR_DRIVERS_FINGERPRINT_FPC1145_H_
 #define ZEPHYR_DRIVERS_FINGERPRINT_FPC1145_H_
 
-#include "fpc1145_private.h"
+#include "fingerprint_fpc1145_private.h"
 
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>

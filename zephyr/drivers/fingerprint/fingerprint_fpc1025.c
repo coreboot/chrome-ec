@@ -5,8 +5,8 @@
 
 #define DT_DRV_COMPAT fpc_fpc1025
 
-#include "fpc1025.h"
-#include "fpc1025_private.h"
+#include "fingerprint_fpc1025.h"
+#include "fingerprint_fpc1025_private.h"
 
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>
