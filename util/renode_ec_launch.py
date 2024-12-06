@@ -166,6 +166,7 @@ def main(argv: Optional[List[str]] = None) -> Optional[int]:
     parser.add_argument(
         "board",
         nargs="?",
+        choices=CONSOLE_MAP.keys(),
         default=os.environ.get("BOARD", DEFAULT_BOARD),
         help="Name of the EC board",
     )
