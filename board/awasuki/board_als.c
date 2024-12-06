@@ -27,9 +27,9 @@
 #define ALS_ENABLE BIT(0)
 #define FACTORY_CLEAR BIT(1)
 #define ALS_NORMAL_COUNT BIT(2)
+#define ALS_CUTOFF_ENABLE BIT(3)
 
 static int als_enable = 0;
-static int als_det_enable = 1;
 
 static int als_eeprom_read(uint8_t offset, uint8_t *data, int len)
 {
@@ -73,6 +73,66 @@ static void als_data_handler(void)
 	CPRINTS(" %d", als_data);
 }
 
+int als_enable_status(void)
+{
+	uint8_t data[1];
+
+	als_eeprom_read(0x00, data, 1);
+	return (als_enable && (data[0] & ALS_CUTOFF_ENABLE));
+}
+
+static void als_change_deferred(void)
+{
+	uint8_t data[1];
+
+	if (!gpio_get_level(GPIO_DOOR_OPEN_EC)) {
+		als_eeprom_read(0x00, data, 1);
+
+		/* Detect the als enable status,used to disable als function in
+		 * debug status*/
+		if (!(data[0] & ALS_ENABLE)) {
+			als_enable = 0;
+			CPRINTS(" function disable-%d", data[0]);
+			return;
+		}
+
+		CPRINTS(" data[0]=0x%2x", data[0]);
+		if (data[0] & ALS_CUTOFF_ENABLE) {
+			if (!(data[0] & ALS_NORMAL_COUNT))
+				als_data_handler();
+
+			data[0] |= ALS_NORMAL_COUNT;
+			als_eeprom_write(0x00, data, 1);
+
+			chipset_force_shutdown(CHIPSET_SHUTDOWN_BOARD_CUSTOM);
+			if (extpower_is_present()) {
+				CPRINTS("AC off!");
+				tcpc_write(0, TCPC_REG_COMMAND,
+					   TCPC_REG_COMMAND_SNK_CTRL_LOW);
+				raa489000_enable_asgate(0, false);
+			}
+			cflush();
+			if (battery_is_present()) {
+				CPRINTS("cut off!");
+				board_cut_off_battery();
+			}
+		} else {
+			CPRINTS("cutoff function disable!");
+			als_data_handler();
+		}
+	}
+}
+DECLARE_DEFERRED(als_change_deferred);
+
+void door_open_interrupt(enum gpio_signal s)
+{
+	if (als_enable) {
+		hook_call_deferred(&als_change_deferred_data, 500 * MSEC);
+	} else {
+		hook_call_deferred(&als_change_deferred_data, -1);
+	}
+}
+
 static void check_als_status(void)
 {
 	uint8_t data[3];
@@ -91,64 +151,9 @@ static void check_als_status(void)
 			data[0] &= ~ALS_NORMAL_COUNT;
 			als_eeprom_write(0x00, data, 1);
 		}
+
+		gpio_enable_interrupt(GPIO_DOOR_OPEN_EC);
+		hook_call_deferred(&als_change_deferred_data, 500 * MSEC);
 	}
 }
 DECLARE_HOOK(HOOK_INIT, check_als_status, HOOK_PRIO_DEFAULT);
-
-int als_enable_status(void)
-{
-	return als_enable;
-}
-
-static void als_change_deferred(void)
-{
-	static bool debouncing;
-	uint8_t data[1];
-
-	if (!gpio_get_level(GPIO_DOOR_OPEN_EC)) {
-		if (!debouncing) {
-			debouncing = true;
-			return;
-		}
-
-		debouncing = false;
-		als_eeprom_read(0x00, data, 1);
-
-		/* Detect the als enable status,used to disable als function in
-		 * debug status*/
-		if (!(data[0] & ALS_ENABLE)) {
-			als_enable = 0;
-			CPRINTS(" function disable-%d", data[0]);
-			return;
-		}
-
-		if (!(data[0] & ALS_NORMAL_COUNT))
-			als_data_handler();
-
-		data[0] |= ALS_NORMAL_COUNT;
-		als_eeprom_write(0x00, data, 1);
-
-		chipset_force_shutdown(CHIPSET_SHUTDOWN_BOARD_CUSTOM);
-		if (extpower_is_present()) {
-			CPRINTS("AC off!");
-			tcpc_write(0, TCPC_REG_COMMAND,
-				   TCPC_REG_COMMAND_SNK_CTRL_LOW);
-			raa489000_enable_asgate(0, false);
-		}
-		cflush();
-		als_det_enable = 0;
-		if (battery_is_present()) {
-			CPRINTS("cut off!");
-			board_cut_off_battery();
-		}
-	}
-}
-DECLARE_DEFERRED(als_change_deferred);
-
-static void check_als(void)
-{
-	if (als_enable && als_det_enable) {
-		hook_call_deferred(&als_change_deferred_data, 0);
-	}
-}
-DECLARE_HOOK(HOOK_SECOND, check_als, HOOK_PRIO_DEFAULT);
