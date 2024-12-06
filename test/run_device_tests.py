@@ -248,12 +248,11 @@ class Platform(ABC):
     @abstractmethod
     def flash(
         self,
+        board_config: BoardConfig,
         image_path: str,
-        board: str,
         flasher: str,
         remote_ip: str,
         remote_port: int,
-        build_board: str,
         test_name: str,
         enable_hw_write_protect: bool,
         zephyr: bool,
@@ -318,12 +317,11 @@ class Hardware(Platform):
 
     def flash(
         self,
+        board_config: BoardConfig,
         image_path: str,
-        board: str,
         flasher: str,
         remote_ip: str,
         remote_port: int,
-        build_board: str,
         test_name: str,
         enable_hw_write_protect: bool,
         zephyr: bool,
@@ -343,7 +341,7 @@ class Hardware(Platform):
         cmd.extend(
             [
                 "--board",
-                board,
+                board_config.name,
                 "--image",
                 image_path,
             ]
@@ -378,19 +376,18 @@ class Renode(Platform):
 
     def flash(
         self,
+        board_config: BoardConfig,
         image_path: str,
-        board: str,
         flasher: str,
         remote_ip: str,
         remote_port: int,
-        build_board: str,
         test_name: str,
         enable_hw_write_protect: bool,
         zephyr: bool,
     ) -> bool:
         cmd = [
             "./util/renode-ec-launch",
-            build_board,
+            board_config.name,
             "zephyr" if zephyr else test_name,
         ]
         if enable_hw_write_protect:
@@ -1489,7 +1486,7 @@ def flash_and_run_test(
     executor,
 ) -> bool:
     """Run a single test using the test and board configuration specified"""
-    build_board = args.board
+    build_board = board_config.name
     # If test provides this information, build image for board specified
     # by test. Also if a test is in Zephyr upstream use the dev board name.
     if test.build_board is not None:
@@ -1527,12 +1524,11 @@ def flash_and_run_test(
 
     # flash test binary
     if not platform.flash(
+        board_config,
         image_path,
-        args.board,
         args.flasher,
         args.remote,
         args.jlink_port,
-        build_board,
         test.test_name,
         test.enable_hw_write_protect,
         args.zephyr,
