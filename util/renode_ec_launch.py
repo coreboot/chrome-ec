@@ -158,17 +158,17 @@ def main(argv: Optional[List[str]] = None) -> Optional[int]:
         """,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.epilog = """
-    Use the BOARD and PROJECT environment variables to set a default for one or
-    both equivalent arguments.
-    """
 
     parser.add_argument(
         "board",
         nargs="?",
         choices=CONSOLE_MAP.keys(),
         default=os.environ.get("BOARD", DEFAULT_BOARD),
-        help="Name of the EC board",
+        help="""
+        Name of the EC/Zephyr board.
+
+        The BOARD environment variable can be used instead of this flag.
+        """,
     )
     parser.add_argument(
         "project",
@@ -177,6 +177,8 @@ def main(argv: Optional[List[str]] = None) -> Optional[int]:
         help="""
         Name of the EC project. This is normally just 'ec' or 'zephyr', but
         could be a test name for on-board test images.
+
+        The PROJECT environment variable can be used instead of this flag.
         """,
     )
 
