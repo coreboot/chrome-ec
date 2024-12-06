@@ -108,6 +108,11 @@ int emul_pdc_pdo_set_direct(struct emul_pdc_pdo_t *data,
 		return -EINVAL;
 	}
 
+	LOG_INF("Emul Set PDOs: %s %s, offset %d num %d",
+		pdo_type == SINK_PDO ? "SINK_PDO" : "SOURCE_PDO",
+		source == LPM_PDO ? "LPM_PDO" : "PARTNER_PDO", pdo_offset,
+		num_pdos);
+
 	if (pdo_offset + num_pdos > PDO_OFFSET_MAX) {
 		LOG_ERR("PDO offset overflow at %d, num pdos: %d", pdo_offset,
 			num_pdos);
