@@ -5,6 +5,11 @@
 #include <dt-bindings/gpio_defines.h>
 
 / {
+
+	aliases {
+		gpio-nb-mode = &gpio_ish_nb_mode_l;
+	};
+
 	named-gpios {
 		compatible = "named-gpios";
 
@@ -14,6 +19,20 @@
 
 		gpio_accel_mb_int_l: accel_mb_int_l {
 			gpios = <&gpio0 5 GPIO_INPUT>;
+		};
+
+		gpio_tablet_mode_l: tablet_mode_l {
+			gpios = <&gpio0 3 GPIO_INPUT>;
+			enum-name = "GPIO_TABLET_MODE_L";
+		};
+
+		gpio_lid_open: lid_open {
+			gpios = <&gpio0 9 GPIO_INPUT>;
+			enum-name = "GPIO_LID_OPEN";
+		};
+
+		gpio_ish_nb_mode_l: ish_nb_mode_l {
+			gpios = <&gpio0 1 (GPIO_ACTIVE_LOW | GPIO_OUTPUT_ACTIVE)>;
 		};
 
 		ec_entering_rw {
