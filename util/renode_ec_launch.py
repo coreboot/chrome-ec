@@ -56,25 +56,19 @@ def msg_run(cmd: List[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
-def launch(opts: argparse.Namespace) -> int:
+def launch(board: str, project: str, enable_write_protect: bool) -> int:
     """Launches an EC image in Renode.
 
     This image can be the actual firmware image or an on-board test image.
 
     Args:
-        opts: The argparse options provided to the program, described below.
-
-    Opts:
-        board: The name of the EC board.
+        board: The name of the EC/Zephyr board.
         project: The name of the EC project.
+        enable_write_protect: Whether to enable hardware write protection.
 
     Returns:
         0 on success, otherwise non-zero.
     """
-
-    board = opts.board
-    project = opts.project
-    enable_write_protect = opts.enable_write_protect
 
     # Since we are going to cd later, we need to determine the absolute path
     # of EC.
@@ -193,7 +187,11 @@ def main(argv: Optional[List[str]] = None) -> Optional[int]:
     )
 
     opts = parser.parse_args(argv)
-    return launch(opts)
+    return launch(
+        board=opts.board,
+        project=opts.project,
+        enable_write_protect=opts.enable_write_protect,
+    )
 
 
 if __name__ == "__main__":
