@@ -7,23 +7,21 @@
 
 """Runs unit tests on device and displays the results.
 
-This script assumes you have a ~/.servodrc config file with a line that
-corresponds to the board being tested.
-
-See https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/HEAD/docs/servo.md#servodrc
+This script assumes you have set up servod according to
+https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/servod_outside_chroot.md.
 
 In addition to running this script locally, you can also run it from a remote
 machine against a board connected to a local machine. For example:
 
 Start servod and JLink locally:
 
-(local chroot) $ sudo servod --board dragonclaw
+(local outside) $ start-servod --channel=release --board=dragonclaw -p 9999 -f
 (local chroot) $ sudo JLinkRemoteServerCLExe -select USB
 
 Forward the FPMCU console on a TCP port:
 
-(local chroot) $ socat $(dut-control raw_fpmcu_console_uart_pty | cut -d: -f2) \
-                 tcp4-listen:10000,fork
+(local outside) $ socat $(dut-control -- raw_fpmcu_console_uart_pty | cut -d: -f2) \
+                  tcp4-listen:10000,fork
 
 Forward all the ports to the remote machine:
 
