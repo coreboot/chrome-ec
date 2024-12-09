@@ -445,7 +445,6 @@ class Renode(Platform):
                 return True
         elif board_config.name in [HELIPILOT, BUCCANEER]:
             if test_name in [
-                "abort",  # TODO(b/379897106)
                 "production_app_test",
                 "benchmark",
                 "exception",
@@ -466,9 +465,6 @@ class Renode(Platform):
                 "rollback_entropy",
                 "rtc_npcx9",
                 "sbrk",
-                "stdlib",  # TODO(b/379897213)
-                "fpsensor_auth_crypto_stateless",  # TODO(b/372969110)
-                "unaligned_access_benchmark",  # TODO(372969629)
             ]:
                 return True
 
