@@ -767,17 +767,24 @@ static int usb_spi_tpm_transaction(const struct spi_device_t *spi_device,
 	int chip_select_level_before = gpio_get_level(spi_device->gpio_cs);
 	gpio_set_level(spi_device->gpio_cs, 0);
 
+	int rv = EC_SUCCESS;
+
+	/* Ensure that any pulse from a previous transaction is done. */
+	if (flash_flags & FLASH_FLAG_TPM_WAIT_FOR_READY)
+		rv = await_high_level(gsc_ready_pin, deadline);
+
 	uint8_t resp[4];
 
 	/* Send 4-byte TPM header, also receiving ready status. */
-	int rv = spi_transaction(spi_device, txdata, 4, resp, -1);
+	if (rv == EC_SUCCESS)
+		rv = spi_transaction(spi_device, txdata, 4, resp, -1);
 
 	/* Optionally wait for Google ready signal, on read transactions. */
 	if (rv == EC_SUCCESS &&
 	    (flash_flags & FLASH_FLAG_READ_WRITE_MSK) ==
 		    FLASH_FLAG_READ_WRITE_READ &&
 	    (flash_flags & FLASH_FLAG_TPM_WAIT_FOR_READY)) {
-		rv = await_falling_edge(gsc_ready_pin, deadline);
+		rv = await_low_level(gsc_ready_pin, deadline);
 	}
 
 	/* Poll for the TPM standard ready status. */
@@ -803,7 +810,7 @@ static int usb_spi_tpm_transaction(const struct spi_device_t *spi_device,
 	    (flash_flags & FLASH_FLAG_READ_WRITE_MSK) ==
 		    FLASH_FLAG_READ_WRITE_WRITE &&
 	    (flash_flags & FLASH_FLAG_TPM_WAIT_FOR_READY)) {
-		rv = await_falling_edge(gsc_ready_pin, deadline);
+		rv = await_low_level(gsc_ready_pin, deadline);
 	}
 	return rv;
 }

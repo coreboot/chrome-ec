@@ -285,8 +285,9 @@ enum gpio_signal gpio_find_by_name(const char *name);
 
 extern int shield_reset_pin;
 
-/* Utility method shared by SPI and I2C TPM code. */
-int await_falling_edge(int gsc_ready_pin, timestamp_t deadline);
+/* Utility methods shared by SPI and I2C TPM code. */
+int await_high_level(int gsc_ready_pin, timestamp_t deadline);
+int await_low_level(int gsc_ready_pin, timestamp_t deadline);
 
 #endif /* !__ASSEMBLER__ */
 #endif /* __CROS_EC_BOARD_H */

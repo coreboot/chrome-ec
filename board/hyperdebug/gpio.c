@@ -2584,14 +2584,19 @@ void dap_goog_gpio(size_t peek_c)
 }
 
 /* Utility function for busy-waiting, used by SPI and I2C TPM. */
-int await_falling_edge(int gsc_ready_pin, timestamp_t deadline)
+int await_high_level(int gsc_ready_pin, timestamp_t deadline)
 {
 	while (!gpio_get_level(gsc_ready_pin)) {
 		timestamp_t now = get_time();
 		if (timestamp_expired(deadline, &now))
 			return EC_ERROR_TIMEOUT;
 	}
+	return EC_SUCCESS;
+}
 
+/* Utility function for busy-waiting, used by SPI and I2C TPM. */
+int await_low_level(int gsc_ready_pin, timestamp_t deadline)
+{
 	while (gpio_get_level(gsc_ready_pin)) {
 		timestamp_t now = get_time();
 		if (timestamp_expired(deadline, &now))
