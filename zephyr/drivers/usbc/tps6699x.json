@@ -287,6 +287,13 @@
                 "start position": 24,
                 "value (EDITABLE)": "0x0",
                 "value description": "0x0"
+              },
+              {
+                "end position": 40,
+                "name": "OverrideHardResetWhenTxInProgress",
+                "start position": 40,
+                "value (EDITABLE)": "0x0",
+                "value description": "False"
               }
             ],
             "length in bytes": "8",
@@ -569,6 +576,20 @@
                 "value description": "False"
               },
               {
+                "end position": 19,
+                "name": "DebugAccessoryAlwaysOn",
+                "start position": 19,
+                "value (EDITABLE)": "0x0",
+                "value description": "False"
+              },
+              {
+                "end position": 20,
+                "name": "DebugAccessoryCustomCable",
+                "start position": 20,
+                "value (EDITABLE)": "0x0",
+                "value description": "False"
+              },
+              {
                 "end position": 29,
                 "name": "DisablePowerToRetimerOnSleep",
                 "start position": 29,
@@ -704,6 +725,41 @@
             ],
             "length in bytes": "22",
             "name": "TX Manufactrer Info SOP"
+          },
+          {
+            "address": "0x78",
+            "bitFields": [
+              {
+                "end position": 7,
+                "name": "Port Reported PDP",
+                "start position": 0,
+                "value (EDITABLE)": "0x0",
+                "value description": "0  W"
+              },
+              {
+                "end position": 15,
+                "name": "Port Present PDP",
+                "start position": 8,
+                "value (EDITABLE)": "0x0",
+                "value description": "0  W"
+              },
+              {
+                "end position": 23,
+                "name": "Port Maximum PDP",
+                "start position": 16,
+                "value (EDITABLE)": "0x0",
+                "value description": "0  W"
+              },
+              {
+                "end position": 31,
+                "name": "Port Type Shared Assured",
+                "start position": 31,
+                "value (EDITABLE)": "0x0",
+                "value description": "False"
+              }
+            ],
+            "length in bytes": "4",
+            "name": "TX Source Info"
           },
           {
             "address": "0x7b",
@@ -4309,13 +4365,6 @@
                 "value description": "114%"
               },
               {
-                "end position": 19,
-                "name": "Soft Start",
-                "start position": 18,
-                "value (EDITABLE)": "0x3",
-                "value description": "3.39 V/ms (typical)"
-              },
-              {
                 "end position": 21,
                 "name": "OVP for PP5V",
                 "start position": 20,
@@ -4628,7 +4677,7 @@
                 "name": "SbTxDirectionFromHost",
                 "start position": 30,
                 "value (EDITABLE)": "0x0",
-                "value description": "00b Normal (Px_SBTX is an input) SBU_NORMAL "
+                "value description": "Normal (Px_SBTX is an input) SBU_NORMAL"
               },
               {
                 "end position": 32,
@@ -4746,78 +4795,78 @@
                 "end position": 65,
                 "name": "Maximum Current",
                 "start position": 56,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 65,
                 "name": "Maximum Power",
                 "start position": 56,
-                "value (EDITABLE)": "0x12c",
-                "value description": "75 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 65,
                 "name": "Maximum Current",
                 "start position": 56,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 62,
                 "name": "Maximum Current",
                 "start position": 56,
-                "value (EDITABLE)": "0x2c",
-                "value description": "2.2 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 65,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 56,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 71,
                 "name": "Minimum Voltage",
                 "start position": 64,
-                "value (EDITABLE)": "0xd1",
-                "value description": "20.900000000000002 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 75,
                 "name": "Voltage",
                 "start position": 66,
-                "value (EDITABLE)": "0xb4",
-                "value description": "9 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 75,
                 "name": "Minimum Voltage",
                 "start position": 66,
-                "value (EDITABLE)": "0xb4",
-                "value description": "9 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 75,
                 "name": "Minimum Voltage",
                 "start position": 66,
-                "value (EDITABLE)": "0xb4",
-                "value description": "9 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 75,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 66,
-                "value (EDITABLE)": "0xb4",
-                "value description": "1.8 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 80,
                 "name": "Maximum Voltage",
                 "start position": 73,
-                "value (EDITABLE)": "0x1",
-                "value description": "0.1 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 77,
@@ -4872,78 +4921,78 @@
                 "end position": 97,
                 "name": "Maximum Current",
                 "start position": 88,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 97,
                 "name": "Maximum Power",
                 "start position": 88,
-                "value (EDITABLE)": "0x12c",
-                "value description": "75 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 97,
                 "name": "Maximum Current",
                 "start position": 88,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 94,
                 "name": "Maximum Current",
                 "start position": 88,
-                "value (EDITABLE)": "0x2c",
-                "value description": "2.2 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 97,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 88,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 103,
                 "name": "Minimum Voltage",
                 "start position": 96,
-                "value (EDITABLE)": "0xb1",
-                "value description": "17.7 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 107,
                 "name": "Voltage",
                 "start position": 98,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 107,
                 "name": "Minimum Voltage",
                 "start position": 98,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 107,
                 "name": "Minimum Voltage",
                 "start position": 98,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 107,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 98,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 112,
                 "name": "Maximum Voltage",
                 "start position": 105,
-                "value (EDITABLE)": "0x2",
-                "value description": "0.2 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 109,
@@ -4998,78 +5047,78 @@
                 "end position": 129,
                 "name": "Maximum Current",
                 "start position": 120,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 129,
                 "name": "Maximum Power",
                 "start position": 120,
-                "value (EDITABLE)": "0x12c",
-                "value description": "75 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 129,
                 "name": "Maximum Current",
                 "start position": 120,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 126,
                 "name": "Maximum Current",
                 "start position": 120,
-                "value (EDITABLE)": "0x2c",
-                "value description": "2.2 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 129,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 120,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 135,
                 "name": "Minimum Voltage",
                 "start position": 128,
-                "value (EDITABLE)": "0x41",
-                "value description": "6.5 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 139,
                 "name": "Voltage",
                 "start position": 130,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 139,
                 "name": "Minimum Voltage",
                 "start position": 130,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 139,
                 "name": "Minimum Voltage",
                 "start position": 130,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 139,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 130,
-                "value (EDITABLE)": "0x190",
-                "value description": "4 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 144,
                 "name": "Maximum Voltage",
                 "start position": 137,
-                "value (EDITABLE)": "0x3",
-                "value description": "0.30000000000000004 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 141,
@@ -5124,78 +5173,78 @@
                 "end position": 161,
                 "name": "Maximum Current",
                 "start position": 152,
-                "value (EDITABLE)": "0x1f4",
-                "value description": "5 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 161,
                 "name": "Maximum Power",
                 "start position": 152,
-                "value (EDITABLE)": "0x1f4",
-                "value description": "125 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 161,
                 "name": "Maximum Current",
                 "start position": 152,
-                "value (EDITABLE)": "0x1f4",
-                "value description": "5 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 158,
                 "name": "Maximum Current",
                 "start position": 152,
-                "value (EDITABLE)": "0x74",
-                "value description": "5.800000000000001 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 161,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 152,
-                "value (EDITABLE)": "0x1f4",
-                "value description": "5 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 167,
                 "name": "Minimum Voltage",
                 "start position": 160,
-                "value (EDITABLE)": "0x41",
-                "value description": "6.5 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 171,
                 "name": "Voltage",
                 "start position": 162,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 171,
                 "name": "Minimum Voltage",
                 "start position": 162,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 171,
                 "name": "Minimum Voltage",
                 "start position": 162,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 171,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 162,
-                "value (EDITABLE)": "0x190",
-                "value description": "4 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 176,
                 "name": "Maximum Voltage",
                 "start position": 169,
-                "value (EDITABLE)": "0x3",
-                "value description": "0.30000000000000004 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 173,
@@ -5684,78 +5733,78 @@
                 "end position": 81,
                 "name": "Operating Current",
                 "start position": 72,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 81,
                 "name": "Operating Power",
                 "start position": 72,
-                "value (EDITABLE)": "0x12c",
-                "value description": "75 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 81,
                 "name": "Operating Current",
                 "start position": 72,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 78,
                 "name": "Maximum Current",
                 "start position": 72,
-                "value (EDITABLE)": "0x2c",
-                "value description": "2.2 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 81,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 72,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 87,
                 "name": "Minimum Voltage",
                 "start position": 80,
-                "value (EDITABLE)": "0xc1",
-                "value description": "19.3 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 91,
                 "name": "Voltage",
                 "start position": 82,
-                "value (EDITABLE)": "0xf0",
-                "value description": "12 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 91,
                 "name": "Minimum Voltage",
                 "start position": 82,
-                "value (EDITABLE)": "0xf0",
-                "value description": "12 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 91,
                 "name": "Minimum Voltage",
                 "start position": 82,
-                "value (EDITABLE)": "0xf0",
-                "value description": "12 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 91,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 82,
-                "value (EDITABLE)": "0xf0",
-                "value description": "2.4 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 96,
                 "name": "Maximum Voltage",
                 "start position": 89,
-                "value (EDITABLE)": "0x1",
-                "value description": "0.1 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 93,
@@ -5803,78 +5852,78 @@
                 "end position": 113,
                 "name": "Operating Current",
                 "start position": 104,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 113,
                 "name": "Operating Power",
                 "start position": 104,
-                "value (EDITABLE)": "0x12c",
-                "value description": "75 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 113,
                 "name": "Operating Current",
                 "start position": 104,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 110,
                 "name": "Maximum Current",
                 "start position": 104,
-                "value (EDITABLE)": "0x2c",
-                "value description": "2.2 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 113,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 104,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 119,
                 "name": "Minimum Voltage",
                 "start position": 112,
-                "value (EDITABLE)": "0xb1",
-                "value description": "17.7 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 123,
                 "name": "Voltage",
                 "start position": 114,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 123,
                 "name": "Minimum Voltage",
                 "start position": 114,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 123,
                 "name": "Minimum Voltage",
                 "start position": 114,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 123,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 114,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 128,
                 "name": "Maximum Voltage",
                 "start position": 121,
-                "value (EDITABLE)": "0x2",
-                "value description": "0.2 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 125,
@@ -5922,78 +5971,78 @@
                 "end position": 145,
                 "name": "Operating Current",
                 "start position": 136,
-                "value (EDITABLE)": "0x145",
-                "value description": "3.25 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 145,
                 "name": "Operating Power",
                 "start position": 136,
-                "value (EDITABLE)": "0x145",
-                "value description": "81.25 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 145,
                 "name": "Operating Current",
                 "start position": 136,
-                "value (EDITABLE)": "0x145",
-                "value description": "3.25 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 142,
                 "name": "Maximum Current",
                 "start position": 136,
-                "value (EDITABLE)": "0x45",
-                "value description": "3.45 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 145,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 136,
-                "value (EDITABLE)": "0x145",
-                "value description": "3.25 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 151,
                 "name": "Minimum Voltage",
                 "start position": 144,
-                "value (EDITABLE)": "0x41",
-                "value description": "6.5 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 155,
                 "name": "Voltage",
                 "start position": 146,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 155,
                 "name": "Minimum Voltage",
                 "start position": 146,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 155,
                 "name": "Minimum Voltage",
                 "start position": 146,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 155,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 146,
-                "value (EDITABLE)": "0x190",
-                "value description": "4 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 160,
                 "name": "Maximum Voltage",
                 "start position": 153,
-                "value (EDITABLE)": "0x3",
-                "value description": "0.30000000000000004 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 157,
@@ -8719,11 +8768,11 @@
                 "value description": "100  %"
               },
               {
-                "end position": 47,
-                "name": "No Fet Used In Epr Circuit",
+                "end position": 40,
+                "name": "BlockingFETPresent",
                 "start position": 40,
-                "value (EDITABLE)": "0x36",
-                "value description": "0x36"
+                "value (EDITABLE)": "0x0",
+                "value description": "False"
               }
             ],
             "length in bytes": "6",
@@ -9916,13 +9965,6 @@
                 "value description": "114%"
               },
               {
-                "end position": 19,
-                "name": "Soft Start",
-                "start position": 18,
-                "value (EDITABLE)": "0x3",
-                "value description": "3.39 V/ms (typical)"
-              },
-              {
                 "end position": 21,
                 "name": "OVP for PP5V",
                 "start position": 20,
@@ -10235,7 +10277,7 @@
                 "name": "SbTxDirectionFromHost",
                 "start position": 30,
                 "value (EDITABLE)": "0x0",
-                "value description": "00b Normal (Px_SBTX is an input) SBU_NORMAL "
+                "value description": "Normal (Px_SBTX is an input) SBU_NORMAL"
               },
               {
                 "end position": 32,
@@ -10353,78 +10395,78 @@
                 "end position": 65,
                 "name": "Maximum Current",
                 "start position": 56,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 65,
                 "name": "Maximum Power",
                 "start position": 56,
-                "value (EDITABLE)": "0x12c",
-                "value description": "75 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 65,
                 "name": "Maximum Current",
                 "start position": 56,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 62,
                 "name": "Maximum Current",
                 "start position": 56,
-                "value (EDITABLE)": "0x2c",
-                "value description": "2.2 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 65,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 56,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 71,
                 "name": "Minimum Voltage",
                 "start position": 64,
-                "value (EDITABLE)": "0xd1",
-                "value description": "20.900000000000002 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 75,
                 "name": "Voltage",
                 "start position": 66,
-                "value (EDITABLE)": "0xb4",
-                "value description": "9 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 75,
                 "name": "Minimum Voltage",
                 "start position": 66,
-                "value (EDITABLE)": "0xb4",
-                "value description": "9 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 75,
                 "name": "Minimum Voltage",
                 "start position": 66,
-                "value (EDITABLE)": "0xb4",
-                "value description": "9 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 75,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 66,
-                "value (EDITABLE)": "0xb4",
-                "value description": "1.8 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 80,
                 "name": "Maximum Voltage",
                 "start position": 73,
-                "value (EDITABLE)": "0x1",
-                "value description": "0.1 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 77,
@@ -10479,78 +10521,78 @@
                 "end position": 97,
                 "name": "Maximum Current",
                 "start position": 88,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 97,
                 "name": "Maximum Power",
                 "start position": 88,
-                "value (EDITABLE)": "0x12c",
-                "value description": "75 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 97,
                 "name": "Maximum Current",
                 "start position": 88,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 94,
                 "name": "Maximum Current",
                 "start position": 88,
-                "value (EDITABLE)": "0x2c",
-                "value description": "2.2 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 97,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 88,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 103,
                 "name": "Minimum Voltage",
                 "start position": 96,
-                "value (EDITABLE)": "0xb1",
-                "value description": "17.7 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 107,
                 "name": "Voltage",
                 "start position": 98,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 107,
                 "name": "Minimum Voltage",
                 "start position": 98,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 107,
                 "name": "Minimum Voltage",
                 "start position": 98,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 107,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 98,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 112,
                 "name": "Maximum Voltage",
                 "start position": 105,
-                "value (EDITABLE)": "0x2",
-                "value description": "0.2 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 109,
@@ -10605,78 +10647,78 @@
                 "end position": 129,
                 "name": "Maximum Current",
                 "start position": 120,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 129,
                 "name": "Maximum Power",
                 "start position": 120,
-                "value (EDITABLE)": "0x12c",
-                "value description": "75 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 129,
                 "name": "Maximum Current",
                 "start position": 120,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 126,
                 "name": "Maximum Current",
                 "start position": 120,
-                "value (EDITABLE)": "0x2c",
-                "value description": "2.2 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 129,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 120,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 135,
                 "name": "Minimum Voltage",
                 "start position": 128,
-                "value (EDITABLE)": "0x41",
-                "value description": "6.5 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 139,
                 "name": "Voltage",
                 "start position": 130,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 139,
                 "name": "Minimum Voltage",
                 "start position": 130,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 139,
                 "name": "Minimum Voltage",
                 "start position": 130,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 139,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 130,
-                "value (EDITABLE)": "0x190",
-                "value description": "4 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 144,
                 "name": "Maximum Voltage",
                 "start position": 137,
-                "value (EDITABLE)": "0x3",
-                "value description": "0.30000000000000004 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 141,
@@ -10731,78 +10773,78 @@
                 "end position": 161,
                 "name": "Maximum Current",
                 "start position": 152,
-                "value (EDITABLE)": "0x1f4",
-                "value description": "5 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 161,
                 "name": "Maximum Power",
                 "start position": 152,
-                "value (EDITABLE)": "0x1f4",
-                "value description": "125 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 161,
                 "name": "Maximum Current",
                 "start position": 152,
-                "value (EDITABLE)": "0x1f4",
-                "value description": "5 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 158,
                 "name": "Maximum Current",
                 "start position": 152,
-                "value (EDITABLE)": "0x74",
-                "value description": "5.800000000000001 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 161,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 152,
-                "value (EDITABLE)": "0x1f4",
-                "value description": "5 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 167,
                 "name": "Minimum Voltage",
                 "start position": 160,
-                "value (EDITABLE)": "0x41",
-                "value description": "6.5 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 171,
                 "name": "Voltage",
                 "start position": 162,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 171,
                 "name": "Minimum Voltage",
                 "start position": 162,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 171,
                 "name": "Minimum Voltage",
                 "start position": 162,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 171,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 162,
-                "value (EDITABLE)": "0x190",
-                "value description": "4 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 176,
                 "name": "Maximum Voltage",
                 "start position": 169,
-                "value (EDITABLE)": "0x3",
-                "value description": "0.30000000000000004 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 173,
@@ -11291,78 +11333,78 @@
                 "end position": 81,
                 "name": "Operating Current",
                 "start position": 72,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 81,
                 "name": "Operating Power",
                 "start position": 72,
-                "value (EDITABLE)": "0x12c",
-                "value description": "75 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 81,
                 "name": "Operating Current",
                 "start position": 72,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 78,
                 "name": "Maximum Current",
                 "start position": 72,
-                "value (EDITABLE)": "0x2c",
-                "value description": "2.2 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 81,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 72,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 87,
                 "name": "Minimum Voltage",
                 "start position": 80,
-                "value (EDITABLE)": "0xc1",
-                "value description": "19.3 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 91,
                 "name": "Voltage",
                 "start position": 82,
-                "value (EDITABLE)": "0xf0",
-                "value description": "12 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 91,
                 "name": "Minimum Voltage",
                 "start position": 82,
-                "value (EDITABLE)": "0xf0",
-                "value description": "12 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 91,
                 "name": "Minimum Voltage",
                 "start position": 82,
-                "value (EDITABLE)": "0xf0",
-                "value description": "12 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 91,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 82,
-                "value (EDITABLE)": "0xf0",
-                "value description": "2.4 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 96,
                 "name": "Maximum Voltage",
                 "start position": 89,
-                "value (EDITABLE)": "0x1",
-                "value description": "0.1 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 93,
@@ -11410,78 +11452,78 @@
                 "end position": 113,
                 "name": "Operating Current",
                 "start position": 104,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 113,
                 "name": "Operating Power",
                 "start position": 104,
-                "value (EDITABLE)": "0x12c",
-                "value description": "75 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 113,
                 "name": "Operating Current",
                 "start position": 104,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 110,
                 "name": "Maximum Current",
                 "start position": 104,
-                "value (EDITABLE)": "0x2c",
-                "value description": "2.2 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 113,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 104,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 119,
                 "name": "Minimum Voltage",
                 "start position": 112,
-                "value (EDITABLE)": "0xb1",
-                "value description": "17.7 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 123,
                 "name": "Voltage",
                 "start position": 114,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 123,
                 "name": "Minimum Voltage",
                 "start position": 114,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 123,
                 "name": "Minimum Voltage",
                 "start position": 114,
-                "value (EDITABLE)": "0x12c",
-                "value description": "15 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 123,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 114,
-                "value (EDITABLE)": "0x12c",
-                "value description": "3 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 128,
                 "name": "Maximum Voltage",
                 "start position": 121,
-                "value (EDITABLE)": "0x2",
-                "value description": "0.2 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 125,
@@ -11529,78 +11571,78 @@
                 "end position": 145,
                 "name": "Operating Current",
                 "start position": 136,
-                "value (EDITABLE)": "0x145",
-                "value description": "3.25 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 145,
                 "name": "Operating Power",
                 "start position": 136,
-                "value (EDITABLE)": "0x145",
-                "value description": "81.25 W"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 W"
               },
               {
                 "end position": 145,
                 "name": "Operating Current",
                 "start position": 136,
-                "value (EDITABLE)": "0x145",
-                "value description": "3.25 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 142,
                 "name": "Maximum Current",
                 "start position": 136,
-                "value (EDITABLE)": "0x45",
-                "value description": "3.45 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 145,
                 "name": "Maximum Current for 15V-20V",
                 "start position": 136,
-                "value (EDITABLE)": "0x145",
-                "value description": "3.25 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 151,
                 "name": "Minimum Voltage",
                 "start position": 144,
-                "value (EDITABLE)": "0x41",
-                "value description": "6.5 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 155,
                 "name": "Voltage",
                 "start position": 146,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 155,
                 "name": "Minimum Voltage",
                 "start position": 146,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 155,
                 "name": "Minimum Voltage",
                 "start position": 146,
-                "value (EDITABLE)": "0x190",
-                "value description": "20 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 155,
                 "name": "Maximum Current for 9V-15V",
                 "start position": 146,
-                "value (EDITABLE)": "0x190",
-                "value description": "4 A"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 A"
               },
               {
                 "end position": 160,
                 "name": "Maximum Voltage",
                 "start position": 153,
-                "value (EDITABLE)": "0x3",
-                "value description": "0.30000000000000004 V"
+                "value (EDITABLE)": "0x0",
+                "value description": "0 V"
               },
               {
                 "end position": 157,
@@ -14326,11 +14368,11 @@
                 "value description": "100  %"
               },
               {
-                "end position": 47,
-                "name": "No Fet Used In Epr Circuit",
+                "end position": 40,
+                "name": "BlockingFETPresent",
                 "start position": 40,
-                "value (EDITABLE)": "0x36",
-                "value description": "0x36"
+                "value (EDITABLE)": "0x0",
+                "value description": "False"
               }
             ],
             "length in bytes": "6",
@@ -14353,8 +14395,8 @@
     "header records": "TPS66994",
     "mode": "config",
     "sharedSettings": true,
-    "timeStamp": "11-8-2024_6-51-39",
-    "toolBuildVersion": "2.19"
+    "timeStamp": "12-10-2024_3-47-19",
+    "toolBuildVersion": "2.21"
   },
   "miscellaneous": {
     "configuration mapping": {
