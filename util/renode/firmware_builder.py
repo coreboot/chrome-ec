@@ -64,7 +64,7 @@ def test(_opts):
     # https://chrome-infra-packages.appspot.com/p/chromiumos/infra/tools/renode.
     cipd_renode_version = (
         "ebuild_source:"
-        + "app-emulation/renode-1.15.3_p20241011-r2,"
+        + "app-emulation/renode-1.15.3_p20241207,"
         + "dev-libs/icu-70.1-r2,"
         + "dev-libs/openssl-3.2.1-r1,"
         + "dev-libs/userspace-rcu-0.13.2-r1,"
