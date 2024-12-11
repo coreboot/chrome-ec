@@ -142,6 +142,8 @@ extern "C" {
 #define EC_MEMMAP_SIZE 255 /* ACPI IO buffer max is 255 bytes */
 #define EC_MEMMAP_TEXT_MAX 8 /* Size of a string in the memory map */
 
+#define EC_LPC_ADDR_MEMMAP_INDEXED_IO 0x380
+
 /* The offset address of each type of data in mapped memory. */
 #define EC_MEMMAP_TEMP_SENSOR 0x00 /* Temp sensors 0x00 - 0x0f */
 #define EC_MEMMAP_FAN 0x10 /* Fan speeds 0x10 - 0x17 */
