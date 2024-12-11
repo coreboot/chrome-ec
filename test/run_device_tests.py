@@ -459,6 +459,7 @@ class Renode(Platform):
                 "malloc",
                 "mpu",
                 "otp_key",
+                "panic_data",  # TODO(b/383553770)
                 "power_utilization",
                 "ram_lock",
                 "rollback",
