@@ -135,9 +135,15 @@
 		gpio_imvp91_vrrdy_od: imvp91_vrrdy_od {
 			gpios = <&gpioj 4 GPIO_INPUT>;
 		};
+		gpio_jack_detect_l: jack_detect_l {
+			gpios = <&gpioh 6 GPIO_INPUT>;
+		};
 		gpio_lid_open: lid_open {
 			gpios = <&gpiof 3 GPIO_INPUT>;
 			enum-name = "GPIO_LID_OPEN";
+		};
+		gpio_loading_enable_l: loading_enable_l {
+			gpios = <&gpioe 6 GPIO_OUTPUT_LOW>;
 		};
 		gpio_pg_pp1050_mem_s3_od: pg_pp1050_mem_s3_od {
 			gpios = <&gpiod 3 GPIO_INPUT>;

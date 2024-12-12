@@ -27,6 +27,8 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
+#include <ap_power/ap_power.h>
+
 LOG_MODULE_REGISTER(board_init, LOG_LEVEL_ERR);
 
 enum base_sensor_type {
@@ -85,6 +87,96 @@ void lid_accel_interrupt(enum gpio_signal signal)
 	else
 		bma4xx_interrupt(signal);
 }
+
+#define INT_RECHECK_US 5000
+
+static void check_audio_jack(void);
+DECLARE_DEFERRED(check_audio_jack);
+
+static void check_audio_jack(void)
+{
+	int value;
+	if (chipset_in_state(CHIPSET_STATE_ON)) {
+		if (gpio_pin_get_dt(
+			    GPIO_DT_FROM_NODELABEL(gpio_jack_detect_l))) {
+			value = 0;
+			gpio_pin_set_dt(
+				GPIO_DT_FROM_NODELABEL(gpio_loading_enable_l),
+				value);
+		} else {
+			value = 1;
+			gpio_pin_set_dt(
+				GPIO_DT_FROM_NODELABEL(gpio_loading_enable_l),
+				value);
+		}
+	} else {
+		value = 0;
+		gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_loading_enable_l),
+				value);
+	}
+}
+
+void audio_jack_interrupt(enum gpio_signal signal)
+{
+	hook_call_deferred(&check_audio_jack_data, INT_RECHECK_US);
+}
+
+static void jack_detect_init(void)
+{
+	gpio_enable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_jack_detect));
+}
+DECLARE_HOOK(HOOK_INIT, jack_detect_init, HOOK_PRIO_DEFAULT);
+
+static void check_audio_jack_handler(struct ap_power_ev_callback *cb,
+				     struct ap_power_ev_data data)
+{
+	int value;
+
+	switch (data.event) {
+	default:
+		return;
+
+	case AP_POWER_RESUME:
+		/* Called on AP S3 -> S0 transition */
+		if (gpio_pin_get_dt(
+			    GPIO_DT_FROM_NODELABEL(gpio_jack_detect_l))) {
+			value = 0;
+			gpio_pin_set_dt(
+				GPIO_DT_FROM_NODELABEL(gpio_loading_enable_l),
+				value);
+		} else {
+			value = 1;
+			gpio_pin_set_dt(
+				GPIO_DT_FROM_NODELABEL(gpio_loading_enable_l),
+				value);
+		}
+		break;
+
+	case AP_POWER_SUSPEND:
+	case AP_POWER_SHUTDOWN:
+		value = 0;
+		/* Called on AP S0 -> S3 transition */
+		gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_loading_enable_l),
+				value);
+		break;
+	}
+}
+
+static int jack_detect_handler(void)
+{
+	static struct ap_power_ev_callback cb;
+	/*
+	 * Add a callback for suspend/resume/shutdowm to
+	 * control the jack_detect VCC.
+	 */
+	ap_power_ev_init_callback(&cb, check_audio_jack_handler,
+				  AP_POWER_RESUME | AP_POWER_SUSPEND |
+					  AP_POWER_SHUTDOWN);
+	ap_power_ev_add_callback(&cb);
+
+	return 0;
+}
+SYS_INIT(jack_detect_handler, APPLICATION, 1);
 
 test_export_static void alt_sensor_init(void)
 {
