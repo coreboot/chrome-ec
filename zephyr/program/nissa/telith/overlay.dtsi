@@ -92,13 +92,16 @@
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "door_open_interrupt";
 		};
+		int_jack_detect: jack_detect {
+			irq-pin = <&gpio_jack_detect_l>;
+			flags = <GPIO_INT_EDGE_BOTH>;
+			handler = "audio_jack_interrupt";
+		};
 	};
 
 	unused-pins {
 		compatible = "unused-gpios";
 		unused-gpios = <&gpiod 4 GPIO_INPUT_PULL_DOWN>,
-			       <&gpioe 6 GPIO_INPUT_PULL_DOWN>,
-			       <&gpioh 6 GPIO_INPUT_PULL_DOWN>,
 			       <&gpiob 5 GPIO_INPUT_PULL_DOWN>,
 			       <&gpioj 1 GPIO_INPUT_PULL_DOWN>;
 	};
@@ -213,6 +216,9 @@
 };
 &gpio_vccin_aux_vid1 {
 	gpios = <&gpiok 1 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
+};
+&gpio_jack_detect_l {
+	gpios = <&gpioh 6 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 };
 
 &gpio_ec_prochot_odl {
