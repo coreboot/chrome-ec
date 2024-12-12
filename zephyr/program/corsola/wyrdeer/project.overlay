@@ -232,7 +232,6 @@
 
 		port0@0{
 			/delete-property/ bc12;
-			ppc_alt = <&ppc_port0>;
 			usb-mux-chain-0{
 				usb-muxes = <&ps8743_mux_1 &virtual_mux_0>;
 			};
@@ -558,10 +557,8 @@
 		compatible = "parade,ps8743";
 		reg = <0x10>;
 	};
-	rt1739@70{
-		compatible = "richtek,rt1739-ppc";
-	};
-	ppc_port0: syv682x@40 {
+	/delete-node/ rt1739@70;
+	bc12_ppc_port0: syv682x@40 {
 		compatible = "silergy,syv682x";
 		status = "okay";
 		reg = <0x40>;
