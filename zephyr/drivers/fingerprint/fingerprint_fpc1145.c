@@ -387,8 +387,10 @@ static int fpc1145_maintenance(const struct device *dev, uint8_t *buf,
 		return -EFAULT;
 	}
 
-	data->errors |=
-		FINGERPRINT_ERROR_DEAD_PIXELS(sensor_info.num_defective_pixels);
+	data->errors &= ~FINGERPRINT_ERROR_DEAD_PIXELS_MASK;
+	data->errors |= FINGERPRINT_ERROR_DEAD_PIXELS(
+		MIN(sensor_info.num_defective_pixels,
+		    FINGERPRINT_ERROR_DEAD_PIXELS_MAX));
 	LOG_INF("num_defective_pixels: %d", sensor_info.num_defective_pixels);
 
 	return 0;
