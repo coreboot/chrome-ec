@@ -423,9 +423,6 @@ class Renode(Platform):
                     "ftrapv",
                     "panic",
                     "panic_data",
-                    "rollback",
-                    "stdlib",
-                    "utils_str",
                 ]:
                     return True
             # TODO(b/356476313): Remove these when Renode is fixed.
