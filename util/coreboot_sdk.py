@@ -41,10 +41,12 @@ def init_toolchain():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.STDOUT,
             check=True,
+            cwd="/mnt/host/source/src/",
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         print(
-            "bazel doesn't exist or is not the right version to download packages for coreboot-sdk"
+            "bazel doesn't exist or is not the right version to download packages"
+            " for coreboot-sdk"
         )
         return {}
     subprocess.run(
@@ -56,6 +58,7 @@ def init_toolchain():
             *(target for _, target in toolchains),
         ],
         check=True,
+        cwd="/mnt/host/source/src/",
     )
 
     result = {}
@@ -64,6 +67,7 @@ def init_toolchain():
             ["bazel", "--project", "fwsdk", "run", target],
             check=True,
             stdout=subprocess.PIPE,
+            cwd="/mnt/host/source/src/",
         )
         result[name] = run_result.stdout.strip()
     return result
