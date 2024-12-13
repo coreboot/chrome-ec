@@ -448,23 +448,12 @@ class Renode(Platform):
                 "production_app_test",
                 "benchmark",
                 "exception",
-                "exit",
-                "flash_physical",
-                "flash_write_protect",
                 "fpsensor_hw",
-                "fp_transport",
-                "ftrapv",  # TODO(b/379880481)
                 "libcxx",
-                "malloc",
-                "mpu",
                 "otp_key",
-                "panic_data",  # TODO(b/383553770)
                 "power_utilization",
                 "ram_lock",
-                "rollback",
-                "rollback_entropy",
                 "rtc_npcx9",
-                "sbrk",
             ]:
                 return True
 
