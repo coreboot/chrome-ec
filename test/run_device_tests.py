@@ -418,9 +418,6 @@ class Renode(Platform):
                     return True
                 if zephyr and test_name in [
                     "abort",
-                    "assert_builtin",
-                    "assert_stdlib",
-                    "exit",
                     "fp_transport",
                     "fpsensor_debug",
                     "ftrapv",
@@ -567,6 +564,8 @@ class AllTests:
                     SINGLE_CHECK_FAILED_REGEX,
                     ALL_TESTS_FAILED_REGEX,
                 ],
+                # TODO(b/365628799): Need to port to Zephyr.
+                skip_for_zephyr=True,
             ),
             TestConfig(
                 test_name="assert_stdlib",
@@ -574,13 +573,19 @@ class AllTests:
                     ALL_TESTS_FAILED_REGEX,
                     ASSERTION_FAILURE_REGEX,
                 ],
+                # TODO(b/365628799): Need to port to Zephyr.
+                skip_for_zephyr=True,
             ),
             TestConfig(test_name="benchmark"),
             TestConfig(test_name="boringssl_crypto"),
             TestConfig(test_name="cortexm_fpu"),
             TestConfig(test_name="crc"),
             TestConfig(test_name="exception"),
-            TestConfig(test_name="exit"),
+            TestConfig(
+                test_name="exit",
+                # TODO(b/365628799): Need to port to Zephyr.
+                skip_for_zephyr=True,
+            ),
             TestConfig(
                 test_name="flash_physical",
                 imagetype_to_use=ImageType.RO,
