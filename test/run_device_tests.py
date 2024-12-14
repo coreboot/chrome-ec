@@ -417,12 +417,12 @@ class Renode(Platform):
                 ]:
                     return True
                 if zephyr and test_name in [
-                    "abort",
-                    "fp_transport",
-                    "fpsensor_debug",
-                    "ftrapv",
-                    "panic",
-                    "panic_data",
+                    "abort",  # TODO(b/384094781)
+                    "fp_transport",  # TODO(b/384094788)
+                    "fpsensor_debug",  # TODO(b/384110894)
+                    "ftrapv",  # TODO(b/384095271)
+                    "panic",  # TODO(b/384095226)
+                    "panic_data",  # TODO(b/384095623)
                 ]:
                     return True
             # TODO(b/356476313): Remove these when Renode is fixed.
