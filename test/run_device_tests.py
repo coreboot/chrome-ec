@@ -385,9 +385,14 @@ class Renode(Platform):
     ) -> bool:
         cmd = [
             "./util/renode-ec-launch",
+            "--board",
             board_config.name,
-            "zephyr" if zephyr else test_name,
         ]
+        if zephyr:
+            cmd.append("--zephyr")
+        else:
+            cmd.extend(["--ec", test_name])
+
         if enable_hw_write_protect:
             cmd.append("--enable-write-protect")
 
