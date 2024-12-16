@@ -119,6 +119,16 @@ DECLARE_HOST_COMMAND(EC_CMD_GET_KEYBD_CONFIG, get_vivaldi_keybd_config,
 
 #define CROS_EC_KEYBOARD_NODE DT_CHOSEN(cros_ec_keyboard)
 
+static struct {
+	uint8_t row;
+	uint8_t col;
+} vivaldi_kbd_vol_up = { UINT8_MAX, UINT8_MAX };
+
+bool vivaldi_kbd_is_vol_up(uint8_t row, uint8_t col)
+{
+	return row == vivaldi_kbd_vol_up.row && col == vivaldi_kbd_vol_up.col;
+}
+
 static void vivaldi_kbd_init(void)
 {
 	const struct ec_response_keybd_config *keybd_config;
@@ -171,11 +181,13 @@ static void vivaldi_kbd_init(void)
 
 		set_scancode_set2(row, col, action_scancodes[key]);
 
-#if defined(CONFIG_PLATFORM_EC_KEYBOARD_CROS_EC_RAW_KB) || defined(CONFIG_ZTEST)
 		if (key == TK_VOL_UP) {
+			vivaldi_kbd_vol_up.row = row;
+			vivaldi_kbd_vol_up.col = col;
+#if defined(CONFIG_PLATFORM_EC_KEYBOARD_CROS_EC_RAW_KB) || defined(CONFIG_ZTEST)
 			set_vol_up_key(row, col);
-		}
 #endif
+		}
 	}
 }
 DECLARE_HOOK(HOOK_INIT, vivaldi_kbd_init, HOOK_PRIO_DEFAULT);
