@@ -103,7 +103,6 @@ The boot and runtime key row and column keys are configured with a
 
         runtime-keys {
                 compatible = "cros-ec,runtime-keys";
-                vol-up-rc = <KBD_RC(0, 4)>;
                 left-alt-rc = <KBD_RC(0, 10)>;
                 right-alt-rc = <KBD_RC(6, 10)>;
                 h-rc = <KBD_RC(1, 6)>;
@@ -112,6 +111,9 @@ The boot and runtime key row and column keys are configured with a
         ...
 };
 ```
+
+Note that runtime-keys operation requires a Vivaldi keyboard configuration node
+as well.
 
 ### Factory test
 
