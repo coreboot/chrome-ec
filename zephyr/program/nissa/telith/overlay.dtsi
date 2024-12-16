@@ -82,6 +82,11 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "audio_jack_interrupt";
 		};
+		int_blpwr_pgd: blpwr_pgd {
+			irq-pin = <&gpio_blpwr_pgd>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "bl_pg_interrupt";
+		};
 	};
 
 	unused-pins {

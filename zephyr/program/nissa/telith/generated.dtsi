@@ -205,6 +205,12 @@
 		charger_vap_otg_en {
 			gpios = <&gpioh 4 GPIO_OUTPUT_LOW>;
 		};
+		gpio_blpwr_pgd: blpwr_pgd {
+			gpios = <&gpioj 6 GPIO_INPUT>;
+		};
+		gpio_blpwr_en: blpwr_en {
+			gpios = <&gpiom 6 GPIO_OUTPUT_LOW>;
+		};
 	};
 
 	named-i2c-ports {
