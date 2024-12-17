@@ -461,7 +461,6 @@ class Renode(Platform):
                     return True
             if test_name in [
                 "exception",
-                "libcxx",
                 "rtc_stm32f4",  # TODO(b/384991107)
                 "timer_dos",  # TODO(b/374798079)
             ]:
@@ -469,7 +468,6 @@ class Renode(Platform):
         elif board_config.name in [HELIPILOT, BUCCANEER, GWENDOLIN]:
             if test_name in [
                 "exception",  # TODO(b/384730599)
-                "libcxx",
                 "otp_key",  # TODO(b/385216796)
                 "ram_lock",  # TODO(b/385216805)
                 "rtc_npcx9",  # TODO(b/385217282)
