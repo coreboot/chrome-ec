@@ -53,7 +53,7 @@ enum clock_osc {
 	OSC_INIT = 0, /* Uninitialized */
 	OSC_HSI, /* High-speed internal oscillator */
 	OSC_MSI, /* Multi-speed internal oscillator */
-#ifdef STM32_HSE_CLOCK /* Allows us to catch absence of HSE at comiple time */
+#ifdef CONFIG_STM32_CLOCK_HSE_HZ /* Catch absence of HSE at compile time */
 	OSC_HSE, /* High-speed external oscillator */
 #endif
 	OSC_PLL, /* PLL */
@@ -99,7 +99,7 @@ static void clock_enable_osc(enum clock_osc osc)
 		ready = STM32_RCC_CR_MSIRDY;
 		on = STM32_RCC_CR_MSION;
 		break;
-#ifdef STM32_HSE_CLOCK
+#ifdef CONFIG_STM32_CLOCK_HSE_HZ
 	case OSC_HSE:
 #ifdef STM32_HSE_BYP
 		STM32_RCC_CR |= STM32_RCC_CR_HSEBYP;
@@ -136,7 +136,7 @@ static void clock_switch_osc(enum clock_osc osc)
 		sw = STM32_RCC_CFGR_SW_MSI;
 		sws = STM32_RCC_CFGR_SWS_MSI;
 		break;
-#ifdef STM32_HSE_CLOCK
+#ifdef CONFIG_STM32_CLOCK_HSE_HZ
 	case OSC_HSE:
 		sw = STM32_RCC_CFGR_SW_HSE;
 		sws = STM32_RCC_CFGR_SWS_HSE;
@@ -187,7 +187,7 @@ static int stm32_configure_pll(enum clock_osc osc, uint8_t m, uint8_t n,
 		    STM32_RCC_PLLCFGR_PLLSRC_MSI)
 			pll_unchanged = false;
 
-#ifdef STM32_HSE_CLOCK
+#ifdef CONFIG_STM32_CLOCK_HSE_HZ
 	if (osc == OSC_HSE)
 		if ((val & STM32_RCC_PLLCFGR_PLLSRC_MSK) !=
 		    STM32_RCC_PLLCFGR_PLLSRC_HSE)
@@ -242,10 +242,10 @@ static int stm32_configure_pll(enum clock_osc osc, uint8_t m, uint8_t n,
 		val |= STM32_RCC_PLLCFGR_PLLSRC_MSI;
 		f = STM32_MSI_CLOCK;
 		break;
-#ifdef STM32_HSE_CLOCK
+#ifdef CONFIG_STM32_CLOCK_HSE_HZ
 	case OSC_HSE:
 		val |= STM32_RCC_PLLCFGR_PLLSRC_HSE;
-		f = STM32_HSE_CLOCK;
+		f = CONFIG_STM32_CLOCK_HSE_HZ;
 		break;
 #endif
 	default:
@@ -344,7 +344,7 @@ static void clock_set_osc(enum clock_osc osc, enum clock_osc pll_osc)
 		freq = STM32_MSI_CLOCK;
 		break;
 
-#ifdef STM32_HSE_CLOCK
+#ifdef CONFIG_STM32_CLOCK_HSE_HZ
 	case OSC_HSE:
 		/* Ensure that HSE is stable */
 		clock_enable_osc(osc);
@@ -356,7 +356,7 @@ static void clock_set_osc(enum clock_osc osc, enum clock_osc pll_osc)
 		STM32_RCC_CR &= ~(STM32_RCC_CR_MSION | STM32_RCC_CR_HSION |
 				  STM32_RCC_CR_PLLON);
 
-		freq = STM32_HSE_CLOCK;
+		freq = CONFIG_STM32_CLOCK_HSE_HZ;
 
 		break;
 #endif
@@ -562,7 +562,7 @@ void rtc_set(uint32_t sec)
 
 void clock_init(void)
 {
-#ifdef STM32_HSE_CLOCK
+#ifdef CONFIG_STM32_CLOCK_HSE_HZ
 	clock_set_osc(OSC_PLL, OSC_HSE);
 #else
 #ifdef STM32_USE_PLL
@@ -601,7 +601,7 @@ static int command_clock(int argc, const char **argv)
 			clock_set_osc(OSC_HSI, OSC_INIT);
 		else if (!strcasecmp(argv[1], "msi"))
 			clock_set_osc(OSC_MSI, OSC_INIT);
-#ifdef STM32_HSE_CLOCK
+#ifdef CONFIG_STM32_CLOCK_HSE_HZ
 		else if (!strcasecmp(argv[1], "hse"))
 			clock_set_osc(OSC_HSE, OSC_INIT);
 		else if (!strcasecmp(argv[1], "pll"))
@@ -619,7 +619,7 @@ static int command_clock(int argc, const char **argv)
 }
 DECLARE_CONSOLE_COMMAND(clock, command_clock,
 			"hsi | msi"
-#ifdef STM32_HSE_CLOCK
+#ifdef CONFIG_STM32_CLOCK_HSE_HZ
 			" | hse"
 #endif
 			" | pll",

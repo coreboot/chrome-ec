@@ -40,7 +40,7 @@
 #else /* !SECTION_IS_RO */
 
 /*
- * PLL configuration. Freq = STM32_HSE_CLOCK or HSI (16MHz) * N / M / R.
+ * PLL configuration. Freq = HSE or HSI (16MHz) * N / M / R.
  *
  * In our case, 16MHz * 55 / 4 / 2 = 110MHz.
  */

@@ -56,9 +56,9 @@
 #define TIM_CLOCK32 5
 
 /* External clock speeds (8 MHz) */
-#define STM32_HSE_CLOCK 8000000
+#define CONFIG_STM32_CLOCK_HSE_HZ 8000000
 
-/* PLL configuration. Freq = STM32_HSE_CLOCK * n/m/r */
+/* PLL configuration. Freq = CONFIG_STM32_CLOCK_HSE_HZ * n/m/r */
 #undef STM32_PLLM
 #define STM32_PLLM 1
 #undef STM32_PLLN

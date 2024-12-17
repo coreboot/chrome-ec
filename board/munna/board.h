@@ -23,12 +23,12 @@
 #define CONFIG_CHIPSET_POWER_SEQ_VERSION 1
 #undef CONFIG_SYSTEM_UNLOCKED
 
-/* PLL configuration. Freq = STM32_HSE_CLOCK or HSI (16MHz) * n/m/r */
+/* PLL configuration. Freq = CONFIG_STM32_CLOCK_HSE_HZ or HSI (16MHz) * n/m/r */
 #undef STM32_PLLM
 #undef STM32_PLLN
 #undef STM32_PLLR
 #define STM32_PLLM 1
-#ifdef STM32_HSE_CLOCK
+#ifdef CONFIG_STM32_CLOCK_HSE_HZ
 #define STM32_PLLN 12
 #else
 #define STM32_PLLN 10
