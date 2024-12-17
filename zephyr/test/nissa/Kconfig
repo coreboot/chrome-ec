@@ -115,6 +115,11 @@ choice TEST_TARGET
 	  help
 		The test target that exercises nissa/quandiso/*.c
 
+	config TEST_NISSA_QUANDISO2
+	  bool "Tests for Quandiso2-specific code"
+	  help
+		The test target that exercises nissa/quandiso2/*.c
+
 	config TEST_NISSA_YAVILLA
 	  bool "Tests for Yavilla-specific code"
 	  help

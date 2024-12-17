@@ -1997,6 +1997,10 @@ def all_targets():
         board = "quandiso",
     )
     ec_target(
+        name = "quandiso2",
+        board = "quandiso2",
+    )
+    ec_target(
         name = "quiche",
         baseboard = "honeybuns",
         board = "quiche",
