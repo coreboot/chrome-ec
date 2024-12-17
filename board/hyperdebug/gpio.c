@@ -1589,7 +1589,8 @@ static int command_gpio_bit_bang(int argc, const char **argv)
 	 * Calculate number of hardware timer cycles for each bit-banging
 	 * sample.
 	 */
-	uint64_t divisor = desired_period_ns * timer_freq / 1000000000;
+	uint64_t divisor =
+		DIV_ROUND_NEAREST(desired_period_ns * timer_freq, 1000000000);
 
 	if (divisor > (1ULL << 32)) {
 		/* Would overflow the 32-bit timer. */
@@ -1743,7 +1744,8 @@ static int command_gpio_dac_bang(int argc, const char **argv)
 	 * Calculate number of hardware timer cycles for each bit-banging
 	 * sample.
 	 */
-	uint64_t divisor = desired_period_ns * timer_freq / 1000000000;
+	uint64_t divisor =
+		DIV_ROUND_NEAREST(desired_period_ns * timer_freq, 1000000000);
 
 	if (divisor > (1ULL << 32)) {
 		/* Would overflow the 32-bit timer. */
@@ -1901,7 +1903,8 @@ static int command_gpio_pwm(int argc, const char **argv)
 	}
 
 	/* Calculate number of hardware timer ticks for each full PWM period. */
-	uint64_t divisor = desired_period_ns * timer_freq / 1000000000;
+	uint64_t divisor =
+		DIV_ROUND_NEAREST(desired_period_ns * timer_freq, 1000000000);
 
 	if (divisor > (1ULL << 32)) {
 		/* Would overflow the 32-bit timer. */
@@ -1909,7 +1912,8 @@ static int command_gpio_pwm(int argc, const char **argv)
 	}
 
 	/* Calculate number of hardware timer ticks with high PWM output. */
-	uint64_t high_count = desired_high_ns * timer_freq / 1000000000;
+	uint64_t high_count =
+		DIV_ROUND_NEAREST(desired_high_ns * timer_freq, 1000000000);
 
 	/* Appropriate power of two for prescaling */
 	uint32_t prescaler = find_suitable_prescaler(divisor);
@@ -1966,7 +1970,7 @@ static int command_gpio_pwm(int argc, const char **argv)
 	}
 
 	tim->ccr[pwm_pins[gpio].channel] =
-		DIV_ROUND_NEAREST(high_count, prescaler) - 1;
+		DIV_ROUND_NEAREST(high_count, prescaler);
 
 	/* Output enable. Set active high/low. */
 	tim->ccer |= 1 << ((pwm_pins[gpio].channel - 1) * 4);
@@ -1991,7 +1995,6 @@ static int command_gpio_pwm(int argc, const char **argv)
 			.channel_pin[(pwm_pins[gpio].channel - 1)] = gpio;
 		timer_pwm_use[timer_no].num_channels_in_use++;
 	}
-	ccprintf("Count: %d\n", tim->cnt);
 
 	return EC_SUCCESS;
 }
