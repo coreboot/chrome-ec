@@ -440,10 +440,6 @@ class Renode(Platform):
 
         if board_config.name in [BLOONCHIPPER, DARTMONKEY]:
             if board_config.name == BLOONCHIPPER:
-                if test_name in [
-                    "timer",  # TODO(b/372968708)
-                ]:
-                    return True
                 if zephyr and test_name in [
                     "abort",  # TODO(b/384094781)
                     # TODO(b/382705460): We have seen this flake in the CQ.
