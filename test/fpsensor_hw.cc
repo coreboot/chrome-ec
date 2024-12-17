@@ -34,6 +34,13 @@ test_static int test_fp_check_hwid(void)
 	return EC_SUCCESS;
 #endif
 
+#if defined(CONFIG_FP_SENSOR_EGIS630)
+	uint16_t id = 0;
+	TEST_EQ(egis_get_hwid(&id), EC_SUCCESS, "%d");
+	TEST_EQ(FP_SENSOR_HWID, id, "0x%04x");
+	return EC_SUCCESS;
+#endif
+
 	return EC_ERROR_UNKNOWN;
 }
 
