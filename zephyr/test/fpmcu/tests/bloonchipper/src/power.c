@@ -16,11 +16,14 @@
 #include <zephyr/pm/policy.h>
 #include <zephyr/ztest.h>
 
+#include <stm32f4xx_ll_rcc.h>
+
 static uint32_t hook_chip_resume_cnt;
 static uint32_t hook_chip_suspend_cnt;
 
 FAKE_VALUE_FUNC(enum fp_transport_type, get_fp_transport_type);
 FAKE_VOID_FUNC(LL_TIM_DisableCounter, void *);
+FAKE_VOID_FUNC(LL_RCC_ConfigMCO, uint32_t, uint32_t);
 FAKE_VALUE_FUNC(int, stm32_clock_control_off, const struct device *,
 		clock_control_subsys_t);
 FAKE_VALUE_FUNC(int, pm_device_action_run, const struct device *,
@@ -230,4 +233,12 @@ ZTEST(power, test_gpio_suspend)
 
 	zassert_equal(pm_device_action_run_fake.arg0_history[0], gpioc_dev);
 	zassert_equal(pm_device_action_run_fake.arg0_history[1], gpioh_dev);
+}
+
+ZTEST(power, test_mco2)
+{
+	zassert_equal(LL_RCC_ConfigMCO_fake.call_count, 1);
+	zassert_equal(LL_RCC_ConfigMCO_fake.arg0_history[0],
+		      LL_RCC_MCO2SOURCE_HSE);
+	zassert_equal(LL_RCC_ConfigMCO_fake.arg1_history[0], LL_RCC_MCO2_DIV_1);
 }

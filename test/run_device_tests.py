@@ -904,9 +904,8 @@ BLOONCHIPPER_CONFIG = BoardConfig(
     expected_fp_power_zephyr=PowerUtilization(
         idle=RangedValue(0.17, 0.04), sleep=RangedValue(0.17, 0.04)
     ),
-    # TODO(b/311568657) Update expected value once b/311568657 is closed.
     expected_mcu_power_zephyr=PowerUtilization(
-        idle=RangedValue(14.61, 0.14 * 2), sleep=RangedValue(0.28, 0.04)
+        idle=RangedValue(14.10, 0.14 * 2), sleep=RangedValue(0.28, 0.04)
     ),
     variants={
         "bloonchipper_v2.0.4277": {
