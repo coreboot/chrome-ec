@@ -84,6 +84,7 @@ BOARDS_THAT_COMPILE_SUCCESSFULLY_WITH_CLANG = [
     "tigertail",
     "twinkie",
     "wand",
+    "whitebeard",
     "zed",
     "zinger",
     # Boards that use CHIP:=mchp
