@@ -451,7 +451,7 @@ class Renode(Platform):
             if test_name in [
                 "production_app_test",
                 "benchmark",
-                "exception",
+                "exception",  # TODO(b/384730599)
                 "fpsensor_hw",
                 "libcxx",
                 "otp_key",
