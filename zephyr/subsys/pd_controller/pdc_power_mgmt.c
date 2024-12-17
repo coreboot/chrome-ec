@@ -1499,12 +1499,7 @@ static void run_snk_policies(struct pdc_port_t *port)
 		return;
 	} else if (atomic_test_and_clear_bit(port->snk_policy.flags,
 					     SNK_POLICY_NEW_POWER_REQUEST)) {
-		/* TODO: b/382277419
-		 * this policy flag should construct a new RDO request
-		 * based on the current maximum voltage and maximum current.
-		 */
-		port->get_pdo = (struct get_pdo_t){ 0 };
-		port->snk_attached_local_state = SNK_ATTACHED_GET_PDOS;
+		port->snk_attached_local_state = SNK_ATTACHED_EVALUATE_PDOS;
 		return;
 	} else if (atomic_test_and_clear_bit(port->snk_policy.flags,
 					     SNK_POLICY_EVAL_SWAP_TO_SRC)) {
@@ -2129,6 +2124,16 @@ static void pdc_snk_attached_run(void *obj)
 		if (rv) {
 			LOG_ERR("C%d: No suitable PDO found (%d)",
 				config->connector_num, rv);
+		}
+
+		if (port->snk_policy.pdo ==
+			    port->snk_policy.src.pdos[selected_pdo] &&
+		    port->snk_policy.pdo_index == (selected_pdo + 1)) {
+			/* Selected PDO didn't change - no need to send RDO */
+			LOG_INF("C%d: Retaining PDO[%d]=0x%08X",
+				config->connector_num, selected_pdo,
+				port->snk_policy.src.pdos[selected_pdo]);
+			return;
 		}
 
 		/* Store the selected PDO. Convert the PDO number to 1-based
@@ -3339,9 +3344,6 @@ int pdc_power_mgmt_set_new_power_request(int port)
 		return -ENOTCONN;
 	}
 
-	/* TODO: b/382277419
-	 * NEW_POWER_REQUEST should build up a new RDO request only.
-	 */
 	atomic_set_bit(pdc_data[port]->port.snk_policy.flags,
 		       SNK_POLICY_NEW_POWER_REQUEST);
 

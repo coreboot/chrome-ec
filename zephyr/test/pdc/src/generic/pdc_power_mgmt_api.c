@@ -573,8 +573,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 		  .pdo = PDO_VAR(5000, 3000, 15000),
 		  .expected = false },
 	};
-	uint32_t timeout = k_ms_to_cyc_ceil32(PDC_TEST_TIMEOUT);
-	uint32_t start;
 
 	zassert_false(
 		pd_get_partner_data_swap_capable(CONFIG_USB_PD_PORT_MAX_COUNT));
@@ -584,6 +582,9 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 			emul_pdc_configure_snk(emul, &connector_status);
 		else
 			emul_pdc_configure_src(emul, &connector_status);
+		clear_partner_pdos(emul, (test[i].power_role == PD_ROLE_SINK ?
+						  SOURCE_PDO :
+						  SINK_PDO));
 		emul_pdc_set_pdos(emul,
 				  (test[i].power_role == PD_ROLE_SINK ?
 					   SOURCE_PDO :
@@ -592,17 +593,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 		emul_pdc_connect_partner(emul, &connector_status);
 
 		zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
-
-		start = k_cycle_get_32();
-		while (k_cycle_get_32() - start < timeout) {
-			k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
-
-			if (test[i].expected !=
-			    pd_get_partner_data_swap_capable(TEST_PORT))
-				continue;
-
-			break;
-		}
+		LOG_INF("[%d] connection settled", i);
 
 		zassert_equal(test[i].expected,
 			      pd_get_partner_data_swap_capable(TEST_PORT),
@@ -612,6 +603,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 		emul_pdc_disconnect(emul);
 		zassert_true(TEST_WAIT_FOR(!pd_is_connected(TEST_PORT),
 					   PDC_TEST_TIMEOUT));
+		zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
+		LOG_INF("[%d] disconnection settled", i);
 	}
 }
 
@@ -1919,29 +1912,41 @@ static uint32_t get_rdo()
 ZTEST_USER(pdc_power_mgmt_api, test_set_new_power_request)
 {
 	union connector_status_t connector_status;
-	const uint32_t pdo_15W[] = {
-		PDO_FIXED(5000, 3000, PDO_FIXED_DUAL_ROLE),
+	const uint32_t pdos[] = {
+		PDO_FIXED(5000, 3000, PDO_FIXED_DUAL_ROLE), /* 15W */
+		PDO_FIXED(9000, 3000, PDO_FIXED_DUAL_ROLE), /* 27W */
+		PDO_FIXED(20000, 3000, PDO_FIXED_DUAL_ROLE) /* 60W */
 	};
-	const uint32_t pdo_27W[] = {
-		PDO_FIXED(9000, 3000, PDO_FIXED_DUAL_ROLE),
-	};
+	unsigned int max_voltage = pdc_power_mgmt_get_max_voltage();
 
 	/* This should result in no-op */
 	zassert_not_ok(pdc_power_mgmt_set_new_power_request(TEST_PORT));
 
 	emul_pdc_configure_snk(emul, &connector_status);
 	clear_partner_pdos(emul, SOURCE_PDO);
-	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO,
-			  pdo_15W);
+
+	/* Set the first two PDOs, make sure 5v RDO is selected */
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, ARRAY_SIZE(pdos) - 1,
+			  PARTNER_PDO, pdos);
+
+	pdc_power_mgmt_set_max_voltage(5000);
 	emul_pdc_connect_partner(emul, &connector_status);
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 	LOG_DBG("RDO position before new power request: %d",
 		RDO_POS(get_rdo()));
 
-	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_1, 1, PARTNER_PDO,
-			  pdo_27W);
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
+
+	/* Set all PDOs, make sure 27w PDO is selected as pdc_power_mgmt
+	 * should NOT query for new PDOs although 60w is present now. */
+
+	clear_partner_pdos(emul, SOURCE_PDO);
+	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, ARRAY_SIZE(pdos),
+			  PARTNER_PDO, pdos);
+	pdc_power_mgmt_set_max_voltage(20000);
 	zassert_ok(pdc_power_mgmt_set_new_power_request(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	/* The 27W PDO at position 2 must be selected after the new power
 	 * request.
@@ -1954,6 +1959,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_new_power_request)
 		     get_rdo());
 
 	LOG_DBG("RDO position after new power request: %d", RDO_POS(get_rdo()));
+	pdc_power_mgmt_set_max_voltage(max_voltage);
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_request_source_voltage)
