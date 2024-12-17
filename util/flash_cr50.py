@@ -630,7 +630,7 @@ class Cr50RescueUpdater(FlashCr50):
 
     NAME = 'cr50-rescue'
     PACKAGE = 'cr50-utils'
-    DEFAULT_UPDATER = '/usr/bin/cr50-rescue'
+    DEFAULT_UPDATER = '../cr50-utils/software/tools/SPI/rescue'
 
     WAIT_FOR_UPDATE = CMD_TIMEOUT
     RESCUE_RESET_DELAY = 5
