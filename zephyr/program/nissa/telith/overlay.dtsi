@@ -87,6 +87,11 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "extpower_interrupt";
 		};
+		int_als_status: als_status {
+			irq-pin = <&ec_als_odl>;
+			flags = <GPIO_INT_EDGE_FALLING>;
+			handler = "door_open_interrupt";
+		};
 	};
 
 	unused-pins {
