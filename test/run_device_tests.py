@@ -1371,12 +1371,15 @@ def run_test(
 
     while True:
         console.flush()
-        line = readline(executor, console, 1)
+
+        elapsed_secs = time.time() - start
+        remaining_secs = int(test.timeout_secs - elapsed_secs)
+        if remaining_secs <= 0:
+            logging.debug("Test timed out")
+            return False
+
+        line = readline(executor, console, remaining_secs)
         if not line:
-            now = time.time()
-            if now - start > test.timeout_secs:
-                logging.debug("Test timed out")
-                return False
             continue
 
         test.logs.append(line)
