@@ -5,7 +5,8 @@
 """Define zmake projects for nissa."""
 
 # Nivviks and Craask, Pujjo, Xivu, Xivur, Uldren has NPCX993F, Nereid
-# and Joxer, Yaviks, Yavilla, Yavista, Quandiso, Domika has ITE81302
+# and Joxer, Yaviks, Yavilla, Yavista, Quandiso, Quandiso2, Domika has
+# ITE81302
 
 
 def register_nissa_project(
@@ -174,6 +175,9 @@ pirrha = register_nissa_project(
 quandiso = register_nissa_project(
     project_name="quandiso",
 )
+quandiso2 = register_nissa_project(
+    project_name="quandiso2",
+)
 anraggar = register_nissa_project(
     project_name="anraggar",
     chip="it8xxx2/it81302bx",
@@ -242,6 +246,7 @@ assert_rw_fwid_DO_NOT_EDIT(project_name="pujjo", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="pujjoga", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="pujjogatwin", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="quandiso", addr=0xB7FE0)
+assert_rw_fwid_DO_NOT_EDIT(project_name="quandiso2", addr=0xB7FE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="uldren", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="xivu", addr=0x7FFE0)
 assert_rw_fwid_DO_NOT_EDIT(project_name="xivur", addr=0x7FFE0)

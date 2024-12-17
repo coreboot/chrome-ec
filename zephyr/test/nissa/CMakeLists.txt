@@ -259,6 +259,23 @@ if(CONFIG_TEST_NISSA_QUANDISO)
     )
 endif()
 
+if(CONFIG_TEST_NISSA_QUANDISO2)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
+    zephyr_include_directories("${PLATFORM_EC}/zephyr/shim/chip/it8xxx2/include")
+    target_sources(
+            app PRIVATE
+            src/quandiso2.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso2/src/board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso2/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso2/src/fan.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso2/src/keyboard.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso2/src/led.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso2/src/sub_board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso2/src/thermal.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/quandiso2/src/usbc.c
+    )
+endif()
+
 if(CONFIG_TEST_NISSA_YAVILLA)
     target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
     zephyr_include_directories("${PLATFORM_EC}/zephyr/shim/chip/it8xxx2/include")
