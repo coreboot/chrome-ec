@@ -18,12 +18,12 @@
 #define CPRINTS(format, args...) cprints(CC_SYSTEM, "ALS " format, ##args)
 
 #define EEPROM_PAGE_WRITE_MS 5
-#define EEPROM_DATA_VERIFY 0xaa
 #define I2C_ADDR_ALS_FLAGS 0x50
 #define I2C_PORT_ALS I2C_PORT_BATTERY
 
 #define ALS_ENABLE BIT(0)
 #define FACTORY_CLEAR BIT(1)
+#define ALS_NORMAL_COUNT BIT(2)
 
 static int als_enable = 0;
 static int als_det_enable = 1;
@@ -77,16 +77,15 @@ static void check_als_status(void)
 	als_eeprom_read(0x00, data, 3);
 	CPRINTS("data:%d, %d, %d ", data[0], data[1], data[2]);
 
-	/* Check if the first three bytes are "CBI", otherwise we need
-	 * disable als function and wait factory clear eeprom data.
-	 */
-	if ((data[0] == 0x43) && (data[1] == 0x42) && (data[2] == 0x49)) {
-		CPRINTS("als eeprom need clear! disable als function");
-		als_enable = 0;
-	} else {
-		/* Enable als function */
-		if ((data[0] & ALS_ENABLE) || (data[1] != EEPROM_DATA_VERIFY)) {
-			als_enable = 1;
+	/* check als function status
+	 * Bit6 is reserved for judging whether the CBI file is pre-burned.
+	 * Normally, we will not set the Bit6 position. */
+	if ((data[0] & ALS_ENABLE) && (data[0] != 0x43)) {
+		als_enable = 1;
+		if ((data[0] & ALS_NORMAL_COUNT) &&
+		    gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(ec_als_odl))) {
+			data[0] &= ~ALS_NORMAL_COUNT;
+			als_eeprom_write(0x00, data, 1);
 		}
 	}
 }
@@ -101,15 +100,24 @@ static void als_change_deferred(void)
 {
 	static bool debouncing;
 	int out;
+	uint8_t data[1];
 
 	out = gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(ec_als_odl));
 
 	if (out == 0) {
-		if (!debouncing)
+		if (!debouncing) {
 			debouncing = true;
-
+			return;
+		}
 		debouncing = false;
-		als_data_handler();
+
+		als_eeprom_read(0x00, data, 1);
+		if (!(data[0] & ALS_NORMAL_COUNT))
+			als_data_handler();
+
+		data[0] |= ALS_NORMAL_COUNT;
+		als_eeprom_write(0x00, data, 1);
+
 		chipset_force_shutdown(CHIPSET_SHUTDOWN_BOARD_CUSTOM);
 		if (extpower_is_present()) {
 			CPRINTS("AC off!");

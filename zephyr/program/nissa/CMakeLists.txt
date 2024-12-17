@@ -272,6 +272,17 @@ if(DEFINED CONFIG_BOARD_PUJJOGA)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "pujjoga/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "pujjoga/src/charger.c")
 endif()
+if(DEFINED CONFIG_BOARD_PUJJOGATWIN)
+	project(pujjogatwin)
+	zephyr_library_sources(
+			"pujjogatwin/src/board.c"
+			"pujjogatwin/src/led.c"
+			"pujjogatwin/src/hdmi.c"
+			"pujjogatwin/src/sub_board.c"
+	)
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "pujjogatwin/src/usbc.c")
+	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "pujjogatwin/src/charger.c")
+endif()
 if(DEFINED CONFIG_BOARD_RIVEN)
 	zephyr_include_directories("riven/include")
 	zephyr_library_sources(
@@ -320,6 +331,8 @@ if(DEFINED CONFIG_BOARD_RULL)
 	zephyr_library_sources(
 			"rull/src/board.c"
 			"rull/src/sub_board.c"
+			"rull/src/usb_mux_config.c"
+			"rull/src/board_touchpanal.c"
 	)
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_USBC "rull/src/usbc.c")
 	zephyr_library_sources_ifdef(CONFIG_PLATFORM_EC_CHARGER "rull/src/charger.c")

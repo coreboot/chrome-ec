@@ -872,6 +872,11 @@ def all_targets():
         extra_modules = ["cmsis"],
     )
     ec_target(
+        name = "francka-ti",
+        board = "francka-ti",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "frostflow",
         board = "frostflow",
         extra_modules = ["cmsis"],
@@ -1975,6 +1980,11 @@ def all_targets():
         extra_modules = ["cmsis"],
     )
     ec_target(
+        name = "pujjogatwin",
+        board = "pujjogatwin",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
         name = "quackingstick",
         baseboard = "trogdor",
         board = "quackingstick",
@@ -2339,6 +2349,11 @@ def all_targets():
     ec_target(
         name = "trulo-ti",
         board = "trulo-ti",
+        extra_modules = ["cmsis"],
+    )
+    ec_target(
+        name = "uldrenite",
+        board = "uldrenite",
         extra_modules = ["cmsis"],
     )
     ec_target(

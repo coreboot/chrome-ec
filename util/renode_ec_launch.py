@@ -56,25 +56,19 @@ def msg_run(cmd: List[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
-def launch(opts: argparse.Namespace) -> int:
+def launch(board: str, project: str, enable_write_protect: bool) -> int:
     """Launches an EC image in Renode.
 
     This image can be the actual firmware image or an on-board test image.
 
     Args:
-        opts: The argparse options provided to the program, described below.
-
-    Opts:
-        board: The name of the EC board.
+        board: The name of the EC/Zephyr board.
         project: The name of the EC project.
+        enable_write_protect: Whether to enable hardware write protection.
 
     Returns:
         0 on success, otherwise non-zero.
     """
-
-    board = opts.board
-    project = opts.project
-    enable_write_protect = opts.enable_write_protect
 
     # Since we are going to cd later, we need to determine the absolute path
     # of EC.
@@ -164,16 +158,17 @@ def main(argv: Optional[List[str]] = None) -> Optional[int]:
         """,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.epilog = """
-    Use the BOARD and PROJECT environment variables to set a default for one or
-    both equivalent arguments.
-    """
 
     parser.add_argument(
         "board",
         nargs="?",
+        choices=CONSOLE_MAP.keys(),
         default=os.environ.get("BOARD", DEFAULT_BOARD),
-        help="Name of the EC board",
+        help="""
+        Name of the EC/Zephyr board.
+
+        The BOARD environment variable can be used instead of this flag.
+        """,
     )
     parser.add_argument(
         "project",
@@ -182,6 +177,8 @@ def main(argv: Optional[List[str]] = None) -> Optional[int]:
         help="""
         Name of the EC project. This is normally just 'ec' or 'zephyr', but
         could be a test name for on-board test images.
+
+        The PROJECT environment variable can be used instead of this flag.
         """,
     )
 
@@ -193,7 +190,11 @@ def main(argv: Optional[List[str]] = None) -> Optional[int]:
     )
 
     opts = parser.parse_args(argv)
-    return launch(opts)
+    return launch(
+        board=opts.board,
+        project=opts.project,
+        enable_write_protect=opts.enable_write_protect,
+    )
 
 
 if __name__ == "__main__":

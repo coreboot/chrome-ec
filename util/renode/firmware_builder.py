@@ -22,9 +22,14 @@ from google.protobuf import json_format
 from chromite.api.gen_sdk.chromite.api import firmware_pb2
 
 
-BOARDS = [
+EC_BOARDS = [
     "bloonchipper",
     "dartmonkey",
+    "helipilot",
+]
+
+ZEPHYR_BOARDS = [
+    "bloonchipper",
 ]
 
 
@@ -36,7 +41,7 @@ def build(opts):
         "make",
         f"-j{opts.cpus}",
     ]
-    cmd.extend(["tests-" + b for b in BOARDS])
+    cmd.extend(["tests-" + b for b in EC_BOARDS])
     subprocess.run(cmd, cwd=working_dir, check=True)
 
 
@@ -53,6 +58,27 @@ def bundle(opts):
         )
 
 
+def run_device_tests(board: str, working_dir: Path, zephyr: bool):
+    """Run device tests on Renode emulator."""
+    cmd = [
+        "test/run_device_tests.py",
+        "-b",
+        board,
+        "--renode",
+        "--with_private",
+        "no",
+    ]
+
+    if zephyr:
+        cmd.append("--zephyr")
+
+    subprocess.run(
+        cmd,
+        cwd=working_dir,
+        check=True,
+    )
+
+
 def test(_opts):
     """Runs EC unit tests with Renode."""
 
@@ -63,11 +89,11 @@ def test(_opts):
     # https://chrome-infra-packages.appspot.com/p/chromiumos/infra/tools/renode.
     cipd_renode_version = (
         "ebuild_source:"
-        + "app-crypt/mit-krb5-1.21.3,"
-        + "app-emulation/renode-1.15.3_p20241010,"
-        + "dev-lang/mono-6.12.0.122,"
-        + "sys-fs/e2fsprogs-1.47.0-r4,"
-        + "sys-libs/glibc-2.37-r9"
+        + "app-emulation/renode-1.15.3_p20241207,"
+        + "dev-libs/icu-70.1-r2,"
+        + "dev-libs/openssl-3.2.1-r1,"
+        + "dev-libs/userspace-rcu-0.13.2-r1,"
+        + "dev-util/lttng-ust-2.12.1-r1"
     )
 
     # Install Renode.
@@ -93,19 +119,11 @@ def test(_opts):
     # TODO(b/371633141): Add a parallel option to run_device_tests.py to speed
     # this up. Right now the EC/Zephyr coverage builders take longer than this,
     # so it doesn't affect overall CQ time.
-    for board in BOARDS:
-        subprocess.run(
-            [
-                "test/run_device_tests.py",
-                "-b",
-                board,
-                "--renode",
-                "--with_private",
-                "no",
-            ],
-            cwd=working_dir,
-            check=True,
-        )
+    for board in EC_BOARDS:
+        run_device_tests(board, working_dir, zephyr=False)
+
+    for board in ZEPHYR_BOARDS:
+        run_device_tests(board, working_dir, zephyr=True)
 
 
 def main(args):

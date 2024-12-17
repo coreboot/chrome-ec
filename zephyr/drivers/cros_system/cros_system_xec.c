@@ -589,7 +589,7 @@ static const struct cros_system_xec_config cros_system_dev_cfg = {
 	.base_wdog = DT_REG_ADDR(DT_INST(0, microchip_xec_watchdog)),
 };
 
-static const struct cros_system_driver_api cros_system_driver_xec_api = {
+static DEVICE_API(cros_system, cros_system_driver_xec_api) = {
 	.get_reset_cause = cros_system_xec_get_reset_cause,
 	.soc_reset = cros_system_xec_soc_reset,
 	.hibernate = cros_system_xec_hibernate,

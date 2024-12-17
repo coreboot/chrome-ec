@@ -6,6 +6,11 @@
  / {
 	aliases {
 		gpio-cbi-wp = &gpio_ec_cbi_wp;
+				/*
+		 * HPD pins for HDMI sub-board.
+		 */
+		gpio-hdmi-en-odl = &gpio_sb_3;
+		gpio-hpd-odl = &gpio_sb_4;
 	};
 
 	named-gpios {
@@ -63,6 +68,20 @@
 		};
 		gpio_en_usb_a0_vbus: en_usb_a0_vbus {
 			gpios = <&gpio9 1 GPIO_OUTPUT>;
+		};
+		gpio_en_slp_z: en_slp_z {
+			gpios = <&gpioe 1 GPIO_OUTPUT>;
+		};
+		gpio_sb_3: sb-3 {
+			gpios = <&gpiof 4 (GPIO_OPEN_DRAIN | GPIO_VOLTAGE_1P8)>;
+			no-auto-init;
+		};
+		gpio_sb_4: sb-4 {
+			gpios = <&gpiof 5 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
+			no-auto-init;
+		};
+		gpio_ec_soc_hdmi_hpd: ec_soc_hdmi_hpd {
+			gpios = <&gpioe 4 GPIO_OUTPUT>;
 		};
 	};
 

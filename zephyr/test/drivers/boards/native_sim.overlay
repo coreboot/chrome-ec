@@ -658,7 +658,7 @@
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.0f";
 					};
 				};
 			};
@@ -682,7 +682,7 @@
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.0f";
 					};
 				};
 				rgb-cal-y {
@@ -692,7 +692,7 @@
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.0f";
 					};
 				};
 				rgb-cal-z {
@@ -702,7 +702,7 @@
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.0f";
 					};
 				};
 			};

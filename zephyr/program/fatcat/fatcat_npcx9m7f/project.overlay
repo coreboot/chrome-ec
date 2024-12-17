@@ -13,7 +13,6 @@
 
 #include "generated.dtsi"
 
-#include "adc.dtsi"
 #include "gpios.dtsi"
 #include "i2c.dtsi"
 

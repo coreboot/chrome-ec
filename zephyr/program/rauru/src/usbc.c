@@ -157,7 +157,6 @@ enum adc_channel board_get_vbus_adc(int port)
 	CPRINTS("Unknown vbus adc port id: %d", port);
 	return ADC_VBUS_C0;
 }
-#endif /* CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT */
 
 __override int pd_snk_is_vbus_provided(int port)
 {
@@ -168,3 +167,4 @@ __override int pd_snk_is_vbus_provided(int port)
 	return adc_read_channel(board_get_vbus_adc(port)) >=
 	       PD_V_SINK_DISCONNECT_MAX;
 }
+#endif /* CONFIG_USB_PD_VBUS_MEASURE_ADC_EACH_PORT */

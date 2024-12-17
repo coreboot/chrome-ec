@@ -1907,8 +1907,9 @@ fp_download_frame(struct ec_response_fp_info *info, int index)
 	}
 	if (!frame_cmd->Run(comm_get_fd())) {
 		const char *error_str = strerror(errno);
+		std::string result_str = frame_cmd->ResultString();
 		if (frame_cmd->Result() != ec::kEcCommandUninitializedResult) {
-			error_str = frame_cmd->ResultString().c_str();
+			error_str = result_str.c_str();
 		}
 		fprintf(stderr, "Fp Frame command failed with error: %s\n",
 			error_str);

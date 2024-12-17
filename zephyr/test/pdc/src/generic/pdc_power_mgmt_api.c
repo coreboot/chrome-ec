@@ -86,13 +86,13 @@ static void pdc_power_mgmt_before(void *fixture)
 	emul_pdc_set_response_delay(emul, 0);
 	emul_pdc_disconnect(emul);
 
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	reset_fakes();
 }
 
 static void pdc_power_mgmt_after(void *fixture)
 {
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	reset_fakes();
 }
 
@@ -118,13 +118,13 @@ ZTEST_USER(pdc_power_mgmt_api, test_connector_reset)
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	zassert_ok(pdc_power_mgmt_connector_reset(TEST_PORT, PD_HARD_RESET));
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	zassert_ok(pdc_power_mgmt_connector_reset(TEST_PORT, PD_DATA_RESET));
 }
 
@@ -156,7 +156,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_is_connected)
 
 	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
@@ -486,14 +486,9 @@ ZTEST_USER(pdc_power_mgmt_api_connectionless, test_set_trysrc)
 ZTEST_USER(pdc_power_mgmt_api_connectionless, test_get_drp)
 {
 	enum drp_mode_t drp_mode = DRP_NORMAL;
-	int rv;
 
 	LOG_INF("Sending GET DRP");
-	rv = pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode);
-	if (rv == -ENOSYS) {
-		ztest_test_skip();
-	}
-	zassert_ok(rv, "rv=%d", rv);
+	zassert_ok(pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode));
 }
 
 ZTEST_USER(pdc_power_mgmt_api_connectionless, test_get_lpm_ppm_info)
@@ -535,13 +530,13 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_usb_comm_capable)
 		emul_pdc_set_connector_capability(emul, &test[i].ccap);
 		emul_pdc_configure_src(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
-		zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+		zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 		zassert_true(
 			test[i].expected ==
 				pd_get_partner_usb_comm_capable(TEST_PORT), );
 
 		emul_pdc_disconnect(emul);
-		zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+		zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 		zassert_true(!pd_is_connected(TEST_PORT));
 	}
 }
@@ -596,7 +591,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_partner_data_swap_capable)
 				  PDO_OFFSET_0, 1, PARTNER_PDO, &test[i].pdo);
 		emul_pdc_connect_partner(emul, &connector_status);
 
-		zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+		zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 		start = k_cycle_get_32();
 		while (k_cycle_get_32() - start < timeout) {
@@ -671,7 +666,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_info)
 	zassert_true(
 		TEST_WAIT_FOR(pd_is_connected(TEST_PORT), PDC_TEST_TIMEOUT));
 
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	zassert_ok(pdc_power_mgmt_get_info(TEST_PORT, &out, true));
 	zassert_equal(in1.fw_version, out.fw_version, "in=0x%X, out=0x%X",
 		      in1.fw_version, out.fw_version);
@@ -1037,7 +1032,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 	zassert_equal(expected_voltage_mv,
 		      pdc_power_mgmt_get_vbus_voltage(TEST_PORT));
 
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	zassert_true(TEST_WAIT_FOR(
 		next_expected_voltage_mv ==
 			pdc_power_mgmt_get_vbus_voltage(TEST_PORT),
@@ -1055,7 +1050,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_vbus_voltage)
 	emul_pdc_pulse_irq(emul);
 	k_msleep(TEST_WAIT_FOR_INTERVAL_MS);
 
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	zassert_equal(next_expected_voltage_mv,
 		      pdc_power_mgmt_get_vbus_voltage(TEST_PORT));
 
@@ -1254,7 +1249,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_set_dual_role)
 
 		emul_pdc_disconnect(emul);
 
-		zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+		zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 		if (test[i].e.check_cc_mode) {
 			zassert_ok(emul_pdc_get_ccom(emul, &ccom),
@@ -1371,7 +1366,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_on)
 	uint32_t start;
 	const enum drp_mode_t expected = USBC0_UNA_DRP_MODE;
 	enum drp_mode_t drp_mode = DRP_INVALID;
-	int rv;
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
@@ -1398,10 +1392,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_on)
 	}
 
 	zassert_equal(CCOM_DRP, ccom);
-	rv = pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode);
-	if (rv == EC_SUCCESS) {
-		zassert_equal(drp_mode, expected);
-	}
+	zassert_ok(pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode));
+	zassert_equal(drp_mode, expected);
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
@@ -1412,7 +1404,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 	uint32_t start;
 	const enum drp_mode_t expected = DRP_NORMAL;
 	enum drp_mode_t drp_mode = DRP_INVALID;
-	int rv;
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
@@ -1441,10 +1432,8 @@ ZTEST_USER(pdc_power_mgmt_api, test_chipset_shutdown)
 
 	zassert_equal(1, pdr.swap_to_snk);
 	zassert_equal(0, pdr.swap_to_src);
-	rv = pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode);
-	if (rv == EC_SUCCESS) {
-		zassert_equal(drp_mode, expected);
-	}
+	zassert_ok(pdc_power_mgmt_get_drp_mode(TEST_PORT, &drp_mode));
+	zassert_equal(drp_mode, expected);
 }
 
 static bool wait_state_name(int port, const uint8_t target_state,
@@ -1559,7 +1548,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_connector_status)
 
 	emul_pdc_configure_snk(emul, &in);
 	emul_pdc_connect_partner(emul, &in);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	zassert_ok(pdc_power_mgmt_get_connector_status(TEST_PORT, &out));
 	zassert_ok(pdc_power_mgmt_get_last_status_change(
@@ -1583,41 +1572,6 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_connector_status)
 	emul_pdc_disconnect(emul);
 	zassert_true(TEST_WAIT_FOR(!pdc_power_mgmt_is_connected(TEST_PORT),
 				   PDC_TEST_TIMEOUT));
-}
-
-ZTEST_USER(pdc_power_mgmt_api, test_new_pd_sink_contract)
-{
-	union connector_status_t in = { 0 };
-	union conn_status_change_bits_t in_conn_status_change_bits;
-	bool sink_path_en;
-
-	const uint32_t pdos[] = {
-		PDO_FIXED(5000, 3000, PDO_FIXED_DUAL_ROLE),
-		PDO_FIXED(15000, 3000, PDO_FIXED_DUAL_ROLE),
-	};
-
-	/* Connect a sourcing port partner */
-	emul_pdc_configure_snk(emul, &in);
-	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, 1, PARTNER_PDO, pdos);
-	emul_pdc_connect_partner(emul, &in);
-
-	/* Ensure we are connected */
-	pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT);
-
-	/* Simulate the port partner changing its PDOs. The sink path is
-	 * disabled during this step */
-	emul_pdc_set_pdos(emul, SOURCE_PDO, PDO_OFFSET_0, ARRAY_SIZE(pdos),
-			  PARTNER_PDO, pdos);
-	in_conn_status_change_bits.battery_charging_status = 1;
-	in.raw_conn_status_change_bits = in_conn_status_change_bits.raw_value;
-	emul_pdc_connect_partner(emul, &in);
-
-	/* Pause to allow pdc_power_mgmt to process interrupt and re-settle */
-	pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT);
-
-	/* Check that the sink path is on again */
-	zassert_ok(emul_pdc_get_sink_path(emul, &sink_path_en));
-	zassert_true(sink_path_en);
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_cable_prop)
@@ -1646,7 +1600,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_cable_prop)
 
 	emul_pdc_configure_snk(emul, &in_conn_status);
 	emul_pdc_connect_partner(emul, &in_conn_status);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	zassert_ok(pdc_power_mgmt_get_connector_status(TEST_PORT,
 						       &out_conn_status));
@@ -1803,7 +1757,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_identity_vid)
 
 	emul_pdc_configure_snk(emul, &conn_status);
 	emul_pdc_connect_partner(emul, &conn_status);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	zassert_equal(USB_VID_GOOGLE,
 		      pdc_power_mgmt_get_identity_vid(TEST_PORT));
@@ -1827,7 +1781,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_identity_pid)
 
 	emul_pdc_configure_snk(emul, &conn_status);
 	emul_pdc_connect_partner(emul, &conn_status);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	zassert_equal(0xBEAD, pdc_power_mgmt_get_identity_pid(TEST_PORT));
 	zassert_equal(IDH_PTYPE_HUB,
@@ -1852,7 +1806,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_product_type)
 
 	emul_pdc_configure_snk(emul, &conn_status);
 	emul_pdc_connect_partner(emul, &conn_status);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	zassert_equal(IDH_PTYPE_HUB,
 		      pdc_power_mgmt_get_product_type(TEST_PORT));
@@ -2023,7 +1977,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_source_voltage)
 				     ARRAY_SIZE(partner_src_pdos), PARTNER_PDO,
 				     partner_src_pdos));
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	zassert_ok(pdc_power_mgmt_get_rdo(TEST_PORT, &rdo));
 	/* Confirm 5v PDO selected */
@@ -2035,7 +1989,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_source_voltage)
 	 */
 	source_mv = 12000;
 	pdc_power_mgmt_request_source_voltage(TEST_PORT, source_mv);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	zassert_ok(pdc_power_mgmt_get_rdo(TEST_PORT, &rdo));
 	/* Confirm 12v PDO selected */
@@ -2043,7 +1997,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_source_voltage)
 	zassert_equal(source_mv, pdc_power_mgmt_get_max_voltage());
 
 	emul_pdc_disconnect(emul);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	/* Setup    - Configure as DRP SRC and request 5v
 	 * Validate - Confirm 5v PDO selected and switched to SINK
@@ -2058,11 +2012,11 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_source_voltage)
 				     partner_src_pdos));
 	source_mv = 5000;
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	zassert_equal(PD_ROLE_SOURCE, pd_get_power_role(TEST_PORT));
 
 	pdc_power_mgmt_request_source_voltage(TEST_PORT, source_mv);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	zassert_equal(source_mv, pdc_power_mgmt_get_max_voltage());
 
 	/* Confirm 5v PDO selected */
@@ -2076,7 +2030,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_request_source_voltage)
 
 	/* Restore source voltage */
 	pdc_power_mgmt_request_source_voltage(TEST_PORT, prev_mv);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 }
 #endif /* CONFIG_TODO_B_345292002 */
 
@@ -2096,17 +2050,17 @@ ZTEST_USER(pdc_power_mgmt_api, test_pdc_power_mgmt_set_active_charge_port)
 
 	emul_pdc_configure_snk(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	zassert_true(is_sink_path_enabled());
 
 	zassert_ok(charge_manager_set_override(OVERRIDE_DONT_CHARGE));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	/* Sink path should be disabled because it's not active charge port */
 	zassert_false(is_sink_path_enabled());
 
 	zassert_ok(charge_manager_set_override(TEST_PORT));
 	/* Sink path should be enabled after activating TEST_PORT */
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	zassert_true(is_sink_path_enabled());
 }
 
@@ -2122,15 +2076,15 @@ ZTEST_USER(pdc_power_mgmt_api, test_get_vconn_state)
 
 	emul_pdc_configure_src(emul, &connector_status);
 	emul_pdc_connect_partner(emul, &connector_status);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	emul_pdc_set_vconn_sourcing(emul, false);
 	zassert_false(pdc_power_mgmt_get_vconn_state(TEST_PORT));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	emul_pdc_set_vconn_sourcing(emul, true);
 	zassert_true(pdc_power_mgmt_get_vconn_state(TEST_PORT));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 }
 
 /* TODO(b/345292002): The tests below fail with the TPS6699x emulator/driver. */
@@ -2189,7 +2143,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_hpd_wake)
 	emul_pdc_pulse_irq(emul);
 	TEST_WORKING_DELAY(PDC_TEST_TIMEOUT * 2);
 
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 
 	/* Confirm that the IRQ with HPD_LVL high caused a USB mux host
 	 * event.

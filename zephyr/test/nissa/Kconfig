@@ -66,6 +66,11 @@ choice TEST_TARGET
 	  help
 	    The test target that exercises nissa/pujjoga/*.c
 
+	config TEST_NISSA_PUJJOGATWIN
+	  bool "Tests for PujjogaTwin-specific code"
+	  help
+	    The test target that exercises nissa/pujjogatwin/*.c
+
 	config TEST_NISSA_JOXER
 	  bool "Tests for Joxer-specific code"
 	  help

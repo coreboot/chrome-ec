@@ -222,7 +222,7 @@ static int cros_kb_raw_npcx_config_alt(const struct device *dev, bool enable)
 }
 #endif
 
-static const struct cros_kb_raw_driver_api cros_kb_raw_npcx_driver_api = {
+static DEVICE_API(cros_kb_raw, cros_kb_raw_npcx_driver_api) = {
 	.init = cros_kb_raw_npcx_init,
 	.drive_colum = cros_kb_raw_npcx_drive_column,
 	.read_rows = cros_kb_raw_npcx_read_row,

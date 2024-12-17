@@ -2699,7 +2699,7 @@ static int rts54_get_attention_vdo(const struct device *dev,
 				  ARRAY_SIZE(payload), (uint8_t *)vdo);
 }
 
-static const struct pdc_driver_api_t pdc_driver_api = {
+static DEVICE_API(pdc, pdc_driver_api) = {
 	.is_init_done = rts54_is_init_done,
 	.get_ucsi_version = rts54_get_ucsi_version,
 	.reset = rts54_pdc_reset,
@@ -2812,6 +2812,7 @@ static int pdc_init(const struct device *dev)
 	data->cmd = CMD_NONE;
 	data->error_recovery_counter = 0;
 	data->init_retry_counter = 0;
+	data->info.fw_version = PDC_FWVER_INVALID;
 
 	pdc_data[cfg->connector_number] = data;
 

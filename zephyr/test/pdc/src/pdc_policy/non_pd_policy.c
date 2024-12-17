@@ -64,7 +64,7 @@ static void non_pd_policy_before(void *f)
 
 	/* Start with port disconnected. */
 	zassert_ok(emul_pdc_disconnect(fixture->emul_pdc));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(fixture->port));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(fixture->port, -1));
 }
 
 ZTEST_SUITE(non_pd_policy, NULL, non_pd_policy_setup, non_pd_policy_before,
@@ -144,8 +144,7 @@ ZTEST_USER_F(non_pd_policy, test_non_pd_sinking)
 		connector_status.power_operation_mode = USB_DEFAULT_OPERATION;
 		zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc,
 						    &connector_status));
-		zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(
-			fixture->port));
+		zassert_ok(pdc_power_mgmt_wait_for_sync(fixture->port, -1));
 
 		/* Wait tRpValueChange before emulating a change in Rp. */
 		k_sleep(K_USEC(PD_T_RP_VALUE_CHANGE));
@@ -163,8 +162,7 @@ ZTEST_USER_F(non_pd_policy, test_non_pd_sinking)
 			connector_change.raw_value;
 		zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc,
 						    &connector_status));
-		zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(
-			fixture->port));
+		zassert_ok(pdc_power_mgmt_wait_for_sync(fixture->port, -1));
 
 		/* Don't query the power info until the charge detect delay
 		 * expires. */
@@ -188,7 +186,6 @@ ZTEST_USER_F(non_pd_policy, test_non_pd_sinking)
 			test[i].current_lim, response.meas.current_lim);
 
 		zassert_ok(emul_pdc_disconnect(fixture->emul_pdc));
-		zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(
-			fixture->port));
+		zassert_ok(pdc_power_mgmt_wait_for_sync(fixture->port, -1));
 	}
 }

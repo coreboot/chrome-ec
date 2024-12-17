@@ -96,7 +96,8 @@ endif # CROS_SYSTEM_NATIVE_POSIX
 
 menuconfig CROS_SYSTEM_STM32
 	bool "ST STM32 cros system driver"
-	depends on SOC_FAMILY_STM32 && IWDG_STM32 && HWINFO
+	depends on SOC_FAMILY_STM32 && IWDG_STM32
+	select HWINFO
 	select REBOOT
 	default y
 	help

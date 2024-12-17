@@ -28,6 +28,7 @@
 #include "hooks.h"
 #include "lid_switch.h"
 #include "power.h"
+#include "power/mt8186.h"
 #include "power_button.h"
 #include "system.h"
 #include "task.h"
@@ -573,9 +574,27 @@ static void power_button_changed(void)
 DECLARE_HOOK(HOOK_POWER_BUTTON_CHANGE, power_button_changed, HOOK_PRIO_DEFAULT);
 
 #ifdef CONFIG_POWER_TRACK_HOST_SLEEP_STATE
+__overridable void board_handle_host_sleep_event(enum host_sleep_event state)
+{
+	/*
+	 * This hook can be overridden to customize the handling of sleep hang
+	 * events. By default, it does nothing.
+	 */
+}
+
+__overridable void board_handle_sleep_hang(enum sleep_hang_type hang_type)
+{
+	/*
+	 * This hook can be overridden to customize the handling of sleep hang
+	 * events. By default, it does nothing.
+	 */
+}
+
 __override void power_chipset_handle_sleep_hang(enum sleep_hang_type hang_type)
 {
-	CPRINTS("Warning: Detected sleep hang! Waking host up!");
+	CPRINTS("Warning: Detected sleep hang (%d)! Waking host up!",
+		hang_type);
+	board_handle_sleep_hang(hang_type);
 	host_set_single_event(EC_HOST_EVENT_HANG_DETECT);
 }
 
@@ -603,6 +622,7 @@ power_chipset_handle_host_sleep_event(enum host_sleep_event state,
 		task_wake(TASK_ID_CHIPSET);
 		sleep_complete_resume(ctx);
 	}
+	board_handle_host_sleep_event(state);
 }
 #endif /* CONFIG_POWER_TRACK_HOST_SLEEP_STATE */
 

@@ -21,6 +21,7 @@
 #include "../trulo/keyboard.dtsi"
 #include "../trulo/led_pins.dtsi"
 #include "../trulo/led_policy.dtsi"
+#include "../trulo/pwm.dtsi"
 #include "../trulo/temp_sensors.dtsi"
 #include "../trulo/usb_typec.dtsi"
 #include "../trulo/usba.dtsi"

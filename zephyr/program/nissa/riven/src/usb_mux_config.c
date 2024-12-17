@@ -3,7 +3,7 @@
  * found in the LICENSE file.
  */
 
-/* gothrax  board-specific USB-C mux configuration */
+/* riven  board-specific USB-C mux configuration */
 
 #include "charge_state.h"
 #include "console.h"
@@ -73,13 +73,13 @@ int board_anx7483_c1_mux_set(const struct usb_mux *me, mux_state_t mux_state)
 		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_UTX2,
 					    ANX7483_EQ_SETTING_8_4DB));
 		RETURN_ERROR(anx7483_set_fg(me, ANX7483_PIN_URX1,
-					    ANX7483_FG_SETTING_NEG_1_5DB));
+					    ANX7483_FG_SETTING_0_5DB));
 		RETURN_ERROR(anx7483_set_fg(me, ANX7483_PIN_URX2,
-					    ANX7483_FG_SETTING_NEG_1_5DB));
+					    ANX7483_FG_SETTING_0_5DB));
 		RETURN_ERROR(anx7483_set_fg(me, ANX7483_PIN_UTX1,
-					    ANX7483_FG_SETTING_NEG_1_5DB));
+					    ANX7483_FG_SETTING_0_5DB));
 		RETURN_ERROR(anx7483_set_fg(me, ANX7483_PIN_UTX2,
-					    ANX7483_FG_SETTING_NEG_1_5DB));
+					    ANX7483_FG_SETTING_0_5DB));
 	} else if (mux_state == USB_PD_MUX_DOCK && !flipped) {
 		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX1,
 					    ANX7483_EQ_SETTING_12_5DB));
@@ -90,9 +90,9 @@ int board_anx7483_c1_mux_set(const struct usb_mux *me, mux_state_t mux_state)
 		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_UTX2,
 					    ANX7483_EQ_SETTING_8_4DB));
 		RETURN_ERROR(anx7483_set_fg(me, ANX7483_PIN_URX2,
-					    ANX7483_FG_SETTING_NEG_1_5DB));
+					    ANX7483_FG_SETTING_0_5DB));
 		RETURN_ERROR(anx7483_set_fg(me, ANX7483_PIN_UTX2,
-					    ANX7483_FG_SETTING_NEG_1_5DB));
+					    ANX7483_FG_SETTING_0_5DB));
 	} else if (mux_state == USB_PD_MUX_DOCK && flipped) {
 		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_URX1,
 					    ANX7483_EQ_SETTING_8_4DB));
@@ -103,9 +103,9 @@ int board_anx7483_c1_mux_set(const struct usb_mux *me, mux_state_t mux_state)
 		RETURN_ERROR(anx7483_set_eq(me, ANX7483_PIN_DRX2,
 					    ANX7483_EQ_SETTING_12_5DB));
 		RETURN_ERROR(anx7483_set_fg(me, ANX7483_PIN_URX1,
-					    ANX7483_FG_SETTING_NEG_1_5DB));
+					    ANX7483_FG_SETTING_0_5DB));
 		RETURN_ERROR(anx7483_set_fg(me, ANX7483_PIN_UTX1,
-					    ANX7483_FG_SETTING_NEG_1_5DB));
+					    ANX7483_FG_SETTING_0_5DB));
 	}
 
 	return EC_SUCCESS;

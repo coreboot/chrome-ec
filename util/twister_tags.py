@@ -67,7 +67,7 @@ def main(args):
         def test_tags_generator(root):
             """Returns space separated tags denoted by a tags key"""
             if "tags" in root:
-                for tag in root["tags"].split(" "):
+                for tag in root["tags"]:
                     yield tag
 
             for val in root.values():

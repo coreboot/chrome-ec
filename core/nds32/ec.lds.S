@@ -50,6 +50,22 @@ SECTIONS
 		__flash_dma_size = . - __flash_dma_start;
 		ASSERT((__flash_dma_size < IT83XX_ILM_BLOCK_SIZE),
 		       "__flash_dma_size < IT83XX_ILM_BLOCK_SIZE");
+
+#ifdef CONFIG_IT83XX_EXTENDED_ILM
+		. = ALIGN(IT83XX_ILM_BLOCK_SIZE);
+		__nds32_flash_ilm_start = .;
+#ifdef CONFIG_IT83XX_EXTENDED_ILM_I2C_DRIVER
+		OUTDIR/chip/it83xx/i2c.o (.text*)
+		OUTDIR/chip/it83xx/i2c.o (.rodata)
+#endif
+#ifdef CONFIG_IT83XX_EXTENDED_ILM_HWTIMER_DRIVER
+		OUTDIR/chip/it83xx/hwtimer.o (.text*)
+		OUTDIR/chip/it83xx/hwtimer.o (.rodata)
+#endif
+		__nds32_flash_ilm_end = .;
+		__nds32_flash_ilm_size = . - __nds32_flash_ilm_start;
+#endif
+
 		. = ALIGN(IT83XX_ILM_BLOCK_SIZE);
 		__flash_text_start = .;
 		*(.text*)
@@ -276,6 +292,13 @@ SECTIONS
 		. = ALIGN(4);
 		__bss_end = .;
 
+#ifdef CONFIG_IT83XX_EXTENDED_ILM
+		. = ALIGN(IT83XX_ILM_BLOCK_SIZE);
+		__nds32_flash_dlm_start = .;
+		. += __nds32_flash_ilm_end - __nds32_flash_ilm_start;
+		. = ALIGN(IT83XX_ILM_BLOCK_SIZE);
+#endif
+
 		/*
 		 * Shared memory buffer must be at the end of preallocated RAM,
 		 * so it can expand to use all the remaining RAM.
@@ -329,6 +352,10 @@ SECTIONS
 #ifdef CONFIG_I2C_PERIPHERAL
 		. = ALIGN(256);
 		*(.h2ram.pool.i2cslv)
+#endif
+#ifdef CONFIG_IT83XX_I2C_CMD_QUEUE
+		. = ALIGN(256);
+		*(.h2ram.pool.i2c_cq)
 #endif
 		__h2ram_end = .;
 	} > H2RAM

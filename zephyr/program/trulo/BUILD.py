@@ -7,6 +7,7 @@
 
 def register_trulo_project(
     project_name,
+    chip="npcx9/npcx9m3f",
     kconfig_files=None,
     **kwargs,
 ):
@@ -21,7 +22,7 @@ def register_trulo_project(
 
     register_npcx_project(
         project_name=project_name,
-        zephyr_board="npcx9/npcx9m3f",
+        zephyr_board=chip,
         dts_overlays=[
             here / project_name / "project.overlay",
         ],
@@ -55,7 +56,19 @@ register_trulo_project(
     modules=["cmsis", "picolibc", "ec", "pigweed"],
 )
 
+register_trulo_project(
+    project_name="uldrenite",
+    chip="npcx9/npcx9m7fb",
+    kconfig_files=[
+        # Common to all projects.
+        here / "program.conf",
+        # Parent project's config
+        here / "uldrenite" / "project.conf",
+    ],
+)
+
 # Note for reviews, do not let anyone edit these assertions, the addresses
 # must not change after the first RO release.
 assert_rw_fwid_DO_NOT_EDIT(project_name="trulo", addr=0x40144)
 assert_rw_fwid_DO_NOT_EDIT(project_name="trulo-ti", addr=0x40144)
+assert_rw_fwid_DO_NOT_EDIT(project_name="uldrenite", addr=0x40144)

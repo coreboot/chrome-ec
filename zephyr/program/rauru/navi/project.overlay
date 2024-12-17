@@ -157,7 +157,7 @@
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.9f";
 					};
 				};
 			};
@@ -177,7 +177,7 @@
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.99f";
 					};
 				};
 			};
@@ -196,32 +196,32 @@
 
 				rgb-cal-x {
 					offset = <0>;
-					coeff = "0", "0", "0", "1";
+					coeff = "3.104837469", "-3.042481383", "-2.665622822", "-3.48553635";
 					als-channel-scale {
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.9f";
 					};
 				};
 				rgb-cal-y {
 					offset = <0>;
-					coeff = "0", "0", "0", "1";
+					coeff = "-4.896982528", "4.933101898", "5.191614317", "4.774099358";
 					als-channel-scale {
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.9f";
 					};
 				};
 				rgb-cal-z {
 					offset = <0>;
-					coeff = "0", "0", "0", "1";
+					coeff = "-4.474227687", "4.463081990", "4.725799761", "4.329380493";
 					als-channel-scale {
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.9f";
 					};
 				};
 			};
@@ -240,32 +240,32 @@
 
 				rgb-cal-x {
 					offset = <0>;
-					coeff = "0", "0", "0", "1";
+					coeff = "-0.270504545", "0.365824995", "0.63568366", "0.125036008";
 					als-channel-scale {
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.99f";
 					};
 				};
 				rgb-cal-y {
 					offset = <0>;
-					coeff = "0", "0", "0", "1";
+					coeff = "-0.260229489", "0.327072623", "0.60465724", "0.140379923";
 					als-channel-scale {
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.99f";
 					};
 				};
 				rgb-cal-z {
 					offset = <0>;
-					coeff = "0", "0", "0", "1";
+					coeff = "0.317013982", "-0.481912324", "-0.01555734", "-0.110027566";
 					als-channel-scale {
 					compatible =
 					"cros-ec,accelgyro-als-channel-scale";
 						k-channel-scale = <1>;
-						cover-scale = <1>;
+						cover-scale = "1.99f";
 					};
 				};
 			};

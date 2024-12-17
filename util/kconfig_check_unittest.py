@@ -1,3 +1,4 @@
+#!/usr/bin/env vpython3
 # Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -7,7 +8,6 @@
 import contextlib
 import io
 import os
-import pathlib
 import re
 import sys
 import tempfile
@@ -123,6 +123,7 @@ rsource "subdir/Kconfig.wibble"
         ) as out:
             out.write(
                 f"""menuconfig {PREFIX}MENU_KCONFIG
+bool "prompt for menu kconfig"
 
 config {CONSOLE_PREFIX}WIBBLE
 \tbool "Console command: wibble"
@@ -177,25 +178,6 @@ rsource "subdir/Kconfig.wobble"
             files = checker.find_kconfigs(srctree)
             fnames = [fname[len(srctree) :] for fname in files]
             self.assertEqual(["/Kconfig", "/subdir/Kconfig.wibble"], fnames)
-
-    def test_scan_kconfigs(self):
-        """Test KconfigCheck.scan_configs()"""
-        checker = kconfig_check.KconfigCheck()
-        with tempfile.TemporaryDirectory() as srctree:
-            with tempfile.TemporaryDirectory() as zephyr_path:
-                self.setup_zephyr_base(zephyr_path)
-                os.environ["ZEPHYR_BASE"] = str(zephyr_path)
-                self.setup_srctree(srctree)
-                self.assertEqual(
-                    [
-                        "CONSOLE_CMD_WIBBLE",
-                        "MENU_KCONFIG",
-                        "MY_KCONFIG",
-                        "WOBBLE_MENU_KCONFIG",
-                        "ZCONFIG",
-                    ],
-                    checker.scan_kconfigs(srctree, PREFIX_TUPLES),
-                )
 
     @classmethod
     def setup_allowed_and_configs(
@@ -281,31 +263,6 @@ rsource "subdir/Kconfig.wobble"
         self.assertEqual("", stdout.getvalue())
         found = re.findall("(CONFIG_.*)", stderr.getvalue())
         self.assertEqual(["CONFIG_NEW_ONE"], found)
-
-    def test_real_kconfig(self):
-        """Same Kconfig should be returned for kconfiglib / adhoc"""
-        if not kconfig_check.USE_KCONFIGLIB:
-            self.fail("No kconfiglib available")
-        zephyr_path = pathlib.Path(
-            "../../../src/third_party/zephyr/main"
-        ).resolve()
-        if not zephyr_path.exists():
-            self.fail("No zephyr tree available")
-        os.environ["ZEPHYR_BASE"] = str(zephyr_path)
-
-        checker = kconfig_check.KconfigCheck()
-        srcdir = "zephyr"
-        search_paths = [zephyr_path]
-        kc_version = checker.scan_kconfigs(
-            srcdir, search_paths=search_paths, try_kconfiglib=True
-        )
-        adhoc_version = checker.scan_kconfigs(srcdir, try_kconfiglib=False)
-
-        # List of things missing from the Kconfig
-        missing = sorted(list(set(adhoc_version) - set(kc_version)))
-
-        # There should be no differences between adhoc and kconfig versions
-        self.assertListEqual([], missing)
 
     def test_check_unneeded(self):
         """Test running the 'check' subcommand with unneeded ad-hoc configs"""

@@ -314,7 +314,7 @@ static void nxp_pcf85063a_isr(const struct device *port,
 	}
 }
 
-static const struct cros_rtc_driver_api nxp_rtc_pcf85063a_driver_api = {
+static DEVICE_API(cros_rtc, nxp_rtc_pcf85063a_driver_api) = {
 	.configure = nxp_rtc_pcf85063a_configure,
 	.get_value = nxp_rtc_pcf85063a_get_value,
 	.set_value = nxp_rtc_pcf85063a_set_value,

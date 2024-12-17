@@ -276,7 +276,7 @@ ZTEST(ucsi_ppm, test_get_connector_status)
 	LOG_INF("Connecting a partner");
 	csts.power_operation_mode = USB_TC_CURRENT_1_5A;
 	emul_pdc_connect_partner(emul, &csts);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(PDC_EMUL_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(PDC_EMUL_PORT, -1));
 
 	LOG_INF("Sending GET_CONNECTOR_STATUS");
 	zassert_ok(write_command(&ctrl));
@@ -303,7 +303,7 @@ ZTEST(ucsi_ppm, test_set_sink_path)
 	 * Test SET_SINK_PATH when sink is disconnected.
 	 */
 	emul_pdc_disconnect(emul);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(PDC_EMUL_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(PDC_EMUL_PORT, -1));
 
 	LOG_INF("Sending SET_SINK_PATH while disconnected");
 	ctrl.command = UCSI_SET_SINK_PATH;
@@ -327,7 +327,7 @@ ZTEST(ucsi_ppm, test_set_sink_path)
 	 */
 	emul_pdc_configure_snk(emul, &csts);
 	emul_pdc_connect_partner(emul, &csts);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(PDC_EMUL_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(PDC_EMUL_PORT, -1));
 
 	LOG_INF("Sending SET_SINK_PATH as a sink");
 	zassert_ok(write_command(&ctrl));
@@ -347,7 +347,7 @@ ZTEST(ucsi_ppm, test_set_sink_path)
 	 */
 	emul_pdc_configure_src(emul, &csts);
 	emul_pdc_connect_partner(emul, &csts);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(PDC_EMUL_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(PDC_EMUL_PORT, -1));
 
 	LOG_INF("Sending SET_SINK_PATH to a source");
 	zassert_ok(write_command(&ctrl));
@@ -406,7 +406,7 @@ ZTEST(ucsi_ppm, test_get_alternate_modes_fail)
 	 */
 	emul_pdc_configure_snk(emul, &csts);
 	emul_pdc_connect_partner(emul, &csts);
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(PDC_EMUL_PORT));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(PDC_EMUL_PORT, -1));
 
 	LOG_INF("Sending GET_ALTERNATE_MODES as a sink");
 	ctrl.command = UCSI_GET_ALTERNATE_MODES;

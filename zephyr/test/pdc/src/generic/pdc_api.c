@@ -312,7 +312,7 @@ ZTEST_USER(pdc_api, test_set_ccom)
 
 ZTEST_USER(pdc_api, test_set_drp_mode)
 {
-	int i, rv;
+	int i;
 	enum drp_mode_t dm_in[] = { DRP_NORMAL, DRP_TRY_SRC, DRP_TRY_SNK };
 	uint8_t num_modes = ARRAY_SIZE(dm_in);
 	enum drp_mode_t dm_out;
@@ -332,11 +332,9 @@ ZTEST_USER(pdc_api, test_set_drp_mode)
 
 		/* Check PDC driver API if supported */
 		dm_out = DRP_INVALID;
-		rv = pdc_get_drp_mode(dev, &dm_out);
+		zassert_ok(pdc_get_drp_mode(dev, &dm_out));
 		k_sleep(K_MSEC(SLEEP_MS));
-		if (rv == EC_SUCCESS) {
-			zassert_equal(dm_in[i], dm_out);
-		}
+		zassert_equal(dm_in[i], dm_out);
 	}
 }
 
@@ -348,7 +346,7 @@ ZTEST_USER(pdc_api, test_set_sink_path)
 	for (i = 0; i < ARRAY_SIZE(in); i++) {
 		zassert_ok(pdc_set_sink_path(dev, in[i]));
 
-		k_sleep(K_MSEC(SLEEP_MS));
+		k_sleep(K_MSEC(SLEEP_MS * 10));
 		zassert_ok(emul_pdc_get_sink_path(emul, &out));
 
 		zassert_equal(in[i], out);
@@ -460,9 +458,10 @@ ZTEST_USER(pdc_api, test_reconnect)
  */
 void helper_clear_cached_chip_info(void)
 {
-	struct pdc_info_t zero = { 0 }, out;
+	struct pdc_info_t init = { 0 }, out;
 
-	emul_pdc_set_info(emul, &zero);
+	init.fw_version = PDC_FWVER_INVALID;
+	emul_pdc_set_info(emul, &init);
 	zassert_ok(pdc_get_info(dev, &out, true));
 	k_sleep(K_MSEC(SLEEP_MS));
 }

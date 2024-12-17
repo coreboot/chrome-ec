@@ -153,10 +153,11 @@ BOARDS_RAIDEN=(
 	soraka
 )
 
-BOARDS_MCHP_INT_SPI=(
+BOARDS_MCHP_INT_UART=(
 	mtlrvpp_mchp
 	ptlrvp_mchp
 )
+
 DEFAULT_PORT="${SERVOD_PORT:-9999}"
 BITBANG_RATE="57600"  # Could be overwritten by a command line option.
 
@@ -385,8 +386,8 @@ if in_array "${BOARDS_IT83XX_SPI_PROGRAMMING[@]}" "${BOARD}"; then
 	SUPPORTED_CHIPS+=("ite_spi")
 fi
 
-if in_array "${BOARDS_MCHP_INT_SPI[@]}" "${BOARD}"; then
-	SUPPORTED_CHIPS+=("mchp_int_spi")
+if in_array "${BOARDS_MCHP_INT_UART[@]}" "${BOARD}"; then
+	SUPPORTED_CHIPS+=("mchp_int_uart")
 fi
 
 if [[ ${#SUPPORTED_CHIPS[@]} -eq 0 && -n "${FLAGS_chip}" ]]; then
@@ -1914,7 +1915,7 @@ function flash_npcx_int_spi() {
 	flash_flashrom
 }
 
-function flash_mchp_int_spi() {
+function flash_mchp_int_uart() {
 	EC_UART="$(servo_ec_uart)"
 	EC_UART_PREFIX="$(servo_ec_uart_prefix)"
 	MCHP_DIR="${EC_DIR}/util/mchp"
@@ -1940,17 +1941,38 @@ function flash_mchp_int_spi() {
 	# Reset chip in firmware update mode
 	dut_control cold_reset:on fw_up:on cold_reset:off
 
-	# Set 9600 baudrate to program Second loader image
+	info "Programming EC firmware using MCHP UART interface"
+	info "EC UART = ${EC_UART}"
+
+	servo_save_add "${EC_UART_PREFIX}_baudrate"
+	servo_save_add "${EC_UART_PREFIX}_parity"
+
+	claim_pty "${EC_UART}"
+
 	sec_load_baudrate=9600
-	if [ "${current_baudrate}" != "${sec_load_baudrate}" ] ; then
-	   dut_control "${EC_UART_PREFIX}"_baudrate:"${sec_load_baudrate}"
+	info "Using ${sec_load_baudrate} baudrate for the second loader"
+	dut_control_or_die "${EC_UART_PREFIX}_baudrate:${sec_load_baudrate}"
+	dut_control_or_die "${EC_UART_PREFIX}_parity:none"
+
+	if servo_is_ccd ; then
+		info "Servo is CCD"
+		servo_save_add "${EC_UART_PREFIX}_bitbang_en"
+		dut_control "${EC_UART_PREFIX}_bitbang_en:on"
 	fi
+
 	# Load Second loader image into SRAM
 	"${MCHP_DIR}"/crisis_rcvry_util.py -s "${MCHP_LOADER}" -p "${EC_UART}"
 
 	# Set 57600 baudrate to program EC image
 	image_load_baudrate=57600
-	dut_control "${EC_UART_PREFIX}"_baudrate:"${image_load_baudrate}"
+	info "Using ${image_load_baudrate} baudrate for the image load"
+	dut_control_or_die "${EC_UART_PREFIX}_baudrate:${image_load_baudrate}"
+
+	if servo_is_ccd ; then
+		info "Servo is CCD"
+		servo_save_add "${EC_UART_PREFIX}_bitbang_en"
+		dut_control "${EC_UART_PREFIX}_bitbang_en:on"
+	fi
 
 	# Flash EC image into the internal flash
 	"${MCHP_DIR}"/crisis_rcvry_util.py -e "${EC_IMAGE}" -p "${EC_UART}"

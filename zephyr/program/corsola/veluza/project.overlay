@@ -87,6 +87,7 @@
 	gpio-interrupts {
 		/delete-node/ x_ec_gpio2;
 		/delete-node/ usb_c0_ppc_bc12;
+		/delete-node/ usb_c1_bc12_charger;
 		int_base_imu: base_imu {
 			handler = "base_sensor_interrupt";
 		};
@@ -112,6 +113,7 @@
 	usbc {
 		port0@0 {
 			ppc = <&ppc_port0>;
+			/delete-property/ bc12;
 		};
 		port1@1 {
 			/delete-property/ bc12;
@@ -295,9 +297,11 @@
 &i2c0 {
 	charger_bc12_port1: rt9490@53 {
 		thermistor = <&thermistor_rt9490>;
+		/delete-property/ irq;
 	};
 };
 &i2c2 {
+	/delete-node/ rt1739@70;
 	ppc_port0: syv682x@40 {
 		compatible = "silergy,syv682x";
 		status = "okay";

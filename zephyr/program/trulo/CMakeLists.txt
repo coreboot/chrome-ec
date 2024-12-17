@@ -11,3 +11,8 @@ if(DEFINED CONFIG_BOARD_TRULO)
 	project(trulo)
 	add_subdirectory(trulo)
 endif()
+
+if(DEFINED CONFIG_BOARD_ULDRENITE)
+	project(uldrenite)
+	add_subdirectory(uldrenite)
+endif()

@@ -4,16 +4,27 @@
  *
  */
 
-#include <dt-bindings/motionsense/utils.h>
+ #include <dt-bindings/motionsense/utils.h>
 
-/ {
+ / {
 	aliases {
-		/*
-		 * motion sense's <>_INT_EVENT is handled
-		 * by alias. Using the alias, each driver creates
-		 * its own <>_INT_EVENT.
-		 */
 		bma4xx-int = &lid_accel;
+	};
+
+	/* Rotation matrix used by drivers. */
+	motionsense-rotation-ref {
+		compatible = "cros-ec,motionsense-rotation-ref";
+		lid_rot_ref: lid-rotation-ref {
+			mat33 = <(-1) 0 0
+				 0 (-1) 0
+				 0 0 1>;
+		};
+
+		base_rot_ref: base-rotation-ref-bmi {
+			mat33 = <(-1) 0 0
+				 0 (-1) 0
+				 0 0 1>;
+		};
 	};
 
 	/*
@@ -23,55 +34,28 @@
 	 * corresponding sensor driver needs to use the
 	 * instance of the mutex.
 	 */
+
 	motionsense-mutex {
 		compatible = "cros-ec,motionsense-mutex";
-		mutex_lid_bma422: lid-bma422-mutex {
+		mutex_bma4xx_lid: mutex-bma4xx-lid {
 		};
-
-		mutex_base_bma422: base-bma422-mutex {
-		};
-	};
-
-	/* Rotation matrix used by drivers. */
-	motionsense-rotation-ref {
-		compatible = "cros-ec,motionsense-rotation-ref";
-		lid_rot_ref: lid-rotation-ref {
-			mat33 = <0 1 0
-				 1 0 0
-				 0 0 (-1)>;
-		};
-		base_rot_ref: base-rotation-ref {
-			mat33 = <(-1) 0 0
-				 0 1 0
-				 0 0 (-1)>;
+		mutex_bma4xx_base: mutex-bma4xx-base {
 		};
 	};
 
-	/*
-	 * Driver specific data. A driver-specific data can be shared with
-	 * different motion sensors while they are using the same driver.
-	 *
-	 * If a node's compatible starts with "cros-ec,accelgyro-", it is for
-	 * a common structure defined in accelgyro.h.
-	 * e.g) compatible = "cros-ec,accelgyro-als-drv-data" is for
-	 * "struct als_drv_data_t" in accelgyro.h
-	 */
+	/* Driver specific data */
 	motionsense-sensor-data {
-		bma422_lid_data: bma4xx-lid-drv-data {
+		lid_data: bma422-drv-lid-data {
 			compatible = "cros-ec,drvdata-bma4xx";
 			status = "okay";
 		};
-		bma422_base_data: bma4xx-base-drv-data {
+		base_data: bma422-drv-base-data {
 			compatible = "cros-ec,drvdata-bma4xx";
 			status = "okay";
 		};
 	};
 
-	/*
-	 * List of motion sensors that creates motion_sensors array.
-	 * The nodelabel "lid_accel" and "base_accel" are used to indicate
-	 * motion sensor IDs for lid angle calculation.
-	 */
+	/* List of motion sensors that create motion_sensors array. */
 	motionsense-sensor {
 		lid_accel: lid-accel {
 			compatible = "cros-ec,bma4xx";
@@ -79,11 +63,11 @@
 
 			active-mask = "SENSOR_ACTIVE_S0_S3";
 			location = "MOTIONSENSE_LOC_LID";
-			mutex = <&mutex_lid_bma422>;
-			port = <&i2c_ec_i2c_sensor_scl_r>;
+			mutex = <&mutex_bma4xx_lid>;
+			port = <&i2c_ec_i2c_sensor_scl_1v8>;
 			rot-standard-ref = <&lid_rot_ref>;
-			default-range = <2>;
-			drv-data = <&bma422_lid_data>;
+			default-range = <4>; /* to meet CDD 7.3.1/C-1-4 reqs. */
+			drv-data = <&lid_data>;
 			i2c-spi-addr-flags = "BMA4_I2C_ADDR_SECONDARY";
 			configs {
 				compatible =
@@ -93,21 +77,21 @@
 				};
 				ec-s3 {
 					odr = <(10000 | ROUND_UP_FLAG)>;
+					ec-rate = <(100 * USEC_PER_MSEC)>;
 				};
 			};
 		};
-
 		base_accel: base-accel {
 			compatible = "cros-ec,bma4xx";
 			status = "okay";
 
 			active-mask = "SENSOR_ACTIVE_S0_S3";
 			location = "MOTIONSENSE_LOC_BASE";
-			mutex = <&mutex_base_bma422>;
-			port = <&i2c_ec_i2c_sensor_scl_r>;
+			mutex = <&mutex_bma4xx_base>;
+			port = <&i2c_ec_i2c_sensor_scl_1v8>;
 			rot-standard-ref = <&base_rot_ref>;
-			default-range = <4>;
-			drv-data = <&bma422_base_data>;
+			default-range = <2>;
+			drv-data = <&base_data>;
 			i2c-spi-addr-flags = "BMA4_I2C_ADDR_PRIMARY";
 			configs {
 				compatible =
@@ -117,18 +101,21 @@
 				};
 				ec-s3 {
 					odr = <(10000 | ROUND_UP_FLAG)>;
+					ec-rate = <(100 * USEC_PER_MSEC)>;
 				};
 			};
 		};
 	};
 
+	/* High level description info */
 	motionsense-sensor-info {
 		compatible = "cros-ec,motionsense-sensor-info";
-
 		/*
-		 * list of GPIO interrupts that have to
-		 * be enabled at initial stage
+		 * List of GPIO interrupts that have to be enabled at initial
+		 * stage.
 		 */
-		sensor-irqs = <&int_imu &int_accel>;
+		sensor-irqs = <&int_lid_accel>;
+		/* list of sensors in force mode */
+		accel-force-mode-sensors = <&base_accel>;
 	};
 };

@@ -5,8 +5,8 @@
 
 #define DT_DRV_COMPAT fpc_fpc1025
 
-#include "fpc1025.h"
-#include "fpc1025_private.h"
+#include "fingerprint_fpc1025.h"
+#include "fingerprint_fpc1025_private.h"
 
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>
@@ -371,7 +371,7 @@ static int fpc1025_finger_status(const struct device *dev)
 	return rc;
 }
 
-static const struct fingerprint_driver_api cros_fp_fpc1025_driver_api = {
+static DEVICE_API(fingerprint, cros_fp_fpc1025_driver_api) = {
 	.init = fpc1025_init,
 	.deinit = fpc1025_deinit,
 	.config = fpc1025_config,

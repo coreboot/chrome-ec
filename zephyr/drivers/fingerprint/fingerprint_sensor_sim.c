@@ -118,7 +118,7 @@ static int fp_simulator_finger_status(const struct device *dev)
 	return data->state.finger_state;
 }
 
-static const struct fingerprint_driver_api fp_simulator_driver_api = {
+static DEVICE_API(fingerprint, fp_simulator_driver_api) = {
 	.init = fp_simulator_init,
 	.deinit = fp_simulator_deinit,
 	.config = fp_simulator_config,

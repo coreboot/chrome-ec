@@ -8,12 +8,11 @@
 
 /* Power Signals */
 #define PWR_EN_PP3300_S5 &gpio4 1
-#define PWR_EN_PP5000_S5 &gpio3 2
+#define PWR_EN_PP5000_S5 &gpio7 6
 #define PWR_RSMRST_PWRGD &gpio7 2
 #define PWR_EC_PCH_RSMRST &gpio9 5
-#define PWR_SLP_S0 &gpioe 1
+#define PWR_SLP_S0 &gpiob 0
 #define PWR_PCH_PWROK &gpio6 1
-#define PWR_EC_PCH_SYS_PWROK &gpio6 4
 #define PWR_ALL_SYS_PWRGD &gpio6 3
 
 /* I2C Ports */

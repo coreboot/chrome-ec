@@ -1040,7 +1040,7 @@ static int shi_npcx_init(const struct device *dev)
 	return ret;
 }
 
-static const struct cros_shi_driver_api cros_shi_npcx_driver_api = {
+static DEVICE_API(cros_shi, cros_shi_npcx_driver_api) = {
 	.enable = cros_shi_npcx_enable,
 	.disable = cros_shi_npcx_disable,
 };

@@ -3015,6 +3015,16 @@
 #undef CONFIG_IT83XX_ENABLE_MOUSE_DEVICE
 
 /*
+ * Enable more ILM to cache chip's drivers to reduce latency in fetching
+ * instructions from internal flash.
+ */
+#undef CONFIG_IT83XX_EXTENDED_ILM
+/* IT8320 hardware timer driver runs from ILM */
+#undef CONFIG_IT83XX_EXTENDED_ILM_HWTIMER_DRIVER
+/* IT8320 I2C driver runs from ILM */
+#undef CONFIG_IT83XX_EXTENDED_ILM_I2C_DRIVER
+
+/*
  * The IT8320 supports e-flash clock up to 48 MHz (IT8390 maximum is 32 MHz).
  * Enable it if we want better performance of fetching instruction from e-flash.
  *
@@ -7414,6 +7424,12 @@
 /* Default to 1024 for end of ram data (panic and jump data) */
 #ifndef CONFIG_PRESERVED_END_OF_RAM_SIZE
 #define CONFIG_PRESERVED_END_OF_RAM_SIZE 1024
+#endif
+
+/* Select CONFIG_IT83XX_EXTENDED_ILM automatically */
+#if defined(CONFIG_IT83XX_EXTENDED_ILM_HWTIMER_DRIVER) || \
+	defined(CONFIG_IT83XX_EXTENDED_ILM_I2C_DRIVER)
+#define CONFIG_IT83XX_EXTENDED_ILM
 #endif
 
 #ifdef HAVE_PRIVATE

@@ -22,6 +22,7 @@ import sys
 from google.protobuf import json_format  # pylint: disable=import-error
 
 from chromite.api.gen_sdk.chromite.api import firmware_pb2
+from chromite.lib.chromeos_version import VersionInfo
 import scripts.firmware_builder_lib
 
 
@@ -76,8 +77,10 @@ BINARY_SIZE_REGIONS = [
 ]
 
 
-def log_cmd(cmd, env=None):
+def log_cmd(cmd, env=None, cwd=None):
     """Log subprocess command."""
+    if cwd:
+        print(f"cd {cwd};", end=" ")
     if env is not None:
         print("env", end=" ")
         [  # pylint:disable=expression-not-assigned
@@ -94,6 +97,14 @@ def find_checkout():
         if (path / ".repo").is_dir():
             return path
     raise FileNotFoundError("Unable to locate the root of the checkout")
+
+
+def get_version():
+    """Determine the current chroot version."""
+    ver = VersionInfo.from_repo(source_repo=find_checkout())
+    if ver:
+        return ver.VersionString()
+    return None
 
 
 def build(opts):
@@ -138,21 +149,9 @@ def build(opts):
     if opts.bcs_version:
         cmd.extend(["-v", opts.bcs_version])
     else:
-        version_file = (
-            find_checkout()
-            / "src/third_party/chromiumos-overlay/chromeos/config/chromeos_version.sh"
-        )
-        if version_file.exists():
-            version = subprocess.run(
-                f"source {shlex.quote(str(version_file))} >/dev/null && "
-                "echo -n $CHROMEOS_VERSION_STRING",
-                shell=True,
-                check=True,
-                text=True,
-                stdout=subprocess.PIPE,
-            ).stdout
-            if version:
-                cmd.extend(["-v", version])
+        version = get_version()
+        if version:
+            cmd.extend(["-v", version])
 
     log_cmd(cmd)
     subprocess.run(
@@ -315,26 +314,40 @@ def bundle_firmware(opts):
     """Bundles the artifacts from each target into its own tarball."""
     info = firmware_pb2.FirmwareArtifactInfo()  # pylint: disable=no-member
     info.bcs_version_info.version_string = opts.bcs_version
+    version = opts.bcs_version or get_version()
+
     bundle_dir = get_bundle_dir(opts)
     platform_ec = ZEPHYR_DIR.parent
     modules = zmake.modules.locate_from_checkout(find_checkout())
     projects_path = zmake.modules.default_projects_dirs(modules)
     subprocesses = []
+    per_board_targets = collections.defaultdict(list)
     for project in zmake.project.find_projects(projects_path).values():
         build_dir = (
             platform_ec / "build" / "zephyr" / project.config.project_name
         )
         artifacts_dir = build_dir / "output"
         # karis.EC.15709.192.0.tar.bz2
-        if opts.bcs_version:
-            tarball_name = (
-                f"{project.config.project_name}.EC.{opts.bcs_version}.tar.bz2"
-            )
+        if version:
+            tarball_name = f"{project.config.project_name}.EC.{version}.tar.bz2"
         else:
             tarball_name = f"{project.config.project_name}.EC.tar.bz2"
         tarball_path = bundle_dir.joinpath(tarball_name)
-        cmd = ["tar", "cfj", tarball_path, "."]
-        log_cmd(cmd)
+        for board in set(project.config.inherited_from):
+            per_board_targets[board].append(
+                f"{project.config.project_name}/output"
+            )
+        cmd = [
+            "tar",
+            "--exclude=*.elf",
+            "--exclude=*.lst",
+            "-cjf",
+            tarball_path,
+        ]
+        cmd.extend(
+            [x.relative_to(artifacts_dir) for x in artifacts_dir.glob("*")]
+        )
+        log_cmd(cmd, cwd=artifacts_dir)
         subprocesses.append(
             subprocess.Popen(  # pylint: disable=consider-using-with
                 cmd, cwd=artifacts_dir, stdin=subprocess.DEVNULL
@@ -348,6 +361,31 @@ def bundle_firmware(opts):
         )
         # TODO(kmshelton): Populate the rest of metadata contents as it
         # gets defined in infra/proto/src/chromite/api/firmware.proto.
+    # For each board, create a big tar file that contains all the models.
+    for board, dirs in per_board_targets.items():
+        tarball_name = f"{board}/firmware_from_source.tar.bz2"
+        (bundle_dir / board).mkdir(exist_ok=True)
+        cmd = [
+            "tar",
+            "-cjf",
+            str(bundle_dir / tarball_name),
+            "-C",
+            str(platform_ec / "build" / "zephyr"),
+            "--transform",
+            "s,/output,,",
+        ] + dirs
+        log_cmd(cmd)
+        subprocesses.append(
+            subprocess.Popen(  # pylint: disable=consider-using-with
+                cmd, stdin=subprocess.DEVNULL
+            )
+        )
+        meta = info.objects.add()
+        meta.tarball_info.board.append(board)
+        meta.file_name = tarball_name
+        meta.tarball_info.type = (
+            firmware_pb2.FirmwareArtifactInfo.TarballInfo.FirmwareType.EC  # pylint: disable=no-member
+        )
     for proc in subprocesses:
         proc.wait()
         if proc.returncode != 0:

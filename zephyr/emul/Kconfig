@@ -170,6 +170,16 @@ config EMUL_FPC1025
 	  mode) that can be issued by the public driver (without FPC private
 	  library)
 
+config EMUL_FPC1145
+	bool "FPC1145 fingerprint sensor emulator"
+	depends on ZTEST && DT_HAS_FPC_FPC1145_ENABLED && ARCH_POSIX
+	default y
+	help
+	  This option enables the FPC1145 fingerprint sensor emulator.
+	  It supports only basic commands (get hardware id, enter low power
+	  mode) that can be issued by the public driver (without FPC private
+	  library)
+
 config EMUL_SMBUS_ARA
 	bool "SMBUS Alert Response Address emulator"
 	default y

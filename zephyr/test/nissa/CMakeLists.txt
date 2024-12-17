@@ -129,6 +129,20 @@ if(CONFIG_TEST_NISSA_PUJJOGA)
     )
 endif()
 
+if(CONFIG_TEST_NISSA_PUJJOGATWIN)
+    target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0)
+    target_sources(
+            app PRIVATE
+            src/pujjogatwin.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjogatwin/src/board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjogatwin/src/charger.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjogatwin/src/hdmi.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjogatwin/src/led.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjogatwin/src/sub_board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/pujjogatwin/src/usbc.c
+    )
+endif()
+
 if(CONFIG_TEST_NISSA_JOXER)
     target_compile_definitions(app PRIVATE CHARGER_PRIMARY=0 CHARGER_SECONDARY=1)
     target_sources(

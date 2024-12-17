@@ -22,6 +22,7 @@ GPIO_INT(VCCIN_AUX_VID1,	PIN(K, 1), GPIO_INT_BOTH, power_signal_interrupt)
 GPIO_INT(PG_VCCIO_EXT_OD,	PIN(D, 7), GPIO_INT_BOTH, baseboard_all_sys_pgood_interrupt)
 GPIO_INT(ESPI_RESET_L, 	 	PIN(D, 2), GPIO_INT_FALLING | GPIO_SEL_1P8V, espi_reset_pin_asserted_interrupt)
 GPIO_INT(H1_EC_PWR_BTN_ODL,	PIN(E, 2), GPIO_INT_BOTH | GPIO_PULL_UP, power_button_interrupt)
+GPIO_INT(DOOR_OPEN_EC,		PIN(L, 3), GPIO_INT_FALLING, door_open_interrupt)
 
 #ifdef CONFIG_LOW_POWER_IDLE
 /* Used to wake up the EC from Deep Doze mode when writing to console */
@@ -57,7 +58,6 @@ GPIO(EC_PROCHOT_ODL,		PIN(I, 1), GPIO_ODR_HIGH | GPIO_SEL_1P8V)
 GPIO(EC_AP_VCCST_PWRGD_OD,	PIN(E, 5), GPIO_ODR_LOW)
 GPIO(ALL_SYS_PWRGD,		PIN(B, 7), GPIO_OUT_LOW)
 GPIO(EN_SLP_Z,			PIN(K, 3), GPIO_OUT_LOW)
-GPIO(DOOR_OPEN_EC,		PIN(L, 3), GPIO_INPUT)
 
 /* Required for icelake chipset code, but implemented through other means for dedede */
 UNIMPLEMENTED(AC_PRESENT)

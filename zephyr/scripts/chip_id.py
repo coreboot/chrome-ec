@@ -255,7 +255,7 @@ DISAMBIGUATION_DICTIONARY = {
             None,
             None,
             {
-                "reg": "0x00",
+                "reg": "0x92",
                 "mask": "0xff",
                 "value": "0x90",
             },
@@ -266,7 +266,7 @@ DISAMBIGUATION_DICTIONARY = {
             None,
             None,
             {
-                "reg": "0x00",
+                "reg": "0x92",
                 "mask": "0xff",
                 "value": "0x93",
             },

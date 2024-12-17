@@ -1,5 +1,6 @@
 common:
-  platform_allow: native_sim
+  platform_allow:
+  - native_sim
 tests:
   # The UART API provides both interrupt driven and modes.
   console.output.interrupt:

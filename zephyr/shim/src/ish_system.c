@@ -70,7 +70,7 @@ extern void sedi_pm_reset(void);
 
 test_mockable void system_reset(int flags)
 {
-	if (IS_ENABLED(CONFIG_REBOOT)) {
+	if (IS_ENABLED(CONFIG_REBOOT) && IS_ENABLED(CONFIG_PM)) {
 		sedi_pm_reset();
 	}
 	__builtin_unreachable();

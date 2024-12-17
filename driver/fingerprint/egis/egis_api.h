@@ -38,31 +38,55 @@ extern "C" {
 #define FP_SENSOR_RES_BPP_EGIS (8)
 
 typedef enum {
-	EGIS_API_OK,
-	EGIS_API_WAIT_EVENT_FINGER_PRESENT,
-	EGIS_API_CAPTURE_DONE,
-	EGIS_API_ENABLE_EVENT_FINGER_PRESENT,
-	EGIS_API_WAIT_TIME,
-	EGIS_API_FINGER_PRESENT,
-	EGIS_API_FINGER_LOST,
-	EGIS_API_FINGER_UNSTABLE,
-	EGIS_API_FINGER_PARTIAL,
-	EGIS_API_CALIBRATION_INTERRUPT,
-	EGIS_API_ERROR_TOO_FAST,
-	EGIS_API_ERROR_TOO_SLOW,
-	EGIS_API_ERROR_GENERAL,
-	EGIS_API_ERROR_SENSOR,
-	EGIS_API_ERROR_MEMORY,
-	EGIS_API_ERROR_PARAMETER,
-	EGIS_API_FAIL_LOW_QUALITY,
-	EGIS_API_FAIL_IDENTIFY_START,
-	EGIS_API_FAIL_IDENTIFY_IMAGE,
-	EGIS_API_ERROR_INVALID_FINGERID,
-	EGIS_API_ERROR_OUT_RECORD,
-
-	EGIS_API_ERROR_SENSOR_NEED_RESET = 99,
-	EGIS_API_ERROR_SENSOR_OCP_DETECT = 110,
+	EGIS_API_OK = 0,
+	EGIS_API_IMAGE_QUALITY_GOOD = 0,
+	EGIS_API_IMAGE_QUALITY_BAD = 1,
+	EGIS_API_IMAGE_QUALITY_WATER = 2,
+	EGIS_API_IMAGE_QUALITY_PARTIAL = 3,
+	EGIS_API_IMAGE_EMPTY = 4,
+	EGIS_API_FINGER_PRESENT = 5,
+	EGIS_API_FINGER_LOST = 6,
+	EGIS_API_ENROLL_FINISH = 11,
+	EGIS_API_ENROLL_IMAGE_OK = 12,
+	EGIS_API_ENROLL_REDUNDANT_INPUT = 13,
+	EGIS_API_ENROLL_LOW_QUALITY = 14,
+	EGIS_API_ENROLL_LOW_COVERAGE = 15,
+	EGIS_API_MATCH_MATCHED = 21,
+	EGIS_API_MATCH_MATCHED_UPDATED = 22,
+	EGIS_API_MATCH_MATCHED_UPDATED_FAILED = 23,
+	EGIS_API_MATCH_NOT_MATCHED = 24,
+	EGIS_API_MATCH_LOW_QUALITY = 25,
+	EGIS_API_MATCH_LOW_COVERAGE = 26,
+	EGIS_API_ERROR_GENERAL = -1,
+	EGIS_API_ERROR_COMMAND_FAIL = -2,
+	EGIS_API_ERROR_DEVICE_NOT_FOUND = -3,
+	EGIS_API_ERROR_MEMORY = -4,
+	EGIS_API_ERROR_PARAMETER = -5,
+	EGIS_API_ERROR_WRONG_STATE = -6,
+	EGIS_API_ERROR_IO_SPI = -7,
+	EGIS_API_ERROR_SENSOR_GENERAL = -11,
+	EGIS_API_ERROR_SENSOR_SENSING_MDOE_CALIBRATION = -12,
+	EGIS_API_ERROR_SENSOR_DETECT_MDOE_CALIBRATION = -13,
+	EGIS_API_ERROR_SENSOR_NEED_RESET = -15,
+	EGIS_API_ERROR_SENSOR_OCP_DETECT = -16,
+	EGIS_API_ERROR_FINGER_UNSTABLE = -17,
+	EGIS_API_ERROR_MATCHER_LIB_FAIL = -18,
+	EGIS_API_ERROR_EMFP_LIB_FAIL = -19,
+	EGIS_API_ERROR = -20,
 } egis_api_return_t;
+
+/**
+ * @brief Get the fingerprint sensor HWID
+ *
+ * @param[out] id sensor id read from sensor.
+ *
+ * @return EGIS_OK : on success.
+ * @return EGIS_API_ERROR_IO_SPI on SPI transfer failure, @p id filled with
+ * zeros
+ * @return EGIS_API_ERROR_PARAMETER on incorrect parameter, @p id filled with
+ * zeros
+ */
+int egis_get_hwid(uint16_t *id);
 
 /**
  * @brief Reset and initialize the sensor IC.
@@ -82,14 +106,14 @@ typedef enum {
  * @return EGIS_API_ERROR_SENSOR_GENERAL : on sensor operation fail
  * @return EGIS_API_ERROR_PARAMETER : on incorrect parameter
  */
-int egis_sensor_init(void);
+egis_api_return_t egis_sensor_init(void);
 
 /**
  * @brief Deinitialize the sensor IC.
  *
  * @return EGIS_OK : on success.
  */
-int egis_sensor_deinit(void);
+egis_api_return_t egis_sensor_deinit(void);
 
 /**
  * Power down the sensor IC.
@@ -121,7 +145,7 @@ void egis_sensor_power_down(void);
 /*
  * TODO(b/376870662): Create additional modes for `egis_get_image_with_mode`.
  */
-int egis_get_image_with_mode(uint8_t *image_data, int mode);
+egis_api_return_t egis_get_image_with_mode(uint8_t *image_data, int mode);
 
 /**
  * @brief Get 8bits image data from EGIS fingerprint sensor.
@@ -143,7 +167,7 @@ int egis_get_image_with_mode(uint8_t *image_data, int mode);
  * @return EGIS_API_ERROR_PARAMETER : on incorrect parameter
  * @return EGIS_API_ERROR_IO_SPI : on execute SPI transfer fail
  */
-int egis_get_image(uint8_t *image_data);
+egis_api_return_t egis_get_image(uint8_t *image_data);
 
 /**
  * @brief Set the finger detection mode for the Egis sensor.
@@ -165,7 +189,7 @@ void egis_set_detect_mode(void);
  * @return EGIS_API_ERROR_PARAMETER : on incorrect parameter
  * @return EGIS_API_ERROR_IO_SPI : on execute SPI transfer fail
  */
-int egis_check_int_status(void);
+egis_api_return_t egis_check_int_status(void);
 
 /**
  * Compares given finger image against enrolled templates.
@@ -180,19 +204,24 @@ int egis_check_int_status(void);
  * @param[out] update_bitmap contains one bit per template, the bit is set if
  * the match has updated the given template.
  *
- * @return EC_MKBP_FP_ERR_MATCH_NO on non-match
- * @return EC_MKBP_FP_ERR_MATCH_YES for match when template was not updated with
+ * @return EGIS_API_MATCH_NOT_MATCHED on non-match
+ * @return EGIS_API_MATCH_MATCHED for match when template was not updated with
  * new data
- * @return EC_MKBP_FP_ERR_MATCH_YES_UPDATED for match when template was updated
- * @return EC_MKBP_FP_ERR_MATCH_YES_UPDATE_FAILED match, but update failed (not
+ * @return EGIS_API_MATCH_MATCHED_UPDATED for match when template was updated
+ * @return EGIS_API_MATCH_MATCHED_UPDATED_FAILED match, but update failed (not
  * saved)
+ * @return EGIS_API_MATCH_LOW_QUALITY when matching could not be performed due
+ * to low image quality
+ * @return EGIS_API_MATCH_LOW_COVERAGE when matching could not be performed due
+ * to finger covering too little area of the sensor
  * @return negative value on error, list below
  * @return EGIS_API_ERROR_PARAMETER : on incorrect parameter
  * @return EGIS_API_ERROR_MATCHER_LIB_FAIL : on matcher lib fail
  * @return EGIS_API_ERROR_EMFP_LIB_FAIL : on emfp lib fail
  */
-int egis_finger_match(void *templ, uint32_t templ_count, uint8_t *image,
-		      int32_t *match_index, uint32_t *update_bitmap);
+egis_api_return_t egis_finger_match(void *templ, uint32_t templ_count,
+				    uint8_t *image, int32_t *match_index,
+				    uint32_t *update_bitmap);
 
 /**
  * Start a finger enrollment session.
@@ -201,7 +230,7 @@ int egis_finger_match(void *templ, uint32_t templ_count, uint8_t *image,
  * @return negative value on error, list below
  * @return EGIS_API_ERROR_MATCHER_LIB_FAIL : on matcher lib fail
  */
-int egis_enrollment_begin(void);
+egis_api_return_t egis_enrollment_begin(void);
 
 /**
  * Generate a template from the finger whose enrollment has just being
@@ -213,7 +242,7 @@ int egis_enrollment_begin(void);
  * @return negative value on error, list below
  * @return EGIS_API_ERROR : on fail.
  */
-int egis_enrollment_finish(void *templ);
+egis_api_return_t egis_enrollment_finish(void *templ);
 
 /**
  * Adds fingerprint image to the current enrollment session.
@@ -223,15 +252,21 @@ int egis_enrollment_finish(void *templ);
  * complete: [0-100].
  *
  * @return 0 on success
- * @return EC_MKBP_FP_ERR_ENROLL_OK when image was successfully enrolled
- * @return EC_MKBP_FP_ERR_ENROLL_IMMOBILE when image added, but user should be
+ * @return EGIS_API_ENROLL_FINISH when image was successfully enrolled and
+ * enroll_percentage 100%
+ * @return EGIS_API_ENROLL_IMAGE_OK when image was successfully enrolled
+ * @return EGIS_API_ENROLL_REDUNDANT_INPUT when image added, but user should be
  * advised to move finger
+ * @return EGIS_API_ENROLL_LOW_QUALITY when image could not be used due to low
+ * image quality
+ * @return EGIS_API_ENROLL_LOW_COVERAGE when image could not be used due to
+ * finger covering too little area of the sensor
  * @return negative value on error, list below
  * @return EGIS_API_ERROR_PARAMETER : on incorrect parameter
  * @return EGIS_API_ERROR_MATCHER_LIB_FAIL : on matcher lib fail
  * @return EGIS_API_ERROR_EMFP_LIB_FAIL : on emfp lib fail
  */
-int egis_finger_enroll(uint8_t *image, int *completion);
+egis_api_return_t egis_finger_enroll(uint8_t *image, int *completion);
 
 #ifdef __cplusplus
 }

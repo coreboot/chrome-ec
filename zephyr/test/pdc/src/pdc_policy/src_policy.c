@@ -114,7 +114,7 @@ ZTEST_USER_F(src_policy, test_src_policy_one_3a)
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT0],
 					    &connector_status_port0));
 
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	/* The emulator doesn't negotiate a real contract with the partner
 	 * as this is under the control of the PDC firmware.
@@ -143,7 +143,7 @@ ZTEST_USER_F(src_policy, test_src_policy_one_3a)
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT1],
 					    &connector_status_port1));
 
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT1));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT1, -1));
 
 	zassert_ok(emul_pdc_get_pdos(fixture->emul_pdc[TEST_USBC_PORT0],
 				     SOURCE_PDO, PDO_OFFSET_0, 1, LPM_PDO,
@@ -187,7 +187,7 @@ ZTEST_USER_F(src_policy, test_src_policy_disconnect_3a)
 					    &connector_status));
 
 	/* Wait for connection to settle and source policies to run. */
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	/* Connect port 1 */
 	emul_pdc_configure_src(fixture->emul_pdc[TEST_USBC_PORT1],
@@ -199,7 +199,7 @@ ZTEST_USER_F(src_policy, test_src_policy_disconnect_3a)
 
 					    &connector_status));
 	/* Wait for connection to settle and source policies to run. */
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT1));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT1, -1));
 
 	/* Port 1 should only offer 5V 1.5A. */
 	zassert_ok(emul_pdc_get_pdos(fixture->emul_pdc[TEST_USBC_PORT1],
@@ -214,7 +214,7 @@ ZTEST_USER_F(src_policy, test_src_policy_disconnect_3a)
 
 	/* Disconnect port 0 */
 	zassert_ok(emul_pdc_disconnect(fixture->emul_pdc[TEST_USBC_PORT0]));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	/* Port 1 should now be offered 3A */
 	zassert_ok(emul_pdc_get_pdos(fixture->emul_pdc[TEST_USBC_PORT1],
@@ -256,7 +256,7 @@ ZTEST_USER_F(src_policy, test_src_policy_pr_swap)
 					    &connector_status));
 
 	/* Wait for connection to settle and source policies to run. */
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	zassert_ok(emul_pdc_get_pdos(fixture->emul_pdc[TEST_USBC_PORT0],
 				     SOURCE_PDO, PDO_OFFSET_0, 1, LPM_PDO,
@@ -280,7 +280,7 @@ ZTEST_USER_F(src_policy, test_src_policy_pr_swap)
 				      &connector_status);
 	emul_pdc_pulse_irq(fixture->emul_pdc[TEST_USBC_PORT0]);
 
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	zassert_ok(emul_pdc_get_pdos(fixture->emul_pdc[TEST_USBC_PORT0],
 				     SOURCE_PDO, PDO_OFFSET_0, 1, LPM_PDO,
@@ -311,7 +311,7 @@ ZTEST_USER_F(src_policy, test_src_policy_non_pd)
 					    &connector_status));
 
 	/* Wait for connection to settle and source policies to run. */
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	zassert_ok(emul_pdc_get_pdos(fixture->emul_pdc[TEST_USBC_PORT0],
 				     SOURCE_PDO, PDO_OFFSET_0, 1, LPM_PDO,
@@ -331,7 +331,7 @@ ZTEST_USER_F(src_policy, test_src_policy_non_pd)
 	emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT1],
 				 &connector_status);
 
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT1));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT1, -1));
 
 	zassert_ok(emul_pdc_get_requested_power_level(
 		fixture->emul_pdc[TEST_USBC_PORT1], &typec_current));
@@ -339,7 +339,7 @@ ZTEST_USER_F(src_policy, test_src_policy_non_pd)
 
 	/* Disconnect port 0 */
 	zassert_ok(emul_pdc_disconnect(fixture->emul_pdc[TEST_USBC_PORT0]));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	/* Non-PD should now be offered 3A current. */
 	zassert_ok(emul_pdc_get_requested_power_level(
@@ -354,7 +354,7 @@ ZTEST_USER_F(src_policy, test_src_policy_non_pd)
 				     &partner_snk_pdo));
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT0],
 					    &connector_status));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	k_sleep(K_USEC(PD_T_SINK_ADJ));
 
@@ -397,7 +397,7 @@ ZTEST_USER_F(src_policy, test_src_policy_frs_1a5)
 					    &snk_partner_connector_status));
 
 	/* Wait for connection to settle and source policies to run. */
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	zassert_ok(emul_pdc_get_pdos(fixture->emul_pdc[TEST_USBC_PORT0],
 				     SOURCE_PDO, PDO_OFFSET_0, 1, LPM_PDO,
@@ -422,7 +422,7 @@ ZTEST_USER_F(src_policy, test_src_policy_frs_1a5)
 				     &frs_partner_snk_pdo));
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT1],
 					    &frs_partner_connector_status));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT1));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT1, -1));
 
 	/* FRS should be enabled, even while providing 3A on another port. */
 	zassert_ok(emul_pdc_get_frs(fixture->emul_pdc[TEST_USBC_PORT1],
@@ -481,7 +481,7 @@ ZTEST_USER_F(src_policy, test_src_policy_frs_3a)
 					    &snk_partner_connector_status));
 
 	/* Wait for connection to settle and source policies to run. */
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	zassert_ok(emul_pdc_get_pdos(fixture->emul_pdc[TEST_USBC_PORT0],
 				     SOURCE_PDO, PDO_OFFSET_0, 1, LPM_PDO,
@@ -506,7 +506,7 @@ ZTEST_USER_F(src_policy, test_src_policy_frs_3a)
 				     &frs_partner_snk_pdo));
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT1],
 					    &frs_partner_connector_status));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT1));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT1, -1));
 
 	/* FRS should be enabled. */
 	zassert_ok(emul_pdc_get_frs(fixture->emul_pdc[TEST_USBC_PORT1],
@@ -563,7 +563,7 @@ ZTEST_USER_F(src_policy, test_src_policy_fsr_downgrade_for_pd)
 				     &frs_partner_snk_pdo));
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT1],
 					    &frs_partner_connector_status));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT1));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT1, -1));
 
 	/* FRS should be enabled. */
 	zassert_ok(emul_pdc_get_frs(fixture->emul_pdc[TEST_USBC_PORT1],
@@ -594,10 +594,10 @@ ZTEST_USER_F(src_policy, test_src_policy_fsr_downgrade_for_pd)
 				     &snk_partner_snk_pdo));
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT0],
 					    &snk_partner_connector_status));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	/* Allow for policies to run on port 1. */
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT1));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT1, -1));
 
 	/* TODO - validate that the FRS port is degraded before the sink
 	 * port is offered 3.0A.
@@ -632,10 +632,10 @@ ZTEST_USER_F(src_policy, test_src_policy_fsr_downgrade_for_pd)
 
 	/* Disconnecting the PD sink on port 0 should re-enable FRS. */
 	zassert_ok(emul_pdc_disconnect(fixture->emul_pdc[TEST_USBC_PORT0]));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	/* Allow for policies to run on port 1. */
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT1));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT1, -1));
 
 	/* FRS should be enabled. */
 	zassert_ok(emul_pdc_get_frs(fixture->emul_pdc[TEST_USBC_PORT1],
@@ -682,7 +682,7 @@ ZTEST_USER_F(src_policy, test_src_policy_non_pd_downgrade_for_frs)
 	snk_partner_connector_status.power_operation_mode = USB_TC_CURRENT_3A;
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT0],
 					    &snk_partner_connector_status));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	zassert_ok(emul_pdc_get_requested_power_level(
 		fixture->emul_pdc[TEST_USBC_PORT0], &typec_current));
@@ -701,16 +701,16 @@ ZTEST_USER_F(src_policy, test_src_policy_non_pd_downgrade_for_frs)
 				     &frs_partner_snk_pdo));
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT1],
 					    &frs_partner_connector_status));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT1));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT1, -1));
 
 	/* Non-PD sink should be downgraded. */
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 	zassert_ok(emul_pdc_get_requested_power_level(
 		fixture->emul_pdc[TEST_USBC_PORT0], &typec_current));
 	zassert_equal(typec_current, TC_CURRENT_1_5A);
 
 	/* FRS should be enabled. */
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT1));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT1, -1));
 	zassert_ok(emul_pdc_get_frs(fixture->emul_pdc[TEST_USBC_PORT1],
 				    &frs_enabled));
 	zassert_true(frs_enabled);
@@ -744,7 +744,7 @@ ZTEST_USER_F(src_policy, test_src_policy_sink_pdo_errors)
 				     &partner_snk_pdo));
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT0],
 					    &connector_status));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	zassert_ok(emul_pdc_get_pdos(fixture->emul_pdc[TEST_USBC_PORT0],
 				     SOURCE_PDO, PDO_OFFSET_0, 1, LPM_PDO,
@@ -759,7 +759,7 @@ ZTEST_USER_F(src_policy, test_src_policy_sink_pdo_errors)
 		      PDO_FIXED_GET_CURR(lpm_src_pdo_actual), 1500);
 
 	zassert_ok(emul_pdc_disconnect(fixture->emul_pdc[TEST_USBC_PORT0]));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 }
 
 /* Verify error paths related to handling of FRS partner sink PDOs. */
@@ -796,7 +796,7 @@ ZTEST_USER_F(src_policy, test_src_policy_frs_sink_pdo_errors)
 				     &frs_partner_snk_pdo));
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT0],
 					    &connector_status));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	/* FRS should be disabled. */
 	zassert_ok(emul_pdc_get_frs(fixture->emul_pdc[TEST_USBC_PORT0],
@@ -804,7 +804,7 @@ ZTEST_USER_F(src_policy, test_src_policy_frs_sink_pdo_errors)
 	zassert_false(frs_enabled);
 
 	zassert_ok(emul_pdc_disconnect(fixture->emul_pdc[TEST_USBC_PORT0]));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	/* Partner must also advertise FRS before we enable FRS. */
 	frs_partner_snk_pdo = PDO_FIXED(5000, 3000, PDO_FIXED_DUAL_ROLE);
@@ -821,14 +821,14 @@ ZTEST_USER_F(src_policy, test_src_policy_frs_sink_pdo_errors)
 				     &frs_partner_snk_pdo));
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT0],
 					    &connector_status));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	/* FRS should be disabled. */
 	zassert_ok(emul_pdc_get_frs(fixture->emul_pdc[TEST_USBC_PORT0],
 				    &frs_enabled));
 	zassert_false(frs_enabled);
 	zassert_ok(emul_pdc_disconnect(fixture->emul_pdc[TEST_USBC_PORT0]));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	/* Verify FRS enabled if the partner only wants default power */
 	frs_partner_snk_pdo = PDO_FIXED(
@@ -847,7 +847,7 @@ ZTEST_USER_F(src_policy, test_src_policy_frs_sink_pdo_errors)
 				     &frs_partner_snk_pdo));
 	zassert_ok(emul_pdc_connect_partner(fixture->emul_pdc[TEST_USBC_PORT0],
 					    &connector_status));
-	zassert_ok(pdc_power_mgmt_resync_port_state_for_ppm(TEST_USBC_PORT0));
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_USBC_PORT0, -1));
 
 	zassert_ok(emul_pdc_get_frs(fixture->emul_pdc[TEST_USBC_PORT0],
 				    &frs_enabled));

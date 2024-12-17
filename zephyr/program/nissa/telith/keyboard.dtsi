@@ -43,7 +43,7 @@
 			VIVALDI_TK_SNAPSHOT		/* T5 */
 			VIVALDI_TK_BRIGHTNESS_DOWN	/* T6 */
 			VIVALDI_TK_BRIGHTNESS_UP	/* T7 */
-			VIVALDI_TK_ACCESSIBILITY	/* T8 */
+			VIVALDI_TK_DICTATE      	/* T8 */
 			VIVALDI_TK_PLAY_PAUSE		/* T9 */
 			VIVALDI_TK_MICMUTE		/* T10 */
 			VIVALDI_TK_VOL_MUTE		/* T11 */
@@ -67,7 +67,7 @@
 			VIVALDI_TK_BRIGHTNESS_UP	/* T7 */
 			VIVALDI_TK_KBD_BKLIGHT_DOWN	/* T8 */
 			VIVALDI_TK_KBD_BKLIGHT_UP	/* T9 */
-			VIVALDI_TK_MICMUTE		/* T10 */
+			VIVALDI_TK_DICTATE		/* T10 */
 			VIVALDI_TK_VOL_MUTE		/* T11 */
 			VIVALDI_TK_VOL_DOWN		/* T12 */
 			VIVALDI_TK_VOL_UP		/* T13 */
@@ -87,7 +87,7 @@
 			VIVALDI_TK_SNAPSHOT		/* T5 */
 			VIVALDI_TK_BRIGHTNESS_DOWN	/* T6 */
 			VIVALDI_TK_BRIGHTNESS_UP	/* T7 */
-			VIVALDI_TK_MENU			/* T8 */
+			VIVALDI_TK_DICTATE		/* T8 */
 			VIVALDI_TK_DONOTDISTURB		/* T9 */
 			VIVALDI_TK_ACCESSIBILITY	/* T10 */
 			VIVALDI_TK_PLAY_PAUSE		/* T11 */
@@ -114,7 +114,7 @@
 			VIVALDI_TK_BRIGHTNESS_UP	/* T7 */
 			VIVALDI_TK_KBD_BKLIGHT_DOWN	/* T8 */
 			VIVALDI_TK_KBD_BKLIGHT_UP	/* T9 */
-			VIVALDI_TK_MENU			/* T10 */
+			VIVALDI_TK_DICTATE		/* T10 */
 			VIVALDI_TK_PLAY_PAUSE		/* T11 */
 			VIVALDI_TK_MICMUTE		/* T12 */
 			VIVALDI_TK_VOL_MUTE		/* T13 */
@@ -168,6 +168,7 @@
 	actual-key-mask = <0x08 0xff 0xff 0xff 0xff 0xf5 0xff 0xa4
 			   0xff 0xfe 0x55 0xff 0xca 0x40 0x0a 0x40
 			   0xff 0xff>;
+	kso-ignore-mask = <04>;
 
 	kso-gpio {
 		compatible = "cros-ec,col-gpio";

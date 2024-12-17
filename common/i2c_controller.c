@@ -231,7 +231,7 @@ int i2c_xfer_unlocked(const int port, const uint16_t addr_flags,
 			 * If this read follows a write (above) then we need a
 			 * restart
 			 */
-			if (num_msgs)
+			if (num_msgs || flags & I2C_XFER_RESTART)
 				rflags |= I2C_MSG_RESTART;
 			msg[num_msgs].flags = rflags;
 			num_msgs++;

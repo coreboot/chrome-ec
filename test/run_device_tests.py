@@ -7,23 +7,21 @@
 
 """Runs unit tests on device and displays the results.
 
-This script assumes you have a ~/.servodrc config file with a line that
-corresponds to the board being tested.
-
-See https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/HEAD/docs/servo.md#servodrc
+This script assumes you have set up servod according to
+https://chromium.googlesource.com/chromiumos/third_party/hdctools/+/main/docs/servod_outside_chroot.md.
 
 In addition to running this script locally, you can also run it from a remote
 machine against a board connected to a local machine. For example:
 
 Start servod and JLink locally:
 
-(local chroot) $ sudo servod --board dragonclaw
+(local outside) $ start-servod --channel=release --board=dragonclaw -p 9999 -f
 (local chroot) $ sudo JLinkRemoteServerCLExe -select USB
 
 Forward the FPMCU console on a TCP port:
 
-(local chroot) $ socat $(dut-control raw_fpmcu_console_uart_pty | cut -d: -f2) \
-                 tcp4-listen:10000,fork
+(local outside) $ socat $(dut-control -- raw_fpmcu_console_uart_pty | cut -d: -f2) \
+                  tcp4-listen:10000,fork
 
 Forward all the ports to the remote machine:
 
@@ -248,14 +246,14 @@ class Platform(ABC):
     @abstractmethod
     def flash(
         self,
+        board_config: BoardConfig,
         image_path: str,
-        board: str,
         flasher: str,
         remote_ip: str,
         remote_port: int,
-        build_board: str,
         test_name: str,
         enable_hw_write_protect: bool,
+        zephyr: bool,
     ) -> bool:
         """Flash specified test to specified board."""
 
@@ -317,14 +315,14 @@ class Hardware(Platform):
 
     def flash(
         self,
+        board_config: BoardConfig,
         image_path: str,
-        board: str,
         flasher: str,
         remote_ip: str,
         remote_port: int,
-        build_board: str,
         test_name: str,
         enable_hw_write_protect: bool,
+        zephyr: bool,
     ) -> bool:
         logging.info("Flashing test")
 
@@ -341,7 +339,7 @@ class Hardware(Platform):
         cmd.extend(
             [
                 "--board",
-                board,
+                board_config.name,
                 "--image",
                 image_path,
             ]
@@ -376,16 +374,20 @@ class Renode(Platform):
 
     def flash(
         self,
+        board_config: BoardConfig,
         image_path: str,
-        board: str,
         flasher: str,
         remote_ip: str,
         remote_port: int,
-        build_board: str,
         test_name: str,
         enable_hw_write_protect: bool,
+        zephyr: bool,
     ) -> bool:
-        cmd = ["./util/renode-ec-launch", build_board, test_name]
+        cmd = [
+            "./util/renode-ec-launch",
+            board_config.name,
+            "zephyr" if zephyr else test_name,
+        ]
         if enable_hw_write_protect:
             cmd.append("--enable-write-protect")
 
@@ -402,6 +404,12 @@ class Renode(Platform):
     def skip_test(
         self, test_name: str, board_config: BoardConfig, zephyr: bool
     ) -> bool:
+        # TODO(b/380468811): Re-enable upstream Zephyr tests when they work.
+        if test_name in [
+            test.test_name for test in AllTests.get_zephyr_tests()
+        ]:
+            return True
+
         if board_config.name in [BLOONCHIPPER, DARTMONKEY]:
             if board_config.name == BLOONCHIPPER:
                 if test_name in [
@@ -409,18 +417,12 @@ class Renode(Platform):
                 ]:
                     return True
                 if zephyr and test_name in [
-                    "abort",
-                    "assert_builtin",
-                    "assert_stdlib",
-                    "exit",
-                    "fp_transport",
-                    "fpsensor_debug",
-                    "ftrapv",
-                    "panic",
-                    "panic_data",
-                    "rollback",
-                    "stdlib",
-                    "utils_str",
+                    "abort",  # TODO(b/384094781)
+                    "fp_transport",  # TODO(b/384094788)
+                    "fpsensor_debug",  # TODO(b/384110894)
+                    "ftrapv",  # TODO(b/384095271)
+                    "panic",  # TODO(b/384095226)
+                    "panic_data",  # TODO(b/384095623)
                 ]:
                     return True
             # TODO(b/356476313): Remove these when Renode is fixed.
@@ -432,7 +434,6 @@ class Renode(Platform):
                 "libcxx",
                 "power_utilization",
                 "rtc_stm32f4",
-                "std_vector",
                 "timer_dos",  # TODO(b/374798079)
             ]:
                 return True
@@ -441,24 +442,12 @@ class Renode(Platform):
                 "production_app_test",
                 "benchmark",
                 "exception",
-                "exit",
-                "flash_physical",
-                "flash_write_protect",
                 "fpsensor_hw",
-                "fp_transport",
                 "libcxx",
-                "malloc",
-                "mpu",
                 "otp_key",
                 "power_utilization",
                 "ram_lock",
-                "rollback",
-                "rollback_entropy",
                 "rtc_npcx9",
-                "sbrk",
-                "std_vector",
-                "fpsensor_auth_crypto_stateless",  # TODO(b/372969110)
-                "unaligned_access_benchmark",  # TODO(372969629)
             ]:
                 return True
 
@@ -572,6 +561,8 @@ class AllTests:
                     SINGLE_CHECK_FAILED_REGEX,
                     ALL_TESTS_FAILED_REGEX,
                 ],
+                # TODO(b/365628799): Need to port to Zephyr.
+                skip_for_zephyr=True,
             ),
             TestConfig(
                 test_name="assert_stdlib",
@@ -579,13 +570,19 @@ class AllTests:
                     ALL_TESTS_FAILED_REGEX,
                     ASSERTION_FAILURE_REGEX,
                 ],
+                # TODO(b/365628799): Need to port to Zephyr.
+                skip_for_zephyr=True,
             ),
             TestConfig(test_name="benchmark"),
             TestConfig(test_name="boringssl_crypto"),
             TestConfig(test_name="cortexm_fpu"),
             TestConfig(test_name="crc"),
             TestConfig(test_name="exception"),
-            TestConfig(test_name="exit"),
+            TestConfig(
+                test_name="exit",
+                # TODO(b/365628799): Need to port to Zephyr.
+                skip_for_zephyr=True,
+            ),
             TestConfig(
                 test_name="flash_physical",
                 imagetype_to_use=ImageType.RO,
@@ -1307,13 +1304,19 @@ def run_test_zephyr(test: TestConfig) -> str:
     # Zephyr upstream tests run automatically
     if test.zephyr_name:
         return []
+
+    # TODO(b/382705460): This extra command is to work around an issue where
+    # sometimes there is a missing character in the test command: "zest"
+    # instead of "ztest".
+    test_cmd = "\n\n\n\n\n\n"
+
     if len(test.test_args) == 0:
         # If there are no args just run-all not to be limited by suite name
-        test_cmd = "ztest run-all\n"
+        test_cmd += "ztest run-all\n"
     else:
         # ZTEST console doesn't support passing test arguments
         # Assume a testsuite for every test + arg combination
-        test_cmd = "ztest run-testcase " + test.test_name
+        test_cmd += "ztest run-testcase " + test.test_name
         for test_arg in test.test_args:
             test_cmd = test_cmd + "_" + test_arg
         test_cmd = test_cmd + "\n"
@@ -1475,7 +1478,7 @@ def flash_and_run_test(
     executor,
 ) -> bool:
     """Run a single test using the test and board configuration specified"""
-    build_board = args.board
+    build_board = board_config.name
     # If test provides this information, build image for board specified
     # by test. Also if a test is in Zephyr upstream use the dev board name.
     if test.build_board is not None:
@@ -1513,14 +1516,14 @@ def flash_and_run_test(
 
     # flash test binary
     if not platform.flash(
+        board_config,
         image_path,
-        args.board,
         args.flasher,
         args.remote,
         args.jlink_port,
-        build_board,
         test.test_name,
         test.enable_hw_write_protect,
+        args.zephyr,
     ):
         logging.debug("Flashing failed")
         return False

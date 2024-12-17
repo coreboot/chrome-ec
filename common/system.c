@@ -49,6 +49,11 @@
 /* Round up to a multiple of 4 */
 #define ROUNDUP4(x) (((x) + 3) & ~3)
 
+/**
+ * Returns a pointer to the jump data structure.
+ */
+struct jump_data *get_jump_data(void);
+
 /* Data for an individual jump tag */
 struct jump_tag {
 	uint16_t tag; /* Tag ID */
@@ -219,6 +224,15 @@ test_mockable int system_is_locked(void)
 
 test_mockable uintptr_t system_usable_ram_end(void)
 {
+	/* This function can be called while initializing C++ objects with
+	 * static storage duration, which occurs before any calls to
+	 * set jdata. e.g., from __libc_init_array in init.S.
+	 */
+	if (!IS_ENABLED(CHIP_ISH) /* TODO(b/376875609) */
+	    && IS_ENABLED(CONFIG_COMMON_PANIC_OUTPUT) && jdata == NULL) {
+		jdata = get_jump_data();
+	}
+
 	/* Leave space at the end of RAM for jump data and tags.
 	 *
 	 * Note that jump_tag_total is 0 on a reboot, so we have the maximum
@@ -326,7 +340,8 @@ void system_print_banner(void)
 	}
 }
 
-#ifdef CONFIG_RAM_SIZE
+#if defined(CONFIG_RAM_SIZE) && \
+	(defined(CONFIG_COMMON_PANIC_OUTPUT) || defined(BOARD_HOST))
 struct jump_data *get_jump_data(void)
 {
 	uintptr_t addr;
@@ -341,7 +356,7 @@ struct jump_data *get_jump_data(void)
 
 	return (struct jump_data *)(addr - sizeof(struct jump_data));
 }
-#endif
+#endif /* CONFIG_RAM_SIZE && (CONFIG_COMMON_PANIC_OUTPUT || BOARD_HOST) */
 
 test_mockable int system_jumped_to_this_image(void)
 {
@@ -921,6 +936,15 @@ void system_common_pre_init(void)
 		else if (reason != PANIC_SW_WATCHDOG || !pdata ||
 			 pdata->flags & PANIC_DATA_FLAG_OLD_HOSTCMD)
 			panic_set_reason(PANIC_SW_WATCHDOG, 0, 0);
+	}
+
+	/*
+	 * get_jump_data() is only available if one of the following are
+	 * enabled.
+	 */
+	if (!(IS_ENABLED(CONFIG_COMMON_PANIC_OUTPUT) ||
+	      IS_ENABLED(BOARD_HOST))) {
+		return;
 	}
 
 	jdata = get_jump_data();
