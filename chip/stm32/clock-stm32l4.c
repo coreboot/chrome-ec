@@ -49,16 +49,6 @@
  */
 #define SCALING 1000
 
-enum clock_osc {
-	OSC_INIT = 0, /* Uninitialized */
-	OSC_HSI, /* High-speed internal oscillator */
-	OSC_MSI, /* Multi-speed internal oscillator */
-#ifdef CONFIG_STM32_CLOCK_HSE_HZ /* Catch absence of HSE at compile time */
-	OSC_HSE, /* High-speed external oscillator */
-#endif
-	OSC_PLL, /* PLL */
-};
-
 static int freq = STM32_MSI_CLOCK;
 static int current_osc;
 
@@ -299,7 +289,7 @@ static int stm32_configure_pll(enum clock_osc osc, uint8_t m, uint8_t n,
  * @param osc		Oscillator to use
  * @param pll_osc	Source oscillator for PLL. Ignored if osc is not PLL.
  */
-static void clock_set_osc(enum clock_osc osc, enum clock_osc pll_osc)
+void clock_set_osc(enum clock_osc osc, enum clock_osc pll_osc)
 {
 	uint32_t val;
 
