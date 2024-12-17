@@ -147,9 +147,14 @@ ZTEST(jubilant_keyboard, test_keyboard_matrix_cbi_error)
 
 ZTEST(jubilant_keyboard, test_keyboard_matrix_cbi_invalid)
 {
+	cros_cbi_get_fw_config_fake.custom_fake =
+		cros_cbi_get_fw_config_kb_numpad;
+
 	/* just to exercise the "invalid value" code path */
 	kb_numpad = 2;
 	keyboard_matrix_init();
+
+	/* TODO: Check if the message "invalid cbi value: 4d2" was logged. */
 }
 
 ZTEST(jubilant_keyboard, test_get_scancode_set2)
