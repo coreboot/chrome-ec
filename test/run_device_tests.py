@@ -414,9 +414,17 @@ class Renode(Platform):
     def skip_test(
         self, test_name: str, board_config: BoardConfig, zephyr: bool
     ) -> bool:
+        # pylint: disable=too-many-return-statements
+
         # TODO(b/380468811): Re-enable upstream Zephyr tests when they work.
         if test_name in [
             test.test_name for test in AllTests.get_zephyr_tests()
+        ]:
+            return True
+
+        # Tests failures that are independent of the board.
+        if test_name in [
+            "production_app_test",  # TODO(b/384740370)
         ]:
             return True
 
@@ -437,7 +445,6 @@ class Renode(Platform):
                     return True
             # TODO(b/356476313): Remove these when Renode is fixed.
             if test_name in [
-                "production_app_test",
                 "benchmark",
                 "exception",
                 "fpsensor_hw",
@@ -449,7 +456,6 @@ class Renode(Platform):
                 return True
         elif board_config.name in [HELIPILOT, BUCCANEER]:
             if test_name in [
-                "production_app_test",
                 "benchmark",
                 "exception",  # TODO(b/384730599)
                 "fpsensor_hw",
@@ -462,6 +468,8 @@ class Renode(Platform):
                 return True
 
         return False
+
+        # pylint: enable=too-many-return-statements
 
 
 @dataclass
