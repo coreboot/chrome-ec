@@ -8,6 +8,7 @@
 #include "common.h"
 #include "console.h"
 #include "extpower.h"
+#include "gpio/gpio_int.h"
 #include "hooks.h"
 #include "i2c.h"
 #include "usb_pd.h"
@@ -24,9 +25,9 @@
 #define ALS_ENABLE BIT(0)
 #define FACTORY_CLEAR BIT(1)
 #define ALS_NORMAL_COUNT BIT(2)
+#define ALS_CUTOFF_ENABLE BIT(3)
 
 static int als_enable = 0;
-static int als_det_enable = 1;
 
 static int als_eeprom_read(uint8_t offset, uint8_t *data, int len)
 {
@@ -70,6 +71,64 @@ static void als_data_handler(void)
 	CPRINTS(" %d", als_data);
 }
 
+static void als_change_deferred(void)
+{
+	uint8_t data[1];
+
+	if (!gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(ec_als_odl))) {
+		als_eeprom_read(0x00, data, 1);
+
+		/* Detect the als enable status,used to disable als function in
+		 * debug status*/
+		if (!(data[0] & ALS_ENABLE)) {
+			als_enable = 0;
+			CPRINTS(" function disable-%d", data[0]);
+			return;
+		}
+
+		if (data[0] & ALS_CUTOFF_ENABLE) {
+			if (!(data[0] & ALS_NORMAL_COUNT))
+				als_data_handler();
+
+			data[0] |= ALS_NORMAL_COUNT;
+			als_eeprom_write(0x00, data, 1);
+
+			chipset_force_shutdown(CHIPSET_SHUTDOWN_BOARD_CUSTOM);
+			if (extpower_is_present()) {
+				CPRINTS("AC off!");
+				for (int i = 0; i < ppc_cnt; i++) {
+					/*
+					 * Do not return early if one fails
+					 * otherwise we can get into a boot loop
+					 * assertion failure.
+					 */
+					if (ppc_vbus_sink_enable(i, 0))
+						CPRINTS("Disabling C%d as sink failed.",
+							i);
+				}
+			}
+			cflush();
+			if (battery_is_present()) {
+				CPRINTS("cut off!");
+				board_cut_off_battery();
+			}
+		} else {
+			CPRINTS("cutoff function disable!");
+			als_data_handler();
+		}
+	}
+}
+DECLARE_DEFERRED(als_change_deferred);
+
+void door_open_interrupt(enum gpio_signal s)
+{
+	if (als_enable) {
+		hook_call_deferred(&als_change_deferred_data, 500 * MSEC);
+	} else {
+		hook_call_deferred(&als_change_deferred_data, -1);
+	}
+}
+
 static void check_als_status(void)
 {
 	uint8_t data[3];
@@ -87,64 +146,10 @@ static void check_als_status(void)
 			data[0] &= ~ALS_NORMAL_COUNT;
 			als_eeprom_write(0x00, data, 1);
 		}
+
+		gpio_enable_dt_interrupt(
+			GPIO_INT_FROM_NODELABEL(int_als_status));
+		hook_call_deferred(&als_change_deferred_data, 500 * MSEC);
 	}
 }
 DECLARE_HOOK(HOOK_INIT, check_als_status, HOOK_PRIO_DEFAULT);
-
-int als_enable_status(void)
-{
-	return als_enable;
-}
-
-static void als_change_deferred(void)
-{
-	static bool debouncing;
-	int out;
-	uint8_t data[1];
-
-	out = gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(ec_als_odl));
-
-	if (out == 0) {
-		if (!debouncing) {
-			debouncing = true;
-			return;
-		}
-		debouncing = false;
-
-		als_eeprom_read(0x00, data, 1);
-		if (!(data[0] & ALS_NORMAL_COUNT))
-			als_data_handler();
-
-		data[0] |= ALS_NORMAL_COUNT;
-		als_eeprom_write(0x00, data, 1);
-
-		chipset_force_shutdown(CHIPSET_SHUTDOWN_BOARD_CUSTOM);
-		if (extpower_is_present()) {
-			CPRINTS("AC off!");
-			for (int i = 0; i < ppc_cnt; i++) {
-				/*
-				 * Do not return early if one fails otherwise we
-				 * can get into a boot loop assertion failure.
-				 */
-				if (ppc_vbus_sink_enable(i, 0))
-					CPRINTS("Disabling C%d as sink failed.",
-						i);
-			}
-		}
-		cflush();
-		als_det_enable = 0;
-		if (battery_is_present()) {
-			CPRINTS("cut off!");
-			board_cut_off_battery();
-		}
-	}
-}
-DECLARE_DEFERRED(als_change_deferred);
-
-static void check_als(void)
-{
-	if (als_enable && als_det_enable) {
-		hook_call_deferred(&als_change_deferred_data, 0);
-	}
-}
-DECLARE_HOOK(HOOK_SECOND, check_als, HOOK_PRIO_DEFAULT);
