@@ -212,29 +212,6 @@ class BinmanPacker(BasePacker):
         with open(version_file_path, "w", encoding="utf-8") as version_file:
             version_file.write(version_string[:31].ljust(32, "\0"))
 
-        # Binman needs any C compiler to use as a C preprocessor.  Find one.
-        for path in [
-            os.environ.get("BUILD_CC"),
-            os.environ.get("CC"),
-            "/usr/bin/x86_64-pc-linux-gnu-clang",
-            "clang",
-            "gcc",
-        ]:
-            if path:
-                cpp = shutil.which(path)
-                if cpp:
-                    break
-        else:
-            raise OSError(
-                "Unable to find any C compiler for binman to use as a "
-                "preprocessor.  Try setting BUILD_CC in the environment."
-            )
-
-        env = {
-            "CC": cpp,
-            "DTC": str(util.get_tool_path("dtc")),
-        }
-
         proc = jobclient.popen(
             [
                 util.get_tool_path("python3.8"),
@@ -249,7 +226,6 @@ class BinmanPacker(BasePacker):
                 work_dir,
             ],
             cwd=work_dir,
-            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             encoding="utf-8",
