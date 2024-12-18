@@ -12,9 +12,6 @@
 #include "gpios.dtsi"
 #include "include/board.h"
 
-#define CHARGER_I2C i2c4
-#define PD_POW_I2C i2c1
-
 / {
 	named-gpios {
 		/*

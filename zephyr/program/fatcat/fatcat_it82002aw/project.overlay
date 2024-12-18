@@ -19,9 +19,6 @@ i2c3ALT: &i2c3 {
 #include "generated.dtsi"
 #include "include/board.h"
 
-#define CHARGER_I2C i2c4
-#define PD_POW_I2C i2c1
-
 / {
 	named-gpios {
 		/*
@@ -38,10 +35,6 @@ i2c3ALT: &i2c3 {
 	};
 };
 
-#include "../../intelrvp/ptlrvp/i2c.dtsi"
-#include "../../intelrvp/ptlrvp/keyboard.dtsi"
-#include "../../intelrvp/ptlrvp/power_signals.dtsi"
-
 #include "adc.dtsi"
 #include "console.dtsi"
 #include "gpios.dtsi"
@@ -50,6 +43,10 @@ i2c3ALT: &i2c3 {
 #include "interrupts.dtsi"
 #include "keyboard.dtsi"
 #include "pwm.dtsi"
+
+#include "../../intelrvp/ptlrvp/i2c.dtsi"
+#include "../../intelrvp/ptlrvp/keyboard.dtsi"
+#include "../../intelrvp/ptlrvp/power_signals.dtsi"
 
 /* these need to be promoted to program.conf */
 

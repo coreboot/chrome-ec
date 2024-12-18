@@ -4,7 +4,7 @@
  */
 
 /* charger */
-&CHARGER_I2C {
+charger_i2c: &i2c2_0 {
 	pinctrl-0 = <&i2c2_0_sda_scl_gp91_92>;
 	pinctrl-names = "default";
 };
@@ -14,7 +14,7 @@
 };
 
 /* typec-aic1-power */
-&PD_POW_I2C {
+pd_pow_i2c: &i2c0_0 {
 	pinctrl-0 = <&i2c0_0_sda_scl_gpb4_b5>;
 	pinctrl-names = "default";
 };

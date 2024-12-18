@@ -15,11 +15,6 @@
 #define PWR_PCH_PWROK &gpio6 1
 #define PWR_ALL_SYS_PWRGD &gpio6 3
 
-/* I2C Ports */
-#define CHARGER_I2C i2c2_0
-
-#define PD_POW_I2C i2c0_0
-
 /* PD Interrupts */
 #define PD_POW_IRQ_GPIO &gpiof 0
 

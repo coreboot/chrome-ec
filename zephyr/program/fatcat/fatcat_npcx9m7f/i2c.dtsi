@@ -24,7 +24,7 @@
 	status = "okay";
 };
 
-&i2c0_0 {
+pd_pow_i2c: &i2c0_0 {
 	label = "I2C_PORT_PD";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 };
@@ -33,7 +33,7 @@
 	status = "okay";
 };
 
-&i2c2_0 {
+charger_i2c: &i2c2_0 {
 	label = "I2C_PORT_SMB_BS";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 };

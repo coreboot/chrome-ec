@@ -16,11 +16,6 @@
 #define PWR_ALL_SYS_PWRGD MCHP_GPIO_DECODE_057
 #define PWR_SYS_RST MCHP_GPIO_DECODE_224
 
-/* I2C Ports */
-/* TODO: Eliminate the I2C macros b/384773566 */
-#define CHARGER_I2C i2c_smb_0
-#define PD_POW_I2C i2c_smb_1
-
 /* PD Interrupts */
 #define PD_POW_IRQ_GPIO MCHP_GPIO_DECODE_143
 

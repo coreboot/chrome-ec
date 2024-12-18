@@ -28,9 +28,6 @@
 #define PWR_PCH_PWROK &gpio6 1
 #define PWR_ALL_SYS_PWRGD &gpio6 3
 
-#define CHARGER_I2C i2c2_0
-#define PD_POW_I2C i2c0_0
-
 #include "../../intelrvp/ptlrvp/power_signals.dtsi"
 #include "../../intelrvp/ptlrvp/i2c.dtsi"
 #include "../../intelrvp/ptlrvp/keyboard.dtsi"
