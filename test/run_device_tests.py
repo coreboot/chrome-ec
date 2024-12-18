@@ -450,7 +450,7 @@ class Renode(Platform):
             if test_name in [
                 "exception",
                 "libcxx",
-                "rtc_stm32f4",
+                "rtc_stm32f4",  # TODO(b/384991107)
                 "timer_dos",  # TODO(b/374798079)
             ]:
                 return True
