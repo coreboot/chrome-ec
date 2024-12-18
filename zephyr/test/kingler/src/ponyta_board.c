@@ -39,6 +39,12 @@ FAKE_VALUE_FUNC(int, clock_get_freq);
 FAKE_VALUE_FUNC(int, cros_cbi_get_fw_config, enum cbi_fw_config_field_id,
 		uint32_t *);
 
+static void ponyta_before(void *fixture)
+{
+	RESET_FAKE(clock_get_freq);
+	RESET_FAKE(cros_cbi_get_fw_config);
+}
+
 int mock_cros_cbi_get_fw_config_clamshell(enum cbi_fw_config_field_id field_id,
 					  uint32_t *value)
 {
@@ -80,7 +86,8 @@ static void *clamshell_setup(void)
 	return NULL;
 }
 
-ZTEST_SUITE(ponyta_clamshell, NULL, clamshell_setup, NULL, NULL, teardown);
+ZTEST_SUITE(ponyta_clamshell, NULL, clamshell_setup, ponyta_before, NULL,
+	    teardown);
 
 ZTEST(ponyta_clamshell, test_gmr_tablet_switch_disabled)
 {
@@ -164,7 +171,8 @@ static void *use_alt_sensor_setup(void)
 	return NULL;
 }
 
-ZTEST_SUITE(use_alt_sensor, NULL, use_alt_sensor_setup, NULL, NULL, teardown);
+ZTEST_SUITE(use_alt_sensor, NULL, use_alt_sensor_setup, ponyta_before, NULL,
+	    teardown);
 
 ZTEST(use_alt_sensor, test_use_alt_sensor)
 {
@@ -200,7 +208,8 @@ static void *no_alt_sensor_setup(void)
 	return NULL;
 }
 
-ZTEST_SUITE(no_alt_sensor, NULL, no_alt_sensor_setup, NULL, NULL, teardown);
+ZTEST_SUITE(no_alt_sensor, NULL, no_alt_sensor_setup, ponyta_before, NULL,
+	    teardown);
 
 ZTEST(no_alt_sensor, test_no_alt_sensor)
 {
@@ -217,7 +226,7 @@ ZTEST(no_alt_sensor, test_no_alt_sensor)
 	zassert_equal(interrupt_id, 1, "interrupt_id=%d", interrupt_id);
 }
 
-ZTEST_SUITE(customize_vol_up_key, NULL, NULL, NULL, NULL, teardown);
+ZTEST_SUITE(customize_vol_up_key, NULL, NULL, ponyta_before, NULL, teardown);
 
 ZTEST(customize_vol_up_key, test_customize_vol_up_key)
 {

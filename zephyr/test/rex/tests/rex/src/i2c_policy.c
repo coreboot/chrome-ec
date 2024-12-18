@@ -109,6 +109,8 @@ ZTEST_USER(i2c_policy, test_allow_c1_usb3_only)
 
 static void i2c_policy_before(void *fixture)
 {
+	RESET_FAKE(cros_cbi_get_fw_config);
+
 	cros_cbi_get_fw_config_fake.custom_fake =
 		mock_cros_cbi_get_fw_config_no_usb_db;
 }
