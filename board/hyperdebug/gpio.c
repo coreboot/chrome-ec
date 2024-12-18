@@ -119,14 +119,49 @@
 /* Number of concurrent gpio monitoring operations supported. */
 #define NUM_CYCLIC_BUFFERS 3
 
+/*
+ * Declaration of registers for STM32 low power timers
+ */
+struct lptimer_ctlr {
+	unsigned int isr;
+	unsigned int icr;
+	unsigned int ier;
+	unsigned int cfgr;
+
+	unsigned int cr;
+	unsigned int cmp;
+	unsigned int arr;
+	unsigned int cnt;
+
+	unsigned int option_register;
+	unsigned int reserved;
+	unsigned int rcr;
+};
+/* Must be volatile, or compiler optimizes out repeated accesses */
+typedef volatile struct lptimer_ctlr lptimer_ctlr_t;
+
 struct pwm_pin_t {
-	timer_ctlr_t *timer_regs;
+	void *timer_regs;
+	bool is_lp_timer;
 	uint8_t timer_no;
 	uint8_t channel; /* Range 1 - 4 */
 	uint8_t pad_alternate_function;
 };
 
-#define PWM_TIMER(N) (timer_ctlr_t *)STM32_TIM_BASE(N), PWM_TIMER_##N
+/*
+ * Rather arbitrarily pretend the low power timers are numbered 11 - 13 (the
+ * STM32L5 has a "gap" in the numbering of its non-low power timer, so this does
+ * not create conflicts.
+ *
+ * A single numbering scheme is required in order to index into the array
+ * timer_pwm_use.
+ */
+#define PWM_LPTIMER_1 11
+#define PWM_LPTIMER_2 12
+#define PWM_LPTIMER_3 13
+
+#define PWM_TIMER(N) (void *)STM32_TIM_BASE(N), false, PWM_TIMER_##N
+#define PWM_LPTIMER(N) (void *)STM32_LPTIM_BASE(N), true, PWM_LPTIMER_##N
 
 /* Sparse array of PWM capabilities for GPIO pins. */
 const struct pwm_pin_t pwm_pins[GPIO_COUNT] = {
@@ -166,9 +201,16 @@ const struct pwm_pin_t pwm_pins[GPIO_COUNT] = {
 	[GPIO_CN12_42] = { PWM_TIMER(15), 2, 14 }, /* PF10 */
 	[GPIO_CN10_33] = { PWM_TIMER(16), 1, 14 }, /* PE0 */
 	[GPIO_CN11_61] = { PWM_TIMER(17), 1, 14 }, /* PE1 */
+	[GPIO_CN9_13] = { PWM_LPTIMER(1), 1, 1 }, /* PB2 */
+	[GPIO_CN11_64] = { PWM_LPTIMER(1), 1, 1 }, /* PG15 */
+	[GPIO_CN7_9] = { PWM_LPTIMER(2), 1, 14 }, /* PA4 */
+	[GPIO_CN8_16] = { PWM_LPTIMER(3), 1, 2 }, /* PF5 */
+	[GPIO_CN9_5] = { PWM_LPTIMER(3), 1, 2 }, /* PC3 */
+	[GPIO_CN10_15] = { PWM_LPTIMER(3), 1, 2 }, /* PB10 */
 };
 
 #undef PWM_TIMER
+#undef PWM_LPTIMER
 
 struct timer_pwm_use_t {
 	/*
@@ -1973,6 +2015,93 @@ static void disable_timer_output_channel(int gpio, bool last)
 	__hw_timer_enable_clock(timer_no, 0);
 }
 
+/* Enable clock to low power timer. */
+static void lptimer_enable_clock(int timer_no)
+{
+	switch (timer_no) {
+	case PWM_LPTIMER_1:
+		STM32_RCC_APB1ENR |= STM32_RCC_APB1ENR1_LPTIM1EN;
+		break;
+	case PWM_LPTIMER_2:
+		STM32_RCC_APB1ENR2 |= STM32_RCC_APB1ENR2_LPTIM2EN;
+		break;
+	case PWM_LPTIMER_3:
+		STM32_RCC_APB1ENR2 |= STM32_RCC_APB1ENR2_LPTIM3EN;
+		break;
+	}
+}
+
+/* Disable clock to low power timer. */
+static void lptimer_disable_clock(int timer_no)
+{
+	switch (timer_no) {
+	case PWM_LPTIMER_1:
+		STM32_RCC_APB1ENR &= ~STM32_RCC_APB1ENR1_LPTIM1EN;
+		break;
+	case PWM_LPTIMER_2:
+		STM32_RCC_APB1ENR2 &= ~STM32_RCC_APB1ENR2_LPTIM2EN;
+		break;
+	case PWM_LPTIMER_3:
+		STM32_RCC_APB1ENR2 &= ~STM32_RCC_APB1ENR2_LPTIM3EN;
+		break;
+	}
+}
+
+/*
+ * Turn on the low power timer associated with the given pin, and set it up to
+ * repeat every "period" clock cycles (of the peripheral clock).
+ */
+static enum timer_setup_err_t setup_lptimer(int gpio, uint32_t prescaler,
+					    uint64_t period)
+{
+	const int timer_no = pwm_pins[gpio].timer_no;
+	lptimer_ctlr_t *const tim = pwm_pins[gpio].timer_regs;
+
+	/* Enable clock to low power timer. */
+	lptimer_enable_clock(timer_no);
+
+	/* Enable timer, must be done before modifying other registers. */
+	tim->cr = BIT(0);
+
+	int scale = 31 - __builtin_clz(prescaler);
+	if (scale > 7)
+		return TIMER_SETUP_OUT_OF_RANGE;
+	tim->cfgr = scale << 9 | BIT(21);
+
+	tim->arr = DIV_ROUND_NEAREST(period, prescaler) - 1;
+	return TIMER_SETUP_SUCCESS;
+}
+
+/*
+ * Enable PWM output for the given pin, such that the output will be high for
+ * "high_count" clock cycles (of the peripheral clock), and low for the
+ * remaining part of the timer period.
+ */
+static void enable_lptimer_output_channel(int gpio, uint32_t prescaler,
+					  uint64_t high_count)
+{
+	lptimer_ctlr_t *const tim = pwm_pins[gpio].timer_regs;
+
+	tim->cmp = DIV_ROUND_NEAREST(high_count, prescaler) - 1;
+
+	/* Start timer */
+	tim->cr |= BIT(2);
+}
+
+/*
+ * Disable PWM output for the given pin, (and turn off the timer, if no other
+ * outputs are currently using it).
+ */
+static void disable_lptimer_output_channel(int gpio, bool last)
+{
+	/*
+	 * Low power timers have only a single output channel, so disabling one
+	 * output channel can always be safely achieved simply by shutting down
+	 * the timer.
+	 */
+	lptimer_disable_clock(pwm_pins[gpio].timer_no);
+}
+
 static int command_gpio_pwm(int argc, const char **argv)
 {
 	if (argc < 4)
@@ -1998,13 +2127,17 @@ static int command_gpio_pwm(int argc, const char **argv)
 		timer_pwm_use[timer_no]
 			.channel_pin[(pwm_pins[gpio].channel - 1)] = GPIO_COUNT;
 		bool last = !--timer_pwm_use[timer_no].num_channels_in_use;
-		disable_timer_output_channel(gpio, last);
+		pwm_pins[gpio].is_lp_timer ?
+			disable_lptimer_output_channel(gpio, last) :
+			disable_timer_output_channel(gpio, last);
 		return EC_SUCCESS;
 	}
 
 	if (argc < 5)
 		return EC_ERROR_PARAM_COUNT;
-	const uint32_t timer_freq = clock_get_timer_freq();
+	const uint32_t timer_freq = pwm_pins[gpio].is_lp_timer ?
+					    clock_get_apb_freq() :
+					    clock_get_timer_freq();
 	char *e;
 	uint64_t desired_period_ns = strtoull(argv[3], &e, 0);
 	if (*e)
@@ -2040,7 +2173,9 @@ static int command_gpio_pwm(int argc, const char **argv)
 		return EC_ERROR_PARAM2;
 	}
 
-	switch (setup_timer(gpio, prescaler, period)) {
+	switch (pwm_pins[gpio].is_lp_timer ?
+			setup_lptimer(gpio, prescaler, period) :
+			setup_timer(gpio, prescaler, period)) {
 	case TIMER_SETUP_SUCCESS:
 		break;
 	case TIMER_SETUP_OUT_OF_RANGE:
@@ -2068,7 +2203,9 @@ static int command_gpio_pwm(int argc, const char **argv)
 		panic("PWM invariant");
 	}
 
-	enable_timer_output_channel(gpio, prescaler, high_count);
+	pwm_pins[gpio].is_lp_timer ?
+		enable_lptimer_output_channel(gpio, prescaler, high_count) :
+		enable_timer_output_channel(gpio, prescaler, high_count);
 
 	if (current_pin == GPIO_COUNT) {
 		timer_pwm_use[timer_no]
@@ -2140,14 +2277,16 @@ static void gpio_reinit(void)
 
 	/* Disable any PWM */
 	for (int gpio = 0; gpio < GPIO_COUNT; gpio++) {
-		timer_ctlr_t *const tim = pwm_pins[gpio].timer_regs;
-		if (!tim)
+		if (!pwm_pins[gpio].timer_regs)
 			continue;
 
-		/* Clear output enable bit for this channel. */
-		tim->ccer &= ~(1U << ((pwm_pins[gpio].channel - 1) * 4));
-		/* Stop the timer. */
-		tim->cr1 = 0x0000;
+		/* Disable timer clock. */
+		const int timer_no = pwm_pins[gpio].timer_no;
+		if (pwm_pins[gpio].is_lp_timer) {
+			lptimer_disable_clock(timer_no);
+		} else {
+			__hw_timer_enable_clock(timer_no, 0);
+		}
 	}
 	for (int i = 0; i < sizeof(timer_pwm_use) / sizeof(timer_pwm_use[0]);
 	     i++) {
