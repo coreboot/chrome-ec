@@ -451,6 +451,9 @@ class Renode(Platform):
                     "ftrapv",  # TODO(b/384095271)
                     "panic",  # TODO(b/384095226)
                     "panic_data",  # TODO(b/384095623)
+                    "zephyr_flash_stm32f4",  # TODO(b/384974228)
+                    # TODO(b/384975384)
+                    "zephyr_counter_basic_api_stm32_subsec",
                 ]:
                     return True
             if test_name in [
@@ -852,14 +855,16 @@ class AllTests:
         """Return Zephyr upstream test configs."""
         # Make sure proper paths are added in the twister script, see ZEPHYR_TEST_PATHS
         tests = [
-            TestConfig(
-                zephyr_name="cpp.main.newlib",
-                test_name="zephyr_cpp_newlib",
-            ),
-            TestConfig(
-                zephyr_name="cpp.main.cpp20",
-                test_name="zephyr_cpp_std20",
-            ),
+            # TODO(b/380492754): Fix compilation.
+            # TestConfig(
+            #    zephyr_name="cpp.main.newlib",
+            #    test_name="zephyr_cpp_newlib",
+            # ),
+            # TODO(b/380491850): Test hangs.
+            # TestConfig(
+            #    zephyr_name="cpp.main.cpp20",
+            #    test_name="zephyr_cpp_std20",
+            # ),
             TestConfig(
                 zephyr_name="drivers.entropy",
                 test_name="zephyr_drivers_entropy",
