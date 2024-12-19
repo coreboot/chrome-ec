@@ -9,35 +9,101 @@
 		/*
 		 * FW_CONFIG field to defined for THERMAL SOLUTION.
 		 */
-		thermal-solution {
-			enum-name = "FW_THERMAL_SOLUTION";
+		form-factor {
+			enum-name = "FORM_FACTOR";
 			start = <0>;
 			size = <1>;
 
-			thermal-solution-6w {
+			form-factor-clamshell {
 				compatible = "cros-ec,cbi-fw-config-value";
-				enum-name = "FW_THERMAL_SOLUTION_6W";
+				enum-name = "FORM_FACTOR_CLAMSHELL";
 				value = <0>;
+				default;
 			};
-			thermal-solution-15w {
+			form-factor-convertible {
 				compatible = "cros-ec,cbi-fw-config-value";
-				enum-name = "FW_THERMAL_SOLUTION_15W";
+				enum-name = "FORM_FACTOR_CONVERTIBLE";
 				value = <1>;
 			};
 		};
-
-		/*
-		 * FW_CONFIG field to defined for KB TYPE.
-		 */
-		kb-type {
-			enum-name = "FW_KB_TYPE";
+		db-cellular {
+			enum-name = "DB_CELLULAR";
 			start = <1>;
+			size = <2>;
+
+			cellular-absent {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "CELLULAR_ABSENT";
+				value = <0>;
+			};
+			cellular-rw350r {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "CELLULAR_RW350R";
+				value = <1>;
+			};
+		};
+		external-vr {
+			enum-name = "EXTERNAL_VR";
+			start = <3>;
 			size = <1>;
 
-			kb-type-default {
+			cellular-present {
 				compatible = "cros-ec,cbi-fw-config-value";
-				enum-name = "FW_KB_TYPE_DEFAULT";
+				enum-name = "EXT_VR_PRESENT";
 				value = <0>;
+			};
+			cellular-absent {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "EXT_VR_ABSENT";
+				value = <1>;
+			};
+		};
+		touchscreen {
+			enum-name = "TOUCHSCREEN";
+			start = <4>;
+			size = <1>;
+
+			touch-present {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "TOUCHSCREEN_PRESENT";
+				value = <0>;
+			};
+			touch-absent {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "TOUCHSCREEN_ABSENT";
+				value = <1>;
+			};
+		};
+		memory-channel {
+			enum-name = "MEMORY_CHANNEL";
+			start = <5>;
+			size = <1>;
+
+			half-channel {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "HALF_CHANNEL";
+				value = <0>;
+			};
+			full-channel {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "FULL_CHANNEL";
+				value = <1>;
+			};
+		};
+		wifi-sar {
+			enum-name = "WIFI_SAR";
+			start = <6>;
+			size = <1>;
+
+			id-0 {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "ID_0";
+				value = <0>;
+			};
+			id-1 {
+				compatible = "cros-ec,cbi-fw-config-value";
+				enum-name = "ID_1";
+				value = <1>;
 			};
 		};
 	};
