@@ -67,21 +67,6 @@
 			flags = <GPIO_INT_EDGE_BOTH>;
 			handler = "lid_interrupt";
 		};
-		int_tablet_mode: tablet_mode {
-			irq-pin = <&gpio_tablet_mode_l>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "gmr_tablet_switch_isr";
-		};
-		int_imu: ec_imu {
-			irq-pin = <&gpio_imu_int_l>;
-			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "motion_interrupt";
-		};
-		int_lid_imu: lid_imu {
-			irq-pin = <&gpio_acc_int_l>;
-			flags = <GPIO_INT_EDGE_FALLING>;
-			handler = "lid_accel_interrupt";
-		};
 		int_ac_present: ac_present {
 			irq-pin = <&gpio_ec_acok_od>;
 			flags = <GPIO_INT_EDGE_BOTH>;
@@ -101,8 +86,12 @@
 
 	unused-pins {
 		compatible = "unused-gpios";
-		unused-gpios = <&gpiod 4 GPIO_INPUT_PULL_DOWN>,
+
+		unused-gpios = <&gpioa 7 GPIO_INPUT_PULL_DOWN>,
+			       <&gpioc 0 GPIO_INPUT_PULL_DOWN>,
+			       <&gpiod 4 GPIO_INPUT_PULL_DOWN>,
 			       <&gpiob 5 GPIO_INPUT_PULL_DOWN>,
+			       <&gpioj 0 GPIO_INPUT_PULL_DOWN>,
 			       <&gpioj 1 GPIO_INPUT_PULL_DOWN>;
 	};
 
@@ -208,9 +197,6 @@
 	};
 };
 
-&gpio_imu_int_l {
-	gpios = <&gpioj 0 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
-};
 &gpio_vccin_aux_vid0 {
 	gpios = <&gpiod 0 (GPIO_INPUT | GPIO_VOLTAGE_1P8)>;
 };
