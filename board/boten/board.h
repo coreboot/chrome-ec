@@ -107,9 +107,6 @@
 #define CONFIG_DYNAMIC_MOTION_SENSOR_COUNT
 #define CONFIG_BUTTONS_RUNTIME_CONFIG
 
-/* watchdog warning always on */
-#define CONFIG_IT83XX_PREWDT_ALWAYS_ENABLED
-
 #ifndef __ASSEMBLER__
 
 #include "gpio_signal.h"
