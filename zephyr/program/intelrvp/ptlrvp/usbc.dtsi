@@ -25,9 +25,16 @@
 			pd-retimer;
 			policy = <&cros_policy>;
 		};
+		port2@2 {
+			compatible = "named-usbc-port";
+			reg = <2>;
+			pdc = <&pd_pow_port2>;
+			pd-retimer;
+			policy = <&cros_policy>;
+		};
 		ppm-driver {
 			compatible = "ucsi-ppm";
-			lpm = <&pd_pow_port0 &pd_pow_port1>;
+			lpm = <&pd_pow_port0 &pd_pow_port1 &pd_pow_port2>;
 		};
 	};
 };

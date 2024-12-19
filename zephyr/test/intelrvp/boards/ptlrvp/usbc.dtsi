@@ -23,5 +23,11 @@
 			pdc = <&pd_pow_port1>;
 			policy = <&cros_policy>;
 		};
+		port2@2 {
+			compatible = "named-usbc-port";
+			reg = <2>;
+			pdc = <&pd_pow_port2>;
+			policy = <&cros_policy>;
+		};
 	};
 };
