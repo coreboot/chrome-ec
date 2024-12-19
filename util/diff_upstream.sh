@@ -44,6 +44,10 @@ for repo in "${!zephyr_repos[@]}"; do
     0aa6f11bc7563989da85774a0decaecd3b304d6a)
       upstream_commit=65cbefb
       ;;
+    # picolibc has a commit out of order
+    b25f4a47784d2c24695977c903fe114565ae2bc6)
+      upstream_commit=1c73900b79dbc02b80d09f5d637382249158e1ec
+      ;;
   esac
   echo "==============================="
   echo "Diffing ${ZEPHYR_DIR}/${repo} vs ${upstream_repo}@${upstream_branch}"
@@ -60,6 +64,7 @@ for repo in "${!zephyr_repos[@]}"; do
 
   git --no-pager diff "${upstream_commit}" ':(exclude).vpython3' \
     ':(exclude)DIR_METADATA' ':(exclude)OWNERS' ':(exclude)PRESUBMIT.cfg' \
+    ':(exclude)scripts/do-coreboot*' ':(exclude)scripts/cross-coreboot*' \
     || die "git diff failed"
 done
 
