@@ -147,11 +147,6 @@ BUILD_ASSERT(RTS54XX_GET_IC_STATUS_PROG_NAME_STR_LEN <=
  * @brief RTS54XX I2C block read command
  */
 #define RTS54XX_BLOCK_READ_CMD 0x80
-
-/* TODO: b/323371550 */
-BUILD_ASSERT(NUM_PDC_RTS54XX_PORTS <= 2,
-	     "rts54xx driver supports a maximum of 2 ports");
-
 /**
  * @brief SMbus Command struct for Realtek commands
  */
