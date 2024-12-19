@@ -126,23 +126,23 @@
 			sensor = <&temp_cpu_vr>;
 		};
 		cpu {
-			temp_host_high = <80>;
-			temp_host_halt = <83>;
-			temp_host_release_high = <77>;
+			temp_host_high = <79>;
+			temp_host_halt = <82>;
+			temp_host_release_high = <76>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_cpu>;
 		};
 		ambient {
-			temp_host_high = <70>;
-			temp_host_halt = <73>;
-			temp_host_release_high = <67>;
+			temp_host_high = <75>;
+			temp_host_halt = <78>;
+			temp_host_release_high = <72>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_ambient>;
 		};
 		charger {
-			temp_host_high = <84>;
-			temp_host_halt = <87>;
-			temp_host_release_high = <81>;
+			temp_host_high = <85>;
+			temp_host_halt = <88>;
+			temp_host_release_high = <82>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_charger>;
 		};
