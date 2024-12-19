@@ -11,6 +11,5 @@
 #include "generated.dtsi"
 #include "gpio_leds.dtsi"
 #include "keyboard.dtsi"
-#include "motionsense.dtsi"
 #include "overlay.dtsi"
 #include "power_signals.dtsi"
