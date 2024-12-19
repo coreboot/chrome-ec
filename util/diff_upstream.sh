@@ -28,7 +28,7 @@ for repo in "${!zephyr_repos[@]}"; do
   upstream_branch="${upstream[1]}"
 
   cd "${ZEPHYR_DIR}/${repo}" || die "${ZEPHYR_DIR}/${repo} not found"
-  repo start nodiffs .
+  repo start nodiffs . 2>/dev/null || die "repo start failed"
   git pull || die "git pull failed"
   upstream_commit="$(git log | sed -e '/^\s*GitOrigin-RevId:/!d' \
     -e 's/.*: //' -e 's/)$//' | head -1)"
