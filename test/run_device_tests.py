@@ -437,7 +437,6 @@ class Renode(Platform):
     ) -> bool:
         # Tests failures that are independent of the board.
         if test_name in [
-            "benchmark",  # TODO(b/384749490)
             "fpsensor_hw",  # TODO(b/384743080)
             "power_utilization",  # Can't measure power on Renode.
             "production_app_test",  # TODO(b/384740370)
@@ -597,7 +596,7 @@ class AllTests:
                 # TODO(b/365628799): Need to port to Zephyr.
                 skip_for_zephyr=True,
             ),
-            TestConfig(test_name="benchmark"),
+            TestConfig(test_name="benchmark", timeout_secs=90),
             TestConfig(test_name="boringssl_crypto"),
             TestConfig(test_name="cortexm_fpu"),
             TestConfig(test_name="crc"),
