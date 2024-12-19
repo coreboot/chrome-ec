@@ -134,7 +134,14 @@ DATA_ACCESS_VIOLATION_200A8000_REGEX = re.compile(
 This is 32K less than Helipilot's start address (0x200B0000). This corresponds
 to HELIPILOT_DATA_RAM_SIZE_BYTES being increased from 156KiB to 188KiB.
 """
+DATA_ACCESS_VIOLATION_20098000_REGEX = re.compile(
+    r"Data access violation, mfar = 20098000\r\n"
+)
+"""Gwendolin's data RAM starting address.
 
+This is 96K less than Helipilot's start address (0x200B0000). This corresponds
+to HELIPILOT_DATA_RAM_SIZE_BYTES being increased from 156KiB to 252KiB.
+"""
 
 # \r is added twice by Zephyr code.
 PRINTF_CALLED_REGEX = re.compile(r"printf called(\r){1,2}\n")
@@ -1010,6 +1017,7 @@ BUCCANEER_CONFIG.expected_fp_power = PowerUtilization(
 GWENDOLIN_CONFIG = copy.deepcopy(HELIPILOT_CONFIG)
 GWENDOLIN_CONFIG.name = GWENDOLIN
 GWENDOLIN_CONFIG.sensor_type = FPSensorType.EGIS
+GWENDOLIN_CONFIG.mpu_regex = DATA_ACCESS_VIOLATION_20098000_REGEX
 
 BOARD_CONFIGS = {
     "bloonchipper": BLOONCHIPPER_CONFIG,
