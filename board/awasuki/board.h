@@ -136,7 +136,6 @@ enum battery_type {
 	BATTERY_TYPE_COUNT,
 };
 
-int als_enable_status(void);
 void door_open_interrupt(enum gpio_signal s);
 #endif /* !__ASSEMBLER__ */
 
