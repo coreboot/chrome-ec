@@ -1853,17 +1853,6 @@ static void st_task_wait_run(void *o)
 			*voltage = cs->voltage_reading * cs->voltage_scale * 5;
 		} else {
 			len = sizeof(union connector_status_t);
-			if (cs->conn_partner_type == DEBUG_ACCESSORY_ATTACHED) {
-				union reg_status pdc_status;
-				rv = tps_rd_status(&cfg->i2c, &pdc_status);
-				if (!rv) {
-					cs->conn_partner_type =
-						(pdc_status.data_role ?
-							 UFP_ATTACHED :
-							 DFP_ATTACHED);
-				}
-			}
-
 			/* If we had previously cached the connection status
 			 * change, append those bits in GET_CONNECTOR_STATUS.
 			 * The PDC clears these after the first read but we want

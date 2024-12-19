@@ -261,9 +261,7 @@ ZTEST_USER(pdc_power_mgmt_api, test_pd_get_task_cc_state)
 		{ .in = UFP_ATTACHED, .out = PD_CC_UFP_ATTACHED },
 		{ .in = POWERED_CABLE_NO_UFP_ATTACHED, .out = PD_CC_NONE },
 		{ .in = POWERED_CABLE_UFP_ATTACHED, .out = PD_CC_UFP_ATTACHED },
-#ifndef CONFIG_TODO_B_345292002
 		{ .in = DEBUG_ACCESSORY_ATTACHED, .out = PD_CC_UFP_DEBUG_ACC },
-#endif
 		{ .in = AUDIO_ADAPTER_ACCESSORY_ATTACHED,
 		  .out = PD_CC_UFP_AUDIO_ACC },
 	};
@@ -277,9 +275,14 @@ ZTEST_USER(pdc_power_mgmt_api, test_pd_get_task_cc_state)
 		connector_status.conn_partner_type = test[i].in;
 		emul_pdc_configure_src(emul, &connector_status);
 		emul_pdc_connect_partner(emul, &connector_status);
-		zassert_true(TEST_WAIT_FOR(
-			test[i].out == pd_get_task_cc_state(TEST_PORT),
-			PDC_TEST_TIMEOUT));
+		zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
+
+		zassert_equal(test[i].out, pd_get_task_cc_state(TEST_PORT),
+			      "[%d] expecting=%d, returned=%d", i, test[i].out,
+			      pd_get_task_cc_state(TEST_PORT));
+
+		emul_pdc_disconnect(emul);
+		zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
 	}
 }
 
