@@ -22,8 +22,10 @@ static void rauru_common_init(void)
 	gpio_enable_dt_interrupt(
 		GPIO_INT_FROM_NODELABEL(int_ap_xhci_init_done));
 
+#ifndef CONFIG_BOARD_HYLIA
 	/* TODO(yllin): move this to usb redriver/retimer configure place */
 	rauru_get_sb_type();
+#endif
 
 	/* b/353712228:
 	 * Rauru's HW sets external current limit (ILIM_HIZ) to 0.9A.
@@ -39,8 +41,6 @@ DECLARE_HOOK(HOOK_INIT, rauru_common_init, HOOK_PRIO_PRE_DEFAULT);
 /* USB-A */
 void xhci_interrupt(enum gpio_signal signal)
 {
-	const int xhci_stat = gpio_get_level(signal);
-
 #ifdef USB_PORT_ENABLE_COUNT
 	enum usb_charge_mode mode = gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(
 					    gpio_ap_xhci_init_done)) ?
@@ -51,6 +51,9 @@ void xhci_interrupt(enum gpio_signal signal)
 		usb_charge_set_mode(i, mode, USB_ALLOW_SUSPEND_CHARGE);
 	}
 #endif
+
+#ifdef CONFIG_PLATFORM_EC_USB_PD_TCPMV2
+	const int xhci_stat = gpio_get_level(signal);
 
 	for (int i = 0; i < CONFIG_USB_PD_PORT_MAX_COUNT; i++) {
 		/*
@@ -67,8 +70,10 @@ void xhci_interrupt(enum gpio_signal signal)
 			pd_set_dual_role(i, PD_DRP_FORCE_SINK);
 		}
 	}
+#endif
 }
 
+#ifdef CONFIG_PLATFORM_EC_USB_PD_TCPMV2
 __override enum pd_dual_role_states pd_get_drp_state_in_s0(void)
 {
 	if (gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_ap_xhci_init_done))) {
@@ -77,6 +82,7 @@ __override enum pd_dual_role_states pd_get_drp_state_in_s0(void)
 		return PD_DRP_FORCE_SINK;
 	}
 }
+#endif
 
 #if DT_NODE_EXISTS(DT_NODELABEL(fan0))
 static void fan_low_rpm(void)

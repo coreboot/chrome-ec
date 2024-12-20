@@ -12,132 +12,52 @@
 #include "usb_mux.h"
 #include "usb_pd.h"
 #include "usb_pd_dp_hpd_gpio.h"
+#include "usbc/pdc_power_mgmt.h"
+
+#include <stdint.h>
+
+#include <zephyr/logging/log.h>
 
 #define CPRINTS(format, args...) cprints(CC_USBPD, format, ##args)
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
-
-static int active_dp_port = DP_PORT_NONE;
-
-bool rauru_is_hpd_high(enum rauru_dp_port port)
-{
-	return PD_VDO_DPSTS_HPD_LVL(dp_status[port]);
-}
-
-enum rauru_dp_port rauru_get_dp_path(void)
-{
-	return active_dp_port;
-}
-
-void rauru_detach_dp_path(enum rauru_dp_port port)
-{
-	if (port != active_dp_port) {
-		return;
-	}
-
-	for (int i = 0; i < board_get_usb_pd_port_count(); i++) {
-		if (i != port && rauru_is_hpd_high(i)) {
-			/* TODO(yllin): should set IRQ_HPD as well? */
-			rauru_set_dp_path(i);
-			return;
-		}
-	}
-
-	/* no other active port,  */
-	rauru_set_dp_path(DP_PORT_NONE);
-}
-
-void rauru_set_dp_path(enum rauru_dp_port port)
-{
-	if (port == active_dp_port) {
-		return;
-	}
-	active_dp_port = port;
-	CPRINTS("DP p%d", port);
-}
+LOG_MODULE_REGISTER(hylia_usbc, LOG_LEVEL_DBG);
 
 int svdm_get_hpd_gpio(int port)
 {
-	/* HPD is low active, inverse the result */
-	return !gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_ec_ap_dp_hpd_l));
+	const struct gpio_dt_spec *dp_in_hpd[] = {
+		GPIO_DT_FROM_NODELABEL(gpio_usb_c0_dp_in_hpd),
+		GPIO_DT_FROM_NODELABEL(gpio_usb_c1_dp_in_hpd),
+	};
+	return gpio_pin_get_dt(dp_in_hpd[port]);
 }
 
 void svdm_set_hpd_gpio(int port, int en)
 {
-	if (port != active_dp_port)
-		return;
-
-	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_ec_ap_dp_hpd_l), !en);
+	const struct gpio_dt_spec *dp_in_hpd[] = {
+		GPIO_DT_FROM_NODELABEL(gpio_usb_c0_dp_in_hpd),
+		GPIO_DT_FROM_NODELABEL(gpio_usb_c1_dp_in_hpd),
+	};
+	gpio_pin_set_dt(dp_in_hpd[port], en);
 }
 
-__override void svdm_dp_post_config(int port)
+void hylia_dp_attention(int port, uint32_t vdo_dp_status)
 {
-	mux_state_t mux_mode = svdm_dp_get_mux_mode(port);
+	int lvl = PD_VDO_DPSTS_HPD_LVL(vdo_dp_status);
+	int irq = PD_VDO_DPSTS_HPD_IRQ(vdo_dp_status);
 
-	typec_set_sbu(port, true);
-
-	dp_flags[port] |= DP_FLAGS_DP_ON;
-
-	if (port == active_dp_port) {
-		usb_mux_set(port, mux_mode, USB_SWITCH_CONNECT,
-			    polarity_rm_dts(pd_get_polarity(port)));
-		usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL |
-						 USB_PD_MUX_HPD_IRQ_DEASSERTED);
-	} else {
-		usb_mux_set(port, mux_mode & (~USB_PD_MUX_DP_ENABLED),
-			    USB_SWITCH_CONNECT,
-			    polarity_rm_dts(pd_get_polarity(port)));
-	}
-}
-
-int rauru_is_dp_muxable(enum rauru_dp_port port)
-{
-	return port == active_dp_port || active_dp_port == DP_PORT_NONE;
-}
-
-__override int svdm_dp_attention(int port, uint32_t *payload)
-{
-	int lvl = PD_VDO_DPSTS_HPD_LVL(payload[1]);
-	int irq = PD_VDO_DPSTS_HPD_IRQ(payload[1]);
 	mux_state_t mux_state, mux_mode;
 
-	mux_mode = svdm_dp_get_mux_mode(port);
-	dp_status[port] = payload[1];
+	mux_mode = pdc_power_mgmt_get_dp_mux_mode(port);
 
-	if (!rauru_is_dp_muxable(port)) {
-		/* TODO(waihong): Info user? */
-		CPRINTS("p%d: The other port is already muxed.", port);
-		return 0; /* nak */
+	if (svdm_get_hpd_gpio(port) == lvl) {
+		LOG_DBG("p%d: hpd is stable %d.", port, lvl);
+		return;
 	}
 
-	if (lvl) {
-		/* connect the DP pipeline before setting HPD if HPG high */
-		rauru_set_dp_path(port);
-		usb_mux_set(port, mux_mode, USB_SWITCH_CONNECT,
-			    polarity_rm_dts(pd_get_polarity(port)));
-	} else {
-		usb_mux_set(port, mux_mode & (~USB_PD_MUX_USB_ENABLED),
-			    USB_SWITCH_CONNECT,
-			    polarity_rm_dts(pd_get_polarity(port)));
-	}
-
-	if (chipset_in_state(CHIPSET_STATE_ANY_SUSPEND) && (irq || lvl)) {
-		/*
-		 * Wake up the AP.  IRQ or level high indicates a DP sink is now
-		 * present.
-		 */
-		if (IS_ENABLED(CONFIG_MKBP_EVENT)) {
-			pd_notify_dp_alt_mode_entry(port);
-		}
-	}
-
-	if (dp_hpd_gpio_set(port, lvl, irq) != EC_SUCCESS) {
-		return 0;
-	}
-
-	if (!lvl) {
-		/* detach DP pipeline after setting HPD */
-		rauru_detach_dp_path(port);
-	}
+	svdm_set_hpd_gpio(port, lvl);
+	LOG_DBG("p%d DP hpd %d", port, lvl);
+	usb_mux_set(port, mux_mode, USB_SWITCH_CONNECT,
+		    polarity_rm_dts(pd_get_polarity(port)));
 
 	/*
 	 * Populate MUX state before dp path mux, so we can keep the HPD status.
@@ -146,16 +66,19 @@ __override int svdm_dp_attention(int port, uint32_t *payload)
 		    (irq ? USB_PD_MUX_HPD_IRQ : USB_PD_MUX_HPD_IRQ_DEASSERTED);
 	usb_mux_hpd_update(port, mux_state);
 
-	/* ack */
-	return 1;
+	return;
 }
 
-__override void svdm_exit_dp_mode(int port)
+void hylia_set_unattached(int port)
 {
-	dp_flags[port] = 0;
-	dp_status[port] = 0;
-	dp_hpd_gpio_set(port, false, false);
-	usb_mux_hpd_update(port, USB_PD_MUX_HPD_LVL_DEASSERTED |
-					 USB_PD_MUX_HPD_IRQ_DEASSERTED);
-	rauru_detach_dp_path(port);
+	svdm_set_hpd_gpio(port, 0);
 }
+
+static void hylia_pdc_cb_init(void)
+{
+	pdc_power_mgmt_register_board_callback(PDC_BOARD_CB_UNATTACH,
+					       hylia_set_unattached);
+	pdc_power_mgmt_register_board_callback(PDC_BOARD_CB_DP_ATTENTION,
+					       hylia_dp_attention);
+}
+DECLARE_HOOK(HOOK_INIT, hylia_pdc_cb_init, HOOK_PRIO_LAST);
