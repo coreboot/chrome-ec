@@ -85,7 +85,10 @@ The connector for SWD is `J4`. It is labeled with `CORESIGHT20`.
 *** note
 **NOTE**: `SW2` on the edge of Quincy must be set to `C-SGHT`, the `JEN#`
 switch (`SW7`) must be set low, and [`CONFIG_ENABLE_JTAG_SELECTION`] must be
-enabled for the board.
+enabled for the board. If the board has not been reworked, you must reset or
+toggle the power to the board after starting `servod` to work
+around http://b/372308953. You can press `SW10` (next to the servo connector) to
+reset.
 ***
 <!-- mdformat on -->
 
