@@ -236,6 +236,11 @@ CCD needs to be [`Open`].
     combinations to enter [Recovery Mode] and re-enable [Developer Mode].
     See [this bug] for details.
     ***
+    *** note
+    **note**: Chromeboxes without a monitor turn off when the power
+    button is pressed. You can connect a monitor to the DUT keep the AP on
+    while pressing the power button for CCD open.
+    ***
 
 1.  Use the `ccd` command on the GSC console to verify the state is [`Open`]:
 

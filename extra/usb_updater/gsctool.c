@@ -306,17 +306,6 @@ struct options_map {
 	int *flag;
 };
 
-/*
- * Type of the GSC device. This is used to represent which type of GSC we are
- * connected to and to tag an image file for compatibility.
- * for downloading.
- */
-enum gsc_device {
-	GSC_DEVICE_H1,
-	GSC_DEVICE_DT,
-	GSC_DEVICE_NT,
-};
-
 /* Index to refer to a section within sections array */
 enum section {
 	RO_A,
@@ -4688,6 +4677,7 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 	size_t response_size = sizeof(boot_trace);
 	uint32_t rv;
 	uint64_t timespan = 0;
+	uint64_t absolute_ms = 0;
 	size_t i;
 
 	rv = send_vendor_command(td, VENDOR_CC_GET_BOOT_TRACE, &payload,
@@ -4701,8 +4691,11 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 	if (response_size == 0)
 		return 0; /* Trace is empty. */
 
-	if (!show_machine_output)
+	if (!show_machine_output) {
 		printf("    got %zd bytes back:\n", response_size);
+		/* Print out header for event info that follows */
+		printf("                Event   Delta     Total\n");
+	}
 	if (response_size > 0) {
 		for (i = 0; i < response_size / sizeof(uint16_t); i++) {
 			uint16_t entry = boot_trace[i];
@@ -4723,9 +4716,11 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 				timespan += (uint64_t)delta_time * MAX_TIME_MS;
 				continue;
 			}
-			printf(" %20s: %4" PRId64 " ms\n",
+			/* Accumulate the absolute time so we can report it */
+			absolute_ms += timespan + delta_time;
+			printf(" %20s %4" PRId64 " ms %6" PRId64 " ms\n",
 			       boot_tracer_stages[event_id],
-			       timespan + delta_time);
+			       timespan + delta_time, absolute_ms);
 			timespan = 0;
 		}
 		printf("\n");
@@ -4733,11 +4728,11 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 	return 0;
 }
 
-struct get_chip_id_response {
-	uint32_t tpm_vid_pid;
-	uint32_t chip_id;
-};
-
+/*
+ * Gets the chip information. Note that Cr50 does not support this command yet
+ * and calling this produces UMA alerts events even if the error is
+ * appropriately handled in this layer.
+ */
 static struct get_chip_id_response get_chip_id_info(
 	struct transfer_descriptor *td)
 {
@@ -4754,7 +4749,7 @@ static struct get_chip_id_response get_chip_id_info(
 		debug("Unexpected response size. (%zu)\n", response_size);
 	} else {
 		/* Success, convert endianness then return */
-		response.tpm_vid_pid = be32toh(response.tpm_vid_pid);
+		response.tpm_did_vid = be32toh(response.tpm_did_vid);
 		response.chip_id = be32toh(response.chip_id);
 		return response;
 	}
@@ -4769,28 +4764,30 @@ static struct get_chip_id_response get_chip_id_info(
  */
 static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 {
-	int epoch;
 	int major;
 	struct get_chip_id_response chip_id;
 
 	/*
-	 * Get the firmware version first. See if this is a specific GSC version
-	 * where the Ti50 FW does not response with an error code if the host
-	 * tries an unknown TPMV command over USB. This prevents a USB timeout
-	 * and shutting down of USB subsystem within gsctool (b/368631328).
+	 * If the major version is within the known ranges, stop there since
+	 * not all versions of Cr50 and Ti50 support the GET_CHIP_ID vendor
+	 * command, and if we call it when it isn't supported it will generate
+	 * an UMA alert even if we handle the error here (b/376500403).
+	 * There is also a USB issue to work around (b/368631328).
 	 */
 	get_version(td, false);
-	epoch = targ.shv[1].epoch;
 	major = targ.shv[1].major;
-	if ((epoch == 0 || epoch == 1) && (major >= 21 && major <= 26))
+	if (major >= 30 && major < 40)
+		return GSC_DEVICE_NT;
+	else if (major >= 20 && major < 30)
 		return GSC_DEVICE_DT;
+	else if (major < 10)
+		return GSC_DEVICE_H1;
 	/*
-	 * Try the newer TPMV command. If the command isn't supported,
-	 * then the GSC should respond with an error. If that happens we will
-	 * fall back to the GSC version as the indicator.
+	 * If the major version isn't in the known range, then use the TPMV
+	 * command, which should be supported at that point
 	 */
 	chip_id = get_chip_id_info(td);
-	switch (chip_id.tpm_vid_pid) {
+	switch (chip_id.tpm_did_vid) {
 	case 0x50666666:
 		return GSC_DEVICE_NT;
 	case 0x504a6666:
@@ -4799,21 +4796,12 @@ static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 		return GSC_DEVICE_H1;
 	}
 
-	if (chip_id.tpm_vid_pid)
+	if (chip_id.tpm_did_vid)
 		fprintf(stderr, "Unregonized VID_PID 0x%X\n",
-			chip_id.tpm_vid_pid);
+			chip_id.tpm_did_vid);
 
-	/*
-	 * If TPMV command doesn't exist or VID_PID is unrecognized then,
-	 * use the firmware version to determine type.
-	 */
-	major = targ.shv[1].major;
-	if (major >= 30 && major < 40)
-		return GSC_DEVICE_NT;
-	else if (major >= 20 && major < 30)
-		return GSC_DEVICE_DT;
-	else
-		return GSC_DEVICE_H1;
+	/* We have to pick something, but this probably isn't correct */
+	return GSC_DEVICE_H1;
 }
 
 int main(int argc, char *argv[])

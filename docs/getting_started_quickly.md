@@ -51,7 +51,7 @@ from the Chromium OS chroot:
 1.  Run
 
     ```bash
-    repo init -u https://chromium.googlesource.com/chromiumos/manifest.git --repo-url https://chromium.googlesource.com/external/repo.git -g minilayout
+    repo init https://chromium.googlesource.com/chromiumos/manifest.git -g minilayout
     ```
 
 1.  Edit `.repo/manifest.xml`, and add `groups="minilayout"` to the platform/ec
