@@ -468,7 +468,7 @@ class Renode(Platform):
                 "exception",  # TODO(b/384730599)
                 "libcxx",
                 "otp_key",  # TODO(b/385216796)
-                "ram_lock",
+                "ram_lock",  # TODO(b/385216805)
                 "rtc_npcx9",
             ]:
                 return True
