@@ -331,6 +331,13 @@ class Hardware(Platform):
         enable_hw_write_protect: bool,
         zephyr: bool,
     ) -> bool:
+        # TODO(b/372308953): Remove when all Quincy v3 have been reworked.
+        if flasher == JTRACE and board_config.name == HELIPILOT:
+            logging.info(
+                "Power cycling to work around Quincy v3 issue: b/372308953"
+            )
+            power_cycle(self, board_config)
+
         logging.info("Flashing test")
 
         cmd = []
