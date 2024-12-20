@@ -27,11 +27,12 @@ ZTEST(pdc_usb_utils, test_pd_extract_pdo_power_unclamped)
 
 	/* PDO in excess of board limits -- should not be clamped */
 	pdo = PDO_FIXED(20000 /*mV*/,
-			CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA + 1000 /*mA*/, 0);
+			CONFIG_PLATFORM_EC_USB_PD_MAX_CURRENT_MA + 1000 /*mA*/,
+			0);
 	pd_extract_pdo_power_unclamped(pdo, &ma, &max_mv, &min_mv);
 	zassert_equal(20000, min_mv);
 	zassert_equal(20000, max_mv);
-	zassert_equal(CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA + 1000, ma);
+	zassert_equal(CONFIG_PLATFORM_EC_USB_PD_MAX_CURRENT_MA + 1000, ma);
 
 	pdo = PDO_AUG(9000 /*mV*/, 15000 /*mV*/, 2000 /*mA*/);
 	pd_extract_pdo_power_unclamped(pdo, &ma, &max_mv, &min_mv);

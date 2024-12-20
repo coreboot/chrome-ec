@@ -32,7 +32,7 @@ static void board_dc_jack_handler(struct k_work *dc_jack_work)
 	/* System is booted from DC Jack */
 	if (board_is_dc_jack_present()) {
 		charge_dc_jack.current =
-			(CONFIG_PLATFORM_EC_PD_MAX_POWER_MW * 1000) /
+			(CONFIG_PLATFORM_EC_USB_PD_MAX_POWER_MW * 1000) /
 			DC_JACK_MAX_VOLTAGE_MV;
 		charge_dc_jack.voltage = DC_JACK_MAX_VOLTAGE_MV;
 	} else {

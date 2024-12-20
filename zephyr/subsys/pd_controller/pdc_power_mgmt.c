@@ -812,17 +812,17 @@ static const uint32_t pdo_snk_fixed_flags =
 static const uint32_t pdc_snk_pdos[] = {
 	/* Mandatory fixed 5V PDO */
 	PDO_FIXED(5000,
-		  MIN((CONFIG_PLATFORM_EC_PD_OPERATING_POWER_MW / 5),
-		      CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA),
+		  MIN((CONFIG_PLATFORM_EC_USB_PD_OPERATING_POWER_MW / 5),
+		      CONFIG_PLATFORM_EC_USB_PD_MAX_CURRENT_MA),
 		  pdo_snk_fixed_flags),
 	/* Battery PDO covering 5V-5% to the board maximum voltage and current
 	 */
-	PDO_BATT(4750, CONFIG_PLATFORM_EC_PD_MAX_VOLTAGE_MV,
-		 CONFIG_PLATFORM_EC_PD_OPERATING_POWER_MW),
+	PDO_BATT(4750, CONFIG_PLATFORM_EC_USB_PD_MAX_VOLTAGE_MV,
+		 CONFIG_PLATFORM_EC_USB_PD_OPERATING_POWER_MW),
 	/* Variable PDO covering 5V-5% to the board maximum voltage and current
 	 */
-	PDO_VAR(4750, CONFIG_PLATFORM_EC_PD_MAX_VOLTAGE_MV,
-		CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA),
+	PDO_VAR(4750, CONFIG_PLATFORM_EC_USB_PD_MAX_VOLTAGE_MV,
+		CONFIG_PLATFORM_EC_USB_PD_MAX_CURRENT_MA),
 };
 
 static const struct smf_state pdc_states[];
@@ -969,12 +969,13 @@ static struct pdc_data_t *pdc_data[] = { DT_INST_FOREACH_STATUS_OKAY(
  * @brief As a sink, this is the max voltage (in millivolts) we can request
  *        before getting source caps
  */
-static uint32_t pdc_max_request_mv = CONFIG_PLATFORM_EC_PD_MAX_VOLTAGE_MV;
+static uint32_t pdc_max_request_mv = CONFIG_PLATFORM_EC_USB_PD_MAX_VOLTAGE_MV;
 
 /**
  * @brief As a sink, this is the max power (in milliwatts) needed to operate
  */
-static uint32_t pdc_max_operating_power = CONFIG_PLATFORM_EC_PD_MAX_POWER_MW;
+static uint32_t pdc_max_operating_power =
+	CONFIG_PLATFORM_EC_USB_PD_MAX_POWER_MW;
 
 static enum pdc_state_t get_pdc_state(struct pdc_port_t *port)
 {
@@ -2191,7 +2192,7 @@ static void pdc_snk_attached_run(void *obj)
 		 * manager are given the correct board operating current.
 		 */
 		max_ma = MIN(PDO_FIXED_GET_CURR(port->snk_policy.pdo),
-			     CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA);
+			     CONFIG_PLATFORM_EC_USB_PD_MAX_CURRENT_MA);
 		max_mv = PDO_FIXED_GET_VOLT(port->snk_policy.pdo);
 		max_mw = max_ma * max_mv / 1000;
 
@@ -2223,7 +2224,7 @@ static void pdc_snk_attached_run(void *obj)
 		return;
 	case SNK_ATTACHED_START_CHARGING:
 		max_ma = MIN(PDO_FIXED_GET_CURR(port->snk_policy.pdo),
-			     CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA);
+			     CONFIG_PLATFORM_EC_USB_PD_MAX_CURRENT_MA);
 		max_mv = PDO_FIXED_GET_VOLT(port->snk_policy.pdo);
 		max_mw = max_ma * max_mv / 1000;
 

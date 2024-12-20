@@ -106,7 +106,7 @@ ZTEST_USER(test_dc_jack, test_charger_jack_init_present)
 
 	/* Since dc jack gpio is set in test_board_is_dc_jack_present port
 	 * current will be non zero */
-	zassert_equal((CONFIG_PLATFORM_EC_PD_MAX_POWER_MW * 1000) /
+	zassert_equal((CONFIG_PLATFORM_EC_USB_PD_MAX_POWER_MW * 1000) /
 			      DC_JACK_MAX_VOLTAGE_MV,
 		      port_info.current, "port current:%d", port_info.current);
 	zassert_equal(DC_JACK_MAX_VOLTAGE_MV, port_info.voltage,
@@ -154,7 +154,7 @@ ZTEST_USER(test_dc_jack, test_charger_jack_interrupt)
 	/* Delay to process interrupt */
 	k_sleep(K_MSEC(500));
 
-	zassert_equal((CONFIG_PLATFORM_EC_PD_MAX_POWER_MW * 1000) /
+	zassert_equal((CONFIG_PLATFORM_EC_USB_PD_MAX_POWER_MW * 1000) /
 			      DC_JACK_MAX_VOLTAGE_MV,
 		      port_info.current, "port current:%d", port_info.current);
 	zassert_equal(DC_JACK_MAX_VOLTAGE_MV, port_info.voltage,

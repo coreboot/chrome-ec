@@ -2328,9 +2328,9 @@ ZTEST_USER(pdc_power_mgmt_api_eval_src_pdos, test_board_values)
 	/* Check assumed board values. If these change, the test cases
 	 * following might need adjustment since the PDO evaluation function
 	 */
-	zassert_equal(20000, CONFIG_PLATFORM_EC_PD_MAX_VOLTAGE_MV);
-	zassert_equal(3000, CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA);
-	zassert_equal(60000, CONFIG_PLATFORM_EC_PD_MAX_POWER_MW);
+	zassert_equal(20000, CONFIG_PLATFORM_EC_USB_PD_MAX_VOLTAGE_MV);
+	zassert_equal(3000, CONFIG_PLATFORM_EC_USB_PD_MAX_CURRENT_MA);
+	zassert_equal(60000, CONFIG_PLATFORM_EC_USB_PD_MAX_POWER_MW);
 }
 
 ZTEST_USER(pdc_power_mgmt_api_eval_src_pdos, test_fallback_pdo)

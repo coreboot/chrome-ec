@@ -1227,7 +1227,7 @@ static void cmd_set_rdo(struct pdc_data_t *data)
 	if ((pdo & PDO_TYPE_MASK) == PDO_TYPE_BATTERY) {
 		max_v = PDO_BATT_GET_MAX_VOLT(pdo);
 		min_v = PDO_BATT_GET_MIN_VOLT(pdo);
-		max_a = CONFIG_PLATFORM_EC_PD_MAX_CURRENT_MA / 10;
+		max_a = CONFIG_PLATFORM_EC_USB_PD_MAX_CURRENT_MA / 10;
 		min_power = PDO_BATT_GET_OP_POWER(pdo);
 	} else {
 		max_v = min_v = PDO_FIXED_GET_VOLT(pdo);
@@ -1243,7 +1243,7 @@ static void cmd_set_rdo(struct pdc_data_t *data)
 	an_snk.auto_neg_max_voltage = max_v / 50;
 	an_snk.auto_neg_min_voltage = min_v / 50;
 	an_snk.auto_neg_capabilities_mismach_power =
-		CONFIG_PLATFORM_EC_PD_MAX_POWER_MW / 250;
+		CONFIG_PLATFORM_EC_USB_PD_MAX_POWER_MW / 250;
 
 	rv = tps_rw_autonegotiate_sink(&cfg->i2c, &an_snk, I2C_MSG_WRITE);
 	if (rv) {
