@@ -469,7 +469,7 @@ class Renode(Platform):
                 "libcxx",
                 "otp_key",  # TODO(b/385216796)
                 "ram_lock",  # TODO(b/385216805)
-                "rtc_npcx9",
+                "rtc_npcx9",  # TODO(b/385217282)
             ]:
                 return True
 
