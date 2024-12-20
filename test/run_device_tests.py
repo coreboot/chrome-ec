@@ -446,6 +446,9 @@ class Renode(Platform):
                     return True
                 if zephyr and test_name in [
                     "abort",  # TODO(b/384094781)
+                    # TODO(b/382705460): We have seen this flake in the CQ.
+                    # Re-enable when missing character bug is fixed.
+                    "flash_physical",
                     "fp_transport",  # TODO(b/384094788)
                     "fpsensor_debug",  # TODO(b/384110894)
                     "ftrapv",  # TODO(b/384095271)
