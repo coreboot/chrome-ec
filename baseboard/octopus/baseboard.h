@@ -249,10 +249,10 @@
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 250000 /* us */
 
 /* TODO(b/76218141): Use correct PD power values */
-#define PD_OPERATING_POWER_MW 15000
-#define PD_MAX_POWER_MW 45000
-#define PD_MAX_CURRENT_MA 3000
-#define PD_MAX_VOLTAGE_MV 20000
+#define CONFIG_USB_PD_OPERATING_POWER_MW 15000
+#define CONFIG_USB_PD_MAX_POWER_MW 45000
+#define CONFIG_USB_PD_MAX_CURRENT_MA 3000
+#define CONFIG_USB_PD_MAX_VOLTAGE_MV 20000
 
 /*******************************************************************************
  * USB-A Configs

@@ -159,10 +159,10 @@
 #define PD_POWER_SUPPLY_TURN_OFF_DELAY 50000 /* us */
 
 /* Define typical operating power and max power */
-#define PD_OPERATING_POWER_MW 15000
-#define PD_MAX_POWER_MW 60000
-#define PD_MAX_CURRENT_MA 3000
-#define PD_MAX_VOLTAGE_MV 20000
+#define CONFIG_USB_PD_OPERATING_POWER_MW 15000
+#define CONFIG_USB_PD_MAX_POWER_MW 60000
+#define CONFIG_USB_PD_MAX_CURRENT_MA 3000
+#define CONFIG_USB_PD_MAX_VOLTAGE_MV 20000
 /*
  * Define PDO selection logic for SourceCap.
  * On a 45W PD charger, it might provide PDOs with 15V/3A and 20V/2.25A.

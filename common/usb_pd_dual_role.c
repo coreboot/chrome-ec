@@ -20,7 +20,7 @@
  * As a sink, this is the max voltage (in millivolts) we can request
  * before getting source caps
  */
-static unsigned int max_request_mv = PD_MAX_VOLTAGE_MV;
+static unsigned int max_request_mv = CONFIG_USB_PD_MAX_VOLTAGE_MV;
 
 void pd_set_max_voltage(unsigned int mv)
 {
@@ -65,7 +65,7 @@ int pd_find_pdo_index(uint32_t src_cap_cnt, const uint32_t *const src_caps,
 	int __attribute__((unused)) cur_mv = 0;
 
 	/* max voltage is always limited by this boards max request */
-	max_mv = MIN(max_mv, PD_MAX_VOLTAGE_MV);
+	max_mv = MIN(max_mv, CONFIG_USB_PD_MAX_VOLTAGE_MV);
 
 	/* Get max power that is under our max voltage input */
 	for (i = 0; i < src_cap_cnt; i++) {
@@ -95,13 +95,13 @@ int pd_find_pdo_index(uint32_t src_cap_cnt, const uint32_t *const src_caps,
 		} else {
 			int ma = PDO_FIXED_GET_CURR(src_caps[i]);
 
-			ma = MIN(ma, PD_MAX_CURRENT_MA);
+			ma = MIN(ma, CONFIG_USB_PD_MAX_CURRENT_MA);
 			uw = ma * mv;
 		}
 
 		if (mv > max_mv)
 			continue;
-		uw = MIN(uw, PD_MAX_POWER_MW * 1000);
+		uw = MIN(uw, CONFIG_USB_PD_MAX_POWER_MW * 1000);
 		prefer_cur = 0;
 
 		/* Apply special rules in favor of voltage  */
@@ -219,7 +219,7 @@ void pd_build_request(int32_t vpd_vdo, uint32_t *rdo, uint32_t *ma,
 
 	uw = *ma * *mv;
 	/* Mismatch bit set if less power offered than the operating power */
-	if (uw < (1000 * PD_OPERATING_POWER_MW))
+	if (uw < (1000 * CONFIG_USB_PD_OPERATING_POWER_MW))
 		flags |= RDO_CAP_MISMATCH;
 
 	/* b:271612382S has more details. */

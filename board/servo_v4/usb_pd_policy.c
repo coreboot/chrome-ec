@@ -141,7 +141,7 @@ static uint8_t allow_dr_swap = 1;
 static uint32_t max_supported_voltage(void)
 {
 	int board_max_mv = board_get_version() >= BOARD_VERSION_BLACK ?
-				   PD_MAX_VOLTAGE_MV :
+				   CONFIG_USB_PD_MAX_VOLTAGE_MV :
 				   MAX_MV_RED_BLUE;
 
 	return board_max_mv < user_limited_max_mv ? board_max_mv :

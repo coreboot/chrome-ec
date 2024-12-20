@@ -733,8 +733,9 @@ __overridable enum battery_disconnect_state battery_get_disconnect_state(void)
 #ifdef CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV
 
 #if CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV < 5000 || \
-	CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV >= PD_MAX_VOLTAGE_MV
-#error "Voltage limit must be between 5000 and PD_MAX_VOLTAGE_MV"
+	CONFIG_BATT_FULL_CHIPSET_OFF_INPUT_LIMIT_MV >=    \
+		CONFIG_USB_PD_MAX_VOLTAGE_MV
+#error "Voltage limit must be between 5000 and CONFIG_USB_PD_MAX_VOLTAGE_MV"
 #endif
 
 #if !((defined(CONFIG_USB_PD_TCPMV1) && defined(CONFIG_USB_PD_DUAL_ROLE)) || \

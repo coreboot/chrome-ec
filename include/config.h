@@ -4816,9 +4816,9 @@
  *
  * The default SNK PDOs are:
  * - Fixed 5V/500mA with the same PDO_FIXED_FLAGS
- * - Variable (non-battery) min 4.75V, max PD_MAX_VOLTAGE_MV, operational
- *   current 3A
- * - Battery min 4.75V, max PD_MAX_VOLTAGE_MV, operational power 15W
+ * - Variable (non-battery) min 4.75V, max CONFIG_USB_PD_MAX_VOLTAGE_MV,
+ *   operational current 3A
+ * - Battery min 4.75V, max CONFIG_USB_PD_MAX_VOLTAGE_MV, operational power 15W
  */
 #undef CONFIG_USB_PD_CUSTOM_PDO
 
@@ -6303,6 +6303,42 @@
 	defined(CONFIG_PLATFORM_EC_USB_PD_CONTROLLER))))
 #error "Retimer firmware update requires TCPMv2 and USBC_SS_MUX, or " \
 	"USB PD controller."
+#endif
+
+/* Set default USB PD power levels unless already defined by the platform. */
+/*
+ * Base configuration for PD power operating power value, which is used
+ * in PD negotiation. The final PD parameter used in negotiation is
+ * affected by CONFIG_USB_PD_MAX_POWER_MW,
+ * CONFIG_USB_PD_MAX_CURRENT_MA, and CONFIG_USB_PD_MAX_VOLTAGE_MV.
+ * Increase this value is the system requires more than 15 watts to boot
+ * without a battery.
+ */
+#ifndef CONFIG_USB_PD_OPERATING_POWER_MW
+#define CONFIG_USB_PD_OPERATING_POWER_MW 15000
+#endif
+
+/*
+ * The maximum PD negotiated current for the system.
+ */
+#ifndef CONFIG_USB_PD_MAX_CURRENT_MA
+#define CONFIG_USB_PD_MAX_CURRENT_MA 3000
+#endif
+
+/*
+ * The maximum PD negotiated voltage for the system.
+ */
+#ifndef CONFIG_USB_PD_MAX_VOLTAGE_MV
+#define CONFIG_USB_PD_MAX_VOLTAGE_MV 20000
+#endif
+
+/*
+ * The maximum PD negotiated power for the system. By default, this
+ * is derived from CONFIG_USB_PD_MAX_CURRENT_MA and CONFIG_PD_MAX_CURRENT_MV.
+ */
+#ifndef CONFIG_USB_PD_MAX_POWER_MW
+#define CONFIG_USB_PD_MAX_POWER_MW \
+	((CONFIG_USB_PD_MAX_CURRENT_MA * CONFIG_USB_PD_MAX_VOLTAGE_MV) / 1000)
 #endif
 
 /******************************************************************************/

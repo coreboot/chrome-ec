@@ -1643,7 +1643,7 @@ static void charge_manager_set_external_power_limit(int current_lim,
 	if (current_lim == EC_POWER_LIMIT_NONE)
 		current_lim = CHARGE_CEIL_NONE;
 	if (voltage_lim == EC_POWER_LIMIT_NONE)
-		voltage_lim = PD_MAX_VOLTAGE_MV;
+		voltage_lim = CONFIG_USB_PD_MAX_VOLTAGE_MV;
 
 	for (port = 0; port < board_get_usb_pd_port_count(); ++port) {
 		charge_manager_set_ceil(port, CEIL_REQUESTOR_HOST, current_lim);

@@ -1885,18 +1885,19 @@ int charge_set_input_current_limit(int ma, int mv)
 		charger_get_input_current_limit(chgnum, &prev_input);
 
 #ifdef CONFIG_USB_POWER_DELIVERY
-#if ((PD_MAX_POWER_MW * 1000) / PD_MAX_VOLTAGE_MV != PD_MAX_CURRENT_MA)
+#if ((CONFIG_USB_PD_MAX_POWER_MW * 1000) / CONFIG_USB_PD_MAX_VOLTAGE_MV != \
+     CONFIG_USB_PD_MAX_CURRENT_MA)
 		/*
 		 * If battery is not present, input current is set to
-		 * PD_MAX_CURRENT_MA. If the input power set is greater than
-		 * the maximum allowed system power, system might get damaged.
-		 * Hence, limit the input current to meet maximum allowed
-		 * input system power.
+		 * CONFIG_USB_PD_MAX_CURRENT_MA. If the input power set is
+		 * greater than the maximum allowed system power, system might
+		 * get damaged. Hence, limit the input current to meet maximum
+		 * allowed input system power.
 		 */
 
-		if (mv > 0 &&
-		    mv * curr.desired_input_current > PD_MAX_POWER_MW * 1000) {
-			ma = (PD_MAX_POWER_MW * 1000) / mv;
+		if (mv > 0 && mv * curr.desired_input_current >
+				      CONFIG_USB_PD_MAX_POWER_MW * 1000) {
+			ma = (CONFIG_USB_PD_MAX_POWER_MW * 1000) / mv;
 			ma = derate_input_current(ma);
 		}
 		/*

@@ -536,7 +536,7 @@ static void board_charger_init(void)
 {
 	charger_set_input_current_limit(
 		CHARGER_SOLO,
-		PD_MAX_CURRENT_MA *
+		CONFIG_USB_PD_MAX_CURRENT_MA *
 			(100 - CONFIG_CHARGER_INPUT_CURRENT_DERATE_PCT) / 100);
 }
 DECLARE_HOOK(HOOK_INIT, board_charger_init, HOOK_PRIO_DEFAULT);
