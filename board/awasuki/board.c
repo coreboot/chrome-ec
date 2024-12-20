@@ -478,3 +478,40 @@ __override const struct svdm_response svdm_rsp = {
 	 * Applicability of Structured VDM Commands.
 	 */
 };
+
+static void awasuki_charge_mode_setting(void)
+{
+	int reg = 0;
+
+	if (extpower_is_present()) {
+		if (get_chg_ctrl_mode() == CHARGE_CONTROL_IDLE) {
+			if (i2c_read16(I2C_PORT_USB_C0, I2C_ADDR_CHARGER_FLAGS,
+				       ISL923X_REG_CONTROL0,
+				       &reg) == EC_SUCCESS) {
+				if (!(reg & RAA489000_C0_VSYS_OFFSET)) {
+					reg |= RAA489000_C0_VSYS_OFFSET;
+					if (i2c_write16(I2C_PORT_USB_C0,
+							I2C_ADDR_CHARGER_FLAGS,
+							ISL923X_REG_CONTROL0,
+							reg))
+						CPRINTF("C0 ISL9238_REG_CONTROL0 write fail!");
+				}
+			}
+		} else {
+			if (i2c_read16(I2C_PORT_USB_C0, I2C_ADDR_CHARGER_FLAGS,
+				       ISL923X_REG_CONTROL0,
+				       &reg) == EC_SUCCESS) {
+				if (reg & RAA489000_C0_VSYS_OFFSET) {
+					reg &= ~RAA489000_C0_VSYS_OFFSET;
+					if (i2c_write16(I2C_PORT_USB_C0,
+							I2C_ADDR_CHARGER_FLAGS,
+							ISL923X_REG_CONTROL0,
+							reg))
+						CPRINTF("C0 ISL9238_REG_CONTROL0 write fail!");
+				}
+			}
+		}
+	}
+}
+DECLARE_HOOK(HOOK_BATTERY_SOC_CHANGE, awasuki_charge_mode_setting,
+	     HOOK_PRIO_DEFAULT);
