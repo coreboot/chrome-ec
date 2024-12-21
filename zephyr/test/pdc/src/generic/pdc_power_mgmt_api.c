@@ -48,6 +48,8 @@ bool test_pdc_power_mgmt_is_src_typec_attached_run(int port);
 /* Test-specific FFF fakes */
 FAKE_VALUE_FUNC(int, system_jumped_late);
 FAKE_VALUE_FUNC(int, chipset_in_state, int);
+FAKE_VOID_FUNC(board_unattached_cb_stub, int);
+FAKE_VOID_FUNC(board_dp_attention_cb_stub, int, uint32_t);
 
 static enum chipset_state_mask fake_chipset_state = CHIPSET_STATE_ON;
 
@@ -2204,6 +2206,43 @@ ZTEST_USER(pdc_power_mgmt_api, test_dp_mode)
 	zassert_equal(MODE_DP_PIN_C, pdc_power_mgmt_get_dp_pin_mode(TEST_PORT));
 	zassert_equal(USB_PD_MUX_DP_ENABLED,
 		      pdc_power_mgmt_get_dp_mux_mode(TEST_PORT));
+}
+
+ZTEST_USER(pdc_power_mgmt_api, test_board_callback)
+{
+	union connector_status_t in_conn_status;
+	union conn_status_change_bits_t in_conn_status_change_bits;
+	union get_attention_vdo_t attention_vdo;
+
+	/* Register board callbacks. */
+	pdc_power_mgmt_register_board_callback(PDC_BOARD_CB_DP_ATTENTION,
+					       board_dp_attention_cb_stub);
+	pdc_power_mgmt_register_board_callback(PDC_BOARD_CB_UNATTACH,
+					       board_unattached_cb_stub);
+
+	/* Connect (DP) alternate mode partner. */
+	in_conn_status_change_bits.attention = 1;
+	in_conn_status.raw_conn_status_change_bits =
+		in_conn_status_change_bits.raw_value;
+	in_conn_status.power_operation_mode = PD_OPERATION;
+	in_conn_status.conn_partner_flags =
+		CONNECTOR_PARTNER_FLAG_ALTERNATE_MODE;
+	emul_pdc_configure_src(emul, &in_conn_status);
+	emul_pdc_connect_partner(emul, &in_conn_status);
+
+	zassert_true(TEST_WAIT_FOR(pdc_power_mgmt_is_connected(TEST_PORT),
+				   PDC_TEST_TIMEOUT));
+
+	/* Trigger Attention event for callback. */
+	attention_vdo.vdo = 0x01;
+	emul_pdc_set_attention_vdo(emul, attention_vdo);
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
+	zassert_equal(board_dp_attention_cb_stub_fake.call_count, 1);
+
+	/* Trigger unattach event for callback. */
+	emul_pdc_disconnect(emul);
+	zassert_ok(pdc_power_mgmt_wait_for_sync(TEST_PORT, -1));
+	zassert_equal(board_unattached_cb_stub_fake.call_count, 1);
 }
 
 ZTEST_USER(pdc_power_mgmt_api, test_get_rdo_errors)
