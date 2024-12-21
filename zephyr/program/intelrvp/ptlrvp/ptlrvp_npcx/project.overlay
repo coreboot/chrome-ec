@@ -14,15 +14,30 @@
 #include "i2c.dts"
 #include "psl.dtsi"
 #include "../battery.dtsi"
+#include "../gsc_board.dtsi"
 #include "../i2c.dtsi"
-#include "../ioex.dtsi"
 #include "../ioex_gpio.dtsi"
 #include "../interrupts.dtsi"
-#include "../keyboard.dtsi"
 #include "../pd.dtsi"
 #include "../power_signals.dtsi"
 #include "../temp_sensor.dts"
 #include "../usbc.dtsi"
+
+/*
+ * Using IT8801 MFD driver
+ * These lines can be deleted after all PTL platforms support the MFD driver.
+ * b/386325459
+ */
+/delete-node/ &kb_discrete;
+/delete-node/ &int_ioex_kbd_intr_n;
+
+&it8801_mfd {
+	irq-gpios = <&gpio7 0 GPIO_ACTIVE_HIGH>;
+};
+
+/* TODO: Enable with Keyboard logic b/377409155 */
+/delete-node/ &int_vol_up;
+/delete-node/ &int_vol_dn;
 
 &cbi_flash {
     /*

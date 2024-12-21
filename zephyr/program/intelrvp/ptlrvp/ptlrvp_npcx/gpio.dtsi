@@ -108,9 +108,8 @@
 		c-usbc-pd-alrt-aic4 {
 			gpios = <&gpio6 7 GPIO_INPUT>;
 		};
-		ioex_kbd_intr_n: c-ioex-kbd-intr {
+		c-ioex-kbd-intr {
 			gpios = <&gpio7 0 GPIO_INPUT>;
-			enum-name = "GPIO_KB_DISCRETE_INT";
 		};
 		std_adp_prsnt: mecc-std-adp-prsnt {
 			gpios = <&gpio6 2 GPIO_INPUT>;
