@@ -18,6 +18,7 @@
 #include <zephyr/logging/log.h>
 
 #include <ap_power/ap_power.h>
+#include <ap_power/ap_power_interface.h>
 
 LOG_MODULE_REGISTER(board_init, LOG_LEVEL_ERR);
 
@@ -202,5 +203,9 @@ int8_t board_vivaldi_keybd_idx(void)
 static void board_init(void)
 {
 	gpio_pin_set_dt(GPIO_DT_FROM_NODELABEL(gpio_en_pp5000_s5), 1);
+
+	if (ap_power_in_state(AP_POWER_STATE_ON)) {
+		disable_sleep(SLEEP_MASK_AP_RUN);
+	}
 }
 DECLARE_HOOK(HOOK_INIT, board_init, HOOK_PRIO_DEFAULT);
