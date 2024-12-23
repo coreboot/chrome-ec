@@ -93,6 +93,7 @@ int emul_pdc_pdo_set_direct(struct emul_pdc_pdo_t *data,
 			    enum pdo_source_t source, const uint32_t *pdos)
 {
 	uint32_t *target_pdos = get_pdo_data(data, source, pdo_type);
+	uint8_t blank_pdos = PDO_OFFSET_MAX - (pdo_offset + num_pdos);
 
 	if (!target_pdos) {
 		return -EINVAL;
@@ -110,6 +111,12 @@ int emul_pdc_pdo_set_direct(struct emul_pdc_pdo_t *data,
 	}
 
 	memcpy(&target_pdos[pdo_offset], pdos, sizeof(uint32_t) * num_pdos);
+
+	/* LPMs and partners should track the number of valid PDOs.
+	 * Zero fill the invalid PDOs.
+	 */
+	memset(&target_pdos[pdo_offset + num_pdos], 0,
+	       sizeof(uint32_t) * blank_pdos);
 
 	/* By default, if the test sets the partner sink PDOs, also update
 	 * the partner RDO to match the fixed PDO.

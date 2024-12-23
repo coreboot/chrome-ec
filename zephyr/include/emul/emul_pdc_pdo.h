@@ -53,12 +53,12 @@ int emul_pdc_pdo_get_direct(struct emul_pdc_pdo_t *data,
 /**
  * @brief Sets PDO data based on pdo_type and source
  *
- * @param data
- * @param pdo_type
- * @param pdo_offset
- * @param num_pdos
- * @param source
- * @param pdos
+ * @param data Pointer to the emulator's collection of LPM and partner PDOs
+ * @param pdo_type PDO type to update
+ * @param pdo_offset Index of the first PDO to write
+ * @param num_pdos Number of PDOs in this call
+ * @param source Indicates LPM or partner PDOs
+ * @param pdos Array of new PDOs, must contain @num_pdos entries
  * @return int
  */
 int emul_pdc_pdo_set_direct(struct emul_pdc_pdo_t *data,
