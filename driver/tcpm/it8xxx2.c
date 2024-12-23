@@ -48,6 +48,10 @@ bool rx_en[IT83XX_USBPD_PHY_PORT_COUNT];
 STATIC_IF(CONFIG_USB_PD_DECODE_SOP)
 bool sop_prime_en[IT83XX_USBPD_PHY_PORT_COUNT];
 static uint8_t tx_error_status[IT83XX_USBPD_PHY_PORT_COUNT] = { 0 };
+__maybe_unused static bool allow_vconn_dis[IT83XX_USBPD_PHY_PORT_COUNT] = {
+	/* Set init value 1 to allow Vconn disable */
+	[0 ...(IT83XX_USBPD_PHY_PORT_COUNT - 1)] = 1
+};
 
 const struct usbpd_ctrl_t usbpd_ctrl_regs[] = {
 	{ &IT83XX_GPIO_GPCRF4, &IT83XX_GPIO_GPCRF5, IT83XX_IRQ_USBPD0 },
@@ -474,7 +478,11 @@ static int it8xxx2_tcpm_set_vconn(int port, int enable)
 						    USBPD_CC_PIN_2 :
 						    USBPD_CC_PIN_1,
 					    enable);
+			allow_vconn_dis[port] = 1;
 		} else {
+			if (!allow_vconn_dis[port]) {
+				return EC_SUCCESS;
+			}
 			/*
 			 * If the pd port has previous connection and supplies
 			 * Vconn, then RO jumping to RW reset the system,
@@ -500,6 +508,7 @@ static int it8xxx2_tcpm_set_vconn(int port, int enable)
 			 * module (ex.UP/RD/DET/Tx/Rx) and disable 5v tolerant.
 			 */
 			it8xxx2_enable_vconn(port, enable);
+			allow_vconn_dis[port] = 0;
 		}
 	}
 
@@ -869,6 +878,10 @@ static void it8xxx2_init(enum usbpd_port port, int role)
 	it8xxx2_set_data_role(port, role);
 	/* Set default power role and assert Rp/Rd */
 	it8xxx2_set_power_role(port, role);
+	/* Set value 1 to allow Vconn disable */
+	if (IS_ENABLED(CONFIG_USBC_VCONN)) {
+		allow_vconn_dis[port] = 1;
+	}
 	/* Disable vconn: connect cc analog module, disable cc 5v tolerant */
 	it8xxx2_tcpm_set_vconn(port, 0);
 	/* Enable tx done and hard reset detect interrupt */
