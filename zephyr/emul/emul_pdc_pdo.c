@@ -55,16 +55,6 @@ static uint32_t *get_pdo_data(struct emul_pdc_pdo_t *pdos,
 	}
 }
 
-static bool is_epr_pdo(uint32_t pdo)
-{
-	uint32_t type = PDO_GET_TYPE(pdo);
-
-	return (type == PDO_GET_TYPE(PDO_TYPE_AUGMENTED) &&
-		PDO_AUG_GET_PPS(pdo) == PDO_AUG_PPS_EPR) ||
-	       (type == PDO_GET_TYPE(PDO_TYPE_FIXED) &&
-		(pdo & PDO_FIXED_EPR_MODE_CAPABLE) != 0);
-}
-
 int emul_pdc_pdo_reset(struct emul_pdc_pdo_t *pdos)
 {
 	memset(pdos, 0, sizeof(struct emul_pdc_pdo_t));
@@ -117,15 +107,6 @@ int emul_pdc_pdo_set_direct(struct emul_pdc_pdo_t *data,
 		LOG_ERR("PDO offset overflow at %d, num pdos: %d", pdo_offset,
 			num_pdos);
 		return -EINVAL;
-	}
-
-	for (uint8_t i = 0; i < num_pdos; i++) {
-		/* EPR PDOs are only supported in offsets 1-4. */
-		if (is_epr_pdo(pdos[i]) &&
-		    pdo_offset + i > EMUL_PDO_MAX_EPR_PDO_OFFSET) {
-			LOG_ERR("Only PDOs 1-4 support EPR");
-			return -EINVAL;
-		}
 	}
 
 	memcpy(&target_pdos[pdo_offset], pdos, sizeof(uint32_t) * num_pdos);

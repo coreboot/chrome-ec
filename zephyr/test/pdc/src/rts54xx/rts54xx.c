@@ -34,32 +34,11 @@ LOG_MODULE_REGISTER(test_rts54xx, LOG_LEVEL_INF);
 
 #define NUM_PORTS 2
 
-static const uint32_t epr_pdos[] = {
-	PDO_AUG_EPR(5000, 20000, 140, 0), PDO_AUG_EPR(5000, 20000, 140, 0),
-	PDO_AUG_EPR(5000, 20000, 140, 0), PDO_AUG_EPR(5000, 20000, 140, 0),
-	PDO_AUG_EPR(5000, 20000, 140, 0),
-};
 static const uint32_t spr_pdos[] = {
 	PDO_AUG(1000, 5000, 3000), PDO_FIXED(5000, 3000, 0),
 	PDO_AUG(1000, 5000, 3000), PDO_FIXED(9000, 3000, 0),
 	PDO_AUG(1000, 5000, 3000), PDO_FIXED(15000, 3000, 0),
 	PDO_AUG(1000, 5000, 3000), PDO_FIXED(20000, 3000, 0),
-};
-static const uint32_t mixed_pdos_success[] = {
-	PDO_AUG_EPR(5000, 20000, 140, 0),
-	PDO_FIXED(5000, 3000, PDO_FIXED_EPR_MODE_CAPABLE),
-	PDO_AUG(1000, 5000, 3000),
-	PDO_FIXED(5000, 3000, 0),
-	PDO_FIXED(9000, 3000, 0),
-	PDO_FIXED(20000, 3000, 0),
-};
-static const uint32_t mixed_pdos_failure[] = {
-	PDO_AUG(1000, 5000, 3000),
-	PDO_FIXED(5000, 3000, 0),
-	PDO_FIXED(9000, 3000, 0),
-	PDO_FIXED(20000, 3000, 0),
-	PDO_FIXED(5000, 3000, PDO_FIXED_EPR_MODE_CAPABLE),
-	PDO_AUG_EPR(5000, 20000, 140, 0),
 };
 
 static const struct emul *emul = EMUL_DT_GET(RTS5453P_NODE);
@@ -152,25 +131,6 @@ ZTEST_USER(rts54xx, test_emul_pdos)
 	zassert_not_ok(emul_get_src_pdos(PDO_OFFSET_5, 8, pdos));
 	zassert_not_ok(emul_get_snk_pdos(PDO_OFFSET_5, 8, pdos));
 
-	/* Test that only PDOs 1-4 support EPR. */
-	memset(pdos, 0, sizeof(pdos));
-	zassert_ok(emul_set_src_pdos(PDO_OFFSET_1, RTS5453P_MAX_EPR_PDO_OFFSET,
-				     epr_pdos));
-	zassert_ok(emul_get_src_pdos(PDO_OFFSET_1, RTS5453P_MAX_EPR_PDO_OFFSET,
-				     pdos));
-	zassert_ok(memcmp(pdos, epr_pdos, sizeof(uint32_t) * 4));
-	zassert_not_ok(emul_set_src_pdos(
-		PDO_OFFSET_1, RTS5453P_MAX_EPR_PDO_OFFSET + 1, epr_pdos));
-
-	memset(pdos, 0, sizeof(pdos));
-	zassert_ok(emul_set_snk_pdos(PDO_OFFSET_1, RTS5453P_MAX_EPR_PDO_OFFSET,
-				     epr_pdos));
-	zassert_ok(emul_get_snk_pdos(PDO_OFFSET_1, RTS5453P_MAX_EPR_PDO_OFFSET,
-				     pdos));
-	zassert_ok(memcmp(pdos, epr_pdos, sizeof(uint32_t) * 4));
-	zassert_not_ok(emul_set_snk_pdos(
-		PDO_OFFSET_1, RTS5453P_MAX_EPR_PDO_OFFSET + 1, epr_pdos));
-
 	/* Test that SPR PDOs can be placed in any offset. */
 	memset(pdos, 0, sizeof(pdos));
 	zassert_ok(emul_set_src_pdos(PDO_OFFSET_1, 7, spr_pdos));
@@ -181,22 +141,6 @@ ZTEST_USER(rts54xx, test_emul_pdos)
 	zassert_ok(emul_set_snk_pdos(PDO_OFFSET_1, 7, spr_pdos));
 	zassert_ok(emul_get_snk_pdos(PDO_OFFSET_1, 7, pdos));
 	zassert_ok(memcmp(pdos, spr_pdos, sizeof(uint32_t) * 7));
-
-	/* Test mixtures of PDOS. */
-	memset(pdos, 0, sizeof(pdos));
-	zassert_ok(emul_set_src_pdos(PDO_OFFSET_1, 6, mixed_pdos_success));
-	zassert_ok(emul_get_src_pdos(PDO_OFFSET_1, 6, pdos));
-	zassert_ok(
-		memcmp(pdos, mixed_pdos_success, sizeof(mixed_pdos_success)));
-
-	memset(pdos, 0, sizeof(pdos));
-	zassert_ok(emul_set_snk_pdos(PDO_OFFSET_1, 6, mixed_pdos_success));
-	zassert_ok(emul_get_snk_pdos(PDO_OFFSET_1, 6, pdos));
-	zassert_ok(
-		memcmp(pdos, mixed_pdos_success, sizeof(mixed_pdos_success)));
-
-	zassert_not_ok(emul_set_src_pdos(PDO_OFFSET_1, 6, mixed_pdos_failure));
-	zassert_not_ok(emul_set_snk_pdos(PDO_OFFSET_1, 6, mixed_pdos_failure));
 }
 
 ZTEST_USER(rts54xx, test_pdos)
@@ -205,7 +149,7 @@ ZTEST_USER(rts54xx, test_pdos)
 	int num_pdos = GET_PDOS_MAX_NUM;
 
 	memset(pdos, 0, sizeof(pdos));
-	zassert_ok(emul_set_src_pdos(PDO_OFFSET_1, 6, mixed_pdos_success));
+	zassert_ok(emul_set_src_pdos(PDO_OFFSET_1, 6, spr_pdos));
 
 	/*
 	 * This is implemented using the same underlying code as
@@ -223,8 +167,7 @@ ZTEST_USER(rts54xx, test_pdos)
 					&pdos[i - 1]));
 		k_sleep(K_MSEC(1000));
 	}
-	zassert_ok(
-		memcmp(pdos, mixed_pdos_success, sizeof(mixed_pdos_success)));
+	zassert_ok(memcmp(pdos, spr_pdos, 6));
 }
 
 ZTEST_USER(rts54xx, test_get_bus_info)
