@@ -46,6 +46,8 @@ static uint32_t board_version = PREINIT_VERSION;
 static struct gpio_callback cs_callback;
 static const struct gpio_dt_spec cs_gpio =
 	GPIO_DT_SPEC_GET(DT_NODELABEL(shi0), cs_gpios);
+static void ap_wakeup_isr(const struct device *port, struct gpio_callback *cb,
+			  gpio_port_pins_t pins);
 
 /*
  * Enables the interrupt on the CS_L pin. This is done with a deferred call
@@ -55,6 +57,11 @@ static void enable_cs_interrupt(void)
 {
 	gpio_add_callback_dt(&cs_gpio, &cs_callback);
 	gpio_pin_interrupt_configure_dt(&cs_gpio, GPIO_INT_EDGE_BOTH);
+
+	/* trigger the callback if CS_L is already low at this point */
+	if (!gpio_pin_get_dt(&cs_gpio)) {
+		ap_wakeup_isr(cs_gpio.port, &cs_callback, cs_gpio.pin);
+	}
 }
 DECLARE_DEFERRED(enable_cs_interrupt);
 
