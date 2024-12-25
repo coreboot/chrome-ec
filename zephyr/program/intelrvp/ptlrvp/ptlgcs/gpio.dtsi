@@ -109,9 +109,8 @@
 		en_pp5000_s5: ec-gppc-b14 {
 			gpios = <MCHP_GPIO_DECODE_244 GPIO_OUTPUT_LOW>;
 		};
-		smc_lid_n: smc-lid {
+		nc-b2 {
 			gpios = <MCHP_GPIO_DECODE_033 GPIO_INPUT>;
-			enum-name = "GPIO_LID_OPEN";
 		};
 		std_adp_prsnt: std-adp-prsnt-ec {
 			gpios = <MCHP_GPIO_DECODE_243 GPIO_INPUT>;
@@ -175,8 +174,9 @@
 			gpios = <MCHP_GPIO_DECODE_162 GPIO_INPUT>;
 			enum-name = "GPIO_BATT_PRES_ODL";
 		};
-		hall-0deg-int-vci-n {
+		smc_lid_n: hall-0deg-int-vci-n {
 			gpios = <MCHP_GPIO_DECODE_161 GPIO_INPUT>;
+			enum-name = "GPIO_LID_OPEN";
 		};
 		ec-h1-packet-mode-r {
 			gpios = <MCHP_GPIO_DECODE_101 GPIO_INPUT>;
