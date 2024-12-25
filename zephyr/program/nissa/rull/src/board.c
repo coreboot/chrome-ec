@@ -38,12 +38,31 @@ enum battery_present battery_hw_present(void)
 	return gpio_pin_get_dt(batt_pres) ? BP_NO : BP_YES;
 }
 
+bool board_battery_is_initialized(void)
+{
+	int batt_status;
+
+	return battery_status(&batt_status) != EC_SUCCESS ?
+		       false :
+		       !!(batt_status & STATUS_INITIALIZED);
+}
+
 enum battery_present battery_is_present(void)
 {
 	int state;
 
 	if (gpio_pin_get_dt(GPIO_DT_FROM_NODELABEL(gpio_ec_battery_pres_odl)))
 		return BP_NO;
+
+	/*
+	 * If it is detected that the battery GPIO exists, but has not been
+	 * initialized, return BP_YES first. Battery could be in ship
+	 * mode and might require pre-charge current to wake it up. BP_NO is not
+	 * returned here because charger state machine will not provide
+	 * pre-charge current assuming that battery is not present.
+	 */
+	if (!board_battery_is_initialized())
+		return BP_YES;
 
 	/*
 	 *  According to the battery manufacturer's reply:
@@ -71,6 +90,8 @@ int charger_profile_override(struct charge_state_data *curr)
 		int current = batt_info->precharge_current;
 
 		curr->requested_current = MAX(curr->requested_current, current);
+
+		curr->requested_voltage = batt_info->voltage_max;
 
 		return -1;
 	}
