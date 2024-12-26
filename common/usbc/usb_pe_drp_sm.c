@@ -2003,11 +2003,9 @@ static void pe_send_request_msg(int port)
 	/* Build and send request RDO */
 	pd_build_request(vpd_vdo, &rdo, &curr_limit, &supply_voltage, port);
 
-	CPRINTF("C%d: Req [%d] %dmV %dmA", port, RDO_POS(rdo), supply_voltage,
-		curr_limit);
-	if (rdo & RDO_CAP_MISMATCH)
-		CPRINTF(" Mismatch");
-	CPRINTF("\n");
+	CPRINTS("C%d: Req [%d] %dmV %dmA %s", port, RDO_POS(rdo),
+		supply_voltage, curr_limit,
+		rdo & RDO_CAP_MISMATCH ? "Mismatch" : "");
 
 	pe[port].curr_limit = curr_limit;
 	pe[port].supply_voltage = supply_voltage;
