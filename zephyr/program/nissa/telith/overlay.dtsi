@@ -123,28 +123,28 @@
 
 	named-temp-sensors {
 		compatible = "cros-ec,temp-sensors";
-		cpu_vr {
+		temp_sensor_vr: cpu_vr {
 			temp_host_high = <88>;
 			temp_host_halt = <91>;
 			temp_host_release_high = <85>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_cpu_vr>;
 		};
-		cpu {
+		temp_sensor_cpu: cpu {
 			temp_host_high = <79>;
 			temp_host_halt = <82>;
 			temp_host_release_high = <76>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_cpu>;
 		};
-		ambient {
+		temp_sensor_ambient: ambient {
 			temp_host_high = <75>;
 			temp_host_halt = <78>;
 			temp_host_release_high = <72>;
 			power-good-pin = <&gpio_ec_soc_dsw_pwrok>;
 			sensor = <&temp_ambient>;
 		};
-		charger {
+		temp_sensor_charger: charger {
 			temp_host_high = <85>;
 			temp_host_halt = <88>;
 			temp_host_release_high = <82>;

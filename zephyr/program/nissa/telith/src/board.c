@@ -13,6 +13,8 @@
 #include "fan.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
+#include "temp_sensor/temp_sensor.h"
+#include "thermal.h"
 #include "timer.h"
 
 #include <zephyr/drivers/gpio.h>
@@ -123,6 +125,72 @@ enum battery_present battery_hw_present(void)
 	return gpio_pin_get_dt(batt_pres) ? BP_NO : BP_YES;
 }
 
+/* thermal tabel control for 15W CPU */
+#define TEMP_VR TEMP_SENSOR_ID(DT_NODELABEL(temp_sensor_vr))
+#define TEMP_CPU TEMP_SENSOR_ID(DT_NODELABEL(temp_sensor_cpu))
+#define TEMP_AMBIENT TEMP_SENSOR_ID(DT_NODELABEL(temp_sensor_ambient))
+#define TEMP_CHARGER TEMP_SENSOR_ID(DT_NODELABEL(temp_sensor_charger))
+
+const static struct ec_thermal_config thermal_vr = {
+	.temp_host = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(88),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(91),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
+		[EC_TEMP_THRESH_HALT] = 0,
+	},
+	.temp_fan_off = C_TO_K(35),
+	.temp_fan_max = C_TO_K(77),
+};
+
+const static struct ec_thermal_config thermal_cpu = {
+	.temp_host = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(79),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(82),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(76),
+		[EC_TEMP_THRESH_HALT] = 0,
+	},
+	.temp_fan_off = C_TO_K(35),
+	.temp_fan_max = C_TO_K(69),
+};
+
+const static struct ec_thermal_config thermal_ambient = {
+	.temp_host = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(75),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(78),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(72),
+		[EC_TEMP_THRESH_HALT] = 0,
+	},
+	.temp_fan_off = C_TO_K(35),
+	.temp_fan_max = C_TO_K(65),
+};
+
+const static struct ec_thermal_config thermal_charger = {
+	.temp_host = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(85),
+		[EC_TEMP_THRESH_HALT] = C_TO_K(88),
+	},
+	.temp_host_release = {
+		[EC_TEMP_THRESH_WARN] = 0,
+		[EC_TEMP_THRESH_HIGH] = C_TO_K(82),
+		[EC_TEMP_THRESH_HALT] = 0,
+	},
+	.temp_fan_off = C_TO_K(35),
+	.temp_fan_max = C_TO_K(75),
+};
+
 test_export_static void fan_init(void)
 {
 	int ret;
@@ -143,6 +211,10 @@ test_export_static void fan_init(void)
 		gpio_pin_configure_dt(
 			GPIO_DT_FROM_NODELABEL(gpio_en_pp5000_fan),
 			GPIO_OUTPUT);
+		thermal_params[TEMP_VR] = thermal_vr;
+		thermal_params[TEMP_CPU] = thermal_cpu;
+		thermal_params[TEMP_AMBIENT] = thermal_ambient;
+		thermal_params[TEMP_CHARGER] = thermal_charger;
 	}
 }
 DECLARE_HOOK(HOOK_INIT, fan_init, HOOK_PRIO_POST_FIRST);
