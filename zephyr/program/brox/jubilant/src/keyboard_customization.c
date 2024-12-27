@@ -83,6 +83,7 @@ void set_scancode_set2(uint8_t row, uint8_t col, uint16_t val)
 		scancode_set2[col][row] = val;
 }
 
+static bool key_numpad = FW_KB_NUMERIC_PAD_ABSENT;
 /*
  * Keyboard function decided by FW config.
  */
@@ -102,15 +103,43 @@ test_export_static void keyboard_matrix_init(void)
 	switch (val) {
 	case FW_KB_NUMERIC_PAD_PRESENT:
 		scancode_set2 = jubileum_scancode_set2;
+		key_numpad = FW_KB_NUMERIC_PAD_PRESENT;
 		LOG_INF("jubileum keyboard matrix");
 		break;
 	case FW_KB_NUMERIC_PAD_ABSENT:
 		scancode_set2 = jubilant_scancode_set2;
+		key_numpad = FW_KB_NUMERIC_PAD_ABSENT;
 		LOG_INF("jubilant keyboard matrix");
 		break;
 	default:
 		LOG_WRN("invalid cbi value: %x", val);
 		return;
+	}
+
+	ret = cros_cbi_get_fw_config(FW_KB_TYPE, &val);
+	if (ret != 0) {
+		LOG_ERR("Error retrieving CBI FW_CONFIG field %d", FW_KB_TYPE);
+		val = FW_KB_TYPE_DEFAULT;
+	}
+
+	if (val == FW_KB_TYPE_CA_FR) {
+		if (key_numpad == FW_KB_NUMERIC_PAD_ABSENT) {
+			/*
+			 * Canadian French keyboard (US layout),
+			 *   \| (key 45):     0x0061->0x61->0x56
+			 *   r-ctrl (key 64): 0xe014->0x14->0x1d
+			 * move key45 (row:7,col:17) to key64 (row:3,col:14)
+			 */
+			set_scancode_set2(3, 14, get_scancode_set2(7, 17));
+		} else {
+			/*
+			 * Canadian French keyboard (US layout),
+			 *   \| (key 45):     0x0061->0x61->0x56
+			 *   r-ctrl (key 64): 0xe014->0x14->0x1d
+			 * move key45 (row:2,col:7) to key64 (row:3,col:14)
+			 */
+			set_scancode_set2(3, 14, get_scancode_set2(2, 7));
+		}
 	}
 }
 DECLARE_HOOK(HOOK_INIT, keyboard_matrix_init, HOOK_PRIO_POST_FIRST);
