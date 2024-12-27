@@ -3,14 +3,9 @@
  * found in the LICENSE file.
  */
 /* Quandiso hardware configuration */
-#include "cros_board_info.h"
-#include "cros_cbi.h"
 #include "gpio/gpio_int.h"
 #include "hooks.h"
-#include "motion_sense.h"
-#include "motionsense_sensors.h"
 #include "nissa_common.h"
-#include "tablet_mode.h"
 
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
@@ -76,29 +71,3 @@ static void pen_init(void)
 	ap_power_ev_add_callback(&cb);
 }
 DECLARE_HOOK(HOOK_INIT, pen_init, HOOK_PRIO_INIT_I2C);
-
-test_export_static void tabletmode_fw_config(void)
-{
-	int ret;
-	uint32_t val;
-
-	/* Check if it's tablet or not */
-	ret = cros_cbi_get_fw_config(FW_TABLET, &val);
-	if (ret != 0) {
-		LOG_ERR("Error retrieving CBI FW_CONFIG field");
-		return;
-	}
-	if (val == FW_TABLET_NOT_PRESENT) {
-		LOG_INF("Clamshell: disable motionsense function.");
-		gmr_tablet_switch_disable();
-		motion_sensor_count = 0;
-		gpio_disable_dt_interrupt(GPIO_INT_FROM_NODELABEL(int_imu));
-		gpio_disable_dt_interrupt(
-			GPIO_INT_FROM_NODELABEL(int_tablet_mode));
-		gpio_pin_configure_dt(GPIO_DT_FROM_NODELABEL(gpio_imu_int_l),
-				      GPIO_DISCONNECTED);
-	} else {
-		LOG_INF("Tablet: Enable motionsense function.");
-	}
-}
-DECLARE_HOOK(HOOK_INIT, tabletmode_fw_config, HOOK_PRIO_POST_I2C);

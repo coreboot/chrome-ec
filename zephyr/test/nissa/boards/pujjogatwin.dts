@@ -10,7 +10,6 @@
 
 #include "../program/nissa/cbi.dtsi"
 #include "../program/nissa/pujjogatwin/motionsense.dtsi"
-#include "../program/nissa/pujjogatwin/cbi.dtsi"
 
 / {
 	aliases {
@@ -141,11 +140,6 @@
 			irq-pin = <&gpio_acc_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "lis2dw12_interrupt";
-		};
-		int_tablet_mode: tablet_mode {
-			irq-pin = <&gpio_tablet_mode_l>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "gmr_tablet_switch_isr";
 		};
 	};
 
