@@ -10,8 +10,6 @@
 #include "hooks.h"
 #include "led_common.h"
 #include "led_onoff_states.h"
-#include "motion_sense.h"
-#include "motionsense_sensors.h"
 #include "nissa_hdmi.h"
 #include "pujjogatwin.h"
 #include "pujjogatwin_sub_board.h"
