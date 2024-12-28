@@ -22,6 +22,8 @@
 #define CPRINTF(format, args...) cprintf(CC_USBPD, format, ##args)
 LOG_MODULE_REGISTER(hylia_usbc, LOG_LEVEL_DBG);
 
+uint64_t svdm_hpd_deadline[CONFIG_USB_PD_PORT_MAX_COUNT];
+
 int svdm_get_hpd_gpio(int port)
 {
 	const struct gpio_dt_spec *dp_in_hpd[] = {
@@ -44,21 +46,42 @@ void hylia_dp_attention(int port, uint32_t vdo_dp_status)
 {
 	int lvl = PD_VDO_DPSTS_HPD_LVL(vdo_dp_status);
 	int irq = PD_VDO_DPSTS_HPD_IRQ(vdo_dp_status);
+	int cur_lvl = svdm_get_hpd_gpio(port);
 
 	mux_state_t mux_state, mux_mode;
 
 	mux_mode = pdc_power_mgmt_get_dp_mux_mode(port);
 
-	if (svdm_get_hpd_gpio(port) == lvl) {
-		LOG_DBG("p%d: hpd is stable %d.", port, lvl);
-		return;
-	}
-
-	svdm_set_hpd_gpio(port, lvl);
-	LOG_DBG("p%d DP hpd %d", port, lvl);
 	usb_mux_set(port, mux_mode, USB_SWITCH_CONNECT,
 		    polarity_rm_dts(pd_get_polarity(port)));
 
+	if (irq && !lvl) {
+		/*
+		 * IRQ can only be generated when the level is high, because
+		 * the IRQ is signaled by a short low pulse from the high level.
+		 */
+		CPRINTF("ERR:HPD:IRQ&LOW\n");
+		return;
+	}
+
+	if (irq && cur_lvl) {
+		uint64_t now = get_time().val;
+		/* wait for the minimum spacing between IRQ_HPD if needed */
+		if (now < svdm_hpd_deadline[port]) {
+			crec_usleep(svdm_hpd_deadline[port] - now);
+		}
+
+		/* generate IRQ_HPD pulse */
+		svdm_set_hpd_gpio(port, 0);
+		udelay(HPD_DSTREAM_DEBOUNCE_IRQ);
+		svdm_set_hpd_gpio(port, 1);
+	} else {
+		svdm_set_hpd_gpio(port, lvl);
+		LOG_DBG("p%d DP hpd %d", port, lvl);
+	}
+
+	/* set the minimum time delay (2ms) for the next HPD IRQ */
+	svdm_hpd_deadline[port] = get_time().val + HPD_USTREAM_DEBOUNCE_LVL;
 	/*
 	 * Populate MUX state before dp path mux, so we can keep the HPD status.
 	 */
