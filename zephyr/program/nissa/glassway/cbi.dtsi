@@ -150,5 +150,24 @@
                                 value = <1>;
                         };
                 };
+
+                /*
+                 * SSFC field to set USB MUX EQ for different DB FFC.
+                 */
+                ffc_type {
+                        enum-name = "USB_SS_MUX";
+                        size = <2>;
+                        ffc1: ffc1 {
+                                compatible = "cros-ec,cbi-ssfc-value";
+                                status = "okay";
+                                value = <0>;
+                                default;
+                        };
+                        ffc2: ffc2 {
+                                compatible = "cros-ec,cbi-ssfc-value";
+                                status = "okay";
+                                value = <1>;
+                        };
+                };
 	};
 };
