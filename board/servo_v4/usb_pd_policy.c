@@ -295,8 +295,8 @@ static void update_ports(void)
 				pd_extract_pdo_power(pdo, &max_ma, &max_mv,
 						     &unused);
 				pd_src_chg_pdo[src_index] =
-					PDO_FIXED_VOLT(max_mv) |
-					PDO_FIXED_CURR(max_ma);
+					PDO_FIXED_SET_VOLTAGE(max_mv) |
+					PDO_FIXED_SET_CURRENT(max_ma);
 
 				if (src_index == 0) {
 					/*
@@ -332,10 +332,10 @@ static void update_ports(void)
 			chg_pdo_cnt = src_index;
 		} else {
 			/* 5V PDO */
-			pd_src_chg_pdo[0] = PDO_FIXED_VOLT(PD_MIN_MV) |
-					    PDO_FIXED_CURR(vbus[CHG].ma) |
-					    DUT_PDO_FIXED_FLAGS |
-					    PDO_FIXED_UNCONSTRAINED;
+			pd_src_chg_pdo[0] =
+				PDO_FIXED_SET_VOLTAGE(PD_MIN_MV) |
+				PDO_FIXED_SET_CURRENT(vbus[CHG].ma) |
+				DUT_PDO_FIXED_FLAGS | PDO_FIXED_UNCONSTRAINED;
 			/*
 			 * TODO: Keep Unconstrained Power knobs
 			 * exposed and well-defined.
