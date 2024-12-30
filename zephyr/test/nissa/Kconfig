@@ -56,6 +56,11 @@ choice TEST_TARGET
 	  help
 		The test target that exercises nissa/gothrax/*.c
 
+	config TEST_GOTHRAX_SUB_BOARD
+		bool "Tests for sub_board.c"
+		help
+		  The test target that exercises nissa/gothrax/src/sub_board.c
+
 	config TEST_NISSA_PUJJO
 	  bool "Tests for Pujjo-specific code"
 	  help

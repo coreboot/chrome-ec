@@ -105,6 +105,13 @@ if(CONFIG_TEST_NISSA_GOTHRAX)
     )
 endif()
 
+target_sources_ifdef(
+        CONFIG_TEST_GOTHRAX_SUB_BOARD
+        app PRIVATE
+        src/gothrax_sub_board.c
+        src/log_module.c
+        ${PLATFORM_EC_PROGRAM_DIR}/nissa/gothrax/src/sub_board.c)
+
 if(CONFIG_TEST_NISSA_PUJJO)
     target_sources(
             app PRIVATE
