@@ -4,9 +4,11 @@
  */
 
 #include "battery_fuel_gauge.h"
+#include "cros_board_info.h"
 #include "cros_cbi.h"
 #include "driver/charger/isl923x_public.h"
 #include "driver/tcpm/raa489000.h"
+#include "emul/retimer/emul_anx7483.h"
 #include "emul/tcpc/emul_tcpci.h"
 #include "extpower.h"
 #include "fan.h"
@@ -24,6 +26,7 @@
 #include "tablet_mode.h"
 #include "tcpm/tcpci.h"
 #include "usb_charge.h"
+#include "usbc/usb_muxes.h"
 
 #include <zephyr/drivers/gpio/gpio_emul.h>
 #include <zephyr/fff.h>
@@ -37,6 +40,7 @@
 
 #define TCPC0 EMUL_DT_GET(DT_NODELABEL(tcpc_port0))
 #define TCPC1 EMUL_DT_GET(DT_NODELABEL(tcpc_port1))
+#define ANX7483_EMUL1 EMUL_DT_GET(DT_NODELABEL(anx7483_port1))
 #define ASSERT_GPIO_FLAGS(spec, expected)                                  \
 	do {                                                               \
 		gpio_flags_t flags;                                        \
@@ -955,4 +959,109 @@ ZTEST(glassway, test_pen_power_control)
 	board_power_change(NULL, data);
 	gpio_disable_dt_interrupt(pen_detect_int);
 	zassert_equal(gpio_emul_output_get_dt(pen_power_gpio), 0);
+}
+
+ZTEST(glassway, test_board_anx7483_c1_mux_set)
+{
+	int rv;
+	enum anx7483_eq_setting eq;
+
+	/* Initial ssfc data for Glassway FFC connector. */
+	cbi_get_ssfc_fake.custom_fake = cbi_get_ssfc_mock;
+	ssfc_data = 0x00;
+	cros_cbi_ssfc_init();
+
+	usb_mux_init(1);
+
+	/* Test USB mux state. */
+	usb_mux_set(1, USB_PD_MUX_USB_ENABLED, USB_SWITCH_CONNECT, 0);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_DRX1, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_3DB);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_DRX2, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_3DB);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_URX1, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_3DB);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_URX2, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_3DB);
+
+	/* Test dock mux state. */
+	usb_mux_set(1, USB_PD_MUX_DOCK, USB_SWITCH_CONNECT, 0);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_URX1, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_3DB);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_DRX1, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_3DB);
+
+	/* Test flipped dock mux state. */
+	usb_mux_set(1, USB_PD_MUX_DOCK | USB_PD_MUX_POLARITY_INVERTED,
+		    USB_SWITCH_CONNECT, 0);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_URX2, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_3DB);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_DRX2, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_3DB);
+
+	/* Initial ssfc data for Gallida360 FFC connector. */
+	cbi_get_ssfc_fake.custom_fake = cbi_get_ssfc_mock;
+	ssfc_data = 0x20;
+	cros_cbi_ssfc_init();
+	cbi_set_ssfc(0x20);
+
+	usb_mux_init(1);
+
+	/* Test USB mux state. */
+	usb_mux_set(1, USB_PD_MUX_USB_ENABLED, USB_SWITCH_CONNECT, 0);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_DRX1, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_6_8DB);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_DRX2, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_6_8DB);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_URX1, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_8DB);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_URX2, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_8DB);
+
+	/* Test dock mux state. */
+	usb_mux_set(1, USB_PD_MUX_DOCK, USB_SWITCH_CONNECT, 0);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_URX1, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_8DB);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_DRX1, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_6_8DB);
+
+	/* Test flipped dock mux state. */
+	usb_mux_set(1, USB_PD_MUX_DOCK | USB_PD_MUX_POLARITY_INVERTED,
+		    USB_SWITCH_CONNECT, 0);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_URX2, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_7_8DB);
+
+	rv = anx7483_emul_get_eq(ANX7483_EMUL1, ANX7483_PIN_DRX2, &eq);
+	zassert_ok(rv);
+	zassert_equal(eq, ANX7483_EQ_SETTING_6_8DB);
 }

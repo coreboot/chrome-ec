@@ -4,6 +4,7 @@
  */
 
 #include <dt-bindings/pwm/pwm.h>
+#include <npcx_emul.dts>
 
 #include "../program/nissa/glassway/cbi.dtsi"
 #include "../program/nissa/glassway/motionsense.dtsi"
@@ -97,6 +98,26 @@
                 };
 	};
 
+	usbc {
+                #address-cells = <1>;
+                #size-cells = <0>;
+
+                port1@1 {
+                        compatible = "named-usbc-port";
+                        reg = <1>;
+                        tcpc = <&tcpci_emul_1>;
+                        usb-mux-chain-1 {
+                                compatible = "cros-ec,usb-mux-chain";
+                                usb-muxes = <&virtual_mux_1 &anx7483_port1>;
+                        };
+                };
+                port1-muxes {
+                        virtual_mux_1: virtual-mux-1 {
+                                compatible = "cros-ec,usbc-mux-virtual";
+                        };
+                };
+        };
+
 	named-i2c-ports {
 		i2c_ec_i2c_batt: ec_i2c_batt {
 			i2c-port = <&i2c_ctrl7>;
@@ -148,5 +169,20 @@
 		default_battery_3s: getac_pg01lj3353 {
 			compatible = "getac,pg01lj3353", "battery-smart";
 		};
+	};
+
+
+};
+
+&i2c_ctrl5 {
+	tcpci_emul_1: tcpci_emul@84 {
+                compatible = "cros,tcpci-generic-emul";
+                status = "okay";
+                reg = <0x84>;
+        };
+        anx7483_port1: anx7483_emul1@3e {
+                compatible = "cros,anx7483-emul", "analogix,anx7483";
+		reg = <0x3e>;
+		board-set = "board_anx7483_c1_mux_set";
 	};
 };

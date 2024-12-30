@@ -301,6 +301,7 @@ if(CONFIG_TEST_NISSA_GLASSWAY)
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/glassway/src/usbc.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/glassway/src/charger.c
             ${PLATFORM_EC_PROGRAM_DIR}/nissa/glassway/src/board.c
+            ${PLATFORM_EC_PROGRAM_DIR}/nissa/glassway/src/usb_mux_config.c
     )
 endif()
 
