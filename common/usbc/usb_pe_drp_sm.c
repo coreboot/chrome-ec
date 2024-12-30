@@ -1977,8 +1977,10 @@ static void send_source_cap(int port)
 
 /*
  * Request desired charge voltage from source.
+ * @param port USB-C port number
+ * @return true if the Request message was sent; false otherwise
  */
-static void pe_send_request_msg(int port)
+static bool pe_send_request_msg(int port)
 {
 	uint32_t vpd_vdo = 0;
 	uint32_t rdo;
@@ -2007,6 +2009,19 @@ static void pe_send_request_msg(int port)
 		supply_voltage, curr_limit,
 		rdo & RDO_CAP_MISMATCH ? "Mismatch" : "");
 
+	/* TODO(b/386401791): Repeated, identical Requests add noise to traces,
+	 * waste time, and interfere with some compliance tests. The charge
+	 * manager should not generate such Requests, but sometimes, it does.
+	 * Until the charge manager is fixed, prevent redundant Requests here.
+	 */
+	if (get_last_state_pe(port) == PE_SNK_READY &&
+	    curr_limit == pe[port].curr_limit &&
+	    supply_voltage == pe[port].supply_voltage) {
+		CPRINTS("C%d: %s: Duplicate Request %u mV, %u mA", port,
+			__func__, supply_voltage, curr_limit);
+		return false;
+	}
+
 	pe[port].curr_limit = curr_limit;
 	pe[port].supply_voltage = supply_voltage;
 
@@ -2026,6 +2041,8 @@ static void pe_send_request_msg(int port)
 	}
 
 	send_data_msg(port, TCPCI_MSG_SOP, msg);
+
+	return true;
 }
 
 static void pe_update_src_pdo_flags(int port, int pdo_cnt, uint32_t *pdos)
@@ -3539,7 +3556,10 @@ static void pe_snk_select_capability_entry(int port)
 	print_current_state(port);
 
 	/* Send Request */
-	pe_send_request_msg(port);
+	if (!pe_send_request_msg(port)) {
+		set_state_pe(port, PE_SNK_READY);
+		return;
+	}
 	pe_sender_response_msg_entry(port);
 
 	/* We are PD Connected */
