@@ -122,7 +122,7 @@ int emul_pdc_pdo_set_direct(struct emul_pdc_pdo_t *data,
 	 * the partner RDO to match the fixed PDO.
 	 */
 	if (pdo_offset == 0 && source == PARTNER_PDO && pdo_type == SINK_PDO) {
-		int max_curr = PDO_FIXED_GET_CURR(target_pdos[0]);
+		int max_curr = PDO_FIXED_CURRENT(target_pdos[0]);
 		data->partner_rdo = RDO_FIXED(1, max_curr, 500, 0);
 	}
 

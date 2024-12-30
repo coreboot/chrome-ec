@@ -1165,9 +1165,9 @@ union sido dpm_get_source_info_msg(int port)
 	} else {
 		uint32_t highest_pdo = pdos[pdo_count - 1];
 
-		source_info.port_reported_pdp =
-			PDO_FIXED_GET_VOLT(highest_pdo) *
-			PDO_FIXED_GET_CURR(highest_pdo) / 1000000;
+		source_info.port_reported_pdp = PDO_FIXED_VOLTAGE(highest_pdo) *
+						PDO_FIXED_CURRENT(highest_pdo) /
+						1000000;
 	}
 
 	/* Present PDP:

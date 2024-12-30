@@ -111,6 +111,10 @@ enum pdo_peak_overcurrent {
 	PDO_PEAK_OVERCURR_150,
 };
 
+/* Note - macros for extracting PDO voltage, current, and power fields are
+ * provided in ec_commands.h.
+ */
+
 #define PDO_FIXED_SUSPEND BIT(28) /* USB Suspend supported */
 /* Higher capability in vSafe5V sink PDO */
 #define PDO_FIXED_SNK_HIGHER_CAP BIT(28)
@@ -124,8 +128,6 @@ enum pdo_peak_overcurrent {
 	(((mv) / 50) << 10) /* Voltage in 50mV units */
 #define PDO_FIXED_SET_CURRENT(ma) \
 	(((ma) / 10) << 0) /* Max current in 10mA units */
-#define PDO_FIXED_GET_VOLT(pdo) (((pdo >> 10) & 0x3FF) * 50)
-#define PDO_FIXED_GET_CURR(pdo) ((pdo & 0x3FF) * 10)
 #define PDO_FIXED_GET_DRP BIT(29)
 #define PDO_FIXED_GET_UNCONSTRAINED_PWR BIT(27)
 #define PDO_FIXED_GET_USB_COMM_CAPABLE BIT(26)
@@ -144,9 +146,6 @@ enum pdo_peak_overcurrent {
 #define PDO_BATT_SET_MAX_VOLTAGE(mv) ((((mv) / 50) & 0x3FF) << 20)
 #define PDO_BATT_SET_MIN_VOLTAGE(mv) ((((mv) / 50) & 0x3FF) << 10)
 #define PDO_BATT_SET_MAX_POWER(mw) ((((mw) / 250) & 0x3FF) << 0)
-#define PDO_BATT_GET_MAX_VOLT(pdo) (((pdo >> 20) & 0x3FF) * 50)
-#define PDO_BATT_GET_MIN_VOLT(pdo) (((pdo >> 10) & 0x3FF) * 50)
-#define PDO_BATT_GET_OP_POWER(pdo) ((pdo & 0x3FF) * 250)
 
 #define PDO_BATT(min_mv, max_mv, op_mw)                                        \
 	(PDO_BATT_SET_MIN_VOLTAGE(min_mv) | PDO_BATT_SET_MAX_VOLTAGE(max_mv) | \

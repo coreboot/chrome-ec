@@ -2002,8 +2002,8 @@ int evaluate_src_pdos(const uint32_t *pdos, size_t num_pdos, size_t *selected)
 		}
 
 		/* Extract voltage and current from PDO, and compute wattage */
-		uint32_t mv = PDO_FIXED_GET_VOLT(pdos[i]);
-		uint32_t ma = PDO_FIXED_GET_CURR(pdos[i]);
+		uint32_t mv = PDO_FIXED_VOLTAGE(pdos[i]);
+		uint32_t ma = PDO_FIXED_CURRENT(pdos[i]);
 		uint32_t mw = (mv * ma) / 1000;
 
 		LOG_INF("PDO%d: %08x, %d %d %d", i + 1, pdos[i], mv, ma, mw);
@@ -2191,17 +2191,17 @@ static void pdc_snk_attached_run(void *obj)
 		 * clamped to the board maximum here so that the RDO and charge
 		 * manager are given the correct board operating current.
 		 */
-		max_ma = MIN(PDO_FIXED_GET_CURR(port->snk_policy.pdo),
+		max_ma = MIN(PDO_FIXED_CURRENT(port->snk_policy.pdo),
 			     CONFIG_PLATFORM_EC_USB_PD_MAX_CURRENT_MA);
-		max_mv = PDO_FIXED_GET_VOLT(port->snk_policy.pdo);
+		max_mv = PDO_FIXED_VOLTAGE(port->snk_policy.pdo);
 		max_mw = max_ma * max_mv / 1000;
 
 		/* max_mw_pdo holds the raw PDO wattage without clamping. Use
 		 * this to set the mismatch bit if less power is offered than
 		 * our operating requirement.
 		 */
-		max_mw_pdo = PDO_FIXED_GET_CURR(port->snk_policy.pdo) *
-			     PDO_FIXED_GET_VOLT(port->snk_policy.pdo) / 1000;
+		max_mw_pdo = PDO_FIXED_CURRENT(port->snk_policy.pdo) *
+			     PDO_FIXED_VOLTAGE(port->snk_policy.pdo) / 1000;
 
 		if (max_mw_pdo < pdc_max_operating_power) {
 			flags |= RDO_CAP_MISMATCH;
@@ -2223,9 +2223,9 @@ static void pdc_snk_attached_run(void *obj)
 		queue_internal_cmd(port, CMD_PDC_SET_RDO);
 		return;
 	case SNK_ATTACHED_START_CHARGING:
-		max_ma = MIN(PDO_FIXED_GET_CURR(port->snk_policy.pdo),
+		max_ma = MIN(PDO_FIXED_CURRENT(port->snk_policy.pdo),
 			     CONFIG_PLATFORM_EC_USB_PD_MAX_CURRENT_MA);
-		max_mv = PDO_FIXED_GET_VOLT(port->snk_policy.pdo);
+		max_mv = PDO_FIXED_VOLTAGE(port->snk_policy.pdo);
 		max_mw = max_ma * max_mv / 1000;
 
 		LOG_INF("Available charging on C%d", config->connector_num);
