@@ -36,7 +36,7 @@ config PLATFORM_EC_DSP_REMOTE_CBI
 config PLATFORM_EC_DSP_REMOTE_LID_SWITCH
 	bool "Lid switch GMR is on another MCU"
 	default y if !TEST
-	depends on !PLATFORM_EC_LID_SWITCH
+	depends on !PLATFORM_EC_LID_SWITCH || PLATFORM_EC_DSP_SERVICE
 	help
 		Use the lid switch logic but the source of truth of the GMR is on another
 		MCU.
