@@ -398,6 +398,10 @@ TEST_F(DspComms, ReadCbiOemName) {
 }
 
 TEST_F(DspComms, LidPosition) {
+  // Remove the callbacks for the GPIO. These callbacks forward the interrupt
+  // from the service to the client. In this test, we want to manually do the
+  // status read and assert the status values.
+  gpio_remove_callback_dt(&kServiceInterruptSpec, &gpio_callbacks_);
   // Emulate lid open
   gpio_emul_input_set(kLidOpenInterruptSpec.port, kLidOpenInterruptSpec.pin, 1);
   // Emulate clamshell mode

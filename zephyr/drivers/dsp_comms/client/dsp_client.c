@@ -215,7 +215,6 @@ int dsp_client_get_cbi_flags(const struct device* dev,
     return -EAGAIN;
   }
   LOG_DBG("events = 0x%08x", events);
-  dsp_client_read_status(&data->read_status_work);
 
   LOG_DBG("Expecting response of %u bytes", data->pending_response_length);
   if (data->pending_response_length == PENDING_RESPONSE_LENGTH_ERROR) {
@@ -256,7 +255,7 @@ static void dsp_client_gpio_callback(const struct device* port,
 
   LOG_DBG("***** DSP SERVICE FIRED INTERRUPT *****");
   dsp_client_enable_interrupt(data, false);
-  k_event_post(&data->response_ready_event, 1);
+  k_work_submit(&data->read_status_work);
 }
 
 static void dsp_client_read_status(struct k_work* item) {
@@ -277,11 +276,6 @@ static void dsp_client_read_status(struct k_work* item) {
     k_mutex_unlock(&data->mutex);
     return;
   }
-  printk("Read [");
-  for (size_t i = 0; i < ARRAY_SIZE(status_buffer); ++i) {
-    printk("0x%02x ", status_buffer[i]);
-  }
-  printk("]\n");
 
   pb_istream_t istream =
       pb_istream_from_buffer(status_buffer, ARRAY_SIZE(status_buffer));
@@ -328,6 +322,10 @@ static int dsp_client_gpio_init(const struct device* dev) {
   int interrupt_rc;
 
   __ASSERT_NO_MSG(gpio_is_ready_dt(&config->interrupt));
+  LOG_INF("Initializing %s::%u with flags 0x%04x",
+          config->interrupt.port->name,
+          config->interrupt.pin,
+          config->interrupt.dt_flags);
 
   rc = gpio_pin_configure_dt(&config->interrupt, GPIO_INPUT);
   __ASSERT_NO_MSG(rc == 0);
@@ -367,12 +365,26 @@ static int dsp_client_gpio_init(const struct device* dev) {
 
 static int dsp_client_init(const struct device* dev) {
   struct dsp_client_data* data = dev->data;
+  const struct dsp_client_config* config = data->config;
+  int rc;
 
   k_mutex_init(&data->mutex);
   k_event_init(&data->response_ready_event);
   k_work_init(&data->read_status_work, dsp_client_read_status);
 
-  return dsp_client_gpio_init(dev);
+  rc = dsp_client_gpio_init(dev);
+  if (rc != 0) {
+    return rc;
+  }
+
+  if (data->interrupt_config == GPIO_INT_EDGE_TO_ACTIVE &&
+      gpio_pin_get_dt(&config->interrupt)) {
+    LOG_DBG(
+        "Using edge to active but GPIO is already high, simulating interrupt");
+    dsp_client_gpio_callback(
+        config->interrupt.port, &data->gpio_cb, config->interrupt.pin);
+  }
+  return 0;
 }
 
 #define DSP_CLIENT_DEFINE(inst)                                \
