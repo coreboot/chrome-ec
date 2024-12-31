@@ -7,20 +7,10 @@
 	gpio_interrupts: gpio-interrupts {
 		compatible = "cros-ec,gpio-interrupts";
 
-		int_lid_open: lid_open {
-			irq-pin = <&gpio_lid_open>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "lid_interrupt";
-		};
 		int_lid_accel: ec_lid_accel  {
 			irq-pin = <&gpio_acc_int_l>;
 			flags = <GPIO_INT_EDGE_FALLING>;
 			handler = "bma4xx_interrupt";
-		};
-		int_tablet_mode: ec_tablet_mode {
-			irq-pin = <&gpio_tablet_mode_int_l>;
-			flags = <GPIO_INT_EDGE_BOTH>;
-			handler = "gmr_tablet_switch_isr";
 		};
 	};
 };
