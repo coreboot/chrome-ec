@@ -94,6 +94,13 @@ config PLATFORM_EC_CHARGESPLASH
 	  Enable visual charging indicator to display on-screen when
 	  AC is initially connected.
 
+config PLATFORM_EC_CHARGER_ILIM_PIN_DISABLED
+	bool "Disable external ILIM pin"
+	help
+	  Board specific flag used to disable external ILIM pin used to
+	  determine input current limit. When defined, the input current
+	  limit is decided only by the software register value.
+
 config PLATFORM_EC_CHARGER_ISL9237
 	bool "Use the ISL9237 charger"
 	depends on PLATFORM_EC_I2C

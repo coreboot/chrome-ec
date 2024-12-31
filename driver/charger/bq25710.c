@@ -452,6 +452,11 @@ static int bq257x0_init_charge_option_2(int chgnum)
 		reg = SET_CO2_BY_NAME(BATOC_VTH, 1P33, reg);
 	}
 
+	/* Set ILIM pin disabled if it is currently enabled. */
+	if (IS_ENABLED(CONFIG_CHARGER_ILIM_PIN_DISABLED)) {
+		reg = SET_CO2_BY_NAME(EN_EXTILIM, DISABLE, reg);
+	}
+
 	return raw_write16(chgnum, BQ25710_REG_CHARGE_OPTION_2, reg);
 }
 
