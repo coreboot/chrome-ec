@@ -181,6 +181,7 @@ int dsp_client_get_cbi_flags(const struct device* dev,
   };
   int rc;
 
+  __ASSERT(device_is_ready(dev), "DSP client not ready!");
   k_mutex_lock(&data->mutex, K_FOREVER);
   pb_ostream_t stream = pb_ostream_from_buffer(data->request_buffer,
                                                cros_dsp_comms_EcService_size);
