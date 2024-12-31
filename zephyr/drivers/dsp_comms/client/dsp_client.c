@@ -144,48 +144,24 @@ static inline bool is_status_bit_set(uint8_t bit,
 static int dsp_client_enable_interrupt(struct dsp_client_data* data,
                                        bool enable) {
   const struct dsp_client_config* config = data->config;
-  int rc;
 
-  if (!enable) {
-    if (data->interrupt_config == GPIO_INT_EDGE_TO_ACTIVE) {
-      // We're using an edge trigger, there's no need to actually disable things
-      return 0;
-    }
+  if (data->interrupt_config == GPIO_INT_EDGE_TO_ACTIVE) {
+    // We're using an edge trigger, there's no need to enable/disable the
+    // interrupt
+    return 0;
+  }
+
+  // This function only does anything for level interrupts to avoid getting
+  // repeated interrupts while we're servicing the first
+  if (enable) {
+    LOG_INF("Enabling level interrupts!");
+    return gpio_pin_interrupt_configure_dt(&config->interrupt,
+                                           GPIO_INT_LEVEL_ACTIVE);
+  } else {
     LOG_INF("Disabling interrupts!");
     return gpio_pin_interrupt_configure_dt(&config->interrupt,
                                            GPIO_INT_DISABLE);
   }
-
-  // Try level active if we haven't tried before or if previous attempt was a
-  // level active
-  if (data->interrupt_config == 0 ||
-      data->interrupt_config == GPIO_INT_LEVEL_ACTIVE) {
-    LOG_INF("Enabling level interrupts!");
-    rc = gpio_pin_interrupt_configure_dt(&config->interrupt,
-                                         GPIO_INT_LEVEL_ACTIVE);
-
-    if (rc == 0) {
-      data->interrupt_config = GPIO_INT_LEVEL_ACTIVE;
-      return 0;
-    }
-  }
-
-  LOG_WRN("GPIO driver does not support level interrupts");
-  rc = gpio_pin_interrupt_configure_dt(&config->interrupt,
-                                       GPIO_INT_EDGE_TO_ACTIVE);
-  if (rc != 0) {
-    return rc;
-  }
-
-  data->interrupt_config = GPIO_INT_EDGE_TO_ACTIVE;
-
-  // We can't detect levels, so poll the pin.
-  if (gpio_pin_get_dt(&config->interrupt)) {
-    // TODO get status
-    LOG_DBG("GPIO is high");
-  }
-
-  return rc;
 }
 
 int dsp_client_get_cbi_flags(const struct device* dev,
@@ -348,6 +324,7 @@ static int dsp_client_gpio_init(const struct device* dev) {
   const struct dsp_client_config* config = dev->config;
   struct dsp_client_data* data = dev->data;
   int rc = 0;
+  int interrupt_rc;
 
   __ASSERT_NO_MSG(gpio_is_ready_dt(&config->interrupt));
 
@@ -359,7 +336,21 @@ static int dsp_client_gpio_init(const struct device* dev) {
   rc |= gpio_add_callback(config->interrupt.port, &data->gpio_cb);
   __ASSERT_NO_MSG(rc == 0);
 
-  rc |= dsp_client_enable_interrupt(data, true);
+  // This driver prefers level active interrupts since the server might have an
+  // interrupt running before the client even come up. But if we can't get a
+  // level interrupt we'll fall back to edge.
+  interrupt_rc = gpio_pin_interrupt_configure_dt(&config->interrupt,
+                                                 GPIO_INT_LEVEL_ACTIVE);
+  if (interrupt_rc == 0) {
+    data->interrupt_config = GPIO_INT_LEVEL_ACTIVE;
+  } else {
+    interrupt_rc = gpio_pin_interrupt_configure_dt(&config->interrupt,
+                                                   GPIO_INT_EDGE_TO_ACTIVE);
+    if (interrupt_rc == 0) {
+      data->interrupt_config = GPIO_INT_EDGE_TO_ACTIVE;
+    }
+  }
+  rc |= interrupt_rc;
   __ASSERT_NO_MSG(rc == 0);
 
   if (data->interrupt_config == GPIO_INT_LEVEL_ACTIVE) {
