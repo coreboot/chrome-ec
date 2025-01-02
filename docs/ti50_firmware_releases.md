@@ -8,7 +8,7 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.132       | 0.23.122
+[ToT][ToT ebuild]   | 0.24.140       | 0.23.122
 [M132][132 release] | 0.24.132       | 0.23.122
 [M131][131 release] | 0.24.121       | 0.23.112
 [M130][130 release] | 0.24.112       | 0.23.112
@@ -54,9 +54,10 @@ Feature Description                  | Feature Added | Feature Complete | Releas
 ZTE Serial Number                    |               | 0.22.6           | M107
 CCD Open preserved across deep sleep |               | 0.22.6           | M107
 AP RO WP Sense                       | 0.22.6        |                  | M107
-AP RO Verification (without reset)   | 0.24.0        |                  | M108
+AP RO Verification (without reset)   | 0.24.0        | 0.23.0           | M108
 Fix updates after PoR and deep sleep | 0.24.14       | 0.23.14          | M113
-AP RO Verification Enforcement       | 0.24.61       |                  | M121
+AP RO Verification Enforcement       | 0.24.61       | 0.23.71          | M122
+Build uses Bazel artifacts           | 0.24.140      |                  | M133
 
 # RO revisions
 
@@ -1977,6 +1978,41 @@ Build:   ti50_common_prepvt-15974.B:v0.0.207-e79f9ffc
          tock:v0.0.9681-d514a6986
          ms-tpm-20-ref:v0.0.322-c1d3cdd
          chrome-bot@chromeos-ci-firmware-us-east1-d-x32-1-9dga 2024-12-13 15:07:37
+```
+
+### 0.24.140 Released on 2024-01-02 in M133
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/6136105)
+
+Builder
+[firmware-ti50-prepvt-15974.B-branch/37](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15974.B-branch/37/overview)
+
+Artifacts:
+[15974.37.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/firmware-ti50-prepvt-15974.B-branch/R129-15974.37.0-1-8728006437754332961/dt-ti50.tar.bz2/)
+
+**Bug Fixes**
+
+*   Fix crypto interrupt handling bug that resulted in a
+    "Console is Busy!" error
+    [b/375956711](https://b.corp.google.com/issues/375956711)
+
+**Features**
+
+*   Block PCR0 double extend
+    [b/385129891](https://b.corp.google.com/issues/385129891)
+*   Add RBOX 4th form factor for Non-Inverted KSO
+    [b/151064221](https://b.corp.google.com/issues/151064221)
+*   Fixes to improve pinweaver hardening
+    [b/325666144](https://b.corp.google.com/issues/325666144)
+*   First build to use bazel artifacts
+
+```
+Build:   ti50_common_prepvt-15974.B:v0.0.246-c837ddc5
+         libtock-rs:v0.0.925-1213708
+         tock:v0.0.9681-d514a6986
+         ms-tpm-20-ref:v0.0.324-e325e3d
+         chrome-bot@chromeos-ci-firmware-us-central2-d-x32-1-41m2 2024-12-20 10:45:40
 ```
 
 <!-- Links -->
