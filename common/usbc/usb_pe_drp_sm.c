@@ -1656,7 +1656,7 @@ static bool common_src_snk_dpm_requests(int port)
 						     PD_ROLE_VCONN_SRC :
 						     PD_ROLE_VCONN_OFF;
 		if (request == current) {
-			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_DATA_RESET);
+			PE_CLR_DPM_REQUEST(port, DPM_REQUEST_VCONN_SWAP);
 			return false;
 		}
 		pe_set_dpm_curr_request(port, DPM_REQUEST_VCONN_SWAP);
