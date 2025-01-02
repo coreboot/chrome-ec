@@ -58,6 +58,10 @@ int charger_profile_override(struct charge_state_data *curr)
 		int current = 256;
 
 		curr->requested_current = MAX(curr->requested_current, current);
+		curr->requested_voltage =
+			MAX(curr->requested_voltage, batt_info->voltage_min);
+		curr->state = ST_PRECHARGE;
+		curr->batt.flags |= BATT_FLAG_DEEP_CHARGE;
 
 		return -1;
 	}
