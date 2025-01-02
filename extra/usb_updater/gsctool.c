@@ -306,17 +306,6 @@ struct options_map {
 	int *flag;
 };
 
-/*
- * Type of the GSC device. This is used to represent which type of GSC we are
- * connected to and to tag an image file for compatibility.
- * for downloading.
- */
-enum gsc_device {
-	GSC_DEVICE_H1,
-	GSC_DEVICE_DT,
-	GSC_DEVICE_NT,
-};
-
 /* Index to refer to a section within sections array */
 enum section {
 	RO_A,
@@ -632,7 +621,7 @@ static bool is_ti50_device(void)
 static FILE *tpm_output;
 static int ts_write(const void *out, size_t len)
 {
-	const char *cmd_head = "PATH=\"${PATH}:/usr/sbin\" "
+	const char *cmd_head = "PATH=\"${PATH}:/usr/sbin:/vendor/bin/hw\" "
 			       "${TRUNKS_SEND_BIN:-trunks_send} --raw ";
 	size_t head_size = strlen(cmd_head);
 	char full_command[head_size + 2 * len + 1];
@@ -1624,6 +1613,23 @@ static void get_version(struct transfer_descriptor *td, bool leave_pending)
 		send_done(&td->uep);
 }
 
+/*
+ * Gets a string of the currently detected GSC device type.
+ */
+static const char *device_string(enum gsc_device device)
+{
+	switch (device) {
+	case GSC_DEVICE_H1:
+		return "H1";
+	case GSC_DEVICE_DT:
+		return "DT";
+	case GSC_DEVICE_NT:
+		return "NT";
+	default:
+		return "Unknown";
+	}
+}
+
 static void setup_connection(struct transfer_descriptor *td)
 {
 	/* Send start request. */
@@ -1631,6 +1637,7 @@ static void setup_connection(struct transfer_descriptor *td)
 
 	get_version(td, true);
 
+	printf("device: %s\n", device_string(gsc_dev));
 	printf("keyids: RO 0x%08x, RW 0x%08x\n", targ.keyid[0], targ.keyid[1]);
 	printf("offsets: backup RO at %#x, backup RW at %#x\n", td->ro_offset,
 	       td->rw_offset);
@@ -1784,7 +1791,7 @@ uint32_t send_vendor_command(struct transfer_descriptor *td,
 		 * to be stripped from the actual response body by this
 		 * function.
 		 */
-		uint8_t temp_response[MAX_RX_BUF_SIZE];
+		uint8_t temp_response[MAX_RX_BUF_SIZE + 1];
 		size_t max_response_size;
 
 		if (!response_size) {
@@ -2307,12 +2314,15 @@ static int show_headers_versions(const struct image *image,
 	}
 
 	if (show_machine_output) {
+		print_machine_output("IMAGE_DEVICE_TYPE", "%s",
+				     device_string(image->type));
 		print_machine_output("IMAGE_RO_FW_VER", "%s", ro_fw_ver[0]);
 		print_machine_output("IMAGE_RW_FW_VER", "%s", rw_fw_ver[0]);
 		print_machine_output("IMAGE_BID_STRING", "%s", bid_string[0]);
 		print_machine_output("IMAGE_BID_MASK", "%08x", bid[0].mask);
 		print_machine_output("IMAGE_BID_FLAGS", "%08x", bid[0].flags);
 	} else {
+		printf("device: %s\n", device_string(image->type));
 		printf("RO_A:%s RW_A:%s[%s:%08x:%08x] ", ro_fw_ver[0],
 		       rw_fw_ver[0], bid_string[0], bid[0].mask, bid[0].flags);
 		printf("RO_B:%s RW_B:%s[%s:%08x:%08x]\n", ro_fw_ver[1],
@@ -3241,19 +3251,6 @@ static int process_get_apro_hash(struct transfer_descriptor *td)
 	for (i = 0; i < SHA256_DIGEST_SIZE; i++)
 		printf("%x", response[i]);
 	printf("\n");
-	return 0;
-}
-
-static int process_start_apro_verify(struct transfer_descriptor *td)
-{
-	int rv = 0;
-
-	rv = send_vendor_command(td, VENDOR_CC_AP_RO_VALIDATE, NULL, 0, NULL,
-				 NULL);
-	if (rv != VENDOR_RC_SUCCESS) {
-		fprintf(stderr, "Error %d starting RO verify\n", rv);
-		return update_error;
-	}
 	return 0;
 }
 
@@ -4242,6 +4239,27 @@ static int process_reboot_gsc(struct transfer_descriptor *td, size_t timeout_ms)
 	return 0;
 }
 
+static int process_start_apro_verify(struct transfer_descriptor *td)
+{
+	int rv = 0;
+
+	/*
+	 * For Ti50, we need to restart GSC to perform AP RO verification again.
+	 */
+	if (is_ti50_device())
+		return process_reboot_gsc(td, 1000);
+
+	/* If H1 chip, then send vendor command to start AP RO verification */
+	rv = send_vendor_command(td, VENDOR_CC_AP_RO_VALIDATE, NULL, 0, NULL,
+				 NULL);
+	if (rv != VENDOR_RC_SUCCESS) {
+		fprintf(stderr, "Error %d starting RO verify\n", rv);
+		return update_error;
+	}
+
+	return 0;
+}
+
 /*
  * Search the passed in zero terminated array of options_map structures for
  * option 'option'.
@@ -4659,6 +4677,7 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 	size_t response_size = sizeof(boot_trace);
 	uint32_t rv;
 	uint64_t timespan = 0;
+	uint64_t absolute_ms = 0;
 	size_t i;
 
 	rv = send_vendor_command(td, VENDOR_CC_GET_BOOT_TRACE, &payload,
@@ -4672,8 +4691,11 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 	if (response_size == 0)
 		return 0; /* Trace is empty. */
 
-	if (!show_machine_output)
+	if (!show_machine_output) {
 		printf("    got %zd bytes back:\n", response_size);
+		/* Print out header for event info that follows */
+		printf("                Event   Delta     Total\n");
+	}
 	if (response_size > 0) {
 		for (i = 0; i < response_size / sizeof(uint16_t); i++) {
 			uint16_t entry = boot_trace[i];
@@ -4694,14 +4716,46 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 				timespan += (uint64_t)delta_time * MAX_TIME_MS;
 				continue;
 			}
-			printf(" %20s: %4" PRId64 " ms\n",
+			/* Accumulate the absolute time so we can report it */
+			absolute_ms += timespan + delta_time;
+			printf(" %20s %4" PRId64 " ms %6" PRId64 " ms\n",
 			       boot_tracer_stages[event_id],
-			       timespan + delta_time);
+			       timespan + delta_time, absolute_ms);
 			timespan = 0;
 		}
 		printf("\n");
 	}
 	return 0;
+}
+
+/*
+ * Gets the chip information. Note that Cr50 does not support this command yet
+ * and calling this produces UMA alerts events even if the error is
+ * appropriately handled in this layer.
+ */
+static struct get_chip_id_response get_chip_id_info(
+	struct transfer_descriptor *td)
+{
+	uint32_t rv;
+	struct get_chip_id_response response;
+	size_t response_size = sizeof(response);
+
+	rv = send_vendor_command(td, VENDOR_CC_GET_CHIP_ID, NULL, 0,
+				 (uint8_t *)&response, &response_size);
+	if (rv != VENDOR_RC_SUCCESS) {
+		debug("Failed getting chip id: 0x%X. Okay for older chips\n",
+		      rv);
+	} else if (response_size < sizeof(response)) {
+		debug("Unexpected response size. (%zu)\n", response_size);
+	} else {
+		/* Success, convert endianness then return */
+		response.tpm_did_vid = be32toh(response.tpm_did_vid);
+		response.chip_id = be32toh(response.chip_id);
+		return response;
+	}
+	/* Zero memory before returning since there was an error */
+	memset(&response, 0, sizeof(response));
+	return response;
 }
 
 /*
@@ -4711,18 +4765,43 @@ static int process_get_boot_trace(struct transfer_descriptor *td, bool erase,
 static enum gsc_device determine_gsc_type(struct transfer_descriptor *td)
 {
 	int major;
-	/* First try the newer TPMV command */
-	/* TODO(b/364705511): Add new TPMV command */
+	struct get_chip_id_response chip_id;
 
-	/* If that fails, use the firmware version to determine type */
+	/*
+	 * If the major version is within the known ranges, stop there since
+	 * not all versions of Cr50 and Ti50 support the GET_CHIP_ID vendor
+	 * command, and if we call it when it isn't supported it will generate
+	 * an UMA alert even if we handle the error here (b/376500403).
+	 * There is also a USB issue to work around (b/368631328).
+	 */
 	get_version(td, false);
 	major = targ.shv[1].major;
 	if (major >= 30 && major < 40)
 		return GSC_DEVICE_NT;
 	else if (major >= 20 && major < 30)
 		return GSC_DEVICE_DT;
-	else
+	else if (major < 10)
 		return GSC_DEVICE_H1;
+	/*
+	 * If the major version isn't in the known range, then use the TPMV
+	 * command, which should be supported at that point
+	 */
+	chip_id = get_chip_id_info(td);
+	switch (chip_id.tpm_did_vid) {
+	case 0x50666666:
+		return GSC_DEVICE_NT;
+	case 0x504a6666:
+		return GSC_DEVICE_DT;
+	case 0x00281ae0:
+		return GSC_DEVICE_H1;
+	}
+
+	if (chip_id.tpm_did_vid)
+		fprintf(stderr, "Unregonized VID_PID 0x%X\n",
+			chip_id.tpm_did_vid);
+
+	/* We have to pick something, but this probably isn't correct */
+	return GSC_DEVICE_H1;
 }
 
 int main(int argc, char *argv[])

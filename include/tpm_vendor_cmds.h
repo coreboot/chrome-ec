@@ -217,6 +217,8 @@ enum vendor_cmd_cc {
 	 * this can be removed as long as the value is reserved.
 	 */
 	VENDOR_CC_GET_AP_RO_RESET_COUNTS = 74,
+	/* Returns info to identify the specific GSC chip type. */
+	VENDOR_CC_GET_CHIP_ID = 75,
 
 	LAST_VENDOR_COMMAND = 65535,
 };
@@ -334,6 +336,23 @@ enum ap_ro_check_vc_errors {
 	ARCVE_NOT_PROGRAMMED = 10,
 	ARCVE_FLASH_READ_FAILED = 11,
 	ARCVE_BOARD_ID_BLOCKED = 12,
+};
+
+/* Returns info to identify the specific GSC chip type. */
+struct get_chip_id_response {
+	uint32_t tpm_did_vid;
+	uint32_t chip_id;
+};
+
+/*
+ * Type of the GSC device. This is used to represent which type of GSC we are
+ * connected to and to tag an image file for compatibility.
+ * for downloading.
+ */
+enum gsc_device {
+	GSC_DEVICE_H1,
+	GSC_DEVICE_DT,
+	GSC_DEVICE_NT,
 };
 
 /*****************************************************************************/
