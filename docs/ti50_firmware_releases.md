@@ -8,8 +8,8 @@ This document captures major feature differences between Ti50 firmware releases
 
 ChromeOS Version    | PrePVT version | Prod Version
 ------------------- | -------------- | ------------
-[ToT][ToT ebuild]   | 0.24.131       | 0.23.121
-[M132][132 release] | 0.24.121       | 0.23.121
+[ToT][ToT ebuild]   | 0.24.132       | 0.23.122
+[M132][132 release] | 0.24.132       | 0.23.122
 [M131][131 release] | 0.24.121       | 0.23.112
 [M130][130 release] | 0.24.112       | 0.23.112
 [M129][129 release] | 0.24.112       | 0.23.112
@@ -834,7 +834,7 @@ Release
 [CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5973937)
 
 Builder
-[firmware-ti50-mp-15980.B-branch/7](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15980.B-branch/27/overview)
+[firmware-ti50-mp-15980.B-branch/27](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15980.B-branch/27/overview)
 
 Artifacts:
 [15980.24.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/firmware-ti50-mp-15980.B-branch/R129-15980.24.0-1-8733266516965531265/ti50.tar.bz2)
@@ -851,6 +851,34 @@ Build:   ti50_common_mp-15980.B:v0.0.95-e057d336
          ms-tpm-20-ref:v0.0.320-19310e0
          @chromeos-ci-firmware-us-east1-d-x32-0-05ll 2024-10-10 10:46:07
 ```
+
+### 0.23.122 Released on 2024-12-19 in M133 (cherry-picked to M132)
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/6112096)
+
+M132 Cherry-Pick
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/6113847)
+
+Builder
+[firmware-ti50-mp-15980.B-branch/35](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-mp-15980.B-branch/35/overview)
+
+Artifacts:
+[15980.32.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/firmware-ti50-mp-15980.B-branch/R129-15980.32.0-1-8728629894002971313/ti50.tar.bz2)
+
+**Features**
+
+*   Restrict updating EncStateful based on the PCR0 state
+    [b/373478634](https://b.corp.google.com/issues/373478634)
+
+```
+Build:   ti50_common_mp-15980.B:v0.0.97-837bb529
+         libtock-rs:v0.0.925-1213708
+         tock:v0.0.9676-30e7fe57c
+         ms-tpm-20-ref:v0.0.320-19310e0
+         chrome-bot@chromeos-ci-firmware-us-east1-d-x32-0-okli 2024-12-13 13:30:38
+```
+
 
 ## PrePVT images
 
@@ -1923,6 +1951,32 @@ Build:   ti50_common_prepvt-15974.B:v0.0.205-b42c10e8
          tock:v0.0.9681-d514a6986
          ms-tpm-20-ref:v0.0.322-c1d3cdd
          chrome-bot@chromeos-ci-firmware-us-east1-d-x32-0-2arp 2024-11-19 08:07:12
+```
+
+### 0.24.132 Released on 2024-12-18 in M133 (cherry-picked to M132)
+
+Release
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/6104086)
+M132 Cherry-Pick
+[CL](https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/6113848)
+
+Builder
+[firmware-ti50-prepvt-15974.B-branch/35](https://ci.chromium.org/ui/p/chromeos/builders/firmware/firmware-ti50-prepvt-15974.B-branch/35/overview)
+
+Artifacts:
+[15974.35.0](https://pantheon.corp.google.com/storage/browser/chromeos-releases/firmware-ti50-prepvt-15974.B-branch/R129-15974.35.0-1-8728624852836979185/dt-ti50.tar.bz2/)
+
+**Features**
+
+*   Restrict updating EncStateful based on the PCR0 state
+    [b/373478634](https://b.corp.google.com/issues/373478634)
+
+```
+Build:   ti50_common_prepvt-15974.B:v0.0.207-e79f9ffc
+         libtock-rs:v0.0.925-1213708
+         tock:v0.0.9681-d514a6986
+         ms-tpm-20-ref:v0.0.322-c1d3cdd
+         chrome-bot@chromeos-ci-firmware-us-east1-d-x32-1-9dga 2024-12-13 15:07:37
 ```
 
 <!-- Links -->
