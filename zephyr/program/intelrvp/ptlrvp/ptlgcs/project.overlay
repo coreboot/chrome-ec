@@ -34,6 +34,15 @@
 /delete-node/ &int_vol_up;
 /delete-node/ &int_vol_dn;
 
+/* PTLGCS has 2 Type-C ports */
+/delete-node/ &pd_pow_port2;
+&usbc {
+	/delete-node/ port2@2;
+	ppm-driver {
+		lpm = <&pd_pow_port0 &pd_pow_port1>;
+	};
+};
+
 / {
 	gcs_board_id: gcs-board-id {
 		compatible = "intel,rvp-board-id";
