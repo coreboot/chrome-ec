@@ -18,7 +18,7 @@
 			policy = <&cros_policy>;
 			usb-mux-chain-0 {
 				compatible = "cros-ec,usb-mux-chain";
-				usb-muxes = <&ps8802_mux_0 &virtual_mux_0>;
+				usb-muxes = <&virtual_mux_0>;
 			};
 		};
 
@@ -35,7 +35,7 @@
 			policy = <&cros_policy>;
 			usb-mux-chain-1 {
 				compatible = "cros-ec,usb-mux-chain";
-				usb-muxes = <&it5205_mux_1 &virtual_mux_1>;
+				usb-muxes = <&virtual_mux_1>;
 			};
 		};
 
@@ -60,17 +60,6 @@
 };
 
 &i2c2 {
-	ps8802_mux_0: ps8802-mux-0@18 {
-		compatible = "parade,ps8802";
-		status = "okay";
-		reg = <0x18>;
-	};
-
-	it5205_mux_1: it5205-mux-0@48 {
-		compatible = "ite,it5205";
-		reg = <0x48>;
-	};
-
 	dp_bridge: anx7510-bridge@40 {
 		compatible = "analogix,anx7510";
 		status = "okay";
