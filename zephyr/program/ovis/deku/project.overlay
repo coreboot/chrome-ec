@@ -28,6 +28,10 @@
 			enum-name = "ADC_TEMP_SENSOR_4";
 			io-channels = <&adc0 9>;
 		};
+		adc_sensor_5: adc_sensor_5 {
+			enum-name = "ADC_PSYS";
+			io-channels = <&adc0 3>;
+		};
 	};
 
 	named-gpios {
