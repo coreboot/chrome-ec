@@ -20,7 +20,11 @@
 #include "error_codes.h"
 
 // Redirect VLOG invocations written for libchrome to android-base's LOG macro.
-#define VLOG(x) LOG(INFO)
+// The severities are not compatible with each other (e.g. libchrome's INFO is 0
+// but android-base's is 2), so we drop the severity information. This code can
+// generate tons of output so we map everything to VERBOSE so it can easily be
+// filtered out.
+#define VLOG(x) LOG(VERBOSE)
 
 namespace trunks {
 
