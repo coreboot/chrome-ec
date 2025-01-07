@@ -115,6 +115,10 @@ def launch(
     # like "include @util/renode/${board}.resc".
     os.chdir(ec_dir)
 
+    # Outside the chroot, we may not have libicu
+    # https://aka.ms/dotnet-missing-libicu
+    os.environ["DOTNET_SYSTEM_GLOBALIZATION_INVARIANT"] = "1"
+
     renode_execute: List[str] = []
     # We set the machine name to the exact board name, since we might be
     # using a derivative board, like buccaneer which is based on helipilot.
