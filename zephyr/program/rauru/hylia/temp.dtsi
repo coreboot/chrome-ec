@@ -50,7 +50,7 @@
 		temp_sensor_1 {
 			sensor = <&temp_sensor_1_thermistor>;
 		};
-		temp_sensor_2 {
+		temp_sensor_2: temp_sensor_2 {
 			sensor = <&temp_sensor_2_thermistor>;
 		};
 		temp_sensor_3 {
