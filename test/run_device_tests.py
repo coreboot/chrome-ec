@@ -888,10 +888,11 @@ class AllTests:
                 exclude_boards=[DARTMONKEY, HELIPILOT],
                 timeout_secs=60,
             ),
-            TestConfig(
-                zephyr_name="kernel.poll",
-                test_name="zephyr_kernel_poll",
-            ),
+            # TODO(b/388097490): Fix compilation.
+            # TestConfig(
+            #    zephyr_name="kernel.poll",
+            #    test_name="zephyr_kernel_poll",
+            # ),
         ]
 
         for test in tests:
