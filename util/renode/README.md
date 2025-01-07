@@ -3,7 +3,30 @@
 This directory holds the configuration files for Renode and this doc, which
 provides a quick-start for Renode and EC.
 
-## Installing Latest Renode
+## Installing Renode
+
+The ChromeOS chroot has a [`renode` ebuild] that is considered the "stable"
+version in ChromeOS. You can install `renode` inside the chroot with:
+
+```bash
+(chroot) $ sudo emerge renode
+```
+
+Alternatively, you can download a prebuilt version of the `renode` ebuild using
+[CIPD]. The following command will download the latest prebuilt version into a
+directory called `renode`:
+
+```bash
+(chroot) $ echo "chromiumos/infra/tools/renode latest" | cipd ensure -ensure-file - --root renode
+```
+
+Note that the prebuilt version is not automatically in your `PATH`.
+
+[`renode` ebuild]: https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/third_party/chromiumos-overlay/app-emulation/renode/
+
+[CIPD]: http://go/luci-cipd
+
+### Latest Version
 
 Outside of the chroot, on gLinux or Debian, please run the
 `util/renode-deb-install.sh` script.
