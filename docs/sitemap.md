@@ -33,6 +33,10 @@
 *   [Dragonclaw Schematics and Layout](./schematics/dragonclaw)
 *   [Fingerprint MCU RAM and Flash](./fingerprint/fingerprint-ram-and-flash.md)
 
+## Renode
+
+*   [Renode](../util/renode/README.md)
+
 ## Testing
 
 *   [Unit Tests](./unit_tests.md)
