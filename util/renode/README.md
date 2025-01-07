@@ -33,27 +33,45 @@ Outside of the chroot, on gLinux or Debian, please run the
 
 ## Launching Renode
 
-Outside of the chroot, you can use the `util/renode-ec-launch` script to start
-Renode.
+The [`renode-ec-launch`] script is a convenient wrapper to configure and
+run Renode for specific boards. It works both inside and outside the chroot and
+configures the console as `/tmp/renode-uart`.
 
-The script will utiize the optional `BOARD` and `PROJECT` environment variables
-to adjust these respective EC parameters. The project parameter selects whether
-you want to run the default "ec" firmware image, or whether you want to run a
-unittest image, like "aes".
+The script lets you run both EC and Zephyr images, including the "default" image
+or a unit test image. For complete details, refer to the `--help` output.
 
-Here are some examples:
+### Examples
 
 ```bash
-# Just launch bloonchipper normal ec image.
-make BOARD=bloonchipper all
-BOARD=bloonchipper ./util/renode-ec-launch
+# Build bloonchipper EC image.
+(chroot) $ make BOARD=bloonchipper -j
+# Run the image in Renode.
+(chroot) $ ./util/renode-ec-launch -b bloonchipper
+# Connect to the console.
+(chroot) $ screen /tmp/renode-uart
 ```
 
 ```bash
-# Let's run the aes unittest image.
-make BOARD=bloonchipper test-aes
-BOARD=bloonchipper PROJECT=aes ./util/renode-ec-launch
+# Build the AES unit test image.
+(chroot) $ make BOARD=bloonchipper test-aes -j
+# Run the unit test image in Renode.
+(chroot) $ ./util/renode-ec-launch -b bloonchipper --ec aes
+# Connect to the console.
+(chroot) $ screen /tmp/renode-uart
+# Run the test from the console.
+> runtest
 ```
+
+```bash
+# Build the bloonchipper Zephyr image.
+(chroot) $ zmake build bloonchipper
+# Run the image in Renode.
+(chroot) $ ./util/renode-ec-launch -b bloonchipper --zephyr
+# Connect to the console.
+(chroot) $ screen /tmp/renode-uart
+```
+
+[`renode-ec-launch`]: ../renode-ec-launch
 
 ## Connecting GDB to Renode
 
