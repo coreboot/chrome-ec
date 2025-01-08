@@ -73,7 +73,7 @@
 		col-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
 	};
 
-	boot-keys {
+	boot_keys: boot-keys {
 		compatible = "cros-ec,boot-keys";
 		down-arrow-rc = <KBD_RC(6, 11)>;
 		esc-rc = <KBD_RC(1, 1)>;

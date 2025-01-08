@@ -65,3 +65,7 @@
 				VIVALDI_KEYBD_CAP_ASSISTANT_KEY)>;
 	};
 };
+
+&boot_keys {
+	refresh-rc = <KBD_RC(3, 2)>;
+};
