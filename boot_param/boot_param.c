@@ -786,6 +786,12 @@ static inline bool fill_config_details(
 		return false;
 	}
 
+	/* code hash value, could be all zeros in case the device does not */
+	/* support AP RO verification or verification is not provisioned. */
+	__platform_memcpy(cwt_claims->code_hash.value,
+			  ctx->cfg.code_digest,
+			  sizeof(cwt_claims->code_hash.value));
+
 	/* Calculate boot mode */
 	cwt_claims->mode.value = calc_mode(ctx);
 
