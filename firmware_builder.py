@@ -22,6 +22,13 @@ from google.protobuf import json_format
 from chromite.api.gen.chromite.api import firmware_pb2
 
 
+# Set to True to publish goldeneye artifacts with new firmware builders.
+#   - False on TOT.
+#   - True on mp and prepvt branches.
+PUBLISH_TO_GOLDENEYE = False
+
+# Cr50 uses the reef builder. If that ever changes, update this name
+GE_BOARD = "reef"
 DEFAULT_BUNDLE_DIRECTORY = '/tmp/artifact_bundles'
 DEFAULT_BUNDLE_METADATA_FILE = '/tmp/artifact_bundle_metadata'
 
@@ -155,6 +162,10 @@ def bundle_firmware(opts):
             cmd, cwd=os.path.join(ec_dir, 'build', build_target), check=True)
         meta = info.objects.add()
         meta.file_name = tarball_name
+        # Board is required to publish to GE as well
+        if PUBLISH_TO_GOLDENEYE:
+            meta.tarball_info.board.extend([GE_BOARD])
+            meta.tarball_info.publish_to_goldeneye = True
         meta.tarball_info.type = (
             firmware_pb2.FirmwareArtifactInfo.TarballInfo.FirmwareType.EC)
         # TODO(kmshelton): Populate the rest of metadata contents as it gets
