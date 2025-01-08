@@ -163,7 +163,7 @@ def bundle_firmware(opts):
         meta = info.objects.add()
         meta.file_name = tarball_name
         # Board is required to publish to GE as well
-        if PUBLISH_TO_GOLDENEYE:
+        if PUBLISH_TO_GOLDENEYE and build_target == "cr50":
             meta.tarball_info.board.extend([GE_BOARD])
             meta.tarball_info.publish_to_goldeneye = True
         meta.tarball_info.type = (
