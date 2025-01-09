@@ -15,6 +15,7 @@
 
 #include "gpios.dtsi"
 #include "i2c.dtsi"
+#include "temp_sensors.dtsi"
 
 #include "../fatcat_it82002aw/gsc_board.dtsi"
 #include "../fatcat_it82002aw/interrupts.dtsi"
