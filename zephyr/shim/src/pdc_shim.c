@@ -3,20 +3,13 @@
  * found in the LICENSE file.
  */
 
-#include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/toolchain/common.h>
 
 #include <usbc/pdc_power_mgmt.h>
 
-LOG_MODULE_REGISTER(pdc_shim, LOG_LEVEL_ERR);
-
 enum tcpc_cc_polarity pd_get_polarity(int port)
 {
-	if (port >= board_get_usb_pd_port_count()) {
-		LOG_ERR("C%d: Invalid port.", port);
-		return POLARITY_CC1;
-	}
 	return pdc_power_mgmt_pd_get_polarity(port);
 }
 
