@@ -25,7 +25,7 @@ from chromite.api.gen.chromite.api import firmware_pb2
 # Set to True to publish goldeneye artifacts with new firmware builders.
 #   - False on TOT.
 #   - True on mp and prepvt branches.
-PUBLISH_TO_GOLDENEYE = False
+PUBLISH_TO_GOLDENEYE = True
 
 # Cr50 uses the reef builder. If that ever changes, update this name
 GE_BOARD = "reef"
