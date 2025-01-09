@@ -224,6 +224,9 @@ if [[ "${FLAGS_private}" == "${FLAGS_TRUE}" ]]; then
   LINKS+=( fingerprint )
 fi
 
+# This link is outside the new makefile's. vpython3 files in utils/ link here.
+ln -s "$(realpath ../../third_party)" "${TMP_DIR}"/third_party
+
 # TODO support changing toolchains between versions
 echo "# Adding coreboot-sdk to env."
 TOOLCHAIN_VARS=$(./util/coreboot_sdk.py)
